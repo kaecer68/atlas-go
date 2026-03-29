@@ -1,0 +1,10 @@
+.DS_Store
+.env
+.env.local
+/bin/
+/dist/
+/coverage.out
+/atlas
+/tmp/
+/.gocache/
+/data/cache/

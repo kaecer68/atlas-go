@@ -1,0 +1,25 @@
+{
+  "WindowID": "window-20260326-20260327",
+  "TargetAgentID": "growth-momentum-01",
+  "TargetSkill": "growth_momentum",
+  "PromptFile": "prompts/agents/growth_momentum.md",
+  "MutationType": "prompt_tightening",
+  "FailurePattern": "Repeated negative risk-adjusted outcomes across replay sessions.",
+  "Hypothesis": "A targeted prompt refinement can improve risk-adjusted recommendation quality.",
+  "AcceptanceMetric": "sharpe_like",
+  "AcceptanceGates": [
+    "improve_sharpe_like",
+    "no_material_drawdown_degradation",
+    "no_constraint_bypass"
+  ],
+  "ForbiddenActions": [
+    "illiquid_breakout_chasing",
+    "earnings_blindness"
+  ],
+  "RequiredSkills": [
+    "growth_momentum",
+    "technical_breakout"
+  ],
+  "RecommendedWindow": "next multi-session replay window",
+  "GeneratedAt": "2026-03-30T00:03:24.73951+08:00"
+}

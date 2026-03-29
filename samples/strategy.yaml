@@ -1,0 +1,12 @@
+name: tw-equity-replay
+mode: daily
+universe:
+  - 2330.TW
+  - 2317.TW
+  - 2382.TW
+  - 2603.TW
+  - 0050.TW
+risk:
+  max_position_weight: 0.18
+  max_open_positions: 5
+  reserve_cash_fraction: 0.10

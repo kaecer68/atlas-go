@@ -1,0 +1,67 @@
+version: 1
+agents:
+  - id: taiwan-macro-01
+    name: Taiwan Macro
+    layer: context
+    skill: taiwan_macro
+    enabled: true
+    prompt_file: prompts/agents/taiwan_macro.md
+    universe: []
+    primary_metrics: [regime_accuracy, drawdown_avoidance]
+  - id: foreign-flow-01
+    name: Foreign Flow
+    layer: context
+    skill: foreign_flow
+    enabled: true
+    prompt_file: prompts/agents/foreign_flow.md
+    universe: []
+    primary_metrics: [regime_accuracy, flow_alignment]
+  - id: semi-desk-01
+    name: Semiconductor Desk
+    layer: sector
+    skill: semiconductor_desk
+    enabled: true
+    prompt_file: prompts/agents/semiconductor_desk.md
+    universe: [2330.TW, 2303.TW, 2454.TW, 3034.TW]
+    primary_metrics: [alpha_hit_rate, risk_adjusted_return]
+  - id: ai-desk-01
+    name: AI Supply Chain Desk
+    layer: sector
+    skill: ai_supply_chain_desk
+    enabled: true
+    prompt_file: prompts/agents/ai_supply_chain_desk.md
+    universe: [2382.TW, 6669.TW, 3017.TW, 3037.TW]
+    primary_metrics: [alpha_hit_rate, turnover_efficiency]
+  - id: etf-rotation-01
+    name: ETF Rotation Desk
+    layer: sector
+    skill: etf_rotation_desk
+    enabled: true
+    prompt_file: prompts/agents/etf_rotation_desk.md
+    universe: [0050.TW, 0056.TW, 00878.TW]
+    primary_metrics: [drawdown_control, defensive_capture]
+  - id: growth-momentum-01
+    name: Growth Momentum
+    layer: style
+    skill: growth_momentum
+    enabled: true
+    prompt_file: prompts/agents/growth_momentum.md
+    universe: []
+    primary_metrics: [alpha_hit_rate, momentum_followthrough]
+  - id: cro-01
+    name: CRO
+    layer: control
+    skill: cro_risk
+    enabled: true
+    prompt_file: prompts/agents/cro_risk.md
+    universe: []
+    primary_metrics: [drawdown_control, concentration_violations]
+  - id: cio-01
+    name: CIO
+    layer: control
+    skill: cio_portfolio
+    enabled: true
+    prompt_file: prompts/agents/cio_seed.md
+    universe: []
+    primary_metrics: [portfolio_return, sharpe_like]
+
