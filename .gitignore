@@ -8,3 +8,7 @@
 /tmp/
 /.gocache/
 /data/cache/
+/data/state/
+/data/replay/*.jsonl
+/prompts/experiments/
+/internal/experiment/prompts/

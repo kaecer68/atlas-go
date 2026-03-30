@@ -17,18 +17,22 @@ func TestEvaluateUpdatesStatus(t *testing.T) {
 		t.Fatalf("getwd: %v", err)
 	}
 	root := filepath.Clean(filepath.Join(wd, "../.."))
-	store := ledger.NewStore(filepath.Join(root, "data/state"))
-	judge := NewJudge(store, filepath.Join(root, "samples", "replay", "twse_stock_day_all_sample.csv"), filepath.Join(root, "data", "state", "baseline_policy.json"))
-	resultPath := filepath.Join(storeBaseDir(root), "experiments", "test-experiment.json")
-	promptPath := filepath.Join(root, "prompts/experiments/test-agent/exp/v2.md")
+	stateDir := t.TempDir()
+	store := ledger.NewStore(stateDir)
+	judge := NewJudge(store, filepath.Join(root, "samples", "replay", "twse_stock_day_all_sample.csv"), filepath.Join(stateDir, "baseline_policy.json"))
+	resultPath := filepath.Join(stateDir, "experiments", "test-experiment.json")
+	promptPath := filepath.Join(t.TempDir(), "v2.md")
 	baselinePromptPath := filepath.Join(root, "prompts/agents/growth_momentum.md")
-	windowPath := filepath.Join(storeBaseDir(root), "windows", "window-test.json")
+	windowPath := filepath.Join(stateDir, "windows", "window-test.json")
 
 	if err := os.MkdirAll(filepath.Dir(promptPath), 0o755); err != nil {
 		t.Fatalf("mkdir prompt dir: %v", err)
 	}
 	if err := os.WriteFile(promptPath, []byte("require trend confirmation\ndowngrade conviction\nreject setups\n"), 0o644); err != nil {
 		t.Fatalf("write prompt: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(resultPath), 0o755); err != nil {
+		t.Fatalf("mkdir result dir: %v", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(windowPath), 0o755); err != nil {
 		t.Fatalf("mkdir window dir: %v", err)
@@ -204,8 +208,4 @@ require_cro_pass: true`
 	if len(checks) < 4 {
 		t.Fatalf("expected structural portfolio checks, got %v", checks)
 	}
-}
-
-func storeBaseDir(root string) string {
-	return filepath.Join(root, "data/state")
 }

@@ -22,7 +22,16 @@ func TestComparePromptPerformance(t *testing.T) {
 		TargetLayer:   domain.LayerStyle,
 		PromptFile:    filepath.Join("..", "..", "prompts", "agents", "growth_momentum.md"),
 	}
-	candidatePath := filepath.Join("..", "..", "prompts", "experiments", "growth-momentum-01", "exec-growth-momentum-01-1774800459", "v2.md")
+	candidateDir := t.TempDir()
+	candidatePath := filepath.Join(candidateDir, "v2.md")
+	candidateArtifact := `require trend confirmation
+downgrade conviction
+reject setups
+growth_momentum
+technical_breakout`
+	if err := os.WriteFile(candidatePath, []byte(candidateArtifact), 0o644); err != nil {
+		t.Fatalf("write candidate prompt: %v", err)
+	}
 
 	baseline, candidate, err := comparePromptPerformance(replayPath, "", brief, window, candidatePath)
 	if err != nil {
