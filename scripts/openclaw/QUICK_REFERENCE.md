@@ -1,0 +1,194 @@
+# OpenClaw 腳本快速參考卡
+
+## 5 分鐘快速開始
+
+```bash
+# 推薦：一鍵執行完整實驗循環（90天窗口，自動判斷，自動晉升）
+./scripts/openclaw/run-validated-round.sh
+
+# 查看系統狀態
+./scripts/openclaw/status.sh
+```
+
+## Mutation 類型選擇指南
+
+| 類型 | 效果 | 建議使用場景 |
+|------|------|--------------|
+| `risk_rule_change` | **+40%** 平均改進 | 首選，激進風格，降低准入門檻 |
+| `portfolio_constraint` | **+26%** 平均改進 | 次選，調整倉位和現金比例 |
+| `prompt_tightening` | ~0% 改進 | 不推薦，僅修改提示詞無實質影響 |
+
+```bash
+# 使用特定 mutation 類型
+./scripts/openclaw/run-validated-round.sh --type risk_rule_change
+./scripts/openclaw/run-validated-round.sh --type portfolio_constraint --agent value-yield-01
+```
+
+## 常用命令速查
+
+### 🔍 狀態檢查
+
+```bash
+./scripts/openclaw/status.sh              # 完整狀態報告
+./scripts/openclaw/revert-baseline --list # 查看版本歷史
+```
+
+### 📊 資源監控與輪次管理
+
+```bash
+# 資源檢查（CPU/內存/磁盤）
+./scripts/monitor/resource-guard.sh check           # 檢查資源狀態
+./scripts/monitor/resource-guard.sh check --json     # JSON格式輸出
+
+# 輪次追蹤與停止條件
+./scripts/monitor/round-tracker.sh check    # 檢查是否應停止
+./scripts/monitor/round-tracker.sh stats    # 查看輪次統計
+./scripts/monitor/round-tracker.sh reset    # 重置追蹤器
+```
+
+**停止條件（平衡模式）**：
+- 總輪次達到 20 輪
+- 連續 3 輪被拒絕
+- 接受率低於 15%
+- CPU > 75% 或內存 > 80%
+
+配置文件：`configs/monitor-limits.json`
+
+### 📝 生成改進建議
+```bash
+# 互動模式（推薦）
+./scripts/openclaw/propose-mutation.sh
+
+# 自動模式
+./scripts/openclaw/propose-mutation.sh --auto
+
+# 指定 agent
+./scripts/openclaw/propose-mutation.sh --agent growth-momentum-01
+```
+
+### 🚀 執行實驗
+```bash
+# 執行下一個
+./scripts/openclaw/execute-next.sh
+
+# 執行特定 brief
+./scripts/openclaw/execute-next.sh --brief path/to/brief.json
+```
+
+### ⚖️ 判斷結果
+```bash
+# 互動判斷
+./scripts/openclaw/judge-latest.sh
+
+# JSON 輸出
+./scripts/openclaw/judge-latest.sh --json
+```
+
+### ✅ Promote（接受改進）
+```bash
+# 基本用法
+./scripts/openclaw/decide.sh --promote EXP-ID --reason "Improved Sharpe by X%"
+
+# 預覽
+./scripts/openclaw/decide.sh --promote EXP-ID --reason "..." --dry-run
+```
+
+### ⏪ Revert（回滾）
+```bash
+# 回滾到上一版本
+./scripts/openclaw/decide.sh --revert --reason "Unexpected drawdown"
+
+# 回滾到指定版本
+./scripts/openclaw/decide.sh --revert 3 --reason "Version 3 more stable"
+
+# 查看歷史
+./scripts/openclaw/revert-baseline --list
+```
+
+## 標準工作流程
+
+### 人類主導模式
+```bash
+# Step 1: 查看狀態
+./scripts/openclaw/status.sh
+
+# Step 2: 生成 mutation（互動）
+./scripts/openclaw/propose-mutation.sh
+
+# Step 3: 執行實驗
+./scripts/openclaw/execute-next.sh
+
+# Step 4: 判斷結果（稍後）
+./scripts/openclaw/judge-latest.sh
+
+# Step 5: Promote/Revert
+./scripts/openclaw/decide.sh --promote EXP-ID --reason "..."
+```
+
+### OpenClaw 輔助模式
+```bash
+# Step 1: 狀態檢查
+./scripts/openclaw/status.sh
+
+# Step 2: OpenClaw 生成建議
+./scripts/openclaw/propose-mutation.sh --auto --dry-run
+# 👤 人工確認
+
+# Step 3: 執行
+./scripts/openclaw/propose-mutation.sh --auto
+./scripts/openclaw/execute-next.sh --auto
+
+# Step 4: OpenClaw 判斷
+./scripts/openclaw/judge-latest.sh --json
+# 👤 人工確認 promote
+
+# Step 5: 執行決策
+./scripts/openclaw/decide.sh --promote EXP-ID --reason "..." --yes
+```
+
+## 故障排除
+
+| 問題 | 解決方法 |
+|------|----------|
+| 不知道該做什麼 | `./scripts/openclaw/status.sh` |
+| 實驗卡住 | `grep '"Status":"running"' data/state/experiments.jsonl` |
+| 忘記版本號 | `./scripts/openclaw/revert-baseline --list` |
+| promote 錯誤 | 加上 `--dry-run` 預覽 |
+
+## 檔案位置
+
+```
+data/
+├── state/
+│   ├── baseline_policy.json      # 當前策略版本
+│   ├── experiments.jsonl         # 實驗記錄
+│   └── experiments/              # 實驗結果
+├── replay/                       # 回放數據
+└── mutation-briefs/              # Mutation 建議
+```
+
+## 安全機制
+
+- ✅ **Promote/Revert 必須提供 `--reason`**
+- ✅ **預設需要確認**（可加 `--yes` 跳過）
+- ✅ **支援 `--dry-run` 預覽**
+- ✅ **所有操作可追蹤**（記錄在 experiments.jsonl）
+
+## 需要幫助？
+
+```bash
+# 任何腳本加上 --help
+./scripts/openclaw/status.sh --help
+./scripts/openclaw/propose-mutation.sh --help
+./scripts/openclaw/decide.sh --help
+
+# 詳細教學
+cat docs/SCRIPT_USAGE_GUIDE.md
+
+# 協議文件
+cat docs/openclaw-protocol.md
+```
+
+---
+
+**記住**：Promote 和 Revert 是單向門，系統強制要求 reason 和確認！

@@ -38,20 +38,67 @@ This project is optimized for the Taiwan equity market:
 
 ## Recommended Data Strategy
 
-- Primary historical and market structure: TWSE + TPEX
-- Primary near-real-time market data: Fugle
-- Secondary validation source: Yahoo Finance / Yahoo Taiwan pages
+- **Primary real-time provider**: Hybrid (Fugle + TWSE fallback) — automatically switches to free TWSE OpenAPI when Fugle fails
+- **TWSE OpenAPI**: Free, covers 1335 listed stocks, rate limit 3 req/5s — used as default fallback
+- **Fugle**: Preferred for real-time trading (paid), demo key limited to symbol 1476
+- **Historical/validation**: TWSE + TPEX for backtesting
+
+### Provider Configuration
+
+Set in `.env`:
+```bash
+# Default: Hybrid mode (recommended)
+ATLAS_MARKET_DATA_PROVIDER=hybrid
+FUGLE_API_KEY=your_api_key_here
+
+# Or use TWSE only (free)
+ATLAS_MARKET_DATA_PROVIDER=twse
+
+# Or use Fugle only (requires valid API key)
+ATLAS_MARKET_DATA_PROVIDER=fugle
+```
 
 ## Quick Start
 
+### Daily Simulation
+
 ```bash
 go run ./cmd/atlas
+```
+
+### OpenClaw Experiment Loop (Recommended)
+
+```bash
+# One-command validated experiment round (90-day window, auto-promote if accepted)
+./scripts/openclaw/run-validated-round.sh
+
+# Or step by step:
+./scripts/openclaw/propose-mutation.sh --auto              # Step 1: Generate mutation brief
+./scripts/openclaw/execute-next.sh --auto                # Step 2: Execute experiment
+./scripts/openclaw/judge-latest.sh --auto                # Step 3: Judge results
+```
+
+### Advanced: Mutation Type Selection
+
+```bash
+# Test different mutation strategies
+./scripts/openclaw/run-validated-round.sh --type risk_rule_change           # Aggressive entry rules (+40% avg)
+./scripts/openclaw/run-validated-round.sh --type portfolio_constraint       # Position sizing & cash rules (+26% avg)
+./scripts/openclaw/run-validated-round.sh --type prompt_tightening          # Prompt refinement (limited effect)
+
+# Specify agent
+./scripts/openclaw/run-validated-round.sh --agent growth-momentum-01 --type risk_rule_change
+```
+
+### Manual Commands
+
+```bash
 go test ./...
 go run ./cmd/import-replay -source samples/replay/twse_stock_day_all_sample.csv -target data/replay/tw_open_data.jsonl
-go run ./cmd/backtest-window -start 2026-03-26 -end 2026-03-27
-go run ./cmd/execute-experiment -brief data/state/windows/window-20260326-20260327-mutation-brief.json
-go run ./cmd/judge-experiment -result data/state/experiments/exec-growth-momentum-01-1774800459.json
-go run ./cmd/promote-baseline -result data/state/experiments/exec-growth-momentum-01-1774800459.json
+go run ./cmd/backtest-window -start 2026-01-01 -end 2026-03-31  # Create 90-day window
+go run ./cmd/execute-experiment --brief data/state/mutation-briefs/brief-xxx.json
+go run ./cmd/judge-experiment -result data/state/experiments/exec-xxx.json
+go run ./cmd/promote-baseline -result data/state/experiments/exec-xxx.json
 ```
 
 ## Operating Logic
@@ -179,21 +226,65 @@ Those policy candidates now route through a shared execution policy model:
 - replay compare can derive a candidate execution policy from the proposal artifact
 - CRO conviction filtering and governance routing now read the same policy surface instead of separate ad-hoc rules
 
-Accepted experiments can now be promoted into a formal baseline policy:
+## Resource Monitoring & Round Management (New in v0.5)
 
-- baseline policy lives at `ATLAS_BASELINE_POLICY_PATH`
-- prompt promotions become persistent prompt overrides
-- risk and portfolio promotions update shared execution and simulation constraints
-- runtime, backtest, judge, and replay compare all read the same baseline policy file
+The system now includes automated resource monitoring and round tracking to prevent overloading and ensure stable long-running experiments.
 
-The executor lives in:
+### Resource Guard
 
-- [executors.go](/Users/kaecer/.openclaw/workspace/agents/finance/atlas/internal/orchestrator/executors.go)
-- [plugin_registry.go](/Users/kaecer/.openclaw/workspace/agents/finance/atlas/internal/orchestrator/plugin_registry.go)
-- [plugin_control.go](/Users/kaecer/.openclaw/workspace/agents/finance/atlas/internal/orchestrator/plugin_control.go)
-- [plugin_additional.go](/Users/kaecer/.openclaw/workspace/agents/finance/atlas/internal/orchestrator/plugin_additional.go)
+Monitor system resources before each experiment round:
 
-The prompt-aware experiment judge reuses this same execution path, so `v1` and `v2` prompts are compared against the same replay decision logic rather than separate ad-hoc heuristics.
+```bash
+# Check CPU, memory, and disk usage
+./scripts/monitor/resource-guard.sh check
+
+# JSON output for automation
+./scripts/monitor/resource-guard.sh check --json
+```
+
+**Default Thresholds (Balanced Mode)**:
+- CPU: 75% (warn if exceeded)
+- Memory: 80% (warn if exceeded)  
+- Disk: 85% (warn if exceeded)
+
+Configure in `configs/monitor-limits.json`.
+
+### Round Tracker
+
+Track experiment rounds and enforce stop conditions:
+
+```bash
+# Check if stop conditions are met
+./scripts/monitor/round-tracker.sh check
+
+# View statistics
+./scripts/monitor/round-tracker.sh stats
+
+# Reset tracker (with backup)
+./scripts/monitor/round-tracker.sh reset
+```
+
+**Stop Conditions (Balanced Mode)**:
+- Maximum 20 total rounds
+- 3 consecutive rejections
+- Acceptance rate below 15%
+- All 7 agents optimized
+
+### Automatic Integration
+
+`run-validated-round.sh` now automatically:
+1. Checks resource status before execution
+2. Validates round limits
+3. Records results after completion
+
+Example output:
+```
+[Resource Check] Checking system resources... ✓
+[Round Check] Checking round limits...
+[Round Tracker] Current round: 10/20
+...
+[Round Recorded] Round 10: accepted (improvement: 0.0025)
+```
 
 ## Skill System
 

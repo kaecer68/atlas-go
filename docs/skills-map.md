@@ -183,6 +183,19 @@ These skills define how the system is run correctly.
 - identify weak agents across a period instead of one day
 - avoid drawing conclusions from too few sessions
 
+### `market_data_provider`
+
+- Focus: reliable market data acquisition with automatic fallback
+- Responsibilities:
+- choose appropriate provider (hybrid/twse/fugle) based on config and availability
+- handle rate limiting gracefully (TWSE: 3 req/5s, Fugle: 50 req/min)
+- automatic fallback from paid to free sources when failures occur
+- maintain data provenance in quote source field
+- Providers:
+  - **hybrid** (default): tries Fugle first, falls back to TWSE OpenAPI automatically
+  - **twse**: TWSE OpenAPI only (free, 1335 listed stocks)
+  - **fugle**: Fugle only (paid for real-time, demo key limited to symbol 1476)
+
 ## Layer 3: Control Skills
 
 These skills limit risk and maintain system integrity.
@@ -232,6 +245,17 @@ These skills govern how the system improves over time.
 - Focus: produce one targeted prompt change
 - Inputs: weak-agent failure pattern, current prompt, allowed scope
 - Outputs: candidate prompt revision
+- **Strategy evolution**:
+  - **Defensive (v1)**: tighten qualification, downgrade uncertain signals, reject fragile setups
+  - **Offensive (v2)**: optimize entry timing, increase position sizing on high-conviction setups
+  - **Aggressive (v3 - current)**: 
+    - Higher conviction thresholds (>70 vs >50)
+    - 2x position sizing when Sharpe > 1.0
+    - Concentrate up to 30% in single name when edge is clear
+    - Skip diversification rules for high-conviction opportunities
+- **Known limitations**: 
+  - `prompt_tightening` mutation currently produces no measurable difference (candidate == baseline)
+  - Only modifies prompt text without changing underlying recommendation scoring logic
 - Avoid: broad rewrites with unclear causality
 
 ### `experiment_designer`
@@ -239,14 +263,84 @@ These skills govern how the system improves over time.
 - Focus: define a valid before/after comparison
 - Inputs: hypothesis, window, acceptance metric, revert condition
 - Outputs: experiment record
+- Required fields in mutation brief:
+  - `window_id`: backtest window for evaluation
+  - `target_skill`: agent skill identifier
+  - `acceptance_gates`: ["improve_sharpe_like", "no_material_drawdown_degradation", "no_constraint_bypass"]
+  - `maturity_level`: level_1_exploratory | level_2_window_validated | level_3_regime_aware
 - Avoid: evaluation leakage and moving goalposts
 
 ### `experiment_judge`
 
 - Focus: accept or reject a candidate based on evidence
-- Inputs: baseline metrics, candidate metrics, risk behavior
+- Inputs: baseline metrics, candidate metrics, risk behavior, judge checks
 - Outputs: accepted or rejected decision
+- **Acceptance criteria** (simplified in 2026-04):
+  - candidate must be > baseline (strict improvement required)
+  - improvement must exceed threshold:
+    - `prompt_tightening`: 0.0005 (rarely effective, see known issues)
+    - `risk_rule_change`: 0.001 (lowered from 0.0025)
+    - `portfolio_constraint_revision`: 0.001 (lowered from 0.0035)
+  - sufficient policy checks must pass
+- **Implementation note**: Thresholds were lowered to allow gradual improvements. Previously strict thresholds (0.0025-0.0035) caused excessive rejections even for positive improvements.
 - Avoid: approving changes based on narrative only
+
+### `risk_rule_change` Parameters (2026-04 Updated)
+
+Effective risk rule mutation uses these aggressive parameters:
+
+```yaml
+risk_rule_change:
+  conviction_floor: 35              # Lowered from 55 (capture more opportunities)
+  liquidity_floor: 2000000         # Reduced from 5M (broader universe)
+  max_position_weight: 0.25        # Increased from 0.18 (higher conviction sizing)
+  high_conviction_threshold: 80    # For auto-scaling to max weight
+  stop_loss_pct: 8                 # Tighter than 15% (faster capital rotation)
+  min_cash_pct: 5                  # Reduced from 12% (less cash drag)
+  aggressive_mode: true
+```
+
+**Observed effects** (90-day window, 4 agents tested):
+- Average improvement: +29%
+- Acceptance rate: 100% (4/4 agents)
+- Baseline range: 0.005073 → Candidate: 0.006419-0.007110
+
+### `live_trading_operator` *(New)*
+
+- Focus: real-time paper trading execution and monitoring
+- Responsibilities:
+  - maintain live portfolio state and position tracking
+  - subscribe to market events through Event Bus
+  - execute agent logic on market snapshots
+  - apply risk checks before order simulation
+  - record all trading activity to persistent ledger
+- Components:
+  - Live State Store (portfolio, positions, regime)
+  - Event Bus (market snapshots, orders, risk alerts)
+  - Real-time Orchestrator (market schedule, intraday cycles)
+
+### `monitoring_operator` *(New in v0.5)*
+
+- Focus: system health, resource monitoring, and experiment lifecycle management
+- Responsibilities:
+  - monitor CPU, memory, and disk usage during experiments
+  - track experiment rounds and enforce stop conditions
+  - alert on resource pressure and anomalies
+  - provide visibility into system performance
+- **Resource thresholds** (Balanced mode):
+  - CPU: 75% (warn), 85% (critical)
+  - Memory: 80% (warn), 90% (critical)
+  - Disk: 85% (warn)
+- **Stop conditions**:
+  - Maximum 20 total rounds per session
+  - 3 consecutive rejections
+  - Acceptance rate below 15% (after 5+ rounds)
+  - All 7 agents optimized
+- **Scripts**:
+  - `scripts/monitor/resource-guard.sh` - Resource monitoring
+  - `scripts/monitor/round-tracker.sh` - Round tracking
+- **Configuration**: `configs/monitor-limits.json`
+- Avoid: ignoring resource warnings during long-running experiments
 
 ## Core Operating Logic
 

@@ -1,0 +1,90 @@
+{
+  "_comment": "OpenClaw 资源监控与轮次管理配置 - 平衡模式 (Balanced)",
+  "_version": "1.0",
+  "_last_updated": "2026-04-06",
+  "_description": "平衡配置：适合大多数场景，兼顾性能与稳定性。未来可根据实验结果调整为保守(Conservative)或激进(Aggressive)模式。",
+  
+  "resource_limits": {
+    "cpu_threshold_percent": 75,
+    "cpu_threshold_comment": "CPU使用率超过75%时发出警告，超过85%时建议暂停",
+    
+    "memory_threshold_percent": 80,
+    "memory_threshold_comment": "内存使用率超过80%时发出警告",
+    
+    "disk_threshold_percent": 85,
+    "disk_threshold_comment": "磁盘使用率超过85%时发出警告",
+    
+    "max_parallel_rounds": 3,
+    "max_parallel_comment": "最多并行执行3轮实验，避免资源过载",
+    
+    "wait_timeout_seconds": 300,
+    "wait_timeout_comment": "资源不足时最多等待5分钟恢复"
+  },
+  
+  "stop_conditions": {
+    "max_total_rounds": 20,
+    "max_rounds_comment": "单个实验会话最多执行20轮，防止无限循环",
+    
+    "consecutive_rejects": 3,
+    "consecutive_comment": "连续3轮被拒绝后建议停止，避免无效迭代",
+    
+    "min_acceptance_rate": 0.15,
+    "min_rate_comment": "接受率低于15%时建议停止(至少5轮后评估)",
+    
+    "target_agents_coverage": "all",
+    "coverage_comment": "目标：优化所有7个agents，或改为核心agents数量",
+    
+    "min_sharpe_improvement": 0.01,
+    "sharpe_comment": "单次改进的最低夏普比率提升阈值(当前实验阈值0.001为原始值)",
+    
+    "max_experiment_duration_minutes": 120,
+    "duration_comment": "单轮实验最多运行2小时，防止卡住"
+  },
+  
+  "adaptive_adjustments": {
+    "_comment": "根据历史实验结果动态调整的参数",
+    
+    "enable_auto_throttle": true,
+    "auto_throttle_comment": "当资源紧张时自动降低并行度",
+    
+    "high_load_cpu_threshold": 85,
+    "high_load_action": "reduce_parallel_by_1",
+    
+    "critical_load_cpu_threshold": 95,
+    "critical_load_action": "pause_and_wait",
+    
+    "improvement_trend_window": 5,
+    "trend_comment": "评估最近5轮的趋势来决定是否继续"
+  },
+  
+  "monitoring": {
+    "log_interval_seconds": 30,
+    "log_comment": "每30秒记录一次资源状态",
+    
+    "alert_on_stop": true,
+    "alert_comment": "达到停止条件时发出提醒",
+    
+    "save_resource_history": true,
+    "history_comment": "保存资源使用历史供后续分析",
+    
+    "history_file": "data/state/resource-history.jsonl"
+  },
+  
+  "future_optimization_tracking": {
+    "_comment": "记录这些参数以便后续版本比较",
+    
+    "baseline_config": "balanced_v1.0",
+    "alternative_configs": ["conservative_v1.0", "aggressive_v1.0"],
+    
+    "metrics_to_track": [
+      "total_rounds_until_stop",
+      "acceptance_rate",
+      "average_improvement_per_round",
+      "total_execution_time",
+      "peak_resource_usage",
+      "final_portfolio_sharpe"
+    ],
+    
+    "comparison_notes": "记录此处以便未来对比：保守模式可能降低接受率但提高稳定性；激进模式可能增加并行度但增加资源风险"
+  }
+}
