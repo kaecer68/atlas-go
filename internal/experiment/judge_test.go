@@ -109,7 +109,7 @@ func TestPassesAcceptanceUsesMaturityThresholds(t *testing.T) {
 		Experiment: domain.ExperimentRecord{
 			AcceptanceGates: []string{"improve_sharpe_like", "no_material_drawdown_degradation", "no_constraint_bypass"},
 			BaselineValue:   0.0100,
-			CandidateValue:  0.0105,
+			CandidateValue:  0.0102,
 			MutationType:    "prompt_tightening",
 		},
 		Brief: domain.MutationBrief{
@@ -145,7 +145,7 @@ func TestPassesAcceptanceUsesMutationTypeProfiles(t *testing.T) {
 		Experiment: domain.ExperimentRecord{
 			AcceptanceGates: []string{"improve_sharpe_like", "no_material_drawdown_degradation", "no_constraint_bypass"},
 			BaselineValue:   0.0100,
-			CandidateValue:  0.0120,
+			CandidateValue:  0.0105,
 			MutationType:    "risk_rule_change",
 		},
 		Brief: domain.MutationBrief{

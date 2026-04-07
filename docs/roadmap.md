@@ -16,7 +16,7 @@
 - first sector and macro agent prompts
 - sessionized replay artifacts
 
-## Phase 3: OpenClaw Training Loop
+## Phase 3: OpenClaw Training Loop ✅
 
 - agent registry
 - prompt versioning
@@ -24,17 +24,30 @@
 - keep-or-revert experiment flow
 - ledger-backed weakest-agent selection
 - multi-session backtest windows
+- intelligent mutation type selection (prompt_tightening, risk_rule_change, portfolio_constraint_revision)
+- interactive mutation proposal scripts
 
-## Phase 4: Near-Real-Time Paper Trading
+## Phase 4: Near-Real-Time Paper Trading ✅
 
-- Fugle snapshots
-- live state store
-- event-driven orchestration
-- monitoring and alerting
+- Fugle snapshots ✅
+- TWSE OpenAPI integration ✅
+- Hybrid Provider (Fugle + TWSE fallback) ✅
+- Live State Store ✅
+- Event-driven orchestration ✅
+- Monitoring and alerting ✅
 
-## Phase 5: Portfolio Intelligence
+## Phase 5: Portfolio Intelligence ✅
 
-- portfolio exposure management
-- agent weighting
-- style rotation
-- post-trade analysis
+- Multi-factor portfolio optimization ✅
+- Risk-adjusted position sizing ✅
+- Dynamic regime-based allocation ✅
+- Agent weighting system ✅
+- Style rotation detection ✅
+- Post-trade analysis ✅
+
+## Phase 6: Production Trading (Next)
+
+- Real broker integration
+- Live order management
+- Risk circuit breakers
+- Performance reporting

@@ -54,6 +54,10 @@ func SelectWeakestAgent(registry domain.AgentRegistry, scorecards []domain.Score
 			continue
 		}
 		scorecard.Layer = agent.Layer
+
+		// 智能选择 mutation 类型
+		mutationType, hypothesis, acceptanceGates := selectMutationType(agent, scorecard)
+
 		return &Candidate{
 			Agent:     agent,
 			Scorecard: scorecard,
@@ -61,11 +65,11 @@ func SelectWeakestAgent(registry domain.AgentRegistry, scorecards []domain.Score
 				ID:                fmt.Sprintf("exp-%s-%d", agent.ID, time.Now().Unix()),
 				TargetAgentID:     agent.ID,
 				Skill:             agent.Skill,
-				Hypothesis:        "A targeted prompt refinement can improve risk-adjusted recommendation quality.",
+				Hypothesis:        hypothesis,
 				PromptVersionFrom: "v1",
 				PromptVersionTo:   "v2",
-				MutationType:      "prompt_tightening",
-				AcceptanceGates:   []string{"improve_sharpe_like", "no_material_drawdown_degradation", "no_constraint_bypass"},
+				MutationType:      mutationType,
+				AcceptanceGates:   acceptanceGates,
 				WindowStart:       time.Now().AddDate(0, 0, -20),
 				WindowEnd:         time.Now(),
 				AcceptanceMetric:  "sharpe_like",
@@ -182,4 +186,44 @@ func iterationGuidance(layer domain.AgentLayer, windowCount int) []string {
 	}
 
 	return guidance
+}
+
+// selectMutationType 根据 agent 层级、scorecard 表现和证据窗口数智能选择 mutation 类型
+func selectMutationType(agent domain.AgentSpec, scorecard domain.Scorecard) (string, string, []string) {
+	sharpe := scorecard.SharpeLike
+	windows := scorecard.WindowCount
+	layer := agent.Layer
+
+	// Control 层 agent 优先考虑 risk_rule_change 或 portfolio_constraint_revision
+	if layer == domain.LayerControl {
+		if windows >= 5 && sharpe < 0 {
+			// 证据充足且表现差，尝试 portfolio 约束调整
+			return "portfolio_constraint_revision",
+				"Portfolio-level risk governance needs adjustment based on sustained replay evidence of weak risk-adjusted returns.",
+				[]string{"improve_sharpe_like", "reduce_concentration_risk", "maintain_cro_authority"}
+		}
+		// Control 层默认 risk rule 调整
+		return "risk_rule_change",
+			"Risk filtering rules need tightening to reduce false positives in CRO screening.",
+			[]string{"improve_sharpe_like", "reduce_false_positive_rate", "preserve_downside_protection"}
+	}
+
+	// Sector 层 agent，证据充足且表现不佳时，尝试 risk rule change
+	if layer == domain.LayerSector && windows >= 4 && sharpe < 0.1 {
+		return "risk_rule_change",
+			"Sector selection criteria need stronger conviction thresholds to avoid weak setups.",
+			[]string{"improve_sharpe_like", "reduce_sector_blindspots", "maintain_industry_coverage"}
+	}
+
+	// Style 层 agent，证据充足时尝试 risk rule change
+	if layer == domain.LayerStyle && windows >= 4 && sharpe < 0.1 {
+		return "risk_rule_change",
+			"Style filter thresholds should be raised to improve signal quality.",
+			[]string{"improve_sharpe_like", "reduce_style_drift", "maintain_momentum_catch"}
+	}
+
+	// 默认情况：prompt tightening（适用于证据不足或 Context 层）
+	return "prompt_tightening",
+		"A targeted prompt refinement can improve risk-adjusted recommendation quality.",
+		[]string{"improve_sharpe_like", "no_material_drawdown_degradation", "no_constraint_bypass"}
 }

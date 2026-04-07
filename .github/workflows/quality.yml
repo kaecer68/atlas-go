@@ -1,0 +1,102 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  GO_VERSION: '1.21'
+
+jobs:
+  # Code formatting check
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Check formatting
+      run: |
+        if [ -n "$(gofmt -l .)" ]; then
+          echo "Please run 'gofmt -w .' to fix formatting issues:"
+          gofmt -l .
+          exit 1
+        fi
+
+  # Vet
+  vet:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Run go vet
+      run: go vet ./...
+
+  # Static analysis
+  staticcheck:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Install staticcheck
+      run: go install honnef.co/go/tools/cmd/staticcheck@latest
+
+    - name: Run staticcheck
+      run: staticcheck ./...
+
+  # Test coverage
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Run tests with coverage
+      run: |
+        go test -coverprofile=coverage.out ./...
+        go tool cover -func=coverage.out | tail -n 1
+
+    - name: Check coverage threshold
+      run: |
+        COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+        echo "Total coverage: $COVERAGE%"
+        if (( $(echo "$COVERAGE < 60" | bc -l) )); then
+          echo "Coverage is below 60% threshold"
+          exit 1
+        fi
+
+  # License check
+  license:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Check license headers
+      run: |
+        # Check that all .go files have license header
+        MISSING=$(find . -name "*.go" -type f ! -path "./vendor/*" -exec grep -L "Copyright\|MIT\|Apache" {} \;)
+        if [ -n "$MISSING" ]; then
+          echo "Files missing license headers:"
+          echo "$MISSING"
+          exit 1
+        fi

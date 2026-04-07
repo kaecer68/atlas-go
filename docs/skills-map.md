@@ -196,6 +196,276 @@ These skills define how the system is run correctly.
   - **twse**: TWSE OpenAPI only (free, 1335 listed stocks)
   - **fugle**: Fugle only (paid for real-time, demo key limited to symbol 1476)
 
+### `asset_allocation_manager` *(New in v23)*
+
+- Focus: strategic asset allocation across asset classes and security types
+- Responsibilities:
+  - maintain target allocation weights in `configs/portfolio-allocation.v23.json`
+  - balance ETF core exposure with single-stock satellite positions
+  - enforce concentration limits per asset class and individual name
+  - coordinate rebalancing schedule (default: annual)
+  - track allocation drift and trigger adjustment alerts
+- **Configuration**:
+  - File: `configs/portfolio-allocation.v23.json`
+  - Taiwan Equity Total: 45% (ETF 15% + Single Stocks 30%)
+  - Precious Metals: 15% (Gold 10% + Silver 5%)
+  - Industrial Metals: 15% (Copper)
+  - Cash: 25%
+- **Single Stock Targets** (14 names, ~2.14% each):
+  - Semiconductor: 2330.TW, 2303.TW, 2454.TW, 3034.TW
+  - AI Supply Chain: 2382.TW, 6669.TW, 3017.TW, 3037.TW
+  - Financials: 2881.TW, 2882.TW, 2891.TW
+  - Shipping: 2603.TW, 2609.TW, 2615.TW
+- **Risk Guards**:
+  - Max single stock weight: 3%
+  - Daily portfolio drawdown alert: -2%
+  - Emergency trigger: 3-day cumulative Sharpe drop >5%
+- Avoid: over-concentration in single names or sectors
+
+### `darwinian_weight_manager` *(Phase 2 - Atlas-GIC Style)*
+
+- Focus: dynamic agent weight adjustment based on performance
+- Responsibilities:
+  - track rolling 30-day Sharpe ratio for each agent
+  - adjust weights daily: top quartile ×1.05, bottom quartile ×0.95
+  - clamp weights between 0.3 (whispering) and 2.5 (shouting)
+  - persist weights to `configs/darwinian_weights.json`
+  - apply weights to recommendations before portfolio synthesis
+- **Weight Range**:
+  - 2.0-2.5: Shouting (highest confidence, strong performance)
+  - 1.5-2.0: Strong (above average)
+  - 0.8-1.5: Neutral (average)
+  - 0.5-0.8: Weak (below average)
+  - 0.3-0.5: Whispering (poor performance, minimal influence)
+- **Metrics Tracked**:
+  - Rolling Sharpe ratio (30-day window)
+  - Win rate and average return per signal
+  - Total signals and consecutive streaks
+- **Usage**:
+  ```bash
+  ./scripts/darwinian-adjust.sh          # Daily adjustment
+  ./scripts/darwinian-adjust.sh --reset # Reset to neutral (1.0)
+  ```
+- Implementation: `internal/portfolio/darwinian_weights.go`
+
+### Superinvestor Layer *(Phase 2 - 4 Master-Style Agents)*
+
+**Layer 4 agents providing concentrated, high-quality recommendations:**
+
+| Agent | Style | Focus | Key Metrics |
+|-------|-------|-------|-------------|
+| `super_druckenmiller` | Macro/Momentum | Asymmetric macro trades, momentum timing | VIX, DXY, 10Y yields, sector flows |
+| `super_aschenbrenner` | AI/Compute Cycle | AI capex beneficiaries, value chain mapping | Data center capex, GPU pricing, Taiwan exports |
+| `super_baker` | Deep Tech | IP moat analysis, R&D efficiency | Patent quality, gross margins, R&D spend |
+| `super_ackman` | Quality Compounder | Pricing power, FCF generation | ROIC, FCF conversion, customer retention |
+
+- **Conviction Threshold**: 65+ (higher than regular agents)
+- **Coordination**: Each superinvestor has defined collaboration notes with other agents
+- **Prompts**: `prompts/agents/super_*.md`
+
+---
+
+## Phase 3: Advanced Agent Systems *(Agent Spawning, PRISM, Reflexivity, Swarm)*
+
+### `agent_spawner` *(Phase 3 - Automated Agent Lifecycle)*
+
+- Focus: automatic agent creation, gap detection, and lifecycle management
+- Responsibilities:
+  - detect capability gaps in current agent population
+  - spawn new agents based on missing skills or market opportunities
+  - manage agent lifecycle: spawn → train → deploy → monitor → retire
+  - coordinate with PRISM for regime-specific training
+- **Components**:
+  - `GapDetector`: identifies missing capabilities
+  - `AgentFactory`: creates new agent instances
+  - `SpawningManager`: orchestrates deployment
+- **Configuration**: `configs/spawning-config.json`
+- **Usage**:
+  ```bash
+  ./scripts/spawning-manage.sh --scan      # Scan for gaps
+  ./scripts/spawning-manage.sh --spawn     # Spawn new agent
+  ./scripts/spawning-manage.sh --status    # Show status
+  ```
+- Implementation: `internal/spawning/`
+
+### `prism_manager` *(Phase 3 - Multi-Regime Training)*
+
+- Focus: regime-specific training queue management and optimization
+- Responsibilities:
+  - maintain training queues for different market regimes
+  - schedule training tasks based on regime detection
+  - balance training load across regimes
+  - optimize training priority based on regime volatility
+- **Regime Types**:
+  - `trending_up`: strong momentum, trend-following strategies
+  - `trending_down`: bear market, defensive positioning
+  - `range_bound`: low volatility, mean-reversion strategies
+  - `high_volatility`: crisis mode, risk-off positioning
+  - `low_volatility`: calm market, momentum strategies
+  - `rotation`: sector rotation, style switching
+  - `earnings`: earnings season, event-driven
+- **Configuration**: `configs/prism-config.json`
+- **Usage**:
+  ```bash
+  ./scripts/prism-manage.sh --rebalance    # Rebalance queues
+  ./scripts/prism-manage.sh --status       # Show queue status
+  ./scripts/prism-manage.sh --train        # Trigger training
+  ```
+- Implementation: `internal/prism/`
+
+### `reflexivity_engine` *(Phase 3 - Soros Reflexivity)*
+
+- Focus: detect and apply market bias feedback loops
+- Responsibilities:
+  - identify reflexivity patterns in market data
+  - track price-fundamental feedback loops
+  - detect bubble formation and collapse signals
+  - adjust recommendations based on reflexive bias
+- **Key Concepts**:
+  - **Bias**: market participants' distorted perception
+  - **Far-from-Equilibrium**: price far from intrinsic value
+  - **Self-Reinforcing**: feedback loop amplifies trend
+  - **Reversal Point**: when trend cannot sustain itself
+- **Detection Metrics**:
+  - Price/momentum divergence
+  - Volume/price relationship
+  - Sentiment/price divergence
+  - Fundamental deterioration with price rise
+- **Usage**:
+  ```bash
+  ./scripts/reflexivity-report.sh          # Generate analysis
+  ```
+- Implementation: `internal/reflexivity/`
+
+### `mirofish_swarm` *(Phase 3 - Swarm Intelligence Simulation)*
+
+- Focus: simulate diverse agent behaviors for robust strategy discovery
+- Responsibilities:
+  - run parallel simulations with varied agent configurations
+  - aggregate consensus from diverse strategies
+  - detect anomalies in strategy performance
+  - generate training data from simulation results
+- **Swarm Components**:
+  - `MiroFish`: individual strategy agents with unique behaviors
+  - `MarketScenario`: simulated market conditions
+  - `ConsensusEngine`: aggregates signals from swarm
+  - `AnomalyDetector`: identifies outlier strategies
+- **Simulation Modes**:
+  - `diversity`: maximize strategy variation
+  - `convergence`: find common signals
+  - `stress_test`: extreme market conditions
+  - `regime_specific`: targeted regime simulation
+- **Usage**:
+  ```bash
+  ./scripts/swarm-manage.sh --run          # Run simulation
+  ./scripts/swarm-manage.sh --consensus    # Get consensus
+  ```
+- Implementation: `internal/swarm/`
+
+---
+
+## Phase 4: Expert-Level Capabilities *(Meta-Learning, Adversarial, Global, Real-Time)*
+
+### `metalearner` *(Phase 4 - Learning-to-Learn)*
+
+- Focus: evolutionary strategy optimization and automated learning approach selection
+- Responsibilities:
+  - maintain population of learning strategies (20+ strategies)
+  - evolve strategies based on MiroFish simulation results
+  - perform crossover, mutation, and selection of top performers
+  - adapt training approaches daily based on performance
+- **Strategy Types**:
+  - Conservative: minimal changes, low risk
+  - Aggressive: frequent mutations, high exploration
+  - Adaptive: regime-dependent approach
+  - Focused: deep optimization on specific skills
+  - Broad: wide exploration across many strategies
+- **Evolution Process**:
+  1. Evaluate all strategies on recent performance
+  2. Select top performers (top 25%)
+  3. Create offspring via crossover/mutation
+  4. Replace worst performers
+  5. Persist strategy population
+- **Configuration**: `configs/metalearning-config.json`
+- Implementation: `internal/metalearning/`
+
+### `adversarial_trainer` *(Phase 4 - Red/Blue Team)*
+
+- Focus: stress testing agents against adversarial scenarios
+- Responsibilities:
+  - run Red Team attacks simulating market crises
+  - coordinate Blue Team defensive responses
+  - identify vulnerabilities in agent strategies
+  - harden agents against known attack patterns
+- **Red Team (5 Attackers)**:
+  - `flash_crash`: sudden price drop simulation
+  - `liquidity_drain`: low volume scenario
+  - `correlation_spike`: unexpected correlation
+  - `sentiment_shift`: rapid mood change
+  - `regime_jump`: sudden regime transition
+- **Blue Team (5 Defenders)**:
+  - `risk_mitigator`: position sizing defense
+  - `recovery_agent`: loss recovery strategies
+  - `diversifier`: correlation hedging
+  - `liquidity_guard`: cash management
+  - `stop_loss_manager`: exit strategy
+- **Training Parameters**:
+  - 100 training cycles
+  - Adaptive difficulty (increases with agent improvement)
+  - Vulnerability severity levels: critical, high, medium, low
+- Implementation: `internal/adversarial/`
+
+### `global_market_manager` *(Phase 4 - Cross-Market Expansion)*
+
+- Focus: multi-market operations and regional exposure management
+- Responsibilities:
+  - manage operations across 7 regional markets
+  - track cross-market correlations
+  - enforce regional exposure limits
+  - handle multi-currency and timezone operations
+- **Supported Markets**:
+  | Region | Code | Currency | Timezone |
+  |--------|------|----------|----------|
+  | Taiwan | TW | TWD | UTC+8 |
+  | United States | US | USD | UTC-5 |
+  | Europe | EU | EUR | UTC+1 |
+  | Japan | JP | JPY | UTC+9 |
+  | China | CN | CNY | UTC+8 |
+  | Asia Pacific | AS | Multi | UTC+8 |
+  | Emerging | EM | Multi | Various |
+- **Exposure Limits**:
+  - Max single region: 40%
+  - Max single country: 25%
+  - Max correlation exposure: 0.7
+- **Configuration**: `configs/global-market-config.json`
+- Implementation: `internal/globalmarket/`
+
+### `realtime_adapter` *(Phase 4 - Sub-Second Adaptation)*
+
+- Focus: real-time regime detection and dynamic weight adjustment
+- Responsibilities:
+  - detect market regime within 100ms
+  - adjust agent weights based on current regime
+  - provide confidence scoring for regime predictions
+  - trigger automatic rebalancing when regime shifts
+- **Detected Regimes**:
+  - `calm`: low volatility, steady trends
+  - `volatile`: high volatility, uncertain direction
+  - `trending_up`: strong upward momentum
+  - `trending_down`: strong downward momentum
+  - `reversing`: trend exhaustion, potential reversal
+  - `breakout`: breakout from consolidation
+  - `breakdown`: breakdown from support
+- **Update Cycle**: 100ms
+- **Weight Adjustment**:
+  - Regime-specific agent activation
+  - Confidence-weighted recommendations
+  - Automatic rebalancing triggers
+- **Configuration**: `configs/realtime-config.json`
+- Implementation: `internal/realtime/`
+
+---
+
 ## Layer 3: Control Skills
 
 These skills limit risk and maintain system integrity.

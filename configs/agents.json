@@ -169,6 +169,62 @@
       "requiredSkills": ["cio_portfolio", "research_auditor"],
       "forbiddenActions": ["cro_bypass", "engine_bypass"],
       "operatingNotes": ["Synthesize only within engine and CRO constraints."]
+    },
+    {
+      "id": "super-dru-01",
+      "name": "Superinvestor - Druckenmiller",
+      "layer": "superinvestor",
+      "skill": "druckenmiller_macro",
+      "promptFile": "prompts/agents/super_druckenmiller.md",
+      "enabled": true,
+      "universe": [],
+      "darwinian_weight": 1.0,
+      "primaryMetrics": ["macro_asymmetric_hits", "momentum_capture"],
+      "requiredSkills": ["druckenmiller_macro", "technical_breakout"],
+      "forbiddenActions": ["value_anchor_bias", "earnings_blindness"],
+      "operatingNotes": ["Find the big asymmetric trade. Use momentum and macro themes."]
+    },
+    {
+      "id": "super-asc-01",
+      "name": "Superinvestor - Aschenbrenner",
+      "layer": "superinvestor",
+      "skill": "aschenbrenner_ai_compute",
+      "promptFile": "prompts/agents/super_aschenbrenner.md",
+      "enabled": true,
+      "universe": [],
+      "darwinian_weight": 1.0,
+      "primaryMetrics": ["ai_capex_alpha", "compute_cycle_timing"],
+      "requiredSkills": ["aschenbrenner_ai_compute", "semiconductor_desk"],
+      "forbiddenActions": ["hype_cycle_chasing", "capex_peak_blindness"],
+      "operatingNotes": ["Who benefits from AI capex cycle? Separate durable trends from hype."]
+    },
+    {
+      "id": "super-bak-01",
+      "name": "Superinvestor - Baker",
+      "layer": "superinvestor",
+      "skill": "baker_deep_tech",
+      "promptFile": "prompts/agents/super_baker.md",
+      "enabled": true,
+      "universe": [],
+      "darwinian_weight": 1.0,
+      "primaryMetrics": ["ip_moat_identification", "tech_differentiation_alpha"],
+      "requiredSkills": ["baker_deep_tech", "earnings_quality"],
+      "forbiddenActions": ["revenue_only_analysis", "ip_weakness_ignoring"],
+      "operatingNotes": ["Focus on real IP moats and technological differentiation."]
+    },
+    {
+      "id": "super-ack-01",
+      "name": "Superinvestor - Ackman",
+      "layer": "superinvestor",
+      "skill": "ackman_quality",
+      "promptFile": "prompts/agents/super_ackman.md",
+      "enabled": true,
+      "universe": [],
+      "darwinian_weight": 1.0,
+      "primaryMetrics": ["quality_compounder_alpha", "catalyst_timing"],
+      "requiredSkills": ["ackman_quality", "value_yield"],
+      "forbiddenActions": ["short_term_noise_reaction", "low_fcf_selection"],
+      "operatingNotes": ["Pricing power + FCF + catalyst. Quality compounders only."]
     }
   ]
 }

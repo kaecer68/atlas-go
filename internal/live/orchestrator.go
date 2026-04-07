@@ -1,0 +1,478 @@
+package live
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/orchestrator"
+)
+
+// Orchestrator 实时交易编排器
+type Orchestrator struct {
+	stateStore *StateStore
+	eventBus   *ChannelEventBus
+	marketData marketdata.Provider
+	registry   domain.AgentRegistry
+	system     *orchestrator.System
+
+	// 配置
+	config OrchestratorConfig
+
+	// 运行状态
+	isRunning bool
+	mutex     sync.RWMutex
+	ctx       context.Context
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+
+	// 调度器
+	intradayTicker *time.Ticker
+	quoteTicker    *time.Ticker
+
+	// 观测标的
+	watchlist []string
+}
+
+// OrchestratorConfig 编排器配置
+type OrchestratorConfig struct {
+	MarketOpenTime     string        // 09:00
+	MarketCloseTime    string        // 13:30
+	IntradayInterval   time.Duration // 5m
+	QuotePollInterval  time.Duration // 30s
+	PreMarketCheck     bool
+	MaxDailyLossPct    float64
+	MaxPositionLossPct float64
+	StopLossEnabled    bool
+	TakeProfitEnabled  bool
+}
+
+// DefaultOrchestratorConfig 默认配置
+func DefaultOrchestratorConfig() OrchestratorConfig {
+	return OrchestratorConfig{
+		MarketOpenTime:     "09:00",
+		MarketCloseTime:    "13:30",
+		IntradayInterval:   5 * time.Minute,
+		QuotePollInterval:  30 * time.Second,
+		PreMarketCheck:     true,
+		MaxDailyLossPct:    2.0,
+		MaxPositionLossPct: 5.0,
+		StopLossEnabled:    true,
+		TakeProfitEnabled:  false,
+	}
+}
+
+// NewOrchestrator 创建新的编排器
+func NewOrchestrator(
+	stateStore *StateStore,
+	eventBus *ChannelEventBus,
+	marketData marketdata.Provider,
+	registry domain.AgentRegistry,
+	system *orchestrator.System,
+	config OrchestratorConfig,
+) *Orchestrator {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	return &Orchestrator{
+		stateStore: stateStore,
+		eventBus:   eventBus,
+		marketData: marketData,
+		registry:   registry,
+		system:     system,
+		config:     config,
+		ctx:        ctx,
+		cancel:     cancel,
+		watchlist:  make([]string, 0),
+	}
+}
+
+// SetWatchlist 设置观测标的列表
+func (o *Orchestrator) SetWatchlist(symbols []string) {
+	o.mutex.Lock()
+	defer o.mutex.Unlock()
+	o.watchlist = symbols
+}
+
+// Start 启动编排器
+func (o *Orchestrator) Start() error {
+	o.mutex.Lock()
+	defer o.mutex.Unlock()
+
+	if o.isRunning {
+		return fmt.Errorf("orchestrator already running")
+	}
+
+	o.isRunning = true
+
+	// 启动事件订阅
+	o.setupEventHandlers()
+
+	// 启动市场时间调度器
+	o.wg.Add(1)
+	go o.marketTimeScheduler()
+
+	// 启动数据轮询
+	o.quoteTicker = time.NewTicker(o.config.QuotePollInterval)
+	o.wg.Add(1)
+	go o.quotePoller()
+
+	// 发布系统启动事件
+	o.eventBus.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventSystemStart,
+		Timestamp: time.Now(),
+		Payload: map[string]interface{}{
+			"market_data_provider": o.marketData.Name(),
+			"watchlist_count":      len(o.watchlist),
+		},
+	})
+
+	fmt.Printf("[Orchestrator] Started with %d symbols, poll interval: %v\n",
+		len(o.watchlist), o.config.QuotePollInterval)
+
+	return nil
+}
+
+// Stop 停止编排器
+func (o *Orchestrator) Stop() error {
+	o.mutex.Lock()
+	defer o.mutex.Unlock()
+
+	if !o.isRunning {
+		return nil
+	}
+
+	o.isRunning = false
+	o.cancel()
+
+	if o.quoteTicker != nil {
+		o.quoteTicker.Stop()
+	}
+	if o.intradayTicker != nil {
+		o.intradayTicker.Stop()
+	}
+
+	o.wg.Wait()
+
+	// 保存最终状态
+	if err := o.stateStore.Save(); err != nil {
+		return fmt.Errorf("save final state: %w", err)
+	}
+
+	fmt.Println("[Orchestrator] Stopped")
+	return nil
+}
+
+// setupEventHandlers 设置事件处理器
+func (o *Orchestrator) setupEventHandlers() {
+	// 监听市场快照事件
+	o.eventBus.Subscribe(EventMarketSnapshot, func(ctx context.Context, event BusEvent) error {
+		// 更新持仓价格
+		if payload, ok := event.Payload.(MarketEventPayload); ok {
+			quotes := []domain.Quote{payload.Quote}
+			o.stateStore.UpdatePositionPrices(quotes)
+
+			// 检查止损止盈
+			if o.config.StopLossEnabled || o.config.TakeProfitEnabled {
+				o.checkRiskTriggers(payload.Symbol, payload.Quote.Last)
+			}
+		}
+		return nil
+	})
+
+	// 监听持仓更新事件
+	o.eventBus.Subscribe(EventPositionUpdate, func(ctx context.Context, event BusEvent) error {
+		if payload, ok := event.Payload.(PositionEventPayload); ok {
+			fmt.Printf("[Position] %s: %s %s x%d @ %.2f\n",
+				payload.ChangeType,
+				payload.Symbol,
+				payload.Position.Symbol,
+				payload.Position.Quantity,
+				payload.Position.AverageCost)
+		}
+		return nil
+	})
+
+	// 监听订单事件
+	o.eventBus.Subscribe(EventOrderPlaced, func(ctx context.Context, event BusEvent) error {
+		if payload, ok := event.Payload.(OrderEventPayload); ok {
+			fmt.Printf("[Order] Placed: %s %s x%d @ %.2f\n",
+				payload.Order.Side,
+				payload.Order.Symbol,
+				payload.Order.Quantity,
+				payload.Order.Price)
+		}
+		return nil
+	})
+}
+
+// marketTimeScheduler 市场时间调度器
+func (o *Orchestrator) marketTimeScheduler() {
+	defer o.wg.Done()
+
+	for {
+		select {
+		case <-o.ctx.Done():
+			return
+		default:
+		}
+
+		now := time.Now()
+
+		// 解析市场时间
+		marketOpen, _ := time.Parse("15:04", o.config.MarketOpenTime)
+		marketClose, _ := time.Parse("15:04", o.config.MarketCloseTime)
+
+		todayOpen := time.Date(now.Year(), now.Month(), now.Day(),
+			marketOpen.Hour(), marketOpen.Minute(), 0, 0, now.Location())
+		todayClose := time.Date(now.Year(), now.Month(), now.Day(),
+			marketClose.Hour(), marketClose.Minute(), 0, 0, now.Location())
+
+		// 市场开盘处理
+		if now.After(todayOpen) && now.Before(todayClose) {
+			// 检查是否是开盘后的第一次
+			if o.intradayTicker == nil {
+				o.handleMarketOpen()
+				o.intradayTicker = time.NewTicker(o.config.IntradayInterval)
+				o.wg.Add(1)
+				go o.intradayProcessor()
+			}
+		}
+
+		// 市场收盘处理
+		if now.After(todayClose) && o.intradayTicker != nil {
+			o.handleMarketClose()
+			o.intradayTicker.Stop()
+			o.intradayTicker = nil
+		}
+
+		// 每分钟检查一次
+		time.Sleep(time.Minute)
+	}
+}
+
+// quotePoller 行情轮询器
+func (o *Orchestrator) quotePoller() {
+	defer o.wg.Done()
+
+	for {
+		select {
+		case <-o.ctx.Done():
+			return
+		case <-o.quoteTicker.C:
+			o.fetchAndProcessQuotes()
+		}
+	}
+}
+
+// fetchAndProcessQuotes 获取并处理行情
+func (o *Orchestrator) fetchAndProcessQuotes() {
+	if len(o.watchlist) == 0 {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(o.ctx, 10*time.Second)
+	defer cancel()
+
+	quotes, err := o.marketData.GetQuotes(ctx, time.Now(), o.watchlist)
+	if err != nil {
+		o.eventBus.Publish(BusEvent{
+			ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+			Type:      EventSystemError,
+			Timestamp: time.Now(),
+			Payload: map[string]string{
+				"error": fmt.Sprintf("fetch quotes: %v", err),
+			},
+		})
+		return
+	}
+
+	// 发布行情事件
+	for _, quote := range quotes {
+		o.eventBus.PublishMarketSnapshot(quote)
+	}
+}
+
+// intradayProcessor 盘中处理器
+func (o *Orchestrator) intradayProcessor() {
+	defer o.wg.Done()
+
+	for {
+		select {
+		case <-o.ctx.Done():
+			return
+		case <-o.intradayTicker.C:
+			o.handleIntradayCycle()
+		}
+	}
+}
+
+// handleMarketOpen 处理市场开盘
+func (o *Orchestrator) handleMarketOpen() {
+	fmt.Println("[Orchestrator] Market OPEN")
+
+	// 重置每日状态
+	o.stateStore.ResetDayState()
+
+	// 加载持仓
+	positions := o.stateStore.GetPositions()
+	fmt.Printf("[Orchestrator] Loaded %d positions\n", len(positions))
+
+	// 发布开盘事件
+	o.eventBus.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventMarketOpen,
+		Timestamp: time.Now(),
+		Payload: map[string]interface{}{
+			"positions_count": len(positions),
+			"cash":            o.stateStore.GetPortfolio().Cash,
+		},
+	})
+
+	// 运行 Context Agent 判断市场状态
+	o.runContextAgent()
+}
+
+// handleIntradayCycle 处理盘中周期
+func (o *Orchestrator) handleIntradayCycle() {
+	fmt.Printf("[Orchestrator] Intraday cycle at %s\n", time.Now().Format("15:04:05"))
+
+	// 获取最新行情
+	o.fetchAndProcessQuotes()
+
+	// 更新持仓盈亏
+	portfolio := o.stateStore.GetPortfolio()
+	dayPnL := portfolio.DayPnL
+	dayPnLPct := (dayPnL / portfolio.Cash) * 100
+
+	// 检查每日最大亏损
+	if o.config.MaxDailyLossPct > 0 && dayPnLPct < -o.config.MaxDailyLossPct {
+		fmt.Printf("[Risk] Daily loss limit hit: %.2f%%\n", dayPnLPct)
+		o.eventBus.PublishRiskEvent(EventRiskAlert, "", domain.Position{},
+			"max_daily_loss", 0)
+	}
+
+	// 运行 Agent 生成推荐
+	o.runStyleAndSectorAgents()
+
+	// 应用 CRO 风险过滤
+	o.applyRiskFilters()
+
+	// 模拟订单执行
+	o.simulateOrderExecution()
+}
+
+// handleMarketClose 处理市场收盘
+func (o *Orchestrator) handleMarketClose() {
+	fmt.Println("[Orchestrator] Market CLOSE")
+
+	// 获取最终行情
+	o.fetchAndProcessQuotes()
+
+	// 计算最终盈亏
+	portfolio := o.stateStore.GetPortfolio()
+
+	// 保存状态
+	if err := o.stateStore.Save(); err != nil {
+		fmt.Printf("[Error] Save state: %v\n", err)
+	}
+
+	// 发布收盘事件
+	o.eventBus.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventMarketClose,
+		Timestamp: time.Now(),
+		Payload: map[string]interface{}{
+			"day_pnl":        portfolio.DayPnL,
+			"unrealized_pnl": portfolio.UnrealizedPnL,
+			"total_exposure": portfolio.TotalExposure,
+		},
+	})
+}
+
+// runContextAgent 运行 Context Agent 判断市场状态
+func (o *Orchestrator) runContextAgent() {
+	// TODO: 集成 Context Agent (Taiwan Macro)
+	// 简化版本: 保持当前状态或基于简单规则判断
+	fmt.Println("[Agent] Running Context Agent for regime assessment")
+}
+
+// runStyleAndSectorAgents 运行 Style 和 Sector Agents
+func (o *Orchestrator) runStyleAndSectorAgents() {
+	// TODO: 集成 Style 和 Sector Agents
+	// 简化版本: 占位
+	fmt.Println("[Agent] Running Style and Sector Agents")
+}
+
+// applyRiskFilters 应用风险过滤
+func (o *Orchestrator) applyRiskFilters() {
+	// TODO: 集成 CRO Agent 风险过滤
+	fmt.Println("[Risk] Applying CRO risk filters")
+}
+
+// simulateOrderExecution 模拟订单执行
+func (o *Orchestrator) simulateOrderExecution() {
+	// TODO: 集成订单模拟器
+	// 简化版本: 占位
+	fmt.Println("[Trading] Simulating order execution")
+}
+
+// checkRiskTriggers 检查风险触发条件
+func (o *Orchestrator) checkRiskTriggers(symbol string, currentPrice float64) {
+	position, ok := o.stateStore.GetPosition(symbol)
+	if !ok {
+		return
+	}
+
+	// 计算盈亏百分比
+	pnlPct := (currentPrice - position.AverageCost) / position.AverageCost * 100
+
+	// 检查止损
+	if o.config.StopLossEnabled && pnlPct < -o.config.MaxPositionLossPct {
+		o.eventBus.PublishRiskEvent(EventStopLossTriggered, symbol, position,
+			"stop_loss", currentPrice)
+		fmt.Printf("[Risk] Stop loss triggered for %s at %.2f (loss: %.2f%%)\n",
+			symbol, currentPrice, pnlPct)
+	}
+
+	// 检查止盈 (简化: 2倍止损距离)
+	if o.config.TakeProfitEnabled && pnlPct > o.config.MaxPositionLossPct*2 {
+		o.eventBus.PublishRiskEvent(EventTakeProfitTriggered, symbol, position,
+			"take_profit", currentPrice)
+		fmt.Printf("[Risk] Take profit triggered for %s at %.2f (gain: %.2f%%)\n",
+			symbol, currentPrice, pnlPct)
+	}
+}
+
+// Status 获取运行状态
+func (o *Orchestrator) Status() map[string]interface{} {
+	o.mutex.RLock()
+	defer o.mutex.RUnlock()
+
+	portfolio := o.stateStore.GetPortfolio()
+	positions := o.stateStore.GetPositions()
+
+	return map[string]interface{}{
+		"is_running":         o.isRunning,
+		"market_data_source": o.marketData.Name(),
+		"watchlist_size":     len(o.watchlist),
+		"positions_count":    len(positions),
+		"portfolio": map[string]interface{}{
+			"cash":           portfolio.Cash,
+			"available_cash": portfolio.AvailableCash,
+			"total_exposure": portfolio.TotalExposure,
+			"day_pnl":        portfolio.DayPnL,
+			"unrealized_pnl": portfolio.UnrealizedPnL,
+		},
+		"config": map[string]interface{}{
+			"market_open":       o.config.MarketOpenTime,
+			"market_close":      o.config.MarketCloseTime,
+			"intraday_cycle":    o.config.IntradayInterval.String(),
+			"quote_poll":        o.config.QuotePollInterval.String(),
+			"stop_loss_enabled": o.config.StopLossEnabled,
+		},
+	}
+}

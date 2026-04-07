@@ -1,0 +1,169 @@
+version: '3.8'
+
+services:
+  # Main Atlas application
+  atlas:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: atlas-go
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - ATLAS_ENV=production
+      - ATLAS_LOG_LEVEL=info
+      - ATLAS_DATA_DIR=/app/data
+      - ATLAS_CONFIG_DIR=/app/configs
+      - ATLAS_REPORTS_DIR=/app/reports
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+    networks:
+      - atlas-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Redis for caching and message queue
+  redis:
+    image: redis:7-alpine
+    container_name: atlas-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - atlas-network
+    command: redis-server --appendonly yes
+
+  # PostgreSQL for persistent storage
+  postgres:
+    image: postgres:15-alpine
+    container_name: atlas-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=atlas
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-atlas_secret}
+      - POSTGRES_DB=atlas
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - atlas-network
+
+  # Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: atlas-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - atlas-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+
+  # Grafana for dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: atlas-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - atlas-network
+    depends_on:
+      - prometheus
+
+  # Daily cron job for Darwinian weights adjustment
+  cron-darwinian:
+    build:
+      context: .
+      dockerfile: Dockerfile.cron
+    container_name: atlas-cron-darwinian
+    restart: unless-stopped
+    environment:
+      - CRON_SCHEDULE=0 9 * * *
+      - CRON_COMMAND=/app/scripts/darwinian-adjust.sh --apply
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+    networks:
+      - atlas-network
+    depends_on:
+      - atlas
+
+  # PRISM training queue processor
+  prism-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: atlas-prism-worker
+    restart: unless-stopped
+    command: ["/app/atlas-go", "prism", "worker"]
+    environment:
+      - ATLAS_ENV=production
+      - ATLAS_WORKER_TYPE=prism
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+    networks:
+      - atlas-network
+    depends_on:
+      - redis
+      - postgres
+
+  # MiroFish swarm simulation runner
+  swarm-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: atlas-swarm-runner
+    restart: "no"
+    command: ["/app/atlas-go", "swarm", "run"]
+    environment:
+      - ATLAS_ENV=production
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+    networks:
+      - atlas-network
+    profiles:
+      - swarm
+
+volumes:
+  redis-data:
+  postgres-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  atlas-network:
+    driver: bridge

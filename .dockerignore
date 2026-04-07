@@ -1,0 +1,69 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+bin/
+atlas-go
+
+# Data and logs (mount as volumes)
+data/*
+!data/.gitkeep
+logs/*
+!logs/.gitkeep
+reports/*
+!reports/.gitkeep
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Documentation (keep in repo, not needed in image)
+docs/*.md
+!docs/*.json
+
+# Tests
+*_test.go
+test/
+tests/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Monitoring (mount as config)
+monitoring/
+
+# Scripts (copied separately)
+scripts/*.log

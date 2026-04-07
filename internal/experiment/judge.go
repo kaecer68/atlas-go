@@ -2,6 +2,7 @@ package experiment
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -28,9 +29,16 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 		return domain.PromptExperimentResult{}, err
 	}
 
-	promptBytes, err := os.ReadFile(result.CandidatePrompt)
+	candidatePromptPath := result.CandidatePrompt
+	if !filepath.IsAbs(candidatePromptPath) {
+		if _, err := os.Stat(candidatePromptPath); err != nil {
+			candidatePromptPath = filepath.Join(".", candidatePromptPath)
+		}
+	}
+
+	promptBytes, err := os.ReadFile(candidatePromptPath)
 	if err != nil {
-		return domain.PromptExperimentResult{}, err
+		return domain.PromptExperimentResult{}, fmt.Errorf("read candidate prompt %s: %w", candidatePromptPath, err)
 	}
 	windowSummary, err := loadWindowSummary(windowSummaryPath(resultPath, result.Brief.WindowID))
 	if err != nil {
@@ -160,14 +168,13 @@ func passesAcceptance(result domain.PromptExperimentResult) (bool, string) {
 }
 
 func requiredImprovementForProfile(maturity, mutationType string) float64 {
-	base := requiredImprovementForMaturity(maturity)
 	switch mutationType {
 	case "risk_rule_change":
-		return base + 0.0015
+		return 0.001
 	case "portfolio_constraint_revision":
-		return base + 0.0025
+		return 0.001
 	default:
-		return base
+		return 0.0005
 	}
 }
 

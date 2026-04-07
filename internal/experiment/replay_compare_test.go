@@ -40,6 +40,9 @@ technical_breakout`
 	if candidate > 1 || baseline > 1 {
 		t.Fatalf("unexpected replay score magnitude, baseline=%f candidate=%f", baseline, candidate)
 	}
+	if baseline == candidate {
+		t.Fatalf("expected candidate to differ from baseline, got baseline=%f candidate=%f", baseline, candidate)
+	}
 }
 
 func TestApplyConstraintCandidateParsesRiskAndPortfolioFields(t *testing.T) {

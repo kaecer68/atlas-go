@@ -164,7 +164,7 @@ func TestExecuteUsesPortfolioConstraintTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read candidate prompt: %v", err)
 	}
-	if !strings.Contains(string(promptBytes), "Portfolio Constraint Revision Proposal") {
+	if !strings.Contains(string(promptBytes), "Portfolio Constraint Optimization Proposal") {
 		t.Fatalf("expected portfolio constraint template artifact")
 	}
 }

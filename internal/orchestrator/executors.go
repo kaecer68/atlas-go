@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
 func ExecuteRegistryResearch(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string) (domain.Regime, []domain.Recommendation) {
@@ -26,6 +27,43 @@ func ExecuteRegistryResearchDetailedWithPolicy(registry domain.AgentRegistry, qu
 	raw := collectRecommendations(registry, quoteBySymbol, plugins, overrides)
 	final := applyControlLayer(registry, plugins, raw, policy)
 	return regime, raw, final
+}
+
+// ExecuteRegistryResearchWithDarwinianWeights executes research with Darwinian weight application
+// This applies Atlas-GIC style weight multipliers (0.3-2.5) to agent recommendations
+func ExecuteRegistryResearchWithDarwinianWeights(
+	registry domain.AgentRegistry,
+	quotes []domain.Quote,
+	overrides map[string]string,
+	policy domain.ExecutionPolicy,
+	weightManager *portfolio.DarwinianWeightManager,
+) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []*portfolio.DarwinianAgentWeight) {
+	plugins := NewPluginRegistry()
+	quoteBySymbol := make(map[string]domain.Quote, len(quotes))
+	for _, quote := range quotes {
+		quoteBySymbol[quote.Symbol] = quote
+	}
+
+	// Initialize weight manager if needed
+	if weightManager == nil {
+		weightManager = portfolio.NewDarwinianWeightManager("configs/darwinian_weights.json")
+		weightManager.InitializeFromRegistry(registry)
+		_ = weightManager.Load() // Try to load existing weights
+	}
+
+	regime := inferRegime(registry, quoteBySymbol, plugins, overrides)
+	raw := collectRecommendations(registry, quoteBySymbol, plugins, overrides)
+
+	// Apply Darwinian weights to recommendations
+	weighted := weightManager.ApplyDarwinianWeights(raw)
+
+	// Apply control layer (CRO) to weighted recommendations
+	final := applyControlLayer(registry, plugins, weighted, policy)
+
+	// Get current weight data for reporting
+	weightData := weightManager.GetAllAgentWeightData()
+
+	return regime, raw, final, weightData
 }
 
 func inferRegime(registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string) domain.Regime {
@@ -54,7 +92,7 @@ func collectRecommendations(registry domain.AgentRegistry, quotes map[string]dom
 		if !agent.Enabled {
 			continue
 		}
-		if agent.Layer != domain.LayerSector && agent.Layer != domain.LayerStyle {
+		if agent.Layer != domain.LayerSector && agent.Layer != domain.LayerStyle && agent.Layer != domain.LayerSuperinvestor {
 			continue
 		}
 

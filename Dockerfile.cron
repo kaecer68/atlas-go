@@ -1,0 +1,20 @@
+# Cron job runner for Atlas
+FROM alpine:latest
+
+# Install cron and curl
+RUN apk add --no-cache dcron curl bash
+
+# Create app directory
+WORKDIR /app
+
+# Copy scripts
+COPY scripts/ /app/scripts/
+
+# Make scripts executable
+RUN chmod +x /app/scripts/*.sh
+
+# Create log directory
+RUN mkdir -p /var/log/cron
+
+# Start cron in foreground
+CMD ["crond", "-f", "-l", "2"]

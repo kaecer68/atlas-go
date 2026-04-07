@@ -34,12 +34,25 @@ func (AISupplyChainExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (AISupplyChainExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string) (domain.Recommendation, bool) {
+	conviction := 78
+	if quote.Last < quote.Open {
+		conviction -= 5
+	}
+	if strings.Contains(prompt, "order-flow") && quote.Volume > 10000000 {
+		conviction += 8
+	}
+	if strings.Contains(prompt, "downgrade") && quote.Last < quote.High*0.99 {
+		conviction -= 10
+	}
+	if conviction < 60 {
+		return domain.Recommendation{}, false
+	}
 	return domain.Recommendation{
 		Agent:      agent.ID,
 		Skill:      agent.Skill,
 		Symbol:     quote.Symbol,
 		Side:       domain.SideBuy,
-		Conviction: 78,
+		Conviction: conviction,
 		Reason:     "ai infrastructure order-flow sensitivity",
 	}, true
 }
@@ -51,12 +64,28 @@ func (ETFRotationExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (ETFRotationExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string) (domain.Recommendation, bool) {
+	conviction := 64
+	if quote.Last < quote.Open {
+		conviction -= 3
+	}
+	if strings.Contains(prompt, "rotation") && quote.Last > quote.Open {
+		conviction += 6
+	}
+	if strings.Contains(prompt, "sector leadership") && quote.Volume > 8000000 {
+		conviction += 5
+	}
+	if strings.Contains(prompt, "reject") && quote.Last < quote.Low*1.005 {
+		return domain.Recommendation{}, false
+	}
+	if conviction < 55 {
+		return domain.Recommendation{}, false
+	}
 	return domain.Recommendation{
 		Agent:      agent.ID,
 		Skill:      agent.Skill,
 		Symbol:     quote.Symbol,
 		Side:       domain.SideBuy,
-		Conviction: 64,
+		Conviction: conviction,
 		Reason:     "broad ETF fallback under controlled risk",
 	}, true
 }

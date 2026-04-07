@@ -81,9 +81,19 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 func selectProvider(cfg config.Config) marketdata.Provider {
 	switch cfg.MarketDataProvider {
 	case "fugle":
-		return marketdata.NewFugleProvider()
-	default:
+		// 纯 Fugle 模式（需有效 API key）
+		if cfg.FugleAPIKey != "" {
+			return marketdata.NewFugleProviderWithAPIKey(cfg.FugleAPIKey)
+		}
 		return marketdata.NewTWSEProvider()
+	case "twse":
+		// 纯 TWSE 模式（免费，rate limited）
+		return marketdata.NewTWSEOpenAPIProvider()
+	case "hybrid", "":
+		// 默认：Hybrid 模式（优先 Fugle，失败回退 TWSE）
+		return marketdata.NewHybridProvider(cfg.FugleAPIKey)
+	default:
+		return marketdata.NewHybridProvider(cfg.FugleAPIKey)
 	}
 }
 

@@ -1,0 +1,242 @@
+package marketdata
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strconv"
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
+	"golang.org/x/time/rate"
+)
+
+const (
+	twseAPIBaseURL = "https://openapi.twse.com.tw/v1"
+	// TWSE rate limit: 3 requests per 5 seconds
+	twseRateLimit = 0.6 // requests per second (3/5)
+	twseRateBurst = 3
+)
+
+// TWSEClient TWSE OpenAPI 客户端
+type TWSEClient struct {
+	httpClient  *http.Client
+	baseURL     string
+	rateLimiter *rate.Limiter
+}
+
+// TWSEQuote TWSE 行情数据结构
+type TWSEQuote struct {
+	Code         string `json:"Code"`
+	Name         string `json:"Name"`
+	TradeVolume  string `json:"TradeVolume"`
+	TradeValue   string `json:"TradeValue"`
+	OpeningPrice string `json:"OpeningPrice"`
+	HighestPrice string `json:"HighestPrice"`
+	LowestPrice  string `json:"LowestPrice"`
+	ClosingPrice string `json:"ClosingPrice"`
+	Change       string `json:"Change"`
+	Transaction  string `json:"Transaction"`
+}
+
+// NewTWSEClient 创建 TWSE OpenAPI 客户端
+func NewTWSEClient() *TWSEClient {
+	return &TWSEClient{
+		httpClient: &http.Client{
+			Timeout: 15 * time.Second,
+		},
+		baseURL:     twseAPIBaseURL,
+		rateLimiter: rate.NewLimiter(rate.Limit(twseRateLimit), twseRateBurst),
+	}
+}
+
+// SetHTTPClient 设置自定义 HTTP 客户端
+func (c *TWSEClient) SetHTTPClient(client *http.Client) {
+	c.httpClient = client
+}
+
+// GetQuotes 批量获取当日所有上市股票行情
+func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
+	if err := c.rateLimiter.Wait(ctx); err != nil {
+		return nil, fmt.Errorf("rate limit wait: %w", err)
+	}
+
+	endpoint := fmt.Sprintf("%s/exchangeReport/STOCK_DAY_ALL", c.baseURL)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("api error: status %d", resp.StatusCode)
+	}
+
+	var twseQuotes []TWSEQuote
+	if err := json.NewDecoder(resp.Body).Decode(&twseQuotes); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	quotes := make([]domain.Quote, 0, len(twseQuotes))
+	for _, q := range twseQuotes {
+		quote, err := c.convertToQuote(q)
+		if err != nil {
+			// 跳过解析失败的记录
+			continue
+		}
+		quotes = append(quotes, quote)
+	}
+
+	return quotes, nil
+}
+
+// GetQuote 获取单个股票行情
+func (c *TWSEClient) GetQuote(ctx context.Context, symbol string) (domain.Quote, error) {
+	// TWSE OpenAPI 只提供批量接口，我们获取全部后过滤
+	quotes, err := c.GetQuotes(ctx)
+	if err != nil {
+		return domain.Quote{}, err
+	}
+
+	for _, q := range quotes {
+		if q.Symbol == symbol {
+			return q, nil
+		}
+	}
+
+	return domain.Quote{}, fmt.Errorf("symbol %s not found", symbol)
+}
+
+// GetQuotesBySymbols 获取指定股票列表的行情
+func (c *TWSEClient) GetQuotesBySymbols(ctx context.Context, symbols []string) ([]domain.Quote, error) {
+	allQuotes, err := c.GetQuotes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	symbolMap := make(map[string]bool)
+	for _, s := range symbols {
+		symbolMap[s] = true
+	}
+
+	filtered := make([]domain.Quote, 0)
+	for _, q := range allQuotes {
+		if symbolMap[q.Symbol] {
+			filtered = append(filtered, q)
+		}
+	}
+
+	return filtered, nil
+}
+
+// GetDailyQuote 获取指定日期和股票的行情
+func (c *TWSEClient) GetDailyQuote(ctx context.Context, date string, symbol string) (domain.Quote, error) {
+	if err := c.rateLimiter.Wait(ctx); err != nil {
+		return domain.Quote{}, fmt.Errorf("rate limit wait: %w", err)
+	}
+
+	endpoint := fmt.Sprintf("%s/exchangeReport/STOCK_DAY", c.baseURL)
+	params := url.Values{}
+	params.Set("date", date)
+	params.Set("stockNo", symbol)
+
+	reqURL := fmt.Sprintf("%s?%s", endpoint, params.Encode())
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return domain.Quote{}, fmt.Errorf("create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return domain.Quote{}, fmt.Errorf("http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return domain.Quote{}, fmt.Errorf("api error: status %d", resp.StatusCode)
+	}
+
+	var twseQuotes []TWSEQuote
+	if err := json.NewDecoder(resp.Body).Decode(&twseQuotes); err != nil {
+		return domain.Quote{}, fmt.Errorf("decode response: %w", err)
+	}
+
+	if len(twseQuotes) == 0 {
+		return domain.Quote{}, fmt.Errorf("no data for %s on %s", symbol, date)
+	}
+
+	return c.convertToQuote(twseQuotes[0])
+}
+
+// convertToQuote 将 TWSE 数据转换为 domain.Quote
+func (c *TWSEClient) convertToQuote(twse TWSEQuote) (domain.Quote, error) {
+	last, err := strconv.ParseFloat(twse.ClosingPrice, 64)
+	if err != nil {
+		return domain.Quote{}, fmt.Errorf("parse closing price: %w", err)
+	}
+
+	open, _ := strconv.ParseFloat(twse.OpeningPrice, 64)
+	high, _ := strconv.ParseFloat(twse.HighestPrice, 64)
+	low, _ := strconv.ParseFloat(twse.LowestPrice, 64)
+	volume, _ := strconv.ParseInt(twse.TradeVolume, 10, 64)
+
+	return domain.Quote{
+		Symbol:     twse.Code,
+		Last:       last,
+		Open:       open,
+		High:       high,
+		Low:        low,
+		Volume:     volume,
+		Market:     "TW",
+		AsOf:       time.Now(),
+		IsTradable: true,
+		Source:     "twse",
+	}, nil
+}
+
+// TWSEOpenAPIProvider 实现 marketdata.Provider 接口
+type TWSEOpenAPIProvider struct {
+	client *TWSEClient
+}
+
+// NewTWSEOpenAPIProvider 创建 TWSE OpenAPI Provider
+func NewTWSEOpenAPIProvider() *TWSEOpenAPIProvider {
+	return &TWSEOpenAPIProvider{
+		client: NewTWSEClient(),
+	}
+}
+
+// Name 返回 Provider 名称
+func (p *TWSEOpenAPIProvider) Name() string {
+	return "twse-openapi"
+}
+
+// GetQuotes 实现 Provider 接口
+func (p *TWSEOpenAPIProvider) GetQuotes(ctx context.Context, asOf time.Time, symbols []string) ([]domain.Quote, error) {
+	if len(symbols) == 1 {
+		quote, err := p.client.GetQuote(ctx, symbols[0])
+		if err != nil {
+			return nil, err
+		}
+		return []domain.Quote{quote}, nil
+	}
+	return p.client.GetQuotesBySymbols(ctx, symbols)
+}
+
+// CheckMarketStatus 检查市场状态（通过获取数据判断是否开市）
+func (c *TWSEClient) CheckMarketStatus(ctx context.Context) (bool, error) {
+	_, err := c.GetQuotes(ctx)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}

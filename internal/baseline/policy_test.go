@@ -14,8 +14,8 @@ func TestLoadMissingReturnsDefaultPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load default policy: %v", err)
 	}
-	if policy.ExecutionPolicy.ConvictionFloor != 50 {
-		t.Fatalf("expected default conviction floor 50")
+	if policy.ExecutionPolicy.ConvictionFloor != 60 {
+		t.Fatalf("expected default conviction floor 60, got %d", policy.ExecutionPolicy.ConvictionFloor)
 	}
 	if !policy.ExecutionPolicy.RequireCROPass {
 		t.Fatalf("expected default CRO pass enabled")
@@ -68,8 +68,8 @@ func TestPromoteAcceptedConstraintExperiment(t *testing.T) {
 	if next.Constraints.MaxPositionWeight != 0.15 {
 		t.Fatalf("expected promoted max position weight")
 	}
-	if next.ExecutionPolicy.ConvictionFloor != 50 {
-		t.Fatalf("expected execution policy to remain aligned")
+	if next.ExecutionPolicy.ConvictionFloor != 60 {
+		t.Fatalf("expected execution policy to remain aligned with conviction floor 60, got %d", next.ExecutionPolicy.ConvictionFloor)
 	}
 }
 

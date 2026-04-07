@@ -1,0 +1,52 @@
+{
+  "version": "v23",
+  "status": "production_monitoring",
+  "effectiveDate": "2026-04-06",
+  "allocation": {
+    "taiwan_equity_total": 0.45,
+    "taiwan_equity_split": {
+      "etf_0050_tw": 0.15,
+      "single_stocks_total": 0.30
+    },
+    "precious_metals": {
+      "total": 0.15,
+      "gold": 0.10,
+      "silver": 0.05
+    },
+    "industrial_metals": {
+      "total": 0.15,
+      "copper": 0.15
+    },
+    "cash": 0.25
+  },
+  "singleStockTargets": [
+    { "symbol": "2330.TW", "weight": 0.0214, "bucket": "semiconductor" },
+    { "symbol": "2303.TW", "weight": 0.0214, "bucket": "semiconductor" },
+    { "symbol": "2454.TW", "weight": 0.0214, "bucket": "semiconductor" },
+    { "symbol": "3034.TW", "weight": 0.0214, "bucket": "semiconductor" },
+
+    { "symbol": "2382.TW", "weight": 0.0214, "bucket": "ai_supply_chain" },
+    { "symbol": "6669.TW", "weight": 0.0214, "bucket": "ai_supply_chain" },
+    { "symbol": "3017.TW", "weight": 0.0214, "bucket": "ai_supply_chain" },
+    { "symbol": "3037.TW", "weight": 0.0214, "bucket": "ai_supply_chain" },
+
+    { "symbol": "2881.TW", "weight": 0.0214, "bucket": "financials" },
+    { "symbol": "2882.TW", "weight": 0.0214, "bucket": "financials" },
+    { "symbol": "2891.TW", "weight": 0.0214, "bucket": "financials" },
+
+    { "symbol": "2603.TW", "weight": 0.0214, "bucket": "shipping" },
+    { "symbol": "2609.TW", "weight": 0.0214, "bucket": "shipping" },
+    { "symbol": "2615.TW", "weight": 0.0218, "bucket": "shipping" }
+  ],
+  "riskGuards": {
+    "max_single_stock_weight": 0.03,
+    "daily_drawdown_alert": -0.02,
+    "rebalance_frequency": "annual",
+    "emergency_trigger": "3_day_cumulative_sharpe_drop_gt_5pct"
+  },
+  "executionNotes": [
+    "This file is the operational target-allocation reference for OpenClaw monitoring mode.",
+    "Agents in configs/agents.json are already enabled; no enablement change is required.",
+    "Single-stock sleeve is set to 30% total with 14 symbols (~2.14% each)."
+  ]
+}

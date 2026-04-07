@@ -18,6 +18,7 @@ type Policy struct {
 	Constraints     domain.SimulationConstraints
 	ExecutionPolicy domain.ExecutionPolicy
 	Promotions      []PromotionRecord
+	RevertHistory   []RevertRecord
 	LastUpdatedAt   time.Time
 }
 
@@ -29,6 +30,15 @@ type PromotionRecord struct {
 	CandidatePath string
 	PromotedAt    time.Time
 	Status        string
+	VersionAfter  int
+}
+
+type RevertRecord struct {
+	FromVersion         int
+	ToVersion           int
+	RevertedExperiments []string
+	Reason              string
+	RevertedAt          time.Time
 }
 
 func DefaultPolicy() Policy {
@@ -37,7 +47,7 @@ func DefaultPolicy() Policy {
 		MaxPositionWeight:           0.18,
 		MaxOpenPositions:            5,
 		MinTradableVolume:           1000000,
-		MinRecommendationConviction: 0,
+		MinRecommendationConviction: 60,
 		RequireCROPass:              true,
 		TransactionCostBPS:          1.425,
 		SlippageBPS:                 4,

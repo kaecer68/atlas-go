@@ -5,10 +5,12 @@ import "time"
 type AgentLayer string
 
 const (
-	LayerContext AgentLayer = "context"
-	LayerSector  AgentLayer = "sector"
-	LayerStyle   AgentLayer = "style"
-	LayerControl AgentLayer = "control"
+	LayerContext       AgentLayer = "context"
+	LayerMacro         AgentLayer = "macro"
+	LayerSector        AgentLayer = "sector"
+	LayerStyle         AgentLayer = "style"
+	LayerSuperinvestor AgentLayer = "superinvestor"
+	LayerControl       AgentLayer = "control"
 )
 
 type AgentSpec struct {
@@ -23,6 +25,7 @@ type AgentSpec struct {
 	RequiredSkills   []string
 	ForbiddenActions []string
 	OperatingNotes   []string
+	DarwinianWeight  float64 `json:"darwinian_weight,omitempty"` // Starting weight for Darwinian system
 }
 
 type AgentRegistry struct {
@@ -83,23 +86,23 @@ type ExperimentRecord struct {
 }
 
 type MutationBrief struct {
-	WindowID            string
-	TargetAgentID       string
-	TargetSkill         string
-	TargetLayer         AgentLayer
-	PromptFile          string
-	MutationType        string
-	FailurePattern      string
-	Hypothesis          string
-	AcceptanceMetric    string
-	AcceptanceGates     []string
-	ForbiddenActions    []string
-	RequiredSkills      []string
-	ObservedWindowCount int
-	MaturityLevel       string
-	IterationGuidance   []string
-	RecommendedWindow   string
-	GeneratedAt         time.Time
+	WindowID            string     `json:"window_id"`
+	TargetAgentID       string     `json:"target_agent_id"`
+	TargetSkill         string     `json:"target_skill"`
+	TargetLayer         AgentLayer `json:"target_layer"`
+	PromptFile          string     `json:"prompt_file"`
+	MutationType        string     `json:"mutation_type"`
+	FailurePattern      string     `json:"failure_pattern"`
+	Hypothesis          string     `json:"hypothesis"`
+	AcceptanceMetric    string     `json:"acceptance_metric"`
+	AcceptanceGates     []string   `json:"acceptance_gates"`
+	ForbiddenActions    []string   `json:"forbidden_actions"`
+	RequiredSkills      []string   `json:"required_skills"`
+	ObservedWindowCount int        `json:"observed_window_count"`
+	MaturityLevel       string     `json:"maturity_level"`
+	IterationGuidance   []string   `json:"iteration_guidance"`
+	RecommendedWindow   string     `json:"recommended_window"`
+	GeneratedAt         time.Time  `json:"generated_at"`
 }
 
 type PromptExperimentResult struct {
