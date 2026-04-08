@@ -12,14 +12,30 @@ import (
 	"github.com/kaecer68/atlas-go/internal/sim"
 )
 
+type replayScoreSummary struct {
+	BaselineScore         float64
+	CandidateScore        float64
+	BaselineObservations  int
+	CandidateObservations int
+	UsedFallbackWindow    bool
+}
+
 func comparePromptPerformance(replayDataPath, baselinePolicyPath string, brief domain.MutationBrief, window domain.BacktestWindowSummary, candidatePromptPath string) (float64, float64, error) {
-	ds, err := replay.LoadTWSEOpenDataCSV(replayDataPath)
+	summary, err := comparePromptPerformanceDetailed(replayDataPath, baselinePolicyPath, brief, window, candidatePromptPath)
 	if err != nil {
 		return 0, 0, err
 	}
+	return summary.BaselineScore, summary.CandidateScore, nil
+}
+
+func comparePromptPerformanceDetailed(replayDataPath, baselinePolicyPath string, brief domain.MutationBrief, window domain.BacktestWindowSummary, candidatePromptPath string) (replayScoreSummary, error) {
+	ds, err := replay.LoadTWSEOpenDataCSV(replayDataPath)
+	if err != nil {
+		return replayScoreSummary{}, err
+	}
 	policy, err := baseline.Load(baselinePolicyPath)
 	if err != nil {
-		return 0, 0, err
+		return replayScoreSummary{}, err
 	}
 
 	baselinePrompt := baseline.ResolvePromptOverride(policy, brief.TargetAgentID, brief.TargetSkill)
@@ -32,14 +48,16 @@ func comparePromptPerformance(replayDataPath, baselinePolicyPath string, brief d
 		}
 		baselinePromptBytes, err := os.ReadFile(promptFile)
 		if err != nil {
-			return 0, 0, err
+			return replayScoreSummary{}, err
 		}
 		baselinePrompt = string(baselinePromptBytes)
 	}
 	candidatePromptBytes, err := os.ReadFile(candidatePromptPath)
 	if err != nil {
-		return 0, 0, err
+		return replayScoreSummary{}, err
 	}
+
+	summary := replayScoreSummary{}
 
 	switch brief.MutationType {
 	case "risk_rule_change", "portfolio_constraint_revision":
@@ -47,25 +65,43 @@ func comparePromptPerformance(replayDataPath, baselinePolicyPath string, brief d
 		candidateConstraints := baseline.ApplyConstraintCandidate(policy.Constraints, string(candidatePromptBytes))
 		baseline, baselineObs := scoreConstraintWindowWithObservations(ds, baselineConstraints, window.StartDate, window.EndDate)
 		candidate, candidateObs := scoreConstraintWindowWithObservations(ds, candidateConstraints, window.StartDate, window.EndDate)
+		summary.BaselineScore = baseline
+		summary.CandidateScore = candidate
+		summary.BaselineObservations = baselineObs
+		summary.CandidateObservations = candidateObs
 		if baselineObs == 0 && candidateObs == 0 {
 			fallbackStart, fallbackEnd, ok := fallbackWindow(ds, 30)
 			if ok {
-				baseline, _ = scoreConstraintWindowWithObservations(ds, baselineConstraints, fallbackStart, fallbackEnd)
-				candidate, _ = scoreConstraintWindowWithObservations(ds, candidateConstraints, fallbackStart, fallbackEnd)
+				baseline, baselineObs = scoreConstraintWindowWithObservations(ds, baselineConstraints, fallbackStart, fallbackEnd)
+				candidate, candidateObs = scoreConstraintWindowWithObservations(ds, candidateConstraints, fallbackStart, fallbackEnd)
+				summary.BaselineScore = baseline
+				summary.CandidateScore = candidate
+				summary.BaselineObservations = baselineObs
+				summary.CandidateObservations = candidateObs
+				summary.UsedFallbackWindow = true
 			}
 		}
-		return baseline, candidate, nil
+		return summary, nil
 	default:
 		baseline, baselineObs := scorePromptWindowWithObservations(ds, brief.TargetSkill, baselinePrompt, policy.ExecutionPolicy, window.StartDate, window.EndDate)
 		candidate, candidateObs := scorePromptWindowWithObservations(ds, brief.TargetSkill, string(candidatePromptBytes), policy.ExecutionPolicy, window.StartDate, window.EndDate)
+		summary.BaselineScore = baseline
+		summary.CandidateScore = candidate
+		summary.BaselineObservations = baselineObs
+		summary.CandidateObservations = candidateObs
 		if baselineObs == 0 && candidateObs == 0 {
 			fallbackStart, fallbackEnd, ok := fallbackWindow(ds, 30)
 			if ok {
-				baseline, _ = scorePromptWindowWithObservations(ds, brief.TargetSkill, baselinePrompt, policy.ExecutionPolicy, fallbackStart, fallbackEnd)
-				candidate, _ = scorePromptWindowWithObservations(ds, brief.TargetSkill, string(candidatePromptBytes), policy.ExecutionPolicy, fallbackStart, fallbackEnd)
+				baseline, baselineObs = scorePromptWindowWithObservations(ds, brief.TargetSkill, baselinePrompt, policy.ExecutionPolicy, fallbackStart, fallbackEnd)
+				candidate, candidateObs = scorePromptWindowWithObservations(ds, brief.TargetSkill, string(candidatePromptBytes), policy.ExecutionPolicy, fallbackStart, fallbackEnd)
+				summary.BaselineScore = baseline
+				summary.CandidateScore = candidate
+				summary.BaselineObservations = baselineObs
+				summary.CandidateObservations = candidateObs
+				summary.UsedFallbackWindow = true
 			}
 		}
-		return baseline, candidate, nil
+		return summary, nil
 	}
 }
 

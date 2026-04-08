@@ -122,6 +122,8 @@ func TestPhase2Integration(t *testing.T) {
 // TestPhase3Integration validates Agent Spawning, PRISM, Reflexivity, and Swarm
 func TestPhase3Integration(t *testing.T) {
 	t.Run("AgentSpawningLifecycle", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+
 		// Create registry
 		registry := &domain.AgentRegistry{
 			Agents: []domain.AgentSpec{

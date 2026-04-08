@@ -106,12 +106,15 @@ type MutationBrief struct {
 }
 
 type PromptExperimentResult struct {
-	Experiment      ExperimentRecord
-	Brief           MutationBrief
-	CandidatePrompt string
-	EvaluationMode  string
-	PolicyChecks    []string
-	Notes           []string
-	JudgeChecks     []string
-	RecordedAt      time.Time
+	Experiment            ExperimentRecord
+	Brief                 MutationBrief
+	CandidatePrompt       string
+	EvaluationMode        string
+	PolicyChecks          []string
+	Notes                 []string
+	JudgeChecks           []string
+	BaselineObservations  int
+	CandidateObservations int
+	UsedFallbackWindow    bool
+	RecordedAt            time.Time
 }

@@ -45,14 +45,24 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 		return domain.PromptExperimentResult{}, err
 	}
 
-	baseline, candidate, err := comparePromptPerformance(j.replayDataPath, j.baselinePath, result.Brief, windowSummary, result.CandidatePrompt)
+	summary, err := comparePromptPerformanceDetailed(j.replayDataPath, j.baselinePath, result.Brief, windowSummary, result.CandidatePrompt)
 	if err != nil {
 		return domain.PromptExperimentResult{}, err
 	}
 	checks := judgeReplayChecks(string(promptBytes), result)
+	checks = append(checks,
+		fmt.Sprintf("baseline observations: %d", summary.BaselineObservations),
+		fmt.Sprintf("candidate observations: %d", summary.CandidateObservations),
+	)
+	if summary.UsedFallbackWindow {
+		checks = append(checks, "fallback replay window used due to sparse primary window")
+	}
 
-	result.Experiment.BaselineValue = baseline
-	result.Experiment.CandidateValue = candidate
+	result.Experiment.BaselineValue = summary.BaselineScore
+	result.Experiment.CandidateValue = summary.CandidateScore
+	result.BaselineObservations = summary.BaselineObservations
+	result.CandidateObservations = summary.CandidateObservations
+	result.UsedFallbackWindow = summary.UsedFallbackWindow
 	result.Experiment.WindowStart = windowSummary.StartDate
 	result.Experiment.WindowEnd = windowSummary.EndDate
 	result.EvaluationMode = "prompt_aware_replay_judged"
@@ -133,9 +143,15 @@ func passesAcceptance(result domain.PromptExperimentResult) (bool, string) {
 	baseline := result.Experiment.BaselineValue
 	candidate := result.Experiment.CandidateValue
 	checks := result.JudgeChecks
+	baselineObs := result.BaselineObservations
+	candidateObs := result.CandidateObservations
 
 	if len(gates) == 0 {
 		return false, "rejected: no acceptance gates configured"
+	}
+	minObs := requiredObservationCountForProfile(result.Brief.MaturityLevel, result.Experiment.MutationType)
+	if baselineObs < minObs || candidateObs < minObs {
+		return false, fmt.Sprintf("rejected: insufficient replay observations (baseline=%d candidate=%d required=%d)", baselineObs, candidateObs, minObs)
 	}
 	if candidate <= baseline {
 		return false, "rejected: candidate did not improve over baseline"
@@ -198,6 +214,27 @@ func requiredCheckCountForProfile(maturity, mutationType string) int {
 		return base + 2
 	default:
 		return base
+	}
+}
+
+func requiredObservationCountForProfile(maturity, mutationType string) int {
+	base := requiredObservationCountForMaturity(maturity)
+	switch mutationType {
+	case "risk_rule_change", "portfolio_constraint_revision":
+		return base + 1
+	default:
+		return base
+	}
+}
+
+func requiredObservationCountForMaturity(maturity string) int {
+	switch maturity {
+	case "level_3_regime_aware":
+		return 12
+	case "level_2_window_validated":
+		return 8
+	default:
+		return 4
 	}
 }
 

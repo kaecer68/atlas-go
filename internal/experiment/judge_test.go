@@ -98,7 +98,9 @@ func TestPassesAcceptanceUsesMaturityThresholds(t *testing.T) {
 		Brief: domain.MutationBrief{
 			MaturityLevel: "level_1_exploratory",
 		},
-		JudgeChecks: []string{"a", "b"},
+		BaselineObservations:  6,
+		CandidateObservations: 6,
+		JudgeChecks:           []string{"a", "b"},
 	}
 	accepted, _ := passesAcceptance(level1)
 	if !accepted {
@@ -115,7 +117,9 @@ func TestPassesAcceptanceUsesMaturityThresholds(t *testing.T) {
 		Brief: domain.MutationBrief{
 			MaturityLevel: "level_3_regime_aware",
 		},
-		JudgeChecks: []string{"a", "b", "c", "d"},
+		BaselineObservations:  12,
+		CandidateObservations: 12,
+		JudgeChecks:           []string{"a", "b", "c", "d"},
 	}
 	accepted, note := passesAcceptance(level3)
 	if accepted {
@@ -134,7 +138,9 @@ func TestPassesAcceptanceUsesMutationTypeProfiles(t *testing.T) {
 		Brief: domain.MutationBrief{
 			MaturityLevel: "level_2_window_validated",
 		},
-		JudgeChecks: []string{"a", "b", "c"},
+		BaselineObservations:  8,
+		CandidateObservations: 8,
+		JudgeChecks:           []string{"a", "b", "c"},
 	}
 	accepted, _ := passesAcceptance(promptMutation)
 	if !accepted {
@@ -151,11 +157,38 @@ func TestPassesAcceptanceUsesMutationTypeProfiles(t *testing.T) {
 		Brief: domain.MutationBrief{
 			MaturityLevel: "level_2_window_validated",
 		},
-		JudgeChecks: []string{"a", "b", "c", "d"},
+		BaselineObservations:  9,
+		CandidateObservations: 9,
+		JudgeChecks:           []string{"a", "b", "c", "d"},
 	}
 	accepted, note := passesAcceptance(riskMutation)
 	if accepted {
 		t.Fatalf("expected risk rule change to require a larger delta, got note %q", note)
+	}
+}
+
+func TestPassesAcceptanceRejectsWhenObservationsInsufficient(t *testing.T) {
+	result := domain.PromptExperimentResult{
+		Experiment: domain.ExperimentRecord{
+			AcceptanceGates: []string{"improve_sharpe_like", "no_material_drawdown_degradation", "no_constraint_bypass"},
+			BaselineValue:   0.0100,
+			CandidateValue:  0.0200,
+			MutationType:    "risk_rule_change",
+		},
+		Brief: domain.MutationBrief{
+			MaturityLevel: "level_2_window_validated",
+		},
+		BaselineObservations:  3,
+		CandidateObservations: 3,
+		JudgeChecks:           []string{"a", "b", "c", "d", "e"},
+	}
+
+	accepted, note := passesAcceptance(result)
+	if accepted {
+		t.Fatalf("expected rejection for insufficient observations")
+	}
+	if note == "" {
+		t.Fatalf("expected rejection note")
 	}
 }
 

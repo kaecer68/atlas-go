@@ -160,6 +160,8 @@ func TestSpawningManager(t *testing.T) {
 	})
 
 	t.Run("ManualSpawn", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+
 		registry := &domain.AgentRegistry{Agents: []domain.AgentSpec{}}
 		config := DefaultSpawningConfig()
 		manager := NewSpawningManager(registry, config)
@@ -179,6 +181,8 @@ func TestSpawningManager(t *testing.T) {
 	})
 
 	t.Run("GetSpawnedAgents", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+
 		registry := &domain.AgentRegistry{Agents: []domain.AgentSpec{}}
 		config := DefaultSpawningConfig()
 		manager := NewSpawningManager(registry, config)
@@ -204,6 +208,8 @@ func TestSpawningManager(t *testing.T) {
 	})
 
 	t.Run("AcceptAgent", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+
 		registry := &domain.AgentRegistry{Agents: []domain.AgentSpec{}}
 		config := DefaultSpawningConfig()
 		manager := NewSpawningManager(registry, config)
@@ -218,6 +224,8 @@ func TestSpawningManager(t *testing.T) {
 	})
 
 	t.Run("RejectAgent", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+
 		registry := &domain.AgentRegistry{Agents: []domain.AgentSpec{}}
 		config := DefaultSpawningConfig()
 		manager := NewSpawningManager(registry, config)
@@ -231,6 +239,8 @@ func TestSpawningManager(t *testing.T) {
 	})
 
 	t.Run("GetStatistics", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+
 		registry := &domain.AgentRegistry{Agents: []domain.AgentSpec{}}
 		config := DefaultSpawningConfig()
 		manager := NewSpawningManager(registry, config)

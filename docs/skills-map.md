@@ -19,6 +19,17 @@ The goal is to make the system:
 - professionally bounded
 - resistant to random prompt drift
 
+## Maintenance Note (Current-First)
+
+This document is a maintained operating map, not a historical score report.
+
+- When prose conflicts with code/config/runtime results, treat code and runtime outputs as source of truth.
+- Primary truth sources:
+  - `configs/agents.json`
+  - `internal/experiment/*` (mutation and judge logic)
+  - `internal/orchestrator/*` and `internal/sim/*` (execution behavior)
+  - latest experiment artifacts in `data/state/experiments/*.json`
+
 ## Skill System Overview
 
 The complete skill system is divided into four layers:
@@ -41,6 +52,8 @@ The skill system is also enforced through machine-readable policy fields in code
 - `MutationBrief`
 
 Future automation should preserve these policy fields directly instead of inferring them only from prose.
+
+When in doubt, validate policy behavior by replay execution and judge outputs, not by this document alone.
 
 ## Layer 1: Domain Skills
 
@@ -229,7 +242,7 @@ These skills define how the system is run correctly.
   - track rolling 30-day Sharpe ratio for each agent
   - adjust weights daily: top quartile ×1.05, bottom quartile ×0.95
   - clamp weights between 0.3 (whispering) and 2.5 (shouting)
-  - persist weights to `configs/darwinian_weights.json`
+  - persist weights to runtime state storage used by the portfolio workflow
   - apply weights to recommendations before portfolio synthesis
 - **Weight Range**:
   - 2.0-2.5: Shouting (highest confidence, strong performance)
@@ -248,16 +261,16 @@ These skills define how the system is run correctly.
   ```
 - Implementation: `internal/portfolio/darwinian_weights.go`
 
-### Superinvestor Layer *(Phase 2 - 4 Master-Style Agents)*
+### Superinvestor Layer (registry-backed)
 
 **Layer 4 agents providing concentrated, high-quality recommendations:**
 
-| Agent | Style | Focus | Key Metrics |
+| Agent ID (registry) | Prompt file | Focus | Key Metrics |
 |-------|-------|-------|-------------|
-| `super_druckenmiller` | Macro/Momentum | Asymmetric macro trades, momentum timing | VIX, DXY, 10Y yields, sector flows |
-| `super_aschenbrenner` | AI/Compute Cycle | AI capex beneficiaries, value chain mapping | Data center capex, GPU pricing, Taiwan exports |
-| `super_baker` | Deep Tech | IP moat analysis, R&D efficiency | Patent quality, gross margins, R&D spend |
-| `super_ackman` | Quality Compounder | Pricing power, FCF generation | ROIC, FCF conversion, customer retention |
+| `super-dru-01` | `prompts/agents/super_druckenmiller.md` | Asymmetric macro trades, momentum timing | VIX, DXY, 10Y yields, sector flows |
+| `super-asc-01` | `prompts/agents/super_aschenbrenner.md` | AI capex beneficiaries, value chain mapping | Data center capex, GPU pricing, Taiwan exports |
+| `super-bak-01` | `prompts/agents/super_baker.md` | IP moat analysis, R&D efficiency | Patent quality, gross margins, R&D spend |
+| `super-ack-01` | `prompts/agents/super_ackman.md` | Pricing power, FCF generation | ROIC, FCF conversion, customer retention |
 
 - **Conviction Threshold**: 65+ (higher than regular agents)
 - **Coordination**: Each superinvestor has defined collaboration notes with other agents
@@ -279,7 +292,7 @@ These skills define how the system is run correctly.
   - `GapDetector`: identifies missing capabilities
   - `AgentFactory`: creates new agent instances
   - `SpawningManager`: orchestrates deployment
-- **Configuration**: `configs/spawning-config.json`
+- **Configuration**: primarily script-driven and code defaults (no committed `configs/spawning-config.json` in current repository state)
 - **Usage**:
   ```bash
   ./scripts/spawning-manage.sh --scan      # Scan for gaps
@@ -304,7 +317,7 @@ These skills define how the system is run correctly.
   - `low_volatility`: calm market, momentum strategies
   - `rotation`: sector rotation, style switching
   - `earnings`: earnings season, event-driven
-- **Configuration**: `configs/prism-config.json`
+- **Configuration**: primarily script-driven and code defaults (no committed `configs/prism-config.json` in current repository state)
 - **Usage**:
   ```bash
   ./scripts/prism-manage.sh --rebalance    # Rebalance queues
@@ -386,7 +399,7 @@ These skills define how the system is run correctly.
   3. Create offspring via crossover/mutation
   4. Replace worst performers
   5. Persist strategy population
-- **Configuration**: `configs/metalearning-config.json`
+- **Configuration**: primarily code defaults (no committed `configs/metalearning-config.json` in current repository state)
 - Implementation: `internal/metalearning/`
 
 ### `adversarial_trainer` *(Phase 4 - Red/Blue Team)*
@@ -437,7 +450,7 @@ These skills define how the system is run correctly.
   - Max single region: 40%
   - Max single country: 25%
   - Max correlation exposure: 0.7
-- **Configuration**: `configs/global-market-config.json`
+- **Configuration**: implementation-defined in code paths (no committed `configs/global-market-config.json` in current repository state)
 - Implementation: `internal/globalmarket/`
 
 ### `realtime_adapter` *(Phase 4 - Sub-Second Adaptation)*
@@ -461,7 +474,7 @@ These skills define how the system is run correctly.
   - Regime-specific agent activation
   - Confidence-weighted recommendations
   - Automatic rebalancing triggers
-- **Configuration**: `configs/realtime-config.json`
+- **Configuration**: implementation-defined in code paths (no committed `configs/realtime-config.json` in current repository state)
 - Implementation: `internal/realtime/`
 
 ---
@@ -515,14 +528,10 @@ These skills govern how the system improves over time.
 - Focus: produce one targeted prompt change
 - Inputs: weak-agent failure pattern, current prompt, allowed scope
 - Outputs: candidate prompt revision
-- **Strategy evolution**:
-  - **Defensive (v1)**: tighten qualification, downgrade uncertain signals, reject fragile setups
-  - **Offensive (v2)**: optimize entry timing, increase position sizing on high-conviction setups
-  - **Aggressive (v3 - current)**: 
-    - Higher conviction thresholds (>70 vs >50)
-    - 2x position sizing when Sharpe > 1.0
-    - Concentrate up to 30% in single name when edge is clear
-    - Skip diversification rules for high-conviction opportunities
+- **Mutation style families**:
+  - `prompt_tightening`: tighten qualification and reject fragile setups
+  - `risk_rule_change`: adjust risk/conviction/liquidity controls
+  - `portfolio_constraint_revision`: revise sizing and reserve constraints
 - **Known limitations**: 
   - `prompt_tightening` mutation currently produces no measurable difference (candidate == baseline)
   - Only modifies prompt text without changing underlying recommendation scoring logic
@@ -545,15 +554,25 @@ These skills govern how the system improves over time.
 - Focus: accept or reject a candidate based on evidence
 - Inputs: baseline metrics, candidate metrics, risk behavior, judge checks
 - Outputs: accepted or rejected decision
-- **Acceptance criteria** (simplified in 2026-04):
+- **Acceptance criteria** (current):
   - candidate must be > baseline (strict improvement required)
   - improvement must exceed threshold:
     - `prompt_tightening`: 0.0005 (rarely effective, see known issues)
     - `risk_rule_change`: 0.001 (lowered from 0.0025)
     - `portfolio_constraint_revision`: 0.001 (lowered from 0.0035)
+  - replay observations must satisfy profile minimums (maturity + mutation type), for example level_2 + `risk_rule_change` requires 9 observations
   - sufficient policy checks must pass
-- **Implementation note**: Thresholds were lowered to allow gradual improvements. Previously strict thresholds (0.0025-0.0035) caused excessive rejections even for positive improvements.
+- **Implementation note**: Recent runs show two distinct rejection classes: insufficient observations and no-improvement vs baseline. Treat them differently during iteration planning.
 - Avoid: approving changes based on narrative only
+
+## Current Empirical Snapshot (2026-04-08)
+
+- Short-window runs frequently fail observation gates.
+- Longer-window runs can pass observation gates, but recent candidates still mostly fail to beat baseline.
+- Judge outcomes should be interpreted in two buckets:
+  - `insufficient replay observations`
+  - `candidate did not improve over baseline`
+- Promote decisions should only consider the second bucket when observation thresholds are satisfied.
 
 ### `risk_rule_change` Parameters (2026-04 Updated)
 
@@ -570,12 +589,12 @@ risk_rule_change:
   aggressive_mode: true
 ```
 
-**Observed effects** (90-day window, 4 agents tested):
-- Average improvement: +29%
-- Acceptance rate: 100% (4/4 agents)
-- Baseline range: 0.005073 → Candidate: 0.006419-0.007110
+**Recent observed effects** (current replay workflow):
+- frequent rejections due to insufficient observations in short windows
+- long-window runs can satisfy observation gates, but candidates still often fail to exceed baseline
+- use this section as directional guidance, not a guaranteed acceptance profile
 
-### `live_trading_operator` *(New)*
+### `live_trading_operator`
 
 - Focus: real-time paper trading execution and monitoring
 - Responsibilities:
@@ -589,7 +608,7 @@ risk_rule_change:
   - Event Bus (market snapshots, orders, risk alerts)
   - Real-time Orchestrator (market schedule, intraday cycles)
 
-### `monitoring_operator` *(New in v0.5)*
+### `monitoring_operator`
 
 - Focus: system health, resource monitoring, and experiment lifecycle management
 - Responsibilities:
@@ -720,6 +739,6 @@ Any AI modifying this system must preserve these Taiwan-market assumptions:
 
 ## Companion Documents
 
-- [`docs/operations-playbook.md`](/Users/kaecer/.openclaw/workspace/agents/finance/atlas/docs/operations-playbook.md)
-- [`docs/iteration-playbook.md`](/Users/kaecer/.openclaw/workspace/agents/finance/atlas/docs/iteration-playbook.md)
-- [`docs/evolution-loop.md`](/Users/kaecer/.openclaw/workspace/agents/finance/atlas/docs/evolution-loop.md)
+- [`docs/operations-playbook.md`](docs/operations-playbook.md)
+- [`docs/iteration-playbook.md`](docs/iteration-playbook.md)
+- [`docs/evolution-loop.md`](docs/evolution-loop.md)
