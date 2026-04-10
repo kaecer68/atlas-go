@@ -3,6 +3,7 @@ package config
 import (
 	"bufio"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -17,6 +18,8 @@ type Config struct {
 	ReplaySessionDate  string
 	FugleAPIKey        string
 	YahooEnabled       bool
+	BrokerMode         string
+	BrokerMaxRetries   int
 }
 
 func Load() Config {
@@ -33,8 +36,10 @@ func Load() Config {
 		ReplayDataPath:     envOr("ATLAS_REPLAY_DATA_PATH", "samples/replay/twse_stock_day_all_sample.csv"),
 		ReplaySessionDate:  envOr("ATLAS_REPLAY_SESSION_DATE", "2026-03-26"),
 		// 优先使用 FUGLE_API_KEY，其次 ATLAS_FUGLE_API_KEY
-		FugleAPIKey:  envOrPriority("FUGLE_API_KEY", "ATLAS_FUGLE_API_KEY"),
-		YahooEnabled: os.Getenv("ATLAS_YAHOO_ENABLED") == "true",
+		FugleAPIKey:      envOrPriority("FUGLE_API_KEY", "ATLAS_FUGLE_API_KEY"),
+		YahooEnabled:     os.Getenv("ATLAS_YAHOO_ENABLED") == "true",
+		BrokerMode:       envOr("ATLAS_BROKER_MODE", "dry-run"),
+		BrokerMaxRetries: envOrInt("ATLAS_BROKER_MAX_RETRIES", 1),
 	}
 }
 
@@ -52,6 +57,18 @@ func envOrPriority(keys ...string) string {
 		}
 	}
 	return ""
+}
+
+func envOrInt(key string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return n
 }
 
 // loadEnvFile 从 .env 文件加载环境变量
