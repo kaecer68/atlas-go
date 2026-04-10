@@ -85,12 +85,14 @@ func TestResolveBrokerModeLiveHTTPMissingConfigFallsBackToGuarded(t *testing.T) 
 
 func TestResolveBrokerModeLiveHTTPConfiguredUsesLiveHTTP(t *testing.T) {
 	requested, effective, broker, audit := resolveBrokerMode(OrchestratorConfig{
-		BrokerMode:         "live",
-		BrokerAdapter:      "http",
-		BrokerAPIBaseURL:   "https://broker.example",
-		BrokerAPIKey:       "key1",
-		BrokerHTTPTimeoutS: 5,
-		BrokerHTTPAttempts: 2,
+		BrokerMode:           "live",
+		BrokerAdapter:        "http",
+		BrokerAPIBaseURL:     "https://broker.example",
+		BrokerAPIKey:         "key1",
+		BrokerHTTPTimeoutS:   5,
+		BrokerHTTPAttempts:   2,
+		BrokerNonceStore:     "file",
+		BrokerNonceStorePath: t.TempDir() + "/nonce-store.json",
 	})
 	if requested != "live" {
 		t.Fatalf("requested mode mismatch: got=%q want=live", requested)
@@ -103,6 +105,28 @@ func TestResolveBrokerModeLiveHTTPConfiguredUsesLiveHTTP(t *testing.T) {
 	}
 	if audit == "" {
 		t.Fatalf("expected non-empty audit message for live-http mode")
+	}
+}
+
+func TestResolveBrokerModeLiveHTTPInvalidNonceStoreFallsBackToGuarded(t *testing.T) {
+	requested, effective, broker, audit := resolveBrokerMode(OrchestratorConfig{
+		BrokerMode:       "live",
+		BrokerAdapter:    "http",
+		BrokerAPIBaseURL: "https://broker.example",
+		BrokerAPIKey:     "key1",
+		BrokerNonceStore: "invalid",
+	})
+	if requested != "live" {
+		t.Fatalf("requested mode mismatch: got=%q want=live", requested)
+	}
+	if effective != "live-guarded" {
+		t.Fatalf("effective mode mismatch: got=%q want=live-guarded", effective)
+	}
+	if broker == nil || broker.Mode() != "live" {
+		t.Fatalf("expected guarded live broker fallback, got %+v", broker)
+	}
+	if audit == "" {
+		t.Fatalf("expected non-empty audit message for nonce store fallback")
 	}
 }
 
@@ -128,6 +152,7 @@ func TestNewOrchestratorAppliesLiveGuardedMode(t *testing.T) {
 			BrokerAdapter:     "guarded",
 			BrokerSigner:      "placeholder",
 			BrokerKeyID:       "kid-test",
+			BrokerNonceStore:  "memory",
 			BrokerMaxRetries:  2,
 		},
 	)
@@ -164,5 +189,8 @@ func TestNewOrchestratorAppliesLiveGuardedMode(t *testing.T) {
 	}
 	if configMap["broker_key_id"] != "kid-test" {
 		t.Fatalf("status broker_key_id mismatch: %v", configMap["broker_key_id"])
+	}
+	if configMap["broker_nonce_store"] != "memory" {
+		t.Fatalf("status broker_nonce_store mismatch: %v", configMap["broker_nonce_store"])
 	}
 }

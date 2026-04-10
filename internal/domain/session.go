@@ -38,4 +38,6 @@ type BrokerRuntimeAudit struct {
 	RetryStatusCodes []int
 	MaxClockSkewSec  int
 	NonceTTLSec      int
+	NonceStore       string
+	NonceStorePath   string
 }

@@ -7,6 +7,23 @@ import (
 	"time"
 )
 
+func TestBuildNonceReplayStoreDefaultsToMemory(t *testing.T) {
+	store, err := BuildNonceReplayStore("", "")
+	if err != nil {
+		t.Fatalf("BuildNonceReplayStore error: %v", err)
+	}
+	if store == nil {
+		t.Fatalf("expected non-nil store")
+	}
+}
+
+func TestBuildNonceReplayStoreFileRequiresPath(t *testing.T) {
+	_, err := BuildNonceReplayStore("file", "")
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+}
+
 func TestInMemoryNonceReplayStoreRejectsReplayWithinTTL(t *testing.T) {
 	store := NewInMemoryNonceReplayStore()
 	now := time.Date(2026, time.April, 11, 22, 0, 0, 0, time.UTC)

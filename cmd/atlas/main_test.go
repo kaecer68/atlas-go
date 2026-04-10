@@ -310,3 +310,25 @@ func TestValidateBrokerRuntimeConfigRejectsNegativeNonceTTL(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestValidateBrokerRuntimeConfigRejectsUnsupportedNonceStore(t *testing.T) {
+	cfg := config.Config{BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerMaxClockSkewS: 300, BrokerNonceTTLS: 300, BrokerNonceStore: "redis"}
+	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "nonce store") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateBrokerRuntimeConfigRejectsFileNonceStoreWithoutPath(t *testing.T) {
+	cfg := config.Config{BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerMaxClockSkewS: 300, BrokerNonceTTLS: 300, BrokerNonceStore: "file"}
+	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "store path") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

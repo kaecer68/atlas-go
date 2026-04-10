@@ -50,7 +50,30 @@ type fileNonceReplayStore struct {
 }
 
 func NewFileNonceReplayStore(path string) NonceReplayStore {
-	return &fileNonceReplayStore{path: filepath.Clean(path)}
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		return &fileNonceReplayStore{path: ""}
+	}
+	return &fileNonceReplayStore{path: filepath.Clean(trimmed)}
+}
+
+func BuildNonceReplayStore(storeType string, storePath string) (NonceReplayStore, error) {
+	kind := strings.TrimSpace(strings.ToLower(storeType))
+	if kind == "" {
+		kind = "memory"
+	}
+
+	switch kind {
+	case "memory":
+		return NewInMemoryNonceReplayStore(), nil
+	case "file":
+		if strings.TrimSpace(storePath) == "" {
+			return nil, fmt.Errorf("nonce replay store path is required for file store")
+		}
+		return NewFileNonceReplayStore(storePath), nil
+	default:
+		return nil, fmt.Errorf("unsupported nonce replay store type %q (allowed: memory, file)", kind)
+	}
 }
 
 func (s *fileNonceReplayStore) Register(nonce string, requestTime time.Time, ttl time.Duration) error {

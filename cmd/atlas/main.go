@@ -54,6 +54,8 @@ func run(args []string, deps appDeps) error {
 	brokerMaxRetries := flags.Int("broker-max-retries", -1, "override broker max retries (>=0)")
 	brokerMaxClockSkew := flags.Int("broker-max-clock-skew-sec", -1, "override broker max clock skew seconds (>=0, 0 disables check)")
 	brokerNonceTTL := flags.Int("broker-nonce-ttl-sec", -1, "override broker nonce replay ttl seconds (>=1)")
+	brokerNonceStore := flags.String("broker-nonce-store", "", "override nonce replay store: memory|file")
+	brokerNonceStorePath := flags.String("broker-nonce-store-path", "", "override nonce replay file store path (required when store=file)")
 	allowLiveBroker := flags.Bool("allow-live-broker", false, "allow live broker mode (default false)")
 	allowHTTPBroker := flags.Bool("allow-http-broker", false, "allow http broker adapter in live mode (default false)")
 	allowRealSigner := flags.Bool("allow-real-signer", false, "allow non-placeholder signer for http broker adapter")
@@ -85,6 +87,12 @@ func run(args []string, deps appDeps) error {
 	}
 	if *brokerNonceTTL >= 0 {
 		cfg.BrokerNonceTTLS = *brokerNonceTTL
+	}
+	if *brokerNonceStore != "" {
+		cfg.BrokerNonceStore = *brokerNonceStore
+	}
+	if *brokerNonceStorePath != "" {
+		cfg.BrokerNonceStorePath = *brokerNonceStorePath
 	}
 	if err := validateBrokerRuntimeConfig(&cfg, *allowLiveBroker, *allowHTTPBroker, *allowRealSigner); err != nil {
 		return err
@@ -165,6 +173,17 @@ func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allow
 	if cfg.BrokerNonceTTLS < 0 {
 		return fmt.Errorf("broker nonce ttl must be >= 0, got %d", cfg.BrokerNonceTTLS)
 	}
+	cfg.BrokerNonceStore = strings.TrimSpace(strings.ToLower(cfg.BrokerNonceStore))
+	if cfg.BrokerNonceStore == "" {
+		cfg.BrokerNonceStore = "memory"
+	}
+	if cfg.BrokerNonceStore != "memory" && cfg.BrokerNonceStore != "file" {
+		return fmt.Errorf("unsupported broker nonce store %q (allowed: memory, file)", cfg.BrokerNonceStore)
+	}
+	cfg.BrokerNonceStorePath = strings.TrimSpace(cfg.BrokerNonceStorePath)
+	if cfg.BrokerNonceStore == "file" && cfg.BrokerNonceStorePath == "" {
+		return fmt.Errorf("broker nonce store path is required when broker nonce store is file")
+	}
 
 	return nil
 }
@@ -209,6 +228,8 @@ func runSimulation(cfg config.Config) error {
 	fmt.Printf("broker_retry_status_codes: %v\n", cfg.BrokerHTTPRetryStatusCodes)
 	fmt.Printf("broker_max_clock_skew_sec: %d\n", cfg.BrokerMaxClockSkewS)
 	fmt.Printf("broker_nonce_ttl_sec: %d\n", cfg.BrokerNonceTTLS)
+	fmt.Printf("broker_nonce_store: %s\n", cfg.BrokerNonceStore)
+	fmt.Printf("broker_nonce_store_path: %s\n", cfg.BrokerNonceStorePath)
 	fmt.Printf("broker_max_retries: %d\n", cfg.BrokerMaxRetries)
 	fmt.Printf("session: %s\n", session.ID)
 	fmt.Printf("agents: %d\n", len(registry.Agents))
