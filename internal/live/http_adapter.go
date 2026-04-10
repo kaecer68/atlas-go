@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -27,6 +28,8 @@ type HTTPBrokerAdapterConfig struct {
 	RetryableStatusCodes []int
 	Client               *http.Client
 	Signer               string
+	Now                  func() time.Time
+	Nonce                func() string
 }
 
 type HTTPBrokerAdapter struct {
@@ -41,12 +44,14 @@ type HTTPBrokerAdapter struct {
 	signerName           string
 	signerVer            string
 	signer               requestSigner
+	nowFn                func() time.Time
+	nonceFn              func() string
 }
 
 type requestSigner interface {
 	Name() string
 	Version() string
-	Sign(payload []byte, secret string) string
+	Sign(payload []byte, secret string, timestamp string, nonce string) string
 }
 
 type placeholderSigner struct{}
@@ -55,8 +60,8 @@ func (s placeholderSigner) Name() string { return "placeholder" }
 
 func (s placeholderSigner) Version() string { return "v1" }
 
-func (s placeholderSigner) Sign(payload []byte, secret string) string {
-	h := sha256.Sum256([]byte(secret + ":" + string(payload)))
+func (s placeholderSigner) Sign(payload []byte, secret string, timestamp string, nonce string) string {
+	h := sha256.Sum256(canonicalSignInput(payload, secret, timestamp, nonce))
 	return "placeholder-" + hex.EncodeToString(h[:])
 }
 
@@ -66,9 +71,9 @@ func (s hmacSHA256Signer) Name() string { return "hmac-sha256" }
 
 func (s hmacSHA256Signer) Version() string { return "v1" }
 
-func (s hmacSHA256Signer) Sign(payload []byte, secret string) string {
+func (s hmacSHA256Signer) Sign(payload []byte, secret string, timestamp string, nonce string) string {
 	h := hmac.New(sha256.New, []byte(secret))
-	_, _ = h.Write(payload)
+	_, _ = h.Write(canonicalSignInput(payload, secret, timestamp, nonce))
 	return hex.EncodeToString(h.Sum(nil))
 }
 
@@ -100,6 +105,14 @@ func NewHTTPBrokerAdapter(cfg HTTPBrokerAdapterConfig) *HTTPBrokerAdapter {
 	if keyID == "" {
 		keyID = "default"
 	}
+	nowFn := cfg.Now
+	if nowFn == nil {
+		nowFn = time.Now
+	}
+	nonceFn := cfg.Nonce
+	if nonceFn == nil {
+		nonceFn = defaultRequestNonce
+	}
 
 	return &HTTPBrokerAdapter{
 		baseURL:              strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"),
@@ -113,6 +126,8 @@ func NewHTTPBrokerAdapter(cfg HTTPBrokerAdapterConfig) *HTTPBrokerAdapter {
 		signerName:           signerName,
 		signerVer:            signer.Version(),
 		signer:               signer,
+		nowFn:                nowFn,
+		nonceFn:              nonceFn,
 	}
 }
 
@@ -143,11 +158,16 @@ func (a *HTTPBrokerAdapter) SubmitOrder(ctx context.Context, order domain.Order)
 		return BrokerResult{}, fmt.Errorf("marshal order payload: %w", err)
 	}
 	idempotencyKey := orderIdempotencyKey(order)
+	timestamp := a.nowFn().UTC().Format(time.RFC3339Nano)
+	nonce := a.nonceFn()
+	if strings.TrimSpace(nonce) == "" {
+		nonce = defaultRequestNonce()
+	}
 
 	var lastErr error
 	for attempt := 1; attempt <= a.maxAttempts; attempt++ {
 		attemptCtx, cancel := context.WithTimeout(ctx, a.timeout)
-		res, err := a.sendOrderRequest(attemptCtx, body, idempotencyKey)
+		res, err := a.sendOrderRequest(attemptCtx, body, idempotencyKey, timestamp, nonce)
 		cancel()
 		if err != nil {
 			lastErr = fmt.Errorf("attempt %d/%d: %w", attempt, a.maxAttempts, err)
@@ -162,18 +182,20 @@ func (a *HTTPBrokerAdapter) SubmitOrder(ctx context.Context, order domain.Order)
 	return BrokerResult{}, fmt.Errorf("submit order failed after %d attempts: %w", a.maxAttempts, lastErr)
 }
 
-func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte, idempotencyKey string) (BrokerResult, error) {
+func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte, idempotencyKey string, timestamp string, nonce string) (BrokerResult, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.baseURL+"/orders", bytes.NewReader(body))
 	if err != nil {
 		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("build request: %v", err), retryable: false}
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Key", a.apiKey)
-	req.Header.Set("X-Signature", a.signer.Sign(body, a.apiSecret))
+	req.Header.Set("X-Signature", a.signer.Sign(body, a.apiSecret, timestamp, nonce))
 	req.Header.Set("X-Signature-Method", a.signerName)
 	req.Header.Set("X-Signature-Version", a.signerVer)
 	req.Header.Set("X-Key-Id", a.keyID)
 	req.Header.Set("X-Idempotency-Key", idempotencyKey)
+	req.Header.Set("X-Request-Timestamp", timestamp)
+	req.Header.Set("X-Request-Nonce", nonce)
 
 	resp, err := a.client.Do(req)
 	if err != nil {
@@ -268,4 +290,17 @@ func toRetryableStatusCodeSet(codes []int) map[int]bool {
 		}
 	}
 	return set
+}
+
+func canonicalSignInput(payload []byte, secret string, timestamp string, nonce string) []byte {
+	return []byte(secret + "\n" + timestamp + "\n" + nonce + "\n" + string(payload))
+}
+
+func defaultRequestNonce() string {
+	b := make([]byte, 12)
+	if _, err := rand.Read(b); err != nil {
+		fallback := sha256.Sum256([]byte(time.Now().UTC().Format(time.RFC3339Nano)))
+		return hex.EncodeToString(fallback[:12])
+	}
+	return hex.EncodeToString(b)
 }
