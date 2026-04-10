@@ -18,10 +18,24 @@ type SessionSummary struct {
 	PositionCount         int
 	EndingCash            float64
 	OutcomeCount          int
+	BrokerRuntime         BrokerRuntimeAudit
 	NextExperimentAgentID string
 	ProposalID            string
 	CommitID              string
 	ApprovalID            string
 	GuardOutcomes         []GuardOutcome
 	RecordedAt            time.Time
+}
+
+type BrokerRuntimeAudit struct {
+	Mode             string
+	Adapter          string
+	Signer           string
+	KeyID            string
+	MaxRetries       int
+	HTTPTimeoutSec   int
+	HTTPAttempts     int
+	RetryStatusCodes []int
+	MaxClockSkewSec  int
+	NonceTTLSec      int
 }

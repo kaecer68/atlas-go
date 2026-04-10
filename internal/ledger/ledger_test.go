@@ -40,6 +40,18 @@ func TestRecordSessionSummaryPersistsTraceIDs(t *testing.T) {
 		ProposalID: "proposal-1",
 		CommitID:   "commit-1",
 		ApprovalID: "approval-1",
+		BrokerRuntime: domain.BrokerRuntimeAudit{
+			Mode:             "live",
+			Adapter:          "http",
+			Signer:           "hmac-sha256",
+			KeyID:            "kid-1",
+			MaxRetries:       2,
+			HTTPTimeoutSec:   5,
+			HTTPAttempts:     3,
+			RetryStatusCodes: []int{408, 429, 503},
+			MaxClockSkewSec:  120,
+			NonceTTLSec:      180,
+		},
 		RecordedAt: time.Now(),
 	}
 
@@ -65,5 +77,17 @@ func TestRecordSessionSummaryPersistsTraceIDs(t *testing.T) {
 	}
 	if got.ApprovalID != summary.ApprovalID {
 		t.Fatalf("approval_id mismatch: got %q want %q", got.ApprovalID, summary.ApprovalID)
+	}
+	if got.BrokerRuntime.Mode != summary.BrokerRuntime.Mode {
+		t.Fatalf("broker runtime mode mismatch: got %q want %q", got.BrokerRuntime.Mode, summary.BrokerRuntime.Mode)
+	}
+	if got.BrokerRuntime.Adapter != summary.BrokerRuntime.Adapter {
+		t.Fatalf("broker runtime adapter mismatch: got %q want %q", got.BrokerRuntime.Adapter, summary.BrokerRuntime.Adapter)
+	}
+	if got.BrokerRuntime.MaxClockSkewSec != summary.BrokerRuntime.MaxClockSkewSec {
+		t.Fatalf("broker runtime max clock skew mismatch: got %d want %d", got.BrokerRuntime.MaxClockSkewSec, summary.BrokerRuntime.MaxClockSkewSec)
+	}
+	if got.BrokerRuntime.NonceTTLSec != summary.BrokerRuntime.NonceTTLSec {
+		t.Fatalf("broker runtime nonce ttl mismatch: got %d want %d", got.BrokerRuntime.NonceTTLSec, summary.BrokerRuntime.NonceTTLSec)
 	}
 }
