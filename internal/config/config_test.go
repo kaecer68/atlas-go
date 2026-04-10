@@ -14,6 +14,8 @@ func TestLoad_Defaults(t *testing.T) {
 		"ATLAS_REPLAY_DATA_PATH", "ATLAS_REPLAY_SESSION_DATE",
 		"FUGLE_API_KEY", "ATLAS_FUGLE_API_KEY", "ATLAS_YAHOO_ENABLED",
 		"ATLAS_BROKER_MODE", "ATLAS_BROKER_MAX_RETRIES", "ATLAS_BROKER_ADAPTER",
+		"ATLAS_BROKER_API_BASE_URL", "ATLAS_BROKER_API_KEY", "ATLAS_BROKER_API_SECRET",
+		"ATLAS_BROKER_HTTP_TIMEOUT_SEC", "ATLAS_BROKER_HTTP_ATTEMPTS",
 	}
 	for _, k := range envKeys {
 		t.Setenv(k, "")
@@ -55,6 +57,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.BrokerAdapter != "guarded" {
 		t.Errorf("BrokerAdapter should default to guarded, got %q", cfg.BrokerAdapter)
 	}
+	if cfg.BrokerHTTPTimeoutS != 5 {
+		t.Errorf("BrokerHTTPTimeoutS should default to 5, got %d", cfg.BrokerHTTPTimeoutS)
+	}
+	if cfg.BrokerHTTPAttempts != 2 {
+		t.Errorf("BrokerHTTPAttempts should default to 2, got %d", cfg.BrokerHTTPAttempts)
+	}
 }
 
 func TestLoad_BrokerAdapterDefaultFallbackWhenEmpty(t *testing.T) {
@@ -76,6 +84,11 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	t.Setenv("ATLAS_BROKER_MODE", "dry-run")
 	t.Setenv("ATLAS_BROKER_MAX_RETRIES", "3")
 	t.Setenv("ATLAS_BROKER_ADAPTER", "mock")
+	t.Setenv("ATLAS_BROKER_API_BASE_URL", "https://broker.example")
+	t.Setenv("ATLAS_BROKER_API_KEY", "key-1")
+	t.Setenv("ATLAS_BROKER_API_SECRET", "sec-1")
+	t.Setenv("ATLAS_BROKER_HTTP_TIMEOUT_SEC", "9")
+	t.Setenv("ATLAS_BROKER_HTTP_ATTEMPTS", "4")
 
 	cfg := Load()
 
@@ -99,6 +112,21 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	}
 	if cfg.BrokerAdapter != "mock" {
 		t.Errorf("BrokerAdapter = %q, want mock", cfg.BrokerAdapter)
+	}
+	if cfg.BrokerAPIBaseURL != "https://broker.example" {
+		t.Errorf("BrokerAPIBaseURL = %q, want https://broker.example", cfg.BrokerAPIBaseURL)
+	}
+	if cfg.BrokerAPIKey != "key-1" {
+		t.Errorf("BrokerAPIKey = %q, want key-1", cfg.BrokerAPIKey)
+	}
+	if cfg.BrokerAPISecret != "sec-1" {
+		t.Errorf("BrokerAPISecret = %q, want sec-1", cfg.BrokerAPISecret)
+	}
+	if cfg.BrokerHTTPTimeoutS != 9 {
+		t.Errorf("BrokerHTTPTimeoutS = %d, want 9", cfg.BrokerHTTPTimeoutS)
+	}
+	if cfg.BrokerHTTPAttempts != 4 {
+		t.Errorf("BrokerHTTPAttempts = %d, want 4", cfg.BrokerHTTPAttempts)
 	}
 }
 

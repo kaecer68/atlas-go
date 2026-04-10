@@ -130,7 +130,7 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 
 func TestValidateBrokerRuntimeConfigRejectsNegativeRetries(t *testing.T) {
 	cfg := config.Config{BrokerMode: "dry-run", BrokerMaxRetries: -1}
-	err := validateBrokerRuntimeConfig(&cfg, false)
+	err := validateBrokerRuntimeConfig(&cfg, false, false)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
@@ -158,5 +158,46 @@ func TestRunRejectsUnsupportedBrokerAdapter(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unsupported broker adapter") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow(t *testing.T) {
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1}
+		},
+		newDashboardAPI: func(dir string) routeRegistrar {
+			return monitoring.NewDashboardAPI(dir)
+		},
+		listenAndServe: func(addr string, handler http.Handler) error {
+			return nil
+		},
+	}
+
+	err := run([]string{"-api", "-allow-live-broker", "-broker-adapter", "http"}, deps)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "allow-http-broker") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
+		},
+		newDashboardAPI: func(dir string) routeRegistrar {
+			return monitoring.NewDashboardAPI(dir)
+		},
+		listenAndServe: func(addr string, handler http.Handler) error {
+			return nil
+		},
+	}
+
+	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker"}, deps)
+	if err != nil {
+		t.Fatalf("run returned error: %v", err)
 	}
 }
