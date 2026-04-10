@@ -58,6 +58,11 @@ type OrchestratorConfig struct {
 	BrokerMode         string
 	BrokerMaxRetries   int
 	BrokerAdapter      string
+	BrokerAPIBaseURL   string
+	BrokerAPIKey       string
+	BrokerAPISecret    string
+	BrokerHTTPTimeoutS int
+	BrokerHTTPAttempts int
 }
 
 // DefaultOrchestratorConfig 默认配置
@@ -75,6 +80,8 @@ func DefaultOrchestratorConfig() OrchestratorConfig {
 		BrokerMode:         "dry-run",
 		BrokerMaxRetries:   1,
 		BrokerAdapter:      "guarded",
+		BrokerHTTPTimeoutS: 5,
+		BrokerHTTPAttempts: 2,
 	}
 }
 
@@ -88,7 +95,7 @@ func NewOrchestrator(
 	config OrchestratorConfig,
 ) *Orchestrator {
 	ctx, cancel := context.WithCancel(context.Background())
-	requestedMode, effectiveMode, broker, audit := resolveBrokerMode(config.BrokerMode, config.BrokerAdapter)
+	requestedMode, effectiveMode, broker, audit := resolveBrokerMode(config)
 	maxRetries := config.BrokerMaxRetries
 	if maxRetries < 0 {
 		maxRetries = 0
@@ -112,13 +119,13 @@ func NewOrchestrator(
 	}
 }
 
-func resolveBrokerMode(mode string, adapter string) (requested string, effective string, broker Broker, auditMsg string) {
-	requested = strings.TrimSpace(strings.ToLower(mode))
+func resolveBrokerMode(cfg OrchestratorConfig) (requested string, effective string, broker Broker, auditMsg string) {
+	requested = strings.TrimSpace(strings.ToLower(cfg.BrokerMode))
 	if requested == "" {
 		requested = "dry-run"
 	}
 
-	adapterProvider := strings.TrimSpace(strings.ToLower(adapter))
+	adapterProvider := strings.TrimSpace(strings.ToLower(cfg.BrokerAdapter))
 	if adapterProvider == "" {
 		adapterProvider = "guarded"
 	}
@@ -132,6 +139,21 @@ func resolveBrokerMode(mode string, adapter string) (requested string, effective
 			return requested, "live-guarded", NewGuardedLiveBroker(nil), "live mode enabled with guarded adapter; orders are rejected until adapter is configured"
 		case "mock":
 			return requested, "live-mock", NewGuardedLiveBroker(NewMockLiveAdapter()), "live mode uses mock adapter; no real orders are sent"
+		case "http":
+			httpAdapter := NewHTTPBrokerAdapter(HTTPBrokerAdapterConfig{
+				BaseURL:     cfg.BrokerAPIBaseURL,
+				APIKey:      cfg.BrokerAPIKey,
+				APISecret:   cfg.BrokerAPISecret,
+				Timeout:     time.Duration(cfg.BrokerHTTPTimeoutS) * time.Second,
+				MaxAttempts: cfg.BrokerHTTPAttempts,
+			})
+			if strings.TrimSpace(cfg.BrokerAPIBaseURL) == "" {
+				return requested, "live-guarded", NewGuardedLiveBroker(nil), "live+http adapter requested but ATLAS_BROKER_API_BASE_URL is empty; fallback to guarded"
+			}
+			if strings.TrimSpace(cfg.BrokerAPIKey) == "" {
+				return requested, "live-guarded", NewGuardedLiveBroker(nil), "live+http adapter requested but ATLAS_BROKER_API_KEY is empty; fallback to guarded"
+			}
+			return requested, "live-http", NewGuardedLiveBroker(httpAdapter), "live mode uses http adapter with signature placeholder; verify credentials and endpoint before production use"
 		default:
 			return requested, "live-guarded", NewGuardedLiveBroker(nil), fmt.Sprintf("unsupported broker adapter %q for live mode; fallback to guarded", adapterProvider)
 		}

@@ -46,9 +46,10 @@ func run(args []string, deps appDeps) error {
 	apiMode := flags.Bool("api", false, "start dashboard api server")
 	apiAddr := flags.String("addr", ":8080", "dashboard api listen address")
 	brokerMode := flags.String("broker-mode", "", "override broker mode: dry-run|paper|live")
-	brokerAdapter := flags.String("broker-adapter", "", "override broker adapter: guarded|mock")
+	brokerAdapter := flags.String("broker-adapter", "", "override broker adapter: guarded|mock|http")
 	brokerMaxRetries := flags.Int("broker-max-retries", -1, "override broker max retries (>=0)")
 	allowLiveBroker := flags.Bool("allow-live-broker", false, "allow live broker mode (default false)")
+	allowHTTPBroker := flags.Bool("allow-http-broker", false, "allow http broker adapter in live mode (default false)")
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("parse flags: %w", err)
 	}
@@ -63,7 +64,7 @@ func run(args []string, deps appDeps) error {
 	if *brokerMaxRetries >= 0 {
 		cfg.BrokerMaxRetries = *brokerMaxRetries
 	}
-	if err := validateBrokerRuntimeConfig(&cfg, *allowLiveBroker); err != nil {
+	if err := validateBrokerRuntimeConfig(&cfg, *allowLiveBroker, *allowHTTPBroker); err != nil {
 		return err
 	}
 
@@ -81,7 +82,7 @@ func run(args []string, deps appDeps) error {
 	return runSimulation(cfg)
 }
 
-func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool) error {
+func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allowHTTPBroker bool) error {
 	cfg.BrokerMode = strings.TrimSpace(strings.ToLower(cfg.BrokerMode))
 	if cfg.BrokerMode == "" {
 		cfg.BrokerMode = "dry-run"
@@ -90,8 +91,8 @@ func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool) error
 	if cfg.BrokerAdapter == "" {
 		cfg.BrokerAdapter = "guarded"
 	}
-	if cfg.BrokerAdapter != "guarded" && cfg.BrokerAdapter != "mock" {
-		return fmt.Errorf("unsupported broker adapter %q (allowed: guarded, mock)", cfg.BrokerAdapter)
+	if cfg.BrokerAdapter != "guarded" && cfg.BrokerAdapter != "mock" && cfg.BrokerAdapter != "http" {
+		return fmt.Errorf("unsupported broker adapter %q (allowed: guarded, mock, http)", cfg.BrokerAdapter)
 	}
 
 	switch cfg.BrokerMode {
@@ -100,6 +101,9 @@ func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool) error
 	case "live":
 		if !allowLiveBroker {
 			return fmt.Errorf("broker mode %q is disabled by default; pass -allow-live-broker to enable", cfg.BrokerMode)
+		}
+		if cfg.BrokerAdapter == "http" && !allowHTTPBroker {
+			return fmt.Errorf("broker adapter %q is disabled by default in live mode; pass -allow-http-broker to enable", cfg.BrokerAdapter)
 		}
 	default:
 		return fmt.Errorf("unsupported broker mode %q (allowed: dry-run, paper, live)", cfg.BrokerMode)
