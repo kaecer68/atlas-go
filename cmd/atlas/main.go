@@ -48,6 +48,7 @@ func run(args []string, deps appDeps) error {
 	brokerMode := flags.String("broker-mode", "", "override broker mode: dry-run|paper|live")
 	brokerAdapter := flags.String("broker-adapter", "", "override broker adapter: guarded|mock|http")
 	brokerSigner := flags.String("broker-signer", "", "override broker signer: placeholder|hmac-sha256")
+	brokerKeyID := flags.String("broker-key-id", "", "override broker key id for signer key rotation")
 	brokerMaxRetries := flags.Int("broker-max-retries", -1, "override broker max retries (>=0)")
 	allowLiveBroker := flags.Bool("allow-live-broker", false, "allow live broker mode (default false)")
 	allowHTTPBroker := flags.Bool("allow-http-broker", false, "allow http broker adapter in live mode (default false)")
@@ -65,6 +66,9 @@ func run(args []string, deps appDeps) error {
 	}
 	if *brokerSigner != "" {
 		cfg.BrokerSigner = *brokerSigner
+	}
+	if *brokerKeyID != "" {
+		cfg.BrokerKeyID = *brokerKeyID
 	}
 	if *brokerMaxRetries >= 0 {
 		cfg.BrokerMaxRetries = *brokerMaxRetries
@@ -100,6 +104,7 @@ func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allow
 	if cfg.BrokerSigner == "" {
 		cfg.BrokerSigner = "placeholder"
 	}
+	cfg.BrokerKeyID = strings.TrimSpace(cfg.BrokerKeyID)
 	if cfg.BrokerAdapter != "guarded" && cfg.BrokerAdapter != "mock" && cfg.BrokerAdapter != "http" {
 		return fmt.Errorf("unsupported broker adapter %q (allowed: guarded, mock, http)", cfg.BrokerAdapter)
 	}
@@ -119,6 +124,9 @@ func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allow
 		}
 		if cfg.BrokerAdapter == "http" && cfg.BrokerSigner != "placeholder" && !allowRealSigner {
 			return fmt.Errorf("broker signer %q is disabled by default for http adapter; pass -allow-real-signer to enable", cfg.BrokerSigner)
+		}
+		if cfg.BrokerAdapter == "http" && cfg.BrokerSigner != "placeholder" && cfg.BrokerKeyID == "" {
+			return fmt.Errorf("broker key id is required when using signer %q with http adapter", cfg.BrokerSigner)
 		}
 	default:
 		return fmt.Errorf("unsupported broker mode %q (allowed: dry-run, paper, live)", cfg.BrokerMode)
@@ -147,6 +155,7 @@ func runSimulation(cfg config.Config) error {
 	fmt.Printf("broker_mode: %s\n", cfg.BrokerMode)
 	fmt.Printf("broker_adapter: %s\n", cfg.BrokerAdapter)
 	fmt.Printf("broker_signer: %s\n", cfg.BrokerSigner)
+	fmt.Printf("broker_key_id: %s\n", cfg.BrokerKeyID)
 	fmt.Printf("broker_max_retries: %d\n", cfg.BrokerMaxRetries)
 	fmt.Printf("session: %s\n", session.ID)
 	fmt.Printf("agents: %d\n", len(registry.Agents))

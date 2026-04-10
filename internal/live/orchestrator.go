@@ -64,6 +64,7 @@ type OrchestratorConfig struct {
 	BrokerHTTPTimeoutS int
 	BrokerHTTPAttempts int
 	BrokerSigner       string
+	BrokerKeyID        string
 }
 
 // DefaultOrchestratorConfig 默认配置
@@ -146,6 +147,7 @@ func resolveBrokerMode(cfg OrchestratorConfig) (requested string, effective stri
 				BaseURL:     cfg.BrokerAPIBaseURL,
 				APIKey:      cfg.BrokerAPIKey,
 				APISecret:   cfg.BrokerAPISecret,
+				KeyID:       cfg.BrokerKeyID,
 				Timeout:     time.Duration(cfg.BrokerHTTPTimeoutS) * time.Second,
 				MaxAttempts: cfg.BrokerHTTPAttempts,
 				Signer:      cfg.BrokerSigner,
