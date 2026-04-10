@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -182,7 +183,11 @@ func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allow
 	}
 	cfg.BrokerNonceStorePath = strings.TrimSpace(cfg.BrokerNonceStorePath)
 	if cfg.BrokerNonceStore == "file" && cfg.BrokerNonceStorePath == "" {
-		return fmt.Errorf("broker nonce store path is required when broker nonce store is file")
+		ledgerDir := strings.TrimSpace(cfg.LedgerDir)
+		if ledgerDir == "" {
+			ledgerDir = "data/state"
+		}
+		cfg.BrokerNonceStorePath = filepath.Join(ledgerDir, "broker-nonce-replay.json")
 	}
 
 	return nil
