@@ -3,6 +3,7 @@ package live
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,6 +38,10 @@ type Orchestrator struct {
 
 	// 观测标的
 	watchlist []string
+
+	requestedBrokerMode string
+	effectiveBrokerMode string
+	executionAuditMsg   string
 }
 
 // OrchestratorConfig 编排器配置
@@ -50,6 +55,8 @@ type OrchestratorConfig struct {
 	MaxPositionLossPct float64
 	StopLossEnabled    bool
 	TakeProfitEnabled  bool
+	BrokerMode         string
+	BrokerMaxRetries   int
 }
 
 // DefaultOrchestratorConfig 默认配置
@@ -64,6 +71,8 @@ func DefaultOrchestratorConfig() OrchestratorConfig {
 		MaxPositionLossPct: 5.0,
 		StopLossEnabled:    true,
 		TakeProfitEnabled:  false,
+		BrokerMode:         "dry-run",
+		BrokerMaxRetries:   1,
 	}
 }
 
@@ -77,19 +86,43 @@ func NewOrchestrator(
 	config OrchestratorConfig,
 ) *Orchestrator {
 	ctx, cancel := context.WithCancel(context.Background())
+	requestedMode, effectiveMode, broker, audit := resolveBrokerMode(config.BrokerMode)
+	maxRetries := config.BrokerMaxRetries
+	if maxRetries < 0 {
+		maxRetries = 0
+	}
 
 	return &Orchestrator{
-		stateStore: stateStore,
-		eventBus:   eventBus,
-		marketData: marketData,
-		broker:     NewDryRunBroker(),
-		orderMgr:   NewOrderManager(NewDryRunBroker(), eventBus, 1, 100*time.Millisecond),
-		registry:   registry,
-		system:     system,
-		config:     config,
-		ctx:        ctx,
-		cancel:     cancel,
-		watchlist:  make([]string, 0),
+		stateStore:          stateStore,
+		eventBus:            eventBus,
+		marketData:          marketData,
+		broker:              broker,
+		orderMgr:            NewOrderManager(broker, eventBus, maxRetries, 100*time.Millisecond),
+		registry:            registry,
+		system:              system,
+		config:              config,
+		ctx:                 ctx,
+		cancel:              cancel,
+		watchlist:           make([]string, 0),
+		requestedBrokerMode: requestedMode,
+		effectiveBrokerMode: effectiveMode,
+		executionAuditMsg:   audit,
+	}
+}
+
+func resolveBrokerMode(mode string) (requested string, effective string, broker Broker, auditMsg string) {
+	requested = strings.TrimSpace(strings.ToLower(mode))
+	if requested == "" {
+		requested = "dry-run"
+	}
+
+	switch requested {
+	case "dry-run", "paper":
+		return requested, "dry-run", NewDryRunBroker(), ""
+	case "live":
+		return requested, "dry-run", NewDryRunBroker(), "live broker mode is not enabled yet; fallback to dry-run"
+	default:
+		return requested, "dry-run", NewDryRunBroker(), fmt.Sprintf("unsupported broker mode %q; fallback to dry-run", requested)
 	}
 }
 
@@ -97,13 +130,23 @@ func NewOrchestrator(
 func (o *Orchestrator) SetBroker(broker Broker) {
 	o.mutex.Lock()
 	defer o.mutex.Unlock()
+	retries := o.config.BrokerMaxRetries
+	if retries < 0 {
+		retries = 0
+	}
 	if broker == nil {
 		o.broker = NewDryRunBroker()
-		o.orderMgr = NewOrderManager(o.broker, o.eventBus, 1, 100*time.Millisecond)
+		o.orderMgr = NewOrderManager(o.broker, o.eventBus, retries, 100*time.Millisecond)
+		o.requestedBrokerMode = "dry-run"
+		o.effectiveBrokerMode = "dry-run"
+		o.executionAuditMsg = ""
 		return
 	}
 	o.broker = broker
-	o.orderMgr = NewOrderManager(o.broker, o.eventBus, 1, 100*time.Millisecond)
+	o.orderMgr = NewOrderManager(o.broker, o.eventBus, retries, 100*time.Millisecond)
+	o.requestedBrokerMode = broker.Mode()
+	o.effectiveBrokerMode = broker.Mode()
+	o.executionAuditMsg = ""
 }
 
 // SetWatchlist 设置观测标的列表
@@ -124,6 +167,14 @@ func (o *Orchestrator) Start() error {
 
 	o.isRunning = true
 
+	if o.orderMgr == nil {
+		retries := o.config.BrokerMaxRetries
+		if retries < 0 {
+			retries = 0
+		}
+		o.orderMgr = NewOrderManager(o.broker, o.eventBus, retries, 100*time.Millisecond)
+	}
+
 	// 启动事件订阅
 	o.setupEventHandlers()
 
@@ -142,13 +193,27 @@ func (o *Orchestrator) Start() error {
 		Type:      EventSystemStart,
 		Timestamp: time.Now(),
 		Payload: map[string]interface{}{
-			"market_data_provider": o.marketData.Name(),
-			"watchlist_count":      len(o.watchlist),
+			"market_data_provider":  o.marketData.Name(),
+			"watchlist_count":       len(o.watchlist),
+			"broker_mode_requested": o.requestedBrokerMode,
+			"broker_mode_effective": o.effectiveBrokerMode,
+			"broker_max_retries":    o.config.BrokerMaxRetries,
 		},
 	})
 
-	fmt.Printf("[Orchestrator] Started with %d symbols, poll interval: %v\n",
-		len(o.watchlist), o.config.QuotePollInterval)
+	if o.executionAuditMsg != "" {
+		o.eventBus.Publish(BusEvent{
+			ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+			Type:      EventSystemError,
+			Timestamp: time.Now(),
+			Payload: map[string]string{
+				"error": o.executionAuditMsg,
+			},
+		})
+	}
+
+	fmt.Printf("[Orchestrator] Started with %d symbols, poll interval: %v, broker=%s\n",
+		len(o.watchlist), o.config.QuotePollInterval, o.effectiveBrokerMode)
 
 	return nil
 }
@@ -436,7 +501,11 @@ func (o *Orchestrator) simulateOrderExecution() {
 		o.broker = NewDryRunBroker()
 	}
 	if o.orderMgr == nil {
-		o.orderMgr = NewOrderManager(o.broker, o.eventBus, 1, 100*time.Millisecond)
+		retries := o.config.BrokerMaxRetries
+		if retries < 0 {
+			retries = 0
+		}
+		o.orderMgr = NewOrderManager(o.broker, o.eventBus, retries, 100*time.Millisecond)
 	}
 
 	// Phase 6 起步：先建立可审计的执行通道，默认 dry-run，不触发真实下单。
@@ -448,7 +517,11 @@ func (o *Orchestrator) executeOrder(ctx context.Context, order domain.Order) err
 		if o.broker == nil {
 			o.broker = NewDryRunBroker()
 		}
-		o.orderMgr = NewOrderManager(o.broker, o.eventBus, 1, 100*time.Millisecond)
+		retries := o.config.BrokerMaxRetries
+		if retries < 0 {
+			retries = 0
+		}
+		o.orderMgr = NewOrderManager(o.broker, o.eventBus, retries, 100*time.Millisecond)
 	}
 	if err := o.orderMgr.Execute(ctx, order); err != nil {
 		return fmt.Errorf("execute order via manager: %w", err)
@@ -504,11 +577,14 @@ func (o *Orchestrator) Status() map[string]interface{} {
 			"unrealized_pnl": portfolio.UnrealizedPnL,
 		},
 		"config": map[string]interface{}{
-			"market_open":       o.config.MarketOpenTime,
-			"market_close":      o.config.MarketCloseTime,
-			"intraday_cycle":    o.config.IntradayInterval.String(),
-			"quote_poll":        o.config.QuotePollInterval.String(),
-			"stop_loss_enabled": o.config.StopLossEnabled,
+			"market_open":           o.config.MarketOpenTime,
+			"market_close":          o.config.MarketCloseTime,
+			"intraday_cycle":        o.config.IntradayInterval.String(),
+			"quote_poll":            o.config.QuotePollInterval.String(),
+			"stop_loss_enabled":     o.config.StopLossEnabled,
+			"broker_mode_requested": o.requestedBrokerMode,
+			"broker_mode_effective": o.effectiveBrokerMode,
+			"broker_max_retries":    o.config.BrokerMaxRetries,
 		},
 	}
 }
