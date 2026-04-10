@@ -29,6 +29,8 @@ type Config struct {
 	BrokerHTTPRetryStatusCodes []int
 	BrokerMaxClockSkewS        int
 	BrokerNonceTTLS            int
+	BrokerNonceStore           string
+	BrokerNonceStorePath       string
 	BrokerSigner               string
 	BrokerKeyID                string
 }
@@ -60,6 +62,8 @@ func Load() Config {
 		BrokerHTTPRetryStatusCodes: envOrIntCSV("ATLAS_BROKER_HTTP_RETRY_STATUS_CODES", []int{408, 425, 429, 500, 502, 503, 504}),
 		BrokerMaxClockSkewS:        envOrInt("ATLAS_BROKER_MAX_CLOCK_SKEW_SEC", 300),
 		BrokerNonceTTLS:            envOrInt("ATLAS_BROKER_NONCE_TTL_SEC", 300),
+		BrokerNonceStore:           envOr("ATLAS_BROKER_NONCE_STORE", "memory"),
+		BrokerNonceStorePath:       envOr("ATLAS_BROKER_NONCE_STORE_PATH", ""),
 		BrokerSigner:               envOr("ATLAS_BROKER_SIGNER", "placeholder"),
 		BrokerKeyID:                envOr("ATLAS_BROKER_KEY_ID", ""),
 	}

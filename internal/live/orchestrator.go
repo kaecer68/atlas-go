@@ -66,6 +66,8 @@ type OrchestratorConfig struct {
 	BrokerHTTPRetryStatusCodes []int
 	BrokerMaxClockSkewS        int
 	BrokerNonceTTLS            int
+	BrokerNonceStore           string
+	BrokerNonceStorePath       string
 	BrokerSigner               string
 	BrokerKeyID                string
 }
@@ -90,6 +92,7 @@ func DefaultOrchestratorConfig() OrchestratorConfig {
 		BrokerHTTPRetryStatusCodes: []int{408, 425, 429, 500, 502, 503, 504},
 		BrokerMaxClockSkewS:        300,
 		BrokerNonceTTLS:            300,
+		BrokerNonceStore:           "memory",
 		BrokerSigner:               "placeholder",
 	}
 }
@@ -149,6 +152,10 @@ func resolveBrokerMode(cfg OrchestratorConfig) (requested string, effective stri
 		case "mock":
 			return requested, "live-mock", NewGuardedLiveBroker(NewMockLiveAdapter()), "live mode uses mock adapter; no real orders are sent"
 		case "http":
+			nonceStore, err := BuildNonceReplayStore(cfg.BrokerNonceStore, cfg.BrokerNonceStorePath)
+			if err != nil {
+				return requested, "live-guarded", NewGuardedLiveBroker(nil), fmt.Sprintf("live+http adapter requested but nonce store config invalid: %v; fallback to guarded", err)
+			}
 			httpAdapter := NewHTTPBrokerAdapter(HTTPBrokerAdapterConfig{
 				BaseURL:              cfg.BrokerAPIBaseURL,
 				APIKey:               cfg.BrokerAPIKey,
@@ -159,6 +166,7 @@ func resolveBrokerMode(cfg OrchestratorConfig) (requested string, effective stri
 				RetryableStatusCodes: cfg.BrokerHTTPRetryStatusCodes,
 				MaxClockSkew:         time.Duration(cfg.BrokerMaxClockSkewS) * time.Second,
 				NonceTTL:             time.Duration(cfg.BrokerNonceTTLS) * time.Second,
+				NonceStore:           nonceStore,
 				Signer:               cfg.BrokerSigner,
 			})
 			if strings.TrimSpace(cfg.BrokerAPIBaseURL) == "" {
@@ -255,6 +263,8 @@ func (o *Orchestrator) Start() error {
 			"broker_http_retry_status_codes": o.config.BrokerHTTPRetryStatusCodes,
 			"broker_max_clock_skew_sec":      o.config.BrokerMaxClockSkewS,
 			"broker_nonce_ttl_sec":           o.config.BrokerNonceTTLS,
+			"broker_nonce_store":             o.config.BrokerNonceStore,
+			"broker_nonce_store_path":        o.config.BrokerNonceStorePath,
 			"broker_max_retries":             o.config.BrokerMaxRetries,
 		},
 	})
@@ -650,6 +660,8 @@ func (o *Orchestrator) Status() map[string]interface{} {
 			"broker_http_retry_status_codes": o.config.BrokerHTTPRetryStatusCodes,
 			"broker_max_clock_skew_sec":      o.config.BrokerMaxClockSkewS,
 			"broker_nonce_ttl_sec":           o.config.BrokerNonceTTLS,
+			"broker_nonce_store":             o.config.BrokerNonceStore,
+			"broker_nonce_store_path":        o.config.BrokerNonceStorePath,
 			"broker_max_retries":             o.config.BrokerMaxRetries,
 		},
 	}
