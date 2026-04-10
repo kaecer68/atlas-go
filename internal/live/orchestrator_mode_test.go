@@ -194,3 +194,49 @@ func TestNewOrchestratorAppliesLiveGuardedMode(t *testing.T) {
 		t.Fatalf("status broker_nonce_store mismatch: %v", configMap["broker_nonce_store"])
 	}
 }
+
+func TestNewOrchestratorAppliesLiveHTTPFileNonceStoreConfig(t *testing.T) {
+	store := NewStateStore(t.TempDir())
+	bus := NewChannelEventBus(32)
+	t.Cleanup(func() {
+		_ = bus.Close()
+	})
+
+	nonceStorePath := t.TempDir() + "/nonce-store.json"
+	o := NewOrchestrator(
+		store,
+		bus,
+		stubProvider{name: "stub-market", quotes: []domain.Quote{}},
+		domain.AgentRegistry{},
+		nil,
+		OrchestratorConfig{
+			MarketOpenTime:       "09:00",
+			MarketCloseTime:      "13:30",
+			IntradayInterval:     time.Hour,
+			QuotePollInterval:    10 * time.Second,
+			BrokerMode:           "live",
+			BrokerAdapter:        "http",
+			BrokerAPIBaseURL:     "https://broker.example",
+			BrokerAPIKey:         "key-test",
+			BrokerNonceStore:     "file",
+			BrokerNonceStorePath: nonceStorePath,
+			BrokerSigner:         "placeholder",
+		},
+	)
+
+	if o.effectiveBrokerMode != "live-http" {
+		t.Fatalf("effective broker mode: got=%q want=live-http", o.effectiveBrokerMode)
+	}
+
+	status := o.Status()
+	configMap, ok := status["config"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("unexpected config status type: %T", status["config"])
+	}
+	if configMap["broker_nonce_store"] != "file" {
+		t.Fatalf("status broker_nonce_store mismatch: %v", configMap["broker_nonce_store"])
+	}
+	if configMap["broker_nonce_store_path"] != nonceStorePath {
+		t.Fatalf("status broker_nonce_store_path mismatch: got=%v want=%s", configMap["broker_nonce_store_path"], nonceStorePath)
+	}
+}

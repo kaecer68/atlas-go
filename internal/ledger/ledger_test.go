@@ -51,6 +51,8 @@ func TestRecordSessionSummaryPersistsTraceIDs(t *testing.T) {
 			RetryStatusCodes: []int{408, 429, 503},
 			MaxClockSkewSec:  120,
 			NonceTTLSec:      180,
+			NonceStore:       "file",
+			NonceStorePath:   "data/state/broker-nonce-replay.json",
 		},
 		RecordedAt: time.Now(),
 	}
@@ -89,5 +91,11 @@ func TestRecordSessionSummaryPersistsTraceIDs(t *testing.T) {
 	}
 	if got.BrokerRuntime.NonceTTLSec != summary.BrokerRuntime.NonceTTLSec {
 		t.Fatalf("broker runtime nonce ttl mismatch: got %d want %d", got.BrokerRuntime.NonceTTLSec, summary.BrokerRuntime.NonceTTLSec)
+	}
+	if got.BrokerRuntime.NonceStore != summary.BrokerRuntime.NonceStore {
+		t.Fatalf("broker runtime nonce store mismatch: got %q want %q", got.BrokerRuntime.NonceStore, summary.BrokerRuntime.NonceStore)
+	}
+	if got.BrokerRuntime.NonceStorePath != summary.BrokerRuntime.NonceStorePath {
+		t.Fatalf("broker runtime nonce store path mismatch: got %q want %q", got.BrokerRuntime.NonceStorePath, summary.BrokerRuntime.NonceStorePath)
 	}
 }
