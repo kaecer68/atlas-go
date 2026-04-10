@@ -26,6 +26,7 @@ type Config struct {
 	BrokerAPISecret    string
 	BrokerHTTPTimeoutS int
 	BrokerHTTPAttempts int
+	BrokerSigner       string
 }
 
 func Load() Config {
@@ -52,6 +53,7 @@ func Load() Config {
 		BrokerAPISecret:    envOr("ATLAS_BROKER_API_SECRET", ""),
 		BrokerHTTPTimeoutS: envOrInt("ATLAS_BROKER_HTTP_TIMEOUT_SEC", 5),
 		BrokerHTTPAttempts: envOrInt("ATLAS_BROKER_HTTP_ATTEMPTS", 2),
+		BrokerSigner:       envOr("ATLAS_BROKER_SIGNER", "placeholder"),
 	}
 }
 

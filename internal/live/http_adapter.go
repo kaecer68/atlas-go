@@ -3,6 +3,7 @@ package live
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -23,6 +24,7 @@ type HTTPBrokerAdapterConfig struct {
 	Timeout     time.Duration
 	MaxAttempts int
 	Client      *http.Client
+	Signer      string
 }
 
 type HTTPBrokerAdapter struct {
@@ -32,6 +34,32 @@ type HTTPBrokerAdapter struct {
 	timeout     time.Duration
 	maxAttempts int
 	client      *http.Client
+	signerName  string
+	signer      requestSigner
+}
+
+type requestSigner interface {
+	Name() string
+	Sign(payload []byte, secret string) string
+}
+
+type placeholderSigner struct{}
+
+func (s placeholderSigner) Name() string { return "placeholder" }
+
+func (s placeholderSigner) Sign(payload []byte, secret string) string {
+	h := sha256.Sum256([]byte(secret + ":" + string(payload)))
+	return "placeholder-" + hex.EncodeToString(h[:])
+}
+
+type hmacSHA256Signer struct{}
+
+func (s hmacSHA256Signer) Name() string { return "hmac-sha256" }
+
+func (s hmacSHA256Signer) Sign(payload []byte, secret string) string {
+	h := hmac.New(sha256.New, []byte(secret))
+	_, _ = h.Write(payload)
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 type brokerHTTPError struct {
@@ -56,6 +84,7 @@ func NewHTTPBrokerAdapter(cfg HTTPBrokerAdapterConfig) *HTTPBrokerAdapter {
 	if client == nil {
 		client = &http.Client{}
 	}
+	signerName, signer := selectSigner(cfg.Signer)
 
 	return &HTTPBrokerAdapter{
 		baseURL:     strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"),
@@ -64,6 +93,8 @@ func NewHTTPBrokerAdapter(cfg HTTPBrokerAdapterConfig) *HTTPBrokerAdapter {
 		timeout:     timeout,
 		maxAttempts: maxAttempts,
 		client:      client,
+		signerName:  signerName,
+		signer:      signer,
 	}
 }
 
@@ -76,6 +107,9 @@ func (a *HTTPBrokerAdapter) SubmitOrder(ctx context.Context, order domain.Order)
 	}
 	if a.apiKey == "" {
 		return BrokerResult{}, fmt.Errorf("http broker adapter: api key is required")
+	}
+	if a.signer == nil {
+		a.signerName, a.signer = selectSigner("")
 	}
 
 	payload := map[string]interface{}{
@@ -116,7 +150,8 @@ func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte, i
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Key", a.apiKey)
-	req.Header.Set("X-Signature", signaturePlaceholder(body, a.apiSecret))
+	req.Header.Set("X-Signature", a.signer.Sign(body, a.apiSecret))
+	req.Header.Set("X-Signature-Method", a.signerName)
 	req.Header.Set("X-Idempotency-Key", idempotencyKey)
 
 	resp, err := a.client.Do(req)
@@ -161,11 +196,6 @@ func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte, i
 	}, nil
 }
 
-func signaturePlaceholder(payload []byte, secret string) string {
-	h := sha256.Sum256([]byte(secret + ":" + string(payload)))
-	return "placeholder-" + hex.EncodeToString(h[:])
-}
-
 func orderIdempotencyKey(order domain.Order) string {
 	base := fmt.Sprintf("%s|%s|%d|%.6f|%s", order.Symbol, order.Side, order.Quantity, order.Price, order.Reason)
 	h := sha256.Sum256([]byte(base))
@@ -178,4 +208,16 @@ func isRetryableBrokerError(err error) bool {
 		return be.retryable
 	}
 	return false
+}
+
+func selectSigner(signer string) (string, requestSigner) {
+	name := strings.TrimSpace(strings.ToLower(signer))
+	switch name {
+	case "hmac-sha256":
+		return "hmac-sha256", hmacSHA256Signer{}
+	case "placeholder", "":
+		return "placeholder", placeholderSigner{}
+	default:
+		return "placeholder", placeholderSigner{}
+	}
 }

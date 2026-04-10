@@ -130,7 +130,7 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 
 func TestValidateBrokerRuntimeConfigRejectsNegativeRetries(t *testing.T) {
 	cfg := config.Config{BrokerMode: "dry-run", BrokerMaxRetries: -1}
-	err := validateBrokerRuntimeConfig(&cfg, false, false)
+	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
@@ -197,6 +197,47 @@ func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
 	}
 
 	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker"}, deps)
+	if err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+}
+
+func TestRunRejectsRealSignerWithoutExplicitAllow(t *testing.T) {
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
+		},
+		newDashboardAPI: func(dir string) routeRegistrar {
+			return monitoring.NewDashboardAPI(dir)
+		},
+		listenAndServe: func(addr string, handler http.Handler) error {
+			return nil
+		},
+	}
+
+	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker", "-broker-signer", "hmac-sha256"}, deps)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "allow-real-signer") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunAllowsRealSignerWithExplicitAllow(t *testing.T) {
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
+		},
+		newDashboardAPI: func(dir string) routeRegistrar {
+			return monitoring.NewDashboardAPI(dir)
+		},
+		listenAndServe: func(addr string, handler http.Handler) error {
+			return nil
+		},
+	}
+
+	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker", "-broker-signer", "hmac-sha256", "-allow-real-signer"}, deps)
 	if err != nil {
 		t.Fatalf("run returned error: %v", err)
 	}

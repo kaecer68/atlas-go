@@ -63,6 +63,7 @@ type OrchestratorConfig struct {
 	BrokerAPISecret    string
 	BrokerHTTPTimeoutS int
 	BrokerHTTPAttempts int
+	BrokerSigner       string
 }
 
 // DefaultOrchestratorConfig 默认配置
@@ -82,6 +83,7 @@ func DefaultOrchestratorConfig() OrchestratorConfig {
 		BrokerAdapter:      "guarded",
 		BrokerHTTPTimeoutS: 5,
 		BrokerHTTPAttempts: 2,
+		BrokerSigner:       "placeholder",
 	}
 }
 
@@ -146,6 +148,7 @@ func resolveBrokerMode(cfg OrchestratorConfig) (requested string, effective stri
 				APISecret:   cfg.BrokerAPISecret,
 				Timeout:     time.Duration(cfg.BrokerHTTPTimeoutS) * time.Second,
 				MaxAttempts: cfg.BrokerHTTPAttempts,
+				Signer:      cfg.BrokerSigner,
 			})
 			if strings.TrimSpace(cfg.BrokerAPIBaseURL) == "" {
 				return requested, "live-guarded", NewGuardedLiveBroker(nil), "live+http adapter requested but ATLAS_BROKER_API_BASE_URL is empty; fallback to guarded"
