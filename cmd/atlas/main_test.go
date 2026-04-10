@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -342,5 +343,48 @@ func TestValidateBrokerRuntimeConfigDefaultsFileNonceStorePathWithEmptyLedgerDir
 	}
 	if cfg.BrokerNonceStorePath != "data/state/broker-nonce-replay.json" {
 		t.Fatalf("unexpected nonce store path: %q", cfg.BrokerNonceStorePath)
+	}
+}
+
+func TestValidateBrokerRuntimeConfigNormalizesRelativeFileNonceStorePath(t *testing.T) {
+	ledgerDir := t.TempDir()
+	cfg := config.Config{
+		LedgerDir:            ledgerDir,
+		BrokerMode:           "dry-run",
+		BrokerAdapter:        "guarded",
+		BrokerMaxRetries:     1,
+		BrokerMaxClockSkewS:  300,
+		BrokerNonceTTLS:      300,
+		BrokerNonceStore:     "file",
+		BrokerNonceStorePath: "nonces/custom.json",
+	}
+	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := filepath.Join(ledgerDir, "nonces/custom.json")
+	if cfg.BrokerNonceStorePath != want {
+		t.Fatalf("unexpected nonce store path: got %q want %q", cfg.BrokerNonceStorePath, want)
+	}
+}
+
+func TestValidateBrokerRuntimeConfigKeepsAbsoluteFileNonceStorePath(t *testing.T) {
+	absPath := filepath.Join(t.TempDir(), "nonce-store.json")
+	cfg := config.Config{
+		LedgerDir:            t.TempDir(),
+		BrokerMode:           "dry-run",
+		BrokerAdapter:        "guarded",
+		BrokerMaxRetries:     1,
+		BrokerMaxClockSkewS:  300,
+		BrokerNonceTTLS:      300,
+		BrokerNonceStore:     "file",
+		BrokerNonceStorePath: absPath,
+	}
+	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.BrokerNonceStorePath != absPath {
+		t.Fatalf("unexpected nonce store path: got %q want %q", cfg.BrokerNonceStorePath, absPath)
 	}
 }
