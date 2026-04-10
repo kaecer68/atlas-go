@@ -28,6 +28,9 @@ func TestHTTPBrokerAdapterSubmitOrderSuccess(t *testing.T) {
 		if !strings.HasPrefix(sig, "placeholder-") {
 			t.Fatalf("unexpected signature header: %s", sig)
 		}
+		if got := r.Header.Get("X-Idempotency-Key"); !strings.HasPrefix(got, "atlas-") {
+			t.Fatalf("unexpected idempotency key header: %s", got)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"order_id":   "oid-100",
@@ -55,6 +58,66 @@ func TestHTTPBrokerAdapterSubmitOrderSuccess(t *testing.T) {
 	}
 	if res.Status != "filled" {
 		t.Fatalf("status = %q, want filled", res.Status)
+	}
+}
+
+func TestHTTPBrokerAdapterNoRetryOnBadRequest(t *testing.T) {
+	var calls int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		http.Error(w, "invalid order", http.StatusBadRequest)
+	}))
+	defer server.Close()
+
+	adapter := NewHTTPBrokerAdapter(HTTPBrokerAdapterConfig{
+		BaseURL:     server.URL,
+		APIKey:      "k1",
+		APISecret:   "s1",
+		Timeout:     2 * time.Second,
+		MaxAttempts: 3,
+		Client:      server.Client(),
+	})
+
+	_, err := adapter.SubmitOrder(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 1})
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("calls = %d, want 1 for non-retryable 400", got)
+	}
+}
+
+func TestHTTPBrokerAdapterRetriesOnTooManyRequests(t *testing.T) {
+	var calls int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&calls, 1)
+		if n == 1 {
+			http.Error(w, "rate limited", http.StatusTooManyRequests)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+	}))
+	defer server.Close()
+
+	adapter := NewHTTPBrokerAdapter(HTTPBrokerAdapterConfig{
+		BaseURL:     server.URL,
+		APIKey:      "k1",
+		APISecret:   "s1",
+		Timeout:     2 * time.Second,
+		MaxAttempts: 2,
+		Client:      server.Client(),
+	})
+
+	res, err := adapter.SubmitOrder(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 1})
+	if err != nil {
+		t.Fatalf("SubmitOrder error: %v", err)
+	}
+	if res.Status != "placed" {
+		t.Fatalf("status = %q, want placed", res.Status)
+	}
+	if got := atomic.LoadInt32(&calls); got != 2 {
+		t.Fatalf("calls = %d, want 2", got)
 	}
 }
 

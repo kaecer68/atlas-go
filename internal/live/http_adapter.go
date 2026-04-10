@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,6 +32,15 @@ type HTTPBrokerAdapter struct {
 	timeout     time.Duration
 	maxAttempts int
 	client      *http.Client
+}
+
+type brokerHTTPError struct {
+	message   string
+	retryable bool
+}
+
+func (e *brokerHTTPError) Error() string {
+	return e.message
 }
 
 func NewHTTPBrokerAdapter(cfg HTTPBrokerAdapterConfig) *HTTPBrokerAdapter {
@@ -79,14 +89,18 @@ func (a *HTTPBrokerAdapter) SubmitOrder(ctx context.Context, order domain.Order)
 	if err != nil {
 		return BrokerResult{}, fmt.Errorf("marshal order payload: %w", err)
 	}
+	idempotencyKey := orderIdempotencyKey(order)
 
 	var lastErr error
 	for attempt := 1; attempt <= a.maxAttempts; attempt++ {
 		attemptCtx, cancel := context.WithTimeout(ctx, a.timeout)
-		res, err := a.sendOrderRequest(attemptCtx, body)
+		res, err := a.sendOrderRequest(attemptCtx, body, idempotencyKey)
 		cancel()
 		if err != nil {
 			lastErr = fmt.Errorf("attempt %d/%d: %w", attempt, a.maxAttempts, err)
+			if !isRetryableBrokerError(err) {
+				break
+			}
 			continue
 		}
 		return res, nil
@@ -95,27 +109,33 @@ func (a *HTTPBrokerAdapter) SubmitOrder(ctx context.Context, order domain.Order)
 	return BrokerResult{}, fmt.Errorf("submit order failed after %d attempts: %w", a.maxAttempts, lastErr)
 }
 
-func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte) (BrokerResult, error) {
+func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte, idempotencyKey string) (BrokerResult, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.baseURL+"/orders", bytes.NewReader(body))
 	if err != nil {
-		return BrokerResult{}, fmt.Errorf("build request: %w", err)
+		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("build request: %v", err), retryable: false}
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Key", a.apiKey)
 	req.Header.Set("X-Signature", signaturePlaceholder(body, a.apiSecret))
+	req.Header.Set("X-Idempotency-Key", idempotencyKey)
 
 	resp, err := a.client.Do(req)
 	if err != nil {
-		return BrokerResult{}, fmt.Errorf("http request failed: %w", err)
+		retryable := true
+		if errors.Is(err, context.Canceled) {
+			retryable = false
+		}
+		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("http request failed: %v", err), retryable: retryable}
 	}
 	defer resp.Body.Close()
 
 	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 500 {
-		return BrokerResult{}, fmt.Errorf("broker server error: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("broker server error: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(respBody))), retryable: true}
 	}
 	if resp.StatusCode >= 400 {
-		return BrokerResult{}, fmt.Errorf("broker rejected request: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+		retryable := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusRequestTimeout
+		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("broker rejected request: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(respBody))), retryable: retryable}
 	}
 
 	var payload struct {
@@ -126,7 +146,7 @@ func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte) (
 	}
 	if len(respBody) > 0 {
 		if err := json.Unmarshal(respBody, &payload); err != nil {
-			return BrokerResult{}, fmt.Errorf("decode broker response: %w", err)
+			return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("decode broker response: %v", err), retryable: false}
 		}
 	}
 	if strings.TrimSpace(payload.Status) == "" {
@@ -144,4 +164,18 @@ func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte) (
 func signaturePlaceholder(payload []byte, secret string) string {
 	h := sha256.Sum256([]byte(secret + ":" + string(payload)))
 	return "placeholder-" + hex.EncodeToString(h[:])
+}
+
+func orderIdempotencyKey(order domain.Order) string {
+	base := fmt.Sprintf("%s|%s|%d|%.6f|%s", order.Symbol, order.Side, order.Quantity, order.Price, order.Reason)
+	h := sha256.Sum256([]byte(base))
+	return "atlas-" + hex.EncodeToString(h[:16])
+}
+
+func isRetryableBrokerError(err error) bool {
+	var be *brokerHTTPError
+	if errors.As(err, &be) {
+		return be.retryable
+	}
+	return false
 }
