@@ -44,6 +44,7 @@ func TestRecordSessionSummaryPersistsTraceIDs(t *testing.T) {
 			Mode:             "live",
 			Adapter:          "http",
 			Signer:           "hmac-sha256",
+			SignerVersion:    "v1",
 			KeyID:            "kid-1",
 			MaxRetries:       2,
 			HTTPTimeoutSec:   5,
@@ -53,6 +54,7 @@ func TestRecordSessionSummaryPersistsTraceIDs(t *testing.T) {
 			NonceTTLSec:      180,
 			NonceStore:       "file",
 			NonceStorePath:   "data/state/broker-nonce-replay.json",
+			NonceRedisPrefix: "atlas:nonce:",
 		},
 		RecordedAt: time.Now(),
 	}
@@ -97,5 +99,11 @@ func TestRecordSessionSummaryPersistsTraceIDs(t *testing.T) {
 	}
 	if got.BrokerRuntime.NonceStorePath != summary.BrokerRuntime.NonceStorePath {
 		t.Fatalf("broker runtime nonce store path mismatch: got %q want %q", got.BrokerRuntime.NonceStorePath, summary.BrokerRuntime.NonceStorePath)
+	}
+	if got.BrokerRuntime.SignerVersion != summary.BrokerRuntime.SignerVersion {
+		t.Fatalf("broker runtime signer version mismatch: got %q want %q", got.BrokerRuntime.SignerVersion, summary.BrokerRuntime.SignerVersion)
+	}
+	if got.BrokerRuntime.NonceRedisPrefix != summary.BrokerRuntime.NonceRedisPrefix {
+		t.Fatalf("broker runtime nonce redis prefix mismatch: got %q want %q", got.BrokerRuntime.NonceRedisPrefix, summary.BrokerRuntime.NonceRedisPrefix)
 	}
 }

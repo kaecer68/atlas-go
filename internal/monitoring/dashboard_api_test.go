@@ -38,6 +38,9 @@ func TestDashboardAPIEndpoints(t *testing.T) {
 		if len(resp.GuardOutcomes) == 0 {
 			t.Fatalf("expected guard outcomes")
 		}
+		if resp.BrokerRuntime.NonceStore == "" {
+			t.Fatalf("expected broker runtime context")
+		}
 	})
 
 	t.Run("macro-radar with session_id", func(t *testing.T) {
@@ -75,6 +78,9 @@ func TestDashboardAPIEndpoints(t *testing.T) {
 		if len(resp.WeakestAgentScorecards) == 0 {
 			t.Fatalf("expected scorecards")
 		}
+		if resp.BrokerRuntime.Signer == "" {
+			t.Fatalf("expected broker runtime signer")
+		}
 	})
 
 	t.Run("agent-observatory with limit", func(t *testing.T) {
@@ -111,6 +117,9 @@ func TestDashboardAPIEndpoints(t *testing.T) {
 		}
 		if resp.Items[0].ProposalID == "" {
 			t.Fatalf("expected proposal id in forecast-vs-reality item")
+		}
+		if resp.BrokerRuntime.NonceStore == "" {
+			t.Fatalf("expected forecast-vs-reality broker runtime context")
 		}
 	})
 
@@ -152,6 +161,20 @@ func setupDashboardFixtures(t *testing.T, ledgerDir string) {
 		SessionID:             "session-1",
 		Regime:                domain.RegimeRiskOn,
 		NextExperimentAgentID: "growth-momentum-01",
+		BrokerRuntime: domain.BrokerRuntimeAudit{
+			Mode:             "live",
+			Adapter:          "http",
+			Signer:           "hmac-sha256",
+			SignerVersion:    "v1",
+			KeyID:            "kid-dashboard-1",
+			HTTPAttempts:     2,
+			HTTPTimeoutSec:   5,
+			RetryStatusCodes: []int{429, 503},
+			MaxClockSkewSec:  120,
+			NonceTTLSec:      180,
+			NonceStore:       "redis",
+			NonceRedisPrefix: "atlas:nonce:",
+		},
 		GuardOutcomes: []domain.GuardOutcome{{
 			GuardID:     "cro-01",
 			GuardSkill:  "cro_risk",

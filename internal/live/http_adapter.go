@@ -87,6 +87,7 @@ func (s hmacSHA256Signer) Sign(payload []byte, secret string, timestamp string, 
 
 type brokerHTTPError struct {
 	message   string
+	code      string
 	retryable bool
 }
 
@@ -173,6 +174,9 @@ func (a *HTTPBrokerAdapter) SubmitOrder(ctx context.Context, order domain.Order)
 		a.signerName, a.signer = selectSigner("")
 		a.signerVer = a.signer.Version()
 	}
+	if err := a.validateSignerConfig(); err != nil {
+		return BrokerResult{}, err
+	}
 
 	payload := map[string]interface{}{
 		"symbol":   order.Symbol,
@@ -217,6 +221,13 @@ func (a *HTTPBrokerAdapter) SubmitOrder(ctx context.Context, order domain.Order)
 	return BrokerResult{}, fmt.Errorf("submit order failed after %d attempts: %w", a.maxAttempts, lastErr)
 }
 
+func (a *HTTPBrokerAdapter) validateSignerConfig() error {
+	if a.signerName == "hmac-sha256" && strings.TrimSpace(a.apiSecret) == "" {
+		return &brokerHTTPError{message: "hmac signer requires non-empty api secret", code: "signer.misconfigured", retryable: false}
+	}
+	return nil
+}
+
 func (a *HTTPBrokerAdapter) validateClockSkew(requestTime time.Time) error {
 	if a.maxClockSkew <= 0 {
 		return nil
@@ -249,7 +260,7 @@ func (a *HTTPBrokerAdapter) registerRequestNonce(nonce string, requestTime time.
 func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte, idempotencyKey string, timestamp string, nonce string) (BrokerResult, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.baseURL+"/orders", bytes.NewReader(body))
 	if err != nil {
-		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("build request: %v", err), retryable: false}
+		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("build request: %v", err), code: "request.build_error", retryable: false}
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Key", a.apiKey)
@@ -267,7 +278,7 @@ func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte, i
 		if errors.Is(err, context.Canceled) {
 			retryable = false
 		}
-		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("http request failed: %v", err), retryable: retryable}
+		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("http request failed: %v", err), code: "transport.request_failed", retryable: retryable}
 	}
 	defer resp.Body.Close()
 
@@ -278,7 +289,8 @@ func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte, i
 		if resp.StatusCode >= 500 {
 			prefix = "broker server error"
 		}
-		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("%s: status=%d body=%s", prefix, resp.StatusCode, strings.TrimSpace(string(respBody))), retryable: retryable}
+		code := classifyBrokerErrorCode(resp.StatusCode)
+		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("%s: code=%s status=%d body=%s", prefix, code, resp.StatusCode, strings.TrimSpace(string(respBody))), code: code, retryable: retryable}
 	}
 
 	var payload struct {
@@ -289,7 +301,7 @@ func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte, i
 	}
 	if len(respBody) > 0 {
 		if err := json.Unmarshal(respBody, &payload); err != nil {
-			return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("decode broker response: %v", err), retryable: false}
+			return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("decode broker response: %v", err), code: "response.decode_error", retryable: false}
 		}
 	}
 	if strings.TrimSpace(payload.Status) == "" {
@@ -302,6 +314,22 @@ func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte, i
 		FillPrice: payload.FillPrice,
 		Reason:    payload.Reason,
 	}, nil
+}
+
+func classifyBrokerErrorCode(statusCode int) string {
+	switch statusCode {
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return "auth.signature_invalid"
+	case http.StatusTooManyRequests:
+		return "throttle.rate_limited"
+	case http.StatusBadRequest, http.StatusUnprocessableEntity:
+		return "request.invalid"
+	default:
+		if statusCode >= 500 {
+			return "server.unavailable"
+		}
+		return "request.rejected"
+	}
 }
 
 func orderIdempotencyKey(order domain.Order) string {

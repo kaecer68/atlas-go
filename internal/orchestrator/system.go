@@ -138,6 +138,7 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 			Mode:             s.cfg.BrokerMode,
 			Adapter:          s.cfg.BrokerAdapter,
 			Signer:           s.cfg.BrokerSigner,
+			SignerVersion:    "v1",
 			KeyID:            s.cfg.BrokerKeyID,
 			MaxRetries:       s.cfg.BrokerMaxRetries,
 			HTTPTimeoutSec:   s.cfg.BrokerHTTPTimeoutS,

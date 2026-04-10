@@ -426,3 +426,37 @@ func TestValidateBrokerRuntimeConfigDefaultsRedisKeyPrefix(t *testing.T) {
 		t.Fatalf("unexpected redis key prefix: %q", cfg.BrokerNonceRedisKeyPrefix)
 	}
 }
+
+func TestRunLiveHTTPFullFlagChainInAPIMode(t *testing.T) {
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
+		},
+		newDashboardAPI: func(dir string) routeRegistrar {
+			return monitoring.NewDashboardAPI(dir)
+		},
+		listenAndServe: func(addr string, handler http.Handler) error {
+			return nil
+		},
+	}
+
+	err := run([]string{
+		"-api",
+		"-broker-mode", "live",
+		"-broker-adapter", "http",
+		"-broker-signer", "hmac-sha256",
+		"-broker-key-id", "kid-flag-1",
+		"-broker-retry-status-codes", "429,503",
+		"-broker-max-clock-skew-sec", "120",
+		"-broker-nonce-ttl-sec", "180",
+		"-broker-nonce-store", "redis",
+		"-broker-nonce-redis-url", "redis://localhost:6379/0",
+		"-broker-nonce-redis-key-prefix", "atlas:e2e:",
+		"-allow-live-broker",
+		"-allow-http-broker",
+		"-allow-real-signer",
+	}, deps)
+	if err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+}
