@@ -297,3 +297,101 @@ func TestHTTPBrokerAdapterRejectsMissingBaseURL(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestHTTPBrokerAdapterRejectsReplayNonceWithinTTL(t *testing.T) {
+	var calls int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+	}))
+	defer server.Close()
+
+	adapter := NewHTTPBrokerAdapter(HTTPBrokerAdapterConfig{
+		BaseURL:     server.URL,
+		APIKey:      "k1",
+		APISecret:   "s1",
+		Timeout:     2 * time.Second,
+		MaxAttempts: 1,
+		Client:      server.Client(),
+		Now: func() time.Time {
+			return time.Date(2026, time.April, 11, 21, 5, 0, 0, time.UTC)
+		},
+		Nonce:    func() string { return "nonce-replayed-1" },
+		NonceTTL: 5 * time.Minute,
+	})
+
+	if _, err := adapter.SubmitOrder(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 1}); err != nil {
+		t.Fatalf("first SubmitOrder error: %v", err)
+	}
+	if _, err := adapter.SubmitOrder(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 1}); err == nil {
+		t.Fatalf("expected replay nonce error, got nil")
+	} else if !strings.Contains(err.Error(), "nonce replay") {
+		t.Fatalf("unexpected replay nonce error: %v", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("calls = %d, want 1", got)
+	}
+}
+
+func TestHTTPBrokerAdapterAllowsNonceReuseAfterTTL(t *testing.T) {
+	var calls int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+	}))
+	defer server.Close()
+
+	now := time.Date(2026, time.April, 11, 21, 6, 0, 0, time.UTC)
+	adapter := NewHTTPBrokerAdapter(HTTPBrokerAdapterConfig{
+		BaseURL:     server.URL,
+		APIKey:      "k1",
+		APISecret:   "s1",
+		Timeout:     2 * time.Second,
+		MaxAttempts: 1,
+		Client:      server.Client(),
+		Now: func() time.Time {
+			return now
+		},
+		Nonce:    func() string { return "nonce-reuse-1" },
+		NonceTTL: 2 * time.Minute,
+	})
+
+	if _, err := adapter.SubmitOrder(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 1}); err != nil {
+		t.Fatalf("first SubmitOrder error: %v", err)
+	}
+	now = now.Add(3 * time.Minute)
+	if _, err := adapter.SubmitOrder(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 1}); err != nil {
+		t.Fatalf("second SubmitOrder error: %v", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 2 {
+		t.Fatalf("calls = %d, want 2", got)
+	}
+}
+
+func TestHTTPBrokerAdapterRejectsTimestampOutsideClockSkew(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+	}))
+	defer server.Close()
+
+	adapter := NewHTTPBrokerAdapter(HTTPBrokerAdapterConfig{
+		BaseURL:      server.URL,
+		APIKey:       "k1",
+		APISecret:    "s1",
+		Timeout:      2 * time.Second,
+		MaxAttempts:  1,
+		Client:       server.Client(),
+		Now:          func() time.Time { return time.Date(2026, time.April, 11, 21, 0, 0, 0, time.UTC) },
+		CurrentTime:  func() time.Time { return time.Date(2026, time.April, 11, 21, 10, 0, 0, time.UTC) },
+		MaxClockSkew: 30 * time.Second,
+	})
+
+	if _, err := adapter.SubmitOrder(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 1}); err == nil {
+		t.Fatalf("expected clock skew error, got nil")
+	} else if !strings.Contains(err.Error(), "outside allowed skew") {
+		t.Fatalf("unexpected clock skew error: %v", err)
+	}
+}

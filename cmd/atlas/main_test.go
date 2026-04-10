@@ -288,3 +288,25 @@ func TestValidateBrokerRuntimeConfigRejectsInvalidRetryStatusCode(t *testing.T) 
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestValidateBrokerRuntimeConfigRejectsNegativeClockSkew(t *testing.T) {
+	cfg := config.Config{BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerMaxClockSkewS: -1, BrokerNonceTTLS: 300}
+	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "clock skew") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateBrokerRuntimeConfigRejectsNegativeNonceTTL(t *testing.T) {
+	cfg := config.Config{BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerMaxClockSkewS: 300, BrokerNonceTTLS: -1}
+	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "nonce ttl") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

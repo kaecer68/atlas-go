@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -26,9 +27,12 @@ type HTTPBrokerAdapterConfig struct {
 	Timeout              time.Duration
 	MaxAttempts          int
 	RetryableStatusCodes []int
+	MaxClockSkew         time.Duration
+	NonceTTL             time.Duration
 	Client               *http.Client
 	Signer               string
 	Now                  func() time.Time
+	CurrentTime          func() time.Time
 	Nonce                func() string
 }
 
@@ -45,7 +49,12 @@ type HTTPBrokerAdapter struct {
 	signerVer            string
 	signer               requestSigner
 	nowFn                func() time.Time
+	currentTimeFn        func() time.Time
 	nonceFn              func() string
+	maxClockSkew         time.Duration
+	nonceTTL             time.Duration
+	nonceStore           map[string]time.Time
+	nonceMu              sync.Mutex
 }
 
 type requestSigner interface {
@@ -113,6 +122,18 @@ func NewHTTPBrokerAdapter(cfg HTTPBrokerAdapterConfig) *HTTPBrokerAdapter {
 	if nonceFn == nil {
 		nonceFn = defaultRequestNonce
 	}
+	currentTimeFn := cfg.CurrentTime
+	if currentTimeFn == nil {
+		currentTimeFn = time.Now
+	}
+	maxClockSkew := cfg.MaxClockSkew
+	if maxClockSkew < 0 {
+		maxClockSkew = 0
+	}
+	nonceTTL := cfg.NonceTTL
+	if nonceTTL <= 0 {
+		nonceTTL = 5 * time.Minute
+	}
 
 	return &HTTPBrokerAdapter{
 		baseURL:              strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"),
@@ -127,7 +148,11 @@ func NewHTTPBrokerAdapter(cfg HTTPBrokerAdapterConfig) *HTTPBrokerAdapter {
 		signerVer:            signer.Version(),
 		signer:               signer,
 		nowFn:                nowFn,
+		currentTimeFn:        currentTimeFn,
 		nonceFn:              nonceFn,
+		maxClockSkew:         maxClockSkew,
+		nonceTTL:             nonceTTL,
+		nonceStore:           make(map[string]time.Time),
 	}
 }
 
@@ -158,10 +183,17 @@ func (a *HTTPBrokerAdapter) SubmitOrder(ctx context.Context, order domain.Order)
 		return BrokerResult{}, fmt.Errorf("marshal order payload: %w", err)
 	}
 	idempotencyKey := orderIdempotencyKey(order)
-	timestamp := a.nowFn().UTC().Format(time.RFC3339Nano)
+	requestTime := a.nowFn().UTC()
+	if err := a.validateClockSkew(requestTime); err != nil {
+		return BrokerResult{}, err
+	}
+	timestamp := requestTime.Format(time.RFC3339Nano)
 	nonce := a.nonceFn()
 	if strings.TrimSpace(nonce) == "" {
 		nonce = defaultRequestNonce()
+	}
+	if err := a.registerRequestNonce(nonce, requestTime); err != nil {
+		return BrokerResult{}, err
 	}
 
 	var lastErr error
@@ -180,6 +212,38 @@ func (a *HTTPBrokerAdapter) SubmitOrder(ctx context.Context, order domain.Order)
 	}
 
 	return BrokerResult{}, fmt.Errorf("submit order failed after %d attempts: %w", a.maxAttempts, lastErr)
+}
+
+func (a *HTTPBrokerAdapter) validateClockSkew(requestTime time.Time) error {
+	if a.maxClockSkew <= 0 {
+		return nil
+	}
+	now := a.currentTimeFn().UTC()
+	delta := now.Sub(requestTime.UTC())
+	if delta < 0 {
+		delta = -delta
+	}
+	if delta > a.maxClockSkew {
+		return fmt.Errorf("request timestamp outside allowed skew: delta=%s allowed=%s", delta, a.maxClockSkew)
+	}
+	return nil
+}
+
+func (a *HTTPBrokerAdapter) registerRequestNonce(nonce string, requestTime time.Time) error {
+	a.nonceMu.Lock()
+	defer a.nonceMu.Unlock()
+
+	for n, ts := range a.nonceStore {
+		if requestTime.Sub(ts) > a.nonceTTL {
+			delete(a.nonceStore, n)
+		}
+	}
+
+	if _, exists := a.nonceStore[nonce]; exists {
+		return fmt.Errorf("request nonce replay detected: nonce=%s", nonce)
+	}
+	a.nonceStore[nonce] = requestTime
+	return nil
 }
 
 func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte, idempotencyKey string, timestamp string, nonce string) (BrokerResult, error) {

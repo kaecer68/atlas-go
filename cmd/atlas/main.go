@@ -52,6 +52,8 @@ func run(args []string, deps appDeps) error {
 	brokerKeyID := flags.String("broker-key-id", "", "override broker key id for signer key rotation")
 	brokerRetryStatusCodes := flags.String("broker-retry-status-codes", "", "override broker retry status codes csv, e.g. 408,429,503")
 	brokerMaxRetries := flags.Int("broker-max-retries", -1, "override broker max retries (>=0)")
+	brokerMaxClockSkew := flags.Int("broker-max-clock-skew-sec", -1, "override broker max clock skew seconds (>=0, 0 disables check)")
+	brokerNonceTTL := flags.Int("broker-nonce-ttl-sec", -1, "override broker nonce replay ttl seconds (>=1)")
 	allowLiveBroker := flags.Bool("allow-live-broker", false, "allow live broker mode (default false)")
 	allowHTTPBroker := flags.Bool("allow-http-broker", false, "allow http broker adapter in live mode (default false)")
 	allowRealSigner := flags.Bool("allow-real-signer", false, "allow non-placeholder signer for http broker adapter")
@@ -77,6 +79,12 @@ func run(args []string, deps appDeps) error {
 	}
 	if *brokerMaxRetries >= 0 {
 		cfg.BrokerMaxRetries = *brokerMaxRetries
+	}
+	if *brokerMaxClockSkew >= 0 {
+		cfg.BrokerMaxClockSkewS = *brokerMaxClockSkew
+	}
+	if *brokerNonceTTL >= 0 {
+		cfg.BrokerNonceTTLS = *brokerNonceTTL
 	}
 	if err := validateBrokerRuntimeConfig(&cfg, *allowLiveBroker, *allowHTTPBroker, *allowRealSigner); err != nil {
 		return err
@@ -148,6 +156,15 @@ func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allow
 			return fmt.Errorf("broker retry status code must be 4xx/5xx, got %d", code)
 		}
 	}
+	if cfg.BrokerMaxClockSkewS < 0 {
+		return fmt.Errorf("broker max clock skew must be >= 0, got %d", cfg.BrokerMaxClockSkewS)
+	}
+	if cfg.BrokerNonceTTLS == 0 {
+		cfg.BrokerNonceTTLS = 300
+	}
+	if cfg.BrokerNonceTTLS < 0 {
+		return fmt.Errorf("broker nonce ttl must be >= 0, got %d", cfg.BrokerNonceTTLS)
+	}
 
 	return nil
 }
@@ -190,6 +207,8 @@ func runSimulation(cfg config.Config) error {
 	fmt.Printf("broker_signer: %s\n", cfg.BrokerSigner)
 	fmt.Printf("broker_key_id: %s\n", cfg.BrokerKeyID)
 	fmt.Printf("broker_retry_status_codes: %v\n", cfg.BrokerHTTPRetryStatusCodes)
+	fmt.Printf("broker_max_clock_skew_sec: %d\n", cfg.BrokerMaxClockSkewS)
+	fmt.Printf("broker_nonce_ttl_sec: %d\n", cfg.BrokerNonceTTLS)
 	fmt.Printf("broker_max_retries: %d\n", cfg.BrokerMaxRetries)
 	fmt.Printf("session: %s\n", session.ID)
 	fmt.Printf("agents: %d\n", len(registry.Agents))

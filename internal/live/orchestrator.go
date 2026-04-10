@@ -64,6 +64,8 @@ type OrchestratorConfig struct {
 	BrokerHTTPTimeoutS         int
 	BrokerHTTPAttempts         int
 	BrokerHTTPRetryStatusCodes []int
+	BrokerMaxClockSkewS        int
+	BrokerNonceTTLS            int
 	BrokerSigner               string
 	BrokerKeyID                string
 }
@@ -86,6 +88,8 @@ func DefaultOrchestratorConfig() OrchestratorConfig {
 		BrokerHTTPTimeoutS:         5,
 		BrokerHTTPAttempts:         2,
 		BrokerHTTPRetryStatusCodes: []int{408, 425, 429, 500, 502, 503, 504},
+		BrokerMaxClockSkewS:        300,
+		BrokerNonceTTLS:            300,
 		BrokerSigner:               "placeholder",
 	}
 }
@@ -153,6 +157,8 @@ func resolveBrokerMode(cfg OrchestratorConfig) (requested string, effective stri
 				Timeout:              time.Duration(cfg.BrokerHTTPTimeoutS) * time.Second,
 				MaxAttempts:          cfg.BrokerHTTPAttempts,
 				RetryableStatusCodes: cfg.BrokerHTTPRetryStatusCodes,
+				MaxClockSkew:         time.Duration(cfg.BrokerMaxClockSkewS) * time.Second,
+				NonceTTL:             time.Duration(cfg.BrokerNonceTTLS) * time.Second,
 				Signer:               cfg.BrokerSigner,
 			})
 			if strings.TrimSpace(cfg.BrokerAPIBaseURL) == "" {
@@ -247,6 +253,8 @@ func (o *Orchestrator) Start() error {
 			"broker_http_attempts":           o.config.BrokerHTTPAttempts,
 			"broker_http_timeout_sec":        o.config.BrokerHTTPTimeoutS,
 			"broker_http_retry_status_codes": o.config.BrokerHTTPRetryStatusCodes,
+			"broker_max_clock_skew_sec":      o.config.BrokerMaxClockSkewS,
+			"broker_nonce_ttl_sec":           o.config.BrokerNonceTTLS,
 			"broker_max_retries":             o.config.BrokerMaxRetries,
 		},
 	})
@@ -640,6 +648,8 @@ func (o *Orchestrator) Status() map[string]interface{} {
 			"broker_http_attempts":           o.config.BrokerHTTPAttempts,
 			"broker_http_timeout_sec":        o.config.BrokerHTTPTimeoutS,
 			"broker_http_retry_status_codes": o.config.BrokerHTTPRetryStatusCodes,
+			"broker_max_clock_skew_sec":      o.config.BrokerMaxClockSkewS,
+			"broker_nonce_ttl_sec":           o.config.BrokerNonceTTLS,
 			"broker_max_retries":             o.config.BrokerMaxRetries,
 		},
 	}
