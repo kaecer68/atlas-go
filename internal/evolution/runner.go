@@ -57,12 +57,14 @@ func SelectWeakestAgent(registry domain.AgentRegistry, scorecards []domain.Score
 
 		// 智能选择 mutation 类型
 		mutationType, hypothesis, acceptanceGates := selectMutationType(agent, scorecard)
+		expID := fmt.Sprintf("exp-%s-%d", agent.ID, time.Now().Unix())
 
 		return &Candidate{
 			Agent:     agent,
 			Scorecard: scorecard,
 			Experiment: domain.ExperimentRecord{
-				ID:                fmt.Sprintf("exp-%s-%d", agent.ID, time.Now().Unix()),
+				ID:                expID,
+				ProposalID:        "proposal-" + expID,
 				TargetAgentID:     agent.ID,
 				Skill:             agent.Skill,
 				Hypothesis:        hypothesis,
@@ -104,6 +106,8 @@ func BuildMutationBrief(windowID string, candidate *Candidate) *domain.MutationB
 	}
 
 	return &domain.MutationBrief{
+		ContractVersion:     domain.MutationBriefContractVersion,
+		ProposalID:          proposalIDForBrief(candidate.Experiment),
 		WindowID:            windowID,
 		TargetAgentID:       candidate.Agent.ID,
 		TargetSkill:         candidate.Agent.Skill,
@@ -122,6 +126,16 @@ func BuildMutationBrief(windowID string, candidate *Candidate) *domain.MutationB
 		RecommendedWindow:   recommendedWindow(candidate.Scorecard.WindowCount),
 		GeneratedAt:         time.Now(),
 	}
+}
+
+func proposalIDForBrief(exp domain.ExperimentRecord) string {
+	if exp.ProposalID != "" {
+		return exp.ProposalID
+	}
+	if exp.ID != "" {
+		return "proposal-" + exp.ID
+	}
+	return ""
 }
 
 func maturityLevel(windowCount int) string {

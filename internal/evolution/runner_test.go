@@ -40,6 +40,8 @@ func TestBuildMutationBriefCarriesLayerAndEvidence(t *testing.T) {
 			SharpeLike:  -0.3,
 		},
 		Experiment: domain.ExperimentRecord{
+			ID:               "exp-style-1",
+			ProposalID:       "proposal-exp-style-1",
 			MutationType:     "prompt_tightening",
 			AcceptanceMetric: "sharpe_like",
 			AcceptanceGates:  []string{"improve_sharpe_like"},
@@ -62,5 +64,8 @@ func TestBuildMutationBriefCarriesLayerAndEvidence(t *testing.T) {
 	}
 	if len(brief.IterationGuidance) == 0 {
 		t.Fatalf("expected iteration guidance")
+	}
+	if brief.ProposalID != "proposal-exp-style-1" {
+		t.Fatalf("expected proposal id to be preserved, got %q", brief.ProposalID)
 	}
 }

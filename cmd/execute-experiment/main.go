@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/ledger"
@@ -15,6 +16,9 @@ func main() {
 	flag.Parse()
 
 	cfg := config.Load()
+	if _, err := baseline.Load(cfg.BaselinePolicyPath); err != nil {
+		log.Fatalf("load baseline policy: %v", err)
+	}
 	executor := experiment.NewExecutor(ledger.NewStore(cfg.LedgerDir))
 	result, err := executor.Execute(*brief)
 	if err != nil {

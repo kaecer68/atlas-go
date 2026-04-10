@@ -105,11 +105,6 @@ func comparePromptPerformanceDetailed(replayDataPath, baselinePolicyPath string,
 	}
 }
 
-func scorePromptWindow(ds *replay.Dataset, skill, prompt string, policy domain.ExecutionPolicy, startDate, endDate time.Time) float64 {
-	score, _ := scorePromptWindowWithObservations(ds, skill, prompt, policy, startDate, endDate)
-	return score
-}
-
 func scorePromptWindowWithObservations(ds *replay.Dataset, skill, prompt string, policy domain.ExecutionPolicy, startDate, endDate time.Time) (float64, int) {
 	if ds == nil {
 		return 0, 0
@@ -148,11 +143,6 @@ func scorePromptWindowWithObservations(ds *replay.Dataset, skill, prompt string,
 		return 0, 0
 	}
 	return total / float64(observations), observations
-}
-
-func scoreConstraintWindow(ds *replay.Dataset, constraints domain.SimulationConstraints, startDate, endDate time.Time) float64 {
-	score, _ := scoreConstraintWindowWithObservations(ds, constraints, startDate, endDate)
-	return score
 }
 
 func scoreConstraintWindowWithObservations(ds *replay.Dataset, constraints domain.SimulationConstraints, startDate, endDate time.Time) (float64, int) {

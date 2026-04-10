@@ -71,11 +71,18 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 
 	accepted, acceptanceNote := passesAcceptance(result)
 	result.JudgeChecks = append(result.JudgeChecks, acceptanceNote)
+	if result.Experiment.ApprovalID == "" {
+		result.Experiment.ApprovalID = "approval-" + result.Experiment.ID
+	}
 	if accepted {
-		result.Experiment.Status = domain.ExperimentAccepted
+		if err := domain.TransitionExperimentStatus(&result.Experiment, domain.ExperimentAccepted); err != nil {
+			return domain.PromptExperimentResult{}, fmt.Errorf("transition experiment status: %w", err)
+		}
 		result.Notes = append(result.Notes, "Replay judge accepted the candidate for the next baseline promotion step.")
 	} else {
-		result.Experiment.Status = domain.ExperimentRejected
+		if err := domain.TransitionExperimentStatus(&result.Experiment, domain.ExperimentRejected); err != nil {
+			return domain.PromptExperimentResult{}, fmt.Errorf("transition experiment status: %w", err)
+		}
 		result.Experiment.RevertReason = "Replay judge did not satisfy maturity-aware acceptance gates."
 		result.Notes = append(result.Notes, "Replay judge rejected the candidate.")
 	}
@@ -118,14 +125,51 @@ func judgeReplayChecks(candidatePrompt string, result domain.PromptExperimentRes
 			checks = append(checks, "preserves CRO sequencing requirement")
 		}
 	default:
-		if strings.Contains(lower, "require trend confirmation") {
-			checks = append(checks, "contains stronger trend confirmation rule")
-		}
-		if strings.Contains(lower, "downgrade conviction") {
-			checks = append(checks, "contains conviction downgrade logic")
-		}
-		if strings.Contains(lower, "reject setups") {
-			checks = append(checks, "contains explicit rejection filter")
+		if result.Brief.TargetSkill == "financials_desk" {
+			if strings.Contains(lower, "credit quality gate") {
+				checks = append(checks, "contains credit quality gate")
+			}
+			if strings.Contains(lower, "spread sensitivity downgrade") {
+				checks = append(checks, "contains spread sensitivity downgrade")
+			}
+			if strings.Contains(lower, "capital adequacy premium") {
+				checks = append(checks, "contains capital adequacy premium")
+			}
+		} else if result.Brief.TargetSkill == "technical_breakout" {
+			if strings.Contains(lower, "structure-first breakout filter") {
+				checks = append(checks, "contains structure-first breakout filter")
+			}
+			if strings.Contains(lower, "volume surge requirement") {
+				checks = append(checks, "contains volume surge requirement")
+			}
+			if strings.Contains(lower, "late-breakout penalty") {
+				checks = append(checks, "contains late-breakout penalty")
+			}
+			if strings.Contains(lower, "coverage expansion") {
+				checks = append(checks, "contains coverage expansion mode")
+			}
+			if strings.Contains(lower, "catch-up momentum") {
+				checks = append(checks, "contains catch-up momentum")
+			}
+			if strings.Contains(lower, "volume participation acceptance") {
+				checks = append(checks, "contains volume participation acceptance")
+			}
+			if strings.Contains(lower, "close-strength tolerance") {
+				checks = append(checks, "contains close-strength tolerance")
+			}
+			if strings.Contains(lower, "breakout confirmation bonus") {
+				checks = append(checks, "contains breakout confirmation bonus")
+			}
+		} else {
+			if strings.Contains(lower, "require trend confirmation") {
+				checks = append(checks, "contains stronger trend confirmation rule")
+			}
+			if strings.Contains(lower, "downgrade conviction") {
+				checks = append(checks, "contains conviction downgrade logic")
+			}
+			if strings.Contains(lower, "reject setups") {
+				checks = append(checks, "contains explicit rejection filter")
+			}
 		}
 	}
 	if len(result.PolicyChecks) >= len(result.Brief.RequiredSkills) {
@@ -194,17 +238,6 @@ func requiredImprovementForProfile(maturity, mutationType string) float64 {
 	}
 }
 
-func requiredImprovementForMaturity(maturity string) float64 {
-	switch maturity {
-	case "level_3_regime_aware":
-		return 0.0025
-	case "level_2_window_validated":
-		return 0.001
-	default:
-		return 0
-	}
-}
-
 func requiredCheckCountForProfile(maturity, mutationType string) int {
 	base := requiredCheckCountForMaturity(maturity)
 	switch mutationType {
@@ -234,7 +267,7 @@ func requiredObservationCountForMaturity(maturity string) int {
 	case "level_2_window_validated":
 		return 8
 	default:
-		return 4
+		return 3
 	}
 }
 
@@ -252,11 +285,14 @@ func requiredCheckCountForMaturity(maturity string) int {
 func loadExperimentResult(path string) (domain.PromptExperimentResult, error) {
 	bytes, err := os.ReadFile(path)
 	if err != nil {
-		return domain.PromptExperimentResult{}, err
+		return domain.PromptExperimentResult{}, fmt.Errorf("read experiment result %s: %w", path, err)
 	}
 	var result domain.PromptExperimentResult
 	if err := json.Unmarshal(bytes, &result); err != nil {
-		return domain.PromptExperimentResult{}, err
+		return domain.PromptExperimentResult{}, fmt.Errorf("unmarshal experiment result %s: %w", path, err)
+	}
+	if err := result.NormalizeAndValidateForJudge(); err != nil {
+		return domain.PromptExperimentResult{}, fmt.Errorf("validate experiment result %s: %w", path, err)
 	}
 	return result, nil
 }

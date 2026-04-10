@@ -19,5 +19,9 @@ type SessionSummary struct {
 	EndingCash            float64
 	OutcomeCount          int
 	NextExperimentAgentID string
+	ProposalID            string
+	CommitID              string
+	ApprovalID            string
+	GuardOutcomes         []GuardOutcome
 	RecordedAt            time.Time
 }

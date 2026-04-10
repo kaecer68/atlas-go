@@ -69,6 +69,9 @@ const (
 
 type ExperimentRecord struct {
 	ID                string
+	ProposalID        string
+	CommitID          string
+	ApprovalID        string
 	TargetAgentID     string
 	Skill             string
 	Hypothesis        string
@@ -86,6 +89,8 @@ type ExperimentRecord struct {
 }
 
 type MutationBrief struct {
+	ContractVersion     int        `json:"contract_version,omitempty"`
+	ProposalID          string     `json:"proposal_id,omitempty"`
 	WindowID            string     `json:"window_id"`
 	TargetAgentID       string     `json:"target_agent_id"`
 	TargetSkill         string     `json:"target_skill"`

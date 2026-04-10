@@ -54,6 +54,7 @@ func TestEvaluateUpdatesStatus(t *testing.T) {
 			ID:               "test-experiment",
 			TargetAgentID:    "growth-momentum-01",
 			Skill:            "growth_momentum",
+			MutationType:     "prompt_tightening",
 			AcceptanceMetric: "sharpe_like",
 			AcceptanceGates:  []string{"improve_sharpe_like", "no_material_drawdown_degradation", "no_constraint_bypass"},
 			Status:           domain.ExperimentRunning,
@@ -64,6 +65,9 @@ func TestEvaluateUpdatesStatus(t *testing.T) {
 			TargetSkill:         "growth_momentum",
 			TargetLayer:         domain.LayerStyle,
 			PromptFile:          baselinePromptPath,
+			MutationType:        "prompt_tightening",
+			AcceptanceMetric:    "sharpe_like",
+			AcceptanceGates:     []string{"improve_sharpe_like", "no_material_drawdown_degradation", "no_constraint_bypass"},
 			ForbiddenActions:    []string{"illiquid_breakout_chasing"},
 			RequiredSkills:      []string{"growth_momentum"},
 			ObservedWindowCount: 2,
@@ -240,5 +244,118 @@ require_cro_pass: true`
 	checks := judgeReplayChecks(candidate, result)
 	if len(checks) < 4 {
 		t.Fatalf("expected structural portfolio checks, got %v", checks)
+	}
+}
+
+func TestEvaluateRejectsMalformedResultContract(t *testing.T) {
+	stateDir := t.TempDir()
+	store := ledger.NewStore(stateDir)
+	judge := NewJudge(store, "", "")
+	resultPath := filepath.Join(stateDir, "experiments", "malformed.json")
+
+	if err := os.MkdirAll(filepath.Dir(resultPath), 0o755); err != nil {
+		t.Fatalf("mkdir result dir: %v", err)
+	}
+
+	resultFixture := domain.PromptExperimentResult{
+		Experiment: domain.ExperimentRecord{ID: "exp-malformed"},
+		Brief: domain.MutationBrief{
+			WindowID:         "window-test",
+			TargetAgentID:    "growth-momentum-01",
+			TargetSkill:      "growth_momentum",
+			TargetLayer:      domain.LayerStyle,
+			PromptFile:       "prompts/agents/growth_momentum.md",
+			MutationType:     "prompt_tightening",
+			AcceptanceMetric: "sharpe_like",
+			AcceptanceGates:  []string{"improve_sharpe_like"},
+		},
+		CandidatePrompt: "",
+	}
+	resultBytes, err := json.Marshal(resultFixture)
+	if err != nil {
+		t.Fatalf("marshal malformed fixture: %v", err)
+	}
+	if err := os.WriteFile(resultPath, resultBytes, 0o644); err != nil {
+		t.Fatalf("write malformed fixture: %v", err)
+	}
+
+	if _, err := judge.Evaluate(resultPath); err == nil {
+		t.Fatalf("expected malformed result contract to fail")
+	}
+}
+
+func TestEvaluateRejectsInvalidStatusTransition(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	root := filepath.Clean(filepath.Join(wd, "../.."))
+	stateDir := t.TempDir()
+	store := ledger.NewStore(stateDir)
+	judge := NewJudge(store, filepath.Join(root, "samples", "replay", "twse_stock_day_all_sample.csv"), filepath.Join(stateDir, "baseline_policy.json"))
+	resultPath := filepath.Join(stateDir, "experiments", "test-experiment-invalid-transition.json")
+	promptPath := filepath.Join(t.TempDir(), "v2.md")
+	baselinePromptPath := filepath.Join(root, "prompts/agents/growth_momentum.md")
+	windowPath := filepath.Join(stateDir, "windows", "window-test.json")
+
+	if err := os.MkdirAll(filepath.Dir(promptPath), 0o755); err != nil {
+		t.Fatalf("mkdir prompt dir: %v", err)
+	}
+	if err := os.WriteFile(promptPath, []byte("require trend confirmation\ndowngrade conviction\nreject setups\n"), 0o644); err != nil {
+		t.Fatalf("write prompt: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(resultPath), 0o755); err != nil {
+		t.Fatalf("mkdir result dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(windowPath), 0o755); err != nil {
+		t.Fatalf("mkdir window dir: %v", err)
+	}
+
+	window := domain.BacktestWindowSummary{
+		WindowID:             "window-test",
+		StartDate:            time.Date(2026, 3, 26, 0, 0, 0, 0, time.UTC),
+		EndDate:              time.Date(2026, 3, 27, 0, 0, 0, 0, time.UTC),
+		WorstAgentSharpeLike: -100,
+	}
+	windowBytes, _ := json.Marshal(window)
+	if err := os.WriteFile(windowPath, windowBytes, 0o644); err != nil {
+		t.Fatalf("write window: %v", err)
+	}
+
+	resultFixture := domain.PromptExperimentResult{
+		Experiment: domain.ExperimentRecord{
+			ID:               "test-experiment-invalid-transition",
+			TargetAgentID:    "growth-momentum-01",
+			Skill:            "growth_momentum",
+			MutationType:     "risk_rule_change",
+			AcceptanceMetric: "sharpe_like",
+			AcceptanceGates:  []string{"improve_sharpe_like", "no_material_drawdown_degradation", "no_constraint_bypass"},
+			Status:           domain.ExperimentAccepted,
+		},
+		Brief: domain.MutationBrief{
+			WindowID:            "window-test",
+			TargetAgentID:       "growth-momentum-01",
+			TargetSkill:         "growth_momentum",
+			TargetLayer:         domain.LayerStyle,
+			PromptFile:          baselinePromptPath,
+			MutationType:        "risk_rule_change",
+			AcceptanceMetric:    "sharpe_like",
+			AcceptanceGates:     []string{"improve_sharpe_like", "no_material_drawdown_degradation", "no_constraint_bypass"},
+			ForbiddenActions:    []string{"illiquid_breakout_chasing"},
+			RequiredSkills:      []string{"growth_momentum"},
+			ObservedWindowCount: 2,
+			MaturityLevel:       "level_1_exploratory",
+		},
+		CandidatePrompt: promptPath,
+		EvaluationMode:  "policy_checked_pending_replay",
+		PolicyChecks:    []string{"required skill preserved: growth_momentum"},
+	}
+	resultBytes, _ := json.Marshal(resultFixture)
+	if err := os.WriteFile(resultPath, resultBytes, 0o644); err != nil {
+		t.Fatalf("write result fixture: %v", err)
+	}
+
+	if _, err := judge.Evaluate(resultPath); err == nil {
+		t.Fatalf("expected invalid status transition to fail")
 	}
 }

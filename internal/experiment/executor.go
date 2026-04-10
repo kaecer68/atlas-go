@@ -42,8 +42,14 @@ func (e *Executor) Execute(briefPath string) (domain.PromptExperimentResult, err
 	}
 
 	checks := policyChecks(candidatePrompt, brief)
+	proposalID := brief.ProposalID
+	if proposalID == "" {
+		proposalID = "proposal-" + expID
+	}
 	record := domain.ExperimentRecord{
 		ID:                expID,
+		ProposalID:        proposalID,
+		CommitID:          "commit-" + expID,
 		TargetAgentID:     brief.TargetAgentID,
 		Skill:             brief.TargetSkill,
 		Hypothesis:        brief.Hypothesis,
@@ -54,7 +60,10 @@ func (e *Executor) Execute(briefPath string) (domain.PromptExperimentResult, err
 		WindowStart:       time.Now(),
 		WindowEnd:         time.Now(),
 		AcceptanceMetric:  brief.AcceptanceMetric,
-		Status:            domain.ExperimentRunning,
+		Status:            domain.ExperimentPlanned,
+	}
+	if err := domain.TransitionExperimentStatus(&record, domain.ExperimentRunning); err != nil {
+		return domain.PromptExperimentResult{}, fmt.Errorf("start experiment %s: %w", expID, err)
 	}
 
 	result := domain.PromptExperimentResult{
@@ -98,18 +107,37 @@ func mutatePromptCandidate(source string, brief domain.MutationBrief) string {
 	var b strings.Builder
 	b.WriteString(strings.TrimSpace(source))
 	b.WriteString("\n\n")
-	b.WriteString("## Candidate Mutation v2 - Aggressive Optimization\n\n")
-	b.WriteString("**Strategy Shift**: Prioritize alpha generation over risk minimization.\n\n")
-	b.WriteString("### Key Changes\n\n")
-	b.WriteString("1. **Higher Conviction Thresholds**: Only recommend when confidence > 70 (previously > 50)\n")
-	b.WriteString("2. **Larger Position Sizes**: Allocate 2x normal size when Sharpe > 1.0 in current window\n")
-	b.WriteString("3. **Extended Holding**: Hold through 15% drawdowns if thesis intact\n")
-	b.WriteString("4. **Momentum Focus**: Favor names with 3+ consecutive up days and volume > 2x average\n")
-	b.WriteString("5. **Aggressive Entry**: Buy breakouts immediately, not on pullbacks\n\n")
-	b.WriteString("### Execution Rules\n\n")
-	b.WriteString("- Skip diversification rules when high-conviction opportunity present\n")
-	b.WriteString("- Concentrate up to 30% in single name when edge is clear\n")
-	b.WriteString("- Ignore defensive sectors when momentum favors growth\n")
+	b.WriteString("## Candidate Mutation v2 - Prompt Tightening\n\n")
+	b.WriteString("This mutation tightens setup quality while preserving required skill and guardrail boundaries.\n\n")
+	b.WriteString("### Executable Prompt Controls\n\n")
+	if brief.TargetSkill == "financials_desk" {
+		b.WriteString("- credit quality gate: downgrade conviction when close is weak vs open\n")
+		b.WriteString("- spread sensitivity downgrade: penalize weak intraday close strength\n")
+		b.WriteString("- capital adequacy premium: upgrade conviction when close strength confirms balance-sheet resilience\n")
+		b.WriteString("- enforce illiquid rejection for weak volume names\n\n")
+	} else if brief.TargetSkill == "technical_breakout" {
+		b.WriteString("- catch-up momentum: boost conviction for stocks closing strong but below session peak\n")
+		b.WriteString("- volume participation acceptance: include moderate volume names alongside high-volume breakouts\n")
+		b.WriteString("- close-strength tolerance: do not downgrade minor below-high closes unless breakdown is material\n")
+		b.WriteString("- breakout confirmation bonus: boost conviction when close confirms strength near session high with volume\n\n")
+	} else {
+		if brief.ObservedWindowCount >= 5 {
+			b.WriteString("- require trend confirmation before issuing buy recommendations\n")
+		} else {
+			b.WriteString("- keep momentum bias but tolerate one weak confirmation signal in exploratory mode\n")
+		}
+		b.WriteString("- downgrade conviction when price is below intraday strength or open\n")
+		if brief.ObservedWindowCount >= 8 {
+			b.WriteString("- reject setups when trend persistence is not present\n")
+		} else {
+			b.WriteString("- keep exploratory coverage: do not hard-filter solely on one weak signal\n")
+		}
+		b.WriteString("- enforce illiquid rejection for weak volume names\n\n")
+	}
+	b.WriteString("### Operator Notes\n\n")
+	b.WriteString("- Keep conviction selective and avoid narrative-only entries\n")
+	b.WriteString("- Prefer clean continuation structures over low-quality breakouts\n")
+	b.WriteString("- Preserve control-layer sequencing and CRO/CIO boundaries\n")
 	for _, guidance := range brief.IterationGuidance {
 		b.WriteString("- ")
 		b.WriteString(guidance)
@@ -125,27 +153,58 @@ func mutatePromptCandidate(source string, brief domain.MutationBrief) string {
 
 func mutateRiskRuleCandidate(source string, brief domain.MutationBrief) string {
 	var b strings.Builder
-	b.WriteString("# Risk Rule Change Proposal - Aggressive Alpha Capture\n\n")
-	b.WriteString("This artifact proposes aggressive risk rule modifications to maximize alpha generation.\n\n")
+	title := "# Risk Rule Change Proposal - Governance Tightening"
+	description := "This artifact proposes risk rule modifications designed to be measurable, auditable, and execution-safe."
+	rules := []string{
+		"1. **Raise Entry Quality**: Conviction floor increased to 48 (from baseline floor)",
+		"2. **Tighten Liquidity**: Liquidity floor raised to 3.5M to reduce weak fills",
+		"3. **Trim Position Concentration**: Max position weight set to 20%",
+		"4. **Increase Cash Buffer**: Reserve cash fraction set to 12%",
+		"5. **Keep CRO Gate**: Require CRO pass remains enabled",
+	}
+	convictionFloor := 48
+	liquidityFloor := int64(3500000)
+	maxPositionWeight := 0.20
+	reserveCashFraction := 0.12
+	requireCROPass := true
+
+	if brief.TargetSkill != "financials_desk" {
+		title = "# Risk Rule Change Proposal - Controlled Optimization"
+		description = "This artifact proposes controlled risk rule changes to improve portfolio efficiency under explicit guardrails."
+		rules = []string{
+			"1. **Entry Filter Refresh**: Conviction floor set to 42",
+			"2. **Liquidity Guard**: Liquidity floor maintained at 3.0M for tradability",
+			"3. **Position Discipline**: Max position weight set to 22%",
+			"4. **Operational Buffer**: Reserve cash fraction set to 10%",
+			"5. **Control Integrity**: Require CRO pass remains enabled",
+		}
+		convictionFloor = 42
+		liquidityFloor = 3000000
+		maxPositionWeight = 0.22
+		reserveCashFraction = 0.10
+	}
+
+	b.WriteString(title)
+	b.WriteString("\n\n")
+	b.WriteString(description)
+	b.WriteString("\n\n")
 	writeMutationHeader(&b, brief)
-	b.WriteString("## Aggressive Rule Modifications\n\n")
-	b.WriteString("1. **Lower Entry Barriers**: Conviction floor reduced to 35 (from 55)\n")
-	b.WriteString("2. **Broader Universe**: Liquidity floor reduced to 2M (from 5M)\n")
-	b.WriteString("3. **Aggressive Sizing**: Auto-scale to 25% when conviction > 80\n")
-	b.WriteString("4. **Tight Stops**: 8% stop-loss instead of 15% to free capital faster\n")
-	b.WriteString("5. **No Cash Drag**: Minimum 5% cash only (vs 12% previously)\n\n")
+	b.WriteString("## Rule Modifications\n\n")
+	for _, rule := range rules {
+		b.WriteString(rule)
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
 	b.WriteString("## Baseline Context\n\n```text\n")
 	b.WriteString(strings.TrimSpace(source))
 	b.WriteString("\n```\n\n")
-	b.WriteString("## Candidate Risk Rule Patch\n\n```yaml\n")
+	b.WriteString("## Candidate Rule Patch\n\n```yaml\n")
 	b.WriteString("risk_rule_change:\n")
-	b.WriteString("  conviction_floor: 35\n")
-	b.WriteString("  liquidity_floor: 2000000\n")
-	b.WriteString("  max_position_weight: 0.25\n")
-	b.WriteString("  high_conviction_threshold: 80\n")
-	b.WriteString("  stop_loss_pct: 8\n")
-	b.WriteString("  min_cash_pct: 5\n")
-	b.WriteString("  aggressive_mode: true\n")
+	b.WriteString(fmt.Sprintf("  conviction_floor: %d\n", convictionFloor))
+	b.WriteString(fmt.Sprintf("  liquidity_floor: %d\n", liquidityFloor))
+	b.WriteString(fmt.Sprintf("  max_position_weight: %.2f\n", maxPositionWeight))
+	b.WriteString(fmt.Sprintf("  reserve_cash_fraction: %.2f\n", reserveCashFraction))
+	b.WriteString(fmt.Sprintf("  require_cro_pass: %t\n", requireCROPass))
 	b.WriteString("```\n\n")
 	b.WriteString("## Guardrails\n\n")
 	writeGuidanceAndPolicy(&b, brief)
@@ -225,11 +284,14 @@ func policyChecks(candidate string, brief domain.MutationBrief) []string {
 func loadBrief(path string) (domain.MutationBrief, error) {
 	bytes, err := os.ReadFile(path)
 	if err != nil {
-		return domain.MutationBrief{}, err
+		return domain.MutationBrief{}, fmt.Errorf("read mutation brief %s: %w", path, err)
 	}
 	var brief domain.MutationBrief
 	if err := json.Unmarshal(bytes, &brief); err != nil {
-		return domain.MutationBrief{}, err
+		return domain.MutationBrief{}, fmt.Errorf("unmarshal mutation brief %s: %w", path, err)
+	}
+	if err := brief.NormalizeAndValidate(); err != nil {
+		return domain.MutationBrief{}, fmt.Errorf("validate mutation brief %s: %w", path, err)
 	}
 	return brief, nil
 }

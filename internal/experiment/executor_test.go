@@ -168,3 +168,31 @@ func TestExecuteUsesPortfolioConstraintTemplate(t *testing.T) {
 		t.Fatalf("expected portfolio constraint template artifact")
 	}
 }
+
+func TestExecuteRejectsInvalidBriefContract(t *testing.T) {
+	dir := t.TempDir()
+	executor := NewExecutor(ledger.NewStore(dir))
+	briefPath := filepath.Join(dir, "brief-invalid.json")
+
+	brief := domain.MutationBrief{
+		WindowID:         "window-test",
+		TargetAgentID:    "growth-momentum-01",
+		TargetSkill:      "growth_momentum",
+		TargetLayer:      domain.LayerStyle,
+		PromptFile:       "prompts/agents/growth_momentum.md",
+		MutationType:     "not_supported",
+		AcceptanceMetric: "sharpe_like",
+		AcceptanceGates:  []string{"improve_sharpe_like"},
+	}
+	bytes, err := json.Marshal(brief)
+	if err != nil {
+		t.Fatalf("marshal brief: %v", err)
+	}
+	if err := os.WriteFile(briefPath, bytes, 0o644); err != nil {
+		t.Fatalf("write brief: %v", err)
+	}
+
+	if _, err := executor.Execute(briefPath); err == nil {
+		t.Fatalf("expected invalid brief contract to fail")
+	}
+}
