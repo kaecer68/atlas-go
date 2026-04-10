@@ -134,6 +134,18 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 		PositionCount: len(result.Positions),
 		EndingCash:    result.EndingCash,
 		OutcomeCount:  len(outcomes),
+		BrokerRuntime: domain.BrokerRuntimeAudit{
+			Mode:             s.cfg.BrokerMode,
+			Adapter:          s.cfg.BrokerAdapter,
+			Signer:           s.cfg.BrokerSigner,
+			KeyID:            s.cfg.BrokerKeyID,
+			MaxRetries:       s.cfg.BrokerMaxRetries,
+			HTTPTimeoutSec:   s.cfg.BrokerHTTPTimeoutS,
+			HTTPAttempts:     s.cfg.BrokerHTTPAttempts,
+			RetryStatusCodes: append([]int(nil), s.cfg.BrokerHTTPRetryStatusCodes...),
+			MaxClockSkewSec:  s.cfg.BrokerMaxClockSkewS,
+			NonceTTLSec:      s.cfg.BrokerNonceTTLS,
+		},
 		GuardOutcomes: append([]domain.GuardOutcome(nil), result.GuardOutcomes...),
 		RecordedAt:    time.Now(),
 	}
