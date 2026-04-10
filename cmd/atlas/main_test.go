@@ -313,7 +313,7 @@ func TestValidateBrokerRuntimeConfigRejectsNegativeNonceTTL(t *testing.T) {
 }
 
 func TestValidateBrokerRuntimeConfigRejectsUnsupportedNonceStore(t *testing.T) {
-	cfg := config.Config{BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerMaxClockSkewS: 300, BrokerNonceTTLS: 300, BrokerNonceStore: "redis"}
+	cfg := config.Config{BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerMaxClockSkewS: 300, BrokerNonceTTLS: 300, BrokerNonceStore: "invalid-store"}
 	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -386,5 +386,43 @@ func TestValidateBrokerRuntimeConfigKeepsAbsoluteFileNonceStorePath(t *testing.T
 	}
 	if cfg.BrokerNonceStorePath != absPath {
 		t.Fatalf("unexpected nonce store path: got %q want %q", cfg.BrokerNonceStorePath, absPath)
+	}
+}
+
+func TestValidateBrokerRuntimeConfigRejectsRedisNonceStoreWithoutURL(t *testing.T) {
+	cfg := config.Config{
+		BrokerMode:          "dry-run",
+		BrokerAdapter:       "guarded",
+		BrokerMaxRetries:    1,
+		BrokerMaxClockSkewS: 300,
+		BrokerNonceTTLS:     300,
+		BrokerNonceStore:    "redis",
+	}
+	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "redis url") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateBrokerRuntimeConfigDefaultsRedisKeyPrefix(t *testing.T) {
+	cfg := config.Config{
+		BrokerMode:                "dry-run",
+		BrokerAdapter:             "guarded",
+		BrokerMaxRetries:          1,
+		BrokerMaxClockSkewS:       300,
+		BrokerNonceTTLS:           300,
+		BrokerNonceStore:          "redis",
+		BrokerNonceRedisURL:       "redis://localhost:6379/0",
+		BrokerNonceRedisKeyPrefix: "",
+	}
+	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.BrokerNonceRedisKeyPrefix != "atlas:nonce:" {
+		t.Fatalf("unexpected redis key prefix: %q", cfg.BrokerNonceRedisKeyPrefix)
 	}
 }

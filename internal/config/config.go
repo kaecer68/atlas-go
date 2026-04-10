@@ -31,6 +31,8 @@ type Config struct {
 	BrokerNonceTTLS            int
 	BrokerNonceStore           string
 	BrokerNonceStorePath       string
+	BrokerNonceRedisURL        string
+	BrokerNonceRedisKeyPrefix  string
 	BrokerSigner               string
 	BrokerKeyID                string
 }
@@ -64,6 +66,8 @@ func Load() Config {
 		BrokerNonceTTLS:            envOrInt("ATLAS_BROKER_NONCE_TTL_SEC", 300),
 		BrokerNonceStore:           envOr("ATLAS_BROKER_NONCE_STORE", "memory"),
 		BrokerNonceStorePath:       envOr("ATLAS_BROKER_NONCE_STORE_PATH", ""),
+		BrokerNonceRedisURL:        envOr("ATLAS_BROKER_NONCE_REDIS_URL", ""),
+		BrokerNonceRedisKeyPrefix:  envOr("ATLAS_BROKER_NONCE_REDIS_KEY_PREFIX", "atlas:nonce:"),
 		BrokerSigner:               envOr("ATLAS_BROKER_SIGNER", "placeholder"),
 		BrokerKeyID:                envOr("ATLAS_BROKER_KEY_ID", ""),
 	}

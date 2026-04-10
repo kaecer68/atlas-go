@@ -147,6 +147,7 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 			NonceTTLSec:      s.cfg.BrokerNonceTTLS,
 			NonceStore:       s.cfg.BrokerNonceStore,
 			NonceStorePath:   s.cfg.BrokerNonceStorePath,
+			NonceRedisPrefix: s.cfg.BrokerNonceRedisKeyPrefix,
 		},
 		GuardOutcomes: append([]domain.GuardOutcome(nil), result.GuardOutcomes...),
 		RecordedAt:    time.Now(),

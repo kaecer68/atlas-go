@@ -40,4 +40,5 @@ type BrokerRuntimeAudit struct {
 	NonceTTLSec      int
 	NonceStore       string
 	NonceStorePath   string
+	NonceRedisPrefix string
 }

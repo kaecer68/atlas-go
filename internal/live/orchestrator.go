@@ -68,6 +68,8 @@ type OrchestratorConfig struct {
 	BrokerNonceTTLS            int
 	BrokerNonceStore           string
 	BrokerNonceStorePath       string
+	BrokerNonceRedisURL        string
+	BrokerNonceRedisKeyPrefix  string
 	BrokerSigner               string
 	BrokerKeyID                string
 }
@@ -93,6 +95,7 @@ func DefaultOrchestratorConfig() OrchestratorConfig {
 		BrokerMaxClockSkewS:        300,
 		BrokerNonceTTLS:            300,
 		BrokerNonceStore:           "memory",
+		BrokerNonceRedisKeyPrefix:  "atlas:nonce:",
 		BrokerSigner:               "placeholder",
 	}
 }
@@ -152,7 +155,11 @@ func resolveBrokerMode(cfg OrchestratorConfig) (requested string, effective stri
 		case "mock":
 			return requested, "live-mock", NewGuardedLiveBroker(NewMockLiveAdapter()), "live mode uses mock adapter; no real orders are sent"
 		case "http":
-			nonceStore, err := BuildNonceReplayStore(cfg.BrokerNonceStore, cfg.BrokerNonceStorePath)
+			nonceStore, err := BuildNonceReplayStoreWithOptions(cfg.BrokerNonceStore, NonceReplayStoreOptions{
+				FilePath:       cfg.BrokerNonceStorePath,
+				RedisURL:       cfg.BrokerNonceRedisURL,
+				RedisKeyPrefix: cfg.BrokerNonceRedisKeyPrefix,
+			})
 			if err != nil {
 				return requested, "live-guarded", NewGuardedLiveBroker(nil), fmt.Sprintf("live+http adapter requested but nonce store config invalid: %v; fallback to guarded", err)
 			}
@@ -265,6 +272,7 @@ func (o *Orchestrator) Start() error {
 			"broker_nonce_ttl_sec":           o.config.BrokerNonceTTLS,
 			"broker_nonce_store":             o.config.BrokerNonceStore,
 			"broker_nonce_store_path":        o.config.BrokerNonceStorePath,
+			"broker_nonce_redis_key_prefix":  o.config.BrokerNonceRedisKeyPrefix,
 			"broker_max_retries":             o.config.BrokerMaxRetries,
 		},
 	})
@@ -662,6 +670,7 @@ func (o *Orchestrator) Status() map[string]interface{} {
 			"broker_nonce_ttl_sec":           o.config.BrokerNonceTTLS,
 			"broker_nonce_store":             o.config.BrokerNonceStore,
 			"broker_nonce_store_path":        o.config.BrokerNonceStorePath,
+			"broker_nonce_redis_key_prefix":  o.config.BrokerNonceRedisKeyPrefix,
 			"broker_max_retries":             o.config.BrokerMaxRetries,
 		},
 	}
