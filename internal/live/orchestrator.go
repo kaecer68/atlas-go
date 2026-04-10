@@ -17,6 +17,7 @@ type Orchestrator struct {
 	eventBus   *ChannelEventBus
 	marketData marketdata.Provider
 	broker     Broker
+	orderMgr   *OrderManager
 	registry   domain.AgentRegistry
 	system     *orchestrator.System
 
@@ -82,6 +83,7 @@ func NewOrchestrator(
 		eventBus:   eventBus,
 		marketData: marketData,
 		broker:     NewDryRunBroker(),
+		orderMgr:   NewOrderManager(NewDryRunBroker(), eventBus, 1, 100*time.Millisecond),
 		registry:   registry,
 		system:     system,
 		config:     config,
@@ -97,9 +99,11 @@ func (o *Orchestrator) SetBroker(broker Broker) {
 	defer o.mutex.Unlock()
 	if broker == nil {
 		o.broker = NewDryRunBroker()
+		o.orderMgr = NewOrderManager(o.broker, o.eventBus, 1, 100*time.Millisecond)
 		return
 	}
 	o.broker = broker
+	o.orderMgr = NewOrderManager(o.broker, o.eventBus, 1, 100*time.Millisecond)
 }
 
 // SetWatchlist 设置观测标的列表
@@ -431,33 +435,24 @@ func (o *Orchestrator) simulateOrderExecution() {
 	if o.broker == nil {
 		o.broker = NewDryRunBroker()
 	}
+	if o.orderMgr == nil {
+		o.orderMgr = NewOrderManager(o.broker, o.eventBus, 1, 100*time.Millisecond)
+	}
 
 	// Phase 6 起步：先建立可审计的执行通道，默认 dry-run，不触发真实下单。
-	fmt.Printf("[Trading] Execution channel ready (mode=%s)\n", o.broker.Mode())
+	fmt.Printf("[Trading] Execution channel ready (mode=%s)\n", o.orderMgr.Mode())
 }
 
 func (o *Orchestrator) executeOrder(ctx context.Context, order domain.Order) error {
-	if o.broker == nil {
-		o.broker = NewDryRunBroker()
+	if o.orderMgr == nil {
+		if o.broker == nil {
+			o.broker = NewDryRunBroker()
+		}
+		o.orderMgr = NewOrderManager(o.broker, o.eventBus, 1, 100*time.Millisecond)
 	}
-
-	result, err := o.broker.SubmitOrder(ctx, order)
-	if err != nil {
-		_ = o.eventBus.Publish(BusEvent{
-			ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-			Type:      EventSystemError,
-			Timestamp: time.Now(),
-			Payload: map[string]string{
-				"error": fmt.Sprintf("submit order %s: %v", order.Symbol, err),
-			},
-		})
-		return fmt.Errorf("submit order %s: %w", order.Symbol, err)
+	if err := o.orderMgr.Execute(ctx, order); err != nil {
+		return fmt.Errorf("execute order via manager: %w", err)
 	}
-
-	if err := o.eventBus.PublishOrderEvent(order, result.OrderID, result.Status, result.FillPrice); err != nil {
-		return fmt.Errorf("publish order event: %w", err)
-	}
-
 	return nil
 }
 

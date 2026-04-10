@@ -13,6 +13,7 @@ func TestLoad_Defaults(t *testing.T) {
 		"ATLAS_AGENT_REGISTRY_PATH", "ATLAS_BASELINE_POLICY_PATH", "ATLAS_LEDGER_DIR",
 		"ATLAS_REPLAY_DATA_PATH", "ATLAS_REPLAY_SESSION_DATE",
 		"FUGLE_API_KEY", "ATLAS_FUGLE_API_KEY", "ATLAS_YAHOO_ENABLED",
+		"ATLAS_BROKER_MODE", "ATLAS_BROKER_MAX_RETRIES",
 	}
 	for _, k := range envKeys {
 		t.Setenv(k, "")
@@ -45,6 +46,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.FugleAPIKey != "" {
 		t.Errorf("FugleAPIKey should default to empty, got %q", cfg.FugleAPIKey)
 	}
+	if cfg.BrokerMode != "dry-run" {
+		t.Errorf("BrokerMode should default to dry-run, got %q", cfg.BrokerMode)
+	}
+	if cfg.BrokerMaxRetries != 1 {
+		t.Errorf("BrokerMaxRetries should default to 1, got %d", cfg.BrokerMaxRetries)
+	}
 }
 
 func TestLoad_EnvOverrides(t *testing.T) {
@@ -53,6 +60,8 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	t.Setenv("ATLAS_PRIMARY_MARKET", "US")
 	t.Setenv("ATLAS_REPLAY_MODE", "tick")
 	t.Setenv("ATLAS_YAHOO_ENABLED", "true")
+	t.Setenv("ATLAS_BROKER_MODE", "dry-run")
+	t.Setenv("ATLAS_BROKER_MAX_RETRIES", "3")
 
 	cfg := Load()
 
@@ -67,6 +76,22 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	}
 	if !cfg.YahooEnabled {
 		t.Error("YahooEnabled should be true")
+	}
+	if cfg.BrokerMode != "dry-run" {
+		t.Errorf("BrokerMode = %q, want dry-run", cfg.BrokerMode)
+	}
+	if cfg.BrokerMaxRetries != 3 {
+		t.Errorf("BrokerMaxRetries = %d, want 3", cfg.BrokerMaxRetries)
+	}
+}
+
+func TestLoad_BrokerMaxRetriesInvalidFallback(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("ATLAS_BROKER_MAX_RETRIES", "invalid")
+
+	cfg := Load()
+	if cfg.BrokerMaxRetries != 1 {
+		t.Errorf("BrokerMaxRetries = %d, want 1 when invalid", cfg.BrokerMaxRetries)
 	}
 }
 
