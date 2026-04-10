@@ -13,7 +13,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -29,6 +28,7 @@ type HTTPBrokerAdapterConfig struct {
 	RetryableStatusCodes []int
 	MaxClockSkew         time.Duration
 	NonceTTL             time.Duration
+	NonceStore           NonceReplayStore
 	Client               *http.Client
 	Signer               string
 	Now                  func() time.Time
@@ -53,8 +53,7 @@ type HTTPBrokerAdapter struct {
 	nonceFn              func() string
 	maxClockSkew         time.Duration
 	nonceTTL             time.Duration
-	nonceStore           map[string]time.Time
-	nonceMu              sync.Mutex
+	nonceStore           NonceReplayStore
 }
 
 type requestSigner interface {
@@ -134,6 +133,10 @@ func NewHTTPBrokerAdapter(cfg HTTPBrokerAdapterConfig) *HTTPBrokerAdapter {
 	if nonceTTL <= 0 {
 		nonceTTL = 5 * time.Minute
 	}
+	nonceStore := cfg.NonceStore
+	if nonceStore == nil {
+		nonceStore = NewInMemoryNonceReplayStore()
+	}
 
 	return &HTTPBrokerAdapter{
 		baseURL:              strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"),
@@ -152,7 +155,7 @@ func NewHTTPBrokerAdapter(cfg HTTPBrokerAdapterConfig) *HTTPBrokerAdapter {
 		nonceFn:              nonceFn,
 		maxClockSkew:         maxClockSkew,
 		nonceTTL:             nonceTTL,
-		nonceStore:           make(map[string]time.Time),
+		nonceStore:           nonceStore,
 	}
 }
 
@@ -230,19 +233,16 @@ func (a *HTTPBrokerAdapter) validateClockSkew(requestTime time.Time) error {
 }
 
 func (a *HTTPBrokerAdapter) registerRequestNonce(nonce string, requestTime time.Time) error {
-	a.nonceMu.Lock()
-	defer a.nonceMu.Unlock()
-
-	for n, ts := range a.nonceStore {
-		if requestTime.Sub(ts) > a.nonceTTL {
-			delete(a.nonceStore, n)
+	if a.nonceStore == nil {
+		a.nonceStore = NewInMemoryNonceReplayStore()
+	}
+	err := a.nonceStore.Register(nonce, requestTime, a.nonceTTL)
+	if err != nil {
+		if errors.Is(err, ErrNonceReplayDetected) {
+			return fmt.Errorf("request nonce replay detected: nonce=%s", nonce)
 		}
+		return fmt.Errorf("register nonce replay guard: %w", err)
 	}
-
-	if _, exists := a.nonceStore[nonce]; exists {
-		return fmt.Errorf("request nonce replay detected: nonce=%s", nonce)
-	}
-	a.nonceStore[nonce] = requestTime
 	return nil
 }
 

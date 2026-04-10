@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -393,5 +394,56 @@ func TestHTTPBrokerAdapterRejectsTimestampOutsideClockSkew(t *testing.T) {
 		t.Fatalf("expected clock skew error, got nil")
 	} else if !strings.Contains(err.Error(), "outside allowed skew") {
 		t.Fatalf("unexpected clock skew error: %v", err)
+	}
+}
+
+func TestHTTPBrokerAdapterRejectsReplayNonceAcrossRestartsWithFileStore(t *testing.T) {
+	var calls int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+	}))
+	defer server.Close()
+
+	storePath := filepath.Join(t.TempDir(), "nonce-replay.json")
+	now := time.Date(2026, time.April, 11, 22, 30, 0, 0, time.UTC)
+
+	adapterA := NewHTTPBrokerAdapter(HTTPBrokerAdapterConfig{
+		BaseURL:     server.URL,
+		APIKey:      "k1",
+		APISecret:   "s1",
+		Timeout:     2 * time.Second,
+		MaxAttempts: 1,
+		Client:      server.Client(),
+		Now:         func() time.Time { return now },
+		Nonce:       func() string { return "nonce-persist-1" },
+		NonceTTL:    10 * time.Minute,
+		NonceStore:  NewFileNonceReplayStore(storePath),
+	})
+	if _, err := adapterA.SubmitOrder(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 1}); err != nil {
+		t.Fatalf("adapterA SubmitOrder error: %v", err)
+	}
+
+	adapterB := NewHTTPBrokerAdapter(HTTPBrokerAdapterConfig{
+		BaseURL:     server.URL,
+		APIKey:      "k1",
+		APISecret:   "s1",
+		Timeout:     2 * time.Second,
+		MaxAttempts: 1,
+		Client:      server.Client(),
+		Now:         func() time.Time { return now.Add(1 * time.Minute) },
+		Nonce:       func() string { return "nonce-persist-1" },
+		NonceTTL:    10 * time.Minute,
+		NonceStore:  NewFileNonceReplayStore(storePath),
+	})
+	if _, err := adapterB.SubmitOrder(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 1}); err == nil {
+		t.Fatalf("expected replay nonce error, got nil")
+	} else if !strings.Contains(err.Error(), "nonce replay") {
+		t.Fatalf("unexpected replay nonce error: %v", err)
+	}
+
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("calls = %d, want 1", got)
 	}
 }
