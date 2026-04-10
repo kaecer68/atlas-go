@@ -20,3 +20,23 @@ jobs:
       - name: Test
         run: go test ./...
 
+  governance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Verify Governance Gates
+        run: bash ./scripts/openclaw/verify-governance-gates.sh --require-scenario-diversity
+
+  operations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Verify Operations Gate
+        run: bash ./scripts/openclaw/verify-operations-gate.sh
+

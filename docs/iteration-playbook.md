@@ -19,6 +19,11 @@ Change one meaningful thing at a time, then evaluate it on a replay window.
 7. Compare baseline and candidate.
 8. Keep or revert.
 
+Recommended execution mode for clean comparison:
+
+- use isolated runs (`--no-fallback --no-auto-pivot`) when validating a single mutation hypothesis
+- use auto-pivot mode when the goal is throughput rather than strict A/B causality
+
 Before step 5, read the machine-readable policy:
 
 - required skills
@@ -104,11 +109,11 @@ Every mutation should preserve:
 
 If a proposed change violates policy, revise it before replay.
 
-Mutation type also affects acceptance strictness:
+Mutation type affects acceptance strictness with current judge thresholds:
 
-- prompt tightening is the default, least risky mutation class
-- risk rule changes should face higher evidence thresholds
-- portfolio constraint revisions should face the highest thresholds because they affect the whole system
+- `prompt_tightening`: minimum improvement `0.0005`
+- `risk_rule_change`: minimum improvement `0.001`
+- `portfolio_constraint_revision`: minimum improvement `0.001`
 
 Mutation type should also change the candidate artifact shape:
 
@@ -121,6 +126,19 @@ Judge logic should read those artifact shapes differently:
 - prompt candidates should be checked for signal-tightening language
 - risk rule proposals should be checked for structured rule fields
 - portfolio revisions should be checked for structured governance fields
+
+### 7. Guard-aware iteration
+
+`today-start` applies guard logic before and during mutation execution:
+
+- futility guard: same `agent + window + mutation_type` with 3 recent non-improving runs (`candidate <= baseline`) is treated as futile
+- minimum sample for ranking: mutation types with `n < --min-sample-for-rank` do not enter weighted ranking
+- weighted ranking for auto-pivot: `weighted = avg_delta * min(1, n/5)`, where `avg_delta = avg(candidate - baseline)` over recent runs
+
+Use these guards as planning signals:
+
+- if all candidates are futile, skip primary and move to new window/agent
+- if sample count is low, collect more windows before trusting ranking
 
 ## Suggested Evaluation Questions
 

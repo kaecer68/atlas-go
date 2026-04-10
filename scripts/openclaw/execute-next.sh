@@ -131,8 +131,12 @@ display_experiment_info() {
 execute_experiment() {
     local exp_id="$1"
     local brief_path="$2"
-    
-    echo -e "${CYAN}Executing experiment: $exp_id${NC}"
+
+    if [ -n "$exp_id" ]; then
+        echo -e "${CYAN}Executing experiment: $exp_id${NC}"
+    else
+        echo -e "${CYAN}Executing experiment from explicit brief${NC}"
+    fi
     echo ""
     
     # Build execute command
@@ -250,6 +254,11 @@ main() {
     
     if ! check_prerequisites; then
         exit 1
+    fi
+
+    if [ -n "$BRIEF_PATH" ]; then
+        execute_experiment "" "$BRIEF_PATH"
+        exit 0
     fi
     
     if [ "$AUTO_MODE" = false ] && [ -z "$BRIEF_PATH" ]; then

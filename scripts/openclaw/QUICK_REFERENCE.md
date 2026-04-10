@@ -26,6 +26,52 @@
 
 ## 常用命令速查
 
+### 🧪 治理 Gate 深度驗證（推薦）
+
+```bash
+# 一鍵驗證 G2/G3/G4：determinism + hard guard + trace/dashboard
+./scripts/openclaw/verify-governance-gates.sh
+
+# 指定 replay 與視窗
+./scripts/openclaw/verify-governance-gates.sh \
+	--replay-data samples/replay/twse_stock_day_all_sample.csv \
+	--start 2026-03-26 \
+	--end 2026-03-27
+
+# 人工審核事件契約 + 重播驗證
+./scripts/openclaw/verify-human-approval-event.sh
+
+# M5 parallel simulation verification (base/stress/shock + determinism)
+./scripts/openclaw/verify-parallel-scenarios.sh
+
+# M5 strict mode: fail when scenarios are not distinguishable
+./scripts/openclaw/verify-parallel-scenarios.sh --require-diversity
+
+# Unified governance strict mode (G2/G3/G4 + M5 + M7)
+./scripts/openclaw/verify-governance-gates.sh --require-scenario-diversity
+
+# M8 operations gate (runbook + monitoring config + rollback drill)
+./scripts/openclaw/verify-operations-gate.sh
+
+# M8 + strict governance in one run
+./scripts/openclaw/verify-operations-gate.sh --with-governance
+
+# Guided branch protection setup (default dry-run)
+./scripts/openclaw/setup-branch-protection.sh
+
+# Apply branch protection after review
+./scripts/openclaw/setup-branch-protection.sh --apply
+
+# Apply with custom snapshot backup directory
+./scripts/openclaw/setup-branch-protection.sh --apply --backup-dir data/state/custom-branch-protection-backups
+
+# Restore branch protection from snapshot (safe preview)
+./scripts/openclaw/setup-branch-protection.sh --restore-from data/state/branch-protection-snapshots/<snapshot>.json
+
+# Restore from snapshot and apply
+./scripts/openclaw/setup-branch-protection.sh --restore-from data/state/branch-protection-snapshots/<snapshot>.json --apply
+```
+
 ### 🔍 狀態檢查
 
 ```bash
@@ -89,6 +135,9 @@
 # 基本用法
 ./scripts/openclaw/decide.sh --promote EXP-ID --reason "Improved Sharpe by X%"
 
+# 人工審核入口（推薦）
+./scripts/openclaw/human-approval.sh --approve --experiment EXP-ID --reason "Passes G2/G3/G4"
+
 # 預覽
 ./scripts/openclaw/decide.sh --promote EXP-ID --reason "..." --dry-run
 ```
@@ -97,6 +146,9 @@
 ```bash
 # 回滾到上一版本
 ./scripts/openclaw/decide.sh --revert --reason "Unexpected drawdown"
+
+# 人工審核入口（推薦）
+./scripts/openclaw/human-approval.sh --revert --reason "Rollback after post-promo alert"
 
 # 回滾到指定版本
 ./scripts/openclaw/decide.sh --revert 3 --reason "Version 3 more stable"
@@ -144,6 +196,12 @@
 
 # Step 5: 執行決策
 ./scripts/openclaw/decide.sh --promote EXP-ID --reason "..." --yes
+
+# 或使用人工審核入口（會寫入 approvals 稽核事件）
+./scripts/openclaw/human-approval.sh --approve --experiment EXP-ID --reason "..." --yes
+
+# 從稽核事件重播（建議先 dry-run）
+./scripts/openclaw/replay-approval-event.sh --event data/state/approvals/<decision-file>.json --dry-run
 ```
 
 ## 故障排除

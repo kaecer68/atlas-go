@@ -84,7 +84,7 @@ check_prerequisites() {
     fi
 
     local latest_window
-    latest_window=$(ls data/state/windows/window-[0-9]*-[0-9]*.json 2>/dev/null | grep -v -- "-mutation-brief.json" | sort | tail -1)
+    latest_window=$(ls -t data/state/windows/window-[0-9]*-[0-9]*.json 2>/dev/null | grep -v -- "-mutation-brief.json" | head -1)
     if [ -z "$latest_window" ]; then
         echo -e "${RED}Error: No backtest window summary found.${NC}"
         echo "Run backtest first:"
@@ -161,12 +161,124 @@ find_weakest_agent() {
 
 latest_window_id() {
     local latest_window
-    latest_window=$(ls data/state/windows/window-[0-9]*-[0-9]*.json 2>/dev/null | grep -v -- "-mutation-brief.json" | sort | tail -1)
+    latest_window=$(ls -t data/state/windows/window-[0-9]*-[0-9]*.json 2>/dev/null | grep -v -- "-mutation-brief.json" | head -1)
     if [ -z "$latest_window" ]; then
         echo ""
         return
     fi
     basename "$latest_window" .json
+}
+
+observed_windows_for_agent() {
+    local target_agent="$1"
+    if [ ! -f "data/state/recommendation_outcomes.jsonl" ]; then
+        echo 0
+        return
+    fi
+
+    awk -v agent="$target_agent" '
+    {
+        id = ""
+        win = ""
+        if (match($0, /"AgentID":"[^"]+"/)) {
+            id = substr($0, RSTART+11, RLENGTH-12)
+        }
+        if (id != agent) {
+            next
+        }
+        if (match($0, /"Window":"[^"]+"/)) {
+            win = substr($0, RSTART+10, RLENGTH-11)
+        }
+        if (win != "") {
+            seen[win] = 1
+        }
+    }
+    END {
+        c = 0
+        for (k in seen) {
+            c++
+        }
+        print c
+    }
+    ' data/state/recommendation_outcomes.jsonl
+}
+
+recent_judged_observations_for_agent_profile() {
+    local target_agent="$1"
+    local mutation_type="$2"
+    local window_id="$3"
+    local max_obs=0
+    local f
+
+    if [ ! -d "data/state/experiments" ]; then
+        echo 0
+        return
+    fi
+
+    for f in data/state/experiments/*.json; do
+        [ -f "$f" ] || continue
+        local agent
+        agent=$(jq -r '.Experiment.TargetAgentID // empty' "$f" 2>/dev/null)
+        if [ "$agent" != "$target_agent" ]; then
+            continue
+        fi
+        local mtype win
+        mtype=$(jq -r '.Experiment.MutationType // .Brief.mutation_type // empty' "$f" 2>/dev/null)
+        win=$(jq -r '.Brief.window_id // empty' "$f" 2>/dev/null)
+        if [ -n "$mutation_type" ] && [ "$mtype" != "$mutation_type" ]; then
+            continue
+        fi
+        if [ -n "$window_id" ] && [ "$win" != "$window_id" ]; then
+            continue
+        fi
+        local bobs cobs
+        bobs=$(jq -r '.BaselineObservations // 0' "$f" 2>/dev/null)
+        cobs=$(jq -r '.CandidateObservations // 0' "$f" 2>/dev/null)
+        if [[ "$bobs" =~ ^[0-9]+$ ]] && [ "$bobs" -gt "$max_obs" ]; then
+            max_obs="$bobs"
+        fi
+        if [[ "$cobs" =~ ^[0-9]+$ ]] && [ "$cobs" -gt "$max_obs" ]; then
+            max_obs="$cobs"
+        fi
+    done
+
+    echo "$max_obs"
+}
+
+recent_judged_observations_for_agent_window() {
+    local target_agent="$1"
+    local window_id="$2"
+    local max_obs=0
+    local f
+
+    if [ ! -d "data/state/experiments" ]; then
+        echo 0
+        return
+    fi
+
+    for f in data/state/experiments/*.json; do
+        [ -f "$f" ] || continue
+        local agent win
+        agent=$(jq -r '.Experiment.TargetAgentID // empty' "$f" 2>/dev/null)
+        win=$(jq -r '.Brief.window_id // empty' "$f" 2>/dev/null)
+        if [ "$agent" != "$target_agent" ]; then
+            continue
+        fi
+        if [ -n "$window_id" ] && [ "$win" != "$window_id" ]; then
+            continue
+        fi
+        local bobs cobs
+        bobs=$(jq -r '.BaselineObservations // 0' "$f" 2>/dev/null)
+        cobs=$(jq -r '.CandidateObservations // 0' "$f" 2>/dev/null)
+        if [[ "$bobs" =~ ^[0-9]+$ ]] && [ "$bobs" -gt "$max_obs" ]; then
+            max_obs="$bobs"
+        fi
+        if [[ "$cobs" =~ ^[0-9]+$ ]] && [ "$cobs" -gt "$max_obs" ]; then
+            max_obs="$cobs"
+        fi
+    done
+
+    echo "$max_obs"
 }
 
 # Generate mutation brief
@@ -178,6 +290,29 @@ generate_mutation_brief() {
     local hypothesis="${HYPOTHESIS:-Refine ${target_agent} to improve risk-adjusted recommendation quality}"
     local window_id
     window_id=$(latest_window_id)
+    local observed_window_count=1
+    local outcomes_window_count=0
+    local judged_observation_count=0
+    local judged_window_count=0
+    outcomes_window_count=$(observed_windows_for_agent "$target_agent")
+    if [[ "$outcomes_window_count" =~ ^[0-9]+$ ]] && [ "$outcomes_window_count" -gt "$observed_window_count" ]; then
+        observed_window_count="$outcomes_window_count"
+    fi
+    judged_observation_count=$(recent_judged_observations_for_agent_profile "$target_agent" "$mutation_type" "$window_id")
+    if [[ "$judged_observation_count" =~ ^[0-9]+$ ]] && [ "$judged_observation_count" -gt "$observed_window_count" ]; then
+        observed_window_count="$judged_observation_count"
+    fi
+    judged_window_count=$(recent_judged_observations_for_agent_window "$target_agent" "$window_id")
+    if [[ "$judged_window_count" =~ ^[0-9]+$ ]] && [ "$judged_window_count" -gt "$observed_window_count" ]; then
+        observed_window_count="$judged_window_count"
+    fi
+    if [ -n "$window_id" ] && [ -f "data/state/windows/${window_id}.json" ]; then
+        local detected_count
+        detected_count=$(jq -r '.WorstAgentWindowCount // .SessionCount // 1' "data/state/windows/${window_id}.json" 2>/dev/null)
+        if [[ "$detected_count" =~ ^[0-9]+$ ]] && [ "$detected_count" -gt "$observed_window_count" ]; then
+            observed_window_count="$detected_count"
+        fi
+    fi
     
     # Dynamic rationale and proposed changes based on type
     case $mutation_type in
@@ -245,8 +380,15 @@ generate_mutation_brief() {
     local required_skills="[\"${target_skill}\"]"
     local forbidden_actions='["illiquid_breakout_chasing"]'
     local iteration_guidance='["preserve required skills while tightening setup quality","avoid weakening control-layer constraints"]'
-    local maturity_level="level_2_window_validated"
-    local observed_window_count=2
+    local maturity_level="level_1_exploratory"
+    local recommended_window="next short validation window before broader promotion"
+    if [ "$observed_window_count" -ge 12 ]; then
+        maturity_level="level_3_regime_aware"
+        recommended_window="next cross-regime replay window"
+    elif [ "$observed_window_count" -ge 8 ]; then
+        maturity_level="level_2_window_validated"
+        recommended_window="next multi-session replay window"
+    fi
     
     if [ -f "$prompt_file" ]; then
         echo -e "${GREEN}✓ Found prompt file: ${prompt_file}${NC}" >&2
@@ -293,7 +435,7 @@ generate_mutation_brief() {
     "Maintains required skills coverage"
   ],
   "estimated_complexity": "${ESTIMATED_COMPLEXITY}",
-  "recommended_window": "10_trading_days",
+    "recommended_window": "${recommended_window}",
   "notes_for_reviewer": "This is a ${mutation_type} mutation targeting ${target_agent}"
 }
 EOF
