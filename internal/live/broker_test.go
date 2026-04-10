@@ -2,6 +2,7 @@ package live
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -102,5 +103,24 @@ func TestExecuteOrderPublishesSystemErrorWhenOrderInvalid(t *testing.T) {
 		}
 	case <-time.After(1 * time.Second):
 		t.Fatalf("expected system error event but none was received")
+	}
+}
+
+func TestGuardedLiveBrokerRejectsWhenAdapterMissing(t *testing.T) {
+	b := NewGuardedLiveBroker(nil)
+	result, err := b.SubmitOrder(context.Background(), domain.Order{
+		Symbol:   "2330",
+		Side:     domain.SideBuy,
+		Quantity: 10,
+		Price:    100,
+	})
+	if err != nil {
+		t.Fatalf("SubmitOrder returned unexpected error: %v", err)
+	}
+	if result.Status != "rejected" {
+		t.Fatalf("status = %q, want rejected", result.Status)
+	}
+	if !strings.Contains(result.Reason, "not configured") {
+		t.Fatalf("unexpected reject reason: %q", result.Reason)
 	}
 }
