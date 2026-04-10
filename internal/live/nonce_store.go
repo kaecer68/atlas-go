@@ -1,6 +1,7 @@
 package live
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 var ErrNonceReplayDetected = errors.New("request nonce replay detected")
@@ -49,6 +52,19 @@ type fileNonceReplayStore struct {
 	mu   sync.Mutex
 }
 
+type redisNonceReplayStore struct {
+	client    *redis.Client
+	keyPrefix string
+}
+
+type NonceReplayStoreOptions struct {
+	FilePath       string
+	RedisURL       string
+	RedisKeyPrefix string
+	RedisClient    *redis.Client
+	RedisOpTimeout time.Duration
+}
+
 func NewFileNonceReplayStore(path string) NonceReplayStore {
 	trimmed := strings.TrimSpace(path)
 	if trimmed == "" {
@@ -58,6 +74,10 @@ func NewFileNonceReplayStore(path string) NonceReplayStore {
 }
 
 func BuildNonceReplayStore(storeType string, storePath string) (NonceReplayStore, error) {
+	return BuildNonceReplayStoreWithOptions(storeType, NonceReplayStoreOptions{FilePath: storePath})
+}
+
+func BuildNonceReplayStoreWithOptions(storeType string, opts NonceReplayStoreOptions) (NonceReplayStore, error) {
 	kind := strings.TrimSpace(strings.ToLower(storeType))
 	if kind == "" {
 		kind = "memory"
@@ -67,13 +87,62 @@ func BuildNonceReplayStore(storeType string, storePath string) (NonceReplayStore
 	case "memory":
 		return NewInMemoryNonceReplayStore(), nil
 	case "file":
-		if strings.TrimSpace(storePath) == "" {
+		if strings.TrimSpace(opts.FilePath) == "" {
 			return nil, fmt.Errorf("nonce replay store path is required for file store")
 		}
-		return NewFileNonceReplayStore(storePath), nil
+		return NewFileNonceReplayStore(opts.FilePath), nil
+	case "redis":
+		if opts.RedisClient != nil {
+			return NewRedisNonceReplayStore(opts.RedisClient, opts.RedisKeyPrefix), nil
+		}
+		if strings.TrimSpace(opts.RedisURL) == "" {
+			return nil, fmt.Errorf("nonce replay redis url is required for redis store")
+		}
+		redisOpts, err := redis.ParseURL(strings.TrimSpace(opts.RedisURL))
+		if err != nil {
+			return nil, fmt.Errorf("parse redis url: %w", err)
+		}
+		client := redis.NewClient(redisOpts)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err := client.Ping(ctx).Err(); err != nil {
+			return nil, fmt.Errorf("ping redis: %w", err)
+		}
+		return NewRedisNonceReplayStore(client, opts.RedisKeyPrefix), nil
 	default:
-		return nil, fmt.Errorf("unsupported nonce replay store type %q (allowed: memory, file)", kind)
+		return nil, fmt.Errorf("unsupported nonce replay store type %q (allowed: memory, file, redis)", kind)
 	}
+}
+
+func NewRedisNonceReplayStore(client *redis.Client, keyPrefix string) NonceReplayStore {
+	prefix := strings.TrimSpace(keyPrefix)
+	if prefix == "" {
+		prefix = "atlas:nonce:"
+	}
+	if !strings.HasSuffix(prefix, ":") {
+		prefix += ":"
+	}
+	return &redisNonceReplayStore{client: client, keyPrefix: prefix}
+}
+
+func (s *redisNonceReplayStore) Register(nonce string, requestTime time.Time, ttl time.Duration) error {
+	if s.client == nil {
+		return fmt.Errorf("redis client is required")
+	}
+	if ttl <= 0 {
+		ttl = 5 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	key := s.keyPrefix + nonce
+	ok, err := s.client.SetNX(ctx, key, requestTime.UTC().Format(time.RFC3339Nano), ttl).Result()
+	if err != nil {
+		return fmt.Errorf("redis setnx failed: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("%w: nonce=%s", ErrNonceReplayDetected, nonce)
+	}
+	return nil
 }
 
 func (s *fileNonceReplayStore) Register(nonce string, requestTime time.Time, ttl time.Duration) error {

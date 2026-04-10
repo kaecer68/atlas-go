@@ -15,7 +15,7 @@ func TestLoad_Defaults(t *testing.T) {
 		"FUGLE_API_KEY", "ATLAS_FUGLE_API_KEY", "ATLAS_YAHOO_ENABLED",
 		"ATLAS_BROKER_MODE", "ATLAS_BROKER_MAX_RETRIES", "ATLAS_BROKER_ADAPTER",
 		"ATLAS_BROKER_API_BASE_URL", "ATLAS_BROKER_API_KEY", "ATLAS_BROKER_API_SECRET",
-		"ATLAS_BROKER_HTTP_TIMEOUT_SEC", "ATLAS_BROKER_HTTP_ATTEMPTS", "ATLAS_BROKER_HTTP_RETRY_STATUS_CODES", "ATLAS_BROKER_MAX_CLOCK_SKEW_SEC", "ATLAS_BROKER_NONCE_TTL_SEC", "ATLAS_BROKER_NONCE_STORE", "ATLAS_BROKER_NONCE_STORE_PATH", "ATLAS_BROKER_SIGNER", "ATLAS_BROKER_KEY_ID",
+		"ATLAS_BROKER_HTTP_TIMEOUT_SEC", "ATLAS_BROKER_HTTP_ATTEMPTS", "ATLAS_BROKER_HTTP_RETRY_STATUS_CODES", "ATLAS_BROKER_MAX_CLOCK_SKEW_SEC", "ATLAS_BROKER_NONCE_TTL_SEC", "ATLAS_BROKER_NONCE_STORE", "ATLAS_BROKER_NONCE_STORE_PATH", "ATLAS_BROKER_NONCE_REDIS_URL", "ATLAS_BROKER_NONCE_REDIS_KEY_PREFIX", "ATLAS_BROKER_SIGNER", "ATLAS_BROKER_KEY_ID",
 	}
 	for _, k := range envKeys {
 		t.Setenv(k, "")
@@ -78,6 +78,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.BrokerNonceStorePath != "" {
 		t.Errorf("BrokerNonceStorePath should default to empty, got %q", cfg.BrokerNonceStorePath)
 	}
+	if cfg.BrokerNonceRedisURL != "" {
+		t.Errorf("BrokerNonceRedisURL should default to empty, got %q", cfg.BrokerNonceRedisURL)
+	}
+	if cfg.BrokerNonceRedisKeyPrefix != "atlas:nonce:" {
+		t.Errorf("BrokerNonceRedisKeyPrefix should default to atlas:nonce:, got %q", cfg.BrokerNonceRedisKeyPrefix)
+	}
 	if cfg.BrokerSigner != "placeholder" {
 		t.Errorf("BrokerSigner should default to placeholder, got %q", cfg.BrokerSigner)
 	}
@@ -115,6 +121,8 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	t.Setenv("ATLAS_BROKER_NONCE_TTL_SEC", "180")
 	t.Setenv("ATLAS_BROKER_NONCE_STORE", "file")
 	t.Setenv("ATLAS_BROKER_NONCE_STORE_PATH", "data/state/nonces.json")
+	t.Setenv("ATLAS_BROKER_NONCE_REDIS_URL", "redis://localhost:6379/0")
+	t.Setenv("ATLAS_BROKER_NONCE_REDIS_KEY_PREFIX", "atlas:test:")
 	t.Setenv("ATLAS_BROKER_SIGNER", "hmac-sha256")
 	t.Setenv("ATLAS_BROKER_KEY_ID", "kid-01")
 
@@ -170,6 +178,12 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	}
 	if cfg.BrokerNonceStorePath != "data/state/nonces.json" {
 		t.Errorf("BrokerNonceStorePath = %q, want data/state/nonces.json", cfg.BrokerNonceStorePath)
+	}
+	if cfg.BrokerNonceRedisURL != "redis://localhost:6379/0" {
+		t.Errorf("BrokerNonceRedisURL = %q, want redis://localhost:6379/0", cfg.BrokerNonceRedisURL)
+	}
+	if cfg.BrokerNonceRedisKeyPrefix != "atlas:test:" {
+		t.Errorf("BrokerNonceRedisKeyPrefix = %q, want atlas:test:", cfg.BrokerNonceRedisKeyPrefix)
 	}
 	if cfg.BrokerSigner != "hmac-sha256" {
 		t.Errorf("BrokerSigner = %q, want hmac-sha256", cfg.BrokerSigner)
