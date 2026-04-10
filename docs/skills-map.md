@@ -161,6 +161,7 @@
 
 - `--no-auto-pivot`：primary 判定 futile 時直接跳過
 - 預設 auto-pivot：先輸出候選排名明細，再切到較佳 mutation type
+- fallback 因 futility 被跳過且開啟 auto-pivot 時：會再補跑一次 primary mutation 的 auto-agent cycle
 
 ## 8. 目前已移除的過時描述（本版不再採用）
 
