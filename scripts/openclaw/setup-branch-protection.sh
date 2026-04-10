@@ -27,6 +27,14 @@ CURRENT_JSON=""
 PROPOSED_JSON=""
 SNAPSHOT_JSON=""
 
+CHECKS_SET=false
+STRICT_UP_TO_DATE_SET=false
+REQUIRE_CONVERSATION_RESOLUTION_SET=false
+ENFORCE_ADMINS_SET=false
+REQUIRED_REVIEWS_SET=false
+DISMISS_STALE_REVIEWS_SET=false
+REQUIRE_CODE_OWNER_REVIEWS_SET=false
+
 usage() {
   cat <<'EOF'
 Usage: ./scripts/openclaw/setup-branch-protection.sh [OPTIONS]
@@ -112,31 +120,31 @@ parse_checks_csv() {
 apply_profile_defaults() {
   case "$PROFILE" in
     recommended)
-      CHECKS="ci / governance,ci / operations"
-      STRICT_UP_TO_DATE=true
-      REQUIRE_CONVERSATION_RESOLUTION=true
-      ENFORCE_ADMINS=false
-      REQUIRED_REVIEWS=1
-      DISMISS_STALE_REVIEWS=true
-      REQUIRE_CODE_OWNER_REVIEWS=false
+      if [[ "$CHECKS_SET" != true ]]; then CHECKS="ci / governance,ci / operations"; fi
+      if [[ "$STRICT_UP_TO_DATE_SET" != true ]]; then STRICT_UP_TO_DATE=true; fi
+      if [[ "$REQUIRE_CONVERSATION_RESOLUTION_SET" != true ]]; then REQUIRE_CONVERSATION_RESOLUTION=true; fi
+      if [[ "$ENFORCE_ADMINS_SET" != true ]]; then ENFORCE_ADMINS=false; fi
+      if [[ "$REQUIRED_REVIEWS_SET" != true ]]; then REQUIRED_REVIEWS=1; fi
+      if [[ "$DISMISS_STALE_REVIEWS_SET" != true ]]; then DISMISS_STALE_REVIEWS=true; fi
+      if [[ "$REQUIRE_CODE_OWNER_REVIEWS_SET" != true ]]; then REQUIRE_CODE_OWNER_REVIEWS=false; fi
       ;;
     strict)
-      CHECKS="ci / governance,ci / operations"
-      STRICT_UP_TO_DATE=true
-      REQUIRE_CONVERSATION_RESOLUTION=true
-      ENFORCE_ADMINS=true
-      REQUIRED_REVIEWS=2
-      DISMISS_STALE_REVIEWS=true
-      REQUIRE_CODE_OWNER_REVIEWS=true
+      if [[ "$CHECKS_SET" != true ]]; then CHECKS="ci / governance,ci / operations"; fi
+      if [[ "$STRICT_UP_TO_DATE_SET" != true ]]; then STRICT_UP_TO_DATE=true; fi
+      if [[ "$REQUIRE_CONVERSATION_RESOLUTION_SET" != true ]]; then REQUIRE_CONVERSATION_RESOLUTION=true; fi
+      if [[ "$ENFORCE_ADMINS_SET" != true ]]; then ENFORCE_ADMINS=true; fi
+      if [[ "$REQUIRED_REVIEWS_SET" != true ]]; then REQUIRED_REVIEWS=2; fi
+      if [[ "$DISMISS_STALE_REVIEWS_SET" != true ]]; then DISMISS_STALE_REVIEWS=true; fi
+      if [[ "$REQUIRE_CODE_OWNER_REVIEWS_SET" != true ]]; then REQUIRE_CODE_OWNER_REVIEWS=true; fi
       ;;
     relaxed)
-      CHECKS="ci / governance,ci / operations"
-      STRICT_UP_TO_DATE=false
-      REQUIRE_CONVERSATION_RESOLUTION=false
-      ENFORCE_ADMINS=false
-      REQUIRED_REVIEWS=1
-      DISMISS_STALE_REVIEWS=false
-      REQUIRE_CODE_OWNER_REVIEWS=false
+      if [[ "$CHECKS_SET" != true ]]; then CHECKS="ci / governance,ci / operations"; fi
+      if [[ "$STRICT_UP_TO_DATE_SET" != true ]]; then STRICT_UP_TO_DATE=false; fi
+      if [[ "$REQUIRE_CONVERSATION_RESOLUTION_SET" != true ]]; then REQUIRE_CONVERSATION_RESOLUTION=false; fi
+      if [[ "$ENFORCE_ADMINS_SET" != true ]]; then ENFORCE_ADMINS=false; fi
+      if [[ "$REQUIRED_REVIEWS_SET" != true ]]; then REQUIRED_REVIEWS=1; fi
+      if [[ "$DISMISS_STALE_REVIEWS_SET" != true ]]; then DISMISS_STALE_REVIEWS=false; fi
+      if [[ "$REQUIRE_CODE_OWNER_REVIEWS_SET" != true ]]; then REQUIRE_CODE_OWNER_REVIEWS=false; fi
       ;;
     *)
       die "unknown profile: $PROFILE"
@@ -492,13 +500,13 @@ while [[ $# -gt 0 ]]; do
     --repo) REPO="$2"; shift 2 ;;
     --branch) BRANCH="$2"; shift 2 ;;
     --profile) PROFILE="$2"; shift 2 ;;
-    --checks) CHECKS="$2"; shift 2 ;;
-    --required-reviews) REQUIRED_REVIEWS="$2"; shift 2 ;;
-    --enforce-admins) ENFORCE_ADMINS="$2"; shift 2 ;;
-    --require-conversation) REQUIRE_CONVERSATION_RESOLUTION="$2"; shift 2 ;;
-    --strict-up-to-date) STRICT_UP_TO_DATE="$2"; shift 2 ;;
-    --dismiss-stale) DISMISS_STALE_REVIEWS="$2"; shift 2 ;;
-    --require-codeowners) REQUIRE_CODE_OWNER_REVIEWS="$2"; shift 2 ;;
+    --checks) CHECKS="$2"; CHECKS_SET=true; shift 2 ;;
+    --required-reviews) REQUIRED_REVIEWS="$2"; REQUIRED_REVIEWS_SET=true; shift 2 ;;
+    --enforce-admins) ENFORCE_ADMINS="$2"; ENFORCE_ADMINS_SET=true; shift 2 ;;
+    --require-conversation) REQUIRE_CONVERSATION_RESOLUTION="$2"; REQUIRE_CONVERSATION_RESOLUTION_SET=true; shift 2 ;;
+    --strict-up-to-date) STRICT_UP_TO_DATE="$2"; STRICT_UP_TO_DATE_SET=true; shift 2 ;;
+    --dismiss-stale) DISMISS_STALE_REVIEWS="$2"; DISMISS_STALE_REVIEWS_SET=true; shift 2 ;;
+    --require-codeowners) REQUIRE_CODE_OWNER_REVIEWS="$2"; REQUIRE_CODE_OWNER_REVIEWS_SET=true; shift 2 ;;
     --backup-dir) BACKUP_DIR="$2"; shift 2 ;;
     --restore-from) RESTORE_FROM="$2"; shift 2 ;;
     --apply) DRY_RUN=false; shift ;;
