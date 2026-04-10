@@ -48,7 +48,7 @@ Options:
   --branch <name>              Branch to protect (default: main)
   --profile <name>             recommended|strict|relaxed (default: recommended)
   --checks <a,b,c>             Required status checks (default: "ci / governance,ci / operations")
-  --required-reviews <n>       Required approving reviews, 1..6 (default: 1)
+  --required-reviews <n>       Required approving reviews, 0..6 (default: 1)
   --enforce-admins <bool>      true|false (default: false)
   --require-conversation <bool> true|false (default: true)
   --strict-up-to-date <bool>   true|false (default: true)
@@ -223,7 +223,7 @@ interactive_customize() {
       if [[ -n "${checks_in:-}" ]]; then
         CHECKS="$checks_in"
       fi
-      read -r -p "Required approving reviews (1..6) [${REQUIRED_REVIEWS}]: " rev_in
+      read -r -p "Required approving reviews (0..6) [${REQUIRED_REVIEWS}]: " rev_in
       if [[ -n "${rev_in:-}" ]]; then
         REQUIRED_REVIEWS="$rev_in"
       fi
@@ -270,8 +270,8 @@ load_restore_payload() {
 
 validate_inputs() {
   [[ "$REQUIRED_REVIEWS" =~ ^[0-9]+$ ]] || die "required reviews must be integer"
-  if (( REQUIRED_REVIEWS < 1 || REQUIRED_REVIEWS > 6 )); then
-    die "required reviews out of range (1..6): $REQUIRED_REVIEWS"
+  if (( REQUIRED_REVIEWS < 0 || REQUIRED_REVIEWS > 6 )); then
+    die "required reviews out of range (0..6): $REQUIRED_REVIEWS"
   fi
 
   STRICT_UP_TO_DATE="$(normalize_bool "$STRICT_UP_TO_DATE")"
