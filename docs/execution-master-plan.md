@@ -265,3 +265,61 @@ Rationale:
 - Replay window confidence must be checked before promotion decisions.
 - Avoid mixed mutations in a single experiment cycle.
 - Keep changes auditable through session artifacts and explicit IDs.
+
+## Closure Note (2026-04-10)
+
+This section records the validation evidence collected after completing the governance, experiment, guard, and monitoring changes in this execution cycle.
+
+### Verified Areas
+
+- M2 Macro Intelligence closure evidence
+- M5 Parallel Simulation closure
+- M8 Production Readiness staging baseline
+
+### Commands Executed
+
+```bash
+go test ./internal/globalmarket/...
+go test ./internal/replay/...
+go test ./internal/sim/...
+go test ./internal/portfolio/...
+./scripts/openclaw/verify-parallel-scenarios.sh --require-diversity
+./scripts/openclaw/verify-operations-gate.sh --with-governance
+go run ./cmd/backtest-window -start 2026-03-26 -end 2026-03-27
+```
+
+### Results
+
+- M2 evidence produced successfully for replay window `2026-03-26` -> `2026-03-27`
+- M5 strict scenario verification passed
+- M8 operations gate verification passed
+- Governance verification passed, including G2/G3/G4 + M5 + M7 checks
+
+### Determinism and Scenario Evidence
+
+- replay determinism hash: `c9f50e9b73874f49c445be959d6007c67651c217`
+- base signal hash: `0d583aec7c082861cac1eceec63dff393bdf8e7e`
+- stress signal hash: `decbdaf66a5c7d5b09aad807e9740dc17dba98e6`
+- shock signal hash: `93fb8e07ce6e4126a14bc4747244148d40345f66`
+
+Scenario diversity requirement was satisfied because base/stress/shock signal hashes were distinct and deterministic across repeated runs.
+
+### Evidence Artifacts
+
+- `data/state/windows/window-20260326-20260327.json`
+- `data/state/windows/scenario-compare-window-20260326-20260327.json`
+- `data/state/sessions/session-20260326-daily/summary.json`
+- `data/state/sessions/session-20260326-daily/recommendation_outcomes.jsonl`
+- `data/state/approvals/decision-20260410172704.json`
+
+### Window Summary Snapshot
+
+- `window_id`: `window-20260326-20260327`
+- `worst_agent`: `value-yield-01`
+- `worst_skill`: `value_yield`
+- `worst_sharpe_like`: `-18.480608035729464`
+
+### Remaining Manual Follow-Up
+
+- Apply or verify GitHub branch protection so required checks `ci / governance` and `ci / operations` are enforced before merge.
+- Push commits and open PR with the evidence artifacts above referenced in the description.
