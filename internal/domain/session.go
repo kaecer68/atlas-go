@@ -31,6 +31,7 @@ type BrokerRuntimeAudit struct {
 	Mode             string
 	Adapter          string
 	Signer           string
+	SignerVersion    string
 	KeyID            string
 	MaxRetries       int
 	HTTPTimeoutSec   int

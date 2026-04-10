@@ -20,17 +20,19 @@ type DashboardAPI struct {
 }
 
 type MacroRadarResponse struct {
-	SessionID     string                `json:"session_id"`
-	Regime        domain.Regime         `json:"regime"`
-	GuardOutcomes []domain.GuardOutcome `json:"guard_outcomes"`
-	RecordedAt    time.Time             `json:"recorded_at"`
+	SessionID     string                    `json:"session_id"`
+	Regime        domain.Regime             `json:"regime"`
+	GuardOutcomes []domain.GuardOutcome     `json:"guard_outcomes"`
+	BrokerRuntime domain.BrokerRuntimeAudit `json:"broker_runtime"`
+	RecordedAt    time.Time                 `json:"recorded_at"`
 }
 
 type AgentObservatoryResponse struct {
-	SessionID              string             `json:"session_id"`
-	NextExperimentAgentID  string             `json:"next_experiment_agent_id"`
-	WeakestAgentScorecards []domain.Scorecard `json:"weakest_agent_scorecards"`
-	RecordedAt             time.Time          `json:"recorded_at"`
+	SessionID              string                    `json:"session_id"`
+	NextExperimentAgentID  string                    `json:"next_experiment_agent_id"`
+	WeakestAgentScorecards []domain.Scorecard        `json:"weakest_agent_scorecards"`
+	BrokerRuntime          domain.BrokerRuntimeAudit `json:"broker_runtime"`
+	RecordedAt             time.Time                 `json:"recorded_at"`
 }
 
 type ForecastVsRealityItem struct {
@@ -48,7 +50,8 @@ type ForecastVsRealityItem struct {
 }
 
 type ForecastVsRealityResponse struct {
-	Items []ForecastVsRealityItem `json:"items"`
+	Items         []ForecastVsRealityItem   `json:"items"`
+	BrokerRuntime domain.BrokerRuntimeAudit `json:"broker_runtime"`
 }
 
 func NewDashboardAPI(ledgerDir string) *DashboardAPI {
@@ -77,6 +80,7 @@ func (a *DashboardAPI) handleMacroRadar(w http.ResponseWriter, r *http.Request) 
 		SessionID:     summary.SessionID,
 		Regime:        summary.Regime,
 		GuardOutcomes: append([]domain.GuardOutcome(nil), summary.GuardOutcomes...),
+		BrokerRuntime: summary.BrokerRuntime,
 		RecordedAt:    summary.RecordedAt,
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -113,6 +117,7 @@ func (a *DashboardAPI) handleAgentObservatory(w http.ResponseWriter, r *http.Req
 	if summary != nil {
 		resp.SessionID = summary.SessionID
 		resp.NextExperimentAgentID = summary.NextExperimentAgentID
+		resp.BrokerRuntime = summary.BrokerRuntime
 		resp.RecordedAt = summary.RecordedAt
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -131,7 +136,16 @@ func (a *DashboardAPI) handleForecastVsReality(w http.ResponseWriter, r *http.Re
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load forecast-vs-reality data: %v", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, ForecastVsRealityResponse{Items: items})
+	resp := ForecastVsRealityResponse{Items: items}
+	summary, err := a.loadSessionSummary("")
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load forecast-vs-reality summary context: %v", err))
+		return
+	}
+	if summary != nil {
+		resp.BrokerRuntime = summary.BrokerRuntime
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (a *DashboardAPI) loadSessionSummary(sessionID string) (*domain.SessionSummary, error) {

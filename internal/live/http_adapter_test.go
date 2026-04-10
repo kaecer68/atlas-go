@@ -397,6 +397,100 @@ func TestHTTPBrokerAdapterRejectsTimestampOutsideClockSkew(t *testing.T) {
 	}
 }
 
+func TestHTTPBrokerAdapterRejectsHMACSignerWithoutSecret(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+	}))
+	defer server.Close()
+
+	adapter := NewHTTPBrokerAdapter(HTTPBrokerAdapterConfig{
+		BaseURL:     server.URL,
+		APIKey:      "k1",
+		APISecret:   "",
+		Signer:      "hmac-sha256",
+		MaxAttempts: 1,
+		Client:      server.Client(),
+	})
+
+	_, err := adapter.SubmitOrder(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 1})
+	if err == nil {
+		t.Fatalf("expected signer misconfigured error")
+	}
+	if !strings.Contains(err.Error(), "api secret") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestHTTPBrokerAdapterClassifiesSignatureErrors(t *testing.T) {
+	var calls int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		http.Error(w, "bad signature", http.StatusUnauthorized)
+	}))
+	defer server.Close()
+
+	adapter := NewHTTPBrokerAdapter(HTTPBrokerAdapterConfig{
+		BaseURL:     server.URL,
+		APIKey:      "k1",
+		APISecret:   "s1",
+		MaxAttempts: 2,
+		Client:      server.Client(),
+	})
+
+	_, err := adapter.SubmitOrder(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 1})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !strings.Contains(err.Error(), "auth.signature_invalid") {
+		t.Fatalf("unexpected classification error: %v", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("calls = %d, want 1 for non-retryable auth error", got)
+	}
+}
+
+func TestHTTPBrokerAdapterKeyRotationUsesNewKeyID(t *testing.T) {
+	keyIDs := make([]string, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		keyIDs = append(keyIDs, r.Header.Get("X-Key-Id"))
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+	}))
+	defer server.Close()
+
+	adapterV1 := NewHTTPBrokerAdapter(HTTPBrokerAdapterConfig{
+		BaseURL:     server.URL,
+		APIKey:      "k1",
+		APISecret:   "s1",
+		KeyID:       "kid-v1",
+		MaxAttempts: 1,
+		Client:      server.Client(),
+	})
+	if _, err := adapterV1.SubmitOrder(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 1}); err != nil {
+		t.Fatalf("adapter v1 submit failed: %v", err)
+	}
+
+	adapterV2 := NewHTTPBrokerAdapter(HTTPBrokerAdapterConfig{
+		BaseURL:     server.URL,
+		APIKey:      "k1",
+		APISecret:   "s1",
+		KeyID:       "kid-v2",
+		MaxAttempts: 1,
+		Client:      server.Client(),
+	})
+	if _, err := adapterV2.SubmitOrder(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 1}); err != nil {
+		t.Fatalf("adapter v2 submit failed: %v", err)
+	}
+
+	if len(keyIDs) != 2 {
+		t.Fatalf("expected 2 requests, got %d", len(keyIDs))
+	}
+	if keyIDs[0] != "kid-v1" || keyIDs[1] != "kid-v2" {
+		t.Fatalf("unexpected key rotation sequence: %v", keyIDs)
+	}
+}
+
 func TestHTTPBrokerAdapterRejectsReplayNonceAcrossRestartsWithFileStore(t *testing.T) {
 	var calls int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

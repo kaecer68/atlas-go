@@ -3,6 +3,8 @@ package live
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -152,6 +154,52 @@ func TestOrderManagerPublishSystemErrorAfterRetryExhausted(t *testing.T) {
 	case got := <-eventCh:
 		if got.Type != EventSystemError {
 			t.Fatalf("unexpected event type: got=%s want=%s", got.Type, EventSystemError)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatalf("expected system error event but none was received")
+	}
+}
+
+func TestOrderManagerPublishesSignerErrorClassification(t *testing.T) {
+	bus := NewChannelEventBus(16)
+	t.Cleanup(func() { _ = bus.Close() })
+
+	eventCh := make(chan BusEvent, 4)
+	sub := bus.SubscribeAll(func(ctx context.Context, event BusEvent) error {
+		select {
+		case eventCh <- event:
+		default:
+		}
+		return nil
+	})
+	t.Cleanup(sub.Cancel)
+
+	broker := &scriptedBroker{
+		errors: []error{fmt.Errorf("broker rejected request: code=auth.signature_invalid status=401 body=bad signature")},
+	}
+
+	mgr := NewOrderManager(broker, bus, 0, 0)
+	err := mgr.Execute(context.Background(), domain.Order{
+		Symbol:   "2330",
+		Side:     domain.SideBuy,
+		Quantity: 1,
+		Price:    100,
+	})
+	if err == nil {
+		t.Fatalf("expected error when signer auth fails")
+	}
+
+	select {
+	case got := <-eventCh:
+		if got.Type != EventSystemError {
+			t.Fatalf("unexpected event type: got=%s want=%s", got.Type, EventSystemError)
+		}
+		payload, ok := got.Payload.(map[string]string)
+		if !ok {
+			t.Fatalf("unexpected payload type: %T", got.Payload)
+		}
+		if !strings.Contains(payload["error"], "auth.signature_invalid") {
+			t.Fatalf("expected signer classification in error payload: %v", payload)
 		}
 	case <-time.After(1 * time.Second):
 		t.Fatalf("expected system error event but none was received")
