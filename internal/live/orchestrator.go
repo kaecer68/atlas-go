@@ -16,6 +16,7 @@ type Orchestrator struct {
 	stateStore *StateStore
 	eventBus   *ChannelEventBus
 	marketData marketdata.Provider
+	broker     Broker
 	registry   domain.AgentRegistry
 	system     *orchestrator.System
 
@@ -80,6 +81,7 @@ func NewOrchestrator(
 		stateStore: stateStore,
 		eventBus:   eventBus,
 		marketData: marketData,
+		broker:     NewDryRunBroker(),
 		registry:   registry,
 		system:     system,
 		config:     config,
@@ -87,6 +89,17 @@ func NewOrchestrator(
 		cancel:     cancel,
 		watchlist:  make([]string, 0),
 	}
+}
+
+// SetBroker 注入自定义券商执行器，传入 nil 时回退到 dry-run。
+func (o *Orchestrator) SetBroker(broker Broker) {
+	o.mutex.Lock()
+	defer o.mutex.Unlock()
+	if broker == nil {
+		o.broker = NewDryRunBroker()
+		return
+	}
+	o.broker = broker
 }
 
 // SetWatchlist 设置观测标的列表
@@ -415,9 +428,37 @@ func (o *Orchestrator) applyRiskFilters() {
 
 // simulateOrderExecution 模拟订单执行
 func (o *Orchestrator) simulateOrderExecution() {
-	// TODO: 集成订单模拟器
-	// 简化版本: 占位
-	fmt.Println("[Trading] Simulating order execution")
+	if o.broker == nil {
+		o.broker = NewDryRunBroker()
+	}
+
+	// Phase 6 起步：先建立可审计的执行通道，默认 dry-run，不触发真实下单。
+	fmt.Printf("[Trading] Execution channel ready (mode=%s)\n", o.broker.Mode())
+}
+
+func (o *Orchestrator) executeOrder(ctx context.Context, order domain.Order) error {
+	if o.broker == nil {
+		o.broker = NewDryRunBroker()
+	}
+
+	result, err := o.broker.SubmitOrder(ctx, order)
+	if err != nil {
+		_ = o.eventBus.Publish(BusEvent{
+			ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+			Type:      EventSystemError,
+			Timestamp: time.Now(),
+			Payload: map[string]string{
+				"error": fmt.Sprintf("submit order %s: %v", order.Symbol, err),
+			},
+		})
+		return fmt.Errorf("submit order %s: %w", order.Symbol, err)
+	}
+
+	if err := o.eventBus.PublishOrderEvent(order, result.OrderID, result.Status, result.FillPrice); err != nil {
+		return fmt.Errorf("publish order event: %w", err)
+	}
+
+	return nil
 }
 
 // checkRiskTriggers 检查风险触发条件
