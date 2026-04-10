@@ -120,7 +120,7 @@ func resolveBrokerMode(mode string) (requested string, effective string, broker 
 	case "dry-run", "paper":
 		return requested, "dry-run", NewDryRunBroker(), ""
 	case "live":
-		return requested, "dry-run", NewDryRunBroker(), "live broker mode is not enabled yet; fallback to dry-run"
+		return requested, "live-guarded", NewGuardedLiveBroker(nil), "live mode enabled with guarded adapter; orders are rejected until adapter is configured"
 	default:
 		return requested, "dry-run", NewDryRunBroker(), fmt.Sprintf("unsupported broker mode %q; fallback to dry-run", requested)
 	}

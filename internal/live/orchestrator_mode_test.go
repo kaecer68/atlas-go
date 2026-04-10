@@ -19,19 +19,19 @@ func (p stubProvider) GetQuotes(ctx context.Context, asOf time.Time, symbols []s
 	return p.quotes, nil
 }
 
-func TestResolveBrokerModeLiveFallsBackToDryRun(t *testing.T) {
+func TestResolveBrokerModeLiveUsesGuardedBroker(t *testing.T) {
 	requested, effective, broker, audit := resolveBrokerMode("live")
 	if requested != "live" {
 		t.Fatalf("requested mode mismatch: got=%q want=live", requested)
 	}
-	if effective != "dry-run" {
-		t.Fatalf("effective mode mismatch: got=%q want=dry-run", effective)
+	if effective != "live-guarded" {
+		t.Fatalf("effective mode mismatch: got=%q want=live-guarded", effective)
 	}
-	if broker == nil || broker.Mode() != "dry-run" {
-		t.Fatalf("expected dry-run broker, got %+v", broker)
+	if broker == nil || broker.Mode() != "live" {
+		t.Fatalf("expected live guarded broker, got %+v", broker)
 	}
 	if audit == "" {
-		t.Fatalf("expected non-empty audit message for live fallback")
+		t.Fatalf("expected non-empty audit message for live guarded mode")
 	}
 }
 
@@ -51,7 +51,7 @@ func TestResolveBrokerModeUnknownFallsBackToDryRun(t *testing.T) {
 	}
 }
 
-func TestNewOrchestratorAppliesLiveFailSafeMode(t *testing.T) {
+func TestNewOrchestratorAppliesLiveGuardedMode(t *testing.T) {
 	store := NewStateStore(t.TempDir())
 	bus := NewChannelEventBus(32)
 	t.Cleanup(func() {
@@ -77,8 +77,8 @@ func TestNewOrchestratorAppliesLiveFailSafeMode(t *testing.T) {
 	if o.requestedBrokerMode != "live" {
 		t.Fatalf("requested broker mode: got=%q want=live", o.requestedBrokerMode)
 	}
-	if o.effectiveBrokerMode != "dry-run" {
-		t.Fatalf("effective broker mode: got=%q want=dry-run", o.effectiveBrokerMode)
+	if o.effectiveBrokerMode != "live-guarded" {
+		t.Fatalf("effective broker mode: got=%q want=live-guarded", o.effectiveBrokerMode)
 	}
 	if o.executionAuditMsg == "" {
 		t.Fatalf("expected non-empty audit message when live mode is requested")
@@ -92,7 +92,7 @@ func TestNewOrchestratorAppliesLiveFailSafeMode(t *testing.T) {
 	if configMap["broker_mode_requested"] != "live" {
 		t.Fatalf("status requested mode mismatch: %v", configMap["broker_mode_requested"])
 	}
-	if configMap["broker_mode_effective"] != "dry-run" {
+	if configMap["broker_mode_effective"] != "live-guarded" {
 		t.Fatalf("status effective mode mismatch: %v", configMap["broker_mode_effective"])
 	}
 	if configMap["broker_max_retries"] != 2 {
