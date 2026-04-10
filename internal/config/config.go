@@ -8,26 +8,27 @@ import (
 )
 
 type Config struct {
-	MarketDataProvider string
-	PrimaryMarket      string
-	ReplayMode         string
-	AgentRegistryPath  string
-	BaselinePolicyPath string
-	LedgerDir          string
-	ReplayDataPath     string
-	ReplaySessionDate  string
-	FugleAPIKey        string
-	YahooEnabled       bool
-	BrokerMode         string
-	BrokerMaxRetries   int
-	BrokerAdapter      string
-	BrokerAPIBaseURL   string
-	BrokerAPIKey       string
-	BrokerAPISecret    string
-	BrokerHTTPTimeoutS int
-	BrokerHTTPAttempts int
-	BrokerSigner       string
-	BrokerKeyID        string
+	MarketDataProvider         string
+	PrimaryMarket              string
+	ReplayMode                 string
+	AgentRegistryPath          string
+	BaselinePolicyPath         string
+	LedgerDir                  string
+	ReplayDataPath             string
+	ReplaySessionDate          string
+	FugleAPIKey                string
+	YahooEnabled               bool
+	BrokerMode                 string
+	BrokerMaxRetries           int
+	BrokerAdapter              string
+	BrokerAPIBaseURL           string
+	BrokerAPIKey               string
+	BrokerAPISecret            string
+	BrokerHTTPTimeoutS         int
+	BrokerHTTPAttempts         int
+	BrokerHTTPRetryStatusCodes []int
+	BrokerSigner               string
+	BrokerKeyID                string
 }
 
 func Load() Config {
@@ -44,18 +45,19 @@ func Load() Config {
 		ReplayDataPath:     envOr("ATLAS_REPLAY_DATA_PATH", "samples/replay/twse_stock_day_all_sample.csv"),
 		ReplaySessionDate:  envOr("ATLAS_REPLAY_SESSION_DATE", "2026-03-26"),
 		// 优先使用 FUGLE_API_KEY，其次 ATLAS_FUGLE_API_KEY
-		FugleAPIKey:        envOrPriority("FUGLE_API_KEY", "ATLAS_FUGLE_API_KEY"),
-		YahooEnabled:       os.Getenv("ATLAS_YAHOO_ENABLED") == "true",
-		BrokerMode:         envOr("ATLAS_BROKER_MODE", "dry-run"),
-		BrokerMaxRetries:   envOrInt("ATLAS_BROKER_MAX_RETRIES", 1),
-		BrokerAdapter:      envOr("ATLAS_BROKER_ADAPTER", "guarded"),
-		BrokerAPIBaseURL:   envOr("ATLAS_BROKER_API_BASE_URL", ""),
-		BrokerAPIKey:       envOr("ATLAS_BROKER_API_KEY", ""),
-		BrokerAPISecret:    envOr("ATLAS_BROKER_API_SECRET", ""),
-		BrokerHTTPTimeoutS: envOrInt("ATLAS_BROKER_HTTP_TIMEOUT_SEC", 5),
-		BrokerHTTPAttempts: envOrInt("ATLAS_BROKER_HTTP_ATTEMPTS", 2),
-		BrokerSigner:       envOr("ATLAS_BROKER_SIGNER", "placeholder"),
-		BrokerKeyID:        envOr("ATLAS_BROKER_KEY_ID", ""),
+		FugleAPIKey:                envOrPriority("FUGLE_API_KEY", "ATLAS_FUGLE_API_KEY"),
+		YahooEnabled:               os.Getenv("ATLAS_YAHOO_ENABLED") == "true",
+		BrokerMode:                 envOr("ATLAS_BROKER_MODE", "dry-run"),
+		BrokerMaxRetries:           envOrInt("ATLAS_BROKER_MAX_RETRIES", 1),
+		BrokerAdapter:              envOr("ATLAS_BROKER_ADAPTER", "guarded"),
+		BrokerAPIBaseURL:           envOr("ATLAS_BROKER_API_BASE_URL", ""),
+		BrokerAPIKey:               envOr("ATLAS_BROKER_API_KEY", ""),
+		BrokerAPISecret:            envOr("ATLAS_BROKER_API_SECRET", ""),
+		BrokerHTTPTimeoutS:         envOrInt("ATLAS_BROKER_HTTP_TIMEOUT_SEC", 5),
+		BrokerHTTPAttempts:         envOrInt("ATLAS_BROKER_HTTP_ATTEMPTS", 2),
+		BrokerHTTPRetryStatusCodes: envOrIntCSV("ATLAS_BROKER_HTTP_RETRY_STATUS_CODES", []int{408, 425, 429, 500, 502, 503, 504}),
+		BrokerSigner:               envOr("ATLAS_BROKER_SIGNER", "placeholder"),
+		BrokerKeyID:                envOr("ATLAS_BROKER_KEY_ID", ""),
 	}
 }
 
@@ -85,6 +87,30 @@ func envOrInt(key string, fallback int) int {
 		return fallback
 	}
 	return n
+}
+
+func envOrIntCSV(key string, fallback []int) []int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return append([]int(nil), fallback...)
+	}
+	parts := strings.Split(raw, ",")
+	parsed := make([]int, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		n, err := strconv.Atoi(part)
+		if err != nil {
+			continue
+		}
+		parsed = append(parsed, n)
+	}
+	if len(parsed) == 0 {
+		return append([]int(nil), fallback...)
+	}
+	return parsed
 }
 
 // loadEnvFile 从 .env 文件加载环境变量

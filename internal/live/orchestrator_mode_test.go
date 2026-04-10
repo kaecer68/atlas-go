@@ -126,6 +126,8 @@ func TestNewOrchestratorAppliesLiveGuardedMode(t *testing.T) {
 			QuotePollInterval: 10 * time.Second,
 			BrokerMode:        "live",
 			BrokerAdapter:     "guarded",
+			BrokerSigner:      "placeholder",
+			BrokerKeyID:       "kid-test",
 			BrokerMaxRetries:  2,
 		},
 	)
@@ -153,5 +155,14 @@ func TestNewOrchestratorAppliesLiveGuardedMode(t *testing.T) {
 	}
 	if configMap["broker_max_retries"] != 2 {
 		t.Fatalf("status retries mismatch: %v", configMap["broker_max_retries"])
+	}
+	if configMap["broker_adapter"] != "guarded" {
+		t.Fatalf("status broker_adapter mismatch: %v", configMap["broker_adapter"])
+	}
+	if configMap["broker_signer"] != "placeholder" {
+		t.Fatalf("status broker_signer mismatch: %v", configMap["broker_signer"])
+	}
+	if configMap["broker_key_id"] != "kid-test" {
+		t.Fatalf("status broker_key_id mismatch: %v", configMap["broker_key_id"])
 	}
 }

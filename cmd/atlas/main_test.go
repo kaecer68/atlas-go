@@ -264,3 +264,27 @@ func TestRunRejectsRealSignerWithoutKeyID(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestParseStatusCodeCSV(t *testing.T) {
+	fallback := []int{408, 429}
+	got := parseStatusCodeCSV("400, 500, abc, 503", fallback)
+	if len(got) != 3 || got[0] != 400 || got[1] != 500 || got[2] != 503 {
+		t.Fatalf("parseStatusCodeCSV = %v, want [400 500 503]", got)
+	}
+
+	gotFallback := parseStatusCodeCSV("invalid", fallback)
+	if len(gotFallback) != 2 || gotFallback[0] != 408 || gotFallback[1] != 429 {
+		t.Fatalf("parseStatusCodeCSV fallback = %v, want [408 429]", gotFallback)
+	}
+}
+
+func TestValidateBrokerRuntimeConfigRejectsInvalidRetryStatusCode(t *testing.T) {
+	cfg := config.Config{BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerHTTPRetryStatusCodes: []int{200}}
+	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "retry status code") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

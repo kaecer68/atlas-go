@@ -46,45 +46,47 @@ type Orchestrator struct {
 
 // OrchestratorConfig 编排器配置
 type OrchestratorConfig struct {
-	MarketOpenTime     string        // 09:00
-	MarketCloseTime    string        // 13:30
-	IntradayInterval   time.Duration // 5m
-	QuotePollInterval  time.Duration // 30s
-	PreMarketCheck     bool
-	MaxDailyLossPct    float64
-	MaxPositionLossPct float64
-	StopLossEnabled    bool
-	TakeProfitEnabled  bool
-	BrokerMode         string
-	BrokerMaxRetries   int
-	BrokerAdapter      string
-	BrokerAPIBaseURL   string
-	BrokerAPIKey       string
-	BrokerAPISecret    string
-	BrokerHTTPTimeoutS int
-	BrokerHTTPAttempts int
-	BrokerSigner       string
-	BrokerKeyID        string
+	MarketOpenTime             string        // 09:00
+	MarketCloseTime            string        // 13:30
+	IntradayInterval           time.Duration // 5m
+	QuotePollInterval          time.Duration // 30s
+	PreMarketCheck             bool
+	MaxDailyLossPct            float64
+	MaxPositionLossPct         float64
+	StopLossEnabled            bool
+	TakeProfitEnabled          bool
+	BrokerMode                 string
+	BrokerMaxRetries           int
+	BrokerAdapter              string
+	BrokerAPIBaseURL           string
+	BrokerAPIKey               string
+	BrokerAPISecret            string
+	BrokerHTTPTimeoutS         int
+	BrokerHTTPAttempts         int
+	BrokerHTTPRetryStatusCodes []int
+	BrokerSigner               string
+	BrokerKeyID                string
 }
 
 // DefaultOrchestratorConfig 默认配置
 func DefaultOrchestratorConfig() OrchestratorConfig {
 	return OrchestratorConfig{
-		MarketOpenTime:     "09:00",
-		MarketCloseTime:    "13:30",
-		IntradayInterval:   5 * time.Minute,
-		QuotePollInterval:  30 * time.Second,
-		PreMarketCheck:     true,
-		MaxDailyLossPct:    2.0,
-		MaxPositionLossPct: 5.0,
-		StopLossEnabled:    true,
-		TakeProfitEnabled:  false,
-		BrokerMode:         "dry-run",
-		BrokerMaxRetries:   1,
-		BrokerAdapter:      "guarded",
-		BrokerHTTPTimeoutS: 5,
-		BrokerHTTPAttempts: 2,
-		BrokerSigner:       "placeholder",
+		MarketOpenTime:             "09:00",
+		MarketCloseTime:            "13:30",
+		IntradayInterval:           5 * time.Minute,
+		QuotePollInterval:          30 * time.Second,
+		PreMarketCheck:             true,
+		MaxDailyLossPct:            2.0,
+		MaxPositionLossPct:         5.0,
+		StopLossEnabled:            true,
+		TakeProfitEnabled:          false,
+		BrokerMode:                 "dry-run",
+		BrokerMaxRetries:           1,
+		BrokerAdapter:              "guarded",
+		BrokerHTTPTimeoutS:         5,
+		BrokerHTTPAttempts:         2,
+		BrokerHTTPRetryStatusCodes: []int{408, 425, 429, 500, 502, 503, 504},
+		BrokerSigner:               "placeholder",
 	}
 }
 
@@ -144,13 +146,14 @@ func resolveBrokerMode(cfg OrchestratorConfig) (requested string, effective stri
 			return requested, "live-mock", NewGuardedLiveBroker(NewMockLiveAdapter()), "live mode uses mock adapter; no real orders are sent"
 		case "http":
 			httpAdapter := NewHTTPBrokerAdapter(HTTPBrokerAdapterConfig{
-				BaseURL:     cfg.BrokerAPIBaseURL,
-				APIKey:      cfg.BrokerAPIKey,
-				APISecret:   cfg.BrokerAPISecret,
-				KeyID:       cfg.BrokerKeyID,
-				Timeout:     time.Duration(cfg.BrokerHTTPTimeoutS) * time.Second,
-				MaxAttempts: cfg.BrokerHTTPAttempts,
-				Signer:      cfg.BrokerSigner,
+				BaseURL:              cfg.BrokerAPIBaseURL,
+				APIKey:               cfg.BrokerAPIKey,
+				APISecret:            cfg.BrokerAPISecret,
+				KeyID:                cfg.BrokerKeyID,
+				Timeout:              time.Duration(cfg.BrokerHTTPTimeoutS) * time.Second,
+				MaxAttempts:          cfg.BrokerHTTPAttempts,
+				RetryableStatusCodes: cfg.BrokerHTTPRetryStatusCodes,
+				Signer:               cfg.BrokerSigner,
 			})
 			if strings.TrimSpace(cfg.BrokerAPIBaseURL) == "" {
 				return requested, "live-guarded", NewGuardedLiveBroker(nil), "live+http adapter requested but ATLAS_BROKER_API_BASE_URL is empty; fallback to guarded"
@@ -234,11 +237,17 @@ func (o *Orchestrator) Start() error {
 		Type:      EventSystemStart,
 		Timestamp: time.Now(),
 		Payload: map[string]interface{}{
-			"market_data_provider":  o.marketData.Name(),
-			"watchlist_count":       len(o.watchlist),
-			"broker_mode_requested": o.requestedBrokerMode,
-			"broker_mode_effective": o.effectiveBrokerMode,
-			"broker_max_retries":    o.config.BrokerMaxRetries,
+			"market_data_provider":           o.marketData.Name(),
+			"watchlist_count":                len(o.watchlist),
+			"broker_mode_requested":          o.requestedBrokerMode,
+			"broker_mode_effective":          o.effectiveBrokerMode,
+			"broker_adapter":                 o.config.BrokerAdapter,
+			"broker_signer":                  o.config.BrokerSigner,
+			"broker_key_id":                  o.config.BrokerKeyID,
+			"broker_http_attempts":           o.config.BrokerHTTPAttempts,
+			"broker_http_timeout_sec":        o.config.BrokerHTTPTimeoutS,
+			"broker_http_retry_status_codes": o.config.BrokerHTTPRetryStatusCodes,
+			"broker_max_retries":             o.config.BrokerMaxRetries,
 		},
 	})
 
@@ -618,14 +627,20 @@ func (o *Orchestrator) Status() map[string]interface{} {
 			"unrealized_pnl": portfolio.UnrealizedPnL,
 		},
 		"config": map[string]interface{}{
-			"market_open":           o.config.MarketOpenTime,
-			"market_close":          o.config.MarketCloseTime,
-			"intraday_cycle":        o.config.IntradayInterval.String(),
-			"quote_poll":            o.config.QuotePollInterval.String(),
-			"stop_loss_enabled":     o.config.StopLossEnabled,
-			"broker_mode_requested": o.requestedBrokerMode,
-			"broker_mode_effective": o.effectiveBrokerMode,
-			"broker_max_retries":    o.config.BrokerMaxRetries,
+			"market_open":                    o.config.MarketOpenTime,
+			"market_close":                   o.config.MarketCloseTime,
+			"intraday_cycle":                 o.config.IntradayInterval.String(),
+			"quote_poll":                     o.config.QuotePollInterval.String(),
+			"stop_loss_enabled":              o.config.StopLossEnabled,
+			"broker_mode_requested":          o.requestedBrokerMode,
+			"broker_mode_effective":          o.effectiveBrokerMode,
+			"broker_adapter":                 o.config.BrokerAdapter,
+			"broker_signer":                  o.config.BrokerSigner,
+			"broker_key_id":                  o.config.BrokerKeyID,
+			"broker_http_attempts":           o.config.BrokerHTTPAttempts,
+			"broker_http_timeout_sec":        o.config.BrokerHTTPTimeoutS,
+			"broker_http_retry_status_codes": o.config.BrokerHTTPRetryStatusCodes,
+			"broker_max_retries":             o.config.BrokerMaxRetries,
 		},
 	}
 }

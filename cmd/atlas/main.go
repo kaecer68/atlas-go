@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,6 +50,7 @@ func run(args []string, deps appDeps) error {
 	brokerAdapter := flags.String("broker-adapter", "", "override broker adapter: guarded|mock|http")
 	brokerSigner := flags.String("broker-signer", "", "override broker signer: placeholder|hmac-sha256")
 	brokerKeyID := flags.String("broker-key-id", "", "override broker key id for signer key rotation")
+	brokerRetryStatusCodes := flags.String("broker-retry-status-codes", "", "override broker retry status codes csv, e.g. 408,429,503")
 	brokerMaxRetries := flags.Int("broker-max-retries", -1, "override broker max retries (>=0)")
 	allowLiveBroker := flags.Bool("allow-live-broker", false, "allow live broker mode (default false)")
 	allowHTTPBroker := flags.Bool("allow-http-broker", false, "allow http broker adapter in live mode (default false)")
@@ -69,6 +71,9 @@ func run(args []string, deps appDeps) error {
 	}
 	if *brokerKeyID != "" {
 		cfg.BrokerKeyID = *brokerKeyID
+	}
+	if *brokerRetryStatusCodes != "" {
+		cfg.BrokerHTTPRetryStatusCodes = parseStatusCodeCSV(*brokerRetryStatusCodes, cfg.BrokerHTTPRetryStatusCodes)
 	}
 	if *brokerMaxRetries >= 0 {
 		cfg.BrokerMaxRetries = *brokerMaxRetries
@@ -135,8 +140,36 @@ func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allow
 	if cfg.BrokerMaxRetries < 0 {
 		return fmt.Errorf("broker max retries must be >= 0, got %d", cfg.BrokerMaxRetries)
 	}
+	if len(cfg.BrokerHTTPRetryStatusCodes) == 0 {
+		cfg.BrokerHTTPRetryStatusCodes = []int{408, 425, 429, 500, 502, 503, 504}
+	}
+	for _, code := range cfg.BrokerHTTPRetryStatusCodes {
+		if code < 400 || code > 599 {
+			return fmt.Errorf("broker retry status code must be 4xx/5xx, got %d", code)
+		}
+	}
 
 	return nil
+}
+
+func parseStatusCodeCSV(raw string, fallback []int) []int {
+	parts := strings.Split(raw, ",")
+	parsed := make([]int, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		n, err := strconv.Atoi(part)
+		if err != nil {
+			continue
+		}
+		parsed = append(parsed, n)
+	}
+	if len(parsed) == 0 {
+		return append([]int(nil), fallback...)
+	}
+	return parsed
 }
 
 func runSimulation(cfg config.Config) error {
@@ -156,6 +189,7 @@ func runSimulation(cfg config.Config) error {
 	fmt.Printf("broker_adapter: %s\n", cfg.BrokerAdapter)
 	fmt.Printf("broker_signer: %s\n", cfg.BrokerSigner)
 	fmt.Printf("broker_key_id: %s\n", cfg.BrokerKeyID)
+	fmt.Printf("broker_retry_status_codes: %v\n", cfg.BrokerHTTPRetryStatusCodes)
 	fmt.Printf("broker_max_retries: %d\n", cfg.BrokerMaxRetries)
 	fmt.Printf("session: %s\n", session.ID)
 	fmt.Printf("agents: %d\n", len(registry.Agents))
