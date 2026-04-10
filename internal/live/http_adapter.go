@@ -18,27 +18,29 @@ import (
 )
 
 type HTTPBrokerAdapterConfig struct {
-	BaseURL     string
-	APIKey      string
-	APISecret   string
-	KeyID       string
-	Timeout     time.Duration
-	MaxAttempts int
-	Client      *http.Client
-	Signer      string
+	BaseURL              string
+	APIKey               string
+	APISecret            string
+	KeyID                string
+	Timeout              time.Duration
+	MaxAttempts          int
+	RetryableStatusCodes []int
+	Client               *http.Client
+	Signer               string
 }
 
 type HTTPBrokerAdapter struct {
-	baseURL     string
-	apiKey      string
-	apiSecret   string
-	keyID       string
-	timeout     time.Duration
-	maxAttempts int
-	client      *http.Client
-	signerName  string
-	signerVer   string
-	signer      requestSigner
+	baseURL              string
+	apiKey               string
+	apiSecret            string
+	keyID                string
+	timeout              time.Duration
+	maxAttempts          int
+	retryableStatusCodes map[int]bool
+	client               *http.Client
+	signerName           string
+	signerVer            string
+	signer               requestSigner
 }
 
 type requestSigner interface {
@@ -88,6 +90,7 @@ func NewHTTPBrokerAdapter(cfg HTTPBrokerAdapterConfig) *HTTPBrokerAdapter {
 	if maxAttempts <= 0 {
 		maxAttempts = 1
 	}
+	retryableStatusCodes := toRetryableStatusCodeSet(cfg.RetryableStatusCodes)
 	client := cfg.Client
 	if client == nil {
 		client = &http.Client{}
@@ -99,16 +102,17 @@ func NewHTTPBrokerAdapter(cfg HTTPBrokerAdapterConfig) *HTTPBrokerAdapter {
 	}
 
 	return &HTTPBrokerAdapter{
-		baseURL:     strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"),
-		apiKey:      strings.TrimSpace(cfg.APIKey),
-		apiSecret:   strings.TrimSpace(cfg.APISecret),
-		keyID:       keyID,
-		timeout:     timeout,
-		maxAttempts: maxAttempts,
-		client:      client,
-		signerName:  signerName,
-		signerVer:   signer.Version(),
-		signer:      signer,
+		baseURL:              strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"),
+		apiKey:               strings.TrimSpace(cfg.APIKey),
+		apiSecret:            strings.TrimSpace(cfg.APISecret),
+		keyID:                keyID,
+		timeout:              timeout,
+		maxAttempts:          maxAttempts,
+		retryableStatusCodes: retryableStatusCodes,
+		client:               client,
+		signerName:           signerName,
+		signerVer:            signer.Version(),
+		signer:               signer,
 	}
 }
 
@@ -182,12 +186,13 @@ func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte, i
 	defer resp.Body.Close()
 
 	respBody, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 500 {
-		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("broker server error: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(respBody))), retryable: true}
-	}
 	if resp.StatusCode >= 400 {
-		retryable := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusRequestTimeout
-		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("broker rejected request: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(respBody))), retryable: retryable}
+		retryable := a.retryableStatusCodes[resp.StatusCode]
+		prefix := "broker rejected request"
+		if resp.StatusCode >= 500 {
+			prefix = "broker server error"
+		}
+		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("%s: status=%d body=%s", prefix, resp.StatusCode, strings.TrimSpace(string(respBody))), retryable: retryable}
 	}
 
 	var payload struct {
@@ -237,4 +242,30 @@ func selectSigner(signer string) (string, requestSigner) {
 	default:
 		return "placeholder", placeholderSigner{}
 	}
+}
+
+func defaultRetryableStatusCodes() []int {
+	return []int{
+		http.StatusRequestTimeout,      // 408
+		http.StatusTooEarly,            // 425
+		http.StatusTooManyRequests,     // 429
+		http.StatusInternalServerError, // 500
+		http.StatusBadGateway,          // 502
+		http.StatusServiceUnavailable,  // 503
+		http.StatusGatewayTimeout,      // 504
+	}
+}
+
+func toRetryableStatusCodeSet(codes []int) map[int]bool {
+	selected := codes
+	if len(selected) == 0 {
+		selected = defaultRetryableStatusCodes()
+	}
+	set := make(map[int]bool, len(selected))
+	for _, code := range selected {
+		if code >= 400 && code <= 599 {
+			set[code] = true
+		}
+	}
+	return set
 }
