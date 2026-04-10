@@ -21,6 +21,7 @@ type HTTPBrokerAdapterConfig struct {
 	BaseURL     string
 	APIKey      string
 	APISecret   string
+	KeyID       string
 	Timeout     time.Duration
 	MaxAttempts int
 	Client      *http.Client
@@ -31,21 +32,26 @@ type HTTPBrokerAdapter struct {
 	baseURL     string
 	apiKey      string
 	apiSecret   string
+	keyID       string
 	timeout     time.Duration
 	maxAttempts int
 	client      *http.Client
 	signerName  string
+	signerVer   string
 	signer      requestSigner
 }
 
 type requestSigner interface {
 	Name() string
+	Version() string
 	Sign(payload []byte, secret string) string
 }
 
 type placeholderSigner struct{}
 
 func (s placeholderSigner) Name() string { return "placeholder" }
+
+func (s placeholderSigner) Version() string { return "v1" }
 
 func (s placeholderSigner) Sign(payload []byte, secret string) string {
 	h := sha256.Sum256([]byte(secret + ":" + string(payload)))
@@ -55,6 +61,8 @@ func (s placeholderSigner) Sign(payload []byte, secret string) string {
 type hmacSHA256Signer struct{}
 
 func (s hmacSHA256Signer) Name() string { return "hmac-sha256" }
+
+func (s hmacSHA256Signer) Version() string { return "v1" }
 
 func (s hmacSHA256Signer) Sign(payload []byte, secret string) string {
 	h := hmac.New(sha256.New, []byte(secret))
@@ -85,15 +93,21 @@ func NewHTTPBrokerAdapter(cfg HTTPBrokerAdapterConfig) *HTTPBrokerAdapter {
 		client = &http.Client{}
 	}
 	signerName, signer := selectSigner(cfg.Signer)
+	keyID := strings.TrimSpace(cfg.KeyID)
+	if keyID == "" {
+		keyID = "default"
+	}
 
 	return &HTTPBrokerAdapter{
 		baseURL:     strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"),
 		apiKey:      strings.TrimSpace(cfg.APIKey),
 		apiSecret:   strings.TrimSpace(cfg.APISecret),
+		keyID:       keyID,
 		timeout:     timeout,
 		maxAttempts: maxAttempts,
 		client:      client,
 		signerName:  signerName,
+		signerVer:   signer.Version(),
 		signer:      signer,
 	}
 }
@@ -110,6 +124,7 @@ func (a *HTTPBrokerAdapter) SubmitOrder(ctx context.Context, order domain.Order)
 	}
 	if a.signer == nil {
 		a.signerName, a.signer = selectSigner("")
+		a.signerVer = a.signer.Version()
 	}
 
 	payload := map[string]interface{}{
@@ -152,6 +167,8 @@ func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte, i
 	req.Header.Set("X-API-Key", a.apiKey)
 	req.Header.Set("X-Signature", a.signer.Sign(body, a.apiSecret))
 	req.Header.Set("X-Signature-Method", a.signerName)
+	req.Header.Set("X-Signature-Version", a.signerVer)
+	req.Header.Set("X-Key-Id", a.keyID)
 	req.Header.Set("X-Idempotency-Key", idempotencyKey)
 
 	resp, err := a.client.Do(req)

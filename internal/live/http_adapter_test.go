@@ -28,6 +28,15 @@ func TestHTTPBrokerAdapterSubmitOrderSuccess(t *testing.T) {
 		if !strings.HasPrefix(sig, "placeholder-") {
 			t.Fatalf("unexpected signature header: %s", sig)
 		}
+		if r.Header.Get("X-Signature-Method") != "placeholder" {
+			t.Fatalf("unexpected signature method: %s", r.Header.Get("X-Signature-Method"))
+		}
+		if r.Header.Get("X-Signature-Version") != "v1" {
+			t.Fatalf("unexpected signature version: %s", r.Header.Get("X-Signature-Version"))
+		}
+		if r.Header.Get("X-Key-Id") != "kid-1" {
+			t.Fatalf("unexpected key id header: %s", r.Header.Get("X-Key-Id"))
+		}
 		if got := r.Header.Get("X-Idempotency-Key"); !strings.HasPrefix(got, "atlas-") {
 			t.Fatalf("unexpected idempotency key header: %s", got)
 		}
@@ -44,6 +53,7 @@ func TestHTTPBrokerAdapterSubmitOrderSuccess(t *testing.T) {
 		BaseURL:     server.URL,
 		APIKey:      "k1",
 		APISecret:   "s1",
+		KeyID:       "kid-1",
 		Timeout:     2 * time.Second,
 		MaxAttempts: 2,
 		Client:      server.Client(),
@@ -58,6 +68,39 @@ func TestHTTPBrokerAdapterSubmitOrderSuccess(t *testing.T) {
 	}
 	if res.Status != "filled" {
 		t.Fatalf("status = %q, want filled", res.Status)
+	}
+}
+
+func TestHTTPBrokerAdapterHMACSignerSetsMethodAndVersion(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Signature-Method") != "hmac-sha256" {
+			t.Fatalf("unexpected signature method: %s", r.Header.Get("X-Signature-Method"))
+		}
+		if r.Header.Get("X-Signature-Version") != "v1" {
+			t.Fatalf("unexpected signature version: %s", r.Header.Get("X-Signature-Version"))
+		}
+		if got := r.Header.Get("X-Signature"); strings.HasPrefix(got, "placeholder-") || got == "" {
+			t.Fatalf("unexpected hmac signature value: %s", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+	}))
+	defer server.Close()
+
+	adapter := NewHTTPBrokerAdapter(HTTPBrokerAdapterConfig{
+		BaseURL:     server.URL,
+		APIKey:      "k1",
+		APISecret:   "s1",
+		KeyID:       "kid-hmac-1",
+		Timeout:     2 * time.Second,
+		MaxAttempts: 1,
+		Client:      server.Client(),
+		Signer:      "hmac-sha256",
+	})
+
+	_, err := adapter.SubmitOrder(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 1})
+	if err != nil {
+		t.Fatalf("SubmitOrder error: %v", err)
 	}
 }
 

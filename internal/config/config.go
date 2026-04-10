@@ -27,6 +27,7 @@ type Config struct {
 	BrokerHTTPTimeoutS int
 	BrokerHTTPAttempts int
 	BrokerSigner       string
+	BrokerKeyID        string
 }
 
 func Load() Config {
@@ -54,6 +55,7 @@ func Load() Config {
 		BrokerHTTPTimeoutS: envOrInt("ATLAS_BROKER_HTTP_TIMEOUT_SEC", 5),
 		BrokerHTTPAttempts: envOrInt("ATLAS_BROKER_HTTP_ATTEMPTS", 2),
 		BrokerSigner:       envOr("ATLAS_BROKER_SIGNER", "placeholder"),
+		BrokerKeyID:        envOr("ATLAS_BROKER_KEY_ID", ""),
 	}
 }
 

@@ -237,8 +237,30 @@ func TestRunAllowsRealSignerWithExplicitAllow(t *testing.T) {
 		},
 	}
 
-	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker", "-broker-signer", "hmac-sha256", "-allow-real-signer"}, deps)
+	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker", "-broker-signer", "hmac-sha256", "-broker-key-id", "kid-1", "-allow-real-signer"}, deps)
 	if err != nil {
 		t.Fatalf("run returned error: %v", err)
+	}
+}
+
+func TestRunRejectsRealSignerWithoutKeyID(t *testing.T) {
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
+		},
+		newDashboardAPI: func(dir string) routeRegistrar {
+			return monitoring.NewDashboardAPI(dir)
+		},
+		listenAndServe: func(addr string, handler http.Handler) error {
+			return nil
+		},
+	}
+
+	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker", "-broker-signer", "hmac-sha256", "-allow-real-signer"}, deps)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "key id") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
