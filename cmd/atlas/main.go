@@ -46,6 +46,7 @@ func run(args []string, deps appDeps) error {
 	apiMode := flags.Bool("api", false, "start dashboard api server")
 	apiAddr := flags.String("addr", ":8080", "dashboard api listen address")
 	brokerMode := flags.String("broker-mode", "", "override broker mode: dry-run|paper|live")
+	brokerAdapter := flags.String("broker-adapter", "", "override broker adapter: guarded|mock")
 	brokerMaxRetries := flags.Int("broker-max-retries", -1, "override broker max retries (>=0)")
 	allowLiveBroker := flags.Bool("allow-live-broker", false, "allow live broker mode (default false)")
 	if err := flags.Parse(args); err != nil {
@@ -55,6 +56,9 @@ func run(args []string, deps appDeps) error {
 	cfg := deps.loadConfig()
 	if *brokerMode != "" {
 		cfg.BrokerMode = *brokerMode
+	}
+	if *brokerAdapter != "" {
+		cfg.BrokerAdapter = *brokerAdapter
 	}
 	if *brokerMaxRetries >= 0 {
 		cfg.BrokerMaxRetries = *brokerMaxRetries
@@ -81,6 +85,13 @@ func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool) error
 	cfg.BrokerMode = strings.TrimSpace(strings.ToLower(cfg.BrokerMode))
 	if cfg.BrokerMode == "" {
 		cfg.BrokerMode = "dry-run"
+	}
+	cfg.BrokerAdapter = strings.TrimSpace(strings.ToLower(cfg.BrokerAdapter))
+	if cfg.BrokerAdapter == "" {
+		cfg.BrokerAdapter = "guarded"
+	}
+	if cfg.BrokerAdapter != "guarded" && cfg.BrokerAdapter != "mock" {
+		return fmt.Errorf("unsupported broker adapter %q (allowed: guarded, mock)", cfg.BrokerAdapter)
 	}
 
 	switch cfg.BrokerMode {
@@ -115,6 +126,7 @@ func runSimulation(cfg config.Config) error {
 	fmt.Printf("atlas-go daily simulation\n")
 	fmt.Printf("provider: %s\n", cfg.MarketDataProvider)
 	fmt.Printf("broker_mode: %s\n", cfg.BrokerMode)
+	fmt.Printf("broker_adapter: %s\n", cfg.BrokerAdapter)
 	fmt.Printf("broker_max_retries: %d\n", cfg.BrokerMaxRetries)
 	fmt.Printf("session: %s\n", session.ID)
 	fmt.Printf("agents: %d\n", len(registry.Agents))

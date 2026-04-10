@@ -138,3 +138,25 @@ func TestValidateBrokerRuntimeConfigRejectsNegativeRetries(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestRunRejectsUnsupportedBrokerAdapter(t *testing.T) {
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerMaxRetries: 1}
+		},
+		newDashboardAPI: func(dir string) routeRegistrar {
+			return monitoring.NewDashboardAPI(dir)
+		},
+		listenAndServe: func(addr string, handler http.Handler) error {
+			return nil
+		},
+	}
+
+	err := run([]string{"-api", "-broker-adapter", "invalid"}, deps)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "unsupported broker adapter") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

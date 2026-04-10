@@ -20,7 +20,7 @@ func (p stubProvider) GetQuotes(ctx context.Context, asOf time.Time, symbols []s
 }
 
 func TestResolveBrokerModeLiveUsesGuardedBroker(t *testing.T) {
-	requested, effective, broker, audit := resolveBrokerMode("live")
+	requested, effective, broker, audit := resolveBrokerMode("live", "guarded")
 	if requested != "live" {
 		t.Fatalf("requested mode mismatch: got=%q want=live", requested)
 	}
@@ -36,7 +36,7 @@ func TestResolveBrokerModeLiveUsesGuardedBroker(t *testing.T) {
 }
 
 func TestResolveBrokerModeUnknownFallsBackToDryRun(t *testing.T) {
-	requested, effective, broker, audit := resolveBrokerMode("experimental")
+	requested, effective, broker, audit := resolveBrokerMode("experimental", "guarded")
 	if requested != "experimental" {
 		t.Fatalf("requested mode mismatch: got=%q want=experimental", requested)
 	}
@@ -48,6 +48,22 @@ func TestResolveBrokerModeUnknownFallsBackToDryRun(t *testing.T) {
 	}
 	if audit == "" {
 		t.Fatalf("expected non-empty audit message for unknown mode fallback")
+	}
+}
+
+func TestResolveBrokerModeLiveUsesMockAdapter(t *testing.T) {
+	requested, effective, broker, audit := resolveBrokerMode("live", "mock")
+	if requested != "live" {
+		t.Fatalf("requested mode mismatch: got=%q want=live", requested)
+	}
+	if effective != "live-mock" {
+		t.Fatalf("effective mode mismatch: got=%q want=live-mock", effective)
+	}
+	if broker == nil || broker.Mode() != "live" {
+		t.Fatalf("expected guarded live broker with mock adapter, got %+v", broker)
+	}
+	if audit == "" {
+		t.Fatalf("expected non-empty audit message for live mock mode")
 	}
 }
 
@@ -70,6 +86,7 @@ func TestNewOrchestratorAppliesLiveGuardedMode(t *testing.T) {
 			IntradayInterval:  time.Hour,
 			QuotePollInterval: 10 * time.Second,
 			BrokerMode:        "live",
+			BrokerAdapter:     "guarded",
 			BrokerMaxRetries:  2,
 		},
 	)

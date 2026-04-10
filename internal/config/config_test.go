@@ -13,7 +13,7 @@ func TestLoad_Defaults(t *testing.T) {
 		"ATLAS_AGENT_REGISTRY_PATH", "ATLAS_BASELINE_POLICY_PATH", "ATLAS_LEDGER_DIR",
 		"ATLAS_REPLAY_DATA_PATH", "ATLAS_REPLAY_SESSION_DATE",
 		"FUGLE_API_KEY", "ATLAS_FUGLE_API_KEY", "ATLAS_YAHOO_ENABLED",
-		"ATLAS_BROKER_MODE", "ATLAS_BROKER_MAX_RETRIES",
+		"ATLAS_BROKER_MODE", "ATLAS_BROKER_MAX_RETRIES", "ATLAS_BROKER_ADAPTER",
 	}
 	for _, k := range envKeys {
 		t.Setenv(k, "")
@@ -52,6 +52,19 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.BrokerMaxRetries != 1 {
 		t.Errorf("BrokerMaxRetries should default to 1, got %d", cfg.BrokerMaxRetries)
 	}
+	if cfg.BrokerAdapter != "guarded" {
+		t.Errorf("BrokerAdapter should default to guarded, got %q", cfg.BrokerAdapter)
+	}
+}
+
+func TestLoad_BrokerAdapterDefaultFallbackWhenEmpty(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("ATLAS_BROKER_ADAPTER", "")
+
+	cfg := Load()
+	if cfg.BrokerAdapter != "guarded" {
+		t.Errorf("BrokerAdapter = %q, want guarded when env empty", cfg.BrokerAdapter)
+	}
 }
 
 func TestLoad_EnvOverrides(t *testing.T) {
@@ -62,6 +75,7 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	t.Setenv("ATLAS_YAHOO_ENABLED", "true")
 	t.Setenv("ATLAS_BROKER_MODE", "dry-run")
 	t.Setenv("ATLAS_BROKER_MAX_RETRIES", "3")
+	t.Setenv("ATLAS_BROKER_ADAPTER", "mock")
 
 	cfg := Load()
 
@@ -82,6 +96,9 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	}
 	if cfg.BrokerMaxRetries != 3 {
 		t.Errorf("BrokerMaxRetries = %d, want 3", cfg.BrokerMaxRetries)
+	}
+	if cfg.BrokerAdapter != "mock" {
+		t.Errorf("BrokerAdapter = %q, want mock", cfg.BrokerAdapter)
 	}
 }
 
