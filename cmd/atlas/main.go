@@ -47,9 +47,11 @@ func run(args []string, deps appDeps) error {
 	apiAddr := flags.String("addr", ":8080", "dashboard api listen address")
 	brokerMode := flags.String("broker-mode", "", "override broker mode: dry-run|paper|live")
 	brokerAdapter := flags.String("broker-adapter", "", "override broker adapter: guarded|mock|http")
+	brokerSigner := flags.String("broker-signer", "", "override broker signer: placeholder|hmac-sha256")
 	brokerMaxRetries := flags.Int("broker-max-retries", -1, "override broker max retries (>=0)")
 	allowLiveBroker := flags.Bool("allow-live-broker", false, "allow live broker mode (default false)")
 	allowHTTPBroker := flags.Bool("allow-http-broker", false, "allow http broker adapter in live mode (default false)")
+	allowRealSigner := flags.Bool("allow-real-signer", false, "allow non-placeholder signer for http broker adapter")
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("parse flags: %w", err)
 	}
@@ -61,10 +63,13 @@ func run(args []string, deps appDeps) error {
 	if *brokerAdapter != "" {
 		cfg.BrokerAdapter = *brokerAdapter
 	}
+	if *brokerSigner != "" {
+		cfg.BrokerSigner = *brokerSigner
+	}
 	if *brokerMaxRetries >= 0 {
 		cfg.BrokerMaxRetries = *brokerMaxRetries
 	}
-	if err := validateBrokerRuntimeConfig(&cfg, *allowLiveBroker, *allowHTTPBroker); err != nil {
+	if err := validateBrokerRuntimeConfig(&cfg, *allowLiveBroker, *allowHTTPBroker, *allowRealSigner); err != nil {
 		return err
 	}
 
@@ -82,7 +87,7 @@ func run(args []string, deps appDeps) error {
 	return runSimulation(cfg)
 }
 
-func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allowHTTPBroker bool) error {
+func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allowHTTPBroker bool, allowRealSigner bool) error {
 	cfg.BrokerMode = strings.TrimSpace(strings.ToLower(cfg.BrokerMode))
 	if cfg.BrokerMode == "" {
 		cfg.BrokerMode = "dry-run"
@@ -91,8 +96,15 @@ func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allow
 	if cfg.BrokerAdapter == "" {
 		cfg.BrokerAdapter = "guarded"
 	}
+	cfg.BrokerSigner = strings.TrimSpace(strings.ToLower(cfg.BrokerSigner))
+	if cfg.BrokerSigner == "" {
+		cfg.BrokerSigner = "placeholder"
+	}
 	if cfg.BrokerAdapter != "guarded" && cfg.BrokerAdapter != "mock" && cfg.BrokerAdapter != "http" {
 		return fmt.Errorf("unsupported broker adapter %q (allowed: guarded, mock, http)", cfg.BrokerAdapter)
+	}
+	if cfg.BrokerSigner != "placeholder" && cfg.BrokerSigner != "hmac-sha256" {
+		return fmt.Errorf("unsupported broker signer %q (allowed: placeholder, hmac-sha256)", cfg.BrokerSigner)
 	}
 
 	switch cfg.BrokerMode {
@@ -104,6 +116,9 @@ func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allow
 		}
 		if cfg.BrokerAdapter == "http" && !allowHTTPBroker {
 			return fmt.Errorf("broker adapter %q is disabled by default in live mode; pass -allow-http-broker to enable", cfg.BrokerAdapter)
+		}
+		if cfg.BrokerAdapter == "http" && cfg.BrokerSigner != "placeholder" && !allowRealSigner {
+			return fmt.Errorf("broker signer %q is disabled by default for http adapter; pass -allow-real-signer to enable", cfg.BrokerSigner)
 		}
 	default:
 		return fmt.Errorf("unsupported broker mode %q (allowed: dry-run, paper, live)", cfg.BrokerMode)
@@ -131,6 +146,7 @@ func runSimulation(cfg config.Config) error {
 	fmt.Printf("provider: %s\n", cfg.MarketDataProvider)
 	fmt.Printf("broker_mode: %s\n", cfg.BrokerMode)
 	fmt.Printf("broker_adapter: %s\n", cfg.BrokerAdapter)
+	fmt.Printf("broker_signer: %s\n", cfg.BrokerSigner)
 	fmt.Printf("broker_max_retries: %d\n", cfg.BrokerMaxRetries)
 	fmt.Printf("session: %s\n", session.ID)
 	fmt.Printf("agents: %d\n", len(registry.Agents))

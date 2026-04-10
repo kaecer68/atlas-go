@@ -15,7 +15,7 @@ func TestLoad_Defaults(t *testing.T) {
 		"FUGLE_API_KEY", "ATLAS_FUGLE_API_KEY", "ATLAS_YAHOO_ENABLED",
 		"ATLAS_BROKER_MODE", "ATLAS_BROKER_MAX_RETRIES", "ATLAS_BROKER_ADAPTER",
 		"ATLAS_BROKER_API_BASE_URL", "ATLAS_BROKER_API_KEY", "ATLAS_BROKER_API_SECRET",
-		"ATLAS_BROKER_HTTP_TIMEOUT_SEC", "ATLAS_BROKER_HTTP_ATTEMPTS",
+		"ATLAS_BROKER_HTTP_TIMEOUT_SEC", "ATLAS_BROKER_HTTP_ATTEMPTS", "ATLAS_BROKER_SIGNER",
 	}
 	for _, k := range envKeys {
 		t.Setenv(k, "")
@@ -63,6 +63,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.BrokerHTTPAttempts != 2 {
 		t.Errorf("BrokerHTTPAttempts should default to 2, got %d", cfg.BrokerHTTPAttempts)
 	}
+	if cfg.BrokerSigner != "placeholder" {
+		t.Errorf("BrokerSigner should default to placeholder, got %q", cfg.BrokerSigner)
+	}
 }
 
 func TestLoad_BrokerAdapterDefaultFallbackWhenEmpty(t *testing.T) {
@@ -89,6 +92,7 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	t.Setenv("ATLAS_BROKER_API_SECRET", "sec-1")
 	t.Setenv("ATLAS_BROKER_HTTP_TIMEOUT_SEC", "9")
 	t.Setenv("ATLAS_BROKER_HTTP_ATTEMPTS", "4")
+	t.Setenv("ATLAS_BROKER_SIGNER", "hmac-sha256")
 
 	cfg := Load()
 
@@ -127,6 +131,9 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	}
 	if cfg.BrokerHTTPAttempts != 4 {
 		t.Errorf("BrokerHTTPAttempts = %d, want 4", cfg.BrokerHTTPAttempts)
+	}
+	if cfg.BrokerSigner != "hmac-sha256" {
+		t.Errorf("BrokerSigner = %q, want hmac-sha256", cfg.BrokerSigner)
 	}
 }
 
