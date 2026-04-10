@@ -191,7 +191,7 @@ Use approval event replay to verify the decision can be reconstructed from audit
 Run the dedicated checker when changing decision scripts or event schema:
 
 ```bash
-./scripts/openclaw/verify-human-approval-event.sh
+./scripts/openclaw/verify-human-approval-eventx.sh
 ```
 
 This verifies:
