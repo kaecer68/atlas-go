@@ -81,6 +81,7 @@ jobs:
         args: '-no-fail -fmt sarif -out results.sarif ./...'
 
     - name: Upload SARIF file
+      if: github.event_name != 'pull_request'
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: results.sarif
@@ -121,7 +122,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        push: true
+        push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
