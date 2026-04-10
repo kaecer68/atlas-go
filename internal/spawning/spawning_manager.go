@@ -25,9 +25,9 @@ type SpawningManager struct {
 	acceptanceThreshold  float64
 
 	// State
-	mu           sync.RWMutex
-	isRunning    bool
-	lastCheck    time.Time
+	mu            sync.RWMutex
+	isRunning     bool
+	lastCheck     time.Time
 	checkInterval time.Duration
 }
 
@@ -98,14 +98,14 @@ func (m *SpawningManager) runLoop() {
 	// Run initial check
 	m.PerformSpawningCycle()
 
-	for {
-		select {
-		case <-ticker.C:
-			if !m.isRunning {
-				return
-			}
-			m.PerformSpawningCycle()
+	for range ticker.C {
+		m.mu.RLock()
+		running := m.isRunning
+		m.mu.RUnlock()
+		if !running {
+			return
 		}
+		m.PerformSpawningCycle()
 	}
 }
 

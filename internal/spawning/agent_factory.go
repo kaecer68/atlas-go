@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // AgentFactory creates new agent specifications based on knowledge gaps
@@ -123,9 +125,9 @@ func (f *AgentFactory) generateSkill(gap *KnowledgeGap) string {
 func (f *AgentFactory) generateName(gap *KnowledgeGap) string {
 	switch gap.Type {
 	case GapTypeSector:
-		return fmt.Sprintf("%s Specialist (Auto)", strings.Title(gap.Sector))
+		return fmt.Sprintf("%s Specialist (Auto)", cases.Title(language.English).String(gap.Sector))
 	case GapTypeStyle:
-		return fmt.Sprintf("%s Style Agent (Auto)", strings.Title(gap.Style))
+		return fmt.Sprintf("%s Style Agent (Auto)", cases.Title(language.English).String(gap.Style))
 	case GapTypeRegime:
 		return "Regime Adaptive Agent (Auto)"
 	default:
@@ -367,7 +369,7 @@ func (f *AgentFactory) CloneAgentWithVariation(
 
 	spec := &domain.AgentSpec{
 		ID:               agentID,
-		Name:             fmt.Sprintf("%s (%s Variant)", parent.Name, strings.Title(variationType)),
+		Name:             fmt.Sprintf("%s (%s Variant)", parent.Name, cases.Title(language.English).String(variationType)),
 		Layer:            parent.Layer,
 		Skill:            parent.Skill + "_" + variationType,
 		PromptFile:       fmt.Sprintf("prompts/agents/%s.md", agentID),

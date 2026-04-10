@@ -53,11 +53,11 @@ const (
 type GapStatus string
 
 const (
-	GapStatusOpen       GapStatus = "open"
-	GapStatusSpawning   GapStatus = "spawning"
-	GapStatusTesting    GapStatus = "testing"
-	GapStatusResolved   GapStatus = "resolved"
-	GapStatusDismissed  GapStatus = "dismissed"
+	GapStatusOpen      GapStatus = "open"
+	GapStatusSpawning  GapStatus = "spawning"
+	GapStatusTesting   GapStatus = "testing"
+	GapStatusResolved  GapStatus = "resolved"
+	GapStatusDismissed GapStatus = "dismissed"
 )
 
 // GapEvidence provides supporting data for a gap
@@ -87,12 +87,12 @@ type SpawnedAgent struct {
 type SpawnStatus string
 
 const (
-	SpawnStatusTraining     SpawnStatus = "training"
-	SpawnStatusValidating   SpawnStatus = "validating"
-	SpawnStatusCandidate    SpawnStatus = "candidate"
-	SpawnStatusAccepted     SpawnStatus = "accepted"
-	SpawnStatusRejected     SpawnStatus = "rejected"
-	SpawnStatusDisabled     SpawnStatus = "disabled"
+	SpawnStatusTraining   SpawnStatus = "training"
+	SpawnStatusValidating SpawnStatus = "validating"
+	SpawnStatusCandidate  SpawnStatus = "candidate"
+	SpawnStatusAccepted   SpawnStatus = "accepted"
+	SpawnStatusRejected   SpawnStatus = "rejected"
+	SpawnStatusDisabled   SpawnStatus = "disabled"
 )
 
 // GapDetector analyzes system performance to identify knowledge gaps
@@ -109,8 +109,8 @@ type GapDetector struct {
 func NewGapDetector() *GapDetector {
 	return &GapDetector{
 		minSignalsForAnalysis: 30,   // Minimum signals before analyzing agent performance
-		coverageThreshold:     0.8,    // 80% coverage target
-		correlationThreshold:  0.85,   // Flag agents with >85% correlation
+		coverageThreshold:     0.8,  // 80% coverage target
+		correlationThreshold:  0.85, // Flag agents with >85% correlation
 		gaps:                  make(map[string]*KnowledgeGap),
 		historicalGaps:        make([]string, 0),
 	}
@@ -414,23 +414,23 @@ func (d *GapDetector) UpdateGapStatus(gapID string, status GapStatus) {
 func inferSectorFromAgent(agent domain.AgentSpec) string {
 	// Infer sector from agent ID or skill
 	sectorKeywords := map[string]string{
-		"semi":         "semiconductor",
-		"chip":         "semiconductor",
-		"financial":    "financial",
-		"bank":         "financial",
-		"shipping":     "shipping",
-		"biotech":      "biotech",
-		"pharma":       "biotech",
-		"auto":         "automotive",
-		"ev":           "automotive",
-		"industrial":   "industrials",
-		"consumer":     "consumer",
-		"retail":       "consumer",
-		"reit":         "real_estate",
-		"material":     "materials",
-		"energy":       "energy",
-		"ai":           "electronics",
-		"tech":         "electronics",
+		"semi":       "semiconductor",
+		"chip":       "semiconductor",
+		"financial":  "financial",
+		"bank":       "financial",
+		"shipping":   "shipping",
+		"biotech":    "biotech",
+		"pharma":     "biotech",
+		"auto":       "automotive",
+		"ev":         "automotive",
+		"industrial": "industrials",
+		"consumer":   "consumer",
+		"retail":     "consumer",
+		"reit":       "real_estate",
+		"material":   "materials",
+		"energy":     "energy",
+		"ai":         "electronics",
+		"tech":       "electronics",
 	}
 
 	searchText := strings.ToLower(agent.ID + " " + agent.Skill)
