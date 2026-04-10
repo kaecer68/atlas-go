@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"fmt"
 	"slices"
+	"sort"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -60,7 +61,14 @@ func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommen
 	}
 
 	out := make([]domain.Recommendation, 0, len(bySymbol))
-	for symbol, entry := range bySymbol {
+	symbols := make([]string, 0, len(bySymbol))
+	for symbol := range bySymbol {
+		symbols = append(symbols, symbol)
+	}
+	sort.Strings(symbols)
+
+	for _, symbol := range symbols {
+		entry := bySymbol[symbol]
 		out = append(out, domain.Recommendation{
 			Agent:      agent.ID,
 			Skill:      agent.Skill,
@@ -78,7 +86,18 @@ func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommen
 		case a.Conviction < b.Conviction:
 			return 1
 		default:
-			return 0
+			switch {
+			case a.Symbol < b.Symbol:
+				return -1
+			case a.Symbol > b.Symbol:
+				return 1
+			case a.Reason < b.Reason:
+				return -1
+			case a.Reason > b.Reason:
+				return 1
+			default:
+				return 0
+			}
 		}
 	})
 	return out
@@ -125,7 +144,14 @@ func (e CIOPortfolioExecutorWithWeights) Apply(agent domain.AgentSpec, recs []do
 	}
 
 	out := make([]domain.Recommendation, 0, len(bySymbol))
-	for symbol, entry := range bySymbol {
+	symbols := make([]string, 0, len(bySymbol))
+	for symbol := range bySymbol {
+		symbols = append(symbols, symbol)
+	}
+	sort.Strings(symbols)
+
+	for _, symbol := range symbols {
+		entry := bySymbol[symbol]
 		// Calculate weighted average conviction
 		var weightedConviction int
 		if entry.totalWeight > 0 {
@@ -155,7 +181,18 @@ func (e CIOPortfolioExecutorWithWeights) Apply(agent domain.AgentSpec, recs []do
 		case a.Conviction < b.Conviction:
 			return 1
 		default:
-			return 0
+			switch {
+			case a.Symbol < b.Symbol:
+				return -1
+			case a.Symbol > b.Symbol:
+				return 1
+			case a.Reason < b.Reason:
+				return -1
+			case a.Reason > b.Reason:
+				return 1
+			default:
+				return 0
+			}
 		}
 	})
 	return out

@@ -28,11 +28,17 @@ func (GrowthMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quo
 		}
 	}
 	if strings.Contains(prompt, "downgrade conviction") {
+		pricePenalty := 12
+		openPenalty := 8
+		if strings.Contains(prompt, "exploratory mode") {
+			pricePenalty = 6
+			openPenalty = 4
+		}
 		if quote.Last < quote.High*0.995 {
-			conviction -= 12
+			conviction -= pricePenalty
 		}
 		if quote.Last < quote.Open {
-			conviction -= 8
+			conviction -= openPenalty
 		}
 	}
 	if strings.Contains(prompt, "reject setups") {

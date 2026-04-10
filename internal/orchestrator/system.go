@@ -59,8 +59,9 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		return domain.SimulationResult{}, err
 	}
 
-	regime, rawRecs, finalRecs := ExecuteRegistryResearchDetailedWithPolicy(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy)
+	regime, rawRecs, finalRecs, guardOutcomes := ExecuteRegistryResearchDetailedWithPolicyAndGuards(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy)
 	result := s.engine.Run(regime, quotes, finalRecs)
+	result.GuardOutcomes = guardOutcomes
 	outcomes := buildSyntheticOutcomes(rawRecs, quotes, asOf)
 	_ = s.ledger.RecordOutcomes(outcomes)
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)
@@ -70,8 +71,9 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationResult, error) {
 	symbols := RegistrySymbols(s.registry)
 	quotes := s.replay.QuotesForDate(sessionDate, symbols)
-	regime, rawRecs, finalRecs := ExecuteRegistryResearchDetailedWithPolicy(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy)
+	regime, rawRecs, finalRecs, guardOutcomes := ExecuteRegistryResearchDetailedWithPolicyAndGuards(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy)
 	result := s.engine.Run(regime, quotes, finalRecs)
+	result.GuardOutcomes = guardOutcomes
 	outcomes := buildReplayOutcomes(rawRecs, sessionDate, s.replay)
 	_ = s.ledger.RecordOutcomes(outcomes)
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)
@@ -132,10 +134,17 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 		PositionCount: len(result.Positions),
 		EndingCash:    result.EndingCash,
 		OutcomeCount:  len(outcomes),
+		GuardOutcomes: append([]domain.GuardOutcome(nil), result.GuardOutcomes...),
 		RecordedAt:    time.Now(),
 	}
 	if candidate != nil {
 		summary.NextExperimentAgentID = candidate.Agent.ID
+		summary.ProposalID = candidate.Experiment.ProposalID
+		summary.CommitID = candidate.Experiment.CommitID
+		summary.ApprovalID = candidate.Experiment.ApprovalID
+		if summary.ProposalID == "" {
+			summary.ProposalID = candidate.Experiment.ID
+		}
 	}
 
 	return s.ledger.RecordSessionSummary(s.session, summary)

@@ -20,6 +20,21 @@ func (FinancialsExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, 
 	if strings.Contains(prompt, "balance-sheet") && quote.Low < quote.Open*0.985 {
 		conviction -= 6
 	}
+	if strings.Contains(prompt, "credit quality gate") && quote.Last >= quote.Open {
+		conviction += 2
+	}
+	if strings.Contains(prompt, "credit quality gate") && quote.Last < quote.Open {
+		conviction -= 6
+	}
+	if strings.Contains(prompt, "spread sensitivity downgrade") && quote.Last >= quote.High*0.995 {
+		conviction += 2
+	}
+	if strings.Contains(prompt, "spread sensitivity downgrade") && quote.Last < quote.High*0.995 {
+		conviction -= 4
+	}
+	if strings.Contains(prompt, "capital adequacy premium") && quote.Last >= quote.Open && quote.Last >= quote.High*0.995 {
+		conviction += 3
+	}
 	if conviction < 50 {
 		return domain.Recommendation{}, false
 	}
@@ -125,10 +140,49 @@ func (TechnicalBreakoutExecutor) Recommend(agent domain.AgentSpec, quote domain.
 	if strings.Contains(prompt, "volume") && quote.Volume >= 5000000 {
 		conviction += 8
 	}
-	if strings.Contains(prompt, "close strength") && quote.Last < quote.High*0.995 {
-		conviction -= 14
+	if strings.Contains(prompt, "close strength") && quote.Last < quote.High*0.985 {
+		penalty := 1
+		if strings.Contains(prompt, "close-strength tolerance") {
+			if quote.Last >= quote.High*0.98 {
+				penalty = 0
+			}
+		}
+		conviction -= penalty
+	}
+	volumeFloor := int64(5000000)
+	if strings.Contains(prompt, "volume surge requirement") {
+		volumeFloor = 7000000
+		if quote.Volume >= volumeFloor {
+			conviction += 4
+		} else {
+			conviction -= 4
+		}
+	}
+	if strings.Contains(prompt, "exploratory mode") {
+		volumeFloor = 5000000
+	}
+	if strings.Contains(prompt, "coverage expansion") {
+		volumeFloor = 0
+	}
+	if strings.Contains(prompt, "structure-first breakout filter") && quote.Last < quote.Open {
+		conviction -= 10
+	}
+	if strings.Contains(prompt, "late-breakout penalty") && quote.Last < quote.High*0.998 {
+		conviction -= 8
+	}
+	if strings.Contains(prompt, "breakout confirmation bonus") && quote.Last >= quote.High*0.998 && quote.Volume >= 5000000 {
+		conviction += 12
+	}
+	if strings.Contains(prompt, "catch-up momentum") && quote.Last >= quote.High*0.993 && quote.Last < quote.High*0.998 && quote.Last >= quote.Open {
+		conviction += 6
+	}
+	if strings.Contains(prompt, "volume participation acceptance") && quote.Volume >= 3000000 && quote.Volume < 5000000 {
+		conviction += 3
 	}
 	if strings.Contains(prompt, "reject low volume") && quote.Volume < 5000000 {
+		return domain.Recommendation{}, false
+	}
+	if strings.Contains(prompt, "enforce strict breakout confirmation") && quote.Volume < volumeFloor {
 		return domain.Recommendation{}, false
 	}
 	if conviction < 50 {

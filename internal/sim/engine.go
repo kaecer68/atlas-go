@@ -26,7 +26,16 @@ func (e *Engine) Run(regime domain.Regime, quotes []domain.Quote, recs []domain.
 	}
 
 	sort.Slice(recs, func(i, j int) bool {
-		return recs[i].Conviction > recs[j].Conviction
+		if recs[i].Conviction != recs[j].Conviction {
+			return recs[i].Conviction > recs[j].Conviction
+		}
+		if recs[i].Symbol != recs[j].Symbol {
+			return recs[i].Symbol < recs[j].Symbol
+		}
+		if recs[i].Agent != recs[j].Agent {
+			return recs[i].Agent < recs[j].Agent
+		}
+		return recs[i].Reason < recs[j].Reason
 	})
 
 	maxDeployableCash := cash * (1 - e.constraints.ReserveCashFraction)

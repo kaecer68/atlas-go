@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"fmt"
 	"slices"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -17,6 +18,11 @@ func ExecuteRegistryResearchDetailed(registry domain.AgentRegistry, quotes []dom
 }
 
 func ExecuteRegistryResearchDetailedWithPolicy(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string, policy domain.ExecutionPolicy) (domain.Regime, []domain.Recommendation, []domain.Recommendation) {
+	regime, raw, final, _ := ExecuteRegistryResearchDetailedWithPolicyAndGuards(registry, quotes, overrides, policy)
+	return regime, raw, final
+}
+
+func ExecuteRegistryResearchDetailedWithPolicyAndGuards(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string, policy domain.ExecutionPolicy) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome) {
 	plugins := NewPluginRegistry()
 	quoteBySymbol := make(map[string]domain.Quote, len(quotes))
 	for _, quote := range quotes {
@@ -25,8 +31,8 @@ func ExecuteRegistryResearchDetailedWithPolicy(registry domain.AgentRegistry, qu
 
 	regime := inferRegime(registry, quoteBySymbol, plugins, overrides)
 	raw := collectRecommendations(registry, quoteBySymbol, plugins, overrides)
-	final := applyControlLayer(registry, plugins, raw, policy)
-	return regime, raw, final
+	final, guardOutcomes := applyControlLayerWithOutcomes(registry, plugins, raw, policy)
+	return regime, raw, final, guardOutcomes
 }
 
 // ExecuteRegistryResearchWithDarwinianWeights executes research with Darwinian weight application
@@ -118,17 +124,60 @@ func collectRecommendations(registry domain.AgentRegistry, quotes map[string]dom
 }
 
 func applyControlLayer(registry domain.AgentRegistry, plugins *PluginRegistry, recs []domain.Recommendation, policy domain.ExecutionPolicy) []domain.Recommendation {
+	final, _ := applyControlLayerWithOutcomes(registry, plugins, recs, policy)
+	return final
+}
+
+func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *PluginRegistry, recs []domain.Recommendation, policy domain.ExecutionPolicy) ([]domain.Recommendation, []domain.GuardOutcome) {
 	if !policy.RequireCROPass {
-		return recs
+		return recs, []domain.GuardOutcome{{
+			GuardID:     "control-bypass",
+			GuardSkill:  "control_bypass",
+			Severity:    domain.GuardSeveritySoft,
+			Passed:      true,
+			Reason:      "require_cro_pass is disabled; control layer bypassed",
+			InputCount:  len(recs),
+			OutputCount: len(recs),
+		}}
 	}
+
 	current := recs
+	outcomes := make([]domain.GuardOutcome, 0)
 	for _, agent := range registry.Agents {
 		if !agent.Enabled || agent.Layer != domain.LayerControl {
 			continue
 		}
-		current = plugins.ApplyControl(agent, current, policy)
+		before := len(current)
+		next := plugins.ApplyControl(agent, current, policy)
+		after := len(next)
+		severity := severityForControlAgent(agent)
+		blocked := before > 0 && after == 0 && severity == domain.GuardSeverityHard
+		reason := "passed without filtering"
+		if after < before {
+			reason = fmt.Sprintf("filtered %d recommendation(s)", before-after)
+		}
+		if blocked {
+			reason = "hard guard blocked all recommendations"
+		}
+		outcomes = append(outcomes, domain.GuardOutcome{
+			GuardID:     agent.ID,
+			GuardSkill:  agent.Skill,
+			Severity:    severity,
+			Passed:      !blocked,
+			Reason:      reason,
+			InputCount:  before,
+			OutputCount: after,
+		})
+		current = next
 	}
-	return current
+	return current, outcomes
+}
+
+func severityForControlAgent(agent domain.AgentSpec) domain.GuardSeverity {
+	if agent.Skill == "cro_risk" {
+		return domain.GuardSeverityHard
+	}
+	return domain.GuardSeveritySoft
 }
 
 func DefaultExecutionPolicy() domain.ExecutionPolicy {
