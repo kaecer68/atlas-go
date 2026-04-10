@@ -13,10 +13,13 @@
 當本文與執行結果衝突時，以下內容優先：
 
 1. `configs/agents.json`
-2. `internal/orchestrator/*`
-3. `internal/experiment/*`
-4. `scripts/openclaw/today-start.sh`
-5. `data/state/experiments/*.json`
+2. `cmd/atlas/main.go`（runtime flags 與 guard）
+3. `internal/live/*`（broker mode、nonce store、execution 路徑）
+4. `internal/orchestrator/*`
+5. `internal/experiment/*`
+6. `internal/monitoring/dashboard_api.go`（報表輸出欄位）
+7. `scripts/openclaw/today-start.sh`
+8. `data/state/experiments/*.json`
 
 ## 3. 目前啟用技能（來自 agents.json）
 
@@ -67,6 +70,8 @@
 - ledger_operator
 - data_import_operator
 - monitoring_operator
+- system_guardrail
+- research_auditor
 
 ### 4.4 Evolution Skills（演化能力）
 
