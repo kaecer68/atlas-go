@@ -91,10 +91,6 @@ if [[ ! -f "$REPLAY_DATA_PATH" ]]; then
 	echo "[error] replay data path not found: $REPLAY_DATA_PATH"
 	exit 1
 fi
-if [[ ! -f "$BASE_POLICY_PATH" ]]; then
-	echo "[error] baseline policy path not found: $BASE_POLICY_PATH"
-	exit 1
-fi
 
 require_cmd go
 require_cmd jq
@@ -109,6 +105,33 @@ mkdir -p "$(dirname "$OUTPUT_PATH")"
 TMP_ROOT="$(mktemp -d /tmp/atlas-scenario-verify.XXXXXX)"
 if [[ "$KEEP_TEMP" != true ]]; then
 	trap 'rm -rf "$TMP_ROOT"' EXIT
+fi
+
+if [[ ! -f "$BASE_POLICY_PATH" ]]; then
+	log "baseline policy not found at $BASE_POLICY_PATH; bootstrapping default policy for verification"
+	BASE_POLICY_PATH="$TMP_ROOT/default-baseline-policy.json"
+	cat > "$BASE_POLICY_PATH" <<'EOF'
+{
+	"Version": 1,
+	"PromptOverrides": {},
+	"Constraints": {
+		"StartingCash": 3000000,
+		"MaxPositionWeight": 0.18,
+		"MaxOpenPositions": 5,
+		"MinTradableVolume": 1000000,
+		"MinRecommendationConviction": 60,
+		"RequireCROPass": true,
+		"TransactionCostBPS": 1.425,
+		"SlippageBPS": 4,
+		"ReserveCashFraction": 0.1
+	},
+	"ExecutionPolicy": {
+		"ConvictionFloor": 60,
+		"RequireCROPass": true
+	},
+	"Promotions": []
+}
+EOF
 fi
 
 BASE_POLICY_JSON="$TMP_ROOT/base.policy.json"
