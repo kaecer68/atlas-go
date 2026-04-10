@@ -602,31 +602,6 @@ func calculateMaxDrawdownFromValues(portfolioValues []float64) float64 {
 	return maxDD
 }
 
-func calculateMaxDrawdown(returns []float64) float64 {
-	if len(returns) == 0 {
-		return 0
-	}
-
-	peak := 0.0
-	maxDD := 0.0
-	current := 0.0
-
-	for _, r := range returns {
-		current += r
-		if current > peak {
-			peak = current
-		}
-		if peak > 0 { // Avoid division by zero
-			dd := (peak - current) / peak
-			if dd > maxDD {
-				maxDD = dd
-			}
-		}
-	}
-
-	return maxDD
-}
-
 func calculateSystemHealth(sharpe, drawdown, winRate float64) float64 {
 	health := 100.0
 

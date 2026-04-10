@@ -1,744 +1,185 @@
-# Skills Map
+# Skills Map (Current)
 
-## Purpose
+本文件是 atlas-go 的「現行技能地圖」，只描述目前程式與設定真正在用的技能、規則與流程。
 
-This document defines the full operating skill system for `atlas-go`.
+## 1. 文件用途
 
-It is not only a list of market-analysis roles. It is the shared operating logic that any AI, developer, or future automation layer must follow when:
+- 對齊技能定義與執行行為
+- 降低文件與程式脫節風險
+- 讓 propose/execute/judge/decide 的責任邊界清楚可查
 
-- running simulations
-- importing or replaying market data
-- evaluating agent quality
-- mutating prompts or rules
-- accepting or rejecting changes
+## 2. 真實來源（Source of Truth）
 
-The goal is to make the system:
+當本文與執行結果衝突時，以下內容優先：
 
-- auditable
-- reproducible
-- professionally bounded
-- resistant to random prompt drift
+1. `configs/agents.json`
+2. `internal/orchestrator/*`
+3. `internal/experiment/*`
+4. `scripts/openclaw/today-start.sh`
+5. `data/state/experiments/*.json`
 
-## Maintenance Note (Current-First)
+## 3. 目前啟用技能（來自 agents.json）
 
-This document is a maintained operating map, not a historical score report.
+| Layer | Skill |
+|---|---|
+| context | `taiwan_macro` |
+| context | `foreign_flow` |
+| sector | `semiconductor_desk` |
+| sector | `ai_supply_chain_desk` |
+| sector | `financials_desk` |
+| sector | `shipping_desk` |
+| sector | `etf_rotation_desk` |
+| style | `growth_momentum` |
+| style | `value_yield` |
+| style | `earnings_quality` |
+| style | `technical_breakout` |
+| superinvestor | `druckenmiller_macro` |
+| superinvestor | `aschenbrenner_ai_compute` |
+| superinvestor | `baker_deep_tech` |
+| superinvestor | `ackman_quality` |
+| control | `cro_risk` |
+| control | `cio_portfolio` |
 
-- When prose conflicts with code/config/runtime results, treat code and runtime outputs as source of truth.
-- Primary truth sources:
-  - `configs/agents.json`
-  - `internal/experiment/*` (mutation and judge logic)
-  - `internal/orchestrator/*` and `internal/sim/*` (execution behavior)
-  - latest experiment artifacts in `data/state/experiments/*.json`
+## 4. 技能分層與責任
 
-## Skill System Overview
+### 4.1 Domain Skills（研究與觀點）
 
-The complete skill system is divided into four layers:
+| Group | Skills | 主要責任 |
+|---|---|---|
+| Context | `taiwan_macro`, `foreign_flow` | 給市場狀態與風險偏向 |
+| Sector | `semiconductor_desk`, `ai_supply_chain_desk`, `financials_desk`, `shipping_desk`, `etf_rotation_desk` | 產業面候選與敘事約束 |
+| Style | `growth_momentum`, `value_yield`, `earnings_quality`, `technical_breakout` | 進出場品質與風格濾鏡 |
+| Superinvestor | `druckenmiller_macro`, `aschenbrenner_ai_compute`, `baker_deep_tech`, `ackman_quality` | 高信念補充觀點 |
 
-1. Domain skills
-2. Operating skills
-3. Control skills
-4. Evolution skills
+### 4.2 Control Skills（風控與整合）
 
-## Machine-Readable Policy
+| Skill | 責任 |
+|---|---|
+| `cro_risk` | 後置風險過濾（不可產生 alpha 敘事） |
+| `cio_portfolio` | 最終聚合與排序（不可繞過風控） |
 
-The skill system is also enforced through machine-readable policy fields in code and config:
+### 4.3 Operating Skills（流程運作）
 
-- `configs/agents.json`
-- `AgentSpec.RequiredSkills`
-- `AgentSpec.ForbiddenActions`
-- `AgentSpec.OperatingNotes`
-- `ExperimentRecord.MutationType`
-- `ExperimentRecord.AcceptanceGates`
-- `MutationBrief`
+以下屬於流程能力，主要由 scripts/cmd 與 orchestration 實作，不是 agents.json 內的投研技能：
 
-Future automation should preserve these policy fields directly instead of inferring them only from prose.
+- replay_operator
+- backtest_operator
+- ledger_operator
+- data_import_operator
+- monitoring_operator
 
-When in doubt, validate policy behavior by replay execution and judge outputs, not by this document alone.
+### 4.4 Evolution Skills（演化能力）
 
-## Layer 1: Domain Skills
+以下屬於實驗演化能力，主要落在 experiment/evolution 腳本與程式：
 
-These skills produce research and market judgment.
+- weak_agent_selector
+- prompt_mutator
+- experiment_designer
+- experiment_judge
 
-### Market Context Skills
+## 5. Mutation Profiles（現行）
 
-#### `taiwan_macro`
+支援的 mutation type：
 
-- Focus: Taiwan macro, policy, rates, domestic growth
-- Inputs: CPI, PMI, GDP proxies, local policy direction
-- Outputs: regime view, domestic risk commentary
-- Avoid: single-stock calls
+- `prompt_tightening`
+- `risk_rule_change`
+- `portfolio_constraint_revision`
 
-#### `foreign_flow`
+### 5.1 Prompt Tightening（重點）
 
-- Focus: foreign institutional flows and ownership behavior
-- Inputs: foreign buy/sell, futures positioning, index weights
-- Outputs: market participation bias, crowdedness warnings
-- Avoid: using flow alone as a complete thesis
+目前有 skill-aware 模板：
 
-#### `fx_and_liquidity`
+- `financials_desk`：`credit quality gate`, `spread sensitivity downgrade`, `capital adequacy premium`
+- `technical_breakout`：`catch-up momentum`, `volume participation acceptance`, `close-strength tolerance`, `breakout confirmation bonus`
+- 其他 skill：通用 trend/conviction  tightening 模板
 
-- Focus: TWD/USD, DXY, liquidity spillover, rate pressure
-- Inputs: FX, rates, liquidity stress indicators
-- Outputs: broad support or stress signals for Taiwan equities
-- Avoid: pretending FX predicts everything
+實作位置：`internal/experiment/executor.go`
 
-#### `us_tech_spillover`
+### 5.2 Risk Rule Change（現行參數）
 
-- Focus: transmission from US semis and mega-cap tech into Taiwan
-- Inputs: Nasdaq, NVDA, AMD, AVGO, AI capex cycle
-- Outputs: sector bias and watchlist pressure
-- Avoid: naive one-to-one mapping
+`financials_desk`：
 
-### Sector Desk Skills
+- conviction_floor: 48
+- liquidity_floor: 3,500,000
+- max_position_weight: 0.20
+- reserve_cash_fraction: 0.12
+- require_cro_pass: true
 
-#### `semiconductor_desk`
+其他 skill：
 
-- Focus: foundry, packaging, equipment, IP, memory
-- Inputs: capex cycle, utilization, peer leadership, supply-chain role
-- Outputs: ranked candidates and regime notes
-- Avoid: treating all semiconductor names as one trade
+- conviction_floor: 42
+- liquidity_floor: 3,000,000
+- max_position_weight: 0.22
+- reserve_cash_fraction: 0.10
+- require_cro_pass: true
 
-#### `ai_supply_chain_desk`
+實作位置：`internal/experiment/executor.go`
 
-- Focus: ODM, server, PCB, thermal, connectors, power
-- Inputs: order visibility, hyperscaler capex, shipment narratives
-- Outputs: AI-linked candidate grading
-- Avoid: converting hype directly into earnings certainty
+## 6. Judge 規則（現行）
 
-#### `financials_desk`
+實作位置：`internal/experiment/judge.go`
 
-- Focus: banks, insurers, brokers, asset managers
-- Inputs: rates, spreads, balance-sheet quality, capital sensitivity
-- Outputs: cyclical or defensive positioning ideas
-- Avoid: importing foreign-bank logic without Taiwan adaptation
+### 6.1 接受條件
 
-#### `shipping_desk`
+- 必須 `candidate > baseline`
+- 需達最小改善門檻：
+  - `prompt_tightening`: 0.0005
+  - `risk_rule_change`: 0.001
+  - `portfolio_constraint_revision`: 0.001
+- 需達觀測數門檻：
+  - `level_3_regime_aware`: 12（風險/約束型 +1）
+  - `level_2_window_validated`: 8（風險/約束型 +1）
+  - default: 3（風險/約束型 +1）
 
-- Focus: container and transport-cycle equities
-- Inputs: freight cycle, utilization, macro demand, supply changes
-- Outputs: cycle conviction and reversal risk
-- Avoid: extrapolating peak-cycle earnings
+### 6.2 檢查項（JudgeChecks）
 
-#### `etf_rotation_desk`
-
-- Focus: broad ETF and high-dividend allocation
-- Inputs: valuation spread, breadth, defensive flow, concentration risk
-- Outputs: ETF-based fallback or defensive rotation ideas
-- Avoid: using ETFs to hide weak single-name research
-
-### Style Skills
-
-#### `growth_momentum`
-
-- Focus: trend persistence with earnings or narrative support
-- Inputs: relative strength, estimate direction, breakout quality, volume
-- Outputs: momentum-qualified score
-- Avoid: illiquid and narrative-only setups
-
-#### `value_yield`
-
-- Focus: dividend durability, valuation discipline, cash generation
-- Inputs: payout resilience, FCF, balance sheet
-- Outputs: yield-adjusted conviction
-- Avoid: yield traps
-
-#### `earnings_quality`
-
-- Focus: accounting and earnings durability
-- Inputs: margins, accruals, receivables, inventory, guidance quality
-- Outputs: quality filter on sector ideas
-- Avoid: overreacting to one noisy quarter
-
-#### `technical_breakout`
-
-- Focus: entry timing, trend structure, failure risk
-- Inputs: base structure, volatility, volume behavior
-- Outputs: timing and stop suggestions
-- Avoid: overriding portfolio and macro controls
-
-## Layer 2: Operating Skills
-
-These skills define how the system is run correctly.
-
-### `replay_operator`
-
-- Focus: replay execution discipline
-- Responsibilities:
-- choose a valid replay data source
-- set session date or window correctly
-- verify forward-return availability
-- ensure replays remain reproducible
-
-### `ledger_operator`
-
-- Focus: experiment and outcome hygiene
-- Responsibilities:
-- preserve session boundaries
-- write outcomes, experiments, summaries
-- keep global and session-specific records consistent
-- avoid mixing unrelated replay windows in the same judgment
-
-### `data_import_operator`
-
-- Focus: normalized market data ingestion
-- Responsibilities:
-- convert source files into stable internal replay formats
-- track source provenance
-- reject malformed or partial records
-- keep importer logic deterministic
-
-### `backtest_operator`
-
-- Focus: window-based replay execution
-- Responsibilities:
-- run multi-session replay windows
-- aggregate scorecards
-- identify weak agents across a period instead of one day
-- avoid drawing conclusions from too few sessions
-
-### `market_data_provider`
-
-- Focus: reliable market data acquisition with automatic fallback
-- Responsibilities:
-- choose appropriate provider (hybrid/twse/fugle) based on config and availability
-- handle rate limiting gracefully (TWSE: 3 req/5s, Fugle: 50 req/min)
-- automatic fallback from paid to free sources when failures occur
-- maintain data provenance in quote source field
-- Providers:
-  - **hybrid** (default): tries Fugle first, falls back to TWSE OpenAPI automatically
-  - **twse**: TWSE OpenAPI only (free, 1335 listed stocks)
-  - **fugle**: Fugle only (paid for real-time, demo key limited to symbol 1476)
-
-### `asset_allocation_manager` *(New in v23)*
-
-- Focus: strategic asset allocation across asset classes and security types
-- Responsibilities:
-  - maintain target allocation weights in `configs/portfolio-allocation.v23.json`
-  - balance ETF core exposure with single-stock satellite positions
-  - enforce concentration limits per asset class and individual name
-  - coordinate rebalancing schedule (default: annual)
-  - track allocation drift and trigger adjustment alerts
-- **Configuration**:
-  - File: `configs/portfolio-allocation.v23.json`
-  - Taiwan Equity Total: 45% (ETF 15% + Single Stocks 30%)
-  - Precious Metals: 15% (Gold 10% + Silver 5%)
-  - Industrial Metals: 15% (Copper)
-  - Cash: 25%
-- **Single Stock Targets** (14 names, ~2.14% each):
-  - Semiconductor: 2330.TW, 2303.TW, 2454.TW, 3034.TW
-  - AI Supply Chain: 2382.TW, 6669.TW, 3017.TW, 3037.TW
-  - Financials: 2881.TW, 2882.TW, 2891.TW
-  - Shipping: 2603.TW, 2609.TW, 2615.TW
-- **Risk Guards**:
-  - Max single stock weight: 3%
-  - Daily portfolio drawdown alert: -2%
-  - Emergency trigger: 3-day cumulative Sharpe drop >5%
-- Avoid: over-concentration in single names or sectors
-
-### `darwinian_weight_manager` *(Phase 2 - Atlas-GIC Style)*
-
-- Focus: dynamic agent weight adjustment based on performance
-- Responsibilities:
-  - track rolling 30-day Sharpe ratio for each agent
-  - adjust weights daily: top quartile ×1.05, bottom quartile ×0.95
-  - clamp weights between 0.3 (whispering) and 2.5 (shouting)
-  - persist weights to runtime state storage used by the portfolio workflow
-  - apply weights to recommendations before portfolio synthesis
-- **Weight Range**:
-  - 2.0-2.5: Shouting (highest confidence, strong performance)
-  - 1.5-2.0: Strong (above average)
-  - 0.8-1.5: Neutral (average)
-  - 0.5-0.8: Weak (below average)
-  - 0.3-0.5: Whispering (poor performance, minimal influence)
-- **Metrics Tracked**:
-  - Rolling Sharpe ratio (30-day window)
-  - Win rate and average return per signal
-  - Total signals and consecutive streaks
-- **Usage**:
-  ```bash
-  ./scripts/darwinian-adjust.sh          # Daily adjustment
-  ./scripts/darwinian-adjust.sh --reset # Reset to neutral (1.0)
-  ```
-- Implementation: `internal/portfolio/darwinian_weights.go`
-
-### Superinvestor Layer (registry-backed)
-
-**Layer 4 agents providing concentrated, high-quality recommendations:**
-
-| Agent ID (registry) | Prompt file | Focus | Key Metrics |
-|-------|-------|-------|-------------|
-| `super-dru-01` | `prompts/agents/super_druckenmiller.md` | Asymmetric macro trades, momentum timing | VIX, DXY, 10Y yields, sector flows |
-| `super-asc-01` | `prompts/agents/super_aschenbrenner.md` | AI capex beneficiaries, value chain mapping | Data center capex, GPU pricing, Taiwan exports |
-| `super-bak-01` | `prompts/agents/super_baker.md` | IP moat analysis, R&D efficiency | Patent quality, gross margins, R&D spend |
-| `super-ack-01` | `prompts/agents/super_ackman.md` | Pricing power, FCF generation | ROIC, FCF conversion, customer retention |
-
-- **Conviction Threshold**: 65+ (higher than regular agents)
-- **Coordination**: Each superinvestor has defined collaboration notes with other agents
-- **Prompts**: `prompts/agents/super_*.md`
-
----
-
-## Phase 3: Advanced Agent Systems *(Agent Spawning, PRISM, Reflexivity, Swarm)*
-
-### `agent_spawner` *(Phase 3 - Automated Agent Lifecycle)*
-
-- Focus: automatic agent creation, gap detection, and lifecycle management
-- Responsibilities:
-  - detect capability gaps in current agent population
-  - spawn new agents based on missing skills or market opportunities
-  - manage agent lifecycle: spawn → train → deploy → monitor → retire
-  - coordinate with PRISM for regime-specific training
-- **Components**:
-  - `GapDetector`: identifies missing capabilities
-  - `AgentFactory`: creates new agent instances
-  - `SpawningManager`: orchestrates deployment
-- **Configuration**: primarily script-driven and code defaults (no committed `configs/spawning-config.json` in current repository state)
-- **Usage**:
-  ```bash
-  ./scripts/spawning-manage.sh --scan      # Scan for gaps
-  ./scripts/spawning-manage.sh --spawn     # Spawn new agent
-  ./scripts/spawning-manage.sh --status    # Show status
-  ```
-- Implementation: `internal/spawning/`
-
-### `prism_manager` *(Phase 3 - Multi-Regime Training)*
-
-- Focus: regime-specific training queue management and optimization
-- Responsibilities:
-  - maintain training queues for different market regimes
-  - schedule training tasks based on regime detection
-  - balance training load across regimes
-  - optimize training priority based on regime volatility
-- **Regime Types**:
-  - `trending_up`: strong momentum, trend-following strategies
-  - `trending_down`: bear market, defensive positioning
-  - `range_bound`: low volatility, mean-reversion strategies
-  - `high_volatility`: crisis mode, risk-off positioning
-  - `low_volatility`: calm market, momentum strategies
-  - `rotation`: sector rotation, style switching
-  - `earnings`: earnings season, event-driven
-- **Configuration**: primarily script-driven and code defaults (no committed `configs/prism-config.json` in current repository state)
-- **Usage**:
-  ```bash
-  ./scripts/prism-manage.sh --rebalance    # Rebalance queues
-  ./scripts/prism-manage.sh --status       # Show queue status
-  ./scripts/prism-manage.sh --train        # Trigger training
-  ```
-- Implementation: `internal/prism/`
-
-### `reflexivity_engine` *(Phase 3 - Soros Reflexivity)*
-
-- Focus: detect and apply market bias feedback loops
-- Responsibilities:
-  - identify reflexivity patterns in market data
-  - track price-fundamental feedback loops
-  - detect bubble formation and collapse signals
-  - adjust recommendations based on reflexive bias
-- **Key Concepts**:
-  - **Bias**: market participants' distorted perception
-  - **Far-from-Equilibrium**: price far from intrinsic value
-  - **Self-Reinforcing**: feedback loop amplifies trend
-  - **Reversal Point**: when trend cannot sustain itself
-- **Detection Metrics**:
-  - Price/momentum divergence
-  - Volume/price relationship
-  - Sentiment/price divergence
-  - Fundamental deterioration with price rise
-- **Usage**:
-  ```bash
-  ./scripts/reflexivity-report.sh          # Generate analysis
-  ```
-- Implementation: `internal/reflexivity/`
-
-### `mirofish_swarm` *(Phase 3 - Swarm Intelligence Simulation)*
-
-- Focus: simulate diverse agent behaviors for robust strategy discovery
-- Responsibilities:
-  - run parallel simulations with varied agent configurations
-  - aggregate consensus from diverse strategies
-  - detect anomalies in strategy performance
-  - generate training data from simulation results
-- **Swarm Components**:
-  - `MiroFish`: individual strategy agents with unique behaviors
-  - `MarketScenario`: simulated market conditions
-  - `ConsensusEngine`: aggregates signals from swarm
-  - `AnomalyDetector`: identifies outlier strategies
-- **Simulation Modes**:
-  - `diversity`: maximize strategy variation
-  - `convergence`: find common signals
-  - `stress_test`: extreme market conditions
-  - `regime_specific`: targeted regime simulation
-- **Usage**:
-  ```bash
-  ./scripts/swarm-manage.sh --run          # Run simulation
-  ./scripts/swarm-manage.sh --consensus    # Get consensus
-  ```
-- Implementation: `internal/swarm/`
-
----
-
-## Phase 4: Expert-Level Capabilities *(Meta-Learning, Adversarial, Global, Real-Time)*
-
-### `metalearner` *(Phase 4 - Learning-to-Learn)*
-
-- Focus: evolutionary strategy optimization and automated learning approach selection
-- Responsibilities:
-  - maintain population of learning strategies (20+ strategies)
-  - evolve strategies based on MiroFish simulation results
-  - perform crossover, mutation, and selection of top performers
-  - adapt training approaches daily based on performance
-- **Strategy Types**:
-  - Conservative: minimal changes, low risk
-  - Aggressive: frequent mutations, high exploration
-  - Adaptive: regime-dependent approach
-  - Focused: deep optimization on specific skills
-  - Broad: wide exploration across many strategies
-- **Evolution Process**:
-  1. Evaluate all strategies on recent performance
-  2. Select top performers (top 25%)
-  3. Create offspring via crossover/mutation
-  4. Replace worst performers
-  5. Persist strategy population
-- **Configuration**: primarily code defaults (no committed `configs/metalearning-config.json` in current repository state)
-- Implementation: `internal/metalearning/`
-
-### `adversarial_trainer` *(Phase 4 - Red/Blue Team)*
-
-- Focus: stress testing agents against adversarial scenarios
-- Responsibilities:
-  - run Red Team attacks simulating market crises
-  - coordinate Blue Team defensive responses
-  - identify vulnerabilities in agent strategies
-  - harden agents against known attack patterns
-- **Red Team (5 Attackers)**:
-  - `flash_crash`: sudden price drop simulation
-  - `liquidity_drain`: low volume scenario
-  - `correlation_spike`: unexpected correlation
-  - `sentiment_shift`: rapid mood change
-  - `regime_jump`: sudden regime transition
-- **Blue Team (5 Defenders)**:
-  - `risk_mitigator`: position sizing defense
-  - `recovery_agent`: loss recovery strategies
-  - `diversifier`: correlation hedging
-  - `liquidity_guard`: cash management
-  - `stop_loss_manager`: exit strategy
-- **Training Parameters**:
-  - 100 training cycles
-  - Adaptive difficulty (increases with agent improvement)
-  - Vulnerability severity levels: critical, high, medium, low
-- Implementation: `internal/adversarial/`
-
-### `global_market_manager` *(Phase 4 - Cross-Market Expansion)*
-
-- Focus: multi-market operations and regional exposure management
-- Responsibilities:
-  - manage operations across 7 regional markets
-  - track cross-market correlations
-  - enforce regional exposure limits
-  - handle multi-currency and timezone operations
-- **Supported Markets**:
-  | Region | Code | Currency | Timezone |
-  |--------|------|----------|----------|
-  | Taiwan | TW | TWD | UTC+8 |
-  | United States | US | USD | UTC-5 |
-  | Europe | EU | EUR | UTC+1 |
-  | Japan | JP | JPY | UTC+9 |
-  | China | CN | CNY | UTC+8 |
-  | Asia Pacific | AS | Multi | UTC+8 |
-  | Emerging | EM | Multi | Various |
-- **Exposure Limits**:
-  - Max single region: 40%
-  - Max single country: 25%
-  - Max correlation exposure: 0.7
-- **Configuration**: implementation-defined in code paths (no committed `configs/global-market-config.json` in current repository state)
-- Implementation: `internal/globalmarket/`
-
-### `realtime_adapter` *(Phase 4 - Sub-Second Adaptation)*
-
-- Focus: real-time regime detection and dynamic weight adjustment
-- Responsibilities:
-  - detect market regime within 100ms
-  - adjust agent weights based on current regime
-  - provide confidence scoring for regime predictions
-  - trigger automatic rebalancing when regime shifts
-- **Detected Regimes**:
-  - `calm`: low volatility, steady trends
-  - `volatile`: high volatility, uncertain direction
-  - `trending_up`: strong upward momentum
-  - `trending_down`: strong downward momentum
-  - `reversing`: trend exhaustion, potential reversal
-  - `breakout`: breakout from consolidation
-  - `breakdown`: breakdown from support
-- **Update Cycle**: 100ms
-- **Weight Adjustment**:
-  - Regime-specific agent activation
-  - Confidence-weighted recommendations
-  - Automatic rebalancing triggers
-- **Configuration**: implementation-defined in code paths (no committed `configs/realtime-config.json` in current repository state)
-- Implementation: `internal/realtime/`
-
----
-
-## Layer 3: Control Skills
-
-These skills limit risk and maintain system integrity.
-
-### `cro_risk`
-
-- Focus: attack portfolio proposals before action
-- Inputs: all recommendations, exposure, concentration, correlation
-- Outputs: rejects, trims, caution flags
-- Avoid: proposing alpha itself
-
-### `cio_portfolio`
-
-- Focus: synthesis and final simulated action set
-- Inputs: weighted research outputs, portfolio state, constraints
-- Outputs: paper-trading actions and exposure summary
-- Avoid: bypassing engine constraints
-
-### `research_auditor`
-
-- Focus: explainability and evidence quality
-- Inputs: recommendations, fills, outcomes, experiments, prompt versions
-- Outputs: audit notes, traceability, evidence gaps
-- Avoid: inventing performance or rationale after the fact
-
-### `system_guardrail`
-
-- Focus: protecting non-prompt rules
-- Responsibilities:
-- prevent prompt mutation from silently changing system risk
-- enforce that fill model, liquidity rules, and ledger semantics stay in code review scope
-- separate model judgment from execution truth
-
-## Layer 4: Evolution Skills
-
-These skills govern how the system improves over time.
-
-### `weak_agent_selector`
-
-- Focus: identify the next agent worth improving
-- Inputs: aggregated scorecards and outcomes
-- Outputs: a single mutation candidate
-- Avoid: changing several weak agents at once
-
-### `prompt_mutator`
-
-- Focus: produce one targeted prompt change
-- Inputs: weak-agent failure pattern, current prompt, allowed scope
-- Outputs: candidate prompt revision
-- **Mutation style families**:
-  - `prompt_tightening`: tighten qualification and reject fragile setups
-  - `risk_rule_change`: adjust risk/conviction/liquidity controls
-  - `portfolio_constraint_revision`: revise sizing and reserve constraints
-- **Known limitations**: 
-  - `prompt_tightening` mutation currently produces no measurable difference (candidate == baseline)
-  - Only modifies prompt text without changing underlying recommendation scoring logic
-- Avoid: broad rewrites with unclear causality
-
-### `experiment_designer`
-
-- Focus: define a valid before/after comparison
-- Inputs: hypothesis, window, acceptance metric, revert condition
-- Outputs: experiment record
-- Required fields in mutation brief:
-  - `window_id`: backtest window for evaluation
-  - `target_skill`: agent skill identifier
-  - `acceptance_gates`: ["improve_sharpe_like", "no_material_drawdown_degradation", "no_constraint_bypass"]
-  - `maturity_level`: level_1_exploratory | level_2_window_validated | level_3_regime_aware
-- Avoid: evaluation leakage and moving goalposts
-
-### `experiment_judge`
-
-- Focus: accept or reject a candidate based on evidence
-- Inputs: baseline metrics, candidate metrics, risk behavior, judge checks
-- Outputs: accepted or rejected decision
-- **Acceptance criteria** (current):
-  - candidate must be > baseline (strict improvement required)
-  - improvement must exceed threshold:
-    - `prompt_tightening`: 0.0005 (rarely effective, see known issues)
-    - `risk_rule_change`: 0.001 (lowered from 0.0025)
-    - `portfolio_constraint_revision`: 0.001 (lowered from 0.0035)
-  - replay observations must satisfy profile minimums (maturity + mutation type), for example level_2 + `risk_rule_change` requires 9 observations
-  - sufficient policy checks must pass
-- **Implementation note**: Recent runs show two distinct rejection classes: insufficient observations and no-improvement vs baseline. Treat them differently during iteration planning.
-- Avoid: approving changes based on narrative only
-
-## Current Empirical Snapshot (2026-04-08)
-
-- Short-window runs frequently fail observation gates.
-- Longer-window runs can pass observation gates, but recent candidates still mostly fail to beat baseline.
-- Judge outcomes should be interpreted in two buckets:
-  - `insufficient replay observations`
-  - `candidate did not improve over baseline`
-- Promote decisions should only consider the second bucket when observation thresholds are satisfied.
-
-### `risk_rule_change` Parameters (2026-04 Updated)
-
-Effective risk rule mutation uses these aggressive parameters:
-
-```yaml
-risk_rule_change:
-  conviction_floor: 35              # Lowered from 55 (capture more opportunities)
-  liquidity_floor: 2000000         # Reduced from 5M (broader universe)
-  max_position_weight: 0.25        # Increased from 0.18 (higher conviction sizing)
-  high_conviction_threshold: 80    # For auto-scaling to max weight
-  stop_loss_pct: 8                 # Tighter than 15% (faster capital rotation)
-  min_cash_pct: 5                  # Reduced from 12% (less cash drag)
-  aggressive_mode: true
-```
-
-**Recent observed effects** (current replay workflow):
-- frequent rejections due to insufficient observations in short windows
-- long-window runs can satisfy observation gates, but candidates still often fail to exceed baseline
-- use this section as directional guidance, not a guaranteed acceptance profile
-
-### `live_trading_operator`
-
-- Focus: real-time paper trading execution and monitoring
-- Responsibilities:
-  - maintain live portfolio state and position tracking
-  - subscribe to market events through Event Bus
-  - execute agent logic on market snapshots
-  - apply risk checks before order simulation
-  - record all trading activity to persistent ledger
-- Components:
-  - Live State Store (portfolio, positions, regime)
-  - Event Bus (market snapshots, orders, risk alerts)
-  - Real-time Orchestrator (market schedule, intraday cycles)
-
-### `monitoring_operator`
-
-- Focus: system health, resource monitoring, and experiment lifecycle management
-- Responsibilities:
-  - monitor CPU, memory, and disk usage during experiments
-  - track experiment rounds and enforce stop conditions
-  - alert on resource pressure and anomalies
-  - provide visibility into system performance
-- **Resource thresholds** (Balanced mode):
-  - CPU: 75% (warn), 85% (critical)
-  - Memory: 80% (warn), 90% (critical)
-  - Disk: 85% (warn)
-- **Stop conditions**:
-  - Maximum 20 total rounds per session
-  - 3 consecutive rejections
-  - Acceptance rate below 15% (after 5+ rounds)
-  - All 7 agents optimized
-- **Scripts**:
-  - `scripts/monitor/resource-guard.sh` - Resource monitoring
-  - `scripts/monitor/round-tracker.sh` - Round tracking
-- **Configuration**: `configs/monitor-limits.json`
-- Avoid: ignoring resource warnings during long-running experiments
-
-## Core Operating Logic
-
-Every operation in `atlas-go` should follow this sequence:
-
-1. Import or choose replay-ready market data
-2. Create a replay session or replay window
-3. Run agents through bounded skill roles
-4. Simulate execution through engine constraints
-5. Write outcomes to ledger
-6. Build scorecards
-7. Select one weak agent
-8. Design one experiment
-9. Compare baseline and candidate on unseen periods
-10. Keep or revert
-
-## Core Operating Techniques
-
-### Technique 1: Separate judgment from execution
-
-- Agents propose
-- Engine constrains
-- Ledger records
-
-Never let a prompt directly decide fill mechanics or risk ceilings.
-
-### Technique 2: Optimize one variable at a time
-
-- One weak agent
-- One prompt mutation
-- One evaluation window
-
-This preserves causality.
-
-### Technique 3: Prefer windows over anecdotes
-
-A single good day is not evidence. Window-level scoring is the minimum acceptable unit for agent quality.
-
-### Technique 4: Preserve session provenance
-
-Every replay run must be attributable to:
-
-- one session id
-- one data source
-- one time window
-- one registry state
-
-### Technique 5: Use failures as training assets
-
-Bad results are not noise. They are the raw material for:
-
-- weak-agent selection
-- targeted mutation
-- future guardrail design
-
-## Intelligence Improvement Techniques
-
-These are the preferred techniques for making the system smarter over time.
-
-### `failure_pattern_extraction`
-
-- Find repeated losses by sector, regime, or style
-- Do not mutate based on one-off mistakes
-
-### `narrow_scope_mutation`
-
-- Change wording, thresholds, exclusions, or evidence requirements
-- Do not rewrite the whole identity of the agent
-
-### `regime_specific_learning`
-
-- Separate trend, defensive, and rotation conditions
-- Avoid forcing one prompt to behave well in every regime
-
-### `prompt_to_rule_promotion`
-
-- If a lesson keeps recurring, move it from prompt lore into code, docs, or constraints
-- Example: liquidity filters belong in engine constraints, not only prompts
-
-### `audit_before_acceptance`
-
-- A change is only mature if:
-- the hypothesis is written
-- the evaluation window is known
-- the metric improved
-- the risk behavior did not degrade materially
-
-## Required Knowledge Baseline
-
-Any AI modifying this system must preserve these Taiwan-market assumptions:
-
-- MVP starts long-only
-- round lots matter for fill realism
-- liquidity filters are mandatory
-- costs and slippage are part of ground truth
-- ETFs and single stocks should not be scored identically
-- replay and paper trading are not real execution
-- prompt changes must not silently rewrite risk policy
-
-## Non-Negotiable Rules
-
-1. No hidden change to risk ceilings through prompt edits
-2. No acceptance without experiment metadata
-3. No judgment from a single replay day when a window is available
-4. No unverifiable source of returns
-5. No mixing operation logic with market-analysis logic
-
-## Companion Documents
-
-- [`docs/operations-playbook.md`](docs/operations-playbook.md)
-- [`docs/iteration-playbook.md`](docs/iteration-playbook.md)
-- [`docs/evolution-loop.md`](docs/evolution-loop.md)
+會依 mutation type 與 target skill 檢查候選內容是否包含必要控制語句與政策欄位。
+
+## 7. today-start Guard 與選擇器（現行）
+
+實作位置：`scripts/openclaw/today-start.sh`
+
+### 7.1 連敗 futility guard
+
+- 同 `agent + window + mutation_type`
+- 最近 3 筆皆 `candidate <= baseline`
+- 判定為 futile
+
+### 7.2 最小樣本門檻
+
+- 參數：`--min-sample-for-rank N`
+- 預設：`2`
+- 若候選 mutation type 的歷史樣本數 `n < N`，不參與加權排名
+
+### 7.3 加權排名公式
+
+- 先算 `avg_delta = avg(candidate - baseline)`（lookback=5）
+- 再算 `weighted = avg_delta * min(1, n/5)`
+- auto-pivot 優先選 weighted 較佳者
+
+### 7.4 執行行為
+
+- `--no-auto-pivot`：primary 判定 futile 時直接跳過
+- 預設 auto-pivot：先輸出候選排名明細，再切到較佳 mutation type
+
+## 8. 目前已移除的過時描述（本版不再採用）
+
+- 「prompt_tightening 一律 no-op」：已不成立
+- 舊版 aggressive risk_rule patch（conviction_floor=35 等）：已不成立
+- 以 Phase 編號混合 Layer 編號的雙軌敘事：已移除
+
+## 9. 文件維護規範
+
+每次調整以下任一項時，必須同步更新本文件：
+
+1. `configs/agents.json` 的技能集合
+2. `executor.go` 的 mutation 模板語句
+3. `judge.go` 的接受門檻或檢查項
+4. `today-start.sh` 的 guard、pivot、排名參數
+
+建議在 PR 說明附上：
+
+- 變更前後門檻值
+- 影響的 mutation type
+- 一次隔離實驗（no-fallback/no-auto-pivot）結果
+- 是否影響 promotion 判定

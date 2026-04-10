@@ -1,5 +1,14 @@
 # Atlas-Go 系统完成总结
 
+> 历史快照说明
+>
+> 本文是阶段性完成纪要，不应作为当前运行策略或接受门槛的规范来源。
+> 当前流程与规则请优先参考：
+> - `docs/skills-map.md`
+> - `docs/iteration-playbook.md`
+> - `docs/operations-playbook.md`
+> - `docs/evolution-loop.md`
+
 ## 完成概览
 
 ### ✅ Phase 3: OpenClaw Training Loop（已完成）

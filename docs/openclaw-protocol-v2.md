@@ -1,5 +1,14 @@
 # OpenClaw Protocol v2.0 - Advanced AI System Coordination
 
+> Historical note
+>
+> This document captures a point-in-time architecture narrative and KPI snapshot.
+> For current operation rules and mutation loop behavior, use these documents first:
+> - `docs/skills-map.md`
+> - `docs/iteration-playbook.md`
+> - `docs/operations-playbook.md`
+> - `docs/evolution-loop.md`
+
 ## Evolution Summary
 
 OpenClaw protocol has evolved from **simple experiment execution** (Phase 2) to **strategic system coordination** (Phase 3-4). The atlas-go system is now 95% autonomous with exceptional performance achievements.

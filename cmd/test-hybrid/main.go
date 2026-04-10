@@ -34,7 +34,7 @@ func main() {
 	}
 
 	fmt.Printf("✅ 成功獲取 %d 只股票行情\n\n", len(quotes))
-	
+
 	fmt.Println("行情詳情:")
 	fmt.Println("----------")
 	for _, q := range quotes {
@@ -59,11 +59,11 @@ func main() {
 	} else {
 		fmt.Printf("✅ TWSE 獲取全部上市股票: %d 只\n", len(allQuotes))
 		if len(allQuotes) > 0 {
-			fmt.Printf("   第一只: %s (%s) - %.2f\n", 
+			fmt.Printf("   第一只: %s (%s) - %.2f\n",
 				allQuotes[0].Symbol, allQuotes[0].Market, allQuotes[0].Last)
-			fmt.Printf("   最后一只: %s (%s) - %.2f\n", 
-				allQuotes[len(allQuotes)-1].Symbol, 
-				allQuotes[len(allQuotes)-1].Market, 
+			fmt.Printf("   最后一只: %s (%s) - %.2f\n",
+				allQuotes[len(allQuotes)-1].Symbol,
+				allQuotes[len(allQuotes)-1].Market,
 				allQuotes[len(allQuotes)-1].Last)
 		}
 	}

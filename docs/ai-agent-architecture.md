@@ -145,7 +145,7 @@ Each agent in `configs/agents.json` maps to a specific skill in `docs/skills-map
 ## Performance Metrics
 
 ### Agent-Specific Metrics
-Each agent type has specific performance metrics:
+Each agent type should be evaluated with layer-appropriate metrics:
 
 - **Context agents**: regime_accuracy, drawdown_avoidance
 - **Sector agents**: alpha_hit_rate, risk_adjusted_return
@@ -154,28 +154,33 @@ Each agent type has specific performance metrics:
 - **Superinvestor agents**: high_conviction_return, asymmetric_capture
 
 ### System-Level Metrics
-- **Overall Score**: 83.3/100 (Excellent)
-- **Sharpe Ratio**: 4.83 (Target: >2.0)
-- **Max Drawdown**: 3.03% (Target: <8%)
-- **System Health**: 100.0/100
+System-level values are runtime outputs, not fixed constants in documentation.
+Use replay and experiment artifacts as source of truth:
+
+- `data/state/experiments/*.json`
+- `data/state/sessions/*/summary.json`
+- window backtest outputs from `cmd/backtest-window`
 
 ## Evolution and Learning
 
 ### Weak Agent Selection
-- Identify bottom-performing agents based on rolling metrics
-- Prioritize sector and style agents over control agents
-- Consider evidence from multiple replay windows
+- Identify weak agents from replay-window evidence
+- Use observation count and regime context before mutation
+- Avoid changing multiple weak agents in one iteration
 
 ### Mutation Strategies
-- **Defensive**: Tighten qualification, downgrade uncertain signals
-- **Offensive**: Optimize entry timing, increase position sizing
-- **Aggressive**: Higher conviction thresholds, concentrated positions
+Current mutation classes are:
+
+- `prompt_tightening`
+- `risk_rule_change`
+- `portfolio_constraint_revision`
+
+Apply one mutation class per cycle and validate against baseline via judge gates.
 
 ### Continuous Improvement
-- Daily performance tracking
-- Weekly weight adjustments
-- Monthly agent spawning evaluation
-- Quarterly strategy review
+- Track outcomes continuously in ledger artifacts
+- Use futility and sample-size guards to avoid low-signal retries
+- Promote only after gate-satisfying replay evidence
 
 ## Integration with Advanced Systems
 
@@ -201,6 +206,8 @@ Each agent type has specific performance metrics:
 
 ## Conclusion
 
-The Atlas-Go AI agent architecture represents a sophisticated, multi-layer system with clear separation of concerns, specialized expertise, and advanced learning capabilities. The 15 agents work in coordination through a well-defined hierarchy, with advanced Phase 3 systems providing continuous improvement and adaptation.
+Atlas-Go uses a layered, policy-bounded multi-agent architecture.
 
-The documentation in `docs/skills-map.md` provides the foundational skill definitions, while this document bridges the gap between theoretical skills and practical agent implementation, ensuring clear understanding of the system's architecture and capabilities.
+- `docs/skills-map.md` defines current skills, mutation profiles, and guard behavior.
+- This document explains execution structure and component boundaries.
+- Runtime artifacts remain the final truth for measured performance.

@@ -168,9 +168,9 @@ func TestMetaLearner(t *testing.T) {
 func TestLearningStrategy(t *testing.T) {
 	t.Run("StrategyCreation", func(t *testing.T) {
 		strategy := &LearningStrategy{
-			ID:        "test_strategy",
-			Name:      "Test Strategy",
-			Type:      StrategyMomentum,
+			ID:   "test_strategy",
+			Name: "Test Strategy",
+			Type: StrategyMomentum,
 			Parameters: map[string]float64{
 				"learning_rate": 0.01,
 				"momentum":      0.9,
@@ -216,11 +216,11 @@ func TestMetaLearningPersistence(t *testing.T) {
 
 		// Add some training results
 		ml1.SubmitTrainingResult(TrainingResult{
-			AgentID:      "agent_001",
-			StrategyID:   "strategy_momentum_0",
-			Improvement:  0.2,
-			Converged:    true,
-			Timestamp:    time.Now(),
+			AgentID:     "agent_001",
+			StrategyID:  "strategy_momentum_0",
+			Improvement: 0.2,
+			Converged:   true,
+			Timestamp:   time.Now(),
 		})
 
 		// Save state

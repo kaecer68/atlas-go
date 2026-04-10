@@ -12,40 +12,40 @@ type RiskManager struct {
 	mu sync.RWMutex
 
 	// Risk parameters
-	maxDrawdownPct     float64 // Maximum allowed drawdown (e.g., 0.08 for 8%)
-	maxPositionSize    float64 // Maximum position size as percentage of portfolio
-	maxDailyLossPct    float64 // Maximum daily loss percentage
-	stopLossEnabled    bool
-	takeProfitEnabled  bool
+	maxDrawdownPct    float64 // Maximum allowed drawdown (e.g., 0.08 for 8%)
+	maxPositionSize   float64 // Maximum position size as percentage of portfolio
+	maxDailyLossPct   float64 // Maximum daily loss percentage
+	stopLossEnabled   bool
+	takeProfitEnabled bool
 
 	// Current state
-	currentDrawdown   float64
-	peakValue         float64
-	currentValue      float64
-	dailyStartValue   float64
-	lastUpdate        time.Time
+	currentDrawdown float64
+	peakValue       float64
+	currentValue    float64
+	dailyStartValue float64
+	lastUpdate      time.Time
 
 	// Risk alerts
-	riskAlerts        []RiskAlert
-	alertHistory      []RiskAlert
+	riskAlerts   []RiskAlert
+	alertHistory []RiskAlert
 
 	// Position tracking
-	positions         map[string]*Position
-	totalExposure      float64
+	positions     map[string]*Position
+	totalExposure float64
 }
 
 // RiskAlert represents a risk management alert
 type RiskAlert struct {
-	ID          string
-	Type        AlertType
-	Level       AlertLevel
-	Message     string
-	Target      string
-	Current     float64
-	Threshold   float64
-	Timestamp   time.Time
-	Resolved    bool
-	ResolvedAt  *time.Time
+	ID         string
+	Type       AlertType
+	Level      AlertLevel
+	Message    string
+	Target     string
+	Current    float64
+	Threshold  float64
+	Timestamp  time.Time
+	Resolved   bool
+	ResolvedAt *time.Time
 }
 
 // AlertType represents different types of risk alerts
@@ -84,16 +84,16 @@ type Position struct {
 // NewRiskManager creates a new risk manager with default parameters
 func NewRiskManager() *RiskManager {
 	return &RiskManager{
-		maxDrawdownPct:    0.08,  // 8% max drawdown
-		maxPositionSize:   0.15,  // 15% max position size
-		maxDailyLossPct:   0.03,  // 3% max daily loss
+		maxDrawdownPct:    0.08, // 8% max drawdown
+		maxPositionSize:   0.15, // 15% max position size
+		maxDailyLossPct:   0.03, // 3% max daily loss
 		stopLossEnabled:   true,
 		takeProfitEnabled: true,
-		positions:        make(map[string]*Position),
-		lastUpdate:       time.Now(),
-		dailyStartValue:  100000.0, // Default starting value
-		currentValue:     100000.0,
-		peakValue:        100000.0,
+		positions:         make(map[string]*Position),
+		lastUpdate:        time.Now(),
+		dailyStartValue:   100000.0, // Default starting value
+		currentValue:      100000.0,
+		peakValue:         100000.0,
 	}
 }
 
@@ -246,13 +246,13 @@ func (rm *RiskManager) GetRiskMetrics() RiskMetrics {
 	defer rm.mu.RUnlock()
 
 	return RiskMetrics{
-		CurrentDrawdown:   rm.currentDrawdown,
-		MaxDrawdown:       rm.maxDrawdownPct,
-		TotalExposure:     rm.totalExposure,
-		ExposureRatio:     rm.totalExposure / rm.currentValue,
-		ActivePositions:   len(rm.positions),
-		ActiveAlerts:      len(rm.getActiveAlerts()),
-		LastUpdate:        rm.lastUpdate,
+		CurrentDrawdown: rm.currentDrawdown,
+		MaxDrawdown:     rm.maxDrawdownPct,
+		TotalExposure:   rm.totalExposure,
+		ExposureRatio:   rm.totalExposure / rm.currentValue,
+		ActivePositions: len(rm.positions),
+		ActiveAlerts:    len(rm.getActiveAlerts()),
+		LastUpdate:      rm.lastUpdate,
 	}
 }
 

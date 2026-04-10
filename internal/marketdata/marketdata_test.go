@@ -64,9 +64,9 @@ func TestHybridProvider_WithAPIKey(t *testing.T) {
 
 func TestHybridProvider_Reset(t *testing.T) {
 	tests := []struct {
-		name       string
-		apiKey     string
-		wantTWSE   bool
+		name     string
+		apiKey   string
+		wantTWSE bool
 	}{
 		{"no fugle configured: stays twse after reset", "", true},
 		{"fugle configured: resets to fugle after UseTWSE", "key", false},

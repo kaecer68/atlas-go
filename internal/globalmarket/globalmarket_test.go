@@ -132,8 +132,8 @@ func TestGlobalMarketManager(t *testing.T) {
 		gmm := NewGlobalMarketManager(config)
 
 		positions := map[string]float64{
-			"2330.TW":  500000,  // Taiwan
-			"AAPL":     300000,  // US
+			"2330.TW":   500000, // Taiwan
+			"AAPL":      300000, // US
 			"005930.KS": 200000, // Korea (Asia)
 		}
 
@@ -188,8 +188,8 @@ func TestGlobalMarketManager(t *testing.T) {
 
 		// Create exposure that exceeds limits
 		positions := map[string]float64{
-			"2330.TW": 600000,  // 60% - exceeds 50% limit
-			"AAPL":    400000,  // 40%
+			"2330.TW": 600000, // 60% - exceeds 50% limit
+			"AAPL":    400000, // 40%
 		}
 
 		exposure := gmm.CalculateGlobalExposure(positions)

@@ -11,19 +11,19 @@ import (
 
 // TradeRecord 交易记录
 type TradeRecord struct {
-	Symbol      string
-	Side        domain.Side
-	EntryPrice  float64
-	ExitPrice   float64
-	Quantity    int
-	EntryTime   time.Time
-	ExitTime    time.Time
-	Pnl         float64
-	PnlPct      float64
-	Agent       string
-	Strategy    string
-	Slippage    float64
-	Commission  float64
+	Symbol     string
+	Side       domain.Side
+	EntryPrice float64
+	ExitPrice  float64
+	Quantity   int
+	EntryTime  time.Time
+	ExitTime   time.Time
+	Pnl        float64
+	PnlPct     float64
+	Agent      string
+	Strategy   string
+	Slippage   float64
+	Commission float64
 }
 
 // IsWin 是否盈利
@@ -38,10 +38,10 @@ func (t TradeRecord) HoldingPeriod() time.Duration {
 
 // AttributionResult 归因结果
 type AttributionResult struct {
-	AgentContributions map[string]float64
-	StyleContributions map[Style]float64
+	AgentContributions  map[string]float64
+	StyleContributions  map[Style]float64
 	SymbolContributions map[string]float64
-	TotalPnL           float64
+	TotalPnL            float64
 }
 
 // PostTradeAnalyzer 盘后分析器
@@ -68,16 +68,16 @@ func (a *PostTradeAnalyzer) GetTrades() []TradeRecord {
 
 // PerformanceMetrics 业绩指标
 type PerformanceMetrics struct {
-	TotalTrades     int
-	WinningTrades   int
-	LosingTrades    int
-	WinRate         float64
-	AvgWin          float64
-	AvgLoss         float64
-	ProfitFactor    float64
-	TotalPnL        float64
-	MaxDrawdown     float64
-	SharpeRatio     float64
+	TotalTrades      int
+	WinningTrades    int
+	LosingTrades     int
+	WinRate          float64
+	AvgWin           float64
+	AvgLoss          float64
+	ProfitFactor     float64
+	TotalPnL         float64
+	MaxDrawdown      float64
+	SharpeRatio      float64
 	AvgHoldingPeriod time.Duration
 }
 
@@ -178,13 +178,13 @@ func (a *PostTradeAnalyzer) AttributionBySymbol() map[string]float64 {
 
 // AgentStats Agent 统计
 type AgentStats struct {
-	AgentID       string
-	TotalTrades   int
-	WinCount      int
-	TotalPnL      float64
-	AvgPnL        float64
-	WinRate       float64
-	SharpeLike    float64
+	AgentID     string
+	TotalTrades int
+	WinCount    int
+	TotalPnL    float64
+	AvgPnL      float64
+	WinRate     float64
+	SharpeLike  float64
 }
 
 // CalculateAgentStats 计算各 Agent 统计
@@ -258,9 +258,9 @@ func (a *PostTradeAnalyzer) CalculateDailyPnL() []DailyPnL {
 
 // ExecutionQuality 执行质量
 type ExecutionQuality struct {
-	AvgSlippage     float64
-	AvgCommission   float64
-	FillRate        float64
+	AvgSlippage      float64
+	AvgCommission    float64
+	FillRate         float64
 	AvgExecutionTime time.Duration
 }
 
@@ -282,9 +282,9 @@ func (a *PostTradeAnalyzer) CalculateExecutionQuality() ExecutionQuality {
 	n := float64(len(a.trades))
 
 	return ExecutionQuality{
-		AvgSlippage:     totalSlippage / n,
-		AvgCommission:   totalCommission / n,
-		FillRate:        1.0, // 简化处理
+		AvgSlippage:      totalSlippage / n,
+		AvgCommission:    totalCommission / n,
+		FillRate:         1.0, // 简化处理
 		AvgExecutionTime: totalExecutionTime / time.Duration(len(a.trades)),
 	}
 }
@@ -384,14 +384,14 @@ func (a *PostTradeAnalyzer) GenerateSuggestions() []ImprovementSuggestion {
 
 // AnalysisReport 分析报告
 type AnalysisReport struct {
-	Period          string
-	GeneratedAt     time.Time
-	Metrics         PerformanceMetrics
-	AgentStats      []AgentStats
-	DailyPnLs       []DailyPnL
+	Period           string
+	GeneratedAt      time.Time
+	Metrics          PerformanceMetrics
+	AgentStats       []AgentStats
+	DailyPnLs        []DailyPnL
 	ExecutionQuality ExecutionQuality
-	Suggestions     []ImprovementSuggestion
-	Attribution     AttributionResult
+	Suggestions      []ImprovementSuggestion
+	Attribution      AttributionResult
 }
 
 // GenerateReport 生成完整报告
@@ -405,9 +405,9 @@ func (a *PostTradeAnalyzer) GenerateReport(period string) AnalysisReport {
 		ExecutionQuality: a.CalculateExecutionQuality(),
 		Suggestions:      a.GenerateSuggestions(),
 		Attribution: AttributionResult{
-			AgentContributions: a.AttributionByAgent(),
+			AgentContributions:  a.AttributionByAgent(),
 			SymbolContributions: a.AttributionBySymbol(),
-			TotalPnL:          a.CalculateMetrics().TotalPnL,
+			TotalPnL:            a.CalculateMetrics().TotalPnL,
 		},
 	}
 }

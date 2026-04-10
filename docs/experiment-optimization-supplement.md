@@ -1,5 +1,13 @@
 # OpenClaw 系统稳固化 - 优化补充报告
 
+> 历史快照说明
+>
+> 本文是特定日期的优化记录与实验结果，不是当前运行策略的规范定义。
+> 当前 mutation 守门、futility guard、auto-pivot 与采样规则，请以以下文档为准：
+> - `docs/skills-map.md`
+> - `docs/iteration-playbook.md`
+> - `docs/operations-playbook.md`
+
 ## 执行日期
 2026-04-06
 

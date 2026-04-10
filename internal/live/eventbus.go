@@ -31,8 +31,8 @@ const (
 	EventAgentEvaluation     EventType = "agent.evaluation"
 
 	// 订单事件
-	EventOrderPlaced EventType = "order.placed"
-	EventOrderFilled EventType = "order.filled"
+	EventOrderPlaced   EventType = "order.placed"
+	EventOrderFilled   EventType = "order.filled"
 	EventOrderRejected EventType = "order.rejected"
 
 	// 风险事件
@@ -47,9 +47,9 @@ const (
 
 // MarketEventPayload 市场事件载荷
 type MarketEventPayload struct {
-	Symbol    string        `json:"symbol"`
-	Quote     domain.Quote  `json:"quote"`
-	Timestamp time.Time     `json:"timestamp"`
+	Symbol    string       `json:"symbol"`
+	Quote     domain.Quote `json:"quote"`
+	Timestamp time.Time    `json:"timestamp"`
 }
 
 // RegimeEventPayload 市场状态事件载荷
@@ -69,25 +69,25 @@ type PositionEventPayload struct {
 
 // RecommendationEventPayload 推荐事件载荷
 type RecommendationEventPayload struct {
-	Agent         string                  `json:"agent"`
+	Agent           string                  `json:"agent"`
 	Recommendations []domain.Recommendation `json:"recommendations"`
 }
 
 // OrderEventPayload 订单事件载荷
 type OrderEventPayload struct {
-	OrderID   string      `json:"order_id"`
+	OrderID   string       `json:"order_id"`
 	Order     domain.Order `json:"order"`
-	Status    string      `json:"status"` // "placed", "filled", "rejected"
-	FillPrice float64     `json:"fill_price,omitempty"`
-	FillTime  time.Time   `json:"fill_time,omitempty"`
+	Status    string       `json:"status"` // "placed", "filled", "rejected"
+	FillPrice float64      `json:"fill_price,omitempty"`
+	FillTime  time.Time    `json:"fill_time,omitempty"`
 }
 
 // RiskEventPayload 风险事件载荷
 type RiskEventPayload struct {
-	Symbol      string  `json:"symbol"`
-	Position    domain.Position `json:"position"`
-	TriggerType string  `json:"trigger_type"` // "stop_loss", "take_profit", "max_loss"
-	TriggerPrice float64 `json:"trigger_price"`
+	Symbol       string          `json:"symbol"`
+	Position     domain.Position `json:"position"`
+	TriggerType  string          `json:"trigger_type"` // "stop_loss", "take_profit", "max_loss"
+	TriggerPrice float64         `json:"trigger_price"`
 }
 
 // BusEvent 总线事件
@@ -111,9 +111,9 @@ type EventBus interface {
 
 // Subscription 订阅句柄
 type Subscription struct {
-	ID       string
+	ID        string
 	EventType EventType
-	Cancel   func()
+	Cancel    func()
 }
 
 // ChannelEventBus 基于 Channel 的事件总线实现
@@ -270,7 +270,7 @@ func (b *ChannelEventBus) Subscribe(eventType EventType, handler EventHandler) S
 	b.subscribers[eventType] = append(b.subscribers[eventType], sub)
 
 	return Subscription{
-		ID:       id,
+		ID:        id,
 		EventType: eventType,
 		Cancel: func() {
 			b.unsubscribe(eventType, id)
@@ -289,7 +289,7 @@ func (b *ChannelEventBus) SubscribeAll(handler EventHandler) Subscription {
 	b.allSubscribers = append(b.allSubscribers, sub)
 
 	return Subscription{
-		ID:       id,
+		ID:        id,
 		EventType: "",
 		Cancel: func() {
 			b.unsubscribeAll(id)

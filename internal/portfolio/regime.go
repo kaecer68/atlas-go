@@ -32,11 +32,11 @@ func (s StyleAllocation) Validate() bool {
 
 // RegimeConfig 市场状态配置
 type RegimeConfig struct {
-	Allocation   StyleAllocation
-	MaxExposure  float64 // 最大仓位比例
-	CashReserve  float64 // 现金储备比例
-	RiskOn       bool    // 是否风险偏好
-	Description  string
+	Allocation  StyleAllocation
+	MaxExposure float64 // 最大仓位比例
+	CashReserve float64 // 现金储备比例
+	RiskOn      bool    // 是否风险偏好
+	Description string
 }
 
 // DefaultRegimeConfigs 默认市场状态配置
@@ -287,7 +287,6 @@ func (d *RegimeDetector) SetThresholds(thresholds RegimeThresholds) {
 type IntegratedAllocator struct {
 	allocator *RegimeAllocator
 	detector  *RegimeDetector
-	mu        sync.RWMutex
 }
 
 // NewIntegratedAllocator 创建整合配置器

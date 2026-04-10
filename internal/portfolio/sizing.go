@@ -33,21 +33,21 @@ func DefaultRiskParameters() RiskParameters {
 
 // Signal 交易信号
 type Signal struct {
-	Symbol     string
-	Side       domain.Side
-	Conviction float64 // 置信度 0-1
-	WinRate    float64 // 历史胜率
+	Symbol      string
+	Side        domain.Side
+	Conviction  float64 // 置信度 0-1
+	WinRate     float64 // 历史胜率
 	PayoffRatio float64 // 盈亏比
 }
 
 // Sizer 仓位规模管理器
 type Sizer struct {
-	params        RiskParameters
-	volatilities  map[string]float64 // 股票波动率缓存
-	correlations  map[string]map[string]float64 // 相关性矩阵
-	advCache      map[string]float64 // 日均成交量缓存
-	atrCache      map[string]float64 // ATR缓存
-	mu            sync.RWMutex
+	params       RiskParameters
+	volatilities map[string]float64            // 股票波动率缓存
+	correlations map[string]map[string]float64 // 相关性矩阵
+	advCache     map[string]float64            // 日均成交量缓存
+	atrCache     map[string]float64            // ATR缓存
+	mu           sync.RWMutex
 }
 
 // NewSizer 创建仓位管理器
@@ -369,7 +369,7 @@ func (s *Sizer) CalculatePositionSizing(
 			TargetValue:   float64(shares) * quote.Last,
 			RiskAmount:    riskAmount,
 			StopLossPrice: stopLossPrice,
-			Reason: fmt.Sprintf("kelly|vol|atr|liquidity|corr"),
+			Reason:        "kelly|vol|atr|liquidity|corr",
 		})
 	}
 

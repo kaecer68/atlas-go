@@ -89,10 +89,10 @@ func TestAdversarialTrainer(t *testing.T) {
 		trainer := NewAdversarialTrainer(config)
 
 		agent := domain.AgentSpec{
-			ID:     "test_agent_001",
-			Name:   "Test Agent",
-			Layer:  domain.LayerSector,
-			Skill:  "semiconductor",
+			ID:      "test_agent_001",
+			Name:    "Test Agent",
+			Layer:   domain.LayerSector,
+			Skill:   "semiconductor",
 			Enabled: true,
 		}
 

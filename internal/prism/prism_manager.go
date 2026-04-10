@@ -86,13 +86,12 @@ type TrainingResult struct {
 
 // TrainingQueue manages a regime-specific training queue
 type TrainingQueue struct {
-	Regime     RegimeType
-	tasks      *list.List
-	taskByID   map[string]*list.Element
-	mu         sync.RWMutex
-	maxSize    int
-	processing bool
-	workers    int
+	Regime   RegimeType
+	tasks    *list.List
+	taskByID map[string]*list.Element
+	mu       sync.RWMutex
+	maxSize  int
+	workers  int
 }
 
 // NewTrainingQueue creates a new regime-specific queue

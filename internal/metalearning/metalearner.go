@@ -14,13 +14,13 @@ import (
 
 // LearningStrategy represents a configurable learning approach
 type LearningStrategy struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	Type        StrategyType           `json:"type"`
-	Parameters  map[string]float64     `json:"parameters"`
-	Performance *StrategyPerformance   `json:"performance,omitempty"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
+	ID          string               `json:"id"`
+	Name        string               `json:"name"`
+	Type        StrategyType         `json:"type"`
+	Parameters  map[string]float64   `json:"parameters"`
+	Performance *StrategyPerformance `json:"performance,omitempty"`
+	CreatedAt   time.Time            `json:"created_at"`
+	UpdatedAt   time.Time            `json:"updated_at"`
 }
 
 // StrategyType defines different learning strategy categories
@@ -36,28 +36,28 @@ const (
 
 // StrategyPerformance tracks how well a strategy performs
 type StrategyPerformance struct {
-	StrategyID         string    `json:"strategy_id"`
-	TotalApplications  int       `json:"total_applications"`
-	SuccessCount       int       `json:"success_count"`
-	FailureCount       int       `json:"failure_count"`
-	AvgImprovement     float64   `json:"avg_improvement"`
-	BestImprovement    float64   `json:"best_improvement"`
-	WorstImprovement   float64   `json:"worst_improvement"`
-	AvgTrainingTime    float64   `json:"avg_training_time"`
-	ConvergenceRate    float64   `json:"convergence_rate"`
-	StabilityScore     float64   `json:"stability_score"`
-	LastEvaluated      time.Time `json:"last_evaluated"`
+	StrategyID        string    `json:"strategy_id"`
+	TotalApplications int       `json:"total_applications"`
+	SuccessCount      int       `json:"success_count"`
+	FailureCount      int       `json:"failure_count"`
+	AvgImprovement    float64   `json:"avg_improvement"`
+	BestImprovement   float64   `json:"best_improvement"`
+	WorstImprovement  float64   `json:"worst_improvement"`
+	AvgTrainingTime   float64   `json:"avg_training_time"`
+	ConvergenceRate   float64   `json:"convergence_rate"`
+	StabilityScore    float64   `json:"stability_score"`
+	LastEvaluated     time.Time `json:"last_evaluated"`
 }
 
 // MetaLearningConfig holds configuration for the meta-learning system
 type MetaLearningConfig struct {
-	PopulationSize      int           `json:"population_size"`       // Number of strategies to maintain
-	EliteRatio          float64       `json:"elite_ratio"`          // Top % to keep as elite
-	MutationRate        float64       `json:"mutation_rate"`        // Probability of mutation
-	CrossoverRate       float64       `json:"crossover_rate"`       // Probability of crossover
-	EvaluationWindow    time.Duration `json:"evaluation_window"`    // Time to evaluate strategies
-	AdaptationInterval  time.Duration `json:"adaptation_interval"`  // How often to adapt
-	MinImprovement      float64       `json:"min_improvement"`      // Minimum improvement to count as success
+	PopulationSize     int           `json:"population_size"`     // Number of strategies to maintain
+	EliteRatio         float64       `json:"elite_ratio"`         // Top % to keep as elite
+	MutationRate       float64       `json:"mutation_rate"`       // Probability of mutation
+	CrossoverRate      float64       `json:"crossover_rate"`      // Probability of crossover
+	EvaluationWindow   time.Duration `json:"evaluation_window"`   // Time to evaluate strategies
+	AdaptationInterval time.Duration `json:"adaptation_interval"` // How often to adapt
+	MinImprovement     float64       `json:"min_improvement"`     // Minimum improvement to count as success
 }
 
 // DefaultMetaLearningConfig returns sensible defaults
@@ -102,14 +102,14 @@ type SwarmLearningData struct {
 
 // TrainingResult captures outcome of applying a learning strategy
 type TrainingResult struct {
-	AgentID         string    `json:"agent_id"`
-	StrategyID      string    `json:"strategy_id"`
-	InitialScore    float64   `json:"initial_score"`
-	FinalScore      float64   `json:"final_score"`
-	Improvement     float64   `json:"improvement"`
-	TrainingTime    float64   `json:"training_time"`
-	Converged       bool      `json:"converged"`
-	Timestamp       time.Time `json:"timestamp"`
+	AgentID      string    `json:"agent_id"`
+	StrategyID   string    `json:"strategy_id"`
+	InitialScore float64   `json:"initial_score"`
+	FinalScore   float64   `json:"final_score"`
+	Improvement  float64   `json:"improvement"`
+	TrainingTime float64   `json:"training_time"`
+	Converged    bool      `json:"converged"`
+	Timestamp    time.Time `json:"timestamp"`
 }
 
 // NewMetaLearner creates a new meta-learning engine
@@ -117,7 +117,7 @@ func NewMetaLearner(config *MetaLearningConfig) *MetaLearner {
 	if config == nil {
 		config = DefaultMetaLearningConfig()
 	}
-	
+
 	ml := &MetaLearner{
 		strategies:      make(map[string]*LearningStrategy),
 		population:      make([]*LearningStrategy, 0, config.PopulationSize),
@@ -127,38 +127,38 @@ func NewMetaLearner(config *MetaLearningConfig) *MetaLearner {
 		trainingResults: make(chan TrainingResult, 100),
 		stopChan:        make(chan struct{}),
 	}
-	
+
 	// Initialize with diverse strategies
 	ml.initializePopulation()
-	
+
 	return ml
 }
 
 // initializePopulation creates initial diverse strategy population
 func (ml *MetaLearner) initializePopulation() {
 	baseStrategies := []struct {
-		name string
-		typ  StrategyType
+		name   string
+		typ    StrategyType
 		params map[string]float64
 	}{
 		{
 			name: "Conservative Momentum",
 			typ:  StrategyMomentum,
 			params: map[string]float64{
-				"learning_rate":    0.001,
-				"momentum":         0.9,
-				"batch_size":       32,
-				"warmup_epochs":    5,
+				"learning_rate": 0.001,
+				"momentum":      0.9,
+				"batch_size":    32,
+				"warmup_epochs": 5,
 			},
 		},
 		{
 			name: "Aggressive Adaptive",
 			typ:  StrategyAdaptive,
 			params: map[string]float64{
-				"base_lr":          0.01,
-				"max_lr":           0.1,
-				"decay_factor":     0.95,
-				"patience":         3,
+				"base_lr":      0.01,
+				"max_lr":       0.1,
+				"decay_factor": 0.95,
+				"patience":     3,
 			},
 		},
 		{
@@ -174,8 +174,8 @@ func (ml *MetaLearner) initializePopulation() {
 			name: "Diverse Ensemble",
 			typ:  StrategyEnsemble,
 			params: map[string]float64{
-				"ensemble_size":    7,
-				"diversity_weight": 0.3,
+				"ensemble_size":       7,
+				"diversity_weight":    0.3,
 				"agreement_threshold": 0.6,
 			},
 		},
@@ -183,13 +183,13 @@ func (ml *MetaLearner) initializePopulation() {
 			name: "Evolutionary Search",
 			typ:  StrategyEvolutionary,
 			params: map[string]float64{
-				"population_size":  50,
-				"mutation_rate":  0.1,
+				"population_size":    50,
+				"mutation_rate":      0.1,
 				"selection_pressure": 2.0,
 			},
 		},
 	}
-	
+
 	// Create variations of base strategies
 	for i, base := range baseStrategies {
 		// Original
@@ -206,7 +206,7 @@ func (ml *MetaLearner) initializePopulation() {
 		}
 		ml.strategies[strategy.ID] = strategy
 		ml.population = append(ml.population, strategy)
-		
+
 		// Create mutated variations
 		for j := 0; j < 3; j++ {
 			mutated := ml.mutateStrategy(strategy, fmt.Sprintf("%s_v%d", strategy.ID, j+1))
@@ -229,23 +229,23 @@ func (ml *MetaLearner) mutateStrategy(parent *LearningStrategy, newID string) *L
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-	
+
 	// Copy and mutate parameters
 	for key, val := range parent.Parameters {
 		mutated.Parameters[key] = val
-		
+
 		// Apply mutation with probability
 		if math.Abs(ml.config.MutationRate) > 1e-9 {
 			mutation := (rand.Float64() - 0.5) * 2 * ml.config.MutationRate * val
 			mutated.Parameters[key] = val + mutation
-			
+
 			// Ensure positive for certain parameters
 			if mutated.Parameters[key] < 0 && (key == "learning_rate" || key == "batch_size") {
 				mutated.Parameters[key] = math.Abs(mutated.Parameters[key])
 			}
 		}
 	}
-	
+
 	return mutated
 }
 
@@ -262,7 +262,7 @@ func (ml *MetaLearner) crossover(parent1, parent2 *LearningStrategy, newID strin
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-	
+
 	// Random crossover of parameters
 	for key, val1 := range parent1.Parameters {
 		if val2, exists := parent2.Parameters[key]; exists {
@@ -271,7 +271,7 @@ func (ml *MetaLearner) crossover(parent1, parent2 *LearningStrategy, newID strin
 			} else {
 				child.Parameters[key] = val2
 			}
-			
+
 			// Optional: blend values
 			if rand.Float64() < 0.3 {
 				alpha := rand.Float64()
@@ -281,7 +281,7 @@ func (ml *MetaLearner) crossover(parent1, parent2 *LearningStrategy, newID strin
 			child.Parameters[key] = val1
 		}
 	}
-	
+
 	return child
 }
 
@@ -289,10 +289,10 @@ func (ml *MetaLearner) crossover(parent1, parent2 *LearningStrategy, newID strin
 func (ml *MetaLearner) Start() {
 	ml.wg.Add(1)
 	go ml.adaptationLoop()
-	
+
 	ml.wg.Add(1)
 	go ml.swarmDataProcessor()
-	
+
 	ml.wg.Add(1)
 	go ml.trainingResultProcessor()
 }
@@ -306,10 +306,10 @@ func (ml *MetaLearner) Stop() {
 // adaptationLoop periodically evolves the strategy population
 func (ml *MetaLearner) adaptationLoop() {
 	defer ml.wg.Done()
-	
+
 	ticker := time.NewTicker(ml.config.AdaptationInterval)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ticker.C:
@@ -324,29 +324,29 @@ func (ml *MetaLearner) adaptationLoop() {
 func (ml *MetaLearner) evolvePopulation() {
 	ml.mu.Lock()
 	defer ml.mu.Unlock()
-	
+
 	// 1. Evaluate and rank strategies
 	ml.evaluateStrategies()
-	
+
 	// 2. Select elite
 	eliteCount := int(float64(len(ml.population)) * ml.config.EliteRatio)
 	if eliteCount < 2 {
 		eliteCount = 2
 	}
-	
+
 	sort.Slice(ml.population, func(i, j int) bool {
 		scoreI := ml.calculateStrategyScore(ml.population[i])
 		scoreJ := ml.calculateStrategyScore(ml.population[j])
 		return scoreI > scoreJ
 	})
-	
+
 	ml.eliteStrategies = make([]*LearningStrategy, eliteCount)
 	copy(ml.eliteStrategies, ml.population[:eliteCount])
-	
+
 	// 3. Generate offspring
 	newPopulation := make([]*LearningStrategy, 0, ml.config.PopulationSize)
 	newPopulation = append(newPopulation, ml.eliteStrategies...)
-	
+
 	// Crossover among elite
 	for i := 0; i < eliteCount && len(newPopulation) < ml.config.PopulationSize; i++ {
 		for j := i + 1; j < eliteCount && len(newPopulation) < ml.config.PopulationSize; j++ {
@@ -358,7 +358,7 @@ func (ml *MetaLearner) evolvePopulation() {
 			}
 		}
 	}
-	
+
 	// Mutation of elite
 	for _, elite := range ml.eliteStrategies {
 		if len(newPopulation) >= ml.config.PopulationSize {
@@ -371,7 +371,7 @@ func (ml *MetaLearner) evolvePopulation() {
 			ml.strategies[mutated.ID] = mutated
 		}
 	}
-	
+
 	// Fill remaining with random mutations
 	for len(newPopulation) < ml.config.PopulationSize {
 		parent := ml.eliteStrategies[rand.Intn(len(ml.eliteStrategies))]
@@ -380,7 +380,7 @@ func (ml *MetaLearner) evolvePopulation() {
 		newPopulation = append(newPopulation, mutated)
 		ml.strategies[mutated.ID] = mutated
 	}
-	
+
 	ml.population = newPopulation
 }
 
@@ -389,27 +389,27 @@ func (ml *MetaLearner) calculateStrategyScore(s *LearningStrategy) float64 {
 	if s.Performance == nil || s.Performance.TotalApplications == 0 {
 		return 0.0
 	}
-	
+
 	perf := s.Performance
-	
+
 	// Success rate
 	successRate := float64(perf.SuccessCount) / float64(perf.TotalApplications)
-	
+
 	// Average improvement (normalized)
 	improvementScore := perf.AvgImprovement / (1 + math.Abs(perf.AvgImprovement))
-	
+
 	// Convergence rate bonus
 	convergenceBonus := perf.ConvergenceRate * 0.5
-	
+
 	// Stability bonus
 	stabilityBonus := perf.StabilityScore * 0.3
-	
+
 	// Penalize for high training time (efficiency)
 	efficiencyScore := 1.0 / (1.0 + perf.AvgTrainingTime/3600) // Normalize to hours
-	
+
 	// Combined score
 	score := successRate*0.3 + improvementScore*0.3 + convergenceBonus*0.2 + stabilityBonus*0.1 + efficiencyScore*0.1
-	
+
 	return score
 }
 
@@ -422,7 +422,7 @@ func (ml *MetaLearner) evaluateStrategies() {
 // swarmDataProcessor handles feedback from MiroFish swarm
 func (ml *MetaLearner) swarmDataProcessor() {
 	defer ml.wg.Done()
-	
+
 	for {
 		select {
 		case data := <-ml.swarmData:
@@ -437,20 +437,20 @@ func (ml *MetaLearner) swarmDataProcessor() {
 func (ml *MetaLearner) processSwarmData(data SwarmLearningData) {
 	ml.mu.Lock()
 	defer ml.mu.Unlock()
-	
+
 	// Find matching strategies by similarity to swarm parameters
 	for _, strategy := range ml.population {
 		similarity := ml.calculateParameterSimilarity(strategy.Parameters, data.StrategyParams)
-		
+
 		if similarity > 0.8 {
 			// Update strategy performance based on swarm outcome
 			if strategy.Performance == nil {
 				strategy.Performance = &StrategyPerformance{StrategyID: strategy.ID}
 			}
-			
+
 			perf := strategy.Performance
 			perf.TotalApplications++
-			
+
 			// Success if accuracy is good and converged quickly
 			improvement := data.FinalAccuracy - 0.5 // Assuming 0.5 baseline
 			if data.FinalAccuracy > 0.7 && data.ConvergenceSpeed < 100 {
@@ -459,7 +459,7 @@ func (ml *MetaLearner) processSwarmData(data SwarmLearningData) {
 			} else {
 				perf.FailureCount++
 			}
-			
+
 			perf.LastEvaluated = time.Now()
 			strategy.UpdatedAt = time.Now()
 		}
@@ -471,9 +471,9 @@ func (ml *MetaLearner) calculateParameterSimilarity(p1, p2 map[string]float64) f
 	if len(p1) == 0 || len(p2) == 0 {
 		return 0.0
 	}
-	
+
 	var totalDiff, count float64
-	
+
 	for key, val1 := range p1 {
 		if val2, exists := p2[key]; exists {
 			diff := math.Abs(val1 - val2)
@@ -484,21 +484,21 @@ func (ml *MetaLearner) calculateParameterSimilarity(p1, p2 map[string]float64) f
 			count++
 		}
 	}
-	
+
 	if count == 0 {
 		return 0.0
 	}
-	
+
 	avgDiff := totalDiff / count
 	similarity := math.Max(0, 1-avgDiff)
-	
+
 	return similarity
 }
 
 // trainingResultProcessor handles training outcomes
 func (ml *MetaLearner) trainingResultProcessor() {
 	defer ml.wg.Done()
-	
+
 	for {
 		select {
 		case result := <-ml.trainingResults:
@@ -513,19 +513,19 @@ func (ml *MetaLearner) trainingResultProcessor() {
 func (ml *MetaLearner) processTrainingResult(result TrainingResult) {
 	ml.mu.Lock()
 	defer ml.mu.Unlock()
-	
+
 	strategy, exists := ml.strategies[result.StrategyID]
 	if !exists {
 		return
 	}
-	
+
 	if strategy.Performance == nil {
 		strategy.Performance = &StrategyPerformance{StrategyID: result.StrategyID}
 	}
-	
+
 	perf := strategy.Performance
 	perf.TotalApplications++
-	
+
 	if result.Improvement > ml.config.MinImprovement && result.Converged {
 		perf.SuccessCount++
 		if result.Improvement > perf.BestImprovement {
@@ -537,18 +537,18 @@ func (ml *MetaLearner) processTrainingResult(result TrainingResult) {
 			perf.WorstImprovement = result.Improvement
 		}
 	}
-	
+
 	// Update rolling averages
 	n := float64(perf.TotalApplications)
 	perf.AvgImprovement = (perf.AvgImprovement*(n-1) + result.Improvement) / n
 	perf.AvgTrainingTime = (perf.AvgTrainingTime*(n-1) + result.TrainingTime) / n
-	
+
 	if result.Converged {
 		perf.ConvergenceRate = (perf.ConvergenceRate*(n-1) + 1) / n
 	} else {
 		perf.ConvergenceRate = (perf.ConvergenceRate*(n-1) + 0) / n
 	}
-	
+
 	perf.LastEvaluated = time.Now()
 	strategy.UpdatedAt = time.Now()
 }
@@ -557,11 +557,11 @@ func (ml *MetaLearner) processTrainingResult(result TrainingResult) {
 func (ml *MetaLearner) GetBestStrategy() *LearningStrategy {
 	ml.mu.RLock()
 	defer ml.mu.RUnlock()
-	
+
 	if len(ml.eliteStrategies) == 0 {
 		return nil
 	}
-	
+
 	return ml.eliteStrategies[0]
 }
 
@@ -569,21 +569,21 @@ func (ml *MetaLearner) GetBestStrategy() *LearningStrategy {
 func (ml *MetaLearner) GetTopStrategies(n int) []*LearningStrategy {
 	ml.mu.RLock()
 	defer ml.mu.RUnlock()
-	
+
 	// Sort by score
 	sorted := make([]*LearningStrategy, len(ml.population))
 	copy(sorted, ml.population)
-	
+
 	sort.Slice(sorted, func(i, j int) bool {
 		scoreI := ml.calculateStrategyScore(sorted[i])
 		scoreJ := ml.calculateStrategyScore(sorted[j])
 		return scoreI > scoreJ
 	})
-	
+
 	if n > len(sorted) {
 		n = len(sorted)
 	}
-	
+
 	return sorted[:n]
 }
 
@@ -591,7 +591,7 @@ func (ml *MetaLearner) GetTopStrategies(n int) []*LearningStrategy {
 func (ml *MetaLearner) RecommendStrategyForAgent(agentID string, agentType StrategyType) *LearningStrategy {
 	ml.mu.RLock()
 	defer ml.mu.RUnlock()
-	
+
 	// Filter by type and score
 	var candidates []*LearningStrategy
 	for _, s := range ml.population {
@@ -599,18 +599,18 @@ func (ml *MetaLearner) RecommendStrategyForAgent(agentID string, agentType Strat
 			candidates = append(candidates, s)
 		}
 	}
-	
+
 	if len(candidates) == 0 {
 		return ml.GetBestStrategy()
 	}
-	
+
 	// Return highest scoring of matching type
 	sort.Slice(candidates, func(i, j int) bool {
 		scoreI := ml.calculateStrategyScore(candidates[i])
 		scoreJ := ml.calculateStrategyScore(candidates[j])
 		return scoreI > scoreJ
 	})
-	
+
 	return candidates[0]
 }
 
@@ -636,7 +636,7 @@ func (ml *MetaLearner) SubmitTrainingResult(result TrainingResult) {
 func (ml *MetaLearner) Save(filepath string) error {
 	ml.mu.RLock()
 	defer ml.mu.RUnlock()
-	
+
 	state := struct {
 		Strategies      map[string]*LearningStrategy `json:"strategies"`
 		Population      []string                     `json:"population"`
@@ -648,7 +648,7 @@ func (ml *MetaLearner) Save(filepath string) error {
 		Config:     ml.config,
 		SavedAt:    time.Now(),
 	}
-	
+
 	// Save IDs for population references
 	for _, s := range ml.population {
 		state.Population = append(state.Population, s.ID)
@@ -656,12 +656,12 @@ func (ml *MetaLearner) Save(filepath string) error {
 	for _, s := range ml.eliteStrategies {
 		state.EliteStrategies = append(state.EliteStrategies, s.ID)
 	}
-	
+
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	return os.WriteFile(filepath, data, 0644)
 }
 
@@ -669,26 +669,26 @@ func (ml *MetaLearner) Save(filepath string) error {
 func (ml *MetaLearner) Load(filepath string) error {
 	ml.mu.Lock()
 	defer ml.mu.Unlock()
-	
+
 	data, err := os.ReadFile(filepath)
 	if err != nil {
 		return err
 	}
-	
+
 	var state struct {
 		Strategies      map[string]*LearningStrategy `json:"strategies"`
 		Population      []string                     `json:"population"`
 		EliteStrategies []string                     `json:"elite_strategies"`
 		Config          *MetaLearningConfig          `json:"config"`
 	}
-	
+
 	if err := json.Unmarshal(data, &state); err != nil {
 		return err
 	}
-	
+
 	ml.strategies = state.Strategies
 	ml.config = state.Config
-	
+
 	// Restore population references
 	ml.population = make([]*LearningStrategy, 0, len(state.Population))
 	for _, id := range state.Population {
@@ -696,7 +696,7 @@ func (ml *MetaLearner) Load(filepath string) error {
 			ml.population = append(ml.population, s)
 		}
 	}
-	
+
 	// Restore elite references
 	ml.eliteStrategies = make([]*LearningStrategy, 0, len(state.EliteStrategies))
 	for _, id := range state.EliteStrategies {
@@ -704,7 +704,7 @@ func (ml *MetaLearner) Load(filepath string) error {
 			ml.eliteStrategies = append(ml.eliteStrategies, s)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -712,7 +712,7 @@ func (ml *MetaLearner) Load(filepath string) error {
 func (ml *MetaLearner) GenerateReport() *MetaLearningReport {
 	ml.mu.RLock()
 	defer ml.mu.RUnlock()
-	
+
 	report := &MetaLearningReport{
 		GeneratedAt:     time.Now(),
 		TotalStrategies: len(ml.strategies),
@@ -721,12 +721,12 @@ func (ml *MetaLearner) GenerateReport() *MetaLearningReport {
 		StrategyTypes:   make(map[StrategyType]int),
 		TopStrategies:   make([]*StrategySummary, 0, 5),
 	}
-	
+
 	// Count by type
 	for _, s := range ml.strategies {
 		report.StrategyTypes[s.Type]++
 	}
-	
+
 	// Get top 5
 	top := ml.GetTopStrategies(5)
 	for i, s := range top {
@@ -740,26 +740,26 @@ func (ml *MetaLearner) GenerateReport() *MetaLearningReport {
 			Performance: s.Performance,
 		})
 	}
-	
+
 	// Best strategy parameters
 	if best := ml.GetBestStrategy(); best != nil {
 		report.BestStrategyID = best.ID
 		report.BestStrategyParams = best.Parameters
 	}
-	
+
 	return report
 }
 
 // MetaLearningReport summarizes meta-learning system state
 type MetaLearningReport struct {
-	GeneratedAt        time.Time                   `json:"generated_at"`
-	TotalStrategies      int                         `json:"total_strategies"`
-	PopulationSize       int                         `json:"population_size"`
-	EliteCount           int                         `json:"elite_count"`
-	StrategyTypes        map[StrategyType]int        `json:"strategy_types"`
-	TopStrategies        []*StrategySummary          `json:"top_strategies"`
-	BestStrategyID       string                      `json:"best_strategy_id"`
-	BestStrategyParams   map[string]float64          `json:"best_strategy_params"`
+	GeneratedAt        time.Time            `json:"generated_at"`
+	TotalStrategies    int                  `json:"total_strategies"`
+	PopulationSize     int                  `json:"population_size"`
+	EliteCount         int                  `json:"elite_count"`
+	StrategyTypes      map[StrategyType]int `json:"strategy_types"`
+	TopStrategies      []*StrategySummary   `json:"top_strategies"`
+	BestStrategyID     string               `json:"best_strategy_id"`
+	BestStrategyParams map[string]float64   `json:"best_strategy_params"`
 }
 
 // StrategySummary provides quick overview of a strategy

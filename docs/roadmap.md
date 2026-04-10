@@ -51,3 +51,42 @@
 - Live order management
 - Risk circuit breakers
 - Performance reporting
+
+## Execution Roadmap (2026 Q2-Q4)
+
+### Short Term (2-6 weeks)
+
+- Freeze proposal/commit/event contracts and add validation checks
+- Implement decision state machine with explicit transition guards
+- Persist trace fields (`proposal_id`, `commit_id`, `approval_id`) in ledger artifacts
+- Build guard pipeline v2 with auditable reject reasons
+- Deliver first dashboard APIs for macro radar, agent observatory, and forecast-vs-reality
+
+Exit criteria:
+- Contract tests pass and are versioned
+- Replay runs remain deterministic
+- Every experiment record can be reconstructed end-to-end
+
+### Mid Term (6-12 weeks)
+
+- Add macro event ingestion pipeline with factor timeline snapshots
+- Add parallel simulation scenarios (base, stress, shock)
+- Wire human approval/revert flow into command path
+- Introduce weekly governance review with acceptance scorecards
+
+Exit criteria:
+- Scenario comparisons are stable across repeated runs
+- Human-in-the-loop checkpoints are enforced before promotion
+- Guard outcomes are visible in monitoring panels
+
+### Long Term (3-6 months)
+
+- Integrate production broker adapter with strict circuit breakers
+- Add SLO-driven operations dashboards and incident runbooks
+- Run staged drills for rollback and degraded-data operation
+- Promote to production with controlled capital ramp
+
+Exit criteria:
+- Staging drills pass with documented evidence
+- Rollback completes within defined operational window
+- Risk and audit controls satisfy production checklist
