@@ -322,13 +322,25 @@ func TestValidateBrokerRuntimeConfigRejectsUnsupportedNonceStore(t *testing.T) {
 	}
 }
 
-func TestValidateBrokerRuntimeConfigRejectsFileNonceStoreWithoutPath(t *testing.T) {
+func TestValidateBrokerRuntimeConfigDefaultsFileNonceStorePathFromLedgerDir(t *testing.T) {
+	ledgerDir := t.TempDir()
+	cfg := config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerMaxClockSkewS: 300, BrokerNonceTTLS: 300, BrokerNonceStore: "file"}
+	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(cfg.BrokerNonceStorePath, "broker-nonce-replay.json") {
+		t.Fatalf("unexpected nonce store path: %q", cfg.BrokerNonceStorePath)
+	}
+}
+
+func TestValidateBrokerRuntimeConfigDefaultsFileNonceStorePathWithEmptyLedgerDir(t *testing.T) {
 	cfg := config.Config{BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerMaxClockSkewS: 300, BrokerNonceTTLS: 300, BrokerNonceStore: "file"}
 	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "store path") {
+	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.BrokerNonceStorePath != "data/state/broker-nonce-replay.json" {
+		t.Fatalf("unexpected nonce store path: %q", cfg.BrokerNonceStorePath)
 	}
 }
