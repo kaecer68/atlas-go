@@ -182,12 +182,21 @@ func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allow
 		return fmt.Errorf("unsupported broker nonce store %q (allowed: memory, file)", cfg.BrokerNonceStore)
 	}
 	cfg.BrokerNonceStorePath = strings.TrimSpace(cfg.BrokerNonceStorePath)
+	defaultedNonceStorePath := false
 	if cfg.BrokerNonceStore == "file" && cfg.BrokerNonceStorePath == "" {
 		ledgerDir := strings.TrimSpace(cfg.LedgerDir)
 		if ledgerDir == "" {
 			ledgerDir = "data/state"
 		}
 		cfg.BrokerNonceStorePath = filepath.Join(ledgerDir, "broker-nonce-replay.json")
+		defaultedNonceStorePath = true
+	}
+	if cfg.BrokerNonceStore == "file" && !defaultedNonceStorePath && !filepath.IsAbs(cfg.BrokerNonceStorePath) {
+		ledgerDir := strings.TrimSpace(cfg.LedgerDir)
+		if ledgerDir == "" {
+			ledgerDir = "data/state"
+		}
+		cfg.BrokerNonceStorePath = filepath.Join(ledgerDir, cfg.BrokerNonceStorePath)
 	}
 
 	return nil
