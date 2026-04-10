@@ -57,6 +57,7 @@ type OrchestratorConfig struct {
 	TakeProfitEnabled  bool
 	BrokerMode         string
 	BrokerMaxRetries   int
+	BrokerAdapter      string
 }
 
 // DefaultOrchestratorConfig 默认配置
@@ -73,6 +74,7 @@ func DefaultOrchestratorConfig() OrchestratorConfig {
 		TakeProfitEnabled:  false,
 		BrokerMode:         "dry-run",
 		BrokerMaxRetries:   1,
+		BrokerAdapter:      "guarded",
 	}
 }
 
@@ -86,7 +88,7 @@ func NewOrchestrator(
 	config OrchestratorConfig,
 ) *Orchestrator {
 	ctx, cancel := context.WithCancel(context.Background())
-	requestedMode, effectiveMode, broker, audit := resolveBrokerMode(config.BrokerMode)
+	requestedMode, effectiveMode, broker, audit := resolveBrokerMode(config.BrokerMode, config.BrokerAdapter)
 	maxRetries := config.BrokerMaxRetries
 	if maxRetries < 0 {
 		maxRetries = 0
@@ -110,17 +112,29 @@ func NewOrchestrator(
 	}
 }
 
-func resolveBrokerMode(mode string) (requested string, effective string, broker Broker, auditMsg string) {
+func resolveBrokerMode(mode string, adapter string) (requested string, effective string, broker Broker, auditMsg string) {
 	requested = strings.TrimSpace(strings.ToLower(mode))
 	if requested == "" {
 		requested = "dry-run"
+	}
+
+	adapterProvider := strings.TrimSpace(strings.ToLower(adapter))
+	if adapterProvider == "" {
+		adapterProvider = "guarded"
 	}
 
 	switch requested {
 	case "dry-run", "paper":
 		return requested, "dry-run", NewDryRunBroker(), ""
 	case "live":
-		return requested, "live-guarded", NewGuardedLiveBroker(nil), "live mode enabled with guarded adapter; orders are rejected until adapter is configured"
+		switch adapterProvider {
+		case "guarded":
+			return requested, "live-guarded", NewGuardedLiveBroker(nil), "live mode enabled with guarded adapter; orders are rejected until adapter is configured"
+		case "mock":
+			return requested, "live-mock", NewGuardedLiveBroker(NewMockLiveAdapter()), "live mode uses mock adapter; no real orders are sent"
+		default:
+			return requested, "live-guarded", NewGuardedLiveBroker(nil), fmt.Sprintf("unsupported broker adapter %q for live mode; fallback to guarded", adapterProvider)
+		}
 	default:
 		return requested, "dry-run", NewDryRunBroker(), fmt.Sprintf("unsupported broker mode %q; fallback to dry-run", requested)
 	}

@@ -20,6 +20,7 @@ type Config struct {
 	YahooEnabled       bool
 	BrokerMode         string
 	BrokerMaxRetries   int
+	BrokerAdapter      string
 }
 
 func Load() Config {
@@ -40,6 +41,7 @@ func Load() Config {
 		YahooEnabled:     os.Getenv("ATLAS_YAHOO_ENABLED") == "true",
 		BrokerMode:       envOr("ATLAS_BROKER_MODE", "dry-run"),
 		BrokerMaxRetries: envOrInt("ATLAS_BROKER_MAX_RETRIES", 1),
+		BrokerAdapter:    envOr("ATLAS_BROKER_ADAPTER", "guarded"),
 	}
 }
 
