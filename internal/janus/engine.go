@@ -1,0 +1,237 @@
+package janus
+
+import (
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/prism"
+)
+
+// Engine is the central JANUS meta-layer that tracks PRISM cohort performance,
+// computes dynamic weights, and emits emergent regime classifications.
+type Engine struct {
+	tracker     *CohortPerformanceTracker
+	calculator  *CohortWeightCalculator
+	detector    *RegimeDetector
+	config      JANUSConfig
+	mu          sync.RWMutex
+	lastWeights map[prism.RegimeType]CohortWeight
+	lastClass   RegimeClassification
+	lastUpdated time.Time
+}
+
+// NewEngine creates a JANUS engine with default configuration.
+func NewEngine() *Engine {
+	cfg := DefaultJANUSConfig()
+	return NewEngineWithConfig(cfg)
+}
+
+// NewEngineWithConfig creates a JANUS engine with custom configuration.
+func NewEngineWithConfig(config JANUSConfig) *Engine {
+	return &Engine{
+		tracker:     NewCohortPerformanceTracker(90),
+		calculator:  NewCohortWeightCalculator(config),
+		detector:    NewRegimeDetector(config),
+		config:      config,
+		lastWeights: make(map[prism.RegimeType]CohortWeight),
+		lastClass:   MixedRegime,
+	}
+}
+
+// RecordTrainingResult records a PRISM training result for the specified cohort.
+func (e *Engine) RecordTrainingResult(regime prism.RegimeType, result prism.TrainingResult) {
+	snapshot := CohortSnapshot{
+		Regime:      regime,
+		SharpeRatio: result.SharpeRatio,
+		HitRate:     result.HitRate,
+		TotalReturn: result.TotalReturn,
+		Signals:     result.SignalsCount,
+		RecordedAt:  time.Now(),
+	}
+	e.tracker.RecordSnapshot(snapshot)
+}
+
+// RecordSnapshot records a raw cohort snapshot directly.
+func (e *Engine) RecordSnapshot(snapshot CohortSnapshot) {
+	e.tracker.RecordSnapshot(snapshot)
+}
+
+// Update recomputes weights and regime classification based on the latest tracked data.
+func (e *Engine) Update() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	perf := e.tracker.GetPerformance()
+	if len(perf) == 0 {
+		return
+	}
+
+	// Compute blended weights (default JANUS output).
+	weights := e.calculator.CalculateWeights(perf)
+
+	// Compute short-only and long-only weights for regime detection.
+	shortWeights := e.calculator.CalculateWindowWeights(perf, WindowShort)
+	longWeights := e.calculator.CalculateWindowWeights(perf, WindowLong)
+
+	classification := e.detector.Detect(shortWeights, longWeights)
+
+	e.lastWeights = weights
+	e.lastClass = classification
+	e.lastUpdated = time.Now()
+}
+
+// GetCohortWeights returns the most recently computed JANUS weights.
+func (e *Engine) GetCohortWeights() map[prism.RegimeType]CohortWeight {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	// Defensive copy.
+	out := make(map[prism.RegimeType]CohortWeight, len(e.lastWeights))
+	for k, v := range e.lastWeights {
+		out[k] = v
+	}
+	return out
+}
+
+// GetRegimeClassification returns the latest emergent regime signal.
+func (e *Engine) GetRegimeClassification() RegimeClassification {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.lastClass
+}
+
+// GetStatus returns a serializable snapshot of the current JANUS state.
+func (e *Engine) GetStatus() Status {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	weights := make(map[string]float64, len(e.lastWeights))
+	for regime, cw := range e.lastWeights {
+		weights[regime.String()] = cw.Weight
+	}
+
+	perf := e.tracker.GetPerformance()
+	perfMap := make(map[string]WindowPerformanceSnapshot, len(perf))
+	for regime, p := range perf {
+		perfMap[regime.String()] = WindowPerformanceSnapshot{
+			ShortSharpe: cull(p.ShortWindow),
+			MedSharpe:   cull(p.MedWindow),
+			LongSharpe:  cull(p.LongWindow),
+		}
+	}
+
+	return Status{
+		Weights:            weights,
+		Classification:     string(e.lastClass),
+		LastUpdated:        e.lastUpdated,
+		WindowPerformances: perfMap,
+	}
+}
+
+// ApplyAdjustment scales recommendation conviction by the active JANUS weight
+// of the cohort that most closely matches the current market regime.
+//
+// If no weights have been computed yet, recommendations are returned unchanged.
+func (e *Engine) ApplyAdjustment(
+	recommendations []domain.Recommendation,
+	currentRegime domain.Regime,
+) []domain.Recommendation {
+	e.mu.RLock()
+	weights := e.lastWeights
+	e.mu.RUnlock()
+
+	if len(weights) == 0 {
+		return recommendations
+	}
+
+	// Map domain.Regime to the closest prism.RegimeType to resolve a cohort weight.
+	targetRegime := mapDomainRegimeToPRISM(currentRegime)
+	cw, ok := weights[targetRegime]
+	if !ok {
+		// Fallback to equal scaling if the specific regime cohort is missing.
+		return recommendations
+	}
+
+	adjusted := make([]domain.Recommendation, len(recommendations))
+	for i, rec := range recommendations {
+		adj := rec
+		// Scale conviction by cohort weight relative to neutral (1.0 / cohortCount).
+		// With 5 cohorts, neutral is 0.20. Weight > 0.20 => boost, < 0.20 => reduce.
+		// We use a gentler scaling: 1.0 + (weight - neutral) so that weight 0.30 => 1.10x.
+		neutral := 1.0 / float64(len(weights))
+		scale := 1.0 + (cw.Weight - neutral)
+		adj.Conviction = int(float64(adj.Conviction) * scale)
+		if adj.Conviction > 100 {
+			adj.Conviction = 100
+		}
+		if adj.Conviction < 0 {
+			adj.Conviction = 0
+		}
+		adjusted[i] = adj
+	}
+	return adjusted
+}
+
+// Status is a serializable view of the JANUS engine state.
+type Status struct {
+	Weights            map[string]float64                `json:"weights"`
+	Classification     string                            `json:"classification"`
+	LastUpdated        time.Time                         `json:"last_updated"`
+	WindowPerformances map[string]WindowPerformanceSnapshot `json:"window_performances"`
+}
+
+// WindowPerformanceSnapshot exposes Sharpe values per window for reporting.
+type WindowPerformanceSnapshot struct {
+	ShortSharpe float64 `json:"short_sharpe,omitempty"`
+	MedSharpe   float64 `json:"med_sharpe,omitempty"`
+	LongSharpe  float64 `json:"long_sharpe,omitempty"`
+}
+
+func cull(wp *WindowPerformance) float64 {
+	if wp == nil {
+		return 0
+	}
+	return wp.SharpeRatio
+}
+
+func mapDomainRegimeToPRISM(r domain.Regime) prism.RegimeType {
+	switch r {
+	case domain.RegimeRiskOn:
+		return prism.RegimeRiskOn
+	case domain.RegimeRiskOff:
+		return prism.RegimeRiskOff
+	case domain.RegimeNeutral:
+		// Neutral maps to Low-Volatility as the closest stable regime.
+		return prism.RegimeLowVolatility
+	default:
+		return prism.RegimeTransition
+	}
+}
+
+// EnsureAllRegimes initializes tracker slots for every PRISM regime so that
+// weight calculations produce entries even before data arrives.
+func (e *Engine) EnsureAllRegimes() {
+	for i := 0; i < int(prism.RegimeCount); i++ {
+		regime := prism.RegimeType(i)
+		// Inject a neutral zero snapshot so the regime appears in performance maps.
+		e.tracker.RecordSnapshot(CohortSnapshot{
+			Regime:      regime,
+			SharpeRatio: 0,
+			HitRate:     0.5,
+			TotalReturn: 0,
+			Signals:     0,
+			RecordedAt:  time.Now(),
+		})
+	}
+}
+
+// String returns a human-readable summary of the current JANUS state.
+func (e *Engine) String() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	return fmt.Sprintf("JANUS[class=%s weights=%+v updated=%s]",
+		e.lastClass, e.lastWeights, e.lastUpdated.Format(time.RFC3339))
+}

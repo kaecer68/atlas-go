@@ -1,0 +1,89 @@
+package marketdata
+
+import "context"
+
+// MacroDataPoint represents a single macro indicator reading.
+type MacroDataPoint struct {
+	Symbol    string  `json:"symbol"`
+	Value     float64 `json:"value"`
+	ChangePct float64 `json:"change_pct"`
+	Timestamp int64   `json:"timestamp"`
+}
+
+// MacroDataSnapshot holds the latest readings for all tracked indicators.
+type MacroDataSnapshot struct {
+	US10Y              MacroDataPoint `json:"us10y"`
+	DXY                MacroDataPoint `json:"dxy"`
+	VIX                MacroDataPoint `json:"vix"`
+	USD_TWD            MacroDataPoint `json:"usd_twd"`
+	Oil                MacroDataPoint `json:"oil"`
+	Gold               MacroDataPoint `json:"gold"`
+	JPY                MacroDataPoint `json:"jpy"`
+	ForeignInvestorNet MacroDataPoint `json:"foreign_investor_net"`
+	DomesticFundNet    MacroDataPoint `json:"domestic_fund_net"`
+	DealerNet          MacroDataPoint `json:"dealer_net"`
+	RecordedAt         int64          `json:"recorded_at"`
+}
+
+// MacroDataProvider fetches macroeconomic indicators.
+type MacroDataProvider interface {
+	Name() string
+	FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error)
+}
+
+// CompositeMacroProvider aggregates multiple providers.
+type CompositeMacroProvider struct {
+	providers []MacroDataProvider
+}
+
+// NewCompositeMacroProvider creates a composite from given providers.
+func NewCompositeMacroProvider(providers ...MacroDataProvider) *CompositeMacroProvider {
+	return &CompositeMacroProvider{providers: providers}
+}
+
+// Name returns the provider name.
+func (c *CompositeMacroProvider) Name() string {
+	return "composite"
+}
+
+// FetchSnapshot merges snapshots from all providers (last write wins).
+func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
+	var merged MacroDataSnapshot
+	for _, p := range c.providers {
+		snap, err := p.FetchSnapshot(ctx)
+		if err != nil {
+			continue
+		}
+		if snap.US10Y.Symbol != "" {
+			merged.US10Y = snap.US10Y
+		}
+		if snap.DXY.Symbol != "" {
+			merged.DXY = snap.DXY
+		}
+		if snap.VIX.Symbol != "" {
+			merged.VIX = snap.VIX
+		}
+		if snap.USD_TWD.Symbol != "" {
+			merged.USD_TWD = snap.USD_TWD
+		}
+		if snap.Oil.Symbol != "" {
+			merged.Oil = snap.Oil
+		}
+		if snap.Gold.Symbol != "" {
+			merged.Gold = snap.Gold
+		}
+		if snap.JPY.Symbol != "" {
+			merged.JPY = snap.JPY
+		}
+		if snap.ForeignInvestorNet.Symbol != "" {
+			merged.ForeignInvestorNet = snap.ForeignInvestorNet
+		}
+		if snap.DomesticFundNet.Symbol != "" {
+			merged.DomesticFundNet = snap.DomesticFundNet
+		}
+		if snap.DealerNet.Symbol != "" {
+			merged.DealerNet = snap.DealerNet
+		}
+	}
+	return merged, nil
+}

@@ -2,27 +2,36 @@ package orchestrator
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/evolution"
+	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/reflexivity"
 	"github.com/kaecer68/atlas-go/internal/replay"
 	"github.com/kaecer68/atlas-go/internal/sim"
 )
 
 type System struct {
-	cfg      config.Config
-	provider marketdata.Provider
-	engine   *sim.Engine
-	registry domain.AgentRegistry
-	policy   baseline.Policy
-	ledger   *ledger.Store
-	replay   *replay.Dataset
-	session  domain.ReplaySession
+	cfg            config.Config
+	provider       marketdata.Provider
+	engine         *sim.Engine
+	registry       domain.AgentRegistry
+	policy         baseline.Policy
+	ledger         *ledger.Store
+	replay         *replay.Dataset
+	session        domain.ReplaySession
+	janusEngine     *janus.Engine
+	alphaDiscovery  *AlphaDiscoveryEngine
+	optimizer       *portfolio.Optimizer
+	narrativeEngine *narrative.NarrativeEngine
 }
 
 func NewSystem(cfg config.Config) *System {
@@ -36,15 +45,34 @@ func NewSystem(cfg config.Config) *System {
 	}
 	ds, _ := replay.LoadTWSEOpenDataCSV(cfg.ReplayDataPath)
 	session := newSession(cfg, ds)
+	optimizer := portfolio.NewOptimizer()
+	hp := portfolio.NewHistoricalPrices()
+	_ = hp.LoadFromExtendedJSONL("data/replay/tw_extended_90days.jsonl")
+	fp := portfolio.NewFundamentalProvider()
+	_ = fp.LoadFromJSON("data/fundamentals.json")
+	optimizer.WithHistoricalPrices(hp).WithFundamentalProvider(fp)
+
+	engine := sim.NewEngine(policy.Constraints).
+		WithOptimizer(optimizer).
+		WithReflexivityRules(
+			reflexivity.PriceToFundamentalsRule{},
+			reflexivity.PnLBehaviorRule{},
+			reflexivity.NarrativeFlowsRule{Threshold: 3},
+			reflexivity.MarketPolicyRule{Threshold: 0.03},
+			reflexivity.NewReversalDetectionRule(),
+		)
 	return &System{
-		cfg:      cfg,
-		provider: selectProvider(cfg),
-		engine:   sim.NewEngine(policy.Constraints),
-		registry: registry,
-		policy:   policy,
-		ledger:   ledger.NewStore(cfg.LedgerDir),
-		replay:   ds,
-		session:  session,
+		cfg:             cfg,
+		provider:        selectProvider(cfg),
+		engine:          engine,
+		registry:        registry,
+		policy:          policy,
+		ledger:          ledger.NewStore(cfg.LedgerDir),
+		replay:          ds,
+		session:         session,
+		optimizer:       optimizer,
+		alphaDiscovery:  NewAlphaDiscoveryEngine(optimizer),
+		narrativeEngine: narrative.NewNarrativeEngine(),
 	}
 }
 
@@ -60,6 +88,14 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	}
 
 	regime, rawRecs, finalRecs, guardOutcomes := ExecuteRegistryResearchDetailedWithPolicyAndGuards(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy)
+	rawRecs = s.applyNarrativeContext(rawRecs, quotes)
+	finalRecs = s.applyNarrativeContext(finalRecs, quotes)
+	rawRecs = s.applyHumanOverrides(rawRecs)
+	finalRecs = s.applyHumanOverrides(finalRecs)
+	alphaRecs := s.applyAlphaDiscovery(quotes, rawRecs)
+	rawRecs = append(rawRecs, alphaRecs...)
+	finalRecs = append(finalRecs, alphaRecs...)
+	finalRecs = s.applyJANUS(regime, finalRecs)
 	result := s.engine.Run(regime, quotes, finalRecs)
 	result.GuardOutcomes = guardOutcomes
 	outcomes := buildSyntheticOutcomes(rawRecs, quotes, asOf)
@@ -72,6 +108,14 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	symbols := RegistrySymbols(s.registry)
 	quotes := s.replay.QuotesForDate(sessionDate, symbols)
 	regime, rawRecs, finalRecs, guardOutcomes := ExecuteRegistryResearchDetailedWithPolicyAndGuards(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy)
+	rawRecs = s.applyNarrativeContext(rawRecs, quotes)
+	finalRecs = s.applyNarrativeContext(finalRecs, quotes)
+	rawRecs = s.applyHumanOverrides(rawRecs)
+	finalRecs = s.applyHumanOverrides(finalRecs)
+	alphaRecs := s.applyAlphaDiscovery(quotes, rawRecs)
+	rawRecs = append(rawRecs, alphaRecs...)
+	finalRecs = append(finalRecs, alphaRecs...)
+	finalRecs = s.applyJANUS(regime, finalRecs)
 	result := s.engine.Run(regime, quotes, finalRecs)
 	result.GuardOutcomes = guardOutcomes
 	outcomes := buildReplayOutcomes(rawRecs, sessionDate, s.replay)
@@ -101,6 +145,159 @@ func selectProvider(cfg config.Config) marketdata.Provider {
 
 func (s *System) Registry() domain.AgentRegistry {
 	return s.registry
+}
+
+// WithJANUS attaches a JANUS engine to the system for backtest validation.
+func (s *System) WithJANUS(j *janus.Engine) *System {
+	s.janusEngine = j
+	return s
+}
+
+func (s *System) applyJANUS(regime domain.Regime, recs []domain.Recommendation) []domain.Recommendation {
+	if s.janusEngine == nil {
+		return recs
+	}
+	return s.janusEngine.ApplyAdjustment(recs, regime)
+}
+
+func (s *System) applyNarrativeContext(recs []domain.Recommendation, quotes []domain.Quote) []domain.Recommendation {
+	if s.narrativeEngine == nil {
+		return recs
+	}
+	data := quotesToNarrativeData(quotes)
+	events := s.narrativeEngine.DetectEvents(data)
+	if len(events) == 0 {
+		return recs
+	}
+	chains := s.narrativeEngine.MatchChains(events)
+
+	enriched := make([]domain.Recommendation, len(recs))
+	for i, rec := range recs {
+		enriched[i] = rec
+		// Attach narrative context to context and superinvestor layers.
+		var agentLayer string
+		for _, agent := range s.registry.Agents {
+			if agent.ID == rec.Agent {
+				agentLayer = string(agent.Layer)
+				break
+			}
+		}
+		if agentLayer == "context" || agentLayer == "superinvestor" {
+			enriched[i].SupportingEvents = make([]string, len(events))
+			for j, e := range events {
+				enriched[i].SupportingEvents[j] = e.ID
+			}
+			enriched[i].ReasoningChain = []string{}
+			for _, e := range events {
+				enriched[i].ReasoningChain = append(enriched[i].ReasoningChain, fmt.Sprintf("%s (%s, confidence %.2f)", e.Theme, e.Region, e.Confidence))
+			}
+			for _, c := range chains {
+				if len(c.Steps) > 0 {
+					enriched[i].ReasoningChain = append(enriched[i].ReasoningChain, fmt.Sprintf("Chain %s: %s", c.TemplateID, c.Steps[0].Description))
+				}
+			}
+			if enriched[i].Reason != "" {
+				enriched[i].Reason = fmt.Sprintf("%s | Narrative: %d event(s)", enriched[i].Reason, len(events))
+			}
+		}
+	}
+	return enriched
+}
+
+func (s *System) applyHumanOverrides(recs []domain.Recommendation) []domain.Recommendation {
+	if s.ledger == nil {
+		return recs
+	}
+	interventions, err := s.ledger.LoadHumanInterventions()
+	if err != nil {
+		return recs
+	}
+
+	pausedAgents := make(map[string]bool)
+	bannedSectors := make(map[string]bool)
+	for _, iv := range interventions {
+		switch iv.Type {
+		case "pause_agent":
+			pausedAgents[iv.TargetAgentID] = true
+		case "resume_agent":
+			delete(pausedAgents, iv.TargetAgentID)
+		case "sector_ban":
+			bannedSectors[iv.TargetSector] = true
+		case "sector_unban":
+			delete(bannedSectors, iv.TargetSector)
+		}
+	}
+
+	filtered := make([]domain.Recommendation, 0, len(recs))
+	for _, rec := range recs {
+		if pausedAgents[rec.Agent] {
+			continue
+		}
+		if isRecommendationInBannedSector(rec, s.registry, bannedSectors) {
+			continue
+		}
+		filtered = append(filtered, rec)
+	}
+	return filtered
+}
+
+func isRecommendationInBannedSector(rec domain.Recommendation, registry domain.AgentRegistry, bannedSectors map[string]bool) bool {
+	if len(bannedSectors) == 0 {
+		return false
+	}
+	var skill string
+	for _, agent := range registry.Agents {
+		if agent.ID == rec.Agent {
+			skill = agent.Skill
+			break
+		}
+	}
+	mappings := map[string][]string{
+		"semiconductor_desk":     {"semiconductor", "foundry"},
+		"ai_supply_chain_desk":   {"ai_supply_chain", "pcb", "thermal"},
+		"financials_desk":        {"financials"},
+		"shipping_desk":          {"shipping"},
+		"etf_rotation_desk":      {"high_dividend", "etf_rotation"},
+	}
+	for _, sector := range mappings[skill] {
+		if bannedSectors[sector] {
+			return true
+		}
+	}
+	return false
+}
+
+func quotesToNarrativeData(quotes []domain.Quote) narrative.MarketNarrativeData {
+	data := narrative.MarketNarrativeData{}
+	for _, q := range quotes {
+		switch q.Symbol {
+		case "DXY", "^DXY":
+			data.DXYChangePct = (q.Last - q.Open) / q.Open * 100
+		case "US10Y", "^TNX":
+			data.US10YChangeBps = q.Last
+		case "VIX", "^VIX":
+			data.VIXLevel = q.Last
+		case "OIL", "CL=F":
+			data.OilChangePct = (q.Last - q.Open) / q.Open * 100
+		case "GOLD", "GC=F":
+			data.GoldChangePct = (q.Last - q.Open) / q.Open * 100
+		case "JPY=X", "USDJPY=X":
+			data.JPY_ChangePct = (q.Last - q.Open) / q.Open * 100
+		}
+	}
+	return data
+}
+
+func (s *System) applyAlphaDiscovery(quotes []domain.Quote, recs []domain.Recommendation) []domain.Recommendation {
+	if s.alphaDiscovery == nil {
+		return nil
+	}
+	symbols := RegistrySymbols(s.registry)
+	quoteMap := make(map[string]domain.Quote, len(quotes))
+	for _, q := range quotes {
+		quoteMap[q.Symbol] = q
+	}
+	return s.alphaDiscovery.Discover(symbols, quoteMap, recs)
 }
 
 func (s *System) NextExperimentCandidate() (*evolution.Candidate, error) {

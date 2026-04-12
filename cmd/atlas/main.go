@@ -19,6 +19,10 @@ import (
 
 type routeRegistrar interface {
 	RegisterRoutes(mux *http.ServeMux)
+	RegisterSwaggerRoutes(mux *http.ServeMux)
+	RegisterNarrativeRoutes(mux *http.ServeMux)
+	RegisterControlRoutes(mux *http.ServeMux)
+	RegisterMacroRoutes(mux *http.ServeMux)
 }
 
 type appDeps struct {
@@ -47,6 +51,7 @@ func run(args []string, deps appDeps) error {
 
 	apiMode := flags.Bool("api", false, "start dashboard api server")
 	apiAddr := flags.String("addr", ":8080", "dashboard api listen address")
+	swaggerMode := flags.Bool("swagger", false, "enable swagger docs endpoints")
 	brokerMode := flags.String("broker-mode", "", "override broker mode: dry-run|paper|live")
 	brokerAdapter := flags.String("broker-adapter", "", "override broker adapter: guarded|mock|http")
 	brokerSigner := flags.String("broker-signer", "", "override broker signer: placeholder|hmac-sha256")
@@ -111,6 +116,12 @@ func run(args []string, deps appDeps) error {
 		mux := http.NewServeMux()
 		dashboard := deps.newDashboardAPI(cfg.LedgerDir)
 		dashboard.RegisterRoutes(mux)
+		dashboard.RegisterNarrativeRoutes(mux)
+		dashboard.RegisterControlRoutes(mux)
+		dashboard.RegisterMacroRoutes(mux)
+		if *swaggerMode {
+			dashboard.RegisterSwaggerRoutes(mux)
+		}
 		log.Printf("dashboard api listening on %s", *apiAddr)
 		if err := deps.listenAndServe(*apiAddr, mux); err != nil {
 			return fmt.Errorf("dashboard api server failed: %w", err)

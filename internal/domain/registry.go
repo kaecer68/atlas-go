@@ -44,6 +44,20 @@ type RecommendationOutcome struct {
 	RecordedAt     time.Time
 }
 
+type HumanIntervention struct {
+	ID            string    `json:"id"`
+	Type          string    `json:"type"`          // e.g., "pause_agent", "set_model_weight", "sector_ban", "approve_rec", "reject_rec"
+	TargetAgentID string    `json:"target_agent_id,omitempty"`
+	TargetModelID string    `json:"target_model_id,omitempty"`
+	TargetSector  string    `json:"target_sector,omitempty"`
+	TargetSymbol  string    `json:"target_symbol,omitempty"`
+	Value         float64   `json:"value,omitempty"`
+	Reason        string    `json:"reason"`
+	Operator      string    `json:"operator"`
+	SessionID     string    `json:"session_id,omitempty"`
+	RecordedAt    time.Time `json:"recorded_at"`
+}
+
 type Scorecard struct {
 	AgentID               string
 	Skill                 string

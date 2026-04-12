@@ -10,5 +10,11 @@
 /data/cache/
 /data/state/
 /data/replay/*.jsonl
+/data/replay/*.csv
+/data/fundamentals.json
+/reports/
 /prompts/experiments/
 /internal/experiment/prompts/
+/janus-backtest
+/janus-status
+/internal/monitoring/data/

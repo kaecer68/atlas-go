@@ -2,6 +2,7 @@ package spawning
 
 import (
 	"testing"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
@@ -255,5 +256,54 @@ func TestSpawningManager(t *testing.T) {
 		t.Logf("Statistics: TotalSpawned=%d, ActiveTraining=%d", stats.TotalSpawned, stats.ActiveTraining)
 		// Note: ManualSpawn doesn't automatically track in statistics
 		// This test documents the current behavior
+	})
+
+	t.Run("CheckExtinction", func(t *testing.T) {
+		registry := &domain.AgentRegistry{
+			Agents: []domain.AgentSpec{
+				{ID: "spawn_test_001", Enabled: true, Layer: domain.LayerSector},
+			},
+		}
+		config := DefaultSpawningConfig()
+		config.MinWeightDays = 3
+		manager := NewSpawningManager(registry, config)
+
+		// Inject a spawned agent directly into the internal map
+		manager.spawnedAgents["spawn_test_001"] = &SpawnedAgent{
+			AgentID:   "spawn_test_001",
+			Status:    SpawnStatusValidating,
+			CreatedAt: time.Now(),
+		}
+
+		weights := map[string]float64{
+			"spawn_test_001": 0.3,
+		}
+
+		// Day 1-2: not extinct yet
+		for i := 0; i < 2; i++ {
+			extinct := manager.CheckExtinction(weights)
+			if len(extinct) != 0 {
+				t.Fatalf("expected no extinction on day %d", i+1)
+			}
+		}
+
+		// Day 3: should go extinct
+		extinct := manager.CheckExtinction(weights)
+		if len(extinct) != 1 || extinct[0] != "spawn_test_001" {
+			t.Fatalf("expected extinction on day 3, got %v", extinct)
+		}
+
+		// Verify agent disabled in registry
+		for _, agent := range registry.Agents {
+			if agent.ID == "spawn_test_001" && agent.Enabled {
+				t.Error("expected extinct agent to be disabled in registry")
+			}
+		}
+
+		// Verify statistics reflect extinction
+		stats := manager.GetStatistics()
+		if stats.Extinct != 1 {
+			t.Errorf("expected 1 extinct agent, got %d", stats.Extinct)
+		}
 	})
 }

@@ -180,6 +180,91 @@ func (s *Store) RecordMutationBrief(windowID string, brief domain.MutationBrief)
 	return os.WriteFile(path, bytes, 0o644)
 }
 
+// SpawnRecord captures the lifecycle audit trail for a spawned agent.
+type SpawnRecord struct {
+	AgentID         string    `json:"agent_id"`
+	GapID           string    `json:"gap_id"`
+	GapPattern      string    `json:"gap_pattern"`
+	CreatedAt       time.Time `json:"created_at"`
+	TrainingSharpe  float64   `json:"training_sharpe"`
+	TrainingHitRate float64   `json:"training_hit_rate"`
+	FinalFate       string    `json:"final_fate"` // active / extinct / promoted
+	ExtinctAt       time.Time `json:"extinct_at,omitempty"`
+	PromotedAt      time.Time `json:"promoted_at,omitempty"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+func (s *Store) RecordSpawnRecord(record SpawnRecord) error {
+	if err := os.MkdirAll(s.baseDir, 0o755); err != nil {
+		return err
+	}
+	path := filepath.Join(s.baseDir, "spawn_records.jsonl")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	record.UpdatedAt = time.Now()
+	return json.NewEncoder(f).Encode(record)
+}
+
+func (s *Store) LoadSpawnRecords() ([]SpawnRecord, error) {
+	path := filepath.Join(s.baseDir, "spawn_records.jsonl")
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	records := make([]SpawnRecord, 0)
+	for scanner.Scan() {
+		var rec SpawnRecord
+		if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
+			return nil, fmt.Errorf("decode spawn record: %w", err)
+		}
+		records = append(records, rec)
+	}
+	return records, scanner.Err()
+}
+
+func (s *Store) RecordHumanIntervention(intervention domain.HumanIntervention) error {
+	if err := os.MkdirAll(s.baseDir, 0o755); err != nil {
+		return err
+	}
+	path := filepath.Join(s.baseDir, "human_interventions.jsonl")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return json.NewEncoder(f).Encode(intervention)
+}
+
+func (s *Store) LoadHumanInterventions() ([]domain.HumanIntervention, error) {
+	path := filepath.Join(s.baseDir, "human_interventions.jsonl")
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	records := make([]domain.HumanIntervention, 0)
+	for scanner.Scan() {
+		var rec domain.HumanIntervention
+		if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
+			return nil, fmt.Errorf("decode human intervention: %w", err)
+		}
+		records = append(records, rec)
+	}
+	return records, scanner.Err()
+}
+
 func (s *Store) RecordPromptExperimentResult(experimentID string, result domain.PromptExperimentResult) error {
 	dir := filepath.Join(s.baseDir, "experiments")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -311,6 +396,40 @@ func maxDrawdown(values []float64) float64 {
 
 func (s *Store) sessionDir(sessionID string) string {
 	return filepath.Join(s.baseDir, "sessions", sessionID)
+}
+
+// LoadSessionSummaries reads all session summaries stored in the ledger.
+func (s *Store) LoadSessionSummaries() ([]domain.SessionSummary, error) {
+	root := filepath.Join(s.baseDir, "sessions")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	summaries := make([]domain.SessionSummary, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		path := filepath.Join(root, entry.Name(), "summary.json")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, fmt.Errorf("read summary %s: %w", path, err)
+		}
+		var summary domain.SessionSummary
+		if err := json.Unmarshal(data, &summary); err != nil {
+			return nil, fmt.Errorf("decode summary %s: %w", path, err)
+		}
+		summaries = append(summaries, summary)
+	}
+
+	return summaries, nil
 }
 
 func loadOutcomeFile(path string) ([]domain.RecommendationOutcome, error) {

@@ -24,6 +24,64 @@ func TestSelectWeakestAgent(t *testing.T) {
 	}
 }
 
+func TestSelectWeakestAgentExcludingExtinct(t *testing.T) {
+	reg := domain.AgentRegistry{
+		Agents: []domain.AgentSpec{
+			{ID: "a", Skill: "alpha", Layer: domain.LayerStyle, Enabled: true},
+			{ID: "b", Skill: "beta", Layer: domain.LayerStyle, Enabled: true},
+		},
+	}
+	scorecards := []domain.Scorecard{
+		{AgentID: "a", SharpeLike: -0.4, WindowCount: 2},
+		{AgentID: "b", SharpeLike: -0.1, WindowCount: 2},
+	}
+
+	extinct := map[string]bool{"a": true}
+	candidate := SelectWeakestAgentExcluding(reg, scorecards, extinct)
+	if candidate == nil || candidate.Agent.ID != "b" {
+		t.Fatalf("expected b because a is extinct, got %+v", candidate)
+	}
+}
+
+func TestSelectBestSpawnedAgent(t *testing.T) {
+	reg := domain.AgentRegistry{
+		Agents: []domain.AgentSpec{
+			{ID: "spawn_1", Skill: "sector_bio", Layer: domain.LayerSector, Enabled: true},
+			{ID: "baseline_1", Skill: "tech", Layer: domain.LayerSector, Enabled: true},
+		},
+	}
+	scorecards := []domain.Scorecard{
+		{AgentID: "spawn_1", SharpeLike: 0.8, WindowCount: 5},
+		{AgentID: "baseline_1", SharpeLike: 0.5, WindowCount: 10},
+	}
+
+	spawned := map[string]bool{"spawn_1": true}
+	candidate := SelectBestSpawnedAgent(reg, scorecards, spawned, 0.5)
+	if candidate == nil || candidate.Agent.ID != "spawn_1" {
+		t.Fatalf("expected spawn_1 to be selected for promotion, got %+v", candidate)
+	}
+	if candidate.Experiment.MutationType != "promote_spawned" {
+		t.Fatalf("expected promote_spawned mutation type, got %s", candidate.Experiment.MutationType)
+	}
+}
+
+func TestSelectBestSpawnedAgentIgnoresBelowBaseline(t *testing.T) {
+	reg := domain.AgentRegistry{
+		Agents: []domain.AgentSpec{
+			{ID: "spawn_1", Skill: "sector_bio", Layer: domain.LayerSector, Enabled: true},
+		},
+	}
+	scorecards := []domain.Scorecard{
+		{AgentID: "spawn_1", SharpeLike: 0.4, WindowCount: 5},
+	}
+
+	spawned := map[string]bool{"spawn_1": true}
+	candidate := SelectBestSpawnedAgent(reg, scorecards, spawned, 0.5)
+	if candidate != nil {
+		t.Fatalf("expected no candidate when spawned agent is below baseline")
+	}
+}
+
 func TestBuildMutationBriefCarriesLayerAndEvidence(t *testing.T) {
 	candidate := &Candidate{
 		Agent: domain.AgentSpec{

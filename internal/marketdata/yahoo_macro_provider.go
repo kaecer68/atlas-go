@@ -1,0 +1,160 @@
+package marketdata
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// YahooFinanceMacroProvider fetches macro indicators from Yahoo Finance.
+type YahooFinanceMacroProvider struct {
+	client *http.Client
+}
+
+// NewYahooFinanceMacroProvider creates a new Yahoo Finance macro provider.
+func NewYahooFinanceMacroProvider() *YahooFinanceMacroProvider {
+	return &YahooFinanceMacroProvider{
+		client: &http.Client{Timeout: 15 * time.Second},
+	}
+}
+
+// Name returns the provider name.
+func (y *YahooFinanceMacroProvider) Name() string {
+	return "yahoo_finance"
+}
+
+// FetchSnapshot retrieves DXY, ^TNX, VIX, Oil, Gold, JPY from Yahoo Finance.
+func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
+	symbols := map[string]string{
+		"DX-Y.NYB": "dxy",
+		"^TNX":     "us10y",
+		"^VIX":     "vix",
+		"CL=F":     "oil",
+		"GC=F":     "gold",
+		"JPY=X":    "jpy",
+	}
+
+	snap := MacroDataSnapshot{RecordedAt: time.Now().Unix()}
+	for ticker, key := range symbols {
+		point, err := y.fetchIndicator(ctx, ticker)
+		if err != nil {
+			continue
+		}
+		switch key {
+		case "dxy":
+			snap.DXY = point
+		case "us10y":
+			snap.US10Y = point
+		case "vix":
+			snap.VIX = point
+		case "oil":
+			snap.Oil = point
+		case "gold":
+			snap.Gold = point
+		case "jpy":
+			snap.JPY = point
+		}
+	}
+	return snap, nil
+}
+
+func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker string) (MacroDataPoint, error) {
+	url := fmt.Sprintf("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=2d", ticker)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return MacroDataPoint{}, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+
+	resp, err := y.client.Do(req)
+	if err != nil {
+		return MacroDataPoint{}, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return MacroDataPoint{}, err
+	}
+
+	var chartResp yahooChartResponse
+	if err := json.Unmarshal(body, &chartResp); err != nil {
+		return MacroDataPoint{}, err
+	}
+
+	result := chartResp.Chart.Result
+	if len(result) == 0 {
+		return MacroDataPoint{}, fmt.Errorf("no chart result")
+	}
+
+	meta := result[0].Meta
+	closes := result[0].Indicators.Quote[0].Close
+	if len(closes) == 0 {
+		return MacroDataPoint{}, fmt.Errorf("no close prices")
+	}
+
+	latest := closes[len(closes)-1]
+	prev := latest
+	if len(closes) > 1 && closes[len(closes)-2] != 0 {
+		prev = closes[len(closes)-2]
+	}
+
+	changePct := 0.0
+	if prev != 0 {
+		changePct = (latest - prev) / prev * 100
+	}
+
+	// For US10Y, convert price to bps change proxy.
+	point := MacroDataPoint{
+		Symbol:    ticker,
+		Value:     latest,
+		ChangePct: changePct,
+		Timestamp: meta.RegularMarketTime,
+	}
+
+	if strings.Contains(ticker, "TNX") {
+		// ^TNX is yield in percent; treat change as bps proxy.
+		point.Value = changePct * 10 // rough proxy: 1% move = 100bps
+	}
+
+	return point, nil
+}
+
+type yahooChartResponse struct {
+	Chart struct {
+		Result []struct {
+			Meta struct {
+				RegularMarketTime int64 `json:"regularMarketTime"`
+			} `json:"meta"`
+			Indicators struct {
+				Quote []struct {
+					Close []float64 `json:"close"`
+				} `json:"quote"`
+			} `json:"indicators"`
+		} `json:"result"`
+	} `json:"chart"`
+}
+
+// MockMacroProvider returns deterministic mock data for tests.
+type MockMacroProvider struct {
+	Snapshot MacroDataSnapshot
+}
+
+func (m *MockMacroProvider) Name() string { return "mock" }
+func (m *MockMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
+	return m.Snapshot, nil
+}
+
+// parseFloatSafe parses a float string, returning defaultValue on error.
+func parseFloatSafe(s string, defaultValue float64) float64 {
+	v, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if err != nil {
+		return defaultValue
+	}
+	return v
+}

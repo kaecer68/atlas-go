@@ -15,6 +15,11 @@ type Candidate struct {
 }
 
 func SelectWeakestAgent(registry domain.AgentRegistry, scorecards []domain.Scorecard) *Candidate {
+	return SelectWeakestAgentExcluding(registry, scorecards, nil)
+}
+
+// SelectWeakestAgentExcluding returns the weakest non-extinct agent for mutation.
+func SelectWeakestAgentExcluding(registry domain.AgentRegistry, scorecards []domain.Scorecard, extinctAgentIDs map[string]bool) *Candidate {
 	if len(scorecards) == 0 {
 		return nil
 	}
@@ -53,6 +58,9 @@ func SelectWeakestAgent(registry domain.AgentRegistry, scorecards []domain.Score
 		if !ok || !agent.Enabled {
 			continue
 		}
+		if extinctAgentIDs != nil && extinctAgentIDs[agent.ID] {
+			continue
+		}
 		scorecard.Layer = agent.Layer
 
 		// 智能选择 mutation 类型
@@ -82,6 +90,55 @@ func SelectWeakestAgent(registry domain.AgentRegistry, scorecards []domain.Score
 	}
 
 	return nil
+}
+
+// SelectBestSpawnedAgent picks the highest-performing spawned agent for promotion.
+// It only considers agents with status "candidate" or "validating" that have
+// a Sharpe-like score above the baseline threshold.
+func SelectBestSpawnedAgent(registry domain.AgentRegistry, scorecards []domain.Scorecard, spawnedAgentIDs map[string]bool, baselineSharpe float64) *Candidate {
+	if len(scorecards) == 0 || len(spawnedAgentIDs) == 0 {
+		return nil
+	}
+
+	byID := make(map[string]domain.AgentSpec, len(registry.Agents))
+	for _, agent := range registry.Agents {
+		byID[agent.ID] = agent
+	}
+
+	var best *Candidate
+	for _, sc := range scorecards {
+		agent, ok := byID[sc.AgentID]
+		if !ok || !agent.Enabled || !spawnedAgentIDs[agent.ID] {
+			continue
+		}
+		if sc.SharpeLike <= baselineSharpe {
+			continue
+		}
+		if best == nil || sc.SharpeLike > best.Scorecard.SharpeLike {
+			expID := fmt.Sprintf("promote-%s-%d", agent.ID, time.Now().Unix())
+			best = &Candidate{
+				Agent:     agent,
+				Scorecard: sc,
+				Experiment: domain.ExperimentRecord{
+					ID:                expID,
+					ProposalID:        "proposal-" + expID,
+					TargetAgentID:     agent.ID,
+					Skill:             agent.Skill,
+					Hypothesis:        "Promote well-performing spawned agent to baseline.",
+					PromptVersionFrom: "v1",
+					PromptVersionTo:   "v1",
+					MutationType:      "promote_spawned",
+					AcceptanceGates:   []string{"maintain_sharpe_like", "no_drawdown_spike"},
+					WindowStart:       time.Now().AddDate(0, 0, -20),
+					WindowEnd:         time.Now(),
+					AcceptanceMetric:  "sharpe_like",
+					BaselineValue:     sc.SharpeLike,
+					Status:            domain.ExperimentPlanned,
+				},
+			}
+		}
+	}
+	return best
 }
 
 func layerPriority(agent domain.AgentSpec, ok bool) int {

@@ -145,3 +145,150 @@ FUGLE_API_KEY=your_api_key_here
 
 *Generated: 2026-04-05*
 *Version: atlas-go Phase 4 Core Complete*
+
+---
+
+## Phase 5–10 完成紀要（2026-04-12）
+
+### ✅ Phase 5: 回測敘事基礎設施（Reporting Infrastructure）
+
+| 組件 | 檔案 | 狀態 |
+|------|------|------|
+| 權益曲線渲染 | `internal/reporting/equity_curve.go` | ✅ ASCII/SVG |
+| Agent 表現表格 | `internal/reporting/agent_table.go` | ✅ Markdown |
+| Mutation 存活統計 | `internal/reporting/mutation_summary.go` | ✅ |
+| 回測報告產生 | `internal/reporting/report.go` | ✅ `reports/backtest_*.md` |
+
+**關鍵成果**：`cmd/backtest-window` 現可自動輸出包含權益曲線、agent 命中率和 regime 分佈的 Markdown 報告。
+
+---
+
+### ✅ Phase 6: Swagger UI 整合與文件服務
+
+| 組件 | 檔案 | 狀態 |
+|------|------|------|
+| Swagger JSON 服務 | `docs/swagger.json` | ✅ |
+| Swagger UI 內嵌 | `internal/monitoring/dashboard_api.go` | ✅ CDN 載入 |
+| Dashboard API 測試 | `internal/monitoring/dashboard_api_test.go` | ✅ |
+
+**檢驗網址**：`http://localhost:8080/api/docs`
+
+---
+
+### ✅ Phase 7: 宏觀敘事因果知識庫（Narrative-Driven Causal Investing）
+
+| 組件 | 檔案 | 狀態 |
+|------|------|------|
+| 敘事引擎 | `internal/narrative/` | ✅ |
+| 5 條內建因果模板 | `internal/narrative/templates.go` | ✅ |
+| 因果鏈匹配 | `internal/narrative/knowledge_base.go` | ✅ |
+| Dashboard API | `/api/narrative/events`, `/chains`, `/models`, `/templates` | ✅ |
+
+**內建模板**：`US_rates_up`、`JPY_carry_unwind`、`AI_capex_surge`、`geopolitical_risk_spike`、`oil_price_shock`
+
+---
+
+### ✅ Phase 8: 人機協作控制層（Human-Machine Collaboration）
+
+| 組件 | 檔案 | 狀態 |
+|------|------|------|
+| 干預資料模型 | `internal/domain/types.go` | ✅ `HumanIntervention` |
+| 持久化 | `internal/ledger/ledger.go` | ✅ |
+| Control API | `/api/control/*`（共 8 個端點） | ✅ |
+| 決策引擎整合 | `internal/orchestrator/system.go` | ✅ `applyHumanOverrides()` |
+| Dashboard 控制面板 | `web/static/narrative-dashboard.html` | ✅ |
+
+**端點**：pause-agent、resume-agent、set-model-weight、sector-ban、approve/reject-recommendation、audit-log、active-overrides
+
+---
+
+### ✅ Phase 9: 真實宏觀資料接入（External Macro Data Pipeline）
+
+| 組件 | 檔案 | 狀態 |
+|------|------|------|
+| Macro Provider 介面 | `internal/marketdata/macro_provider.go` | ✅ |
+| Yahoo Finance Provider | `internal/marketdata/yahoo_macro_provider.go` | ✅ DXY/US10Y/VIX/Oil/Gold/JPY |
+| Macro Ingestor | `internal/narrative/ingestor.go` | ✅ 並行抓取、日變動計算 |
+| 資料快照 | `data/state/macro/latest.json` | ✅ 自動持久化 |
+| Dashboard API | `/api/macro/ingest`, `/snapshot/latest`, `/snapshot/history` | ✅ |
+
+---
+
+### ✅ Phase 10: 台灣市場特異性數據層與地緣政治風險追蹤
+
+| 組件 | 檔案 | 狀態 |
+|------|------|------|
+| 地緣政治風險 Provider | `internal/narrative/geopolitical_provider.go` | ✅ RSS + GDELT |
+| 中東衝突因果模板 | `internal/narrative/templates.go` | ✅ `middle_east_escalation` |
+| TWSE 資金流 Provider | `internal/marketdata/twse_capital_flow_provider.go` | ✅ 外資/投信/自營商 |
+| 台灣市場壓力指數 | `internal/narrative/taiwan_stress_index.go` | ✅ 0–100 分，4 級 regime |
+| Dashboard 壓力指數面板 | `web/static/narrative-dashboard.html` | ✅ |
+| API 端點 | `/api/taiwan/stress-index`, `/api/macro/capital-flow/latest` | ✅ |
+| Swagger 更新 | `docs/swagger.json` | ✅ |
+| 單元測試 | `*_test.go` | ✅ 覆蓋率 45.7% |
+
+**檢驗網址**：
+- `http://localhost:8080/api/taiwan/stress-index`
+- `http://localhost:8080/dashboard/narrative`
+
+---
+
+## 系統架構現狀（Phase 10 完整版）
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Atlas-Go 系統架構                         │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 1: Context Agents + Narrative Engine                 │
+│    - taiwan_macro, foreign_flow                             │
+│    - Macro Ingestor (DXY, US10Y, VIX, Oil, Gold, JPY)      │
+│    - Geopolitical Risk Monitor (RSS/GDELT)                 │
+│    - Taiwan Stress Index (0–100 composite)                 │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 2: Sector & Style Agents                             │
+│    - semiconductor_desk, ai_supply_chain_desk              │
+│    - financials_desk, shipping_desk, etf_rotation_desk     │
+│    - growth_momentum, value_yield, earnings_quality        │
+│    - technical_breakout                                    │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 3: Superinvestor Agents                              │
+│    - druckenmiller_macro, aschenbrenner_ai_compute         │
+│    - baker_deep_tech, ackman_quality                       │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 4: Control Skills                                    │
+│    - cro_risk, cio_portfolio                               │
+│    - Human Override (pause, ban, weight, audit)            │
+├─────────────────────────────────────────────────────────────┤
+│  Meta Layer: JANUS + Alpha Discovery + Reflexivity         │
+│    - PRISM cohort dynamic weighting                        │
+│    - Multi-factor alpha discovery                          │
+│    - Reflexivity concrete rules (drawdown, consensus)      │
+├─────────────────────────────────────────────────────────────┤
+│  Evolution Layer                                            │
+│    - weak_agent_selector, prompt_mutator                   │
+│    - experiment_designer, experiment_judge                 │
+│    - Spawning with extinction + audit trail                │
+├─────────────────────────────────────────────────────────────┤
+│  Infrastructure                                             │
+│    - Multi-day Simulator + Equity Curve Reporting          │
+│    - Live Hybrid Provider (Fugle + TWSE)                   │
+│    - TWSE Capital Flow (foreign/domestic/dealer)           │
+│    - Dashboard API + Swagger UI                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 測試驗證結果（Phase 10）
+
+| 測試 | 命令 | 結果 |
+|------|------|------|
+| 完整編譯 | `go build ./...` | ✅ Pass |
+| 單元測試 | `go test ./...` | ✅ Pass |
+| 靜態檢查 | `go vet ./...` | ✅ Pass |
+| 總覆蓋率 | `go test -coverprofile=...` | ✅ 45.7% |
+
+---
+
+*Updated: 2026-04-12*
+*Version: atlas-go Phase 10 Complete*

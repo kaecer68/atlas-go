@@ -6,13 +6,15 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/evolution"
+	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
 type Runner struct {
-	cfg config.Config
+	cfg         config.Config
+	janusEngine *janus.Engine
 }
 
 func NewRunner(cfg config.Config) *Runner {
@@ -39,6 +41,9 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 		cfg := r.cfg
 		cfg.ReplaySessionDate = date.Format("2006-01-02")
 		system := orchestrator.NewSystem(cfg)
+		if r.janusEngine != nil {
+			system.WithJANUS(r.janusEngine)
+		}
 		result, err := system.RunDailySimulation(date)
 		if err != nil {
 			return domain.BacktestWindowSummary{}, err
@@ -91,4 +96,10 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 	}
 
 	return summary, nil
+}
+
+// WithJANUS attaches a JANUS engine to the runner for A/B validation.
+func (r *Runner) WithJANUS(j *janus.Engine) *Runner {
+	r.janusEngine = j
+	return r
 }
