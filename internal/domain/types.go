@@ -31,12 +31,14 @@ type Quote struct {
 }
 
 type Recommendation struct {
-	Agent      string
-	Skill      string
-	Symbol     string
-	Side       Side
-	Conviction int
-	Reason     string
+	Agent           string
+	Skill           string
+	Symbol          string
+	Side            Side
+	Conviction      int
+	Reason          string
+	ReasoningChain  []string `json:"reasoning_chain,omitempty"`
+	SupportingEvents []string `json:"supporting_events,omitempty"`
 }
 
 type Position struct {
@@ -66,6 +68,8 @@ type SimulationConstraints struct {
 	TransactionCostBPS          float64
 	SlippageBPS                 float64
 	ReserveCashFraction         float64
+	StopLossPct                 float64 // sell when price drops below avgCost*(1+StopLossPct)
+	TakeProfitPct               float64 // sell when price rises above avgCost*(1+TakeProfitPct)
 }
 
 type ExecutionPolicy struct {

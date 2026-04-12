@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atlas-Go 宏觀敘事儀表板</title>
+<style>
+  :root { --bg: #0f1115; --panel: #181b21; --border: #2a2f38; --text: #e6e6e6; --muted: #9aa3b2; --accent: #4fc1ff; --up: #26a17b; --down: #d93a3a; --warn: #f5a623; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, "Microsoft JhengHei", "PingFang TC", sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 24px 20px 8px; border-bottom: 1px solid var(--border); }
+  header h1 { margin: 0 0 6px; font-size: 22px; }
+  header p { margin: 0; color: var(--muted); font-size: 14px; }
+  .container { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
+  @media (max-width: 980px) { .container { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .panel h2 { margin: 0 0 12px; font-size: 16px; color: var(--accent); }
+  .event { border-left: 4px solid var(--accent); padding: 12px 14px; margin: 10px 0; background: #11141a; border-radius: 8px; }
+  .event .theme { font-weight: 700; }
+  .event .meta { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .sentiment.pos { color: var(--up); }
+  .sentiment.neg { color: var(--down); }
+  .chain { margin: 12px 0; }
+  .chain-title { font-weight: 700; margin-bottom: 6px; }
+  .step { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px dashed var(--border); }
+  .step:last-child { border-bottom: none; }
+  .step-num { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: var(--border); font-size: 12px; color: var(--muted); }
+  .step-impact { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #22262d; }
+  .step-impact.pos { background: rgba(38,161,123,.15); color: var(--up); }
+  .step-impact.neg { background: rgba(217,58,58,.15); color: var(--down); }
+  .model { padding: 12px; margin: 10px 0; background: #11141a; border-radius: 8px; }
+  .model-header { display: flex; justify-content: space-between; align-items: center; }
+  .model-name { font-weight: 700; }
+  .model-weight { font-size: 13px; color: var(--muted); }
+  .sectors { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--border); }
+  .chip.fav { background: rgba(38,161,123,.15); color: var(--up); }
+  .chip.avoid { background: rgba(217,58,58,.15); color: var(--down); }
+  .refresh { position: fixed; right: 16px; bottom: 16px; padding: 10px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; }
+  .refresh:hover { background: #20252d; }
+  .empty { color: var(--muted); font-size: 14px; padding: 10px 0; }
+  .control-group { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; align-items: center; }
+  .control-group input, .control-group select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 13px; }
+  .control-group button { background: var(--border); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+  .control-group button:hover { background: #2a2f38; }
+  .log-item { font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .log-item:last-child { border-bottom: none; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Atlas-Go 宏觀敘事儀表板</h1>
+  <p>從世界情勢 → 資金流動 → 台灣市場 → 投資策略的可驗證因果鏈</p>
+</header>
+
+<div class="container">
+  <div class="panel">
+    <h2>📈 最新宏觀資料快照（Macro Snapshot）</h2>
+    <div id="macroSnapshot">載入中…</div>
+    <div class="control-group" style="margin-top:8px">
+      <button onclick="triggerIngest()">🔄 立即抓取資料</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>⚠️ 台灣市場壓力指數（Taiwan Stress Index）</h2>
+    <div id="stressIndex">載入中…</div>
+  </div>
+
+  <div class="panel">
+    <h2>🌍 當前敘事事件（Narrative Events）</h2>
+    <div id="events">載入中…</div>
+  </div>
+
+  <div class="panel">
+    <h2>🔗 因果傳導鏈（Causal Chains）</h2>
+    <div id="chains">載入中…</div>
+  </div>
+
+  <div class="panel">
+    <h2>📊 對比投資模型（Investment Models）</h2>
+    <div id="models">載入中…</div>
+  </div>
+
+  <div class="panel">
+    <h2>📚 因果模板庫（Causal Templates）</h2>
+    <div id="templates">載入中…</div>
+  </div>
+
+  <div class="panel">
+    <h2>🎮 人機協作控制（Human Overrides）</h2>
+
+    <div style="margin-top:10px"><strong>暫停 / 恢復 Agent</strong></div>
+    <div class="control-group">
+      <select id="agentSelect"><option>載入中…</option></select>
+      <button onclick="pauseAgent()">暫停</button>
+      <button onclick="resumeAgent()">恢復</button>
+    </div>
+
+    <div style="margin-top:10px"><strong>Sector 黑名單</strong></div>
+    <div class="control-group">
+      <select id="sectorSelect">
+        <option value="ai_supply_chain">ai_supply_chain</option>
+        <option value="semiconductor">semiconductor</option>
+        <option value="financials">financials</option>
+        <option value="shipping">shipping</option>
+        <option value="high_dividend">high_dividend</option>
+        <option value="etf_rotation">etf_rotation</option>
+      </select>
+      <button onclick="banSector()">封鎖</button>
+      <button onclick="unbanSector()">解除</button>
+    </div>
+
+    <div style="margin-top:10px"><strong>模型權重覆寫</strong></div>
+    <div class="control-group">
+      <select id="modelSelect">
+        <option value="hawkish_fed_model">Hawkish Fed Model</option>
+        <option value="ai_supercycle_model">AI Supercycle Model</option>
+        <option value="geopolitical_hedge_model">Geopolitical Hedge Model</option>
+      </select>
+      <input id="modelWeight" type="number" step="0.1" min="0" max="2" value="1.0" style="width:70px">
+      <button onclick="setModelWeight()">設定</button>
+    </div>
+
+    <div style="margin-top:10px"><strong>最新干預記錄（Audit Log）</strong></div>
+    <div id="auditLog" class="empty">載入中…</div>
+  </div>
+</div>
+
+<button class="refresh" onclick="loadAll()">🔄 重新整理</button>
+
+<script>
+async function getJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+function renderEvents(data) {
+  const el = document.getElementById('events');
+  const events = data.events || [];
+  if (!events.length) { el.innerHTML = '<div class="empty">目前無觸發的宏觀敘事事件</div>'; return; }
+  el.innerHTML = events.map(e => {
+    const sClass = e.sentiment > 0 ? 'pos' : 'neg';
+    const sText = e.sentiment > 0 ? '正面' : '負面';
+    return `<div class="event">
+      <div class="theme">${e.theme} <span class="sentiment ${sClass}">${sText} (${e.sentiment})</span></div>
+      <div class="meta">區域: ${e.region} · 置信度: ${(e.confident||e.confidence)*100}% · 時間窗口: ${e.time_window} · 資金流: ${e.capital_flow}</div>
+      <div class="meta">觸發時間: ${new Date(e.timestamp).toLocaleString('zh-TW')}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderChains(data) {
+  const el = document.getElementById('chains');
+  const chains = data.chains || [];
+  if (!chains.length) { el.innerHTML = '<div class="empty">目前無匹配的因果鏈</div>'; return; }
+  el.innerHTML = chains.map(c => `
+    <div class="chain">
+      <div class="chain-title">${c.template_id} <span style="color:var(--muted);font-size:13px">score ${c.score.toFixed(3)}</span></div>
+      ${(c.steps || []).map((s, i) => {
+        const impClass = s.impact > 0 ? 'pos' : 'neg';
+        return `<div class="step">
+          <div class="step-num">${i+1}</div>
+          <div style="flex:1">${s.description}</div>
+          <div class="step-impact ${impClass}">impact ${s.impact}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  `).join('');
+}
+
+function renderModels(data) {
+  const el = document.getElementById('models');
+  const models = data.models || [];
+  if (!models.length) { el.innerHTML = '<div class="empty">目前無活躍模型</div>'; return; }
+  el.innerHTML = models.map(m => `
+    <div class="model">
+      <div class="model-header">
+        <div class="model-name">${m.name}</div>
+        <div class="model-weight">weight ${(m.weight||0).toFixed(3)} · error ${(m.recent_error||0).toFixed(4)}</div>
+      </div>
+      <div style="color:var(--muted);font-size:13px;margin-top:4px">${m.description}</div>
+      <div class="sectors">
+        ${(m.favored_sectors || []).map(s => `<span class="chip fav">+ ${s}</span>`).join('')}
+        ${(m.avoided_sectors || []).map(s => `<span class="chip avoid">− ${s}</span>`).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderTemplates(data) {
+  const el = document.getElementById('templates');
+  const items = data.templates || [];
+  if (!items.length) { el.innerHTML = '<div class="empty">無模板資料</div>'; return; }
+  el.innerHTML = `<table>
+    <thead><tr><th>模板名稱</th><th>觸發主題</th><th>歷史命中率</th><th>資料來源</th></tr></thead>
+    <tbody>
+      ${items.map(t => `
+        <tr>
+          <td>${t.name}</td>
+          <td>${t.trigger_theme}</td>
+          <td>${(t.historical_hit_rate*100).toFixed(0)}%</td>
+          <td style="font-size:12px;color:var(--muted)">${(t.source_references || []).join(', ')}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>`;
+}
+
+async function postJSON(url, body) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+async function pauseAgent() {
+  const agent_id = document.getElementById('agentSelect').value;
+  if (!agent_id) return;
+  await postJSON('/api/control/pause-agent', { agent_id, reason: 'manual pause from dashboard', operator: 'human' });
+  loadAuditLog(); loadOverrides();
+}
+async function resumeAgent() {
+  const agent_id = document.getElementById('agentSelect').value;
+  if (!agent_id) return;
+  await postJSON('/api/control/resume-agent', { agent_id, reason: 'manual resume from dashboard', operator: 'human' });
+  loadAuditLog(); loadOverrides();
+}
+async function banSector() {
+  const sector = document.getElementById('sectorSelect').value;
+  await postJSON('/api/control/sector-ban', { sector, banned: true, reason: 'manual ban from dashboard', operator: 'human' });
+  loadAuditLog(); loadOverrides();
+}
+async function unbanSector() {
+  const sector = document.getElementById('sectorSelect').value;
+  await postJSON('/api/control/sector-ban', { sector, banned: false, reason: 'manual unban from dashboard', operator: 'human' });
+  loadAuditLog(); loadOverrides();
+}
+async function setModelWeight() {
+  const model_id = document.getElementById('modelSelect').value;
+  const weight = parseFloat(document.getElementById('modelWeight').value);
+  await postJSON('/api/control/set-model-weight', { model_id, weight, reason: 'manual weight override', operator: 'human' });
+  loadAuditLog(); loadOverrides();
+}
+
+async function loadAuditLog() {
+  try {
+    const data = await getJSON('/api/control/audit-log');
+    const el = document.getElementById('auditLog');
+    const items = data.interventions || [];
+    if (!items.length) { el.innerHTML = '<div class="empty">暫無干預記錄</div>'; return; }
+    el.innerHTML = items.slice(0, 20).map(iv => `
+      <div class="log-item">
+        <span style="color:var(--accent)">${iv.type}</span>
+        ${iv.target_agent_id || iv.target_sector || iv.target_model_id || iv.target_symbol || ''}
+        <span style="color:var(--muted)">· ${new Date(iv.recorded_at).toLocaleString('zh-TW')}</span>
+        ${iv.reason ? '· ' + iv.reason : ''}
+      </div>
+    `).join('');
+  } catch (e) {
+    document.getElementById('auditLog').textContent = '載入失敗: ' + e.message;
+  }
+}
+
+async function loadOverrides() {
+  try {
+    const data = await getJSON('/api/control/active-overrides');
+    const paused = data.paused_agents || [];
+    const banned = data.banned_sectors || [];
+    // Visual feedback could be added here in future iterations.
+    console.log('paused agents', paused, 'banned sectors', banned);
+  } catch (e) { console.error(e); }
+}
+
+async function triggerIngest() {
+  const el = document.getElementById('macroSnapshot');
+  el.innerHTML = '<div class="empty">抓取中…</div>';
+  try {
+    const data = await postJSON('/api/macro/ingest', {});
+    renderMacroSnapshot(data.snapshot);
+    renderEvents(data);
+  } catch (e) {
+    el.innerHTML = '<div class="empty">抓取失敗: ' + e.message + '</div>';
+  }
+}
+
+function renderMacroSnapshot(snap) {
+  const el = document.getElementById('macroSnapshot');
+  if (!snap) { el.innerHTML = '<div class="empty">無可用快照</div>'; return; }
+  const rows = [
+    ['DXY', snap.dxy],
+    ['US10Y', snap.us10y],
+    ['VIX', snap.vix],
+    ['USD/TWD', snap.usd_twd],
+    ['Oil', snap.oil],
+    ['Gold', snap.gold],
+    ['JPY', snap.jpy]
+  ];
+  const capitalRows = [
+    ['外資淨買超(億)', snap.foreign_investor_net],
+    ['投信淨買超(億)', snap.domestic_fund_net],
+    ['自營商淨買超(億)', snap.dealer_net]
+  ];
+  let html = '<table><thead><tr><th>指標</th><th>數值</th><th>日變動%</th></tr></thead><tbody>' +
+    rows.map(([name, pt]) => {
+      if (!pt) return '';
+      const val = typeof pt.value === 'number' ? pt.value.toFixed(3) : '-';
+      const chg = typeof pt.change_pct === 'number' ? pt.change_pct.toFixed(2) + '%' : '-';
+      const cls = pt.change_pct > 0 ? 'pos' : (pt.change_pct < 0 ? 'neg' : '');
+      return `<tr><td>${name}</td><td>${val}</td><td class="${cls}">${chg}</td></tr>`;
+    }).join('') + '</tbody></table>';
+  if (capitalRows.some(([_, pt]) => pt && typeof pt.value === 'number')) {
+    html += '<div style="margin-top:10px;font-weight:700;font-size:13px;color:var(--accent)">台股三大法人資金流</div>';
+    html += '<table><thead><tr><th>法人</th><th>淨買超(億)</th></tr></thead><tbody>' +
+      capitalRows.map(([name, pt]) => {
+        if (!pt) return '';
+        const val = typeof pt.value === 'number' ? pt.value.toFixed(2) : '-';
+        const cls = pt.value > 0 ? 'pos' : (pt.value < 0 ? 'neg' : '');
+        return `<tr><td>${name}</td><td class="${cls}">${val}</td></tr>`;
+      }).join('') + '</tbody></table>';
+  }
+  el.innerHTML = html;
+}
+
+async function loadMacroSnapshot() {
+  try {
+    const data = await getJSON('/api/macro/snapshot/latest');
+    renderMacroSnapshot(data);
+  } catch (e) {
+    document.getElementById('macroSnapshot').innerHTML = '<div class="empty">尚無快照（可點擊抓取）</div>';
+  }
+}
+
+function renderStressIndex(data) {
+  const el = document.getElementById('stressIndex');
+  if (!data) { el.innerHTML = '<div class="empty">無可用資料</div>'; return; }
+  const score = typeof data.score === 'number' ? data.score.toFixed(1) : '-';
+  const regimeMap = { low: '低壓', alert: '警戒', high: '高壓', crisis: '危機' };
+  const regime = regimeMap[data.regime] || data.regime || '未知';
+  const regimeColor = data.regime === 'crisis' ? 'var(--down)' : (data.regime === 'high' ? 'var(--warn)' : 'var(--up)');
+  const comps = data.components || {};
+  let html = `<div style="font-size:28px;font-weight:700;color:${regimeColor}">${score} <span style="font-size:14px;color:var(--muted)">/ 100</span></div>`;
+  html += `<div style="margin:4px 0 10px;font-size:14px">Regime: <strong>${regime}</strong></div>`;
+  html += '<table><thead><tr><th>子項</th><th>得分</th></tr></thead><tbody>';
+  const names = { dxy: 'DXY', us10y: 'US10Y', foreign_flow: '外資流', vix: 'VIX', geopolitical: '地緣政治' };
+  for (const k of Object.keys(comps)) {
+    const v = comps[k];
+    html += `<tr><td>${names[k] || k}</td><td>${typeof v === 'number' ? v.toFixed(2) : '-'}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+async function loadStressIndex() {
+  try {
+    const data = await getJSON('/api/taiwan/stress-index');
+    renderStressIndex(data);
+  } catch (e) {
+    document.getElementById('stressIndex').innerHTML = '<div class="empty">載入失敗: ' + e.message + '</div>';
+  }
+}
+
+async function loadAll() {
+  const qp = '?us10y_change_bps=15&ai_capex_sentiment=0.8&geopolitical_gpr=160';
+  try {
+    const [events, chains, models, templates] = await Promise.all([
+      getJSON('/api/narrative/events' + qp),
+      getJSON('/api/narrative/chains' + qp),
+      getJSON('/api/narrative/models' + qp),
+      getJSON('/api/narrative/templates')
+    ]);
+    renderEvents(events);
+    renderChains(chains);
+    renderModels(models);
+    renderTemplates(templates);
+    populateAgentSelect(models);
+  } catch (e) {
+    document.getElementById('events').textContent = '載入失敗: ' + e.message;
+  }
+  loadAuditLog();
+  loadOverrides();
+}
+
+function populateAgentSelect(modelsData) {
+  // For demo, populate with a static list of known agents.
+  const agents = [
+    {id:'taiwan-macro-01',name:'Taiwan Macro'},
+    {id:'foreign-flow-01',name:'Foreign Flow'},
+    {id:'semi-desk-01',name:'Semiconductor Desk'},
+    {id:'ai-desk-01',name:'AI Supply Chain Desk'},
+    {id:'growth-momentum-01',name:'Growth Momentum'},
+    {id:'value-yield-01',name:'Value Yield'},
+    {id:'cro-01',name:'CRO'},
+    {id:'cio-01',name:'CIO'},
+    {id:'super-dru-01',name:'Superinvestor Druckenmiller'}
+  ];
+  const sel = document.getElementById('agentSelect');
+  sel.innerHTML = agents.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+}
+
+loadMacroSnapshot();
+loadStressIndex();
+loadAll();
+</script>
+</body>
+</html>

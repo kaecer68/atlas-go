@@ -20,6 +20,8 @@
 6. `internal/monitoring/dashboard_api.go`（報表輸出欄位）
 7. `scripts/openclaw/today-start.sh`
 8. `data/state/experiments/*.json`
+9. `internal/narrative/*`（敘事引擎、因果模板、壓力指數）
+10. `internal/marketdata/*`（宏觀資料與資金流提供者）
 
 ## 3. 目前啟用技能（來自 agents.json）
 
@@ -65,22 +67,35 @@
 
 以下屬於流程能力，主要由 scripts/cmd 與 orchestration 實作，不是 agents.json 內的投研技能：
 
-- replay_operator
-- backtest_operator
-- ledger_operator
-- data_import_operator
-- monitoring_operator
-- system_guardrail
-- research_auditor
+- `replay_operator`
+- `backtest_operator`
+- `ledger_operator`
+- `data_import_operator`
+- `monitoring_operator`
+- `system_guardrail`
+- `research_auditor`
+- `narrative_engine`（宏觀敘事偵測與因果鏈匹配）
+- `macro_ingestor`（外部宏觀資料抓取與快照管理）
+- `geopolitical_risk_monitor`（RSS/GDELT 地緣政治風險監測）
+- `taiwan_stress_calculator`（台灣市場壓力指數計算）
+- `capital_flow_provider`（TWSE 三大法人資金流接入）
 
 ### 4.4 Evolution Skills（演化能力）
 
 以下屬於實驗演化能力，主要落在 experiment/evolution 腳本與程式：
 
-- weak_agent_selector
-- prompt_mutator
-- experiment_designer
-- experiment_judge
+- `weak_agent_selector`
+- `prompt_mutator`
+- `experiment_designer`
+- `experiment_judge`
+
+### 4.5 Platform Skills（AI 助理層可用技能）
+
+本專案開發環境中可用的外部 skill（透過 Kimi CLI / Claude skill 機制）：
+
+- `graphify`：任何輸入 → 知識圖譜 → 社群分群 → HTML/JSON/audit report
+- `kimi-cli-help`：Kimi Code CLI 使用、設定、疑難排解
+- `skill-creator`：建立與更新 skill 的指南
 
 ## 5. Mutation Profiles（現行）
 
@@ -95,8 +110,8 @@
 目前有 skill-aware 模板：
 
 - `financials_desk`：`credit quality gate`, `spread sensitivity downgrade`, `capital adequacy premium`
-- `technical_breakout`：`catch-up momentum`, `volume participation acceptance`, `close-strength tolerance`, `breakout confirmation bonus`
-- 其他 skill：通用 trend/conviction  tightening 模板
+- `technical_breakout`：`structure-first breakout filter`, `volume surge requirement`, `late-breakout penalty`, `coverage expansion`, `catch-up momentum`, `volume participation acceptance`, `close-strength tolerance`, `breakout confirmation bonus`
+- 其他 skill：通用 trend/conviction tightening 模板（`require trend confirmation`、`downgrade conviction`、`reject setups`、`enforce illiquid rejection`）
 
 實作位置：`internal/experiment/executor.go`
 
@@ -136,9 +151,32 @@
   - `level_2_window_validated`: 8（風險/約束型 +1）
   - default: 3（風險/約束型 +1）
 
-### 6.2 檢查項（JudgeChecks）
+### 6.2 檢查項數量門檻（JudgeChecks）
 
-會依 mutation type 與 target skill 檢查候選內容是否包含必要控制語句與政策欄位。
+| Maturity | 基礎檢查項 | prompt_tightening | risk_rule_change | portfolio_constraint_revision |
+|---|---|---|---|---|
+| `level_3_regime_aware` | 4 | 4 | 5 | 6 |
+| `level_2_window_validated` | 3 | 3 | 4 | 5 |
+| default | 2 | 2 | 3 | 4 |
+
+### 6.3 檢查項內容（依 mutation type）
+
+**risk_rule_change**
+- 必須包含 `risk rule change proposal` 標題
+- 必須包含 `candidate rule patch` 區塊
+- 必須包含 `conviction_floor` 與 `liquidity_floor`
+- 必須包含 `guardrails` 區塊
+
+**portfolio_constraint_revision**
+- 必須包含 `portfolio constraint revision proposal` 標題
+- 必須包含 `candidate constraint patch` 區塊
+- 必須包含 `max_position_weight` 與 `reserve_cash_fraction`
+- 必須包含 `require_cro_pass`
+
+**prompt_tightening（default）**
+- `financials_desk`：檢查 `credit quality gate`、`spread sensitivity downgrade`、`capital adequacy premium`
+- `technical_breakout`：檢查 `structure-first breakout filter`、`volume surge requirement`、`late-breakout penalty`、`coverage expansion`、`catch-up momentum`、`volume participation acceptance`、`close-strength tolerance`、`breakout confirmation bonus`
+- 其他 skill：檢查 `require trend confirmation`、`downgrade conviction`、`reject setups`
 
 ## 7. today-start Guard 與選擇器（現行）
 
@@ -182,6 +220,7 @@
 2. `executor.go` 的 mutation 模板語句
 3. `judge.go` 的接受門檻或檢查項
 4. `today-start.sh` 的 guard、pivot、排名參數
+5. `internal/narrative/*` 或 `internal/marketdata/*` 的技能/資料源變更
 
 建議在 PR 說明附上：
 

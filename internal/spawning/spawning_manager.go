@@ -23,12 +23,14 @@ type SpawningManager struct {
 	trainingWindowDays   int
 	validationMinSignals int
 	acceptanceThreshold  float64
+	minWeightDays        int
 
 	// State
 	mu            sync.RWMutex
 	isRunning     bool
 	lastCheck     time.Time
 	checkInterval time.Duration
+	weightHistory map[string]int // agentID -> consecutive days at min weight
 }
 
 // SpawningConfig holds configuration for the spawning manager
@@ -38,6 +40,7 @@ type SpawningConfig struct {
 	ValidationMinSignals int
 	AcceptanceThreshold  float64
 	CheckInterval        time.Duration
+	MinWeightDays        int // days at DarwinianWeightMin before extinction
 }
 
 // DefaultSpawningConfig returns recommended default configuration
@@ -48,6 +51,7 @@ func DefaultSpawningConfig() SpawningConfig {
 		ValidationMinSignals: 20,             // Need 20 signals to evaluate
 		AcceptanceThreshold:  0.5,            // Sharpe > 0.5 to accept
 		CheckInterval:        24 * time.Hour, // Check daily
+		MinWeightDays:        20,             // 20 days at min weight -> extinct
 	}
 }
 
@@ -63,7 +67,9 @@ func NewSpawningManager(registry *domain.AgentRegistry, config SpawningConfig) *
 		validationMinSignals: config.ValidationMinSignals,
 		acceptanceThreshold:  config.AcceptanceThreshold,
 		checkInterval:        config.CheckInterval,
+		minWeightDays:        config.MinWeightDays,
 		lastCheck:            time.Time{},
+		weightHistory:        make(map[string]int),
 	}
 }
 
@@ -369,6 +375,51 @@ func (m *SpawningManager) GetSpawnedAgentByID(agentID string) (*SpawnedAgent, bo
 	return spawned, ok
 }
 
+// CheckExtinction marks spawned agents as extinct if their Darwinian weight
+// has stayed at the minimum threshold for minWeightDays or more.
+// It returns the IDs of agents that were marked extinct in this call.
+func (m *SpawningManager) CheckExtinction(weights map[string]float64) []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.minWeightDays <= 0 {
+		m.minWeightDays = 20
+	}
+	minWeight := 0.3 // DarwinianWeightMin
+
+	var extinct []string
+	for agentID, spawned := range m.spawnedAgents {
+		if spawned.Status == SpawnStatusExtinct {
+			continue
+		}
+		w, ok := weights[agentID]
+		if !ok {
+			// No weight data; reset streak
+			m.weightHistory[agentID] = 0
+			continue
+		}
+		if w <= minWeight {
+			m.weightHistory[agentID]++
+		} else {
+			m.weightHistory[agentID] = 0
+		}
+		if m.weightHistory[agentID] >= m.minWeightDays {
+			spawned.Status = SpawnStatusExtinct
+			m.weightHistory[agentID] = 0
+			// Disable in registry without deleting
+			for i := range m.registry.Agents {
+				if m.registry.Agents[i].ID == agentID {
+					m.registry.Agents[i].Enabled = false
+					break
+				}
+			}
+			extinct = append(extinct, agentID)
+			log.Printf("[SpawningManager] Agent %s marked extinct after %d days at min weight", agentID, m.minWeightDays)
+		}
+	}
+	return extinct
+}
+
 // GetStatistics returns spawning system statistics
 func (m *SpawningManager) GetStatistics() SpawningStatistics {
 	m.mu.RLock()
@@ -381,6 +432,7 @@ func (m *SpawningManager) GetStatistics() SpawningStatistics {
 		Candidates:     0,
 		Accepted:       0,
 		Rejected:       0,
+		Extinct:        0,
 	}
 
 	for _, spawned := range m.spawnedAgents {
@@ -395,6 +447,8 @@ func (m *SpawningManager) GetStatistics() SpawningStatistics {
 			stats.Accepted++
 		case SpawnStatusRejected:
 			stats.Rejected++
+		case SpawnStatusExtinct:
+			stats.Extinct++
 		}
 	}
 
@@ -409,6 +463,7 @@ type SpawningStatistics struct {
 	Candidates     int
 	Accepted       int
 	Rejected       int
+	Extinct        int
 }
 
 // collectScorecards gathers scorecards from the system

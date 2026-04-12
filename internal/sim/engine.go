@@ -1,47 +1,328 @@
 package sim
 
 import (
+	"context"
 	"math"
 	"sort"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/reflexivity"
 )
 
 type Engine struct {
-	constraints domain.SimulationConstraints
+	constraints  domain.SimulationConstraints
+	optimizer    *portfolio.Optimizer
+	useOptimizer bool
+	reflexRules  []reflexivity.Rule
 }
 
 func NewEngine(constraints domain.SimulationConstraints) *Engine {
 	return &Engine{constraints: constraints}
 }
 
-func (e *Engine) Run(regime domain.Regime, quotes []domain.Quote, recs []domain.Recommendation) domain.SimulationResult {
-	cash := e.constraints.StartingCash
-	orders := make([]domain.Order, 0)
-	positions := make([]domain.Position, 0)
-	quoteBySymbol := make(map[string]domain.Quote, len(quotes))
+// WithOptimizer enables portfolio-optimizer-driven order generation.
+func (e *Engine) WithOptimizer(o *portfolio.Optimizer) *Engine {
+	e.optimizer = o
+	e.useOptimizer = true
+	return e
+}
 
-	for _, quote := range quotes {
-		quoteBySymbol[quote.Symbol] = quote
+// WithReflexivityRules attaches reflexivity feedback rules to the engine.
+func (e *Engine) WithReflexivityRules(rules ...reflexivity.Rule) *Engine {
+	e.reflexRules = append(e.reflexRules, rules...)
+	return e
+}
+
+func (e *Engine) Run(regime domain.Regime, quotes []domain.Quote, recs []domain.Recommendation) domain.SimulationResult {
+	state := domain.NewSimulationState(e.constraints.StartingCash)
+	dayResult := e.RunDay(&state, time.Time{}, regime, quotes, recs)
+	return domain.SimulationResult{
+		Regime:        regime,
+		Orders:        dayResult.Orders,
+		Positions:     state.Positions,
+		EndingCash:    state.Cash,
+		GuardOutcomes: nil,
+	}
+}
+
+// RunDay executes a single trading day, updating state in-place.
+func (e *Engine) RunDay(
+	state *domain.SimulationState,
+	_ time.Time,
+	regime domain.Regime,
+	quotes []domain.Quote,
+	recs []domain.Recommendation,
+) domain.DayResult {
+	quoteBySymbol := make(map[string]domain.Quote, len(quotes))
+	for _, q := range quotes {
+		quoteBySymbol[q.Symbol] = q
 	}
 
-	sort.Slice(recs, func(i, j int) bool {
-		if recs[i].Conviction != recs[j].Conviction {
-			return recs[i].Conviction > recs[j].Conviction
+	orders := make([]domain.Order, 0)
+
+	// 0. Apply reflexivity rules before any trading
+	for _, rule := range e.reflexRules {
+		recs = rule.Apply(recs, *state, quoteBySymbol)
+	}
+
+	// 1. Mark existing positions to market
+	for i := range state.Positions {
+		if q, ok := quoteBySymbol[state.Positions[i].Symbol]; ok {
+			state.Positions[i].CurrentPrice = q.Last
+			state.Positions[i].MarketValue = float64(state.Positions[i].Quantity) * q.Last
+			state.Positions[i].UnrealizedPnL = float64(state.Positions[i].Quantity) * (q.Last - state.Positions[i].AverageCost)
 		}
-		if recs[i].Symbol != recs[j].Symbol {
-			return recs[i].Symbol < recs[j].Symbol
+	}
+
+	// 2. Sell logic
+	if e.constraints.SellLogicEnabled() {
+		remaining := make([]domain.Position, 0, len(state.Positions))
+		for _, pos := range state.Positions {
+			quote, ok := quoteBySymbol[pos.Symbol]
+			if !ok || !quote.IsTradable {
+				remaining = append(remaining, pos)
+				continue
+			}
+
+			shouldSell := false
+			reason := ""
+
+			if e.constraints.StopLossPct > 0 && quote.Last <= pos.AverageCost*(1-e.constraints.StopLossPct) {
+				shouldSell = true
+				reason = "stop_loss"
+			}
+			if !shouldSell && e.constraints.TakeProfitPct > 0 && quote.Last >= pos.AverageCost*(1+e.constraints.TakeProfitPct) {
+				shouldSell = true
+				reason = "take_profit"
+			}
+			if !shouldSell {
+				for _, rec := range recs {
+					if rec.Symbol == pos.Symbol && rec.Side == domain.SideSell {
+						shouldSell = true
+						reason = "conviction_reversal"
+						break
+					}
+				}
+			}
+
+			if shouldSell {
+				// Use negative BPS for sell (slippage works against us)
+				price := applyBPS(quote.Last, -(e.constraints.SlippageBPS + e.constraints.TransactionCostBPS))
+				proceeds := float64(pos.Quantity) * price
+				state.Cash += proceeds
+				orders = append(orders, domain.Order{
+					Symbol:   pos.Symbol,
+					Side:     domain.SideSell,
+					Quantity: pos.Quantity,
+					Price:    price,
+					Reason:   reason,
+				})
+				continue
+			}
+			remaining = append(remaining, pos)
 		}
-		if recs[i].Agent != recs[j].Agent {
-			return recs[i].Agent < recs[j].Agent
+		state.Positions = remaining
+	}
+
+	// 3. Buy logic
+	buyOrders, newPositions := e.executeBuys(state.Cash, state.Positions, quoteBySymbol, recs)
+	orders = append(orders, buyOrders...)
+	state.Positions = newPositions
+	state.Cash -= totalCost(buyOrders)
+
+	// 4. Record daily metrics
+	portfolioValue := state.PortfolioValue()
+	state.EquityCurve = append(state.EquityCurve, portfolioValue)
+	prevValue := state.PreviousValues["_portfolio_"]
+	if prevValue > 0 {
+		state.DailyReturns = append(state.DailyReturns, (portfolioValue-prevValue)/prevValue)
+	}
+	state.PreviousValues["_portfolio_"] = portfolioValue
+	if portfolioValue > state.MaxEquity {
+		state.MaxEquity = portfolioValue
+	}
+	if state.MaxEquity > 0 {
+		dd := (state.MaxEquity - portfolioValue) / state.MaxEquity
+		if dd > state.CurrentDrawdown {
+			state.CurrentDrawdown = dd
 		}
-		return recs[i].Reason < recs[j].Reason
+	}
+
+	dailyPnL := portfolioValue - prevValue
+	if prevValue == 0 {
+		dailyPnL = portfolioValue - e.constraints.StartingCash
+	}
+
+	return domain.DayResult{
+		Regime:         regime,
+		Orders:         orders,
+		Positions:      clonePositions(state.Positions),
+		Cash:           state.Cash,
+		PortfolioValue: portfolioValue,
+		DailyPnL:       dailyPnL,
+	}
+}
+
+// RunMultiDay runs a sequential multi-day simulation.
+func (e *Engine) RunMultiDay(
+	quotesByDate map[string][]domain.Quote,
+	recsByDate map[string][]domain.Recommendation,
+	dates []time.Time,
+) domain.SimulationReport {
+	state := domain.NewSimulationState(e.constraints.StartingCash)
+	var firstDate, lastDate time.Time
+	if len(dates) > 0 {
+		firstDate = dates[0]
+		lastDate = dates[len(dates)-1]
+	}
+
+	for _, date := range dates {
+		key := date.Format("2006-01-02")
+		quotes := quotesByDate[key]
+		recs := recsByDate[key]
+		// Determine regime from recs if available; default to neutral
+		regime := domain.RegimeNeutral
+		_ = e.RunDay(&state, date, regime, quotes, recs)
+	}
+
+	report := domain.SimulationReport{
+		TotalReturn:   0,
+		SharpeRatio:   0,
+		MaxDrawdown:   state.CurrentDrawdown,
+		EquityCurve:   append([]float64(nil), state.EquityCurve...),
+		AgentHitRates: make(map[string]float64),
+		TradeCount:    0,
+		StartDate:     firstDate,
+		EndDate:       lastDate,
+	}
+
+	if len(state.EquityCurve) > 0 && state.EquityCurve[0] > 0 {
+		report.TotalReturn = (state.EquityCurve[len(state.EquityCurve)-1] - state.EquityCurve[0]) / state.EquityCurve[0]
+	}
+	if len(state.DailyReturns) > 1 {
+		report.SharpeRatio = calculateSharpe(state.DailyReturns)
+	}
+
+	return report
+}
+
+func (e *Engine) executeBuys(
+	cash float64,
+	existingPositions []domain.Position,
+	quoteBySymbol map[string]domain.Quote,
+	recs []domain.Recommendation,
+) ([]domain.Order, []domain.Position) {
+	if e.useOptimizer && e.optimizer != nil {
+		return e.executeOptimizerBuys(cash, existingPositions, quoteBySymbol, recs)
+	}
+	return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs)
+}
+
+func (e *Engine) executeOptimizerBuys(
+	cash float64,
+	existingPositions []domain.Position,
+	quoteBySymbol map[string]domain.Quote,
+	recs []domain.Recommendation,
+) ([]domain.Order, []domain.Position) {
+	orders, err := e.optimizer.OptimizeToOrders(context.Background(), recs, quoteBySymbol, cash)
+	if err != nil {
+		return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs)
+	}
+
+	positions := clonePositions(existingPositions)
+	var filteredOrders []domain.Order
+	coverage := make(map[string]int)
+	for _, rec := range recs {
+		if rec.Conviction >= e.constraints.MinRecommendationConviction {
+			coverage[rec.Symbol]++
+		}
+	}
+
+	maxDeployableCash := cash * (1 - e.constraints.ReserveCashFraction)
+	maxPerPosition := maxDeployableCash * e.constraints.MaxPositionWeight
+
+	for _, order := range orders {
+		if len(positions) >= e.constraints.MaxOpenPositions {
+			break
+		}
+		if order.Side != domain.SideBuy {
+			continue
+		}
+		if coverage[order.Symbol] == 0 {
+			continue
+		}
+		quote, ok := quoteBySymbol[order.Symbol]
+		if !ok || !quote.IsTradable || quote.Volume < e.constraints.MinTradableVolume {
+			continue
+		}
+
+		price := applyBPS(quote.Last, e.constraints.SlippageBPS+e.constraints.TransactionCostBPS)
+		quantity := order.Quantity
+		if quantity <= 0 {
+			continue
+		}
+		positionValue := float64(quantity) * price
+		if positionValue > maxPerPosition {
+			quantity = int(math.Floor(maxPerPosition/price/100.0) * 100)
+			if quantity <= 0 {
+				continue
+			}
+		}
+		cost := float64(quantity) * price
+		if cost > cash {
+			continue
+		}
+		cash -= cost
+		filteredOrders = append(filteredOrders, domain.Order{
+			Symbol:   order.Symbol,
+			Side:     domain.SideBuy,
+			Quantity: quantity,
+			Price:    price,
+			Reason:   order.Reason,
+		})
+		positions = appendOrUpdatePosition(positions, domain.Position{
+			Symbol:        order.Symbol,
+			Quantity:      quantity,
+			AverageCost:   price,
+			CurrentPrice:  quote.Last,
+			MarketValue:   float64(quantity) * quote.Last,
+			UnrealizedPnL: 0,
+		})
+	}
+
+	return filteredOrders, positions
+}
+
+func (e *Engine) executeLegacyBuys(
+	cash float64,
+	existingPositions []domain.Position,
+	quoteBySymbol map[string]domain.Quote,
+	recs []domain.Recommendation,
+) ([]domain.Order, []domain.Position) {
+	positions := clonePositions(existingPositions)
+	orders := make([]domain.Order, 0)
+
+	sortedRecs := make([]domain.Recommendation, len(recs))
+	copy(sortedRecs, recs)
+	sort.Slice(sortedRecs, func(i, j int) bool {
+		if sortedRecs[i].Conviction != sortedRecs[j].Conviction {
+			return sortedRecs[i].Conviction > sortedRecs[j].Conviction
+		}
+		if sortedRecs[i].Symbol != sortedRecs[j].Symbol {
+			return sortedRecs[i].Symbol < sortedRecs[j].Symbol
+		}
+		if sortedRecs[i].Agent != sortedRecs[j].Agent {
+			return sortedRecs[i].Agent < sortedRecs[j].Agent
+		}
+		return sortedRecs[i].Reason < sortedRecs[j].Reason
 	})
 
 	maxDeployableCash := cash * (1 - e.constraints.ReserveCashFraction)
 	maxPerPosition := maxDeployableCash * e.constraints.MaxPositionWeight
 
-	for _, rec := range recs {
+	for _, rec := range sortedRecs {
 		if len(positions) >= e.constraints.MaxOpenPositions {
 			break
 		}
@@ -76,22 +357,71 @@ func (e *Engine) Run(regime domain.Regime, quotes []domain.Quote, recs []domain.
 			Price:    price,
 			Reason:   rec.Reason,
 		})
-		positions = append(positions, domain.Position{
+		positions = appendOrUpdatePosition(positions, domain.Position{
 			Symbol:        rec.Symbol,
 			Quantity:      quantity,
 			AverageCost:   price,
 			CurrentPrice:  quote.Last,
 			MarketValue:   float64(quantity) * quote.Last,
-			UnrealizedPnL: float64(quantity) * (quote.Last - price),
+			UnrealizedPnL: 0,
 		})
 	}
 
-	return domain.SimulationResult{
-		Regime:     regime,
-		Orders:     orders,
-		Positions:  positions,
-		EndingCash: cash,
+	return orders, positions
+}
+
+func appendOrUpdatePosition(positions []domain.Position, newPos domain.Position) []domain.Position {
+	for i := range positions {
+		if positions[i].Symbol == newPos.Symbol {
+			totalQty := positions[i].Quantity + newPos.Quantity
+			totalCost := positions[i].AverageCost*float64(positions[i].Quantity) + newPos.AverageCost*float64(newPos.Quantity)
+			positions[i].Quantity = totalQty
+			positions[i].AverageCost = totalCost / float64(totalQty)
+			positions[i].CurrentPrice = newPos.CurrentPrice
+			positions[i].MarketValue = float64(totalQty) * newPos.CurrentPrice
+			positions[i].UnrealizedPnL = float64(totalQty) * (newPos.CurrentPrice - positions[i].AverageCost)
+			return positions
+		}
 	}
+	return append(positions, newPos)
+}
+
+func clonePositions(src []domain.Position) []domain.Position {
+	out := make([]domain.Position, len(src))
+	copy(out, src)
+	return out
+}
+
+func totalCost(orders []domain.Order) float64 {
+	total := 0.0
+	for _, o := range orders {
+		if o.Side == domain.SideBuy {
+			total += float64(o.Quantity) * o.Price
+		}
+	}
+	return total
+}
+
+func calculateSharpe(returns []float64) float64 {
+	if len(returns) < 2 {
+		return 0
+	}
+	mean := 0.0
+	for _, r := range returns {
+		mean += r
+	}
+	mean /= float64(len(returns))
+	variance := 0.0
+	for _, r := range returns {
+		diff := r - mean
+		variance += diff * diff
+	}
+	variance /= float64(len(returns) - 1)
+	std := math.Sqrt(variance)
+	if std == 0 {
+		return 0
+	}
+	return mean / std * math.Sqrt(252) // annualized
 }
 
 func applyBPS(price, bps float64) float64 {

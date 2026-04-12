@@ -93,6 +93,7 @@ const (
 	SpawnStatusAccepted   SpawnStatus = "accepted"
 	SpawnStatusRejected   SpawnStatus = "rejected"
 	SpawnStatusDisabled   SpawnStatus = "disabled"
+	SpawnStatusExtinct    SpawnStatus = "extinct"
 )
 
 // GapDetector analyzes system performance to identify knowledge gaps

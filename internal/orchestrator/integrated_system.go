@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/janus"
+	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
@@ -23,6 +25,8 @@ type IntegratedSystem struct {
 	prismManager      *prism.PRISMManager
 	reflexivityEngine *reflexivity.ReflexivityEngine
 	swarm             *swarm.MiroFishSwarm
+	janusEngine       *janus.Engine
+	narrativeEngine   *narrative.NarrativeEngine
 
 	// System state
 	registry               domain.AgentRegistry
@@ -86,6 +90,9 @@ func (is *IntegratedSystem) initializeComponents() {
 	is.prismManager = prism.NewPRISMManager(prism.DefaultPRISMConfig())
 	is.reflexivityEngine = reflexivity.NewReflexivityEngine()
 	is.swarm = swarm.NewMiroFishSwarm(swarm.DefaultSwarmConfig())
+	is.janusEngine = janus.NewEngine()
+	is.janusEngine.EnsureAllRegimes()
+	is.narrativeEngine = narrative.NewNarrativeEngine()
 
 	// Configure risk management
 	is.riskManager.SetRiskParameters(
@@ -103,8 +110,17 @@ func (is *IntegratedSystem) ProcessMarketData(marketData MarketData) ([]domain.R
 	// 1. Update volatility manager with latest returns
 	is.updateVolatilityData(marketData)
 
-	// 2. Get recommendations from all agents
-	recommendations := is.generateAgentRecommendations(marketData)
+	// 1.5 Detect macro narrative events and causal chains
+	narrativeData := is.toNarrativeData(marketData)
+	narrativeEvents := is.narrativeEngine.DetectEvents(narrativeData)
+	narrativeChains := is.narrativeEngine.MatchChains(narrativeEvents)
+	eventThemes := make([]string, len(narrativeEvents))
+	for i, e := range narrativeEvents {
+		eventThemes[i] = e.Theme
+	}
+
+	// 2. Get recommendations from all agents (now narrative-aware)
+	recommendations := is.generateAgentRecommendations(marketData, narrativeEvents, narrativeChains)
 
 	// 3. Apply Darwinian weights to adjust conviction
 	weightedRecommendations := is.darwinianManager.ApplyDarwinianWeights(recommendations)
@@ -118,8 +134,13 @@ func (is *IntegratedSystem) ProcessMarketData(marketData MarketData) ([]domain.R
 	// 6. Get swarm intelligence insights
 	swarmInsights := is.getSwarmInsights(marketData)
 
+	// 6.5 Update JANUS from PRISM and apply cohort weight adjustments
+	is.updateJANUSFromPRISM()
+	currentRegime := is.detectCurrentRegime(marketData)
+	janusAdjusted := is.janusEngine.ApplyAdjustment(filteredRecommendations, currentRegime)
+
 	// 7. Final recommendation adjustment based on all inputs
-	finalRecommendations := is.finalizeRecommendations(filteredRecommendations, swarmInsights)
+	finalRecommendations := is.finalizeRecommendations(janusAdjusted, swarmInsights)
 
 	is.currentRecommendations = finalRecommendations
 	is.lastUpdate = time.Now()
@@ -145,8 +166,8 @@ func (is *IntegratedSystem) updateVolatilityData(data MarketData) {
 	}
 }
 
-// generateAgentRecommendations gets recommendations from all active agents
-func (is *IntegratedSystem) generateAgentRecommendations(data MarketData) []domain.Recommendation {
+// generateAgentRecommendations gets recommendations from all active agents.
+func (is *IntegratedSystem) generateAgentRecommendations(data MarketData, events []narrative.NarrativeEvent, chains []narrative.CausalChain) []domain.Recommendation {
 	recommendations := make([]domain.Recommendation, 0)
 
 	for _, agent := range is.registry.Agents {
@@ -154,9 +175,7 @@ func (is *IntegratedSystem) generateAgentRecommendations(data MarketData) []doma
 			continue
 		}
 
-		// Generate recommendation for this agent
-		// In practice, this would call the agent's recommendation logic
-		recommendation := is.mockAgentRecommendation(agent, data)
+		recommendation := is.mockAgentRecommendation(agent, data, events, chains)
 		recommendations = append(recommendations, recommendation)
 	}
 
@@ -307,6 +326,9 @@ func (is *IntegratedSystem) UpdatePortfolio(trades []Trade) error {
 		is.performDailyAdjustments()
 	}
 
+	// Update JANUS state periodically (also done in ProcessMarketData, but ensure coherence)
+	is.janusEngine.Update()
+
 	return nil
 }
 
@@ -323,9 +345,53 @@ type Trade struct {
 }
 
 // performDailyAdjustments performs daily system adjustments
+// updateJANUSFromPRISM pulls completed PRISM training results and feeds them
+// into the JANUS meta-layer for cohort weight recomputation.
+func (is *IntegratedSystem) updateJANUSFromPRISM() {
+	if is.prismManager == nil || is.janusEngine == nil {
+		return
+	}
+
+	results := is.prismManager.GetCompletedResults()
+	if len(results) == 0 {
+		return
+	}
+
+	for _, res := range results {
+		is.janusEngine.RecordTrainingResult(res.Regime, res.Result)
+	}
+
+	is.prismManager.ClearCompletedResults()
+	is.janusEngine.Update()
+}
+
+// detectCurrentRegime derives a domain.Regime from current market data.
+// This is a simplified heuristic; in production it would use the RegimeExecutor.
+func (is *IntegratedSystem) detectCurrentRegime(data MarketData) domain.Regime {
+	vol := is.calculateMarketVolatility(data)
+	avgPrice := is.calculateAveragePrice(data.Prices)
+
+	// Naive heuristic for demonstration:
+	// High volatility + declining prices -> RISK_OFF
+	// Low volatility + stable prices -> NEUTRAL
+	// Otherwise -> RISK_ON
+	_ = avgPrice
+	if vol > 0.03 {
+		return domain.RegimeRiskOff
+	}
+	if vol < 0.015 {
+		return domain.RegimeNeutral
+	}
+	return domain.RegimeRiskOn
+}
+
 func (is *IntegratedSystem) performDailyAdjustments() {
 	// Adjust Darwinian weights
 	_ = is.darwinianManager.PerformDailyAdjustment()
+
+	// Update JANUS state explicitly on daily boundary
+	is.updateJANUSFromPRISM()
+	is.janusEngine.Update()
 
 	// Get volatility adjustments
 	adjustments := is.volatilityManager.GetVolatilityAdjustments()
@@ -347,6 +413,7 @@ func (is *IntegratedSystem) GetSystemStatus() SystemStatus {
 		ActiveAlerts:      is.riskManager.GetActiveAlerts(),
 		VolatilityMetrics: is.volatilityManager.GetVolatilityMetrics(),
 		ReflexivityLoops:  is.reflexivityEngine.GetActiveLoops(),
+		JANUSStatus:       is.janusEngine.GetStatus(),
 		HealthScore:       is.calculateHealthScore(),
 		LastUpdate:        is.lastUpdate,
 	}
@@ -358,14 +425,15 @@ type SystemStatus struct {
 	ActiveAlerts      []portfolio.RiskAlert
 	VolatilityMetrics portfolio.VolatilityMetrics
 	ReflexivityLoops  []reflexivity.FeedbackLoop
+	JANUSStatus       janus.Status
 	HealthScore       float64
 	LastUpdate        time.Time
 }
 
 // Helper methods (simplified implementations)
 
-func (is *IntegratedSystem) mockAgentRecommendation(agent domain.AgentSpec, data MarketData) domain.Recommendation {
-	return domain.Recommendation{
+func (is *IntegratedSystem) mockAgentRecommendation(agent domain.AgentSpec, data MarketData, events []narrative.NarrativeEvent, chains []narrative.CausalChain) domain.Recommendation {
+	rec := domain.Recommendation{
 		Agent:      agent.ID,
 		Skill:      agent.Skill,
 		Symbol:     "SAMPLE",
@@ -373,6 +441,90 @@ func (is *IntegratedSystem) mockAgentRecommendation(agent domain.AgentSpec, data
 		Conviction: 70,
 		Reason:     "Mock recommendation",
 	}
+
+	// Layer 1 context agents become narrative-aware.
+	if agent.Layer == "context" || agent.Layer == "superinvestor" {
+		if len(events) > 0 {
+			rec.Reason = fmt.Sprintf("Detected %d narrative event(s): %s", len(events), events[0].Theme)
+			rec.ReasoningChain = []string{}
+			rec.SupportingEvents = []string{}
+			for _, e := range events {
+				rec.SupportingEvents = append(rec.SupportingEvents, e.ID)
+				rec.ReasoningChain = append(rec.ReasoningChain, fmt.Sprintf("%s (%s, confidence %.2f)", e.Theme, e.Region, e.Confidence))
+			}
+			for _, c := range chains {
+				if len(c.Steps) > 0 {
+					rec.ReasoningChain = append(rec.ReasoningChain, fmt.Sprintf("Chain %s: %s", c.TemplateID, c.Steps[0].Description))
+				}
+			}
+		}
+	}
+
+	// Sector agents pick up narrative-driven sector bias.
+	if agent.Layer == "sector" && len(chains) > 0 {
+		for _, c := range chains {
+			for _, step := range c.Steps {
+				for _, affected := range step.Affected {
+					if isSectorMatch(agent.Skill, affected) {
+						rec.Reason = fmt.Sprintf("Narrative '%s' affects %s (impact %.2f)", c.TemplateID, affected, step.Impact)
+						rec.SupportingEvents = append(rec.SupportingEvents, c.EventID)
+						if step.Impact > 0 {
+							rec.Conviction = 80
+						} else {
+							rec.Side = domain.SideSell
+							rec.Conviction = 60
+						}
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return rec
+}
+
+func isSectorMatch(skill, affected string) bool {
+	mappings := map[string][]string{
+		"semiconductor_desk":     {"semiconductor", "foundry"},
+		"ai_supply_chain_desk":   {"ai_supply_chain", "pcb", "thermal"},
+		"financials_desk":        {"financials"},
+		"shipping_desk":          {"shipping"},
+		"etf_rotation_desk":      {"high_dividend", "etf_rotation"},
+	}
+	for _, s := range mappings[skill] {
+		if s == affected {
+			return true
+		}
+	}
+	return false
+}
+
+func (is *IntegratedSystem) toNarrativeData(data MarketData) narrative.MarketNarrativeData {
+	nd := narrative.MarketNarrativeData{}
+	// Simple heuristics derived from market data.
+	if len(data.Returns) > 0 {
+		var avgRet float64
+		for _, r := range data.Returns {
+			avgRet += r
+		}
+		avgRet /= float64(len(data.Returns))
+		// Proxy VIX level via cross-sectional return dispersion.
+		nd.VIXLevel = avgRet * 100
+	}
+	if v, ok := data.Prices["DXY"]; ok && v > 0 {
+		nd.DXYChangePct = v / 100.0
+	}
+	if v, ok := data.Prices["US10Y"]; ok && v > 0 {
+		nd.US10YChangeBps = v
+	}
+	if v, ok := data.Prices["OIL"]; ok && v > 0 {
+		nd.OilChangePct = v / 10.0
+	}
+	if v, ok := data.Prices["GOLD"]; ok && v > 0 {
+		nd.GoldChangePct = v / 10.0
+	}
+	return nd
 }
 
 func (is *IntegratedSystem) getHistoricalReturns(symbol string, newReturn float64) []float64 {

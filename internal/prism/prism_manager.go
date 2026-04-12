@@ -217,6 +217,12 @@ func (q *TrainingQueue) GetAllTasks() []*TrainingTask {
 	return tasks
 }
 
+// CompletedTrainingResult pairs a regime with its completed training result.
+type CompletedTrainingResult struct {
+	Regime RegimeType
+	Result TrainingResult
+}
+
 // PRISMManager manages all 5 regime-specific training queues
 type PRISMManager struct {
 	queues    [RegimeCount]*TrainingQueue
@@ -229,6 +235,11 @@ type PRISMManager struct {
 	totalTasks     int
 	completedTasks int
 	failedTasks    int
+
+	// Completed result buffer for JANUS/meta-layer consumption
+	completedResults []CompletedTrainingResult
+	resultMu         sync.RWMutex
+	maxResults       int
 }
 
 // PRISMConfig holds configuration for PRISM
@@ -252,8 +263,9 @@ func DefaultPRISMConfig() PRISMConfig {
 // NewPRISMManager creates a new PRISM manager with 5 regime queues
 func NewPRISMManager(config PRISMConfig) *PRISMManager {
 	pm := &PRISMManager{
-		stopCh: make(chan struct{}),
-		config: config,
+		stopCh:     make(chan struct{}),
+		config:     config,
+		maxResults: 1000,
 	}
 
 	// Initialize 5 regime queues
@@ -428,6 +440,7 @@ func (pm *PRISMManager) worker(queue *TrainingQueue, stopCh <-chan struct{}) {
 			pm.mu.Lock()
 			pm.completedTasks++
 			pm.mu.Unlock()
+			pm.recordCompletedResult(task.Regime, *result)
 		} else {
 			queue.UpdateTaskStatus(task.ID, TaskFailed, result)
 			pm.mu.Lock()
@@ -573,6 +586,37 @@ type TrainingWindow struct {
 	Start  time.Time
 	End    time.Time
 	Regime RegimeType // Optional override
+}
+
+// recordCompletedResult appends a completed training result to the internal buffer.
+func (pm *PRISMManager) recordCompletedResult(regime RegimeType, result TrainingResult) {
+	pm.resultMu.Lock()
+	defer pm.resultMu.Unlock()
+
+	pm.completedResults = append(pm.completedResults, CompletedTrainingResult{
+		Regime: regime,
+		Result: result,
+	})
+	if len(pm.completedResults) > pm.maxResults {
+		pm.completedResults = pm.completedResults[len(pm.completedResults)-pm.maxResults:]
+	}
+}
+
+// GetCompletedResults returns a copy of all recorded completed training results.
+func (pm *PRISMManager) GetCompletedResults() []CompletedTrainingResult {
+	pm.resultMu.RLock()
+	defer pm.resultMu.RUnlock()
+
+	out := make([]CompletedTrainingResult, len(pm.completedResults))
+	copy(out, pm.completedResults)
+	return out
+}
+
+// ClearCompletedResults empties the completed result buffer.
+func (pm *PRISMManager) ClearCompletedResults() {
+	pm.resultMu.Lock()
+	defer pm.resultMu.Unlock()
+	pm.completedResults = pm.completedResults[:0]
 }
 
 // Utility functions
