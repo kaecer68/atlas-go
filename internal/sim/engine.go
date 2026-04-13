@@ -37,13 +37,19 @@ func (e *Engine) WithReflexivityRules(rules ...reflexivity.Rule) *Engine {
 
 func (e *Engine) Run(regime domain.Regime, quotes []domain.Quote, recs []domain.Recommendation) domain.SimulationResult {
 	state := domain.NewSimulationState(e.constraints.StartingCash)
-	dayResult := e.RunDay(&state, time.Time{}, regime, quotes, recs)
+	return e.RunWithState(&state, regime, quotes, recs)
+}
+
+// RunWithState executes a simulation using an existing state, enabling multi-day backtests.
+func (e *Engine) RunWithState(state *domain.SimulationState, regime domain.Regime, quotes []domain.Quote, recs []domain.Recommendation) domain.SimulationResult {
+	dayResult := e.RunDay(state, time.Time{}, regime, quotes, recs)
 	return domain.SimulationResult{
-		Regime:        regime,
-		Orders:        dayResult.Orders,
-		Positions:     state.Positions,
-		EndingCash:    state.Cash,
-		GuardOutcomes: nil,
+		Regime:         regime,
+		Orders:         dayResult.Orders,
+		Positions:      state.Positions,
+		EndingCash:     state.Cash,
+		PortfolioValue: dayResult.PortfolioValue,
+		GuardOutcomes:  nil,
 	}
 }
 

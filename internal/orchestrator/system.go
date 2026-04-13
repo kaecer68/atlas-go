@@ -20,18 +20,19 @@ import (
 )
 
 type System struct {
-	cfg            config.Config
-	provider       marketdata.Provider
-	engine         *sim.Engine
-	registry       domain.AgentRegistry
-	policy         baseline.Policy
-	ledger         *ledger.Store
-	replay         *replay.Dataset
-	session        domain.ReplaySession
+	cfg             config.Config
+	provider        marketdata.Provider
+	engine          *sim.Engine
+	registry        domain.AgentRegistry
+	policy          baseline.Policy
+	ledger          *ledger.Store
+	replay          *replay.Dataset
+	session         domain.ReplaySession
 	janusEngine     *janus.Engine
 	alphaDiscovery  *AlphaDiscoveryEngine
 	optimizer       *portfolio.Optimizer
 	narrativeEngine *narrative.NarrativeEngine
+	persistentState *domain.SimulationState
 }
 
 func NewSystem(cfg config.Config) *System {
@@ -96,7 +97,12 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	rawRecs = append(rawRecs, alphaRecs...)
 	finalRecs = append(finalRecs, alphaRecs...)
 	finalRecs = s.applyJANUS(regime, finalRecs)
-	result := s.engine.Run(regime, quotes, finalRecs)
+	var result domain.SimulationResult
+	if s.persistentState != nil {
+		result = s.engine.RunWithState(s.persistentState, regime, quotes, finalRecs)
+	} else {
+		result = s.engine.Run(regime, quotes, finalRecs)
+	}
 	result.GuardOutcomes = guardOutcomes
 	outcomes := buildSyntheticOutcomes(rawRecs, quotes, asOf)
 	_ = s.ledger.RecordOutcomes(outcomes)
@@ -116,7 +122,12 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	rawRecs = append(rawRecs, alphaRecs...)
 	finalRecs = append(finalRecs, alphaRecs...)
 	finalRecs = s.applyJANUS(regime, finalRecs)
-	result := s.engine.Run(regime, quotes, finalRecs)
+	var result domain.SimulationResult
+	if s.persistentState != nil {
+		result = s.engine.RunWithState(s.persistentState, regime, quotes, finalRecs)
+	} else {
+		result = s.engine.Run(regime, quotes, finalRecs)
+	}
 	result.GuardOutcomes = guardOutcomes
 	outcomes := buildReplayOutcomes(rawRecs, sessionDate, s.replay)
 	_ = s.ledger.RecordOutcomes(outcomes)
@@ -150,6 +161,12 @@ func (s *System) Registry() domain.AgentRegistry {
 // WithJANUS attaches a JANUS engine to the system for backtest validation.
 func (s *System) WithJANUS(j *janus.Engine) *System {
 	s.janusEngine = j
+	return s
+}
+
+// WithPersistentState enables cross-day simulation state carry-over for backtests.
+func (s *System) WithPersistentState(state *domain.SimulationState) *System {
+	s.persistentState = state
 	return s
 }
 
@@ -325,12 +342,13 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 	}
 
 	summary := domain.SessionSummary{
-		SessionID:     s.session.ID,
-		Regime:        result.Regime,
-		OrderCount:    len(result.Orders),
-		PositionCount: len(result.Positions),
-		EndingCash:    result.EndingCash,
-		OutcomeCount:  len(outcomes),
+		SessionID:      s.session.ID,
+		Regime:         result.Regime,
+		OrderCount:     len(result.Orders),
+		PositionCount:  len(result.Positions),
+		EndingCash:     result.EndingCash,
+		PortfolioValue: result.PortfolioValue,
+		OutcomeCount:   len(outcomes),
 		BrokerRuntime: domain.BrokerRuntimeAudit{
 			Mode:             s.cfg.BrokerMode,
 			Adapter:          s.cfg.BrokerAdapter,
@@ -375,7 +393,7 @@ func buildSyntheticOutcomes(recs []domain.Recommendation, quotes []domain.Quote,
 			AgentID:        rec.Agent,
 			Skill:          rec.Skill,
 			Symbol:         rec.Symbol,
-			Window:         "5d",
+			Window:         asOf.Format("2006-01-02"),
 			ForwardReturn:  forwardReturn,
 			BenchmarkDelta: forwardReturn - 0.005,
 			Hit:            forwardReturn > 0,
@@ -400,7 +418,7 @@ func buildReplayOutcomes(recs []domain.Recommendation, asOf time.Time, ds *repla
 			AgentID:        rec.Agent,
 			Skill:          rec.Skill,
 			Symbol:         rec.Symbol,
-			Window:         "1d",
+			Window:         asOf.Format("2006-01-02"),
 			ForwardReturn:  forwardReturn,
 			BenchmarkDelta: forwardReturn - 0.003,
 			Hit:            forwardReturn > 0,

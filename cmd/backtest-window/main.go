@@ -29,6 +29,9 @@ func main() {
 	}
 
 	cfg := config.Load()
+	if cfg.ReplayDataPath == "samples/replay/twse_stock_day_all_sample.csv" {
+		cfg.ReplayDataPath = "data/replay/tw_extended_90days.csv"
+	}
 	runner := backtest.NewRunner(cfg)
 	summary, err := runner.Run(startDate, endDate)
 	if err != nil {
@@ -57,7 +60,11 @@ func main() {
 	equityCurve := make([]float64, 0, len(sessionSummaries))
 	regimeCounts := make(map[string]int)
 	for _, s := range sessionSummaries {
-		equityCurve = append(equityCurve, s.EndingCash)
+		pv := s.PortfolioValue
+		if pv == 0 {
+			pv = s.EndingCash
+		}
+		equityCurve = append(equityCurve, pv)
 		regimeCounts[string(s.Regime)]++
 	}
 

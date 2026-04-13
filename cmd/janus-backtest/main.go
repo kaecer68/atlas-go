@@ -32,6 +32,9 @@ func main() {
 	}
 
 	cfg := config.Load()
+	if cfg.ReplayDataPath == "samples/replay/twse_stock_day_all_sample.csv" {
+		cfg.ReplayDataPath = "data/replay/tw_extended_90days.csv"
+	}
 
 	// Baseline pass (no JANUS)
 	baselineDir, err := os.MkdirTemp("", "janus-baseline-*")

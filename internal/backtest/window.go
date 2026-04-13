@@ -3,6 +3,7 @@ package backtest
 import (
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/evolution"
@@ -27,7 +28,13 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 		return domain.BacktestWindowSummary{}, err
 	}
 
+	policy, err := baseline.Load(r.cfg.BaselinePolicyPath)
+	if err != nil {
+		policy = baseline.DefaultPolicy()
+	}
+
 	sessionCount := 0
+	persistentState := domain.NewSimulationState(policy.Constraints.StartingCash)
 	for _, date := range ds.Dates {
 		if date.Before(startDate) || date.After(endDate) {
 			continue
@@ -44,6 +51,7 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 		if r.janusEngine != nil {
 			system.WithJANUS(r.janusEngine)
 		}
+		system.WithPersistentState(&persistentState)
 		result, err := system.RunDailySimulation(date)
 		if err != nil {
 			return domain.BacktestWindowSummary{}, err

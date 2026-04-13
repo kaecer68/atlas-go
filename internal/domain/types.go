@@ -78,9 +78,10 @@ type ExecutionPolicy struct {
 }
 
 type SimulationResult struct {
-	Regime        Regime
-	Orders        []Order
-	Positions     []Position
-	EndingCash    float64
-	GuardOutcomes []GuardOutcome
+	Regime         Regime
+	Orders         []Order
+	Positions      []Position
+	EndingCash     float64
+	PortfolioValue float64
+	GuardOutcomes  []GuardOutcome
 }
