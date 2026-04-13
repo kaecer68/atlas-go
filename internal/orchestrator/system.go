@@ -192,8 +192,12 @@ func (s *System) WithPersistentState(state *domain.SimulationState) *System {
 }
 
 // WithPRISM attaches a PRISM training manager to the system.
+// If replay data is available, a real training executor is automatically wired.
 func (s *System) WithPRISM(pm *prism.PRISMManager) *System {
 	s.prismManager = pm
+	if s.replay != nil {
+		pm.WithExecutor(NewPRISMTrainingExecutor(s.replay, s.registry, s.policy))
+	}
 	return s
 }
 

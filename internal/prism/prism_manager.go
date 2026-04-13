@@ -225,6 +225,11 @@ type CompletedTrainingResult struct {
 	Result     TrainingResult
 }
 
+// TrainingExecutor executes a single training task and returns real metrics.
+type TrainingExecutor interface {
+	Execute(task TrainingTask) (TrainingResult, error)
+}
+
 // PRISMManager manages all 5 regime-specific training queues
 type PRISMManager struct {
 	queues    [RegimeCount]*TrainingQueue
@@ -232,6 +237,7 @@ type PRISMManager struct {
 	isRunning bool
 	stopCh    chan struct{}
 	config    PRISMConfig
+	executor  TrainingExecutor
 
 	// Metrics
 	totalTasks     int
@@ -276,6 +282,14 @@ func NewPRISMManager(config PRISMConfig) *PRISMManager {
 		pm.queues[i] = NewTrainingQueue(regime, config.QueueSize, config.WorkersPerQueue)
 	}
 
+	return pm
+}
+
+// WithExecutor attaches a real training executor to the manager.
+func (pm *PRISMManager) WithExecutor(ex TrainingExecutor) *PRISMManager {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	pm.executor = ex
 	return pm
 }
 
@@ -454,13 +468,31 @@ func (pm *PRISMManager) worker(queue *TrainingQueue, stopCh <-chan struct{}) {
 
 // executeTraining performs actual training (placeholder - integrate with backtest)
 func (pm *PRISMManager) executeTraining(task *TrainingTask) *TrainingResult {
-	// This would integrate with the actual backtesting system
-	// For now, simulate training with realistic results
+	// If a real executor is attached, use it.
+	pm.mu.RLock()
+	ex := pm.executor
+	pm.mu.RUnlock()
+	if ex != nil {
+		result, err := ex.Execute(*task)
+		if err == nil {
+			return &result
+		}
+		// Fall back to simulation on executor error
+		return &TrainingResult{
+			HitRate:      0.5,
+			SharpeRatio:  0.0,
+			MaxDrawdown:  0.0,
+			TotalReturn:  0.0,
+			SignalsCount: 0,
+			WinCount:     0,
+			LossCount:    0,
+			Error:        err.Error(),
+		}
+	}
 
-	// Simulate processing time
+	// Simulate training with realistic results when no executor is present (legacy/tests)
 	time.Sleep(50 * time.Millisecond)
 
-	// Generate realistic result based on agent type
 	result := &TrainingResult{
 		HitRate:      0.5 + float64(task.Priority)*0.02,
 		SharpeRatio:  0.6,
@@ -471,7 +503,6 @@ func (pm *PRISMManager) executeTraining(task *TrainingTask) *TrainingResult {
 		LossCount:    25,
 	}
 
-	// Adjust based on regime
 	switch task.Regime {
 	case RegimeRiskOn:
 		result.SharpeRatio = 0.8
