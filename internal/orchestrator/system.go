@@ -39,6 +39,7 @@ type System struct {
 	prismManager    *prism.PRISMManager
 	swarm           *swarm.MiroFishSwarm
 	spawningManager *spawning.SpawningManager
+	phase3Controller *Phase3Controller
 }
 
 func NewSystem(cfg config.Config) *System {
@@ -106,6 +107,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	finalRecs = append(finalRecs, alphaRecs...)
 	finalRecs = s.applyJANUS(regime, finalRecs)
 	finalRecs = s.applySwarmConsensus(finalRecs)
+	finalRecs = s.applyPRISMWeights(finalRecs, regime)
 	var result domain.SimulationResult
 	if s.persistentState != nil {
 		result = s.engine.RunWithState(s.persistentState, regime, quotes, finalRecs)
@@ -118,6 +120,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)
 	s.schedulePRISMForRegime(regime, asOf)
 	s.runSpawningCycle()
+	s.runPhase3Optimization(quotes, regime, asOf)
 	return result, nil
 }
 
@@ -136,6 +139,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	finalRecs = append(finalRecs, alphaRecs...)
 	finalRecs = s.applyJANUS(regime, finalRecs)
 	finalRecs = s.applySwarmConsensus(finalRecs)
+	finalRecs = s.applyPRISMWeights(finalRecs, regime)
 	var result domain.SimulationResult
 	if s.persistentState != nil {
 		result = s.engine.RunWithState(s.persistentState, regime, quotes, finalRecs)
@@ -148,6 +152,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)
 	s.schedulePRISMForRegime(regime, sessionDate)
 	s.runSpawningCycle()
+	s.runPhase3Optimization(quotes, regime, sessionDate)
 	return result, nil
 }
 
@@ -201,6 +206,12 @@ func (s *System) WithSwarm(sw *swarm.MiroFishSwarm) *System {
 // WithSpawning attaches a spawning manager for automated agent creation.
 func (s *System) WithSpawning(sm *spawning.SpawningManager) *System {
 	s.spawningManager = sm
+	return s
+}
+
+// WithPhase3Controller attaches the advanced Phase 3 optimization controller.
+func (s *System) WithPhase3Controller(ctrl *Phase3Controller) *System {
+	s.phase3Controller = ctrl
 	return s
 }
 
@@ -517,10 +528,18 @@ func syntheticForwardReturn(symbol string) float64 {
 
 // applySwarmConsensus adjusts recommendation conviction based on swarm consensus.
 func (s *System) applySwarmConsensus(recs []domain.Recommendation) []domain.Recommendation {
-	if s.swarm == nil || len(recs) == 0 {
+	if len(recs) == 0 {
 		return recs
 	}
-	result, ok := s.swarm.GetLatestResult()
+	// Prefer Phase3Controller's continuously-running swarm if available.
+	var result swarm.SimulationResult
+	var ok bool
+	if s.phase3Controller != nil {
+		result, ok = s.phase3Controller.GetSwarmConsensus()
+	}
+	if !ok && s.swarm != nil {
+		result, ok = s.swarm.GetLatestResult()
+	}
 	if !ok || len(result.Consensus) == 0 {
 		return recs
 	}
@@ -547,6 +566,31 @@ func (s *System) applySwarmConsensus(recs []domain.Recommendation) []domain.Reco
 		}
 	}
 	return adjusted
+}
+
+// applyPRISMWeights boosts conviction based on regime-specific PRISM training results.
+func (s *System) applyPRISMWeights(recs []domain.Recommendation, regime domain.Regime) []domain.Recommendation {
+	if s.phase3Controller == nil {
+		return recs
+	}
+	return s.phase3Controller.ApplyPRISMWeights(recs, regime)
+}
+
+// runPhase3Optimization triggers the parallel optimization tracks after simulation.
+func (s *System) runPhase3Optimization(quotes []domain.Quote, regime domain.Regime, asOf time.Time) {
+	if s.phase3Controller == nil {
+		return
+	}
+	baseState := swarm.MarketState{
+		Timestamp: asOf,
+		Prices:    make(map[string]float64, len(quotes)),
+		Volumes:   make(map[string]float64, len(quotes)),
+	}
+	for _, q := range quotes {
+		baseState.Prices[q.Symbol] = q.Last
+		baseState.Volumes[q.Symbol] = float64(q.Volume)
+	}
+	s.phase3Controller.RunParallelOptimization(baseState, regime)
 }
 
 // schedulePRISMForRegime schedules PRISM training for the current regime.

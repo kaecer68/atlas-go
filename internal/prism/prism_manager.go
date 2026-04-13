@@ -219,8 +219,10 @@ func (q *TrainingQueue) GetAllTasks() []*TrainingTask {
 
 // CompletedTrainingResult pairs a regime with its completed training result.
 type CompletedTrainingResult struct {
-	Regime RegimeType
-	Result TrainingResult
+	AgentID    string
+	AgentSkill string
+	Regime     RegimeType
+	Result     TrainingResult
 }
 
 // PRISMManager manages all 5 regime-specific training queues
@@ -440,7 +442,7 @@ func (pm *PRISMManager) worker(queue *TrainingQueue, stopCh <-chan struct{}) {
 			pm.mu.Lock()
 			pm.completedTasks++
 			pm.mu.Unlock()
-			pm.recordCompletedResult(task.Regime, *result)
+			pm.recordCompletedResult(task, *result)
 		} else {
 			queue.UpdateTaskStatus(task.ID, TaskFailed, result)
 			pm.mu.Lock()
@@ -589,13 +591,15 @@ type TrainingWindow struct {
 }
 
 // recordCompletedResult appends a completed training result to the internal buffer.
-func (pm *PRISMManager) recordCompletedResult(regime RegimeType, result TrainingResult) {
+func (pm *PRISMManager) recordCompletedResult(task *TrainingTask, result TrainingResult) {
 	pm.resultMu.Lock()
 	defer pm.resultMu.Unlock()
 
 	pm.completedResults = append(pm.completedResults, CompletedTrainingResult{
-		Regime: regime,
-		Result: result,
+		AgentID:    task.AgentID,
+		AgentSkill: task.AgentSkill,
+		Regime:     task.Regime,
+		Result:     result,
 	})
 	if len(pm.completedResults) > pm.maxResults {
 		pm.completedResults = pm.completedResults[len(pm.completedResults)-pm.maxResults:]
