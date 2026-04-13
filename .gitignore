@@ -17,4 +17,6 @@
 /internal/experiment/prompts/
 /janus-backtest
 /janus-status
+/validate-narrative-shock
+/validate-stress-index
 /internal/monitoring/data/

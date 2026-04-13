@@ -1,0 +1,139 @@
+package main
+
+import (
+	"encoding/csv"
+	"fmt"
+	"math"
+	"os"
+	"strconv"
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/narrative"
+)
+
+func main() {
+	f, err := os.Open("data/replay/tw_extended_90days.csv")
+	if err != nil {
+		fmt.Println("Error opening CSV:", err)
+		os.Exit(1)
+	}
+	defer f.Close()
+
+	reader := csv.NewReader(f)
+	header, err := reader.Read()
+	if err != nil {
+		fmt.Println("Error reading CSV header:", err)
+		os.Exit(1)
+	}
+	idx := make(map[string]int)
+	for i, h := range header {
+		idx[h] = i
+	}
+
+	type dayData struct {
+		date   time.Time
+		close  float64
+		change float64
+	}
+	var days []dayData
+
+	for {
+		rec, err := reader.Read()
+		if err != nil {
+			break
+		}
+		if rec[idx["Code"]] != "0050" {
+			continue
+		}
+		date, _ := time.Parse("2006-01-02", rec[idx["Date"]])
+		close, _ := strconv.ParseFloat(rec[idx["Close"]], 64)
+		open, _ := strconv.ParseFloat(rec[idx["Open"]], 64)
+		days = append(days, dayData{
+			date:   date,
+			close:  close,
+			change: (close - open) / open,
+		})
+	}
+
+	calc := narrative.NewTaiwanStressCalculator(nil)
+	geo := narrative.GeopoliticalRiskScore{Intensity: 30}
+
+	type result struct {
+		date   time.Time
+		stress float64
+		regime string
+		change float64
+	}
+	var results []result
+
+	for _, d := range days {
+		// Construct a synthetic macro snapshot that varies by date
+		// to generate a spread of stress index values.
+		dayOffset := float64(d.date.Day())
+		snap := marketdata.MacroDataSnapshot{
+			DXY:                marketdata.MacroDataPoint{ChangePct: math.Abs(dayOffset-15) * 2.0},
+			US10Y:              marketdata.MacroDataPoint{Value: 6.0 + math.Sin(dayOffset*0.5)},
+			VIX:                marketdata.MacroDataPoint{Value: 10.0 + math.Abs(dayOffset-15)*3.5},
+			ForeignInvestorNet: marketdata.MacroDataPoint{Value: -(dayOffset - 5) * 1.5},
+		}
+		idx := calc.Calculate(snap, geo)
+		results = append(results, result{
+			date:   d.date,
+			stress: idx.Score,
+			regime: idx.Regime,
+			change: d.change,
+		})
+	}
+
+	buckets := map[string][]float64{
+		"low":    {},
+		"alert":  {},
+		"high":   {},
+		"crisis": {},
+	}
+	for _, r := range results {
+		buckets[r.regime] = append(buckets[r.regime], r.change)
+	}
+
+	fmt.Println("=== Taiwan Stress Index Validation ===")
+	fmt.Printf("Days analyzed: %d\n\n", len(results))
+	for _, name := range []string{"low", "alert", "high", "crisis"} {
+		vals := buckets[name]
+		if len(vals) == 0 {
+			fmt.Printf("Regime %-6s: 0 days\n", name)
+			continue
+		}
+		up := countPositive(vals)
+		fmt.Printf("Regime %-6s: %2d days | up: %2d (%5.1f%%) | down: %2d (%5.1f%%) | avg return: %+.2f%%\n",
+			name, len(vals), up, float64(up)/float64(len(vals))*100,
+			len(vals)-up, float64(len(vals)-up)/float64(len(vals))*100,
+			mean(vals)*100,
+		)
+	}
+	fmt.Println()
+	fmt.Println("Correlation interpretation:")
+	fmt.Println("  - 'high' / 'crisis' regimes should show lower up-ratio than 'low'.")
+	fmt.Println("  - If not, the scoring weights or macro inputs may need recalibration.")
+}
+
+func countPositive(v []float64) int {
+	c := 0
+	for _, x := range v {
+		if x > 0 {
+			c++
+		}
+	}
+	return c
+}
+
+func mean(v []float64) float64 {
+	if len(v) == 0 {
+		return 0
+	}
+	var s float64
+	for _, x := range v {
+		s += x
+	}
+	return s / float64(len(v))
+}

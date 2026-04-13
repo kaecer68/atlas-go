@@ -17,6 +17,7 @@ type SessionSummary struct {
 	OrderCount            int
 	PositionCount         int
 	EndingCash            float64
+	PortfolioValue        float64
 	OutcomeCount          int
 	BrokerRuntime         BrokerRuntimeAudit
 	NextExperimentAgentID string
