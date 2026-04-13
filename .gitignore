@@ -21,3 +21,5 @@
 /validate-stress-index
 /validate-twse-capital-flow
 /internal/monitoring/data/
+/prompts/agents/spawn_*.md
+/validate-phase3-integration
