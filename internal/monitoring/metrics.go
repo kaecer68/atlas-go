@@ -209,3 +209,35 @@ func (t *TradingMetrics) RecordPortfolio(cash float64, totalValue float64) {
 	t.collector.RecordGauge("portfolio_cash", cash, nil)
 	t.collector.RecordGauge("portfolio_total_value", totalValue, nil)
 }
+
+// RecordCircuitBreakerState 记录断路器状态
+func (t *TradingMetrics) RecordCircuitBreakerState(state string) {
+	value := 0.0
+	switch state {
+	case "paused":
+		value = 1.0
+	case "halted":
+		value = 2.0
+	}
+	t.collector.RecordGauge("circuit_breaker_state", value, map[string]string{
+		"state": state,
+	})
+}
+
+// RecordRiskEvent 记录风险事件
+func (t *TradingMetrics) RecordRiskEvent(eventType string, symbol string) {
+	t.collector.RecordCounter("risk_events_total", 1, map[string]string{
+		"type":   eventType,
+		"symbol": symbol,
+	})
+}
+
+// RecordCounter 记录通用计数器
+func (t *TradingMetrics) RecordCounter(name string, value float64, labels map[string]string) {
+	t.collector.RecordCounter(name, value, labels)
+}
+
+// RecordGauge 记录通用仪表盘
+func (t *TradingMetrics) RecordGauge(name string, value float64, labels map[string]string) {
+	t.collector.RecordGauge(name, value, labels)
+}

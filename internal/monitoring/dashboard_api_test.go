@@ -386,6 +386,8 @@ func TestDashboardSwaggerRoutes(t *testing.T) {
 	})
 
 	t.Run("swagger json exists", func(t *testing.T) {
+		origDir, _ := os.Getwd()
+		t.Cleanup(func() { _ = os.Chdir(origDir) })
 		dir := t.TempDir()
 		if err := os.Chdir(dir); err != nil {
 			t.Fatalf("chdir: %v", err)
@@ -414,6 +416,8 @@ func TestDashboardSwaggerRoutes(t *testing.T) {
 	})
 
 	t.Run("swagger json not found", func(t *testing.T) {
+		origDir, _ := os.Getwd()
+		t.Cleanup(func() { _ = os.Chdir(origDir) })
 		dir := t.TempDir()
 		if err := os.Chdir(dir); err != nil {
 			t.Fatalf("chdir: %v", err)
@@ -664,5 +668,59 @@ func setupDashboardFixtures(t *testing.T, ledgerDir string) {
 	}
 	if err := os.WriteFile(resultPath, resultBytes, 0o644); err != nil {
 		t.Fatalf("write experiment result: %v", err)
+	}
+}
+
+func TestDashboardLiveStatusEndpoint(t *testing.T) {
+	ledgerDir := t.TempDir()
+	api := NewDashboardAPI(ledgerDir)
+	mux := http.NewServeMux()
+	api.RegisterLiveRoutes(mux)
+
+	// Setup circuit breaker state fixture directly in data/state.
+	_ = os.RemoveAll("data/state")
+	wd, _ := os.Getwd()
+	cbDir := filepath.Join(wd, "data", "state")
+	if err := os.MkdirAll(cbDir, 0o755); err != nil {
+		t.Fatalf("mkdir cb dir: %v", err)
+	}
+	cbPath := filepath.Join(cbDir, "circuit_breaker_state.json")
+	cbData := `{"state":"paused","state_changed_at":"2026-04-13T00:00:00Z","consecutive_sl":2,"cooldown_until":"2026-04-13T00:15:00Z","intraday_peak":1000000,"day_start_value":980000}`
+	if err := os.WriteFile(cbPath, []byte(cbData), 0o644); err != nil {
+		t.Fatalf("write cb state: %v", err)
+	}
+	t.Logf("wrote cb state to %s", cbPath)
+	t.Logf("working dir: %s", wd)
+	t.Cleanup(func() {
+		_ = os.RemoveAll("data/state")
+	})
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/live-status", nil)
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+
+	cb, ok := resp["circuit_breaker"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected circuit_breaker object")
+	}
+	if cb["state"] != "paused" {
+		t.Fatalf("expected paused state, got %v", cb["state"])
+	}
+
+	portfolio, ok := resp["portfolio"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected portfolio object")
+	}
+	if _, ok := portfolio["cash"]; !ok {
+		t.Fatalf("expected cash in portfolio")
 	}
 }

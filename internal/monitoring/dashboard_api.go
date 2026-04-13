@@ -126,6 +126,76 @@ func (a *DashboardAPI) RegisterPhase3Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/phase3-status", a.handlePhase3Status)
 }
 
+func (a *DashboardAPI) RegisterLiveRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/dashboard/live-status", a.handleLiveStatus)
+}
+
+func (a *DashboardAPI) handleLiveStatus(w http.ResponseWriter, r *http.Request) {
+	status := a.loadLiveStatus()
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (a *DashboardAPI) loadLiveStatus() map[string]interface{} {
+	// Load circuit breaker state from persisted file
+	cbState := struct {
+		State          string    `json:"state"`
+		StateChangedAt time.Time `json:"state_changed_at"`
+		ConsecutiveSL  int       `json:"consecutive_sl"`
+		CooldownUntil  time.Time `json:"cooldown_until"`
+		IntradayPeak   float64   `json:"intraday_peak"`
+		DayStartValue  float64   `json:"day_start_value"`
+	}{
+		State: "unknown",
+	}
+	if data, err := os.ReadFile("data/state/circuit_breaker_state.json"); err == nil {
+		_ = json.Unmarshal(data, &cbState)
+	}
+
+	// Load portfolio from live state store JSONL (last line = latest)
+	portfolio := struct {
+		Cash          float64   `json:"cash"`
+		TotalExposure float64   `json:"total_exposure"`
+		AvailableCash float64   `json:"available_cash"`
+		DayPnL        float64   `json:"day_pnl"`
+		UnrealizedPnL float64   `json:"unrealized_pnl"`
+	}{}
+	if data, err := os.ReadFile("data/state/live/state/portfolio_state.jsonl"); err == nil {
+		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+		if len(lines) > 0 {
+			_ = json.Unmarshal([]byte(lines[len(lines)-1]), &portfolio)
+		}
+	}
+
+	// Load positions count from live state store JSONL
+	positions := make(map[string]interface{})
+	if data, err := os.ReadFile("data/state/live/state/positions_current.jsonl"); err == nil {
+		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+		if len(lines) > 0 {
+			_ = json.Unmarshal([]byte(lines[len(lines)-1]), &positions)
+		}
+	}
+
+	return map[string]interface{}{
+		"circuit_breaker": map[string]interface{}{
+			"state":            cbState.State,
+			"state_changed_at": cbState.StateChangedAt,
+			"consecutive_sl":   cbState.ConsecutiveSL,
+			"cooldown_until":   cbState.CooldownUntil,
+			"intraday_peak":    cbState.IntradayPeak,
+			"day_start_value":  cbState.DayStartValue,
+		},
+		"portfolio": map[string]interface{}{
+			"cash":            portfolio.Cash,
+			"available_cash":  portfolio.AvailableCash,
+			"total_exposure":  portfolio.TotalExposure,
+			"day_pnl":         portfolio.DayPnL,
+			"unrealized_pnl":  portfolio.UnrealizedPnL,
+			"positions_count": len(positions),
+		},
+		"timestamp": time.Now().UTC(),
+	}
+}
+
 func (a *DashboardAPI) handlePhase3Status(w http.ResponseWriter, r *http.Request) {
 	metrics, err := orchestrator.LoadPhase3Metrics("")
 	if err != nil {
