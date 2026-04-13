@@ -10,10 +10,10 @@ import (
 
 // TaiwanStressIndex represents a composite market pressure score for Taiwan.
 type TaiwanStressIndex struct {
-	Score          float64                `json:"score"`           // 0 - 100
-	Regime         string                 `json:"regime"`          // low / alert / high / crisis
-	Components     map[string]float64     `json:"components"`
-	Timestamp      int64                  `json:"timestamp"`
+	Score      float64            `json:"score"`  // 0 - 100
+	Regime     string             `json:"regime"` // low / alert / high / crisis
+	Components map[string]float64 `json:"components"`
+	Timestamp  int64              `json:"timestamp"`
 }
 
 // TaiwanStressCalculator computes the stress index from macro and capital flow data.

@@ -107,7 +107,7 @@ func NewHTTPBrokerAdapter(cfg HTTPBrokerAdapterConfig) *HTTPBrokerAdapter {
 	retryableStatusCodes := toRetryableStatusCodeSet(cfg.RetryableStatusCodes)
 	client := cfg.Client
 	if client == nil {
-		client = &http.Client{}
+		client = &http.Client{Timeout: timeout}
 	}
 	signerName, signer := selectSigner(cfg.Signer)
 	keyID := strings.TrimSpace(cfg.KeyID)

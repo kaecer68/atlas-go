@@ -20,14 +20,14 @@ func NewRegimeDetector(config JANUSConfig) *RegimeDetector {
 // Detect compares short-window cohort weights against long-window weights.
 //
 // Algorithm:
-//   1. Find the best-performing cohort in the short window (top weight).
-//   2. Find the best-performing cohort in the long window (top weight).
-//   3. Measure the delta between short and long weights for the short winner.
-//   4. If the short winner has a meaningfully higher weight in the short window
-//      than in the long window => NOVEL_REGIME.
-//   5. If the long winner dominates in the long window and the short window
-//      looks similar => HISTORICAL_REGIME.
-//   6. Otherwise => MIXED.
+//  1. Find the best-performing cohort in the short window (top weight).
+//  2. Find the best-performing cohort in the long window (top weight).
+//  3. Measure the delta between short and long weights for the short winner.
+//  4. If the short winner has a meaningfully higher weight in the short window
+//     than in the long window => NOVEL_REGIME.
+//  5. If the long winner dominates in the long window and the short window
+//     looks similar => HISTORICAL_REGIME.
+//  6. Otherwise => MIXED.
 func (d *RegimeDetector) Detect(
 	shortWeights map[prism.RegimeType]CohortWeight,
 	longWeights map[prism.RegimeType]CohortWeight,

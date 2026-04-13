@@ -176,9 +176,9 @@ func (e *Engine) ApplyAdjustment(
 
 // Status is a serializable view of the JANUS engine state.
 type Status struct {
-	Weights            map[string]float64                `json:"weights"`
-	Classification     string                            `json:"classification"`
-	LastUpdated        time.Time                         `json:"last_updated"`
+	Weights            map[string]float64                   `json:"weights"`
+	Classification     string                               `json:"classification"`
+	LastUpdated        time.Time                            `json:"last_updated"`
 	WindowPerformances map[string]WindowPerformanceSnapshot `json:"window_performances"`
 }
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
 func TestComparePromptPerformance(t *testing.T) {
@@ -53,6 +54,11 @@ liquidity_floor: 5000000
 max_position_weight: 0.15
 reserve_cash_fraction: 0.12
 require_cro_pass: true
+stop_loss_pct: 8
+take_profit_pct: 15
+max_open_positions: 3
+transaction_cost_bps: 2.0
+slippage_bps: 5
 `
 	updated := baseline.ApplyConstraintCandidate(base, candidate)
 	if updated.MinRecommendationConviction != 55 {
@@ -69,6 +75,21 @@ require_cro_pass: true
 	}
 	if !updated.RequireCROPass {
 		t.Fatalf("expected require_cro_pass parsed")
+	}
+	if updated.StopLossPct != 0.08 {
+		t.Fatalf("expected stop_loss_pct parsed as decimal, got %f", updated.StopLossPct)
+	}
+	if updated.TakeProfitPct != 0.15 {
+		t.Fatalf("expected take_profit_pct parsed as decimal, got %f", updated.TakeProfitPct)
+	}
+	if updated.MaxOpenPositions != 3 {
+		t.Fatalf("expected max_open_positions parsed")
+	}
+	if updated.TransactionCostBPS != 2.0 {
+		t.Fatalf("expected transaction_cost_bps parsed")
+	}
+	if updated.SlippageBPS != 5 {
+		t.Fatalf("expected slippage_bps parsed")
 	}
 }
 
@@ -143,5 +164,40 @@ portfolio_constraint_revision:
 	}
 	if baseline == candidate {
 		t.Fatalf("expected governance routing to produce different replay score")
+	}
+}
+
+func TestFallbackWindowExpandsUntilMinDatesMet(t *testing.T) {
+	// Create a dataset with dates spanning 100 days
+	ds := &replay.Dataset{
+		Dates: []time.Time{
+			time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC),
+			time.Date(2026, 1, 30, 0, 0, 0, 0, time.UTC),
+			time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC),
+			time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC),
+		},
+	}
+
+	start, end, ok := fallbackWindow(ds, 3)
+	if !ok {
+		t.Fatalf("expected fallback window to be found")
+	}
+	if end != time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC) {
+		t.Fatalf("unexpected end date")
+	}
+	// Should use 60-day window to capture at least 3 dates
+	if start.After(time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("expected expanded fallback window, got start=%s", start.Format("2006-01-02"))
+	}
+
+	// When minDates exceeds all data, should fall back to full range
+	start, _, ok = fallbackWindow(ds, 100)
+	if !ok {
+		t.Fatalf("expected fallback window to be found")
+	}
+	if start != ds.Dates[0] {
+		t.Fatalf("expected full range fallback, got start=%s", start.Format("2006-01-02"))
 	}
 }

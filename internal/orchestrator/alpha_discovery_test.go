@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -29,7 +30,7 @@ func TestAlphaDiscoveryFindsHighFactorLowCoverage(t *testing.T) {
 		{Agent: "a", Symbol: "2317.TW", Side: domain.SideBuy, Conviction: 80},
 	}
 
-	discovered := engine.Discover([]string{"2330.TW", "2317.TW"}, quotes, recs)
+	discovered := engine.Discover(context.Background(), []string{"2330.TW", "2317.TW"}, quotes, recs)
 
 	found2330 := false
 	for _, d := range discovered {
@@ -66,7 +67,7 @@ func TestAlphaDiscoverySkipsSymbolsWithHighCoverage(t *testing.T) {
 		{Agent: "b", Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 70},
 	}
 
-	discovered := engine.Discover([]string{"2330.TW"}, quotes, recs)
+	discovered := engine.Discover(context.Background(), []string{"2330.TW"}, quotes, recs)
 	if len(discovered) != 0 {
 		t.Errorf("expected no discoveries for symbol with 2-agent coverage, got %d", len(discovered))
 	}
@@ -85,7 +86,7 @@ func TestAlphaDiscoveryIncludesSingleCoverage(t *testing.T) {
 		{Agent: "a", Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 80},
 	}
 
-	discovered := engine.Discover([]string{"2330.TW"}, quotes, recs)
+	discovered := engine.Discover(context.Background(), []string{"2330.TW"}, quotes, recs)
 	// Single coverage is allowed, but the symbol already has a recommendation.
 	// Alpha discovery still generates an exploratory rec if factor score passes.
 	// This is acceptable behavior.

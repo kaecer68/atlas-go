@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/adversarial"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
@@ -316,7 +316,9 @@ func (c *Phase3Controller) RunParallelOptimization(baseState swarm.MarketState, 
 
 	go func() {
 		defer wg.Done()
-		_ = c.ApplyPRISMWeights(nil, regime)
+		if err := c.ApplyPRISMWeights(nil, regime); err != nil {
+			fmt.Printf("[Phase3Controller] warn: ApplyPRISMWeights failed: %v\n", err)
+		}
 	}()
 
 	go func() {
@@ -337,7 +339,9 @@ func (c *Phase3Controller) RunParallelOptimization(baseState swarm.MarketState, 
 	}()
 
 	wg.Wait()
-	_ = c.SaveMetrics("")
+	if err := c.SaveMetrics(""); err != nil {
+		fmt.Printf("[Phase3Controller] warn: SaveMetrics failed: %v\n", err)
+	}
 }
 
 // runAdversarialStressTests finds the weakest agent and runs real stress scenarios.

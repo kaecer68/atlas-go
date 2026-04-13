@@ -1,0 +1,185 @@
+package orchestrator
+
+import (
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/janus"
+	"github.com/kaecer68/atlas-go/internal/prism"
+	"github.com/kaecer68/atlas-go/internal/spawning"
+	"github.com/kaecer68/atlas-go/internal/swarm"
+)
+
+type janusPlugin struct {
+	engine *janus.Engine
+}
+
+func (p *janusPlugin) Name() string { return "janus" }
+
+func (p *janusPlugin) Attach(core *SystemCore) {}
+
+func (p *janusPlugin) ProcessRecommendations(regime domain.Regime, recs []domain.Recommendation) []domain.Recommendation {
+	if p.engine == nil {
+		return recs
+	}
+	return p.engine.ApplyAdjustment(recs, regime)
+}
+
+func (p *janusPlugin) PostSimulation(quotes []domain.Quote, regime domain.Regime, asOf time.Time) {}
+
+type swarmPlugin struct {
+	swarm      *swarm.MiroFishSwarm
+	controller *Phase3Controller
+}
+
+func (p *swarmPlugin) Name() string { return "swarm" }
+
+func (p *swarmPlugin) Attach(core *SystemCore) {}
+
+func (p *swarmPlugin) ProcessRecommendations(regime domain.Regime, recs []domain.Recommendation) []domain.Recommendation {
+	if len(recs) == 0 {
+		return recs
+	}
+	var result swarm.SimulationResult
+	var ok bool
+	if p.controller != nil {
+		result, ok = p.controller.GetSwarmConsensus()
+	}
+	if !ok && p.swarm != nil {
+		result, ok = p.swarm.GetLatestResult()
+	}
+	if !ok || len(result.Consensus) == 0 {
+		return recs
+	}
+	adjusted := make([]domain.Recommendation, len(recs))
+	for i, rec := range recs {
+		adjusted[i] = rec
+		cp, ok := result.Consensus[rec.Symbol]
+		if !ok {
+			continue
+		}
+		switch cp.ConsensusDirection {
+		case "bullish":
+			if rec.Side == domain.SideBuy {
+				adjusted[i].Conviction = min(100, rec.Conviction+5)
+			} else {
+				adjusted[i].Conviction = max(0, rec.Conviction-5)
+			}
+		case "bearish":
+			if rec.Side == domain.SideSell {
+				adjusted[i].Conviction = min(100, rec.Conviction+5)
+			} else {
+				adjusted[i].Conviction = max(0, rec.Conviction-5)
+			}
+		}
+	}
+	return adjusted
+}
+
+func (p *swarmPlugin) PostSimulation(quotes []domain.Quote, regime domain.Regime, asOf time.Time) {}
+
+type prismPlugin struct {
+	manager    *prism.PRISMManager
+	controller *Phase3Controller
+	core       *SystemCore
+}
+
+func (p *prismPlugin) Name() string { return "prism" }
+
+func (p *prismPlugin) Attach(core *SystemCore) {
+	p.core = core
+	if p.manager != nil && core != nil && core.replay != nil {
+		p.manager.WithExecutor(NewPRISMTrainingExecutor(core.replay, core.registry, core.policy))
+	}
+}
+
+func (p *prismPlugin) ProcessRecommendations(regime domain.Regime, recs []domain.Recommendation) []domain.Recommendation {
+	if p.controller == nil {
+		return recs
+	}
+	return p.controller.ApplyPRISMWeights(recs, regime)
+}
+
+func (p *prismPlugin) PostSimulation(quotes []domain.Quote, regime domain.Regime, asOf time.Time) {
+	pm := p.manager
+	if pm == nil && p.controller != nil {
+		pm = p.controller.prismManager
+	}
+	if pm == nil || p.core == nil {
+		return
+	}
+	var pr prism.RegimeType
+	switch regime {
+	case domain.RegimeRiskOn:
+		pr = prism.RegimeRiskOn
+	case domain.RegimeRiskOff:
+		pr = prism.RegimeRiskOff
+	default:
+		pr = prism.RegimeTransition
+	}
+	windowStart := asOf.AddDate(0, 0, -30)
+	for _, agent := range p.core.registry.Agents {
+		if !agent.Enabled {
+			continue
+		}
+		_ = pm.ScheduleTraining(agent, []prism.TrainingWindow{
+			{Start: windowStart, End: asOf, Regime: pr},
+		})
+	}
+}
+
+type spawningPlugin struct {
+	manager    *spawning.SpawningManager
+	controller *Phase3Controller
+}
+
+func (p *spawningPlugin) Name() string { return "spawning" }
+
+func (p *spawningPlugin) Attach(core *SystemCore) {}
+
+func (p *spawningPlugin) ProcessRecommendations(regime domain.Regime, recs []domain.Recommendation) []domain.Recommendation {
+	return recs
+}
+
+func (p *spawningPlugin) PostSimulation(quotes []domain.Quote, regime domain.Regime, asOf time.Time) {
+	sm := p.manager
+	if sm == nil && p.controller != nil {
+		sm = p.controller.spawningManager
+	}
+	if sm == nil {
+		return
+	}
+	sm.PerformSpawningCycle()
+}
+
+type phase3Plugin struct {
+	controller *Phase3Controller
+}
+
+func (p *phase3Plugin) Name() string { return "phase3" }
+
+func (p *phase3Plugin) Attach(core *SystemCore) {
+	if p.controller != nil && core != nil && core.replay != nil {
+		p.controller.WithAdversarialRunner(NewAdversarialScenarioRunner(core.replay, core.registry))
+	}
+}
+
+func (p *phase3Plugin) ProcessRecommendations(regime domain.Regime, recs []domain.Recommendation) []domain.Recommendation {
+	return recs
+}
+
+func (p *phase3Plugin) PostSimulation(quotes []domain.Quote, regime domain.Regime, asOf time.Time) {
+	if p.controller == nil {
+		return
+	}
+	baseState := swarm.MarketState{
+		Timestamp: asOf,
+		Prices:    make(map[string]float64, len(quotes)),
+		Volumes:   make(map[string]float64, len(quotes)),
+	}
+	for _, q := range quotes {
+		baseState.Prices[q.Symbol] = q.Last
+		baseState.Volumes[q.Symbol] = float64(q.Volume)
+	}
+	p.controller.RunParallelOptimization(baseState, regime)
+}

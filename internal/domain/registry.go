@@ -46,7 +46,7 @@ type RecommendationOutcome struct {
 
 type HumanIntervention struct {
 	ID            string    `json:"id"`
-	Type          string    `json:"type"`          // e.g., "pause_agent", "set_model_weight", "sector_ban", "approve_rec", "reject_rec"
+	Type          string    `json:"type"` // e.g., "pause_agent", "set_model_weight", "sector_ban", "approve_rec", "reject_rec"
 	TargetAgentID string    `json:"target_agent_id,omitempty"`
 	TargetModelID string    `json:"target_model_id,omitempty"`
 	TargetSector  string    `json:"target_sector,omitempty"`

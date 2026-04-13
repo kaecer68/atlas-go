@@ -10,9 +10,9 @@ import (
 )
 
 // NewProductionSystem builds a fully-wired System for dependency-graph visibility.
-// It preserves the existing chainable-builder API but surfaces cross-package
-// constructor calls so that static analysis tools (go-callvis, godepgraph) can
-// trace cmd/atlas -> orchestrator -> {prism, swarm, janus, spawning, reflexivity}.
+// It registers each subsystem as a Plugin on the System's PluginHost so that
+// cross-package boundaries are explicit and the simulation loop delegates to
+// a unified lifecycle interface.
 func NewProductionSystem(cfg config.Config) *System {
 	system := NewSystem(cfg)
 

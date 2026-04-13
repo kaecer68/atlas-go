@@ -50,13 +50,15 @@ Run experiment flow:
 
 ```bash
 go run ./cmd/execute-experiment -brief <brief-file>
-go run ./cmd/judge-experiment -result <experiment-result-file>
+go run ./cmd/judge-experiment              # auto-discovers latest experiment
+# or: go run ./cmd/judge-experiment -result <experiment-result-file>
 ```
 
 Run baseline operations:
 
 ```bash
-go run ./cmd/promote-baseline -result <accepted-result-file>
+go run ./cmd/promote-baseline              # auto-discovers latest experiment
+# or: go run ./cmd/promote-baseline -result <accepted-result-file>
 go run ./cmd/revert-baseline --list
 ```
 

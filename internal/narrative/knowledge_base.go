@@ -199,15 +199,15 @@ func (ne *NarrativeEngine) ListModels() []InvestmentModel {
 
 // MarketNarrativeData carries raw inputs for narrative detection.
 type MarketNarrativeData struct {
-	US10YChangeBps      float64
-	DXYChangePct        float64
-	VIXLevel            float64
-	USD_TWD_ChangePct   float64
-	OilChangePct        float64
-	GoldChangePct       float64
-	JPY_ChangePct       float64
-	AICapexSentiment    float64 // +1 bullish, -1 bearish
-	GeopoliticalGPR     float64 // Geopolitical risk index level
+	US10YChangeBps    float64
+	DXYChangePct      float64
+	VIXLevel          float64
+	USD_TWD_ChangePct float64
+	OilChangePct      float64
+	GoldChangePct     float64
+	JPY_ChangePct     float64
+	AICapexSentiment  float64 // +1 bullish, -1 bearish
+	GeopoliticalGPR   float64 // Geopolitical risk index level
 }
 
 func detectUSRatesEvent(data MarketNarrativeData) *NarrativeEvent {

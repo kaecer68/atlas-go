@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -148,13 +147,4 @@ type MockMacroProvider struct {
 func (m *MockMacroProvider) Name() string { return "mock" }
 func (m *MockMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
 	return m.Snapshot, nil
-}
-
-// parseFloatSafe parses a float string, returning defaultValue on error.
-func parseFloatSafe(s string, defaultValue float64) float64 {
-	v, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
-	if err != nil {
-		return defaultValue
-	}
-	return v
 }

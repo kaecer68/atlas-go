@@ -234,9 +234,7 @@ interactive_mode() {
         echo -n "Execute this brief? [Y/n]: "
         read -r confirm
         if [[ ! "$confirm" =~ ^[Nn]$ ]]; then
-            # TODO: Create experiment from brief
-            echo "Creating experiment from brief..."
-            echo "(This would integrate with experiment creation logic)"
+            execute_experiment "" "$brief"
         else
             echo "Cancelled."
         fi
@@ -273,7 +271,7 @@ main() {
             local brief=$(find_mutation_brief)
             if [ -n "$brief" ]; then
                 echo "Using mutation brief: $brief"
-                # Would need to create experiment from brief here
+                execute_experiment "" "$brief"
             else
                 echo "No mutation briefs found either."
                 echo "Run: ./scripts/openclaw/propose-mutation.sh --auto"

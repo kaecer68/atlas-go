@@ -342,14 +342,13 @@ func (re *ReflexivityEngine) calculateOutcome(loop FeedbackLoop) (string, float6
 	case PositiveFeedback:
 		if loop.Bias.Magnitude > 0 {
 			return "Potential bubble formation - monitor for exhaustion", confidence
-		} else {
-			return "Potential crash/capitulation - watch for reversal", confidence
 		}
+		return "Potential crash/capitulation - watch for reversal", confidence
 	case NegativeFeedback:
 		return "Mean reversion likely - expect stabilization", confidence * 0.7
+	default:
+		return "Uncertain outcome", 0.0
 	}
-
-	return "Uncertain outcome", 0.0
 }
 
 // UpdateLoopStatus changes the status of a feedback loop
@@ -477,7 +476,7 @@ func (re *ReflexivityEngine) ProcessRecommendations(recs []domain.Recommendation
 			Source:     extractAgentIDs(recs, symbol),
 			Timestamp:  time.Now(),
 		}
-		re.RegisterBias(bias)
+		_ = re.RegisterBias(bias)
 	}
 }
 

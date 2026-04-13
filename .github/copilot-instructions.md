@@ -56,7 +56,7 @@ Welcome to atlas-go! This is a **simulation-first, audit-driven investment resea
 ### I'm working on live trading paths
 1. ✅ Read: [.github/instructions/live-trading.guardrails.instructions.md](.github/instructions/live-trading.guardrails.instructions.md)
 2. ⚠️ Remember: `internal/live/` has TODO boundaries; replay-first is the safe default
-3. 🔄 Validate: Decision flow vs. `internal/orchestrator/plugin_registry.go`
+3. 🔄 Validate: Decision flow vs. `internal/orchestrator/system.go` / `plugin_host.go`
 
 ---
 
@@ -205,7 +205,7 @@ Before submitting changes, verify:
 ## 🤝 Quick Answers
 
 **Q: Where do I put a new Executor?**  
-A: Implement the interface type from `internal/orchestrator/plugin_registry.go` in a new `internal/<domain>/executor.go`. Register in registry during init.
+A: Implement the executor interface from `internal/orchestrator/plugin_registry.go` in a new `internal/<domain>/executor.go`. If it needs lifecycle hooks (attach / before-sim / after-sim), also implement `Plugin` from `internal/orchestrator/plugin.go` and register it via `PluginHost` in `internal/orchestrator/factory.go`.
 
 **Q: How do I add a new prompt to an agent?**  
 A: Create `prompts/agents/<agent-name>.prompt.md`, update `configs/agents.json` with enabled=true, then test with `go run ./cmd/execute-experiment -brief <test.brief>`.

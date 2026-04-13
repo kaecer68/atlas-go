@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 
@@ -10,6 +11,15 @@ import (
 )
 
 func main() {
+	var help bool
+	flag.BoolVar(&help, "help", false, "show help")
+	flag.Parse()
+	if help {
+		fmt.Println("Usage: validate-twse-capital-flow [--help]")
+		fmt.Println("Fetches the latest TWSE capital-flow snapshot and validates non-zero data.")
+		os.Exit(0)
+	}
+
 	provider := marketdata.NewTWSECapitalFlowProvider("data/state/capital_flow")
 	ctx := context.Background()
 

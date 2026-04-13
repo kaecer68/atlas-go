@@ -31,13 +31,13 @@ type Quote struct {
 }
 
 type Recommendation struct {
-	Agent           string
-	Skill           string
-	Symbol          string
-	Side            Side
-	Conviction      int
-	Reason          string
-	ReasoningChain  []string `json:"reasoning_chain,omitempty"`
+	Agent            string
+	Skill            string
+	Symbol           string
+	Side             Side
+	Conviction       int
+	Reason           string
+	ReasoningChain   []string `json:"reasoning_chain,omitempty"`
 	SupportingEvents []string `json:"supporting_events,omitempty"`
 }
 

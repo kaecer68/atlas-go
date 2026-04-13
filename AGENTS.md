@@ -79,17 +79,22 @@ go run ./cmd/backtest-window -start 2026-03-26 -end 2026-03-27
 
 # 實驗生命週期
 go run ./cmd/execute-experiment -brief <brief-file>
-go run ./cmd/judge-experiment -result <experiment-result-file>
-go run ./cmd/promote-baseline -result <accepted-result-file>
+go run ./cmd/judge-experiment              # 自動尋找最新實驗結果
+# 或
+# go run ./cmd/judge-experiment -result <experiment-result-file>
+
+go run ./cmd/promote-baseline              # 自動尋找最新實驗結果
+# 或
+# go run ./cmd/promote-baseline -result <accepted-result-file>
 go run ./cmd/revert-baseline --list
 
 # 資料匯入（CSV → JSONL）
 go run ./cmd/import-replay -source <csv> -target <jsonl>
 
 # 市場資料與監控測試
-go run ./cmd/test-fugle
-go run ./cmd/test-hybrid
-go run ./cmd/test-monitor
+go run ./cmd/experimental/test-fugle
+go run ./cmd/experimental/test-hybrid
+go run ./cmd/experimental/test-monitor
 ```
 
 ---
@@ -126,16 +131,16 @@ go run ./cmd/test-monitor
 | `cmd/promote-baseline` | 晉升通過的實驗為新的 baseline policy |
 | `cmd/revert-baseline` | 回滾 baseline 到指定版本或實驗前狀態 |
 | `cmd/import-replay` | 將 TWSE/TPEX CSV 轉為 JSONL replay 格式 |
-| `cmd/test-fugle` | 測試 Fugle API 連線 |
-| `cmd/test-hybrid` | 測試 Hybrid Provider（Fugle + TWSE 備援） |
-| `cmd/test-monitor` | 測試監控系統與 live 協調模式 |
+| `cmd/experimental/test-fugle` | 測試 Fugle API 連線（支援 `--help`） |
+| `cmd/experimental/test-hybrid` | 測試 Hybrid Provider（Fugle + TWSE 備援，支援 `--help`） |
+| `cmd/experimental/test-monitor` | 測試監控系統與 live 協調模式（支援 `--help`） |
 
 ### `internal/` 核心套件
 
 | 套件 | 職責 |
 |------|------|
 | `internal/domain/` | 領域型別（`Regime`、`AgentLayer`、`Quote`、`Recommendation`、`Position`、`Order`、`SimulationConstraints` 等） |
-| `internal/orchestrator/` | 流程協調與執行器路由（`PluginRegistry`、`RegimeExecutor`、`AgentExecutor`、`ControlExecutor`） |
+| `internal/orchestrator/` | 流程協調與執行器路由（`PluginHost`、`Plugin`、`RegimeExecutor`、`AgentExecutor`、`ControlExecutor`） |
 | `internal/sim/` | 模擬引擎與部位狀態轉換 |
 | `internal/portfolio/` | 風險、波動度與 Darwinian 權重管理 |
 | `internal/marketdata/` | 市場資料提供者抽象與 adapter（TWSE、Fugle、Hybrid、Yahoo） |
@@ -190,7 +195,7 @@ Ledger (internal/ledger/)
 
 ### Go 寫作模式
 
-- **介面保持小而聚焦**：常見型式為 `Supports(...)` + 一個操作方法。參考 `internal/orchestrator/plugin_registry.go`。
+- **介面保持小而聚焦**：常見型式為 `Supports(...)` + 一個操作方法。參考 `internal/orchestrator/plugin.go`（`Plugin` 生命週期介面）與 `internal/orchestrator/plugin_registry.go`（執行器介面）。
 - **優先使用 early return**，減少巢狀縮排。
 - **錯誤包裝脈絡**：一律使用 `fmt.Errorf("context: %w", err)`。
 - **領域狀態優先用字串 enum**：如 `type Regime string`、`type AgentLayer string`，方便 JSON roundtrip。
@@ -200,7 +205,7 @@ Ledger (internal/ledger/)
 ### 設定檔慣例
 
 - `configs/agents.json` 與 `configs/agents.yaml` 並存，內容對應；**每個 `enabled: true` 的 agent 都必須在 `prompts/agents/` 下有對應的 prompt 檔案**。
-- 環境變數優先於 `.env` 檔案。`internal/config/config.go` 會自動讀取專案根目錄的 `.env`，但已存在的環境變數不會被覆蓋。
+- 環境變數優先於 `.env` 檔案。`internal/config/config.go` 會自動讀取專案根目錄的 `.env`，但已存在的環境變數不會被覆蓋；`.env` 中的值若使用引號（單引號或雙引號）會被自動去除。
 - 關鍵環境變數前綴為 `ATLAS_*`，例如 `ATLAS_MARKET_DATA_PROVIDER`、`ATLAS_REPLAY_DATA_PATH`、`ATLAS_BASELINE_POLICY_PATH`。
 
 ---

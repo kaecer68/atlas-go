@@ -421,6 +421,8 @@ func (sw *MiroFishSwarm) applyEvent(state *MarketState, event MarketEvent) {
 			state.Prices[sym] *= (1 + event.Magnitude*(rand.Float64()-0.5))
 			break // Only affect one symbol
 		}
+	default:
+		// Ignore unknown event types.
 	}
 }
 

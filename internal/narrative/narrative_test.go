@@ -69,13 +69,13 @@ func TestNarrativeEngineDetectEvents(t *testing.T) {
 
 	ne := NewNarrativeEngine()
 	data := MarketNarrativeData{
-		US10YChangeBps:    15,
-		DXYChangePct:      2.0,
-		AICapexSentiment:  0.8,
-		GeopoliticalGPR:   160,
-		OilChangePct:      6.0,
-		JPY_ChangePct:     3.0,
-		VIXLevel:          30,
+		US10YChangeBps:   15,
+		DXYChangePct:     2.0,
+		AICapexSentiment: 0.8,
+		GeopoliticalGPR:  160,
+		OilChangePct:     6.0,
+		JPY_ChangePct:    3.0,
+		VIXLevel:         30,
 	}
 	events := ne.DetectEvents(data)
 	if len(events) != 5 {

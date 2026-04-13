@@ -24,8 +24,8 @@ type TWSECapitalFlow struct {
 
 // TWSECapitalFlowProvider fetches Taiwan institutional investor flows from TWSE.
 type TWSECapitalFlowProvider struct {
-	client      *http.Client
-	storageDir  string
+	client     *http.Client
+	storageDir string
 }
 
 // NewTWSECapitalFlowProvider creates a new TWSE capital flow provider.
@@ -49,7 +49,9 @@ func (t *TWSECapitalFlowProvider) FetchSnapshot(ctx context.Context) (MacroDataS
 	}
 
 	// Persist for audit.
-	_ = t.saveFlow(flow)
+	if err := t.saveFlow(flow); err != nil {
+		// Non-fatal: we still return the snapshot even if persistence fails.
+	}
 
 	snap := MacroDataSnapshot{
 		RecordedAt: time.Now().Unix(),

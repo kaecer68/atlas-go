@@ -3,6 +3,7 @@ package monitoring
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -148,21 +149,25 @@ func (a *DashboardAPI) loadLiveStatus() map[string]interface{} {
 		State: "unknown",
 	}
 	if data, err := os.ReadFile("data/state/circuit_breaker_state.json"); err == nil {
-		_ = json.Unmarshal(data, &cbState)
+		if err := json.Unmarshal(data, &cbState); err != nil {
+			log.Printf("[DashboardAPI] warn: failed to unmarshal circuit breaker state: %v", err)
+		}
 	}
 
 	// Load portfolio from live state store JSONL (last line = latest)
 	portfolio := struct {
-		Cash          float64   `json:"cash"`
-		TotalExposure float64   `json:"total_exposure"`
-		AvailableCash float64   `json:"available_cash"`
-		DayPnL        float64   `json:"day_pnl"`
-		UnrealizedPnL float64   `json:"unrealized_pnl"`
+		Cash          float64 `json:"cash"`
+		TotalExposure float64 `json:"total_exposure"`
+		AvailableCash float64 `json:"available_cash"`
+		DayPnL        float64 `json:"day_pnl"`
+		UnrealizedPnL float64 `json:"unrealized_pnl"`
 	}{}
 	if data, err := os.ReadFile("data/state/live/state/portfolio_state.jsonl"); err == nil {
 		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 		if len(lines) > 0 {
-			_ = json.Unmarshal([]byte(lines[len(lines)-1]), &portfolio)
+			if err := json.Unmarshal([]byte(lines[len(lines)-1]), &portfolio); err != nil {
+				log.Printf("[DashboardAPI] warn: failed to unmarshal portfolio state: %v", err)
+			}
 		}
 	}
 
@@ -171,7 +176,9 @@ func (a *DashboardAPI) loadLiveStatus() map[string]interface{} {
 	if data, err := os.ReadFile("data/state/live/state/positions_current.jsonl"); err == nil {
 		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 		if len(lines) > 0 {
-			_ = json.Unmarshal([]byte(lines[len(lines)-1]), &positions)
+			if err := json.Unmarshal([]byte(lines[len(lines)-1]), &positions); err != nil {
+				log.Printf("[DashboardAPI] warn: failed to unmarshal positions state: %v", err)
+			}
 		}
 	}
 
@@ -803,13 +810,13 @@ func (a *DashboardAPI) handleApproveRecommendation(w http.ResponseWriter, r *htt
 	}
 	store := ledger.NewStore(a.ledgerDir)
 	intervention := domain.HumanIntervention{
-		ID:           fmt.Sprintf("int-approve-%s-%d", req.Symbol, time.Now().UnixNano()),
-		Type:         "approve_rec",
-		TargetSymbol: req.Symbol,
+		ID:            fmt.Sprintf("int-approve-%s-%d", req.Symbol, time.Now().UnixNano()),
+		Type:          "approve_rec",
+		TargetSymbol:  req.Symbol,
 		TargetAgentID: req.AgentID,
-		Reason:       req.Reason,
-		Operator:     req.Operator,
-		RecordedAt:   time.Now().UTC(),
+		Reason:        req.Reason,
+		Operator:      req.Operator,
+		RecordedAt:    time.Now().UTC(),
 	}
 	if err := store.RecordHumanIntervention(intervention); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
@@ -835,13 +842,13 @@ func (a *DashboardAPI) handleRejectRecommendation(w http.ResponseWriter, r *http
 	}
 	store := ledger.NewStore(a.ledgerDir)
 	intervention := domain.HumanIntervention{
-		ID:           fmt.Sprintf("int-reject-%s-%d", req.Symbol, time.Now().UnixNano()),
-		Type:         "reject_rec",
-		TargetSymbol: req.Symbol,
+		ID:            fmt.Sprintf("int-reject-%s-%d", req.Symbol, time.Now().UnixNano()),
+		Type:          "reject_rec",
+		TargetSymbol:  req.Symbol,
 		TargetAgentID: req.AgentID,
-		Reason:       req.Reason,
-		Operator:     req.Operator,
-		RecordedAt:   time.Now().UTC(),
+		Reason:        req.Reason,
+		Operator:      req.Operator,
+		RecordedAt:    time.Now().UTC(),
 	}
 	if err := store.RecordHumanIntervention(intervention); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
@@ -886,6 +893,8 @@ func (a *DashboardAPI) handleActiveOverrides(w http.ResponseWriter, r *http.Requ
 			delete(bannedSectors, iv.TargetSector)
 		case "set_model_weight":
 			modelWeights[iv.TargetModelID] = iv.Value
+		default:
+			// Ignore unknown intervention types.
 		}
 	}
 

@@ -19,6 +19,10 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+to_lower() {
+    echo "$1" | tr '[:upper:]' '[:lower:]'
+}
+
 log_info() { echo -e "${BLUE}[PRISM]${NC} $1"; }
 log_success() { echo -e "${GREEN}[PRISM]${NC} $1"; }
 log_warning() { echo -e "${YELLOW}[PRISM]${NC} $1"; }
@@ -67,7 +71,7 @@ cmd_status() {
     
     for i in "${!REGIMES[@]}"; do
         local regime="${REGIMES[$i]}"
-        local queue_file="${CONFIG_DIR}/prism_queue_${regime,,}.json"
+        local queue_file="${CONFIG_DIR}/prism_queue_$(to_lower "${regime}").json"
         
         local count=0
         if [[ -f "${queue_file}" ]]; then
@@ -109,7 +113,7 @@ cmd_train() {
     local timestamp=$(date +%s)
     
     for regime in "${REGIMES[@]}"; do
-        local queue_file="${CONFIG_DIR}/prism_queue_${regime,,}.json"
+        local queue_file="${CONFIG_DIR}/prism_queue_$(to_lower "${regime}").json"
         
         # Initialize queue file if needed
         if [[ ! -f "${queue_file}" ]]; then
@@ -164,7 +168,7 @@ cmd_queue() {
     # Normalize regime name
     regime=$(echo "${regime}" | sed 's/.*/\L&/; s/\b[a-z]/\u&/g')
     
-    local queue_file="${CONFIG_DIR}/prism_queue_${regime,,}.json"
+    local queue_file="${CONFIG_DIR}/prism_queue_$(to_lower "${regime}").json"
     
     log_info "Queue details for: ${regime}"
     
@@ -184,7 +188,7 @@ cmd_stats() {
     
     # Count tasks per regime
     for regime in "${REGIMES[@]}"; do
-        local queue_file="${CONFIG_DIR}/prism_queue_${regime,,}.json"
+        local queue_file="${CONFIG_DIR}/prism_queue_$(to_lower "${regime}").json"
         local pending=0
         local completed=0
         
@@ -212,7 +216,7 @@ cmd_balance() {
     local total=0
     
     for regime in "${REGIMES[@]}"; do
-        local queue_file="${CONFIG_DIR}/prism_queue_${regime,,}.json"
+        local queue_file="${CONFIG_DIR}/prism_queue_$(to_lower "${regime}").json"
         local count=0
         if [[ -f "${queue_file}" ]]; then
             count=$(grep -c '"task_id"' "${queue_file}" 2>/dev/null || echo "0")
@@ -256,7 +260,7 @@ cmd_clear() {
     if [[ "${target}" == "all" ]]; then
         log_warning "Clearing ALL PRISM queues..."
         for regime in "${REGIMES[@]}"; do
-            local queue_file="${CONFIG_DIR}/prism_queue_${regime,,}.json"
+            local queue_file="${CONFIG_DIR}/prism_queue_$(to_lower "${regime}").json"
             if [[ -f "${queue_file}" ]]; then
                 echo '{"regime": "'${regime}'", "tasks": [], "cleared_at": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > "${queue_file}"
             fi
@@ -265,7 +269,7 @@ cmd_clear() {
     else
         # Normalize regime name
         local regime=$(echo "${target}" | sed 's/.*/\L&/; s/\b[a-z]/\u&/g')
-        local queue_file="${CONFIG_DIR}/prism_queue_${regime,,}.json"
+        local queue_file="${CONFIG_DIR}/prism_queue_$(to_lower "${regime}").json"
         
         if [[ -f "${queue_file}" ]]; then
             echo '{"regime": "'${regime}'", "tasks": [], "cleared_at": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > "${queue_file}"
@@ -294,7 +298,7 @@ cmd_report() {
 EOF
 
     for regime in "${REGIMES[@]}"; do
-        local queue_file="${CONFIG_DIR}/prism_queue_${regime,,}.json"
+        local queue_file="${CONFIG_DIR}/prism_queue_$(to_lower "${regime}").json"
         local pending=0
         local completed=0
         

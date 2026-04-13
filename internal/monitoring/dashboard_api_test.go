@@ -151,12 +151,12 @@ func TestDashboardAPIEndpoints(t *testing.T) {
 		// Write a metrics fixture to the well-known path relative to test working dir
 		_ = os.MkdirAll("data/state", 0o755)
 		metrics := orchestrator.Phase3Metrics{
-			SwarmRunning:          true,
-			SwarmConsensusSymbols: 5,
-			PRISMCompletedResults: 12,
-			SpawningActive:        3,
+			SwarmRunning:           true,
+			SwarmConsensusSymbols:  5,
+			PRISMCompletedResults:  12,
+			SpawningActive:         3,
 			ReflexivityActiveLoops: 2,
-			AdversarialLastScore:  0.82,
+			AdversarialLastScore:   0.82,
 		}
 		data, _ := json.MarshalIndent(metrics, "", "  ")
 		_ = os.WriteFile("data/state/phase3_metrics.json", data, 0o644)

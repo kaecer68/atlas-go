@@ -63,7 +63,7 @@ go tool cover -func=coverage.out | tail -n 1  # Summary line
 ### Non-Obvious Build Steps
 
 - **No external build system required**: Pure Go, single `go.mod` with minimal dependencies (only `golang.org/x/time`)
-- **Config path resolution**: Always checks both env vars and `.env` file; `.env` is loaded silently if missing
+- **Config path resolution**: Always checks both env vars and `.env` file; `.env` is loaded silently if missing. Quoted values in `.env` (`KEY="value"`) are automatically unwrapped, and invalid integers in env vars trigger a warning log while falling back to defaults.
 - **Test isolation**: Tests run in-process; no Docker spin-up needed for basic testing
 - **Ledger directory auto-setup**: Simulation creates `data/state/sessions/<id>/` automatically; no pre-creation needed
 - **Registry loading fallback**: If `configs/agents.json` is missing or corrupt, system falls back to `SeedRegistry()` default
@@ -699,7 +699,7 @@ go run ./cmd/backtest-window -start <date> -end <date>  # Multi-session
 
 ### When Changing Orchestrator/Sim Logic
 
-- **Never modify** `plugin_registry.go` routing without updating tests
+- **Never modify** `plugin_host.go` / `system.go` routing without updating tests
 - **Always test** the specific executor type individually before merge
 - **Check** that control layer still runs **after** all open layers
 - **Validate** that quotes are passed correctly (symbol matching, IsTradable flag)
