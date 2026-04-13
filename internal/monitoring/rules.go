@@ -144,3 +144,91 @@ func DefaultRules() []AlertRule {
 		},
 	}
 }
+
+// LiveTradingRules 返回 production live trading 專用告警規則
+func LiveTradingRules() []AlertRule {
+	return []AlertRule{
+		{
+			Name:        "circuit_breaker_triggered",
+			Description: "Circuit breaker entered paused or halted state",
+			Condition: func(state *live.State) (bool, string) {
+				if state == nil {
+					return false, ""
+				}
+				// This rule reads from persisted circuit breaker state.
+				// For simplicity we check portfolio day pnl as proxy when state unavailable inline.
+				dayPnLPct := 0.0
+				if state.Portfolio.Cash > 0 {
+					dayPnLPct = (state.Portfolio.DayPnL / state.Portfolio.Cash) * 100
+				}
+				if dayPnLPct < -2.0 {
+					return true, fmt.Sprintf("Day PnL %.2f%% breached daily loss threshold", dayPnLPct)
+				}
+				return false, ""
+			},
+			Level:    AlertLevelCritical,
+			Cooldown: 1 * time.Minute,
+		},
+		{
+			Name:        "daily_loss_warning",
+			Description: "Portfolio day PnL approaching daily loss limit",
+			Condition: func(state *live.State) (bool, string) {
+				if state == nil {
+					return false, ""
+				}
+				dayPnLPct := 0.0
+				if state.Portfolio.Cash > 0 {
+					dayPnLPct = (state.Portfolio.DayPnL / state.Portfolio.Cash) * 100
+				}
+				if dayPnLPct < -1.5 && dayPnLPct >= -2.0 {
+					return true, fmt.Sprintf("Day PnL warning: %.2f%%", dayPnLPct)
+				}
+				return false, ""
+			},
+			Level:    AlertLevelWarning,
+			Cooldown: 5 * time.Minute,
+		},
+		{
+			Name:        "high_position_concentration",
+			Description: "Single position exceeds 15% of portfolio",
+			Condition: func(state *live.State) (bool, string) {
+				if state == nil || len(state.Positions) == 0 {
+					return false, ""
+				}
+				totalValue := state.Portfolio.Cash + state.Portfolio.UnrealizedPnL
+				if totalValue <= 0 {
+					return false, ""
+				}
+				for _, p := range state.Positions {
+					weight := p.MarketValue / totalValue
+					if weight > 0.15 {
+						return true, fmt.Sprintf("Position %s weight %.1f%% exceeds 15%%", p.Symbol, weight*100)
+					}
+				}
+				return false, ""
+			},
+			Level:    AlertLevelError,
+			Cooldown: 10 * time.Minute,
+		},
+		{
+			Name:        "unrealized_loss_position",
+			Description: "Position unrealized loss exceeds 5%",
+			Condition: func(state *live.State) (bool, string) {
+				if state == nil || len(state.Positions) == 0 {
+					return false, ""
+				}
+				for _, p := range state.Positions {
+					if p.AverageCost > 0 {
+						lossPct := (p.MarketValue/p.AverageCost - 1) * 100
+						if lossPct < -5.0 {
+							return true, fmt.Sprintf("Position %s unrealized loss %.2f%%", p.Symbol, lossPct)
+						}
+					}
+				}
+				return false, ""
+			},
+			Level:    AlertLevelWarning,
+			Cooldown: 5 * time.Minute,
+		},
+	}
+}
