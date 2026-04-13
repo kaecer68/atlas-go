@@ -88,9 +88,11 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		return domain.SimulationResult{}, err
 	}
 
+	events := s.detectNarrativeEvents(quotes)
 	regime, rawRecs, finalRecs, guardOutcomes := ExecuteRegistryResearchDetailedWithPolicyAndGuards(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy)
-	rawRecs = s.applyNarrativeContext(rawRecs, quotes)
-	finalRecs = s.applyNarrativeContext(finalRecs, quotes)
+	regime = AdjustRegimeFromNarrative(regime, events)
+	rawRecs = s.applyNarrativeContextWithEvents(rawRecs, events)
+	finalRecs = s.applyNarrativeContextWithEvents(finalRecs, events)
 	rawRecs = s.applyHumanOverrides(rawRecs)
 	finalRecs = s.applyHumanOverrides(finalRecs)
 	alphaRecs := s.applyAlphaDiscovery(quotes, rawRecs)
@@ -113,9 +115,11 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationResult, error) {
 	symbols := RegistrySymbols(s.registry)
 	quotes := s.replay.QuotesForDate(sessionDate, symbols)
+	events := s.detectNarrativeEvents(quotes)
 	regime, rawRecs, finalRecs, guardOutcomes := ExecuteRegistryResearchDetailedWithPolicyAndGuards(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy)
-	rawRecs = s.applyNarrativeContext(rawRecs, quotes)
-	finalRecs = s.applyNarrativeContext(finalRecs, quotes)
+	regime = AdjustRegimeFromNarrative(regime, events)
+	rawRecs = s.applyNarrativeContextWithEvents(rawRecs, events)
+	finalRecs = s.applyNarrativeContextWithEvents(finalRecs, events)
 	rawRecs = s.applyHumanOverrides(rawRecs)
 	finalRecs = s.applyHumanOverrides(finalRecs)
 	alphaRecs := s.applyAlphaDiscovery(quotes, rawRecs)
@@ -177,13 +181,20 @@ func (s *System) applyJANUS(regime domain.Regime, recs []domain.Recommendation) 
 	return s.janusEngine.ApplyAdjustment(recs, regime)
 }
 
-func (s *System) applyNarrativeContext(recs []domain.Recommendation, quotes []domain.Quote) []domain.Recommendation {
+func (s *System) detectNarrativeEvents(quotes []domain.Quote) []narrative.NarrativeEvent {
 	if s.narrativeEngine == nil {
-		return recs
+		return nil
 	}
 	data := quotesToNarrativeData(quotes)
-	events := s.narrativeEngine.DetectEvents(data)
-	if len(events) == 0 {
+	return s.narrativeEngine.DetectEvents(data)
+}
+
+func (s *System) applyNarrativeContext(recs []domain.Recommendation, quotes []domain.Quote) []domain.Recommendation {
+	return s.applyNarrativeContextWithEvents(recs, s.detectNarrativeEvents(quotes))
+}
+
+func (s *System) applyNarrativeContextWithEvents(recs []domain.Recommendation, events []narrative.NarrativeEvent) []domain.Recommendation {
+	if s.narrativeEngine == nil || len(events) == 0 {
 		return recs
 	}
 	chains := s.narrativeEngine.MatchChains(events)
@@ -219,6 +230,34 @@ func (s *System) applyNarrativeContext(recs []domain.Recommendation, quotes []do
 		}
 	}
 	return enriched
+}
+
+func AdjustRegimeFromNarrative(base domain.Regime, events []narrative.NarrativeEvent) domain.Regime {
+	if len(events) == 0 {
+		return base
+	}
+
+	riskOffScore := 0
+	riskOnScore := 0
+	for _, e := range events {
+		switch e.Theme {
+		case "US_rates_up", "geopolitical_risk_spike", "oil_price_shock", "JPY_carry_unwind":
+			riskOffScore++
+		case "AI_capex_surge":
+			riskOnScore++
+		}
+	}
+
+	switch {
+	case riskOffScore >= 1:
+		return domain.RegimeRiskOff
+	case riskOnScore >= 1 && base == domain.RegimeNeutral:
+		return domain.RegimeRiskOn
+	case riskOnScore >= 1 && base == domain.RegimeRiskOff:
+		return domain.RegimeNeutral
+	default:
+		return base
+	}
 }
 
 func (s *System) applyHumanOverrides(recs []domain.Recommendation) []domain.Recommendation {

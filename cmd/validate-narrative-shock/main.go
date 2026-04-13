@@ -42,8 +42,9 @@ func main() {
 	nEngine := narrative.NewNarrativeEngine()
 
 	// Baseline run
-	baseRegime, baseRaw, _, _ := orchestrator.ExecuteRegistryResearchDetailedWithPolicyAndGuards(registry, baseQuotes, policy.PromptOverrides, policy.ExecutionPolicy)
+	baseRegimeBase, baseRaw, _, _ := orchestrator.ExecuteRegistryResearchDetailedWithPolicyAndGuards(registry, baseQuotes, policy.PromptOverrides, policy.ExecutionPolicy)
 	baseEvents := nEngine.DetectEvents(quotesToData(baseQuotes))
+	baseRegime := orchestrator.AdjustRegimeFromNarrative(baseRegimeBase, baseEvents)
 	baseRecs := attachNarrative(baseRaw, baseEvents, registry, nEngine)
 
 	// Shock run: inject a US10Y spike quote
@@ -60,8 +61,9 @@ func main() {
 		IsTradable: true,
 		Source:     "mock",
 	})
-	shockRegime, shockRaw, _, _ := orchestrator.ExecuteRegistryResearchDetailedWithPolicyAndGuards(registry, shockQuotes, policy.PromptOverrides, policy.ExecutionPolicy)
+	shockRegimeBase, shockRaw, _, _ := orchestrator.ExecuteRegistryResearchDetailedWithPolicyAndGuards(registry, shockQuotes, policy.PromptOverrides, policy.ExecutionPolicy)
 	shockEvents := nEngine.DetectEvents(quotesToData(shockQuotes))
+	shockRegime := orchestrator.AdjustRegimeFromNarrative(shockRegimeBase, shockEvents)
 	shockRecs := attachNarrative(shockRaw, shockEvents, registry, nEngine)
 
 	fmt.Println("=== Narrative Shock Validation ===")
