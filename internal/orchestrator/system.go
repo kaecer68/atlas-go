@@ -14,9 +14,12 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
 	"github.com/kaecer68/atlas-go/internal/replay"
 	"github.com/kaecer68/atlas-go/internal/sim"
+	"github.com/kaecer68/atlas-go/internal/spawning"
+	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
 type System struct {
@@ -33,6 +36,9 @@ type System struct {
 	optimizer       *portfolio.Optimizer
 	narrativeEngine *narrative.NarrativeEngine
 	persistentState *domain.SimulationState
+	prismManager    *prism.PRISMManager
+	swarm           *swarm.MiroFishSwarm
+	spawningManager *spawning.SpawningManager
 }
 
 func NewSystem(cfg config.Config) *System {
@@ -99,6 +105,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	rawRecs = append(rawRecs, alphaRecs...)
 	finalRecs = append(finalRecs, alphaRecs...)
 	finalRecs = s.applyJANUS(regime, finalRecs)
+	finalRecs = s.applySwarmConsensus(finalRecs)
 	var result domain.SimulationResult
 	if s.persistentState != nil {
 		result = s.engine.RunWithState(s.persistentState, regime, quotes, finalRecs)
@@ -109,6 +116,8 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	outcomes := buildSyntheticOutcomes(rawRecs, quotes, asOf)
 	_ = s.ledger.RecordOutcomes(outcomes)
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)
+	s.schedulePRISMForRegime(regime, asOf)
+	s.runSpawningCycle()
 	return result, nil
 }
 
@@ -126,6 +135,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	rawRecs = append(rawRecs, alphaRecs...)
 	finalRecs = append(finalRecs, alphaRecs...)
 	finalRecs = s.applyJANUS(regime, finalRecs)
+	finalRecs = s.applySwarmConsensus(finalRecs)
 	var result domain.SimulationResult
 	if s.persistentState != nil {
 		result = s.engine.RunWithState(s.persistentState, regime, quotes, finalRecs)
@@ -136,6 +146,8 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	outcomes := buildReplayOutcomes(rawRecs, sessionDate, s.replay)
 	_ = s.ledger.RecordOutcomes(outcomes)
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)
+	s.schedulePRISMForRegime(regime, sessionDate)
+	s.runSpawningCycle()
 	return result, nil
 }
 
@@ -171,6 +183,24 @@ func (s *System) WithJANUS(j *janus.Engine) *System {
 // WithPersistentState enables cross-day simulation state carry-over for backtests.
 func (s *System) WithPersistentState(state *domain.SimulationState) *System {
 	s.persistentState = state
+	return s
+}
+
+// WithPRISM attaches a PRISM training manager to the system.
+func (s *System) WithPRISM(pm *prism.PRISMManager) *System {
+	s.prismManager = pm
+	return s
+}
+
+// WithSwarm attaches a MiroFish swarm simulator to the system.
+func (s *System) WithSwarm(sw *swarm.MiroFishSwarm) *System {
+	s.swarm = sw
+	return s
+}
+
+// WithSpawning attaches a spawning manager for automated agent creation.
+func (s *System) WithSpawning(sm *spawning.SpawningManager) *System {
+	s.spawningManager = sm
 	return s
 }
 
@@ -483,6 +513,74 @@ func syntheticForwardReturn(symbol string) float64 {
 	default:
 		return 0
 	}
+}
+
+// applySwarmConsensus adjusts recommendation conviction based on swarm consensus.
+func (s *System) applySwarmConsensus(recs []domain.Recommendation) []domain.Recommendation {
+	if s.swarm == nil || len(recs) == 0 {
+		return recs
+	}
+	result, ok := s.swarm.GetLatestResult()
+	if !ok || len(result.Consensus) == 0 {
+		return recs
+	}
+	adjusted := make([]domain.Recommendation, len(recs))
+	for i, rec := range recs {
+		adjusted[i] = rec
+		cp, ok := result.Consensus[rec.Symbol]
+		if !ok {
+			continue
+		}
+		switch cp.ConsensusDirection {
+		case "bullish":
+			if rec.Side == domain.SideBuy {
+				adjusted[i].Conviction = min(100, rec.Conviction+5)
+			} else {
+				adjusted[i].Conviction = max(0, rec.Conviction-5)
+			}
+		case "bearish":
+			if rec.Side == domain.SideSell {
+				adjusted[i].Conviction = min(100, rec.Conviction+5)
+			} else {
+				adjusted[i].Conviction = max(0, rec.Conviction-5)
+			}
+		}
+	}
+	return adjusted
+}
+
+// schedulePRISMForRegime schedules PRISM training for the current regime.
+func (s *System) schedulePRISMForRegime(regime domain.Regime, asOf time.Time) {
+	if s.prismManager == nil {
+		return
+	}
+	var pr prism.RegimeType
+	switch regime {
+	case domain.RegimeRiskOn:
+		pr = prism.RegimeRiskOn
+	case domain.RegimeRiskOff:
+		pr = prism.RegimeRiskOff
+	default:
+		pr = prism.RegimeTransition
+	}
+	windowStart := asOf.AddDate(0, 0, -30)
+	for _, agent := range s.registry.Agents {
+		if !agent.Enabled {
+			continue
+		}
+		_ = s.prismManager.ScheduleTraining(agent, []prism.TrainingWindow{
+			{Start: windowStart, End: asOf, Regime: pr},
+		})
+	}
+}
+
+// runSpawningCycle detects knowledge gaps and triggers agent spawning if configured.
+func (s *System) runSpawningCycle() {
+	if s.spawningManager == nil {
+		return
+	}
+	// Spawning cycle is intentionally non-blocking; actual spawn requires acceptance.
+	s.spawningManager.PerformSpawningCycle()
 }
 
 func (s *System) resolveReplayDate() (time.Time, bool) {
