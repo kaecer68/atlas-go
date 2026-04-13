@@ -119,6 +119,9 @@ func run(args []string, deps appDeps) error {
 		dashboard.RegisterNarrativeRoutes(mux)
 		dashboard.RegisterControlRoutes(mux)
 		dashboard.RegisterMacroRoutes(mux)
+		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+			d.RegisterPhase3Routes(mux)
+		}
 		if *swaggerMode {
 			dashboard.RegisterSwaggerRoutes(mux)
 		}

@@ -13,6 +13,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/orchestrator"
 )
 
 func TestDashboardAPIEndpoints(t *testing.T) {
@@ -143,6 +144,44 @@ func TestDashboardAPIEndpoints(t *testing.T) {
 		}
 		if resp.Items[0].TargetAgentID != "growth-momentum-01" {
 			t.Fatalf("unexpected agent id: %s", resp.Items[0].TargetAgentID)
+		}
+	})
+
+	t.Run("phase3-status", func(t *testing.T) {
+		// Write a metrics fixture to the well-known path relative to test working dir
+		_ = os.MkdirAll("data/state", 0o755)
+		metrics := orchestrator.Phase3Metrics{
+			SwarmRunning:          true,
+			SwarmConsensusSymbols: 5,
+			PRISMCompletedResults: 12,
+			SpawningActive:        3,
+			ReflexivityActiveLoops: 2,
+			AdversarialLastScore:  0.82,
+		}
+		data, _ := json.MarshalIndent(metrics, "", "  ")
+		_ = os.WriteFile("data/state/phase3_metrics.json", data, 0o644)
+		defer os.RemoveAll("data/state")
+
+		api.RegisterPhase3Routes(mux)
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/dashboard/phase3-status", nil)
+		mux.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", rr.Code)
+		}
+		var resp orchestrator.Phase3Metrics
+		if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("unmarshal response: %v", err)
+		}
+		if !resp.SwarmRunning {
+			t.Fatal("expected swarm running")
+		}
+		if resp.PRISMCompletedResults != 12 {
+			t.Fatalf("expected 12 completed results, got %d", resp.PRISMCompletedResults)
+		}
+		if resp.AdversarialLastScore != 0.82 {
+			t.Fatalf("expected adversarial score 0.82, got %.2f", resp.AdversarialLastScore)
 		}
 	})
 
