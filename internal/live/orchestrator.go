@@ -213,6 +213,13 @@ func (o *Orchestrator) SetTradingMetrics(metrics MetricsRecorder) {
 	o.metrics = metrics
 }
 
+// SetCircuitBreaker 注入自定义断路器（用于测试与演练）
+func (o *Orchestrator) SetCircuitBreaker(cb *CircuitBreaker) {
+	o.mutex.Lock()
+	defer o.mutex.Unlock()
+	o.circuitBreaker = cb
+}
+
 // SetBroker 注入自定义券商执行器，传入 nil 时回退到 dry-run。
 func (o *Orchestrator) SetBroker(broker Broker) {
 	o.mutex.Lock()
@@ -429,8 +436,12 @@ func (o *Orchestrator) marketTimeScheduler() {
 			o.intradayTicker = nil
 		}
 
-		// 每分钟检查一次
-		time.Sleep(time.Minute)
+		// 每分钟检查一次（可取消）
+		select {
+		case <-o.ctx.Done():
+			return
+		case <-time.After(time.Minute):
+		}
 	}
 }
 
