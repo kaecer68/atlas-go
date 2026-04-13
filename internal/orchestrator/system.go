@@ -220,6 +220,16 @@ func (s *System) WithPhase3Controller(ctrl *Phase3Controller) *System {
 	if s.replay != nil {
 		ctrl.WithAdversarialRunner(NewAdversarialScenarioRunner(s.replay, s.registry))
 	}
+	// Sync sub-managers so System's daily hooks use the same instances.
+	if ctrl.swarm != nil {
+		s.swarm = ctrl.swarm
+	}
+	if ctrl.prismManager != nil {
+		s.prismManager = ctrl.prismManager
+	}
+	if ctrl.spawningManager != nil {
+		s.spawningManager = ctrl.spawningManager
+	}
 	return s
 }
 
@@ -603,7 +613,11 @@ func (s *System) runPhase3Optimization(quotes []domain.Quote, regime domain.Regi
 
 // schedulePRISMForRegime schedules PRISM training for the current regime.
 func (s *System) schedulePRISMForRegime(regime domain.Regime, asOf time.Time) {
-	if s.prismManager == nil {
+	pm := s.prismManager
+	if pm == nil && s.phase3Controller != nil {
+		pm = s.phase3Controller.prismManager
+	}
+	if pm == nil {
 		return
 	}
 	var pr prism.RegimeType
@@ -620,7 +634,7 @@ func (s *System) schedulePRISMForRegime(regime domain.Regime, asOf time.Time) {
 		if !agent.Enabled {
 			continue
 		}
-		_ = s.prismManager.ScheduleTraining(agent, []prism.TrainingWindow{
+		_ = pm.ScheduleTraining(agent, []prism.TrainingWindow{
 			{Start: windowStart, End: asOf, Regime: pr},
 		})
 	}
@@ -628,11 +642,15 @@ func (s *System) schedulePRISMForRegime(regime domain.Regime, asOf time.Time) {
 
 // runSpawningCycle detects knowledge gaps and triggers agent spawning if configured.
 func (s *System) runSpawningCycle() {
-	if s.spawningManager == nil {
+	sm := s.spawningManager
+	if sm == nil && s.phase3Controller != nil {
+		sm = s.phase3Controller.spawningManager
+	}
+	if sm == nil {
 		return
 	}
 	// Spawning cycle is intentionally non-blocking; actual spawn requires acceptance.
-	s.spawningManager.PerformSpawningCycle()
+	sm.PerformSpawningCycle()
 }
 
 func (s *System) resolveReplayDate() (time.Time, bool) {
