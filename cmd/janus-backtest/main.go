@@ -97,13 +97,12 @@ func main() {
 		_ = enc.Encode(report)
 	case "markdown":
 		printMarkdown(report)
+		// Additionally, print a direct conviction scaling proof using the first date.
+		fmt.Println()
+		printConvictionProof(cfg, baselineRegime, engine)
 	default:
 		log.Fatalf("unknown format: %s", *format)
 	}
-
-	// Additionally, print a direct conviction scaling proof using the first date.
-	fmt.Println()
-	printConvictionProof(cfg, baselineRegime, engine)
 }
 
 type ComparisonReport struct {
@@ -117,11 +116,12 @@ type ComparisonReport struct {
 }
 
 type RunMetrics struct {
-	Sessions     int     `json:"sessions"`
-	Outcomes     int     `json:"outcomes"`
-	TotalOrders  int     `json:"total_orders"`
-	TotalPositions int   `json:"total_positions"`
-	EndingCash   float64 `json:"ending_cash"`
+	Sessions       int     `json:"sessions"`
+	Outcomes       int     `json:"outcomes"`
+	TotalOrders    int     `json:"total_orders"`
+	TotalPositions int     `json:"total_positions"`
+	EndingCash     float64 `json:"ending_cash"`
+	PortfolioValue float64 `json:"portfolio_value"`
 }
 
 func loadMetrics(ledgerDir string) RunMetrics {
@@ -136,7 +136,11 @@ func loadMetrics(ledgerDir string) RunMetrics {
 		m.Outcomes += s.OutcomeCount
 		m.TotalOrders += s.OrderCount
 		m.TotalPositions += s.PositionCount
-		m.EndingCash += s.EndingCash
+	}
+	if len(summaries) > 0 {
+		last := summaries[len(summaries)-1]
+		m.EndingCash = last.EndingCash
+		m.PortfolioValue = last.PortfolioValue
 	}
 	return m
 }

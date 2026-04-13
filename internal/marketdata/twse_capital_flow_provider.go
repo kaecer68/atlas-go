@@ -43,15 +43,9 @@ func (t *TWSECapitalFlowProvider) Name() string {
 
 // FetchSnapshot retrieves the latest capital flow data and merges into MacroDataSnapshot.
 func (t *TWSECapitalFlowProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
-	dateStr := time.Now().UTC().Format("20060102")
-	flow, err := t.fetchDate(ctx, dateStr)
+	flow, err := t.fetchLatestTradingDay(ctx)
 	if err != nil {
-		// Fallback to previous trading day if today not available yet.
-		prev := time.Now().UTC().AddDate(0, 0, -1)
-		flow, err = t.fetchDate(ctx, prev.Format("20060102"))
-		if err != nil {
-			return MacroDataSnapshot{}, err
-		}
+		return MacroDataSnapshot{}, err
 	}
 
 	// Persist for audit.
@@ -64,6 +58,19 @@ func (t *TWSECapitalFlowProvider) FetchSnapshot(ctx context.Context) (MacroDataS
 	snap.DomesticFundNet = MacroDataPoint{Symbol: "TAIWAN_DOMESTIC", Value: flow.DomesticFundNet}
 	snap.DealerNet = MacroDataPoint{Symbol: "TAIWAN_DEALER", Value: flow.DealerNet}
 	return snap, nil
+}
+
+func (t *TWSECapitalFlowProvider) fetchLatestTradingDay(ctx context.Context) (TWSECapitalFlow, error) {
+	now := time.Now().UTC()
+	// Try up to 7 days back to find the most recent trading day with data.
+	for i := 0; i < 7; i++ {
+		dateStr := now.AddDate(0, 0, -i).Format("20060102")
+		flow, err := t.fetchDate(ctx, dateStr)
+		if err == nil {
+			return flow, nil
+		}
+	}
+	return TWSECapitalFlow{}, fmt.Errorf("no TWSE capital flow data available in the last 7 days")
 }
 
 func (t *TWSECapitalFlowProvider) fetchDate(ctx context.Context, dateStr string) (TWSECapitalFlow, error) {
