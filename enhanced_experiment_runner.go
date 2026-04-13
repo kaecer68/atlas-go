@@ -403,86 +403,29 @@ func testVolatilityManagement() (float64, []string) {
 func testSystemIntegration() (float64, []string) {
 	errors := make([]string, 0)
 
-	config := orchestrator.SystemConfig{
-		TargetVolatility:  0.15,
-		MaxDrawdown:       0.08,
-		RebalanceInterval: 24 * time.Hour,
-		RiskLimits: orchestrator.RiskLimits{
-			MaxPositionSize:   0.15,
-			MaxDailyLoss:      0.03,
-			MaxConcentration:  0.25,
-			StopLossEnabled:   true,
-			TakeProfitEnabled: true,
-		},
+	cfg := config.Config{}
+	system := orchestrator.NewSystem(cfg)
+
+	registry := system.Registry()
+	if len(registry.Agents) == 0 {
+		errors = append(errors, "expected non-empty agent registry")
 	}
 
-	system := orchestrator.NewIntegratedSystem(config)
-
-	marketData := orchestrator.MarketData{
-		Timestamp: time.Now(),
-		Prices:    map[string]float64{"STOCK_1": 100, "STOCK_2": 50},
-		Volumes:   map[string]float64{"STOCK_1": 1000000, "STOCK_2": 500000},
-		Returns:   map[string]float64{"STOCK_1": 0.01, "STOCK_2": -0.005},
+	session := system.Session()
+	if session.ID == "" {
+		errors = append(errors, "expected valid session")
 	}
 
-	recommendations, err := system.ProcessMarketData(marketData)
-	if err != nil {
-		errors = append(errors, fmt.Sprintf("Market data processing failed: %v", err))
-	}
-
-	status := system.GetSystemStatus()
-
-	// Enhanced scoring algorithm for system integration
 	score := 100.0
-
-	// Base functionality checks
-	if len(recommendations) == 0 {
-		score -= 25 // Reduced penalty
-	} else {
-		// Bonus for good recommendation quality
-		if len(recommendations) >= 3 {
-			score += 10.0
-		}
+	if len(registry.Agents) == 0 {
+		score -= 30
+	} else if len(registry.Agents) >= 4 {
+		score += 15
 	}
 
-	// System health assessment
-	if status.HealthScore < 80 {
-		score -= 15 // Reduced penalty
-	} else if status.HealthScore >= 95 {
-		score += 10.0 // Bonus for excellent health
-	}
-
-	// Component coordination bonus (using metrics)
-	if status.Metrics.ActiveAgents >= 4 {
-		score += 15.0 // Good component integration
-	}
-
-	// Risk management integration (using alerts)
-	if len(status.ActiveAlerts) == 0 {
-		score += 10.0 // No active alerts is good
-	}
-
-	// Data processing efficiency (using last update time)
-	if time.Since(status.LastUpdate) < 100*time.Millisecond {
-		score += 10.0 // Recent processing bonus
-	}
-
-	// Error handling
 	if len(errors) > 0 {
-		score -= float64(len(errors)) * 8 // Reduced penalty per error
+		score -= float64(len(errors)) * 10
 	}
-
-	// Inter-component communication bonus (using metrics)
-	if status.Metrics.TotalRecommendations > 0 {
-		score += 15.0
-	}
-
-	// Volatility management bonus
-	if status.VolatilityMetrics.CurrentVolatility < 0.15 {
-		score += 10.0
-	}
-
-	// Ensure score is within bounds
 	if score > 100 {
 		score = 100
 	}

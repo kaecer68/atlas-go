@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e
 
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    echo "Usage: $0 [--help]"
+    echo "Generate sample replay data for 2026-03-25 to 2026-03-31 at data/replay/twse_open_main.csv"
+    exit 0
+fi
+
 # Generate sample replay data for 2026-03-25 to 2026-03-31
 OUTPUT="data/replay/twse_open_main.csv"
 

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -12,17 +13,26 @@ import (
 )
 
 func main() {
-	brief := flag.String("brief", "data/state/windows/window-20260326-20260327-mutation-brief.json", "mutation brief json path")
-	flag.Parse()
+	if err := run(os.Args[1:]); err != nil {
+		log.Fatalf("%v", err)
+	}
+}
+
+func run(args []string) error {
+	fs := flag.NewFlagSet("execute-experiment", flag.ContinueOnError)
+	brief := fs.String("brief", "data/state/windows/window-20260326-20260327-mutation-brief.json", "mutation brief json path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 
 	cfg := config.Load()
 	if _, err := baseline.Load(cfg.BaselinePolicyPath); err != nil {
-		log.Fatalf("load baseline policy: %v", err)
+		return fmt.Errorf("load baseline policy: %w", err)
 	}
-	executor := experiment.NewExecutor(ledger.NewStore(cfg.LedgerDir))
+	executor := experiment.NewExecutor(ledger.NewStore(cfg.LedgerDir), cfg.BaselinePolicyPath)
 	result, err := executor.Execute(*brief)
 	if err != nil {
-		log.Fatalf("execute experiment: %v", err)
+		return fmt.Errorf("execute experiment: %w", err)
 	}
 
 	fmt.Printf("experiment: %s\n", result.Experiment.ID)
@@ -30,4 +40,5 @@ func main() {
 	fmt.Printf("candidate_prompt: %s\n", result.CandidatePrompt)
 	fmt.Printf("evaluation_mode: %s\n", result.EvaluationMode)
 	fmt.Printf("policy_checks: %d\n", len(result.PolicyChecks))
+	return nil
 }

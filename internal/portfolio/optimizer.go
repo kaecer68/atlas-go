@@ -65,13 +65,13 @@ func DefaultConstraints() Constraints {
 
 // Optimizer 组合优化器
 type Optimizer struct {
-	constraints    Constraints
-	agentWeights   map[string]float64
-	styleWeights   map[string]float64
-	factorWeights  map[FactorType]float64
-	history        *HistoricalPrices
-	fundamentals   *FundamentalProvider
-	mu             sync.RWMutex
+	constraints   Constraints
+	agentWeights  map[string]float64
+	styleWeights  map[string]float64
+	factorWeights map[FactorType]float64
+	history       *HistoricalPrices
+	fundamentals  *FundamentalProvider
+	mu            sync.RWMutex
 }
 
 // NewOptimizer 创建优化器

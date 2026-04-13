@@ -7,10 +7,10 @@ import (
 
 // MutationStats holds aggregate counts for mutation survival analysis.
 type MutationStats struct {
-	Total      int
-	Kept       int
-	Reverted   int
-	Pending    int
+	Total        int
+	Kept         int
+	Reverted     int
+	Pending      int
 	SurvivalRate float64
 }
 

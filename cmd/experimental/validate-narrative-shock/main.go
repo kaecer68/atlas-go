@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"time"
@@ -14,6 +15,15 @@ import (
 )
 
 func main() {
+	var help bool
+	flag.BoolVar(&help, "help", false, "show help")
+	flag.Parse()
+	if help {
+		fmt.Println("Usage: validate-narrative-shock [--help]")
+		fmt.Println("Validates narrative shock detection against replay data for 2026-03-26.")
+		os.Exit(0)
+	}
+
 	cfg := config.Load()
 	if cfg.ReplayDataPath == "samples/replay/twse_stock_day_all_sample.csv" {
 		cfg.ReplayDataPath = "data/replay/tw_extended_90days.csv"

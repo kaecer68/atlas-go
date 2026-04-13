@@ -11,7 +11,7 @@ import (
 func TestAdversarialScenarioRunnerWithRealReplay(t *testing.T) {
 	ds, err := replay.LoadTWSEOpenDataCSV("../../data/replay/tw_extended_90days.csv")
 	if err != nil {
-		t.Skipf("skip: cannot load replay data: %v", err)
+		t.Fatalf("cannot load replay data: %v", err)
 	}
 	registry := SeedRegistry()
 	runner := NewAdversarialScenarioRunner(ds, registry)

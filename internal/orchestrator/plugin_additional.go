@@ -6,6 +6,73 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
+// Common conviction thresholds used across executors.
+const (
+	defaultConvictionFloor = 50
+)
+
+// Financials desk thresholds.
+const (
+	finBaseConviction           = 58
+	finDividendBoost            = 8
+	finBalanceSheetPenalty      = 6
+	finCreditQualityBoost       = 2
+	finCreditQualityPenalty     = 6
+	finSpreadSensitivityBoost   = 2
+	finSpreadSensitivityPenalty = 4
+	finCapitalAdequacyBoost     = 3
+	finPriceToOpenThreshold     = 0.985
+	finPriceToHighThreshold     = 0.995
+)
+
+// Shipping desk thresholds.
+const (
+	shipBaseConviction     = 55
+	shipTacticalBoost      = 10
+	shipWeakClosePenalty   = 12
+	shipWeakCloseThreshold = 0.992
+)
+
+// Value-yield desk thresholds.
+const (
+	vyBaseConviction   = 52
+	vyCashFlowBoost    = 10
+	vyYieldTrapPenalty = 10
+)
+
+// Earnings quality desk thresholds.
+const (
+	eqBaseConviction    = 57
+	eqRepeatableBoost   = 9
+	eqGuidancePenalty   = 8
+	eqGuidanceThreshold = 0.99
+)
+
+// Technical breakout desk thresholds.
+const (
+	tbBaseConviction         = 54
+	tbDefaultVolumeFloor     = 5_000_000
+	tbStrictVolumeFloor      = 7_000_000
+	tbRelaxedVolumeFloor     = 0
+	tbLowVolumeFloor         = 3_000_000
+	tbVolumeBoost            = 8
+	tbCloseStrengthPenalty   = 1
+	tbCloseStrengthThreshold = 0.985
+	tbCloseStrengthTolerance = 0.98
+	tbSurgeBoost             = 4
+	tbSurgePenalty           = 4
+	tbOpenRejectionPenalty   = 10
+	tbLateBreakoutPenalty    = 8
+	tbLateBreakoutThreshold  = 0.998
+	tbConfirmationBoost      = 12
+	tbConfirmationThreshold  = 0.998
+	tbCatchUpBoost           = 6
+	tbCatchUpLowerThreshold  = 0.993
+	tbCatchUpUpperThreshold  = 0.998
+	tbLowVolumeBoost         = 3
+	tbRejectLowVolumeFloor   = 5_000_000
+)
+
 type FinancialsExecutor struct{}
 
 func (FinancialsExecutor) Supports(agent domain.AgentSpec) bool {
@@ -13,28 +80,7 @@ func (FinancialsExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (FinancialsExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string) (domain.Recommendation, bool) {
-	conviction := 58
-	if strings.Contains(prompt, "dividend") && quote.Last >= quote.Open {
-		conviction += 8
-	}
-	if strings.Contains(prompt, "balance-sheet") && quote.Low < quote.Open*0.985 {
-		conviction -= 6
-	}
-	if strings.Contains(prompt, "credit quality gate") && quote.Last >= quote.Open {
-		conviction += 2
-	}
-	if strings.Contains(prompt, "credit quality gate") && quote.Last < quote.Open {
-		conviction -= 6
-	}
-	if strings.Contains(prompt, "spread sensitivity downgrade") && quote.Last >= quote.High*0.995 {
-		conviction += 2
-	}
-	if strings.Contains(prompt, "spread sensitivity downgrade") && quote.Last < quote.High*0.995 {
-		conviction -= 4
-	}
-	if strings.Contains(prompt, "capital adequacy premium") && quote.Last >= quote.Open && quote.Last >= quote.High*0.995 {
-		conviction += 3
-	}
+	conviction := finConviction(prompt, quote)
 	if conviction < 50 {
 		return domain.Recommendation{}, false
 	}
@@ -48,6 +94,34 @@ func (FinancialsExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, 
 	}, true
 }
 
+func finConviction(prompt string, quote domain.Quote) int {
+	conviction := finBaseConviction
+	if strings.Contains(prompt, "dividend") && quote.Last >= quote.Open {
+		conviction += finDividendBoost
+	}
+	if strings.Contains(prompt, "balance-sheet") && quote.Low < quote.Open*finPriceToOpenThreshold {
+		conviction -= finBalanceSheetPenalty
+	}
+	if strings.Contains(prompt, "credit quality gate") {
+		if quote.Last >= quote.Open {
+			conviction += finCreditQualityBoost
+		} else {
+			conviction -= finCreditQualityPenalty
+		}
+	}
+	if strings.Contains(prompt, "spread sensitivity downgrade") {
+		if quote.Last >= quote.High*finPriceToHighThreshold {
+			conviction += finSpreadSensitivityBoost
+		} else {
+			conviction -= finSpreadSensitivityPenalty
+		}
+	}
+	if strings.Contains(prompt, "capital adequacy premium") && quote.Last >= quote.Open && quote.Last >= quote.High*finPriceToHighThreshold {
+		conviction += finCapitalAdequacyBoost
+	}
+	return conviction
+}
+
 type ShippingExecutor struct{}
 
 func (ShippingExecutor) Supports(agent domain.AgentSpec) bool {
@@ -55,14 +129,14 @@ func (ShippingExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (ShippingExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string) (domain.Recommendation, bool) {
-	conviction := 55
+	conviction := shipBaseConviction
 	if strings.Contains(prompt, "tactical") && quote.Last > quote.Open {
-		conviction += 10
+		conviction += shipTacticalBoost
 	}
-	if strings.Contains(prompt, "avoid weak closes") && quote.Last < quote.High*0.992 {
-		conviction -= 12
+	if strings.Contains(prompt, "avoid weak closes") && quote.Last < quote.High*shipWeakCloseThreshold {
+		conviction -= shipWeakClosePenalty
 	}
-	if conviction < 50 {
+	if conviction < defaultConvictionFloor {
 		return domain.Recommendation{}, false
 	}
 	return domain.Recommendation{
@@ -82,14 +156,14 @@ func (ValueYieldExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (ValueYieldExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string) (domain.Recommendation, bool) {
-	conviction := 52
+	conviction := vyBaseConviction
 	if strings.Contains(prompt, "cash-flow support") && quote.Last >= quote.Open {
-		conviction += 10
+		conviction += vyCashFlowBoost
 	}
 	if strings.Contains(prompt, "yield trap") && quote.Last < quote.Open {
-		conviction -= 10
+		conviction -= vyYieldTrapPenalty
 	}
-	if conviction < 50 {
+	if conviction < defaultConvictionFloor {
 		return domain.Recommendation{}, false
 	}
 	return domain.Recommendation{
@@ -109,14 +183,14 @@ func (EarningsQualityExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (EarningsQualityExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string) (domain.Recommendation, bool) {
-	conviction := 57
+	conviction := eqBaseConviction
 	if strings.Contains(prompt, "repeatable") && quote.Last > quote.Open {
-		conviction += 9
+		conviction += eqRepeatableBoost
 	}
-	if strings.Contains(prompt, "guidance") && quote.Last < quote.High*0.99 {
-		conviction -= 8
+	if strings.Contains(prompt, "guidance") && quote.Last < quote.High*eqGuidanceThreshold {
+		conviction -= eqGuidancePenalty
 	}
-	if conviction < 50 {
+	if conviction < defaultConvictionFloor {
 		return domain.Recommendation{}, false
 	}
 	return domain.Recommendation{
@@ -136,56 +210,9 @@ func (TechnicalBreakoutExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (TechnicalBreakoutExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string) (domain.Recommendation, bool) {
-	conviction := 54
-	if strings.Contains(prompt, "volume") && quote.Volume >= 5000000 {
-		conviction += 8
-	}
-	if strings.Contains(prompt, "close strength") && quote.Last < quote.High*0.985 {
-		penalty := 1
-		if strings.Contains(prompt, "close-strength tolerance") {
-			if quote.Last >= quote.High*0.98 {
-				penalty = 0
-			}
-		}
-		conviction -= penalty
-	}
-	volumeFloor := int64(5000000)
-	if strings.Contains(prompt, "volume surge requirement") {
-		volumeFloor = 7000000
-		if quote.Volume >= volumeFloor {
-			conviction += 4
-		} else {
-			conviction -= 4
-		}
-	}
-	if strings.Contains(prompt, "exploratory mode") {
-		volumeFloor = 5000000
-	}
-	if strings.Contains(prompt, "coverage expansion") {
-		volumeFloor = 0
-	}
-	if strings.Contains(prompt, "structure-first breakout filter") && quote.Last < quote.Open {
-		conviction -= 10
-	}
-	if strings.Contains(prompt, "late-breakout penalty") && quote.Last < quote.High*0.998 {
-		conviction -= 8
-	}
-	if strings.Contains(prompt, "breakout confirmation bonus") && quote.Last >= quote.High*0.998 && quote.Volume >= 5000000 {
-		conviction += 12
-	}
-	if strings.Contains(prompt, "catch-up momentum") && quote.Last >= quote.High*0.993 && quote.Last < quote.High*0.998 && quote.Last >= quote.Open {
-		conviction += 6
-	}
-	if strings.Contains(prompt, "volume participation acceptance") && quote.Volume >= 3000000 && quote.Volume < 5000000 {
-		conviction += 3
-	}
-	if strings.Contains(prompt, "reject low volume") && quote.Volume < 5000000 {
-		return domain.Recommendation{}, false
-	}
-	if strings.Contains(prompt, "enforce strict breakout confirmation") && quote.Volume < volumeFloor {
-		return domain.Recommendation{}, false
-	}
-	if conviction < 50 {
+	volumeFloor := tbVolumeFloor(prompt)
+	conviction := tbConviction(prompt, quote, volumeFloor)
+	if tbReject(prompt, quote, volumeFloor, conviction) {
 		return domain.Recommendation{}, false
 	}
 	return domain.Recommendation{
@@ -196,4 +223,61 @@ func (TechnicalBreakoutExecutor) Recommend(agent domain.AgentSpec, quote domain.
 		Conviction: conviction,
 		Reason:     "breakout structure confirmed by volume and close",
 	}, true
+}
+
+func tbVolumeFloor(prompt string) int64 {
+	if strings.Contains(prompt, "coverage expansion") {
+		return tbRelaxedVolumeFloor
+	}
+	if strings.Contains(prompt, "volume surge requirement") {
+		return tbStrictVolumeFloor
+	}
+	return tbDefaultVolumeFloor
+}
+
+func tbConviction(prompt string, quote domain.Quote, volumeFloor int64) int {
+	conviction := tbBaseConviction
+	if strings.Contains(prompt, "volume") && quote.Volume >= tbDefaultVolumeFloor {
+		conviction += tbVolumeBoost
+	}
+	if strings.Contains(prompt, "close strength") && quote.Last < quote.High*tbCloseStrengthThreshold {
+		penalty := tbCloseStrengthPenalty
+		if strings.Contains(prompt, "close-strength tolerance") && quote.Last >= quote.High*tbCloseStrengthTolerance {
+			penalty = 0
+		}
+		conviction -= penalty
+	}
+	if strings.Contains(prompt, "volume surge requirement") {
+		if quote.Volume >= volumeFloor {
+			conviction += tbSurgeBoost
+		} else {
+			conviction -= tbSurgePenalty
+		}
+	}
+	if strings.Contains(prompt, "structure-first breakout filter") && quote.Last < quote.Open {
+		conviction -= tbOpenRejectionPenalty
+	}
+	if strings.Contains(prompt, "late-breakout penalty") && quote.Last < quote.High*tbLateBreakoutThreshold {
+		conviction -= tbLateBreakoutPenalty
+	}
+	if strings.Contains(prompt, "breakout confirmation bonus") && quote.Last >= quote.High*tbConfirmationThreshold && quote.Volume >= tbDefaultVolumeFloor {
+		conviction += tbConfirmationBoost
+	}
+	if strings.Contains(prompt, "catch-up momentum") && quote.Last >= quote.High*tbCatchUpLowerThreshold && quote.Last < quote.High*tbCatchUpUpperThreshold && quote.Last >= quote.Open {
+		conviction += tbCatchUpBoost
+	}
+	if strings.Contains(prompt, "volume participation acceptance") && quote.Volume >= tbLowVolumeFloor && quote.Volume < tbDefaultVolumeFloor {
+		conviction += tbLowVolumeBoost
+	}
+	return conviction
+}
+
+func tbReject(prompt string, quote domain.Quote, volumeFloor int64, conviction int) bool {
+	if strings.Contains(prompt, "reject low volume") && quote.Volume < tbRejectLowVolumeFloor {
+		return true
+	}
+	if strings.Contains(prompt, "enforce strict breakout confirmation") && quote.Volume < volumeFloor {
+		return true
+	}
+	return conviction < defaultConvictionFloor
 }

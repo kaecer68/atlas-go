@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"time"
@@ -11,6 +12,15 @@ import (
 )
 
 func main() {
+	var help bool
+	flag.BoolVar(&help, "help", false, "show help")
+	flag.Parse()
+	if help {
+		fmt.Println("Usage: test-fugle [--help]")
+		fmt.Println("Tests connectivity to the Fugle API (demo key limited to symbol 1476).")
+		os.Exit(0)
+	}
+
 	cfg := config.Load()
 
 	if cfg.FugleAPIKey == "" {

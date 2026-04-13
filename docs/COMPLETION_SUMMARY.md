@@ -107,8 +107,8 @@ FUGLE_API_KEY=your_api_key_here
 - `internal/marketdata/twse_openapi.go` - TWSE OpenAPI 客户端
 - `internal/marketdata/hybrid_provider.go` - Hybrid Provider
 - `docs/phase4-architecture.md` - Phase 4 架构文档
-- `cmd/test-fugle/main.go` - Fugle 测试工具
-- `cmd/test-hybrid/main.go` - Hybrid 测试工具
+- `cmd/experimental/test-fugle/main.go` - Fugle 测试工具
+- `cmd/experimental/test-hybrid/main.go` - Hybrid 测试工具
 
 ### 修改文件
 - `internal/evolution/runner.go` - 智能 mutation 选择
@@ -125,8 +125,8 @@ FUGLE_API_KEY=your_api_key_here
 |------|------|------|
 | 完整编译 | `go build ./...` | ✅ Pass |
 | 主系统运行 | `go run ./cmd/atlas` | ✅ Pass |
-| Fugle API | `go run ./cmd/test-fugle` | ✅ Pass (demo) |
-| Hybrid Provider | `go run ./cmd/test-hybrid` | ✅ Pass |
+| Fugle API | `go run ./cmd/experimental/test-fugle` | ✅ Pass (demo) |
+| Hybrid Provider | `go run ./cmd/experimental/test-hybrid` | ✅ Pass |
 | Unit Tests | `go test ./...` | ✅ Pass |
 
 ---

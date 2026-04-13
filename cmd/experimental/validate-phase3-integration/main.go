@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -19,6 +20,16 @@ import (
 )
 
 func main() {
+	var help bool
+	flag.BoolVar(&help, "help", false, "show help")
+	flag.Parse()
+	if help {
+		fmt.Println("Usage: validate-phase3-integration [--help]")
+		fmt.Println("Runs a Phase-3 integration smoke test (PRISM, Swarm, Spawning, Reflexivity)")
+		fmt.Println("over a short replay window (2026-01-01 to 2026-01-08).")
+		os.Exit(0)
+	}
+
 	cfg := config.Config{
 		ReplayDataPath:     "data/replay/tw_extended_90days.csv",
 		BaselinePolicyPath: "data/state/baseline_policy.json",

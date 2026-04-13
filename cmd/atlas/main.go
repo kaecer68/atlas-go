@@ -143,6 +143,23 @@ func run(args []string, deps appDeps) error {
 }
 
 func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allowHTTPBroker bool, allowRealSigner bool) error {
+	normalizeBrokerStrings(cfg)
+	if err := validateBrokerEnums(cfg); err != nil {
+		return err
+	}
+	if err := validateBrokerLiveMode(cfg, allowLiveBroker, allowHTTPBroker, allowRealSigner); err != nil {
+		return err
+	}
+	if err := validateBrokerRetryConfig(cfg); err != nil {
+		return err
+	}
+	if err := validateBrokerNonceConfig(cfg); err != nil {
+		return err
+	}
+	return nil
+}
+
+func normalizeBrokerStrings(cfg *config.Config) {
 	cfg.BrokerMode = strings.TrimSpace(strings.ToLower(cfg.BrokerMode))
 	if cfg.BrokerMode == "" {
 		cfg.BrokerMode = "dry-run"
@@ -156,16 +173,22 @@ func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allow
 		cfg.BrokerSigner = "placeholder"
 	}
 	cfg.BrokerKeyID = strings.TrimSpace(cfg.BrokerKeyID)
+}
+
+func validateBrokerEnums(cfg *config.Config) error {
 	if cfg.BrokerAdapter != "guarded" && cfg.BrokerAdapter != "mock" && cfg.BrokerAdapter != "http" {
 		return fmt.Errorf("unsupported broker adapter %q (allowed: guarded, mock, http)", cfg.BrokerAdapter)
 	}
 	if cfg.BrokerSigner != "placeholder" && cfg.BrokerSigner != "hmac-sha256" {
 		return fmt.Errorf("unsupported broker signer %q (allowed: placeholder, hmac-sha256)", cfg.BrokerSigner)
 	}
+	return nil
+}
 
+func validateBrokerLiveMode(cfg *config.Config, allowLiveBroker bool, allowHTTPBroker bool, allowRealSigner bool) error {
 	switch cfg.BrokerMode {
 	case "dry-run", "paper":
-		// allowed by default
+		return nil
 	case "live":
 		if !allowLiveBroker {
 			return fmt.Errorf("broker mode %q is disabled by default; pass -allow-live-broker to enable", cfg.BrokerMode)
@@ -179,10 +202,13 @@ func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allow
 		if cfg.BrokerAdapter == "http" && cfg.BrokerSigner != "placeholder" && cfg.BrokerKeyID == "" {
 			return fmt.Errorf("broker key id is required when using signer %q with http adapter", cfg.BrokerSigner)
 		}
+		return nil
 	default:
 		return fmt.Errorf("unsupported broker mode %q (allowed: dry-run, paper, live)", cfg.BrokerMode)
 	}
+}
 
+func validateBrokerRetryConfig(cfg *config.Config) error {
 	if cfg.BrokerMaxRetries < 0 {
 		return fmt.Errorf("broker max retries must be >= 0, got %d", cfg.BrokerMaxRetries)
 	}
@@ -197,6 +223,10 @@ func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allow
 	if cfg.BrokerMaxClockSkewS < 0 {
 		return fmt.Errorf("broker max clock skew must be >= 0, got %d", cfg.BrokerMaxClockSkewS)
 	}
+	return nil
+}
+
+func validateBrokerNonceConfig(cfg *config.Config) error {
 	if cfg.BrokerNonceTTLS == 0 {
 		cfg.BrokerNonceTTLS = 300
 	}
@@ -235,7 +265,6 @@ func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allow
 	if cfg.BrokerNonceStore == "redis" && cfg.BrokerNonceRedisURL == "" {
 		return fmt.Errorf("broker nonce redis url is required when broker nonce store is redis")
 	}
-
 	return nil
 }
 
@@ -381,7 +410,10 @@ func runLiveTrading(cfg config.Config, deps appDeps) error {
 	}
 
 	// Graceful shutdown after a brief run for CLI demonstration.
-	time.Sleep(5 * time.Second)
+	select {
+	case <-time.After(5 * time.Second):
+	case <-ctx.Done():
+	}
 	if err := o.Stop(); err != nil {
 		return fmt.Errorf("stop live orchestrator: %w", err)
 	}

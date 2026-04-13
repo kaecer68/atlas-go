@@ -2,7 +2,9 @@ package live
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -14,14 +16,14 @@ import (
 
 // Orchestrator 实时交易编排器
 type Orchestrator struct {
-	stateStore *StateStore
-	eventBus   *ChannelEventBus
-	marketData marketdata.Provider
-	broker     Broker
-	orderMgr        *OrderManager
-	registry        domain.AgentRegistry
-	system          *orchestrator.System
-	circuitBreaker  *CircuitBreaker
+	stateStore     *StateStore
+	eventBus       *ChannelEventBus
+	marketData     marketdata.Provider
+	broker         Broker
+	orderMgr       *OrderManager
+	registry       domain.AgentRegistry
+	system         *orchestrator.System
+	circuitBreaker *CircuitBreaker
 
 	// 配置
 	config OrchestratorConfig
@@ -282,7 +284,7 @@ func (o *Orchestrator) Start() error {
 	go o.quotePoller()
 
 	// 发布系统启动事件
-	o.eventBus.Publish(BusEvent{
+	o.publishEvent(BusEvent{
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 		Type:      EventSystemStart,
 		Timestamp: time.Now(),
@@ -307,7 +309,7 @@ func (o *Orchestrator) Start() error {
 	})
 
 	if o.executionAuditMsg != "" {
-		o.eventBus.Publish(BusEvent{
+		o.publishEvent(BusEvent{
 			ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 			Type:      EventSystemError,
 			Timestamp: time.Now(),
@@ -470,7 +472,7 @@ func (o *Orchestrator) fetchAndProcessQuotes() {
 
 	quotes, err := o.marketData.GetQuotes(ctx, time.Now(), o.watchlist)
 	if err != nil {
-		o.eventBus.Publish(BusEvent{
+		o.publishEvent(BusEvent{
 			ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 			Type:      EventSystemError,
 			Timestamp: time.Now(),
@@ -483,7 +485,7 @@ func (o *Orchestrator) fetchAndProcessQuotes() {
 
 	// 发布行情事件
 	for _, quote := range quotes {
-		o.eventBus.PublishMarketSnapshot(quote)
+		o.publishMarketSnapshot(quote)
 	}
 }
 
@@ -518,7 +520,7 @@ func (o *Orchestrator) handleMarketOpen() {
 	fmt.Printf("[Orchestrator] Loaded %d positions\n", len(positions))
 
 	// 发布开盘事件
-	o.eventBus.Publish(BusEvent{
+	o.publishEvent(BusEvent{
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 		Type:      EventMarketOpen,
 		Timestamp: time.Now(),
@@ -529,7 +531,13 @@ func (o *Orchestrator) handleMarketOpen() {
 	})
 
 	// 运行 Context Agent 判断市场状态
-	o.runContextAgent()
+	if err := o.runContextAgent(); err != nil {
+		if o.effectiveBrokerMode == "live" {
+			log.Printf("[Orchestrator] CRITICAL: %v", err)
+		} else {
+			log.Printf("[Orchestrator] WARNING: %v (continuing in %s mode)", err, o.effectiveBrokerMode)
+		}
+	}
 }
 
 // handleIntradayCycle 处理盘中周期
@@ -563,15 +571,27 @@ func (o *Orchestrator) handleIntradayCycle() {
 	// 检查每日最大亏损 (legacy event publishing, circuit breaker handles action)
 	if o.config.MaxDailyLossPct > 0 && dayPnLPct < -o.config.MaxDailyLossPct {
 		fmt.Printf("[Risk] Daily loss limit hit: %.2f%%\n", dayPnLPct)
-		o.eventBus.PublishRiskEvent(EventRiskAlert, "", domain.Position{},
+		o.publishRiskEvent(EventRiskAlert, "", domain.Position{},
 			"max_daily_loss", 0)
 	}
 
 	// 运行 Agent 生成推荐
-	o.runStyleAndSectorAgents()
+	if err := o.runStyleAndSectorAgents(); err != nil {
+		if o.effectiveBrokerMode == "live" {
+			log.Printf("[Orchestrator] CRITICAL: %v", err)
+		} else {
+			log.Printf("[Orchestrator] WARNING: %v (continuing in %s mode)", err, o.effectiveBrokerMode)
+		}
+	}
 
 	// 应用 CRO 风险过滤
-	o.applyRiskFilters()
+	if err := o.applyRiskFilters(); err != nil {
+		if o.effectiveBrokerMode == "live" {
+			log.Printf("[Orchestrator] CRITICAL: %v", err)
+		} else {
+			log.Printf("[Orchestrator] WARNING: %v (continuing in %s mode)", err, o.effectiveBrokerMode)
+		}
+	}
 
 	// 模拟订单执行 (circuit breaker is checked inside executeOrder)
 	o.simulateOrderExecution()
@@ -593,7 +613,7 @@ func (o *Orchestrator) handleMarketClose() {
 	}
 
 	// 发布收盘事件
-	o.eventBus.Publish(BusEvent{
+	o.publishEvent(BusEvent{
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 		Type:      EventMarketClose,
 		Timestamp: time.Now(),
@@ -605,24 +625,24 @@ func (o *Orchestrator) handleMarketClose() {
 	})
 }
 
+var errAgentNotIntegrated = errors.New("live orchestrator agent not yet integrated")
+
 // runContextAgent 运行 Context Agent 判断市场状态
-func (o *Orchestrator) runContextAgent() {
+func (o *Orchestrator) runContextAgent() error {
 	// TODO: 集成 Context Agent (Taiwan Macro)
-	// 简化版本: 保持当前状态或基于简单规则判断
-	fmt.Println("[Agent] Running Context Agent for regime assessment")
+	return errAgentNotIntegrated
 }
 
 // runStyleAndSectorAgents 运行 Style 和 Sector Agents
-func (o *Orchestrator) runStyleAndSectorAgents() {
+func (o *Orchestrator) runStyleAndSectorAgents() error {
 	// TODO: 集成 Style 和 Sector Agents
-	// 简化版本: 占位
-	fmt.Println("[Agent] Running Style and Sector Agents")
+	return errAgentNotIntegrated
 }
 
 // applyRiskFilters 应用风险过滤
-func (o *Orchestrator) applyRiskFilters() {
+func (o *Orchestrator) applyRiskFilters() error {
 	// TODO: 集成 CRO Agent 风险过滤
-	fmt.Println("[Risk] Applying CRO risk filters")
+	return errAgentNotIntegrated
 }
 
 // simulateOrderExecution 模拟订单执行
@@ -699,7 +719,7 @@ func (o *Orchestrator) checkRiskTriggers(symbol string, currentPrice float64) {
 		if o.metrics != nil {
 			o.metrics.RecordRiskEvent("stop_loss", symbol)
 		}
-		o.eventBus.PublishRiskEvent(EventStopLossTriggered, symbol, position,
+		o.publishRiskEvent(EventStopLossTriggered, symbol, position,
 			"stop_loss", currentPrice)
 		fmt.Printf("[Risk] Stop loss triggered for %s at %.2f (loss: %.2f%%)\n",
 			symbol, currentPrice, pnlPct)
@@ -710,7 +730,7 @@ func (o *Orchestrator) checkRiskTriggers(symbol string, currentPrice float64) {
 		if o.metrics != nil {
 			o.metrics.RecordRiskEvent("take_profit", symbol)
 		}
-		o.eventBus.PublishRiskEvent(EventTakeProfitTriggered, symbol, position,
+		o.publishRiskEvent(EventTakeProfitTriggered, symbol, position,
 			"take_profit", currentPrice)
 		fmt.Printf("[Risk] Take profit triggered for %s at %.2f (gain: %.2f%%)\n",
 			symbol, currentPrice, pnlPct)
@@ -759,4 +779,27 @@ func (o *Orchestrator) Status() map[string]interface{} {
 			"broker_max_retries":             o.config.BrokerMaxRetries,
 		},
 	}
+}
+
+func (o *Orchestrator) publishEvent(event BusEvent) {
+	if o.eventBus == nil {
+		return
+	}
+	if err := o.eventBus.Publish(event); err != nil {
+		// Event bus errors are non-fatal; best-effort delivery only.
+	}
+}
+
+func (o *Orchestrator) publishMarketSnapshot(quote domain.Quote) {
+	if o.eventBus == nil {
+		return
+	}
+	_ = o.eventBus.PublishMarketSnapshot(quote)
+}
+
+func (o *Orchestrator) publishRiskEvent(eventType EventType, symbol string, position domain.Position, triggerType string, triggerPrice float64) {
+	if o.eventBus == nil {
+		return
+	}
+	_ = o.eventBus.PublishRiskEvent(eventType, symbol, position, triggerType, triggerPrice)
 }

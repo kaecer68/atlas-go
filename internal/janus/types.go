@@ -45,10 +45,10 @@ type CohortPerformance struct {
 
 // WindowPerformance holds aggregated metrics for a specific lookback window
 type WindowPerformance struct {
-	Window      PerformanceWindow
-	SharpeRatio float64
-	HitRate     float64
-	TotalReturn float64
+	Window       PerformanceWindow
+	SharpeRatio  float64
+	HitRate      float64
+	TotalReturn  float64
 	Observations int
 }
 

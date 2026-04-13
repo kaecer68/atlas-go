@@ -135,12 +135,15 @@ func (s *redisNonceReplayStore) Register(nonce string, requestTime time.Time, tt
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	key := s.keyPrefix + nonce
-	ok, err := s.client.SetNX(ctx, key, requestTime.UTC().Format(time.RFC3339Nano), ttl).Result()
+	ok, err := s.client.SetArgs(ctx, key, requestTime.UTC().Format(time.RFC3339Nano), redis.SetArgs{
+		Mode: "NX",
+		TTL:  ttl,
+	}).Result()
+	if err == redis.Nil || ok == "" {
+		return fmt.Errorf("%w: nonce=%s", ErrNonceReplayDetected, nonce)
+	}
 	if err != nil {
 		return fmt.Errorf("redis setnx failed: %w", err)
-	}
-	if !ok {
-		return fmt.Errorf("%w: nonce=%s", ErrNonceReplayDetected, nonce)
 	}
 	return nil
 }

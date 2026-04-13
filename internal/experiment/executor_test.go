@@ -14,7 +14,7 @@ import (
 
 func TestExecuteCreatesCandidatePrompt(t *testing.T) {
 	dir := t.TempDir()
-	executor := NewExecutor(ledger.NewStore(dir))
+	executor := NewExecutor(ledger.NewStore(dir), "")
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -71,7 +71,7 @@ func TestExecuteCreatesCandidatePrompt(t *testing.T) {
 
 func TestExecuteUsesRiskRuleTemplate(t *testing.T) {
 	dir := t.TempDir()
-	executor := NewExecutor(ledger.NewStore(dir))
+	executor := NewExecutor(ledger.NewStore(dir), "")
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -121,7 +121,7 @@ func TestExecuteUsesRiskRuleTemplate(t *testing.T) {
 
 func TestExecuteUsesPortfolioConstraintTemplate(t *testing.T) {
 	dir := t.TempDir()
-	executor := NewExecutor(ledger.NewStore(dir))
+	executor := NewExecutor(ledger.NewStore(dir), "")
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -171,7 +171,7 @@ func TestExecuteUsesPortfolioConstraintTemplate(t *testing.T) {
 
 func TestExecuteRejectsInvalidBriefContract(t *testing.T) {
 	dir := t.TempDir()
-	executor := NewExecutor(ledger.NewStore(dir))
+	executor := NewExecutor(ledger.NewStore(dir), "")
 	briefPath := filepath.Join(dir, "brief-invalid.json")
 
 	brief := domain.MutationBrief{

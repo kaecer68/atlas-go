@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -19,12 +20,23 @@ import (
 )
 
 func main() {
+	var help bool
+	flag.BoolVar(&help, "help", false, "show help")
+	flag.Parse()
+	if help {
+		fmt.Println("Usage: validate-broker [--help]")
+		fmt.Println("Validates broker adapter signature formatting against a local test server.")
+		fmt.Println("Set ATLAS_BROKER_API_KEY, ATLAS_BROKER_API_SECRET and ATLAS_BROKER_KEY_ID for real validation;")
+		fmt.Println("otherwise dummy credentials are used for format checks only.")
+		os.Exit(0)
+	}
+
 	apiKey := os.Getenv("ATLAS_BROKER_API_KEY")
 	apiSecret := os.Getenv("ATLAS_BROKER_API_SECRET")
 	keyID := os.Getenv("ATLAS_BROKER_KEY_ID")
 
 	if apiKey == "" || apiSecret == "" {
-		fmt.Println("Usage: ATLAS_BROKER_API_KEY=... ATLAS_BROKER_API_SECRET=... ATLAS_BROKER_KEY_ID=... go run ./cmd/validate-broker")
+		fmt.Println("Usage: ATLAS_BROKER_API_KEY=... ATLAS_BROKER_API_SECRET=... ATLAS_BROKER_KEY_ID=... go run ./cmd/experimental/validate-broker")
 		fmt.Println("If credentials are empty, dummy values are used for signature-format validation only.")
 	}
 
@@ -81,7 +93,10 @@ func main() {
 		}
 
 		var order domain.Order
-		_ = json.Unmarshal(payload, &order)
+		if err := json.Unmarshal(payload, &order); err != nil {
+			http.Error(w, fmt.Sprintf("invalid payload: %v", err), http.StatusBadRequest)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"order_id":   "validation-oid",

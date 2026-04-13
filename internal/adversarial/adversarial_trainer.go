@@ -764,6 +764,8 @@ func (at *AdversarialTrainer) simulateScenario(scenario *AdversarialScenario, ag
 		baseScore += 0.2
 	case domain.LayerMacro:
 		baseScore += 0.1
+	default:
+		// No layer-specific adjustment.
 	}
 
 	// Random variation

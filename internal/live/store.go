@@ -245,13 +245,20 @@ func (s *StateStore) RecordEvent(eventType string, payload interface{}) {
 // persistEvent 持久化事件
 func (s *StateStore) persistEvent(event Event) {
 	eventsDir := filepath.Join(s.basePath, "events")
-	os.MkdirAll(eventsDir, 0755)
+	if err := os.MkdirAll(eventsDir, 0755); err != nil {
+		return
+	}
 
 	dateStr := time.Now().Format("2006-01-02")
 	eventsPath := filepath.Join(eventsDir, fmt.Sprintf("events_%s.jsonl", dateStr))
 
-	eventJSON, _ := json.Marshal(event)
-	appendToFile(eventsPath, string(eventJSON))
+	eventJSON, err := json.Marshal(event)
+	if err != nil {
+		return
+	}
+	if err := appendToFile(eventsPath, string(eventJSON)); err != nil {
+		fmt.Printf("[StateStore] warn: failed to append event: %v\n", err)
+	}
 }
 
 // UpdatePositionPrices 更新所有持仓价格

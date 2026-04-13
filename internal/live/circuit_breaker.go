@@ -3,6 +3,7 @@ package live
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -15,19 +16,19 @@ import (
 type CircuitState string
 
 const (
-	CircuitNormal  CircuitState = "normal"  // All trading allowed
-	CircuitPaused  CircuitState = "paused"  // No new long positions; close-only
-	CircuitHalted  CircuitState = "halted"  // All trading stopped
+	CircuitNormal CircuitState = "normal" // All trading allowed
+	CircuitPaused CircuitState = "paused" // No new long positions; close-only
+	CircuitHalted CircuitState = "halted" // All trading stopped
 )
 
 // CircuitBreakerRule defines a single trigger condition.
 type CircuitBreakerRule struct {
-	Name           string
-	Enabled        bool
-	DailyLossPct   float64 // e.g. 2.0
-	DrawdownPct    float64 // e.g. 3.0
-	ConsecutiveSL  int     // e.g. 3
-	CooldownMinutes int    // e.g. 15
+	Name            string
+	Enabled         bool
+	DailyLossPct    float64 // e.g. 2.0
+	DrawdownPct     float64 // e.g. 3.0
+	ConsecutiveSL   int     // e.g. 3
+	CooldownMinutes int     // e.g. 15
 }
 
 // DefaultCircuitBreakerRules returns conservative production defaults.
@@ -56,18 +57,18 @@ type CircuitBreakerEvent struct {
 
 // CircuitBreaker implements portfolio-level circuit breaker logic.
 type CircuitBreaker struct {
-	rules           []CircuitBreakerRule
-	state           CircuitState
-	stateChangedAt  time.Time
-	consecutiveSL   int
-	lastSLTime      time.Time
-	cooldownUntil   time.Time
-	intradayPeak    float64
-	dayStartValue   float64
+	rules          []CircuitBreakerRule
+	state          CircuitState
+	stateChangedAt time.Time
+	consecutiveSL  int
+	lastSLTime     time.Time
+	cooldownUntil  time.Time
+	intradayPeak   float64
+	dayStartValue  float64
 
-	mu              sync.RWMutex
-	logPath         string
-	statePath       string
+	mu        sync.RWMutex
+	logPath   string
+	statePath string
 }
 
 // NewCircuitBreaker creates a circuit breaker with default rules.
@@ -79,13 +80,15 @@ func NewCircuitBreaker(logPath, statePath string) *CircuitBreaker {
 		statePath = "data/state/circuit_breaker_state.json"
 	}
 	cb := &CircuitBreaker{
-		rules:         DefaultCircuitBreakerRules(),
-		state:         CircuitNormal,
+		rules:          DefaultCircuitBreakerRules(),
+		state:          CircuitNormal,
 		stateChangedAt: time.Now(),
-		logPath:       logPath,
-		statePath:     statePath,
+		logPath:        logPath,
+		statePath:      statePath,
 	}
-	_ = cb.loadState()
+	if err := cb.loadState(); err != nil {
+		log.Printf("[CircuitBreaker] warn: failed to load state: %v", err)
+	}
 	return cb
 }
 
@@ -114,7 +117,9 @@ func (cb *CircuitBreaker) ResetDayState(startingPortfolioValue float64) {
 	cb.cooldownUntil = time.Time{}
 	cb.intradayPeak = startingPortfolioValue
 	cb.dayStartValue = startingPortfolioValue
-	_ = cb.persistStateLocked()
+	if err := cb.persistStateLocked(); err != nil {
+		log.Printf("[CircuitBreaker] warn: failed to persist state on reset: %v", err)
+	}
 }
 
 // RecordStopLoss increments the consecutive stop-loss counter.
@@ -208,8 +213,12 @@ func (cb *CircuitBreaker) transitionLocked(to CircuitState, reason string, dayPn
 	}
 	cb.state = to
 	cb.stateChangedAt = time.Now()
-	_ = cb.appendLog(event)
-	_ = cb.persistStateLocked()
+	if err := cb.appendLog(event); err != nil {
+		log.Printf("[CircuitBreaker] warn: failed to append log: %v", err)
+	}
+	if err := cb.persistStateLocked(); err != nil {
+		log.Printf("[CircuitBreaker] warn: failed to persist state: %v", err)
+	}
 	fmt.Printf("[CircuitBreaker] %s -> %s | %s\n", event.FromState, event.ToState, reason)
 }
 

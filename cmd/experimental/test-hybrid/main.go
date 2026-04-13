@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"time"
@@ -11,6 +12,15 @@ import (
 )
 
 func main() {
+	var help bool
+	flag.BoolVar(&help, "help", false, "show help")
+	flag.Parse()
+	if help {
+		fmt.Println("Usage: test-hybrid [--help]")
+		fmt.Println("Tests the Hybrid market-data provider (Fugle primary, TWSE fallback).")
+		os.Exit(0)
+	}
+
 	cfg := config.Load()
 
 	fmt.Println("🔄 測試 Hybrid Provider (Fugle + TWSE 備援)")

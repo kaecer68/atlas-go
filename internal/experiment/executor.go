@@ -8,16 +8,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
 type Executor struct {
-	store *ledger.Store
+	store        *ledger.Store
+	baselinePath string
 }
 
-func NewExecutor(store *ledger.Store) *Executor {
-	return &Executor{store: store}
+func NewExecutor(store *ledger.Store, baselinePath string) *Executor {
+	return &Executor{store: store, baselinePath: baselinePath}
 }
 
 func (e *Executor) Execute(briefPath string) (domain.PromptExperimentResult, error) {
@@ -31,8 +33,9 @@ func (e *Executor) Execute(briefPath string) (domain.PromptExperimentResult, err
 		return domain.PromptExperimentResult{}, err
 	}
 
+	policy, _ := baseline.Load(e.baselinePath)
 	expID := fmt.Sprintf("exec-%s-%d", brief.TargetAgentID, time.Now().Unix())
-	candidatePrompt := mutateCandidate(string(sourcePrompt), brief)
+	candidatePrompt := mutateCandidate(string(sourcePrompt), brief, policy.Constraints)
 	candidatePath := filepath.Join("prompts", "experiments", brief.TargetAgentID, expID, "v2.md")
 	if err := os.MkdirAll(filepath.Dir(candidatePath), 0o755); err != nil {
 		return domain.PromptExperimentResult{}, err
@@ -77,6 +80,7 @@ func (e *Executor) Execute(briefPath string) (domain.PromptExperimentResult, err
 			"Policy checks passed for required skill and forbidden action boundaries.",
 			"Iteration guidance was embedded from layer-aware and evidence-aware mutation policy.",
 			"Candidate artifact template was selected from the mutation type profile.",
+			"Candidate constraints are generated relative to current baseline to ensure meaningful delta.",
 			"Replay performance evaluation is the next step before acceptance or rejection.",
 		},
 		RecordedAt: time.Now(),
@@ -92,12 +96,12 @@ func (e *Executor) Execute(briefPath string) (domain.PromptExperimentResult, err
 	return result, nil
 }
 
-func mutateCandidate(source string, brief domain.MutationBrief) string {
+func mutateCandidate(source string, brief domain.MutationBrief, base domain.SimulationConstraints) string {
 	switch brief.MutationType {
 	case "risk_rule_change":
-		return mutateRiskRuleCandidate(source, brief)
+		return mutateRiskRuleCandidate(source, brief, base)
 	case "portfolio_constraint_revision":
-		return mutatePortfolioConstraintCandidate(source, brief)
+		return mutatePortfolioConstraintCandidate(source, brief, base)
 	default:
 		return mutatePromptCandidate(source, brief)
 	}
@@ -151,37 +155,29 @@ func mutatePromptCandidate(source string, brief domain.MutationBrief) string {
 	return b.String()
 }
 
-func mutateRiskRuleCandidate(source string, brief domain.MutationBrief) string {
+func mutateRiskRuleCandidate(source string, brief domain.MutationBrief, base domain.SimulationConstraints) string {
 	var b strings.Builder
 	title := "# Risk Rule Change Proposal - Governance Tightening"
 	description := "This artifact proposes risk rule modifications designed to be measurable, auditable, and execution-safe."
+
+	convictionFloor := computeDeltaConviction(base.MinRecommendationConviction)
+	liquidityFloor := computeDeltaLiquidity(base.MinTradableVolume)
+	maxPositionWeight := computeDeltaMaxPositionWeight(base.MaxPositionWeight)
+	reserveCashFraction := computeDeltaReserveCash(base.ReserveCashFraction)
+	stopLossPct := computeDeltaStopLoss(base.StopLossPct)
+	requireCROPass := true
+
 	rules := []string{
-		"1. **Raise Entry Quality**: Conviction floor increased to 48 (from baseline floor)",
-		"2. **Tighten Liquidity**: Liquidity floor raised to 3.5M to reduce weak fills",
-		"3. **Trim Position Concentration**: Max position weight set to 20%",
-		"4. **Increase Cash Buffer**: Reserve cash fraction set to 12%",
+		fmt.Sprintf("1. **Raise Entry Quality**: Conviction floor adjusted to %d (from %d)", convictionFloor, base.MinRecommendationConviction),
+		fmt.Sprintf("2. **Tighten Liquidity**: Liquidity floor set to %s (from %s)", formatInt64(liquidityFloor), formatInt64(base.MinTradableVolume)),
+		fmt.Sprintf("3. **Trim Position Concentration**: Max position weight set to %.0f%% (from %.0f%%)", maxPositionWeight*100, base.MaxPositionWeight*100),
+		fmt.Sprintf("4. **Cash Buffer**: Reserve cash fraction set to %.0f%% (from %.0f%%)", reserveCashFraction*100, base.ReserveCashFraction*100),
 		"5. **Keep CRO Gate**: Require CRO pass remains enabled",
 	}
-	convictionFloor := 48
-	liquidityFloor := int64(3500000)
-	maxPositionWeight := 0.20
-	reserveCashFraction := 0.12
-	requireCROPass := true
 
 	if brief.TargetSkill != "financials_desk" {
 		title = "# Risk Rule Change Proposal - Controlled Optimization"
 		description = "This artifact proposes controlled risk rule changes to improve portfolio efficiency under explicit guardrails."
-		rules = []string{
-			"1. **Entry Filter Refresh**: Conviction floor set to 42",
-			"2. **Liquidity Guard**: Liquidity floor maintained at 3.0M for tradability",
-			"3. **Position Discipline**: Max position weight set to 22%",
-			"4. **Operational Buffer**: Reserve cash fraction set to 10%",
-			"5. **Control Integrity**: Require CRO pass remains enabled",
-		}
-		convictionFloor = 42
-		liquidityFloor = 3000000
-		maxPositionWeight = 0.22
-		reserveCashFraction = 0.10
 	}
 
 	b.WriteString(title)
@@ -204,6 +200,7 @@ func mutateRiskRuleCandidate(source string, brief domain.MutationBrief) string {
 	b.WriteString(fmt.Sprintf("  liquidity_floor: %d\n", liquidityFloor))
 	b.WriteString(fmt.Sprintf("  max_position_weight: %.2f\n", maxPositionWeight))
 	b.WriteString(fmt.Sprintf("  reserve_cash_fraction: %.2f\n", reserveCashFraction))
+	b.WriteString(fmt.Sprintf("  stop_loss_pct: %.0f\n", stopLossPct*100))
 	b.WriteString(fmt.Sprintf("  require_cro_pass: %t\n", requireCROPass))
 	b.WriteString("```\n\n")
 	b.WriteString("## Guardrails\n\n")
@@ -211,14 +208,27 @@ func mutateRiskRuleCandidate(source string, brief domain.MutationBrief) string {
 	return b.String()
 }
 
-func mutatePortfolioConstraintCandidate(source string, brief domain.MutationBrief) string {
+func mutatePortfolioConstraintCandidate(source string, brief domain.MutationBrief, base domain.SimulationConstraints) string {
 	var b strings.Builder
 	b.WriteString("# Portfolio Constraint Optimization Proposal\n\n")
 	b.WriteString("This artifact proposes portfolio-governance optimizations to improve capital efficiency.\n\n")
 	writeMutationHeader(&b, brief)
 	b.WriteString("## Proposed Constraint Optimizations\n\n")
-	b.WriteString("- Increase max position weight for high-conviction setups (conviction > 75).\n")
-	b.WriteString("- Reduce reserve cash during favorable market regimes (Risk_On).\n")
+
+	maxWeight := computeDeltaMaxPositionWeight(base.MaxPositionWeight)
+	reserveCash := computeDeltaReserveCash(base.ReserveCashFraction)
+	stopLossPct := computeDeltaStopLoss(base.StopLossPct)
+	takeProfitPct := 0.15
+	if base.TakeProfitPct > 0 {
+		if base.TakeProfitPct <= 0.12 {
+			takeProfitPct = 0.20
+		} else {
+			takeProfitPct = 0.12
+		}
+	}
+
+	b.WriteString(fmt.Sprintf("- Adjust max position weight to %.0f%% (from %.0f%%).\n", maxWeight*100, base.MaxPositionWeight*100))
+	b.WriteString(fmt.Sprintf("- Adjust reserve cash fraction to %.0f%% (from %.0f%%).\n", reserveCash*100, base.ReserveCashFraction*100))
 	b.WriteString("- Enable pyramiding: add to winning positions with trailing stop protection.\n")
 	b.WriteString("- Preserve CRO veto authority but streamline approval for proven patterns.\n\n")
 	b.WriteString("## Baseline Context\n\n```text\n")
@@ -226,15 +236,86 @@ func mutatePortfolioConstraintCandidate(source string, brief domain.MutationBrie
 	b.WriteString("\n```\n\n")
 	b.WriteString("## Candidate Constraint Patch\n\n```yaml\n")
 	b.WriteString("portfolio_constraint_revision:\n")
-	b.WriteString("  max_position_weight: 0.22\n")
-	b.WriteString("  high_conviction_weight: 0.25\n")
-	b.WriteString("  reserve_cash_fraction: 0.08\n")
+	b.WriteString(fmt.Sprintf("  max_position_weight: %.2f\n", maxWeight))
+	b.WriteString(fmt.Sprintf("  reserve_cash_fraction: %.2f\n", reserveCash))
+	b.WriteString(fmt.Sprintf("  stop_loss_pct: %.0f\n", stopLossPct*100))
+	b.WriteString(fmt.Sprintf("  take_profit_pct: %.0f\n", takeProfitPct*100))
 	b.WriteString("  enable_pyramiding: true\n")
 	b.WriteString("  require_cro_pass: true\n")
 	b.WriteString("```\n\n")
 	b.WriteString("## Guardrails\n\n")
 	writeGuidanceAndPolicy(&b, brief)
 	return b.String()
+}
+
+func computeDeltaConviction(base int) int {
+	if base <= 40 {
+		return base + 10
+	}
+	if base >= 60 {
+		return base - 10
+	}
+	return base + 7
+}
+
+func computeDeltaLiquidity(base int64) int64 {
+	if base <= 2000000 {
+		return base * 3 / 2
+	}
+	if base >= 5000000 {
+		return base * 2 / 3
+	}
+	return base + 1000000
+}
+
+func computeDeltaMaxPositionWeight(base float64) float64 {
+	if base >= 0.22 {
+		v := base - 0.03
+		if v < 0.10 {
+			return 0.10
+		}
+		return v
+	}
+	v := base + 0.03
+	if v > 0.35 {
+		return 0.35
+	}
+	return v
+}
+
+func computeDeltaReserveCash(base float64) float64 {
+	if base >= 0.15 {
+		v := base - 0.02
+		if v < 0.05 {
+			return 0.05
+		}
+		return v
+	}
+	v := base + 0.02
+	if v > 0.25 {
+		return 0.25
+	}
+	return v
+}
+
+func computeDeltaStopLoss(base float64) float64 {
+	if base <= 0 {
+		return 0.08
+	}
+	if base <= 0.09 {
+		return 0.12
+	}
+	return 0.08
+}
+
+func formatInt64(v int64) string {
+	if v >= 1000000 {
+		return fmt.Sprintf("%.1fM", float64(v)/1000000)
+	}
+	if v >= 1000 {
+		return fmt.Sprintf("%.1fK", float64(v)/1000)
+	}
+	return fmt.Sprintf("%d", v)
 }
 
 func writeMutationHeader(b *strings.Builder, brief domain.MutationBrief) {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -17,6 +18,15 @@ import (
 )
 
 func main() {
+	var help bool
+	flag.BoolVar(&help, "help", false, "show help")
+	flag.Parse()
+	if help {
+		fmt.Println("Usage: staging-drill [--help]")
+		fmt.Println("Runs a 12-second live trading smoke test in dry-run mode with isolated temp state.")
+		os.Exit(0)
+	}
+
 	cfg := config.Load()
 	cfg.BrokerMode = "paper" // force paper trading for staging
 
@@ -124,8 +134,15 @@ func main() {
 	cbData, cbErr := os.ReadFile(circuitStatePath)
 	if cbErr == nil {
 		var cbState map[string]interface{}
-		_ = json.Unmarshal(cbData, &cbState)
-		report["circuit_breaker_state"] = cbState["state"]
+		if err := json.Unmarshal(cbData, &cbState); err != nil {
+			log.Printf("[Staging Drill] WARNING: failed to unmarshal circuit breaker state: %v", err)
+			report["circuit_breaker_state"] = "unknown (invalid json)"
+		} else {
+			report["circuit_breaker_state"] = cbState["state"]
+			if cbState["state"] != "normal" {
+				log.Printf("[Staging Drill] WARNING: circuit breaker state is %v", cbState["state"])
+			}
+		}
 		if cbState["state"] != "normal" {
 			log.Printf("[Staging Drill] WARNING: circuit breaker state is %v", cbState["state"])
 		}

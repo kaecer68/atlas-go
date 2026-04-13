@@ -9,20 +9,17 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/evolution"
-	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
-	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
 	"github.com/kaecer68/atlas-go/internal/replay"
 	"github.com/kaecer68/atlas-go/internal/sim"
-	"github.com/kaecer68/atlas-go/internal/spawning"
-	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
-type System struct {
+// SystemCore holds the essential simulation state and services.
+type SystemCore struct {
 	cfg             config.Config
 	provider        marketdata.Provider
 	engine          *sim.Engine
@@ -31,15 +28,17 @@ type System struct {
 	ledger          *ledger.Store
 	replay          *replay.Dataset
 	session         domain.ReplaySession
-	janusEngine     *janus.Engine
 	alphaDiscovery  *AlphaDiscoveryEngine
 	optimizer       *portfolio.Optimizer
 	narrativeEngine *narrative.NarrativeEngine
 	persistentState *domain.SimulationState
-	prismManager    *prism.PRISMManager
-	swarm           *swarm.MiroFishSwarm
-	spawningManager *spawning.SpawningManager
-	phase3Controller *Phase3Controller
+	ctx             context.Context
+}
+
+// System orchestrates the full simulation loop via a SystemCore and a PluginHost.
+type System struct {
+	*SystemCore
+	host *PluginHost
 }
 
 func NewSystem(cfg config.Config) *System {
@@ -55,9 +54,13 @@ func NewSystem(cfg config.Config) *System {
 	session := newSession(cfg, ds)
 	optimizer := portfolio.NewOptimizer()
 	hp := portfolio.NewHistoricalPrices()
-	_ = hp.LoadFromExtendedJSONL("data/replay/tw_extended_90days.jsonl")
+	if err := hp.LoadFromExtendedJSONL("data/replay/tw_extended_90days.jsonl"); err != nil {
+		fmt.Printf("[System] warn: failed to load historical prices: %v\n", err)
+	}
 	fp := portfolio.NewFundamentalProvider()
-	_ = fp.LoadFromJSON("data/fundamentals.json")
+	if err := fp.LoadFromJSON("data/fundamentals.json"); err != nil {
+		fmt.Printf("[System] warn: failed to load fundamentals: %v\n", err)
+	}
 	optimizer.WithHistoricalPrices(hp).WithFundamentalProvider(fp)
 
 	engine := sim.NewEngine(policy.Constraints).
@@ -70,17 +73,20 @@ func NewSystem(cfg config.Config) *System {
 			reflexivity.NewReversalDetectionRule(),
 		)
 	return &System{
-		cfg:             cfg,
-		provider:        selectProvider(cfg),
-		engine:          engine,
-		registry:        registry,
-		policy:          policy,
-		ledger:          ledger.NewStore(cfg.LedgerDir),
-		replay:          ds,
-		session:         session,
-		optimizer:       optimizer,
-		alphaDiscovery:  NewAlphaDiscoveryEngine(optimizer),
-		narrativeEngine: narrative.NewNarrativeEngine(),
+		SystemCore: &SystemCore{
+			cfg:             cfg,
+			provider:        selectProvider(cfg),
+			engine:          engine.WithContext(context.Background()),
+			registry:        registry,
+			policy:          policy,
+			ledger:          ledger.NewStore(cfg.LedgerDir),
+			replay:          ds,
+			session:         session,
+			optimizer:       optimizer,
+			alphaDiscovery:  NewAlphaDiscoveryEngine(optimizer),
+			narrativeEngine: narrative.NewNarrativeEngine(),
+			ctx:             context.Background(),
+		},
 	}
 }
 
@@ -90,7 +96,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	}
 
 	symbols := RegistrySymbols(s.registry)
-	quotes, err := s.provider.GetQuotes(context.Background(), asOf, symbols)
+	quotes, err := s.provider.GetQuotes(s.ctx, asOf, symbols)
 	if err != nil {
 		return domain.SimulationResult{}, err
 	}
@@ -105,9 +111,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	alphaRecs := s.applyAlphaDiscovery(quotes, rawRecs)
 	rawRecs = append(rawRecs, alphaRecs...)
 	finalRecs = append(finalRecs, alphaRecs...)
-	finalRecs = s.applyJANUS(regime, finalRecs)
-	finalRecs = s.applySwarmConsensus(finalRecs)
-	finalRecs = s.applyPRISMWeights(finalRecs, regime)
+	finalRecs = s.host.ProcessRecommendations(regime, finalRecs)
 	var result domain.SimulationResult
 	if s.persistentState != nil {
 		result = s.engine.RunWithState(s.persistentState, regime, quotes, finalRecs)
@@ -118,9 +122,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	outcomes := buildSyntheticOutcomes(rawRecs, quotes, asOf)
 	_ = s.ledger.RecordOutcomes(outcomes)
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)
-	s.schedulePRISMForRegime(regime, asOf)
-	s.runSpawningCycle()
-	s.runPhase3Optimization(quotes, regime, asOf)
+	s.host.PostSimulation(quotes, regime, asOf)
 	return result, nil
 }
 
@@ -137,9 +139,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	alphaRecs := s.applyAlphaDiscovery(quotes, rawRecs)
 	rawRecs = append(rawRecs, alphaRecs...)
 	finalRecs = append(finalRecs, alphaRecs...)
-	finalRecs = s.applyJANUS(regime, finalRecs)
-	finalRecs = s.applySwarmConsensus(finalRecs)
-	finalRecs = s.applyPRISMWeights(finalRecs, regime)
+	finalRecs = s.host.ProcessRecommendations(regime, finalRecs)
 	var result domain.SimulationResult
 	if s.persistentState != nil {
 		result = s.engine.RunWithState(s.persistentState, regime, quotes, finalRecs)
@@ -150,9 +150,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	outcomes := buildReplayOutcomes(rawRecs, sessionDate, s.replay)
 	_ = s.ledger.RecordOutcomes(outcomes)
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)
-	s.schedulePRISMForRegime(regime, sessionDate)
-	s.runSpawningCycle()
-	s.runPhase3Optimization(quotes, regime, sessionDate)
+	s.host.PostSimulation(quotes, regime, sessionDate)
 	return result, nil
 }
 
@@ -179,77 +177,12 @@ func (s *System) Registry() domain.AgentRegistry {
 	return s.registry
 }
 
-// WithJANUS attaches a JANUS engine to the system for backtest validation.
-func (s *System) WithJANUS(j *janus.Engine) *System {
-	s.janusEngine = j
-	return s
-}
-
-// WithPersistentState enables cross-day simulation state carry-over for backtests.
-func (s *System) WithPersistentState(state *domain.SimulationState) *System {
-	s.persistentState = state
-	return s
-}
-
-// WithPRISM attaches a PRISM training manager to the system.
-// If replay data is available, a real training executor is automatically wired.
-func (s *System) WithPRISM(pm *prism.PRISMManager) *System {
-	s.prismManager = pm
-	if s.replay != nil {
-		pm.WithExecutor(NewPRISMTrainingExecutor(s.replay, s.registry, s.policy))
-	}
-	return s
-}
-
-// WithSwarm attaches a MiroFish swarm simulator to the system.
-func (s *System) WithSwarm(sw *swarm.MiroFishSwarm) *System {
-	s.swarm = sw
-	return s
-}
-
-// WithSpawning attaches a spawning manager for automated agent creation.
-func (s *System) WithSpawning(sm *spawning.SpawningManager) *System {
-	s.spawningManager = sm
-	return s
-}
-
-// WithPhase3Controller attaches the advanced Phase 3 optimization controller.
-// If replay data is available, an adversarial scenario runner is automatically wired.
-func (s *System) WithPhase3Controller(ctrl *Phase3Controller) *System {
-	s.phase3Controller = ctrl
-	if s.replay != nil {
-		ctrl.WithAdversarialRunner(NewAdversarialScenarioRunner(s.replay, s.registry))
-	}
-	// Sync sub-managers so System's daily hooks use the same instances.
-	if ctrl.swarm != nil {
-		s.swarm = ctrl.swarm
-	}
-	if ctrl.prismManager != nil {
-		s.prismManager = ctrl.prismManager
-	}
-	if ctrl.spawningManager != nil {
-		s.spawningManager = ctrl.spawningManager
-	}
-	return s
-}
-
-func (s *System) applyJANUS(regime domain.Regime, recs []domain.Recommendation) []domain.Recommendation {
-	if s.janusEngine == nil {
-		return recs
-	}
-	return s.janusEngine.ApplyAdjustment(recs, regime)
-}
-
 func (s *System) detectNarrativeEvents(quotes []domain.Quote) []narrative.NarrativeEvent {
 	if s.narrativeEngine == nil {
 		return nil
 	}
 	data := QuotesToNarrativeData(quotes)
 	return s.narrativeEngine.DetectEvents(data)
-}
-
-func (s *System) applyNarrativeContext(recs []domain.Recommendation, quotes []domain.Quote) []domain.Recommendation {
-	return s.applyNarrativeContextWithEvents(recs, s.detectNarrativeEvents(quotes))
 }
 
 func (s *System) applyNarrativeContextWithEvents(recs []domain.Recommendation, events []narrative.NarrativeEvent) []domain.Recommendation {
@@ -340,6 +273,8 @@ func (s *System) applyHumanOverrides(recs []domain.Recommendation) []domain.Reco
 			bannedSectors[iv.TargetSector] = true
 		case "sector_unban":
 			delete(bannedSectors, iv.TargetSector)
+		default:
+			// Ignore unknown intervention types.
 		}
 	}
 
@@ -368,11 +303,11 @@ func isRecommendationInBannedSector(rec domain.Recommendation, registry domain.A
 		}
 	}
 	mappings := map[string][]string{
-		"semiconductor_desk":     {"semiconductor", "foundry"},
-		"ai_supply_chain_desk":   {"ai_supply_chain", "pcb", "thermal"},
-		"financials_desk":        {"financials"},
-		"shipping_desk":          {"shipping"},
-		"etf_rotation_desk":      {"high_dividend", "etf_rotation"},
+		"semiconductor_desk":   {"semiconductor", "foundry"},
+		"ai_supply_chain_desk": {"ai_supply_chain", "pcb", "thermal"},
+		"financials_desk":      {"financials"},
+		"shipping_desk":        {"shipping"},
+		"etf_rotation_desk":    {"high_dividend", "etf_rotation"},
 	}
 	for _, sector := range mappings[skill] {
 		if bannedSectors[sector] {
@@ -412,7 +347,7 @@ func (s *System) applyAlphaDiscovery(quotes []domain.Quote, recs []domain.Recomm
 	for _, q := range quotes {
 		quoteMap[q.Symbol] = q
 	}
-	return s.alphaDiscovery.Discover(symbols, quoteMap, recs)
+	return s.alphaDiscovery.Discover(s.ctx, symbols, quoteMap, recs)
 }
 
 func (s *System) NextExperimentCandidate() (*evolution.Candidate, error) {
@@ -542,115 +477,6 @@ func syntheticForwardReturn(symbol string) float64 {
 	default:
 		return 0
 	}
-}
-
-// applySwarmConsensus adjusts recommendation conviction based on swarm consensus.
-func (s *System) applySwarmConsensus(recs []domain.Recommendation) []domain.Recommendation {
-	if len(recs) == 0 {
-		return recs
-	}
-	// Prefer Phase3Controller's continuously-running swarm if available.
-	var result swarm.SimulationResult
-	var ok bool
-	if s.phase3Controller != nil {
-		result, ok = s.phase3Controller.GetSwarmConsensus()
-	}
-	if !ok && s.swarm != nil {
-		result, ok = s.swarm.GetLatestResult()
-	}
-	if !ok || len(result.Consensus) == 0 {
-		return recs
-	}
-	adjusted := make([]domain.Recommendation, len(recs))
-	for i, rec := range recs {
-		adjusted[i] = rec
-		cp, ok := result.Consensus[rec.Symbol]
-		if !ok {
-			continue
-		}
-		switch cp.ConsensusDirection {
-		case "bullish":
-			if rec.Side == domain.SideBuy {
-				adjusted[i].Conviction = min(100, rec.Conviction+5)
-			} else {
-				adjusted[i].Conviction = max(0, rec.Conviction-5)
-			}
-		case "bearish":
-			if rec.Side == domain.SideSell {
-				adjusted[i].Conviction = min(100, rec.Conviction+5)
-			} else {
-				adjusted[i].Conviction = max(0, rec.Conviction-5)
-			}
-		}
-	}
-	return adjusted
-}
-
-// applyPRISMWeights boosts conviction based on regime-specific PRISM training results.
-func (s *System) applyPRISMWeights(recs []domain.Recommendation, regime domain.Regime) []domain.Recommendation {
-	if s.phase3Controller == nil {
-		return recs
-	}
-	return s.phase3Controller.ApplyPRISMWeights(recs, regime)
-}
-
-// runPhase3Optimization triggers the parallel optimization tracks after simulation.
-func (s *System) runPhase3Optimization(quotes []domain.Quote, regime domain.Regime, asOf time.Time) {
-	if s.phase3Controller == nil {
-		return
-	}
-	baseState := swarm.MarketState{
-		Timestamp: asOf,
-		Prices:    make(map[string]float64, len(quotes)),
-		Volumes:   make(map[string]float64, len(quotes)),
-	}
-	for _, q := range quotes {
-		baseState.Prices[q.Symbol] = q.Last
-		baseState.Volumes[q.Symbol] = float64(q.Volume)
-	}
-	s.phase3Controller.RunParallelOptimization(baseState, regime)
-}
-
-// schedulePRISMForRegime schedules PRISM training for the current regime.
-func (s *System) schedulePRISMForRegime(regime domain.Regime, asOf time.Time) {
-	pm := s.prismManager
-	if pm == nil && s.phase3Controller != nil {
-		pm = s.phase3Controller.prismManager
-	}
-	if pm == nil {
-		return
-	}
-	var pr prism.RegimeType
-	switch regime {
-	case domain.RegimeRiskOn:
-		pr = prism.RegimeRiskOn
-	case domain.RegimeRiskOff:
-		pr = prism.RegimeRiskOff
-	default:
-		pr = prism.RegimeTransition
-	}
-	windowStart := asOf.AddDate(0, 0, -30)
-	for _, agent := range s.registry.Agents {
-		if !agent.Enabled {
-			continue
-		}
-		_ = pm.ScheduleTraining(agent, []prism.TrainingWindow{
-			{Start: windowStart, End: asOf, Regime: pr},
-		})
-	}
-}
-
-// runSpawningCycle detects knowledge gaps and triggers agent spawning if configured.
-func (s *System) runSpawningCycle() {
-	sm := s.spawningManager
-	if sm == nil && s.phase3Controller != nil {
-		sm = s.phase3Controller.spawningManager
-	}
-	if sm == nil {
-		return
-	}
-	// Spawning cycle is intentionally non-blocking; actual spawn requires acceptance.
-	sm.PerformSpawningCycle()
 }
 
 func (s *System) resolveReplayDate() (time.Time, bool) {

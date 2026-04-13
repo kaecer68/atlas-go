@@ -16,10 +16,17 @@ type Engine struct {
 	optimizer    *portfolio.Optimizer
 	useOptimizer bool
 	reflexRules  []reflexivity.Rule
+	ctx          context.Context
 }
 
 func NewEngine(constraints domain.SimulationConstraints) *Engine {
-	return &Engine{constraints: constraints}
+	return &Engine{constraints: constraints, ctx: context.Background()}
+}
+
+// WithContext sets the root context for optimizer calls.
+func (e *Engine) WithContext(ctx context.Context) *Engine {
+	e.ctx = ctx
+	return e
 }
 
 // WithOptimizer enables portfolio-optimizer-driven order generation.
@@ -84,52 +91,8 @@ func (e *Engine) RunDay(
 
 	// 2. Sell logic
 	if e.constraints.SellLogicEnabled() {
-		remaining := make([]domain.Position, 0, len(state.Positions))
-		for _, pos := range state.Positions {
-			quote, ok := quoteBySymbol[pos.Symbol]
-			if !ok || !quote.IsTradable {
-				remaining = append(remaining, pos)
-				continue
-			}
-
-			shouldSell := false
-			reason := ""
-
-			if e.constraints.StopLossPct > 0 && quote.Last <= pos.AverageCost*(1-e.constraints.StopLossPct) {
-				shouldSell = true
-				reason = "stop_loss"
-			}
-			if !shouldSell && e.constraints.TakeProfitPct > 0 && quote.Last >= pos.AverageCost*(1+e.constraints.TakeProfitPct) {
-				shouldSell = true
-				reason = "take_profit"
-			}
-			if !shouldSell {
-				for _, rec := range recs {
-					if rec.Symbol == pos.Symbol && rec.Side == domain.SideSell {
-						shouldSell = true
-						reason = "conviction_reversal"
-						break
-					}
-				}
-			}
-
-			if shouldSell {
-				// Use negative BPS for sell (slippage works against us)
-				price := applyBPS(quote.Last, -(e.constraints.SlippageBPS + e.constraints.TransactionCostBPS))
-				proceeds := float64(pos.Quantity) * price
-				state.Cash += proceeds
-				orders = append(orders, domain.Order{
-					Symbol:   pos.Symbol,
-					Side:     domain.SideSell,
-					Quantity: pos.Quantity,
-					Price:    price,
-					Reason:   reason,
-				})
-				continue
-			}
-			remaining = append(remaining, pos)
-		}
-		state.Positions = remaining
+		sellOrders := e.executeSells(state, quoteBySymbol, recs)
+		orders = append(orders, sellOrders...)
 	}
 
 	// 3. Buy logic
@@ -171,6 +134,56 @@ func (e *Engine) RunDay(
 	}
 }
 
+func (e *Engine) executeSells(
+	state *domain.SimulationState,
+	quoteBySymbol map[string]domain.Quote,
+	recs []domain.Recommendation,
+) []domain.Order {
+	remaining := make([]domain.Position, 0, len(state.Positions))
+	var orders []domain.Order
+
+	for _, pos := range state.Positions {
+		quote, ok := quoteBySymbol[pos.Symbol]
+		if !ok || !quote.IsTradable {
+			remaining = append(remaining, pos)
+			continue
+		}
+
+		shouldSell, reason := e.shouldSellPosition(pos, quote, recs)
+		if shouldSell {
+			price := applyBPS(quote.Last, -(e.constraints.SlippageBPS + e.constraints.TransactionCostBPS))
+			proceeds := float64(pos.Quantity) * price
+			state.Cash += proceeds
+			orders = append(orders, domain.Order{
+				Symbol:   pos.Symbol,
+				Side:     domain.SideSell,
+				Quantity: pos.Quantity,
+				Price:    price,
+				Reason:   reason,
+			})
+			continue
+		}
+		remaining = append(remaining, pos)
+	}
+	state.Positions = remaining
+	return orders
+}
+
+func (e *Engine) shouldSellPosition(pos domain.Position, quote domain.Quote, recs []domain.Recommendation) (bool, string) {
+	if e.constraints.StopLossPct > 0 && quote.Last <= pos.AverageCost*(1-e.constraints.StopLossPct) {
+		return true, "stop_loss"
+	}
+	if e.constraints.TakeProfitPct > 0 && quote.Last >= pos.AverageCost*(1+e.constraints.TakeProfitPct) {
+		return true, "take_profit"
+	}
+	for _, rec := range recs {
+		if rec.Symbol == pos.Symbol && rec.Side == domain.SideSell {
+			return true, "conviction_reversal"
+		}
+	}
+	return false, ""
+}
+
 // RunMultiDay runs a sequential multi-day simulation.
 func (e *Engine) RunMultiDay(
 	quotesByDate map[string][]domain.Quote,
@@ -184,13 +197,15 @@ func (e *Engine) RunMultiDay(
 		lastDate = dates[len(dates)-1]
 	}
 
+	var totalTrades int
 	for _, date := range dates {
 		key := date.Format("2006-01-02")
 		quotes := quotesByDate[key]
 		recs := recsByDate[key]
 		// Determine regime from recs if available; default to neutral
 		regime := domain.RegimeNeutral
-		_ = e.RunDay(&state, date, regime, quotes, recs)
+		result := e.RunDay(&state, date, regime, quotes, recs)
+		totalTrades += len(result.Orders)
 	}
 
 	report := domain.SimulationReport{
@@ -199,7 +214,7 @@ func (e *Engine) RunMultiDay(
 		MaxDrawdown:   state.CurrentDrawdown,
 		EquityCurve:   append([]float64(nil), state.EquityCurve...),
 		AgentHitRates: make(map[string]float64),
-		TradeCount:    0,
+		TradeCount:    totalTrades,
 		StartDate:     firstDate,
 		EndDate:       lastDate,
 	}
@@ -232,7 +247,7 @@ func (e *Engine) executeOptimizerBuys(
 	quoteBySymbol map[string]domain.Quote,
 	recs []domain.Recommendation,
 ) ([]domain.Order, []domain.Position) {
-	orders, err := e.optimizer.OptimizeToOrders(context.Background(), recs, quoteBySymbol, cash)
+	orders, err := e.optimizer.OptimizeToOrders(e.ctx, recs, quoteBySymbol, cash)
 	if err != nil {
 		return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs)
 	}

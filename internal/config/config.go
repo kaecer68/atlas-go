@@ -2,6 +2,7 @@ package config
 
 import (
 	"bufio"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -96,6 +97,7 @@ func envOrInt(key string, fallback int) int {
 	}
 	n, err := strconv.Atoi(value)
 	if err != nil {
+		log.Printf("[Config] warn: failed to parse %s=%q as int, using fallback %d: %v", key, value, fallback, err)
 		return fallback
 	}
 	return n
@@ -149,6 +151,13 @@ func loadEnvFile(filename string) {
 
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
+
+		// Strip matching quotes (single or double) commonly used in .env files
+		if len(value) >= 2 {
+			if (value[0] == '"' && value[len(value)-1] == '"') || (value[0] == '\'' && value[len(value)-1] == '\'') {
+				value = value[1 : len(value)-1]
+			}
+		}
 
 		// 如果环境变量未设置，则使用 .env 中的值
 		if os.Getenv(key) == "" {

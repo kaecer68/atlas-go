@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -16,6 +17,15 @@ import (
 )
 
 func main() {
+	var help bool
+	flag.BoolVar(&help, "help", false, "show help")
+	flag.Parse()
+	if help {
+		fmt.Println("Usage: test-monitor [--help]")
+		fmt.Println("Starts the monitoring system in test mode. Press Ctrl+C to stop.")
+		os.Exit(0)
+	}
+
 	fmt.Println("🔍 Atlas-Go 监控系统测试")
 	fmt.Println("========================")
 

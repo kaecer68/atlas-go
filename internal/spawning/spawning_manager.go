@@ -449,6 +449,8 @@ func (m *SpawningManager) GetStatistics() SpawningStatistics {
 			stats.Rejected++
 		case SpawnStatusExtinct:
 			stats.Extinct++
+		default:
+			// Unknown status ignored in stats aggregation.
 		}
 	}
 

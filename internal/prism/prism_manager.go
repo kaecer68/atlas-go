@@ -516,6 +516,8 @@ func (pm *PRISMManager) executeTraining(task *TrainingTask) *TrainingResult {
 	case RegimeLowVolatility:
 		result.SharpeRatio = 0.9
 		result.MaxDrawdown = -0.05
+	default:
+		// Leave baseline result unchanged for unknown regimes.
 	}
 
 	return result

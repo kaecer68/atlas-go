@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/csv"
+	"flag"
 	"fmt"
 	"math"
 	"os"
@@ -13,6 +14,15 @@ import (
 )
 
 func main() {
+	var help bool
+	flag.BoolVar(&help, "help", false, "show help")
+	flag.Parse()
+	if help {
+		fmt.Println("Usage: validate-stress-index [--help]")
+		fmt.Println("Computes the Taiwan market stress index from tw_extended_90days.csv.")
+		os.Exit(0)
+	}
+
 	f, err := os.Open("data/replay/tw_extended_90days.csv")
 	if err != nil {
 		fmt.Println("Error opening CSV:", err)

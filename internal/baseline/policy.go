@@ -150,6 +150,26 @@ func ApplyConstraintCandidate(base domain.SimulationConstraints, candidate strin
 			if v, ok := parseBoolValue(line); ok {
 				base.RequireCROPass = v
 			}
+		case strings.HasPrefix(line, "stop_loss_pct:"):
+			if v, ok := parsePctFloatValue(line); ok {
+				base.StopLossPct = v
+			}
+		case strings.HasPrefix(line, "take_profit_pct:"):
+			if v, ok := parsePctFloatValue(line); ok {
+				base.TakeProfitPct = v
+			}
+		case strings.HasPrefix(line, "max_open_positions:"):
+			if v, ok := parseIntValue(line); ok {
+				base.MaxOpenPositions = v
+			}
+		case strings.HasPrefix(line, "transaction_cost_bps:"):
+			if v, ok := parseFloatValue(line); ok {
+				base.TransactionCostBPS = v
+			}
+		case strings.HasPrefix(line, "slippage_bps:"):
+			if v, ok := parseFloatValue(line); ok {
+				base.SlippageBPS = v
+			}
 		}
 	}
 	return base
@@ -217,6 +237,17 @@ func parseFloatValue(line string) (float64, bool) {
 	v, err := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
 	if err != nil {
 		return 0, false
+	}
+	return v, true
+}
+
+func parsePctFloatValue(line string) (float64, bool) {
+	v, ok := parseFloatValue(line)
+	if !ok {
+		return 0, false
+	}
+	if v > 1 {
+		v = v / 100
 	}
 	return v, true
 }

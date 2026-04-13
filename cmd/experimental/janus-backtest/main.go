@@ -106,13 +106,13 @@ func main() {
 }
 
 type ComparisonReport struct {
-	WindowID      string         `json:"window_id"`
-	StartDate     string         `json:"start_date"`
-	EndDate       string         `json:"end_date"`
-	Baseline      RunMetrics     `json:"baseline"`
-	WithJANUS     RunMetrics     `json:"with_janus"`
-	JANUSStatus   janus.Status   `json:"janus_status"`
-	HasDifference bool           `json:"has_difference"`
+	WindowID      string       `json:"window_id"`
+	StartDate     string       `json:"start_date"`
+	EndDate       string       `json:"end_date"`
+	Baseline      RunMetrics   `json:"baseline"`
+	WithJANUS     RunMetrics   `json:"with_janus"`
+	JANUSStatus   janus.Status `json:"janus_status"`
+	HasDifference bool         `json:"has_difference"`
 }
 
 type RunMetrics struct {

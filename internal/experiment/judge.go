@@ -93,85 +93,23 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 	return result, nil
 }
 
+type judgeCheckFunc func(lower string, result domain.PromptExperimentResult) []string
+
+var judgeCheckStrategies = map[string]judgeCheckFunc{
+	"risk_rule_change":              riskRuleJudgeChecks,
+	"portfolio_constraint_revision": portfolioConstraintJudgeChecks,
+}
+
 func judgeReplayChecks(candidatePrompt string, result domain.PromptExperimentResult) []string {
 	checks := make([]string, 0)
 	lower := strings.ToLower(candidatePrompt)
 
-	switch result.Experiment.MutationType {
-	case "risk_rule_change":
-		if strings.Contains(lower, "risk rule change proposal") {
-			checks = append(checks, "contains risk rule proposal header")
-		}
-		if strings.Contains(lower, "candidate rule patch") {
-			checks = append(checks, "contains candidate rule patch section")
-		}
-		if strings.Contains(lower, "conviction_floor") && strings.Contains(lower, "liquidity_floor") {
-			checks = append(checks, "contains structured risk rule fields")
-		}
-		if strings.Contains(lower, "guardrails") {
-			checks = append(checks, "contains control guardrails section")
-		}
-	case "portfolio_constraint_revision":
-		if strings.Contains(lower, "portfolio constraint revision proposal") {
-			checks = append(checks, "contains portfolio constraint proposal header")
-		}
-		if strings.Contains(lower, "candidate constraint patch") {
-			checks = append(checks, "contains candidate constraint patch section")
-		}
-		if strings.Contains(lower, "max_position_weight") && strings.Contains(lower, "reserve_cash_fraction") {
-			checks = append(checks, "contains structured portfolio constraint fields")
-		}
-		if strings.Contains(lower, "require_cro_pass") {
-			checks = append(checks, "preserves CRO sequencing requirement")
-		}
-	default:
-		if result.Brief.TargetSkill == "financials_desk" {
-			if strings.Contains(lower, "credit quality gate") {
-				checks = append(checks, "contains credit quality gate")
-			}
-			if strings.Contains(lower, "spread sensitivity downgrade") {
-				checks = append(checks, "contains spread sensitivity downgrade")
-			}
-			if strings.Contains(lower, "capital adequacy premium") {
-				checks = append(checks, "contains capital adequacy premium")
-			}
-		} else if result.Brief.TargetSkill == "technical_breakout" {
-			if strings.Contains(lower, "structure-first breakout filter") {
-				checks = append(checks, "contains structure-first breakout filter")
-			}
-			if strings.Contains(lower, "volume surge requirement") {
-				checks = append(checks, "contains volume surge requirement")
-			}
-			if strings.Contains(lower, "late-breakout penalty") {
-				checks = append(checks, "contains late-breakout penalty")
-			}
-			if strings.Contains(lower, "coverage expansion") {
-				checks = append(checks, "contains coverage expansion mode")
-			}
-			if strings.Contains(lower, "catch-up momentum") {
-				checks = append(checks, "contains catch-up momentum")
-			}
-			if strings.Contains(lower, "volume participation acceptance") {
-				checks = append(checks, "contains volume participation acceptance")
-			}
-			if strings.Contains(lower, "close-strength tolerance") {
-				checks = append(checks, "contains close-strength tolerance")
-			}
-			if strings.Contains(lower, "breakout confirmation bonus") {
-				checks = append(checks, "contains breakout confirmation bonus")
-			}
-		} else {
-			if strings.Contains(lower, "require trend confirmation") {
-				checks = append(checks, "contains stronger trend confirmation rule")
-			}
-			if strings.Contains(lower, "downgrade conviction") {
-				checks = append(checks, "contains conviction downgrade logic")
-			}
-			if strings.Contains(lower, "reject setups") {
-				checks = append(checks, "contains explicit rejection filter")
-			}
-		}
+	if strategy, ok := judgeCheckStrategies[result.Experiment.MutationType]; ok {
+		checks = append(checks, strategy(lower, result)...)
+	} else {
+		checks = append(checks, promptTighteningJudgeChecks(lower, result)...)
 	}
+
 	if len(result.PolicyChecks) >= len(result.Brief.RequiredSkills) {
 		checks = append(checks, "required skill policy checks preserved")
 	}
@@ -179,6 +117,92 @@ func judgeReplayChecks(candidatePrompt string, result domain.PromptExperimentRes
 		checks = append(checks, "forbidden actions still named in candidate prompt")
 	}
 
+	return checks
+}
+
+func riskRuleJudgeChecks(lower string, _ domain.PromptExperimentResult) []string {
+	checks := make([]string, 0)
+	if strings.Contains(lower, "risk rule change proposal") {
+		checks = append(checks, "contains risk rule proposal header")
+	}
+	if strings.Contains(lower, "candidate rule patch") {
+		checks = append(checks, "contains candidate rule patch section")
+	}
+	if strings.Contains(lower, "conviction_floor") && strings.Contains(lower, "liquidity_floor") {
+		checks = append(checks, "contains structured risk rule fields")
+	}
+	if strings.Contains(lower, "guardrails") {
+		checks = append(checks, "contains control guardrails section")
+	}
+	return checks
+}
+
+func portfolioConstraintJudgeChecks(lower string, _ domain.PromptExperimentResult) []string {
+	checks := make([]string, 0)
+	if strings.Contains(lower, "portfolio constraint revision proposal") {
+		checks = append(checks, "contains portfolio constraint proposal header")
+	}
+	if strings.Contains(lower, "candidate constraint patch") {
+		checks = append(checks, "contains candidate constraint patch section")
+	}
+	if strings.Contains(lower, "max_position_weight") && strings.Contains(lower, "reserve_cash_fraction") {
+		checks = append(checks, "contains structured portfolio constraint fields")
+	}
+	if strings.Contains(lower, "require_cro_pass") {
+		checks = append(checks, "preserves CRO sequencing requirement")
+	}
+	return checks
+}
+
+func promptTighteningJudgeChecks(lower string, result domain.PromptExperimentResult) []string {
+	checks := make([]string, 0)
+	switch result.Brief.TargetSkill {
+	case "financials_desk":
+		if strings.Contains(lower, "credit quality gate") {
+			checks = append(checks, "contains credit quality gate")
+		}
+		if strings.Contains(lower, "spread sensitivity downgrade") {
+			checks = append(checks, "contains spread sensitivity downgrade")
+		}
+		if strings.Contains(lower, "capital adequacy premium") {
+			checks = append(checks, "contains capital adequacy premium")
+		}
+	case "technical_breakout":
+		if strings.Contains(lower, "structure-first breakout filter") {
+			checks = append(checks, "contains structure-first breakout filter")
+		}
+		if strings.Contains(lower, "volume surge requirement") {
+			checks = append(checks, "contains volume surge requirement")
+		}
+		if strings.Contains(lower, "late-breakout penalty") {
+			checks = append(checks, "contains late-breakout penalty")
+		}
+		if strings.Contains(lower, "coverage expansion") {
+			checks = append(checks, "contains coverage expansion mode")
+		}
+		if strings.Contains(lower, "catch-up momentum") {
+			checks = append(checks, "contains catch-up momentum")
+		}
+		if strings.Contains(lower, "volume participation acceptance") {
+			checks = append(checks, "contains volume participation acceptance")
+		}
+		if strings.Contains(lower, "close-strength tolerance") {
+			checks = append(checks, "contains close-strength tolerance")
+		}
+		if strings.Contains(lower, "breakout confirmation bonus") {
+			checks = append(checks, "contains breakout confirmation bonus")
+		}
+	default:
+		if strings.Contains(lower, "require trend confirmation") {
+			checks = append(checks, "contains stronger trend confirmation rule")
+		}
+		if strings.Contains(lower, "downgrade conviction") {
+			checks = append(checks, "contains conviction downgrade logic")
+		}
+		if strings.Contains(lower, "reject setups") {
+			checks = append(checks, "contains explicit rejection filter")
+		}
+	}
 	return checks
 }
 
@@ -198,6 +222,9 @@ func passesAcceptance(result domain.PromptExperimentResult) (bool, string) {
 		return false, fmt.Sprintf("rejected: insufficient replay observations (baseline=%d candidate=%d required=%d)", baselineObs, candidateObs, minObs)
 	}
 	if candidate <= baseline {
+		if candidate == baseline {
+			return false, "rejected: candidate score equals baseline (no constraint delta applied)"
+		}
 		return false, "rejected: candidate did not improve over baseline"
 	}
 

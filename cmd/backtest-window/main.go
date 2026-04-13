@@ -15,17 +15,26 @@ import (
 )
 
 func main() {
-	start := flag.String("start", "2026-03-26", "backtest window start date (YYYY-MM-DD)")
-	end := flag.String("end", "2026-03-27", "backtest window end date (YYYY-MM-DD)")
-	flag.Parse()
+	if err := run(os.Args[1:]); err != nil {
+		log.Fatalf("%v", err)
+	}
+}
+
+func run(args []string) error {
+	fs := flag.NewFlagSet("backtest-window", flag.ContinueOnError)
+	start := fs.String("start", "2026-03-26", "backtest window start date (YYYY-MM-DD)")
+	end := fs.String("end", "2026-03-27", "backtest window end date (YYYY-MM-DD)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 
 	startDate, err := time.Parse("2006-01-02", *start)
 	if err != nil {
-		log.Fatalf("parse start date: %v", err)
+		return fmt.Errorf("parse start date: %w", err)
 	}
 	endDate, err := time.Parse("2006-01-02", *end)
 	if err != nil {
-		log.Fatalf("parse end date: %v", err)
+		return fmt.Errorf("parse end date: %w", err)
 	}
 
 	cfg := config.Load()
@@ -35,7 +44,7 @@ func main() {
 	runner := backtest.NewRunner(cfg)
 	summary, err := runner.Run(startDate, endDate)
 	if err != nil {
-		log.Fatalf("run backtest window: %v", err)
+		return fmt.Errorf("run backtest window: %w", err)
 	}
 
 	fmt.Printf("window: %s\n", summary.WindowID)
@@ -76,7 +85,7 @@ func main() {
 		OutcomeCount:    summary.OutcomeCount,
 		EquityCurve:     equityCurve,
 		AgentRows:       reporting.BuildAgentRows(scorecards, nil),
-		MutationStats:   reporting.MutationStats{}, // TODO: populate from experiment results
+		MutationStats:   reporting.MutationStats{},
 		WorstAgentID:    summary.WorstAgentID,
 		WorstAgentSkill: summary.WorstAgentSkill,
 		WorstSharpeLike: summary.WorstAgentSharpeLike,
@@ -85,11 +94,14 @@ func main() {
 
 	report := reporting.RenderMarkdown(reportData)
 	reportDir := "reports"
-	_ = os.MkdirAll(reportDir, 0o755)
+	if err := os.MkdirAll(reportDir, 0o755); err != nil {
+		log.Printf("warn: failed to create report directory: %v", err)
+	}
 	reportPath := filepath.Join(reportDir, fmt.Sprintf("backtest_%s.md", summary.WindowID))
 	if err := os.WriteFile(reportPath, []byte(report), 0o644); err != nil {
 		log.Printf("warn: failed to write report: %v", err)
 	} else {
 		fmt.Printf("report written to: %s\n", reportPath)
 	}
+	return nil
 }

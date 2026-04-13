@@ -10,9 +10,9 @@ import (
 // CohortPerformanceTracker maintains a rolling history of cohort snapshots
 // and computes windowed aggregates for JANUS weighting.
 type CohortPerformanceTracker struct {
-	history     map[prism.RegimeType][]CohortSnapshot
-	maxHistory  int
-	mu          sync.RWMutex
+	history    map[prism.RegimeType][]CohortSnapshot
+	maxHistory int
+	mu         sync.RWMutex
 }
 
 // NewCohortPerformanceTracker creates a tracker with a bounded history per cohort.

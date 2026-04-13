@@ -43,13 +43,13 @@ func (c SimulationConstraints) SellLogicEnabled() bool {
 
 // DayResult captures the outcome of a single simulated trading day.
 type DayResult struct {
-	Date        time.Time
-	Regime      Regime
-	Orders      []Order
-	Positions   []Position
-	Cash        float64
+	Date           time.Time
+	Regime         Regime
+	Orders         []Order
+	Positions      []Position
+	Cash           float64
 	PortfolioValue float64
-	DailyPnL    float64
+	DailyPnL       float64
 }
 
 // SimulationReport aggregates metrics from a multi-day run.

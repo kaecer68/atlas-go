@@ -13,7 +13,7 @@ import (
 
 // MacroIngestor fetches macro data, compares with previous snapshot, and emits events.
 type MacroIngestor struct {
-	provider   marketdata.MacroDataProvider
+	provider    marketdata.MacroDataProvider
 	snapshotDir string
 }
 
@@ -73,7 +73,7 @@ func (m *MacroIngestor) saveSnapshot(snap marketdata.MacroDataSnapshot) error {
 	}
 	// Also save dated copy.
 	dateStr := time.Now().UTC().Format("2006-01-02")
-	 datedPath := filepath.Join(m.snapshotDir, dateStr+".json")
+	datedPath := filepath.Join(m.snapshotDir, dateStr+".json")
 	return os.WriteFile(datedPath, data, 0o644)
 }
 

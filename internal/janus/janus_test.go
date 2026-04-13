@@ -113,8 +113,8 @@ func TestRegimeDetector_NovélRegime(t *testing.T) {
 	det := NewRegimeDetector(DefaultJANUSConfig())
 
 	short := map[prism.RegimeType]CohortWeight{
-		prism.RegimeRiskOn:  {Weight: 0.45},
-		prism.RegimeRiskOff: {Weight: 0.30},
+		prism.RegimeRiskOn:         {Weight: 0.45},
+		prism.RegimeRiskOff:        {Weight: 0.30},
 		prism.RegimeHighVolatility: {Weight: 0.15},
 		prism.RegimeLowVolatility:  {Weight: 0.05},
 		prism.RegimeTransition:     {Weight: 0.05},
@@ -122,8 +122,8 @@ func TestRegimeDetector_NovélRegime(t *testing.T) {
 
 	// Same cohorts, but long window shows a different leader.
 	long := map[prism.RegimeType]CohortWeight{
-		prism.RegimeRiskOn:  {Weight: 0.20},
-		prism.RegimeRiskOff: {Weight: 0.50},
+		prism.RegimeRiskOn:         {Weight: 0.20},
+		prism.RegimeRiskOff:        {Weight: 0.50},
 		prism.RegimeHighVolatility: {Weight: 0.15},
 		prism.RegimeLowVolatility:  {Weight: 0.10},
 		prism.RegimeTransition:     {Weight: 0.05},
@@ -162,12 +162,12 @@ func TestRegimeDetector_Mixed(t *testing.T) {
 	det := NewRegimeDetector(DefaultJANUSConfig())
 
 	short := map[prism.RegimeType]CohortWeight{
-		prism.RegimeRiskOn: {Weight: 0.35},
+		prism.RegimeRiskOn:  {Weight: 0.35},
 		prism.RegimeRiskOff: {Weight: 0.35},
 	}
 
 	long := map[prism.RegimeType]CohortWeight{
-		prism.RegimeRiskOn: {Weight: 0.35},
+		prism.RegimeRiskOn:  {Weight: 0.35},
 		prism.RegimeRiskOff: {Weight: 0.35},
 	}
 

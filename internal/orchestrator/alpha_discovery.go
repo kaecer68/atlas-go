@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -10,7 +11,7 @@ import (
 // AlphaDiscoveryEngine identifies symbols with high multi-factor scores
 // but low agent coverage, generating exploratory recommendations.
 type AlphaDiscoveryEngine struct {
-	optimizer      *portfolio.Optimizer
+	optimizer       *portfolio.Optimizer
 	factorThreshold float64
 }
 
@@ -29,6 +30,7 @@ func (e *AlphaDiscoveryEngine) SetFactorThreshold(threshold float64) {
 
 // Discover scans symbols for high-factor / low-coverage opportunities.
 func (e *AlphaDiscoveryEngine) Discover(
+	ctx context.Context,
 	symbols []string,
 	quotes map[string]domain.Quote,
 	recs []domain.Recommendation,
@@ -54,7 +56,7 @@ func (e *AlphaDiscoveryEngine) Discover(
 
 		// We use a package-local helper to compute scores without exposing private methods.
 		// Since we can't call private methods, we approximate by running a mini optimize.
-		score := e.estimateFactorScore(symbol, quotes)
+		score := e.estimateFactorScore(ctx, symbol, quotes)
 		if score < e.factorThreshold {
 			continue
 		}
@@ -74,7 +76,7 @@ func (e *AlphaDiscoveryEngine) Discover(
 
 // estimateFactorScore computes a rough multi-factor score for a symbol using
 // the optimizer's public Optimize entry point with a single dummy recommendation.
-func (e *AlphaDiscoveryEngine) estimateFactorScore(symbol string, quotes map[string]domain.Quote) float64 {
+func (e *AlphaDiscoveryEngine) estimateFactorScore(ctx context.Context, symbol string, quotes map[string]domain.Quote) float64 {
 	quote, ok := quotes[symbol]
 	if !ok || quote.Last == 0 {
 		return 0.0
@@ -88,7 +90,7 @@ func (e *AlphaDiscoveryEngine) estimateFactorScore(symbol string, quotes map[str
 	}
 
 	// Run a minimal optimization to extract the factor scores from the result.
-	positions, err := e.optimizer.Optimize(nil, []domain.Recommendation{dummyRec}, quotes, 1_000_000)
+	positions, err := e.optimizer.Optimize(ctx, []domain.Recommendation{dummyRec}, quotes, 1_000_000)
 	if err != nil || len(positions) == 0 {
 		return 0.0
 	}

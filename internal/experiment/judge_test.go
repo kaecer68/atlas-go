@@ -359,3 +359,28 @@ func TestEvaluateRejectsInvalidStatusTransition(t *testing.T) {
 		t.Fatalf("expected invalid status transition to fail")
 	}
 }
+
+func TestPassesAcceptanceReportsNoConstraintDeltaWhenEqual(t *testing.T) {
+	result := domain.PromptExperimentResult{
+		Experiment: domain.ExperimentRecord{
+			AcceptanceGates: []string{"improve_sharpe_like"},
+			BaselineValue:   0.0075,
+			CandidateValue:  0.0075,
+			MutationType:    "risk_rule_change",
+		},
+		Brief: domain.MutationBrief{
+			MaturityLevel: "level_2_window_validated",
+		},
+		BaselineObservations:  12,
+		CandidateObservations: 12,
+		JudgeChecks:           []string{"a", "b", "c"},
+	}
+
+	accepted, note := passesAcceptance(result)
+	if accepted {
+		t.Fatalf("expected rejection when baseline == candidate")
+	}
+	if note != "rejected: candidate score equals baseline (no constraint delta applied)" {
+		t.Fatalf("expected explicit no-delta note, got: %s", note)
+	}
+}

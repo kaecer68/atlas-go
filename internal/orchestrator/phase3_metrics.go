@@ -12,18 +12,18 @@ import (
 
 // Phase3Metrics exposes a serializable snapshot of the 5-track controller state.
 type Phase3Metrics struct {
-	SwarmRunning               bool              `json:"swarm_running"`
-	SwarmConsensusSymbols      int               `json:"swarm_consensus_symbols"`
-	PRISMQueuedTasks           int               `json:"prism_queued_tasks"`
-	PRISMCompletedResults      int               `json:"prism_completed_results"`
-	PRISMTopAgentID            string            `json:"prism_top_agent_id"`
-	PRISMTopAgentSharpe        float64           `json:"prism_top_agent_sharpe"`
-	SpawningActive             int               `json:"spawning_active"`
-	SpawningCandidates         int               `json:"spawning_candidates"`
-	ReflexivityActiveLoops     int               `json:"reflexivity_active_loops"`
-	AdversarialLastScore       float64           `json:"adversarial_last_score"`
-	AdversarialVulnerabilities []string          `json:"adversarial_vulnerabilities"`
-	RecordedAt                 time.Time         `json:"recorded_at"`
+	SwarmRunning               bool      `json:"swarm_running"`
+	SwarmConsensusSymbols      int       `json:"swarm_consensus_symbols"`
+	PRISMQueuedTasks           int       `json:"prism_queued_tasks"`
+	PRISMCompletedResults      int       `json:"prism_completed_results"`
+	PRISMTopAgentID            string    `json:"prism_top_agent_id"`
+	PRISMTopAgentSharpe        float64   `json:"prism_top_agent_sharpe"`
+	SpawningActive             int       `json:"spawning_active"`
+	SpawningCandidates         int       `json:"spawning_candidates"`
+	ReflexivityActiveLoops     int       `json:"reflexivity_active_loops"`
+	AdversarialLastScore       float64   `json:"adversarial_last_score"`
+	AdversarialVulnerabilities []string  `json:"adversarial_vulnerabilities"`
+	RecordedAt                 time.Time `json:"recorded_at"`
 }
 
 // defaultMetricsPath writes to a well-known location inside the project.

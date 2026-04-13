@@ -19,7 +19,7 @@ import (
 func TestPRISMTrainingExecutorWithRealReplay(t *testing.T) {
 	ds, err := replay.LoadTWSEOpenDataCSV("../../data/replay/tw_extended_90days.csv")
 	if err != nil {
-		t.Skipf("skip: cannot load replay data: %v", err)
+		t.Fatalf("cannot load replay data: %v", err)
 	}
 	registry := SeedRegistry()
 	policy := baseline.DefaultPolicy()
@@ -236,12 +236,12 @@ func TestReflexivityMutatesSwarmScenarios(t *testing.T) {
 		Timestamp:  time.Now(),
 	})
 	reflex.UpdateReality(&reflexivity.MarketReality{
-		ID:        "real_001",
-		Target:    "2330.TW",
-		Price:     900,
-		Trend:     0.03,
+		ID:         "real_001",
+		Target:     "2330.TW",
+		Price:      900,
+		Trend:      0.03,
 		Volatility: 0.20,
-		Timestamp: time.Now(),
+		Timestamp:  time.Now(),
 	})
 
 	ctrl := NewPhase3Controller(&registry, nil, sw, nil, reflex, nil)
@@ -259,7 +259,7 @@ func TestReflexivityMutatesSwarmScenarios(t *testing.T) {
 
 func TestSystemAppliesPRISMWeightsWhenControllerAttached(t *testing.T) {
 	registry := SeedRegistry()
-	s := &System{registry: registry}
+	s := &System{SystemCore: &SystemCore{registry: registry}}
 	recs := []domain.Recommendation{
 		{Agent: "taiwan_macro", Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 60},
 	}
@@ -307,7 +307,7 @@ func TestPhase3MetricsSaveAndLoad(t *testing.T) {
 
 func TestSystemRunPhase3OptimizationNoPanic(t *testing.T) {
 	registry := SeedRegistry()
-	s := &System{registry: registry}
+	s := &System{SystemCore: &SystemCore{registry: registry}}
 	quotes := []domain.Quote{
 		{Symbol: "2330.TW", Last: 850, Volume: 1000000},
 	}

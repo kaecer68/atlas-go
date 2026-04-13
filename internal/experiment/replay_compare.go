@@ -71,7 +71,7 @@ func comparePromptPerformanceDetailed(replayDataPath, baselinePolicyPath string,
 		summary.BaselineObservations = baselineObs
 		summary.CandidateObservations = candidateObs
 		if baselineObs == 0 && candidateObs == 0 {
-			fallbackStart, fallbackEnd, ok := fallbackWindow(ds, 30)
+			fallbackStart, fallbackEnd, ok := fallbackWindow(ds, 1)
 			if ok {
 				baseline, baselineObs = scoreConstraintWindowWithObservations(ds, baselineConstraints, fallbackStart, fallbackEnd)
 				candidate, candidateObs = scoreConstraintWindowWithObservations(ds, candidateConstraints, fallbackStart, fallbackEnd)
@@ -91,7 +91,7 @@ func comparePromptPerformanceDetailed(replayDataPath, baselinePolicyPath string,
 		summary.BaselineObservations = baselineObs
 		summary.CandidateObservations = candidateObs
 		if baselineObs == 0 && candidateObs == 0 {
-			fallbackStart, fallbackEnd, ok := fallbackWindow(ds, 30)
+			fallbackStart, fallbackEnd, ok := fallbackWindow(ds, 1)
 			if ok {
 				baseline, baselineObs = scorePromptWindowWithObservations(ds, brief.TargetSkill, baselinePrompt, policy.ExecutionPolicy, fallbackStart, fallbackEnd)
 				candidate, candidateObs = scorePromptWindowWithObservations(ds, brief.TargetSkill, string(candidatePromptBytes), policy.ExecutionPolicy, fallbackStart, fallbackEnd)
@@ -185,16 +185,28 @@ func scoreConstraintWindowWithObservations(ds *replay.Dataset, constraints domai
 	return total / float64(observations), observations
 }
 
-func fallbackWindow(ds *replay.Dataset, days int) (time.Time, time.Time, bool) {
-	if ds == nil || len(ds.Dates) < 2 {
+func fallbackWindow(ds *replay.Dataset, minDates int) (time.Time, time.Time, bool) {
+	if ds == nil || len(ds.Dates) < 1 {
 		return time.Time{}, time.Time{}, false
 	}
 	end := ds.Dates[len(ds.Dates)-1]
-	start := end.AddDate(0, 0, -days)
-	if start.Before(ds.Dates[0]) {
-		start = ds.Dates[0]
+	for _, days := range []int{30, 60, 90, 180, 365} {
+		start := end.AddDate(0, 0, -days)
+		if start.Before(ds.Dates[0]) {
+			start = ds.Dates[0]
+		}
+		count := 0
+		for _, d := range ds.Dates {
+			if !d.Before(start) && !d.After(end) {
+				count++
+			}
+		}
+		if count >= minDates {
+			return start, end, true
+		}
 	}
-	return start, end, true
+	// Fall back to the full available dataset range.
+	return ds.Dates[0], end, true
 }
 
 func scoreSimulationResult(result domain.SimulationResult, nextQuotes []domain.Quote, startingCash float64) float64 {

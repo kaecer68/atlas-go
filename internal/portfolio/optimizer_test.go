@@ -1,6 +1,7 @@
 package portfolio
 
 import (
+	"context"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -65,7 +66,7 @@ func TestOptimizeProducesDifferentWeightsBasedOnMomentum(t *testing.T) {
 		{Agent: "a", Symbol: "DOWN.TW", Side: domain.SideBuy, Conviction: 50},
 	}
 
-	positions, err := o.Optimize(nil, recs, quotes, 1_000_000)
+	positions, err := o.Optimize(context.Background(), recs, quotes, 1_000_000)
 	if err != nil {
 		t.Fatalf("optimize failed: %v", err)
 	}

@@ -259,4 +259,3 @@ func TestRunMultiDayTwentyDays(t *testing.T) {
 		t.Logf("total return: %f", report.TotalReturn)
 	}
 }
-
