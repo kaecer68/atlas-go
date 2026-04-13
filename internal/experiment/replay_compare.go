@@ -7,6 +7,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/replay"
 	"github.com/kaecer68/atlas-go/internal/sim"
@@ -168,7 +169,10 @@ func scoreConstraintWindowWithObservations(ds *replay.Dataset, constraints domai
 		quotes := ds.QuotesForDate(date, symbols)
 		nextQuotes := ds.QuotesForDate(nextDate, symbols)
 		execPolicy := baseline.ExecutionPolicyFromConstraints(constraints)
-		regime, _, activeRecs := orchestrator.ExecuteRegistryResearchDetailedWithPolicy(registry, quotes, nil, execPolicy)
+		baseRegime, _, activeRecs := orchestrator.ExecuteRegistryResearchDetailedWithPolicy(registry, quotes, nil, execPolicy)
+		ne := narrative.NewNarrativeEngine()
+		events := ne.DetectEvents(orchestrator.QuotesToNarrativeData(quotes))
+		regime := orchestrator.AdjustRegimeFromNarrative(baseRegime, events)
 		activeRecs = filterRecommendationsForConstraints(activeRecs, constraints)
 		result := engine.Run(regime, quotes, activeRecs)
 		total += scoreSimulationResult(result, nextQuotes, constraints.StartingCash)
