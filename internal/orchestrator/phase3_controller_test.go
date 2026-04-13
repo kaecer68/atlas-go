@@ -4,13 +4,45 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/baseline"
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
+	"github.com/kaecer68/atlas-go/internal/replay"
 	"github.com/kaecer68/atlas-go/internal/spawning"
 	"github.com/kaecer68/atlas-go/internal/swarm"
 )
+
+func TestPRISMTrainingExecutorWithRealReplay(t *testing.T) {
+	ds, err := replay.LoadTWSEOpenDataCSV("../../data/replay/tw_extended_90days.csv")
+	if err != nil {
+		t.Skipf("skip: cannot load replay data: %v", err)
+	}
+	registry := SeedRegistry()
+	policy := baseline.DefaultPolicy()
+	exec := NewPRISMTrainingExecutor(ds, registry, policy)
+
+	windowStart := ds.Dates[0]
+	windowEnd := ds.Dates[min(30, len(ds.Dates)-1)]
+	task := prism.TrainingTask{
+		AgentID:     "semi-desk-01",
+		AgentSkill:  "semiconductor_desk",
+		WindowStart: windowStart,
+		WindowEnd:   windowEnd,
+		Regime:      prism.RegimeRiskOn,
+	}
+
+	result, err := exec.Execute(task)
+	if err != nil {
+		t.Fatalf("executor failed: %v", err)
+	}
+	if result.SignalsCount == 0 {
+		t.Fatal("expected non-zero signal count")
+	}
+	t.Logf("Real PRISM result: signals=%d hit=%.2f sharpe=%.3f", result.SignalsCount, result.HitRate, result.SharpeRatio)
+}
 
 func TestPhase3ControllerApplyPRISMWeights(t *testing.T) {
 	registry := SeedRegistry()
@@ -150,6 +182,31 @@ func TestPhase3ControllerRunParallelOptimization(t *testing.T) {
 		t.Fatal("expected swarm to start during parallel optimization")
 	}
 	ctrl.StopBackgroundSwarm()
+}
+
+func TestSystemWithPRISMAutoWiresRealExecutor(t *testing.T) {
+	cfg := config.Config{ReplayDataPath: "../../data/replay/tw_extended_90days.csv"}
+	s := NewSystem(cfg)
+	pm := prism.NewPRISMManager(prism.DefaultPRISMConfig())
+	s.WithPRISM(pm)
+
+	// Schedule a training task and wait for execution
+	_ = pm.ScheduleTraining(
+		domain.AgentSpec{ID: "semi-desk-01", Skill: "semiconductor_desk", Enabled: true},
+		[]prism.TrainingWindow{{Start: time.Now().AddDate(0, 0, -30), End: time.Now(), Regime: prism.RegimeRiskOn}},
+	)
+	pm.Start()
+	defer pm.Stop()
+	time.Sleep(300 * time.Millisecond)
+
+	results := pm.GetCompletedResults()
+	if len(results) == 0 {
+		t.Fatal("expected real PRISM training results after wiring executor")
+	}
+	if results[0].Result.SignalsCount == 0 {
+		t.Fatal("expected non-zero signal count from real executor")
+	}
+	t.Logf("Auto-wired PRISM result: signals=%d hit=%.2f sharpe=%.3f", results[0].Result.SignalsCount, results[0].Result.HitRate, results[0].Result.SharpeRatio)
 }
 
 func TestSystemAppliesPRISMWeightsWhenControllerAttached(t *testing.T) {
