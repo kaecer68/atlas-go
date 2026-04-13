@@ -16,10 +16,15 @@ func TestExecuteOrderPublishesFilledEventInDryRunMode(t *testing.T) {
 		_ = bus.Close()
 	})
 
+	tmpDir := t.TempDir()
+	cb := NewCircuitBreaker(tmpDir+"/cb_log.jsonl", tmpDir+"/cb_state.json")
+	cb.ResetDayState(0)
+
 	o := &Orchestrator{
-		stateStore: store,
-		eventBus:   bus,
-		broker:     NewDryRunBroker(),
+		stateStore:     store,
+		eventBus:       bus,
+		broker:         NewDryRunBroker(),
+		circuitBreaker: cb,
 	}
 
 	eventCh := make(chan BusEvent, 4)
@@ -70,10 +75,15 @@ func TestExecuteOrderPublishesSystemErrorWhenOrderInvalid(t *testing.T) {
 		_ = bus.Close()
 	})
 
+	tmpDir := t.TempDir()
+	cb := NewCircuitBreaker(tmpDir+"/cb_log.jsonl", tmpDir+"/cb_state.json")
+	cb.ResetDayState(0)
+
 	o := &Orchestrator{
-		stateStore: store,
-		eventBus:   bus,
-		broker:     NewDryRunBroker(),
+		stateStore:     store,
+		eventBus:       bus,
+		broker:         NewDryRunBroker(),
+		circuitBreaker: cb,
 	}
 
 	eventCh := make(chan BusEvent, 4)
