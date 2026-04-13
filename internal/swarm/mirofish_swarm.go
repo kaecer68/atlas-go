@@ -142,6 +142,19 @@ func NewMiroFishSwarm(config SwarmConfig) *MiroFishSwarm {
 	}
 }
 
+// UpdateScenario adjusts parameters for a specific scenario by ID.
+func (sw *MiroFishSwarm) UpdateScenario(id string, volatilityDelta, trendDelta float64) {
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
+	for i := range sw.scenarios {
+		if sw.scenarios[i].ID == id {
+			sw.scenarios[i].Volatility = math.Max(0.01, sw.scenarios[i].Volatility+volatilityDelta)
+			sw.scenarios[i].Trend += trendDelta
+			break
+		}
+	}
+}
+
 // InitializeScenarios sets up diverse market scenarios
 func (sw *MiroFishSwarm) InitializeScenarios(baseState MarketState) {
 	sw.mu.Lock()
@@ -243,6 +256,13 @@ func (sw *MiroFishSwarm) Start() {
 	go sw.aggregateResults(sw.stopCh)
 
 	log.Println("[MiroFish] Swarm simulation started")
+}
+
+// IsRunning reports whether the swarm simulation is active.
+func (sw *MiroFishSwarm) IsRunning() bool {
+	sw.mu.RLock()
+	defer sw.mu.RUnlock()
+	return sw.isRunning
 }
 
 // Stop halts the simulation

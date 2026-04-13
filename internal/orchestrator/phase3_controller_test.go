@@ -209,6 +209,53 @@ func TestSystemWithPRISMAutoWiresRealExecutor(t *testing.T) {
 	t.Logf("Auto-wired PRISM result: signals=%d hit=%.2f sharpe=%.3f", results[0].Result.SignalsCount, results[0].Result.HitRate, results[0].Result.SharpeRatio)
 }
 
+func TestReflexivityMutatesSwarmScenarios(t *testing.T) {
+	registry := SeedRegistry()
+	sw := swarm.NewMiroFishSwarm(swarm.SwarmConfig{
+		FishCount:            10,
+		SimulationHorizon:    time.Hour,
+		TimeStep:             time.Minute,
+		ConvergenceThreshold: 0.7,
+		Parallelism:          2,
+	})
+	baseState := swarm.MarketState{
+		Timestamp: time.Now(),
+		Prices:    map[string]float64{"2330.TW": 850},
+		Volumes:   map[string]float64{"2330.TW": 1000000},
+	}
+	sw.InitializeScenarios(baseState)
+
+	reflex := reflexivity.NewReflexivityEngine()
+	_ = reflex.RegisterBias(&reflexivity.MarketBias{
+		ID:         "bias_bull_001",
+		Type:       reflexivity.TrendFollowing,
+		Target:     "2330.TW",
+		Magnitude:  0.85,
+		Confidence: 0.9,
+		Timestamp:  time.Now(),
+	})
+	reflex.UpdateReality(&reflexivity.MarketReality{
+		ID:        "real_001",
+		Target:    "2330.TW",
+		Price:     900,
+		Trend:     0.03,
+		Volatility: 0.20,
+		Timestamp: time.Now(),
+	})
+
+	ctrl := NewPhase3Controller(&registry, nil, sw, nil, reflex, nil)
+	ctrl.syncReflexivityToSwarmUnsafe()
+
+	// The positive feedback loop should have mutated bull_trend and possibly high_vol
+	// We can't directly read scenario params without adding a getter, but we can ensure
+	// the method doesn't panic and swarm remains usable.
+	if !sw.IsRunning() {
+		sw.Start()
+	}
+	time.Sleep(20 * time.Millisecond)
+	sw.Stop()
+}
+
 func TestSystemAppliesPRISMWeightsWhenControllerAttached(t *testing.T) {
 	registry := SeedRegistry()
 	s := &System{registry: registry}

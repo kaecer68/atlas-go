@@ -231,8 +231,54 @@ func (c *Phase3Controller) syncReflexivityToSwarmUnsafe() {
 	if c.reflexEngine == nil || c.swarm == nil {
 		return
 	}
-	// This is a hook for future deep integration.
-	// For now, the reflexivity engine inside sim.Engine already adjusts recommendations directly.
+
+	loops := c.reflexEngine.GetActiveLoops()
+	if len(loops) == 0 {
+		// No active loops: drift toward complacency (lower vol on high_vol, raise low_vol calm)
+		c.swarm.UpdateScenario("high_vol", -0.03, 0)
+		c.swarm.UpdateScenario("low_vol", -0.01, 0)
+		return
+	}
+
+	bullStrength := 0.0
+	bearStrength := 0.0
+	meanRevStrength := 0.0
+	crashStrength := 0.0
+	bubbleStrength := 0.0
+
+	for _, loop := range loops {
+		switch loop.Direction {
+		case reflexivity.PositiveFeedback:
+			if loop.Bias != nil && loop.Bias.Magnitude > 0 {
+				bubbleStrength += loop.Strength
+				bullStrength += loop.Strength
+			} else {
+				crashStrength += loop.Strength
+				bearStrength += loop.Strength
+			}
+		case reflexivity.NegativeFeedback:
+			meanRevStrength += loop.Strength
+		}
+	}
+
+	// Apply deltas proportional to aggregated loop strengths
+	if bubbleStrength > 0 {
+		c.swarm.UpdateScenario("bull_trend", bubbleStrength*0.05, bubbleStrength*0.001)
+	}
+	if crashStrength > 0 {
+		c.swarm.UpdateScenario("bear_trend", crashStrength*0.08, -crashStrength*0.002)
+	}
+	if meanRevStrength > 0 {
+		c.swarm.UpdateScenario("transition", meanRevStrength*0.04, 0)
+	}
+	if bullStrength+bearStrength > 0.7 {
+		// High overall directional conviction → crisis scenario becomes more volatile
+		c.swarm.UpdateScenario("high_vol", 0.05, 0)
+	}
+	if bubbleStrength > 0.8 || crashStrength > 0.8 {
+		// Extreme reflexivity → even low-vol scenario gets a volatility bump (tail risk)
+		c.swarm.UpdateScenario("low_vol", 0.02, 0)
+	}
 }
 
 // GetSwarmConsensus returns the latest swarm consensus if background swarm is running.
