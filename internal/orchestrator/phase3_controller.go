@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/adversarial"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
@@ -25,6 +26,7 @@ type Phase3Controller struct {
 	reflexEngine    *reflexivity.ReflexivityEngine
 	ledger          *ledger.Store
 	advRunner       *AdversarialScenarioRunner
+	lastAdvResult   *adversarial.StressTestResult
 
 	mu               sync.RWMutex
 	swarmRunning     bool
@@ -335,6 +337,7 @@ func (c *Phase3Controller) RunParallelOptimization(baseState swarm.MarketState, 
 	}()
 
 	wg.Wait()
+	_ = c.SaveMetrics("")
 }
 
 // runAdversarialStressTests finds the weakest agent and runs real stress scenarios.
@@ -367,9 +370,19 @@ func (c *Phase3Controller) runAdversarialStressTests() {
 		return
 	}
 	result := c.advRunner.RunStressTest(target.ID, target)
+	c.mu.Lock()
+	c.lastAdvResult = result
+	c.mu.Unlock()
 	if !result.Passed {
 		log.Printf("[Phase3Controller] Agent %s failed adversarial stress test (score %.2f)", target.ID, result.OverallScore)
 	}
+}
+
+// GetLastAdversarialResult returns the most recent stress test result.
+func (c *Phase3Controller) GetLastAdversarialResult() *adversarial.StressTestResult {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.lastAdvResult
 }
 
 // IsSwarmRunning reports whether the background swarm is active.

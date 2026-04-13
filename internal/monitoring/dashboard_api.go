@@ -15,6 +15,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/orchestrator"
 )
 
 type DashboardAPI struct {
@@ -118,6 +119,20 @@ func (a *DashboardAPI) RegisterMacroRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/macro/snapshot/history", a.handleMacroSnapshotHistory)
 	mux.HandleFunc("/api/macro/capital-flow/latest", a.handleCapitalFlowLatest)
 	mux.HandleFunc("/api/taiwan/stress-index", a.handleTaiwanStressIndex)
+}
+
+// RegisterPhase3Routes mounts Phase 3 advanced systems observability endpoints.
+func (a *DashboardAPI) RegisterPhase3Routes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/dashboard/phase3-status", a.handlePhase3Status)
+}
+
+func (a *DashboardAPI) handlePhase3Status(w http.ResponseWriter, r *http.Request) {
+	metrics, err := orchestrator.LoadPhase3Metrics("")
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load phase3 metrics: %v", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, metrics)
 }
 
 func (a *DashboardAPI) handleNarrativeDashboard(w http.ResponseWriter, r *http.Request) {

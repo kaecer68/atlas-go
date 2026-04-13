@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -274,6 +275,33 @@ func TestSystemAppliesPRISMWeightsWhenControllerAttached(t *testing.T) {
 	out2 := s.applyPRISMWeights(recs, domain.RegimeRiskOn)
 	if len(out2) != 1 || out2[0].Conviction != 60 {
 		t.Fatal("expected unchanged when no PRISM results")
+	}
+}
+
+func TestPhase3MetricsSaveAndLoad(t *testing.T) {
+	registry := SeedRegistry()
+	pm := prism.NewPRISMManager(prism.DefaultPRISMConfig())
+	sw := swarm.NewMiroFishSwarm(swarm.SwarmConfig{FishCount: 10, SimulationHorizon: time.Hour, TimeStep: time.Minute, ConvergenceThreshold: 0.7, Parallelism: 2})
+	reflex := reflexivity.NewReflexivityEngine()
+
+	ctrl := NewPhase3Controller(&registry, pm, sw, nil, reflex, nil)
+	ctrl.prismWeightCache["semi-desk-01"] = 0.75
+
+	path := filepath.Join(t.TempDir(), "phase3_metrics.json")
+	if err := ctrl.SaveMetrics(path); err != nil {
+		t.Fatalf("save metrics failed: %v", err)
+	}
+
+	loaded, err := LoadPhase3Metrics(path)
+	if err != nil {
+		t.Fatalf("load metrics failed: %v", err)
+	}
+	// Swarm was never started in this test, so it should be false.
+	if loaded.SwarmRunning {
+		t.Fatal("expected swarm not running")
+	}
+	if loaded.PRISMTopAgentID != "semi-desk-01" {
+		t.Fatalf("expected top agent semi-desk-01, got %s", loaded.PRISMTopAgentID)
 	}
 }
 
