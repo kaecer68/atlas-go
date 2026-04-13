@@ -122,6 +122,10 @@ func TestCheckRiskTriggers(t *testing.T) {
 			})
 			t.Cleanup(sub.Cancel)
 
+			tmpDir := t.TempDir()
+			cb := NewCircuitBreaker(tmpDir+"/cb_log.jsonl", tmpDir+"/cb_state.json")
+			cb.ResetDayState(0)
+
 			o := &Orchestrator{
 				stateStore: store,
 				eventBus:   bus,
@@ -130,6 +134,7 @@ func TestCheckRiskTriggers(t *testing.T) {
 					StopLossEnabled:    tt.stopLoss,
 					TakeProfitEnabled:  tt.takeProfit,
 				},
+				circuitBreaker: cb,
 			}
 
 			o.checkRiskTriggers("2330", tt.currentPrice)
@@ -160,5 +165,58 @@ func TestCheckRiskTriggers(t *testing.T) {
 				t.Fatalf("expected risk event %s but none was received", tt.expectedEvent)
 			}
 		})
+	}
+}
+
+func TestExecuteOrderBlockedByCircuitBreaker(t *testing.T) {
+	store := NewStateStore(t.TempDir())
+	bus := NewChannelEventBus(16)
+	t.Cleanup(func() { _ = bus.Close() })
+
+	tmpDir := t.TempDir()
+	cb := NewCircuitBreaker(tmpDir+"/cb_log.jsonl", tmpDir+"/cb_state.json")
+	cb.ResetDayState(1000000)
+	// Halt trading via daily loss
+	cb.Evaluate(PortfolioState{Cash: 1000000, DayPnL: -30000}, nil, nil)
+
+	o := &Orchestrator{
+		stateStore:     store,
+		eventBus:       bus,
+		circuitBreaker: cb,
+		broker:         NewDryRunBroker(),
+	}
+
+	order := domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 100}
+	err := o.executeOrder(context.Background(), order)
+	if err == nil {
+		t.Fatal("expected executeOrder to be blocked by circuit breaker")
+	}
+	if cb.State() != CircuitHalted {
+		t.Fatalf("expected halted state, got %s", cb.State())
+	}
+
+	// Sell should also be blocked in halted state
+	order.Side = domain.SideSell
+	err = o.executeOrder(context.Background(), order)
+	if err == nil {
+		t.Fatal("expected sell order to be blocked in halted state")
+	}
+
+	// Reset and verify sell works in paused state
+	cb.ResetDayState(1000000)
+	cb.Evaluate(PortfolioState{Cash: 1000000, UnrealizedPnL: 0}, nil, nil)
+	cb.Evaluate(PortfolioState{Cash: 965000, UnrealizedPnL: 0}, nil, nil) // 3.5% drawdown > 3% threshold
+	if cb.State() != CircuitPaused {
+		t.Fatalf("expected paused state, got %s", cb.State())
+	}
+	order.Side = domain.SideBuy
+	err = o.executeOrder(context.Background(), order)
+	if err == nil {
+		t.Fatal("expected buy order to be blocked in paused state")
+	}
+	order.Side = domain.SideSell
+	err = o.executeOrder(context.Background(), order)
+	if err != nil {
+		t.Fatalf("expected sell order to pass in paused state: %v", err)
 	}
 }

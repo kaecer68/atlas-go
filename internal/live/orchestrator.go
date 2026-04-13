@@ -18,9 +18,10 @@ type Orchestrator struct {
 	eventBus   *ChannelEventBus
 	marketData marketdata.Provider
 	broker     Broker
-	orderMgr   *OrderManager
-	registry   domain.AgentRegistry
-	system     *orchestrator.System
+	orderMgr        *OrderManager
+	registry        domain.AgentRegistry
+	system          *orchestrator.System
+	circuitBreaker  *CircuitBreaker
 
 	// 配置
 	config OrchestratorConfig
@@ -124,6 +125,7 @@ func NewOrchestrator(
 		orderMgr:            NewOrderManager(broker, eventBus, maxRetries, 100*time.Millisecond),
 		registry:            registry,
 		system:              system,
+		circuitBreaker:      NewCircuitBreaker("", ""),
 		config:              config,
 		ctx:                 ctx,
 		cancel:              cancel,
@@ -475,6 +477,11 @@ func (o *Orchestrator) handleMarketOpen() {
 	// 重置每日状态
 	o.stateStore.ResetDayState()
 
+	// 重置 circuit breaker
+	portfolio := o.stateStore.GetPortfolio()
+	startingValue := portfolio.Cash + portfolio.UnrealizedPnL
+	o.circuitBreaker.ResetDayState(startingValue)
+
 	// 加载持仓
 	positions := o.stateStore.GetPositions()
 	fmt.Printf("[Orchestrator] Loaded %d positions\n", len(positions))
@@ -501,12 +508,23 @@ func (o *Orchestrator) handleIntradayCycle() {
 	// 获取最新行情
 	o.fetchAndProcessQuotes()
 
-	// 更新持仓盈亏
+	// Circuit breaker evaluation
 	portfolio := o.stateStore.GetPortfolio()
+	o.circuitBreaker.Evaluate(portfolio, o.stateStore.GetPositions(), nil)
+	state := o.circuitBreaker.State()
+	if state != CircuitNormal {
+		fmt.Printf("[CircuitBreaker] Trading restricted: state=%s\n", state)
+		if state == CircuitHalted {
+			return // skip entire cycle
+		}
+		// Paused: still run risk checks but skip new buy orders later
+	}
+
+	// 更新持仓盈亏
 	dayPnL := portfolio.DayPnL
 	dayPnLPct := (dayPnL / portfolio.Cash) * 100
 
-	// 检查每日最大亏损
+	// 检查每日最大亏损 (legacy event publishing, circuit breaker handles action)
 	if o.config.MaxDailyLossPct > 0 && dayPnLPct < -o.config.MaxDailyLossPct {
 		fmt.Printf("[Risk] Daily loss limit hit: %.2f%%\n", dayPnLPct)
 		o.eventBus.PublishRiskEvent(EventRiskAlert, "", domain.Position{},
@@ -519,7 +537,7 @@ func (o *Orchestrator) handleIntradayCycle() {
 	// 应用 CRO 风险过滤
 	o.applyRiskFilters()
 
-	// 模拟订单执行
+	// 模拟订单执行 (circuit breaker is checked inside executeOrder)
 	o.simulateOrderExecution()
 }
 
@@ -589,6 +607,9 @@ func (o *Orchestrator) simulateOrderExecution() {
 }
 
 func (o *Orchestrator) executeOrder(ctx context.Context, order domain.Order) error {
+	if !o.circuitBreaker.CanPlaceOrder(order.Side) {
+		return fmt.Errorf("circuit breaker blocks %s order for %s (state=%s)", order.Side, order.Symbol, o.circuitBreaker.State())
+	}
 	if o.orderMgr == nil {
 		if o.broker == nil {
 			o.broker = NewDryRunBroker()
@@ -617,6 +638,7 @@ func (o *Orchestrator) checkRiskTriggers(symbol string, currentPrice float64) {
 
 	// 检查止损
 	if o.config.StopLossEnabled && pnlPct < -o.config.MaxPositionLossPct {
+		o.circuitBreaker.RecordStopLoss()
 		o.eventBus.PublishRiskEvent(EventStopLossTriggered, symbol, position,
 			"stop_loss", currentPrice)
 		fmt.Printf("[Risk] Stop loss triggered for %s at %.2f (loss: %.2f%%)\n",
