@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/live"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 )
@@ -67,6 +69,7 @@ func run(args []string, deps appDeps) error {
 	allowLiveBroker := flags.Bool("allow-live-broker", false, "allow live broker mode (default false)")
 	allowHTTPBroker := flags.Bool("allow-http-broker", false, "allow http broker adapter in live mode (default false)")
 	allowRealSigner := flags.Bool("allow-real-signer", false, "allow non-placeholder signer for http broker adapter")
+	liveMode := flags.Bool("live", false, "start live trading orchestrator")
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("parse flags: %w", err)
 	}
@@ -132,6 +135,9 @@ func run(args []string, deps appDeps) error {
 		return nil
 	}
 
+	if *liveMode {
+		return runLiveTrading(cfg)
+	}
 	return runSimulation(cfg)
 }
 
@@ -253,7 +259,7 @@ func parseStatusCodeCSV(raw string, fallback []int) []int {
 }
 
 func runSimulation(cfg config.Config) error {
-	system := orchestrator.NewSystem(cfg)
+	system := orchestrator.NewProductionSystem(cfg)
 
 	result, err := system.RunDailySimulation(time.Now())
 	if err != nil {
@@ -298,5 +304,51 @@ func runSimulation(cfg config.Config) error {
 		return fmt.Errorf("record session summary failed: %w", err)
 	}
 
+	return nil
+}
+
+func runLiveTrading(cfg config.Config) error {
+	system := orchestrator.NewProductionSystem(cfg)
+
+	stateStore := live.NewStateStore("data/state/live")
+	eventBus := live.NewChannelEventBus(64)
+	provider := marketdata.NewTWSEProvider()
+
+	liveCfg := live.DefaultOrchestratorConfig()
+	liveCfg.BrokerMode = cfg.BrokerMode
+	liveCfg.BrokerAdapter = cfg.BrokerAdapter
+	liveCfg.BrokerSigner = cfg.BrokerSigner
+	liveCfg.BrokerKeyID = cfg.BrokerKeyID
+	liveCfg.BrokerMaxRetries = cfg.BrokerMaxRetries
+	liveCfg.BrokerHTTPTimeoutS = cfg.BrokerHTTPTimeoutS
+	liveCfg.BrokerHTTPAttempts = cfg.BrokerHTTPAttempts
+	liveCfg.BrokerHTTPRetryStatusCodes = cfg.BrokerHTTPRetryStatusCodes
+	liveCfg.BrokerMaxClockSkewS = cfg.BrokerMaxClockSkewS
+	liveCfg.BrokerNonceTTLS = cfg.BrokerNonceTTLS
+	liveCfg.BrokerNonceStore = cfg.BrokerNonceStore
+	liveCfg.BrokerNonceStorePath = cfg.BrokerNonceStorePath
+	liveCfg.BrokerNonceRedisURL = cfg.BrokerNonceRedisURL
+	liveCfg.BrokerNonceRedisKeyPrefix = cfg.BrokerNonceRedisKeyPrefix
+
+	o := live.NewOrchestrator(
+		stateStore,
+		eventBus,
+		provider,
+		system.Registry(),
+		system,
+		liveCfg,
+	)
+
+	log.Printf("starting live trading orchestrator (broker_mode=%s)", liveCfg.BrokerMode)
+	if err := o.Start(); err != nil {
+		return fmt.Errorf("start live orchestrator: %w", err)
+	}
+
+	// Graceful shutdown after a brief run for CLI demonstration.
+	time.Sleep(5 * time.Second)
+	if err := o.Stop(); err != nil {
+		return fmt.Errorf("stop live orchestrator: %w", err)
+	}
+	log.Println("live trading orchestrator stopped")
 	return nil
 }
