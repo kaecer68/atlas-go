@@ -24,6 +24,7 @@ type Phase3Controller struct {
 	spawningManager *spawning.SpawningManager
 	reflexEngine    *reflexivity.ReflexivityEngine
 	ledger          *ledger.Store
+	advRunner       *AdversarialScenarioRunner
 
 	mu               sync.RWMutex
 	swarmRunning     bool
@@ -51,6 +52,12 @@ func NewPhase3Controller(
 		swarmStopCh:      make(chan struct{}),
 		prismWeightCache: make(map[string]float64),
 	}
+}
+
+// WithAdversarialRunner attaches a real adversarial scenario runner.
+func (c *Phase3Controller) WithAdversarialRunner(r *AdversarialScenarioRunner) *Phase3Controller {
+	c.advRunner = r
+	return c
 }
 
 // StartBackgroundSwarm initializes and continuously updates the swarm simulator.
@@ -291,10 +298,10 @@ func (c *Phase3Controller) GetSwarmConsensus() (swarm.SimulationResult, bool) {
 	return c.swarm.GetLatestResult()
 }
 
-// RunParallelOptimization executes all four Phase 3 optimization tracks.
+// RunParallelOptimization executes all five Phase 3 optimization tracks.
 func (c *Phase3Controller) RunParallelOptimization(baseState swarm.MarketState, regime domain.Regime) {
 	var wg sync.WaitGroup
-	wg.Add(4)
+	wg.Add(5)
 
 	go func() {
 		defer wg.Done()
@@ -322,7 +329,47 @@ func (c *Phase3Controller) RunParallelOptimization(baseState swarm.MarketState, 
 		c.mu.Unlock()
 	}()
 
+	go func() {
+		defer wg.Done()
+		c.runAdversarialStressTests()
+	}()
+
 	wg.Wait()
+}
+
+// runAdversarialStressTests finds the weakest agent and runs real stress scenarios.
+func (c *Phase3Controller) runAdversarialStressTests() {
+	if c.advRunner == nil || c.registry == nil {
+		return
+	}
+	// Find agent with lowest PRISM Sharpe as stress-test target
+	weakestAgent := ""
+	worstSharpe := 999.0
+	c.mu.RLock()
+	for agentID, sharpe := range c.prismWeightCache {
+		if sharpe < worstSharpe {
+			worstSharpe = sharpe
+			weakestAgent = agentID
+		}
+	}
+	c.mu.RUnlock()
+	if weakestAgent == "" {
+		return
+	}
+	var target domain.AgentSpec
+	for _, a := range c.registry.Agents {
+		if a.ID == weakestAgent {
+			target = a
+			break
+		}
+	}
+	if target.ID == "" {
+		return
+	}
+	result := c.advRunner.RunStressTest(target.ID, target)
+	if !result.Passed {
+		log.Printf("[Phase3Controller] Agent %s failed adversarial stress test (score %.2f)", target.ID, result.OverallScore)
+	}
 }
 
 // IsSwarmRunning reports whether the background swarm is active.
