@@ -185,7 +185,7 @@ func (s *System) detectNarrativeEvents(quotes []domain.Quote) []narrative.Narrat
 	if s.narrativeEngine == nil {
 		return nil
 	}
-	data := quotesToNarrativeData(quotes)
+	data := QuotesToNarrativeData(quotes)
 	return s.narrativeEngine.DetectEvents(data)
 }
 
@@ -323,7 +323,7 @@ func isRecommendationInBannedSector(rec domain.Recommendation, registry domain.A
 	return false
 }
 
-func quotesToNarrativeData(quotes []domain.Quote) narrative.MarketNarrativeData {
+func QuotesToNarrativeData(quotes []domain.Quote) narrative.MarketNarrativeData {
 	data := narrative.MarketNarrativeData{}
 	for _, q := range quotes {
 		switch q.Symbol {
