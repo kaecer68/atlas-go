@@ -43,6 +43,19 @@ type Orchestrator struct {
 	requestedBrokerMode string
 	effectiveBrokerMode string
 	executionAuditMsg   string
+
+	metrics MetricsRecorder
+}
+
+// MetricsRecorder defines the interface for live trading metrics.
+type MetricsRecorder interface {
+	RecordOrder(order domain.Order, status string)
+	RecordPosition(position domain.Position)
+	RecordPortfolio(cash, totalValue float64)
+	RecordCircuitBreakerState(state string)
+	RecordRiskEvent(eventType, symbol string)
+	RecordCounter(name string, value float64, labels map[string]string)
+	RecordGauge(name string, value float64, labels map[string]string)
 }
 
 // OrchestratorConfig 编排器配置
@@ -191,6 +204,13 @@ func resolveBrokerMode(cfg OrchestratorConfig) (requested string, effective stri
 	default:
 		return requested, "dry-run", NewDryRunBroker(), fmt.Sprintf("unsupported broker mode %q; fallback to dry-run", requested)
 	}
+}
+
+// SetTradingMetrics 注入交易指标收集器
+func (o *Orchestrator) SetTradingMetrics(metrics MetricsRecorder) {
+	o.mutex.Lock()
+	defer o.mutex.Unlock()
+	o.metrics = metrics
 }
 
 // SetBroker 注入自定义券商执行器，传入 nil 时回退到 dry-run。
@@ -512,6 +532,11 @@ func (o *Orchestrator) handleIntradayCycle() {
 	portfolio := o.stateStore.GetPortfolio()
 	o.circuitBreaker.Evaluate(portfolio, o.stateStore.GetPositions(), nil)
 	state := o.circuitBreaker.State()
+	if o.metrics != nil {
+		o.metrics.RecordCircuitBreakerState(string(state))
+		o.metrics.RecordPortfolio(portfolio.Cash, portfolio.Cash+portfolio.UnrealizedPnL)
+		o.metrics.RecordGauge("portfolio_day_pnl", portfolio.DayPnL, nil)
+	}
 	if state != CircuitNormal {
 		fmt.Printf("[CircuitBreaker] Trading restricted: state=%s\n", state)
 		if state == CircuitHalted {
@@ -604,10 +629,22 @@ func (o *Orchestrator) simulateOrderExecution() {
 
 	// Phase 6 起步：先建立可审计的执行通道，默认 dry-run，不触发真实下单。
 	fmt.Printf("[Trading] Execution channel ready (mode=%s)\n", o.orderMgr.Mode())
+	if o.metrics != nil {
+		o.metrics.RecordCounter("execution_cycles_total", 1, map[string]string{
+			"broker_mode": o.effectiveBrokerMode,
+		})
+	}
 }
 
 func (o *Orchestrator) executeOrder(ctx context.Context, order domain.Order) error {
 	if !o.circuitBreaker.CanPlaceOrder(order.Side) {
+		if o.metrics != nil {
+			o.metrics.RecordCounter("orders_blocked_total", 1, map[string]string{
+				"symbol": order.Symbol,
+				"side":   string(order.Side),
+				"reason": string(o.circuitBreaker.State()),
+			})
+		}
 		return fmt.Errorf("circuit breaker blocks %s order for %s (state=%s)", order.Side, order.Symbol, o.circuitBreaker.State())
 	}
 	if o.orderMgr == nil {
@@ -621,7 +658,16 @@ func (o *Orchestrator) executeOrder(ctx context.Context, order domain.Order) err
 		o.orderMgr = NewOrderManager(o.broker, o.eventBus, retries, 100*time.Millisecond)
 	}
 	if err := o.orderMgr.Execute(ctx, order); err != nil {
+		if o.metrics != nil {
+			o.metrics.RecordCounter("orders_failed_total", 1, map[string]string{
+				"symbol": order.Symbol,
+				"side":   string(order.Side),
+			})
+		}
 		return fmt.Errorf("execute order via manager: %w", err)
+	}
+	if o.metrics != nil {
+		o.metrics.RecordOrder(order, "submitted")
 	}
 	return nil
 }
@@ -639,6 +685,9 @@ func (o *Orchestrator) checkRiskTriggers(symbol string, currentPrice float64) {
 	// 检查止损
 	if o.config.StopLossEnabled && pnlPct < -o.config.MaxPositionLossPct {
 		o.circuitBreaker.RecordStopLoss()
+		if o.metrics != nil {
+			o.metrics.RecordRiskEvent("stop_loss", symbol)
+		}
 		o.eventBus.PublishRiskEvent(EventStopLossTriggered, symbol, position,
 			"stop_loss", currentPrice)
 		fmt.Printf("[Risk] Stop loss triggered for %s at %.2f (loss: %.2f%%)\n",
@@ -647,6 +696,9 @@ func (o *Orchestrator) checkRiskTriggers(symbol string, currentPrice float64) {
 
 	// 检查止盈 (简化: 2倍止损距离)
 	if o.config.TakeProfitEnabled && pnlPct > o.config.MaxPositionLossPct*2 {
+		if o.metrics != nil {
+			o.metrics.RecordRiskEvent("take_profit", symbol)
+		}
 		o.eventBus.PublishRiskEvent(EventTakeProfitTriggered, symbol, position,
 			"take_profit", currentPrice)
 		fmt.Printf("[Risk] Take profit triggered for %s at %.2f (gain: %.2f%%)\n",

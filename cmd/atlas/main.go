@@ -136,7 +136,7 @@ func run(args []string, deps appDeps) error {
 	}
 
 	if *liveMode {
-		return runLiveTrading(cfg)
+		return runLiveTrading(cfg, deps)
 	}
 	return runSimulation(cfg)
 }
@@ -307,7 +307,7 @@ func runSimulation(cfg config.Config) error {
 	return nil
 }
 
-func runLiveTrading(cfg config.Config) error {
+func runLiveTrading(cfg config.Config, deps appDeps) error {
 	system := orchestrator.NewProductionSystem(cfg)
 
 	stateStore := live.NewStateStore("data/state/live")
@@ -338,6 +338,32 @@ func runLiveTrading(cfg config.Config) error {
 		system,
 		liveCfg,
 	)
+
+	// Metrics collector for live trading observability
+	collector := monitoring.NewMetricsCollector()
+	monitor := monitoring.NewMonitor()
+	tradingMetrics := monitoring.NewTradingMetrics(collector, monitor)
+	o.SetTradingMetrics(tradingMetrics)
+
+	// Start dashboard API server for live status endpoint
+	mux := http.NewServeMux()
+	dashboard := deps.newDashboardAPI(cfg.LedgerDir)
+	dashboard.RegisterRoutes(mux)
+	dashboard.RegisterNarrativeRoutes(mux)
+	dashboard.RegisterControlRoutes(mux)
+	dashboard.RegisterMacroRoutes(mux)
+	if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+		d.RegisterSwaggerRoutes(mux)
+		d.RegisterPhase3Routes(mux)
+		d.RegisterLiveRoutes(mux)
+	}
+	apiAddr := ":8080"
+	go func() {
+		log.Printf("dashboard api listening on %s", apiAddr)
+		if err := deps.listenAndServe(apiAddr, mux); err != nil {
+			log.Printf("dashboard api server failed: %v", err)
+		}
+	}()
 
 	log.Printf("starting live trading orchestrator (broker_mode=%s)", liveCfg.BrokerMode)
 	if err := o.Start(); err != nil {
