@@ -214,8 +214,12 @@ func (s *System) WithSpawning(sm *spawning.SpawningManager) *System {
 }
 
 // WithPhase3Controller attaches the advanced Phase 3 optimization controller.
+// If replay data is available, an adversarial scenario runner is automatically wired.
 func (s *System) WithPhase3Controller(ctrl *Phase3Controller) *System {
 	s.phase3Controller = ctrl
+	if s.replay != nil {
+		ctrl.WithAdversarialRunner(NewAdversarialScenarioRunner(s.replay, s.registry))
+	}
 	return s
 }
 
