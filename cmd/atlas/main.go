@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -344,6 +345,15 @@ func runLiveTrading(cfg config.Config, deps appDeps) error {
 	monitor := monitoring.NewMonitor()
 	tradingMetrics := monitoring.NewTradingMetrics(collector, monitor)
 	o.SetTradingMetrics(tradingMetrics)
+
+	// Alert rule engine for live trading safety
+	ruleEngine := monitoring.NewRuleEngine(monitor)
+	for _, rule := range monitoring.LiveTradingRules() {
+		ruleEngine.RegisterRule(rule)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go ruleEngine.Start(ctx, stateStore)
 
 	// Start dashboard API server for live status endpoint
 	mux := http.NewServeMux()
