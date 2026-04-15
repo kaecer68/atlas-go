@@ -38,3 +38,5 @@ cmd/*/reports/
 internal/*/data/
 !internal/marketdata/data/
 !internal/config/data/
+.gitnexus
+/cmd/backtest-window/reports/
