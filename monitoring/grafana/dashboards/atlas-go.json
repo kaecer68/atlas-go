@@ -1,0 +1,210 @@
+{
+  "id": null,
+  "uid": "atlas-go-overview",
+  "title": "Atlas-Go Overview",
+  "tags": ["atlas-go"],
+  "timezone": "browser",
+  "schemaVersion": 36,
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Trading Metrics",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 2,
+      "title": "Portfolio Cash",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "portfolio_cash",
+          "legendFormat": "Cash",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "color": { "mode": "fixed", "fixedColor": "green" }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "title": "Portfolio Total Value",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "portfolio_total_value",
+          "legendFormat": "Total Value",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "color": { "mode": "fixed", "fixedColor": "blue" }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "title": "Circuit Breaker State",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "circuit_breaker_state",
+          "legendFormat": "{{ state }}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "text": "Normal", "color": "green" } }, "type": "value" },
+            { "options": { "1": { "text": "Paused", "color": "yellow" } }, "type": "value" },
+            { "options": { "2": { "text": "Halted", "color": "red" } }, "type": "value" }
+          ]
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "title": "Orders Total (rate)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(orders_total[5m])",
+          "legendFormat": "{{ symbol }} {{ side }}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cps",
+          "custom": { "drawStyle": "line", "lineInterpolation": "linear" }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "title": "Position PnL",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "position_pnl",
+          "legendFormat": "{{ symbol }}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "custom": { "drawStyle": "line", "lineInterpolation": "linear" }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "title": "System Health",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 8,
+      "title": "Atlas Up",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "up{job=\"atlas-go\"}",
+          "legendFormat": "Up",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "text": "Down", "color": "red" } }, "type": "value" },
+            { "options": { "1": { "text": "Up", "color": "green" } }, "type": "value" }
+          ]
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "title": "System Goroutines",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "system_goroutines",
+          "legendFormat": "Goroutines",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 6, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "line", "lineInterpolation": "linear" }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 10,
+      "title": "Risk Events",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(risk_events_total[5m])",
+          "legendFormat": "{{ type }}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cps",
+          "custom": { "drawStyle": "line", "lineInterpolation": "linear" }
+        },
+        "overrides": []
+      }
+    }
+  ]
+}

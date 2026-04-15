@@ -4,8 +4,12 @@ WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o daily-replay-sync ./cmd/daily-replay-sync
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o backfill-replay ./cmd/backfill-replay
+ARG TARGETARCH
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o daily-replay-sync ./cmd/daily-replay-sync
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o backfill-replay ./cmd/backfill-replay
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o macro-ingest ./cmd/macro-ingest
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o geo-ingest ./cmd/geo-ingest
 
 FROM alpine:latest
 
@@ -24,9 +28,18 @@ RUN chmod +x /app/scripts/*.sh
 # Copy Go binaries from builder
 COPY --from=builder /build/daily-replay-sync /app/
 COPY --from=builder /build/backfill-replay /app/
+COPY --from=builder /build/macro-ingest /app/
+COPY --from=builder /build/geo-ingest /app/
+
+# Copy SQL migrations (used by CLI tools when DB pool is initialized)
+COPY --from=builder /build/sql /app/sql
+
+# Copy cron entrypoint
+COPY --from=builder /build/scripts/cron-entrypoint.sh /app/cron-entrypoint.sh
+RUN chmod +x /app/cron-entrypoint.sh
 
 # Create log directory
 RUN mkdir -p /var/log/cron
 
-# Start cron in foreground
-CMD ["crond", "-f", "-l", "2"]
+# Start cron in foreground via entrypoint
+CMD ["/app/cron-entrypoint.sh"]

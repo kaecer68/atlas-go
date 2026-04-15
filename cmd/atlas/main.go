@@ -17,7 +17,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/db"
 	"github.com/kaecer68/atlas-go/internal/live"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
@@ -124,10 +127,34 @@ func run(args []string, deps appDeps) error {
 		return err
 	}
 
+	collector := monitoring.NewMetricsCollector()
+
 	if *apiMode {
+		var pool *pgxpool.Pool
+		if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+			migrationsPath := filepath.Join(cfg.WorkDir, "sql/migrations")
+			if _, err := os.Stat(migrationsPath); err == nil {
+				var dbErr error
+				pool, dbErr = db.Init(context.Background(), dsn, migrationsPath)
+				if dbErr != nil {
+					log.Printf("[DB] failed to initialize database: %v", dbErr)
+				} else {
+					log.Printf("[DB] connected and migrations applied")
+					defer pool.Close()
+				}
+			}
+		}
+
 		mux := http.NewServeMux()
 		dashboard := deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir)
+		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+			d.SetPool(pool)
+		}
 		dashboard.RegisterRoutes(mux)
+
+		mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
+		sysMetrics := monitoring.NewSystemMetrics(collector, monitoring.NewMonitor())
+		go sysMetrics.Start(context.Background())
 		dashboard.RegisterNarrativeRoutes(mux)
 		dashboard.RegisterControlRoutes(mux)
 		dashboard.RegisterMacroRoutes(mux)
@@ -150,7 +177,7 @@ func run(args []string, deps appDeps) error {
 	}
 
 	if *liveMode {
-		return runLiveTrading(cfg, deps)
+		return runLiveTrading(cfg, deps, collector)
 	}
 	return runSimulation(cfg)
 }
@@ -350,7 +377,7 @@ func runSimulation(cfg config.Config) error {
 	return nil
 }
 
-func runLiveTrading(cfg config.Config, deps appDeps) error {
+func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector) error {
 	system := orchestrator.NewProductionSystem(cfg)
 
 	stateStore := live.NewStateStore("data/state/live")
@@ -387,7 +414,6 @@ func runLiveTrading(cfg config.Config, deps appDeps) error {
 	)
 
 	// Metrics collector for live trading observability
-	collector := monitoring.NewMetricsCollector()
 	monitor := monitoring.NewMonitor()
 	tradingMetrics := monitoring.NewTradingMetrics(collector, monitor)
 	o.SetTradingMetrics(tradingMetrics)

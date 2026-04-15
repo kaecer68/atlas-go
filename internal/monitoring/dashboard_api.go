@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -33,7 +35,9 @@ type DashboardAPI struct {
 	baselinePath     string
 	narrativeEngine  *narrative.NarrativeEngine
 	macroIngestor    *narrative.MacroIngestor
+	geoProvider      narrative.GeopoliticalRiskProvider
 	taiwanStressCalc *narrative.TaiwanStressCalculator
+	pool             *pgxpool.Pool
 	backtestMu       sync.Mutex
 	backtestRunning  bool
 	backtestStatus   map[string]interface{}
@@ -89,6 +93,7 @@ func NewDashboardAPI(workDir, ledgerDir string) *DashboardAPI {
 		baselinePath:     filepath.Join(workDir, "data/state/baseline_policy.json"),
 		narrativeEngine:  narrative.NewNarrativeEngine(),
 		macroIngestor:    narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro")),
+		geoProvider:      geoProvider,
 		taiwanStressCalc: narrative.NewTaiwanStressCalculator(geoProvider),
 	}
 }
@@ -102,6 +107,8 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/recommendation-pipeline", a.handleRecommendationPipeline)
 	mux.HandleFunc("/api/dashboard/universe-overlap", a.handleUniverseOverlap)
 	mux.HandleFunc("/api/dashboard/data-channels", a.handleDataChannels)
+	mux.HandleFunc("/api/channels/ingest", a.handleChannelsIngest)
+	mux.HandleFunc("/health", a.handleHealth)
 	mux.HandleFunc("/api/dashboard/sessions", a.handleSessions)
 	mux.HandleFunc("/api/report/latest", a.handleLatestReport)
 	mux.HandleFunc("/api/report/list", a.handleReportList)
@@ -164,6 +171,11 @@ func (a *DashboardAPI) RegisterExperimentRoutes(mux *http.ServeMux) {
 func (a *DashboardAPI) RegisterBacktestRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/backtest/run", a.handleBacktestRun)
 	mux.HandleFunc("/api/backtest/status", a.handleBacktestStatus)
+}
+
+// SetPool injects an optional database pool for DB-backed channel health.
+func (a *DashboardAPI) SetPool(pool *pgxpool.Pool) {
+	a.pool = pool
 }
 
 func (a *DashboardAPI) handleLiveStatus(w http.ResponseWriter, r *http.Request) {
@@ -1211,6 +1223,10 @@ func (a *DashboardAPI) handleActiveOverrides(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+func (a *DashboardAPI) handleHealth(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 func mapKeys(m map[string]bool) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -1227,17 +1243,85 @@ func (a *DashboardAPI) handleMacroIngest(w http.ResponseWriter, r *http.Request)
 	events, snap, err := a.macroIngestor.Ingest(r.Context())
 	stateDir := filepath.Join(a.workDir, "data/state")
 	if err != nil {
-		NewChannelHealthStore(stateDir).Record("us_yahoo", "error", err.Error())
-		NewChannelHealthStore(stateDir).Record("jpy_yahoo", "error", err.Error())
+		NewChannelHealthStoreWithPool(stateDir, a.pool).Record("us_yahoo", "error", err.Error())
+		NewChannelHealthStoreWithPool(stateDir, a.pool).Record("jpy_yahoo", "error", err.Error())
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("ingest failed: %v", err))
 		return
 	}
-	NewChannelHealthStore(stateDir).Record("us_yahoo", "ok", "")
-	NewChannelHealthStore(stateDir).Record("jpy_yahoo", "ok", "")
+	NewChannelHealthStoreWithPool(stateDir, a.pool).Record("us_yahoo", "ok", "")
+	NewChannelHealthStoreWithPool(stateDir, a.pool).Record("jpy_yahoo", "ok", "")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"events":   events,
 		"snapshot": snap,
 	})
+}
+
+func (a *DashboardAPI) handleChannelsIngest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	stateDir := filepath.Join(a.workDir, "data/state")
+	var wg sync.WaitGroup
+	var macroErr, geoErr error
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		events, snap, err := a.macroIngestor.Ingest(r.Context())
+		if err != nil {
+			macroErr = err
+			NewChannelHealthStoreWithPool(stateDir, a.pool).Record("us_yahoo", "error", err.Error())
+			NewChannelHealthStoreWithPool(stateDir, a.pool).Record("jpy_yahoo", "error", err.Error())
+			log.Printf("[handleChannelsIngest] macro ingest failed: %v", err)
+			return
+		}
+		NewChannelHealthStoreWithPool(stateDir, a.pool).Record("us_yahoo", "ok", "")
+		NewChannelHealthStoreWithPool(stateDir, a.pool).Record("jpy_yahoo", "ok", "")
+		log.Printf("[handleChannelsIngest] macro ingest succeeded: %d events, recorded_at=%d", len(events), snap.RecordedAt)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		score, err := a.geoProvider.FetchScore(r.Context())
+		if err != nil {
+			geoErr = err
+			NewChannelHealthStoreWithPool(stateDir, a.pool).Record("geopolitical", "error", err.Error())
+			log.Printf("[handleChannelsIngest] geo ingest failed: %v", err)
+			return
+		}
+		store := narrative.NewGeopoliticalStore(filepath.Join(stateDir, "geopolitical"))
+		if err := store.Save(score); err != nil {
+			geoErr = err
+			NewChannelHealthStoreWithPool(stateDir, a.pool).Record("geopolitical", "error", err.Error())
+			log.Printf("[handleChannelsIngest] geo save failed: %v", err)
+			return
+		}
+		NewChannelHealthStoreWithPool(stateDir, a.pool).Record("geopolitical", "ok", "")
+		log.Printf("[handleChannelsIngest] geo ingest succeeded: intensity=%.2f", score.Intensity)
+	}()
+
+	wg.Wait()
+
+	result := map[string]any{
+		"macro_ok": macroErr == nil,
+		"geo_ok":   geoErr == nil,
+	}
+	if macroErr != nil {
+		result["macro_error"] = macroErr.Error()
+	}
+	if geoErr != nil {
+		result["geo_error"] = geoErr.Error()
+	}
+
+	if macroErr != nil && geoErr != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("all ingests failed: macro=%v, geo=%v", macroErr, geoErr))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (a *DashboardAPI) handleMacroSnapshotLatest(w http.ResponseWriter, r *http.Request) {
@@ -1331,7 +1415,8 @@ func (a *DashboardAPI) handleTaiwanStressIndex(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	index, err := a.taiwanStressCalc.CalculateFromSnapshot(r.Context(), snap)
+	geoStore := narrative.NewGeopoliticalStore(filepath.Join(a.workDir, "data/state/geopolitical"))
+	index, err := a.taiwanStressCalc.CalculateFromSnapshotWithStore(r.Context(), snap, geoStore)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("calculate stress index: %v", err))
 		return
@@ -2117,7 +2202,7 @@ func (a *DashboardAPI) handleDataChannels(w http.ResponseWriter, r *http.Request
 
 	now := time.Now()
 	channels := make([]DataChannel, 0)
-	healthStore := NewChannelHealthStore(filepath.Join(a.workDir, "data/state"))
+	healthStore := NewChannelHealthStoreWithPool(filepath.Join(a.workDir, "data/state"), a.pool)
 
 	// 1. Yahoo Finance Macro (US + Global)
 	macroPath := filepath.Join(a.workDir, "data/state/macro/latest.json")
@@ -2245,6 +2330,36 @@ func (a *DashboardAPI) handleDataChannels(w http.ResponseWriter, r *http.Request
 		}(),
 	})
 
+	// 6. Geopolitical Risk (RSS + GDELT)
+	geoPath := filepath.Join(a.workDir, "data/state/geopolitical/latest.json")
+	geoStatus, geoUpdated := a.checkGeopoliticalHealth(geoPath, now)
+	geoRec := healthStore.Get("geopolitical")
+	if geoRec != nil && geoRec.Status != "" {
+		geoStatus = geoRec.Status
+		if geoRec.LastError != "" {
+			geoUpdated = "上次失敗: " + geoRec.LastError
+		} else {
+			geoUpdated = "上次抓取: " + geoRec.LastFetchAt
+		}
+	}
+	channels = append(channels, DataChannel{
+		ChannelID:  "geopolitical",
+		Country:    "中東/全球",
+		Platform:   "RSS + GDELT",
+		APIFormat:  "RSS / REST JSON",
+		Path:       "feeds.bbci.co.uk / api.gdeltproject.org",
+		Storage:    "data/state/geopolitical/latest.json",
+		Status:     geoStatus,
+		StatusText: statusText(geoStatus),
+		UpdatedAt:  geoUpdated,
+		LastError: func() string {
+			if geoRec != nil {
+				return geoRec.LastError
+			}
+			return ""
+		}(),
+	})
+
 	// Build alerts list for overview card
 	alerts := healthStore.Alerts()
 	// Also add age-based alerts if health store doesn't cover them
@@ -2344,6 +2459,33 @@ func (a *DashboardAPI) checkJPYHealth(path string, now time.Time) (string, strin
 		return "warn", t.Format("2006-01-02 15:04:05")
 	}
 	return "error", t.Format("2006-01-02 15:04:05")
+}
+
+func (a *DashboardAPI) checkGeopoliticalHealth(path string, now time.Time) (string, string) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return "error", "檔案不存在"
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "error", "無法讀取"
+	}
+	var score struct {
+		Timestamp time.Time `json:"timestamp"`
+	}
+	_ = json.Unmarshal(data, &score)
+	latest := info.ModTime()
+	if !score.Timestamp.IsZero() && score.Timestamp.After(latest) {
+		latest = score.Timestamp
+	}
+	age := now.Sub(latest)
+	if age < 24*time.Hour {
+		return "ok", latest.Format("2006-01-02 15:04:05")
+	}
+	if age < 7*24*time.Hour {
+		return "warn", latest.Format("2006-01-02 15:04:05")
+	}
+	return "error", latest.Format("2006-01-02 15:04:05")
 }
 
 func (a *DashboardAPI) checkReplayHealth(path string, now time.Time) (string, string) {

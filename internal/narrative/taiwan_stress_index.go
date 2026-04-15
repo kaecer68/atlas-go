@@ -112,6 +112,7 @@ func (c *TaiwanStressCalculator) Calculate(snap marketdata.MacroDataSnapshot, ge
 }
 
 // CalculateFromSnapshot fetches the geopolitical score and computes the index.
+// If the live fetch fails, it attempts to load the latest persisted score as fallback.
 // Results are cached for 5 minutes to avoid repeated slow external calls on every dashboard refresh.
 func (c *TaiwanStressCalculator) CalculateFromSnapshot(ctx context.Context, snap marketdata.MacroDataSnapshot) (TaiwanStressIndex, error) {
 	c.mu.RLock()
@@ -125,6 +126,39 @@ func (c *TaiwanStressCalculator) CalculateFromSnapshot(ctx context.Context, snap
 	geoScore, err := c.geoProvider.FetchScore(ctx)
 	if err != nil {
 		return TaiwanStressIndex{}, fmt.Errorf("fetch geopolitical score: %w", err)
+	}
+	idx := c.Calculate(snap, geoScore)
+
+	c.mu.Lock()
+	c.cache = &idx
+	c.cachedAt = time.Now()
+	c.mu.Unlock()
+	return idx, nil
+}
+
+// CalculateFromSnapshotWithStore fetches the geopolitical score and computes the index,
+// falling back to a persisted score from the provided store if the live fetch fails.
+func (c *TaiwanStressCalculator) CalculateFromSnapshotWithStore(ctx context.Context, snap marketdata.MacroDataSnapshot, store *GeopoliticalStore) (TaiwanStressIndex, error) {
+	c.mu.RLock()
+	if c.cache != nil && time.Since(c.cachedAt) < c.cacheTTL {
+		idx := *c.cache
+		c.mu.RUnlock()
+		return idx, nil
+	}
+	c.mu.RUnlock()
+
+	geoScore, err := c.geoProvider.FetchScore(ctx)
+	if err != nil {
+		if store != nil {
+			fallback, loadErr := store.Load()
+			if loadErr == nil {
+				geoScore = fallback
+			} else {
+				return TaiwanStressIndex{}, fmt.Errorf("fetch geopolitical score: %w (fallback load also failed: %v)", err, loadErr)
+			}
+		} else {
+			return TaiwanStressIndex{}, fmt.Errorf("fetch geopolitical score: %w", err)
+		}
 	}
 	idx := c.Calculate(snap, geoScore)
 

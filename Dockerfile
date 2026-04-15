@@ -14,13 +14,15 @@ RUN go mod download
 # Copy source code
 COPY . .
 
+ARG TARGETARCH
+
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X main.version=$(git describe --tags --always) -X main.buildTime=$(date -u +%Y%m%d%H%M%S)" \
     -o atlas-go \
     ./cmd/atlas
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o daily-replay-sync ./cmd/daily-replay-sync
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o backfill-replay ./cmd/backfill-replay
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o daily-replay-sync ./cmd/daily-replay-sync
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o backfill-replay ./cmd/backfill-replay
 
 # Final stage
 FROM alpine:latest
@@ -44,6 +46,8 @@ COPY --from=builder /build/backfill-replay /app/
 COPY --from=builder /build/configs /app/configs
 COPY --from=builder /build/prompts /app/prompts
 COPY --from=builder /build/scripts /app/scripts
+COPY --from=builder /build/sql /app/sql
+COPY --from=builder /build/web/static /app/web/static
 
 # Create necessary directories
 RUN mkdir -p /app/data /app/reports /app/logs && \
@@ -61,4 +65,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Run the application
 ENTRYPOINT ["/app/atlas-go"]
-CMD ["serve"]
+CMD ["-api"]

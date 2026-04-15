@@ -5,8 +5,10 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -58,17 +60,28 @@ func (r *RSSGeopoliticalProvider) Name() string {
 
 // FetchScore aggregates keyword counts from RSS feeds and maps to intensity.
 func (r *RSSGeopoliticalProvider) FetchScore(ctx context.Context) (GeopoliticalRiskScore, error) {
-	totalMatches := 0
+	var totalMatches int
 	var succeeded []string
+	var mu sync.Mutex
+	var wg sync.WaitGroup
 
 	for _, url := range r.feeds {
-		matches, err := r.countKeywordsInFeed(ctx, url)
-		if err != nil {
-			continue
-		}
-		totalMatches += matches
-		succeeded = append(succeeded, url)
+		wg.Add(1)
+		go func(url string) {
+			defer wg.Done()
+			matches, err := r.countKeywordsInFeed(ctx, url)
+			if err != nil {
+				log.Printf("[RSSGeopoliticalProvider] feed failed %s: %v", url, err)
+				return
+			}
+			mu.Lock()
+			totalMatches += matches
+			succeeded = append(succeeded, url)
+			mu.Unlock()
+		}(url)
 	}
+
+	wg.Wait()
 
 	// Map matches to 0-100 intensity (heuristic: 0-20 matches -> linear scale, >20 saturates towards 100)
 	intensity := float64(totalMatches) * 3.0
@@ -235,6 +248,7 @@ func (c *CompositeGeopoliticalProvider) FetchScore(ctx context.Context) (Geopoli
 	for _, p := range c.providers {
 		score, err := p.FetchScore(ctx)
 		if err != nil {
+			log.Printf("[CompositeGeopoliticalProvider] provider %s failed: %v", p.Name(), err)
 			continue
 		}
 		totalIntensity += score.Intensity

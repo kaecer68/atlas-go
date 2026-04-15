@@ -8,6 +8,7 @@ services:
       dockerfile: Dockerfile
     container_name: atlas-go
     restart: unless-stopped
+    command: ["-api"]
     ports:
       - "8080:8080"
     environment:
@@ -16,6 +17,7 @@ services:
       - ATLAS_DATA_DIR=/app/data
       - ATLAS_CONFIG_DIR=/app/configs
       - ATLAS_REPORTS_DIR=/app/reports
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas_secret}@postgres:5432/atlas?sslmode=disable
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -56,7 +58,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - atlas-network
 
@@ -93,12 +94,57 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
     networks:
       - atlas-network
     depends_on:
       - prometheus
+
+  # Daily cron job for geopolitical risk data ingestion
+  cron-geo-ingest:
+    build:
+      context: .
+      dockerfile: Dockerfile.cron
+    container_name: atlas-cron-geo-ingest
+    restart: unless-stopped
+    environment:
+      - CRON_SCHEDULE=0 8 * * *
+      - CRON_COMMAND=/app/geo-ingest -work-dir /app
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas_secret}@postgres:5432/atlas?sslmode=disable
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+    networks:
+      - atlas-network
+    depends_on:
+      - atlas
+      - postgres
+
+  # Daily cron job for macro data ingestion (after US market close, Taiwan time)
+  cron-macro-ingest:
+    build:
+      context: .
+      dockerfile: Dockerfile.cron
+    container_name: atlas-cron-macro-ingest
+    restart: unless-stopped
+    environment:
+      - CRON_SCHEDULE=0 8 * * *
+      - CRON_COMMAND=/app/macro-ingest -work-dir /app
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas_secret}@postgres:5432/atlas?sslmode=disable
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+    networks:
+      - atlas-network
+    depends_on:
+      - atlas
+      - postgres
 
   # Daily cron job for replay data sync (Taiwan market close + 30 min)
   cron-replay-sync:
@@ -110,6 +156,7 @@ services:
     environment:
       - CRON_SCHEDULE=30 15 * * *
       - CRON_COMMAND=/app/daily-replay-sync -csv /app/data/replay/tw_extended_90days.csv
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas_secret}@postgres:5432/atlas?sslmode=disable
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -119,6 +166,7 @@ services:
       - atlas-network
     depends_on:
       - atlas
+      - postgres
 
   # Daily cron job for Darwinian weights adjustment
   cron-darwinian:
@@ -130,6 +178,7 @@ services:
     environment:
       - CRON_SCHEDULE=0 9 * * *
       - CRON_COMMAND=/app/scripts/darwinian-adjust.sh --apply
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas_secret}@postgres:5432/atlas?sslmode=disable
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -139,6 +188,7 @@ services:
       - atlas-network
     depends_on:
       - atlas
+      - postgres
 
   # PRISM training queue processor
   prism-worker:
@@ -151,6 +201,7 @@ services:
     environment:
       - ATLAS_ENV=production
       - ATLAS_WORKER_TYPE=prism
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas_secret}@postgres:5432/atlas?sslmode=disable
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -170,6 +221,7 @@ services:
     command: ["/app/atlas-go", "swarm", "run"]
     environment:
       - ATLAS_ENV=production
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas_secret}@postgres:5432/atlas?sslmode=disable
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
