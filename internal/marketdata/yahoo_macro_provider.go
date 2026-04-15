@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -27,7 +29,7 @@ func (y *YahooFinanceMacroProvider) Name() string {
 	return "yahoo_finance"
 }
 
-// FetchSnapshot retrieves DXY, ^TNX, VIX, Oil, Gold, JPY from Yahoo Finance.
+// FetchSnapshot retrieves DXY, ^TNX, VIX, Oil, Gold, JPY from Yahoo Finance concurrently.
 func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
 	symbols := map[string]string{
 		"DX-Y.NYB": "dxy",
@@ -39,24 +41,46 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 	}
 
 	snap := MacroDataSnapshot{RecordedAt: time.Now().Unix()}
+	var mu sync.Mutex
+	var errs []error
+	var wg sync.WaitGroup
+
 	for ticker, key := range symbols {
-		point, err := y.fetchIndicator(ctx, ticker)
-		if err != nil {
-			continue
-		}
-		switch key {
-		case "dxy":
-			snap.DXY = point
-		case "us10y":
-			snap.US10Y = point
-		case "vix":
-			snap.VIX = point
-		case "oil":
-			snap.Oil = point
-		case "gold":
-			snap.Gold = point
-		case "jpy":
-			snap.JPY = point
+		wg.Add(1)
+		go func(ticker, key string) {
+			defer wg.Done()
+			point, err := y.fetchIndicator(ctx, ticker)
+			if err != nil {
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("%s: %w", ticker, err))
+				mu.Unlock()
+				return
+			}
+			mu.Lock()
+			switch key {
+			case "dxy":
+				snap.DXY = point
+			case "us10y":
+				snap.US10Y = point
+			case "vix":
+				snap.VIX = point
+			case "oil":
+				snap.Oil = point
+			case "gold":
+				snap.Gold = point
+			case "jpy":
+				snap.JPY = point
+			}
+			mu.Unlock()
+		}(ticker, key)
+	}
+
+	wg.Wait()
+
+	if len(errs) > 0 {
+		log.Printf("[YahooFinanceMacroProvider] partial fetch failures: %v", errs)
+		if len(errs) == len(symbols) {
+			return snap, fmt.Errorf("all indicators failed: %v", errs)
 		}
 	}
 	return snap, nil

@@ -23,8 +23,8 @@
 9. `scripts/openclaw/today-start.sh`
 10. `data/state/experiments/*.json`
 11. `web/static/index.html`（控制塔前端介面）
-12. `cmd/backfill-replay`（歷史資料回填）
-13. `cmd/daily-replay-sync`（當日資料同步）
+
+> 註：`cmd/backfill-replay` 與 `cmd/daily-replay-sync` 屬於資料管線操作工具，其行為規格詳見 §4.6，不列為技能定義的 Source of Truth。
 
 ## 3. 目前啟用技能（來自 agents.json）
 
@@ -59,7 +59,7 @@
 - `earnings-quality-01` → 傳產/半導體獲利品質股
 - `technical-breakout-01` → 跨產業技術面突破標的
 
-當 agent 未設定 Universe（`[]`）時，後端 fallback 至 `DefaultSymbols()`（22 檔流動標的）。
+當 agent 未設定 Universe（`[]`）時，後端 fallback 至 `DefaultSymbols()`（23 檔流動標的）。
 
 ### 4.2 Crowding Penalty（CIO Portfolio 層）
 
@@ -79,15 +79,15 @@
 - **總覽**：頁面頂端有「如何解讀本頁」說明，強調這是基於最新回測窗口的系統狀態快照。8 張 KPI cards 中，第一列固定為「資料時間」與「基線版本」以宣告時間線與統計基準；其餘卡片（敘事脈絡、市場狀態、表現最差 AI、實驗狀態、擁擠標的、信息通道預警）皆可點擊彈出說明視窗，解釋指標意義與後續注意事項。
 - **宏觀敘事**：整合原 `narrative-dashboard.html` 的 6 大面板。總經快照中的指標改為「英文+中文」雙語標示（如 DXY-美元指數），並在頂部增加資料通道健康度燈號（🟢/🟡/🔴）。台灣市場壓力指數納入 6 大子項：DXY-美元指數、US10Y-美債10年期、外資流向、VIX-波動率指數、日圓-套利平倉壓力、地緣政治風險，並可點擊標題旁的 ℹ️ 查看區間解讀。因果傳導鏈全面本地化為中文，主題 ID 與名稱均為中文，每個步驟都會顯示影響的板塊標籤；負數影響力以紅字呈現。
 - **相對趨勢**：頁面頂端有控制層處置結果的解讀說明。總經敘事脈絡橫幅（雷達上方）顯示 stress score、top event、情緒方向、壓力等級建議，以及根據 narrative model 自動匹配的看多/看空板塊。總經雷達顯示最新回測場次的 control-layer 處置紀錄（放行/過濾/阻擋）與可進場標的前 5 檔。即時狀態欄寬縮小為 170px；若系統處於 Simulation 模式，會顯示「未連接 live broker」的說明而非空白「無資料」。
-- **信息通道**：新增第 9 個 sidebar tab，展示 5 條外部資料通道（US Yahoo Finance、TWSE Replay、TWSE Capital Flow、Fugle、Japan Yahoo Finance）的健康狀態，包含燈號、最後更新時間與錯誤訊息。後端透過 `internal/monitoring/channel_health.go` 持久化每次抓取的成敗紀錄，確保通道異常能即時反映。
+- **信息通道**：新增第 9 個 sidebar tab，展示 6 條外部資料通道（US Yahoo Finance、TWSE Replay、TWSE Capital Flow、Fugle、Japan Yahoo Finance、Geopolitical Risk RSS+GDELT）的健康狀態，包含燈號、最後更新時間與錯誤訊息。後端透過 `internal/monitoring/channel_health.go` 持久化每次抓取的成敗紀錄，確保通道異常能即時反映。
 - **投資管線**：頁面頂端有「如何解讀本頁」說明。表格列出最新場次的所有通過推薦，新增「公司名稱」欄位（由前端 `STOCK_NAME_MAP` 映射 24 檔常見台股），「信念」與「遠期報酬」欄位標題旁皆有 ℹ️ 可點擊查看數值意義；擁擠交易以黃色 badge 高亮。可逐筆批准 / 拒絕 recommendation，這些動作會寫入控制稽核紀錄。
 - **模擬交易**：可視化評判 / 晉升流程與 diff 預覽。
-- **控制與稽核**：除原有的 pause/resume agent、產業封鎖、baseline 晉升/回滾與稽核紀錄外，新增「資料採集健康度」面板，可集中監督 10 項宏觀與資金流資料來源的即時狀態。
+- **控制與稽核**：除原有的 pause/resume agent、產業封鎖、baseline 晉升/回滾與稽核紀錄外，新增「資料採集健康度」面板，可集中監督 6 項外部資料來源的即時狀態。
 - 舊書籤相容：`trading-dashboard.html` 與 `narrative-dashboard.html` 均自動 redirect 回 `/`。
 
 ### 4.5 Dashboard 資料一致性與術語本地化
 
-- **Session 一致性修復**：`handleRecommendationPipeline` 已改為統一使用 `loadSessionSummary("")`，與 `handleMacroRadar`、`handleAgentObservatory` 採用相同的「按 `RecordedAt` 時間降冪取最新」邏輯，解決了投資管線與總經雷達可能顯示不同場次的 bug。
+- **Session 一致性修復**：`handleRecommendationPipeline` 已改為統一使用 `loadSessionSummary("")`，與 `handleMacroRadar`、`handleAgentObservatory` 採用相同的「按 `SessionID` 中的交易日降冪取最新（`RecordedAt` 僅作為平手輔助）」邏輯，解決了投資管線與總經雷達可能顯示不同場次的 bug。
 - **Guard 原因本地化**：`internal/orchestrator/executors.go` 中的控制層 reason 字串已從英文改為中文業務語言（如「未過濾任何推薦，全部放行」、「過濾了 N 筆推薦，僅保留符合條件的標的」、「強制阻擋全部推薦，當日不進場」）。
 - **Agent 顯示名稱本地化**：`configs/agents.json` 與 `configs/agents.yaml` 的 17 個 agent `name` 欄位已全部改為中文，與前端 `AGENT_NAME_MAP` 對齊。
 - **信息通道預警**：`web/static/index.html` 的總覽頁新增「信息通道預警」KPI 卡片，即時提示異常或延遲的資料通道；點擊卡片可直接跳轉至信息通道頁查看詳細燈號與錯誤原因。
@@ -96,7 +96,7 @@
 
 為解決回測資料（`data/replay/tw_extended_90days.csv`）停滯於歷史日期的問題，新增以下工具：
 
-- **`cmd/daily-replay-sync`**：每日自動透過 TWSE OpenAPI 抓取當日所有上市股票的 OHLCV，過濾出 `DefaultSymbols()` 的 22 檔標的後，直接 append 到 `data/replay/tw_extended_90days.csv`。已實測於 2026-04-14 成功抓取並寫入 24 筆紀錄。每次抓取成敗會同步寫入 `data/state/channel_health.json`，供信息通道頁面顯示。
+- **`cmd/daily-replay-sync`**：每日自動透過 TWSE OpenAPI 抓取當日所有上市股票的 OHLCV，過濾出 `DefaultSymbols()` 的 23 檔標的後，直接 append 到 `data/replay/tw_extended_90days.csv`。已實測於 2026-04-14 成功抓取並寫入 24 筆紀錄。每次抓取成敗會同步寫入 `data/state/channel_health.json`，供信息通道頁面顯示。
 - **`cmd/backfill-replay`**：透過 **FinMind API** (`TaiwanStockPrice`) 回填缺失的歷史日線資料。TWSE OpenAPI 的 `STOCK_DAY` 端點對歷史日期返回 HTML 錯誤頁，不支援程式化歷史回填；而 FinMind 提供穩定的歷史股價查詢，且其 2026 年資料與現有 replay 資料完全對齊。已實測回填 2026-04-01 ~ 2026-04-14 共 209 筆紀錄（涵蓋 32 檔標的、6 個交易日）。
 - **`scripts/merge-twse-csv.py`**：用於手動合併從 TWSE 網站下載的單日 CSV。可處理欄位名稱映射（如「證券代號」、「成交股數」、「開盤價」等），自動去重後合併進主 replay CSV。
 

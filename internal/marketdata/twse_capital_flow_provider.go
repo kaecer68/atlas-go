@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -50,7 +51,7 @@ func (t *TWSECapitalFlowProvider) FetchSnapshot(ctx context.Context) (MacroDataS
 
 	// Persist for audit.
 	if err := t.saveFlow(flow); err != nil {
-		// Non-fatal: we still return the snapshot even if persistence fails.
+		log.Printf("[TWSECapitalFlowProvider] saveFlow warning: %v", err)
 	}
 
 	flowTime, _ := time.ParseInLocation("20060102", flow.Date, time.FixedZone("CST", 8*60*60))

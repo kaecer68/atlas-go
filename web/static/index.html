@@ -373,7 +373,15 @@ body { display: flex; margin: 0; min-height: 100vh; }
         本頁呈現 Atlas 所有<strong>外部資料來源的健康狀態</strong>，按國家與平台分類。你可以看到每個通道的 API 格式、本地儲存路徑，以及最後更新時間。
         若某個通道顯示 <span style="color:var(--warn)">🟡 延遲</span> 或 <span style="color:var(--down)">🔴 異常</span>，表示該資料可能影響總經判斷與回測結果，建議檢查網路連線或資料供應商狀態。
       </div>
-      <div class="panel wide"><h2>資料通道監控</h2><div id="dataChannels">載入中…</div></div>
+      <div class="panel wide">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <h2 style="margin:0">資料通道監控</h2>
+          <div class="control-group" style="margin:0">
+            <button class="primary" id="btnIngestChannels" onclick="triggerChannelsIngest()">立即更新 Macro + Geo 資料</button>
+          </div>
+        </div>
+        <div id="dataChannels" style="margin-top:10px">載入中…</div>
+      </div>
     </div>
   </div>
 </div>
@@ -1019,6 +1027,33 @@ async function togglePipelineSession(select) {
   const url = '/api/dashboard/recommendation-pipeline?session_id=' + encodeURIComponent(select.value) + (showAll ? '&show_all=true' : '');
   const data = await getJSON(url);
   renderPipeline(data, showAll, select.value);
+}
+
+async function triggerChannelsIngest() {
+  const btn = document.getElementById('btnIngestChannels');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = '更新中…';
+  try {
+    const res = await fetch('/api/channels/ingest', { method: 'POST' });
+    const data = await res.json().catch(() => ({ error: 'Unknown error' }));
+    if (!res.ok) {
+      notify('資料更新失敗: ' + (data.error || res.statusText), 'err');
+      return;
+    }
+    const parts = [];
+    if (data.macro_ok) parts.push('Macro ✓');
+    else parts.push('Macro ✗' + (data.macro_error ? ': ' + data.macro_error : ''));
+    if (data.geo_ok) parts.push('Geo ✓');
+    else parts.push('Geo ✗' + (data.geo_error ? ': ' + data.geo_error : ''));
+    notify('資料更新完成: ' + parts.join(' | '), data.macro_ok || data.geo_ok ? 'info' : 'err');
+    loadDataChannels();
+  } catch (e) {
+    notify('資料更新失敗: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '立即更新 Macro + Geo 資料';
+  }
 }
 
 function renderDataChannels(data) {

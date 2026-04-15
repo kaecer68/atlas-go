@@ -1,12 +1,15 @@
 package monitoring
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ChannelHealthRecord stores the last fetch result for a single channel.
@@ -22,13 +25,20 @@ type ChannelHealthStore struct {
 	path string
 	mu   sync.RWMutex
 	data map[string]*ChannelHealthRecord
+	pool *pgxpool.Pool
 }
 
 // NewChannelHealthStore creates or loads a health store at the given directory.
 func NewChannelHealthStore(dir string) *ChannelHealthStore {
+	return NewChannelHealthStoreWithPool(dir, nil)
+}
+
+// NewChannelHealthStoreWithPool creates a health store with an optional DB pool.
+func NewChannelHealthStoreWithPool(dir string, pool *pgxpool.Pool) *ChannelHealthStore {
 	return &ChannelHealthStore{
 		path: filepath.Join(dir, "channel_health.json"),
 		data: make(map[string]*ChannelHealthRecord),
+		pool: pool,
 	}
 }
 
@@ -65,9 +75,9 @@ func (s *ChannelHealthStore) save() error {
 	if err != nil {
 		return err
 	}
-	_ = os.MkdirAll(filepath.Dir(s.path), 0755)
+	_ = os.MkdirAll(filepath.Dir(s.path), 0o755)
 	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0644); err != nil {
+	if err := os.WriteFile(tmp, b, 0o644); err != nil {
 		return err
 	}
 	return os.Rename(tmp, s.path)
@@ -75,9 +85,7 @@ func (s *ChannelHealthStore) save() error {
 
 // Record updates the health record for a channel.
 func (s *ChannelHealthStore) Record(channelID, status, errMsg string) error {
-	if err := s.load(); err != nil {
-		// non-fatal: start with empty map
-	}
+	_ = s.load()
 	s.mu.Lock()
 	rec := s.data[channelID]
 	if rec == nil {
@@ -93,11 +101,54 @@ func (s *ChannelHealthStore) Record(channelID, status, errMsg string) error {
 		rec.LastError = errMsg
 	}
 	s.mu.Unlock()
+
+	if s.pool != nil {
+		dbErr := s.recordToDB(channelID, status, errMsg)
+		if dbErr == nil {
+			return s.save()
+		}
+		fmt.Fprintf(os.Stderr, "[ChannelHealth] DB write failed for %s, fallback to JSON: %v\n", channelID, dbErr)
+	}
 	return s.save()
+}
+
+func (s *ChannelHealthStore) recordToDB(channelID, status, errMsg string) error {
+	if s.pool == nil {
+		return fmt.Errorf("database pool not initialized")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	now := time.Now()
+	var lastSuccessAt *time.Time
+	if status == "ok" {
+		ts := now
+		lastSuccessAt = &ts
+	}
+
+	var lastErrorPtr *string
+	if errMsg != "" {
+		lastErrorPtr = &errMsg
+	}
+
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO channel_health (channel_id, status, last_fetch_at, last_error, last_success_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (channel_id)
+		DO UPDATE SET status = EXCLUDED.status,
+					  last_fetch_at = EXCLUDED.last_fetch_at,
+					  last_error = EXCLUDED.last_error,
+					  last_success_at = EXCLUDED.last_success_at,
+					  updated_at = EXCLUDED.updated_at
+	`, channelID, status, now, lastErrorPtr, lastSuccessAt, now)
+	return err
 }
 
 // Get retrieves the health record for a channel (nil if missing).
 func (s *ChannelHealthStore) Get(channelID string) *ChannelHealthRecord {
+	if rec := s.getFromDB(channelID); rec != nil {
+		return rec
+	}
 	_ = s.load()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -105,13 +156,43 @@ func (s *ChannelHealthStore) Get(channelID string) *ChannelHealthRecord {
 	if rec == nil {
 		return nil
 	}
-	// return a copy
 	cp := *rec
 	return &cp
 }
 
+func (s *ChannelHealthStore) getFromDB(channelID string) *ChannelHealthRecord {
+	if s.pool == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var rec ChannelHealthRecord
+	var lastFetchAt, lastSuccessAt *time.Time
+	var lastError string
+	err := s.pool.QueryRow(ctx, `
+		SELECT status, last_fetch_at, COALESCE(last_error,''), last_success_at
+		FROM channel_health
+		WHERE channel_id = $1
+	`, channelID).Scan(&rec.Status, &lastFetchAt, &lastError, &lastSuccessAt)
+	if err != nil {
+		return nil
+	}
+	if lastFetchAt != nil {
+		rec.LastFetchAt = lastFetchAt.Format(time.RFC3339)
+	}
+	if lastSuccessAt != nil {
+		rec.LastSuccessAt = lastSuccessAt.Format(time.RFC3339)
+	}
+	rec.LastError = lastError
+	return &rec
+}
+
 // Alerts returns all channels with non-ok status.
 func (s *ChannelHealthStore) Alerts() []ChannelAlert {
+	if alerts := s.alertsFromDB(); alerts != nil {
+		return alerts
+	}
 	_ = s.load()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -129,6 +210,41 @@ func (s *ChannelHealthStore) Alerts() []ChannelAlert {
 	return alerts
 }
 
+func (s *ChannelHealthStore) alertsFromDB() []ChannelAlert {
+	if s.pool == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT channel_id, status, COALESCE(last_error,''), last_fetch_at
+		FROM channel_health
+		WHERE status NOT IN ('ok','inactive')
+	`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var alerts []ChannelAlert
+	for rows.Next() {
+		var a ChannelAlert
+		var fetchAt *time.Time
+		if err := rows.Scan(&a.ChannelID, &a.Status, &a.Error, &fetchAt); err != nil {
+			continue
+		}
+		if fetchAt != nil {
+			a.FetchAt = fetchAt.Format(time.RFC3339)
+		}
+		alerts = append(alerts, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil
+	}
+	return alerts
+}
+
 // ChannelAlert represents a single unhealthy channel.
 type ChannelAlert struct {
 	ChannelID string `json:"channel_id"`
@@ -139,7 +255,12 @@ type ChannelAlert struct {
 
 // RecordChannelFetch is a convenience helper for CLI tools.
 func RecordChannelFetch(stateDir, channelID, status, errMsg string) {
-	store := NewChannelHealthStore(stateDir)
+	RecordChannelFetchWithPool(stateDir, channelID, status, errMsg, nil)
+}
+
+// RecordChannelFetchWithPool is a convenience helper that accepts an optional DB pool.
+func RecordChannelFetchWithPool(stateDir, channelID, status, errMsg string, pool *pgxpool.Pool) {
+	store := NewChannelHealthStoreWithPool(stateDir, pool)
 	if err := store.Record(channelID, status, errMsg); err != nil {
 		fmt.Fprintf(os.Stderr, "[ChannelHealth] failed to record %s: %v\n", channelID, err)
 	}

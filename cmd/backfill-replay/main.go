@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"flag"
@@ -15,6 +16,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/kaecer68/atlas-go/internal/db"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
@@ -42,8 +46,22 @@ func main() {
 	flag.Parse()
 
 	stateDir := filepath.Join(filepath.Dir(filepath.Dir(*csvPath)), "state")
+	var pool *pgxpool.Pool
+	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+		migrationsPath := filepath.Join(filepath.Dir(stateDir), "sql/migrations")
+		if _, err := os.Stat(migrationsPath); err == nil {
+			var dbErr error
+			pool, dbErr = db.Init(context.Background(), dsn, migrationsPath)
+			if dbErr != nil {
+				log.Printf("[DB] failed to initialize database: %v", dbErr)
+			} else {
+				log.Printf("[DB] connected and migrations applied")
+				defer pool.Close()
+			}
+		}
+	}
 	if _, err := os.Stat(*csvPath); err != nil {
-		monitoring.RecordChannelFetch(stateDir, "twse_replay", "error", err.Error())
+		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay", "error", err.Error(), pool)
 		fmt.Fprintf(os.Stderr, "csv path error: %v\n", err)
 		os.Exit(1)
 	}
@@ -51,7 +69,7 @@ func main() {
 	// Read existing CSV
 	f, err := os.Open(*csvPath)
 	if err != nil {
-		monitoring.RecordChannelFetch(stateDir, "twse_replay", "error", err.Error())
+		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay", "error", err.Error(), pool)
 		fmt.Fprintf(os.Stderr, "open csv: %v\n", err)
 		os.Exit(1)
 	}
@@ -59,13 +77,13 @@ func main() {
 	rows, err := reader.ReadAll()
 	f.Close()
 	if err != nil {
-		monitoring.RecordChannelFetch(stateDir, "twse_replay", "error", err.Error())
+		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay", "error", err.Error(), pool)
 		fmt.Fprintf(os.Stderr, "read csv: %v\n", err)
 		os.Exit(1)
 	}
 
 	if len(rows) == 0 {
-		monitoring.RecordChannelFetch(stateDir, "twse_replay", "error", "csv is empty")
+		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay", "error", "csv is empty", pool)
 		fmt.Fprintf(os.Stderr, "csv is empty\n")
 		os.Exit(1)
 	}
@@ -149,7 +167,7 @@ func main() {
 
 	if len(newRows) == 0 {
 		fmt.Println("No new data to backfill.")
-		monitoring.RecordChannelFetch(stateDir, "twse_replay", "ok", "")
+		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay", "ok", "", pool)
 		return
 	}
 
@@ -159,14 +177,14 @@ func main() {
 		for _, r := range newRows {
 			fmt.Println(strings.Join(r, ","))
 		}
-		monitoring.RecordChannelFetch(stateDir, "twse_replay", "ok", "")
+		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay", "ok", "", pool)
 		return
 	}
 
 	// Append to CSV
 	fout, err := os.OpenFile(*csvPath, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		monitoring.RecordChannelFetch(stateDir, "twse_replay", "error", err.Error())
+		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay", "error", err.Error(), pool)
 		fmt.Fprintf(os.Stderr, "open csv for append: %v\n", err)
 		os.Exit(1)
 	}
@@ -180,12 +198,12 @@ func main() {
 	}
 	writer.Flush()
 	if err := writer.Error(); err != nil {
-		monitoring.RecordChannelFetch(stateDir, "twse_replay", "error", err.Error())
+		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay", "error", err.Error(), pool)
 		fmt.Fprintf(os.Stderr, "flush writer: %v\n", err)
 		os.Exit(1)
 	}
 
-	monitoring.RecordChannelFetch(stateDir, "twse_replay", "ok", "")
+	monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay", "ok", "", pool)
 	fmt.Printf("Successfully appended %d rows to %s\n", len(newRows), *csvPath)
 }
 

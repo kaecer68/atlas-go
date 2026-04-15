@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"sync"
 	"time"
 
@@ -159,12 +160,10 @@ func (s *SystemMetrics) Start(ctx context.Context) {
 
 // collect 收集系统指标
 func (s *SystemMetrics) collect() {
-	// 记录内存使用（简化版）
-	s.collector.RecordGauge("system_memory_usage_mb", 0, nil)
-
-	// 记录 Goroutine 数量
-	s.collector.RecordGauge("system_goroutines", 0, nil)
-
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	s.collector.RecordGauge("system_memory_usage_mb", float64(ms.Sys)/1024/1024, nil)
+	s.collector.RecordGauge("system_goroutines", float64(runtime.NumGoroutine()), nil)
 	s.monitor.Info("metrics", "System metrics collected", nil)
 }
 

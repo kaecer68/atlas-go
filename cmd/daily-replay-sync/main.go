@@ -12,6 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/kaecer68/atlas-go/internal/db"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
@@ -61,19 +64,35 @@ func main() {
 	backfillEnd := flag.String("backfill-end", "", "backfill end date (YYYY-MM-DD)")
 	flag.Parse()
 
+	stateDir := filepath.Join(filepath.Dir(filepath.Dir(*csvPath)), "state")
+	var pool *pgxpool.Pool
+	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+		migrationsPath := filepath.Join(filepath.Dir(stateDir), "sql/migrations")
+		if _, err := os.Stat(migrationsPath); err == nil {
+			var dbErr error
+			pool, dbErr = db.Init(context.Background(), dsn, migrationsPath)
+			if dbErr != nil {
+				log.Printf("[DB] failed to initialize database: %v", dbErr)
+			} else {
+				log.Printf("[DB] connected and migrations applied")
+				defer pool.Close()
+			}
+		}
+	}
+
 	if *backfillStart != "" && *backfillEnd != "" {
-		if err := runBackfill(*csvPath, *backfillStart, *backfillEnd); err != nil {
+		if err := runBackfill(*csvPath, *backfillStart, *backfillEnd, pool); err != nil {
 			log.Fatalf("backfill failed: %v", err)
 		}
 		return
 	}
 
-	if err := runDailySync(*csvPath); err != nil {
+	if err := runDailySync(*csvPath, pool); err != nil {
 		log.Fatalf("daily sync failed: %v", err)
 	}
 }
 
-func runDailySync(csvPath string) error {
+func runDailySync(csvPath string, pool *pgxpool.Pool) error {
 	stateDir := filepath.Join(filepath.Dir(filepath.Dir(csvPath)), "state")
 	client := marketdata.NewTWSEClient()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -82,7 +101,7 @@ func runDailySync(csvPath string) error {
 	log.Println("[DailySync] Fetching today's quotes from TWSE OpenAPI...")
 	quotes, err := client.GetQuotes(ctx)
 	if err != nil {
-		monitoring.RecordChannelFetch(stateDir, "twse_replay", "error", err.Error())
+		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay", "error", err.Error(), pool)
 		return fmt.Errorf("fetch quotes: %w", err)
 	}
 
@@ -111,15 +130,15 @@ func runDailySync(csvPath string) error {
 	}
 
 	if err := appendRecords(csvPath, records); err != nil {
-		monitoring.RecordChannelFetch(stateDir, "twse_replay", "error", err.Error())
+		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay", "error", err.Error(), pool)
 		return err
 	}
-	monitoring.RecordChannelFetch(stateDir, "twse_replay", "ok", "")
+	monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay", "ok", "", pool)
 	log.Printf("[DailySync] Appended %d records for %s", len(records), dateStr)
 	return nil
 }
 
-func runBackfill(csvPath, startStr, endStr string) error {
+func runBackfill(csvPath, startStr, endStr string, pool *pgxpool.Pool) error {
 	start, err := time.Parse("2006-01-02", startStr)
 	if err != nil {
 		return fmt.Errorf("parse start date: %w", err)

@@ -13,8 +13,8 @@ import (
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
-	"github.com/kaecer68/atlas-go/internal/reporting"
 	"github.com/kaecer68/atlas-go/internal/replay"
+	"github.com/kaecer68/atlas-go/internal/reporting"
 )
 
 type Runner struct {
