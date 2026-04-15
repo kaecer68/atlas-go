@@ -9,8 +9,8 @@ Atlas-Go implements a sophisticated multi-layer AI agent system with 15 speciali
 ### Layer 1: Context Agents (Market Environment Analysis)
 | Agent ID | Skill | Focus | Universe | Primary Metrics |
 |----------|-------|-------|-----------|-----------------|
-| `taiwan-macro-01` | `taiwan_macro` | Taiwan macro conditions | None | regime_accuracy, drawdown_avoidance |
-| `foreign-flow-01` | `foreign_flow` | Foreign institutional flows | None | regime_accuracy, flow_alignment |
+| `taiwan-macro-01` | `taiwan_macro` | 台灣總經 | None | regime_accuracy, drawdown_avoidance |
+| `foreign-flow-01` | `foreign_flow` | 外資流向 | None | regime_accuracy, flow_alignment |
 
 **Responsibilities**:
 - Determine market regime and risk budget
@@ -20,11 +20,11 @@ Atlas-Go implements a sophisticated multi-layer AI agent system with 15 speciali
 ### Layer 2: Sector Agents (Industry Expertise)
 | Agent ID | Skill | Focus | Universe | Primary Metrics |
 |----------|-------|-------|-----------|-----------------|
-| `semi-desk-01` | `semiconductor_desk` | Foundry, packaging, equipment | 2330.TW, 2303.TW, 2454.TW, 3034.TW | alpha_hit_rate, risk_adjusted_return |
-| `ai-desk-01` | `ai_supply_chain_desk` | ODM, server, PCB, thermal | 2382.TW, 6669.TW, 3017.TW, 3037.TW | alpha_hit_rate, turnover_efficiency |
-| `etf-rotation-01` | `etf_rotation_desk` | Broad ETF allocation | 0050.TW, 0056.TW, 00878.TW | drawdown_control, defensive_capture |
-| `financials-desk-01` | `financials_desk` | Banks, insurers, brokers | 2881.TW, 2882.TW, 2891.TW | downside_capture, carry_efficiency |
-| `shipping-desk-01` | `shipping_desk` | Container and transport | 2603.TW, 2609.TW, 2615.TW | cycle_timing, volatility_capture |
+| `semi-desk-01` | `semiconductor_desk` | 半導體產業桌 | 2330.TW, 2303.TW, 2454.TW, 3034.TW | alpha_hit_rate, risk_adjusted_return |
+| `ai-desk-01` | `ai_supply_chain_desk` | AI 供應鏈產業桌 | 2382.TW, 6669.TW, 3017.TW, 3037.TW | alpha_hit_rate, turnover_efficiency |
+| `etf-rotation-01` | `etf_rotation_desk` | ETF 輪動 | 0050.TW, 0056.TW, 00878.TW | drawdown_control, defensive_capture |
+| `financials-desk-01` | `financials_desk` | 金融產業桌 | 2881.TW, 2882.TW, 2891.TW | downside_capture, carry_efficiency |
+| `shipping-desk-01` | `shipping_desk` | 航運產業桌 | 2603.TW, 2609.TW, 2615.TW | cycle_timing, volatility_capture |
 
 **Responsibilities**:
 - Generate sector-specific recommendations
@@ -34,10 +34,10 @@ Atlas-Go implements a sophisticated multi-layer AI agent system with 15 speciali
 ### Layer 3: Style Agents (Strategy Implementation)
 | Agent ID | Skill | Focus | Universe | Primary Metrics |
 |----------|-------|-------|-----------|-----------------|
-| `growth-momentum-01` | `growth_momentum` | Trend persistence | None | alpha_hit_rate, momentum_followthrough |
-| `value-yield-01` | `value_yield` | Dividend durability | None | drawdown_control, carry_quality |
-| `earnings-quality-01` | `earnings_quality` | Accounting quality | None | estimate_quality, post_earnings_followthrough |
-| `technical-breakout-01` | `technical_breakout` | Entry timing | None | breakout_followthrough, false_breakout_avoidance |
+| `growth-momentum-01` | `growth_momentum` | 成長動能 | None | alpha_hit_rate, momentum_followthrough |
+| `value-yield-01` | `value_yield` | 價值股息 | None | drawdown_control, carry_quality |
+| `earnings-quality-01` | `earnings_quality` | 獲利品質 | None | estimate_quality, post_earnings_followthrough |
+| `technical-breakout-01` | `technical_breakout` | 技術突破 | None | breakout_followthrough, false_breakout_avoidance |
 
 **Responsibilities**:
 - Apply style-specific filters to sector recommendations
@@ -47,8 +47,8 @@ Atlas-Go implements a sophisticated multi-layer AI agent system with 15 speciali
 ### Layer 4: Control Agents (Risk Management)
 | Agent ID | Skill | Focus | Universe | Primary Metrics |
 |----------|-------|-------|-----------|-----------------|
-| `cro-01` | `cro_risk` | Portfolio risk control | None | drawdown_control, concentration_violations |
-| `cio-01` | `cio_portfolio` | Portfolio synthesis | None | portfolio_return, sharpe_like |
+| `cro-01` | `cro_risk` | 風控長 | None | drawdown_control, concentration_violations |
+| `cio-01` | `cio_portfolio` | 投資長 | None | portfolio_return, sharpe_like |
 
 **Responsibilities**:
 - Attack portfolio proposals before execution
@@ -58,10 +58,10 @@ Atlas-Go implements a sophisticated multi-layer AI agent system with 15 speciali
 ### Layer 5: Superinvestor Agents (Master Strategies)
 | Agent ID | Skill | Focus | Universe | Primary Metrics |
 |----------|-------|-------|-----------|-----------------|
-| `super-dru-01` | `druckenmiller_macro` | Macro asymmetric trades | None | macro_asymmetric_hits, momentum_capture |
-| `super-asc-01` | `aschenbrenner_ai_compute` | AI capex beneficiaries | None | ai_capex_alignment, compute_cycle_timing |
-| `super-bak-01` | `baker_deep_tech` | IP moat analysis | None | ip_quality_score, rdn_efficiency |
-| `super-ack-01` | `ackman_quality_compound` | Quality compounders | None | roic_consistency, fcf_conversion |
+| `super-dru-01` | `druckenmiller_macro` | Druckenmiller 超級投資者 | None | macro_asymmetric_hits, momentum_capture |
+| `super-asc-01` | `aschenbrenner_ai_compute` | Aschenbrenner 超級投資者 | None | ai_capex_alignment, compute_cycle_timing |
+| `super-bak-01` | `baker_deep_tech` | Baker 超級投資者 | None | ip_quality_score, rdn_efficiency |
+| `super-ack-01` | `ackman_quality_compound` | Ackman 超級投資者 | None | roic_consistency, fcf_conversion |
 
 **Responsibilities**:
 - Provide high-conviction, concentrated recommendations
@@ -96,13 +96,13 @@ Atlas-Go implements a sophisticated multi-layer AI agent system with 15 speciali
 ```
 1. Market Data Input
    |
-2. Layer 1: Context Analysis (taiwan-macro-01, foreign-flow-01)
+2. Layer 1: Context Analysis (台灣總經, 外資流向)
    |
-3. Layer 2: Sector Analysis (semi-desk-01, ai-desk-01, etc.)
+3. Layer 2: Sector Analysis (半導體產業桌, AI 供應鏈產業桌, etc.)
    |
-4. Layer 3: Style Filtering (growth-momentum-01, value-yield-01, etc.)
+4. Layer 3: Style Filtering (成長動能, 價值股息, etc.)
    |
-5. Layer 4: Risk Control (cro-01, cio-01)
+5. Layer 4: Risk Control (風控長, 投資長)
    |
 6. Layer 5: Superinvestor Override (if applicable)
    |

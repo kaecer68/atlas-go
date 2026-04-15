@@ -138,7 +138,10 @@ func TestTWSEClient_GetQuotes_Success(t *testing.T) {
 			TradeVolume:  "15000000",
 		},
 	}
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -189,7 +192,10 @@ func TestTWSEClient_GetQuotesBySymbols(t *testing.T) {
 		{Code: "2317", ClosingPrice: "162.00", OpeningPrice: "160.00", HighestPrice: "164.00", LowestPrice: "159.00", TradeVolume: "2000"},
 		{Code: "0050", ClosingPrice: "192.00", OpeningPrice: "191.00", HighestPrice: "193.00", LowestPrice: "190.00", TradeVolume: "5000"},
 	}
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write(body)

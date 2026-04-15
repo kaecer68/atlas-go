@@ -19,7 +19,10 @@ func TestFugleClient_GetQuote_Success(t *testing.T) {
 	payload.Data.Quote.PriceLow.Price = 775.0
 	payload.Data.Quote.Total.TradeVolume = 1500000
 
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("symbolId") != "2330" {
@@ -73,7 +76,10 @@ func TestFugleClient_GetQuotes(t *testing.T) {
 	payload.Data.Quote.PriceLow.Price = 775.0
 	payload.Data.Quote.Total.TradeVolume = 1000
 
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write(body)

@@ -44,7 +44,10 @@ func TestEvaluateUpdatesStatus(t *testing.T) {
 		EndDate:              time.Date(2026, 3, 27, 0, 0, 0, 0, time.UTC),
 		WorstAgentSharpeLike: -100,
 	}
-	windowBytes, _ := json.Marshal(window)
+	windowBytes, err := json.Marshal(window)
+	if err != nil {
+		t.Fatalf("marshal window: %v", err)
+	}
 	if err := os.WriteFile(windowPath, windowBytes, 0o644); err != nil {
 		t.Fatalf("write window: %v", err)
 	}
@@ -77,7 +80,10 @@ func TestEvaluateUpdatesStatus(t *testing.T) {
 		EvaluationMode:  "policy_checked_pending_replay",
 		PolicyChecks:    []string{"required skill preserved: growth_momentum"},
 	}
-	resultBytes, _ := json.Marshal(resultFixture)
+	resultBytes, err := json.Marshal(resultFixture)
+	if err != nil {
+		t.Fatalf("marshal result fixture: %v", err)
+	}
 	if err := os.WriteFile(resultPath, resultBytes, 0o644); err != nil {
 		t.Fatalf("write result fixture: %v", err)
 	}
@@ -317,7 +323,10 @@ func TestEvaluateRejectsInvalidStatusTransition(t *testing.T) {
 		EndDate:              time.Date(2026, 3, 27, 0, 0, 0, 0, time.UTC),
 		WorstAgentSharpeLike: -100,
 	}
-	windowBytes, _ := json.Marshal(window)
+	windowBytes, err := json.Marshal(window)
+	if err != nil {
+		t.Fatalf("marshal window: %v", err)
+	}
 	if err := os.WriteFile(windowPath, windowBytes, 0o644); err != nil {
 		t.Fatalf("write window: %v", err)
 	}
@@ -350,7 +359,10 @@ func TestEvaluateRejectsInvalidStatusTransition(t *testing.T) {
 		EvaluationMode:  "policy_checked_pending_replay",
 		PolicyChecks:    []string{"required skill preserved: growth_momentum"},
 	}
-	resultBytes, _ := json.Marshal(resultFixture)
+	resultBytes, err := json.Marshal(resultFixture)
+	if err != nil {
+		t.Fatalf("marshal result fixture: %v", err)
+	}
 	if err := os.WriteFile(resultPath, resultBytes, 0o644); err != nil {
 		t.Fatalf("write result fixture: %v", err)
 	}

@@ -100,6 +100,26 @@ services:
     depends_on:
       - prometheus
 
+  # Daily cron job for replay data sync (Taiwan market close + 30 min)
+  cron-replay-sync:
+    build:
+      context: .
+      dockerfile: Dockerfile.cron
+    container_name: atlas-cron-replay-sync
+    restart: unless-stopped
+    environment:
+      - CRON_SCHEDULE=30 15 * * *
+      - CRON_COMMAND=/app/daily-replay-sync -csv /app/data/replay/tw_extended_90days.csv
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+    networks:
+      - atlas-network
+    depends_on:
+      - atlas
+
   # Daily cron job for Darwinian weights adjustment
   cron-darwinian:
     build:

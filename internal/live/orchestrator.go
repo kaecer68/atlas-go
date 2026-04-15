@@ -118,6 +118,7 @@ func DefaultOrchestratorConfig() OrchestratorConfig {
 
 // NewOrchestrator 创建新的编排器
 func NewOrchestrator(
+	ctx context.Context,
 	stateStore *StateStore,
 	eventBus *ChannelEventBus,
 	marketData marketdata.Provider,
@@ -125,7 +126,7 @@ func NewOrchestrator(
 	system *orchestrator.System,
 	config OrchestratorConfig,
 ) *Orchestrator {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	requestedMode, effectiveMode, broker, audit := resolveBrokerMode(config)
 	maxRetries := config.BrokerMaxRetries
 	if maxRetries < 0 {

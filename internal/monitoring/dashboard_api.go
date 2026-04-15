@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,20 +11,32 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/backtest"
+	"github.com/kaecer68/atlas-go/internal/baseline"
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/live"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
+	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
 type DashboardAPI struct {
+	workDir          string
 	ledgerDir        string
+	baselinePath     string
 	narrativeEngine  *narrative.NarrativeEngine
 	macroIngestor    *narrative.MacroIngestor
 	taiwanStressCalc *narrative.TaiwanStressCalculator
+	backtestMu       sync.Mutex
+	backtestRunning  bool
+	backtestStatus   map[string]interface{}
 }
 
 type MacroRadarResponse struct {
@@ -61,19 +74,21 @@ type ForecastVsRealityResponse struct {
 	BrokerRuntime domain.BrokerRuntimeAudit `json:"broker_runtime"`
 }
 
-func NewDashboardAPI(ledgerDir string) *DashboardAPI {
+func NewDashboardAPI(workDir, ledgerDir string) *DashboardAPI {
 	provider := marketdata.NewCompositeMacroProvider(
 		marketdata.NewYahooFinanceMacroProvider(),
-		marketdata.NewTWSECapitalFlowProvider("data/state/capital_flow"),
+		marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")),
 	)
 	geoProvider := narrative.NewCompositeGeopoliticalProvider(
 		narrative.NewRSSGeopoliticalProvider(),
 		narrative.NewGDELTGeopoliticalProvider(),
 	)
 	return &DashboardAPI{
+		workDir:          workDir,
 		ledgerDir:        ledgerDir,
+		baselinePath:     filepath.Join(workDir, "data/state/baseline_policy.json"),
 		narrativeEngine:  narrative.NewNarrativeEngine(),
-		macroIngestor:    narrative.NewMacroIngestor(provider, "data/state/macro"),
+		macroIngestor:    narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro")),
 		taiwanStressCalc: narrative.NewTaiwanStressCalculator(geoProvider),
 	}
 }
@@ -82,6 +97,12 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/macro-radar", a.handleMacroRadar)
 	mux.HandleFunc("/api/dashboard/agent-observatory", a.handleAgentObservatory)
 	mux.HandleFunc("/api/dashboard/forecast-vs-reality", a.handleForecastVsReality)
+	mux.HandleFunc("/api/dashboard/experiment-inbox", a.handleExperimentInbox)
+	mux.HandleFunc("/api/dashboard/system-health", a.handleSystemHealth)
+	mux.HandleFunc("/api/dashboard/recommendation-pipeline", a.handleRecommendationPipeline)
+	mux.HandleFunc("/api/dashboard/universe-overlap", a.handleUniverseOverlap)
+	mux.HandleFunc("/api/dashboard/data-channels", a.handleDataChannels)
+	mux.HandleFunc("/api/dashboard/sessions", a.handleSessions)
 	mux.HandleFunc("/api/report/latest", a.handleLatestReport)
 	mux.HandleFunc("/api/report/list", a.handleReportList)
 }
@@ -98,7 +119,6 @@ func (a *DashboardAPI) RegisterNarrativeRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/narrative/chains", a.handleNarrativeChains)
 	mux.HandleFunc("/api/narrative/models", a.handleNarrativeModels)
 	mux.HandleFunc("/api/narrative/templates", a.handleNarrativeTemplates)
-	mux.HandleFunc("/dashboard/narrative", a.handleNarrativeDashboard)
 }
 
 // RegisterControlRoutes mounts human intervention control endpoints.
@@ -131,6 +151,21 @@ func (a *DashboardAPI) RegisterLiveRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/live-status", a.handleLiveStatus)
 }
 
+// RegisterExperimentRoutes mounts experiment lifecycle endpoints.
+func (a *DashboardAPI) RegisterExperimentRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/experiment/promote", a.handleExperimentPromote)
+	mux.HandleFunc("/api/experiment/revert", a.handleExperimentRevert)
+	mux.HandleFunc("/api/experiment/history", a.handleExperimentHistory)
+	mux.HandleFunc("/api/experiment/judge", a.handleJudgeExperiment)
+	mux.HandleFunc("/api/experiment/diff", a.handleExperimentDiff)
+}
+
+// RegisterBacktestRoutes mounts backtest execution endpoints.
+func (a *DashboardAPI) RegisterBacktestRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/backtest/run", a.handleBacktestRun)
+	mux.HandleFunc("/api/backtest/status", a.handleBacktestStatus)
+}
+
 func (a *DashboardAPI) handleLiveStatus(w http.ResponseWriter, r *http.Request) {
 	status := a.loadLiveStatus()
 	writeJSON(w, http.StatusOK, status)
@@ -148,7 +183,7 @@ func (a *DashboardAPI) loadLiveStatus() map[string]interface{} {
 	}{
 		State: "unknown",
 	}
-	if data, err := os.ReadFile("data/state/circuit_breaker_state.json"); err == nil {
+	if data, err := os.ReadFile(filepath.Join(a.workDir, live.DefaultCircuitBreakerStatePath)); err == nil {
 		if err := json.Unmarshal(data, &cbState); err != nil {
 			log.Printf("[DashboardAPI] warn: failed to unmarshal circuit breaker state: %v", err)
 		}
@@ -162,24 +197,26 @@ func (a *DashboardAPI) loadLiveStatus() map[string]interface{} {
 		DayPnL        float64 `json:"day_pnl"`
 		UnrealizedPnL float64 `json:"unrealized_pnl"`
 	}{}
-	if data, err := os.ReadFile("data/state/live/state/portfolio_state.jsonl"); err == nil {
-		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-		if len(lines) > 0 {
-			if err := json.Unmarshal([]byte(lines[len(lines)-1]), &portfolio); err != nil {
-				log.Printf("[DashboardAPI] warn: failed to unmarshal portfolio state: %v", err)
-			}
-		}
+	liveBasePath := filepath.Join(a.workDir, live.DefaultLiveStateBasePath)
+	if p, err := live.LoadLastPortfolioState(liveBasePath); err == nil {
+		portfolio.Cash = p.Cash
+		portfolio.TotalExposure = p.TotalExposure
+		portfolio.AvailableCash = p.AvailableCash
+		portfolio.DayPnL = p.DayPnL
+		portfolio.UnrealizedPnL = p.UnrealizedPnL
+	} else {
+		log.Printf("[DashboardAPI] warn: failed to read portfolio state: %v", err)
 	}
 
 	// Load positions count from live state store JSONL
 	positions := make(map[string]interface{})
-	if data, err := os.ReadFile("data/state/live/state/positions_current.jsonl"); err == nil {
-		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-		if len(lines) > 0 {
-			if err := json.Unmarshal([]byte(lines[len(lines)-1]), &positions); err != nil {
-				log.Printf("[DashboardAPI] warn: failed to unmarshal positions state: %v", err)
-			}
+	if posMap, err := live.LoadLastPositions(liveBasePath); err == nil {
+		positions = make(map[string]interface{}, len(posMap))
+		for k := range posMap {
+			positions[k] = posMap[k]
 		}
+	} else {
+		log.Printf("[DashboardAPI] warn: failed to read positions state: %v", err)
 	}
 
 	return map[string]interface{}{
@@ -203,6 +240,85 @@ func (a *DashboardAPI) loadLiveStatus() map[string]interface{} {
 	}
 }
 
+func (a *DashboardAPI) handleExperimentPromote(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var req struct {
+		ResultPath string `json:"result_path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if req.ResultPath == "" {
+		writeJSONError(w, http.StatusBadRequest, "result_path required")
+		return
+	}
+	mgr := baseline.NewManager(a.baselinePath)
+	policy, err := mgr.PromoteResult(req.ResultPath)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("promote failed: %v", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "version": policy.Version})
+}
+
+func (a *DashboardAPI) handleExperimentRevert(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var req struct {
+		Type         string `json:"type"`
+		Version      int    `json:"version"`
+		ExperimentID string `json:"experiment_id"`
+		Reason       string `json:"reason"`
+		DryRun       bool   `json:"dry_run"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	target := baseline.RevertTarget{Type: baseline.RevertType(req.Type), Version: req.Version, ExperimentID: req.ExperimentID}
+	mgr := baseline.NewManager(a.baselinePath)
+	result, err := mgr.Revert(target, req.Reason, req.DryRun)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("revert failed: %v", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func promotionHistoryToAPI(history []baseline.PromotionRecordWithVersion) []map[string]any {
+	result := make([]map[string]any, len(history))
+	for i, h := range history {
+		result[i] = map[string]any{
+			"experiment_id":   h.ExperimentID,
+			"target_agent_id": h.TargetAgentID,
+			"target_skill":    h.TargetSkill,
+			"mutation_type":   h.MutationType,
+			"candidate_path":  h.CandidatePath,
+			"promoted_at":     h.PromotedAt,
+			"status":          h.Status,
+			"version_after":   h.VersionAfter,
+			"version":         h.Version,
+		}
+	}
+	return result
+}
+
+func (a *DashboardAPI) handleExperimentHistory(w http.ResponseWriter, r *http.Request) {
+	mgr := baseline.NewManager(a.baselinePath)
+	history, err := mgr.GetPromotionHistory()
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load history: %v", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"history": promotionHistoryToAPI(history)})
+}
+
 func (a *DashboardAPI) handlePhase3Status(w http.ResponseWriter, r *http.Request) {
 	metrics, err := orchestrator.LoadPhase3Metrics("")
 	if err != nil {
@@ -210,16 +326,6 @@ func (a *DashboardAPI) handlePhase3Status(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, metrics)
-}
-
-func (a *DashboardAPI) handleNarrativeDashboard(w http.ResponseWriter, r *http.Request) {
-	data, err := os.ReadFile("web/static/narrative-dashboard.html")
-	if err != nil {
-		writeJSONError(w, http.StatusNotFound, "narrative dashboard not found")
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write(data)
 }
 
 func (a *DashboardAPI) handleSwaggerUI(w http.ResponseWriter, r *http.Request) {
@@ -246,7 +352,7 @@ SwaggerUIBundle({
 }
 
 func (a *DashboardAPI) handleSwaggerJSON(w http.ResponseWriter, r *http.Request) {
-	data, err := os.ReadFile("docs/swagger.json")
+	data, err := os.ReadFile(filepath.Join(a.workDir, "docs/swagger.json"))
 	if err != nil {
 		writeJSONError(w, http.StatusNotFound, "swagger spec not found")
 		return
@@ -339,6 +445,23 @@ func (a *DashboardAPI) handleForecastVsReality(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// sessionDateFromID extracts the trading date from a session ID like "session-20260410-daily".
+func sessionDateFromID(id string) time.Time {
+	const prefix = "session-"
+	if !strings.HasPrefix(id, prefix) {
+		return time.Time{}
+	}
+	trimmed := strings.TrimPrefix(id, prefix)
+	parts := strings.Split(trimmed, "-")
+	if len(parts) < 1 {
+		return time.Time{}
+	}
+	if d, err := time.Parse("20060102", parts[0]); err == nil {
+		return d
+	}
+	return time.Time{}
+}
+
 func (a *DashboardAPI) loadSessionSummary(sessionID string) (*domain.SessionSummary, error) {
 	sessionsDir := filepath.Join(a.ledgerDir, "sessions")
 	entries, err := os.ReadDir(sessionsDir)
@@ -379,8 +502,16 @@ func (a *DashboardAPI) loadSessionSummary(sessionID string) (*domain.SessionSumm
 		return &selected, nil
 	}
 
+	// Sort by session trading date (derived from SessionID) descending,
+	// then by RecordedAt as a tiebreaker.
 	slices.SortFunc(summaries, func(a, b domain.SessionSummary) int {
+		aDate := sessionDateFromID(a.SessionID)
+		bDate := sessionDateFromID(b.SessionID)
 		switch {
+		case aDate.After(bDate):
+			return -1
+		case aDate.Before(bDate):
+			return 1
 		case a.RecordedAt.After(b.RecordedAt):
 			return -1
 		case a.RecordedAt.Before(b.RecordedAt):
@@ -452,6 +583,54 @@ func (a *DashboardAPI) loadForecastVsRealityItems(agentID string, limit int) ([]
 	return items, nil
 }
 
+// buildMutationSummary extracts a concise parameter delta from baseline vs candidate prompt controls.
+func buildMutationSummary(policy baseline.Policy, result domain.PromptExperimentResult) string {
+	baselinePrompt := baseline.ResolvePromptOverride(policy, result.Experiment.TargetAgentID, result.Experiment.Skill)
+	if baselinePrompt == "" {
+		sourcePrompt, err := os.ReadFile(result.Brief.PromptFile)
+		if err == nil {
+			baselinePrompt = string(sourcePrompt)
+		}
+	}
+
+	baselineCtrl, _ := domain.ExtractPromptControl(baselinePrompt)
+	candidateBytes, err := os.ReadFile(result.CandidatePrompt)
+	if err != nil {
+		return result.Experiment.MutationType
+	}
+	candidateCtrl, _ := domain.ExtractPromptControl(string(candidateBytes))
+
+	parts := make([]string, 0, 4)
+	add := func(name string, base, cand int64) {
+		if base != cand {
+			parts = append(parts, fmt.Sprintf("%s: %d→%d", name, base, cand))
+		}
+	}
+	addInt := func(name string, base, cand int) {
+		if base != cand {
+			parts = append(parts, fmt.Sprintf("%s: %d→%d", name, base, cand))
+		}
+	}
+	addBool := func(name string, base, cand bool) {
+		if base != cand {
+			parts = append(parts, fmt.Sprintf("%s: %t→%t", name, base, cand))
+		}
+	}
+
+	add("volume_floor", baselineCtrl.VolumeFloor, candidateCtrl.VolumeFloor)
+	addInt("volume_downgrade", baselineCtrl.VolumeDowngrade, candidateCtrl.VolumeDowngrade)
+	addInt("close_strength_boost", baselineCtrl.CloseStrengthBoost, candidateCtrl.CloseStrengthBoost)
+	add("hard_reject_volume", baselineCtrl.HardRejectVolume, candidateCtrl.HardRejectVolume)
+	addInt("conviction_floor", baselineCtrl.ConvictionFloor, candidateCtrl.ConvictionFloor)
+	addInt("volume_boost", baselineCtrl.VolumeBoost, candidateCtrl.VolumeBoost)
+	addInt("neutral_penalty_reduction", baselineCtrl.NeutralPenaltyReduction, candidateCtrl.NeutralPenaltyReduction)
+	addBool("require_trend", baselineCtrl.RequireTrend, candidateCtrl.RequireTrend)
+
+	if len(parts) == 0 {
+		return result.Experiment.MutationType
+	}
+	return strings.Join(parts, ", ")
+}
 func parseLimit(r *http.Request, defaultValue, maxValue int) (int, error) {
 	raw := strings.TrimSpace(r.URL.Query().Get("limit"))
 	if raw == "" {
@@ -471,7 +650,7 @@ func parseLimit(r *http.Request, defaultValue, maxValue int) (int, error) {
 }
 
 func (a *DashboardAPI) handleReportList(w http.ResponseWriter, r *http.Request) {
-	reportDir := "reports"
+	reportDir := filepath.Join(a.workDir, "reports")
 	entries, err := os.ReadDir(reportDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -519,8 +698,128 @@ func (a *DashboardAPI) handleReportList(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]any{"reports": reports})
 }
 
+// UniverseOverlapResponse exposes agent universe coverage and pairwise overlaps.
+type UniverseOverlapResponse struct {
+	Agents   []AgentUniverseView       `json:"agents"`
+	Matrix   map[string]map[string]int `json:"matrix"`
+	Warnings []string                  `json:"warnings"`
+}
+
+// AgentUniverseView shows a single agent's universe coverage.
+type AgentUniverseView struct {
+	AgentID  string   `json:"agent_id"`
+	Name     string   `json:"name"`
+	Layer    string   `json:"layer"`
+	Universe []string `json:"universe"`
+}
+
+func (a *DashboardAPI) handleUniverseOverlap(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	registryPath := filepath.Join(a.workDir, "configs/agents.json")
+	registry, err := orchestrator.LoadRegistry(registryPath)
+	if err != nil {
+		registry = orchestrator.SeedRegistry()
+	}
+
+	agents := make([]AgentUniverseView, 0)
+	byAgent := make(map[string]map[string]struct{})
+	warnings := make([]string, 0)
+
+	for _, agent := range registry.Agents {
+		if !agent.Enabled {
+			continue
+		}
+		universe := make([]string, len(agent.Universe))
+		copy(universe, agent.Universe)
+		if len(universe) == 0 {
+			universe = orchestrator.DefaultSymbols()
+		}
+		agents = append(agents, AgentUniverseView{
+			AgentID:  agent.ID,
+			Name:     agent.Name,
+			Layer:    string(agent.Layer),
+			Universe: universe,
+		})
+		set := make(map[string]struct{}, len(universe))
+		for _, s := range universe {
+			set[s] = struct{}{}
+		}
+		byAgent[agent.ID] = set
+		// Only stock-picking layers are expected to have a dedicated universe.
+		// Context and control layers falling back to defaults is by design, not a warning.
+		if len(agent.Universe) == 0 && isStockPickingLayer(string(agent.Layer)) {
+			warnings = append(warnings, fmt.Sprintf("%s 未設定標的池（fallback 至預設值）", agent.ID))
+		}
+		if len(universe) < 3 {
+			warnings = append(warnings, fmt.Sprintf("%s 標的池僅有 %d 檔標的", agent.ID, len(universe)))
+		}
+	}
+
+	// Track which agents use a fallback universe so we can exclude them from
+	// meaningful overlap calculations (their wide coverage creates noise).
+	fallbackAgents := make(map[string]bool)
+	for _, v := range agents {
+		// In our registry, an empty Universe means fallback to DefaultSymbols.
+		// We look up the original agent config to confirm.
+		for _, agent := range registry.Agents {
+			if agent.ID == v.AgentID {
+				fallbackAgents[v.AgentID] = len(agent.Universe) == 0
+				break
+			}
+		}
+	}
+
+	matrix := make(map[string]map[string]int)
+	for idA, setA := range byAgent {
+		matrix[idA] = make(map[string]int)
+		for idB, setB := range byAgent {
+			if idA == idB {
+				continue
+			}
+			overlap := 0
+			for s := range setA {
+				if _, ok := setB[s]; ok {
+					overlap++
+				}
+			}
+			matrix[idA][idB] = overlap
+			// Crowding warnings are only meaningful among stock-picking layers.
+			// Also skip if either agent uses a fallback universe (wide default coverage creates noise).
+			if overlap >= 3 && isStockPickingLayerByID(idA, agents) && isStockPickingLayerByID(idB, agents) && !fallbackAgents[idA] && !fallbackAgents[idB] {
+				warnings = append(warnings, fmt.Sprintf("標的池重疊過高：%s ↔ %s（%d 檔）", idA, idB, overlap))
+			}
+		}
+	}
+
+	writeJSON(w, http.StatusOK, UniverseOverlapResponse{
+		Agents:   agents,
+		Matrix:   matrix,
+		Warnings: warnings,
+	})
+}
+
+// isStockPickingLayer returns true for layers that are expected to originate
+// symbol-specific recommendations and therefore have a meaningful universe.
+func isStockPickingLayer(layer string) bool {
+	return layer == "sector" || layer == "style" || layer == "superinvestor"
+}
+
+// isStockPickingLayerByID looks up the layer for an agent ID in the provided views.
+func isStockPickingLayerByID(agentID string, views []AgentUniverseView) bool {
+	for _, v := range views {
+		if v.AgentID == agentID {
+			return isStockPickingLayer(v.Layer)
+		}
+	}
+	return false
+}
+
 func (a *DashboardAPI) handleLatestReport(w http.ResponseWriter, r *http.Request) {
-	reportDir := "reports"
+	reportDir := filepath.Join(a.workDir, "reports")
 	entries, err := os.ReadDir(reportDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -628,6 +927,13 @@ func (a *DashboardAPI) handleNarrativeModels(w http.ResponseWriter, r *http.Requ
 	for i, e := range events {
 		themes[i] = e.Theme
 	}
+
+	// Evaluate model prediction errors against replay data so weights are live.
+	replayPath := filepath.Join(a.workDir, "data/replay/tw_extended_90days.csv")
+	if err := a.narrativeEngine.EvaluateModels(replayPath); err != nil {
+		log.Printf("[DashboardAPI] EvaluateModels warning: %v", err)
+	}
+
 	models := a.narrativeEngine.ActiveModels(themes)
 	writeJSON(w, http.StatusOK, map[string]any{"models": models})
 }
@@ -919,10 +1225,15 @@ func (a *DashboardAPI) handleMacroIngest(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	events, snap, err := a.macroIngestor.Ingest(r.Context())
+	stateDir := filepath.Join(a.workDir, "data/state")
 	if err != nil {
+		NewChannelHealthStore(stateDir).Record("us_yahoo", "error", err.Error())
+		NewChannelHealthStore(stateDir).Record("jpy_yahoo", "error", err.Error())
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("ingest failed: %v", err))
 		return
 	}
+	NewChannelHealthStore(stateDir).Record("us_yahoo", "ok", "")
+	NewChannelHealthStore(stateDir).Record("jpy_yahoo", "ok", "")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"events":   events,
 		"snapshot": snap,
@@ -1026,4 +1337,1143 @@ func (a *DashboardAPI) handleTaiwanStressIndex(w http.ResponseWriter, r *http.Re
 		return
 	}
 	writeJSON(w, http.StatusOK, index)
+}
+
+// ExperimentInboxItem represents a single experiment in the inbox.
+type ExperimentInboxItem struct {
+	ExperimentID    string                  `json:"experiment_id"`
+	TargetAgentID   string                  `json:"target_agent_id"`
+	Skill           string                  `json:"skill"`
+	MutationType    string                  `json:"mutation_type"`
+	MutationSummary string                  `json:"mutation_summary,omitempty"`
+	Status          domain.ExperimentStatus `json:"status"`
+	BaselineValue   float64                 `json:"baseline_value"`
+	CandidateValue  float64                 `json:"candidate_value"`
+	CandidatePath   string                  `json:"candidate_path"`
+	RejectReason    string                  `json:"reject_reason,omitempty"`
+	RecordedAt      time.Time               `json:"recorded_at"`
+}
+
+// ExperimentInboxResponse groups experiments by actionable state.
+type ExperimentInboxResponse struct {
+	PendingJudges   []ExperimentInboxItem `json:"pending_judges"`
+	PendingPromotes []ExperimentInboxItem `json:"pending_promotes"`
+	RecentHistory   []ExperimentInboxItem `json:"recent_history"`
+	BaselineVersion int                   `json:"baseline_version"`
+}
+
+func (a *DashboardAPI) handleExperimentInbox(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	policy, err := baseline.Load(a.baselinePath)
+	if err != nil {
+		policy = baseline.DefaultPolicy()
+	}
+
+	experimentsDir := filepath.Join(a.ledgerDir, "experiments")
+	// Auto-expire stale planned/running experiments before building the inbox.
+	if _, err := experiment.ExpireOldExperiments(experimentsDir, experiment.DefaultExperimentTTL); err != nil {
+		log.Printf("[DashboardAPI] warn: experiment TTL cleanup failed: %v", err)
+	}
+
+	entries, err := os.ReadDir(experimentsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeJSON(w, http.StatusOK, ExperimentInboxResponse{BaselineVersion: policy.Version})
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read experiments dir: %v", err))
+		return
+	}
+
+	pendingJudges := make([]ExperimentInboxItem, 0)
+	pendingPromotes := make([]ExperimentInboxItem, 0)
+	recentHistory := make([]ExperimentInboxItem, 0)
+
+	promotedIDs := make(map[string]bool)
+	for _, pr := range policy.Promotions {
+		promotedIDs[pr.ExperimentID] = true
+	}
+
+	// Collect all accepted items first so we can deduplicate by agent.
+	var allAccepted []ExperimentInboxItem
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		path := filepath.Join(experimentsDir, entry.Name())
+		bytes, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var result domain.PromptExperimentResult
+		if err := json.Unmarshal(bytes, &result); err != nil {
+			continue
+		}
+
+		item := ExperimentInboxItem{
+			ExperimentID:    result.Experiment.ID,
+			TargetAgentID:   result.Experiment.TargetAgentID,
+			Skill:           result.Experiment.Skill,
+			MutationType:    result.Experiment.MutationType,
+			MutationSummary: buildMutationSummary(policy, result),
+			Status:          result.Experiment.Status,
+			BaselineValue:   result.Experiment.BaselineValue,
+			CandidateValue:  result.Experiment.CandidateValue,
+			CandidatePath:   result.CandidatePrompt,
+			RejectReason:    result.Experiment.RevertReason,
+			RecordedAt:      result.RecordedAt,
+		}
+
+		switch result.Experiment.Status {
+		case domain.ExperimentRunning, domain.ExperimentPlanned:
+			pendingJudges = append(pendingJudges, item)
+		case domain.ExperimentAccepted:
+			allAccepted = append(allAccepted, item)
+		default:
+			recentHistory = append(recentHistory, item)
+		}
+	}
+
+	// For each agent, keep only the latest accepted experiment as pending promote;
+	// older accepted experiments and already-promoted ones go to history.
+	latestByAgent := make(map[string]ExperimentInboxItem)
+	for _, item := range allAccepted {
+		existing, ok := latestByAgent[item.TargetAgentID]
+		if !ok || item.RecordedAt.After(existing.RecordedAt) {
+			latestByAgent[item.TargetAgentID] = item
+		}
+	}
+	for _, item := range allAccepted {
+		latest := latestByAgent[item.TargetAgentID]
+		if promotedIDs[item.ExperimentID] || item.ExperimentID != latest.ExperimentID {
+			recentHistory = append(recentHistory, item)
+		} else {
+			pendingPromotes = append(pendingPromotes, item)
+		}
+	}
+
+	slices.SortFunc(pendingJudges, func(a, b ExperimentInboxItem) int {
+		if a.RecordedAt.After(b.RecordedAt) {
+			return -1
+		}
+		return 1
+	})
+	slices.SortFunc(pendingPromotes, func(a, b ExperimentInboxItem) int {
+		if a.RecordedAt.After(b.RecordedAt) {
+			return -1
+		}
+		return 1
+	})
+	slices.SortFunc(recentHistory, func(a, b ExperimentInboxItem) int {
+		if a.RecordedAt.After(b.RecordedAt) {
+			return -1
+		}
+		return 1
+	})
+	if len(recentHistory) > 10 {
+		recentHistory = recentHistory[:10]
+	}
+
+	writeJSON(w, http.StatusOK, ExperimentInboxResponse{
+		PendingJudges:   pendingJudges,
+		PendingPromotes: pendingPromotes,
+		RecentHistory:   recentHistory,
+		BaselineVersion: policy.Version,
+	})
+}
+
+func (a *DashboardAPI) handleJudgeExperiment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var req struct {
+		ExperimentID string `json:"experiment_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if req.ExperimentID == "" {
+		writeJSONError(w, http.StatusBadRequest, "experiment_id required")
+		return
+	}
+
+	resultPath := filepath.Join(a.ledgerDir, "experiments", req.ExperimentID+".json")
+	if _, err := os.Stat(resultPath); err != nil {
+		writeJSONError(w, http.StatusNotFound, "experiment result not found")
+		return
+	}
+
+	replayPath := filepath.Join(a.workDir, "data/replay/tw_extended_90days.csv")
+	judge := experiment.NewJudge(ledger.NewStore(a.ledgerDir), replayPath, a.baselinePath)
+	result, err := judge.Evaluate(resultPath)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("judge failed: %v", err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":    true,
+		"status":     result.Experiment.Status,
+		"baseline":   result.Experiment.BaselineValue,
+		"candidate":  result.Experiment.CandidateValue,
+		"experiment": result.Experiment,
+	})
+}
+
+func (a *DashboardAPI) handleExperimentDiff(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	experimentID := strings.TrimSpace(r.URL.Query().Get("experiment_id"))
+	if experimentID == "" {
+		writeJSONError(w, http.StatusBadRequest, "experiment_id required")
+		return
+	}
+
+	resultPath := filepath.Join(a.ledgerDir, "experiments", experimentID+".json")
+	bytes, err := os.ReadFile(resultPath)
+	if err != nil {
+		writeJSONError(w, http.StatusNotFound, "experiment result not found")
+		return
+	}
+	var result domain.PromptExperimentResult
+	if err := json.Unmarshal(bytes, &result); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "invalid experiment result")
+		return
+	}
+
+	// Always use the original agent prompt file as the baseline for diff.
+	promptFile := result.Brief.PromptFile
+	if !filepath.IsAbs(promptFile) {
+		promptFile = filepath.Join(a.workDir, promptFile)
+	}
+	baselineBytes, err := os.ReadFile(promptFile)
+	baselinePrompt := ""
+	if err == nil {
+		baselinePrompt = string(baselineBytes)
+	}
+
+	candidateBytes, err := os.ReadFile(result.CandidatePrompt)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "cannot read candidate prompt")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"baseline_prompt":  baselinePrompt,
+		"candidate_prompt": string(candidateBytes),
+		"target_agent_id":  result.Experiment.TargetAgentID,
+		"skill":            result.Experiment.Skill,
+	})
+}
+
+func (a *DashboardAPI) handleBacktestRun(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var req struct {
+		Start string `json:"start"`
+		End   string `json:"end"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if req.Start == "" || req.End == "" {
+		writeJSONError(w, http.StatusBadRequest, "start and end dates required")
+		return
+	}
+	startDate, err := time.Parse("2006-01-02", req.Start)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid start date format (YYYY-MM-DD)")
+		return
+	}
+	endDate, err := time.Parse("2006-01-02", req.End)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid end date format (YYYY-MM-DD)")
+		return
+	}
+
+	a.backtestMu.Lock()
+	if a.backtestRunning {
+		a.backtestMu.Unlock()
+		writeJSONError(w, http.StatusConflict, "backtest already running")
+		return
+	}
+	a.backtestRunning = true
+	a.backtestStatus = map[string]interface{}{
+		"running":    true,
+		"started_at": time.Now().UTC(),
+		"start":      req.Start,
+		"end":        req.End,
+	}
+	a.backtestMu.Unlock()
+
+	go func() {
+		cfg := config.Load()
+		if cfg.ReplayDataPath == "samples/replay/twse_stock_day_all_sample.csv" {
+			cfg.ReplayDataPath = "data/replay/tw_extended_90days.csv"
+		}
+		runner := backtest.NewRunner(cfg)
+		summary, err := runner.Run(startDate, endDate)
+		if err == nil {
+			if rerr := runner.GenerateReport(summary); rerr != nil {
+				log.Printf("[DashboardAPI] backtest report generation failed: %v", rerr)
+			}
+		}
+
+		a.backtestMu.Lock()
+		a.backtestRunning = false
+		a.backtestStatus["running"] = false
+		a.backtestStatus["finished_at"] = time.Now().UTC()
+		if err != nil {
+			a.backtestStatus["error"] = err.Error()
+		} else {
+			a.backtestStatus["window_id"] = summary.WindowID
+			a.backtestStatus["sessions"] = summary.SessionCount
+			a.backtestStatus["outcomes"] = summary.OutcomeCount
+			a.backtestStatus["worst_agent"] = summary.WorstAgentID
+		}
+		a.backtestMu.Unlock()
+	}()
+
+	writeJSON(w, http.StatusAccepted, map[string]interface{}{
+		"running":      true,
+		"check_status": "/api/backtest/status",
+		"start":        req.Start,
+		"end":          req.End,
+	})
+}
+
+func (a *DashboardAPI) handleBacktestStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	a.backtestMu.Lock()
+	status := make(map[string]interface{}, len(a.backtestStatus))
+	for k, v := range a.backtestStatus {
+		status[k] = v
+	}
+	a.backtestMu.Unlock()
+	writeJSON(w, http.StatusOK, status)
+}
+
+// SystemHealthResponse exposes config consistency and freshness.
+type SystemHealthResponse struct {
+	BaselineVersion       string        `json:"baseline_version"`
+	ReplayDataLatestDate  string        `json:"replay_data_latest_date"`
+	ReplayDataPathOK      bool          `json:"replay_data_path_ok"`
+	LastWindowID          string        `json:"last_window_id"`
+	LastWindowGeneratedAt time.Time     `json:"last_window_generated_at"`
+	Warnings              []string      `json:"warnings"`
+	Regime                domain.Regime `json:"regime"`
+}
+
+func (a *DashboardAPI) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	warnings := make([]string, 0)
+
+	policy, err := baseline.Load(a.baselinePath)
+	baselineVersion := "未知"
+	if err != nil {
+		warnings = append(warnings, "基線策略未載入")
+	} else {
+		baselineVersion = fmt.Sprintf("v%d", policy.Version)
+	}
+
+	replayPath := filepath.Join(a.workDir, "data/replay/tw_extended_90days.csv")
+	replayOK := true
+	latestReplayDate := ""
+	ds, err := replay.LoadTWSEOpenDataCSV(replayPath)
+	if err != nil {
+		replayOK = false
+		warnings = append(warnings, "replay 資料無法讀取："+err.Error())
+	} else if len(ds.Dates) > 0 {
+		latestReplayDate = ds.Dates[len(ds.Dates)-1].Format("2006-01-02")
+	}
+
+	lastWindow := ""
+	var lastWindowTime time.Time
+	windowsDir := filepath.Join(a.ledgerDir, "windows")
+	if entries, err := os.ReadDir(windowsDir); err == nil {
+		var latest time.Time
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || strings.Contains(e.Name(), "mutation-brief") {
+				continue
+			}
+			info, err := e.Info()
+			if err != nil {
+				continue
+			}
+			if info.ModTime().After(latest) {
+				latest = info.ModTime()
+				lastWindow = strings.TrimSuffix(e.Name(), ".json")
+				lastWindowTime = info.ModTime()
+			}
+		}
+	}
+
+	if baselineVersion != "未知" && lastWindowTime.IsZero() {
+		warnings = append(warnings, "找不到回測窗口摘要")
+	}
+
+	// Crowding check from latest session outcomes
+	latestSummary, _ := a.loadSessionSummary("")
+	if latestSummary != nil {
+		store := ledger.NewStore(a.ledgerDir)
+		outcomes, _ := store.LoadSessionOutcomes(latestSummary.SessionID)
+		symbolAgents := make(map[string]map[string]struct{})
+		for _, outcome := range outcomes {
+			if symbolAgents[outcome.Symbol] == nil {
+				symbolAgents[outcome.Symbol] = make(map[string]struct{})
+			}
+			symbolAgents[outcome.Symbol][outcome.AgentID] = struct{}{}
+		}
+		for symbol, agents := range symbolAgents {
+			count := len(agents)
+			if count >= 4 {
+				warnings = append(warnings, fmt.Sprintf("重疊過高：%s（%d 個 AI）", symbol, count))
+			} else if count >= 3 {
+				warnings = append(warnings, fmt.Sprintf("擁擠交易：%s（%d 個 AI）", symbol, count))
+			}
+		}
+	}
+	regime := domain.RegimeNeutral
+	if summary, err := a.loadSessionSummary(""); err == nil && summary != nil {
+		regime = summary.Regime
+	}
+	writeJSON(w, http.StatusOK, SystemHealthResponse{
+		BaselineVersion:       baselineVersion,
+		ReplayDataLatestDate:  latestReplayDate,
+		ReplayDataPathOK:      replayOK,
+		LastWindowID:          lastWindow,
+		LastWindowGeneratedAt: lastWindowTime,
+		Warnings:              warnings,
+		Regime:                regime,
+	})
+}
+
+// PipelineItem represents a single recommendation through the guard pipeline.
+type PipelineItem struct {
+	Symbol        string    `json:"symbol"`
+	AgentID       string    `json:"agent_id"`
+	Skill         string    `json:"skill"`
+	Layer         string    `json:"layer"`
+	Side          string    `json:"side"`
+	Conviction    int       `json:"conviction"`
+	TargetPrice   float64   `json:"target_price"`
+	StopLossPrice float64   `json:"stop_loss_price"`
+	ForwardReturn float64   `json:"forward_return"`
+	Hit           bool      `json:"hit"`
+	Reason        string    `json:"reason"`
+	Price         float64   `json:"price"`
+	PassedGuards  bool      `json:"passed_guards"`
+	GuardReason   string    `json:"guard_reason"`
+	Tags          []string  `json:"tags"`
+	RecordedAt    time.Time `json:"recorded_at"`
+}
+
+// RecommendationPipelineResponse returns the latest session pipeline.
+type RecommendationPipelineResponse struct {
+	SessionID     string                `json:"session_id"`
+	Regime        domain.Regime         `json:"regime"`
+	Items         []PipelineItem        `json:"items"`
+	GuardOutcomes []domain.GuardOutcome `json:"guard_outcomes"`
+	RecordedAt    time.Time             `json:"recorded_at"`
+}
+
+func computePipelineTags(ds *replay.Dataset, symbol string, date time.Time) []string {
+	if ds == nil {
+		return nil
+	}
+	dateKey := date.Format("2006-01-02")
+	bar, ok := ds.ByDate[dateKey][symbol]
+	if !ok {
+		return nil
+	}
+	var prevBar domain.DailyBar
+	var hasPrev bool
+	for i, d := range ds.Dates {
+		if d.Format("2006-01-02") == dateKey && i > 0 {
+			prevBar = ds.ByDate[ds.Dates[i-1].Format("2006-01-02")][symbol]
+			hasPrev = prevBar.Close > 0
+			break
+		}
+	}
+
+	tags := make([]string, 0, 3)
+	changePct := 0.0
+	if bar.Open > 0 {
+		changePct = (bar.Close - bar.Open) / bar.Open
+	}
+	if changePct > 0.035 {
+		tags = append(tags, "長紅")
+	} else if changePct < -0.035 {
+		tags = append(tags, "長黑")
+	}
+	if hasPrev && prevBar.Volume > 0 && bar.Volume > int64(float64(prevBar.Volume)*1.5) {
+		tags = append(tags, "放量")
+	}
+
+	high5 := bar.Close
+	low5 := bar.Close
+	for i, d := range ds.Dates {
+		if d.Format("2006-01-02") == dateKey {
+			start := i - 4
+			if start < 0 {
+				start = 0
+			}
+			for _, pd := range ds.Dates[start : i+1] {
+				b := ds.ByDate[pd.Format("2006-01-02")][symbol]
+				if b.Close > high5 {
+					high5 = b.Close
+				}
+				if b.Close > 0 && (low5 == 0 || b.Close < low5) {
+					low5 = b.Close
+				}
+			}
+			break
+		}
+	}
+	if bar.Close > 0 && bar.Close == high5 {
+		tags = append(tags, "創5日高")
+	}
+	if bar.Close > 0 && low5 > 0 && bar.Close == low5 {
+		tags = append(tags, "創5日低")
+	}
+	return tags
+}
+
+func (a *DashboardAPI) handleSessions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	sessionsDir := filepath.Join(a.ledgerDir, "sessions")
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeJSON(w, http.StatusOK, map[string]any{"sessions": []any{}})
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read sessions dir: %v", err))
+		return
+	}
+
+	type sessionMeta struct {
+		SessionID    string    `json:"session_id"`
+		RecordedAt   time.Time `json:"recorded_at"`
+		Regime       string    `json:"regime"`
+		OutcomeCount int       `json:"outcome_count"`
+	}
+
+	sessions := make([]sessionMeta, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
+		bytes, err := os.ReadFile(summaryPath)
+		if err != nil {
+			continue
+		}
+		var summary domain.SessionSummary
+		if err := json.Unmarshal(bytes, &summary); err != nil {
+			continue
+		}
+		sessions = append(sessions, sessionMeta{
+			SessionID:    summary.SessionID,
+			RecordedAt:   summary.RecordedAt,
+			Regime:       string(summary.Regime),
+			OutcomeCount: summary.OutcomeCount,
+		})
+	}
+
+	// Sort by session trading date descending, then RecordedAt tiebreaker.
+	slices.SortFunc(sessions, func(a, b sessionMeta) int {
+		aDate := sessionDateFromID(a.SessionID)
+		bDate := sessionDateFromID(b.SessionID)
+		switch {
+		case aDate.After(bDate):
+			return -1
+		case aDate.Before(bDate):
+			return 1
+		case a.RecordedAt.After(b.RecordedAt):
+			return -1
+		case a.RecordedAt.Before(b.RecordedAt):
+			return 1
+		default:
+			return 0
+		}
+	})
+
+	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions})
+}
+
+func (a *DashboardAPI) handleRecommendationPipeline(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	showAll := r.URL.Query().Get("show_all") == "true"
+	sessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
+
+	summary, err := a.loadSessionSummary(sessionID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load recommendation pipeline summary: %v", err))
+		return
+	}
+	if summary == nil {
+		writeJSON(w, http.StatusOK, RecommendationPipelineResponse{})
+		return
+	}
+
+	var ds *replay.Dataset
+	cfg := config.Load()
+	replayPath := cfg.ReplayDataPath
+	if replayPath == "samples/replay/twse_stock_day_all_sample.csv" {
+		replayPath = "data/replay/tw_extended_90days.csv"
+	}
+	if replayPath != "" {
+		if !filepath.IsAbs(replayPath) {
+			replayPath = filepath.Join(a.workDir, replayPath)
+		}
+		if dsTmp, err := replay.LoadTWSEOpenDataCSV(replayPath); err == nil {
+			ds = dsTmp
+		}
+	}
+
+	sessionsDir := filepath.Join(a.ledgerDir, "sessions")
+	outcomesPath := filepath.Join(sessionsDir, summary.SessionID, "recommendation_outcomes.jsonl")
+	items := make([]PipelineItem, 0)
+	if data, err := os.ReadFile(outcomesPath); err == nil {
+		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+		for _, line := range lines {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			var outcome struct {
+				AgentID       string    `json:"AgentID"`
+				Skill         string    `json:"Skill"`
+				Layer         string    `json:"Layer"`
+				Symbol        string    `json:"Symbol"`
+				Side          string    `json:"Side"`
+				Conviction    int       `json:"Conviction"`
+				TargetPrice   float64   `json:"TargetPrice"`
+				StopLossPrice float64   `json:"StopLossPrice"`
+				ForwardReturn float64   `json:"ForwardReturn"`
+				Hit           bool      `json:"Hit"`
+				Reason        string    `json:"Reason"`
+				Price         float64   `json:"Price"`
+				PassedGuards  bool      `json:"PassedGuards"`
+				GuardReason   string    `json:"GuardReason"`
+				RecordedAt    time.Time `json:"RecordedAt"`
+			}
+			if err := json.Unmarshal([]byte(line), &outcome); err != nil {
+				continue
+			}
+			fr := outcome.ForwardReturn
+			price := outcome.Price
+			side := outcome.Side
+			passedGuards := outcome.PassedGuards
+			// Legacy sessions (generated before PassedGuards field existed)
+			// should default to true to preserve backward-compatible display.
+			if !passedGuards && !strings.Contains(line, `"PassedGuards"`) {
+				passedGuards = true
+			}
+			if ds != nil && !outcome.RecordedAt.IsZero() {
+				if fr == 0 {
+					if recalculated, ok := ds.ForwardReturn(outcome.Symbol, outcome.RecordedAt, 1); ok {
+						fr = recalculated
+					}
+				}
+				if price == 0 {
+					if bar, ok := ds.ByDate[outcome.RecordedAt.Format("2006-01-02")][outcome.Symbol]; ok {
+						price = bar.Close
+					}
+				}
+			}
+			if side == "" {
+				side = string(domain.SideBuy)
+			}
+			tp := outcome.TargetPrice
+			slp := outcome.StopLossPrice
+			if tp == 0 && slp == 0 && price > 0 {
+				tp, slp = fallbackPriceTargets(outcome.Skill, price)
+			}
+			if !showAll && !passedGuards {
+				continue
+			}
+			tags := computePipelineTags(ds, outcome.Symbol, outcome.RecordedAt)
+			items = append(items, PipelineItem{
+				Symbol:        outcome.Symbol,
+				AgentID:       outcome.AgentID,
+				Skill:         outcome.Skill,
+				Layer:         outcome.Layer,
+				Side:          side,
+				Conviction:    outcome.Conviction,
+				TargetPrice:   tp,
+				StopLossPrice: slp,
+				ForwardReturn: fr,
+				Hit:           fr > 0,
+				Reason:        outcome.Reason,
+				Price:         price,
+				PassedGuards:  passedGuards,
+				GuardReason:   outcome.GuardReason,
+				Tags:          tags,
+				RecordedAt:    outcome.RecordedAt,
+			})
+		}
+	}
+
+	guards := make([]domain.GuardOutcome, 0, len(summary.GuardOutcomes))
+	for _, g := range summary.GuardOutcomes {
+		guards = append(guards, domain.GuardOutcome{
+			GuardID:     g.GuardID,
+			GuardSkill:  g.GuardSkill,
+			Severity:    g.Severity,
+			Passed:      g.Passed,
+			Reason:      g.Reason,
+			InputCount:  g.InputCount,
+			OutputCount: g.OutputCount,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, RecommendationPipelineResponse{
+		SessionID:     summary.SessionID,
+		Regime:        summary.Regime,
+		Items:         items,
+		GuardOutcomes: guards,
+		RecordedAt:    summary.RecordedAt,
+	})
+}
+
+// fallbackPriceTargets returns reasonable target/stop-loss multipliers for legacy
+// sessions that did not persist TargetPrice/StopLossPrice in outcomes.
+// Multipliers are aligned with the orchestrator executor definitions.
+func fallbackPriceTargets(skill string, price float64) (float64, float64) {
+	var targetMult, stopLossMult float64
+	switch skill {
+	case "semiconductor_desk":
+		targetMult, stopLossMult = 1.06, 0.95
+	case "ai_supply_chain_desk":
+		targetMult, stopLossMult = 1.08, 0.95
+	case "etf_rotation_desk":
+		targetMult, stopLossMult = 1.04, 0.97
+	case "financials_desk":
+		targetMult, stopLossMult = 1.05, 0.96
+	case "shipping_desk":
+		targetMult, stopLossMult = 1.07, 0.94
+	case "growth_momentum":
+		targetMult, stopLossMult = 1.08, 0.95
+	case "value_yield":
+		targetMult, stopLossMult = 1.05, 0.96
+	case "earnings_quality":
+		targetMult, stopLossMult = 1.06, 0.95
+	case "technical_breakout":
+		targetMult, stopLossMult = 1.10, 0.94
+	case "alpha_discovery":
+		targetMult, stopLossMult = 1.06, 0.95
+	default:
+		targetMult, stopLossMult = 1.05, 0.95
+	}
+	return price * targetMult, price * stopLossMult
+}
+
+// DataChannel represents a single data source configuration and health status.
+type DataChannel struct {
+	Country    string `json:"country"`
+	Platform   string `json:"platform"`
+	APIFormat  string `json:"api_format"`
+	Path       string `json:"path"`
+	Storage    string `json:"storage"`
+	Status     string `json:"status"`
+	StatusText string `json:"status_text"`
+	UpdatedAt  string `json:"updated_at"`
+	LastError  string `json:"last_error,omitempty"`
+	ChannelID  string `json:"channel_id"`
+}
+
+func (a *DashboardAPI) handleDataChannels(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	now := time.Now()
+	channels := make([]DataChannel, 0)
+	healthStore := NewChannelHealthStore(filepath.Join(a.workDir, "data/state"))
+
+	// 1. Yahoo Finance Macro (US + Global)
+	macroPath := filepath.Join(a.workDir, "data/state/macro/latest.json")
+	macroStatus, macroUpdated := a.checkMacroHealth(macroPath, now)
+	macroRec := healthStore.Get("us_yahoo")
+	if macroRec != nil && macroRec.Status != "" {
+		macroStatus = macroRec.Status
+		if macroRec.LastError != "" {
+			macroUpdated = "上次失敗: " + macroRec.LastError
+		} else {
+			macroUpdated = "上次抓取: " + macroRec.LastFetchAt
+		}
+	}
+	channels = append(channels, DataChannel{
+		ChannelID:  "us_yahoo",
+		Country:    "美國",
+		Platform:   "Yahoo Finance",
+		APIFormat:  "REST JSON",
+		Path:       "query1.finance.yahoo.com/v8/finance/chart",
+		Storage:    "data/state/macro/latest.json",
+		Status:     macroStatus,
+		StatusText: statusText(macroStatus),
+		UpdatedAt:  macroUpdated,
+		LastError: func() string {
+			if macroRec != nil {
+				return macroRec.LastError
+			}
+			return ""
+		}(),
+	})
+
+	// 2. TWSE OpenAPI / T86 - Replay data
+	replayPath := filepath.Join(a.workDir, "data/replay/tw_extended_90days.csv")
+	replayStatus, replayUpdated := a.checkReplayHealth(replayPath, now)
+	replayRec := healthStore.Get("twse_replay")
+	if replayRec != nil && replayRec.Status != "" {
+		replayStatus = replayRec.Status
+		if replayRec.LastError != "" {
+			replayUpdated = "上次失敗: " + replayRec.LastError
+		} else if replayRec.LastSuccessAt != "" {
+			replayUpdated = "上次成功: " + replayRec.LastSuccessAt
+		}
+	}
+	channels = append(channels, DataChannel{
+		ChannelID:  "twse_replay",
+		Country:    "台灣",
+		Platform:   "TWSE 證交所",
+		APIFormat:  "OpenAPI / CSV",
+		Path:       "openapi.twse.com.tw / www.twse.com.tw",
+		Storage:    "data/replay/tw_extended_90days.csv",
+		Status:     replayStatus,
+		StatusText: statusText(replayStatus),
+		UpdatedAt:  replayUpdated,
+		LastError: func() string {
+			if replayRec != nil {
+				return replayRec.LastError
+			}
+			return ""
+		}(),
+	})
+
+	// 3. TWSE Capital Flow
+	capFlowDir := filepath.Join(a.workDir, "data/state/capital_flow")
+	capStatus, capUpdated := a.checkCapitalFlowHealth(capFlowDir, now)
+	channels = append(channels, DataChannel{
+		ChannelID:  "twse_capital_flow",
+		Country:    "台灣",
+		Platform:   "TWSE 三大法人",
+		APIFormat:  "T86 JSON",
+		Path:       "www.twse.com.tw/rwd/zh/fund/T86",
+		Storage:    "data/state/capital_flow/*.json",
+		Status:     capStatus,
+		StatusText: statusText(capStatus),
+		UpdatedAt:  capUpdated,
+	})
+
+	// 4. Fugle (optional/live)
+	fugleKey := os.Getenv("FUGLE_API_KEY")
+	fugleStatus := "inactive"
+	fugleUpdated := "-"
+	if fugleKey != "" {
+		fugleStatus = "ok"
+		fugleUpdated = "API Key 已設定"
+	} else {
+		fugleUpdated = "未設定 API Key"
+	}
+	channels = append(channels, DataChannel{
+		ChannelID:  "fugle",
+		Country:    "台灣",
+		Platform:   "Fugle 富果",
+		APIFormat:  "REST JSON",
+		Path:       "api.fugle.tw",
+		Storage:    "(live cache / memory)",
+		Status:     fugleStatus,
+		StatusText: statusText(fugleStatus),
+		UpdatedAt:  fugleUpdated,
+	})
+
+	// 5. JPY via Yahoo (Japan indicator, same endpoint as US)
+	jpyStatus, jpyUpdated := a.checkJPYHealth(macroPath, now)
+	jpyRec := healthStore.Get("jpy_yahoo")
+	if jpyRec != nil && jpyRec.Status != "" {
+		jpyStatus = jpyRec.Status
+		if jpyRec.LastError != "" {
+			jpyUpdated = "上次失敗: " + jpyRec.LastError
+		} else {
+			jpyUpdated = "上次抓取: " + jpyRec.LastFetchAt
+		}
+	}
+	channels = append(channels, DataChannel{
+		ChannelID:  "jpy_yahoo",
+		Country:    "日本",
+		Platform:   "Yahoo Finance (JPY)",
+		APIFormat:  "REST JSON",
+		Path:       "query1.finance.yahoo.com/v8/finance/chart",
+		Storage:    "data/state/macro/latest.json",
+		Status:     jpyStatus,
+		StatusText: statusText(jpyStatus),
+		UpdatedAt:  jpyUpdated,
+		LastError: func() string {
+			if jpyRec != nil {
+				return jpyRec.LastError
+			}
+			return ""
+		}(),
+	})
+
+	// Build alerts list for overview card
+	alerts := healthStore.Alerts()
+	// Also add age-based alerts if health store doesn't cover them
+	for _, c := range channels {
+		if c.Status == "error" {
+			found := false
+			for _, a := range alerts {
+				if a.ChannelID == c.ChannelID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				alerts = append(alerts, ChannelAlert{
+					ChannelID: c.ChannelID,
+					Status:    c.Status,
+					Error:     c.LastError,
+				})
+			}
+		}
+	}
+	if alerts == nil {
+		alerts = []ChannelAlert{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"channels":  channels,
+		"alerts":    alerts,
+		"generated": now.Format("2006-01-02 15:04:05"),
+	})
+}
+
+func (a *DashboardAPI) checkMacroHealth(path string, now time.Time) (string, string) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return "error", "檔案不存在"
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "error", "無法讀取"
+	}
+	var snap struct {
+		RecordedAt int64 `json:"recorded_at"`
+		DXY        struct {
+			Timestamp int64 `json:"timestamp"`
+		} `json:"dxy"`
+		Oil struct {
+			Timestamp int64 `json:"timestamp"`
+		} `json:"oil"`
+	}
+	_ = json.Unmarshal(data, &snap)
+
+	latest := info.ModTime()
+	if snap.DXY.Timestamp > 0 {
+		dxyTime := time.Unix(snap.DXY.Timestamp, 0)
+		if dxyTime.After(latest) {
+			latest = dxyTime
+		}
+	}
+	if snap.Oil.Timestamp > 0 {
+		oilTime := time.Unix(snap.Oil.Timestamp, 0)
+		if oilTime.After(latest) {
+			latest = oilTime
+		}
+	}
+
+	age := now.Sub(latest)
+	if age < 24*time.Hour {
+		return "ok", latest.Format("2006-01-02 15:04:05")
+	}
+	if age < 7*24*time.Hour {
+		return "warn", latest.Format("2006-01-02 15:04:05")
+	}
+	return "error", latest.Format("2006-01-02 15:04:05")
+}
+
+func (a *DashboardAPI) checkJPYHealth(path string, now time.Time) (string, string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "error", "檔案不存在"
+	}
+	var snap struct {
+		JPY struct {
+			Timestamp int64 `json:"timestamp"`
+		} `json:"jpy"`
+	}
+	_ = json.Unmarshal(data, &snap)
+	if snap.JPY.Timestamp == 0 {
+		return "error", "無 JPY 資料"
+	}
+	t := time.Unix(snap.JPY.Timestamp, 0)
+	age := now.Sub(t)
+	if age < 24*time.Hour {
+		return "ok", t.Format("2006-01-02 15:04:05")
+	}
+	if age < 7*24*time.Hour {
+		return "warn", t.Format("2006-01-02 15:04:05")
+	}
+	return "error", t.Format("2006-01-02 15:04:05")
+}
+
+func (a *DashboardAPI) checkReplayHealth(path string, now time.Time) (string, string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "error", "檔案不存在"
+	}
+	defer f.Close()
+
+	// Read all lines to find the last two trading dates and compute zero-change ratio
+	var lastLine string
+	scanner := bufio.NewScanner(f)
+	lines := make([]string, 0)
+	for scanner.Scan() {
+		line := scanner.Text()
+		lines = append(lines, line)
+		lastLine = line
+	}
+	if lastLine == "" {
+		return "error", "空檔案"
+	}
+	parts := strings.Split(lastLine, ",")
+	if len(parts) == 0 {
+		return "error", "格式錯誤"
+	}
+	latestDate := strings.TrimSpace(parts[0])
+	t, err := time.Parse("2006-01-02", latestDate)
+	if err != nil {
+		return "error", "日期解析失敗"
+	}
+
+	// Check zero-change ratio for last two dates
+	if len(lines) > 1 {
+		prevCloseByCode := make(map[string]float64)
+		lastCloseByCode := make(map[string]float64)
+		var prevDate string
+		for i := len(lines) - 1; i >= 0; i-- {
+			row := strings.Split(lines[i], ",")
+			if len(row) < 9 || row[0] == "Date" {
+				continue
+			}
+			date := row[0]
+			if date != latestDate && prevDate == "" {
+				prevDate = date
+			}
+			if date == latestDate && len(row) >= 9 {
+				closeVal, _ := strconv.ParseFloat(strings.TrimSpace(row[8]), 64)
+				lastCloseByCode[row[1]] = closeVal
+			}
+			if date == prevDate && len(row) >= 9 {
+				closeVal, _ := strconv.ParseFloat(strings.TrimSpace(row[8]), 64)
+				prevCloseByCode[row[1]] = closeVal
+			}
+		}
+		zeroChange := 0
+		compared := 0
+		for code, lastClose := range lastCloseByCode {
+			if prevClose, ok := prevCloseByCode[code]; ok && prevClose > 0 {
+				compared++
+				if lastClose == prevClose {
+					zeroChange++
+				}
+			}
+		}
+		if compared > 0 {
+			ratio := float64(zeroChange) / float64(compared)
+			if ratio > 0.3 {
+				return "warn", fmt.Sprintf("%s (%.0f%% 標的隔日收盤價無變動，請檢查 backfill 資料)", latestDate, ratio*100)
+			}
+		}
+	}
+
+	age := now.Sub(t)
+	if age < 3*24*time.Hour {
+		return "ok", latestDate
+	}
+	if age < 14*24*time.Hour {
+		return "warn", latestDate
+	}
+	return "error", latestDate
+}
+
+func (a *DashboardAPI) checkCapitalFlowHealth(dir string, now time.Time) (string, string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) == 0 {
+		return "error", "無資料"
+	}
+	var latestFile string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		if e.Name() > latestFile {
+			latestFile = e.Name()
+		}
+	}
+	if latestFile == "" {
+		return "error", "無有效檔案"
+	}
+	dateStr := strings.TrimSuffix(latestFile, ".json")
+	t, err := time.Parse("20060102", dateStr)
+	if err != nil {
+		return "error", "日期解析失敗"
+	}
+	info, err := os.Stat(filepath.Join(dir, latestFile))
+	if err == nil && info.ModTime().After(t) {
+		t = info.ModTime()
+	}
+
+	age := now.Sub(t)
+	if age < 48*time.Hour {
+		return "ok", dateStr
+	}
+	if age < 7*24*time.Hour {
+		return "warn", dateStr
+	}
+	return "error", dateStr
+}
+
+func statusText(status string) string {
+	switch status {
+	case "ok":
+		return "正常"
+	case "warn":
+		return "延遲"
+	case "error":
+		return "異常"
+	case "inactive":
+		return "未啟用"
+	default:
+		return "未知"
+	}
 }

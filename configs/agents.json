@@ -3,228 +3,464 @@
   "agents": [
     {
       "id": "taiwan-macro-01",
-      "name": "Taiwan Macro",
+      "name": "台灣總經",
       "layer": "context",
       "skill": "taiwan_macro",
       "promptFile": "prompts/agents/taiwan_macro.md",
       "enabled": true,
       "universe": [],
-      "primaryMetrics": ["regime_accuracy", "drawdown_avoidance"],
-      "requiredSkills": ["taiwan_macro", "replay_operator"],
-      "forbiddenActions": ["single_stock_orders", "position_sizing_override"],
-      "operatingNotes": ["Only output regime and macro risk context."]
+      "primaryMetrics": [
+        "regime_accuracy",
+        "drawdown_avoidance"
+      ],
+      "requiredSkills": [
+        "taiwan_macro",
+        "replay_operator"
+      ],
+      "forbiddenActions": [
+        "single_stock_orders",
+        "position_sizing_override"
+      ],
+      "operatingNotes": [
+        "Only output regime and macro risk context."
+      ]
     },
     {
       "id": "foreign-flow-01",
-      "name": "Foreign Flow",
+      "name": "外資流向",
       "layer": "context",
       "skill": "foreign_flow",
       "promptFile": "prompts/agents/foreign_flow.md",
       "enabled": true,
       "universe": [],
-      "primaryMetrics": ["regime_accuracy", "flow_alignment"],
-      "requiredSkills": ["foreign_flow", "replay_operator"],
-      "forbiddenActions": ["single_factor_final_decision"],
-      "operatingNotes": ["Treat flow as a modifier, not a full thesis."]
+      "primaryMetrics": [
+        "regime_accuracy",
+        "flow_alignment"
+      ],
+      "requiredSkills": [
+        "foreign_flow",
+        "replay_operator"
+      ],
+      "forbiddenActions": [
+        "single_factor_final_decision"
+      ],
+      "operatingNotes": [
+        "Treat flow as a modifier, not a full thesis."
+      ]
     },
     {
       "id": "semi-desk-01",
-      "name": "Semiconductor Desk",
+      "name": "半導體產業桌",
       "layer": "sector",
       "skill": "semiconductor_desk",
       "promptFile": "prompts/agents/semiconductor_desk.md",
       "enabled": true,
-      "universe": ["2330.TW", "2303.TW", "2454.TW", "3034.TW"],
-      "primaryMetrics": ["alpha_hit_rate", "risk_adjusted_return"],
-      "requiredSkills": ["semiconductor_desk", "earnings_quality", "technical_breakout"],
-      "forbiddenActions": ["illiquid_name_selection", "macro_override"],
-      "operatingNotes": ["Differentiate foundry, packaging, and design roles."]
+      "universe": [
+        "2330.TW",
+        "2303.TW",
+        "2454.TW",
+        "3034.TW"
+      ],
+      "primaryMetrics": [
+        "alpha_hit_rate",
+        "risk_adjusted_return"
+      ],
+      "requiredSkills": [
+        "semiconductor_desk",
+        "earnings_quality",
+        "technical_breakout"
+      ],
+      "forbiddenActions": [
+        "illiquid_name_selection",
+        "macro_override"
+      ],
+      "operatingNotes": [
+        "Differentiate foundry, packaging, and design roles."
+      ]
     },
     {
       "id": "ai-desk-01",
-      "name": "AI Supply Chain Desk",
+      "name": "AI 供應鏈產業桌",
       "layer": "sector",
       "skill": "ai_supply_chain_desk",
       "promptFile": "prompts/agents/ai_supply_chain_desk.md",
       "enabled": true,
-      "universe": ["2382.TW", "6669.TW", "3017.TW", "3037.TW"],
-      "primaryMetrics": ["alpha_hit_rate", "turnover_efficiency"],
-      "requiredSkills": ["ai_supply_chain_desk", "growth_momentum"],
-      "forbiddenActions": ["narrative_only_selection"],
-      "operatingNotes": ["Separate durable order flow from hype-driven moves."]
+      "universe": [
+        "2382.TW",
+        "6669.TW",
+        "3017.TW",
+        "3037.TW"
+      ],
+      "primaryMetrics": [
+        "alpha_hit_rate",
+        "turnover_efficiency"
+      ],
+      "requiredSkills": [
+        "ai_supply_chain_desk",
+        "growth_momentum"
+      ],
+      "forbiddenActions": [
+        "narrative_only_selection"
+      ],
+      "operatingNotes": [
+        "Separate durable order flow from hype-driven moves."
+      ]
     },
     {
       "id": "etf-rotation-01",
-      "name": "ETF Rotation Desk",
+      "name": "ETF 輪動",
       "layer": "sector",
       "skill": "etf_rotation_desk",
       "promptFile": "prompts/agents/etf_rotation_desk.md",
       "enabled": true,
-      "universe": ["0050.TW", "0056.TW", "00878.TW"],
-      "primaryMetrics": ["drawdown_control", "defensive_capture"],
-      "requiredSkills": ["etf_rotation_desk", "value_yield"],
-      "forbiddenActions": ["single_name_substitution_bias"],
-      "operatingNotes": ["Use ETF rotation when dispersion or risk is elevated."]
+      "universe": [
+        "0050.TW",
+        "0056.TW",
+        "00878.TW"
+      ],
+      "primaryMetrics": [
+        "drawdown_control",
+        "defensive_capture"
+      ],
+      "requiredSkills": [
+        "etf_rotation_desk",
+        "value_yield"
+      ],
+      "forbiddenActions": [
+        "single_name_substitution_bias"
+      ],
+      "operatingNotes": [
+        "Use ETF rotation when dispersion or risk is elevated."
+      ]
     },
     {
       "id": "financials-desk-01",
-      "name": "Financials Desk",
+      "name": "金融產業桌",
       "layer": "sector",
       "skill": "financials_desk",
       "promptFile": "prompts/agents/financials_desk.md",
       "enabled": true,
-      "universe": ["2881.TW", "2882.TW", "2891.TW"],
-      "primaryMetrics": ["downside_capture", "carry_efficiency"],
-      "requiredSkills": ["financials_desk", "value_yield"],
-      "forbiddenActions": ["cyclical_misclassification", "illiquid_preference"],
-      "operatingNotes": ["Favor balance-sheet resilience and dividend support over excitement."]
+      "universe": [
+        "2881.TW",
+        "2882.TW",
+        "2891.TW"
+      ],
+      "primaryMetrics": [
+        "downside_capture",
+        "carry_efficiency"
+      ],
+      "requiredSkills": [
+        "financials_desk",
+        "value_yield"
+      ],
+      "forbiddenActions": [
+        "cyclical_misclassification",
+        "illiquid_preference"
+      ],
+      "operatingNotes": [
+        "Favor balance-sheet resilience and dividend support over excitement."
+      ]
     },
     {
       "id": "shipping-desk-01",
-      "name": "Shipping Desk",
+      "name": "航運產業桌",
       "layer": "sector",
       "skill": "shipping_desk",
       "promptFile": "prompts/agents/shipping_desk.md",
       "enabled": true,
-      "universe": ["2603.TW", "2609.TW", "2615.TW"],
-      "primaryMetrics": ["cycle_timing", "volatility_capture"],
-      "requiredSkills": ["shipping_desk", "technical_breakout"],
-      "forbiddenActions": ["cycle_blindness", "headline_only_selection"],
-      "operatingNotes": ["Treat freight beta as tactical exposure, not permanent core risk."]
+      "universe": [
+        "2603.TW",
+        "2609.TW",
+        "2615.TW"
+      ],
+      "primaryMetrics": [
+        "cycle_timing",
+        "volatility_capture"
+      ],
+      "requiredSkills": [
+        "shipping_desk",
+        "technical_breakout"
+      ],
+      "forbiddenActions": [
+        "cycle_blindness",
+        "headline_only_selection"
+      ],
+      "operatingNotes": [
+        "Treat freight beta as tactical exposure, not permanent core risk."
+      ]
     },
     {
       "id": "growth-momentum-01",
-      "name": "Growth Momentum",
+      "name": "成長動能",
       "layer": "style",
       "skill": "growth_momentum",
       "promptFile": "prompts/agents/growth_momentum.md",
       "enabled": true,
-      "universe": [],
-      "primaryMetrics": ["alpha_hit_rate", "momentum_followthrough"],
-      "requiredSkills": ["growth_momentum", "technical_breakout"],
-      "forbiddenActions": ["illiquid_breakout_chasing", "earnings_blindness"],
-      "operatingNotes": ["Require confirmation and liquidity before upgrading conviction."]
+      "universe": [
+        "2317.TW",
+        "2382.TW",
+        "2454.TW",
+        "3034.TW",
+        "3037.TW",
+        "6669.TW"
+      ],
+      "primaryMetrics": [
+        "alpha_hit_rate",
+        "momentum_followthrough"
+      ],
+      "requiredSkills": [
+        "growth_momentum",
+        "technical_breakout"
+      ],
+      "forbiddenActions": [
+        "illiquid_breakout_chasing",
+        "earnings_blindness"
+      ],
+      "operatingNotes": [
+        "Require confirmation and liquidity before upgrading conviction."
+      ]
     },
     {
       "id": "value-yield-01",
-      "name": "Value Yield",
+      "name": "價值股息",
       "layer": "style",
       "skill": "value_yield",
       "promptFile": "prompts/agents/value_yield.md",
       "enabled": true,
-      "universe": [],
-      "primaryMetrics": ["drawdown_control", "carry_quality"],
-      "requiredSkills": ["value_yield", "financials_desk"],
-      "forbiddenActions": ["yield_trap_selection", "narrative_chasing"],
-      "operatingNotes": ["Demand cash-flow support before treating yield as defensive."]
+      "universe": [
+        "2881.TW",
+        "2882.TW",
+        "2886.TW",
+        "2891.TW",
+        "0056.TW",
+        "00878.TW"
+      ],
+      "primaryMetrics": [
+        "drawdown_control",
+        "carry_quality"
+      ],
+      "requiredSkills": [
+        "value_yield",
+        "financials_desk"
+      ],
+      "forbiddenActions": [
+        "yield_trap_selection",
+        "narrative_chasing"
+      ],
+      "operatingNotes": [
+        "Demand cash-flow support before treating yield as defensive."
+      ]
     },
     {
       "id": "earnings-quality-01",
-      "name": "Earnings Quality",
+      "name": "獲利品質",
       "layer": "style",
       "skill": "earnings_quality",
       "promptFile": "prompts/agents/earnings_quality.md",
       "enabled": true,
-      "universe": [],
-      "primaryMetrics": ["estimate_quality", "post_earnings_followthrough"],
-      "requiredSkills": ["earnings_quality", "semiconductor_desk"],
-      "forbiddenActions": ["revenue_only_logic", "guidance_ignorance"],
-      "operatingNotes": ["Prefer repeatable earnings quality over one-off spikes."]
+      "universe": [
+        "2330.TW",
+        "2308.TW",
+        "3008.TW",
+        "1301.TW",
+        "1303.TW",
+        "1326.TW"
+      ],
+      "primaryMetrics": [
+        "estimate_quality",
+        "post_earnings_followthrough"
+      ],
+      "requiredSkills": [
+        "earnings_quality",
+        "semiconductor_desk"
+      ],
+      "forbiddenActions": [
+        "revenue_only_logic",
+        "guidance_ignorance"
+      ],
+      "operatingNotes": [
+        "Prefer repeatable earnings quality over one-off spikes."
+      ]
     },
     {
       "id": "technical-breakout-01",
-      "name": "Technical Breakout",
+      "name": "技術突破",
       "layer": "style",
       "skill": "technical_breakout",
       "promptFile": "prompts/agents/technical_breakout.md",
       "enabled": true,
-      "universe": [],
-      "primaryMetrics": ["breakout_followthrough", "false_breakout_avoidance"],
-      "requiredSkills": ["technical_breakout", "growth_momentum"],
-      "forbiddenActions": ["low_volume_breakout_chasing", "range_blindness"],
-      "operatingNotes": ["Require structure, volume, and close strength before breakout upgrades."]
+      "universe": [
+        "2330.TW",
+        "2317.TW",
+        "2382.TW",
+        "2881.TW",
+        "2603.TW",
+        "2609.TW",
+        "0050.TW"
+      ],
+      "primaryMetrics": [
+        "breakout_followthrough",
+        "false_breakout_avoidance"
+      ],
+      "requiredSkills": [
+        "technical_breakout",
+        "growth_momentum"
+      ],
+      "forbiddenActions": [
+        "low_volume_breakout_chasing",
+        "range_blindness"
+      ],
+      "operatingNotes": [
+        "Require structure, volume, and close strength before breakout upgrades."
+      ]
     },
     {
       "id": "cro-01",
-      "name": "CRO",
+      "name": "風控長",
       "layer": "control",
       "skill": "cro_risk",
       "promptFile": "prompts/agents/cro_risk.md",
       "enabled": true,
       "universe": [],
-      "primaryMetrics": ["drawdown_control", "concentration_violations"],
-      "requiredSkills": ["cro_risk", "system_guardrail"],
-      "forbiddenActions": ["alpha_generation", "risk_limit_override"],
-      "operatingNotes": ["Attack ideas; do not originate them."]
+      "primaryMetrics": [
+        "drawdown_control",
+        "concentration_violations"
+      ],
+      "requiredSkills": [
+        "cro_risk",
+        "system_guardrail"
+      ],
+      "forbiddenActions": [
+        "alpha_generation",
+        "risk_limit_override"
+      ],
+      "operatingNotes": [
+        "Attack ideas; do not originate them."
+      ]
     },
     {
       "id": "cio-01",
-      "name": "CIO",
+      "name": "投資長",
       "layer": "control",
       "skill": "cio_portfolio",
       "promptFile": "prompts/agents/cio_seed.md",
       "enabled": true,
       "universe": [],
-      "primaryMetrics": ["portfolio_return", "sharpe_like"],
-      "requiredSkills": ["cio_portfolio", "research_auditor"],
-      "forbiddenActions": ["cro_bypass", "engine_bypass"],
-      "operatingNotes": ["Synthesize only within engine and CRO constraints."]
+      "primaryMetrics": [
+        "portfolio_return",
+        "sharpe_like"
+      ],
+      "requiredSkills": [
+        "cio_portfolio",
+        "research_auditor"
+      ],
+      "forbiddenActions": [
+        "cro_bypass",
+        "engine_bypass"
+      ],
+      "operatingNotes": [
+        "Synthesize only within engine and CRO constraints."
+      ]
     },
     {
       "id": "super-dru-01",
-      "name": "Superinvestor - Druckenmiller",
+      "name": "Druckenmiller 超級投資者",
       "layer": "superinvestor",
       "skill": "druckenmiller_macro",
       "promptFile": "prompts/agents/super_druckenmiller.md",
       "enabled": true,
       "universe": [],
       "darwinian_weight": 1.0,
-      "primaryMetrics": ["macro_asymmetric_hits", "momentum_capture"],
-      "requiredSkills": ["druckenmiller_macro", "technical_breakout"],
-      "forbiddenActions": ["value_anchor_bias", "earnings_blindness"],
-      "operatingNotes": ["Find the big asymmetric trade. Use momentum and macro themes."]
+      "primaryMetrics": [
+        "macro_asymmetric_hits",
+        "momentum_capture"
+      ],
+      "requiredSkills": [
+        "druckenmiller_macro",
+        "technical_breakout"
+      ],
+      "forbiddenActions": [
+        "value_anchor_bias",
+        "earnings_blindness"
+      ],
+      "operatingNotes": [
+        "Find the big asymmetric trade. Use momentum and macro themes."
+      ]
     },
     {
       "id": "super-asc-01",
-      "name": "Superinvestor - Aschenbrenner",
+      "name": "Aschenbrenner 超級投資者",
       "layer": "superinvestor",
       "skill": "aschenbrenner_ai_compute",
       "promptFile": "prompts/agents/super_aschenbrenner.md",
       "enabled": true,
       "universe": [],
       "darwinian_weight": 1.0,
-      "primaryMetrics": ["ai_capex_alpha", "compute_cycle_timing"],
-      "requiredSkills": ["aschenbrenner_ai_compute", "semiconductor_desk"],
-      "forbiddenActions": ["hype_cycle_chasing", "capex_peak_blindness"],
-      "operatingNotes": ["Who benefits from AI capex cycle? Separate durable trends from hype."]
+      "primaryMetrics": [
+        "ai_capex_alpha",
+        "compute_cycle_timing"
+      ],
+      "requiredSkills": [
+        "aschenbrenner_ai_compute",
+        "semiconductor_desk"
+      ],
+      "forbiddenActions": [
+        "hype_cycle_chasing",
+        "capex_peak_blindness"
+      ],
+      "operatingNotes": [
+        "Who benefits from AI capex cycle? Separate durable trends from hype."
+      ]
     },
     {
       "id": "super-bak-01",
-      "name": "Superinvestor - Baker",
+      "name": "Baker 超級投資者",
       "layer": "superinvestor",
       "skill": "baker_deep_tech",
       "promptFile": "prompts/agents/super_baker.md",
       "enabled": true,
       "universe": [],
       "darwinian_weight": 1.0,
-      "primaryMetrics": ["ip_moat_identification", "tech_differentiation_alpha"],
-      "requiredSkills": ["baker_deep_tech", "earnings_quality"],
-      "forbiddenActions": ["revenue_only_analysis", "ip_weakness_ignoring"],
-      "operatingNotes": ["Focus on real IP moats and technological differentiation."]
+      "primaryMetrics": [
+        "ip_moat_identification",
+        "tech_differentiation_alpha"
+      ],
+      "requiredSkills": [
+        "baker_deep_tech",
+        "earnings_quality"
+      ],
+      "forbiddenActions": [
+        "revenue_only_analysis",
+        "ip_weakness_ignoring"
+      ],
+      "operatingNotes": [
+        "Focus on real IP moats and technological differentiation."
+      ]
     },
     {
       "id": "super-ack-01",
-      "name": "Superinvestor - Ackman",
+      "name": "Ackman 超級投資者",
       "layer": "superinvestor",
       "skill": "ackman_quality",
       "promptFile": "prompts/agents/super_ackman.md",
       "enabled": true,
       "universe": [],
       "darwinian_weight": 1.0,
-      "primaryMetrics": ["quality_compounder_alpha", "catalyst_timing"],
-      "requiredSkills": ["ackman_quality", "value_yield"],
-      "forbiddenActions": ["short_term_noise_reaction", "low_fcf_selection"],
-      "operatingNotes": ["Pricing power + FCF + catalyst. Quality compounders only."]
+      "primaryMetrics": [
+        "quality_compounder_alpha",
+        "catalyst_timing"
+      ],
+      "requiredSkills": [
+        "ackman_quality",
+        "value_yield"
+      ],
+      "forbiddenActions": [
+        "short_term_noise_reaction",
+        "low_fcf_selection"
+      ],
+      "operatingNotes": [
+        "Pricing power + FCF + catalyst. Quality compounders only."
+      ]
     }
   ]
 }

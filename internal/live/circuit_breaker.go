@@ -77,7 +77,7 @@ func NewCircuitBreaker(logPath, statePath string) *CircuitBreaker {
 		logPath = "data/state/circuit_breaker_log.jsonl"
 	}
 	if statePath == "" {
-		statePath = "data/state/circuit_breaker_state.json"
+		statePath = DefaultCircuitBreakerStatePath
 	}
 	cb := &CircuitBreaker{
 		rules:          DefaultCircuitBreakerRules(),
@@ -87,7 +87,9 @@ func NewCircuitBreaker(logPath, statePath string) *CircuitBreaker {
 		statePath:      statePath,
 	}
 	if err := cb.loadState(); err != nil {
-		log.Printf("[CircuitBreaker] warn: failed to load state: %v", err)
+		if !os.IsNotExist(err) {
+			log.Printf("[CircuitBreaker] warn: failed to load state: %v", err)
+		}
 	}
 	return cb
 }
@@ -237,7 +239,7 @@ func (cb *CircuitBreaker) appendLog(event CircuitBreakerEvent) error {
 
 func (cb *CircuitBreaker) persistStateLocked() error {
 	if err := os.MkdirAll(filepath.Dir(cb.statePath), 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir for circuit breaker state: %w", err)
 	}
 	state := struct {
 		State          CircuitState `json:"state"`
@@ -256,15 +258,18 @@ func (cb *CircuitBreaker) persistStateLocked() error {
 	}
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal circuit breaker state: %w", err)
 	}
-	return os.WriteFile(cb.statePath, data, 0o644)
+	if err := writeFileAtomic(cb.statePath, string(data)); err != nil {
+		return fmt.Errorf("persist circuit breaker state: %w", err)
+	}
+	return nil
 }
 
 func (cb *CircuitBreaker) loadState() error {
 	data, err := os.ReadFile(cb.statePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("read circuit breaker state: %w", err)
 	}
 	var state struct {
 		State          CircuitState `json:"state"`

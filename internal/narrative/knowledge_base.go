@@ -2,9 +2,12 @@ package narrative
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
 // KnowledgeBase holds causal templates and produces instantiated chains.
@@ -84,6 +87,21 @@ type NarrativeEngine struct {
 	models []InvestmentModel
 }
 
+// sectorSymbolMap maps narrative sectors to representative TWSE symbols.
+var sectorSymbolMap = map[string][]string{
+	"financials":      {"2881.TW", "2882.TW", "2886.TW", "2891.TW", "2892.TW"},
+	"high_dividend":   {"0056.TW", "00878.TW"},
+	"etf_rotation":    {"0050.TW", "0056.TW", "00878.TW"},
+	"ai_supply_chain": {"2330.TW", "2382.TW", "2317.TW", "3037.TW", "6669.TW"},
+	"semiconductor":   {"2330.TW", "2303.TW", "2454.TW", "3034.TW"},
+	"pcb":             {"3037.TW"},
+	"thermal":         {"2382.TW", "2317.TW"},
+	"shipping":        {"2603.TW", "2609.TW", "2615.TW"},
+	"small_cap":       {"3008.TW", "3034.TW", "6669.TW"},
+	"consumer":        {"1301.TW", "1303.TW", "1326.TW"},
+	"tourism":         {},
+}
+
 // NewNarrativeEngine creates a narrative engine with default templates and models.
 func NewNarrativeEngine() *NarrativeEngine {
 	return &NarrativeEngine{
@@ -91,8 +109,9 @@ func NewNarrativeEngine() *NarrativeEngine {
 		models: []InvestmentModel{
 			{
 				ID:             "hawkish_fed_model",
-				Name:           "Hawkish Fed Model",
-				Description:    "Assumes persistently high US rates and USD strength; favors defensive TW sectors.",
+				Name:           "鷹派聯準會模型",
+				Description:    "假設美國利率維持高位且美元走強；偏好台股防禦型板塊（金融、高股息、ETF輪動）。",
+				Rationale:      "當美國進入鷹派升息週期，無風險利率攀升會直接抬高全球資產折現率。外資因美元資產收益率上升而回流美國，導致台股資金面緊縮；高估值科技股對折現率最敏感，本益比會被大幅壓縮。此時應押注金融股（淨息差擴大）、高股息ETF（提供穩定現金流與下跌保護）與ETF輪動策略（降低個股風險）；同時迴避AI供應鏈（遠期現金流估值折讓劇烈）與小盤股（外資撤離時流動性折價嚴重）。",
 				ActiveThemes:   []string{"US_rates_up", "JPY_carry_unwind"},
 				FavoredSectors: []string{"financials", "high_dividend", "etf_rotation"},
 				AvoidedSectors: []string{"ai_supply_chain", "small_cap"},
@@ -100,8 +119,9 @@ func NewNarrativeEngine() *NarrativeEngine {
 			},
 			{
 				ID:             "ai_supercycle_model",
-				Name:           "AI Supercycle Model",
-				Description:    "Assumes AI capex cycle overrides macro headwinds; favors Taiwan tech supply chain.",
+				Name:           "AI 超級週期模型",
+				Description:    "假設 AI 資本支出週期凌駕總經逆風；偏好台灣科技供應鏈（AI供應鏈、半導體、PCB、散熱）。",
+				Rationale:      "AI 被視為繼智慧型手機之後最大的科技硬體週期。當輝達、微軟、Google、亞馬遜上修 AI 資本支出時，訂單幾乎100%落到台灣供應鏈——全球只有台積電能量產最先進 AI 晶片，只有台灣擁有完整 CoWoS 先進封裝、高階 PCB 與伺服器組裝產能。這是『結構性產能短缺』帶來的定價權轉移，應押注 AI 供應鏈、半導體、PCB、散熱；同時迴避消費、觀光——市場會持續汰弱留強，把資金從缺乏成長動能的傳產板塊撤出。",
 				ActiveThemes:   []string{"AI_capex_surge"},
 				FavoredSectors: []string{"ai_supply_chain", "semiconductor", "pcb", "thermal"},
 				AvoidedSectors: []string{"consumer", "tourism"},
@@ -109,8 +129,9 @@ func NewNarrativeEngine() *NarrativeEngine {
 			},
 			{
 				ID:             "geopolitical_hedge_model",
-				Name:           "Geopolitical Hedge Model",
-				Description:    "Assumes elevated geopolitical risk and risk-off flows; favors gold, USD hedges, and TW defensive sectors.",
+				Name:           "地緣政治避險模型",
+				Description:    "假設地緣政治風險升溫且資金流向避險；偏好黃金、美元避險資產與台股防禦型板塊（金融、高股息、航運）。",
+				Rationale:      "地緣政治風險飆升會引發市場風險規避本能，投資人要求更高風險溢酬，直接壓縮股票估值。對外資持股比重高的台股影響尤其劇烈。此時應押注金融（估值低、現金流穩定）、高股息（下跌保護）、航運（地緣衝突初期運價常飆升）；同時迴避 AI 供應鏈與小盤股——科技股本益比高、對風險溢酬最敏感，小盤股流動性差會被外資優先減持。歷史上地緣風險指數突破150時，台灣電子股相對報酬常落後大盤 3~5 個百分點。",
 				ActiveThemes:   []string{"geopolitical_risk_spike", "oil_price_shock"},
 				FavoredSectors: []string{"financials", "high_dividend", "shipping"},
 				AvoidedSectors: []string{"ai_supply_chain", "small_cap"},
@@ -188,6 +209,78 @@ func (ne *NarrativeEngine) UpdateModelWeights() {
 		}
 		ne.models[i].Weight = (1.0 / err) / totalInvErr
 	}
+}
+
+// EvaluateModels computes RecentError for each model by comparing favored vs
+// avoided sector forward returns over the last lookback days in the replay dataset.
+func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
+	ds, err := replay.LoadTWSEOpenDataCSV(replayPath)
+	if err != nil {
+		return fmt.Errorf("load replay: %w", err)
+	}
+
+	const lookback = 10
+	const holdWindow = 5
+	if len(ds.Dates) < lookback+holdWindow {
+		return fmt.Errorf("insufficient replay data: %d dates", len(ds.Dates))
+	}
+
+	startIdx := len(ds.Dates) - lookback - holdWindow
+	if startIdx < 0 {
+		startIdx = 0
+	}
+
+	for i := range ne.models {
+		m := &ne.models[i]
+		correct := 0
+		total := 0
+
+		for d := startIdx; d < startIdx+lookback && d < len(ds.Dates)-holdWindow; d++ {
+			date := ds.Dates[d]
+			favored := ne.avgSectorReturn(ds, date, holdWindow, m.FavoredSectors)
+			avoided := ne.avgSectorReturn(ds, date, holdWindow, m.AvoidedSectors)
+
+			if math.IsNaN(favored) || math.IsNaN(avoided) {
+				continue
+			}
+			total++
+			if favored > avoided {
+				correct++
+			}
+		}
+
+		if total > 0 {
+			m.RecentError = 1.0 - (float64(correct) / float64(total))
+		} else {
+			m.RecentError = 0.5
+		}
+	}
+
+	ne.UpdateModelWeights()
+	return nil
+}
+
+func (ne *NarrativeEngine) avgSectorReturn(ds *replay.Dataset, date time.Time, window int, sectors []string) float64 {
+	var totalReturn float64
+	var count int
+	for _, sector := range sectors {
+		symbols, ok := sectorSymbolMap[sector]
+		if !ok {
+			continue
+		}
+		for _, sym := range symbols {
+			ret, ok := ds.ForwardReturn(sym, date, window)
+			if !ok {
+				continue
+			}
+			totalReturn += ret
+			count++
+		}
+	}
+	if count == 0 {
+		return math.NaN()
+	}
+	return totalReturn / float64(count)
 }
 
 // ListModels returns all investment models.

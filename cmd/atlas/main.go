@@ -2,15 +2,19 @@ package main
 
 import (
 	"context"
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -26,19 +30,23 @@ type routeRegistrar interface {
 	RegisterNarrativeRoutes(mux *http.ServeMux)
 	RegisterControlRoutes(mux *http.ServeMux)
 	RegisterMacroRoutes(mux *http.ServeMux)
+	RegisterExperimentRoutes(mux *http.ServeMux)
+	RegisterLiveRoutes(mux *http.ServeMux)
 }
 
 type appDeps struct {
 	loadConfig      func() config.Config
-	newDashboardAPI func(string) routeRegistrar
+	newDashboardAPI func(string, string) routeRegistrar
 	listenAndServe  func(string, http.Handler) error
 }
 
 func defaultAppDeps() appDeps {
 	return appDeps{
-		loadConfig:      config.Load,
-		newDashboardAPI: func(ledgerDir string) routeRegistrar { return monitoring.NewDashboardAPI(ledgerDir) },
-		listenAndServe:  http.ListenAndServe,
+		loadConfig: config.Load,
+		newDashboardAPI: func(workDir, ledgerDir string) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, ledgerDir)
+		},
+		listenAndServe: http.ListenAndServe,
 	}
 }
 
@@ -118,18 +126,23 @@ func run(args []string, deps appDeps) error {
 
 	if *apiMode {
 		mux := http.NewServeMux()
-		dashboard := deps.newDashboardAPI(cfg.LedgerDir)
+		dashboard := deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir)
 		dashboard.RegisterRoutes(mux)
 		dashboard.RegisterNarrativeRoutes(mux)
 		dashboard.RegisterControlRoutes(mux)
 		dashboard.RegisterMacroRoutes(mux)
+		dashboard.RegisterExperimentRoutes(mux)
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 			d.RegisterPhase3Routes(mux)
+			d.RegisterBacktestRoutes(mux)
 		}
 		if *swaggerMode {
 			dashboard.RegisterSwaggerRoutes(mux)
 		}
+		mux.Handle("/", http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static"))))
 		log.Printf("dashboard api listening on %s", *apiAddr)
+		// Trigger automatic backfill if replay data has gaps.
+		runAutoBackfillOnStartup(cfg.WorkDir)
 		if err := deps.listenAndServe(*apiAddr, mux); err != nil {
 			return fmt.Errorf("dashboard api server failed: %w", err)
 		}
@@ -360,7 +373,11 @@ func runLiveTrading(cfg config.Config, deps appDeps) error {
 	liveCfg.BrokerNonceRedisURL = cfg.BrokerNonceRedisURL
 	liveCfg.BrokerNonceRedisKeyPrefix = cfg.BrokerNonceRedisKeyPrefix
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	o := live.NewOrchestrator(
+		ctx,
 		stateStore,
 		eventBus,
 		provider,
@@ -380,22 +397,22 @@ func runLiveTrading(cfg config.Config, deps appDeps) error {
 	for _, rule := range monitoring.LiveTradingRules() {
 		ruleEngine.RegisterRule(rule)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	go ruleEngine.Start(ctx, stateStore)
 
 	// Start dashboard API server for live status endpoint
 	mux := http.NewServeMux()
-	dashboard := deps.newDashboardAPI(cfg.LedgerDir)
+	dashboard := deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir)
 	dashboard.RegisterRoutes(mux)
 	dashboard.RegisterNarrativeRoutes(mux)
 	dashboard.RegisterControlRoutes(mux)
 	dashboard.RegisterMacroRoutes(mux)
+	dashboard.RegisterExperimentRoutes(mux)
 	if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 		d.RegisterSwaggerRoutes(mux)
 		d.RegisterPhase3Routes(mux)
 		d.RegisterLiveRoutes(mux)
 	}
+	mux.Handle("/", http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static"))))
 	apiAddr := ":8080"
 	go func() {
 		log.Printf("dashboard api listening on %s", apiAddr)
@@ -409,14 +426,116 @@ func runLiveTrading(cfg config.Config, deps appDeps) error {
 		return fmt.Errorf("start live orchestrator: %w", err)
 	}
 
-	// Graceful shutdown after a brief run for CLI demonstration.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	log.Printf("live trading orchestrator running; press Ctrl+C to stop")
 	select {
-	case <-time.After(5 * time.Second):
+	case <-sigCh:
 	case <-ctx.Done():
 	}
+	log.Println("shutting down live trading orchestrator...")
 	if err := o.Stop(); err != nil {
 		return fmt.Errorf("stop live orchestrator: %w", err)
 	}
 	log.Println("live trading orchestrator stopped")
 	return nil
+}
+
+// runAutoBackfillOnStartup checks for missing trading days in the replay CSV
+// and automatically triggers FinMind backfill in a background goroutine.
+func runAutoBackfillOnStartup(workDir string) {
+	go func() {
+		// Give the server a moment to start before doing I/O.
+		time.Sleep(3 * time.Second)
+
+		csvPath := filepath.Join(workDir, "data/replay/tw_extended_90days.csv")
+		latestDate, err := getLatestReplayDate(csvPath)
+		if err != nil {
+			log.Printf("[AutoBackfill] cannot read replay csv: %v", err)
+			return
+		}
+
+		now := time.Now()
+		if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+			now = now.In(tz)
+		}
+
+		// Determine backfill end: yesterday before 15:30 TW, else today.
+		end := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		if now.Hour() < 15 || (now.Hour() == 15 && now.Minute() < 30) {
+			end = end.AddDate(0, 0, -1)
+		}
+
+		start := latestDate.AddDate(0, 0, 1)
+		// Fast-forward through weekends so we don't backfill Saturdays/Sundays.
+		for start.Weekday() == time.Saturday || start.Weekday() == time.Sunday {
+			start = start.AddDate(0, 0, 1)
+		}
+		for end.Weekday() == time.Saturday || end.Weekday() == time.Sunday {
+			end = end.AddDate(0, 0, -1)
+		}
+
+		if start.After(end) {
+			log.Printf("[AutoBackfill] no gap detected (latest=%s, target=%s)", latestDate.Format("2006-01-02"), end.Format("2006-01-02"))
+			return
+		}
+
+		startStr := start.Format("2006-01-02")
+		endStr := end.Format("2006-01-02")
+		log.Printf("[AutoBackfill] detected gap %s ~ %s. Triggering backfill...", startStr, endStr)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
+		var cmd *exec.Cmd
+		binaryPath := filepath.Join(workDir, "backfill-replay")
+		if _, err := os.Stat(binaryPath); err == nil {
+			cmd = exec.CommandContext(ctx, binaryPath, "-csv", csvPath, "-start", startStr, "-end", endStr)
+		} else if _, err := exec.LookPath("go"); err == nil {
+			cmd = exec.CommandContext(ctx, "go", "run", "./cmd/backfill-replay", "-csv", csvPath, "-start", startStr, "-end", endStr)
+			cmd.Dir = workDir
+		} else {
+			log.Printf("[AutoBackfill] backfill-replay binary not found and go not in PATH; skipping auto-backfill")
+			return
+		}
+
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Printf("[AutoBackfill] backfill failed: %v\noutput: %s", err, string(out))
+			return
+		}
+		log.Printf("[AutoBackfill] success:\n%s", string(out))
+	}()
+}
+
+func getLatestReplayDate(csvPath string) (time.Time, error) {
+	f, err := os.Open(csvPath)
+	if err != nil {
+		return time.Time{}, err
+	}
+	defer f.Close()
+
+	reader := csv.NewReader(f)
+	var latest time.Time
+	_, _ = reader.Read() // skip header
+	for {
+		row, err := reader.Read()
+		if err != nil {
+			break
+		}
+		if len(row) == 0 {
+			continue
+		}
+		d, err := time.Parse("2006-01-02", strings.TrimSpace(row[0]))
+		if err != nil {
+			continue
+		}
+		if d.After(latest) {
+			latest = d
+		}
+	}
+	if latest.IsZero() {
+		return time.Time{}, fmt.Errorf("no valid dates found")
+	}
+	return latest, nil
 }

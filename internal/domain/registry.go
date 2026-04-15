@@ -36,11 +36,20 @@ type AgentRegistry struct {
 type RecommendationOutcome struct {
 	AgentID        string
 	Skill          string
+	Layer          AgentLayer
 	Symbol         string
+	Side           Side
+	Conviction     int
+	TargetPrice    float64
+	StopLossPrice  float64
 	Window         string
 	ForwardReturn  float64
 	BenchmarkDelta float64
 	Hit            bool
+	Reason         string
+	Price          float64
+	PassedGuards   bool
+	GuardReason    string
 	RecordedAt     time.Time
 }
 
@@ -59,17 +68,17 @@ type HumanIntervention struct {
 }
 
 type Scorecard struct {
-	AgentID               string
-	Skill                 string
-	Layer                 AgentLayer
-	Observations          int
-	WindowCount           int
-	HitRate               float64
-	AverageReturn         float64
-	SharpeLike            float64
-	MaxDrawdown           float64
-	ConcentrationWarnings int
-	LastUpdatedAt         time.Time
+	AgentID               string     `json:"agent_id"`
+	Skill                 string     `json:"skill"`
+	Layer                 AgentLayer `json:"layer"`
+	Observations          int        `json:"observations"`
+	WindowCount           int        `json:"windows"`
+	HitRate               float64    `json:"hit_rate"`
+	AverageReturn         float64    `json:"average_return"`
+	SharpeLike            float64    `json:"sharpe"`
+	MaxDrawdown           float64    `json:"max_drawdown"`
+	ConcentrationWarnings int        `json:"concentration_warnings"`
+	LastUpdatedAt         time.Time  `json:"last_updated_at"`
 }
 
 type ExperimentStatus string
@@ -79,6 +88,7 @@ const (
 	ExperimentRunning  ExperimentStatus = "running"
 	ExperimentAccepted ExperimentStatus = "accepted"
 	ExperimentRejected ExperimentStatus = "rejected"
+	ExperimentExpired  ExperimentStatus = "expired"
 )
 
 type ExperimentRecord struct {

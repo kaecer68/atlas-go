@@ -39,3 +39,20 @@ func TestCanTransitionExperimentStatus_InitialState(t *testing.T) {
 		t.Fatalf("empty -> accepted should be invalid")
 	}
 }
+
+func TestTransitionExperimentStatus_ExpiredTransitions(t *testing.T) {
+	planned := &ExperimentRecord{Status: ExperimentPlanned}
+	if err := TransitionExperimentStatus(planned, ExperimentExpired); err != nil {
+		t.Fatalf("planned -> expired should be valid: %v", err)
+	}
+
+	running := &ExperimentRecord{Status: ExperimentRunning}
+	if err := TransitionExperimentStatus(running, ExperimentExpired); err != nil {
+		t.Fatalf("running -> expired should be valid: %v", err)
+	}
+
+	accepted := &ExperimentRecord{Status: ExperimentAccepted}
+	if err := TransitionExperimentStatus(accepted, ExperimentExpired); err == nil {
+		t.Fatalf("accepted -> expired should be invalid")
+	}
+}

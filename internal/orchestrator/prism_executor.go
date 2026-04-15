@@ -65,6 +65,7 @@ func (e *PRISMTrainingExecutor) Execute(task prism.TrainingTask) (prism.Training
 				ForwardReturn:  fr,
 				BenchmarkDelta: fr - 0.003,
 				Hit:            fr > 0,
+				Reason:         rec.Reason,
 				RecordedAt:     date,
 			})
 		}

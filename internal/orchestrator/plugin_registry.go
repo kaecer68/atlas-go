@@ -9,7 +9,7 @@ import (
 
 type AgentExecutor interface {
 	Supports(agent domain.AgentSpec) bool
-	Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string) (domain.Recommendation, bool)
+	Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool)
 }
 
 type RegimeExecutor interface {
@@ -70,10 +70,10 @@ func (r *PluginRegistry) RegimeScore(agent domain.AgentSpec, quotes map[string]d
 	return 0
 }
 
-func (r *PluginRegistry) Recommendation(agent domain.AgentSpec, quote domain.Quote, prompt string) (domain.Recommendation, bool) {
+func (r *PluginRegistry) Recommendation(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
 	for _, exec := range r.agentExecutors {
 		if exec.Supports(agent) {
-			return exec.Recommend(agent, quote, prompt)
+			return exec.Recommend(agent, quote, prompt, regime)
 		}
 	}
 	return domain.Recommendation{}, false

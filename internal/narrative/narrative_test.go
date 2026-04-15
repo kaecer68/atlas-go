@@ -12,9 +12,9 @@ func TestKnowledgeBaseDefaults(t *testing.T) {
 		t.Fatalf("expected default templates, got none")
 	}
 
-	tmpl, ok := kb.GetTemplate("us_rates_up")
+	tmpl, ok := kb.GetTemplate("美國升息 / 鷹派聯準會")
 	if !ok {
-		t.Fatalf("expected us_rates_up template")
+		t.Fatalf("expected 美國升息 / 鷹派聯準會 template")
 	}
 	if tmpl.HistoricalHitRate <= 0 {
 		t.Fatalf("expected positive hit rate")

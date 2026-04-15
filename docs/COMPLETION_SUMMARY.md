@@ -196,7 +196,7 @@ FUGLE_API_KEY=your_api_key_here
 | 持久化 | `internal/ledger/ledger.go` | ✅ |
 | Control API | `/api/control/*`（共 8 個端點） | ✅ |
 | 決策引擎整合 | `internal/orchestrator/system.go` | ✅ `applyHumanOverrides()` |
-| Dashboard 控制面板 | `web/static/narrative-dashboard.html` | ✅ |
+| Dashboard 控制面板 | `web/static/index.html`（Unified Sidebar SPA） | ✅ |
 
 **端點**：pause-agent、resume-agent、set-model-weight、sector-ban、approve/reject-recommendation、audit-log、active-overrides
 
@@ -222,14 +222,14 @@ FUGLE_API_KEY=your_api_key_here
 | 中東衝突因果模板 | `internal/narrative/templates.go` | ✅ `middle_east_escalation` |
 | TWSE 資金流 Provider | `internal/marketdata/twse_capital_flow_provider.go` | ✅ 外資/投信/自營商 |
 | 台灣市場壓力指數 | `internal/narrative/taiwan_stress_index.go` | ✅ 0–100 分，4 級 regime |
-| Dashboard 壓力指數面板 | `web/static/narrative-dashboard.html` | ✅ |
+| Dashboard 壓力指數面板 | `web/static/index.html`（宏觀敘事頁籤） | ✅ |
 | API 端點 | `/api/taiwan/stress-index`, `/api/macro/capital-flow/latest` | ✅ |
 | Swagger 更新 | `docs/swagger.json` | ✅ |
 | 單元測試 | `*_test.go` | ✅ 覆蓋率 45.7% |
 
 **檢驗網址**：
 - `http://localhost:8080/api/taiwan/stress-index`
-- `http://localhost:8080/dashboard/narrative`
+- `http://localhost:8080/`（Unified Control Tower，宏觀敘事頁籤）
 
 ---
 

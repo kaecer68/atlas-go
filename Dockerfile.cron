@@ -1,4 +1,12 @@
 # Cron job runner for Atlas
+FROM golang:1.25-alpine AS builder
+WORKDIR /build
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o daily-replay-sync ./cmd/daily-replay-sync
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o backfill-replay ./cmd/backfill-replay
+
 FROM alpine:latest
 
 # Install cron and curl
@@ -12,6 +20,10 @@ COPY scripts/ /app/scripts/
 
 # Make scripts executable
 RUN chmod +x /app/scripts/*.sh
+
+# Copy Go binaries from builder
+COPY --from=builder /build/daily-replay-sync /app/
+COPY --from=builder /build/backfill-replay /app/
 
 # Create log directory
 RUN mkdir -p /var/log/cron

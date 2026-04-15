@@ -33,6 +33,7 @@ type SystemCore struct {
 	narrativeEngine *narrative.NarrativeEngine
 	persistentState *domain.SimulationState
 	ctx             context.Context
+	lastOutcomes    []domain.RecommendationOutcome
 }
 
 // System orchestrates the full simulation loop via a SystemCore and a PluginHost.
@@ -103,6 +104,9 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 
 	events := s.detectNarrativeEvents(quotes)
 	regime, rawRecs, finalRecs, guardOutcomes := ExecuteRegistryResearchDetailedWithPolicyAndGuards(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy)
+	// Preserve original recs for outcome building so GuardOutcomes align with outcomes.
+	outcomeRawRecs := append([]domain.Recommendation(nil), rawRecs...)
+	outcomeFinalRecs := append([]domain.Recommendation(nil), finalRecs...)
 	regime = AdjustRegimeFromNarrative(regime, events)
 	rawRecs = s.applyNarrativeContextWithEvents(rawRecs, events)
 	finalRecs = s.applyNarrativeContextWithEvents(finalRecs, events)
@@ -119,9 +123,10 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		result = s.engine.Run(regime, quotes, finalRecs)
 	}
 	result.GuardOutcomes = guardOutcomes
-	outcomes := buildSyntheticOutcomes(rawRecs, quotes, asOf)
+	outcomes := buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf)
 	_ = s.ledger.RecordOutcomes(outcomes)
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)
+	s.lastOutcomes = outcomes
 	s.host.PostSimulation(quotes, regime, asOf)
 	return result, nil
 }
@@ -131,6 +136,9 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	quotes := s.replay.QuotesForDate(sessionDate, symbols)
 	events := s.detectNarrativeEvents(quotes)
 	regime, rawRecs, finalRecs, guardOutcomes := ExecuteRegistryResearchDetailedWithPolicyAndGuards(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy)
+	// Preserve original recs for outcome building so GuardOutcomes align with outcomes.
+	outcomeRawRecs := append([]domain.Recommendation(nil), rawRecs...)
+	outcomeFinalRecs := append([]domain.Recommendation(nil), finalRecs...)
 	regime = AdjustRegimeFromNarrative(regime, events)
 	rawRecs = s.applyNarrativeContextWithEvents(rawRecs, events)
 	finalRecs = s.applyNarrativeContextWithEvents(finalRecs, events)
@@ -147,9 +155,10 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		result = s.engine.Run(regime, quotes, finalRecs)
 	}
 	result.GuardOutcomes = guardOutcomes
-	outcomes := buildReplayOutcomes(rawRecs, sessionDate, s.replay)
+	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, sessionDate, s.replay)
 	_ = s.ledger.RecordOutcomes(outcomes)
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)
+	s.lastOutcomes = outcomes
 	s.host.PostSimulation(quotes, regime, sessionDate)
 	return result, nil
 }
@@ -369,11 +378,6 @@ func (s *System) Session() domain.ReplaySession {
 }
 
 func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate *evolution.Candidate) error {
-	outcomes, err := s.ledger.LoadOutcomes()
-	if err != nil {
-		return err
-	}
-
 	summary := domain.SessionSummary{
 		SessionID:      s.session.ID,
 		Regime:         result.Regime,
@@ -381,7 +385,7 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 		PositionCount:  len(result.Positions),
 		EndingCash:     result.EndingCash,
 		PortfolioValue: result.PortfolioValue,
-		OutcomeCount:   len(outcomes),
+		OutcomeCount:   len(s.lastOutcomes),
 		BrokerRuntime: domain.BrokerRuntimeAudit{
 			Mode:             s.cfg.BrokerMode,
 			Adapter:          s.cfg.BrokerAdapter,
@@ -414,69 +418,121 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 	return s.ledger.RecordSessionSummary(s.session, summary)
 }
 
-func buildSyntheticOutcomes(recs []domain.Recommendation, quotes []domain.Quote, asOf time.Time) []domain.RecommendationOutcome {
-	if len(recs) == 0 {
-		return nil
+func quoteBySymbolMap(quotes []domain.Quote) map[string]domain.Quote {
+	m := make(map[string]domain.Quote, len(quotes))
+	for _, q := range quotes {
+		m[q.Symbol] = q
 	}
-
-	outcomes := make([]domain.RecommendationOutcome, 0, len(recs))
-	for _, rec := range recs {
-		forwardReturn := syntheticForwardReturn(rec.Symbol)
-		outcomes = append(outcomes, domain.RecommendationOutcome{
-			AgentID:        rec.Agent,
-			Skill:          rec.Skill,
-			Symbol:         rec.Symbol,
-			Window:         asOf.Format("2006-01-02"),
-			ForwardReturn:  forwardReturn,
-			BenchmarkDelta: forwardReturn - 0.005,
-			Hit:            forwardReturn > 0,
-			RecordedAt:     asOf,
-		})
-	}
-	return outcomes
+	return m
 }
 
-func buildReplayOutcomes(recs []domain.Recommendation, asOf time.Time, ds *replay.Dataset) []domain.RecommendationOutcome {
-	if ds == nil || len(recs) == 0 {
+func buildFinalRecKey(finalRecs []domain.Recommendation) map[string]struct{} {
+	keys := make(map[string]struct{}, len(finalRecs))
+	for _, rec := range finalRecs {
+		keys[rec.Symbol+"|"+rec.Agent] = struct{}{}
+	}
+	return keys
+}
+
+func syntheticForwardReturn(symbol string, quote domain.Quote) float64 {
+	if quote.Open > 0 {
+		intraday := (quote.Last - quote.Open) / quote.Open
+		fr := intraday * 0.8
+		if fr > 0.05 {
+			fr = 0.05
+		}
+		if fr < -0.05 {
+			fr = -0.05
+		}
+		if fr == 0 {
+			fr = 0.003
+		}
+		return fr
+	}
+	var sum int64
+	for _, r := range symbol {
+		sum += int64(r)
+	}
+	return (float64(sum%100)/100.0)*0.04 - 0.02
+}
+
+func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []domain.Quote, asOf time.Time) []domain.RecommendationOutcome {
+	if len(rawRecs) == 0 {
 		return nil
 	}
-
-	outcomes := make([]domain.RecommendationOutcome, 0, len(recs))
-	for _, rec := range recs {
-		forwardReturn, ok := ds.ForwardReturn(rec.Symbol, asOf, 1)
-		if !ok {
-			continue
+	quoteMap := quoteBySymbolMap(quotes)
+	finalKey := buildFinalRecKey(finalRecs)
+	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
+	for _, rec := range rawRecs {
+		quote := quoteMap[rec.Symbol]
+		forwardReturn := syntheticForwardReturn(rec.Symbol, quote)
+		_, passed := finalKey[rec.Symbol+"|"+rec.Agent]
+		guardReason := ""
+		if !passed {
+			guardReason = "未通過控制層過濾"
 		}
 		outcomes = append(outcomes, domain.RecommendationOutcome{
 			AgentID:        rec.Agent,
 			Skill:          rec.Skill,
+			Layer:          rec.Layer,
 			Symbol:         rec.Symbol,
+			Side:           rec.Side,
+			Conviction:     rec.Conviction,
+			TargetPrice:    rec.TargetPrice,
+			StopLossPrice:  rec.StopLossPrice,
+			Window:         asOf.Format("2006-01-02"),
+			ForwardReturn:  forwardReturn,
+			BenchmarkDelta: forwardReturn - 0.005,
+			Hit:            forwardReturn > 0,
+			Reason:         rec.Reason,
+			Price:          quote.Last,
+			PassedGuards:   passed,
+			GuardReason:    guardReason,
+			RecordedAt:     asOf,
+		})
+	}
+	return outcomes
+}
+
+func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []domain.Quote, asOf time.Time, ds *replay.Dataset) []domain.RecommendationOutcome {
+	if ds == nil || len(rawRecs) == 0 {
+		return nil
+	}
+	quoteMap := quoteBySymbolMap(quotes)
+	finalKey := buildFinalRecKey(finalRecs)
+	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
+	for _, rec := range rawRecs {
+		forwardReturn, ok := ds.ForwardReturn(rec.Symbol, asOf, 1)
+		if !ok {
+			forwardReturn = 0
+		}
+		_, passed := finalKey[rec.Symbol+"|"+rec.Agent]
+		guardReason := ""
+		if !passed {
+			guardReason = "未通過控制層過濾"
+		}
+		quote := quoteMap[rec.Symbol]
+		outcomes = append(outcomes, domain.RecommendationOutcome{
+			AgentID:        rec.Agent,
+			Skill:          rec.Skill,
+			Layer:          rec.Layer,
+			Symbol:         rec.Symbol,
+			Side:           rec.Side,
+			Conviction:     rec.Conviction,
+			TargetPrice:    rec.TargetPrice,
+			StopLossPrice:  rec.StopLossPrice,
 			Window:         asOf.Format("2006-01-02"),
 			ForwardReturn:  forwardReturn,
 			BenchmarkDelta: forwardReturn - 0.003,
 			Hit:            forwardReturn > 0,
+			Reason:         rec.Reason,
+			Price:          quote.Last,
+			PassedGuards:   passed,
+			GuardReason:    guardReason,
 			RecordedAt:     asOf,
 		})
 	}
-
 	return outcomes
-}
-
-func syntheticForwardReturn(symbol string) float64 {
-	switch symbol {
-	case "2330.TW":
-		return 0.021
-	case "2382.TW":
-		return 0.014
-	case "2317.TW":
-		return -0.006
-	case "2603.TW":
-		return -0.018
-	case "0050.TW":
-		return 0.008
-	default:
-		return 0
-	}
 }
 
 func (s *System) resolveReplayDate() (time.Time, bool) {

@@ -69,6 +69,7 @@ func main() {
 	liveCfg.BrokerNonceRedisKeyPrefix = cfg.BrokerNonceRedisKeyPrefix
 
 	o := live.NewOrchestrator(
+		context.Background(),
 		stateStore,
 		eventBus,
 		provider,
