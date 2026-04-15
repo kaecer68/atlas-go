@@ -71,7 +71,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 | `internal/ledger/` | JSONL append-only 持久化 |
 | `internal/portfolio/` | Darwinian 權重管理（限制 `[0.3, 2.5]`） |
 | `internal/marketdata/` | 資料提供者抽象（TWSE OpenAPI、Fugle、Hybrid） |
-| `internal/live/` | **仍有 TODO 邊界**；預設安全路徑為 replay/simulation |
+| `internal/live/` | 已強化（context 統一、原子寫入、Dashboard 解耦），但 production live 仍需 `-allow-live-broker` 等旗標謹慎啟用 |
 | `internal/prism/` | Regime-specific 訓練佇列（5 種 regime） |
 | `internal/swarm/` | MiroFish swarm 模擬 |
 | `internal/janus/` | 跨 cohort regime 偵測與 PRISM 權重動態調整 |
@@ -146,10 +146,6 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 所有人工干預均持久化至 `data/state/approvals/`，作為可稽核軌跡。
 
 ---
-
-## 已知議題
-
-- `.github/workflows/daily-maintenance.yml` 硬編碼 `GO_VERSION: '1.21'`，與 `go.mod` 的 `1.25.0` 不一致。若修改此 workflow，應改為 `go-version-file: go.mod`。
 
 ---
 
