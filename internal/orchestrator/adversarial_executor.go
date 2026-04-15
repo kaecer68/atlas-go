@@ -119,6 +119,7 @@ func (r *AdversarialScenarioRunner) agentScoreOverWindowWithMutation(agent domai
 				ForwardReturn:  fr,
 				BenchmarkDelta: fr - 0.003,
 				Hit:            fr > 0,
+				Reason:         rec.Reason,
 				RecordedAt:     date,
 			})
 		}

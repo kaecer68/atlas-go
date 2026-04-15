@@ -1,6 +1,9 @@
 package marketdata
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // MacroDataPoint represents a single macro indicator reading.
 type MacroDataPoint struct {
@@ -84,6 +87,12 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 		if snap.DealerNet.Symbol != "" {
 			merged.DealerNet = snap.DealerNet
 		}
+		if snap.RecordedAt > merged.RecordedAt {
+			merged.RecordedAt = snap.RecordedAt
+		}
+	}
+	if merged.RecordedAt == 0 {
+		merged.RecordedAt = time.Now().Unix()
 	}
 	return merged, nil
 }

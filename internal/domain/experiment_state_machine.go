@@ -11,12 +11,14 @@ func CanTransitionExperimentStatus(from, to ExperimentStatus) bool {
 	case "":
 		return to == ExperimentPlanned || to == ExperimentRunning
 	case ExperimentPlanned:
-		return to == ExperimentRunning || to == ExperimentRejected
+		return to == ExperimentRunning || to == ExperimentRejected || to == ExperimentExpired
 	case ExperimentRunning:
-		return to == ExperimentAccepted || to == ExperimentRejected
+		return to == ExperimentAccepted || to == ExperimentRejected || to == ExperimentExpired
 	case ExperimentAccepted:
 		return false
 	case ExperimentRejected:
+		return false
+	case ExperimentExpired:
 		return false
 	default:
 		return false

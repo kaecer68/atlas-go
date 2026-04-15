@@ -47,7 +47,8 @@ func (s *Store) RecordSessionOutcomes(session domain.ReplaySession, outcomes []d
 	}
 
 	path := filepath.Join(s.sessionDir(session.ID), "recommendation_outcomes.jsonl")
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	// Overwrite instead of append to avoid stale data accumulation when re-running sessions.
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
 		return err
 	}
@@ -60,6 +61,30 @@ func (s *Store) RecordSessionOutcomes(session domain.ReplaySession, outcomes []d
 		}
 	}
 	return nil
+}
+
+// LoadSessionOutcomes reads per-session recommendation outcomes from the session directory.
+func (s *Store) LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOutcome, error) {
+	path := filepath.Join(s.sessionDir(sessionID), "recommendation_outcomes.jsonl")
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	outcomes := make([]domain.RecommendationOutcome, 0)
+	for scanner.Scan() {
+		var outcome domain.RecommendationOutcome
+		if err := json.Unmarshal(scanner.Bytes(), &outcome); err != nil {
+			return nil, fmt.Errorf("decode outcome: %w", err)
+		}
+		outcomes = append(outcomes, outcome)
+	}
+	return outcomes, scanner.Err()
 }
 
 func (s *Store) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
@@ -284,11 +309,14 @@ func (s *Store) UpdatePromptExperimentResult(experimentID string, result domain.
 
 func BuildScorecards(outcomes []domain.RecommendationOutcome) []domain.Scorecard {
 	type agg struct {
-		agentID string
-		skill   string
-		returns []float64
-		hits    int
-		windows map[string]struct{}
+		agentID      string
+		skill        string
+		layer        string
+		returns      []float64
+		hits         int
+		windows      map[string]struct{}
+		dailyReturns map[string]float64
+		dailyCounts  map[string]int
 	}
 
 	byAgent := map[string]*agg{}
@@ -297,9 +325,12 @@ func BuildScorecards(outcomes []domain.RecommendationOutcome) []domain.Scorecard
 		entry, ok := byAgent[key]
 		if !ok {
 			entry = &agg{
-				agentID: outcome.AgentID,
-				skill:   outcome.Skill,
-				windows: map[string]struct{}{},
+				agentID:      outcome.AgentID,
+				skill:        outcome.Skill,
+				layer:        string(outcome.Layer),
+				windows:      map[string]struct{}{},
+				dailyReturns: map[string]float64{},
+				dailyCounts:  map[string]int{},
 			}
 			byAgent[key] = entry
 		}
@@ -309,21 +340,30 @@ func BuildScorecards(outcomes []domain.RecommendationOutcome) []domain.Scorecard
 		}
 		if outcome.Window != "" {
 			entry.windows[outcome.Window] = struct{}{}
+			entry.dailyReturns[outcome.Window] += outcome.ForwardReturn
+			entry.dailyCounts[outcome.Window]++
 		}
 	}
 
 	scorecards := make([]domain.Scorecard, 0, len(byAgent))
 	for _, entry := range byAgent {
 		avg := mean(entry.returns)
+		daily := make([]float64, 0, len(entry.windows))
+		for w := range entry.windows {
+			if c := entry.dailyCounts[w]; c > 0 {
+				daily = append(daily, entry.dailyReturns[w]/float64(c))
+			}
+		}
 		scorecards = append(scorecards, domain.Scorecard{
 			AgentID:       entry.agentID,
 			Skill:         entry.skill,
+			Layer:         domain.AgentLayer(entry.layer),
 			WindowCount:   len(entry.windows),
 			Observations:  len(entry.returns),
 			HitRate:       ratio(entry.hits, len(entry.returns)),
 			AverageReturn: avg,
 			SharpeLike:    sharpeLike(entry.returns),
-			MaxDrawdown:   maxDrawdown(entry.returns),
+			MaxDrawdown:   maxDrawdown(daily),
 			LastUpdatedAt: time.Now(),
 		})
 	}

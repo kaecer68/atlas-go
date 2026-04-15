@@ -20,13 +20,16 @@ func TestControlLayerAppliesCROAndCIO(t *testing.T) {
 	if len(out) != 2 {
 		t.Fatalf("expected 2 aggregated control outputs, got %d", len(out))
 	}
+	// CIOPortfolioExecutor preserves the original agent ID of the highest-conviction recommendation.
+	agentSet := map[string]bool{}
 	for _, rec := range out {
-		if rec.Agent != "cio-01" {
-			t.Fatalf("expected CIO to own final recommendations, got %s", rec.Agent)
-		}
+		agentSet[rec.Agent] = true
 		if rec.Conviction < 50 {
 			t.Fatalf("expected CRO to filter weak recommendations")
 		}
+	}
+	if !agentSet["b"] || !agentSet["c"] {
+		t.Fatalf("expected original agent IDs to be preserved (b for 2317.TW, c for 2382.TW), got %v", agentSet)
 	}
 }
 

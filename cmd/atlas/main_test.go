@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -21,11 +22,11 @@ func TestRunAPIModeStartsServerAndRegistersRoutes(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: ledgerDir}
 		},
-		newDashboardAPI: func(dir string) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string) routeRegistrar {
 			if dir != ledgerDir {
 				t.Fatalf("ledger dir = %q, want %q", dir, ledgerDir)
 			}
-			return monitoring.NewDashboardAPI(dir)
+			return monitoring.NewDashboardAPI(workDir, dir)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			gotAddr = addr
@@ -58,8 +59,8 @@ func TestRunAPIModeReturnsListenError(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir()}
 		},
-		newDashboardAPI: func(dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(dir)
+		newDashboardAPI: func(workDir, dir string) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return errors.New("bind failed")
@@ -83,8 +84,8 @@ func TestRunRejectsLiveBrokerWithoutExplicitAllow(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(dir)
+		newDashboardAPI: func(workDir, dir string) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
@@ -108,11 +109,11 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(dir string) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string) routeRegistrar {
 			if dir != ledgerDir {
 				t.Fatalf("ledger dir = %q, want %q", dir, ledgerDir)
 			}
-			return monitoring.NewDashboardAPI(dir)
+			return monitoring.NewDashboardAPI(workDir, dir)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			gotAddr = addr
@@ -145,8 +146,8 @@ func TestRunRejectsUnsupportedBrokerAdapter(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(dir)
+		newDashboardAPI: func(workDir, dir string) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
@@ -167,8 +168,8 @@ func TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(dir)
+		newDashboardAPI: func(workDir, dir string) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
@@ -189,8 +190,8 @@ func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(dir)
+		newDashboardAPI: func(workDir, dir string) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
@@ -208,8 +209,8 @@ func TestRunRejectsRealSignerWithoutExplicitAllow(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
 		},
-		newDashboardAPI: func(dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(dir)
+		newDashboardAPI: func(workDir, dir string) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
@@ -230,8 +231,8 @@ func TestRunAllowsRealSignerWithExplicitAllow(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
 		},
-		newDashboardAPI: func(dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(dir)
+		newDashboardAPI: func(workDir, dir string) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
@@ -249,8 +250,8 @@ func TestRunRejectsRealSignerWithoutKeyID(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
 		},
-		newDashboardAPI: func(dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(dir)
+		newDashboardAPI: func(workDir, dir string) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
@@ -432,8 +433,8 @@ func TestRunLiveHTTPFullFlagChainInAPIMode(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
 		},
-		newDashboardAPI: func(dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(dir)
+		newDashboardAPI: func(workDir, dir string) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
@@ -458,5 +459,74 @@ func TestRunLiveHTTPFullFlagChainInAPIMode(t *testing.T) {
 	}, deps)
 	if err != nil {
 		t.Fatalf("run returned error: %v", err)
+	}
+}
+
+func TestStaticFileServerServesIndex(t *testing.T) {
+	tmpDir := t.TempDir()
+	staticDir := filepath.Join(tmpDir, "web", "static")
+	if err := os.MkdirAll(staticDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(staticDir, "index.html"), []byte("<h1>Atlas</h1>"), 0644); err != nil {
+		t.Fatalf("write index.html: %v", err)
+	}
+
+	var gotHandler http.Handler
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			return config.Config{WorkDir: tmpDir, LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
+		},
+		newDashboardAPI: func(workDir, dir string) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir)
+		},
+		listenAndServe: func(addr string, handler http.Handler) error {
+			gotHandler = handler
+			return nil
+		},
+	}
+
+	if err := run([]string{"-api"}, deps); err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+	if gotHandler == nil {
+		t.Fatalf("expected http handler to be registered")
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	gotHandler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET / status = %d, want 200", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "<h1>Atlas</h1>") {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+func TestDashboardAPIUsesWorkDirForPaths(t *testing.T) {
+	tmpDir := t.TempDir()
+	reportsDir := filepath.Join(tmpDir, "reports")
+	if err := os.MkdirAll(reportsDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(reportsDir, "backtest_test.md"), []byte("# Backtest Report"), 0644); err != nil {
+		t.Fatalf("write report: %v", err)
+	}
+
+	api := monitoring.NewDashboardAPI(tmpDir, filepath.Join(tmpDir, "data", "state"))
+	mux := http.NewServeMux()
+	api.RegisterRoutes(mux)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/report/latest", nil)
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("latest report status = %d, want 200", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "# Backtest Report") {
+		t.Fatalf("unexpected body: %q", body)
 	}
 }

@@ -1,7 +1,9 @@
 package narrative
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
@@ -39,6 +41,54 @@ func TestTaiwanStressCalculator_Calculate(t *testing.T) {
 	}
 }
 
+type mockGeoProvider struct {
+	calls int
+	score GeopoliticalRiskScore
+}
+
+func (m *mockGeoProvider) Name() string { return "mock" }
+func (m *mockGeoProvider) FetchScore(ctx context.Context) (GeopoliticalRiskScore, error) {
+	m.calls++
+	return m.score, nil
+}
+
+func TestTaiwanStressCalculator_CalculateFromSnapshot_CachesResult(t *testing.T) {
+	mock := &mockGeoProvider{score: GeopoliticalRiskScore{Intensity: 10}}
+	calc := NewTaiwanStressCalculator(mock)
+	calc.cacheTTL = 100 * time.Millisecond
+
+	snap := marketdata.MacroDataSnapshot{
+		DXY:                marketdata.MacroDataPoint{ChangePct: 1},
+		US10Y:              marketdata.MacroDataPoint{Value: 1},
+		VIX:                marketdata.MacroDataPoint{Value: 10},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 0},
+		RecordedAt:         1713000000,
+	}
+
+	ctx := context.Background()
+	if _, err := calc.CalculateFromSnapshot(ctx, snap); err != nil {
+		t.Fatalf("first call failed: %v", err)
+	}
+	if mock.calls != 1 {
+		t.Fatalf("expected 1 provider call after first invocation, got %d", mock.calls)
+	}
+
+	if _, err := calc.CalculateFromSnapshot(ctx, snap); err != nil {
+		t.Fatalf("second call failed: %v", err)
+	}
+	if mock.calls != 1 {
+		t.Fatalf("expected cached result, but provider was called again (calls=%d)", mock.calls)
+	}
+
+	time.Sleep(150 * time.Millisecond)
+	if _, err := calc.CalculateFromSnapshot(ctx, snap); err != nil {
+		t.Fatalf("third call after ttl failed: %v", err)
+	}
+	if mock.calls != 2 {
+		t.Fatalf("expected provider to be called after ttl expired, got %d calls", mock.calls)
+	}
+}
+
 func TestTaiwanStressCalculator_RegimeThresholds(t *testing.T) {
 	calc := NewTaiwanStressCalculator(nil)
 
@@ -56,7 +106,7 @@ func TestTaiwanStressCalculator_RegimeThresholds(t *testing.T) {
 		},
 		{
 			name: "alert",
-			snap: marketdata.MacroDataSnapshot{DXY: marketdata.MacroDataPoint{ChangePct: 20}, US10Y: marketdata.MacroDataPoint{Value: 11}, VIX: marketdata.MacroDataPoint{Value: 0}, ForeignInvestorNet: marketdata.MacroDataPoint{Value: 0}},
+			snap: marketdata.MacroDataSnapshot{DXY: marketdata.MacroDataPoint{ChangePct: 20}, US10Y: marketdata.MacroDataPoint{Value: 30}, VIX: marketdata.MacroDataPoint{Value: 0}, ForeignInvestorNet: marketdata.MacroDataPoint{Value: 0}},
 			geo:  30,
 			want: "alert",
 		},

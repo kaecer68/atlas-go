@@ -11,6 +11,12 @@ const (
 	defaultConvictionFloor = 50
 )
 
+// priceTargets returns reasonable target and stop-loss prices based on current quote.
+// Multipliers vary by strategy volatility profile.
+func priceTargets(quote domain.Quote, targetMult, stopLossMult float64) (float64, float64) {
+	return quote.Last * targetMult, quote.Last * stopLossMult
+}
+
 // Financials desk thresholds.
 const (
 	finBaseConviction           = 58
@@ -79,18 +85,22 @@ func (FinancialsExecutor) Supports(agent domain.AgentSpec) bool {
 	return agent.Skill == "financials_desk"
 }
 
-func (FinancialsExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string) (domain.Recommendation, bool) {
+func (FinancialsExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
 	conviction := finConviction(prompt, quote)
 	if conviction < 50 {
 		return domain.Recommendation{}, false
 	}
+	tp, slp := priceTargets(quote, 1.05, 0.96)
 	return domain.Recommendation{
-		Agent:      agent.ID,
-		Skill:      agent.Skill,
-		Symbol:     quote.Symbol,
-		Side:       domain.SideBuy,
-		Conviction: conviction,
-		Reason:     "financial carry with resilient balance-sheet posture",
+		Agent:         agent.ID,
+		Skill:         agent.Skill,
+		Layer:         agent.Layer,
+		Symbol:        quote.Symbol,
+		Side:          domain.SideBuy,
+		Conviction:    conviction,
+		Reason:        "financial carry with resilient balance-sheet posture",
+		TargetPrice:   tp,
+		StopLossPrice: slp,
 	}, true
 }
 
@@ -128,7 +138,7 @@ func (ShippingExecutor) Supports(agent domain.AgentSpec) bool {
 	return agent.Skill == "shipping_desk"
 }
 
-func (ShippingExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string) (domain.Recommendation, bool) {
+func (ShippingExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
 	conviction := shipBaseConviction
 	if strings.Contains(prompt, "tactical") && quote.Last > quote.Open {
 		conviction += shipTacticalBoost
@@ -139,13 +149,17 @@ func (ShippingExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, pr
 	if conviction < defaultConvictionFloor {
 		return domain.Recommendation{}, false
 	}
+	tp, slp := priceTargets(quote, 1.07, 0.94)
 	return domain.Recommendation{
-		Agent:      agent.ID,
-		Skill:      agent.Skill,
-		Symbol:     quote.Symbol,
-		Side:       domain.SideBuy,
-		Conviction: conviction,
-		Reason:     "shipping beta used as tactical cycle exposure",
+		Agent:         agent.ID,
+		Skill:         agent.Skill,
+		Layer:         agent.Layer,
+		Symbol:        quote.Symbol,
+		Side:          domain.SideBuy,
+		Conviction:    conviction,
+		Reason:        "shipping beta used as tactical cycle exposure",
+		TargetPrice:   tp,
+		StopLossPrice: slp,
 	}, true
 }
 
@@ -155,7 +169,7 @@ func (ValueYieldExecutor) Supports(agent domain.AgentSpec) bool {
 	return agent.Skill == "value_yield"
 }
 
-func (ValueYieldExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string) (domain.Recommendation, bool) {
+func (ValueYieldExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
 	conviction := vyBaseConviction
 	if strings.Contains(prompt, "cash-flow support") && quote.Last >= quote.Open {
 		conviction += vyCashFlowBoost
@@ -166,13 +180,17 @@ func (ValueYieldExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, 
 	if conviction < defaultConvictionFloor {
 		return domain.Recommendation{}, false
 	}
+	tp, slp := priceTargets(quote, 1.05, 0.96)
 	return domain.Recommendation{
-		Agent:      agent.ID,
-		Skill:      agent.Skill,
-		Symbol:     quote.Symbol,
-		Side:       domain.SideBuy,
-		Conviction: conviction,
-		Reason:     "defensive yield lens with valuation discipline",
+		Agent:         agent.ID,
+		Skill:         agent.Skill,
+		Layer:         agent.Layer,
+		Symbol:        quote.Symbol,
+		Side:          domain.SideBuy,
+		Conviction:    conviction,
+		Reason:        "defensive yield lens with valuation discipline",
+		TargetPrice:   tp,
+		StopLossPrice: slp,
 	}, true
 }
 
@@ -182,7 +200,7 @@ func (EarningsQualityExecutor) Supports(agent domain.AgentSpec) bool {
 	return agent.Skill == "earnings_quality"
 }
 
-func (EarningsQualityExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string) (domain.Recommendation, bool) {
+func (EarningsQualityExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
 	conviction := eqBaseConviction
 	if strings.Contains(prompt, "repeatable") && quote.Last > quote.Open {
 		conviction += eqRepeatableBoost
@@ -193,13 +211,17 @@ func (EarningsQualityExecutor) Recommend(agent domain.AgentSpec, quote domain.Qu
 	if conviction < defaultConvictionFloor {
 		return domain.Recommendation{}, false
 	}
+	tp, slp := priceTargets(quote, 1.06, 0.95)
 	return domain.Recommendation{
-		Agent:      agent.ID,
-		Skill:      agent.Skill,
-		Symbol:     quote.Symbol,
-		Side:       domain.SideBuy,
-		Conviction: conviction,
-		Reason:     "earnings quality and forward visibility support",
+		Agent:         agent.ID,
+		Skill:         agent.Skill,
+		Layer:         agent.Layer,
+		Symbol:        quote.Symbol,
+		Side:          domain.SideBuy,
+		Conviction:    conviction,
+		Reason:        "earnings quality and forward visibility support",
+		TargetPrice:   tp,
+		StopLossPrice: slp,
 	}, true
 }
 
@@ -209,19 +231,23 @@ func (TechnicalBreakoutExecutor) Supports(agent domain.AgentSpec) bool {
 	return agent.Skill == "technical_breakout"
 }
 
-func (TechnicalBreakoutExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string) (domain.Recommendation, bool) {
+func (TechnicalBreakoutExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
 	volumeFloor := tbVolumeFloor(prompt)
 	conviction := tbConviction(prompt, quote, volumeFloor)
 	if tbReject(prompt, quote, volumeFloor, conviction) {
 		return domain.Recommendation{}, false
 	}
+	tp, slp := priceTargets(quote, 1.10, 0.94)
 	return domain.Recommendation{
-		Agent:      agent.ID,
-		Skill:      agent.Skill,
-		Symbol:     quote.Symbol,
-		Side:       domain.SideBuy,
-		Conviction: conviction,
-		Reason:     "breakout structure confirmed by volume and close",
+		Agent:         agent.ID,
+		Skill:         agent.Skill,
+		Layer:         agent.Layer,
+		Symbol:        quote.Symbol,
+		Side:          domain.SideBuy,
+		Conviction:    conviction,
+		Reason:        "breakout structure confirmed by volume and close",
+		TargetPrice:   tp,
+		StopLossPrice: slp,
 	}, true
 }
 

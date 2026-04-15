@@ -138,6 +138,7 @@ func TestNewOrchestratorAppliesLiveGuardedMode(t *testing.T) {
 	})
 
 	o := NewOrchestrator(
+		context.Background(),
 		store,
 		bus,
 		stubProvider{name: "stub-market", quotes: []domain.Quote{}},
@@ -204,6 +205,7 @@ func TestNewOrchestratorAppliesLiveHTTPFileNonceStoreConfig(t *testing.T) {
 
 	nonceStorePath := t.TempDir() + "/nonce-store.json"
 	o := NewOrchestrator(
+		context.Background(),
 		store,
 		bus,
 		stubProvider{name: "stub-market", quotes: []domain.Quote{}},

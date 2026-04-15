@@ -61,13 +61,17 @@ func (e *AlphaDiscoveryEngine) Discover(
 			continue
 		}
 
+		tp, slp := priceTargets(quote, 1.06, 0.95)
 		discovered = append(discovered, domain.Recommendation{
-			Agent:      "alpha_discovery",
-			Skill:      "alpha_discovery",
-			Symbol:     symbol,
-			Side:       domain.SideBuy,
-			Conviction: 40,
-			Reason:     fmt.Sprintf("alpha_discovery|factor_score:%.2f|coverage:%d", score, coverage[symbol]),
+			Agent:         "alpha_discovery",
+			Skill:         "alpha_discovery",
+			Layer:         domain.LayerStyle,
+			Symbol:        symbol,
+			Side:          domain.SideBuy,
+			Conviction:    40,
+			Reason:        fmt.Sprintf("alpha_discovery|factor_score:%.2f|coverage:%d", score, coverage[symbol]),
+			TargetPrice:   tp,
+			StopLossPrice: slp,
 		})
 	}
 

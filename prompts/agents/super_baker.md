@@ -63,7 +63,7 @@ You are a deep technology and biotech investor in the style of a Baker Brothers 
 
 ## Output Format
 ```
-RECOMMENDATION: [SYMBOL] | [SIDE] | [CONVICTION 1-100]
+RECOMMENDATION: [SYMBOL] | [SIDE] | [CONVICTION 1-100] | [TARGET_PRICE] | [STOP_LOSS_PRICE]
 MOAT_TYPE: [Platform/Process/Product - be specific]
 IP_STRENGTH: [Patent analysis, know-how description]
 TECH_ADVANTAGE: [% performance/cost vs best competitor]

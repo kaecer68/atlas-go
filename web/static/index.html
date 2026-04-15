@@ -1,0 +1,1734 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atlas-Go 交易與實驗控制塔</title>
+<style>
+
+
+  :root { --bg: #0b0d11; --panel: #13161c; --border: #242a33; --text: #e8ecf1; --muted: #8e99ab; --accent: #4fc1ff; --up: #26a17b; --down: #d93a3a; --warn: #f5a623; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, "Microsoft JhengHei", "PingFang TC", sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 18px 20px 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+  header h1 { margin: 0 0 4px; font-size: 20px; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  header a { color: var(--accent); text-decoration: none; font-size: 13px; }
+  .health-bar { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .health-bar .pill { background: var(--panel); border: 1px solid var(--border); padding: 4px 10px; border-radius: 999px; }
+  .health-bar .pill.warn { border-color: var(--warn); color: var(--warn); }
+  .health-bar .pill.err { border-color: var(--down); color: var(--down); }
+
+  .container { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px; }
+  @media (max-width: 1100px) { .container { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+  .panel h2 { margin: 0 0 10px; font-size: 15px; color: var(--accent); }
+  .panel.wide { grid-column: 1 / -1; }
+  .metric { display: inline-block; margin: 4px 10px 4px 0; }
+  .metric .label { font-size: 11px; color: var(--muted); }
+  .metric .value { font-size: 16px; font-weight: 700; }
+  .metric .value.up, .up { color: var(--up); }
+  .metric .value.down, .down { color: var(--down); }
+  .metric .value.warn, .warn { color: var(--warn); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 5px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  tr.weak td { color: var(--down); }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; margin: 1px 3px 1px 0; display: inline-block; }
+  .badge.ok { background: rgba(38,161,123,.15); color: var(--up); border: 1px solid rgba(38,161,123,.3); }
+  .badge.warn { background: rgba(245,166,35,.15); color: var(--warn); border: 1px solid rgba(245,166,35,.3); }
+  .badge.err { background: rgba(217,58,58,.15); color: var(--down); border: 1px solid rgba(217,58,58,.3); }
+  .badge.info { background: rgba(79,193,255,.12); color: var(--accent); border: 1px solid rgba(79,193,255,.3); }
+  .empty { color: var(--muted); font-size: 13px; padding: 10px 0; }
+  pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: #0d1015; padding: 10px; border-radius: 6px; max-height: 280px; overflow: auto; }
+  .control-group { display: flex; flex-wrap: wrap; gap: 7px; margin: 8px 0; align-items: center; }
+  .control-group input, .control-group select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; font-size: 12px; }
+  .control-group button { background: var(--border); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 11px; font-size: 12px; cursor: pointer; }
+  .control-group button.primary { background: #1f6feb; border-color: #1f6feb; }
+  .control-group button.danger { background: #da3633; border-color: #da3633; }
+  .control-group button:hover { opacity: .9; }
+
+  .workflow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+  .workflow .step { background: var(--bg); border: 1px solid var(--border); padding: 6px 10px; border-radius: 8px; font-size: 12px; color: var(--muted); }
+  .workflow .step.active { border-color: var(--accent); color: var(--accent); }
+  .workflow .arrow { color: var(--muted); font-size: 12px; }
+
+  .inbox-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 900px) { .inbox-grid { grid-template-columns: 1fr; } }
+  .inbox-col h3 { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+  .inbox-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 8px; font-size: 12px; }
+  .inbox-card .title { font-weight: 600; margin-bottom: 4px; }
+  .inbox-card .meta { color: var(--muted); margin-bottom: 6px; }
+  .inbox-card .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .pipeline-row.positive td { color: var(--up); }
+  .pipeline-row.negative td { color: var(--down); }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none; place-items: center; z-index: 200; }
+  .modal-overlay.show { display: grid; }
+  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; width: min(840px, 94vw); max-height: 86vh; overflow: auto; padding: 18px; }
+  .modal h3 { margin: 0 0 10px; font-size: 16px; }
+  .diff { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px; }
+  .diff pre { margin: 0; max-height: 60vh; }
+
+  .notification-center { position: fixed; right: 14px; top: 14px; width: min(340px, 92vw); z-index: 150; }
+  .notification { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+  .notification .close { float: right; color: var(--muted); cursor: pointer; }
+
+  .refresh { position: fixed; right: 14px; bottom: 14px; padding: 9px 13px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; z-index: 50; }
+  .refresh:hover { background: #1a1e25; }
+  @keyframes pulsePill {
+    0% { box-shadow: 0 0 0 0 rgba(217,58,58,0.25); }
+    70% { box-shadow: 0 0 0 8px rgba(217,58,58,0); }
+    100% { box-shadow: 0 0 0 0 rgba(217,58,58,0); }
+  }
+  .health-bar .pill.pulse { animation: pulsePill 2s infinite; }
+  .pipeline-action { font-size: 11px; padding: 2px 7px; border-radius: 5px; border: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; }
+  .pipeline-action:hover { opacity: .85; }
+  .pipeline-action:disabled { opacity: .4; cursor: not-allowed; }
+  #pipelineTable { font-size: 12px; }
+  #pipelineTable th, #pipelineTable td { padding: 6px 5px; }
+
+
+/* Sidebar + SPA Layout */
+body { display: flex; margin: 0; min-height: 100vh; }
+#sidebar {
+  width: 144px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 60;
+}
+#sidebar .brand {
+  padding: 14px 10px 10px;
+  border-bottom: 1px solid var(--border);
+}
+#sidebar .brand h1 { margin: 0; font-size: 15px; color: var(--accent); }
+#sidebar .brand p { margin: 4px 0 0; font-size: 10px; color: var(--muted); }
+#sidebar nav { flex: 1; overflow: auto; padding: 8px 0; }
+#sidebar nav a {
+  display: block;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text);
+  text-decoration: none;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+}
+#sidebar nav a:hover { background: rgba(255,255,255,.03); }
+#sidebar nav a.active {
+  background: rgba(79,193,255,.08);
+  border-left-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+#sidebar .foot {
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+#sidebar .foot a { color: var(--accent); text-decoration: none; }
+
+#main {
+  margin-left: 144px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+#topbar {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 40;
+}
+#topbar h2 { margin: 0; font-size: 16px; }
+#topbar .meta { font-size: 12px; color: var(--muted); }
+
+#content { flex: 1; padding: 16px 18px; }
+.page { display: none; }
+.page.active { display: block; }
+
+/* 總覽卡片 */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+@media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 720px) { .kpi-grid { grid-template-columns: 1fr; } }
+.kpi-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+.kpi-card .kpi-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.kpi-card .kpi-value { font-size: 22px; font-weight: 700; }
+.kpi-card .kpi-hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+.kpi-card.alert { border-color: var(--warn); }
+.kpi-card.alert-err { border-color: var(--down); }
+
+/* Mobile sidebar toggle */
+#menuToggle {
+  display: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+@media (max-width: 900px) {
+  #sidebar { transform: translateX(-100%); transition: transform .2s ease; }
+  #sidebar.open { transform: translateX(0); }
+  #main { margin-left: 0; }
+  #menuToggle { display: inline-block; }
+}
+
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div class="brand">
+    <h1>Atlas-Go</h1>
+    <p>人機協作控制塔</p>
+  </div>
+  <nav>
+    <a class="active" data-page="overview" onclick="switchPage('overview')">總覽</a>
+    <a data-page="narrative" onclick="switchPage('narrative')">宏觀敘事</a>
+    <a data-page="live" onclick="switchPage('live')">相對趨勢</a>
+    <a data-page="pipeline" onclick="switchPage('pipeline')">投資管線</a>
+    <a data-page="agents" onclick="switchPage('agents')">AI 觀測台</a>
+    <a data-page="experiments" onclick="switchPage('experiments')">模擬交易</a>
+    <a data-page="reports" onclick="switchPage('reports')">最新回測</a>
+    <a data-page="controls" onclick="switchPage('controls')">控制與稽核</a>
+    <a data-page="datachannels" onclick="switchPage('datachannels')">信息通道</a>
+  </nav>
+  <div class="foot">
+    <span style="color:var(--muted)">v8 · 統一介面</span>
+  </div>
+</div>
+
+<div id="main">
+  <div id="topbar">
+    <div style="display:flex;align-items:center;gap:10px">
+      <button id="menuToggle" onclick="toggleSidebar()">☰</button>
+      <h2 id="pageTitle">總覽</h2>
+    </div>
+    <div class="meta" id="lastRefresh">-</div>
+  </div>
+
+  <div id="content">
+    <!-- 總覽 -->
+    <div class="page active" id="page-overview">
+      <div class="panel" style="margin-bottom:14px;font-size:13px;color:var(--text);line-height:1.7">
+        <strong>如何解讀本頁：</strong>
+        本頁呈現的是基於最新回測窗口計算出的<strong>系統狀態快照</strong>。這不是即時行情，而是 Atlas 在指定 replay 資料區間內，透過多層 AI Agent 模擬與風控後匯總出的「當前體制判斷」。
+        下方的每一張卡片都是一個獨立指標；點擊卡片（除資料時間與基線版本外）可查看該指標的詳細解讀與操作建議。
+      </div>
+      <div class="kpi-grid" id="overviewGrid">
+        <div class="kpi-card"><div class="kpi-label">資料時間</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card"><div class="kpi-label">基線版本</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card" style="cursor:pointer" onclick="openKpiHelp('narrative')"><div class="kpi-label">敘事脈絡</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card" style="cursor:pointer" onclick="openKpiHelp('regime')"><div class="kpi-label">市場狀態</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card" style="cursor:pointer" onclick="openKpiHelp('weakest')"><div class="kpi-label">表現最差 AI</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card" style="cursor:pointer" onclick="openKpiHelp('experiment')"><div class="kpi-label">實驗狀態</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card" style="cursor:pointer" onclick="openKpiHelp('crowding')"><div class="kpi-label">擁擠標的</div><div class="kpi-value">-</div></div>
+      </div>
+    </div>
+
+    <!-- 宏觀敘事 -->
+    <div class="page" id="page-narrative">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="panel"><h2>總經快照</h2><div id="narrativeMacro">載入中…</div></div>
+        <div class="panel"><h2>台灣市場壓力指數</h2><div id="narrativeStress">載入中…</div></div>
+        <div class="panel"><h2>敘事事件</h2><div id="narrativeEvents">載入中…</div></div>
+        <div class="panel"><h2>因果傳導鏈</h2><div id="narrativeChains">載入中…</div></div>
+        <div class="panel"><h2>投資模型</h2><div id="narrativeModels">載入中…</div></div>
+        <div class="panel"><h2>因果模板庫</h2><div id="narrativeTemplates">載入中…</div></div>
+      </div>
+    </div>
+
+    <!-- 相對趨勢 -->
+    <div class="page" id="page-live">
+      <div class="panel" style="margin-bottom:14px;font-size:13px;color:var(--text);line-height:1.7">
+        <strong>如何解讀本頁：</strong>
+        本頁呈現的是<strong>控制層（風控長／投資長）對 AI 推薦的最終處置結果</strong>。它告訴你：在市場當前體制下，有多少推薦被放行、有多少被推回、以及系統是否觸發熔斷。
+        若風控長阻擋率高，請檢查【宏觀敘事】的壓力指數是否飆升；若投資長過濾數量多，請檢查【投資管線】是否有板塊擁擠或風格衝突。
+      </div>
+      <div class="panel wide" style="margin-bottom:14px"><h2>總經敘事脈絡</h2><div id="liveNarrativeStrip">載入中…</div></div>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 170px;gap:14px">
+        <div class="panel"><h2>總經雷達</h2><div id="macroRadar">載入中…</div></div>
+        <div class="panel"><h2>即時狀態</h2><div id="liveStatus">載入中…</div></div>
+      </div>
+    </div>
+
+    <!-- 投資管線 -->
+    <div class="page" id="page-pipeline">
+      <div class="panel wide" style="margin-bottom:14px;font-size:13px;color:var(--text);line-height:1.7">
+        <strong>如何解讀本頁：</strong>
+        以下為最新回測場次中，<strong>控制層已放行的推薦標的</strong>。每筆資料包含策略來源、方向、收盤價與隔日回測報酬。價量標籤與推薦理由供您快速評估是否放行。
+        若勾選「顯示全部被過濾項目」，<span style="color:var(--down)">紅色邊框列</span>為被控制層擋下的標的，您可點擊「補追」進行人工覆寫。
+        <br><span style="color:var(--muted)">註：收盤價為回測當日收盤，作為模擬進場的參考基準。目標價與停損價由 Agent 推薦產生，並在 Simulator 中優先於固定百分比止盈止損。</span>
+      </div>
+      <div class="panel wide"><h2>最新場次推薦明細</h2><div id="recommendationPipeline">載入中…</div></div>
+    </div>
+
+    <!-- AI 觀測台 -->
+    <div class="page" id="page-agents">
+      <div class="panel wide"><h2>績效評估</h2><div id="agentObservatory">載入中…</div></div>
+      <div class="panel wide"><h2>AI 標的池重疊</h2><div id="universeOverlap">載入中…</div></div>
+    </div>
+
+    <!-- 模擬交易 -->
+    <div class="page" id="page-experiments">
+      <div class="panel wide">
+        <h2>收件匣</h2>
+        <div class="workflow">
+          <div class="step">回測窗口</div><span class="arrow">→</span>
+          <div class="step">突變簡報</div><span class="arrow">→</span>
+          <div class="step">執行</div><span class="arrow">→</span>
+          <div class="step active">評判 / 晉升</div><span class="arrow">→</span>
+          <div class="step">基線政策</div>
+        </div>
+        <div class="inbox-grid" id="experimentInbox">載入中…</div>
+      </div>
+      <div class="panel wide"><h2>晉升歷史</h2><div id="experimentHistory">載入中…</div></div>
+    </div>
+
+    <!-- 最新回測 -->
+    <div class="page" id="page-reports">
+      <div class="panel wide">
+        <h2>啟動回測</h2>
+        <div class="control-group">
+          <label style="font-size:12px;color:var(--muted)">開始</label>
+          <input type="date" id="backtestStart" value="2026-03-26">
+          <label style="font-size:12px;color:var(--muted)">結束</label>
+          <input type="date" id="backtestEnd" value="2026-03-27">
+          <button class="primary" onclick="runBacktest()">啟動回測</button>
+          <span id="backtestStatusText" style="font-size:12px;color:var(--muted)"></span>
+        </div>
+        <div id="backtestStatusDetail" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
+      </div>
+      <div class="panel wide"><h2>回測報告</h2><div id="backtestReport">載入中…</div></div>
+    </div>
+
+    <!-- 控制與稽核 -->
+    <div class="page" id="page-controls">
+      <div class="panel wide">
+        <h2>人工控制</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div>
+            <div style="margin-bottom:6px;font-size:13px"><strong>AI 覆寫</strong> <span id="overrideBadges"></span></div>
+            <div class="control-group">
+              <select id="agentSelect"></select>
+              <button onclick="pauseAgent()">暫停</button>
+              <button onclick="resumeAgent()">恢復</button>
+            </div>
+            <div style="margin-top:8px;font-size:13px"><strong>產業封鎖</strong></div>
+            <div class="control-group">
+              <select id="sectorSelect">
+                <option value="semiconductor">半導體</option>
+                <option value="ai_supply_chain">AI 供應鏈</option>
+                <option value="shipping">航運</option>
+                <option value="high_dividend">高股息</option>
+                <option value="etf_rotation">ETF 輪動</option>
+              </select>
+              <button onclick="banSector()">封鎖</button>
+              <button onclick="unbanSector()">解除</button>
+            </div>
+          </div>
+          <div>
+            <div style="margin-bottom:6px;font-size:13px"><strong>基線管理</strong></div>
+            <div class="control-group">
+              <select id="promoteSelect"><option value="">-- 選擇已接受的實驗 --</option></select>
+              <button class="primary" onclick="promoteExperiment()">晉升</button>
+            </div>
+            <div class="control-group">
+              <select id="revertSelect"><option value="">-- 選擇要回滾的版本 --</option></select>
+              <input id="revertReason" type="text" placeholder="原因" style="width:180px">
+              <button class="danger" onclick="revertExperiment()">回滾</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel wide"><h2>資料採集健康度</h2><div id="dataIngestHealth">載入中…</div></div>
+      <div class="panel wide"><h2>人工干預紀錄</h2><div id="auditLog">載入中…</div></div>
+    </div>
+    <!-- 信息通道 -->
+    <div class="page" id="page-datachannels">
+      <div class="panel wide" style="margin-bottom:14px;font-size:13px;color:var(--text);line-height:1.7">
+        <strong>如何解讀本頁：</strong>
+        本頁呈現 Atlas 所有<strong>外部資料來源的健康狀態</strong>，按國家與平台分類。你可以看到每個通道的 API 格式、本地儲存路徑，以及最後更新時間。
+        若某個通道顯示 <span style="color:var(--warn)">🟡 延遲</span> 或 <span style="color:var(--down)">🔴 異常</span>，表示該資料可能影響總經判斷與回測結果，建議檢查網路連線或資料供應商狀態。
+      </div>
+      <div class="panel wide"><h2>資料通道監控</h2><div id="dataChannels">載入中…</div></div>
+    </div>
+  </div>
+</div>
+
+<button class="refresh" onclick="loadAll()" title="每 30 秒自動更新">🔄 重新整理</button>
+
+<div class="notification-center" id="notificationCenter"></div>
+
+<!-- Modal: Prompt Diff -->
+<div class="modal-overlay" id="diffModal" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h3>提示詞差異比對</h3>
+    <div class="diff" id="diffContent">
+      <div><strong>基線</strong><pre id="diffBaseline"></pre></div>
+      <div><strong>候選</strong><pre id="diffCandidate"></pre></div>
+    </div>
+    <div class="control-group" style="margin-top:10px;justify-content:flex-end">
+      <button onclick="closeModal()">關閉</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Promote Confirm -->
+<div class="modal-overlay" id="promoteModal" onclick="if(event.target===this)closePromoteModal()">
+  <div class="modal" style="width:min(520px,94vw)">
+    <h3>確認晉升 Baseline Policy</h3>
+    <p style="font-size:13px;color:var(--muted)">此操作將更新 <code>data/state/baseline_policy.json</code>。請確認以下資訊無誤：</p>
+    <div id="promotePreview" style="font-size:12px;margin:10px 0"></div>
+    <div class="control-group" style="justify-content:flex-end">
+      <button onclick="closePromoteModal()">取消</button>
+      <button class="primary" onclick="confirmPromote()">確認晉升</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: KPI Help -->
+<div class="modal-overlay" id="infoModal" onclick="if(event.target===this)closeInfoModal()">
+  <div class="modal" style="width:min(560px,94vw)">
+    <h3 id="infoTitle">說明</h3>
+    <div id="infoContent" style="font-size:13px;line-height:1.7"></div>
+    <div class="control-group" style="margin-top:14px;justify-content:flex-end">
+      <button onclick="closeInfoModal()">關閉</button>
+    </div>
+  </div>
+</div>
+
+<script>
+
+function switchPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.remove('active'));
+  const btn = document.querySelector('#sidebar nav a[data-page="' + id + '"]');
+  if (btn) btn.classList.add('active');
+  const titles = {
+    overview: '總覽',
+    narrative: '宏觀敘事',
+    live: '相對趨勢',
+    pipeline: '投資管線',
+    agents: 'AI 觀測台',
+    experiments: '模擬交易',
+    reports: '最新回測',
+    controls: '控制與稽核',
+    datachannels: '信息通道'
+  };
+  document.getElementById('pageTitle').textContent = titles[id] || id;
+  // Close mobile sidebar
+  document.getElementById('sidebar').classList.remove('open');
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+const AGENT_NAME_MAP = {
+  'taiwan-macro-01': '台灣總經',
+  'foreign-flow-01': '外資流向',
+  'semi-desk-01': '半導體產業桌',
+  'ai-desk-01': 'AI 供應鏈產業桌',
+  'growth-momentum-01': '成長動能',
+  'value-yield-01': '價值股息',
+  'earnings-quality-01': '獲利品質',
+  'technical-breakout-01': '技術突破',
+  'financials-desk-01': '金融產業桌',
+  'shipping-desk-01': '航運產業桌',
+  'etf-rotation-01': 'ETF 輪動',
+  'cro-01': '風控長',
+  'cio-01': '投資長',
+  'super-dru-01': 'Druckenmiller 超級投資者',
+  'super-asc-01': 'Aschenbrenner 超級投資者',
+  'super-bak-01': 'Baker 超級投資者',
+  'super-ack-01': 'Ackman 超級投資者',
+  'alpha_discovery': '阿爾法發現'
+};
+function agentName(id) { return AGENT_NAME_MAP[id] || id; }
+
+const STOCK_NAME_MAP = {
+  '0050.TW': '元大台灣50',
+  '0056.TW': '元大高股息',
+  '00878.TW': '國泰永續高股息',
+  '1301.TW': '台塑',
+  '1303.TW': '南亞',
+  '1326.TW': '台化',
+  '2303.TW': '聯電',
+  '2308.TW': '台達電',
+  '2317.TW': '鴻海',
+  '2330.TW': '台積電',
+  '2382.TW': '廣達',
+  '2454.TW': '聯發科',
+  '2603.TW': '長榮',
+  '2609.TW': '陽明',
+  '2615.TW': '萬海',
+  '2881.TW': '富邦金',
+  '2882.TW': '國泰金',
+  '2886.TW': '兆豐金',
+  '2891.TW': '中信金',
+  '3008.TW': '大立光',
+  '3017.TW': '奇鋐',
+  '3034.TW': '聯詠',
+  '3037.TW': '欣興',
+  '6669.TW': '緯穎',
+  // 常見個股無後綴映射
+  '0050': '元大台灣50',
+  '0056': '元大高股息',
+  '00878': '國泰永續高股息',
+  '1301': '台塑',
+  '1303': '南亞',
+  '1326': '台化',
+  '2303': '聯電',
+  '2308': '台達電',
+  '2317': '鴻海',
+  '2330': '台積電',
+  '2382': '廣達',
+  '2454': '聯發科',
+  '2603': '長榮',
+  '2609': '陽明',
+  '2615': '萬海',
+  '2881': '富邦金',
+  '2882': '國泰金',
+  '2886': '兆豐金',
+  '2891': '中信金',
+  '3008': '大立光',
+  '3017': '奇鋐',
+  '3034': '聯詠',
+  '3037': '欣興',
+  '6669': '緯穎'
+};
+function stockName(symbol) { return STOCK_NAME_MAP[symbol] || (STOCK_NAME_MAP[(symbol || '').replace('.TW','')] || ''); }
+
+const REGIME_NAME_MAP = {
+  'NEUTRAL': '中性',
+  'RISK_ON': '風險趨向',
+  'RISK_OFF': '風險趨避'
+};
+function regimeLabel(r) { return REGIME_NAME_MAP[r] ? `${REGIME_NAME_MAP[r]}（${r}）` : r; }
+
+const STRESS_NAME_MAP = {
+  'low': '低壓',
+  'alert': '警戒',
+  'high': '高壓',
+  'crisis': '危機'
+};
+function stressLabel(r) { return STRESS_NAME_MAP[r] || r; }
+
+const EVENT_NAME_MAP = {
+  'US_rates_up': '美國升息',
+  'US_rates_down': '美國降息',
+  'AI_capex_surge': 'AI 資本支出激增',
+  'geopolitical_tension': '地緣政治緊張',
+  'geopolitical_risk_spike': '地緣政治風險飆升',
+  'china_slowdown': '中國經濟放緩',
+  'taiwan_export_boom': '台灣出口強勁',
+  'semiconductor_cycle_peak': '半導體週期高峰',
+  'financials_deregulation': '金融去管制',
+  'shipping_rate_spike': '運價飆升',
+  'oil_price_shock': '油價衝擊',
+  'JPY_carry_unwind': '日圓套利平倉',
+  'middle_east_escalation': '中東衝突升級'
+};
+function eventName(theme) { return EVENT_NAME_MAP[theme] || theme; }
+
+const REGION_NAME_MAP = {
+  'US': '美國',
+  'Global': '全球',
+  'Asia': '亞洲',
+  'JP': '日本',
+  'Middle East': '中東'
+};
+function regionName(r) { return REGION_NAME_MAP[r] || r; }
+
+const CAPITAL_FLOW_NAME_MAP = {
+  'flight_to_USD': '美元避險',
+  'risk_off': '風險趨避流出',
+  'risk_on': '風險偏好流入',
+  'tech_capex_inflow': '科技資本支出流入',
+  'inflation_reprice': '通膨重新定價',
+  'global_liquidity_drain': '全球流動性收緊'
+};
+function capitalFlowName(cf) { return CAPITAL_FLOW_NAME_MAP[cf] || cf; }
+
+const MODEL_NAME_MAP = {
+  '鷹派聯準會模型': '鷹派聯準會模型',
+  'AI 超級週期模型': 'AI 超級週期模型',
+  '地緣政治避險模型': '地緣政治避險模型'
+};
+function modelName(m) { return MODEL_NAME_MAP[m] || m; }
+
+const TEMPLATE_NAME_MAP = {
+  '美國升息 / 鷹派聯準會': '美國升息 / 鷹派聯準會',
+  '日圓套利平倉': '日圓套利平倉',
+  'AI 資本支出激增': 'AI 資本支出激增',
+  '地緣政治風險飆升': '地緣政治風險飆升',
+  '油價衝擊': '油價衝擊',
+  '中東衝突升級': '中東衝突升級'
+};
+function templateName(t) { return TEMPLATE_NAME_MAP[t] || t; }
+
+const SECTOR_NAME_MAP = {
+  'semiconductor': '半導體',
+  'ai_supply_chain': 'AI 供應鏈',
+  'financials': '金融',
+  'shipping': '航運',
+  'high_dividend': '高股息',
+  'etf_rotation': 'ETF 輪動',
+  'small_cap': '小型股',
+  'foundry': '晶圓代工',
+  'pcb': 'PCB',
+  'thermal': '散熱',
+  'semi_equipment': '半導體設備',
+  'materials': '材料',
+  'petrochemicals': '石化',
+  'consumer': '消費',
+  'tourism': '觀光',
+  'DXY': '美元指數',
+  'gold': '黃金',
+  'JPY': '日圓',
+  'oil': '原油',
+  'VIX': '波動率指數',
+  'global_liquidity': '全球流動性',
+  'global_equities': '全球股市',
+  'US_tech_capex': '美國科技資本支出',
+  'breakeven_inflation': '通膨預期',
+  'Fed_funds_futures': '聯準會基金期貨',
+  'US_rates': '美國利率',
+  'TAIEX': '台股大盤',
+  'GPR_index': '地緣政治風險指數',
+  'EM_currencies': '新興市場貨幣',
+  'foreign_flow_TW': '外資流向_台股'
+};
+function sectorName(s) { return SECTOR_NAME_MAP[s] || s; }
+
+const TIME_WINDOW_NAME_MAP = {
+  'immediate': '即時',
+  '1_week': '1 週',
+  '1_month': '1 個月'
+};
+function timeWindowName(tw) { return TIME_WINDOW_NAME_MAP[tw] || tw; }
+
+function renderOverview(data, agentsData, inbox, overlap, narrativeEvents, stress, dataChannels) {
+  const grid = document.getElementById('overviewGrid');
+  const health = data || {};
+  const cards = agentsData || {};
+  const weakest = cards.next_experiment_agent_id || '-';
+  const weakCard = (cards.weakest_agent_scorecards || []).find(c => c.agent_id === weakest);
+  const weakSharpe = weakCard ? (weakCard.sharpe || 0).toFixed(3) : '-';
+
+  const warnings = health.warnings || [];
+  const crowdingWarnings = warnings.filter(w => w.toLowerCase().includes('crowded trade') || w.toLowerCase().includes('high overlap'));
+
+  const pendingJudges = (inbox && inbox.pending_judges) ? inbox.pending_judges.length : 0;
+  const pendingPromotes = (inbox && inbox.pending_promotes) ? inbox.pending_promotes.length : 0;
+  const experimentText = (pendingJudges || pendingPromotes) ? `待評判 ${pendingJudges} · 待晉升 ${pendingPromotes}` : '全部完成';
+
+  const regime = (data && data.regime) || '-';
+  const regimeColor = regime === 'RISK_ON' ? 'var(--up)' : (regime === 'RISK_OFF' ? 'var(--down)' : (regime === 'NEUTRAL' ? 'var(--warn)' : 'inherit'));
+
+  const nev = (narrativeEvents && narrativeEvents.events) || [];
+  // 以「情緒絕對值 × 信心度」排序，取最強烈的事件作為代表
+  const sortedEvents = nev.slice().sort((a, b) => {
+    const strengthA = Math.abs(a.sentiment || 0) * (a.confidence || 1);
+    const strengthB = Math.abs(b.sentiment || 0) * (b.confidence || 1);
+    return strengthB - strengthA;
+  });
+  const topEvent = sortedEvents[0];
+  const stressScore = stress && typeof stress.score === 'number' ? stress.score.toFixed(1) : '-';
+  const stressRegime = stress ? stressLabel(stress.regime || '-') : '-';
+  const narrativeTitle = topEvent ? eventName(topEvent.theme) : '無活躍事件';
+  const narrativeSub = `壓力指數 ${stressScore}（${stressRegime}）· ${nev.length} 個事件`;
+
+  let crowdingHtml = '';
+  if (crowdingWarnings.length) {
+    crowdingHtml = crowdingWarnings.map(w => {
+      const text = w.replace('擁擠交易：', '').replace('重疊過高：', '');
+      return `<div style="margin:4px 0;font-size:13px;color:var(--warn)">⚠ ${text}</div>`;
+    }).join('');
+  } else {
+    crowdingHtml = '<div style="margin:4px 0;font-size:13px;color:var(--up)">✓ 無擁擠標的</div>';
+  }
+
+  // Data channel alerts
+  const channels = (dataChannels && dataChannels.channels) || [];
+  const alerts = (dataChannels && dataChannels.alerts) || [];
+  const errorChannels = channels.filter(c => c.status === 'error');
+  const warnChannels = channels.filter(c => c.status === 'warn');
+  const totalAlerts = alerts.length || errorChannels.length;
+  const alertHtml = totalAlerts > 0
+    ? `<div style="margin:4px 0;font-size:13px;color:var(--down)">⚠ ${errorChannels.map(c => escapeHtml(c.platform)).join('、')} 發生異常</div>`
+    : (warnChannels.length > 0
+      ? `<div style="margin:4px 0;font-size:13px;color:var(--warn)">⚠ ${warnChannels.map(c => escapeHtml(c.platform)).join('、')} 資料延遲</div>`
+      : '<div style="margin:4px 0;font-size:13px;color:var(--up)">✓ 所有通道正常</div>');
+
+  grid.innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">資料時間</div><div class="kpi-value" style="font-size:18px">${health.replay_data_latest_date || '?'}</div><div class="kpi-hint">窗口 ${health.last_window_id || '?'} · 生成於 ${formatDate(health.last_window_generated_at)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">基線版本</div><div class="kpi-value">${health.baseline_version || '?'}</div><div class="kpi-hint">目前生效的政策</div></div>
+    <div class="kpi-card" style="cursor:pointer" onclick="openKpiHelp('narrative')"><div class="kpi-label">敘事脈絡</div><div class="kpi-value" style="font-size:18px">${narrativeTitle}</div><div class="kpi-hint">${narrativeSub} · <a href="#" onclick="event.stopPropagation();switchPage('narrative');return false;" style="color:var(--accent)">開啟宏觀敘事 →</a></div></div>
+    <div class="kpi-card" style="cursor:pointer" onclick="openKpiHelp('regime')"><div class="kpi-label">市場狀態</div><div class="kpi-value" style="color:${regimeColor}">${regimeLabel(regime)}</div></div>
+    <div class="kpi-card" style="cursor:pointer" onclick="openKpiHelp('weakest')"><div class="kpi-label">表現最差 AI</div><div class="kpi-value">${agentName(weakest)}</div><div class="kpi-hint">Sharpe-like：${weakSharpe}</div></div>
+    <div class="kpi-card" style="cursor:pointer" onclick="openKpiHelp('experiment')"><div class="kpi-label">實驗狀態</div><div class="kpi-value" style="font-size:18px">${experimentText}</div><div class="kpi-hint">待處理項目</div></div>
+    <div class="kpi-card ${crowdingWarnings.length ? 'alert-err' : ''}" style="cursor:pointer" onclick="openKpiHelp('crowding')"><div class="kpi-label">擁擠標的</div><div class="kpi-value" style="font-size:18px">${crowdingWarnings.length ? crowdingWarnings.length + ' 筆' : '正常'}</div>${crowdingHtml}</div>
+    <div class="kpi-card ${totalAlerts > 0 ? 'alert-err' : ''}" style="cursor:pointer" onclick="switchPage('datachannels')"><div class="kpi-label">信息通道預警</div><div class="kpi-value" style="font-size:18px">${totalAlerts > 0 ? totalAlerts + ' 筆異常' : (warnChannels.length > 0 ? warnChannels.length + ' 筆延遲' : '正常')}</div>${alertHtml}</div>
+  `;
+}
+
+
+// --- Utilities ---
+function escapeHtml(text) {
+  if (typeof text !== 'string') return text;
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+async function getJSON(url) { const r = await fetch(url); if (!r.ok) throw new Error(r.status); return r.json(); }
+async function postJSON(url, body) { const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (!r.ok) throw new Error(r.status); return r.json(); }
+
+function notify(msg, type='info') {
+  const nc = document.getElementById('notificationCenter');
+  const n = document.createElement('div'); n.className = 'notification';
+  n.innerHTML = `<span class="close" onclick="this.parentElement.remove()">×</span><div>${msg}</div>`;
+  nc.appendChild(n);
+  setTimeout(() => n.remove(), 8000);
+}
+
+function formatDate(d) { return d ? new Date(d).toLocaleString('zh-TW') : '-'; }
+function fmt(num, digits=3) { return (num ?? 0).toFixed(digits); }
+
+// Simple markdown-to-HTML
+function mdToHtml(md) {
+  let html = md.replace(/</g, '&lt;');
+  html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+  html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+  html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  html = html.replace(/\n/g, '<br>');
+  return html;
+}
+
+
+function renderInbox(data) {
+  const el = document.getElementById('experimentInbox');
+  const pending = data.pending_judges || [];
+  const promotes = data.pending_promotes || [];
+  const history = data.recent_history || [];
+
+  const card = (item, extra) => `
+    <div class="inbox-card">
+      <div class="title">${item.experiment_id}</div>
+      <div class="meta">${agentName(item.target_agent_id)} · ${item.mutation_type} · 基線 ${fmt(item.baseline_value)} / 候選 ${fmt(item.candidate_value)}</div>
+      ${item.mutation_summary ? `<div style="margin:3px 0;font-size:11px;color:var(--muted)">${item.mutation_summary}</div>` : ''}
+      ${extra ? `<div style="margin:4px 0;font-size:11px;color:var(--muted)">${extra}</div>` : ''}
+      <div class="actions">${item._actions || ''}</div>
+    </div>
+  `;
+
+  const judgeActions = (id) => `
+    <button onclick="judgeExperiment('${id}')">評判</button>
+    <button onclick="viewDiff('${id}')">差異</button>
+  `;
+  const promoteActions = (id) => `
+    <button class="primary" onclick="openPromote('data/state/experiments/${id}.json')">晉升</button>
+    <button onclick="viewDiff('${id}')">差異</button>
+  `;
+  const histBadge = (s, reason) => `<span class="badge ${s==='accepted'?'ok':(s==='rejected'?'err':'warn')}">${s==='accepted'?'已接受':(s==='rejected'?'已拒絕':s)}</span>${reason ? ` <span title="${reason.replace(/"/g,'&quot;')}" style="cursor:help;border-bottom:1px dotted var(--muted)">ℹ️</span>` : ''}`;
+
+  el.innerHTML = `
+    <div class="inbox-col">
+      <h3>待評判 (${pending.length})</h3>
+      ${pending.length ? pending.map(p => card(p).replace('${item._actions || \'\'}', judgeActions(p.experiment_id))).join('') : '<div class="empty">無待評判實驗</div>'}
+    </div>
+    <div class="inbox-col">
+      <h3>待晉升 (${promotes.length})</h3>
+      ${promotes.length ? promotes.map(p => card(p).replace('${item._actions || \'\'}', promoteActions(p.experiment_id))).join('') : '<div class="empty">無待晉升實驗</div>'}
+    </div>
+    <div class="inbox-col">
+      <h3>近期歷史 (${history.length})</h3>
+      ${history.length ? history.map(h => {
+        const extra = h.status === 'rejected' && h.reject_reason ? `原因: ${h.reject_reason}` : '';
+        return card(h, extra).replace('${item._actions || \'\'}', histBadge(h.status, h.reject_reason));
+      }).join('') : '<div class="empty">無歷史紀錄</div>'}
+    </div>
+  `;
+
+  // Populate promote/revert dropdowns
+  const promoteSel = document.getElementById('promoteSelect');
+  promoteSel.innerHTML = '<option value="">-- 選擇已接受的實驗 --</option>' + promotes.map(p => `<option value="data/state/experiments/${p.experiment_id}.json">${p.experiment_id} (${agentName(p.target_agent_id)})</option>`).join('');
+  if (promoteSel.options.length > 1 && promoteSel.selectedIndex === 0) {
+    promoteSel.selectedIndex = 1;
+  }
+}
+
+function computePipelineSummary(guardOutcomes) {
+  const guard = guardOutcomes || [];
+  const firstGuard = guard[0];
+  const lastGuard = guard[guard.length - 1];
+  const rawInputs = firstGuard ? firstGuard.InputCount : 0;
+  const finalOutputs = lastGuard ? lastGuard.OutputCount : 0;
+  const filteredCount = Math.max(0, rawInputs - finalOutputs);
+  return { rawInputs, finalOutputs, filteredCount, guard };
+}
+
+function renderMacroRadar(data, pipelineData) {
+  const el = document.getElementById('macroRadar');
+  if (!data || !data.session_id) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
+  const { rawInputs, finalOutputs, filteredCount, guard } = computePipelineSummary(data.guard_outcomes);
+  const regimeColor = data.regime === 'RISK_ON' ? 'var(--up)' : (data.regime === 'RISK_OFF' ? 'var(--down)' : (data.regime === 'NEUTRAL' ? 'var(--warn)' : 'inherit'));
+  const recordedAt = data.recorded_at ? formatDate(data.recorded_at) : '-';
+  const items = (pipelineData && pipelineData.items) || [];
+
+  let controlSummary = '';
+  if (guard.length) {
+    const lines = guard.map(g => {
+      const filtered = g.InputCount - g.OutputCount;
+      if (!g.Passed) return `<span style="color:var(--down)">● ${agentName(g.GuardID)} 強制阻擋全部推薦（${g.InputCount} → 0）</span>`;
+      if (filtered > 0) return `<span style="color:var(--warn)">● ${agentName(g.GuardID)} 過濾了 ${filtered} 筆推薦（${g.InputCount} → ${g.OutputCount}）</span>`;
+      return `<span style="color:var(--up)">● ${agentName(g.GuardID)} 未過濾任何推薦，全部放行</span>`;
+    });
+    controlSummary = `<div style="margin:8px 0;font-size:12px;line-height:1.6;background:var(--bg);padding:8px 10px;border-radius:6px">${lines.join('<br>')}</div>`;
+  }
+
+  const passedItems = items.filter(it => it.passed_guards);
+  const topItems = passedItems.slice(0, 5);
+  let symbolTable = '';
+  if (topItems.length) {
+    symbolTable = `
+      <div style="margin-top:10px;font-size:13px;font-weight:700">最新回測認為可進場的標的（${finalOutputs} 檔中的前 ${topItems.length} 檔）</div>
+      <table style="margin-top:6px;font-size:12px">
+        <thead><tr><th>標的</th><th>公司名稱</th><th>推薦 AI</th><th>信念 <span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();openInfoHelp('信念說明', \`<p><strong>信念（Conviction）是什麼？</strong></p><p>這是 AI Agent 對該標的推薦信心分數，範圍通常為 <strong>0 ~ 100</strong>。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>&gt;70</strong>：高信念，AI 認為該標的強烈符合策略條件且風險可控。</li><li><strong>40~70</strong>：中等信念，條件部分符合，但可能存在不確定性。</li><li><strong>&lt;40</strong>：低信念，條件邊緣符合，容易被控制層過濾。</li></ul><p>當多個 AI 同時推薦同一標的時，控制層可能會對信念較低的推薦進行懲罰或過濾。</p>\`)">ℹ️</span></th><th>遠期報酬 <span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();openInfoHelp('遠期報酬說明', \`<p><strong>遠期報酬是什麼？</strong></p><p>這是系統在回測模擬中，假設「以當日收盤價買入該標的並持有固定天數」後計算出的收益率。</p><p>數值可正可負，例如 <strong>+8.5%</strong> 代表回測中持有期間上漲，<strong>-20.9%</strong> 代表下跌。幅度大小取決於市場波動與持有期間長度。</p><p><strong>這不是未來保證</strong>，而是用來驗證 AI 推薦品質的歷史參考值。持續為正的遠期報酬代表該 AI 的選股邏輯在當前市場體制下相對有效。</p>\`)">ℹ️</span></th></tr></thead>
+        <tbody>
+          ${topItems.map(it => {
+            const retCls = it.forward_return > 0 ? 'up' : (it.forward_return < 0 ? 'down' : '');
+            return `<tr><td>${it.symbol}</td><td>${stockName(it.symbol) || '-'}</td><td>${agentName(it.agent_id)}</td><td>${it.conviction || '-'}</td><td class="${retCls}">${(it.forward_return*100).toFixed(1)}%</td></tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      ${passedItems.length > 5 ? `<div style="margin-top:4px;font-size:12px;color:var(--muted)">尚有 ${passedItems.length - 5} 檔標的，請前往<a href="#" onclick="switchPage('pipeline');return false;" style="color:var(--accent);text-decoration:underline">【投資管線】</a>查看完整清單與操作建議 →</div>` : ''}
+    `;
+  } else if (finalOutputs > 0) {
+    symbolTable = `<div style="margin-top:10px;font-size:12px;color:var(--warn)">控制層放行 ${finalOutputs} 筆，但投資管線暫無詳細標的資料（可能該場次尚未載入管線數據）。</div>`;
+  } else if (guard.length) {
+    symbolTable = '<div class="empty">本場次無被推薦標的進入模擬投組</div>';
+  }
+
+  el.innerHTML = `
+    <div style="margin-bottom:8px;font-size:12px;color:var(--muted)">
+      以下為 <strong>最新回測場次</strong>（${recordedAt}）。這不是即時持倉，而是系統以當時資料與基線策略模擬後，控制層對 AI 推薦的最終處置。
+    </div>
+    <div class="metric"><div class="label">回測場次</div><div class="value">${data.session_id}</div></div>
+    <div class="metric"><div class="label">市場狀態</div><div class="value" style="color:${regimeColor}">${regimeLabel(data.regime || '-')}</div></div>
+    <div class="metric"><div class="label">推薦處置</div><div class="value">${rawInputs} 筆推薦 → 最終放行 ${finalOutputs} 筆</div></div>
+    ${filteredCount > 0 ? `<div style="font-size:12px;color:var(--warn);margin:4px 0">其中 ${filteredCount} 筆因風控條件未通過而被過濾（詳見下方控制層紀錄）</div>` : ''}
+    ${controlSummary}
+    ${symbolTable}
+    ${guard.length ? '<table style="margin-top:8px;font-size:12px"><thead><tr><th>AI</th><th>結果</th><th>處理數量</th><th>說明</th></tr></thead><tbody>' + guard.map(g => {
+      const filtered = g.InputCount - g.OutputCount;
+      let actionText = '放行';
+      let actionClass = 'ok';
+      if (!g.Passed) { actionText = '阻擋'; actionClass = 'err'; }
+      else if (filtered > 0) { actionText = '過濾'; actionClass = 'warn'; }
+      return `<tr><td>${agentName(g.GuardID) || '-'}</td><td><span class="badge ${actionClass}">${actionText}</span></td><td>${g.InputCount} → ${g.OutputCount}</td><td>${g.Reason || '-'}</td></tr>`;
+    }).join('') + '</tbody></table>' : '<div class="empty">本場次無控制層紀錄</div>'}
+  `;
+}
+
+function renderAgentObservatory(data) {
+  const el = document.getElementById('agentObservatory');
+  const cards = data.weakest_agent_scorecards || [];
+  if (!cards.length) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
+  const weakest = data.next_experiment_agent_id || '';
+  const helpIcon = (title, html) => `<span style="cursor:pointer;color:var(--accent);font-size:12px;margin-left:3px" onclick="event.stopPropagation();openInfoHelp('${title}', \`${html.replace(/"/g, '&quot;')}\`)">ℹ️</span>`;
+  el.innerHTML = `<table>
+    <thead><tr><th>策略來源</th><th>窗口數 ${helpIcon('窗口數說明', '<p>該 Agent 參與過多少個回測窗口。</p><p>窗口數越多，統計信心度越高；窗口數過少時，績效數字可能僅供參考。</p>')}</th><th>命中率 ${helpIcon('命中率說明', '<p>推薦產生正向隔日回測報酬的比例。</p><p>持續 >50% 代表該 Agent 的選股邏輯在當前市場體制下相對有效。</p>')}</th><th>Sharpe ${helpIcon('Sharpe 說明', '<p>風險調整後報酬指標。</p><p>越高代表單位風險帶來的報酬越好；<0 表示經風險調整後整體為負貢獻（虧損）。</p>')}</th><th>最大回撤 ${helpIcon('最大回撤說明', '<p>歷史推薦中曾出現的最大累積虧損幅度。</p><p>數值越接近 0，代表風險控制越好；絕對值過大時應檢查該 Agent 的停損機制。</p>')}</th></tr></thead>
+    <tbody>
+      ${cards.map(c => {
+        const isWeak = c.agent_id === weakest;
+        return `<tr class="${isWeak ? 'weak' : ''}">
+          <td>${agentName(c.agent_id) || ''}</td>
+          <td>${c.windows || 0}</td>
+          <td>${((c.hit_rate || 0) * 100).toFixed(1)}%</td>
+          <td style="${(c.sharpe || 0) < 0 ? 'color:#ff6b6b' : ''}">${(c.sharpe || 0).toFixed(3)}</td>
+          <td>${((c.max_drawdown || 0) * 100).toFixed(1)}%</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>
+  ${weakest ? `<div style="margin-top:8px;font-size:12px;color:var(--down)">表現最差策略來源：<strong>${agentName(weakest)}</strong></div>` : ''}`;
+}
+
+
+function renderUniverseOverlap(data) {
+  const el = document.getElementById('universeOverlap');
+  if (!data || !data.agents) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
+  const agents = data.agents || [];
+  const matrix = data.matrix || {};
+  const warnings = data.warnings || [];
+  const styleAgents = agents.filter(a => a.layer === 'style');
+  const uoHelp = (title, html) => `<span style="cursor:pointer;color:var(--accent);font-size:12px;margin-left:3px" onclick="event.stopPropagation();openInfoHelp('${title}', \`${html.replace(/"/g, '&quot;')}\`)">ℹ️</span>`;
+  el.innerHTML = `
+    <div style="margin-bottom:10px;font-size:12px;color:var(--text);line-height:1.6">
+      <strong>如何解讀本區塊：</strong>以下顯示各策略來源（Agent）設定的關注標的池，以及 <strong>Style 層</strong> 之間的標的重疊程度。當兩個 Style Agent 同時關注 >=3 檔相同標的時，CIO 層會自動施加信念懲罰（擁擠交易警告）。
+    </div>
+    ${warnings.length ? `<div style="margin-bottom:8px">${warnings.map(w => `<span class="badge warn">⚠ ${w}</span>`).join('')}</div>` : ''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div>
+        <div style="margin-bottom:6px;font-size:13px"><strong>策略來源標的池</strong></div>
+        <table>
+          <thead><tr><th>策略來源 ${uoHelp('策略來源', '<p>Agent 的中文名稱，對應 <code>configs/agents.json</code> 中的 <code>name</code> 欄位。</p><p>同一策略技能未來可能由多個 Agent 競爭執行。</p>')}</th><th>層級 ${uoHelp('層級', '<p>Agent 在 Atlas 分層架構中的所屬層級。</p><ul style="margin:6px 0;padding-left:18px;line-height:1.8"><li><strong>產業主題</strong>（sector）：決定板塊配置。</li><li><strong>風格因子</strong>（style）：決定成長／價值／動能等風格傾向。</li><li><strong>超級投資者</strong>（superinvestor）：模擬特定投資大師的選股邏輯。</li><li><strong>總經情境</strong>（context）：根據總經 regime 產生方向性建議，不直接選股。</li><li><strong>控制層</strong>（control）：風控長／投資長，負責過濾與後置風控。</li></ul>')}</th><th>數量 ${uoHelp('數量', '<p>該 Agent 關注的股票檔數。</p><p>若 Agent 未在設定中指定標的池，會自動 fallback 至系統預設的 24 檔台股。</p><p>數量過少可能導致策略覆蓋不足；過多則可能失去聚焦。</p>')}</th><th>標的 ${uoHelp('標的', '<p>該 Agent 會進行評估與推薦的具體股票代碼清單。</p><p>此清單來自 <code>configs/agents.json</code> 的 <code>universe</code> 欄位。</p>')}</th></tr></thead>
+          <tbody>
+            ${agents.map(a => `<tr><td>${agentName(a.agent_id) || a.agent_id}</td><td>${a.layer || '-'}</td><td>${a.universe ? a.universe.length : 0}</td><td style="font-size:11px;color:var(--muted)">${(a.universe || []).join(', ')}</td></tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <div style="margin-bottom:6px;font-size:13px"><strong>Style 層重疊矩陣</strong></div>
+        ${styleAgents.length ? `<table>
+          <thead><tr><th>策略來源 ${uoHelp('策略來源（列）', '<p>矩陣中的每一列代表一個 Style 層 Agent。</p><p>交叉格子顯示的是「該列 Agent」與「該欄 Agent」同時關注的相同標的數量。</p>')}</th>${styleAgents.map(b => `<th>${agentName(b.agent_id)} ${uoHelp(agentName(b.agent_id), '<p>Style 層 Agent 之一。</p><p>列與欄的交叉數字代表兩個 Agent 標的池的重疊檔數。</p>')}</th>`).join('')}</tr></thead>
+          <tbody>
+            ${styleAgents.map(a => `<tr><td>${agentName(a.agent_id)}</td>${styleAgents.map(b => `<td style="${a.agent_id === b.agent_id ? 'background:var(--bg)' : (matrix[a.agent_id] && matrix[a.agent_id][b.agent_id] >= 3 ? 'color:var(--warn);font-weight:700' : '')}">${a.agent_id === b.agent_id ? '-' : (matrix[a.agent_id] && matrix[a.agent_id][b.agent_id] || 0)}</td>`).join('')}</tr>`).join('')}
+          </tbody>
+        </table>` : '<div class="empty">無風格層 Agent</div>'}
+      </div>
+    </div>
+  `;
+}
+let pipelineSessions = [];
+
+function renderPipeline(data, showAll, sessionId) {
+  if (showAll === undefined) showAll = false;
+  const el = document.getElementById('recommendationPipeline');
+  if (!data || !data.session_id) { el.innerHTML = '<div class="empty">尚無回測場次資料</div>'; return; }
+  const { rawInputs, finalOutputs, filteredCount, guard } = computePipelineSummary(data.guard_outcomes);
+  const items = data.items || [];
+  const recordedAt = data.recorded_at ? formatDate(data.recorded_at) : '-';
+
+  const sessionSelect = pipelineSessions.length ? `
+    <select id="pipelineSessionSelect" style="font-size:12px;padding:2px 6px;border-radius:4px;border:1px solid var(--border);background:var(--panel);color:var(--text)" onchange="togglePipelineSession(this)">
+      ${pipelineSessions.map(s => `<option value="${s.session_id}" ${s.session_id === data.session_id ? 'selected' : ''}>${s.session_id} · ${s.regime} · ${new Date(s.recorded_at).toLocaleDateString('zh-TW')}</option>`).join('')}
+    </select>
+  ` : `<span style="font-size:12px;color:var(--muted)">載入場次中…</span>`;
+
+  const guardBadges = guard.length ? `<div style="margin-bottom:8px">${guard.map(g => {
+    const filtered = g.InputCount - g.OutputCount;
+    let label = '放行';
+    let cls = 'ok';
+    if (!g.Passed) { label = '阻擋'; cls = 'err'; }
+    else if (filtered > 0) { label = `過濾 ${filtered} 筆`; cls = 'warn'; }
+    return `<span class="badge ${cls}">${agentName(g.GuardID)}：${label}（${g.InputCount}→${g.OutputCount}）</span>`;
+  }).join('')}</div>` : '';
+
+  if (!items.length) {
+    const emptyMsg = finalOutputs === 0
+      ? '本場次經控制層審核後，沒有任何標的被放行進入模擬投組。原因可能是風控長強制阻擋，或所有推薦均被投資長過濾。'
+      : `控制層放行 ${finalOutputs} 筆，但投資管線暫無詳細標的資料（可能該場次尚未載入管線數據）。`;
+    el.innerHTML = `
+      <div style="margin-bottom:8px;font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>場次：</span>${sessionSelect} · 市場狀態：<strong>${regimeLabel(data.regime || '-')}</strong> · ${recordedAt}</div>
+      <div style="font-size:12px;color:var(--warn);margin-bottom:8px">${emptyMsg}</div>
+      ${guardBadges}
+      <div style="margin-bottom:8px;font-size:12px">
+        <label style="cursor:pointer;user-select:none">
+          <input type="checkbox" id="pipelineShowAll" ${showAll ? 'checked' : ''} onchange="togglePipelineShowAll(this)">
+          <span style="margin-left:4px">顯示全部被過濾項目（含未通過控制層）</span>
+        </label>
+      </div>
+    `;
+    return;
+  }
+
+  el.innerHTML = `
+    <div style="margin-bottom:8px;font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>場次：</span>${sessionSelect} · 市場狀態：<strong>${regimeLabel(data.regime || '-')}</strong> · ${recordedAt}</div>
+    <div style="margin-bottom:8px;font-size:12px;color:var(--muted)">
+      本場次共有 ${rawInputs} 筆 AI 推薦，經控制層後放行 ${finalOutputs} 筆${filteredCount > 0 ? `（過濾 ${filteredCount} 筆）` : ''}。
+    </div>
+    ${guardBadges}
+    <div style="margin-bottom:8px;font-size:12px">
+      <label style="cursor:pointer;user-select:none">
+        <input type="checkbox" id="pipelineShowAll" ${showAll ? 'checked' : ''} onchange="togglePipelineShowAll(this)">
+        <span style="margin-left:4px">顯示全部被過濾項目（含未通過控制層）</span>
+      </label>
+    </div>
+    <div style="max-height:320px;overflow:auto">
+    <table id="pipelineTable">
+      <thead><tr><th>標的</th><th>公司名稱</th><th>策略來源 <span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();openInfoHelp('策略來源說明', \`<p><strong>策略來源是什麼？</strong></p><p>顯示格式為 <code>Agent ID（策略技能）</code>。</p><p>Agent ID 是系統內部的實例名稱；括號內為該 Agent 執行的策略技能。同一策略未來可能由多個 Agent 競爭執行。</p>\`)">ℹ️</span></th><th>來源層 <span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();openInfoHelp('來源層說明', \`<p><strong>來源層決定這筆推薦來自 Atlas 的哪一層代理。</strong></p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>產業主題</strong>：sector layer，決定板塊配置。</li><li><strong>風格因子</strong>：style layer，決定成長／價值／動能等風格傾向。</li><li><strong>超級投資者</strong>：superinvestor layer，模擬特定投資大師的選股邏輯。</li><li><strong>總經情境</strong>：context layer，根據總經 regime 產生的方向性建議。</li></ul>\`)">ℹ️</span></th><th>方向</th><th>收盤價</th><th>目標價</th><th>停損價</th><th>信念 <span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();openInfoHelp('信念說明', \`<p><strong>信念（Conviction）是什麼？</strong></p><p>這是 AI Agent 對該標的推薦信心分數，範圍通常為 <strong>0 ~ 100</strong>。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>&gt;70</strong>：高信念，AI 認為該標的強烈符合策略條件且風險可控。</li><li><strong>40~70</strong>：中等信念，條件部分符合，但可能存在不確定性。</li><li><strong>&lt;40</strong>：低信念，條件邊緣符合，容易被控制層過濾。</li></ul><p>當多個 AI 同時推薦同一標的時，控制層可能會對信念較低的推薦進行懲罰或過濾。</p>\`)">ℹ️</span></th><th>隔日回測報酬 <span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();openInfoHelp('隔日回測報酬說明', \`<p><strong>隔日回測報酬是什麼？</strong></p><p>這是回測模擬中「以當日收盤價進場，隔日收盤價出場」的報酬率。</p><p>數值可正可負，例如 <strong>+3.2%</strong> 代表隔日上漲，<strong>-1.5%</strong> 代表隔日下跌。</p><p><strong>這不是未來保證</strong>，而是用來驗證該 Agent 在當時市場體制下的選股品質。持續為正代表策略相對有效。</p>\`)">ℹ️</span></th><th>價量標籤 + 推薦理由</th><th>操作</th></tr></thead>
+      <tbody>
+        ${items.map(it => {
+          const cls = it.forward_return > 0 ? 'positive' : (it.forward_return < 0 ? 'negative' : '');
+          const rowStyle = !it.passed_guards ? 'background:rgba(239,68,68,0.06);border-left:3px solid var(--down)' : 'border-left:3px solid var(--up)';
+          const crowded = (it.reason || '').includes('[crowded:');
+          const badge = crowded ? `<span class="badge warn">擁擠</span> ` : '';
+          const sideLabel = it.side === 'BUY' ? '<span style="color:var(--up);font-weight:700">買入</span>' : (it.side === 'SELL' ? '<span style="color:var(--down);font-weight:700">賣出</span>' : '-');
+          const priceLabel = it.price ? it.price.toFixed(2) : '-';
+          const targetPriceLabel = it.target_price > 0 ? it.target_price.toFixed(2) : '-';
+          const stopLossPriceLabel = it.stop_loss_price > 0 ? it.stop_loss_price.toFixed(2) : '-';
+          let frCls = 'color:var(--muted)';
+          let frIcon = '➖ ';
+          if (it.forward_return > 0) { frCls = 'color:var(--up);font-weight:700'; frIcon = '📈 '; }
+          else if (it.forward_return < 0) { frCls = 'color:var(--down);font-weight:700'; frIcon = '📉 '; }
+          const layerMap = { sector: '產業主題', style: '風格因子', superinvestor: '超級投資者', context: '總經情境', control: '控制層', macro: '總經情境' };
+          const layerName = layerMap[it.layer] || (it.layer || (it.agent_id === 'alpha_discovery' ? '風格因子' : '-'));
+          const tags = (it.tags || []).map(t => `<span class="badge" style="font-size:10px;padding:1px 5px;background:var(--bg);border:1px solid var(--border);margin-right:3px">${t}</span>`).join('');
+          const actionBtns = it.passed_guards
+            ? `<button class="pipeline-action" onclick="approveRec(this,'${it.symbol}','${it.agent_id}')">放行</button> <button class="pipeline-action" onclick="rejectRec(this,'${it.symbol}','${it.agent_id}')">否決</button>`
+            : `<button class="pipeline-action" onclick="approveRec(this,'${it.symbol}','${it.agent_id}')">補追</button>`;
+          const actionHelp = `<span style="cursor:pointer;color:var(--accent);font-size:12px;margin-left:4px" onclick="event.stopPropagation();openInfoHelp('人工覆寫說明', \`<p><strong>放行</strong>：人工背書此推薦，系統後續回測不會將它濾除。</p><p><strong>否決</strong>：人工拒絕此推薦，系統後續回測會強制排除該 (標的, Agent) 組合。</p><p><strong>補追</strong>：對已被控制層擋下的標的進行人工放行。</p>\`)">ℹ️</span>`;
+          return `<tr class="pipeline-row ${cls}" style="${rowStyle}"><td>${it.symbol}</td><td>${stockName(it.symbol) || '-'}</td><td>${agentName(it.agent_id)}（${it.skill}）</td><td>${layerName}</td><td>${sideLabel}</td><td>${priceLabel}</td><td>${targetPriceLabel}</td><td>${stopLossPriceLabel}</td><td>${it.conviction || '-'}</td><td style="${frCls}">${frIcon}${(it.forward_return*100).toFixed(1)}%</td><td><div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:4px">${tags}</div>${badge}${it.reason || '-'}${it.guard_reason ? '<br><span style="color:var(--muted);font-size:11px">' + it.guard_reason + '</span>' : ''}</td><td>${actionBtns}${actionHelp}</td></tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    </div>
+  `;
+}
+async function togglePipelineShowAll(checkbox) {
+  const sessionSelect = document.getElementById('pipelineSessionSelect');
+  const sessionId = sessionSelect ? sessionSelect.value : '';
+  const url = (checkbox.checked ? '/api/dashboard/recommendation-pipeline?show_all=true' : '/api/dashboard/recommendation-pipeline') + (sessionId ? '&session_id=' + encodeURIComponent(sessionId) : '');
+  const data = await getJSON(url);
+  renderPipeline(data, checkbox.checked, sessionId);
+}
+async function togglePipelineSession(select) {
+  const showAllCheckbox = document.getElementById('pipelineShowAll');
+  const showAll = showAllCheckbox ? showAllCheckbox.checked : false;
+  const url = '/api/dashboard/recommendation-pipeline?session_id=' + encodeURIComponent(select.value) + (showAll ? '&show_all=true' : '');
+  const data = await getJSON(url);
+  renderPipeline(data, showAll, select.value);
+}
+
+function renderDataChannels(data) {
+  const el = document.getElementById('dataChannels');
+  if (!data || !data.channels) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
+  const channels = data.channels || [];
+  const statusLight = s => {
+    const color = s === 'ok' ? '#10b981' : (s === 'warn' ? '#f59e0b' : (s === 'error' ? '#ef4444' : '#9ca3af'));
+    return `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};box-shadow:0 0 6px ${color};margin-right:6px;vertical-align:middle"></span>`;
+  };
+  const statusClass = s => s === 'ok' ? 'up' : (s === 'warn' ? 'warn' : (s === 'error' ? 'down' : 'muted'));
+
+  // Group by country
+  const byCountry = {};
+  channels.forEach(c => {
+    if (!byCountry[c.country]) byCountry[c.country] = [];
+    byCountry[c.country].push(c);
+  });
+
+  let html = '';
+  Object.keys(byCountry).forEach(country => {
+    html += `<div style="margin:12px 0"><div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:6px">${country}</div>`;
+    html += '<table style="font-size:12px"><thead><tr><th style="width:28px">燈號</th><th>平台名稱</th><th>API 格式</th><th>資料路徑</th><th>本地儲存</th><th>狀態</th><th>最後更新</th></tr></thead><tbody>';
+    byCountry[country].forEach(c => {
+      const errorHint = c.last_error ? `<div style="font-size:11px;color:var(--down);margin-top:2px">⚠ ${escapeHtml(c.last_error)}</div>` : '';
+      html += `<tr>
+        <td style="text-align:center">${statusLight(c.status)}</td>
+        <td>${c.platform}</td>
+        <td>${c.api_format}</td>
+        <td style="font-size:11px;color:var(--muted)">${c.path}</td>
+        <td style="font-size:11px;color:var(--muted)">${c.storage}</td>
+        <td><span class="badge ${statusClass(c.status)}">${c.status_text}</span>${errorHint}</td>
+        <td style="font-size:11px">${c.updated_at}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+  });
+
+  if (data.alerts && data.alerts.length) {
+    html += `<div style="margin-top:14px;padding:10px 12px;background:rgba(239,68,68,0.08);border-left:3px solid var(--down);border-radius:6px">
+      <div style="font-size:13px;font-weight:700;color:var(--down);margin-bottom:6px">需要關注的通道</div>
+      ${data.alerts.map(a => `<div style="font-size:12px;margin:3px 0"><strong>${escapeHtml(a.channel_id)}</strong>：${escapeHtml(a.error || '狀態異常')} <span style="color:var(--muted)">（${a.fetch_at ? new Date(a.fetch_at).toLocaleString('zh-TW') : '-'}）</span></div>`).join('')}
+    </div>`;
+  }
+
+  html += `<div style="margin-top:10px;font-size:12px;color:var(--muted)">報告生成時間：${data.generated || '-'}</div>`;
+  el.innerHTML = html;
+}
+
+async function renderBacktestReport() {
+  const el = document.getElementById('backtestReport');
+  try {
+    const r = await fetch('/api/report/latest');
+    if (!r.ok) { el.innerHTML = '<div class="empty">尚無回測報告</div>'; return; }
+    const text = await r.text();
+    el.innerHTML = `<div style="font-size:13px;line-height:1.6">${mdToHtml(text)}</div>`;
+  } catch (e) {
+    el.innerHTML = '<div class="empty">載入失敗: ' + e.message + '</div>';
+  }
+}
+
+async function runBacktest() {
+  const start = document.getElementById('backtestStart').value;
+  const end = document.getElementById('backtestEnd').value;
+  const statusEl = document.getElementById('backtestStatusText');
+  const detailEl = document.getElementById('backtestStatusDetail');
+  statusEl.textContent = '執行中…';
+  detailEl.textContent = '';
+  try {
+    const res = await postJSON('/api/backtest/run', { start, end });
+    statusEl.textContent = '已提交';
+    detailEl.innerHTML = `<span style="color:var(--accent)">後台執行中，請稍後按 🔄 重新整理查看最新結果</span>`;
+    notify(`回測已啟動：${start} ~ ${end}`, 'info');
+    pollBacktestStatus();
+  } catch (e) {
+    statusEl.textContent = '失敗';
+    detailEl.textContent = e.message;
+    notify('回測啟動失敗: ' + e.message, 'err');
+  }
+}
+
+async function pollBacktestStatus() {
+  const detailEl = document.getElementById('backtestStatusDetail');
+  const statusEl = document.getElementById('backtestStatusText');
+  for (let i = 0; i < 60; i++) {
+    await new Promise(r => setTimeout(r, 3000));
+    try {
+      const st = await getJSON('/api/backtest/status');
+      if (!st.running) {
+        if (st.error) {
+          statusEl.textContent = '失敗';
+          detailEl.innerHTML = `<span style="color:var(--down)">錯誤：${escapeHtml(st.error)}</span>`;
+          notify('回測執行失敗: ' + st.error, 'err');
+        } else {
+          statusEl.textContent = '完成';
+          detailEl.innerHTML = `<span style="color:var(--up)">完成：window ${escapeHtml(st.window_id || '')} · sessions ${st.sessions || 0} · outcomes ${st.outcomes || 0}</span>`;
+          notify('回測已完成', 'info');
+          await renderBacktestReport();
+        }
+        return;
+      }
+    } catch (e) {
+      // ignore polling errors
+    }
+  }
+  statusEl.textContent = '執行中';
+  detailEl.innerHTML = '<span style="color:var(--muted)">輪詢逾時，請手動重新整理頁面確認結果</span>';
+}
+
+function renderLiveStatus(data) {
+  const el = document.getElementById('liveStatus');
+  if (!data || !data.circuit_breaker) {
+    el.innerHTML = `
+      <div style="font-size:12px;color:var(--muted);line-height:1.6">
+        <div style="margin-bottom:6px"><strong>目前處於 Simulation 模式</strong></div>
+        <div>系統當前以 replay 資料進行回測模擬，未連接 live broker，因此沒有即時熔斷、現金與損益資料。</div>
+        <div style="margin-top:6px">若需要 live 交易狀態，請確認已啟動 live 模式並完成 broker 連線設定。</div>
+      </div>
+    `;
+    return;
+  }
+  const cb = data.circuit_breaker;
+  const pnl = (data.portfolio || {}).day_pnl || 0;
+  const pnlClass = pnl >= 0 ? 'up' : 'down';
+  const cbState = cb.state === 'tripped' ? '已觸發' : '正常';
+  el.innerHTML = `
+    <div class="metric"><div class="label">熔斷機制</div><div class="value ${cb.state === 'tripped' ? 'err' : 'ok'}">${cbState}</div></div>
+    <div class="metric"><div class="label">現金</div><div class="value">${((data.portfolio || {}).cash || 0).toLocaleString()}</div></div>
+    <div class="metric"><div class="label">今日損益</div><div class="value ${pnlClass}">${pnl.toLocaleString()}</div></div>
+    <div class="metric"><div class="label">持倉數</div><div class="value">${(data.portfolio || {}).positions_count || 0}</div></div>
+  `;
+}
+
+function renderLiveNarrativeStrip(events, stress, models, chains) {
+  const el = document.getElementById('liveNarrativeStrip');
+  if (!el) return;
+  const eventList = (events && events.events) || [];
+  const sortedEvents = eventList.slice().sort((a, b) => {
+    const strengthA = Math.abs(a.sentiment || 0) * (a.confidence || 1);
+    const strengthB = Math.abs(b.sentiment || 0) * (b.confidence || 1);
+    return strengthB - strengthA;
+  });
+  const topEvent = sortedEvents[0];
+  const stressScore = stress && typeof stress.score === 'number' ? stress.score.toFixed(1) : '-';
+  const sLabel = stress ? stressLabel(stress.regime || '-') : '-';
+  const stressColor = stress && stress.regime === 'crisis' ? 'var(--down)' : (stress && stress.regime === 'high' ? 'var(--warn)' : 'var(--up)');
+
+  // 根據壓力等級產生建議
+  let stressAdvice = '系統風險預算充足，可正常執行策略。';
+  if (stress && stress.regime === 'alert') stressAdvice = '壓力指數進入警戒區，建議降低單一標的倉位上限，並提高停損敏感度。';
+  else if (stress && stress.regime === 'high') stressAdvice = '壓力指數偏高，控制層可能過濾較多推薦，建議保守操作。';
+  else if (stress && stress.regime === 'crisis') stressAdvice = '壓力指數處於危機等級，風控長可能強制阻擋全部推薦，建議大幅減碼或觀望。';
+
+  // 從 narrative models / chains 找對應板塊
+  let favored = [];
+  let avoided = [];
+  if (topEvent && topEvent.theme) {
+    const modelList = (models && models.models) || [];
+    const chainList = (chains && chains.chains) || [];
+    const matchedModel = modelList.find(m => (m.active_themes || []).includes(topEvent.theme));
+    const matchedChain = chainList.find(c => c.trigger_theme === topEvent.theme);
+    if (matchedModel) {
+      favored = matchedModel.favored_sectors || [];
+      avoided = matchedModel.avoided_sectors || [];
+    } else if (matchedChain) {
+      favored = matchedChain.affected_sectors || [];
+    }
+  }
+
+  const sentiment = topEvent ? (topEvent.sentiment || 0) : 0;
+  const sentimentText = sentiment > 0 ? '偏多' : (sentiment < 0 ? '偏空' : '中性');
+  const sentimentColor = sentiment > 0 ? 'var(--up)' : (sentiment < 0 ? 'var(--down)' : 'var(--warn)');
+
+  const favoredBadges = favored.length ? favored.map(s => `<span class="badge ok">${sectorName(s)}</span>`).join(' ') : '<span class="badge" style="background:var(--bg);color:var(--muted)">—</span>';
+  const avoidedBadges = avoided.length ? avoided.map(s => `<span class="badge err">${sectorName(s)}</span>`).join(' ') : '<span class="badge" style="background:var(--bg);color:var(--muted)">—</span>';
+
+  el.innerHTML = `
+    <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">
+      <div class="metric">
+        <div class="label" style="cursor:pointer;text-decoration:underline dotted;color:var(--accent)" onclick="openInfoHelp('台灣壓力指數說明', \`<p><strong>台灣壓力指數是什麼？</strong><br>這是一個綜合評估台灣市場當前風險壓力的量化指標，範圍為 <strong>0 ~ 100</strong>。分數越高，代表市場面臨的綜合壓力越大，系統傾向採取更保守的風控措施。</p>
+        <p><strong>各區間的具體意義：</strong></p>
+        <ul style='margin:6px 0;padding-left:18px;line-height:1.8'>
+          <li><span style='color:var(--up)'><strong>低壓（&lt;30）</strong></span>：市場環境相對寬鬆，風險預算充足，可正常執行各類策略。</li>
+          <li><span style='color:var(--warn)'><strong>警戒（30~49）</strong></span>：壓力開始累積，建議降低單一標的倉位上限，並提高停損敏感度。</li>
+          <li><span style='color:var(--warn)'><strong>高壓（50~69）</strong></span>：市場風險明顯升高，控制層可能過濾較多推薦，建議採取保守操作。</li>
+          <li><span style='color:var(--down)'><strong>危機（≥70）</strong></span>：市場處於高壓狀態，風控長可能強制阻擋全部推薦，建議大幅減碼或觀望。</li>
+        </ul>
+        <p><strong>計算組成：</strong><br>指數由美元指數（DXY）、美債10年期殖利率（US10Y）、VIX波動率、外資流向、日圓變動與地緣政治風險等六項加權構成。</p>\`)">台灣壓力指數 <span style="font-size:10px">ℹ️</span></div>
+        <div class="value" style="color:${stressColor}">${stressScore}</div>
+      </div>
+      <div class="metric"><div class="label">壓力等級</div><div class="value">${sLabel}</div></div>
+      <div class="metric" style="flex:1;min-width:260px">
+        <div class="label">主要敘事事件</div>
+        <div class="value" style="font-size:14px">${topEvent ? eventName(topEvent.theme) : '無活躍事件'}</div>
+        <div style="margin-top:6px;font-size:12px;color:var(--muted);line-height:1.6">
+          情緒方向：<strong style="color:${sentimentColor}">${sentimentText}</strong> · ${stressAdvice}
+        </div>
+        <div style="margin-top:6px;font-size:12px;line-height:1.6">
+          <div style="margin-bottom:3px">敘事看多板塊：${favoredBadges}</div>
+          <div>敘事看空板塊：${avoidedBadges}</div>
+        </div>
+      </div>
+      <div style="margin-left:auto">
+        <button class="pipeline-action" onclick="switchPage('narrative')">查看宏觀敘事 →</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderNarrativePage(snapshot, stress, events, chains, models, templates) {
+  const macroEl = document.getElementById('narrativeMacro');
+  if (macroEl) {
+    if (!snapshot) { macroEl.innerHTML = '<div class="empty">無可用快照</div>'; }
+    else {
+      const rows = [
+        ['DXY-美元指數', snapshot.dxy], ['US10Y-美債10年期', snapshot.us10y], ['VIX-波動率指數', snapshot.vix],
+        ['USD/TWD-匯率', snapshot.usd_twd], ['原油', snapshot.oil], ['黃金', snapshot.gold], ['日圓', snapshot.jpy]
+      ];
+      const capitalRows = [
+        ['外資淨買超(億)', snapshot.foreign_investor_net],
+        ['投信淨買超(億)', snapshot.domestic_fund_net],
+        ['自營商淨買超(億)', snapshot.dealer_net]
+      ];
+      let latestTs = 0;
+      rows.forEach(([_, pt]) => { if (pt && pt.timestamp > latestTs) latestTs = pt.timestamp; });
+      const updateTime = latestTs ? new Date(latestTs * 1000).toLocaleString('zh-TW') : '-';
+      const hasData = rows.some(([_, pt]) => pt && pt.symbol);
+      const isFresh = latestTs && (Date.now()/1000 - latestTs) < 86400;
+      const channelStatus = hasData
+        ? (isFresh ? {color:'var(--up)',text:'🟢 資料通道正常'} : {color:'var(--warn)',text:'🟡 資料略有延遲'})
+        : {color:'var(--down)',text:'🔴 資料通道異常'};
+      let html = `<div style="margin-bottom:8px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:12px;color:${channelStatus.color};font-weight:700">${channelStatus.text}</span>
+        <span style="font-size:12px;color:var(--muted)">更新於 ${updateTime}</span>
+      </div>`;
+      html += '<table><thead><tr><th>指標</th><th>數值</th><th>日變動%</th></tr></thead><tbody>' +
+        rows.map(([name, pt]) => {
+          if (!pt) return '';
+          const val = typeof pt.value === 'number' ? pt.value.toFixed(3) : '-';
+          const chg = typeof pt.change_pct === 'number' ? pt.change_pct.toFixed(2) + '%' : '-';
+          const cls = pt.change_pct > 0 ? 'up' : (pt.change_pct < 0 ? 'down' : '');
+          return `<tr><td>${name}</td><td>${val}</td><td class="${cls}">${chg}</td></tr>`;
+        }).join('') + '</tbody></table>';
+      const capitalLatestTs = capitalRows.reduce((max, [_, pt]) => (pt && pt.timestamp > max) ? pt.timestamp : max, 0);
+      const capitalHasData = capitalRows.some(([_, pt]) => pt && pt.symbol);
+      const capitalIsFresh = capitalLatestTs && (Date.now()/1000 - capitalLatestTs) < 86400;
+      const capitalStatus = capitalHasData
+        ? (capitalIsFresh ? {color:'var(--up)',text:'🟢 正常'} : {color:'var(--warn)',text:'🟡 延遲'})
+        : {color:'var(--down)',text:'🔴 缺失'};
+      const capitalTimeStr = capitalLatestTs ? new Date(capitalLatestTs * 1000).toLocaleString('zh-TW') : '-';
+      if (capitalRows.some(([_, pt]) => pt && typeof pt.value === 'number')) {
+        html += `<div style="margin-top:10px;display:flex;align-items:center;gap:10px">
+          <span style="font-weight:700;font-size:13px;color:var(--accent)">台股三大法人資金流</span>
+          <span style="font-size:12px;color:${capitalStatus.color};font-weight:700">${capitalStatus.text}</span>
+          <span style="font-size:12px;color:var(--muted)">更新於 ${capitalTimeStr}</span>
+        </div>`;
+        html += '<table><thead><tr><th>法人</th><th>淨買超(億)</th></tr></thead><tbody>' +
+          capitalRows.map(([name, pt]) => {
+            if (!pt) return '';
+            const val = typeof pt.value === 'number' ? pt.value.toFixed(2) : '-';
+            const cls = pt.value > 0 ? 'up' : (pt.value < 0 ? 'down' : '');
+            return `<tr><td>${name}</td><td class="${cls}">${val}</td></tr>`;
+          }).join('') + '</tbody></table>';
+      } else {
+        html += `<div style="margin-top:10px;display:flex;align-items:center;gap:10px">
+          <span style="font-weight:700;font-size:13px;color:var(--accent)">台股三大法人資金流</span>
+          <span style="font-size:12px;color:${capitalStatus.color};font-weight:700">${capitalStatus.text}</span>
+          <span style="font-size:12px;color:var(--muted)">更新於 ${capitalTimeStr}</span>
+        </div><div class="empty">暫無可用資料</div>`;
+      }
+      macroEl.innerHTML = html;
+    }
+  }
+
+  const stressEl = document.getElementById('narrativeStress');
+  if (stressEl) {
+    if (!stress) { stressEl.innerHTML = '<div class="empty">無可用資料</div>'; }
+    else {
+      const score = typeof stress.score === 'number' ? stress.score.toFixed(1) : '-';
+      const sLabel = stressLabel(stress.regime || '-');
+      const regimeColor = stress.regime === 'crisis' ? 'var(--down)' : (stress.regime === 'high' ? 'var(--warn)' : 'var(--up)');
+      const comps = stress.components || {};
+      const stressTime = stress.timestamp ? new Date(stress.timestamp * 1000).toLocaleString('zh-TW') : new Date().toLocaleString('zh-TW');
+      let html = `<div style="margin-bottom:8px;font-size:12px;color:var(--muted)">資料更新時間：${stressTime}</div>`;
+      html += `<div style="font-size:28px;font-weight:700;color:${regimeColor}">${score} <span style="font-size:14px;color:var(--muted)">/ 100</span></div>`;
+      html += `<div style="margin:4px 0 10px;font-size:14px">壓力等級：<strong>${stressLabel(stress.regime || '-')}</strong></div>`;
+      html += `<table><thead><tr><th>子項</th><th>分數 <span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();openInfoHelp('壓力指數分數說明', \`<p><strong>分數是什麼？</strong></p><p>壓力指數由多個子項加權構成，每個子項的分數代表該因子對台灣市場的壓力貢獻度。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>正值</strong>：該因子正在對市場施加壓力（例如美元走強、地緣政治風險升溫）。</li><li><strong>負值</strong>：該因子正在緩解市場壓力（例如外資大幅流入、波動率下降）。</li><li><strong>絕對值越大</strong>：該因子對整體壓力指數的影響越顯著。</li></ul><p>最終壓力指數為各子項加權總和，範圍理論上為 <strong>0 ~ 100</strong>，但個別子項可能出現負值以反映風險緩解效果。</p>\`)">ℹ️</span></th></tr></thead><tbody>`;
+      const names = { dxy: 'DXY-美元指數', us10y: 'US10Y-美債10年期', foreign_flow: '外資流向', vix: 'VIX-波動率指數', jpy: '日圓-套利平倉壓力', geopolitical: '地緣政治風險' };
+      for (const k of Object.keys(comps)) {
+        html += `<tr><td>${names[k] || k}</td><td>${typeof comps[k] === 'number' ? comps[k].toFixed(2) : '-'}</td></tr>`;
+      }
+      html += '</tbody></table>';
+      stressEl.innerHTML = html;
+    }
+  }
+
+  const eventsEl = document.getElementById('narrativeEvents');
+  if (eventsEl) {
+    const list = (events && events.events) || [];
+    // 同樣按強度排序，讓最劇烈的事件優先呈現
+    const sortedList = list.slice().sort((a, b) => {
+      const strengthA = Math.abs(a.sentiment || 0) * (a.confidence || 1);
+      const strengthB = Math.abs(b.sentiment || 0) * (b.confidence || 1);
+      return strengthB - strengthA;
+    });
+    if (!sortedList.length) { eventsEl.innerHTML = '<div class="empty">目前無觸發的宏觀敘事</div>'; }
+    else {
+      eventsEl.innerHTML = sortedList.map(e => {
+        const sClass = e.sentiment > 0 ? 'up' : 'down';
+        const sText = e.sentiment > 0 ? '正面' : '負面';
+        const tw = timeWindowName(e.time_window || '-');
+        return `<div style="border-left:3px solid var(--accent);padding:10px 12px;margin:8px 0;background:#0d1015;border-radius:8px">
+          <div style="font-weight:700">${eventName(e.theme)} <span class="${sClass}">${sText} (${e.sentiment})</span></div>
+          <div style="color:var(--muted);font-size:12px;margin-top:4px">區域：${regionName(e.region)} · 信心度：${((e.confident || e.confidence || 0) * 100).toFixed(0)}% · 資金流：${capitalFlowName(e.capital_flow || '-')} · 時間窗口：${tw}</div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  const chainsEl = document.getElementById('narrativeChains');
+  if (chainsEl) {
+    const list = (chains && chains.chains) || [];
+    if (!list.length) { chainsEl.innerHTML = '<div class="empty">目前無匹配的因果鏈</div>'; }
+    else {
+      chainsEl.innerHTML = list.map(c => `
+        <div style="margin:10px 0">
+          <div style="font-weight:700;margin-bottom:4px">${templateName(c.template_id)} <span style="color:var(--muted);font-size:12px">分數 ${(c.score || 0).toFixed(3)}</span></div>
+          ${(c.steps || []).map((s, i) => {
+            const impClass = s.impact > 0 ? 'up' : 'down';
+            const affected = (s.affected || []).map(a => `<span style="display:inline-block;font-size:11px;padding:2px 8px;margin:2px 4px 2px 0;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--border)">${sectorName(a) || a}</span>`).join('');
+            return `<div style="padding:8px 0;border-bottom:1px dashed var(--border)">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="width:22px;height:22px;display:grid;place-items:center;border-radius:50%;background:var(--border);font-size:11px;color:var(--muted);flex-shrink:0">${i+1}</div>
+                <div style="flex:1;font-size:12px">${s.description}</div>
+                <div class="${impClass}" style="font-size:11px;padding:2px 8px;border-radius:999px;background:#0d1015;flex-shrink:0">影響力 ${s.impact}</div>
+              </div>
+              ${affected ? `<div style="margin-top:6px;padding-left:30px">${affected}</div>` : ''}
+            </div>`;
+          }).join('')}
+        </div>
+      `).join('');
+    }
+  }
+
+  const modelsEl = document.getElementById('narrativeModels');
+  if (modelsEl) {
+    const list = (models && models.models) || [];
+    if (!list.length) { modelsEl.innerHTML = '<div class="empty">目前無活躍模型</div>'; }
+    else {
+      modelsEl.innerHTML = list.map((m, idx) => {
+        const w = m.weight || 0;
+        const e = m.recent_error || 0;
+        const weightPct = Math.min(100, Math.max(0, w * 100)).toFixed(1);
+        const weightColor = w >= 0.5 ? '#10b981' : (w >= 0.25 ? '#f59e0b' : '#ef4444');
+        const errColor = e <= 0.3 ? '#10b981' : (e <= 0.5 ? '#f59e0b' : '#ef4444');
+        const errText = e <= 0.3 ? '優秀' : (e <= 0.5 ? '一般' : '偏高');
+        return `
+        <div style="padding:12px;margin:8px 0;background:#0d1015;border-radius:8px;border-left:3px solid ${weightColor}">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+            <div style="font-weight:700;font-size:15px">${escapeHtml(modelName(m.name))}</div>
+            <div style="font-size:12px;color:var(--muted);white-space:nowrap">誤差 <span style="color:${errColor};font-weight:700">${(e*100).toFixed(1)}% ${errText}</span></div>
+          </div>
+          <div style="margin:8px 0">
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
+              <span>模型權重</span>
+              <div style="flex:1;height:6px;background:#1f2937;border-radius:3px;overflow:hidden">
+                <div style="width:${weightPct}%;height:100%;background:${weightColor}"></div>
+              </div>
+              <span style="min-width:40px;text-align:right">${w.toFixed(3)}</span>
+            </div>
+          </div>
+          <div style="color:var(--muted);font-size:12px;margin-top:4px">${escapeHtml(m.description || '')}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">
+            ${(m.favored_sectors || []).map(s => `<span class="badge ok">+ ${escapeHtml(sectorName(s))}</span>`).join('')}
+            ${(m.avoided_sectors || []).map(s => `<span class="badge err">− ${escapeHtml(sectorName(s))}</span>`).join('')}
+          </div>
+          ${m.rationale ? `<div style="margin-top:10px">
+            <button onclick="document.getElementById('model-rationale-${idx}').style.display=document.getElementById('model-rationale-${idx}').style.display==='none'?'block':'none';this.textContent=this.textContent==='展開完整論述 ▼'?'收起論述 ▲':'展開完整論述 ▼'" style="font-size:12px;color:var(--accent);background:none;border:none;padding:0;cursor:pointer">展開完整論述 ▼</button>
+            <div id="model-rationale-${idx}" style="display:none;margin-top:8px;padding:10px;background:var(--bg);border-radius:6px;font-size:12px;line-height:1.7;color:var(--text);white-space:pre-wrap">${escapeHtml(m.rationale)}</div>
+          </div>` : ''}
+        </div>
+      `;
+      }).join('');
+    }
+  }
+
+  const templatesEl = document.getElementById('narrativeTemplates');
+  if (templatesEl) {
+    const items = (templates && templates.templates) || [];
+    if (!items.length) { templatesEl.innerHTML = '<div class="empty">無模板資料</div>'; }
+    else {
+      templatesEl.innerHTML = `<table>
+        <thead><tr><th>模板名稱</th><th>觸發主題</th><th>歷史命中率</th><th>資料來源</th><th style="width:90px">操作</th></tr></thead>
+        <tbody>
+          ${items.map((t, idx) => `<tr>
+            <td>${escapeHtml(templateName(t.name))}</td>
+            <td>${escapeHtml(eventName(t.trigger_theme))}</td>
+            <td>${((t.historical_hit_rate || 0) * 100).toFixed(0)}%</td>
+            <td style="font-size:11px;color:var(--muted)">${escapeHtml((t.source_references || []).join(', '))}</td>
+            <td><button onclick="document.getElementById('tmpl-rationale-${idx}').style.display=document.getElementById('tmpl-rationale-${idx}').style.display==='none'?'table-row':'none';this.textContent=this.textContent==='展開 ▼'?'收起 ▲':'展開 ▼'" style="font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer">展開 ▼</button></td>
+          </tr>
+          <tr id="tmpl-rationale-${idx}" style="display:none">
+            <td colspan="5" style="background:var(--bg);padding:12px 14px;font-size:12px;line-height:1.8;color:var(--text);white-space:pre-wrap;border-left:3px solid var(--accent)">${escapeHtml(t.rationale || '暫無論述')}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    }
+  }
+}
+
+function renderDataIngestHealth(snapshot) {
+  const el = document.getElementById('dataIngestHealth');
+  if (!el) return;
+  if (!snapshot) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
+  const indicators = [
+    { key: 'dxy', label: 'DXY-美元指數' },
+    { key: 'us10y', label: 'US10Y-美債10年期' },
+    { key: 'vix', label: 'VIX-波動率指數' },
+    { key: 'usd_twd', label: 'USD/TWD-匯率' },
+    { key: 'oil', label: '原油' },
+    { key: 'gold', label: '黃金' },
+    { key: 'jpy', label: '日圓' },
+    { key: 'foreign_investor_net', label: '外資淨買超(億)' },
+    { key: 'domestic_fund_net', label: '投信淨買超(億)' },
+    { key: 'dealer_net', label: '自營商淨買超(億)' }
+  ];
+  const nowSec = Date.now() / 1000;
+  let html = '<table><thead><tr><th>資料來源</th><th>狀態</th><th>最新數值</th><th>更新時間</th></tr></thead><tbody>';
+  for (const ind of indicators) {
+    const pt = snapshot[ind.key];
+    const hasSymbol = pt && pt.symbol;
+    const ts = pt && pt.timestamp ? pt.timestamp : 0;
+    const isFresh = ts && (nowSec - ts) < 86400;
+    let statusHtml = '';
+    if (hasSymbol && isFresh) {
+      statusHtml = '<span style="color:var(--up)">🟢 正常</span>';
+    } else if (hasSymbol) {
+      statusHtml = '<span style="color:var(--warn)">🟡 延遲</span>';
+    } else {
+      statusHtml = '<span style="color:var(--down)">🔴 缺失</span>';
+    }
+    const val = (hasSymbol && typeof pt.value === 'number') ? pt.value.toFixed(3) : '-';
+    const timeStr = ts ? new Date(ts * 1000).toLocaleString('zh-TW') : '-';
+    html += `<tr><td>${ind.label}</td><td>${statusHtml}</td><td>${val}</td><td style="font-size:11px;color:var(--muted)">${timeStr}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  html += '<div style="margin-top:10px;font-size:12px;color:var(--muted)">說明：綠燈表示資料在 24 小時內有更新；黃燈表示資料存在但超過 24 小時未更新；紅燈表示該指標完全缺失。若宏觀數據出現大面積紅燈，建議檢查網路連線或資料供應商（Yahoo Finance / TWSE）狀態。</div>';
+  el.innerHTML = html;
+}
+
+async function loadOverrides() {
+  try {
+    const data = await getJSON('/api/control/active-overrides');
+    const paused = data.paused_agents || [];
+    const banned = data.banned_sectors || [];
+    const container = document.getElementById('overrideBadges');
+    const pausedBadges = paused.map(a => `<span class="badge err">⏸ ${a}</span>`).join('');
+    const bannedBadges = banned.map(s => `<span class="badge warn">🚫 ${s}</span>`).join('');
+    container.innerHTML = pausedBadges + bannedBadges || '<span style="color:var(--muted);font-size:12px">目前無生效覆寫</span>';
+  } catch (e) { console.error(e); }
+}
+
+async function loadAuditLog() {
+  const el = document.getElementById('auditLog');
+  try {
+    const data = await getJSON('/api/control/audit-log');
+    const items = (data.interventions || []).slice(0, 20);
+    if (!items.length) { el.innerHTML = '<div class="empty">無紀錄</div>'; return; }
+    const actionMap = {
+      'pause_agent': '暫停 Agent',
+      'resume_agent': '恢復 Agent',
+      'set_model_weight': '設定模型權重',
+      'sector_ban': '封鎖產業',
+      'sector_unban': '解除封鎖',
+      'approve_rec': '批准推薦',
+      'reject_rec': '拒絕推薦'
+    };
+    el.innerHTML = `<table><thead><tr><th>時間</th><th>操作者</th><th>動作</th><th>對象</th><th>原因</th></tr></thead><tbody>
+      ${items.map(it => `<tr><td>${formatDate(it.recorded_at)}</td><td>${it.operator || '-'}</td><td>${actionMap[it.type] || it.type}</td><td>${agentName(it.target_agent_id) || sectorName(it.target_sector) || it.target_symbol || it.target_model_id || '-'}</td><td>${it.reason || '-'}</td></tr>`).join('')}
+    </tbody></table>`;
+  } catch (e) { el.innerHTML = '<div class="empty">載入失敗</div>'; }
+}
+
+async function loadExperimentHistory() {
+  const el = document.getElementById('experimentHistory');
+  try {
+    const data = await getJSON('/api/experiment/history');
+    const items = (data.history || []).slice(0, 20);
+    if (!items.length) { el.innerHTML = '<div class="empty">無紀錄</div>'; return; }
+    el.innerHTML = `<table><thead><tr><th>時間</th><th>版本</th><th>實驗</th><th>AI</th><th>狀態</th></tr></thead><tbody>
+      ${items.map(it => `<tr><td>${formatDate(it.promoted_at)}</td><td>v${it.version_after || '-'}</td><td>${it.experiment_id || ''}</td><td>${agentName(it.target_agent_id) || it.target_agent_id || ''}</td><td><span class="badge ${it.status==='accepted'?'ok':'warn'}">${it.status==='accepted'?'已接受':(it.status==='rejected'?'已拒絕':it.status)}</span></td></tr>`).join('')}
+    </tbody></table>`;
+    const revertSel = document.getElementById('revertSelect');
+    revertSel.innerHTML = '<option value="">-- 選擇要回滾的版本 --</option>' + items.map((it, i) => `<option value="${it.experiment_id}">v${it.version_after || i} - ${it.experiment_id}</option>`).join('');
+  } catch (e) { el.innerHTML = '<div class="empty">載入失敗</div>'; }
+}
+
+// --- Actions ---
+async function judgeExperiment(id) {
+  try {
+    const res = await postJSON('/api/experiment/judge', { experiment_id: id });
+    notify(`評判完成：${id} → ${res.status==='accepted'?'已接受':res.status}`, res.status==='accepted'?'ok':'info');
+    loadAll();
+  } catch (e) { notify('評判失敗：' + e.message, 'err'); }
+}
+
+async function viewDiff(id) {
+  try {
+    const data = await getJSON('/api/experiment/diff?experiment_id=' + encodeURIComponent(id));
+    document.getElementById('diffBaseline').textContent = data.baseline_prompt || '(empty)';
+    document.getElementById('diffCandidate').textContent = data.candidate_prompt || '(empty)';
+    document.getElementById('diffModal').classList.add('show');
+  } catch (e) { notify('載入差異比對失敗：' + e.message, 'err'); }
+}
+function closeModal() { document.getElementById('diffModal').classList.remove('show'); }
+
+let pendingPromotePath = '';
+function openPromote(path) {
+  pendingPromotePath = path;
+  document.getElementById('promotePreview').innerHTML = `<code>${path}</code>`;
+  document.getElementById('promoteModal').classList.add('show');
+}
+function closePromoteModal() { document.getElementById('promoteModal').classList.remove('show'); pendingPromotePath = ''; }
+
+function openKpiHelp(key) {
+  const titleMap = {
+    narrative: '敘事脈絡',
+    regime: '市場狀態',
+    weakest: '表現最差 AI',
+    experiment: '實驗狀態',
+    crowding: '擁擠標的'
+  };
+  const contentMap = {
+    narrative: `<p><strong>這是什麼？</strong><br>顯示當前回測窗口中，由總經數據（利率、匯率、資金流向等）驅動的最重要敘事主題，以及台灣市場壓力指數。它回答了「現在市場的主要故事是什麼」。</p>
+<p><strong>為什麼重要？</strong><br>敘事脈絡決定了倉位規模與產業配置傾向。若出現「AI 資本支出激增」或「地緣政治緊張」等事件，會直接影響下游 Agent 的推薦權重與控制層的過濾條件。</p>
+<p><strong>該注意什麼？</strong><br>點擊卡片上的「開啟宏觀敘事 →」可前往完整 6 大面板。若壓力指數處於「高壓」或「危機」等級，建議同步檢視【相對趨勢】頁的總經雷達，並考慮降低整體曝險。</p>`,
+    regime: `<p><strong>這是什麼？</strong><br>基於最新回測資料計算出的市場體制（RISK_ON／NEUTRAL／RISK_OFF）。這是 Context Layer 對當前環境的綜合判斷。<br><br>
+<strong>請注意名稱含義：</strong>
+<ul style="margin:6px 0;padding-left:18px">
+<li><code>RISK_ON</code> = <span style="color:var(--up)">風險偏好（積極）</span>：市場願意承擔風險，通常是加倉機會。</li>
+<li><code>NEUTRAL</code> = <span style="color:var(--warn)">中性</span>：方向不明，系統會自動縮減單一倉位上限至 85%。</li>
+<li><code>RISK_OFF</code> = <span style="color:var(--down)">風險趨避（保守）</span>：市場傾向避險，這才是需要特別警惕的狀態。</li>
+</ul></p>
+<p><strong>為什麼重要？</strong><br>體制決定了整個投資組合的基調。RISK_ON 時可積極參與成長與動能策略；NEUTRAL 時應控制單一標的比重並提高篩選標準；RISK_OFF 時應優先考慮降低曝險、轉向防禦性配置或提高現金比重。</p>
+<p><strong>該注意什麼？</strong><br>當 regime 從 RISK_ON 快速轉向 RISK_OFF，通常伴隨壓力指數飆升。此時請立即前往【相對趨勢】頁檢查總經雷達，並檢視【投資管線】是否有過多推薦被控制層阻擋——這是市場風險情緒惡化的早期信號。</p>`,
+    weakest: `<p><strong>這是什麼？</strong><br>根據最新回測窗口的 Scorecard，Sharpe-like 指標最低的 Agent。它是下一輪突變實驗（Mutation）的首選候選對象。</p>
+<p><strong>為什麼重要？</strong><br>Atlas-Go 的演化循環（Evolution Loop）就是持續識別最弱 Agent，並對其進行 prompt、規則或約束條件的突變改進。這不代表該 Agent 一定會被淘汰，而是指出當前最需要迭代的策略缺口。</p>
+<p><strong>該注意什麼？</strong><br>在提出突變前，建議先進入【AI 觀測台】頁檢查該 Agent 的觀察數（observations）是否充足，以及失敗是否集中在特定 regime。若樣本過少，改善結論的置信度會降低。</p>`,
+    experiment: `<p><strong>這是什麼？</strong><br>顯示當前待評判（judge）和待晉升（promote）的實驗數量。它是整個 mutation → judge → promote → revert 閉環的可視化入口。</p>
+<p><strong>為什麼重要？</strong><br>若存在「待評判」實驗，表示已有突變運行完成但尚未決定接受或拒絕；若存在「待晉升」實驗，表示已有實驗通過門檻但尚未寫入基線政策（baseline_policy.json）。</p>
+<p><strong>該注意什麼？</strong><br>停滯的實驗會阻塞下一輪改進循環。建議定期進入【模擬交易】頁進行評判與晉升。若晉升後發現績效反轉，可透過【控制與稽核】頁回滾基線版本。</p>`,
+    crowding: `<p><strong>這是什麼？</strong><br>當同一標的同時被 ≥3 個 Agent 推薦，或 Style Layer 的標的池重疊過高時，CIO 層會觸發擁擠懲罰（conviction × 0.7）。此卡片列出當前被多重疊覆蓋的標的。</p>
+<p><strong>為什麼重要？</strong><br>擁擠是風格趨同的信號，往往預示短期波動放大或回調風險。這幫助操作者識別「大家都愛」的熱門標的是否已過度集中。</p>
+<p><strong>該注意什麼？</strong><br>高重疊不一定立刻危險，但如果疊加高壓力指數（>70）或 NEUTRAL regime，應特別警惕。可考慮在【投資管線】頁手動拒絕部分高擁擠標的，或進一步降低該風格 Agent 的 Darwinian 權重。</p>`
+  };
+  document.getElementById('infoTitle').textContent = titleMap[key] || '說明';
+  document.getElementById('infoContent').innerHTML = contentMap[key] || '';
+  document.getElementById('infoModal').classList.add('show');
+}
+function closeInfoModal() { document.getElementById('infoModal').classList.remove('show'); }
+function openInfoHelp(title, htmlContent) {
+  document.getElementById('infoTitle').textContent = title || '說明';
+  document.getElementById('infoContent').innerHTML = htmlContent || '';
+  document.getElementById('infoModal').classList.add('show');
+}
+
+async function confirmPromote() {
+  if (!pendingPromotePath) return;
+  try {
+    const res = await postJSON('/api/experiment/promote', { result_path: pendingPromotePath });
+    notify(`晉升成功：基線 v${res.version}`, 'ok');
+    closePromoteModal();
+    loadAll();
+  } catch (e) { notify('晉升失敗：' + e.message, 'err'); }
+}
+
+async function promoteExperiment() {
+  const path = document.getElementById('promoteSelect').value;
+  if (!path) { notify('請先選擇一個實驗', 'warn'); return; }
+  openPromote(path);
+}
+
+async function revertExperiment() {
+  const id = document.getElementById('revertSelect').value;
+  const reason = document.getElementById('revertReason').value.trim();
+  if (!id) { notify('請選擇要回滾的版本', 'warn'); return; }
+  if (!confirm('確定要回滾到 ' + id + ' 嗎？')) return;
+  try {
+    await postJSON('/api/experiment/revert', { type: 'experiment', experiment_id: id, reason: reason || '儀表板回滾' });
+    notify('回滾成功', 'ok');
+    loadAll();
+  } catch (e) { notify('回滾失敗: ' + e.message, 'err'); }
+}
+
+
+async function approveRec(btn, symbol, agentID) {
+  const cell = btn.parentElement;
+  cell.querySelectorAll('button').forEach(b => b.disabled = true);
+  btn.textContent = '…';
+  try {
+    await postJSON('/api/control/approve-recommendation', { symbol, agent_id: agentID, reason: '儀表板人工批准', operator: 'human' });
+    btn.textContent = '✓';
+    notify(`已批准 ${symbol}（${agentID}）`, 'ok');
+    loadAll();
+  } catch (e) {
+    cell.querySelectorAll('button').forEach(b => b.disabled = false);
+    btn.textContent = '✓';
+    notify('批准失敗：' + e.message, 'err');
+  }
+}
+async function rejectRec(btn, symbol, agentID) {
+  const cell = btn.parentElement;
+  cell.querySelectorAll('button').forEach(b => b.disabled = true);
+  btn.textContent = '…';
+  try {
+    await postJSON('/api/control/reject-recommendation', { symbol, agent_id: agentID, reason: '儀表板人工拒絕', operator: 'human' });
+    btn.textContent = '✕';
+    notify(`已拒絕 ${symbol}（${agentID}）`, 'info');
+    loadAll();
+  } catch (e) {
+    cell.querySelectorAll('button').forEach(b => b.disabled = false);
+    btn.textContent = '✕';
+    notify('拒絕失敗：' + e.message, 'err');
+  }
+}
+async function pauseAgent() {
+  const agent_id = document.getElementById('agentSelect').value;
+  if (!agent_id) return;
+  await postJSON('/api/control/pause-agent', { agent_id, reason: '儀表板人工暫停', operator: 'human' });
+  loadOverrides(); notify('已暫停 Agent');
+}
+async function resumeAgent() {
+  const agent_id = document.getElementById('agentSelect').value;
+  if (!agent_id) return;
+  await postJSON('/api/control/resume-agent', { agent_id, reason: '儀表板人工恢復', operator: 'human' });
+  loadOverrides(); notify('已恢復 Agent');
+}
+async function banSector() {
+  const sector = document.getElementById('sectorSelect').value;
+  await postJSON('/api/control/sector-ban', { sector, banned: true, reason: '儀表板人工封鎖', operator: 'human' });
+  loadOverrides(); notify('已封鎖產業');
+}
+async function unbanSector() {
+  const sector = document.getElementById('sectorSelect').value;
+  await postJSON('/api/control/sector-ban', { sector, banned: false, reason: '儀表板人工解除封鎖', operator: 'human' });
+  loadOverrides(); notify('已解除產業封鎖');
+}
+
+// --- Boot ---
+function populateAgentSelect() {
+  const agents = [
+    {id:'taiwan-macro-01',name:'台灣總經'},
+    {id:'foreign-flow-01',name:'外資流向'},
+    {id:'semi-desk-01',name:'半導體產業桌'},
+    {id:'ai-desk-01',name:'AI 供應鏈產業桌'},
+    {id:'growth-momentum-01',name:'成長動能'},
+    {id:'value-yield-01',name:'價值股息'},
+    {id:'cro-01',name:'風控長'},
+    {id:'cio-01',name:'投資長'},
+    {id:'super-dru-01',name:'Druckenmiller 超級投資者'}
+  ];
+  const sel = document.getElementById('agentSelect');
+  sel.innerHTML = agents.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+}
+
+async function loadAll() {
+  try {
+    const [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions] = await Promise.all([
+      getJSON('/api/dashboard/system-health').catch(() => null),
+      getJSON('/api/dashboard/macro-radar').catch(() => null),
+      getJSON('/api/dashboard/agent-observatory').catch(() => null),
+      getJSON('/api/dashboard/recommendation-pipeline').catch(() => null),
+      getJSON('/api/dashboard/live-status').catch(() => null),
+      getJSON('/api/dashboard/experiment-inbox').catch(() => null),
+      getJSON('/api/dashboard/universe-overlap').catch(() => null),
+      getJSON('/api/taiwan/stress-index').catch(() => null),
+      getJSON('/api/narrative/events').catch(() => null),
+      getJSON('/api/narrative/chains').catch(() => null),
+      getJSON('/api/narrative/models').catch(() => null),
+      getJSON('/api/narrative/templates').catch(() => null),
+      getJSON('/api/macro/snapshot/latest').catch(() => null),
+      getJSON('/api/dashboard/data-channels').catch(() => null),
+      getJSON('/api/dashboard/sessions').catch(() => null),
+    ]);
+    if (sessions && sessions.sessions) {
+      pipelineSessions = sessions.sessions;
+    }
+    renderOverview(health, agents, inbox, overlap, events, stress, dataChannels);
+    renderMacroRadar(macro, pipeline);
+    renderLiveNarrativeStrip(events, stress, models, chains);
+    renderAgentObservatory(agents);
+    renderUniverseOverlap(overlap);
+    renderPipeline(pipeline, false, '');
+    renderLiveStatus(live);
+    renderInbox(inbox);
+    renderNarrativePage(snapshot, stress, events, chains, models, templates);
+    renderDataIngestHealth(snapshot);
+    renderDataChannels(dataChannels);
+  } catch (e) { console.error(e); }
+  document.getElementById('lastRefresh').textContent = '更新於 ' + new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  renderBacktestReport();
+  loadOverrides();
+  loadAuditLog();
+  loadExperimentHistory();
+}
+
+populateAgentSelect();
+loadAll();
+setInterval(loadAll, 30000);
+
+</script>
+</body>
+</html>

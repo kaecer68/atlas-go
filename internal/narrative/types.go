@@ -31,6 +31,7 @@ type CausalTemplate struct {
 	Steps             []CausalStep `json:"steps"`
 	HistoricalHitRate float64      `json:"historical_hit_rate"`
 	SourceReferences  []string     `json:"source_references"`
+	Rationale         string       `json:"rationale"`
 }
 
 // CausalChain is an instantiated causal chain from a specific event.
@@ -46,6 +47,7 @@ type InvestmentModel struct {
 	ID               string   `json:"id"`
 	Name             string   `json:"name"`
 	Description      string   `json:"description"`
+	Rationale        string   `json:"rationale"`
 	ActiveThemes     []string `json:"active_themes"`
 	FavoredSectors   []string `json:"favored_sectors"`
 	AvoidedSectors   []string `json:"avoided_sectors"`

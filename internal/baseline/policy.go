@@ -201,6 +201,7 @@ func Promote(policy Policy, result domain.PromptExperimentResult, candidate stri
 		CandidatePath: result.CandidatePrompt,
 		PromotedAt:    time.Now(),
 		Status:        string(result.Experiment.Status),
+		VersionAfter:  next.Version,
 	})
 	return next, nil
 }

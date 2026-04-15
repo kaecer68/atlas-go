@@ -50,31 +50,34 @@ func (m *MacroIngestor) loadLatestSnapshot() (marketdata.MacroDataSnapshot, erro
 	path := filepath.Join(m.snapshotDir, "latest.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return marketdata.MacroDataSnapshot{}, err
+		return marketdata.MacroDataSnapshot{}, fmt.Errorf("read snapshot: %w", err)
 	}
 	var snap marketdata.MacroDataSnapshot
 	if err := json.Unmarshal(data, &snap); err != nil {
-		return marketdata.MacroDataSnapshot{}, err
+		return marketdata.MacroDataSnapshot{}, fmt.Errorf("unmarshal snapshot: %w", err)
 	}
 	return snap, nil
 }
 
 func (m *MacroIngestor) saveSnapshot(snap marketdata.MacroDataSnapshot) error {
 	if err := os.MkdirAll(m.snapshotDir, 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir snapshot dir: %w", err)
 	}
 	path := filepath.Join(m.snapshotDir, "latest.json")
 	data, err := json.MarshalIndent(snap, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal snapshot: %w", err)
 	}
 	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return err
+		return fmt.Errorf("save snapshot: %w", err)
 	}
 	// Also save dated copy.
 	dateStr := time.Now().UTC().Format("2006-01-02")
 	datedPath := filepath.Join(m.snapshotDir, dateStr+".json")
-	return os.WriteFile(datedPath, data, 0o644)
+	if err := os.WriteFile(datedPath, data, 0o644); err != nil {
+		return fmt.Errorf("save dated snapshot: %w", err)
+	}
+	return nil
 }
 
 func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot) []NarrativeEvent {

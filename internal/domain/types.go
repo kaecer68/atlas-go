@@ -33,9 +33,12 @@ type Quote struct {
 type Recommendation struct {
 	Agent            string
 	Skill            string
+	Layer            AgentLayer
 	Symbol           string
 	Side             Side
 	Conviction       int
+	TargetPrice      float64
+	StopLossPrice    float64
 	Reason           string
 	ReasoningChain   []string `json:"reasoning_chain,omitempty"`
 	SupportingEvents []string `json:"supporting_events,omitempty"`

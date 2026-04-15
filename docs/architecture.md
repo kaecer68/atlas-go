@@ -20,8 +20,8 @@ Purpose: determine regime, risk budget, and sector bias.
 
 Initial agents:
 
-- Taiwan Macro
-- Foreign Flow
+- 台灣總經
+- 外資流向
 - TWD / USD FX
 - US Tech Spillover
 - Semiconductor Cycle
@@ -34,11 +34,11 @@ Purpose: select opportunities inside Taiwan-specific sectors.
 
 Initial desks:
 
-- Semiconductor
-- AI Supply Chain
+- 半導體產業桌
+- AI 供應鏈產業桌
 - PCB and Thermal
-- Financials
-- Shipping
+- 金融產業桌
+- 航運產業桌
 - Consumer and Tourism
 - High Dividend and ETF Rotation
 - Small Cap Momentum
@@ -49,10 +49,10 @@ Purpose: filter raw ideas using style-specific lenses.
 
 Initial styles:
 
-- Growth Momentum
-- Value and Yield
-- Earnings Quality
-- Technical Breakout
+- 成長動能
+- 價值股息
+- 獲利品質
+- 技術突破
 - Chip and Flow Confirmation
 
 ### Layer 4: Decision Layer
@@ -61,15 +61,15 @@ Purpose: enforce risk, simulate execution, and record final actions.
 
 Decision agents:
 
-- CRO
+- 風控長
 - Execution Simulator
-- CIO
+- 投資長
 - Research Auditor
 
 ## Data Flow
 
 ```text
-Market Data -> Layer 1 -> Layer 2 -> Layer 3 -> CRO -> CIO -> Simulation Engine -> Scorecard
+Market Data -> Layer 1 -> Layer 2 -> Layer 3 -> 風控長 -> 投資長 -> Simulation Engine -> Scorecard
 ```
 
 ## Modes

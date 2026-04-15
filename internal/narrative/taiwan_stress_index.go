@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sync"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
@@ -19,6 +21,10 @@ type TaiwanStressIndex struct {
 // TaiwanStressCalculator computes the stress index from macro and capital flow data.
 type TaiwanStressCalculator struct {
 	geoProvider GeopoliticalRiskProvider
+	mu          sync.RWMutex
+	cache       *TaiwanStressIndex
+	cachedAt    time.Time
+	cacheTTL    time.Duration
 }
 
 // NewTaiwanStressCalculator creates a calculator with an optional geopolitical provider.
@@ -26,21 +32,24 @@ func NewTaiwanStressCalculator(geoProvider GeopoliticalRiskProvider) *TaiwanStre
 	if geoProvider == nil {
 		geoProvider = NewRSSGeopoliticalProvider()
 	}
-	return &TaiwanStressCalculator{geoProvider: geoProvider}
+	return &TaiwanStressCalculator{
+		geoProvider: geoProvider,
+		cacheTTL:    5 * time.Minute,
+	}
 }
 
 // Calculate computes the stress index from the given snapshot and geopolitical score.
 func (c *TaiwanStressCalculator) Calculate(snap marketdata.MacroDataSnapshot, geoScore GeopoliticalRiskScore) TaiwanStressIndex {
 	components := make(map[string]float64)
 
-	// DXY component (weight 20%): absolute change pct scaled to 0-100.
+	// DXY component (weight 15%): absolute change pct scaled to 0-100.
 	dxyComponent := math.Abs(snap.DXY.ChangePct) * 5.0
 	if dxyComponent > 100 {
 		dxyComponent = 100
 	}
-	components["dxy"] = dxyComponent * 0.20
+	components["dxy"] = dxyComponent * 0.15
 
-	// US10Y component (weight 25%): change in bps proxy scaled.
+	// US10Y component (weight 20%): change in bps proxy scaled.
 	us10yChange := snap.US10Y.Value
 	if us10yChange < 0 {
 		us10yChange = -us10yChange
@@ -49,7 +58,7 @@ func (c *TaiwanStressCalculator) Calculate(snap marketdata.MacroDataSnapshot, ge
 	if us10yComponent > 100 {
 		us10yComponent = 100
 	}
-	components["us10y"] = us10yComponent * 0.25
+	components["us10y"] = us10yComponent * 0.20
 
 	// Foreign investor net sell component (weight 25%): negative flow scaled.
 	foreignFlow := -snap.ForeignInvestorNet.Value // net sell is positive stress
@@ -69,12 +78,20 @@ func (c *TaiwanStressCalculator) Calculate(snap marketdata.MacroDataSnapshot, ge
 	}
 	components["vix"] = vixComponent * 0.15
 
+	// JPY component (weight 10%): JPY appreciation or carry unwind increases Taiwan stress.
+	jpyChange := math.Abs(snap.JPY.ChangePct)
+	jpyComponent := jpyChange * 10.0
+	if jpyComponent > 100 {
+		jpyComponent = 100
+	}
+	components["jpy"] = jpyComponent * 0.10
+
 	// Geopolitical risk component (weight 15%).
 	geoComponent := geoScore.Intensity
 	components["geopolitical"] = geoComponent * 0.15
 
 	score := components["dxy"] + components["us10y"] + components["foreign_flow"] +
-		components["vix"] + components["geopolitical"]
+		components["vix"] + components["jpy"] + components["geopolitical"]
 
 	regime := "low"
 	switch {
@@ -95,10 +112,25 @@ func (c *TaiwanStressCalculator) Calculate(snap marketdata.MacroDataSnapshot, ge
 }
 
 // CalculateFromSnapshot fetches the geopolitical score and computes the index.
+// Results are cached for 5 minutes to avoid repeated slow external calls on every dashboard refresh.
 func (c *TaiwanStressCalculator) CalculateFromSnapshot(ctx context.Context, snap marketdata.MacroDataSnapshot) (TaiwanStressIndex, error) {
+	c.mu.RLock()
+	if c.cache != nil && time.Since(c.cachedAt) < c.cacheTTL {
+		idx := *c.cache
+		c.mu.RUnlock()
+		return idx, nil
+	}
+	c.mu.RUnlock()
+
 	geoScore, err := c.geoProvider.FetchScore(ctx)
 	if err != nil {
 		return TaiwanStressIndex{}, fmt.Errorf("fetch geopolitical score: %w", err)
 	}
-	return c.Calculate(snap, geoScore), nil
+	idx := c.Calculate(snap, geoScore)
+
+	c.mu.Lock()
+	c.cache = &idx
+	c.cachedAt = time.Now()
+	c.mu.Unlock()
+	return idx, nil
 }

@@ -9,6 +9,7 @@ import (
 )
 
 type Config struct {
+	WorkDir                    string
 	MarketDataProvider         string
 	PrimaryMarket              string
 	ReplayMode                 string
@@ -43,6 +44,7 @@ func Load() Config {
 	loadEnvFile(".env")
 
 	return Config{
+		WorkDir:            envOr("ATLAS_WORK_DIR", "."),
 		MarketDataProvider: envOr("ATLAS_MARKET_DATA_PROVIDER", "twse"),
 		PrimaryMarket:      envOr("ATLAS_PRIMARY_MARKET", "TW"),
 		ReplayMode:         envOr("ATLAS_REPLAY_MODE", "daily"),

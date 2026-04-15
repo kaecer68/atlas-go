@@ -42,6 +42,9 @@ func TestAlphaDiscoveryFindsHighFactorLowCoverage(t *testing.T) {
 			if d.Agent != "alpha_discovery" {
 				t.Errorf("expected alpha_discovery agent, got %s", d.Agent)
 			}
+			if d.Layer != domain.LayerStyle {
+				t.Errorf("expected layer style for discovered alpha, got %s", d.Layer)
+			}
 		}
 		if d.Symbol == "2317.TW" {
 			t.Error("did not expect 2317.TW to be discovered (already covered and low factor)")

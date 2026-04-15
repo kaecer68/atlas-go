@@ -19,6 +19,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-w -s -X main.version=$(git describe --tags --always) -X main.buildTime=$(date -u +%Y%m%d%H%M%S)" \
     -o atlas-go \
     ./cmd/atlas
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o daily-replay-sync ./cmd/daily-replay-sync
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o backfill-replay ./cmd/backfill-replay
 
 # Final stage
 FROM alpine:latest
@@ -33,8 +35,10 @@ RUN addgroup -g 1000 atlas && \
 # Set working directory
 WORKDIR /app
 
-# Copy binary from builder
+# Copy binaries from builder
 COPY --from=builder /build/atlas-go /app/
+COPY --from=builder /build/daily-replay-sync /app/
+COPY --from=builder /build/backfill-replay /app/
 
 # Copy configuration files
 COPY --from=builder /build/configs /app/configs

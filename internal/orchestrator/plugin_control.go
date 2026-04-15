@@ -43,21 +43,31 @@ func (CIOPortfolioExecutor) Supports(agent domain.AgentSpec) bool {
 
 func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy) []domain.Recommendation {
 	type agg struct {
-		count      int
-		conviction int
-		reason     string
-		skill      string
+		count          int
+		conviction     int
+		bestConviction int
+		reason         string
+		skill          string
+		targetPrice    float64
+		stopLossPrice  float64
+		bestAgent      string
 	}
 
 	bySymbol := map[string]*agg{}
 	for _, rec := range recs {
 		entry, ok := bySymbol[rec.Symbol]
 		if !ok {
-			entry = &agg{reason: rec.Reason, skill: rec.Skill}
+			entry = &agg{reason: rec.Reason, skill: rec.Skill, targetPrice: rec.TargetPrice, stopLossPrice: rec.StopLossPrice, bestConviction: rec.Conviction, bestAgent: rec.Agent}
 			bySymbol[rec.Symbol] = entry
 		}
 		entry.count++
 		entry.conviction += rec.Conviction
+		if rec.Conviction > entry.bestConviction {
+			entry.bestConviction = rec.Conviction
+			entry.targetPrice = rec.TargetPrice
+			entry.stopLossPrice = rec.StopLossPrice
+			entry.bestAgent = rec.Agent
+		}
 	}
 
 	out := make([]domain.Recommendation, 0, len(bySymbol))
@@ -69,13 +79,24 @@ func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommen
 
 	for _, symbol := range symbols {
 		entry := bySymbol[symbol]
+		avgConviction := entry.conviction / entry.count
+		if entry.count >= 3 {
+			avgConviction = int(float64(avgConviction) * 0.7)
+		}
+		reason := entry.reason
+		if entry.count >= 3 {
+			reason = fmt.Sprintf("[crowded:%d agents] ", entry.count) + reason
+		}
 		out = append(out, domain.Recommendation{
-			Agent:      agent.ID,
-			Skill:      agent.Skill,
-			Symbol:     symbol,
-			Side:       domain.SideBuy,
-			Conviction: entry.conviction / entry.count,
-			Reason:     entry.reason,
+			Agent:         entry.bestAgent,
+			Skill:         agent.Skill,
+			Layer:         agent.Layer,
+			Symbol:        symbol,
+			Side:          domain.SideBuy,
+			Conviction:    avgConviction,
+			Reason:        reason,
+			TargetPrice:   entry.targetPrice,
+			StopLossPrice: entry.stopLossPrice,
 		})
 	}
 
@@ -120,6 +141,10 @@ func (e CIOPortfolioExecutorWithWeights) Apply(agent domain.AgentSpec, recs []do
 		count              int
 		reason             string
 		skill              string
+		targetPrice        float64
+		stopLossPrice      float64
+		bestScore          float64
+		bestAgent          string
 	}
 
 	bySymbol := map[string]*agg{}
@@ -127,7 +152,7 @@ func (e CIOPortfolioExecutorWithWeights) Apply(agent domain.AgentSpec, recs []do
 	for _, rec := range recs {
 		entry, ok := bySymbol[rec.Symbol]
 		if !ok {
-			entry = &agg{reason: rec.Reason, skill: rec.Skill}
+			entry = &agg{reason: rec.Reason, skill: rec.Skill, targetPrice: rec.TargetPrice, stopLossPrice: rec.StopLossPrice, bestScore: -1, bestAgent: rec.Agent}
 			bySymbol[rec.Symbol] = entry
 		}
 
@@ -138,9 +163,16 @@ func (e CIOPortfolioExecutorWithWeights) Apply(agent domain.AgentSpec, recs []do
 		}
 
 		// Weighted contribution: conviction * agent_weight
-		entry.weightedConviction += float64(rec.Conviction) * agentWeight
+		score := float64(rec.Conviction) * agentWeight
+		entry.weightedConviction += score
 		entry.totalWeight += agentWeight
 		entry.count++
+		if score > entry.bestScore {
+			entry.bestScore = score
+			entry.targetPrice = rec.TargetPrice
+			entry.stopLossPrice = rec.StopLossPrice
+			entry.bestAgent = rec.Agent
+		}
 	}
 
 	out := make([]domain.Recommendation, 0, len(bySymbol))
@@ -163,14 +195,21 @@ func (e CIOPortfolioExecutorWithWeights) Apply(agent domain.AgentSpec, recs []do
 		if e.WeightManager != nil && entry.count > 0 {
 			reasonPrefix = fmt.Sprintf("[Weighted:%d agents] ", entry.count)
 		}
+		if entry.count >= 3 {
+			reasonPrefix = fmt.Sprintf("[crowded:%d agents] ", entry.count) + reasonPrefix
+			weightedConviction = int(float64(weightedConviction) * 0.7)
+		}
 
 		out = append(out, domain.Recommendation{
-			Agent:      agent.ID,
-			Skill:      agent.Skill,
-			Symbol:     symbol,
-			Side:       domain.SideBuy,
-			Conviction: weightedConviction,
-			Reason:     reasonPrefix + entry.reason,
+			Agent:         entry.bestAgent,
+			Skill:         agent.Skill,
+			Layer:         agent.Layer,
+			Symbol:        symbol,
+			Side:          domain.SideBuy,
+			Conviction:    weightedConviction,
+			Reason:        reasonPrefix + entry.reason,
+			TargetPrice:   entry.targetPrice,
+			StopLossPrice: entry.stopLossPrice,
 		})
 	}
 

@@ -1,6 +1,9 @@
 package backtest
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
@@ -10,6 +13,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
+	"github.com/kaecer68/atlas-go/internal/reporting"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
@@ -104,6 +108,57 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 	}
 
 	return summary, nil
+}
+
+// GenerateReport creates a markdown report from the backtest summary and persists it to reports/.
+func (r *Runner) GenerateReport(summary domain.BacktestWindowSummary) error {
+	store := ledger.NewStore(r.cfg.LedgerDir)
+	scorecards, _, err := store.LoadAllSessionScorecards()
+	if err != nil {
+		return fmt.Errorf("load scorecards: %w", err)
+	}
+
+	sessionSummaries, err := store.LoadSessionSummaries()
+	if err != nil {
+		return fmt.Errorf("load session summaries: %w", err)
+	}
+
+	equityCurve := make([]float64, 0, len(sessionSummaries))
+	regimeCounts := make(map[string]int)
+	for _, s := range sessionSummaries {
+		pv := s.PortfolioValue
+		if pv == 0 {
+			pv = s.EndingCash
+		}
+		equityCurve = append(equityCurve, pv)
+		regimeCounts[string(s.Regime)]++
+	}
+
+	reportData := reporting.BacktestReportData{
+		WindowID:        summary.WindowID,
+		StartDate:       summary.StartDate,
+		EndDate:         summary.EndDate,
+		SessionCount:    summary.SessionCount,
+		OutcomeCount:    summary.OutcomeCount,
+		EquityCurve:     equityCurve,
+		AgentRows:       reporting.BuildAgentRows(scorecards, nil),
+		MutationStats:   reporting.MutationStats{},
+		WorstAgentID:    summary.WorstAgentID,
+		WorstAgentSkill: summary.WorstAgentSkill,
+		WorstSharpeLike: summary.WorstAgentSharpeLike,
+		RegimeCounts:    regimeCounts,
+	}
+
+	report := reporting.RenderMarkdown(reportData)
+	reportDir := "reports"
+	if err := os.MkdirAll(reportDir, 0o755); err != nil {
+		return fmt.Errorf("create report dir: %w", err)
+	}
+	reportPath := filepath.Join(reportDir, fmt.Sprintf("backtest_%s.md", summary.WindowID))
+	if err := os.WriteFile(reportPath, []byte(report), 0o644); err != nil {
+		return fmt.Errorf("write report: %w", err)
+	}
+	return nil
 }
 
 // WithJANUS attaches a JANUS engine to the runner for A/B validation.

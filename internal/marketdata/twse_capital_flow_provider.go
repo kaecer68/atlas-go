@@ -53,12 +53,14 @@ func (t *TWSECapitalFlowProvider) FetchSnapshot(ctx context.Context) (MacroDataS
 		// Non-fatal: we still return the snapshot even if persistence fails.
 	}
 
+	flowTime, _ := time.ParseInLocation("20060102", flow.Date, time.FixedZone("CST", 8*60*60))
+	flowTs := flowTime.Unix()
 	snap := MacroDataSnapshot{
-		RecordedAt: time.Now().Unix(),
+		RecordedAt: flowTs,
 	}
-	snap.ForeignInvestorNet = MacroDataPoint{Symbol: "TAIWAN_FOREIGN", Value: flow.ForeignInvestorNet}
-	snap.DomesticFundNet = MacroDataPoint{Symbol: "TAIWAN_DOMESTIC", Value: flow.DomesticFundNet}
-	snap.DealerNet = MacroDataPoint{Symbol: "TAIWAN_DEALER", Value: flow.DealerNet}
+	snap.ForeignInvestorNet = MacroDataPoint{Symbol: "TAIWAN_FOREIGN", Value: flow.ForeignInvestorNet, Timestamp: flowTs}
+	snap.DomesticFundNet = MacroDataPoint{Symbol: "TAIWAN_DOMESTIC", Value: flow.DomesticFundNet, Timestamp: flowTs}
+	snap.DealerNet = MacroDataPoint{Symbol: "TAIWAN_DEALER", Value: flow.DealerNet, Timestamp: flowTs}
 	return snap, nil
 }
 

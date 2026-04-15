@@ -96,7 +96,7 @@ func (e *Engine) RunDay(
 	}
 
 	// 3. Buy logic
-	buyOrders, newPositions := e.executeBuys(state.Cash, state.Positions, quoteBySymbol, recs)
+	buyOrders, newPositions := e.executeBuys(state.Cash, state.Positions, quoteBySymbol, recs, regime)
 	orders = append(orders, buyOrders...)
 	state.Positions = newPositions
 	state.Cash -= totalCost(buyOrders)
@@ -170,14 +170,29 @@ func (e *Engine) executeSells(
 }
 
 func (e *Engine) shouldSellPosition(pos domain.Position, quote domain.Quote, recs []domain.Recommendation) (bool, string) {
+	// Look up any recommendation for this symbol to check target/stop-loss prices.
+	var rec *domain.Recommendation
+	for i := range recs {
+		if recs[i].Symbol == pos.Symbol {
+			rec = &recs[i]
+			break
+		}
+	}
+
+	if rec != nil && rec.StopLossPrice > 0 && quote.Last <= rec.StopLossPrice {
+		return true, "stop_loss_price"
+	}
+	if rec != nil && rec.TargetPrice > 0 && quote.Last >= rec.TargetPrice {
+		return true, "target_price"
+	}
 	if e.constraints.StopLossPct > 0 && quote.Last <= pos.AverageCost*(1-e.constraints.StopLossPct) {
 		return true, "stop_loss"
 	}
 	if e.constraints.TakeProfitPct > 0 && quote.Last >= pos.AverageCost*(1+e.constraints.TakeProfitPct) {
 		return true, "take_profit"
 	}
-	for _, rec := range recs {
-		if rec.Symbol == pos.Symbol && rec.Side == domain.SideSell {
+	for _, r := range recs {
+		if r.Symbol == pos.Symbol && r.Side == domain.SideSell {
 			return true, "conviction_reversal"
 		}
 	}
@@ -234,11 +249,12 @@ func (e *Engine) executeBuys(
 	existingPositions []domain.Position,
 	quoteBySymbol map[string]domain.Quote,
 	recs []domain.Recommendation,
+	regime domain.Regime,
 ) ([]domain.Order, []domain.Position) {
 	if e.useOptimizer && e.optimizer != nil {
-		return e.executeOptimizerBuys(cash, existingPositions, quoteBySymbol, recs)
+		return e.executeOptimizerBuys(cash, existingPositions, quoteBySymbol, recs, regime)
 	}
-	return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs)
+	return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs, regime)
 }
 
 func (e *Engine) executeOptimizerBuys(
@@ -246,10 +262,11 @@ func (e *Engine) executeOptimizerBuys(
 	existingPositions []domain.Position,
 	quoteBySymbol map[string]domain.Quote,
 	recs []domain.Recommendation,
+	regime domain.Regime,
 ) ([]domain.Order, []domain.Position) {
 	orders, err := e.optimizer.OptimizeToOrders(e.ctx, recs, quoteBySymbol, cash)
 	if err != nil {
-		return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs)
+		return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs, regime)
 	}
 
 	positions := clonePositions(existingPositions)
@@ -262,7 +279,11 @@ func (e *Engine) executeOptimizerBuys(
 	}
 
 	maxDeployableCash := cash * (1 - e.constraints.ReserveCashFraction)
-	maxPerPosition := maxDeployableCash * e.constraints.MaxPositionWeight
+	maxPositionWeight := e.constraints.MaxPositionWeight
+	if regime == domain.RegimeNeutral {
+		maxPositionWeight = maxPositionWeight * 0.85
+	}
+	maxPerPosition := maxDeployableCash * maxPositionWeight
 
 	for _, order := range orders {
 		if len(positions) >= e.constraints.MaxOpenPositions {
@@ -321,6 +342,7 @@ func (e *Engine) executeLegacyBuys(
 	existingPositions []domain.Position,
 	quoteBySymbol map[string]domain.Quote,
 	recs []domain.Recommendation,
+	regime domain.Regime,
 ) ([]domain.Order, []domain.Position) {
 	positions := clonePositions(existingPositions)
 	orders := make([]domain.Order, 0)
@@ -341,7 +363,11 @@ func (e *Engine) executeLegacyBuys(
 	})
 
 	maxDeployableCash := cash * (1 - e.constraints.ReserveCashFraction)
-	maxPerPosition := maxDeployableCash * e.constraints.MaxPositionWeight
+	maxPositionWeight := e.constraints.MaxPositionWeight
+	if regime == domain.RegimeNeutral {
+		maxPositionWeight = maxPositionWeight * 0.85
+	}
+	maxPerPosition := maxDeployableCash * maxPositionWeight
 
 	for _, rec := range sortedRecs {
 		if len(positions) >= e.constraints.MaxOpenPositions {

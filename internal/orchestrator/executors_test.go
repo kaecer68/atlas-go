@@ -30,10 +30,10 @@ func TestGrowthMomentumOverrideChangesRecommendations(t *testing.T) {
 
 	baseline := collectRecommendations(registry, quoteBySymbol, plugins, map[string]string{
 		"growth_momentum": "qualify candidates using trend persistence and volume confirmation",
-	})
+	}, domain.RegimeNeutral)
 	candidate := collectRecommendations(registry, quoteBySymbol, plugins, map[string]string{
 		"growth_momentum": "require trend confirmation\ndowngrade conviction\nreject setups\n",
-	})
+	}, domain.RegimeNeutral)
 
 	baselineCount := countSkillRecommendations(baseline, "growth_momentum")
 	candidateCount := countSkillRecommendations(candidate, "growth_momentum")
@@ -104,10 +104,10 @@ func TestTechnicalBreakoutOverrideRejectsLowVolumeSetups(t *testing.T) {
 
 	baseline := collectRecommendations(registry, quoteBySymbol, plugins, map[string]string{
 		"technical_breakout": "require volume\nrequire close strength",
-	})
+	}, domain.RegimeNeutral)
 	candidate := collectRecommendations(registry, quoteBySymbol, plugins, map[string]string{
 		"technical_breakout": "require volume\nrequire close strength\nreject low volume",
-	})
+	}, domain.RegimeNeutral)
 
 	baselineCount := countSkillRecommendations(baseline, "technical_breakout")
 	candidateCount := countSkillRecommendations(candidate, "technical_breakout")
@@ -135,7 +135,7 @@ func TestBuildReplayOutcomesUsesRecommendationAgentAndSkill(t *testing.T) {
 		},
 	}
 
-	outcomes := buildReplayOutcomes([]domain.Recommendation{
+	recs := []domain.Recommendation{
 		{
 			Agent:      "financials-desk-01",
 			Skill:      "financials_desk",
@@ -144,7 +144,8 @@ func TestBuildReplayOutcomesUsesRecommendationAgentAndSkill(t *testing.T) {
 			Conviction: 60,
 			Reason:     "test",
 		},
-	}, time.Date(2026, 3, 26, 0, 0, 0, 0, time.UTC), ds)
+	}
+	outcomes := buildReplayOutcomes(recs, recs, nil, time.Date(2026, 3, 26, 0, 0, 0, 0, time.UTC), ds)
 
 	if len(outcomes) != 1 {
 		t.Fatalf("expected one outcome, got %d", len(outcomes))

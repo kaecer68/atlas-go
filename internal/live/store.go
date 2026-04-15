@@ -5,11 +5,26 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
+
+// Well-known filenames used by StateStore for persistence.
+const (
+	PortfolioStateFile = "portfolio_state.jsonl"
+	PositionsStateFile = "positions_current.jsonl"
+	RegimeStateFile    = "regime_state.jsonl"
+	LiveStateSubDir    = "state"
+)
+
+// DefaultCircuitBreakerStatePath is the default relative path for circuit breaker state.
+const DefaultCircuitBreakerStatePath = "data/state/circuit_breaker_state.json"
+
+// DefaultLiveStateBasePath is the default base directory for live trading state.
+const DefaultLiveStateBasePath = "data/state/live"
 
 // StateStore 管理实时交易状态
 type StateStore struct {
@@ -76,43 +91,22 @@ func (s *StateStore) Load() error {
 	defer s.mutex.Unlock()
 
 	// 加载投资组合状态
-	portfolioPath := filepath.Join(s.basePath, "state", "portfolio_state.jsonl")
-	if data, err := os.ReadFile(portfolioPath); err == nil && len(data) > 0 {
-		lines := splitLines(string(data))
-		if len(lines) > 0 {
-			lastLine := lines[len(lines)-1]
-			if err := json.Unmarshal([]byte(lastLine), &s.portfolio); err != nil {
-				return fmt.Errorf("load portfolio state: %w", err)
-			}
-		}
+	if p, err := LoadLastPortfolioState(s.basePath); err == nil {
+		s.portfolio = p
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("load portfolio state: %w", err)
 	}
 
-	// 加载持仓状态
-	positionsPath := filepath.Join(s.basePath, "state", "positions_current.jsonl")
-	if data, err := os.ReadFile(positionsPath); err == nil && len(data) > 0 {
-		lines := splitLines(string(data))
-		if len(lines) > 0 {
-			lastLine := lines[len(lines)-1]
-			var positions []domain.Position
-			if err := json.Unmarshal([]byte(lastLine), &positions); err == nil {
-				s.positions = make(map[string]domain.Position)
-				for _, p := range positions {
-					s.positions[p.Symbol] = p
-				}
-			}
-		}
+	// 加载持仓状态（格式错误不阻断启动）
+	if positions, err := LoadLastPositions(s.basePath); err == nil {
+		s.positions = positions
 	}
 
 	// 加载市场状态
-	regimePath := filepath.Join(s.basePath, "state", "regime_state.jsonl")
-	if data, err := os.ReadFile(regimePath); err == nil && len(data) > 0 {
-		lines := splitLines(string(data))
-		if len(lines) > 0 {
-			lastLine := lines[len(lines)-1]
-			if err := json.Unmarshal([]byte(lastLine), &s.regime); err != nil {
-				return fmt.Errorf("load regime state: %w", err)
-			}
-		}
+	if r, err := LoadLastRegime(s.basePath); err == nil {
+		s.regime = r
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("load regime state: %w", err)
 	}
 
 	return nil
@@ -130,27 +124,36 @@ func (s *StateStore) Save() error {
 	}
 
 	// 保存投资组合状态
-	portfolioPath := filepath.Join(stateDir, "portfolio_state.jsonl")
-	portfolioJSON, _ := json.Marshal(s.portfolio)
-	if err := appendToFile(portfolioPath, string(portfolioJSON)); err != nil {
+	portfolioPath := filepath.Join(stateDir, PortfolioStateFile)
+	portfolioJSON, err := json.Marshal(s.portfolio)
+	if err != nil {
+		return fmt.Errorf("marshal portfolio: %w", err)
+	}
+	if err := writeFileAtomic(portfolioPath, string(portfolioJSON)); err != nil {
 		return fmt.Errorf("save portfolio: %w", err)
 	}
 
 	// 保存持仓状态
-	positionsPath := filepath.Join(stateDir, "positions_current.jsonl")
+	positionsPath := filepath.Join(stateDir, PositionsStateFile)
 	positions := make([]domain.Position, 0, len(s.positions))
 	for _, p := range s.positions {
 		positions = append(positions, p)
 	}
-	positionsJSON, _ := json.Marshal(positions)
-	if err := appendToFile(positionsPath, string(positionsJSON)); err != nil {
+	positionsJSON, err := json.Marshal(positions)
+	if err != nil {
+		return fmt.Errorf("marshal positions: %w", err)
+	}
+	if err := writeFileAtomic(positionsPath, string(positionsJSON)); err != nil {
 		return fmt.Errorf("save positions: %w", err)
 	}
 
 	// 保存市场状态
-	regimePath := filepath.Join(stateDir, "regime_state.jsonl")
-	regimeJSON, _ := json.Marshal(s.regime)
-	if err := appendToFile(regimePath, string(regimeJSON)); err != nil {
+	regimePath := filepath.Join(stateDir, RegimeStateFile)
+	regimeJSON, err := json.Marshal(s.regime)
+	if err != nil {
+		return fmt.Errorf("marshal regime: %w", err)
+	}
+	if err := writeFileAtomic(regimePath, string(regimeJSON)); err != nil {
 		return fmt.Errorf("save regime: %w", err)
 	}
 
@@ -254,6 +257,7 @@ func (s *StateStore) persistEvent(event Event) {
 
 	eventJSON, err := json.Marshal(event)
 	if err != nil {
+		fmt.Printf("[StateStore] warn: failed to marshal event: %v\n", err)
 		return
 	}
 	if err := appendToFile(eventsPath, string(eventJSON)); err != nil {
@@ -371,4 +375,86 @@ func appendToFile(path, content string) error {
 
 	_, err = f.WriteString(content + "\n")
 	return err
+}
+
+// writeFileAtomic writes content to a temp file and renames it to the target path.
+// This ensures readers never see a partially written file.
+func writeFileAtomic(path, content string) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".tmp-*.jsonl")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := tmp.WriteString(content + "\n"); err != nil {
+		tmp.Close()
+		return fmt.Errorf("write temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("rename temp file: %w", err)
+	}
+	return nil
+}
+
+// readLastJSONLLine reads the last valid JSON line from a JSONL file.
+// It scans backwards from the end of the file to tolerate partially-written final lines.
+func readLastJSONLLine(path string, v any) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if len(data) == 0 {
+		return nil
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		if err := json.Unmarshal([]byte(line), v); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("no valid JSON line found in %s", path)
+}
+
+// LoadLastPortfolioState reads the latest persisted portfolio state from the StateStore directory.
+func LoadLastPortfolioState(basePath string) (PortfolioState, error) {
+	var p PortfolioState
+	path := filepath.Join(basePath, LiveStateSubDir, PortfolioStateFile)
+	if err := readLastJSONLLine(path, &p); err != nil {
+		return p, err
+	}
+	return p, nil
+}
+
+// LoadLastPositions reads the latest persisted positions from the StateStore directory.
+func LoadLastPositions(basePath string) (map[string]domain.Position, error) {
+	path := filepath.Join(basePath, LiveStateSubDir, PositionsStateFile)
+	var list []domain.Position
+	if err := readLastJSONLLine(path, &list); err != nil {
+		return nil, err
+	}
+	m := make(map[string]domain.Position, len(list))
+	for _, pos := range list {
+		m[pos.Symbol] = pos
+	}
+	return m, nil
+}
+
+// LoadLastRegime reads the latest persisted regime state from the StateStore directory.
+func LoadLastRegime(basePath string) (RegimeState, error) {
+	var r RegimeState
+	path := filepath.Join(basePath, LiveStateSubDir, RegimeStateFile)
+	if err := readLastJSONLLine(path, &r); err != nil {
+		return r, err
+	}
+	return r, nil
 }
