@@ -123,7 +123,7 @@ Ledger (internal/ledger/)
 | **Reusing recommendation slices across runs** | Rebuild/copy each iteration; check simulator for stale references |
 | **Baseline policy not loaded before experiment** — results show invalid values | Verify `data/state/baseline_policy.json` exists; run baseline load first |
 | **Darwinian weight clipping (0.3–2.5) is silent** | Don't assume boundaries; values outside range auto-clamp with no warning |
-| **Missing prompt files for enabled agents** | Every entry in agents.json must have matching `prompts/agents/<name>.prompt*` |
+| **Missing prompt files for enabled agents** | Every entry in agents.json must have matching `prompts/agents/<name>.md` |
 
 **See** [AI_PRODUCTIVITY_GUIDE.md](AI_PRODUCTIVITY_GUIDE.md) for the full gotcha lookup table with symptoms & fixes.
 
@@ -182,8 +182,8 @@ internal/orchestrator/
 - [docs/data-sources.md](docs/data-sources.md) — Market data import, replay format (JSONL)
 - [AI_PRODUCTIVITY_GUIDE.md](AI_PRODUCTIVITY_GUIDE.md) — Detailed gotchas, configuration patterns, command cheat sheet
 
-### Implementation References
-- [docs/phase2-implementation.md](docs/phase2-implementation.md) through [docs/phase5-architecture.md](docs/phase5-architecture.md) — Historical phase decisions and architecture details
+### Implementation History
+- `docs/archive/phase2-implementation.md` through `docs/archive/phase5-architecture.md` — Historical phase decisions and architecture details
 
 ---
 

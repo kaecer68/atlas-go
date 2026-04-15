@@ -77,7 +77,7 @@ Atlas-Go implements a sophisticated multi-layer AI agent system with 15 speciali
 
 ### PRISM Training System
 - **Purpose**: Multi-regime training for different market conditions
-- **Regimes**: trending_up, trending_down, range_bound, high_volatility, low_volatility, rotation, earnings
+- **Regimes**: Risk-On, Risk-Off, High-Volatility, Low-Volatility, Transition (5 cohorts)
 - **Process**: Queue management -> Regime-specific training -> Performance optimization
 
 ### Reflexivity Engine
@@ -102,9 +102,9 @@ Atlas-Go implements a sophisticated multi-layer AI agent system with 15 speciali
    |
 4. Layer 3: Style Filtering (成長動能, 價值股息, etc.)
    |
-5. Layer 4: Risk Control (風控長, 投資長)
+5. Layer 4: Superinvestor Override (if applicable)
    |
-6. Layer 5: Superinvestor Override (if applicable)
+6. Layer 5: Risk Control (風控長, 投資長)
    |
 7. Integrated System Decision
 ```
@@ -115,7 +115,7 @@ Atlas-Go implements a sophisticated multi-layer AI agent system with 15 speciali
    |
 2. Rolling Metrics Calculation (20-day windows)
    |
-3. Performance Ranking (top 33% boost, bottom 33% reduction)
+3. Performance Ranking (top 25% boost ×1.05, bottom 25% reduction ×0.95)
    |
 4. Volatility Penalty Application
    |
