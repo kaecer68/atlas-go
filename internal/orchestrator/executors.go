@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"fmt"
 	"slices"
 
@@ -23,7 +24,10 @@ func ExecuteRegistryResearchDetailedWithPolicy(registry domain.AgentRegistry, qu
 }
 
 func ExecuteRegistryResearchDetailedWithPolicyAndGuards(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string, policy domain.ExecutionPolicy) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome) {
-	plugins := NewPluginRegistry()
+	return executeRegistryResearchDetailedWithPolicyAndGuards(registry, quotes, overrides, policy, NewPluginRegistry())
+}
+
+func executeRegistryResearchDetailedWithPolicyAndGuards(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string, policy domain.ExecutionPolicy, plugins *PluginRegistry) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome) {
 	quoteBySymbol := make(map[string]domain.Quote, len(quotes))
 	for _, quote := range quotes {
 		quoteBySymbol[quote.Symbol] = quote
@@ -35,6 +39,13 @@ func ExecuteRegistryResearchDetailedWithPolicyAndGuards(registry domain.AgentReg
 	return regime, raw, final, guardOutcomes
 }
 
+// ExecuteRegistryResearchDetailedWithPolicyAndGuardsAndPlugins is the plugin-aware variant
+// of ExecuteRegistryResearchDetailedWithPolicyAndGuards. It allows callers to supply a
+// custom PluginRegistry (e.g. one with a screener attached) for testing and advanced use.
+func ExecuteRegistryResearchDetailedWithPolicyAndGuardsAndPlugins(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string, policy domain.ExecutionPolicy, plugins *PluginRegistry) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome) {
+	return executeRegistryResearchDetailedWithPolicyAndGuards(registry, quotes, overrides, policy, plugins)
+}
+
 // ExecuteRegistryResearchWithDarwinianWeights executes research with Darwinian weight application
 // This applies Atlas-GIC style weight multipliers (0.3-2.5) to agent recommendations
 func ExecuteRegistryResearchWithDarwinianWeights(
@@ -44,7 +55,17 @@ func ExecuteRegistryResearchWithDarwinianWeights(
 	policy domain.ExecutionPolicy,
 	weightManager *portfolio.DarwinianWeightManager,
 ) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []*portfolio.DarwinianAgentWeight) {
-	plugins := NewPluginRegistry()
+	return executeRegistryResearchWithDarwinianWeights(registry, quotes, overrides, policy, weightManager, NewPluginRegistry())
+}
+
+func executeRegistryResearchWithDarwinianWeights(
+	registry domain.AgentRegistry,
+	quotes []domain.Quote,
+	overrides map[string]string,
+	policy domain.ExecutionPolicy,
+	weightManager *portfolio.DarwinianWeightManager,
+	plugins *PluginRegistry,
+) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []*portfolio.DarwinianAgentWeight) {
 	quoteBySymbol := make(map[string]domain.Quote, len(quotes))
 	for _, quote := range quotes {
 		quoteBySymbol[quote.Symbol] = quote
@@ -111,6 +132,9 @@ func collectRecommendations(registry domain.AgentRegistry, quotes map[string]dom
 		for _, symbol := range symbols {
 			quote, ok := quotes[symbol]
 			if !ok || !quote.IsTradable {
+				continue
+			}
+			if pass, err := plugins.Screen(context.Background(), agent, symbol, quotes); err != nil || !pass {
 				continue
 			}
 			rec, ok := plugins.Recommendation(agent, quote, prompt, regime)

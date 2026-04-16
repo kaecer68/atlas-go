@@ -19,7 +19,6 @@ func priceTargets(quote domain.Quote, targetMult, stopLossMult float64) (float64
 
 // Financials desk thresholds.
 const (
-	finBaseConviction           = 58
 	finDividendBoost            = 8
 	finBalanceSheetPenalty      = 6
 	finCreditQualityBoost       = 2
@@ -33,7 +32,6 @@ const (
 
 // Shipping desk thresholds.
 const (
-	shipBaseConviction     = 55
 	shipTacticalBoost      = 10
 	shipWeakClosePenalty   = 12
 	shipWeakCloseThreshold = 0.992
@@ -41,14 +39,12 @@ const (
 
 // Value-yield desk thresholds.
 const (
-	vyBaseConviction   = 52
 	vyCashFlowBoost    = 10
 	vyYieldTrapPenalty = 10
 )
 
 // Earnings quality desk thresholds.
 const (
-	eqBaseConviction    = 57
 	eqRepeatableBoost   = 9
 	eqGuidancePenalty   = 8
 	eqGuidanceThreshold = 0.99
@@ -56,7 +52,6 @@ const (
 
 // Technical breakout desk thresholds.
 const (
-	tbBaseConviction         = 54
 	tbDefaultVolumeFloor     = 5_000_000
 	tbStrictVolumeFloor      = 7_000_000
 	tbRelaxedVolumeFloor     = 0
@@ -86,7 +81,7 @@ func (FinancialsExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (FinancialsExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	conviction := finConviction(prompt, quote)
+	conviction := finConviction(agent, prompt, quote)
 	if conviction < 50 {
 		return domain.Recommendation{}, false
 	}
@@ -104,8 +99,8 @@ func (FinancialsExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, 
 	}, true
 }
 
-func finConviction(prompt string, quote domain.Quote) int {
-	conviction := finBaseConviction
+func finConviction(agent domain.AgentSpec, prompt string, quote domain.Quote) int {
+	conviction := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
 	if strings.Contains(prompt, "dividend") && quote.Last >= quote.Open {
 		conviction += finDividendBoost
 	}
@@ -139,7 +134,7 @@ func (ShippingExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (ShippingExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	conviction := shipBaseConviction
+	conviction := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
 	if strings.Contains(prompt, "tactical") && quote.Last > quote.Open {
 		conviction += shipTacticalBoost
 	}
@@ -170,7 +165,7 @@ func (ValueYieldExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (ValueYieldExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	conviction := vyBaseConviction
+	conviction := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
 	if strings.Contains(prompt, "cash-flow support") && quote.Last >= quote.Open {
 		conviction += vyCashFlowBoost
 	}
@@ -201,7 +196,7 @@ func (EarningsQualityExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (EarningsQualityExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	conviction := eqBaseConviction
+	conviction := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
 	if strings.Contains(prompt, "repeatable") && quote.Last > quote.Open {
 		conviction += eqRepeatableBoost
 	}
@@ -233,7 +228,7 @@ func (TechnicalBreakoutExecutor) Supports(agent domain.AgentSpec) bool {
 
 func (TechnicalBreakoutExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
 	volumeFloor := tbVolumeFloor(prompt)
-	conviction := tbConviction(prompt, quote, volumeFloor)
+	conviction := tbConviction(agent, prompt, quote, volumeFloor)
 	if tbReject(prompt, quote, volumeFloor, conviction) {
 		return domain.Recommendation{}, false
 	}
@@ -261,8 +256,8 @@ func tbVolumeFloor(prompt string) int64 {
 	return tbDefaultVolumeFloor
 }
 
-func tbConviction(prompt string, quote domain.Quote, volumeFloor int64) int {
-	conviction := tbBaseConviction
+func tbConviction(agent domain.AgentSpec, prompt string, quote domain.Quote, volumeFloor int64) int {
+	conviction := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
 	if strings.Contains(prompt, "volume") && quote.Volume >= tbDefaultVolumeFloor {
 		conviction += tbVolumeBoost
 	}

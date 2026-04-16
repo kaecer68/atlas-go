@@ -14,18 +14,19 @@ const (
 )
 
 type AgentSpec struct {
-	ID               string
-	Name             string
-	Layer            AgentLayer
-	Skill            string
-	PromptFile       string
-	Enabled          bool
-	Universe         []string
-	PrimaryMetrics   []string
-	RequiredSkills   []string
-	ForbiddenActions []string
-	OperatingNotes   []string
-	DarwinianWeight  float64 `json:"darwinian_weight,omitempty"` // Starting weight for Darwinian system
+	ID                string
+	Name              string
+	Layer             AgentLayer
+	Skill             string
+	PromptFile        string
+	Enabled           bool
+	Universe          []string
+	PrimaryMetrics    []string
+	RequiredSkills    []string
+	ForbiddenActions  []string
+	OperatingNotes    []string
+	DarwinianWeight   float64           `json:"darwinian_weight,omitempty"` // Starting weight for Darwinian system
+	ScreeningCriteria ScreeningCriteria `json:"screening_criteria,omitempty"`
 }
 
 type AgentRegistry struct {

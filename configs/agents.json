@@ -76,7 +76,12 @@
       ],
       "operatingNotes": [
         "Differentiate foundry, packaging, and design roles."
-      ]
+      ],
+      "screening_criteria": {
+        "volume_intraday": {
+          "min": 1000000
+        }
+      }
     },
     {
       "id": "ai-desk-01",
@@ -104,7 +109,15 @@
       ],
       "operatingNotes": [
         "Separate durable order flow from hype-driven moves."
-      ]
+      ],
+      "screening_criteria": {
+        "volume_intraday": {
+          "min": 1000000
+        },
+        "momentum_20d": {
+          "min": 0.0
+        }
+      }
     },
     {
       "id": "etf-rotation-01",
@@ -131,7 +144,12 @@
       ],
       "operatingNotes": [
         "Use ETF rotation when dispersion or risk is elevated."
-      ]
+      ],
+      "screening_criteria": {
+        "volume_intraday": {
+          "min": 500000
+        }
+      }
     },
     {
       "id": "financials-desk-01",
@@ -159,7 +177,15 @@
       ],
       "operatingNotes": [
         "Favor balance-sheet resilience and dividend support over excitement."
-      ]
+      ],
+      "screening_criteria": {
+        "pe": {
+          "max": 20
+        },
+        "dividend_yield": {
+          "min": 1.0
+        }
+      }
     },
     {
       "id": "shipping-desk-01",
@@ -187,7 +213,12 @@
       ],
       "operatingNotes": [
         "Treat freight beta as tactical exposure, not permanent core risk."
-      ]
+      ],
+      "screening_criteria": {
+        "volume_intraday": {
+          "min": 800000
+        }
+      }
     },
     {
       "id": "growth-momentum-01",
@@ -218,7 +249,15 @@
       ],
       "operatingNotes": [
         "Require confirmation and liquidity before upgrading conviction."
-      ]
+      ],
+      "screening_criteria": {
+        "volume_intraday": {
+          "min": 1000000
+        },
+        "momentum_20d": {
+          "min": 0.0
+        }
+      }
     },
     {
       "id": "value-yield-01",
@@ -249,7 +288,18 @@
       ],
       "operatingNotes": [
         "Demand cash-flow support before treating yield as defensive."
-      ]
+      ],
+      "screening_criteria": {
+        "pe": {
+          "max": 18
+        },
+        "pb": {
+          "max": 2
+        },
+        "dividend_yield": {
+          "min": 2.0
+        }
+      }
     },
     {
       "id": "earnings-quality-01",
@@ -280,7 +330,15 @@
       ],
       "operatingNotes": [
         "Prefer repeatable earnings quality over one-off spikes."
-      ]
+      ],
+      "screening_criteria": {
+        "pe": {
+          "max": 25
+        },
+        "volume_intraday": {
+          "min": 800000
+        }
+      }
     },
     {
       "id": "technical-breakout-01",
@@ -312,7 +370,15 @@
       ],
       "operatingNotes": [
         "Require structure, volume, and close strength before breakout upgrades."
-      ]
+      ],
+      "screening_criteria": {
+        "volume_intraday": {
+          "min": 1000000
+        },
+        "momentum_20d": {
+          "min": -0.2
+        }
+      }
     },
     {
       "id": "cro-01",
@@ -385,7 +451,12 @@
       ],
       "operatingNotes": [
         "Find the big asymmetric trade. Use momentum and macro themes."
-      ]
+      ],
+      "screening_criteria": {
+        "volume_intraday": {
+          "min": 1000000
+        }
+      }
     },
     {
       "id": "super-asc-01",
@@ -410,7 +481,12 @@
       ],
       "operatingNotes": [
         "Who benefits from AI capex cycle? Separate durable trends from hype."
-      ]
+      ],
+      "screening_criteria": {
+        "volume_intraday": {
+          "min": 1000000
+        }
+      }
     },
     {
       "id": "super-bak-01",
@@ -435,7 +511,12 @@
       ],
       "operatingNotes": [
         "Focus on real IP moats and technological differentiation."
-      ]
+      ],
+      "screening_criteria": {
+        "volume_intraday": {
+          "min": 800000
+        }
+      }
     },
     {
       "id": "super-ack-01",
@@ -460,7 +541,15 @@
       ],
       "operatingNotes": [
         "Pricing power + FCF + catalyst. Quality compounders only."
-      ]
+      ],
+      "screening_criteria": {
+        "pe": {
+          "max": 25
+        },
+        "volume_intraday": {
+          "min": 800000
+        }
+      }
     }
   ]
 }

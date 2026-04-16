@@ -1,10 +1,12 @@
 package orchestrator
 
 import (
+	"context"
 	"os"
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/screener"
 )
 
 type AgentExecutor interface {
@@ -21,6 +23,7 @@ type PluginRegistry struct {
 	regimeExecutors  []RegimeExecutor
 	agentExecutors   []AgentExecutor
 	controlExecutors []ControlExecutor
+	screener         screener.Screener
 }
 
 func NewPluginRegistry() *PluginRegistry {
@@ -45,6 +48,18 @@ func NewPluginRegistry() *PluginRegistry {
 			CIOPortfolioExecutor{},
 		},
 	}
+}
+
+func (r *PluginRegistry) WithScreener(s screener.Screener) *PluginRegistry {
+	r.screener = s
+	return r
+}
+
+func (r *PluginRegistry) Screen(ctx context.Context, agent domain.AgentSpec, symbol string, quotes map[string]domain.Quote) (bool, error) {
+	if r.screener == nil || !agent.ScreeningCriteria.HasFilters() {
+		return true, nil
+	}
+	return r.screener.Screen(ctx, symbol, agent.ScreeningCriteria, quotes)
 }
 
 func (r *PluginRegistry) ResolvePrompt(agent domain.AgentSpec, overrides map[string]string) string {

@@ -9,15 +9,9 @@ import (
 )
 
 func TestAlphaDiscoveryFindsHighFactorLowCoverage(t *testing.T) {
-	optimizer := portfolio.NewOptimizer()
-	optimizer.SetFactorWeights(map[portfolio.FactorType]float64{
-		portfolio.FactorMomentum: 1.0,
-		portfolio.FactorValue:    0.0,
-		portfolio.FactorQuality:  0.0,
-		portfolio.FactorAgent:    0.0,
-	})
+	factorEngine := portfolio.NewFactorEngine()
 
-	engine := NewAlphaDiscoveryEngine(optimizer)
+	engine := NewAlphaDiscoveryEngine(factorEngine)
 	engine.SetFactorThreshold(0.3)
 
 	quotes := map[string]domain.Quote{
@@ -57,8 +51,8 @@ func TestAlphaDiscoveryFindsHighFactorLowCoverage(t *testing.T) {
 }
 
 func TestAlphaDiscoverySkipsSymbolsWithHighCoverage(t *testing.T) {
-	optimizer := portfolio.NewOptimizer()
-	engine := NewAlphaDiscoveryEngine(optimizer)
+	factorEngine := portfolio.NewFactorEngine()
+	engine := NewAlphaDiscoveryEngine(factorEngine)
 	engine.SetFactorThreshold(0.0) // very low so any tradable symbol passes
 
 	quotes := map[string]domain.Quote{
@@ -77,8 +71,8 @@ func TestAlphaDiscoverySkipsSymbolsWithHighCoverage(t *testing.T) {
 }
 
 func TestAlphaDiscoveryIncludesSingleCoverage(t *testing.T) {
-	optimizer := portfolio.NewOptimizer()
-	engine := NewAlphaDiscoveryEngine(optimizer)
+	factorEngine := portfolio.NewFactorEngine()
+	engine := NewAlphaDiscoveryEngine(factorEngine)
 	engine.SetFactorThreshold(0.0)
 
 	quotes := map[string]domain.Quote{

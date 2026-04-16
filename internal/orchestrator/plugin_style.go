@@ -13,19 +13,16 @@ func (GrowthMomentumExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (GrowthMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	conviction := 62
+	conviction := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
 
 	ctrl, ok := domain.ExtractPromptControl(prompt)
 	if ok {
 		if quote.Last < quote.Open {
 			conviction -= 8
 		}
-		if quote.Volume < 5000000 {
-			conviction -= 5
-		}
 		penalty := 0
 		if ctrl.RequireTrend {
-			if quote.Last < quote.Open || quote.Volume < 5000000 {
+			if quote.Last < quote.Open {
 				penalty += 8
 			}
 		}
@@ -44,11 +41,8 @@ func (GrowthMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quo
 		if ctrl.CloseStrengthBoost > 0 && quote.Last > quote.Open {
 			conviction += ctrl.CloseStrengthBoost
 		}
-		if ctrl.VolumeBoost > 0 && quote.Last > quote.Open && quote.Volume > 5000000 {
+		if ctrl.VolumeBoost > 0 && quote.Last > quote.Open {
 			conviction += ctrl.VolumeBoost
-		}
-		if ctrl.HardRejectVolume > 0 && quote.Volume < ctrl.HardRejectVolume {
-			return domain.Recommendation{}, false
 		}
 		minConviction := 45
 		if ctrl.ConvictionFloor > 0 {
@@ -75,11 +69,8 @@ func (GrowthMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quo
 	if quote.Last < quote.Open {
 		conviction -= 8
 	}
-	if quote.Volume < 5000000 {
-		conviction -= 5
-	}
 	if strings.Contains(prompt, "require trend confirmation") {
-		if quote.Last < quote.Open || quote.Volume < 5000000 {
+		if quote.Last < quote.Open {
 			conviction -= 15
 		}
 	}
@@ -96,14 +87,6 @@ func (GrowthMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quo
 		if quote.Last < quote.Open {
 			conviction -= openPenalty
 		}
-	}
-	if strings.Contains(prompt, "reject setups") {
-		if quote.Last < quote.Open {
-			return domain.Recommendation{}, false
-		}
-	}
-	if strings.Contains(prompt, "illiquid") && quote.Volume < 5000000 {
-		return domain.Recommendation{}, false
 	}
 	if conviction < 45 {
 		return domain.Recommendation{}, false

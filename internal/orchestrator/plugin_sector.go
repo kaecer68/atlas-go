@@ -13,28 +13,15 @@ func (SemiconductorExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (SemiconductorExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	conviction := 84
+	conviction := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
 
-	// Try structured control block first; fall back to legacy string matching.
 	ctrl, ok := domain.ExtractPromptControl(prompt)
 	if !ok {
-		// Legacy fallback for older prompts without control blocks.
-		volumeFloor := int64(1500000)
-		if strings.Contains(prompt, "2.0M") {
-			volumeFloor = 2000000
-		}
-		if strings.Contains(prompt, "close strength confirms leadership") && quote.Last > quote.Open && quote.Volume >= volumeFloor {
+		if strings.Contains(prompt, "close strength confirms leadership") && quote.Last > quote.Open {
 			conviction += 10
 		}
 		if strings.Contains(prompt, "weak volume") {
-			if quote.Volume < volumeFloor {
-				conviction -= 25
-			} else if quote.Volume < 3000000 && quote.Last < quote.Open {
-				conviction -= 15
-			}
-		}
-		if strings.Contains(prompt, "illiquid") && quote.Volume < volumeFloor {
-			return domain.Recommendation{}, false
+			conviction -= 15
 		}
 		if conviction < 60 {
 			return domain.Recommendation{}, false
@@ -53,26 +40,12 @@ func (SemiconductorExecutor) Recommend(agent domain.AgentSpec, quote domain.Quot
 		}, true
 	}
 
-	// Structured path
-	volumeFloor := ctrl.VolumeFloor
-	if volumeFloor == 0 {
-		volumeFloor = 1500000
-	}
-
-	if ctrl.CloseStrengthBoost > 0 && quote.Last > quote.Open && quote.Volume >= volumeFloor {
+	if ctrl.CloseStrengthBoost > 0 && quote.Last > quote.Open {
 		conviction += ctrl.CloseStrengthBoost
 	}
 
-	if ctrl.VolumeDowngrade > 0 {
-		if quote.Volume < volumeFloor {
-			conviction -= ctrl.VolumeDowngrade
-		} else if quote.Volume < 3000000 && quote.Last < quote.Open {
-			conviction -= max(10, ctrl.VolumeDowngrade/2)
-		}
-	}
-
-	if ctrl.HardRejectVolume > 0 && quote.Volume < ctrl.HardRejectVolume {
-		return domain.Recommendation{}, false
+	if ctrl.VolumeDowngrade > 0 && quote.Last < quote.Open {
+		conviction -= max(10, ctrl.VolumeDowngrade/2)
 	}
 
 	minConviction := 60
@@ -104,6 +77,44 @@ func max(a, b int) int {
 	return b
 }
 
+type signalParams struct {
+	volumeThreshold int64
+	priceBoost      int
+	volumeBoost     int
+	maxCap          int
+}
+
+func defaultSignalParams() signalParams {
+	return signalParams{
+		volumeThreshold: 5_000_000,
+		priceBoost:      5,
+		volumeBoost:     5,
+		maxCap:          75,
+	}
+}
+
+func signalParamsFromAgent(agent domain.AgentSpec) signalParams {
+	params := defaultSignalParams()
+	if agent.ScreeningCriteria.VolumeIntraday != nil && agent.ScreeningCriteria.VolumeIntraday.Min != nil {
+		params.volumeThreshold = *agent.ScreeningCriteria.VolumeIntraday.Min
+	}
+	return params
+}
+
+func dynamicSignalStrength(quote domain.Quote, params signalParams) int {
+	conviction := 60
+	if quote.Last > quote.Open {
+		conviction += params.priceBoost
+	}
+	if quote.Volume > params.volumeThreshold {
+		conviction += params.volumeBoost
+	}
+	if conviction > params.maxCap {
+		conviction = params.maxCap
+	}
+	return conviction
+}
+
 type AISupplyChainExecutor struct{}
 
 func (AISupplyChainExecutor) Supports(agent domain.AgentSpec) bool {
@@ -111,11 +122,11 @@ func (AISupplyChainExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (AISupplyChainExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	conviction := 78
+	conviction := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
 	if quote.Last < quote.Open {
 		conviction -= 5
 	}
-	if strings.Contains(prompt, "order-flow") && quote.Volume > 10000000 {
+	if strings.Contains(prompt, "order-flow") && quote.Last > quote.Open {
 		conviction += 8
 	}
 	if strings.Contains(prompt, "downgrade") && quote.Last < quote.High*0.99 {
@@ -145,7 +156,7 @@ func (ETFRotationExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (ETFRotationExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	conviction := 64
+	conviction := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
 
 	ctrl, ok := domain.ExtractPromptControl(prompt)
 	if ok {
@@ -155,15 +166,12 @@ func (ETFRotationExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote,
 		if ctrl.CloseStrengthBoost > 0 && quote.Last > quote.Open {
 			conviction += ctrl.CloseStrengthBoost
 		}
-		if ctrl.VolumeBoost > 0 && quote.Volume > 8000000 {
+		if ctrl.VolumeBoost > 0 && quote.Last > quote.Open {
 			conviction += ctrl.VolumeBoost
 		}
 		minConviction := 55
 		if ctrl.ConvictionFloor > 0 {
 			minConviction = ctrl.ConvictionFloor
-		}
-		if ctrl.HardRejectVolume > 0 && quote.Volume < ctrl.HardRejectVolume {
-			return domain.Recommendation{}, false
 		}
 		if conviction < minConviction {
 			return domain.Recommendation{}, false
@@ -189,11 +197,8 @@ func (ETFRotationExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote,
 	if strings.Contains(prompt, "rotation") && quote.Last > quote.Open {
 		conviction += 6
 	}
-	if strings.Contains(prompt, "sector leadership") && quote.Volume > 8000000 {
+	if strings.Contains(prompt, "sector leadership") {
 		conviction += 5
-	}
-	if strings.Contains(prompt, "reject") && quote.Last < quote.Low*1.005 {
-		return domain.Recommendation{}, false
 	}
 	if conviction < 55 {
 		return domain.Recommendation{}, false
