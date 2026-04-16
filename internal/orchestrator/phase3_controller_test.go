@@ -19,7 +19,7 @@ import (
 func TestPRISMTrainingExecutorWithRealReplay(t *testing.T) {
 	ds, err := replay.LoadTWSEOpenDataCSV("../../data/replay/tw_extended_90days.csv")
 	if err != nil {
-		t.Fatalf("cannot load replay data: %v", err)
+		t.Skipf("cannot load replay data: %v", err)
 	}
 	registry := SeedRegistry()
 	policy := baseline.DefaultPolicy()
