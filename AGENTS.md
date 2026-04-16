@@ -69,7 +69,8 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 | `internal/experiment/` | 實驗執行（`Executor`）與評判（`Judge`） |
 | `internal/baseline/` | Baseline policy 升降級與版本控制 |
 | `internal/ledger/` | JSONL append-only 持久化 |
-| `internal/portfolio/` | Darwinian 權重管理（限制 `[0.3, 2.5]`） |
+| `internal/portfolio/` | Darwinian 權重管理（限制 `[0.3, 2.5]`）與 **FactorEngine**（動能/價值/品質多因子計算） |
+| `internal/screener/` | 宣告式個股篩選（P/E、P/B、股息率、動能、成交量、總因子分數） |
 | `internal/marketdata/` | 資料提供者抽象（TWSE OpenAPI、Fugle、Hybrid） |
 | `internal/live/` | 已強化（context 統一、原子寫入、Dashboard 解耦），但 production live 仍需 `-allow-live-broker` 等旗標謹慎啟用 |
 | `internal/prism/` | Regime-specific 訓練佇列（5 種 regime） |
@@ -78,7 +79,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 | `internal/narrative/` | 巨集觀敘事事件偵測、因果鏈、台灣壓力指數 |
 
 **分層資料流**：
-`Market Data → Orchestrator (context/sector/style/superinvestor → control) → Simulator → Ledger`
+`Market Data → Orchestrator (context → screener → sector/style/superinvestor → control) → Simulator → Ledger`
 
 ---
 
@@ -131,7 +132,8 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 | **GuardOutcomes 與 outcomes 必須對齊** | 控制層（CIO）輸出應**保留原始 Agent ID**，不可覆寫為自己的 ID，否則 `PassedGuards` 會全部變 `false`。 |
 | **OutcomeCount 必須是單場次數量** | `RecordSessionSummary` 絕對不可用 `ledger.LoadOutcomes()`（讀取全域檔案）來填 `OutcomeCount`。 |
 | **同一件事不可有三種算法** | 放行/過濾筆數必須由單一權威來源（如 `GuardOutcomes`）計算，前端不可各自重算。 |
-| **Live 交易風險** | `cmd/atlas` 有 `-allow-live-broker`、`-allow-real-signer` 等旗標，本地測試時切勿意外啟用。 |
+| **ScreeningCriteria 靜默過濾** | `configs/agents.json` 中若設定了 `screening_criteria`，標的在進入 sector/style executor **之前**就會被 `screener` 過濾。P/E、P/B 或成交量門檻過高可能導致某檔標的「完全沒有推薦」，這是預期行為，不是 bug。調整門檻前請先用 `go test ./internal/screener/...` 確認篩選邏輯。 |
+| **Live 交易風險** | `cmd/atlas` 有 `-allow-live-broker`、`-allow-real-signor` 等旗標，本地測試時切勿意外啟用。 |
 
 ---
 
@@ -163,7 +165,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas** (6231 symbols, 15886 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas** (6372 symbols, 16583 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

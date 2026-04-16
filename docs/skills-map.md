@@ -123,6 +123,18 @@ python scripts/merge-twse-csv.py --source ~/Downloads/twse_20260401.csv --target
 - **投資模型動態權重**：`internal/narrative/knowledge_base.go` 新增 `EvaluateModels(replayPath)`。每次開啟【宏觀敘事】頁面時，系統會即時讀取 `tw_extended_90days.csv`，比較最近 10 個交易日內「模型偏好板塊」vs「模型迴避板塊」的 5 日遠期報酬差，計算出 `RecentError = 1 - 正確率`，再透過 inverse-error weighting 自動調整三個模型的權重（總和為 1.0）。前端以進度條與顏色標籤即時呈現權重與誤差等級。
 - **完整投資邏輯論述（Rationale）**：`CausalTemplate` 與 `InvestmentModel` 結構新增 `Rationale` 欄位，並為全部 6 個因果模板與 3 個投資模型撰寫了詳細的中文論述，說明「為什麼應該押注 A 板塊、迴避 B 板塊」的底層經濟與市場機制。前端在投資模型卡片與因果模板庫表格中均提供「展開完整論述」按鈕，讓使用者能直接閱讀決策背後的說服力邏輯。
 
+### 4.8 宣告式個股篩選（Screening Layer）
+
+為讓系統具備真正的選股能力，在 `sector/style` executor 生成推薦**之前**新增 `internal/screener/` 宣告式篩選層：
+
+- **篩選條件**：`ScreeningCriteria` 支援 P/E 區間、P/B 區間、股息率區間、20 日動能區間、日內成交量下限、最小總因子分數（`min_total_factor_score`）與必填因子清單。
+- **資料來源**：`FactorEngine`（`internal/portfolio/factor_engine.go`）提供動能/價值/品質/綜合分數計算；基本面資料來自 `FundamentalProvider`（`data/fundamentals.json`）。
+- **配置位置**：`configs/agents.json` 中已為 13 個 sector / style / superinvestor agent 加入 `screening_criteria`，例如：
+  - `value-yield-01`：`pe max: 18`、`pb max: 2`、`dividend_yield min: 2.0`
+  - `growth-momentum-01`：`volume_intraday min: 1_000_000`、`momentum_20d min: 0.0`
+- **動態訊號強度對齊**：sector executors 的 `dynamicSignalStrength` 會自動讀取該 agent 的 `screening_criteria.volume_intraday.min` 作為成交量激勵門檻，使 executor 的訊號強度與篩選閘門保持一致。
+- **注意事項**：篩選條件過嚴可能導致某檔標的「完全沒有推薦」，這是預期行為。調整門檻前請先用 `go test ./internal/screener/...` 驗證。
+
 ## 5. 技能分層與責任
 
 ### 5.1 Domain Skills（研究與觀點）
