@@ -77,18 +77,6 @@ func (s *System) WithPhase3Controller(ctrl *Phase3Controller) *System {
 // The following methods are retained for test backward compatibility.
 // They look up the specific plugin in the host and delegate to it.
 
-func (s *System) applyJANUS(regime domain.Regime, recs []domain.Recommendation) []domain.Recommendation {
-	if s.host == nil {
-		return recs
-	}
-	for _, p := range s.host.plugins {
-		if jp, ok := p.(*janusPlugin); ok {
-			return jp.ProcessRecommendations(regime, recs)
-		}
-	}
-	return recs
-}
-
 func (s *System) applySwarmConsensus(recs []domain.Recommendation) []domain.Recommendation {
 	if s.host == nil {
 		return recs

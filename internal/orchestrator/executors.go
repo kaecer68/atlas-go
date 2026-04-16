@@ -232,9 +232,6 @@ func applyAntiCorrelationLayer(recs []domain.Recommendation) []domain.Recommenda
 	}
 
 	// Group by skill and enforce max 2 symbols per skill to improve diversification
-	type ranked struct {
-		rec domain.Recommendation
-	}
 	skillRecs := map[string][]domain.Recommendation{}
 	for _, rec := range bySymbol {
 		skillRecs[rec.Skill] = append(skillRecs[rec.Skill], rec)
