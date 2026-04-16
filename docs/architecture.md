@@ -69,8 +69,10 @@ Decision agents:
 ## Data Flow
 
 ```text
-Market Data -> Layer 1 -> Layer 2 -> Layer 3 -> 風控長 -> 投資長 -> Simulation Engine -> Scorecard
+Market Data -> Layer 1 -> Screener -> Layer 2 -> Layer 3 -> 風控長 -> 投資長 -> Simulation Engine -> Scorecard
 ```
+
+**Screener** (`internal/screener/`) runs before Layer 2/3 executors generate recommendations. It filters symbols using declarative criteria (P/E, P/B, dividend yield, momentum, volume, and total factor score) so that only qualifying stocks reach the sector desks and style filters.
 
 ## Modes
 
@@ -117,6 +119,8 @@ The system should eventually:
 - `internal/domain`: canonical types
 - `internal/marketdata`: provider abstraction and adapters
 - `internal/orchestrator`: layered workflow
+- `internal/screener`: declarative stock screening (fundamentals + technicals)
+- `internal/portfolio`: Darwinian weights and multi-factor engine
 - `internal/sim`: portfolio and execution engine
 - `internal/config`: runtime configuration
 - `cmd/atlas`: entrypoint for local simulation runs
