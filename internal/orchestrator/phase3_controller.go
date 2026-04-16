@@ -76,7 +76,8 @@ func (c *Phase3Controller) StartBackgroundSwarm(baseState swarm.MarketState) {
 	c.swarm.Start()
 	c.swarmRunning = true
 
-	go c.swarmUpdateLoop()
+	stopCh := c.swarmStopCh
+	go c.swarmUpdateLoop(stopCh)
 	log.Println("[Phase3Controller] Background swarm started")
 }
 
@@ -103,13 +104,13 @@ func (c *Phase3Controller) UpdateSwarmState(state swarm.MarketState) {
 	c.lastSwarmState = state
 }
 
-func (c *Phase3Controller) swarmUpdateLoop() {
+func (c *Phase3Controller) swarmUpdateLoop(stopCh <-chan struct{}) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-c.swarmStopCh:
+		case <-stopCh:
 			return
 		case <-ticker.C:
 			c.mu.RLock()
