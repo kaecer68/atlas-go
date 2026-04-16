@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/replay"
+	"github.com/kaecer68/atlas-go/internal/screener"
 )
 
 func TestGrowthMomentumOverrideChangesRecommendations(t *testing.T) {
@@ -156,6 +158,76 @@ func TestBuildReplayOutcomesUsesRecommendationAgentAndSkill(t *testing.T) {
 	if outcomes[0].Skill != "financials_desk" {
 		t.Fatalf("expected outcome skill to come from recommendation, got %s", outcomes[0].Skill)
 	}
+}
+
+func TestScreenerFiltersRecommendationsBeforeExecutor(t *testing.T) {
+	registry := domain.AgentRegistry{
+		Agents: []domain.AgentSpec{
+			{
+				ID:       "growth-momentum-test",
+				Name:     "Test Growth Momentum",
+				Layer:    domain.LayerStyle,
+				Skill:    "growth_momentum",
+				Enabled:  true,
+				Universe: []string{"HIGH_VOL.TW", "LOW_VOL.TW"},
+				ScreeningCriteria: domain.ScreeningCriteria{
+					VolumeIntraday: &domain.MinFilter{Min: ptrInt64(1_000_000)},
+				},
+			},
+		},
+	}
+	quotes := map[string]domain.Quote{
+		"HIGH_VOL.TW": {Symbol: "HIGH_VOL.TW", Open: 100, Last: 105, Volume: 5_000_000, IsTradable: true},
+		"LOW_VOL.TW":  {Symbol: "LOW_VOL.TW", Open: 100, Last: 105, Volume: 100_000, IsTradable: true},
+	}
+
+	fe := portfolio.NewFactorEngine()
+	fp := portfolio.NewFundamentalProvider()
+	scr := screener.NewEngine(fe, fp)
+	plugins := NewPluginRegistry().WithScreener(scr)
+
+	recs := collectRecommendations(registry, quotes, plugins, nil, domain.RegimeNeutral)
+
+	if len(recs) != 1 {
+		t.Fatalf("expected 1 recommendation after screening, got %d", len(recs))
+	}
+	if recs[0].Symbol != "HIGH_VOL.TW" {
+		t.Errorf("expected HIGH_VOL.TW to pass screening, got %s", recs[0].Symbol)
+	}
+}
+
+func TestScreenerAllowsAllWhenNoCriteriaSet(t *testing.T) {
+	registry := domain.AgentRegistry{
+		Agents: []domain.AgentSpec{
+			{
+				ID:       "growth-momentum-test-2",
+				Name:     "Test Growth Momentum No Criteria",
+				Layer:    domain.LayerStyle,
+				Skill:    "growth_momentum",
+				Enabled:  true,
+				Universe: []string{"A.TW", "B.TW"},
+			},
+		},
+	}
+	quotes := map[string]domain.Quote{
+		"A.TW": {Symbol: "A.TW", Open: 100, Last: 105, Volume: 500_000, IsTradable: true},
+		"B.TW": {Symbol: "B.TW", Open: 100, Last: 105, Volume: 500_000, IsTradable: true},
+	}
+
+	fe := portfolio.NewFactorEngine()
+	fp := portfolio.NewFundamentalProvider()
+	scr := screener.NewEngine(fe, fp)
+	plugins := NewPluginRegistry().WithScreener(scr)
+
+	recs := collectRecommendations(registry, quotes, plugins, nil, domain.RegimeNeutral)
+
+	if len(recs) != 2 {
+		t.Fatalf("expected 2 recommendations when no screening criteria set, got %d", len(recs))
+	}
+}
+
+func ptrInt64(i int64) *int64 {
+	return &i
 }
 
 func TestRegistrySymbolsIncludesNewSectorUniverses(t *testing.T) {

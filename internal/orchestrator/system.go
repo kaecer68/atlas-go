@@ -15,6 +15,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
 	"github.com/kaecer68/atlas-go/internal/replay"
+	"github.com/kaecer68/atlas-go/internal/screener"
 	"github.com/kaecer68/atlas-go/internal/sim"
 )
 
@@ -30,6 +31,7 @@ type SystemCore struct {
 	session         domain.ReplaySession
 	alphaDiscovery  *AlphaDiscoveryEngine
 	optimizer       *portfolio.Optimizer
+	plugins         *PluginRegistry
 	narrativeEngine *narrative.NarrativeEngine
 	persistentState *domain.SimulationState
 	ctx             context.Context
@@ -62,7 +64,12 @@ func NewSystem(cfg config.Config) *System {
 	if err := fp.LoadFromJSON("data/fundamentals.json"); err != nil {
 		fmt.Printf("[System] warn: failed to load fundamentals: %v\n", err)
 	}
-	optimizer.WithHistoricalPrices(hp).WithFundamentalProvider(fp)
+	factorEngine := portfolio.NewFactorEngine().
+		WithHistoricalPrices(hp).
+		WithFundamentalProvider(fp)
+	optimizer.WithHistoricalPrices(hp).WithFundamentalProvider(fp).WithFactorEngine(factorEngine)
+	screenerEngine := screener.NewEngine(factorEngine, fp)
+	plugins := NewPluginRegistry().WithScreener(screenerEngine)
 
 	engine := sim.NewEngine(policy.Constraints).
 		WithOptimizer(optimizer).
@@ -84,7 +91,8 @@ func NewSystem(cfg config.Config) *System {
 			replay:          ds,
 			session:         session,
 			optimizer:       optimizer,
-			alphaDiscovery:  NewAlphaDiscoveryEngine(optimizer),
+			plugins:         plugins,
+			alphaDiscovery:  NewAlphaDiscoveryEngine(factorEngine),
 			narrativeEngine: narrative.NewNarrativeEngine(),
 			ctx:             context.Background(),
 		},
@@ -103,7 +111,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	}
 
 	events := s.detectNarrativeEvents(quotes)
-	regime, rawRecs, finalRecs, guardOutcomes := ExecuteRegistryResearchDetailedWithPolicyAndGuards(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy)
+	regime, rawRecs, finalRecs, guardOutcomes := executeRegistryResearchDetailedWithPolicyAndGuards(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy, s.plugins)
 	// Preserve original recs for outcome building so GuardOutcomes align with outcomes.
 	outcomeRawRecs := append([]domain.Recommendation(nil), rawRecs...)
 	outcomeFinalRecs := append([]domain.Recommendation(nil), finalRecs...)
@@ -134,7 +142,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	symbols := RegistrySymbols(s.registry)
 	quotes := s.replay.QuotesForDate(sessionDate, symbols)
 	events := s.detectNarrativeEvents(quotes)
-	regime, rawRecs, finalRecs, guardOutcomes := ExecuteRegistryResearchDetailedWithPolicyAndGuards(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy)
+	regime, rawRecs, finalRecs, guardOutcomes := executeRegistryResearchDetailedWithPolicyAndGuards(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy, s.plugins)
 	// Preserve original recs for outcome building so GuardOutcomes align with outcomes.
 	outcomeRawRecs := append([]domain.Recommendation(nil), rawRecs...)
 	outcomeFinalRecs := append([]domain.Recommendation(nil), finalRecs...)

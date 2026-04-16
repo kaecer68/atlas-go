@@ -11,14 +11,14 @@ import (
 // AlphaDiscoveryEngine identifies symbols with high multi-factor scores
 // but low agent coverage, generating exploratory recommendations.
 type AlphaDiscoveryEngine struct {
-	optimizer       *portfolio.Optimizer
+	factorEngine    *portfolio.FactorEngine
 	factorThreshold float64
 }
 
 // NewAlphaDiscoveryEngine creates a new alpha discovery engine.
-func NewAlphaDiscoveryEngine(optimizer *portfolio.Optimizer) *AlphaDiscoveryEngine {
+func NewAlphaDiscoveryEngine(factorEngine *portfolio.FactorEngine) *AlphaDiscoveryEngine {
 	return &AlphaDiscoveryEngine{
-		optimizer:       optimizer,
+		factorEngine:    factorEngine,
 		factorThreshold: 0.6,
 	}
 }
@@ -79,33 +79,21 @@ func (e *AlphaDiscoveryEngine) Discover(
 }
 
 // estimateFactorScore computes a rough multi-factor score for a symbol using
-// the optimizer's public Optimize entry point with a single dummy recommendation.
-func (e *AlphaDiscoveryEngine) estimateFactorScore(ctx context.Context, symbol string, quotes map[string]domain.Quote) float64 {
-	quote, ok := quotes[symbol]
-	if !ok || quote.Last == 0 {
+// the factor engine directly.
+func (e *AlphaDiscoveryEngine) estimateFactorScore(_ context.Context, symbol string, quotes map[string]domain.Quote) float64 {
+	if e.factorEngine == nil {
 		return 0.0
 	}
-
-	dummyRec := domain.Recommendation{
-		Agent:      "alpha_discovery",
-		Symbol:     symbol,
-		Side:       domain.SideBuy,
-		Conviction: 50,
+	defaultWeights := map[portfolio.FactorType]float64{
+		portfolio.FactorMomentum: 0.30,
+		portfolio.FactorValue:    0.25,
+		portfolio.FactorQuality:  0.25,
+		portfolio.FactorAgent:    0.20,
 	}
-
-	// Run a minimal optimization to extract the factor scores from the result.
-	positions, err := e.optimizer.Optimize(ctx, []domain.Recommendation{dummyRec}, quotes, 1_000_000)
-	if err != nil || len(positions) == 0 {
+	scores := e.factorEngine.CalculateAllScores(symbol, quotes, nil, nil, defaultWeights)
+	total, ok := scores["total"]
+	if !ok {
 		return 0.0
 	}
-
-	pos := positions[0]
-	total := 0.0
-	for _, score := range pos.Factors {
-		total += score
-	}
-	if len(pos.Factors) == 0 {
-		return 0.0
-	}
-	return total / float64(len(pos.Factors))
+	return total
 }
