@@ -113,7 +113,6 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	rawRecs = s.applyHumanOverrides(rawRecs)
 	finalRecs = s.applyHumanOverrides(finalRecs)
 	alphaRecs := s.applyAlphaDiscovery(quotes, rawRecs)
-	rawRecs = append(rawRecs, alphaRecs...)
 	finalRecs = append(finalRecs, alphaRecs...)
 	finalRecs = s.host.ProcessRecommendations(regime, finalRecs)
 	var result domain.SimulationResult
@@ -145,7 +144,6 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	rawRecs = s.applyHumanOverrides(rawRecs)
 	finalRecs = s.applyHumanOverrides(finalRecs)
 	alphaRecs := s.applyAlphaDiscovery(quotes, rawRecs)
-	rawRecs = append(rawRecs, alphaRecs...)
 	finalRecs = append(finalRecs, alphaRecs...)
 	finalRecs = s.host.ProcessRecommendations(regime, finalRecs)
 	var result domain.SimulationResult
