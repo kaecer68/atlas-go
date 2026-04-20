@@ -4,15 +4,17 @@ import "time"
 
 // NarrativeEvent represents a detected macro event that may trigger causal chains.
 type NarrativeEvent struct {
-	ID          string             `json:"id"`
-	Theme       string             `json:"theme"`        // e.g., "US_rates_up"
-	Region      string             `json:"region"`       // e.g., "US", "Global", "Asia"
-	Sentiment   float64            `json:"sentiment"`    // -1.0 (very negative) to +1.0
-	Confidence  float64            `json:"confidence"`   // 0.0 to 1.0
-	CapitalFlow string             `json:"capital_flow"` // e.g., "flight_to_USD", "risk_off"
-	TimeWindow  string             `json:"time_window"`  // "immediate", "1_week", "1_month"
-	Timestamp   time.Time          `json:"timestamp"`
-	SourceData  map[string]float64 `json:"source_data,omitempty"`
+	ID               string             `json:"id"`
+	Theme            string             `json:"theme"`      // e.g., "US_rates_up"
+	Region           string             `json:"region"`     // e.g., "US", "Global", "Asia"
+	Sentiment        float64            `json:"sentiment"`  // -1.0 (very negative) to +1.0
+	Confidence       float64            `json:"confidence"` // 0.0 to 1.0
+	ConfidenceSource string             `json:"confidence_source"`
+	HitRate          float64            `json:"hit_rate"`
+	CapitalFlow      string             `json:"capital_flow"` // e.g., "flight_to_USD", "risk_off"
+	TimeWindow       string             `json:"time_window"`  // "immediate", "1_week", "1_month"
+	Timestamp        time.Time          `json:"timestamp"`
+	SourceData       map[string]float64 `json:"source_data,omitempty"`
 }
 
 // CausalStep represents one step in a causal transmission chain.

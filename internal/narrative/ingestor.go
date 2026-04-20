@@ -25,6 +25,15 @@ func NewMacroIngestor(provider marketdata.MacroDataProvider, snapshotDir string)
 	}
 }
 
+func hitRateForTheme(theme string) float64 {
+	for _, t := range DefaultTemplates() {
+		if t.TriggerTheme == theme {
+			return t.HistoricalHitRate
+		}
+	}
+	return 0.0
+}
+
 // SnapshotDir returns the directory where snapshots are stored.
 func (m *MacroIngestor) SnapshotDir() string {
 	return m.snapshotDir
@@ -94,6 +103,12 @@ func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot) []Narrati
 		events = append(events, *event)
 	}
 	if event := detectOilShockEventFromSnapshot(curr.Oil, now); event != nil {
+		events = append(events, *event)
+	}
+	if event := detectRetailFrenzyEvent(curr); event != nil {
+		events = append(events, *event)
+	}
+	if event := detectRetailFearEvent(curr); event != nil {
 		events = append(events, *event)
 	}
 	// AI capex sentiment remains externally supplied for now.
@@ -204,6 +219,56 @@ func detectOilShockEventFromSnapshot(currOil marketdata.MacroDataPoint, now time
 			Timestamp:   now,
 			SourceData: map[string]float64{
 				"oil_change_pct": currOil.ChangePct,
+			},
+		}
+	}
+	return nil
+}
+
+func detectRetailFrenzyEvent(snap marketdata.MacroDataSnapshot) *NarrativeEvent {
+	if snap.RetailSentiment.Symbol == "" {
+		return nil
+	}
+	if snap.RetailSentiment.Value >= 0.8 {
+		now := time.Now().UTC()
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-retail-frenzy-%d", now.UnixNano()),
+			Theme:            "retail_frenzy",
+			Region:           "TW",
+			Sentiment:        1.0,
+			Confidence:       snap.RetailSentiment.Value,
+			ConfidenceSource: "retail_sentiment_90th_percentile",
+			HitRate:          hitRateForTheme("retail_frenzy"),
+			CapitalFlow:      "retail_chasing",
+			TimeWindow:       "1-2_weeks",
+			Timestamp:        now,
+			SourceData: map[string]float64{
+				"sentiment_score": snap.RetailSentiment.Value,
+			},
+		}
+	}
+	return nil
+}
+
+func detectRetailFearEvent(snap marketdata.MacroDataSnapshot) *NarrativeEvent {
+	if snap.RetailSentiment.Symbol == "" {
+		return nil
+	}
+	if snap.RetailSentiment.Value <= -0.8 {
+		now := time.Now().UTC()
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-retail-fear-%d", now.UnixNano()),
+			Theme:            "retail_fear",
+			Region:           "TW",
+			Sentiment:        -1.0,
+			Confidence:       -snap.RetailSentiment.Value,
+			ConfidenceSource: "retail_sentiment_10th_percentile",
+			HitRate:          hitRateForTheme("retail_fear"),
+			CapitalFlow:      "retail_fleeing",
+			TimeWindow:       "1-2_weeks",
+			Timestamp:        now,
+			SourceData: map[string]float64{
+				"sentiment_score": snap.RetailSentiment.Value,
 			},
 		}
 	}
