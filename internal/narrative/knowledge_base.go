@@ -169,6 +169,9 @@ func (ne *NarrativeEngine) DetectEvents(data MarketNarrativeData) []NarrativeEve
 	if evt := detectJPYCarryUnwindEvent(data); evt != nil {
 		events = append(events, *evt)
 	}
+	if evt := detectSeasonalEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
 	return events
 }
 
@@ -302,15 +305,16 @@ func (ne *NarrativeEngine) ListModels() []InvestmentModel {
 
 // MarketNarrativeData carries raw inputs for narrative detection.
 type MarketNarrativeData struct {
-	US10YChangeBps    float64
-	DXYChangePct      float64
-	VIXLevel          float64
-	USD_TWD_ChangePct float64
-	OilChangePct      float64
-	GoldChangePct     float64
-	JPY_ChangePct     float64
-	AICapexSentiment  float64 // +1 bullish, -1 bearish
-	GeopoliticalGPR   float64 // Geopolitical risk index level
+	US10YChangeBps            float64
+	DXYChangePct              float64
+	VIXLevel                  float64
+	USD_TWD_ChangePct         float64
+	OilChangePct              float64
+	GoldChangePct             float64
+	JPY_ChangePct             float64
+	AICapexSentiment          float64 // +1 bullish, -1 bearish
+	GeopoliticalGPR           float64 // Geopolitical risk index level
+	SpringFestivalExpectation *SeasonalExpectation
 }
 
 func detectUSRatesEvent(data MarketNarrativeData) *NarrativeEvent {
@@ -408,6 +412,88 @@ func detectJPYCarryUnwindEvent(data MarketNarrativeData) *NarrativeEvent {
 			},
 		}
 	}
+	return nil
+}
+
+func detectSeasonalEvent(data MarketNarrativeData) *NarrativeEvent {
+	return detectSeasonalEventAt(time.Now().UTC(), data)
+}
+
+func detectSeasonalEventAt(now time.Time, data MarketNarrativeData) *NarrativeEvent {
+	month := now.Month()
+	day := now.Day()
+
+	if month == time.January && day > 16 {
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-post-election-%d", nowUnix()),
+			Theme:            "post_election_relief",
+			Region:           "TW",
+			Sentiment:        0.4,
+			Confidence:       0.55,
+			ConfidenceSource: "post_election_relief_pattern",
+			HitRate:          hitRateForTheme("post_election_relief"),
+			CapitalFlow:      "policy_clarity_rebound",
+			TimeWindow:       "4_weeks",
+			Timestamp:        now,
+			SourceData: map[string]float64{
+				"month": float64(month),
+				"day":   float64(day),
+			},
+		}
+	}
+
+	if (month == 1 && day >= 15) || (month == 2 && day <= 15) {
+		confidence := 0.65
+		sourceData := map[string]float64{
+			"month": float64(month),
+			"day":   float64(day),
+		}
+
+		if data.SpringFestivalExpectation != nil {
+			expectation := data.SpringFestivalExpectation
+			confidence = 0.70 * expectation.SurprisePotential
+			if expectation.AlreadyPricedIn {
+				confidence *= 0.3
+			}
+			sourceData["historical_avg_return"] = expectation.HistoricalAvgReturn
+			sourceData["current_return"] = expectation.CurrentReturn
+			sourceData["expectation_gap"] = expectation.ExpectationGap
+		}
+
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-spring-%d", nowUnix()),
+			Theme:            "spring_festival_season",
+			Region:           "TW",
+			Sentiment:        0.3,
+			Confidence:       confidence,
+			ConfidenceSource: "calendar_seasonal_with_expectation_gap",
+			HitRate:          hitRateForTheme("spring_festival_season"),
+			CapitalFlow:      "seasonal_rotation",
+			TimeWindow:       "1_month",
+			Timestamp:        now,
+			SourceData:       sourceData,
+		}
+	}
+
+	if month == 12 || month == 1 || month == 2 {
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-election-%d", nowUnix()),
+			Theme:            "election_cycle",
+			Region:           "TW",
+			Sentiment:        -0.2,
+			Confidence:       0.60,
+			ConfidenceSource: "calendar_political",
+			HitRate:          hitRateForTheme("election_cycle"),
+			CapitalFlow:      "policy_uncertainty",
+			TimeWindow:       "3_month",
+			Timestamp:        now,
+			SourceData: map[string]float64{
+				"month": float64(month),
+				"day":   float64(day),
+			},
+		}
+	}
+
 	return nil
 }
 
