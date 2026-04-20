@@ -89,3 +89,35 @@ func (t *TWSERetailSentimentProvider) fetchMarginBalance(ctx context.Context) (f
 func (t *TWSERetailSentimentProvider) fetchDayTradingRatio(ctx context.Context) (float64, error) {
 	return 0, fmt.Errorf("not implemented: TWSE T23 API")
 }
+
+// RetailSentimentMacroAdapter adapts RetailSentimentProvider to MacroDataProvider.
+type RetailSentimentMacroAdapter struct {
+	provider RetailSentimentProvider
+}
+
+// NewRetailSentimentMacroAdapter creates an adapter.
+func NewRetailSentimentMacroAdapter(provider RetailSentimentProvider) *RetailSentimentMacroAdapter {
+	return &RetailSentimentMacroAdapter{provider: provider}
+}
+
+// Name returns the adapter name.
+func (a *RetailSentimentMacroAdapter) Name() string {
+	return a.provider.Name() + "_macro"
+}
+
+// FetchSnapshot converts retail sentiment data into MacroDataSnapshot format.
+func (a *RetailSentimentMacroAdapter) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
+	rs, err := a.provider.FetchSnapshot(ctx)
+	if err != nil {
+		return MacroDataSnapshot{}, err
+	}
+
+	return MacroDataSnapshot{
+		RecordedAt: rs.Timestamp.Unix(),
+		RetailSentiment: MacroDataPoint{
+			Symbol:    "RETAIL_SENTIMENT",
+			Value:     rs.SentimentScore,
+			Timestamp: rs.Timestamp.Unix(),
+		},
+	}, nil
+}

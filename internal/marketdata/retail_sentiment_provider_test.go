@@ -57,3 +57,24 @@ func TestTWSERetailSentimentProvider_FetchSnapshot_Mock(t *testing.T) {
 		t.Errorf("expected day trading ratio 0.25, got %f", snap.DayTradingRatio)
 	}
 }
+
+func TestRetailSentimentMacroAdapter_FetchSnapshot(t *testing.T) {
+	retail := NewTWSERetailSentimentProvider("")
+	retail.fetchMarginBalanceFunc = func(ctx context.Context) (float64, error) {
+		return 1500.0, nil
+	}
+	retail.marginHistory = []float64{1000, 1200, 1300, 1400}
+
+	adapter := NewRetailSentimentMacroAdapter(retail)
+	snap, err := adapter.FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if snap.RetailSentiment.Symbol == "" {
+		t.Error("expected RetailSentiment MacroDataPoint to be populated")
+	}
+	if snap.RetailSentiment.Value == 0 {
+		t.Error("expected non-zero sentiment score")
+	}
+}
