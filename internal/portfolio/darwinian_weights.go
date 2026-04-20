@@ -66,7 +66,32 @@ type DarwinianAgentWeight struct {
 	AvgReturn         float64   `json:"avg_return"`
 	LastAdjustedAt    time.Time `json:"last_adjusted_at"`
 	LastUpdatedAt     time.Time `json:"last_updated_at"`
-	DailyReturns      []float64 `json:"daily_returns"` // Last 20 days returns for Sharpe calc
+	DailyReturns      []float64 `json:"daily_returns"`
+	FirstSignalDate   time.Time `json:"first_signal_date"`
+}
+
+// DarwinianConfig holds configurable parameters for weight management.
+type DarwinianConfig struct {
+	RollingWindowDays      int     `json:"rolling_window_days"`
+	UseExponentialDecay    bool    `json:"use_exponential_decay"`
+	DecayHalfLifeDays      int     `json:"decay_half_life_days"`
+	NewAgentProtectionDays int     `json:"new_agent_protection_days"`
+	NewAgentFixedWeight    float64 `json:"new_agent_fixed_weight"`
+	MinAdjustmentInterval  int     `json:"min_adjustment_interval"`
+	WeightMomentumFactor   float64 `json:"weight_momentum_factor"`
+}
+
+// DefaultDarwinianConfig returns sensible defaults.
+func DefaultDarwinianConfig() DarwinianConfig {
+	return DarwinianConfig{
+		RollingWindowDays:      60,
+		UseExponentialDecay:    true,
+		DecayHalfLifeDays:      10,
+		NewAgentProtectionDays: 30,
+		NewAgentFixedWeight:    1.0,
+		MinAdjustmentInterval:  3,
+		WeightMomentumFactor:   0.2,
+	}
 }
 
 // DarwinianWeightManager implements Atlas-GIC style Darwinian weight system
@@ -359,17 +384,14 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		return adjustments, clampingEvents
 	}
 
-	// Calculate performance metrics for all eligible agents
 	for _, w := range eligible {
-		m.updateRollingMetrics(w)
+		m.updateRollingMetricsWithConfig(w)
 	}
 
-	// Sort by rolling Sharpe ratio
 	sort.Slice(eligible, func(i, j int) bool {
 		return eligible[i].RollingSharpe > eligible[j].RollingSharpe
 	})
 
-	// Enhanced adjustment algorithm
 	n := len(eligible)
 	topTier := n / 3
 	if topTier < 1 {
@@ -380,7 +402,6 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		bottomTier = 1
 	}
 
-	// Top tier: significant increase with performance scaling
 	for i := 0; i < topTier; i++ {
 		w := eligible[i]
 		oldWeight := w.Weight
@@ -408,10 +429,12 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		}
 		w.LastAdjustedAt = now
 
+		w.Weight = oldWeight + (targetWeight-oldWeight)*m.config.WeightMomentumFactor
+		w.Weight = m.constrainWeight(w.Weight)
+		w.LastAdjustedAt = now
 		adjustments[w.AgentID] = w.Weight - oldWeight
 	}
 
-	// Middle tier: maintain or slight adjustment
 	for i := topTier; i < n-bottomTier; i++ {
 		w := eligible[i]
 		oldWeight := w.Weight
@@ -435,12 +458,10 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		adjustments[w.AgentID] = w.Weight - oldWeight
 	}
 
-	// Bottom tier: decrease with risk consideration
 	for i := n - bottomTier; i < n; i++ {
 		w := eligible[i]
 		oldWeight := w.Weight
 
-		// Risk-based reduction: poor performance + high volatility = bigger cut
 		riskMultiplier := 1.0
 		if w.RollingVolatility > m.params.Darwinian.RiskVolatilityThreshold {
 			riskMultiplier = m.params.Darwinian.RiskMultiplier
@@ -454,6 +475,9 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		}
 		w.LastAdjustedAt = now
 
+		w.Weight = oldWeight + (targetWeight-oldWeight)*m.config.WeightMomentumFactor
+		w.Weight = m.constrainWeight(w.Weight)
+		w.LastAdjustedAt = now
 		adjustments[w.AgentID] = w.Weight - oldWeight
 	}
 
@@ -907,4 +931,128 @@ func (m *DarwinianWeightManager) SaveReport(path string) error {
 	}
 
 	return nil
+}
+
+func calculateExponentialWeights(days int, halfLife int) []float64 {
+	weights := make([]float64, days)
+	lambda := math.Ln2 / float64(halfLife)
+
+	total := 0.0
+	for i := 0; i < days; i++ {
+		w := math.Exp(-lambda * float64(days-1-i))
+		weights[i] = w
+		total += w
+	}
+
+	for i := range weights {
+		weights[i] /= total
+	}
+	return weights
+}
+
+func (m *DarwinianWeightManager) isNewAgent(w *DarwinianAgentWeight, now time.Time) bool {
+	if w.FirstSignalDate.IsZero() {
+		return true
+	}
+	daysSinceFirst := int(now.Sub(w.FirstSignalDate).Hours() / 24)
+	return daysSinceFirst < m.config.NewAgentProtectionDays
+}
+
+func (m *DarwinianWeightManager) isInCooldown(w *DarwinianAgentWeight, now time.Time) bool {
+	if w.LastAdjustedAt.IsZero() {
+		return false
+	}
+	daysSinceAdjust := int(now.Sub(w.LastAdjustedAt).Hours() / 24)
+	return daysSinceAdjust < m.config.MinAdjustmentInterval
+}
+
+func (m *DarwinianWeightManager) updateRollingMetricsWithConfig(w *DarwinianAgentWeight) {
+	if len(w.DailyReturns) == 0 {
+		w.RollingSharpe = 0
+		w.RollingVolatility = 0
+		return
+	}
+
+	returns := w.DailyReturns
+	if len(returns) > m.config.RollingWindowDays {
+		returns = returns[len(returns)-m.config.RollingWindowDays:]
+	}
+
+	if m.config.UseExponentialDecay {
+		weights := calculateExponentialWeights(len(returns), m.config.DecayHalfLifeDays)
+		w.RollingSharpe = calculateWeightedSharpe(returns, weights)
+	} else {
+		w.RollingSharpe = calculateSimpleSharpe(returns)
+	}
+
+	w.RollingVolatility = calculateVolatility(returns)
+}
+
+func calculateWeightedSharpe(returns, weights []float64) float64 {
+	if len(returns) != len(weights) {
+		return 0
+	}
+
+	weightedAvg := 0.0
+	for i, r := range returns {
+		weightedAvg += r * weights[i]
+	}
+
+	weightedVar := 0.0
+	for i, r := range returns {
+		diff := r - weightedAvg
+		weightedVar += weights[i] * diff * diff
+	}
+
+	if weightedVar == 0 {
+		return 0
+	}
+
+	return weightedAvg / math.Sqrt(weightedVar)
+}
+
+func calculateSimpleSharpe(returns []float64) float64 {
+	if len(returns) == 0 {
+		return 0
+	}
+
+	avg := 0.0
+	for _, r := range returns {
+		avg += r
+	}
+	avg /= float64(len(returns))
+
+	variance := 0.0
+	for _, r := range returns {
+		diff := r - avg
+		variance += diff * diff
+	}
+	variance /= float64(len(returns))
+
+	if variance == 0 {
+		return 0
+	}
+
+	return avg / math.Sqrt(variance)
+}
+
+func calculateVolatility(returns []float64) float64 {
+	if len(returns) == 0 {
+		return 0
+	}
+
+	avg := 0.0
+	for _, r := range returns {
+		avg += r
+	}
+	avg /= float64(len(returns))
+
+	variance := 0.0
+	for _, r := range returns {
+		diff := r - avg
+		variance += diff * diff
+	}
+	variance /= float64(len(returns))
+
+	return math.Sqrt(variance)
 }
