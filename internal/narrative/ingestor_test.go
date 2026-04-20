@@ -88,3 +88,44 @@ func TestMacroIngestorNoTriggerOnCalmData(t *testing.T) {
 		t.Fatalf("expected 0 events on calm data, got %d", len(events))
 	}
 }
+
+func TestDetectRetailFrenzyEvent(t *testing.T) {
+	snap := marketdata.MacroDataSnapshot{
+		RetailSentiment: marketdata.MacroDataPoint{Symbol: "RETAIL_SENTIMENT", Value: 0.85},
+	}
+
+	event := detectRetailFrenzyEvent(snap)
+	if event == nil {
+		t.Fatal("expected event for high sentiment")
+	}
+	if event.Theme != "retail_frenzy" {
+		t.Errorf("expected theme retail_frenzy, got %s", event.Theme)
+	}
+}
+
+func TestDetectRetailFearEvent(t *testing.T) {
+	snap := marketdata.MacroDataSnapshot{
+		RetailSentiment: marketdata.MacroDataPoint{Symbol: "RETAIL_SENTIMENT", Value: -0.85},
+	}
+
+	event := detectRetailFearEvent(snap)
+	if event == nil {
+		t.Fatal("expected event for low sentiment")
+	}
+	if event.Theme != "retail_fear" {
+		t.Errorf("expected theme retail_fear, got %s", event.Theme)
+	}
+}
+
+func TestDetectRetailEvents_Neutral(t *testing.T) {
+	snap := marketdata.MacroDataSnapshot{
+		RetailSentiment: marketdata.MacroDataPoint{Symbol: "RETAIL_SENTIMENT", Value: 0.0},
+	}
+
+	if detectRetailFrenzyEvent(snap) != nil {
+		t.Error("expected nil for neutral sentiment")
+	}
+	if detectRetailFearEvent(snap) != nil {
+		t.Error("expected nil for neutral sentiment")
+	}
+}
