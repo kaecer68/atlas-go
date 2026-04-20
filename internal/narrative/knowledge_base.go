@@ -137,6 +137,16 @@ func NewNarrativeEngine() *NarrativeEngine {
 				AvoidedSectors: []string{"ai_supply_chain", "small_cap"},
 				Weight:         1.0,
 			},
+			{
+				ID:             "retail_sentiment_model",
+				Name:           "散戶情緒逆向模型",
+				Description:    "假設散戶極端情緒為反向指標；狂熱時防禦，恐慌時進取。",
+				Rationale:      "散戶是台股市場的重要參與者，但行為常呈現『追高殺低』的羊群效應。當融資餘額達極端高點（90th percentile），代表散戶過度樂觀，後續回調機率高，應轉向防禦；當融資餘額達極端低點（10th percentile），代表散戶過度悲觀，籌碼已清洗乾淨，反彈機率高，應積極布局。",
+				ActiveThemes:   []string{"retail_frenzy", "retail_fear"},
+				FavoredSectors: []string{"high_dividend", "financials"},
+				AvoidedSectors: []string{"small_cap", "ai_supply_chain"},
+				Weight:         1.0,
+			},
 		},
 	}
 }
