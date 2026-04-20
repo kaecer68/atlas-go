@@ -1,9 +1,11 @@
 package portfolio
 
 import (
+	"math"
 	"sync"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 // FactorEngine calculates multi-factor scores for individual symbols.
@@ -211,4 +213,18 @@ func (fe *FactorEngine) CalculateAllScores(
 	}
 
 	return result
+}
+
+func (fe *FactorEngine) CalculateLiquidityScore(symbol string, micro marketdata.MicrostructureSnapshot) float64 {
+	baseScore := micro.TradeabilityScore / 100.0 * 10.0
+
+	if micro.LiquidityScore < 20 {
+		baseScore -= 5.0
+	}
+
+	if micro.AbnormalVolume {
+		baseScore -= 3.0
+	}
+
+	return math.Max(-10.0, math.Min(10.0, baseScore))
 }
