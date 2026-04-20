@@ -40,3 +40,4 @@ internal/*/data/
 !internal/config/data/
 .gitnexus
 /cmd/backtest-window/reports/
+.worktrees/
