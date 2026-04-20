@@ -135,6 +135,20 @@ func DefaultTemplates() []CausalTemplate {
 			Rationale:         `當融資餘額降至歷史10th percentile以下，代表散戶極度恐慌、槓桿已大幅去化。歷史統計顯示，此時後1-2周反彈機率約60%。應逢低布局優質股，尤其是被錯殺的中小型股。`,
 		},
 		{
+			ID:             "選後 relief 反彈",
+			Name:           "選後 relief 反彈",
+			TriggerTheme:   "post_election_relief",
+			RequiredRegion: "TW",
+			Steps: []CausalStep{
+				{Description: "選舉不確定性消除，政策明朗化", Affected: []string{"台股大盤", "外資流向"}, Impact: 0.5},
+				{Description: "避險資金回流，補漲行情展開", Affected: []string{"台股大盤"}, Impact: 0.4},
+				{Description: "政策受惠股（綠能、基建、國防）獲資金青睞", Affected: []string{"綠能", "基建", "國防"}, Impact: 0.4},
+			},
+			HistoricalHitRate: 0.68,
+			SourceReferences:  []string{"Taiwan Election and Stock Market Historical Analysis"},
+			Rationale:         `選後1個月，政策不確定性消除，外資與避險資金回流，台股上漲機率約68%。應布局政策受惠股（綠能、基建、國防），這些板塊在新政府施政方向明確後常獲資金青睞。`,
+		},
+		{
 			ID:             "中東衝突升級",
 			Name:           "中東衝突升級",
 			TriggerTheme:   "middle_east_escalation",
