@@ -327,3 +327,77 @@ func TestDarwinianWeightReport(t *testing.T) {
 		}
 	})
 }
+
+func TestDarwinianConfig_Defaults(t *testing.T) {
+	cfg := DefaultDarwinianConfig()
+
+	if cfg.RollingWindowDays != 60 {
+		t.Errorf("expected rolling window 60, got %d", cfg.RollingWindowDays)
+	}
+	if !cfg.UseExponentialDecay {
+		t.Error("expected exponential decay enabled by default")
+	}
+	if cfg.NewAgentProtectionDays != 30 {
+		t.Errorf("expected protection days 30, got %d", cfg.NewAgentProtectionDays)
+	}
+	if cfg.MinAdjustmentInterval != 3 {
+		t.Errorf("expected min interval 3, got %d", cfg.MinAdjustmentInterval)
+	}
+}
+
+func TestDarwinianWeightManager_WithConfig(t *testing.T) {
+	cfg := DefaultDarwinianConfig()
+	cfg.RollingWindowDays = 30
+	cfg.NewAgentFixedWeight = 1.5
+
+	m := NewDarwinianWeightManagerWithConfig("/tmp/test_dw.json", cfg)
+	if m.config.RollingWindowDays != 30 {
+		t.Errorf("expected custom rolling window 30, got %d", m.config.RollingWindowDays)
+	}
+	if m.config.NewAgentFixedWeight != 1.5 {
+		t.Errorf("expected custom fixed weight 1.5, got %f", m.config.NewAgentFixedWeight)
+	}
+}
+
+func TestCalculateExponentialWeights(t *testing.T) {
+	weights := calculateExponentialWeights(5, 2)
+
+	if len(weights) != 5 {
+		t.Fatalf("expected 5 weights, got %d", len(weights))
+	}
+
+	if weights[4] <= weights[0] {
+		t.Error("expected recent weights to be higher")
+	}
+
+	var sum float64
+	for _, w := range weights {
+		sum += w
+	}
+	if sum < 0.99 || sum > 1.01 {
+		t.Errorf("expected sum ~1.0, got %f", sum)
+	}
+}
+
+func TestDarwinianWeightManager_NewAgentProtection(t *testing.T) {
+	cfg := DefaultDarwinianConfig()
+	cfg.NewAgentProtectionDays = 30
+	cfg.NewAgentFixedWeight = 1.0
+
+	m := NewDarwinianWeightManagerWithConfig("/tmp/test_dw.json", cfg)
+	m.weights["new-agent"] = &DarwinianAgentWeight{
+		AgentID:         "new-agent",
+		Skill:           "momentum",
+		Layer:           "sector",
+		Weight:          1.0,
+		FirstSignalDate: time.Now(),
+		LastAdjustedAt:  time.Now().Add(-24 * time.Hour),
+	}
+
+	m.PerformDailyAdjustment()
+
+	weight, _ := m.GetAgentWeightData("new-agent")
+	if weight == nil || weight.Weight != 1.0 {
+		t.Errorf("expected protected weight 1.0, got %v", weight)
+	}
+}
