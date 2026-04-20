@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
@@ -115,6 +116,27 @@ func (e *Engine) Screen(ctx context.Context, symbol string, criteria domain.Scre
 
 	_ = ctx
 	return true, nil
+}
+
+func (e *Engine) ApplyMicrostructureFilter(symbol string, criteria domain.ScreeningCriteria, microData map[string]marketdata.MicrostructureSnapshot) (bool, string) {
+	snap, ok := microData[symbol]
+	if !ok {
+		return false, "missing microstructure data"
+	}
+
+	if criteria.MinLiquidityScore != nil && snap.LiquidityScore < *criteria.MinLiquidityScore {
+		return false, fmt.Sprintf("liquidity score too low: %.1f < %.1f", snap.LiquidityScore, *criteria.MinLiquidityScore)
+	}
+
+	if criteria.MaxSpreadEstimate != nil && snap.SpreadEstimate > *criteria.MaxSpreadEstimate {
+		return false, fmt.Sprintf("spread too wide: %.3f > %.3f", snap.SpreadEstimate, *criteria.MaxSpreadEstimate)
+	}
+
+	if criteria.ExcludeAbnormalVolume != nil && *criteria.ExcludeAbnormalVolume && snap.AbnormalVolume {
+		return false, "abnormal volume detected"
+	}
+
+	return true, ""
 }
 
 // ScreenUniverse filters a list of symbols, returning only those that pass.
