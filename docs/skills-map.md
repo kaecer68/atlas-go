@@ -1,6 +1,10 @@
 # Skills Map (Current)
 
-本文件是 atlas-go 的「現行技能地圖」，只描述目前程式與設定真正在用的技能、規則與流程。
+> **最後更新**：2026-04-21（v1.3 完成後）
+>
+> 本文件是 atlas-go 的「現行技能地圖」，只描述目前程式與設定真正在用的技能、規則與流程。
+>
+> v1.3 新增四大功能模組：自然語言生成（NLG）、台灣稅務計算（Tax）、即時警報系統（Alerts）、階段式資金管理（Capital Management）。
 
 ## 1. 文件用途
 
@@ -24,7 +28,14 @@
 10. `data/state/experiments/*.json`
 11. `web/static/index.html`（控制塔前端介面）
 
-> 註：`cmd/backfill-replay` 與 `cmd/daily-replay-sync` 屬於資料管線操作工具，其行為規格詳見 §4.6，不列為技能定義的 Source of Truth。
+> 註：`cmd/backfill-replay`、`cmd/daily-replay-sync`、`cmd/check-data-health`、`cmd/geo-ingest` 屬於資料管線或健康檢查工具，其行為規格詳見 §4.6 與 §4.12，不列為技能定義的 Source of Truth。
+> 
+> v1.3 新增 Source of Truth：
+> - `internal/tax/*`（稅務計算與扣稅後部位調整）
+> - `internal/monitoring/alert_store.go`、`notifier.go`、`alert_api.go`（警報持久化與通知）
+> - `internal/narrative/report_generator.go`、`nlg_templates.go`（自然語言報告生成）
+> - `internal/risk/capital_controller.go`、`approval_workflow.go`（資金階段控制與人工審批）
+> - `internal/portfolio/capital_allocator.go`（多策略資金分配）
 
 ## 3. 目前啟用技能（來自 agents.json）
 
@@ -32,21 +43,21 @@
 |---|---|---|
 | context | `taiwan_macro` | |
 | context | `foreign_flow` | |
-| sector | `semiconductor_desk` | Universe: 2330, 2303, 2454, 3034 |
-| sector | `ai_supply_chain_desk` | Universe: 2382, 6669, 3017, 3037 |
-| sector | `financials_desk` | Universe: 2881, 2882, 2891 |
-| sector | `shipping_desk` | Universe: 2603, 2609, 2615 |
-| sector | `etf_rotation_desk` | Universe: 0050, 0056, 00878 |
-| style | `growth_momentum` | Universe: 2317, 2382, 2454, 3034, 3037, 6669 |
-| style | `value_yield` | Universe: 2881, 2882, 2886, 2891, 0056, 00878 |
-| style | `earnings_quality` | Universe: 2330, 2308, 3008, 1301, 1303, 1326 |
-| style | `technical_breakout` | Universe: 2330, 2317, 2382, 2881, 2603, 2609, 0050 |
-| superinvestor | `druckenmiller_macro` | |
-| superinvestor | `aschenbrenner_ai_compute` | |
-| superinvestor | `baker_deep_tech` | |
-| superinvestor | `ackman_quality` | |
-| control | `cro_risk` | conviction floor 過濾 |
-| control | `cio_portfolio` | 聚合 + crowding penalty |
+| sector | `semiconductor_desk` | Universe: 2330, 2303, 2454, 3034；支援宣告式篩選 |
+| sector | `ai_supply_chain_desk` | Universe: 2382, 6669, 3017, 3037；支援宣告式篩選 |
+| sector | `financials_desk` | Universe: 2881, 2882, 2891；支援宣告式篩選 |
+| sector | `shipping_desk` | Universe: 2603, 2609, 2615；支援宣告式篩選 |
+| sector | `etf_rotation_desk` | Universe: 0050, 0056, 00878；支援宣告式篩選 |
+| style | `growth_momentum` | Universe: 2317, 2382, 2454, 3034, 3037, 6669；支援宣告式篩選 |
+| style | `value_yield` | Universe: 2881, 2882, 2886, 2891, 0056, 00878；支援宣告式篩選 |
+| style | `earnings_quality` | Universe: 2330, 2308, 3008, 1301, 1303, 1326；支援宣告式篩選 |
+| style | `technical_breakout` | Universe: 2330, 2317, 2382, 2881, 2603, 2609, 0050；支援宣告式篩選 |
+| superinvestor | `druckenmiller_macro` | 支援宣告式篩選 |
+| superinvestor | `aschenbrenner_ai_compute` | 支援宣告式篩選 |
+| superinvestor | `baker_deep_tech` | 支援宣告式篩選 |
+| superinvestor | `ackman_quality` | 支援宣告式篩選 |
+| control | `cro_risk` | conviction floor 過濾；支援宣告式篩選 |
+| control | `cio_portfolio` | 聚合 + crowding penalty；支援宣告式篩選 |
 
 ## 4. 核心機制更新（近期變更）
 
@@ -177,6 +188,62 @@ conviction_breakdown: {
 | geopolitical_risk | 0.65 |
 | oil_price_shock | 0.58 |
 
+### 4.9 自然語言生成（NLG）
+
+`internal/narrative/report_generator.go` 與 `nlg_templates.go` 實作中文自然語言報告生成：
+
+- **日報產生器**：`GenerateDailySummary(date, events, recommendations, risk)` 組合市場概覽、宏觀敘事、推薦標的、風險評估四大區塊，輸出結構化的 `DailySummaryReport`
+- **因子分數解釋**：`ExplainFactorScores(rec)` 為每個推薦標的生成中文因子分析（動能/價值/品質），說明分數來源與計算邏輯
+- **API 端點**：`/api/dashboard/daily-summary` 回傳 JSON 格式的日報，供前端「總覽」頁面展示
+- **模板系統**：所有 NLG 輸出基於預定義中文模板（`TemplateMarketOverview`、`TemplateNarrativeSummary` 等），確保輸出穩定且可預期
+
+### 4.10 台灣稅務計算（Tax Module）
+
+`internal/tax/` 提供台灣市場專用稅務計算：
+
+- **股利稅**：28%（含 NHI 附加費），`CalculateDividendTax(dividendAmount)`
+- **證交稅**：0.3%（僅賣出方），`CalculateTransactionTax(sellNotional)`
+- **部位稅務快照**：`CalculatePositionTax(pos, sellPrice, dividendReceived)` 計算單一部位的總稅負擔與稅後損益
+- **投組稅務彙總**：`CalculatePortfolioTax(positions, sellPrices, dividends)` 計算全部持有部位的稅務影響
+- **稅務調整損益**：`SimulationResult` 新增 `BeforeTaxPnL`、`AfterTaxPnL`、`TotalTaxPaid`、`TaxSnapshots` 欄位
+- **扣稅後部位調整**：`TaxAwareSizer` 在部位配置前預留證交稅資金，降低實際進場金額
+
+### 4.11 即時警報系統（Alerts）
+
+`internal/monitoring/` 擴展為完整警報生命週期管理：
+
+- **警報持久化**：`AlertStore` 以 JSONL 格式保存所有警報，支援 `Save`、`LoadAll`、`LoadUnacknowledged`、`Acknowledge` 操作
+- **通知通道**：
+  - **Telegram Bot**：`TelegramNotifier` 透過 Bot API 發送格式化警報訊息（含 emoji 嚴重程度標示）
+  - **Email**：`EmailNotifier` 透過 SMTP 發送警報郵件
+  - **Webhook**：`WebhookNotifier` 透過 HTTP POST 將警報 JSON 推送至外部系統
+- **警報整合**：`Monitor` 整合 `AlertStore` 與 `Notifier`，規則觸發時自動持久化並分發通知
+- **API 端點**：`/api/alerts`（列表）、`/api/alerts/unacknowledged`（未確認）、`/api/alerts/acknowledge`（確認）
+- **配置**：`AlertChannelConfig` 統一管理各通道的認證資訊（bot token、SMTP 設定、webhook URL）
+
+### 4.12 階段式資金管理（Capital Management）
+
+`internal/risk/` 與 `internal/portfolio/` 實作四階段資金部署機制：
+
+- **資金階段**：`CapitalPhase` enum 定義四個階段
+  - `simulation`（A）：模擬階段，無資金限制
+  - `paper`（B）：模擬交易，10% 資金上限
+  - `live`（C）：實盤交易，30% 資金上限
+  - `full`（D）：全自動擴展，100% 資金
+- **晉升條件**：`CapitalPhaseController.CanAdvance()` 檢查三項指標
+  - 最低 30 天階段停留期
+  - 滾動 Sharpe > 1.0
+  - 最大回撤 < 10%
+- **人工審批**：`Live → Full`（C→D）晉升需人工核准。`ApprovalWorkflow` 以 JSONL 持久化審批請求，支援 `RequestApproval`、`Approve`、`Reject` 操作
+- **資金分配**：`CapitalAllocator` 根據當前階段限制計算可部署資金，並依推薦標的數量均分。`ReallocateWithTax()` 進一步扣除預期稅負後重新分配
+- **系統整合**：`SystemCore` 每日模擬後自動更新滾動 Sharpe 與回撤，檢查晉升條件。`cmd/atlas/main.go` 初始化時注入 `CapitalPhaseController` 與 `ApprovalWorkflow`
+
+### 4.13 資料健康檢查與地緣政治風險擷取
+
+- **`cmd/check-data-health`**：檢查 replay CSV、ledger、基線政策等核心資料的完整性與一致性，輸出健康報告
+- **`cmd/geo-ingest`**：擷取並彙整地緣政治風險資料（GDELT + RSS），供 `internal/narrative/geopolitical_provider.go` 使用
+- **`cmd/daily-replay-sync`** 與 **`cmd/backfill-replay`**：詳見 §4.6，已新增 `check-data-health` 自動觸發機制於系統啟動時
+
 ## 5. 技能分層與責任
 
 ### 5.1 Domain Skills（研究與觀點）
@@ -201,18 +268,36 @@ conviction_breakdown: {
 
 以下屬於流程能力，主要由 scripts / cmd 與 orchestration 實作：
 
+**資料與回測：**
 - `replay_operator`
 - `backtest_operator`
 - `ledger_operator`
 - `data_import_operator`
+- `data_health_checker`（v1.3：`cmd/check-data-health`）
+
+**監控與警報：**
 - `monitoring_operator`
-- `system_guardrail`
-- `research_auditor`
+- `alert_dispatcher`（v1.3：Telegram/Email/Webhook 通知）
+- `channel_health_monitor`（`internal/monitoring/channel_health.go`）
+
+**敘事與巨集觀：**
 - `narrative_engine`
 - `macro_ingestor`
 - `geopolitical_risk_monitor`
+- `geo_ingestor`（v1.3：`cmd/geo-ingest`）
 - `taiwan_stress_calculator`
 - `capital_flow_provider`
+
+**風控與資金：**
+- `system_guardrail`
+- `risk_manager`（v1.3：含 `CapitalPhaseController`）
+- `capital_allocator`（v1.3：`internal/portfolio/capital_allocator.go`）
+- `tax_calculator`（v1.3：`internal/tax/taiwan_tax.go`）
+
+**研究與報告：**
+- `research_auditor`
+- `report_generator`（v1.3：`internal/narrative/report_generator.go`）
+- `approval_workflow`（v1.3：`internal/risk/approval_workflow.go`）
 
 ### 5.4 Evolution Skills（演化能力）
 
@@ -231,9 +316,21 @@ conviction_breakdown: {
 
 支援的 mutation type：
 
+**通用型：**
 - `prompt_tightening`
 - `risk_rule_change`
 - `portfolio_constraint_revision`
+
+**產業/風格特化型**（v1.2+ 新增）：
+- `semiconductor_desk`
+- `financials_desk`
+- `technical_breakout`
+- `etf_rotation_desk`
+- `value_yield`
+- `growth_momentum`
+- `ai_supply_chain_desk`
+- `shipping_desk`
+- `earnings_quality`
 
 實作位置：`internal/experiment/executor.go`
 
@@ -284,6 +381,7 @@ conviction_breakdown: {
 
 以下變更必須同步更新本文件：
 
+### v1.1/v1.2 維護項目
 1. `configs/agents.json` 的技能集合或 Universe 變更
 2. `executor.go` 的 mutation 模板語句
 3. `judge.go` 的接受門檻或檢查項
@@ -293,3 +391,12 @@ conviction_breakdown: {
 7. `internal/monitoring/channel_health.go` 的通道健康紀錄格式變更
 8. `internal/monitoring/dashboard_api.go` 的 API parsing struct JSON tag（務必與 `domain.*` struct 的 JSON tag 保持 snake_case 一致）
 9. 決策鏈透明度功能（FactorScores Breakdown、ConvictionBreakdown、MacroEvent 信心度）的任何變更
+
+### v1.3 新增維護項目
+10. `internal/tax/*` 的稅率、稅種或計算邏輯變更（台灣稅法調整時）
+11. `internal/monitoring/alert_store.go`、`notifier.go`、`alert_api.go` 的警報格式、通知通道或 API 欄位變更
+12. `internal/narrative/report_generator.go`、`nlg_templates.go` 的報告區塊、模板語句或輸出格式變更
+13. `internal/risk/capital_controller.go` 的資金階段定義、晉升條件或限制比例變更
+14. `internal/risk/approval_workflow.go` 的審批流程狀態或持久化格式變更
+15. `internal/portfolio/capital_allocator.go` 的資金分配演算法或權重計算變更
+16. `cmd/atlas/main.go` 的資金管理初始化參數或階段預設值變更
