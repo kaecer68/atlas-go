@@ -1530,7 +1530,7 @@ func (a *DashboardAPI) handleChannelsIngest(w http.ResponseWriter, r *http.Reque
 
 	stateDir := filepath.Join(a.workDir, "data/state")
 	var wg sync.WaitGroup
-	var macroErr, geoErr error
+	var macroErr, geoErr, capFlowErr error
 
 	wg.Add(1)
 	go func() {
@@ -1569,11 +1569,25 @@ func (a *DashboardAPI) handleChannelsIngest(w http.ResponseWriter, r *http.Reque
 		log.Printf("[handleChannelsIngest] geo ingest succeeded: intensity=%.2f", score.Intensity)
 	}()
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		capFlowProvider := marketdata.NewTWSECapitalFlowProvider(filepath.Join(stateDir, "capital_flow"))
+		_, err := capFlowProvider.FetchSnapshot(r.Context())
+		if err != nil {
+			capFlowErr = err
+			log.Printf("[handleChannelsIngest] capital flow ingest failed: %v", err)
+			return
+		}
+		log.Printf("[handleChannelsIngest] capital flow ingest succeeded")
+	}()
+
 	wg.Wait()
 
 	result := map[string]any{
-		"macro_ok": macroErr == nil,
-		"geo_ok":   geoErr == nil,
+		"macro_ok":    macroErr == nil,
+		"geo_ok":      geoErr == nil,
+		"cap_flow_ok": capFlowErr == nil,
 	}
 	if macroErr != nil {
 		result["macro_error"] = macroErr.Error()
@@ -1581,9 +1595,12 @@ func (a *DashboardAPI) handleChannelsIngest(w http.ResponseWriter, r *http.Reque
 	if geoErr != nil {
 		result["geo_error"] = geoErr.Error()
 	}
+	if capFlowErr != nil {
+		result["cap_flow_error"] = capFlowErr.Error()
+	}
 
-	if macroErr != nil && geoErr != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("all ingests failed: macro=%v, geo=%v", macroErr, geoErr))
+	if macroErr != nil && geoErr != nil && capFlowErr != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("all ingests failed: macro=%v, geo=%v, cap_flow=%v", macroErr, geoErr, capFlowErr))
 		return
 	}
 
@@ -2693,6 +2710,9 @@ func (a *DashboardAPI) checkMacroHealth(path string, now time.Time) (string, str
 	_ = json.Unmarshal(data, &snap)
 
 	latest := info.ModTime()
+	if snap.RecordedAt > 0 {
+		latest = time.Unix(snap.RecordedAt, 0)
+	}
 	if snap.DXY.Timestamp > 0 {
 		dxyTime := time.Unix(snap.DXY.Timestamp, 0)
 		if dxyTime.After(latest) {
@@ -2754,9 +2774,11 @@ func (a *DashboardAPI) checkGeopoliticalHealth(path string, now time.Time) (stri
 		Timestamp time.Time `json:"timestamp"`
 	}
 	_ = json.Unmarshal(data, &score)
-	latest := info.ModTime()
-	if !score.Timestamp.IsZero() && score.Timestamp.After(latest) {
+	var latest time.Time
+	if !score.Timestamp.IsZero() {
 		latest = score.Timestamp
+	} else {
+		latest = info.ModTime()
 	}
 	age := now.Sub(latest)
 	if age < 24*time.Hour {
@@ -2866,17 +2888,33 @@ func (a *DashboardAPI) checkCapitalFlowHealth(dir string, now time.Time) (string
 		return "error", "無有效檔案"
 	}
 	dateStr := strings.TrimSuffix(latestFile, ".json")
-	t, err := time.Parse("20060102", dateStr)
-	if err != nil {
-		return "error", "日期解析失敗"
+
+	var dataTs time.Time
+	data, err := os.ReadFile(filepath.Join(dir, latestFile))
+	if err == nil {
+		var flow struct {
+			Date string `json:"date"`
+		}
+		if json.Unmarshal(data, &flow) == nil && flow.Date != "" {
+			if parsed, err := time.ParseInLocation("20060102", flow.Date, time.FixedZone("CST", 8*60*60)); err == nil {
+				dataTs = parsed
+			}
+		}
 	}
-	info, err := os.Stat(filepath.Join(dir, latestFile))
-	if err == nil && info.ModTime().After(t) {
-		t = info.ModTime()
+
+	var t time.Time
+	if !dataTs.IsZero() {
+		t = dataTs
+	} else {
+		parsed, err := time.Parse("20060102", dateStr)
+		if err != nil {
+			return "error", "日期解析失敗"
+		}
+		t = parsed
 	}
 
 	age := now.Sub(t)
-	if age < 48*time.Hour {
+	if age < 24*time.Hour {
 		return "ok", dateStr
 	}
 	if age < 7*24*time.Hour {

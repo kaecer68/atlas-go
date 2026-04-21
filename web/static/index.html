@@ -321,7 +321,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
     <div class="page" id="page-narrative">
       <div class="two-col-grid">
         <div class="panel"><h2>總經快照</h2><div id="narrativeMacro" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>台灣市場壓力指數</h2><div id="narrativeStress" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>外資出逃指數</h2><div id="narrativeStress" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>敘事事件</h2><div id="narrativeEvents" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>因果傳導鏈</h2><div id="narrativeChains" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>投資模型</h2><div id="narrativeModels" class="empty loading">載入中…</div></div>
@@ -336,7 +336,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
       <div class="panel help-panel">
         <strong>如何解讀本頁：</strong>
         本頁呈現的是<strong>控制層（風控長／投資長）對 AI 推薦的最終處置結果</strong>。它告訴你：在市場當前體制下，有多少推薦被放行、有多少被推回、以及系統是否觸發熔斷。
-        若風控長阻擋率高，請檢查【宏觀敘事】的壓力指數是否飆升；若投資長過濾數量多，請檢查【投資管線】是否有板塊擁擠或風格衝突。
+        若風控長阻擋率高，請檢查【宏觀敘事】的外資出逃指數是否飆升（紅燈）；若投資長過濾數量多，請檢查【投資管線】是否有板塊擁擠或風格衝突。
       </div>
       <div class="panel wide mb-md"><h2>總經敘事脈絡</h2><div id="liveNarrativeStrip" class="empty loading">載入中…</div></div>
       <div class="live-grid">
@@ -779,7 +779,7 @@ function renderOverview(data, agentsData, inbox, overlap, narrativeEvents, stres
   const stressScore = stress && typeof stress.score === 'number' ? stress.score.toFixed(1) : '-';
   const stressRegime = stress ? stressLabel(stress.regime || '-') : '-';
   const narrativeTitle = topEvent ? eventName(topEvent.theme) : '無活躍事件';
-  const narrativeSub = `壓力指數 ${stressScore}（${stressRegime}）· ${nev.length} 個事件`;
+  const narrativeSub = `外資出逃指數 ${stressScore}分（${stressRegime}）· ${nev.length} 個事件`;
 
   let crowdingHtml = '';
   if (crowdingWarnings.length) {
@@ -1141,7 +1141,7 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
   const eventList = (events && events.events) ? events.events.slice(0, 5) : [];
   const chainList = (chains && chains.chains) ? chains.chains.slice(0, 5) : [];
   const modelList = (models && models.models) ? models.models.slice(0, 5) : [];
-  const stressVal = (stress && typeof stress.index === 'number') ? stress.index : null;
+  const stressVal = (stress && typeof stress.score === 'number') ? stress.score : null;
   const items = (pipeline && pipeline.items) ? pipeline.items : [];
   const screened = (pipeline && pipeline.screened_items) ? pipeline.screened_items : [];
   const guards = (pipeline && pipeline.guard_outcomes) ? pipeline.guard_outcomes : [];
@@ -1171,7 +1171,7 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
   const macroContent = `
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">
       <span class="badge info">市場狀態：${regimeLabel(regime)}</span>
-      ${stressVal != null ? `<span class="badge ${stressVal > 70 ? 'err' : (stressVal > 40 ? 'warn' : 'ok')}">台灣壓力指數：${stressVal.toFixed(1)}</span>` : ''}
+      ${stressVal != null ? `<span class="badge ${stressVal >= 70 ? 'err' : (stressVal >= 50 ? 'warn' : 'ok')}">外資出逃指數：${stressVal.toFixed(1)}分（${stressVal >= 70 ? '紅燈-危機' : (stressVal >= 50 ? '黃燈-高壓' : (stressVal >= 30 ? '黃燈-警戒' : '綠燈-低壓'))}）</span>` : ''}
     </div>
     <div class="mb-sm">
       <div class="text-sm font-bold mb-xs">宏觀敘事事件（${eventList.length} 個）</div>
@@ -1799,11 +1799,11 @@ function renderLiveNarrativeStrip(events, stress, models, chains) {
   const sLabel = stress ? stressLabel(stress.regime || '-') : '-';
   const stressColor = stress && stress.regime === 'crisis' ? 'var(--down)' : (stress && stress.regime === 'high' ? 'var(--warn)' : 'var(--up)');
 
-  // 根據壓力等級產生建議
-  let stressAdvice = '系統風險預算充足，可正常執行策略。';
-  if (stress && stress.regime === 'alert') stressAdvice = '壓力指數進入警戒區，建議降低單一標的倉位上限，並提高停損敏感度。';
-  else if (stress && stress.regime === 'high') stressAdvice = '壓力指數偏高，控制層可能過濾較多推薦，建議保守操作。';
-  else if (stress && stress.regime === 'crisis') stressAdvice = '壓力指數處於危機等級，風控長可能強制阻擋全部推薦，建議大幅減碼或觀望。';
+  // 根據外資出逃等級產生具體說明
+  let stressAdvice = '外資流出壓力小，資金面寬鬆，適合正常操作。';
+  if (stress && stress.regime === 'alert') stressAdvice = '外資開始流出（警戒），可能伴隨：外資賣超擴大、台股波動增加。建議觀察外資動向，避免追高。';
+  else if (stress && stress.regime === 'high') stressAdvice = '外資明顯出逃（高壓），通常伴隨：台股下跌機率高、成交量萎縮、強勢股補跌。建議降低持股，提高現金比重。';
+  else if (stress && stress.regime === 'crisis') stressAdvice = '外資大量出逃（危機），通常伴隨：台股急跌、融資斷頭、 systemic risk。建議大幅減碼或空倉觀望，等待資金回流訊號。';
 
   // 從 narrative models / chains 找對應板塊
   let favored = [];
@@ -1831,15 +1831,16 @@ function renderLiveNarrativeStrip(events, stress, models, chains) {
   el.innerHTML = `
     <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">
       <div class="metric">
-        <div class="label" style="cursor:pointer;text-decoration:underline dotted;color:var(--accent)" onclick="openInfoHelp('台灣壓力指數說明', \`<p><strong>台灣壓力指數是什麼？</strong><br>這是一個綜合評估台灣市場當前風險壓力的量化指標，範圍為 <strong>0 ~ 100</strong>。分數越高，代表市場面臨的綜合壓力越大，系統傾向採取更保守的風控措施。</p>
-        <p><strong>各區間的具體意義：</strong></p>
+        <div class="label" style="cursor:pointer;text-decoration:underline dotted;color:var(--accent)" onclick="openInfoHelp('外資出逃指數說明', \`<p><strong>外資出逃指數是什麼？</strong><br>這是追蹤<strong>外資及國際資金撤離台灣市場壓力</strong>的綜合指標，範圍 <strong>0 ~ 100</strong>。分數越高，代表外資賣超壓力越大，台股面臨資金流出風險。</p>
+        <p><strong>燈號說明：</strong></p>
         <ul style='margin:6px 0;padding-left:18px;line-height:1.8'>
-          <li><span style='color:var(--up)'><strong>低壓（&lt;30）</strong></span>：市場環境相對寬鬆，風險預算充足，可正常執行各類策略。</li>
-          <li><span style='color:var(--warn)'><strong>警戒（30~49）</strong></span>：壓力開始累積，建議降低單一標的倉位上限，並提高停損敏感度。</li>
-          <li><span style='color:var(--warn)'><strong>高壓（50~69）</strong></span>：市場風險明顯升高，控制層可能過濾較多推薦，建議採取保守操作。</li>
-          <li><span style='color:var(--down)'><strong>危機（≥70）</strong></span>：市場處於高壓狀態，風控長可能強制阻擋全部推薦，建議大幅減碼或觀望。</li>
+          <li><span style='color:var(--up)'><strong>🟢 綠燈（0~29分）</strong></span>：外資流出壓力小。資金面寬鬆，台股上漲機率高。</li>
+          <li><span style='color:var(--warn)'><strong>🟡 黃燈（30~49分）</strong></span>：外資開始流出。可能伴隨台股波動增加，建議觀察。</li>
+          <li><span style='color:var(--warn)'><strong>🟠 橙燈（50~69分）</strong></span>：外資明顯出逃。台股下跌機率高，建議降低持股。</li>
+          <li><span style='color:var(--down)'><strong>🔴 紅燈（70~100分）</strong></span>：外資大量出逃。台股急跌風險高，建議空倉觀望。</li>
         </ul>
-        <p><strong>計算組成：</strong><br>指數由美元指數（DXY）、美債10年期殖利率（US10Y）、VIX波動率、外資流向、日圓變動與地緣政治風險等六項加權構成。</p>\`)">台灣壓力指數 <span class="text-xs">ℹ️</span></div>
+        <p><strong>計算組成：</strong><br>指數由六項因子加權構成，核心為外資淨流向（權重25%），輔以美元指數、美債殖利率、VIX、日圓、地緣政治風險。</p>
+        <p><strong>重要提醒：</strong><br>此指數僅追蹤<strong>資金面壓力</strong>，不代表台股一定漲跌。外資流出時，內資或散戶可能承接，形成「價跌量縮」或「價穩量縮」等不同走勢。</p>\`)">外資出逃指數 <span class="text-xs">ℹ️</span></div>
         <div class="value" style="color:${stressColor}">${stressScore}</div>
       </div>
       <div class="metric"><div class="label">壓力等級</div><div class="value">${sLabel}</div></div>
@@ -1939,8 +1940,8 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
       const stressTime = stress.timestamp ? new Date(stress.timestamp * 1000).toLocaleString('zh-TW') : new Date().toLocaleString('zh-TW');
       let html = `<div class="mb-sm text-muted text-sm">資料更新時間：${stressTime}</div>`;
       html += `<div style="font-size:28px;font-weight:700;color:${regimeColor}">${score} <span style="font-size:14px;color:var(--muted)">/ 100</span></div>`;
-      html += `<div style="margin:4px 0 10px;font-size:14px">壓力等級：<strong>${stressLabel(stress.regime || '-')}</strong></div>`;
-      html += `<table><thead><tr><th>子項</th><th>分數 <span class="cursor-pointer text-accent" onclick="event.stopPropagation();openInfoHelp('壓力指數分數說明', \`<p><strong>分數是什麼？</strong></p><p>壓力指數由多個子項加權構成，每個子項的分數代表該因子對台灣市場的壓力貢獻度。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>正值</strong>：該因子正在對市場施加壓力（例如美元走強、地緣政治風險升溫）。</li><li><strong>負值</strong>：該因子正在緩解市場壓力（例如外資大幅流入、波動率下降）。</li><li><strong>絕對值越大</strong>：該因子對整體壓力指數的影響越顯著。</li></ul><p>最終壓力指數為各子項加權總和，範圍理論上為 <strong>0 ~ 100</strong>，但個別子項可能出現負值以反映風險緩解效果。</p>\`)">ℹ️</span></th></tr></thead><tbody>`;
+      html += `<div style="margin:4px 0 10px;font-size:14px">出逃等級：<strong>${stressLabel(stress.regime || '-')}</strong>（${stress.score >= 70 ? '🔴 紅燈' : (stress.score >= 50 ? '🟠 橙燈' : (stress.score >= 30 ? '🟡 黃燈' : '🟢 綠燈'))}）</div>`;
+      html += `<table><thead><tr><th>子項</th><th>壓力貢獻 <span class="cursor-pointer text-accent" onclick="event.stopPropagation();openInfoHelp('外資出逃指數分數說明', \`<p><strong>分數代表什麼？</strong></p><p>外資出逃指數由六個因子加權構成。每個子項的分數代表該因子對「外資撤離台灣」這個現象的貢獻度。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>分數越高</strong>：該因子越可能導致外資賣超台股（例如美元走強→外資匯出獲利、VIX飆升→全球避險情緒）。</li><li><strong>分數為 0</strong>：該因子目前沒有施壓（例如外資買超時，外資流向因子為 0）。</li><li><strong>所有子項皆為正值</strong>：指數只累加壓力，不扣除「助力」。這是單向指標。</li></ul><p><strong>為什麼是單向指標？</strong><br>因為外資買超時，系統不會顯示「負壓力」，而是讓總分維持低位（綠燈）。這樣設計是為了突出「危險訊號」，而非平衡呈現多空。</p><p><strong>總分區間意義：</strong><br>• 0-29分（綠燈）：外資流出壓力小，資金面寬鬆<br>• 30-49分（黃燈）：外資開始流出，注意波動<br>• 50-69分（橙燈）：外資明顯出逃，台股下跌機率高<br>• 70-100分（紅燈）：外資大量出逃，系統性風險高</p>\`)">ℹ️</span></th></tr></thead><tbody>`;
       const names = { dxy: 'DXY-美元指數', us10y: 'US10Y-美債10年期', foreign_flow: '外資流向', vix: 'VIX-波動率指數', jpy: '日圓-套利平倉壓力', geopolitical: '地緣政治風險' };
       for (const k of Object.keys(comps)) {
         html += `<tr><td>${names[k] || k}</td><td>${typeof comps[k] === 'number' ? comps[k].toFixed(2) : '-'}</td></tr>`;
@@ -2245,9 +2246,9 @@ function openKpiHelp(key) {
     crowding: '擁擠標的'
   };
   const contentMap = {
-    narrative: `<p><strong>這是什麼？</strong><br>顯示當前回測窗口中，由總經數據（利率、匯率、資金流向等）驅動的最重要敘事主題，以及台灣市場壓力指數。它回答了「現在市場的主要故事是什麼」。</p>
+    narrative: `<p><strong>這是什麼？</strong><br>顯示當前回測窗口中，由總經數據（利率、匯率、資金流向等）驅動的最重要敘事主題，以及外資出逃指數。它回答了「現在市場的主要故事是什麼」。</p>
 <p><strong>為什麼重要？</strong><br>敘事脈絡決定了倉位規模與產業配置傾向。若出現「AI 資本支出激增」或「地緣政治緊張」等事件，會直接影響下游 Agent 的推薦權重與控制層的過濾條件。</p>
-<p><strong>該注意什麼？</strong><br>點擊卡片上的「開啟宏觀敘事 →」可前往完整 6 大面板。若壓力指數處於「高壓」或「危機」等級，建議同步檢視【相對趨勢】頁的總經雷達，並考慮降低整體曝險。</p>`,
+<p><strong>該注意什麼？</strong><br>點擊卡片上的「開啟宏觀敘事 →」可前往完整 6 大面板。若外資出逃指數處於「橙燈」（50-69分）或「紅燈」（70分以上），代表外資正在明顯撤離，建議同步檢視【相對趨勢】頁的總經雷達，並考慮降低整體曝險。</p>`,
     regime: `<p><strong>這是什麼？</strong><br>基於最新回測資料計算出的市場體制（RISK_ON／NEUTRAL／RISK_OFF）。這是 Context Layer 對當前環境的綜合判斷。<br><br>
 <strong>請注意名稱含義：</strong>
 <ul style="margin:6px 0;padding-left:18px">
@@ -2256,7 +2257,7 @@ function openKpiHelp(key) {
 <li><code>RISK_OFF</code> = <span class="text-down">風險趨避（保守）</span>：市場傾向避險，這才是需要特別警惕的狀態。</li>
 </ul></p>
 <p><strong>為什麼重要？</strong><br>體制決定了整個投資組合的基調。RISK_ON 時可積極參與成長與動能策略；NEUTRAL 時應控制單一標的比重並提高篩選標準；RISK_OFF 時應優先考慮降低曝險、轉向防禦性配置或提高現金比重。</p>
-<p><strong>該注意什麼？</strong><br>當 regime 從 RISK_ON 快速轉向 RISK_OFF，通常伴隨壓力指數飆升。此時請立即前往【相對趨勢】頁檢查總經雷達，並檢視【投資管線】是否有過多推薦被控制層阻擋——這是市場風險情緒惡化的早期信號。</p>`,
+<p><strong>該注意什麼？</strong><br>當 regime 從 RISK_ON 快速轉向 RISK_OFF，通常伴隨外資出逃指數飆升（紅燈）。此時請立即前往【相對趨勢】頁檢查總經雷達，並檢視【投資管線】是否有過多推薦被控制層阻擋——這是市場風險情緒惡化的早期信號。</p>`,
     weakest: `<p><strong>這是什麼？</strong><br>根據最新回測窗口的 Scorecard，Sharpe-like 指標最低的 Agent。它是下一輪突變實驗（Mutation）的首選候選對象。</p>
 <p><strong>為什麼重要？</strong><br>Atlas-Go 的演化循環（Evolution Loop）就是持續識別最弱 Agent，並對其進行 prompt、規則或約束條件的突變改進。這不代表該 Agent 一定會被淘汰，而是指出當前最需要迭代的策略缺口。</p>
 <p><strong>該注意什麼？</strong><br>在提出突變前，建議先進入【AI 觀測台】頁檢查該 Agent 的觀察數（observations）是否充足，以及失敗是否集中在特定 regime。若樣本過少，改善結論的置信度會降低。</p>`,
@@ -2265,7 +2266,7 @@ function openKpiHelp(key) {
 <p><strong>該注意什麼？</strong><br>停滯的實驗會阻塞下一輪改進循環。建議定期進入【模擬交易】頁進行評判與晉升。若晉升後發現績效反轉，可透過【控制與稽核】頁回滾基線版本。</p>`,
     crowding: `<p><strong>這是什麼？</strong><br>當同一標的同時被 ≥3 個 Agent 推薦，或 Style Layer 的標的池重疊過高時，CIO 層會觸發擁擠懲罰（conviction × 0.7）。此卡片列出當前被多重疊覆蓋的標的。</p>
 <p><strong>為什麼重要？</strong><br>擁擠是風格趨同的信號，往往預示短期波動放大或回調風險。這幫助操作者識別「大家都愛」的熱門標的是否已過度集中。</p>
-<p><strong>該注意什麼？</strong><br>高重疊不一定立刻危險，但如果疊加高壓力指數（>70）或 NEUTRAL regime，應特別警惕。可考慮在【投資管線】頁手動拒絕部分高擁擠標的，或進一步降低該風格 Agent 的 Darwinian 權重。</p>`
+<p><strong>該注意什麼？</strong><br>高重疊不一定立刻危險，但如果疊加外資出逃指數紅燈（>70分）或 NEUTRAL regime，應特別警惕。可考慮在【投資管線】頁手動拒絕部分高擁擠標的，或進一步降低該風格 Agent 的 Darwinian 權重。</p>`
   };
   document.getElementById('infoTitle').textContent = titleMap[key] || '說明';
   document.getElementById('infoContent').innerHTML = contentMap[key] || '';
