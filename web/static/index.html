@@ -265,13 +265,13 @@ body { display: flex; margin: 0; min-height: 100vh; }
 </head>
 <body>
 
-<div id="sidebar">
+<aside id="sidebar" role="complementary" aria-label="側邊導航">
   <div class="brand">
     <h1>Atlas-Go</h1>
     <p>人機協作控制塔</p>
     <button class="theme-toggle" onclick="toggleTheme()" title="切換主題">🌓</button>
   </div>
-  <nav>
+  <nav role="navigation" aria-label="主要導航">
     <a class="active" data-page="overview" onclick="switchPage('overview')">總覽</a>
     <a data-page="narrative" onclick="switchPage('narrative')">宏觀敘事</a>
     <a data-page="live" onclick="switchPage('live')">相對趨勢</a>
@@ -287,9 +287,9 @@ body { display: flex; margin: 0; min-height: 100vh; }
   <div class="foot">
     <span class="text-muted">v8 · 統一介面</span>
   </div>
-</div>
+</aside>
 
-<div id="main">
+<main id="main" role="main">
   <div id="topbar">
     <div class="flex-center-gap">
       <button id="menuToggle" onclick="toggleSidebar()">☰</button>
@@ -400,10 +400,10 @@ body { display: flex; margin: 0; min-height: 100vh; }
       <div class="panel wide">
         <h2>啟動回測</h2>
         <div class="control-group">
-          <label class="label-muted">開始</label>
-          <input type="date" id="backtestStart" value="2026-03-26">
-          <label class="label-muted">結束</label>
-          <input type="date" id="backtestEnd" value="2026-03-27">
+          <label class="label-muted" for="backtestStart">開始</label>
+          <input type="date" id="backtestStart" aria-label="回測開始日期" value="2026-03-26">
+          <label class="label-muted" for="backtestEnd">結束</label>
+          <input type="date" id="backtestEnd" aria-label="回測結束日期" value="2026-03-27">
           <button class="primary" onclick="runBacktest()">啟動回測</button>
           <span id="backtestStatusText" class="text-muted text-sm"></span>
         </div>
@@ -495,7 +495,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
 
 <button class="refresh" onclick="loadAll()" title="每 30 秒自動更新">🔄 重新整理</button>
 
-<div class="notification-center" id="notificationCenter"></div>
+<div class="notification-center" id="notificationCenter" role="status" aria-live="polite" aria-label="通知中心"></div>
 
 <!-- Modal: Prompt Diff -->
 <div class="modal-overlay" id="diffModal" role="dialog" aria-modal="true" onclick="if(event.target===this)closeModal()">
@@ -861,6 +861,7 @@ function mdToHtml(md) {
 
 function renderInbox(data) {
   const el = document.getElementById('experimentInbox');
+  if (!data) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
   const pending = data.pending_judges || [];
   const promotes = data.pending_promotes || [];
   const history = data.recent_history || [];
