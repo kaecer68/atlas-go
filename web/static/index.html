@@ -20,9 +20,9 @@
   .health-bar .pill.warn { border-color: var(--warn); color: var(--warn); }
   .health-bar .pill.err { border-color: var(--down); color: var(--down); }
 
-  .container { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px; }
+  .container { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); padding: var(--space-md); }
   @media (max-width: 1100px) { .container { grid-template-columns: 1fr; } }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: var(--space-md); }
   .panel h2 { margin: 0 0 10px; font-size: 15px; color: var(--accent); }
   .panel.wide { grid-column: 1 / -1; }
   .metric { display: inline-block; margin: 4px 10px 4px 0; }
@@ -93,9 +93,10 @@
    .pipeline-action:active { transform: translateY(1px); opacity: .7; }
   .pipeline-action:disabled { opacity: .4; cursor: not-allowed; }
   #pipelineTable { font-size: 12px; }
-${1}  .table-wrapper { overflow-x: auto; max-width: 100%; }
-  .table-wrapper table { min-width: 640px; }
-${2}/* Sidebar + SPA Layout */
+  #pipelineTable th, #pipelineTable td { padding: 6px 5px; }
+
+
+/* Sidebar + SPA Layout */
 body { display: flex; margin: 0; min-height: 100vh; }
 #sidebar {
   width: 144px;
@@ -165,12 +166,18 @@ body { display: flex; margin: 0; min-height: 100vh; }
 
 /* 總覽卡片 */
 .kpi-grid {
+  gap: var(--space-md);
+}
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+  
 }
-@media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 720px) { .kpi-grid { grid-template-columns: 1fr; } }
+@media (max-width: 1100px) { .kpi-grid {
+  gap: var(--space-md);
+} grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 720px) { .kpi-grid {
+  gap: var(--space-md);
+} grid-template-columns: 1fr; } }
 .kpi-card {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -474,12 +481,6 @@ body { display: flex; margin: 0; min-height: 100vh; }
 </div>
 
 <script>
-
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    closeModal(); closePromoteModal(); closeInfoModal();
-  }
-});
 
 function switchPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
