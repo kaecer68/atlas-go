@@ -1,0 +1,150 @@
+package monitoring
+
+import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
+)
+
+// AlertStore provides thread-safe JSONL persistence for alert records.
+type AlertStore struct {
+	filePath string
+	mu       sync.RWMutex
+}
+
+// NewAlertStore creates an AlertStore backed by a JSONL file.
+// The directory is created if it does not exist.
+func NewAlertStore(dir string) (*AlertStore, error) {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, fmt.Errorf("create alert store dir: %w", err)
+	}
+	return &AlertStore{
+		filePath: filepath.Join(dir, "alerts.jsonl"),
+	}, nil
+}
+
+// Save appends an alert record to the JSONL file.
+func (s *AlertStore) Save(alert domain.AlertRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	f, err := os.OpenFile(s.filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return fmt.Errorf("open alert file: %w", err)
+	}
+	defer f.Close()
+
+	if err := json.NewEncoder(f).Encode(alert); err != nil {
+		return fmt.Errorf("encode alert record: %w", err)
+	}
+	return nil
+}
+
+// LoadAll reads all alert records from the JSONL file.
+// Returns nil slice when the file does not exist.
+func (s *AlertStore) LoadAll() ([]domain.AlertRecord, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.loadFromFile()
+}
+
+// LoadUnacknowledged reads only unacknowledged alert records.
+// Returns nil slice when the file does not exist.
+func (s *AlertStore) LoadUnacknowledged() ([]domain.AlertRecord, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	all, err := s.loadFromFile()
+	if err != nil {
+		return nil, err
+	}
+
+	var unacked []domain.AlertRecord
+	for _, a := range all {
+		if !a.Acknowledged {
+			unacked = append(unacked, a)
+		}
+	}
+	return unacked, nil
+}
+
+// Acknowledge marks an alert as acknowledged by the given user.
+// Returns an error if the alert is not found.
+func (s *AlertStore) Acknowledge(alertID string, user string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	all, err := s.loadFromFile()
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	found := false
+	for i := range all {
+		if all[i].ID == alertID {
+			all[i].Acknowledged = true
+			all[i].AcknowledgedAt = &now
+			all[i].AcknowledgedBy = user
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("alert %q not found", alertID)
+	}
+
+	return s.rewriteAll(all)
+}
+
+// loadFromFile reads all records from the JSONL file.
+// Caller must hold at least a read lock.
+func (s *AlertStore) loadFromFile() ([]domain.AlertRecord, error) {
+	f, err := os.Open(s.filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("open alert file: %w", err)
+	}
+	defer f.Close()
+
+	var records []domain.AlertRecord
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var rec domain.AlertRecord
+		if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
+			return nil, fmt.Errorf("decode alert record: %w", err)
+		}
+		records = append(records, rec)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan alert file: %w", err)
+	}
+	return records, nil
+}
+
+// rewriteAll overwrites the JSONL file with the given records.
+// Caller must hold the write lock.
+func (s *AlertStore) rewriteAll(records []domain.AlertRecord) error {
+	f, err := os.OpenFile(s.filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return fmt.Errorf("open alert file for rewrite: %w", err)
+	}
+	defer f.Close()
+
+	enc := json.NewEncoder(f)
+	for _, rec := range records {
+		if err := enc.Encode(rec); err != nil {
+			return fmt.Errorf("encode alert record: %w", err)
+		}
+	}
+	return nil
+}
