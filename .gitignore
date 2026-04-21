@@ -56,3 +56,9 @@ tmp/
 # Build artifacts
 run-stress
 coverage_all.out
+
+# Data files (generated)
+cmd/backtest-window/data/state/darwinian_weights.json
+
+# OpenCode config (local development)
+opencode.json
