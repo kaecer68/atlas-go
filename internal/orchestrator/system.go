@@ -15,27 +15,35 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
 	"github.com/kaecer68/atlas-go/internal/replay"
+	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/screener"
 	"github.com/kaecer68/atlas-go/internal/sim"
 )
 
 // SystemCore holds the essential simulation state and services.
 type SystemCore struct {
-	cfg             config.Config
-	provider        marketdata.Provider
-	engine          *sim.Engine
-	registry        domain.AgentRegistry
-	policy          baseline.Policy
-	ledger          *ledger.Store
-	replay          *replay.Dataset
-	session         domain.ReplaySession
-	alphaDiscovery  *AlphaDiscoveryEngine
-	optimizer       *portfolio.Optimizer
-	plugins         *PluginRegistry
-	narrativeEngine *narrative.NarrativeEngine
-	persistentState *domain.SimulationState
-	ctx             context.Context
-	lastOutcomes    []domain.RecommendationOutcome
+	cfg              config.Config
+	provider         marketdata.Provider
+	engine           *sim.Engine
+	registry         domain.AgentRegistry
+	policy           baseline.Policy
+	ledger           *ledger.Store
+	replay           *replay.Dataset
+	session          domain.ReplaySession
+	alphaDiscovery   *AlphaDiscoveryEngine
+	optimizer        *portfolio.Optimizer
+	plugins          *PluginRegistry
+	narrativeEngine  *narrative.NarrativeEngine
+	persistentState  *domain.SimulationState
+	ctx              context.Context
+	lastOutcomes     []domain.RecommendationOutcome
+	portfolioHistory []float64
+	returnHistory    []float64
+	darwinian        *portfolio.DarwinianWeightManager
+
+	capitalController *risk.CapitalPhaseController
+	capitalAllocator  *portfolio.CapitalAllocator
+	approvalWorkflow  *risk.ApprovalWorkflow
 }
 
 // System orchestrates the full simulation loop via a SystemCore and a PluginHost.
@@ -69,7 +77,11 @@ func NewSystem(cfg config.Config) *System {
 		WithFundamentalProvider(fp)
 	optimizer.WithHistoricalPrices(hp).WithFundamentalProvider(fp).WithFactorEngine(factorEngine)
 	screenerEngine := screener.NewEngine(factorEngine, fp)
-	plugins := NewPluginRegistry().WithScreener(screenerEngine)
+	plugins := NewPluginRegistry().WithScreener(screenerEngine).WithFactorEngine(factorEngine)
+
+	darwinian := portfolio.NewDarwinianWeightManager("data/state/darwinian_weights.json")
+	darwinian.InitializeFromRegistry(registry)
+	_ = darwinian.Load()
 
 	engine := sim.NewEngine(policy.Constraints).
 		WithOptimizer(optimizer).
@@ -95,6 +107,7 @@ func NewSystem(cfg config.Config) *System {
 			alphaDiscovery:  NewAlphaDiscoveryEngine(factorEngine),
 			narrativeEngine: narrative.NewNarrativeEngine(),
 			ctx:             context.Background(),
+			darwinian:       darwinian,
 		},
 	}
 }
@@ -111,7 +124,15 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	}
 
 	events := s.detectNarrativeEvents(quotes)
-	regime, rawRecs, finalRecs, guardOutcomes := executeRegistryResearchDetailedWithPolicyAndGuards(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy, s.plugins)
+	var regime domain.Regime
+	var rawRecs, finalRecs []domain.Recommendation
+	var guardOutcomes []domain.GuardOutcome
+	var rejects []domain.ScreeningReject
+	if s.darwinian != nil {
+		regime, rawRecs, finalRecs, guardOutcomes, rejects = executeRegistryResearchDetailedWithPolicyAndGuardsAndDarwinian(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy, s.plugins, s.session.ID, s.darwinian)
+	} else {
+		regime, rawRecs, finalRecs, guardOutcomes, rejects = executeRegistryResearchDetailedWithPolicyAndGuards(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy, s.plugins, s.session.ID)
+	}
 	// Preserve original recs for outcome building so GuardOutcomes align with outcomes.
 	outcomeRawRecs := append([]domain.Recommendation(nil), rawRecs...)
 	outcomeFinalRecs := append([]domain.Recommendation(nil), finalRecs...)
@@ -130,10 +151,35 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		result = s.engine.Run(regime, quotes, finalRecs)
 	}
 	result.GuardOutcomes = guardOutcomes
+
+	s.portfolioHistory = append(s.portfolioHistory, result.PortfolioValue)
+	if len(s.portfolioHistory) > 1 {
+		prev := s.portfolioHistory[len(s.portfolioHistory)-2]
+		if prev > 0 {
+			dailyReturn := (result.PortfolioValue - prev) / prev
+			s.returnHistory = append(s.returnHistory, dailyReturn)
+		}
+	}
+	if len(s.returnHistory) >= 30 {
+		snap := risk.ComputeRiskSnapshot(s.returnHistory, s.portfolioHistory)
+		result.RiskSnapshot = &snap
+	}
+	s.updateCapitalMetrics(result)
+
 	outcomes := buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf)
 	_ = s.ledger.RecordOutcomes(outcomes)
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)
+	_ = s.ledger.RecordSessionScreeningRejects(s.session.ID, rejects)
 	s.lastOutcomes = outcomes
+
+	if s.darwinian != nil {
+		for _, outcome := range outcomes {
+			s.darwinian.RecordOutcome(outcome.AgentID, outcome.ForwardReturn, outcome.Hit)
+		}
+		s.darwinian.PerformDailyAdjustment()
+		_ = s.darwinian.Save()
+	}
+
 	s.host.PostSimulation(quotes, regime, asOf)
 	return result, nil
 }
@@ -142,7 +188,15 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	symbols := RegistrySymbols(s.registry)
 	quotes := s.replay.QuotesForDate(sessionDate, symbols)
 	events := s.detectNarrativeEvents(quotes)
-	regime, rawRecs, finalRecs, guardOutcomes := executeRegistryResearchDetailedWithPolicyAndGuards(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy, s.plugins)
+	var regime domain.Regime
+	var rawRecs, finalRecs []domain.Recommendation
+	var guardOutcomes []domain.GuardOutcome
+	var rejects []domain.ScreeningReject
+	if s.darwinian != nil {
+		regime, rawRecs, finalRecs, guardOutcomes, rejects = executeRegistryResearchDetailedWithPolicyAndGuardsAndDarwinian(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy, s.plugins, s.session.ID, s.darwinian)
+	} else {
+		regime, rawRecs, finalRecs, guardOutcomes, rejects = executeRegistryResearchDetailedWithPolicyAndGuards(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy, s.plugins, s.session.ID)
+	}
 	// Preserve original recs for outcome building so GuardOutcomes align with outcomes.
 	outcomeRawRecs := append([]domain.Recommendation(nil), rawRecs...)
 	outcomeFinalRecs := append([]domain.Recommendation(nil), finalRecs...)
@@ -164,7 +218,27 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, sessionDate, s.replay)
 	_ = s.ledger.RecordOutcomes(outcomes)
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)
+	_ = s.ledger.RecordSessionScreeningRejects(s.session.ID, rejects)
 	s.lastOutcomes = outcomes
+
+	s.portfolioHistory = append(s.portfolioHistory, result.PortfolioValue)
+	if len(s.portfolioHistory) > 1 {
+		prev := s.portfolioHistory[len(s.portfolioHistory)-2]
+		if prev > 0 {
+			dailyReturn := (result.PortfolioValue - prev) / prev
+			s.returnHistory = append(s.returnHistory, dailyReturn)
+		}
+	}
+	s.updateCapitalMetrics(result)
+
+	if s.darwinian != nil {
+		for _, outcome := range outcomes {
+			s.darwinian.RecordOutcome(outcome.AgentID, outcome.ForwardReturn, outcome.Hit)
+		}
+		s.darwinian.PerformDailyAdjustment()
+		_ = s.darwinian.Save()
+	}
+
 	s.host.PostSimulation(quotes, regime, sessionDate)
 	return result, nil
 }
@@ -190,6 +264,14 @@ func selectProvider(cfg config.Config) marketdata.Provider {
 
 func (s *System) Registry() domain.AgentRegistry {
 	return s.registry
+}
+
+func (s *System) GetPlugins() *PluginRegistry {
+	return s.plugins
+}
+
+func (s *System) GetExecutionPolicy() domain.ExecutionPolicy {
+	return s.policy.ExecutionPolicy
 }
 
 func (s *System) detectNarrativeEvents(quotes []domain.Quote) []narrative.NarrativeEvent {
@@ -478,23 +560,25 @@ func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes [
 			guardReason = "未通過控制層過濾"
 		}
 		outcomes = append(outcomes, domain.RecommendationOutcome{
-			AgentID:        rec.Agent,
-			Skill:          rec.Skill,
-			Layer:          rec.Layer,
-			Symbol:         rec.Symbol,
-			Side:           rec.Side,
-			Conviction:     rec.Conviction,
-			TargetPrice:    rec.TargetPrice,
-			StopLossPrice:  rec.StopLossPrice,
-			Window:         asOf.Format("2006-01-02"),
-			ForwardReturn:  forwardReturn,
-			BenchmarkDelta: forwardReturn - 0.005,
-			Hit:            forwardReturn > 0,
-			Reason:         rec.Reason,
-			Price:          quote.Last,
-			PassedGuards:   passed,
-			GuardReason:    guardReason,
-			RecordedAt:     asOf,
+			AgentID:             rec.Agent,
+			Skill:               rec.Skill,
+			Layer:               rec.Layer,
+			Symbol:              rec.Symbol,
+			Side:                rec.Side,
+			Conviction:          rec.Conviction,
+			TargetPrice:         rec.TargetPrice,
+			StopLossPrice:       rec.StopLossPrice,
+			Window:              asOf.Format("2006-01-02"),
+			ForwardReturn:       forwardReturn,
+			BenchmarkDelta:      forwardReturn - 0.005,
+			Hit:                 forwardReturn > 0,
+			Reason:              rec.Reason,
+			Price:               quote.Last,
+			PassedGuards:        passed,
+			GuardReason:         guardReason,
+			RecordedAt:          asOf,
+			FactorScores:        rec.FactorScores,
+			ConvictionBreakdown: rec.ConvictionBreakdown,
 		})
 	}
 	return outcomes
@@ -519,23 +603,25 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 		}
 		quote := quoteMap[rec.Symbol]
 		outcomes = append(outcomes, domain.RecommendationOutcome{
-			AgentID:        rec.Agent,
-			Skill:          rec.Skill,
-			Layer:          rec.Layer,
-			Symbol:         rec.Symbol,
-			Side:           rec.Side,
-			Conviction:     rec.Conviction,
-			TargetPrice:    rec.TargetPrice,
-			StopLossPrice:  rec.StopLossPrice,
-			Window:         asOf.Format("2006-01-02"),
-			ForwardReturn:  forwardReturn,
-			BenchmarkDelta: forwardReturn - 0.003,
-			Hit:            forwardReturn > 0,
-			Reason:         rec.Reason,
-			Price:          quote.Last,
-			PassedGuards:   passed,
-			GuardReason:    guardReason,
-			RecordedAt:     asOf,
+			AgentID:             rec.Agent,
+			Skill:               rec.Skill,
+			Layer:               rec.Layer,
+			Symbol:              rec.Symbol,
+			Side:                rec.Side,
+			Conviction:          rec.Conviction,
+			TargetPrice:         rec.TargetPrice,
+			StopLossPrice:       rec.StopLossPrice,
+			Window:              asOf.Format("2006-01-02"),
+			ForwardReturn:       forwardReturn,
+			BenchmarkDelta:      forwardReturn - 0.003,
+			Hit:                 forwardReturn > 0,
+			Reason:              rec.Reason,
+			Price:               quote.Last,
+			PassedGuards:        passed,
+			GuardReason:         guardReason,
+			RecordedAt:          asOf,
+			FactorScores:        rec.FactorScores,
+			ConvictionBreakdown: rec.ConvictionBreakdown,
 		})
 	}
 	return outcomes
@@ -572,4 +658,56 @@ func newSession(cfg config.Config, ds *replay.Dataset) domain.ReplaySession {
 		DataSource:  dataSource,
 		StartedAt:   time.Now(),
 	}
+}
+
+func (s *System) WithCapitalManagement(
+	controller *risk.CapitalPhaseController,
+	allocator *portfolio.CapitalAllocator,
+	workflow *risk.ApprovalWorkflow,
+) {
+	s.capitalController = controller
+	s.capitalAllocator = allocator
+	s.approvalWorkflow = workflow
+}
+
+func (s *System) checkCapitalPhase() (bool, string) {
+	if s.capitalController == nil {
+		return false, "capital controller not initialized"
+	}
+
+	canAdvance, reason := s.capitalController.CanAdvance()
+	if !canAdvance {
+		return false, reason
+	}
+
+	if s.capitalController.GetSnapshot().Phase == domain.PhaseLive {
+		if s.approvalWorkflow != nil {
+			_, err := s.approvalWorkflow.RequestApproval(
+				"phase_advance_to_full",
+				"system",
+				"criteria met for transition from live to full capital",
+			)
+			if err != nil {
+				return false, fmt.Errorf("request approval: %w", err).Error()
+			}
+			return false, "approval requested for live→full transition"
+		}
+	}
+
+	return true, "ready to advance"
+}
+
+func (s *System) updateCapitalMetrics(result domain.SimulationResult) {
+	if s.capitalController == nil {
+		return
+	}
+
+	if len(s.returnHistory) < 2 {
+		return
+	}
+
+	sharpe := risk.CalculateSharpeRatio(s.returnHistory)
+	maxDD := risk.CalculateMaxDrawdown(s.portfolioHistory)
+
+	s.capitalController.UpdateMetrics(sharpe, maxDD)
 }

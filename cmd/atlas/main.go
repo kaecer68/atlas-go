@@ -21,10 +21,13 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/db"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/live"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
+	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/risk"
 )
 
 type routeRegistrar interface {
@@ -170,8 +173,22 @@ func run(args []string, deps appDeps) error {
 		log.Printf("dashboard api listening on %s", *apiAddr)
 		// Trigger automatic backfill if replay data has gaps.
 		runAutoBackfillOnStartup(cfg.WorkDir)
-		if err := deps.listenAndServe(*apiAddr, mux); err != nil {
-			return fmt.Errorf("dashboard api server failed: %w", err)
+
+		// Start server in a goroutine so the main goroutine can handle signals.
+		srvErr := make(chan error, 1)
+		go func() {
+			if err := deps.listenAndServe(*apiAddr, mux); err != nil {
+				srvErr <- fmt.Errorf("dashboard api server failed: %w", err)
+			}
+		}()
+
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		select {
+		case sig := <-sigCh:
+			log.Printf("received %v, shutting down api server...", sig)
+		case err := <-srvErr:
+			return err
 		}
 		return nil
 	}
@@ -330,6 +347,16 @@ func parseStatusCodeCSV(raw string, fallback []int) []int {
 
 func runSimulation(cfg config.Config) error {
 	system := orchestrator.NewProductionSystem(cfg)
+
+	capitalCfg := domain.DefaultCapitalPhaseConfig()
+	capitalCfg.PhaseStartDate = time.Now().Add(-30 * 24 * time.Hour)
+	controller := risk.NewCapitalPhaseController(capitalCfg)
+	allocator := portfolio.NewCapitalAllocator()
+	workflow, err := risk.NewApprovalWorkflow("data/state/approvals")
+	if err != nil {
+		return fmt.Errorf("create approval workflow: %w", err)
+	}
+	system.WithCapitalManagement(controller, allocator, workflow)
 
 	result, err := system.RunDailySimulation(time.Now())
 	if err != nil {
