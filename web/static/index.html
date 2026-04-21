@@ -751,6 +751,7 @@ function timeWindowName(tw) { return TIME_WINDOW_NAME_MAP[tw] || tw; }
 
 function renderOverview(data, agentsData, inbox, overlap, narrativeEvents, stress, dataChannels, capitalPhase) {
   const grid = document.getElementById('overviewGrid');
+  grid.classList.remove('loading');
   const health = data || {};
   const cards = agentsData || {};
   const weakest = cards.next_experiment_agent_id || '-';
@@ -861,7 +862,8 @@ function mdToHtml(md) {
 
 function renderInbox(data) {
   const el = document.getElementById('experimentInbox');
-  if (!data) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
+  if (!data) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
+  el.classList.remove('loading');
   const pending = data.pending_judges || [];
   const promotes = data.pending_promotes || [];
   const history = data.recent_history || [];
@@ -924,7 +926,8 @@ function computePipelineSummary(guardOutcomes) {
 
 function renderMacroRadar(data, pipelineData) {
   const el = document.getElementById('macroRadar');
-  if (!data || !data.session_id) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
+  if (!data || !data.session_id) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
+  el.classList.remove('loading');
   const { rawInputs, finalOutputs, filteredCount, guard } = computePipelineSummary(data.guard_outcomes);
   const regimeColor = data.regime === 'RISK_ON' ? 'var(--up)' : (data.regime === 'RISK_OFF' ? 'var(--down)' : (data.regime === 'NEUTRAL' ? 'var(--warn)' : 'inherit'));
   const recordedAt = data.recorded_at ? formatDate(data.recorded_at) : '-';
@@ -987,9 +990,10 @@ function renderMacroRadar(data, pipelineData) {
 
 function renderAgentObservatory(data, overlapData) {
   const el = document.getElementById('agentObservatory');
-  if (!data) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
+  if (!data) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
   const cards = data.weakest_agent_scorecards || [];
-  if (!cards.length) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
+  if (!cards.length) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
+  el.classList.remove('loading');
   const weakest = data.next_experiment_agent_id || '';
   const helpIcon = (title, html) => `<span class="cursor-pointer text-accent text-sm ml-xs" onclick="event.stopPropagation();openInfoHelp('${title}', \`${html.replace(/"/g, '&quot;')}\`)">ℹ️</span>`;
 
@@ -1038,7 +1042,8 @@ function renderAgentObservatory(data, overlapData) {
 
 function renderUniverseOverlap(data) {
   const el = document.getElementById('universeOverlap');
-  if (!data || !data.agents) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
+  if (!data || !data.agents) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
+  el.classList.remove('loading');
   const agents = data.agents || [];
   const matrix = data.matrix || {};
   const warnings = data.warnings || [];
@@ -1131,6 +1136,7 @@ function renderConvictionBreakdown(cb) {
 }
 function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains, models, inbox, phase3, taxSnapshot) {
   const el = document.getElementById('decisionChain');
+  el.classList.remove('loading');
   const regime = (pipeline && pipeline.regime) || (macro && macro.regime) || '-';
   const eventList = (events && events.events) ? events.events.slice(0, 5) : [];
   const chainList = (chains && chains.chains) ? chains.chains.slice(0, 5) : [];
@@ -1403,6 +1409,7 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
 
 function renderAIEvolution(inbox, phase3) {
   const el = document.getElementById('aiEvolution');
+  el.classList.remove('loading');
   const items = (inbox && inbox.items) ? inbox.items : [];
   const pending = items.filter(i => i.status === 'pending' || i.status === 'planned');
   const latest = items.slice(0, 3);
@@ -1444,7 +1451,8 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
   if (showAll === undefined) showAll = false;
   if (showScreened === undefined) showScreened = false;
   const el = document.getElementById('recommendationPipeline');
-  if (!data || !data.session_id) { el.innerHTML = '<div class="empty">尚無回測場次資料</div>'; return; }
+  if (!data || !data.session_id) { el.innerHTML = '<div class="empty">尚無回測場次資料</div>'; el.classList.remove('loading'); return; }
+  el.classList.remove('loading');
   const { rawInputs, finalOutputs, filteredCount, guard } = computePipelineSummary(data.guard_outcomes);
   const items = data.items || [];
   const screenedItems = data.screened_items || [];
@@ -1642,7 +1650,8 @@ async function triggerChannelsIngest() {
 
 function renderDataChannels(data) {
   const el = document.getElementById('dataChannels');
-  if (!data || !data.channels) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
+  if (!data || !data.channels) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
+  el.classList.remove('loading');
   const channels = data.channels || [];
   const statusLight = s => {
     const color = s === 'ok' ? 'var(--status-ok)' : (s === 'warn' ? 'var(--status-warn)' : (s === 'error' ? 'var(--status-err)' : 'var(--status-unknown)'));
@@ -1691,11 +1700,13 @@ async function renderBacktestReport() {
   const el = document.getElementById('backtestReport');
   try {
     const r = await fetch('/api/report/latest');
-    if (!r.ok) { el.innerHTML = '<div class="empty">尚無回測報告</div>'; return; }
+    if (!r.ok) { el.innerHTML = '<div class="empty">尚無回測報告</div>'; el.classList.remove('loading'); return; }
     const text = await r.text();
     el.innerHTML = `<div style="font-size:13px;line-height:1.6">${mdToHtml(text)}</div>`;
+    el.classList.remove('loading');
   } catch (e) {
     el.innerHTML = '<div class="empty">載入失敗: ' + e.message + '</div>';
+    el.classList.remove('loading');
   }
 }
 
@@ -1757,8 +1768,10 @@ function renderLiveStatus(data) {
         <div style="margin-top:6px">若需要 live 交易狀態，請確認已啟動 live 模式並完成 broker 連線設定。</div>
       </div>
     `;
+    el.classList.remove('loading');
     return;
   }
+  el.classList.remove('loading');
   const cb = data.circuit_breaker;
   const pnl = (data.portfolio || {}).day_pnl || 0;
   const pnlClass = pnl >= 0 ? 'up' : 'down';
@@ -1774,6 +1787,7 @@ function renderLiveStatus(data) {
 function renderLiveNarrativeStrip(events, stress, models, chains) {
   const el = document.getElementById('liveNarrativeStrip');
   if (!el) return;
+  el.classList.remove('loading');
   const eventList = (events && events.events) || [];
   const sortedEvents = eventList.slice().sort((a, b) => {
     const strengthA = Math.abs(a.sentiment || 0) * (a.confidence || 1);
@@ -1850,6 +1864,7 @@ function renderLiveNarrativeStrip(events, stress, models, chains) {
 function renderNarrativePage(snapshot, stress, events, chains, models, templates, retailSentiment, seasonal) {
   const macroEl = document.getElementById('narrativeMacro');
   if (macroEl) {
+    macroEl.classList.remove('loading');
     if (!snapshot) { macroEl.innerHTML = '<div class="empty">無可用快照</div>'; }
     else {
       const rows = [
@@ -1914,6 +1929,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
 
   const stressEl = document.getElementById('narrativeStress');
   if (stressEl) {
+    stressEl.classList.remove('loading');
     if (!stress) { stressEl.innerHTML = '<div class="empty">無可用資料</div>'; }
     else {
       const score = typeof stress.score === 'number' ? stress.score.toFixed(1) : '-';
@@ -1936,6 +1952,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
 
   const eventsEl = document.getElementById('narrativeEvents');
   if (eventsEl) {
+    eventsEl.classList.remove('loading');
     const list = (events && events.events) || [];
     // 同樣按強度排序，讓最劇烈的事件優先呈現
     const sortedList = list.slice().sort((a, b) => {
@@ -1959,6 +1976,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
 
   const chainsEl = document.getElementById('narrativeChains');
   if (chainsEl) {
+    chainsEl.classList.remove('loading');
     const list = (chains && chains.chains) || [];
     if (!list.length) { chainsEl.innerHTML = '<div class="empty">目前無匹配的因果鏈</div>'; }
     else {
@@ -1984,6 +2002,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
 
   const modelsEl = document.getElementById('narrativeModels');
   if (modelsEl) {
+    modelsEl.classList.remove('loading');
     const list = (models && models.models) || [];
     if (!list.length) { modelsEl.innerHTML = '<div class="empty">目前無活躍模型</div>'; }
     else {
@@ -2026,6 +2045,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
 
   const templatesEl = document.getElementById('narrativeTemplates');
   if (templatesEl) {
+    templatesEl.classList.remove('loading');
     const items = (templates && templates.templates) || [];
     if (!items.length) { templatesEl.innerHTML = '<div class="empty">無模板資料</div>'; }
     else {
@@ -2049,6 +2069,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
 
   const retailEl = document.getElementById('narrativeRetailSentiment');
   if (retailEl) {
+    retailEl.classList.remove('loading');
     if (!retailSentiment) { retailEl.innerHTML = '<div class="empty">無散戶情緒資料</div>'; }
     else {
       const readingMap = { frenzy: '狂熱', neutral: '中性', fear: '恐慌' };
@@ -2086,6 +2107,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
 
   const seasonalEl = document.getElementById('narrativeSeasonal');
   if (seasonalEl) {
+    seasonalEl.classList.remove('loading');
     if (!seasonal || !seasonal.expectations || seasonal.expectations.length === 0) { seasonalEl.innerHTML = '<div class="empty">無季節性事件</div>'; }
     else {
       const rows = seasonal.expectations.map(e => {
@@ -2100,6 +2122,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
 function renderDataIngestHealth(snapshot) {
   const el = document.getElementById('dataIngestHealth');
   if (!el) return;
+  el.classList.remove('loading');
   if (!snapshot) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
   const indicators = [
     { key: 'dxy', label: 'DXY-美元指數' },
@@ -2153,6 +2176,7 @@ async function loadAuditLog() {
   const el = document.getElementById('auditLog');
   try {
     const data = await getJSON('/api/control/audit-log');
+    el.classList.remove('loading');
     const items = (data.interventions || []).slice(0, 20);
     if (!items.length) { el.innerHTML = '<div class="empty">無紀錄</div>'; return; }
     const actionMap = {
@@ -2174,6 +2198,7 @@ async function loadExperimentHistory() {
   const el = document.getElementById('experimentHistory');
   try {
     const data = await getJSON('/api/experiment/history');
+    el.classList.remove('loading');
     const items = (data.history || []).slice(0, 20);
     if (!items.length) { el.innerHTML = '<div class="empty">無紀錄</div>'; return; }
     el.innerHTML = `<table><thead><tr><th>時間</th><th>版本</th><th>實驗</th><th>AI</th><th>狀態</th></tr></thead><tbody>
@@ -2357,8 +2382,10 @@ function renderAlerts(data) {
   if (!el) return;
   if (!data || !data.alerts || data.alerts.length === 0) {
     el.innerHTML = '<div class="empty">目前沒有警報</div>';
+    el.classList.remove('loading');
     return;
   }
+  el.classList.remove('loading');
   const severityMap = { critical: '嚴重', warning: '警告', info: '資訊' };
   const rows = data.alerts.map(a => {
     const sevClass = a.severity === 'critical' ? 'err' : a.severity === 'warning' ? 'warn' : 'info';
