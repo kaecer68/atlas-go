@@ -41,3 +41,18 @@ internal/*/data/
 .gitnexus
 /cmd/backtest-window/reports/
 .worktrees/
+
+# Development artifacts
+.opencode/
+.planning/
+.playwright-mcp/
+.graphify_cached.json
+.graphify_uncached.txt
+
+# Temporary files
+tmp/
+*.log
+
+# Build artifacts
+run-stress
+coverage_all.out
