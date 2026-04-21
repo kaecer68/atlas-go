@@ -135,6 +135,48 @@ python scripts/merge-twse-csv.py --source ~/Downloads/twse_20260401.csv --target
 - **動態訊號強度對齊**：sector executors 的 `dynamicSignalStrength` 會自動讀取該 agent 的 `screening_criteria.volume_intraday.min` 作為成交量激勵門檻，使 executor 的訊號強度與篩選閘門保持一致。
 - **注意事項**：篩選條件過嚴可能導致某檔標的「完全沒有推薦」，這是預期行為。調整門檻前請先用 `go test ./internal/screener/...` 驗證。
 
+#### 篩選後的 FactorScores
+
+被篩選層拒絕的標的（`ScreeningReject`）同樣會附加完整 `FactorScores`（含 `Breakdown`），可用於前端調試或放行參考。 Breakdown 結構如下：
+
+| 欄位 | 說明 |
+|------|------|
+| `score` | 該因子計算結果（-1 ~ 1） |
+| `weight` | 該因子權重 |
+| `formula` | 計算公式（如 `clamp(ret20 / 0.30, -1, 1)`） |
+| `raw_inputs` | 原始輸入值（如 `ret20: 0.0275`） |
+| `is_fallback` | true = 無歷史資料，使用日內價格或猜測值 |
+
+#### 行業信念計算透明化（Phase 2）
+
+所有 sector/style executor 的 `Recommendation` 現在都附加 `ConvictionBreakdown`，完整揭露信念分數的計算過程：
+
+```
+conviction_breakdown: {
+  base: 70,    // 起始信念分
+  floor: 60,   // 最低保護分
+  final: 76,   // 最終信念分
+  steps: [
+    { rule: "rotation_boost", delta: +6, reason: "rotation keyword + last > open" },
+    { rule: "volume_penalty", delta: -5, reason: "below avg volume" }
+  ]
+}
+```
+
+每個 step 代表一條增減分規則，來自 `convictionBuilder`（`internal/orchestrator/conviction_builder.go`）。
+
+#### 宏觀敘事信心度（Phase 3）
+
+每個偵測到的 `NarrativeEvent` 現在都有 `confidence_source`（固定值 `heuristic_fixed_v1`）與 `historical_hit_rate`（0.58 ~ 0.81 之間），用於評估事件偵測的歷史可靠性。
+
+| 主題 | 歷史命中率 |
+|------|-----------|
+| AI_capex_surge | 0.81 |
+| US_rates_up | 0.72 |
+| JPY_carry_unwind | 0.68 |
+| geopolitical_risk | 0.65 |
+| oil_price_shock | 0.58 |
+
 ## 5. 技能分層與責任
 
 ### 5.1 Domain Skills（研究與觀點）
@@ -145,6 +187,8 @@ python scripts/merge-twse-csv.py --source ~/Downloads/twse_20260401.csv --target
 | Sector | `semiconductor_desk`, `ai_supply_chain_desk`, `financials_desk`, `shipping_desk`, `etf_rotation_desk` | 產業面候選與敘事約束 |
 | Style | `growth_momentum`, `value_yield`, `earnings_quality`, `technical_breakout` | 進出場品質與風格濾鏡（已分配獨立 Universe） |
 | Superinvestor | `druckenmiller_macro`, `aschenbrenner_ai_compute`, `baker_deep_tech`, `ackman_quality` | 高信念補充觀點 |
+
+> 所有 sector/style/control executor 的 Recommendation 現在都附加 FactorScores（含 Breakdown）與 ConvictionBreakdown，用於前端決策鏈透明度展示。
 
 ### 5.2 Control Skills（風控與整合）
 
@@ -247,3 +291,5 @@ python scripts/merge-twse-csv.py --source ~/Downloads/twse_20260401.csv --target
 5. Dashboard 前端結構或 API 欄位變更
 6. `internal/narrative/*` 的模板、模型、權重計算邏輯或論述內容變更
 7. `internal/monitoring/channel_health.go` 的通道健康紀錄格式變更
+8. `internal/monitoring/dashboard_api.go` 的 API parsing struct JSON tag（務必與 `domain.*` struct 的 JSON tag 保持 snake_case 一致）
+9. 決策鏈透明度功能（FactorScores Breakdown、ConvictionBreakdown、MacroEvent 信心度）的任何變更
