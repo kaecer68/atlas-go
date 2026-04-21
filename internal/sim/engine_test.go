@@ -1,11 +1,13 @@
 package sim
 
 import (
+	"math"
 	"testing"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/tax"
 )
 
 func TestRunBuildsPositions(t *testing.T) {
@@ -257,5 +259,95 @@ func TestRunMultiDayTwentyDays(t *testing.T) {
 	}
 	if report.TotalReturn <= 0 {
 		t.Logf("total return: %f", report.TotalReturn)
+	}
+}
+
+func TestRunWithTaxCalculatorPopulatesTaxFields(t *testing.T) {
+	engine := NewEngine(domain.SimulationConstraints{
+		StartingCash:                1000000,
+		MaxPositionWeight:           0.5,
+		MaxOpenPositions:            5,
+		MinTradableVolume:           1,
+		MinRecommendationConviction: 0,
+		TransactionCostBPS:          0,
+		SlippageBPS:                 0,
+		ReserveCashFraction:         0,
+	}).WithTaxCalculator(tax.NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig())).
+		WithDividends(map[string]float64{"2330.TW": 15000})
+
+	quotes := []domain.Quote{
+		{Symbol: "2330.TW", Last: 800, Volume: 1000000, IsTradable: true},
+	}
+	recs := []domain.Recommendation{
+		{Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 90, Reason: "test"},
+	}
+
+	result := engine.Run(domain.RegimeRiskOn, quotes, recs)
+
+	if len(result.TaxSnapshots) == 0 {
+		t.Fatal("expected tax snapshots to be populated")
+	}
+	if result.BeforeTaxPnL == 0 && result.AfterTaxPnL == 0 {
+		t.Fatal("expected P&L fields to be populated")
+	}
+	if result.TotalTaxPaid <= 0 {
+		t.Errorf("expected positive TotalTaxPaid, got %v", result.TotalTaxPaid)
+	}
+}
+
+func TestTaxAdjustedPnLEqualsGrossMinusTax(t *testing.T) {
+	engine := NewEngine(domain.SimulationConstraints{
+		StartingCash:                1000000,
+		MaxPositionWeight:           0.5,
+		MaxOpenPositions:            5,
+		MinTradableVolume:           1,
+		MinRecommendationConviction: 0,
+		TransactionCostBPS:          0,
+		SlippageBPS:                 0,
+		ReserveCashFraction:         0,
+	}).WithTaxCalculator(tax.NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig()))
+
+	quotes := []domain.Quote{
+		{Symbol: "2330.TW", Last: 800, Volume: 1000000, IsTradable: true},
+	}
+	recs := []domain.Recommendation{
+		{Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 90, Reason: "test"},
+	}
+
+	result := engine.Run(domain.RegimeRiskOn, quotes, recs)
+
+	wantAfterTax := result.BeforeTaxPnL - result.TotalTaxPaid
+	if math.Abs(result.AfterTaxPnL-wantAfterTax) > 0.01 {
+		t.Errorf("AfterTaxPnL = %v, want %v (BeforeTaxPnL=%v - TotalTaxPaid=%v)",
+			result.AfterTaxPnL, wantAfterTax, result.BeforeTaxPnL, result.TotalTaxPaid)
+	}
+}
+
+func TestRunWithoutTaxCalculatorLeavesTaxFieldsZero(t *testing.T) {
+	engine := NewEngine(domain.SimulationConstraints{
+		StartingCash:                1000000,
+		MaxPositionWeight:           0.5,
+		MaxOpenPositions:            5,
+		MinTradableVolume:           1,
+		MinRecommendationConviction: 0,
+		TransactionCostBPS:          0,
+		SlippageBPS:                 0,
+		ReserveCashFraction:         0,
+	})
+
+	quotes := []domain.Quote{
+		{Symbol: "2330.TW", Last: 800, Volume: 1000000, IsTradable: true},
+	}
+	recs := []domain.Recommendation{
+		{Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 90, Reason: "test"},
+	}
+
+	result := engine.Run(domain.RegimeRiskOn, quotes, recs)
+
+	if len(result.TaxSnapshots) != 0 {
+		t.Errorf("expected no tax snapshots without tax calculator, got %d", len(result.TaxSnapshots))
+	}
+	if result.TotalTaxPaid != 0 {
+		t.Errorf("expected zero TotalTaxPaid, got %v", result.TotalTaxPaid)
 	}
 }

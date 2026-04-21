@@ -9,14 +9,18 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
+	"github.com/kaecer68/atlas-go/internal/tax"
 )
 
 type Engine struct {
-	constraints  domain.SimulationConstraints
-	optimizer    *portfolio.Optimizer
-	useOptimizer bool
-	reflexRules  []reflexivity.Rule
-	ctx          context.Context
+	constraints   domain.SimulationConstraints
+	optimizer     *portfolio.Optimizer
+	useOptimizer  bool
+	reflexRules   []reflexivity.Rule
+	ctx           context.Context
+	slippageModel *SlippageModel
+	taxCalc       *tax.TaiwanTaxCalculator
+	dividends     map[string]float64
 }
 
 func NewEngine(constraints domain.SimulationConstraints) *Engine {
@@ -42,6 +46,25 @@ func (e *Engine) WithReflexivityRules(rules ...reflexivity.Rule) *Engine {
 	return e
 }
 
+// WithSlippageModel attaches a dynamic slippage model to the engine.
+// When set, the engine uses liquidity-based slippage instead of fixed SlippageBPS.
+func (e *Engine) WithSlippageModel(sm *SlippageModel) *Engine {
+	e.slippageModel = sm
+	return e
+}
+
+// WithTaxCalculator attaches a tax calculator for post-simulation tax adjustment.
+func (e *Engine) WithTaxCalculator(tc *tax.TaiwanTaxCalculator) *Engine {
+	e.taxCalc = tc
+	return e
+}
+
+// WithDividends sets the dividend amounts per symbol for tax computation.
+func (e *Engine) WithDividends(divs map[string]float64) *Engine {
+	e.dividends = divs
+	return e
+}
+
 func (e *Engine) Run(regime domain.Regime, quotes []domain.Quote, recs []domain.Recommendation) domain.SimulationResult {
 	state := domain.NewSimulationState(e.constraints.StartingCash)
 	return e.RunWithState(&state, regime, quotes, recs)
@@ -50,7 +73,7 @@ func (e *Engine) Run(regime domain.Regime, quotes []domain.Quote, recs []domain.
 // RunWithState executes a simulation using an existing state, enabling multi-day backtests.
 func (e *Engine) RunWithState(state *domain.SimulationState, regime domain.Regime, quotes []domain.Quote, recs []domain.Recommendation) domain.SimulationResult {
 	dayResult := e.RunDay(state, time.Time{}, regime, quotes, recs)
-	return domain.SimulationResult{
+	result := domain.SimulationResult{
 		Regime:         regime,
 		Orders:         dayResult.Orders,
 		Positions:      state.Positions,
@@ -58,6 +81,10 @@ func (e *Engine) RunWithState(state *domain.SimulationState, regime domain.Regim
 		PortfolioValue: dayResult.PortfolioValue,
 		GuardOutcomes:  nil,
 	}
+	if e.taxCalc != nil {
+		e.computeTaxAdjustedResults(&result, state)
+	}
+	return result
 }
 
 // RunDay executes a single trading day, updating state in-place.
@@ -134,6 +161,13 @@ func (e *Engine) RunDay(
 	}
 }
 
+func (e *Engine) getSlippageBPS(symbol string, quotes map[string]domain.Quote) float64 {
+	if e.slippageModel != nil {
+		return e.slippageModel.CalculateSlippageBPS(symbol, quotes)
+	}
+	return e.constraints.SlippageBPS
+}
+
 func (e *Engine) executeSells(
 	state *domain.SimulationState,
 	quoteBySymbol map[string]domain.Quote,
@@ -151,7 +185,8 @@ func (e *Engine) executeSells(
 
 		shouldSell, reason := e.shouldSellPosition(pos, quote, recs)
 		if shouldSell {
-			price := applyBPS(quote.Last, -(e.constraints.SlippageBPS + e.constraints.TransactionCostBPS))
+			slippageBPS := e.getSlippageBPS(pos.Symbol, quoteBySymbol)
+			price := applyBPS(quote.Last, -(slippageBPS + e.constraints.TransactionCostBPS))
 			proceeds := float64(pos.Quantity) * price
 			state.Cash += proceeds
 			orders = append(orders, domain.Order{
@@ -300,7 +335,8 @@ func (e *Engine) executeOptimizerBuys(
 			continue
 		}
 
-		price := applyBPS(quote.Last, e.constraints.SlippageBPS+e.constraints.TransactionCostBPS)
+		slippageBPS := e.getSlippageBPS(order.Symbol, quoteBySymbol)
+		price := applyBPS(quote.Last, slippageBPS+e.constraints.TransactionCostBPS)
 		quantity := order.Quantity
 		if quantity <= 0 {
 			continue
@@ -385,7 +421,8 @@ func (e *Engine) executeLegacyBuys(
 			continue
 		}
 
-		price := applyBPS(quote.Last, e.constraints.SlippageBPS+e.constraints.TransactionCostBPS)
+		slippageBPS := e.getSlippageBPS(rec.Symbol, quoteBySymbol)
+		price := applyBPS(quote.Last, slippageBPS+e.constraints.TransactionCostBPS)
 		quantity := int(math.Floor(maxPerPosition/price/100.0) * 100)
 		if quantity <= 0 {
 			continue
@@ -473,4 +510,30 @@ func calculateSharpe(returns []float64) float64 {
 
 func applyBPS(price, bps float64) float64 {
 	return price * (1 + bps/10000.0)
+}
+
+func (e *Engine) computeTaxAdjustedResults(result *domain.SimulationResult, state *domain.SimulationState) {
+	if e.taxCalc == nil {
+		return
+	}
+
+	sellPrices := make(map[string]float64, len(state.Positions))
+	for _, pos := range state.Positions {
+		sellPrices[pos.Symbol] = pos.CurrentPrice
+	}
+
+	taxSnapshots := e.taxCalc.CalculatePortfolioTax(state.Positions, sellPrices, e.dividends)
+
+	var totalTax float64
+	for _, snap := range taxSnapshots {
+		totalTax += snap.TotalTax
+	}
+
+	beforeTaxPnL := result.PortfolioValue - e.constraints.StartingCash
+	afterTaxPnL := beforeTaxPnL - totalTax
+
+	result.TaxSnapshots = taxSnapshots
+	result.BeforeTaxPnL = beforeTaxPnL
+	result.AfterTaxPnL = afterTaxPnL
+	result.TotalTaxPaid = totalTax
 }
