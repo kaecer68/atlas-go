@@ -30,7 +30,7 @@ func run(args []string) error {
 		return fmt.Errorf("load baseline policy: %w", err)
 	}
 	executor := experiment.NewExecutor(ledger.NewStore(cfg.LedgerDir), cfg.BaselinePolicyPath)
-	result, err := executor.Execute(*brief)
+	result, err := executor.Execute(*brief, cfg.ReplayDataPath)
 	if err != nil {
 		return fmt.Errorf("execute experiment: %w", err)
 	}
@@ -40,5 +40,11 @@ func run(args []string) error {
 	fmt.Printf("candidate_prompt: %s\n", result.CandidatePrompt)
 	fmt.Printf("evaluation_mode: %s\n", result.EvaluationMode)
 	fmt.Printf("policy_checks: %d\n", len(result.PolicyChecks))
+	if result.DataMetadata != nil {
+		fmt.Printf("data_range: %s to %s\n", result.DataMetadata.DateRangeStart.Format("2006-01-02"), result.DataMetadata.DateRangeEnd.Format("2006-01-02"))
+		if result.DataMetadata.DaysDelayed > 2 {
+			fmt.Printf("data_delay_warning: replay data is %d days delayed\n", result.DataMetadata.DaysDelayed)
+		}
+	}
 	return nil
 }

@@ -155,6 +155,14 @@ func run(args []string, deps appDeps) error {
 		}
 		dashboard.RegisterRoutes(mux)
 
+		alertStore, err := monitoring.NewAlertStore(filepath.Join(cfg.WorkDir, "data/state/alerts"))
+		if err != nil {
+			log.Printf("[Alerts] failed to create alert store: %v", err)
+		} else {
+			alertAPI := monitoring.NewAlertAPI(alertStore)
+			alertAPI.RegisterRoutes(mux)
+		}
+
 		mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
 		sysMetrics := monitoring.NewSystemMetrics(collector, monitoring.NewMonitor())
 		go sysMetrics.Start(context.Background())
@@ -456,6 +464,13 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	mux := http.NewServeMux()
 	dashboard := deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir)
 	dashboard.RegisterRoutes(mux)
+	alertStore, err := monitoring.NewAlertStore(filepath.Join(cfg.WorkDir, "data/state/alerts"))
+	if err != nil {
+		log.Printf("[Alerts] failed to create alert store: %v", err)
+	} else {
+		alertAPI := monitoring.NewAlertAPI(alertStore)
+		alertAPI.RegisterRoutes(mux)
+	}
 	dashboard.RegisterNarrativeRoutes(mux)
 	dashboard.RegisterControlRoutes(mux)
 	dashboard.RegisterMacroRoutes(mux)
