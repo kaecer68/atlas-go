@@ -21,12 +21,12 @@ func newTestStore(t *testing.T) *AlertStore {
 
 func makeAlert(id string) domain.AlertRecord {
 	return domain.AlertRecord{
-		ID:       id,
+		ID:        id,
 		Timestamp: time.Now(),
-		Rule:     "test_rule",
-		Severity: "WARNING",
-		Message:  "test message",
-		Value:    42.0,
+		Rule:      "test_rule",
+		Severity:  "WARNING",
+		Message:   "test message",
+		Value:     42.0,
 	}
 }
 

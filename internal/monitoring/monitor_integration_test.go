@@ -56,8 +56,8 @@ func TestMonitor_AlertDispatchedToNotifier(t *testing.T) {
 	}
 
 	captureNotifier := &captureNotifier{
-		inner:   n,
-		mu:      &mu,
+		inner:    n,
+		mu:       &mu,
 		received: &received,
 	}
 
@@ -154,8 +154,8 @@ type captureNotifier struct {
 	received *[]domain.AlertRecord
 }
 
-func (c *captureNotifier) Name() string            { return c.inner.Name() }
-func (c *captureNotifier) IsConfigured() bool      { return true }
+func (c *captureNotifier) Name() string       { return c.inner.Name() }
+func (c *captureNotifier) IsConfigured() bool { return true }
 func (c *captureNotifier) Notify(a domain.AlertRecord) error {
 	c.mu.Lock()
 	*c.received = append(*c.received, a)
