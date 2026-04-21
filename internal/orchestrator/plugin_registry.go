@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/screener"
 )
 
@@ -24,6 +25,7 @@ type PluginRegistry struct {
 	agentExecutors   []AgentExecutor
 	controlExecutors []ControlExecutor
 	screener         screener.Screener
+	factorEngine     *portfolio.FactorEngine
 }
 
 func NewPluginRegistry() *PluginRegistry {
@@ -55,11 +57,49 @@ func (r *PluginRegistry) WithScreener(s screener.Screener) *PluginRegistry {
 	return r
 }
 
+func (r *PluginRegistry) WithFactorEngine(fe *portfolio.FactorEngine) *PluginRegistry {
+	r.factorEngine = fe
+	return r
+}
+
+func (r *PluginRegistry) CalculateFactorScores(symbol string, quotes map[string]domain.Quote, agentRecs []domain.Recommendation, agentWeights map[string]float64) map[portfolio.FactorType]float64 {
+	if r.factorEngine == nil {
+		return nil
+	}
+	defaultWeights := map[portfolio.FactorType]float64{
+		portfolio.FactorMomentum: 0.30,
+		portfolio.FactorValue:    0.25,
+		portfolio.FactorQuality:  0.25,
+		portfolio.FactorAgent:    0.20,
+	}
+	return r.factorEngine.CalculateAllScores(symbol, quotes, agentRecs, agentWeights, defaultWeights)
+}
+
+func (r *PluginRegistry) CalculateFactorScoresWithBreakdown(symbol string, quotes map[string]domain.Quote, agentRecs []domain.Recommendation, agentWeights map[string]float64) (*domain.FactorScoreBreakdown, map[portfolio.FactorType]float64) {
+	if r.factorEngine == nil {
+		return nil, nil
+	}
+	defaultWeights := map[portfolio.FactorType]float64{
+		portfolio.FactorMomentum: 0.30,
+		portfolio.FactorValue:    0.25,
+		portfolio.FactorQuality:  0.25,
+		portfolio.FactorAgent:    0.20,
+	}
+	return r.factorEngine.CalculateAllScoresWithBreakdown(symbol, quotes, agentRecs, agentWeights, defaultWeights)
+}
+
 func (r *PluginRegistry) Screen(ctx context.Context, agent domain.AgentSpec, symbol string, quotes map[string]domain.Quote) (bool, error) {
 	if r.screener == nil || !agent.ScreeningCriteria.HasFilters() {
 		return true, nil
 	}
 	return r.screener.Screen(ctx, symbol, agent.ScreeningCriteria, quotes)
+}
+
+func (r *PluginRegistry) ScreenDetailed(ctx context.Context, agent domain.AgentSpec, symbol string, quotes map[string]domain.Quote) (screener.ScreenResult, error) {
+	if r.screener == nil || !agent.ScreeningCriteria.HasFilters() {
+		return screener.ScreenResult{Passed: true}, nil
+	}
+	return r.screener.ScreenDetailed(ctx, symbol, agent.ScreeningCriteria, quotes)
 }
 
 func (r *PluginRegistry) ResolvePrompt(agent domain.AgentSpec, overrides map[string]string) string {

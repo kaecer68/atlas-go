@@ -15,7 +15,7 @@ func TestAlphaDiscoveryFindsHighFactorLowCoverage(t *testing.T) {
 	engine.SetFactorThreshold(0.3)
 
 	quotes := map[string]domain.Quote{
-		"2330.TW": {Symbol: "2330.TW", Open: 100, Last: 110, IsTradable: true},
+		"2330.TW": {Symbol: "2330.TW", Open: 100, Last: 120, IsTradable: true},
 		"2317.TW": {Symbol: "2317.TW", Open: 100, Last: 101, IsTradable: true},
 	}
 

@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -30,12 +31,12 @@ func TestGrowthMomentumOverrideChangesRecommendations(t *testing.T) {
 	}
 	plugins := NewPluginRegistry()
 
-	baseline := collectRecommendations(registry, quoteBySymbol, plugins, map[string]string{
+	baseline, _ := collectRecommendations(registry, quoteBySymbol, plugins, map[string]string{
 		"growth_momentum": "qualify candidates using trend persistence and volume confirmation",
-	}, domain.RegimeNeutral)
-	candidate := collectRecommendations(registry, quoteBySymbol, plugins, map[string]string{
+	}, domain.RegimeNeutral, "")
+	candidate, _ := collectRecommendations(registry, quoteBySymbol, plugins, map[string]string{
 		"growth_momentum": "require trend confirmation\ndowngrade conviction\nreject setups\n",
-	}, domain.RegimeNeutral)
+	}, domain.RegimeNeutral, "")
 
 	baselineCount := countSkillRecommendations(baseline, "growth_momentum")
 	candidateCount := countSkillRecommendations(candidate, "growth_momentum")
@@ -104,12 +105,12 @@ func TestTechnicalBreakoutOverrideRejectsLowVolumeSetups(t *testing.T) {
 	}
 	plugins := NewPluginRegistry()
 
-	baseline := collectRecommendations(registry, quoteBySymbol, plugins, map[string]string{
+	baseline, _ := collectRecommendations(registry, quoteBySymbol, plugins, map[string]string{
 		"technical_breakout": "require volume\nrequire close strength",
-	}, domain.RegimeNeutral)
-	candidate := collectRecommendations(registry, quoteBySymbol, plugins, map[string]string{
+	}, domain.RegimeNeutral, "")
+	candidate, _ := collectRecommendations(registry, quoteBySymbol, plugins, map[string]string{
 		"technical_breakout": "require volume\nrequire close strength\nreject low volume",
-	}, domain.RegimeNeutral)
+	}, domain.RegimeNeutral, "")
 
 	baselineCount := countSkillRecommendations(baseline, "technical_breakout")
 	candidateCount := countSkillRecommendations(candidate, "technical_breakout")
@@ -186,7 +187,7 @@ func TestScreenerFiltersRecommendationsBeforeExecutor(t *testing.T) {
 	scr := screener.NewEngine(fe, fp)
 	plugins := NewPluginRegistry().WithScreener(scr)
 
-	recs := collectRecommendations(registry, quotes, plugins, nil, domain.RegimeNeutral)
+	recs, _ := collectRecommendations(registry, quotes, plugins, nil, domain.RegimeNeutral, "")
 
 	if len(recs) != 1 {
 		t.Fatalf("expected 1 recommendation after screening, got %d", len(recs))
@@ -219,7 +220,7 @@ func TestScreenerAllowsAllWhenNoCriteriaSet(t *testing.T) {
 	scr := screener.NewEngine(fe, fp)
 	plugins := NewPluginRegistry().WithScreener(scr)
 
-	recs := collectRecommendations(registry, quotes, plugins, nil, domain.RegimeNeutral)
+	recs, _ := collectRecommendations(registry, quotes, plugins, nil, domain.RegimeNeutral, "")
 
 	if len(recs) != 2 {
 		t.Fatalf("expected 2 recommendations when no screening criteria set, got %d", len(recs))
@@ -258,4 +259,48 @@ func containsSymbol(symbols []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func TestExecuteRegistryResearchWithDarwinianWeightsAppliesWeightMarker(t *testing.T) {
+	registry := SeedRegistry()
+	quotes := []domain.Quote{
+		{Symbol: "2881.TW", Open: 68, High: 69, Low: 67.8, Last: 68.8, Volume: 6800000, IsTradable: true},
+		{Symbol: "2603.TW", Open: 188, High: 192, Low: 187, Last: 191, Volume: 21000000, IsTradable: true},
+	}
+
+	dw := portfolio.NewDarwinianWeightManager("testdata/darwinian_test.json")
+	dw.InitializeFromRegistry(registry)
+
+	regime, rawRecs, finalRecs, guardOutcomes, rejects := executeRegistryResearchDetailedWithPolicyAndGuardsAndDarwinian(registry, quotes, nil, DefaultExecutionPolicy(), NewPluginRegistry(), "", dw)
+
+	if len(rawRecs) == 0 {
+		t.Fatalf("expected raw recommendations")
+	}
+	if len(finalRecs) == 0 {
+		t.Fatalf("expected final recommendations")
+	}
+	if len(guardOutcomes) == 0 {
+		t.Fatalf("expected guard outcomes")
+	}
+
+	hasDWMarker := false
+	for _, rec := range finalRecs {
+		if strings.Contains(rec.Reason, "[DW:") {
+			hasDWMarker = true
+			break
+		}
+	}
+	if !hasDWMarker {
+		t.Errorf("expected at least one final recommendation to have Darwinian weight marker [DW:], got none")
+	}
+
+	// Verify raw recommendations do NOT have the marker (weights applied after raw collection)
+	for _, rec := range rawRecs {
+		if strings.Contains(rec.Reason, "[DW:") {
+			t.Errorf("raw recommendation should not have Darwinian weight marker, got: %s", rec.Reason)
+		}
+	}
+
+	_ = rejects
+	_ = regime
 }
