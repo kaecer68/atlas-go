@@ -29,15 +29,16 @@ func (y *YahooFinanceMacroProvider) Name() string {
 	return "yahoo_finance"
 }
 
-// FetchSnapshot retrieves DXY, ^TNX, VIX, Oil, Gold, JPY from Yahoo Finance concurrently.
+// FetchSnapshot retrieves DXY, ^TNX, VIX, Oil, Gold, JPY, USD/TWD from Yahoo Finance concurrently.
 func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
 	symbols := map[string]string{
-		"DX-Y.NYB": "dxy",
-		"^TNX":     "us10y",
-		"^VIX":     "vix",
-		"CL=F":     "oil",
-		"GC=F":     "gold",
-		"JPY=X":    "jpy",
+		"DX-Y.NYB":  "dxy",
+		"^TNX":      "us10y",
+		"^VIX":      "vix",
+		"CL=F":      "oil",
+		"GC=F":      "gold",
+		"JPY=X":     "jpy",
+		"USD/TWD=X": "usd_twd",
 	}
 
 	snap := MacroDataSnapshot{RecordedAt: time.Now().Unix()}
@@ -70,6 +71,8 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 				snap.Gold = point
 			case "jpy":
 				snap.JPY = point
+			case "usd_twd":
+				snap.USD_TWD = point
 			}
 			mu.Unlock()
 		}(ticker, key)
