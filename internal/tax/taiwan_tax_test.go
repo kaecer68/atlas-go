@@ -11,9 +11,9 @@ func TestCalculateDividendTax(t *testing.T) {
 	calc := NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig())
 
 	tests := []struct {
-		name    string
-		amount  float64
-		want    float64
+		name   string
+		amount float64
+		want   float64
 	}{
 		{"zero", 0, 0},
 		{"negative", -1000, 0},
@@ -35,9 +35,9 @@ func TestCalculateTransactionTax(t *testing.T) {
 	calc := NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig())
 
 	tests := []struct {
-		name       string
-		notional   float64
-		want       float64
+		name     string
+		notional float64
+		want     float64
 	}{
 		{"zero", 0, 0},
 		{"negative", -50000, 0},
