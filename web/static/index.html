@@ -986,6 +986,7 @@ function renderMacroRadar(data, pipelineData) {
 
 function renderAgentObservatory(data, overlapData) {
   const el = document.getElementById('agentObservatory');
+  if (!data) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
   const cards = data.weakest_agent_scorecards || [];
   if (!cards.length) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
   const weakest = data.next_experiment_agent_id || '';

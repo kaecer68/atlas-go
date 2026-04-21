@@ -35,6 +35,16 @@ Atlas-Go 儀表板經過系統性修復後，已從「可接受的內部工具�
 - ✅ 載入狀態旋轉動畫
 - ✅ 字階與字重變數系統
 - ✅ factorBar/layerCards/statusLights 色彩統一
+- ✅ 主題切換機制（淺色/深色模式 + localStorage 記憶）
+- ✅ 表單驗證視覺反饋（`:invalid` 紅色邊框）
+- ✅ 響應式斷點微調（平板側邊欄 144px → 200px）
+- ✅ API 404 錯誤處理（renderAgentObservatory null 檢查）
+
+**瀏覽器驗證結果（2026-04-22）：**
+- ✅ Tab 導航：正確遍歷所有互動元素（主題切換 → 連結 → 重新整理按鈕）
+- ✅ 主題切換：點擊切換 light/dark，localStorage 正確記憶
+- ✅ 無障礙基礎：0 個無 alt 圖片、0 個無標籤輸入、0 個無文字按鈕
+- ⚠️ 74 個 muted 文字元素（預期行為，符合設計系統）
 
 ---
 
