@@ -7,7 +7,7 @@
 <style>
 
 
-  :root { --bg: #0b0d11; --panel: #13161c; --border: #242a33; --text: #e8ecf1; --muted: #9aa5b8; --accent: #4fc1ff; --up: #26a17b; --down: #d93a3a; --warn: #f5a623; --primary: #1f6feb; --danger: #da3633; --space-xs: 4px; --space-sm: 8px; --space-md: 14px; --space-lg: 20px; --space-xl: 32px; }
+  :root { --bg: #0b0d11; --panel: #13161c; --border: #242a33; --text: #e8ecf1; --muted: #9aa5b8; --accent: #4fc1ff; --up: #26a17b; --down: #d93a3a; --warn: #f5a623; --primary: #1f6feb; --danger: #da3633; --space-xs: 4px; --space-sm: 8px; --space-md: 14px; --space-lg: 20px; --space-xl: 32px; --layer-1: #3b82f6; --layer-2: #8b5cf6; --layer-3: #10b981; --layer-4: #f59e0b; --layer-5: #ef4444; --layer-6: #6366f1; --status-ok: #10b981; --status-warn: #f59e0b; --status-err: #ef4444; --status-unknown: #9ca3af; }
   * { box-sizing: border-box; }
   *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, "Microsoft JhengHei", "PingFang TC", sans-serif; background: var(--bg); color: var(--text); }
@@ -207,6 +207,19 @@ body { display: flex; margin: 0; min-height: 100vh; }
   #menuToggle { display: inline-block; }
 }
 
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading::before {
+  content: "";
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
 </style>
 </head>
 <body>
@@ -265,14 +278,14 @@ body { display: flex; margin: 0; min-height: 100vh; }
     <!-- 宏觀敘事 -->
     <div class="page" id="page-narrative">
       <div class="two-col-grid">
-        <div class="panel"><h2>總經快照</h2><div id="narrativeMacro">載入中…</div></div>
-        <div class="panel"><h2>台灣市場壓力指數</h2><div id="narrativeStress">載入中…</div></div>
-        <div class="panel"><h2>敘事事件</h2><div id="narrativeEvents">載入中…</div></div>
-        <div class="panel"><h2>因果傳導鏈</h2><div id="narrativeChains">載入中…</div></div>
-        <div class="panel"><h2>投資模型</h2><div id="narrativeModels">載入中…</div></div>
-        <div class="panel"><h2>因果模板庫</h2><div id="narrativeTemplates">載入中…</div></div>
-        <div class="panel"><h2>散戶情緒</h2><div id="narrativeRetailSentiment">載入中…</div></div>
-        <div class="panel"><h2>季節性分析</h2><div id="narrativeSeasonal">載入中…</div></div>
+        <div class="panel"><h2>總經快照</h2><div id="narrativeMacro" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>台灣市場壓力指數</h2><div id="narrativeStress" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>敘事事件</h2><div id="narrativeEvents" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>因果傳導鏈</h2><div id="narrativeChains" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>投資模型</h2><div id="narrativeModels" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>因果模板庫</h2><div id="narrativeTemplates" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>散戶情緒</h2><div id="narrativeRetailSentiment" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>季節性分析</h2><div id="narrativeSeasonal" class="empty loading">載入中…</div></div>
       </div>
     </div>
 
@@ -283,10 +296,10 @@ body { display: flex; margin: 0; min-height: 100vh; }
         本頁呈現的是<strong>控制層（風控長／投資長）對 AI 推薦的最終處置結果</strong>。它告訴你：在市場當前體制下，有多少推薦被放行、有多少被推回、以及系統是否觸發熔斷。
         若風控長阻擋率高，請檢查【宏觀敘事】的壓力指數是否飆升；若投資長過濾數量多，請檢查【投資管線】是否有板塊擁擠或風格衝突。
       </div>
-      <div class="panel wide" style="margin-bottom:14px"><h2>總經敘事脈絡</h2><div id="liveNarrativeStrip">載入中…</div></div>
+      <div class="panel wide" style="margin-bottom:14px"><h2>總經敘事脈絡</h2><div id="liveNarrativeStrip" class="empty loading">載入中…</div></div>
       <div style="display:grid;grid-template-columns:minmax(0,1fr) 170px;gap:14px">
-        <div class="panel"><h2>總經雷達</h2><div id="macroRadar">載入中…</div></div>
-        <div class="panel"><h2>即時狀態</h2><div id="liveStatus">載入中…</div></div>
+        <div class="panel"><h2>總經雷達</h2><div id="macroRadar" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>即時狀態</h2><div id="liveStatus" class="empty loading">載入中…</div></div>
       </div>
     </div>
 
@@ -304,7 +317,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
         若勾選「顯示全部被過濾項目」，<span style="color:var(--down)">紅色邊框列</span>為被控制層擋下的標的，您可點擊「補追」進行人工覆寫。
         <br><span style="color:var(--muted)">註：收盤價為回測當日收盤，作為模擬進場的參考基準。目標價與停損價由 Agent 推薦產生，並在 Simulator 中優先於固定百分比止盈止損。</span>
       </div>
-      <div class="panel wide"><h2>最新場次推薦明細</h2><div id="recommendationPipeline">載入中…</div></div>
+      <div class="panel wide"><h2>最新場次推薦明細</h2><div id="recommendationPipeline" class="empty loading">載入中…</div></div>
     </div>
 
     <!-- 決策鏈 -->
@@ -314,14 +327,14 @@ body { display: flex; margin: 0; min-height: 100vh; }
         本頁將 Atlas 的完整決策過程攤開在陽光下，從<strong>宏觀環境 → 行業趨勢 → 個股篩選 → 控制決策 → 實際績效</strong>一路追蹤。
         每一層的參數、條件與結果都必須可被稽核。若推薦虧損，你可以在這裡直接看到是哪一層的判斷出了問題。
       </div>
-      <div id="decisionChain">載入中…</div>
-      <div class="panel wide" style="margin-top:14px"><h2>AI 自我進化狀態</h2><div id="aiEvolution">載入中…</div></div>
+      <div id="decisionChain" class="empty loading">載入中…</div>
+      <div class="panel wide" style="margin-top:14px"><h2>AI 自我進化狀態</h2><div id="aiEvolution" class="empty loading">載入中…</div></div>
     </div>
 
     <!-- AI 觀測台 -->
     <div class="page" id="page-agents">
-      <div class="panel wide"><h2>績效評估</h2><div id="agentObservatory">載入中…</div></div>
-      <div class="panel wide"><h2>AI 標的池重疊</h2><div id="universeOverlap">載入中…</div></div>
+      <div class="panel wide"><h2>績效評估</h2><div id="agentObservatory" class="empty loading">載入中…</div></div>
+      <div class="panel wide"><h2>AI 標的池重疊</h2><div id="universeOverlap" class="empty loading">載入中…</div></div>
     </div>
 
     <!-- 模擬交易 -->
@@ -335,9 +348,9 @@ body { display: flex; margin: 0; min-height: 100vh; }
           <div class="step active">評判 / 晉升</div><span class="arrow">→</span>
           <div class="step">基線政策</div>
         </div>
-        <div class="inbox-grid" id="experimentInbox">載入中…</div>
+        <div class="inbox-grid" id="experimentInbox" class="empty loading">載入中…</div>
       </div>
-      <div class="panel wide"><h2>晉升歷史</h2><div id="experimentHistory">載入中…</div></div>
+      <div class="panel wide"><h2>晉升歷史</h2><div id="experimentHistory" class="empty loading">載入中…</div></div>
     </div>
 
     <!-- 最新回測 -->
@@ -354,7 +367,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
         </div>
         <div id="backtestStatusDetail" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
       </div>
-      <div class="panel wide"><h2>回測報告</h2><div id="backtestReport">載入中…</div></div>
+      <div class="panel wide"><h2>回測報告</h2><div id="backtestReport" class="empty loading">載入中…</div></div>
     </div>
 
     <!-- 控制與稽核 -->
@@ -396,8 +409,8 @@ body { display: flex; margin: 0; min-height: 100vh; }
           </div>
         </div>
       </div>
-      <div class="panel wide"><h2>資料採集健康度</h2><div id="dataIngestHealth">載入中…</div></div>
-      <div class="panel wide"><h2>人工干預紀錄</h2><div id="auditLog">載入中…</div></div>
+      <div class="panel wide"><h2>資料採集健康度</h2><div id="dataIngestHealth" class="empty loading">載入中…</div></div>
+      <div class="panel wide"><h2>人工干預紀錄</h2><div id="auditLog" class="empty loading">載入中…</div></div>
     </div>
     <!-- 信息通道 -->
     <div class="page" id="page-datachannels">
@@ -413,7 +426,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
             <button class="primary" id="btnIngestChannels" onclick="triggerChannelsIngest()">立即更新 Macro + Geo 資料</button>
           </div>
         </div>
-        <div id="dataChannels" style="margin-top:10px">載入中…</div>
+        <div id="dataChannels" style="margin-top:10px" class="empty loading">載入中…</div>
       </div>
     </div>
 
@@ -432,7 +445,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
             <button onclick="showUnacknowledgedOnly()">僅顯示未確認</button>
           </div>
         </div>
-        <div id="alertsPanel">載入中…</div>
+        <div id="alertsPanel" class="empty loading">載入中…</div>
       </div>
     </div>
   </div>
@@ -1018,9 +1031,9 @@ function factorBar(score, minVal, maxVal) {
   if (score == null || isNaN(score)) return '<span style="color:var(--muted)">-</span>';
   const range = maxVal - minVal;
   const pct = Math.max(0, Math.min(100, ((score - minVal) / range) * 100));
-  let color = '#f59e0b';
-  if (score >= (minVal + range * 0.6)) color = '#22c55e';
-  else if (score <= (minVal + range * 0.4)) color = '#ef4444';
+  let color = 'var(--warn)';
+  if (score >= (minVal + range * 0.6)) color = 'var(--up)';
+  else if (score <= (minVal + range * 0.4)) color = 'var(--down)';
   return `<div style="width:60px;height:6px;background:var(--bg);border-radius:3px;overflow:hidden" title="${score.toFixed(3)}"><div style="width:${pct}%;height:100%;background:${color}"></div></div>`;
 }
 function renderFactorBreakdown(breakdown) {
@@ -1335,12 +1348,12 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
   ` : '<div style="color:var(--muted)">暫無稅務資料</div>';
 
   el.innerHTML = `
-    ${layerCard('1', '宏觀環境', macroContent, '#3b82f6')}
-    ${layerCard('2', '行業趨勢', sectorContent, '#8b5cf6')}
-    ${layerCard('3', '個股篩選', stockContent, '#10b981')}
-    ${layerCard('4', '控制決策', guardContent, '#f59e0b')}
-    ${layerCard('5', '績效追蹤', perfContent, '#ef4444')}
-    ${layerCard('6', '稅務影響', taxContent, '#6366f1')}
+    ${layerCard('1', '宏觀環境', macroContent, 'var(--layer-1)')}
+    ${layerCard('2', '行業趨勢', sectorContent, 'var(--layer-2)')}
+    ${layerCard('3', '個股篩選', stockContent, 'var(--layer-3)')}
+    ${layerCard('4', '控制決策', guardContent, 'var(--layer-4)')}
+    ${layerCard('5', '績效追蹤', perfContent, 'var(--layer-5)')}
+    ${layerCard('6', '稅務影響', taxContent, 'var(--layer-6)')}
   `;
 }
 
@@ -1588,7 +1601,7 @@ function renderDataChannels(data) {
   if (!data || !data.channels) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
   const channels = data.channels || [];
   const statusLight = s => {
-    const color = s === 'ok' ? '#10b981' : (s === 'warn' ? '#f59e0b' : (s === 'error' ? '#ef4444' : '#9ca3af'));
+    const color = s === 'ok' ? 'var(--status-ok)' : (s === 'warn' ? 'var(--status-warn)' : (s === 'error' ? 'var(--status-err)' : 'var(--status-unknown)'));
     return `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};box-shadow:0 0 6px ${color};margin-right:6px;vertical-align:middle"></span>`;
   };
   const statusClass = s => s === 'ok' ? 'up' : (s === 'warn' ? 'warn' : (s === 'error' ? 'down' : 'muted'));
