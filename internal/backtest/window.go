@@ -76,6 +76,13 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 		return domain.BacktestWindowSummary{}, err
 	}
 
+	windowOutcomes := 0
+	for _, outcome := range outcomes {
+		if !outcome.RecordedAt.Before(startDate) && !outcome.RecordedAt.After(endDate) {
+			windowOutcomes++
+		}
+	}
+
 	registry, err := orchestrator.LoadRegistry(r.cfg.AgentRegistryPath)
 	if err != nil {
 		registry = orchestrator.SeedRegistry()
@@ -87,7 +94,7 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 		StartDate:    startDate,
 		EndDate:      endDate,
 		SessionCount: sessionCount,
-		OutcomeCount: len(outcomes),
+		OutcomeCount: windowOutcomes,
 		GeneratedAt:  time.Now(),
 	}
 	if candidate != nil {
