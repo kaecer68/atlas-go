@@ -2,7 +2,6 @@ package live
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -626,24 +625,230 @@ func (o *Orchestrator) handleMarketClose() {
 	})
 }
 
-var errAgentNotIntegrated = errors.New("live orchestrator agent not yet integrated")
-
 // runContextAgent 运行 Context Agent 判断市场状态
+// 使用与 simulation 模式相同的 regime inference 逻辑
 func (o *Orchestrator) runContextAgent() error {
-	// TODO: 集成 Context Agent (Taiwan Macro)
-	return errAgentNotIntegrated
+	if o.system == nil {
+		return fmt.Errorf("system not initialized")
+	}
+
+	// Fetch quotes for regime inference
+	ctx, cancel := context.WithTimeout(o.ctx, 10*time.Second)
+	defer cancel()
+
+	// Use watchlist or default symbols
+	symbols := o.watchlist
+	if len(symbols) == 0 {
+		symbols = []string{"0050.TW", "0056.TW", "2330.TW", "2317.TW", "2454.TW"}
+	}
+
+	quotes, err := o.marketData.GetQuotes(ctx, time.Now(), symbols)
+	if err != nil {
+		return fmt.Errorf("fetch quotes for regime inference: %w", err)
+	}
+
+	// Convert to map for registry processing
+	quoteMap := make(map[string]domain.Quote, len(quotes))
+	for _, q := range quotes {
+		quoteMap[q.Symbol] = q
+	}
+
+	// Get registry and plugins from system
+	registry := o.system.Registry()
+	plugins := o.system.GetPlugins()
+	if plugins == nil {
+		plugins = orchestrator.NewPluginRegistry()
+	}
+
+	// Infer regime using same logic as simulation
+	regime := o.inferRegime(registry, quoteMap, plugins)
+
+	// Store current regime in state
+	o.stateStore.SetCurrentRegime(regime)
+
+	// Publish regime change event
+	o.publishEvent(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventSystemStart, // Reuse type or create EventRegimeChange
+		Timestamp: time.Now(),
+		Payload: map[string]interface{}{
+			"regime": string(regime),
+			"type":   "regime_inference",
+		},
+	})
+
+	fmt.Printf("[ContextAgent] Regime inferred: %s\n", regime)
+	return nil
+}
+
+// inferRegime replicates the simulation regime inference logic
+func (o *Orchestrator) inferRegime(registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *orchestrator.PluginRegistry) domain.Regime {
+	score := 0
+	for _, agent := range registry.Agents {
+		if !agent.Enabled || agent.Layer != domain.LayerContext {
+			continue
+		}
+		prompt := plugins.ResolvePrompt(agent, nil)
+		score += plugins.RegimeScore(agent, quotes, prompt)
+	}
+
+	switch {
+	case score > 0:
+		return domain.RegimeRiskOn
+	case score < 0:
+		return domain.RegimeRiskOff
+	default:
+		return domain.RegimeNeutral
+	}
 }
 
 // runStyleAndSectorAgents 运行 Style 和 Sector Agents
+// 生成股票推荐并存储在 state 中供后续执行
 func (o *Orchestrator) runStyleAndSectorAgents() error {
-	// TODO: 集成 Style 和 Sector Agents
-	return errAgentNotIntegrated
+	if o.system == nil {
+		return fmt.Errorf("system not initialized")
+	}
+
+	// Fetch quotes for all watchlist symbols
+	ctx, cancel := context.WithTimeout(o.ctx, 10*time.Second)
+	defer cancel()
+
+	if len(o.watchlist) == 0 {
+		return nil // No symbols to analyze
+	}
+
+	quotes, err := o.marketData.GetQuotes(ctx, time.Now(), o.watchlist)
+	if err != nil {
+		return fmt.Errorf("fetch quotes for agent analysis: %w", err)
+	}
+
+	// Convert to map
+	quoteMap := make(map[string]domain.Quote, len(quotes))
+	for _, q := range quotes {
+		quoteMap[q.Symbol] = q
+	}
+
+	// Get registry and plugins
+	registry := o.system.Registry()
+	plugins := o.system.GetPlugins()
+	if plugins == nil {
+		plugins = orchestrator.NewPluginRegistry()
+	}
+
+	// Get current regime
+	regime := o.stateStore.GetCurrentRegime()
+
+	// Collect recommendations using same logic as simulation
+	var recommendations []domain.Recommendation
+	for _, agent := range registry.Agents {
+		if !agent.Enabled {
+			continue
+		}
+		if agent.Layer != domain.LayerSector && agent.Layer != domain.LayerStyle && agent.Layer != domain.LayerSuperinvestor {
+			continue
+		}
+
+		prompt := plugins.ResolvePrompt(agent, nil)
+		symbols := agent.Universe
+		if len(symbols) == 0 {
+			symbols = o.watchlist
+		}
+
+		for _, symbol := range symbols {
+			quote, ok := quoteMap[symbol]
+			if !ok || !quote.IsTradable {
+				continue
+			}
+
+			// Apply screening
+			passed, err := plugins.Screen(ctx, agent, symbol, quoteMap)
+			if err != nil || !passed {
+				continue
+			}
+
+			rec, ok := plugins.Recommendation(agent, quote, prompt, regime)
+			if !ok {
+				continue
+			}
+			recommendations = append(recommendations, rec)
+		}
+	}
+
+	// Store recommendations
+	if len(recommendations) > 0 {
+		o.stateStore.SetPendingRecommendations(recommendations)
+		fmt.Printf("[StyleAndSectorAgents] Generated %d recommendations\n", len(recommendations))
+	}
+
+	// Publish event
+	o.publishEvent(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventSystemStart,
+		Timestamp: time.Now(),
+		Payload: map[string]interface{}{
+			"recommendation_count": len(recommendations),
+			"type":                 "agent_recommendations",
+		},
+	})
+
+	return nil
 }
 
-// applyRiskFilters 应用风险过滤
+// applyRiskFilters 应用 CRO Agent 风险过滤
+// 使用与 simulation 模式相同的控制层逻辑
 func (o *Orchestrator) applyRiskFilters() error {
-	// TODO: 集成 CRO Agent 风险过滤
-	return errAgentNotIntegrated
+	if o.system == nil {
+		return fmt.Errorf("system not initialized")
+	}
+
+	// Get pending recommendations
+	recommendations := o.stateStore.GetPendingRecommendations()
+	if len(recommendations) == 0 {
+		return nil // No recommendations to filter
+	}
+
+	// Get registry and plugins
+	registry := o.system.Registry()
+	plugins := o.system.GetPlugins()
+	if plugins == nil {
+		plugins = orchestrator.NewPluginRegistry()
+	}
+
+	// Get execution policy from system
+	policy := o.system.GetExecutionPolicy()
+
+	// Apply control layer filters
+	filtered := recommendations
+	for _, agent := range registry.Agents {
+		if !agent.Enabled || agent.Layer != domain.LayerControl {
+			continue
+		}
+		filtered = plugins.ApplyControl(agent, filtered, policy)
+	}
+
+	// Store filtered recommendations
+	o.stateStore.SetFilteredRecommendations(filtered)
+
+	// Calculate blocked count
+	blockedCount := len(recommendations) - len(filtered)
+
+	fmt.Printf("[RiskFilters] Applied CRO/CIO filters: %d passed, %d blocked\n", len(filtered), blockedCount)
+
+	// Publish event
+	if blockedCount > 0 {
+		o.publishEvent(BusEvent{
+			ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+			Type:      EventRiskAlert,
+			Timestamp: time.Now(),
+			Payload: map[string]interface{}{
+				"blocked_count": blockedCount,
+				"passed_count":  len(filtered),
+				"type":          "risk_filter",
+			},
+		})
+	}
+
+	return nil
 }
 
 // simulateOrderExecution 模拟订单执行
