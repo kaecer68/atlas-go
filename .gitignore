@@ -62,3 +62,9 @@ cmd/backtest-window/data/state/darwinian_weights.json
 
 # OpenCode config (local development)
 opencode.json
+
+# Debug test files
+internal/experiment/debug*_test.go
+
+# PR description
+PR_DESCRIPTION.md

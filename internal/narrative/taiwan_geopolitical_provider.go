@@ -1,0 +1,198 @@
+package narrative
+
+import (
+	"context"
+	"encoding/xml"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
+)
+
+// TaiwanRSSGeopoliticalProvider monitors Taiwan-related geopolitical news via RSS feeds.
+// It extends the RSS pattern to track cross-strait tensions, military drills, and sanctions.
+type TaiwanRSSGeopoliticalProvider struct {
+	client   *http.Client
+	feeds    []string
+	keywords []string
+}
+
+// NewTaiwanRSSGeopoliticalProvider creates a Taiwan geopolitical risk monitor.
+// Uses CNA (Central News Agency) and Liberty Times RSS feeds with cross-strait keywords.
+func NewTaiwanRSSGeopoliticalProvider() *TaiwanRSSGeopoliticalProvider {
+	return &TaiwanRSSGeopoliticalProvider{
+		client: &http.Client{Timeout: 15 * time.Second},
+		feeds: []string{
+			"https://www.cna.com.tw/cna/rss/rssfa.xml",     // CNA All News
+			"https://news.ltn.com.tw/rss/focus.xml",        // Liberty Times Focus
+			"https://www.cna.com.tw/cna/rss/pol/rssfa.xml", // CNA Politics
+			"https://news.tvbs.com.tw/rss/news.xml",        // TVBS News
+		},
+		keywords: []string{
+			// Chinese keywords
+			"台灣", "中國", "兩岸", "軍演", "制裁", "共機", "共艦",
+			"台海", "陸委會", "海基會", "AIT", "美台", "抗中",
+			"武統", "和統", "九二共識", "一中", "台獨", "維持現狀",
+			// English keywords
+			"taiwan", "china", "chinese", "cross-strait", "cross strait",
+			"military drill", "military exercise", "naval exercise",
+			"sanction", "sanctions", "blacklist",
+			"PLA", "People's Liberation Army", "PLA Navy",
+			"aircraft carrier", "warship", "drone",
+			"Taiwan Strait", "Taiwan relations act", "TRA",
+			"Tsai Ing-wen", "Lai Ching-te", "president",
+			"US arms sale", "arms sale", "F-16", "missile",
+		},
+	}
+}
+
+// Name returns the provider name.
+func (t *TaiwanRSSGeopoliticalProvider) Name() string {
+	return "taiwan_rss_geopolitical"
+}
+
+// FetchScore aggregates keyword counts from Taiwan RSS feeds and maps to intensity.
+func (t *TaiwanRSSGeopoliticalProvider) FetchScore(ctx context.Context) (GeopoliticalRiskScore, error) {
+	var totalMatches int
+	var succeeded []string
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for _, url := range t.feeds {
+		wg.Add(1)
+		go func(url string) {
+			defer wg.Done()
+			matches, err := t.countKeywordsInFeed(ctx, url)
+			if err != nil {
+				log.Printf("[TaiwanRSSGeopoliticalProvider] feed failed %s: %v", url, err)
+				return
+			}
+			mu.Lock()
+			totalMatches += matches
+			succeeded = append(succeeded, url)
+			mu.Unlock()
+		}(url)
+	}
+
+	wg.Wait()
+
+	// Map matches to 0-100 intensity
+	// Cross-strait news is typically less frequent but more impactful than Middle East conflicts
+	intensity := float64(totalMatches) * 4.0
+	if intensity > 100 {
+		intensity = 100
+	}
+	if intensity < 5 {
+		intensity = 5
+	}
+
+	// Sentiment tends to be more neutral to negative depending on news content
+	sentiment := -0.3
+	if totalMatches > 10 {
+		sentiment = -0.5
+	}
+
+	score := GeopoliticalRiskScore{
+		Region:         "Taiwan",
+		Intensity:      intensity,
+		Sentiment:      sentiment,
+		Confidence:     0.60,
+		OilImpact:      0.1, // Lower oil impact than Middle East
+		ShippingImpact: 0.4, // Taiwan Strait shipping risk
+		Sources:        succeeded,
+		Timestamp:      time.Now().UTC(),
+	}
+	return score, nil
+}
+
+func (t *TaiwanRSSGeopoliticalProvider) countKeywordsInFeed(ctx context.Context, url string) (int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, err
+	}
+
+	var rss rssFeed
+	if err := xml.Unmarshal(body, &rss); err != nil {
+		return 0, err
+	}
+
+	matches := 0
+	for _, item := range rss.Channel.Items {
+		text := strings.ToLower(item.Title + " " + item.Description)
+		for _, kw := range t.keywords {
+			if strings.Contains(text, kw) {
+				matches++
+			}
+		}
+	}
+	return matches, nil
+}
+
+// CompositeTaiwanGeopoliticalProvider combines Taiwan RSS with other Taiwan-focused providers.
+type CompositeTaiwanGeopoliticalProvider struct {
+	providers []GeopoliticalRiskProvider
+}
+
+// NewCompositeTaiwanGeopoliticalProvider creates a composite Taiwan provider.
+func NewCompositeTaiwanGeopoliticalProvider(providers ...GeopoliticalRiskProvider) *CompositeTaiwanGeopoliticalProvider {
+	return &CompositeTaiwanGeopoliticalProvider{providers: providers}
+}
+
+// Name returns the provider name.
+func (c *CompositeTaiwanGeopoliticalProvider) Name() string {
+	return "composite_taiwan_geopolitical"
+}
+
+// FetchScore averages intensity across all Taiwan providers.
+func (c *CompositeTaiwanGeopoliticalProvider) FetchScore(ctx context.Context) (GeopoliticalRiskScore, error) {
+	var totalIntensity float64
+	var totalConfidence float64
+	var totalOilImpact float64
+	var totalShippingImpact float64
+	var sources []string
+	var count int
+
+	for _, p := range c.providers {
+		score, err := p.FetchScore(ctx)
+		if err != nil {
+			log.Printf("[CompositeTaiwanGeopoliticalProvider] provider %s failed: %v", p.Name(), err)
+			continue
+		}
+		totalIntensity += score.Intensity
+		totalConfidence += score.Confidence
+		totalOilImpact += score.OilImpact
+		totalShippingImpact += score.ShippingImpact
+		sources = append(sources, p.Name())
+		count++
+	}
+
+	if count == 0 {
+		return GeopoliticalRiskScore{}, fmt.Errorf("all Taiwan geopolitical providers failed")
+	}
+
+	return GeopoliticalRiskScore{
+		Region:         "Taiwan",
+		Intensity:      totalIntensity / float64(count),
+		Sentiment:      -0.4,
+		Confidence:     totalConfidence / float64(count),
+		OilImpact:      totalOilImpact / float64(count),
+		ShippingImpact: totalShippingImpact / float64(count),
+		Sources:        sources,
+		Timestamp:      time.Now().UTC(),
+	}, nil
+}
