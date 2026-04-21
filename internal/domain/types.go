@@ -232,9 +232,9 @@ func DefaultCapitalPhaseConfig() CapitalPhaseConfig {
 		SharpeThreshold:  1.0,
 		CapitalLimits: map[string]float64{
 			string(PhaseSimulation): 1.0,
-			string(PhasePaper):    0.10,
-			string(PhaseLive):     0.30,
-			string(PhaseFull):     1.0,
+			string(PhasePaper):      0.10,
+			string(PhaseLive):       0.30,
+			string(PhaseFull):       1.0,
 		},
 	}
 }
@@ -250,4 +250,26 @@ type CapitalSnapshot struct {
 	MaxDrawdown     float64      `json:"max_drawdown"`
 	CanAdvance      bool         `json:"can_advance"`
 	AdvanceReason   string       `json:"advance_reason,omitempty"`
+}
+
+type RetailSentimentSnapshot struct {
+	MarginBalance    float64   `json:"margin_balance"`
+	MarginChangePct  float64   `json:"margin_change_pct"`
+	DayTradingRatio  float64   `json:"day_trading_ratio"`
+	MarginPercentile float64   `json:"margin_percentile"`
+	Timestamp        time.Time `json:"timestamp"`
+}
+
+func (s RetailSentimentSnapshot) CalculateSentimentScore() float64 {
+	return (s.MarginPercentile - 0.5) * 2
+}
+
+func (s RetailSentimentSnapshot) ExtremeReading() string {
+	if s.MarginPercentile >= 0.9 {
+		return "frenzy"
+	}
+	if s.MarginPercentile <= 0.1 {
+		return "fear"
+	}
+	return "neutral"
 }
