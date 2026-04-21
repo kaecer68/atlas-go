@@ -184,8 +184,27 @@ body { display: flex; margin: 0; min-height: 100vh; }
 .kpi-card .kpi-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 .kpi-card .kpi-value { font-size: 22px; font-weight: 700; }
 .kpi-card .kpi-hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
-.kpi-card.alert { border-color: var(--warn); }
-.kpi-card.alert-err { border-color: var(--down); }
+  .kpi-card.alert { border-color: var(--warn); }
+  .kpi-card.alert-err { border-color: var(--down); }
+  .kpi-card.clickable { cursor: pointer; }
+  .help-panel { margin-bottom: var(--space-md); font-size: 13px; color: var(--text); line-height: 1.7; }
+  .mb-sm { margin-bottom: var(--space-sm); }
+  .mb-md { margin-bottom: var(--space-md); }
+  .text-muted { color: var(--muted); }
+  .text-down { color: var(--down); }
+  .text-up { color: var(--up); }
+  .text-warn { color: var(--warn); }
+  .text-accent { color: var(--accent); }
+  .live-grid { display: grid; grid-template-columns: minmax(0, 1fr) 170px; gap: var(--space-md); }
+  .mt-md { margin-top: var(--space-md); }
+  .mt-sm { margin-top: var(--space-sm); }
+  .m-0 { margin: 0; }
+  .input-w-md { width: 180px; }
+  .flex-between { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .mb-sm { margin-bottom: var(--space-sm); }
+  .label-muted { font-size: 12px; color: var(--muted); }
+  .text-sm { font-size: 12px; }
+  .help-panel { margin-bottom: var(--space-md); font-size: 13px; color: var(--text); line-height: 1.7; }
 
 /* Mobile sidebar toggle */
 #menuToggle {
@@ -243,13 +262,13 @@ body { display: flex; margin: 0; min-height: 100vh; }
     <a data-page="alerts" onclick="switchPage('alerts')">系統警報</a>
   </nav>
   <div class="foot">
-    <span style="color:var(--muted)">v8 · 統一介面</span>
+    <span class="text-muted">v8 · 統一介面</span>
   </div>
 </div>
 
 <div id="main">
   <div id="topbar">
-    <div style="display:flex;align-items:center;gap:10px">
+    <div class="flex-center-gap">
       <button id="menuToggle" onclick="toggleSidebar()">☰</button>
       <h2 id="pageTitle">總覽</h2>
     </div>
@@ -259,7 +278,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
   <div id="content">
     <!-- 總覽 -->
     <div class="page active" id="page-overview">
-      <div class="panel" style="margin-bottom:14px;font-size:13px;color:var(--text);line-height:1.7">
+      <div class="panel help-panel">
         <strong>如何解讀本頁：</strong>
         本頁呈現的是基於最新回測窗口計算出的<strong>系統狀態快照</strong>。這不是即時行情，而是 Atlas 在指定 replay 資料區間內，透過多層 AI Agent 模擬與風控後匯總出的「當前體制判斷」。
         下方的每一張卡片都是一個獨立指標；點擊卡片（除資料時間與基線版本外）可查看該指標的詳細解讀與操作建議。
@@ -267,11 +286,11 @@ body { display: flex; margin: 0; min-height: 100vh; }
       <div class="kpi-grid" id="overviewGrid">
         <div class="kpi-card"><div class="kpi-label">資料時間</div><div class="kpi-value">-</div></div>
         <div class="kpi-card"><div class="kpi-label">基線版本</div><div class="kpi-value">-</div></div>
-        <div class="kpi-card" style="cursor:pointer" onclick="openKpiHelp('narrative')"><div class="kpi-label">敘事脈絡</div><div class="kpi-value">-</div></div>
-        <div class="kpi-card" style="cursor:pointer" onclick="openKpiHelp('regime')"><div class="kpi-label">市場狀態</div><div class="kpi-value">-</div></div>
-        <div class="kpi-card" style="cursor:pointer" onclick="openKpiHelp('weakest')"><div class="kpi-label">表現最差 AI</div><div class="kpi-value">-</div></div>
-        <div class="kpi-card" style="cursor:pointer" onclick="openKpiHelp('experiment')"><div class="kpi-label">實驗狀態</div><div class="kpi-value">-</div></div>
-        <div class="kpi-card" style="cursor:pointer" onclick="openKpiHelp('crowding')"><div class="kpi-label">擁擠標的</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card clickable" onclick="openKpiHelp('narrative')"><div class="kpi-label">敘事脈絡</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card clickable" onclick="openKpiHelp('regime')"><div class="kpi-label">市場狀態</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card clickable" onclick="openKpiHelp('weakest')"><div class="kpi-label">表現最差 AI</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card clickable" onclick="openKpiHelp('experiment')"><div class="kpi-label">實驗狀態</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card clickable" onclick="openKpiHelp('crowding')"><div class="kpi-label">擁擠標的</div><div class="kpi-value">-</div></div>
       </div>
     </div>
 
@@ -291,13 +310,13 @@ body { display: flex; margin: 0; min-height: 100vh; }
 
     <!-- 相對趨勢 -->
     <div class="page" id="page-live">
-      <div class="panel" style="margin-bottom:14px;font-size:13px;color:var(--text);line-height:1.7">
+      <div class="panel help-panel">
         <strong>如何解讀本頁：</strong>
         本頁呈現的是<strong>控制層（風控長／投資長）對 AI 推薦的最終處置結果</strong>。它告訴你：在市場當前體制下，有多少推薦被放行、有多少被推回、以及系統是否觸發熔斷。
         若風控長阻擋率高，請檢查【宏觀敘事】的壓力指數是否飆升；若投資長過濾數量多，請檢查【投資管線】是否有板塊擁擠或風格衝突。
       </div>
-      <div class="panel wide" style="margin-bottom:14px"><h2>總經敘事脈絡</h2><div id="liveNarrativeStrip" class="empty loading">載入中…</div></div>
-      <div style="display:grid;grid-template-columns:minmax(0,1fr) 170px;gap:14px">
+      <div class="panel wide mb-md"><h2>總經敘事脈絡</h2><div id="liveNarrativeStrip" class="empty loading">載入中…</div></div>
+      <div class="live-grid">
         <div class="panel"><h2>總經雷達</h2><div id="macroRadar" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>即時狀態</h2><div id="liveStatus" class="empty loading">載入中…</div></div>
       </div>
@@ -305,30 +324,30 @@ body { display: flex; margin: 0; min-height: 100vh; }
 
     <!-- 投資管線 -->
     <div class="page" id="page-pipeline">
-      <div class="workflow" style="margin-bottom:12px">
+      <div class="workflow mb-sm">
         <div class="step">AI 推薦</div><span class="arrow">→</span>
         <div class="step clickable" id="workflowScreening" onclick="toggleWorkflowScreening()" title="點擊顯示/隱藏被篩選層排除的標的">篩選層</div><span class="arrow">→</span>
         <div class="step">控制層</div><span class="arrow">→</span>
         <div class="step">模擬投組</div>
       </div>
-      <div class="panel wide" style="margin-bottom:14px;font-size:13px;color:var(--text);line-height:1.7">
+      <div class="panel wide help-panel">
         <strong>如何解讀本頁：</strong>
         以下為最新回測場次中，<strong>控制層已放行的推薦標的</strong>。每筆資料包含策略來源、方向、收盤價與隔日回測報酬。價量標籤與推薦理由供您快速評估是否放行。
-        若勾選「顯示全部被過濾項目」，<span style="color:var(--down)">紅色邊框列</span>為被控制層擋下的標的，您可點擊「補追」進行人工覆寫。
-        <br><span style="color:var(--muted)">註：收盤價為回測當日收盤，作為模擬進場的參考基準。目標價與停損價由 Agent 推薦產生，並在 Simulator 中優先於固定百分比止盈止損。</span>
+        若勾選「顯示全部被過濾項目」，<span class="text-down">紅色邊框列</span>為被控制層擋下的標的，您可點擊「補追」進行人工覆寫。
+        <br><span class="text-muted">註：收盤價為回測當日收盤，作為模擬進場的參考基準。目標價與停損價由 Agent 推薦產生，並在 Simulator 中優先於固定百分比止盈止損。</span>
       </div>
       <div class="panel wide"><h2>最新場次推薦明細</h2><div id="recommendationPipeline" class="empty loading">載入中…</div></div>
     </div>
 
     <!-- 決策鏈 -->
     <div class="page" id="page-decision">
-      <div class="panel wide" style="margin-bottom:14px;font-size:13px;color:var(--text);line-height:1.7">
+      <div class="panel wide help-panel">
         <strong>如何解讀本頁：</strong>
         本頁將 Atlas 的完整決策過程攤開在陽光下，從<strong>宏觀環境 → 行業趨勢 → 個股篩選 → 控制決策 → 實際績效</strong>一路追蹤。
         每一層的參數、條件與結果都必須可被稽核。若推薦虧損，你可以在這裡直接看到是哪一層的判斷出了問題。
       </div>
       <div id="decisionChain" class="empty loading">載入中…</div>
-      <div class="panel wide" style="margin-top:14px"><h2>AI 自我進化狀態</h2><div id="aiEvolution" class="empty loading">載入中…</div></div>
+      <div class="panel wide mt-md"><h2>AI 自我進化狀態</h2><div id="aiEvolution" class="empty loading">載入中…</div></div>
     </div>
 
     <!-- AI 觀測台 -->
@@ -358,12 +377,12 @@ body { display: flex; margin: 0; min-height: 100vh; }
       <div class="panel wide">
         <h2>啟動回測</h2>
         <div class="control-group">
-          <label style="font-size:12px;color:var(--muted)">開始</label>
+          <label class="label-muted">開始</label>
           <input type="date" id="backtestStart" value="2026-03-26">
-          <label style="font-size:12px;color:var(--muted)">結束</label>
+          <label class="label-muted">結束</label>
           <input type="date" id="backtestEnd" value="2026-03-27">
           <button class="primary" onclick="runBacktest()">啟動回測</button>
-          <span id="backtestStatusText" style="font-size:12px;color:var(--muted)"></span>
+          <span id="backtestStatusText" class="text-muted text-sm"></span>
         </div>
         <div id="backtestStatusDetail" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
       </div>
@@ -376,7 +395,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
         <h2>人工控制</h2>
         <div class="two-col-grid">
           <div>
-            <div style="margin-bottom:6px;font-size:13px"><strong>AI 覆寫</strong> <span id="overrideBadges"></span></div>
+            <div class="mb-xs text-sm"><strong>AI 覆寫</strong> <span id="overrideBadges"></span></div>
             <div class="control-group">
               <select id="agentSelect"></select>
               <button onclick="pauseAgent()">暫停</button>
@@ -396,14 +415,14 @@ body { display: flex; margin: 0; min-height: 100vh; }
             </div>
           </div>
           <div>
-            <div style="margin-bottom:6px;font-size:13px"><strong>基線管理</strong></div>
+            <div class="mb-xs text-sm"><strong>基線管理</strong></div>
             <div class="control-group">
               <select id="promoteSelect"><option value="">-- 選擇已接受的實驗 --</option></select>
               <button class="primary" onclick="promoteExperiment()">晉升</button>
             </div>
             <div class="control-group">
               <select id="revertSelect"><option value="">-- 選擇要回滾的版本 --</option></select>
-              <input id="revertReason" type="text" placeholder="原因" style="width:180px">
+              <input id="revertReason" type="text" placeholder="原因" class="input-w-md">
               <button class="danger" onclick="revertExperiment()">回滾</button>
             </div>
           </div>
@@ -414,33 +433,33 @@ body { display: flex; margin: 0; min-height: 100vh; }
     </div>
     <!-- 信息通道 -->
     <div class="page" id="page-datachannels">
-      <div class="panel wide" style="margin-bottom:14px;font-size:13px;color:var(--text);line-height:1.7">
+      <div class="panel wide help-panel">
         <strong>如何解讀本頁：</strong>
         本頁呈現 Atlas 所有<strong>外部資料來源的健康狀態</strong>，按國家與平台分類。你可以看到每個通道的 API 格式、本地儲存路徑，以及最後更新時間。
-        若某個通道顯示 <span style="color:var(--warn)">🟡 延遲</span> 或 <span style="color:var(--down)">🔴 異常</span>，表示該資料可能影響總經判斷與回測結果，建議檢查網路連線或資料供應商狀態。
+        若某個通道顯示 <span class="text-warn">🟡 延遲</span> 或 <span class="text-down">🔴 異常</span>，表示該資料可能影響總經判斷與回測結果，建議檢查網路連線或資料供應商狀態。
       </div>
       <div class="panel wide">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-          <h2 style="margin:0">資料通道監控</h2>
-          <div class="control-group" style="margin:0">
+        <div class="flex-between">
+          <h2 class="m-0">資料通道監控</h2>
+          <div class="control-group m-0">
             <button class="primary" id="btnIngestChannels" onclick="triggerChannelsIngest()">立即更新 Macro + Geo 資料</button>
           </div>
         </div>
-        <div id="dataChannels" style="margin-top:10px" class="empty loading">載入中…</div>
+        <div id="dataChannels" class="empty loading mt-sm">載入中…</div>
       </div>
     </div>
 
     
     <div class="page" id="page-alerts">
-      <div class="panel wide" style="margin-bottom:14px;font-size:13px;color:var(--text);line-height:1.7">
+      <div class="panel wide help-panel">
         <strong>如何解讀本頁：</strong>
         本頁呈現 Atlas 系統產生的所有<strong>風險警報與系統通知</strong>。每條警報都有嚴重程度標記，你可以確認已處理的警報。
         未確認的警報會持續提醒，直到人工介入處理。
       </div>
       <div class="panel wide">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
-          <h2 style="margin:0">系統警報</h2>
-          <div class="control-group" style="margin:0">
+        <div class="flex-between mb-sm">
+          <h2 class="m-0">系統警報</h2>
+          <div class="control-group m-0">
             <button onclick="loadAlerts()">🔄 重新整理</button>
             <button onclick="showUnacknowledgedOnly()">僅顯示未確認</button>
           </div>
@@ -742,10 +761,10 @@ function renderOverview(data, agentsData, inbox, overlap, narrativeEvents, stres
   if (crowdingWarnings.length) {
     crowdingHtml = crowdingWarnings.map(w => {
       const text = w.replace('擁擠交易：', '').replace('重疊過高：', '');
-      return `<div style="margin:4px 0;font-size:13px;color:var(--warn)">⚠ ${text}</div>`;
+      return `<div class="my-xs text-sm text-warn">⚠ ${text}</div>`;
     }).join('');
   } else {
-    crowdingHtml = '<div style="margin:4px 0;font-size:13px;color:var(--up)">✓ 無擁擠標的</div>';
+    crowdingHtml = '<div class="my-xs text-sm text-up">✓ 無擁擠標的</div>';
   }
 
   // Data channel alerts
@@ -757,25 +776,25 @@ function renderOverview(data, agentsData, inbox, overlap, narrativeEvents, stres
   const alertHtml = totalAlerts > 0
     ? `<div style="margin:4px 0;font-size:13px;color:var(--down)">⚠ ${errorChannels.map(c => escapeHtml(c.platform)).join('、')} 發生異常</div>`
     : (warnChannels.length > 0
-      ? `<div style="margin:4px 0;font-size:13px;color:var(--warn)">⚠ ${warnChannels.map(c => escapeHtml(c.platform)).join('、')} 資料延遲</div>`
-      : '<div style="margin:4px 0;font-size:13px;color:var(--up)">✓ 所有通道正常</div>');
+      ? `<div class="my-xs text-sm text-warn">⚠ ${warnChannels.map(c => escapeHtml(c.platform)).join('、')} 資料延遲</div>`
+      : '<div class="my-xs text-sm text-up">✓ 所有通道正常</div>');
 
   const phaseMap = { simulation: '模擬', paper: '模擬', live: '實盤', full: '全倉' };
   const phaseColor = capitalPhase ? (capitalPhase.can_advance ? 'var(--up)' : 'var(--warn)') : 'inherit';
   const phaseHtml = capitalPhase
-    ? `<div style="margin:4px 0;font-size:13px;color:var(--muted)">第 ${capitalPhase.days_in_phase} 天 · Sharpe ${(capitalPhase.rolling_sharpe || 0).toFixed(2)}</div>`
-    : '<div style="margin:4px 0;font-size:13px;color:var(--muted)">-</div>';
+    ? `<div class="my-xs text-sm text-muted">第 ${capitalPhase.days_in_phase} 天 · Sharpe ${(capitalPhase.rolling_sharpe || 0).toFixed(2)}</div>`
+    : '<div class="my-xs text-sm text-muted">-</div>';
 
   grid.innerHTML = `
-    <div class="kpi-card"><div class="kpi-label">資料時間</div><div class="kpi-value" style="font-size:18px">${health.replay_data_latest_date || '?'}</div><div class="kpi-hint">窗口 ${health.last_window_id || '?'} · 生成於 ${formatDate(health.last_window_generated_at)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">資料時間</div><div class="kpi-value" class="text-lg">${health.replay_data_latest_date || '?'}</div><div class="kpi-hint">窗口 ${health.last_window_id || '?'} · 生成於 ${formatDate(health.last_window_generated_at)}</div></div>
     <div class="kpi-card"><div class="kpi-label">基線版本</div><div class="kpi-value">${health.baseline_version || '?'}</div><div class="kpi-hint">目前生效的政策</div></div>
-    <div class="kpi-card" style="cursor:pointer" onclick="openKpiHelp('narrative')"><div class="kpi-label">敘事脈絡</div><div class="kpi-value" style="font-size:18px">${narrativeTitle}</div><div class="kpi-hint">${narrativeSub} · <a href="#" onclick="event.stopPropagation();switchPage('narrative');return false;" style="color:var(--accent)">開啟宏觀敘事 →</a></div></div>
-    <div class="kpi-card" style="cursor:pointer" onclick="openKpiHelp('regime')"><div class="kpi-label">市場狀態</div><div class="kpi-value" style="color:${regimeColor}">${regimeLabel(regime)}</div></div>
-    <div class="kpi-card" style="cursor:pointer" onclick="openKpiHelp('weakest')"><div class="kpi-label">表現最差 AI</div><div class="kpi-value">${agentName(weakest)}</div><div class="kpi-hint">Sharpe-like：${weakSharpe}</div></div>
-    <div class="kpi-card" style="cursor:pointer" onclick="openKpiHelp('experiment')"><div class="kpi-label">實驗狀態</div><div class="kpi-value" style="font-size:18px">${experimentText}</div><div class="kpi-hint">待處理項目</div></div>
-    <div class="kpi-card ${crowdingWarnings.length ? 'alert-err' : ''}" style="cursor:pointer" onclick="openKpiHelp('crowding')"><div class="kpi-label">擁擠標的</div><div class="kpi-value" style="font-size:18px">${crowdingWarnings.length ? crowdingWarnings.length + ' 筆' : '正常'}</div>${crowdingHtml}</div>
-    <div class="kpi-card ${totalAlerts > 0 ? 'alert-err' : ''}" style="cursor:pointer" onclick="switchPage('datachannels')"><div class="kpi-label">信息通道預警</div><div class="kpi-value" style="font-size:18px">${totalAlerts > 0 ? totalAlerts + ' 筆異常' : (warnChannels.length > 0 ? warnChannels.length + ' 筆延遲' : '正常')}</div>${alertHtml}</div>
-    <div class="kpi-card" style="cursor:pointer" onclick="switchPage('controls')"><div class="kpi-label">資金階段</div><div class="kpi-value" style="color:${phaseColor};font-size:18px">${capitalPhase ? phaseMap[capitalPhase.phase] || capitalPhase.phase : '-'}</div>${phaseHtml}</div>
+    <div class="kpi-card" class="cursor-pointer" onclick="openKpiHelp('narrative')"><div class="kpi-label">敘事脈絡</div><div class="kpi-value" class="text-lg">${narrativeTitle}</div><div class="kpi-hint">${narrativeSub} · <a href="#" onclick="event.stopPropagation();switchPage('narrative');return false;" class="text-accent">開啟宏觀敘事 →</a></div></div>
+    <div class="kpi-card" class="cursor-pointer" onclick="openKpiHelp('regime')"><div class="kpi-label">市場狀態</div><div class="kpi-value" style="color:${regimeColor}">${regimeLabel(regime)}</div></div>
+    <div class="kpi-card" class="cursor-pointer" onclick="openKpiHelp('weakest')"><div class="kpi-label">表現最差 AI</div><div class="kpi-value">${agentName(weakest)}</div><div class="kpi-hint">Sharpe-like：${weakSharpe}</div></div>
+    <div class="kpi-card" class="cursor-pointer" onclick="openKpiHelp('experiment')"><div class="kpi-label">實驗狀態</div><div class="kpi-value" class="text-lg">${experimentText}</div><div class="kpi-hint">待處理項目</div></div>
+    <div class="kpi-card ${crowdingWarnings.length ? 'alert-err' : ''}" class="cursor-pointer" onclick="openKpiHelp('crowding')"><div class="kpi-label">擁擠標的</div><div class="kpi-value" class="text-lg">${crowdingWarnings.length ? crowdingWarnings.length + ' 筆' : '正常'}</div>${crowdingHtml}</div>
+    <div class="kpi-card ${totalAlerts > 0 ? 'alert-err' : ''}" class="cursor-pointer" onclick="switchPage('datachannels')"><div class="kpi-label">信息通道預警</div><div class="kpi-value" class="text-lg">${totalAlerts > 0 ? totalAlerts + ' 筆異常' : (warnChannels.length > 0 ? warnChannels.length + ' 筆延遲' : '正常')}</div>${alertHtml}</div>
+    <div class="kpi-card" class="cursor-pointer" onclick="switchPage('controls')"><div class="kpi-label">資金階段</div><div class="kpi-value" style="color:${phaseColor};font-size:18px">${capitalPhase ? phaseMap[capitalPhase.phase] || capitalPhase.phase : '-'}</div>${phaseHtml}</div>
   `;
 }
 
@@ -891,9 +910,9 @@ function renderMacroRadar(data, pipelineData) {
   if (guard.length) {
     const lines = guard.map(g => {
       const filtered = g.InputCount - g.OutputCount;
-      if (!g.Passed) return `<span style="color:var(--down)">● ${agentName(g.GuardID)} 強制阻擋全部推薦（${g.InputCount} → 0）</span>`;
-      if (filtered > 0) return `<span style="color:var(--warn)">● ${agentName(g.GuardID)} 過濾了 ${filtered} 筆推薦（${g.InputCount} → ${g.OutputCount}）</span>`;
-      return `<span style="color:var(--up)">● ${agentName(g.GuardID)} 未過濾任何推薦，全部放行</span>`;
+      if (!g.Passed) return `<span class="text-down">● ${agentName(g.GuardID)} 強制阻擋全部推薦（${g.InputCount} → 0）</span>`;
+      if (filtered > 0) return `<span class="text-warn">● ${agentName(g.GuardID)} 過濾了 ${filtered} 筆推薦（${g.InputCount} → ${g.OutputCount}）</span>`;
+      return `<span class="text-up">● ${agentName(g.GuardID)} 未過濾任何推薦，全部放行</span>`;
     });
     controlSummary = `<div style="margin:8px 0;font-size:12px;line-height:1.6;background:var(--bg);padding:8px 10px;border-radius:6px">${lines.join('<br>')}</div>`;
   }
@@ -905,7 +924,7 @@ function renderMacroRadar(data, pipelineData) {
     symbolTable = `
       <div style="margin-top:10px;font-size:13px;font-weight:700">最新回測認為可進場的標的（${finalOutputs} 檔中的前 ${topItems.length} 檔）</div>
       <table style="margin-top:6px;font-size:12px">
-        <thead><tr><th>標的</th><th>公司名稱</th><th>推薦 AI</th><th>信念 <span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();openInfoHelp('信念說明', \`<p><strong>信念（Conviction）是什麼？</strong></p><p>這是 AI Agent 對該標的推薦信心分數，範圍通常為 <strong>0 ~ 100</strong>。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>&gt;70</strong>：高信念，AI 認為該標的強烈符合策略條件且風險可控。</li><li><strong>40~70</strong>：中等信念，條件部分符合，但可能存在不確定性。</li><li><strong>&lt;40</strong>：低信念，條件邊緣符合，容易被控制層過濾。</li></ul><p>當多個 AI 同時推薦同一標的時，控制層可能會對信念較低的推薦進行懲罰或過濾。</p>\`)">ℹ️</span></th><th>遠期報酬 <span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();openInfoHelp('遠期報酬說明', \`<p><strong>遠期報酬是什麼？</strong></p><p>這是系統在回測模擬中，假設「以當日收盤價買入該標的並持有固定天數」後計算出的收益率。</p><p>數值可正可負，例如 <strong>+8.5%</strong> 代表回測中持有期間上漲，<strong>-20.9%</strong> 代表下跌。幅度大小取決於市場波動與持有期間長度。</p><p><strong>這不是未來保證</strong>，而是用來驗證 AI 推薦品質的歷史參考值。持續為正的遠期報酬代表該 AI 的選股邏輯在當前市場體制下相對有效。</p>\`)">ℹ️</span></th></tr></thead>
+        <thead><tr><th>標的</th><th>公司名稱</th><th>推薦 AI</th><th>信念 <span class="cursor-pointer text-accent" onclick="event.stopPropagation();openInfoHelp('信念說明', \`<p><strong>信念（Conviction）是什麼？</strong></p><p>這是 AI Agent 對該標的推薦信心分數，範圍通常為 <strong>0 ~ 100</strong>。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>&gt;70</strong>：高信念，AI 認為該標的強烈符合策略條件且風險可控。</li><li><strong>40~70</strong>：中等信念，條件部分符合，但可能存在不確定性。</li><li><strong>&lt;40</strong>：低信念，條件邊緣符合，容易被控制層過濾。</li></ul><p>當多個 AI 同時推薦同一標的時，控制層可能會對信念較低的推薦進行懲罰或過濾。</p>\`)">ℹ️</span></th><th>遠期報酬 <span class="cursor-pointer text-accent" onclick="event.stopPropagation();openInfoHelp('遠期報酬說明', \`<p><strong>遠期報酬是什麼？</strong></p><p>這是系統在回測模擬中，假設「以當日收盤價買入該標的並持有固定天數」後計算出的收益率。</p><p>數值可正可負，例如 <strong>+8.5%</strong> 代表回測中持有期間上漲，<strong>-20.9%</strong> 代表下跌。幅度大小取決於市場波動與持有期間長度。</p><p><strong>這不是未來保證</strong>，而是用來驗證 AI 推薦品質的歷史參考值。持續為正的遠期報酬代表該 AI 的選股邏輯在當前市場體制下相對有效。</p>\`)">ℹ️</span></th></tr></thead>
         <tbody>
           ${topItems.map(it => {
             const retCls = it.forward_return > 0 ? 'up' : (it.forward_return < 0 ? 'down' : '');
@@ -922,7 +941,7 @@ function renderMacroRadar(data, pipelineData) {
   }
 
   el.innerHTML = `
-    <div style="margin-bottom:8px;font-size:12px;color:var(--muted)">
+    <div class="mb-sm text-muted text-sm">
       以下為 <strong>最新回測場次</strong>（${recordedAt}）。這不是即時持倉，而是系統以當時資料與基線策略模擬後，控制層對 AI 推薦的最終處置。
     </div>
     <div class="metric"><div class="label">回測場次</div><div class="value">${data.session_id}</div></div>
@@ -947,7 +966,7 @@ function renderAgentObservatory(data, overlapData) {
   const cards = data.weakest_agent_scorecards || [];
   if (!cards.length) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
   const weakest = data.next_experiment_agent_id || '';
-  const helpIcon = (title, html) => `<span style="cursor:pointer;color:var(--accent);font-size:12px;margin-left:3px" onclick="event.stopPropagation();openInfoHelp('${title}', \`${html.replace(/"/g, '&quot;')}\`)">ℹ️</span>`;
+  const helpIcon = (title, html) => `<span class="cursor-pointer text-accent text-sm ml-xs" onclick="event.stopPropagation();openInfoHelp('${title}', \`${html.replace(/"/g, '&quot;')}\`)">ℹ️</span>`;
 
   let criteriaHtml = '';
   if (overlapData && overlapData.agents) {
@@ -967,7 +986,7 @@ function renderAgentObservatory(data, overlapData) {
           if (sc.momentum_20d && sc.momentum_20d.min != null) badges.push(`動能≥${sc.momentum_20d.min}`);
           if (sc.min_total_factor_score != null) badges.push(`因子≥${sc.min_total_factor_score}`);
           if (!badges.length) return '';
-          return `<div style="margin:6px 0;font-size:12px"><strong>${agentName(a.agent_id)}</strong> <span style="color:var(--muted)">${badges.map(b => `<span class="badge info" style="cursor:help" title="${b}">${b}</span>`).join(' ')}</span></div>`;
+          return `<div style="margin:6px 0;font-size:12px"><strong>${agentName(a.agent_id)}</strong> <span class="text-muted">${badges.map(b => `<span class="badge info" class="cursor-help" title="${b}">${b}</span>`).join(' ')}</span></div>`;
         }).filter(s => s).join('') + '</div>';
     }
   }
@@ -999,24 +1018,24 @@ function renderUniverseOverlap(data) {
   const matrix = data.matrix || {};
   const warnings = data.warnings || [];
   const styleAgents = agents.filter(a => a.layer === 'style');
-  const uoHelp = (title, html) => `<span style="cursor:pointer;color:var(--accent);font-size:12px;margin-left:3px" onclick="event.stopPropagation();openInfoHelp('${title}', \`${html.replace(/"/g, '&quot;')}\`)">ℹ️</span>`;
+  const uoHelp = (title, html) => `<span class="cursor-pointer text-accent text-sm ml-xs" onclick="event.stopPropagation();openInfoHelp('${title}', \`${html.replace(/"/g, '&quot;')}\`)">ℹ️</span>`;
   el.innerHTML = `
     <div style="margin-bottom:10px;font-size:12px;color:var(--text);line-height:1.6">
       <strong>如何解讀本區塊：</strong>以下顯示各策略來源（Agent）設定的關注標的池，以及 <strong>Style 層</strong> 之間的標的重疊程度。當兩個 Style Agent 同時關注 >=3 檔相同標的時，CIO 層會自動施加信念懲罰（擁擠交易警告）。
     </div>
-    ${warnings.length ? `<div style="margin-bottom:8px">${warnings.map(w => `<span class="badge warn">⚠ ${w}</span>`).join('')}</div>` : ''}
+    ${warnings.length ? `<div class="mb-sm">${warnings.map(w => `<span class="badge warn">⚠ ${w}</span>`).join('')}</div>` : ''}
     <div class="two-col-grid">
       <div>
-        <div style="margin-bottom:6px;font-size:13px"><strong>策略來源標的池</strong></div>
+        <div class="mb-xs text-sm"><strong>策略來源標的池</strong></div>
         <table>
           <thead><tr><th>策略來源 ${uoHelp('策略來源', '<p>Agent 的中文名稱，對應 <code>configs/agents.json</code> 中的 <code>name</code> 欄位。</p><p>同一策略技能未來可能由多個 Agent 競爭執行。</p>')}</th><th>層級 ${uoHelp('層級', '<p>Agent 在 Atlas 分層架構中的所屬層級。</p><ul style="margin:6px 0;padding-left:18px;line-height:1.8"><li><strong>產業主題</strong>（sector）：決定板塊配置。</li><li><strong>風格因子</strong>（style）：決定成長／價值／動能等風格傾向。</li><li><strong>超級投資者</strong>（superinvestor）：模擬特定投資大師的選股邏輯。</li><li><strong>總經情境</strong>（context）：根據總經 regime 產生方向性建議，不直接選股。</li><li><strong>控制層</strong>（control）：風控長／投資長，負責過濾與後置風控。</li></ul>')}</th><th>數量 ${uoHelp('數量', '<p>該 Agent 關注的股票檔數。</p><p>若 Agent 未在設定中指定標的池，會自動 fallback 至系統預設的 24 檔台股。</p><p>數量過少可能導致策略覆蓋不足；過多則可能失去聚焦。</p>')}</th><th>標的 ${uoHelp('標的', '<p>該 Agent 會進行評估與推薦的具體股票代碼清單。</p><p>此清單來自 <code>configs/agents.json</code> 的 <code>universe</code> 欄位。</p>')}</th></tr></thead>
           <tbody>
-            ${agents.map(a => `<tr><td>${agentName(a.agent_id) || a.agent_id}</td><td>${a.layer || '-'}</td><td>${a.universe ? a.universe.length : 0}</td><td style="font-size:11px;color:var(--muted)">${(a.universe || []).join(', ')}</td></tr>`).join('')}
+            ${agents.map(a => `<tr><td>${agentName(a.agent_id) || a.agent_id}</td><td>${a.layer || '-'}</td><td>${a.universe ? a.universe.length : 0}</td><td class="text-muted text-xs">${(a.universe || []).join(', ')}</td></tr>`).join('')}
           </tbody>
         </table>
       </div>
       <div>
-        <div style="margin-bottom:6px;font-size:13px"><strong>Style 層重疊矩陣</strong></div>
+        <div class="mb-xs text-sm"><strong>Style 層重疊矩陣</strong></div>
         ${styleAgents.length ? `<table>
           <thead><tr><th>策略來源 ${uoHelp('策略來源（列）', '<p>矩陣中的每一列代表一個 Style 層 Agent。</p><p>交叉格子顯示的是「該列 Agent」與「該欄 Agent」同時關注的相同標的數量。</p>')}</th>${styleAgents.map(b => `<th>${agentName(b.agent_id)} ${uoHelp(agentName(b.agent_id), '<p>Style 層 Agent 之一。</p><p>列與欄的交叉數字代表兩個 Agent 標的池的重疊檔數。</p>')}</th>`).join('')}</tr></thead>
           <tbody>
@@ -1028,28 +1047,28 @@ function renderUniverseOverlap(data) {
   `;
 }
 function factorBar(score, minVal, maxVal) {
-  if (score == null || isNaN(score)) return '<span style="color:var(--muted)">-</span>';
+  if (score == null || isNaN(score)) return '<span class="text-muted">-</span>';
   const range = maxVal - minVal;
   const pct = Math.max(0, Math.min(100, ((score - minVal) / range) * 100));
   let color = 'var(--warn)';
   if (score >= (minVal + range * 0.6)) color = 'var(--up)';
   else if (score <= (minVal + range * 0.4)) color = 'var(--down)';
-  return `<div style="width:60px;height:6px;background:var(--bg);border-radius:3px;overflow:hidden" title="${score.toFixed(3)}"><div style="width:${pct}%;height:100%;background:${color}"></div></div>`;
+  return `<div class="factor-bar-bg" title="${score.toFixed(3)}"><div style="width:${pct}%;height:100%;background:${color}"></div></div>`;
 }
 function renderFactorBreakdown(breakdown) {
-  if (!breakdown) return '<div style="color:var(--muted);font-size:11px">無計算明細</div>';
+  if (!breakdown) return '<div class="text-muted text-xs">無計算明細</div>';
   const item = (label, it) => {
     if (!it) return '';
     const inputs = it.raw_inputs ? Object.entries(it.raw_inputs).map(([k, v]) => `${k}: ${typeof v === 'number' ? v.toFixed(3) : v}`).join(', ') : '';
     const fallback = it.is_fallback ? '<span style="color:var(--warn);font-size:10px">fallback</span> ' : '';
     const weight = it.weight ? `<span style="color:var(--muted);font-size:10px">權重 ${it.weight.toFixed(2)}</span> ` : '';
     return `<div style="margin:4px 0;padding:4px 6px;background:var(--bg);border-radius:4px">
-      <div style="font-size:11px;font-weight:600">${label} ${fallback}${weight}= <span style="color:var(--accent)">${it.score != null ? it.score.toFixed(3) : '-'}</span></div>
+      <div class="text-xs font-semibold">${label} ${fallback}${weight}= <span class="text-accent">${it.score != null ? it.score.toFixed(3) : '-'}</span></div>
       <div style="font-size:10px;color:var(--muted);margin-top:2px">公式: ${it.formula || '-'}</div>
-      ${inputs ? `<div style="font-size:10px;color:var(--muted)">原始輸入: ${inputs}</div>` : ''}
+      ${inputs ? `<div class="text-muted text-xs">原始輸入: ${inputs}</div>` : ''}
     </div>`;
   };
-  return `<div style="padding:8px 0">
+  return `<div class="py-sm">
     ${item('動能', breakdown.momentum)}
     ${item('價值', breakdown.value)}
     ${item('品質', breakdown.quality)}
@@ -1070,18 +1089,18 @@ function toggleBreakdown(key) {
   }
 }
 function renderConvictionBreakdown(cb) {
-  if (!cb) return '<div style="color:var(--muted);font-size:11px">無計算明細</div>';
+  if (!cb) return '<div class="text-muted text-xs">無計算明細</div>';
   const steps = (cb.steps || []).map(s => {
     const deltaCls = s.delta > 0 ? 'color:var(--up)' : (s.delta < 0 ? 'color:var(--down)' : 'color:var(--muted)');
     const deltaLabel = s.delta > 0 ? '+' + s.delta : String(s.delta);
     return `<div style="display:flex;gap:8px;align-items:flex-start;margin:3px 0;padding:3px 6px;background:var(--bg);border-radius:4px">
-      <div style="width:90px;font-size:10px;color:var(--muted)">${s.rule}</div>
-      <div style="width:40px;font-size:11px;font-weight:600;${deltaCls}">${deltaLabel}</div>
+      <div class="w-90 text-xs text-muted">${s.rule}</div>
+      <div class="w-40 text-xs font-semibold" style="${deltaCls}">${deltaLabel}</div>
       <div style="flex:1;font-size:10px;color:var(--muted)">${s.reason || '-'}</div>
     </div>`;
   }).join('');
-  return `<div style="padding:8px 0">
-    <div style="font-size:11px;margin-bottom:6px">基礎分: <strong>${cb.base}</strong>　門檻: <strong>${cb.floor}</strong>　最終: <strong style="color:var(--accent)">${cb.final}</strong></div>
+  return `<div class="py-sm">
+    <div style="font-size:11px;margin-bottom:6px">基礎分: <strong>${cb.base}</strong>　門檻: <strong>${cb.floor}</strong>　最終: <strong class="text-accent">${cb.final}</strong></div>
     ${steps}
   </div>`;
 }
@@ -1113,7 +1132,7 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
     return `<tr>
       <td>${e.theme}</td>
       <td>${(e.confidence * 100).toFixed(0)}%</td>
-      <td style="font-size:11px;color:var(--muted)">${source}</td>
+      <td class="text-muted text-xs">${source}</td>
       <td>${hitRate}</td>
     </tr>`;
   }).join('');
@@ -1123,20 +1142,20 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
       <span class="badge info">市場狀態：${regimeLabel(regime)}</span>
       ${stressVal != null ? `<span class="badge ${stressVal > 70 ? 'err' : (stressVal > 40 ? 'warn' : 'ok')}">台灣壓力指數：${stressVal.toFixed(1)}</span>` : ''}
     </div>
-    <div style="margin-bottom:10px">
-      <div style="font-size:12px;font-weight:700;margin-bottom:6px">宏觀敘事事件（${eventList.length} 個）</div>
-      ${eventList.length ? `<div style="max-height:200px;overflow:auto">
+    <div class="mb-sm">
+      <div class="text-sm font-bold mb-xs">宏觀敘事事件（${eventList.length} 個）</div>
+      ${eventList.length ? `<div class="scroll-box">
         <div class="table-wrapper">
-        <table style="font-size:12px">
+        <table class="text-sm">
           <thead><tr><th>主題</th><th>Confidence</th><th>來源</th><th>歷史命中率</th></tr></thead>
           <tbody>${macroEventRows}</tbody>
         </table>
         </div>
-      </div>` : '<div style="color:var(--muted);font-size:12px">暫無宏觀敘事事件</div>'}
+      </div>` : '<div class="text-muted text-sm">暫無宏觀敘事事件</div>'}
     </div>
     <div style="margin-bottom:10px;padding:10px 12px;background:var(--bg);border-radius:8px;border-left:3px solid #3b82f6">
-      <div style="font-size:12px;font-weight:700;margin-bottom:4px">宏觀算法說明</div>
-      <div style="font-size:11px;color:var(--muted);line-height:1.7">
+      <div class="text-sm font-bold mb-xs">宏觀算法說明</div>
+      <div class="text-xs text-muted lh-relaxed">
         目前宏觀事件 confidence 為經驗硬編碼常數（heuristic_fixed_v1），依據事件類型分別為 0.60~0.75。<br>
         歷史命中率取自對應因果模板（CausalTemplate）的 HistoricalHitRate，代表該主題在過去回測中的預測準確度。
       </div>
@@ -1149,8 +1168,8 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
 
   const sectorAlgoNote = `
   <div style="margin-bottom:12px;padding:10px 12px;background:var(--bg);border-radius:8px;border-left:3px solid #8b5cf6">
-    <div style="font-size:12px;font-weight:700;margin-bottom:4px">行業趨勢算法說明</div>
-    <div style="font-size:11px;color:var(--muted);line-height:1.7">
+    <div class="text-sm font-bold mb-xs">行業趨勢算法說明</div>
+    <div class="text-xs text-muted lh-relaxed">
       所有產業桌（Sector）與風格桌（Style）的 conviction 皆從基礎分 60 開始。<br>
       基礎分會根據當日價量訊號調整：收盤價 > 開盤價加價格加分；成交量超過門檻加成交量分（上限 75）。<br>
       接著依據各 Agent 的 prompt 關鍵詞與 control 參數進行逐條加減分，最後與 floor 比較決定是否產出推薦。
@@ -1166,16 +1185,16 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
       <td>${it.conviction != null ? it.conviction : '-'}</td>
       <td><button class="pipeline-action" onclick="toggleBreakdown('${key}')" id="btn-${key}">展開</button></td>
     </tr>
-    <tr id="breakdown-${key}" style="display:none"><td colspan="4" style="background:#0d1015;border-left:3px solid #8b5cf6">${renderConvictionBreakdown(cb)}</td></tr>`;
+    <tr id="breakdown-${key}" class="hidden"><td colspan="4" style="background:#0d1015;border-left:3px solid #8b5cf6">${renderConvictionBreakdown(cb)}</td></tr>`;
   };
 
   const sectorTable = (title, list, prefix) => {
-    if (!list.length) return `<div style="margin-bottom:10px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">${title}</div><div style="color:var(--muted);font-size:12px">暫無資料</div></div>`;
-    return `<div style="margin-bottom:10px">
-      <div style="font-size:12px;font-weight:700;margin-bottom:4px">${title}（${list.length} 筆）</div>
-      <div style="max-height:200px;overflow:auto">
+    if (!list.length) return `<div class="mb-sm"><div class="text-sm font-bold mb-xs">${title}</div><div class="text-muted text-sm">暫無資料</div></div>`;
+    return `<div class="mb-sm">
+      <div class="text-sm font-bold mb-xs">${title}（${list.length} 筆）</div>
+      <div class="scroll-box">
         <div class="table-wrapper">
-        <table style="font-size:12px">
+        <table class="text-sm">
           <thead><tr><th>標的</th><th>策略來源</th><th>信念</th><th>明細</th></tr></thead>
           <tbody>${list.map((it, idx) => sectorRow(it, idx, prefix)).join('')}</tbody>
         </table>
@@ -1188,7 +1207,7 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
     ${sectorAlgoNote}
     ${sectorTable('產業主題推薦', sectorAgents, 'sector')}
     ${sectorTable('風格因子推薦', styleAgents, 'style')}
-    <div style="margin-bottom:8px"><strong>活躍因果鏈：</strong></div>
+    <div class="mb-sm"><strong>活躍因果鏈：</strong></div>
     <ul style="margin:0;padding-left:18px;line-height:1.8">
       ${chainList.map(c => `<li>${c.template_id}（分數 ${c.score?.toFixed(2) || '-' }）</li>`).join('')}
       ${!chainList.length ? '<li>暫無活躍因果鏈</li>' : ''}
@@ -1209,38 +1228,38 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
       if (sc.volume_intraday && sc.volume_intraday.min != null) badges.push(`成交量≥${(sc.volume_intraday.min/10000).toFixed(0)}萬`);
       if (sc.momentum_20d && sc.momentum_20d.min != null) badges.push(`動能≥${sc.momentum_20d.min}`);
       if (sc.min_total_factor_score != null) badges.push(`因子≥${sc.min_total_factor_score}`);
-      return `<div style="margin:4px 0"><strong>${agentName(c.agent_id)}</strong> ${badges.length ? badges.map(b => `<span class="badge" style="font-size:10px;padding:1px 5px">${b}</span>`).join(' ') : '<span style="color:var(--muted)">無篩選條件</span>'}</div>`;
+      return `<div class="my-xs"><strong>${agentName(c.agent_id)}</strong> ${badges.length ? badges.map(b => `<span class="badge" style="font-size:10px;padding:1px 5px">${b}</span>`).join(' ') : '<span class="text-muted">無篩選條件</span>'}</div>`;
     }).join('');
   } else {
-    agentCriteriaHtml = '<div style="color:var(--muted)">暫無 Agent 績效資料</div>';
+    agentCriteriaHtml = '<div class="text-muted">暫無 Agent 績效資料</div>';
   }
 
   const factorCells = (fs, rowKey) => {
     fs = fs || {};
     const btn = `<button class="pipeline-action" onclick="toggleBreakdown('${rowKey}')" id="btn-${rowKey}">展開</button>`;
-    return `<td>${factorBar(fs.momentum, -1, 1)}</td><td style="font-size:11px">${fs.momentum != null ? fs.momentum.toFixed(2) : '-'}</td>
-            <td>${factorBar(fs.value, -1, 1)}</td><td style="font-size:11px">${fs.value != null ? fs.value.toFixed(2) : '-'}</td>
-            <td>${factorBar(fs.quality, -1, 1)}</td><td style="font-size:11px">${fs.quality != null ? fs.quality.toFixed(2) : '-'}</td>
-            <td>${factorBar(fs.agent, 0, 1)}</td><td style="font-size:11px">${fs.agent != null ? fs.agent.toFixed(2) : '-'}</td>
-            <td>${factorBar(fs.total, -1, 1)}</td><td style="font-size:11px">${fs.total != null ? fs.total.toFixed(3) : '-'}</td>
+    return `<td>${factorBar(fs.momentum, -1, 1)}</td><td class="text-xs">${fs.momentum != null ? fs.momentum.toFixed(2) : '-'}</td>
+            <td>${factorBar(fs.value, -1, 1)}</td><td class="text-xs">${fs.value != null ? fs.value.toFixed(2) : '-'}</td>
+            <td>${factorBar(fs.quality, -1, 1)}</td><td class="text-xs">${fs.quality != null ? fs.quality.toFixed(2) : '-'}</td>
+            <td>${factorBar(fs.agent, 0, 1)}</td><td class="text-xs">${fs.agent != null ? fs.agent.toFixed(2) : '-'}</td>
+            <td>${factorBar(fs.total, -1, 1)}</td><td class="text-xs">${fs.total != null ? fs.total.toFixed(3) : '-'}</td>
             <td>${btn}</td>`;
   };
 
   const recRows = items.map((it, idx) => {
     const rowKey = `rec-${idx}-${it.symbol}-${it.agent_id}`;
     return `<tr><td>${it.symbol}</td><td>${agentName(it.agent_id)}</td>${factorCells(it.factor_scores, rowKey)}</tr>
-            <tr id="breakdown-${rowKey}" style="display:none"><td colspan="13" style="background:#0d1015;border-left:3px solid var(--accent)">${renderFactorBreakdown(it.factor_scores && it.factor_scores.breakdown)}</td></tr>`;
+            <tr id="breakdown-${rowKey}" class="hidden"><td colspan="13" class="detail-panel">${renderFactorBreakdown(it.factor_scores && it.factor_scores.breakdown)}</td></tr>`;
   }).join('');
   const screenedRows = screened.map((s, idx) => {
     const rowKey = `scr-${idx}-${s.symbol}-${s.agent_id}`;
-    return `<tr style="color:var(--muted)"><td>${s.symbol}</td><td>${agentName(s.agent_id)}</td><td colspan="2">${s.criterion_label || s.criterion || '-'}</td>${factorCells(s.factor_scores, rowKey)}</tr>
-            <tr id="breakdown-${rowKey}" style="display:none"><td colspan="15" style="background:#0d1015;border-left:3px solid var(--accent)">${renderFactorBreakdown(s.factor_scores && s.factor_scores.breakdown)}</td></tr>`;
+    return `<tr class="text-muted"><td>${s.symbol}</td><td>${agentName(s.agent_id)}</td><td colspan="2">${s.criterion_label || s.criterion || '-'}</td>${factorCells(s.factor_scores, rowKey)}</tr>
+            <tr id="breakdown-${rowKey}" class="hidden"><td colspan="15" class="detail-panel">${renderFactorBreakdown(s.factor_scores && s.factor_scores.breakdown)}</td></tr>`;
   }).join('');
 
   const algoNote = `
   <div style="margin-bottom:12px;padding:10px 12px;background:var(--bg);border-radius:8px;border-left:3px solid var(--accent)">
-    <div style="font-size:12px;font-weight:700;margin-bottom:4px">算法透明化說明</div>
-    <div style="font-size:11px;color:var(--muted);line-height:1.7">
+    <div class="text-sm font-bold mb-xs">算法透明化說明</div>
+    <div class="text-xs text-muted lh-relaxed">
       動能：20日收益率 ÷ 0.30（無歷史資料則用當日漲跌 ÷ 0.10），clamp 到 [-1, 1]。<br>
       價值：P/E 得分 = 1 - (PE-5)/45；P/B 得分 = 1 - (PB-0.5)/4.5；clamp 到 [-1, 1] 後取平均。<br>
       品質：股息率 ÷ 5%；波動率得分 = 1 - Vol20d/0.05；兩者平均。<br>
@@ -1251,28 +1270,28 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
 
   const stockContent = `
     ${algoNote}
-    <div style="margin-bottom:10px">${agentCriteriaHtml}</div>
-    <div style="margin-bottom:10px">
-      <div style="font-size:12px;font-weight:700;margin-bottom:6px">被推薦個股因子明細（${items.length} 檔）</div>
+    <div class="mb-sm">${agentCriteriaHtml}</div>
+    <div class="mb-sm">
+      <div class="text-sm font-bold mb-xs">被推薦個股因子明細（${items.length} 檔）</div>
       ${items.length ? `<div style="max-height:260px;overflow:auto">
         <div class="table-wrapper">
-        <table style="font-size:12px">
+        <table class="text-sm">
           <thead><tr><th>標的</th><th>策略來源</th><th colspan="2">動能</th><th colspan="2">價值</th><th colspan="2">品質</th><th colspan="2">Agent</th><th colspan="2">總分</th><th>明細</th></tr></thead>
           <tbody>${recRows}</tbody>
         </table>
         </div>
-      </div>` : '<div style="color:var(--muted);font-size:12px">暫無被推薦個股</div>'}
+      </div>` : '<div class="text-muted text-sm">暫無被推薦個股</div>'}
     </div>
     <div>
-      <div style="font-size:12px;font-weight:700;margin-bottom:6px">被篩除個股因子明細（${screened.length} 檔）</div>
-      ${screened.length ? `<div style="max-height:200px;overflow:auto">
+      <div class="text-sm font-bold mb-xs">被篩除個股因子明細（${screened.length} 檔）</div>
+      ${screened.length ? `<div class="scroll-box">
         <div class="table-wrapper">
-        <table style="font-size:12px">
+        <table class="text-sm">
           <thead><tr><th>標的</th><th>策略來源</th><th colspan="2">未通過條件</th><th colspan="2">動能</th><th colspan="2">價值</th><th colspan="2">品質</th><th colspan="2">Agent</th><th colspan="2">總分</th><th>明細</th></tr></thead>
           <tbody>${screenedRows}</tbody>
         </table>
         </div>
-      </div>` : '<div style="color:var(--muted);font-size:12px">本場次暫無篩除紀錄</div>'}
+      </div>` : '<div class="text-muted text-sm">本場次暫無篩除紀錄</div>'}
     </div>
   `;
 
@@ -1282,8 +1301,8 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
     let txt = `放行 ${g.OutputCount || 0} 筆`;
     if (!g.Passed) { cls = 'err'; txt = `阻擋（輸出 ${g.OutputCount || 0} 筆）`; }
     else if (filtered > 0) { cls = 'warn'; txt = `過濾 ${filtered} 筆後放行 ${g.OutputCount || 0} 筆`; }
-    return `<div style="margin:4px 0"><span class="badge ${cls}">${agentName(g.GuardID)}</span> ${txt}（輸入 ${g.InputCount || 0} → 輸出 ${g.OutputCount || 0}）</div>`;
-  }).join('') || '<div style="color:var(--muted)">暫無控制層紀錄</div>';
+    return `<div class="my-xs"><span class="badge ${cls}">${agentName(g.GuardID)}</span> ${txt}（輸入 ${g.InputCount || 0} → 輸出 ${g.OutputCount || 0}）</div>`;
+  }).join('') || '<div class="text-muted">暫無控制層紀錄</div>';
 
   const perfRows = items.slice(0, 20).map(it => {
     const fr = it.forward_return;
@@ -1304,7 +1323,7 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
   const perfContent = items.length ? `
     <div style="max-height:360px;overflow:auto">
     <div class="table-wrapper">
-    <table style="font-size:12px">
+    <table class="text-sm">
       <thead><tr><th>標的</th><th>策略來源</th><th>建議價</th><th>目標價</th><th>停損價</th><th>隔日報酬</th><th>命中</th></tr></thead>
       <tbody>${perfRows}</tbody>
     </table>
@@ -1313,39 +1332,39 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
     </div>
     </div>
     <div style="margin-top:8px;color:var(--muted);font-size:11px">顯示前 20 筆控制層放行標的。完整明細請至「投資管線」頁面。</div>
-  ` : '<div style="color:var(--muted)">本場次尚無控制層放行標的</div>';
+  ` : '<div class="text-muted">本場次尚無控制層放行標的</div>';
 
   const taxContent = taxSnapshot && taxSnapshot.snapshots && taxSnapshot.snapshots.length > 0 ? `
-    <div style="margin-bottom:10px">
-      <div style="font-size:12px;font-weight:700;margin-bottom:6px">稅務摘要</div>
+    <div class="mb-sm">
+      <div class="text-sm font-bold mb-xs">稅務摘要</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
-        <div class="kpi-card" style="padding:8px">
+        <div class="kpi-card" class="p-sm">
           <div class="kpi-label">稅前損益</div>
-          <div class="kpi-value" style="font-size:16px">${(taxSnapshot.before_tax_pnl || 0).toFixed(0)}</div>
+          <div class="kpi-value" class="text-base">${(taxSnapshot.before_tax_pnl || 0).toFixed(0)}</div>
         </div>
-        <div class="kpi-card" style="padding:8px">
+        <div class="kpi-card" class="p-sm">
           <div class="kpi-label">總稅額</div>
           <div class="kpi-value" style="font-size:16px;color:var(--down)">${(taxSnapshot.total_tax_paid || 0).toFixed(0)}</div>
         </div>
-        <div class="kpi-card" style="padding:8px">
+        <div class="kpi-card" class="p-sm">
           <div class="kpi-label">稅後損益</div>
           <div class="kpi-value" style="font-size:16px;color:var(--up)">${(taxSnapshot.after_tax_pnl || 0).toFixed(0)}</div>
         </div>
-        <div class="kpi-card" style="padding:8px">
+        <div class="kpi-card" class="p-sm">
           <div class="kpi-label">有效稅率</div>
-          <div class="kpi-value" style="font-size:16px">${taxSnapshot.before_tax_pnl > 0 ? ((taxSnapshot.total_tax_paid / taxSnapshot.before_tax_pnl) * 100).toFixed(1) : 0}%</div>
+          <div class="kpi-value" class="text-base">${taxSnapshot.before_tax_pnl > 0 ? ((taxSnapshot.total_tax_paid / taxSnapshot.before_tax_pnl) * 100).toFixed(1) : 0}%</div>
         </div>
       </div>
     </div>
-    <div style="max-height:200px;overflow:auto">
+    <div class="scroll-box">
       <div class="table-wrapper">
-      <table style="font-size:12px">
+      <table class="text-sm">
         <thead><tr><th>標的</th><th>交易稅</th><th>股息稅</th><th>總稅額</th><th>稅後損益</th></tr></thead>
         <tbody>${taxSnapshot.snapshots.map(s => `<tr><td>${s.symbol}</td><td>${s.transaction_tax.toFixed(0)}</td><td>${s.dividend_tax.toFixed(0)}</td><td>${s.total_tax.toFixed(0)}</td><td>${s.after_tax_pnl.toFixed(0)}</td></tr>`).join('')}</tbody>
       </table>
       </div>
     </div>
-  ` : '<div style="color:var(--muted)">暫無稅務資料</div>';
+  ` : '<div class="text-muted">暫無稅務資料</div>';
 
   el.innerHTML = `
     ${layerCard('1', '宏觀環境', macroContent, 'var(--layer-1)')}
@@ -1368,25 +1387,25 @@ function renderAIEvolution(inbox, phase3) {
 
   el.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
-      <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px">
-    <div style="font-size:12px;color:var(--muted);margin-bottom:4px">待評判實驗</div>
-    <div style="font-size:22px;font-weight:700">${pending.length}</div>
-    <div style="font-size:11px;color:var(--muted);margin-top:4px">共 ${items.length} 個歷史實驗</div>
+      <div class="panel-card">
+    <div class="text-sm text-muted mb-xs">待評判實驗</div>
+    <div class="text-xl font-bold">${pending.length}</div>
+    <div class="text-xs text-muted mt-xs">共 ${items.length} 個歷史實驗</div>
       </div>
-      <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px">
-    <div style="font-size:12px;color:var(--muted);margin-bottom:4px">PRISM 已完成訓練</div>
-    <div style="font-size:22px;font-weight:700">${prismCompleted}</div>
-    <div style="font-size:11px;color:var(--muted);margin-top:4px">5 體制佇列</div>
+      <div class="panel-card">
+    <div class="text-sm text-muted mb-xs">PRISM 已完成訓練</div>
+    <div class="text-xl font-bold">${prismCompleted}</div>
+    <div class="text-xs text-muted mt-xs">5 體制佇列</div>
       </div>
-      <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px">
-    <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Swarm 狀態</div>
-    <div style="font-size:22px;font-weight:700">${swarmRunning}</div>
-    <div style="font-size:11px;color:var(--muted);margin-top:4px">MiroFish 共識模擬</div>
+      <div class="panel-card">
+    <div class="text-sm text-muted mb-xs">Swarm 狀態</div>
+    <div class="text-xl font-bold">${swarmRunning}</div>
+    <div class="text-xs text-muted mt-xs">MiroFish 共識模擬</div>
       </div>
     </div>
     ${latest.length ? `
-  <div style="margin-top:12px">
-  <div style="font-size:12px;font-weight:700;margin-bottom:6px">最近實驗</div>
+  <div class="mt-sm">
+  <div class="text-sm font-bold mb-xs">最近實驗</div>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${latest.map(it => `<span class="badge info">${it.experiment_id} · ${it.mutation_type || it.target_agent_id || '實驗'}</span>`).join(' ')}
       </div>
@@ -1410,9 +1429,9 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
     <select id="pipelineSessionSelect" style="font-size:12px;padding:2px 6px;border-radius:4px;border:1px solid var(--border);background:var(--panel);color:var(--text)" onchange="togglePipelineSession(this)">
       ${pipelineSessions.map(s => `<option value="${s.session_id}" ${s.session_id === data.session_id ? 'selected' : ''}>${s.session_id} · ${s.regime} · ${new Date(s.recorded_at).toLocaleDateString('zh-TW')}</option>`).join('')}
     </select>
-  ` : `<span style="font-size:12px;color:var(--muted)">載入場次中…</span>`;
+  ` : `<span class="text-muted text-sm">載入場次中…</span>`;
 
-  const guardBadges = guard.length ? `<div style="margin-bottom:8px">${guard.map(g => {
+  const guardBadges = guard.length ? `<div class="mb-sm">${guard.map(g => {
     const filtered = g.InputCount - g.OutputCount;
     let label = '放行';
     let cls = 'ok';
@@ -1431,20 +1450,20 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
 
   const screenedCountLabel = screenedItems.length ? `（${screenedItems.length} 檔）` : '（無資料）';
   const showScreenedCheckbox = `
-    <div style="margin-bottom:8px;font-size:12px">
-      <label style="cursor:pointer;user-select:none">
+    <div class="mb-sm text-sm">
+      <label class="cursor-pointer select-none">
         <input type="checkbox" id="pipelineShowScreened" ${showScreened ? 'checked' : ''} onchange="togglePipelineShowScreened(this)">
-        <span style="margin-left:4px">顯示被篩選層排除的標的 ${screenedCountLabel}</span>
+        <span class="ml-xs">顯示被篩選層排除的標的 ${screenedCountLabel}</span>
       </label>
     </div>
   `;
 
   const screenedSection = showScreened ? (screenedItems && screenedItems.length ? `
-    <div style="margin-top:12px">
+    <div class="mt-sm">
       <h3 style="font-size:13px;color:var(--muted);margin-bottom:8px">被篩選層排除的標的（${screenedItems.length} 檔）</h3>
-      <div style="max-height:520px;overflow:auto">
+      <div class="scroll-box-lg">
         <div class="table-wrapper">
-        <table style="font-size:12px">
+        <table class="text-sm">
           <thead><tr><th>標的</th><th>公司名稱</th><th>策略來源</th><th>未通過條件</th><th>門檻</th><th>實際值</th></tr></thead>
           <tbody>
             ${screenedItems.map(s => `<tr style="border-left:3px solid #666;color:var(--muted)">
@@ -1466,10 +1485,10 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
   </div>`) : '';
 
   const pipelineTable = items.length ? `
-    <div style="max-height:520px;overflow:auto">
+    <div class="scroll-box-lg">
     <div class="table-wrapper">
     <table id="pipelineTable">
-      <thead><tr><th>標的</th><th>公司名稱</th><th>策略來源 <span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();openInfoHelp('策略來源說明', \`<p><strong>策略來源是什麼？</strong></p><p>顯示格式為 <code>Agent ID（策略技能）</code>。</p><p>Agent ID 是系統內部的實例名稱；括號內為該 Agent 執行的策略技能。同一策略未來可能由多個 Agent 競爭執行。</p>\`)">ℹ️</span></th><th>來源層 <span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();openInfoHelp('來源層說明', \`<p><strong>來源層決定這筆推薦來自 Atlas 的哪一層代理。</strong></p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>產業主題</strong>：sector layer，決定板塊配置。</li><li><strong>風格因子</strong>：style layer，決定成長／價值／動能等風格傾向。</li><li><strong>超級投資者</strong>：superinvestor layer，模擬特定投資大師的選股邏輯。</li><li><strong>總經情境</strong>：context layer，根據總經 regime 產生的方向性建議。</li></ul>\`)">ℹ️</span></th><th>方向</th><th>收盤價</th><th>目標價</th><th>停損價</th><th>信念 <span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();openInfoHelp('信念說明', \`<p><strong>信念（Conviction）是什麼？</strong></p><p>這是 AI Agent 對該標的推薦信心分數，範圍通常為 <strong>0 ~ 100</strong>。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>&gt;70</strong>：高信念，AI 認為該標的強烈符合策略條件且風險可控。</li><li><strong>40~70</strong>：中等信念，條件部分符合，但可能存在不確定性。</li><li><strong>&lt;40</strong>：低信念，條件邊緣符合，容易被控制層過濾。</li></ul><p>當多個 AI 同時推薦同一標的時，控制層可能會對信念較低的推薦進行懲罰或過濾。</p>\`)">ℹ️</span></th><th>隔日回測報酬 <span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();openInfoHelp('隔日回測報酬說明', \`<p><strong>隔日回測報酬是什麼？</strong></p><p>這是回測模擬中「以當日收盤價進場，隔日收盤價出場」的報酬率。</p><p>數值可正可負，例如 <strong>+3.2%</strong> 代表隔日上漲，<strong>-1.5%</strong> 代表隔日下跌。</p><p><strong>這不是未來保證</strong>，而是用來驗證該 Agent 在當時市場體制下的選股品質。持續為正代表策略相對有效。</p>\`)">ℹ️</span></th><th>價量標籤 + 推薦理由</th><th>操作</th></tr></thead>
+      <thead><tr><th>標的</th><th>公司名稱</th><th>策略來源 <span class="cursor-pointer text-accent" onclick="event.stopPropagation();openInfoHelp('策略來源說明', \`<p><strong>策略來源是什麼？</strong></p><p>顯示格式為 <code>Agent ID（策略技能）</code>。</p><p>Agent ID 是系統內部的實例名稱；括號內為該 Agent 執行的策略技能。同一策略未來可能由多個 Agent 競爭執行。</p>\`)">ℹ️</span></th><th>來源層 <span class="cursor-pointer text-accent" onclick="event.stopPropagation();openInfoHelp('來源層說明', \`<p><strong>來源層決定這筆推薦來自 Atlas 的哪一層代理。</strong></p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>產業主題</strong>：sector layer，決定板塊配置。</li><li><strong>風格因子</strong>：style layer，決定成長／價值／動能等風格傾向。</li><li><strong>超級投資者</strong>：superinvestor layer，模擬特定投資大師的選股邏輯。</li><li><strong>總經情境</strong>：context layer，根據總經 regime 產生的方向性建議。</li></ul>\`)">ℹ️</span></th><th>方向</th><th>收盤價</th><th>目標價</th><th>停損價</th><th>信念 <span class="cursor-pointer text-accent" onclick="event.stopPropagation();openInfoHelp('信念說明', \`<p><strong>信念（Conviction）是什麼？</strong></p><p>這是 AI Agent 對該標的推薦信心分數，範圍通常為 <strong>0 ~ 100</strong>。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>&gt;70</strong>：高信念，AI 認為該標的強烈符合策略條件且風險可控。</li><li><strong>40~70</strong>：中等信念，條件部分符合，但可能存在不確定性。</li><li><strong>&lt;40</strong>：低信念，條件邊緣符合，容易被控制層過濾。</li></ul><p>當多個 AI 同時推薦同一標的時，控制層可能會對信念較低的推薦進行懲罰或過濾。</p>\`)">ℹ️</span></th><th>隔日回測報酬 <span class="cursor-pointer text-accent" onclick="event.stopPropagation();openInfoHelp('隔日回測報酬說明', \`<p><strong>隔日回測報酬是什麼？</strong></p><p>這是回測模擬中「以當日收盤價進場，隔日收盤價出場」的報酬率。</p><p>數值可正可負，例如 <strong>+3.2%</strong> 代表隔日上漲，<strong>-1.5%</strong> 代表隔日下跌。</p><p><strong>這不是未來保證</strong>，而是用來驗證該 Agent 在當時市場體制下的選股品質。持續為正代表策略相對有效。</p>\`)">ℹ️</span></th><th>價量標籤 + 推薦理由</th><th>操作</th></tr></thead>
       <tbody>
         ${items.map(it => {
           const cls = it.forward_return > 0 ? 'positive' : (it.forward_return < 0 ? 'negative' : '');
@@ -1491,7 +1510,7 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
             ? `<button class="pipeline-action" onclick="approveRec(this,'${it.symbol}','${it.agent_id}')">放行</button> <button class="pipeline-action" onclick="rejectRec(this,'${it.symbol}','${it.agent_id}')">否決</button>`
             : `<button class="pipeline-action" onclick="approveRec(this,'${it.symbol}','${it.agent_id}')">補追</button>`;
           const actionHelp = `<span style="cursor:pointer;color:var(--accent);font-size:12px;margin-left:4px" onclick="event.stopPropagation();openInfoHelp('人工覆寫說明', \`<p><strong>放行</strong>：人工背書此推薦，系統後續回測不會將它濾除。</p><p><strong>否決</strong>：人工拒絕此推薦，系統後續回測會強制排除該 (標的, Agent) 組合。</p><p><strong>補追</strong>：對已被控制層擋下的標的進行人工放行。</p>\`)">ℹ️</span>`;
-          return `<tr class="pipeline-row ${cls}" style="${rowStyle}"><td>${it.symbol}</td><td>${stockName(it.symbol) || '-'}</td><td>${agentName(it.agent_id)}（${it.skill}）</td><td>${layerName}</td><td>${sideLabel}</td><td>${priceLabel}</td><td>${targetPriceLabel}</td><td>${stopLossPriceLabel}</td><td>${it.conviction || '-'}</td><td style="${frCls}">${frIcon}${(it.forward_return*100).toFixed(1)}%</td><td><div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:4px">${tags}</div>${badge}${it.reason || '-'}${it.guard_reason ? '<br><span style="color:var(--muted);font-size:11px">' + it.guard_reason + '</span>' : ''}</td><td>${actionBtns}${actionHelp}</td></tr>`;
+          return `<tr class="pipeline-row ${cls}" style="${rowStyle}"><td>${it.symbol}</td><td>${stockName(it.symbol) || '-'}</td><td>${agentName(it.agent_id)}（${it.skill}）</td><td>${layerName}</td><td>${sideLabel}</td><td>${priceLabel}</td><td>${targetPriceLabel}</td><td>${stopLossPriceLabel}</td><td>${it.conviction || '-'}</td><td style="${frCls}">${frIcon}${(it.forward_return*100).toFixed(1)}%</td><td><div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:4px">${tags}</div>${badge}${it.reason || '-'}${it.guard_reason ? '<br><span class="text-muted text-xs">' + it.guard_reason + '</span>' : ''}</td><td>${actionBtns}${actionHelp}</td></tr>`;
         }).join('')}
       </tbody>
     </table>
@@ -1505,14 +1524,14 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
 
   el.innerHTML = `
     <div style="margin-bottom:8px;font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>場次：</span>${sessionSelect} · 市場狀態：<strong>${regimeLabel(data.regime || '-')}</strong> · ${recordedAt}</div>
-    <div style="margin-bottom:8px;font-size:12px;color:var(--muted)">
+    <div class="mb-sm text-muted text-sm">
       本場次共有 ${rawInputs} 筆 AI 推薦，經控制層後放行 ${finalOutputs} 筆${filteredCount > 0 ? `（過濾 ${filteredCount} 筆）` : ''}。
     </div>
     ${guardBadges}
-    <div style="margin-bottom:8px;font-size:12px">
-      <label style="cursor:pointer;user-select:none">
+    <div class="mb-sm text-sm">
+      <label class="cursor-pointer select-none">
         <input type="checkbox" id="pipelineShowAll" ${showAll ? 'checked' : ''} onchange="togglePipelineShowAll(this)">
-        <span style="margin-left:4px">顯示全部被過濾項目（含未通過控制層）</span>
+        <span class="ml-xs">顯示全部被過濾項目（含未通過控制層）</span>
       </label>
     </div>
     ${showScreenedCheckbox}
@@ -1616,17 +1635,17 @@ function renderDataChannels(data) {
   let html = '';
   Object.keys(byCountry).forEach(country => {
     html += `<div style="margin:12px 0"><div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:6px">${country}</div>`;
-    html += '<table style="font-size:12px"><thead><tr><th style="width:28px">燈號</th><th>平台名稱</th><th>API 格式</th><th>資料路徑</th><th>本地儲存</th><th>狀態</th><th>最後更新</th></tr></thead><tbody>';
+    html += '<table class="text-sm"><thead><tr><th class="w-28">燈號</th><th>平台名稱</th><th>API 格式</th><th>資料路徑</th><th>本地儲存</th><th>狀態</th><th>最後更新</th></tr></thead><tbody>';
     byCountry[country].forEach(c => {
       const errorHint = c.last_error ? `<div style="font-size:11px;color:var(--down);margin-top:2px">⚠ ${escapeHtml(c.last_error)}</div>` : '';
       html += `<tr>
-        <td style="text-align:center">${statusLight(c.status)}</td>
+        <td class="text-center">${statusLight(c.status)}</td>
         <td>${c.platform}</td>
         <td>${c.api_format}</td>
-        <td style="font-size:11px;color:var(--muted)">${c.path}</td>
-        <td style="font-size:11px;color:var(--muted)">${c.storage}</td>
+        <td class="text-muted text-xs">${c.path}</td>
+        <td class="text-muted text-xs">${c.storage}</td>
         <td><span class="badge ${statusClass(c.status)}">${c.status_text}</span>${errorHint}</td>
-        <td style="font-size:11px">${c.updated_at}</td>
+        <td class="text-xs">${c.updated_at}</td>
       </tr>`;
     });
     html += '</tbody></table></div>';
@@ -1635,11 +1654,11 @@ function renderDataChannels(data) {
   if (data.alerts && data.alerts.length) {
     html += `<div style="margin-top:14px;padding:10px 12px;background:rgba(239,68,68,0.08);border-left:3px solid var(--down);border-radius:6px">
       <div style="font-size:13px;font-weight:700;color:var(--down);margin-bottom:6px">需要關注的通道</div>
-      ${data.alerts.map(a => `<div style="font-size:12px;margin:3px 0"><strong>${escapeHtml(a.channel_id)}</strong>：${escapeHtml(a.error || '狀態異常')} <span style="color:var(--muted)">（${a.fetch_at ? new Date(a.fetch_at).toLocaleString('zh-TW') : '-'}）</span></div>`).join('')}
+      ${data.alerts.map(a => `<div style="font-size:12px;margin:3px 0"><strong>${escapeHtml(a.channel_id)}</strong>：${escapeHtml(a.error || '狀態異常')} <span class="text-muted">（${a.fetch_at ? new Date(a.fetch_at).toLocaleString('zh-TW') : '-'}）</span></div>`).join('')}
     </div>`;
   }
 
-  html += `<div style="margin-top:10px;font-size:12px;color:var(--muted)">報告生成時間：${data.generated || '-'}</div>`;
+  html += `<div class="mt-sm text-muted text-sm">報告生成時間：${data.generated || '-'}</div>`;
   el.innerHTML = html;
 }
 
@@ -1665,7 +1684,7 @@ async function runBacktest() {
   try {
     const res = await postJSON('/api/backtest/run', { start, end });
     statusEl.textContent = '已提交';
-    detailEl.innerHTML = `<span style="color:var(--accent)">後台執行中，請稍後按 🔄 重新整理查看最新結果</span>`;
+    detailEl.innerHTML = `<span class="text-accent">後台執行中，請稍後按 🔄 重新整理查看最新結果</span>`;
     notify(`回測已啟動：${start} ~ ${end}`, 'info');
     pollBacktestStatus();
   } catch (e) {
@@ -1685,11 +1704,11 @@ async function pollBacktestStatus() {
       if (!st.running) {
         if (st.error) {
           statusEl.textContent = '失敗';
-          detailEl.innerHTML = `<span style="color:var(--down)">錯誤：${escapeHtml(st.error)}</span>`;
+          detailEl.innerHTML = `<span class="text-down">錯誤：${escapeHtml(st.error)}</span>`;
           notify('回測執行失敗: ' + st.error, 'err');
         } else {
           statusEl.textContent = '完成';
-          detailEl.innerHTML = `<span style="color:var(--up)">完成：window ${escapeHtml(st.window_id || '')} · sessions ${st.sessions || 0} · outcomes ${st.outcomes || 0}</span>`;
+          detailEl.innerHTML = `<span class="text-up">完成：window ${escapeHtml(st.window_id || '')} · sessions ${st.sessions || 0} · outcomes ${st.outcomes || 0}</span>`;
           notify('回測已完成', 'info');
           await renderBacktestReport();
         }
@@ -1700,7 +1719,7 @@ async function pollBacktestStatus() {
     }
   }
   statusEl.textContent = '執行中';
-  detailEl.innerHTML = '<span style="color:var(--muted)">輪詢逾時，請手動重新整理頁面確認結果</span>';
+  detailEl.innerHTML = '<span class="text-muted">輪詢逾時，請手動重新整理頁面確認結果</span>';
 }
 
 function renderLiveStatus(data) {
@@ -1708,7 +1727,7 @@ function renderLiveStatus(data) {
   if (!data || !data.circuit_breaker) {
     el.innerHTML = `
       <div style="font-size:12px;color:var(--muted);line-height:1.6">
-        <div style="margin-bottom:6px"><strong>目前處於 Simulation 模式</strong></div>
+        <div class="mb-xs"><strong>目前處於 Simulation 模式</strong></div>
         <div>系統當前以 replay 資料進行回測模擬，未連接 live broker，因此沒有即時熔斷、現金與損益資料。</div>
         <div style="margin-top:6px">若需要 live 交易狀態，請確認已啟動 live 模式並完成 broker 連線設定。</div>
       </div>
@@ -1767,8 +1786,8 @@ function renderLiveNarrativeStrip(events, stress, models, chains) {
   const sentimentText = sentiment > 0 ? '偏多' : (sentiment < 0 ? '偏空' : '中性');
   const sentimentColor = sentiment > 0 ? 'var(--up)' : (sentiment < 0 ? 'var(--down)' : 'var(--warn)');
 
-  const favoredBadges = favored.length ? favored.map(s => `<span class="badge ok">${sectorName(s)}</span>`).join(' ') : '<span class="badge" style="background:var(--bg);color:var(--muted)">—</span>';
-  const avoidedBadges = avoided.length ? avoided.map(s => `<span class="badge err">${sectorName(s)}</span>`).join(' ') : '<span class="badge" style="background:var(--bg);color:var(--muted)">—</span>';
+  const favoredBadges = favored.length ? favored.map(s => `<span class="badge ok">${sectorName(s)}</span>`).join(' ') : '<span class="badge" class="bg-muted text-muted">—</span>';
+  const avoidedBadges = avoided.length ? avoided.map(s => `<span class="badge err">${sectorName(s)}</span>`).join(' ') : '<span class="badge" class="bg-muted text-muted">—</span>';
 
   el.innerHTML = `
     <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">
@@ -1781,7 +1800,7 @@ function renderLiveNarrativeStrip(events, stress, models, chains) {
           <li><span style='color:var(--warn)'><strong>高壓（50~69）</strong></span>：市場風險明顯升高，控制層可能過濾較多推薦，建議採取保守操作。</li>
           <li><span style='color:var(--down)'><strong>危機（≥70）</strong></span>：市場處於高壓狀態，風控長可能強制阻擋全部推薦，建議大幅減碼或觀望。</li>
         </ul>
-        <p><strong>計算組成：</strong><br>指數由美元指數（DXY）、美債10年期殖利率（US10Y）、VIX波動率、外資流向、日圓變動與地緣政治風險等六項加權構成。</p>\`)">台灣壓力指數 <span style="font-size:10px">ℹ️</span></div>
+        <p><strong>計算組成：</strong><br>指數由美元指數（DXY）、美債10年期殖利率（US10Y）、VIX波動率、外資流向、日圓變動與地緣政治風險等六項加權構成。</p>\`)">台灣壓力指數 <span class="text-xs">ℹ️</span></div>
         <div class="value" style="color:${stressColor}">${stressScore}</div>
       </div>
       <div class="metric"><div class="label">壓力等級</div><div class="value">${sLabel}</div></div>
@@ -1827,7 +1846,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
         : {color:'var(--down)',text:'🔴 資料通道異常'};
       let html = `<div style="margin-bottom:8px;display:flex;align-items:center;gap:10px">
         <span style="font-size:12px;color:${channelStatus.color};font-weight:700">${channelStatus.text}</span>
-        <span style="font-size:12px;color:var(--muted)">更新於 ${updateTime}</span>
+        <span class="text-muted text-sm">更新於 ${updateTime}</span>
       </div>`;
       html += '<table><thead><tr><th>指標</th><th>數值</th><th>日變動%</th></tr></thead><tbody>' +
         rows.map(([name, pt]) => {
@@ -1845,10 +1864,10 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
         : {color:'var(--down)',text:'🔴 缺失'};
       const capitalTimeStr = capitalLatestTs ? new Date(capitalLatestTs * 1000).toLocaleString('zh-TW') : '-';
       if (capitalRows.some(([_, pt]) => pt && typeof pt.value === 'number')) {
-        html += `<div style="margin-top:10px;display:flex;align-items:center;gap:10px">
-          <span style="font-weight:700;font-size:13px;color:var(--accent)">台股三大法人資金流</span>
-          <span style="font-size:12px;color:${capitalStatus.color};font-weight:700">${capitalStatus.text}</span>
-          <span style="font-size:12px;color:var(--muted)">更新於 ${capitalTimeStr}</span>
+        html += `<div class="mt-sm flex-center-gap">
+          <span class="font-bold text-sm text-accent">台股三大法人資金流</span>
+          <span class="text-sm font-bold" style="color:${capitalStatus.color}">${capitalStatus.text}</span>
+          <span class="text-muted text-sm">更新於 ${capitalTimeStr}</span>
         </div>`;
         html += '<table><thead><tr><th>法人</th><th>淨買超(億)</th></tr></thead><tbody>' +
           capitalRows.map(([name, pt]) => {
@@ -1858,10 +1877,10 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
             return `<tr><td>${name}</td><td class="${cls}">${val}</td></tr>`;
           }).join('') + '</tbody></table>';
       } else {
-        html += `<div style="margin-top:10px;display:flex;align-items:center;gap:10px">
-          <span style="font-weight:700;font-size:13px;color:var(--accent)">台股三大法人資金流</span>
-          <span style="font-size:12px;color:${capitalStatus.color};font-weight:700">${capitalStatus.text}</span>
-          <span style="font-size:12px;color:var(--muted)">更新於 ${capitalTimeStr}</span>
+        html += `<div class="mt-sm flex-center-gap">
+          <span class="font-bold text-sm text-accent">台股三大法人資金流</span>
+          <span class="text-sm font-bold" style="color:${capitalStatus.color}">${capitalStatus.text}</span>
+          <span class="text-muted text-sm">更新於 ${capitalTimeStr}</span>
         </div><div class="empty">暫無可用資料</div>`;
       }
       macroEl.innerHTML = html;
@@ -1877,10 +1896,10 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
       const regimeColor = stress.regime === 'crisis' ? 'var(--down)' : (stress.regime === 'high' ? 'var(--warn)' : 'var(--up)');
       const comps = stress.components || {};
       const stressTime = stress.timestamp ? new Date(stress.timestamp * 1000).toLocaleString('zh-TW') : new Date().toLocaleString('zh-TW');
-      let html = `<div style="margin-bottom:8px;font-size:12px;color:var(--muted)">資料更新時間：${stressTime}</div>`;
+      let html = `<div class="mb-sm text-muted text-sm">資料更新時間：${stressTime}</div>`;
       html += `<div style="font-size:28px;font-weight:700;color:${regimeColor}">${score} <span style="font-size:14px;color:var(--muted)">/ 100</span></div>`;
       html += `<div style="margin:4px 0 10px;font-size:14px">壓力等級：<strong>${stressLabel(stress.regime || '-')}</strong></div>`;
-      html += `<table><thead><tr><th>子項</th><th>分數 <span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();openInfoHelp('壓力指數分數說明', \`<p><strong>分數是什麼？</strong></p><p>壓力指數由多個子項加權構成，每個子項的分數代表該因子對台灣市場的壓力貢獻度。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>正值</strong>：該因子正在對市場施加壓力（例如美元走強、地緣政治風險升溫）。</li><li><strong>負值</strong>：該因子正在緩解市場壓力（例如外資大幅流入、波動率下降）。</li><li><strong>絕對值越大</strong>：該因子對整體壓力指數的影響越顯著。</li></ul><p>最終壓力指數為各子項加權總和，範圍理論上為 <strong>0 ~ 100</strong>，但個別子項可能出現負值以反映風險緩解效果。</p>\`)">ℹ️</span></th></tr></thead><tbody>`;
+      html += `<table><thead><tr><th>子項</th><th>分數 <span class="cursor-pointer text-accent" onclick="event.stopPropagation();openInfoHelp('壓力指數分數說明', \`<p><strong>分數是什麼？</strong></p><p>壓力指數由多個子項加權構成，每個子項的分數代表該因子對台灣市場的壓力貢獻度。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>正值</strong>：該因子正在對市場施加壓力（例如美元走強、地緣政治風險升溫）。</li><li><strong>負值</strong>：該因子正在緩解市場壓力（例如外資大幅流入、波動率下降）。</li><li><strong>絕對值越大</strong>：該因子對整體壓力指數的影響越顯著。</li></ul><p>最終壓力指數為各子項加權總和，範圍理論上為 <strong>0 ~ 100</strong>，但個別子項可能出現負值以反映風險緩解效果。</p>\`)">ℹ️</span></th></tr></thead><tbody>`;
       const names = { dxy: 'DXY-美元指數', us10y: 'US10Y-美債10年期', foreign_flow: '外資流向', vix: 'VIX-波動率指數', jpy: '日圓-套利平倉壓力', geopolitical: '地緣政治風險' };
       for (const k of Object.keys(comps)) {
         html += `<tr><td>${names[k] || k}</td><td>${typeof comps[k] === 'number' ? comps[k].toFixed(2) : '-'}</td></tr>`;
@@ -1906,8 +1925,8 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
         const sText = e.sentiment > 0 ? '正面' : '負面';
         const tw = timeWindowName(e.time_window || '-');
         return `<div style="border-left:3px solid var(--accent);padding:10px 12px;margin:8px 0;background:#0d1015;border-radius:8px">
-          <div style="font-weight:700">${eventName(e.theme)} <span class="${sClass}">${sText} (${e.sentiment})</span></div>
-          <div style="color:var(--muted);font-size:12px;margin-top:4px">區域：${regionName(e.region)} · 信心度：${((e.confident || e.confidence || 0) * 100).toFixed(0)}% · 資金流：${capitalFlowName(e.capital_flow || '-')} · 時間窗口：${tw}</div>
+          <div class="font-bold">${eventName(e.theme)} <span class="${sClass}">${sText} (${e.sentiment})</span></div>
+          <div class="text-muted text-sm mt-xs">區域：${regionName(e.region)} · 信心度：${((e.confident || e.confidence || 0) * 100).toFixed(0)}% · 資金流：${capitalFlowName(e.capital_flow || '-')} · 時間窗口：${tw}</div>
         </div>`;
       }).join('');
     }
@@ -1920,13 +1939,13 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
     else {
       chainsEl.innerHTML = list.map(c => `
         <div style="margin:10px 0">
-          <div style="font-weight:700;margin-bottom:4px">${templateName(c.template_id)} <span style="color:var(--muted);font-size:12px">分數 ${(c.score || 0).toFixed(3)}</span></div>
+          <div style="font-weight:700;margin-bottom:4px">${templateName(c.template_id)} <span class="text-muted text-sm">分數 ${(c.score || 0).toFixed(3)}</span></div>
           ${(c.steps || []).map((s, i) => {
             const impClass = s.impact > 0 ? 'up' : 'down';
             const affected = (s.affected || []).map(a => `<span style="display:inline-block;font-size:11px;padding:2px 8px;margin:2px 4px 2px 0;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--border)">${sectorName(a) || a}</span>`).join('');
-            return `<div style="padding:8px 0;border-bottom:1px dashed var(--border)">
-              <div style="display:flex;align-items:center;gap:8px">
-                <div style="width:22px;height:22px;display:grid;place-items:center;border-radius:50%;background:var(--border);font-size:11px;color:var(--muted);flex-shrink:0">${i+1}</div>
+            return `<div class="py-sm border-b-dashed">
+              <div class="flex-center-gap-sm">
+                <div class="layer-num">${i+1}</div>
                 <div style="flex:1;font-size:12px">${s.description}</div>
                 <div class="${impClass}" style="font-size:11px;padding:2px 8px;border-radius:999px;background:#0d1015;flex-shrink:0">影響力 ${s.impact}</div>
               </div>
@@ -1951,7 +1970,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
         const errColor = e <= 0.3 ? '#10b981' : (e <= 0.5 ? '#f59e0b' : '#ef4444');
         const errText = e <= 0.3 ? '優秀' : (e <= 0.5 ? '一般' : '偏高');
         return `
-        <div style="padding:12px;margin:8px 0;background:#0d1015;border-radius:8px;border-left:3px solid ${weightColor}">
+        <div class="weight-panel" style="border-left-color:${weightColor}">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
             <div style="font-weight:700;font-size:15px">${escapeHtml(modelName(m.name))}</div>
             <div style="font-size:12px;color:var(--muted);white-space:nowrap">誤差 <span style="color:${errColor};font-weight:700">${(e*100).toFixed(1)}% ${errText}</span></div>
@@ -1962,15 +1981,15 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
               <div style="flex:1;height:6px;background:#1f2937;border-radius:3px;overflow:hidden">
                 <div style="width:${weightPct}%;height:100%;background:${weightColor}"></div>
               </div>
-              <span style="min-width:40px;text-align:right">${w.toFixed(3)}</span>
+              <span class="min-w-40 text-right">${w.toFixed(3)}</span>
             </div>
           </div>
-          <div style="color:var(--muted);font-size:12px;margin-top:4px">${escapeHtml(m.description || '')}</div>
+          <div class="text-muted text-sm mt-xs">${escapeHtml(m.description || '')}</div>
           <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">
             ${(m.favored_sectors || []).map(s => `<span class="badge ok">+ ${escapeHtml(sectorName(s))}</span>`).join('')}
             ${(m.avoided_sectors || []).map(s => `<span class="badge err">− ${escapeHtml(sectorName(s))}</span>`).join('')}
           </div>
-          ${m.rationale ? `<div style="margin-top:10px">
+          ${m.rationale ? `<div class="mt-sm">
             <button onclick="document.getElementById('model-rationale-${idx}').style.display=document.getElementById('model-rationale-${idx}').style.display==='none'?'block':'none';this.textContent=this.textContent==='展開完整論述 ▼'?'收起論述 ▲':'展開完整論述 ▼'" style="font-size:12px;color:var(--accent);background:none;border:none;padding:0;cursor:pointer">展開完整論述 ▼</button>
             <div id="model-rationale-${idx}" style="display:none;margin-top:8px;padding:10px;background:var(--bg);border-radius:6px;font-size:12px;line-height:1.7;color:var(--text);white-space:pre-wrap">${escapeHtml(m.rationale)}</div>
           </div>` : ''}
@@ -1986,16 +2005,16 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
     if (!items.length) { templatesEl.innerHTML = '<div class="empty">無模板資料</div>'; }
     else {
       templatesEl.innerHTML = `<table>
-        <thead><tr><th>模板名稱</th><th>觸發主題</th><th>歷史命中率</th><th>資料來源</th><th style="width:90px">操作</th></tr></thead>
+        <thead><tr><th>模板名稱</th><th>觸發主題</th><th>歷史命中率</th><th>資料來源</th><th class="w-90">操作</th></tr></thead>
         <tbody>
           ${items.map((t, idx) => `<tr>
             <td>${escapeHtml(templateName(t.name))}</td>
             <td>${escapeHtml(eventName(t.trigger_theme))}</td>
             <td>${((t.historical_hit_rate || 0) * 100).toFixed(0)}%</td>
-            <td style="font-size:11px;color:var(--muted)">${escapeHtml((t.source_references || []).join(', '))}</td>
+            <td class="text-muted text-xs">${escapeHtml((t.source_references || []).join(', '))}</td>
             <td><button onclick="document.getElementById('tmpl-rationale-${idx}').style.display=document.getElementById('tmpl-rationale-${idx}').style.display==='none'?'table-row':'none';this.textContent=this.textContent==='展開 ▼'?'收起 ▲':'展開 ▼'" style="font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer">展開 ▼</button></td>
           </tr>
-          <tr id="tmpl-rationale-${idx}" style="display:none">
+          <tr id="tmpl-rationale-${idx}" class="hidden">
             <td colspan="5" style="background:var(--bg);padding:12px 14px;font-size:12px;line-height:1.8;color:var(--text);white-space:pre-wrap;border-left:3px solid var(--accent)">${escapeHtml(t.rationale || '暫無論述')}</td>
           </tr>`).join('')}
         </tbody>
@@ -2014,28 +2033,28 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
       const changeClass = (retailSentiment.margin_change_pct || 0) >= 0 ? 'up' : 'down';
       retailEl.innerHTML = `
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-          <span style="font-size:12px;color:var(--muted)">散戶情緒指標</span>
+          <span class="text-muted text-sm">散戶情緒指標</span>
           <span class="badge ${readingClass}">${readingMap[retailSentiment.extreme_reading] || retailSentiment.extreme_reading}</span>
         </div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
-          <div class="kpi-card" style="padding:10px">
+          <div class="kpi-card" class="p-md">
             <div class="kpi-label">情緒分數</div>
-            <div class="kpi-value" style="font-size:18px">${score}</div>
+            <div class="kpi-value" class="text-lg">${score}</div>
           </div>
-          <div class="kpi-card" style="padding:10px">
+          <div class="kpi-card" class="p-md">
             <div class="kpi-label">融資變化</div>
-            <div class="kpi-value ${changeClass}" style="font-size:18px">${changeStr}</div>
+            <div class="kpi-value ${changeClass}" class="text-lg">${changeStr}</div>
           </div>
-          <div class="kpi-card" style="padding:10px">
+          <div class="kpi-card" class="p-md">
             <div class="kpi-label">融資餘額</div>
-            <div class="kpi-value" style="font-size:18px">${(retailSentiment.margin_balance || 0).toFixed(0)} 億</div>
+            <div class="kpi-value" class="text-lg">${(retailSentiment.margin_balance || 0).toFixed(0)} 億</div>
           </div>
-          <div class="kpi-card" style="padding:10px">
+          <div class="kpi-card" class="p-md">
             <div class="kpi-label">當沖比率</div>
-            <div class="kpi-value" style="font-size:18px">${((retailSentiment.day_trading_ratio || 0) * 100).toFixed(1)}%</div>
+            <div class="kpi-value" class="text-lg">${((retailSentiment.day_trading_ratio || 0) * 100).toFixed(1)}%</div>
           </div>
         </div>
-        <div style="margin-top:10px;font-size:12px;color:var(--muted)">歷史百分位: ${((retailSentiment.margin_percentile || 0) * 100).toFixed(0)}th</div>
+        <div class="mt-sm text-muted text-sm">歷史百分位: ${((retailSentiment.margin_percentile || 0) * 100).toFixed(0)}th</div>
       `;
     }
   }
@@ -2078,18 +2097,18 @@ function renderDataIngestHealth(snapshot) {
     const isFresh = ts && (nowSec - ts) < 86400;
     let statusHtml = '';
     if (hasSymbol && isFresh) {
-      statusHtml = '<span style="color:var(--up)">🟢 正常</span>';
+      statusHtml = '<span class="text-up">🟢 正常</span>';
     } else if (hasSymbol) {
-      statusHtml = '<span style="color:var(--warn)">🟡 延遲</span>';
+      statusHtml = '<span class="text-warn">🟡 延遲</span>';
     } else {
-      statusHtml = '<span style="color:var(--down)">🔴 缺失</span>';
+      statusHtml = '<span class="text-down">🔴 缺失</span>';
     }
     const val = (hasSymbol && typeof pt.value === 'number') ? pt.value.toFixed(3) : '-';
     const timeStr = ts ? new Date(ts * 1000).toLocaleString('zh-TW') : '-';
-    html += `<tr><td>${ind.label}</td><td>${statusHtml}</td><td>${val}</td><td style="font-size:11px;color:var(--muted)">${timeStr}</td></tr>`;
+    html += `<tr><td>${ind.label}</td><td>${statusHtml}</td><td>${val}</td><td class="text-muted text-xs">${timeStr}</td></tr>`;
   }
   html += '</tbody></table>';
-  html += '<div style="margin-top:10px;font-size:12px;color:var(--muted)">說明：綠燈表示資料在 24 小時內有更新；黃燈表示資料存在但超過 24 小時未更新；紅燈表示該指標完全缺失。若宏觀數據出現大面積紅燈，建議檢查網路連線或資料供應商（Yahoo Finance / TWSE）狀態。</div>';
+  html += '<div class="mt-sm text-muted text-sm">說明：綠燈表示資料在 24 小時內有更新；黃燈表示資料存在但超過 24 小時未更新；紅燈表示該指標完全缺失。若宏觀數據出現大面積紅燈，建議檢查網路連線或資料供應商（Yahoo Finance / TWSE）狀態。</div>';
   el.innerHTML = html;
 }
 
@@ -2101,7 +2120,7 @@ async function loadOverrides() {
     const container = document.getElementById('overrideBadges');
     const pausedBadges = paused.map(a => `<span class="badge err">⏸ ${a}</span>`).join('');
     const bannedBadges = banned.map(s => `<span class="badge warn">🚫 ${s}</span>`).join('');
-    container.innerHTML = pausedBadges + bannedBadges || '<span style="color:var(--muted);font-size:12px">目前無生效覆寫</span>';
+    container.innerHTML = pausedBadges + bannedBadges || '<span class="text-muted text-sm">目前無生效覆寫</span>';
   } catch (e) { console.error(e); }
 }
 
@@ -2182,9 +2201,9 @@ function openKpiHelp(key) {
     regime: `<p><strong>這是什麼？</strong><br>基於最新回測資料計算出的市場體制（RISK_ON／NEUTRAL／RISK_OFF）。這是 Context Layer 對當前環境的綜合判斷。<br><br>
 <strong>請注意名稱含義：</strong>
 <ul style="margin:6px 0;padding-left:18px">
-<li><code>RISK_ON</code> = <span style="color:var(--up)">風險偏好（積極）</span>：市場願意承擔風險，通常是加倉機會。</li>
-<li><code>NEUTRAL</code> = <span style="color:var(--warn)">中性</span>：方向不明，系統會自動縮減單一倉位上限至 85%。</li>
-<li><code>RISK_OFF</code> = <span style="color:var(--down)">風險趨避（保守）</span>：市場傾向避險，這才是需要特別警惕的狀態。</li>
+<li><code>RISK_ON</code> = <span class="text-up">風險偏好（積極）</span>：市場願意承擔風險，通常是加倉機會。</li>
+<li><code>NEUTRAL</code> = <span class="text-warn">中性</span>：方向不明，系統會自動縮減單一倉位上限至 85%。</li>
+<li><code>RISK_OFF</code> = <span class="text-down">風險趨避（保守）</span>：市場傾向避險，這才是需要特別警惕的狀態。</li>
 </ul></p>
 <p><strong>為什麼重要？</strong><br>體制決定了整個投資組合的基調。RISK_ON 時可積極參與成長與動能策略；NEUTRAL 時應控制單一標的比重並提高篩選標準；RISK_OFF 時應優先考慮降低曝險、轉向防禦性配置或提高現金比重。</p>
 <p><strong>該注意什麼？</strong><br>當 regime 從 RISK_ON 快速轉向 RISK_OFF，通常伴隨壓力指數飆升。此時請立即前往【相對趨勢】頁檢查總經雷達，並檢視【投資管線】是否有過多推薦被控制層阻擋——這是市場風險情緒惡化的早期信號。</p>`,
