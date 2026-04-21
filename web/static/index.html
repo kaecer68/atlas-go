@@ -94,6 +94,9 @@
   .pipeline-action:disabled { opacity: .4; cursor: not-allowed; }
   #pipelineTable { font-size: 12px; }
   #pipelineTable th, #pipelineTable td { padding: 6px 5px; }
+  .table-wrapper { overflow-x: auto; max-width: 100%; }
+  .table-wrapper table { min-width: 640px; }
+
 
 
 /* Sidebar + SPA Layout */
@@ -194,6 +197,9 @@ body { display: flex; margin: 0; min-height: 100vh; }
   border-radius: 6px;
   cursor: pointer;
 }
+.two-col-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); }
+@media (max-width: 1100px) { .two-col-grid { grid-template-columns: 1fr; } }
+
 @media (max-width: 900px) {
   #sidebar { transform: translateX(-100%); transition: transform .2s ease; }
   #sidebar.open { transform: translateX(0); }
@@ -258,7 +264,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
 
     <!-- 宏觀敘事 -->
     <div class="page" id="page-narrative">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="two-col-grid">
         <div class="panel"><h2>總經快照</h2><div id="narrativeMacro">載入中…</div></div>
         <div class="panel"><h2>台灣市場壓力指數</h2><div id="narrativeStress">載入中…</div></div>
         <div class="panel"><h2>敘事事件</h2><div id="narrativeEvents">載入中…</div></div>
@@ -355,7 +361,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
     <div class="page" id="page-controls">
       <div class="panel wide">
         <h2>人工控制</h2>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="two-col-grid">
           <div>
             <div style="margin-bottom:6px;font-size:13px"><strong>AI 覆寫</strong> <span id="overrideBadges"></span></div>
             <div class="control-group">
@@ -986,7 +992,7 @@ function renderUniverseOverlap(data) {
       <strong>如何解讀本區塊：</strong>以下顯示各策略來源（Agent）設定的關注標的池，以及 <strong>Style 層</strong> 之間的標的重疊程度。當兩個 Style Agent 同時關注 >=3 檔相同標的時，CIO 層會自動施加信念懲罰（擁擠交易警告）。
     </div>
     ${warnings.length ? `<div style="margin-bottom:8px">${warnings.map(w => `<span class="badge warn">⚠ ${w}</span>`).join('')}</div>` : ''}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="two-col-grid">
       <div>
         <div style="margin-bottom:6px;font-size:13px"><strong>策略來源標的池</strong></div>
         <table>
@@ -1107,10 +1113,12 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
     <div style="margin-bottom:10px">
       <div style="font-size:12px;font-weight:700;margin-bottom:6px">宏觀敘事事件（${eventList.length} 個）</div>
       ${eventList.length ? `<div style="max-height:200px;overflow:auto">
+        <div class="table-wrapper">
         <table style="font-size:12px">
           <thead><tr><th>主題</th><th>Confidence</th><th>來源</th><th>歷史命中率</th></tr></thead>
           <tbody>${macroEventRows}</tbody>
         </table>
+        </div>
       </div>` : '<div style="color:var(--muted);font-size:12px">暫無宏觀敘事事件</div>'}
     </div>
     <div style="margin-bottom:10px;padding:10px 12px;background:var(--bg);border-radius:8px;border-left:3px solid #3b82f6">
@@ -1153,10 +1161,12 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
     return `<div style="margin-bottom:10px">
       <div style="font-size:12px;font-weight:700;margin-bottom:4px">${title}（${list.length} 筆）</div>
       <div style="max-height:200px;overflow:auto">
+        <div class="table-wrapper">
         <table style="font-size:12px">
           <thead><tr><th>標的</th><th>策略來源</th><th>信念</th><th>明細</th></tr></thead>
           <tbody>${list.map((it, idx) => sectorRow(it, idx, prefix)).join('')}</tbody>
         </table>
+        </div>
       </div>
     </div>`;
   };
@@ -1232,19 +1242,23 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
     <div style="margin-bottom:10px">
       <div style="font-size:12px;font-weight:700;margin-bottom:6px">被推薦個股因子明細（${items.length} 檔）</div>
       ${items.length ? `<div style="max-height:260px;overflow:auto">
+        <div class="table-wrapper">
         <table style="font-size:12px">
           <thead><tr><th>標的</th><th>策略來源</th><th colspan="2">動能</th><th colspan="2">價值</th><th colspan="2">品質</th><th colspan="2">Agent</th><th colspan="2">總分</th><th>明細</th></tr></thead>
           <tbody>${recRows}</tbody>
         </table>
+        </div>
       </div>` : '<div style="color:var(--muted);font-size:12px">暫無被推薦個股</div>'}
     </div>
     <div>
       <div style="font-size:12px;font-weight:700;margin-bottom:6px">被篩除個股因子明細（${screened.length} 檔）</div>
       ${screened.length ? `<div style="max-height:200px;overflow:auto">
+        <div class="table-wrapper">
         <table style="font-size:12px">
           <thead><tr><th>標的</th><th>策略來源</th><th colspan="2">未通過條件</th><th colspan="2">動能</th><th colspan="2">價值</th><th colspan="2">品質</th><th colspan="2">Agent</th><th colspan="2">總分</th><th>明細</th></tr></thead>
           <tbody>${screenedRows}</tbody>
         </table>
+        </div>
       </div>` : '<div style="color:var(--muted);font-size:12px">本場次暫無篩除紀錄</div>'}
     </div>
   `;
@@ -1276,10 +1290,14 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
 
   const perfContent = items.length ? `
     <div style="max-height:360px;overflow:auto">
+    <div class="table-wrapper">
     <table style="font-size:12px">
       <thead><tr><th>標的</th><th>策略來源</th><th>建議價</th><th>目標價</th><th>停損價</th><th>隔日報酬</th><th>命中</th></tr></thead>
       <tbody>${perfRows}</tbody>
     </table>
+    </div>
+    </div>
+    </div>
     </div>
     <div style="margin-top:8px;color:var(--muted);font-size:11px">顯示前 20 筆控制層放行標的。完整明細請至「投資管線」頁面。</div>
   ` : '<div style="color:var(--muted)">本場次尚無控制層放行標的</div>';
@@ -1307,10 +1325,12 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
       </div>
     </div>
     <div style="max-height:200px;overflow:auto">
+      <div class="table-wrapper">
       <table style="font-size:12px">
         <thead><tr><th>標的</th><th>交易稅</th><th>股息稅</th><th>總稅額</th><th>稅後損益</th></tr></thead>
         <tbody>${taxSnapshot.snapshots.map(s => `<tr><td>${s.symbol}</td><td>${s.transaction_tax.toFixed(0)}</td><td>${s.dividend_tax.toFixed(0)}</td><td>${s.total_tax.toFixed(0)}</td><td>${s.after_tax_pnl.toFixed(0)}</td></tr>`).join('')}</tbody>
       </table>
+      </div>
     </div>
   ` : '<div style="color:var(--muted)">暫無稅務資料</div>';
 
@@ -1410,19 +1430,21 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
     <div style="margin-top:12px">
       <h3 style="font-size:13px;color:var(--muted);margin-bottom:8px">被篩選層排除的標的（${screenedItems.length} 檔）</h3>
       <div style="max-height:520px;overflow:auto">
-      <table style="font-size:12px">
-        <thead><tr><th>標的</th><th>公司名稱</th><th>策略來源</th><th>未通過條件</th><th>門檻</th><th>實際值</th></tr></thead>
-        <tbody>
-          ${screenedItems.map(s => `<tr style="border-left:3px solid #666;color:var(--muted)">
-            <td>${s.symbol}</td>
-            <td>${stockName(s.symbol) || '-'}</td>
-            <td>${agentName(s.agent_id)}</td>
-            <td>${s.criterion_label || s.criterion || '-'}</td>
-            <td>${s.threshold || '-'}</td>
-            <td>${s.actual_value || '-'}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
+        <div class="table-wrapper">
+        <table style="font-size:12px">
+          <thead><tr><th>標的</th><th>公司名稱</th><th>策略來源</th><th>未通過條件</th><th>門檻</th><th>實際值</th></tr></thead>
+          <tbody>
+            ${screenedItems.map(s => `<tr style="border-left:3px solid #666;color:var(--muted)">
+              <td>${s.symbol}</td>
+              <td>${stockName(s.symbol) || '-'}</td>
+              <td>${agentName(s.agent_id)}</td>
+              <td>${s.criterion_label || s.criterion || '-'}</td>
+              <td>${s.threshold || '-'}</td>
+              <td>${s.actual_value || '-'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+        </div>
       </div>
     </div>
   ` : `<div style="margin-top:12px;padding:12px;background:var(--bg);border-radius:8px;border-left:3px solid var(--border);color:var(--muted);font-size:12px">
@@ -1432,6 +1454,7 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
 
   const pipelineTable = items.length ? `
     <div style="max-height:520px;overflow:auto">
+    <div class="table-wrapper">
     <table id="pipelineTable">
       <thead><tr><th>標的</th><th>公司名稱</th><th>策略來源 <span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();openInfoHelp('策略來源說明', \`<p><strong>策略來源是什麼？</strong></p><p>顯示格式為 <code>Agent ID（策略技能）</code>。</p><p>Agent ID 是系統內部的實例名稱；括號內為該 Agent 執行的策略技能。同一策略未來可能由多個 Agent 競爭執行。</p>\`)">ℹ️</span></th><th>來源層 <span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();openInfoHelp('來源層說明', \`<p><strong>來源層決定這筆推薦來自 Atlas 的哪一層代理。</strong></p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>產業主題</strong>：sector layer，決定板塊配置。</li><li><strong>風格因子</strong>：style layer，決定成長／價值／動能等風格傾向。</li><li><strong>超級投資者</strong>：superinvestor layer，模擬特定投資大師的選股邏輯。</li><li><strong>總經情境</strong>：context layer，根據總經 regime 產生的方向性建議。</li></ul>\`)">ℹ️</span></th><th>方向</th><th>收盤價</th><th>目標價</th><th>停損價</th><th>信念 <span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();openInfoHelp('信念說明', \`<p><strong>信念（Conviction）是什麼？</strong></p><p>這是 AI Agent 對該標的推薦信心分數，範圍通常為 <strong>0 ~ 100</strong>。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>&gt;70</strong>：高信念，AI 認為該標的強烈符合策略條件且風險可控。</li><li><strong>40~70</strong>：中等信念，條件部分符合，但可能存在不確定性。</li><li><strong>&lt;40</strong>：低信念，條件邊緣符合，容易被控制層過濾。</li></ul><p>當多個 AI 同時推薦同一標的時，控制層可能會對信念較低的推薦進行懲罰或過濾。</p>\`)">ℹ️</span></th><th>隔日回測報酬 <span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();openInfoHelp('隔日回測報酬說明', \`<p><strong>隔日回測報酬是什麼？</strong></p><p>這是回測模擬中「以當日收盤價進場，隔日收盤價出場」的報酬率。</p><p>數值可正可負，例如 <strong>+3.2%</strong> 代表隔日上漲，<strong>-1.5%</strong> 代表隔日下跌。</p><p><strong>這不是未來保證</strong>，而是用來驗證該 Agent 在當時市場體制下的選股品質。持續為正代表策略相對有效。</p>\`)">ℹ️</span></th><th>價量標籤 + 推薦理由</th><th>操作</th></tr></thead>
       <tbody>
@@ -1459,6 +1482,7 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
         }).join('')}
       </tbody>
     </table>
+    </div>
     </div>
   ` : '';
 
