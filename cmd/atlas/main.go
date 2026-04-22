@@ -44,6 +44,7 @@ type appDeps struct {
 	loadConfig      func() config.Config
 	newDashboardAPI func(string, string) routeRegistrar
 	listenAndServe  func(string, http.Handler) error
+	shutdown        chan struct{}
 }
 
 func defaultAppDeps() appDeps {
@@ -53,6 +54,7 @@ func defaultAppDeps() appDeps {
 			return monitoring.NewDashboardAPI(workDir, ledgerDir)
 		},
 		listenAndServe: http.ListenAndServe,
+		shutdown:       make(chan struct{}),
 	}
 }
 
@@ -198,6 +200,8 @@ func run(args []string, deps appDeps) error {
 			log.Printf("received %v, shutting down api server...", sig)
 		case err := <-srvErr:
 			return err
+		case <-deps.shutdown:
+			log.Printf("shutdown signal received, shutting down api server...")
 		}
 		return nil
 	}

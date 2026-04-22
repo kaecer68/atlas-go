@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
@@ -18,6 +19,7 @@ func TestRunAPIModeStartsServerAndRegistersRoutes(t *testing.T) {
 	var gotAddr string
 	var gotHandler http.Handler
 
+	shutdown := make(chan struct{})
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: ledgerDir}
@@ -33,7 +35,13 @@ func TestRunAPIModeStartsServerAndRegistersRoutes(t *testing.T) {
 			gotHandler = handler
 			return nil
 		},
+		shutdown: shutdown,
 	}
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		close(shutdown)
+	}()
 
 	err := run([]string{"-api", "-addr", ":19090"}, deps)
 	if err != nil {
@@ -105,6 +113,7 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 	ledgerDir := t.TempDir()
 	var gotAddr string
 
+	shutdown := make(chan struct{})
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerMaxRetries: 1}
@@ -119,7 +128,13 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 			gotAddr = addr
 			return nil
 		},
+		shutdown: shutdown,
 	}
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		close(shutdown)
+	}()
 
 	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker"}, deps)
 	if err != nil {
@@ -186,6 +201,7 @@ func TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow(t *testing.T) {
 }
 
 func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
+	shutdown := make(chan struct{})
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
@@ -196,7 +212,13 @@ func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
 		},
+		shutdown: shutdown,
 	}
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		close(shutdown)
+	}()
 
 	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker"}, deps)
 	if err != nil {
@@ -227,6 +249,7 @@ func TestRunRejectsRealSignerWithoutExplicitAllow(t *testing.T) {
 }
 
 func TestRunAllowsRealSignerWithExplicitAllow(t *testing.T) {
+	shutdown := make(chan struct{})
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
@@ -237,7 +260,13 @@ func TestRunAllowsRealSignerWithExplicitAllow(t *testing.T) {
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
 		},
+		shutdown: shutdown,
 	}
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		close(shutdown)
+	}()
 
 	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker", "-broker-signer", "hmac-sha256", "-broker-key-id", "kid-1", "-allow-real-signer"}, deps)
 	if err != nil {
@@ -429,6 +458,7 @@ func TestValidateBrokerRuntimeConfigDefaultsRedisKeyPrefix(t *testing.T) {
 }
 
 func TestRunLiveHTTPFullFlagChainInAPIMode(t *testing.T) {
+	shutdown := make(chan struct{})
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
@@ -439,7 +469,13 @@ func TestRunLiveHTTPFullFlagChainInAPIMode(t *testing.T) {
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
 		},
+		shutdown: shutdown,
 	}
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		close(shutdown)
+	}()
 
 	err := run([]string{
 		"-api",
@@ -472,6 +508,7 @@ func TestStaticFileServerServesIndex(t *testing.T) {
 		t.Fatalf("write index.html: %v", err)
 	}
 
+	shutdown := make(chan struct{})
 	var gotHandler http.Handler
 	deps := appDeps{
 		loadConfig: func() config.Config {
@@ -484,7 +521,13 @@ func TestStaticFileServerServesIndex(t *testing.T) {
 			gotHandler = handler
 			return nil
 		},
+		shutdown: shutdown,
 	}
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		close(shutdown)
+	}()
 
 	if err := run([]string{"-api"}, deps); err != nil {
 		t.Fatalf("run returned error: %v", err)
