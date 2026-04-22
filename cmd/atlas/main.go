@@ -181,6 +181,7 @@ func run(args []string, deps appDeps) error {
 		log.Printf("dashboard api listening on %s", *apiAddr)
 		// Trigger automatic backfill if replay data has gaps.
 		runAutoBackfillOnStartup(cfg.WorkDir)
+		runAutoCapitalFlowFetchOnStartup(cfg.WorkDir)
 
 		// Start server in a goroutine so the main goroutine can handle signals.
 		srvErr := make(chan error, 1)
@@ -606,4 +607,23 @@ func getLatestReplayDate(csvPath string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("no valid dates found")
 	}
 	return latest, nil
+}
+
+// runAutoCapitalFlowFetchOnStartup fetches capital flow data from TWSE in a background
+// goroutine after a short delay to allow the server to fully start.
+func runAutoCapitalFlowFetchOnStartup(workDir string) {
+	go func() {
+		time.Sleep(5 * time.Second)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		capFlowProvider := marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow"))
+		_, err := capFlowProvider.FetchSnapshot(ctx)
+		if err != nil {
+			log.Printf("[AutoCapitalFlow] fetch failed: %v", err)
+			return
+		}
+		log.Printf("[AutoCapitalFlow] fetch succeeded")
+	}()
 }
