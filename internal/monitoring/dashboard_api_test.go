@@ -147,6 +147,32 @@ func TestDashboardAPIEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("recommendation-pipeline", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/dashboard/recommendation-pipeline", nil)
+		mux.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", rr.Code)
+		}
+		var resp RecommendationPipelineResponse
+		if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("unmarshal response: %v", err)
+		}
+		if resp.SessionID != "session-1" {
+			t.Fatalf("expected session-1, got %s", resp.SessionID)
+		}
+		if len(resp.Items) == 0 {
+			t.Fatalf("expected pipeline items")
+		}
+		if len(resp.ScreenedItems) != 1 {
+			t.Fatalf("expected 1 screened item, got %d", len(resp.ScreenedItems))
+		}
+		if resp.ScreenedItems[0].Symbol != "2330.TW" {
+			t.Fatalf("expected 2330.TW screened, got %s", resp.ScreenedItems[0].Symbol)
+		}
+	})
+
 	t.Run("phase3-status", func(t *testing.T) {
 		// Write a metrics fixture to the well-known path relative to test working dir
 		_ = os.MkdirAll("data/state", 0o755)
@@ -627,8 +653,8 @@ func setupDashboardFixtures(t *testing.T, ledgerDir string) {
 		t.Fatalf("mkdir outcomes dir: %v", err)
 	}
 	outcomes := []domain.RecommendationOutcome{
-		{AgentID: "growth-momentum-01", Skill: "growth_momentum", Window: "1d", ForwardReturn: -0.01, Hit: false, RecordedAt: time.Now()},
-		{AgentID: "value-yield-01", Skill: "value_yield", Window: "1d", ForwardReturn: 0.02, Hit: true, RecordedAt: time.Now()},
+		{AgentID: "growth-momentum-01", Skill: "growth_momentum", Symbol: "2330.TW", Layer: domain.LayerStyle, Window: "1d", ForwardReturn: -0.01, Hit: false, PassedGuards: true, RecordedAt: time.Now()},
+		{AgentID: "value-yield-01", Skill: "value_yield", Symbol: "2317.TW", Layer: domain.LayerStyle, Window: "1d", ForwardReturn: 0.02, Hit: true, PassedGuards: true, RecordedAt: time.Now()},
 	}
 	f, err := os.Create(outcomesPath)
 	if err != nil {
@@ -642,6 +668,37 @@ func setupDashboardFixtures(t *testing.T, ledgerDir string) {
 		}
 	}
 	_ = f.Close()
+
+	sessionOutcomesPath := filepath.Join(ledgerDir, "sessions", summary.SessionID, "recommendation_outcomes.jsonl")
+	sf, err := os.Create(sessionOutcomesPath)
+	if err != nil {
+		t.Fatalf("create session outcomes file: %v", err)
+	}
+	enc2 := json.NewEncoder(sf)
+	for _, outcome := range outcomes {
+		if err := enc2.Encode(outcome); err != nil {
+			_ = sf.Close()
+			t.Fatalf("encode session outcome: %v", err)
+		}
+	}
+	_ = sf.Close()
+
+	screenedPath := filepath.Join(ledgerDir, "sessions", summary.SessionID, "screened_symbols.jsonl")
+	screened := []domain.ScreeningReject{
+		{SessionID: summary.SessionID, Symbol: "2330.TW", AgentID: "semi-desk-01", Criterion: "volume_intraday_min", Threshold: "1000000", ActualValue: "500000", RecordedAt: time.Now()},
+	}
+	scf, err := os.Create(screenedPath)
+	if err != nil {
+		t.Fatalf("create screened file: %v", err)
+	}
+	enc3 := json.NewEncoder(scf)
+	for _, s := range screened {
+		if err := enc3.Encode(s); err != nil {
+			_ = scf.Close()
+			t.Fatalf("encode screened reject: %v", err)
+		}
+	}
+	_ = scf.Close()
 
 	experiment := domain.PromptExperimentResult{
 		Experiment: domain.ExperimentRecord{
@@ -723,4 +780,122 @@ func TestDashboardLiveStatusEndpoint(t *testing.T) {
 	if _, ok := portfolio["cash"]; !ok {
 		t.Fatalf("expected cash in portfolio")
 	}
+}
+
+func TestHandleDailySummary(t *testing.T) {
+	ledgerDir := t.TempDir()
+
+	sessionID := "session-20260420-daily"
+	sessionDir := filepath.Join(ledgerDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir session dir: %v", err)
+	}
+
+	summary := domain.SessionSummary{
+		SessionID:      sessionID,
+		Regime:         domain.RegimeRiskOn,
+		PortfolioValue: 1000000,
+		RecordedAt:     time.Now(),
+	}
+	summaryBytes, _ := json.Marshal(summary)
+	if err := os.WriteFile(filepath.Join(sessionDir, "summary.json"), summaryBytes, 0o644); err != nil {
+		t.Fatalf("write summary: %v", err)
+	}
+
+	events := []narrative.NarrativeEvent{
+		{
+			ID:         "evt-test-1",
+			Theme:      "AI_capex_surge",
+			Region:     "US",
+			Sentiment:  0.8,
+			Confidence: 0.70,
+			HitRate:    0.81,
+			TimeWindow: "1_month",
+			Timestamp:  time.Now().UTC(),
+		},
+	}
+	eventsBytes, _ := json.Marshal(events)
+	if err := os.WriteFile(filepath.Join(sessionDir, "narrative_events.json"), eventsBytes, 0o644); err != nil {
+		t.Fatalf("write events: %v", err)
+	}
+
+	outcomesPath := filepath.Join(sessionDir, "recommendation_outcomes.jsonl")
+	outcomes := []struct {
+		AgentID    string `json:"AgentID"`
+		Skill      string `json:"Skill"`
+		Layer      string `json:"Layer"`
+		Symbol     string `json:"Symbol"`
+		Side       string `json:"Side"`
+		Conviction int    `json:"Conviction"`
+		Reason     string `json:"Reason"`
+	}{
+		{AgentID: "agent-a", Skill: "growth_momentum", Layer: "style", Symbol: "2330.TW", Side: "BUY", Conviction: 8, Reason: "strong momentum"},
+		{AgentID: "agent-b", Skill: "value_yield", Layer: "style", Symbol: "2881.TW", Side: "BUY", Conviction: 5, Reason: "undervalued"},
+	}
+	f, _ := os.Create(outcomesPath)
+	for _, o := range outcomes {
+		json.NewEncoder(f).Encode(o)
+	}
+	f.Close()
+
+	api := NewDashboardAPI("", ledgerDir)
+	mux := http.NewServeMux()
+	api.RegisterRoutes(mux)
+
+	t.Run("returns daily summary", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/dashboard/daily-summary?date=2026-04-20", nil)
+		mux.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", rr.Code)
+		}
+
+		var resp domain.DailySummaryReport
+		if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("unmarshal response: %v", err)
+		}
+
+		if resp.Date != "2026-04-20" {
+			t.Errorf("expected date 2026-04-20, got %s", resp.Date)
+		}
+		if resp.NarrativeCount != 1 {
+			t.Errorf("expected NarrativeCount=1, got %d", resp.NarrativeCount)
+		}
+		if len(resp.Sections) == 0 {
+			t.Error("expected at least one section")
+		}
+		if len(resp.TopPicks) != 2 {
+			t.Errorf("expected 2 top picks, got %d", len(resp.TopPicks))
+		}
+	})
+
+	t.Run("defaults to today when no date param", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/dashboard/daily-summary", nil)
+		mux.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", rr.Code)
+		}
+
+		var resp domain.DailySummaryReport
+		if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("unmarshal response: %v", err)
+		}
+		today := time.Now().UTC().Format("2006-01-02")
+		if resp.Date != today {
+			t.Errorf("expected date %s, got %s", today, resp.Date)
+		}
+	})
+
+	t.Run("rejects non-GET methods", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/dashboard/daily-summary", nil)
+		mux.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status = %d, want 405", rr.Code)
+		}
+	})
 }

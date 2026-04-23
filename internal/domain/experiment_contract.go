@@ -13,6 +13,13 @@ var supportedMutationTypes = map[string]struct{}{
 	"portfolio_constraint_revision": {},
 }
 
+var validMaturityLevels = map[string]struct{}{
+	"level_1_exploratory":      {},
+	"level_2_validated":        {},
+	"level_2_window_validated": {},
+	"level_3_regime_aware":     {},
+}
+
 func (b *MutationBrief) NormalizeAndValidate() error {
 	if b == nil {
 		return fmt.Errorf("mutation brief is nil")
@@ -53,6 +60,11 @@ func (b *MutationBrief) NormalizeAndValidate() error {
 	}
 	if b.ObservedWindowCount < 0 {
 		return fmt.Errorf("observed_window_count must be >= 0")
+	}
+	if b.MaturityLevel != "" {
+		if _, ok := validMaturityLevels[b.MaturityLevel]; !ok {
+			return fmt.Errorf("invalid maturity_level: %q", b.MaturityLevel)
+		}
 	}
 
 	return nil

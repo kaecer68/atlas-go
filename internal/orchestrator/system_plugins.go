@@ -5,6 +5,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/janus"
+	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/spawning"
 	"github.com/kaecer68/atlas-go/internal/swarm"
@@ -50,6 +51,13 @@ func (s *System) WithSpawning(sm *spawning.SpawningManager) *System {
 		s.host = &PluginHost{}
 	}
 	s.host.Register(&spawningPlugin{manager: sm}, s.SystemCore)
+	return s
+}
+
+// WithDarwinian attaches a Darwinian weight manager to the system for dynamic
+// agent weight adjustment based on performance.
+func (s *System) WithDarwinian(dw *portfolio.DarwinianWeightManager) *System {
+	s.darwinian = dw
 	return s
 }
 

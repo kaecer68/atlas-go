@@ -12,6 +12,19 @@ import (
 	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
+func createTestReplayCSV(t *testing.T, path string) {
+	content := `Date,Code,Name,TradeVolume,Open,High,Low,Close
+2026-03-25,0050,Test,1000000,100,110,90,105
+2026-03-26,0050,Test,1000000,105,115,95,110
+2026-03-27,0050,Test,1000000,110,120,100,115
+2026-03-30,0050,Test,1000000,115,125,105,120
+2026-03-31,0050,Test,1000000,120,130,110,125
+`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write test replay: %v", err)
+	}
+}
+
 func TestExecuteCreatesCandidatePrompt(t *testing.T) {
 	dir := t.TempDir()
 	executor := NewExecutor(ledger.NewStore(dir), "")
@@ -22,9 +35,11 @@ func TestExecuteCreatesCandidatePrompt(t *testing.T) {
 	root := filepath.Clean(filepath.Join(wd, "../.."))
 	promptPath := filepath.Join(root, "prompts/agents/growth_momentum.md")
 	briefPath := filepath.Join(dir, "brief.json")
+	replayPath := filepath.Join(dir, "test-replay.csv")
+	createTestReplayCSV(t, replayPath)
 
 	brief := domain.MutationBrief{
-		WindowID:            "window-test",
+		WindowID:            "window-20260325-20260331",
 		TargetAgentID:       "growth-momentum-01",
 		TargetSkill:         "growth_momentum",
 		TargetLayer:         domain.LayerStyle,
@@ -50,7 +65,7 @@ func TestExecuteCreatesCandidatePrompt(t *testing.T) {
 		t.Fatalf("write brief: %v", err)
 	}
 
-	result, err := executor.Execute(briefPath)
+	result, err := executor.Execute(briefPath, replayPath)
 	if err != nil {
 		t.Fatalf("execute experiment: %v", err)
 	}
@@ -79,9 +94,11 @@ func TestExecuteUsesRiskRuleTemplate(t *testing.T) {
 	root := filepath.Clean(filepath.Join(wd, "../.."))
 	promptPath := filepath.Join(root, "prompts/agents/cro_risk.md")
 	briefPath := filepath.Join(dir, "brief-risk.json")
+	replayPath := filepath.Join(dir, "test-replay.csv")
+	createTestReplayCSV(t, replayPath)
 
 	brief := domain.MutationBrief{
-		WindowID:            "window-test",
+		WindowID:            "window-20260325-20260331",
 		TargetAgentID:       "cro-01",
 		TargetSkill:         "cro_risk",
 		TargetLayer:         domain.LayerControl,
@@ -106,7 +123,7 @@ func TestExecuteUsesRiskRuleTemplate(t *testing.T) {
 		t.Fatalf("write brief: %v", err)
 	}
 
-	result, err := executor.Execute(briefPath)
+	result, err := executor.Execute(briefPath, replayPath)
 	if err != nil {
 		t.Fatalf("execute experiment: %v", err)
 	}
@@ -129,9 +146,11 @@ func TestExecuteUsesPortfolioConstraintTemplate(t *testing.T) {
 	root := filepath.Clean(filepath.Join(wd, "../.."))
 	promptPath := filepath.Join(root, "prompts/agents/cio_seed.md")
 	briefPath := filepath.Join(dir, "brief-portfolio.json")
+	replayPath := filepath.Join(dir, "test-replay.csv")
+	createTestReplayCSV(t, replayPath)
 
 	brief := domain.MutationBrief{
-		WindowID:            "window-test",
+		WindowID:            "window-20260325-20260331",
 		TargetAgentID:       "cio-01",
 		TargetSkill:         "cio_portfolio",
 		TargetLayer:         domain.LayerControl,
@@ -156,7 +175,7 @@ func TestExecuteUsesPortfolioConstraintTemplate(t *testing.T) {
 		t.Fatalf("write brief: %v", err)
 	}
 
-	result, err := executor.Execute(briefPath)
+	result, err := executor.Execute(briefPath, replayPath)
 	if err != nil {
 		t.Fatalf("execute experiment: %v", err)
 	}
@@ -173,9 +192,11 @@ func TestExecuteRejectsInvalidBriefContract(t *testing.T) {
 	dir := t.TempDir()
 	executor := NewExecutor(ledger.NewStore(dir), "")
 	briefPath := filepath.Join(dir, "brief-invalid.json")
+	replayPath := filepath.Join(dir, "test-replay.csv")
+	createTestReplayCSV(t, replayPath)
 
 	brief := domain.MutationBrief{
-		WindowID:         "window-test",
+		WindowID:         "window-20260325-20260331",
 		TargetAgentID:    "growth-momentum-01",
 		TargetSkill:      "growth_momentum",
 		TargetLayer:      domain.LayerStyle,
@@ -192,7 +213,7 @@ func TestExecuteRejectsInvalidBriefContract(t *testing.T) {
 		t.Fatalf("write brief: %v", err)
 	}
 
-	if _, err := executor.Execute(briefPath); err == nil {
+	if _, err := executor.Execute(briefPath, replayPath); err == nil {
 		t.Fatalf("expected invalid brief contract to fail")
 	}
 }

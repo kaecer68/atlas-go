@@ -25,6 +25,7 @@ type MacroDataSnapshot struct {
 	ForeignInvestorNet MacroDataPoint `json:"foreign_investor_net"`
 	DomesticFundNet    MacroDataPoint `json:"domestic_fund_net"`
 	DealerNet          MacroDataPoint `json:"dealer_net"`
+	ExportElectronics  MacroDataPoint `json:"export_electronics"`
 	RecordedAt         int64          `json:"recorded_at"`
 }
 
@@ -86,6 +87,9 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 		}
 		if snap.DealerNet.Symbol != "" {
 			merged.DealerNet = snap.DealerNet
+		}
+		if snap.ExportElectronics.Symbol != "" {
+			merged.ExportElectronics = snap.ExportElectronics
 		}
 		if snap.RecordedAt > merged.RecordedAt {
 			merged.RecordedAt = snap.RecordedAt

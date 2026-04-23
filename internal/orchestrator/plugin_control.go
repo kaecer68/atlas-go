@@ -26,13 +26,59 @@ func (CRORiskExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendatio
 	if floor <= 0 {
 		floor = 50
 	}
+
 	for _, rec := range recs {
 		if rec.Conviction < floor {
 			continue
 		}
+
+		if rec.StopLossPrice > 0 && rec.TargetPrice > 0 && rec.Side == domain.SideBuy {
+			if rec.StopLossPrice >= rec.TargetPrice {
+				continue
+			}
+		}
+
 		filtered = append(filtered, rec)
 	}
+
+	sectorCount := map[string]int{}
+	for _, rec := range filtered {
+		sector := skillToSector(rec.Skill)
+		sectorCount[sector]++
+	}
+
+	if len(filtered) > 3 {
+		result := make([]domain.Recommendation, 0, len(filtered))
+		for _, rec := range filtered {
+			sector := skillToSector(rec.Skill)
+			if float64(sectorCount[sector])/float64(len(filtered)) > 0.40 {
+				rec.Reason = fmt.Sprintf("[CRO:產業集中 %.0f%%] ", float64(sectorCount[sector])/float64(len(filtered))*100) + rec.Reason
+				rec.Conviction = int(float64(rec.Conviction) * 0.7)
+				if rec.Conviction < floor {
+					continue
+				}
+			}
+			result = append(result, rec)
+		}
+		return result
+	}
+
 	return filtered
+}
+
+func skillToSector(skill string) string {
+	switch skill {
+	case "semiconductor", "ai_supply_chain", "pcb", "thermal":
+		return "technology"
+	case "financials", "value_yield":
+		return "financials"
+	case "shipping":
+		return "shipping"
+	case "consumer", "tourism":
+		return "consumer"
+	default:
+		return "other"
+	}
 }
 
 type CIOPortfolioExecutor struct{}

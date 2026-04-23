@@ -23,8 +23,17 @@ func NewExecutor(store *ledger.Store, baselinePath string) *Executor {
 	return &Executor{store: store, baselinePath: baselinePath}
 }
 
-func (e *Executor) Execute(briefPath string) (domain.PromptExperimentResult, error) {
+func (e *Executor) Execute(briefPath string, replayPath string) (domain.PromptExperimentResult, error) {
 	brief, err := loadBrief(briefPath)
+	if err != nil {
+		return domain.PromptExperimentResult{}, err
+	}
+
+	windowStart, windowEnd, err := parseWindowDates(brief.WindowID)
+	if err != nil {
+		return domain.PromptExperimentResult{}, fmt.Errorf("parse window dates: %w", err)
+	}
+	dataMeta, err := ValidateReplayData(windowStart, windowEnd, replayPath)
 	if err != nil {
 		return domain.PromptExperimentResult{}, err
 	}
@@ -89,7 +98,8 @@ func (e *Executor) Execute(briefPath string) (domain.PromptExperimentResult, err
 			"Candidate constraints are generated relative to current baseline to ensure meaningful delta.",
 			"Replay performance evaluation is the next step before acceptance or rejection.",
 		},
-		RecordedAt: time.Now(),
+		RecordedAt:   time.Now(),
+		DataMetadata: dataMeta,
 	}
 
 	if err := e.store.RecordExperiment(record); err != nil {
@@ -313,12 +323,12 @@ func v3ControlBlockAndBullets(brief domain.MutationBrief) (domain.PromptControl,
 		return domain.PromptControl{
 				VolumeDowngrade:         15,
 				PriceCondition:          "close_below_open_and_prior_close",
-				RequireTrend:            true,
+				RequireTrend:            false,
 				CloseStrengthBoost:      8,
-				ConvictionFloor:         48,
-				NeutralPenaltyReduction: 5,
+				ConvictionFloor:         40,
+				NeutralPenaltyReduction: 0,
 			}, []string{
-				"- require trend confirmation with moderated penalty in neutral regimes",
+				"- keep momentum bias but tolerate one weak confirmation signal in exploratory mode",
 				"- downgrade conviction when price is below both open and prior close",
 				"- reward close strength to favor higher-quality momentum setups",
 			}

@@ -107,3 +107,22 @@ func TestRecordSessionSummaryPersistsTraceIDs(t *testing.T) {
 		t.Fatalf("broker runtime nonce redis prefix mismatch: got %q want %q", got.BrokerRuntime.NonceRedisPrefix, summary.BrokerRuntime.NonceRedisPrefix)
 	}
 }
+
+func TestRecordAndLoadSessionScreeningRejects(t *testing.T) {
+	dir := t.TempDir()
+	s := NewStore(dir)
+	rejects := []domain.ScreeningReject{
+		{SessionID: "s1", Symbol: "2330.TW", AgentID: "a1", Criterion: "pe_max"},
+		{SessionID: "s1", Symbol: "2317.TW", AgentID: "a2", Criterion: "volume_min"},
+	}
+	if err := s.RecordSessionScreeningRejects("s1", rejects); err != nil {
+		t.Fatalf("record failed: %v", err)
+	}
+	loaded, err := s.LoadSessionScreeningRejects("s1")
+	if err != nil {
+		t.Fatalf("load failed: %v", err)
+	}
+	if len(loaded) != 2 {
+		t.Fatalf("expected 2 rejects, got %d", len(loaded))
+	}
+}

@@ -69,8 +69,20 @@ Decision agents:
 ## Data Flow
 
 ```text
-Market Data -> Layer 1 -> Layer 2 -> Layer 3 -> 風控長 -> 投資長 -> Simulation Engine -> Scorecard
+Market Data -> Layer 1 -> Screener -> Layer 2 -> Layer 3 -> 風控長 -> 投資長 -> Simulation Engine -> Scorecard
 ```
+
+**Screener** (`internal/screener/`) runs before Layer 2/3 executors generate recommendations. It filters symbols using declarative criteria (P/E, P/B, dividend yield, momentum, volume, and total factor score) so that only qualifying stocks reach the sector desks and style filters.
+
+### 決策鏈透明度（Audit Trail）
+
+系統同時輸出完整的計算過程供人工稽核：
+
+1. **個股因子** → `FactorScores` 含四因子（動能/價值/品質/Agent）與總分，每因子含公式、原始輸入、是否 fallback
+2. **信念增減** → `ConvictionBreakdown` 含 base/floor/final 與每步 rule/delta/reason
+3. **宏觀事件** → `NarrativeEvent` 含 `confidence_source` 與 `historical_hit_rate`
+
+前端 `web/static/index.html` 的「決策鏈」頁面以五層卡片呈現（宏觀→行業→個股篩選→控制→績效），每層皆可展開查看計算明細。
 
 ## Modes
 
@@ -117,6 +129,8 @@ The system should eventually:
 - `internal/domain`: canonical types
 - `internal/marketdata`: provider abstraction and adapters
 - `internal/orchestrator`: layered workflow
+- `internal/screener`: declarative stock screening (fundamentals + technicals)
+- `internal/portfolio`: Darwinian weights and multi-factor engine
 - `internal/sim`: portfolio and execution engine
 - `internal/config`: runtime configuration
 - `cmd/atlas`: entrypoint for local simulation runs

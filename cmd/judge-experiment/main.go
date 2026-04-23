@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/experiment"
@@ -37,8 +39,21 @@ func findLatestExperiment(dir string) string {
 	if len(files) == 0 {
 		return ""
 	}
-	sort.Sort(sort.Reverse(sort.StringSlice(files)))
+	sort.Slice(files, func(i, j int) bool {
+		return extractTimestamp(files[i]) > extractTimestamp(files[j])
+	})
 	return filepath.Join(dir, files[0])
+}
+
+func extractTimestamp(filename string) int64 {
+	base := strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))
+	parts := strings.Split(base, "-")
+	if len(parts) > 0 {
+		if ts, err := strconv.ParseInt(parts[len(parts)-1], 10, 64); err == nil {
+			return ts
+		}
+	}
+	return 0
 }
 
 func run(args []string) error {
