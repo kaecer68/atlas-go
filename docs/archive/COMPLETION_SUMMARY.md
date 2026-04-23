@@ -243,7 +243,7 @@ FUGLE_API_KEY=your_api_key_here
 │    - taiwan_macro, foreign_flow                             │
 │    - Macro Ingestor (DXY, US10Y, VIX, Oil, Gold, JPY)      │
 │    - Geopolitical Risk Monitor (RSS/GDELT)                 │
-│    - Taiwan Stress Index (0–100 composite)                 │
+│    - Foreign Capital Flight Index (0–100 composite)                 │
 ├─────────────────────────────────────────────────────────────┤
 │  Layer 2: Sector & Style Agents                             │
 │    - semiconductor_desk, ai_supply_chain_desk              │

@@ -47,6 +47,7 @@
 
 ## Phase 6: Production Trading (Next)
 
+- Decision chain transparency (FactorScores breakdown, ConvictionBreakdown, MacroEvent confidence) ✅
 - Real broker integration
 - Live order management
 - Risk circuit breakers

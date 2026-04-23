@@ -69,7 +69,8 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 | `internal/experiment/` | 實驗執行（`Executor`）與評判（`Judge`） |
 | `internal/baseline/` | Baseline policy 升降級與版本控制 |
 | `internal/ledger/` | JSONL append-only 持久化 |
-| `internal/portfolio/` | Darwinian 權重管理（限制 `[0.3, 2.5]`） |
+| `internal/portfolio/` | Darwinian 權重管理（限制 `[0.3, 2.5]`）與 **FactorEngine**（動能/價值/品質多因子計算） |
+| `internal/screener/` | 宣告式個股篩選（P/E、P/B、股息率、動能、成交量、總因子分數） |
 | `internal/marketdata/` | 資料提供者抽象（TWSE OpenAPI、Fugle、Hybrid） |
 | `internal/live/` | 已強化（context 統一、原子寫入、Dashboard 解耦），但 production live 仍需 `-allow-live-broker` 等旗標謹慎啟用 |
 | `internal/prism/` | Regime-specific 訓練佇列（5 種 regime） |
@@ -78,7 +79,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 | `internal/narrative/` | 巨集觀敘事事件偵測、因果鏈、台灣壓力指數 |
 
 **分層資料流**：
-`Market Data → Orchestrator (context/sector/style/superinvestor → control) → Simulator → Ledger`
+`Market Data → Orchestrator (context → screener → sector/style/superinvestor → control) → Simulator → Ledger`
 
 ---
 
@@ -131,7 +132,9 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 | **GuardOutcomes 與 outcomes 必須對齊** | 控制層（CIO）輸出應**保留原始 Agent ID**，不可覆寫為自己的 ID，否則 `PassedGuards` 會全部變 `false`。 |
 | **OutcomeCount 必須是單場次數量** | `RecordSessionSummary` 絕對不可用 `ledger.LoadOutcomes()`（讀取全域檔案）來填 `OutcomeCount`。 |
 | **同一件事不可有三種算法** | 放行/過濾筆數必須由單一權威來源（如 `GuardOutcomes`）計算，前端不可各自重算。 |
-| **Live 交易風險** | `cmd/atlas` 有 `-allow-live-broker`、`-allow-real-signer` 等旗標，本地測試時切勿意外啟用。 |
+| **ScreeningCriteria 靜默過濾** | `configs/agents.json` 中若設定了 `screening_criteria`，標的在進入 sector/style executor **之前**就會被 `screener` 過濾。P/E、P/B 或成交量門檻過高可能導致某檔標的「完全沒有推薦」，這是預期行為，不是 bug。調整門檻前請先用 `go test ./internal/screener/...` 確認篩選邏輯。 |
+| **JSON tag 大小寫錯誤** | API handler (`dashboard_api.go`) 讀取 JSONL 時，若 anonymous struct 的 JSON tag 用了 PascalCase（如 `json:"FactorScores"`）而 JSON 檔案實際寫入時是 snake_case（如 `factor_scores`），unmarshal 會靜默失敗，導致該欄位永遠為 nil/零值。所有 `domain.*` struct 的 JSON tag 均為 snake_case，API parsing struct 必須對齊。 |
+| **Live 交易風險** | `cmd/atlas` 有 `-allow-live-broker`、`-allow-real-signor` 等旗標，本地測試時切勿意外啟用。 |
 
 ---
 
@@ -149,6 +152,34 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 
 ---
 
+## 決策鏈透明化（Audit Trail）
+
+系統已實作三階段透明度機制，將後端決策鏈的完整計算過程攤開在「決策鏈」前端頁面：
+
+### 第一階段：個股因子分數透明化
+- `FactorScores`（含 `Breakdown *FactorScoreBreakdown`）附加於每筆 `Recommendation` 與 `ScreeningReject`
+- 每因子含：`Score`（計算結果）、`Weight`（權重）、`Formula`（計算公式）、`RawInputs`（原始輸入）、`IsFallback`（是否為 fallback 猜測）
+- 實作：`internal/portfolio/factor_engine.go` 的 `CalculateAllScoresWithBreakdown()`
+- 觸發時機：`collectRecommendations()`（`internal/orchestrator/executors.go`）對所有 recs 與 rejects 都呼叫計算
+
+### 第二階段：行業信念計算透明化
+- `ConvictionBreakdown`（含 `Base`/`Floor`/`Final` 與 `Steps[]`）附加於每筆 `Recommendation`
+- 每步含：`Rule`（規則名）、`Delta`（增減分）、`Reason`（原因說明）
+- 實作：`internal/orchestrator/conviction_builder.go` 的 `convictionBuilder`，由各 Sector/Style Executor 的 `Recommend()` 方法呼叫
+- 已重寫：Semiconductor、AI Supply Chain、ETF Rotation、Financials、Shipping、ValueYield、EarningsQuality、TechnicalBreakout、GrowthMomentum 等 Executor
+
+### 第三階段：宏觀事件信心度透明化
+- `NarrativeEvent`（`internal/narrative/types.go`）新增 `ConfidenceSource`（信心度來源）與 `HitRate`（歷史命中率）
+- 實作：`internal/narrative/ingestor.go` 與 `internal/narrative/knowledge_base.go` 的各 `detect*Event()` 函式
+- 內建命中率：`US_rates_up: 0.72`、`JPY_carry_unwind: 0.68`、`geopolitical_risk: 0.65`、`oil_price_shock: 0.58`、`AI_capex_surge: 0.81`
+
+### 資料流驗證
+- API `/api/dashboard/recommendation-pipeline` 回傳的 `items[].factor_scores` 含完整 breakdown
+- API 回傳的 `items[].conviction_breakdown` 含完整 steps
+- `screened_items[].factor_scores` 含被篩選標的之因子分數
+
+---
+
 ## 延伸指令檔
 
 以下檔案依任務領域提供額外守則：
@@ -163,7 +194,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas** (6231 symbols, 15886 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas** (7365 symbols, 19812 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -261,3 +292,12 @@ To check whether embeddings exist, inspect `.gitnexus/meta.json` — the `stats.
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
+
+## graphify
+
+This project has a graphify knowledge graph at graphify-out/.
+
+Rules:
+- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
+- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
+- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)

@@ -40,3 +40,31 @@ internal/*/data/
 !internal/config/data/
 .gitnexus
 /cmd/backtest-window/reports/
+.worktrees/
+
+# Development artifacts
+.opencode/
+.planning/
+.playwright-mcp/
+.graphify_cached.json
+.graphify_uncached.txt
+
+# Temporary files
+tmp/
+*.log
+
+# Build artifacts
+run-stress
+coverage_all.out
+
+# Data files (generated)
+cmd/backtest-window/data/state/darwinian_weights.json
+
+# OpenCode config (local development)
+opencode.json
+
+# Debug test files
+internal/experiment/debug*_test.go
+
+# PR description
+PR_DESCRIPTION.md

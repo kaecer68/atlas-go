@@ -17,9 +17,21 @@ func TestRunExecutesExperiment(t *testing.T) {
 		t.Fatalf("write prompt: %v", err)
 	}
 
+	replayPath := filepath.Join(dir, "test-replay.csv")
+	replayContent := `Date,Code,Name,TradeVolume,Open,High,Low,Close
+2026-03-25,0050,Test,1000000,100,110,90,105
+2026-03-26,0050,Test,1000000,105,115,95,110
+2026-03-27,0050,Test,1000000,110,120,100,115
+2026-03-30,0050,Test,1000000,115,125,105,120
+2026-03-31,0050,Test,1000000,120,130,110,125
+`
+	if err := os.WriteFile(replayPath, []byte(replayContent), 0o644); err != nil {
+		t.Fatalf("write replay: %v", err)
+	}
+
 	brief := domain.MutationBrief{
 		ContractVersion:     domain.MutationBriefContractVersion,
-		WindowID:            "window-test",
+		WindowID:            "window-20260325-20260331",
 		TargetAgentID:       "test-agent-01",
 		TargetSkill:         "test_skill",
 		TargetLayer:         domain.LayerStyle,
@@ -42,16 +54,17 @@ func TestRunExecutesExperiment(t *testing.T) {
 		t.Fatalf("write brief: %v", err)
 	}
 
-	// Point ledger and config to temp dir via env if needed, but config.Load()
-	// reads from .env or defaults. We'll override via env for this test.
 	origLedger := os.Getenv("ATLAS_LEDGER_DIR")
 	origBaseline := os.Getenv("ATLAS_BASELINE_POLICY_PATH")
+	origReplay := os.Getenv("ATLAS_REPLAY_DATA_PATH")
 	defer func() {
 		os.Setenv("ATLAS_LEDGER_DIR", origLedger)
 		os.Setenv("ATLAS_BASELINE_POLICY_PATH", origBaseline)
+		os.Setenv("ATLAS_REPLAY_DATA_PATH", origReplay)
 	}()
 	os.Setenv("ATLAS_LEDGER_DIR", dir)
 	os.Setenv("ATLAS_BASELINE_POLICY_PATH", filepath.Join(dir, "baseline.json"))
+	os.Setenv("ATLAS_REPLAY_DATA_PATH", replayPath)
 
 	if err := run([]string{"--brief", briefPath}); err != nil {
 		t.Fatalf("run execute-experiment: %v", err)

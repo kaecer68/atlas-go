@@ -21,10 +21,13 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/db"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/live"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
+	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/risk"
 )
 
 type routeRegistrar interface {
@@ -41,6 +44,7 @@ type appDeps struct {
 	loadConfig      func() config.Config
 	newDashboardAPI func(string, string) routeRegistrar
 	listenAndServe  func(string, http.Handler) error
+	shutdown        chan struct{}
 }
 
 func defaultAppDeps() appDeps {
@@ -50,6 +54,7 @@ func defaultAppDeps() appDeps {
 			return monitoring.NewDashboardAPI(workDir, ledgerDir)
 		},
 		listenAndServe: http.ListenAndServe,
+		shutdown:       make(chan struct{}),
 	}
 }
 
@@ -152,6 +157,14 @@ func run(args []string, deps appDeps) error {
 		}
 		dashboard.RegisterRoutes(mux)
 
+		alertStore, err := monitoring.NewAlertStore(filepath.Join(cfg.WorkDir, "data/state/alerts"))
+		if err != nil {
+			log.Printf("[Alerts] failed to create alert store: %v", err)
+		} else {
+			alertAPI := monitoring.NewAlertAPI(alertStore)
+			alertAPI.RegisterRoutes(mux)
+		}
+
 		mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
 		sysMetrics := monitoring.NewSystemMetrics(collector, monitoring.NewMonitor())
 		go sysMetrics.Start(context.Background())
@@ -170,8 +183,25 @@ func run(args []string, deps appDeps) error {
 		log.Printf("dashboard api listening on %s", *apiAddr)
 		// Trigger automatic backfill if replay data has gaps.
 		runAutoBackfillOnStartup(cfg.WorkDir)
-		if err := deps.listenAndServe(*apiAddr, mux); err != nil {
-			return fmt.Errorf("dashboard api server failed: %w", err)
+		runAutoCapitalFlowFetchOnStartup(cfg.WorkDir)
+
+		// Start server in a goroutine so the main goroutine can handle signals.
+		srvErr := make(chan error, 1)
+		go func() {
+			if err := deps.listenAndServe(*apiAddr, mux); err != nil {
+				srvErr <- fmt.Errorf("dashboard api server failed: %w", err)
+			}
+		}()
+
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		select {
+		case sig := <-sigCh:
+			log.Printf("received %v, shutting down api server...", sig)
+		case err := <-srvErr:
+			return err
+		case <-deps.shutdown:
+			log.Printf("shutdown signal received, shutting down api server...")
 		}
 		return nil
 	}
@@ -331,6 +361,16 @@ func parseStatusCodeCSV(raw string, fallback []int) []int {
 func runSimulation(cfg config.Config) error {
 	system := orchestrator.NewProductionSystem(cfg)
 
+	capitalCfg := domain.DefaultCapitalPhaseConfig()
+	capitalCfg.PhaseStartDate = time.Now().Add(-30 * 24 * time.Hour)
+	controller := risk.NewCapitalPhaseController(capitalCfg)
+	allocator := portfolio.NewCapitalAllocator()
+	workflow, err := risk.NewApprovalWorkflow("data/state/approvals")
+	if err != nil {
+		return fmt.Errorf("create approval workflow: %w", err)
+	}
+	system.WithCapitalManagement(controller, allocator, workflow)
+
 	result, err := system.RunDailySimulation(time.Now())
 	if err != nil {
 		return fmt.Errorf("simulation failed: %w", err)
@@ -429,6 +469,13 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	mux := http.NewServeMux()
 	dashboard := deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir)
 	dashboard.RegisterRoutes(mux)
+	alertStore, err := monitoring.NewAlertStore(filepath.Join(cfg.WorkDir, "data/state/alerts"))
+	if err != nil {
+		log.Printf("[Alerts] failed to create alert store: %v", err)
+	} else {
+		alertAPI := monitoring.NewAlertAPI(alertStore)
+		alertAPI.RegisterRoutes(mux)
+	}
 	dashboard.RegisterNarrativeRoutes(mux)
 	dashboard.RegisterControlRoutes(mux)
 	dashboard.RegisterMacroRoutes(mux)
@@ -564,4 +611,23 @@ func getLatestReplayDate(csvPath string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("no valid dates found")
 	}
 	return latest, nil
+}
+
+// runAutoCapitalFlowFetchOnStartup fetches capital flow data from TWSE in a background
+// goroutine after a short delay to allow the server to fully start.
+func runAutoCapitalFlowFetchOnStartup(workDir string) {
+	go func() {
+		time.Sleep(5 * time.Second)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		capFlowProvider := marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow"))
+		_, err := capFlowProvider.FetchSnapshot(ctx)
+		if err != nil {
+			log.Printf("[AutoCapitalFlow] fetch failed: %v", err)
+			return
+		}
+		log.Printf("[AutoCapitalFlow] fetch succeeded")
+	}()
 }

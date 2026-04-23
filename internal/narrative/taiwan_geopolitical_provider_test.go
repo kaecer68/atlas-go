@@ -1,0 +1,141 @@
+package narrative
+
+import (
+	"context"
+	"testing"
+	"time"
+)
+
+func TestTaiwanRSSGeopoliticalProvider_Name(t *testing.T) {
+	p := NewTaiwanRSSGeopoliticalProvider()
+	if p.Name() != "taiwan_rss_geopolitical" {
+		t.Fatalf("unexpected name: %s", p.Name())
+	}
+}
+
+func TestTaiwanRSSGeopoliticalProvider_Feeds(t *testing.T) {
+	p := NewTaiwanRSSGeopoliticalProvider()
+	if len(p.feeds) == 0 {
+		t.Fatalf("feeds should not be empty")
+	}
+
+	// Verify expected feeds are present
+	expectedFeeds := []string{
+		"https://www.cna.com.tw/cna/rss/rssfa.xml",
+		"https://news.ltn.com.tw/rss/focus.xml",
+	}
+
+	found := 0
+	for _, feed := range p.feeds {
+		for _, expected := range expectedFeeds {
+			if feed == expected {
+				found++
+				break
+			}
+		}
+	}
+
+	if found < 2 {
+		t.Fatalf("expected at least 2 known feeds, found %d", found)
+	}
+}
+
+func TestTaiwanRSSGeopoliticalProvider_Keywords(t *testing.T) {
+	p := NewTaiwanRSSGeopoliticalProvider()
+	if len(p.keywords) == 0 {
+		t.Fatalf("keywords should not be empty")
+	}
+
+	// Verify Chinese keywords
+	chineseKeywords := []string{"台灣", "中國", "兩岸", "軍演", "制裁"}
+	for _, kw := range chineseKeywords {
+		found := false
+		for _, k := range p.keywords {
+			if k == kw {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected keyword %q not found", kw)
+		}
+	}
+
+	// Verify English keywords
+	englishKeywords := []string{"taiwan", "china", "cross-strait", "military drill"}
+	for _, kw := range englishKeywords {
+		found := false
+		for _, k := range p.keywords {
+			if k == kw {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected keyword %q not found", kw)
+		}
+	}
+}
+
+func TestTaiwanRSSGeopoliticalProvider_FetchScore(t *testing.T) {
+	p := NewTaiwanRSSGeopoliticalProvider()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	score, err := p.FetchScore(ctx)
+	if err != nil {
+		t.Fatalf("FetchScore failed: %v", err)
+	}
+
+	if score.Region != "Taiwan" {
+		t.Fatalf("unexpected region: %s", score.Region)
+	}
+
+	// Intensity should be between 0-100
+	if score.Intensity < 0 || score.Intensity > 100 {
+		t.Fatalf("intensity out of range: %v", score.Intensity)
+	}
+
+	// Confidence should be between 0-1
+	if score.Confidence < 0 || score.Confidence > 1 {
+		t.Fatalf("confidence out of range: %v", score.Confidence)
+	}
+
+	// Sentiment should be between -1 and 1
+	if score.Sentiment < -1 || score.Sentiment > 1 {
+		t.Fatalf("sentiment out of range: %v", score.Sentiment)
+	}
+
+	// Oil impact should be low for Taiwan
+	if score.OilImpact > 0.5 {
+		t.Fatalf("oil impact too high for Taiwan: %v", score.OilImpact)
+	}
+}
+
+func TestCompositeTaiwanGeopoliticalProvider_Name(t *testing.T) {
+	p := NewCompositeTaiwanGeopoliticalProvider()
+	if p.Name() != "composite_taiwan_geopolitical" {
+		t.Fatalf("unexpected name: %s", p.Name())
+	}
+}
+
+func TestCompositeTaiwanGeopoliticalProvider_FetchScore(t *testing.T) {
+	p := NewCompositeTaiwanGeopoliticalProvider(
+		NewTaiwanRSSGeopoliticalProvider(),
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	score, err := p.FetchScore(ctx)
+	if err != nil {
+		t.Fatalf("FetchScore failed: %v", err)
+	}
+
+	if score.Region != "Taiwan" {
+		t.Fatalf("unexpected region: %s", score.Region)
+	}
+
+	if score.Intensity < 0 || score.Intensity > 100 {
+		t.Fatalf("intensity out of range: %v", score.Intensity)
+	}
+}

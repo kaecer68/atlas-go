@@ -16,6 +16,8 @@ import (
 func NewProductionSystem(cfg config.Config) *System {
 	system := NewSystem(cfg)
 
+	system.WithDarwinian(system.darwinian)
+
 	pm := prism.NewPRISMManager(prism.DefaultPRISMConfig())
 	system.WithPRISM(pm)
 

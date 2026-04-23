@@ -71,6 +71,7 @@ type Optimizer struct {
 	factorWeights map[FactorType]float64
 	history       *HistoricalPrices
 	fundamentals  *FundamentalProvider
+	factorEngine  *FactorEngine
 	mu            sync.RWMutex
 }
 
@@ -81,6 +82,7 @@ func NewOptimizer() *Optimizer {
 		agentWeights:  make(map[string]float64),
 		styleWeights:  make(map[string]float64),
 		factorWeights: defaultFactorWeights(),
+		factorEngine:  NewFactorEngine(),
 	}
 }
 
@@ -101,11 +103,22 @@ func (o *Optimizer) SetConstraints(c Constraints) {
 	o.constraints = c
 }
 
+// WithFactorEngine attaches a pre-configured factor engine.
+func (o *Optimizer) WithFactorEngine(fe *FactorEngine) *Optimizer {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.factorEngine = fe
+	return o
+}
+
 // WithHistoricalPrices attaches a historical price repository for momentum calc.
 func (o *Optimizer) WithHistoricalPrices(hp *HistoricalPrices) *Optimizer {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.history = hp
+	if o.factorEngine != nil {
+		o.factorEngine.WithHistoricalPrices(hp)
+	}
 	return o
 }
 
@@ -114,6 +127,9 @@ func (o *Optimizer) WithFundamentalProvider(fp *FundamentalProvider) *Optimizer 
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.fundamentals = fp
+	if o.factorEngine != nil {
+		o.factorEngine.WithFundamentalProvider(fp)
+	}
 	return o
 }
 
@@ -237,9 +253,9 @@ func (o *Optimizer) calculateMultiFactorScores(
 		}
 
 		// 其他因子 (简化版，实际需要历史数据)
-		momentumScore := o.calculateMomentumScore(symbol, quotes)
-		valueScore := o.calculateValueScore(symbol, quotes)
-		qualityScore := o.calculateQualityScore(symbol, quotes)
+		momentumScore := o.factorEngine.CalculateMomentumScore(symbol, quotes)
+		valueScore := o.factorEngine.CalculateValueScore(symbol, quotes)
+		qualityScore := o.factorEngine.CalculateQualityScore(symbol, quotes)
 
 		// 综合评分
 		totalScore := momentumScore*factorWeights[FactorMomentum] +
@@ -260,132 +276,6 @@ func (o *Optimizer) calculateMultiFactorScores(
 	}
 
 	return scores
-}
-
-// calculateMomentumScore computes momentum based on 20-day price change.
-// Falls back to intraday return when no historical data is available.
-func (o *Optimizer) calculateMomentumScore(symbol string, quotes map[string]domain.Quote) float64 {
-	o.mu.RLock()
-	hp := o.history
-	o.mu.RUnlock()
-
-	if hp != nil {
-		ret20 := hp.MomentumReturn(symbol, 20)
-		if ret20 != 0 {
-			// Normalize: assume ±30% over 20 days maps to ±1.0
-			score := ret20 / 0.30
-			if score > 1.0 {
-				score = 1.0
-			}
-			if score < -1.0 {
-				score = -1.0
-			}
-			return score
-		}
-	}
-
-	// Fallback to intraday momentum proxy
-	quote, ok := quotes[symbol]
-	if !ok || quote.Open == 0 {
-		return 0.0
-	}
-	intradayReturn := (quote.Last - quote.Open) / quote.Open
-	score := intradayReturn / 0.10
-	if score > 1.0 {
-		score = 1.0
-	}
-	if score < -1.0 {
-		score = -1.0
-	}
-	return score
-}
-
-// calculateValueScore computes value based on P/E and P/B from fundamentals.
-// Falls back to a mild positive constant when no data is available.
-func (o *Optimizer) calculateValueScore(symbol string, quotes map[string]domain.Quote) float64 {
-	_ = quotes
-	o.mu.RLock()
-	fp := o.fundamentals
-	o.mu.RUnlock()
-
-	if fp != nil && fp.HasData() {
-		data := fp.Get(symbol)
-		score := 0.0
-		count := 0
-		if data.PE > 0 {
-			// Lower PE is better. Map PE 5->1.0, PE 50->-1.0 linearly
-			peScore := 1.0 - (data.PE-5)/45.0
-			if peScore > 1.0 {
-				peScore = 1.0
-			}
-			if peScore < -1.0 {
-				peScore = -1.0
-			}
-			score += peScore
-			count++
-		}
-		if data.PB > 0 {
-			pbScore := 1.0 - (data.PB-0.5)/4.5
-			if pbScore > 1.0 {
-				pbScore = 1.0
-			}
-			if pbScore < -1.0 {
-				pbScore = -1.0
-			}
-			score += pbScore
-			count++
-		}
-		if count > 0 {
-			return score / float64(count)
-		}
-	}
-	return 0.1 // fallback placeholder
-}
-
-// calculateQualityScore computes quality based on dividend yield and price stability.
-// Falls back to a mild positive constant when no data is available.
-func (o *Optimizer) calculateQualityScore(symbol string, quotes map[string]domain.Quote) float64 {
-	o.mu.RLock()
-	fp := o.fundamentals
-	hp := o.history
-	o.mu.RUnlock()
-
-	score := 0.0
-	count := 0
-
-	if fp != nil && fp.HasData() {
-		data := fp.Get(symbol)
-		if data.DividendYield > 0 {
-			// Higher yield suggests stability. Map 0->0, 5%->1.0
-			dyScore := data.DividendYield / 5.0
-			if dyScore > 1.0 {
-				dyScore = 1.0
-			}
-			score += dyScore
-			count++
-		}
-	}
-
-	if hp != nil {
-		vol := hp.Volatility(symbol, 20)
-		if vol > 0 {
-			// Lower volatility = higher quality. Map 0->1.0, 5%->0 linearly
-			volScore := 1.0 - vol/0.05
-			if volScore > 1.0 {
-				volScore = 1.0
-			}
-			if volScore < -1.0 {
-				volScore = -1.0
-			}
-			score += volScore
-			count++
-		}
-	}
-
-	if count > 0 {
-		return score / float64(count)
-	}
-	return 0.05 // fallback placeholder
 }
 
 // allocateInitialWeights 初始权重分配

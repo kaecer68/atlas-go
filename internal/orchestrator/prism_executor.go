@@ -58,15 +58,17 @@ func (e *PRISMTrainingExecutor) Execute(task prism.TrainingTask) (prism.Training
 				continue
 			}
 			outcomes = append(outcomes, domain.RecommendationOutcome{
-				AgentID:        rec.Agent,
-				Skill:          rec.Skill,
-				Symbol:         rec.Symbol,
-				Window:         date.Format("2006-01-02"),
-				ForwardReturn:  fr,
-				BenchmarkDelta: fr - 0.003,
-				Hit:            fr > 0,
-				Reason:         rec.Reason,
-				RecordedAt:     date,
+				AgentID:             rec.Agent,
+				Skill:               rec.Skill,
+				Symbol:              rec.Symbol,
+				Window:              date.Format("2006-01-02"),
+				ForwardReturn:       fr,
+				BenchmarkDelta:      fr - 0.003,
+				Hit:                 fr > 0,
+				Reason:              rec.Reason,
+				RecordedAt:          date,
+				FactorScores:        rec.FactorScores,
+				ConvictionBreakdown: rec.ConvictionBreakdown,
 			})
 		}
 		_ = nextDate

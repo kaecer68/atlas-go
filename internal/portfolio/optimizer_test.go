@@ -14,12 +14,12 @@ func TestOptimizerMomentumScore(t *testing.T) {
 		"2317.TW": {Symbol: "2317.TW", Open: 200, Last: 180, IsTradable: true},
 	}
 
-	upScore := o.calculateMomentumScore("2330.TW", quotes)
+	upScore := o.factorEngine.CalculateMomentumScore("2330.TW", quotes)
 	if upScore <= 0 {
 		t.Errorf("expected positive momentum for up-day, got %f", upScore)
 	}
 
-	downScore := o.calculateMomentumScore("2317.TW", quotes)
+	downScore := o.factorEngine.CalculateMomentumScore("2317.TW", quotes)
 	if downScore >= 0 {
 		t.Errorf("expected negative momentum for down-day, got %f", downScore)
 	}
@@ -33,12 +33,12 @@ func TestOptimizerValueAndQualityScoresAreNonZero(t *testing.T) {
 	o := NewOptimizer()
 	quotes := map[string]domain.Quote{}
 
-	v := o.calculateValueScore("2330.TW", quotes)
+	v := o.factorEngine.CalculateValueScore("2330.TW", quotes)
 	if v == 0 {
 		t.Error("expected non-zero mock value score")
 	}
 
-	q := o.calculateQualityScore("2330.TW", quotes)
+	q := o.factorEngine.CalculateQualityScore("2330.TW", quotes)
 	if q == 0 {
 		t.Error("expected non-zero mock quality score")
 	}

@@ -434,6 +434,47 @@ func maxDrawdown(values []float64) float64 {
 	return maxDD
 }
 
+func (s *Store) RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error {
+	if err := os.MkdirAll(s.sessionDir(sessionID), 0o755); err != nil {
+		return err
+	}
+	path := filepath.Join(s.sessionDir(sessionID), "screened_symbols.jsonl")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	enc := json.NewEncoder(f)
+	for _, r := range rejects {
+		if err := enc.Encode(r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) LoadSessionScreeningRejects(sessionID string) ([]domain.ScreeningReject, error) {
+	path := filepath.Join(s.sessionDir(sessionID), "screened_symbols.jsonl")
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	rejects := make([]domain.ScreeningReject, 0)
+	for scanner.Scan() {
+		var rec domain.ScreeningReject
+		if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
+			return nil, fmt.Errorf("decode screening reject: %w", err)
+		}
+		rejects = append(rejects, rec)
+	}
+	return rejects, scanner.Err()
+}
+
 func (s *Store) sessionDir(sessionID string) string {
 	return filepath.Join(s.baseDir, "sessions", sessionID)
 }

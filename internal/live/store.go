@@ -32,10 +32,12 @@ type StateStore struct {
 	mutex    sync.RWMutex
 
 	// 内存状态
-	portfolio PortfolioState
-	positions map[string]domain.Position
-	regime    RegimeState
-	events    []Event
+	portfolio       PortfolioState
+	positions       map[string]domain.Position
+	regime          RegimeState
+	events          []Event
+	recommendations []domain.Recommendation
+	filteredRecs    []domain.Recommendation
 }
 
 // PortfolioState 投资组合状态
@@ -440,4 +442,48 @@ func LoadLastRegime(basePath string) (RegimeState, error) {
 		return r, err
 	}
 	return r, nil
+}
+
+// GetCurrentRegime returns the current market regime.
+func (s *StateStore) GetCurrentRegime() domain.Regime {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.regime.CurrentRegime
+}
+
+// SetCurrentRegime updates the current market regime.
+func (s *StateStore) SetCurrentRegime(regime domain.Regime) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.regime.CurrentRegime = regime
+	s.regime.LastChangedAt = time.Now()
+	s.regime.DeterminedBy = "context_agent"
+}
+
+// GetPendingRecommendations returns the pending recommendations.
+func (s *StateStore) GetPendingRecommendations() []domain.Recommendation {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return append([]domain.Recommendation(nil), s.recommendations...)
+}
+
+// SetPendingRecommendations sets the pending recommendations.
+func (s *StateStore) SetPendingRecommendations(recs []domain.Recommendation) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.recommendations = append([]domain.Recommendation(nil), recs...)
+}
+
+// GetFilteredRecommendations returns the filtered recommendations.
+func (s *StateStore) GetFilteredRecommendations() []domain.Recommendation {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return append([]domain.Recommendation(nil), s.filteredRecs...)
+}
+
+// SetFilteredRecommendations sets the filtered recommendations.
+func (s *StateStore) SetFilteredRecommendations(recs []domain.Recommendation) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.filteredRecs = append([]domain.Recommendation(nil), recs...)
 }

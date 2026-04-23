@@ -291,8 +291,10 @@ func requiredObservationCountForMaturity(maturity string) int {
 	switch maturity {
 	case "level_3_regime_aware":
 		return 12
-	case "level_2_window_validated":
+	case "level_2_window_validated", "level_2_validated":
 		return 8
+	case "level_1_exploratory":
+		return 3
 	default:
 		return 3
 	}
@@ -302,8 +304,10 @@ func requiredCheckCountForMaturity(maturity string) int {
 	switch maturity {
 	case "level_3_regime_aware":
 		return 4
-	case "level_2_window_validated":
+	case "level_2_window_validated", "level_2_validated":
 		return 3
+	case "level_1_exploratory":
+		return 2
 	default:
 		return 2
 	}

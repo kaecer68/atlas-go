@@ -2,8 +2,11 @@ package monitoring
 
 import (
 	"fmt"
+	"log"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 // AlertLevel 告警级别
@@ -50,6 +53,9 @@ type Monitor struct {
 	mu         sync.RWMutex
 	history    []Alert
 	maxHistory int
+
+	alertStore *AlertStore
+	notifiers  []Notifier
 }
 
 // NewMonitor 创建监控系统
@@ -87,6 +93,9 @@ func (m *Monitor) Alert(level AlertLevel, category string, message string, metad
 	}
 	handlers := make([]AlertHandler, len(m.handlers))
 	copy(handlers, m.handlers)
+	store := m.alertStore
+	notifiers := make([]Notifier, len(m.notifiers))
+	copy(notifiers, m.notifiers)
 	m.mu.Unlock()
 
 	// 异步通知处理器
@@ -95,6 +104,32 @@ func (m *Monitor) Alert(level AlertLevel, category string, message string, metad
 			go handler(alert)
 		}
 	}()
+
+	// 持久化並派發通知
+	record := domain.AlertRecord{
+		ID:        alert.ID,
+		Timestamp: alert.Timestamp,
+		Rule:      category,
+		Severity:  level.String(),
+		Message:   message,
+	}
+	if store != nil {
+		go func() {
+			if err := store.Save(record); err != nil {
+				log.Printf("[monitor] save alert: %v", err)
+			}
+		}()
+	}
+	for _, n := range notifiers {
+		if !n.IsConfigured() {
+			continue
+		}
+		go func(notif Notifier) {
+			if err := notif.Notify(record); err != nil {
+				log.Printf("[%s] notify: %v", notif.Name(), err)
+			}
+		}(n)
+	}
 }
 
 // Info 发送信息级别告警
@@ -115,6 +150,20 @@ func (m *Monitor) Error(category string, message string, metadata map[string]int
 // Critical 发送严重级别告警
 func (m *Monitor) Critical(category string, message string, metadata map[string]interface{}) {
 	m.Alert(AlertLevelCritical, category, message, metadata)
+}
+
+// SetAlertStore sets the persistent alert store.
+func (m *Monitor) SetAlertStore(store *AlertStore) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.alertStore = store
+}
+
+// AddNotifier adds a notification dispatcher.
+func (m *Monitor) AddNotifier(n Notifier) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.notifiers = append(m.notifiers, n)
 }
 
 // GetHistory 获取告警历史

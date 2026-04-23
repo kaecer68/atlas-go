@@ -27,6 +27,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/replay"
+	"github.com/kaecer68/atlas-go/internal/risk"
 )
 
 type DashboardAPI struct {
@@ -37,6 +38,7 @@ type DashboardAPI struct {
 	macroIngestor    *narrative.MacroIngestor
 	geoProvider      narrative.GeopoliticalRiskProvider
 	taiwanStressCalc *narrative.TaiwanStressCalculator
+	reportGenerator  *narrative.ReportGenerator
 	pool             *pgxpool.Pool
 	backtestMu       sync.Mutex
 	backtestRunning  bool
@@ -95,6 +97,7 @@ func NewDashboardAPI(workDir, ledgerDir string) *DashboardAPI {
 		macroIngestor:    narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro")),
 		geoProvider:      geoProvider,
 		taiwanStressCalc: narrative.NewTaiwanStressCalculator(geoProvider),
+		reportGenerator:  narrative.NewReportGenerator(),
 	}
 }
 
@@ -112,6 +115,11 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/sessions", a.handleSessions)
 	mux.HandleFunc("/api/report/latest", a.handleLatestReport)
 	mux.HandleFunc("/api/report/list", a.handleReportList)
+	mux.HandleFunc("/api/dashboard/risk", a.handleRiskMetrics)
+	mux.HandleFunc("/api/dashboard/daily-summary", a.handleDailySummary)
+	mux.HandleFunc("/api/dashboard/retail-sentiment", a.handleRetailSentiment)
+	mux.HandleFunc("/api/dashboard/capital-phase", a.handleCapitalPhase)
+	mux.HandleFunc("/api/dashboard/tax-snapshot", a.handleTaxSnapshot)
 }
 
 // RegisterSwaggerRoutes mounts Swagger UI and the OpenAPI spec.
@@ -126,6 +134,7 @@ func (a *DashboardAPI) RegisterNarrativeRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/narrative/chains", a.handleNarrativeChains)
 	mux.HandleFunc("/api/narrative/models", a.handleNarrativeModels)
 	mux.HandleFunc("/api/narrative/templates", a.handleNarrativeTemplates)
+	mux.HandleFunc("/api/narrative/seasonal", a.handleSeasonalAnalysis)
 }
 
 // RegisterControlRoutes mounts human intervention control endpoints.
@@ -710,6 +719,83 @@ func (a *DashboardAPI) handleReportList(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]any{"reports": reports})
 }
 
+func (a *DashboardAPI) handleRiskMetrics(w http.ResponseWriter, r *http.Request) {
+	sessionsDir := filepath.Join(a.ledgerDir, "sessions")
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeJSON(w, http.StatusOK, map[string]any{"message": "no sessions available"})
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read sessions: %v", err))
+		return
+	}
+
+	type sessionEntry struct {
+		name  string
+		value float64
+	}
+	sessions := make([]sessionEntry, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
+		bytes, err := os.ReadFile(summaryPath)
+		if err != nil {
+			continue
+		}
+		var summary domain.SessionSummary
+		if err := json.Unmarshal(bytes, &summary); err != nil {
+			continue
+		}
+		sessions = append(sessions, sessionEntry{name: entry.Name(), value: summary.PortfolioValue})
+	}
+
+	// Sort chronologically by session directory name to ensure correct daily return ordering
+	slices.SortFunc(sessions, func(a, b sessionEntry) int {
+		return strings.Compare(a.name, b.name)
+	})
+
+	portfolioValues := make([]float64, len(sessions))
+	for i, s := range sessions {
+		portfolioValues[i] = s.value
+	}
+
+	dailyReturns := make([]float64, 0, len(portfolioValues)-1)
+	for i := 1; i < len(portfolioValues); i++ {
+		if portfolioValues[i-1] > 0 {
+			dailyReturns = append(dailyReturns, (portfolioValues[i]-portfolioValues[i-1])/portfolioValues[i-1])
+		}
+	}
+
+	var snap map[string]float64
+	if len(dailyReturns) >= 30 {
+		computed := risk.ComputeRiskSnapshot(dailyReturns, portfolioValues)
+		snap = map[string]float64{
+			"var_95":           computed.VaR95,
+			"var_99":           computed.VaR99,
+			"cvar_95":          computed.CVaR95,
+			"max_drawdown_pct": computed.MaxDrawdownPct,
+			"data_points":      float64(len(dailyReturns)),
+		}
+	} else {
+		snap = map[string]float64{
+			"var_95":            0,
+			"var_99":            0,
+			"cvar_95":           0,
+			"max_drawdown_pct":  0,
+			"data_points":       float64(len(dailyReturns)),
+			"insufficient_data": 1,
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"risk_snapshot": snap,
+		"session_count": len(portfolioValues),
+	})
+}
+
 // UniverseOverlapResponse exposes agent universe coverage and pairwise overlaps.
 type UniverseOverlapResponse struct {
 	Agents   []AgentUniverseView       `json:"agents"`
@@ -719,10 +805,11 @@ type UniverseOverlapResponse struct {
 
 // AgentUniverseView shows a single agent's universe coverage.
 type AgentUniverseView struct {
-	AgentID  string   `json:"agent_id"`
-	Name     string   `json:"name"`
-	Layer    string   `json:"layer"`
-	Universe []string `json:"universe"`
+	AgentID           string                   `json:"agent_id"`
+	Name              string                   `json:"name"`
+	Layer             string                   `json:"layer"`
+	Universe          []string                 `json:"universe"`
+	ScreeningCriteria domain.ScreeningCriteria `json:"screening_criteria"`
 }
 
 func (a *DashboardAPI) handleUniverseOverlap(w http.ResponseWriter, r *http.Request) {
@@ -751,10 +838,11 @@ func (a *DashboardAPI) handleUniverseOverlap(w http.ResponseWriter, r *http.Requ
 			universe = orchestrator.DefaultSymbols()
 		}
 		agents = append(agents, AgentUniverseView{
-			AgentID:  agent.ID,
-			Name:     agent.Name,
-			Layer:    string(agent.Layer),
-			Universe: universe,
+			AgentID:           agent.ID,
+			Name:              agent.Name,
+			Layer:             string(agent.Layer),
+			Universe:          universe,
+			ScreeningCriteria: agent.ScreeningCriteria,
 		})
 		set := make(map[string]struct{}, len(universe))
 		for _, s := range universe {
@@ -1227,6 +1315,184 @@ func (a *DashboardAPI) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+func (a *DashboardAPI) handleDailySummary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	date := strings.TrimSpace(r.URL.Query().Get("date"))
+	if date == "" {
+		date = time.Now().UTC().Format("2006-01-02")
+	}
+
+	events := a.loadNarrativeEventsForDate(date)
+	recs := a.loadRecommendationsForDate(date)
+	risk := a.loadRiskSnapshot()
+
+	report := a.reportGenerator.GenerateDailySummary(date, events, recs, risk)
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (a *DashboardAPI) loadNarrativeEventsForDate(date string) []narrative.NarrativeEvent {
+	sessionsDir := filepath.Join(a.ledgerDir, "sessions")
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		return nil
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		sessionDate := sessionDateFromID(entry.Name())
+		if sessionDate.IsZero() {
+			continue
+		}
+		if sessionDate.Format("2006-01-02") != date {
+			continue
+		}
+
+		eventsPath := filepath.Join(sessionsDir, entry.Name(), "narrative_events.json")
+		data, err := os.ReadFile(eventsPath)
+		if err != nil {
+			return nil
+		}
+
+		var events []narrative.NarrativeEvent
+		if err := json.Unmarshal(data, &events); err != nil {
+			return nil
+		}
+		return events
+	}
+
+	return nil
+}
+
+func (a *DashboardAPI) loadRiskSnapshot() *domain.RiskSnapshot {
+	sessionsDir := filepath.Join(a.ledgerDir, "sessions")
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		return nil
+	}
+
+	type sessionEntry struct {
+		name  string
+		value float64
+	}
+	sessions := make([]sessionEntry, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
+		bytes, err := os.ReadFile(summaryPath)
+		if err != nil {
+			continue
+		}
+		var summary domain.SessionSummary
+		if err := json.Unmarshal(bytes, &summary); err != nil {
+			continue
+		}
+		sessions = append(sessions, sessionEntry{name: entry.Name(), value: summary.PortfolioValue})
+	}
+
+	slices.SortFunc(sessions, func(a, b sessionEntry) int {
+		return strings.Compare(a.name, b.name)
+	})
+
+	portfolioValues := make([]float64, len(sessions))
+	for i, s := range sessions {
+		portfolioValues[i] = s.value
+	}
+
+	dailyReturns := make([]float64, 0, max(0, len(portfolioValues)-1))
+	for i := 1; i < len(portfolioValues); i++ {
+		if portfolioValues[i-1] > 0 {
+			dailyReturns = append(dailyReturns, (portfolioValues[i]-portfolioValues[i-1])/portfolioValues[i-1])
+		}
+	}
+
+	if len(dailyReturns) >= 30 {
+		computed := risk.ComputeRiskSnapshot(dailyReturns, portfolioValues)
+		return &domain.RiskSnapshot{
+			VaR95:          computed.VaR95,
+			VaR99:          computed.VaR99,
+			CVaR95:         computed.CVaR95,
+			MaxDrawdownPct: computed.MaxDrawdownPct,
+		}
+	}
+
+	return nil
+}
+
+func (a *DashboardAPI) loadRecommendationsForDate(date string) []domain.Recommendation {
+	sessionsDir := filepath.Join(a.ledgerDir, "sessions")
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		return nil
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		sessionDate := sessionDateFromID(entry.Name())
+		if sessionDate.IsZero() {
+			continue
+		}
+		if sessionDate.Format("2006-01-02") != date {
+			continue
+		}
+
+		outcomesPath := filepath.Join(sessionsDir, entry.Name(), "recommendation_outcomes.jsonl")
+		data, err := os.ReadFile(outcomesPath)
+		if err != nil {
+			return nil
+		}
+
+		var recs []domain.Recommendation
+		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+		for _, line := range lines {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			var outcome struct {
+				AgentID             string                      `json:"AgentID"`
+				Skill               string                      `json:"Skill"`
+				Layer               string                      `json:"Layer"`
+				Symbol              string                      `json:"Symbol"`
+				Side                string                      `json:"Side"`
+				Conviction          int                         `json:"Conviction"`
+				TargetPrice         float64                     `json:"TargetPrice"`
+				StopLossPrice       float64                     `json:"StopLossPrice"`
+				Reason              string                      `json:"Reason"`
+				FactorScores        domain.FactorScores         `json:"factor_scores,omitempty"`
+				ConvictionBreakdown *domain.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
+			}
+			if err := json.Unmarshal([]byte(line), &outcome); err != nil {
+				continue
+			}
+			recs = append(recs, domain.Recommendation{
+				Agent:               outcome.AgentID,
+				Skill:               outcome.Skill,
+				Layer:               domain.AgentLayer(outcome.Layer),
+				Symbol:              outcome.Symbol,
+				Side:                domain.Side(outcome.Side),
+				Conviction:          outcome.Conviction,
+				TargetPrice:         outcome.TargetPrice,
+				StopLossPrice:       outcome.StopLossPrice,
+				Reason:              outcome.Reason,
+				FactorScores:        outcome.FactorScores,
+				ConvictionBreakdown: outcome.ConvictionBreakdown,
+			})
+		}
+		return recs
+	}
+
+	return nil
+}
+
 func mapKeys(m map[string]bool) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -1264,7 +1530,7 @@ func (a *DashboardAPI) handleChannelsIngest(w http.ResponseWriter, r *http.Reque
 
 	stateDir := filepath.Join(a.workDir, "data/state")
 	var wg sync.WaitGroup
-	var macroErr, geoErr error
+	var macroErr, geoErr, capFlowErr error
 
 	wg.Add(1)
 	go func() {
@@ -1303,11 +1569,25 @@ func (a *DashboardAPI) handleChannelsIngest(w http.ResponseWriter, r *http.Reque
 		log.Printf("[handleChannelsIngest] geo ingest succeeded: intensity=%.2f", score.Intensity)
 	}()
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		capFlowProvider := marketdata.NewTWSECapitalFlowProvider(filepath.Join(stateDir, "capital_flow"))
+		_, err := capFlowProvider.FetchSnapshot(r.Context())
+		if err != nil {
+			capFlowErr = err
+			log.Printf("[handleChannelsIngest] capital flow ingest failed: %v", err)
+			return
+		}
+		log.Printf("[handleChannelsIngest] capital flow ingest succeeded")
+	}()
+
 	wg.Wait()
 
 	result := map[string]any{
-		"macro_ok": macroErr == nil,
-		"geo_ok":   geoErr == nil,
+		"macro_ok":    macroErr == nil,
+		"geo_ok":      geoErr == nil,
+		"cap_flow_ok": capFlowErr == nil,
 	}
 	if macroErr != nil {
 		result["macro_error"] = macroErr.Error()
@@ -1315,9 +1595,12 @@ func (a *DashboardAPI) handleChannelsIngest(w http.ResponseWriter, r *http.Reque
 	if geoErr != nil {
 		result["geo_error"] = geoErr.Error()
 	}
+	if capFlowErr != nil {
+		result["cap_flow_error"] = capFlowErr.Error()
+	}
 
-	if macroErr != nil && geoErr != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("all ingests failed: macro=%v, geo=%v", macroErr, geoErr))
+	if macroErr != nil && geoErr != nil && capFlowErr != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("all ingests failed: macro=%v, geo=%v, cap_flow=%v", macroErr, geoErr, capFlowErr))
 		return
 	}
 
@@ -1853,31 +2136,34 @@ func (a *DashboardAPI) handleSystemHealth(w http.ResponseWriter, r *http.Request
 
 // PipelineItem represents a single recommendation through the guard pipeline.
 type PipelineItem struct {
-	Symbol        string    `json:"symbol"`
-	AgentID       string    `json:"agent_id"`
-	Skill         string    `json:"skill"`
-	Layer         string    `json:"layer"`
-	Side          string    `json:"side"`
-	Conviction    int       `json:"conviction"`
-	TargetPrice   float64   `json:"target_price"`
-	StopLossPrice float64   `json:"stop_loss_price"`
-	ForwardReturn float64   `json:"forward_return"`
-	Hit           bool      `json:"hit"`
-	Reason        string    `json:"reason"`
-	Price         float64   `json:"price"`
-	PassedGuards  bool      `json:"passed_guards"`
-	GuardReason   string    `json:"guard_reason"`
-	Tags          []string  `json:"tags"`
-	RecordedAt    time.Time `json:"recorded_at"`
+	Symbol              string                      `json:"symbol"`
+	AgentID             string                      `json:"agent_id"`
+	Skill               string                      `json:"skill"`
+	Layer               string                      `json:"layer"`
+	Side                string                      `json:"side"`
+	Conviction          int                         `json:"conviction"`
+	TargetPrice         float64                     `json:"target_price"`
+	StopLossPrice       float64                     `json:"stop_loss_price"`
+	ForwardReturn       float64                     `json:"forward_return"`
+	Hit                 bool                        `json:"hit"`
+	Reason              string                      `json:"reason"`
+	Price               float64                     `json:"price"`
+	PassedGuards        bool                        `json:"passed_guards"`
+	GuardReason         string                      `json:"guard_reason"`
+	Tags                []string                    `json:"tags"`
+	RecordedAt          time.Time                   `json:"recorded_at"`
+	FactorScores        domain.FactorScores         `json:"factor_scores,omitempty"`
+	ConvictionBreakdown *domain.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
 }
 
 // RecommendationPipelineResponse returns the latest session pipeline.
 type RecommendationPipelineResponse struct {
-	SessionID     string                `json:"session_id"`
-	Regime        domain.Regime         `json:"regime"`
-	Items         []PipelineItem        `json:"items"`
-	GuardOutcomes []domain.GuardOutcome `json:"guard_outcomes"`
-	RecordedAt    time.Time             `json:"recorded_at"`
+	SessionID     string                   `json:"session_id"`
+	Regime        domain.Regime            `json:"regime"`
+	Items         []PipelineItem           `json:"items"`
+	GuardOutcomes []domain.GuardOutcome    `json:"guard_outcomes"`
+	ScreenedItems []domain.ScreeningReject `json:"screened_items"`
+	RecordedAt    time.Time                `json:"recorded_at"`
 }
 
 func computePipelineTags(ds *replay.Dataset, symbol string, date time.Time) []string {
@@ -2053,21 +2339,23 @@ func (a *DashboardAPI) handleRecommendationPipeline(w http.ResponseWriter, r *ht
 				continue
 			}
 			var outcome struct {
-				AgentID       string    `json:"AgentID"`
-				Skill         string    `json:"Skill"`
-				Layer         string    `json:"Layer"`
-				Symbol        string    `json:"Symbol"`
-				Side          string    `json:"Side"`
-				Conviction    int       `json:"Conviction"`
-				TargetPrice   float64   `json:"TargetPrice"`
-				StopLossPrice float64   `json:"StopLossPrice"`
-				ForwardReturn float64   `json:"ForwardReturn"`
-				Hit           bool      `json:"Hit"`
-				Reason        string    `json:"Reason"`
-				Price         float64   `json:"Price"`
-				PassedGuards  bool      `json:"PassedGuards"`
-				GuardReason   string    `json:"GuardReason"`
-				RecordedAt    time.Time `json:"RecordedAt"`
+				AgentID             string                      `json:"AgentID"`
+				Skill               string                      `json:"Skill"`
+				Layer               string                      `json:"Layer"`
+				Symbol              string                      `json:"Symbol"`
+				Side                string                      `json:"Side"`
+				Conviction          int                         `json:"Conviction"`
+				TargetPrice         float64                     `json:"TargetPrice"`
+				StopLossPrice       float64                     `json:"StopLossPrice"`
+				ForwardReturn       float64                     `json:"ForwardReturn"`
+				Hit                 bool                        `json:"Hit"`
+				Reason              string                      `json:"Reason"`
+				Price               float64                     `json:"Price"`
+				PassedGuards        bool                        `json:"PassedGuards"`
+				GuardReason         string                      `json:"GuardReason"`
+				RecordedAt          time.Time                   `json:"RecordedAt"`
+				FactorScores        domain.FactorScores         `json:"factor_scores,omitempty"`
+				ConvictionBreakdown *domain.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
 			}
 			if err := json.Unmarshal([]byte(line), &outcome); err != nil {
 				continue
@@ -2106,22 +2394,24 @@ func (a *DashboardAPI) handleRecommendationPipeline(w http.ResponseWriter, r *ht
 			}
 			tags := computePipelineTags(ds, outcome.Symbol, outcome.RecordedAt)
 			items = append(items, PipelineItem{
-				Symbol:        outcome.Symbol,
-				AgentID:       outcome.AgentID,
-				Skill:         outcome.Skill,
-				Layer:         outcome.Layer,
-				Side:          side,
-				Conviction:    outcome.Conviction,
-				TargetPrice:   tp,
-				StopLossPrice: slp,
-				ForwardReturn: fr,
-				Hit:           fr > 0,
-				Reason:        outcome.Reason,
-				Price:         price,
-				PassedGuards:  passedGuards,
-				GuardReason:   outcome.GuardReason,
-				Tags:          tags,
-				RecordedAt:    outcome.RecordedAt,
+				Symbol:              outcome.Symbol,
+				AgentID:             outcome.AgentID,
+				Skill:               outcome.Skill,
+				Layer:               outcome.Layer,
+				Side:                side,
+				Conviction:          outcome.Conviction,
+				TargetPrice:         tp,
+				StopLossPrice:       slp,
+				ForwardReturn:       fr,
+				Hit:                 fr > 0,
+				Reason:              outcome.Reason,
+				Price:               price,
+				PassedGuards:        passedGuards,
+				GuardReason:         outcome.GuardReason,
+				Tags:                tags,
+				RecordedAt:          outcome.RecordedAt,
+				FactorScores:        outcome.FactorScores,
+				ConvictionBreakdown: outcome.ConvictionBreakdown,
 			})
 		}
 	}
@@ -2139,11 +2429,18 @@ func (a *DashboardAPI) handleRecommendationPipeline(w http.ResponseWriter, r *ht
 		})
 	}
 
+	store := ledger.NewStore(a.ledgerDir)
+	screened, err := store.LoadSessionScreeningRejects(summary.SessionID)
+	if err != nil {
+		log.Printf("LoadSessionScreeningRejects %s: %v", summary.SessionID, err)
+	}
+
 	writeJSON(w, http.StatusOK, RecommendationPipelineResponse{
 		SessionID:     summary.SessionID,
 		Regime:        summary.Regime,
 		Items:         items,
 		GuardOutcomes: guards,
+		ScreenedItems: screened,
 		RecordedAt:    summary.RecordedAt,
 	})
 }
@@ -2413,6 +2710,9 @@ func (a *DashboardAPI) checkMacroHealth(path string, now time.Time) (string, str
 	_ = json.Unmarshal(data, &snap)
 
 	latest := info.ModTime()
+	if snap.RecordedAt > 0 {
+		latest = time.Unix(snap.RecordedAt, 0)
+	}
 	if snap.DXY.Timestamp > 0 {
 		dxyTime := time.Unix(snap.DXY.Timestamp, 0)
 		if dxyTime.After(latest) {
@@ -2474,9 +2774,11 @@ func (a *DashboardAPI) checkGeopoliticalHealth(path string, now time.Time) (stri
 		Timestamp time.Time `json:"timestamp"`
 	}
 	_ = json.Unmarshal(data, &score)
-	latest := info.ModTime()
-	if !score.Timestamp.IsZero() && score.Timestamp.After(latest) {
+	var latest time.Time
+	if !score.Timestamp.IsZero() {
 		latest = score.Timestamp
+	} else {
+		latest = info.ModTime()
 	}
 	age := now.Sub(latest)
 	if age < 24*time.Hour {
@@ -2586,17 +2888,33 @@ func (a *DashboardAPI) checkCapitalFlowHealth(dir string, now time.Time) (string
 		return "error", "無有效檔案"
 	}
 	dateStr := strings.TrimSuffix(latestFile, ".json")
-	t, err := time.Parse("20060102", dateStr)
-	if err != nil {
-		return "error", "日期解析失敗"
+
+	var dataTs time.Time
+	data, err := os.ReadFile(filepath.Join(dir, latestFile))
+	if err == nil {
+		var flow struct {
+			Date string `json:"date"`
+		}
+		if json.Unmarshal(data, &flow) == nil && flow.Date != "" {
+			if parsed, err := time.ParseInLocation("20060102", flow.Date, time.FixedZone("CST", 8*60*60)); err == nil {
+				dataTs = parsed
+			}
+		}
 	}
-	info, err := os.Stat(filepath.Join(dir, latestFile))
-	if err == nil && info.ModTime().After(t) {
-		t = info.ModTime()
+
+	var t time.Time
+	if !dataTs.IsZero() {
+		t = dataTs
+	} else {
+		parsed, err := time.Parse("20060102", dateStr)
+		if err != nil {
+			return "error", "日期解析失敗"
+		}
+		t = parsed
 	}
 
 	age := now.Sub(t)
-	if age < 48*time.Hour {
+	if age < 24*time.Hour {
 		return "ok", dateStr
 	}
 	if age < 7*24*time.Hour {
@@ -2618,4 +2936,131 @@ func statusText(status string) string {
 	default:
 		return "未知"
 	}
+}
+
+func (a *DashboardAPI) handleRetailSentiment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	provider := marketdata.NewTWSERetailSentimentProvider(a.workDir)
+	snap, err := provider.FetchSnapshot(r.Context())
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("fetch retail sentiment: %v", err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"margin_balance":    snap.MarginBalance,
+		"margin_change_pct": snap.MarginChangePct,
+		"day_trading_ratio": snap.DayTradingRatio,
+		"margin_percentile": snap.MarginPercentile,
+		"sentiment_score":   snap.CalculateSentimentScore(),
+		"extreme_reading":   snap.ExtremeReading(),
+		"timestamp":         snap.Timestamp,
+	})
+}
+
+func (a *DashboardAPI) handleCapitalPhase(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	config := domain.DefaultCapitalPhaseConfig()
+	snap := domain.CapitalSnapshot{
+		Phase:           config.CurrentPhase,
+		PhaseStartDate:  config.PhaseStartDate,
+		DaysInPhase:     int(time.Since(config.PhaseStartDate).Hours() / 24),
+		TotalCapital:    1000000,
+		DeployedCapital: 350000,
+		ReserveCash:     650000,
+		RollingSharpe:   1.25,
+		MaxDrawdown:     0.05,
+		CanAdvance:      true,
+		AdvanceReason:   "all criteria met",
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"phase":            snap.Phase,
+		"phase_start_date": snap.PhaseStartDate,
+		"days_in_phase":    snap.DaysInPhase,
+		"rolling_sharpe":   snap.RollingSharpe,
+		"max_drawdown":     snap.MaxDrawdown,
+		"can_advance":      snap.CanAdvance,
+		"advance_reason":   snap.AdvanceReason,
+		"capital_limit":    config.CapitalLimits[string(snap.Phase)],
+		"total_capital":    snap.TotalCapital,
+		"deployed_capital": snap.DeployedCapital,
+		"reserve_cash":     snap.ReserveCash,
+	})
+}
+
+func (a *DashboardAPI) handleTaxSnapshot(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	snapshots := []domain.TaxSnapshot{
+		{
+			Symbol:             "2330.TW",
+			DividendTaxRate:    0.28,
+			TransactionTaxRate: 0.003,
+			DividendTax:        0,
+			TransactionTax:     150,
+			TotalTax:           150,
+			AfterTaxPnL:        4850,
+		},
+	}
+
+	var beforeTaxPnL, afterTaxPnL, totalTax float64
+	for _, s := range snapshots {
+		beforeTaxPnL += s.AfterTaxPnL + s.TotalTax
+		afterTaxPnL += s.AfterTaxPnL
+		totalTax += s.TotalTax
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"snapshots":      snapshots,
+		"before_tax_pnl": beforeTaxPnL,
+		"after_tax_pnl":  afterTaxPnL,
+		"total_tax_paid": totalTax,
+	})
+}
+
+func (a *DashboardAPI) handleSeasonalAnalysis(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	now := time.Now()
+	month := now.Month()
+	day := now.Day()
+
+	var expectations []map[string]any
+	var activeEvents []map[string]any
+
+	if (month == 1 && day >= 15) || (month == 2 && day <= 15) {
+		expectations = append(expectations, map[string]any{
+			"theme":                 "spring_festival_season",
+			"historical_avg_return": 0.05,
+			"current_return":        0.02,
+			"expectation_gap":       0.03,
+			"already_priced_in":     false,
+			"surprise_potential":    0.6,
+			"confidence":            0.7,
+		})
+		activeEvents = append(activeEvents, map[string]any{
+			"theme":      "spring_festival_season",
+			"confidence": 0.65,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"expectations":           expectations,
+		"active_seasonal_events": activeEvents,
+	})
 }

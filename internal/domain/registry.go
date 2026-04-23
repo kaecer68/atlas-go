@@ -14,18 +14,19 @@ const (
 )
 
 type AgentSpec struct {
-	ID               string
-	Name             string
-	Layer            AgentLayer
-	Skill            string
-	PromptFile       string
-	Enabled          bool
-	Universe         []string
-	PrimaryMetrics   []string
-	RequiredSkills   []string
-	ForbiddenActions []string
-	OperatingNotes   []string
-	DarwinianWeight  float64 `json:"darwinian_weight,omitempty"` // Starting weight for Darwinian system
+	ID                string
+	Name              string
+	Layer             AgentLayer
+	Skill             string
+	PromptFile        string
+	Enabled           bool
+	Universe          []string
+	PrimaryMetrics    []string
+	RequiredSkills    []string
+	ForbiddenActions  []string
+	OperatingNotes    []string
+	DarwinianWeight   float64           `json:"darwinian_weight,omitempty"` // Starting weight for Darwinian system
+	ScreeningCriteria ScreeningCriteria `json:"screening_criteria,omitempty"`
 }
 
 type AgentRegistry struct {
@@ -34,23 +35,25 @@ type AgentRegistry struct {
 }
 
 type RecommendationOutcome struct {
-	AgentID        string
-	Skill          string
-	Layer          AgentLayer
-	Symbol         string
-	Side           Side
-	Conviction     int
-	TargetPrice    float64
-	StopLossPrice  float64
-	Window         string
-	ForwardReturn  float64
-	BenchmarkDelta float64
-	Hit            bool
-	Reason         string
-	Price          float64
-	PassedGuards   bool
-	GuardReason    string
-	RecordedAt     time.Time
+	AgentID             string
+	Skill               string
+	Layer               AgentLayer
+	Symbol              string
+	Side                Side
+	Conviction          int
+	TargetPrice         float64
+	StopLossPrice       float64
+	Window              string
+	ForwardReturn       float64
+	BenchmarkDelta      float64
+	Hit                 bool
+	Reason              string
+	Price               float64
+	PassedGuards        bool
+	GuardReason         string
+	RecordedAt          time.Time
+	FactorScores        FactorScores         `json:"factor_scores,omitempty"`
+	ConvictionBreakdown *ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
 }
 
 type HumanIntervention struct {
@@ -134,6 +137,16 @@ type MutationBrief struct {
 	GeneratedAt         time.Time  `json:"generated_at"`
 }
 
+type ReplayDataMetadata struct {
+	SourcePath     string    `json:"source_path"`
+	DateRangeStart time.Time `json:"date_range_start"`
+	DateRangeEnd   time.Time `json:"date_range_end"`
+	DaysDelayed    int       `json:"days_delayed"`
+	CoversWindow   bool      `json:"covers_window"`
+	LastModified   time.Time `json:"last_modified"`
+	RecordCount    int       `json:"record_count"`
+}
+
 type PromptExperimentResult struct {
 	Experiment            ExperimentRecord
 	Brief                 MutationBrief
@@ -146,4 +159,5 @@ type PromptExperimentResult struct {
 	CandidateObservations int
 	UsedFallbackWindow    bool
 	RecordedAt            time.Time
+	DataMetadata          *ReplayDataMetadata `json:"data_metadata,omitempty"`
 }
