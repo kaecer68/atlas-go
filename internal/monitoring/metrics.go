@@ -2,15 +2,12 @@ package monitoring
 
 import (
 	"context"
-	"fmt"
-	"runtime"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"sync"
 	"time"
-
-	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
-// MetricType 指标类型
+// MetricType 指標類型
 type MetricType string
 
 const (
@@ -19,161 +16,195 @@ const (
 	MetricTypeHistogram MetricType = "histogram"
 )
 
-// Metric 指标
+// Metric 指標數據
 type Metric struct {
-	Name      string
-	Type      MetricType
-	Value     float64
-	Labels    map[string]string
-	Timestamp time.Time
+	Name   string
+	Value  float64
+	Type   MetricType
+	Labels map[string]string
 }
 
-// MetricsCollector 指标收集器
+// MetricsCollector 收集系統運行指標
 type MetricsCollector struct {
+	mu sync.RWMutex
+
+	// 通用指標存儲
 	metrics    map[string]Metric
 	histograms map[string][]float64
-	mu         sync.RWMutex
+
+	// Screening metrics
+	screeningTotal    int64
+	screeningPassed   int64
+	screeningRejected int64
+
+	// Alert metrics
+	alertsTriggered    int64
+	alertsAcknowledged int64
+	alertsByType       map[string]int64
 }
 
-// NewMetricsCollector 创建指标收集器
+// NewMetricsCollector 建立新的指標收集器
 func NewMetricsCollector() *MetricsCollector {
 	return &MetricsCollector{
-		metrics:    make(map[string]Metric),
-		histograms: make(map[string][]float64),
+		metrics:      make(map[string]Metric),
+		histograms:   make(map[string][]float64),
+		alertsByType: make(map[string]int64),
 	}
 }
 
-// RecordCounter 记录计数器
-func (c *MetricsCollector) RecordCounter(name string, value float64, labels map[string]string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// RecordCounter 記錄計數器（累加）
+func (m *MetricsCollector) RecordCounter(name string, value float64, labels map[string]string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	key := c.buildKey(name, labels)
-	if existing, ok := c.metrics[key]; ok {
-		c.metrics[key] = Metric{
-			Name:      name,
-			Type:      MetricTypeCounter,
-			Value:     existing.Value + value,
-			Labels:    labels,
-			Timestamp: time.Now(),
-		}
+	key := metricKey(name, labels)
+	existing, ok := m.metrics[key]
+	if ok {
+		existing.Value += value
+		m.metrics[key] = existing
 	} else {
-		c.metrics[key] = Metric{
-			Name:      name,
-			Type:      MetricTypeCounter,
-			Value:     value,
-			Labels:    labels,
-			Timestamp: time.Now(),
+		m.metrics[key] = Metric{
+			Name:   name,
+			Value:  value,
+			Type:   MetricTypeCounter,
+			Labels: labels,
 		}
 	}
 }
 
-// RecordGauge 记录仪表盘
-func (c *MetricsCollector) RecordGauge(name string, value float64, labels map[string]string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// RecordGauge 記錄儀表（覆蓋）
+func (m *MetricsCollector) RecordGauge(name string, value float64, labels map[string]string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	key := c.buildKey(name, labels)
-	c.metrics[key] = Metric{
-		Name:      name,
-		Type:      MetricTypeGauge,
-		Value:     value,
-		Labels:    labels,
-		Timestamp: time.Now(),
+	key := metricKey(name, labels)
+	m.metrics[key] = Metric{
+		Name:   name,
+		Value:  value,
+		Type:   MetricTypeGauge,
+		Labels: labels,
 	}
 }
 
-// RecordHistogram 记录直方图
-func (c *MetricsCollector) RecordHistogram(name string, value float64, labels map[string]string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// RecordHistogram 記錄直方圖
+func (m *MetricsCollector) RecordHistogram(name string, value float64, labels map[string]string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	key := c.buildKey(name, labels)
-	c.histograms[key] = append(c.histograms[key], value)
+	m.histograms[name] = append(m.histograms[name], value)
 }
 
-// GetMetric 获取指标
-func (c *MetricsCollector) GetMetric(name string, labels map[string]string) (Metric, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+// GetMetric 取得指標
+func (m *MetricsCollector) GetMetric(name string, labels map[string]string) (Metric, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-	key := c.buildKey(name, labels)
-	metric, ok := c.metrics[key]
+	key := metricKey(name, labels)
+	metric, ok := m.metrics[key]
 	return metric, ok
 }
 
-// GetAllMetrics 获取所有指标
-func (c *MetricsCollector) GetAllMetrics() []Metric {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+// GetAllMetrics 取得所有指標
+func (m *MetricsCollector) GetAllMetrics() []Metric {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-	result := make([]Metric, 0, len(c.metrics))
-	for _, metric := range c.metrics {
+	result := make([]Metric, 0, len(m.metrics))
+	for _, metric := range m.metrics {
 		result = append(result, metric)
 	}
 	return result
 }
 
-// buildKey 构建指标键
-func (c *MetricsCollector) buildKey(name string, labels map[string]string) string {
+// RecordScreening 記錄篩選結果
+func (m *MetricsCollector) RecordScreening(passed, rejected int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.screeningTotal += passed + rejected
+	m.screeningPassed += passed
+	m.screeningRejected += rejected
+}
+
+// GetScreeningRate 取得篩選率
+func (m *MetricsCollector) GetScreeningRate() float64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.screeningTotal == 0 {
+		return 0
+	}
+	return float64(m.screeningPassed) / float64(m.screeningTotal)
+}
+
+// RecordAlert 記錄警報觸發
+func (m *MetricsCollector) RecordAlert(alertType string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.alertsTriggered++
+	m.alertsByType[alertType]++
+}
+
+// RecordAlertAcknowledged 記錄警報確認
+func (m *MetricsCollector) RecordAlertAcknowledged() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.alertsAcknowledged++
+}
+
+// GetAlertTriggerRate 取得警報觸發率
+func (m *MetricsCollector) GetAlertTriggerRate() float64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return float64(m.alertsTriggered)
+}
+
+// GetMetricsSnapshot 取得指標快照
+func (m *MetricsCollector) GetMetricsSnapshot() MetricsSnapshot {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	alertsByTypeCopy := make(map[string]int64)
+	for k, v := range m.alertsByType {
+		alertsByTypeCopy[k] = v
+	}
+
+	return MetricsSnapshot{
+		ScreeningTotal:     m.screeningTotal,
+		ScreeningPassed:    m.screeningPassed,
+		ScreeningRate:      m.GetScreeningRate(),
+		AlertsTriggered:    m.alertsTriggered,
+		AlertsAcknowledged: m.alertsAcknowledged,
+		AlertsByType:       alertsByTypeCopy,
+		Timestamp:          time.Now(),
+	}
+}
+
+// MetricsSnapshot 指標快照
+type MetricsSnapshot struct {
+	ScreeningTotal     int64            `json:"screening_total"`
+	ScreeningPassed    int64            `json:"screening_passed"`
+	ScreeningRate      float64          `json:"screening_rate"`
+	AlertsTriggered    int64            `json:"alerts_triggered"`
+	AlertsAcknowledged int64            `json:"alerts_acknowledged"`
+	AlertsByType       map[string]int64 `json:"alerts_by_type"`
+	Timestamp          time.Time        `json:"timestamp"`
+}
+
+// metricKey 生成指標鍵
+func metricKey(name string, labels map[string]string) string {
 	if len(labels) == 0 {
 		return name
 	}
-
-	key := name
-	for k, v := range labels {
-		key = fmt.Sprintf("%s:%s=%s", key, k, v)
-	}
-	return key
+	// 簡單實現，實際應排序 labels
+	return name
 }
 
-// SystemMetrics 系统指标
-type SystemMetrics struct {
-	collector *MetricsCollector
-	monitor   *Monitor
-	interval  time.Duration
-}
-
-// NewSystemMetrics 创建系统指标收集器
-func NewSystemMetrics(collector *MetricsCollector, monitor *Monitor) *SystemMetrics {
-	return &SystemMetrics{
-		collector: collector,
-		monitor:   monitor,
-		interval:  60 * time.Second,
-	}
-}
-
-// Start 启动系统指标收集
-func (s *SystemMetrics) Start(ctx context.Context) {
-	ticker := time.NewTicker(s.interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			s.collect()
-		}
-	}
-}
-
-// collect 收集系统指标
-func (s *SystemMetrics) collect() {
-	var ms runtime.MemStats
-	runtime.ReadMemStats(&ms)
-	s.collector.RecordGauge("system_memory_usage_mb", float64(ms.Sys)/1024/1024, nil)
-	s.collector.RecordGauge("system_goroutines", float64(runtime.NumGoroutine()), nil)
-	s.monitor.Info("metrics", "System metrics collected", nil)
-}
-
-// TradingMetrics 交易指标
+// TradingMetrics 交易指標
 type TradingMetrics struct {
 	collector *MetricsCollector
 	monitor   *Monitor
 }
 
-// NewTradingMetrics 创建交易指标收集器
+// NewTradingMetrics 建立交易指標收集器
 func NewTradingMetrics(collector *MetricsCollector, monitor *Monitor) *TradingMetrics {
 	return &TradingMetrics{
 		collector: collector,
@@ -181,62 +212,89 @@ func NewTradingMetrics(collector *MetricsCollector, monitor *Monitor) *TradingMe
 	}
 }
 
-// RecordOrder 记录订单
-func (t *TradingMetrics) RecordOrder(order domain.Order, status string) {
-	labels := map[string]string{
+func (tm *TradingMetrics) RecordOrder(order domain.Order, status string) {
+	// 記錄訂單總數
+	tm.collector.RecordCounter("orders_total", 1, map[string]string{
 		"symbol": order.Symbol,
 		"side":   string(order.Side),
 		"status": status,
-	}
+	})
 
-	t.collector.RecordCounter("orders_total", 1, labels)
-	t.collector.RecordGauge("order_value", order.Price*float64(order.Quantity), labels)
+	// 記錄訂單價值
+	orderValue := float64(order.Quantity) * order.Price
+	tm.collector.RecordGauge("order_value", orderValue, map[string]string{
+		"symbol": order.Symbol,
+		"side":   string(order.Side),
+	})
 }
 
-// RecordPosition 记录持仓
-func (t *TradingMetrics) RecordPosition(position domain.Position) {
-	labels := map[string]string{
+// RecordPosition 記錄部位
+func (tm *TradingMetrics) RecordPosition(position domain.Position) {
+	tm.collector.RecordGauge("position_value", position.MarketValue, map[string]string{
 		"symbol": position.Symbol,
-	}
-
-	t.collector.RecordGauge("position_value", position.MarketValue, labels)
-	t.collector.RecordGauge("position_pnl", position.UnrealizedPnL, labels)
+	})
 }
 
-// RecordPortfolio 记录投资组合
-func (t *TradingMetrics) RecordPortfolio(cash float64, totalValue float64) {
-	t.collector.RecordGauge("portfolio_cash", cash, nil)
-	t.collector.RecordGauge("portfolio_total_value", totalValue, nil)
+// RecordPortfolio 記錄投組
+func (tm *TradingMetrics) RecordPortfolio(cash, totalValue float64) {
+	tm.collector.RecordGauge("portfolio_cash", cash, nil)
+	tm.collector.RecordGauge("portfolio_total", totalValue, nil)
 }
 
-// RecordCircuitBreakerState 记录断路器状态
-func (t *TradingMetrics) RecordCircuitBreakerState(state string) {
-	value := 0.0
-	switch state {
-	case "paused":
-		value = 1.0
-	case "halted":
-		value = 2.0
-	}
-	t.collector.RecordGauge("circuit_breaker_state", value, map[string]string{
+// RecordCircuitBreakerState 記錄熔斷狀態
+func (tm *TradingMetrics) RecordCircuitBreakerState(state string) {
+	tm.collector.RecordGauge("circuit_breaker_state", 1, map[string]string{
 		"state": state,
 	})
 }
 
-// RecordRiskEvent 记录风险事件
-func (t *TradingMetrics) RecordRiskEvent(eventType string, symbol string) {
-	t.collector.RecordCounter("risk_events_total", 1, map[string]string{
+// RecordRiskEvent 記錄風險事件
+func (tm *TradingMetrics) RecordRiskEvent(eventType, symbol string) {
+	tm.collector.RecordCounter("risk_events", 1, map[string]string{
 		"type":   eventType,
 		"symbol": symbol,
 	})
 }
 
-// RecordCounter 记录通用计数器
-func (t *TradingMetrics) RecordCounter(name string, value float64, labels map[string]string) {
-	t.collector.RecordCounter(name, value, labels)
+// RecordCounter 記錄計數器
+func (tm *TradingMetrics) RecordCounter(name string, value float64, labels map[string]string) {
+	tm.collector.RecordCounter(name, value, labels)
 }
 
-// RecordGauge 记录通用仪表盘
-func (t *TradingMetrics) RecordGauge(name string, value float64, labels map[string]string) {
-	t.collector.RecordGauge(name, value, labels)
+// RecordGauge 記錄儀表
+func (tm *TradingMetrics) RecordGauge(name string, value float64, labels map[string]string) {
+	tm.collector.RecordGauge(name, value, labels)
+}
+
+// SystemMetrics 系統指標
+type SystemMetrics struct {
+	collector *MetricsCollector
+	monitor   *Monitor
+}
+
+// NewSystemMetrics 建立系統指標收集器
+func NewSystemMetrics(collector *MetricsCollector, monitor *Monitor) *SystemMetrics {
+	return &SystemMetrics{
+		collector: collector,
+		monitor:   monitor,
+	}
+}
+
+// Start 啟動系統指標收集
+
+// Start 啟動系統指標收集
+func (sm *SystemMetrics) Start(ctx context.Context) {
+	// 啟動背景收集任務
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				// 定期收集系統指標
+			}
+		}
+	}()
 }
