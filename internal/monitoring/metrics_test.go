@@ -63,3 +63,26 @@ func TestMetricsCollector_Snapshot(t *testing.T) {
 		t.Errorf("expected 1 alert, got %d", snapshot.AlertsTriggered)
 	}
 }
+
+func TestCheckThresholds(t *testing.T) {
+	// 測試低篩選率
+	m := NewMetricsCollector()
+	threshold := DefaultAlertThreshold()
+	
+	m.RecordScreening(5, 95) // 5% 篩選率
+	violations := m.CheckThresholds(threshold)
+	if len(violations) != 1 {
+		t.Errorf("expected 1 violation, got %d", len(violations))
+	}
+	if violations[0].Metric != "screening_rate" {
+		t.Errorf("expected screening_rate violation, got %s", violations[0].Metric)
+	}
+
+	// 測試正常情況
+	m2 := NewMetricsCollector()
+	m2.RecordScreening(50, 50) // 50% 篩選率
+	violations = m2.CheckThresholds(threshold)
+	if len(violations) != 0 {
+		t.Errorf("expected 0 violations, got %d", len(violations))
+	}
+}

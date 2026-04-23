@@ -283,6 +283,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
     <a data-page="controls" onclick="switchPage('controls')">控制與稽核</a>
     <a data-page="datachannels" onclick="switchPage('datachannels')">信息通道</a>
     <a data-page="alerts" onclick="switchPage('alerts')">系統警報</a>
+    <a data-page="metrics" onclick="switchPage('metrics')">指標監控</a>
   </nav>
   <div class="foot">
     <span class="text-muted">v8 · 統一介面</span>
@@ -490,6 +491,34 @@ body { display: flex; margin: 0; min-height: 100vh; }
         <div id="alertsPanel" class="empty loading">載入中…</div>
       </div>
     </div>
+    <div class="page" id="page-metrics">
+      <div class="panel wide help-panel">
+        <strong>如何解讀本頁：</strong>
+        本頁呈現 Atlas 系統的<strong>即時運行指標</strong>，包含篩選率、警報觸發率、資金階段等關鍵數據。
+        這些指標幫助你了解系統運行狀態，及時發現異常。
+      </div>
+      <div class="grid cols-3" id="metricsKPI">
+        <div class="panel">
+          <h3>篩選率</h3>
+          <div class="kpi-value" id="screeningRate">-</div>
+          <div class="kpi-label">通過篩選的標的比例</div>
+        </div>
+        <div class="panel">
+          <h3>警報觸發</h3>
+          <div class="kpi-value" id="alertsTriggered">-</div>
+          <div class="kpi-label">今日觸發的警報數</div>
+        </div>
+        <div class="panel">
+          <h3>資金階段</h3>
+          <div class="kpi-value" id="capitalPhase">-</div>
+          <div class="kpi-label">當前資金管理階段</div>
+        </div>
+      </div>
+      <div class="panel wide">
+        <h2>指標趨勢</h2>
+        <div id="metricsTrend" class="empty">載入中…</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -554,7 +583,8 @@ function switchPage(id) {
     reports: '最新回測',
     controls: '控制與稽核',
     datachannels: '信息通道',
-    alerts: '系統警報'
+    alerts: '系統警報',
+    metrics: '指標監控'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   // Close mobile sidebar
@@ -2415,6 +2445,45 @@ async function loadAlerts() {
   }
 }
 
+async function loadMetrics() {
+  try {
+    const data = await getJSON('/api/dashboard/metrics?type=all');
+    const screeningRate = data && data.screening_rate != null ? (data.screening_rate * 100).toFixed(1) + '%' : '-';
+    const screeningRateEl = document.getElementById('screeningRate');
+    if (screeningRateEl) screeningRateEl.textContent = screeningRate;
+    const alertsTriggeredEl = document.getElementById('alertsTriggered');
+    if (alertsTriggeredEl) alertsTriggeredEl.textContent = data && data.alerts_triggered != null ? data.alerts_triggered : '-';
+    const capitalPhaseEl = document.getElementById('capitalPhase');
+    if (capitalPhaseEl) {
+      const cp = await getJSON('/api/dashboard/capital-phase').catch(() => null);
+      capitalPhaseEl.textContent = cp && cp.phase ? cp.phase : 'Simulation';
+    }
+    updateMetricsTrend(data);
+  } catch (err) {
+    console.error('loadMetrics error:', err);
+  }
+}
+
+function updateMetricsTrend(data) {
+  const trendDiv = document.getElementById('metricsTrend');
+  if (!trendDiv) return;
+  let html = '<div class="grid cols-2">';
+  if (data && data.alerts_by_type) {
+    html += '<div class="panel"><h3>警報類型分佈</h3><table><thead><tr><th>類型</th><th>次數</th></tr></thead><tbody>';
+    for (const [type, count] of Object.entries(data.alerts_by_type)) {
+      html += `<tr><td>${type}</td><td>${count}</td></tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+  html += '<div class="panel"><h3>篩選統計</h3><table><thead><tr><th>項目</th><th>數值</th></tr></thead><tbody>';
+  html += `<tr><td>總數</td><td>${data && data.screening_total != null ? data.screening_total : '-'}</td></tr>`;
+  html += `<tr><td>通過</td><td>${data && data.screening_passed != null ? data.screening_passed : '-'}</td></tr>`;
+  html += `<tr><td>拒絕</td><td>${data && data.screening_total != null && data.screening_passed != null ? data.screening_total - data.screening_passed : '-'}</td></tr>`;
+  html += '</tbody></table></div>';
+  html += '</div>';
+  trendDiv.innerHTML = html;
+}
+
 async function loadAll() {
   try {
     const [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal] = await Promise.all([
@@ -2457,6 +2526,7 @@ async function loadAll() {
     renderDataIngestHealth(snapshot);
     renderDataChannels(dataChannels);
     renderAlerts(alerts);
+    loadMetrics();
   } catch (e) { console.error(e); }
   document.getElementById('lastRefresh').textContent = '更新於 ' + new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   renderBacktestReport();

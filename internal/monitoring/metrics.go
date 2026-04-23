@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"fmt"
 	"context"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"sync"
@@ -297,4 +298,134 @@ func (sm *SystemMetrics) Start(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+// AlertThreshold 警報閾值配置
+type AlertThreshold struct {
+	MinScreeningRate      float64 // 最小篩選率（低於此值觸發警報）
+	MaxAlertTriggerRate   float64 // 最大警報觸發率（高於此值觸發警報）
+	MaxUnacknowledgedAlerts int64   // 最大未確認警報數
+}
+
+// DefaultAlertThreshold 預設閾值
+func DefaultAlertThreshold() AlertThreshold {
+	return AlertThreshold{
+		MinScreeningRate:        0.1,   // 篩選率低於 10% 觸發警報
+		MaxAlertTriggerRate:     100,   // 每小時超過 100 次警報觸發
+		MaxUnacknowledgedAlerts: 10,    // 超過 10 筆未確認警報
+	}
+}
+
+// CheckThresholds 檢查指標是否超過閾值
+func (m *MetricsCollector) CheckThresholds(threshold AlertThreshold) []ThresholdViolation {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var violations []ThresholdViolation
+
+	// 檢查篩選率
+	if m.screeningTotal > 0 {
+		rate := float64(m.screeningPassed) / float64(m.screeningTotal)
+		if rate < threshold.MinScreeningRate {
+			violations = append(violations, ThresholdViolation{
+				Metric:      "screening_rate",
+				Current:     rate,
+				Threshold:   threshold.MinScreeningRate,
+				Severity:    "warning",
+				Message:     fmt.Sprintf("篩選率過低: %.1f%% (閾值: %.1f%%)", rate*100, threshold.MinScreeningRate*100),
+			})
+		}
+	}
+
+	// 檢查警報觸發率
+	if m.alertsTriggered > int64(threshold.MaxAlertTriggerRate) {
+		violations = append(violations, ThresholdViolation{
+			Metric:      "alert_trigger_rate",
+			Current:     float64(m.alertsTriggered),
+			Threshold:   threshold.MaxAlertTriggerRate,
+			Severity:    "critical",
+			Message:     fmt.Sprintf("警報觸發率過高: %d (閾值: %.0f)", m.alertsTriggered, threshold.MaxAlertTriggerRate),
+		})
+	}
+
+	// 檢查未確認警報
+	unacknowledged := m.alertsTriggered - m.alertsAcknowledged
+	if unacknowledged > threshold.MaxUnacknowledgedAlerts {
+		violations = append(violations, ThresholdViolation{
+			Metric:      "unacknowledged_alerts",
+			Current:     float64(unacknowledged),
+			Threshold:   float64(threshold.MaxUnacknowledgedAlerts),
+			Severity:    "warning",
+			Message:     fmt.Sprintf("未確認警報過多: %d (閾值: %d)", unacknowledged, threshold.MaxUnacknowledgedAlerts),
+		})
+	}
+
+	return violations
+}
+
+// ThresholdViolation 閾值違規
+type ThresholdViolation struct {
+	Metric    string  `json:"metric"`
+	Current   float64 `json:"current"`
+	Threshold float64 `json:"threshold"`
+	Severity  string  `json:"severity"`
+	Message   string  `json:"message"`
+}
+
+// MetricsHistory 指標歷史記錄
+type MetricsHistory struct {
+	mu       sync.RWMutex
+	snapshots []MetricsSnapshot
+	maxSize   int
+}
+
+// NewMetricsHistory 建立指標歷史記錄
+func NewMetricsHistory(maxSize int) *MetricsHistory {
+	return &MetricsHistory{
+		snapshots: make([]MetricsSnapshot, 0, maxSize),
+		maxSize:   maxSize,
+	}
+}
+
+// AddSnapshot 添加指標快照
+func (h *MetricsHistory) AddSnapshot(snapshot MetricsSnapshot) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	h.snapshots = append(h.snapshots, snapshot)
+	if len(h.snapshots) > h.maxSize {
+		h.snapshots = h.snapshots[len(h.snapshots)-h.maxSize:]
+	}
+}
+
+// GetTrend 取得指標趨勢
+func (h *MetricsHistory) GetTrend(metric string) []TrendPoint {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	var trend []TrendPoint
+	for _, snapshot := range h.snapshots {
+		var value float64
+		switch metric {
+		case "screening_rate":
+			value = snapshot.ScreeningRate
+		case "alerts_triggered":
+			value = float64(snapshot.AlertsTriggered)
+		case "alerts_acknowledged":
+			value = float64(snapshot.AlertsAcknowledged)
+		default:
+			continue
+		}
+		trend = append(trend, TrendPoint{
+			Timestamp: snapshot.Timestamp,
+			Value:     value,
+		})
+	}
+	return trend
+}
+
+// TrendPoint 趨勢點
+type TrendPoint struct {
+	Timestamp time.Time `json:"timestamp"`
+	Value     float64   `json:"value"`
 }
