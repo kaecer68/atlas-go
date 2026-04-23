@@ -19,7 +19,7 @@ type AlphaDiscoveryEngine struct {
 func NewAlphaDiscoveryEngine(factorEngine *portfolio.FactorEngine) *AlphaDiscoveryEngine {
 	return &AlphaDiscoveryEngine{
 		factorEngine:    factorEngine,
-		factorThreshold: 0.2,
+		factorThreshold: 0.4,
 	}
 }
 
