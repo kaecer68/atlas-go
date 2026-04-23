@@ -43,6 +43,7 @@ type DashboardAPI struct {
 	backtestMu       sync.Mutex
 	backtestRunning  bool
 	backtestStatus   map[string]interface{}
+	metricsCollector *MetricsCollector
 }
 
 type MacroRadarResponse struct {
@@ -98,6 +99,7 @@ func NewDashboardAPI(workDir, ledgerDir string) *DashboardAPI {
 		geoProvider:      geoProvider,
 		taiwanStressCalc: narrative.NewTaiwanStressCalculator(geoProvider),
 		reportGenerator:  narrative.NewReportGenerator(),
+		metricsCollector: NewMetricsCollector(),
 	}
 }
 
@@ -120,6 +122,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/retail-sentiment", a.handleRetailSentiment)
 	mux.HandleFunc("/api/dashboard/capital-phase", a.handleCapitalPhase)
 	mux.HandleFunc("/api/dashboard/tax-snapshot", a.handleTaxSnapshot)
+	mux.HandleFunc("/api/dashboard/metrics", a.handleMetrics)
 }
 
 // RegisterSwaggerRoutes mounts Swagger UI and the OpenAPI spec.
@@ -3063,4 +3066,40 @@ func (a *DashboardAPI) handleSeasonalAnalysis(w http.ResponseWriter, r *http.Req
 		"expectations":           expectations,
 		"active_seasonal_events": activeEvents,
 	})
+}
+
+// handleMetrics 處理指標查詢請求
+func (a *DashboardAPI) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 從查詢參數獲取指標類型
+	metricType := r.URL.Query().Get("type")
+	
+	var response interface{}
+	
+	switch metricType {
+	case "screening":
+		response = map[string]interface{}{
+			"screening_rate":    a.metricsCollector.GetScreeningRate(),
+			"screening_total":   a.metricsCollector.GetMetricsSnapshot().ScreeningTotal,
+			"screening_passed":  a.metricsCollector.GetMetricsSnapshot().ScreeningPassed,
+		}
+	case "alerts":
+		snapshot := a.metricsCollector.GetMetricsSnapshot()
+		response = map[string]interface{}{
+			"alerts_triggered":    snapshot.AlertsTriggered,
+			"alerts_acknowledged": snapshot.AlertsAcknowledged,
+			"alerts_by_type":      snapshot.AlertsByType,
+		}
+	case "all":
+		response = a.metricsCollector.GetMetricsSnapshot()
+	default:
+		response = a.metricsCollector.GetMetricsSnapshot()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
