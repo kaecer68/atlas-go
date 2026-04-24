@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"strings"
 	"sync"
@@ -125,9 +126,16 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 	}
 
 	latest := closes[len(closes)-1]
+	if math.IsNaN(latest) || math.IsInf(latest, 0) {
+		return MacroDataPoint{}, fmt.Errorf("invalid latest price: %v", latest)
+	}
+
 	prev := latest
-	if len(closes) > 1 && closes[len(closes)-2] != 0 {
-		prev = closes[len(closes)-2]
+	if len(closes) > 1 {
+		candidate := closes[len(closes)-2]
+		if !math.IsNaN(candidate) && !math.IsInf(candidate, 0) && candidate != 0 {
+			prev = candidate
+		}
 	}
 
 	changePct := 0.0
@@ -135,7 +143,10 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 		changePct = (latest - prev) / prev * 100
 	}
 
-	// For US10Y, convert price to bps change proxy.
+	if math.IsNaN(changePct) || math.IsInf(changePct, 0) {
+		return MacroDataPoint{}, fmt.Errorf("invalid change percentage: %v", changePct)
+	}
+
 	point := MacroDataPoint{
 		Symbol:    ticker,
 		Value:     latest,

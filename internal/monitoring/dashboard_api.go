@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/experiment"
+	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/live"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -31,19 +33,24 @@ import (
 )
 
 type DashboardAPI struct {
-	workDir          string
-	ledgerDir        string
-	baselinePath     string
-	narrativeEngine  *narrative.NarrativeEngine
-	macroIngestor    *narrative.MacroIngestor
-	geoProvider      narrative.GeopoliticalRiskProvider
-	taiwanStressCalc *narrative.TaiwanStressCalculator
-	reportGenerator  *narrative.ReportGenerator
-	pool             *pgxpool.Pool
-	backtestMu       sync.Mutex
-	backtestRunning  bool
-	backtestStatus   map[string]interface{}
-	metricsCollector *MetricsCollector
+	workDir            string
+	ledgerDir          string
+	baselinePath       string
+	narrativeEngine    *narrative.NarrativeEngine
+	macroIngestor      *narrative.MacroIngestor
+	geoProvider        narrative.GeopoliticalRiskProvider
+	taiwanStressCalc   *narrative.TaiwanStressCalculator
+	reportGenerator    *narrative.ReportGenerator
+	pool               *pgxpool.Pool
+	backtestMu         sync.Mutex
+	backtestRunning    bool
+	backtestStatus     map[string]interface{}
+	metricsCollector   *MetricsCollector
+	industryClassifier *industry.ClassificationTree
+	seasonalEngine     *industry.SeasonalEngine
+	cycleTracker       *industry.CycleTracker
+	linkageAnalyzer    *industry.LinkageAnalyzer
+	riskMonitor        *industry.RiskMonitor
 }
 
 type MacroRadarResponse struct {
@@ -91,15 +98,20 @@ func NewDashboardAPI(workDir, ledgerDir string) *DashboardAPI {
 		narrative.NewGDELTGeopoliticalProvider(),
 	)
 	return &DashboardAPI{
-		workDir:          workDir,
-		ledgerDir:        ledgerDir,
-		baselinePath:     filepath.Join(workDir, "data/state/baseline_policy.json"),
-		narrativeEngine:  narrative.NewNarrativeEngine(),
-		macroIngestor:    narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro")),
-		geoProvider:      geoProvider,
-		taiwanStressCalc: narrative.NewTaiwanStressCalculator(geoProvider),
-		reportGenerator:  narrative.NewReportGenerator(),
-		metricsCollector: NewMetricsCollector(),
+		workDir:            workDir,
+		ledgerDir:          ledgerDir,
+		baselinePath:       filepath.Join(workDir, "data/state/baseline_policy.json"),
+		narrativeEngine:    narrative.NewNarrativeEngine(),
+		macroIngestor:      narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro")),
+		geoProvider:        geoProvider,
+		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider),
+		reportGenerator:    narrative.NewReportGenerator(),
+		metricsCollector:   NewMetricsCollector(),
+		industryClassifier: industry.DefaultClassification(),
+		seasonalEngine:     industry.NewSeasonalEngine(),
+		cycleTracker:       industry.NewCycleTracker(),
+		linkageAnalyzer:    industry.NewLinkageAnalyzer(),
+		riskMonitor:        industry.NewRiskMonitor(),
 	}
 }
 
@@ -123,6 +135,15 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/capital-phase", a.handleCapitalPhase)
 	mux.HandleFunc("/api/dashboard/tax-snapshot", a.handleTaxSnapshot)
 	mux.HandleFunc("/api/dashboard/metrics", a.handleMetrics)
+}
+
+func (a *DashboardAPI) RegisterIndustryRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/industry/classification", a.handleIndustryClassification)
+	mux.HandleFunc("/api/industry/seasonality", a.handleIndustrySeasonality)
+	mux.HandleFunc("/api/industry/cycle", a.handleIndustryCycle)
+	mux.HandleFunc("/api/industry/linkage", a.handleIndustryLinkage)
+	mux.HandleFunc("/api/industry/risk", a.handleIndustryRisk)
+	mux.HandleFunc("/api/industry/overview", a.handleIndustryOverview)
 }
 
 // RegisterSwaggerRoutes mounts Swagger UI and the OpenAPI spec.
@@ -2040,13 +2061,22 @@ func (a *DashboardAPI) handleBacktestStatus(w http.ResponseWriter, r *http.Reque
 
 // SystemHealthResponse exposes config consistency and freshness.
 type SystemHealthResponse struct {
-	BaselineVersion       string        `json:"baseline_version"`
-	ReplayDataLatestDate  string        `json:"replay_data_latest_date"`
-	ReplayDataPathOK      bool          `json:"replay_data_path_ok"`
-	LastWindowID          string        `json:"last_window_id"`
-	LastWindowGeneratedAt time.Time     `json:"last_window_generated_at"`
-	Warnings              []string      `json:"warnings"`
-	Regime                domain.Regime `json:"regime"`
+	BaselineVersion       string            `json:"baseline_version"`
+	ReplayDataLatestDate  string            `json:"replay_data_latest_date"`
+	ReplayDataPathOK      bool              `json:"replay_data_path_ok"`
+	LastWindowID          string            `json:"last_window_id"`
+	LastWindowGeneratedAt time.Time         `json:"last_window_generated_at"`
+	Warnings              []string          `json:"warnings"`
+	Regime                domain.Regime     `json:"regime"`
+	DataChannels          []DataChannelInfo `json:"data_channels,omitempty"`
+}
+
+type DataChannelInfo struct {
+	ChannelID  string `json:"channel_id"`
+	Label      string `json:"label"`
+	Status     string `json:"status"`
+	StatusText string `json:"status_text"`
+	UpdatedAt  string `json:"updated_at"`
 }
 
 func (a *DashboardAPI) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
@@ -2126,6 +2156,15 @@ func (a *DashboardAPI) handleSystemHealth(w http.ResponseWriter, r *http.Request
 	if summary, err := a.loadSessionSummary(""); err == nil && summary != nil {
 		regime = summary.Regime
 	}
+
+	now := time.Now()
+	channels := []DataChannelInfo{
+		a.buildChannelInfo("us_yahoo", "Yahoo Finance Macro", a.checkMacroHealth, filepath.Join(a.workDir, "data/state/macro/latest.json"), now),
+		a.buildChannelInfo("twse_capital_flow", "TWSE 三大法人", a.checkCapitalFlowHealth, filepath.Join(a.workDir, "data/state/capital_flow"), now),
+		a.buildChannelInfo("geopolitical", "地緣政治風險", a.checkGeopoliticalHealth, filepath.Join(a.workDir, "data/state/geopolitical/latest.json"), now),
+		a.buildChannelInfo("twse_replay", "TWSE Replay", a.checkReplayHealth, filepath.Join(a.workDir, "data/replay/tw_extended_90days.csv"), now),
+	}
+
 	writeJSON(w, http.StatusOK, SystemHealthResponse{
 		BaselineVersion:       baselineVersion,
 		ReplayDataLatestDate:  latestReplayDate,
@@ -2134,7 +2173,19 @@ func (a *DashboardAPI) handleSystemHealth(w http.ResponseWriter, r *http.Request
 		LastWindowGeneratedAt: lastWindowTime,
 		Warnings:              warnings,
 		Regime:                regime,
+		DataChannels:          channels,
 	})
+}
+
+func (a *DashboardAPI) buildChannelInfo(id, label string, checker func(string, time.Time) (string, string), path string, now time.Time) DataChannelInfo {
+	status, updated := checker(path, now)
+	return DataChannelInfo{
+		ChannelID:  id,
+		Label:      label,
+		Status:     status,
+		StatusText: statusText(status),
+		UpdatedAt:  updated,
+	}
 }
 
 // PipelineItem represents a single recommendation through the guard pipeline.
@@ -3077,15 +3128,15 @@ func (a *DashboardAPI) handleMetrics(w http.ResponseWriter, r *http.Request) {
 
 	// 從查詢參數獲取指標類型
 	metricType := r.URL.Query().Get("type")
-	
+
 	var response interface{}
-	
+
 	switch metricType {
 	case "screening":
 		response = map[string]interface{}{
-			"screening_rate":    a.metricsCollector.GetScreeningRate(),
-			"screening_total":   a.metricsCollector.GetMetricsSnapshot().ScreeningTotal,
-			"screening_passed":  a.metricsCollector.GetMetricsSnapshot().ScreeningPassed,
+			"screening_rate":   a.metricsCollector.GetScreeningRate(),
+			"screening_total":  a.metricsCollector.GetMetricsSnapshot().ScreeningTotal,
+			"screening_passed": a.metricsCollector.GetMetricsSnapshot().ScreeningPassed,
 		}
 	case "alerts":
 		snapshot := a.metricsCollector.GetMetricsSnapshot()
@@ -3102,4 +3153,272 @@ func (a *DashboardAPI) handleMetrics(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+func (a *DashboardAPI) handleIndustryClassification(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	tree := a.industryClassifier
+	segments := tree.GetAllSegments()
+
+	var result []map[string]interface{}
+	for _, seg := range segments {
+		if seg.ParentID == "" {
+			children := tree.GetChildren(seg.ID)
+			var childList []map[string]interface{}
+			for _, child := range children {
+				grandchildren := tree.GetChildren(child.ID)
+				var grandchildList []map[string]interface{}
+				for _, gc := range grandchildren {
+					grandchildList = append(grandchildList, map[string]interface{}{
+						"id":          gc.ID,
+						"name":        gc.Name,
+						"weight":      gc.Weight,
+						"description": gc.Description,
+					})
+				}
+				childList = append(childList, map[string]interface{}{
+					"id":          child.ID,
+					"name":        child.Name,
+					"weight":      child.Weight,
+					"description": child.Description,
+					"children":    grandchildList,
+				})
+			}
+			result = append(result, map[string]interface{}{
+				"id":          seg.ID,
+				"name":        seg.Name,
+				"weight":      seg.Weight,
+				"description": seg.Description,
+				"children":    childList,
+			})
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"industries": result,
+		"count":      len(result),
+	})
+}
+
+func (a *DashboardAPI) handleIndustrySeasonality(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	industryID := r.URL.Query().Get("industry")
+	now := time.Now()
+
+	patterns := a.seasonalEngine.DetectCurrentPatterns(now)
+	var activePatterns []map[string]interface{}
+	for _, p := range patterns {
+		if industryID == "" || p.IsRelevantForIndustry(industryID) {
+			activePatterns = append(activePatterns, map[string]interface{}{
+				"id":                  p.ID,
+				"name":                p.Name,
+				"description":         p.Description,
+				"start_month":         p.StartMonth,
+				"start_day":           p.StartDay,
+				"end_month":           p.EndMonth,
+				"end_day":             p.EndDay,
+				"historical_accuracy": p.HistoricalAccuracy,
+				"typical_return":      p.TypicalReturn,
+				"affected_industries": p.AffectedIndustries,
+			})
+		}
+	}
+
+	var adjustment float64
+	if industryID != "" {
+		adjustment = a.seasonalEngine.GetPatternAdjustment(industryID, now)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"current_date":    now.Format("2006-01-02"),
+		"active_patterns": activePatterns,
+		"pattern_count":   len(activePatterns),
+		"adjustment":      adjustment,
+	})
+}
+
+func (a *DashboardAPI) handleIndustryCycle(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	industryID := r.URL.Query().Get("industry")
+	if industryID == "" {
+		writeJSONError(w, http.StatusBadRequest, "industry parameter required")
+		return
+	}
+
+	position, ok := a.cycleTracker.GetPosition(industryID)
+	if !ok {
+		writeJSONError(w, http.StatusNotFound, "industry not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"industry":        industryID,
+		"business_cycle":  position.BusinessCycle,
+		"inventory_cycle": position.InventoryCycle,
+		"capex_cycle":     position.CapexCycle,
+		"confidence":      position.Confidence,
+		"updated_at":      position.UpdatedAt,
+		"is_favorable":    position.IsFavorable(),
+		"phase_score":     position.GetPhaseScore(),
+		"trend":           position.GetTrend(),
+	})
+}
+
+func (a *DashboardAPI) handleIndustryLinkage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	industryID := r.URL.Query().Get("industry")
+	if industryID == "" {
+		writeJSONError(w, http.StatusBadRequest, "industry parameter required")
+		return
+	}
+
+	graph := a.linkageAnalyzer.GetSupplyChainGraph()
+	upstream := graph.GetUpstream(industryID)
+	downstream := graph.GetDownstream(industryID)
+
+	correlations := a.linkageAnalyzer.GetCorrelationMatrix().GetCorrelatedIndustries(industryID, 0.0)
+	var correlationList []map[string]interface{}
+	for otherIndustry, correlation := range correlations {
+		strength := "low"
+		if math.Abs(correlation) > 0.7 {
+			strength = "high"
+		} else if math.Abs(correlation) > 0.4 {
+			strength = "medium"
+		}
+		correlationList = append(correlationList, map[string]interface{}{
+			"industry":    otherIndustry,
+			"correlation": correlation,
+			"strength":    strength,
+		})
+	}
+
+	score := a.linkageAnalyzer.CalculateLinkageScore(industryID)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"industry":      industryID,
+		"upstream":      upstream,
+		"downstream":    downstream,
+		"correlations":  correlationList,
+		"linkage_score": score,
+	})
+}
+
+func (a *DashboardAPI) handleIndustryRisk(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	symbol := r.URL.Query().Get("symbol")
+	industryID := r.URL.Query().Get("industry")
+	if symbol == "" && industryID == "" {
+		writeJSONError(w, http.StatusBadRequest, "symbol or industry parameter required")
+		return
+	}
+
+	var risks []industry.RiskEvent
+	if symbol == "" && industryID != "" {
+		risks = a.riskMonitor.GetAllRisks("ALL", industryID, 0, 0)
+	} else {
+		risks = a.riskMonitor.GetAllRisks(symbol, industryID, 0, 0)
+	}
+	var riskList []map[string]interface{}
+	for _, risk := range risks {
+		riskList = append(riskList, map[string]interface{}{
+			"id":                 risk.ID,
+			"type":               risk.Type,
+			"severity":           risk.Severity,
+			"description":        risk.Description,
+			"impact_estimate":    risk.ImpactEstimate,
+			"confidence":         risk.Confidence,
+			"detected_at":        risk.DetectedAt,
+			"recommended_action": risk.RecommendedAction,
+		})
+	}
+
+	highest := a.riskMonitor.GetHighestRisk(risks)
+	var highestRisk map[string]interface{}
+	if highest != nil {
+		highestRisk = map[string]interface{}{
+			"id":          highest.ID,
+			"type":        highest.Type,
+			"severity":    highest.Severity,
+			"description": highest.Description,
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"symbol":       symbol,
+		"industry":     industryID,
+		"risk_count":   len(riskList),
+		"risks":        riskList,
+		"highest_risk": highestRisk,
+	})
+}
+
+func (a *DashboardAPI) handleIndustryOverview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	now := time.Now()
+	tree := a.industryClassifier
+	segments := tree.GetAllSegments()
+
+	var industries []map[string]interface{}
+	for _, seg := range segments {
+		if seg.ParentID != "" {
+			continue
+		}
+
+		cyclePos, ok := a.cycleTracker.GetPosition(seg.ID)
+		if !ok {
+			continue
+		}
+
+		patterns := a.seasonalEngine.DetectCurrentPatterns(now)
+		var activePatternNames []string
+		for _, p := range patterns {
+			if p.IsRelevantForIndustry(seg.ID) {
+				activePatternNames = append(activePatternNames, p.Name)
+			}
+		}
+
+		linkageScore := a.linkageAnalyzer.CalculateLinkageScore(seg.ID)
+
+		industries = append(industries, map[string]interface{}{
+			"id":                seg.ID,
+			"name":              seg.Name,
+			"cycle_phase":       cyclePos.BusinessCycle,
+			"inventory_cycle":   cyclePos.InventoryCycle,
+			"capex_cycle":       cyclePos.CapexCycle,
+			"cycle_confidence":  cyclePos.Confidence,
+			"is_favorable":      cyclePos.IsFavorable(),
+			"seasonal_patterns": activePatternNames,
+			"linkage_score":     linkageScore,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"industries": industries,
+		"count":      len(industries),
+		"updated_at": now,
+	})
 }

@@ -254,6 +254,56 @@ func passesAcceptance(result domain.PromptExperimentResult) (bool, string) {
 	return true, "accepted: maturity-aware gates satisfied"
 }
 
+func welchTTest(baselineReturns, candidateReturns []float64) (tStat float64, df float64) {
+	if len(baselineReturns) < 2 || len(candidateReturns) < 2 {
+		return 0, 0
+	}
+
+	mean1, var1 := meanAndVariance(baselineReturns)
+	mean2, var2 := meanAndVariance(candidateReturns)
+
+	n1, n2 := float64(len(baselineReturns)), float64(len(candidateReturns))
+
+	se1 := var1 / n1
+	se2 := var2 / n2
+	seDiff := math.Sqrt(se1 + se2)
+
+	if seDiff == 0 {
+		return 0, 0
+	}
+
+	tStat = (mean2 - mean1) / seDiff
+
+	df = math.Pow(se1+se2, 2) / (math.Pow(se1, 2)/(n1-1) + math.Pow(se2, 2)/(n2-1))
+
+	return tStat, df
+}
+
+func meanAndVariance(data []float64) (mean, variance float64) {
+	if len(data) == 0 {
+		return 0, 0
+	}
+
+	var sum float64
+	for _, v := range data {
+		sum += v
+	}
+	mean = sum / float64(len(data))
+
+	if len(data) < 2 {
+		return mean, 0
+	}
+
+	var sqDiffSum float64
+	for _, v := range data {
+		diff := v - mean
+		sqDiffSum += diff * diff
+	}
+	variance = sqDiffSum / float64(len(data)-1)
+
+	return mean, variance
+}
+
 func requiredImprovementForProfile(maturity, mutationType string) float64 {
 	switch mutationType {
 	case "risk_rule_change":

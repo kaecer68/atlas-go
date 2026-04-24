@@ -1,8 +1,8 @@
 package monitoring
 
 import (
-	"fmt"
 	"context"
+	"fmt"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"sync"
 	"time"
@@ -302,17 +302,17 @@ func (sm *SystemMetrics) Start(ctx context.Context) {
 
 // AlertThreshold 警報閾值配置
 type AlertThreshold struct {
-	MinScreeningRate      float64 // 最小篩選率（低於此值觸發警報）
-	MaxAlertTriggerRate   float64 // 最大警報觸發率（高於此值觸發警報）
+	MinScreeningRate        float64 // 最小篩選率（低於此值觸發警報）
+	MaxAlertTriggerRate     float64 // 最大警報觸發率（高於此值觸發警報）
 	MaxUnacknowledgedAlerts int64   // 最大未確認警報數
 }
 
 // DefaultAlertThreshold 預設閾值
 func DefaultAlertThreshold() AlertThreshold {
 	return AlertThreshold{
-		MinScreeningRate:        0.1,   // 篩選率低於 10% 觸發警報
-		MaxAlertTriggerRate:     100,   // 每小時超過 100 次警報觸發
-		MaxUnacknowledgedAlerts: 10,    // 超過 10 筆未確認警報
+		MinScreeningRate:        0.1, // 篩選率低於 10% 觸發警報
+		MaxAlertTriggerRate:     100, // 每小時超過 100 次警報觸發
+		MaxUnacknowledgedAlerts: 10,  // 超過 10 筆未確認警報
 	}
 }
 
@@ -328,11 +328,11 @@ func (m *MetricsCollector) CheckThresholds(threshold AlertThreshold) []Threshold
 		rate := float64(m.screeningPassed) / float64(m.screeningTotal)
 		if rate < threshold.MinScreeningRate {
 			violations = append(violations, ThresholdViolation{
-				Metric:      "screening_rate",
-				Current:     rate,
-				Threshold:   threshold.MinScreeningRate,
-				Severity:    "warning",
-				Message:     fmt.Sprintf("篩選率過低: %.1f%% (閾值: %.1f%%)", rate*100, threshold.MinScreeningRate*100),
+				Metric:    "screening_rate",
+				Current:   rate,
+				Threshold: threshold.MinScreeningRate,
+				Severity:  "warning",
+				Message:   fmt.Sprintf("篩選率過低: %.1f%% (閾值: %.1f%%)", rate*100, threshold.MinScreeningRate*100),
 			})
 		}
 	}
@@ -340,11 +340,11 @@ func (m *MetricsCollector) CheckThresholds(threshold AlertThreshold) []Threshold
 	// 檢查警報觸發率
 	if m.alertsTriggered > int64(threshold.MaxAlertTriggerRate) {
 		violations = append(violations, ThresholdViolation{
-			Metric:      "alert_trigger_rate",
-			Current:     float64(m.alertsTriggered),
-			Threshold:   threshold.MaxAlertTriggerRate,
-			Severity:    "critical",
-			Message:     fmt.Sprintf("警報觸發率過高: %d (閾值: %.0f)", m.alertsTriggered, threshold.MaxAlertTriggerRate),
+			Metric:    "alert_trigger_rate",
+			Current:   float64(m.alertsTriggered),
+			Threshold: threshold.MaxAlertTriggerRate,
+			Severity:  "critical",
+			Message:   fmt.Sprintf("警報觸發率過高: %d (閾值: %.0f)", m.alertsTriggered, threshold.MaxAlertTriggerRate),
 		})
 	}
 
@@ -352,11 +352,11 @@ func (m *MetricsCollector) CheckThresholds(threshold AlertThreshold) []Threshold
 	unacknowledged := m.alertsTriggered - m.alertsAcknowledged
 	if unacknowledged > threshold.MaxUnacknowledgedAlerts {
 		violations = append(violations, ThresholdViolation{
-			Metric:      "unacknowledged_alerts",
-			Current:     float64(unacknowledged),
-			Threshold:   float64(threshold.MaxUnacknowledgedAlerts),
-			Severity:    "warning",
-			Message:     fmt.Sprintf("未確認警報過多: %d (閾值: %d)", unacknowledged, threshold.MaxUnacknowledgedAlerts),
+			Metric:    "unacknowledged_alerts",
+			Current:   float64(unacknowledged),
+			Threshold: float64(threshold.MaxUnacknowledgedAlerts),
+			Severity:  "warning",
+			Message:   fmt.Sprintf("未確認警報過多: %d (閾值: %d)", unacknowledged, threshold.MaxUnacknowledgedAlerts),
 		})
 	}
 
@@ -374,7 +374,7 @@ type ThresholdViolation struct {
 
 // MetricsHistory 指標歷史記錄
 type MetricsHistory struct {
-	mu       sync.RWMutex
+	mu        sync.RWMutex
 	snapshots []MetricsSnapshot
 	maxSize   int
 }

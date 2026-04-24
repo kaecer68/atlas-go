@@ -68,7 +68,7 @@ func TestCheckThresholds(t *testing.T) {
 	// 測試低篩選率
 	m := NewMetricsCollector()
 	threshold := DefaultAlertThreshold()
-	
+
 	m.RecordScreening(5, 95) // 5% 篩選率
 	violations := m.CheckThresholds(threshold)
 	if len(violations) != 1 {

@@ -284,6 +284,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
     <a data-page="datachannels" onclick="switchPage('datachannels')">信息通道</a>
     <a data-page="alerts" onclick="switchPage('alerts')">系統警報</a>
     <a data-page="metrics" onclick="switchPage('metrics')">指標監控</a>
+    <a data-page="industry" onclick="switchPage('industry')">產業生態系</a>
   </nav>
   <div class="foot">
     <span class="text-muted">v8 · 統一介面</span>
@@ -452,7 +453,6 @@ body { display: flex; margin: 0; min-height: 100vh; }
           </div>
         </div>
       </div>
-      <div class="panel wide"><h2>資料採集健康度</h2><div id="dataIngestHealth" class="empty loading">載入中…</div></div>
       <div class="panel wide"><h2>人工干預紀錄</h2><div id="auditLog" class="empty loading">載入中…</div></div>
     </div>
     <!-- 信息通道 -->
@@ -491,6 +491,21 @@ body { display: flex; margin: 0; min-height: 100vh; }
         <div id="alertsPanel" class="empty loading">載入中…</div>
       </div>
     </div>
+
+    <div class="page" id="page-industry">
+      <div class="panel wide help-panel">
+        <strong>如何解讀本頁：</strong>
+        本頁呈現 Atlas 對台灣產業的<strong>多維度分析</strong>，包含產業分類樹、週期定位、供應鏈連動與季節性模式。
+        點擊產業卡片可查看詳細的週期羅盤與衝擊傳導分析。
+      </div>
+      <div class="two-col-grid">
+        <div class="panel"><h2>產業地圖</h2><div id="industryMap" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>週期羅盤</h2><div id="industryCycle" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>供應鏈連動</h2><div id="industryLinkage" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>季節性模式</h2><div id="industrySeasonality" class="empty loading">載入中…</div></div>
+      </div>
+    </div>
+
     <div class="page" id="page-metrics">
       <div class="panel wide help-panel">
         <strong>如何解讀本頁：</strong>
@@ -584,7 +599,8 @@ function switchPage(id) {
     controls: '控制與稽核',
     datachannels: '信息通道',
     alerts: '系統警報',
-    metrics: '指標監控'
+    metrics: '指標監控',
+    industry: '產業生態系'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   // Close mobile sidebar
@@ -821,16 +837,15 @@ function renderOverview(data, agentsData, inbox, overlap, narrativeEvents, stres
     crowdingHtml = '<div class="my-xs text-sm text-up">✓ 無擁擠標的</div>';
   }
 
-  // Data channel alerts
-  const channels = (dataChannels && dataChannels.channels) || [];
-  const alerts = (dataChannels && dataChannels.alerts) || [];
-  const errorChannels = channels.filter(c => c.status === 'error');
-  const warnChannels = channels.filter(c => c.status === 'warn');
-  const totalAlerts = alerts.length || errorChannels.length;
+  // Data channel alerts - unified from system-health API
+  const sysChannels = (health && health.data_channels) || [];
+  const errorChannels = sysChannels.filter(c => c.status === 'error');
+  const warnChannels = sysChannels.filter(c => c.status === 'warn');
+  const totalAlerts = errorChannels.length;
   const alertHtml = totalAlerts > 0
-    ? `<div style="margin:4px 0;font-size:13px;color:var(--down)">⚠ ${errorChannels.map(c => escapeHtml(c.platform)).join('、')} 發生異常</div>`
+    ? `<div style="margin:4px 0;font-size:13px;color:var(--down)">⚠ ${errorChannels.map(c => escapeHtml(c.label)).join('、')} 發生異常</div>`
     : (warnChannels.length > 0
-      ? `<div class="my-xs text-sm text-warn">⚠ ${warnChannels.map(c => escapeHtml(c.platform)).join('、')} 資料延遲</div>`
+      ? `<div class="my-xs text-sm text-warn">⚠ ${warnChannels.map(c => escapeHtml(c.label)).join('、')} 資料延遲</div>`
       : '<div class="my-xs text-sm text-up">✓ 所有通道正常</div>');
 
   const phaseMap = { simulation: '模擬', paper: '模擬', live: '實盤', full: '全倉' };
@@ -2523,10 +2538,10 @@ async function loadAll() {
     renderLiveStatus(live);
     renderInbox(inbox);
     renderNarrativePage(snapshot, stress, events, chains, models, templates, retailSentiment, seasonal);
-    renderDataIngestHealth(snapshot);
     renderDataChannels(dataChannels);
     renderAlerts(alerts);
     loadMetrics();
+    loadIndustryData();
   } catch (e) { console.error(e); }
   document.getElementById('lastRefresh').textContent = '更新於 ' + new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   renderBacktestReport();
@@ -2548,10 +2563,111 @@ function toggleTheme() {
   localStorage.setItem('atlas-theme', next);
 }
 
-// Load saved theme
 const savedTheme = localStorage.getItem('atlas-theme');
 if (savedTheme) {
   document.documentElement.setAttribute('data-theme', savedTheme);
+}
+
+async function loadIndustryData() {
+  try {
+    const [classification, overview, seasonality] = await Promise.all([
+      getJSON('/api/industry/classification').catch(() => null),
+      getJSON('/api/industry/overview').catch(() => null),
+      getJSON('/api/industry/seasonality').catch(() => null),
+    ]);
+    renderIndustryMap(classification);
+    renderIndustryCycle(overview);
+    renderIndustryLinkage(overview);
+    renderIndustrySeasonality(seasonality);
+  } catch (e) { console.error('loadIndustryData error:', e); }
+}
+
+function renderIndustryMap(data) {
+  const el = document.getElementById('industryMap');
+  if (!data || !data.industries) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
+  el.classList.remove('loading');
+  const industries = data.industries;
+  let html = '<div style="display:flex;flex-wrap:wrap;gap:10px">';
+  industries.forEach(ind => {
+    const weightPct = Math.round((ind.weight || 0) * 100);
+    html += `<div style="flex:1;min-width:140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer" onclick="showIndustryDetail('${ind.id}')">`;
+    html += `<div style="font-weight:700;font-size:14px;margin-bottom:4px">${ind.name}</div>`;
+    html += `<div style="font-size:12px;color:var(--muted)">權重 ${weightPct}%</div>`;
+    html += `<div style="margin-top:6px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">`;
+    html += `<div style="width:${weightPct}%;height:100%;background:var(--accent)"></div></div>`;
+    html += `</div>`;
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function renderIndustryCycle(data) {
+  const el = document.getElementById('industryCycle');
+  if (!data || !data.industries) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
+  el.classList.remove('loading');
+  const industries = data.industries;
+  const cycleColors = {
+    recovery: '#10b981',
+    expansion: '#3b82f6',
+    mature: '#f59e0b',
+    recession: '#ef4444'
+  };
+  const cycleNames = {
+    recovery: '復甦',
+    expansion: '擴張',
+    mature: '成熟',
+    recession: '衰退'
+  };
+  let html = '<div style="display:flex;flex-wrap:wrap;gap:10px">';
+  industries.forEach(ind => {
+    const color = cycleColors[ind.cycle_phase] || '#666';
+    const name = cycleNames[ind.cycle_phase] || ind.cycle_phase;
+    html += `<div style="flex:1;min-width:140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px">`;
+    html += `<div style="font-weight:700;font-size:14px;margin-bottom:4px">${ind.name}</div>`;
+    html += `<div style="display:flex;align-items:center;gap:6px;margin:4px 0">`;
+    html += `<span style="width:10px;height:10px;border-radius:50%;background:${color};display:inline-block"></span>`;
+    html += `<span style="font-size:12px">${name}</span>`;
+    html += `</div>`;
+    html += `<div style="font-size:11px;color:var(--muted)">信心度 ${Math.round((ind.cycle_confidence || 0) * 100)}%</div>`;
+    html += `</div>`;
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function renderIndustryLinkage(data) {
+  const el = document.getElementById('industryLinkage');
+  if (!data || !data.industries) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
+  el.classList.remove('loading');
+  const industries = data.industries;
+  let html = '<table><thead><tr><th>產業</th><th>系統重要性</th><th>連動分數</th></tr></thead><tbody>';
+  industries.forEach(ind => {
+    const score = ind.linkage_score || {};
+    html += `<tr><td>${ind.name}</td><td>${(score.systemic_importance || 0).toFixed(2)}</td><td>${(score.shock_propagation_speed || 0).toFixed(2)}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function renderIndustrySeasonality(data) {
+  const el = document.getElementById('industrySeasonality');
+  if (!data || !data.active_patterns) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
+  el.classList.remove('loading');
+  const patterns = data.active_patterns;
+  let html = '<div style="display:flex;flex-direction:column;gap:8px">';
+  patterns.forEach(p => {
+    html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px">`;
+    html += `<div style="font-weight:700;font-size:13px;margin-bottom:4px">${p.name}</div>`;
+    html += `<div style="font-size:12px;color:var(--muted)">${p.description || ''}</div>`;
+    html += `<div style="font-size:11px;color:var(--accent);margin-top:4px">歷史準確度 ${Math.round((p.historical_accuracy || 0) * 100)}%</div>`;
+    html += `</div>`;
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function showIndustryDetail(industryId) {
+  notify(`產業詳細分析功能開發中: ${industryId}`, 'info');
 }
 
 </script>

@@ -51,7 +51,11 @@ func (CRORiskExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendatio
 		result := make([]domain.Recommendation, 0, len(filtered))
 		for _, rec := range filtered {
 			sector := skillToSector(rec.Skill)
-			if float64(sectorCount[sector])/float64(len(filtered)) > 0.40 {
+			concentrationThreshold := 0.40
+			if len(filtered) >= 10 {
+				concentrationThreshold = 0.35
+			}
+			if float64(sectorCount[sector])/float64(len(filtered)) > concentrationThreshold {
 				rec.Reason = fmt.Sprintf("[CRO:產業集中 %.0f%%] ", float64(sectorCount[sector])/float64(len(filtered))*100) + rec.Reason
 				rec.Conviction = int(float64(rec.Conviction) * 0.7)
 				if rec.Conviction < floor {

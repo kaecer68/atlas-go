@@ -11,17 +11,15 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
-// ─── TWSEProvider ────────────────────────────────────────────────────────────
-
-func TestTWSEProvider_Name(t *testing.T) {
-	p := NewTWSEProvider()
-	if got := p.Name(); got != "twse" {
-		t.Fatalf("Name() = %q, want %q", got, "twse")
+func TestMockProvider_Name(t *testing.T) {
+	p := NewMockProvider()
+	if got := p.Name(); got != "mock" {
+		t.Fatalf("Name() = %q, want %q", got, "mock")
 	}
 }
 
-func TestTWSEProvider_GetQuotes(t *testing.T) {
-	p := NewTWSEProvider()
+func TestMockProvider_GetQuotes(t *testing.T) {
+	p := NewMockProvider()
 	symbols := []string{"2330", "2317"}
 	quotes, err := p.GetQuotes(context.Background(), time.Now(), symbols)
 	if err != nil {
@@ -34,9 +32,16 @@ func TestTWSEProvider_GetQuotes(t *testing.T) {
 		if q.Last <= 0 {
 			t.Errorf("symbol %s: Last price should be > 0, got %f", q.Symbol, q.Last)
 		}
-		if q.Source != "twse" {
-			t.Errorf("symbol %s: Source = %q, want %q", q.Symbol, q.Source, "twse")
+		if q.Source != "mock" {
+			t.Errorf("symbol %s: Source = %q, want %q", q.Symbol, q.Source, "mock")
 		}
+	}
+}
+
+func TestMockProvider_IsMock(t *testing.T) {
+	p := NewMockProvider()
+	if !p.IsMock() {
+		t.Fatal("expected IsMock() to be true")
 	}
 }
 
@@ -114,13 +119,22 @@ func TestHybridProvider_hasInvalidQuotes(t *testing.T) {
 		t.Error("expected hasInvalidQuotes=false for valid quote")
 	}
 
-	// Mixed: one valid is enough to not trigger
 	mixed := []domain.Quote{
 		{Symbol: "A", Last: 100, Open: 99, High: 101, Low: 98},
 		{Symbol: "B", Last: 0, Open: 0, High: 0, Low: 0},
 	}
 	if !p.hasInvalidQuotes(mixed) {
 		t.Error("expected hasInvalidQuotes=true when at least one all-zero quote is present")
+	}
+
+	negativePrice := []domain.Quote{{Symbol: "X", Last: -100, Open: 99, High: 101, Low: 98}}
+	if !p.hasInvalidQuotes(negativePrice) {
+		t.Error("expected hasInvalidQuotes=true for negative price")
+	}
+
+	negativeVolume := []domain.Quote{{Symbol: "X", Last: 100, Open: 99, High: 101, Low: 98, Volume: -1}}
+	if !p.hasInvalidQuotes(negativeVolume) {
+		t.Error("expected hasInvalidQuotes=true for negative volume")
 	}
 }
 

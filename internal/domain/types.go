@@ -240,16 +240,17 @@ func DefaultCapitalPhaseConfig() CapitalPhaseConfig {
 }
 
 type CapitalSnapshot struct {
-	Phase           CapitalPhase `json:"phase"`
-	PhaseStartDate  time.Time    `json:"phase_start_date"`
-	DaysInPhase     int          `json:"days_in_phase"`
-	TotalCapital    float64      `json:"total_capital"`
-	DeployedCapital float64      `json:"deployed_capital"`
-	ReserveCash     float64      `json:"reserve_cash"`
-	RollingSharpe   float64      `json:"rolling_sharpe"`
-	MaxDrawdown     float64      `json:"max_drawdown"`
-	CanAdvance      bool         `json:"can_advance"`
-	AdvanceReason   string       `json:"advance_reason,omitempty"`
+	Phase             CapitalPhase `json:"phase"`
+	PhaseStartDate    time.Time    `json:"phase_start_date"`
+	DaysInPhase       int          `json:"days_in_phase"`
+	TotalCapital      float64      `json:"total_capital"`
+	DeployedCapital   float64      `json:"deployed_capital"`
+	ReserveCash       float64      `json:"reserve_cash"`
+	RollingSharpe     float64      `json:"rolling_sharpe"`
+	MaxDrawdown       float64      `json:"max_drawdown"`
+	ConsecutiveLosses int          `json:"consecutive_losses"`
+	CanAdvance        bool         `json:"can_advance"`
+	AdvanceReason     string       `json:"advance_reason,omitempty"`
 }
 
 type RetailSentimentSnapshot struct {
