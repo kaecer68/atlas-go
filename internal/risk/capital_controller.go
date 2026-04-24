@@ -88,7 +88,6 @@ func (c *CapitalPhaseController) CalculateMaxPositionSize(totalCapital float64) 
 	return totalCapital * limit
 }
 
-// evaluateAdvanceCriteria checks min days, drawdown limit, and Sharpe threshold.
 func (c *CapitalPhaseController) evaluateAdvanceCriteria() (bool, string) {
 	daysInPhase := int(time.Since(c.config.PhaseStartDate).Hours() / 24)
 
@@ -102,6 +101,10 @@ func (c *CapitalPhaseController) evaluateAdvanceCriteria() (bool, string) {
 
 	if c.snapshot.RollingSharpe < c.config.SharpeThreshold {
 		return false, fmt.Sprintf("sharpe threshold not met: %.4f < %.4f", c.snapshot.RollingSharpe, c.config.SharpeThreshold)
+	}
+
+	if c.snapshot.ConsecutiveLosses >= 5 {
+		return false, fmt.Sprintf("consecutive loss limit exceeded: %d >= 5", c.snapshot.ConsecutiveLosses)
 	}
 
 	return true, "all criteria met"
@@ -145,7 +148,7 @@ func CalculateSharpeRatio(dailyReturns []float64) float64 {
 		diff := r - mean
 		variance += diff * diff
 	}
-	stdDev := math.Sqrt(variance / float64(len(dailyReturns)))
+	stdDev := math.Sqrt(variance / float64(len(dailyReturns)-1))
 
 	if stdDev == 0 {
 		return 0.0

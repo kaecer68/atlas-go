@@ -242,6 +242,23 @@ func TestCalculateSharpeRatio(t *testing.T) {
 	}
 }
 
+func TestCanAdvance_ConsecutiveLossesExceeded(t *testing.T) {
+	cfg := domain.DefaultCapitalPhaseConfig()
+	cfg.MinDaysPerPhase = 10
+	cfg.PhaseStartDate = time.Now().Add(-20 * 24 * time.Hour)
+	ctrl := NewCapitalPhaseController(cfg)
+	ctrl.UpdateMetrics(1.5, 0.05)
+	ctrl.snapshot.ConsecutiveLosses = 5
+
+	can, reason := ctrl.CanAdvance()
+	if can {
+		t.Error("expected CanAdvance to be false when consecutive losses exceeded")
+	}
+	if reason == "" {
+		t.Error("expected a reason when cannot advance due to consecutive losses")
+	}
+}
+
 func TestNextPhase_Progression(t *testing.T) {
 	expectedOrder := []domain.CapitalPhase{
 		domain.PhaseSimulation,

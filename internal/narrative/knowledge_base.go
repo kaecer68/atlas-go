@@ -575,6 +575,63 @@ func detectSeasonalEvent(data MarketNarrativeData) *NarrativeEvent {
 		}
 	}
 
+	if (month == 3 && day >= 1) || (month == 4 && day <= 15) {
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-blackout-%d", nowUnix()),
+			Theme:            "earnings_blackout",
+			Region:           "TW",
+			Sentiment:        0.1,
+			Confidence:       0.55,
+			ConfidenceSource: "calendar_seasonal",
+			HitRate:          0.55,
+			CapitalFlow:      "pre_earnings_positioning",
+			TimeWindow:       "1_month",
+			Timestamp:        now,
+			SourceData: map[string]float64{
+				"month": float64(month),
+				"day":   float64(day),
+			},
+		}
+	}
+
+	if (month == 7 && day >= 1) || (month == 8) || (month == 9 && day <= 15) {
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-tech-peak-%d", nowUnix()),
+			Theme:            "tech_peak_season",
+			Region:           "TW",
+			Sentiment:        0.5,
+			Confidence:       0.75,
+			ConfidenceSource: "calendar_seasonal",
+			HitRate:          0.75,
+			CapitalFlow:      "tech_capex_inflow",
+			TimeWindow:       "2_months",
+			Timestamp:        now,
+			SourceData: map[string]float64{
+				"month": float64(month),
+				"day":   float64(day),
+			},
+		}
+	}
+
+	if month == 11 || month == 12 {
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-yearend-%d", nowUnix()),
+			Theme:            "year_end_window_dressing",
+			Region:           "TW",
+			Sentiment:        0.2,
+			Confidence:       0.58,
+			ConfidenceSource: "calendar_seasonal",
+			HitRate:          0.58,
+			CapitalFlow:      "institutional_rebalancing",
+			TimeWindow:       "2_months",
+			Timestamp:        now,
+			SourceData: map[string]float64{
+				"month": float64(month),
+				"day":   float64(day),
+			},
+		}
+	}
+
 	return nil
 }
 

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
@@ -243,8 +244,6 @@ func collectRecommendations(registry domain.AgentRegistry, quotes map[string]dom
 	return recs, rejects
 }
 
-const vixMomentumCrashThreshold = 30.0
-
 func applyMomentumCrashProtection(recs []domain.Recommendation, quotes map[string]domain.Quote) []domain.Recommendation {
 	vix := 0.0
 	vixFound := false
@@ -259,7 +258,8 @@ func applyMomentumCrashProtection(recs []domain.Recommendation, quotes map[strin
 		log.Printf("[WARN] VIX not found in quotes; momentum crash protection disabled")
 		return recs
 	}
-	if vix <= vixMomentumCrashThreshold {
+	cfg := config.GetEngineConfig().Executors
+	if vix <= cfg.VIXMomentumCrashThreshold {
 		return recs
 	}
 
@@ -363,14 +363,15 @@ func applyCrowdingPenalty(recs []domain.Recommendation) []domain.Recommendation 
 		symbolAgents[rec.Symbol][rec.Agent] = struct{}{}
 	}
 
+	cfg := config.GetEngineConfig().Executors
 	out := make([]domain.Recommendation, len(recs))
 	for i, rec := range recs {
 		agents := symbolAgents[rec.Symbol]
 		penalty := 1.0
 		if len(agents) >= 4 {
-			penalty = 0.6
+			penalty = cfg.CrowdingPenaltyAgents4
 		} else if len(agents) >= 3 {
-			penalty = 0.75
+			penalty = cfg.CrowdingPenaltyAgents3
 		}
 		rec.Conviction = int(float64(rec.Conviction) * penalty)
 		out[i] = rec
@@ -407,15 +408,16 @@ func applyAntiCorrelationLayer(recs []domain.Recommendation, availableCash float
 		})
 	}
 
-	minTrade := 100000.0
-	maxStocks := 8
+	cfg := config.GetEngineConfig().Executors
+	minTrade := cfg.MinTradeAmount
+	maxStocks := cfg.MaxStocksDefault
 	if availableCash > 0 {
 		calculated := int(availableCash / minTrade)
-		if calculated < 5 {
-			calculated = 5
+		if calculated < cfg.MaxStocksMin {
+			calculated = cfg.MaxStocksMin
 		}
-		if calculated > 12 {
-			calculated = 12
+		if calculated > cfg.MaxStocksMax {
+			calculated = cfg.MaxStocksMax
 		}
 		maxStocks = calculated
 	}
@@ -466,8 +468,9 @@ func severityForControlAgent(agent domain.AgentSpec) domain.GuardSeverity {
 }
 
 func DefaultExecutionPolicy() domain.ExecutionPolicy {
+	cfg := config.GetEngineConfig().Executors
 	return domain.ExecutionPolicy{
-		ConvictionFloor:         50,
+		ConvictionFloor:         cfg.ConvictionFloorDefault,
 		RequireCROPass:          true,
 		MomentumCrashProtection: true,
 	}

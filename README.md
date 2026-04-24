@@ -97,10 +97,15 @@ go test ./internal/sim/...
 
 For the complete operating skill map and guardrails, see:
 
-- `docs/skills-map.md`
-- `docs/operations-playbook.md`
-- `docs/iteration-playbook.md`
-- `docs/evolution-loop.md`
+- `.claude/SKILLS-MAP.md` — **統一技能地圖入口**
+- `.claude/skills/atlas-core-architecture/SKILL.md` — 核心架構
+- `.claude/skills/atlas-macro-narrative/SKILL.md` — 宏觀敘事
+- `.claude/skills/atlas-risk-management/SKILL.md` — 風險管理
+- `.claude/skills/atlas-strategy-evolution/SKILL.md` — 策略進化
+- `.claude/skills/atlas-operations-guide/SKILL.md` — 操作指南
+- `docs/operations-playbook.md` — 操作手冊
+- `docs/iteration-playbook.md` — 迭代指南
+- `docs/evolution-loop.md` — 演化循環
 
 ## Repository Structure
 

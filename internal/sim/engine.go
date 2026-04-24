@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
@@ -316,7 +317,7 @@ func (e *Engine) executeOptimizerBuys(
 	maxDeployableCash := cash * (1 - e.constraints.ReserveCashFraction)
 	maxPositionWeight := e.constraints.MaxPositionWeight
 	if regime == domain.RegimeNeutral {
-		maxPositionWeight = maxPositionWeight * 0.85
+		maxPositionWeight = maxPositionWeight * config.GetEngineConfig().Simulation.NeutralRegimeSizingFactor
 	}
 	maxPerPosition := maxDeployableCash * maxPositionWeight
 
@@ -401,7 +402,7 @@ func (e *Engine) executeLegacyBuys(
 	maxDeployableCash := cash * (1 - e.constraints.ReserveCashFraction)
 	maxPositionWeight := e.constraints.MaxPositionWeight
 	if regime == domain.RegimeNeutral {
-		maxPositionWeight = maxPositionWeight * 0.85
+		maxPositionWeight = maxPositionWeight * config.GetEngineConfig().Simulation.NeutralRegimeSizingFactor
 	}
 	maxPerPosition := maxDeployableCash * maxPositionWeight
 

@@ -2,6 +2,7 @@ package experiment
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -394,5 +395,45 @@ func TestPassesAcceptanceReportsNoConstraintDeltaWhenEqual(t *testing.T) {
 	}
 	if note != "rejected: candidate score equals baseline (no constraint delta applied)" {
 		t.Fatalf("expected explicit no-delta note, got: %s", note)
+	}
+}
+
+func TestWelchTTest(t *testing.T) {
+	baseline := []float64{0.01, 0.02, 0.015, 0.01, 0.02, 0.01, 0.015, 0.01, 0.02, 0.01}
+	candidate := []float64{0.02, 0.03, 0.025, 0.02, 0.03, 0.02, 0.025, 0.02, 0.03, 0.02}
+
+	tStat, df := welchTTest(baseline, candidate)
+	if tStat <= 0 {
+		t.Fatalf("expected positive t-statistic for better candidate, got %.4f", tStat)
+	}
+	if df <= 0 {
+		t.Fatalf("expected positive degrees of freedom, got %.4f", df)
+	}
+}
+
+func TestWelchTTestInsufficientData(t *testing.T) {
+	baseline := []float64{0.01}
+	candidate := []float64{0.02}
+
+	tStat, df := welchTTest(baseline, candidate)
+	if tStat != 0 {
+		t.Fatalf("expected t-statistic=0 for insufficient data, got %.4f", tStat)
+	}
+	if df != 0 {
+		t.Fatalf("expected df=0 for insufficient data, got %.4f", df)
+	}
+}
+
+func TestMeanAndVariance(t *testing.T) {
+	data := []float64{1.0, 2.0, 3.0, 4.0, 5.0}
+	mean, variance := meanAndVariance(data)
+
+	if mean != 3.0 {
+		t.Fatalf("expected mean=3.0, got %.4f", mean)
+	}
+
+	expectedVariance := 2.5
+	if math.Abs(variance-expectedVariance) > 0.0001 {
+		t.Fatalf("expected variance=%.4f, got %.4f", expectedVariance, variance)
 	}
 }

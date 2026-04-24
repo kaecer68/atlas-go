@@ -46,7 +46,7 @@ func main() {
 	system := orchestrator.NewProductionSystem(cfg)
 	stateStore := live.NewStateStore(liveStateDir)
 	eventBus := live.NewChannelEventBus(64)
-	provider := marketdata.NewTWSEProvider()
+	provider := marketdata.NewMockProvider()
 
 	liveCfg := live.DefaultOrchestratorConfig()
 	liveCfg.MarketOpenTime = "00:00"

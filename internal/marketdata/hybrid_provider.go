@@ -91,6 +91,12 @@ func (p *HybridProvider) hasInvalidQuotes(quotes []domain.Quote) bool {
 		if q.Last == 0 && q.Open == 0 && q.High == 0 && q.Low == 0 {
 			return true
 		}
+		if q.Last < 0 || q.Open < 0 || q.High < 0 || q.Low < 0 {
+			return true
+		}
+		if q.Volume < 0 {
+			return true
+		}
 	}
 	return false
 }

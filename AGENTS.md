@@ -189,12 +189,39 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 - `.github/instructions/live-trading.guardrails.instructions.md` — Live trading 邊界
 - `.github/copilot-instructions.md` — 綜合入口與常見工作流程
 
-進一步架構與操作細節請參考 `docs/` 目錄（繁體中文為主）。
+## 技能地圖與 AI 代理指南
+
+**所有 AI 代理在進行任何程式修改前，必須先閱讀以下文件以理解系統架構與設計意圖：**
+
+### 統一入口
+- `.claude/SKILLS-MAP.md` — **唯一技能地圖入口**，包含所有技能的位置、職責與使用時機
+
+### 核心技能（依任務類型）
+- **架構相關**: `.claude/skills/atlas-core-architecture/SKILL.md`
+- **宏觀敘事**: `.claude/skills/atlas-macro-narrative/SKILL.md`
+- **風險管理**: `.claude/skills/atlas-risk-management/SKILL.md`
+- **策略進化**: `.claude/skills/atlas-strategy-evolution/SKILL.md`
+- **操作指南**: `.claude/skills/atlas-operations-guide/SKILL.md`
+
+### 補充文件（詳細規格）
+- `docs/architecture.md` — 架構詳細說明
+- `docs/ai-agent-architecture.md` — AI 代理架構
+- `docs/operations-playbook.md` — 操作手冊
+- `docs/iteration-playbook.md` — 迭代指南
+- `docs/evolution-loop.md` — 演化循環
+- `docs/roadmap.md` — 開發路線圖
+
+> **文件優先順序**（當內容衝突時）：
+> 1. `.claude/SKILLS-MAP.md`
+> 2. `.claude/skills/atlas-*/SKILL.md`
+> 3. `AGENTS.md`
+> 4. `docs/*.md`
+> 5. 原始碼（最終真理來源）
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas** (7454 symbols, 19716 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas** (8307 symbols, 21920 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

@@ -98,6 +98,36 @@ func TestControlLayerHardGuardCanBlockAllRecommendations(t *testing.T) {
 	}
 }
 
+func TestCRORiskExecutorDynamicConcentrationThreshold(t *testing.T) {
+	executor := CRORiskExecutor{}
+	agent := domain.AgentSpec{ID: "cro-01", Skill: "cro_risk"}
+
+	recs := []domain.Recommendation{
+		{Agent: "a", Skill: "semiconductor", Symbol: "2330.TW", Conviction: 80, Side: domain.SideBuy, Reason: "r1"},
+		{Agent: "b", Skill: "semiconductor", Symbol: "2317.TW", Conviction: 75, Side: domain.SideBuy, Reason: "r2"},
+		{Agent: "c", Skill: "semiconductor", Symbol: "2454.TW", Conviction: 70, Side: domain.SideBuy, Reason: "r3"},
+		{Agent: "d", Skill: "semiconductor", Symbol: "2303.TW", Conviction: 65, Side: domain.SideBuy, Reason: "r4"},
+		{Agent: "e", Skill: "financials", Symbol: "2884.TW", Conviction: 60, Side: domain.SideBuy, Reason: "r5"},
+		{Agent: "f", Skill: "financials", Symbol: "2891.TW", Conviction: 55, Side: domain.SideBuy, Reason: "r6"},
+		{Agent: "g", Skill: "shipping", Symbol: "2603.TW", Conviction: 50, Side: domain.SideBuy, Reason: "r7"},
+		{Agent: "h", Skill: "consumer", Symbol: "2912.TW", Conviction: 50, Side: domain.SideBuy, Reason: "r8"},
+		{Agent: "i", Skill: "consumer", Symbol: "1229.TW", Conviction: 50, Side: domain.SideBuy, Reason: "r9"},
+		{Agent: "j", Skill: "consumer", Symbol: "1707.TW", Conviction: 50, Side: domain.SideBuy, Reason: "r10"},
+		{Agent: "k", Skill: "consumer", Symbol: "2207.TW", Conviction: 50, Side: domain.SideBuy, Reason: "r11"},
+	}
+
+	out := executor.Apply(agent, recs, DefaultExecutionPolicy())
+	if len(out) == 0 {
+		t.Fatal("expected some recommendations to pass")
+	}
+
+	for _, rec := range out {
+		if rec.Conviction < 50 {
+			t.Fatalf("expected all convictions to be >= 50 after CRO filtering, got %d for %s", rec.Conviction, rec.Symbol)
+		}
+	}
+}
+
 func TestCIOPortfolioExecutorDeterministicTieBreak(t *testing.T) {
 	executor := CIOPortfolioExecutor{}
 	agent := domain.AgentSpec{ID: "cio-01", Skill: "cio_portfolio"}

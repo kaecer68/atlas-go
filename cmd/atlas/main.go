@@ -165,6 +165,19 @@ func run(args []string, deps appDeps) error {
 			alertAPI.RegisterRoutes(mux)
 		}
 
+		mux.HandleFunc("/admin/reload-config", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			cfg, err := config.ReloadEngineConfig()
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Failed to reload config: %v", err), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"status":"ok","version":"%s"}`+"\n", cfg.Version)
+		})
 		mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
 		sysMetrics := monitoring.NewSystemMetrics(collector, monitoring.NewMonitor())
 		go sysMetrics.Start(context.Background())
@@ -175,6 +188,7 @@ func run(args []string, deps appDeps) error {
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 			d.RegisterPhase3Routes(mux)
 			d.RegisterBacktestRoutes(mux)
+			d.RegisterIndustryRoutes(mux)
 		}
 		if *swaggerMode {
 			dashboard.RegisterSwaggerRoutes(mux)
@@ -422,7 +436,7 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 
 	stateStore := live.NewStateStore("data/state/live")
 	eventBus := live.NewChannelEventBus(64)
-	provider := marketdata.NewTWSEProvider()
+	provider := marketdata.NewMockProvider()
 
 	liveCfg := live.DefaultOrchestratorConfig()
 	liveCfg.BrokerMode = cfg.BrokerMode
@@ -484,6 +498,7 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		d.RegisterSwaggerRoutes(mux)
 		d.RegisterPhase3Routes(mux)
 		d.RegisterLiveRoutes(mux)
+		d.RegisterIndustryRoutes(mux)
 	}
 	mux.Handle("/", http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static"))))
 	apiAddr := ":8080"
