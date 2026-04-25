@@ -9,16 +9,18 @@
 
   :root {
     --bg: #0b0d11; --panel: #13161c; --border: #242a33; --text: #e8ecf1; --muted: #9aa5b8;
-    --accent: #4fc1ff; --up: #26a17b; --down: #d93a3a; --warn: #f5a623;
+    --accent: #4fc1ff; --up: var(--color-success); --down: var(--color-danger); --warn: var(--color-warning);
     --primary: #1f6feb; --danger: #da3633;
+    --color-success: #10b981; --color-danger: #ef4444; --color-warning: #f59e0b; --color-info: #3b82f6;
     --space-xs: 4px; --space-sm: 8px; --space-md: 14px; --space-lg: 20px; --space-xl: 32px;
     --layer-1: #3b82f6; --layer-2: #8b5cf6; --layer-3: #10b981; --layer-4: #f59e0b; --layer-5: #ef4444; --layer-6: #6366f1;
-    --status-ok: #10b981; --status-warn: #f59e0b; --status-err: #ef4444; --status-unknown: #9ca3af;
+    --status-ok: var(--color-success); --status-warn: var(--color-warning); --status-err: var(--color-danger); --status-unknown: #9ca3af;
   }
   :root[data-theme="light"] {
     --bg: #f5f5f5; --panel: #ffffff; --border: #e0e0e0; --text: #1a1a1a; --muted: #666666;
-    --accent: #0066cc; --up: #2e7d32; --down: #c62828; --warn: #ed6c02;
+    --accent: #0066cc; --up: var(--color-success); --down: var(--color-danger); --warn: var(--color-warning);
     --primary: #1976d2; --danger: #d32f2f;
+    --color-success: #16a34a; --color-danger: #dc2626; --color-warning: #ea580c; --color-info: #2563eb;
   }
   * { box-sizing: border-box; }
   *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -35,7 +37,7 @@
   .container { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); padding: var(--space-md); }
   @media (max-width: 1100px) { .container { grid-template-columns: 1fr; } }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: var(--space-md); }
-  .panel h2 { margin: 0 0 10px; font-size: 15px; color: var(--accent); }
+  .panel h2 { margin: 0 0 10px; font-size: 17px; font-weight: 600; color: var(--accent); }
   .panel.wide { grid-column: 1 / -1; }
   .metric { display: inline-block; margin: 4px 10px 4px 0; }
   .metric .label { font-size: 11px; color: var(--muted); }
@@ -117,7 +119,7 @@
 /* Sidebar + SPA Layout */
 body { display: flex; margin: 0; min-height: 100vh; }
 #sidebar {
-  width: 144px;
+  width: 170px;
   background: var(--panel);
   border-right: 1px solid var(--border);
   display: flex;
@@ -143,6 +145,9 @@ body { display: flex; margin: 0; min-height: 100vh; }
   text-decoration: none;
   border-left: 3px solid transparent;
   cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 #sidebar nav a:hover { background: rgba(255,255,255,.03); }
 #sidebar nav a.active {
@@ -159,7 +164,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
 #sidebar .foot a { color: var(--accent); text-decoration: none; }
 
 #main {
-  margin-left: 144px;
+  margin-left: 170px;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -243,11 +248,6 @@ body { display: flex; margin: 0; min-height: 100vh; }
   #menuToggle { display: inline-block; }
 }
 
-@media (min-width: 768px) and (max-width: 900px) {
-  #sidebar { width: 200px; }
-  #main { margin-left: 200px; }
-}
-
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading::before {
   content: "";
@@ -261,9 +261,276 @@ body { display: flex; margin: 0; min-height: 100vh; }
   vertical-align: middle;
 }
 
+/* Skeleton screens */
+@keyframes skeletonShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--border) 25%, rgba(255,255,255,.08) 50%, var(--border) 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.5s ease-in-out infinite;
+  border-radius: 4px;
+}
+.skeleton-line { height: 12px; margin-bottom: 8px; }
+.skeleton-line:last-child { width: 60%; }
+.skeleton-block { height: 60px; margin-bottom: 12px; }
+.skeleton-title { height: 18px; width: 40%; margin-bottom: 12px; }
+.skeleton-text { height: 12px; width: 80%; margin-bottom: 6px; }
+
+/* Loading indicator */
+#loadingBar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: transparent;
+  z-index: 9999;
+  pointer-events: none;
+}
+#loadingBar.active {
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: loadingSlide 1.2s ease-in-out infinite;
+}
+@keyframes loadingSlide {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Notification type colors */
+.notification.type-error { border-left: 3px solid var(--color-danger); }
+.notification.type-error .notif-icon { color: var(--color-danger); }
+.notification.type-warning { border-left: 3px solid var(--color-warning); }
+.notification.type-warning .notif-icon { color: var(--color-warning); }
+.notification.type-info { border-left: 3px solid var(--color-info); }
+.notification.type-info .notif-icon { color: var(--color-info); }
+.notification.type-success { border-left: 3px solid var(--color-success); }
+.notification.type-success .notif-icon { color: var(--color-success); }
+
+/* Refresh pill badge */
+.refresh-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: default;
+}
+.refresh-pill .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--color-success);
+  animation: pulseDot 2s ease-in-out infinite;
+}
+.refresh-pill.paused .dot { background: var(--color-warning); animation: none; }
+.refresh-pill.error .dot { background: var(--color-danger); animation: none; }
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .3; }
+}
+.refresh-pill button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+  margin-left: 4px;
+}
+.refresh-pill button:hover { text-decoration: underline; }
+
+/* Error banner */
+.error-banner {
+  background: rgba(239,68,68,.1);
+  border: 1px solid var(--color-danger);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 10px 0;
+  font-size: 12px;
+  color: var(--color-danger);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.error-banner .retry-btn {
+  background: var(--color-danger);
+  color: #fff;
+  border: none;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  margin-left: auto;
+}
+
+/* Table pagination */
+.table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.table-pagination button {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.table-pagination button:disabled { opacity: .4; cursor: not-allowed; }
+.table-pagination button:hover:not(:disabled) { border-color: var(--accent); }
+
+/* Mobile touch targets */
+@media (max-width: 900px) {
+  .control-group button, .control-group input, .control-group select {
+    min-height: 44px;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+  #sidebar nav a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+  .pipeline-action { min-height: 44px; padding: 8px 12px; }
+  .refresh { min-height: 44px; min-width: 44px; }
+  .table-scroll-hint {
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    padding: 4px 0;
+  }
+  .table-scroll-hint::after { content: ' ← 左右滑動 →'; }
+}
+@media (min-width: 768px) and (max-width: 900px) {
+  #sidebar { width: 200px; }
+  #main { margin-left: 200px; }
+}
+
+/* Typography improvements */
+.panel h3 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
+.text-caption { font-size: 11px; color: var(--muted); }
+.text-body { font-size: 13px; }
+.text-heading { font-size: 17px; font-weight: 600; }
+
+/* Filter panel */
+.filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.filter-toggle:hover { border-color: var(--accent); background: rgba(79,193,255,.05); }
+.filter-toggle.active { border-color: var(--accent); color: var(--accent); background: rgba(79,193,255,.08); }
+.filter-toggle .icon { font-size: 14px; }
+.filter-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin: 10px 0;
+  display: none;
+}
+.filter-panel.open { display: block; }
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+.filter-group label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.filter-group input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text);
+  transition: border-color .15s;
+}
+.filter-group input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(79,193,255,.15);
+}
+.filter-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.filter-actions button {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 12px;
+  border-radius: 5px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.filter-actions button:hover { border-color: var(--accent); }
+.filter-actions button.primary { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 600; }
+.filter-actions button.primary:hover { opacity: .9; }
+.filter-active-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(79,193,255,.1);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+.filter-active-badge::before { content: '●'; animation: pulseDot 1.5s infinite; }
+
+/* Empty state with guidance */
+.empty-state-guidance {
+  text-align: center;
+  padding: 24px 16px;
+  color: var(--muted);
+}
+.empty-state-guidance .icon { font-size: 32px; margin-bottom: 8px; opacity: .5; }
+.empty-state-guidance .title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.empty-state-guidance .desc { font-size: 12px; margin-bottom: 12px; }
+.empty-state-guidance .action { font-size: 11px; color: var(--accent); }
+
 </style>
 </head>
 <body>
+
+<div id="loadingBar"></div>
 
 <aside id="sidebar" role="complementary" aria-label="側邊導航">
   <div class="brand">
@@ -272,19 +539,19 @@ body { display: flex; margin: 0; min-height: 100vh; }
     <button class="theme-toggle" onclick="toggleTheme()" title="切換主題">🌓</button>
   </div>
   <nav role="navigation" aria-label="主要導航">
-    <a class="active" data-page="overview" onclick="switchPage('overview')">總覽</a>
-    <a data-page="narrative" onclick="switchPage('narrative')">宏觀敘事</a>
-    <a data-page="live" onclick="switchPage('live')">相對趨勢</a>
-    <a data-page="pipeline" onclick="switchPage('pipeline')">投資管線</a>
-    <a data-page="decision" onclick="switchPage('decision')">決策鏈</a>
-    <a data-page="agents" onclick="switchPage('agents')">AI 觀測台</a>
-    <a data-page="experiments" onclick="switchPage('experiments')">模擬交易</a>
-    <a data-page="reports" onclick="switchPage('reports')">最新回測</a>
-    <a data-page="controls" onclick="switchPage('controls')">控制與稽核</a>
-    <a data-page="datachannels" onclick="switchPage('datachannels')">信息通道</a>
-    <a data-page="alerts" onclick="switchPage('alerts')">系統警報</a>
-    <a data-page="metrics" onclick="switchPage('metrics')">指標監控</a>
-    <a data-page="industry" onclick="switchPage('industry')">產業生態系</a>
+    <a class="active" data-page="overview" onclick="switchPage('overview')" tabindex="0" title="總覽">總覽</a>
+    <a data-page="narrative" onclick="switchPage('narrative')" tabindex="0" title="宏觀敘事">宏觀敘事</a>
+    <a data-page="live" onclick="switchPage('live')" tabindex="0" title="相對趨勢">相對趨勢</a>
+    <a data-page="pipeline" onclick="switchPage('pipeline')" tabindex="0" title="投資管線">投資管線</a>
+    <a data-page="decision" onclick="switchPage('decision')" tabindex="0" title="決策鏈">決策鏈</a>
+    <a data-page="agents" onclick="switchPage('agents')" tabindex="0" title="AI 觀測台">AI 觀測台</a>
+    <a data-page="experiments" onclick="switchPage('experiments')" tabindex="0" title="模擬交易">模擬交易</a>
+    <a data-page="reports" onclick="switchPage('reports')" tabindex="0" title="最新回測">最新回測</a>
+    <a data-page="controls" onclick="switchPage('controls')" tabindex="0" title="控制與稽核">控制與稽核</a>
+    <a data-page="datachannels" onclick="switchPage('datachannels')" tabindex="0" title="信息通道">信息通道</a>
+    <a data-page="alerts" onclick="switchPage('alerts')" tabindex="0" title="系統警報">系統警報</a>
+    <a data-page="metrics" onclick="switchPage('metrics')" tabindex="0" title="指標監控">指標監控</a>
+    <a data-page="industry" onclick="switchPage('industry')" tabindex="0" title="產業生態系">產業生態系</a>
   </nav>
   <div class="foot">
     <span class="text-muted">v8 · 統一介面</span>
@@ -297,7 +564,11 @@ body { display: flex; margin: 0; min-height: 100vh; }
       <button id="menuToggle" onclick="toggleSidebar()">☰</button>
       <h2 id="pageTitle">總覽</h2>
     </div>
-    <div class="meta" id="lastRefresh">-</div>
+    <div class="refresh-pill" id="refreshPill">
+      <span class="dot"></span>
+      <span id="refreshTime">等待更新…</span>
+      <button id="refreshToggle" onclick="toggleAutoRefresh()" title="暫停/恢復自動刷新" style="margin-left:6px;background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px">⏸</button>
+    </div>
   </div>
 
   <div id="content">
@@ -355,6 +626,51 @@ body { display: flex; margin: 0; min-height: 100vh; }
         <div class="step">控制層</div><span class="arrow">→</span>
         <div class="step">模擬投組</div>
       </div>
+      <button class="filter-toggle" id="filterToggle" onclick="toggleFilterPanel()" title="點擊展開/收合進階篩選">
+        <span class="icon">⚙</span> 進階篩選
+        <span id="filterBadge"></span>
+      </button>
+      <div class="filter-panel" id="filterPanel">
+        <div class="filter-row">
+          <div class="filter-group">
+            <label>P/E 比（最小～最大）</label>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="number" id="peMin" placeholder="0" min="0" step="0.1" aria-label="P/E 最小值">
+              <span style="color:var(--muted);font-size:11px">～</span>
+              <input type="number" id="peMax" placeholder="無上限" min="0" step="0.1" aria-label="P/E 最大值">
+            </div>
+          </div>
+          <div class="filter-group">
+            <label>P/B 比（最小～最大）</label>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="number" id="pbMin" placeholder="0" min="0" step="0.1" aria-label="P/B 最小值">
+              <span style="color:var(--muted);font-size:11px">～</span>
+              <input type="number" id="pbMax" placeholder="無上限" min="0" step="0.1" aria-label="P/B 最大值">
+            </div>
+          </div>
+          <div class="filter-group">
+            <label>股息率（最小～最大）%</label>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="number" id="dyMin" placeholder="0" min="0" step="0.1" aria-label="股息率最小值">
+              <span style="color:var(--muted);font-size:11px">～</span>
+              <input type="number" id="dyMax" placeholder="無上限" min="0" step="0.1" aria-label="股息率最大值">
+            </div>
+          </div>
+          <div class="filter-group">
+            <label>報酬率範圍 %</label>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="number" id="retMin" placeholder="-100" step="0.1" aria-label="報酬率最小值">
+              <span style="color:var(--muted);font-size:11px">～</span>
+              <input type="number" id="retMax" placeholder="100" step="0.1" aria-label="報酬率最大值">
+            </div>
+          </div>
+        </div>
+        <div class="filter-actions">
+          <button class="primary" onclick="applyFilters()">套用篩選</button>
+          <button onclick="clearFilters()">清除條件</button>
+          <span id="filterResultCount" style="margin-left:auto;font-size:11px;color:var(--muted)"></span>
+        </div>
+      </div>
       <div class="panel wide help-panel">
         <strong>如何解讀本頁：</strong>
         以下為最新回測場次中，<strong>控制層已放行的推薦標的</strong>。每筆資料包含策略來源、方向、收盤價與隔日回測報酬。價量標籤與推薦理由供您快速評估是否放行。
@@ -403,9 +719,9 @@ body { display: flex; margin: 0; min-height: 100vh; }
         <h2>啟動回測</h2>
         <div class="control-group">
           <label class="label-muted" for="backtestStart">開始</label>
-          <input type="date" id="backtestStart" aria-label="回測開始日期" value="2026-03-26">
+          <input type="date" id="backtestStart" aria-label="回測開始日期">
           <label class="label-muted" for="backtestEnd">結束</label>
-          <input type="date" id="backtestEnd" aria-label="回測結束日期" value="2026-03-27">
+          <input type="date" id="backtestEnd" aria-label="回測結束日期">
           <button class="primary" onclick="runBacktest()">啟動回測</button>
           <span id="backtestStatusText" class="text-muted text-sm"></span>
         </div>
@@ -511,6 +827,9 @@ body { display: flex; margin: 0; min-height: 100vh; }
         <strong>如何解讀本頁：</strong>
         本頁呈現 Atlas 系統的<strong>即時運行指標</strong>，包含篩選率、警報觸發率、資金階段等關鍵數據。
         這些指標幫助你了解系統運行狀態，及時發現異常。
+        <span style="color:var(--muted);font-size:12px;display:block;margin-top:6px">
+          注意：篩選統計與警報計數為記憶體內累計值，系統重啟後歸零。當系統持續運行並處理資料時，指標將自動累積。
+        </span>
       </div>
       <div class="grid cols-3" id="metricsKPI">
         <div class="panel">
@@ -537,7 +856,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
   </div>
 </div>
 
-<button class="refresh" onclick="loadAll()" title="每 30 秒自動更新">🔄 重新整理</button>
+<button class="refresh" onclick="loadAll()" title="手動重新整理">🔄 重新整理</button>
 
 <div class="notification-center" id="notificationCenter" role="status" aria-live="polite" aria-label="通知中心"></div>
 
@@ -581,6 +900,8 @@ body { display: flex; margin: 0; min-height: 100vh; }
 
 <script>
 
+const pageLoadStatus = {};
+
 function switchPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
@@ -605,6 +926,11 @@ function switchPage(id) {
   document.getElementById('pageTitle').textContent = titles[id] || id;
   // Close mobile sidebar
   document.getElementById('sidebar').classList.remove('open');
+  // Lazy load page data
+  if (!pageLoadStatus[id]) {
+    pageLoadStatus[id] = true;
+    loadPageData(id);
+  }
 }
 
 function toggleSidebar() {
@@ -878,19 +1204,129 @@ function escapeHtml(text) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
-async function getJSON(url) { const r = await fetch(url); if (!r.ok) throw new Error(r.status); return r.json(); }
-async function postJSON(url, body) { const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (!r.ok) throw new Error(r.status); return r.json(); }
+async function getJSON(url) {
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  } catch (err) {
+    if (err.message && !err.message.includes('404')) {
+      notify(`載入失敗: ${url.split('/').pop()} - ${err.message}`, 'error');
+    }
+    throw err;
+  }
+}
+async function postJSON(url, body) {
+  try {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  } catch (err) {
+    notify(`操作失敗: ${url.split('/').pop()} - ${err.message}`, 'error');
+    throw err;
+  }
+}
 
 function notify(msg, type='info') {
   const nc = document.getElementById('notificationCenter');
-  const n = document.createElement('div'); n.className = 'notification';
-  n.innerHTML = `<span class="close" onclick="this.parentElement.remove()">×</span><div>${msg}</div>`;
+  const n = document.createElement('div');
+  const typeClass = type === 'error' ? 'type-error' : type === 'warning' ? 'type-warning' : type === 'success' ? 'type-success' : 'type-info';
+  const icon = type === 'error' ? '✕' : type === 'warning' ? '⚠' : type === 'success' ? '✓' : 'ℹ';
+  n.className = `notification ${typeClass}`;
+  n.innerHTML = `<span class="notif-icon">${icon}</span><span class="close" onclick="this.parentElement.remove()">×</span><div>${msg}</div>`;
   nc.appendChild(n);
   setTimeout(() => n.remove(), 8000);
 }
 
 function formatDate(d) { return d ? new Date(d).toLocaleString('zh-TW') : '-'; }
 function fmt(num, digits=3) { return (num ?? 0).toFixed(digits); }
+
+function initBacktestDates() {
+  const today = new Date();
+  // Find most recent trading day (Monday=1 to Friday=5)
+  const mostRecentTradingDay = new Date(today);
+  while (mostRecentTradingDay.getDay() === 0 || mostRecentTradingDay.getDay() === 6) {
+    mostRecentTradingDay.setDate(mostRecentTradingDay.getDate() - 1);
+  }
+  // Default to 5 trading days back
+  const fiveTradingDaysAgo = new Date(mostRecentTradingDay);
+  let daysBack = 0;
+  while (daysBack < 5) {
+    fiveTradingDaysAgo.setDate(fiveTradingDaysAgo.getDate() - 1);
+    if (fiveTradingDaysAgo.getDay() !== 0 && fiveTradingDaysAgo.getDay() !== 6) {
+      daysBack++;
+    }
+  }
+  const fmt2 = (d) => d.toISOString().split('T')[0];
+  const startEl = document.getElementById('backtestStart');
+  const endEl = document.getElementById('backtestEnd');
+  if (startEl) startEl.value = fmt2(fiveTradingDaysAgo);
+  if (endEl) endEl.value = fmt2(mostRecentTradingDay);
+}
+
+// CSV export utility
+function exportTableToCSV(tableId, filename) {
+  const table = document.getElementById(tableId);
+  if (!table) { notify('找不到表格', 'error'); return; }
+  const rows = table.querySelectorAll('tr');
+  if (!rows.length) { notify('表格無資料', 'warning'); return; }
+  let csv = [];
+  rows.forEach(row => {
+    const cells = row.querySelectorAll('th, td');
+    const vals = [];
+    cells.forEach(cell => {
+      let text = cell.textContent.trim().replace(/"/g, '""');
+      vals.push(`"${text}"`);
+    });
+    csv.push(vals.join(','));
+  });
+  const blob = new Blob(['\uFEFF' + csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename || 'export.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  notify('CSV 匯出完成', 'success');
+}
+
+// Table pagination utility
+function paginateTable(containerId, rows, pageSize=50) {
+  const container = document.getElementById(containerId);
+  if (!container || rows.length <= pageSize) return null;
+  const totalPages = Math.ceil(rows.length / pageSize);
+  const paginationDiv = document.createElement('div');
+  paginationDiv.className = 'table-pagination';
+  paginationDiv.innerHTML = `
+    <span>顯示 <strong>1-${pageSize}</strong> / 共 <strong>${rows.length}</strong> 筆</span>
+    <div style="display:flex;gap:6px">
+      <button disabled id="prevPageBtn">‹ 上一頁</button>
+      <span id="pageInfo" style="line-height:24px">1 / ${totalPages}</span>
+      <button id="nextPageBtn">下一頁 ›</button>
+    </div>
+  `;
+  let currentPage = 0;
+  const updatePage = (page) => {
+    currentPage = page;
+    const start = page * pageSize;
+    const end = Math.min(start + pageSize, rows.length);
+    const visibleRows = rows.slice(start, end);
+    container.innerHTML = '';
+    visibleRows.forEach(r => container.appendChild(r));
+    const info = document.getElementById('pageInfo');
+    const prevBtn = document.getElementById('prevPageBtn');
+    const nextBtn = document.getElementById('nextPageBtn');
+    if (info) info.textContent = `${page + 1} / ${totalPages}`;
+    if (prevBtn) { prevBtn.disabled = page === 0; prevBtn.onclick = () => updatePage(page - 1); }
+    if (nextBtn) { nextBtn.disabled = page >= totalPages - 1; nextBtn.onclick = () => updatePage(page + 1); }
+    const span = paginationDiv.querySelector('span');
+    if (span) span.innerHTML = `顯示 <strong>${start + 1}-${end}</strong> / 共 <strong>${rows.length}</strong> 筆`;
+  };
+  paginationDiv.querySelector('#prevPageBtn').onclick = () => updatePage(currentPage - 1);
+  paginationDiv.querySelector('#nextPageBtn').onclick = () => updatePage(currentPage + 1);
+  updatePage(0);
+  return paginationDiv;
+}
 
 // Simple markdown-to-HTML
 function mdToHtml(md) {
@@ -905,9 +1341,55 @@ function mdToHtml(md) {
 }
 
 
+function renderEmptyState(message, action, hint) {
+  return `<div class="empty-state-guidance">
+    <div class="icon">📭</div>
+    <div class="title">${message}</div>
+    ${hint ? `<div class="desc">${hint}</div>` : ''}
+    ${action ? `<div class="action">${action}</div>` : ''}
+  </div>`;
+}
+
+function renderSkeleton(lines=4) {
+  let html = '';
+  for (let i = 0; i < lines; i++) {
+    const w = Math.random() * 30 + 50;
+    html += `<div class="skeleton skeleton-line" style="width:${w}%"></div>`;
+  }
+  return `<div class="skeleton-block"></div><div style="padding:8px">${html}</div>`;
+}
+
+function showSkeletons() {
+  // Show skeleton loading states for major panels
+  const panels = [
+    { id: 'recommendationPipeline', lines: 6 },
+    { id: 'decisionChain', lines: 8 },
+    { id: 'agentObservatory', lines: 5 },
+    { id: 'universeOverlap', lines: 4 },
+    { id: 'experimentInbox', lines: 4 },
+    { id: 'backtestReport', lines: 6 },
+    { id: 'aiEvolution', lines: 4 },
+    { id: 'liveStatus', lines: 4 },
+    { id: 'narrativeMacro', lines: 3 },
+    { id: 'narrativeStress', lines: 3 },
+    { id: 'narrativeEvents', lines: 5 },
+    { id: 'narrativeChains', lines: 5 },
+    { id: 'narrativeModels', lines: 4 },
+    { id: 'dataChannels', lines: 4 },
+    { id: 'alerts', lines: 4 },
+  ];
+  panels.forEach(p => {
+    const el = document.getElementById(p.id);
+    if (el && el.classList.contains('loading')) {
+      el.innerHTML = renderSkeleton(p.lines);
+      el.classList.remove('loading');
+    }
+  });
+}
+
 function renderInbox(data) {
   const el = document.getElementById('experimentInbox');
-  if (!data) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
+  if (!data) { el.innerHTML = renderEmptyState('尚無實驗資料', '執行「go run ./cmd/execute-experiment -brief <file>」後將自動顯示'); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
   const pending = data.pending_judges || [];
   const promotes = data.pending_promotes || [];
@@ -936,18 +1418,18 @@ function renderInbox(data) {
   el.innerHTML = `
     <div class="inbox-col">
       <h3>待評判 (${pending.length})</h3>
-      ${pending.length ? pending.map(p => card(p).replace('${item._actions || \'\'}', judgeActions(p.experiment_id))).join('') : '<div class="empty">無待評判實驗</div>'}
+      ${pending.length ? pending.map(p => card(p).replace('${item._actions || \'\'}', judgeActions(p.experiment_id))).join('') : renderEmptyState('無待評判實驗', '執行實驗後將自動顯示')}
     </div>
     <div class="inbox-col">
       <h3>待晉升 (${promotes.length})</h3>
-      ${promotes.length ? promotes.map(p => card(p).replace('${item._actions || \'\'}', promoteActions(p.experiment_id))).join('') : '<div class="empty">無待晉升實驗</div>'}
+      ${promotes.length ? promotes.map(p => card(p).replace('${item._actions || \'\'}', promoteActions(p.experiment_id))).join('') : renderEmptyState('無待晉升實驗', '評判通過後將自動顯示')}
     </div>
     <div class="inbox-col">
       <h3>近期歷史 (${history.length})</h3>
       ${history.length ? history.map(h => {
         const extra = h.status === 'rejected' && h.reject_reason ? `原因: ${h.reject_reason}` : '';
         return card(h, extra).replace('${item._actions || \'\'}', histBadge(h.status, h.reject_reason));
-      }).join('') : '<div class="empty">無歷史紀錄</div>'}
+      }).join('') : renderEmptyState('無歷史紀錄', '')}
     </div>
   `;
 
@@ -971,7 +1453,7 @@ function computePipelineSummary(guardOutcomes) {
 
 function renderMacroRadar(data, pipelineData) {
   const el = document.getElementById('macroRadar');
-  if (!data || !data.session_id) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
+  if (!data || !data.session_id) { el.innerHTML = renderEmptyState('尚無回測資料', '執行回測後將自動顯示'); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
   const { rawInputs, finalOutputs, filteredCount, guard } = computePipelineSummary(data.guard_outcomes);
   const regimeColor = data.regime === 'RISK_ON' ? 'var(--up)' : (data.regime === 'RISK_OFF' ? 'var(--down)' : (data.regime === 'NEUTRAL' ? 'var(--warn)' : 'inherit'));
@@ -1009,7 +1491,7 @@ function renderMacroRadar(data, pipelineData) {
   } else if (finalOutputs > 0) {
     symbolTable = `<div style="margin-top:10px;font-size:12px;color:var(--warn)">控制層放行 ${finalOutputs} 筆，但投資管線暫無詳細標的資料（可能該場次尚未載入管線數據）。</div>`;
   } else if (guard.length) {
-    symbolTable = '<div class="empty">本場次無被推薦標的進入模擬投組</div>';
+    symbolTable = renderEmptyState('本場次無被推薦標的進入模擬投組', 'AI 推薦可能全部被控制層過濾');
   }
 
   el.innerHTML = `
@@ -1029,15 +1511,15 @@ function renderMacroRadar(data, pipelineData) {
       if (!g.Passed) { actionText = '阻擋'; actionClass = 'err'; }
       else if (filtered > 0) { actionText = '過濾'; actionClass = 'warn'; }
       return `<tr><td>${agentName(g.GuardID) || '-'}</td><td><span class="badge ${actionClass}">${actionText}</span></td><td>${g.InputCount} → ${g.OutputCount}</td><td>${g.Reason || '-'}</td></tr>`;
-    }).join('') + '</tbody></table>' : '<div class="empty">本場次無控制層紀錄</div>'}
+    }).join('') + '</tbody></table>' : renderEmptyState('本場次無控制層紀錄', '')}
   `;
 }
 
 function renderAgentObservatory(data, overlapData) {
   const el = document.getElementById('agentObservatory');
-  if (!data) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
+  if (!data) { el.innerHTML = renderEmptyState('尚無資料', ''); el.classList.remove('loading'); return; }
   const cards = data.weakest_agent_scorecards || [];
-  if (!cards.length) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
+  if (!cards.length) { el.innerHTML = renderEmptyState('尚無 Agent 績效資料', ''); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
   const weakest = data.next_experiment_agent_id || '';
   const helpIcon = (title, html) => `<span class="cursor-pointer text-accent text-sm ml-xs" onclick="event.stopPropagation();openInfoHelp('${title}', \`${html.replace(/"/g, '&quot;')}\`)">ℹ️</span>`;
@@ -1087,7 +1569,7 @@ function renderAgentObservatory(data, overlapData) {
 
 function renderUniverseOverlap(data) {
   const el = document.getElementById('universeOverlap');
-  if (!data || !data.agents) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
+  if (!data || !data.agents) { el.innerHTML = renderEmptyState('尚無資料', ''); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
   const agents = data.agents || [];
   const matrix = data.matrix || {};
@@ -1116,7 +1598,7 @@ function renderUniverseOverlap(data) {
           <tbody>
             ${styleAgents.map(a => `<tr><td>${agentName(a.agent_id)}</td>${styleAgents.map(b => `<td style="${a.agent_id === b.agent_id ? 'background:var(--bg)' : (matrix[a.agent_id] && matrix[a.agent_id][b.agent_id] >= 3 ? 'color:var(--warn);font-weight:700' : '')}">${a.agent_id === b.agent_id ? '-' : (matrix[a.agent_id] && matrix[a.agent_id][b.agent_id] || 0)}</td>`).join('')}</tr>`).join('')}
           </tbody>
-        </table>` : '<div class="empty">無風格層 Agent</div>'}
+        </table>` : renderEmptyState('無風格層 Agent', '請在 configs/agents.json 中設定 style 層 Agent')}
       </div>
     </div>
   `;
@@ -1227,7 +1709,7 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
           <tbody>${macroEventRows}</tbody>
         </table>
         </div>
-      </div>` : '<div class="text-muted text-sm">暫無宏觀敘事事件</div>'}
+      </div>` : renderEmptyState('暫無宏觀敘事事件', '')}
     </div>
     <div style="margin-bottom:10px;padding:10px 12px;background:var(--bg);border-radius:8px;border-left:3px solid #3b82f6">
       <div class="text-sm font-bold mb-xs">宏觀算法說明</div>
@@ -1265,7 +1747,7 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
   };
 
   const sectorTable = (title, list, prefix) => {
-    if (!list.length) return `<div class="mb-sm"><div class="text-sm font-bold mb-xs">${title}</div><div class="text-muted text-sm">暫無資料</div></div>`;
+    if (!list.length) return `<div class="mb-sm"><div class="text-sm font-bold mb-xs">${title}</div>${renderEmptyState('暫無資料', '')}</div>`;
     return `<div class="mb-sm">
       <div class="text-sm font-bold mb-xs">${title}（${list.length} 筆）</div>
       <div class="scroll-box">
@@ -1307,7 +1789,7 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
       return `<div class="my-xs"><strong>${agentName(c.agent_id)}</strong> ${badges.length ? badges.map(b => `<span class="badge" style="font-size:10px;padding:1px 5px">${b}</span>`).join(' ') : '<span class="text-muted">無篩選條件</span>'}</div>`;
     }).join('');
   } else {
-    agentCriteriaHtml = '<div class="text-muted">暫無 Agent 績效資料</div>';
+    agentCriteriaHtml = renderEmptyState('暫無 Agent 績效資料', '');
   }
 
   const factorCells = (fs, rowKey) => {
@@ -1356,7 +1838,7 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
           <tbody>${recRows}</tbody>
         </table>
         </div>
-      </div>` : '<div class="text-muted text-sm">暫無被推薦個股</div>'}
+      </div>` : renderEmptyState('暫無被推薦個股', '')}
     </div>
     <div>
       <div class="text-sm font-bold mb-xs">被篩除個股因子明細（${screened.length} 檔）</div>
@@ -1367,7 +1849,7 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
           <tbody>${screenedRows}</tbody>
         </table>
         </div>
-      </div>` : '<div class="text-muted text-sm">本場次暫無篩除紀錄</div>'}
+      </div>` : renderEmptyState('本場次暫無篩除紀錄', '')}
     </div>
   `;
 
@@ -1378,7 +1860,7 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
     if (!g.Passed) { cls = 'err'; txt = `阻擋（輸出 ${g.OutputCount || 0} 筆）`; }
     else if (filtered > 0) { cls = 'warn'; txt = `過濾 ${filtered} 筆後放行 ${g.OutputCount || 0} 筆`; }
     return `<div class="my-xs"><span class="badge ${cls}">${agentName(g.GuardID)}</span> ${txt}（輸入 ${g.InputCount || 0} → 輸出 ${g.OutputCount || 0}）</div>`;
-  }).join('') || '<div class="text-muted">暫無控制層紀錄</div>';
+  }).join('') || renderEmptyState('暫無控制層紀錄', '');
 
   const perfRows = items.slice(0, 20).map(it => {
     const fr = it.forward_return;
@@ -1408,7 +1890,7 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
     </div>
     </div>
     <div style="margin-top:8px;color:var(--muted);font-size:11px">顯示前 20 筆控制層放行標的。完整明細請至「投資管線」頁面。</div>
-  ` : '<div class="text-muted">本場次尚無控制層放行標的</div>';
+  ` : renderEmptyState('本場次尚無控制層放行標的', 'AI 推薦可能全部被控制層過濾');
 
   const taxContent = taxSnapshot && taxSnapshot.snapshots && taxSnapshot.snapshots.length > 0 ? `
     <div class="mb-sm">
@@ -1440,7 +1922,7 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
       </table>
       </div>
     </div>
-  ` : '<div class="text-muted">暫無稅務資料</div>';
+  ` : renderEmptyState('暫無稅務資料', '');
 
   el.innerHTML = `
     ${layerCard('1', '宏觀環境', macroContent, 'var(--layer-1)')}
@@ -1490,18 +1972,123 @@ function renderAIEvolution(inbox, phase3) {
   `;
 }
 
+// --- Filter panel state ---
+let filterState = {
+  peMin: null, peMax: null,
+  pbMin: null, pbMax: null,
+  dyMin: null, dyMax: null,
+  retMin: null, retMax: null
+};
+let isFilterActive = false;
+
+function toggleFilterPanel() {
+  const panel = document.getElementById('filterPanel');
+  const toggle = document.getElementById('filterToggle');
+  if (!panel || !toggle) return;
+  panel.classList.toggle('open');
+  toggle.classList.toggle('active', panel.classList.contains('open'));
+}
+
+function applyFilters() {
+  const peMin = parseFloat(document.getElementById('peMin')?.value);
+  const peMax = parseFloat(document.getElementById('peMax')?.value);
+  const pbMin = parseFloat(document.getElementById('pbMin')?.value);
+  const pbMax = parseFloat(document.getElementById('pbMax')?.value);
+  const dyMin = parseFloat(document.getElementById('dyMin')?.value);
+  const dyMax = parseFloat(document.getElementById('dyMax')?.value);
+  const retMin = parseFloat(document.getElementById('retMin')?.value);
+  const retMax = parseFloat(document.getElementById('retMax')?.value);
+
+  filterState = { peMin: isNaN(peMin) ? null : peMin, peMax: isNaN(peMax) ? null : peMax,
+                  pbMin: isNaN(pbMin) ? null : pbMin, pbMax: isNaN(pbMax) ? null : pbMax,
+                  dyMin: isNaN(dyMin) ? null : dyMin, dyMax: isNaN(dyMax) ? null : dyMax,
+                  retMin: isNaN(retMin) ? null : retMin, retMax: isNaN(retMax) ? null : retMax };
+
+  isFilterActive = Object.values(filterState).some(v => v !== null);
+
+  const badge = document.getElementById('filterBadge');
+  if (badge) badge.innerHTML = isFilterActive ? '<span class="filter-active-badge">篩選中</span>' : '';
+
+  // Re-render pipeline with filters (reset to first page)
+  window._pipelinePage = 0;
+  const data = window._pipelineData;
+  if (data) renderPipeline(data, false, null, false);
+
+  const count = document.getElementById('filterResultCount');
+  if (count) {
+    const filtered = countFilteredItems(data?.items || []);
+    count.textContent = filtered > 0 ? `符合條件：${filtered} 筆` : '';
+  }
+
+  notify('篩選條件已套用', 'success');
+}
+
+function clearFilters() {
+  ['peMin','peMax','pbMin','pbMax','dyMin','dyMax','retMin','retMax'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  filterState = { peMin: null, peMax: null, pbMin: null, pbMax: null, dyMin: null, dyMax: null, retMin: null, retMax: null };
+  isFilterActive = false;
+  const badge = document.getElementById('filterBadge');
+  if (badge) badge.innerHTML = '';
+  const count = document.getElementById('filterResultCount');
+  if (count) count.textContent = '';
+  window._pipelinePage = 0;
+  const data = window._pipelineData;
+  if (data) renderPipeline(data, false, null, false);
+  notify('篩選條件已清除', 'info');
+}
+
+function countFilteredItems(items) {
+  if (!items || items.length === 0) return 0;
+  return items.filter(item => passesFilter(item)).length;
+}
+
+function passesFilter(item) {
+  if (!isFilterActive) return true;
+  const m = item.metrics || {};
+  const pe = m.price_to_earnings ?? m.pe ?? m.PE ?? null;
+  const pb = m.price_to_book ?? m.pb ?? m.PB ?? null;
+  const dy = m.dividend_yield ?? m.dy ?? m.DY ?? null;
+  const ret = m.backtest_return ?? m.return ?? m.ret ?? null;
+
+  if (filterState.peMin !== null && pe !== null && pe < filterState.peMin) return false;
+  if (filterState.peMax !== null && pe !== null && pe > filterState.peMax) return false;
+  if (filterState.pbMin !== null && pb !== null && pb < filterState.pbMin) return false;
+  if (filterState.pbMax !== null && pb !== null && pb > filterState.pbMax) return false;
+  if (filterState.dyMin !== null && dy !== null && dy < filterState.dyMin) return false;
+  if (filterState.dyMax !== null && dy !== null && dy > filterState.dyMax) return false;
+  if (filterState.retMin !== null && ret !== null && ret < filterState.retMin) return false;
+  if (filterState.retMax !== null && ret !== null && ret > filterState.retMax) return false;
+  return true;
+}
+
 let pipelineSessions = [];
 
 function renderPipeline(data, showAll, sessionId, showScreened) {
   if (showAll === undefined) showAll = false;
   if (showScreened === undefined) showScreened = false;
   const el = document.getElementById('recommendationPipeline');
-  if (!data || !data.session_id) { el.innerHTML = '<div class="empty">尚無回測場次資料</div>'; el.classList.remove('loading'); return; }
+  if (!data || !data.session_id) { el.innerHTML = renderEmptyState('尚無回測場次資料', '執行回測後將自動顯示'); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
+
+  // Store data for filter access
+  window._pipelineData = data;
+
   const { rawInputs, finalOutputs, filteredCount, guard } = computePipelineSummary(data.guard_outcomes);
-  const items = data.items || [];
+  let items = data.items || [];
   const screenedItems = data.screened_items || [];
   const recordedAt = data.recorded_at ? formatDate(data.recorded_at) : '-';
+
+  // Apply filters if active
+  if (isFilterActive) {
+    const before = items.length;
+    items = items.filter(passesFilter);
+    const after = items.length;
+    const count = document.getElementById('filterResultCount');
+    if (count) count.textContent = `符合條件：${after} / ${before} 筆`;
+  }
 
   const sessionSelect = pipelineSessions.length ? `
     <select id="pipelineSessionSelect" style="font-size:12px;padding:2px 6px;border-radius:4px;border:1px solid var(--border);background:var(--panel);color:var(--text)" onchange="togglePipelineSession(this)">
@@ -1562,38 +2149,62 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
     若為較舊場次，可能尚未記錄篩選資料。請執行新的回測後再查看。
   </div>`) : '';
 
+  const PAGE_SIZE = 50;
+  const totalItems = items.length;
+  let page = window._pipelinePage || 0;
+  const startIdx = page * PAGE_SIZE;
+  const endIdx = Math.min(startIdx + PAGE_SIZE, totalItems);
+  const pagedItems = items.slice(startIdx, endIdx);
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+
+  const buildTableRows = (itemList) => itemList.map(it => {
+    const cls = it.forward_return > 0 ? 'positive' : (it.forward_return < 0 ? 'negative' : '');
+    const rowStyle = !it.passed_guards ? 'background:rgba(239,68,68,0.06);border-left:3px solid var(--down)' : 'border-left:3px solid var(--up)';
+    const crowded = (it.reason || '').includes('[crowded:');
+    const badge = crowded ? `<span class="badge warn">擁擠</span> ` : '';
+    const sideLabel = it.side === 'BUY' ? '<span style="color:var(--up);font-weight:700">買入</span>' : (it.side === 'SELL' ? '<span style="color:var(--down);font-weight:700">賣出</span>' : '-');
+    const priceLabel = it.price ? it.price.toFixed(2) : '-';
+    const targetPriceLabel = it.target_price > 0 ? it.target_price.toFixed(2) : '-';
+    const stopLossPriceLabel = it.stop_loss_price > 0 ? it.stop_loss_price.toFixed(2) : '-';
+    let frCls = 'color:var(--muted)';
+    let frIcon = '➖ ';
+    if (it.forward_return > 0) { frCls = 'color:var(--up);font-weight:700'; frIcon = '📈 '; }
+    else if (it.forward_return < 0) { frCls = 'color:var(--down);font-weight:700'; frIcon = '📉 '; }
+    const layerMap = { sector: '產業主題', style: '風格因子', superinvestor: '超級投資者', context: '總經情境', control: '控制層', macro: '總經情境' };
+    const layerName = layerMap[it.layer] || (it.layer || (it.agent_id === 'alpha_discovery' ? '風格因子' : '-'));
+    const tags = (it.tags || []).map(t => `<span class="badge" style="font-size:10px;padding:1px 5px;background:var(--bg);border:1px solid var(--border);margin-right:3px">${t}</span>`).join('');
+    const actionBtns = it.passed_guards
+      ? `<button class="pipeline-action" onclick="approveRec(this,'${it.symbol}','${it.agent_id}')">放行</button> <button class="pipeline-action" onclick="rejectRec(this,'${it.symbol}','${it.agent_id}')">否決</button>`
+      : `<button class="pipeline-action" onclick="approveRec(this,'${it.symbol}','${it.agent_id}')">補追</button>`;
+    const actionHelp = `<span style="cursor:pointer;color:var(--accent);font-size:12px;margin-left:4px" onclick="event.stopPropagation();openInfoHelp('人工覆寫說明', \`<p><strong>放行</strong>：人工背書此推薦，系統後續回測不會將它濾除。</p><p><strong>否決</strong>：人工拒絕此推薦，系統後續回測會強制排除該 (標的, Agent) 組合。</p><p><strong>補追</strong>：對已被控制層擋下的標的進行人工放行。</p>\`)">ℹ️</span>`;
+    return `<tr class="pipeline-row ${cls}" style="${rowStyle}"><td>${it.symbol}</td><td>${stockName(it.symbol) || '-'}</td><td>${agentName(it.agent_id)}（${it.skill}）</td><td>${layerName}</td><td>${sideLabel}</td><td>${priceLabel}</td><td>${targetPriceLabel}</td><td>${stopLossPriceLabel}</td><td>${it.conviction || '-'}</td><td style="${frCls}">${frIcon}${(it.forward_return*100).toFixed(1)}%</td><td><div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:4px">${tags}</div>${badge}${it.reason || '-'}${it.guard_reason ? '<br><span class="text-muted text-xs">' + it.guard_reason + '</span>' : ''}</td><td>${actionBtns}${actionHelp}</td></tr>`;
+  }).join('');
+
+  const paginationControls = totalItems > PAGE_SIZE ? `
+    <div class="table-pagination" style="margin-top:10px">
+      <span>顯示 <strong>${startIdx + 1}-${endIdx}</strong> / 共 <strong>${totalItems}</strong> 筆</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button onclick="window._pipelinePage=0;renderPipeline(window._pipelineData,false,null,false)" ${page===0?'disabled':''}>« 首頁</button>
+        <button onclick="window._pipelinePage=${page-1};renderPipeline(window._pipelineData,false,null,false)" ${page===0?'disabled':''}>‹ 上一頁</button>
+        <span style="padding:0 8px">第 ${page + 1} / ${totalPages} 頁</span>
+        <button onclick="window._pipelinePage=${page+1};renderPipeline(window._pipelineData,false,null,false)" ${page>=totalPages-1?'disabled':''}>下一頁 ›</button>
+        <button onclick="window._pipelinePage=${totalPages-1};renderPipeline(window._pipelineData,false,null,false)" ${page>=totalPages-1?'disabled':''}>末頁 »</button>
+      </div>
+    </div>
+  ` : '';
+
   const pipelineTable = items.length ? `
     <div class="scroll-box-lg">
     <div class="table-wrapper">
     <table id="pipelineTable">
       <thead><tr><th>標的</th><th>公司名稱</th><th>策略來源 <span class="cursor-pointer text-accent" onclick="event.stopPropagation();openInfoHelp('策略來源說明', \`<p><strong>策略來源是什麼？</strong></p><p>顯示格式為 <code>Agent ID（策略技能）</code>。</p><p>Agent ID 是系統內部的實例名稱；括號內為該 Agent 執行的策略技能。同一策略未來可能由多個 Agent 競爭執行。</p>\`)">ℹ️</span></th><th>來源層 <span class="cursor-pointer text-accent" onclick="event.stopPropagation();openInfoHelp('來源層說明', \`<p><strong>來源層決定這筆推薦來自 Atlas 的哪一層代理。</strong></p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>產業主題</strong>：sector layer，決定板塊配置。</li><li><strong>風格因子</strong>：style layer，決定成長／價值／動能等風格傾向。</li><li><strong>超級投資者</strong>：superinvestor layer，模擬特定投資大師的選股邏輯。</li><li><strong>總經情境</strong>：context layer，根據總經 regime 產生的方向性建議。</li></ul>\`)">ℹ️</span></th><th>方向</th><th>收盤價</th><th>目標價</th><th>停損價</th><th>信念 <span class="cursor-pointer text-accent" onclick="event.stopPropagation();openInfoHelp('信念說明', \`<p><strong>信念（Conviction）是什麼？</strong></p><p>這是 AI Agent 對該標的推薦信心分數，範圍通常為 <strong>0 ~ 100</strong>。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>&gt;70</strong>：高信念，AI 認為該標的強烈符合策略條件且風險可控。</li><li><strong>40~70</strong>：中等信念，條件部分符合，但可能存在不確定性。</li><li><strong>&lt;40</strong>：低信念，條件邊緣符合，容易被控制層過濾。</li></ul><p>當多個 AI 同時推薦同一標的時，控制層可能會對信念較低的推薦進行懲罰或過濾。</p>\`)">ℹ️</span></th><th>隔日回測報酬 <span class="cursor-pointer text-accent" onclick="event.stopPropagation();openInfoHelp('隔日回測報酬說明', \`<p><strong>隔日回測報酬是什麼？</strong></p><p>這是回測模擬中「以當日收盤價進場，隔日收盤價出場」的報酬率。</p><p>數值可正可負，例如 <strong>+3.2%</strong> 代表隔日上漲，<strong>-1.5%</strong> 代表隔日下跌。</p><p><strong>這不是未來保證</strong>，而是用來驗證該 Agent 在當時市場體制下的選股品質。持續為正代表策略相對有效。</p>\`)">ℹ️</span></th><th>價量標籤 + 推薦理由</th><th>操作</th></tr></thead>
-      <tbody>
-        ${items.map(it => {
-          const cls = it.forward_return > 0 ? 'positive' : (it.forward_return < 0 ? 'negative' : '');
-          const rowStyle = !it.passed_guards ? 'background:rgba(239,68,68,0.06);border-left:3px solid var(--down)' : 'border-left:3px solid var(--up)';
-          const crowded = (it.reason || '').includes('[crowded:');
-          const badge = crowded ? `<span class="badge warn">擁擠</span> ` : '';
-          const sideLabel = it.side === 'BUY' ? '<span style="color:var(--up);font-weight:700">買入</span>' : (it.side === 'SELL' ? '<span style="color:var(--down);font-weight:700">賣出</span>' : '-');
-          const priceLabel = it.price ? it.price.toFixed(2) : '-';
-          const targetPriceLabel = it.target_price > 0 ? it.target_price.toFixed(2) : '-';
-          const stopLossPriceLabel = it.stop_loss_price > 0 ? it.stop_loss_price.toFixed(2) : '-';
-          let frCls = 'color:var(--muted)';
-          let frIcon = '➖ ';
-          if (it.forward_return > 0) { frCls = 'color:var(--up);font-weight:700'; frIcon = '📈 '; }
-          else if (it.forward_return < 0) { frCls = 'color:var(--down);font-weight:700'; frIcon = '📉 '; }
-          const layerMap = { sector: '產業主題', style: '風格因子', superinvestor: '超級投資者', context: '總經情境', control: '控制層', macro: '總經情境' };
-          const layerName = layerMap[it.layer] || (it.layer || (it.agent_id === 'alpha_discovery' ? '風格因子' : '-'));
-          const tags = (it.tags || []).map(t => `<span class="badge" style="font-size:10px;padding:1px 5px;background:var(--bg);border:1px solid var(--border);margin-right:3px">${t}</span>`).join('');
-          const actionBtns = it.passed_guards
-            ? `<button class="pipeline-action" onclick="approveRec(this,'${it.symbol}','${it.agent_id}')">放行</button> <button class="pipeline-action" onclick="rejectRec(this,'${it.symbol}','${it.agent_id}')">否決</button>`
-            : `<button class="pipeline-action" onclick="approveRec(this,'${it.symbol}','${it.agent_id}')">補追</button>`;
-          const actionHelp = `<span style="cursor:pointer;color:var(--accent);font-size:12px;margin-left:4px" onclick="event.stopPropagation();openInfoHelp('人工覆寫說明', \`<p><strong>放行</strong>：人工背書此推薦，系統後續回測不會將它濾除。</p><p><strong>否決</strong>：人工拒絕此推薦，系統後續回測會強制排除該 (標的, Agent) 組合。</p><p><strong>補追</strong>：對已被控制層擋下的標的進行人工放行。</p>\`)">ℹ️</span>`;
-          return `<tr class="pipeline-row ${cls}" style="${rowStyle}"><td>${it.symbol}</td><td>${stockName(it.symbol) || '-'}</td><td>${agentName(it.agent_id)}（${it.skill}）</td><td>${layerName}</td><td>${sideLabel}</td><td>${priceLabel}</td><td>${targetPriceLabel}</td><td>${stopLossPriceLabel}</td><td>${it.conviction || '-'}</td><td style="${frCls}">${frIcon}${(it.forward_return*100).toFixed(1)}%</td><td><div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:4px">${tags}</div>${badge}${it.reason || '-'}${it.guard_reason ? '<br><span class="text-muted text-xs">' + it.guard_reason + '</span>' : ''}</td><td>${actionBtns}${actionHelp}</td></tr>`;
-        }).join('')}
+      <tbody id="pipelineTableBody">
+        ${buildTableRows(pagedItems)}
       </tbody>
     </table>
     </div>
     </div>
+    ${paginationControls}
   ` : '';
 
   const emptyMsg = !items.length ? (finalOutputs === 0
@@ -1606,6 +2217,9 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
       本場次共有 ${rawInputs} 筆 AI 推薦，經控制層後放行 ${finalOutputs} 筆${filteredCount > 0 ? `（過濾 ${filteredCount} 筆）` : ''}。
     </div>
     ${guardBadges}
+    <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+      <button onclick="exportTableToCSV('pipelineTable','pipeline_${data.session_id}.csv')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer">📥 匯出 CSV</button>
+    </div>
     <div class="mb-sm text-sm">
       <label class="cursor-pointer select-none">
         <input type="checkbox" id="pipelineShowAll" ${showAll ? 'checked' : ''} onchange="togglePipelineShowAll(this)">
@@ -1695,7 +2309,7 @@ async function triggerChannelsIngest() {
 
 function renderDataChannels(data) {
   const el = document.getElementById('dataChannels');
-  if (!data || !data.channels) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
+  if (!data || !data.channels) { el.innerHTML = renderEmptyState('尚無資料通道資料', ''); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
   const channels = data.channels || [];
   const statusLight = s => {
@@ -1745,7 +2359,7 @@ async function renderBacktestReport() {
   const el = document.getElementById('backtestReport');
   try {
     const r = await fetch('/api/report/latest');
-    if (!r.ok) { el.innerHTML = '<div class="empty">尚無回測報告</div>'; el.classList.remove('loading'); return; }
+    if (!r.ok) { el.innerHTML = renderEmptyState('尚無回測報告', '執行回測後將自動產生'); el.classList.remove('loading'); return; }
     const text = await r.text();
     el.innerHTML = `<div style="font-size:13px;line-height:1.6">${mdToHtml(text)}</div>`;
     el.classList.remove('loading');
@@ -1778,8 +2392,40 @@ async function runBacktest() {
 async function pollBacktestStatus() {
   const detailEl = document.getElementById('backtestStatusDetail');
   const statusEl = document.getElementById('backtestStatusText');
-  for (let i = 0; i < 60; i++) {
-    await new Promise(r => setTimeout(r, 3000));
+  const maxAttempts = 60;
+  const pollInterval = 3000; // 3 seconds
+  let attempt = 0;
+
+  // Show initial progress indicator
+  detailEl.innerHTML = `
+    <div class="text-muted" style="margin-top:8px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span>⏳ 等待回測完成…</span>
+        <span id="pollProgressPct" style="font-size:11px;color:var(--accent)">0%</span>
+      </div>
+      <div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden">
+        <div id="pollProgressBar" style="background:var(--accent);height:100%;width:0%;transition:width 0.3s ease"></div>
+      </div>
+      <div style="font-size:11px;margin-top:4px">已等待 <span id="pollElapsed">0</span> 秒 / 最多 ${Math.round(maxAttempts * pollInterval / 1000)} 秒</div>
+    </div>
+  `;
+
+  const startTime = Date.now();
+
+  for (let i = 0; i < maxAttempts; i++) {
+    attempt = i + 1;
+    await new Promise(r => setTimeout(r, pollInterval));
+
+    // Update progress bar
+    const pct = Math.round((attempt / maxAttempts) * 100);
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    const progressBar = document.getElementById('pollProgressBar');
+    const progressPct = document.getElementById('pollProgressPct');
+    const pollElapsed = document.getElementById('pollElapsed');
+    if (progressBar) progressBar.style.width = pct + '%';
+    if (progressPct) progressPct.textContent = pct + '%';
+    if (pollElapsed) pollElapsed.textContent = elapsed;
+
     try {
       const st = await getJSON('/api/backtest/status');
       if (!st.running) {
@@ -1788,19 +2434,30 @@ async function pollBacktestStatus() {
           detailEl.innerHTML = `<span class="text-down">錯誤：${escapeHtml(st.error)}</span>`;
           notify('回測執行失敗: ' + st.error, 'err');
         } else {
+          const totalElapsed = Math.round((Date.now() - startTime) / 1000);
           statusEl.textContent = '完成';
-          detailEl.innerHTML = `<span class="text-up">完成：window ${escapeHtml(st.window_id || '')} · sessions ${st.sessions || 0} · outcomes ${st.outcomes || 0}</span>`;
+          detailEl.innerHTML = `<span class="text-up">完成：window ${escapeHtml(st.window_id || '')} · sessions ${st.sessions || 0} · outcomes ${st.outcomes || 0}（耗時 ${totalElapsed} 秒）</span>`;
           notify('回測已完成', 'info');
           await renderBacktestReport();
         }
         return;
       }
     } catch (e) {
-      // ignore polling errors
+      // ignore polling errors, continue retrying
     }
   }
+
+  // Timeout reached
   statusEl.textContent = '執行中';
-  detailEl.innerHTML = '<span class="text-muted">輪詢逾時，請手動重新整理頁面確認結果</span>';
+  detailEl.innerHTML = `
+    <div class="text-muted">
+      <div>⏱️ 輪詢逾時（${Math.round(maxAttempts * pollInterval / 1000)} 秒），回測可能仍在執行中</div>
+      <div style="margin-top:6px">
+        <button onclick="pollBacktestStatus()" style="background:var(--accent);color:var(--bg);border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px">繼續輪詢</button>
+        <button onclick="renderBacktestReport()" style="background:var(--border);color:var(--fg);border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:8px">手動整理</button>
+      </div>
+    </div>
+  `;
 }
 
 function renderLiveStatus(data) {
@@ -1911,7 +2568,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
   const macroEl = document.getElementById('narrativeMacro');
   if (macroEl) {
     macroEl.classList.remove('loading');
-    if (!snapshot) { macroEl.innerHTML = '<div class="empty">無可用快照</div>'; }
+    if (!snapshot) { macroEl.innerHTML = renderEmptyState('無可用快照', '執行回測後將自動產生'); }
     else {
       const rows = [
         ['DXY-美元指數', snapshot.dxy], ['US10Y-美債10年期', snapshot.us10y], ['VIX-波動率指數', snapshot.vix],
@@ -1967,7 +2624,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
           <span class="font-bold text-sm text-accent">台股三大法人資金流</span>
           <span class="text-sm font-bold" style="color:${capitalStatus.color}">${capitalStatus.text}</span>
           <span class="text-muted text-sm">更新於 ${capitalTimeStr}</span>
-        </div><div class="empty">暫無可用資料</div>`;
+        </div>${renderEmptyState('暫無可用資料', '')}`;
       }
       macroEl.innerHTML = html;
     }
@@ -1976,7 +2633,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
   const stressEl = document.getElementById('narrativeStress');
   if (stressEl) {
     stressEl.classList.remove('loading');
-    if (!stress) { stressEl.innerHTML = '<div class="empty">無可用資料</div>'; }
+    if (!stress) { stressEl.innerHTML = renderEmptyState('無可用壓力資料', ''); }
     else {
       const score = typeof stress.score === 'number' ? stress.score.toFixed(1) : '-';
       const sLabel = stressLabel(stress.regime || '-');
@@ -2006,7 +2663,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
       const strengthB = Math.abs(b.sentiment || 0) * (b.confidence || 1);
       return strengthB - strengthA;
     });
-    if (!sortedList.length) { eventsEl.innerHTML = '<div class="empty">目前無觸發的宏觀敘事</div>'; }
+    if (!sortedList.length) { eventsEl.innerHTML = renderEmptyState('目前無觸發的宏觀敘事', ''); }
     else {
       eventsEl.innerHTML = sortedList.map(e => {
         const sClass = e.sentiment > 0 ? 'up' : 'down';
@@ -2024,7 +2681,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
   if (chainsEl) {
     chainsEl.classList.remove('loading');
     const list = (chains && chains.chains) || [];
-    if (!list.length) { chainsEl.innerHTML = '<div class="empty">目前無匹配的因果鏈</div>'; }
+    if (!list.length) { chainsEl.innerHTML = renderEmptyState('目前無匹配的因果鏈', ''); }
     else {
       chainsEl.innerHTML = list.map(c => `
         <div style="margin:10px 0">
@@ -2050,7 +2707,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
   if (modelsEl) {
     modelsEl.classList.remove('loading');
     const list = (models && models.models) || [];
-    if (!list.length) { modelsEl.innerHTML = '<div class="empty">目前無活躍模型</div>'; }
+    if (!list.length) { modelsEl.innerHTML = renderEmptyState('目前無活躍模型', ''); }
     else {
       modelsEl.innerHTML = list.map((m, idx) => {
         const w = m.weight || 0;
@@ -2093,7 +2750,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
   if (templatesEl) {
     templatesEl.classList.remove('loading');
     const items = (templates && templates.templates) || [];
-    if (!items.length) { templatesEl.innerHTML = '<div class="empty">無模板資料</div>'; }
+    if (!items.length) { templatesEl.innerHTML = renderEmptyState('無模板資料', ''); }
     else {
       templatesEl.innerHTML = `<table>
         <thead><tr><th>模板名稱</th><th>觸發主題</th><th>歷史命中率</th><th>資料來源</th><th class="w-90">操作</th></tr></thead>
@@ -2116,7 +2773,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
   const retailEl = document.getElementById('narrativeRetailSentiment');
   if (retailEl) {
     retailEl.classList.remove('loading');
-    if (!retailSentiment) { retailEl.innerHTML = '<div class="empty">無散戶情緒資料</div>'; }
+    if (!retailSentiment) { retailEl.innerHTML = renderEmptyState('無散戶情緒資料', ''); }
     else {
       const readingMap = { frenzy: '狂熱', neutral: '中性', fear: '恐慌' };
       const readingClass = retailSentiment.extreme_reading === 'frenzy' ? 'err' : retailSentiment.extreme_reading === 'fear' ? 'warn' : 'ok';
@@ -2154,7 +2811,7 @@ function renderNarrativePage(snapshot, stress, events, chains, models, templates
   const seasonalEl = document.getElementById('narrativeSeasonal');
   if (seasonalEl) {
     seasonalEl.classList.remove('loading');
-    if (!seasonal || !seasonal.expectations || seasonal.expectations.length === 0) { seasonalEl.innerHTML = '<div class="empty">無季節性事件</div>'; }
+    if (!seasonal || !seasonal.expectations || seasonal.expectations.length === 0) { seasonalEl.innerHTML = renderEmptyState('無季節性事件', ''); }
     else {
       const rows = seasonal.expectations.map(e => {
         const statusBadge = e.already_priced_in ? '<span class="badge">已反應</span>' : '<span class="badge ok">有驚喜潛力</span>';
@@ -2169,7 +2826,7 @@ function renderDataIngestHealth(snapshot) {
   const el = document.getElementById('dataIngestHealth');
   if (!el) return;
   el.classList.remove('loading');
-  if (!snapshot) { el.innerHTML = '<div class="empty">無資料</div>'; return; }
+  if (!snapshot) { el.innerHTML = renderEmptyState('尚無資料', ''); return; }
   const indicators = [
     { key: 'dxy', label: 'DXY-美元指數' },
     { key: 'us10y', label: 'US10Y-美債10年期' },
@@ -2224,7 +2881,7 @@ async function loadAuditLog() {
     const data = await getJSON('/api/control/audit-log');
     el.classList.remove('loading');
     const items = (data.interventions || []).slice(0, 20);
-    if (!items.length) { el.innerHTML = '<div class="empty">無紀錄</div>'; return; }
+    if (!items.length) { el.innerHTML = renderEmptyState('無紀錄', ''); return; }
     const actionMap = {
       'pause_agent': '暫停 Agent',
       'resume_agent': '恢復 Agent',
@@ -2246,7 +2903,7 @@ async function loadExperimentHistory() {
     const data = await getJSON('/api/experiment/history');
     el.classList.remove('loading');
     const items = (data.history || []).slice(0, 20);
-    if (!items.length) { el.innerHTML = '<div class="empty">無紀錄</div>'; return; }
+    if (!items.length) { el.innerHTML = renderEmptyState('無紀錄', ''); return; }
     el.innerHTML = `<table><thead><tr><th>時間</th><th>版本</th><th>實驗</th><th>AI</th><th>狀態</th></tr></thead><tbody>
       ${items.map(it => `<tr><td>${formatDate(it.promoted_at)}</td><td>v${it.version_after || '-'}</td><td>${it.experiment_id || ''}</td><td>${agentName(it.target_agent_id) || it.target_agent_id || ''}</td><td><span class="badge ${it.status==='accepted'?'ok':'warn'}">${it.status==='accepted'?'已接受':(it.status==='rejected'?'已拒絕':it.status)}</span></td></tr>`).join('')}
     </tbody></table>`;
@@ -2427,7 +3084,15 @@ function renderAlerts(data) {
   const el = document.getElementById('alertsPanel');
   if (!el) return;
   if (!data || !data.alerts || data.alerts.length === 0) {
-    el.innerHTML = '<div class="empty">目前沒有警報</div>';
+    el.innerHTML = '<div class="empty" style="padding:20px 0;line-height:1.8">' +
+      '<div style="font-size:14px;margin-bottom:8px">目前沒有警報</div>' +
+      '<div style="font-size:12px;color:var(--muted)">' +
+      '警報由系統監控模組觸發，當以下條件發生時會產生警報：<br>' +
+      '• 資料通道延遲超過閾值<br>' +
+      '• 系統健康度異常<br>' +
+      '• 交易風險超過限制<br>' +
+      '目前系統運行正常，暫無需要關注的警報。' +
+      '</div></div>';
     el.classList.remove('loading');
     return;
   }
@@ -2438,7 +3103,7 @@ function renderAlerts(data) {
     const ackBtn = a.acknowledged ? '<span class="badge ok">已確認</span>' : `<button class="pipeline-action" onclick="acknowledgeAlert('${a.id}')">確認</button>`;
     return `<tr><td>${new Date(a.timestamp).toLocaleString('zh-TW')}</td><td><span class="badge ${sevClass}">${severityMap[a.severity] || a.severity}</span></td><td>${a.rule}</td><td>${a.message}</td><td>${a.value !== undefined ? a.value.toFixed(2) : '-'}</td><td>${ackBtn}</td></tr>`;
   }).join('');
-  el.innerHTML = `<table><thead><tr><th>時間</th><th>嚴重度</th><th>規則</th><th>訊息</th><th>數值</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table>`;
+  el.innerHTML = `<div style="display:flex;justify-content:flex-end;margin-bottom:6px"><button onclick="exportTableToCSV('alertsTable','alerts_export.csv')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer">📥 匯出 CSV</button></div><table id="alertsTable"><thead><tr><th>時間</th><th>嚴重度</th><th>規則</th><th>訊息</th><th>數值</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 async function acknowledgeAlert(alertId) {
@@ -2483,12 +3148,14 @@ function updateMetricsTrend(data) {
   const trendDiv = document.getElementById('metricsTrend');
   if (!trendDiv) return;
   let html = '<div class="grid cols-2">';
-  if (data && data.alerts_by_type) {
+  if (data && data.alerts_by_type && Object.keys(data.alerts_by_type).length > 0) {
     html += '<div class="panel"><h3>警報類型分佈</h3><table><thead><tr><th>類型</th><th>次數</th></tr></thead><tbody>';
     for (const [type, count] of Object.entries(data.alerts_by_type)) {
       html += `<tr><td>${type}</td><td>${count}</td></tr>`;
     }
     html += '</tbody></table></div>';
+  } else {
+    html += '<div class="panel"><h3>警報類型分佈</h3><div class="empty" style="font-size:12px;color:var(--muted);padding:10px 0">目前尚無警報觸發記錄。當系統偵測到異常時，此處將顯示警報分類統計。</div></div>';
   }
   html += '<div class="panel"><h3>篩選統計</h3><table><thead><tr><th>項目</th><th>數值</th></tr></thead><tbody>';
   html += `<tr><td>總數</td><td>${data && data.screening_total != null ? data.screening_total : '-'}</td></tr>`;
@@ -2499,7 +3166,69 @@ function updateMetricsTrend(data) {
   trendDiv.innerHTML = html;
 }
 
+// --- Auto-refresh state ---
+let autoRefreshEnabled = true;
+let autoRefreshTimer = null;
+let consecutiveFailures = 0;
+const MAX_CONSECUTIVE_FAILURES = 3;
+
+function toggleAutoRefresh() {
+  autoRefreshEnabled = !autoRefreshEnabled;
+  const pill = document.getElementById('refreshPill');
+  const btn = document.getElementById('refreshToggle');
+  if (autoRefreshEnabled) {
+    pill.classList.remove('paused');
+    btn.textContent = '⏸';
+    startAutoRefresh();
+    notify('自動刷新已恢復', 'success');
+  } else {
+    pill.classList.add('paused');
+    btn.textContent = '▶';
+    stopAutoRefresh();
+    notify('自動刷新已暫停', 'warning');
+  }
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  autoRefreshTimer = setInterval(loadAll, 30000);
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+}
+
+function updateRefreshPill(status) {
+  const pill = document.getElementById('refreshPill');
+  const timeEl = document.getElementById('refreshTime');
+  if (!pill || !timeEl) return;
+  const now = new Date().toLocaleTimeString('zh-TW', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  timeEl.textContent = `上次更新 ${now}`;
+  pill.classList.remove('paused', 'error');
+  const btn = document.getElementById('refreshToggle');
+  if (status === 'error') {
+    pill.classList.add('error');
+    timeEl.textContent = '連線異常';
+    if (btn) btn.textContent = '🔄';
+  } else if (!autoRefreshEnabled) {
+    pill.classList.add('paused');
+    timeEl.textContent = '已暫停';
+    if (btn) btn.textContent = '▶';
+  } else {
+    if (btn) btn.textContent = '⏸';
+  }
+}
+
 async function loadAll() {
+  const loadingBar = document.getElementById('loadingBar');
+  if (loadingBar) loadingBar.classList.add('active');
+
+  // Show skeleton screens before API calls
+  showSkeletons();
+
   try {
     const [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal] = await Promise.all([
       getJSON('/api/dashboard/system-health').catch(() => null),
@@ -2524,6 +3253,20 @@ async function loadAll() {
       getJSON('/api/dashboard/tax-snapshot').catch(() => null),
       getJSON('/api/narrative/seasonal').catch(() => null),
     ]);
+
+    const allNull = [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal].every(v => v === null);
+    if (allNull) {
+      consecutiveFailures++;
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        updateRefreshPill('error');
+        showErrorBanner();
+      }
+    } else {
+      consecutiveFailures = 0;
+      hideErrorBanner();
+      updateRefreshPill('ok');
+    }
+
     if (sessions && sessions.sessions) {
       pipelineSessions = sessions.sessions;
     }
@@ -2542,17 +3285,168 @@ async function loadAll() {
     renderAlerts(alerts);
     loadMetrics();
     loadIndustryData();
-  } catch (e) { console.error(e); }
-  document.getElementById('lastRefresh').textContent = '更新於 ' + new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  } catch (e) {
+    console.error(e);
+    consecutiveFailures++;
+    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+      updateRefreshPill('error');
+      showErrorBanner();
+    }
+  } finally {
+    if (loadingBar) loadingBar.classList.remove('active');
+  }
   renderBacktestReport();
   loadOverrides();
   loadAuditLog();
   loadExperimentHistory();
 }
 
+function showErrorBanner() {
+  let banner = document.getElementById('errorBanner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'errorBanner';
+    banner.className = 'error-banner';
+    const content = document.getElementById('content');
+    if (content) content.insertBefore(banner, content.firstChild);
+  }
+  banner.innerHTML = `<span>⚠ 連續 ${consecutiveFailures} 次更新失敗，請檢查網路連線</span><button class="retry-btn" onclick="retryLoad()">重試</button>`;
+  banner.style.display = 'flex';
+}
+
+function hideErrorBanner() {
+  const banner = document.getElementById('errorBanner');
+  if (banner) banner.style.display = 'none';
+}
+
+function retryLoad() {
+  consecutiveFailures = 0;
+  hideErrorBanner();
+  loadAll();
+}
+
+async function loadPageData(pageId) {
+  switch(pageId) {
+    case 'narrative':
+      try {
+        const [snapshot, stress, events, chains, models, templates, retailSentiment, seasonal] = await Promise.all([
+          getJSON('/api/macro/snapshot/latest').catch(() => null),
+          getJSON('/api/taiwan/stress-index').catch(() => null),
+          getJSON('/api/narrative/events').catch(() => null),
+          getJSON('/api/narrative/chains').catch(() => null),
+          getJSON('/api/narrative/models').catch(() => null),
+          getJSON('/api/narrative/templates').catch(() => null),
+          getJSON('/api/dashboard/retail-sentiment').catch(() => null),
+          getJSON('/api/narrative/seasonal').catch(() => null),
+        ]);
+        renderNarrativePage(snapshot, stress, events, chains, models, templates, retailSentiment, seasonal);
+      } catch (e) { console.error('Failed to load narrative:', e); }
+      break;
+    case 'pipeline':
+      try {
+        const pipeline = await getJSON('/api/dashboard/recommendation-pipeline').catch(() => null);
+        renderPipeline(pipeline, false, '');
+      } catch (e) { console.error('Failed to load pipeline:', e); }
+      break;
+    case 'decision':
+      try {
+        const [pipeline, macro, agents, stress, events, chains, models, inbox, phase3, taxSnapshot] = await Promise.all([
+          getJSON('/api/dashboard/recommendation-pipeline').catch(() => null),
+          getJSON('/api/dashboard/macro-radar').catch(() => null),
+          getJSON('/api/dashboard/agent-observatory').catch(() => null),
+          getJSON('/api/taiwan/stress-index').catch(() => null),
+          getJSON('/api/narrative/events').catch(() => null),
+          getJSON('/api/narrative/chains').catch(() => null),
+          getJSON('/api/narrative/models').catch(() => null),
+          getJSON('/api/dashboard/experiment-inbox').catch(() => null),
+          getJSON('/api/dashboard/phase3-status').catch(() => null),
+          getJSON('/api/dashboard/tax-snapshot').catch(() => null),
+        ]);
+        renderDecisionChain(pipeline, macro, agents, stress, events, chains, models, inbox, phase3, taxSnapshot);
+      } catch (e) { console.error('Failed to load decision chain:', e); }
+      break;
+    case 'agents':
+      try {
+        const [agents, overlap] = await Promise.all([
+          getJSON('/api/dashboard/agent-observatory').catch(() => null),
+          getJSON('/api/dashboard/universe-overlap').catch(() => null),
+        ]);
+        renderAgentObservatory(agents, overlap);
+        renderUniverseOverlap(overlap);
+      } catch (e) { console.error('Failed to load agents:', e); }
+      break;
+    case 'experiments':
+      try {
+        const inbox = await getJSON('/api/dashboard/experiment-inbox').catch(() => null);
+        renderInbox(inbox);
+        loadAuditLog();
+        loadExperimentHistory();
+      } catch (e) { console.error('Failed to load experiments:', e); }
+      break;
+    case 'reports':
+      try {
+        renderBacktestReport();
+      } catch (e) { console.error('Failed to load reports:', e); }
+      break;
+    case 'controls':
+      try {
+        loadOverrides();
+      } catch (e) { console.error('Failed to load controls:', e); }
+      break;
+    case 'datachannels':
+      try {
+        const dataChannels = await getJSON('/api/dashboard/data-channels').catch(() => null);
+        renderDataChannels(dataChannels);
+      } catch (e) { console.error('Failed to load data channels:', e); }
+      break;
+    case 'alerts':
+      try {
+        const alerts = await getJSON('/api/alerts').catch(() => null);
+        renderAlerts(alerts);
+      } catch (e) { console.error('Failed to load alerts:', e); }
+      break;
+    case 'metrics':
+      try {
+        loadMetrics();
+      } catch (e) { console.error('Failed to load metrics:', e); }
+      break;
+    case 'industry':
+      try {
+        loadIndustryData();
+      } catch (e) { console.error('Failed to load industry:', e); }
+      break;
+    case 'live':
+      try {
+        const live = await getJSON('/api/dashboard/live-status').catch(() => null);
+        renderLiveStatus(live);
+      } catch (e) { console.error('Failed to load live status:', e); }
+      break;
+  }
+}
+
 populateAgentSelect();
+initBacktestDates();
 loadAll();
-setInterval(loadAll, 30000);
+startAutoRefresh();
+
+// Keyboard navigation for sidebar
+document.querySelectorAll('#sidebar nav a').forEach(link => {
+  link.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      link.click();
+    }
+  });
+});
+
+// ESC key to close modals
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeModal();
+    closePromoteModal();
+    closeInfoModal();
+  }
+});
 
 // Theme toggle
 function toggleTheme() {
@@ -2570,21 +3464,25 @@ if (savedTheme) {
 
 async function loadIndustryData() {
   try {
-    const [classification, overview, seasonality] = await Promise.all([
+    const [classification, overview, seasonality, calendar] = await Promise.all([
       getJSON('/api/industry/classification').catch(() => null),
       getJSON('/api/industry/overview').catch(() => null),
       getJSON('/api/industry/seasonality').catch(() => null),
+      getJSON('/api/industry/seasonality/calendar').catch(() => null),
     ]);
     renderIndustryMap(classification);
     renderIndustryCycle(overview);
     renderIndustryLinkage(overview);
+    if (seasonality && calendar) {
+      seasonality.calendar = calendar;
+    }
     renderIndustrySeasonality(seasonality);
   } catch (e) { console.error('loadIndustryData error:', e); }
 }
 
 function renderIndustryMap(data) {
   const el = document.getElementById('industryMap');
-  if (!data || !data.industries) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
+  if (!data || !data.industries) { el.innerHTML = renderEmptyState('尚無產業資料', ''); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
   const industries = data.industries;
   let html = '<div style="display:flex;flex-wrap:wrap;gap:10px">';
@@ -2603,7 +3501,7 @@ function renderIndustryMap(data) {
 
 function renderIndustryCycle(data) {
   const el = document.getElementById('industryCycle');
-  if (!data || !data.industries) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
+  if (!data || !data.industries) { el.innerHTML = renderEmptyState('尚無週期資料', ''); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
   const industries = data.industries;
   const cycleColors = {
@@ -2637,33 +3535,164 @@ function renderIndustryCycle(data) {
 
 function renderIndustryLinkage(data) {
   const el = document.getElementById('industryLinkage');
-  if (!data || !data.industries) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
+  if (!data || !data.industries) { el.innerHTML = renderEmptyState('尚無產業關聯資料', ''); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
   const industries = data.industries;
-  let html = '<table><thead><tr><th>產業</th><th>系統重要性</th><th>連動分數</th></tr></thead><tbody>';
+
+  // Calculate historical averages across all industries
+  let totalSystemicImportance = 0;
+  let totalPropagationSpeed = 0;
+  let maxSystemic = 0;
+  let maxPropagation = 0;
+  let count = 0;
+
   industries.forEach(ind => {
     const score = ind.linkage_score || {};
-    html += `<tr><td>${ind.name}</td><td>${(score.systemic_importance || 0).toFixed(2)}</td><td>${(score.shock_propagation_speed || 0).toFixed(2)}</td></tr>`;
+    const si = score.systemic_importance || 0;
+    const sp = score.shock_propagation_speed || 0;
+    totalSystemicImportance += si;
+    totalPropagationSpeed += sp;
+    if (si > maxSystemic) maxSystemic = si;
+    if (sp > maxPropagation) maxPropagation = sp;
+    count++;
+  });
+
+  const avgSystemic = count > 0 ? totalSystemicImportance / count : 0;
+  const avgPropagation = count > 0 ? totalPropagationSpeed / count : 0;
+
+  let html = '<div style="font-size:11px;color:var(--muted);margin-bottom:10px;padding:8px;background:var(--bg);border-radius:6px">' +
+    '<strong>數據說明：</strong>「系統重要性」衡量該產業在整體經濟中的關鍵程度（0-1）；「連動分數」反映衝擊傳導速度，數值越高表示該產業受外部衝擊影響越快擴散至其他產業。' +
+    '</div>';
+
+  // Summary stats
+  html += '<div style="display:flex;gap:8px;margin-bottom:12px">';
+  html += `<div style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">`;
+  html += `<div style="font-size:11px;color:var(--muted)">平均系統重要性</div>`;
+  html += `<div style="font-size:16px;font-weight:700">${avgSystemic.toFixed(2)}</div>`;
+  html += `</div>`;
+  html += `<div style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">`;
+  html += `<div style="font-size:11px;color:var(--muted)">平均連動分數</div>`;
+  html += `<div style="font-size:16px;font-weight:700">${avgPropagation.toFixed(2)}</div>`;
+  html += `</div>`;
+  html += `<div style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">`;
+  html += `<div style="font-size:11px;color:var(--muted)">最高系統重要性</div>`;
+  html += `<div style="font-size:16px;font-weight:700">${maxSystemic.toFixed(2)}</div>`;
+  html += `</div>`;
+  html += '</div>';
+
+  html += '<table><thead><tr><th>產業</th><th>系統重要性</th><th>連動分數</th><th>相對強度</th></tr></thead><tbody>';
+  industries.forEach(ind => {
+    const score = ind.linkage_score || {};
+    const si = score.systemic_importance || 0;
+    const sp = score.shock_propagation_speed || 0;
+    const siRelative = avgSystemic > 0 ? (si / avgSystemic) : 1;
+    const spRelative = avgPropagation > 0 ? (sp / avgPropagation) : 1;
+    const overallStrength = (siRelative + spRelative) / 2;
+
+    let strengthLabel = '平均';
+    let strengthColor = 'var(--muted)';
+    if (overallStrength > 1.3) { strengthLabel = '高'; strengthColor = 'var(--up)'; }
+    else if (overallStrength < 0.7) { strengthLabel = '低'; strengthColor = 'var(--down)'; }
+
+    html += `<tr><td>${ind.name}</td><td>${si.toFixed(2)}</td><td>${sp.toFixed(2)}</td><td style="color:${strengthColor}">${strengthLabel}</td></tr>`;
   });
   html += '</tbody></table>';
   el.innerHTML = html;
 }
 
+let seasonalityViewMode = 'list'; // 'list' or 'calendar'
+
 function renderIndustrySeasonality(data) {
   const el = document.getElementById('industrySeasonality');
-  if (!data || !data.active_patterns) { el.innerHTML = '<div class="empty">無資料</div>'; el.classList.remove('loading'); return; }
   el.classList.remove('loading');
-  const patterns = data.active_patterns;
-  let html = '<div style="display:flex;flex-direction:column;gap:8px">';
-  patterns.forEach(p => {
+
+  const allPatterns = data && data.all_patterns ? data.all_patterns : [];
+  const activePatterns = data && data.active_patterns ? data.active_patterns : [];
+
+  let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
+  html += '<div style="font-size:11px;color:var(--muted)">顯示所有歷史季節性模式與統計數據</div>';
+  html += '<div style="display:flex;gap:4px">';
+  html += `<button onclick="seasonalityViewMode='list';renderIndustrySeasonality(window.seasonalityData)" style="background:${seasonalityViewMode==='list'?'var(--accent)':'var(--bg)'};color:${seasonalityViewMode==='list'?'#fff':'var(--text)'};border:1px solid var(--border);border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer">列表</button>`;
+  html += `<button onclick="seasonalityViewMode='calendar';renderIndustrySeasonality(window.seasonalityData)" style="background:${seasonalityViewMode==='calendar'?'var(--accent)':'var(--bg)'};color:${seasonalityViewMode==='calendar'?'#fff':'var(--text)'};border:1px solid var(--border);border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer">日曆</button>`;
+  html += '</div></div>';
+
+  if (seasonalityViewMode === 'calendar') {
+    html += renderSeasonalityCalendar(data);
+  } else {
+    html += renderSeasonalityList(allPatterns, activePatterns, data);
+  }
+
+  el.innerHTML = html;
+  window.seasonalityData = data;
+}
+
+function renderSeasonalityList(allPatterns, activePatterns, data) {
+  if (!allPatterns || allPatterns.length === 0) {
+    return renderEmptyState('無季節性模式資料', '');
+  }
+
+  const activeIds = new Set(activePatterns.map(p => p.id));
+  const today = new Date().toLocaleDateString('zh-TW');
+
+  let html = '<table style="font-size:12px"><thead><tr><th>模式</th><th>期間</th><th>歷史準確度</th><th>典型報酬</th><th>調整因子</th><th>狀態</th></tr></thead><tbody>';
+  allPatterns.forEach(p => {
+    const isActive = activeIds.has(p.id);
+    const statusBadge = isActive
+      ? '<span class="badge ok">進行中</span>'
+      : '<span class="badge info">非活躍</span>';
+    const accuracy = Math.round((p.historical_accuracy || 0) * 100);
+    const returnPct = ((p.typical_return || 0) * 100).toFixed(1);
+    const adjustment = (p.adjustment_factor || 1.0).toFixed(2);
+    const period = `${p.start_month}/${p.start_day} ~ ${p.end_month}/${p.end_day}`;
+
+    html += `<tr style="${isActive ? 'background:rgba(79,193,255,0.05)' : ''}">`;
+    html += `<td><strong>${p.name}</strong><br><span style="font-size:11px;color:var(--muted)">${p.description || ''}</span></td>`;
+    html += `<td>${period}</td>`;
+    html += `<td>${accuracy}%</td>`;
+    html += `<td>${returnPct}%</td>`;
+    html += `<td>${adjustment}x</td>`;
+    html += `<td>${statusBadge}</td>`;
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+
+  if (activePatterns.length === 0) {
+    html += `<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--muted)">
+      今天是 ${today}，目前無活躍模式。上表列出所有追蹤中的季節性模式供參考。
+    </div>`;
+  }
+
+  return html;
+}
+
+function renderSeasonalityCalendar(data) {
+  if (!data || !data.calendar) {
+    return renderEmptyState('無日曆資料', '');
+  }
+
+  const months = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+  const calendar = data.calendar;
+
+  let html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">';
+  calendar.months.forEach(m => {
+    const monthName = months[m.month - 1];
     html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px">`;
-    html += `<div style="font-weight:700;font-size:13px;margin-bottom:4px">${p.name}</div>`;
-    html += `<div style="font-size:12px;color:var(--muted)">${p.description || ''}</div>`;
-    html += `<div style="font-size:11px;color:var(--accent);margin-top:4px">歷史準確度 ${Math.round((p.historical_accuracy || 0) * 100)}%</div>`;
+    html += `<div style="font-weight:700;font-size:13px;margin-bottom:6px">${monthName}</div>`;
+    if (m.patterns && m.patterns.length > 0) {
+      m.patterns.forEach(p => {
+        const accuracy = Math.round((p.historical_accuracy || 0) * 100);
+        html += `<div style="font-size:11px;margin:3px 0;padding:4px;background:var(--panel);border-radius:4px">`;
+        html += `<strong>${p.name}</strong> <span style="color:var(--muted)">(${accuracy}%)</span>`;
+        html += `</div>`;
+      });
+    } else {
+      html += `<div style="font-size:11px;color:var(--muted)">無相關模式</div>`;
+    }
     html += `</div>`;
   });
   html += '</div>';
-  el.innerHTML = html;
+
+  return html;
 }
 
 function showIndustryDetail(industryId) {
