@@ -206,12 +206,12 @@ func DefaultTemplates() []CausalTemplate {
 			Steps: []CausalStep{
 				{Description: "美元對台幣匯率劇烈變動（>1%）", Affected: []string{"USD/TWD", "出口競爭力"}, Impact: -0.6},
 				{Description: "美元走強 → 台灣出口商競爭力下降，進口成本上升", Affected: []string{"出口導向", "進口成本"}, Impact: -0.5},
-				{Description: "外資換匯成本增加，減少台股投資意願", Affected: []string{"外資流向_台股"}, Impact: -0.4},
+				{Description: "外公換匯成本增加，減少台股投資意願", Affected: []string{"外公流向_台股"}, Impact: -0.4},
 				{Description: "內需與金融板塊相對抗跌", Affected: []string{"內需", "金融"}, Impact: 0.3},
 			},
 			HistoricalHitRate: 0.62,
 			SourceReferences:  []string{"Central Bank of Taiwan Quarterly Report"},
-			Rationale: `USD/TWD 匯率是台灣出口競爭力的核心指標。台灣出口佔 GDP 65%，電子產品為主要出口項目，對匯率極度敏感。當美元對台幣急升（>1%）時，雖然短期對出口商有匯兌收益，但長期會侵蝕競爭力；且外資會因換匯成本增加而減少投資意願。
+			Rationale: `USD/TWD 匯率是台灣出口競爭力的核心指標。台灣出口佔 GDP 65%，電子產品為主要出口項目，對匯率極度敏感。當美元對台急需貶（>1%）時，雖然短期對出口商有匯兌收益，但長期會侵蝕競爭力；且外公會因換匯成本增加而減少投資意願。
 
 投資配置：
 • 【押注】內需、金融：較不受匯率波動直接影響
@@ -233,13 +233,36 @@ func DefaultTemplates() []CausalTemplate {
 			Rationale: `半導體是台灣經濟的核心引擎，佔出口比重超過 35%。當電子零組件出口連續下滑時，意味著全球科技需求正在放緩，半導體庫存開始堆積，產能利用率下降。
 
 這對台股的影響：
-1. 營收與獲利下修：科技股的本益比是建立在成長預期上，一旦成長放緩，估值會被大幅下調
+1. 營收與獲利下修：科技股本益比是建立在成長預期上，一旦成長放緩，估值會被大幅下調
 2. 庫存減記：半導體庫存價值快速貶值，影響獲利
 3. 資本支出縮減：設備與材料訂單減少，影響上游供應鏈
 
 投資配置：
 • 【押注】高股息、內需、金融：在週期下行時提供防禦
 • 【迴避】半導體、AI供應鏈、PCB：庫存去化期通常持續 2-4 個季度，期間股價承壓`,
+		},
+		{
+			ID:             "散戶機構分歧",
+			Name:           "散戶機構分歧",
+			TriggerTheme:   "retail_institutional_divergence",
+			RequiredRegion: "TW",
+			Steps: []CausalStep{
+				{Description: "融資餘額 Z-Score > 1.5（散戶過度樂觀）", Affected: []string{"散戶情緒", "融資餘額"}, Impact: 0.7},
+				{Description: "外公與投信同步賣超（機構偏空）", Affected: []string{"外公流向", "投信流向"}, Impact: -0.6},
+				{Description: "市場流動性邊際惡化 → 軋空風險升高", Affected: []string{"台股大盤", "流動性"}, Impact: -0.5},
+				{Description: "高Beta股和主題型中小股面臨短期回調壓力", Affected: []string{"中小型股", "主題股"}, Impact: -0.4},
+			},
+			HistoricalHitRate: 0.60,
+			SourceReferences:  []string{"TWSE Margin Statistics", "Taiwan Financial Supervisory Commission"},
+			Rationale: `當散戶（透過融資餘額衡量）和機構投資人（外資+投信）的方向出現明顯分歧時，市場往往處於過度杠桿或過度樂觀的狀態。融資餘額創新高代表散戶信心飽滿，但若同期機構投資人卻在賣超，這種「群眾 vs 專業」的分歧是經典的逆向訊號。
+
+歷史規律：
+• 散戶融資餘額 Z-Score > 1.5 且外资持續賣超 → 未來 1 個月高Beta股回調概率超過 60%
+• 軋空行情往往在散戶過度樂觀後突然反轉
+
+投資配置：
+• 【迴避】高Beta、主題型中小股：杠桿化程度最高，回調時殺最慘
+• 【押注】高股息、金融：較不受散戶情緒邊際影響`,
 		},
 	}
 }

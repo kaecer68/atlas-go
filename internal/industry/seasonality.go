@@ -253,6 +253,35 @@ func (se *SeasonalEngine) GetAllPatterns() []SeasonalPattern {
 	return result
 }
 
+func (se *SeasonalEngine) GetPatternsForIndustry(industryID string) []SeasonalPattern {
+	var result []SeasonalPattern
+	for _, p := range se.patterns {
+		if p.IsRelevantForIndustry(industryID) {
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
+func (se *SeasonalEngine) GetIndustryImpact(patternID, industryID string) (impact string, adjustment float64) {
+	pattern, ok := se.GetPatternByID(patternID)
+	if !ok {
+		return "neutral", 1.0
+	}
+
+	for _, favored := range pattern.FavoredIndustries {
+		if favored == industryID {
+			return "favored", pattern.AdjustmentFactor
+		}
+	}
+	for _, avoided := range pattern.AvoidedIndustries {
+		if avoided == industryID {
+			return "avoided", 1.0 / pattern.AdjustmentFactor
+		}
+	}
+	return "neutral", 1.0
+}
+
 // GetHistoricalAccuracy returns the average historical accuracy of active patterns.
 func (se *SeasonalEngine) GetHistoricalAccuracy(t time.Time) float64 {
 	patterns := se.DetectCurrentPatterns(t)

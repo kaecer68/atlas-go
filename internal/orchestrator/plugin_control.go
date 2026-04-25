@@ -14,31 +14,55 @@ type ControlExecutor interface {
 	Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy) []domain.Recommendation
 }
 
-type CRORiskExecutor struct{}
+type CRORiskExecutor struct {
+	convictionNormalizer *portfolio.ConvictionNormalizer
+}
+
+func NewCRORiskExecutor() *CRORiskExecutor {
+	return &CRORiskExecutor{
+		convictionNormalizer: portfolio.NewConvictionNormalizer(),
+	}
+}
 
 func (CRORiskExecutor) Supports(agent domain.AgentSpec) bool {
 	return agent.Skill == "cro_risk"
 }
 
-func (CRORiskExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy) []domain.Recommendation {
+func (e CRORiskExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy) []domain.Recommendation {
 	filtered := make([]domain.Recommendation, 0, len(recs))
 	floor := policy.ConvictionFloor
 	if floor <= 0 {
 		floor = 50
 	}
 
-	for _, rec := range recs {
-		if rec.Conviction < floor {
-			continue
+	if policy.EnableConvictionNormalization && e.convictionNormalizer != nil {
+		for _, rec := range recs {
+			e.convictionNormalizer.RecordConviction(rec.Agent, rec.Conviction)
 		}
-
-		if rec.StopLossPrice > 0 && rec.TargetPrice > 0 && rec.Side == domain.SideBuy {
-			if rec.StopLossPrice >= rec.TargetPrice {
+		for _, rec := range recs {
+			zScore := e.convictionNormalizer.Normalize(rec.Agent, rec.Conviction, portfolio.ZScore)
+			if zScore <= -1.5 {
 				continue
 			}
+			if rec.StopLossPrice > 0 && rec.TargetPrice > 0 && rec.Side == domain.SideBuy {
+				if rec.StopLossPrice >= rec.TargetPrice {
+					continue
+				}
+			}
+			filtered = append(filtered, rec)
 		}
-
-		filtered = append(filtered, rec)
+	} else {
+		for _, rec := range recs {
+			if rec.Conviction < floor {
+				continue
+			}
+			if rec.StopLossPrice > 0 && rec.TargetPrice > 0 && rec.Side == domain.SideBuy {
+				if rec.StopLossPrice >= rec.TargetPrice {
+					continue
+				}
+			}
+			filtered = append(filtered, rec)
+		}
 	}
 
 	sectorCount := map[string]int{}

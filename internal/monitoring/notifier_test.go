@@ -21,7 +21,7 @@ func TestTelegramNotifier_IsConfigured(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			n := NewTelegramNotifier(tt.cfg)
+			n := NewTelegramNotifier(tt.cfg.TelegramBotToken, tt.cfg.TelegramChatID)
 			if got := n.IsConfigured(); got != tt.want {
 				t.Errorf("IsConfigured() = %v, want %v", got, tt.want)
 			}
@@ -30,14 +30,14 @@ func TestTelegramNotifier_IsConfigured(t *testing.T) {
 }
 
 func TestTelegramNotifier_Name(t *testing.T) {
-	n := NewTelegramNotifier(domain.AlertChannelConfig{})
+	n := NewTelegramNotifier("", "")
 	if n.Name() != "telegram" {
 		t.Errorf("Name() = %q, want telegram", n.Name())
 	}
 }
 
 func TestTelegramNotifier_Notify_NotConfigured(t *testing.T) {
-	n := NewTelegramNotifier(domain.AlertChannelConfig{})
+	n := NewTelegramNotifier("", "")
 	err := n.Notify(domain.AlertRecord{ID: "1"})
 	if err == nil {
 		t.Fatal("expected error when not configured, got nil")
@@ -55,8 +55,8 @@ func TestTelegramNotifier_Notify_Success(t *testing.T) {
 	defer server.Close()
 
 	n := &TelegramNotifier{
-		botToken: "test-token",
-		chatID:   "123",
+		BotToken: "test-token",
+		ChatID:   "123",
 		baseURL:  server.URL,
 		client:   &http.Client{},
 	}
@@ -128,7 +128,7 @@ func TestWebhookNotifier_IsConfigured(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			n := NewWebhookNotifier(tt.cfg)
+			n := NewWebhookNotifier(tt.cfg.WebhookURL, tt.cfg.WebhookHeaders)
 			if got := n.IsConfigured(); got != tt.want {
 				t.Errorf("IsConfigured() = %v, want %v", got, tt.want)
 			}
@@ -137,14 +137,14 @@ func TestWebhookNotifier_IsConfigured(t *testing.T) {
 }
 
 func TestWebhookNotifier_Name(t *testing.T) {
-	n := NewWebhookNotifier(domain.AlertChannelConfig{})
+	n := NewWebhookNotifier("", nil)
 	if n.Name() != "webhook" {
 		t.Errorf("Name() = %q, want webhook", n.Name())
 	}
 }
 
 func TestWebhookNotifier_Notify_NotConfigured(t *testing.T) {
-	n := NewWebhookNotifier(domain.AlertChannelConfig{})
+	n := NewWebhookNotifier("", nil)
 	err := n.Notify(domain.AlertRecord{ID: "1"})
 	if err == nil {
 		t.Fatal("expected error when not configured, got nil")
@@ -163,7 +163,7 @@ func TestWebhookNotifier_Notify_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	n := NewWebhookNotifier(domain.AlertChannelConfig{WebhookURL: server.URL})
+	n := NewWebhookNotifier(server.URL, nil)
 	alert := domain.AlertRecord{ID: "alert-1", Rule: "test", Severity: "INFO", Message: "hello"}
 
 	if err := n.Notify(alert); err != nil {
@@ -180,10 +180,7 @@ func TestWebhookNotifier_Notify_CustomHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	n := NewWebhookNotifier(domain.AlertChannelConfig{
-		WebhookURL:     server.URL,
-		WebhookHeaders: map[string]string{"X-API-Key": "secret"},
-	})
+	n := NewWebhookNotifier(server.URL, map[string]string{"X-API-Key": "secret"})
 	if err := n.Notify(domain.AlertRecord{ID: "1"}); err != nil {
 		t.Fatalf("Notify: %v", err)
 	}
@@ -196,7 +193,7 @@ func TestWebhookNotifier_Notify_ServerError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	n := NewWebhookNotifier(domain.AlertChannelConfig{WebhookURL: server.URL})
+	n := NewWebhookNotifier(server.URL, nil)
 	err := n.Notify(domain.AlertRecord{ID: "1"})
 	if err == nil {
 		t.Fatal("expected error on server failure, got nil")

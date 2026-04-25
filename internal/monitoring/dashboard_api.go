@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -28,6 +29,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
+	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/replay"
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
@@ -46,11 +48,14 @@ type DashboardAPI struct {
 	backtestRunning    bool
 	backtestStatus     map[string]interface{}
 	metricsCollector   *MetricsCollector
+	metricsHistory     *MetricsHistory
 	industryClassifier *industry.ClassificationTree
 	seasonalEngine     *industry.SeasonalEngine
 	cycleTracker       *industry.CycleTracker
 	linkageAnalyzer    *industry.LinkageAnalyzer
 	riskMonitor        *industry.RiskMonitor
+	healthManager      *portfolio.AgentHealthManager
+	dataQualityChecker *DataQualityChecker
 }
 
 type MacroRadarResponse struct {
@@ -88,15 +93,19 @@ type ForecastVsRealityResponse struct {
 	BrokerRuntime domain.BrokerRuntimeAudit `json:"broker_runtime"`
 }
 
-func NewDashboardAPI(workDir, ledgerDir string) *DashboardAPI {
+func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
 	provider := marketdata.NewCompositeMacroProvider(
 		marketdata.NewYahooFinanceMacroProvider(),
 		marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")),
+		marketdata.NewTWSEBalanceProvider(filepath.Join(workDir, "data/state/margin")),
 	)
 	geoProvider := narrative.NewCompositeGeopoliticalProvider(
 		narrative.NewRSSGeopoliticalProvider(),
 		narrative.NewGDELTGeopoliticalProvider(),
 	)
+	if metricsCollector == nil {
+		metricsCollector = NewMetricsCollector()
+	}
 	return &DashboardAPI{
 		workDir:            workDir,
 		ledgerDir:          ledgerDir,
@@ -106,12 +115,15 @@ func NewDashboardAPI(workDir, ledgerDir string) *DashboardAPI {
 		geoProvider:        geoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider),
 		reportGenerator:    narrative.NewReportGenerator(),
-		metricsCollector:   NewMetricsCollector(),
+		metricsCollector:   metricsCollector,
+		metricsHistory:     NewMetricsHistory(1000),
 		industryClassifier: industry.DefaultClassification(),
 		seasonalEngine:     industry.NewSeasonalEngine(),
 		cycleTracker:       industry.NewCycleTracker(),
 		linkageAnalyzer:    industry.NewLinkageAnalyzer(),
 		riskMonitor:        industry.NewRiskMonitor(),
+		healthManager:      portfolio.NewAgentHealthManager(),
+		dataQualityChecker: NewDataQualityChecker(workDir, ledgerDir),
 	}
 }
 
@@ -135,15 +147,20 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/capital-phase", a.handleCapitalPhase)
 	mux.HandleFunc("/api/dashboard/tax-snapshot", a.handleTaxSnapshot)
 	mux.HandleFunc("/api/dashboard/metrics", a.handleMetrics)
+	mux.HandleFunc("/api/dashboard/metrics/trend", a.handleMetricsTrend)
+	mux.HandleFunc("/api/dashboard/data-quality", a.handleDataQuality)
 }
 
 func (a *DashboardAPI) RegisterIndustryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/industry/classification", a.handleIndustryClassification)
 	mux.HandleFunc("/api/industry/seasonality", a.handleIndustrySeasonality)
+	mux.HandleFunc("/api/industry/seasonality/calendar", a.handleIndustrySeasonalityCalendar)
 	mux.HandleFunc("/api/industry/cycle", a.handleIndustryCycle)
 	mux.HandleFunc("/api/industry/linkage", a.handleIndustryLinkage)
 	mux.HandleFunc("/api/industry/risk", a.handleIndustryRisk)
 	mux.HandleFunc("/api/industry/overview", a.handleIndustryOverview)
+	mux.HandleFunc("/api/industry/shock-simulation", a.handleShockSimulation)
+	mux.HandleFunc("/api/industry/graph", a.handleIndustryGraph)
 }
 
 // RegisterSwaggerRoutes mounts Swagger UI and the OpenAPI spec.
@@ -171,6 +188,7 @@ func (a *DashboardAPI) RegisterControlRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/control/reject-recommendation", a.handleRejectRecommendation)
 	mux.HandleFunc("/api/control/audit-log", a.handleAuditLog)
 	mux.HandleFunc("/api/control/active-overrides", a.handleActiveOverrides)
+	mux.HandleFunc("/api/agents/health", a.handleAgentHealth)
 }
 
 // RegisterMacroRoutes mounts macro data snapshot endpoints.
@@ -209,6 +227,11 @@ func (a *DashboardAPI) RegisterBacktestRoutes(mux *http.ServeMux) {
 // SetPool injects an optional database pool for DB-backed channel health.
 func (a *DashboardAPI) SetPool(pool *pgxpool.Pool) {
 	a.pool = pool
+}
+
+// SetHealthManager injects an optional agent health manager.
+func (a *DashboardAPI) SetHealthManager(m *portfolio.AgentHealthManager) {
+	a.healthManager = m
 }
 
 func (a *DashboardAPI) handleLiveStatus(w http.ResponseWriter, r *http.Request) {
@@ -1003,15 +1026,17 @@ func writeJSONError(w http.ResponseWriter, status int, message string) {
 
 func (a *DashboardAPI) handleNarrativeEvents(w http.ResponseWriter, r *http.Request) {
 	data := narrative.MarketNarrativeData{
-		US10YChangeBps:    parseFloatQuery(r, "us10y_change_bps", 15),
-		DXYChangePct:      parseFloatQuery(r, "dxy_change_pct", 2.0),
-		VIXLevel:          parseFloatQuery(r, "vix_level", 30),
-		USD_TWD_ChangePct: parseFloatQuery(r, "usd_twd_change_pct", 0),
-		OilChangePct:      parseFloatQuery(r, "oil_change_pct", 6.0),
-		GoldChangePct:     parseFloatQuery(r, "gold_change_pct", 2.5),
-		JPY_ChangePct:     parseFloatQuery(r, "jpy_change_pct", 3.0),
-		AICapexSentiment:  parseFloatQuery(r, "ai_capex_sentiment", 0.8),
-		GeopoliticalGPR:   parseFloatQuery(r, "geopolitical_gpr", 160),
+		US10YChangeBps:                parseFloatQuery(r, "us10y_change_bps", 15),
+		DXYChangePct:                  parseFloatQuery(r, "dxy_change_pct", 2.0),
+		VIXLevel:                      parseFloatQuery(r, "vix_level", 30),
+		USD_TWD_ChangePct:             parseFloatQuery(r, "usd_twd_change_pct", 0),
+		OilChangePct:                  parseFloatQuery(r, "oil_change_pct", 6.0),
+		GoldChangePct:                 parseFloatQuery(r, "gold_change_pct", 2.5),
+		JPY_ChangePct:                 parseFloatQuery(r, "jpy_change_pct", 3.0),
+		AICapexSentiment:              parseFloatQuery(r, "ai_capex_sentiment", 0.8),
+		GeopoliticalGPR:               parseFloatQuery(r, "geopolitical_gpr", 160),
+		RetailInstitutionalDivergence: parseFloatQuery(r, "retail_divergence", 0),
+		MarginZScore:                  parseFloatQuery(r, "margin_zscore", 0),
 	}
 	events := a.narrativeEngine.DetectEvents(data)
 	writeJSON(w, http.StatusOK, map[string]any{"events": events})
@@ -1146,6 +1171,54 @@ func (a *DashboardAPI) handleResumeAgent(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "intervention": intervention})
+}
+
+func (a *DashboardAPI) handleAgentHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	if a.healthManager == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"agents":      []*portfolio.AgentHealth{},
+			"total":       0,
+			"muted_count": 0,
+		})
+		return
+	}
+
+	registryPath := filepath.Join(a.workDir, "configs/agents.json")
+	registry, err := orchestrator.LoadRegistry(registryPath)
+	if err != nil {
+		registry = orchestrator.SeedRegistry()
+	}
+
+	agents := make([]*portfolio.AgentHealth, 0)
+	mutedCount := 0
+
+	for _, agent := range registry.Agents {
+		if !agent.Enabled {
+			continue
+		}
+		h := a.healthManager.GetHealth(agent.ID)
+		if h == nil {
+			h = &portfolio.AgentHealth{
+				AgentID: agent.ID,
+				Status:  portfolio.HealthStatusHealthy,
+			}
+		}
+		agents = append(agents, h)
+		if h.Status == portfolio.HealthStatusMuted {
+			mutedCount++
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"agents":      agents,
+		"total":       len(agents),
+		"muted_count": mutedCount,
+	})
 }
 
 func (a *DashboardAPI) handleSetModelWeight(w http.ResponseWriter, r *http.Request) {
@@ -2634,9 +2707,20 @@ func (a *DashboardAPI) handleDataChannels(w http.ResponseWriter, r *http.Request
 	fugleKey := os.Getenv("FUGLE_API_KEY")
 	fugleStatus := "inactive"
 	fugleUpdated := "-"
+	fugleLastError := ""
 	if fugleKey != "" {
-		fugleStatus = "ok"
-		fugleUpdated = "API Key 已設定"
+		fugleClient := marketdata.NewFugleClient(fugleKey)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		_, err := fugleClient.GetQuote(ctx, "0050")
+		cancel()
+		if err != nil {
+			fugleStatus = "error"
+			fugleUpdated = "API 連線失敗"
+			fugleLastError = err.Error()
+		} else {
+			fugleStatus = "ok"
+			fugleUpdated = "API 連線正常"
+		}
 	} else {
 		fugleUpdated = "未設定 API Key"
 	}
@@ -2650,6 +2734,7 @@ func (a *DashboardAPI) handleDataChannels(w http.ResponseWriter, r *http.Request
 		Status:     fugleStatus,
 		StatusText: statusText(fugleStatus),
 		UpdatedAt:  fugleUpdated,
+		LastError:  fugleLastError,
 	})
 
 	// 5. JPY via Yahoo (Japan indicator, same endpoint as US)
@@ -2706,6 +2791,36 @@ func (a *DashboardAPI) handleDataChannels(w http.ResponseWriter, r *http.Request
 		LastError: func() string {
 			if geoRec != nil {
 				return geoRec.LastError
+			}
+			return ""
+		}(),
+	})
+
+	// 7. TWSE Margin (Retail Leverage — reverse indicator)
+	marginDir := filepath.Join(a.workDir, "data/state/margin")
+	marginStatus, marginUpdated := a.checkCapitalFlowHealth(marginDir, now)
+	marginRec := healthStore.Get("twse_margin")
+	if marginRec != nil && marginRec.Status != "" {
+		marginStatus = marginRec.Status
+		if marginRec.LastError != "" {
+			marginUpdated = "上次失敗: " + marginRec.LastError
+		} else if marginRec.LastSuccessAt != "" {
+			marginUpdated = "上次成功: " + marginRec.LastSuccessAt
+		}
+	}
+	channels = append(channels, DataChannel{
+		ChannelID:  "twse_margin",
+		Country:    "台灣",
+		Platform:   "TWSE 融資融券",
+		APIFormat:  "Miantane JSON",
+		Path:       "www.twse.com.tw/rwd/zh/marginTradingMiantane",
+		Storage:    "data/state/margin/*_margin.json",
+		Status:     marginStatus,
+		StatusText: statusText(marginStatus),
+		UpdatedAt:  marginUpdated,
+		LastError: func() string {
+			if marginRec != nil {
+				return marginRec.LastError
 			}
 			return ""
 		}(),
@@ -3048,6 +3163,8 @@ func (a *DashboardAPI) handleCapitalPhase(w http.ResponseWriter, r *http.Request
 		"total_capital":    snap.TotalCapital,
 		"deployed_capital": snap.DeployedCapital,
 		"reserve_cash":     snap.ReserveCash,
+		"is_simulated":     true,
+		"note":             "此為示範資料，非真實交易記錄。實際資金階段需透過 live trading 或模擬執行後計算。",
 	})
 }
 
@@ -3081,6 +3198,8 @@ func (a *DashboardAPI) handleTaxSnapshot(w http.ResponseWriter, r *http.Request)
 		"before_tax_pnl": beforeTaxPnL,
 		"after_tax_pnl":  afterTaxPnL,
 		"total_tax_paid": totalTax,
+		"is_simulated":   true,
+		"note":           "此為示範資料（僅 2330.TW 單一筆），非真實交易記錄。實際稅務資料需從 ledger outcomes 計算。",
 	})
 }
 
@@ -3226,7 +3345,7 @@ func (a *DashboardAPI) handleIndustrySeasonality(w http.ResponseWriter, r *http.
 				"end_month":           p.EndMonth,
 				"end_day":             p.EndDay,
 				"historical_accuracy": p.HistoricalAccuracy,
-				"typical_return":      p.TypicalReturn,
+				"typical_return":      p.TypicalReturn(),
 				"affected_industries": p.AffectedIndustries,
 			})
 		}
@@ -3237,11 +3356,81 @@ func (a *DashboardAPI) handleIndustrySeasonality(w http.ResponseWriter, r *http.
 		adjustment = a.seasonalEngine.GetPatternAdjustment(industryID, now)
 	}
 
+	allPatterns := a.seasonalEngine.GetAllPatterns()
+	var historicalPatterns []map[string]interface{}
+	for _, p := range allPatterns {
+		if industryID == "" || p.IsRelevantForIndustry(industryID) {
+			historicalPatterns = append(historicalPatterns, map[string]interface{}{
+				"id":                  p.ID,
+				"name":                p.Name,
+				"name_en":             p.NameEN,
+				"description":         p.Description,
+				"start_month":         p.StartMonth,
+				"start_day":           p.StartDay,
+				"end_month":           p.EndMonth,
+				"end_day":             p.EndDay,
+				"historical_accuracy": p.HistoricalAccuracy,
+				"typical_return":      p.TypicalReturn(),
+				"adjustment_factor":   p.AdjustmentFactor,
+				"favored_industries":  p.FavoredIndustries,
+				"avoided_industries":  p.AvoidedIndustries,
+				"impact": func() string {
+					if industryID == "" {
+						return ""
+					}
+					impact, _ := a.seasonalEngine.GetIndustryImpact(p.ID, industryID)
+					return impact
+				}(),
+			})
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"current_date":    now.Format("2006-01-02"),
-		"active_patterns": activePatterns,
-		"pattern_count":   len(activePatterns),
-		"adjustment":      adjustment,
+		"current_date":        now.Format("2006-01-02"),
+		"active_patterns":     activePatterns,
+		"pattern_count":       len(activePatterns),
+		"adjustment":          adjustment,
+		"all_patterns":        historicalPatterns,
+		"total_pattern_count": len(historicalPatterns),
+	})
+}
+
+func (a *DashboardAPI) handleIndustrySeasonalityCalendar(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	industryID := r.URL.Query().Get("industry")
+	now := time.Now()
+	calendar := a.seasonalEngine.GenerateCalendar(now.Year())
+
+	var months []map[string]interface{}
+	for m := 1; m <= 12; m++ {
+		monthPatterns := calendar.ByMonth[m]
+		var relevantPatterns []map[string]interface{}
+		for _, p := range monthPatterns {
+			if industryID == "" || p.IsRelevantForIndustry(industryID) {
+				relevantPatterns = append(relevantPatterns, map[string]interface{}{
+					"id":                  p.ID,
+					"name":                p.Name,
+					"historical_accuracy": p.HistoricalAccuracy,
+					"typical_return":      p.TypicalReturn(),
+					"adjustment_factor":   p.AdjustmentFactor,
+				})
+			}
+		}
+		months = append(months, map[string]interface{}{
+			"month":    m,
+			"patterns": relevantPatterns,
+			"count":    len(relevantPatterns),
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"year":     calendar.Year,
+		"industry": industryID,
+		"months":   months,
 	})
 }
 
@@ -3252,8 +3441,32 @@ func (a *DashboardAPI) handleIndustryCycle(w http.ResponseWriter, r *http.Reques
 	}
 
 	industryID := r.URL.Query().Get("industry")
+
 	if industryID == "" {
-		writeJSONError(w, http.StatusBadRequest, "industry parameter required")
+		var allPositions []map[string]interface{}
+		for _, seg := range a.industryClassifier.GetAllSegments() {
+			if seg.ParentID != "" {
+				continue
+			}
+			if pos, ok := a.cycleTracker.GetPosition(seg.ID); ok {
+				allPositions = append(allPositions, map[string]interface{}{
+					"industry":        seg.ID,
+					"name":            seg.Name,
+					"business_cycle":  pos.BusinessCycle,
+					"inventory_cycle": pos.InventoryCycle,
+					"capex_cycle":     pos.CapexCycle,
+					"confidence":      pos.Confidence,
+					"updated_at":      pos.UpdatedAt,
+					"is_favorable":    pos.IsFavorable(),
+					"phase_score":     pos.GetPhaseScore(),
+					"trend":           pos.GetTrend(),
+				})
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"industries": allPositions,
+			"count":      len(allPositions),
+		})
 		return
 	}
 
@@ -3421,4 +3634,174 @@ func (a *DashboardAPI) handleIndustryOverview(w http.ResponseWriter, r *http.Req
 		"count":      len(industries),
 		"updated_at": now,
 	})
+}
+
+func (a *DashboardAPI) handleShockSimulation(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	var req struct {
+		SourceIndustry string  `json:"source_industry"`
+		ShockMagnitude float64 `json:"shock_magnitude"`
+		MaxDepth       int     `json:"max_depth"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid json: "+err.Error())
+		return
+	}
+
+	if req.SourceIndustry == "" {
+		writeJSONError(w, http.StatusBadRequest, "source_industry required")
+		return
+	}
+
+	if req.MaxDepth <= 0 {
+		req.MaxDepth = 3
+	}
+
+	impacts := a.linkageAnalyzer.PropagateShock(req.SourceIndustry, req.ShockMagnitude, req.MaxDepth)
+
+	var impactList []map[string]interface{}
+	for industry, impact := range impacts {
+		impactList = append(impactList, map[string]interface{}{
+			"industry": industry,
+			"impact":   impact,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"source":       req.SourceIndustry,
+		"shock":        req.ShockMagnitude,
+		"max_depth":    req.MaxDepth,
+		"impacts":      impactList,
+		"impact_count": len(impactList),
+	})
+}
+
+func (a *DashboardAPI) handleIndustryGraph(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	cm := a.linkageAnalyzer.GetCorrelationMatrix()
+
+	var nodes []map[string]interface{}
+	var edges []map[string]interface{}
+	nodeSet := make(map[string]bool)
+
+	allCorrelations := cm.GetAllCorrelations()
+	for industryA, correlations := range allCorrelations {
+		if !nodeSet[industryA] {
+			nodeSet[industryA] = true
+			score := a.linkageAnalyzer.CalculateLinkageScore(industryA)
+			nodes = append(nodes, map[string]interface{}{
+				"id":                  industryA,
+				"systemic_importance": score.SystemicImportance,
+				"upstream_count":      score.UpstreamCount,
+				"downstream_count":    score.DownstreamCount,
+			})
+		}
+
+		for industryB, correlation := range correlations {
+			if industryA >= industryB {
+				continue
+			}
+			if !nodeSet[industryB] {
+				nodeSet[industryB] = true
+				score := a.linkageAnalyzer.CalculateLinkageScore(industryB)
+				nodes = append(nodes, map[string]interface{}{
+					"id":                  industryB,
+					"systemic_importance": score.SystemicImportance,
+					"upstream_count":      score.UpstreamCount,
+					"downstream_count":    score.DownstreamCount,
+				})
+			}
+
+			strength := "low"
+			if math.Abs(correlation) > 0.7 {
+				strength = "high"
+			} else if math.Abs(correlation) > 0.4 {
+				strength = "medium"
+			}
+
+			edges = append(edges, map[string]interface{}{
+				"source":      industryA,
+				"target":      industryB,
+				"correlation": correlation,
+				"strength":    strength,
+			})
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"nodes": nodes,
+		"edges": edges,
+	})
+}
+
+func (a *DashboardAPI) handleMetricsTrend(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	metric := r.URL.Query().Get("metric")
+	period := r.URL.Query().Get("period")
+
+	if metric == "" {
+		metric = "screening_rate"
+	}
+	if period == "" {
+		period = "24h"
+	}
+
+	var duration time.Duration
+	switch period {
+	case "24h":
+		duration = 24 * time.Hour
+	case "7d":
+		duration = 7 * 24 * time.Hour
+	case "30d":
+		duration = 30 * 24 * time.Hour
+	default:
+		duration = 24 * time.Hour
+	}
+
+	snapshot := a.metricsCollector.GetMetricsSnapshot()
+	trend := a.metricsHistory.GetTrend(metric)
+
+	var filteredTrend []TrendPoint
+	cutoff := time.Now().Add(-duration)
+	for _, point := range trend {
+		if point.Timestamp.After(cutoff) {
+			filteredTrend = append(filteredTrend, point)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"metric":      metric,
+		"period":      period,
+		"duration":    duration.String(),
+		"current":     snapshot,
+		"trend":       filteredTrend,
+		"data_points": len(filteredTrend),
+	})
+}
+
+func (a *DashboardAPI) handleDataQuality(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	report := a.dataQualityChecker.RunAll(ctx)
+
+	writeJSON(w, http.StatusOK, report)
 }

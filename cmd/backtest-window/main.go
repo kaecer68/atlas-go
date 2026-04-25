@@ -60,7 +60,7 @@ func run(args []string) error {
 
 	if *serve {
 		mux := http.NewServeMux()
-		dashboard := monitoring.NewDashboardAPI(cfg.WorkDir, cfg.LedgerDir)
+		dashboard := monitoring.NewDashboardAPI(cfg.WorkDir, cfg.LedgerDir, nil)
 		dashboard.RegisterRoutes(mux)
 		dashboard.RegisterNarrativeRoutes(mux)
 		dashboard.RegisterControlRoutes(mux)

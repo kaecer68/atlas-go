@@ -50,10 +50,7 @@ func TestMonitor_AlertDispatchedToNotifier(t *testing.T) {
 	}))
 	defer server.Close()
 
-	n := &WebhookNotifier{
-		url:    server.URL,
-		client: &http.Client{},
-	}
+	n := NewWebhookNotifier(server.URL, nil)
 
 	captureNotifier := &captureNotifier{
 		inner:    n,
@@ -82,7 +79,7 @@ func TestMonitor_AlertDispatchedToNotifier(t *testing.T) {
 
 func TestMonitor_AlertSkipsUnconfiguredNotifier(t *testing.T) {
 	m := NewMonitor()
-	m.AddNotifier(NewWebhookNotifier(domain.AlertChannelConfig{}))
+	m.AddNotifier(NewWebhookNotifier("", nil))
 
 	m.Alert(AlertLevelInfo, "cat", "msg", nil)
 	time.Sleep(50 * time.Millisecond)
@@ -101,8 +98,8 @@ func TestMonitor_MultipleNotifiersAllDispatched(t *testing.T) {
 	defer server.Close()
 
 	m := NewMonitor()
-	m.AddNotifier(&WebhookNotifier{url: server.URL, client: &http.Client{}})
-	m.AddNotifier(&WebhookNotifier{url: server.URL, client: &http.Client{}})
+	m.AddNotifier(NewWebhookNotifier(server.URL, nil))
+	m.AddNotifier(NewWebhookNotifier(server.URL, nil))
 
 	m.Alert(AlertLevelWarning, "cat", "msg", nil)
 	time.Sleep(100 * time.Millisecond)

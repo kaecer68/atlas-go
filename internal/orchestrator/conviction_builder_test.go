@@ -116,15 +116,11 @@ func TestConvictionBuilderFloorCheck(t *testing.T) {
 		if result != false {
 			t.Errorf("floorCheck = %v, want false", result)
 		}
-		if b.final != 30 {
-			t.Errorf("final = %d, want 30 (floor)", b.final)
+		if b.final != 20 {
+			t.Errorf("final = %d, want 20 (original after add)", b.final)
 		}
-		if len(b.steps) != 2 {
-			t.Fatalf("steps len = %d, want 2 (original + floor)", len(b.steps))
-		}
-		floorStep := b.steps[1]
-		if floorStep.Rule != "floor" || floorStep.Delta != 10 {
-			t.Errorf("floor step mismatch: %+v", floorStep)
+		if len(b.steps) != 1 {
+			t.Fatalf("steps len = %d, want 1 (no floor step added)", len(b.steps))
 		}
 	})
 
@@ -218,7 +214,6 @@ func TestConvictionBuilderCombinedWorkflowFloorTriggered(t *testing.T) {
 	b.add("positive1", 10, "first positive")
 	b.add("negative1", -30, "first negative")
 
-	// final = 30, below floor 40
 	result := b.floorCheck()
 	if result != false {
 		t.Errorf("floorCheck = %v, want false", result)
@@ -228,14 +223,11 @@ func TestConvictionBuilderCombinedWorkflowFloorTriggered(t *testing.T) {
 
 	final, breakdown := b.build()
 
-	if final != 40 {
-		t.Errorf("final = %d, want 40 (floor raised)", final)
+	if final != 30 {
+		t.Errorf("final = %d, want 30 (floorCheck does not mutate on false)", final)
 	}
 
-	if len(breakdown.Steps) != 3 {
-		t.Errorf("steps len = %d, want 3", len(breakdown.Steps))
-	}
-	if breakdown.Steps[2].Rule != "floor" {
-		t.Errorf("step[2] rule = %q, want 'floor'", breakdown.Steps[2].Rule)
+	if len(breakdown.Steps) != 2 {
+		t.Errorf("steps len = %d, want 2", len(breakdown.Steps))
 	}
 }

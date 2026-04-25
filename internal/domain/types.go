@@ -116,9 +116,10 @@ type SimulationConstraints struct {
 }
 
 type ExecutionPolicy struct {
-	ConvictionFloor         int
-	RequireCROPass          bool
-	MomentumCrashProtection bool
+	ConvictionFloor               int
+	RequireCROPass                bool
+	MomentumCrashProtection       bool
+	EnableConvictionNormalization bool
 }
 
 type RiskSnapshot struct {

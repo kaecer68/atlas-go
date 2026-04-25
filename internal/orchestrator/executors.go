@@ -42,6 +42,29 @@ func ExecuteRegistryResearchDetailedWithPolicyAndGuardsAndPlugins(
 	return regime, raw, final, guardOutcomes
 }
 
+func filterMutedAgents(registry domain.AgentRegistry, plugins *PluginRegistry) domain.AgentRegistry {
+	if plugins == nil || plugins.healthManager == nil {
+		return registry
+	}
+	filtered := make([]domain.AgentSpec, 0, len(registry.Agents))
+	for _, agent := range registry.Agents {
+		if !plugins.IsAgentHealthy(agent.ID) {
+			health := plugins.healthManager.GetHealth(agent.ID)
+			score := 0.0
+			if health != nil {
+				score = health.CompositeScore
+			}
+			log.Printf("[AgentHealth] Agent %s is muted (CompositeScore=%.2f), skipping", agent.ID, score)
+			continue
+		}
+		filtered = append(filtered, agent)
+	}
+	return domain.AgentRegistry{
+		Version: registry.Version,
+		Agents:  filtered,
+	}
+}
+
 func executeRegistryResearchDetailedWithPolicyAndGuards(
 	registry domain.AgentRegistry,
 	quotes []domain.Quote,
@@ -54,6 +77,8 @@ func executeRegistryResearchDetailedWithPolicyAndGuards(
 	for _, quote := range quotes {
 		quoteBySymbol[quote.Symbol] = quote
 	}
+
+	registry = filterMutedAgents(registry, plugins)
 
 	regime := inferRegime(registry, quoteBySymbol, plugins, overrides)
 	raw, rejects := collectRecommendations(registry, quoteBySymbol, plugins, overrides, regime, sessionID)
@@ -77,6 +102,8 @@ func executeRegistryResearchDetailedWithPolicyAndGuardsAndDarwinian(
 	for _, quote := range quotes {
 		quoteBySymbol[quote.Symbol] = quote
 	}
+
+	registry = filterMutedAgents(registry, plugins)
 
 	regime := inferRegime(registry, quoteBySymbol, plugins, overrides)
 	raw, rejects := collectRecommendations(registry, quoteBySymbol, plugins, overrides, regime, sessionID)
