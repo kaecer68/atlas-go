@@ -349,14 +349,65 @@ func (a *DashboardAPI) handlePortfolioState(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// buildEquityCurve constructs an equity curve from all session summaries,
+// sorted by session trading date ascending.
 func (a *DashboardAPI) buildEquityCurve() ([]EquityCurvePoint, error) {
-	summary, err := a.loadSessionSummary("")
-	if err != nil || summary == nil {
-		return nil, fmt.Errorf("no session summary: %w", err)
+	sessionsDir := filepath.Join(a.ledgerDir, "sessions")
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("no sessions directory")
+		}
+		return nil, err
 	}
-	return []EquityCurvePoint{
-		{Label: summary.SessionID, Value: summary.PortfolioValue},
-	}, nil
+
+	type sessionPoint struct {
+		date    time.Time
+		label   string
+		value   float64
+	}
+	points := make([]sessionPoint, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
+		bytes, err := os.ReadFile(summaryPath)
+		if err != nil {
+			continue
+		}
+		var summary domain.SessionSummary
+		if err := json.Unmarshal(bytes, &summary); err != nil {
+			continue
+		}
+		if summary.PortfolioValue == 0 {
+			continue
+		}
+		date := sessionDateFromID(summary.SessionID)
+		points = append(points, sessionPoint{
+			date:  date,
+			label: summary.SessionID,
+			value: summary.PortfolioValue,
+		})
+	}
+
+	if len(points) == 0 {
+		return nil, fmt.Errorf("no session data")
+	}
+
+	// Sort by date ascending for chart rendering
+	slices.SortFunc(points, func(a, b sessionPoint) int {
+		return a.date.Compare(b.date)
+	})
+
+	curve := make([]EquityCurvePoint, len(points))
+	for i, p := range points {
+		curve[i] = EquityCurvePoint{
+			Label: p.label,
+			Value: p.value,
+		}
+	}
+	return curve, nil
 }
 
 func (a *DashboardAPI) loadLiveStatus() map[string]interface{} {
