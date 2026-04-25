@@ -1,5 +1,9 @@
 package portfolio
 
+// Deprecated: This file is not used in production.
+// Darwinian weight management has been moved to darwinian.go.
+// See ANALYSIS_REPORT.md for details on this decision.
+
 import (
 	"sort"
 	"sync"

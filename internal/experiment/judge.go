@@ -17,10 +17,16 @@ type Judge struct {
 	store          *ledger.Store
 	replayDataPath string
 	baselinePath   string
+	oosValidator   *OOSValidator
 }
 
 func NewJudge(store *ledger.Store, replayDataPath, baselinePath string) *Judge {
-	return &Judge{store: store, replayDataPath: replayDataPath, baselinePath: baselinePath}
+	return &Judge{
+		store:          store,
+		replayDataPath: replayDataPath,
+		baselinePath:   baselinePath,
+		oosValidator:   NewOOSValidator(store, replayDataPath),
+	}
 }
 
 func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, error) {
@@ -63,6 +69,8 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 	result.BaselineObservations = summary.BaselineObservations
 	result.CandidateObservations = summary.CandidateObservations
 	result.UsedFallbackWindow = summary.UsedFallbackWindow
+	result.BaselineReturns = summary.BaselineReturns
+	result.CandidateReturns = summary.CandidateReturns
 	result.Experiment.WindowStart = windowSummary.StartDate
 	result.Experiment.WindowEnd = windowSummary.EndDate
 	result.EvaluationMode = "prompt_aware_replay_judged"
@@ -75,10 +83,31 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 		result.Experiment.ApprovalID = "approval-" + result.Experiment.ID
 	}
 	if accepted {
-		if err := domain.TransitionExperimentStatus(&result.Experiment, domain.ExperimentAccepted); err != nil {
-			return domain.PromptExperimentResult{}, fmt.Errorf("transition experiment status: %w", err)
+		// OOS validation: hard gate after passesAcceptance().
+		// Run on the window immediately following the primary backtest window.
+		oosResult, oosErr := j.oosValidator.ValidateWithBrief(candidatePromptPath, j.baselinePath, result.Brief, windowSummary.EndDate)
+		result.OOSResult = oosResult
+		if oosErr != nil {
+			// OOS validation error — reject conservatively.
+			if err := domain.TransitionExperimentStatus(&result.Experiment, domain.ExperimentRejected); err != nil {
+				return domain.PromptExperimentResult{}, fmt.Errorf("transition experiment status: %w", err)
+			}
+			result.Experiment.RevertReason = fmt.Sprintf("OOS validation error: %v", oosErr)
+			result.Notes = append(result.Notes, "Replay judge rejected due to OOS validation error.")
+		} else if !oosResult.Passed {
+			// OOS failed — reject without accepting.
+			if err := domain.TransitionExperimentStatus(&result.Experiment, domain.ExperimentRejected); err != nil {
+				return domain.PromptExperimentResult{}, fmt.Errorf("transition experiment status: %w", err)
+			}
+			result.Experiment.RevertReason = fmt.Sprintf("OOS validation failed: %s", oosResult.Reason)
+			result.Notes = append(result.Notes, fmt.Sprintf("Replay judge rejected on OOS gate: %s.", oosResult.Reason))
+		} else {
+			// OOS passed — accept.
+			if err := domain.TransitionExperimentStatus(&result.Experiment, domain.ExperimentAccepted); err != nil {
+				return domain.PromptExperimentResult{}, fmt.Errorf("transition experiment status: %w", err)
+			}
+			result.Notes = append(result.Notes, "Replay judge accepted the candidate for the next baseline promotion step.")
 		}
-		result.Notes = append(result.Notes, "Replay judge accepted the candidate for the next baseline promotion step.")
 	} else {
 		if err := domain.TransitionExperimentStatus(&result.Experiment, domain.ExperimentRejected); err != nil {
 			return domain.PromptExperimentResult{}, fmt.Errorf("transition experiment status: %w", err)
@@ -233,6 +262,15 @@ func passesAcceptance(result domain.PromptExperimentResult) (bool, string) {
 		return false, "rejected: improvement below mutation profile threshold"
 	}
 
+	// Statistical significance check using Welch's t-test.
+	// Run only when session returns are available to preserve backward compatibility.
+	if len(result.BaselineReturns) >= 2 && len(result.CandidateReturns) >= 2 {
+		tStat, _ := welchTTest(result.BaselineReturns, result.CandidateReturns)
+		if math.Abs(tStat) < 2.0 {
+			return false, fmt.Sprintf("rejected: candidate improvement not statistically significant (|t|=%.2f < 2.0)", tStat)
+		}
+	}
+
 	requiredChecks := requiredCheckCountForProfile(result.Brief.MaturityLevel, result.Experiment.MutationType)
 
 	for _, gate := range gates {
@@ -249,6 +287,21 @@ func passesAcceptance(result domain.PromptExperimentResult) (bool, string) {
 			if math.IsNaN(candidate) {
 				return false, "rejected: candidate score invalid"
 			}
+		default:
+			// TODO: Implement full gate matrix.
+			// Each gate below requires additional data from simulation outcomes:
+			//
+			// reduce_concentration_risk      → needs per-symbol position weights from ledger
+			// reduce_false_positive_rate     → needs CRO rejection rate from session outcomes
+			// preserve_downside_protection   → needs max drawdown from scorecard
+			// maintain_cro_authority         → needs CRO override frequency from ledger
+			// reduce_sector_blindspots       → needs sector coverage metrics from registry
+			// maintain_industry_coverage    → needs industry exposure from portfolio
+			// reduce_style_drift            → needs style classification tracking
+			// maintain_momentum_catch        → needs momentum indicator hit rate
+			// maintain_sharpe_like          → needs scorecard.SharpeLike comparison
+			// no_drawdown_spike             → needs drawdown series from simulation
+			return false, fmt.Sprintf("rejected: unimplemented gate %q — requires additional outcome data", gate)
 		}
 	}
 	return true, "accepted: maturity-aware gates satisfied"

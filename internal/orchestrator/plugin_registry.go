@@ -26,6 +26,7 @@ type PluginRegistry struct {
 	controlExecutors []ControlExecutor
 	screener         screener.Screener
 	factorEngine     *portfolio.FactorEngine
+	healthManager    *portfolio.AgentHealthManager
 }
 
 func NewPluginRegistry() *PluginRegistry {
@@ -46,7 +47,7 @@ func NewPluginRegistry() *PluginRegistry {
 			TechnicalBreakoutExecutor{},
 		},
 		controlExecutors: []ControlExecutor{
-			CRORiskExecutor{},
+			NewCRORiskExecutor(),
 			CIOPortfolioExecutor{},
 		},
 	}
@@ -60,6 +61,18 @@ func (r *PluginRegistry) WithScreener(s screener.Screener) *PluginRegistry {
 func (r *PluginRegistry) WithFactorEngine(fe *portfolio.FactorEngine) *PluginRegistry {
 	r.factorEngine = fe
 	return r
+}
+
+func (r *PluginRegistry) WithAgentHealthManager(m *portfolio.AgentHealthManager) *PluginRegistry {
+	r.healthManager = m
+	return r
+}
+
+func (r *PluginRegistry) IsAgentHealthy(agentID string) bool {
+	if r.healthManager == nil {
+		return true
+	}
+	return r.healthManager.IsAgentHealthy(agentID)
 }
 
 func (r *PluginRegistry) CalculateFactorScores(symbol string, quotes map[string]domain.Quote, agentRecs []domain.Recommendation, agentWeights map[string]float64) map[portfolio.FactorType]float64 {

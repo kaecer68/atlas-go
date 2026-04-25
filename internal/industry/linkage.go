@@ -460,3 +460,7 @@ func (la *LinkageAnalyzer) GetCorrelationMatrix() *CorrelationMatrix {
 func (la *LinkageAnalyzer) CalculateLinkageScore(industryID string) *IndustryLinkageScore {
 	return la.propagation.CalculateLinkageScore(industryID)
 }
+
+func (la *LinkageAnalyzer) PropagateShock(sourceIndustry string, shockMagnitude float64, maxDepth int) map[string]float64 {
+	return la.propagation.PropagateShock(sourceIndustry, shockMagnitude, maxDepth)
+}

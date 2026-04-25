@@ -211,6 +211,9 @@ func (ne *NarrativeEngine) DetectEvents(data MarketNarrativeData) []NarrativeEve
 	if evt := detectSeasonalEvent(data); evt != nil {
 		events = append(events, *evt)
 	}
+	if evt := detectRetailDivergenceEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
 	return events
 }
 
@@ -306,6 +309,14 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 		} else {
 			m.RecentError = 0.5
 		}
+
+		hitRate := 1.0 - m.RecentError
+		if hitRate < 0 {
+			hitRate = 0
+		} else if hitRate > 1 {
+			hitRate = 1
+		}
+		m.HitRate = hitRate
 	}
 
 	ne.UpdateModelWeights()
@@ -344,15 +355,17 @@ func (ne *NarrativeEngine) ListModels() []InvestmentModel {
 
 // MarketNarrativeData carries raw inputs for narrative detection.
 type MarketNarrativeData struct {
-	US10YChangeBps    float64
-	DXYChangePct      float64
-	VIXLevel          float64
-	USD_TWD_ChangePct float64
-	OilChangePct      float64
-	GoldChangePct     float64
-	JPY_ChangePct     float64
-	AICapexSentiment  float64 // +1 bullish, -1 bearish
-	GeopoliticalGPR   float64 // Geopolitical risk index level
+	US10YChangeBps                float64
+	DXYChangePct                  float64
+	VIXLevel                      float64
+	USD_TWD_ChangePct             float64
+	OilChangePct                  float64
+	GoldChangePct                 float64
+	JPY_ChangePct                 float64
+	AICapexSentiment              float64 // +1 bullish, -1 bearish
+	GeopoliticalGPR               float64 // Geopolitical risk index level
+	RetailInstitutionalDivergence float64 // + retail bullish, - retail bearish
+	MarginZScore                  float64 // how extreme current margin balance is (reverse indicator)
 }
 
 func detectUSRatesEvent(data MarketNarrativeData) *NarrativeEvent {
@@ -632,6 +645,28 @@ func detectSeasonalEvent(data MarketNarrativeData) *NarrativeEvent {
 		}
 	}
 
+	return nil
+}
+
+func detectRetailDivergenceEvent(data MarketNarrativeData) *NarrativeEvent {
+	if data.MarginZScore > 1.5 && data.RetailInstitutionalDivergence > 0 {
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-retail-div-%d", nowUnix()),
+			Theme:            "retail_institutional_divergence",
+			Region:           "TW",
+			Sentiment:        -0.5,
+			Confidence:       0.60,
+			ConfidenceSource: "divergence_zscore_v1",
+			HitRate:          hitRateForTheme("retail_institutional_divergence"),
+			CapitalFlow:      "crowding_risk",
+			TimeWindow:       "immediate",
+			Timestamp:        time.Now().UTC(),
+			SourceData: map[string]float64{
+				"margin_zscore":                   data.MarginZScore,
+				"retail_institutional_divergence": data.RetailInstitutionalDivergence,
+			},
+		}
+	}
 	return nil
 }
 

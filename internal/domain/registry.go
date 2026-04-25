@@ -147,6 +147,19 @@ type ReplayDataMetadata struct {
 	RecordCount    int       `json:"record_count"`
 }
 
+type OOSResult struct {
+	Passed         bool      `json:"passed"`
+	BaselineScore  float64   `json:"baseline_score"`
+	CandidateScore float64   `json:"candidate_score"`
+	Improvement    float64   `json:"improvement"`
+	Observations   int       `json:"observations"`
+	OOSWindowStart time.Time `json:"oos_window_start"`
+	OOSWindowEnd   time.Time `json:"oos_window_end"`
+	UsedFallback   bool      `json:"used_fallback"`
+	ValidationAt   time.Time `json:"validation_at"`
+	Reason         string    `json:"reason"`
+}
+
 type PromptExperimentResult struct {
 	Experiment            ExperimentRecord
 	Brief                 MutationBrief
@@ -160,4 +173,7 @@ type PromptExperimentResult struct {
 	UsedFallbackWindow    bool
 	RecordedAt            time.Time
 	DataMetadata          *ReplayDataMetadata `json:"data_metadata,omitempty"`
+	OOSResult             *OOSResult          `json:"oos_result,omitempty"`
+	BaselineReturns       []float64           `json:"baseline_returns,omitempty"`
+	CandidateReturns      []float64           `json:"candidate_returns,omitempty"`
 }

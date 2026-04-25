@@ -44,6 +44,7 @@ type SystemCore struct {
 	capitalController *risk.CapitalPhaseController
 	capitalAllocator  *portfolio.CapitalAllocator
 	approvalWorkflow  *risk.ApprovalWorkflow
+	metricsCollector  interface{ RecordScreening(passed, rejected int64) }
 }
 
 // System orchestrates the full simulation loop via a SystemCore and a PluginHost.
@@ -170,6 +171,9 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	_ = s.ledger.RecordOutcomes(outcomes)
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)
 	_ = s.ledger.RecordSessionScreeningRejects(s.session.ID, rejects)
+	if s.metricsCollector != nil {
+		s.metricsCollector.RecordScreening(int64(len(rawRecs)), int64(len(rejects)))
+	}
 	s.lastOutcomes = outcomes
 
 	if s.darwinian != nil {
@@ -219,6 +223,9 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	_ = s.ledger.RecordOutcomes(outcomes)
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)
 	_ = s.ledger.RecordSessionScreeningRejects(s.session.ID, rejects)
+	if s.metricsCollector != nil {
+		s.metricsCollector.RecordScreening(int64(len(rawRecs)), int64(len(rejects)))
+	}
 	s.lastOutcomes = outcomes
 
 	s.portfolioHistory = append(s.portfolioHistory, result.PortfolioValue)
@@ -533,8 +540,9 @@ func syntheticForwardReturn(symbol string, quote domain.Quote) float64 {
 		if fr < -0.05 {
 			fr = -0.05
 		}
+		// Neutral fallback: no artificial bias introduced
 		if fr == 0 {
-			fr = 0.003
+			fr = 0.0
 		}
 		return fr
 	}
@@ -669,6 +677,10 @@ func (s *System) WithCapitalManagement(
 	s.capitalController = controller
 	s.capitalAllocator = allocator
 	s.approvalWorkflow = workflow
+}
+
+func (s *System) WithMetricsCollector(mc interface{ RecordScreening(passed, rejected int64) }) {
+	s.metricsCollector = mc
 }
 
 func (s *System) checkCapitalPhase() (bool, string) {

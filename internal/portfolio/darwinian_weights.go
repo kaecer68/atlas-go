@@ -3,6 +3,8 @@ package portfolio
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -164,7 +166,7 @@ func (m *DarwinianWeightManager) updateRollingMetrics(w *DarwinianAgentWeight) {
 	for _, r := range recentReturns {
 		variance += (r - mean) * (r - mean)
 	}
-	w.RollingVolatility = variance / float64(len(recentReturns))
+	w.RollingVolatility = math.Sqrt(variance / float64(len(recentReturns)))
 }
 
 // calculateSharpe calculates Sharpe ratio for a series of returns
@@ -185,13 +187,13 @@ func (m *DarwinianWeightManager) calculateSharpe(returns []float64) float64 {
 	for _, r := range returns {
 		variance += (r - mean) * (r - mean)
 	}
-	stdDev := variance / float64(len(returns))
+	stdDev := math.Sqrt(variance / float64(len(returns)-1))
 	if stdDev == 0 {
 		return 0.0
 	}
 
 	// Sharpe = mean / stdDev (assuming risk-free rate = 0 for simplicity)
-	return mean / stdDev
+	return (mean / stdDev) * math.Sqrt(252)
 }
 
 // PerformDailyAdjustment performs the daily Darwinian weight adjustment
@@ -250,7 +252,7 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() map[string]float64 {
 		}
 
 		multiplier := TopQuartileMultiplier * performanceBonus * volatilityPenalty
-		w.Weight = m.constrainWeight(oldWeight * multiplier)
+		w.Weight = m.constrainWeight(w.AgentID, oldWeight*multiplier)
 		w.LastAdjustedAt = now
 
 		adjustments[w.AgentID] = w.Weight - oldWeight
@@ -263,9 +265,9 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() map[string]float64 {
 
 		// Slight adjustment based on hit rate
 		if w.HitRate > 0.6 {
-			w.Weight = m.constrainWeight(oldWeight * 1.02)
+			w.Weight = m.constrainWeight(w.AgentID, oldWeight*1.02)
 		} else if w.HitRate < 0.4 {
-			w.Weight = m.constrainWeight(oldWeight * 0.98)
+			w.Weight = m.constrainWeight(w.AgentID, oldWeight*0.98)
 		}
 
 		w.LastAdjustedAt = now
@@ -284,7 +286,7 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() map[string]float64 {
 		}
 
 		multiplier := BottomQuartileMultiplier * riskMultiplier
-		w.Weight = m.constrainWeight(oldWeight * multiplier)
+		w.Weight = m.constrainWeight(w.AgentID, oldWeight*multiplier)
 		w.LastAdjustedAt = now
 
 		adjustments[w.AgentID] = w.Weight - oldWeight
@@ -308,11 +310,13 @@ func (m *DarwinianWeightManager) rankBySharpe() []*DarwinianAgentWeight {
 }
 
 // constrainWeight ensures weight stays within [0.3, 2.5] bounds
-func (m *DarwinianWeightManager) constrainWeight(weight float64) float64 {
+func (m *DarwinianWeightManager) constrainWeight(agentID string, weight float64) float64 {
 	if weight < DarwinianWeightMin {
+		log.Printf("[DarwinianWeightManager] agent %s weight %.4f clamped to min %.2f", agentID, weight, DarwinianWeightMin)
 		return DarwinianWeightMin
 	}
 	if weight > DarwinianWeightMax {
+		log.Printf("[DarwinianWeightManager] agent %s weight %.4f clamped to max %.2f", agentID, weight, DarwinianWeightMax)
 		return DarwinianWeightMax
 	}
 	return weight

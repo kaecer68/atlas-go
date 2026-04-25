@@ -42,7 +42,7 @@ type routeRegistrar interface {
 
 type appDeps struct {
 	loadConfig      func() config.Config
-	newDashboardAPI func(string, string) routeRegistrar
+	newDashboardAPI func(string, string, *monitoring.MetricsCollector) routeRegistrar
 	listenAndServe  func(string, http.Handler) error
 	shutdown        chan struct{}
 }
@@ -50,8 +50,8 @@ type appDeps struct {
 func defaultAppDeps() appDeps {
 	return appDeps{
 		loadConfig: config.Load,
-		newDashboardAPI: func(workDir, ledgerDir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(workDir, ledgerDir)
+		newDashboardAPI: func(workDir, ledgerDir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, ledgerDir, collector)
 		},
 		listenAndServe: http.ListenAndServe,
 		shutdown:       make(chan struct{}),
@@ -151,9 +151,14 @@ func run(args []string, deps appDeps) error {
 		}
 
 		mux := http.NewServeMux()
-		dashboard := deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir)
+		healthStore, err := portfolio.NewAgentHealthStore(filepath.Join(cfg.WorkDir, "data/state"))
+		if err != nil {
+			log.Printf("[AgentHealth] failed to create health store: %v", err)
+		}
+		dashboard := deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 			d.SetPool(pool)
+			d.SetHealthManager(portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore))
 		}
 		dashboard.RegisterRoutes(mux)
 
@@ -179,7 +184,11 @@ func run(args []string, deps appDeps) error {
 			fmt.Fprintf(w, `{"status":"ok","version":"%s"}`+"\n", cfg.Version)
 		})
 		mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
-		sysMetrics := monitoring.NewSystemMetrics(collector, monitoring.NewMonitor())
+		monitor := monitoring.NewMonitor()
+		if alertStore != nil {
+			monitor.SetAlertStore(alertStore)
+		}
+		sysMetrics := monitoring.NewSystemMetrics(collector, monitor)
 		go sysMetrics.Start(context.Background())
 		dashboard.RegisterNarrativeRoutes(mux)
 		dashboard.RegisterControlRoutes(mux)
@@ -189,6 +198,7 @@ func run(args []string, deps appDeps) error {
 			d.RegisterPhase3Routes(mux)
 			d.RegisterBacktestRoutes(mux)
 			d.RegisterIndustryRoutes(mux)
+			d.RegisterLiveRoutes(mux)
 		}
 		if *swaggerMode {
 			dashboard.RegisterSwaggerRoutes(mux)
@@ -223,7 +233,7 @@ func run(args []string, deps appDeps) error {
 	if *liveMode {
 		return runLiveTrading(cfg, deps, collector)
 	}
-	return runSimulation(cfg)
+	return runSimulation(cfg, collector)
 }
 
 func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allowHTTPBroker bool, allowRealSigner bool) error {
@@ -372,8 +382,11 @@ func parseStatusCodeCSV(raw string, fallback []int) []int {
 	return parsed
 }
 
-func runSimulation(cfg config.Config) error {
+func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector) error {
 	system := orchestrator.NewProductionSystem(cfg)
+	if collector != nil {
+		system.WithMetricsCollector(collector)
+	}
 
 	capitalCfg := domain.DefaultCapitalPhaseConfig()
 	capitalCfg.PhaseStartDate = time.Now().Add(-30 * 24 * time.Hour)
@@ -433,6 +446,9 @@ func runSimulation(cfg config.Config) error {
 
 func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector) error {
 	system := orchestrator.NewProductionSystem(cfg)
+	if collector != nil {
+		system.WithMetricsCollector(collector)
+	}
 
 	stateStore := live.NewStateStore("data/state/live")
 	eventBus := live.NewChannelEventBus(64)
@@ -481,7 +497,7 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 
 	// Start dashboard API server for live status endpoint
 	mux := http.NewServeMux()
-	dashboard := deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir)
+	dashboard := deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
 	dashboard.RegisterRoutes(mux)
 	alertStore, err := monitoring.NewAlertStore(filepath.Join(cfg.WorkDir, "data/state/alerts"))
 	if err != nil {
@@ -489,6 +505,7 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	} else {
 		alertAPI := monitoring.NewAlertAPI(alertStore)
 		alertAPI.RegisterRoutes(mux)
+		monitor.SetAlertStore(alertStore)
 	}
 	dashboard.RegisterNarrativeRoutes(mux)
 	dashboard.RegisterControlRoutes(mux)

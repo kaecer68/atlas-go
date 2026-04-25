@@ -24,11 +24,11 @@ func TestRunAPIModeStartsServerAndRegistersRoutes(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: ledgerDir}
 		},
-		newDashboardAPI: func(workDir, dir string) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
 			if dir != ledgerDir {
 				t.Fatalf("ledger dir = %q, want %q", dir, ledgerDir)
 			}
-			return monitoring.NewDashboardAPI(workDir, dir)
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			gotAddr = addr
@@ -67,8 +67,8 @@ func TestRunAPIModeReturnsListenError(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir()}
 		},
-		newDashboardAPI: func(workDir, dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(workDir, dir)
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return errors.New("bind failed")
@@ -92,8 +92,8 @@ func TestRunRejectsLiveBrokerWithoutExplicitAllow(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(workDir, dir)
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
@@ -118,11 +118,11 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
 			if dir != ledgerDir {
 				t.Fatalf("ledger dir = %q, want %q", dir, ledgerDir)
 			}
-			return monitoring.NewDashboardAPI(workDir, dir)
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			gotAddr = addr
@@ -161,8 +161,8 @@ func TestRunRejectsUnsupportedBrokerAdapter(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(workDir, dir)
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
@@ -183,8 +183,8 @@ func TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(workDir, dir)
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
@@ -206,8 +206,8 @@ func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(workDir, dir)
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
@@ -231,8 +231,8 @@ func TestRunRejectsRealSignerWithoutExplicitAllow(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
 		},
-		newDashboardAPI: func(workDir, dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(workDir, dir)
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
@@ -254,8 +254,8 @@ func TestRunAllowsRealSignerWithExplicitAllow(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
 		},
-		newDashboardAPI: func(workDir, dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(workDir, dir)
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
@@ -279,8 +279,8 @@ func TestRunRejectsRealSignerWithoutKeyID(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
 		},
-		newDashboardAPI: func(workDir, dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(workDir, dir)
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
@@ -463,8 +463,8 @@ func TestRunLiveHTTPFullFlagChainInAPIMode(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
 		},
-		newDashboardAPI: func(workDir, dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(workDir, dir)
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			return nil
@@ -514,8 +514,8 @@ func TestStaticFileServerServesIndex(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{WorkDir: tmpDir, LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string) routeRegistrar {
-			return monitoring.NewDashboardAPI(workDir, dir)
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			gotHandler = handler
@@ -558,7 +558,7 @@ func TestDashboardAPIUsesWorkDirForPaths(t *testing.T) {
 		t.Fatalf("write report: %v", err)
 	}
 
-	api := monitoring.NewDashboardAPI(tmpDir, filepath.Join(tmpDir, "data", "state"))
+	api := monitoring.NewDashboardAPI(tmpDir, filepath.Join(tmpDir, "data", "state"), nil)
 	mux := http.NewServeMux()
 	api.RegisterRoutes(mux)
 

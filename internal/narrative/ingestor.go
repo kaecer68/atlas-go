@@ -14,15 +14,17 @@ import (
 
 // MacroIngestor fetches macro data, compares with previous snapshot, and emits events.
 type MacroIngestor struct {
-	provider    marketdata.MacroDataProvider
-	snapshotDir string
+	provider         marketdata.MacroDataProvider
+	snapshotDir      string
+	divergenceDetect *DivergenceDetector
 }
 
 // NewMacroIngestor creates an ingestor with a given provider and snapshot directory.
 func NewMacroIngestor(provider marketdata.MacroDataProvider, snapshotDir string) *MacroIngestor {
 	return &MacroIngestor{
-		provider:    provider,
-		snapshotDir: snapshotDir,
+		provider:         provider,
+		snapshotDir:      snapshotDir,
+		divergenceDetect: NewDivergenceDetector(),
 	}
 }
 
@@ -39,7 +41,7 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 	}
 
 	prev, _ := m.loadLatestSnapshot()
-	events := detectEventsFromSnapshot(snap, prev)
+	events := detectEventsFromSnapshot(snap, prev, m.divergenceDetect)
 
 	if err := m.saveSnapshot(snap); err != nil {
 		return events, snap, fmt.Errorf("save snapshot: %w", err)
@@ -96,7 +98,7 @@ func hitRateForTheme(theme string) float64 {
 	return 0.0
 }
 
-func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot) []NarrativeEvent {
+func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot, div *DivergenceDetector) []NarrativeEvent {
 	var events []NarrativeEvent
 	now := time.Now().UTC()
 
@@ -118,8 +120,36 @@ func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot) []Narrati
 	if event := detectSemiconductorEventFromSnapshot(curr.ExportElectronics, prev.ExportElectronics, now); event != nil {
 		events = append(events, *event)
 	}
-	// AI capex sentiment remains externally supplied for now.
+
+	if div != nil && curr.RetailMarginBalance.Symbol != "" && curr.ForeignInvestorNet.Symbol != "" {
+		div.Update(curr.RetailMarginBalance.Value, curr.ForeignInvestorNet.Value)
+		_, marginZ := div.RetailDivergenceAndMarginZScore(curr.RetailMarginBalance.Value, curr.ForeignInvestorNet.Value)
+		if event := detectRetailDivergenceEventFromSnapshot(curr.ForeignInvestorNet, marginZ, now); event != nil {
+			events = append(events, *event)
+		}
+	}
 	return events
+}
+
+func detectRetailDivergenceEventFromSnapshot(foreignNet marketdata.MacroDataPoint, marginZScore float64, now time.Time) *NarrativeEvent {
+	if marginZScore > 1.5 && foreignNet.Value < 0 {
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-retail-div-%d", now.UnixNano()),
+			Theme:            "retail_institutional_divergence",
+			Region:           "TW",
+			Sentiment:        -0.5,
+			Confidence:       0.60,
+			ConfidenceSource: "divergence_zscore_v1",
+			HitRate:          hitRateForTheme("retail_institutional_divergence"),
+			CapitalFlow:      "crowding_risk",
+			TimeWindow:       "immediate",
+			Timestamp:        now,
+			SourceData: map[string]float64{
+				"margin_zscore": marginZScore,
+			},
+		}
+	}
+	return nil
 }
 
 func detectUSRatesEventFromSnapshot(curr, prev marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {

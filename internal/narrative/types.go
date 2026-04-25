@@ -55,5 +55,6 @@ type InvestmentModel struct {
 	AvoidedSectors   []string `json:"avoided_sectors"`
 	RecentPrediction float64  `json:"recent_prediction"`
 	RecentError      float64  `json:"recent_error"` // lower is better
+	HitRate          float64  `json:"hit_rate"`     // 1 - RecentError, clamped to [0, 1]
 	Weight           float64  `json:"weight"`
 }

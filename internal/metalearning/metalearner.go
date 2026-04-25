@@ -2,6 +2,10 @@
 // Based on MiroFish swarm results and training data to optimize learning strategies
 package metalearning
 
+// Deprecated: This file is not used in production.
+// Metalearning functionality has been replaced by the Darwinian weight system.
+// See ANALYSIS_REPORT.md for details on this decision.
+
 import (
 	"encoding/json"
 	"fmt"

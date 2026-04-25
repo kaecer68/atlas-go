@@ -174,18 +174,17 @@ func TestDarwinianWeightManager(t *testing.T) {
 	t.Run("ConstrainWeight", func(t *testing.T) {
 		m := NewDarwinianWeightManager("/tmp/test_dw.json")
 
-		// Test via constrainWeight (private but accessible in same package)
-		clamped := m.constrainWeight(3.0)
+		clamped := m.constrainWeight("test-agent", 3.0)
 		if clamped != DarwinianWeightMax {
 			t.Errorf("Expected max %f, got %f", DarwinianWeightMax, clamped)
 		}
 
-		clamped = m.constrainWeight(0.1)
+		clamped = m.constrainWeight("test-agent", 0.1)
 		if clamped != DarwinianWeightMin {
 			t.Errorf("Expected min %f, got %f", DarwinianWeightMin, clamped)
 		}
 
-		clamped = m.constrainWeight(1.5)
+		clamped = m.constrainWeight("test-agent", 1.5)
 		if clamped != 1.5 {
 			t.Errorf("Expected 1.5, got %f", clamped)
 		}

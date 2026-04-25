@@ -20,7 +20,7 @@ func TestDashboardAPIEndpoints(t *testing.T) {
 	ledgerDir := t.TempDir()
 	setupDashboardFixtures(t, ledgerDir)
 
-	api := NewDashboardAPI("", ledgerDir)
+	api := NewDashboardAPI("", ledgerDir, nil)
 	mux := http.NewServeMux()
 	api.RegisterRoutes(mux)
 
@@ -307,7 +307,7 @@ func TestDashboardAPIEndpoints(t *testing.T) {
 }
 
 func TestDashboardNarrativeRoutes(t *testing.T) {
-	api := NewDashboardAPI("", t.TempDir())
+	api := NewDashboardAPI("", t.TempDir(), nil)
 	mux := http.NewServeMux()
 	api.RegisterNarrativeRoutes(mux)
 
@@ -389,7 +389,7 @@ func TestDashboardNarrativeRoutes(t *testing.T) {
 
 func TestDashboardSwaggerRoutes(t *testing.T) {
 	ledgerDir := t.TempDir()
-	api := NewDashboardAPI("", ledgerDir)
+	api := NewDashboardAPI("", ledgerDir, nil)
 	mux := http.NewServeMux()
 	api.RegisterSwaggerRoutes(mux)
 
@@ -462,7 +462,7 @@ func TestDashboardSwaggerRoutes(t *testing.T) {
 
 func TestDashboardMacroRoutes(t *testing.T) {
 	ledgerDir := t.TempDir()
-	api := NewDashboardAPI("", ledgerDir)
+	api := NewDashboardAPI("", ledgerDir, nil)
 	// Inject mock provider to avoid real network calls in tests.
 	api.macroIngestor = narrative.NewMacroIngestor(
 		&marketdata.MockMacroProvider{
@@ -517,7 +517,7 @@ func TestDashboardMacroRoutes(t *testing.T) {
 
 func TestDashboardControlRoutes(t *testing.T) {
 	ledgerDir := t.TempDir()
-	api := NewDashboardAPI("", ledgerDir)
+	api := NewDashboardAPI("", ledgerDir, nil)
 	mux := http.NewServeMux()
 	api.RegisterControlRoutes(mux)
 
@@ -730,7 +730,7 @@ func setupDashboardFixtures(t *testing.T, ledgerDir string) {
 
 func TestDashboardLiveStatusEndpoint(t *testing.T) {
 	ledgerDir := t.TempDir()
-	api := NewDashboardAPI("", ledgerDir)
+	api := NewDashboardAPI("", ledgerDir, nil)
 	mux := http.NewServeMux()
 	api.RegisterLiveRoutes(mux)
 
@@ -838,7 +838,7 @@ func TestHandleDailySummary(t *testing.T) {
 	}
 	f.Close()
 
-	api := NewDashboardAPI("", ledgerDir)
+	api := NewDashboardAPI("", ledgerDir, nil)
 	mux := http.NewServeMux()
 	api.RegisterRoutes(mux)
 
