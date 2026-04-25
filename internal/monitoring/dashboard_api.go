@@ -24,6 +24,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/live"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -41,6 +42,7 @@ type DashboardAPI struct {
 	narrativeEngine    *narrative.NarrativeEngine
 	macroIngestor      *narrative.MacroIngestor
 	geoProvider        narrative.GeopoliticalRiskProvider
+	taiwanGeoProvider  *narrative.CompositeTaiwanGeopoliticalProvider
 	taiwanStressCalc   *narrative.TaiwanStressCalculator
 	reportGenerator    *narrative.ReportGenerator
 	pool               *pgxpool.Pool
@@ -56,6 +58,7 @@ type DashboardAPI struct {
 	riskMonitor        *industry.RiskMonitor
 	healthManager      *portfolio.AgentHealthManager
 	dataQualityChecker *DataQualityChecker
+	janusEngine        *janus.Engine
 }
 
 type MacroRadarResponse struct {
@@ -72,6 +75,36 @@ type AgentObservatoryResponse struct {
 	WeakestAgentScorecards []domain.Scorecard        `json:"weakest_agent_scorecards"`
 	BrokerRuntime          domain.BrokerRuntimeAudit `json:"broker_runtime"`
 	RecordedAt             time.Time                 `json:"recorded_at"`
+}
+
+// PortfolioStateResponse is the response for GET /api/dashboard/portfolio-state.
+type PortfolioStateResponse struct {
+	SnapshotTime     time.Time          `json:"snapshot_time"`
+	Cash             float64            `json:"cash"`
+	PortfolioValue   float64            `json:"portfolio_value"`
+	CumulativePnL    float64            `json:"cumulative_pnl"`
+	CumulativePnLPct float64            `json:"cumulative_pnl_pct"`
+	CurrentDrawdown  float64            `json:"current_drawdown"`
+	PositionsCount   int                `json:"positions_count"`
+	Positions        []PositionDTO      `json:"positions"`
+	EquityCurve      []EquityCurvePoint `json:"equity_curve"`
+}
+
+// PositionDTO represents a single position with computed P&L percentage.
+type PositionDTO struct {
+	Symbol        string  `json:"symbol"`
+	Quantity      int     `json:"quantity"`
+	AverageCost   float64 `json:"average_cost"`
+	CurrentPrice  float64 `json:"current_price"`
+	MarketValue   float64 `json:"market_value"`
+	UnrealizedPnL float64 `json:"unrealized_pnl"`
+	PnlPct        float64 `json:"pnl_pct"`
+}
+
+// EquityCurvePoint is a single point on the equity curve.
+type EquityCurvePoint struct {
+	Label string  `json:"label"`
+	Value float64 `json:"value"`
 }
 
 type ForecastVsRealityItem struct {
@@ -98,10 +131,15 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		marketdata.NewYahooFinanceMacroProvider(),
 		marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")),
 		marketdata.NewTWSEBalanceProvider(filepath.Join(workDir, "data/state/margin")),
+		marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export")),
+		marketdata.NewTSMCRevenueProvider(filepath.Join(workDir, "data/state/tsmc_revenue")),
 	)
 	geoProvider := narrative.NewCompositeGeopoliticalProvider(
 		narrative.NewRSSGeopoliticalProvider(),
 		narrative.NewGDELTGeopoliticalProvider(),
+	)
+	taiwanGeoProvider := narrative.NewCompositeTaiwanGeopoliticalProvider(
+		narrative.NewTaiwanRSSGeopoliticalProvider(),
 	)
 	if metricsCollector == nil {
 		metricsCollector = NewMetricsCollector()
@@ -113,6 +151,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		narrativeEngine:    narrative.NewNarrativeEngine(),
 		macroIngestor:      narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro")),
 		geoProvider:        geoProvider,
+		taiwanGeoProvider:  taiwanGeoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider),
 		reportGenerator:    narrative.NewReportGenerator(),
 		metricsCollector:   metricsCollector,
@@ -207,6 +246,7 @@ func (a *DashboardAPI) RegisterPhase3Routes(mux *http.ServeMux) {
 
 func (a *DashboardAPI) RegisterLiveRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/live-status", a.handleLiveStatus)
+	mux.HandleFunc("/api/dashboard/portfolio-state", a.handlePortfolioState)
 }
 
 // RegisterExperimentRoutes mounts experiment lifecycle endpoints.
@@ -234,9 +274,89 @@ func (a *DashboardAPI) SetHealthManager(m *portfolio.AgentHealthManager) {
 	a.healthManager = m
 }
 
+// SetJanusEngine injects an optional JANUS engine for regime health monitoring.
+func (a *DashboardAPI) SetJanusEngine(e *janus.Engine) {
+	a.janusEngine = e
+}
+
 func (a *DashboardAPI) handleLiveStatus(w http.ResponseWriter, r *http.Request) {
 	status := a.loadLiveStatus()
 	writeJSON(w, http.StatusOK, status)
+}
+
+func (a *DashboardAPI) handlePortfolioState(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	liveBasePath := filepath.Join(a.workDir, live.DefaultLiveStateBasePath)
+
+	portfolio, err := live.LoadLastPortfolioState(liveBasePath)
+	if err != nil {
+		log.Printf("[DashboardAPI] warn: failed to load portfolio state: %v", err)
+		writeJSON(w, http.StatusOK, PortfolioStateResponse{})
+		return
+	}
+
+	posMap, err := live.LoadLastPositions(liveBasePath)
+	if err != nil {
+		log.Printf("[DashboardAPI] warn: failed to load positions: %v", err)
+	}
+
+	positions := make([]PositionDTO, 0, len(posMap))
+	for _, pos := range posMap {
+		pnlPct := 0.0
+		if cost := float64(pos.Quantity) * pos.AverageCost; cost > 0 {
+			pnlPct = pos.UnrealizedPnL / cost
+		}
+		positions = append(positions, PositionDTO{
+			Symbol:        pos.Symbol,
+			Quantity:      pos.Quantity,
+			AverageCost:   pos.AverageCost,
+			CurrentPrice:  pos.CurrentPrice,
+			MarketValue:   pos.MarketValue,
+			UnrealizedPnL: pos.UnrealizedPnL,
+			PnlPct:        pnlPct,
+		})
+	}
+	slices.SortFunc(positions, func(a, b PositionDTO) int {
+		return strings.Compare(a.Symbol, b.Symbol)
+	})
+
+	var totalMarketValue float64
+	for _, p := range positions {
+		totalMarketValue += p.MarketValue
+	}
+
+	equityCurve, _ := a.buildEquityCurve()
+
+	resp := PortfolioStateResponse{
+		SnapshotTime:     portfolio.LastUpdated,
+		Cash:             portfolio.Cash,
+		PortfolioValue:   portfolio.Cash + totalMarketValue,
+		CumulativePnL:    portfolio.RealizedPnL + portfolio.UnrealizedPnL,
+		CumulativePnLPct: 0,
+		CurrentDrawdown:  0,
+		PositionsCount:   len(positions),
+		Positions:        positions,
+		EquityCurve:      equityCurve,
+	}
+	if portfolio.Cash > 0 {
+		resp.CumulativePnLPct = resp.CumulativePnL / portfolio.Cash
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (a *DashboardAPI) buildEquityCurve() ([]EquityCurvePoint, error) {
+	summary, err := a.loadSessionSummary("")
+	if err != nil || summary == nil {
+		return nil, fmt.Errorf("no session summary: %w", err)
+	}
+	return []EquityCurvePoint{
+		{Label: summary.SessionID, Value: summary.PortfolioValue},
+	}, nil
 }
 
 func (a *DashboardAPI) loadLiveStatus() map[string]interface{} {
@@ -1627,7 +1747,7 @@ func (a *DashboardAPI) handleChannelsIngest(w http.ResponseWriter, r *http.Reque
 
 	stateDir := filepath.Join(a.workDir, "data/state")
 	var wg sync.WaitGroup
-	var macroErr, geoErr, capFlowErr error
+	var macroErr, geoErr, capFlowErr, exportErr, tsmcErr, twGeoErr, janusErr error
 
 	wg.Add(1)
 	go func() {
@@ -1673,10 +1793,84 @@ func (a *DashboardAPI) handleChannelsIngest(w http.ResponseWriter, r *http.Reque
 		_, err := capFlowProvider.FetchSnapshot(r.Context())
 		if err != nil {
 			capFlowErr = err
+			NewChannelHealthStoreWithPool(stateDir, a.pool).Record("twse_capital_flow", "error", err.Error())
 			log.Printf("[handleChannelsIngest] capital flow ingest failed: %v", err)
 			return
 		}
+		NewChannelHealthStoreWithPool(stateDir, a.pool).Record("twse_capital_flow", "ok", "")
 		log.Printf("[handleChannelsIngest] capital flow ingest succeeded")
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		exportProvider := marketdata.NewExportStatisticsProvider(filepath.Join(stateDir, "export"))
+		_, err := exportProvider.FetchSnapshot(r.Context())
+		if err != nil {
+			exportErr = err
+			NewChannelHealthStoreWithPool(stateDir, a.pool).Record("export_statistics", "error", err.Error())
+			log.Printf("[handleChannelsIngest] export statistics ingest failed: %v", err)
+			return
+		}
+		NewChannelHealthStoreWithPool(stateDir, a.pool).Record("export_statistics", "ok", "")
+		log.Printf("[handleChannelsIngest] export statistics ingest succeeded")
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		tsmcProvider := marketdata.NewTSMCRevenueProvider(filepath.Join(stateDir, "tsmc_revenue"))
+		_, err := tsmcProvider.FetchSnapshot(r.Context())
+		if err != nil {
+			tsmcErr = err
+			NewChannelHealthStoreWithPool(stateDir, a.pool).Record("tsmc_revenue", "error", err.Error())
+			log.Printf("[handleChannelsIngest] TSMC revenue ingest failed: %v", err)
+			return
+		}
+		NewChannelHealthStoreWithPool(stateDir, a.pool).Record("tsmc_revenue", "ok", "")
+		log.Printf("[handleChannelsIngest] TSMC revenue ingest succeeded")
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		twGeoScore, err := a.taiwanGeoProvider.FetchScore(r.Context())
+		if err != nil {
+			twGeoErr = err
+			NewChannelHealthStoreWithPool(stateDir, a.pool).Record("geopolitical_taiwan", "error", err.Error())
+			log.Printf("[handleChannelsIngest] Taiwan geopolitical ingest failed: %v", err)
+			return
+		}
+		twStore := narrative.NewGeopoliticalStore(filepath.Join(stateDir, "geopolitical", "taiwan"))
+		if err := twStore.Save(twGeoScore); err != nil {
+			twGeoErr = err
+			NewChannelHealthStoreWithPool(stateDir, a.pool).Record("geopolitical_taiwan", "error", err.Error())
+			log.Printf("[handleChannelsIngest] Taiwan geopolitical save failed: %v", err)
+			return
+		}
+		NewChannelHealthStoreWithPool(stateDir, a.pool).Record("geopolitical_taiwan", "ok", "")
+		log.Printf("[handleChannelsIngest] Taiwan geopolitical ingest succeeded: intensity=%.2f", twGeoScore.Intensity)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if a.janusEngine == nil {
+			janusErr = fmt.Errorf("JANUS engine not initialized")
+			NewChannelHealthStoreWithPool(stateDir, a.pool).Record("janus_regime", "error", janusErr.Error())
+			log.Printf("[handleChannelsIngest] JANUS regime ingest skipped: engine not initialized")
+			return
+		}
+		a.janusEngine.Update()
+		status := a.janusEngine.GetStatus()
+		if status.LastUpdated.IsZero() {
+			janusErr = fmt.Errorf("JANUS engine has no data after update")
+			NewChannelHealthStoreWithPool(stateDir, a.pool).Record("janus_regime", "error", janusErr.Error())
+			log.Printf("[handleChannelsIngest] JANUS regime ingest failed: %v", janusErr)
+			return
+		}
+		NewChannelHealthStoreWithPool(stateDir, a.pool).Record("janus_regime", "ok", "")
+		log.Printf("[handleChannelsIngest] JANUS regime ingest succeeded: class=%s", status.Classification)
 	}()
 
 	wg.Wait()
@@ -1685,6 +1879,10 @@ func (a *DashboardAPI) handleChannelsIngest(w http.ResponseWriter, r *http.Reque
 		"macro_ok":    macroErr == nil,
 		"geo_ok":      geoErr == nil,
 		"cap_flow_ok": capFlowErr == nil,
+		"export_ok":   exportErr == nil,
+		"tsmc_ok":     tsmcErr == nil,
+		"tw_geo_ok":   twGeoErr == nil,
+		"janus_ok":    janusErr == nil,
 	}
 	if macroErr != nil {
 		result["macro_error"] = macroErr.Error()
@@ -1695,9 +1893,21 @@ func (a *DashboardAPI) handleChannelsIngest(w http.ResponseWriter, r *http.Reque
 	if capFlowErr != nil {
 		result["cap_flow_error"] = capFlowErr.Error()
 	}
+	if exportErr != nil {
+		result["export_error"] = exportErr.Error()
+	}
+	if tsmcErr != nil {
+		result["tsmc_error"] = tsmcErr.Error()
+	}
+	if twGeoErr != nil {
+		result["tw_geo_error"] = twGeoErr.Error()
+	}
+	if janusErr != nil {
+		result["janus_error"] = janusErr.Error()
+	}
 
 	if macroErr != nil && geoErr != nil && capFlowErr != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("all ingests failed: macro=%v, geo=%v, cap_flow=%v", macroErr, geoErr, capFlowErr))
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("all core ingests failed: macro=%v, geo=%v, cap_flow=%v", macroErr, geoErr, capFlowErr))
 		return
 	}
 
@@ -2826,6 +3036,125 @@ func (a *DashboardAPI) handleDataChannels(w http.ResponseWriter, r *http.Request
 		}(),
 	})
 
+	// 8. Export Statistics (Electronics export proxy for tech sector health)
+	exportDir := filepath.Join(a.workDir, "data/state/export")
+	exportStatus, exportUpdated := a.checkCapitalFlowHealth(exportDir, now)
+	exportRec := healthStore.Get("export_statistics")
+	if exportRec != nil && exportRec.Status != "" {
+		exportStatus = exportRec.Status
+		if exportRec.LastError != "" {
+			exportUpdated = "上次失敗: " + exportRec.LastError
+		} else if exportRec.LastSuccessAt != "" {
+			exportUpdated = "上次成功: " + exportRec.LastSuccessAt
+		}
+	}
+	channels = append(channels, DataChannel{
+		ChannelID:  "export_statistics",
+		Country:    "台灣",
+		Platform:   "TWSE 出口統計",
+		APIFormat:  "FAS210 JSON",
+		Path:       "www.twse.com.tw/rwd/zh/exchangeReport/FAS210",
+		Storage:    "data/state/export/*_export.json",
+		Status:     exportStatus,
+		StatusText: statusText(exportStatus),
+		UpdatedAt:  exportUpdated,
+		LastError: func() string {
+			if exportRec != nil {
+				return exportRec.LastError
+			}
+			return ""
+		}(),
+	})
+
+	// 9. TSMC Revenue (AI capex sentiment proxy)
+	tsmcDir := filepath.Join(a.workDir, "data/state/tsmc_revenue")
+	tsmcStatus, tsmcUpdated := a.checkCapitalFlowHealth(tsmcDir, now)
+	tsmcRec := healthStore.Get("tsmc_revenue")
+	if tsmcRec != nil && tsmcRec.Status != "" {
+		tsmcStatus = tsmcRec.Status
+		if tsmcRec.LastError != "" {
+			tsmcUpdated = "上次失敗: " + tsmcRec.LastError
+		} else if tsmcRec.LastSuccessAt != "" {
+			tsmcUpdated = "上次成功: " + tsmcRec.LastSuccessAt
+		}
+	}
+	channels = append(channels, DataChannel{
+		ChannelID:  "tsmc_revenue",
+		Country:    "台灣",
+		Platform:   "TWSE 台積電月營收",
+		APIFormat:  "TWT49U JSON",
+		Path:       "www.twse.com.tw/rwd/zh/fund/TWT49U",
+		Storage:    "data/state/tsmc_revenue/*_revenue.json",
+		Status:     tsmcStatus,
+		StatusText: statusText(tsmcStatus),
+		UpdatedAt:  tsmcUpdated,
+		LastError: func() string {
+			if tsmcRec != nil {
+				return tsmcRec.LastError
+			}
+			return ""
+		}(),
+	})
+
+	// 10. Taiwan Geopolitical Risk (RSS + Cross-Strait monitoring)
+	twGeoDir := filepath.Join(a.workDir, "data/state/geopolitical/taiwan")
+	twGeoStatus, twGeoUpdated := a.checkCapitalFlowHealth(twGeoDir, now)
+	twGeoRec := healthStore.Get("geopolitical_taiwan")
+	if twGeoRec != nil && twGeoRec.Status != "" {
+		twGeoStatus = twGeoRec.Status
+		if twGeoRec.LastError != "" {
+			twGeoUpdated = "上次失敗: " + twGeoRec.LastError
+		} else if twGeoRec.LastSuccessAt != "" {
+			twGeoUpdated = "上次成功: " + twGeoRec.LastSuccessAt
+		}
+	}
+	channels = append(channels, DataChannel{
+		ChannelID:  "geopolitical_taiwan",
+		Country:    "台灣",
+		Platform:   "CNA / 自由時報 / TVBS RSS",
+		APIFormat:  "RSS XML",
+		Path:       "www.cna.com.tw / news.ltn.com.tw / news.tvbs.com.tw",
+		Storage:    "data/state/geopolitical/taiwan/latest.json",
+		Status:     twGeoStatus,
+		StatusText: statusText(twGeoStatus),
+		UpdatedAt:  twGeoUpdated,
+		LastError: func() string {
+			if twGeoRec != nil {
+				return twGeoRec.LastError
+			}
+			return ""
+		}(),
+	})
+
+	// 11. JANUS Regime (Meta-layer regime detection)
+	janusStatus, janusUpdated := a.checkJanusHealth(now)
+	janusRec := healthStore.Get("janus_regime")
+	if janusRec != nil && janusRec.Status != "" {
+		janusStatus = janusRec.Status
+		if janusRec.LastError != "" {
+			janusUpdated = "上次失敗: " + janusRec.LastError
+		} else if janusRec.LastSuccessAt != "" {
+			janusUpdated = "上次成功: " + janusRec.LastSuccessAt
+		}
+	}
+	channels = append(channels, DataChannel{
+		ChannelID:  "janus_regime",
+		Country:    "全域",
+		Platform:   "JANUS Engine",
+		APIFormat:  "Internal",
+		Path:       "internal/janus",
+		Storage:    "(in-memory state)",
+		Status:     janusStatus,
+		StatusText: statusText(janusStatus),
+		UpdatedAt:  janusUpdated,
+		LastError: func() string {
+			if janusRec != nil {
+				return janusRec.LastError
+			}
+			return ""
+		}(),
+	})
+
 	// Build alerts list for overview card
 	alerts := healthStore.Alerts()
 	// Also add age-based alerts if health store doesn't cover them
@@ -2957,6 +3286,24 @@ func (a *DashboardAPI) checkGeopoliticalHealth(path string, now time.Time) (stri
 		return "warn", latest.Format("2006-01-02 15:04:05")
 	}
 	return "error", latest.Format("2006-01-02 15:04:05")
+}
+
+func (a *DashboardAPI) checkJanusHealth(now time.Time) (string, string) {
+	if a.janusEngine == nil {
+		return "inactive", "JANUS engine 未啟用"
+	}
+	status := a.janusEngine.GetStatus()
+	if status.LastUpdated.IsZero() {
+		return "warn", "JANUS 已載入但尚未更新"
+	}
+	age := now.Sub(status.LastUpdated)
+	if age < 7*24*time.Hour {
+		return "ok", status.LastUpdated.Format("2006-01-02 15:04:05")
+	}
+	if age < 30*24*time.Hour {
+		return "warn", status.LastUpdated.Format("2006-01-02 15:04:05")
+	}
+	return "error", status.LastUpdated.Format("2006-01-02 15:04:05")
 }
 
 func (a *DashboardAPI) checkReplayHealth(path string, now time.Time) (string, string) {
