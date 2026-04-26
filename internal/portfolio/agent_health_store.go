@@ -82,21 +82,3 @@ func (s *AgentHealthStore) LoadAll() (map[string]*AgentHealth, error) {
 	}
 	return result, nil
 }
-
-// rewriteAll overwrites the JSONL file with the given health records.
-// Caller must hold the write lock.
-func (s *AgentHealthStore) rewriteAll(records []*AgentHealth) error {
-	f, err := os.OpenFile(s.filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
-	if err != nil {
-		return fmt.Errorf("open agent health file for rewrite: %w", err)
-	}
-	defer f.Close()
-
-	enc := json.NewEncoder(f)
-	for _, rec := range records {
-		if err := enc.Encode(rec); err != nil {
-			return fmt.Errorf("encode agent health record: %w", err)
-		}
-	}
-	return nil
-}
