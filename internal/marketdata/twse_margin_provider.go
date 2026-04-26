@@ -78,53 +78,44 @@ func (t *TWSEBalanceProvider) fetchLatestTradingDay(ctx context.Context) (TWSEBa
 }
 
 func (t *TWSEBalanceProvider) fetchDate(ctx context.Context, dateStr string) (TWSEBalance, error) {
-	url := fmt.Sprintf(
-		"https://www.twse.com.tw/rwd/zh/marginTradingMiantane?response=json&date=%s&selectType=ALL",
-		dateStr,
-	)
+	url := "https://openapi.twse.com.tw/v1/exchangeReport/MI_MARGN"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return TWSEBalance{}, err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("Accept", "application/json")
 
 	resp, err := t.client.Do(req)
 	if err != nil {
-		return TWSEBalance{}, err
+		return TWSEBalance{}, fmt.Errorf("TWSE MI_MARGN request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return TWSEBalance{}, fmt.Errorf("TWSE API HTTP %d", resp.StatusCode)
+		return TWSEBalance{}, fmt.Errorf("TWSE MI_MARGN HTTP %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return TWSEBalance{}, err
+		return TWSEBalance{}, fmt.Errorf("TWSE MI_MARGN read body: %w", err)
 	}
 
-	var apiResp twseMarginResponse
-	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return TWSEBalance{}, fmt.Errorf("TWSE margin JSON parse error: %w", err)
+	// New OpenAPI v1 returns a direct array of objects with Chinese field names.
+	var records []marginRecord
+	if err := json.Unmarshal(body, &records); err != nil {
+		return TWSEBalance{}, fmt.Errorf("TWSE MI_MARGN JSON parse error: %w", err)
 	}
-	if apiResp.Stat != "OK" || len(apiResp.Data) == 0 {
-		return TWSEBalance{}, fmt.Errorf("TWSE margin API returned: %s", apiResp.Stat)
+	if len(records) == 0 {
+		return TWSEBalance{}, fmt.Errorf("TWSE MI_MARGN returned empty data")
 	}
 
-	// TWSE T86 or T4 response columns vary; we aggregate total margin balance.
-	// Column mapping for margin trading (T4 / Miantane):
-	// 0: 證券代號, 1: 證券名稱,
-	// 2: 融資餘額 (元), 3: 融資買進 (元), 4: 融資賣出 (元), 5: 融資買賣斷 (元),
-	// 6: 融券餘額 (股), 7: 融券買進 (股), 8: 融券賣出 (股), 9: 融券買賣斷 (股)
 	var totalMarginBalance float64
 	var totalShortBalance float64
 
-	for _, row := range apiResp.Data {
-		if len(row) < 7 {
-			continue
-		}
-		marginBal := parseTWDVolume(row[2])
-		shortBal := parseTWDVolume(row[6])
+	for _, r := range records {
+		marginBal := parseTWDVolume(r.MarginBalance)
+		shortBal := parseTWDVolume(r.ShortBalance)
 		totalMarginBalance += marginBal
 		totalShortBalance += shortBal
 	}
@@ -137,6 +128,27 @@ func (t *TWSEBalanceProvider) fetchDate(ctx context.Context, dateStr string) (TW
 	return bal, nil
 }
 
+// marginRecord represents a single row from the TWSE OpenAPI v1 MI_MARGN endpoint.
+// Fields use Chinese keys matching the API response.
+type marginRecord struct {
+	Symbol          string `json:"股票代號"`
+	Name            string `json:"股票名稱"`
+	MarginBuy       string `json:"融資買進"`
+	MarginSell      string `json:"融資賣出"`
+	MarginCashRepay string `json:"融資現金償還"`
+	MarginPrevBal   string `json:"融資前日餘額"`
+	MarginBalance   string `json:"融資今日餘額"`
+	MarginLimit     string `json:"融資限額"`
+	ShortBuy        string `json:"融券買進"`
+	ShortSell       string `json:"融券賣出"`
+	ShortCashRepay  string `json:"融券現券償還"`
+	ShortPrevBal    string `json:"融券前日餘額"`
+	ShortBalance    string `json:"融券今日餘額"`
+	ShortLimit      string `json:"融券限額"`
+	Offset          string `json:"資券互抵"`
+	Note            string `json:"註記"`
+}
+
 func (t *TWSEBalanceProvider) saveBalance(bal TWSEBalance) error {
 	if err := os.MkdirAll(t.storageDir, 0o755); err != nil {
 		return err
@@ -147,9 +159,4 @@ func (t *TWSEBalanceProvider) saveBalance(bal TWSEBalance) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0o644)
-}
-
-type twseMarginResponse struct {
-	Stat string     `json:"stat"`
-	Data [][]string `json:"data"`
 }

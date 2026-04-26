@@ -27,6 +27,7 @@ type MacroDataSnapshot struct {
 	DealerNet           MacroDataPoint `json:"dealer_net"`
 	ExportElectronics   MacroDataPoint `json:"export_electronics"`
 	RetailMarginBalance MacroDataPoint `json:"retail_margin_balance"`
+	TSMCRevenue         MacroDataPoint `json:"tsmc_revenue"`
 	RecordedAt          int64          `json:"recorded_at"`
 }
 
@@ -94,6 +95,9 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 		}
 		if snap.RetailMarginBalance.Symbol != "" {
 			merged.RetailMarginBalance = snap.RetailMarginBalance
+		}
+		if snap.TSMCRevenue.Symbol != "" {
+			merged.TSMCRevenue = snap.TSMCRevenue
 		}
 		if snap.RecordedAt > merged.RecordedAt {
 			merged.RecordedAt = snap.RecordedAt
