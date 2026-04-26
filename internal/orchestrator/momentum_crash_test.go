@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"math"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -40,9 +41,10 @@ func TestApplyMomentumCrashProtectionWhenVIXHigh(t *testing.T) {
 		t.Errorf("momentum breakdown should be 0, got %v", result[0].FactorScores.Breakdown.Momentum.Score)
 	}
 	// With normalized weights (value=0.25/0.70, quality=0.25/0.70, agent=0.20/0.70)
+	// Use epsilon comparison for floating point to avoid precision issues
 	expectedTotal := 70*(0.25/0.70) + 60*(0.25/0.70) + 50*(0.20/0.70)
-	if result[0].FactorScores.Total != expectedTotal {
-		t.Errorf("total should be %.2f (without momentum), got %.2f", expectedTotal, result[0].FactorScores.Total)
+	if math.Abs(result[0].FactorScores.Total-expectedTotal) > 1e-9 {
+		t.Errorf("total should be %.6f (without momentum), got %.6f", expectedTotal, result[0].FactorScores.Total)
 	}
 }
 
