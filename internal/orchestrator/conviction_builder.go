@@ -39,10 +39,7 @@ func (b *convictionBuilder) cap(max int) {
 func (b *convictionBuilder) floorCheck() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.final < b.floor {
-		return false
-	}
-	return true
+	return b.final >= b.floor
 }
 
 func (b *convictionBuilder) build() (int, *domain.ConvictionBreakdown) {

@@ -10,8 +10,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
-const maxAcceptableDataDelay = 2 * 24 * time.Hour
-
 func ValidateReplayData(windowStart, windowEnd time.Time, replayPath string) (*domain.ReplayDataMetadata, error) {
 	info, err := os.Stat(replayPath)
 	if err != nil {
