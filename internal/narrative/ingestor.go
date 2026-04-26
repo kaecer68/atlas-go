@@ -128,6 +128,14 @@ func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot, div *Dive
 			events = append(events, *event)
 		}
 	}
+
+	if curr.TSMCRevenue.Symbol != "" && curr.TSMCRevenue.ChangePct > 0 {
+		sentiment := computeAICapexSentiment(curr.TSMCRevenue.ChangePct)
+		if event := detectAICapexEventFromSnapshot(sentiment, prev.TSMCRevenue, now); event != nil {
+			events = append(events, *event)
+		}
+	}
+
 	return events
 }
 
@@ -349,4 +357,39 @@ func detectOilShockEventFromSnapshot(currOil marketdata.MacroDataPoint, now time
 		}
 	}
 	return nil
+}
+
+func computeAICapexSentiment(tsmcYoYChangePct float64) float64 {
+	if tsmcYoYChangePct > 10 {
+		return 0.8
+	}
+	if tsmcYoYChangePct > 0 {
+		return 0.5
+	}
+	return -0.3
+}
+
+func detectAICapexEventFromSnapshot(sentiment float64, prevTSMC marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+	if sentiment <= 0.5 {
+		return nil
+	}
+	confidence := 0.70
+	if prevTSMC.Symbol != "" && prevTSMC.ChangePct > 0 {
+		confidence = 0.75
+	}
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-ai-capex-%d", now.UnixNano()),
+		Theme:            "AI_capex_surge",
+		Region:           "US",
+		Sentiment:        0.8,
+		Confidence:       confidence,
+		ConfidenceSource: "tsmc_revenue_yoy_v1",
+		HitRate:          hitRateForTheme("AI_capex_surge"),
+		CapitalFlow:      "tech_capex_inflow",
+		TimeWindow:       "1_month",
+		Timestamp:        now,
+		SourceData: map[string]float64{
+			"ai_capex_sentiment": sentiment,
+		},
+	}
 }

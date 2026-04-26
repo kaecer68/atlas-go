@@ -39,10 +39,14 @@ func main() {
 		}
 	}
 
+	exportDir := filepath.Join(stateDir, "export")
+	tsmcDir := filepath.Join(stateDir, "tsmc_revenue")
+
 	provider := marketdata.NewCompositeMacroProvider(
 		marketdata.NewYahooFinanceMacroProvider(),
 		marketdata.NewTWSECapitalFlowProvider(capitalFlowDir),
-		marketdata.NewExportStatisticsProvider(),
+		marketdata.NewExportStatisticsProvider(exportDir),
+		marketdata.NewTSMCRevenueProvider(tsmcDir),
 	)
 
 	ingestor := narrative.NewMacroIngestor(provider, snapshotDir)

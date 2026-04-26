@@ -235,3 +235,58 @@ func (e *Engine) String() string {
 	return fmt.Sprintf("JANUS[class=%s weights=%+v updated=%s]",
 		e.lastClass, e.lastWeights, e.lastUpdated.Format(time.RFC3339))
 }
+
+// JANUSHealthStatus represents the health assessment of the JANUS engine.
+type JANUSHealthStatus struct {
+	Initialized     bool    `json:"initialized"`
+	RegimeClass     string  `json:"regime_class"`
+	Confidence      float64 `json:"confidence"`
+	CohortCount     int     `json:"cohort_count"`
+	LastUpdatedAgoH float64 `json:"last_updated_ago_hours"`
+}
+
+// HealthStatus returns a health assessment of the JANUS engine suitable for monitoring.
+func (e *Engine) HealthStatus() JANUSHealthStatus {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	hs := JANUSHealthStatus{
+		Initialized: !e.lastUpdated.IsZero(),
+		RegimeClass: string(e.lastClass),
+		CohortCount: len(e.lastWeights),
+	}
+	if !e.lastUpdated.IsZero() {
+		hs.LastUpdatedAgoH = time.Since(e.lastUpdated).Hours()
+	}
+	if len(e.lastWeights) > 0 {
+		totalConf := 0.0
+		for _, cw := range e.lastWeights {
+			totalConf += cw.Weight
+		}
+		hs.Confidence = totalConf / float64(len(e.lastWeights))
+	}
+	return hs
+}
+
+// RecordHealthTo writes the current JANUS health status to a channel health store.
+func (e *Engine) RecordHealthTo(store ChannelHealthRecorder) {
+	hs := e.HealthStatus()
+	if !hs.Initialized {
+		store.Record("janus_regime", "error", "JANUS engine not yet updated")
+		return
+	}
+	if hs.LastUpdatedAgoH > 168 {
+		store.Record("janus_regime", "error", fmt.Sprintf("JANUS data stale: %.1f hours old", hs.LastUpdatedAgoH))
+		return
+	}
+	if hs.LastUpdatedAgoH > 48 {
+		store.Record("janus_regime", "warn", fmt.Sprintf("JANUS data aging: %.1f hours old", hs.LastUpdatedAgoH))
+		return
+	}
+	store.Record("janus_regime", "ok", "")
+}
+
+// ChannelHealthRecorder matches the subset of the monitoring health store interface JANUS needs.
+type ChannelHealthRecorder interface {
+	Record(channelID, status, message string)
+}

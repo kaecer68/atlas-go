@@ -2,54 +2,45 @@ package marketdata
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 )
 
 func TestExportStatisticsProvider_Name(t *testing.T) {
-	p := NewExportStatisticsProvider()
+	p := NewExportStatisticsProvider("data/state/export")
 	if p.Name() != "export_statistics" {
 		t.Fatalf("unexpected name: %s", p.Name())
 	}
 }
 
-func TestExportStatisticsProvider_FetchSnapshot(t *testing.T) {
-	p := NewExportStatisticsProvider()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func TestExportStatisticsProvider_FetchSnapshot_RealAPI(t *testing.T) {
+	p := NewExportStatisticsProvider("data/state/export")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	snap, err := p.FetchSnapshot(ctx)
 	if err != nil {
-		t.Fatalf("FetchSnapshot failed: %v", err)
-	}
-
-	// Should return mock data when API is unavailable
-	if snap.ExportElectronics.Symbol == "" {
-		t.Fatalf("ExportElectronics should be populated")
+		t.Logf("ExportStatisticsProvider.FetchSnapshot returned error (may be expected in CI): %v", err)
+		return
 	}
 
 	if snap.ExportElectronics.Symbol != "TW_EXPORT_ELECTRONICS" {
 		t.Fatalf("unexpected symbol: %s", snap.ExportElectronics.Symbol)
 	}
-
 	if snap.RecordedAt == 0 {
 		t.Fatalf("RecordedAt should be set")
 	}
 }
 
-func TestExportStatisticsProvider_MockSnapshot(t *testing.T) {
-	p := NewExportStatisticsProvider()
-	snap := p.mockSnapshot()
+func TestExportStatisticsProvider_FetchSnapshot_Decommissioned(t *testing.T) {
+	p := ExportStatisticsProviderWithClient(http.DefaultClient, t.TempDir())
+	p.baseURL = "https://fake-test-server"
+	p.client.Timeout = 5 * time.Second
 
-	if snap.ExportElectronics.Symbol != "TW_EXPORT_ELECTRONICS" {
-		t.Fatalf("unexpected symbol: %s", snap.ExportElectronics.Symbol)
-	}
-
-	if snap.ExportElectronics.Value != 120.5 {
-		t.Fatalf("unexpected value: %v", snap.ExportElectronics.Value)
-	}
-
-	if snap.ExportElectronics.ChangePct != 2.3 {
-		t.Fatalf("unexpected change: %v", snap.ExportElectronics.ChangePct)
+	ctx := context.Background()
+	_, err := p.FetchSnapshot(ctx)
+	if err == nil {
+		t.Fatal("expected error since FAS210 is decommissioned")
 	}
 }

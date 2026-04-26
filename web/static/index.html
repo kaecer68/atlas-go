@@ -788,7 +788,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
     </div>
 
     <!-- 組合持倉 -->
-    <div id="page-portfolio" class="page" style="display:none">
+    <div id="page-portfolio" class="page">
       <h1 id="pageTitle">📂 組合持倉</h1>
       <div class="kpi-grid" id="portfolioKPIs"></div>
       <div class="panel wide" id="equityCurvePanel" style="display:none">
@@ -1308,7 +1308,6 @@ function renderOverview(data, agentsData, inbox, overlap, narrativeEvents, stres
     <div class="kpi-card"><div class="kpi-label">基線版本</div><div class="kpi-value">${health.baseline_version || '?'}</div><div class="kpi-hint">目前生效的政策</div></div>
     <div class="kpi-card clickable" onclick="openKpiHelp('experiment')"><div class="kpi-label">實驗狀態</div><div class="kpi-value text-lg">${experimentText}</div><div class="kpi-hint">待處理項目</div></div>
     <div class="kpi-card clickable" onclick="switchPage('controls')"><div class="kpi-label">資金階段</div><div class="kpi-value" style="color:${phaseColor};font-size:18px">${capitalPhase ? phaseMap[capitalPhase.phase] || capitalPhase.phase : '-'}</div>${phaseHtml}</div>
-  `;
   `;
 }
 
