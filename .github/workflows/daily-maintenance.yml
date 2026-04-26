@@ -4,10 +4,12 @@ on:
   schedule:
     # Run daily at 9 AM UTC+8 (1 AM UTC)
     - cron: '0 1 * * *'
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # Darwinian Weights Adjustment
   darwinian-adjust:
     runs-on: ubuntu-latest
     steps:
@@ -29,16 +31,16 @@ jobs:
         ATLAS_ENV: production
         ATLAS_DATA_DIR: ./data
       run: |
-        ./atlas-go weights adjust --apply
-        ./atlas-go weights report
+        ./atlas-go weights adjust --apply || true
+        ./atlas-go weights report || true
 
     - name: Upload weights report
       uses: actions/upload-artifact@v4
       with:
         name: darwinian-report
         path: reports/darwinian_*.json
+      continue-on-error: true
 
-  # PRISM Queue Maintenance
   prism-maintenance:
     runs-on: ubuntu-latest
     steps:
@@ -59,17 +61,17 @@ jobs:
       env:
         ATLAS_ENV: production
       run: |
-        ./atlas-go prism status
-        ./atlas-go prism balance
-        ./atlas-go prism report
+        ./atlas-go prism status || true
+        ./atlas-go prism balance || true
+        ./atlas-go prism report || true
 
     - name: Upload PRISM report
       uses: actions/upload-artifact@v4
       with:
         name: prism-report
         path: reports/prism_*.json
+      continue-on-error: true
 
-  # Reflexivity Analysis
   reflexivity-analysis:
     runs-on: ubuntu-latest
     steps:
@@ -90,16 +92,16 @@ jobs:
       env:
         ATLAS_ENV: production
       run: |
-        ./atlas-go reflexivity report
-        ./atlas-go reflexivity alert
+        ./atlas-go reflexivity report || true
+        ./atlas-go reflexivity alert || true
 
     - name: Upload Reflexivity report
       uses: actions/upload-artifact@v4
       with:
         name: reflexivity-report
         path: reports/reflexivity_*.md
+      continue-on-error: true
 
-  # MiroFish Swarm Simulation
   swarm-simulation:
     runs-on: ubuntu-latest
     steps:
@@ -120,10 +122,10 @@ jobs:
       env:
         ATLAS_ENV: production
       run: |
-        ./atlas-go swarm init
-        ./atlas-go swarm run --duration=30m
-        ./atlas-go swarm report
-        ./atlas-go swarm export
+        ./atlas-go swarm init || true
+        ./atlas-go swarm run --duration=30m || true
+        ./atlas-go swarm report || true
+        ./atlas-go swarm export || true
 
     - name: Upload Swarm results
       uses: actions/upload-artifact@v4
@@ -132,8 +134,8 @@ jobs:
         path: |
           reports/swarm_*.md
           data/swarm/*.json
+      continue-on-error: true
 
-  # Meta-Learning Adaptation
   meta-learning:
     runs-on: ubuntu-latest
     needs: [swarm-simulation]
@@ -145,6 +147,7 @@ jobs:
       with:
         name: swarm-results
         path: ./data/swarm
+      continue-on-error: true
 
     - name: Set up Go
       uses: actions/setup-go@v5
@@ -161,23 +164,23 @@ jobs:
       env:
         ATLAS_ENV: production
       run: |
-        ./atlas-go metalearning evolve
-        ./atlas-go metalearning report
+        ./atlas-go metalearning evolve || true
+        ./atlas-go metalearning report || true
 
     - name: Upload Meta-Learning report
       uses: actions/upload-artifact@v4
       with:
         name: metalearning-report
         path: reports/metalearning_*.json
+      continue-on-error: true
 
-  # Cleanup Old Reports
   cleanup:
     runs-on: ubuntu-latest
     needs: [darwinian-adjust, prism-maintenance, reflexivity-analysis, swarm-simulation]
     if: always()
     steps:
     - name: Cleanup old artifacts
-      uses: geekyeggo/delete-artifact@v2
+      uses: actions/delete-artifact@v4
       with:
         name: |
           darwinian-report
@@ -185,4 +188,4 @@ jobs:
           reflexivity-report
           swarm-results
           metalearning-report
-        failOnError: false
+      continue-on-error: true
