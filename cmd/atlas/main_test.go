@@ -20,6 +20,7 @@ func TestRunAPIModeStartsServerAndRegistersRoutes(t *testing.T) {
 	var gotHandler http.Handler
 
 	shutdown := make(chan struct{})
+	listenDone := make(chan struct{})
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: ledgerDir}
@@ -33,6 +34,7 @@ func TestRunAPIModeStartsServerAndRegistersRoutes(t *testing.T) {
 		listenAndServe: func(addr string, handler http.Handler) error {
 			gotAddr = addr
 			gotHandler = handler
+			close(listenDone)
 			return nil
 		},
 		shutdown: shutdown,
@@ -47,6 +49,7 @@ func TestRunAPIModeStartsServerAndRegistersRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run returned error: %v", err)
 	}
+	<-listenDone
 	if gotAddr != ":19090" {
 		t.Fatalf("listen addr = %q, want %q", gotAddr, ":19090")
 	}
@@ -114,6 +117,7 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 	var gotAddr string
 
 	shutdown := make(chan struct{})
+	listenDone := make(chan struct{})
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerMaxRetries: 1}
@@ -126,6 +130,7 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			gotAddr = addr
+			close(listenDone)
 			return nil
 		},
 		shutdown: shutdown,
@@ -140,6 +145,7 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run returned error: %v", err)
 	}
+	<-listenDone
 	if gotAddr != ":8080" {
 		t.Fatalf("listen addr = %q, want %q", gotAddr, ":8080")
 	}
@@ -509,6 +515,7 @@ func TestStaticFileServerServesIndex(t *testing.T) {
 	}
 
 	shutdown := make(chan struct{})
+	listenDone := make(chan struct{})
 	var gotHandler http.Handler
 	deps := appDeps{
 		loadConfig: func() config.Config {
@@ -519,6 +526,7 @@ func TestStaticFileServerServesIndex(t *testing.T) {
 		},
 		listenAndServe: func(addr string, handler http.Handler) error {
 			gotHandler = handler
+			close(listenDone)
 			return nil
 		},
 		shutdown: shutdown,
@@ -532,6 +540,7 @@ func TestStaticFileServerServesIndex(t *testing.T) {
 	if err := run([]string{"-api"}, deps); err != nil {
 		t.Fatalf("run returned error: %v", err)
 	}
+	<-listenDone
 	if gotHandler == nil {
 		t.Fatalf("expected http handler to be registered")
 	}
