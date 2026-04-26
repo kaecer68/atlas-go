@@ -7,39 +7,37 @@ on:
 
 env:
   GO_VERSION: '1.21'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # Create Release
   create-release:
     runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
     - uses: actions/checkout@v4
 
     - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
+      uses: softprops/action-gh-release@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
+        name: Release ${{ github.ref }}
         draft: false
         prerelease: false
         body: |
           ## Atlas-Go Release ${{ github.ref }}
-          
+
           ### Features
           - Phase 2: Darwinian Weights, Superinvestor Layer
           - Phase 3: Agent Spawning, PRISM, Soros Reflexivity, MiroFish Swarm
           - Phase 4: Meta-Learning, Adversarial Training, Global Markets, Real-Time Adaptation
-          
+
           ### Installation
           ```bash
           docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
           ```
-          
+
           ### Changelog
           See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 
@@ -81,14 +79,13 @@ jobs:
         tar czvf "${output_name}.tar.gz" ${output_name}
 
     - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
+      uses: softprops/action-gh-release@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ needs.create-release.outputs.upload_url }}
-        asset_path: ./atlas-go-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
-        asset_name: atlas-go-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
-        asset_content_type: application/gzip
+        tag_name: ${{ github.ref }}
+        files: |
+          atlas-go-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
 
   # Publish Docker Image
   publish-docker:
