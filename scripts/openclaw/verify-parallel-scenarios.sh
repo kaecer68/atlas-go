@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-START_DATE="2026-03-26"
+START_DATE="2026-03-20"
 END_DATE="2026-03-27"
 REPLAY_DATA_PATH="${ATLAS_REPLAY_DATA_PATH:-samples/replay/twse_stock_day_all_sample.csv}"
 BASE_POLICY_PATH="${ATLAS_BASELINE_POLICY_PATH:-data/state/baseline_policy.json}"
