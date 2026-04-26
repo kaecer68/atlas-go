@@ -3,6 +3,7 @@ package industry
 import (
 	"fmt"
 	"math"
+	"sync"
 	"time"
 )
 
@@ -54,6 +55,7 @@ type RiskEvent struct {
 
 // RiskMonitor monitors industry-specific risks.
 type RiskMonitor struct {
+	mu               sync.RWMutex
 	customerData     map[string][]CustomerConcentration // symbol -> customers
 	newsSources      []NewsSource
 	asymmetricConfig AsymmetricRiskConfig
@@ -106,16 +108,22 @@ func DefaultNewsSources() []NewsSource {
 
 // AddCustomerConcentration adds customer concentration data for a symbol.
 func (rm *RiskMonitor) AddCustomerConcentration(symbol string, customers []CustomerConcentration) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
 	rm.customerData[symbol] = customers
 }
 
 // GetCustomerConcentration returns customer concentration for a symbol.
 func (rm *RiskMonitor) GetCustomerConcentration(symbol string) []CustomerConcentration {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
 	return rm.customerData[symbol]
 }
 
 // CalculateCustomerConcentrationRisk calculates the customer concentration risk.
 func (rm *RiskMonitor) CalculateCustomerConcentrationRisk(symbol string) *RiskEvent {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
 	customers, ok := rm.customerData[symbol]
 	if !ok || len(customers) == 0 {
 		return nil
