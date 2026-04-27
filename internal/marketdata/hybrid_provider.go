@@ -9,13 +9,13 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
-// CircuitState represents the state of the circuit breaker.
-type CircuitState string
+// ProviderCircuitState represents the state of the provider circuit breaker.
+type ProviderCircuitState string
 
 const (
-	CircuitClosed   CircuitState = "closed"    // Normal operation, requests pass through
-	CircuitOpen     CircuitState = "open"      // Failing, requests blocked
-	CircuitHalfOpen CircuitState = "half-open" // Testing if service recovered
+	ProviderCircuitClosed   ProviderCircuitState = "closed"    // Normal operation, requests pass through
+	ProviderCircuitOpen     ProviderCircuitState = "open"      // Failing, requests blocked
+	ProviderCircuitHalfOpen ProviderCircuitState = "half-open" // Testing if service recovered
 )
 
 // circuitBreakerConfig holds the configuration for the circuit breaker.
@@ -42,7 +42,7 @@ type HybridProvider struct {
 	twseClient    *TWSEClient
 
 	// Circuit breaker state
-	cbState         CircuitState
+	cbState         ProviderCircuitState
 	cbFailureCount  int
 	cbLastFailure   time.Time
 	cbHalfOpenCalls int
@@ -66,7 +66,7 @@ func NewHybridProvider(apiKey string) *HybridProvider {
 	return &HybridProvider{
 		fugleProvider: fugleProvider,
 		twseClient:    NewTWSEClient(),
-		cbState:       CircuitClosed,
+		cbState:       ProviderCircuitClosed,
 		cbConfig:      defaultCircuitBreakerConfig(),
 	}
 }
@@ -109,18 +109,18 @@ func (p *HybridProvider) shouldTryFugle() bool {
 	defer p.cbMutex.Unlock()
 
 	switch p.cbState {
-	case CircuitClosed:
+	case ProviderCircuitClosed:
 		return true
-	case CircuitOpen:
+	case ProviderCircuitOpen:
 		// Check if recovery timeout has elapsed
 		if time.Since(p.cbLastFailure) > p.cbConfig.recoveryTimeout {
-			p.cbState = CircuitHalfOpen
+			p.cbState = ProviderCircuitHalfOpen
 			p.cbHalfOpenCalls = 0
 			fmt.Printf("[HybridProvider] Circuit breaker entering half-open state, testing Fugle recovery\n")
 			return true
 		}
 		return false
-	case CircuitHalfOpen:
+	case ProviderCircuitHalfOpen:
 		// Allow limited calls in half-open state
 		if p.cbHalfOpenCalls < p.cbConfig.halfOpenMaxCalls {
 			p.cbHalfOpenCalls++
@@ -153,14 +153,14 @@ func (p *HybridProvider) recordFugleFailure() {
 	p.fallbackCount++
 	p.lastFallbackAt = time.Now()
 
-	if p.cbState == CircuitHalfOpen {
+	if p.cbState == ProviderCircuitHalfOpen {
 		// Failure in half-open state -> back to open
-		p.cbState = CircuitOpen
+		p.cbState = ProviderCircuitOpen
 		p.cbHalfOpenCalls = 0
 		fmt.Printf("[HybridProvider] Fugle recovery failed in half-open state, circuit re-opened\n")
 	} else if p.cbFailureCount >= p.cbConfig.failureThreshold {
 		// Too many failures -> open circuit
-		p.cbState = CircuitOpen
+		p.cbState = ProviderCircuitOpen
 		fmt.Printf("[HybridProvider] Circuit breaker opened after %d consecutive failures\n", p.cbFailureCount)
 	}
 }
@@ -170,11 +170,11 @@ func (p *HybridProvider) recordFugleSuccess() {
 	p.cbMutex.Lock()
 	defer p.cbMutex.Unlock()
 
-	if p.cbState != CircuitClosed {
+	if p.cbState != ProviderCircuitClosed {
 		fmt.Printf("[HybridProvider] Fugle recovered, circuit breaker closed\n")
 		p.recoveryAttempts++
 	}
-	p.cbState = CircuitClosed
+	p.cbState = ProviderCircuitClosed
 	p.cbFailureCount = 0
 	p.cbHalfOpenCalls = 0
 }
@@ -183,11 +183,11 @@ func (p *HybridProvider) recordFugleSuccess() {
 func (p *HybridProvider) isCircuitOpen() bool {
 	p.cbMutex.RLock()
 	defer p.cbMutex.RUnlock()
-	return p.cbState == CircuitOpen
+	return p.cbState == ProviderCircuitOpen
 }
 
 // getCircuitState returns the current circuit state (for logging).
-func (p *HybridProvider) getCircuitState() CircuitState {
+func (p *HybridProvider) getCircuitState() ProviderCircuitState {
 	p.cbMutex.RLock()
 	defer p.cbMutex.RUnlock()
 	return p.cbState
@@ -234,9 +234,9 @@ func (p *HybridProvider) Reset() {
 	p.cbMutex.Lock()
 	defer p.cbMutex.Unlock()
 	if p.fugleProvider == nil {
-		p.cbState = CircuitOpen
+		p.cbState = ProviderCircuitOpen
 	} else {
-		p.cbState = CircuitClosed
+		p.cbState = ProviderCircuitClosed
 	}
 	p.cbFailureCount = 0
 	p.cbHalfOpenCalls = 0
@@ -248,7 +248,7 @@ func (p *HybridProvider) Reset() {
 func (p *HybridProvider) UseTWSE() {
 	p.cbMutex.Lock()
 	defer p.cbMutex.Unlock()
-	p.cbState = CircuitOpen
+	p.cbState = ProviderCircuitOpen
 	p.cbLastFailure = time.Now()
 }
 
@@ -256,7 +256,7 @@ func (p *HybridProvider) UseTWSE() {
 func (p *HybridProvider) UseFugle() {
 	p.cbMutex.Lock()
 	defer p.cbMutex.Unlock()
-	p.cbState = CircuitClosed
+	p.cbState = ProviderCircuitClosed
 	p.cbFailureCount = 0
 	p.cbHalfOpenCalls = 0
 }
