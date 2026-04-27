@@ -18,7 +18,9 @@ type WriteError struct {
 	Err  error
 }
 
-func (e *WriteError) Error() string { return fmt.Sprintf("ledger %s: path=%s: %v", e.Op, e.Path, e.Err) }
+func (e *WriteError) Error() string {
+	return fmt.Sprintf("ledger %s: path=%s: %v", e.Op, e.Path, e.Err)
+}
 func (e *WriteError) Unwrap() error { return e.Err }
 
 // SessionWriteRequest contains all data for a session write operation.

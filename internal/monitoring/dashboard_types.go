@@ -123,3 +123,22 @@ type ExperimentInboxResponse struct {
 	RecentHistory   []ExperimentInboxItem `json:"recent_history"`
 	BaselineVersion int                   `json:"baseline_version"`
 }
+
+type DataChannelInfo struct {
+	ChannelID  string `json:"channel_id"`
+	Label      string `json:"label"`
+	Status     string `json:"status"`
+	StatusText string `json:"status_text"`
+	UpdatedAt  string `json:"updated_at"`
+}
+
+type SystemHealthResponse struct {
+	BaselineVersion       string            `json:"baseline_version"`
+	ReplayDataLatestDate  string            `json:"replay_data_latest_date"`
+	ReplayDataPathOK      bool              `json:"replay_data_path_ok"`
+	LastWindowID          string            `json:"last_window_id"`
+	LastWindowGeneratedAt time.Time         `json:"last_window_generated_at"`
+	Warnings              []string          `json:"warnings"`
+	Regime                domain.Regime     `json:"regime"`
+	DataChannels          []DataChannelInfo `json:"data_channels,omitempty"`
+}

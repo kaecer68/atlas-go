@@ -13,8 +13,8 @@ import (
 type CircuitState string
 
 const (
-	CircuitClosed   CircuitState = "closed"   // Normal operation, requests pass through
-	CircuitOpen     CircuitState = "open"     // Failing, requests blocked
+	CircuitClosed   CircuitState = "closed"    // Normal operation, requests pass through
+	CircuitOpen     CircuitState = "open"      // Failing, requests blocked
 	CircuitHalfOpen CircuitState = "half-open" // Testing if service recovered
 )
 
@@ -42,12 +42,12 @@ type HybridProvider struct {
 	twseClient    *TWSEClient
 
 	// Circuit breaker state
-	cbState          CircuitState
-	cbFailureCount   int
-	cbLastFailure    time.Time
-	cbHalfOpenCalls  int
-	cbConfig         circuitBreakerConfig
-	cbMutex          sync.RWMutex
+	cbState         CircuitState
+	cbFailureCount  int
+	cbLastFailure   time.Time
+	cbHalfOpenCalls int
+	cbConfig        circuitBreakerConfig
+	cbMutex         sync.RWMutex
 
 	// Fallback tracking for observability
 	fallbackCount    int

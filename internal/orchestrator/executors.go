@@ -12,23 +12,105 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
+// ExecutionContext holds all parameters needed to execute registry research.
+type ExecutionContext struct {
+	Registry      domain.AgentRegistry
+	Quotes        []domain.Quote
+	Overrides     map[string]string
+	Policy        domain.ExecutionPolicy
+	Plugins       *PluginRegistry
+	SessionID     string
+	WeightManager *portfolio.DarwinianWeightManager
+}
+
+// ResearchResult holds all outputs from executing registry research.
+type ResearchResult struct {
+	Regime               domain.Regime
+	RawRecommendations   []domain.Recommendation
+	FinalRecommendations []domain.Recommendation
+	GuardOutcomes        []domain.GuardOutcome
+	ScreeningRejects     []domain.ScreeningReject
+	DarwinianWeights     []*portfolio.DarwinianAgentWeight
+}
+
+// ExecuteWithContext executes registry research using a unified context.
+func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
+	if ctx.Plugins == nil {
+		ctx.Plugins = NewPluginRegistry()
+	}
+	if ctx.Policy == (domain.ExecutionPolicy{}) {
+		ctx.Policy = DefaultExecutionPolicy()
+	}
+
+	quoteBySymbol := make(map[string]domain.Quote, len(ctx.Quotes))
+	for _, quote := range ctx.Quotes {
+		quoteBySymbol[quote.Symbol] = quote
+	}
+
+	registry := filterMutedAgents(ctx.Registry, ctx.Plugins)
+
+	regime := inferRegime(registry, quoteBySymbol, ctx.Plugins, ctx.Overrides)
+	raw, rejects := collectRecommendations(registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, regime, ctx.SessionID)
+
+	if ctx.Policy.MomentumCrashProtection {
+		raw = applyMomentumCrashProtection(raw, quoteBySymbol)
+	}
+
+	var weightData []*portfolio.DarwinianAgentWeight
+	controlInput := raw
+	if ctx.WeightManager != nil {
+		controlInput = ctx.WeightManager.ApplyDarwinianWeights(raw)
+		weightData = ctx.WeightManager.GetAllAgentWeightData()
+	}
+
+	final, guardOutcomes := applyControlLayerWithOutcomes(registry, ctx.Plugins, controlInput, ctx.Policy)
+
+	return ResearchResult{
+		Regime:               regime,
+		RawRecommendations:   raw,
+		FinalRecommendations: final,
+		GuardOutcomes:        guardOutcomes,
+		ScreeningRejects:     rejects,
+		DarwinianWeights:     weightData,
+	}
+}
+
 func ExecuteRegistryResearch(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string) (domain.Regime, []domain.Recommendation) {
-	regime, _, final := ExecuteRegistryResearchDetailed(registry, quotes, overrides)
-	return regime, final
+	result := ExecuteWithContext(ExecutionContext{
+		Registry:  registry,
+		Quotes:    quotes,
+		Overrides: overrides,
+	})
+	return result.Regime, result.FinalRecommendations
 }
 
 func ExecuteRegistryResearchDetailed(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string) (domain.Regime, []domain.Recommendation, []domain.Recommendation) {
-	return ExecuteRegistryResearchDetailedWithPolicy(registry, quotes, overrides, DefaultExecutionPolicy())
+	result := ExecuteWithContext(ExecutionContext{
+		Registry:  registry,
+		Quotes:    quotes,
+		Overrides: overrides,
+	})
+	return result.Regime, result.RawRecommendations, result.FinalRecommendations
 }
 
 func ExecuteRegistryResearchDetailedWithPolicy(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string, policy domain.ExecutionPolicy) (domain.Regime, []domain.Recommendation, []domain.Recommendation) {
-	regime, raw, final, _ := ExecuteRegistryResearchDetailedWithPolicyAndGuards(registry, quotes, overrides, policy)
-	return regime, raw, final
+	result := ExecuteWithContext(ExecutionContext{
+		Registry:  registry,
+		Quotes:    quotes,
+		Overrides: overrides,
+		Policy:    policy,
+	})
+	return result.Regime, result.RawRecommendations, result.FinalRecommendations
 }
 
 func ExecuteRegistryResearchDetailedWithPolicyAndGuards(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string, policy domain.ExecutionPolicy) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome) {
-	regime, raw, final, guardOutcomes, _ := executeRegistryResearchDetailedWithPolicyAndGuards(registry, quotes, overrides, policy, NewPluginRegistry(), "")
-	return regime, raw, final, guardOutcomes
+	result := ExecuteWithContext(ExecutionContext{
+		Registry:  registry,
+		Quotes:    quotes,
+		Overrides: overrides,
+		Policy:    policy,
+	})
+	return result.Regime, result.RawRecommendations, result.FinalRecommendations, result.GuardOutcomes
 }
 
 func ExecuteRegistryResearchDetailedWithPolicyAndGuardsAndPlugins(
@@ -38,8 +120,14 @@ func ExecuteRegistryResearchDetailedWithPolicyAndGuardsAndPlugins(
 	policy domain.ExecutionPolicy,
 	plugins *PluginRegistry,
 ) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome) {
-	regime, raw, final, guardOutcomes, _ := executeRegistryResearchDetailedWithPolicyAndGuards(registry, quotes, overrides, policy, plugins, "")
-	return regime, raw, final, guardOutcomes
+	result := ExecuteWithContext(ExecutionContext{
+		Registry:  registry,
+		Quotes:    quotes,
+		Overrides: overrides,
+		Policy:    policy,
+		Plugins:   plugins,
+	})
+	return result.Regime, result.RawRecommendations, result.FinalRecommendations, result.GuardOutcomes
 }
 
 func filterMutedAgents(registry domain.AgentRegistry, plugins *PluginRegistry) domain.AgentRegistry {
@@ -73,20 +161,15 @@ func executeRegistryResearchDetailedWithPolicyAndGuards(
 	plugins *PluginRegistry,
 	sessionID string,
 ) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome, []domain.ScreeningReject) {
-	quoteBySymbol := make(map[string]domain.Quote, len(quotes))
-	for _, quote := range quotes {
-		quoteBySymbol[quote.Symbol] = quote
-	}
-
-	registry = filterMutedAgents(registry, plugins)
-
-	regime := inferRegime(registry, quoteBySymbol, plugins, overrides)
-	raw, rejects := collectRecommendations(registry, quoteBySymbol, plugins, overrides, regime, sessionID)
-	if policy.MomentumCrashProtection {
-		raw = applyMomentumCrashProtection(raw, quoteBySymbol)
-	}
-	final, guardOutcomes := applyControlLayerWithOutcomes(registry, plugins, raw, policy)
-	return regime, raw, final, guardOutcomes, rejects
+	result := ExecuteWithContext(ExecutionContext{
+		Registry:  registry,
+		Quotes:    quotes,
+		Overrides: overrides,
+		Policy:    policy,
+		Plugins:   plugins,
+		SessionID: sessionID,
+	})
+	return result.Regime, result.RawRecommendations, result.FinalRecommendations, result.GuardOutcomes, result.ScreeningRejects
 }
 
 func executeRegistryResearchDetailedWithPolicyAndGuardsAndDarwinian(
@@ -98,26 +181,16 @@ func executeRegistryResearchDetailedWithPolicyAndGuardsAndDarwinian(
 	sessionID string,
 	weightManager *portfolio.DarwinianWeightManager,
 ) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome, []domain.ScreeningReject) {
-	quoteBySymbol := make(map[string]domain.Quote, len(quotes))
-	for _, quote := range quotes {
-		quoteBySymbol[quote.Symbol] = quote
-	}
-
-	registry = filterMutedAgents(registry, plugins)
-
-	regime := inferRegime(registry, quoteBySymbol, plugins, overrides)
-	raw, rejects := collectRecommendations(registry, quoteBySymbol, plugins, overrides, regime, sessionID)
-	if policy.MomentumCrashProtection {
-		raw = applyMomentumCrashProtection(raw, quoteBySymbol)
-	}
-
-	// Apply Darwinian weights to raw recommendations before control layer.
-	weighted := weightManager.ApplyDarwinianWeights(raw)
-
-	// Apply control layer with outcomes to weighted recommendations.
-	final, guardOutcomes := applyControlLayerWithOutcomes(registry, plugins, weighted, policy)
-
-	return regime, raw, final, guardOutcomes, rejects
+	result := ExecuteWithContext(ExecutionContext{
+		Registry:      registry,
+		Quotes:        quotes,
+		Overrides:     overrides,
+		Policy:        policy,
+		Plugins:       plugins,
+		SessionID:     sessionID,
+		WeightManager: weightManager,
+	})
+	return result.Regime, result.RawRecommendations, result.FinalRecommendations, result.GuardOutcomes, result.ScreeningRejects
 }
 
 // ExecuteRegistryResearchWithDarwinianWeights executes research with Darwinian weight application
@@ -142,34 +215,23 @@ func executeRegistryResearchWithDarwinianWeights(
 	plugins *PluginRegistry,
 	sessionID string,
 ) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []*portfolio.DarwinianAgentWeight, []domain.ScreeningReject) {
-	quoteBySymbol := make(map[string]domain.Quote, len(quotes))
-	for _, quote := range quotes {
-		quoteBySymbol[quote.Symbol] = quote
+	wm := weightManager
+	if wm == nil {
+		wm = portfolio.NewDarwinianWeightManager("configs/darwinian_weights.json")
+		wm.InitializeFromRegistry(registry)
+		_ = wm.Load()
 	}
 
-	// Initialize weight manager if needed
-	if weightManager == nil {
-		weightManager = portfolio.NewDarwinianWeightManager("configs/darwinian_weights.json")
-		weightManager.InitializeFromRegistry(registry)
-		_ = weightManager.Load() // Try to load existing weights
-	}
-
-	regime := inferRegime(registry, quoteBySymbol, plugins, overrides)
-	raw, rejects := collectRecommendations(registry, quoteBySymbol, plugins, overrides, regime, sessionID)
-	if policy.MomentumCrashProtection {
-		raw = applyMomentumCrashProtection(raw, quoteBySymbol)
-	}
-
-	// Apply Darwinian weights to recommendations
-	weighted := weightManager.ApplyDarwinianWeights(raw)
-
-	// Apply control layer (CRO) to weighted recommendations
-	final := applyControlLayer(registry, plugins, weighted, policy)
-
-	// Get current weight data for reporting
-	weightData := weightManager.GetAllAgentWeightData()
-
-	return regime, raw, final, weightData, rejects
+	result := ExecuteWithContext(ExecutionContext{
+		Registry:      registry,
+		Quotes:        quotes,
+		Overrides:     overrides,
+		Policy:        policy,
+		Plugins:       plugins,
+		SessionID:     sessionID,
+		WeightManager: wm,
+	})
+	return result.Regime, result.RawRecommendations, result.FinalRecommendations, result.DarwinianWeights, result.ScreeningRejects
 }
 
 func inferRegime(registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string) domain.Regime {
