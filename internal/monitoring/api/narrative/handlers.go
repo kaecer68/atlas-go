@@ -3,18 +3,15 @@ package narrative
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
-	"path/filepath"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
 
 type Handlers struct {
-	WorkDir         string
-	NarrativeEngine *narrative.NarrativeEngine
-	ReportGenerator *narrative.ReportGenerator
+	Svc *service.NarrativeService
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
@@ -59,7 +56,7 @@ func (h *Handlers) HandleNarrativeEvents(w http.ResponseWriter, r *http.Request)
 		RetailInstitutionalDivergence: parseFloatQuery(r, "retail_divergence", 0),
 		MarginZScore:                  parseFloatQuery(r, "margin_zscore", 0),
 	}
-	events := h.NarrativeEngine.DetectEvents(data)
+	events := h.Svc.DetectEvents(data)
 	writeJSON(w, http.StatusOK, map[string]any{"events": events})
 }
 
@@ -75,8 +72,8 @@ func (h *Handlers) HandleNarrativeChains(w http.ResponseWriter, r *http.Request)
 		AICapexSentiment:  parseFloatQuery(r, "ai_capex_sentiment", 0.8),
 		GeopoliticalGPR:   parseFloatQuery(r, "geopolitical_gpr", 160),
 	}
-	events := h.NarrativeEngine.DetectEvents(data)
-	chains := h.NarrativeEngine.MatchChains(events)
+	events := h.Svc.DetectEvents(data)
+	chains := h.Svc.MatchChains(events)
 	writeJSON(w, http.StatusOK, map[string]any{"chains": chains})
 }
 
@@ -92,24 +89,17 @@ func (h *Handlers) HandleNarrativeModels(w http.ResponseWriter, r *http.Request)
 		AICapexSentiment:  parseFloatQuery(r, "ai_capex_sentiment", 0.8),
 		GeopoliticalGPR:   parseFloatQuery(r, "geopolitical_gpr", 160),
 	}
-	events := h.NarrativeEngine.DetectEvents(data)
+	events := h.Svc.DetectEvents(data)
 	themes := make([]string, len(events))
 	for i, e := range events {
 		themes[i] = e.Theme
 	}
-
-	replayPath := filepath.Join(h.WorkDir, "data/replay/tw_extended_90days.csv")
-	if err := h.NarrativeEngine.EvaluateModels(replayPath); err != nil {
-		log.Printf("[DashboardAPI] EvaluateModels warning: %v", err)
-	}
-
-	models := h.NarrativeEngine.ActiveModels(themes)
+	models := h.Svc.GetActiveModels(themes)
 	writeJSON(w, http.StatusOK, map[string]any{"models": models})
 }
 
 func (h *Handlers) HandleNarrativeTemplates(w http.ResponseWriter, r *http.Request) {
-	kb := narrative.NewKnowledgeBase()
-	templates := kb.ListTemplates()
+	templates := h.Svc.GetTemplates()
 	writeJSON(w, http.StatusOK, map[string]any{"templates": templates})
 }
 

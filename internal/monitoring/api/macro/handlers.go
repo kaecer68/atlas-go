@@ -4,18 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/kaecer68/atlas-go/internal/marketdata"
-	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
 type Handlers struct {
-	WorkDir          string
-	MacroIngestor    *narrative.MacroIngestor
-	TaiwanStressCalc *narrative.TaiwanStressCalculator
+	Service *service.MacroService
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
@@ -41,7 +36,7 @@ func (h *Handlers) HandleMacroIngest(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	events, snap, err := h.MacroIngestor.Ingest(r.Context())
+	events, snap, err := h.Service.Ingest(r.Context())
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("ingest failed: %v", err))
 		return
@@ -53,14 +48,9 @@ func (h *Handlers) HandleMacroIngest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleMacroSnapshotLatest(w http.ResponseWriter, r *http.Request) {
-	path := filepath.Join(h.MacroIngestor.SnapshotDir(), "latest.json")
-	data, err := os.ReadFile(path)
+	data, err := h.Service.GetLatestSnapshot()
 	if err != nil {
-		if os.IsNotExist(err) {
-			writeJSONError(w, http.StatusNotFound, "no macro snapshot available")
-			return
-		}
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read snapshot: %v", err))
+		writeJSONError(w, http.StatusNotFound, "no macro snapshot available")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -73,14 +63,9 @@ func (h *Handlers) HandleMacroSnapshotHistory(w http.ResponseWriter, r *http.Req
 		writeJSONError(w, http.StatusBadRequest, "date query param required (YYYY-MM-DD)")
 		return
 	}
-	path := filepath.Join(h.MacroIngestor.SnapshotDir(), date+".json")
-	data, err := os.ReadFile(path)
+	data, err := h.Service.GetSnapshotByDate(date)
 	if err != nil {
-		if os.IsNotExist(err) {
-			writeJSONError(w, http.StatusNotFound, "snapshot not found for date")
-			return
-		}
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read snapshot: %v", err))
+		writeJSONError(w, http.StatusNotFound, "snapshot not found for date")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -92,26 +77,16 @@ func (h *Handlers) HandleCapitalFlowLatest(w http.ResponseWriter, r *http.Reques
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	path := filepath.Join(h.MacroIngestor.SnapshotDir(), "latest.json")
-	data, err := os.ReadFile(path)
+	snap, err := h.Service.GetCapitalFlow()
 	if err != nil {
-		if os.IsNotExist(err) {
-			writeJSONError(w, http.StatusNotFound, "no macro snapshot available")
-			return
-		}
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read snapshot: %v", err))
-		return
-	}
-	var snap marketdata.MacroDataSnapshot
-	if err := json.Unmarshal(data, &snap); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("decode snapshot: %v", err))
+		writeJSONError(w, http.StatusNotFound, "no macro snapshot available")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"foreign_investor_net": snap.ForeignInvestorNet,
 		"domestic_fund_net":    snap.DomesticFundNet,
-		"dealer_net":           snap.DealerNet,
-		"recorded_at":          snap.RecordedAt,
+		"dealer_net":          snap.DealerNet,
+		"recorded_at":         snap.RecordedAt,
 	})
 }
 
@@ -121,29 +96,7 @@ func (h *Handlers) HandleTaiwanStressIndex(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var snap marketdata.MacroDataSnapshot
-	path := filepath.Join(h.MacroIngestor.SnapshotDir(), "latest.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			_, snap, err = h.MacroIngestor.Ingest(r.Context())
-			if err != nil {
-				writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("ingest failed: %v", err))
-				return
-			}
-		} else {
-			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read snapshot: %v", err))
-			return
-		}
-	} else {
-		if err := json.Unmarshal(data, &snap); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("decode snapshot: %v", err))
-			return
-		}
-	}
-
-	geoStore := narrative.NewGeopoliticalStore(filepath.Join(h.WorkDir, "data/state/geopolitical"))
-	index, err := h.TaiwanStressCalc.CalculateFromSnapshotWithStore(r.Context(), snap, geoStore)
+	index, err := h.Service.CalculateStressIndex(r.Context())
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("calculate stress index: %v", err))
 		return

@@ -4,20 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path/filepath"
-	"slices"
-	"time"
 
-	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/ledger"
-	"github.com/kaecer68/atlas-go/internal/orchestrator"
-	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
 type Handlers struct {
-	WorkDir       string
-	LedgerDir     string
-	HealthManager *portfolio.AgentHealthManager
+	Svc *service.ControlService
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
@@ -42,14 +34,6 @@ func writeJSONError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
 }
 
-func mapKeys(m map[string]bool) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
 func (h *Handlers) HandlePauseAgent(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -68,16 +52,8 @@ func (h *Handlers) HandlePauseAgent(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "agent_id required")
 		return
 	}
-	store := ledger.NewStore(h.LedgerDir)
-	intervention := domain.HumanIntervention{
-		ID:            fmt.Sprintf("int-pause-%s-%d", req.AgentID, time.Now().UnixNano()),
-		Type:          "pause_agent",
-		TargetAgentID: req.AgentID,
-		Reason:        req.Reason,
-		Operator:      req.Operator,
-		RecordedAt:    time.Now().UTC(),
-	}
-	if err := store.RecordHumanIntervention(intervention); err != nil {
+	intervention := h.Svc.CreateIntervention("pause_agent", req.AgentID, req.Reason, req.Operator, 0)
+	if err := h.Svc.RecordIntervention(intervention); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
 		return
 	}
@@ -102,16 +78,8 @@ func (h *Handlers) HandleResumeAgent(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "agent_id required")
 		return
 	}
-	store := ledger.NewStore(h.LedgerDir)
-	intervention := domain.HumanIntervention{
-		ID:            fmt.Sprintf("int-resume-%s-%d", req.AgentID, time.Now().UnixNano()),
-		Type:          "resume_agent",
-		TargetAgentID: req.AgentID,
-		Reason:        req.Reason,
-		Operator:      req.Operator,
-		RecordedAt:    time.Now().UTC(),
-	}
-	if err := store.RecordHumanIntervention(intervention); err != nil {
+	intervention := h.Svc.CreateIntervention("resume_agent", req.AgentID, req.Reason, req.Operator, 0)
+	if err := h.Svc.RecordIntervention(intervention); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
 		return
 	}
@@ -123,42 +91,11 @@ func (h *Handlers) HandleAgentHealth(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-
-	if h.HealthManager == nil {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"agents":      []*portfolio.AgentHealth{},
-			"total":       0,
-			"muted_count": 0,
-		})
+	agents, mutedCount, err := h.Svc.GetAgentHealth()
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("get agent health: %v", err))
 		return
 	}
-
-	registryPath := filepath.Join(h.WorkDir, "configs/agents.json")
-	registry, err := orchestrator.LoadRegistry(registryPath)
-	if err != nil {
-		registry = orchestrator.SeedRegistry()
-	}
-
-	agents := make([]*portfolio.AgentHealth, 0)
-	mutedCount := 0
-
-	for _, agent := range registry.Agents {
-		if !agent.Enabled {
-			continue
-		}
-		h := h.HealthManager.GetHealth(agent.ID)
-		if h == nil {
-			h = &portfolio.AgentHealth{
-				AgentID: agent.ID,
-				Status:  portfolio.HealthStatusHealthy,
-			}
-		}
-		agents = append(agents, h)
-		if h.Status == portfolio.HealthStatusMuted {
-			mutedCount++
-		}
-	}
-
 	writeJSON(w, http.StatusOK, map[string]any{
 		"agents":      agents,
 		"total":       len(agents),
@@ -185,17 +122,8 @@ func (h *Handlers) HandleSetModelWeight(w http.ResponseWriter, r *http.Request) 
 		writeJSONError(w, http.StatusBadRequest, "model_id required")
 		return
 	}
-	store := ledger.NewStore(h.LedgerDir)
-	intervention := domain.HumanIntervention{
-		ID:            fmt.Sprintf("int-model-%s-%d", req.ModelID, time.Now().UnixNano()),
-		Type:          "set_model_weight",
-		TargetModelID: req.ModelID,
-		Value:         req.Weight,
-		Reason:        req.Reason,
-		Operator:      req.Operator,
-		RecordedAt:    time.Now().UTC(),
-	}
-	if err := store.RecordHumanIntervention(intervention); err != nil {
+	intervention := h.Svc.CreateIntervention("set_model_weight", req.ModelID, req.Reason, req.Operator, req.Weight)
+	if err := h.Svc.RecordIntervention(intervention); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
 		return
 	}
@@ -221,20 +149,12 @@ func (h *Handlers) HandleSectorBan(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "sector required")
 		return
 	}
-	store := ledger.NewStore(h.LedgerDir)
 	interventionType := "sector_unban"
 	if req.Banned {
 		interventionType = "sector_ban"
 	}
-	intervention := domain.HumanIntervention{
-		ID:           fmt.Sprintf("int-sector-%s-%d", req.Sector, time.Now().UnixNano()),
-		Type:         interventionType,
-		TargetSector: req.Sector,
-		Reason:       req.Reason,
-		Operator:     req.Operator,
-		RecordedAt:   time.Now().UTC(),
-	}
-	if err := store.RecordHumanIntervention(intervention); err != nil {
+	intervention := h.Svc.CreateIntervention(interventionType, req.Sector, req.Reason, req.Operator, 0)
+	if err := h.Svc.RecordIntervention(intervention); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
 		return
 	}
@@ -256,17 +176,8 @@ func (h *Handlers) HandleApproveRecommendation(w http.ResponseWriter, r *http.Re
 		writeJSONError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	store := ledger.NewStore(h.LedgerDir)
-	intervention := domain.HumanIntervention{
-		ID:            fmt.Sprintf("int-approve-%s-%d", req.Symbol, time.Now().UnixNano()),
-		Type:          "approve_rec",
-		TargetSymbol:  req.Symbol,
-		TargetAgentID: req.AgentID,
-		Reason:        req.Reason,
-		Operator:      req.Operator,
-		RecordedAt:    time.Now().UTC(),
-	}
-	if err := store.RecordHumanIntervention(intervention); err != nil {
+	intervention := h.Svc.CreateIntervention("approve_rec", req.Symbol, req.Reason, req.Operator, 0)
+	if err := h.Svc.RecordIntervention(intervention); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
 		return
 	}
@@ -288,17 +199,8 @@ func (h *Handlers) HandleRejectRecommendation(w http.ResponseWriter, r *http.Req
 		writeJSONError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	store := ledger.NewStore(h.LedgerDir)
-	intervention := domain.HumanIntervention{
-		ID:            fmt.Sprintf("int-reject-%s-%d", req.Symbol, time.Now().UnixNano()),
-		Type:          "reject_rec",
-		TargetSymbol:  req.Symbol,
-		TargetAgentID: req.AgentID,
-		Reason:        req.Reason,
-		Operator:      req.Operator,
-		RecordedAt:    time.Now().UTC(),
-	}
-	if err := store.RecordHumanIntervention(intervention); err != nil {
+	intervention := h.Svc.CreateIntervention("reject_rec", req.Symbol, req.Reason, req.Operator, 0)
+	if err := h.Svc.RecordIntervention(intervention); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
 		return
 	}
@@ -306,47 +208,19 @@ func (h *Handlers) HandleRejectRecommendation(w http.ResponseWriter, r *http.Req
 }
 
 func (h *Handlers) HandleAuditLog(w http.ResponseWriter, r *http.Request) {
-	store := ledger.NewStore(h.LedgerDir)
-	interventions, err := store.LoadHumanInterventions()
+	interventions, err := h.Svc.LoadInterventions()
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load interventions: %v", err))
 		return
 	}
-	slices.Reverse(interventions)
 	writeJSON(w, http.StatusOK, map[string]any{"interventions": interventions})
 }
 
 func (h *Handlers) HandleActiveOverrides(w http.ResponseWriter, r *http.Request) {
-	store := ledger.NewStore(h.LedgerDir)
-	interventions, err := store.LoadHumanInterventions()
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load interventions: %v", err))
-		return
-	}
-
-	pausedAgents := make(map[string]bool)
-	bannedSectors := make(map[string]bool)
-	modelWeights := make(map[string]float64)
-
-	for _, iv := range interventions {
-		switch iv.Type {
-		case "pause_agent":
-			pausedAgents[iv.TargetAgentID] = true
-		case "resume_agent":
-			delete(pausedAgents, iv.TargetAgentID)
-		case "sector_ban":
-			bannedSectors[iv.TargetSector] = true
-		case "sector_unban":
-			delete(bannedSectors, iv.TargetSector)
-		case "set_model_weight":
-			modelWeights[iv.TargetModelID] = iv.Value
-		default:
-		}
-	}
-
+	pausedAgents, bannedSectors, modelWeights := h.Svc.GetActiveOverrides()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"paused_agents":  mapKeys(pausedAgents),
-		"banned_sectors": mapKeys(bannedSectors),
+		"paused_agents":  pausedAgents,
+		"banned_sectors": bannedSectors,
 		"model_weights":  modelWeights,
 	})
 }

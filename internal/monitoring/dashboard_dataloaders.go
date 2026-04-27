@@ -82,5 +82,8 @@ func (a *DashboardAPI) LoadRecommendationOutcomes(sessionID string) ([]domain.Re
 
 // BuildSymbolSectorMap implements DataLoader.
 func (a *DashboardAPI) BuildSymbolSectorMap() map[string]string {
-	return BuildSymbolSectorMap(a.industryClassifier)
+	if a.industryService == nil {
+		return make(map[string]string)
+	}
+	return BuildSymbolSectorMap(a.industryService.Classifier)
 }

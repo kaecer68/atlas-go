@@ -34,6 +34,7 @@ import (
 	apibacktest "github.com/kaecer68/atlas-go/internal/monitoring/api/backtest"
 	apihealth "github.com/kaecer68/atlas-go/internal/monitoring/api/health"
 	apilive "github.com/kaecer68/atlas-go/internal/monitoring/api/live"
+	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -52,16 +53,9 @@ type DashboardAPI struct {
 	taiwanStressCalc   *narrative.TaiwanStressCalculator
 	reportGenerator    *narrative.ReportGenerator
 	pool               *pgxpool.Pool
-	backtestMu         sync.Mutex
-	backtestRunning    bool
-	backtestStatus     map[string]interface{}
+	industryService    *service.IndustryService
 	metricsCollector   *MetricsCollector
 	metricsHistory     *MetricsHistory
-	industryClassifier *industry.ClassificationTree
-	seasonalEngine     *industry.SeasonalEngine
-	cycleTracker       *industry.CycleTracker
-	linkageAnalyzer    *industry.LinkageAnalyzer
-	riskMonitor        *industry.RiskMonitor
 	healthManager      *portfolio.AgentHealthManager
 	dataQualityChecker *DataQualityChecker
 	janusEngine        *janus.Engine
@@ -160,13 +154,9 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		taiwanGeoProvider:  taiwanGeoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider),
 		reportGenerator:    narrative.NewReportGenerator(),
+		industryService:    service.NewIndustryService(industry.DefaultClassification(), industry.NewSeasonalEngine(), industry.NewCycleTracker(), industry.NewLinkageAnalyzer(), industry.NewRiskMonitor()),
 		metricsCollector:   metricsCollector,
 		metricsHistory:     NewMetricsHistory(1000),
-		industryClassifier: industry.DefaultClassification(),
-		seasonalEngine:     industry.NewSeasonalEngine(),
-		cycleTracker:       industry.NewCycleTracker(),
-		linkageAnalyzer:    industry.NewLinkageAnalyzer(),
-		riskMonitor:        industry.NewRiskMonitor(),
 		healthManager:      portfolio.NewAgentHealthManager(),
 		dataQualityChecker: NewDataQualityChecker(workDir, ledgerDir),
 	}
@@ -199,11 +189,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 
 func (a *DashboardAPI) RegisterIndustryRoutes(mux *http.ServeMux) {
 	handlers := &apiindustry.Handlers{
-		Classifier:      a.industryClassifier,
-		SeasonalEngine:  a.seasonalEngine,
-		CycleTracker:    a.cycleTracker,
-		LinkageAnalyzer: a.linkageAnalyzer,
-		RiskMonitor:     a.riskMonitor,
+		Svc: a.industryService,
 	}
 	handlers.RegisterRoutes(mux)
 }
@@ -215,29 +201,26 @@ func (a *DashboardAPI) RegisterSwaggerRoutes(mux *http.ServeMux) {
 }
 
 func (a *DashboardAPI) RegisterNarrativeRoutes(mux *http.ServeMux) {
+	svc := service.NewNarrativeService(a.workDir, a.narrativeEngine, a.reportGenerator)
 	handlers := &apinarrative.Handlers{
-		WorkDir:         a.workDir,
-		NarrativeEngine: a.narrativeEngine,
-		ReportGenerator: a.reportGenerator,
+		Svc: svc,
 	}
 	handlers.RegisterRoutes(mux)
 }
 
 func (a *DashboardAPI) RegisterControlRoutes(mux *http.ServeMux) {
+	svc := service.NewControlService(a.workDir, a.ledgerDir, a.healthManager)
 	handlers := &apicontrol.Handlers{
-		WorkDir:       a.workDir,
-		LedgerDir:     a.ledgerDir,
-		HealthManager: a.healthManager,
+		Svc: svc,
 	}
 	handlers.RegisterRoutes(mux)
 }
 
 // RegisterMacroRoutes mounts macro data snapshot endpoints.
 func (a *DashboardAPI) RegisterMacroRoutes(mux *http.ServeMux) {
+	svc := service.NewMacroService(a.workDir, a.macroIngestor, a.taiwanStressCalc)
 	handlers := &apimacro.Handlers{
-		WorkDir:          a.workDir,
-		MacroIngestor:    a.macroIngestor,
-		TaiwanStressCalc: a.taiwanStressCalc,
+		Service: svc,
 	}
 	handlers.RegisterRoutes(mux)
 }
@@ -269,7 +252,8 @@ func (a *DashboardAPI) RegisterExperimentRoutes(mux *http.ServeMux) {
 
 // RegisterBacktestRoutes mounts backtest execution endpoints.
 func (a *DashboardAPI) RegisterBacktestRoutes(mux *http.ServeMux) {
-	handlers := &apibacktest.Handlers{}
+	svc := service.NewBacktestService()
+	handlers := apibacktest.NewHandlers(svc)
 	handlers.RegisterRoutes(mux)
 }
 
@@ -701,16 +685,10 @@ func (a *DashboardAPI) loadRecommendationOutcomes(sessionID string) ([]domain.Re
 }
 
 func (a *DashboardAPI) buildSymbolSectorMap() map[string]string {
-	m := make(map[string]string)
-	if a.industryClassifier == nil {
-		return m
+	if a.industryService == nil {
+		return make(map[string]string)
 	}
-	for _, seg := range a.industryClassifier.GetAllSegments() {
-		for _, sym := range seg.RepresentativeStocks {
-			m[sym] = seg.ID
-		}
-	}
-	return m
+	return BuildSymbolSectorMap(a.industryService.Classifier)
 }
 
 // buildEquityCurve constructs an equity curve from all session summaries,
