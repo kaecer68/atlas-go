@@ -5,11 +5,12 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // GeopoliticalRiskScore represents a computed geopolitical risk reading.
@@ -71,7 +72,7 @@ func (r *RSSGeopoliticalProvider) FetchScore(ctx context.Context) (GeopoliticalR
 			defer wg.Done()
 			matches, err := r.countKeywordsInFeed(ctx, url)
 			if err != nil {
-				log.Printf("[RSSGeopoliticalProvider] feed failed %s: %v", url, err)
+				logging.Warn("geopolitical_provider", "feed_failed", logging.FStr("url", url), logging.Err(err))
 				return
 			}
 			mu.Lock()
@@ -248,7 +249,7 @@ func (c *CompositeGeopoliticalProvider) FetchScore(ctx context.Context) (Geopoli
 	for _, p := range c.providers {
 		score, err := p.FetchScore(ctx)
 		if err != nil {
-			log.Printf("[CompositeGeopoliticalProvider] provider %s failed: %v", p.Name(), err)
+			logging.Warn("geopolitical_provider", "provider_failed", logging.FStr("provider", p.Name()), logging.Err(err))
 			continue
 		}
 		totalIntensity += score.Intensity

@@ -2,11 +2,11 @@ package monitoring
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // AlertLevel 告警级别
@@ -116,7 +116,7 @@ func (m *Monitor) Alert(level AlertLevel, category string, message string, metad
 	if store != nil {
 		go func() {
 			if err := store.Save(record); err != nil {
-				log.Printf("[monitor] save alert: %v", err)
+				logging.Warn("monitor", "alert_save_failed", logging.Err(err))
 			}
 		}()
 	}
@@ -126,7 +126,7 @@ func (m *Monitor) Alert(level AlertLevel, category string, message string, metad
 		}
 		go func(notif Notifier) {
 			if err := notif.Notify(record); err != nil {
-				log.Printf("[%s] notify: %v", notif.Name(), err)
+				logging.Warn("monitor", "notify_failed", logging.FStr("notifier", notif.Name()), logging.Err(err))
 			}
 		}(n)
 	}

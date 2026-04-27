@@ -3,7 +3,6 @@ package portfolio
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"os"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 const (
@@ -312,11 +312,11 @@ func (m *DarwinianWeightManager) rankBySharpe() []*DarwinianAgentWeight {
 // constrainWeight ensures weight stays within [0.3, 2.5] bounds
 func (m *DarwinianWeightManager) constrainWeight(agentID string, weight float64) float64 {
 	if weight < DarwinianWeightMin {
-		log.Printf("[DarwinianWeightManager] agent %s weight %.4f clamped to min %.2f", agentID, weight, DarwinianWeightMin)
+		logging.Warn("darwinian_weights", "weight_clamped_min", logging.AgentID(agentID), logging.FFloat64("weight", weight), logging.FFloat64("min", DarwinianWeightMin))
 		return DarwinianWeightMin
 	}
 	if weight > DarwinianWeightMax {
-		log.Printf("[DarwinianWeightManager] agent %s weight %.4f clamped to max %.2f", agentID, weight, DarwinianWeightMax)
+		logging.Warn("darwinian_weights", "weight_clamped_max", logging.AgentID(agentID), logging.FFloat64("weight", weight), logging.FFloat64("max", DarwinianWeightMax))
 		return DarwinianWeightMax
 	}
 	return weight

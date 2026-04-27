@@ -2,7 +2,6 @@ package orchestrator
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"sync"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/adversarial"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
 	"github.com/kaecer68/atlas-go/internal/spawning"
@@ -78,7 +78,7 @@ func (c *Phase3Controller) StartBackgroundSwarm(baseState swarm.MarketState) {
 
 	stopCh := c.swarmStopCh
 	go c.swarmUpdateLoop(stopCh)
-	log.Println("[Phase3Controller] Background swarm started")
+	logging.Info("phase3_controller", "background_swarm_started")
 }
 
 // StopBackgroundSwarm halts the continuous swarm updates.
@@ -94,7 +94,7 @@ func (c *Phase3Controller) StopBackgroundSwarm() {
 	c.swarm.Stop()
 	c.swarmRunning = false
 	c.swarmStopCh = make(chan struct{})
-	log.Println("[Phase3Controller] Background swarm stopped")
+	logging.Info("phase3_controller", "background_swarm_stopped")
 }
 
 // UpdateSwarmState feeds the latest market state into the running swarm.
@@ -225,11 +225,11 @@ func (c *Phase3Controller) AutoPromoteSpawnedAgents() {
 
 		if sharpeLike >= 0.5 && hitRate >= 0.45 {
 			if err := c.spawningManager.AcceptAgent(agent.AgentID); err != nil {
-				log.Printf("[Phase3Controller] Failed to accept %s: %v", agent.AgentID, err)
+				logging.Error("phase3_controller", "accept_failed", logging.AgentID(agent.AgentID), logging.Err(err))
 			}
 		} else if sharpeLike < 0.0 || hitRate < 0.30 {
 			if err := c.spawningManager.RejectAgent(agent.AgentID, fmt.Sprintf("poor performance (sharpe %.3f, hit %.2f%%)", sharpeLike, hitRate*100)); err != nil {
-				log.Printf("[Phase3Controller] Failed to reject %s: %v", agent.AgentID, err)
+				logging.Error("phase3_controller", "reject_failed", logging.AgentID(agent.AgentID), logging.Err(err))
 			}
 		}
 	}
@@ -379,7 +379,7 @@ func (c *Phase3Controller) runAdversarialStressTests() {
 	c.lastAdvResult = result
 	c.mu.Unlock()
 	if !result.Passed {
-		log.Printf("[Phase3Controller] Agent %s failed adversarial stress test (score %.2f)", target.ID, result.OverallScore)
+		logging.Warn("phase3_controller", "adversarial_test_failed", logging.AgentID(target.ID), "score", result.OverallScore)
 	}
 }
 

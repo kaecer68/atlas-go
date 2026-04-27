@@ -3,13 +3,13 @@ package live
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // CircuitState represents the current trading halt level.
@@ -88,7 +88,7 @@ func NewCircuitBreaker(logPath, statePath string) *CircuitBreaker {
 	}
 	if err := cb.loadState(); err != nil {
 		if !os.IsNotExist(err) {
-			log.Printf("[CircuitBreaker] warn: failed to load state: %v", err)
+			logging.Warn("circuit_breaker", "failed_to_load_state", logging.Err(err))
 		}
 	}
 	return cb
@@ -120,7 +120,7 @@ func (cb *CircuitBreaker) ResetDayState(startingPortfolioValue float64) {
 	cb.intradayPeak = startingPortfolioValue
 	cb.dayStartValue = startingPortfolioValue
 	if err := cb.persistStateLocked(); err != nil {
-		log.Printf("[CircuitBreaker] warn: failed to persist state on reset: %v", err)
+		logging.Warn("circuit_breaker", "failed_to_persist_state_on_reset", logging.Err(err))
 	}
 }
 
@@ -216,10 +216,10 @@ func (cb *CircuitBreaker) transitionLocked(to CircuitState, reason string, dayPn
 	cb.state = to
 	cb.stateChangedAt = time.Now()
 	if err := cb.appendLog(event); err != nil {
-		log.Printf("[CircuitBreaker] warn: failed to append log: %v", err)
+		logging.Warn("circuit_breaker", "failed_to_append_log", logging.Err(err))
 	}
 	if err := cb.persistStateLocked(); err != nil {
-		log.Printf("[CircuitBreaker] warn: failed to persist state: %v", err)
+		logging.Warn("circuit_breaker", "failed_to_persist_state", logging.Err(err))
 	}
 	fmt.Printf("[CircuitBreaker] %s -> %s | %s\n", event.FromState, event.ToState, reason)
 }

@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // TWSECapitalFlow holds daily net buy/sell for the three major investor types.
@@ -51,7 +52,7 @@ func (t *TWSECapitalFlowProvider) FetchSnapshot(ctx context.Context) (MacroDataS
 
 	// Persist for audit.
 	if err := t.saveFlow(flow); err != nil {
-		log.Printf("[TWSECapitalFlowProvider] saveFlow warning: %v", err)
+		logging.Warn("twse_capital_flow_provider", "save_flow_warning", logging.Err(err))
 	}
 
 	flowTime, _ := time.ParseInLocation("20060102", flow.Date, time.FixedZone("CST", 8*60*60))

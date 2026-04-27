@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // YahooFinanceMacroProvider fetches macro indicators from Yahoo Finance.
@@ -82,7 +83,7 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 	wg.Wait()
 
 	if len(errs) > 0 {
-		log.Printf("[YahooFinanceMacroProvider] partial fetch failures: %v", errs)
+		logging.Warn("yahoo_macro_provider", "partial_fetch_failures", "errors", fmt.Sprintf("%v", errs))
 		if len(errs) == len(symbols) {
 			return snap, fmt.Errorf("all indicators failed: %v", errs)
 		}

@@ -4,11 +4,12 @@ package swarm
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // MiroFishSwarm manages parallel market simulations
@@ -226,7 +227,7 @@ func (sw *MiroFishSwarm) InitializeScenarios(baseState MarketState) {
 		}
 	}
 
-	log.Printf("[MiroFish] Initialized %d fish across %d scenarios", len(sw.fish), len(sw.scenarios))
+	logging.Info("mirofish_swarm", "initialized", "fish_count", len(sw.fish), "scenario_count", len(sw.scenarios))
 }
 
 // Start begins the swarm simulation
@@ -255,7 +256,7 @@ func (sw *MiroFishSwarm) Start() {
 	// Start result aggregator
 	go sw.aggregateResults(sw.stopCh)
 
-	log.Println("[MiroFish] Swarm simulation started")
+	logging.Info("mirofish_swarm", "swarm_started")
 }
 
 // IsRunning reports whether the swarm simulation is active.
@@ -277,7 +278,7 @@ func (sw *MiroFishSwarm) Stop() {
 	sw.isRunning = false
 	close(sw.stopCh)
 
-	log.Println("[MiroFish] Swarm simulation stopped")
+	logging.Info("mirofish_swarm", "swarm_stopped")
 }
 
 // runBatch simulates a batch of fish

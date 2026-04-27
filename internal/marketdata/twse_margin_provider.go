@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 type TWSEBalanceProvider struct {
@@ -47,7 +48,7 @@ func (t *TWSEBalanceProvider) FetchSnapshot(ctx context.Context) (MacroDataSnaps
 	}
 
 	if err := t.saveBalance(bal); err != nil {
-		log.Printf("[TWSEBalanceProvider] saveBalance warning: %v", err)
+		logging.Warn("twse_margin_provider", "save_balance_warning", logging.Err(err))
 	}
 
 	balTime, _ := time.ParseInLocation("20060102", bal.Date, time.FixedZone("CST", 8*60*60))

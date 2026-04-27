@@ -5,11 +5,11 @@ package prism
 import (
 	"container/list"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // RegimeType represents distinct market regimes
@@ -317,7 +317,7 @@ func (pm *PRISMManager) Start() {
 		go pm.autoBalancer(pm.stopCh)
 	}
 
-	log.Println("[PRISM] Started with 5 regime queues")
+	logging.Info("prism_manager", "started", "regime_queues", 5)
 }
 
 // Stop halts all queue processing
@@ -332,7 +332,7 @@ func (pm *PRISMManager) Stop() {
 	pm.isRunning = false
 	close(pm.stopCh)
 
-	log.Println("[PRISM] Stopped")
+	logging.Info("prism_manager", "stopped")
 }
 
 // ScheduleTraining schedules an agent for training in appropriate regime queues
@@ -405,7 +405,7 @@ func (pm *PRISMManager) ClearQueue(regime RegimeType) {
 
 	if int(regime) < int(RegimeCount) {
 		pm.queues[int(regime)].Clear()
-		log.Printf("[PRISM] Cleared queue for regime %s", regime)
+		logging.Info("prism_manager", "queue_cleared", logging.FStr("regime", regime.String()))
 	}
 }
 
@@ -426,8 +426,7 @@ func (pm *PRISMManager) Rebalance() {
 		queue := pm.queues[i]
 		deviation := queue.Len() - avgLoad
 		if abs(deviation) > avgLoad/2 {
-			log.Printf("[PRISM] Queue %s load imbalance: %d (avg: %d)",
-				queue.Regime, queue.Len(), avgLoad)
+			logging.Warn("prism_manager", "load_imbalance", logging.FStr("regime", queue.Regime.String()), logging.FInt("queue_size", queue.Len()), logging.FInt("avg_load", avgLoad))
 		}
 	}
 }

@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // TSMCRevenue holds monthly revenue data for TSMC.
@@ -49,7 +50,7 @@ func (t *TSMCRevenueProvider) FetchSnapshot(ctx context.Context) (MacroDataSnaps
 	}
 
 	if err := t.saveRevenue(rev); err != nil {
-		log.Printf("[TSMCRevenueProvider] saveRevenue warning: %v", err)
+		logging.Warn("tsmc_revenue_provider", "save_revenue_warning", logging.Err(err))
 	}
 
 	revTime, _ := time.ParseInLocation("20060102", rev.Date+"01", time.FixedZone("CST", 8*60*60))
@@ -75,7 +76,7 @@ func (t *TSMCRevenueProvider) fetchLatestMonth(ctx context.Context) (TSMCRevenue
 		if err == nil {
 			return rev, nil
 		}
-		log.Printf("[TSMCRevenueProvider] month %s failed: %v", yearMonth, err)
+		logging.Error("tsmc_revenue_provider", "month_fetch_failed", "year_month", yearMonth, logging.Err(err))
 	}
 	return TSMCRevenue{}, fmt.Errorf("no TSMC revenue data available in the last 7 months")
 }
