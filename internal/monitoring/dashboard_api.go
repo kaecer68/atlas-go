@@ -175,21 +175,6 @@ type RiskExposureResponse struct {
 	InsufficientData bool                    `json:"insufficient_data"`
 }
 
-type SectorExposure struct {
-	Sector      string  `json:"sector"`
-	SectorLabel string  `json:"sector_label"`
-	Weight      float64 `json:"weight"`
-	EstValue    float64 `json:"est_value"`
-}
-
-type FactorExposureInline struct {
-	Momentum float64 `json:"momentum"`
-	Value    float64 `json:"value"`
-	Quality  float64 `json:"quality"`
-	Agent    float64 `json:"agent"`
-	Total    float64 `json:"total"`
-}
-
 type PositionConcentration struct {
 	Symbol      string  `json:"symbol"`
 	MarketValue float64 `json:"market_value"`
@@ -1216,23 +1201,6 @@ func (a *DashboardAPI) handleForecastVsReality(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// sessionDateFromID extracts the trading date from a session ID like "session-20260410-daily".
-func sessionDateFromID(id string) time.Time {
-	const prefix = "session-"
-	if !strings.HasPrefix(id, prefix) {
-		return time.Time{}
-	}
-	trimmed := strings.TrimPrefix(id, prefix)
-	parts := strings.Split(trimmed, "-")
-	if len(parts) < 1 {
-		return time.Time{}
-	}
-	if d, err := time.Parse("20060102", parts[0]); err == nil {
-		return d
-	}
-	return time.Time{}
-}
-
 func (a *DashboardAPI) loadSessionSummary(sessionID string) (*domain.SessionSummary, error) {
 	sessionsDir := filepath.Join(a.ledgerDir, "sessions")
 	entries, err := os.ReadDir(sessionsDir)
@@ -1352,72 +1320,6 @@ func (a *DashboardAPI) loadForecastVsRealityItems(agentID string, limit int) ([]
 		return items[:limit], nil
 	}
 	return items, nil
-}
-
-// buildMutationSummary extracts a concise parameter delta from baseline vs candidate prompt controls.
-func buildMutationSummary(policy baseline.Policy, result domain.PromptExperimentResult) string {
-	baselinePrompt := baseline.ResolvePromptOverride(policy, result.Experiment.TargetAgentID, result.Experiment.Skill)
-	if baselinePrompt == "" {
-		sourcePrompt, err := os.ReadFile(result.Brief.PromptFile)
-		if err == nil {
-			baselinePrompt = string(sourcePrompt)
-		}
-	}
-
-	baselineCtrl, _ := domain.ExtractPromptControl(baselinePrompt)
-	candidateBytes, err := os.ReadFile(result.CandidatePrompt)
-	if err != nil {
-		return result.Experiment.MutationType
-	}
-	candidateCtrl, _ := domain.ExtractPromptControl(string(candidateBytes))
-
-	parts := make([]string, 0, 4)
-	add := func(name string, base, cand int64) {
-		if base != cand {
-			parts = append(parts, fmt.Sprintf("%s: %d→%d", name, base, cand))
-		}
-	}
-	addInt := func(name string, base, cand int) {
-		if base != cand {
-			parts = append(parts, fmt.Sprintf("%s: %d→%d", name, base, cand))
-		}
-	}
-	addBool := func(name string, base, cand bool) {
-		if base != cand {
-			parts = append(parts, fmt.Sprintf("%s: %t→%t", name, base, cand))
-		}
-	}
-
-	add("volume_floor", baselineCtrl.VolumeFloor, candidateCtrl.VolumeFloor)
-	addInt("volume_downgrade", baselineCtrl.VolumeDowngrade, candidateCtrl.VolumeDowngrade)
-	addInt("close_strength_boost", baselineCtrl.CloseStrengthBoost, candidateCtrl.CloseStrengthBoost)
-	add("hard_reject_volume", baselineCtrl.HardRejectVolume, candidateCtrl.HardRejectVolume)
-	addInt("conviction_floor", baselineCtrl.ConvictionFloor, candidateCtrl.ConvictionFloor)
-	addInt("volume_boost", baselineCtrl.VolumeBoost, candidateCtrl.VolumeBoost)
-	addInt("neutral_penalty_reduction", baselineCtrl.NeutralPenaltyReduction, candidateCtrl.NeutralPenaltyReduction)
-	addBool("require_trend", baselineCtrl.RequireTrend, candidateCtrl.RequireTrend)
-
-	if len(parts) == 0 {
-		return result.Experiment.MutationType
-	}
-	return strings.Join(parts, ", ")
-}
-func parseLimit(r *http.Request, defaultValue, maxValue int) (int, error) {
-	raw := strings.TrimSpace(r.URL.Query().Get("limit"))
-	if raw == "" {
-		return defaultValue, nil
-	}
-	v, err := strconv.Atoi(raw)
-	if err != nil {
-		return 0, fmt.Errorf("invalid limit: must be integer")
-	}
-	if v <= 0 {
-		return 0, fmt.Errorf("invalid limit: must be > 0")
-	}
-	if v > maxValue {
-		return maxValue, nil
-	}
-	return v, nil
 }
 
 func (a *DashboardAPI) handleReportList(w http.ResponseWriter, r *http.Request) {
@@ -1553,15 +1455,6 @@ type UniverseOverlapResponse struct {
 	Warnings []string                  `json:"warnings"`
 }
 
-// AgentUniverseView shows a single agent's universe coverage.
-type AgentUniverseView struct {
-	AgentID           string                   `json:"agent_id"`
-	Name              string                   `json:"name"`
-	Layer             string                   `json:"layer"`
-	Universe          []string                 `json:"universe"`
-	ScreeningCriteria domain.ScreeningCriteria `json:"screening_criteria"`
-}
-
 func (a *DashboardAPI) handleUniverseOverlap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1652,22 +1545,6 @@ func (a *DashboardAPI) handleUniverseOverlap(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-// isStockPickingLayer returns true for layers that are expected to originate
-// symbol-specific recommendations and therefore have a meaningful universe.
-func isStockPickingLayer(layer string) bool {
-	return layer == "sector" || layer == "style" || layer == "superinvestor"
-}
-
-// isStockPickingLayerByID looks up the layer for an agent ID in the provided views.
-func isStockPickingLayerByID(agentID string, views []AgentUniverseView) bool {
-	for _, v := range views {
-		if v.AgentID == agentID {
-			return isStockPickingLayer(v.Layer)
-		}
-	}
-	return false
-}
-
 func (a *DashboardAPI) handleLatestReport(w http.ResponseWriter, r *http.Request) {
 	reportDir := filepath.Join(a.workDir, "reports")
 	entries, err := os.ReadDir(reportDir)
@@ -1715,16 +1592,6 @@ func (a *DashboardAPI) handleLatestReport(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(content)
-}
-
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func writeJSONError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
 }
 
 func (a *DashboardAPI) handleNarrativeEvents(w http.ResponseWriter, r *http.Request) {
@@ -1794,18 +1661,6 @@ func (a *DashboardAPI) handleNarrativeTemplates(w http.ResponseWriter, r *http.R
 	kb := narrative.NewKnowledgeBase()
 	templates := kb.ListTemplates()
 	writeJSON(w, http.StatusOK, map[string]any{"templates": templates})
-}
-
-func parseFloatQuery(r *http.Request, key string, defaultValue float64) float64 {
-	raw := strings.TrimSpace(r.URL.Query().Get(key))
-	if raw == "" {
-		return defaultValue
-	}
-	v, err := strconv.ParseFloat(raw, 64)
-	if err != nil {
-		return defaultValue
-	}
-	return v
 }
 
 func (a *DashboardAPI) handlePauseAgent(w http.ResponseWriter, r *http.Request) {
@@ -2291,14 +2146,6 @@ func (a *DashboardAPI) loadRecommendationsForDate(date string) []domain.Recommen
 	}
 
 	return nil
-}
-
-func mapKeys(m map[string]bool) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
 }
 
 func (a *DashboardAPI) handleMacroIngest(w http.ResponseWriter, r *http.Request) {
@@ -3111,68 +2958,6 @@ type RecommendationPipelineResponse struct {
 	RecordedAt    time.Time                `json:"recorded_at"`
 }
 
-func computePipelineTags(ds *replay.Dataset, symbol string, date time.Time) []string {
-	if ds == nil {
-		return nil
-	}
-	dateKey := date.Format("2006-01-02")
-	bar, ok := ds.ByDate[dateKey][symbol]
-	if !ok {
-		return nil
-	}
-	var prevBar domain.DailyBar
-	var hasPrev bool
-	for i, d := range ds.Dates {
-		if d.Format("2006-01-02") == dateKey && i > 0 {
-			prevBar = ds.ByDate[ds.Dates[i-1].Format("2006-01-02")][symbol]
-			hasPrev = prevBar.Close > 0
-			break
-		}
-	}
-
-	tags := make([]string, 0, 3)
-	changePct := 0.0
-	if bar.Open > 0 {
-		changePct = (bar.Close - bar.Open) / bar.Open
-	}
-	if changePct > 0.035 {
-		tags = append(tags, "長紅")
-	} else if changePct < -0.035 {
-		tags = append(tags, "長黑")
-	}
-	if hasPrev && prevBar.Volume > 0 && bar.Volume > int64(float64(prevBar.Volume)*1.5) {
-		tags = append(tags, "放量")
-	}
-
-	high5 := bar.Close
-	low5 := bar.Close
-	for i, d := range ds.Dates {
-		if d.Format("2006-01-02") == dateKey {
-			start := i - 4
-			if start < 0 {
-				start = 0
-			}
-			for _, pd := range ds.Dates[start : i+1] {
-				b := ds.ByDate[pd.Format("2006-01-02")][symbol]
-				if b.Close > high5 {
-					high5 = b.Close
-				}
-				if b.Close > 0 && (low5 == 0 || b.Close < low5) {
-					low5 = b.Close
-				}
-			}
-			break
-		}
-	}
-	if bar.Close > 0 && bar.Close == high5 {
-		tags = append(tags, "創5日高")
-	}
-	if bar.Close > 0 && low5 > 0 && bar.Close == low5 {
-		tags = append(tags, "創5日低")
-	}
-	return tags
-}
-
 func (a *DashboardAPI) handleSessions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -3388,38 +3173,6 @@ func (a *DashboardAPI) handleRecommendationPipeline(w http.ResponseWriter, r *ht
 		ScreenedItems: screened,
 		RecordedAt:    summary.RecordedAt,
 	})
-}
-
-// fallbackPriceTargets returns reasonable target/stop-loss multipliers for legacy
-// sessions that did not persist TargetPrice/StopLossPrice in outcomes.
-// Multipliers are aligned with the orchestrator executor definitions.
-func fallbackPriceTargets(skill string, price float64) (float64, float64) {
-	var targetMult, stopLossMult float64
-	switch skill {
-	case "semiconductor_desk":
-		targetMult, stopLossMult = 1.06, 0.95
-	case "ai_supply_chain_desk":
-		targetMult, stopLossMult = 1.08, 0.95
-	case "etf_rotation_desk":
-		targetMult, stopLossMult = 1.04, 0.97
-	case "financials_desk":
-		targetMult, stopLossMult = 1.05, 0.96
-	case "shipping_desk":
-		targetMult, stopLossMult = 1.07, 0.94
-	case "growth_momentum":
-		targetMult, stopLossMult = 1.08, 0.95
-	case "value_yield":
-		targetMult, stopLossMult = 1.05, 0.96
-	case "earnings_quality":
-		targetMult, stopLossMult = 1.06, 0.95
-	case "technical_breakout":
-		targetMult, stopLossMult = 1.10, 0.94
-	case "alpha_discovery":
-		targetMult, stopLossMult = 1.06, 0.95
-	default:
-		targetMult, stopLossMult = 1.05, 0.95
-	}
-	return price * targetMult, price * stopLossMult
 }
 
 // DataChannel represents a single data source configuration and health status.
@@ -4075,21 +3828,6 @@ func (a *DashboardAPI) checkCapitalFlowHealth(dir string, now time.Time) (string
 		return "warn", dateStr
 	}
 	return "error", dateStr
-}
-
-func statusText(status string) string {
-	switch status {
-	case "ok":
-		return "正常"
-	case "warn":
-		return "延遲"
-	case "error":
-		return "異常"
-	case "inactive":
-		return "未啟用"
-	default:
-		return "未知"
-	}
 }
 
 func (a *DashboardAPI) handleRetailSentiment(w http.ResponseWriter, r *http.Request) {
