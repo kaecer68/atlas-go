@@ -21,6 +21,7 @@ type ExecutionContext struct {
 	Plugins       *PluginRegistry
 	SessionID     string
 	WeightManager *portfolio.DarwinianWeightManager
+	Context       context.Context // request-level context for cancellation propagation
 }
 
 // ResearchResult holds all outputs from executing registry research.
@@ -41,6 +42,9 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 	if ctx.Policy == (domain.ExecutionPolicy{}) {
 		ctx.Policy = DefaultExecutionPolicy()
 	}
+	if ctx.Context == nil {
+		ctx.Context = context.Background()
+	}
 
 	quoteBySymbol := make(map[string]domain.Quote, len(ctx.Quotes))
 	for _, quote := range ctx.Quotes {
@@ -50,7 +54,7 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 	registry := filterMutedAgents(ctx.Registry, ctx.Plugins)
 
 	regime := inferRegime(registry, quoteBySymbol, ctx.Plugins, ctx.Overrides)
-	raw, rejects := collectRecommendations(registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, regime, ctx.SessionID)
+	raw, rejects := collectRecommendations(ctx.Context, registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, regime, ctx.SessionID)
 
 	if ctx.Policy.MomentumCrashProtection {
 		raw = applyMomentumCrashProtection(raw, quoteBySymbol)
@@ -254,7 +258,7 @@ func inferRegime(registry domain.AgentRegistry, quotes map[string]domain.Quote, 
 	}
 }
 
-func collectRecommendations(registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string, regime domain.Regime, sessionID string) ([]domain.Recommendation, []domain.ScreeningReject) {
+func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string, regime domain.Regime, sessionID string) ([]domain.Recommendation, []domain.ScreeningReject) {
 	recs := make([]domain.Recommendation, 0)
 	rejects := make([]domain.ScreeningReject, 0)
 	now := time.Now().UTC()
@@ -277,7 +281,7 @@ func collectRecommendations(registry domain.AgentRegistry, quotes map[string]dom
 			if !ok || !quote.IsTradable {
 				continue
 			}
-			screenRes, err := plugins.ScreenDetailed(context.Background(), agent, symbol, quotes)
+			screenRes, err := plugins.ScreenDetailed(ctx, agent, symbol, quotes)
 			if err != nil || !screenRes.Passed {
 				if !screenRes.Passed {
 					rejects = append(rejects, domain.ScreeningReject{

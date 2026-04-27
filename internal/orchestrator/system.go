@@ -136,6 +136,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		Plugins:       s.plugins,
 		SessionID:     s.session.ID,
 		WeightManager: s.darwinian,
+		Context:       s.ctx,
 	})
 	regime := researchResult.Regime
 	rawRecs := researchResult.RawRecommendations
@@ -218,6 +219,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		Plugins:       s.plugins,
 		SessionID:     s.session.ID,
 		WeightManager: s.darwinian,
+		Context:       s.ctx,
 	})
 	regime := researchResult.Regime
 	rawRecs := researchResult.RawRecommendations
