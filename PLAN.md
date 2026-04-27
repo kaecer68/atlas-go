@@ -467,5 +467,153 @@ staticcheck ./...
 
 ---
 
+## P-Infra: 基礎設施優化計劃（未來）
+
+**觸發時機**：數據庫升級（JSONL → SQLite/PostgreSQL）時一併啟動
+**與數據庫升級綁定原因**：Data Access Layer 的 interface 設計正好支援 JSONL → SQLite 的無縫切換，兩者一起做減少重複重構
+
+---
+
+### P-Infra 1: Structured Logging
+
+**問題**：360 處 `log.Printf`/`fmt.Printf`，零 structured logging，production 問題難排查
+
+**現況**：
+```
+48 個檔案使用 log.Printf/fmt.Printf
+零 zap/zerolog/slog 引入
+```
+
+**實作目標**：
+- 選擇 `slog`（標準庫，Go 1.21+）或 `zap`
+- 建立 `internal/logging/logger.go`：package-level logger，結構化欄位
+- 核心路徑先遷：orchestrator、marketdata、ledger
+- 格式：`component`, `event`, `symbol`, `session_id`, `duration_ms`
+
+**驗證**：
+```bash
+# 確認無 log.Printf 在核心路徑
+grep -r "log\.Printf" internal/orchestrator/ internal/marketdata/ internal/ledger/
+# 確認 slog/zap 已引入
+grep -r "slog\.\|zap\." internal/
+```
+
+---
+
+### P-Infra 2: Context Propagation
+
+**問題**：127 處 `context.Background()`，graceful shutdown 不完整，goroutine 可能洩漏
+
+**現況**：
+- Phase 2 已修復核心管線（executors.go → collectRecommendations → ScreenDetailed）
+- `system.go` 初始化（line 102, 112）仍有 2 處 `context.Background()`
+- 所有 entry point（main.go）和測試檔案有 ~90+ 處
+
+**實作目標**：
+- 審計所有 internal/ 下的 `context.Background()` 使用
+- 區分「entry point 必須用」vs「有 parent context 卻沒傳遞」
+- 修復第二類（有機會被 parent 取消的 operation）
+- 不修改：entry point、測試檔案
+
+**Context 傳遞審計清單**（待審計）：
+```
+internal/orchestrator/system.go         — engine.WithContext(context.Background())   [需要？]
+internal/orchestrator/system.go         — ctx: context.Background()                  [需要？]
+internal/marketdata/*.go               — 各 provider GetQuotes() 呼叫
+internal/ledger/*.go                    — 各 Store 方法
+```
+
+**驗證**：
+```bash
+# 確認 context 傳遞鍊完整
+go test -race ./internal/orchestrator/...  # 無 context race
+```
+
+---
+
+### P-Infra 3: Data Access Layer
+
+**問題**：無 interface 抽象，直接操作 JSONL，未來換 DB 成本高
+
+**現況**：
+```go
+type Store struct { baseDir string }  // 直接操作檔案
+// 無 OutcomeStore / QuoteStore / SessionStore interface
+```
+
+**實作目標**：
+```go
+// OutcomeStore — 推薦結果
+type OutcomeStore interface {
+    Record(ctx context.Context, outcomes []RecommendationOutcome) error
+    Load(ctx context.Context) ([]RecommendationOutcome, error)
+    LoadSession(ctx context.Context, sessionID string) ([]RecommendationOutcome, error)
+}
+
+// SessionStore — Session 元數據
+type SessionStore interface {
+    Save(ctx context.Context, session ReplaySession, summary *SessionSummary) error
+    Load(ctx context.Context, sessionID string) (*ReplaySession, *SessionSummary, error)
+}
+
+// QuoteStore — 行情快取
+type QuoteStore interface {
+    Put(ctx context.Context, quotes []Quote) error
+    Get(ctx context.Context, symbols []string, asOf time.Time) ([]Quote, error)
+}
+
+// JSONLStore 實作（現在）
+type JSONLStore struct { ... }
+
+// SQLiteStore 實作（未來）
+type SQLiteStore struct { ... }
+```
+
+**與 DB 升級的關聯**：
+- JSONLStore → SQLiteStore 為同一 interface 的兩實作
+- 迁移过程：先建立 interface → 實作 SQLiteStore → 雙實作並行 → 確認後切換
+- 降低風險：DB 升級不需要改變上層呼叫
+
+**驗證**：
+```bash
+go build ./...
+go test ./internal/ledger/...  # interface 不改變行為
+```
+
+---
+
+## P-Infra 執行策略
+
+### 觸發條件（任一滿足即啟動）
+
+| 條件 | 緊迫度 |
+|------|--------|
+| JSONL 單日檔案超過 100MB | 高 |
+| 需要多 service 共用 ledger 資料 | 高 |
+| Production 需要 structured logging alert | 中 |
+| Live mode graceful shutdown 仍有 goroutine 洩漏 | 高 |
+
+### 執行順序
+
+```
+Phase 1: 建立 logging package
+         ↓
+Phase 2: 實作 OutcomeStore interface + JSONLStore
+         ↓
+Phase 3: 遷移 ledger 核心方法到 interface
+         ↓
+Phase 4: Context propagation 審計與修復
+         ↓
+Phase 5: Structured logging 全面遷移（非核心路徑）
+         ↓
+Phase 6: SQLiteStore 實作（與 DB 升級同步）
+         ↓
+Phase 7: 切換並移除 JSONLStore
+```
+
+---
+
+## 原始計劃完成記錄
+
 *計劃產出時間: 2026-04-25*
 *來源: ANALYSIS_REPORT.md*
