@@ -6,6 +6,8 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -348,4 +350,64 @@ func PromotionHistoryToAPI(history []baseline.PromotionRecordWithVersion) []map[
 		}
 	}
 	return result
+}
+
+func LoadSessionSummary(ledgerDir, sessionID string) (*domain.SessionSummary, error) {
+	sessionsDir := filepath.Join(ledgerDir, "sessions")
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	summaries := make([]domain.SessionSummary, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if sessionID != "" && entry.Name() != sessionID {
+			continue
+		}
+		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
+		bytes, err := os.ReadFile(summaryPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, err
+		}
+		var summary domain.SessionSummary
+		if err := json.Unmarshal(bytes, &summary); err != nil {
+			return nil, err
+		}
+		summaries = append(summaries, summary)
+	}
+	if len(summaries) == 0 {
+		return nil, nil
+	}
+	if sessionID != "" {
+		selected := summaries[0]
+		return &selected, nil
+	}
+
+	slices.SortFunc(summaries, func(a, b domain.SessionSummary) int {
+		aDate := sessionDateFromID(a.SessionID)
+		bDate := sessionDateFromID(b.SessionID)
+		switch {
+		case aDate.After(bDate):
+			return -1
+		case aDate.Before(bDate):
+			return 1
+		case a.RecordedAt.After(b.RecordedAt):
+			return -1
+		case a.RecordedAt.Before(b.RecordedAt):
+			return 1
+		default:
+			return 0
+		}
+	})
+	latest := summaries[0]
+	return &latest, nil
 }

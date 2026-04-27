@@ -44,10 +44,12 @@ type routeRegistrar interface {
 }
 
 type appDeps struct {
-	loadConfig      func() config.Config
-	newDashboardAPI func(string, string, *monitoring.MetricsCollector) routeRegistrar
-	listenAndServe  func(string, http.Handler) error
-	shutdown        chan struct{}
+	loadConfig                  func() config.Config
+	newDashboardAPI             func(string, string, *monitoring.MetricsCollector) routeRegistrar
+	listenAndServe              func(*http.Server) error
+	shutdown                    chan struct{}
+	runAutoCapitalFlowOnStartup func(string)
+	runAutoBackfillOnStartup    func(string)
 }
 
 func defaultAppDeps() appDeps {
@@ -56,8 +58,10 @@ func defaultAppDeps() appDeps {
 		newDashboardAPI: func(workDir, ledgerDir string, collector *monitoring.MetricsCollector) routeRegistrar {
 			return monitoring.NewDashboardAPI(workDir, ledgerDir, collector)
 		},
-		listenAndServe: http.ListenAndServe,
-		shutdown:       make(chan struct{}),
+		listenAndServe:              func(srv *http.Server) error { return srv.ListenAndServe() },
+		shutdown:                    make(chan struct{}),
+		runAutoCapitalFlowOnStartup: runAutoCapitalFlowFetchOnStartup,
+		runAutoBackfillOnStartup:    runAutoBackfillOnStartup,
 	}
 }
 
@@ -197,7 +201,8 @@ func run(args []string, deps appDeps) error {
 			monitor.SetAlertStore(alertStore)
 		}
 		sysMetrics := monitoring.NewSystemMetrics(collector, monitor)
-		go sysMetrics.Start(context.Background())
+		sysCtx, sysCancel := context.WithCancel(context.Background())
+		go sysMetrics.Start(sysCtx)
 		dashboard.RegisterNarrativeRoutes(mux)
 		dashboard.RegisterControlRoutes(mux)
 		dashboard.RegisterMacroRoutes(mux)
@@ -214,13 +219,13 @@ func run(args []string, deps appDeps) error {
 		mux.Handle("/", http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static"))))
 		log.Printf("dashboard api listening on %s", *apiAddr)
 		// Trigger automatic backfill if replay data has gaps.
-		runAutoBackfillOnStartup(cfg.WorkDir)
-		runAutoCapitalFlowFetchOnStartup(cfg.WorkDir)
+		deps.runAutoBackfillOnStartup(cfg.WorkDir)
+		deps.runAutoCapitalFlowOnStartup(cfg.WorkDir)
 
 		srv := &http.Server{Addr: *apiAddr, Handler: mux}
 		srvErr := make(chan error, 1)
 		go func() {
-			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			if err := deps.listenAndServe(srv); err != nil && err != http.ErrServerClosed {
 				srvErr <- fmt.Errorf("dashboard api server failed: %w", err)
 			}
 		}()
@@ -236,6 +241,7 @@ func run(args []string, deps appDeps) error {
 			log.Printf("shutdown signal received, shutting down api server...")
 		}
 
+		sysCancel()
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {
