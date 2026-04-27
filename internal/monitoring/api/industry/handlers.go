@@ -2,19 +2,14 @@ package industry
 
 import (
 	"encoding/json"
-	"math"
 	"net/http"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
 type Handlers struct {
-	Classifier     *industry.ClassificationTree
-	SeasonalEngine *industry.SeasonalEngine
-	CycleTracker   *industry.CycleTracker
-	LinkageAnalyzer *industry.LinkageAnalyzer
-	RiskMonitor    *industry.RiskMonitor
+	Svc *service.IndustryService
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
@@ -45,42 +40,7 @@ func (h *Handlers) HandleIndustryClassification(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	tree := h.Classifier
-	segments := tree.GetAllSegments()
-
-	var result []map[string]interface{}
-	for _, seg := range segments {
-		if seg.ParentID == "" {
-			children := tree.GetChildren(seg.ID)
-			var childList []map[string]interface{}
-			for _, child := range children {
-				grandchildren := tree.GetChildren(child.ID)
-				var grandchildList []map[string]interface{}
-				for _, gc := range grandchildren {
-					grandchildList = append(grandchildList, map[string]interface{}{
-						"id":          gc.ID,
-						"name":        gc.Name,
-						"weight":      gc.Weight,
-						"description": gc.Description,
-					})
-				}
-				childList = append(childList, map[string]interface{}{
-					"id":          child.ID,
-					"name":        child.Name,
-					"weight":      child.Weight,
-					"description": child.Description,
-					"children":    grandchildList,
-				})
-			}
-			result = append(result, map[string]interface{}{
-				"id":          seg.ID,
-				"name":        seg.Name,
-				"weight":      seg.Weight,
-				"description": seg.Description,
-				"children":    childList,
-			})
-		}
-	}
+	result := h.Svc.GetClassificationTree()
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"industries": result,
@@ -97,57 +57,42 @@ func (h *Handlers) HandleIndustrySeasonality(w http.ResponseWriter, r *http.Requ
 	industryID := r.URL.Query().Get("industry")
 	now := time.Now()
 
-	patterns := h.SeasonalEngine.DetectCurrentPatterns(now)
+	active, historical, adjustment := h.Svc.GetSeasonalPatterns(industryID, now)
+
 	var activePatterns []map[string]interface{}
-	for _, p := range patterns {
-		if industryID == "" || p.IsRelevantForIndustry(industryID) {
-			activePatterns = append(activePatterns, map[string]interface{}{
-				"id":                  p.ID,
-				"name":                p.Name,
-				"description":         p.Description,
-				"start_month":         p.StartMonth,
-				"start_day":           p.StartDay,
-				"end_month":           p.EndMonth,
-				"end_day":             p.EndDay,
-				"historical_accuracy": p.HistoricalAccuracy,
-				"typical_return":      p.TypicalReturn(),
-				"affected_industries": p.AffectedIndustries,
-			})
-		}
+	for _, p := range active {
+		activePatterns = append(activePatterns, map[string]interface{}{
+			"id":                  p.ID,
+			"name":                p.Name,
+			"description":         p.Description,
+			"start_month":         p.StartMonth,
+			"start_day":           p.StartDay,
+			"end_month":           p.EndMonth,
+			"end_day":             p.EndDay,
+			"historical_accuracy": p.HistoricalAccuracy,
+			"typical_return":      p.TypicalReturn,
+			"affected_industries": p.AffectedIndustries,
+		})
 	}
 
-	var adjustment float64
-	if industryID != "" {
-		adjustment = h.SeasonalEngine.GetPatternAdjustment(industryID, now)
-	}
-
-	allPatterns := h.SeasonalEngine.GetAllPatterns()
 	var historicalPatterns []map[string]interface{}
-	for _, p := range allPatterns {
-		if industryID == "" || p.IsRelevantForIndustry(industryID) {
-			historicalPatterns = append(historicalPatterns, map[string]interface{}{
-				"id":                  p.ID,
-				"name":                p.Name,
-				"name_en":             p.NameEN,
-				"description":         p.Description,
-				"start_month":         p.StartMonth,
-				"start_day":           p.StartDay,
-				"end_month":           p.EndMonth,
-				"end_day":             p.EndDay,
-				"historical_accuracy": p.HistoricalAccuracy,
-				"typical_return":      p.TypicalReturn(),
-				"adjustment_factor":   p.AdjustmentFactor,
-				"favored_industries":  p.FavoredIndustries,
-				"avoided_industries":  p.AvoidedIndustries,
-				"impact": func() string {
-					if industryID == "" {
-						return ""
-					}
-					impact, _ := h.SeasonalEngine.GetIndustryImpact(p.ID, industryID)
-					return impact
-				}(),
-			})
-		}
+	for _, p := range historical {
+		historicalPatterns = append(historicalPatterns, map[string]interface{}{
+			"id":                  p.ID,
+			"name":                p.Name,
+			"name_en":             p.NameEN,
+			"description":         p.Description,
+			"start_month":         p.StartMonth,
+			"start_day":           p.StartDay,
+			"end_month":           p.EndMonth,
+			"end_day":             p.EndDay,
+			"historical_accuracy": p.HistoricalAccuracy,
+			"typical_return":      p.TypicalReturn,
+			"adjustment_factor":   p.AdjustmentFactor,
+			"favored_industries":  p.FavoredIndustries,
+			"avoided_industries":  p.AvoidedIndustries,
+			"impact":              p.Impact,
+		})
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -168,32 +113,10 @@ func (h *Handlers) HandleIndustrySeasonalityCalendar(w http.ResponseWriter, r *h
 
 	industryID := r.URL.Query().Get("industry")
 	now := time.Now()
-	calendar := h.SeasonalEngine.GenerateCalendar(now.Year())
-
-	var months []map[string]interface{}
-	for m := 1; m <= 12; m++ {
-		monthPatterns := calendar.ByMonth[m]
-		var relevantPatterns []map[string]interface{}
-		for _, p := range monthPatterns {
-			if industryID == "" || p.IsRelevantForIndustry(industryID) {
-				relevantPatterns = append(relevantPatterns, map[string]interface{}{
-					"id":                  p.ID,
-					"name":                p.Name,
-					"historical_accuracy": p.HistoricalAccuracy,
-					"typical_return":      p.TypicalReturn(),
-					"adjustment_factor":   p.AdjustmentFactor,
-				})
-			}
-		}
-		months = append(months, map[string]interface{}{
-			"month":    m,
-			"patterns": relevantPatterns,
-			"count":    len(relevantPatterns),
-		})
-	}
+	months := h.Svc.GetSeasonalCalendar(industryID, now.Year())
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"year":     calendar.Year,
+		"year":     now.Year(),
 		"industry": industryID,
 		"months":   months,
 	})
@@ -207,26 +130,27 @@ func (h *Handlers) HandleIndustryCycle(w http.ResponseWriter, r *http.Request) {
 
 	industryID := r.URL.Query().Get("industry")
 
+	positions, ok := h.Svc.GetCyclePositions(industryID)
+	if !ok {
+		writeJSONError(w, http.StatusNotFound, "industry not found")
+		return
+	}
+
 	if industryID == "" {
 		var allPositions []map[string]interface{}
-		for _, seg := range h.Classifier.GetAllSegments() {
-			if seg.ParentID != "" {
-				continue
-			}
-			if pos, ok := h.CycleTracker.GetPosition(seg.ID); ok {
-				allPositions = append(allPositions, map[string]interface{}{
-					"industry":        seg.ID,
-					"name":            seg.Name,
-					"business_cycle":  pos.BusinessCycle,
-					"inventory_cycle": pos.InventoryCycle,
-					"capex_cycle":     pos.CapexCycle,
-					"confidence":      pos.Confidence,
-					"updated_at":      pos.UpdatedAt,
-					"is_favorable":    pos.IsFavorable(),
-					"phase_score":     pos.GetPhaseScore(),
-					"trend":           pos.GetTrend(),
-				})
-			}
+		for _, pos := range positions {
+			allPositions = append(allPositions, map[string]interface{}{
+				"industry":        pos.Industry,
+				"name":            pos.Name,
+				"business_cycle":  pos.BusinessCycle,
+				"inventory_cycle": pos.InventoryCycle,
+				"capex_cycle":     pos.CapexCycle,
+				"confidence":      pos.Confidence,
+				"updated_at":      pos.UpdatedAt,
+				"is_favorable":    pos.IsFavorable,
+				"phase_score":     pos.PhaseScore,
+				"trend":           pos.Trend,
+			})
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"industries": allPositions,
@@ -235,22 +159,17 @@ func (h *Handlers) HandleIndustryCycle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	position, ok := h.CycleTracker.GetPosition(industryID)
-	if !ok {
-		writeJSONError(w, http.StatusNotFound, "industry not found")
-		return
-	}
-
+	pos := positions[0]
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"industry":        industryID,
-		"business_cycle":  position.BusinessCycle,
-		"inventory_cycle": position.InventoryCycle,
-		"capex_cycle":     position.CapexCycle,
-		"confidence":      position.Confidence,
-		"updated_at":      position.UpdatedAt,
-		"is_favorable":    position.IsFavorable(),
-		"phase_score":     position.GetPhaseScore(),
-		"trend":           position.GetTrend(),
+		"industry":        pos.Industry,
+		"business_cycle":  pos.BusinessCycle,
+		"inventory_cycle": pos.InventoryCycle,
+		"capex_cycle":     pos.CapexCycle,
+		"confidence":      pos.Confidence,
+		"updated_at":      pos.UpdatedAt,
+		"is_favorable":    pos.IsFavorable,
+		"phase_score":     pos.PhaseScore,
+		"trend":           pos.Trend,
 	})
 }
 
@@ -266,34 +185,18 @@ func (h *Handlers) HandleIndustryLinkage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	graph := h.LinkageAnalyzer.GetSupplyChainGraph()
-	upstream := graph.GetUpstream(industryID)
-	downstream := graph.GetDownstream(industryID)
-
-	correlations := h.LinkageAnalyzer.GetCorrelationMatrix().GetCorrelatedIndustries(industryID, 0.0)
-	var correlationList []map[string]interface{}
-	for otherIndustry, correlation := range correlations {
-		strength := "low"
-		if math.Abs(correlation) > 0.7 {
-			strength = "high"
-		} else if math.Abs(correlation) > 0.4 {
-			strength = "medium"
-		}
-		correlationList = append(correlationList, map[string]interface{}{
-			"industry":    otherIndustry,
-			"correlation": correlation,
-			"strength":    strength,
-		})
+	info, err := h.Svc.GetLinkageInfo(industryID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	score := h.LinkageAnalyzer.CalculateLinkageScore(industryID)
-
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"industry":      industryID,
-		"upstream":      upstream,
-		"downstream":    downstream,
-		"correlations":  correlationList,
-		"linkage_score": score,
+		"industry":      info.Industry,
+		"upstream":      info.Upstream,
+		"downstream":    info.Downstream,
+		"correlations":  info.Correlations,
+		"linkage_score": info.LinkageScore,
 	})
 }
 
@@ -310,43 +213,14 @@ func (h *Handlers) HandleIndustryRisk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var risks []industry.RiskEvent
-	if symbol == "" && industryID != "" {
-		risks = h.RiskMonitor.GetAllRisks("ALL", industryID, 0, 0)
-	} else {
-		risks = h.RiskMonitor.GetAllRisks(symbol, industryID, 0, 0)
-	}
-	var riskList []map[string]interface{}
-	for _, risk := range risks {
-		riskList = append(riskList, map[string]interface{}{
-			"id":                 risk.ID,
-			"type":               risk.Type,
-			"severity":           risk.Severity,
-			"description":        risk.Description,
-			"impact_estimate":    risk.ImpactEstimate,
-			"confidence":         risk.Confidence,
-			"detected_at":        risk.DetectedAt,
-			"recommended_action": risk.RecommendedAction,
-		})
-	}
-
-	highest := h.RiskMonitor.GetHighestRisk(risks)
-	var highestRisk map[string]interface{}
-	if highest != nil {
-		highestRisk = map[string]interface{}{
-			"id":          highest.ID,
-			"type":        highest.Type,
-			"severity":    highest.Severity,
-			"description": highest.Description,
-		}
-	}
+	info := h.Svc.GetRiskInfo(symbol, industryID)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"symbol":       symbol,
-		"industry":     industryID,
-		"risk_count":   len(riskList),
-		"risks":        riskList,
-		"highest_risk": highestRisk,
+		"symbol":       info.Symbol,
+		"industry":     info.Industry,
+		"risk_count":   info.RiskCount,
+		"risks":        info.Risks,
+		"highest_risk": info.HighestRisk,
 	})
 }
 
@@ -357,40 +231,20 @@ func (h *Handlers) HandleIndustryOverview(w http.ResponseWriter, r *http.Request
 	}
 
 	now := time.Now()
-	tree := h.Classifier
-	segments := tree.GetAllSegments()
+	overviews := h.Svc.GetIndustryOverview(now)
 
 	var industries []map[string]interface{}
-	for _, seg := range segments {
-		if seg.ParentID != "" {
-			continue
-		}
-
-		cyclePos, ok := h.CycleTracker.GetPosition(seg.ID)
-		if !ok {
-			continue
-		}
-
-		patterns := h.SeasonalEngine.DetectCurrentPatterns(now)
-		var activePatternNames []string
-		for _, p := range patterns {
-			if p.IsRelevantForIndustry(seg.ID) {
-				activePatternNames = append(activePatternNames, p.Name)
-			}
-		}
-
-		linkageScore := h.LinkageAnalyzer.CalculateLinkageScore(seg.ID)
-
+	for _, o := range overviews {
 		industries = append(industries, map[string]interface{}{
-			"id":                seg.ID,
-			"name":              seg.Name,
-			"cycle_phase":       cyclePos.BusinessCycle,
-			"inventory_cycle":   cyclePos.InventoryCycle,
-			"capex_cycle":       cyclePos.CapexCycle,
-			"cycle_confidence":  cyclePos.Confidence,
-			"is_favorable":      cyclePos.IsFavorable(),
-			"seasonal_patterns": activePatternNames,
-			"linkage_score":     linkageScore,
+			"id":                o.ID,
+			"name":              o.Name,
+			"cycle_phase":       o.CyclePhase,
+			"inventory_cycle":   o.InventoryCycle,
+			"capex_cycle":       o.CapexCycle,
+			"cycle_confidence":  o.CycleConfidence,
+			"is_favorable":      o.IsFavorable,
+			"seasonal_patterns": o.SeasonalPatterns,
+			"linkage_score":     o.LinkageScore,
 		})
 	}
 
@@ -427,13 +281,13 @@ func (h *Handlers) HandleShockSimulation(w http.ResponseWriter, r *http.Request)
 		req.MaxDepth = 3
 	}
 
-	impacts := h.LinkageAnalyzer.PropagateShock(req.SourceIndustry, req.ShockMagnitude, req.MaxDepth)
+	impacts := h.Svc.PropagateShock(req.SourceIndustry, req.ShockMagnitude, req.MaxDepth)
 
 	var impactList []map[string]interface{}
-	for industry, impact := range impacts {
+	for _, impact := range impacts {
 		impactList = append(impactList, map[string]interface{}{
-			"industry": industry,
-			"impact":   impact,
+			"industry": impact.Industry,
+			"impact":   impact.Impact,
 		})
 	}
 
@@ -452,58 +306,30 @@ func (h *Handlers) HandleIndustryGraph(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cm := h.LinkageAnalyzer.GetCorrelationMatrix()
+	nodes, edges := h.Svc.GetIndustryGraph()
 
-	var nodes []map[string]interface{}
-	var edges []map[string]interface{}
-	nodeSet := make(map[string]bool)
+	var nodeList []map[string]interface{}
+	for _, n := range nodes {
+		nodeList = append(nodeList, map[string]interface{}{
+			"id":                  n.ID,
+			"systemic_importance": n.SystemicImportance,
+			"upstream_count":      n.UpstreamCount,
+			"downstream_count":    n.DownstreamCount,
+		})
+	}
 
-	allCorrelations := cm.GetAllCorrelations()
-	for industryA, correlations := range allCorrelations {
-		if !nodeSet[industryA] {
-			nodeSet[industryA] = true
-			score := h.LinkageAnalyzer.CalculateLinkageScore(industryA)
-			nodes = append(nodes, map[string]interface{}{
-				"id":                  industryA,
-				"systemic_importance": score.SystemicImportance,
-				"upstream_count":      score.UpstreamCount,
-				"downstream_count":    score.DownstreamCount,
-			})
-		}
-
-		for industryB, correlation := range correlations {
-			if industryA >= industryB {
-				continue
-			}
-			if !nodeSet[industryB] {
-				nodeSet[industryB] = true
-				score := h.LinkageAnalyzer.CalculateLinkageScore(industryB)
-				nodes = append(nodes, map[string]interface{}{
-					"id":                  industryB,
-					"systemic_importance": score.SystemicImportance,
-					"upstream_count":      score.UpstreamCount,
-					"downstream_count":    score.DownstreamCount,
-				})
-			}
-
-			strength := "low"
-			if math.Abs(correlation) > 0.7 {
-				strength = "high"
-			} else if math.Abs(correlation) > 0.4 {
-				strength = "medium"
-			}
-
-			edges = append(edges, map[string]interface{}{
-				"source":      industryA,
-				"target":      industryB,
-				"correlation": correlation,
-				"strength":    strength,
-			})
-		}
+	var edgeList []map[string]interface{}
+	for _, e := range edges {
+		edgeList = append(edgeList, map[string]interface{}{
+			"source":      e.Source,
+			"target":      e.Target,
+			"correlation": e.Correlation,
+			"strength":    e.Strength,
+		})
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"nodes": nodes,
-		"edges": edges,
+		"nodes": nodeList,
+		"edges": edgeList,
 	})
 }

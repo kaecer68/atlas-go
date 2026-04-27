@@ -2,19 +2,18 @@ package backtest
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
-	"sync"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/backtest"
-	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
 type Handlers struct {
-	mu              sync.Mutex
-	running         bool
-	status          map[string]interface{}
+	svc *service.BacktestService
+}
+
+func NewHandlers(svc *service.BacktestService) *Handlers {
+	return &Handlers{svc: svc}
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
@@ -60,48 +59,10 @@ func (h *Handlers) HandleBacktestRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.mu.Lock()
-	if h.running {
-		h.mu.Unlock()
+	if err := h.svc.Start(startDate, endDate); err != nil {
 		writeJSONError(w, http.StatusConflict, "backtest already running")
 		return
 	}
-	h.running = true
-	h.status = map[string]interface{}{
-		"running":    true,
-		"started_at": time.Now().UTC(),
-		"start":      req.Start,
-		"end":        req.End,
-	}
-	h.mu.Unlock()
-
-	go func() {
-		cfg := config.Load()
-		if cfg.ReplayDataPath == "samples/replay/twse_stock_day_all_sample.csv" {
-			cfg.ReplayDataPath = "data/replay/tw_extended_90days.csv"
-		}
-		runner := backtest.NewRunner(cfg)
-		summary, err := runner.Run(startDate, endDate)
-		if err == nil {
-			if rerr := runner.GenerateReport(summary); rerr != nil {
-				log.Printf("[DashboardAPI] backtest report generation failed: %v", rerr)
-			}
-		}
-
-		h.mu.Lock()
-		h.running = false
-		h.status["running"] = false
-		h.status["finished_at"] = time.Now().UTC()
-		if err != nil {
-			h.status["error"] = err.Error()
-		} else {
-			h.status["window_id"] = summary.WindowID
-			h.status["sessions"] = summary.SessionCount
-			h.status["outcomes"] = summary.OutcomeCount
-			h.status["worst_agent"] = summary.WorstAgentID
-		}
-		h.mu.Unlock()
-	}()
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{
 		"running":      true,
@@ -116,11 +77,6 @@ func (h *Handlers) HandleBacktestStatus(w http.ResponseWriter, r *http.Request) 
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	h.mu.Lock()
-	status := make(map[string]interface{}, len(h.status))
-	for k, v := range h.status {
-		status[k] = v
-	}
-	h.mu.Unlock()
+	status := h.svc.GetStatus()
 	writeJSON(w, http.StatusOK, status)
 }
