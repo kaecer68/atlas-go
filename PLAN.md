@@ -535,10 +535,36 @@ go test -race ./internal/orchestrator/...  # 無 context race
 
 **問題**：無 interface 抽象，直接操作 JSONL，未來換 DB 成本高
 
-**現況**：
+**現況 — PostgreSQL 和 Redis 已在使用中**：
+
+```
+PostgreSQL (pgx + migrate)
+├── ✅ 連接池初始化  → db.Init() [cmd/atlas/main.go]
+├── ✅ Migration 系統 → 可運作，sql/migrations/ 有 1 個 migration
+├── ✅ channel_health 表 → Dashboard API 監控用
+└── ❌ Ledger 數據  → 仍用 JSONL（這是真正的 gap）
+
+Redis (go-redis)
+├── ✅ NonceReplayStore → 可選，需 BrokerNonceStore: "redis"
+└── ❌ 主要儲存     → 不是預設
+
+JSONL (ledger package)
+└── ✅ 主要儲存     → outcomes, sessions, scorecards
+```
+
+**已驗證的可用基礎設施**：
+- `db.Init()` — pgxpool 建立 + migrate up，已在 `cmd/atlas/main.go` 正常運作
+- `ChannelHealthStore` 模式 — 示範了「interface + PostgreSQL pool」的使用方式，可以復用
+
+**真正的 gap**：
 ```go
-type Store struct { baseDir string }  // 直接操作檔案
-// 無 OutcomeStore / QuoteStore / SessionStore interface
+// 現有（無 interface）
+type Store struct { baseDir string }  // 直接操作 JSONL
+
+// 缺口：ledger 層沒有 OutcomeStore / SessionStore interface
+// 對比 ChannelHealthStore 的模式：
+//   type ChannelHealthStore { pool *pgxpool.Pool }
+//   → 已有 Pool 但 ledger 層沒有抽象成 interface
 ```
 
 **實作目標**：
@@ -567,12 +593,16 @@ type JSONLStore struct { ... }
 
 // SQLiteStore 實作（未來）
 type SQLiteStore struct { ... }
+
+// PostgreSQLStore 實作（最終目標）
+type PostgreSQLStore struct { pool *pgxpool.Pool }  // 復用既有的 db.Init()
 ```
 
 **與 DB 升級的關聯**：
-- JSONLStore → SQLiteStore 為同一 interface 的兩實作
-- 迁移过程：先建立 interface → 實作 SQLiteStore → 雙實作並行 → 確認後切換
+- JSONLStore → SQLiteStore → PostgreSQLStore 為同一 interface 的三實作
+- 迁移过程：先建立 interface → 實作 SQLiteStore → 雙實作並行 → PostgreSQLStore → 確認後切換
 - 降低風險：DB 升級不需要改變上層呼叫
+- **可直接復用**：既有的 `db.Init()` 和 `sql/migrations/` 在過渡期間保持可用
 
 **驗證**：
 ```bash
