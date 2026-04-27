@@ -8,6 +8,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/evolution"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -45,6 +46,7 @@ type SystemCore struct {
 	capitalAllocator  *portfolio.CapitalAllocator
 	approvalWorkflow  *risk.ApprovalWorkflow
 	metricsCollector  interface{ RecordScreening(passed, rejected int64) }
+	eventBus          *eventbus.ChannelEventBus
 }
 
 // System orchestrates the full simulation loop via a SystemCore and a PluginHost.
@@ -109,6 +111,7 @@ func NewSystem(cfg config.Config) *System {
 			narrativeEngine: narrative.NewNarrativeEngine(),
 			ctx:             context.Background(),
 			darwinian:       darwinian,
+			eventBus:        eventbus.NewChannelEventBus(256),
 		},
 	}
 }
@@ -125,19 +128,28 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	}
 
 	events := s.detectNarrativeEvents(quotes)
-	var regime domain.Regime
-	var rawRecs, finalRecs []domain.Recommendation
-	var guardOutcomes []domain.GuardOutcome
-	var rejects []domain.ScreeningReject
-	if s.darwinian != nil {
-		regime, rawRecs, finalRecs, guardOutcomes, rejects = executeRegistryResearchDetailedWithPolicyAndGuardsAndDarwinian(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy, s.plugins, s.session.ID, s.darwinian)
-	} else {
-		regime, rawRecs, finalRecs, guardOutcomes, rejects = executeRegistryResearchDetailedWithPolicyAndGuards(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy, s.plugins, s.session.ID)
-	}
+	researchResult := ExecuteWithContext(ExecutionContext{
+		Registry:      s.registry,
+		Quotes:        quotes,
+		Overrides:     s.policy.PromptOverrides,
+		Policy:        s.policy.ExecutionPolicy,
+		Plugins:       s.plugins,
+		SessionID:     s.session.ID,
+		WeightManager: s.darwinian,
+	})
+	regime := researchResult.Regime
+	rawRecs := researchResult.RawRecommendations
+	finalRecs := researchResult.FinalRecommendations
+	guardOutcomes := researchResult.GuardOutcomes
+	rejects := researchResult.ScreeningRejects
 	// Preserve original recs for outcome building so GuardOutcomes align with outcomes.
 	outcomeRawRecs := append([]domain.Recommendation(nil), rawRecs...)
 	outcomeFinalRecs := append([]domain.Recommendation(nil), finalRecs...)
+	oldRegime := regime
 	regime = AdjustRegimeFromNarrative(regime, events)
+	if s.eventBus != nil {
+		go s.eventBus.PublishRegimeChange(oldRegime, regime, 0.0, "orchestrator")
+	}
 	rawRecs = s.applyNarrativeContextWithEvents(rawRecs, events)
 	finalRecs = s.applyNarrativeContextWithEvents(finalRecs, events)
 	rawRecs = s.applyHumanOverrides(rawRecs)
@@ -145,6 +157,9 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	alphaRecs := s.applyAlphaDiscovery(quotes, rawRecs)
 	finalRecs = append(finalRecs, alphaRecs...)
 	finalRecs = s.host.ProcessRecommendations(regime, finalRecs)
+	if s.eventBus != nil {
+		go s.eventBus.PublishRecommendation("orchestrator", finalRecs)
+	}
 	var result domain.SimulationResult
 	if s.persistentState != nil {
 		result = s.engine.RunWithState(s.persistentState, regime, quotes, finalRecs)
@@ -152,6 +167,9 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		result = s.engine.Run(regime, quotes, finalRecs)
 	}
 	result.GuardOutcomes = guardOutcomes
+	if s.eventBus != nil {
+		go s.eventBus.PublishGuardOutcomes(s.session.ID, guardOutcomes)
+	}
 
 	s.portfolioHistory = append(s.portfolioHistory, result.PortfolioValue)
 	if len(s.portfolioHistory) > 1 {
@@ -192,19 +210,28 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	symbols := RegistrySymbols(s.registry)
 	quotes := s.replay.QuotesForDate(sessionDate, symbols)
 	events := s.detectNarrativeEvents(quotes)
-	var regime domain.Regime
-	var rawRecs, finalRecs []domain.Recommendation
-	var guardOutcomes []domain.GuardOutcome
-	var rejects []domain.ScreeningReject
-	if s.darwinian != nil {
-		regime, rawRecs, finalRecs, guardOutcomes, rejects = executeRegistryResearchDetailedWithPolicyAndGuardsAndDarwinian(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy, s.plugins, s.session.ID, s.darwinian)
-	} else {
-		regime, rawRecs, finalRecs, guardOutcomes, rejects = executeRegistryResearchDetailedWithPolicyAndGuards(s.registry, quotes, s.policy.PromptOverrides, s.policy.ExecutionPolicy, s.plugins, s.session.ID)
-	}
+	researchResult := ExecuteWithContext(ExecutionContext{
+		Registry:      s.registry,
+		Quotes:        quotes,
+		Overrides:     s.policy.PromptOverrides,
+		Policy:        s.policy.ExecutionPolicy,
+		Plugins:       s.plugins,
+		SessionID:     s.session.ID,
+		WeightManager: s.darwinian,
+	})
+	regime := researchResult.Regime
+	rawRecs := researchResult.RawRecommendations
+	finalRecs := researchResult.FinalRecommendations
+	guardOutcomes := researchResult.GuardOutcomes
+	rejects := researchResult.ScreeningRejects
 	// Preserve original recs for outcome building so GuardOutcomes align with outcomes.
 	outcomeRawRecs := append([]domain.Recommendation(nil), rawRecs...)
 	outcomeFinalRecs := append([]domain.Recommendation(nil), finalRecs...)
+	oldRegime := regime
 	regime = AdjustRegimeFromNarrative(regime, events)
+	if s.eventBus != nil {
+		go s.eventBus.PublishRegimeChange(oldRegime, regime, 0.0, "orchestrator")
+	}
 	rawRecs = s.applyNarrativeContextWithEvents(rawRecs, events)
 	finalRecs = s.applyNarrativeContextWithEvents(finalRecs, events)
 	rawRecs = s.applyHumanOverrides(rawRecs)
@@ -212,6 +239,9 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	alphaRecs := s.applyAlphaDiscovery(quotes, rawRecs)
 	finalRecs = append(finalRecs, alphaRecs...)
 	finalRecs = s.host.ProcessRecommendations(regime, finalRecs)
+	if s.eventBus != nil {
+		go s.eventBus.PublishRecommendation("orchestrator", finalRecs)
+	}
 	var result domain.SimulationResult
 	if s.persistentState != nil {
 		result = s.engine.RunWithState(s.persistentState, regime, quotes, finalRecs)
@@ -219,6 +249,9 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		result = s.engine.Run(regime, quotes, finalRecs)
 	}
 	result.GuardOutcomes = guardOutcomes
+	if s.eventBus != nil {
+		go s.eventBus.PublishGuardOutcomes(s.session.ID, guardOutcomes)
+	}
 	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, sessionDate, s.replay)
 	_ = s.ledger.RecordOutcomes(outcomes)
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)

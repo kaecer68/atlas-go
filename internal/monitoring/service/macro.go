@@ -60,16 +60,16 @@ func (s *MacroService) CalculateStressIndex(ctx context.Context) (narrative.Taiw
 		if os.IsNotExist(err) {
 			_, snap, err = s.MacroIngestor.Ingest(ctx)
 			if err != nil {
-			return narrative.TaiwanStressIndex{}, fmt.Errorf("ingest failed: %w", err)
+				return narrative.TaiwanStressIndex{}, fmt.Errorf("ingest failed: %w", err)
+			}
+		} else {
+			return narrative.TaiwanStressIndex{}, fmt.Errorf("read snapshot: %w", err)
 		}
 	} else {
-		return narrative.TaiwanStressIndex{}, fmt.Errorf("read snapshot: %w", err)
+		if err := json.Unmarshal(data, &snap); err != nil {
+			return narrative.TaiwanStressIndex{}, fmt.Errorf("decode snapshot: %w", err)
+		}
 	}
-} else {
-	if err := json.Unmarshal(data, &snap); err != nil {
-		return narrative.TaiwanStressIndex{}, fmt.Errorf("decode snapshot: %w", err)
-	}
-}
 
 	geoStore := narrative.NewGeopoliticalStore(filepath.Join(s.WorkDir, "data/state/geopolitical"))
 	index, err := s.TaiwanStressCalc.CalculateFromSnapshotWithStore(ctx, snap, geoStore)

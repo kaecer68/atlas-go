@@ -69,21 +69,21 @@ func (s *IndustryService) GetClassificationTree() []map[string]interface{} {
 }
 
 type SeasonalPattern struct {
-	ID                  string  `json:"id"`
-	Name                string  `json:"name"`
-	NameEN              string  `json:"name_en,omitempty"`
-	Description         string  `json:"description"`
-	StartMonth          int     `json:"start_month"`
-	StartDay            int     `json:"start_day"`
-	EndMonth            int     `json:"end_month"`
-	EndDay              int     `json:"end_day"`
-	HistoricalAccuracy  float64 `json:"historical_accuracy"`
-	TypicalReturn       float64 `json:"typical_return"`
-	AdjustmentFactor    float64 `json:"adjustment_factor"`
-	FavoredIndustries   []string `json:"favored_industries,omitempty"`
-	AvoidedIndustries   []string `json:"avoided_industries,omitempty"`
-	AffectedIndustries  []string `json:"affected_industries,omitempty"`
-	Impact              string  `json:"impact,omitempty"`
+	ID                 string   `json:"id"`
+	Name               string   `json:"name"`
+	NameEN             string   `json:"name_en,omitempty"`
+	Description        string   `json:"description"`
+	StartMonth         int      `json:"start_month"`
+	StartDay           int      `json:"start_day"`
+	EndMonth           int      `json:"end_month"`
+	EndDay             int      `json:"end_day"`
+	HistoricalAccuracy float64  `json:"historical_accuracy"`
+	TypicalReturn      float64  `json:"typical_return"`
+	AdjustmentFactor   float64  `json:"adjustment_factor"`
+	FavoredIndustries  []string `json:"favored_industries,omitempty"`
+	AvoidedIndustries  []string `json:"avoided_industries,omitempty"`
+	AffectedIndustries []string `json:"affected_industries,omitempty"`
+	Impact             string   `json:"impact,omitempty"`
 }
 
 func (s *IndustryService) GetSeasonalPatterns(industryID string, now time.Time) (active []SeasonalPattern, historical []SeasonalPattern, adjustment float64) {
@@ -187,9 +187,9 @@ func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition,
 				allPositions = append(allPositions, CyclePosition{
 					Industry:       seg.ID,
 					Name:           seg.Name,
-			BusinessCycle:  string(pos.BusinessCycle),
-			InventoryCycle: string(pos.InventoryCycle),
-			CapexCycle:     string(pos.CapexCycle),
+					BusinessCycle:  string(pos.BusinessCycle),
+					InventoryCycle: string(pos.InventoryCycle),
+					CapexCycle:     string(pos.CapexCycle),
 					Confidence:     pos.Confidence,
 					UpdatedAt:      pos.UpdatedAt,
 					IsFavorable:    pos.IsFavorable(),
@@ -207,9 +207,9 @@ func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition,
 	}
 	return []CyclePosition{{
 		Industry:       industryID,
-			BusinessCycle:  string(position.BusinessCycle),
-			InventoryCycle: string(position.InventoryCycle),
-			CapexCycle:     string(position.CapexCycle),
+		BusinessCycle:  string(position.BusinessCycle),
+		InventoryCycle: string(position.InventoryCycle),
+		CapexCycle:     string(position.CapexCycle),
 		Confidence:     position.Confidence,
 		UpdatedAt:      position.UpdatedAt,
 		IsFavorable:    position.IsFavorable(),
@@ -219,10 +219,10 @@ func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition,
 }
 
 type LinkageInfo struct {
-	Industry     string                   `json:"industry"`
-	Upstream     []string                 `json:"upstream"`
-	Downstream   []string                 `json:"downstream"`
-	Correlations []map[string]interface{} `json:"correlations"`
+	Industry     string                         `json:"industry"`
+	Upstream     []string                       `json:"upstream"`
+	Downstream   []string                       `json:"downstream"`
+	Correlations []map[string]interface{}       `json:"correlations"`
 	LinkageScore *industry.IndustryLinkageScore `json:"linkage_score"`
 }
 
@@ -299,9 +299,9 @@ func (s *IndustryService) GetRiskInfo(symbol, industryID string) *RiskInfo {
 	var highestRisk map[string]interface{}
 	if highest != nil {
 		highestRisk = map[string]interface{}{
-			"id":       highest.ID,
-			"type":     highest.Type,
-			"severity": highest.Severity,
+			"id":          highest.ID,
+			"type":        highest.Type,
+			"severity":    highest.Severity,
 			"description": highest.Description,
 		}
 	}
@@ -316,14 +316,14 @@ func (s *IndustryService) GetRiskInfo(symbol, industryID string) *RiskInfo {
 }
 
 type IndustryOverview struct {
-	ID               string    `json:"id"`
-	Name             string    `json:"name"`
-	CyclePhase       string    `json:"cycle_phase"`
-	InventoryCycle   string    `json:"inventory_cycle"`
-	CapexCycle       string    `json:"capex_cycle"`
-	CycleConfidence  float64   `json:"cycle_confidence"`
-	IsFavorable      bool      `json:"is_favorable"`
-	SeasonalPatterns []string  `json:"seasonal_patterns"`
+	ID               string                         `json:"id"`
+	Name             string                         `json:"name"`
+	CyclePhase       string                         `json:"cycle_phase"`
+	InventoryCycle   string                         `json:"inventory_cycle"`
+	CapexCycle       string                         `json:"capex_cycle"`
+	CycleConfidence  float64                        `json:"cycle_confidence"`
+	IsFavorable      bool                           `json:"is_favorable"`
+	SeasonalPatterns []string                       `json:"seasonal_patterns"`
 	LinkageScore     *industry.IndustryLinkageScore `json:"linkage_score"`
 }
 

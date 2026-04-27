@@ -20,20 +20,19 @@ import (
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/live"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
-	apiexperiment "github.com/kaecer68/atlas-go/internal/monitoring/api/experiment"
-	apiindustry "github.com/kaecer68/atlas-go/internal/monitoring/api/industry"
-	apimacro "github.com/kaecer68/atlas-go/internal/monitoring/api/macro"
-	apicontrol "github.com/kaecer68/atlas-go/internal/monitoring/api/control"
-	apinarrative "github.com/kaecer68/atlas-go/internal/monitoring/api/narrative"
 	apibacktest "github.com/kaecer68/atlas-go/internal/monitoring/api/backtest"
+	apicontrol "github.com/kaecer68/atlas-go/internal/monitoring/api/control"
+	apiexperiment "github.com/kaecer68/atlas-go/internal/monitoring/api/experiment"
 	apihealth "github.com/kaecer68/atlas-go/internal/monitoring/api/health"
+	apiindustry "github.com/kaecer68/atlas-go/internal/monitoring/api/industry"
 	apilive "github.com/kaecer68/atlas-go/internal/monitoring/api/live"
+	apimacro "github.com/kaecer68/atlas-go/internal/monitoring/api/macro"
+	apinarrative "github.com/kaecer68/atlas-go/internal/monitoring/api/narrative"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
@@ -167,7 +166,6 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/agent-observatory", a.handleAgentObservatory)
 	mux.HandleFunc("/api/dashboard/forecast-vs-reality", a.handleForecastVsReality)
 
-	mux.HandleFunc("/api/dashboard/system-health", a.handleSystemHealth)
 	mux.HandleFunc("/api/dashboard/recommendation-pipeline", a.handleRecommendationPipeline)
 	mux.HandleFunc("/api/dashboard/universe-overlap", a.handleUniverseOverlap)
 	mux.HandleFunc("/api/dashboard/data-channels", a.handleDataChannels)
@@ -821,67 +819,6 @@ func (a *DashboardAPI) loadLiveStatus() map[string]interface{} {
 	}
 }
 
-func (a *DashboardAPI) handleExperimentPromote(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	var req struct {
-		ResultPath string `json:"result_path"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
-	if req.ResultPath == "" {
-		writeJSONError(w, http.StatusBadRequest, "result_path required")
-		return
-	}
-	mgr := baseline.NewManager(a.baselinePath)
-	policy, err := mgr.PromoteResult(req.ResultPath)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("promote failed: %v", err))
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "version": policy.Version})
-}
-
-func (a *DashboardAPI) handleExperimentRevert(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	var req struct {
-		Type         string `json:"type"`
-		Version      int    `json:"version"`
-		ExperimentID string `json:"experiment_id"`
-		Reason       string `json:"reason"`
-		DryRun       bool   `json:"dry_run"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
-	target := baseline.RevertTarget{Type: baseline.RevertType(req.Type), Version: req.Version, ExperimentID: req.ExperimentID}
-	mgr := baseline.NewManager(a.baselinePath)
-	result, err := mgr.Revert(target, req.Reason, req.DryRun)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("revert failed: %v", err))
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-func (a *DashboardAPI) handleExperimentHistory(w http.ResponseWriter, r *http.Request) {
-	mgr := baseline.NewManager(a.baselinePath)
-	history, err := mgr.GetPromotionHistory()
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load history: %v", err))
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"history": PromotionHistoryToAPI(history)})
-}
-
 func (a *DashboardAPI) handlePhase3Status(w http.ResponseWriter, r *http.Request) {
 	metrics, err := orchestrator.LoadPhase3Metrics("")
 	if err != nil {
@@ -889,6 +826,115 @@ func (a *DashboardAPI) handlePhase3Status(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, metrics)
+}
+
+func (a *DashboardAPI) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	warnings := make([]string, 0)
+
+	policy, err := baseline.Load(a.baselinePath)
+	baselineVersion := "未知"
+	if err != nil {
+		warnings = append(warnings, "基線策略未載入")
+	} else {
+		baselineVersion = fmt.Sprintf("v%d", policy.Version)
+	}
+
+	replayPath := filepath.Join(a.workDir, "data/replay/tw_extended_90days.csv")
+	replayOK := true
+	latestReplayDate := ""
+	ds, err := replay.LoadTWSEOpenDataCSV(replayPath)
+	if err != nil {
+		replayOK = false
+		warnings = append(warnings, "replay 資料無法讀取："+err.Error())
+	} else if len(ds.Dates) > 0 {
+		latestReplayDate = ds.Dates[len(ds.Dates)-1].Format("2006-01-02")
+	}
+
+	lastWindow := ""
+	var lastWindowTime time.Time
+	windowsDir := filepath.Join(a.ledgerDir, "windows")
+	if entries, err := os.ReadDir(windowsDir); err == nil {
+		var latest time.Time
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || strings.Contains(e.Name(), "mutation-brief") {
+				continue
+			}
+			info, err := e.Info()
+			if err != nil {
+				continue
+			}
+			if info.ModTime().After(latest) {
+				latest = info.ModTime()
+				lastWindow = strings.TrimSuffix(e.Name(), ".json")
+				lastWindowTime = info.ModTime()
+			}
+		}
+	}
+
+	if baselineVersion != "未知" && lastWindowTime.IsZero() {
+		warnings = append(warnings, "找不到回測窗口摘要")
+	}
+
+	// Crowding check from latest session outcomes
+	latestSummary, _ := a.loadSessionSummary("")
+	if latestSummary != nil {
+		store := ledger.NewStore(a.ledgerDir)
+		outcomes, _ := store.LoadSessionOutcomes(latestSummary.SessionID)
+		symbolAgents := make(map[string]map[string]struct{})
+		for _, outcome := range outcomes {
+			if symbolAgents[outcome.Symbol] == nil {
+				symbolAgents[outcome.Symbol] = make(map[string]struct{})
+			}
+			symbolAgents[outcome.Symbol][outcome.AgentID] = struct{}{}
+		}
+		for symbol, agents := range symbolAgents {
+			count := len(agents)
+			if count >= 4 {
+				warnings = append(warnings, fmt.Sprintf("重疊過高：%s（%d 個 AI）", symbol, count))
+			} else if count >= 3 {
+				warnings = append(warnings, fmt.Sprintf("擁擠交易：%s（%d 個 AI）", symbol, count))
+			}
+		}
+	}
+	regime := domain.RegimeNeutral
+	if summary, err := a.loadSessionSummary(""); err == nil && summary != nil {
+		regime = summary.Regime
+	}
+
+	now := time.Now()
+	channels := []DataChannelInfo{
+		a.buildChannelInfo("us_yahoo", "Yahoo Finance Macro", a.checkMacroHealth, filepath.Join(a.workDir, "data/state/macro/latest.json"), now),
+		a.buildChannelInfo("twse_capital_flow", "TWSE 三大法人", a.checkCapitalFlowHealth, filepath.Join(a.workDir, "data/state/capital_flow"), now),
+		a.buildChannelInfo("geopolitical", "地緣政治風險", a.checkGeopoliticalHealth, filepath.Join(a.workDir, "data/state/geopolitical/latest.json"), now),
+		a.buildChannelInfo("twse_replay", "TWSE Replay", a.checkReplayHealth, filepath.Join(a.workDir, "data/replay/tw_extended_90days.csv"), now),
+	}
+
+	writeJSON(w, http.StatusOK, SystemHealthResponse{
+		BaselineVersion:       baselineVersion,
+		ReplayDataLatestDate:  latestReplayDate,
+		ReplayDataPathOK:      replayOK,
+		LastWindowID:          lastWindow,
+		LastWindowGeneratedAt: lastWindowTime,
+		Warnings:              warnings,
+		Regime:                regime,
+		DataChannels:          channels,
+	})
+}
+
+func (a *DashboardAPI) buildChannelInfo(id, label string, checker func(string, time.Time) (string, string), path string, now time.Time) DataChannelInfo {
+	status, updated := checker(path, now)
+	return DataChannelInfo{
+		ChannelID:  id,
+		Label:      label,
+		Status:     status,
+		StatusText: statusText(status),
+		UpdatedAt:  updated,
+	}
 }
 
 func (a *DashboardAPI) handleSwaggerUI(w http.ResponseWriter, r *http.Request) {
@@ -1877,348 +1923,6 @@ func (a *DashboardAPI) handleTaiwanStressIndex(w http.ResponseWriter, r *http.Re
 		return
 	}
 	writeJSON(w, http.StatusOK, index)
-}
-
-// ExperimentInboxItem represents a single experiment in the inbox.
-func (a *DashboardAPI) handleExperimentInbox(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	policy, err := baseline.Load(a.baselinePath)
-	if err != nil {
-		policy = baseline.DefaultPolicy()
-	}
-
-	experimentsDir := filepath.Join(a.ledgerDir, "experiments")
-	// Auto-expire stale planned/running experiments before building the inbox.
-	if _, err := experiment.ExpireOldExperiments(experimentsDir, experiment.DefaultExperimentTTL); err != nil {
-		log.Printf("[DashboardAPI] warn: experiment TTL cleanup failed: %v", err)
-	}
-
-	entries, err := os.ReadDir(experimentsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusOK, ExperimentInboxResponse{BaselineVersion: policy.Version})
-			return
-		}
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read experiments dir: %v", err))
-		return
-	}
-
-	pendingJudges := make([]ExperimentInboxItem, 0)
-	pendingPromotes := make([]ExperimentInboxItem, 0)
-	recentHistory := make([]ExperimentInboxItem, 0)
-
-	promotedIDs := make(map[string]bool)
-	for _, pr := range policy.Promotions {
-		promotedIDs[pr.ExperimentID] = true
-	}
-
-	// Collect all accepted items first so we can deduplicate by agent.
-	var allAccepted []ExperimentInboxItem
-	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
-			continue
-		}
-		path := filepath.Join(experimentsDir, entry.Name())
-		bytes, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		var result domain.PromptExperimentResult
-		if err := json.Unmarshal(bytes, &result); err != nil {
-			continue
-		}
-
-		item := ExperimentInboxItem{
-			ExperimentID:    result.Experiment.ID,
-			TargetAgentID:   result.Experiment.TargetAgentID,
-			Skill:           result.Experiment.Skill,
-			MutationType:    result.Experiment.MutationType,
-			MutationSummary: BuildMutationSummary(policy, result),
-			Status:          result.Experiment.Status,
-			BaselineValue:   result.Experiment.BaselineValue,
-			CandidateValue:  result.Experiment.CandidateValue,
-			CandidatePath:   result.CandidatePrompt,
-			RejectReason:    result.Experiment.RevertReason,
-			RecordedAt:      result.RecordedAt,
-		}
-
-		switch result.Experiment.Status {
-		case domain.ExperimentRunning, domain.ExperimentPlanned:
-			pendingJudges = append(pendingJudges, item)
-		case domain.ExperimentAccepted:
-			allAccepted = append(allAccepted, item)
-		default:
-			recentHistory = append(recentHistory, item)
-		}
-	}
-
-	// For each agent, keep only the latest accepted experiment as pending promote;
-	// older accepted experiments and already-promoted ones go to history.
-	latestByAgent := make(map[string]ExperimentInboxItem)
-	for _, item := range allAccepted {
-		existing, ok := latestByAgent[item.TargetAgentID]
-		if !ok || item.RecordedAt.After(existing.RecordedAt) {
-			latestByAgent[item.TargetAgentID] = item
-		}
-	}
-	for _, item := range allAccepted {
-		latest := latestByAgent[item.TargetAgentID]
-		if promotedIDs[item.ExperimentID] || item.ExperimentID != latest.ExperimentID {
-			recentHistory = append(recentHistory, item)
-		} else {
-			pendingPromotes = append(pendingPromotes, item)
-		}
-	}
-
-	slices.SortFunc(pendingJudges, func(a, b ExperimentInboxItem) int {
-		if a.RecordedAt.After(b.RecordedAt) {
-			return -1
-		}
-		return 1
-	})
-	slices.SortFunc(pendingPromotes, func(a, b ExperimentInboxItem) int {
-		if a.RecordedAt.After(b.RecordedAt) {
-			return -1
-		}
-		return 1
-	})
-	slices.SortFunc(recentHistory, func(a, b ExperimentInboxItem) int {
-		if a.RecordedAt.After(b.RecordedAt) {
-			return -1
-		}
-		return 1
-	})
-	if len(recentHistory) > 10 {
-		recentHistory = recentHistory[:10]
-	}
-
-	writeJSON(w, http.StatusOK, ExperimentInboxResponse{
-		PendingJudges:   pendingJudges,
-		PendingPromotes: pendingPromotes,
-		RecentHistory:   recentHistory,
-		BaselineVersion: policy.Version,
-	})
-}
-
-func (a *DashboardAPI) handleJudgeExperiment(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	var req struct {
-		ExperimentID string `json:"experiment_id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
-	if req.ExperimentID == "" {
-		writeJSONError(w, http.StatusBadRequest, "experiment_id required")
-		return
-	}
-
-	resultPath := filepath.Join(a.ledgerDir, "experiments", req.ExperimentID+".json")
-	if _, err := os.Stat(resultPath); err != nil {
-		writeJSONError(w, http.StatusNotFound, "experiment result not found")
-		return
-	}
-
-	replayPath := filepath.Join(a.workDir, "data/replay/tw_extended_90days.csv")
-	judge := experiment.NewJudge(ledger.NewStore(a.ledgerDir), replayPath, a.baselinePath)
-	result, err := judge.Evaluate(resultPath)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("judge failed: %v", err))
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"success":    true,
-		"status":     result.Experiment.Status,
-		"baseline":   result.Experiment.BaselineValue,
-		"candidate":  result.Experiment.CandidateValue,
-		"experiment": result.Experiment,
-	})
-}
-
-func (a *DashboardAPI) handleExperimentDiff(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	experimentID := strings.TrimSpace(r.URL.Query().Get("experiment_id"))
-	if experimentID == "" {
-		writeJSONError(w, http.StatusBadRequest, "experiment_id required")
-		return
-	}
-
-	resultPath := filepath.Join(a.ledgerDir, "experiments", experimentID+".json")
-	bytes, err := os.ReadFile(resultPath)
-	if err != nil {
-		writeJSONError(w, http.StatusNotFound, "experiment result not found")
-		return
-	}
-	var result domain.PromptExperimentResult
-	if err := json.Unmarshal(bytes, &result); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "invalid experiment result")
-		return
-	}
-
-	// Always use the original agent prompt file as the baseline for diff.
-	promptFile := result.Brief.PromptFile
-	if !filepath.IsAbs(promptFile) {
-		promptFile = filepath.Join(a.workDir, promptFile)
-	}
-	baselineBytes, err := os.ReadFile(promptFile)
-	baselinePrompt := ""
-	if err == nil {
-		baselinePrompt = string(baselineBytes)
-	}
-
-	candidateBytes, err := os.ReadFile(result.CandidatePrompt)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "cannot read candidate prompt")
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"baseline_prompt":  baselinePrompt,
-		"candidate_prompt": string(candidateBytes),
-		"target_agent_id":  result.Experiment.TargetAgentID,
-		"skill":            result.Experiment.Skill,
-	})
-}
-
-// SystemHealthResponse exposes config consistency and freshness.
-type SystemHealthResponse struct {
-	BaselineVersion       string            `json:"baseline_version"`
-	ReplayDataLatestDate  string            `json:"replay_data_latest_date"`
-	ReplayDataPathOK      bool              `json:"replay_data_path_ok"`
-	LastWindowID          string            `json:"last_window_id"`
-	LastWindowGeneratedAt time.Time         `json:"last_window_generated_at"`
-	Warnings              []string          `json:"warnings"`
-	Regime                domain.Regime     `json:"regime"`
-	DataChannels          []DataChannelInfo `json:"data_channels,omitempty"`
-}
-
-type DataChannelInfo struct {
-	ChannelID  string `json:"channel_id"`
-	Label      string `json:"label"`
-	Status     string `json:"status"`
-	StatusText string `json:"status_text"`
-	UpdatedAt  string `json:"updated_at"`
-}
-
-func (a *DashboardAPI) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	warnings := make([]string, 0)
-
-	policy, err := baseline.Load(a.baselinePath)
-	baselineVersion := "未知"
-	if err != nil {
-		warnings = append(warnings, "基線策略未載入")
-	} else {
-		baselineVersion = fmt.Sprintf("v%d", policy.Version)
-	}
-
-	replayPath := filepath.Join(a.workDir, "data/replay/tw_extended_90days.csv")
-	replayOK := true
-	latestReplayDate := ""
-	ds, err := replay.LoadTWSEOpenDataCSV(replayPath)
-	if err != nil {
-		replayOK = false
-		warnings = append(warnings, "replay 資料無法讀取："+err.Error())
-	} else if len(ds.Dates) > 0 {
-		latestReplayDate = ds.Dates[len(ds.Dates)-1].Format("2006-01-02")
-	}
-
-	lastWindow := ""
-	var lastWindowTime time.Time
-	windowsDir := filepath.Join(a.ledgerDir, "windows")
-	if entries, err := os.ReadDir(windowsDir); err == nil {
-		var latest time.Time
-		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || strings.Contains(e.Name(), "mutation-brief") {
-				continue
-			}
-			info, err := e.Info()
-			if err != nil {
-				continue
-			}
-			if info.ModTime().After(latest) {
-				latest = info.ModTime()
-				lastWindow = strings.TrimSuffix(e.Name(), ".json")
-				lastWindowTime = info.ModTime()
-			}
-		}
-	}
-
-	if baselineVersion != "未知" && lastWindowTime.IsZero() {
-		warnings = append(warnings, "找不到回測窗口摘要")
-	}
-
-	// Crowding check from latest session outcomes
-	latestSummary, _ := a.loadSessionSummary("")
-	if latestSummary != nil {
-		store := ledger.NewStore(a.ledgerDir)
-		outcomes, _ := store.LoadSessionOutcomes(latestSummary.SessionID)
-		symbolAgents := make(map[string]map[string]struct{})
-		for _, outcome := range outcomes {
-			if symbolAgents[outcome.Symbol] == nil {
-				symbolAgents[outcome.Symbol] = make(map[string]struct{})
-			}
-			symbolAgents[outcome.Symbol][outcome.AgentID] = struct{}{}
-		}
-		for symbol, agents := range symbolAgents {
-			count := len(agents)
-			if count >= 4 {
-				warnings = append(warnings, fmt.Sprintf("重疊過高：%s（%d 個 AI）", symbol, count))
-			} else if count >= 3 {
-				warnings = append(warnings, fmt.Sprintf("擁擠交易：%s（%d 個 AI）", symbol, count))
-			}
-		}
-	}
-	regime := domain.RegimeNeutral
-	if summary, err := a.loadSessionSummary(""); err == nil && summary != nil {
-		regime = summary.Regime
-	}
-
-	now := time.Now()
-	channels := []DataChannelInfo{
-		a.buildChannelInfo("us_yahoo", "Yahoo Finance Macro", a.checkMacroHealth, filepath.Join(a.workDir, "data/state/macro/latest.json"), now),
-		a.buildChannelInfo("twse_capital_flow", "TWSE 三大法人", a.checkCapitalFlowHealth, filepath.Join(a.workDir, "data/state/capital_flow"), now),
-		a.buildChannelInfo("geopolitical", "地緣政治風險", a.checkGeopoliticalHealth, filepath.Join(a.workDir, "data/state/geopolitical/latest.json"), now),
-		a.buildChannelInfo("twse_replay", "TWSE Replay", a.checkReplayHealth, filepath.Join(a.workDir, "data/replay/tw_extended_90days.csv"), now),
-	}
-
-	writeJSON(w, http.StatusOK, SystemHealthResponse{
-		BaselineVersion:       baselineVersion,
-		ReplayDataLatestDate:  latestReplayDate,
-		ReplayDataPathOK:      replayOK,
-		LastWindowID:          lastWindow,
-		LastWindowGeneratedAt: lastWindowTime,
-		Warnings:              warnings,
-		Regime:                regime,
-		DataChannels:          channels,
-	})
-}
-
-func (a *DashboardAPI) buildChannelInfo(id, label string, checker func(string, time.Time) (string, string), path string, now time.Time) DataChannelInfo {
-	status, updated := checker(path, now)
-	return DataChannelInfo{
-		ChannelID:  id,
-		Label:      label,
-		Status:     status,
-		StatusText: statusText(status),
-		UpdatedAt:  updated,
-	}
 }
 
 // PipelineItem represents a single recommendation through the guard pipeline.
@@ -3291,7 +2995,6 @@ func (a *DashboardAPI) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
-
 
 func (a *DashboardAPI) handleMetricsTrend(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

@@ -85,8 +85,8 @@ func (h *Handlers) HandleCapitalFlowLatest(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]any{
 		"foreign_investor_net": snap.ForeignInvestorNet,
 		"domestic_fund_net":    snap.DomesticFundNet,
-		"dealer_net":          snap.DealerNet,
-		"recorded_at":         snap.RecordedAt,
+		"dealer_net":           snap.DealerNet,
+		"recorded_at":          snap.RecordedAt,
 	})
 }
 
