@@ -53,6 +53,23 @@
 - Risk circuit breakers
 - Performance reporting
 
+## P-Infra: Infrastructure Foundation (Future)
+
+Infrastructure improvements required before or during production hardening. Triggered alongside database migration (JSONL → SQLite/PostgreSQL).
+
+| 項目 | 用途 | 不改善的風險 |
+|------|------|-------------|
+| **Structured logging** (slog/zap) | 360 處 `log.Printf` → JSON structured logs，支援 ELK/Loki 查詢、alerting | Production incident 排查從 30 分變 2 小時 |
+| **Context propagation** | 127 處 `context.Background()` → 傳遞 parent context，配合 graceful shutdown | Live mode graceful shutdown 不完整，goroutine 洩漏 |
+| **Data Access Layer** | 定義 `OutcomeStore`/`QuoteStore`/`SessionStore` interface，支援 JSONL→SQLite 遷移 | 將來換 DB 幾乎要重寫整個 ledger 層 |
+
+**觸發時機**：當以下任一條件滿足時啟動
+- 數據量增長導致 JSONL 效能瓶頸
+- 需要多 consumer（如 dashboard、backtest）共用同一筆資料
+- Production 環境需要 ELK/Loki 等 structured logging 工具
+
+See: `PLAN.md` — P-Infra 章節
+
 ## Execution Roadmap (2026 Q2-Q4)
 
 ### Short Term (2-6 weeks)
