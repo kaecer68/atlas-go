@@ -2,12 +2,12 @@ package service
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 type BacktestService struct {
@@ -52,7 +52,7 @@ func (s *BacktestService) Start(startDate, endDate time.Time) error {
 		summary, err := runner.Run(startDate, endDate)
 		if err == nil {
 			if rerr := runner.GenerateReport(summary); rerr != nil {
-				log.Printf("[BacktestService] report generation failed: %v", rerr)
+				logging.Error("backtest_service", "report_generation_failed", logging.Err(rerr))
 			}
 		}
 

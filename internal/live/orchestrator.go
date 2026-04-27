@@ -3,12 +3,12 @@ package live
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 )
@@ -533,9 +533,9 @@ func (o *Orchestrator) handleMarketOpen() {
 	// 运行 Context Agent 判断市场状态
 	if err := o.runContextAgent(); err != nil {
 		if o.effectiveBrokerMode == "live" {
-			log.Printf("[Orchestrator] CRITICAL: %v", err)
+			logging.Error("live_orchestrator", "critical_error", logging.Err(err))
 		} else {
-			log.Printf("[Orchestrator] WARNING: %v (continuing in %s mode)", err, o.effectiveBrokerMode)
+			logging.Warn("live_orchestrator", "warning_continuing", logging.Err(err), "broker_mode", o.effectiveBrokerMode)
 		}
 	}
 }
@@ -578,18 +578,18 @@ func (o *Orchestrator) handleIntradayCycle() {
 	// 运行 Agent 生成推荐
 	if err := o.runStyleAndSectorAgents(); err != nil {
 		if o.effectiveBrokerMode == "live" {
-			log.Printf("[Orchestrator] CRITICAL: %v", err)
+			logging.Error("live_orchestrator", "critical_error", logging.Err(err))
 		} else {
-			log.Printf("[Orchestrator] WARNING: %v (continuing in %s mode)", err, o.effectiveBrokerMode)
+			logging.Warn("live_orchestrator", "warning_continuing", logging.Err(err), "broker_mode", o.effectiveBrokerMode)
 		}
 	}
 
 	// 应用 CRO 风险过滤
 	if err := o.applyRiskFilters(); err != nil {
 		if o.effectiveBrokerMode == "live" {
-			log.Printf("[Orchestrator] CRITICAL: %v", err)
+			logging.Error("live_orchestrator", "critical_error", logging.Err(err))
 		} else {
-			log.Printf("[Orchestrator] WARNING: %v (continuing in %s mode)", err, o.effectiveBrokerMode)
+			logging.Warn("live_orchestrator", "warning_continuing", logging.Err(err), "broker_mode", o.effectiveBrokerMode)
 		}
 	}
 

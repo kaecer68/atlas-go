@@ -3,12 +3,12 @@ package orchestrator
 import (
 	"context"
 	"fmt"
-	"log"
 	"slices"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
@@ -146,7 +146,7 @@ func filterMutedAgents(registry domain.AgentRegistry, plugins *PluginRegistry) d
 			if health != nil {
 				score = health.CompositeScore
 			}
-			log.Printf("[AgentHealth] Agent %s is muted (CompositeScore=%.2f), skipping", agent.ID, score)
+			logging.Info("executors", "agent_muted", logging.AgentID(agent.ID), "composite_score", score)
 			continue
 		}
 		filtered = append(filtered, agent)
@@ -348,7 +348,7 @@ func applyMomentumCrashProtection(recs []domain.Recommendation, quotes map[strin
 		}
 	}
 	if !vixFound {
-		log.Printf("[WARN] VIX not found in quotes; momentum crash protection disabled")
+		logging.Warn("executors", "vix_not_found", "event", "momentum_crash_protection_disabled")
 		return recs
 	}
 	cfg := config.GetEngineConfig().Executors

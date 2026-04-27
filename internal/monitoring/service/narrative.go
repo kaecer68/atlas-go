@@ -1,10 +1,10 @@
 package service
 
 import (
-	"log"
 	"path/filepath"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
 
@@ -33,7 +33,7 @@ func (s *NarrativeService) MatchChains(events []narrative.NarrativeEvent) []narr
 func (s *NarrativeService) GetActiveModels(themes []string) []narrative.InvestmentModel {
 	replayPath := filepath.Join(s.WorkDir, "data/replay/tw_extended_90days.csv")
 	if err := s.NarrativeEngine.EvaluateModels(replayPath); err != nil {
-		log.Printf("[NarrativeService] EvaluateModels warning: %v", err)
+		logging.Warn("narrative_service", "evaluate_models_warning", logging.Err(err))
 	}
 	return s.NarrativeEngine.ActiveModels(themes)
 }

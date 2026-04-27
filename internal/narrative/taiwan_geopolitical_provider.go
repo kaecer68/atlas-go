@@ -5,11 +5,12 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // TaiwanRSSGeopoliticalProvider monitors Taiwan-related geopolitical news via RSS feeds.
@@ -67,7 +68,7 @@ func (t *TaiwanRSSGeopoliticalProvider) FetchScore(ctx context.Context) (Geopoli
 			defer wg.Done()
 			matches, err := t.countKeywordsInFeed(ctx, url)
 			if err != nil {
-				log.Printf("[TaiwanRSSGeopoliticalProvider] feed failed %s: %v", url, err)
+				logging.Warn("taiwan_geopolitical_provider", "feed_failed", logging.FStr("url", url), logging.Err(err))
 				return
 			}
 			mu.Lock()
@@ -170,7 +171,7 @@ func (c *CompositeTaiwanGeopoliticalProvider) FetchScore(ctx context.Context) (G
 	for _, p := range c.providers {
 		score, err := p.FetchScore(ctx)
 		if err != nil {
-			log.Printf("[CompositeTaiwanGeopoliticalProvider] provider %s failed: %v", p.Name(), err)
+			logging.Warn("taiwan_geopolitical_provider", "provider_failed", logging.FStr("provider", p.Name()), logging.Err(err))
 			continue
 		}
 		totalIntensity += score.Intensity

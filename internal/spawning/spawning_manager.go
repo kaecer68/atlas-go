@@ -2,13 +2,13 @@ package spawning
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // SpawningManager orchestrates the entire agent spawning lifecycle
@@ -84,7 +84,7 @@ func (m *SpawningManager) Start() {
 
 	m.isRunning = true
 	go m.runLoop()
-	log.Println("[SpawningManager] Started automated agent spawning")
+	logging.Info("spawning_manager", "started")
 }
 
 // Stop halts the spawning process
@@ -93,7 +93,7 @@ func (m *SpawningManager) Stop() {
 	defer m.mu.Unlock()
 
 	m.isRunning = false
-	log.Println("[SpawningManager] Stopped")
+	logging.Info("spawning_manager", "stopped")
 }
 
 // runLoop is the main background loop
@@ -121,7 +121,7 @@ func (m *SpawningManager) PerformSpawningCycle() {
 	defer m.mu.Unlock()
 
 	m.lastCheck = time.Now()
-	log.Println("[SpawningManager] Starting spawning cycle...")
+	logging.Info("spawning_manager", "spawning_cycle_started")
 
 	// 1. Detect gaps
 	scorecards := m.collectScorecards()
@@ -129,11 +129,11 @@ func (m *SpawningManager) PerformSpawningCycle() {
 	gaps := m.gapDetector.DetectGaps(*m.registry, scorecards, universe)
 
 	if len(gaps) == 0 {
-		log.Println("[SpawningManager] No gaps detected")
+		logging.Info("spawning_manager", "no_gaps_detected")
 		return
 	}
 
-	log.Printf("[SpawningManager] Detected %d knowledge gaps", len(gaps))
+	logging.Info("spawning_manager", "knowledge_gaps_detected", "count", len(gaps))
 
 	// 2. Prioritize gaps
 	prioritized := m.prioritizeGaps(gaps)
@@ -153,7 +153,7 @@ func (m *SpawningManager) PerformSpawningCycle() {
 		// Spawn agent
 		spawned, err := m.spawnAgentForGap(gap)
 		if err != nil {
-			log.Printf("[SpawningManager] Failed to spawn for gap %s: %v", gap.ID, err)
+			logging.Error("spawning_manager", "spawn_failed", logging.FStr("gap_id", gap.ID), logging.Err(err))
 			continue
 		}
 
@@ -161,7 +161,7 @@ func (m *SpawningManager) PerformSpawningCycle() {
 		m.gapDetector.UpdateGapStatus(gap.ID, GapStatusSpawning)
 		spawnCount++
 
-		log.Printf("[SpawningManager] Spawned agent %s for gap %s", spawned.AgentID, gap.ID)
+		logging.Info("spawning_manager", "agent_spawned", logging.AgentID(spawned.AgentID), logging.FStr("gap_id", gap.ID))
 	}
 
 	// 4. Update training agents
@@ -170,7 +170,7 @@ func (m *SpawningManager) PerformSpawningCycle() {
 	// 5. Validate completed agents
 	m.validateCompletedAgents()
 
-	log.Printf("[SpawningManager] Cycle complete. Active spawns: %d", len(m.spawnedAgents))
+	logging.Info("spawning_manager", "cycle_complete", "active_spawns", len(m.spawnedAgents))
 }
 
 // prioritizeGaps sorts gaps by priority score
@@ -266,7 +266,7 @@ func (m *SpawningManager) updateTrainingAgents(scorecards map[string]*domain.Sco
 		spawned.Status = SpawnStatusValidating
 		spawned.TrainingEnd = time.Now()
 
-		log.Printf("[SpawningManager] Agent %s completed training, entering validation", agentID)
+		logging.Info("spawning_manager", "training_completed", logging.AgentID(agentID))
 
 		// Update gap status
 		m.gapDetector.UpdateGapStatus(spawned.GapID, GapStatusTesting)
@@ -301,7 +301,7 @@ func (m *SpawningManager) validateCompletedAgents() {
 
 		// For now, mark as candidate for manual review
 		spawned.Status = SpawnStatusCandidate
-		log.Printf("[SpawningManager] Agent %s is now a candidate for acceptance", agentID)
+		logging.Info("spawning_manager", "candidate_ready", logging.AgentID(agentID))
 	}
 }
 
@@ -330,7 +330,7 @@ func (m *SpawningManager) AcceptAgent(agentID string) error {
 	spawned.Status = SpawnStatusAccepted
 	m.gapDetector.UpdateGapStatus(spawned.GapID, GapStatusResolved)
 
-	log.Printf("[SpawningManager] Accepted agent %s", agentID)
+	logging.Info("spawning_manager", "agent_accepted", logging.AgentID(agentID))
 	return nil
 }
 
@@ -349,7 +349,7 @@ func (m *SpawningManager) RejectAgent(agentID string, reason string) error {
 	// Mark gap as open again for retry
 	m.gapDetector.UpdateGapStatus(spawned.GapID, GapStatusOpen)
 
-	log.Printf("[SpawningManager] Rejected agent %s: %s", agentID, reason)
+	logging.Warn("spawning_manager", "agent_rejected", logging.AgentID(agentID), logging.FStr("reason", reason))
 	return nil
 }
 
@@ -414,7 +414,7 @@ func (m *SpawningManager) CheckExtinction(weights map[string]float64) []string {
 				}
 			}
 			extinct = append(extinct, agentID)
-			log.Printf("[SpawningManager] Agent %s marked extinct after %d days at min weight", agentID, m.minWeightDays)
+			logging.Warn("spawning_manager", "agent_extinct", logging.AgentID(agentID), logging.FInt("days_at_min_weight", m.minWeightDays))
 		}
 	}
 	return extinct

@@ -2,10 +2,11 @@ package config
 
 import (
 	"bufio"
-	"log"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 type Config struct {
@@ -99,7 +100,7 @@ func envOrInt(key string, fallback int) int {
 	}
 	n, err := strconv.Atoi(value)
 	if err != nil {
-		log.Printf("[Config] warn: failed to parse %s=%q as int, using fallback %d: %v", key, value, fallback, err)
+		logging.Warn("config", "parse_int_failed", logging.FStr("key", key), logging.FStr("value", value), logging.FInt("fallback", fallback), logging.Err(err))
 		return fallback
 	}
 	return n
