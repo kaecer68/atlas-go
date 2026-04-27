@@ -130,8 +130,14 @@ func (c *CapitalPhaseController) nextPhase() domain.CapitalPhase {
 	return ""
 }
 
-// CalculateSharpeRatio computes the rolling Sharpe ratio from daily returns.
-// Uses the simplified formula: mean(returns) / std(returns) * sqrt(252).
+func (c *CapitalPhaseController) RecordLoss() {
+	c.snapshot.ConsecutiveLosses++
+}
+
+func (c *CapitalPhaseController) RecordWin() {
+	c.snapshot.ConsecutiveLosses = 0
+}
+
 func CalculateSharpeRatio(dailyReturns []float64) float64 {
 	if len(dailyReturns) < 2 {
 		return 0.0

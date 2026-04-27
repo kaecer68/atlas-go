@@ -758,4 +758,10 @@ func (s *System) updateCapitalMetrics(result domain.SimulationResult) {
 	maxDD := risk.CalculateMaxDrawdown(s.portfolioHistory)
 
 	s.capitalController.UpdateMetrics(sharpe, maxDD)
+
+	if result.AfterTaxPnL < 0 {
+		s.capitalController.RecordLoss()
+	} else {
+		s.capitalController.RecordWin()
+	}
 }

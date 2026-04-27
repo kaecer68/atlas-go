@@ -259,6 +259,94 @@ func TestCanAdvance_ConsecutiveLossesExceeded(t *testing.T) {
 	}
 }
 
+func TestRecordLoss_IncrementsCounter(t *testing.T) {
+	cfg := domain.DefaultCapitalPhaseConfig()
+	ctrl := NewCapitalPhaseController(cfg)
+
+	if ctrl.snapshot.ConsecutiveLosses != 0 {
+		t.Fatalf("expected initial ConsecutiveLosses=0, got %d", ctrl.snapshot.ConsecutiveLosses)
+	}
+
+	ctrl.RecordLoss()
+	if ctrl.snapshot.ConsecutiveLosses != 1 {
+		t.Errorf("expected ConsecutiveLosses=1 after one loss, got %d", ctrl.snapshot.ConsecutiveLosses)
+	}
+
+	ctrl.RecordLoss()
+	ctrl.RecordLoss()
+	if ctrl.snapshot.ConsecutiveLosses != 3 {
+		t.Errorf("expected ConsecutiveLosses=3 after three losses, got %d", ctrl.snapshot.ConsecutiveLosses)
+	}
+}
+
+func TestRecordWin_ResetsCounter(t *testing.T) {
+	cfg := domain.DefaultCapitalPhaseConfig()
+	ctrl := NewCapitalPhaseController(cfg)
+
+	ctrl.RecordLoss()
+	ctrl.RecordLoss()
+	ctrl.RecordLoss()
+	if ctrl.snapshot.ConsecutiveLosses != 3 {
+		t.Fatalf("expected ConsecutiveLosses=3 after three losses, got %d", ctrl.snapshot.ConsecutiveLosses)
+	}
+
+	ctrl.RecordWin()
+	if ctrl.snapshot.ConsecutiveLosses != 0 {
+		t.Errorf("expected ConsecutiveLosses=0 after win, got %d", ctrl.snapshot.ConsecutiveLosses)
+	}
+}
+
+func TestRecordLoss_BlocksAdvance(t *testing.T) {
+	cfg := domain.DefaultCapitalPhaseConfig()
+	cfg.MinDaysPerPhase = 10
+	cfg.PhaseStartDate = time.Now().Add(-20 * 24 * time.Hour)
+	ctrl := NewCapitalPhaseController(cfg)
+	ctrl.UpdateMetrics(1.5, 0.05)
+
+	for i := 0; i < 4; i++ {
+		ctrl.RecordLoss()
+	}
+
+	can, _ := ctrl.CanAdvance()
+	if !can {
+		t.Error("expected CanAdvance=true with 4 consecutive losses (limit is 5)")
+	}
+
+	ctrl.RecordLoss()
+
+	can, reason := ctrl.CanAdvance()
+	if can {
+		t.Error("expected CanAdvance=false with 5 consecutive losses")
+	}
+	if reason == "" {
+		t.Error("expected a reason when cannot advance due to consecutive losses")
+	}
+}
+
+func TestRecordWin_AllowsRecovery(t *testing.T) {
+	cfg := domain.DefaultCapitalPhaseConfig()
+	cfg.MinDaysPerPhase = 10
+	cfg.PhaseStartDate = time.Now().Add(-20 * 24 * time.Hour)
+	ctrl := NewCapitalPhaseController(cfg)
+	ctrl.UpdateMetrics(1.5, 0.05)
+
+	for i := 0; i < 5; i++ {
+		ctrl.RecordLoss()
+	}
+
+	can, _ := ctrl.CanAdvance()
+	if can {
+		t.Error("expected CanAdvance=false with 5 consecutive losses")
+	}
+
+	ctrl.RecordWin()
+
+	can, _ = ctrl.CanAdvance()
+	if !can {
+		t.Error("expected CanAdvance=true after recovery (win resets counter)")
+	}
+}
+
 func TestNextPhase_Progression(t *testing.T) {
 	expectedOrder := []domain.CapitalPhase{
 		domain.PhaseSimulation,
