@@ -29,27 +29,18 @@ type PluginRegistry struct {
 	healthManager    *portfolio.AgentHealthManager
 }
 
-func NewPluginRegistry() *PluginRegistry {
+func NewPluginRegistry(loaders ...ExecutorLoader) *PluginRegistry {
+	loader := ExecutorLoader(StaticLoader{})
+	if len(loaders) > 0 {
+		loader = loaders[0]
+	}
+	regime, _ := loader.LoadRegimeExecutors()
+	agent, _ := loader.LoadAgentExecutors()
+	control, _ := loader.LoadControlExecutors()
 	return &PluginRegistry{
-		regimeExecutors: []RegimeExecutor{
-			TaiwanMacroRegimeExecutor{},
-			ForeignFlowRegimeExecutor{},
-		},
-		agentExecutors: []AgentExecutor{
-			SemiconductorExecutor{},
-			AISupplyChainExecutor{},
-			ETFRotationExecutor{},
-			FinancialsExecutor{},
-			ShippingExecutor{},
-			GrowthMomentumExecutor{},
-			ValueYieldExecutor{},
-			EarningsQualityExecutor{},
-			TechnicalBreakoutExecutor{},
-		},
-		controlExecutors: []ControlExecutor{
-			NewCRORiskExecutor(),
-			CIOPortfolioExecutor{},
-		},
+		regimeExecutors:  regime,
+		agentExecutors:   agent,
+		controlExecutors: control,
 	}
 }
 
