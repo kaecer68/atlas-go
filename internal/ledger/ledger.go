@@ -47,20 +47,24 @@ func (s *Store) RecordSessionOutcomes(session domain.ReplaySession, outcomes []d
 	}
 
 	path := filepath.Join(s.sessionDir(session.ID), "recommendation_outcomes.jsonl")
-	// Overwrite instead of append to avoid stale data accumulation when re-running sessions.
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	tmp := path + ".tmp"
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-
 	enc := json.NewEncoder(f)
 	for _, outcome := range outcomes {
 		if err := enc.Encode(outcome); err != nil {
+			f.Close()
+			os.Remove(tmp)
 			return err
 		}
 	}
-	return nil
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // LoadSessionOutcomes reads per-session recommendation outcomes from the session directory.

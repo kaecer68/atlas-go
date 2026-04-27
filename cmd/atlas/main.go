@@ -213,10 +213,10 @@ func run(args []string, deps appDeps) error {
 		runAutoBackfillOnStartup(cfg.WorkDir)
 		runAutoCapitalFlowFetchOnStartup(cfg.WorkDir)
 
-		// Start server in a goroutine so the main goroutine can handle signals.
+		srv := &http.Server{Addr: *apiAddr, Handler: mux}
 		srvErr := make(chan error, 1)
 		go func() {
-			if err := deps.listenAndServe(*apiAddr, mux); err != nil {
+			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				srvErr <- fmt.Errorf("dashboard api server failed: %w", err)
 			}
 		}()
@@ -224,12 +224,20 @@ func run(args []string, deps appDeps) error {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		select {
-		case sig := <-sigCh:
-			log.Printf("received %v, shutting down api server...", sig)
+		case <-sigCh:
+			log.Printf("received signal, shutting down api server...")
 		case err := <-srvErr:
 			return err
 		case <-deps.shutdown:
 			log.Printf("shutdown signal received, shutting down api server...")
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("api server graceful shutdown failed: %v", err)
+		} else {
+			log.Printf("api server stopped")
 		}
 		return nil
 	}
@@ -523,9 +531,10 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	}
 	mux.Handle("/", http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static"))))
 	apiAddr := ":8080"
+	srv := &http.Server{Addr: apiAddr, Handler: mux}
 	go func() {
 		log.Printf("dashboard api listening on %s", apiAddr)
-		if err := deps.listenAndServe(apiAddr, mux); err != nil {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Printf("dashboard api server failed: %v", err)
 		}
 	}()
@@ -542,7 +551,12 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	case <-sigCh:
 	case <-ctx.Done():
 	}
-	log.Println("shutting down live trading orchestrator...")
+	log.Println("shutting down...")
+	ctx2, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx2); err != nil {
+		log.Printf("dashboard api graceful shutdown failed: %v", err)
+	}
 	if err := o.Stop(); err != nil {
 		return fmt.Errorf("stop live orchestrator: %w", err)
 	}
