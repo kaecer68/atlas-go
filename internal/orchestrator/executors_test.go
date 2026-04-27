@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -31,10 +32,10 @@ func TestGrowthMomentumOverrideChangesRecommendations(t *testing.T) {
 	}
 	plugins := NewPluginRegistry()
 
-	baseline, _ := collectRecommendations(registry, quoteBySymbol, plugins, map[string]string{
+	baseline, _ := collectRecommendations(context.Background(), registry, quoteBySymbol, plugins, map[string]string{
 		"growth_momentum": "qualify candidates using trend persistence and volume confirmation",
 	}, domain.RegimeNeutral, "")
-	candidate, _ := collectRecommendations(registry, quoteBySymbol, plugins, map[string]string{
+	candidate, _ := collectRecommendations(context.Background(), registry, quoteBySymbol, plugins, map[string]string{
 		"growth_momentum": "require trend confirmation\ndowngrade conviction\nreject setups\n",
 	}, domain.RegimeNeutral, "")
 
@@ -105,10 +106,10 @@ func TestTechnicalBreakoutOverrideRejectsLowVolumeSetups(t *testing.T) {
 	}
 	plugins := NewPluginRegistry()
 
-	baseline, _ := collectRecommendations(registry, quoteBySymbol, plugins, map[string]string{
+	baseline, _ := collectRecommendations(context.Background(), registry, quoteBySymbol, plugins, map[string]string{
 		"technical_breakout": "require volume\nrequire close strength",
 	}, domain.RegimeNeutral, "")
-	candidate, _ := collectRecommendations(registry, quoteBySymbol, plugins, map[string]string{
+	candidate, _ := collectRecommendations(context.Background(), registry, quoteBySymbol, plugins, map[string]string{
 		"technical_breakout": "require volume\nrequire close strength\nreject low volume",
 	}, domain.RegimeNeutral, "")
 
@@ -187,7 +188,7 @@ func TestScreenerFiltersRecommendationsBeforeExecutor(t *testing.T) {
 	scr := screener.NewEngine(fe, fp)
 	plugins := NewPluginRegistry().WithScreener(scr)
 
-	recs, _ := collectRecommendations(registry, quotes, plugins, nil, domain.RegimeNeutral, "")
+	recs, _ := collectRecommendations(context.Background(), registry, quotes, plugins, nil, domain.RegimeNeutral, "")
 
 	if len(recs) != 1 {
 		t.Fatalf("expected 1 recommendation after screening, got %d", len(recs))
@@ -220,7 +221,7 @@ func TestScreenerAllowsAllWhenNoCriteriaSet(t *testing.T) {
 	scr := screener.NewEngine(fe, fp)
 	plugins := NewPluginRegistry().WithScreener(scr)
 
-	recs, _ := collectRecommendations(registry, quotes, plugins, nil, domain.RegimeNeutral, "")
+	recs, _ := collectRecommendations(context.Background(), registry, quotes, plugins, nil, domain.RegimeNeutral, "")
 
 	if len(recs) != 2 {
 		t.Fatalf("expected 2 recommendations when no screening criteria set, got %d", len(recs))
