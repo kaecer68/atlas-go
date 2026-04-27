@@ -82,11 +82,11 @@ func TestHybridProvider_Reset(t *testing.T) {
 			p := NewHybridProvider(tt.apiKey)
 			p.UseTWSE() // force TWSE
 			p.Reset()
-			if tt.wantTWSE && !p.useTWSE {
-				t.Error("expected useTWSE=true after Reset with no Fugle configured")
+			if tt.wantTWSE && !p.IsUsingTWSE() {
+				t.Error("expected IsUsingTWSE()=true after Reset with no Fugle configured")
 			}
-			if !tt.wantTWSE && p.useTWSE {
-				t.Error("expected useTWSE=false after Reset when Fugle is configured")
+			if !tt.wantTWSE && p.IsUsingTWSE() {
+				t.Error("expected IsUsingTWSE()=false after Reset when Fugle is configured")
 			}
 		})
 	}

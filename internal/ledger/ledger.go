@@ -150,7 +150,12 @@ func (s *Store) RecordSessionSummary(session domain.ReplaySession, summary domai
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, bytes, 0o644)
+
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, bytes, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 func (s *Store) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
@@ -189,7 +194,12 @@ func (s *Store) RecordWindowSummary(summary domain.BacktestWindowSummary) error 
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, bytes, 0o644)
+
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, bytes, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 func (s *Store) RecordMutationBrief(windowID string, brief domain.MutationBrief) error {
@@ -202,7 +212,12 @@ func (s *Store) RecordMutationBrief(windowID string, brief domain.MutationBrief)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, bytes, 0o644)
+
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, bytes, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // SpawnRecord captures the lifecycle audit trail for a spawned agent.
@@ -300,7 +315,12 @@ func (s *Store) RecordPromptExperimentResult(experimentID string, result domain.
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, bytes, 0o644)
+
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, bytes, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 func (s *Store) UpdatePromptExperimentResult(experimentID string, result domain.PromptExperimentResult) error {

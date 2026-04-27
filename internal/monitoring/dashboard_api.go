@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,7 +17,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -28,6 +26,14 @@ import (
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/live"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	apiexperiment "github.com/kaecer68/atlas-go/internal/monitoring/api/experiment"
+	apiindustry "github.com/kaecer68/atlas-go/internal/monitoring/api/industry"
+	apimacro "github.com/kaecer68/atlas-go/internal/monitoring/api/macro"
+	apicontrol "github.com/kaecer68/atlas-go/internal/monitoring/api/control"
+	apinarrative "github.com/kaecer68/atlas-go/internal/monitoring/api/narrative"
+	apibacktest "github.com/kaecer68/atlas-go/internal/monitoring/api/backtest"
+	apihealth "github.com/kaecer68/atlas-go/internal/monitoring/api/health"
+	apilive "github.com/kaecer68/atlas-go/internal/monitoring/api/live"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -107,80 +113,6 @@ type EquityCurvePoint struct {
 	Value float64 `json:"value"`
 }
 
-type PnLAttributionResponse struct {
-	SnapshotTime      time.Time           `json:"snapshot_time"`
-	SessionID         string              `json:"session_id"`
-	StartingValue     float64             `json:"starting_value"`
-	CurrentValue      float64             `json:"current_value"`
-	CumulativePnL     float64             `json:"cumulative_pnl"`
-	CumulativeRetPct  float64             `json:"cumulative_return_pct"`
-	AgentAttribution  []AgentAttribution  `json:"agent_attribution"`
-	SectorAttribution []SectorAttribution `json:"sector_attribution"`
-	FactorAttribution FactorAttribution   `json:"factor_attribution"`
-	SymbolAttribution []SymbolAttribution `json:"symbol_attribution"`
-}
-
-type AgentAttribution struct {
-	AgentID     string  `json:"agent_id"`
-	AgentName   string  `json:"agent_name"`
-	Layer       string  `json:"layer"`
-	TotalReturn float64 `json:"total_return"`
-	Count       int     `json:"count"`
-	AvgReturn   float64 `json:"avg_return"`
-}
-
-type SectorAttribution struct {
-	Sector      string  `json:"sector"`
-	SectorLabel string  `json:"sector_label"`
-	TotalReturn float64 `json:"total_return"`
-	Count       int     `json:"count"`
-	AvgReturn   float64 `json:"avg_return"`
-}
-
-type FactorAttribution struct {
-	Momentum FactorDetail `json:"momentum"`
-	Value    FactorDetail `json:"value"`
-	Quality  FactorDetail `json:"quality"`
-	Agent    FactorDetail `json:"agent"`
-	Total    FactorDetail `json:"total"`
-}
-
-type FactorDetail struct {
-	AvgScore     float64 `json:"avg_score"`
-	AvgReturn    float64 `json:"avg_return"`
-	Contribution float64 `json:"contribution"`
-}
-
-type SymbolAttribution struct {
-	Symbol      string  `json:"symbol"`
-	TotalReturn float64 `json:"total_return"`
-	Count       int     `json:"count"`
-	AvgReturn   float64 `json:"avg_return"`
-	Side        string  `json:"side"`
-}
-
-type RiskExposureResponse struct {
-	SnapshotTime     time.Time               `json:"snapshot_time"`
-	VaR95            float64                 `json:"var_95"`
-	VaR99            float64                 `json:"var_99"`
-	CVaR95           float64                 `json:"cvar_95"`
-	MaxDrawdownPct   float64                 `json:"max_drawdown_pct"`
-	PortfolioValue   float64                 `json:"portfolio_value"`
-	CashRatio        float64                 `json:"cash_ratio"`
-	PositionCount    int                     `json:"position_count"`
-	SectorExposure   []SectorExposure        `json:"sector_exposure"`
-	FactorExposure   FactorExposureInline    `json:"factor_exposure"`
-	Concentration    []PositionConcentration `json:"concentration"`
-	DataPoints       int                     `json:"data_points"`
-	InsufficientData bool                    `json:"insufficient_data"`
-}
-
-type PositionConcentration struct {
-	Symbol      string  `json:"symbol"`
-	MarketValue float64 `json:"market_value"`
-	Weight      float64 `json:"weight"`
-}
-
 type ForecastVsRealityItem struct {
 	ExperimentID   string                  `json:"experiment_id"`
 	ProposalID     string                  `json:"proposal_id"`
@@ -244,13 +176,14 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/macro-radar", a.handleMacroRadar)
 	mux.HandleFunc("/api/dashboard/agent-observatory", a.handleAgentObservatory)
 	mux.HandleFunc("/api/dashboard/forecast-vs-reality", a.handleForecastVsReality)
-	mux.HandleFunc("/api/dashboard/experiment-inbox", a.handleExperimentInbox)
+
 	mux.HandleFunc("/api/dashboard/system-health", a.handleSystemHealth)
 	mux.HandleFunc("/api/dashboard/recommendation-pipeline", a.handleRecommendationPipeline)
 	mux.HandleFunc("/api/dashboard/universe-overlap", a.handleUniverseOverlap)
 	mux.HandleFunc("/api/dashboard/data-channels", a.handleDataChannels)
 	mux.HandleFunc("/api/channels/ingest", a.handleChannelsIngest)
-	mux.HandleFunc("/health", a.handleHealth)
+	handlers := &apihealth.Handlers{}
+	handlers.RegisterRoutes(mux)
 	mux.HandleFunc("/api/dashboard/sessions", a.handleSessions)
 	mux.HandleFunc("/api/report/latest", a.handleLatestReport)
 	mux.HandleFunc("/api/report/list", a.handleReportList)
@@ -265,15 +198,14 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (a *DashboardAPI) RegisterIndustryRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/industry/classification", a.handleIndustryClassification)
-	mux.HandleFunc("/api/industry/seasonality", a.handleIndustrySeasonality)
-	mux.HandleFunc("/api/industry/seasonality/calendar", a.handleIndustrySeasonalityCalendar)
-	mux.HandleFunc("/api/industry/cycle", a.handleIndustryCycle)
-	mux.HandleFunc("/api/industry/linkage", a.handleIndustryLinkage)
-	mux.HandleFunc("/api/industry/risk", a.handleIndustryRisk)
-	mux.HandleFunc("/api/industry/overview", a.handleIndustryOverview)
-	mux.HandleFunc("/api/industry/shock-simulation", a.handleShockSimulation)
-	mux.HandleFunc("/api/industry/graph", a.handleIndustryGraph)
+	handlers := &apiindustry.Handlers{
+		Classifier:      a.industryClassifier,
+		SeasonalEngine:  a.seasonalEngine,
+		CycleTracker:    a.cycleTracker,
+		LinkageAnalyzer: a.linkageAnalyzer,
+		RiskMonitor:     a.riskMonitor,
+	}
+	handlers.RegisterRoutes(mux)
 }
 
 // RegisterSwaggerRoutes mounts Swagger UI and the OpenAPI spec.
@@ -282,35 +214,32 @@ func (a *DashboardAPI) RegisterSwaggerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/docs/swagger.json", a.handleSwaggerJSON)
 }
 
-// RegisterNarrativeRoutes mounts narrative analysis endpoints and the narrative dashboard.
 func (a *DashboardAPI) RegisterNarrativeRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/narrative/events", a.handleNarrativeEvents)
-	mux.HandleFunc("/api/narrative/chains", a.handleNarrativeChains)
-	mux.HandleFunc("/api/narrative/models", a.handleNarrativeModels)
-	mux.HandleFunc("/api/narrative/templates", a.handleNarrativeTemplates)
-	mux.HandleFunc("/api/narrative/seasonal", a.handleSeasonalAnalysis)
+	handlers := &apinarrative.Handlers{
+		WorkDir:         a.workDir,
+		NarrativeEngine: a.narrativeEngine,
+		ReportGenerator: a.reportGenerator,
+	}
+	handlers.RegisterRoutes(mux)
 }
 
-// RegisterControlRoutes mounts human intervention control endpoints.
 func (a *DashboardAPI) RegisterControlRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/control/pause-agent", a.handlePauseAgent)
-	mux.HandleFunc("/api/control/resume-agent", a.handleResumeAgent)
-	mux.HandleFunc("/api/control/set-model-weight", a.handleSetModelWeight)
-	mux.HandleFunc("/api/control/sector-ban", a.handleSectorBan)
-	mux.HandleFunc("/api/control/approve-recommendation", a.handleApproveRecommendation)
-	mux.HandleFunc("/api/control/reject-recommendation", a.handleRejectRecommendation)
-	mux.HandleFunc("/api/control/audit-log", a.handleAuditLog)
-	mux.HandleFunc("/api/control/active-overrides", a.handleActiveOverrides)
-	mux.HandleFunc("/api/agents/health", a.handleAgentHealth)
+	handlers := &apicontrol.Handlers{
+		WorkDir:       a.workDir,
+		LedgerDir:     a.ledgerDir,
+		HealthManager: a.healthManager,
+	}
+	handlers.RegisterRoutes(mux)
 }
 
 // RegisterMacroRoutes mounts macro data snapshot endpoints.
 func (a *DashboardAPI) RegisterMacroRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/macro/ingest", a.handleMacroIngest)
-	mux.HandleFunc("/api/macro/snapshot/latest", a.handleMacroSnapshotLatest)
-	mux.HandleFunc("/api/macro/snapshot/history", a.handleMacroSnapshotHistory)
-	mux.HandleFunc("/api/macro/capital-flow/latest", a.handleCapitalFlowLatest)
-	mux.HandleFunc("/api/taiwan/stress-index", a.handleTaiwanStressIndex)
+	handlers := &apimacro.Handlers{
+		WorkDir:          a.workDir,
+		MacroIngestor:    a.macroIngestor,
+		TaiwanStressCalc: a.taiwanStressCalc,
+	}
+	handlers.RegisterRoutes(mux)
 }
 
 // RegisterPhase3Routes mounts Phase 3 advanced systems observability endpoints.
@@ -321,23 +250,27 @@ func (a *DashboardAPI) RegisterPhase3Routes(mux *http.ServeMux) {
 func (a *DashboardAPI) RegisterLiveRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/live-status", a.handleLiveStatus)
 	mux.HandleFunc("/api/dashboard/portfolio-state", a.handlePortfolioState)
-	mux.HandleFunc("/api/dashboard/pnl-attribution", a.handlePnLAttribution)
-	mux.HandleFunc("/api/dashboard/risk-exposure", a.handleRiskExposure)
+	handlers := &apilive.Handlers{
+		LedgerDir: a.ledgerDir,
+		WorkDir:   a.workDir,
+	}
+	handlers.RegisterRoutes(mux)
 }
 
 // RegisterExperimentRoutes mounts experiment lifecycle endpoints.
 func (a *DashboardAPI) RegisterExperimentRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/experiment/promote", a.handleExperimentPromote)
-	mux.HandleFunc("/api/experiment/revert", a.handleExperimentRevert)
-	mux.HandleFunc("/api/experiment/history", a.handleExperimentHistory)
-	mux.HandleFunc("/api/experiment/judge", a.handleJudgeExperiment)
-	mux.HandleFunc("/api/experiment/diff", a.handleExperimentDiff)
+	handlers := &apiexperiment.Handlers{
+		BaselinePath: a.baselinePath,
+		LedgerDir:    a.ledgerDir,
+		WorkDir:      a.workDir,
+	}
+	handlers.RegisterRoutes(mux)
 }
 
 // RegisterBacktestRoutes mounts backtest execution endpoints.
 func (a *DashboardAPI) RegisterBacktestRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/backtest/run", a.handleBacktestRun)
-	mux.HandleFunc("/api/backtest/status", a.handleBacktestStatus)
+	handlers := &apibacktest.Handlers{}
+	handlers.RegisterRoutes(mux)
 }
 
 // SetPool injects an optional database pool for DB-backed channel health.
@@ -529,7 +462,7 @@ func (a *DashboardAPI) handlePnLAttribution(w http.ResponseWriter, r *http.Reque
 		agentMap[oc.AgentID].TotalReturn += oc.ForwardReturn
 		agentMap[oc.AgentID].Count++
 
-		sector := getSymbolSector(oc.Symbol, symSectorMap)
+		sector := GetSymbolSector(oc.Symbol, symSectorMap)
 		if sectorMap[sector] == nil {
 			sectorMap[sector] = &SectorAttribution{Sector: sector, SectorLabel: sectorLabelMap[sector]}
 		}
@@ -683,7 +616,7 @@ func (a *DashboardAPI) handleRiskExposure(w http.ResponseWriter, r *http.Request
 
 	outcomes, _ := a.loadRecommendationOutcomes("")
 	symSectorMap := a.buildSymbolSectorMap()
-	sectorWeights, factorExp := computeSectorFactorExposure(outcomes, portfolioValue, symSectorMap)
+	sectorWeights, factorExp := ComputeSectorFactorExposure(outcomes, portfolioValue, symSectorMap)
 
 	var concentration []PositionConcentration
 	posList := make([]domain.Position, 0, len(positions))
@@ -778,92 +711,6 @@ func (a *DashboardAPI) buildSymbolSectorMap() map[string]string {
 		}
 	}
 	return m
-}
-
-func getSymbolSector(symbol string, symMap map[string]string) string {
-	if s, ok := symMap[symbol]; ok {
-		return s
-	}
-	return "other"
-}
-
-func computeSectorFactorExposure(outcomes []domain.RecommendationOutcome, portfolioValue float64, symSectorMap map[string]string) ([]SectorExposure, FactorExposureInline) {
-	sectorLabelMap := map[string]string{
-		"semiconductor":   "半導體",
-		"ai_supply_chain": "AI供應鏈",
-		"robotics":        "機器人",
-		"financials":      "金融",
-		"shipping":        "航運",
-		"energy":          "能源",
-		"electronics":     "電子",
-		"consumer":        "消費",
-		"industrial":      "工業",
-		"other":           "其他",
-	}
-
-	type secAgg struct {
-		count                        int
-		absReturn                    float64
-		avgM, avgV, avgQ, avgA, avgT float64
-	}
-	secMap := make(map[string]*secAgg)
-
-	var totalM, totalV, totalQ, totalA, totalT float64
-	var totalAbsReturn float64
-	var cnt int
-
-	for _, oc := range outcomes {
-		if !oc.PassedGuards || oc.Symbol == "" {
-			continue
-		}
-		sec := getSymbolSector(oc.Symbol, symSectorMap)
-		if secMap[sec] == nil {
-			secMap[sec] = &secAgg{}
-		}
-		s := secMap[sec]
-		s.count++
-		s.absReturn += math.Abs(oc.ForwardReturn)
-		totalAbsReturn += math.Abs(oc.ForwardReturn)
-		s.avgM += oc.FactorScores.Momentum
-		s.avgV += oc.FactorScores.Value
-		s.avgQ += oc.FactorScores.Quality
-		s.avgA += oc.FactorScores.Agent
-		s.avgT += oc.FactorScores.Total
-
-		totalM += oc.FactorScores.Momentum
-		totalV += oc.FactorScores.Value
-		totalQ += oc.FactorScores.Quality
-		totalA += oc.FactorScores.Agent
-		totalT += oc.FactorScores.Total
-		cnt++
-	}
-
-	var sectorExp []SectorExposure
-	for sec, s := range secMap {
-		weight := 0.0
-		if totalAbsReturn > 0 {
-			weight = s.absReturn / totalAbsReturn
-		}
-		sectorExp = append(sectorExp, SectorExposure{
-			Sector:      sec,
-			SectorLabel: sectorLabelMap[sec],
-			Weight:      weight,
-			EstValue:    weight * portfolioValue,
-		})
-	}
-
-	var fe FactorExposureInline
-	if cnt > 0 {
-		fe = FactorExposureInline{
-			Momentum: totalM / float64(cnt),
-			Value:    totalV / float64(cnt),
-			Quality:  totalQ / float64(cnt),
-			Agent:    totalA / float64(cnt),
-			Total:    totalT / float64(cnt),
-		}
-	}
-
-	return sectorExp, fe
 }
 
 // buildEquityCurve constructs an equity curve from all session summaries,
@@ -1047,24 +894,6 @@ func (a *DashboardAPI) handleExperimentRevert(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, result)
 }
 
-func promotionHistoryToAPI(history []baseline.PromotionRecordWithVersion) []map[string]any {
-	result := make([]map[string]any, len(history))
-	for i, h := range history {
-		result[i] = map[string]any{
-			"experiment_id":   h.ExperimentID,
-			"target_agent_id": h.TargetAgentID,
-			"target_skill":    h.TargetSkill,
-			"mutation_type":   h.MutationType,
-			"candidate_path":  h.CandidatePath,
-			"promoted_at":     h.PromotedAt,
-			"status":          h.Status,
-			"version_after":   h.VersionAfter,
-			"version":         h.Version,
-		}
-	}
-	return result
-}
-
 func (a *DashboardAPI) handleExperimentHistory(w http.ResponseWriter, r *http.Request) {
 	mgr := baseline.NewManager(a.baselinePath)
 	history, err := mgr.GetPromotionHistory()
@@ -1072,7 +901,7 @@ func (a *DashboardAPI) handleExperimentHistory(w http.ResponseWriter, r *http.Re
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load history: %v", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"history": promotionHistoryToAPI(history)})
+	writeJSON(w, http.StatusOK, map[string]any{"history": PromotionHistoryToAPI(history)})
 }
 
 func (a *DashboardAPI) handlePhase3Status(w http.ResponseWriter, r *http.Request) {
@@ -1594,382 +1423,6 @@ func (a *DashboardAPI) handleLatestReport(w http.ResponseWriter, r *http.Request
 	_, _ = w.Write(content)
 }
 
-func (a *DashboardAPI) handleNarrativeEvents(w http.ResponseWriter, r *http.Request) {
-	data := narrative.MarketNarrativeData{
-		US10YChangeBps:                parseFloatQuery(r, "us10y_change_bps", 15),
-		DXYChangePct:                  parseFloatQuery(r, "dxy_change_pct", 2.0),
-		VIXLevel:                      parseFloatQuery(r, "vix_level", 30),
-		USD_TWD_ChangePct:             parseFloatQuery(r, "usd_twd_change_pct", 0),
-		OilChangePct:                  parseFloatQuery(r, "oil_change_pct", 6.0),
-		GoldChangePct:                 parseFloatQuery(r, "gold_change_pct", 2.5),
-		JPY_ChangePct:                 parseFloatQuery(r, "jpy_change_pct", 3.0),
-		AICapexSentiment:              parseFloatQuery(r, "ai_capex_sentiment", 0.8),
-		GeopoliticalGPR:               parseFloatQuery(r, "geopolitical_gpr", 160),
-		RetailInstitutionalDivergence: parseFloatQuery(r, "retail_divergence", 0),
-		MarginZScore:                  parseFloatQuery(r, "margin_zscore", 0),
-	}
-	events := a.narrativeEngine.DetectEvents(data)
-	writeJSON(w, http.StatusOK, map[string]any{"events": events})
-}
-
-func (a *DashboardAPI) handleNarrativeChains(w http.ResponseWriter, r *http.Request) {
-	data := narrative.MarketNarrativeData{
-		US10YChangeBps:    parseFloatQuery(r, "us10y_change_bps", 15),
-		DXYChangePct:      parseFloatQuery(r, "dxy_change_pct", 2.0),
-		VIXLevel:          parseFloatQuery(r, "vix_level", 30),
-		USD_TWD_ChangePct: parseFloatQuery(r, "usd_twd_change_pct", 0),
-		OilChangePct:      parseFloatQuery(r, "oil_change_pct", 6.0),
-		GoldChangePct:     parseFloatQuery(r, "gold_change_pct", 2.5),
-		JPY_ChangePct:     parseFloatQuery(r, "jpy_change_pct", 3.0),
-		AICapexSentiment:  parseFloatQuery(r, "ai_capex_sentiment", 0.8),
-		GeopoliticalGPR:   parseFloatQuery(r, "geopolitical_gpr", 160),
-	}
-	events := a.narrativeEngine.DetectEvents(data)
-	chains := a.narrativeEngine.MatchChains(events)
-	writeJSON(w, http.StatusOK, map[string]any{"chains": chains})
-}
-
-func (a *DashboardAPI) handleNarrativeModels(w http.ResponseWriter, r *http.Request) {
-	data := narrative.MarketNarrativeData{
-		US10YChangeBps:    parseFloatQuery(r, "us10y_change_bps", 15),
-		DXYChangePct:      parseFloatQuery(r, "dxy_change_pct", 2.0),
-		VIXLevel:          parseFloatQuery(r, "vix_level", 30),
-		USD_TWD_ChangePct: parseFloatQuery(r, "usd_twd_change_pct", 0),
-		OilChangePct:      parseFloatQuery(r, "oil_change_pct", 6.0),
-		GoldChangePct:     parseFloatQuery(r, "gold_change_pct", 2.5),
-		JPY_ChangePct:     parseFloatQuery(r, "jpy_change_pct", 3.0),
-		AICapexSentiment:  parseFloatQuery(r, "ai_capex_sentiment", 0.8),
-		GeopoliticalGPR:   parseFloatQuery(r, "geopolitical_gpr", 160),
-	}
-	events := a.narrativeEngine.DetectEvents(data)
-	themes := make([]string, len(events))
-	for i, e := range events {
-		themes[i] = e.Theme
-	}
-
-	// Evaluate model prediction errors against replay data so weights are live.
-	replayPath := filepath.Join(a.workDir, "data/replay/tw_extended_90days.csv")
-	if err := a.narrativeEngine.EvaluateModels(replayPath); err != nil {
-		log.Printf("[DashboardAPI] EvaluateModels warning: %v", err)
-	}
-
-	models := a.narrativeEngine.ActiveModels(themes)
-	writeJSON(w, http.StatusOK, map[string]any{"models": models})
-}
-
-func (a *DashboardAPI) handleNarrativeTemplates(w http.ResponseWriter, r *http.Request) {
-	kb := narrative.NewKnowledgeBase()
-	templates := kb.ListTemplates()
-	writeJSON(w, http.StatusOK, map[string]any{"templates": templates})
-}
-
-func (a *DashboardAPI) handlePauseAgent(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	var req struct {
-		AgentID  string `json:"agent_id"`
-		Reason   string `json:"reason"`
-		Operator string `json:"operator"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
-	if req.AgentID == "" {
-		writeJSONError(w, http.StatusBadRequest, "agent_id required")
-		return
-	}
-	store := ledger.NewStore(a.ledgerDir)
-	intervention := domain.HumanIntervention{
-		ID:            fmt.Sprintf("int-pause-%s-%d", req.AgentID, time.Now().UnixNano()),
-		Type:          "pause_agent",
-		TargetAgentID: req.AgentID,
-		Reason:        req.Reason,
-		Operator:      req.Operator,
-		RecordedAt:    time.Now().UTC(),
-	}
-	if err := store.RecordHumanIntervention(intervention); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "intervention": intervention})
-}
-
-func (a *DashboardAPI) handleResumeAgent(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	var req struct {
-		AgentID  string `json:"agent_id"`
-		Reason   string `json:"reason"`
-		Operator string `json:"operator"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
-	if req.AgentID == "" {
-		writeJSONError(w, http.StatusBadRequest, "agent_id required")
-		return
-	}
-	store := ledger.NewStore(a.ledgerDir)
-	intervention := domain.HumanIntervention{
-		ID:            fmt.Sprintf("int-resume-%s-%d", req.AgentID, time.Now().UnixNano()),
-		Type:          "resume_agent",
-		TargetAgentID: req.AgentID,
-		Reason:        req.Reason,
-		Operator:      req.Operator,
-		RecordedAt:    time.Now().UTC(),
-	}
-	if err := store.RecordHumanIntervention(intervention); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "intervention": intervention})
-}
-
-func (a *DashboardAPI) handleAgentHealth(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	if a.healthManager == nil {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"agents":      []*portfolio.AgentHealth{},
-			"total":       0,
-			"muted_count": 0,
-		})
-		return
-	}
-
-	registryPath := filepath.Join(a.workDir, "configs/agents.json")
-	registry, err := orchestrator.LoadRegistry(registryPath)
-	if err != nil {
-		registry = orchestrator.SeedRegistry()
-	}
-
-	agents := make([]*portfolio.AgentHealth, 0)
-	mutedCount := 0
-
-	for _, agent := range registry.Agents {
-		if !agent.Enabled {
-			continue
-		}
-		h := a.healthManager.GetHealth(agent.ID)
-		if h == nil {
-			h = &portfolio.AgentHealth{
-				AgentID: agent.ID,
-				Status:  portfolio.HealthStatusHealthy,
-			}
-		}
-		agents = append(agents, h)
-		if h.Status == portfolio.HealthStatusMuted {
-			mutedCount++
-		}
-	}
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"agents":      agents,
-		"total":       len(agents),
-		"muted_count": mutedCount,
-	})
-}
-
-func (a *DashboardAPI) handleSetModelWeight(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	var req struct {
-		ModelID  string  `json:"model_id"`
-		Weight   float64 `json:"weight"`
-		Reason   string  `json:"reason"`
-		Operator string  `json:"operator"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
-	if req.ModelID == "" {
-		writeJSONError(w, http.StatusBadRequest, "model_id required")
-		return
-	}
-	store := ledger.NewStore(a.ledgerDir)
-	intervention := domain.HumanIntervention{
-		ID:            fmt.Sprintf("int-model-%s-%d", req.ModelID, time.Now().UnixNano()),
-		Type:          "set_model_weight",
-		TargetModelID: req.ModelID,
-		Value:         req.Weight,
-		Reason:        req.Reason,
-		Operator:      req.Operator,
-		RecordedAt:    time.Now().UTC(),
-	}
-	if err := store.RecordHumanIntervention(intervention); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "intervention": intervention})
-}
-
-func (a *DashboardAPI) handleSectorBan(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	var req struct {
-		Sector   string `json:"sector"`
-		Banned   bool   `json:"banned"`
-		Reason   string `json:"reason"`
-		Operator string `json:"operator"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
-	if req.Sector == "" {
-		writeJSONError(w, http.StatusBadRequest, "sector required")
-		return
-	}
-	store := ledger.NewStore(a.ledgerDir)
-	interventionType := "sector_unban"
-	if req.Banned {
-		interventionType = "sector_ban"
-	}
-	intervention := domain.HumanIntervention{
-		ID:           fmt.Sprintf("int-sector-%s-%d", req.Sector, time.Now().UnixNano()),
-		Type:         interventionType,
-		TargetSector: req.Sector,
-		Reason:       req.Reason,
-		Operator:     req.Operator,
-		RecordedAt:   time.Now().UTC(),
-	}
-	if err := store.RecordHumanIntervention(intervention); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "intervention": intervention})
-}
-
-func (a *DashboardAPI) handleApproveRecommendation(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	var req struct {
-		Symbol   string `json:"symbol"`
-		AgentID  string `json:"agent_id"`
-		Reason   string `json:"reason"`
-		Operator string `json:"operator"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
-	store := ledger.NewStore(a.ledgerDir)
-	intervention := domain.HumanIntervention{
-		ID:            fmt.Sprintf("int-approve-%s-%d", req.Symbol, time.Now().UnixNano()),
-		Type:          "approve_rec",
-		TargetSymbol:  req.Symbol,
-		TargetAgentID: req.AgentID,
-		Reason:        req.Reason,
-		Operator:      req.Operator,
-		RecordedAt:    time.Now().UTC(),
-	}
-	if err := store.RecordHumanIntervention(intervention); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "intervention": intervention})
-}
-
-func (a *DashboardAPI) handleRejectRecommendation(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	var req struct {
-		Symbol   string `json:"symbol"`
-		AgentID  string `json:"agent_id"`
-		Reason   string `json:"reason"`
-		Operator string `json:"operator"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
-	store := ledger.NewStore(a.ledgerDir)
-	intervention := domain.HumanIntervention{
-		ID:            fmt.Sprintf("int-reject-%s-%d", req.Symbol, time.Now().UnixNano()),
-		Type:          "reject_rec",
-		TargetSymbol:  req.Symbol,
-		TargetAgentID: req.AgentID,
-		Reason:        req.Reason,
-		Operator:      req.Operator,
-		RecordedAt:    time.Now().UTC(),
-	}
-	if err := store.RecordHumanIntervention(intervention); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "intervention": intervention})
-}
-
-func (a *DashboardAPI) handleAuditLog(w http.ResponseWriter, r *http.Request) {
-	store := ledger.NewStore(a.ledgerDir)
-	interventions, err := store.LoadHumanInterventions()
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load interventions: %v", err))
-		return
-	}
-	// Reverse to show newest first.
-	slices.Reverse(interventions)
-	writeJSON(w, http.StatusOK, map[string]any{"interventions": interventions})
-}
-
-func (a *DashboardAPI) handleActiveOverrides(w http.ResponseWriter, r *http.Request) {
-	store := ledger.NewStore(a.ledgerDir)
-	interventions, err := store.LoadHumanInterventions()
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load interventions: %v", err))
-		return
-	}
-
-	pausedAgents := make(map[string]bool)
-	bannedSectors := make(map[string]bool)
-	modelWeights := make(map[string]float64)
-
-	for _, iv := range interventions {
-		switch iv.Type {
-		case "pause_agent":
-			pausedAgents[iv.TargetAgentID] = true
-		case "resume_agent":
-			delete(pausedAgents, iv.TargetAgentID)
-		case "sector_ban":
-			bannedSectors[iv.TargetSector] = true
-		case "sector_unban":
-			delete(bannedSectors, iv.TargetSector)
-		case "set_model_weight":
-			modelWeights[iv.TargetModelID] = iv.Value
-		default:
-			// Ignore unknown intervention types.
-		}
-	}
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"paused_agents":  mapKeys(pausedAgents),
-		"banned_sectors": mapKeys(bannedSectors),
-		"model_weights":  modelWeights,
-	})
-}
-
-func (a *DashboardAPI) handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-}
-
 func (a *DashboardAPI) handleDailySummary(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -2146,27 +1599,6 @@ func (a *DashboardAPI) loadRecommendationsForDate(date string) []domain.Recommen
 	}
 
 	return nil
-}
-
-func (a *DashboardAPI) handleMacroIngest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	events, snap, err := a.macroIngestor.Ingest(r.Context())
-	stateDir := filepath.Join(a.workDir, "data/state")
-	if err != nil {
-		NewChannelHealthStoreWithPool(stateDir, a.pool).Record("us_yahoo", "error", err.Error())
-		NewChannelHealthStoreWithPool(stateDir, a.pool).Record("jpy_yahoo", "error", err.Error())
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("ingest failed: %v", err))
-		return
-	}
-	NewChannelHealthStoreWithPool(stateDir, a.pool).Record("us_yahoo", "ok", "")
-	NewChannelHealthStoreWithPool(stateDir, a.pool).Record("jpy_yahoo", "ok", "")
-	writeJSON(w, http.StatusOK, map[string]any{
-		"events":   events,
-		"snapshot": snap,
-	})
 }
 
 func (a *DashboardAPI) handleChannelsIngest(w http.ResponseWriter, r *http.Request) {
@@ -2470,28 +1902,6 @@ func (a *DashboardAPI) handleTaiwanStressIndex(w http.ResponseWriter, r *http.Re
 }
 
 // ExperimentInboxItem represents a single experiment in the inbox.
-type ExperimentInboxItem struct {
-	ExperimentID    string                  `json:"experiment_id"`
-	TargetAgentID   string                  `json:"target_agent_id"`
-	Skill           string                  `json:"skill"`
-	MutationType    string                  `json:"mutation_type"`
-	MutationSummary string                  `json:"mutation_summary,omitempty"`
-	Status          domain.ExperimentStatus `json:"status"`
-	BaselineValue   float64                 `json:"baseline_value"`
-	CandidateValue  float64                 `json:"candidate_value"`
-	CandidatePath   string                  `json:"candidate_path"`
-	RejectReason    string                  `json:"reject_reason,omitempty"`
-	RecordedAt      time.Time               `json:"recorded_at"`
-}
-
-// ExperimentInboxResponse groups experiments by actionable state.
-type ExperimentInboxResponse struct {
-	PendingJudges   []ExperimentInboxItem `json:"pending_judges"`
-	PendingPromotes []ExperimentInboxItem `json:"pending_promotes"`
-	RecentHistory   []ExperimentInboxItem `json:"recent_history"`
-	BaselineVersion int                   `json:"baseline_version"`
-}
-
 func (a *DashboardAPI) handleExperimentInbox(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -2549,7 +1959,7 @@ func (a *DashboardAPI) handleExperimentInbox(w http.ResponseWriter, r *http.Requ
 			TargetAgentID:   result.Experiment.TargetAgentID,
 			Skill:           result.Experiment.Skill,
 			MutationType:    result.Experiment.MutationType,
-			MutationSummary: buildMutationSummary(policy, result),
+			MutationSummary: BuildMutationSummary(policy, result),
 			Status:          result.Experiment.Status,
 			BaselineValue:   result.Experiment.BaselineValue,
 			CandidateValue:  result.Experiment.CandidateValue,
@@ -2702,99 +2112,6 @@ func (a *DashboardAPI) handleExperimentDiff(w http.ResponseWriter, r *http.Reque
 		"target_agent_id":  result.Experiment.TargetAgentID,
 		"skill":            result.Experiment.Skill,
 	})
-}
-
-func (a *DashboardAPI) handleBacktestRun(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	var req struct {
-		Start string `json:"start"`
-		End   string `json:"end"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
-	if req.Start == "" || req.End == "" {
-		writeJSONError(w, http.StatusBadRequest, "start and end dates required")
-		return
-	}
-	startDate, err := time.Parse("2006-01-02", req.Start)
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid start date format (YYYY-MM-DD)")
-		return
-	}
-	endDate, err := time.Parse("2006-01-02", req.End)
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid end date format (YYYY-MM-DD)")
-		return
-	}
-
-	a.backtestMu.Lock()
-	if a.backtestRunning {
-		a.backtestMu.Unlock()
-		writeJSONError(w, http.StatusConflict, "backtest already running")
-		return
-	}
-	a.backtestRunning = true
-	a.backtestStatus = map[string]interface{}{
-		"running":    true,
-		"started_at": time.Now().UTC(),
-		"start":      req.Start,
-		"end":        req.End,
-	}
-	a.backtestMu.Unlock()
-
-	go func() {
-		cfg := config.Load()
-		if cfg.ReplayDataPath == "samples/replay/twse_stock_day_all_sample.csv" {
-			cfg.ReplayDataPath = "data/replay/tw_extended_90days.csv"
-		}
-		runner := backtest.NewRunner(cfg)
-		summary, err := runner.Run(startDate, endDate)
-		if err == nil {
-			if rerr := runner.GenerateReport(summary); rerr != nil {
-				log.Printf("[DashboardAPI] backtest report generation failed: %v", rerr)
-			}
-		}
-
-		a.backtestMu.Lock()
-		a.backtestRunning = false
-		a.backtestStatus["running"] = false
-		a.backtestStatus["finished_at"] = time.Now().UTC()
-		if err != nil {
-			a.backtestStatus["error"] = err.Error()
-		} else {
-			a.backtestStatus["window_id"] = summary.WindowID
-			a.backtestStatus["sessions"] = summary.SessionCount
-			a.backtestStatus["outcomes"] = summary.OutcomeCount
-			a.backtestStatus["worst_agent"] = summary.WorstAgentID
-		}
-		a.backtestMu.Unlock()
-	}()
-
-	writeJSON(w, http.StatusAccepted, map[string]interface{}{
-		"running":      true,
-		"check_status": "/api/backtest/status",
-		"start":        req.Start,
-		"end":          req.End,
-	})
-}
-
-func (a *DashboardAPI) handleBacktestStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	a.backtestMu.Lock()
-	status := make(map[string]interface{}, len(a.backtestStatus))
-	for k, v := range a.backtestStatus {
-		status[k] = v
-	}
-	a.backtestMu.Unlock()
-	writeJSON(w, http.StatusOK, status)
 }
 
 // SystemHealthResponse exposes config consistency and freshness.
@@ -3997,474 +3314,6 @@ func (a *DashboardAPI) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func (a *DashboardAPI) handleIndustryClassification(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	tree := a.industryClassifier
-	segments := tree.GetAllSegments()
-
-	var result []map[string]interface{}
-	for _, seg := range segments {
-		if seg.ParentID == "" {
-			children := tree.GetChildren(seg.ID)
-			var childList []map[string]interface{}
-			for _, child := range children {
-				grandchildren := tree.GetChildren(child.ID)
-				var grandchildList []map[string]interface{}
-				for _, gc := range grandchildren {
-					grandchildList = append(grandchildList, map[string]interface{}{
-						"id":          gc.ID,
-						"name":        gc.Name,
-						"weight":      gc.Weight,
-						"description": gc.Description,
-					})
-				}
-				childList = append(childList, map[string]interface{}{
-					"id":          child.ID,
-					"name":        child.Name,
-					"weight":      child.Weight,
-					"description": child.Description,
-					"children":    grandchildList,
-				})
-			}
-			result = append(result, map[string]interface{}{
-				"id":          seg.ID,
-				"name":        seg.Name,
-				"weight":      seg.Weight,
-				"description": seg.Description,
-				"children":    childList,
-			})
-		}
-	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"industries": result,
-		"count":      len(result),
-	})
-}
-
-func (a *DashboardAPI) handleIndustrySeasonality(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	industryID := r.URL.Query().Get("industry")
-	now := time.Now()
-
-	patterns := a.seasonalEngine.DetectCurrentPatterns(now)
-	var activePatterns []map[string]interface{}
-	for _, p := range patterns {
-		if industryID == "" || p.IsRelevantForIndustry(industryID) {
-			activePatterns = append(activePatterns, map[string]interface{}{
-				"id":                  p.ID,
-				"name":                p.Name,
-				"description":         p.Description,
-				"start_month":         p.StartMonth,
-				"start_day":           p.StartDay,
-				"end_month":           p.EndMonth,
-				"end_day":             p.EndDay,
-				"historical_accuracy": p.HistoricalAccuracy,
-				"typical_return":      p.TypicalReturn(),
-				"affected_industries": p.AffectedIndustries,
-			})
-		}
-	}
-
-	var adjustment float64
-	if industryID != "" {
-		adjustment = a.seasonalEngine.GetPatternAdjustment(industryID, now)
-	}
-
-	allPatterns := a.seasonalEngine.GetAllPatterns()
-	var historicalPatterns []map[string]interface{}
-	for _, p := range allPatterns {
-		if industryID == "" || p.IsRelevantForIndustry(industryID) {
-			historicalPatterns = append(historicalPatterns, map[string]interface{}{
-				"id":                  p.ID,
-				"name":                p.Name,
-				"name_en":             p.NameEN,
-				"description":         p.Description,
-				"start_month":         p.StartMonth,
-				"start_day":           p.StartDay,
-				"end_month":           p.EndMonth,
-				"end_day":             p.EndDay,
-				"historical_accuracy": p.HistoricalAccuracy,
-				"typical_return":      p.TypicalReturn(),
-				"adjustment_factor":   p.AdjustmentFactor,
-				"favored_industries":  p.FavoredIndustries,
-				"avoided_industries":  p.AvoidedIndustries,
-				"impact": func() string {
-					if industryID == "" {
-						return ""
-					}
-					impact, _ := a.seasonalEngine.GetIndustryImpact(p.ID, industryID)
-					return impact
-				}(),
-			})
-		}
-	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"current_date":        now.Format("2006-01-02"),
-		"active_patterns":     activePatterns,
-		"pattern_count":       len(activePatterns),
-		"adjustment":          adjustment,
-		"all_patterns":        historicalPatterns,
-		"total_pattern_count": len(historicalPatterns),
-	})
-}
-
-func (a *DashboardAPI) handleIndustrySeasonalityCalendar(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	industryID := r.URL.Query().Get("industry")
-	now := time.Now()
-	calendar := a.seasonalEngine.GenerateCalendar(now.Year())
-
-	var months []map[string]interface{}
-	for m := 1; m <= 12; m++ {
-		monthPatterns := calendar.ByMonth[m]
-		var relevantPatterns []map[string]interface{}
-		for _, p := range monthPatterns {
-			if industryID == "" || p.IsRelevantForIndustry(industryID) {
-				relevantPatterns = append(relevantPatterns, map[string]interface{}{
-					"id":                  p.ID,
-					"name":                p.Name,
-					"historical_accuracy": p.HistoricalAccuracy,
-					"typical_return":      p.TypicalReturn(),
-					"adjustment_factor":   p.AdjustmentFactor,
-				})
-			}
-		}
-		months = append(months, map[string]interface{}{
-			"month":    m,
-			"patterns": relevantPatterns,
-			"count":    len(relevantPatterns),
-		})
-	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"year":     calendar.Year,
-		"industry": industryID,
-		"months":   months,
-	})
-}
-
-func (a *DashboardAPI) handleIndustryCycle(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	industryID := r.URL.Query().Get("industry")
-
-	if industryID == "" {
-		var allPositions []map[string]interface{}
-		for _, seg := range a.industryClassifier.GetAllSegments() {
-			if seg.ParentID != "" {
-				continue
-			}
-			if pos, ok := a.cycleTracker.GetPosition(seg.ID); ok {
-				allPositions = append(allPositions, map[string]interface{}{
-					"industry":        seg.ID,
-					"name":            seg.Name,
-					"business_cycle":  pos.BusinessCycle,
-					"inventory_cycle": pos.InventoryCycle,
-					"capex_cycle":     pos.CapexCycle,
-					"confidence":      pos.Confidence,
-					"updated_at":      pos.UpdatedAt,
-					"is_favorable":    pos.IsFavorable(),
-					"phase_score":     pos.GetPhaseScore(),
-					"trend":           pos.GetTrend(),
-				})
-			}
-		}
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"industries": allPositions,
-			"count":      len(allPositions),
-		})
-		return
-	}
-
-	position, ok := a.cycleTracker.GetPosition(industryID)
-	if !ok {
-		writeJSONError(w, http.StatusNotFound, "industry not found")
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"industry":        industryID,
-		"business_cycle":  position.BusinessCycle,
-		"inventory_cycle": position.InventoryCycle,
-		"capex_cycle":     position.CapexCycle,
-		"confidence":      position.Confidence,
-		"updated_at":      position.UpdatedAt,
-		"is_favorable":    position.IsFavorable(),
-		"phase_score":     position.GetPhaseScore(),
-		"trend":           position.GetTrend(),
-	})
-}
-
-func (a *DashboardAPI) handleIndustryLinkage(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	industryID := r.URL.Query().Get("industry")
-	if industryID == "" {
-		writeJSONError(w, http.StatusBadRequest, "industry parameter required")
-		return
-	}
-
-	graph := a.linkageAnalyzer.GetSupplyChainGraph()
-	upstream := graph.GetUpstream(industryID)
-	downstream := graph.GetDownstream(industryID)
-
-	correlations := a.linkageAnalyzer.GetCorrelationMatrix().GetCorrelatedIndustries(industryID, 0.0)
-	var correlationList []map[string]interface{}
-	for otherIndustry, correlation := range correlations {
-		strength := "low"
-		if math.Abs(correlation) > 0.7 {
-			strength = "high"
-		} else if math.Abs(correlation) > 0.4 {
-			strength = "medium"
-		}
-		correlationList = append(correlationList, map[string]interface{}{
-			"industry":    otherIndustry,
-			"correlation": correlation,
-			"strength":    strength,
-		})
-	}
-
-	score := a.linkageAnalyzer.CalculateLinkageScore(industryID)
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"industry":      industryID,
-		"upstream":      upstream,
-		"downstream":    downstream,
-		"correlations":  correlationList,
-		"linkage_score": score,
-	})
-}
-
-func (a *DashboardAPI) handleIndustryRisk(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	symbol := r.URL.Query().Get("symbol")
-	industryID := r.URL.Query().Get("industry")
-	if symbol == "" && industryID == "" {
-		writeJSONError(w, http.StatusBadRequest, "symbol or industry parameter required")
-		return
-	}
-
-	var risks []industry.RiskEvent
-	if symbol == "" && industryID != "" {
-		risks = a.riskMonitor.GetAllRisks("ALL", industryID, 0, 0)
-	} else {
-		risks = a.riskMonitor.GetAllRisks(symbol, industryID, 0, 0)
-	}
-	var riskList []map[string]interface{}
-	for _, risk := range risks {
-		riskList = append(riskList, map[string]interface{}{
-			"id":                 risk.ID,
-			"type":               risk.Type,
-			"severity":           risk.Severity,
-			"description":        risk.Description,
-			"impact_estimate":    risk.ImpactEstimate,
-			"confidence":         risk.Confidence,
-			"detected_at":        risk.DetectedAt,
-			"recommended_action": risk.RecommendedAction,
-		})
-	}
-
-	highest := a.riskMonitor.GetHighestRisk(risks)
-	var highestRisk map[string]interface{}
-	if highest != nil {
-		highestRisk = map[string]interface{}{
-			"id":          highest.ID,
-			"type":        highest.Type,
-			"severity":    highest.Severity,
-			"description": highest.Description,
-		}
-	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"symbol":       symbol,
-		"industry":     industryID,
-		"risk_count":   len(riskList),
-		"risks":        riskList,
-		"highest_risk": highestRisk,
-	})
-}
-
-func (a *DashboardAPI) handleIndustryOverview(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	now := time.Now()
-	tree := a.industryClassifier
-	segments := tree.GetAllSegments()
-
-	var industries []map[string]interface{}
-	for _, seg := range segments {
-		if seg.ParentID != "" {
-			continue
-		}
-
-		cyclePos, ok := a.cycleTracker.GetPosition(seg.ID)
-		if !ok {
-			continue
-		}
-
-		patterns := a.seasonalEngine.DetectCurrentPatterns(now)
-		var activePatternNames []string
-		for _, p := range patterns {
-			if p.IsRelevantForIndustry(seg.ID) {
-				activePatternNames = append(activePatternNames, p.Name)
-			}
-		}
-
-		linkageScore := a.linkageAnalyzer.CalculateLinkageScore(seg.ID)
-
-		industries = append(industries, map[string]interface{}{
-			"id":                seg.ID,
-			"name":              seg.Name,
-			"cycle_phase":       cyclePos.BusinessCycle,
-			"inventory_cycle":   cyclePos.InventoryCycle,
-			"capex_cycle":       cyclePos.CapexCycle,
-			"cycle_confidence":  cyclePos.Confidence,
-			"is_favorable":      cyclePos.IsFavorable(),
-			"seasonal_patterns": activePatternNames,
-			"linkage_score":     linkageScore,
-		})
-	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"industries": industries,
-		"count":      len(industries),
-		"updated_at": now,
-	})
-}
-
-func (a *DashboardAPI) handleShockSimulation(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	var req struct {
-		SourceIndustry string  `json:"source_industry"`
-		ShockMagnitude float64 `json:"shock_magnitude"`
-		MaxDepth       int     `json:"max_depth"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json: "+err.Error())
-		return
-	}
-
-	if req.SourceIndustry == "" {
-		writeJSONError(w, http.StatusBadRequest, "source_industry required")
-		return
-	}
-
-	if req.MaxDepth <= 0 {
-		req.MaxDepth = 3
-	}
-
-	impacts := a.linkageAnalyzer.PropagateShock(req.SourceIndustry, req.ShockMagnitude, req.MaxDepth)
-
-	var impactList []map[string]interface{}
-	for industry, impact := range impacts {
-		impactList = append(impactList, map[string]interface{}{
-			"industry": industry,
-			"impact":   impact,
-		})
-	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"source":       req.SourceIndustry,
-		"shock":        req.ShockMagnitude,
-		"max_depth":    req.MaxDepth,
-		"impacts":      impactList,
-		"impact_count": len(impactList),
-	})
-}
-
-func (a *DashboardAPI) handleIndustryGraph(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	cm := a.linkageAnalyzer.GetCorrelationMatrix()
-
-	var nodes []map[string]interface{}
-	var edges []map[string]interface{}
-	nodeSet := make(map[string]bool)
-
-	allCorrelations := cm.GetAllCorrelations()
-	for industryA, correlations := range allCorrelations {
-		if !nodeSet[industryA] {
-			nodeSet[industryA] = true
-			score := a.linkageAnalyzer.CalculateLinkageScore(industryA)
-			nodes = append(nodes, map[string]interface{}{
-				"id":                  industryA,
-				"systemic_importance": score.SystemicImportance,
-				"upstream_count":      score.UpstreamCount,
-				"downstream_count":    score.DownstreamCount,
-			})
-		}
-
-		for industryB, correlation := range correlations {
-			if industryA >= industryB {
-				continue
-			}
-			if !nodeSet[industryB] {
-				nodeSet[industryB] = true
-				score := a.linkageAnalyzer.CalculateLinkageScore(industryB)
-				nodes = append(nodes, map[string]interface{}{
-					"id":                  industryB,
-					"systemic_importance": score.SystemicImportance,
-					"upstream_count":      score.UpstreamCount,
-					"downstream_count":    score.DownstreamCount,
-				})
-			}
-
-			strength := "low"
-			if math.Abs(correlation) > 0.7 {
-				strength = "high"
-			} else if math.Abs(correlation) > 0.4 {
-				strength = "medium"
-			}
-
-			edges = append(edges, map[string]interface{}{
-				"source":      industryA,
-				"target":      industryB,
-				"correlation": correlation,
-				"strength":    strength,
-			})
-		}
-	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"nodes": nodes,
-		"edges": edges,
-	})
-}
 
 func (a *DashboardAPI) handleMetricsTrend(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

@@ -3,6 +3,7 @@ package monitoring
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -106,7 +107,7 @@ func isStockPickingLayerByID(agentID string, views []AgentUniverseView) bool {
 	return false
 }
 
-func buildMutationSummary(policy baseline.Policy, result domain.PromptExperimentResult) string {
+func BuildMutationSummary(policy baseline.Policy, result domain.PromptExperimentResult) string {
 	baselinePrompt := baseline.ResolvePromptOverride(policy, result.Experiment.TargetAgentID, result.Experiment.Skill)
 	if baselinePrompt == "" {
 		sourcePrompt, err := os.ReadFile(result.Brief.PromptFile)
@@ -243,4 +244,108 @@ func fallbackPriceTargets(skill string, price float64) (float64, float64) {
 		targetMult, stopLossMult = 1.05, 0.95
 	}
 	return price * targetMult, price * stopLossMult
+}
+
+func GetSymbolSector(symbol string, symMap map[string]string) string {
+	if s, ok := symMap[symbol]; ok {
+		return s
+	}
+	return "other"
+}
+
+func ComputeSectorFactorExposure(outcomes []domain.RecommendationOutcome, portfolioValue float64, symSectorMap map[string]string) ([]SectorExposure, FactorExposureInline) {
+	sectorLabelMap := map[string]string{
+		"semiconductor":   "半導體",
+		"ai_supply_chain": "AI供應鏈",
+		"robotics":        "機器人",
+		"financials":      "金融",
+		"shipping":        "航運",
+		"energy":          "能源",
+		"electronics":     "電子",
+		"consumer":        "消費",
+		"industrial":      "工業",
+		"other":           "其他",
+	}
+
+	type secAgg struct {
+		count                        int
+		absReturn                    float64
+		avgM, avgV, avgQ, avgA, avgT float64
+	}
+	secMap := make(map[string]*secAgg)
+
+	var totalM, totalV, totalQ, totalA, totalT float64
+	var totalAbsReturn float64
+	var cnt int
+
+	for _, oc := range outcomes {
+		if !oc.PassedGuards || oc.Symbol == "" {
+			continue
+		}
+		sec := GetSymbolSector(oc.Symbol, symSectorMap)
+		if secMap[sec] == nil {
+			secMap[sec] = &secAgg{}
+		}
+		s := secMap[sec]
+		s.count++
+		s.absReturn += math.Abs(oc.ForwardReturn)
+		totalAbsReturn += math.Abs(oc.ForwardReturn)
+		s.avgM += oc.FactorScores.Momentum
+		s.avgV += oc.FactorScores.Value
+		s.avgQ += oc.FactorScores.Quality
+		s.avgA += oc.FactorScores.Agent
+		s.avgT += oc.FactorScores.Total
+
+		totalM += oc.FactorScores.Momentum
+		totalV += oc.FactorScores.Value
+		totalQ += oc.FactorScores.Quality
+		totalA += oc.FactorScores.Agent
+		totalT += oc.FactorScores.Total
+		cnt++
+	}
+
+	var sectorExp []SectorExposure
+	for sec, s := range secMap {
+		weight := 0.0
+		if totalAbsReturn > 0 {
+			weight = s.absReturn / totalAbsReturn
+		}
+		sectorExp = append(sectorExp, SectorExposure{
+			Sector:      sec,
+			SectorLabel: sectorLabelMap[sec],
+			Weight:      weight,
+			EstValue:    weight * portfolioValue,
+		})
+	}
+
+	var fe FactorExposureInline
+	if cnt > 0 {
+		fe = FactorExposureInline{
+			Momentum: totalM / float64(cnt),
+			Value:    totalV / float64(cnt),
+			Quality:  totalQ / float64(cnt),
+			Agent:    totalA / float64(cnt),
+			Total:    totalT / float64(cnt),
+		}
+	}
+
+	return sectorExp, fe
+}
+
+func PromotionHistoryToAPI(history []baseline.PromotionRecordWithVersion) []map[string]any {
+	result := make([]map[string]any, len(history))
+	for i, h := range history {
+		result[i] = map[string]any{
+			"experiment_id":   h.ExperimentID,
+			"target_agent_id": h.TargetAgentID,
+			"target_skill":    h.TargetSkill,
+			"mutation_type":   h.MutationType,
+			"candidate_path":  h.CandidatePath,
+			"promoted_at":     h.PromotedAt,
+			"status":          h.Status,
+			"version_after":   h.VersionAfter,
+			"version":         h.Version,
+		}
+	}
+	return result
 }
