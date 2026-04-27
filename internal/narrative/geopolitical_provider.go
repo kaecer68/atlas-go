@@ -2,6 +2,7 @@ package narrative
 
 import (
 	"context"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -171,10 +172,6 @@ func (g *GDELTGeopoliticalProvider) Name() string {
 
 // FetchScore queries GDELT for violent events in the Middle East over the last 24h.
 func (g *GDELTGeopoliticalProvider) FetchScore(ctx context.Context) (GeopoliticalRiskScore, error) {
-	// GDELT Global Knowledge Graph (GKG) API query example for Middle East conflict keywords
-	// We use a simple query against the GKG for "Israel" + "Gaza" in the last 24 hours.
-	// GDELT 2.0 GKG API: https://blog.gdeltproject.org/gdelt-2-0-our-global-world-in-real-time/
-	// For a lightweight MVP we use the GKG Summary API for the last 24h.
 	now := time.Now().UTC()
 	yesterday := now.Add(-24 * time.Hour)
 	startDate := yesterday.Format("20060102") + "000000"
@@ -196,14 +193,26 @@ func (g *GDELTGeopoliticalProvider) FetchScore(ctx context.Context) (Geopolitica
 	}
 	defer resp.Body.Close()
 
-	// GDELT summary artlist JSON structure is variable; for MVP we treat non-empty response as positive signal.
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return GeopoliticalRiskScore{}, err
 	}
 
-	// Simple heuristic: length of response as proxy for activity volume.
-	intensity := float64(len(body)) / 500.0
+	var gdeltResp struct {
+		Articles     []struct{} `json:"articles"`
+		TotalRecords int        `json:"totalRecords"`
+	}
+	if err := json.Unmarshal(body, &gdeltResp); err != nil {
+		logging.Warn("geopolitical_provider", "gdelt_parse_failed", logging.Err(err))
+		return GeopoliticalRiskScore{}, fmt.Errorf("failed to parse GDELT response: %w", err)
+	}
+
+	articleCount := gdeltResp.TotalRecords
+	if articleCount == 0 {
+		articleCount = len(gdeltResp.Articles)
+	}
+
+	intensity := float64(articleCount) * 2.0
 	if intensity > 100 {
 		intensity = 100
 	}
@@ -215,7 +224,7 @@ func (g *GDELTGeopoliticalProvider) FetchScore(ctx context.Context) (Geopolitica
 		Region:         "Middle East",
 		Intensity:      intensity,
 		Sentiment:      -0.6,
-		Confidence:     0.50,
+		Confidence:     0.65,
 		OilImpact:      0.5,
 		ShippingImpact: 0.4,
 		Sources:        []string{"GDELT 2.0"},

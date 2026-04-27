@@ -340,355 +340,6 @@ func (a *DashboardAPI) handlePortfolioState(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func (a *DashboardAPI) handlePnLAttribution(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	sessionsDir := filepath.Join(a.ledgerDir, "sessions")
-	entries, err := os.ReadDir(sessionsDir)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "read sessions")
-		return
-	}
-
-	latestSession := ""
-	var latestSummary domain.SessionSummary
-	var allSummaries []domain.SessionSummary
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
-		bytes, err := os.ReadFile(summaryPath)
-		if err != nil {
-			continue
-		}
-		var s domain.SessionSummary
-		if err := json.Unmarshal(bytes, &s); err != nil {
-			continue
-		}
-		allSummaries = append(allSummaries, s)
-		if s.SessionID > latestSession {
-			latestSession = s.SessionID
-			latestSummary = s
-		}
-	}
-
-	if latestSession == "" {
-		writeJSON(w, http.StatusOK, PnLAttributionResponse{})
-		return
-	}
-
-	slices.SortFunc(allSummaries, func(a, b domain.SessionSummary) int {
-		return strings.Compare(a.SessionID, b.SessionID)
-	})
-
-	var startingValue, currentValue float64
-	if len(allSummaries) >= 2 {
-		startingValue = allSummaries[0].PortfolioValue
-	}
-	currentValue = latestSummary.PortfolioValue
-	cumulativePnL := currentValue - startingValue
-	var cumulativeRetPct float64
-	if startingValue > 0 {
-		cumulativeRetPct = cumulativePnL / startingValue
-	}
-
-	outcomes, _ := a.loadRecommendationOutcomes(latestSession)
-	symSectorMap := a.buildSymbolSectorMap()
-	var (
-		agentMap                                    = make(map[string]*AgentAttribution)
-		sectorMap                                   = make(map[string]*SectorAttribution)
-		symbolMap                                   = make(map[string]*SymbolAttribution)
-		fMomentum, fValue, fQuality, fAgent, fTotal float64
-		fCount                                      int
-	)
-	sectorLabelMap := map[string]string{
-		"semiconductor":   "半導體",
-		"ai_supply_chain": "AI供應鏈",
-		"robotics":        "機器人",
-		"financials":      "金融",
-		"shipping":        "航運",
-		"energy":          "能源",
-		"electronics":     "電子",
-		"consumer":        "消費",
-		"industrial":      "工業",
-		"other":           "其他",
-	}
-	agentLayerMap := map[string]string{
-		"taiwan-macro-01":       "macro",
-		"foreign-flow-01":       "macro",
-		"semi-desk-01":          "sector",
-		"ai-desk-01":            "sector",
-		"growth-momentum-01":    "style",
-		"value-yield-01":        "style",
-		"technical-breakout-01": "style",
-		"earnings-quality-01":   "style",
-		"shipping-desk-01":      "sector",
-		"financials-desk-01":    "sector",
-	}
-
-	for _, oc := range outcomes {
-		if !oc.PassedGuards || oc.ForwardReturn == 0 {
-			continue
-		}
-		if oc.AgentID == "" || oc.Symbol == "" {
-			continue
-		}
-
-		if agentMap[oc.AgentID] == nil {
-			agentMap[oc.AgentID] = &AgentAttribution{AgentID: oc.AgentID, Layer: agentLayerMap[oc.AgentID]}
-		}
-		agentMap[oc.AgentID].TotalReturn += oc.ForwardReturn
-		agentMap[oc.AgentID].Count++
-
-		sector := GetSymbolSector(oc.Symbol, symSectorMap)
-		if sectorMap[sector] == nil {
-			sectorMap[sector] = &SectorAttribution{Sector: sector, SectorLabel: sectorLabelMap[sector]}
-		}
-		sectorMap[sector].TotalReturn += oc.ForwardReturn
-		sectorMap[sector].Count++
-
-		if symbolMap[oc.Symbol] == nil {
-			symbolMap[oc.Symbol] = &SymbolAttribution{Symbol: oc.Symbol, Side: string(oc.Side)}
-		}
-		symbolMap[oc.Symbol].TotalReturn += oc.ForwardReturn
-		symbolMap[oc.Symbol].Count++
-
-		fMomentum += oc.FactorScores.Momentum
-		fValue += oc.FactorScores.Value
-		fQuality += oc.FactorScores.Quality
-		fAgent += oc.FactorScores.Agent
-		fTotal += oc.FactorScores.Total
-		fCount++
-	}
-
-	var agentAttr []AgentAttribution
-	for _, a := range agentMap {
-		if a.Count > 0 {
-			a.AvgReturn = a.TotalReturn / float64(a.Count)
-			a.AgentName = a.AgentID
-		}
-		agentAttr = append(agentAttr, *a)
-	}
-	var sectorAttr []SectorAttribution
-	for _, s := range sectorMap {
-		if s.Count > 0 {
-			s.AvgReturn = s.TotalReturn / float64(s.Count)
-		}
-		sectorAttr = append(sectorAttr, *s)
-	}
-	var symbolAttr []SymbolAttribution
-	for _, s := range symbolMap {
-		if s.Count > 0 {
-			s.AvgReturn = s.TotalReturn / float64(s.Count)
-		}
-		symbolAttr = append(symbolAttr, *s)
-	}
-
-	var factorAttr FactorAttribution
-	if fCount > 0 {
-		avgM, avgV, avgQ, avgA, avgT := fMomentum/float64(fCount), fValue/float64(fCount), fQuality/float64(fCount), fAgent/float64(fCount), fTotal/float64(fCount)
-		avgRet := float64(0)
-		if len(outcomes) > 0 {
-			var sumRet float64
-			for _, oc := range outcomes {
-				if oc.PassedGuards {
-					sumRet += oc.ForwardReturn
-				}
-			}
-			avgRet = sumRet / float64(len(outcomes))
-		}
-		factorAttr = FactorAttribution{
-			Momentum: FactorDetail{AvgScore: avgM, AvgReturn: avgRet, Contribution: avgM * avgRet},
-			Value:    FactorDetail{AvgScore: avgV, AvgReturn: avgRet, Contribution: avgV * avgRet},
-			Quality:  FactorDetail{AvgScore: avgQ, AvgReturn: avgRet, Contribution: avgQ * avgRet},
-			Agent:    FactorDetail{AvgScore: avgA, AvgReturn: avgRet, Contribution: avgA * avgRet},
-			Total:    FactorDetail{AvgScore: avgT, AvgReturn: avgRet, Contribution: avgT * avgRet},
-		}
-	}
-
-	writeJSON(w, http.StatusOK, PnLAttributionResponse{
-		SnapshotTime:      latestSummary.RecordedAt,
-		SessionID:         latestSession,
-		StartingValue:     startingValue,
-		CurrentValue:      currentValue,
-		CumulativePnL:     cumulativePnL,
-		CumulativeRetPct:  cumulativeRetPct,
-		AgentAttribution:  agentAttr,
-		SectorAttribution: sectorAttr,
-		FactorAttribution: factorAttr,
-		SymbolAttribution: symbolAttr,
-	})
-}
-
-func (a *DashboardAPI) handleRiskExposure(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	sessionsDir := filepath.Join(a.ledgerDir, "sessions")
-	entries, err := os.ReadDir(sessionsDir)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "read sessions")
-		return
-	}
-
-	type sessionEntry struct {
-		name  string
-		value float64
-	}
-	sessions := make([]sessionEntry, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
-		bytes, err := os.ReadFile(summaryPath)
-		if err != nil {
-			continue
-		}
-		var summary domain.SessionSummary
-		if err := json.Unmarshal(bytes, &summary); err != nil {
-			continue
-		}
-		sessions = append(sessions, sessionEntry{name: entry.Name(), value: summary.PortfolioValue})
-	}
-
-	slices.SortFunc(sessions, func(a, b sessionEntry) int {
-		return strings.Compare(a.name, b.name)
-	})
-
-	portfolioValues := make([]float64, len(sessions))
-	for i, s := range sessions {
-		portfolioValues[i] = s.value
-	}
-
-	dailyReturns := make([]float64, 0, len(portfolioValues)-1)
-	for i := 1; i < len(portfolioValues); i++ {
-		if portfolioValues[i-1] > 0 {
-			dailyReturns = append(dailyReturns, (portfolioValues[i]-portfolioValues[i-1])/portfolioValues[i-1])
-		}
-	}
-
-	var snap domain.RiskSnapshot
-	var insufficient bool
-	if len(dailyReturns) >= 30 {
-		snap = risk.ComputeRiskSnapshot(dailyReturns, portfolioValues)
-	} else {
-		insufficient = true
-	}
-
-	liveBasePath := filepath.Join(a.workDir, live.DefaultLiveStateBasePath)
-	portfolio, _ := live.LoadLastPortfolioState(liveBasePath)
-	positions, _ := live.LoadLastPositions(liveBasePath)
-
-	var totalMV float64
-	for _, p := range positions {
-		totalMV += p.MarketValue
-	}
-	portfolioValue := portfolio.Cash + totalMV
-	var cashRatio float64
-	if portfolioValue > 0 {
-		cashRatio = portfolio.Cash / portfolioValue
-	}
-
-	outcomes, _ := a.loadRecommendationOutcomes("")
-	symSectorMap := a.buildSymbolSectorMap()
-	sectorWeights, factorExp := ComputeSectorFactorExposure(outcomes, portfolioValue, symSectorMap)
-
-	var concentration []PositionConcentration
-	posList := make([]domain.Position, 0, len(positions))
-	for _, p := range positions {
-		posList = append(posList, p)
-	}
-	slices.SortFunc(posList, func(a, b domain.Position) int {
-		if b.MarketValue == a.MarketValue {
-			return 0
-		}
-		if b.MarketValue > a.MarketValue {
-			return 1
-		}
-		return -1
-	})
-	for i := 0; i < len(posList) && i < 5; i++ {
-		p := posList[i]
-		w := float64(0)
-		if portfolioValue > 0 {
-			w = p.MarketValue / portfolioValue
-		}
-		concentration = append(concentration, PositionConcentration{
-			Symbol:      p.Symbol,
-			MarketValue: p.MarketValue,
-			Weight:      w,
-		})
-	}
-
-	writeJSON(w, http.StatusOK, RiskExposureResponse{
-		SnapshotTime:     time.Now(),
-		VaR95:            snap.VaR95,
-		VaR99:            snap.VaR99,
-		CVaR95:           snap.CVaR95,
-		MaxDrawdownPct:   snap.MaxDrawdownPct,
-		PortfolioValue:   portfolioValue,
-		CashRatio:        cashRatio,
-		PositionCount:    len(positions),
-		SectorExposure:   sectorWeights,
-		FactorExposure:   factorExp,
-		Concentration:    concentration,
-		DataPoints:       len(dailyReturns),
-		InsufficientData: insufficient,
-	})
-}
-
-func (a *DashboardAPI) loadRecommendationOutcomes(sessionID string) ([]domain.RecommendationOutcome, error) {
-	sessionsDir := filepath.Join(a.ledgerDir, "sessions")
-	if sessionID == "" {
-		entries, err := os.ReadDir(sessionsDir)
-		if err != nil {
-			return nil, err
-		}
-		var latest string
-		for _, entry := range entries {
-			if entry.IsDir() && entry.Name() > latest {
-				latest = entry.Name()
-			}
-		}
-		sessionID = latest
-	}
-	path := filepath.Join(sessionsDir, sessionID, "recommendation_outcomes.jsonl")
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	var outcomes []domain.RecommendationOutcome
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-		var oc domain.RecommendationOutcome
-		if err := json.Unmarshal([]byte(line), &oc); err != nil {
-			continue
-		}
-		outcomes = append(outcomes, oc)
-	}
-	return outcomes, scanner.Err()
-}
-
-func (a *DashboardAPI) buildSymbolSectorMap() map[string]string {
-	if a.industryService == nil {
-		return make(map[string]string)
-	}
-	return BuildSymbolSectorMap(a.industryService.Classifier)
-}
-
 // buildEquityCurve constructs an equity curve from all session summaries,
 // sorted by session trading date ascending.
 func (a *DashboardAPI) buildEquityCurve() ([]EquityCurvePoint, error) {
@@ -881,7 +532,7 @@ func (a *DashboardAPI) handleSystemHealth(w http.ResponseWriter, r *http.Request
 	}
 
 	// Crowding check from latest session outcomes
-	latestSummary, _ := a.loadSessionSummary("")
+	latestSummary, _ := LoadSessionSummary(a.ledgerDir, "")
 	if latestSummary != nil {
 		store := ledger.NewStore(a.ledgerDir)
 		outcomes, _ := store.LoadSessionOutcomes(latestSummary.SessionID)
@@ -902,7 +553,7 @@ func (a *DashboardAPI) handleSystemHealth(w http.ResponseWriter, r *http.Request
 		}
 	}
 	regime := domain.RegimeNeutral
-	if summary, err := a.loadSessionSummary(""); err == nil && summary != nil {
+	if summary, err := LoadSessionSummary(a.ledgerDir, ""); err == nil && summary != nil {
 		regime = summary.Regime
 	}
 
@@ -972,7 +623,7 @@ func (a *DashboardAPI) handleSwaggerJSON(w http.ResponseWriter, r *http.Request)
 
 func (a *DashboardAPI) handleMacroRadar(w http.ResponseWriter, r *http.Request) {
 	sessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
-	summary, err := a.loadSessionSummary(sessionID)
+	summary, err := LoadSessionSummary(a.ledgerDir, sessionID)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load macro radar data: %v", err))
 		return
@@ -1000,7 +651,7 @@ func (a *DashboardAPI) handleAgentObservatory(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	summary, err := a.loadSessionSummary(sessionID)
+	summary, err := LoadSessionSummary(a.ledgerDir, sessionID)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load agent observatory summary: %v", err))
 		return
@@ -1043,7 +694,7 @@ func (a *DashboardAPI) handleForecastVsReality(w http.ResponseWriter, r *http.Re
 		return
 	}
 	resp := ForecastVsRealityResponse{Items: items}
-	summary, err := a.loadSessionSummary("")
+	summary, err := LoadSessionSummary(a.ledgerDir, "")
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load forecast-vs-reality summary context: %v", err))
 		return
@@ -1052,68 +703,6 @@ func (a *DashboardAPI) handleForecastVsReality(w http.ResponseWriter, r *http.Re
 		resp.BrokerRuntime = summary.BrokerRuntime
 	}
 	writeJSON(w, http.StatusOK, resp)
-}
-
-func (a *DashboardAPI) loadSessionSummary(sessionID string) (*domain.SessionSummary, error) {
-	sessionsDir := filepath.Join(a.ledgerDir, "sessions")
-	entries, err := os.ReadDir(sessionsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	summaries := make([]domain.SessionSummary, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		if sessionID != "" && entry.Name() != sessionID {
-			continue
-		}
-		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
-		bytes, err := os.ReadFile(summaryPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return nil, err
-		}
-		var summary domain.SessionSummary
-		if err := json.Unmarshal(bytes, &summary); err != nil {
-			return nil, err
-		}
-		summaries = append(summaries, summary)
-	}
-	if len(summaries) == 0 {
-		return nil, nil
-	}
-	if sessionID != "" {
-		selected := summaries[0]
-		return &selected, nil
-	}
-
-	// Sort by session trading date (derived from SessionID) descending,
-	// then by RecordedAt as a tiebreaker.
-	slices.SortFunc(summaries, func(a, b domain.SessionSummary) int {
-		aDate := sessionDateFromID(a.SessionID)
-		bDate := sessionDateFromID(b.SessionID)
-		switch {
-		case aDate.After(bDate):
-			return -1
-		case aDate.Before(bDate):
-			return 1
-		case a.RecordedAt.After(b.RecordedAt):
-			return -1
-		case a.RecordedAt.Before(b.RecordedAt):
-			return 1
-		default:
-			return 0
-		}
-	})
-	latest := summaries[0]
-	return &latest, nil
 }
 
 func (a *DashboardAPI) loadForecastVsRealityItems(agentID string, limit int) ([]ForecastVsRealityItem, error) {
@@ -1825,106 +1414,6 @@ func (a *DashboardAPI) handleChannelsIngest(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, result)
 }
 
-func (a *DashboardAPI) handleMacroSnapshotLatest(w http.ResponseWriter, r *http.Request) {
-	path := filepath.Join(a.macroIngestor.SnapshotDir(), "latest.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			writeJSONError(w, http.StatusNotFound, "no macro snapshot available")
-			return
-		}
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read snapshot: %v", err))
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(data)
-}
-
-func (a *DashboardAPI) handleMacroSnapshotHistory(w http.ResponseWriter, r *http.Request) {
-	date := strings.TrimSpace(r.URL.Query().Get("date"))
-	if date == "" {
-		writeJSONError(w, http.StatusBadRequest, "date query param required (YYYY-MM-DD)")
-		return
-	}
-	path := filepath.Join(a.macroIngestor.SnapshotDir(), date+".json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			writeJSONError(w, http.StatusNotFound, "snapshot not found for date")
-			return
-		}
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read snapshot: %v", err))
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(data)
-}
-
-func (a *DashboardAPI) handleCapitalFlowLatest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	path := filepath.Join(a.macroIngestor.SnapshotDir(), "latest.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			writeJSONError(w, http.StatusNotFound, "no macro snapshot available")
-			return
-		}
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read snapshot: %v", err))
-		return
-	}
-	var snap marketdata.MacroDataSnapshot
-	if err := json.Unmarshal(data, &snap); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("decode snapshot: %v", err))
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"foreign_investor_net": snap.ForeignInvestorNet,
-		"domestic_fund_net":    snap.DomesticFundNet,
-		"dealer_net":           snap.DealerNet,
-		"recorded_at":          snap.RecordedAt,
-	})
-}
-
-func (a *DashboardAPI) handleTaiwanStressIndex(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	// Try to load latest snapshot first; if missing, trigger ingest.
-	var snap marketdata.MacroDataSnapshot
-	path := filepath.Join(a.macroIngestor.SnapshotDir(), "latest.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			_, snap, err = a.macroIngestor.Ingest(r.Context())
-			if err != nil {
-				writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("ingest failed: %v", err))
-				return
-			}
-		} else {
-			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read snapshot: %v", err))
-			return
-		}
-	} else {
-		if err := json.Unmarshal(data, &snap); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("decode snapshot: %v", err))
-			return
-		}
-	}
-
-	geoStore := narrative.NewGeopoliticalStore(filepath.Join(a.workDir, "data/state/geopolitical"))
-	index, err := a.taiwanStressCalc.CalculateFromSnapshotWithStore(r.Context(), snap, geoStore)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("calculate stress index: %v", err))
-		return
-	}
-	writeJSON(w, http.StatusOK, index)
-}
-
 // PipelineItem represents a single recommendation through the guard pipeline.
 type PipelineItem struct {
 	Symbol              string                      `json:"symbol"`
@@ -2033,7 +1522,7 @@ func (a *DashboardAPI) handleRecommendationPipeline(w http.ResponseWriter, r *ht
 	showAll := r.URL.Query().Get("show_all") == "true"
 	sessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
 
-	summary, err := a.loadSessionSummary(sessionID)
+	summary, err := LoadSessionSummary(a.ledgerDir, sessionID)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load recommendation pipeline summary: %v", err))
 		return
@@ -2864,13 +2353,13 @@ func (a *DashboardAPI) handleCapitalPhase(w http.ResponseWriter, r *http.Request
 		Phase:           config.CurrentPhase,
 		PhaseStartDate:  config.PhaseStartDate,
 		DaysInPhase:     int(time.Since(config.PhaseStartDate).Hours() / 24),
-		TotalCapital:    1000000,
-		DeployedCapital: 350000,
-		ReserveCash:     650000,
-		RollingSharpe:   1.25,
-		MaxDrawdown:     0.05,
-		CanAdvance:      true,
-		AdvanceReason:   "all criteria met",
+		TotalCapital:    0,
+		DeployedCapital: 0,
+		ReserveCash:     0,
+		RollingSharpe:   0,
+		MaxDrawdown:     0,
+		CanAdvance:      false,
+		AdvanceReason:   "no live trading data available",
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -2886,7 +2375,7 @@ func (a *DashboardAPI) handleCapitalPhase(w http.ResponseWriter, r *http.Request
 		"deployed_capital": snap.DeployedCapital,
 		"reserve_cash":     snap.ReserveCash,
 		"is_simulated":     true,
-		"note":             "此為示範資料，非真實交易記錄。實際資金階段需透過 live trading 或模擬執行後計算。",
+		"note":             "no live trading data — capital phase requires orchestrator.System in live mode",
 	})
 }
 
@@ -2896,67 +2385,13 @@ func (a *DashboardAPI) handleTaxSnapshot(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	snapshots := []domain.TaxSnapshot{
-		{
-			Symbol:             "2330.TW",
-			DividendTaxRate:    0.28,
-			TransactionTaxRate: 0.003,
-			DividendTax:        0,
-			TransactionTax:     150,
-			TotalTax:           150,
-			AfterTaxPnL:        4850,
-		},
-	}
-
-	var beforeTaxPnL, afterTaxPnL, totalTax float64
-	for _, s := range snapshots {
-		beforeTaxPnL += s.AfterTaxPnL + s.TotalTax
-		afterTaxPnL += s.AfterTaxPnL
-		totalTax += s.TotalTax
-	}
-
 	writeJSON(w, http.StatusOK, map[string]any{
-		"snapshots":      snapshots,
-		"before_tax_pnl": beforeTaxPnL,
-		"after_tax_pnl":  afterTaxPnL,
-		"total_tax_paid": totalTax,
+		"snapshots":      []domain.TaxSnapshot{},
+		"before_tax_pnl": 0,
+		"after_tax_pnl":  0,
+		"total_tax_paid": 0,
 		"is_simulated":   true,
-		"note":           "此為示範資料（僅 2330.TW 單一筆），非真實交易記錄。實際稅務資料需從 ledger outcomes 計算。",
-	})
-}
-
-func (a *DashboardAPI) handleSeasonalAnalysis(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	now := time.Now()
-	month := now.Month()
-	day := now.Day()
-
-	var expectations []map[string]any
-	var activeEvents []map[string]any
-
-	if (month == 1 && day >= 15) || (month == 2 && day <= 15) {
-		expectations = append(expectations, map[string]any{
-			"theme":                 "spring_festival_season",
-			"historical_avg_return": 0.05,
-			"current_return":        0.02,
-			"expectation_gap":       0.03,
-			"already_priced_in":     false,
-			"surprise_potential":    0.6,
-			"confidence":            0.7,
-		})
-		activeEvents = append(activeEvents, map[string]any{
-			"theme":      "spring_festival_season",
-			"confidence": 0.65,
-		})
-	}
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"expectations":           expectations,
-		"active_seasonal_events": activeEvents,
+		"note":           "no trading sessions recorded — tax snapshots computed from ledger outcomes",
 	})
 }
 

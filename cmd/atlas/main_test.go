@@ -31,13 +31,15 @@ func TestRunAPIModeStartsServerAndRegistersRoutes(t *testing.T) {
 			}
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
-		listenAndServe: func(addr string, handler http.Handler) error {
-			gotAddr = addr
-			gotHandler = handler
+		listenAndServe: func(srv *http.Server) error {
+			gotAddr = srv.Addr
+			gotHandler = srv.Handler
 			close(listenDone)
 			return nil
 		},
-		shutdown: shutdown,
+		shutdown:                    shutdown,
+		runAutoCapitalFlowOnStartup: func(string) {},
+		runAutoBackfillOnStartup:    func(string) {},
 	}
 
 	go func() {
@@ -73,9 +75,11 @@ func TestRunAPIModeReturnsListenError(t *testing.T) {
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
-		listenAndServe: func(addr string, handler http.Handler) error {
+		listenAndServe: func(srv *http.Server) error {
 			return errors.New("bind failed")
 		},
+		runAutoCapitalFlowOnStartup: func(string) {},
+		runAutoBackfillOnStartup:    func(string) {},
 	}
 
 	err := run([]string{"-api"}, deps)
@@ -98,9 +102,11 @@ func TestRunRejectsLiveBrokerWithoutExplicitAllow(t *testing.T) {
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
-		listenAndServe: func(addr string, handler http.Handler) error {
+		listenAndServe: func(srv *http.Server) error {
 			return nil
 		},
+		runAutoCapitalFlowOnStartup: func(string) {},
+		runAutoBackfillOnStartup:    func(string) {},
 	}
 
 	err := run([]string{"-api", "-broker-mode", "live"}, deps)
@@ -128,12 +134,14 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 			}
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
-		listenAndServe: func(addr string, handler http.Handler) error {
-			gotAddr = addr
+		listenAndServe: func(srv *http.Server) error {
+			gotAddr = srv.Addr
 			close(listenDone)
 			return nil
 		},
-		shutdown: shutdown,
+		shutdown:                    shutdown,
+		runAutoCapitalFlowOnStartup: func(string) {},
+		runAutoBackfillOnStartup:    func(string) {},
 	}
 
 	go func() {
@@ -170,9 +178,11 @@ func TestRunRejectsUnsupportedBrokerAdapter(t *testing.T) {
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
-		listenAndServe: func(addr string, handler http.Handler) error {
+		listenAndServe: func(srv *http.Server) error {
 			return nil
 		},
+		runAutoCapitalFlowOnStartup: func(string) {},
+		runAutoBackfillOnStartup:    func(string) {},
 	}
 
 	err := run([]string{"-api", "-broker-adapter", "invalid"}, deps)
@@ -192,9 +202,11 @@ func TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow(t *testing.T) {
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
-		listenAndServe: func(addr string, handler http.Handler) error {
+		listenAndServe: func(srv *http.Server) error {
 			return nil
 		},
+		runAutoCapitalFlowOnStartup: func(string) {},
+		runAutoBackfillOnStartup:    func(string) {},
 	}
 
 	err := run([]string{"-api", "-allow-live-broker", "-broker-adapter", "http"}, deps)
@@ -215,10 +227,12 @@ func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
-		listenAndServe: func(addr string, handler http.Handler) error {
+		listenAndServe: func(srv *http.Server) error {
 			return nil
 		},
-		shutdown: shutdown,
+		shutdown:                    shutdown,
+		runAutoCapitalFlowOnStartup: func(string) {},
+		runAutoBackfillOnStartup:    func(string) {},
 	}
 
 	go func() {
@@ -240,9 +254,11 @@ func TestRunRejectsRealSignerWithoutExplicitAllow(t *testing.T) {
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
-		listenAndServe: func(addr string, handler http.Handler) error {
+		listenAndServe: func(srv *http.Server) error {
 			return nil
 		},
+		runAutoCapitalFlowOnStartup: func(string) {},
+		runAutoBackfillOnStartup:    func(string) {},
 	}
 
 	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker", "-broker-signer", "hmac-sha256"}, deps)
@@ -263,10 +279,12 @@ func TestRunAllowsRealSignerWithExplicitAllow(t *testing.T) {
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
-		listenAndServe: func(addr string, handler http.Handler) error {
+		listenAndServe: func(srv *http.Server) error {
 			return nil
 		},
-		shutdown: shutdown,
+		shutdown:                    shutdown,
+		runAutoCapitalFlowOnStartup: func(string) {},
+		runAutoBackfillOnStartup:    func(string) {},
 	}
 
 	go func() {
@@ -288,9 +306,11 @@ func TestRunRejectsRealSignerWithoutKeyID(t *testing.T) {
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
-		listenAndServe: func(addr string, handler http.Handler) error {
+		listenAndServe: func(srv *http.Server) error {
 			return nil
 		},
+		runAutoCapitalFlowOnStartup: func(string) {},
+		runAutoBackfillOnStartup:    func(string) {},
 	}
 
 	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker", "-broker-signer", "hmac-sha256", "-allow-real-signer"}, deps)
@@ -472,10 +492,12 @@ func TestRunLiveHTTPFullFlagChainInAPIMode(t *testing.T) {
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
-		listenAndServe: func(addr string, handler http.Handler) error {
+		listenAndServe: func(srv *http.Server) error {
 			return nil
 		},
-		shutdown: shutdown,
+		shutdown:                    shutdown,
+		runAutoCapitalFlowOnStartup: func(string) {},
+		runAutoBackfillOnStartup:    func(string) {},
 	}
 
 	go func() {
@@ -524,12 +546,14 @@ func TestStaticFileServerServesIndex(t *testing.T) {
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
-		listenAndServe: func(addr string, handler http.Handler) error {
-			gotHandler = handler
+		listenAndServe: func(srv *http.Server) error {
+			gotHandler = srv.Handler
 			close(listenDone)
 			return nil
 		},
-		shutdown: shutdown,
+		shutdown:                    shutdown,
+		runAutoCapitalFlowOnStartup: func(string) {},
+		runAutoBackfillOnStartup:    func(string) {},
 	}
 
 	go func() {
