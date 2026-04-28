@@ -18,13 +18,64 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
 - **主要檔案**：`darwinian_weights.go`、`agent_weights.go`
 
 ### 2. FactorEngine (多因子計算引擎)
-- **因子類型**：計算 Momentum (動能)、Value (價值)、Quality (品質) 與 Agent (代理人) 四類因子。
+- **因子類型**：計算 Momentum (動能)、Value (價值)、Quality (品質)、Agent (代理人)、InstitutionalSentiment (機構情緒)、Liquidity (流動性) 六類因子。
 - **透明決策鏈 (Audit Trail)**：回傳 `FactorScoreBreakdown` 包含：
     - `Formula`: 實際計算公式字串。
     - `RawInputs`: 原始輸入數值 (如 P/E, P/B, 20d Volatility)。
     - `IsFallback`: 標記是否因資料缺失而使用猜測值。
-- **Fallback 行為**：當歷史資料不足時，Momentum 會回退至 intraday return；Value/Quality 則回退至固定常數 (`0.1`/`0.05`)。
+- **Fallback 行為**：當歷史資料不足時，Momentum 會回退至 intraday return；Value/Quality/Liquidity 則回退至固定常數 (`0.1`/`0.05`/`0.0`)。
 - **主要檔案**：`factor_engine.go`
+
+### 2.1. FactorBridge (宏觀數據橋接器)
+- **職責**：將 MacroDataSnapshot（monitoring 數據）轉換為可用於因子計算的輸入。
+- **MacroDataSnapshot 來源**：
+    - TWSEBalanceProvider → 散戶資金流向
+    - TWSECapitalFlowProvider → 外資/法人數據
+    - TaiwanStressIndex → 市場壓力指數
+- **輸出結構**：
+    - `ForeignFlowScore`: 外資買賣超標準化分數 [-1, 1]
+    - `MarginBalanceScore`: 券資比標準化分數 [-1, 1]
+    - `RetailSentimentScore`: 散戶情緒分數 [-1, 1]
+    - `StressLevel`: 市場壓力等級 (0-100)
+- **主要檔案**：`factor_bridge.go`（待建立）
+
+### 2.2. InstitutionalSentiment (機構情緒因子)
+- **計算方式**：
+    ```
+    InstitutionalSentiment = 0.50 × ForeignFlowScore
+                          + 0.30 × DomesticFlowScore
+                          + 0.20 × MarginBalanceScore
+    ```
+- **資料來源**：
+    - 外資：`TWSECapitalFlowProvider.GetForeignInvestment()`
+    - 法人：`TWSECapitalFlowProvider.GetDomesticInstitutional()`
+    - 券資比：`TWSEBalanceProvider.GetMarginBalance()`
+- **主要檔案**：`factor_institutional_sentiment.go`（待建立）
+
+### 2.3. Liquidity (流動性因子)
+- **計算方式**（Amihud ILLIQ proxy）：
+    ```
+    Liquidity = -log( |Return| / Volume )  // 標準化後
+    ```
+- **閾值**：
+    - ILLIQ > 1.0：低流動性（因子權重調降）
+    - ILLIQ < 0.1：高流動性（正常權重）
+- **主要檔案**：`factor_liquidity.go`（待建立）
+
+### 2.4. FactorWeightEngine (動態權重引擎)
+- **職責**：根據市場事件與 Regime 動態調整因子權重。
+- **基礎權重配置**（6 因子）：
+    | 因子 | 基礎權重 |
+    |------|----------|
+    | Momentum | 0.20 |
+    | Value | 0.15 |
+    | Quality | 0.15 |
+    | Agent | 0.20 |
+    | InstitutionalSentiment | 0.15 |
+    | Liquidity | 0.15 |
+- **事件驅動調整**：當 NarrativeEvent 觸發時，FactorWeightEngine 根據事件 Theme 調整相關因子權重。
+- **Regime 感知**：不同 Regime 下採用不同的基礎權重配置。
+- **主要檔案**：`factor_weight_engine.go`（待建立）
 
 ### 3. Agent Health Management (代理健康狀態管理)
 - **狀態機**：Agent 有四種健康狀態 — `healthy`、`degraded`、`muted`、`recovering`。
@@ -96,7 +147,19 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
 
 ### 11. Conviction Normalizer & Regime/Style (信念正規化)
 - **Conviction Normalizer**：將不同來源的信念分數正規化至統一尺度。
-- **Regime/Style**：市場體制識別 (Bull/Bear/Neutral) 與風格標籤 (Growth/Value/Quality)。
+- **Regime/Style**：市場體制識別 (Bull/Bear/Neutral/HighVol) 與風格標籤 (Growth/Value/Quality)。
+- **Regime 判斷條件**：
+    | Regime | 判斷條件 |
+    |--------|----------|
+    | Bull | VIX < 15, TrendUp |
+    | Bear | VIX > 25, TrendDown |
+    | Neutral | VIX 15-25 |
+    | HighVol | VIX > 30 |
+- **RegimeChange 觸發時**：
+    1. 記錄 `PreviousRegime` / `CurrentRegime`
+    2. 計算 Regime 持續時間
+    3. 觸發 FactorWeightEngine 重新計算權重
+    4. 發送 `RegimeChangedEvent` 到因果鏈
 - **主要檔案**：`conviction_normalizer.go`、`regime.go`、`style.go`
 
 ---
