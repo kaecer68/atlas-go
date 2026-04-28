@@ -1,93 +1,96 @@
 ---
 name: marketdata
-description: "Skill for the Marketdata area of atlas. 60 symbols across 15 files."
+description: "Skill for the Marketdata area of atlas. 109 symbols across 27 files."
 ---
 
 # Marketdata
 
-60 symbols | 15 files | Cohesion: 80%
+109 symbols | 27 files | Cohesion: 72%
 
 ## When to Use
 
 - Working with code in `internal/`
-- Understanding how TestHybridProvider_NoAPIKey, TestHybridProvider_WithAPIKey, TestHybridProvider_Reset work
+- Understanding how TestTEJClient_GetStockPriceDaily_Success, TestTEJClient_GetStockPriceDaily_APIError, TestTEJClient_GetStockPriceDaily_EmptyResponse work
 - Modifying marketdata-related functionality
 
 ## Key Files
 
 | File | Symbols |
 |------|---------|
-| `internal/marketdata/hybrid_provider.go` | NewHybridProvider, Name, Reset, UseTWSE, UseFugle (+6) |
-| `internal/marketdata/marketdata_test.go` | TestHybridProvider_NoAPIKey, TestHybridProvider_WithAPIKey, TestHybridProvider_Reset, TestHybridProvider_UseTWSE_UseFugle, TestHybridProvider_hasInvalidQuotes (+5) |
+| `internal/marketdata/hybrid_provider.go` | defaultCircuitBreakerConfig, NewHybridProvider, Name, UseTWSE, UseFugle (+13) |
+| `internal/marketdata/marketdata_test.go` | TestHybridProvider_NoAPIKey, TestHybridProvider_WithAPIKey, TestHybridProvider_UseTWSE_UseFugle, TestTWSEClient_GetQuotes_Success, TestTWSEClient_GetQuotes_NonOKStatus (+6) |
+| `internal/marketdata/tej_provider_test.go` | TestTEJClient_GetStockPriceDaily_Success, TestTEJClient_GetStockPriceDaily_APIError, TestTEJClient_GetStockPriceDaily_EmptyResponse, TestTEJClient_GetFinancialStatements, TestTEJClient_RateLimiter (+5) |
 | `internal/marketdata/fugle_client.go` | GetClient, NewFugleClient, GetQuote, GetQuotes, NewFugleProviderWithAPIKey (+3) |
+| `internal/marketdata/tej_provider.go` | GetStockPriceDaily, NewTEJClient, Ping, GetFinancialStatements, toFloat64 (+2) |
+| `internal/marketdata/twse_capital_flow_provider.go` | fetchLatestTradingDay, fetchDate, parseTWDVolume, NewTWSECapitalFlowProvider, Name (+2) |
 | `internal/marketdata/twse_openapi.go` | NewTWSEClient, GetQuotes, GetQuote, GetQuotesBySymbols, CheckMarketStatus (+1) |
-| `internal/marketdata/export_provider.go` | NewExportStatisticsProvider, Name, FetchSnapshot, mockSnapshot |
-| `internal/marketdata/twse_capital_flow_provider.go` | NewTWSECapitalFlowProvider, Name, FetchSnapshot, parseTWDVolume |
-| `internal/marketdata/fugle_client_test.go` | TestFugleClient_GetQuote_Success, TestFugleClient_GetQuote_NonOK, TestFugleClient_GetQuotes, TestNewFugleProviderWithAPIKey |
-| `internal/marketdata/export_provider_test.go` | TestExportStatisticsProvider_Name, TestExportStatisticsProvider_FetchSnapshot, TestExportStatisticsProvider_MockSnapshot |
-| `internal/marketdata/twse.go` | NewTWSEProvider, Name, GetQuotes |
-| `internal/marketdata/twse_capital_flow_provider_test.go` | TestNewTWSECapitalFlowProvider, TestParseTWDVolume |
+| `internal/marketdata/tsmc_revenue_provider.go` | fetchLatestMonth, fetchMonth, FetchSnapshot, saveRevenue, TSMCRevenueProviderWithClient |
+| `internal/marketdata/twse.go` | NewMockProvider, Name, GetQuotes, IsMock |
+| `internal/marketdata/export_provider.go` | NewExportStatisticsProvider, Name, FetchSnapshot, ExportStatisticsProviderWithClient |
 
 ## Entry Points
 
 Start here when exploring this area:
 
-- **`TestHybridProvider_NoAPIKey`** (Function) — `internal/marketdata/marketdata_test.go:44`
-- **`TestHybridProvider_WithAPIKey`** (Function) — `internal/marketdata/marketdata_test.go:54`
-- **`TestHybridProvider_Reset`** (Function) — `internal/marketdata/marketdata_test.go:64`
-- **`TestHybridProvider_UseTWSE_UseFugle`** (Function) — `internal/marketdata/marketdata_test.go:89`
-- **`NewHybridProvider`** (Function) — `internal/marketdata/hybrid_provider.go:20`
+- **`TestTEJClient_GetStockPriceDaily_Success`** (Function) — `internal/marketdata/tej_provider_test.go:11`
+- **`TestTEJClient_GetStockPriceDaily_APIError`** (Function) — `internal/marketdata/tej_provider_test.go:50`
+- **`TestTEJClient_GetStockPriceDaily_EmptyResponse`** (Function) — `internal/marketdata/tej_provider_test.go:65`
+- **`TestRedisNonceReplayStoreRejectsReplayAcrossInstances`** (Function) — `internal/live/nonce_store_test.go:96`
+- **`TestRedisNonceReplayStoreAllowsReuseAfterTTL`** (Function) — `internal/live/nonce_store_test.go:124`
 
 ## Key Symbols
 
 | Symbol | Type | File | Line |
 |--------|------|------|------|
-| `TestHybridProvider_NoAPIKey` | Function | `internal/marketdata/marketdata_test.go` | 44 |
-| `TestHybridProvider_WithAPIKey` | Function | `internal/marketdata/marketdata_test.go` | 54 |
-| `TestHybridProvider_Reset` | Function | `internal/marketdata/marketdata_test.go` | 64 |
-| `TestHybridProvider_UseTWSE_UseFugle` | Function | `internal/marketdata/marketdata_test.go` | 89 |
-| `NewHybridProvider` | Function | `internal/marketdata/hybrid_provider.go` | 20 |
+| `TestTEJClient_GetStockPriceDaily_Success` | Function | `internal/marketdata/tej_provider_test.go` | 11 |
+| `TestTEJClient_GetStockPriceDaily_APIError` | Function | `internal/marketdata/tej_provider_test.go` | 50 |
+| `TestTEJClient_GetStockPriceDaily_EmptyResponse` | Function | `internal/marketdata/tej_provider_test.go` | 65 |
+| `TestRedisNonceReplayStoreRejectsReplayAcrossInstances` | Function | `internal/live/nonce_store_test.go` | 96 |
+| `TestRedisNonceReplayStoreAllowsReuseAfterTTL` | Function | `internal/live/nonce_store_test.go` | 124 |
+| `NewRedisNonceReplayStore` | Function | `internal/live/nonce_store.go` | 116 |
+| `TestHybridProvider_NoAPIKey` | Function | `internal/marketdata/marketdata_test.go` | 49 |
+| `TestHybridProvider_WithAPIKey` | Function | `internal/marketdata/marketdata_test.go` | 59 |
+| `TestHybridProvider_UseTWSE_UseFugle` | Function | `internal/marketdata/marketdata_test.go` | 94 |
+| `NewHybridProvider` | Function | `internal/marketdata/hybrid_provider.go` | 59 |
 | `NewTWSEClient` | Function | `internal/marketdata/twse_openapi.go` | 44 |
-| `TestHybridProvider_hasInvalidQuotes` | Function | `internal/marketdata/marketdata_test.go` | 103 |
-| `TestTWSEClient_GetQuotes_Success` | Function | `internal/marketdata/marketdata_test.go` | 128 |
-| `TestTWSEClient_GetQuotes_NonOKStatus` | Function | `internal/marketdata/marketdata_test.go` | 173 |
-| `TestTWSEClient_GetQuotesBySymbols` | Function | `internal/marketdata/marketdata_test.go` | 188 |
-| `TestExportStatisticsProvider_Name` | Function | `internal/marketdata/export_provider_test.go` | 8 |
-| `TestExportStatisticsProvider_FetchSnapshot` | Function | `internal/marketdata/export_provider_test.go` | 15 |
-| `TestExportStatisticsProvider_MockSnapshot` | Function | `internal/marketdata/export_provider_test.go` | 39 |
-| `NewExportStatisticsProvider` | Function | `internal/marketdata/export_provider.go` | 18 |
-| `TestNewTWSECapitalFlowProvider` | Function | `internal/marketdata/twse_capital_flow_provider_test.go` | 24 |
-| `NewTWSECapitalFlowProvider` | Function | `internal/marketdata/twse_capital_flow_provider.go` | 32 |
-| `NewTWSEProvider` | Function | `internal/marketdata/twse.go` | 11 |
-| `TestTWSEProvider_Name` | Function | `internal/marketdata/marketdata_test.go` | 15 |
-| `TestTWSEProvider_GetQuotes` | Function | `internal/marketdata/marketdata_test.go` | 22 |
-| `TestFugleClient_GetQuote_Success` | Function | `internal/marketdata/fugle_client_test.go` | 10 |
+| `TestTWSEClient_GetQuotes_Success` | Function | `internal/marketdata/marketdata_test.go` | 142 |
+| `TestTWSEClient_GetQuotes_NonOKStatus` | Function | `internal/marketdata/marketdata_test.go` | 187 |
+| `TestTWSEClient_GetQuotesBySymbols` | Function | `internal/marketdata/marketdata_test.go` | 202 |
+| `TestParseTWDVolume` | Function | `internal/marketdata/twse_capital_flow_provider_test.go` | 6 |
+| `NewMockProvider` | Function | `internal/marketdata/twse.go` | 11 |
+| `TestMockProvider_Name` | Function | `internal/marketdata/marketdata_test.go` | 13 |
+| `TestMockProvider_GetQuotes` | Function | `internal/marketdata/marketdata_test.go` | 20 |
+| `TestMockProvider_IsMock` | Function | `internal/marketdata/marketdata_test.go` | 40 |
+| `TestTEJClient_GetFinancialStatements` | Function | `internal/marketdata/tej_provider_test.go` | 125 |
 
 ## Execution Flows
 
 | Flow | Type | Steps |
 |------|------|-------|
-| `Main → ConvertToQuote` | cross_community | 6 |
-| `Main → GetQuote` | cross_community | 6 |
-| `Main → FugleClient` | cross_community | 5 |
-| `Main → TWSECapitalFlowProvider` | cross_community | 5 |
+| `HandleRecommendationPipeline → Close` | cross_community | 5 |
+| `Main → TWSECapitalFlow` | cross_community | 5 |
+| `Main → Close` | cross_community | 5 |
+| `Main → ParseTWDVolume` | cross_community | 5 |
+| `RunAutoCapitalFlowFetchOnStartup → TWSECapitalFlow` | cross_community | 5 |
+| `RunAutoCapitalFlowFetchOnStartup → Close` | cross_community | 5 |
+| `RunAutoCapitalFlowFetchOnStartup → ParseTWDVolume` | cross_community | 5 |
 | `Main → Close` | cross_community | 4 |
-| `Main → FugleProvider` | cross_community | 4 |
-| `Main → TWSEClient` | cross_community | 4 |
-| `Main → TWSEClient` | cross_community | 4 |
-| `Main → GetQuote` | cross_community | 4 |
-| `Main → GetQuotesBySymbols` | cross_community | 4 |
+| `Main → Close` | cross_community | 4 |
+| `Main → Close` | cross_community | 4 |
 
 ## Connected Areas
 
 | Area | Connections |
 |------|-------------|
-| Live | 3 calls |
+| Live | 7 calls |
+| Industry | 4 calls |
 | Config | 1 calls |
 | Daily-replay-sync | 1 calls |
+| Swarm | 1 calls |
+| Prism | 1 calls |
 
 ## How to Explore
 
-1. `gitnexus_context({name: "TestHybridProvider_NoAPIKey"})` — see callers and callees
+1. `gitnexus_context({name: "TestTEJClient_GetStockPriceDaily_Success"})` — see callers and callees
 2. `gitnexus_query({query: "marketdata"})` — find related execution flows
 3. Read key files listed above for implementation details

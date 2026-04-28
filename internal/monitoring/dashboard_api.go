@@ -32,7 +32,11 @@ import (
 	apiindustry "github.com/kaecer68/atlas-go/internal/monitoring/api/industry"
 	apilive "github.com/kaecer68/atlas-go/internal/monitoring/api/live"
 	apimacro "github.com/kaecer68/atlas-go/internal/monitoring/api/macro"
+	apimetrics "github.com/kaecer68/atlas-go/internal/monitoring/api/metrics"
 	apinarrative "github.com/kaecer68/atlas-go/internal/monitoring/api/narrative"
+	apipipeline "github.com/kaecer68/atlas-go/internal/monitoring/api/pipeline"
+	apireport "github.com/kaecer68/atlas-go/internal/monitoring/api/report"
+	apisystem "github.com/kaecer68/atlas-go/internal/monitoring/api/system"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
@@ -162,27 +166,60 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 }
 
 func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/dashboard/macro-radar", a.handleMacroRadar)
-	mux.HandleFunc("/api/dashboard/agent-observatory", a.handleAgentObservatory)
-	mux.HandleFunc("/api/dashboard/forecast-vs-reality", a.handleForecastVsReality)
+	pipelineSvc := service.NewPipelineService(a.workDir, a.ledgerDir)
+	pipelineHandlers := apipipeline.NewHandlers(pipelineSvc)
+	pipelineHandlers.RegisterRoutes(mux)
 
-	mux.HandleFunc("/api/dashboard/recommendation-pipeline", a.handleRecommendationPipeline)
-	mux.HandleFunc("/api/dashboard/universe-overlap", a.handleUniverseOverlap)
-	mux.HandleFunc("/api/dashboard/data-channels", a.handleDataChannels)
-	mux.HandleFunc("/api/channels/ingest", a.handleChannelsIngest)
+	reportSvc := service.NewReportService(a.workDir, a.ledgerDir)
+	reportHandlers := apireport.NewHandlers(reportSvc)
+	reportHandlers.RegisterRoutes(mux)
+
+	metricsSvc := service.NewMetricsService(
+		&service.MetricsCollectorAdapter{
+			GetScreeningRateFunc:   a.metricsCollector.GetScreeningRate,
+			GetMetricsSnapshotFunc: func() service.MetricsSnapshot {
+				snap := a.metricsCollector.GetMetricsSnapshot()
+				return service.MetricsSnapshot{
+					ScreeningTotal:     snap.ScreeningTotal,
+					ScreeningPassed:    snap.ScreeningPassed,
+					ScreeningRate:      snap.ScreeningRate,
+					AlertsTriggered:    snap.AlertsTriggered,
+					AlertsAcknowledged: snap.AlertsAcknowledged,
+					AlertsByType:       snap.AlertsByType,
+					Timestamp:          snap.Timestamp,
+				}
+			},
+		},
+		&service.MetricsHistoryAdapter{
+			GetTrendFunc: func(metric string) []service.TrendPoint {
+				points := a.metricsHistory.GetTrend(metric)
+				result := make([]service.TrendPoint, len(points))
+				for i, p := range points {
+					result[i] = service.TrendPoint{
+						Timestamp: p.Timestamp,
+						Value:     p.Value,
+					}
+				}
+				return result
+			},
+		},
+	)
+	metricsHandlers := apimetrics.NewHandlers(metricsSvc)
+	metricsHandlers.RegisterRoutes(mux)
+
+	systemSvc := service.NewSystemService(a.workDir, a.ledgerDir, a.baselinePath)
+	systemHandlers := apisystem.NewHandlers(systemSvc)
+	systemHandlers.RegisterRoutes(mux)
+
 	handlers := &apihealth.Handlers{}
 	handlers.RegisterRoutes(mux)
-	mux.HandleFunc("/api/dashboard/sessions", a.handleSessions)
-	mux.HandleFunc("/api/report/latest", a.handleLatestReport)
-	mux.HandleFunc("/api/report/list", a.handleReportList)
+
+	mux.HandleFunc("/api/dashboard/data-channels", a.handleDataChannels)
+	mux.HandleFunc("/api/channels/ingest", a.handleChannelsIngest)
 	mux.HandleFunc("/api/dashboard/risk", a.handleRiskMetrics)
-	mux.HandleFunc("/api/dashboard/daily-summary", a.handleDailySummary)
 	mux.HandleFunc("/api/dashboard/retail-sentiment", a.handleRetailSentiment)
 	mux.HandleFunc("/api/dashboard/capital-phase", a.handleCapitalPhase)
 	mux.HandleFunc("/api/dashboard/tax-snapshot", a.handleTaxSnapshot)
-	mux.HandleFunc("/api/dashboard/metrics", a.handleMetrics)
-	mux.HandleFunc("/api/dashboard/metrics/trend", a.handleMetricsTrend)
-	mux.HandleFunc("/api/dashboard/data-quality", a.handleDataQuality)
 }
 
 func (a *DashboardAPI) RegisterIndustryRoutes(mux *http.ServeMux) {
@@ -223,17 +260,15 @@ func (a *DashboardAPI) RegisterMacroRoutes(mux *http.ServeMux) {
 	handlers.RegisterRoutes(mux)
 }
 
-// RegisterPhase3Routes mounts Phase 3 advanced systems observability endpoints.
 func (a *DashboardAPI) RegisterPhase3Routes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/dashboard/phase3-status", a.handlePhase3Status)
 }
 
 func (a *DashboardAPI) RegisterLiveRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/dashboard/live-status", a.handleLiveStatus)
-	mux.HandleFunc("/api/dashboard/portfolio-state", a.handlePortfolioState)
+	svc := service.NewLiveService(a.workDir, a.ledgerDir)
 	handlers := &apilive.Handlers{
 		LedgerDir: a.ledgerDir,
 		WorkDir:   a.workDir,
+		Svc:       svc,
 	}
 	handlers.RegisterRoutes(mux)
 }

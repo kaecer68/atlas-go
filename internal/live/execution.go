@@ -1,0 +1,91 @@
+package live
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
+)
+
+type ExecutionManager struct {
+	broker         Broker
+	orderMgr       *OrderManager
+	circuitBreaker *CircuitBreaker
+	config         OrchestratorConfig
+	metrics        MetricsRecorder
+	eventBus       *ChannelEventBus
+}
+
+func NewExecutionManager(
+	broker Broker,
+	circuitBreaker *CircuitBreaker,
+	config OrchestratorConfig,
+	metrics MetricsRecorder,
+) *ExecutionManager {
+	return &ExecutionManager{
+		broker:         broker,
+		circuitBreaker: circuitBreaker,
+		config:         config,
+		metrics:        metrics,
+	}
+}
+
+func (e *ExecutionManager) SetEventBus(eb *ChannelEventBus) {
+	e.eventBus = eb
+}
+
+func (e *ExecutionManager) SimulateExecution() {
+	if e.broker == nil {
+		e.broker = NewDryRunBroker()
+	}
+	if e.orderMgr == nil {
+		retries := e.config.BrokerMaxRetries
+		if retries < 0 {
+			retries = 0
+		}
+		e.orderMgr = NewOrderManager(e.broker, e.eventBus, retries, 100*time.Millisecond)
+	}
+	fmt.Printf("[Trading] Execution channel ready (mode=%s)\n", e.orderMgr.Mode())
+	if e.metrics != nil {
+		e.metrics.RecordCounter("execution_cycles_total", 1, map[string]string{
+			"broker_mode": e.broker.Mode(),
+		})
+	}
+}
+
+func (e *ExecutionManager) ExecuteOrder(ctx context.Context, order domain.Order) error {
+	if !e.circuitBreaker.CanPlaceOrder(order.Side) {
+		if e.metrics != nil {
+			e.metrics.RecordCounter("orders_blocked_total", 1, map[string]string{
+				"symbol": order.Symbol,
+				"side":   string(order.Side),
+				"reason": string(e.circuitBreaker.State()),
+			})
+		}
+		return fmt.Errorf("circuit breaker blocks %s order for %s (state=%s)", order.Side, order.Symbol, e.circuitBreaker.State())
+	}
+	if e.orderMgr == nil {
+		if e.broker == nil {
+			e.broker = NewDryRunBroker()
+		}
+		retries := e.config.BrokerMaxRetries
+		if retries < 0 {
+			retries = 0
+		}
+		e.orderMgr = NewOrderManager(e.broker, e.eventBus, retries, 100*time.Millisecond)
+	}
+	if err := e.orderMgr.Execute(ctx, order); err != nil {
+		if e.metrics != nil {
+			e.metrics.RecordCounter("orders_failed_total", 1, map[string]string{
+				"symbol": order.Symbol,
+				"side":   string(order.Side),
+			})
+		}
+		return fmt.Errorf("execute order via manager: %w", err)
+	}
+	if e.metrics != nil {
+		e.metrics.RecordOrder(order, "submitted")
+	}
+	return nil
+}

@@ -1,11 +1,11 @@
 ---
 name: janus
-description: "Skill for the Janus area of atlas. 32 symbols across 6 files."
+description: "Skill for the Janus area of atlas. 34 symbols across 6 files."
 ---
 
 # Janus
 
-32 symbols | 6 files | Cohesion: 70%
+34 symbols | 6 files | Cohesion: 71%
 
 ## When to Use
 
@@ -18,7 +18,7 @@ description: "Skill for the Janus area of atlas. 32 symbols across 6 files."
 | File | Symbols |
 |------|---------|
 | `internal/janus/janus_test.go` | TestEngine_EndToEnd, TestEngine_ApplyAdjustment, TestEngine_ApplyAdjustment_NoWeights, recsForJanus, TestRegimeDetector_NovélRegime (+6) |
-| `internal/janus/engine.go` | NewEngine, Update, GetRegimeClassification, ApplyAdjustment, mapDomainRegimeToPRISM (+4) |
+| `internal/janus/engine.go` | NewEngine, Update, GetRegimeClassification, ApplyAdjustment, mapDomainRegimeToPRISM (+6) |
 | `internal/janus/tracker.go` | GetPerformance, aggregate, windowFromDays, NewCohortPerformanceTracker, RecordSnapshot (+1) |
 | `internal/janus/calculator.go` | CalculateWindowWeights, NewCohortWeightCalculator, CalculateWeights |
 | `internal/janus/detector.go` | NewRegimeDetector, Detect |

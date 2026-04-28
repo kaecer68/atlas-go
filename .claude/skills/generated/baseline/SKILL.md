@@ -1,11 +1,11 @@
 ---
 name: baseline
-description: "Skill for the Baseline area of atlas. 25 symbols across 6 files."
+description: "Skill for the Baseline area of atlas. 26 symbols across 6 files."
 ---
 
 # Baseline
 
-25 symbols | 6 files | Cohesion: 76%
+26 symbols | 6 files | Cohesion: 70%
 
 ## When to Use
 
@@ -17,7 +17,7 @@ description: "Skill for the Baseline area of atlas. 25 symbols across 6 files."
 
 | File | Symbols |
 |------|---------|
-| `internal/baseline/policy.go` | Save, ApplyConstraintCandidate, parseIntValue, parseInt64Value, parseFloatValue (+5) |
+| `internal/baseline/policy.go` | Save, ApplyConstraintCandidate, parseIntValue, parseInt64Value, parseFloatValue (+6) |
 | `internal/baseline/rollback_test.go` | TestRevert_LastPromotion, TestRevert_ToVersion, TestRevert_ToExperiment, TestRevert_ValidationErrors, TestGetPromotionHistory (+3) |
 | `cmd/revert-baseline/main.go` | main, showPromotionHistory, truncate |
 | `internal/baseline/policy_test.go` | TestPromoteAcceptedPromptExperiment, TestPromoteAcceptedConstraintExperiment |
@@ -51,34 +51,34 @@ Start here when exploring this area:
 | `TestPromoteAcceptedPromptExperiment` | Function | `internal/baseline/policy_test.go` | 24 |
 | `TestPromoteAcceptedConstraintExperiment` | Function | `internal/baseline/policy_test.go` | 49 |
 | `DefaultPolicy` | Function | `internal/baseline/policy.go` | 43 |
+| `Load` | Function | `internal/baseline/policy.go` | 64 |
 | `ExecutionPolicyFromConstraints` | Function | `internal/baseline/policy.go` | 106 |
 | `Promote` | Function | `internal/baseline/policy.go` | 177 |
 | `contains` | Function | `internal/baseline/rollback_test.go` | 188 |
 | `containsHelper` | Function | `internal/baseline/rollback_test.go` | 192 |
 | `main` | Function | `cmd/revert-baseline/main.go` | 12 |
 | `showPromotionHistory` | Function | `cmd/revert-baseline/main.go` | 88 |
-| `truncate` | Function | `cmd/revert-baseline/main.go` | 120 |
 
 ## Execution Flows
 
 | Flow | Type | Steps |
 |------|------|-------|
+| `RunLiveTrading → Policy` | cross_community | 5 |
+| `RunLiveTrading → ExecutionPolicyFromConstraints` | cross_community | 5 |
+| `RunSimulation → Policy` | cross_community | 5 |
 | `RunSimulation → ExecutionPolicyFromConstraints` | cross_community | 5 |
 | `NewProductionSystem → Policy` | cross_community | 5 |
-| `Main → Policy` | cross_community | 5 |
-| `Main → ExecutionPolicyFromConstraints` | cross_community | 5 |
-| `Main → ExecutionPolicyFromConstraints` | cross_community | 5 |
 | `Main → Policy` | cross_community | 4 |
 | `Main → ExecutionPolicyFromConstraints` | cross_community | 4 |
-| `HandleSystemHealth → Policy` | cross_community | 4 |
-| `HandleSystemHealth → ExecutionPolicyFromConstraints` | cross_community | 4 |
-| `HandleExperimentInbox → Policy` | cross_community | 4 |
+| `Main → Policy` | cross_community | 4 |
+| `HandleInbox → Policy` | cross_community | 4 |
+| `HandleInbox → ExecutionPolicyFromConstraints` | cross_community | 4 |
 
 ## Connected Areas
 
 | Area | Connections |
 |------|-------------|
-| Live | 1 calls |
+| Industry | 2 calls |
 
 ## How to Explore
 
