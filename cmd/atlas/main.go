@@ -236,6 +236,7 @@ func run(args []string, deps appDeps) error {
 		case <-sigCh:
 			log.Printf("received signal, shutting down api server...")
 		case err := <-srvErr:
+			sysCancel()
 			return err
 		case <-deps.shutdown:
 			log.Printf("shutdown signal received, shutting down api server...")

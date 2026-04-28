@@ -10,9 +10,15 @@ import (
 )
 
 type AgentRunner struct {
-	stateStore          *StateStore
-	marketData          interface{ GetQuotes(ctx context.Context, t time.Time, symbols []string) ([]domain.Quote, error) }
-	system              interface{ Registry() domain.AgentRegistry; GetPlugins() *orchestrator.PluginRegistry; GetExecutionPolicy() domain.ExecutionPolicy }
+	stateStore *StateStore
+	marketData interface {
+		GetQuotes(ctx context.Context, t time.Time, symbols []string) ([]domain.Quote, error)
+	}
+	system interface {
+		Registry() domain.AgentRegistry
+		GetPlugins() *orchestrator.PluginRegistry
+		GetExecutionPolicy() domain.ExecutionPolicy
+	}
 	effectiveBrokerMode string
 	eventBus            *ChannelEventBus
 	metrics             MetricsRecorder
@@ -20,8 +26,14 @@ type AgentRunner struct {
 
 func NewAgentRunner(
 	stateStore *StateStore,
-	marketData interface{ GetQuotes(ctx context.Context, t time.Time, symbols []string) ([]domain.Quote, error) },
-	system interface{ Registry() domain.AgentRegistry; GetPlugins() *orchestrator.PluginRegistry; GetExecutionPolicy() domain.ExecutionPolicy },
+	marketData interface {
+		GetQuotes(ctx context.Context, t time.Time, symbols []string) ([]domain.Quote, error)
+	},
+	system interface {
+		Registry() domain.AgentRegistry
+		GetPlugins() *orchestrator.PluginRegistry
+		GetExecutionPolicy() domain.ExecutionPolicy
+	},
 	effectiveBrokerMode string,
 ) *AgentRunner {
 	return &AgentRunner{

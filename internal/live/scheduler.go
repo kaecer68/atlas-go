@@ -10,14 +10,17 @@ import (
 )
 
 type Scheduler struct {
-	marketData         marketdata.Provider
-	watchlist          []string
-	config             OrchestratorConfig
-	eventBus           *ChannelEventBus
-	stateStore         *StateStore
-	circuitBreaker     *CircuitBreaker
-	metrics            MetricsRecorder
-	system             interface{ Registry() domain.AgentRegistry; GetPlugins() interface{} }
+	marketData     marketdata.Provider
+	watchlist      []string
+	config         OrchestratorConfig
+	eventBus       *ChannelEventBus
+	stateStore     *StateStore
+	circuitBreaker *CircuitBreaker
+	metrics        MetricsRecorder
+	system         interface {
+		Registry() domain.AgentRegistry
+		GetPlugins() interface{}
+	}
 	effectiveBrokerMode string
 
 	intradayTicker *time.Ticker
@@ -44,16 +47,19 @@ func NewScheduler(
 	ctx, cancel := context.WithCancel(ctx)
 	return &Scheduler{
 		marketData:          marketData,
-		stateStore:         stateStore,
-		circuitBreaker:     circuitBreaker,
-		config:             config,
+		stateStore:          stateStore,
+		circuitBreaker:      circuitBreaker,
+		config:              config,
 		effectiveBrokerMode: effectiveBrokerMode,
-		ctx:                ctx,
-		cancel:             cancel,
+		ctx:                 ctx,
+		cancel:              cancel,
 	}
 }
 
-func (s *Scheduler) SetSystem(system interface{ Registry() domain.AgentRegistry; GetPlugins() interface{} }) {
+func (s *Scheduler) SetSystem(system interface {
+	Registry() domain.AgentRegistry
+	GetPlugins() interface{}
+}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.system = system

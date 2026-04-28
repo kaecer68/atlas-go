@@ -12,11 +12,14 @@ import (
 
 type janusPlugin struct {
 	engine *janus.Engine
+	core   *SystemCore
 }
 
 func (p *janusPlugin) Name() string { return "janus" }
 
-func (p *janusPlugin) Attach(core *SystemCore) {}
+func (p *janusPlugin) Attach(core *SystemCore) {
+	p.core = core
+}
 
 func (p *janusPlugin) ProcessRecommendations(regime domain.Regime, recs []domain.Recommendation) []domain.Recommendation {
 	if p.engine == nil {
@@ -25,7 +28,65 @@ func (p *janusPlugin) ProcessRecommendations(regime domain.Regime, recs []domain
 	return p.engine.ApplyAdjustment(recs, regime)
 }
 
-func (p *janusPlugin) PostSimulation(quotes []domain.Quote, regime domain.Regime, asOf time.Time) {}
+func (p *janusPlugin) PostSimulation(quotes []domain.Quote, regime domain.Regime, asOf time.Time) {
+	if p.engine == nil {
+		return
+	}
+
+	// Map domain.Regime to prism.RegimeType for cohort classification.
+	var pr prism.RegimeType
+	switch regime {
+	case domain.RegimeRiskOn:
+		pr = prism.RegimeRiskOn
+	case domain.RegimeRiskOff:
+		pr = prism.RegimeRiskOff
+	case domain.RegimeNeutral:
+		pr = prism.RegimeLowVolatility
+	default:
+		pr = prism.RegimeTransition
+	}
+
+	// Calculate aggregate metrics from simulation outcomes.
+	var totalReturn, hitRate float64
+	var signals int
+	outcomes := p.core.lastOutcomes
+	if len(outcomes) > 0 {
+		hitCount := 0
+		for _, o := range outcomes {
+			if o.Hit {
+				hitCount++
+			}
+		}
+		hitRate = float64(hitCount) / float64(len(outcomes))
+		for _, o := range outcomes {
+			totalReturn += o.ForwardReturn
+		}
+		signals = len(outcomes)
+	}
+
+	// Calculate Sharpe ratio as risk-adjusted return metric.
+	// Use totalReturn as the single-period return; with enough samples
+	// this approximates the risk-adjusted performance.
+	sharpeRatio := totalReturn
+	if signals > 0 {
+		// Normalize by signal count to avoid inflation.
+		sharpeRatio = totalReturn / float64(signals)
+	}
+
+	// Record the cohort snapshot to the JANUS tracker.
+	snapshot := janus.CohortSnapshot{
+		Regime:      pr,
+		SharpeRatio: sharpeRatio,
+		HitRate:     hitRate,
+		TotalReturn: totalReturn,
+		Signals:     signals,
+		RecordedAt:  asOf,
+	}
+	p.engine.RecordSnapshot(snapshot)
+
+	// Recompute weights and regime classification.
+	p.engine.Update()
+}
 
 type swarmPlugin struct {
 	swarm      *swarm.MiroFishSwarm
