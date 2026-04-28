@@ -53,7 +53,7 @@ Start here when exploring this area:
 | `NewTaiwanTaxCalculator` | Function | `internal/tax/taiwan_tax.go` | 17 |
 | `DefaultRiskParameters` | Function | `internal/portfolio/sizing.go` | 22 |
 | `NewSizer` | Function | `internal/portfolio/sizing.go` | 53 |
-| `DefaultTaiwanTaxConfig` | Function | `internal/domain/types.go` | 174 |
+| `DefaultTaiwanTaxConfig` | Function | `internal/domain/types.go` | 175 |
 | `SizePosition` | Method | `internal/tax/tax_aware_sizing.go` | 26 |
 | `BaseSizer` | Method | `internal/tax/tax_aware_sizing.go` | 42 |
 | `Config` | Method | `internal/tax/taiwan_tax.go` | 22 |

@@ -1,94 +1,98 @@
 ---
 name: live
-description: "Skill for the Live area of atlas. 177 symbols across 31 files."
+description: "Skill for the Live area of atlas. 170 symbols across 36 files."
 ---
 
 # Live
 
-177 symbols | 31 files | Cohesion: 75%
+170 symbols | 36 files | Cohesion: 73%
 
 ## When to Use
 
 - Working with code in `internal/`
-- Understanding how TestOrderManagerRetriesThenPublishesFilled, TestOrderManagerPublishRejectedWithReason, TestOrderManagerPublishSystemErrorAfterRetryExhausted work
+- Understanding how TestTaiwanRSSGeopoliticalProvider_FetchScore, Warn, Err work
 - Modifying live-related functionality
 
 ## Key Files
 
 | File | Symbols |
 |------|---------|
-| `internal/live/orchestrator.go` | NewOrchestrator, SetBroker, executeOrder, checkRiskTriggers, Start (+20) |
-| `internal/live/store.go` | NewStateStore, Save, GetPosition, UpdatePosition, writeFileAtomic (+15) |
-| `internal/live/eventbus.go` | NewChannelEventBus, Publish, PublishMarketSnapshot, PublishRegimeChange, PublishPositionUpdate (+11) |
+| `internal/live/orchestrator.go` | executeOrder, checkRiskTriggers, SetBroker, DefaultOrchestratorConfig, SetTradingMetrics (+19) |
+| `internal/live/store.go` | NewStateStore, Save, UpdatePosition, writeFileAtomic, Load (+13) |
 | `internal/live/http_adapter_test.go` | TestHTTPBrokerAdapterSubmitOrderSuccess, TestHTTPBrokerAdapterHMACSignerSetsMethodAndVersion, expectedHMACSignature, TestHTTPBrokerAdapterNoRetryOnBadRequest, TestHTTPBrokerAdapterNoRetryOnNotImplementedByDefault (+11) |
-| `internal/live/http_adapter.go` | Sign, Error, NewHTTPBrokerAdapter, SubmitOrder, validateSignerConfig (+11) |
+| `internal/live/http_adapter.go` | Sign, NewHTTPBrokerAdapter, SubmitOrder, validateSignerConfig, validateClockSkew (+10) |
 | `internal/live/circuit_breaker.go` | DefaultCircuitBreakerRules, NewCircuitBreaker, SetRules, State, ResetDayState (+7) |
-| `internal/live/nonce_store_test.go` | TestRedisNonceReplayStoreRejectsReplayAcrossInstances, TestRedisNonceReplayStoreAllowsReuseAfterTTL, TestBuildNonceReplayStoreDefaultsToMemory, TestBuildNonceReplayStoreFileRequiresPath, TestBuildNonceReplayStoreRedisRequiresURLWhenNoClient (+4) |
-| `internal/live/orchestrator_mode_test.go` | TestNewOrchestratorAppliesLiveGuardedMode, TestNewOrchestratorAppliesLiveHTTPFileNonceStoreConfig, TestResolveBrokerModeLiveUsesGuardedBroker, TestResolveBrokerModeUnknownFallsBackToDryRun, TestResolveBrokerModeLiveUsesMockAdapter (+3) |
-| `internal/live/eventbus_publish_test.go` | TestPublishMarketSnapshot, TestPublishRegimeChange, TestPublishPositionUpdate, TestPublishRecommendation, TestSubscribeAndUnsubscribe (+2) |
-| `internal/live/nonce_store.go` | NewRedisNonceReplayStore, NewFileNonceReplayStore, BuildNonceReplayStore, BuildNonceReplayStoreWithOptions, NewInMemoryNonceReplayStore |
+| `internal/monitoring/api/live/handlers.go` | writeJSON, writeJSONError, getSymbolSector, computeSectorFactorExposure, HandlePnLAttribution (+5) |
+| `internal/live/orchestrator_mode_test.go` | TestResolveBrokerModeLiveUsesGuardedBroker, TestResolveBrokerModeUnknownFallsBackToDryRun, TestResolveBrokerModeLiveUsesMockAdapter, TestResolveBrokerModeLiveHTTPMissingConfigFallsBackToGuarded, TestResolveBrokerModeLiveHTTPConfiguredUsesLiveHTTP (+3) |
+| `internal/live/nonce_store_test.go` | TestBuildNonceReplayStoreDefaultsToMemory, TestBuildNonceReplayStoreFileRequiresPath, TestBuildNonceReplayStoreRedisRequiresURLWhenNoClient, TestFileNonceReplayStorePersistsAcrossInstances, TestFileNonceReplayStoreAllowsReuseAfterTTL (+2) |
+| `internal/live/circuit_breaker_test.go` | TestCircuitBreakerDailyLossHalt, TestCircuitBreakerDrawdownPause, TestCircuitBreakerConsecutiveStopLossCooldown, TestCircuitBreakerAutoRecoverAfterCooldown, TestCircuitBreakerResetDayState |
+| `internal/live/broker.go` | NewDryRunBroker, validateOrder, NewGuardedLiveBroker, SubmitOrder |
 
 ## Entry Points
 
 Start here when exploring this area:
 
-- **`TestOrderManagerRetriesThenPublishesFilled`** (Function) — `internal/live/order_manager_test.go:34`
-- **`TestOrderManagerPublishRejectedWithReason`** (Function) — `internal/live/order_manager_test.go:77`
-- **`TestOrderManagerPublishSystemErrorAfterRetryExhausted`** (Function) — `internal/live/order_manager_test.go:123`
-- **`TestOrderManagerPublishesSignerErrorClassification`** (Function) — `internal/live/order_manager_test.go:162`
-- **`NewOrderManager`** (Function) — `internal/live/order_manager.go:18`
+- **`TestTaiwanRSSGeopoliticalProvider_FetchScore`** (Function) — `internal/narrative/taiwan_geopolitical_provider_test.go:79`
+- **`Warn`** (Function) — `internal/logging/logger.go:51`
+- **`Err`** (Function) — `internal/logging/logger.go:81`
+- **`NewStateStore`** (Function) — `internal/live/store.go:70`
+- **`TestCheckRiskTriggers`** (Function) — `internal/live/orchestrator_test.go:10`
 
 ## Key Symbols
 
 | Symbol | Type | File | Line |
 |--------|------|------|------|
-| `TestOrderManagerRetriesThenPublishesFilled` | Function | `internal/live/order_manager_test.go` | 34 |
-| `TestOrderManagerPublishRejectedWithReason` | Function | `internal/live/order_manager_test.go` | 77 |
-| `TestOrderManagerPublishSystemErrorAfterRetryExhausted` | Function | `internal/live/order_manager_test.go` | 123 |
-| `TestOrderManagerPublishesSignerErrorClassification` | Function | `internal/live/order_manager_test.go` | 162 |
-| `NewOrderManager` | Function | `internal/live/order_manager.go` | 18 |
-| `TestNewOrchestratorAppliesLiveGuardedMode` | Function | `internal/live/orchestrator_mode_test.go` | 132 |
-| `TestNewOrchestratorAppliesLiveHTTPFileNonceStoreConfig` | Function | `internal/live/orchestrator_mode_test.go` | 198 |
-| `NewOrchestrator` | Function | `internal/live/orchestrator.go` | 118 |
-| `TestRedisNonceReplayStoreRejectsReplayAcrossInstances` | Function | `internal/live/nonce_store_test.go` | 96 |
-| `TestRedisNonceReplayStoreAllowsReuseAfterTTL` | Function | `internal/live/nonce_store_test.go` | 124 |
-| `NewRedisNonceReplayStore` | Function | `internal/live/nonce_store.go` | 116 |
-| `TestGuardedToHTTPFlowIntegration` | Function | `internal/live/http_flow_integration_test.go` | 16 |
-| `TestHTTPFlowIntegrationRejectsClockSkew` | Function | `internal/live/http_flow_integration_test.go` | 90 |
-| `TestPublishMarketSnapshot` | Function | `internal/live/eventbus_publish_test.go` | 11 |
-| `TestPublishRegimeChange` | Function | `internal/live/eventbus_publish_test.go` | 33 |
-| `TestPublishPositionUpdate` | Function | `internal/live/eventbus_publish_test.go` | 57 |
-| `TestPublishRecommendation` | Function | `internal/live/eventbus_publish_test.go` | 78 |
-| `TestSubscribeAndUnsubscribe` | Function | `internal/live/eventbus_publish_test.go` | 99 |
-| `TestSubscribeAll` | Function | `internal/live/eventbus_publish_test.go` | 128 |
-| `TestEventBusStats` | Function | `internal/live/eventbus_publish_test.go` | 152 |
+| `TestTaiwanRSSGeopoliticalProvider_FetchScore` | Function | `internal/narrative/taiwan_geopolitical_provider_test.go` | 79 |
+| `Warn` | Function | `internal/logging/logger.go` | 51 |
+| `Err` | Function | `internal/logging/logger.go` | 81 |
+| `NewStateStore` | Function | `internal/live/store.go` | 70 |
+| `TestCheckRiskTriggers` | Function | `internal/live/orchestrator_test.go` | 10 |
+| `TestExecuteOrderBlockedByCircuitBreaker` | Function | `internal/live/orchestrator_test.go` | 170 |
+| `TestCircuitBreakerDailyLossHalt` | Function | `internal/live/circuit_breaker_test.go` | 9 |
+| `TestCircuitBreakerDrawdownPause` | Function | `internal/live/circuit_breaker_test.go` | 25 |
+| `TestCircuitBreakerConsecutiveStopLossCooldown` | Function | `internal/live/circuit_breaker_test.go` | 44 |
+| `TestCircuitBreakerAutoRecoverAfterCooldown` | Function | `internal/live/circuit_breaker_test.go` | 59 |
+| `TestCircuitBreakerResetDayState` | Function | `internal/live/circuit_breaker_test.go` | 80 |
+| `DefaultCircuitBreakerRules` | Function | `internal/live/circuit_breaker.go` | 34 |
+| `NewCircuitBreaker` | Function | `internal/live/circuit_breaker.go` | 74 |
+| `TestExecuteOrderPublishesFilledEventInDryRunMode` | Function | `internal/live/broker_test.go` | 11 |
+| `TestExecuteOrderPublishesSystemErrorWhenOrderInvalid` | Function | `internal/live/broker_test.go` | 70 |
+| `NewDryRunBroker` | Function | `internal/live/broker.go` | 32 |
+| `TestHTTPBrokerAdapterSubmitOrderSuccess` | Function | `internal/live/http_adapter_test.go` | 19 |
+| `TestHTTPBrokerAdapterHMACSignerSetsMethodAndVersion` | Function | `internal/live/http_adapter_test.go` | 87 |
+| `TestHTTPBrokerAdapterNoRetryOnBadRequest` | Function | `internal/live/http_adapter_test.go` | 135 |
+| `TestHTTPBrokerAdapterNoRetryOnNotImplementedByDefault` | Function | `internal/live/http_adapter_test.go` | 161 |
 
 ## Execution Flows
 
 | Flow | Type | Steps |
 |------|------|-------|
+| `Main → SeedRegistry` | cross_community | 5 |
 | `HandleIntradayCycle → Publish` | cross_community | 5 |
 | `HandleIntradayCycle → BusEvent` | cross_community | 5 |
 | `HandleIntradayCycle → MarketEventPayload` | cross_community | 5 |
-| `Main → Close` | cross_community | 5 |
-| `Main → Close` | cross_community | 5 |
-| `Main → Close` | cross_community | 5 |
+| `Start → Warn` | cross_community | 5 |
+| `RunEnhancedExperiment → Warn` | cross_community | 5 |
 | `Main → Close` | cross_community | 4 |
-| `Main → SeedRegistry` | cross_community | 4 |
 | `Main → PRISMManager` | cross_community | 4 |
 | `Main → PRISMConfig` | cross_community | 4 |
+| `Main → MiroFishSwarm` | cross_community | 4 |
 
 ## Connected Areas
 
 | Area | Connections |
 |------|-------------|
 | Monitoring | 12 calls |
-| Orchestrator | 11 calls |
+| Orchestrator | 9 calls |
+| Eventbus | 7 calls |
+| Marketdata | 5 calls |
+| Industry | 3 calls |
+| Narrative | 1 calls |
 | Config | 1 calls |
-| Marketdata | 1 calls |
+| Prism | 1 calls |
 
 ## How to Explore
 
-1. `gitnexus_context({name: "TestOrderManagerRetriesThenPublishesFilled"})` — see callers and callees
+1. `gitnexus_context({name: "TestTaiwanRSSGeopoliticalProvider_FetchScore"})` — see callers and callees
 2. `gitnexus_query({query: "live"})` — find related execution flows
 3. Read key files listed above for implementation details

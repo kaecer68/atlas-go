@@ -1,74 +1,73 @@
 ---
 name: atlas
-description: "Skill for the Atlas area of atlas. 35 symbols across 4 files."
+description: "Skill for the Atlas area of atlas. 38 symbols across 5 files."
 ---
 
 # Atlas
 
-35 symbols | 4 files | Cohesion: 73%
+38 symbols | 5 files | Cohesion: 71%
 
 ## When to Use
 
 - Working with code in `cmd/`
-- Understanding how NewSystemMetrics, TestRunAPIModeStartsServerAndRegistersRoutes, TestRunAPIModeReturnsListenError work
+- Understanding how NewSystemMetrics, TestDashboardSwaggerRoutes, TestRunAPIModeStartsServerAndRegistersRoutes work
 - Modifying atlas-related functionality
 
 ## Key Files
 
 | File | Symbols |
 |------|---------|
-| `cmd/atlas/main_test.go` | TestRunAPIModeStartsServerAndRegistersRoutes, TestRunAPIModeReturnsListenError, TestRunRejectsLiveBrokerWithoutExplicitAllow, TestRunAllowsLiveBrokerWhenExplicitlyEnabled, TestRunRejectsUnsupportedBrokerAdapter (+15) |
-| `cmd/atlas/main.go` | defaultAppDeps, main, run, parseStatusCodeCSV, runAutoBackfillOnStartup (+7) |
+| `cmd/atlas/main_test.go` | TestRunAPIModeStartsServerAndRegistersRoutes, TestRunAPIModeReturnsListenError, TestRunRejectsLiveBrokerWithoutExplicitAllow, TestRunAllowsLiveBrokerWhenExplicitlyEnabled, TestRunRejectsUnsupportedBrokerAdapter (+16) |
+| `cmd/atlas/main.go` | run, parseStatusCodeCSV, runAutoBackfillOnStartup, getLatestReplayDate, validateBrokerRuntimeConfig (+5) |
+| `internal/monitoring/dashboard_api.go` | RegisterSwaggerRoutes, SetPool, SetHealthManager, SetJanusEngine |
 | `internal/monitoring/metrics.go` | NewSystemMetrics, Start |
-| `internal/monitoring/dashboard_api.go` | SetPool |
+| `internal/monitoring/dashboard_api_test.go` | TestDashboardSwaggerRoutes |
 
 ## Entry Points
 
 Start here when exploring this area:
 
 - **`NewSystemMetrics`** (Function) — `internal/monitoring/metrics.go:276`
+- **`TestDashboardSwaggerRoutes`** (Function) — `internal/monitoring/dashboard_api_test.go:389`
 - **`TestRunAPIModeStartsServerAndRegistersRoutes`** (Function) — `cmd/atlas/main_test.go:16`
-- **`TestRunAPIModeReturnsListenError`** (Function) — `cmd/atlas/main_test.go:64`
-- **`TestRunRejectsLiveBrokerWithoutExplicitAllow`** (Function) — `cmd/atlas/main_test.go:89`
-- **`TestRunAllowsLiveBrokerWhenExplicitlyEnabled`** (Function) — `cmd/atlas/main_test.go:111`
+- **`TestRunAPIModeReturnsListenError`** (Function) — `cmd/atlas/main_test.go:69`
+- **`TestRunRejectsLiveBrokerWithoutExplicitAllow`** (Function) — `cmd/atlas/main_test.go:96`
 
 ## Key Symbols
 
 | Symbol | Type | File | Line |
 |--------|------|------|------|
 | `NewSystemMetrics` | Function | `internal/monitoring/metrics.go` | 276 |
+| `TestDashboardSwaggerRoutes` | Function | `internal/monitoring/dashboard_api_test.go` | 389 |
 | `TestRunAPIModeStartsServerAndRegistersRoutes` | Function | `cmd/atlas/main_test.go` | 16 |
-| `TestRunAPIModeReturnsListenError` | Function | `cmd/atlas/main_test.go` | 64 |
-| `TestRunRejectsLiveBrokerWithoutExplicitAllow` | Function | `cmd/atlas/main_test.go` | 89 |
-| `TestRunAllowsLiveBrokerWhenExplicitlyEnabled` | Function | `cmd/atlas/main_test.go` | 111 |
-| `TestRunRejectsUnsupportedBrokerAdapter` | Function | `cmd/atlas/main_test.go` | 158 |
-| `TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow` | Function | `cmd/atlas/main_test.go` | 180 |
-| `TestRunRejectsRealSignerWithoutExplicitAllow` | Function | `cmd/atlas/main_test.go` | 228 |
-| `TestRunRejectsRealSignerWithoutKeyID` | Function | `cmd/atlas/main_test.go` | 276 |
-| `TestParseStatusCodeCSV` | Function | `cmd/atlas/main_test.go` | 298 |
-| `TestValidateBrokerRuntimeConfigRejectsNegativeRetries` | Function | `cmd/atlas/main_test.go` | 147 |
-| `TestValidateBrokerRuntimeConfigRejectsInvalidRetryStatusCode` | Function | `cmd/atlas/main_test.go` | 311 |
-| `TestValidateBrokerRuntimeConfigRejectsNegativeClockSkew` | Function | `cmd/atlas/main_test.go` | 322 |
-| `TestValidateBrokerRuntimeConfigRejectsNegativeNonceTTL` | Function | `cmd/atlas/main_test.go` | 333 |
-| `TestValidateBrokerRuntimeConfigRejectsUnsupportedNonceStore` | Function | `cmd/atlas/main_test.go` | 344 |
-| `TestValidateBrokerRuntimeConfigDefaultsFileNonceStorePathFromLedgerDir` | Function | `cmd/atlas/main_test.go` | 355 |
-| `TestValidateBrokerRuntimeConfigDefaultsFileNonceStorePathWithEmptyLedgerDir` | Function | `cmd/atlas/main_test.go` | 367 |
-| `TestValidateBrokerRuntimeConfigNormalizesRelativeFileNonceStorePath` | Function | `cmd/atlas/main_test.go` | 378 |
-| `TestValidateBrokerRuntimeConfigKeepsAbsoluteFileNonceStorePath` | Function | `cmd/atlas/main_test.go` | 400 |
-| `TestValidateBrokerRuntimeConfigRejectsRedisNonceStoreWithoutURL` | Function | `cmd/atlas/main_test.go` | 421 |
+| `TestRunAPIModeReturnsListenError` | Function | `cmd/atlas/main_test.go` | 69 |
+| `TestRunRejectsLiveBrokerWithoutExplicitAllow` | Function | `cmd/atlas/main_test.go` | 96 |
+| `TestRunAllowsLiveBrokerWhenExplicitlyEnabled` | Function | `cmd/atlas/main_test.go` | 120 |
+| `TestRunRejectsUnsupportedBrokerAdapter` | Function | `cmd/atlas/main_test.go` | 172 |
+| `TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow` | Function | `cmd/atlas/main_test.go` | 196 |
+| `TestRunAllowsHTTPBrokerAdapterWithExplicitAllow` | Function | `cmd/atlas/main_test.go` | 220 |
+| `TestRunRejectsRealSignerWithoutExplicitAllow` | Function | `cmd/atlas/main_test.go` | 248 |
+| `TestRunRejectsRealSignerWithoutKeyID` | Function | `cmd/atlas/main_test.go` | 300 |
+| `TestParseStatusCodeCSV` | Function | `cmd/atlas/main_test.go` | 324 |
+| `TestValidateBrokerRuntimeConfigRejectsNegativeRetries` | Function | `cmd/atlas/main_test.go` | 161 |
+| `TestValidateBrokerRuntimeConfigRejectsInvalidRetryStatusCode` | Function | `cmd/atlas/main_test.go` | 337 |
+| `TestValidateBrokerRuntimeConfigRejectsNegativeClockSkew` | Function | `cmd/atlas/main_test.go` | 348 |
+| `TestValidateBrokerRuntimeConfigRejectsNegativeNonceTTL` | Function | `cmd/atlas/main_test.go` | 359 |
+| `TestValidateBrokerRuntimeConfigRejectsUnsupportedNonceStore` | Function | `cmd/atlas/main_test.go` | 370 |
+| `TestValidateBrokerRuntimeConfigDefaultsFileNonceStorePathFromLedgerDir` | Function | `cmd/atlas/main_test.go` | 381 |
+| `TestValidateBrokerRuntimeConfigDefaultsFileNonceStorePathWithEmptyLedgerDir` | Function | `cmd/atlas/main_test.go` | 393 |
+| `TestValidateBrokerRuntimeConfigNormalizesRelativeFileNonceStorePath` | Function | `cmd/atlas/main_test.go` | 404 |
 
 ## Execution Flows
 
 | Flow | Type | Steps |
 |------|------|-------|
-| `Main → CompositeMacroProvider` | cross_community | 5 |
-| `Main → YahooFinanceMacroProvider` | cross_community | 5 |
-| `Main → TWSECapitalFlowProvider` | cross_community | 5 |
 | `Main → NormalizeBrokerStrings` | cross_community | 4 |
 | `Main → ValidateBrokerEnums` | cross_community | 4 |
 | `Main → ValidateBrokerLiveMode` | cross_community | 4 |
 | `Main → ValidateBrokerRetryConfig` | cross_community | 4 |
 | `Main → MetricsCollector` | cross_community | 4 |
+| `Main → Ping` | cross_community | 4 |
 | `Main → Close` | cross_community | 4 |
 | `Main → RunMigrations` | cross_community | 4 |
 
@@ -76,12 +75,12 @@ Start here when exploring this area:
 
 | Area | Connections |
 |------|-------------|
-| Monitoring | 22 calls |
-| Live | 2 calls |
+| Monitoring | 26 calls |
+| Portfolio | 3 calls |
 | Db | 1 calls |
+| Janus | 1 calls |
+| Industry | 1 calls |
 | Config | 1 calls |
-| Narrative | 1 calls |
-| Marketdata | 1 calls |
 | Orchestrator | 1 calls |
 
 ## How to Explore

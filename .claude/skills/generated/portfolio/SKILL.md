@@ -1,11 +1,11 @@
 ---
 name: portfolio
-description: "Skill for the Portfolio area of atlas. 146 symbols across 23 files."
+description: "Skill for the Portfolio area of atlas. 234 symbols across 39 files."
 ---
 
 # Portfolio
 
-146 symbols | 23 files | Cohesion: 85%
+234 symbols | 39 files | Cohesion: 84%
 
 ## When to Use
 
@@ -17,16 +17,16 @@ description: "Skill for the Portfolio area of atlas. 146 symbols across 23 files
 
 | File | Symbols |
 |------|---------|
+| `internal/portfolio/darwinian_weights.go` | NewDarwinianWeightManager, InitializeFromRegistry, RecordOutcome, updateRollingMetrics, calculateSharpe (+17) |
 | `internal/screener/engine_test.go` | ptrFloat64, ptrInt64, loadTestFundamentals, TestScreenPassesWithNilCriteria, TestScreenFiltersByPE (+13) |
 | `internal/portfolio/factor_engine_test.go` | TestFactorEngineCalculateMomentumScore, TestFactorEngineCalculateValueScore, TestFactorEngineCalculateValueScoreWithFundamentals, TestFactorEngineCalculateQualityScore, TestFactorEngineCalculateQualityScoreWithDividendYield (+11) |
+| `internal/portfolio/agent_health_test.go` | TestRecordOutcomeUpdatesStreaks, TestMuteAfterConsecutiveLosses, TestMuteAfterNegativeSharpe, TestAutoUnmuteAfterConsecutiveWins, TestAutoUnmuteAfterTimeBasedRecovery (+7) |
 | `internal/portfolio/capital_allocator_test.go` | TestNewCapitalAllocator, TestAllocate_EmptyRecommendations, TestAllocate_PhaseLimit, TestAllocate_EqualDistribution, TestAllocate_ConvictionWeighted (+7) |
 | `internal/portfolio/factor_engine.go` | NewFactorEngine, WithHistoricalPrices, WithFundamentalProvider, CalculateMomentumScore, calculateMomentumDetail (+6) |
 | `internal/portfolio/sector_rotator.go` | NewSectorRotator, NewSectorRotatorWithConfig, GetRebalancingTrades, CanExecuteRotation, absFloat64 (+6) |
-| `internal/portfolio/darwinian_weights.go` | rankBySharpe, constrainWeight, GetWeight, GetAllWeights, GetAgentWeightData (+5) |
+| `internal/portfolio/agent_health.go` | DefaultAgentHealthConfig, NewAgentHealthManager, NewAgentHealthManagerWithConfig, NewAgentHealthManagerWithStore, GetHealth (+5) |
 | `internal/portfolio/sizing.go` | CalculateSize, calculateKellySize, adjustForVolatility, adjustForATR, applyLiquidityLimit (+5) |
 | `internal/portfolio/analysis.go` | HoldingPeriod, CalculateMetrics, AttributionByAgent, AttributionBySymbol, CalculateAgentStats (+4) |
-| `internal/portfolio/agent_weights.go` | UpdateWeights, calculateScore, constrainWeight, renormalizeWeights, RankAgents (+4) |
-| `internal/portfolio/risk_manager.go` | NewRiskManager, SetRiskParameters, UpdatePortfolioValue, AddPosition, UpdatePosition (+1) |
 
 ## Entry Points
 
@@ -67,20 +67,29 @@ Start here when exploring this area:
 
 | Flow | Type | Steps |
 |------|------|-------|
-| `Main → ConstrainWeight` | cross_community | 5 |
-| `NewStyleRotationStrategy → StyleAllocation` | intra_community | 4 |
-| `NewIntegratedAllocator → StyleAllocation` | intra_community | 4 |
-| `NewIntegratedAllocator → RegimeThresholds` | intra_community | 4 |
+| `RunDailySimulation → StaticLoader` | cross_community | 5 |
+| `RunDailySimulation → LoadRegimeExecutors` | cross_community | 5 |
+| `RunDailySimulation → LoadAgentExecutors` | cross_community | 5 |
+| `RunDailySimulation → LoadControlExecutors` | cross_community | 5 |
+| `RunDailySimulation → IsAgentHealthy` | cross_community | 5 |
+| `RunDailySimulation → Info` | cross_community | 5 |
+| `RunDailySimulation → AgentID` | cross_community | 5 |
+| `Main → DarwinianWeightManager` | cross_community | 5 |
+| `Main → DarwinianAgentWeight` | cross_community | 5 |
+| `RunEnhancedExperiment → CalculateSharpe` | cross_community | 5 |
 
 ## Connected Areas
 
 | Area | Connections |
 |------|-------------|
-| Orchestrator | 14 calls |
-| Narrative | 5 calls |
-| Swarm | 3 calls |
-| Risk | 2 calls |
-| Config | 1 calls |
+| Orchestrator | 39 calls |
+| Risk | 11 calls |
+| Industry | 8 calls |
+| Ledger | 5 calls |
+| Eventbus | 5 calls |
+| Experiment | 4 calls |
+| Sim | 3 calls |
+| Narrative | 3 calls |
 
 ## How to Explore
 

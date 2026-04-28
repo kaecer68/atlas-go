@@ -1,88 +1,89 @@
 ---
 name: risk
-description: "Skill for the Risk area of atlas. 64 symbols across 11 files."
+description: "Skill for the Risk area of atlas. 77 symbols across 11 files."
 ---
 
 # Risk
 
-64 symbols | 11 files | Cohesion: 75%
+77 symbols | 11 files | Cohesion: 83%
 
 ## When to Use
 
 - Working with code in `internal/`
-- Understanding how TestNewApprovalWorkflow_CreatesDirectory, TestRequestApproval_Success, TestRequestApproval_MissingType work
+- Understanding how TestNewCapitalPhaseController, TestGetCapitalLimit, TestGetCapitalLimitUnknownPhase work
 - Modifying risk-related functionality
 
 ## Key Files
 
 | File | Symbols |
 |------|---------|
+| `internal/risk/capital_controller_test.go` | TestNewCapitalPhaseController, TestGetCapitalLimit, TestGetCapitalLimitUnknownPhase, TestCalculateMaxPositionSize, TestCanAdvance_MinDaysNotMet (+13) |
 | `internal/risk/approval_workflow_test.go` | setupWorkflow, TestNewApprovalWorkflow_CreatesDirectory, TestRequestApproval_Success, TestRequestApproval_MissingType, TestRequestApproval_MissingRequestedBy (+11) |
-| `internal/risk/macro_aware_drawdown.go` | NewDefaultDrawdownLevels, NewMacroAwareDrawdownEngine, NewMacroAwareDrawdownEngineWithConfig, ShouldHaltTrading, GetSectorConstraints (+4) |
-| `internal/risk/capital_controller_test.go` | TestAdvancePhase_Success, TestAdvancePhase_CannotAdvance, TestAdvancePhase_AtFinalPhase, TestNextPhase_Progression, TestCanAdvance_MinDaysNotMet (+3) |
+| `internal/risk/capital_controller.go` | NewCapitalPhaseController, GetSnapshot, UpdateMetrics, CanAdvance, AdvancePhase (+6) |
 | `internal/risk/approval_workflow.go` | NewApprovalWorkflow, RequestApproval, Approve, Reject, LoadAll (+2) |
 | `internal/risk/var_calculator_test.go` | TestCalculateMaxDrawdown, TestCalculateMaxDrawdownNoDecline, TestComputeRiskSnapshot, TestCalculateVaR, TestCalculateVaREmpty (+2) |
-| `internal/risk/capital_controller.go` | UpdateMetrics, AdvancePhase, evaluateAdvanceCriteria, nextPhase, CanAdvance |
-| `internal/risk/macro_aware_drawdown_test.go` | TestMacroAwareDrawdownEngine_GetSectorConstraints, TestMacroAwareDrawdownEngine_ShouldHaltTrading, TestMacroAwareDrawdownEngine_CalculatePortfolioAdjustment, TestMacroAwareDrawdownEngine_Evaluate |
+| `internal/risk/macro_aware_drawdown.go` | NewDefaultDrawdownLevels, NewMacroAwareDrawdownEngine, NewMacroAwareDrawdownEngineWithConfig, ShouldHaltTrading, GetSectorConstraints (+1) |
 | `internal/risk/var_calculator.go` | CalculateMaxDrawdown, ComputeRiskSnapshot, CalculateVaR, CalculateCVaR |
-| `internal/narrative/macro_assessment.go` | String, buildRationale |
-| `internal/monitoring/dashboard_api.go` | loadRiskSnapshot |
+| `internal/monitoring/dashboard_api.go` | handleCapitalPhase, handleRiskMetrics, loadRiskSnapshot |
+| `internal/risk/macro_aware_drawdown_test.go` | TestMacroAwareDrawdownEngine_GetSectorConstraints, TestMacroAwareDrawdownEngine_ShouldHaltTrading, TestMacroAwareDrawdownEngine_CalculatePortfolioAdjustment |
+| `internal/domain/types.go` | DefaultCapitalPhaseConfig |
 
 ## Entry Points
 
 Start here when exploring this area:
 
-- **`TestNewApprovalWorkflow_CreatesDirectory`** (Function) — `internal/risk/approval_workflow_test.go:17`
-- **`TestRequestApproval_Success`** (Function) — `internal/risk/approval_workflow_test.go:29`
-- **`TestRequestApproval_MissingType`** (Function) — `internal/risk/approval_workflow_test.go:51`
-- **`TestRequestApproval_MissingRequestedBy`** (Function) — `internal/risk/approval_workflow_test.go:60`
-- **`TestApprove_Success`** (Function) — `internal/risk/approval_workflow_test.go:69`
+- **`TestNewCapitalPhaseController`** (Function) — `internal/risk/capital_controller_test.go:9`
+- **`TestGetCapitalLimit`** (Function) — `internal/risk/capital_controller_test.go:21`
+- **`TestGetCapitalLimitUnknownPhase`** (Function) — `internal/risk/capital_controller_test.go:46`
+- **`TestCalculateMaxPositionSize`** (Function) — `internal/risk/capital_controller_test.go:58`
+- **`TestCanAdvance_MinDaysNotMet`** (Function) — `internal/risk/capital_controller_test.go:72`
 
 ## Key Symbols
 
 | Symbol | Type | File | Line |
 |--------|------|------|------|
-| `TestNewApprovalWorkflow_CreatesDirectory` | Function | `internal/risk/approval_workflow_test.go` | 17 |
-| `TestRequestApproval_Success` | Function | `internal/risk/approval_workflow_test.go` | 29 |
-| `TestRequestApproval_MissingType` | Function | `internal/risk/approval_workflow_test.go` | 51 |
-| `TestRequestApproval_MissingRequestedBy` | Function | `internal/risk/approval_workflow_test.go` | 60 |
-| `TestApprove_Success` | Function | `internal/risk/approval_workflow_test.go` | 69 |
-| `TestApprove_NotFound` | Function | `internal/risk/approval_workflow_test.go` | 94 |
-| `TestApprove_AlreadyApproved` | Function | `internal/risk/approval_workflow_test.go` | 103 |
-| `TestReject_Success` | Function | `internal/risk/approval_workflow_test.go` | 115 |
-| `TestReject_AlreadyRejected` | Function | `internal/risk/approval_workflow_test.go` | 134 |
-| `TestLoadAll_Empty` | Function | `internal/risk/approval_workflow_test.go` | 146 |
-| `TestLoadAll_Persistence` | Function | `internal/risk/approval_workflow_test.go` | 158 |
-| `TestGetRequest_NotFound` | Function | `internal/risk/approval_workflow_test.go` | 179 |
-| `TestPendingRequests` | Function | `internal/risk/approval_workflow_test.go` | 188 |
-| `TestApprovalWorkflow_StatusTracking` | Function | `internal/risk/approval_workflow_test.go` | 207 |
-| `TestApprovalWorkflow_FilePersistsAcrossInstances` | Function | `internal/risk/approval_workflow_test.go` | 226 |
-| `NewApprovalWorkflow` | Function | `internal/risk/approval_workflow.go` | 36 |
-| `TestMacroAwareDrawdownEngine_GetSectorConstraints` | Function | `internal/risk/macro_aware_drawdown_test.go` | 128 |
-| `TestMacroAwareDrawdownEngine_ShouldHaltTrading` | Function | `internal/risk/macro_aware_drawdown_test.go` | 189 |
-| `TestMacroAwareDrawdownEngine_CalculatePortfolioAdjustment` | Function | `internal/risk/macro_aware_drawdown_test.go` | 215 |
-| `NewDefaultDrawdownLevels` | Function | `internal/risk/macro_aware_drawdown.go` | 55 |
+| `TestNewCapitalPhaseController` | Function | `internal/risk/capital_controller_test.go` | 9 |
+| `TestGetCapitalLimit` | Function | `internal/risk/capital_controller_test.go` | 21 |
+| `TestGetCapitalLimitUnknownPhase` | Function | `internal/risk/capital_controller_test.go` | 46 |
+| `TestCalculateMaxPositionSize` | Function | `internal/risk/capital_controller_test.go` | 58 |
+| `TestCanAdvance_MinDaysNotMet` | Function | `internal/risk/capital_controller_test.go` | 72 |
+| `TestCanAdvance_DrawdownExceeded` | Function | `internal/risk/capital_controller_test.go` | 88 |
+| `TestCanAdvance_SharpeNotMet` | Function | `internal/risk/capital_controller_test.go` | 105 |
+| `TestCanAdvance_AllCriteriaMet` | Function | `internal/risk/capital_controller_test.go` | 119 |
+| `TestAdvancePhase_Success` | Function | `internal/risk/capital_controller_test.go` | 134 |
+| `TestAdvancePhase_CannotAdvance` | Function | `internal/risk/capital_controller_test.go` | 157 |
+| `TestAdvancePhase_AtFinalPhase` | Function | `internal/risk/capital_controller_test.go` | 170 |
+| `TestUpdateMetrics_UpdatesSnapshot` | Function | `internal/risk/capital_controller_test.go` | 184 |
+| `TestCanAdvance_ConsecutiveLossesExceeded` | Function | `internal/risk/capital_controller_test.go` | 244 |
+| `TestRecordLoss_IncrementsCounter` | Function | `internal/risk/capital_controller_test.go` | 261 |
+| `TestRecordWin_ResetsCounter` | Function | `internal/risk/capital_controller_test.go` | 281 |
+| `TestRecordLoss_BlocksAdvance` | Function | `internal/risk/capital_controller_test.go` | 298 |
+| `TestRecordWin_AllowsRecovery` | Function | `internal/risk/capital_controller_test.go` | 325 |
+| `TestNextPhase_Progression` | Function | `internal/risk/capital_controller_test.go` | 349 |
+| `NewCapitalPhaseController` | Function | `internal/risk/capital_controller.go` | 17 |
+| `DefaultCapitalPhaseConfig` | Function | `internal/domain/types.go` | 226 |
 
 ## Execution Flows
 
 | Flow | Type | Steps |
 |------|------|-------|
 | `HandleDailySummary → CalculateVaR` | cross_community | 5 |
+| `LoadDailySummary → CalculateVaR` | cross_community | 5 |
+| `HandleRiskExposure → CalculateVaR` | cross_community | 4 |
 | `HandleDailySummary → CalculateMaxDrawdown` | cross_community | 4 |
-| `HandleRiskMetrics → CalculateVaR` | cross_community | 4 |
-| `HandleDailySummary → Max` | cross_community | 3 |
+| `LoadDailySummary → CalculateMaxDrawdown` | cross_community | 4 |
+| `HandleRiskExposure → CalculateMaxDrawdown` | cross_community | 3 |
+| `RunSimulation → CapitalPhaseConfig` | cross_community | 3 |
 
 ## Connected Areas
 
 | Area | Connections |
 |------|-------------|
-| Orchestrator | 11 calls |
-| Portfolio | 8 calls |
-| Swarm | 4 calls |
+| Industry | 5 calls |
 | Config | 1 calls |
 
 ## How to Explore
 
-1. `gitnexus_context({name: "TestNewApprovalWorkflow_CreatesDirectory"})` — see callers and callees
+1. `gitnexus_context({name: "TestNewCapitalPhaseController"})` — see callers and callees
 2. `gitnexus_query({query: "risk"})` — find related execution flows
 3. Read key files listed above for implementation details

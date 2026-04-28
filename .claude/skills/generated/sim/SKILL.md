@@ -59,26 +59,13 @@ Start here when exploring this area:
 | `TestSlippageModelConsistencyWithAndWithoutPrecompute` | Function | `internal/sim/slippage_model_test.go` | 301 |
 | `TestSlippageModelPrecompute` | Function | `internal/sim/slippage_model_test.go` | 197 |
 
-## Execution Flows
-
-| Flow | Type | Steps |
-|------|------|-------|
-| `ExecuteOptimizerBuys → Validate` | cross_community | 5 |
-| `ExecuteOptimizerBuys → EngineConfig` | cross_community | 5 |
-| `ExecuteOptimizerBuys → MacroRiskConfig` | cross_community | 5 |
-| `ExecuteOptimizerBuys → StructuralTrendConfig` | cross_community | 5 |
-| `HandleBacktestRun → SimulationState` | cross_community | 4 |
-| `ExecuteOptimizerBuys → CalculateSlippageBPS` | cross_community | 4 |
-| `ExecuteOptimizerBuys → DrawdownConfig` | cross_community | 4 |
-
 ## Connected Areas
 
 | Area | Connections |
 |------|-------------|
 | Tax | 4 calls |
-| Portfolio | 2 calls |
+| Portfolio | 3 calls |
 | Config | 2 calls |
-| Orchestrator | 1 calls |
 
 ## How to Explore
 

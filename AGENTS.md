@@ -221,7 +221,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas** (9241 symbols, 24006 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas** (10088 symbols, 26391 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -317,6 +317,26 @@ To check whether embeddings exist, inspect `.gitnexus/meta.json` — the `stats.
 | Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
 | Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+| Work in the Orchestrator area (319 symbols) | `.claude/skills/generated/orchestrator/SKILL.md` |
+| Work in the Portfolio area (234 symbols) | `.claude/skills/generated/portfolio/SKILL.md` |
+| Work in the Monitoring area (200 symbols) | `.claude/skills/generated/monitoring/SKILL.md` |
+| Work in the Industry area (185 symbols) | `.claude/skills/generated/industry/SKILL.md` |
+| Work in the Live area (170 symbols) | `.claude/skills/generated/live/SKILL.md` |
+| Work in the Narrative area (148 symbols) | `.claude/skills/generated/narrative/SKILL.md` |
+| Work in the Marketdata area (109 symbols) | `.claude/skills/generated/marketdata/SKILL.md` |
+| Work in the Experiment area (102 symbols) | `.claude/skills/generated/experiment/SKILL.md` |
+| Work in the Risk area (77 symbols) | `.claude/skills/generated/risk/SKILL.md` |
+| Work in the Sim area (54 symbols) | `.claude/skills/generated/sim/SKILL.md` |
+| Work in the Ledger area (44 symbols) | `.claude/skills/generated/ledger/SKILL.md` |
+| Work in the Atlas area (38 symbols) | `.claude/skills/generated/atlas/SKILL.md` |
+| Work in the Janus area (34 symbols) | `.claude/skills/generated/janus/SKILL.md` |
+| Work in the Service area (30 symbols) | `.claude/skills/generated/service/SKILL.md` |
+| Work in the Spawning area (27 symbols) | `.claude/skills/generated/spawning/SKILL.md` |
+| Work in the Baseline area (26 symbols) | `.claude/skills/generated/baseline/SKILL.md` |
+| Work in the Realtime area (26 symbols) | `.claude/skills/generated/realtime/SKILL.md` |
+| Work in the Eventbus area (25 symbols) | `.claude/skills/generated/eventbus/SKILL.md` |
+| Work in the Tax area (23 symbols) | `.claude/skills/generated/tax/SKILL.md` |
+| Work in the Prism area (22 symbols) | `.claude/skills/generated/prism/SKILL.md` |
 
 <!-- gitnexus:end -->
 

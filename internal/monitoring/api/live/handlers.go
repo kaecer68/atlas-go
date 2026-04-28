@@ -13,6 +13,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/live"
+	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
 
@@ -20,12 +21,22 @@ import (
 type Handlers struct {
 	LedgerDir string
 	WorkDir   string
+	Svc       *service.LiveService
+}
+
+func (h *Handlers) getService() *service.LiveService {
+	if h.Svc != nil {
+		return h.Svc
+	}
+	return service.NewLiveService(h.WorkDir, h.LedgerDir)
 }
 
 // RegisterRoutes mounts live trading endpoints.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/pnl-attribution", h.HandlePnLAttribution)
 	mux.HandleFunc("/api/dashboard/risk-exposure", h.HandleRiskExposure)
+	mux.HandleFunc("/api/dashboard/live-status", h.HandleLiveStatus)
+	mux.HandleFunc("/api/dashboard/portfolio-state", h.HandlePortfolioState)
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
@@ -518,6 +529,28 @@ func (h *Handlers) HandleRiskExposure(w http.ResponseWriter, r *http.Request) {
 		DataPoints:       len(dailyReturns),
 		InsufficientData: insufficient,
 	})
+}
+
+// HandleLiveStatus returns the current live trading status.
+func (h *Handlers) HandleLiveStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	status := h.getService().LoadLiveStatus()
+	writeJSON(w, http.StatusOK, status)
+}
+
+// HandlePortfolioState returns the current portfolio state with positions.
+func (h *Handlers) HandlePortfolioState(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	state := h.getService().LoadPortfolioState()
+	writeJSON(w, http.StatusOK, state)
 }
 
 func loadRecommendationOutcomes(ledgerDir, sessionID string) ([]domain.RecommendationOutcome, error) {
