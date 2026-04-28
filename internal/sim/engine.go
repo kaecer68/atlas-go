@@ -14,14 +14,15 @@ import (
 )
 
 type Engine struct {
-	constraints   domain.SimulationConstraints
-	optimizer     *portfolio.Optimizer
-	useOptimizer  bool
-	reflexRules   []reflexivity.Rule
-	ctx           context.Context
-	slippageModel *SlippageModel
-	taxCalc       *tax.TaiwanTaxCalculator
-	dividends     map[string]float64
+	constraints     domain.SimulationConstraints
+	optimizer       *portfolio.Optimizer
+	useOptimizer    bool
+	reflexRules     []reflexivity.Rule
+	ctx             context.Context
+	slippageModel   *SlippageModel
+	taxCalc         *tax.TaiwanTaxCalculator
+	dividends       map[string]float64
+	thresholdEngine *DynamicThresholdEngine
 }
 
 func NewEngine(constraints domain.SimulationConstraints) *Engine {
@@ -64,6 +65,17 @@ func (e *Engine) WithTaxCalculator(tc *tax.TaiwanTaxCalculator) *Engine {
 func (e *Engine) WithDividends(divs map[string]float64) *Engine {
 	e.dividends = divs
 	return e
+}
+
+// WithThresholdEngine attaches a dynamic threshold engine for correlation-based filtering.
+func (e *Engine) WithThresholdEngine(te *DynamicThresholdEngine) *Engine {
+	e.thresholdEngine = te
+	return e
+}
+
+// GetThresholdEngine returns the attached dynamic threshold engine.
+func (e *Engine) GetThresholdEngine() *DynamicThresholdEngine {
+	return e.thresholdEngine
 }
 
 func (e *Engine) Run(regime domain.Regime, quotes []domain.Quote, recs []domain.Recommendation) domain.SimulationResult {
