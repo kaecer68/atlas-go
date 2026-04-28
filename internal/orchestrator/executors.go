@@ -284,6 +284,11 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 			screenRes, err := plugins.ScreenDetailed(ctx, agent, symbol, quotes)
 			if err != nil || !screenRes.Passed {
 				if !screenRes.Passed {
+					logging.Debug("screener", "screen_reject",
+						logging.Symbol(symbol),
+						logging.AgentID(agent.ID),
+						logging.FStr("criterion", screenRes.Criterion),
+						logging.FStr("reason", screenRes.Reason))
 					rejects = append(rejects, domain.ScreeningReject{
 						SessionID:      sessionID,
 						Symbol:         symbol,
@@ -311,12 +316,14 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 		breakdown, scores := plugins.CalculateFactorScoresWithBreakdown(recs[i].Symbol, quotes, recs, agentWeights)
 		if scores != nil {
 			recs[i].FactorScores = domain.FactorScores{
-				Momentum:  scores[portfolio.FactorMomentum],
-				Value:     scores[portfolio.FactorValue],
-				Quality:   scores[portfolio.FactorQuality],
-				Agent:     scores[portfolio.FactorAgent],
-				Total:     scores["total"],
-				Breakdown: breakdown,
+				Momentum:               scores[portfolio.FactorMomentum],
+				Value:                  scores[portfolio.FactorValue],
+				Quality:                scores[portfolio.FactorQuality],
+				Agent:                  scores[portfolio.FactorAgent],
+				InstitutionalSentiment: scores[portfolio.FactorInstSent],
+				Liquidity:              scores[portfolio.FactorLiquidity],
+				Total:                  scores["total"],
+				Breakdown:              breakdown,
 			}
 		}
 	}
@@ -324,12 +331,14 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 		breakdown, scores := plugins.CalculateFactorScoresWithBreakdown(rejects[i].Symbol, quotes, recs, agentWeights)
 		if scores != nil {
 			rejects[i].FactorScores = domain.FactorScores{
-				Momentum:  scores[portfolio.FactorMomentum],
-				Value:     scores[portfolio.FactorValue],
-				Quality:   scores[portfolio.FactorQuality],
-				Agent:     scores[portfolio.FactorAgent],
-				Total:     scores["total"],
-				Breakdown: breakdown,
+				Momentum:               scores[portfolio.FactorMomentum],
+				Value:                  scores[portfolio.FactorValue],
+				Quality:                scores[portfolio.FactorQuality],
+				Agent:                  scores[portfolio.FactorAgent],
+				InstitutionalSentiment: scores[portfolio.FactorInstSent],
+				Liquidity:              scores[portfolio.FactorLiquidity],
+				Total:                  scores["total"],
+				Breakdown:              breakdown,
 			}
 		}
 	}

@@ -42,22 +42,24 @@ type Signal struct {
 
 // Sizer 仓位规模管理器
 type Sizer struct {
-	params       RiskParameters
-	volatilities map[string]float64            // 股票波动率缓存
-	correlations map[string]map[string]float64 // 相关性矩阵
-	advCache     map[string]float64            // 日均成交量缓存
-	atrCache     map[string]float64            // ATR缓存
-	mu           sync.RWMutex
+	params               RiskParameters
+	volatilities         map[string]float64            // 股票波动率缓存
+	correlations         map[string]map[string]float64 // 相关性矩阵
+	advCache             map[string]float64            // 日均成交量缓存
+	atrCache             map[string]float64            // ATR缓存
+	correlationThreshold float64                       // 动态相关性阈值
+	mu                   sync.RWMutex
 }
 
 // NewSizer 创建仓位管理器
 func NewSizer() *Sizer {
 	return &Sizer{
-		params:       DefaultRiskParameters(),
-		volatilities: make(map[string]float64),
-		correlations: make(map[string]map[string]float64),
-		advCache:     make(map[string]float64),
-		atrCache:     make(map[string]float64),
+		params:               DefaultRiskParameters(),
+		volatilities:         make(map[string]float64),
+		correlations:         make(map[string]map[string]float64),
+		advCache:             make(map[string]float64),
+		atrCache:             make(map[string]float64),
+		correlationThreshold: 0.70, // 默认静态阈值
 	}
 }
 
@@ -66,6 +68,13 @@ func (s *Sizer) SetRiskParameters(params RiskParameters) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.params = params
+}
+
+// SetCorrelationThreshold 设置动态相关性阈值
+func (s *Sizer) SetCorrelationThreshold(threshold float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.correlationThreshold = threshold
 }
 
 // CalculateSize 计算建议仓位规模
@@ -217,6 +226,7 @@ func (s *Sizer) applyLiquidityLimit(size, adv, maxPct float64) float64 {
 func (s *Sizer) calculateCorrelationPenalty(symbol string, portfolio PortfolioSnapshot) float64 {
 	s.mu.RLock()
 	correlations := s.correlations[symbol]
+	threshold := s.correlationThreshold
 	s.mu.RUnlock()
 
 	if len(correlations) == 0 || len(portfolio.Positions) == 0 {
@@ -225,11 +235,16 @@ func (s *Sizer) calculateCorrelationPenalty(symbol string, portfolio PortfolioSn
 
 	var totalCorr float64
 	var count int
+	var highCorrCount int
 
 	for _, pos := range portfolio.Positions {
 		if corr, ok := correlations[pos.Symbol]; ok {
-			totalCorr += math.Abs(corr)
+			absCorr := math.Abs(corr)
+			totalCorr += absCorr
 			count++
+			if absCorr > threshold {
+				highCorrCount++
+			}
 		}
 	}
 
@@ -239,8 +254,8 @@ func (s *Sizer) calculateCorrelationPenalty(symbol string, portfolio PortfolioSn
 
 	avgCorr := totalCorr / float64(count)
 
-	// 平均相关性越高，惩罚越大
-	// 0.7 相关性 -> 0.5 惩罚
+	// 动态阈值：高相关性惩罚 = avgCorr * (highCorrCount/count)
+	// 相关性越高、超过阈值的标的越多，惩罚越大
 	penalty := avgCorr * 0.7
 	if penalty > 0.7 {
 		penalty = 0.7
