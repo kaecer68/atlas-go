@@ -18,6 +18,68 @@ func NewRegistry() *Registry {
 	}
 }
 
+func NewRegistryWithDefaults() *Registry {
+	r := NewRegistry()
+
+	strategies := []*Strategy{
+		{
+			ID:           "all_weather",
+			Name:         "全天候",
+			Description:  "所有 Agent，保守閾值",
+			Enabled:      true,
+			Agents:       []string{"*"},
+			Priority:     10,
+			RiskAppetite: RiskAppetiteBalanced,
+			RegimePrefs:  []domain.Regime{domain.RegimeRiskOn, domain.RegimeRiskOff, domain.RegimeNeutral},
+		},
+		{
+			ID:           "growth",
+			Name:         "成長動能",
+			Description:  "動能 + AI supply chain",
+			Enabled:      true,
+			Agents:       []string{"momentum", "ai_supply_chain"},
+			Priority:     20,
+			RiskAppetite: RiskAppetiteAggressive,
+			RegimePrefs:  []domain.Regime{domain.RegimeRiskOn, domain.RegimeNeutral},
+		},
+		{
+			ID:           "value",
+			Name:         "價值投資",
+			Description:  "Value + Quality",
+			Enabled:      true,
+			Agents:       []string{"value", "quality"},
+			Priority:     30,
+			RiskAppetite: RiskAppetiteConservative,
+			RegimePrefs:  []domain.Regime{domain.RegimeRiskOn, domain.RegimeNeutral},
+		},
+		{
+			ID:           "defensive",
+			Name:         "防御型",
+			Description:  "高品質 + 低波動",
+			Enabled:      true,
+			Agents:       []string{"quality", "low_volatility"},
+			Priority:     40,
+			RiskAppetite: RiskAppetiteConservative,
+			RegimePrefs:  []domain.Regime{domain.RegimeRiskOff, domain.RegimeNeutral},
+		},
+		{
+			ID:           "momentum",
+			Name:         "純動能",
+			Description:  "僅動能因子",
+			Enabled:      true,
+			Agents:       []string{"momentum"},
+			Priority:     50,
+			RiskAppetite: RiskAppetiteAggressive,
+			RegimePrefs:  []domain.Regime{domain.RegimeRiskOn},
+		},
+	}
+
+	for _, s := range strategies {
+		r.strategies[s.ID] = s
+	}
+	return r
+}
+
 func (r *Registry) Register(s *Strategy) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
