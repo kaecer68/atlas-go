@@ -15,6 +15,10 @@ type NarrativeEvent struct {
 	TimeWindow       string             `json:"time_window"`  // "immediate", "1_week", "1_month"
 	Timestamp        time.Time          `json:"timestamp"`
 	SourceData       map[string]float64 `json:"source_data,omitempty"`
+	Duration         time.Duration      `json:"duration"`
+	ExpiresAt        time.Time          `json:"expires_at"`
+	Severity         string             `json:"severity"`
+	Status           string             `json:"status"`
 }
 
 // CausalStep represents one step in a causal transmission chain.

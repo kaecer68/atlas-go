@@ -38,6 +38,7 @@ func defaultCircuitBreakerConfig() circuitBreakerConfig {
 // 优先使用 Fugle（实时），失败时回退到 TWSE OpenAPI（免费但 rate limited）
 // 使用 Circuit Breaker 模式防止永久切换，支持自动恢复
 type HybridProvider struct {
+	fubonProvider *FubonProvider
 	fugleProvider *FugleProvider
 	twseClient    *TWSEClient
 
@@ -57,13 +58,19 @@ type HybridProvider struct {
 
 // NewHybridProvider 创建混合 Provider
 // apiKey: Fugle API key，如果为空或失败则回退到 TWSE
-func NewHybridProvider(apiKey string) *HybridProvider {
+func NewHybridProvider(fubonAPIKey, fugleAPIKey string) *HybridProvider {
+	var fubonProvider *FubonProvider
+	if fubonAPIKey != "" {
+		fubonProvider = NewFubonProviderWithClient(NewFubonClient(fubonAPIKey))
+	}
+
 	var fugleProvider *FugleProvider
-	if apiKey != "" {
-		fugleProvider = NewFugleProviderWithAPIKey(apiKey)
+	if fugleAPIKey != "" {
+		fugleProvider = NewFugleProviderWithAPIKey(fugleAPIKey)
 	}
 
 	return &HybridProvider{
+		fubonProvider: fubonProvider,
 		fugleProvider: fugleProvider,
 		twseClient:    NewTWSEClient(),
 		cbState:       ProviderCircuitClosed,
@@ -73,38 +80,35 @@ func NewHybridProvider(apiKey string) *HybridProvider {
 
 // Name 返回 Provider 名称
 func (p *HybridProvider) Name() string {
-	if p.isCircuitOpen() || p.fugleProvider == nil {
-		return "hybrid-twse"
+	if p.fubonProvider != nil {
+		return "hybrid-fubon"
 	}
-	return "hybrid-fugle"
+	if p.fugleProvider != nil {
+		return "hybrid-fugle"
+	}
+	return "hybrid-twse"
 }
 
-// GetQuotes 获取行情，优先 Fugle，失败时回退 TWSE
-// 使用 Circuit Breaker 防止永久切换，支持自动恢复
+// GetQuotes 获取行情，优先 Fubon，失败时回退 Fugle，最后 TWSE
 func (p *HybridProvider) GetQuotes(ctx context.Context, asOf time.Time, symbols []string) ([]domain.Quote, error) {
-	// If no Fugle provider, always use TWSE
-	if p.fugleProvider == nil {
-		return p.getQuotesFromTWSE(ctx, symbols)
+	if p.fubonProvider == nil {
+		return p.getQuotesFromFugleOrTWSE(ctx, asOf, symbols)
 	}
 
-	// Check if circuit breaker allows Fugle attempt
-	if p.shouldTryFugle() {
-		quotes, err := p.tryFugle(ctx, asOf, symbols)
+	if p.shouldTryFubon() {
+		quotes, err := p.tryFubon(ctx, asOf, symbols)
 		if err == nil && len(quotes) > 0 && !p.hasInvalidQuotes(quotes) {
 			return quotes, nil
 		}
-		// Fugle failed or returned invalid data, record failure and fallback
-		p.recordFugleFailure()
-		fmt.Printf("[HybridProvider] Fugle failed (%v), falling back to TWSE (circuit: %s, failures: %d)\n",
+		p.recordFubonFailure()
+		fmt.Printf("[HybridProvider] Fubon failed (%v), falling back to Fugle/TWSE (circuit: %s, failures: %d)\n",
 			err, p.getCircuitState(), p.getFailureCount())
 	}
 
-	// Fallback to TWSE
-	return p.getQuotesFromTWSE(ctx, symbols)
+	return p.getQuotesFromFugleOrTWSE(ctx, asOf, symbols)
 }
 
-// shouldTryFugle returns true if the circuit breaker allows a Fugle attempt.
-func (p *HybridProvider) shouldTryFugle() bool {
+func (p *HybridProvider) shouldTryFubon() bool {
 	p.cbMutex.Lock()
 	defer p.cbMutex.Unlock()
 
@@ -112,16 +116,14 @@ func (p *HybridProvider) shouldTryFugle() bool {
 	case ProviderCircuitClosed:
 		return true
 	case ProviderCircuitOpen:
-		// Check if recovery timeout has elapsed
 		if time.Since(p.cbLastFailure) > p.cbConfig.recoveryTimeout {
 			p.cbState = ProviderCircuitHalfOpen
 			p.cbHalfOpenCalls = 0
-			fmt.Printf("[HybridProvider] Circuit breaker entering half-open state, testing Fugle recovery\n")
+			fmt.Printf("[HybridProvider] Circuit breaker entering half-open state, testing Fubon recovery\n")
 			return true
 		}
 		return false
 	case ProviderCircuitHalfOpen:
-		// Allow limited calls in half-open state
 		if p.cbHalfOpenCalls < p.cbConfig.halfOpenMaxCalls {
 			p.cbHalfOpenCalls++
 			return true
@@ -131,7 +133,62 @@ func (p *HybridProvider) shouldTryFugle() bool {
 	return false
 }
 
-// tryFugle attempts to get quotes from Fugle.
+func (p *HybridProvider) tryFubon(ctx context.Context, asOf time.Time, symbols []string) ([]domain.Quote, error) {
+	quotes, err := p.fubonProvider.GetQuotes(ctx, asOf, symbols)
+	if err != nil {
+		return nil, err
+	}
+	if len(quotes) == 0 || p.hasInvalidQuotes(quotes) {
+		return quotes, fmt.Errorf("fubon returned invalid/empty data")
+	}
+	return quotes, nil
+}
+
+func (p *HybridProvider) recordFubonFailure() {
+	p.cbMutex.Lock()
+	defer p.cbMutex.Unlock()
+
+	p.cbFailureCount++
+	p.cbLastFailure = time.Now()
+	p.fallbackCount++
+	p.lastFallbackAt = time.Now()
+
+	if p.cbState == ProviderCircuitHalfOpen {
+		p.cbState = ProviderCircuitOpen
+		p.cbHalfOpenCalls = 0
+		fmt.Printf("[HybridProvider] Fubon recovery failed in half-open state, circuit re-opened\n")
+	} else if p.cbFailureCount >= p.cbConfig.failureThreshold {
+		p.cbState = ProviderCircuitOpen
+		fmt.Printf("[HybridProvider] Circuit breaker opened after %d consecutive failures\n", p.cbFailureCount)
+	}
+}
+
+func (p *HybridProvider) getQuotesFromFugleOrTWSE(ctx context.Context, asOf time.Time, symbols []string) ([]domain.Quote, error) {
+	if p.fugleProvider != nil && p.shouldTryFugle() {
+		quotes, err := p.tryFugle(ctx, asOf, symbols)
+		if err == nil && len(quotes) > 0 && !p.hasInvalidQuotes(quotes) {
+			return quotes, nil
+		}
+		if err != nil {
+			fmt.Printf("[HybridProvider] Fugle failed (%v), falling back to TWSE\n", err)
+		}
+	}
+	return p.getQuotesFromTWSE(ctx, symbols)
+}
+
+func (p *HybridProvider) shouldTryFugle() bool {
+	p.cbMutex.Lock()
+	defer p.cbMutex.Unlock()
+
+	if p.cbState == ProviderCircuitClosed || p.cbState == ProviderCircuitHalfOpen {
+		return p.fugleProvider != nil
+	}
+	if p.cbState == ProviderCircuitOpen && time.Since(p.cbLastFailure) > p.cbConfig.recoveryTimeout {
+		return p.fugleProvider != nil
+	}
+	return false
+}
+
 func (p *HybridProvider) tryFugle(ctx context.Context, asOf time.Time, symbols []string) ([]domain.Quote, error) {
 	quotes, err := p.fugleProvider.GetQuotes(ctx, asOf, symbols)
 	if err != nil {
@@ -143,29 +200,6 @@ func (p *HybridProvider) tryFugle(ctx context.Context, asOf time.Time, symbols [
 	return quotes, nil
 }
 
-// recordFugleFailure records a failure and potentially opens the circuit.
-func (p *HybridProvider) recordFugleFailure() {
-	p.cbMutex.Lock()
-	defer p.cbMutex.Unlock()
-
-	p.cbFailureCount++
-	p.cbLastFailure = time.Now()
-	p.fallbackCount++
-	p.lastFallbackAt = time.Now()
-
-	if p.cbState == ProviderCircuitHalfOpen {
-		// Failure in half-open state -> back to open
-		p.cbState = ProviderCircuitOpen
-		p.cbHalfOpenCalls = 0
-		fmt.Printf("[HybridProvider] Fugle recovery failed in half-open state, circuit re-opened\n")
-	} else if p.cbFailureCount >= p.cbConfig.failureThreshold {
-		// Too many failures -> open circuit
-		p.cbState = ProviderCircuitOpen
-		fmt.Printf("[HybridProvider] Circuit breaker opened after %d consecutive failures\n", p.cbFailureCount)
-	}
-}
-
-// recordFugleSuccess records a successful Fugle call and resets the circuit.
 func (p *HybridProvider) recordFugleSuccess() {
 	p.cbMutex.Lock()
 	defer p.cbMutex.Unlock()
@@ -179,7 +213,6 @@ func (p *HybridProvider) recordFugleSuccess() {
 	p.cbHalfOpenCalls = 0
 }
 
-// isCircuitOpen returns true if the circuit is currently open.
 func (p *HybridProvider) isCircuitOpen() bool {
 	p.cbMutex.RLock()
 	defer p.cbMutex.RUnlock()
@@ -261,7 +294,21 @@ func (p *HybridProvider) UseFugle() {
 	p.cbHalfOpenCalls = 0
 }
 
-// GetClient 获取底层客户端（用于直接访问）
+func (p *HybridProvider) GetFubonClient() *FubonClient {
+	if p.fubonProvider == nil {
+		return nil
+	}
+	return p.fubonProvider.GetClient()
+}
+
+func (p *HybridProvider) UseFubon() {
+	p.cbMutex.Lock()
+	defer p.cbMutex.Unlock()
+	p.cbState = ProviderCircuitClosed
+	p.cbFailureCount = 0
+	p.cbHalfOpenCalls = 0
+}
+
 func (p *HybridProvider) GetTWSEClient() *TWSEClient {
 	return p.twseClient
 }

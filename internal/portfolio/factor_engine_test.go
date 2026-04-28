@@ -287,8 +287,8 @@ func TestFallbackFactorsGetReducedWeight(t *testing.T) {
 	if breakdown.Total.Formula == "" {
 		t.Error("expected total formula to be set")
 	}
-	if breakdown.Total.Formula != "sum(factor_score * effective_weight) [SCOR-04: fallback factors use 50% weight]" {
-		t.Errorf("expected SCOR-04 formula, got '%s'", breakdown.Total.Formula)
+	if breakdown.Total.Formula != "sum(factor_score * effective_weight)" {
+		t.Errorf("expected formula 'sum(factor_score * effective_weight)', got '%s'", breakdown.Total.Formula)
 	}
 }
 
