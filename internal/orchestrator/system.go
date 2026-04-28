@@ -335,6 +335,21 @@ func (s *System) GetExecutionPolicy() domain.ExecutionPolicy {
 	return s.policy.ExecutionPolicy
 }
 
+func (s *System) GetCurrentStrategy() *strategy.Strategy {
+	if s.strategySelector == nil {
+		return nil
+	}
+	return s.strategySelector.GetCurrentStrategy()
+}
+
+func (s *System) GetStrategySelector() *strategy.Selector {
+	return s.strategySelector
+}
+
+func (s *System) GetThresholdEngine() *sim.DynamicThresholdEngine {
+	return s.thresholdEngine
+}
+
 func (s *System) detectNarrativeEvents(quotes []domain.Quote) []narrative.NarrativeEvent {
 	if s.narrativeEngine == nil {
 		return nil
