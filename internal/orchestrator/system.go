@@ -170,6 +170,23 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	if s.eventBus != nil {
 		go s.eventBus.PublishRegimeChange(oldRegime, regime, 0.0, "orchestrator")
 	}
+
+	if s.strategySelector != nil {
+		selectedStrategy, err := s.strategySelector.Select(
+			s.ctx,
+			vixFromQuotes(quotes),
+			regime,
+		)
+		if err == nil && selectedStrategy != nil {
+			if s.factorWeightEngine != nil {
+				s.factorWeightEngine.ApplyStrategy(selectedStrategy)
+			}
+			if s.thresholdEngine != nil {
+				s.thresholdEngine.SetRiskAppetite(sim.RiskAppetite(selectedStrategy.RiskAppetite))
+			}
+		}
+	}
+
 	rawRecs = s.applyNarrativeContextWithEvents(rawRecs, events)
 	finalRecs = s.applyNarrativeContextWithEvents(finalRecs, events)
 	rawRecs = s.applyHumanOverrides(rawRecs)
@@ -253,6 +270,23 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	if s.eventBus != nil {
 		go s.eventBus.PublishRegimeChange(oldRegime, regime, 0.0, "orchestrator")
 	}
+
+	if s.strategySelector != nil {
+		selectedStrategy, err := s.strategySelector.Select(
+			s.ctx,
+			vixFromQuotes(quotes),
+			regime,
+		)
+		if err == nil && selectedStrategy != nil {
+			if s.factorWeightEngine != nil {
+				s.factorWeightEngine.ApplyStrategy(selectedStrategy)
+			}
+			if s.thresholdEngine != nil {
+				s.thresholdEngine.SetRiskAppetite(sim.RiskAppetite(selectedStrategy.RiskAppetite))
+			}
+		}
+	}
+
 	rawRecs = s.applyNarrativeContextWithEvents(rawRecs, events)
 	finalRecs = s.applyNarrativeContextWithEvents(finalRecs, events)
 	rawRecs = s.applyHumanOverrides(rawRecs)
