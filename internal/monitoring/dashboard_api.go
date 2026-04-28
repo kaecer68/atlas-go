@@ -27,16 +27,21 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	apibacktest "github.com/kaecer68/atlas-go/internal/monitoring/api/backtest"
 	apicontrol "github.com/kaecer68/atlas-go/internal/monitoring/api/control"
+	apidata "github.com/kaecer68/atlas-go/internal/monitoring/api/data"
 	apiexperiment "github.com/kaecer68/atlas-go/internal/monitoring/api/experiment"
 	apihealth "github.com/kaecer68/atlas-go/internal/monitoring/api/health"
 	apiindustry "github.com/kaecer68/atlas-go/internal/monitoring/api/industry"
 	apilive "github.com/kaecer68/atlas-go/internal/monitoring/api/live"
 	apimacro "github.com/kaecer68/atlas-go/internal/monitoring/api/macro"
+	apimarketdata "github.com/kaecer68/atlas-go/internal/monitoring/api/marketdata"
 	apimetrics "github.com/kaecer68/atlas-go/internal/monitoring/api/metrics"
 	apinarrative "github.com/kaecer68/atlas-go/internal/monitoring/api/narrative"
 	apipipeline "github.com/kaecer68/atlas-go/internal/monitoring/api/pipeline"
 	apireport "github.com/kaecer68/atlas-go/internal/monitoring/api/report"
+	apirisk "github.com/kaecer68/atlas-go/internal/monitoring/api/risk"
+	apiswagger "github.com/kaecer68/atlas-go/internal/monitoring/api/swagger"
 	apisystem "github.com/kaecer68/atlas-go/internal/monitoring/api/system"
+	apitax "github.com/kaecer68/atlas-go/internal/monitoring/api/tax"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
@@ -176,7 +181,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 
 	metricsSvc := service.NewMetricsService(
 		&service.MetricsCollectorAdapter{
-			GetScreeningRateFunc:   a.metricsCollector.GetScreeningRate,
+			GetScreeningRateFunc: a.metricsCollector.GetScreeningRate,
 			GetMetricsSnapshotFunc: func() service.MetricsSnapshot {
 				snap := a.metricsCollector.GetMetricsSnapshot()
 				return service.MetricsSnapshot{
@@ -214,12 +219,17 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	handlers := &apihealth.Handlers{}
 	handlers.RegisterRoutes(mux)
 
-	mux.HandleFunc("/api/dashboard/data-channels", a.handleDataChannels)
-	mux.HandleFunc("/api/channels/ingest", a.handleChannelsIngest)
-	mux.HandleFunc("/api/dashboard/risk", a.handleRiskMetrics)
-	mux.HandleFunc("/api/dashboard/retail-sentiment", a.handleRetailSentiment)
-	mux.HandleFunc("/api/dashboard/capital-phase", a.handleCapitalPhase)
-	mux.HandleFunc("/api/dashboard/tax-snapshot", a.handleTaxSnapshot)
+	dataHandlers := apidata.NewHandlers(a.workDir, a.pool, a.macroIngestor, a.geoProvider, a.taiwanGeoProvider, a.janusEngine, &channelHealthAdapter{store: NewChannelHealthStoreWithPool(filepath.Join(a.workDir, "data/state"), a.pool)})
+	dataHandlers.RegisterRoutes(mux)
+
+	riskHandlers := apirisk.NewHandlers(a.ledgerDir)
+	riskHandlers.RegisterRoutes(mux)
+
+	marketdataHandlers := apimarketdata.NewHandlers(a.workDir)
+	marketdataHandlers.RegisterRoutes(mux)
+
+	taxHandlers := apitax.NewHandlers()
+	taxHandlers.RegisterRoutes(mux)
 }
 
 func (a *DashboardAPI) RegisterIndustryRoutes(mux *http.ServeMux) {
@@ -231,8 +241,8 @@ func (a *DashboardAPI) RegisterIndustryRoutes(mux *http.ServeMux) {
 
 // RegisterSwaggerRoutes mounts Swagger UI and the OpenAPI spec.
 func (a *DashboardAPI) RegisterSwaggerRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/docs", a.handleSwaggerUI)
-	mux.HandleFunc("/api/docs/swagger.json", a.handleSwaggerJSON)
+	swaggerHandlers := apiswagger.NewHandlers(a.workDir)
+	swaggerHandlers.RegisterRoutes(mux)
 }
 
 func (a *DashboardAPI) RegisterNarrativeRoutes(mux *http.ServeMux) {
@@ -2527,4 +2537,40 @@ func (a *DashboardAPI) handleDataQuality(w http.ResponseWriter, r *http.Request)
 	report := a.dataQualityChecker.RunAll(ctx)
 
 	writeJSON(w, http.StatusOK, report)
+}
+
+// channelHealthAdapter adapts monitoring.ChannelHealthStore to data.ChannelHealthRecorder.
+type channelHealthAdapter struct {
+	store *ChannelHealthStore
+}
+
+func (a *channelHealthAdapter) Record(channelID, status, errMsg string) error {
+	return a.store.Record(channelID, status, errMsg)
+}
+
+func (a *channelHealthAdapter) Get(channelID string) *apidata.ChannelHealthRecord {
+	rec := a.store.Get(channelID)
+	if rec == nil {
+		return nil
+	}
+	return &apidata.ChannelHealthRecord{
+		Status:        rec.Status,
+		LastFetchAt:   rec.LastFetchAt,
+		LastError:     rec.LastError,
+		LastSuccessAt: rec.LastSuccessAt,
+	}
+}
+
+func (a *channelHealthAdapter) Alerts() []apidata.ChannelAlert {
+	alerts := a.store.Alerts()
+	result := make([]apidata.ChannelAlert, len(alerts))
+	for i, al := range alerts {
+		result[i] = apidata.ChannelAlert{
+			ChannelID: al.ChannelID,
+			Status:    al.Status,
+			Error:     al.Error,
+			FetchAt:   al.FetchAt,
+		}
+	}
+	return result
 }
