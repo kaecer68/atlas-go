@@ -6,6 +6,14 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
+type RiskAppetite int
+
+const (
+	RiskAppetiteConservative RiskAppetite = 1
+	RiskAppetiteBalanced     RiskAppetite = 2
+	RiskAppetiteAggressive   RiskAppetite = 3
+)
+
 type RegimeType string
 
 const (
@@ -29,6 +37,7 @@ type DynamicThresholdEngine struct {
 	currentRegime     RegimeType
 	lastVIX           float64
 	updateCount       int
+	riskAppetite      RiskAppetite
 }
 
 func NewDynamicThresholdEngine() *DynamicThresholdEngine {
@@ -44,6 +53,7 @@ func NewDynamicThresholdEngine() *DynamicThresholdEngine {
 		},
 		currentRegime: RegimeNeutral,
 		lastVIX:       20.0,
+		riskAppetite:  RiskAppetiteBalanced,
 	}
 }
 
@@ -57,8 +67,9 @@ func (e *DynamicThresholdEngine) GetThreshold(vix float64, regime RegimeType) fl
 
 	vixAdjustment := (vix - 20.0) / 100.0
 	regimeAdjustment := e.regimeMultipliers[regime]
+	appetiteAdjustment := e.getAppetiteAdjustment()
 
-	threshold := e.baseThreshold + vixAdjustment + regimeAdjustment
+	threshold := e.baseThreshold + vixAdjustment + regimeAdjustment + appetiteAdjustment
 
 	if threshold < e.minThreshold {
 		threshold = e.minThreshold
@@ -79,7 +90,8 @@ func (e *DynamicThresholdEngine) GetCurrentThreshold() float64 {
 func (e *DynamicThresholdEngine) calculateThresholdUnsafe(vix float64, regime RegimeType) float64 {
 	vixAdjustment := (vix - 20.0) / 100.0
 	regimeAdjustment := e.regimeMultipliers[regime]
-	threshold := e.baseThreshold + vixAdjustment + regimeAdjustment
+	appetiteAdjustment := e.getAppetiteAdjustment()
+	threshold := e.baseThreshold + vixAdjustment + regimeAdjustment + appetiteAdjustment
 
 	if threshold < e.minThreshold {
 		threshold = e.minThreshold
@@ -116,6 +128,29 @@ func (e *DynamicThresholdEngine) SetBaseThreshold(threshold float64) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.baseThreshold = threshold
+}
+
+func (e *DynamicThresholdEngine) SetRiskAppetite(ra RiskAppetite) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.riskAppetite = ra
+}
+
+func (e *DynamicThresholdEngine) GetRiskAppetite() RiskAppetite {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.riskAppetite
+}
+
+func (e *DynamicThresholdEngine) getAppetiteAdjustment() float64 {
+	switch e.riskAppetite {
+	case RiskAppetiteConservative:
+		return 0.10
+	case RiskAppetiteAggressive:
+		return -0.05
+	default:
+		return 0.00
+	}
 }
 
 func (e *DynamicThresholdEngine) GetStats() map[string]interface{} {
