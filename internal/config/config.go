@@ -19,7 +19,9 @@ type Config struct {
 	LedgerDir                  string
 	ReplayDataPath             string
 	ReplaySessionDate          string
+	FubonAPIKey               string
 	FugleAPIKey                string
+	FinMindAPIKey              string
 	YahooEnabled               bool
 	BrokerMode                 string
 	BrokerMaxRetries           int
@@ -54,8 +56,9 @@ func Load() Config {
 		LedgerDir:          envOr("ATLAS_LEDGER_DIR", "data/state"),
 		ReplayDataPath:     envOr("ATLAS_REPLAY_DATA_PATH", "samples/replay/twse_stock_day_all_sample.csv"),
 		ReplaySessionDate:  envOr("ATLAS_REPLAY_SESSION_DATE", "2026-03-26"),
-		// 优先使用 FUGLE_API_KEY，其次 ATLAS_FUGLE_API_KEY
+		FubonAPIKey:               envOrPriority("FUBON_API_KEY", "ATLAS_FUBON_API_KEY"),
 		FugleAPIKey:                envOrPriority("FUGLE_API_KEY", "ATLAS_FUGLE_API_KEY"),
+		FinMindAPIKey:              envOr("FINMIND_API_KEY", ""),
 		YahooEnabled:               os.Getenv("ATLAS_YAHOO_ENABLED") == "true",
 		BrokerMode:                 envOr("ATLAS_BROKER_MODE", "dry-run"),
 		BrokerMaxRetries:           envOrInt("ATLAS_BROKER_MAX_RETRIES", 1),

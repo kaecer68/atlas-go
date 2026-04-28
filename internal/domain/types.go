@@ -39,20 +39,24 @@ type FactorScoreItem struct {
 }
 
 type FactorScoreBreakdown struct {
-	Momentum FactorScoreItem `json:"momentum"`
-	Value    FactorScoreItem `json:"value"`
-	Quality  FactorScoreItem `json:"quality"`
-	Agent    FactorScoreItem `json:"agent"`
-	Total    FactorScoreItem `json:"total"`
+	Momentum               FactorScoreItem `json:"momentum"`
+	Value                  FactorScoreItem `json:"value"`
+	Quality                FactorScoreItem `json:"quality"`
+	Agent                  FactorScoreItem `json:"agent"`
+	InstitutionalSentiment FactorScoreItem `json:"institutional_sentiment"`
+	Liquidity              FactorScoreItem `json:"liquidity"`
+	Total                  FactorScoreItem `json:"total"`
 }
 
 type FactorScores struct {
-	Momentum  float64               `json:"momentum"`
-	Value     float64               `json:"value"`
-	Quality   float64               `json:"quality"`
-	Agent     float64               `json:"agent"`
-	Total     float64               `json:"total"`
-	Breakdown *FactorScoreBreakdown `json:"breakdown,omitempty"`
+	Momentum               float64               `json:"momentum"`
+	Value                  float64               `json:"value"`
+	Quality                float64               `json:"quality"`
+	Agent                  float64               `json:"agent"`
+	InstitutionalSentiment float64               `json:"institutional_sentiment"`
+	Liquidity              float64               `json:"liquidity"`
+	Total                  float64               `json:"total"`
+	Breakdown              *FactorScoreBreakdown `json:"breakdown,omitempty"`
 }
 
 type ConvictionStep struct {

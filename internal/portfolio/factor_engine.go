@@ -295,14 +295,82 @@ func (fe *FactorEngine) calculateQualityDetail(symbol string, quotes map[string]
 	}
 }
 
-// CalculateAllScores returns momentum, value, quality, and agent scores.
-// The agent score is computed from the provided recommendations for the symbol.
+func (fe *FactorEngine) CalculateInstitutionalSentimentScore(input FactorBridgeInput) domain.FactorScoreItem {
+	const (
+		foreignWeight  = 0.50
+		domesticWeight = 0.30
+		marginWeight   = 0.20
+	)
+	score := foreignWeight*input.ForeignFlowScore +
+		domesticWeight*input.DomesticFlowScore +
+		marginWeight*input.MarginBalanceScore
+	if score > 1.0 {
+		score = 1.0
+	}
+	if score < -1.0 {
+		score = -1.0
+	}
+	return domain.FactorScoreItem{
+		Score:   score,
+		Formula: "0.50*ForeignFlowScore + 0.30*DomesticFlowScore + 0.20*MarginBalanceScore",
+		RawInputs: map[string]float64{
+			"foreign_score":   input.ForeignFlowScore,
+			"domestic_score":  input.DomesticFlowScore,
+			"margin_score":    input.MarginBalanceScore,
+			"foreign_weight":  foreignWeight,
+			"domestic_weight": domesticWeight,
+			"margin_weight":   marginWeight,
+		},
+	}
+}
+
+func (fe *FactorEngine) CalculateLiquidityScore(symbol string, quotes map[string]domain.Quote) domain.FactorScoreItem {
+	quote, ok := quotes[symbol]
+	if !ok || quote.Open == 0 || quote.Volume == 0 {
+		return domain.FactorScoreItem{
+			Score:      0.0,
+			Formula:    "-log(abs(return) / volume)",
+			RawInputs:  map[string]float64{},
+			IsFallback: true,
+		}
+	}
+	ret := (quote.Last - quote.Open) / quote.Open
+	if ret == 0 {
+		return domain.FactorScoreItem{
+			Score:     0.0,
+			Formula:   "-log(abs(0) / volume) = 0",
+			RawInputs: map[string]float64{"return": 0, "volume": float64(quote.Volume)},
+		}
+	}
+	illiq := math.Abs(ret) / float64(quote.Volume)
+	score := -math.Log(illiq + 1e-10)
+	if score > 1.0 {
+		score = 1.0
+	}
+	if score < -1.0 {
+		score = -1.0
+	}
+	return domain.FactorScoreItem{
+		Score:   score,
+		Formula: "clamp(-log(abs(return)/volume), -1, 1)",
+		RawInputs: map[string]float64{
+			"return": ret,
+			"volume": float64(quote.Volume),
+			"illiq":  illiq,
+		},
+	}
+}
+
+// CalculateAllScores returns momentum, value, quality, agent, institutional sentiment,
+// and liquidity scores. The agent score is computed from the provided recommendations
+// for the symbol. An optional FactorBridgeInput can be provided for macro-aware factors.
 func (fe *FactorEngine) CalculateAllScores(
 	symbol string,
 	quotes map[string]domain.Quote,
 	agentRecs []domain.Recommendation,
 	agentWeights map[string]float64,
 	factorWeights map[FactorType]float64,
+	bridgeInputs ...FactorBridgeInput,
 ) map[FactorType]float64 {
 	momentumScore := fe.CalculateMomentumScore(symbol, quotes)
 	valueScore := fe.CalculateValueScore(symbol, quotes)
@@ -332,6 +400,15 @@ func (fe *FactorEngine) CalculateAllScores(
 		FactorAgent:    agentScore,
 	}
 
+	// Add macro-aware factors if bridge input available
+	if len(bridgeInputs) > 0 {
+		input := bridgeInputs[0]
+		instSentScore := fe.CalculateInstitutionalSentimentScore(input)
+		liqScore := fe.CalculateLiquidityScore(symbol, quotes)
+		result[FactorInstSent] = instSentScore.Score
+		result[FactorLiquidity] = liqScore.Score
+	}
+
 	// Compute weighted total if factorWeights provided
 	if len(factorWeights) > 0 {
 		total := 0.0
@@ -348,12 +425,14 @@ func (fe *FactorEngine) CalculateAllScores(
 
 // CalculateAllScoresWithBreakdown returns both the score map and a detailed
 // breakdown showing formulas, raw inputs, and fallback flags per factor.
+// An optional FactorBridgeInput can be provided for macro-aware institutional sentiment and liquidity.
 func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 	symbol string,
 	quotes map[string]domain.Quote,
 	agentRecs []domain.Recommendation,
 	agentWeights map[string]float64,
 	factorWeights map[FactorType]float64,
+	bridgeInputs ...FactorBridgeInput,
 ) (*domain.FactorScoreBreakdown, map[FactorType]float64) {
 	mom := fe.calculateMomentumDetail(symbol, quotes)
 	val := fe.calculateValueDetail(symbol, quotes)
@@ -385,6 +464,13 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 		RawInputs: rawAgent,
 	}
 
+	var instSent, liq domain.FactorScoreItem
+	if len(bridgeInputs) > 0 {
+		input := bridgeInputs[0]
+		instSent = fe.CalculateInstitutionalSentimentScore(input)
+		liq = fe.CalculateLiquidityScore(symbol, quotes)
+	}
+
 	result := map[FactorType]float64{
 		FactorMomentum: mom.Score,
 		FactorValue:    val.Score,
@@ -393,10 +479,17 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 	}
 
 	breakdown := &domain.FactorScoreBreakdown{
-		Momentum: mom,
-		Value:    val,
-		Quality:  qly,
-		Agent:    agent,
+		Momentum:               mom,
+		Value:                  val,
+		Quality:                qly,
+		Agent:                  agent,
+		InstitutionalSentiment: instSent,
+		Liquidity:              liq,
+	}
+
+	if len(bridgeInputs) > 0 {
+		result[FactorInstSent] = instSent.Score
+		result[FactorLiquidity] = liq.Score
 	}
 
 	// SCOR-04: Apply reduced weight for fallback factors in total calculation
@@ -404,44 +497,53 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 		total := 0.0
 		rawTotal := map[string]float64{}
 
-		// Helper to get effective weight (50% for fallback factors)
 		getEffectiveWeight := func(ft FactorType, item domain.FactorScoreItem, defaultWeight float64) float64 {
 			if item.IsFallback {
-				return defaultWeight * 0.5 // SCOR-04: 50% weight reduction for fallback
+				return defaultWeight * 0.5
 			}
 			return defaultWeight
 		}
 
-		// Momentum
 		momWeight := getEffectiveWeight(FactorMomentum, mom, factorWeights[FactorMomentum])
 		total += mom.Score * momWeight
 		rawTotal[string(FactorMomentum)] = mom.Score * momWeight
 
-		// Value
 		valWeight := getEffectiveWeight(FactorValue, val, factorWeights[FactorValue])
 		total += val.Score * valWeight
 		rawTotal[string(FactorValue)] = val.Score * valWeight
 
-		// Quality
 		qlyWeight := getEffectiveWeight(FactorQuality, qly, factorWeights[FactorQuality])
 		total += qly.Score * qlyWeight
 		rawTotal[string(FactorQuality)] = qly.Score * qlyWeight
 
-		// Agent
 		agentWeight := getEffectiveWeight(FactorAgent, agent, factorWeights[FactorAgent])
 		total += agent.Score * agentWeight
 		rawTotal[string(FactorAgent)] = agent.Score * agentWeight
 
+		if len(bridgeInputs) > 0 {
+			instWeight := getEffectiveWeight(FactorInstSent, instSent, factorWeights[FactorInstSent])
+			total += instSent.Score * instWeight
+			rawTotal[string(FactorInstSent)] = instSent.Score * instWeight
+
+			liqWeight := getEffectiveWeight(FactorLiquidity, liq, factorWeights[FactorLiquidity])
+			total += liq.Score * liqWeight
+			rawTotal[string(FactorLiquidity)] = liq.Score * liqWeight
+		}
+
 		result["total"] = total
 		breakdown.Total = domain.FactorScoreItem{
 			Score:     total,
-			Formula:   "sum(factor_score * effective_weight) [SCOR-04: fallback factors use 50% weight]",
+			Formula:   "sum(factor_score * effective_weight)",
 			RawInputs: rawTotal,
 		}
 		breakdown.Momentum.Weight = factorWeights[FactorMomentum]
 		breakdown.Value.Weight = factorWeights[FactorValue]
 		breakdown.Quality.Weight = factorWeights[FactorQuality]
 		breakdown.Agent.Weight = factorWeights[FactorAgent]
+		if len(bridgeInputs) > 0 {
+			breakdown.InstitutionalSentiment.Weight = factorWeights[FactorInstSent]
+			breakdown.Liquidity.Weight = factorWeights[FactorLiquidity]
+		}
 	}
 
 	return breakdown, result
