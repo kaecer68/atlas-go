@@ -48,7 +48,7 @@ func TestMockProvider_IsMock(t *testing.T) {
 // ─── HybridProvider ──────────────────────────────────────────────────────────
 
 func TestHybridProvider_NoAPIKey(t *testing.T) {
-	p := NewHybridProvider("")
+	p := NewHybridProvider("", "")
 	if p.Name() != "hybrid-twse" {
 		t.Fatalf("Name() = %q, want %q", p.Name(), "hybrid-twse")
 	}
@@ -58,9 +58,9 @@ func TestHybridProvider_NoAPIKey(t *testing.T) {
 }
 
 func TestHybridProvider_WithAPIKey(t *testing.T) {
-	p := NewHybridProvider("test-key")
-	if p.Name() != "hybrid-fugle" {
-		t.Fatalf("Name() = %q, want %q", p.Name(), "hybrid-fugle")
+	p := NewHybridProvider("", "test-key")
+	if p.Name() != "hybrid-fubon" {
+		t.Fatalf("Name() = %q, want %q", p.Name(), "hybrid-fubon")
 	}
 	if p.GetFugleClient() == nil {
 		t.Fatal("GetFugleClient() should not be nil when API key is set")
@@ -79,7 +79,7 @@ func TestHybridProvider_Reset(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := NewHybridProvider(tt.apiKey)
+			p := NewHybridProvider("", tt.apiKey)
 			p.UseTWSE() // force TWSE
 			p.Reset()
 			if tt.wantTWSE && !p.IsUsingTWSE() {
@@ -93,7 +93,7 @@ func TestHybridProvider_Reset(t *testing.T) {
 }
 
 func TestHybridProvider_UseTWSE_UseFugle(t *testing.T) {
-	p := NewHybridProvider("key")
+	p := NewHybridProvider("", "key")
 
 	p.UseTWSE()
 	if p.Name() != "hybrid-twse" {
@@ -101,7 +101,7 @@ func TestHybridProvider_UseTWSE_UseFugle(t *testing.T) {
 	}
 
 	p.UseFugle()
-	if p.Name() != "hybrid-fugle" {
+	if p.Name() != "hybrid-fubon" {
 		t.Fatalf("after UseFugle: Name() = %q, want hybrid-fugle", p.Name())
 	}
 }

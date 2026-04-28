@@ -299,9 +299,9 @@ func selectProvider(cfg config.Config) marketdata.Provider {
 		return marketdata.NewTWSEOpenAPIProvider()
 	case "hybrid", "":
 		// 默认：Hybrid 模式（优先 Fugle，失败回退 TWSE）
-		return marketdata.NewHybridProvider(cfg.FugleAPIKey)
+		return marketdata.NewHybridProvider("", cfg.FugleAPIKey)
 	default:
-		return marketdata.NewHybridProvider(cfg.FugleAPIKey)
+		return marketdata.NewHybridProvider("", cfg.FugleAPIKey)
 	}
 }
 

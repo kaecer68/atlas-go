@@ -27,7 +27,7 @@ func main() {
 	fmt.Println("==========================================")
 
 	// 創建 Hybrid Provider
-	provider := marketdata.NewHybridProvider(cfg.FugleAPIKey)
+	provider := marketdata.NewHybridProvider("", cfg.FugleAPIKey)
 	fmt.Printf("✅ Provider 創建成功: %s\n\n", provider.Name())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
