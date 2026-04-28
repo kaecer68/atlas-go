@@ -142,10 +142,10 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 	}
 
 	return SystemHealthResponse{
-		BaselineVersion:        baselineVersion,
-		ReplayDataLatestDate:   latestReplayDate,
+		BaselineVersion:       baselineVersion,
+		ReplayDataLatestDate:  latestReplayDate,
 		ReplayDataPathOK:      replayOK,
-		LastWindowID:           lastWindow,
+		LastWindowID:          lastWindow,
 		LastWindowGeneratedAt: lastWindowTime,
 		Warnings:              warnings,
 		Regime:                regime,
@@ -172,10 +172,10 @@ func buildChannelInfo(id, label string, checker func(string, time.Time) (string,
 	status, updated := checker(path, now)
 	return DataChannelInfo{
 		ChannelID:  id,
-		Label:     label,
-		Status:    status,
+		Label:      label,
+		Status:     status,
 		StatusText: statusText(status),
-		UpdatedAt: updated,
+		UpdatedAt:  updated,
 	}
 }
 

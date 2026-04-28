@@ -39,9 +39,9 @@ type Orchestrator struct {
 
 	metrics MetricsRecorder
 
-	scheduler       *Scheduler
-	agentRunner     *AgentRunner
-	executionMgr    *ExecutionManager
+	scheduler    *Scheduler
+	agentRunner  *AgentRunner
+	executionMgr *ExecutionManager
 }
 
 type MetricsRecorder interface {
@@ -96,7 +96,7 @@ func DefaultOrchestratorConfig() OrchestratorConfig {
 		TakeProfitEnabled:          false,
 		BrokerMode:                 "dry-run",
 		BrokerMaxRetries:           1,
-		BrokerAdapter:             "guarded",
+		BrokerAdapter:              "guarded",
 		BrokerHTTPTimeoutS:         5,
 		BrokerHTTPAttempts:         2,
 		BrokerHTTPRetryStatusCodes: []int{408, 425, 429, 500, 502, 503, 504},
@@ -126,8 +126,8 @@ func NewOrchestrator(
 
 	o := &Orchestrator{
 		stateStore:          stateStore,
-		eventBus:           eventBus,
-		marketData:         marketData,
+		eventBus:            eventBus,
+		marketData:          marketData,
 		broker:              broker,
 		orderMgr:            NewOrderManager(broker, eventBus, maxRetries, 100*time.Millisecond),
 		registry:            registry,
@@ -138,7 +138,7 @@ func NewOrchestrator(
 		cancel:              cancel,
 		watchlist:           make([]string, 0),
 		requestedBrokerMode: requestedMode,
-		effectiveBrokerMode:  effectiveMode,
+		effectiveBrokerMode: effectiveMode,
 		executionAuditMsg:   audit,
 	}
 
@@ -484,7 +484,7 @@ func (o *Orchestrator) Status() map[string]interface{} {
 	positions := o.stateStore.GetPositions()
 
 	return map[string]interface{}{
-		"is_running":          o.isRunning,
+		"is_running":         o.isRunning,
 		"market_data_source": o.marketData.Name(),
 		"watchlist_size":     len(o.watchlist),
 		"positions_count":    len(positions),
@@ -492,29 +492,29 @@ func (o *Orchestrator) Status() map[string]interface{} {
 			"cash":           portfolio.Cash,
 			"available_cash": portfolio.AvailableCash,
 			"total_exposure": portfolio.TotalExposure,
-			"day_pnl":         portfolio.DayPnL,
+			"day_pnl":        portfolio.DayPnL,
 			"unrealized_pnl": portfolio.UnrealizedPnL,
 		},
 		"config": map[string]interface{}{
 			"market_open":                    o.config.MarketOpenTime,
 			"market_close":                   o.config.MarketCloseTime,
-			"intraday_cycle":                o.config.IntradayInterval.String(),
-			"quote_poll":                    o.config.QuotePollInterval.String(),
-			"stop_loss_enabled":             o.config.StopLossEnabled,
-			"broker_mode_requested":         o.requestedBrokerMode,
-			"broker_mode_effective":         o.effectiveBrokerMode,
-			"broker_adapter":                o.config.BrokerAdapter,
-			"broker_signer":                 o.config.BrokerSigner,
-			"broker_key_id":                 o.config.BrokerKeyID,
-			"broker_http_attempts":          o.config.BrokerHTTPAttempts,
-			"broker_http_timeout_sec":       o.config.BrokerHTTPTimeoutS,
+			"intraday_cycle":                 o.config.IntradayInterval.String(),
+			"quote_poll":                     o.config.QuotePollInterval.String(),
+			"stop_loss_enabled":              o.config.StopLossEnabled,
+			"broker_mode_requested":          o.requestedBrokerMode,
+			"broker_mode_effective":          o.effectiveBrokerMode,
+			"broker_adapter":                 o.config.BrokerAdapter,
+			"broker_signer":                  o.config.BrokerSigner,
+			"broker_key_id":                  o.config.BrokerKeyID,
+			"broker_http_attempts":           o.config.BrokerHTTPAttempts,
+			"broker_http_timeout_sec":        o.config.BrokerHTTPTimeoutS,
 			"broker_http_retry_status_codes": o.config.BrokerHTTPRetryStatusCodes,
-			"broker_max_clock_skew_sec":     o.config.BrokerMaxClockSkewS,
-			"broker_nonce_ttl_sec":          o.config.BrokerNonceTTLS,
-			"broker_nonce_store":            o.config.BrokerNonceStore,
-			"broker_nonce_store_path":       o.config.BrokerNonceStorePath,
-			"broker_nonce_redis_key_prefix": o.config.BrokerNonceRedisKeyPrefix,
-			"broker_max_retries":            o.config.BrokerMaxRetries,
+			"broker_max_clock_skew_sec":      o.config.BrokerMaxClockSkewS,
+			"broker_nonce_ttl_sec":           o.config.BrokerNonceTTLS,
+			"broker_nonce_store":             o.config.BrokerNonceStore,
+			"broker_nonce_store_path":        o.config.BrokerNonceStorePath,
+			"broker_nonce_redis_key_prefix":  o.config.BrokerNonceRedisKeyPrefix,
+			"broker_max_retries":             o.config.BrokerMaxRetries,
 		},
 	}
 }

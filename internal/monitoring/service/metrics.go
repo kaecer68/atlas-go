@@ -8,7 +8,7 @@ import (
 // MetricsService encapsulates metrics collection and trend analysis
 type MetricsService struct {
 	collector MetricsCollector
-	history  MetricsHistory
+	history   MetricsHistory
 }
 
 type MetricsCollector interface {
