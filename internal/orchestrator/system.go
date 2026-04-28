@@ -19,6 +19,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/screener"
 	"github.com/kaecer68/atlas-go/internal/sim"
+	"github.com/kaecer68/atlas-go/internal/strategy"
 )
 
 // SystemCore holds the essential simulation state and services.
@@ -47,6 +48,12 @@ type SystemCore struct {
 	approvalWorkflow  *risk.ApprovalWorkflow
 	metricsCollector  interface{ RecordScreening(passed, rejected int64) }
 	eventBus          *eventbus.ChannelEventBus
+
+	strategyRegistry   *strategy.Registry
+	strategySelector   *strategy.Selector
+	comparisonEngine   *strategy.ComparisonEngine
+	factorWeightEngine *portfolio.FactorWeightEngine
+	thresholdEngine    *sim.DynamicThresholdEngine
 }
 
 // System orchestrates the full simulation loop via a SystemCore and a PluginHost.
@@ -86,8 +93,15 @@ func NewSystem(cfg config.Config) *System {
 	darwinian.InitializeFromRegistry(registry)
 	_ = darwinian.Load()
 
+	thresholdEngine := sim.NewDynamicThresholdEngine()
+	strategyRegistry := strategy.NewRegistryWithDefaults()
+	comparisonEngine := strategy.NewComparisonEngine(20)
+	strategySelector := strategy.NewSelector(strategyRegistry, comparisonEngine)
+	factorWeightEngine := portfolio.NewFactorWeightEngine()
+
 	engine := sim.NewEngine(policy.Constraints).
 		WithOptimizer(optimizer).
+		WithThresholdEngine(thresholdEngine).
 		WithReflexivityRules(
 			reflexivity.PriceToFundamentalsRule{},
 			reflexivity.PnLBehaviorRule{},
@@ -97,21 +111,26 @@ func NewSystem(cfg config.Config) *System {
 		)
 	return &System{
 		SystemCore: &SystemCore{
-			cfg:             cfg,
-			provider:        selectProvider(cfg),
-			engine:          engine.WithContext(context.Background()),
-			registry:        registry,
-			policy:          policy,
-			ledger:          ledger.NewStore(cfg.LedgerDir),
-			replay:          ds,
-			session:         session,
-			optimizer:       optimizer,
-			plugins:         plugins,
-			alphaDiscovery:  NewAlphaDiscoveryEngine(factorEngine),
-			narrativeEngine: narrative.NewNarrativeEngine(),
-			ctx:             context.Background(),
-			darwinian:       darwinian,
-			eventBus:        eventbus.NewChannelEventBus(256),
+			cfg:                cfg,
+			provider:           selectProvider(cfg),
+			engine:             engine.WithContext(context.Background()),
+			registry:           registry,
+			policy:             policy,
+			ledger:             ledger.NewStore(cfg.LedgerDir),
+			replay:             ds,
+			session:            session,
+			optimizer:          optimizer,
+			plugins:            plugins,
+			alphaDiscovery:     NewAlphaDiscoveryEngine(factorEngine),
+			narrativeEngine:    narrative.NewNarrativeEngine(),
+			ctx:                context.Background(),
+			darwinian:          darwinian,
+			eventBus:           eventbus.NewChannelEventBus(256),
+			strategyRegistry:   strategyRegistry,
+			strategySelector:   strategySelector,
+			comparisonEngine:   comparisonEngine,
+			factorWeightEngine: factorWeightEngine,
+			thresholdEngine:    thresholdEngine,
 		},
 	}
 }
