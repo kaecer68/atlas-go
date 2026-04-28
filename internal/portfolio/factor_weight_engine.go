@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/strategy"
 )
 
 type FactorWeightEngine struct {
@@ -140,5 +141,30 @@ func (e *FactorWeightEngine) Update() {
 		if event.Status == "faded" || event.Status == "expired" {
 			delete(e.activeEvents, id)
 		}
+	}
+}
+
+func (e *FactorWeightEngine) ApplyStrategy(s *strategy.Strategy) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	strategyKey := "strategy_adjustment"
+	delete(e.eventWeights, strategyKey)
+
+	switch s.RiskAppetite {
+	case strategy.RiskAppetiteConservative:
+		e.eventWeights[strategyKey] = map[FactorType]float64{
+			FactorValue:    0.05,
+			FactorQuality:  0.05,
+			FactorMomentum: -0.05,
+		}
+	case strategy.RiskAppetiteAggressive:
+		e.eventWeights[strategyKey] = map[FactorType]float64{
+			FactorMomentum: 0.05,
+			FactorInstSent: 0.03,
+			FactorValue:    -0.03,
+			FactorQuality:  -0.03,
+		}
+	default:
 	}
 }
