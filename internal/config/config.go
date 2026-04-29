@@ -19,7 +19,7 @@ type Config struct {
 	LedgerDir                  string
 	ReplayDataPath             string
 	ReplaySessionDate          string
-	FubonAPIKey               string
+	FubonAPIKey                string
 	FugleAPIKey                string
 	FinMindAPIKey              string
 	YahooEnabled               bool
@@ -47,16 +47,16 @@ func Load() Config {
 	loadEnvFile(".env")
 
 	return Config{
-		WorkDir:            envOr("ATLAS_WORK_DIR", "."),
-		MarketDataProvider: envOr("ATLAS_MARKET_DATA_PROVIDER", "twse"),
-		PrimaryMarket:      envOr("ATLAS_PRIMARY_MARKET", "TW"),
-		ReplayMode:         envOr("ATLAS_REPLAY_MODE", "daily"),
-		AgentRegistryPath:  envOr("ATLAS_AGENT_REGISTRY_PATH", "configs/agents.json"),
-		BaselinePolicyPath: envOr("ATLAS_BASELINE_POLICY_PATH", "data/state/baseline_policy.json"),
-		LedgerDir:          envOr("ATLAS_LEDGER_DIR", "data/state"),
-		ReplayDataPath:     envOr("ATLAS_REPLAY_DATA_PATH", "samples/replay/twse_stock_day_all_sample.csv"),
-		ReplaySessionDate:  envOr("ATLAS_REPLAY_SESSION_DATE", "2026-03-26"),
-		FubonAPIKey:               envOrPriority("FUBON_API_KEY", "ATLAS_FUBON_API_KEY"),
+		WorkDir:                    envOr("ATLAS_WORK_DIR", "."),
+		MarketDataProvider:         envOr("ATLAS_MARKET_DATA_PROVIDER", "twse"),
+		PrimaryMarket:              envOr("ATLAS_PRIMARY_MARKET", "TW"),
+		ReplayMode:                 envOr("ATLAS_REPLAY_MODE", "daily"),
+		AgentRegistryPath:          envOr("ATLAS_AGENT_REGISTRY_PATH", "configs/agents.json"),
+		BaselinePolicyPath:         envOr("ATLAS_BASELINE_POLICY_PATH", "data/state/baseline_policy.json"),
+		LedgerDir:                  envOr("ATLAS_LEDGER_DIR", "data/state"),
+		ReplayDataPath:             envOr("ATLAS_REPLAY_DATA_PATH", "samples/replay/twse_stock_day_all_sample.csv"),
+		ReplaySessionDate:          envOr("ATLAS_REPLAY_SESSION_DATE", "2026-03-26"),
+		FubonAPIKey:                envOrPriority("FUBON_API_KEY", "ATLAS_FUBON_API_KEY"),
 		FugleAPIKey:                envOrPriority("FUGLE_API_KEY", "ATLAS_FUGLE_API_KEY"),
 		FinMindAPIKey:              envOr("FINMIND_API_KEY", ""),
 		YahooEnabled:               os.Getenv("ATLAS_YAHOO_ENABLED") == "true",

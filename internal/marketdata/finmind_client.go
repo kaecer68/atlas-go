@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	finmindBaseURL    = "https://api.finmindtrade.com/api/v4"
-	finmindRateLimit  = 600
-	finmindBurst      = 60
+	finmindBaseURL   = "https://api.finmindtrade.com/api/v4"
+	finmindRateLimit = 600
+	finmindBurst     = 60
 )
 
 type FinMindClient struct {
@@ -25,8 +25,8 @@ type FinMindClient struct {
 }
 
 type FinMindResponse struct {
-	Msg    string `json:"msg"`
-	Status int    `json:"status"`
+	Msg    string                   `json:"msg"`
+	Status int                      `json:"status"`
 	Data   []map[string]interface{} `json:"data"`
 }
 
