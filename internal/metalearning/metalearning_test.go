@@ -214,7 +214,6 @@ func TestMetaLearningPersistence(t *testing.T) {
 		config := DefaultMetaLearningConfig()
 		ml1 := NewMetaLearner(config)
 
-		// Add some training results
 		ml1.SubmitTrainingResult(TrainingResult{
 			AgentID:     "agent_001",
 			StrategyID:  "strategy_momentum_0",
@@ -223,25 +222,134 @@ func TestMetaLearningPersistence(t *testing.T) {
 			Timestamp:   time.Now(),
 		})
 
-		// Save state
 		tempFile := "/tmp/test_metalearning.json"
 		err := ml1.Save(tempFile)
 		if err != nil {
 			t.Fatalf("Failed to save: %v", err)
 		}
 
-		// Load into new instance
 		ml2 := NewMetaLearner(config)
 		err = ml2.Load(tempFile)
 		if err != nil {
 			t.Fatalf("Failed to load: %v", err)
 		}
 
-		// Verify strategies loaded
 		if len(ml2.strategies) == 0 {
 			t.Error("Expected strategies to be loaded")
 		}
 
 		t.Logf("Loaded %d strategies", len(ml2.strategies))
 	})
+}
+
+func TestCrossover(t *testing.T) {
+	config := DefaultMetaLearningConfig()
+	ml := NewMetaLearner(config)
+
+	parent1 := &LearningStrategy{
+		ID:   "parent1",
+		Name: "Parent 1",
+		Type: StrategyMomentum,
+		Parameters: map[string]float64{
+			"learning_rate": 0.01,
+			"momentum":     0.9,
+		},
+	}
+	parent2 := &LearningStrategy{
+		ID:   "parent2",
+		Name: "Parent 2",
+		Type: StrategyMomentum,
+		Parameters: map[string]float64{
+			"learning_rate": 0.02,
+			"momentum":     0.95,
+		},
+	}
+
+	child := ml.crossover(parent1, parent2, "child1")
+
+	if child.ID != "child1" {
+		t.Errorf("Expected child ID 'child1', got %s", child.ID)
+	}
+	if child.Type != StrategyMomentum {
+		t.Errorf("Expected type StrategyMomentum, got %s", child.Type)
+	}
+	if len(child.Parameters) == 0 {
+		t.Error("Expected child to have parameters")
+	}
+}
+
+func TestCalculateParameterSimilarity(t *testing.T) {
+	config := DefaultMetaLearningConfig()
+	ml := NewMetaLearner(config)
+
+	p1 := map[string]float64{"a": 1.0, "b": 2.0}
+	p2 := map[string]float64{"a": 1.0, "b": 3.0}
+
+	sim := ml.calculateParameterSimilarity(p1, p2)
+	if sim <= 0 {
+		t.Errorf("Expected positive similarity, got %f", sim)
+	}
+	if sim >= 1 {
+		t.Errorf("Expected similarity < 1 for different params, got %f", sim)
+	}
+
+	sim2 := ml.calculateParameterSimilarity(p1, p1)
+	if sim2 != 1.0 {
+		t.Errorf("Expected similarity 1.0 for identical params, got %f", sim2)
+	}
+
+	sim3 := ml.calculateParameterSimilarity(map[string]float64{}, p1)
+	if sim3 != 0.0 {
+		t.Errorf("Expected 0 for empty first param, got %f", sim3)
+	}
+
+	sim4 := ml.calculateParameterSimilarity(p1, map[string]float64{})
+	if sim4 != 0.0 {
+		t.Errorf("Expected 0 for empty second param, got %f", sim4)
+	}
+}
+
+func TestProcessSwarmData(t *testing.T) {
+	config := DefaultMetaLearningConfig()
+	ml := NewMetaLearner(config)
+
+	data := SwarmLearningData{
+		FishID:         "fish_001",
+		Scenario:       "bull",
+		LearningRate:   0.01,
+		BatchSize:      32,
+		Epochs:         10,
+		FinalAccuracy:  0.85,
+		ConvergenceSpeed: 30.0,
+		Stability:      0.9,
+		Timestamp:      time.Now(),
+		StrategyParams: map[string]float64{
+			"learning_rate": 0.01,
+			"momentum":      0.9,
+		},
+	}
+
+	ml.processSwarmData(data)
+}
+
+func TestProcessTrainingResult(t *testing.T) {
+	config := DefaultMetaLearningConfig()
+	ml := NewMetaLearner(config)
+
+	result := TrainingResult{
+		AgentID:      "agent_001",
+		StrategyID:   "strategy_momentum_0",
+		InitialScore: 0.5,
+		FinalScore:   0.7,
+		Improvement:  0.2,
+		TrainingTime: 3600,
+		Converged:    true,
+		Timestamp:    time.Now(),
+	}
+
+	ml.processTrainingResult(result)
+
+	if len(ml.strategies) == 0 {
+		t.Error("Expected strategies to be populated")
+	}
 }
