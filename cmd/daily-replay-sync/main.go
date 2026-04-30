@@ -157,12 +157,13 @@ func runBackfill(csvPath, startStr, endStr string, pool *pgxpool.Pool) error {
 
 	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 		dateStr := d.Format("2006-01-02")
+		apiDateStr := d.Format("20060102") // TWSE API expects YYYYMMDD format
 		log.Printf("[Backfill] Processing %s...", dateStr)
 
 		var records []csvRecord
 		for _, sym := range symbols {
 			code := stripSuffix(sym)
-			quote, err := client.GetDailyQuote(ctx, dateStr, code)
+			quote, err := client.GetDailyQuote(ctx, apiDateStr, code)
 			if err != nil {
 				log.Printf("[Backfill]   skip %s on %s: %v", code, dateStr, err)
 				continue

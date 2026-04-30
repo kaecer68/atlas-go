@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -14,7 +15,7 @@ import (
 )
 
 const (
-	twseAPIBaseURL = "https://openapi.twse.com.tw/v1"
+	twseAPIBaseURL = "https://www.twse.com.tw"
 	// TWSE rate limit: 3 requests per 5 seconds
 	twseRateLimit = 0.6 // requests per second (3/5)
 	twseRateBurst = 3
@@ -39,6 +40,15 @@ type TWSEQuote struct {
 	ClosingPrice string `json:"ClosingPrice"`
 	Change       string `json:"Change"`
 	Transaction  string `json:"Transaction"`
+}
+
+// TWSEDailyResponse TWSE 每月股票數據 API 回應結構
+type TWSEDailyResponse struct {
+	Stat   string     `json:"stat"`
+	Date   string     `json:"date"`
+	Title  string     `json:"title"`
+	Fields []string   `json:"fields"`
+	Data   [][]string `json:"data"`
 }
 
 // NewTWSEClient 创建 TWSE OpenAPI 客户端
@@ -145,6 +155,7 @@ func (c *TWSEClient) GetDailyQuote(ctx context.Context, date string, symbol stri
 
 	endpoint := fmt.Sprintf("%s/exchangeReport/STOCK_DAY", c.baseURL)
 	params := url.Values{}
+	params.Set("response", "json")
 	params.Set("date", date)
 	params.Set("stockNo", symbol)
 
@@ -165,16 +176,16 @@ func (c *TWSEClient) GetDailyQuote(ctx context.Context, date string, symbol stri
 		return domain.Quote{}, fmt.Errorf("api error: status %d", resp.StatusCode)
 	}
 
-	var twseQuotes []TWSEQuote
-	if err := json.NewDecoder(resp.Body).Decode(&twseQuotes); err != nil {
+	var dailyResp TWSEDailyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&dailyResp); err != nil {
 		return domain.Quote{}, fmt.Errorf("decode response: %w", err)
 	}
 
-	if len(twseQuotes) == 0 {
+	if dailyResp.Stat != "OK" || len(dailyResp.Data) == 0 {
 		return domain.Quote{}, fmt.Errorf("no data for %s on %s", symbol, date)
 	}
 
-	return c.convertToQuote(twseQuotes[0])
+	return c.convertDailyRowToQuote(dailyResp.Data[0], symbol)
 }
 
 // convertToQuote 将 TWSE 数据转换为 domain.Quote
@@ -201,6 +212,43 @@ func (c *TWSEClient) convertToQuote(twse TWSEQuote) (domain.Quote, error) {
 		IsTradable: true,
 		Source:     "twse",
 	}, nil
+}
+
+// convertDailyRowToQuote 將 TWSE 每日數據陣列轉換為 domain.Quote
+// data row: [日期, 成交股數, 成交金額, 開盤價, 最高價, 最低價, 收盤價, 漲跌價差, 成交筆數, 註記]
+func (c *TWSEClient) convertDailyRowToQuote(row []string, symbol string) (domain.Quote, error) {
+	if len(row) < 7 {
+		return domain.Quote{}, fmt.Errorf("invalid row length: %d", len(row))
+	}
+
+	closeStr := stripCommas(row[6])
+	last, err := strconv.ParseFloat(closeStr, 64)
+	if err != nil {
+		return domain.Quote{}, fmt.Errorf("parse close price: %w", err)
+	}
+
+	open, _ := strconv.ParseFloat(stripCommas(row[3]), 64)
+	high, _ := strconv.ParseFloat(stripCommas(row[4]), 64)
+	low, _ := strconv.ParseFloat(stripCommas(row[5]), 64)
+	volume, _ := strconv.ParseInt(stripCommas(row[1]), 10, 64)
+
+	return domain.Quote{
+		Symbol:     symbol,
+		Last:       last,
+		Open:       open,
+		High:       high,
+		Low:        low,
+		Volume:     volume,
+		Market:     "TW",
+		AsOf:       time.Now(),
+		IsTradable: true,
+		Source:     "twse",
+	}, nil
+}
+
+// stripCommas removes commas from numeric strings (e.g., "1,940.00" -> "1940.00")
+func stripCommas(s string) string {
+	return strings.ReplaceAll(s, ",", "")
 }
 
 // TWSEOpenAPIProvider 实现 marketdata.Provider 接口
