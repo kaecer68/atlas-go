@@ -14,10 +14,15 @@ import (
 
 // ChannelHealthRecord stores the last fetch result for a single channel.
 type ChannelHealthRecord struct {
-	Status        string `json:"status"`        // ok | warn | error | inactive
-	LastFetchAt   string `json:"last_fetch_at"` // RFC3339
-	LastError     string `json:"last_error,omitempty"`
-	LastSuccessAt string `json:"last_success_at,omitempty"`
+	Status             string   `json:"status"`        // ok | warn | error | inactive
+	LastFetchAt        string   `json:"last_fetch_at"` // RFC3339
+	LastError          string   `json:"last_error,omitempty"`
+	LastSuccessAt      string   `json:"last_success_at,omitempty"`
+	RateLimitRemaining int      `json:"rate_limit_remaining,omitempty"`
+	LatencyMs          int64    `json:"latency_ms,omitempty"`
+	RecordsFetched     int      `json:"records_fetched,omitempty"`
+	SymbolsProcessed   int      `json:"symbols_processed,omitempty"`
+	Errors             []string `json:"errors,omitempty"`
 }
 
 // ChannelHealthStore persists channel fetch outcomes.
@@ -84,7 +89,7 @@ func (s *ChannelHealthStore) save() error {
 }
 
 // Record updates the health record for a channel.
-func (s *ChannelHealthStore) Record(channelID, status, errMsg string) error {
+func (s *ChannelHealthStore) Record(channelID, status, errMsg string, opts ...RecordOption) error {
 	_ = s.load()
 	s.mu.Lock()
 	rec := s.data[channelID]
@@ -99,6 +104,12 @@ func (s *ChannelHealthStore) Record(channelID, status, errMsg string) error {
 		rec.LastSuccessAt = rec.LastFetchAt
 	} else {
 		rec.LastError = errMsg
+		if errMsg != "" {
+			rec.Errors = []string{errMsg}
+		}
+	}
+	for _, opt := range opts {
+		opt(rec)
 	}
 	s.mu.Unlock()
 
@@ -253,15 +264,41 @@ type ChannelAlert struct {
 	FetchAt   string `json:"fetch_at"`
 }
 
+// RecordOption configures optional fields on a ChannelHealthRecord.
+type RecordOption func(*ChannelHealthRecord)
+
+// WithRateLimitRemaining sets the rate limit remaining count.
+func WithRateLimitRemaining(remaining int) RecordOption {
+	return func(r *ChannelHealthRecord) { r.RateLimitRemaining = remaining }
+}
+
+// WithLatencyMs sets the latency in milliseconds.
+func WithLatencyMs(ms int64) RecordOption {
+	return func(r *ChannelHealthRecord) { r.LatencyMs = ms }
+}
+
+// WithRecordsFetched sets the number of records fetched.
+func WithRecordsFetched(n int) RecordOption {
+	return func(r *ChannelHealthRecord) { r.RecordsFetched = n }
+}
+
+// WithSymbolsProcessed sets the number of symbols processed.
+func WithSymbolsProcessed(n int) RecordOption {
+	return func(r *ChannelHealthRecord) { r.SymbolsProcessed = n }
+}
+
 // RecordChannelFetch is a convenience helper for CLI tools.
-func RecordChannelFetch(stateDir, channelID, status, errMsg string) {
-	RecordChannelFetchWithPool(stateDir, channelID, status, errMsg, nil)
+func RecordChannelFetch(stateDir, channelID, status, errMsg string, rateRemaining int, latencyMs int64) {
+	RecordChannelFetchWithPool(stateDir, channelID, status, errMsg, nil,
+		WithRateLimitRemaining(rateRemaining),
+		WithLatencyMs(latencyMs),
+	)
 }
 
 // RecordChannelFetchWithPool is a convenience helper that accepts an optional DB pool.
-func RecordChannelFetchWithPool(stateDir, channelID, status, errMsg string, pool *pgxpool.Pool) {
+func RecordChannelFetchWithPool(stateDir, channelID, status, errMsg string, pool *pgxpool.Pool, opts ...RecordOption) {
 	store := NewChannelHealthStoreWithPool(stateDir, pool)
-	if err := store.Record(channelID, status, errMsg); err != nil {
+	if err := store.Record(channelID, status, errMsg, opts...); err != nil {
 		fmt.Fprintf(os.Stderr, "[ChannelHealth] failed to record %s: %v\n", channelID, err)
 	}
 }

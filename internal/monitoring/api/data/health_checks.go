@@ -23,10 +23,15 @@ type ChannelAlert struct {
 
 // ChannelHealthRecord stores the last fetch result for a single channel.
 type ChannelHealthRecord struct {
-	Status        string `json:"status"`
-	LastFetchAt   string `json:"last_fetch_at"`
-	LastError     string `json:"last_error,omitempty"`
-	LastSuccessAt string `json:"last_success_at,omitempty"`
+	Status             string   `json:"status"`
+	LastFetchAt        string   `json:"last_fetch_at"`
+	LastError          string   `json:"last_error,omitempty"`
+	LastSuccessAt      string   `json:"last_success_at,omitempty"`
+	RateLimitRemaining int      `json:"rate_limit_remaining,omitempty"`
+	LatencyMs          int64    `json:"latency_ms,omitempty"`
+	RecordsFetched     int      `json:"records_fetched,omitempty"`
+	SymbolsProcessed   int      `json:"symbols_processed,omitempty"`
+	Errors             []string `json:"errors,omitempty"`
 }
 
 // ChannelHealthRecorder records and retrieves channel health status.
