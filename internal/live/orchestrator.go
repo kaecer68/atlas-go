@@ -81,6 +81,10 @@ type OrchestratorConfig struct {
 	BrokerNonceRedisKeyPrefix  string
 	BrokerSigner               string
 	BrokerKeyID                string
+	FubonDMAPersonalID         string
+	FubonDMAAPIKey             string
+	FubonDMAScriptPath         string
+	FubonDMAPythonPath         string
 }
 
 func DefaultOrchestratorConfig() OrchestratorConfig {
@@ -105,6 +109,10 @@ func DefaultOrchestratorConfig() OrchestratorConfig {
 		BrokerNonceStore:           "memory",
 		BrokerNonceRedisKeyPrefix:  "atlas:nonce:",
 		BrokerSigner:               "placeholder",
+		FubonDMAPersonalID:         "",
+		FubonDMAAPIKey:             "",
+		FubonDMAScriptPath:         "cmd/fubon-dma/wrapper.py",
+		FubonDMAPythonPath:         "python3",
 	}
 }
 
@@ -234,6 +242,7 @@ func (o *Orchestrator) Start() error {
 			"broker_nonce_store_path":        o.config.BrokerNonceStorePath,
 			"broker_nonce_redis_key_prefix":  o.config.BrokerNonceRedisKeyPrefix,
 			"broker_max_retries":             o.config.BrokerMaxRetries,
+			"fubon_dma_adapter":              o.config.BrokerAdapter == "fubon-dma",
 		},
 	})
 
@@ -515,6 +524,10 @@ func (o *Orchestrator) Status() map[string]interface{} {
 			"broker_nonce_store_path":        o.config.BrokerNonceStorePath,
 			"broker_nonce_redis_key_prefix":  o.config.BrokerNonceRedisKeyPrefix,
 			"broker_max_retries":             o.config.BrokerMaxRetries,
+			"fubon_dma_personal_id_set":      o.config.FubonDMAPersonalID != "",
+			"fubon_dma_api_key_set":          o.config.FubonDMAAPIKey != "",
+			"fubon_dma_script_path":          o.config.FubonDMAScriptPath,
+			"fubon_dma_python_path":          o.config.FubonDMAPythonPath,
 		},
 	}
 }
@@ -615,6 +628,22 @@ func resolveBrokerMode(cfg OrchestratorConfig) (requested string, effective stri
 				return requested, "live-guarded", NewGuardedLiveBroker(nil), "live+http adapter requested but ATLAS_BROKER_API_KEY is empty; fallback to guarded"
 			}
 			return requested, "live-http", NewGuardedLiveBroker(httpAdapter), "live mode uses http adapter with signature placeholder; verify credentials and endpoint before production use"
+		case "fubon-dma":
+			personalID := strings.TrimSpace(cfg.FubonDMAPersonalID)
+			apiKey := strings.TrimSpace(cfg.FubonDMAAPIKey)
+			if personalID == "" {
+				return requested, "live-guarded", NewGuardedLiveBroker(nil), "live+fubon-dma adapter requested but FUBON_DMA_PERSONAL_ID is empty; fallback to guarded"
+			}
+			if apiKey == "" {
+				return requested, "live-guarded", NewGuardedLiveBroker(nil), "live+fubon-dma adapter requested but FUBON_DMA_API_KEY is empty; fallback to guarded"
+			}
+			dmaAdapter := NewFubonDMAAdapter(FubonDMAAdapterConfig{
+				PersonalID: personalID,
+				APIKey:     apiKey,
+				ScriptPath: cfg.FubonDMAScriptPath,
+				PythonPath: cfg.FubonDMAPythonPath,
+			})
+			return requested, "live-fubon-dma", NewGuardedLiveBroker(dmaAdapter), "live mode uses fubon-dma adapter; DMA login will be attempted on orchestrator start"
 		default:
 			return requested, "live-guarded", NewGuardedLiveBroker(nil), fmt.Sprintf("unsupported broker adapter %q for live mode; fallback to guarded", adapterProvider)
 		}
