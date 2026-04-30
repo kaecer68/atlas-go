@@ -90,6 +90,10 @@ func run(args []string, deps appDeps) error {
 	brokerNonceStorePath := flags.String("broker-nonce-store-path", "", "override nonce replay file store path (required when store=file)")
 	brokerNonceRedisURL := flags.String("broker-nonce-redis-url", "", "override nonce replay redis url (required when store=redis)")
 	brokerNonceRedisKeyPrefix := flags.String("broker-nonce-redis-key-prefix", "", "override nonce replay redis key prefix")
+	fubonDMAPersonalID := flags.String("fubon-dma-personal-id", "", "fubon dma personal id (identity card number)")
+	fubonDMAAPIKey := flags.String("fubon-dma-api-key", "", "fubon dma api key")
+	fubonDMAScriptPath := flags.String("fubon-dma-script-path", "", "fubon dma wrapper.py path")
+	fubonDMAPythonPath := flags.String("fubon-dma-python-path", "", "fubon dma python executable path")
 	allowLiveBroker := flags.Bool("allow-live-broker", false, "allow live broker mode (default false)")
 	allowHTTPBroker := flags.Bool("allow-http-broker", false, "allow http broker adapter in live mode (default false)")
 	allowRealSigner := flags.Bool("allow-real-signer", false, "allow non-placeholder signer for http broker adapter")
@@ -136,6 +140,18 @@ func run(args []string, deps appDeps) error {
 	}
 	if *brokerNonceRedisKeyPrefix != "" {
 		cfg.BrokerNonceRedisKeyPrefix = *brokerNonceRedisKeyPrefix
+	}
+	if *fubonDMAPersonalID != "" {
+		cfg.FubonDMAPersonalID = *fubonDMAPersonalID
+	}
+	if *fubonDMAAPIKey != "" {
+		cfg.FubonDMAAPIKey = *fubonDMAAPIKey
+	}
+	if *fubonDMAScriptPath != "" {
+		cfg.FubonDMAScriptPath = *fubonDMAScriptPath
+	}
+	if *fubonDMAPythonPath != "" {
+		cfg.FubonDMAPythonPath = *fubonDMAPythonPath
 	}
 	if err := validateBrokerRuntimeConfig(&cfg, *allowLiveBroker, *allowHTTPBroker, *allowRealSigner); err != nil {
 		return err
@@ -293,8 +309,8 @@ func normalizeBrokerStrings(cfg *config.Config) {
 }
 
 func validateBrokerEnums(cfg *config.Config) error {
-	if cfg.BrokerAdapter != "guarded" && cfg.BrokerAdapter != "mock" && cfg.BrokerAdapter != "http" {
-		return fmt.Errorf("unsupported broker adapter %q (allowed: guarded, mock, http)", cfg.BrokerAdapter)
+	if cfg.BrokerAdapter != "guarded" && cfg.BrokerAdapter != "mock" && cfg.BrokerAdapter != "http" && cfg.BrokerAdapter != "fubon-dma" {
+		return fmt.Errorf("unsupported broker adapter %q (allowed: guarded, mock, http, fubon-dma)", cfg.BrokerAdapter)
 	}
 	if cfg.BrokerSigner != "placeholder" && cfg.BrokerSigner != "hmac-sha256" {
 		return fmt.Errorf("unsupported broker signer %q (allowed: placeholder, hmac-sha256)", cfg.BrokerSigner)
@@ -318,6 +334,14 @@ func validateBrokerLiveMode(cfg *config.Config, allowLiveBroker bool, allowHTTPB
 		}
 		if cfg.BrokerAdapter == "http" && cfg.BrokerSigner != "placeholder" && cfg.BrokerKeyID == "" {
 			return fmt.Errorf("broker key id is required when using signer %q with http adapter", cfg.BrokerSigner)
+		}
+		if cfg.BrokerAdapter == "fubon-dma" {
+			if cfg.FubonDMAPersonalID == "" {
+				return fmt.Errorf("fubon-dma adapter requires FUBON_DMA_PERSONAL_ID (use -fubon-dma-personal-id flag or FUBON_DMA_PERSONAL_ID env)")
+			}
+			if cfg.FubonDMAAPIKey == "" {
+				return fmt.Errorf("fubon-dma adapter requires FUBON_DMA_API_KEY (use -fubon-dma-api-key flag or FUBON_DMA_API_KEY env)")
+			}
 		}
 		return nil
 	default:
@@ -443,6 +467,10 @@ func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector) er
 	fmt.Printf("broker_nonce_redis_url: %s\n", cfg.BrokerNonceRedisURL)
 	fmt.Printf("broker_nonce_redis_key_prefix: %s\n", cfg.BrokerNonceRedisKeyPrefix)
 	fmt.Printf("broker_max_retries: %d\n", cfg.BrokerMaxRetries)
+	fmt.Printf("fubon_dma_personal_id_set: %v\n", cfg.FubonDMAPersonalID != "")
+	fmt.Printf("fubon_dma_api_key_set: %v\n", cfg.FubonDMAAPIKey != "")
+	fmt.Printf("fubon_dma_script_path: %s\n", cfg.FubonDMAScriptPath)
+	fmt.Printf("fubon_dma_python_path: %s\n", cfg.FubonDMAPythonPath)
 	fmt.Printf("session: %s\n", session.ID)
 	fmt.Printf("agents: %d\n", len(registry.Agents))
 	fmt.Printf("regime: %s\n", result.Regime)
@@ -492,6 +520,10 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	liveCfg.BrokerNonceStorePath = cfg.BrokerNonceStorePath
 	liveCfg.BrokerNonceRedisURL = cfg.BrokerNonceRedisURL
 	liveCfg.BrokerNonceRedisKeyPrefix = cfg.BrokerNonceRedisKeyPrefix
+	liveCfg.FubonDMAPersonalID = cfg.FubonDMAPersonalID
+	liveCfg.FubonDMAAPIKey = cfg.FubonDMAAPIKey
+	liveCfg.FubonDMAScriptPath = cfg.FubonDMAScriptPath
+	liveCfg.FubonDMAPythonPath = cfg.FubonDMAPythonPath
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -40,6 +40,10 @@ type Config struct {
 	BrokerNonceRedisKeyPrefix  string
 	BrokerSigner               string
 	BrokerKeyID                string
+	FubonDMAPersonalID         string
+	FubonDMAAPIKey             string
+	FubonDMAScriptPath         string
+	FubonDMAPythonPath         string
 }
 
 func Load() Config {
@@ -77,6 +81,10 @@ func Load() Config {
 		BrokerNonceRedisKeyPrefix:  envOr("ATLAS_BROKER_NONCE_REDIS_KEY_PREFIX", "atlas:nonce:"),
 		BrokerSigner:               envOr("ATLAS_BROKER_SIGNER", "placeholder"),
 		BrokerKeyID:                envOr("ATLAS_BROKER_KEY_ID", ""),
+		FubonDMAPersonalID:         envOr("FUBON_DMA_PERSONAL_ID", ""),
+		FubonDMAAPIKey:             envOrPriority("FUBON_DMA_API_KEY", "ATLAS_FUBON_DMA_API_KEY"),
+		FubonDMAScriptPath:         envOr("FUBON_DMA_SCRIPT_PATH", "cmd/fubon-dma/wrapper.py"),
+		FubonDMAPythonPath:         envOr("FUBON_DMA_PYTHON_PATH", "python3"),
 	}
 }
 
