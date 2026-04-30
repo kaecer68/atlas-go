@@ -252,7 +252,7 @@ func TestCrossover(t *testing.T) {
 		Type: StrategyMomentum,
 		Parameters: map[string]float64{
 			"learning_rate": 0.01,
-			"momentum":     0.9,
+			"momentum":      0.9,
 		},
 	}
 	parent2 := &LearningStrategy{
@@ -261,7 +261,7 @@ func TestCrossover(t *testing.T) {
 		Type: StrategyMomentum,
 		Parameters: map[string]float64{
 			"learning_rate": 0.02,
-			"momentum":     0.95,
+			"momentum":      0.95,
 		},
 	}
 
@@ -314,15 +314,15 @@ func TestProcessSwarmData(t *testing.T) {
 	ml := NewMetaLearner(config)
 
 	data := SwarmLearningData{
-		FishID:         "fish_001",
-		Scenario:       "bull",
-		LearningRate:   0.01,
-		BatchSize:      32,
-		Epochs:         10,
-		FinalAccuracy:  0.85,
+		FishID:           "fish_001",
+		Scenario:         "bull",
+		LearningRate:     0.01,
+		BatchSize:        32,
+		Epochs:           10,
+		FinalAccuracy:    0.85,
 		ConvergenceSpeed: 30.0,
-		Stability:      0.9,
-		Timestamp:      time.Now(),
+		Stability:        0.9,
+		Timestamp:        time.Now(),
 		StrategyParams: map[string]float64{
 			"learning_rate": 0.01,
 			"momentum":      0.9,
