@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-type rateLimiter struct {
+type RateLimiter struct {
 	mu        sync.Mutex
 	remaining int
 	limit     int
@@ -17,8 +17,8 @@ type rateLimiter struct {
 	window    time.Duration
 }
 
-func newRateLimiter(limit int) *rateLimiter {
-	return &rateLimiter{
+func NewRateLimiter(limit int) *RateLimiter {
+	return &RateLimiter{
 		limit:     limit,
 		remaining: limit,
 		window:    time.Hour,
@@ -26,7 +26,7 @@ func newRateLimiter(limit int) *rateLimiter {
 	}
 }
 
-func (r *rateLimiter) Wait(ctx context.Context) error {
+func (r *RateLimiter) Wait(ctx context.Context) error {
 	r.mu.Lock()
 	now := time.Now()
 	cutoff := now.Add(-r.window)
@@ -59,7 +59,7 @@ func (r *rateLimiter) Wait(ctx context.Context) error {
 	return nil
 }
 
-func (r *rateLimiter) RecordUse() {
+func (r *RateLimiter) RecordUse() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.requests = append(r.requests, time.Now())
@@ -68,13 +68,13 @@ func (r *rateLimiter) RecordUse() {
 	}
 }
 
-func (r *rateLimiter) Remaining() int {
+func (r *RateLimiter) Remaining() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.remaining
 }
 
-func (r *rateLimiter) WaitForReset(resetAt time.Time) time.Duration {
+func (r *RateLimiter) WaitForReset(resetAt time.Time) time.Duration {
 	return time.Until(resetAt) + time.Second
 }
 
@@ -96,7 +96,7 @@ func (e *FinMindAPIError) IsServerError() bool {
 	return e.StatusCode >= 500
 }
 
-func FetchWithRetry(ctx context.Context, client *http.Client, url string, apiKey string, limiter *rateLimiter, maxRetries int) ([]byte, error) {
+func FetchWithRetry(ctx context.Context, client *http.Client, url string, apiKey string, limiter *RateLimiter, maxRetries int) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("finmind: create request: %w", err)

@@ -7,7 +7,7 @@ import (
 )
 
 func TestRateLimiter_WaitAndRecord(t *testing.T) {
-	limiter := newRateLimiter(600) // 600 req/hr
+	limiter := NewRateLimiter(600) // 600 req/hr
 	ctx := context.Background()
 
 	// Should not block on first call
@@ -23,7 +23,7 @@ func TestRateLimiter_WaitAndRecord(t *testing.T) {
 }
 
 func TestRateLimiter_DecrementsOnUse(t *testing.T) {
-	limiter := newRateLimiter(600)
+	limiter := NewRateLimiter(600)
 	limiter.RecordUse()
 	if limiter.Remaining() != 599 {
 		t.Fatalf("expected 599 remaining, got %d", limiter.Remaining())
@@ -31,7 +31,7 @@ func TestRateLimiter_DecrementsOnUse(t *testing.T) {
 }
 
 func TestRateLimiter_429Handling(t *testing.T) {
-	limiter := newRateLimiter(600)
+	limiter := NewRateLimiter(600)
 	// Simulate hitting 429 - should compute correct wait time
 	resetAt := time.Now().Add(30 * time.Second)
 	waitDuration := limiter.WaitForReset(resetAt)
