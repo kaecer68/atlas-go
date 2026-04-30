@@ -26,6 +26,9 @@ func run(args []string) error {
 	}
 
 	cfg := config.Load()
+	if cfg.ReplayDataPath == "samples/replay/twse_stock_day_all_sample.csv" {
+		cfg.ReplayDataPath = "data/replay/tw_extended_90days.csv"
+	}
 	if _, err := baseline.Load(cfg.BaselinePolicyPath); err != nil {
 		return fmt.Errorf("load baseline policy: %w", err)
 	}
