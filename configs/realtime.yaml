@@ -1,0 +1,17 @@
+# 即時行情串流設定
+# Realtime quote streaming configuration
+
+providers:
+  - name: fugle-ws
+    type: fugle-websocket
+    api_key: ${FUGLE_API_KEY}
+    ws_url: wss://api.fugle.tw/marketdata/v1.0/stock/streaming
+    enabled: true
+
+  - name: twse-polling
+    type: polling
+    interval_s: 5
+    enabled: false
+
+failover_timeout_s: 30
+health_check_period_s: 60
