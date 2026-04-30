@@ -184,6 +184,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 			if s.thresholdEngine != nil {
 				s.thresholdEngine.SetRiskAppetite(sim.RiskAppetite(selectedStrategy.RiskAppetite))
 			}
+			s.registry = s.filterAgentsByStrategy(s.registry, selectedStrategy)
 		}
 	}
 
@@ -284,6 +285,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 			if s.thresholdEngine != nil {
 				s.thresholdEngine.SetRiskAppetite(sim.RiskAppetite(selectedStrategy.RiskAppetite))
 			}
+			s.registry = s.filterAgentsByStrategy(s.registry, selectedStrategy)
 		}
 	}
 
@@ -341,19 +343,17 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 func selectProvider(cfg config.Config) marketdata.Provider {
 	switch cfg.MarketDataProvider {
 	case "fugle":
-		// 纯 Fugle 模式（需有效 API key）
 		if cfg.FugleAPIKey != "" {
 			return marketdata.NewFugleProviderWithAPIKey(cfg.FugleAPIKey)
 		}
 		fmt.Println("[WARNING] Fugle API key not configured, falling back to mock provider. DO NOT USE IN PRODUCTION.")
 		return marketdata.NewMockProvider()
 	case "twse":
-		// 纯 TWSE 模式（免费，rate limited）
 		return marketdata.NewTWSEOpenAPIProvider()
 	case "hybrid", "":
-		return marketdata.NewHybridProvider(cfg.FubonAPIKey, cfg.FugleAPIKey)
+		return marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 	default:
-		return marketdata.NewHybridProvider(cfg.FubonAPIKey, cfg.FugleAPIKey)
+		return marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 	}
 }
 
