@@ -1321,6 +1321,7 @@ func (a *DashboardAPI) handleChannelsIngest(w http.ResponseWriter, r *http.Reque
 		log.Printf("[handleChannelsIngest] capital flow ingest succeeded")
 	}()
 
+	// Export statistics (customs open data — replaced TWSE FAS210)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -1398,8 +1399,7 @@ func (a *DashboardAPI) handleChannelsIngest(w http.ResponseWriter, r *http.Reque
 		defer wg.Done()
 		tejKey := os.Getenv("TEJ_API_KEY")
 		if tejKey == "" {
-			tejErr = fmt.Errorf("TEJ_API_KEY not set")
-			NewChannelHealthStoreWithPool(stateDir, a.pool).Record("tej", "error", tejErr.Error())
+			NewChannelHealthStoreWithPool(stateDir, a.pool).Record("tej", "inactive", "TEJ_API_KEY not set")
 			log.Printf("[handleChannelsIngest] TEJ ingest skipped: TEJ_API_KEY not set")
 			return
 		}
@@ -1931,8 +1931,9 @@ func (a *DashboardAPI) handleDataChannels(w http.ResponseWriter, r *http.Request
 	})
 
 	// 8. Export Statistics (Electronics export proxy for tech sector health)
+	// TWSE FAS210 decommissioned; replaced with customs open data (data.gov.tw dataset 6053).
 	exportDir := filepath.Join(a.workDir, "data/state/export")
-	exportStatus, exportUpdated := a.checkCapitalFlowHealth(exportDir, now)
+	exportStatus, exportUpdated := a.checkExportHealth(exportDir, now)
 	exportRec := healthStore.Get("export_statistics")
 	if exportRec != nil && exportRec.Status != "" {
 		exportStatus = exportRec.Status
@@ -1945,19 +1946,13 @@ func (a *DashboardAPI) handleDataChannels(w http.ResponseWriter, r *http.Request
 	channels = append(channels, DataChannel{
 		ChannelID:  "export_statistics",
 		Country:    "台灣",
-		Platform:   "TWSE 出口統計",
-		APIFormat:  "FAS210 JSON",
-		Path:       "www.twse.com.tw/rwd/zh/exchangeReport/FAS210",
+		Platform:   "海關進出口統計 (data.gov.tw)",
+		APIFormat:  "CSV",
+		Path:       "opendata.customs.gov.tw/data/6053/csv.csv",
 		Storage:    "data/state/export/*_export.json",
 		Status:     exportStatus,
 		StatusText: statusText(exportStatus),
 		UpdatedAt:  exportUpdated,
-		LastError: func() string {
-			if exportRec != nil {
-				return exportRec.LastError
-			}
-			return ""
-		}(),
 	})
 
 	// 9. TSMC Revenue (AI capex sentiment proxy)
@@ -2022,13 +2017,11 @@ func (a *DashboardAPI) handleDataChannels(w http.ResponseWriter, r *http.Request
 
 	// 11. JANUS Regime (Meta-layer regime detection)
 	janusStatus, janusUpdated := a.checkJanusHealth(now)
+	janusLastError := ""
 	janusRec := healthStore.Get("janus_regime")
-	if janusRec != nil && janusRec.Status != "" {
-		janusStatus = janusRec.Status
+	if janusRec != nil {
 		if janusRec.LastError != "" {
-			janusUpdated = "上次失敗: " + janusRec.LastError
-		} else if janusRec.LastSuccessAt != "" {
-			janusUpdated = "上次成功: " + janusRec.LastSuccessAt
+			janusLastError = janusRec.LastError
 		}
 	}
 	channels = append(channels, DataChannel{
@@ -2041,24 +2034,24 @@ func (a *DashboardAPI) handleDataChannels(w http.ResponseWriter, r *http.Request
 		Status:     janusStatus,
 		StatusText: statusText(janusStatus),
 		UpdatedAt:  janusUpdated,
-		LastError: func() string {
-			if janusRec != nil {
-				return janusRec.LastError
-			}
-			return ""
-		}(),
+		LastError:  janusLastError,
 	})
 
 	// 12. TEJ (Taiwan Economic Journal - premium financial data)
-	tejStatus := "unknown"
-	tejUpdated := ""
-	tejRec := healthStore.Get("tej")
-	if tejRec != nil && tejRec.Status != "" {
-		tejStatus = tejRec.Status
-		if tejRec.LastError != "" {
-			tejUpdated = "上次失敗: " + tejRec.LastError
-		} else if tejRec.LastSuccessAt != "" {
-			tejUpdated = "上次成功: " + tejRec.LastSuccessAt
+	tejStatus := "inactive"
+	tejUpdated := "TEJ_API_KEY not configured"
+	tejKey := os.Getenv("TEJ_API_KEY")
+	if tejKey != "" {
+		tejStatus = "ok"
+		tejUpdated = "TEJ API key configured"
+		tejRec := healthStore.Get("tej")
+		if tejRec != nil && tejRec.Status != "" {
+			tejStatus = tejRec.Status
+			if tejRec.LastError != "" {
+				tejUpdated = "上次失敗: " + tejRec.LastError
+			} else if tejRec.LastSuccessAt != "" {
+				tejUpdated = "上次成功: " + tejRec.LastSuccessAt
+			}
 		}
 	}
 	channels = append(channels, DataChannel{
@@ -2071,42 +2064,30 @@ func (a *DashboardAPI) handleDataChannels(w http.ResponseWriter, r *http.Request
 		Status:     tejStatus,
 		StatusText: statusText(tejStatus),
 		UpdatedAt:  tejUpdated,
-		LastError: func() string {
-			if tejRec != nil {
-				return tejRec.LastError
-			}
-			return ""
-		}(),
+		LastError:  "",
 	})
 
-	// Build alerts list for overview card
-	alerts := healthStore.Alerts()
-	// Also add age-based alerts if health store doesn't cover them
-	for _, c := range channels {
-		if c.Status == "error" {
-			found := false
-			for _, a := range alerts {
-				if a.ChannelID == c.ChannelID {
-					found = true
-					break
-				}
-			}
-			if !found {
-				alerts = append(alerts, ChannelAlert{
-					ChannelID: c.ChannelID,
-					Status:    c.Status,
-					Error:     c.LastError,
-				})
-			}
-		}
+	knownInactive := map[string]bool{
+		"fubon": true,
 	}
-	if alerts == nil {
-		alerts = []ChannelAlert{}
+
+	var freshAlerts []ChannelAlert
+	for _, c := range channels {
+		if c.Status == "error" || c.Status == "warn" {
+			if knownInactive[c.ChannelID] {
+				continue
+			}
+			freshAlerts = append(freshAlerts, ChannelAlert{
+				ChannelID: c.ChannelID,
+				Status:    c.Status,
+				Error:     c.LastError,
+			})
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"channels":  channels,
-		"alerts":    alerts,
+		"alerts":    freshAlerts,
 		"generated": now.Format("2006-01-02 15:04:05"),
 	})
 }
@@ -2358,6 +2339,62 @@ func (a *DashboardAPI) checkCapitalFlowHealth(dir string, now time.Time) (string
 		return "ok", dateStr
 	}
 	if age < 7*24*time.Hour {
+		return "warn", dateStr
+	}
+	return "error", dateStr
+}
+
+func (a *DashboardAPI) checkExportHealth(dir string, now time.Time) (string, string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) == 0 {
+		return "error", "無資料"
+	}
+	var latestFile string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), "_export.json") {
+			continue
+		}
+		if e.Name() > latestFile {
+			latestFile = e.Name()
+		}
+	}
+	if latestFile == "" {
+		return "error", "無有效檔案"
+	}
+	dateStr := strings.TrimSuffix(latestFile, "_export.json")
+
+	var dataTs time.Time
+	data, err := os.ReadFile(filepath.Join(dir, latestFile))
+	if err == nil {
+		var exp struct {
+			Year  int `json:"year"`
+			Month int `json:"month"`
+		}
+		if json.Unmarshal(data, &exp) == nil && exp.Year > 0 && exp.Month >= 1 {
+			dataTs = time.Date(exp.Year+1911, time.Month(exp.Month), 1, 0, 0, 0, 0, time.FixedZone("CST", 8*60*60))
+		}
+	}
+
+	var t time.Time
+	if !dataTs.IsZero() {
+		t = dataTs
+	} else {
+		if len(dateStr) != 5 {
+			return "error", "日期解析失敗"
+		}
+		rocYear, err1 := strconv.Atoi(dateStr[:3])
+		month, err2 := strconv.Atoi(dateStr[3:])
+		if err1 != nil || err2 != nil || month < 1 || month > 12 {
+			return "error", "日期解析失敗"
+		}
+		t = time.Date(rocYear+1911, time.Month(month), 1, 0, 0, 0, 0, time.FixedZone("CST", 8*60*60))
+	}
+
+	age := now.Sub(t)
+	if age < 45*24*time.Hour {
+		return "ok", dateStr
+	}
+	if age < 90*24*time.Hour {
 		return "warn", dateStr
 	}
 	return "error", dateStr

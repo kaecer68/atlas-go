@@ -169,6 +169,7 @@ func run(args []string, deps appDeps) error {
 			d.SetPool(pool)
 			d.SetHealthManager(portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore))
 			janusEngine := janus.NewEngine()
+			janusEngine.EnsureAllRegimes()
 			d.SetJanusEngine(janusEngine)
 			log.Printf("[JANUS] engine injected into dashboard API")
 		}
