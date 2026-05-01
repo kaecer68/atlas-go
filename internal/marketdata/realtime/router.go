@@ -2,18 +2,30 @@ package realtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
+
+// RedisConfig Redis PubSub 設定
+type RedisConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Addr    string `yaml:"addr"`
+	Channel string `yaml:"channel"`
+	Password string `yaml:"password"`
+	DB      int    `yaml:"db"`
+}
 
 type RouterConfig struct {
 	Providers          []ProviderConfig `yaml:"providers"`
 	FailoverTimeoutS   int              `yaml:"failover_timeout_s"`
 	HealthCheckPeriodS int              `yaml:"health_check_period_s"`
+	Redis              RedisConfig      `yaml:"redis"`
 }
 
 type ProviderConfig struct {
@@ -32,16 +44,18 @@ func DefaultRouterConfig() RouterConfig {
 }
 
 type RealtimeRouter struct {
-	providers  []RealtimeProvider
-	activeIdx  atomic.Int32
-	callbacks  []QuoteCallback
-	cbMu       sync.RWMutex
-	config     RouterConfig
-	running    bool
-	runningMu  sync.Mutex
-	cancelCtx  context.Context
-	cancelFunc context.CancelFunc
-	failoverCh chan int32
+	providers   []RealtimeProvider
+	activeIdx   atomic.Int32
+	callbacks   []QuoteCallback
+	cbMu        sync.RWMutex
+	config      RouterConfig
+	running     bool
+	runningMu   sync.Mutex
+	cancelCtx   context.Context
+	cancelFunc  context.CancelFunc
+	failoverCh  chan int32
+	redisClient *redis.Client
+	redisChannel string
 }
 
 func NewRealtimeRouter(config RouterConfig, providers []RealtimeProvider) *RealtimeRouter {
@@ -50,6 +64,13 @@ func NewRealtimeRouter(config RouterConfig, providers []RealtimeProvider) *Realt
 		config:     config,
 		failoverCh: make(chan int32, len(providers)),
 	}
+}
+
+// WithRedis 設定 Redis PubSub 發布，啟用後 emitQuote 會將報價同步發布到指定頻道
+func (r *RealtimeRouter) WithRedis(client *redis.Client, channel string) *RealtimeRouter {
+	r.redisClient = client
+	r.redisChannel = channel
+	return r
 }
 
 func (r *RealtimeRouter) Start(ctx context.Context) error {
@@ -191,6 +212,13 @@ func (r *RealtimeRouter) emitQuote(quote domain.Quote) {
 
 	for _, cb := range callbacks {
 		cb(quote)
+	}
+
+	if r.redisClient != nil && r.redisChannel != "" {
+		data, err := json.Marshal(quote)
+		if err == nil {
+			r.redisClient.Publish(r.cancelCtx, r.redisChannel, data)
+		}
 	}
 }
 

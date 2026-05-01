@@ -18,16 +18,16 @@ const (
 )
 
 type Quote struct {
-	Symbol     string
-	Last       float64
-	Open       float64
-	High       float64
-	Low        float64
-	Volume     int64
-	Market     string
-	AsOf       time.Time
-	IsTradable bool
-	Source     string
+	Symbol     string    `json:"symbol"`
+	Last       float64   `json:"last"`
+	Open       float64   `json:"open"`
+	High       float64   `json:"high"`
+	Low        float64   `json:"low"`
+	Volume     int64     `json:"volume"`
+	Market     string    `json:"market"`
+	AsOf       time.Time `json:"as_of"`
+	IsTradable bool      `json:"is_tradable"`
+	Source     string    `json:"source"`
 }
 
 type FactorScoreItem struct {

@@ -15,3 +15,10 @@ providers:
 
 failover_timeout_s: 30
 health_check_period_s: 60
+
+redis:
+  enabled: true
+  addr: "localhost:6379"
+  channel: "atlas:quotes"
+  password: ""
+  db: 0
