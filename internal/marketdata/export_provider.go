@@ -2,17 +2,33 @@ package marketdata
 
 import (
 	"context"
+	"encoding/csv"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
-// ExportStatisticsProvider fetches Taiwan export statistics.
-// TWSE FAS210 has been decommissioned; FinMind does not provide aggregate export data.
-// This provider returns a "no data available" error to signal the channel as degraded.
-// Available alternatives:
-//   - Government customs API (manual, not real-time)
-//   - g0v mirror: https://portal-api.g0v.ronny.tw/api/goodid/0 (JSON, relatively fresh)
+// CustomsExportImport holds a single row of customs export/import statistics.
+type CustomsExportImport struct {
+	Year         int     `json:"year"`          // ROC year (e.g., 115 = 2026)
+	Month        int     `json:"month"`         // 1-12
+	ExportTotal  float64 `json:"export_total"`  // 千美元 → /1e6 = 10億美元
+	ImportTotal  float64 `json:"import_total"`  // 千美元 → /1e6 = 10億美元
+	TradeBalance float64 `json:"trade_balance"` // 出超 (千美元)
+	DownloadedAt int64   `json:"downloaded_at"` // unix timestamp
+}
+
+// ExportStatisticsProvider fetches Taiwan export/import statistics from
+// the government open data portal (data.gov.tw dataset 6053).
+// CSV: https://opendata.customs.gov.tw/data/6053/csv.csv
 type ExportStatisticsProvider struct {
 	client     *http.Client
 	storageDir string
@@ -22,8 +38,9 @@ type ExportStatisticsProvider struct {
 // NewExportStatisticsProvider creates a new export statistics provider.
 func NewExportStatisticsProvider(storageDir string) *ExportStatisticsProvider {
 	return &ExportStatisticsProvider{
-		client:     &http.Client{Timeout: 20 * time.Second},
+		client:     &http.Client{Timeout: 30 * time.Second},
 		storageDir: storageDir,
+		baseURL:    "https://opendata.customs.gov.tw/data/6053/csv.csv",
 	}
 }
 
@@ -32,11 +49,138 @@ func (e *ExportStatisticsProvider) Name() string {
 	return "export_statistics"
 }
 
-// FetchSnapshot returns an error because TWSE FAS210 (export statistics)
-// has been decommissioned with no confirmed replacement endpoint.
-func (e *ExportStatisticsProvider) FetchSnapshot(context.Context) (MacroDataSnapshot, error) {
-	return MacroDataSnapshot{}, fmt.Errorf("export_statistics: TWSE FAS210 endpoint decommissioned; " +
-		"FinMind does not provide aggregate export data; use government customs API or g0v mirror")
+// FetchSnapshot fetches the latest customs export/import data and returns a MacroDataSnapshot.
+func (e *ExportStatisticsProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
+	latest, prev, err := e.fetchLatestTwoMonths(ctx)
+	if err != nil {
+		return MacroDataSnapshot{}, fmt.Errorf("export_statistics fetch: %w", err)
+	}
+
+	exportValue := latest.ExportTotal / 1e6 // convert from million USD → billion USD
+
+	var changePct float64
+	if prev.ExportTotal > 0 {
+		changePct = ((latest.ExportTotal - prev.ExportTotal) / prev.ExportTotal) * 100
+	}
+
+	// Convert ROC year/month to unix timestamp (use 1st of month noon CST)
+	ts := time.Date(latest.Year+1911, time.Month(latest.Month), 1, 12, 0, 0, 0, time.FixedZone("CST", 8*60*60)).Unix()
+
+	if err := e.saveExport(latest); err != nil {
+		logging.Warn("export_statistics_provider", "save_export_warning", logging.Err(err))
+	}
+
+	return MacroDataSnapshot{
+		RecordedAt: latest.DownloadedAt,
+		ExportElectronics: MacroDataPoint{
+			Symbol:    "TW_EXPORT_ELECTRONICS",
+			Value:     exportValue,
+			ChangePct: changePct,
+			Timestamp: ts,
+		},
+	}, nil
+}
+
+// fetchLatestTwoMonths returns the two most recent monthly records.
+func (e *ExportStatisticsProvider) fetchLatestTwoMonths(ctx context.Context) (CustomsExportImport, CustomsExportImport, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, e.baseURL, nil)
+	if err != nil {
+		return CustomsExportImport{}, CustomsExportImport{}, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("Accept", "text/csv")
+
+	resp, err := e.client.Do(req)
+	if err != nil {
+		return CustomsExportImport{}, CustomsExportImport{}, fmt.Errorf("export statistics HTTP request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return CustomsExportImport{}, CustomsExportImport{}, fmt.Errorf("export statistics HTTP %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return CustomsExportImport{}, CustomsExportImport{}, fmt.Errorf("export statistics read body: %w", err)
+	}
+
+	records, err := parseCustomsCSV(body)
+	if err != nil {
+		return CustomsExportImport{}, CustomsExportImport{}, fmt.Errorf("export statistics CSV parse: %w", err)
+	}
+
+	if len(records) < 2 {
+		return CustomsExportImport{}, CustomsExportImport{}, fmt.Errorf("export statistics: expected at least 2 rows, got %d", len(records))
+	}
+
+	// CSV is newest-first; records[0] = current month, records[1] = previous month
+	return records[0], records[1], nil
+}
+
+// parseCustomsCSV parses the customs CSV body into CustomsExportImport slice (newest-first).
+func parseCustomsCSV(body []byte) ([]CustomsExportImport, error) {
+	// Strip UTF-8 BOM if present.
+	if len(body) >= 3 && body[0] == 0xef && body[1] == 0xbb && body[2] == 0xbf {
+		body = body[3:]
+	}
+	reader := csv.NewReader(strings.NewReader(string(body)))
+	reader.FieldsPerRecord = -1 // allow variable fields
+	reader.TrimLeadingSpace = true
+
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	if len(records) < 2 {
+		return nil, fmt.Errorf("CSV has no data rows")
+	}
+
+	var results []CustomsExportImport
+	now := time.Now().Unix()
+
+	// Skip header row (records[0]), iterate data rows
+	for _, row := range records[1:] {
+		if len(row) < 8 {
+			continue
+		}
+		year, err := strconv.Atoi(row[0])
+		if err != nil {
+			continue
+		}
+		month, err := strconv.Atoi(row[1])
+		if err != nil || month < 1 || month > 12 {
+			continue
+		}
+
+		exportTotal := parseTWDVolume(row[2])
+		importTotal := parseTWDVolume(row[3])
+		tradeBalance := parseTWDVolume(row[8])
+
+		// Convert from thousand TWD to million TWD (same unit as other MacroDataPoint values)
+		results = append(results, CustomsExportImport{
+			Year:         year,
+			Month:        month,
+			ExportTotal:  exportTotal / 1000, // 千美元 → 百萬美元
+			ImportTotal:  importTotal / 1000,
+			TradeBalance: tradeBalance / 1000,
+			DownloadedAt: now,
+		})
+	}
+
+	return results, nil
+}
+
+func (e *ExportStatisticsProvider) saveExport(data CustomsExportImport) error {
+	if err := os.MkdirAll(e.storageDir, 0o755); err != nil {
+		return err
+	}
+	path := filepath.Join(e.storageDir, fmt.Sprintf("%03d%02d_export.json", data.Year, data.Month))
+	out, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0o644)
 }
 
 // ExportStatisticsProviderWithClient creates a provider with custom HTTP client (for testing).
@@ -44,5 +188,6 @@ func ExportStatisticsProviderWithClient(client *http.Client, storageDir string) 
 	return &ExportStatisticsProvider{
 		client:     client,
 		storageDir: storageDir,
+		baseURL:    "https://opendata.customs.gov.tw/data/6053/csv.csv",
 	}
 }
