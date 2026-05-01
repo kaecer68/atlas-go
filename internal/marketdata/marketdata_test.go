@@ -154,6 +154,128 @@ func TestHybridProvider_hasInvalidQuotes(t *testing.T) {
 	}
 }
 
+func TestHybridProvider_FinMindCircuitBreaker(t *testing.T) {
+	p := NewHybridProvider("finmind-key", "fugle-key")
+
+	// Initial state: circuit closed
+	if !p.shouldTryFinMind() {
+		t.Error("expected shouldTryFinMind()=true when circuit is closed")
+	}
+
+	// Simulate 3 failures
+	p.recordFinMindFailure()
+	p.recordFinMindFailure()
+	p.recordFinMindFailure()
+
+	// After 3 failures: circuit should be open
+	if p.shouldTryFinMind() {
+		t.Error("expected shouldTryFinMind()=false after 3 failures (circuit open)")
+	}
+
+	// Circuit breaker stats
+	stats := p.CircuitBreakerStats()
+	if stats["failure_count"] != 3 {
+		t.Errorf("failure_count = %d, want 3", stats["failure_count"])
+	}
+	if stats["state"] != string(ProviderCircuitOpen) {
+		t.Errorf("state = %q, want %q", stats["state"], ProviderCircuitOpen)
+	}
+
+	// Manually set to half-open for testing
+	p.cbMutex.Lock()
+	p.cbState = ProviderCircuitHalfOpen
+	p.cbHalfOpenCalls = 0
+	p.cbMutex.Unlock()
+
+	// Simulate recovery (need 2 successes in half-open)
+	p.recordFinMindSuccess()
+	p.recordFinMindSuccess()
+
+	// After success in half-open: circuit should be closed
+	if !p.shouldTryFinMind() {
+		t.Error("expected shouldTryFinMind()=true after recovery (circuit closed)")
+	}
+
+	stats = p.CircuitBreakerStats()
+	if stats["state"] != string(ProviderCircuitClosed) {
+		t.Errorf("state = %q, want %q after recovery", stats["state"], ProviderCircuitClosed)
+	}
+	if stats["failure_count"] != 0 {
+		t.Errorf("failure_count = %d, want 0 after recovery", stats["failure_count"])
+	}
+}
+
+func TestHybridProvider_FinMindCircuitBreaker_HalfOpen(t *testing.T) {
+	p := NewHybridProvider("finmind-key", "fugle-key")
+
+	// Open the circuit
+	p.recordFinMindFailure()
+	p.recordFinMindFailure()
+	p.recordFinMindFailure()
+
+	// Manually set to half-open for testing
+	p.cbMutex.Lock()
+	p.cbState = ProviderCircuitHalfOpen
+	p.cbHalfOpenCalls = 0
+	p.cbMutex.Unlock()
+
+	if !p.shouldTryFinMind() {
+		t.Error("expected shouldTryFinMind()=true in half-open state")
+	}
+
+	// First success in half-open
+	p.recordFinMindSuccess()
+
+	// Should still be half-open (need halfOpenMaxCalls=2)
+	p.cbMutex.RLock()
+	state := p.cbState
+	p.cbMutex.RUnlock()
+	if state != ProviderCircuitHalfOpen {
+		t.Errorf("state = %q, want %q after first success in half-open", state, ProviderCircuitHalfOpen)
+	}
+
+	// Second success in half-open
+	p.recordFinMindSuccess()
+
+	// Now should be closed
+	p.cbMutex.RLock()
+	state = p.cbState
+	p.cbMutex.RUnlock()
+	if state != ProviderCircuitClosed {
+		t.Errorf("state = %q, want %q after second success in half-open", state, ProviderCircuitClosed)
+	}
+}
+
+func TestHybridProvider_FinMindCircuitBreaker_RecoveryTimeout(t *testing.T) {
+	p := NewHybridProvider("finmind-key", "fugle-key")
+
+	// Open the circuit
+	p.recordFinMindFailure()
+	p.recordFinMindFailure()
+	p.recordFinMindFailure()
+
+	if p.shouldTryFinMind() {
+		t.Error("expected shouldTryFinMind()=false immediately after opening circuit")
+	}
+
+	// Manually set last failure to past recovery timeout
+	p.cbMutex.Lock()
+	p.cbLastFailure = time.Now().Add(-10 * time.Minute)
+	p.cbMutex.Unlock()
+
+	// After recovery timeout: should enter half-open
+	if !p.shouldTryFinMind() {
+		t.Error("expected shouldTryFinMind()=true after recovery timeout (half-open)")
+	}
+
+	p.cbMutex.RLock()
+	state := p.cbState
+	p.cbMutex.RUnlock()
+	if state != ProviderCircuitHalfOpen {
+		t.Errorf("state = %q, want %q after recovery timeout", state, ProviderCircuitHalfOpen)
+	}
+}
+
 // ─── TWSEClient via httptest ──────────────────────────────────────────────────
 
 func TestTWSEClient_GetQuotes_Success(t *testing.T) {
