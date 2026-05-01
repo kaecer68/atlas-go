@@ -46,7 +46,10 @@ func main() {
 	flag.Parse()
 
 	stateDir := filepath.Join(os.Getenv("HOME"), "workspace", "atlas", "data", "state")
-	os.MkdirAll(stateDir, 0755)
+	if err := os.MkdirAll(stateDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create state dir: %v\n", err)
+		os.Exit(1)
+	}
 
 	apiKey := os.Getenv("FINMIND_API_KEY")
 	if apiKey == "" {
@@ -133,7 +136,9 @@ func loadSymbols(symbolsArg string) []string {
 	}
 
 	var fund map[string]interface{}
-	json.Unmarshal(data, &fund)
+	if err := json.Unmarshal(data, &fund); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to parse fundamentals: %v\n", err)
+	}
 
 	var symbols []string
 	for id := range fund {

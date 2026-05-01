@@ -51,7 +51,9 @@ func TestRecordChannelFetch_MultipleChannels(t *testing.T) {
 	var wrapper struct {
 		Channels map[string]*ChannelHealthRecord `json:"channels"`
 	}
-	json.Unmarshal(data, &wrapper)
+	if err := json.Unmarshal(data, &wrapper); err != nil {
+		t.Fatalf("unmarshal wrapper: %v", err)
+	}
 
 	if len(wrapper.Channels) != 2 {
 		t.Fatalf("expected 2 channels, got %d", len(wrapper.Channels))
@@ -81,7 +83,9 @@ func TestRecordChannelFetch_WithErrors(t *testing.T) {
 	var wrapper struct {
 		Channels map[string]*ChannelHealthRecord `json:"channels"`
 	}
-	json.Unmarshal(data, &wrapper)
+	if err := json.Unmarshal(data, &wrapper); err != nil {
+		t.Fatalf("unmarshal wrapper: %v", err)
+	}
 
 	rec := wrapper.Channels["err_channel"]
 	if rec == nil {

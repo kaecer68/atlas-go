@@ -143,7 +143,7 @@ func TestFetchTaiwan5SecIndex(t *testing.T) {
 			t.Errorf("expected start_date=2026-04-29, got %s", r.URL.Query().Get("start_date"))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(responseJSON))
+		_, _ = w.Write([]byte(responseJSON))
 	}))
 	defer server.Close()
 
@@ -181,7 +181,7 @@ func TestFetchTaiwan5SecIndex_Integration(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(responseJSON))
+		_, _ = w.Write([]byte(responseJSON))
 	}))
 	defer server.Close()
 
@@ -202,7 +202,7 @@ func TestFetchTaiwan5SecIndex_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("http request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
