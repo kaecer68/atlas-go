@@ -277,10 +277,66 @@ func checkCapitalFlowHealth(dir string, now time.Time) (string, string) {
 	}
 
 	age := now.Sub(t)
-	if age < 24*time.Hour {
+	if age < 48*time.Hour {
 		return "ok", dateStr
 	}
 	if age < 7*24*time.Hour {
+		return "warn", dateStr
+	}
+	return "error", dateStr
+}
+
+func checkExportHealth(dir string, now time.Time) (string, string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) == 0 {
+		return "error", "無資料"
+	}
+	var latestFile string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), "_export.json") {
+			continue
+		}
+		if e.Name() > latestFile {
+			latestFile = e.Name()
+		}
+	}
+	if latestFile == "" {
+		return "error", "無有效檔案"
+	}
+	dateStr := strings.TrimSuffix(latestFile, "_export.json")
+
+	var dataTs time.Time
+	data, err := os.ReadFile(filepath.Join(dir, latestFile))
+	if err == nil {
+		var exp struct {
+			Year  int `json:"year"`
+			Month int `json:"month"`
+		}
+		if json.Unmarshal(data, &exp) == nil && exp.Year > 0 && exp.Month >= 1 {
+			dataTs = time.Date(exp.Year+1911, time.Month(exp.Month), 1, 0, 0, 0, 0, time.FixedZone("CST", 8*60*60))
+		}
+	}
+
+	var t time.Time
+	if !dataTs.IsZero() {
+		t = dataTs
+	} else {
+		if len(dateStr) != 5 {
+			return "error", "日期解析失敗"
+		}
+		rocYear, err1 := strconv.Atoi(dateStr[:3])
+		month, err2 := strconv.Atoi(dateStr[3:])
+		if err1 != nil || err2 != nil || month < 1 || month > 12 {
+			return "error", "日期解析失敗"
+		}
+		t = time.Date(rocYear+1911, time.Month(month), 1, 0, 0, 0, 0, time.FixedZone("CST", 8*60*60))
+	}
+
+	age := now.Sub(t)
+	if age < 45*24*time.Hour {
+		return "ok", dateStr
+	}
+	if age < 90*24*time.Hour {
 		return "warn", dateStr
 	}
 	return "error", dateStr

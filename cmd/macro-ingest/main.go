@@ -23,6 +23,8 @@ func main() {
 	stateDir := filepath.Join(*workDir, "data/state")
 	snapshotDir := filepath.Join(stateDir, "macro")
 	capitalFlowDir := filepath.Join(stateDir, "capital_flow")
+	marginDir := filepath.Join(stateDir, "margin")
+	exportDir := filepath.Join(stateDir, "export")
 
 	var pool *pgxpool.Pool
 	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
@@ -39,12 +41,12 @@ func main() {
 		}
 	}
 
-	exportDir := filepath.Join(stateDir, "export")
 	tsmcDir := filepath.Join(stateDir, "tsmc_revenue")
 
 	provider := marketdata.NewCompositeMacroProvider(
 		marketdata.NewYahooFinanceMacroProvider(),
 		marketdata.NewTWSECapitalFlowProvider(capitalFlowDir),
+		marketdata.NewTWSEBalanceProvider(marginDir),
 		marketdata.NewExportStatisticsProvider(exportDir),
 		marketdata.NewTSMCRevenueProvider(tsmcDir),
 	)
@@ -58,12 +60,10 @@ func main() {
 	if err != nil {
 		monitoring.RecordChannelFetchWithPool(stateDir, "us_yahoo", "error", err.Error(), pool)
 		monitoring.RecordChannelFetchWithPool(stateDir, "jpy_yahoo", "error", err.Error(), pool)
-		monitoring.RecordChannelFetchWithPool(stateDir, "export_statistics", "error", err.Error(), pool)
 		log.Fatalf("ingest failed: %v", err)
 	}
 
 	monitoring.RecordChannelFetchWithPool(stateDir, "us_yahoo", "ok", "", pool)
 	monitoring.RecordChannelFetchWithPool(stateDir, "jpy_yahoo", "ok", "", pool)
-	monitoring.RecordChannelFetchWithPool(stateDir, "export_statistics", "ok", "", pool)
 	log.Printf("[MacroIngest] Ingested %d events, snapshot recorded_at=%d", len(events), snap.RecordedAt)
 }
