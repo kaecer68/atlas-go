@@ -174,13 +174,17 @@ func (h *Handlers) HandleDataChannels(w http.ResponseWriter, r *http.Request) {
 
 	// 4. Fugle (optional/live)
 	fugleKey := os.Getenv("FUGLE_API_KEY")
+	if fugleKey == "" {
+		fugleKey = os.Getenv("ATLAS_FUGLE_API_KEY")
+	}
 	fugleStatus := "inactive"
 	fugleUpdated := "-"
 	fugleLastError := ""
 	if fugleKey != "" {
 		fugleClient := marketdata.NewFugleClient(fugleKey)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_, err := fugleClient.GetQuote(ctx, "0050")
+		// Fugle free tier API key 只授權單一 symbol，先用 1476 測試連線
+		_, err := fugleClient.GetQuote(ctx, "1476")
 		cancel()
 		if err != nil {
 			fugleStatus = "error"
@@ -204,6 +208,56 @@ func (h *Handlers) HandleDataChannels(w http.ResponseWriter, r *http.Request) {
 		StatusText: statusText(fugleStatus),
 		UpdatedAt:  fugleUpdated,
 		LastError:  fugleLastError,
+	})
+
+	// 4a. Fubon (optional/live)
+	// 富邦證券 API 目前連線異常（TLS handshake timeout），暫時標記為未啟用
+	channels = append(channels, DataChannel{
+		ChannelID:  "fubon",
+		Country:    "台灣",
+		Platform:   "富邦證券",
+		APIFormat:  "REST JSON",
+		Path:       "api.fubon.com.tw",
+		Storage:    "(live cache / memory)",
+		Status:     "inactive",
+		StatusText: statusText("inactive"),
+		UpdatedAt:  "API 連線異常",
+		LastError:  "",
+	})
+
+	// 4b. FinMind (optional/data backfill)
+	finmindKey := os.Getenv("FINMIND_API_KEY")
+	finmindStatus := "inactive"
+	finmindUpdated := "-"
+	finmindLastError := ""
+	if finmindKey != "" {
+		finmindClient := marketdata.NewFinMindClient(finmindKey)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		// 用近交易日測試（今天可能是假日無交易資料）
+		_, err := finmindClient.GetStockPrice(ctx, "2330", time.Now().AddDate(0, 0, -1).Format("2006-01-02"))
+		cancel()
+		if err != nil {
+			finmindStatus = "error"
+			finmindUpdated = "API 連線失敗"
+			finmindLastError = err.Error()
+		} else {
+			finmindStatus = "ok"
+			finmindUpdated = "API 連線正常"
+		}
+	} else {
+		finmindUpdated = "未設定 API Key"
+	}
+	channels = append(channels, DataChannel{
+		ChannelID:  "finmind",
+		Country:    "台灣",
+		Platform:   "FinMind",
+		APIFormat:  "REST JSON",
+		Path:       "api.finmindtrade.com",
+		Storage:    "(live cache / memory)",
+		Status:     finmindStatus,
+		StatusText: statusText(finmindStatus),
+		UpdatedAt:  finmindUpdated,
+		LastError:  finmindLastError,
 	})
 
 	// 5. JPY via Yahoo (Japan indicator, same endpoint as US)
@@ -296,8 +350,9 @@ func (h *Handlers) HandleDataChannels(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// 8. Export Statistics (Electronics export proxy for tech sector health)
+	// TWSE FAS210 decommissioned; replaced with customs open data (data.gov.tw dataset 6053).
 	exportDir := filepath.Join(h.WorkDir, "data/state/export")
-	exportStatus, exportUpdated := checkCapitalFlowHealth(exportDir, now)
+	exportStatus, exportUpdated := checkExportHealth(exportDir, now)
 	exportRec := h.HealthRecorder.Get("export_statistics")
 	if exportRec != nil && exportRec.Status != "" {
 		exportStatus = exportRec.Status
@@ -310,19 +365,14 @@ func (h *Handlers) HandleDataChannels(w http.ResponseWriter, r *http.Request) {
 	channels = append(channels, DataChannel{
 		ChannelID:  "export_statistics",
 		Country:    "台灣",
-		Platform:   "TWSE 出口統計",
-		APIFormat:  "FAS210 JSON",
-		Path:       "www.twse.com.tw/rwd/zh/exchangeReport/FAS210",
+		Platform:   "海關進出口統計 (data.gov.tw)",
+		APIFormat:  "CSV",
+		Path:       "opendata.customs.gov.tw/data/6053/csv.csv",
 		Storage:    "data/state/export/*_export.json",
 		Status:     exportStatus,
 		StatusText: statusText(exportStatus),
 		UpdatedAt:  exportUpdated,
-		LastError: func() string {
-			if exportRec != nil {
-				return exportRec.LastError
-			}
-			return ""
-		}(),
+		LastError:  "",
 	})
 
 	// 9. TSMC Revenue (AI capex sentiment proxy)
@@ -415,15 +465,20 @@ func (h *Handlers) HandleDataChannels(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// 12. TEJ (Taiwan Economic Journal - premium financial data)
-	tejStatus := "unknown"
-	tejUpdated := ""
-	tejRec := h.HealthRecorder.Get("tej")
-	if tejRec != nil && tejRec.Status != "" {
-		tejStatus = tejRec.Status
-		if tejRec.LastError != "" {
-			tejUpdated = "上次失敗: " + tejRec.LastError
-		} else if tejRec.LastSuccessAt != "" {
-			tejUpdated = "上次成功: " + tejRec.LastSuccessAt
+	tejStatus := "inactive"
+	tejUpdated := "TEJ_API_KEY not configured"
+	tejKey := os.Getenv("TEJ_API_KEY")
+	if tejKey != "" {
+		tejStatus = "ok"
+		tejUpdated = "TEJ API key configured"
+		tejRec := h.HealthRecorder.Get("tej")
+		if tejRec != nil && tejRec.Status != "" {
+			tejStatus = tejRec.Status
+			if tejRec.LastError != "" {
+				tejUpdated = "上次失敗: " + tejRec.LastError
+			} else if tejRec.LastSuccessAt != "" {
+				tejUpdated = "上次成功: " + tejRec.LastSuccessAt
+			}
 		}
 	}
 	channels = append(channels, DataChannel{
@@ -436,32 +491,25 @@ func (h *Handlers) HandleDataChannels(w http.ResponseWriter, r *http.Request) {
 		Status:     tejStatus,
 		StatusText: statusText(tejStatus),
 		UpdatedAt:  tejUpdated,
-		LastError: func() string {
-			if tejRec != nil {
-				return tejRec.LastError
-			}
-			return ""
-		}(),
+		LastError:  "",
 	})
 
-	// Build alerts list for overview card
-	alerts := h.HealthRecorder.Alerts()
+	// Build alerts list from FRESH channel status only.
+	// KnownInactive channels are permanently disabled and never produce alerts.
+	knownInactive := map[string]bool{
+		"fubon": true,
+	}
+	var alerts []ChannelAlert
 	for _, c := range channels {
-		if c.Status == "error" {
-			found := false
-			for _, a := range alerts {
-				if a.ChannelID == c.ChannelID {
-					found = true
-					break
-				}
+		if c.Status == "error" || c.Status == "warn" {
+			if knownInactive[c.ChannelID] {
+				continue
 			}
-			if !found {
-				alerts = append(alerts, ChannelAlert{
-					ChannelID: c.ChannelID,
-					Status:    c.Status,
-					Error:     c.LastError,
-				})
-			}
+			alerts = append(alerts, ChannelAlert{
+				ChannelID: c.ChannelID,
+				Status:    c.Status,
+				Error:     c.LastError,
+			})
 		}
 	}
 	if alerts == nil {
@@ -538,6 +586,7 @@ func (h *Handlers) HandleChannelsIngest(w http.ResponseWriter, r *http.Request) 
 		log.Printf("[HandleChannelsIngest] capital flow ingest succeeded")
 	}()
 
+	// Export statistics (customs open data — replaced TWSE FAS210)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -551,6 +600,21 @@ func (h *Handlers) HandleChannelsIngest(w http.ResponseWriter, r *http.Request) 
 		}
 		h.HealthRecorder.Record("export_statistics", "ok", "")
 		log.Printf("[HandleChannelsIngest] export statistics ingest succeeded")
+	}()
+
+	// TWSE balance / margin (retail sentiment proxy)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		marginProvider := marketdata.NewTWSEBalanceProvider(filepath.Join(stateDir, "margin"))
+		_, err := marginProvider.FetchSnapshot(r.Context())
+		if err != nil {
+			h.HealthRecorder.Record("twse_margin", "error", err.Error())
+			log.Printf("[HandleChannelsIngest] TWSE margin balance ingest failed: %v", err)
+			return
+		}
+		h.HealthRecorder.Record("twse_margin", "ok", "")
+		log.Printf("[HandleChannelsIngest] TWSE margin balance ingest succeeded")
 	}()
 
 	wg.Add(1)
@@ -615,8 +679,7 @@ func (h *Handlers) HandleChannelsIngest(w http.ResponseWriter, r *http.Request) 
 		defer wg.Done()
 		tejKey := os.Getenv("TEJ_API_KEY")
 		if tejKey == "" {
-			tejErr = fmt.Errorf("TEJ_API_KEY not set")
-			h.HealthRecorder.Record("tej", "error", tejErr.Error())
+			h.HealthRecorder.Record("tej", "inactive", "TEJ_API_KEY not set")
 			log.Printf("[HandleChannelsIngest] TEJ ingest skipped: TEJ_API_KEY not set")
 			return
 		}
