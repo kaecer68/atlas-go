@@ -11,6 +11,8 @@ import (
 
 type Config struct {
 	WorkDir                    string
+	DatabaseURL                string
+	MigrationsPath             string
 	MarketDataProvider         string
 	PrimaryMarket              string
 	ReplayMode                 string
@@ -48,6 +50,8 @@ func Load() Config {
 
 	return Config{
 		WorkDir:                    envOr("ATLAS_WORK_DIR", "."),
+		DatabaseURL:                envOr("DATABASE_URL", ""),
+		MigrationsPath:             envOr("ATLAS_MIGRATIONS_PATH", "sql/migrations"),
 		MarketDataProvider:         envOr("ATLAS_MARKET_DATA_PROVIDER", "twse"),
 		PrimaryMarket:              envOr("ATLAS_PRIMARY_MARKET", "TW"),
 		ReplayMode:                 envOr("ATLAS_REPLAY_MODE", "daily"),
