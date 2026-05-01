@@ -32,12 +32,19 @@ type TEJClient struct {
 	baseURL     string        // defaults to tejAPIBaseURL, overridable for tests
 }
 
-// TEJ API response wrapper (generic).
+// TEJ API response wrapper (REST API format).
+// The REST API returns data in a "datatable" wrapper.
 type tejResponse struct {
-	Stat  string  `json:"stat"`
-	Data  [][]any `json:"data"`
-	Meta  any     `json:"meta"`
-	Pages int     `json:"pages,omitempty"`
+	Datatable struct {
+		Data    [][]any `json:"data"`
+		Columns []struct {
+			Name string `json:"name"`
+		} `json:"columns"`
+	} `json:"datatable"`
+	Error *struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error,omitempty"`
 }
 
 // TEJStockPriceRow represents one row from TRAIL/TAPRCD dataset.
@@ -71,7 +78,7 @@ func (c *TEJClient) Ping(ctx context.Context) error {
 	if c.apiKey == "" {
 		return fmt.Errorf("TEJ API key not configured")
 	}
-	rows, err := c.GetStockPriceDaily(ctx, "2330", "2024-01-02", "2024-01-02")
+	rows, err := c.GetStockPriceDaily(ctx, "2330", "2025-01-03", "2025-01-03")
 	if err != nil {
 		return err
 	}
@@ -89,21 +96,20 @@ func (c *TEJClient) GetStockPriceDaily(ctx context.Context, stockID, startDate, 
 		return nil, fmt.Errorf("tej rate limit wait: %w", err)
 	}
 
-	endpoint := fmt.Sprintf("%s/v1/data/TRAIL/TAPRCD", c.baseURL)
+	endpoint := fmt.Sprintf("%s/api/datatables/TRAIL/TAPRCD.json", c.baseURL)
 
 	params := url.Values{}
+	params.Set("api_key", c.apiKey)
 	params.Set("coid", stockID)
-	params.Set("mdate", fmt.Sprintf("gte:%s,lte:%s", startDate, endDate))
-	params.Set("opts.columns", "coid,mdate,open_d,high_d,low_d,close_d,volume,trade_value")
-	params.Set("paginate", "true")
-	params.Set("per_page", "10000")
+	params.Set("mdate.gte", startDate)
+	params.Set("mdate.lte", endDate)
+	params.Set("opts.columns", "coid,mdate,open_d,high_d,low_d,close_d,volume,amount")
 
 	reqURL := fmt.Sprintf("%s?%s", endpoint, params.Encode())
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("tej create request: %w", err)
 	}
-	req.Header.Set("X-API-Key", c.apiKey)
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.httpClient.Do(req)
@@ -122,12 +128,12 @@ func (c *TEJClient) GetStockPriceDaily(ctx context.Context, stockID, startDate, 
 		return nil, fmt.Errorf("tej decode response: %w", err)
 	}
 
-	if apiResp.Stat != "OK" && apiResp.Stat != "200" && apiResp.Stat != "" {
-		return nil, fmt.Errorf("tej stat not OK: %s", apiResp.Stat)
+	if apiResp.Error != nil {
+		return nil, fmt.Errorf("tej api error: %s - %s", apiResp.Error.Code, apiResp.Error.Message)
 	}
 
-	rows := make([]TEJStockPriceRow, 0, len(apiResp.Data))
-	for _, row := range apiResp.Data {
+	rows := make([]TEJStockPriceRow, 0, len(apiResp.Datatable.Data))
+	for _, row := range apiResp.Datatable.Data {
 		if len(row) < 8 {
 			continue
 		}
@@ -158,11 +164,13 @@ func (c *TEJClient) GetFinancialStatements(ctx context.Context, stockID, tableCo
 	// tableCode examples:
 	//  TWN/AFINA  — 綜合損益表 (trial)
 	//  TWN/ABINA  — 資產負債表 (trial)
-	endpoint := fmt.Sprintf("%s/v1/data/%s", c.baseURL, tableCode)
+	endpoint := fmt.Sprintf("%s/api/datatables/%s.json", c.baseURL, tableCode)
 
 	params := url.Values{}
+	params.Set("api_key", c.apiKey)
 	params.Set("coid", stockID)
-	params.Set("mdate", fmt.Sprintf("gte:%s,lte:%s", startDate, endDate))
+	params.Set("mdate.gte", startDate)
+	params.Set("mdate.lte", endDate)
 	params.Set("paginate", "true")
 	params.Set("per_page", "10000")
 
@@ -171,7 +179,6 @@ func (c *TEJClient) GetFinancialStatements(ctx context.Context, stockID, tableCo
 	if err != nil {
 		return nil, fmt.Errorf("tej create request: %w", err)
 	}
-	req.Header.Set("X-API-Key", c.apiKey)
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.httpClient.Do(req)
@@ -185,21 +192,18 @@ func (c *TEJClient) GetFinancialStatements(ctx context.Context, stockID, tableCo
 		return nil, fmt.Errorf("tej api error: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	var apiResp struct {
-		Stat string  `json:"stat"`
-		Data [][]any `json:"data"`
-	}
+	var apiResp tejResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
 		return nil, fmt.Errorf("tej decode response: %w", err)
 	}
 
-	if apiResp.Stat != "OK" && apiResp.Stat != "" {
-		return nil, fmt.Errorf("tej stat not OK: %s", apiResp.Stat)
+	if apiResp.Error != nil {
+		return nil, fmt.Errorf("tej api error: %s - %s", apiResp.Error.Code, apiResp.Error.Message)
 	}
 
 	// Return as []map for flexibility; caller knows column order.
-	rows := make([]map[string]any, 0, len(apiResp.Data))
-	for _, row := range apiResp.Data {
+	rows := make([]map[string]any, 0, len(apiResp.Datatable.Data))
+	for _, row := range apiResp.Datatable.Data {
 		m := make(map[string]any)
 		for i, col := range row {
 			m[fmt.Sprintf("col_%d", i)] = col
