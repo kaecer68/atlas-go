@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -104,7 +105,8 @@ func (c *FugleClient) GetQuote(ctx context.Context, symbol string) (domain.Quote
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return domain.Quote{}, fmt.Errorf("api error: status %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return domain.Quote{}, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	// 解析响应
@@ -172,7 +174,8 @@ func (c *FugleClient) GetMeta(ctx context.Context, symbol string) (*FugleMetaRes
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("api error: status %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	var metaResp FugleMetaResponse
