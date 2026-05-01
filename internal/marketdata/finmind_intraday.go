@@ -63,7 +63,7 @@ func (c *FinMindClient) FetchTaiwan5SecIndex(ctx context.Context, date string) (
 	if err != nil {
 		return nil, fmt.Errorf("finmind 5sec index: http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("finmind 5sec index: status %d", resp.StatusCode)
@@ -126,7 +126,7 @@ func Save5SecIndexToLedger(bars []Taiwan5SecIndexBar, dir string) error {
 	if err != nil {
 		return fmt.Errorf("save 5sec index: open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	enc := json.NewEncoder(f)
 	for _, bar := range bars {
