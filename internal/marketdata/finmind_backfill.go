@@ -149,7 +149,7 @@ func FetchWithRetry(ctx context.Context, client *http.Client, url string, apiKey
 			}
 		}
 
-		return body, readErr
+		return body, fmt.Errorf("finmind: read response body: %w", readErr)
 	}
 	return nil, &FinMindAPIError{StatusCode: 0, Message: "max retries exceeded"}
 }

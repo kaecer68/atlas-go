@@ -29,7 +29,7 @@
 ### 🧪 治理 Gate 深度驗證（推薦）
 
 ```bash
-# 一鍵驗證 G2/G3/G4：determinism + hard guard + trace/dashboard
+# 一鍵驗證 G1/G2/G3/G4：contract + determinism + hard guard + trace/dashboard
 ./scripts/openclaw/verify-governance-gates.sh
 
 # 指定 replay 與視窗

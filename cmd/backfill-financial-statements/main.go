@@ -23,6 +23,13 @@ const (
 	pacingSeconds  = 6
 )
 
+func dataDir() string {
+	if d := os.Getenv("ATLAS_DATA_DIR"); d != "" {
+		return d
+	}
+	return filepath.Join(os.Getenv("HOME"), "workspace", "atlas", "data")
+}
+
 var (
 	startDate  = flag.String("start", "2024-01-01", "backfill start date (YYYY-MM-DD)")
 	endDate    = flag.String("end", "2026-04-30", "backfill end date (YYYY-MM-DD)")
@@ -33,7 +40,7 @@ var (
 func main() {
 	flag.Parse()
 
-	stateDir := filepath.Join(os.Getenv("HOME"), "workspace", "atlas", "data", "state")
+	stateDir := filepath.Join(dataDir(), "state")
 	os.MkdirAll(stateDir, 0755)
 
 	apiKey := os.Getenv("FINMIND_API_KEY")
@@ -45,7 +52,7 @@ func main() {
 	symbols := loadSymbols(*symbolsArg)
 	fmt.Printf("Backfill financial statements for %d symbols from %s to %s\n", len(symbols), *startDate, *endDate)
 
-	outputPath := filepath.Join(os.Getenv("HOME"), "workspace", "atlas", "data", "replay", "financial_statements.jsonl")
+	outputPath := filepath.Join(dataDir(), "replay", "financial_statements.jsonl")
 	existing := loadExistingRecords(outputPath)
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -117,7 +124,7 @@ func loadSymbols(symbolsArg string) []string {
 		return strings.Split(symbolsArg, ",")
 	}
 
-	fundamentalsPath := filepath.Join(os.Getenv("HOME"), "workspace", "atlas", "data", "fundamentals.json")
+	fundamentalsPath := filepath.Join(dataDir(), "fundamentals.json")
 	data, err := os.ReadFile(fundamentalsPath)
 	if err != nil {
 		return nil

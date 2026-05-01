@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -101,6 +102,7 @@ func (s *ChannelHealthStore) Record(channelID, status, errMsg string, opts ...Re
 	rec.LastFetchAt = time.Now().Format(time.RFC3339)
 	if status == "ok" {
 		rec.LastError = ""
+		rec.Errors = nil
 		rec.LastSuccessAt = rec.LastFetchAt
 	} else {
 		rec.LastError = errMsg
@@ -114,7 +116,7 @@ func (s *ChannelHealthStore) Record(channelID, status, errMsg string, opts ...Re
 	s.mu.Unlock()
 
 	if s.pool != nil {
-		dbErr := s.recordToDB(channelID, status, errMsg)
+		dbErr := s.recordToDB(channelID, rec)
 		if dbErr == nil {
 			return s.save()
 		}
@@ -123,7 +125,7 @@ func (s *ChannelHealthStore) Record(channelID, status, errMsg string, opts ...Re
 	return s.save()
 }
 
-func (s *ChannelHealthStore) recordToDB(channelID, status, errMsg string) error {
+func (s *ChannelHealthStore) recordToDB(channelID string, rec *ChannelHealthRecord) error {
 	if s.pool == nil {
 		return fmt.Errorf("database pool not initialized")
 	}
@@ -132,27 +134,65 @@ func (s *ChannelHealthStore) recordToDB(channelID, status, errMsg string) error 
 
 	now := time.Now()
 	var lastSuccessAt *time.Time
-	if status == "ok" {
+	if rec.Status == "ok" {
 		ts := now
 		lastSuccessAt = &ts
 	}
 
 	var lastErrorPtr *string
-	if errMsg != "" {
-		lastErrorPtr = &errMsg
+	if rec.LastError != "" {
+		lastErrorPtr = &rec.LastError
+	}
+
+	var rateLimitRemaining *int
+	if rec.RateLimitRemaining > 0 {
+		rateLimitRemaining = &rec.RateLimitRemaining
+	}
+
+	var latencyMs *int64
+	if rec.LatencyMs > 0 {
+		latencyMs = &rec.LatencyMs
+	}
+
+	var recordsFetched *int
+	if rec.RecordsFetched > 0 {
+		recordsFetched = &rec.RecordsFetched
+	}
+
+	var symbolsProcessed *int
+	if rec.SymbolsProcessed > 0 {
+		symbolsProcessed = &rec.SymbolsProcessed
+	}
+
+	var errorsJSON []byte
+	if len(rec.Errors) > 0 {
+		var errMarshal error
+		errorsJSON, errMarshal = json.Marshal(rec.Errors)
+		if errMarshal != nil {
+			errorsJSON = []byte("[]")
+		}
 	}
 
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO channel_health (channel_id, status, last_fetch_at, last_error, last_success_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO channel_health (channel_id, status, last_fetch_at, last_error, last_success_at, updated_at,
+			rate_limit_remaining, latency_ms, records_fetched, symbols_processed, errors)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (channel_id)
 		DO UPDATE SET status = EXCLUDED.status,
 					  last_fetch_at = EXCLUDED.last_fetch_at,
 					  last_error = EXCLUDED.last_error,
 					  last_success_at = EXCLUDED.last_success_at,
-					  updated_at = EXCLUDED.updated_at
-	`, channelID, status, now, lastErrorPtr, lastSuccessAt, now)
-	return err
+					  updated_at = EXCLUDED.updated_at,
+					  rate_limit_remaining = EXCLUDED.rate_limit_remaining,
+					  latency_ms = EXCLUDED.latency_ms,
+					  records_fetched = EXCLUDED.records_fetched,
+					  symbols_processed = EXCLUDED.symbols_processed,
+					  errors = EXCLUDED.errors
+	`, channelID, rec.Status, now, lastErrorPtr, lastSuccessAt, now, rateLimitRemaining, latencyMs, recordsFetched, symbolsProcessed, errorsJSON)
+	if err != nil {
+		return fmt.Errorf("record channel health to db: %w", err)
+	}
+	return nil
 }
 
 // Get retrieves the health record for a channel (nil if missing).
@@ -181,11 +221,18 @@ func (s *ChannelHealthStore) getFromDB(channelID string) *ChannelHealthRecord {
 	var rec ChannelHealthRecord
 	var lastFetchAt, lastSuccessAt *time.Time
 	var lastError string
+	var rateLimitRemaining *int
+	var latencyMs sql.NullInt64
+	var recordsFetched *int
+	var symbolsProcessed *int
+	var errorsJSON []byte
 	err := s.pool.QueryRow(ctx, `
-		SELECT status, last_fetch_at, COALESCE(last_error,''), last_success_at
+		SELECT status, last_fetch_at, COALESCE(last_error,''), last_success_at,
+			rate_limit_remaining, latency_ms, records_fetched, symbols_processed, errors
 		FROM channel_health
 		WHERE channel_id = $1
-	`, channelID).Scan(&rec.Status, &lastFetchAt, &lastError, &lastSuccessAt)
+	`, channelID).Scan(&rec.Status, &lastFetchAt, &lastError, &lastSuccessAt,
+		&rateLimitRemaining, &latencyMs, &recordsFetched, &symbolsProcessed, &errorsJSON)
 	if err != nil {
 		return nil
 	}
@@ -196,6 +243,21 @@ func (s *ChannelHealthStore) getFromDB(channelID string) *ChannelHealthRecord {
 		rec.LastSuccessAt = lastSuccessAt.Format(time.RFC3339)
 	}
 	rec.LastError = lastError
+	if rateLimitRemaining != nil {
+		rec.RateLimitRemaining = *rateLimitRemaining
+	}
+	if latencyMs.Valid {
+		rec.LatencyMs = latencyMs.Int64
+	}
+	if recordsFetched != nil {
+		rec.RecordsFetched = *recordsFetched
+	}
+	if symbolsProcessed != nil {
+		rec.SymbolsProcessed = *symbolsProcessed
+	}
+	if len(errorsJSON) > 0 {
+		_ = json.Unmarshal(errorsJSON, &rec.Errors)
+	}
 	return &rec
 }
 
