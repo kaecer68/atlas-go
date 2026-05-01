@@ -79,15 +79,88 @@ func (p *HybridProvider) Name() string {
 }
 
 func (p *HybridProvider) GetQuotes(ctx context.Context, asOf time.Time, symbols []string) ([]domain.Quote, error) {
-	if p.finmindProvider != nil {
-		quotes, err := p.finmindProvider.GetQuotes(ctx, asOf, symbols)
+	if p.finmindProvider != nil && p.shouldTryFinMind() {
+		quotes, err := p.tryFinMind(ctx, asOf, symbols)
 		if err == nil && len(quotes) > 0 && !p.hasInvalidQuotes(quotes) {
+			p.recordFinMindSuccess()
 			return quotes, nil
 		}
-		fmt.Printf("[HybridProvider] FinMind failed (%v), falling back to Fugle/TWSE\n", err)
+		if err != nil {
+			fmt.Printf("[HybridProvider] FinMind failed (%v), falling back to Fugle/TWSE\n", err)
+		}
 	}
 
 	return p.getQuotesFromFugleOrTWSE(ctx, asOf, symbols)
+}
+
+func (p *HybridProvider) shouldTryFinMind() bool {
+	p.cbMutex.Lock()
+	defer p.cbMutex.Unlock()
+
+	if p.cbState == ProviderCircuitClosed || p.cbState == ProviderCircuitHalfOpen {
+		return true
+	}
+	if p.cbState == ProviderCircuitOpen && time.Since(p.cbLastFailure) > p.cbConfig.recoveryTimeout {
+		p.cbState = ProviderCircuitHalfOpen
+		p.cbHalfOpenCalls = 0
+		return true
+	}
+	return false
+}
+
+func (p *HybridProvider) tryFinMind(ctx context.Context, asOf time.Time, symbols []string) ([]domain.Quote, error) {
+	quotes, err := p.finmindProvider.GetQuotes(ctx, asOf, symbols)
+	if err != nil {
+		p.recordFinMindFailure()
+		return nil, err
+	}
+	if len(quotes) == 0 || p.hasInvalidQuotes(quotes) {
+		p.recordFinMindFailure()
+		return quotes, fmt.Errorf("finmind returned invalid/empty data")
+	}
+	return quotes, nil
+}
+
+func (p *HybridProvider) recordFinMindFailure() {
+	p.cbMutex.Lock()
+	defer p.cbMutex.Unlock()
+
+	p.cbFailureCount++
+	p.cbLastFailure = time.Now()
+	p.fallbackCount++
+	p.lastFallbackAt = time.Now()
+
+	if p.cbState == ProviderCircuitHalfOpen {
+		p.cbState = ProviderCircuitOpen
+		fmt.Printf("[HybridProvider] Circuit OPEN (FinMind failed in half-open)\n")
+		return
+	}
+
+	if p.cbFailureCount >= p.cbConfig.failureThreshold {
+		p.cbState = ProviderCircuitOpen
+		fmt.Printf("[HybridProvider] Circuit OPEN (FinMind failed %d times)\n", p.cbFailureCount)
+	}
+}
+
+func (p *HybridProvider) recordFinMindSuccess() {
+	p.cbMutex.Lock()
+	defer p.cbMutex.Unlock()
+
+	if p.cbState == ProviderCircuitHalfOpen {
+		p.cbHalfOpenCalls++
+		if p.cbHalfOpenCalls >= p.cbConfig.halfOpenMaxCalls {
+			p.cbState = ProviderCircuitClosed
+			p.cbFailureCount = 0
+			p.cbHalfOpenCalls = 0
+			p.recoveryAttempts++
+			fmt.Printf("[HybridProvider] Circuit CLOSED (FinMind recovered)\n")
+		}
+		return
+	}
+
+	if p.cbState == ProviderCircuitClosed {
+		p.cbFailureCount = 0
+	}
 }
 
 func (p *HybridProvider) getQuotesFromFugleOrTWSE(ctx context.Context, asOf time.Time, symbols []string) ([]domain.Quote, error) {

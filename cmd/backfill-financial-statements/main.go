@@ -147,9 +147,12 @@ func loadExistingRecords(path string) map[string]struct{} {
 
 	br := io.LimitReader(f, 100<<20)
 	dec := json.NewDecoder(br)
-	for dec.More() {
+	for {
 		var rec map[string]interface{}
 		if err := dec.Decode(&rec); err != nil {
+			if err == io.EOF {
+				break
+			}
 			continue
 		}
 		date, _ := rec["date"].(string)
