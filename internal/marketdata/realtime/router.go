@@ -8,17 +8,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/redis/go-redis/v9"
 )
 
 // RedisConfig Redis PubSub 設定
 type RedisConfig struct {
-	Enabled bool   `yaml:"enabled"`
-	Addr    string `yaml:"addr"`
-	Channel string `yaml:"channel"`
+	Enabled  bool   `yaml:"enabled"`
+	Addr     string `yaml:"addr"`
+	Channel  string `yaml:"channel"`
 	Password string `yaml:"password"`
-	DB      int    `yaml:"db"`
+	DB       int    `yaml:"db"`
 }
 
 type RouterConfig struct {
@@ -44,17 +44,17 @@ func DefaultRouterConfig() RouterConfig {
 }
 
 type RealtimeRouter struct {
-	providers   []RealtimeProvider
-	activeIdx   atomic.Int32
-	callbacks   []QuoteCallback
-	cbMu        sync.RWMutex
-	config      RouterConfig
-	running     bool
-	runningMu   sync.Mutex
-	cancelCtx   context.Context
-	cancelFunc  context.CancelFunc
-	failoverCh  chan int32
-	redisClient *redis.Client
+	providers    []RealtimeProvider
+	activeIdx    atomic.Int32
+	callbacks    []QuoteCallback
+	cbMu         sync.RWMutex
+	config       RouterConfig
+	running      bool
+	runningMu    sync.Mutex
+	cancelCtx    context.Context
+	cancelFunc   context.CancelFunc
+	failoverCh   chan int32
+	redisClient  *redis.Client
 	redisChannel string
 }
 
