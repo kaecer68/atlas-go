@@ -103,8 +103,8 @@ func (c *CapitalPhaseController) evaluateAdvanceCriteria() (bool, string) {
 		return false, fmt.Sprintf("sharpe threshold not met: %.4f < %.4f", c.snapshot.RollingSharpe, c.config.SharpeThreshold)
 	}
 
-	if c.snapshot.ConsecutiveLosses >= 5 {
-		return false, fmt.Sprintf("consecutive loss limit exceeded: %d >= 5", c.snapshot.ConsecutiveLosses)
+	if c.snapshot.ConsecutiveLosses >= c.config.MaxConsecutiveLosses {
+		return false, fmt.Sprintf("consecutive loss limit exceeded: %d >= %d", c.snapshot.ConsecutiveLosses, c.config.MaxConsecutiveLosses)
 	}
 
 	return true, "all criteria met"

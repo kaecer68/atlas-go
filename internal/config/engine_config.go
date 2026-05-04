@@ -48,9 +48,12 @@ type StructuralTrendConfig struct {
 
 // DrawdownConfig holds drawdown level parameters
 type DrawdownConfig struct {
-	Levels                 map[string]DrawdownLevel `json:"levels"`
-	OrangeOverrideMinScore float64                  `json:"orange_override_min_score"`
-	RedOverrideMinScore    float64                  `json:"red_override_min_score"`
+	Levels                            map[string]DrawdownLevel `json:"levels"`
+	OrangeOverrideMinScore            float64                  `json:"orange_override_min_score"`
+	RedOverrideMinScore               float64                  `json:"red_override_min_score"`
+	SectorConstraintsRiskOff          map[string]float64       `json:"sector_constraints_risk_off"`
+	SectorConstraintsCarryTradeUnwind map[string]float64       `json:"sector_constraints_carry_trade_unwind"`
+	SectorConstraintsSectorRotation   map[string]float64       `json:"sector_constraints_sector_rotation"`
 }
 
 // DrawdownLevel represents a single drawdown level
@@ -274,6 +277,25 @@ func defaultEngineConfig() *EngineConfig {
 			},
 			OrangeOverrideMinScore: 0.55,
 			RedOverrideMinScore:    0.75,
+			SectorConstraintsRiskOff: map[string]float64{
+				"ai_supply_chain": 0.3,
+				"small_cap":       0.2,
+				"emerging_market": 0.1,
+				"gold":            1.5,
+				"utilities":       1.2,
+			},
+			SectorConstraintsCarryTradeUnwind: map[string]float64{
+				"all_equities": 0.1,
+				"tech":         0.05,
+				"financials":   0.1,
+				"cash":         2.0,
+			},
+			SectorConstraintsSectorRotation: map[string]float64{
+				"energy":              1.8,
+				"oil_services":        1.5,
+				"high_valuation_tech": 0.3,
+				"rate_sensitive":      0.4,
+			},
 		},
 		SectorRotation: SectorRotationConfig{
 			BaseAllocations: map[string]float64{

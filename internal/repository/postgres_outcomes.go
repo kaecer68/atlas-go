@@ -18,7 +18,7 @@ func (r *PostgresRepository) RecordOutcomes(ctx context.Context, outcomes []doma
 	if len(outcomes) == 0 {
 		return nil
 	}
-	
+
 	batch := &pgx.Batch{}
 	for _, o := range outcomes {
 		metadata, _ := json.Marshal(o)
@@ -28,10 +28,10 @@ func (r *PostgresRepository) RecordOutcomes(ctx context.Context, outcomes []doma
 		`, time.Now(), o.Window, o.Symbol, o.AgentID, string(o.Layer),
 			o.Conviction, o.PassedGuards, o.GuardReason, o.Price, metadata)
 	}
-	
+
 	br := r.pool.SendBatch(ctx, batch)
 	defer br.Close()
-	
+
 	_, err := br.Exec()
 	return err
 }
@@ -47,7 +47,7 @@ func (r *PostgresRepository) QueryOutcomesBySession(ctx context.Context, session
 		return nil, fmt.Errorf("query outcomes by session: %w", err)
 	}
 	defer rows.Close()
-	
+
 	return scanRecommendationOutcomes(rows)
 }
 
@@ -62,7 +62,7 @@ func (r *PostgresRepository) QueryOutcomesBySymbol(ctx context.Context, symbol s
 		return nil, fmt.Errorf("query outcomes by symbol: %w", err)
 	}
 	defer rows.Close()
-	
+
 	return scanRecommendationOutcomes(rows)
 }
 
@@ -77,13 +77,13 @@ func (r *PostgresRepository) QueryOutcomesByAgent(ctx context.Context, agentID s
 		return nil, fmt.Errorf("query outcomes by agent: %w", err)
 	}
 	defer rows.Close()
-	
+
 	return scanRecommendationOutcomes(rows)
 }
 
 func (r *PostgresRepository) QueryPassRate(ctx context.Context, agentID string, window time.Duration) (float64, error) {
 	start := time.Now().Add(-window)
-	
+
 	var total, passed int64
 	err := r.pool.QueryRow(ctx, `
 		SELECT 
@@ -92,15 +92,15 @@ func (r *PostgresRepository) QueryPassRate(ctx context.Context, agentID string, 
 		FROM recommendation_outcomes
 		WHERE agent_id = $1 AND time >= $2
 	`, agentID, start).Scan(&total, &passed)
-	
+
 	if err != nil {
 		return 0, fmt.Errorf("query pass rate: %w", err)
 	}
-	
+
 	if total == 0 {
 		return 0, nil
 	}
-	
+
 	return float64(passed) / float64(total), nil
 }
 
@@ -117,7 +117,7 @@ func (r *PostgresRepository) QueryTopSymbols(ctx context.Context, limit int, sta
 		return nil, fmt.Errorf("query top symbols: %w", err)
 	}
 	defer rows.Close()
-	
+
 	var results []SymbolCount
 	for rows.Next() {
 		var sc SymbolCount
@@ -126,8 +126,37 @@ func (r *PostgresRepository) QueryTopSymbols(ctx context.Context, limit int, sta
 		}
 		results = append(results, sc)
 	}
-	
+
 	return results, rows.Err()
+}
+
+type SessionInfo struct {
+	SessionID    string    `json:"session_id"`
+	RecordedAt   time.Time `json:"recorded_at"`
+	OutcomeCount int       `json:"outcome_count"`
+}
+
+func (r *PostgresRepository) QuerySessions(ctx context.Context) ([]SessionInfo, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT session_id, MAX(time) as recorded_at, COUNT(*) as outcome_count
+		FROM recommendation_outcomes
+		GROUP BY session_id
+		ORDER BY recorded_at DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("query sessions: %w", err)
+	}
+	defer rows.Close()
+
+	var sessions []SessionInfo
+	for rows.Next() {
+		var s SessionInfo
+		if err := rows.Scan(&s.SessionID, &s.RecordedAt, &s.OutcomeCount); err != nil {
+			continue
+		}
+		sessions = append(sessions, s)
+	}
+	return sessions, rows.Err()
 }
 
 func scanRecommendationOutcomes(rows pgx.Rows) ([]domain.RecommendationOutcome, error) {

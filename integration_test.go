@@ -309,7 +309,7 @@ func TestEndToEndWorkflow(t *testing.T) {
 		weightManager.RecordOutcome("sector_semiconductor", 0.03, true)
 		weightManager.RecordOutcome("sector_semiconductor", 0.015, true)
 
-		adjustments := weightManager.PerformDailyAdjustment()
+		adjustments, _ := weightManager.PerformDailyAdjustment()
 		t.Logf("  - Calculated adjustments for %d agents", len(adjustments))
 
 		t.Log("Step 2: Gap Detection (Spawning)")

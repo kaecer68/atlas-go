@@ -37,7 +37,7 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
     - `MarginBalanceScore`: 券資比標準化分數 [-1, 1]
     - `RetailSentimentScore`: 散戶情緒分數 [-1, 1]
     - `StressLevel`: 市場壓力等級 (0-100)
-- **主要檔案**：`factor_bridge.go`（待建立）
+- **主要檔案**：`factor_bridge.go`（已實作）
 
 ### 2.2. InstitutionalSentiment (機構情緒因子)
 - **計算方式**：
@@ -50,7 +50,7 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
     - 外資：`TWSECapitalFlowProvider.GetForeignInvestment()`
     - 法人：`TWSECapitalFlowProvider.GetDomesticInstitutional()`
     - 券資比：`TWSEBalanceProvider.GetMarginBalance()`
-- **主要檔案**：`factor_institutional_sentiment.go`（待建立）
+- **主要檔案**：功能已實作於 `factor_engine.go` 的 `CalculateInstitutionalSentimentScore()`
 
 ### 2.3. Liquidity (流動性因子)
 - **計算方式**（Amihud ILLIQ proxy）：
@@ -60,7 +60,7 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
 - **閾值**：
     - ILLIQ > 1.0：低流動性（因子權重調降）
     - ILLIQ < 0.1：高流動性（正常權重）
-- **主要檔案**：`factor_liquidity.go`（待建立）
+- **主要檔案**：功能已實作於 `factor_engine.go` 的 `CalculateLiquidityScore()`
 
 ### 2.4. FactorWeightEngine (動態權重引擎)
 - **職責**：根據市場事件與 Regime 動態調整因子權重。

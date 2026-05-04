@@ -13,6 +13,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/live"
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
@@ -37,16 +38,6 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/risk-exposure", h.HandleRiskExposure)
 	mux.HandleFunc("/api/dashboard/live-status", h.HandleLiveStatus)
 	mux.HandleFunc("/api/dashboard/portfolio-state", h.HandlePortfolioState)
-}
-
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func writeJSONError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
 }
 
 func getSymbolSector(symbol string, symMap map[string]string) string {
@@ -228,14 +219,14 @@ type PositionConcentration struct {
 // HandlePnLAttribution returns P&L attribution breakdown by agent, sector, symbol, and factor.
 func (h *Handlers) HandlePnLAttribution(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	sessionsDir := filepath.Join(h.LedgerDir, "sessions")
 	entries, err := os.ReadDir(sessionsDir)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "read sessions")
+		shared.WriteJSONError(w, http.StatusInternalServerError, "read sessions")
 		return
 	}
 
@@ -263,7 +254,7 @@ func (h *Handlers) HandlePnLAttribution(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if latestSession == "" {
-		writeJSON(w, http.StatusOK, PnLAttributionResponse{})
+		shared.WriteJSON(w, http.StatusOK, PnLAttributionResponse{})
 		return
 	}
 
@@ -396,7 +387,7 @@ func (h *Handlers) HandlePnLAttribution(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	writeJSON(w, http.StatusOK, PnLAttributionResponse{
+	shared.WriteJSON(w, http.StatusOK, PnLAttributionResponse{
 		SnapshotTime:      latestSummary.RecordedAt,
 		SessionID:         latestSession,
 		StartingValue:     startingValue,
@@ -413,14 +404,14 @@ func (h *Handlers) HandlePnLAttribution(w http.ResponseWriter, r *http.Request) 
 // HandleRiskExposure returns risk metrics including VaR, CVaR, max drawdown, and sector/factor exposure.
 func (h *Handlers) HandleRiskExposure(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	sessionsDir := filepath.Join(h.LedgerDir, "sessions")
 	entries, err := os.ReadDir(sessionsDir)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "read sessions")
+		shared.WriteJSONError(w, http.StatusInternalServerError, "read sessions")
 		return
 	}
 
@@ -514,7 +505,7 @@ func (h *Handlers) HandleRiskExposure(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	writeJSON(w, http.StatusOK, RiskExposureResponse{
+	shared.WriteJSON(w, http.StatusOK, RiskExposureResponse{
 		SnapshotTime:     time.Now(),
 		VaR95:            snap.VaR95,
 		VaR99:            snap.VaR99,
@@ -534,23 +525,23 @@ func (h *Handlers) HandleRiskExposure(w http.ResponseWriter, r *http.Request) {
 // HandleLiveStatus returns the current live trading status.
 func (h *Handlers) HandleLiveStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	status := h.getService().LoadLiveStatus()
-	writeJSON(w, http.StatusOK, status)
+	shared.WriteJSON(w, http.StatusOK, status)
 }
 
 // HandlePortfolioState returns the current portfolio state with positions.
 func (h *Handlers) HandlePortfolioState(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	state := h.getService().LoadPortfolioState()
-	writeJSON(w, http.StatusOK, state)
+	shared.WriteJSON(w, http.StatusOK, state)
 }
 
 func loadRecommendationOutcomes(ledgerDir, sessionID string) ([]domain.RecommendationOutcome, error) {

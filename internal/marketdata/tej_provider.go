@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"golang.org/x/time/rate"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 // TEJ API configuration.
@@ -18,9 +20,6 @@ import (
 // Docs: https://api.tej.com.tw/
 const (
 	tejAPIBaseURL = "https://api.tej.com.tw"
-	// Free tier daily call limit (conservative, leave headroom).
-	tejCallsPerDay    = 450
-	tejCallsPerSecond = 5 // burst limit for rate limiter
 )
 
 // TEJClient fetches data from TEJ API.
@@ -62,13 +61,14 @@ type TEJStockPriceRow struct {
 // NewTEJClient creates a TEJ API client.
 // apiKey: obtained from TEJ website (free trial key).
 func NewTEJClient(apiKey string) *TEJClient {
+	params := config.GetParametersConfig()
 	return &TEJClient{
 		apiKey:  apiKey,
 		baseURL: tejAPIBaseURL,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: time.Duration(params.Marketdata.TEJAPITimeoutSec.Value) * time.Second,
 		},
-		rateLimiter: rate.NewLimiter(rate.Limit(tejCallsPerSecond), tejCallsPerSecond),
+		rateLimiter: rate.NewLimiter(rate.Limit(params.Marketdata.TEJCallsPerSecond.Value), params.Marketdata.TEJCallsPerSecond.Value),
 	}
 }
 

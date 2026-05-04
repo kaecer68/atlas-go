@@ -4,8 +4,31 @@ import (
 	"math"
 	"sort"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
+
+type VaRCalculator struct {
+	primaryConfidence   float64
+	secondaryConfidence float64
+}
+
+func NewVaRCalculator() *VaRCalculator {
+	cfg := config.GetParametersConfig()
+	return &VaRCalculator{
+		primaryConfidence:   cfg.Risk.VaRConfidenceLevel.Value,
+		secondaryConfidence: cfg.Risk.VaRSecondaryConfidence.Value,
+	}
+}
+
+func (c *VaRCalculator) ComputeRiskSnapshot(dailyReturns []float64, portfolioValues []float64) domain.RiskSnapshot {
+	return domain.RiskSnapshot{
+		VaR95:          CalculateVaR(dailyReturns, c.primaryConfidence),
+		VaR99:          CalculateVaR(dailyReturns, c.secondaryConfidence),
+		CVaR95:         CalculateCVaR(dailyReturns, c.primaryConfidence),
+		MaxDrawdownPct: CalculateMaxDrawdown(portfolioValues),
+	}
+}
 
 // CalculateVaR computes historical VaR and CVaR from a series of daily returns.
 // confidence should be 0.95 or 0.99.
@@ -69,12 +92,8 @@ func CalculateMaxDrawdown(values []float64) float64 {
 }
 
 // ComputeRiskSnapshot calculates all risk metrics from historical daily returns
-// and portfolio value history.
+// and portfolio value history using configurable VaR confidence levels.
 func ComputeRiskSnapshot(dailyReturns []float64, portfolioValues []float64) domain.RiskSnapshot {
-	return domain.RiskSnapshot{
-		VaR95:          CalculateVaR(dailyReturns, 0.95),
-		VaR99:          CalculateVaR(dailyReturns, 0.99),
-		CVaR95:         CalculateCVaR(dailyReturns, 0.95),
-		MaxDrawdownPct: CalculateMaxDrawdown(portfolioValues),
-	}
+	calculator := NewVaRCalculator()
+	return calculator.ComputeRiskSnapshot(dailyReturns, portfolioValues)
 }

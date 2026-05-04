@@ -220,12 +220,13 @@ const (
 )
 
 type CapitalPhaseConfig struct {
-	CurrentPhase     CapitalPhase       `json:"current_phase"`
-	PhaseStartDate   time.Time          `json:"phase_start_date"`
-	MinDaysPerPhase  int                `json:"min_days_per_phase"`
-	MaxDrawdownLimit float64            `json:"max_drawdown_limit"`
-	SharpeThreshold  float64            `json:"sharpe_threshold"`
-	CapitalLimits    map[string]float64 `json:"capital_limits"`
+	CurrentPhase         CapitalPhase       `json:"current_phase"`
+	PhaseStartDate       time.Time          `json:"phase_start_date"`
+	MinDaysPerPhase      int                `json:"min_days_per_phase"`
+	MaxDrawdownLimit     float64            `json:"max_drawdown_limit"`
+	SharpeThreshold      float64            `json:"sharpe_threshold"`
+	CapitalLimits        map[string]float64 `json:"capital_limits"`
+	MaxConsecutiveLosses int                `json:"max_consecutive_losses"`
 }
 
 func DefaultCapitalPhaseConfig() CapitalPhaseConfig {
@@ -241,6 +242,7 @@ func DefaultCapitalPhaseConfig() CapitalPhaseConfig {
 			string(PhaseLive):       0.30,
 			string(PhaseFull):       1.0,
 		},
+		MaxConsecutiveLosses: 5,
 	}
 }
 

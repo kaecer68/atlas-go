@@ -1,12 +1,12 @@
 package marketdata
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 )
 
 // Handlers provides market-data-related API endpoints.
@@ -25,31 +25,21 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/capital-phase", h.HandleCapitalPhase)
 }
 
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func writeJSONError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
-}
-
 // HandleRetailSentiment handles GET /api/dashboard/retail-sentiment.
 func (h *Handlers) HandleRetailSentiment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	provider := newRetailSentimentProvider(h.WorkDir)
 	snap, err := provider.FetchSnapshot(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("fetch retail sentiment: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("fetch retail sentiment: %v", err))
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	shared.WriteJSON(w, http.StatusOK, map[string]any{
 		"margin_balance":    snap.MarginBalance,
 		"margin_change_pct": snap.MarginChangePct,
 		"day_trading_ratio": snap.DayTradingRatio,
@@ -63,7 +53,7 @@ func (h *Handlers) HandleRetailSentiment(w http.ResponseWriter, r *http.Request)
 // HandleCapitalPhase handles GET /api/dashboard/capital-phase.
 func (h *Handlers) HandleCapitalPhase(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -81,7 +71,7 @@ func (h *Handlers) HandleCapitalPhase(w http.ResponseWriter, r *http.Request) {
 		AdvanceReason:   "no live trading data available",
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	shared.WriteJSON(w, http.StatusOK, map[string]any{
 		"phase":            snap.Phase,
 		"phase_start_date": snap.PhaseStartDate,
 		"days_in_phase":    snap.DaysInPhase,

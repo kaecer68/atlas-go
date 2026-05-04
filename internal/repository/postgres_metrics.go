@@ -29,14 +29,14 @@ func (r *PostgresRepository) Record(ctx context.Context, metricName string, valu
 	sessionID := labels["session_id"]
 	symbol := labels["symbol"]
 	regime := labels["regime"]
-	
+
 	metadata, _ := json.Marshal(labels)
-	
+
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO metrics (time, metric_name, value, agent_id, session_id, symbol, regime, metadata)
 		VALUES (NOW(), $1, $2, $3, $4, $5, $6, $7)
 	`, metricName, value, agentID, sessionID, symbol, regime, metadata)
-	
+
 	return err
 }
 
@@ -51,7 +51,7 @@ func (r *PostgresRepository) QueryRange(ctx context.Context, metricName string, 
 		return nil, fmt.Errorf("query metrics range: %w", err)
 	}
 	defer rows.Close()
-	
+
 	return scanMetricPoints(rows)
 }
 
@@ -63,7 +63,7 @@ func (r *PostgresRepository) QueryLatest(ctx context.Context, metricName string,
 	`
 	args := []interface{}{metricName}
 	argIdx := 2
-	
+
 	for key, value := range labels {
 		switch key {
 		case "agent_id":
@@ -80,9 +80,9 @@ func (r *PostgresRepository) QueryLatest(ctx context.Context, metricName string,
 			argIdx++
 		}
 	}
-	
+
 	query += " ORDER BY time DESC LIMIT 1"
-	
+
 	var point MetricPoint
 	var metadata []byte
 	err := r.pool.QueryRow(ctx, query, args...).Scan(
@@ -96,11 +96,11 @@ func (r *PostgresRepository) QueryLatest(ctx context.Context, metricName string,
 		}
 		return nil, fmt.Errorf("query latest metric: %w", err)
 	}
-	
+
 	if len(metadata) > 0 {
 		json.Unmarshal(metadata, &point.Metadata)
 	}
-	
+
 	return &point, nil
 }
 
@@ -120,36 +120,36 @@ func (r *PostgresRepository) Aggregate(ctx context.Context, metricName string, s
 	default:
 		return 0, fmt.Errorf("unsupported aggregation: %s", agg)
 	}
-	
+
 	var result float64
 	err := r.pool.QueryRow(ctx, query, metricName, start, end).Scan(&result)
 	if err != nil {
 		return 0, fmt.Errorf("aggregate metrics: %w", err)
 	}
-	
+
 	return result, nil
 }
 
 func (r *PostgresRepository) SaveSnapshot(ctx context.Context, snapshot *MetricsSnapshot) error {
 	// Store each field as a separate metric point
 	metrics := map[string]float64{
-		"screening_total":      float64(snapshot.ScreeningTotal),
-		"screening_passed":     float64(snapshot.ScreeningPassed),
-		"screening_rate":       snapshot.ScreeningRate,
-		"alerts_triggered":     float64(snapshot.AlertsTriggered),
-		"alerts_acknowledged":  float64(snapshot.AlertsAcknowledged),
+		"screening_total":     float64(snapshot.ScreeningTotal),
+		"screening_passed":    float64(snapshot.ScreeningPassed),
+		"screening_rate":      snapshot.ScreeningRate,
+		"alerts_triggered":    float64(snapshot.AlertsTriggered),
+		"alerts_acknowledged": float64(snapshot.AlertsAcknowledged),
 	}
-	
+
 	for alertType, count := range snapshot.AlertsByType {
 		metrics["alerts_"+alertType] = float64(count)
 	}
-	
+
 	for name, value := range metrics {
 		if err := r.Record(ctx, name, value, map[string]string{"type": "snapshot"}); err != nil {
 			return fmt.Errorf("record snapshot metric %s: %w", name, err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -157,7 +157,7 @@ func (r *PostgresRepository) LoadToday(ctx context.Context) (*MetricsSnapshot, e
 	today := time.Now().Format("2006-01-02")
 	start, _ := time.Parse("2006-01-02", today)
 	end := start.Add(24 * time.Hour)
-	
+
 	points, err := r.QueryRange(ctx, "screening_total", start, end)
 	if err != nil {
 		return nil, err
@@ -165,7 +165,7 @@ func (r *PostgresRepository) LoadToday(ctx context.Context) (*MetricsSnapshot, e
 	if len(points) == 0 {
 		return nil, nil
 	}
-	
+
 	// Build snapshot from the latest data points
 	snapshot := &MetricsSnapshot{Timestamp: points[0].Time}
 

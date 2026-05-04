@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 )
@@ -18,6 +19,7 @@ type Judge struct {
 	replayDataPath string
 	baselinePath   string
 	oosValidator   *OOSValidator
+	params         *config.ParametersConfig
 }
 
 func NewJudge(store *ledger.Store, replayDataPath, baselinePath string) *Judge {
@@ -26,7 +28,16 @@ func NewJudge(store *ledger.Store, replayDataPath, baselinePath string) *Judge {
 		replayDataPath: replayDataPath,
 		baselinePath:   baselinePath,
 		oosValidator:   NewOOSValidator(store, replayDataPath),
+		params:         config.DefaultParametersConfig(),
 	}
+}
+
+// WithParameters sets the Judge's parameters configuration.
+// Returns the Judge for chainable usage.
+func (j *Judge) WithParameters(p *config.ParametersConfig) *Judge {
+	j.params = p
+	j.oosValidator = j.oosValidator.WithParameters(p)
+	return j
 }
 
 func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, error) {
@@ -77,7 +88,36 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 	result.JudgeChecks = checks
 	result.RecordedAt = time.Now()
 
-	accepted, acceptanceNote := passesAcceptance(result)
+	// Load parameter snapshot and perform sensitivity analysis
+	if result.ParameterSnapshotID != "" {
+		snapStore := config.NewSnapshotStore("data/state/parameter-snapshots")
+		if snap, err := snapStore.LoadSnapshot(result.ParameterSnapshotID); err == nil {
+			checks = append(checks, fmt.Sprintf("parameter snapshot loaded: %s", result.ParameterSnapshotID))
+			if snap.Params != nil {
+				// Compare current parameters with experiment parameters
+				currentParams := j.params
+				if currentParams != nil {
+					diffs := config.DiffSnapshots(
+						&config.ParameterSnapshot{Params: snap.Params},
+						&config.ParameterSnapshot{Params: currentParams},
+					)
+					if len(diffs) > 0 {
+						checks = append(checks, fmt.Sprintf("WARNING: %d parameters changed since experiment", len(diffs)))
+						for _, diff := range diffs {
+							checks = append(checks, fmt.Sprintf("  - %s: %v → %v", diff.Parameter, diff.OldValue, diff.NewValue))
+						}
+					} else {
+						checks = append(checks, "parameters unchanged since experiment")
+					}
+				}
+			}
+		} else {
+			checks = append(checks, fmt.Sprintf("parameter snapshot not found: %s", result.ParameterSnapshotID))
+		}
+		result.JudgeChecks = checks
+	}
+
+	accepted, acceptanceNote := j.passesAcceptance(result)
 	result.JudgeChecks = append(result.JudgeChecks, acceptanceNote)
 	if result.Experiment.ApprovalID == "" {
 		result.Experiment.ApprovalID = "approval-" + result.Experiment.ID
@@ -235,7 +275,7 @@ func promptTighteningJudgeChecks(lower string, result domain.PromptExperimentRes
 	return checks
 }
 
-func passesAcceptance(result domain.PromptExperimentResult) (bool, string) {
+func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, string) {
 	gates := result.Experiment.AcceptanceGates
 	baseline := result.Experiment.BaselineValue
 	candidate := result.Experiment.CandidateValue
@@ -246,7 +286,7 @@ func passesAcceptance(result domain.PromptExperimentResult) (bool, string) {
 	if len(gates) == 0 {
 		return false, "rejected: no acceptance gates configured"
 	}
-	minObs := requiredObservationCountForProfile(result.Brief.MaturityLevel, result.Experiment.MutationType)
+	minObs := j.requiredObservationCountForProfile(result.Brief.MaturityLevel, result.Experiment.MutationType)
 	if baselineObs < minObs || candidateObs < minObs {
 		return false, fmt.Sprintf("rejected: insufficient replay observations (baseline=%d candidate=%d required=%d)", baselineObs, candidateObs, minObs)
 	}
@@ -257,7 +297,7 @@ func passesAcceptance(result domain.PromptExperimentResult) (bool, string) {
 		return false, "rejected: candidate did not improve over baseline"
 	}
 
-	requiredImprovement := requiredImprovementForProfile(result.Brief.MaturityLevel, result.Experiment.MutationType)
+	requiredImprovement := j.requiredImprovementForProfile(result.Brief.MaturityLevel, result.Experiment.MutationType)
 	if candidate-baseline < requiredImprovement {
 		return false, "rejected: improvement below mutation profile threshold"
 	}
@@ -266,12 +306,13 @@ func passesAcceptance(result domain.PromptExperimentResult) (bool, string) {
 	// Run only when session returns are available to preserve backward compatibility.
 	if len(result.BaselineReturns) >= 2 && len(result.CandidateReturns) >= 2 {
 		tStat, _ := welchTTest(result.BaselineReturns, result.CandidateReturns)
-		if math.Abs(tStat) < 2.0 {
-			return false, fmt.Sprintf("rejected: candidate improvement not statistically significant (|t|=%.2f < 2.0)", tStat)
+		threshold := j.params.Experiment.WelchTTestThreshold.Value
+		if math.Abs(tStat) < threshold {
+			return false, fmt.Sprintf("rejected: candidate improvement not statistically significant (|t|=%.2f < %.1f)", tStat, threshold)
 		}
 	}
 
-	requiredChecks := requiredCheckCountForProfile(result.Brief.MaturityLevel, result.Experiment.MutationType)
+	requiredChecks := j.requiredCheckCountForProfile(result.Brief.MaturityLevel, result.Experiment.MutationType)
 
 	for _, gate := range gates {
 		switch gate {
@@ -287,21 +328,47 @@ func passesAcceptance(result domain.PromptExperimentResult) (bool, string) {
 			if math.IsNaN(candidate) {
 				return false, "rejected: candidate score invalid"
 			}
+		case "maintain_sharpe_like":
+			if len(result.BaselineReturns) >= 2 {
+				stable, _, err := SharpeStabilityCheck(result.BaselineReturns, j.params.Experiment.SharpeStabilityThreshold.Value)
+				if err != nil {
+					return false, fmt.Sprintf("rejected: baseline Sharpe stability check error: %v", err)
+				}
+				if !stable {
+					return false, "rejected: baseline Sharpe ratio not statistically stable"
+				}
+			}
+			if len(result.CandidateReturns) >= 2 {
+				stable, _, err := SharpeStabilityCheck(result.CandidateReturns, j.params.Experiment.SharpeStabilityThreshold.Value)
+				if err != nil {
+					return false, fmt.Sprintf("rejected: candidate Sharpe stability check error: %v", err)
+				}
+				if !stable {
+					return false, "rejected: candidate Sharpe ratio not statistically stable"
+				}
+			}
+		case "no_drawdown_spike":
+			if result.OOSResult != nil && !result.OOSResult.Passed {
+				return false, fmt.Sprintf("rejected: OOS validation failed: %s", result.OOSResult.Reason)
+			}
+		case "preserve_downside_protection":
+			baselineDD := maxDrawdown(result.BaselineReturns)
+			candidateDD := maxDrawdown(result.CandidateReturns)
+			ratio := j.params.Experiment.DrawdownProtectionRatio.Value
+			if candidateDD < baselineDD*ratio {
+				return false, fmt.Sprintf("rejected: candidate drawdown %.2f exceeds %.0f%% of baseline %.2f", candidateDD, ratio*100, baselineDD)
+			}
+		case "reduce_concentration_risk":
+			baselineVol := calculateVolatility(result.BaselineReturns)
+			candidateVol := calculateVolatility(result.CandidateReturns)
+			ratio := j.params.Experiment.VolatilityToleranceRatio.Value
+			if candidateVol > baselineVol*ratio {
+				return false, fmt.Sprintf("rejected: candidate volatility %.2f exceeds %.1fx baseline %.2f", candidateVol, ratio, baselineVol)
+			}
+		case "reduce_false_positive_rate", "maintain_cro_authority", "reduce_sector_blindspots", "maintain_industry_coverage", "reduce_style_drift", "maintain_momentum_catch":
+			return false, fmt.Sprintf("rejected: gate %q requires outcome data not yet collected", gate)
 		default:
-			// TODO: Implement full gate matrix.
-			// Each gate below requires additional data from simulation outcomes:
-			//
-			// reduce_concentration_risk      → needs per-symbol position weights from ledger
-			// reduce_false_positive_rate     → needs CRO rejection rate from session outcomes
-			// preserve_downside_protection   → needs max drawdown from scorecard
-			// maintain_cro_authority         → needs CRO override frequency from ledger
-			// reduce_sector_blindspots       → needs sector coverage metrics from registry
-			// maintain_industry_coverage    → needs industry exposure from portfolio
-			// reduce_style_drift            → needs style classification tracking
-			// maintain_momentum_catch        → needs momentum indicator hit rate
-			// maintain_sharpe_like          → needs scorecard.SharpeLike comparison
-			// no_drawdown_spike             → needs drawdown series from simulation
-			return false, fmt.Sprintf("rejected: unimplemented gate %q — requires additional outcome data", gate)
+			return false, fmt.Sprintf("rejected: unknown gate %q", gate)
 		}
 	}
 	return true, "accepted: maturity-aware gates satisfied"
@@ -357,19 +424,46 @@ func meanAndVariance(data []float64) (mean, variance float64) {
 	return mean, variance
 }
 
-func requiredImprovementForProfile(maturity, mutationType string) float64 {
+func maxDrawdown(returns []float64) float64 {
+	if len(returns) == 0 {
+		return 0
+	}
+	peak := 1.0
+	maxDD := 0.0
+	cum := 1.0
+	for _, r := range returns {
+		cum *= 1 + r
+		if cum > peak {
+			peak = cum
+		}
+		dd := (peak - cum) / peak
+		if dd > maxDD {
+			maxDD = dd
+		}
+	}
+	return -maxDD
+}
+
+func calculateVolatility(returns []float64) float64 {
+	if len(returns) < 2 {
+		return 0
+	}
+	_, variance := meanAndVariance(returns)
+	return math.Sqrt(variance)
+}
+
+func (j *Judge) requiredImprovementForProfile(maturity, mutationType string) float64 {
+	base := j.params.Experiment.ImprovementThreshold.Value
 	switch mutationType {
-	case "risk_rule_change":
-		return 0.001
-	case "portfolio_constraint_revision":
-		return 0.001
+	case "risk_rule_change", "portfolio_constraint_revision":
+		return base * 2
 	default:
-		return 0.0005
+		return base
 	}
 }
 
-func requiredCheckCountForProfile(maturity, mutationType string) int {
-	base := requiredCheckCountForMaturity(maturity)
+func (j *Judge) requiredCheckCountForProfile(maturity, mutationType string) int {
+	base := j.requiredCheckCountForMaturity(maturity)
 	switch mutationType {
 	case "risk_rule_change":
 		return base + 1
@@ -380,8 +474,8 @@ func requiredCheckCountForProfile(maturity, mutationType string) int {
 	}
 }
 
-func requiredObservationCountForProfile(maturity, mutationType string) int {
-	base := requiredObservationCountForMaturity(maturity)
+func (j *Judge) requiredObservationCountForProfile(maturity, mutationType string) int {
+	base := j.requiredObservationCountForMaturity(maturity)
 	switch mutationType {
 	case "risk_rule_change", "portfolio_constraint_revision":
 		return base + 1
@@ -390,20 +484,20 @@ func requiredObservationCountForProfile(maturity, mutationType string) int {
 	}
 }
 
-func requiredObservationCountForMaturity(maturity string) int {
+func (j *Judge) requiredObservationCountForMaturity(maturity string) int {
 	switch maturity {
 	case "level_3_regime_aware":
-		return 12
+		return j.params.Experiment.MaturityLevel3Observations.Value
 	case "level_2_window_validated", "level_2_validated":
-		return 8
+		return j.params.Experiment.MaturityLevel2Observations.Value
 	case "level_1_exploratory":
-		return 3
+		return j.params.Experiment.MaturityLevel1Observations.Value
 	default:
-		return 3
+		return j.params.Experiment.MaturityLevel1Observations.Value
 	}
 }
 
-func requiredCheckCountForMaturity(maturity string) int {
+func (j *Judge) requiredCheckCountForMaturity(maturity string) int {
 	switch maturity {
 	case "level_3_regime_aware":
 		return 4
@@ -446,4 +540,11 @@ func loadWindowSummary(path string) (domain.BacktestWindowSummary, error) {
 func windowSummaryPath(resultPath, windowID string) string {
 	base := filepath.Dir(filepath.Dir(resultPath))
 	return filepath.Join(base, "windows", windowID+".json")
+}
+
+// testJudge returns a Judge with default parameters for testing purposes.
+func testJudge() *Judge {
+	return &Judge{
+		params: config.DefaultParametersConfig(),
+	}
 }

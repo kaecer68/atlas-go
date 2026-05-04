@@ -1,0 +1,9 @@
+[2026-05-03 09:12:55.570416 +08:00 INFO] [notify] systen body={"TAPassport":{"place":"empty"}}
+[2026-05-03 09:13:06.953654 +08:00 INFO] [notify] systen body={"TAPassport":{"place":"empty"}}
+[2026-05-03 09:14:44.324704 +08:00 INFO] [notify] systen body={"TAPassport":{"place":"empty"}}
+[2026-05-03 09:40:01.652828 +08:00 INFO] [notify] systen body={"TAPassport":{"place":"empty"}}
+[2026-05-03 09:40:25.185372 +08:00 INFO] [notify] systen body={"TAPassport":{"place":"empty"}}
+[2026-05-03 09:40:25.206294 +08:00 INFO] [notify] systen body={"WLS":{"WLs":[{"_c":"X","_t":"1.0.20909.1835440.*","oxtp":10},{"_c":"X","_t":"0.0.0.M120628569.XBSAUTHN","oxtp":10},{"_c":"X","_t":"0.12.0.BBS.NGCCALND","oxtp":10}],"clid":"_BIZ","count":3}}
+[2026-05-03 09:40:44.377691 +08:00 INFO] [notify] systen body={"TAPassport":{"place":"empty"}}
+[2026-05-03 09:41:07.678473 +08:00 INFO] [notify] systen body={"TAPassport":{"place":"empty"}}
+[2026-05-03 09:41:07.705477 +08:00 INFO] [notify] systen body={"WLS":{"WLs":[{"_c":"X","_t":"1.0.20909.1835440.*","oxtp":10},{"_c":"X","_t":"0.0.0.M120628569.XBSAUTHN","oxtp":10},{"_c":"X","_t":"0.12.0.BBS.NGCCALND","oxtp":10}],"clid":"_BIZ","count":3}}

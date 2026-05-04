@@ -5,6 +5,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 type Trade struct {
@@ -23,7 +25,7 @@ type ComparisonEngine struct {
 
 func NewComparisonEngine(window int) *ComparisonEngine {
 	if window <= 0 {
-		window = 20
+		window = config.GetParametersConfig().Strategy.ScoreLookbackDays.Value
 	}
 	return &ComparisonEngine{
 		window: window,

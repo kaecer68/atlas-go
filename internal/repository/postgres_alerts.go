@@ -23,7 +23,7 @@ func (r *PostgresRepository) SaveAlert(ctx context.Context, alert domain.AlertRe
 			acknowledged_by = EXCLUDED.acknowledged_by
 	`, alert.ID, alert.Timestamp, alert.Rule, alert.Severity, alert.Message,
 		alert.Value, alert.Threshold, alert.Acknowledged, alert.AcknowledgedAt, alert.AcknowledgedBy)
-	
+
 	return err
 }
 
@@ -36,13 +36,13 @@ func (r *PostgresRepository) LoadAllAlerts(ctx context.Context, limit int) ([]do
 	if limit > 0 {
 		query += fmt.Sprintf(" LIMIT %d", limit)
 	}
-	
+
 	rows, err := r.pool.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("load all alerts: %w", err)
 	}
 	defer rows.Close()
-	
+
 	return scanAlertRecords(rows)
 }
 
@@ -57,7 +57,7 @@ func (r *PostgresRepository) LoadUnacknowledgedAlerts(ctx context.Context) ([]do
 		return nil, fmt.Errorf("load unacknowledged alerts: %w", err)
 	}
 	defer rows.Close()
-	
+
 	return scanAlertRecords(rows)
 }
 
@@ -67,15 +67,15 @@ func (r *PostgresRepository) AcknowledgeAlert(ctx context.Context, alertID strin
 		SET acknowledged = TRUE, acknowledged_at = NOW(), acknowledged_by = $2
 		WHERE id = $1 AND NOT acknowledged
 	`, alertID, user)
-	
+
 	if err != nil {
 		return fmt.Errorf("acknowledge alert: %w", err)
 	}
-	
+
 	if result.RowsAffected() == 0 {
 		return fmt.Errorf("alert %q not found or already acknowledged", alertID)
 	}
-	
+
 	return nil
 }
 
@@ -89,13 +89,13 @@ func (r *PostgresRepository) LoadAlertsBySeverity(ctx context.Context, severity 
 	if limit > 0 {
 		query += fmt.Sprintf(" LIMIT %d", limit)
 	}
-	
+
 	rows, err := r.pool.Query(ctx, query, severity)
 	if err != nil {
 		return nil, fmt.Errorf("load alerts by severity: %w", err)
 	}
 	defer rows.Close()
-	
+
 	return scanAlertRecords(rows)
 }
 
@@ -110,7 +110,7 @@ func (r *PostgresRepository) LoadAlertsByTimeRange(ctx context.Context, start, e
 		return nil, fmt.Errorf("load alerts by time range: %w", err)
 	}
 	defer rows.Close()
-	
+
 	return scanAlertRecords(rows)
 }
 

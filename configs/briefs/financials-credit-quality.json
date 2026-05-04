@@ -1,0 +1,35 @@
+{
+  "contract_version": 1,
+  "proposal_id": "default-financials-credit-quality",
+  "window_id": "window-20260326-20260327",
+  "target_agent_id": "financials-desk-01",
+  "target_skill": "financials_desk",
+  "target_layer": "sector",
+  "prompt_file": "prompts/agents/financials_desk.md",
+  "mutation_type": "prompt_tightening",
+  "failure_pattern": "Weak-close financial names with adequate credit profiles are filtered too aggressively, missing defensive recovery setups.",
+  "hypothesis": "Improved credit-quality filtering and reduced false positives on weak-but-resilient closes can enhance financial-sector coverage quality.",
+  "acceptance_metric": "sharpe_like",
+  "acceptance_gates": [
+    "maintain_sharpe_like",
+    "preserve_downside_protection",
+    "reduce_false_positive_rate"
+  ],
+  "forbidden_actions": [
+    "remove required skill boundaries",
+    "bypass control layer",
+    "ignore_balance_sheet_quality"
+  ],
+  "required_skills": [
+    "financials_desk",
+    "value_yield"
+  ],
+  "observed_window_count": 8,
+  "maturity_level": "level_2_window_validated",
+  "iteration_guidance": [
+    "Distinguish between weak trend and weak fundamentals.",
+    "Require explicit credit-quality signal before downgrade.",
+    "Preserve dividend-support logic as a floor."
+  ],
+  "recommended_window": "window-20260326-20260327"
+}

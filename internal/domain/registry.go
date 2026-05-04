@@ -176,4 +176,5 @@ type PromptExperimentResult struct {
 	OOSResult             *OOSResult          `json:"oos_result,omitempty"`
 	BaselineReturns       []float64           `json:"baseline_returns,omitempty"`
 	CandidateReturns      []float64           `json:"candidate_returns,omitempty"`
+	ParameterSnapshotID   string              `json:"parameter_snapshot_id,omitempty"`
 }

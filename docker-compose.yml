@@ -32,6 +32,28 @@ services:
       retries: 3
       start_period: 40s
 
+  # Fubon MarketData Proxy (Python microservice)
+  fubon-proxy:
+    build:
+      context: ./services/fubon-proxy
+      dockerfile: Dockerfile
+    container_name: atlas-fubon-proxy
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - FUBON_PERSONAL_ID=${FUBON_PERSONAL_ID}
+      - FUBON_API_KEY=${FUBON_API_KEY}
+      - FUBON_PROXY_PORT=8081
+    networks:
+      - atlas-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
   # Redis for caching and message queue
   redis:
     image: redis:7-alpine

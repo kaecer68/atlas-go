@@ -3,6 +3,8 @@ package industry
 import (
 	"fmt"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 // CyclePhase represents the current phase of an industry business cycle.
@@ -224,16 +226,28 @@ func (ct *CycleTracker) detectCyclePosition(industryID string, metrics IndustryM
 
 // detectBusinessCycle determines the business cycle phase.
 func (ct *CycleTracker) detectBusinessCycle(metrics IndustryMetrics) CyclePhase {
-	// Logic based on revenue growth and profit growth
+	params := config.GetParametersConfig().Industry
+	thresholds, ok := params.CycleThresholds.Value[metrics.IndustryID]
+	if !ok {
+		thresholds = config.CycleThresholdConfig{
+			ExpansionRevenuePct: 0.20,
+			ExpansionProfitPct:  0.20,
+			RecoveryRevenuePct:  0.05,
+			RecoveryProfitPct:   0.05,
+			MatureRevenuePct:    -0.05,
+			MatureProfitPct:     -0.05,
+		}
+	}
+
 	revenueGrowth := metrics.RevenueGrowthYoY
 	profitGrowth := metrics.ProfitGrowthYoY
 
 	switch {
-	case revenueGrowth > 0.20 && profitGrowth > 0.20:
+	case revenueGrowth > thresholds.ExpansionRevenuePct && profitGrowth > thresholds.ExpansionProfitPct:
 		return CycleExpansion
-	case revenueGrowth > 0.05 && profitGrowth > 0.05:
+	case revenueGrowth > thresholds.RecoveryRevenuePct && profitGrowth > thresholds.RecoveryProfitPct:
 		return CycleRecovery
-	case revenueGrowth > -0.05 && profitGrowth > -0.05:
+	case revenueGrowth > thresholds.MatureRevenuePct && profitGrowth > thresholds.MatureProfitPct:
 		return CycleMature
 	default:
 		return CycleRecession

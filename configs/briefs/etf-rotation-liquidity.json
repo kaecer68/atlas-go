@@ -1,0 +1,35 @@
+{
+  "contract_version": 1,
+  "proposal_id": "default-etf-rotation-liquidity",
+  "window_id": "window-20260326-20260327",
+  "target_agent_id": "etf-rotation-01",
+  "target_skill": "etf_rotation_desk",
+  "target_layer": "sector",
+  "prompt_file": "prompts/agents/etf_rotation_desk.md",
+  "mutation_type": "prompt_tightening",
+  "failure_pattern": "Moderate-liquidity ETF rotation setups are skipped, concentrating exposure in the most liquid names and reducing diversification benefit.",
+  "hypothesis": "Tightening liquidity thresholds intelligently can improve ETF rotation coverage without degrading execution quality.",
+  "acceptance_metric": "sharpe_like",
+  "acceptance_gates": [
+    "maintain_sharpe_like",
+    "improve_coverage",
+    "control_slippage"
+  ],
+  "forbidden_actions": [
+    "remove required skill boundaries",
+    "bypass control layer",
+    "ignore_liquidity_risk"
+  ],
+  "required_skills": [
+    "etf_rotation_desk",
+    "value_yield"
+  ],
+  "observed_window_count": 8,
+  "maturity_level": "level_2_window_validated",
+  "iteration_guidance": [
+    "Use relative liquidity vs sector median instead of absolute threshold.",
+    "Maintain strict rejection for names below sector 25th percentile.",
+    "Preserve defensive-rotation priority during elevated dispersion."
+  ],
+  "recommended_window": "window-20260326-20260327"
+}

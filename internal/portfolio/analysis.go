@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -46,6 +47,7 @@ type AttributionResult struct {
 
 // PostTradeAnalyzer 盘后分析器
 type PostTradeAnalyzer struct {
+	mu    sync.RWMutex
 	trades []TradeRecord
 }
 
@@ -58,12 +60,18 @@ func NewPostTradeAnalyzer() *PostTradeAnalyzer {
 
 // AddTrade 添加交易记录
 func (a *PostTradeAnalyzer) AddTrade(trade TradeRecord) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	a.trades = append(a.trades, trade)
 }
 
 // GetTrades 获取所有交易
 func (a *PostTradeAnalyzer) GetTrades() []TradeRecord {
-	return a.trades
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	result := make([]TradeRecord, len(a.trades))
+	copy(result, a.trades)
+	return result
 }
 
 // PerformanceMetrics 业绩指标
@@ -414,11 +422,15 @@ func (a *PostTradeAnalyzer) GenerateReport(period string) AnalysisReport {
 
 // Clear 清空历史数据
 func (a *PostTradeAnalyzer) Clear() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	a.trades = make([]TradeRecord, 0)
 }
 
 // FilterByPeriod 按时间段筛选交易
 func (a *PostTradeAnalyzer) FilterByPeriod(start, end time.Time) []TradeRecord {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 	var filtered []TradeRecord
 	for _, trade := range a.trades {
 		if trade.ExitTime.After(start) && trade.ExitTime.Before(end) {

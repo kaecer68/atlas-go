@@ -1,7 +1,6 @@
 package sim
 
 import (
-	"math"
 	"sort"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -152,23 +151,4 @@ func AdjustPriceForSlippage(price float64, slippageBPS float64, side domain.Side
 		return price * (1 + slippageBPS/10000.0)
 	}
 	return price * (1 - slippageBPS/10000.0)
-}
-
-// AdjustPriceWithTransactionCost applies both slippage and transaction cost.
-func AdjustPriceWithTransactionCost(price float64, slippageBPS, txCostBPS float64, side domain.Side) float64 {
-	totalBPS := slippageBPS + txCostBPS
-	if side == domain.SideBuy {
-		return price * (1 + totalBPS/10000.0)
-	}
-	return price * (1 - totalBPS/10000.0)
-}
-
-// EstimateMarketImpact estimates the market impact for a given order size.
-// Uses square root law: impact = sqrt(order_value / daily_volume) * constant.
-func EstimateMarketImpact(orderValue, dailyVolume float64) float64 {
-	if dailyVolume <= 0 || orderValue <= 0 {
-		return 0
-	}
-	ratio := orderValue / dailyVolume
-	return math.Sqrt(ratio) * 0.001 // 0.1% base impact
 }

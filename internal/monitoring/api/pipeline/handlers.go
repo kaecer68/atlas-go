@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
@@ -27,16 +27,6 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/recommendation-pipeline", h.HandleRecommendationPipeline)
 	mux.HandleFunc("/api/dashboard/sessions", h.HandleSessions)
 	mux.HandleFunc("/api/dashboard/universe-overlap", h.HandleUniverseOverlap)
-}
-
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func writeJSONError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
 }
 
 func parseLimit(r *http.Request, defaultValue, maxValue int) (int, error) {
@@ -60,18 +50,18 @@ func parseLimit(r *http.Request, defaultValue, maxValue int) (int, error) {
 // HandleMacroRadar handles GET /api/dashboard/macro-radar.
 func (h *Handlers) HandleMacroRadar(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	sessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
 	data, err := h.Svc.LoadMacroRadar(sessionID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load macro radar data: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load macro radar data: %v", err))
 		return
 	}
 	if data == nil {
-		writeJSON(w, http.StatusOK, MacroRadarResponse{})
+		shared.WriteJSON(w, http.StatusOK, MacroRadarResponse{})
 		return
 	}
 
@@ -82,7 +72,7 @@ func (h *Handlers) HandleMacroRadar(w http.ResponseWriter, r *http.Request) {
 		BrokerRuntime: data.BrokerRuntime,
 		RecordedAt:    data.RecordedAt,
 	}
-	writeJSON(w, http.StatusOK, resp)
+	shared.WriteJSON(w, http.StatusOK, resp)
 }
 
 // MacroRadarResponse is the API response for macro radar.
@@ -97,20 +87,20 @@ type MacroRadarResponse struct {
 // HandleAgentObservatory handles GET /api/dashboard/agent-observatory.
 func (h *Handlers) HandleAgentObservatory(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	sessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
 	limit, err := parseLimit(r, 5, 50)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		shared.WriteJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	data, err := h.Svc.LoadAgentObservatory(sessionID, limit)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load agent observatory: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load agent observatory: %v", err))
 		return
 	}
 
@@ -121,7 +111,7 @@ func (h *Handlers) HandleAgentObservatory(w http.ResponseWriter, r *http.Request
 		BrokerRuntime:          data.BrokerRuntime,
 		RecordedAt:             data.RecordedAt,
 	}
-	writeJSON(w, http.StatusOK, resp)
+	shared.WriteJSON(w, http.StatusOK, resp)
 }
 
 // AgentObservatoryResponse is the API response for agent observatory.
@@ -136,20 +126,20 @@ type AgentObservatoryResponse struct {
 // HandleForecastVsReality handles GET /api/dashboard/forecast-vs-reality.
 func (h *Handlers) HandleForecastVsReality(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	limit, err := parseLimit(r, 20, 100)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		shared.WriteJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	agentID := strings.TrimSpace(r.URL.Query().Get("agent_id"))
 
 	data, err := h.Svc.LoadForecastVsReality(agentID, limit)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load forecast-vs-reality data: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load forecast-vs-reality data: %v", err))
 		return
 	}
 
@@ -174,7 +164,7 @@ func (h *Handlers) HandleForecastVsReality(w http.ResponseWriter, r *http.Reques
 		Items:         items,
 		BrokerRuntime: data.BrokerRuntime,
 	}
-	writeJSON(w, http.StatusOK, resp)
+	shared.WriteJSON(w, http.StatusOK, resp)
 }
 
 // ForecastVsRealityItem is the API response item for forecast vs reality.
@@ -201,7 +191,7 @@ type ForecastVsRealityResponse struct {
 // HandleRecommendationPipeline handles GET /api/dashboard/recommendation-pipeline.
 func (h *Handlers) HandleRecommendationPipeline(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -210,11 +200,11 @@ func (h *Handlers) HandleRecommendationPipeline(w http.ResponseWriter, r *http.R
 
 	data, err := h.Svc.LoadRecommendationPipeline(sessionID, showAll)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load recommendation pipeline: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load recommendation pipeline: %v", err))
 		return
 	}
 	if data == nil {
-		writeJSON(w, http.StatusOK, RecommendationPipelineResponse{})
+		shared.WriteJSON(w, http.StatusOK, RecommendationPipelineResponse{})
 		return
 	}
 
@@ -250,7 +240,7 @@ func (h *Handlers) HandleRecommendationPipeline(w http.ResponseWriter, r *http.R
 		ScreenedItems: data.ScreenedItems,
 		RecordedAt:    data.RecordedAt,
 	}
-	writeJSON(w, http.StatusOK, resp)
+	shared.WriteJSON(w, http.StatusOK, resp)
 }
 
 // PipelineItem is the API response item for recommendation pipeline.
@@ -288,17 +278,17 @@ type RecommendationPipelineResponse struct {
 // HandleSessions handles GET /api/dashboard/sessions.
 func (h *Handlers) HandleSessions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	sessions, err := h.Svc.LoadSessions()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load sessions: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load sessions: %v", err))
 		return
 	}
 	if sessions == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"sessions": []any{}})
+		shared.WriteJSON(w, http.StatusOK, map[string]any{"sessions": []any{}})
 		return
 	}
 
@@ -311,19 +301,19 @@ func (h *Handlers) HandleSessions(w http.ResponseWriter, r *http.Request) {
 			"outcome_count": s.OutcomeCount,
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"sessions": result})
+	shared.WriteJSON(w, http.StatusOK, map[string]any{"sessions": result})
 }
 
 // HandleUniverseOverlap handles GET /api/dashboard/universe-overlap.
 func (h *Handlers) HandleUniverseOverlap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	data, err := h.Svc.LoadUniverseOverlap()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load universe overlap: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load universe overlap: %v", err))
 		return
 	}
 
@@ -343,7 +333,7 @@ func (h *Handlers) HandleUniverseOverlap(w http.ResponseWriter, r *http.Request)
 		Matrix:   data.Matrix,
 		Warnings: data.Warnings,
 	}
-	writeJSON(w, http.StatusOK, resp)
+	shared.WriteJSON(w, http.StatusOK, resp)
 }
 
 // AgentUniverseView is the API response for agent universe view.

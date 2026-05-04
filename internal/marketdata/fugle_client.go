@@ -9,15 +9,13 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"golang.org/x/time/rate"
 )
 
 const (
 	fugleAPIBaseURL = "https://api.fugle.tw/realtime/v0.3"
-	// 免费版限制: 50 requests/minute
-	fugleRateLimit = 50
-	fugleRateBurst = 10
 )
 
 // FugleClient Fugle API 客户端
@@ -62,13 +60,14 @@ type FugleQuoteResponse struct {
 
 // NewFugleClient 创建 Fugle 客户端
 func NewFugleClient(apiKey string) *FugleClient {
+	params := config.GetParametersConfig()
 	return &FugleClient{
 		apiKey: apiKey,
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: time.Duration(params.Marketdata.FugleAPITimeoutSec.Value) * time.Second,
 		},
 		baseURL:     fugleAPIBaseURL,
-		rateLimiter: rate.NewLimiter(rate.Every(time.Minute/fugleRateLimit), fugleRateBurst),
+		rateLimiter: rate.NewLimiter(rate.Every(time.Minute/time.Duration(params.Marketdata.FugleRateLimit.Value)), params.Marketdata.FugleRateLimit.Value),
 	}
 }
 

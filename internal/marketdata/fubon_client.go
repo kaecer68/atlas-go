@@ -6,70 +6,71 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"golang.org/x/time/rate"
 )
 
 const (
-	fubonAPIBaseURL = "https://api.fubon.com.tw/market-data/v1"
-	// 即時行情限制: 300 requests/minute
-	fubonIntradayRateLimit = 300
-	fubonIntradayBurst     = 30
-	// 歷史行情限制: 60 requests/minute
-	fubonHistoricalRateLimit = 60
-	fubonHistoricalBurst     = 10
+	fubonProxyBaseURL = "http://localhost:8081"
 )
 
 type FubonClient struct {
-	authToken         string
+	proxyURL          string
 	httpClient        *http.Client
-	baseURL           string
 	intradayLimiter   *rate.Limiter
 	historicalLimiter *rate.Limiter
 }
 
 type FubonQuoteResponse struct {
-	APIVersion string `json:"api_version"`
-	Data       struct {
-		Info struct {
-			Date        string `json:"date"`
-			Time        string `json:"time"`
-			Symbol      string `json:"symbol"`
-			Name        string `json:"name"`
-			CountryCode string `json:"country_code"`
-			TimeZone    string `json:"time_zone"`
-		} `json:"info"`
-		Quote struct {
-			Trade struct {
-				Price float64 `json:"price"`
-			} `json:"trade"`
-			PriceOpen struct {
-				Price float64 `json:"price"`
-			} `json:"price_open"`
-			PriceHigh struct {
-				Price float64 `json:"price"`
-			} `json:"price_high"`
-			PriceLow struct {
-				Price float64 `json:"price"`
-			} `json:"price_low"`
-			Total struct {
-				TradeVolume int64 `json:"trade_volume"`
-			} `json:"total"`
-		} `json:"quote"`
-	} `json:"data"`
+	Symbol         string  `json:"symbol"`
+	Name           string  `json:"name"`
+	Last           float64 `json:"last"`
+	Open           float64 `json:"open"`
+	High           float64 `json:"high"`
+	Low            float64 `json:"low"`
+	Volume         int     `json:"volume"`
+	ReferencePrice float64 `json:"reference_price"`
+	PreviousClose  float64 `json:"previous_close"`
+	Change         float64 `json:"change"`
+	ChangePercent  float64 `json:"change_percent"`
+	Bids           []struct {
+		Price float64 `json:"price"`
+		Size  int     `json:"size"`
+	} `json:"bids"`
+	Asks []struct {
+		Price float64 `json:"price"`
+		Size  int     `json:"size"`
+	} `json:"asks"`
+	IsOpen    bool   `json:"is_open"`
+	IsClose   bool   `json:"is_close"`
+	Timestamp int64  `json:"timestamp"`
+	Source    string `json:"source"`
+}
+
+type FubonMarketStatus struct {
+	Status    string `json:"status"`
+	IsOpen    bool   `json:"is_open"`
+	Timestamp int    `json:"timestamp"`
 }
 
 func NewFubonClient(authToken string) *FubonClient {
+	proxyURL := os.Getenv("FUBON_PROXY_URL")
+	if proxyURL == "" {
+		proxyURL = fubonProxyBaseURL
+	}
+
+	params := config.GetParametersConfig()
 	return &FubonClient{
-		authToken: authToken,
+		proxyURL: proxyURL,
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: time.Duration(params.Marketdata.FubonAPITimeoutSec.Value) * time.Second,
 		},
-		baseURL:           fubonAPIBaseURL,
-		intradayLimiter:   rate.NewLimiter(rate.Every(time.Minute/fubonIntradayRateLimit), fubonIntradayBurst),
-		historicalLimiter: rate.NewLimiter(rate.Every(time.Minute/fubonHistoricalRateLimit), fubonHistoricalBurst),
+		intradayLimiter:   rate.NewLimiter(rate.Every(time.Minute/time.Duration(params.Marketdata.FubonIntradayLimit.Value)), params.Marketdata.FubonIntradayLimit.Value),
+		historicalLimiter: rate.NewLimiter(rate.Every(time.Minute/time.Duration(params.Marketdata.FubonHistoricalLimit.Value)), params.Marketdata.FubonHistoricalLimit.Value),
 	}
 }
 
@@ -79,48 +80,43 @@ func (c *FubonClient) SetHTTPClient(client *http.Client) {
 
 func (c *FubonClient) GetQuote(ctx context.Context, symbol string) (domain.Quote, error) {
 	if err := c.intradayLimiter.Wait(ctx); err != nil {
-		return domain.Quote{}, fmt.Errorf("fubon api: rate limit wait: %w", err)
+		return domain.Quote{}, fmt.Errorf("fubon proxy: rate limit wait: %w", err)
 	}
 
-	endpoint := fmt.Sprintf("%s/intraday/quote", c.baseURL)
-	params := url.Values{}
-	params.Set("symbol_id", symbol)
+	endpoint := fmt.Sprintf("%s/quote/%s", c.proxyURL, symbol)
 
-	reqURL := fmt.Sprintf("%s?%s", endpoint, params.Encode())
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return domain.Quote{}, fmt.Errorf("fubon api: create request: %w", err)
+		return domain.Quote{}, fmt.Errorf("fubon proxy: create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.authToken)
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return domain.Quote{}, fmt.Errorf("fubon api: http request: %w", err)
+		return domain.Quote{}, fmt.Errorf("fubon proxy: http request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return domain.Quote{}, fmt.Errorf("fubon api: status %d", resp.StatusCode)
+		return domain.Quote{}, fmt.Errorf("fubon proxy: status %d", resp.StatusCode)
 	}
 
 	var fubonResp FubonQuoteResponse
 	if err := json.NewDecoder(resp.Body).Decode(&fubonResp); err != nil {
-		return domain.Quote{}, fmt.Errorf("fubon api: decode response: %w", err)
+		return domain.Quote{}, fmt.Errorf("fubon proxy: decode response: %w", err)
 	}
 
 	quote := domain.Quote{
 		Symbol:     symbol,
-		Last:       fubonResp.Data.Quote.Trade.Price,
-		Open:       fubonResp.Data.Quote.PriceOpen.Price,
-		High:       fubonResp.Data.Quote.PriceHigh.Price,
-		Low:        fubonResp.Data.Quote.PriceLow.Price,
-		Volume:     fubonResp.Data.Quote.Total.TradeVolume,
+		Last:       fubonResp.Last,
+		Open:       fubonResp.Open,
+		High:       fubonResp.High,
+		Low:        fubonResp.Low,
+		Volume:     int64(fubonResp.Volume),
 		Market:     "TW",
 		AsOf:       time.Now(),
-		IsTradable: true,
+		IsTradable: fubonResp.IsOpen && !fubonResp.IsClose,
 		Source:     "fubon",
 	}
 
@@ -128,15 +124,67 @@ func (c *FubonClient) GetQuote(ctx context.Context, symbol string) (domain.Quote
 }
 
 func (c *FubonClient) GetQuotes(ctx context.Context, symbols []string) ([]domain.Quote, error) {
-	quotes := make([]domain.Quote, 0, len(symbols))
+	if len(symbols) == 0 {
+		return []domain.Quote{}, nil
+	}
 
-	for _, symbol := range symbols {
-		quote, err := c.GetQuote(ctx, symbol)
+	if len(symbols) == 1 {
+		quote, err := c.GetQuote(ctx, symbols[0])
 		if err != nil {
-			fmt.Printf("[Fubon] Error fetching %s: %v\n", symbol, err)
-			continue
+			return nil, err
 		}
-		quotes = append(quotes, quote)
+		return []domain.Quote{quote}, nil
+	}
+
+	if err := c.intradayLimiter.Wait(ctx); err != nil {
+		return nil, fmt.Errorf("fubon proxy: rate limit wait: %w", err)
+	}
+
+	endpoint := fmt.Sprintf("%s/quotes", c.proxyURL)
+	params := url.Values{}
+	params.Set("symbols", symbols[0])
+	for i := 1; i < len(symbols); i++ {
+		params.Set("symbols", params.Get("symbols")+","+symbols[i])
+	}
+
+	reqURL := fmt.Sprintf("%s?%s", endpoint, params.Encode())
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("fubon proxy: create request: %w", err)
+	}
+
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fubon proxy: http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fubon proxy: status %d", resp.StatusCode)
+	}
+
+	var fubonResps []FubonQuoteResponse
+	if err := json.NewDecoder(resp.Body).Decode(&fubonResps); err != nil {
+		return nil, fmt.Errorf("fubon proxy: decode response: %w", err)
+	}
+
+	quotes := make([]domain.Quote, 0, len(fubonResps))
+	for _, r := range fubonResps {
+		quotes = append(quotes, domain.Quote{
+			Symbol:     r.Symbol,
+			Last:       r.Last,
+			Open:       r.Open,
+			High:       r.High,
+			Low:        r.Low,
+			Volume:     int64(r.Volume),
+			Market:     "TW",
+			AsOf:       time.Now(),
+			IsTradable: r.IsOpen && !r.IsClose,
+			Source:     "fubon",
+		})
 	}
 
 	return quotes, nil
@@ -144,15 +192,56 @@ func (c *FubonClient) GetQuotes(ctx context.Context, symbols []string) ([]domain
 
 func (c *FubonClient) GetHistoricalQuote(ctx context.Context, symbol string, date time.Time) (domain.Quote, error) {
 	if err := c.historicalLimiter.Wait(ctx); err != nil {
-		return domain.Quote{}, fmt.Errorf("fubon api: historical rate limit wait: %w", err)
+		return domain.Quote{}, fmt.Errorf("fubon proxy: historical rate limit wait: %w", err)
 	}
-	return domain.Quote{}, fmt.Errorf("fubon api: historical quote not yet implemented")
+	return domain.Quote{}, fmt.Errorf("fubon proxy: historical quote not yet implemented")
 }
 
 func (c *FubonClient) CheckMarketStatus(ctx context.Context) (bool, error) {
-	_, err := c.GetQuote(ctx, "0050")
+	endpoint := fmt.Sprintf("%s/market-status", c.proxyURL)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return false, fmt.Errorf("fubon api: check market status: %w", err)
+		return false, fmt.Errorf("fubon proxy: create request: %w", err)
 	}
-	return true, nil
+
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("fubon proxy: http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("fubon proxy: status %d", resp.StatusCode)
+	}
+
+	var status FubonMarketStatus
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		return false, fmt.Errorf("fubon proxy: decode response: %w", err)
+	}
+
+	return status.IsOpen, nil
+}
+
+func (c *FubonClient) HealthCheck(ctx context.Context) error {
+	endpoint := fmt.Sprintf("%s/health", c.proxyURL)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("fubon proxy: create health request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("fubon proxy: health check failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("fubon proxy: health check status %d", resp.StatusCode)
+	}
+
+	return nil
 }
