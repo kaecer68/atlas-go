@@ -10,11 +10,12 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
 ## KEY CONCEPTS
 
 ### 1. Darwinian Weights (達爾文權重管理)
-- **範圍限制**：權重強制夾制於 `[0.3, 2.5]`。`0.3` 為 whisper (低語)，`2.5` 為 shout (高喊)。
+- **Agent 權重範圍限制**：權重強制夾制於 `[0.3, 2.5]`。`0.3` 為 whisper (低語)，`2.5` 為 shout (高喊)。
+- **套用後信念範圍限制**：經過權重調整後的信念值會再夾制於 `[ConvictionClampMin, ConvictionClampMax]`（預設 `[1, 250]`），防止信念極端化。
 - **動態調整**：`PerformDailyAdjustment` 依據 **Rolling Sharpe Ratio** (20天) 進行分層調整：
     - **Top 1/3**: 權重提升 (`TopQuartileMultiplier=1.05`) + Performance Bonus。
     - **Bottom 1/3**: 權重調降 (`BottomQuartileMultiplier=0.95`) + Risk Penalty (若波幅過高)。
-- **套用機制**：`ApplyDarwinianWeights` 將 Agent 推薦的 Conviction 乘上權重，結果限制在 `[1, 250]`。
+- **套用機制**：`ApplyDarwinianWeights` 將 Agent 推薦的 Conviction 乘上權重，結果先做權重夾制再進行信念夾制。
 - **主要檔案**：`darwinian_weights.go`、`agent_weights.go`
 
 ### 2. FactorEngine (多因子計算引擎)
@@ -75,7 +76,8 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
     | Liquidity | 0.15 |
 - **事件驅動調整**：當 NarrativeEvent 觸發時，FactorWeightEngine 根據事件 Theme 調整相關因子權重。
 - **Regime 感知**：不同 Regime 下採用不同的基礎權重配置。
-- **主要檔案**：`factor_weight_engine.go`（待建立）
+- **主要檔案**：`factor_weight_engine.go`（**待建立** - 目前因子權重調整尚未實作，現有系統使用固定因子權重）
+- **現況**：FactorWeightEngine 為預計功能，目前 `FactorEngine` 使用固定基礎權重（見 `FactorWeights` 參數）。動態事件驅動的權重調整尚未實作。
 
 ### 3. Agent Health Management (代理健康狀態管理)
 - **狀態機**：Agent 有四種健康狀態 — `healthy`、`degraded`、`muted`、`recovering`。

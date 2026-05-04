@@ -47,7 +47,7 @@ type AttributionResult struct {
 
 // PostTradeAnalyzer 盘后分析器
 type PostTradeAnalyzer struct {
-	mu    sync.RWMutex
+	mu     sync.RWMutex
 	trades []TradeRecord
 }
 

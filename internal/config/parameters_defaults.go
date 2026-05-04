@@ -413,10 +413,10 @@ func defaultSizingParameters() SizingParameters {
 			Source:    SourceHeuristic,
 		},
 		DefaultATR: ParameterMetadata[float64]{
-			Value:     0.0,
-			Rationale: "WARNING: 0 default causes ATR adjustment to be skipped",
+			Value:     0.02,
+			Rationale: "Non-zero default for ATR-based position sizing (2% of price as fallback)",
 			Source:    SourceHeuristic,
-			Todo:      "URGENT: set reasonable non-zero default (e.g., 2% of price)",
+			Todo:      "Calibrate from backtest: test [0.01, 0.03] range",
 		},
 	}
 }

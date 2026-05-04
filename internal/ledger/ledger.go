@@ -26,19 +26,24 @@ func (s *Store) RecordOutcomes(outcomes []domain.RecommendationOutcome) error {
 	}
 
 	path := filepath.Join(s.baseDir, "recommendation_outcomes.jsonl")
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	tmp := path + ".tmp"
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-
 	enc := json.NewEncoder(f)
 	for _, outcome := range outcomes {
 		if err := enc.Encode(outcome); err != nil {
+			f.Close()
+			os.Remove(tmp)
 			return err
 		}
 	}
-	return nil
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 func (s *Store) RecordSessionOutcomes(session domain.ReplaySession, outcomes []domain.RecommendationOutcome) error {
