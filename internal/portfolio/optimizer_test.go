@@ -88,3 +88,433 @@ func TestOptimizeProducesDifferentWeightsBasedOnMomentum(t *testing.T) {
 		t.Errorf("expected UP.TW to have higher weight than DOWN.TW, got up=%f down=%f", upWeight, downWeight)
 	}
 }
+
+func TestOptimizeEmptyRecommendations(t *testing.T) {
+	o := NewOptimizer()
+	positions, err := o.Optimize(context.Background(), nil, map[string]domain.Quote{}, 1_000_000)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if positions != nil {
+		t.Error("expected nil positions for empty recommendations")
+	}
+}
+
+func TestOptimizeMaxPositionPctConstraint(t *testing.T) {
+	o := NewOptimizer()
+	c := DefaultConstraints()
+	c.MaxPositionPct = 0.10
+	c.CashReserve = 0.0
+	o.SetConstraints(c)
+
+	quotes := map[string]domain.Quote{
+		"A.TW": {Symbol: "A.TW", Open: 100, Last: 110, IsTradable: true},
+		"B.TW": {Symbol: "B.TW", Open: 100, Last: 110, IsTradable: true},
+		"C.TW": {Symbol: "C.TW", Open: 100, Last: 110, IsTradable: true},
+		"D.TW": {Symbol: "D.TW", Open: 100, Last: 110, IsTradable: true},
+		"E.TW": {Symbol: "E.TW", Open: 100, Last: 110, IsTradable: true},
+		"F.TW": {Symbol: "F.TW", Open: 100, Last: 110, IsTradable: true},
+		"G.TW": {Symbol: "G.TW", Open: 100, Last: 110, IsTradable: true},
+		"H.TW": {Symbol: "H.TW", Open: 100, Last: 110, IsTradable: true},
+		"I.TW": {Symbol: "I.TW", Open: 100, Last: 110, IsTradable: true},
+		"J.TW": {Symbol: "J.TW", Open: 100, Last: 110, IsTradable: true},
+	}
+
+	recs := []domain.Recommendation{
+		{Agent: "a", Symbol: "A.TW", Side: domain.SideBuy, Conviction: 80},
+		{Agent: "b", Symbol: "B.TW", Side: domain.SideBuy, Conviction: 80},
+		{Agent: "c", Symbol: "C.TW", Side: domain.SideBuy, Conviction: 80},
+		{Agent: "d", Symbol: "D.TW", Side: domain.SideBuy, Conviction: 80},
+		{Agent: "e", Symbol: "E.TW", Side: domain.SideBuy, Conviction: 80},
+		{Agent: "f", Symbol: "F.TW", Side: domain.SideBuy, Conviction: 80},
+		{Agent: "g", Symbol: "G.TW", Side: domain.SideBuy, Conviction: 80},
+		{Agent: "h", Symbol: "H.TW", Side: domain.SideBuy, Conviction: 80},
+		{Agent: "i", Symbol: "I.TW", Side: domain.SideBuy, Conviction: 80},
+		{Agent: "j", Symbol: "J.TW", Side: domain.SideBuy, Conviction: 80},
+	}
+
+	positions, err := o.Optimize(context.Background(), recs, quotes, 1_000_000)
+	if err != nil {
+		t.Fatalf("optimize failed: %v", err)
+	}
+	if len(positions) == 0 {
+		t.Fatal("expected positions from optimize")
+	}
+
+	for _, p := range positions {
+		positionValue := p.TargetValue
+		positionPct := positionValue / 1_000_000
+		if positionPct > c.MaxPositionPct+0.001 {
+			t.Errorf("position %s exceeds max pct: %f > %f", p.Symbol, positionPct, c.MaxPositionPct)
+		}
+	}
+}
+
+func TestOptimizeCashReserveConstraint(t *testing.T) {
+	o := NewOptimizer()
+	c := DefaultConstraints()
+	c.CashReserve = 0.20
+	o.SetConstraints(c)
+
+	quotes := map[string]domain.Quote{
+		"2330.TW": {Symbol: "2330.TW", Open: 500, Last: 550, IsTradable: true},
+	}
+
+	recs := []domain.Recommendation{
+		{Agent: "a", Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 80},
+	}
+
+	positions, err := o.Optimize(context.Background(), recs, quotes, 1_000_000)
+	if err != nil {
+		t.Fatalf("optimize failed: %v", err)
+	}
+	if len(positions) == 0 {
+		t.Fatal("expected positions from optimize")
+	}
+
+	investable := 1_000_000 * (1 - c.CashReserve)
+	var totalValue float64
+	for _, p := range positions {
+		totalValue += p.TargetValue
+	}
+	if totalValue > investable {
+		t.Errorf("total value %f exceeds investable %f after cash reserve", totalValue, investable)
+	}
+}
+
+func TestOptimizeBuildPositionsMissingQuote(t *testing.T) {
+	o := NewOptimizer()
+	c := DefaultConstraints()
+	c.MaxPositionPct = 1.0
+	c.CashReserve = 0.0
+	o.SetConstraints(c)
+	o.SetFactorWeights(map[FactorType]float64{
+		FactorMomentum: 0.0,
+		FactorValue:    0.0,
+		FactorQuality:  0.0,
+		FactorAgent:    1.0,
+	})
+
+	recs := []domain.Recommendation{
+		{Agent: "a", Symbol: "HAS_QUOTE.TW", Side: domain.SideBuy, Conviction: 80},
+		{Agent: "a", Symbol: "NO_QUOTE.TW", Side: domain.SideBuy, Conviction: 80},
+	}
+
+	quotes := map[string]domain.Quote{
+		"HAS_QUOTE.TW": {Symbol: "HAS_QUOTE.TW", Open: 100, Last: 110, IsTradable: true},
+	}
+
+	positions, err := o.Optimize(context.Background(), recs, quotes, 1_000_000)
+	if err != nil {
+		t.Fatalf("optimize failed: %v", err)
+	}
+	if len(positions) != 1 {
+		t.Fatalf("expected 1 position (missing quote skipped), got %d", len(positions))
+	}
+	if positions[0].Symbol != "HAS_QUOTE.TW" {
+		t.Errorf("expected HAS_QUOTE.TW, got %s", positions[0].Symbol)
+	}
+}
+
+func TestOptimizeBuildPositionsZeroQuotePrice(t *testing.T) {
+	o := NewOptimizer()
+	c := DefaultConstraints()
+	c.MaxPositionPct = 1.0
+	c.CashReserve = 0.0
+	o.SetConstraints(c)
+	o.SetFactorWeights(map[FactorType]float64{
+		FactorMomentum: 0.0,
+		FactorValue:    0.0,
+		FactorQuality:  0.0,
+		FactorAgent:    1.0,
+	})
+
+	recs := []domain.Recommendation{
+		{Agent: "a", Symbol: "ZERO_PRICE.TW", Side: domain.SideBuy, Conviction: 80},
+	}
+
+	quotes := map[string]domain.Quote{
+		"ZERO_PRICE.TW": {Symbol: "ZERO_PRICE.TW", Open: 100, Last: 0, IsTradable: true},
+	}
+
+	positions, err := o.Optimize(context.Background(), recs, quotes, 1_000_000)
+	if err != nil {
+		t.Fatalf("optimize failed: %v", err)
+	}
+	if len(positions) != 0 {
+		t.Fatalf("expected 0 positions (zero price skipped), got %d", len(positions))
+	}
+}
+
+func TestOptimizeAggregateRecommendationsSameSymbolDifferentSides(t *testing.T) {
+	o := NewOptimizer()
+
+	recs := []domain.Recommendation{
+		{Agent: "a", Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 80},
+		{Agent: "b", Symbol: "2330.TW", Side: domain.SideSell, Conviction: 60},
+	}
+
+	positions, err := o.Optimize(context.Background(), recs, map[string]domain.Quote{
+		"2330.TW": {Symbol: "2330.TW", Open: 500, Last: 550, IsTradable: true},
+	}, 1_000_000)
+	if err != nil {
+		t.Fatalf("optimize failed: %v", err)
+	}
+
+	buyCount := 0
+	sellCount := 0
+	for _, p := range positions {
+		if p.Symbol == "2330.TW" {
+			if p.Side == domain.SideBuy {
+				buyCount++
+			}
+			if p.Side == domain.SideSell {
+				sellCount++
+			}
+		}
+	}
+
+	if buyCount == 0 {
+		t.Error("expected at least one buy position for 2330.TW")
+	}
+	if sellCount == 0 {
+		t.Error("expected at least one sell position for 2330.TW")
+	}
+}
+
+func TestOptimizeAggregateRecommendationsSameSymbolSameSide(t *testing.T) {
+	o := NewOptimizer()
+	c := DefaultConstraints()
+	c.MaxPositionPct = 1.0
+	c.CashReserve = 0.0
+	o.SetConstraints(c)
+	o.SetFactorWeights(map[FactorType]float64{
+		FactorMomentum: 0.0,
+		FactorValue:    0.0,
+		FactorQuality:  0.0,
+		FactorAgent:    1.0,
+	})
+
+	recs := []domain.Recommendation{
+		{Agent: "a", Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 80},
+		{Agent: "b", Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 60},
+	}
+
+	positions, err := o.Optimize(context.Background(), recs, map[string]domain.Quote{
+		"2330.TW": {Symbol: "2330.TW", Open: 500, Last: 550, IsTradable: true},
+	}, 1_000_000)
+	if err != nil {
+		t.Fatalf("optimize failed: %v", err)
+	}
+
+	count := 0
+	for _, p := range positions {
+		if p.Symbol == "2330.TW" {
+			count++
+		}
+	}
+
+	if count != 1 {
+		t.Errorf("expected 1 aggregated position for same symbol+side, got %d", count)
+	}
+}
+
+func TestOptimizeToOrders(t *testing.T) {
+	o := NewOptimizer()
+	c := DefaultConstraints()
+	c.MaxPositionPct = 1.0
+	c.CashReserve = 0.0
+	o.SetConstraints(c)
+	o.SetFactorWeights(map[FactorType]float64{
+		FactorMomentum: 0.0,
+		FactorValue:    0.0,
+		FactorQuality:  0.0,
+		FactorAgent:    1.0,
+	})
+
+	recs := []domain.Recommendation{
+		{Agent: "a", Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 80},
+	}
+
+	quotes := map[string]domain.Quote{
+		"2330.TW": {Symbol: "2330.TW", Open: 500, Last: 550, IsTradable: true},
+	}
+
+	orders, err := o.OptimizeToOrders(context.Background(), recs, quotes, 1_000_000)
+	if err != nil {
+		t.Fatalf("optimize to orders failed: %v", err)
+	}
+	if len(orders) == 0 {
+		t.Fatal("expected orders from optimize")
+	}
+
+	if orders[0].Symbol != "2330.TW" {
+		t.Errorf("expected symbol 2330.TW, got %s", orders[0].Symbol)
+	}
+	if orders[0].Side != domain.SideBuy {
+		t.Errorf("expected side buy, got %s", orders[0].Side)
+	}
+	if orders[0].Quantity <= 0 {
+		t.Errorf("expected positive quantity, got %d", orders[0].Quantity)
+	}
+	if orders[0].Price != 550 {
+		t.Errorf("expected price 550, got %f", orders[0].Price)
+	}
+}
+
+func TestOptimizeToOrdersMissingQuote(t *testing.T) {
+	o := NewOptimizer()
+	c := DefaultConstraints()
+	c.MaxPositionPct = 1.0
+	c.CashReserve = 0.0
+	o.SetConstraints(c)
+
+	recs := []domain.Recommendation{
+		{Agent: "a", Symbol: "MISSING.TW", Side: domain.SideBuy, Conviction: 80},
+	}
+
+	orders, err := o.OptimizeToOrders(context.Background(), recs, map[string]domain.Quote{}, 1_000_000)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(orders) != 0 {
+		t.Errorf("expected 0 orders (missing quote), got %d", len(orders))
+	}
+}
+
+func TestOptimizerWithFactorEngine(t *testing.T) {
+	o := NewOptimizer()
+	fe := NewFactorEngine()
+	result := o.WithFactorEngine(fe)
+	if result != o {
+		t.Error("expected WithFactorEngine to return the same optimizer")
+	}
+	if o.factorEngine != fe {
+		t.Error("expected factor engine to be attached")
+	}
+}
+
+func TestOptimizerWithHistoricalPrices(t *testing.T) {
+	o := NewOptimizer()
+	hp := NewHistoricalPrices()
+	result := o.WithHistoricalPrices(hp)
+	if result != o {
+		t.Error("expected WithHistoricalPrices to return the same optimizer")
+	}
+	if o.history != hp {
+		t.Error("expected historical prices to be attached")
+	}
+	if o.factorEngine.history != hp {
+		t.Error("expected factor engine to also receive historical prices")
+	}
+}
+
+func TestOptimizerWithFundamentalProvider(t *testing.T) {
+	o := NewOptimizer()
+	fp := NewFundamentalProvider()
+	result := o.WithFundamentalProvider(fp)
+	if result != o {
+		t.Error("expected WithFundamentalProvider to return the same optimizer")
+	}
+	if o.fundamentals != fp {
+		t.Error("expected fundamental provider to be attached")
+	}
+	if o.factorEngine.fundamentals != fp {
+		t.Error("expected factor engine to also receive fundamental provider")
+	}
+}
+
+func TestOptimizerSetAgentWeights(t *testing.T) {
+	o := NewOptimizer()
+	weights := map[string]float64{
+		"agent-a": 1.5,
+		"agent-b": 0.8,
+	}
+	o.SetAgentWeights(weights)
+	if o.agentWeights["agent-a"] != 1.5 {
+		t.Errorf("expected agent-a weight 1.5, got %f", o.agentWeights["agent-a"])
+	}
+	if o.agentWeights["agent-b"] != 0.8 {
+		t.Errorf("expected agent-b weight 0.8, got %f", o.agentWeights["agent-b"])
+	}
+}
+
+func TestOptimizerSetStyleWeights(t *testing.T) {
+	o := NewOptimizer()
+	weights := map[string]float64{
+		"growth": 1.2,
+		"value":  0.9,
+	}
+	o.SetStyleWeights(weights)
+	if o.styleWeights["growth"] != 1.2 {
+		t.Errorf("expected growth weight 1.2, got %f", o.styleWeights["growth"])
+	}
+	if o.styleWeights["value"] != 0.9 {
+		t.Errorf("expected value weight 0.9, got %f", o.styleWeights["value"])
+	}
+}
+
+func TestOptimizerGetEfficientFrontier(t *testing.T) {
+	o := NewOptimizer()
+	frontier := o.GetEfficientFrontier()
+	if len(frontier) == 0 {
+		t.Fatal("expected non-empty efficient frontier")
+	}
+	for i, point := range frontier {
+		if point.Return <= 0 {
+			t.Errorf("point %d: expected positive return, got %f", i, point.Return)
+		}
+		if point.Risk <= 0 {
+			t.Errorf("point %d: expected positive risk, got %f", i, point.Risk)
+		}
+	}
+}
+
+func TestOptimizeWithAgentWeights(t *testing.T) {
+	o := NewOptimizer()
+	c := DefaultConstraints()
+	c.MaxPositionPct = 1.0
+	c.CashReserve = 0.0
+	o.SetConstraints(c)
+	o.SetFactorWeights(map[FactorType]float64{
+		FactorMomentum: 0.0,
+		FactorValue:    0.0,
+		FactorQuality:  0.0,
+		FactorAgent:    1.0,
+	})
+	o.SetAgentWeights(map[string]float64{
+		"strong-agent": 2.0,
+		"weak-agent":   0.5,
+	})
+
+	recs := []domain.Recommendation{
+		{Agent: "strong-agent", Symbol: "A.TW", Side: domain.SideBuy, Conviction: 80},
+		{Agent: "weak-agent", Symbol: "B.TW", Side: domain.SideBuy, Conviction: 20},
+	}
+
+	quotes := map[string]domain.Quote{
+		"A.TW": {Symbol: "A.TW", Open: 100, Last: 100, IsTradable: true},
+		"B.TW": {Symbol: "B.TW", Open: 100, Last: 100, IsTradable: true},
+	}
+
+	positions, err := o.Optimize(context.Background(), recs, quotes, 1_000_000)
+	if err != nil {
+		t.Fatalf("optimize failed: %v", err)
+	}
+	if len(positions) != 2 {
+		t.Fatalf("expected 2 positions, got %d", len(positions))
+	}
+
+	var aWeight, bWeight float64
+	for _, p := range positions {
+		if p.Symbol == "A.TW" {
+			aWeight = p.TargetWeight
+		}
+		if p.Symbol == "B.TW" {
+			bWeight = p.TargetWeight
+		}
+	}
+	if aWeight <= bWeight {
+		t.Errorf("expected A.TW (strong-agent) to have higher weight than B.TW (weak-agent), got a=%f b=%f", aWeight, bWeight)
+	}
+}

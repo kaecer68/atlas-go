@@ -12,16 +12,17 @@ import (
 // It writes to both backends for data safety during migration.
 // Reads prefer PostgreSQL, fallback to JSONL if PG is unavailable.
 type DualWriteRepository struct {
-	pg     *PostgresRepository
-	jsonl  *JSONLRepository
+	pg    *PostgresRepository
+	jsonl *JSONLRepository
 }
 
-// JSONLRepository is a placeholder for the existing file-based storage.
-// It wraps the existing AlertStore, MetricsStore, etc.
 type JSONLRepository struct {
-	alertStore   AlertStore
-	metricsStore MetricsStore
-	outcomeStore OutcomeStore
+	alertStore             AlertStore
+	metricsStore           MetricsStore
+	outcomeStore           OutcomeStore
+	screeningRejectStore   ScreeningRejectStore
+	sessionSummaryStore    SessionSummaryStore
+	humanInterventionStore HumanInterventionStore
 }
 
 // AlertStore defines the interface for the existing alert store
@@ -46,11 +47,33 @@ type OutcomeStore interface {
 	LoadOutcomes() ([]domain.RecommendationOutcome, error)
 }
 
+type ScreeningRejectStore interface {
+	RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error
+	LoadSessionScreeningRejects(sessionID string) ([]domain.ScreeningReject, error)
+}
+
+type SessionSummaryStore interface {
+	RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error
+	LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error)
+}
+
+type HumanInterventionStore interface {
+	RecordHumanIntervention(intervention domain.HumanIntervention) error
+	LoadHumanInterventions() ([]domain.HumanIntervention, error)
+}
+
 // NewDualWriteRepository creates a new dual-write repository.
-func NewDualWriteRepository(pool *pgxpool.Pool, alertStore AlertStore, metricsStore MetricsStore, outcomeStore OutcomeStore) *DualWriteRepository {
+func NewDualWriteRepository(pool *pgxpool.Pool, alertStore AlertStore, metricsStore MetricsStore, outcomeStore OutcomeStore, screeningRejectStore ScreeningRejectStore, sessionSummaryStore SessionSummaryStore, humanInterventionStore HumanInterventionStore) *DualWriteRepository {
 	return &DualWriteRepository{
-		pg:    NewPostgresRepository(pool),
-		jsonl: &JSONLRepository{alertStore: alertStore, metricsStore: metricsStore, outcomeStore: outcomeStore},
+		pg: NewPostgresRepository(pool),
+		jsonl: &JSONLRepository{
+			alertStore:             alertStore,
+			metricsStore:           metricsStore,
+			outcomeStore:           outcomeStore,
+			screeningRejectStore:   screeningRejectStore,
+			sessionSummaryStore:    sessionSummaryStore,
+			humanInterventionStore: humanInterventionStore,
+		},
 	}
 }
 
@@ -151,6 +174,10 @@ func (r *DualWriteRepository) LoadAlertsByTimeRange(ctx context.Context, start, 
 	return r.pg.LoadAlertsByTimeRange(ctx, start, end)
 }
 
+func (r *DualWriteRepository) QuerySessions(ctx context.Context) ([]SessionInfo, error) {
+	return r.pg.QuerySessions(ctx)
+}
+
 // ============================================
 // Outcome Operations
 // ============================================
@@ -214,4 +241,43 @@ func (r *DualWriteRepository) QueryLatestExportStats(ctx context.Context) (*Expo
 
 func (r *DualWriteRepository) QueryExportStatsByYearMonth(ctx context.Context, year, month int) (*ExportStatsRecord, error) {
 	return r.pg.QueryExportStatsByYearMonth(ctx, year, month)
+}
+
+func (r *DualWriteRepository) RecordScreeningRejects(ctx context.Context, sessionID string, rejects []domain.ScreeningReject) error {
+	_ = r.jsonl.screeningRejectStore.RecordSessionScreeningRejects(sessionID, rejects)
+	return r.pg.RecordScreeningRejects(ctx, sessionID, rejects)
+}
+
+func (r *DualWriteRepository) QueryScreeningRejectsBySession(ctx context.Context, sessionID string) ([]domain.ScreeningReject, error) {
+	rejects, err := r.pg.QueryScreeningRejectsBySession(ctx, sessionID)
+	if err == nil && len(rejects) > 0 {
+		return rejects, nil
+	}
+	return r.jsonl.screeningRejectStore.LoadSessionScreeningRejects(sessionID)
+}
+
+func (r *DualWriteRepository) SaveSessionSummary(ctx context.Context, summary domain.SessionSummary) error {
+	_ = r.jsonl.sessionSummaryStore.RecordSessionSummary(domain.ReplaySession{ID: summary.SessionID}, summary)
+	return r.pg.SaveSessionSummary(ctx, summary)
+}
+
+func (r *DualWriteRepository) LoadSessionSummary(ctx context.Context, sessionID string) (*domain.SessionSummary, error) {
+	return r.pg.LoadSessionSummary(ctx, sessionID)
+}
+
+func (r *DualWriteRepository) LoadAllSessionSummaries(ctx context.Context) ([]domain.SessionSummary, error) {
+	return r.pg.LoadAllSessionSummaries(ctx)
+}
+
+func (r *DualWriteRepository) RecordHumanIntervention(ctx context.Context, intervention domain.HumanIntervention) error {
+	_ = r.jsonl.humanInterventionStore.RecordHumanIntervention(intervention)
+	return r.pg.RecordHumanIntervention(ctx, intervention)
+}
+
+func (r *DualWriteRepository) LoadHumanInterventions(ctx context.Context) ([]domain.HumanIntervention, error) {
+	interventions, err := r.pg.LoadHumanInterventions(ctx)
+	if err == nil && len(interventions) > 0 {
+		return interventions, nil
+	}
+	return r.jsonl.humanInterventionStore.LoadHumanInterventions()
 }

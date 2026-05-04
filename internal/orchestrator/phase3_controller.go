@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/adversarial"
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -155,13 +156,13 @@ func (c *Phase3Controller) ApplyPRISMWeights(recs []domain.Recommendation, regim
 		}
 	}
 
-	// Update cache for telemetry
 	c.mu.Lock()
 	for k, v := range agentSharpe {
 		c.prismWeightCache[k] = v
 	}
 	c.mu.Unlock()
 
+	params := config.GetParametersConfig().Orchestrator
 	adjusted := make([]domain.Recommendation, len(recs))
 	copy(adjusted, recs)
 	for i := range adjusted {
@@ -169,9 +170,8 @@ func (c *Phase3Controller) ApplyPRISMWeights(recs []domain.Recommendation, regim
 		if !ok || sharpe <= 0 {
 			continue
 		}
-		// Boost conviction up to +15 for top Sharpe performers; penalty up to -10 for poor performers
-		boost := int(math.Round((sharpe - 0.5) * 20))
-		boost = max(-10, min(15, boost))
+		boost := int(math.Round((sharpe - 0.5) * params.PRISMBoostMultiplier.Value))
+		boost = max(params.PRISMBoostMin.Value, min(params.PRISMBoostMax.Value, boost))
 		adjusted[i].Conviction = max(0, min(100, adjusted[i].Conviction+boost))
 		if boost != 0 {
 			adjusted[i].Reason = fmt.Sprintf("%s [PRISM:%.2f]", adjusted[i].Reason, sharpe)
@@ -198,6 +198,8 @@ func (c *Phase3Controller) AutoPromoteSpawnedAgents() {
 		return
 	}
 
+	params := config.GetParametersConfig().Orchestrator
+
 	scorecards, _, err := c.ledger.LoadAllSessionScorecards()
 	if err != nil {
 		return
@@ -215,19 +217,18 @@ func (c *Phase3Controller) AutoPromoteSpawnedAgents() {
 		}
 
 		sc, ok := scorecardByAgent[agent.AgentID]
-		if !ok || sc.Observations < 10 {
+		if !ok || sc.Observations < params.PromotionMinObservations.Value {
 			continue
 		}
 
-		// Acceptance criteria
 		sharpeLike := sc.SharpeLike
 		hitRate := sc.HitRate
 
-		if sharpeLike >= 0.5 && hitRate >= 0.45 {
+		if sharpeLike >= params.PromotionSharpeThreshold.Value && hitRate >= params.PromotionHitRateThreshold.Value {
 			if err := c.spawningManager.AcceptAgent(agent.AgentID); err != nil {
 				logging.Error("phase3_controller", "accept_failed", logging.AgentID(agent.AgentID), logging.Err(err))
 			}
-		} else if sharpeLike < 0.0 || hitRate < 0.30 {
+		} else if sharpeLike < params.RejectionSharpeThreshold.Value || hitRate < params.RejectionHitRateThreshold.Value {
 			if err := c.spawningManager.RejectAgent(agent.AgentID, fmt.Sprintf("poor performance (sharpe %.3f, hit %.2f%%)", sharpeLike, hitRate*100)); err != nil {
 				logging.Error("phase3_controller", "reject_failed", logging.AgentID(agent.AgentID), logging.Err(err))
 			}

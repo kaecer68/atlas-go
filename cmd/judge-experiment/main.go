@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -9,10 +10,14 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/db"
 	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/monitoring"
+	"github.com/kaecer68/atlas-go/internal/repository"
 )
 
 func main() {
@@ -83,5 +88,29 @@ func run(args []string) error {
 	fmt.Printf("baseline: %.6f\n", result.Experiment.BaselineValue)
 	fmt.Printf("candidate: %.6f\n", result.Experiment.CandidateValue)
 	fmt.Printf("evaluation_mode: %s\n", result.EvaluationMode)
+
+	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+		pool, poolErr := db.Init(context.Background(), dsn, filepath.Join(filepath.Dir(os.Args[0]), "..", "..", "sql", "migrations"))
+		if poolErr == nil {
+			defer pool.Close()
+			collector := monitoring.NewMetricsCollector()
+			snap := collector.GetMetricsSnapshot()
+			repoSnap := repository.MetricsSnapshot{
+				ScreeningTotal:     snap.ScreeningTotal,
+				ScreeningPassed:    snap.ScreeningPassed,
+				ScreeningRate:      snap.ScreeningRate,
+				AlertsTriggered:    snap.AlertsTriggered,
+				AlertsAcknowledged: snap.AlertsAcknowledged,
+				AlertsByType:       snap.AlertsByType,
+				Timestamp:          time.Now(),
+			}
+			repo := repository.NewDualWriteRepository(pool, nil, nil, nil, nil, nil, nil)
+			if err := repo.SaveSnapshot(context.Background(), &repoSnap); err != nil {
+				log.Printf("[Metrics] snapshot save failed: %v", err)
+			} else {
+				log.Printf("[Metrics] snapshot saved")
+			}
+		}
+	}
 	return nil
 }

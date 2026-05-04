@@ -113,7 +113,7 @@ func TestPassesAcceptanceUsesMaturityThresholds(t *testing.T) {
 		CandidateObservations: 6,
 		JudgeChecks:           []string{"a", "b"},
 	}
-	accepted, _ := passesAcceptance(level1)
+	accepted, _ := testJudge().passesAcceptance(level1)
 	if !accepted {
 		t.Fatalf("expected level 1 experiment to accept modest improvement")
 	}
@@ -132,7 +132,7 @@ func TestPassesAcceptanceUsesMaturityThresholds(t *testing.T) {
 		CandidateObservations: 12,
 		JudgeChecks:           []string{"a", "b", "c", "d"},
 	}
-	accepted, note := passesAcceptance(level3)
+	accepted, note := testJudge().passesAcceptance(level3)
 	if accepted {
 		t.Fatalf("expected level 3 experiment to reject small improvement, got note %q", note)
 	}
@@ -153,7 +153,7 @@ func TestPassesAcceptanceUsesMutationTypeProfiles(t *testing.T) {
 		CandidateObservations: 8,
 		JudgeChecks:           []string{"a", "b", "c"},
 	}
-	accepted, _ := passesAcceptance(promptMutation)
+	accepted, _ := testJudge().passesAcceptance(promptMutation)
 	if !accepted {
 		t.Fatalf("expected prompt tightening to pass with sufficient level 2 improvement")
 	}
@@ -172,7 +172,7 @@ func TestPassesAcceptanceUsesMutationTypeProfiles(t *testing.T) {
 		CandidateObservations: 9,
 		JudgeChecks:           []string{"a", "b", "c", "d"},
 	}
-	accepted, note := passesAcceptance(riskMutation)
+	accepted, note := testJudge().passesAcceptance(riskMutation)
 	if accepted {
 		t.Fatalf("expected risk rule change to require a larger delta, got note %q", note)
 	}
@@ -194,7 +194,7 @@ func TestPassesAcceptanceRejectsWhenObservationsInsufficient(t *testing.T) {
 		JudgeChecks:           []string{"a", "b", "c", "d", "e"},
 	}
 
-	accepted, note := passesAcceptance(result)
+	accepted, note := testJudge().passesAcceptance(result)
 	if accepted {
 		t.Fatalf("expected rejection for insufficient observations")
 	}
@@ -389,7 +389,7 @@ func TestPassesAcceptanceReportsNoConstraintDeltaWhenEqual(t *testing.T) {
 		JudgeChecks:           []string{"a", "b", "c"},
 	}
 
-	accepted, note := passesAcceptance(result)
+	accepted, note := testJudge().passesAcceptance(result)
 	if accepted {
 		t.Fatalf("expected rejection when baseline == candidate")
 	}

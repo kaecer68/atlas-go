@@ -1,6 +1,7 @@
 package portfolio
 
 import (
+	"fmt"
 	"math"
 	"sync"
 
@@ -18,12 +19,15 @@ func isFinite(f float64) bool {
 type FactorEngine struct {
 	history      *HistoricalPrices
 	fundamentals *FundamentalProvider
+	params       *RuntimeParameters
 	mu           sync.RWMutex
 }
 
 // NewFactorEngine creates an empty factor engine.
 func NewFactorEngine() *FactorEngine {
-	return &FactorEngine{}
+	return &FactorEngine{
+		params: DefaultRuntimeParameters(),
+	}
 }
 
 // WithHistoricalPrices attaches a historical price repository for momentum calc.
@@ -42,7 +46,17 @@ func (fe *FactorEngine) WithFundamentalProvider(fp *FundamentalProvider) *Factor
 	return fe
 }
 
-// CalculateMomentumScore computes momentum based on 20-day price change.
+// WithParameters sets the runtime parameters for factor calculations.
+// This allows configuration of lookback periods, thresholds, and weights
+// without changing the public API. Returns the FactorEngine for chaining.
+func (fe *FactorEngine) WithParameters(p *RuntimeParameters) *FactorEngine {
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
+	fe.params = p
+	return fe
+}
+
+// CalculateMomentumScore computes momentum based on price change over the configured lookback period.
 // Falls back to intraday return when no historical data is available.
 func (fe *FactorEngine) CalculateMomentumScore(symbol string, quotes map[string]domain.Quote) float64 {
 	return fe.calculateMomentumDetail(symbol, quotes).Score
@@ -55,9 +69,9 @@ func (fe *FactorEngine) calculateMomentumDetail(symbol string, quotes map[string
 	fe.mu.RUnlock()
 
 	if hp != nil {
-		ret20 := hp.MomentumReturn(symbol, 20)
-		if ret20 != 0 {
-			score := ret20 / 0.30
+		ret := hp.MomentumReturn(symbol, fe.params.Factor.MomentumLookbackDays)
+		if ret != 0 {
+			score := ret / fe.params.Factor.MomentumStdDevDivisor
 			if score > 1.0 {
 				score = 1.0
 			}
@@ -66,8 +80,8 @@ func (fe *FactorEngine) calculateMomentumDetail(symbol string, quotes map[string
 			}
 			return domain.FactorScoreItem{
 				Score:     score,
-				Formula:   "clamp(ret20 / 0.30, -1, 1)",
-				RawInputs: map[string]float64{"ret20": ret20},
+				Formula:   fmt.Sprintf("clamp(ret%d / %.2f, -1, 1)", fe.params.Factor.MomentumLookbackDays, fe.params.Factor.MomentumStdDevDivisor),
+				RawInputs: map[string]float64{fmt.Sprintf("ret%d", fe.params.Factor.MomentumLookbackDays): ret},
 			}
 		}
 	}
@@ -76,15 +90,13 @@ func (fe *FactorEngine) calculateMomentumDetail(symbol string, quotes map[string
 	if !ok || quote.Open == 0 {
 		return domain.FactorScoreItem{
 			Score:      0.0,
-			Formula:    "clamp(intraday / 0.10 * 0.5, -1, 1)",
+			Formula:    fmt.Sprintf("clamp(intraday / %.2f * %.1f, -1, 1)", fe.params.Factor.MomentumIntradayThreshold, fe.params.Factor.MomentumIntradayDiscount),
 			RawInputs:  map[string]float64{"open": 0, "last": 0},
 			IsFallback: true,
 		}
 	}
 	intradayReturn := (quote.Last - quote.Open) / quote.Open
-	// SCOR-01: Use 50% weight for fallback to reflect lower confidence
-	// Instead of dividing by 0.10 (same scale as 20-day return), we halve the score
-	score := intradayReturn / 0.10 * 0.5
+	score := intradayReturn / fe.params.Factor.MomentumIntradayThreshold * fe.params.Factor.MomentumIntradayDiscount
 	if score > 1.0 {
 		score = 1.0
 	}
@@ -93,7 +105,7 @@ func (fe *FactorEngine) calculateMomentumDetail(symbol string, quotes map[string
 	}
 	return domain.FactorScoreItem{
 		Score:      score,
-		Formula:    "clamp(intraday / 0.10 * 0.5, -1, 1)",
+		Formula:    fmt.Sprintf("clamp(intraday / %.2f * %.1f, -1, 1)", fe.params.Factor.MomentumIntradayThreshold, fe.params.Factor.MomentumIntradayDiscount),
 		RawInputs:  map[string]float64{"open": quote.Open, "last": quote.Last, "intraday_return": intradayReturn},
 		IsFallback: true,
 	}
@@ -146,8 +158,8 @@ func (fe *FactorEngine) calculateValueDetail(symbol string, quotes map[string]do
 				formula = "clamp(1 - (PE/sectorMedianPE - 1), -1, 1)"
 			} else {
 				// Fallback to absolute P/E if no sector data available
-				peScore = 1.0 - (data.PE-5)/45.0
-				formula = "clamp(1 - (PE-5)/45, -1, 1)"
+				peScore = 1.0 - (data.PE-fe.params.Factor.ValuePERangeCenter)/fe.params.Factor.ValuePERangeWidth
+				formula = fmt.Sprintf("clamp(1 - (PE-%.2f)/%.2f, -1, 1)", fe.params.Factor.ValuePERangeCenter, fe.params.Factor.ValuePERangeWidth)
 			}
 
 			if peScore > 1.0 {
@@ -164,7 +176,7 @@ func (fe *FactorEngine) calculateValueDetail(symbol string, quotes map[string]do
 			// P/E is invalid (negative, zero, NaN, or Inf)
 			// Try P/B first
 			if data.PB > 0 && isFinite(data.PB) {
-				pbScore := 1.0 - (data.PB-0.5)/4.5
+				pbScore := 1.0 - (data.PB-fe.params.Factor.ValuePBRangeCenter)/fe.params.Factor.ValuePBRangeWidth
 				if pbScore > 1.0 {
 					pbScore = 1.0
 				}
@@ -176,10 +188,10 @@ func (fe *FactorEngine) calculateValueDetail(symbol string, quotes map[string]do
 				raw["pb"] = data.PB
 				raw["pb_score"] = pbScore
 				raw["pe_switched_to_pb"] = 1.0 // Mark that we switched from P/E to P/B
-				formula = "clamp(1 - (PB-0.5)/4.5, -1, 1)"
+				formula = fmt.Sprintf("clamp(1 - (PB-%.2f)/%.2f, -1, 1)", fe.params.Factor.ValuePBRangeCenter, fe.params.Factor.ValuePBRangeWidth)
 			} else if data.PS > 0 && isFinite(data.PS) {
 				// P/B also invalid, try P/S
-				psScore := 1.0 - (data.PS-0.5)/9.5
+				psScore := 1.0 - (data.PS-fe.params.Factor.ValuePSRangeCenter)/fe.params.Factor.ValuePSRangeWidth
 				if psScore > 1.0 {
 					psScore = 1.0
 				}
@@ -191,7 +203,7 @@ func (fe *FactorEngine) calculateValueDetail(symbol string, quotes map[string]do
 				raw["ps"] = data.PS
 				raw["ps_score"] = psScore
 				raw["pe_switched_to_ps"] = 1.0 // Mark that we switched from P/E to P/S
-				formula = "clamp(1 - (PS-0.5)/9.5, -1, 1)"
+				formula = fmt.Sprintf("clamp(1 - (PS-%.2f)/%.2f, -1, 1)", fe.params.Factor.ValuePSRangeCenter, fe.params.Factor.ValuePSRangeWidth)
 			} else {
 				// All value metrics invalid, use fallback
 				isFallback = true
@@ -201,7 +213,7 @@ func (fe *FactorEngine) calculateValueDetail(symbol string, quotes map[string]do
 
 		// If P/E was valid, also include P/B as secondary metric
 		if peValid && data.PB > 0 && isFinite(data.PB) {
-			pbScore := 1.0 - (data.PB-0.5)/4.5
+			pbScore := 1.0 - (data.PB-fe.params.Factor.ValuePBRangeCenter)/fe.params.Factor.ValuePBRangeWidth
 			if pbScore > 1.0 {
 				pbScore = 1.0
 			}
@@ -212,7 +224,7 @@ func (fe *FactorEngine) calculateValueDetail(symbol string, quotes map[string]do
 			count++
 			raw["pb"] = data.PB
 			raw["pb_score"] = pbScore
-			formula = "avg(clamp(1 - (PE/sectorMedianPE - 1), -1, 1), clamp(1 - (PB-0.5)/4.5, -1, 1))"
+			formula = fmt.Sprintf("avg(clamp(1 - (PE/sectorMedianPE - 1), -1, 1), clamp(1 - (PB-%.2f)/%.2f, -1, 1))", fe.params.Factor.ValuePBRangeCenter, fe.params.Factor.ValuePBRangeWidth)
 		}
 
 		if count > 0 {
@@ -225,7 +237,7 @@ func (fe *FactorEngine) calculateValueDetail(symbol string, quotes map[string]do
 		}
 	}
 	return domain.FactorScoreItem{
-		Score:      0.1,
+		Score:      fe.params.Factor.ValueFallbackScore,
 		Formula:    "fallback: no fundamentals available",
 		RawInputs:  map[string]float64{},
 		IsFallback: true,
@@ -252,7 +264,7 @@ func (fe *FactorEngine) calculateQualityDetail(symbol string, quotes map[string]
 	if fp != nil && fp.HasData() {
 		data := fp.Get(symbol)
 		if data.DividendYield > 0 {
-			dyScore := data.DividendYield / 5.0
+			dyScore := data.DividendYield / fe.params.Factor.QualityDividendYieldCap
 			if dyScore > 1.0 {
 				dyScore = 1.0
 			}
@@ -264,9 +276,9 @@ func (fe *FactorEngine) calculateQualityDetail(symbol string, quotes map[string]
 	}
 
 	if hp != nil {
-		vol := hp.Volatility(symbol, 20)
+		vol := hp.Volatility(symbol, fe.params.Factor.MomentumLookbackDays)
 		if vol > 0 {
-			volScore := 1.0 - vol/0.05
+			volScore := 1.0 - vol/fe.params.Factor.QualityVolatilityStd
 			if volScore > 1.0 {
 				volScore = 1.0
 			}
@@ -275,7 +287,7 @@ func (fe *FactorEngine) calculateQualityDetail(symbol string, quotes map[string]
 			}
 			score += volScore
 			count++
-			raw["volatility_20d"] = vol
+			raw[fmt.Sprintf("volatility_%dd", fe.params.Factor.MomentumLookbackDays)] = vol
 			raw["volatility_score"] = volScore
 		}
 	}
@@ -283,24 +295,23 @@ func (fe *FactorEngine) calculateQualityDetail(symbol string, quotes map[string]
 	if count > 0 {
 		return domain.FactorScoreItem{
 			Score:     score / float64(count),
-			Formula:   "avg(DividendYield/5, clamp(1 - Vol20d/0.05, -1, 1))",
+			Formula:   fmt.Sprintf("avg(DividendYield/%.2f, clamp(1 - Vol%dd/%.2f, -1, 1))", fe.params.Factor.QualityDividendYieldCap, fe.params.Factor.MomentumLookbackDays, fe.params.Factor.QualityVolatilityStd),
 			RawInputs: raw,
 		}
 	}
 	return domain.FactorScoreItem{
-		Score:      0.05,
-		Formula:    "avg(DividendYield/5, clamp(1 - Vol20d/0.05, -1, 1))",
+		Score:      fe.params.Factor.QualityFallbackScore,
+		Formula:    fmt.Sprintf("avg(DividendYield/%.2f, clamp(1 - Vol%dd/%.2f, -1, 1))", fe.params.Factor.QualityDividendYieldCap, fe.params.Factor.MomentumLookbackDays, fe.params.Factor.QualityVolatilityStd),
 		RawInputs:  map[string]float64{},
 		IsFallback: true,
 	}
 }
 
 func (fe *FactorEngine) CalculateInstitutionalSentimentScore(input FactorBridgeInput) domain.FactorScoreItem {
-	const (
-		foreignWeight  = 0.50
-		domesticWeight = 0.30
-		marginWeight   = 0.20
-	)
+	weights := fe.params.Factor.InstitutionalSentimentWeights
+	foreignWeight := weights["foreign"]
+	domesticWeight := weights["domestic"]
+	marginWeight := weights["margin"]
 	score := foreignWeight*input.ForeignFlowScore +
 		domesticWeight*input.DomesticFlowScore +
 		marginWeight*input.MarginBalanceScore
@@ -312,7 +323,7 @@ func (fe *FactorEngine) CalculateInstitutionalSentimentScore(input FactorBridgeI
 	}
 	return domain.FactorScoreItem{
 		Score:   score,
-		Formula: "0.50*ForeignFlowScore + 0.30*DomesticFlowScore + 0.20*MarginBalanceScore",
+		Formula: fmt.Sprintf("%.2f*ForeignFlowScore + %.2f*DomesticFlowScore + %.2f*MarginBalanceScore", foreignWeight, domesticWeight, marginWeight),
 		RawInputs: map[string]float64{
 			"foreign_score":   input.ForeignFlowScore,
 			"domestic_score":  input.DomesticFlowScore,
@@ -499,7 +510,7 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 
 		getEffectiveWeight := func(ft FactorType, item domain.FactorScoreItem, defaultWeight float64) float64 {
 			if item.IsFallback {
-				return defaultWeight * 0.5
+				return defaultWeight * fe.params.Factor.FallbackWeightReduction
 			}
 			return defaultWeight
 		}

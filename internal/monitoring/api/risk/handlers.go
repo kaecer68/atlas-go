@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
 
@@ -28,26 +29,16 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/risk", h.HandleRiskMetrics)
 }
 
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func writeJSONError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
-}
-
 // HandleRiskMetrics handles GET /api/dashboard/risk.
 func (h *Handlers) HandleRiskMetrics(w http.ResponseWriter, r *http.Request) {
 	sessionsDir := filepath.Join(h.LedgerDir, "sessions")
 	entries, err := os.ReadDir(sessionsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusOK, map[string]any{"message": "no sessions available"})
+			shared.WriteJSON(w, http.StatusOK, map[string]any{"message": "no sessions available"})
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read sessions: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read sessions: %v", err))
 		return
 	}
 
@@ -109,7 +100,7 @@ func (h *Handlers) HandleRiskMetrics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	shared.WriteJSON(w, http.StatusOK, map[string]any{
 		"risk_snapshot": snap,
 		"session_count": len(portfolioValues),
 	})

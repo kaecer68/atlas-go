@@ -26,13 +26,14 @@ func main() {
 	fmt.Println("🔄 測試 Hybrid Provider (Fubon → Fugle → TWSE)")
 	fmt.Println("==================================================")
 
-	provider := marketdata.NewHybridProvider(cfg.FubonAPIKey, cfg.FugleAPIKey)
+	twseClient := marketdata.NewTWSEClient()
+	provider := marketdata.NewHybridProvider(twseClient, cfg.FinMindAPIKey, cfg.FubonAPIKey, cfg.FugleAPIKey)
 	fmt.Printf("✅ Provider 創建成功: %s\n\n", provider.Name())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// 測試 1: 嘗試獲取 0050, 2330（Fugle demo 會失敗，自動回退 TWSE）
+	// 測試 1: 嘗試獲取 0050, 2330（TWSE 免費）
 	testSymbols := []string{"0050", "2330", "2317"}
 	fmt.Printf("📡 測試獲取 %d 只股票行情...\n", len(testSymbols))
 
@@ -54,14 +55,13 @@ func main() {
 	// 測試 2: 檢查當前使用的數據源
 	fmt.Printf("\n📊 當前使用數據源: ")
 	if provider.IsUsingTWSE() {
-		fmt.Println("TWSE OpenAPI (免費)")
-	} else {
 		fmt.Println("Fugle (付費/限制)")
+	} else {
+		fmt.Println("TWSE OpenAPI (免費)")
 	}
 
 	// 測試 3: 直接測試 TWSE Client（獲取全部上市股票）
 	fmt.Println("\n📡 測試 TWSE Client 獲取全部上市股票...")
-	twseClient := provider.GetTWSEClient()
 	allQuotes, err := twseClient.GetQuotes(ctx)
 	if err != nil {
 		fmt.Printf("⚠️  TWSE 獲取全部失敗: %v\n", err)
@@ -79,7 +79,7 @@ func main() {
 
 	// 測試 4: 測試單獨獲取 1476（Fugle demo 支持的股票）
 	fmt.Println("\n📡 測試獲取 1476 (Fugle demo key 支持)...")
-	provider.Reset() // 重置回 Fugle 模式
+	provider.UseFugle() // 強制使用 Fugle
 	quotes1476, err := provider.GetQuotes(ctx, time.Now(), []string{"1476"})
 	if err != nil {
 		fmt.Printf("⚠️  獲取 1476 失敗: %v\n", err)
@@ -89,8 +89,9 @@ func main() {
 
 	fmt.Println("\n🎉 所有測試完成！")
 	fmt.Println("\n💡 使用說明:")
-	fmt.Println("   - Hybrid Provider 會優先嘗試 Fugle")
-	fmt.Println("   - Fugle 失敗時自動回退到 TWSE OpenAPI")
+	fmt.Println("   - Hybrid Provider 優先順序: TWSE → FinMind → Fubon → Fugle")
 	fmt.Println("   - TWSE 免費但有 rate limit (3 req/5s)")
-	fmt.Println("   - 正式環境建議申請 Fugle 正式 API key")
+	fmt.Println("   - FinMind 免費，需 API Key")
+	fmt.Println("   - Fubon 免費，需富邦證券帳戶")
+	fmt.Println("   - Fugle 付費，circuit breaker 保護")
 }

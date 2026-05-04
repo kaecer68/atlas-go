@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -44,13 +45,29 @@ type RegimeDetector struct {
 	priceChangeThreshold float64
 }
 
-// NewRegimeDetector creates a detector with default thresholds
-func NewRegimeDetector() *RegimeDetector {
+func defaultRealtimeConfig() *config.RealtimeParameters {
+	return &config.RealtimeParameters{
+		VolatilityThreshold:  config.ParameterMetadata[float64]{Value: 0.02},
+		VolumeSpikeThreshold: config.ParameterMetadata[float64]{Value: 2.0},
+		PriceChangeThreshold: config.ParameterMetadata[float64]{Value: 0.01},
+		MinConfidence:        config.ParameterMetadata[float64]{Value: 0.7},
+		WeightAdjustmentRate: config.ParameterMetadata[float64]{Value: 0.1},
+		MaxWeightChange:      config.ParameterMetadata[float64]{Value: 0.5},
+		MinWeight:            config.ParameterMetadata[float64]{Value: 0.1},
+		UpdateIntervalMs:     config.ParameterMetadata[int]{Value: 100},
+	}
+}
+
+// NewRegimeDetector creates a detector with configurable thresholds
+func NewRegimeDetector(params *config.RealtimeParameters) *RegimeDetector {
+	if params == nil {
+		params = defaultRealtimeConfig()
+	}
 	return &RegimeDetector{
-		windowSize:           60,   // 60 data points
-		volatilityThreshold:  0.02, // 2% volatility
-		volumeSpikeThreshold: 2.0,  // 2x average volume
-		priceChangeThreshold: 0.01, // 1% price move
+		windowSize:           60,
+		volatilityThreshold:  params.VolatilityThreshold.Value,
+		volumeSpikeThreshold: params.VolumeSpikeThreshold.Value,
+		priceChangeThreshold: params.PriceChangeThreshold.Value,
 	}
 }
 
@@ -190,44 +207,57 @@ type RealTimeAdapter struct {
 	agentWeights   map[string]map[string]float64 // agent -> symbol -> weight adjustment
 	lastUpdate     map[string]time.Time
 	config         *RealTimeConfig
+	params         *config.RealtimeParameters
 	stopChan       chan struct{}
 	mu             sync.RWMutex
 	onRegimeChange func(symbol string, oldRegime, newRegime RegimeType)
 }
 
-// RealTimeConfig configures the adapter
+// RealTimeConfig configures the adapter (legacy)
 type RealTimeConfig struct {
 	UpdateInterval       time.Duration `json:"update_interval"`
 	DataWindowSize       int           `json:"data_window_size"`
 	MinConfidence        float64       `json:"min_confidence"`
 	WeightAdjustmentRate float64       `json:"weight_adjustment_rate"`
 	MaxWeightChange      float64       `json:"max_weight_change"`
+	MinWeight            float64       `json:"min_weight"`
 }
 
 // DefaultRealTimeConfig returns standard configuration
 func DefaultRealTimeConfig() *RealTimeConfig {
 	return &RealTimeConfig{
-		UpdateInterval:       100 * time.Millisecond, // 100ms updates
+		UpdateInterval:       100 * time.Millisecond,
 		DataWindowSize:       60,
 		MinConfidence:        0.7,
 		WeightAdjustmentRate: 0.1,
 		MaxWeightChange:      0.5,
+		MinWeight:            0.1,
 	}
 }
 
-// NewRealTimeAdapter creates an adapter
-func NewRealTimeAdapter(config *RealTimeConfig) *RealTimeAdapter {
-	if config == nil {
-		config = DefaultRealTimeConfig()
+// NewRealTimeAdapter creates an adapter with optional RealtimeParameters
+func NewRealTimeAdapter(params *config.RealtimeParameters) *RealTimeAdapter {
+	if params == nil {
+		params = defaultRealtimeConfig()
+	}
+
+	cfg := &RealTimeConfig{
+		UpdateInterval:       time.Duration(params.UpdateIntervalMs.Value) * time.Millisecond,
+		DataWindowSize:       60,
+		MinConfidence:        params.MinConfidence.Value,
+		WeightAdjustmentRate: params.WeightAdjustmentRate.Value,
+		MaxWeightChange:      params.MaxWeightChange.Value,
+		MinWeight:            params.MinWeight.Value,
 	}
 
 	return &RealTimeAdapter{
-		detector:      NewRegimeDetector(),
+		detector:      NewRegimeDetector(params),
 		dataWindows:   make(map[string][]MarketDataPoint),
 		currentRegime: make(map[string]RegimeType),
 		agentWeights:  make(map[string]map[string]float64),
 		lastUpdate:    make(map[string]time.Time),
-		config:        config,
+		config:        cfg,
+		params:        params,
 		stopChan:      make(chan struct{}),
 	}
 }
@@ -328,9 +358,8 @@ func (rta *RealTimeAdapter) adaptToRegime(symbol string, regime RegimeType) {
 				}
 			}
 
-			// Ensure positive
-			if newWeight < 0.1 {
-				newWeight = 0.1
+			if newWeight < rta.config.MinWeight {
+				newWeight = rta.config.MinWeight
 			}
 
 			rta.agentWeights[agentID][symbol] = newWeight

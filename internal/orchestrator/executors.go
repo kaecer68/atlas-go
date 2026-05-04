@@ -365,6 +365,7 @@ func applyMomentumCrashProtection(recs []domain.Recommendation, quotes map[strin
 		return recs
 	}
 
+	params := config.GetParametersConfig().Orchestrator
 	for i := range recs {
 		if recs[i].FactorScores.Momentum == 0 {
 			continue
@@ -373,12 +374,10 @@ func applyMomentumCrashProtection(recs []domain.Recommendation, quotes map[strin
 		if recs[i].FactorScores.Breakdown != nil {
 			recs[i].FactorScores.Breakdown.Momentum.Score = 0
 		}
-		// Recalculate total without momentum, normalizing remaining weights to sum to 1.0
-		// Original weights: momentum=0.30, value=0.25, quality=0.25, agent=0.20
-		remainingWeight := 0.25 + 0.25 + 0.20
-		recs[i].FactorScores.Total = recs[i].FactorScores.Value*(0.25/remainingWeight) +
-			recs[i].FactorScores.Quality*(0.25/remainingWeight) +
-			recs[i].FactorScores.Agent*(0.20/remainingWeight)
+		remainingWeight := params.FactorWeightValue.Value + params.FactorWeightQuality.Value + params.FactorWeightAgent.Value
+		recs[i].FactorScores.Total = recs[i].FactorScores.Value*(params.FactorWeightValue.Value/remainingWeight) +
+			recs[i].FactorScores.Quality*(params.FactorWeightQuality.Value/remainingWeight) +
+			recs[i].FactorScores.Agent*(params.FactorWeightAgent.Value/remainingWeight)
 		if recs[i].FactorScores.Breakdown != nil {
 			recs[i].FactorScores.Breakdown.Total.Score = recs[i].FactorScores.Total
 		}

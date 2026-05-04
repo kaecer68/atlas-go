@@ -10,15 +10,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"golang.org/x/time/rate"
 )
 
 const (
 	twseAPIBaseURL = "https://www.twse.com.tw"
-	// TWSE rate limit: 3 requests per 5 seconds
-	twseRateLimit = 0.6 // requests per second (3/5)
-	twseRateBurst = 3
 )
 
 // TWSEClient TWSE OpenAPI 客户端
@@ -53,12 +51,13 @@ type TWSEDailyResponse struct {
 
 // NewTWSEClient 创建 TWSE OpenAPI 客户端
 func NewTWSEClient() *TWSEClient {
+	params := config.GetParametersConfig()
 	return &TWSEClient{
 		httpClient: &http.Client{
-			Timeout: 15 * time.Second,
+			Timeout: time.Duration(params.Marketdata.TWSEAPITimeoutSec.Value) * time.Second,
 		},
 		baseURL:     twseAPIBaseURL,
-		rateLimiter: rate.NewLimiter(rate.Limit(twseRateLimit), twseRateBurst),
+		rateLimiter: rate.NewLimiter(rate.Limit(params.Marketdata.TWSEAPIRateLimit.Value), params.Marketdata.TWSEAPIRateBurst.Value),
 	}
 }
 

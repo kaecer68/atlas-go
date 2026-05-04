@@ -16,6 +16,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
 	"github.com/kaecer68/atlas-go/internal/replay"
+	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/screener"
 	"github.com/kaecer68/atlas-go/internal/sim"
@@ -54,6 +55,8 @@ type SystemCore struct {
 	comparisonEngine   *strategy.ComparisonEngine
 	factorWeightEngine *portfolio.FactorWeightEngine
 	thresholdEngine    *sim.DynamicThresholdEngine
+
+	repo repository.OutcomeRepository
 }
 
 // System orchestrates the full simulation loop via a SystemCore and a PluginHost.
@@ -73,6 +76,14 @@ func NewSystem(cfg config.Config) *System {
 	}
 	ds, _ := replay.LoadTWSEOpenDataCSV(cfg.ReplayDataPath)
 	session := newSession(cfg, ds)
+
+	// Load parameters config and convert to runtime parameters
+	paramsCfg, err := config.LoadParametersConfig(cfg.ParametersConfigPath)
+	if err != nil || paramsCfg == nil {
+		paramsCfg = config.DefaultParametersConfig()
+	}
+	runtimeParams := portfolio.ToRuntimeParameters(paramsCfg)
+
 	optimizer := portfolio.NewOptimizer()
 	hp := portfolio.NewHistoricalPrices()
 	if err := hp.LoadFromExtendedJSONL("data/replay/tw_extended_90days.jsonl"); err != nil {
@@ -83,13 +94,15 @@ func NewSystem(cfg config.Config) *System {
 		fmt.Printf("[System] warn: failed to load fundamentals: %v\n", err)
 	}
 	factorEngine := portfolio.NewFactorEngine().
+		WithParameters(runtimeParams).
 		WithHistoricalPrices(hp).
 		WithFundamentalProvider(fp)
 	optimizer.WithHistoricalPrices(hp).WithFundamentalProvider(fp).WithFactorEngine(factorEngine)
 	screenerEngine := screener.NewEngine(factorEngine, fp)
 	plugins := NewPluginRegistry().WithScreener(screenerEngine).WithFactorEngine(factorEngine)
 
-	darwinian := portfolio.NewDarwinianWeightManager("data/state/darwinian_weights.json")
+	darwinian := portfolio.NewDarwinianWeightManager("data/state/darwinian_weights.json").
+		WithParameters(runtimeParams)
 	darwinian.InitializeFromRegistry(registry)
 	_ = darwinian.Load()
 
@@ -223,7 +236,11 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	s.updateCapitalMetrics(result)
 
 	outcomes := buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf)
-	_ = s.ledger.RecordOutcomes(outcomes)
+	if s.repo != nil {
+		_ = s.repo.RecordOutcomes(s.ctx, outcomes)
+	} else {
+		_ = s.ledger.RecordOutcomes(outcomes)
+	}
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)
 	_ = s.ledger.RecordSessionScreeningRejects(s.session.ID, rejects)
 	if s.metricsCollector != nil {
@@ -308,7 +325,11 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		go s.eventBus.PublishGuardOutcomes(s.session.ID, guardOutcomes)
 	}
 	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, sessionDate, s.replay)
-	_ = s.ledger.RecordOutcomes(outcomes)
+	if s.repo != nil {
+		_ = s.repo.RecordOutcomes(s.ctx, outcomes)
+	} else {
+		_ = s.ledger.RecordOutcomes(outcomes)
+	}
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)
 	_ = s.ledger.RecordSessionScreeningRejects(s.session.ID, rejects)
 	if s.metricsCollector != nil {
@@ -351,9 +372,9 @@ func selectProvider(cfg config.Config) marketdata.Provider {
 		// 纯 TWSE 模式（免费，rate limited）
 		return marketdata.NewTWSEOpenAPIProvider()
 	case "hybrid", "":
-		return marketdata.NewHybridProvider(cfg.FubonAPIKey, cfg.FugleAPIKey)
+		return marketdata.NewHybridProvider(marketdata.NewTWSEClient(), cfg.FinMindAPIKey, cfg.FubonAPIKey, cfg.FugleAPIKey)
 	default:
-		return marketdata.NewHybridProvider(cfg.FubonAPIKey, cfg.FugleAPIKey)
+		return marketdata.NewHybridProvider(marketdata.NewTWSEClient(), cfg.FinMindAPIKey, cfg.FubonAPIKey, cfg.FugleAPIKey)
 	}
 }
 
@@ -783,6 +804,12 @@ func (s *System) WithCapitalManagement(
 
 func (s *System) WithMetricsCollector(mc interface{ RecordScreening(passed, rejected int64) }) {
 	s.metricsCollector = mc
+}
+
+// SetRepository injects an optional repository for dual-write persistence.
+// When set, outcomes are written to both PostgreSQL and JSONL via the repository.
+func (s *System) SetRepository(repo repository.OutcomeRepository) {
+	s.repo = repo
 }
 
 func (s *System) checkCapitalPhase() (bool, string) {

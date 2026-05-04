@@ -26,11 +26,11 @@ func (r *PostgresRepository) QueryLatestCapitalFlow(ctx context.Context, channel
 		ORDER BY time DESC
 		LIMIT 1
 	`, channel).Scan(&rec.Time, &rec.Channel, &rec.NetBuy, &rec.TotalBuy, &rec.TotalSell)
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &rec, nil
 }
 
@@ -45,7 +45,7 @@ func (r *PostgresRepository) QueryCapitalFlowRange(ctx context.Context, channel 
 		return nil, err
 	}
 	defer rows.Close()
-	
+
 	var records []CapitalFlowRecord
 	for rows.Next() {
 		var rec CapitalFlowRecord
@@ -54,7 +54,7 @@ func (r *PostgresRepository) QueryCapitalFlowRange(ctx context.Context, channel 
 		}
 		records = append(records, rec)
 	}
-	
+
 	return records, rows.Err()
 }
 
@@ -66,7 +66,7 @@ func (r *PostgresRepository) SaveExportStats(ctx context.Context, year, month in
 	// Convert ROC year to Gregorian for timestamp
 	gregorianYear := year + 1911
 	ts := time.Date(gregorianYear, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
-	
+
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO export_statistics (time, year, month, export_total, import_total, trade_balance)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -75,7 +75,7 @@ func (r *PostgresRepository) SaveExportStats(ctx context.Context, year, month in
 			import_total = EXCLUDED.import_total,
 			trade_balance = EXCLUDED.trade_balance
 	`, ts, year, month, exportTotal, importTotal, tradeBalance)
-	
+
 	return err
 }
 
@@ -87,11 +87,11 @@ func (r *PostgresRepository) QueryLatestExportStats(ctx context.Context) (*Expor
 		ORDER BY time DESC
 		LIMIT 1
 	`).Scan(&rec.Time, &rec.Year, &rec.Month, &rec.ExportTotal, &rec.ImportTotal, &rec.TradeBalance)
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &rec, nil
 }
 
@@ -102,10 +102,10 @@ func (r *PostgresRepository) QueryExportStatsByYearMonth(ctx context.Context, ye
 		FROM export_statistics
 		WHERE year = $1 AND month = $2
 	`, year, month).Scan(&rec.Time, &rec.Year, &rec.Month, &rec.ExportTotal, &rec.ImportTotal, &rec.TradeBalance)
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &rec, nil
 }

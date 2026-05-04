@@ -62,9 +62,9 @@ type AlertRepository interface {
 // OutcomeRepository defines the interface for recommendation outcomes persistence.
 type OutcomeRepository interface {
 	RecordOutcomes(ctx context.Context, outcomes []domain.RecommendationOutcome) error
-	QueryBySession(ctx context.Context, sessionID string) ([]domain.RecommendationOutcome, error)
-	QueryBySymbol(ctx context.Context, symbol string, start, end time.Time) ([]domain.RecommendationOutcome, error)
-	QueryByAgent(ctx context.Context, agentID string, start, end time.Time) ([]domain.RecommendationOutcome, error)
+	QueryOutcomesBySession(ctx context.Context, sessionID string) ([]domain.RecommendationOutcome, error)
+	QueryOutcomesBySymbol(ctx context.Context, symbol string, start, end time.Time) ([]domain.RecommendationOutcome, error)
+	QueryOutcomesByAgent(ctx context.Context, agentID string, start, end time.Time) ([]domain.RecommendationOutcome, error)
 	QueryPassRate(ctx context.Context, agentID string, window time.Duration) (float64, error)
 	QueryTopSymbols(ctx context.Context, limit int, start, end time.Time) ([]SymbolCount, error)
 }
@@ -108,11 +108,30 @@ type ExportStatsRecord struct {
 	TradeBalance float64   `json:"trade_balance"`
 }
 
+type ScreeningRejectRepository interface {
+	RecordScreeningRejects(ctx context.Context, sessionID string, rejects []domain.ScreeningReject) error
+	QueryScreeningRejectsBySession(ctx context.Context, sessionID string) ([]domain.ScreeningReject, error)
+}
+
+type SessionSummaryRepository interface {
+	SaveSessionSummary(ctx context.Context, summary domain.SessionSummary) error
+	LoadSessionSummary(ctx context.Context, sessionID string) (*domain.SessionSummary, error)
+	LoadAllSessionSummaries(ctx context.Context) ([]domain.SessionSummary, error)
+}
+
+type HumanInterventionRepository interface {
+	RecordHumanIntervention(ctx context.Context, intervention domain.HumanIntervention) error
+	LoadHumanInterventions(ctx context.Context) ([]domain.HumanIntervention, error)
+}
+
 // Repository combines all repository interfaces for convenience.
 type Repository struct {
-	Metrics     MetricsRepository
-	Alerts      AlertRepository
-	Outcomes    OutcomeRepository
-	CapitalFlow CapitalFlowRepository
-	ExportStats ExportStatsRepository
+	Metrics            MetricsRepository
+	Alerts             AlertRepository
+	Outcomes           OutcomeRepository
+	CapitalFlow        CapitalFlowRepository
+	ExportStats        ExportStatsRepository
+	ScreeningRejects   ScreeningRejectRepository
+	SessionSummaries   SessionSummaryRepository
+	HumanInterventions HumanInterventionRepository
 }

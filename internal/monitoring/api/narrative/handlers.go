@@ -1,11 +1,11 @@
 package narrative
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
@@ -20,16 +20,6 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/narrative/models", h.HandleNarrativeModels)
 	mux.HandleFunc("/api/narrative/templates", h.HandleNarrativeTemplates)
 	mux.HandleFunc("/api/narrative/seasonal", h.HandleSeasonalAnalysis)
-}
-
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func writeJSONError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
 }
 
 func parseFloatQuery(r *http.Request, key string, defaultVal float64) float64 {
@@ -57,7 +47,7 @@ func (h *Handlers) HandleNarrativeEvents(w http.ResponseWriter, r *http.Request)
 		MarginZScore:                  parseFloatQuery(r, "margin_zscore", 0),
 	}
 	events := h.Svc.DetectEvents(data)
-	writeJSON(w, http.StatusOK, map[string]any{"events": events})
+	shared.WriteJSON(w, http.StatusOK, map[string]any{"events": events})
 }
 
 func (h *Handlers) HandleNarrativeChains(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +64,7 @@ func (h *Handlers) HandleNarrativeChains(w http.ResponseWriter, r *http.Request)
 	}
 	events := h.Svc.DetectEvents(data)
 	chains := h.Svc.MatchChains(events)
-	writeJSON(w, http.StatusOK, map[string]any{"chains": chains})
+	shared.WriteJSON(w, http.StatusOK, map[string]any{"chains": chains})
 }
 
 func (h *Handlers) HandleNarrativeModels(w http.ResponseWriter, r *http.Request) {
@@ -95,24 +85,24 @@ func (h *Handlers) HandleNarrativeModels(w http.ResponseWriter, r *http.Request)
 		themes[i] = e.Theme
 	}
 	models := h.Svc.GetActiveModels(themes)
-	writeJSON(w, http.StatusOK, map[string]any{"models": models})
+	shared.WriteJSON(w, http.StatusOK, map[string]any{"models": models})
 }
 
 func (h *Handlers) HandleNarrativeTemplates(w http.ResponseWriter, r *http.Request) {
 	templates := h.Svc.GetTemplates()
-	writeJSON(w, http.StatusOK, map[string]any{"templates": templates})
+	shared.WriteJSON(w, http.StatusOK, map[string]any{"templates": templates})
 }
 
 func (h *Handlers) HandleSeasonalAnalysis(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	now := time.Now()
 	month := now.Month()
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	shared.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"month": month.String(),
 		"note":  "seasonal patterns are embedded in narrative engine",
 	})

@@ -12,6 +12,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/replay"
@@ -153,28 +154,13 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 	}, nil
 }
 
-func statusText(status string) string {
-	switch status {
-	case "ok":
-		return "正常"
-	case "warn":
-		return "延遲"
-	case "error":
-		return "異常"
-	case "inactive":
-		return "未啟用"
-	default:
-		return "未知"
-	}
-}
-
 func buildChannelInfo(id, label string, checker func(string, time.Time) (string, string), path string, now time.Time) DataChannelInfo {
 	status, updated := checker(path, now)
 	return DataChannelInfo{
 		ChannelID:  id,
 		Label:      label,
 		Status:     status,
-		StatusText: statusText(status),
+		StatusText: StatusText(status),
 		UpdatedAt:  updated,
 	}
 }
@@ -385,6 +371,105 @@ func checkCapitalFlowHealth(dir string, now time.Time) (string, string) {
 		return "ok", dateStr
 	}
 	if age < 7*24*time.Hour {
+		return "warn", dateStr
+	}
+	return "error", dateStr
+}
+
+func checkJPYHealth(path string, now time.Time) (string, string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "error", "檔案不存在"
+	}
+	var snap struct {
+		JPY struct {
+			Timestamp int64 `json:"timestamp"`
+		} `json:"jpy"`
+	}
+	_ = json.Unmarshal(data, &snap)
+	if snap.JPY.Timestamp == 0 {
+		return "error", "無 JPY 資料"
+	}
+	t := time.Unix(snap.JPY.Timestamp, 0)
+	age := now.Sub(t)
+	if age < 24*time.Hour {
+		return "ok", t.Format("2006-01-02 15:04:05")
+	}
+	if age < 7*24*time.Hour {
+		return "warn", t.Format("2006-01-02 15:04:05")
+	}
+	return "error", t.Format("2006-01-02 15:04:05")
+}
+
+func checkJanusHealth(engine *janus.Engine, now time.Time) (string, string) {
+	if engine == nil {
+		return "inactive", "JANUS engine 未啟用"
+	}
+	status := engine.GetStatus()
+	if status.LastUpdated.IsZero() {
+		return "warn", "JANUS 已載入但尚未更新"
+	}
+	age := now.Sub(status.LastUpdated)
+	if age < 7*24*time.Hour {
+		return "ok", status.LastUpdated.Format("2006-01-02 15:04:05")
+	}
+	if age < 30*24*time.Hour {
+		return "warn", status.LastUpdated.Format("2006-01-02 15:04:05")
+	}
+	return "error", status.LastUpdated.Format("2006-01-02 15:04:05")
+}
+
+func checkExportHealth(dir string, now time.Time) (string, string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) == 0 {
+		return "error", "無資料"
+	}
+	var latestFile string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), "_export.json") {
+			continue
+		}
+		if e.Name() > latestFile {
+			latestFile = e.Name()
+		}
+	}
+	if latestFile == "" {
+		return "error", "無有效檔案"
+	}
+	dateStr := strings.TrimSuffix(latestFile, "_export.json")
+
+	var dataTs time.Time
+	data, err := os.ReadFile(filepath.Join(dir, latestFile))
+	if err == nil {
+		var exp struct {
+			Year  int `json:"year"`
+			Month int `json:"month"`
+		}
+		if json.Unmarshal(data, &exp) == nil && exp.Year > 0 && exp.Month >= 1 {
+			dataTs = time.Date(exp.Year+1911, time.Month(exp.Month), 1, 0, 0, 0, 0, time.FixedZone("CST", 8*60*60))
+		}
+	}
+
+	var t time.Time
+	if !dataTs.IsZero() {
+		t = dataTs
+	} else {
+		if len(dateStr) != 5 {
+			return "error", "日期解析失敗"
+		}
+		rocYear, err1 := strconv.Atoi(dateStr[:3])
+		month, err2 := strconv.Atoi(dateStr[3:])
+		if err1 != nil || err2 != nil || month < 1 || month > 12 {
+			return "error", "日期解析失敗"
+		}
+		t = time.Date(rocYear+1911, time.Month(month), 1, 0, 0, 0, 0, time.FixedZone("CST", 8*60*60))
+	}
+
+	age := now.Sub(t)
+	if age < 45*24*time.Hour {
+		return "ok", dateStr
+	}
+	if age < 90*24*time.Hour {
 		return "warn", dateStr
 	}
 	return "error", dateStr

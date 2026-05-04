@@ -18,6 +18,7 @@ type Config struct {
 	ReplayMode                 string
 	AgentRegistryPath          string
 	BaselinePolicyPath         string
+	ParametersConfigPath       string
 	LedgerDir                  string
 	ReplayDataPath             string
 	ReplaySessionDate          string
@@ -57,6 +58,7 @@ func Load() Config {
 		ReplayMode:                 envOr("ATLAS_REPLAY_MODE", "daily"),
 		AgentRegistryPath:          envOr("ATLAS_AGENT_REGISTRY_PATH", "configs/agents.json"),
 		BaselinePolicyPath:         envOr("ATLAS_BASELINE_POLICY_PATH", "data/state/baseline_policy.json"),
+		ParametersConfigPath:       envOr("ATLAS_PARAMETERS_CONFIG_PATH", "configs/parameters.json"),
 		LedgerDir:                  envOr("ATLAS_LEDGER_DIR", "data/state"),
 		ReplayDataPath:             envOr("ATLAS_REPLAY_DATA_PATH", "samples/replay/twse_stock_day_all_sample.csv"),
 		ReplaySessionDate:          envOr("ATLAS_REPLAY_SESSION_DATE", "2026-03-26"),

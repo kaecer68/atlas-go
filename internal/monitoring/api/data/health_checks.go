@@ -34,6 +34,7 @@ type ChannelHealthRecorder interface {
 	Record(channelID, status, errMsg string) error
 	Get(channelID string) *ChannelHealthRecord
 	Alerts() []ChannelAlert
+	SyncAllToDB() error
 }
 
 func checkMacroHealth(path string, now time.Time) (string, string) {
@@ -73,14 +74,15 @@ func checkMacroHealth(path string, now time.Time) (string, string) {
 		}
 	}
 
-	age := now.Sub(latest)
-	if age < 24*time.Hour {
-		return "ok", latest.Format("2006-01-02 15:04:05")
+	businessDaysGap := countBusinessDays(latest, now)
+	updated := latest.Format("2006-01-02 15:04:05")
+	if businessDaysGap == 0 {
+		return "ok", updated
 	}
-	if age < 7*24*time.Hour {
-		return "warn", latest.Format("2006-01-02 15:04:05")
+	if businessDaysGap <= 1 {
+		return "warn", updated + " (" + strconv.Itoa(businessDaysGap) + "個交易日未更新)"
 	}
-	return "error", latest.Format("2006-01-02 15:04:05")
+	return "error", updated + " (" + strconv.Itoa(businessDaysGap) + "個交易日未更新)"
 }
 
 func checkJPYHealth(path string, now time.Time) (string, string) {
@@ -98,14 +100,15 @@ func checkJPYHealth(path string, now time.Time) (string, string) {
 		return "error", "無 JPY 資料"
 	}
 	t := time.Unix(snap.JPY.Timestamp, 0)
-	age := now.Sub(t)
-	if age < 24*time.Hour {
-		return "ok", t.Format("2006-01-02 15:04:05")
+	businessDaysGap := countBusinessDays(t, now)
+	updated := t.Format("2006-01-02 15:04:05")
+	if businessDaysGap == 0 {
+		return "ok", updated
 	}
-	if age < 7*24*time.Hour {
-		return "warn", t.Format("2006-01-02 15:04:05")
+	if businessDaysGap <= 1 {
+		return "warn", updated + " (" + strconv.Itoa(businessDaysGap) + "個交易日未更新)"
 	}
-	return "error", t.Format("2006-01-02 15:04:05")
+	return "error", updated + " (" + strconv.Itoa(businessDaysGap) + "個交易日未更新)"
 }
 
 func checkGeopoliticalHealth(path string, now time.Time) (string, string) {
@@ -127,14 +130,15 @@ func checkGeopoliticalHealth(path string, now time.Time) (string, string) {
 	} else {
 		latest = info.ModTime()
 	}
-	age := now.Sub(latest)
-	if age < 24*time.Hour {
-		return "ok", latest.Format("2006-01-02 15:04:05")
+	businessDaysGap := countBusinessDays(latest, now)
+	updated := latest.Format("2006-01-02 15:04:05")
+	if businessDaysGap == 0 {
+		return "ok", updated
 	}
-	if age < 7*24*time.Hour {
-		return "warn", latest.Format("2006-01-02 15:04:05")
+	if businessDaysGap <= 1 {
+		return "warn", updated + " (" + strconv.Itoa(businessDaysGap) + "個交易日未更新)"
 	}
-	return "error", latest.Format("2006-01-02 15:04:05")
+	return "error", updated + " (" + strconv.Itoa(businessDaysGap) + "個交易日未更新)"
 }
 
 func checkJanusHealth(engine *janus.Engine, now time.Time) (string, string) {
@@ -276,14 +280,25 @@ func checkCapitalFlowHealth(dir string, now time.Time) (string, string) {
 		t = parsed
 	}
 
-	age := now.Sub(t)
-	if age < 48*time.Hour {
+	businessDaysGap := countBusinessDays(t, now)
+	if businessDaysGap == 0 {
 		return "ok", dateStr
 	}
-	if age < 7*24*time.Hour {
-		return "warn", dateStr
+	if businessDaysGap <= 1 {
+		return "warn", dateStr + " (" + strconv.Itoa(businessDaysGap) + "個交易日未更新)"
 	}
-	return "error", dateStr
+	return "error", dateStr + " (" + strconv.Itoa(businessDaysGap) + "個交易日未更新)"
+}
+
+func countBusinessDays(start, end time.Time) int {
+	count := 0
+	for d := start.AddDate(0, 0, 1); d.Before(end); d = d.AddDate(0, 0, 1) {
+		wd := d.Weekday()
+		if wd != time.Saturday && wd != time.Sunday {
+			count++
+		}
+	}
+	return count
 }
 
 func checkExportHealth(dir string, now time.Time) (string, string) {

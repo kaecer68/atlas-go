@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
@@ -30,9 +31,10 @@ func (CRORiskExecutor) Supports(agent domain.AgentSpec) bool {
 
 func (e CRORiskExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy) []domain.Recommendation {
 	filtered := make([]domain.Recommendation, 0, len(recs))
+	params := config.GetParametersConfig().Orchestrator
 	floor := policy.ConvictionFloor
 	if floor <= 0 {
-		floor = 50
+		floor = params.ConvictionFloorDefault.Value
 	}
 
 	if policy.EnableConvictionNormalization && e.convictionNormalizer != nil {
@@ -41,7 +43,7 @@ func (e CRORiskExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendat
 		}
 		for _, rec := range recs {
 			zScore := e.convictionNormalizer.Normalize(rec.Agent, rec.Conviction, portfolio.ZScore)
-			if zScore <= -1.5 {
+			if zScore <= params.CROZScoreThreshold.Value {
 				continue
 			}
 			if rec.StopLossPrice > 0 && rec.TargetPrice > 0 && rec.Side == domain.SideBuy {
@@ -75,13 +77,13 @@ func (e CRORiskExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendat
 		result := make([]domain.Recommendation, 0, len(filtered))
 		for _, rec := range filtered {
 			sector := skillToSector(rec.Skill)
-			concentrationThreshold := 0.40
+			concentrationThreshold := params.SectorConcentrationThreshold.Value
 			if len(filtered) >= 10 {
-				concentrationThreshold = 0.35
+				concentrationThreshold = params.SectorConcentrationThresholdHigh.Value
 			}
 			if float64(sectorCount[sector])/float64(len(filtered)) > concentrationThreshold {
 				rec.Reason = fmt.Sprintf("[CRO:產業集中 %.0f%%] ", float64(sectorCount[sector])/float64(len(filtered))*100) + rec.Reason
-				rec.Conviction = int(float64(rec.Conviction) * 0.7)
+				rec.Conviction = int(float64(rec.Conviction) * params.SectorConvictionMultiplier.Value)
 				if rec.Conviction < floor {
 					continue
 				}
@@ -127,6 +129,7 @@ func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommen
 		bestAgent      string
 	}
 
+	params := config.GetParametersConfig().Orchestrator
 	bySymbol := map[string]*agg{}
 	for _, rec := range recs {
 		entry, ok := bySymbol[rec.Symbol]
@@ -155,7 +158,7 @@ func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommen
 		entry := bySymbol[symbol]
 		avgConviction := entry.conviction / entry.count
 		if entry.count >= 3 {
-			avgConviction = int(float64(avgConviction) * 0.7)
+			avgConviction = int(float64(avgConviction) * params.CrowdedConvictionMultiplier.Value)
 		}
 		reason := entry.reason
 		if entry.count >= 3 {
@@ -319,8 +322,8 @@ func (SuperinvestorExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (SuperinvestorExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy) []domain.Recommendation {
-	// Superinvestor agents typically have higher conviction thresholds
-	minConviction := 65 // Higher bar for superinvestor recommendations
+	params := config.GetParametersConfig().Orchestrator
+	minConviction := params.SuperinvestorMinConviction.Value
 	if policy.ConvictionFloor > minConviction {
 		minConviction = policy.ConvictionFloor
 	}
@@ -328,7 +331,6 @@ func (SuperinvestorExecutor) Apply(agent domain.AgentSpec, recs []domain.Recomme
 	filtered := make([]domain.Recommendation, 0, len(recs))
 	for _, rec := range recs {
 		if rec.Conviction >= minConviction {
-			// Mark as superinvestor-sourced
 			rec.Reason = "[Superinvestor:" + agent.Skill + "] " + rec.Reason
 			filtered = append(filtered, rec)
 		}

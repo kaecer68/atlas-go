@@ -28,6 +28,23 @@ Core path:
 
 `market data -> orchestrator -> layered executors -> control filters (CRO/CIO) -> simulator -> ledger`
 
+### Data Providers (Priority Order)
+
+1. **TWSE OpenAPI** (Free, no auth) - Primary
+2. **FinMind** (Free, API key) - Historical data
+3. **Fubon** (Free, account required) - Real-time via Python proxy
+4. **Fugle** (Paid, circuit breaker protected) - Last resort
+
+**Fubon Integration**: Since Fubon's Go SDK does not support market data APIs, we use a Python FastAPI microservice (`services/fubon-proxy/`) that wraps the official Python SDK. The Go application communicates with this proxy via HTTP.
+
+**Configuration**:
+```bash
+# .env
+FUBON_API_KEY=your_api_key
+FUBON_PERSONAL_ID=your_id_number  # Required for DMA login
+FUBON_PROXY_URL=http://localhost:8081  # Optional, defaults to localhost:8081
+```
+
 Main packages:
 
 - `internal/domain`: canonical types

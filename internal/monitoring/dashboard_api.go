@@ -36,18 +36,23 @@ import (
 	apimarketdata "github.com/kaecer68/atlas-go/internal/monitoring/api/marketdata"
 	apimetrics "github.com/kaecer68/atlas-go/internal/monitoring/api/metrics"
 	apinarrative "github.com/kaecer68/atlas-go/internal/monitoring/api/narrative"
+	apiparameters "github.com/kaecer68/atlas-go/internal/monitoring/api/parameters"
 	apipipeline "github.com/kaecer68/atlas-go/internal/monitoring/api/pipeline"
 	apireport "github.com/kaecer68/atlas-go/internal/monitoring/api/report"
 	apirisk "github.com/kaecer68/atlas-go/internal/monitoring/api/risk"
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	apiswagger "github.com/kaecer68/atlas-go/internal/monitoring/api/swagger"
 	apisystem "github.com/kaecer68/atlas-go/internal/monitoring/api/system"
+	apitaskexec "github.com/kaecer68/atlas-go/internal/monitoring/api/taskexec"
 	apitax "github.com/kaecer68/atlas-go/internal/monitoring/api/tax"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/replay"
+	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
+	"github.com/kaecer68/atlas-go/internal/taskexec"
 )
 
 type DashboardAPI struct {
@@ -67,6 +72,8 @@ type DashboardAPI struct {
 	healthManager      *portfolio.AgentHealthManager
 	dataQualityChecker *DataQualityChecker
 	janusEngine        *janus.Engine
+	repo               *repository.DualWriteRepository
+	taskManager        *taskexec.Manager
 }
 
 type MacroRadarResponse struct {
@@ -230,6 +237,9 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 
 	taxHandlers := apitax.NewHandlers()
 	taxHandlers.RegisterRoutes(mux)
+
+	paramHandlers := apiparameters.NewHandlers(filepath.Join(a.workDir, "configs/parameters.json"))
+	paramHandlers.RegisterRoutes(mux)
 }
 
 func (a *DashboardAPI) RegisterIndustryRoutes(mux *http.ServeMux) {
@@ -315,14 +325,33 @@ func (a *DashboardAPI) SetJanusEngine(e *janus.Engine) {
 	a.janusEngine = e
 }
 
+// SetRepository injects an optional repository for DB-backed queries.
+func (a *DashboardAPI) SetRepository(repo *repository.DualWriteRepository) {
+	a.repo = repo
+}
+
+func (a *DashboardAPI) SetTaskManager(m *taskexec.Manager) {
+	a.taskManager = m
+}
+
+func (a *DashboardAPI) RegisterTaskExecRoutes(mux *http.ServeMux) {
+	if a.taskManager == nil {
+		log.Printf("[TaskExec] skipping route registration: taskManager is nil")
+		return
+	}
+	log.Printf("[TaskExec] registering task execution routes")
+	handlers := apitaskexec.NewHandler(a.taskManager)
+	handlers.RegisterRoutes(mux)
+}
+
 func (a *DashboardAPI) handleLiveStatus(w http.ResponseWriter, r *http.Request) {
 	status := a.loadLiveStatus()
-	writeJSON(w, http.StatusOK, status)
+	shared.WriteJSON(w, http.StatusOK, status)
 }
 
 func (a *DashboardAPI) handlePortfolioState(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -331,7 +360,7 @@ func (a *DashboardAPI) handlePortfolioState(w http.ResponseWriter, r *http.Reque
 	portfolio, err := live.LoadLastPortfolioState(liveBasePath)
 	if err != nil {
 		log.Printf("[DashboardAPI] warn: failed to load portfolio state: %v", err)
-		writeJSON(w, http.StatusOK, PortfolioStateResponse{})
+		shared.WriteJSON(w, http.StatusOK, PortfolioStateResponse{})
 		return
 	}
 
@@ -382,7 +411,7 @@ func (a *DashboardAPI) handlePortfolioState(w http.ResponseWriter, r *http.Reque
 		resp.CumulativePnLPct = resp.CumulativePnL / portfolio.Cash
 	}
 
-	writeJSON(w, http.StatusOK, resp)
+	shared.WriteJSON(w, http.StatusOK, resp)
 }
 
 // buildEquityCurve constructs an equity curve from all session summaries,
@@ -518,15 +547,15 @@ func (a *DashboardAPI) loadLiveStatus() map[string]interface{} {
 func (a *DashboardAPI) handlePhase3Status(w http.ResponseWriter, r *http.Request) {
 	metrics, err := orchestrator.LoadPhase3Metrics("")
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load phase3 metrics: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load phase3 metrics: %v", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, metrics)
+	shared.WriteJSON(w, http.StatusOK, metrics)
 }
 
 func (a *DashboardAPI) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -610,7 +639,7 @@ func (a *DashboardAPI) handleSystemHealth(w http.ResponseWriter, r *http.Request
 		a.buildChannelInfo("twse_replay", "TWSE Replay", a.checkReplayHealth, filepath.Join(a.workDir, "data/replay/tw_extended_90days.csv"), now),
 	}
 
-	writeJSON(w, http.StatusOK, SystemHealthResponse{
+	shared.WriteJSON(w, http.StatusOK, SystemHealthResponse{
 		BaselineVersion:       baselineVersion,
 		ReplayDataLatestDate:  latestReplayDate,
 		ReplayDataPathOK:      replayOK,
@@ -659,7 +688,7 @@ SwaggerUIBundle({
 func (a *DashboardAPI) handleSwaggerJSON(w http.ResponseWriter, r *http.Request) {
 	data, err := os.ReadFile(filepath.Join(a.workDir, "docs/swagger.json"))
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, "swagger spec not found")
+		shared.WriteJSONError(w, http.StatusNotFound, "swagger spec not found")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -670,11 +699,11 @@ func (a *DashboardAPI) handleMacroRadar(w http.ResponseWriter, r *http.Request) 
 	sessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
 	summary, err := LoadSessionSummary(a.ledgerDir, sessionID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load macro radar data: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load macro radar data: %v", err))
 		return
 	}
 	if summary == nil {
-		writeJSON(w, http.StatusOK, MacroRadarResponse{})
+		shared.WriteJSON(w, http.StatusOK, MacroRadarResponse{})
 		return
 	}
 
@@ -685,27 +714,27 @@ func (a *DashboardAPI) handleMacroRadar(w http.ResponseWriter, r *http.Request) 
 		BrokerRuntime: summary.BrokerRuntime,
 		RecordedAt:    summary.RecordedAt,
 	}
-	writeJSON(w, http.StatusOK, resp)
+	shared.WriteJSON(w, http.StatusOK, resp)
 }
 
 func (a *DashboardAPI) handleAgentObservatory(w http.ResponseWriter, r *http.Request) {
 	sessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
 	limit, err := parseLimit(r, 5, 50)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		shared.WriteJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	summary, err := LoadSessionSummary(a.ledgerDir, sessionID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load agent observatory summary: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load agent observatory summary: %v", err))
 		return
 	}
 
 	store := ledger.NewStore(a.ledgerDir)
 	outcomes, err := store.LoadOutcomes()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load recommendation outcomes: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load recommendation outcomes: %v", err))
 		return
 	}
 	scorecards := ledger.BuildScorecards(outcomes)
@@ -722,32 +751,32 @@ func (a *DashboardAPI) handleAgentObservatory(w http.ResponseWriter, r *http.Req
 		resp.BrokerRuntime = summary.BrokerRuntime
 		resp.RecordedAt = summary.RecordedAt
 	}
-	writeJSON(w, http.StatusOK, resp)
+	shared.WriteJSON(w, http.StatusOK, resp)
 }
 
 func (a *DashboardAPI) handleForecastVsReality(w http.ResponseWriter, r *http.Request) {
 	limit, err := parseLimit(r, 20, 100)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		shared.WriteJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	agentID := strings.TrimSpace(r.URL.Query().Get("agent_id"))
 
 	items, err := a.loadForecastVsRealityItems(agentID, limit)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load forecast-vs-reality data: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load forecast-vs-reality data: %v", err))
 		return
 	}
 	resp := ForecastVsRealityResponse{Items: items}
 	summary, err := LoadSessionSummary(a.ledgerDir, "")
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load forecast-vs-reality summary context: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load forecast-vs-reality summary context: %v", err))
 		return
 	}
 	if summary != nil {
 		resp.BrokerRuntime = summary.BrokerRuntime
 	}
-	writeJSON(w, http.StatusOK, resp)
+	shared.WriteJSON(w, http.StatusOK, resp)
 }
 
 func (a *DashboardAPI) loadForecastVsRealityItems(agentID string, limit int) ([]ForecastVsRealityItem, error) {
@@ -814,10 +843,10 @@ func (a *DashboardAPI) handleReportList(w http.ResponseWriter, r *http.Request) 
 	entries, err := os.ReadDir(reportDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusOK, map[string]any{"reports": []any{}})
+			shared.WriteJSON(w, http.StatusOK, map[string]any{"reports": []any{}})
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read reports dir: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read reports dir: %v", err))
 		return
 	}
 
@@ -855,7 +884,7 @@ func (a *DashboardAPI) handleReportList(w http.ResponseWriter, r *http.Request) 
 		}
 	})
 
-	writeJSON(w, http.StatusOK, map[string]any{"reports": reports})
+	shared.WriteJSON(w, http.StatusOK, map[string]any{"reports": reports})
 }
 
 func (a *DashboardAPI) handleRiskMetrics(w http.ResponseWriter, r *http.Request) {
@@ -863,10 +892,10 @@ func (a *DashboardAPI) handleRiskMetrics(w http.ResponseWriter, r *http.Request)
 	entries, err := os.ReadDir(sessionsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusOK, map[string]any{"message": "no sessions available"})
+			shared.WriteJSON(w, http.StatusOK, map[string]any{"message": "no sessions available"})
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read sessions: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read sessions: %v", err))
 		return
 	}
 
@@ -929,7 +958,7 @@ func (a *DashboardAPI) handleRiskMetrics(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	shared.WriteJSON(w, http.StatusOK, map[string]any{
 		"risk_snapshot": snap,
 		"session_count": len(portfolioValues),
 	})
@@ -944,7 +973,7 @@ type UniverseOverlapResponse struct {
 
 func (a *DashboardAPI) handleUniverseOverlap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -1025,7 +1054,7 @@ func (a *DashboardAPI) handleUniverseOverlap(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	writeJSON(w, http.StatusOK, UniverseOverlapResponse{
+	shared.WriteJSON(w, http.StatusOK, UniverseOverlapResponse{
 		Agents:   agents,
 		Matrix:   matrix,
 		Warnings: warnings,
@@ -1037,10 +1066,10 @@ func (a *DashboardAPI) handleLatestReport(w http.ResponseWriter, r *http.Request
 	entries, err := os.ReadDir(reportDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			writeJSONError(w, http.StatusNotFound, "no reports directory found")
+			shared.WriteJSONError(w, http.StatusNotFound, "no reports directory found")
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read reports dir: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read reports dir: %v", err))
 		return
 	}
 
@@ -1065,14 +1094,14 @@ func (a *DashboardAPI) handleLatestReport(w http.ResponseWriter, r *http.Request
 	}
 
 	if latestFile == "" {
-		writeJSONError(w, http.StatusNotFound, "no backtest report found")
+		shared.WriteJSONError(w, http.StatusNotFound, "no backtest report found")
 		return
 	}
 
 	path := filepath.Join(reportDir, latestFile)
 	content, err := os.ReadFile(path)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read report: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read report: %v", err))
 		return
 	}
 
@@ -1083,7 +1112,7 @@ func (a *DashboardAPI) handleLatestReport(w http.ResponseWriter, r *http.Request
 
 func (a *DashboardAPI) handleDailySummary(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -1097,7 +1126,7 @@ func (a *DashboardAPI) handleDailySummary(w http.ResponseWriter, r *http.Request
 	risk := a.loadRiskSnapshot()
 
 	report := a.reportGenerator.GenerateDailySummary(date, events, recs, risk)
-	writeJSON(w, http.StatusOK, report)
+	shared.WriteJSON(w, http.StatusOK, report)
 }
 
 func (a *DashboardAPI) loadNarrativeEventsForDate(date string) []narrative.NarrativeEvent {
@@ -1261,7 +1290,7 @@ func (a *DashboardAPI) loadRecommendationsForDate(date string) []domain.Recommen
 
 func (a *DashboardAPI) handleChannelsIngest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -1452,11 +1481,11 @@ func (a *DashboardAPI) handleChannelsIngest(w http.ResponseWriter, r *http.Reque
 	}
 
 	if macroErr != nil && geoErr != nil && capFlowErr != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("all core ingests failed: macro=%v, geo=%v, cap_flow=%v", macroErr, geoErr, capFlowErr))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("all core ingests failed: macro=%v, geo=%v, cap_flow=%v", macroErr, geoErr, capFlowErr))
 		return
 	}
 
-	writeJSON(w, http.StatusOK, result)
+	shared.WriteJSON(w, http.StatusOK, result)
 }
 
 // PipelineItem represents a single recommendation through the guard pipeline.
@@ -1493,18 +1522,7 @@ type RecommendationPipelineResponse struct {
 
 func (a *DashboardAPI) handleSessions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	sessionsDir := filepath.Join(a.ledgerDir, "sessions")
-	entries, err := os.ReadDir(sessionsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusOK, map[string]any{"sessions": []any{}})
-			return
-		}
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read sessions dir: %v", err))
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -1513,6 +1531,35 @@ func (a *DashboardAPI) handleSessions(w http.ResponseWriter, r *http.Request) {
 		RecordedAt   time.Time `json:"recorded_at"`
 		Regime       string    `json:"regime"`
 		OutcomeCount int       `json:"outcome_count"`
+	}
+
+	if a.repo != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		dbSessions, err := a.repo.QuerySessions(ctx)
+		if err == nil && len(dbSessions) > 0 {
+			sessions := make([]sessionMeta, len(dbSessions))
+			for i, s := range dbSessions {
+				sessions[i] = sessionMeta{
+					SessionID:    s.SessionID,
+					RecordedAt:   s.RecordedAt,
+					OutcomeCount: s.OutcomeCount,
+				}
+			}
+			shared.WriteJSON(w, http.StatusOK, map[string]any{"sessions": sessions})
+			return
+		}
+	}
+
+	sessionsDir := filepath.Join(a.ledgerDir, "sessions")
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			shared.WriteJSON(w, http.StatusOK, map[string]any{"sessions": []any{}})
+			return
+		}
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read sessions dir: %v", err))
+		return
 	}
 
 	sessions := make([]sessionMeta, 0, len(entries))
@@ -1555,12 +1602,12 @@ func (a *DashboardAPI) handleSessions(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 
-	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions})
+	shared.WriteJSON(w, http.StatusOK, map[string]any{"sessions": sessions})
 }
 
 func (a *DashboardAPI) handleRecommendationPipeline(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -1569,11 +1616,11 @@ func (a *DashboardAPI) handleRecommendationPipeline(w http.ResponseWriter, r *ht
 
 	summary, err := LoadSessionSummary(a.ledgerDir, sessionID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load recommendation pipeline summary: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load recommendation pipeline summary: %v", err))
 		return
 	}
 	if summary == nil {
-		writeJSON(w, http.StatusOK, RecommendationPipelineResponse{})
+		shared.WriteJSON(w, http.StatusOK, RecommendationPipelineResponse{})
 		return
 	}
 
@@ -1592,90 +1639,149 @@ func (a *DashboardAPI) handleRecommendationPipeline(w http.ResponseWriter, r *ht
 		}
 	}
 
-	sessionsDir := filepath.Join(a.ledgerDir, "sessions")
-	outcomesPath := filepath.Join(sessionsDir, summary.SessionID, "recommendation_outcomes.jsonl")
 	items := make([]PipelineItem, 0)
-	if data, err := os.ReadFile(outcomesPath); err == nil {
-		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-		for _, line := range lines {
-			if strings.TrimSpace(line) == "" {
-				continue
-			}
-			var outcome struct {
-				AgentID             string                      `json:"AgentID"`
-				Skill               string                      `json:"Skill"`
-				Layer               string                      `json:"Layer"`
-				Symbol              string                      `json:"Symbol"`
-				Side                string                      `json:"Side"`
-				Conviction          int                         `json:"Conviction"`
-				TargetPrice         float64                     `json:"TargetPrice"`
-				StopLossPrice       float64                     `json:"StopLossPrice"`
-				ForwardReturn       float64                     `json:"ForwardReturn"`
-				Hit                 bool                        `json:"Hit"`
-				Reason              string                      `json:"Reason"`
-				Price               float64                     `json:"Price"`
-				PassedGuards        bool                        `json:"PassedGuards"`
-				GuardReason         string                      `json:"GuardReason"`
-				RecordedAt          time.Time                   `json:"RecordedAt"`
-				FactorScores        domain.FactorScores         `json:"factor_scores,omitempty"`
-				ConvictionBreakdown *domain.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
-			}
-			if err := json.Unmarshal([]byte(line), &outcome); err != nil {
-				continue
-			}
-			fr := outcome.ForwardReturn
-			price := outcome.Price
-			side := outcome.Side
-			passedGuards := outcome.PassedGuards
-			// Legacy sessions (generated before PassedGuards field existed)
-			// should default to true to preserve backward-compatible display.
-			if !passedGuards && !strings.Contains(line, `"PassedGuards"`) {
-				passedGuards = true
-			}
-			if ds != nil && !outcome.RecordedAt.IsZero() {
-				if fr == 0 {
-					if recalculated, ok := ds.ForwardReturn(outcome.Symbol, outcome.RecordedAt, 1); ok {
-						fr = recalculated
+
+	if a.repo != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		outcomes, err := a.repo.QueryOutcomesBySession(ctx, summary.SessionID)
+		if err == nil && len(outcomes) > 0 {
+			for _, o := range outcomes {
+				fr := o.ForwardReturn
+				price := o.Price
+				side := string(o.Side)
+				passedGuards := o.PassedGuards
+				if ds != nil && !o.RecordedAt.IsZero() {
+					if fr == 0 {
+						if recalculated, ok := ds.ForwardReturn(o.Symbol, o.RecordedAt, 1); ok {
+							fr = recalculated
+						}
+					}
+					if price == 0 {
+						if bar, ok := ds.ByDate[o.RecordedAt.Format("2006-01-02")][o.Symbol]; ok {
+							price = bar.Close
+						}
 					}
 				}
-				if price == 0 {
-					if bar, ok := ds.ByDate[outcome.RecordedAt.Format("2006-01-02")][outcome.Symbol]; ok {
-						price = bar.Close
+				if side == "" {
+					side = string(domain.SideBuy)
+				}
+				tp := o.TargetPrice
+				slp := o.StopLossPrice
+				if tp == 0 && slp == 0 && price > 0 {
+					tp, slp = fallbackPriceTargets(string(o.Skill), price)
+				}
+				if !showAll && !passedGuards {
+					continue
+				}
+				tags := computePipelineTags(ds, o.Symbol, o.RecordedAt)
+				items = append(items, PipelineItem{
+					Symbol:              o.Symbol,
+					AgentID:             o.AgentID,
+					Skill:               string(o.Skill),
+					Layer:               string(o.Layer),
+					Side:                side,
+					Conviction:          o.Conviction,
+					TargetPrice:         tp,
+					StopLossPrice:       slp,
+					ForwardReturn:       fr,
+					Hit:                 fr > 0,
+					Reason:              o.Reason,
+					Price:               price,
+					PassedGuards:        passedGuards,
+					GuardReason:         o.GuardReason,
+					Tags:                tags,
+					RecordedAt:          o.RecordedAt,
+					FactorScores:        o.FactorScores,
+					ConvictionBreakdown: o.ConvictionBreakdown,
+				})
+			}
+		}
+	}
+
+	if len(items) == 0 {
+		sessionsDir := filepath.Join(a.ledgerDir, "sessions")
+		outcomesPath := filepath.Join(sessionsDir, summary.SessionID, "recommendation_outcomes.jsonl")
+		if data, err := os.ReadFile(outcomesPath); err == nil {
+			lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+			for _, line := range lines {
+				if strings.TrimSpace(line) == "" {
+					continue
+				}
+				var outcome struct {
+					AgentID             string                      `json:"AgentID"`
+					Skill               string                      `json:"Skill"`
+					Layer               string                      `json:"Layer"`
+					Symbol              string                      `json:"Symbol"`
+					Side                string                      `json:"Side"`
+					Conviction          int                         `json:"Conviction"`
+					TargetPrice         float64                     `json:"TargetPrice"`
+					StopLossPrice       float64                     `json:"StopLossPrice"`
+					ForwardReturn       float64                     `json:"ForwardReturn"`
+					Hit                 bool                        `json:"Hit"`
+					Reason              string                      `json:"Reason"`
+					Price               float64                     `json:"Price"`
+					PassedGuards        bool                        `json:"PassedGuards"`
+					GuardReason         string                      `json:"GuardReason"`
+					RecordedAt          time.Time                   `json:"RecordedAt"`
+					FactorScores        domain.FactorScores         `json:"factor_scores,omitempty"`
+					ConvictionBreakdown *domain.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
+				}
+				if err := json.Unmarshal([]byte(line), &outcome); err != nil {
+					continue
+				}
+				fr := outcome.ForwardReturn
+				price := outcome.Price
+				side := outcome.Side
+				passedGuards := outcome.PassedGuards
+				if !passedGuards && !strings.Contains(line, `"PassedGuards"`) {
+					passedGuards = true
+				}
+				if ds != nil && !outcome.RecordedAt.IsZero() {
+					if fr == 0 {
+						if recalculated, ok := ds.ForwardReturn(outcome.Symbol, outcome.RecordedAt, 1); ok {
+							fr = recalculated
+						}
+					}
+					if price == 0 {
+						if bar, ok := ds.ByDate[outcome.RecordedAt.Format("2006-01-02")][outcome.Symbol]; ok {
+							price = bar.Close
+						}
 					}
 				}
+				if side == "" {
+					side = string(domain.SideBuy)
+				}
+				tp := outcome.TargetPrice
+				slp := outcome.StopLossPrice
+				if tp == 0 && slp == 0 && price > 0 {
+					tp, slp = fallbackPriceTargets(outcome.Skill, price)
+				}
+				if !showAll && !passedGuards {
+					continue
+				}
+				tags := computePipelineTags(ds, outcome.Symbol, outcome.RecordedAt)
+				items = append(items, PipelineItem{
+					Symbol:              outcome.Symbol,
+					AgentID:             outcome.AgentID,
+					Skill:               outcome.Skill,
+					Layer:               outcome.Layer,
+					Side:                side,
+					Conviction:          outcome.Conviction,
+					TargetPrice:         tp,
+					StopLossPrice:       slp,
+					ForwardReturn:       fr,
+					Hit:                 fr > 0,
+					Reason:              outcome.Reason,
+					Price:               price,
+					PassedGuards:        passedGuards,
+					GuardReason:         outcome.GuardReason,
+					Tags:                tags,
+					RecordedAt:          outcome.RecordedAt,
+					FactorScores:        outcome.FactorScores,
+					ConvictionBreakdown: outcome.ConvictionBreakdown,
+				})
 			}
-			if side == "" {
-				side = string(domain.SideBuy)
-			}
-			tp := outcome.TargetPrice
-			slp := outcome.StopLossPrice
-			if tp == 0 && slp == 0 && price > 0 {
-				tp, slp = fallbackPriceTargets(outcome.Skill, price)
-			}
-			if !showAll && !passedGuards {
-				continue
-			}
-			tags := computePipelineTags(ds, outcome.Symbol, outcome.RecordedAt)
-			items = append(items, PipelineItem{
-				Symbol:              outcome.Symbol,
-				AgentID:             outcome.AgentID,
-				Skill:               outcome.Skill,
-				Layer:               outcome.Layer,
-				Side:                side,
-				Conviction:          outcome.Conviction,
-				TargetPrice:         tp,
-				StopLossPrice:       slp,
-				ForwardReturn:       fr,
-				Hit:                 fr > 0,
-				Reason:              outcome.Reason,
-				Price:               price,
-				PassedGuards:        passedGuards,
-				GuardReason:         outcome.GuardReason,
-				Tags:                tags,
-				RecordedAt:          outcome.RecordedAt,
-				FactorScores:        outcome.FactorScores,
-				ConvictionBreakdown: outcome.ConvictionBreakdown,
-			})
 		}
 	}
 
@@ -1698,7 +1804,7 @@ func (a *DashboardAPI) handleRecommendationPipeline(w http.ResponseWriter, r *ht
 		log.Printf("LoadSessionScreeningRejects %s: %v", summary.SessionID, err)
 	}
 
-	writeJSON(w, http.StatusOK, RecommendationPipelineResponse{
+	shared.WriteJSON(w, http.StatusOK, RecommendationPipelineResponse{
 		SessionID:     summary.SessionID,
 		Regime:        summary.Regime,
 		Items:         items,
@@ -1724,7 +1830,7 @@ type DataChannel struct {
 
 func (a *DashboardAPI) handleDataChannels(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -2085,7 +2191,7 @@ func (a *DashboardAPI) handleDataChannels(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	shared.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"channels":  channels,
 		"alerts":    freshAlerts,
 		"generated": now.Format("2006-01-02 15:04:05"),
@@ -2402,18 +2508,18 @@ func (a *DashboardAPI) checkExportHealth(dir string, now time.Time) (string, str
 
 func (a *DashboardAPI) handleRetailSentiment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	provider := marketdata.NewTWSERetailSentimentProvider(a.workDir)
 	snap, err := provider.FetchSnapshot(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("fetch retail sentiment: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("fetch retail sentiment: %v", err))
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	shared.WriteJSON(w, http.StatusOK, map[string]any{
 		"margin_balance":    snap.MarginBalance,
 		"margin_change_pct": snap.MarginChangePct,
 		"day_trading_ratio": snap.DayTradingRatio,
@@ -2426,7 +2532,7 @@ func (a *DashboardAPI) handleRetailSentiment(w http.ResponseWriter, r *http.Requ
 
 func (a *DashboardAPI) handleCapitalPhase(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -2444,7 +2550,7 @@ func (a *DashboardAPI) handleCapitalPhase(w http.ResponseWriter, r *http.Request
 		AdvanceReason:   "no live trading data available",
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	shared.WriteJSON(w, http.StatusOK, map[string]any{
 		"phase":            snap.Phase,
 		"phase_start_date": snap.PhaseStartDate,
 		"days_in_phase":    snap.DaysInPhase,
@@ -2463,11 +2569,11 @@ func (a *DashboardAPI) handleCapitalPhase(w http.ResponseWriter, r *http.Request
 
 func (a *DashboardAPI) handleTaxSnapshot(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	shared.WriteJSON(w, http.StatusOK, map[string]any{
 		"snapshots":      []domain.TaxSnapshot{},
 		"before_tax_pnl": 0,
 		"after_tax_pnl":  0,
@@ -2515,7 +2621,7 @@ func (a *DashboardAPI) handleMetrics(w http.ResponseWriter, r *http.Request) {
 
 func (a *DashboardAPI) handleMetricsTrend(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -2552,7 +2658,7 @@ func (a *DashboardAPI) handleMetricsTrend(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	shared.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"metric":      metric,
 		"period":      period,
 		"duration":    duration.String(),
@@ -2573,7 +2679,7 @@ func (a *DashboardAPI) handleDataQuality(w http.ResponseWriter, r *http.Request)
 
 	report := a.dataQualityChecker.RunAll(ctx)
 
-	writeJSON(w, http.StatusOK, report)
+	shared.WriteJSON(w, http.StatusOK, report)
 }
 
 // channelHealthAdapter adapts monitoring.ChannelHealthStore to data.ChannelHealthRecorder.
@@ -2610,4 +2716,8 @@ func (a *channelHealthAdapter) Alerts() []apidata.ChannelAlert {
 		}
 	}
 	return result
+}
+
+func (a *channelHealthAdapter) SyncAllToDB() error {
+	return a.store.SyncAllToDB()
 }

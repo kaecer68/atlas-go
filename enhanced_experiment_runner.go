@@ -156,7 +156,7 @@ func testEnhancedDarwinianWeights() (float64, float64, []string) {
 	}
 
 	// 應用權重調整 (測試增強算法)
-	adjustments := wm.PerformDailyAdjustment()
+	adjustments, _ := wm.PerformDailyAdjustment()
 
 	// More realistic scoring algorithm for Darwinian Weights
 	score := 40.0 // Base score for having a working system

@@ -308,3 +308,25 @@ func TestNewAgentHealthManagerWithStore_PersistsAndRestores(t *testing.T) {
 		t.Errorf("agent-q ConsecutiveWins = %d, want 1", q.ConsecutiveWins)
 	}
 }
+
+func TestNewAgentHealthManager(t *testing.T) {
+	m := NewAgentHealthManager()
+	if m == nil {
+		t.Fatal("expected non-nil manager")
+	}
+	if m.health == nil {
+		t.Error("expected health map to be initialized")
+	}
+	if m.config.DefaultMuteThreshold != 5 {
+		t.Errorf("expected default mute threshold 5, got %d", m.config.DefaultMuteThreshold)
+	}
+}
+
+func TestAgentHealthManagerWithParameters(t *testing.T) {
+	m := NewAgentHealthManagerWithConfig(DefaultAgentHealthConfig())
+	params := DefaultRuntimeParameters()
+	m.WithParameters(params)
+	if m.runtimeParams == nil {
+		t.Error("expected runtime params to be set")
+	}
+}

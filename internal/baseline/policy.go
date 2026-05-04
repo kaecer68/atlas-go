@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -42,16 +43,17 @@ type RevertRecord struct {
 }
 
 func DefaultPolicy() Policy {
+	cfg := config.DefaultParametersConfig().Baseline
 	constraints := domain.SimulationConstraints{
-		StartingCash:                3000000,
-		MaxPositionWeight:           0.18,
-		MaxOpenPositions:            5,
-		MinTradableVolume:           1000000,
-		MinRecommendationConviction: 60,
-		RequireCROPass:              true,
-		TransactionCostBPS:          1.425,
-		SlippageBPS:                 4,
-		ReserveCashFraction:         0.1,
+		StartingCash:                cfg.StartingCash.Value,
+		MaxPositionWeight:           cfg.MaxPositionWeight.Value,
+		MaxOpenPositions:            cfg.MaxOpenPositions.Value,
+		MinTradableVolume:           int64(cfg.MinTradableVolume.Value),
+		MinRecommendationConviction: cfg.MinRecommendationConviction.Value,
+		RequireCROPass:              cfg.RequireCROPass.Value,
+		TransactionCostBPS:          cfg.TransactionCostBPS.Value,
+		SlippageBPS:                 cfg.SlippageBPS.Value,
+		ReserveCashFraction:         cfg.ReserveCashFraction.Value,
 	}
 	return Policy{
 		Version:         1,
@@ -107,7 +109,7 @@ func Save(path string, policy Policy) error {
 func ExecutionPolicyFromConstraints(constraints domain.SimulationConstraints) domain.ExecutionPolicy {
 	floor := constraints.MinRecommendationConviction
 	if floor <= 0 {
-		floor = 50
+		floor = config.DefaultParametersConfig().Baseline.MinRecommendationConviction.Value
 	}
 	return domain.ExecutionPolicy{
 		ConvictionFloor: floor,

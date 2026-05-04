@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
@@ -22,27 +23,28 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/industry-overview", h.HandleIndustryOverview)
 	mux.HandleFunc("/api/dashboard/industry-shock-simulation", h.HandleShockSimulation)
 	mux.HandleFunc("/api/dashboard/industry-graph", h.HandleIndustryGraph)
-}
 
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func writeJSONError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
+	mux.HandleFunc("/api/industry/classification", h.HandleIndustryClassification)
+	mux.HandleFunc("/api/industry/seasonality", h.HandleIndustrySeasonality)
+	mux.HandleFunc("/api/industry/seasonality/calendar", h.HandleIndustrySeasonalityCalendar)
+	mux.HandleFunc("/api/industry/cycle", h.HandleIndustryCycle)
+	mux.HandleFunc("/api/industry/linkage", h.HandleIndustryLinkage)
+	mux.HandleFunc("/api/industry/risk", h.HandleIndustryRisk)
+	mux.HandleFunc("/api/industry/overview", h.HandleIndustryOverview)
+	mux.HandleFunc("/api/industry/detail", h.HandleIndustryDetail)
+	mux.HandleFunc("/api/industry/shock-simulation", h.HandleShockSimulation)
+	mux.HandleFunc("/api/industry/graph", h.HandleIndustryGraph)
 }
 
 func (h *Handlers) HandleIndustryClassification(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	result := h.Svc.GetClassificationTree()
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	shared.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"industries": result,
 		"count":      len(result),
 	})
@@ -50,7 +52,7 @@ func (h *Handlers) HandleIndustryClassification(w http.ResponseWriter, r *http.R
 
 func (h *Handlers) HandleIndustrySeasonality(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -95,7 +97,7 @@ func (h *Handlers) HandleIndustrySeasonality(w http.ResponseWriter, r *http.Requ
 		})
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	shared.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"current_date":        now.Format("2006-01-02"),
 		"active_patterns":     activePatterns,
 		"pattern_count":       len(activePatterns),
@@ -107,7 +109,7 @@ func (h *Handlers) HandleIndustrySeasonality(w http.ResponseWriter, r *http.Requ
 
 func (h *Handlers) HandleIndustrySeasonalityCalendar(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -115,7 +117,7 @@ func (h *Handlers) HandleIndustrySeasonalityCalendar(w http.ResponseWriter, r *h
 	now := time.Now()
 	months := h.Svc.GetSeasonalCalendar(industryID, now.Year())
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	shared.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"year":     now.Year(),
 		"industry": industryID,
 		"months":   months,
@@ -124,7 +126,7 @@ func (h *Handlers) HandleIndustrySeasonalityCalendar(w http.ResponseWriter, r *h
 
 func (h *Handlers) HandleIndustryCycle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -132,7 +134,7 @@ func (h *Handlers) HandleIndustryCycle(w http.ResponseWriter, r *http.Request) {
 
 	positions, ok := h.Svc.GetCyclePositions(industryID)
 	if !ok {
-		writeJSONError(w, http.StatusNotFound, "industry not found")
+		shared.WriteJSONError(w, http.StatusNotFound, "industry not found")
 		return
 	}
 
@@ -152,7 +154,7 @@ func (h *Handlers) HandleIndustryCycle(w http.ResponseWriter, r *http.Request) {
 				"trend":           pos.Trend,
 			})
 		}
-		writeJSON(w, http.StatusOK, map[string]interface{}{
+		shared.WriteJSON(w, http.StatusOK, map[string]interface{}{
 			"industries": allPositions,
 			"count":      len(allPositions),
 		})
@@ -160,7 +162,7 @@ func (h *Handlers) HandleIndustryCycle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pos := positions[0]
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	shared.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"industry":        pos.Industry,
 		"business_cycle":  pos.BusinessCycle,
 		"inventory_cycle": pos.InventoryCycle,
@@ -175,23 +177,23 @@ func (h *Handlers) HandleIndustryCycle(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleIndustryLinkage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	industryID := r.URL.Query().Get("industry")
 	if industryID == "" {
-		writeJSONError(w, http.StatusBadRequest, "industry parameter required")
+		shared.WriteJSONError(w, http.StatusBadRequest, "industry parameter required")
 		return
 	}
 
 	info, err := h.Svc.GetLinkageInfo(industryID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		shared.WriteJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	shared.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"industry":      info.Industry,
 		"upstream":      info.Upstream,
 		"downstream":    info.Downstream,
@@ -202,20 +204,20 @@ func (h *Handlers) HandleIndustryLinkage(w http.ResponseWriter, r *http.Request)
 
 func (h *Handlers) HandleIndustryRisk(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	symbol := r.URL.Query().Get("symbol")
 	industryID := r.URL.Query().Get("industry")
 	if symbol == "" && industryID == "" {
-		writeJSONError(w, http.StatusBadRequest, "symbol or industry parameter required")
+		shared.WriteJSONError(w, http.StatusBadRequest, "symbol or industry parameter required")
 		return
 	}
 
 	info := h.Svc.GetRiskInfo(symbol, industryID)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	shared.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"symbol":       info.Symbol,
 		"industry":     info.Industry,
 		"risk_count":   info.RiskCount,
@@ -226,7 +228,7 @@ func (h *Handlers) HandleIndustryRisk(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleIndustryOverview(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -248,16 +250,38 @@ func (h *Handlers) HandleIndustryOverview(w http.ResponseWriter, r *http.Request
 		})
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	shared.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"industries": industries,
 		"count":      len(industries),
 		"updated_at": now,
 	})
 }
 
+func (h *Handlers) HandleIndustryDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	industryID := r.URL.Query().Get("industry")
+	if industryID == "" {
+		shared.WriteJSONError(w, http.StatusBadRequest, "industry parameter required")
+		return
+	}
+
+	now := time.Now()
+	detail, err := h.Svc.GetIndustryDetail(industryID, now)
+	if err != nil {
+		shared.WriteJSONError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	shared.WriteJSON(w, http.StatusOK, detail)
+}
+
 func (h *Handlers) HandleShockSimulation(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -268,12 +292,12 @@ func (h *Handlers) HandleShockSimulation(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json: "+err.Error())
+		shared.WriteJSONError(w, http.StatusBadRequest, "invalid json: "+err.Error())
 		return
 	}
 
 	if req.SourceIndustry == "" {
-		writeJSONError(w, http.StatusBadRequest, "source_industry required")
+		shared.WriteJSONError(w, http.StatusBadRequest, "source_industry required")
 		return
 	}
 
@@ -291,7 +315,7 @@ func (h *Handlers) HandleShockSimulation(w http.ResponseWriter, r *http.Request)
 		})
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	shared.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"source":       req.SourceIndustry,
 		"shock":        req.ShockMagnitude,
 		"max_depth":    req.MaxDepth,
@@ -302,7 +326,7 @@ func (h *Handlers) HandleShockSimulation(w http.ResponseWriter, r *http.Request)
 
 func (h *Handlers) HandleIndustryGraph(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -328,7 +352,7 @@ func (h *Handlers) HandleIndustryGraph(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	shared.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"nodes": nodeList,
 		"edges": edgeList,
 	})
