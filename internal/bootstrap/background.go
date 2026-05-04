@@ -17,8 +17,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
-
-
 func StartChannelHealthSyncLoop(ctx context.Context, workDir string, pool *pgxpool.Pool) {
 	if pool == nil {
 		return

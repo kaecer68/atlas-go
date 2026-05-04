@@ -156,7 +156,7 @@ func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommen
 
 	for _, symbol := range symbols {
 		entry := bySymbol[symbol]
-		avgConviction := entry.conviction / entry.count
+		avgConviction := int(float64(entry.conviction) / float64(entry.count))
 		if entry.count >= 3 {
 			avgConviction = int(float64(avgConviction) * params.CrowdedConvictionMultiplier.Value)
 		}

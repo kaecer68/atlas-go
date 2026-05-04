@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -113,8 +114,16 @@ func (s *ReportService) LoadReportList() ([]ReportEntry, error) {
 	}
 
 	slices.SortFunc(reports, func(a, b ReportEntry) int {
-		aTime, _ := time.Parse(time.RFC3339, a.UpdatedAt)
-		bTime, _ := time.Parse(time.RFC3339, b.UpdatedAt)
+		aTime, err := time.Parse(time.RFC3339, a.UpdatedAt)
+		if err != nil {
+			log.Printf("[report] parse updated_at failed: %v", err)
+			return 1
+		}
+		bTime, err := time.Parse(time.RFC3339, b.UpdatedAt)
+		if err != nil {
+			log.Printf("[report] parse updated_at failed: %v", err)
+			return -1
+		}
 		switch {
 		case aTime.After(bTime):
 			return -1

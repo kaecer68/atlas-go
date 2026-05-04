@@ -872,8 +872,16 @@ func (a *DashboardAPI) handleReportList(w http.ResponseWriter, r *http.Request) 
 
 	// Sort by updated_at descending
 	slices.SortFunc(reports, func(a, b map[string]any) int {
-		aTime, _ := time.Parse(time.RFC3339, a["updated_at"].(string))
-		bTime, _ := time.Parse(time.RFC3339, b["updated_at"].(string))
+		aTime, err := time.Parse(time.RFC3339, a["updated_at"].(string))
+		if err != nil {
+			log.Printf("[dashboard] parse updated_at failed: %v", err)
+			return 1
+		}
+		bTime, err := time.Parse(time.RFC3339, b["updated_at"].(string))
+		if err != nil {
+			log.Printf("[dashboard] parse updated_at failed: %v", err)
+			return -1
+		}
 		switch {
 		case aTime.After(bTime):
 			return -1

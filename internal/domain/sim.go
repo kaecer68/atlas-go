@@ -4,14 +4,14 @@ import "time"
 
 // SimulationState tracks cross-day portfolio state for multi-day backtests.
 type SimulationState struct {
-	Cash            float64
-	Positions       []Position
-	CumulativePnL   float64
-	EquityCurve     []float64 // portfolio value at end of each day
-	DailyReturns    []float64
-	PreviousValues  map[string]float64 // symbol -> previous day close (for drawdown calc)
-	MaxEquity       float64
-	CurrentDrawdown float64
+	Cash            float64            `json:"cash"`
+	Positions       []Position         `json:"positions"`
+	CumulativePnL   float64            `json:"cumulative_pnl"`
+	EquityCurve     []float64          `json:"equity_curve"`
+	DailyReturns    []float64          `json:"daily_returns"`
+	PreviousValues  map[string]float64 `json:"previous_values"`
+	MaxEquity       float64            `json:"max_equity"`
+	CurrentDrawdown float64            `json:"current_drawdown"`
 }
 
 // NewSimulationState initializes a simulation state with starting cash.
@@ -43,23 +43,22 @@ func (c SimulationConstraints) SellLogicEnabled() bool {
 
 // DayResult captures the outcome of a single simulated trading day.
 type DayResult struct {
-	Date           time.Time
-	Regime         Regime
-	Orders         []Order
-	Positions      []Position
-	Cash           float64
-	PortfolioValue float64
-	DailyPnL       float64
+	Date           time.Time  `json:"date"`
+	Regime         Regime     `json:"regime"`
+	Orders         []Order    `json:"orders"`
+	Positions      []Position `json:"positions"`
+	Cash           float64    `json:"cash"`
+	PortfolioValue float64    `json:"portfolio_value"`
+	DailyPnL       float64    `json:"daily_pnl"`
 }
 
-// SimulationReport aggregates metrics from a multi-day run.
 type SimulationReport struct {
-	TotalReturn   float64
-	SharpeRatio   float64
-	MaxDrawdown   float64
-	EquityCurve   []float64
-	AgentHitRates map[string]float64
-	TradeCount    int
-	StartDate     time.Time
-	EndDate       time.Time
+	TotalReturn   float64            `json:"total_return"`
+	SharpeRatio   float64            `json:"sharpe_ratio"`
+	MaxDrawdown   float64            `json:"max_drawdown"`
+	EquityCurve   []float64          `json:"equity_curve"`
+	AgentHitRates map[string]float64 `json:"agent_hit_rates"`
+	TradeCount    int                `json:"trade_count"`
+	StartDate     time.Time          `json:"start_date"`
+	EndDate       time.Time          `json:"end_date"`
 }
