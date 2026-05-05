@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -72,6 +73,7 @@ type DarwinianAgentWeight struct {
 type DarwinianWeightManager struct {
 	weights      map[string]*DarwinianAgentWeight
 	configPath   string
+	historyPath  string
 	lookbackDays int
 	params       *RuntimeParameters
 	mu           sync.RWMutex
@@ -84,6 +86,7 @@ func NewDarwinianWeightManager(configPath string) *DarwinianWeightManager {
 	return &DarwinianWeightManager{
 		weights:      make(map[string]*DarwinianAgentWeight),
 		configPath:   configPath,
+		historyPath:  "",
 		lookbackDays: params.Darwinian.LookbackDays,
 		params:       params,
 	}
@@ -99,6 +102,85 @@ func (m *DarwinianWeightManager) WithParameters(p *RuntimeParameters) *Darwinian
 		m.lookbackDays = p.Darwinian.LookbackDays
 	}
 	return m
+}
+
+func (m *DarwinianWeightManager) WithHistoryPath(path string) *DarwinianWeightManager {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.historyPath = path
+	return m
+}
+
+// AppendSnapshot appends current weights as a timestamped history entry to the JSONL file.
+func (m *DarwinianWeightManager) AppendSnapshot() error {
+	if m.historyPath == "" {
+		return nil
+	}
+	m.mu.RLock()
+	snapshot := DarwinianSnapshot{
+		Timestamp: time.Now(),
+		Weights:   make(map[string]DarwinianAgentWeight, len(m.weights)),
+	}
+	for id, w := range m.weights {
+		cp := *w
+		cp.DailyReturns = make([]float64, len(w.DailyReturns))
+		copy(cp.DailyReturns, w.DailyReturns)
+		snapshot.Weights[id] = cp
+	}
+	m.mu.RUnlock()
+
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		return fmt.Errorf("marshal snapshot: %w", err)
+	}
+	dir := filepath.Dir(m.historyPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("create history dir: %w", err)
+	}
+	f, err := os.OpenFile(m.historyPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("open history file: %w", err)
+	}
+	defer f.Close()
+	if _, err := f.Write(append(data, '\n')); err != nil {
+		return fmt.Errorf("append snapshot: %w", err)
+	}
+	return nil
+}
+
+type DarwinianSnapshot struct {
+	Timestamp time.Time                       `json:"timestamp"`
+	Weights   map[string]DarwinianAgentWeight `json:"weights"`
+}
+
+// LoadHistory loads up to limit recent snapshots from the JSONL history file.
+// Returns snapshots in reverse chronological order (newest first, oldest last).
+// The frontend reverses this again for sparkline display to show oldest-to-newest.
+func (m *DarwinianWeightManager) LoadHistory(limit int) ([]DarwinianSnapshot, error) {
+	if m.historyPath == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(m.historyPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read history: %w", err)
+	}
+	var snapshots []DarwinianSnapshot
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	for i := len(lines) - 1; i >= 0 && len(snapshots) < limit; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		var snap DarwinianSnapshot
+		if err := json.Unmarshal([]byte(line), &snap); err != nil {
+			continue
+		}
+		snapshots = append(snapshots, snap)
+	}
+	return snapshots, nil
 }
 
 // WithEventBus sets the event bus for publishing clamping events.

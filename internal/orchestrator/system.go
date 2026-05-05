@@ -110,6 +110,7 @@ func NewSystem(cfg config.Config) *System {
 	plugins := NewPluginRegistry().WithScreener(screenerEngine).WithFactorEngine(factorEngine)
 
 	darwinian := portfolio.NewDarwinianWeightManager("data/state/darwinian_weights.json").
+		WithHistoryPath("data/state/darwinian_history.jsonl").
 		WithParameters(runtimeParams)
 	darwinian.InitializeFromRegistry(registry)
 	_ = darwinian.Load()
@@ -272,6 +273,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		}
 		_, clampingEvents := s.darwinian.PerformDailyAdjustment()
 		_ = s.darwinian.Save()
+		_ = s.darwinian.AppendSnapshot()
 		// Publish clamping events for monitoring and audit trail
 		if len(clampingEvents) > 0 && s.eventBus != nil {
 			payloads := make([]eventbus.ClampingEventPayload, len(clampingEvents))

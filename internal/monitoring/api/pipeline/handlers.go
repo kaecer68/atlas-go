@@ -28,6 +28,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/sessions", h.HandleSessions)
 	mux.HandleFunc("/api/dashboard/universe-overlap", h.HandleUniverseOverlap)
 	mux.HandleFunc("/api/synergy/darwinian-status", h.HandleDarwinianStatus)
+	mux.HandleFunc("/api/synergy/darwinian-trend", h.HandleDarwinianTrend)
 	mux.HandleFunc("/api/dashboard/regime-history", h.HandleRegimeHistory)
 }
 
@@ -162,9 +163,26 @@ func (h *Handlers) HandleForecastVsReality(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	symbolPredictions := make([]SymbolPredictionItem, len(data.SymbolPredictions))
+	for i, p := range data.SymbolPredictions {
+		symbolPredictions[i] = SymbolPredictionItem{
+			AgentID:       p.AgentID,
+			Symbol:        p.Symbol,
+			Side:          p.Side,
+			Conviction:    p.Conviction,
+			TargetPrice:   p.TargetPrice,
+			ForwardReturn: p.ForwardReturn,
+			Hit:           p.Hit,
+			PassedGuards:  p.PassedGuards,
+			RecordedAt:    p.RecordedAt,
+			SessionID:     p.SessionID,
+		}
+	}
+
 	resp := ForecastVsRealityResponse{
-		Items:         items,
-		BrokerRuntime: data.BrokerRuntime,
+		Items:             items,
+		SymbolPredictions: symbolPredictions,
+		BrokerRuntime:     data.BrokerRuntime,
 	}
 	shared.WriteJSON(w, http.StatusOK, resp)
 }
@@ -186,8 +204,23 @@ type ForecastVsRealityItem struct {
 
 // ForecastVsRealityResponse is the API response for forecast vs reality.
 type ForecastVsRealityResponse struct {
-	Items         []ForecastVsRealityItem   `json:"items"`
-	BrokerRuntime domain.BrokerRuntimeAudit `json:"broker_runtime"`
+	Items             []ForecastVsRealityItem   `json:"items"`
+	SymbolPredictions []SymbolPredictionItem    `json:"symbol_predictions"`
+	BrokerRuntime     domain.BrokerRuntimeAudit `json:"broker_runtime"`
+}
+
+// SymbolPredictionItem is the API response item for symbol-level predictions.
+type SymbolPredictionItem struct {
+	AgentID       string  `json:"agent_id"`
+	Symbol        string  `json:"symbol"`
+	Side          string  `json:"side"`
+	Conviction    int     `json:"conviction"`
+	TargetPrice   float64 `json:"target_price"`
+	ForwardReturn float64 `json:"forward_return"`
+	Hit           bool    `json:"hit"`
+	PassedGuards  bool    `json:"passed_guards"`
+	RecordedAt    string  `json:"recorded_at"`
+	SessionID     string  `json:"session_id"`
 }
 
 // HandleRecommendationPipeline handles GET /api/dashboard/recommendation-pipeline.
@@ -365,6 +398,24 @@ func (h *Handlers) HandleDarwinianStatus(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	shared.WriteJSON(w, http.StatusOK, data)
+}
+
+func (h *Handlers) HandleDarwinianTrend(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	limit, err := parseLimit(r, 30, 200)
+	if err != nil {
+		shared.WriteJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	points, err := h.Svc.LoadDarwinianHistory(limit)
+	if err != nil {
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load darwinian history: %v", err))
+		return
+	}
+	shared.WriteJSON(w, http.StatusOK, map[string]interface{}{"points": points})
 }
 
 func (h *Handlers) HandleRegimeHistory(w http.ResponseWriter, r *http.Request) {

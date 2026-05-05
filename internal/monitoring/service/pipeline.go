@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
@@ -118,7 +120,13 @@ func (s *PipelineService) LoadForecastVsReality(agentID string, limit int) (*For
 		return nil, fmt.Errorf("load forecast-vs-reality data: %w", err)
 	}
 
-	data := &ForecastVsRealityData{Items: items}
+	predictions, err := s.loadSymbolPredictions(limit)
+	if err != nil {
+		logging.Warn("pipeline_service", "load_symbol_predictions", logging.Err(err))
+		predictions = nil
+	}
+
+	data := &ForecastVsRealityData{Items: items, SymbolPredictions: predictions}
 	summary, err := LoadSessionSummary(s.LedgerDir, "")
 	if err != nil {
 		return data, nil
@@ -129,10 +137,96 @@ func (s *PipelineService) LoadForecastVsReality(agentID string, limit int) (*For
 	return data, nil
 }
 
+func (s *PipelineService) loadSymbolPredictions(limit int) ([]SymbolPredictionItem, error) {
+	path := filepath.Join(s.LedgerDir, "recommendation_outcomes.jsonl")
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+
+	type rawOutcome struct {
+		AgentID       string  `json:"agent_id"`
+		Symbol        string  `json:"symbol"`
+		Side          string  `json:"side"`
+		Conviction    int     `json:"conviction"`
+		TargetPrice   float64 `json:"target_price"`
+		ForwardReturn float64 `json:"forward_return"`
+		Hit           bool    `json:"hit"`
+		PassedGuards  bool    `json:"passed_guards"`
+		RecordedAt    string  `json:"recorded_at"`
+		SessionID     string  `json:"session_id"`
+	}
+
+	var outcomes []rawOutcome
+	var dropped int
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var out rawOutcome
+		if err := json.Unmarshal(scanner.Bytes(), &out); err != nil {
+			dropped++
+			continue
+		}
+		outcomes = append(outcomes, out)
+	}
+	if dropped > 0 {
+		logging.Warn("pipeline_service", "dropped_corrupted_outcomes", logging.FInt("count", dropped))
+	}
+
+	slices.SortFunc(outcomes, func(a, b rawOutcome) int {
+		if a.SessionID > b.SessionID {
+			return -1
+		}
+		if a.SessionID < b.SessionID {
+			return 1
+		}
+		return 0
+	})
+
+	if len(outcomes) > limit {
+		outcomes = outcomes[:limit]
+	}
+
+	result := make([]SymbolPredictionItem, len(outcomes))
+	for i, o := range outcomes {
+		result[i] = SymbolPredictionItem{
+			AgentID:       o.AgentID,
+			Symbol:        o.Symbol,
+			Side:          o.Side,
+			Conviction:    o.Conviction,
+			TargetPrice:   o.TargetPrice,
+			ForwardReturn: o.ForwardReturn,
+			Hit:           o.Hit,
+			PassedGuards:  o.PassedGuards,
+			RecordedAt:    o.RecordedAt,
+			SessionID:     o.SessionID,
+		}
+	}
+	return result, nil
+}
+
 // ForecastVsRealityData is the internal representation for forecast vs reality response.
 type ForecastVsRealityData struct {
-	Items         []ForecastVsRealityItem
-	BrokerRuntime domain.BrokerRuntimeAudit
+	Items             []ForecastVsRealityItem
+	SymbolPredictions []SymbolPredictionItem
+	BrokerRuntime     domain.BrokerRuntimeAudit
+}
+
+// SymbolPredictionItem represents a single symbol's prediction vs actual outcome.
+type SymbolPredictionItem struct {
+	AgentID       string  `json:"agent_id"`
+	Symbol        string  `json:"symbol"`
+	Side          string  `json:"side"`
+	Conviction    int     `json:"conviction"`
+	TargetPrice   float64 `json:"target_price"`
+	ForwardReturn float64 `json:"forward_return"`
+	Hit           bool    `json:"hit"`
+	PassedGuards  bool    `json:"passed_guards"`
+	RecordedAt    string  `json:"recorded_at"`
+	SessionID     string  `json:"session_id"`
 }
 
 // ForecastVsRealityItem represents a single experiment result.
@@ -567,6 +661,55 @@ type DarwinianAgentInfo struct {
 }
 
 // LoadDarwinianStatus loads the current Darwinian weight state from disk.
+func (s *PipelineService) LoadDarwinianHistory(limit int) ([]DarwinianHistoryPoint, error) {
+	historyPath := filepath.Join(s.WorkDir, "data/state/darwinian_history.jsonl")
+	data, err := os.ReadFile(historyPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read darwinian history: %w", err)
+	}
+	var points []DarwinianHistoryPoint
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	for i := len(lines) - 1; i >= 0 && len(points) < limit; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		var snap struct {
+			Timestamp string `json:"timestamp"`
+			Weights   map[string]struct {
+				Weight        float64 `json:"weight"`
+				RollingSharpe float64 `json:"rolling_sharpe"`
+				HitRate       float64 `json:"hit_rate"`
+			} `json:"weights"`
+		}
+		if err := json.Unmarshal([]byte(line), &snap); err != nil {
+			continue
+		}
+		ts := snap.Timestamp
+		for agentID, w := range snap.Weights {
+			points = append(points, DarwinianHistoryPoint{
+				AgentID:       agentID,
+				Timestamp:     ts,
+				Weight:        w.Weight,
+				RollingSharpe: w.RollingSharpe,
+				HitRate:       w.HitRate,
+			})
+		}
+	}
+	return points, nil
+}
+
+type DarwinianHistoryPoint struct {
+	AgentID       string  `json:"agent_id"`
+	Timestamp     string  `json:"timestamp"`
+	Weight        float64 `json:"weight"`
+	RollingSharpe float64 `json:"rolling_sharpe"`
+	HitRate       float64 `json:"hit_rate"`
+}
+
 func (s *PipelineService) LoadDarwinianStatus() (*DarwinianStatusData, error) {
 	weightsPath := filepath.Join(s.WorkDir, "data/state/darwinian_weights.json")
 	data, err := os.ReadFile(weightsPath)
