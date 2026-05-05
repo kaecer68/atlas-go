@@ -156,6 +156,7 @@ type ExperimentParameters struct {
 	VolatilityToleranceRatio   ParameterMetadata[float64] `json:"volatility_tolerance_ratio"`
 	OOSWindowDays              ParameterMetadata[int]     `json:"oos_window_days"`
 	SharpeStabilityThreshold   ParameterMetadata[float64] `json:"sharpe_stability_threshold"`
+	MaxFallbackRatio           ParameterMetadata[float64] `json:"max_fallback_ratio"`
 }
 
 // BaselineParameters holds tunable values for baseline policy defaults.

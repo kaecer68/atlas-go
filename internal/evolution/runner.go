@@ -128,7 +128,7 @@ func SelectBestSpawnedAgent(registry domain.AgentRegistry, scorecards []domain.S
 					PromptVersionFrom: "v1",
 					PromptVersionTo:   "v1",
 					MutationType:      "promote_spawned",
-					AcceptanceGates:   []string{"maintain_sharpe_like", "no_drawdown_spike"},
+					AcceptanceGates:   []string{"maintain_sharpe_like", "no_drawdown_spike", "factor_quality"},
 					WindowStart:       time.Now().AddDate(0, 0, -20),
 					WindowEnd:         time.Now(),
 					AcceptanceMetric:  "sharpe_like",

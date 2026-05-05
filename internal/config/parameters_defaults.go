@@ -611,6 +611,11 @@ func defaultExperimentParameters() ExperimentParameters {
 			Rationale: "Sharpe stability: stderr < 0.5 AND |mean|/stddev >= 0.5",
 			Source:    SourceHeuristic,
 		},
+		MaxFallbackRatio: ParameterMetadata[float64]{
+			Value:     0.6,
+			Rationale: "Maximum fraction of factors allowed to be IsFallback (60%) before degrading experiment confidence",
+			Source:    SourceHeuristic,
+		},
 	}
 }
 

@@ -14,13 +14,35 @@ import (
 )
 
 type replayScoreSummary struct {
-	BaselineScore         float64
-	CandidateScore        float64
-	BaselineObservations  int
-	CandidateObservations int
-	UsedFallbackWindow    bool
-	BaselineReturns       []float64
-	CandidateReturns      []float64
+	BaselineScore          float64
+	CandidateScore         float64
+	BaselineObservations   int
+	CandidateObservations  int
+	UsedFallbackWindow     bool
+	BaselineReturns        []float64
+	CandidateReturns       []float64
+	BaselineFallbackStats  FallbackStats
+	CandidateFallbackStats FallbackStats
+}
+
+// FallbackStats tracks factor quality based on IsFallback ratio.
+type FallbackStats struct {
+	FallbackCount int // number of factors marked IsFallback=true
+	TotalCount    int // total number of factors evaluated
+}
+
+// Ratio returns the fraction of fallback factors (0.0 to 1.0).
+// Returns 0.0 if TotalCount is 0.
+func (fs FallbackStats) Ratio() float64 {
+	if fs.TotalCount == 0 {
+		return 0.0
+	}
+	return float64(fs.FallbackCount) / float64(fs.TotalCount)
+}
+
+// IsHighFallback returns true if more than maxRatio of factors are fallbacks.
+func (fs FallbackStats) IsHighFallback(maxRatio float64) bool {
+	return fs.Ratio() > maxRatio
 }
 
 func comparePromptPerformance(replayDataPath, baselinePolicyPath string, brief domain.MutationBrief, window domain.BacktestWindowSummary, candidatePromptPath string) (float64, float64, error) {
@@ -90,25 +112,29 @@ func comparePromptPerformanceDetailed(replayDataPath, baselinePolicyPath string,
 		}
 		return summary, nil
 	default:
-		baseline, baselineObs, baselineReturns := scorePromptWindowWithObservations(ds, brief.TargetSkill, baselinePrompt, policy.ExecutionPolicy, window.StartDate, window.EndDate)
-		candidate, candidateObs, candidateReturns := scorePromptWindowWithObservations(ds, brief.TargetSkill, string(candidatePromptBytes), policy.ExecutionPolicy, window.StartDate, window.EndDate)
+		baseline, baselineObs, baselineReturns, baselineFallback := scorePromptWindowWithObservations(ds, brief.TargetSkill, baselinePrompt, policy.ExecutionPolicy, window.StartDate, window.EndDate)
+		candidate, candidateObs, candidateReturns, candidateFallback := scorePromptWindowWithObservations(ds, brief.TargetSkill, string(candidatePromptBytes), policy.ExecutionPolicy, window.StartDate, window.EndDate)
 		summary.BaselineScore = baseline
 		summary.CandidateScore = candidate
 		summary.BaselineObservations = baselineObs
 		summary.CandidateObservations = candidateObs
 		summary.BaselineReturns = baselineReturns
 		summary.CandidateReturns = candidateReturns
+		summary.BaselineFallbackStats = baselineFallback
+		summary.CandidateFallbackStats = candidateFallback
 		if baselineObs == 0 && candidateObs == 0 {
 			fallbackStart, fallbackEnd, ok := fallbackWindow(ds, 1)
 			if ok {
-				baseline, baselineObs, baselineReturns = scorePromptWindowWithObservations(ds, brief.TargetSkill, baselinePrompt, policy.ExecutionPolicy, fallbackStart, fallbackEnd)
-				candidate, candidateObs, candidateReturns = scorePromptWindowWithObservations(ds, brief.TargetSkill, string(candidatePromptBytes), policy.ExecutionPolicy, fallbackStart, fallbackEnd)
+				baseline, baselineObs, baselineReturns, baselineFallback = scorePromptWindowWithObservations(ds, brief.TargetSkill, baselinePrompt, policy.ExecutionPolicy, fallbackStart, fallbackEnd)
+				candidate, candidateObs, candidateReturns, candidateFallback = scorePromptWindowWithObservations(ds, brief.TargetSkill, string(candidatePromptBytes), policy.ExecutionPolicy, fallbackStart, fallbackEnd)
 				summary.BaselineScore = baseline
 				summary.CandidateScore = candidate
 				summary.BaselineObservations = baselineObs
 				summary.CandidateObservations = candidateObs
 				summary.BaselineReturns = baselineReturns
 				summary.CandidateReturns = candidateReturns
+				summary.BaselineFallbackStats = baselineFallback
+				summary.CandidateFallbackStats = candidateFallback
 				summary.UsedFallbackWindow = true
 			}
 		}
@@ -116,13 +142,14 @@ func comparePromptPerformanceDetailed(replayDataPath, baselinePolicyPath string,
 	}
 }
 
-func scorePromptWindowWithObservations(ds *replay.Dataset, skill, prompt string, policy domain.ExecutionPolicy, startDate, endDate time.Time) (float64, int, []float64) {
+func scorePromptWindowWithObservations(ds *replay.Dataset, skill, prompt string, policy domain.ExecutionPolicy, startDate, endDate time.Time) (float64, int, []float64, FallbackStats) {
 	if ds == nil {
-		return 0, 0, nil
+		return 0, 0, nil, FallbackStats{}
 	}
 
 	registry := orchestrator.SeedRegistry()
 	sessionReturns := make([]float64, 0)
+	var totalFallback, totalFactors int
 	for _, date := range ds.Dates {
 		if date.Before(startDate) || date.After(endDate) {
 			continue
@@ -142,6 +169,25 @@ func scorePromptWindowWithObservations(ds *replay.Dataset, skill, prompt string,
 			if rec.Skill != skill {
 				continue
 			}
+			if rec.FactorScores.Breakdown != nil {
+				bd := rec.FactorScores.Breakdown
+				if bd.Momentum.IsFallback {
+					totalFallback++
+				}
+				totalFactors++
+				if bd.Value.IsFallback {
+					totalFallback++
+				}
+				totalFactors++
+				if bd.Quality.IsFallback {
+					totalFallback++
+				}
+				totalFactors++
+				if bd.Agent.IsFallback {
+					totalFallback++
+				}
+				totalFactors++
+			}
 			forwardReturn, ok := ds.ForwardReturn(rec.Symbol, date, 1)
 			if !ok {
 				continue
@@ -155,13 +201,13 @@ func scorePromptWindowWithObservations(ds *replay.Dataset, skill, prompt string,
 	}
 
 	if len(sessionReturns) == 0 {
-		return 0, 0, nil
+		return 0, 0, nil, FallbackStats{}
 	}
 	total := 0.0
 	for _, r := range sessionReturns {
 		total += r
 	}
-	return total / float64(len(sessionReturns)), len(sessionReturns), sessionReturns
+	return total / float64(len(sessionReturns)), len(sessionReturns), sessionReturns, FallbackStats{FallbackCount: totalFallback, TotalCount: totalFactors}
 }
 
 func scoreConstraintWindowWithObservations(ds *replay.Dataset, constraints domain.SimulationConstraints, startDate, endDate time.Time) (float64, int, []float64) {

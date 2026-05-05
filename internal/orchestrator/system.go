@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
@@ -49,6 +50,7 @@ type SystemCore struct {
 	approvalWorkflow  *risk.ApprovalWorkflow
 	metricsCollector  interface{ RecordScreening(passed, rejected int64) }
 	eventBus          *eventbus.ChannelEventBus
+	clampingLogger    *clampingLogger
 
 	strategyRegistry   *strategy.Registry
 	strategySelector   *strategy.Selector
@@ -58,6 +60,12 @@ type SystemCore struct {
 
 	repo repository.OutcomeRepository
 }
+
+// CoreServices interface implementation for SystemCore
+func (s *SystemCore) GetReplay() *replay.Dataset                      { return s.replay }
+func (s *SystemCore) GetRegistry() domain.AgentRegistry               { return s.registry }
+func (s *SystemCore) GetPolicy() baseline.Policy                      { return s.policy }
+func (s *SystemCore) GetLastOutcomes() []domain.RecommendationOutcome { return s.lastOutcomes }
 
 // System orchestrates the full simulation loop via a SystemCore and a PluginHost.
 type System struct {
@@ -106,6 +114,9 @@ func NewSystem(cfg config.Config) *System {
 	darwinian.InitializeFromRegistry(registry)
 	_ = darwinian.Load()
 
+	eventBus := eventbus.NewChannelEventBus(256)
+	darwinian.WithEventBus(eventBus)
+
 	thresholdEngine := sim.NewDynamicThresholdEngine()
 	strategyRegistry := strategy.NewRegistryWithDefaults()
 	comparisonEngine := strategy.NewComparisonEngine(20)
@@ -138,7 +149,8 @@ func NewSystem(cfg config.Config) *System {
 			narrativeEngine:    narrative.NewNarrativeEngine(),
 			ctx:                context.Background(),
 			darwinian:          darwinian,
-			eventBus:           eventbus.NewChannelEventBus(256),
+			eventBus:           eventBus,
+			clampingLogger:     newClampingLogger(filepath.Join(cfg.LedgerDir, "clamping_events.jsonl")),
 			strategyRegistry:   strategyRegistry,
 			strategySelector:   strategySelector,
 			comparisonEngine:   comparisonEngine,
@@ -161,14 +173,15 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 
 	events := s.detectNarrativeEvents(quotes)
 	researchResult := ExecuteWithContext(ExecutionContext{
-		Registry:      s.registry,
-		Quotes:        quotes,
-		Overrides:     s.policy.PromptOverrides,
-		Policy:        s.policy.ExecutionPolicy,
-		Plugins:       s.plugins,
-		SessionID:     s.session.ID,
-		WeightManager: s.darwinian,
-		Context:       s.ctx,
+		Registry:        s.registry,
+		Quotes:          quotes,
+		Overrides:       s.policy.PromptOverrides,
+		Policy:          s.policy.ExecutionPolicy,
+		Plugins:         s.plugins,
+		SessionID:       s.session.ID,
+		WeightManager:   s.darwinian,
+		Context:         s.ctx,
+		NarrativeEvents: events,
 	})
 	regime := researchResult.Regime
 	rawRecs := researchResult.RawRecommendations
@@ -252,8 +265,27 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		for _, outcome := range outcomes {
 			s.darwinian.RecordOutcome(outcome.AgentID, outcome.ForwardReturn, outcome.Hit)
 		}
-		s.darwinian.PerformDailyAdjustment()
+		_, clampingEvents := s.darwinian.PerformDailyAdjustment()
 		_ = s.darwinian.Save()
+		// Publish clamping events for monitoring and audit trail
+		if len(clampingEvents) > 0 && s.eventBus != nil {
+			payloads := make([]eventbus.ClampingEventPayload, len(clampingEvents))
+			for i, e := range clampingEvents {
+				payloads[i] = eventbus.ClampingEventPayload{
+					AgentID:     e.AgentID,
+					RawWeight:   e.RawWeight,
+					FinalWeight: e.FinalWeight,
+					Boundary:    e.Boundary,
+					Timestamp:   e.Timestamp,
+				}
+			}
+			go s.eventBus.PublishDarwinianClamping(payloads)
+			if s.clampingLogger != nil {
+				for _, p := range payloads {
+					s.clampingLogger.Append(p)
+				}
+			}
+		}
 	}
 
 	s.host.PostSimulation(quotes, regime, asOf)
@@ -265,14 +297,15 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	quotes := s.replay.QuotesForDate(sessionDate, symbols)
 	events := s.detectNarrativeEvents(quotes)
 	researchResult := ExecuteWithContext(ExecutionContext{
-		Registry:      s.registry,
-		Quotes:        quotes,
-		Overrides:     s.policy.PromptOverrides,
-		Policy:        s.policy.ExecutionPolicy,
-		Plugins:       s.plugins,
-		SessionID:     s.session.ID,
-		WeightManager: s.darwinian,
-		Context:       s.ctx,
+		Registry:        s.registry,
+		Quotes:          quotes,
+		Overrides:       s.policy.PromptOverrides,
+		Policy:          s.policy.ExecutionPolicy,
+		Plugins:         s.plugins,
+		SessionID:       s.session.ID,
+		WeightManager:   s.darwinian,
+		Context:         s.ctx,
+		NarrativeEvents: events,
 	})
 	regime := researchResult.Regime
 	rawRecs := researchResult.RawRecommendations
@@ -351,8 +384,26 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		for _, outcome := range outcomes {
 			s.darwinian.RecordOutcome(outcome.AgentID, outcome.ForwardReturn, outcome.Hit)
 		}
-		s.darwinian.PerformDailyAdjustment()
+		_, clampingEvents := s.darwinian.PerformDailyAdjustment()
 		_ = s.darwinian.Save()
+		if len(clampingEvents) > 0 && s.eventBus != nil {
+			payloads := make([]eventbus.ClampingEventPayload, len(clampingEvents))
+			for i, e := range clampingEvents {
+				payloads[i] = eventbus.ClampingEventPayload{
+					AgentID:     e.AgentID,
+					RawWeight:   e.RawWeight,
+					FinalWeight: e.FinalWeight,
+					Boundary:    e.Boundary,
+					Timestamp:   e.Timestamp,
+				}
+			}
+			go s.eventBus.PublishDarwinianClamping(payloads)
+			if s.clampingLogger != nil {
+				for _, p := range payloads {
+					s.clampingLogger.Append(p)
+				}
+			}
+		}
 	}
 
 	s.host.PostSimulation(quotes, regime, sessionDate)
