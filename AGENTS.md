@@ -61,6 +61,8 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 
 ## 核心架構
 
+### 主要模組（核心資料流）
+
 | 目錄 | 職責 |
 |------|------|
 | `internal/domain/` | 領域型別（`Regime`、`Recommendation`、`Position` 等字串 enum） |
@@ -78,8 +80,38 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 | `internal/janus/` | 跨 cohort regime 偵測與 PRISM 權重動態調整 |
 | `internal/narrative/` | 巨集觀敘事事件偵測、因果鏈、台灣壓力指數 |
 
+### 輔助模組（支撐系統）
+
+| 目錄 | 職責 |
+|------|------|
+| `internal/adversarial/` | 對抗性訓練（AdversarialTrainer、BattleResult、StressTest） |
+| `internal/backtest/` | 視窗回測（Window.Run） |
+| `internal/bootstrap/` | 系統初始化與儀表板路由註冊 |
+| `internal/config/` | 環境變數讀取（ATLAS_* 前綴）、參數配置 |
+| `internal/db/` | PostgreSQL 連接管理 |
+| `internal/eventbus/` | 事件匯流排（ChannelEventBus、Publish/Subscribe） |
+| `internal/evolution/` | 突變提案建構（BuildMutationBrief）、最弱代理選擇 |
+| `internal/globalmarket/` | 全球總經資料管理 |
+| `internal/importer/` | CSV → JSONL 資料匯入（TWSE、FinMind） |
+| `internal/industry/` | 產業分析（行業輪動、供給需求分析） |
+| `internal/logging/` | 統一日誌介面（Info/Error/Err） |
+| `internal/monitoring/` | 監控 API 與 Dashboard（200 symbols，36 個 API handlers） |
+| `internal/realtime/` | 即時資料轉接器（RealTimeAdapter） |
+| `internal/reflexivity/` | 自反性價格動態引擎 |
+| `internal/replay/` | TWSE CSV 載入與 forward return 計算 |
+| `internal/reporting/` | 報告生成（Markdown、ASCII chart、Agent 績效表） |
+| `internal/repository/` | PostgreSQL 持久化（DualWriteRepository） |
+| `internal/risk/` | 風險管理（RiskManager、VaR、宏觀回撤） |
+| `internal/spawning/` | Agent 生成管理（SpawningManager、PerformSpawningCycle） |
+| `internal/strategy/` | 策略選擇器與登錄 |
+| `internal/stress/` | 壓力測試場景（RunScenario） |
+| `internal/taskexec/` | 非同步任務執行器（Manager、Cancel/Subscribe） |
+| `internal/tax/` | 台灣稅務計算（TaiwanTaxCalculator） |
+
 **分層資料流**：
-`Market Data → Orchestrator (context → screener → sector/style/superinvestor → control) → Simulator → Ledger`
+`Market Data → Orchestrator (context → screener → sector/style → control) → Simulator → Ledger`
+
+> **注意**：`superinvestor` 不是獨立 executor，而是 sector/style agent 的角色型別（參見 `configs/agents.json` 中的 `layer: superinvestor`）。
 
 ---
 
@@ -221,7 +253,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas** (10939 symbols, 28816 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (17355 symbols, 38718 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -233,19 +265,6 @@ This project is indexed by GitNexus as **atlas** (10939 symbols, 28816 relations
 - When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
 - When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
 
-## When Debugging
-
-1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
-2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
-3. `READ gitnexus://repo/atlas/process/{processName}` — trace the full execution flow step by step
-4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
-
-## When Refactoring
-
-- **Renaming**: MUST use `gitnexus_rename({symbol_name: "old", new_name: "new", dry_run: true})` first. Review the preview — graph edits are safe, text_search edits need manual review. Then run with `dry_run: false`.
-- **Extracting/Splitting**: MUST run `gitnexus_context({name: "target"})` to see all incoming/outgoing refs, then `gitnexus_impact({target: "target", direction: "upstream"})` to find all external callers before moving code.
-- After any refactor: run `gitnexus_detect_changes({scope: "all"})` to verify only expected files changed.
-
 ## Never Do
 
 - NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
@@ -253,59 +272,14 @@ This project is indexed by GitNexus as **atlas** (10939 symbols, 28816 relations
 - NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
 - NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
 
-## Tools Quick Reference
-
-| Tool | When to use | Command |
-|------|-------------|---------|
-| `query` | Find code by concept | `gitnexus_query({query: "auth validation"})` |
-| `context` | 360-degree view of one symbol | `gitnexus_context({name: "validateUser"})` |
-| `impact` | Blast radius before editing | `gitnexus_impact({target: "X", direction: "upstream"})` |
-| `detect_changes` | Pre-commit scope check | `gitnexus_detect_changes({scope: "staged"})` |
-| `rename` | Safe multi-file rename | `gitnexus_rename({symbol_name: "old", new_name: "new", dry_run: true})` |
-| `cypher` | Custom graph queries | `gitnexus_cypher({query: "MATCH ..."})` |
-
-## Impact Risk Levels
-
-| Depth | Meaning | Action |
-|-------|---------|--------|
-| d=1 | WILL BREAK — direct callers/importers | MUST update these |
-| d=2 | LIKELY AFFECTED — indirect deps | Should test |
-| d=3 | MAY NEED TESTING — transitive | Test if critical path |
-
 ## Resources
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/atlas/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/atlas/clusters` | All functional areas |
-| `gitnexus://repo/atlas/processes` | All execution flows |
-| `gitnexus://repo/atlas/process/{name}` | Step-by-step execution trace |
-
-## Self-Check Before Finishing
-
-Before completing any code modification task, verify:
-1. `gitnexus_impact` was run for all modified symbols
-2. No HIGH/CRITICAL risk warnings were ignored
-3. `gitnexus_detect_changes()` confirms changes match expected scope
-4. All d=1 (WILL BREAK) dependents were updated
-
-## Keeping the Index Fresh
-
-After committing code changes, the GitNexus index becomes stale. Re-run analyze to update it:
-
-```bash
-npx gitnexus analyze
-```
-
-If the index previously included embeddings, preserve them by adding `--embeddings`:
-
-```bash
-npx gitnexus analyze --embeddings
-```
-
-To check whether embeddings exist, inspect `.gitnexus/meta.json` — the `stats.embeddings` field shows the count (0 means no embeddings). **Running analyze without `--embeddings` will delete any previously generated embeddings.**
-
-> Claude Code users: A PostToolUse hook handles this automatically after `git commit` and `git merge`.
+| `gitnexus://repo/atlas-go/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/atlas-go/clusters` | All functional areas |
+| `gitnexus://repo/atlas-go/processes` | All execution flows |
+| `gitnexus://repo/atlas-go/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 

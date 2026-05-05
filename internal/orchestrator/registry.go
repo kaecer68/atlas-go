@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
@@ -181,7 +182,7 @@ func SeedRegistry() domain.AgentRegistry {
 	}
 }
 
-func ValidateRegistry(reg domain.AgentRegistry) error {
+func ValidateRegistry(reg domain.AgentRegistry, configDir string) error {
 	if reg.Version <= 0 {
 		return fmt.Errorf("registry version must be positive")
 	}
@@ -201,6 +202,16 @@ func ValidateRegistry(reg domain.AgentRegistry) error {
 			return fmt.Errorf("duplicate agent id: %s", agent.ID)
 		}
 		seen[agent.ID] = struct{}{}
+
+		if configDir != "" && agent.PromptFile != "" {
+			promptPath := agent.PromptFile
+			if !filepath.IsAbs(promptPath) {
+				promptPath = filepath.Join(configDir, promptPath)
+			}
+			if _, err := os.Stat(promptPath); err != nil {
+				return fmt.Errorf("agent %s prompt file not found: %s", agent.ID, promptPath)
+			}
+		}
 	}
 
 	return nil
@@ -209,7 +220,7 @@ func ValidateRegistry(reg domain.AgentRegistry) error {
 func LoadRegistry(path string) (domain.AgentRegistry, error) {
 	if path == "" {
 		reg := SeedRegistry()
-		return reg, ValidateRegistry(reg)
+		return reg, ValidateRegistry(reg, "")
 	}
 
 	bytes, err := os.ReadFile(path)
@@ -221,5 +232,6 @@ func LoadRegistry(path string) (domain.AgentRegistry, error) {
 	if err := json.Unmarshal(bytes, &reg); err != nil {
 		return domain.AgentRegistry{}, err
 	}
-	return reg, ValidateRegistry(reg)
+	configDir := filepath.Dir(path)
+	return reg, ValidateRegistry(reg, configDir)
 }

@@ -32,7 +32,8 @@
 /test-monitor
 *.test
 graphify-out/
-internal/graphify-out/
+ internal/graphify-out/
+ */graphify-out/
 complexity_top20.txt
 cmd/*/reports/
 internal/*/data/
@@ -48,6 +49,7 @@ internal/*/data/
 .playwright-mcp/
 .graphify_cached.json
 .graphify_uncached.txt
+.sisyphus/
 
 # Temporary files
 tmp/
