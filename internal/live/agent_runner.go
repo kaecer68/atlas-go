@@ -52,6 +52,35 @@ func (r *AgentRunner) SetMetrics(m MetricsRecorder) {
 	r.metrics = m
 }
 
+func (r *AgentRunner) ApplyExecutionInput(ctx context.Context, input ExecutionInput) error {
+	r.stateStore.SetCurrentRegime(input.Regime)
+
+	if len(input.RawRecommendations) > 0 {
+		r.stateStore.SetPendingRecommendations(input.RawRecommendations)
+	}
+
+	if len(input.FinalRecommendations) > 0 {
+		r.stateStore.SetFilteredRecommendations(input.FinalRecommendations)
+	}
+
+	r.publishEvent(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventSystemStart,
+		Timestamp: time.Now(),
+		Payload: map[string]interface{}{
+			"regime":               string(input.Regime),
+			"raw_count":            len(input.RawRecommendations),
+			"final_count":         len(input.FinalRecommendations),
+			"determined_by":        input.DeterminedBy,
+			"type":                 "execution_input_applied",
+		},
+	})
+
+	fmt.Printf("[AgentRunner] Applied execution input: regime=%s, raw=%d, final=%d\n",
+		input.Regime, len(input.RawRecommendations), len(input.FinalRecommendations))
+	return nil
+}
+
 func (r *AgentRunner) RunContextAgent(ctx context.Context, watchlist []string) error {
 	if r.system == nil {
 		return fmt.Errorf("system not initialized")
