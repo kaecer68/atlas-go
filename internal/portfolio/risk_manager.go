@@ -67,7 +67,6 @@ const (
 	LevelEmergency
 )
 
-// Position represents a trading position
 type Position struct {
 	Symbol       string
 	Size         float64
@@ -78,6 +77,11 @@ type Position struct {
 	OpenTime     time.Time
 	LastUpdate   time.Time
 }
+
+// Position is for real-time risk tracking, distinct from domain.Position
+// which is the canonical cross-package snapshot for persistence.
+// This struct tracks execution details (entry time, realized P&L) needed for
+// stop-loss/take-profit decisions.
 
 // NewRiskManager creates a new risk manager with default parameters
 func NewRiskManager() *RiskManager {
