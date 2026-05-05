@@ -18,16 +18,31 @@ import (
 
 // PipelineService encapsulates dashboard pipeline data loading operations.
 type PipelineService struct {
-	WorkDir   string
-	LedgerDir string
+	WorkDir          string
+	LedgerDir        string
+	registryProvider RegistryProviderFunc
 }
 
-// NewPipelineService creates a new PipelineService.
+type RegistryProviderFunc func() (domain.AgentRegistry, error)
+
+func (s *PipelineService) WithRegistryProvider(fn RegistryProviderFunc) *PipelineService {
+	s.registryProvider = fn
+	return s
+}
+
 func NewPipelineService(workDir, ledgerDir string) *PipelineService {
 	return &PipelineService{
 		WorkDir:   workDir,
 		LedgerDir: ledgerDir,
 	}
+}
+
+func (s *PipelineService) loadRegistry() (domain.AgentRegistry, error) {
+	if s.registryProvider != nil {
+		return s.registryProvider()
+	}
+	registryPath := filepath.Join(s.WorkDir, "configs/agents.json")
+	return orchestrator.LoadRegistry(registryPath)
 }
 
 // LoadMacroRadar loads macro radar summary for the given session.
@@ -432,8 +447,7 @@ type SessionMeta struct {
 
 // LoadUniverseOverlap loads agent universe overlap data.
 func (s *PipelineService) LoadUniverseOverlap() (*UniverseOverlapData, error) {
-	registryPath := filepath.Join(s.WorkDir, "configs/agents.json")
-	registry, err := orchestrator.LoadRegistry(registryPath)
+	registry, err := s.loadRegistry()
 	if err != nil {
 		registry = orchestrator.SeedRegistry()
 	}
