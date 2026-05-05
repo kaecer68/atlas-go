@@ -11,6 +11,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
@@ -20,6 +21,7 @@ type Judge struct {
 	baselinePath   string
 	oosValidator   *OOSValidator
 	params         *config.ParametersConfig
+	eventBus       *eventbus.ChannelEventBus
 }
 
 func NewJudge(store *ledger.Store, replayDataPath, baselinePath string) *Judge {
@@ -30,6 +32,12 @@ func NewJudge(store *ledger.Store, replayDataPath, baselinePath string) *Judge {
 		oosValidator:   NewOOSValidator(store, replayDataPath),
 		params:         config.DefaultParametersConfig(),
 	}
+}
+
+// WithEventBus sets the Judge's event bus for publishing insufficient data events.
+func (j *Judge) WithEventBus(bus *eventbus.ChannelEventBus) *Judge {
+	j.eventBus = bus
+	return j
 }
 
 // WithParameters sets the Judge's parameters configuration.
@@ -82,6 +90,10 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 	result.UsedFallbackWindow = summary.UsedFallbackWindow
 	result.BaselineReturns = summary.BaselineReturns
 	result.CandidateReturns = summary.CandidateReturns
+	result.BaselineFallbackCount = summary.BaselineFallbackStats.FallbackCount
+	result.CandidateFallbackCount = summary.CandidateFallbackStats.FallbackCount
+	result.BaselineFactorCount = summary.BaselineFallbackStats.TotalCount
+	result.CandidateFactorCount = summary.CandidateFallbackStats.TotalCount
 	result.Experiment.WindowStart = windowSummary.StartDate
 	result.Experiment.WindowEnd = windowSummary.EndDate
 	result.EvaluationMode = "prompt_aware_replay_judged"
@@ -288,6 +300,16 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, st
 	}
 	minObs := j.requiredObservationCountForProfile(result.Brief.MaturityLevel, result.Experiment.MutationType)
 	if baselineObs < minObs || candidateObs < minObs {
+		if j.eventBus != nil {
+			_ = j.eventBus.PublishExperimentInsufficientData(
+				result.Experiment.ID,
+				baselineObs,
+				candidateObs,
+				minObs,
+				string(result.Brief.MaturityLevel),
+				result.UsedFallbackWindow,
+			)
+		}
 		return false, fmt.Sprintf("rejected: insufficient replay observations (baseline=%d candidate=%d required=%d)", baselineObs, candidateObs, minObs)
 	}
 	if candidate <= baseline {
@@ -364,6 +386,20 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, st
 			ratio := j.params.Experiment.VolatilityToleranceRatio.Value
 			if candidateVol > baselineVol*ratio {
 				return false, fmt.Sprintf("rejected: candidate volatility %.2f exceeds %.1fx baseline %.2f", candidateVol, ratio, baselineVol)
+			}
+		case "factor_quality":
+			maxRatio := j.params.Experiment.MaxFallbackRatio.Value
+			if result.BaselineFactorCount > 0 {
+				baselineRatio := float64(result.BaselineFallbackCount) / float64(result.BaselineFactorCount)
+				if baselineRatio > maxRatio {
+					checks = append(checks, fmt.Sprintf("WARNING: baseline fallback ratio %.1f%% exceeds threshold %.1f%%", baselineRatio*100, maxRatio*100))
+				}
+			}
+			if result.CandidateFactorCount > 0 {
+				candidateRatio := float64(result.CandidateFallbackCount) / float64(result.CandidateFactorCount)
+				if candidateRatio > maxRatio {
+					return false, fmt.Sprintf("rejected: candidate fallback ratio %.1f%% exceeds threshold %.1f%%", candidateRatio*100, maxRatio*100)
+				}
 			}
 		case "reduce_false_positive_rate", "maintain_cro_authority", "reduce_sector_blindspots", "maintain_industry_coverage", "reduce_style_drift", "maintain_momentum_catch":
 			return false, fmt.Sprintf("rejected: gate %q requires outcome data not yet collected", gate)

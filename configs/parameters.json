@@ -559,7 +559,12 @@
     },
     "sharpe_stability_threshold": {
       "value": 0.5,
-      "rationale": "Sharpe stability: stderr \u003c 0.5 AND |mean|/stddev \u003e= 0.5",
+      "rationale": "Sharpe stability: stderr < 0.5 AND |mean|/stddev >= 0.5",
+      "source": "heuristic"
+    },
+    "max_fallback_ratio": {
+      "value": 0.6,
+      "rationale": "Maximum 60% fallback factors allowed in experiment evaluation; exceeding rejects candidate",
       "source": "heuristic"
     }
   },

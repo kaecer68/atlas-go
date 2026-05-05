@@ -161,20 +161,24 @@ type OOSResult struct {
 }
 
 type PromptExperimentResult struct {
-	Experiment            ExperimentRecord
-	Brief                 MutationBrief
-	CandidatePrompt       string
-	EvaluationMode        string
-	PolicyChecks          []string
-	Notes                 []string
-	JudgeChecks           []string
-	BaselineObservations  int
-	CandidateObservations int
-	UsedFallbackWindow    bool
-	RecordedAt            time.Time
-	DataMetadata          *ReplayDataMetadata `json:"data_metadata,omitempty"`
-	OOSResult             *OOSResult          `json:"oos_result,omitempty"`
-	BaselineReturns       []float64           `json:"baseline_returns,omitempty"`
-	CandidateReturns      []float64           `json:"candidate_returns,omitempty"`
-	ParameterSnapshotID   string              `json:"parameter_snapshot_id,omitempty"`
+	Experiment             ExperimentRecord
+	Brief                  MutationBrief
+	CandidatePrompt        string
+	EvaluationMode         string
+	PolicyChecks           []string
+	Notes                  []string
+	JudgeChecks            []string
+	BaselineObservations   int
+	CandidateObservations  int
+	UsedFallbackWindow     bool
+	RecordedAt             time.Time
+	DataMetadata           *ReplayDataMetadata `json:"data_metadata,omitempty"`
+	OOSResult              *OOSResult          `json:"oos_result,omitempty"`
+	BaselineReturns        []float64           `json:"baseline_returns,omitempty"`
+	CandidateReturns       []float64           `json:"candidate_returns,omitempty"`
+	ParameterSnapshotID    string              `json:"parameter_snapshot_id,omitempty"`
+	BaselineFallbackCount  int                 `json:"baseline_fallback_count,omitempty"`
+	CandidateFallbackCount int                 `json:"candidate_fallback_count,omitempty"`
+	BaselineFactorCount    int                 `json:"baseline_factor_count,omitempty"`
+	CandidateFactorCount   int                 `json:"candidate_factor_count,omitempty"`
 }

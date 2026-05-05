@@ -213,3 +213,95 @@ func TestFallbackWindowExpandsUntilMinDatesMet(t *testing.T) {
 		t.Fatalf("expected full range fallback, got start=%s", start.Format("2006-01-02"))
 	}
 }
+
+func TestFallbackStatsRatio(t *testing.T) {
+	tests := []struct {
+		name      string
+		fallback  FallbackStats
+		wantRatio float64
+	}{
+		{
+			name:      "zero factors",
+			fallback:  FallbackStats{FallbackCount: 0, TotalCount: 0},
+			wantRatio: 0.0,
+		},
+		{
+			name:      "no fallbacks",
+			fallback:  FallbackStats{FallbackCount: 0, TotalCount: 10},
+			wantRatio: 0.0,
+		},
+		{
+			name:      "all fallbacks",
+			fallback:  FallbackStats{FallbackCount: 10, TotalCount: 10},
+			wantRatio: 1.0,
+		},
+		{
+			name:      "half fallbacks",
+			fallback:  FallbackStats{FallbackCount: 5, TotalCount: 10},
+			wantRatio: 0.5,
+		},
+		{
+			name:      "60 percent fallbacks",
+			fallback:  FallbackStats{FallbackCount: 6, TotalCount: 10},
+			wantRatio: 0.6,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.fallback.Ratio()
+			if got != tt.wantRatio {
+				t.Errorf("FallbackStats.Ratio() = %v, want %v", got, tt.wantRatio)
+			}
+		})
+	}
+}
+
+func TestFallbackStatsIsHighFallback(t *testing.T) {
+	tests := []struct {
+		name     string
+		fallback FallbackStats
+		maxRatio float64
+		want     bool
+	}{
+		{
+			name:     "zero total returns false",
+			fallback: FallbackStats{FallbackCount: 0, TotalCount: 0},
+			maxRatio: 0.6,
+			want:     false,
+		},
+		{
+			name:     "below threshold returns false",
+			fallback: FallbackStats{FallbackCount: 5, TotalCount: 10},
+			maxRatio: 0.6,
+			want:     false,
+		},
+		{
+			name:     "at threshold returns false",
+			fallback: FallbackStats{FallbackCount: 6, TotalCount: 10},
+			maxRatio: 0.6,
+			want:     false,
+		},
+		{
+			name:     "above threshold returns true",
+			fallback: FallbackStats{FallbackCount: 7, TotalCount: 10},
+			maxRatio: 0.6,
+			want:     true,
+		},
+		{
+			name:     "all fallbacks above threshold",
+			fallback: FallbackStats{FallbackCount: 10, TotalCount: 10},
+			maxRatio: 0.6,
+			want:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.fallback.IsHighFallback(tt.maxRatio)
+			if got != tt.want {
+				t.Errorf("FallbackStats.IsHighFallback(%v) = %v, want %v", tt.maxRatio, got, tt.want)
+			}
+		})
+	}
+}

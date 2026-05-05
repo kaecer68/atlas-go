@@ -125,8 +125,8 @@ func (v *OOSValidator) ValidateWithBrief(candidatePath, baselinePath string, bri
 			}
 		}
 
-		baselineScore, baselineObs, _ := scorePromptWindowWithObservations(ds, brief.TargetSkill, baselinePrompt, policy.ExecutionPolicy, oosStart, oosEnd)
-		candidateScore, candidateObs, _ := scorePromptWindowWithObservations(ds, brief.TargetSkill, string(candidateBytes), policy.ExecutionPolicy, oosStart, oosEnd)
+		baselineScore, baselineObs, _, _ := scorePromptWindowWithObservations(ds, brief.TargetSkill, baselinePrompt, policy.ExecutionPolicy, oosStart, oosEnd)
+		candidateScore, candidateObs, _, _ := scorePromptWindowWithObservations(ds, brief.TargetSkill, string(candidateBytes), policy.ExecutionPolicy, oosStart, oosEnd)
 
 		result.BaselineScore = baselineScore
 		result.CandidateScore = candidateScore
@@ -136,8 +136,8 @@ func (v *OOSValidator) ValidateWithBrief(candidatePath, baselinePath string, bri
 		if result.UsedFallback {
 			fbStart, fbEnd, ok := fallbackWindow(ds, 1)
 			if ok {
-				baselineScore, baselineObs, _ = scorePromptWindowWithObservations(ds, brief.TargetSkill, baselinePrompt, policy.ExecutionPolicy, fbStart, fbEnd)
-				candidateScore, candidateObs, _ = scorePromptWindowWithObservations(ds, brief.TargetSkill, string(candidateBytes), policy.ExecutionPolicy, fbStart, fbEnd)
+				baselineScore, baselineObs, _, _ = scorePromptWindowWithObservations(ds, brief.TargetSkill, baselinePrompt, policy.ExecutionPolicy, fbStart, fbEnd)
+				candidateScore, candidateObs, _, _ = scorePromptWindowWithObservations(ds, brief.TargetSkill, string(candidateBytes), policy.ExecutionPolicy, fbStart, fbEnd)
 				result.BaselineScore = baselineScore
 				result.CandidateScore = candidateScore
 				result.Observations = min(baselineObs, candidateObs)

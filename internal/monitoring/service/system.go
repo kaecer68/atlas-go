@@ -12,6 +12,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
@@ -473,4 +474,34 @@ func checkExportHealth(dir string, now time.Time) (string, string) {
 		return "warn", dateStr
 	}
 	return "error", dateStr
+}
+
+func (s *SystemService) LoadClampingEvents(limit int) ([]eventbus.ClampingEventPayload, error) {
+	path := filepath.Join(s.LedgerDir, "clamping_events.jsonl")
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []eventbus.ClampingEventPayload{}, nil
+		}
+		return nil, fmt.Errorf("open clamping events: %w", err)
+	}
+	defer f.Close()
+
+	var events []eventbus.ClampingEventPayload
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var e eventbus.ClampingEventPayload
+		if err := json.Unmarshal(scanner.Bytes(), &e); err != nil {
+			continue
+		}
+		events = append(events, e)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan clamping events: %w", err)
+	}
+
+	if len(events) > limit {
+		return events[len(events)-limit:], nil
+	}
+	return events, nil
 }

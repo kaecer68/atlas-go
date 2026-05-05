@@ -3,6 +3,7 @@ package system
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
@@ -19,6 +20,7 @@ func NewHandlers(svc *service.SystemService) *Handlers {
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/phase3-status", h.HandlePhase3Status)
 	mux.HandleFunc("/api/dashboard/system-health", h.HandleSystemHealth)
+	mux.HandleFunc("/api/dashboard/clamping-events", h.HandleClampingEvents)
 }
 
 // HandlePhase3Status returns Phase 3 metrics (Swarm, PRISM, Spawning, Reflexivity, Adversarial).
@@ -50,4 +52,32 @@ func (h *Handlers) HandleSystemHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	shared.WriteJSON(w, http.StatusOK, health)
+}
+
+func (h *Handlers) HandleClampingEvents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	limit := 100
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			if parsed > 1000 {
+				parsed = 1000
+			}
+			limit = parsed
+		}
+	}
+
+	events, err := h.Svc.LoadClampingEvents(limit)
+	if err != nil {
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load clamping events: %v", err))
+		return
+	}
+
+	shared.WriteJSON(w, http.StatusOK, map[string]any{
+		"events": events,
+		"count":  len(events),
+	})
 }
