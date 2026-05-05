@@ -374,13 +374,15 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	adapter := orchestrator.NewAdapterProducer(provider, system)
+
 	o := live.NewOrchestrator(
 		ctx,
 		stateStore,
 		eventBus,
 		provider,
 		system.Registry(),
-		system,
+		adapter,
 		liveCfg,
 	)
 

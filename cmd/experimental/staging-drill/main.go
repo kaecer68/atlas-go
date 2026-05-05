@@ -74,7 +74,7 @@ func main() {
 		eventBus,
 		provider,
 		system.Registry(),
-		system,
+		orchestrator.NewAdapterProducer(provider, system),
 		liveCfg,
 	)
 	o.SetWatchlist([]string{"0050", "2330", "2317"})
