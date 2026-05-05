@@ -88,25 +88,29 @@ func comparePromptPerformanceDetailed(replayDataPath, baselinePolicyPath string,
 	case "risk_rule_change", "portfolio_constraint_revision":
 		baselineConstraints := policy.Constraints
 		candidateConstraints := baseline.ApplyConstraintCandidate(policy.Constraints, string(candidatePromptBytes))
-		baseline, baselineObs, baselineReturns := scoreConstraintWindowWithObservations(ds, baselineConstraints, window.StartDate, window.EndDate)
-		candidate, candidateObs, candidateReturns := scoreConstraintWindowWithObservations(ds, candidateConstraints, window.StartDate, window.EndDate)
+		baseline, baselineObs, baselineReturns, baselineFallback := scoreConstraintWindowWithObservations(ds, baselineConstraints, window.StartDate, window.EndDate)
+		candidate, candidateObs, candidateReturns, candidateFallback := scoreConstraintWindowWithObservations(ds, candidateConstraints, window.StartDate, window.EndDate)
 		summary.BaselineScore = baseline
 		summary.CandidateScore = candidate
 		summary.BaselineObservations = baselineObs
 		summary.CandidateObservations = candidateObs
 		summary.BaselineReturns = baselineReturns
 		summary.CandidateReturns = candidateReturns
+		summary.BaselineFallbackStats = baselineFallback
+		summary.CandidateFallbackStats = candidateFallback
 		if baselineObs == 0 && candidateObs == 0 {
 			fallbackStart, fallbackEnd, ok := fallbackWindow(ds, 1)
 			if ok {
-				baseline, baselineObs, baselineReturns = scoreConstraintWindowWithObservations(ds, baselineConstraints, fallbackStart, fallbackEnd)
-				candidate, candidateObs, candidateReturns = scoreConstraintWindowWithObservations(ds, candidateConstraints, fallbackStart, fallbackEnd)
+				baseline, baselineObs, baselineReturns, baselineFallback = scoreConstraintWindowWithObservations(ds, baselineConstraints, fallbackStart, fallbackEnd)
+				candidate, candidateObs, candidateReturns, candidateFallback = scoreConstraintWindowWithObservations(ds, candidateConstraints, fallbackStart, fallbackEnd)
 				summary.BaselineScore = baseline
 				summary.CandidateScore = candidate
 				summary.BaselineObservations = baselineObs
 				summary.CandidateObservations = candidateObs
 				summary.BaselineReturns = baselineReturns
 				summary.CandidateReturns = candidateReturns
+				summary.BaselineFallbackStats = baselineFallback
+				summary.CandidateFallbackStats = candidateFallback
 				summary.UsedFallbackWindow = true
 			}
 		}
@@ -210,9 +214,9 @@ func scorePromptWindowWithObservations(ds *replay.Dataset, skill, prompt string,
 	return total / float64(len(sessionReturns)), len(sessionReturns), sessionReturns, FallbackStats{FallbackCount: totalFallback, TotalCount: totalFactors}
 }
 
-func scoreConstraintWindowWithObservations(ds *replay.Dataset, constraints domain.SimulationConstraints, startDate, endDate time.Time) (float64, int, []float64) {
+func scoreConstraintWindowWithObservations(ds *replay.Dataset, constraints domain.SimulationConstraints, startDate, endDate time.Time) (float64, int, []float64, FallbackStats) {
 	if ds == nil {
-		return 0, 0, nil
+		return 0, 0, nil, FallbackStats{}
 	}
 
 	registry := orchestrator.SeedRegistry()
@@ -220,6 +224,7 @@ func scoreConstraintWindowWithObservations(ds *replay.Dataset, constraints domai
 	engine := sim.NewEngine(constraints)
 
 	sessionReturns := make([]float64, 0)
+	var totalFallback, totalFactors int
 	for _, date := range ds.Dates {
 		if date.Before(startDate) || date.After(endDate) {
 			continue
@@ -237,18 +242,42 @@ func scoreConstraintWindowWithObservations(ds *replay.Dataset, constraints domai
 		events := ne.DetectEvents(orchestrator.QuotesToNarrativeData(quotes))
 		regime := orchestrator.AdjustRegimeFromNarrative(baseRegime, events)
 		activeRecs = filterRecommendationsForConstraints(activeRecs, constraints)
+
+		// Track fallback stats from FactorScores.Breakdown
+		for _, rec := range activeRecs {
+			if rec.FactorScores.Breakdown != nil {
+				bd := rec.FactorScores.Breakdown
+				if bd.Momentum.IsFallback {
+					totalFallback++
+				}
+				totalFactors++
+				if bd.Value.IsFallback {
+					totalFallback++
+				}
+				totalFactors++
+				if bd.Quality.IsFallback {
+					totalFallback++
+				}
+				totalFactors++
+				if bd.Agent.IsFallback {
+					totalFallback++
+				}
+				totalFactors++
+			}
+		}
+
 		result := engine.Run(regime, quotes, activeRecs)
 		sessionReturns = append(sessionReturns, scoreSimulationResult(result, nextQuotes, constraints.StartingCash))
 	}
 
 	if len(sessionReturns) == 0 {
-		return 0, 0, nil
+		return 0, 0, nil, FallbackStats{}
 	}
 	total := 0.0
 	for _, r := range sessionReturns {
 		total += r
 	}
-	return total / float64(len(sessionReturns)), len(sessionReturns), sessionReturns
+	return total / float64(len(sessionReturns)), len(sessionReturns), sessionReturns, FallbackStats{FallbackCount: totalFallback, TotalCount: totalFactors}
 }
 
 func fallbackWindow(ds *replay.Dataset, minDates int) (time.Time, time.Time, bool) {

@@ -97,8 +97,8 @@ func (v *OOSValidator) ValidateWithBrief(candidatePath, baselinePath string, bri
 		baselineConstraints := policy.Constraints
 		candidateConstraints := baseline.ApplyConstraintCandidate(policy.Constraints, string(candidateBytes))
 
-		baselineScore, baselineObs, _ := scoreConstraintWindowWithObservations(ds, baselineConstraints, oosStart, oosEnd)
-		candidateScore, candidateObs, _ := scoreConstraintWindowWithObservations(ds, candidateConstraints, oosStart, oosEnd)
+		baselineScore, baselineObs, _, _ := scoreConstraintWindowWithObservations(ds, baselineConstraints, oosStart, oosEnd)
+		candidateScore, candidateObs, _, _ := scoreConstraintWindowWithObservations(ds, candidateConstraints, oosStart, oosEnd)
 
 		result.BaselineScore = baselineScore
 		result.CandidateScore = candidateScore
@@ -108,8 +108,8 @@ func (v *OOSValidator) ValidateWithBrief(candidatePath, baselinePath string, bri
 		if result.UsedFallback {
 			fbStart, fbEnd, ok := fallbackWindow(ds, 1)
 			if ok {
-				baselineScore, baselineObs, _ = scoreConstraintWindowWithObservations(ds, baselineConstraints, fbStart, fbEnd)
-				candidateScore, candidateObs, _ = scoreConstraintWindowWithObservations(ds, candidateConstraints, fbStart, fbEnd)
+				baselineScore, baselineObs, _, _ = scoreConstraintWindowWithObservations(ds, baselineConstraints, fbStart, fbEnd)
+				candidateScore, candidateObs, _, _ = scoreConstraintWindowWithObservations(ds, candidateConstraints, fbStart, fbEnd)
 				result.BaselineScore = baselineScore
 				result.CandidateScore = candidateScore
 				result.Observations = min(baselineObs, candidateObs)
@@ -200,8 +200,8 @@ func (v *OOSValidator) ValidateWithConstraints(candidateConstraintsPath, baselin
 	baselineConstraints := policy.Constraints
 	candidateConstraints := baseline.ApplyConstraintCandidate(policy.Constraints, string(candidateBytes))
 
-	baselineScore, baselineObs, _ := scoreConstraintWindowWithObservations(ds, baselineConstraints, oosStart, oosEnd)
-	candidateScore, candidateObs, _ := scoreConstraintWindowWithObservations(ds, candidateConstraints, oosStart, oosEnd)
+	baselineScore, baselineObs, _, _ := scoreConstraintWindowWithObservations(ds, baselineConstraints, oosStart, oosEnd)
+	candidateScore, candidateObs, _, _ := scoreConstraintWindowWithObservations(ds, candidateConstraints, oosStart, oosEnd)
 
 	result.BaselineScore = baselineScore
 	result.CandidateScore = candidateScore
@@ -211,8 +211,8 @@ func (v *OOSValidator) ValidateWithConstraints(candidateConstraintsPath, baselin
 	if result.UsedFallback {
 		fbStart, fbEnd, ok := fallbackWindow(ds, 1)
 		if ok {
-			baselineScore, baselineObs, _ = scoreConstraintWindowWithObservations(ds, baselineConstraints, fbStart, fbEnd)
-			candidateScore, candidateObs, _ = scoreConstraintWindowWithObservations(ds, candidateConstraints, fbStart, fbEnd)
+			baselineScore, baselineObs, _, _ = scoreConstraintWindowWithObservations(ds, baselineConstraints, fbStart, fbEnd)
+			candidateScore, candidateObs, _, _ = scoreConstraintWindowWithObservations(ds, candidateConstraints, fbStart, fbEnd)
 			result.BaselineScore = baselineScore
 			result.CandidateScore = candidateScore
 			result.Observations = min(baselineObs, candidateObs)
