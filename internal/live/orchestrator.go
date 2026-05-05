@@ -10,7 +10,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
-	"github.com/kaecer68/atlas-go/internal/orchestrator"
 )
 
 type Orchestrator struct {
@@ -20,7 +19,9 @@ type Orchestrator struct {
 	broker         Broker
 	orderMgr       *OrderManager
 	registry       domain.AgentRegistry
-	system         *orchestrator.System
+	executionInputProvider interface {
+		Produce(ctx context.Context, symbols []string) (*domain.ExecutionInput, error)
+	}
 	circuitBreaker *CircuitBreaker
 
 	config OrchestratorConfig
@@ -114,7 +115,9 @@ func NewOrchestrator(
 	eventBus *ChannelEventBus,
 	marketData marketdata.Provider,
 	registry domain.AgentRegistry,
-	system *orchestrator.System,
+	inputProvider interface {
+		Produce(ctx context.Context, symbols []string) (*domain.ExecutionInput, error)
+	},
 	config OrchestratorConfig,
 ) *Orchestrator {
 	ctx, cancel := context.WithCancel(ctx)
@@ -131,7 +134,7 @@ func NewOrchestrator(
 		broker:              broker,
 		orderMgr:            NewOrderManager(broker, eventBus, maxRetries, 100*time.Millisecond),
 		registry:            registry,
-		system:              system,
+		executionInputProvider: inputProvider,
 		circuitBreaker:      NewCircuitBreaker("", ""),
 		config:              config,
 		ctx:                 ctx,
@@ -143,7 +146,7 @@ func NewOrchestrator(
 	}
 
 	o.scheduler = NewScheduler(ctx, marketData, stateStore, o.circuitBreaker, config, effectiveMode)
-	o.agentRunner = NewAgentRunner(stateStore, marketData, system, effectiveMode)
+	o.agentRunner = NewAgentRunner(stateStore, marketData, nil, effectiveMode)
 	o.executionMgr = NewExecutionManager(broker, o.circuitBreaker, config, nil)
 
 	o.scheduler.SetMetrics(o.metrics)
@@ -157,6 +160,17 @@ func NewOrchestrator(
 	o.setupEventHandlers()
 
 	return o
+}
+
+func (o *Orchestrator) applyExecutionInput() error {
+	if o.executionInputProvider == nil {
+		return nil
+	}
+	input, err := o.executionInputProvider.Produce(o.ctx, o.watchlist)
+	if err != nil {
+		return fmt.Errorf("produce execution input: %w", err)
+	}
+	return o.agentRunner.ApplyExecutionInput(o.ctx, *input)
 }
 
 func (o *Orchestrator) SetTradingMetrics(metrics MetricsRecorder) {
@@ -340,7 +354,7 @@ func (o *Orchestrator) onMarketOpen() {
 		},
 	})
 
-	if err := o.agentRunner.RunContextAgent(o.ctx, o.watchlist); err != nil {
+	if err := o.applyExecutionInput(); err != nil {
 		if o.effectiveBrokerMode == "live" {
 			logging.Error("live_orchestrator", "critical_error", logging.Err(err))
 		} else {
@@ -376,15 +390,7 @@ func (o *Orchestrator) onIntradayCycle() {
 		o.publishRiskEvent(EventRiskAlert, "", domain.Position{}, "max_daily_loss", 0)
 	}
 
-	if err := o.agentRunner.RunStyleAndSectorAgents(o.ctx, o.watchlist); err != nil {
-		if o.effectiveBrokerMode == "live" {
-			logging.Error("live_orchestrator", "critical_error", logging.Err(err))
-		} else {
-			logging.Warn("live_orchestrator", "warning_continuing", logging.Err(err), "broker_mode", o.effectiveBrokerMode)
-		}
-	}
-
-	if err := o.agentRunner.ApplyRiskFilters(o.ctx); err != nil {
+	if err := o.applyExecutionInput(); err != nil {
 		if o.effectiveBrokerMode == "live" {
 			logging.Error("live_orchestrator", "critical_error", logging.Err(err))
 		} else {
