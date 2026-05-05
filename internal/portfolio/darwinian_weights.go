@@ -11,30 +11,42 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 const (
-	// DarwinianWeightMin minimum agent weight multiplier (0.3 = whisper)
+	// DEPRECATED: Use RuntimeParameters instead. These constants exist for test compatibility.
 	DarwinianWeightMin = 0.3
-	// DarwinianWeightMax maximum agent weight multiplier (2.5 = shout)
+	// DEPRECATED: Use RuntimeParameters instead. These constants exist for test compatibility.
 	DarwinianWeightMax = 2.5
-	// DarwinianNeutralWeight starting neutral weight
+	// DEPRECATED: Use RuntimeParameters instead. These constants exist for test compatibility.
 	DarwinianNeutralWeight = 1.0
-	// TopQuartileMultiplier multiplier for top 25% performers
+	// DEPRECATED: Use RuntimeParameters instead. These constants exist for test compatibility.
 	TopQuartileMultiplier = 1.05
-	// BottomQuartileMultiplier multiplier for bottom 25% performers
+	// DEPRECATED: Use RuntimeParameters instead. These constants exist for test compatibility.
 	BottomQuartileMultiplier = 0.95
-	// DailyAdjustmentCooldown minimum time between adjustments
+	// DEPRECATED: Use RuntimeParameters instead. These constants exist for test compatibility.
 	DailyAdjustmentCooldown = 20 * time.Hour
 )
+
+// ConvictionClampingEvent records when a conviction value was clamped.
+type ConvictionClampingEvent struct {
+	AgentID         string    `json:"agent_id"`
+	Symbol          string    `json:"symbol"`
+	RawConviction   int       `json:"raw_conviction"`
+	FinalConviction int       `json:"final_conviction"`
+	Weight          float64   `json:"weight"`
+	Boundary        string    `json:"boundary"`
+	Timestamp       time.Time `json:"timestamp"`
+}
 
 // ClampingEvent records when a weight was clamped to a boundary.
 type ClampingEvent struct {
 	AgentID     string    `json:"agent_id"`
 	RawWeight   float64   `json:"raw_weight"`
 	FinalWeight float64   `json:"final_weight"`
-	Boundary    string    `json:"boundary"` // "min" or "max"
+	Boundary    string    `json:"boundary"`
 	Timestamp   time.Time `json:"timestamp"`
 }
 
@@ -63,6 +75,7 @@ type DarwinianWeightManager struct {
 	lookbackDays int
 	params       *RuntimeParameters
 	mu           sync.RWMutex
+	eventBus     *eventbus.ChannelEventBus
 }
 
 // NewDarwinianWeightManager creates a new Darwinian weight manager
@@ -85,6 +98,14 @@ func (m *DarwinianWeightManager) WithParameters(p *RuntimeParameters) *Darwinian
 		m.params = p
 		m.lookbackDays = p.Darwinian.LookbackDays
 	}
+	return m
+}
+
+// WithEventBus sets the event bus for publishing clamping events.
+func (m *DarwinianWeightManager) WithEventBus(eb *eventbus.ChannelEventBus) *DarwinianWeightManager {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.eventBus = eb
 	return m
 }
 
@@ -352,6 +373,20 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		w.LastAdjustedAt = now
 
 		adjustments[w.AgentID] = w.Weight - oldWeight
+	}
+
+	if len(clampingEvents) > 0 && m.eventBus != nil {
+		payloads := make([]eventbus.ClampingEventPayload, len(clampingEvents))
+		for i, e := range clampingEvents {
+			payloads[i] = eventbus.ClampingEventPayload{
+				AgentID:     e.AgentID,
+				RawWeight:   e.RawWeight,
+				FinalWeight: e.FinalWeight,
+				Boundary:    e.Boundary,
+				Timestamp:   e.Timestamp,
+			}
+		}
+		_ = m.eventBus.PublishDarwinianClamping(payloads)
 	}
 
 	return adjustments, clampingEvents
@@ -651,6 +686,62 @@ func (m *DarwinianWeightManager) ApplyDarwinianWeights(
 	}
 
 	return weighted
+}
+
+// ApplyDarwinianWeightsWithEvents applies Darwinian weights and returns clamping events for monitoring.
+// This is the preferred method when you need audit trail of conviction clamping.
+func (m *DarwinianWeightManager) ApplyDarwinianWeightsWithEvents(
+	recommendations []domain.Recommendation,
+) ([]domain.Recommendation, []ConvictionClampingEvent) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	weighted := make([]domain.Recommendation, 0, len(recommendations))
+	var clampingEvents []ConvictionClampingEvent
+
+	for _, rec := range recommendations {
+		weight := m.params.Darwinian.WeightNeutral
+		if w, ok := m.weights[rec.Agent]; ok {
+			weight = w.Weight
+		}
+
+		rawConviction := rec.Conviction
+		weightedConviction := int(float64(rec.Conviction) * weight)
+
+		clampMin := m.params.Darwinian.ConvictionClampMin
+		clampMax := m.params.Darwinian.ConvictionClampMax
+		boundary := ""
+		if weightedConviction > clampMax {
+			boundary = "max"
+			weightedConviction = clampMax
+		} else if weightedConviction < clampMin {
+			boundary = "min"
+			weightedConviction = clampMin
+		}
+
+		if boundary != "" {
+			clampingEvents = append(clampingEvents, ConvictionClampingEvent{
+				AgentID:         rec.Agent,
+				Symbol:          rec.Symbol,
+				RawConviction:   rawConviction,
+				FinalConviction: weightedConviction,
+				Weight:          weight,
+				Boundary:        boundary,
+				Timestamp:       time.Now(),
+			})
+		}
+
+		weighted = append(weighted, domain.Recommendation{
+			Agent:      rec.Agent,
+			Skill:      rec.Skill,
+			Symbol:     rec.Symbol,
+			Side:       rec.Side,
+			Conviction: weightedConviction,
+			Reason:     fmt.Sprintf("%s [DW:%.2f]", rec.Reason, weight),
+		})
+	}
+
+	return weighted, clampingEvents
 }
 
 // DarwinianWeightReport represents a comprehensive weight status report

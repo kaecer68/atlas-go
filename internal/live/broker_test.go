@@ -108,11 +108,11 @@ func TestExecuteOrderPublishesSystemErrorWhenOrderInvalid(t *testing.T) {
 
 	select {
 	case got := <-eventCh:
-		if got.Type != EventSystemError {
-			t.Fatalf("unexpected event type: got=%s want=%s", got.Type, EventSystemError)
+		if got.Type != EventOrderError {
+			t.Fatalf("unexpected event type: got=%s want=%s", got.Type, EventOrderError)
 		}
 	case <-time.After(1 * time.Second):
-		t.Fatalf("expected system error event but none was received")
+		t.Fatalf("expected order error event but none was received")
 	}
 }
 
@@ -124,8 +124,11 @@ func TestGuardedLiveBrokerRejectsWhenAdapterMissing(t *testing.T) {
 		Quantity: 10,
 		Price:    100,
 	})
-	if err != nil {
-		t.Fatalf("SubmitOrder returned unexpected error: %v", err)
+	if err == nil {
+		t.Fatal("SubmitOrder expected error for missing adapter, got nil")
+	}
+	if !strings.Contains(err.Error(), "not configured") {
+		t.Fatalf("error = %q, want to contain 'not configured'", err.Error())
 	}
 	if result.Status != "rejected" {
 		t.Fatalf("status = %q, want rejected", result.Status)

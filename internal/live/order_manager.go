@@ -79,6 +79,19 @@ func (m *OrderManager) Execute(ctx context.Context, order domain.Order) error {
 			if result.Reason == "" {
 				result.Reason = "broker rejected order"
 			}
+			if m.eventBus != nil {
+				_ = m.eventBus.PublishOrderError(
+					result.OrderID,
+					order.Symbol,
+					string(order.Side),
+					order.Price,
+					order.Quantity,
+					"rejected",
+					result.Reason,
+					attempt,
+					status,
+				)
+			}
 			return fmt.Errorf("broker rejected order %s: %s", order.Symbol, result.Reason)
 		}
 
@@ -86,14 +99,17 @@ func (m *OrderManager) Execute(ctx context.Context, order domain.Order) error {
 	}
 
 	if m.eventBus != nil {
-		_ = m.eventBus.Publish(BusEvent{
-			ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-			Type:      EventSystemError,
-			Timestamp: time.Now(),
-			Payload: map[string]string{
-				"error": fmt.Sprintf("submit order %s failed after %d attempts: %v", order.Symbol, attempts, lastErr),
-			},
-		})
+		_ = m.eventBus.PublishOrderError(
+			"",
+			order.Symbol,
+			string(order.Side),
+			order.Price,
+			order.Quantity,
+			"retry_exhausted",
+			lastErr.Error(),
+			attempts,
+			"error",
+		)
 	}
 
 	return fmt.Errorf("submit order %s failed after %d attempts: %w", order.Symbol, attempts, lastErr)

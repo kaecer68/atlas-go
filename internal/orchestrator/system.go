@@ -182,6 +182,11 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		WeightManager:   s.darwinian,
 		Context:         s.ctx,
 		NarrativeEvents: events,
+		ConvictionClampingCallback: func(evts []portfolio.ConvictionClampingEvent) {
+			if s.clampingLogger != nil {
+				s.clampingLogger.AppendConvictionEvents(evts)
+			}
+		},
 	})
 	regime := researchResult.Regime
 	rawRecs := researchResult.RawRecommendations
@@ -306,6 +311,11 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		WeightManager:   s.darwinian,
 		Context:         s.ctx,
 		NarrativeEvents: events,
+		ConvictionClampingCallback: func(evts []portfolio.ConvictionClampingEvent) {
+			if s.clampingLogger != nil {
+				s.clampingLogger.AppendConvictionEvents(evts)
+			}
+		},
 	})
 	regime := researchResult.Regime
 	rawRecs := researchResult.RawRecommendations

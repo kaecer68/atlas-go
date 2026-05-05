@@ -9,19 +9,72 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
+// LayerRouter encapsulates layer-based agent routing logic.
+// This decouples AgentRegistry layer filtering from executor dispatch,
+// allowing routing strategy to be tested and evolved independently.
+type LayerRouter interface {
+	// GetContextAgents returns agents for regime inference (LayerContext only).
+	GetContextAgents(registry domain.AgentRegistry) []domain.AgentSpec
+	// GetSectorAgents returns agents for sector allocation (LayerSector only).
+	GetSectorAgents(registry domain.AgentRegistry) []domain.AgentSpec
+	// GetStyleAgents returns agents for style allocation (LayerStyle only).
+	GetStyleAgents(registry domain.AgentRegistry) []domain.AgentSpec
+	// GetControlAgents returns agents for control layer (LayerControl only).
+	GetControlAgents(registry domain.AgentRegistry) []domain.AgentSpec
+	// FilterByLayer returns agents matching the specified layer.
+	FilterByLayer(registry domain.AgentRegistry, layer domain.AgentLayer) []domain.AgentSpec
+}
+
+// DefaultLayerRouter is the default layer-based router implementation.
+type DefaultLayerRouter struct{}
+
+func (DefaultLayerRouter) GetContextAgents(registry domain.AgentRegistry) []domain.AgentSpec {
+	return FilterAgentsByLayer(registry.Agents, domain.LayerContext)
+}
+
+func (DefaultLayerRouter) GetSectorAgents(registry domain.AgentRegistry) []domain.AgentSpec {
+	return FilterAgentsByLayer(registry.Agents, domain.LayerSector)
+}
+
+func (DefaultLayerRouter) GetStyleAgents(registry domain.AgentRegistry) []domain.AgentSpec {
+	return FilterAgentsByLayer(registry.Agents, domain.LayerStyle)
+}
+
+func (DefaultLayerRouter) GetControlAgents(registry domain.AgentRegistry) []domain.AgentSpec {
+	return FilterAgentsByLayer(registry.Agents, domain.LayerControl)
+}
+
+func (r DefaultLayerRouter) FilterByLayer(registry domain.AgentRegistry, layer domain.AgentLayer) []domain.AgentSpec {
+	return FilterAgentsByLayer(registry.Agents, layer)
+}
+
+// FilterAgentsByLayer returns enabled agents matching the specified layer.
+func FilterAgentsByLayer(agents []domain.AgentSpec, layer domain.AgentLayer) []domain.AgentSpec {
+	result := make([]domain.AgentSpec, 0, len(agents))
+	for _, a := range agents {
+		if a.Enabled && a.Layer == layer {
+			result = append(result, a)
+		}
+	}
+	return result
+}
+
 // ExecutionContext holds all parameters needed to execute registry research.
 type ExecutionContext struct {
-	Registry      domain.AgentRegistry
-	Quotes        []domain.Quote
-	Overrides     map[string]string
-	Policy        domain.ExecutionPolicy
-	Plugins       *PluginRegistry
-	SessionID     string
-	WeightManager *portfolio.DarwinianWeightManager
-	Context       context.Context // request-level context for cancellation propagation
+	Registry                   domain.AgentRegistry
+	Quotes                     []domain.Quote
+	Overrides                  map[string]string
+	Policy                     domain.ExecutionPolicy
+	Plugins                    *PluginRegistry
+	SessionID                  string
+	WeightManager              *portfolio.DarwinianWeightManager
+	Context                    context.Context            // request-level context for cancellation propagation
+	NarrativeEvents            []narrative.NarrativeEvent // narrative events for regime evidence fusion
+	ConvictionClampingCallback func([]portfolio.ConvictionClampingEvent)
 }
 
 // ResearchResult holds all outputs from executing registry research.
@@ -53,7 +106,7 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 
 	registry := filterMutedAgents(ctx.Registry, ctx.Plugins)
 
-	regime := inferRegime(registry, quoteBySymbol, ctx.Plugins, ctx.Overrides)
+	regime := inferRegime(registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, ctx.NarrativeEvents)
 	raw, rejects := collectRecommendations(ctx.Context, registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, regime, ctx.SessionID)
 
 	if ctx.Policy.MomentumCrashProtection {
@@ -63,8 +116,12 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 	var weightData []*portfolio.DarwinianAgentWeight
 	controlInput := raw
 	if ctx.WeightManager != nil {
-		controlInput = ctx.WeightManager.ApplyDarwinianWeights(raw)
+		var convictionEvents []portfolio.ConvictionClampingEvent
+		controlInput, convictionEvents = ctx.WeightManager.ApplyDarwinianWeightsWithEvents(raw)
 		weightData = ctx.WeightManager.GetAllAgentWeightData()
+		if len(convictionEvents) > 0 && ctx.ConvictionClampingCallback != nil {
+			ctx.ConvictionClampingCallback(convictionEvents)
+		}
 	}
 
 	final, guardOutcomes := applyControlLayerWithOutcomes(registry, ctx.Plugins, controlInput, ctx.Policy)
@@ -238,20 +295,33 @@ func executeRegistryResearchWithDarwinianWeights(
 	return result.Regime, result.RawRecommendations, result.FinalRecommendations, result.DarwinianWeights, result.ScreeningRejects
 }
 
-func inferRegime(registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string) domain.Regime {
-	score := 0
-	for _, agent := range registry.Agents {
-		if !agent.Enabled || agent.Layer != domain.LayerContext {
-			continue
-		}
-		prompt := plugins.ResolvePrompt(agent, overrides)
-		score += plugins.RegimeScore(agent, quotes, prompt)
+func inferRegime(registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string, events []narrative.NarrativeEvent) domain.Regime {
+	sources := []RegimeEvidenceSource{
+		NewMacroEvidenceSource(),
+		NewTechnicalEvidenceSource(),
+		NewNarrativeEvidenceSource(),
+		NewAgentSignalEvidenceSource(registry, plugins, overrides),
 	}
 
+	var totalScore, totalWeight float64
+	for _, src := range sources {
+		ev := src.Evidence(quotes, events)
+		if ev.Confidence > 0 {
+			totalScore += ev.Score * ev.Confidence
+			totalWeight += ev.Confidence
+		}
+	}
+
+	if totalWeight == 0 {
+		return domain.RegimeNeutral
+	}
+
+	normalized := totalScore / totalWeight
+
 	switch {
-	case score > 0:
+	case normalized > 0.15:
 		return domain.RegimeRiskOn
-	case score < 0:
+	case normalized < -0.15:
 		return domain.RegimeRiskOff
 	default:
 		return domain.RegimeNeutral

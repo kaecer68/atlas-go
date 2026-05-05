@@ -10,7 +10,7 @@ import (
 
 func TestSeedRegistryIsValid(t *testing.T) {
 	reg := SeedRegistry()
-	if err := ValidateRegistry(reg); err != nil {
+	if err := ValidateRegistry(reg, ""); err != nil {
 		t.Fatalf("registry validation failed: %v", err)
 	}
 	if len(reg.Agents) < 5 {

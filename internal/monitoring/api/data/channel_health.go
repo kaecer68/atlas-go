@@ -13,6 +13,27 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+type ChannelAlert struct {
+	ChannelID string `json:"channel_id"`
+	Status    string `json:"status"`
+	Error     string `json:"error"`
+	FetchAt   string `json:"fetch_at"`
+}
+
+type ChannelHealthRecord struct {
+	Status        string `json:"status"`
+	LastFetchAt   string `json:"last_fetch_at"`
+	LastError     string `json:"last_error,omitempty"`
+	LastSuccessAt string `json:"last_success_at,omitempty"`
+}
+
+type ChannelHealthRecorder interface {
+	Record(channelID, status, errMsg string) error
+	Get(channelID string) *ChannelHealthRecord
+	Alerts() []ChannelAlert
+	SyncAllToDB() error
+}
+
 type channelHealthStore struct {
 	path   string
 	mu     sync.RWMutex

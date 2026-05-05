@@ -2,11 +2,14 @@ package live
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
+
+var ErrAdapterNotConfigured = errors.New("live broker adapter not configured")
 
 // BrokerResult 表示券商執行結果。
 type BrokerResult struct {
@@ -72,8 +75,8 @@ func (b *GuardedLiveBroker) SubmitOrder(ctx context.Context, order domain.Order)
 	if b.adapter == nil {
 		return BrokerResult{
 			Status: "rejected",
-			Reason: "live broker adapter not configured",
-		}, nil
+			Reason: ErrAdapterNotConfigured.Error(),
+		}, ErrAdapterNotConfigured
 	}
 
 	result, err := b.adapter.SubmitOrder(ctx, order)
