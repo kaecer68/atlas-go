@@ -13,12 +13,12 @@ import (
 )
 
 type Orchestrator struct {
-	stateStore     *StateStore
-	eventBus       *ChannelEventBus
-	marketData     marketdata.Provider
-	broker         Broker
-	orderMgr       *OrderManager
-	registry       domain.AgentRegistry
+	stateStore             *StateStore
+	eventBus               *ChannelEventBus
+	marketData             marketdata.Provider
+	broker                 Broker
+	orderMgr               *OrderManager
+	registry               domain.AgentRegistry
 	executionInputProvider interface {
 		Produce(ctx context.Context, symbols []string) (*domain.ExecutionInput, error)
 	}
@@ -128,21 +128,21 @@ func NewOrchestrator(
 	}
 
 	o := &Orchestrator{
-		stateStore:          stateStore,
-		eventBus:            eventBus,
-		marketData:          marketData,
-		broker:              broker,
-		orderMgr:            NewOrderManager(broker, eventBus, maxRetries, 100*time.Millisecond),
-		registry:            registry,
+		stateStore:             stateStore,
+		eventBus:               eventBus,
+		marketData:             marketData,
+		broker:                 broker,
+		orderMgr:               NewOrderManager(broker, eventBus, maxRetries, 100*time.Millisecond),
+		registry:               registry,
 		executionInputProvider: inputProvider,
-		circuitBreaker:      NewCircuitBreaker("", ""),
-		config:              config,
-		ctx:                 ctx,
-		cancel:              cancel,
-		watchlist:           make([]string, 0),
-		requestedBrokerMode: requestedMode,
-		effectiveBrokerMode: effectiveMode,
-		executionAuditMsg:   audit,
+		circuitBreaker:         NewCircuitBreaker("", ""),
+		config:                 config,
+		ctx:                    ctx,
+		cancel:                 cancel,
+		watchlist:              make([]string, 0),
+		requestedBrokerMode:    requestedMode,
+		effectiveBrokerMode:    effectiveMode,
+		executionAuditMsg:      audit,
 	}
 
 	o.scheduler = NewScheduler(ctx, marketData, stateStore, o.circuitBreaker, config, effectiveMode)

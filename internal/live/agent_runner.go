@@ -68,11 +68,11 @@ func (r *AgentRunner) ApplyExecutionInput(ctx context.Context, input ExecutionIn
 		Type:      EventSystemStart,
 		Timestamp: time.Now(),
 		Payload: map[string]interface{}{
-			"regime":               string(input.Regime),
-			"raw_count":            len(input.RawRecommendations),
-			"final_count":         len(input.FinalRecommendations),
-			"determined_by":        input.DeterminedBy,
-			"type":                 "execution_input_applied",
+			"regime":        string(input.Regime),
+			"raw_count":     len(input.RawRecommendations),
+			"final_count":   len(input.FinalRecommendations),
+			"determined_by": input.DeterminedBy,
+			"type":          "execution_input_applied",
 		},
 	})
 

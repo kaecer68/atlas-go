@@ -11,7 +11,7 @@ import (
 var ErrSystemNotInitialized = errors.New("system not initialized")
 
 type LiveExecutionInputProvider interface {
-Produce(ctx context.Context, symbols []string) (*domain.ExecutionInput, error)
+	Produce(ctx context.Context, symbols []string) (*domain.ExecutionInput, error)
 }
 
 type liveExecutionInputProvider struct {
