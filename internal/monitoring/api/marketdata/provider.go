@@ -2,6 +2,7 @@ package marketdata
 
 import (
 	"context"
+	"path/filepath"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	marketdatapkg "github.com/kaecer68/atlas-go/internal/marketdata"
@@ -12,5 +13,5 @@ type retailSentimentProvider interface {
 }
 
 func newRetailSentimentProvider(workDir string) retailSentimentProvider {
-	return marketdatapkg.NewTWSERetailSentimentProvider(workDir)
+	return marketdatapkg.NewTWSERetailSentimentProvider(filepath.Join(workDir, "data/state/margin"))
 }

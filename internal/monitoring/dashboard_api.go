@@ -2520,7 +2520,7 @@ func (a *DashboardAPI) handleRetailSentiment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	provider := marketdata.NewTWSERetailSentimentProvider(a.workDir)
+	provider := marketdata.NewTWSERetailSentimentProvider(filepath.Join(a.workDir, "data/state/margin"))
 	snap, err := provider.FetchSnapshot(r.Context())
 	if err != nil {
 		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("fetch retail sentiment: %v", err))

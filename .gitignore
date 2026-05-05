@@ -57,6 +57,34 @@ tmp/
 run-stress
 coverage_all.out
 
+# Compiled binaries (root level)
+backfill-replay
+backtest-window
+check-data-health
+daily-replay-sync
+execute-experiment
+geo-ingest
+import-replay
+judge-experiment
+macro-ingest
+migrate-data
+promote-baseline
+revert-baseline
+
+# Log files
+*.log
+*.log.*
+log/
+services/fubon-proxy/log/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Experiment snapshots
+cmd/execute-experiment/data/state/parameter-snapshots/
+
 # Data files (generated)
 cmd/backtest-window/data/state/darwinian_weights.json
 
