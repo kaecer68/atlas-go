@@ -2091,7 +2091,7 @@ function renderConvictionBreakdown(cb) {
     ${steps}
   </div>`;
 }
-function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains, models, inbox, phase3, taxSnapshot) {
+function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains, models, inbox, phase3, taxSnapshot, regimeHistory) {
   const el = document.getElementById('decisionChain');
   el.classList.remove('loading');
   const regime = (pipeline && pipeline.regime) || (macro && macro.regime) || '-';
@@ -2130,6 +2130,17 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
       <span class="badge info">市場狀態：${regimeLabel(regime)}</span>
       ${stressVal != null ? `<span class="badge ${stressVal >= 70 ? 'err' : (stressVal >= 50 ? 'warn' : 'ok')}">外資出逃指數：${stressVal.toFixed(1)}分（${stressVal >= 70 ? '紅燈-危機' : (stressVal >= 50 ? '黃燈-高壓' : (stressVal >= 30 ? '黃燈-警戒' : '綠燈-低壓'))}）</span>` : ''}
     </div>
+    ${(regimeHistory && regimeHistory.transitions && regimeHistory.transitions.length > 0) ? `
+    <div style="margin-bottom:10px;padding:8px 12px;background:var(--bg);border-radius:8px;border-left:3px solid #8b5cf6">
+      <div class="text-xs font-bold mb-xs" style="color:var(--accent-secondary)">⚡ Regime 切換記錄</div>
+      ${regimeHistory.transitions.slice(-5).map(t => `
+        <div style="font-size:11px;margin:3px 0">
+          <span style="color:var(--down)">${t.from_regime || '-'}</span>
+          → <span style="color:var(--up)">${t.to_regime}</span>
+          <span class="text-muted"> · ${t.timestamp ? new Date(t.timestamp).toLocaleDateString('zh-TW') : ''}</span>
+        </div>
+      `).join('')}
+    </div>` : ''}
     <div class="mb-sm">
       <div class="text-sm font-bold mb-xs">宏觀敘事事件（${eventList.length} 個）</div>
       ${eventList.length ? `<div class="scroll-box">
@@ -4185,7 +4196,7 @@ async function loadAll() {
   showSkeletons();
 
   try {
-    const [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal] = await Promise.all([
+    const [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal, regimeHistory] = await Promise.all([
       getJSON('/api/dashboard/system-health').catch(() => null),
       getJSON('/api/dashboard/macro-radar').catch(() => null),
       getJSON('/api/dashboard/agent-observatory').catch(() => null),
@@ -4207,9 +4218,10 @@ async function loadAll() {
       getJSON('/api/dashboard/capital-phase').catch(() => null),
       getJSON('/api/dashboard/tax-snapshot').catch(() => null),
       getJSON('/api/narrative/seasonal').catch(() => null),
+      getJSON('/api/dashboard/regime-history').catch(() => null),
     ]);
 
-    const allNull = [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal].every(v => v === null);
+    const allNull = [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal, regimeHistory].every(v => v === null);
     if (allNull) {
       consecutiveFailures++;
       if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
@@ -4231,7 +4243,7 @@ async function loadAll() {
     renderAgentObservatory(agents, overlap);
     renderUniverseOverlap(overlap);
     renderPipeline(pipeline, false, '');
-    renderDecisionChain(pipeline, macro, agents, stress, events, chains, models, inbox, phase3, taxSnapshot);
+    renderDecisionChain(pipeline, macro, agents, stress, events, chains, models, inbox, phase3, taxSnapshot, regimeHistory);
     renderAIEvolution(inbox, phase3);
     renderLiveStatus(live);
     renderInbox(inbox);
@@ -4309,7 +4321,7 @@ async function loadPageData(pageId) {
       break;
     case 'decision':
       try {
-        const [pipeline, macro, agents, stress, events, chains, models, inbox, phase3, taxSnapshot] = await Promise.all([
+        const [pipeline, macro, agents, stress, events, chains, models, inbox, phase3, taxSnapshot, regimeHistory] = await Promise.all([
           getJSON('/api/dashboard/recommendation-pipeline').catch(() => null),
           getJSON('/api/dashboard/macro-radar').catch(() => null),
           getJSON('/api/dashboard/agent-observatory').catch(() => null),
@@ -4320,8 +4332,9 @@ async function loadPageData(pageId) {
           getJSON('/api/dashboard/experiment-inbox').catch(() => null),
           getJSON('/api/dashboard/phase3-status').catch(() => null),
           getJSON('/api/dashboard/tax-snapshot').catch(() => null),
+          getJSON('/api/dashboard/regime-history').catch(() => null),
         ]);
-        renderDecisionChain(pipeline, macro, agents, stress, events, chains, models, inbox, phase3, taxSnapshot);
+        renderDecisionChain(pipeline, macro, agents, stress, events, chains, models, inbox, phase3, taxSnapshot, regimeHistory);
       } catch (e) { console.error('Failed to load decision chain:', e); }
       break;
     case 'agents':
