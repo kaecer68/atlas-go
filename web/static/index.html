@@ -2710,6 +2710,11 @@ async function toggleWorkflowScreening() {
   }
 }
 
+async function loadDataChannels() {
+  const data = await getJSON('/api/dashboard/data-channels').catch(() => null);
+  renderDataChannels(data);
+}
+
 async function triggerChannelsIngest() {
   const btn = document.getElementById('btnIngestChannels');
   if (!btn) return;
@@ -4810,10 +4815,10 @@ if (savedTheme) {
 async function loadIndustryData() {
   try {
     const [classification, overview, seasonality, calendar] = await Promise.all([
-      getJSON('/api/industry/classification').catch(() => null),
-      getJSON('/api/industry/overview').catch(() => null),
-      getJSON('/api/industry/seasonality').catch(() => null),
-      getJSON('/api/industry/seasonality/calendar').catch(() => null),
+      getJSON('/api/dashboard/industry-classification').catch(() => null),
+      getJSON('/api/dashboard/industry-overview').catch(() => null),
+      getJSON('/api/dashboard/industry-seasonality').catch(() => null),
+      getJSON('/api/dashboard/industry-seasonality-calendar').catch(() => null),
     ]);
     renderIndustryMap(classification);
     renderIndustryCycle(overview);
