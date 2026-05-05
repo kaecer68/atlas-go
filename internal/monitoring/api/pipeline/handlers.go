@@ -27,6 +27,8 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/recommendation-pipeline", h.HandleRecommendationPipeline)
 	mux.HandleFunc("/api/dashboard/sessions", h.HandleSessions)
 	mux.HandleFunc("/api/dashboard/universe-overlap", h.HandleUniverseOverlap)
+	mux.HandleFunc("/api/synergy/darwinian-status", h.HandleDarwinianStatus)
+	mux.HandleFunc("/api/dashboard/regime-history", h.HandleRegimeHistory)
 }
 
 func parseLimit(r *http.Request, defaultValue, maxValue int) (int, error) {
@@ -350,4 +352,35 @@ type UniverseOverlapResponse struct {
 	Agents   []AgentUniverseView       `json:"agents"`
 	Matrix   map[string]map[string]int `json:"matrix"`
 	Warnings []string                  `json:"warnings"`
+}
+
+func (h *Handlers) HandleDarwinianStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	data, err := h.Svc.LoadDarwinianStatus()
+	if err != nil {
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load darwinian status: %v", err))
+		return
+	}
+	shared.WriteJSON(w, http.StatusOK, data)
+}
+
+func (h *Handlers) HandleRegimeHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	limit, err := parseLimit(r, 30, 100)
+	if err != nil {
+		shared.WriteJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	data, err := h.Svc.LoadRegimeHistory(limit)
+	if err != nil {
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load regime history: %v", err))
+		return
+	}
+	shared.WriteJSON(w, http.StatusOK, data)
 }

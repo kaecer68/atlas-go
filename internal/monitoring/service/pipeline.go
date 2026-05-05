@@ -545,3 +545,126 @@ type AgentUniverseViewData struct {
 	Universe          []string
 	ScreeningCriteria domain.ScreeningCriteria
 }
+
+// DarwinianStatusData holds the current Darwinian weight state for the dashboard.
+type DarwinianStatusData struct {
+	Status       string                        `json:"status"`
+	LastComputed string                        `json:"last_computed,omitempty"`
+	AgentCount   int                           `json:"agent_count"`
+	Agents       map[string]DarwinianAgentInfo `json:"agents"`
+}
+
+// DarwinianAgentInfo holds weight and performance data for a single agent.
+type DarwinianAgentInfo struct {
+	Weight        float64 `json:"weight"`
+	RollingSharpe float64 `json:"rolling_sharpe"`
+	HitRate       float64 `json:"hit_rate"`
+	TotalSignals  int     `json:"total_signals"`
+	WinCount      int     `json:"win_count"`
+	LossCount     int     `json:"loss_count"`
+	AvgReturn     float64 `json:"avg_return"`
+	LastUpdated   string  `json:"last_updated,omitempty"`
+}
+
+// LoadDarwinianStatus loads the current Darwinian weight state from disk.
+func (s *PipelineService) LoadDarwinianStatus() (*DarwinianStatusData, error) {
+	weightsPath := filepath.Join(s.WorkDir, "data/state/darwinian_weights.json")
+	data, err := os.ReadFile(weightsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &DarwinianStatusData{Status: "not_found"}, nil
+		}
+		return nil, fmt.Errorf("read darwinian weights: %w", err)
+	}
+	var saved struct {
+		SavedAt string `json:"saved_at"`
+		Weights map[string]struct {
+			Weight        float64 `json:"weight"`
+			RollingSharpe float64 `json:"rolling_sharpe"`
+			HitRate       float64 `json:"hit_rate"`
+			TotalSignals  int     `json:"total_signals"`
+			WinCount      int     `json:"win_count"`
+			LossCount     int     `json:"loss_count"`
+			AvgReturn     float64 `json:"avg_return"`
+			LastUpdatedAt string  `json:"last_updated_at"`
+		} `json:"weights"`
+	}
+	if err := json.Unmarshal(data, &saved); err != nil {
+		return nil, fmt.Errorf("parse darwinian weights: %w", err)
+	}
+	agents := make(map[string]DarwinianAgentInfo, len(saved.Weights))
+	for id, w := range saved.Weights {
+		agents[id] = DarwinianAgentInfo{
+			Weight:        w.Weight,
+			RollingSharpe: w.RollingSharpe,
+			HitRate:       w.HitRate,
+			TotalSignals:  w.TotalSignals,
+			WinCount:      w.WinCount,
+			LossCount:     w.LossCount,
+			AvgReturn:     w.AvgReturn,
+			LastUpdated:   w.LastUpdatedAt,
+		}
+	}
+	return &DarwinianStatusData{
+		Status:       "ok",
+		LastComputed: saved.SavedAt,
+		AgentCount:   len(agents),
+		Agents:       agents,
+	}, nil
+}
+
+type RegimeHistoryData struct {
+	Sessions    []RegimeSessionEntry `json:"sessions"`
+	Transitions []RegimeTransition   `json:"transitions"`
+	Current     string               `json:"current_regime"`
+}
+
+type RegimeSessionEntry struct {
+	SessionID  string `json:"session_id"`
+	Regime     string `json:"regime"`
+	RecordedAt string `json:"recorded_at"`
+}
+
+type RegimeTransition struct {
+	From      string `json:"from_regime"`
+	To        string `json:"to_regime"`
+	Timestamp string `json:"timestamp"`
+}
+
+func (s *PipelineService) LoadRegimeHistory(limit int) (*RegimeHistoryData, error) {
+	store := ledger.NewStore(s.LedgerDir)
+	summaries, err := store.LoadSessionSummaries()
+	if err != nil {
+		return nil, fmt.Errorf("load session summaries: %w", err)
+	}
+	if len(summaries) > limit {
+		summaries = summaries[len(summaries)-limit:]
+	}
+	sessions := make([]RegimeSessionEntry, len(summaries))
+	var transitions []RegimeTransition
+	var prevRegime string
+	for i, sum := range summaries {
+		sessions[i] = RegimeSessionEntry{
+			SessionID:  sum.SessionID,
+			Regime:     string(sum.Regime),
+			RecordedAt: sum.RecordedAt.Format(time.RFC3339),
+		}
+		if i > 0 && string(sum.Regime) != prevRegime {
+			transitions = append(transitions, RegimeTransition{
+				From:      prevRegime,
+				To:        string(sum.Regime),
+				Timestamp: sum.RecordedAt.Format(time.RFC3339),
+			})
+		}
+		prevRegime = string(sum.Regime)
+	}
+	current := ""
+	if len(summaries) > 0 {
+		current = string(summaries[len(summaries)-1].Regime)
+	}
+	return &RegimeHistoryData{
+		Sessions:    sessions,
+		Transitions: transitions,
+		Current:     current,
+	}, nil
+}
