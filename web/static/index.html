@@ -1936,7 +1936,21 @@ function renderMacroRadar(data, pipelineData) {
   `;
 }
 
-function renderAgentObservatory(data, overlapData) {
+function sparkline(values, color) {
+  if (!values || values.length < 2) return '<span class="text-muted text-xs">-</span>';
+  const w = 64, h = 20;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * w;
+    const y = h - ((v - min) / range) * h;
+    return x.toFixed(1) + ',' + y.toFixed(1);
+  }).join(' ');
+  return `<svg width="${w}" height="${h}" style="vertical-align:middle"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+}
+
+function renderAgentObservatory(data, overlapData, darwinianTrend) {
   const el = document.getElementById('agentObservatory');
   if (!data) { el.innerHTML = renderEmptyState('尚無資料', ''); el.classList.remove('loading'); return; }
   const cards = data.weakest_agent_scorecards || [];
@@ -1969,16 +1983,20 @@ function renderAgentObservatory(data, overlapData) {
   }
 
   el.innerHTML = `<table>
-    <thead><tr><th>策略來源</th><th>窗口數 ${helpIcon('窗口數說明', '<p>該 Agent 參與過多少個回測窗口。</p><p>窗口數越多，統計信心度越高；窗口數過少時，績效數字可能僅供參考。</p>')}</th><th>命中率 ${helpIcon('命中率說明', '<p>推薦產生正向隔日回測報酬的比例。</p><p>持續 >50% 代表該 Agent 的選股邏輯在當前市場體制下相對有效。</p>')}</th><th>Sharpe ${helpIcon('Sharpe 說明', '<p>風險調整後報酬指標。</p><p>越高代表單位風險帶來的報酬越好；<0 表示經風險調整後整體為負貢獻（虧損）。</p>')}</th><th>最大回撤 ${helpIcon('最大回撤說明', '<p>歷史推薦中曾出現的最大累積虧損幅度。</p><p>數值越接近 0，代表風險控制越好；絕對值過大時應檢查該 Agent 的停損機制。</p>')}</th></tr></thead>
+    <thead><tr><th>策略來源</th><th>窗口數 ${helpIcon('窗口數說明', '<p>該 Agent 參與過多少個回測窗口。</p><p>窗口數越多，統計信心度越高；窗口數過少時，績效數字可能僅供參考。</p>')}</th><th>命中率 ${helpIcon('命中率說明', '<p>推薦產生正向隔日回測報酬的比例。</p><p>持續 >50% 代表該 Agent 的選股邏輯在當前市場體制下相對有效。</p>')}</th><th>Sharpe ${helpIcon('Sharpe 說明', '<p>風險調整後報酬指標。</p><p>越高代表單位風險帶來的報酬越好；<0 表示經風險調整後整體為負貢獻（虧損）。</p>')}</th><th>最大回撤 ${helpIcon('最大回撤說明', '<p>歷史推薦中曾出現的最大累積虧損幅度。</p><p>數值越接近 0，代表風險控制越好；絕對值過大時應檢查該 Agent 的停損機制。</p>')}</th><th>權重趨勢 ${helpIcon('權重說明', '<p>Darwinian 權重歷史走勢圖。</p><p>範圍 0.3~2.5，越高代表該 Agent 近期表現越好。</p>')}</th></tr></thead>
     <tbody>
       ${cards.map(c => {
         const isWeak = c.agent_id === weakest;
+        const trendPoints = (darwinianTrend && darwinianTrend.points) ? darwinianTrend.points.filter(p => p.agent_id === c.agent_id).reverse() : [];
+        const weightVals = trendPoints.map(p => p.weight);
+        const wColor = weightVals.length > 0 && weightVals[weightVals.length - 1] >= 2.0 ? 'var(--up)' : weightVals.length > 0 && weightVals[weightVals.length - 1] <= 0.5 ? 'var(--down)' : 'var(--accent)';
         return `<tr class="${isWeak ? 'weak' : ''}">
           <td>${agentName(c.agent_id) || ''}</td>
           <td>${c.windows || 0}</td>
           <td>${((c.hit_rate || 0) * 100).toFixed(1)}%</td>
           <td style="${(c.sharpe || 0) < 0 ? 'color:#ff6b6b' : ''}">${(c.sharpe || 0).toFixed(3)}</td>
           <td>${((c.max_drawdown || 0) * 100).toFixed(1)}%</td>
+          <td>${sparkline(weightVals, wColor)}</td>
         </tr>`;
       }).join('')}
     </tbody>
@@ -4196,7 +4214,7 @@ async function loadAll() {
   showSkeletons();
 
   try {
-    const [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal, regimeHistory] = await Promise.all([
+    const [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal, regimeHistory, darwinianTrend] = await Promise.all([
       getJSON('/api/dashboard/system-health').catch(() => null),
       getJSON('/api/dashboard/macro-radar').catch(() => null),
       getJSON('/api/dashboard/agent-observatory').catch(() => null),
@@ -4219,9 +4237,10 @@ async function loadAll() {
       getJSON('/api/dashboard/tax-snapshot').catch(() => null),
       getJSON('/api/narrative/seasonal').catch(() => null),
       getJSON('/api/dashboard/regime-history').catch(() => null),
+      getJSON('/api/synergy/darwinian-trend').catch(() => null),
     ]);
 
-    const allNull = [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal, regimeHistory].every(v => v === null);
+    const allNull = [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal, regimeHistory, darwinianTrend].every(v => v === null);
     if (allNull) {
       consecutiveFailures++;
       if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
@@ -4343,7 +4362,7 @@ async function loadPageData(pageId) {
           getJSON('/api/dashboard/agent-observatory').catch(() => null),
           getJSON('/api/dashboard/universe-overlap').catch(() => null),
         ]);
-        renderAgentObservatory(agents, overlap);
+    renderAgentObservatory(agents, overlap, darwinianTrend);
         renderUniverseOverlap(overlap);
       } catch (e) { console.error('Failed to load agents:', e); }
       break;
