@@ -136,6 +136,15 @@ func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot, div *Dive
 		}
 	}
 
+	if curr.RetailMarginBalance.Symbol != "" {
+		if event := detectRetailFrenzyEventFromSnapshot(curr.RetailMarginBalance, now); event != nil {
+			events = append(events, *event)
+		}
+		if event := detectRetailFearEventFromSnapshot(curr.RetailMarginBalance, now); event != nil {
+			events = append(events, *event)
+		}
+	}
+
 	return events
 }
 
@@ -367,6 +376,54 @@ func computeAICapexSentiment(tsmcYoYChangePct float64) float64 {
 		return 0.5
 	}
 	return -0.3
+}
+
+func detectRetailFrenzyEventFromSnapshot(marginBalance marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+	if marginBalance.Symbol == "" {
+		return nil
+	}
+	if marginBalance.Value > 2000 {
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-retail-frenzy-%d", now.UnixNano()),
+			Theme:            "retail_frenzy",
+			Region:           "TW",
+			Sentiment:        1.0,
+			Confidence:       0.55,
+			ConfidenceSource: "margin_balance_threshold",
+			HitRate:          hitRateForTheme("retail_frenzy"),
+			CapitalFlow:      "retail_chasing",
+			TimeWindow:       "1-2_weeks",
+			Timestamp:        now,
+			SourceData: map[string]float64{
+				"margin_balance": marginBalance.Value,
+			},
+		}
+	}
+	return nil
+}
+
+func detectRetailFearEventFromSnapshot(marginBalance marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+	if marginBalance.Symbol == "" {
+		return nil
+	}
+	if marginBalance.Value < 1200 {
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-retail-fear-%d", now.UnixNano()),
+			Theme:            "retail_fear",
+			Region:           "TW",
+			Sentiment:        -1.0,
+			Confidence:       0.60,
+			ConfidenceSource: "margin_balance_threshold",
+			HitRate:          hitRateForTheme("retail_fear"),
+			CapitalFlow:      "retail_fleeing",
+			TimeWindow:       "1-2_weeks",
+			Timestamp:        now,
+			SourceData: map[string]float64{
+				"margin_balance": marginBalance.Value,
+			},
+		}
+	}
+	return nil
 }
 
 func detectAICapexEventFromSnapshot(sentiment float64, prevTSMC marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {

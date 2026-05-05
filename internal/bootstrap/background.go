@@ -106,22 +106,49 @@ func StartAutoBackfill(ctx context.Context, workDir string) {
 
 func StartAutoCapitalFlowFetch(ctx context.Context, workDir string) {
 	go func() {
+		// Initial fetch after 5 seconds.
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(5 * time.Second):
 		}
 
-		bgCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-		defer cancel()
-
 		capFlowProvider := marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow"))
-		_, err := capFlowProvider.FetchSnapshot(bgCtx)
-		if err != nil {
-			log.Printf("[AutoCapitalFlow] fetch failed: %v", err)
-			return
+
+		// Fetch immediately on startup.
+		doFetch := func() {
+			bgCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+			defer cancel()
+			_, err := capFlowProvider.FetchSnapshot(bgCtx)
+			if err != nil {
+				log.Printf("[AutoCapitalFlow] fetch failed: %v", err)
+				return
+			}
+			log.Printf("[AutoCapitalFlow] fetch succeeded")
 		}
-		log.Printf("[AutoCapitalFlow] fetch succeeded")
+		doFetch()
+
+		// Periodic fetch every 30 minutes during market hours (09:00-15:30 CST).
+		ticker := time.NewTicker(30 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				now := time.Now()
+				if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+					now = now.In(tz)
+				}
+				// Only fetch during Taiwan market hours to avoid unnecessary API calls.
+				if now.Weekday() != time.Saturday && now.Weekday() != time.Sunday {
+					hour := now.Hour()
+					if hour >= 9 && hour < 16 {
+						doFetch()
+					}
+				}
+			}
+		}
 	}()
 }
 
