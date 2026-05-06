@@ -2,7 +2,6 @@ package tax
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -49,12 +48,12 @@ func (h *Handlers) HandleTaxSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find the latest daily session with tax data
+	// Find the latest daily session that has tax data
 	type candidate struct {
 		name string
 		date time.Time
 	}
-	var latest candidate
+	var candidates []candidate
 	for _, e := range entries {
 		if !e.IsDir() || !strings.HasSuffix(e.Name(), "-daily") {
 			continue
@@ -65,76 +64,56 @@ func (h *Handlers) HandleTaxSnapshot(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		if parsed.After(latest.date) {
-			latest = candidate{name: e.Name(), date: parsed}
+		candidates = append(candidates, candidate{name: e.Name(), date: parsed})
+	}
+	// Sort by date descending
+	for i := 0; i < len(candidates); i++ {
+		for j := i + 1; j < len(candidates); j++ {
+			if candidates[j].date.After(candidates[i].date) {
+				candidates[i], candidates[j] = candidates[j], candidates[i]
+			}
 		}
 	}
-	if latest.name == "" {
-		shared.WriteJSON(w, http.StatusOK, map[string]any{
-			"snapshots":      []domain.TaxSnapshot{},
-			"before_tax_pnl": 0,
-			"after_tax_pnl":  0,
-			"total_tax_paid": 0,
-			"is_simulated":   true,
-			"note":           "no daily sessions found",
-		})
-		return
+
+	// Find the first session with tax data
+	for _, c := range candidates {
+		summaryPath := filepath.Join(sessionsDir, c.name, "summary.json")
+		bytes, err := os.ReadFile(summaryPath)
+		if err != nil {
+			continue
+		}
+		var summary domain.SessionSummary
+		if err := json.Unmarshal(bytes, &summary); err != nil {
+			continue
+		}
+		if len(summary.TaxSnapshots) > 0 || summary.TotalTaxPaid != 0 {
+			returnTaxSnapshot(w, summary)
+			return
+		}
 	}
 
-	summaryPath := filepath.Join(sessionsDir, latest.name, "summary.json")
-	bytes, err := os.ReadFile(summaryPath)
-	if err != nil {
-		shared.WriteJSON(w, http.StatusOK, map[string]any{
-			"snapshots":      []domain.TaxSnapshot{},
-			"before_tax_pnl": 0,
-			"after_tax_pnl":  0,
-			"total_tax_paid": 0,
-			"is_simulated":   true,
-			"note":           "session summary not found: " + latest.name,
-		})
-		return
-	}
+	// No session with tax data found
+	shared.WriteJSON(w, http.StatusOK, map[string]any{
+		"snapshots":      []domain.TaxSnapshot{},
+		"before_tax_pnl": 0,
+		"after_tax_pnl":  0,
+		"total_tax_paid": 0,
+		"is_simulated":   true,
+		"note":           "no sessions with tax data — run a new simulation to populate",
+	})
+}
 
-	var summary domain.SessionSummary
-	if err := json.Unmarshal(bytes, &summary); err != nil {
-		log.Printf("[TaxHandler] warn: failed to parse summary for %s: %v", latest.name, err)
-		shared.WriteJSON(w, http.StatusOK, map[string]any{
-			"snapshots":      []domain.TaxSnapshot{},
-			"before_tax_pnl": 0,
-			"after_tax_pnl":  0,
-			"total_tax_paid": 0,
-			"is_simulated":   true,
-			"note":           "failed to parse session summary",
-		})
-		return
-	}
-
+func returnTaxSnapshot(w http.ResponseWriter, summary domain.SessionSummary) {
 	snapshots := summary.TaxSnapshots
 	if snapshots == nil {
 		snapshots = []domain.TaxSnapshot{}
 	}
-
-	beforeTax := summary.PortfolioValue // approximate: portfolio value represents pre-tax state
-	if summary.AfterTaxPnL != 0 || summary.TotalTaxPaid != 0 {
-		// If tax was computed, use actual tax fields
-		shared.WriteJSON(w, http.StatusOK, map[string]any{
-			"session_id":     summary.SessionID,
-			"snapshots":      snapshots,
-			"before_tax_pnl": summary.PortfolioValue,
-			"after_tax_pnl":  summary.AfterTaxPnL,
-			"total_tax_paid": summary.TotalTaxPaid,
-			"is_simulated":   true,
-		})
-		return
-	}
-
 	shared.WriteJSON(w, http.StatusOK, map[string]any{
 		"session_id":     summary.SessionID,
 		"snapshots":      snapshots,
-		"before_tax_pnl": beforeTax,
+		"before_tax_pnl": summary.PortfolioValue,
 		"after_tax_pnl":  summary.AfterTaxPnL,
 		"total_tax_paid": summary.TotalTaxPaid,
 		"is_simulated":   true,
-		"note":           "tax data not yet recorded in this session — run a new simulation to populate",
 	})
 }
