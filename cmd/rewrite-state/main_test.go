@@ -58,6 +58,39 @@ func writeLegacySessionRecommendationOutcomes(t *testing.T, dir, sessionID strin
 	}
 }
 
+// writeLegacySessionSummary writes a PascalCase summary.json (legacy format before canonical rewrite).
+func writeLegacySessionSummary(t *testing.T, dir, sessionID string) {
+	t.Helper()
+	sessionDir := filepath.Join(dir, "sessions", sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir session dir: %v", err)
+	}
+	// Legacy PascalCase format - LoadSessionSummaries unmarshals into domain.SessionSummary
+	// which uses snake_case tags, so PascalCase causes silent field loss.
+	legacy := `{
+		"SessionID": "session-20260101",
+		"Regime": "BULL",
+		"OrderCount": 10,
+		"PositionCount": 5,
+		"EndingCash": 950000.0,
+		"PortfolioValue": 1050000.0,
+		"OutcomeCount": 8,
+		"BrokerRuntime": {
+			"Mode": "backtest",
+			"Adapter": "twse"
+		},
+		"NextExperimentAgentID": "agent-x",
+		"ProposalID": "prop-1",
+		"CommitID": "abc123",
+		"ApprovalID": "apv-1",
+		"GuardOutcomes": [],
+		"RecordedAt": "2026-01-01T12:00:00Z"
+	}`
+	if err := os.WriteFile(filepath.Join(sessionDir, "summary.json"), []byte(legacy), 0o644); err != nil {
+		t.Fatalf("write summary.json: %v", err)
+	}
+}
+
 func writeLegacyExperimentsJSONL(t *testing.T, dir string) {
 	t.Helper()
 	line := `{"ID":"exp-1","TargetAgentID":"agent-1","Skill":"test","MutationType":"prompt_tightening","Status":"planned"}` + "\n"
@@ -353,6 +386,78 @@ func TestRewriteStatePreservesUnrecognizedFiles(t *testing.T) {
 	archiveDir := filepath.Join(archiveBase, archiveEntries[0].Name())
 	if _, err := os.Stat(filepath.Join(archiveDir, "custom_data.json")); err != nil {
 		t.Fatalf("unrecognized file should be in archive: %v", err)
+	}
+}
+
+func TestRewriteStateConvertsSessionSummaryToSnakeCase(t *testing.T) {
+	stateDir, archiveBase := buildFullFixtureState(t)
+	writeLegacySessionSummary(t, stateDir, "session-20260101")
+
+	var stdout bytes.Buffer
+	if err := run([]string{"-state-dir", stateDir, "-archive-base", archiveBase}, &stdout); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	summaryPath := filepath.Join(stateDir, "sessions", "session-20260101", "summary.json")
+	summaryData, err := os.ReadFile(summaryPath)
+	if err != nil {
+		t.Fatalf("read summary.json: %v", err)
+	}
+
+	if !strings.Contains(string(summaryData), `"session_id"`) {
+		t.Fatalf("expected summary.json to contain snake_case key session_id; got:\n%s", summaryData)
+	}
+	if strings.Contains(string(summaryData), `"SessionID"`) {
+		t.Fatalf("expected summary.json NOT to contain PascalCase key SessionID; got:\n%s", summaryData)
+	}
+
+	if !strings.Contains(string(summaryData), `"outcome_count"`) {
+		t.Fatalf("expected summary.json to contain snake_case key outcome_count; got:\n%s", summaryData)
+	}
+	if strings.Contains(string(summaryData), `"OutcomeCount"`) {
+		t.Fatalf("expected summary.json NOT to contain PascalCase key OutcomeCount; got:\n%s", summaryData)
+	}
+
+	if !strings.Contains(string(summaryData), `"portfolio_value"`) {
+		t.Fatalf("expected summary.json to contain snake_case key portfolio_value; got:\n%s", summaryData)
+	}
+	if strings.Contains(string(summaryData), `"PortfolioValue"`) {
+		t.Fatalf("expected summary.json NOT to contain PascalCase key PortfolioValue; got:\n%s", summaryData)
+	}
+}
+
+func TestRewriteStateArchiveRetainsOriginalSessionSummary(t *testing.T) {
+	stateDir, archiveBase := buildFullFixtureState(t)
+	writeLegacySessionSummary(t, stateDir, "session-20260101")
+
+	var stdout bytes.Buffer
+	if err := run([]string{"-state-dir", stateDir, "-archive-base", archiveBase}, &stdout); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	archiveEntries, err := os.ReadDir(archiveBase)
+	if err != nil {
+		t.Fatalf("read archive base: %v", err)
+	}
+	if len(archiveEntries) != 1 {
+		t.Fatalf("expected 1 archive dir, got %d", len(archiveEntries))
+	}
+	archiveDir := filepath.Join(archiveBase, archiveEntries[0].Name())
+
+	archiveSummaryPath := filepath.Join(archiveDir, "sessions", "session-20260101", "summary.json")
+	archiveSummaryData, err := os.ReadFile(archiveSummaryPath)
+	if err != nil {
+		t.Fatalf("read archived summary.json: %v", err)
+	}
+
+	if !strings.Contains(string(archiveSummaryData), `"SessionID"`) {
+		t.Fatalf("archive summary.json should retain PascalCase key SessionID; got:\n%s", archiveSummaryData)
+	}
+	if !strings.Contains(string(archiveSummaryData), `"OutcomeCount"`) {
+		t.Fatalf("archive summary.json should retain PascalCase key OutcomeCount; got:\n%s", archiveSummaryData)
+	}
+	if strings.Contains(string(archiveSummaryData), `"session_id"`) {
+		t.Fatalf("archive summary.json should NOT contain snake_case key session_id; got:\n%s", archiveSummaryData)
 	}
 }
 

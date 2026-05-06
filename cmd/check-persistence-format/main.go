@@ -232,7 +232,8 @@ func checkWriterConsistency(path string) []string {
 	}
 
 	if info.Size() == 0 {
-		return []string{"file empty"}
+		summaryIssues := checkEmptyWithSiblingSummary(path)
+		return summaryIssues
 	}
 
 	f, err := os.Open(path)
@@ -286,4 +287,47 @@ func checkWriterConsistency(path string) []string {
 	}
 
 	return issues
+}
+
+func checkEmptyWithSiblingSummary(outcomesPath string) []string {
+	sessionDir := filepath.Dir(outcomesPath)
+	summaryPath := filepath.Join(sessionDir, "summary.json")
+
+	data, err := os.ReadFile(summaryPath)
+	if err != nil {
+		return []string{"file empty"}
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return []string{"file empty"}
+	}
+
+	countVal, ok := raw["outcome_count"]
+	if !ok {
+		return []string{"file empty"}
+	}
+
+	count, ok := toFloat64(countVal)
+	if !ok {
+		return []string{"file empty"}
+	}
+
+	if count == 0 {
+		return nil
+	}
+
+	return []string{fmt.Sprintf("file empty but summary reports outcome_count=%.0f", count)}
+}
+
+func toFloat64(v interface{}) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case int:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	}
+	return 0, false
 }

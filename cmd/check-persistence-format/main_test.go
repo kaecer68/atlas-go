@@ -400,3 +400,80 @@ func TestFormatClassifyJSONL(t *testing.T) {
 		t.Fatalf("expected snake_case for JSONL, got %s", result)
 	}
 }
+
+func TestCheckWriterConsistencyEmptyWithZeroOutcomeCount(t *testing.T) {
+	dir := t.TempDir()
+	sessionDir := filepath.Join(dir, "sessions", "session-20260326")
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	summaryPath := filepath.Join(sessionDir, "summary.json")
+	summaryContent := `{"session_id":"session-20260326","outcome_count":0}`
+	if err := os.WriteFile(summaryPath, []byte(summaryContent), 0o644); err != nil {
+		t.Fatalf("write summary: %v", err)
+	}
+
+	outcomesPath := filepath.Join(sessionDir, "recommendation_outcomes.jsonl")
+	if err := os.WriteFile(outcomesPath, []byte{}, 0o644); err != nil {
+		t.Fatalf("write empty outcomes: %v", err)
+	}
+
+	issues := checkWriterConsistency(outcomesPath)
+	if len(issues) != 0 {
+		t.Fatalf("expected no issues for empty outcomes file with outcome_count==0, got: %v", issues)
+	}
+}
+
+func TestCheckWriterConsistencyEmptyWithPositiveOutcomeCount(t *testing.T) {
+	dir := t.TempDir()
+	sessionDir := filepath.Join(dir, "sessions", "session-20260326")
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	summaryPath := filepath.Join(sessionDir, "summary.json")
+	summaryContent := `{"session_id":"session-20260326","outcome_count":5}`
+	if err := os.WriteFile(summaryPath, []byte(summaryContent), 0o644); err != nil {
+		t.Fatalf("write summary: %v", err)
+	}
+
+	outcomesPath := filepath.Join(sessionDir, "recommendation_outcomes.jsonl")
+	if err := os.WriteFile(outcomesPath, []byte{}, 0o644); err != nil {
+		t.Fatalf("write empty outcomes: %v", err)
+	}
+
+	issues := checkWriterConsistency(outcomesPath)
+	if len(issues) == 0 {
+		t.Fatalf("expected issues for empty outcomes file with outcome_count==5, got none")
+	}
+	found := false
+	for _, issue := range issues {
+		if strings.Contains(issue, "outcome_count") || strings.Contains(issue, "expected") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected issue mentioning outcome_count mismatch, got: %v", issues)
+	}
+}
+
+func TestClassifyArtifactEmptyWithSiblingSummary(t *testing.T) {
+	dir := t.TempDir()
+	sessionDir := filepath.Join(dir, "sessions", "session-20260326")
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	summaryPath := filepath.Join(sessionDir, "summary.json")
+	os.WriteFile(summaryPath, []byte(`{"session_id":"session-20260326","outcome_count":3}`), 0o644)
+
+	outcomesPath := filepath.Join(sessionDir, "recommendation_outcomes.jsonl")
+	os.WriteFile(outcomesPath, []byte{}, 0o644)
+
+	result := classifyArtifact(outcomesPath)
+	if result != "empty" {
+		t.Fatalf("expected classification 'empty' for zero-byte outcomes file, got %q", result)
+	}
+}
