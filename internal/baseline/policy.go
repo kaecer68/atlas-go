@@ -24,9 +24,17 @@ type Policy struct {
 }
 
 func (p *Policy) UnmarshalJSON(data []byte) error {
-	type alias Policy
-	var current alias
-	if err := json.Unmarshal(data, &current); err == nil && current.Version != 0 {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	if _, ok := raw["version"]; ok {
+		type alias Policy
+		var current alias
+		if err := json.Unmarshal(data, &current); err != nil {
+			return err
+		}
 		*p = Policy(current)
 		return nil
 	}
@@ -50,14 +58,35 @@ func (p *Policy) UnmarshalJSON(data []byte) error {
 		RevertedAt          time.Time `json:"RevertedAt"`
 	}
 
+	type legacySimulationConstraints struct {
+		StartingCash                float64 `json:"StartingCash"`
+		MaxPositionWeight           float64 `json:"MaxPositionWeight"`
+		MaxOpenPositions            int     `json:"MaxOpenPositions"`
+		MinTradableVolume           int64   `json:"MinTradableVolume"`
+		MinRecommendationConviction int     `json:"MinRecommendationConviction"`
+		RequireCROPass              bool    `json:"RequireCROPass"`
+		TransactionCostBPS          float64 `json:"TransactionCostBPS"`
+		SlippageBPS                 float64 `json:"SlippageBPS"`
+		ReserveCashFraction         float64 `json:"ReserveCashFraction"`
+		StopLossPct                 float64 `json:"StopLossPct"`
+		TakeProfitPct               float64 `json:"TakeProfitPct"`
+	}
+
+	type legacyExecutionPolicy struct {
+		ConvictionFloor               int  `json:"ConvictionFloor"`
+		RequireCROPass                bool `json:"RequireCROPass"`
+		MomentumCrashProtection       bool `json:"MomentumCrashProtection"`
+		EnableConvictionNormalization bool `json:"EnableConvictionNormalization"`
+	}
+
 	type legacyPolicy struct {
-		Version         int                          `json:"Version"`
-		PromptOverrides map[string]string            `json:"PromptOverrides"`
-		Constraints     domain.SimulationConstraints `json:"Constraints"`
-		ExecutionPolicy domain.ExecutionPolicy       `json:"ExecutionPolicy"`
-		Promotions      []legacyPromotionRecord      `json:"Promotions"`
-		RevertHistory   []legacyRevertRecord         `json:"RevertHistory"`
-		LastUpdatedAt   time.Time                    `json:"LastUpdatedAt"`
+		Version         int                         `json:"Version"`
+		PromptOverrides map[string]string           `json:"PromptOverrides"`
+		Constraints     legacySimulationConstraints `json:"Constraints"`
+		ExecutionPolicy legacyExecutionPolicy       `json:"ExecutionPolicy"`
+		Promotions      []legacyPromotionRecord     `json:"Promotions"`
+		RevertHistory   []legacyRevertRecord        `json:"RevertHistory"`
+		LastUpdatedAt   time.Time                   `json:"LastUpdatedAt"`
 	}
 
 	var legacy legacyPolicy
@@ -78,11 +107,28 @@ func (p *Policy) UnmarshalJSON(data []byte) error {
 	*p = Policy{
 		Version:         legacy.Version,
 		PromptOverrides: legacy.PromptOverrides,
-		Constraints:     legacy.Constraints,
-		ExecutionPolicy: legacy.ExecutionPolicy,
-		Promotions:      promotions,
-		RevertHistory:   revertHistory,
-		LastUpdatedAt:   legacy.LastUpdatedAt,
+		Constraints: domain.SimulationConstraints{
+			StartingCash:                legacy.Constraints.StartingCash,
+			MaxPositionWeight:           legacy.Constraints.MaxPositionWeight,
+			MaxOpenPositions:            legacy.Constraints.MaxOpenPositions,
+			MinTradableVolume:           legacy.Constraints.MinTradableVolume,
+			MinRecommendationConviction: legacy.Constraints.MinRecommendationConviction,
+			RequireCROPass:              legacy.Constraints.RequireCROPass,
+			TransactionCostBPS:          legacy.Constraints.TransactionCostBPS,
+			SlippageBPS:                 legacy.Constraints.SlippageBPS,
+			ReserveCashFraction:         legacy.Constraints.ReserveCashFraction,
+			StopLossPct:                 legacy.Constraints.StopLossPct,
+			TakeProfitPct:               legacy.Constraints.TakeProfitPct,
+		},
+		ExecutionPolicy: domain.ExecutionPolicy{
+			ConvictionFloor:               legacy.ExecutionPolicy.ConvictionFloor,
+			RequireCROPass:                legacy.ExecutionPolicy.RequireCROPass,
+			MomentumCrashProtection:       legacy.ExecutionPolicy.MomentumCrashProtection,
+			EnableConvictionNormalization: legacy.ExecutionPolicy.EnableConvictionNormalization,
+		},
+		Promotions:    promotions,
+		RevertHistory: revertHistory,
+		LastUpdatedAt: legacy.LastUpdatedAt,
 	}
 	return nil
 }

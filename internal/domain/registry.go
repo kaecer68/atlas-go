@@ -178,11 +178,35 @@ type ExperimentRecord struct {
 }
 
 func (r *ExperimentRecord) UnmarshalJSON(data []byte) error {
-	type alias ExperimentRecord
-	var current alias
-	if err := json.Unmarshal(data, &current); err == nil && current.ProposalID != "" {
-		*r = ExperimentRecord(current)
-		return nil
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	isCanonical := false
+	for key := range raw {
+		if key == "id" {
+			isCanonical = true
+			break
+		}
+		for i := 0; i < len(key); i++ {
+			if key[i] == '_' {
+				isCanonical = true
+				break
+			}
+		}
+		if isCanonical {
+			break
+		}
+	}
+
+	if isCanonical {
+		type alias ExperimentRecord
+		var current alias
+		if err := json.Unmarshal(data, &current); err == nil {
+			*r = ExperimentRecord(current)
+			return nil
+		}
 	}
 
 	type legacyExperimentRecord struct {
