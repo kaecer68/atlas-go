@@ -71,9 +71,9 @@ print_header() {
 # Find next planned experiment
 find_next_experiment() {
     if [ -f "data/state/experiments.jsonl" ]; then
-        local next_exp=$(grep '"Status":"planned"' data/state/experiments.jsonl | tail -1)
+        local next_exp=$(grep -i '"status":"planned"' data/state/experiments.jsonl | tail -1)
         if [ -n "$next_exp" ]; then
-            local exp_id=$(echo "$next_exp" | grep -o '"ID":"[^"]*"' | head -1 | cut -d'"' -f4)
+            local exp_id=$(echo "$next_exp" | jq -r '.id // .ID // empty')
             echo "$exp_id"
             return 0
         fi
@@ -113,12 +113,12 @@ display_experiment_info() {
     echo "  ID: $exp_id"
     
     if [ -f "data/state/experiments.jsonl" ]; then
-        local exp_data=$(grep "\"ID\":\"$exp_id\"" data/state/experiments.jsonl | head -1)
+        local exp_data=$(grep -i "\"id\":\"$exp_id\"" data/state/experiments.jsonl | head -1)
         if [ -n "$exp_data" ]; then
-            local agent=$(echo "$exp_data" | grep -o '"TargetAgentID":"[^"]*"' | cut -d'"' -f4)
-            local skill=$(echo "$exp_data" | grep -o '"Skill":"[^"]*"' | cut -d'"' -f4)
-            local mutation=$(echo "$exp_data" | grep -o '"MutationType":"[^"]*"' | cut -d'"' -f4)
-            
+            local agent=$(echo "$exp_data" | jq -r '.target_agent_id // .TargetAgentID // empty')
+            local skill=$(echo "$exp_data" | jq -r '.skill // .Skill // empty')
+            local mutation=$(echo "$exp_data" | jq -r '.mutation_type // .MutationType // empty')
+
             echo "  Agent: $agent"
             echo "  Skill: $skill"
             echo "  Mutation Type: ${mutation:-prompt_tightening}"

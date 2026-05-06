@@ -14,32 +14,96 @@ import (
 )
 
 type Policy struct {
-	Version         int
-	PromptOverrides map[string]string
-	Constraints     domain.SimulationConstraints
-	ExecutionPolicy domain.ExecutionPolicy
-	Promotions      []PromotionRecord
-	RevertHistory   []RevertRecord
-	LastUpdatedAt   time.Time
+	Version         int                          `json:"version"`
+	PromptOverrides map[string]string            `json:"prompt_overrides"`
+	Constraints     domain.SimulationConstraints `json:"constraints"`
+	ExecutionPolicy domain.ExecutionPolicy       `json:"execution_policy"`
+	Promotions      []PromotionRecord            `json:"promotions"`
+	RevertHistory   []RevertRecord               `json:"revert_history"`
+	LastUpdatedAt   time.Time                    `json:"last_updated_at"`
+}
+
+func (p *Policy) UnmarshalJSON(data []byte) error {
+	type alias Policy
+	var current alias
+	if err := json.Unmarshal(data, &current); err == nil && current.Version != 0 {
+		*p = Policy(current)
+		return nil
+	}
+
+	type legacyPromotionRecord struct {
+		ExperimentID  string    `json:"ExperimentID"`
+		TargetAgentID string    `json:"TargetAgentID"`
+		TargetSkill   string    `json:"TargetSkill"`
+		MutationType  string    `json:"MutationType"`
+		CandidatePath string    `json:"CandidatePath"`
+		PromotedAt    time.Time `json:"PromotedAt"`
+		Status        string    `json:"Status"`
+		VersionAfter  int       `json:"VersionAfter"`
+	}
+
+	type legacyRevertRecord struct {
+		FromVersion         int       `json:"FromVersion"`
+		ToVersion           int       `json:"ToVersion"`
+		RevertedExperiments []string  `json:"RevertedExperiments"`
+		Reason              string    `json:"Reason"`
+		RevertedAt          time.Time `json:"RevertedAt"`
+	}
+
+	type legacyPolicy struct {
+		Version         int                          `json:"Version"`
+		PromptOverrides map[string]string            `json:"PromptOverrides"`
+		Constraints     domain.SimulationConstraints `json:"Constraints"`
+		ExecutionPolicy domain.ExecutionPolicy       `json:"ExecutionPolicy"`
+		Promotions      []legacyPromotionRecord      `json:"Promotions"`
+		RevertHistory   []legacyRevertRecord         `json:"RevertHistory"`
+		LastUpdatedAt   time.Time                    `json:"LastUpdatedAt"`
+	}
+
+	var legacy legacyPolicy
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
+
+	promotions := make([]PromotionRecord, len(legacy.Promotions))
+	for i, lp := range legacy.Promotions {
+		promotions[i] = PromotionRecord(lp)
+	}
+
+	revertHistory := make([]RevertRecord, len(legacy.RevertHistory))
+	for i, lr := range legacy.RevertHistory {
+		revertHistory[i] = RevertRecord(lr)
+	}
+
+	*p = Policy{
+		Version:         legacy.Version,
+		PromptOverrides: legacy.PromptOverrides,
+		Constraints:     legacy.Constraints,
+		ExecutionPolicy: legacy.ExecutionPolicy,
+		Promotions:      promotions,
+		RevertHistory:   revertHistory,
+		LastUpdatedAt:   legacy.LastUpdatedAt,
+	}
+	return nil
 }
 
 type PromotionRecord struct {
-	ExperimentID  string
-	TargetAgentID string
-	TargetSkill   string
-	MutationType  string
-	CandidatePath string
-	PromotedAt    time.Time
-	Status        string
-	VersionAfter  int
+	ExperimentID  string    `json:"experiment_id"`
+	TargetAgentID string    `json:"target_agent_id"`
+	TargetSkill   string    `json:"target_skill"`
+	MutationType  string    `json:"mutation_type"`
+	CandidatePath string    `json:"candidate_path"`
+	PromotedAt    time.Time `json:"promoted_at"`
+	Status        string    `json:"status"`
+	VersionAfter  int       `json:"version_after"`
 }
 
 type RevertRecord struct {
-	FromVersion         int
-	ToVersion           int
-	RevertedExperiments []string
-	Reason              string
-	RevertedAt          time.Time
+	FromVersion         int       `json:"from_version"`
+	ToVersion           int       `json:"to_version"`
+	RevertedExperiments []string  `json:"reverted_experiments"`
+	Reason              string    `json:"reason"`
+	RevertedAt          time.Time `json:"reverted_at"`
 }
 
 func DefaultPolicy() Policy {

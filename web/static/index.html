@@ -847,18 +847,23 @@ body { display: flex; margin: 0; min-height: 100vh; }
     <div id="page-portfolio" class="page">
       <h1 id="pageTitle">📂 組合持倉</h1>
       <div class="kpi-grid" id="portfolioKPIs"></div>
-      <div class="panel wide" id="equityCurvePanel" style="display:none">
-        <h2>淨值趨勢</h2>
-        <canvas id="equityChart" height="200"></canvas>
+      <div class="live-grid">
+        <div class="panel"><h2>📊 市場體制</h2><div id="regimeContext"></div></div>
+        <div class="panel"><h2>💰 配置指引</h2><div id="allocationGuidance"></div></div>
       </div>
+      <div class="panel wide"><h2>🤖 AI 策略儀表板</h2><div id="agentScoreboard"></div></div>
       <div class="panel wide" id="positionsPanel">
         <h2>持倉明細</h2>
         <div id="positionsTable"></div>
       </div>
+      <div class="panel wide" id="equityCurvePanel" style="display:none">
+        <h2>淨值趨勢</h2>
+        <canvas id="equityChart" height="200"></canvas>
+      </div>
       <details class="help-details">
         <summary><strong>📖 如何解讀本頁</strong></summary>
-        <p>顯示最新模擬場次的持倉狀態與淨值變化。損益為未實現損益，實際損益需待部位平倉後確認。</p>
-        <p class="text-muted text-sm">資料來源：live state store（data/state/live/）。若無持倉資料，代表尚未執行模擬或所有部位已平倉。</p>
+        <p>本頁為<strong>策略駕駛艙</strong>，整合三大決策維度：<strong>市場體制</strong>（現在該積極還是保守？）、<strong>AI 信心度</strong>（哪些 AI 策略正在賺錢？）、<strong>資金規模</strong>（以你的資金適合怎樣的配置比例？）。</p>
+        <p class="text-muted text-sm">Darwinian 權重系統會自動根據 AI 近 20 日績效調整影響力（0.3×～2.5×）。持倉中的「推薦 AI」欄位對應到最後一次 pipeline 中通過控制層審核的推薦來源。</p>
       </details>
     </div>
 
@@ -1866,8 +1871,8 @@ function computePipelineSummary(guardOutcomes) {
   const guard = guardOutcomes || [];
   const firstGuard = guard[0];
   const lastGuard = guard[guard.length - 1];
-  const rawInputs = firstGuard ? firstGuard.InputCount : 0;
-  const finalOutputs = lastGuard ? lastGuard.OutputCount : 0;
+const rawInputs = firstGuard ? firstGuard.input_count : 0;
+		const finalOutputs = lastGuard ? lastGuard.output_count : 0;
   const filteredCount = Math.max(0, rawInputs - finalOutputs);
   return { rawInputs, finalOutputs, filteredCount, guard };
 }
@@ -1884,10 +1889,10 @@ function renderMacroRadar(data, pipelineData) {
   let controlSummary = '';
   if (guard.length) {
     const lines = guard.map(g => {
-      const filtered = g.InputCount - g.OutputCount;
-      if (!g.Passed) return `<span class="text-down">● ${agentName(g.GuardID)} 強制阻擋全部推薦（${g.InputCount} → 0）</span>`;
-      if (filtered > 0) return `<span class="text-warn">● ${agentName(g.GuardID)} 過濾了 ${filtered} 筆推薦（${g.InputCount} → ${g.OutputCount}）</span>`;
-      return `<span class="text-up">● ${agentName(g.GuardID)} 未過濾任何推薦，全部放行</span>`;
+      const filtered = g.input_count - g.output_count;
+      if (!g.passed) return `<span class="text-down">● ${agentName(g.guard_id)} 強制阻擋全部推薦（${g.input_count} → 0）</span>`;
+      if (filtered > 0) return `<span class="text-warn">● ${agentName(g.guard_id)} 過濾了 ${filtered} 筆推薦（${g.input_count} → ${g.output_count}）</span>`;
+      return `<span class="text-up">● ${agentName(g.guard_id)} 未過濾任何推薦，全部放行</span>`;
     });
     controlSummary = `<div style="margin:8px 0;font-size:12px;line-height:1.6;background:var(--bg);padding:8px 10px;border-radius:6px">${lines.join('<br>')}</div>`;
   }
@@ -1926,12 +1931,12 @@ function renderMacroRadar(data, pipelineData) {
     ${controlSummary}
     ${symbolTable}
     ${guard.length ? '<table style="margin-top:8px;font-size:12px"><thead><tr><th>AI</th><th>結果</th><th>處理數量</th><th>說明</th></tr></thead><tbody>' + guard.map(g => {
-      const filtered = g.InputCount - g.OutputCount;
+      const filtered = g.input_count - g.output_count;
       let actionText = '放行';
       let actionClass = 'ok';
-      if (!g.Passed) { actionText = '阻擋'; actionClass = 'err'; }
+      if (!g.passed) { actionText = '阻擋'; actionClass = 'err'; }
       else if (filtered > 0) { actionText = '過濾'; actionClass = 'warn'; }
-      return `<tr><td>${agentName(g.GuardID) || '-'}</td><td><span class="badge ${actionClass}">${actionText}</span></td><td>${g.InputCount} → ${g.OutputCount}</td><td>${g.Reason || '-'}</td></tr>`;
+      return `<tr><td>${agentName(g.guard_id) || '-'}</td><td><span class="badge ${actionClass}">${actionText}</span></td><td>${g.input_count} → ${g.output_count}</td><td>${g.reason || '-'}</td></tr>`;
     }).join('') + '</tbody></table>' : renderEmptyState('本場次無控制層紀錄', '')}
   `;
 }
@@ -2313,12 +2318,12 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
   `;
 
   const guardContent = guards.map(g => {
-    const filtered = (g.InputCount || 0) - (g.OutputCount || 0);
+    const filtered = (g.input_count || 0) - (g.output_count || 0);
     let cls = 'ok';
-    let txt = `放行 ${g.OutputCount || 0} 筆`;
-    if (!g.Passed) { cls = 'err'; txt = `阻擋（輸出 ${g.OutputCount || 0} 筆）`; }
-    else if (filtered > 0) { cls = 'warn'; txt = `過濾 ${filtered} 筆後放行 ${g.OutputCount || 0} 筆`; }
-    return `<div class="my-xs"><span class="badge ${cls}">${agentName(g.GuardID)}</span> ${txt}（輸入 ${g.InputCount || 0} → 輸出 ${g.OutputCount || 0}）</div>`;
+    let txt = `放行 ${g.output_count || 0} 筆`;
+    if (!g.passed) { cls = 'err'; txt = `阻擋（輸出 ${g.output_count || 0} 筆）`; }
+    else if (filtered > 0) { cls = 'warn'; txt = `過濾 ${filtered} 筆後放行 ${g.output_count || 0} 筆`; }
+    return `<div class="my-xs"><span class="badge ${cls}">${agentName(g.guard_id)}</span> ${txt}（輸入 ${g.input_count || 0} → 輸出 ${g.output_count || 0}）</div>`;
   }).join('') || renderEmptyState('暫無控制層紀錄', '');
 
   const perfRows = items.slice(0, 20).map(it => {
@@ -2627,12 +2632,12 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
   let guardBadges = '';
   if (guard.length) {
     guardBadges = `<div class="mb-sm">${guard.map(g => {
-      const filtered = g.InputCount - g.OutputCount;
+      const filtered = g.input_count - g.output_count;
       let label = '放行';
       let cls = 'ok';
-      if (!g.Passed) { label = '阻擋'; cls = 'err'; }
+      if (!g.passed) { label = '阻擋'; cls = 'err'; }
       else if (filtered > 0) { label = `過濾 ${filtered} 筆`; cls = 'warn'; }
-      return `<span class="badge ${cls}">${agentName(g.GuardID)}：${label}（${g.InputCount}→${g.OutputCount}）</span>`;
+      return `<span class="badge ${cls}">${agentName(g.guard_id)}：${label}（${g.input_count}→${g.output_count}）</span>`;
     }).join('')}</div>`;
   } else if (data.status === 'degraded') {
     guardBadges = `<div class="mb-sm text-sm" style="color:var(--warn)">⚠️ 控制層過濾記錄未載入</div>`;
@@ -3442,31 +3447,31 @@ function renderRiskCards(data) {
   `;
 }
 
-async function loadPortfolioState() {
-  const el = document.getElementById('portfolioKPIs');
-  if (el) el.innerHTML = '<div class="loading">載入中...</div>';
-  try {
-    const data = await getJSON('/api/dashboard/portfolio-state');
-    renderPortfolioKPIs(data);
-    renderEquityCurve(data.equity_curve);
-    renderPositionsTable(data.positions);
-  } catch (e) {
-    if (el) el.innerHTML = '<div class="text-muted">載入失敗：' + e.message + '</div>';
-  }
-}
-
-function renderPortfolioKPIs(data) {
+function renderPortfolioKPIs(data, pipeline) {
   const el = document.getElementById('portfolioKPIs');
   if (!el) return;
+  if (!data) { el.innerHTML = '<div class="empty">尚無組合資料</div>'; return; }
   const fmt = v => typeof v === 'number' ? v.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0}) : '-';
   const fmtPct = v => typeof v === 'number' ? (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%' : '-';
   const pnlColor = v => typeof v === 'number' ? (v >= 0 ? 'var(--up)' : 'var(--down)') : '';
+  const dd = data.current_drawdown;
+  const ddPct = dd > 0 ? (dd * 100).toFixed(1) + '%' : '0%';
+  const ddColor = dd > 0.2 ? 'var(--down)' : (dd > 0.1 ? 'var(--warn)' : 'var(--up)');
+
+  // Count pipeline suggestions when positions are empty
+  const positionsCount = data.positions_count || 0;
+  let positionLabel = positionsCount + ' 檔';
+  if (positionsCount === 0 && pipeline && pipeline.items) {
+    const passed = pipeline.items.filter(it => it.passed_guards !== false).length;
+    if (passed > 0) positionLabel = `0 檔 <span style="font-size:10px;color:var(--muted)">（${passed} 筆建議）</span>`;
+  }
+
   el.innerHTML = `
     <div class="panel" style="text-align:center"><div class="kpi-label">總資產</div><div class="kpi-value">${fmt(data.portfolio_value)}</div></div>
     <div class="panel" style="text-align:center"><div class="kpi-label">可用現金</div><div class="kpi-value">${fmt(data.cash)}</div></div>
+    <div class="panel" style="text-align:center"><div class="kpi-label">目前回撤</div><div class="kpi-value" style="color:${ddColor}">${ddPct}</div></div>
     <div class="panel" style="text-align:center"><div class="kpi-label">累計損益</div><div class="kpi-value" style="color:${pnlColor(data.cumulative_pnl_pct)}">${fmtPct(data.cumulative_pnl_pct)}</div></div>
-    <div class="panel" style="text-align:center"><div class="kpi-label">目前回撤</div><div class="kpi-value" style="color:var(--warn)">${fmtPct(data.current_drawdown)}</div></div>
-    <div class="panel" style="text-align:center"><div class="kpi-label">持倉數</div><div class="kpi-value">${data.positions_count || 0} 檔</div></div>
+    <div class="panel" style="text-align:center"><div class="kpi-label">持倉數</div><div class="kpi-value">${positionLabel}</div></div>
   `;
 }
 
@@ -3520,21 +3525,31 @@ function renderEquityCurve(points) {
   });
 }
 
-function renderPositionsTable(positions) {
+function renderPositionsTable(positions, pipeline) {
   const el = document.getElementById('positionsTable');
   if (!el) return;
+
   if (!positions || positions.length === 0) {
-    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">目前無持倉</div>';
+    // Fallback: show latest pipeline recommendations as suggested positions
+    const items = (pipeline && pipeline.items) || [];
+    const passedItems = items.filter(it => it.passed_guards !== false);
+    if (passedItems.length > 0) {
+      el.innerHTML = renderSuggestedPositions(passedItems, pipeline);
+      return;
+    }
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">目前無持倉，且尚無 pipeline 建議資料</div>';
     return;
   }
+
   const fmt = v => typeof v === 'number' ? v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
   const fmtInt = v => typeof v === 'number' ? v.toLocaleString('en-US') : '-';
   const pnlColor = v => typeof v === 'number' ? (v >= 0 ? 'var(--up)' : 'var(--down)') : 'var(--muted)';
   const pnlSign = v => typeof v === 'number' ? (v >= 0 ? '+' : '') : '';
+  const convColor = v => typeof v === 'number' ? (v >= 0.7 ? 'var(--up)' : (v >= 0.4 ? 'var(--warn)' : 'var(--muted)')) : 'var(--muted)';
   el.innerHTML = `
     <div class="table-wrapper">
     <table id="positionsTableEl">
-      <thead><tr><th>符號</th><th>數量</th><th>成本</th><th>現價</th><th>市值</th><th>損益</th><th>損益%</th></tr></thead>
+      <thead><tr><th>符號</th><th>數量</th><th>成本</th><th>現價</th><th>市值</th><th>損益</th><th>損益%</th><th>推薦 AI</th><th>信心</th></tr></thead>
       <tbody>
         ${positions.map(p => `<tr>
           <td><strong>${p.symbol}</strong></td>
@@ -3544,10 +3559,173 @@ function renderPositionsTable(positions) {
           <td>${fmt(p.market_value)}</td>
           <td style="color:${pnlColor(p.unrealized_pnl)};font-weight:700">${pnlSign(p.unrealized_pnl)}${fmt(p.unrealized_pnl)}</td>
           <td style="color:${pnlColor(p.pnl_pct)};font-weight:700">${pnlSign(p.pnl_pct)}${(p.pnl_pct * 100).toFixed(2)}%</td>
+          <td style="font-size:11px">${agentName(p.agent_id) || p.agent_name || '-'}</td>
+          <td style="color:${convColor(p.conviction)};font-size:11px">${p.conviction ? (p.conviction * 100).toFixed(0) + '%' : '-'}</td>
         </tr>`).join('')}
       </tbody>
     </table>
     </div>
+  `;
+}
+
+function renderSuggestedPositions(items, pipeline) {
+  const sessionID = (pipeline && pipeline.session_id) || '-';
+  const regime = (pipeline && pipeline.regime) || '-';
+  return `
+    <div style="margin-bottom:8px;font-size:11px;color:var(--warn)">
+      ⚠️ 目前無 live 持倉資料，以下為最新模擬場次（${sessionID}｜${regime}）的 <strong>AI 建議持倉</strong>
+    </div>
+    <div class="table-wrapper">
+    <table>
+      <thead><tr><th>標的</th><th>方向</th><th>推薦 AI</th><th>信心</th><th>目標價</th><th>停損價</th><th>理由</th></tr></thead>
+      <tbody>
+        ${items.map(i => {
+          const sideLabel = i.side === 'BUY' ? '買入' : (i.side === 'SELL' ? '賣出' : i.side);
+          const sideColor = i.side === 'BUY' ? 'var(--up)' : 'var(--down)';
+          const conv = i.conviction || 0;
+          const convColor = conv >= 0.7 ? 'var(--up)' : (conv >= 0.4 ? 'var(--warn)' : 'var(--muted)');
+          return `<tr>
+            <td><strong>${i.symbol || '-'}</strong></td>
+            <td style="color:${sideColor};font-weight:600">${sideLabel}</td>
+            <td style="font-size:11px">${agentName(i.agent_id) || i.skill || '-'}</td>
+            <td style="color:${convColor};font-weight:600">${(conv * 100).toFixed(0)}%</td>
+            <td>${i.target_price ? i.target_price.toFixed(1) : '-'}</td>
+            <td>${i.stop_loss_price ? i.stop_loss_price.toFixed(1) : '-'}</td>
+            <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(i.reason || '-').replace(/"/g,'&quot;')}">${(i.reason || '-').substring(0, 50)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-top:4px">共 ${items.length} 筆通過控制層審核的推薦（來自 ${pipeline.session_id || '?'}）</div>
+  `;
+}
+
+function renderRegimeContext(ps, regimeData) {
+  const el = document.getElementById('regimeContext');
+  if (!el) return;
+  const regime = (ps && ps.regime) || '-';
+  const regimeLabel = (ps && ps.regime_label) || regime;
+  const transitions = (regimeData && regimeData.transitions) || [];
+  const sessions = (regimeData && regimeData.sessions) || [];
+
+  // Count regime distribution
+  const counts = {};
+  sessions.forEach(s => { const r = s.regime || '-'; counts[r] = (counts[r] || 0) + 1; });
+  const total = sessions.length || 1;
+
+  let advice = '';
+  if (regime === 'RISK_ON') advice = '市場處於多頭格局，適合提高曝險、偏重動能與成長型策略。';
+  else if (regime === 'RISK_OFF') advice = '市場處於空頭格局，應降低曝險、增持現金、偏好防禦型策略。';
+  else if (regime === 'NEUTRAL') advice = '市場處於盤整格局，方向不明朗，建議適度曝險、分散配置。';
+  else advice = '體制資料尚未載入，系統將以中性配置運行。';
+
+  const regimeColor = regime === 'RISK_ON' ? 'var(--up)' : (regime === 'RISK_OFF' ? 'var(--down)' : 'var(--warn)');
+
+  // Last transition info
+  let transitionHtml = '';
+  if (transitions.length > 0) {
+    const last = transitions[transitions.length - 1];
+    const fromLabel = last.from || '-';
+    const toLabel = last.to || '-';
+    transitionHtml = `<div style="font-size:10px;color:var(--muted);margin-top:6px">最近轉變：${fromLabel} → ${toLabel}（${last.session_id || ''}）</div>`;
+  }
+
+  el.innerHTML = `
+    <div style="text-align:center">
+      <div class="kpi-value" style="color:${regimeColor};font-size:22px">${regimeLabel}</div>
+      <div class="kpi-label" style="margin-top:2px">${regime}</div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6">${advice}</div>
+    ${transitionHtml}
+    <div style="margin-top:8px;display:flex;gap:8px;font-size:11px;color:var(--muted)">
+      <span>🟢 ${counts['RISK_ON'] || 0} 天</span>
+      <span>🟡 ${counts['NEUTRAL'] || 0} 天</span>
+      <span>🔴 ${counts['RISK_OFF'] || 0} 天</span>
+    </div>
+  `;
+}
+
+function renderAllocationGuidance(ps, regimeData) {
+  const el = document.getElementById('allocationGuidance');
+  if (!el) return;
+  const cash = (ps && ps.cash) || 0;
+  const portfolioValue = (ps && ps.portfolio_value) || cash;
+  const regime = (ps && ps.regime) || 'NEUTRAL';
+
+  // Capital-tier-based allocation guidance
+  let tier, suggestedCashPct, maxPositionPct, diversificationNote;
+  if (portfolioValue < 500000) {
+    tier = '小型資金（&lt;50 萬）';
+    suggestedCashPct = regime === 'RISK_ON' ? 0.05 : (regime === 'RISK_OFF' ? 0.30 : 0.15);
+    maxPositionPct = 0.40;
+    diversificationNote = '建議 3～5 檔集中配置，追求資本成長';
+  } else if (portfolioValue < 3000000) {
+    tier = '中型資金（50～300 萬）';
+    suggestedCashPct = regime === 'RISK_ON' ? 0.10 : (regime === 'RISK_OFF' ? 0.35 : 0.20);
+    maxPositionPct = 0.20;
+    diversificationNote = '建議 6～10 檔適度分散，平衡成長與風控';
+  } else {
+    tier = '大型資金（&gt;300 萬）';
+    suggestedCashPct = regime === 'RISK_ON' ? 0.20 : (regime === 'RISK_OFF' ? 0.45 : 0.30);
+    maxPositionPct = 0.10;
+    diversificationNote = '建議 10～20 檔全市場配置，資本保值優先';
+  }
+
+  const currentCashPct = portfolioValue > 0 ? cash / portfolioValue : 1;
+  const cashStatus = currentCashPct >= suggestedCashPct ? '✅' : '⚠️';
+  const exposurePct = 1 - currentCashPct;
+  const suggestedExposurePct = 1 - suggestedCashPct;
+
+  el.innerHTML = `
+    <div style="font-size:11px;color:var(--muted);margin-bottom:4px">${tier}</div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+      <div><span style="font-size:18px;font-weight:700">${(exposurePct * 100).toFixed(0)}%</span><br><span style="font-size:10px;color:var(--muted)">目前曝險</span></div>
+      <div><span style="font-size:18px;color:var(--muted)">→</span></div>
+      <div><span style="font-size:18px;font-weight:700;color:var(--accent)">${(suggestedExposurePct * 100).toFixed(0)}%</span><br><span style="font-size:10px;color:var(--muted)">建議曝險</span></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);line-height:1.5">
+      <div>${cashStatus} 現金比例：${(currentCashPct * 100).toFixed(0)}%（建議 ≥ ${(suggestedCashPct * 100).toFixed(0)}%）</div>
+      <div>📌 單一持倉上限：${(maxPositionPct * 100).toFixed(0)}%</div>
+      <div style="margin-top:2px">${diversificationNote}</div>
+    </div>
+  `;
+}
+
+function renderAgentScoreboard(dw) {
+  const el = document.getElementById('agentScoreboard');
+  if (!el) return;
+  if (!dw || !dw.agents || dw.status !== 'ok') {
+    el.innerHTML = '<div style="padding:12px;text-align:center;color:var(--muted)">Darwinian 權重資料尚未載入</div>';
+    return;
+  }
+
+  const agents = Object.values(dw.agents);
+  const sorted = agents.sort((a, b) => (b.rolling_sharpe || 0) - (a.rolling_sharpe || 0));
+
+  el.innerHTML = `
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      ${sorted.map(a => {
+        const w = a.weight || 1;
+        const sharpe = a.rolling_sharpe || 0;
+        const hitRate = (a.hit_rate || 0) * 100;
+        const barW = Math.max(1, Math.round(w / 2.5 * 100));
+        const color = w >= 2.0 ? 'var(--up)' : (w >= 1.0 ? 'var(--accent)' : (w >= 0.5 ? 'var(--warn)' : 'var(--down)'));
+        return `<div style="flex:1;min-width:180px;max-width:240px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+            <div style="width:${barW}%;max-width:100%;height:3px;background:${color};border-radius:2px;flex-shrink:0" title="權重 ${w.toFixed(2)}"></div>
+            <span style="font-size:10px;font-weight:700;white-space:nowrap">${agentName(a.agent_id)}</span>
+          </div>
+          <div style="font-size:10px;color:var(--muted);display:flex;gap:8px">
+            <span>S:${sharpe.toFixed(1)}</span>
+            <span>Hit:${hitRate.toFixed(0)}%</span>
+            <span>N:${a.total_signals || 0}</span>
+            <span style="font-weight:700;color:${color}">×${w.toFixed(2)}</span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-top:6px">Darwinian 權重範圍：0.3～2.5× | 基於近 20 日滾動績效自動調整 | 更新時間：${dw.last_computed || '-'}</div>
   `;
 }
 
@@ -4507,7 +4685,20 @@ async function loadPageData(pageId) {
       } catch (e) { console.error('Failed to load live status:', e); }
       break;
     case 'portfolio':
-      loadPortfolioState();
+      try {
+        const [ps, dw, regimeData, pipeline] = await Promise.all([
+          getJSON('/api/dashboard/portfolio-state').catch(() => null),
+          getJSON('/api/synergy/darwinian-status').catch(() => null),
+          getJSON('/api/dashboard/regime-history').catch(() => null),
+          getJSON('/api/dashboard/recommendation-pipeline').catch(() => null),
+        ]);
+        renderPortfolioKPIs(ps, pipeline);
+        renderRegimeContext(ps, regimeData);
+        renderAllocationGuidance(ps, regimeData);
+        renderAgentScoreboard(dw);
+        renderEquityCurve((ps && ps.equity_curve) || []);
+        renderPositionsTable((ps && ps.positions) || [], pipeline);
+      } catch (e) { console.error('Failed to load portfolio:', e); }
       break;
     case 'parameters':
       try {

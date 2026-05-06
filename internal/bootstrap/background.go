@@ -114,6 +114,7 @@ func StartAutoCapitalFlowFetch(ctx context.Context, workDir string) {
 		}
 
 		capFlowProvider := marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow"))
+		healthStore := monitoring.NewChannelHealthStoreWithPool(filepath.Join(workDir, "data/state"), nil)
 
 		// Fetch immediately on startup.
 		doFetch := func() {
@@ -122,9 +123,11 @@ func StartAutoCapitalFlowFetch(ctx context.Context, workDir string) {
 			_, err := capFlowProvider.FetchSnapshot(bgCtx)
 			if err != nil {
 				log.Printf("[AutoCapitalFlow] fetch failed: %v", err)
+				_ = healthStore.Record("twse_capital_flow", "error", err.Error())
 				return
 			}
 			log.Printf("[AutoCapitalFlow] fetch succeeded")
+			_ = healthStore.Record("twse_capital_flow", "ok", "")
 		}
 		doFetch()
 

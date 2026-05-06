@@ -268,6 +268,15 @@ func (s *DataChannelService) buildTWSEReplayChannel(now time.Time) DataChannel {
 func (s *DataChannelService) buildTWSECapitalFlowChannel(now time.Time) DataChannel {
 	capFlowDir := filepath.Join(s.WorkDir, "data/state/capital_flow")
 	status, updated := checkCapitalFlowHealth(capFlowDir, now)
+	rec := s.healthStore.Get("twse_capital_flow")
+	if rec != nil && rec.Status != "" {
+		status = rec.Status
+		if rec.LastError != "" {
+			updated = "上次失敗: " + rec.LastError
+		} else if rec.LastSuccessAt != "" {
+			updated = "上次成功: " + rec.LastSuccessAt
+		}
+	}
 	return DataChannel{
 		ChannelID:  "twse_capital_flow",
 		Country:    "台灣",
@@ -320,6 +329,29 @@ func (s *DataChannelService) buildFugleChannel(now time.Time) DataChannel {
 }
 
 func (s *DataChannelService) buildFubonChannel(now time.Time) DataChannel {
+	fubonKey := os.Getenv("FUBON_API_KEY")
+	if fubonKey == "" {
+		fubonKey = os.Getenv("ATLAS_FUBON_API_KEY")
+	}
+	status := "inactive"
+	updated := "-"
+	lastError := ""
+	if fubonKey != "" {
+		fubonClient := marketdata.NewFubonClient(fubonKey)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		err := fubonClient.HealthCheck(ctx)
+		cancel()
+		if err != nil {
+			status = "error"
+			updated = "API 連線失敗"
+			lastError = err.Error()
+		} else {
+			status = "ok"
+			updated = "API 連線正常"
+		}
+	} else {
+		updated = "未設定 API Key"
+	}
 	return DataChannel{
 		ChannelID:  "fubon",
 		Country:    "台灣",
@@ -327,9 +359,10 @@ func (s *DataChannelService) buildFubonChannel(now time.Time) DataChannel {
 		APIFormat:  "REST JSON",
 		Path:       "api.fubon.com.tw",
 		Storage:    "(live cache / memory)",
-		Status:     "inactive",
-		StatusText: statusText("inactive"),
-		UpdatedAt:  "API 連線異常",
+		Status:     status,
+		StatusText: statusText(status),
+		UpdatedAt:  updated,
+		LastError:  lastError,
 	}
 }
 
@@ -579,7 +612,7 @@ func (s *DataChannelService) GetAlerts(ctx context.Context) ([]ChannelAlert, err
 	if err != nil {
 		return nil, err
 	}
-	knownInactive := map[string]bool{"fubon": true}
+	knownInactive := map[string]bool{}
 	var alerts []ChannelAlert
 	for _, c := range channels {
 		if c.Status == "error" || c.Status == "warn" {
