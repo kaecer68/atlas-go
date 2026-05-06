@@ -152,7 +152,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	marketdataHandlers := apimarketdata.NewHandlers(a.workDir)
 	marketdataHandlers.RegisterRoutes(mux)
 
-	taxHandlers := apitax.NewHandlers()
+	taxHandlers := apitax.NewHandlers(a.ledgerDir)
 	taxHandlers.RegisterRoutes(mux)
 
 	paramHandlers := apiparameters.NewHandlers(filepath.Join(a.workDir, "configs/parameters.json"))
