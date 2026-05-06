@@ -2525,12 +2525,81 @@ function passesFilter(item) {
 
 let pipelineSessions = [];
 
+function renderStatusBanner(status, statusMessage) {
+  if (!status || status === 'ok') return '';
+  let bgColor = 'var(--panel)';
+  let borderColor = 'var(--border)';
+  let icon = 'ℹ️';
+  let title = '提示 (Info)';
+  
+  if (status === 'degraded') {
+    bgColor = 'rgba(245, 158, 11, 0.1)';
+    borderColor = 'var(--warn)';
+    icon = '⚠️';
+    title = '部分服務降級 (Degraded)';
+  } else if (status === 'minimal') {
+    bgColor = 'rgba(245, 158, 11, 0.1)';
+    borderColor = 'var(--warn)';
+    icon = '⚠️';
+    title = '最小可用模式 (Minimal)';
+  } else if (status === 'error') {
+    bgColor = 'rgba(239, 68, 68, 0.1)';
+    borderColor = 'var(--down)';
+    icon = '❌';
+    title = '系統錯誤 (Error)';
+  } else if (status === 'no_session') {
+    bgColor = 'rgba(59, 130, 246, 0.1)';
+    borderColor = '#3b82f6'; // using a blue color for info
+    icon = 'ℹ️';
+    title = '無可用場次 (No Session)';
+  }
+  
+  return `
+    <div style="background:${bgColor}; border-left: 4px solid ${borderColor}; padding: 12px; border-radius: 4px; margin-bottom: 16px; color: var(--text); font-size: 13px; display: flex; align-items: flex-start; gap: 8px;">
+      <span style="font-size: 16px;">${icon}</span>
+      <div>
+        <strong style="display: block; margin-bottom: 2px;">${title}</strong>
+        <span style="color: var(--muted);">${statusMessage || ''}</span>
+      </div>
+    </div>
+  `;
+}
+
 function renderPipeline(data, showAll, sessionId, showScreened) {
   if (showAll === undefined) showAll = false;
   if (showScreened === undefined) showScreened = false;
   const el = document.getElementById('recommendationPipeline');
-  if (!data || !data.session_id) { el.innerHTML = renderEmptyState('尚無回測場次資料', '執行回測後將自動顯示'); el.classList.remove('loading'); return; }
+
+  if (!data || data.status === 'no_session') {
+    const sessions = data?.available_sessions || [];
+    const sessionList = sessions.length 
+      ? `<div class="mt-sm"><strong>可用場次：</strong><ul class="list-unstyled" style="margin-top:8px;padding-left:16px">${sessions.map(s => `<li style="margin-bottom:4px"><code>${s}</code></li>`).join('')}</ul></div>`
+      : '';
+    el.innerHTML = renderEmptyState(
+      '尚無回測場次資料',
+      '執行回測後將自動顯示',
+      (data?.status_message || '') + sessionList
+    );
+    el.classList.remove('loading');
+    return;
+  }
+
+  if (data.status === 'error') {
+    el.innerHTML = renderEmptyState(
+      '資料載入異常',
+      '',
+      data.status_message || '系統發生錯誤，請檢查日誌或聯絡管理員'
+    );
+    el.classList.remove('loading');
+    return;
+  }
+
+  if (!data.session_id) { el.innerHTML = renderEmptyState('尚無回測場次資料', '執行回測後將自動顯示'); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
+
+  const statusBanner = (data.status === 'degraded' || data.status === 'minimal') 
+    ? renderStatusBanner(data.status, data.status_message) 
+    : '';
 
   // Store data for filter access
   window._pipelineData = data;
@@ -2555,14 +2624,19 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
     </select>
   ` : `<span class="text-muted text-sm">載入場次中…</span>`;
 
-  const guardBadges = guard.length ? `<div class="mb-sm">${guard.map(g => {
-    const filtered = g.InputCount - g.OutputCount;
-    let label = '放行';
-    let cls = 'ok';
-    if (!g.Passed) { label = '阻擋'; cls = 'err'; }
-    else if (filtered > 0) { label = `過濾 ${filtered} 筆`; cls = 'warn'; }
-    return `<span class="badge ${cls}">${agentName(g.GuardID)}：${label}（${g.InputCount}→${g.OutputCount}）</span>`;
-  }).join('')}</div>` : '';
+  let guardBadges = '';
+  if (guard.length) {
+    guardBadges = `<div class="mb-sm">${guard.map(g => {
+      const filtered = g.InputCount - g.OutputCount;
+      let label = '放行';
+      let cls = 'ok';
+      if (!g.Passed) { label = '阻擋'; cls = 'err'; }
+      else if (filtered > 0) { label = `過濾 ${filtered} 筆`; cls = 'warn'; }
+      return `<span class="badge ${cls}">${agentName(g.GuardID)}：${label}（${g.InputCount}→${g.OutputCount}）</span>`;
+    }).join('')}</div>`;
+  } else if (data.status === 'degraded') {
+    guardBadges = `<div class="mb-sm text-sm" style="color:var(--warn)">⚠️ 控制層過濾記錄未載入</div>`;
+  }
 
   const screeningBadge = screenedItems.length ? `（${screenedItems.length} 檔被篩除）` : '';
   const workflowScreening = document.getElementById('workflowScreening');
@@ -2666,11 +2740,18 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
     ${paginationControls}
   ` : '';
 
-  const emptyMsg = !items.length ? (finalOutputs === 0
-    ? '本場次經控制層審核後，沒有任何標的被放行進入模擬投組。原因可能是風控長強制阻擋，或所有推薦均被投資長過濾。'
-    : `控制層放行 ${finalOutputs} 筆，但投資管線暫無詳細標的資料（可能該場次尚未載入管線數據）。`) : '';
+  let emptyMsg = '';
+  if (!items.length) {
+    if (data.status === 'minimal') {
+      emptyMsg = data.status_message || '處於最小可用模式，暫無標的資料。';
+    } else if (finalOutputs === 0) {
+      emptyMsg = '本場次經控制層審核後，沒有任何標的被放行進入模擬投組。原因可能是風控長強制阻擋，或所有推薦均被投資長過濾。';
+    } else {
+      emptyMsg = `控制層放行 ${finalOutputs} 筆，但投資管線暫無詳細標的資料（可能該場次尚未載入管線數據）。`;
+    }
+  }
 
-  el.innerHTML = `
+  el.innerHTML = statusBanner + `
     <div style="margin-bottom:8px;font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>場次：</span>${sessionSelect} · 市場狀態：<strong>${regimeLabel(data.regime || '-')}</strong> · ${recordedAt}</div>
     <div class="mb-sm text-muted text-sm">
       本場次共有 ${rawInputs} 筆 AI 推薦，經控制層後放行 ${finalOutputs} 筆${filteredCount > 0 ? `（過濾 ${filteredCount} 筆）` : ''}。
@@ -4335,6 +4416,9 @@ async function loadPageData(pageId) {
     case 'pipeline':
       try {
         const pipeline = await getJSON('/api/dashboard/recommendation-pipeline').catch(() => null);
+        if (pipeline && pipeline.status && pipeline.status !== 'ok') {
+          console.warn(`[Pipeline] API returned non-ok status: ${pipeline.status} - ${pipeline.status_message}`);
+        }
         renderPipeline(pipeline, false, '');
       } catch (e) { console.error('Failed to load pipeline:', e); }
       break;
