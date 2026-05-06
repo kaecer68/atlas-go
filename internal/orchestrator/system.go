@@ -689,6 +689,9 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 		},
 		GuardOutcomes: append([]domain.GuardOutcome(nil), result.GuardOutcomes...),
 		RecordedAt:    time.Now(),
+		TaxSnapshots:  append([]domain.TaxSnapshot(nil), result.TaxSnapshots...),
+		AfterTaxPnL:   result.AfterTaxPnL,
+		TotalTaxPaid:  result.TotalTaxPaid,
 	}
 	if candidate != nil {
 		summary.NextExperimentAgentID = candidate.Agent.ID
