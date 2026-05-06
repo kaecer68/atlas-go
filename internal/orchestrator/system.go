@@ -25,6 +25,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/screener"
 	"github.com/kaecer68/atlas-go/internal/sim"
 	"github.com/kaecer68/atlas-go/internal/strategy"
+	"github.com/kaecer68/atlas-go/internal/tax"
 )
 
 // SystemCore holds the essential simulation state and services.
@@ -130,6 +131,7 @@ func NewSystem(cfg config.Config) *System {
 	engine := sim.NewEngine(policy.Constraints).
 		WithOptimizer(optimizer).
 		WithThresholdEngine(thresholdEngine).
+		WithTaxCalculator(tax.NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig())).
 		WithReflexivityRules(
 			reflexivity.PriceToFundamentalsRule{},
 			reflexivity.PnLBehaviorRule{},
