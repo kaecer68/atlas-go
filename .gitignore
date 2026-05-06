@@ -98,3 +98,6 @@ internal/experiment/debug*_test.go
 
 # PR description
 PR_DESCRIPTION.md
+# Runtime state and cached data
+cmd/atlas/data/state/
+internal/marketdata/data/state/
