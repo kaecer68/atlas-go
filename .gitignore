@@ -102,12 +102,12 @@ PR_DESCRIPTION.md
 cmd/atlas/data/state/
 internal/marketdata/data/state/
 # Migration tool binaries
-archive-state
-check-persistence-format
-convert-baseline-policy
-convert-experiment-results
-convert-experiments-jsonl
-convert-recommendation-outcomes
-rewrite-state
+/archive-state
+/check-persistence-format
+/convert-baseline-policy
+/convert-experiment-results
+/convert-experiments-jsonl
+/convert-recommendation-outcomes
+/rewrite-state
 # State archives
 data/state-archive/
