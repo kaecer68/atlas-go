@@ -1,6 +1,5 @@
 package ledger
 
-
 import (
 	"bytes"
 	"encoding/json"

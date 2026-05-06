@@ -267,7 +267,7 @@ func TestExecutionPolicy_JSONKeys(t *testing.T) {
 	orig := ExecutionPolicy{
 		ConvictionFloor:               3,
 		RequireCROPass:                true,
-		MomentumCrashProtection:      true,
+		MomentumCrashProtection:       true,
 		EnableConvictionNormalization: false,
 	}
 
@@ -305,7 +305,7 @@ func TestExecutionPolicy_RoundTrip(t *testing.T) {
 	orig := ExecutionPolicy{
 		ConvictionFloor:               3,
 		RequireCROPass:                true,
-		MomentumCrashProtection:      true,
+		MomentumCrashProtection:       true,
 		EnableConvictionNormalization: false,
 	}
 

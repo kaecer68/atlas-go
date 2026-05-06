@@ -115,7 +115,7 @@ type SimulationConstraints struct {
 	TransactionCostBPS          float64 `json:"transaction_cost_bps"`
 	SlippageBPS                 float64 `json:"slippage_bps"`
 	ReserveCashFraction         float64 `json:"reserve_cash_fraction"`
-	StopLossPct                 float64 `json:"stop_loss_pct"` // sell when price drops below avgCost*(1+StopLossPct)
+	StopLossPct                 float64 `json:"stop_loss_pct"`   // sell when price drops below avgCost*(1+StopLossPct)
 	TakeProfitPct               float64 `json:"take_profit_pct"` // sell when price rises above avgCost*(1+TakeProfitPct)
 }
 
