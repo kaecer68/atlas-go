@@ -2,7 +2,10 @@ package orchestrator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -697,7 +700,30 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 		}
 	}
 
-	return s.ledger.RecordSessionSummary(s.session, summary)
+	if err := s.ledger.RecordSessionSummary(s.session, summary); err != nil {
+		return err
+	}
+
+	// Save per-session position snapshot for portfolio page
+	s.saveSessionPositions(s.session.ID, result.Positions)
+	return nil
+}
+
+func (s *System) saveSessionPositions(sessionID string, positions []domain.Position) {
+	if len(positions) == 0 {
+		return
+	}
+	sessionDir := filepath.Join(s.cfg.LedgerDir, "sessions", sessionID)
+	_ = os.MkdirAll(sessionDir, 0o755)
+	path := filepath.Join(sessionDir, "positions.json")
+	bytes, err := json.MarshalIndent(positions, "", "  ")
+	if err != nil {
+		log.Printf("[System] warn: failed to marshal positions for %s: %v", sessionID, err)
+		return
+	}
+	if err := os.WriteFile(path, bytes, 0o644); err != nil {
+		log.Printf("[System] warn: failed to write positions for %s: %v", sessionID, err)
+	}
 }
 
 func quoteBySymbolMap(quotes []domain.Quote) map[string]domain.Quote {

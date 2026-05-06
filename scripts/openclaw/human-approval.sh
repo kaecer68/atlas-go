@@ -142,7 +142,7 @@ EXP_STATUS=""
 if [[ -n "$EXPERIMENT_ID" ]]; then
   RESULT_FILE="data/state/experiments/${EXPERIMENT_ID}.json"
   if [[ -f "$RESULT_FILE" ]]; then
-    EXP_STATUS="$(jq -r '.Experiment.Status // empty' "$RESULT_FILE" 2>/dev/null || true)"
+    EXP_STATUS="$(jq -r '.experiment.status // .Experiment.Status // empty' "$RESULT_FILE" 2>/dev/null || true)"
   fi
 fi
 

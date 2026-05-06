@@ -218,13 +218,13 @@ recent_judged_observations_for_agent_profile() {
     for f in data/state/experiments/*.json; do
         [ -f "$f" ] || continue
         local agent
-        agent=$(jq -r '.Experiment.TargetAgentID // empty' "$f" 2>/dev/null)
+        agent=$(jq -r '.experiment.target_agent_id // .Experiment.TargetAgentID // empty' "$f" 2>/dev/null)
         if [ "$agent" != "$target_agent" ]; then
             continue
         fi
         local mtype win
-        mtype=$(jq -r '.Experiment.MutationType // .Brief.mutation_type // empty' "$f" 2>/dev/null)
-        win=$(jq -r '.Brief.window_id // empty' "$f" 2>/dev/null)
+        mtype=$(jq -r '.experiment.mutation_type // .Experiment.MutationType // .brief.mutation_type // .Brief.mutation_type // empty' "$f" 2>/dev/null)
+        win=$(jq -r '.brief.window_id // .Brief.window_id // empty' "$f" 2>/dev/null)
         if [ -n "$mutation_type" ] && [ "$mtype" != "$mutation_type" ]; then
             continue
         fi
@@ -232,8 +232,8 @@ recent_judged_observations_for_agent_profile() {
             continue
         fi
         local bobs cobs
-        bobs=$(jq -r '.BaselineObservations // 0' "$f" 2>/dev/null)
-        cobs=$(jq -r '.CandidateObservations // 0' "$f" 2>/dev/null)
+        bobs=$(jq -r '.baseline_observations // .BaselineObservations // 0' "$f" 2>/dev/null)
+        cobs=$(jq -r '.candidate_observations // .CandidateObservations // 0' "$f" 2>/dev/null)
         if [[ "$bobs" =~ ^[0-9]+$ ]] && [ "$bobs" -gt "$max_obs" ]; then
             max_obs="$bobs"
         fi
@@ -259,8 +259,8 @@ recent_judged_observations_for_agent_window() {
     for f in data/state/experiments/*.json; do
         [ -f "$f" ] || continue
         local agent win
-        agent=$(jq -r '.Experiment.TargetAgentID // empty' "$f" 2>/dev/null)
-        win=$(jq -r '.Brief.window_id // empty' "$f" 2>/dev/null)
+        agent=$(jq -r '.experiment.target_agent_id // .Experiment.TargetAgentID // empty' "$f" 2>/dev/null)
+        win=$(jq -r '.brief.window_id // .Brief.window_id // empty' "$f" 2>/dev/null)
         if [ "$agent" != "$target_agent" ]; then
             continue
         fi
@@ -268,8 +268,8 @@ recent_judged_observations_for_agent_window() {
             continue
         fi
         local bobs cobs
-        bobs=$(jq -r '.BaselineObservations // 0' "$f" 2>/dev/null)
-        cobs=$(jq -r '.CandidateObservations // 0' "$f" 2>/dev/null)
+        bobs=$(jq -r '.baseline_observations // .BaselineObservations // 0' "$f" 2>/dev/null)
+        cobs=$(jq -r '.candidate_observations // .CandidateObservations // 0' "$f" 2>/dev/null)
         if [[ "$bobs" =~ ^[0-9]+$ ]] && [ "$bobs" -gt "$max_obs" ]; then
             max_obs="$bobs"
         fi

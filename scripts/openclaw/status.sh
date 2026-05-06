@@ -40,9 +40,9 @@ check_baseline() {
     print_header "Baseline Policy Status"
     
     if [ -f "data/state/baseline_policy.json" ]; then
-        VERSION=$(cat data/state/baseline_policy.json | grep -o '"Version": [0-9]*' | head -1 | grep -o '[0-9]*')
-        PROMOTIONS=$(cat data/state/baseline_policy.json | grep -o '"Promotions":' | wc -l)
-        
+        VERSION=$(jq -r '.version // .Version // empty' data/state/baseline_policy.json 2>/dev/null)
+        PROMOTIONS=$(cat data/state/baseline_policy.json | grep -oi '"promotions":' | wc -l)
+
         print_success "Baseline policy exists (version ${VERSION})"
         echo "  Version: ${VERSION}"
         echo "  Last updated: $(stat -c %y data/state/baseline_policy.json 2>/dev/null || stat -f %Sm data/state/baseline_policy.json 2>/dev/null || echo 'unknown')"
@@ -57,10 +57,10 @@ check_experiments() {
     
     if [ -f "data/state/experiments.jsonl" ]; then
         TOTAL=$(wc -l < data/state/experiments.jsonl 2>/dev/null || echo "0")
-        PLANNED=$(grep -c '"Status":"planned"' data/state/experiments.jsonl 2>/dev/null || echo "0")
-        RUNNING=$(grep -c '"Status":"running"' data/state/experiments.jsonl 2>/dev/null || echo "0")
-        ACCEPTED=$(grep -c '"Status":"accepted"' data/state/experiments.jsonl 2>/dev/null || echo "0")
-        REJECTED=$(grep -c '"Status":"rejected"' data/state/experiments.jsonl 2>/dev/null || echo "0")
+        PLANNED=$(grep -ic '"status":"planned"' data/state/experiments.jsonl 2>/dev/null || echo "0")
+        RUNNING=$(grep -ic '"status":"running"' data/state/experiments.jsonl 2>/dev/null || echo "0")
+        ACCEPTED=$(grep -ic '"status":"accepted"' data/state/experiments.jsonl 2>/dev/null || echo "0")
+        REJECTED=$(grep -ic '"status":"rejected"' data/state/experiments.jsonl 2>/dev/null || echo "0")
         
         echo "  Total experiments: ${TOTAL}"
         echo "  📝 Planned: ${PLANNED}"
@@ -131,8 +131,8 @@ recommend_action() {
     
     # Check for running experiments
     if [ -f "data/state/experiments.jsonl" ]; then
-        RUNNING=$(grep -c '"Status":"running"' data/state/experiments.jsonl 2>/dev/null || echo "0")
-        PLANNED=$(grep -c '"Status":"planned"' data/state/experiments.jsonl 2>/dev/null || echo "0")
+        RUNNING=$(grep -ic '"status":"running"' data/state/experiments.jsonl 2>/dev/null || echo "0")
+        PLANNED=$(grep -ic '"status":"planned"' data/state/experiments.jsonl 2>/dev/null || echo "0")
         
         if [ "$RUNNING" -gt 0 ]; then
             print_warning "Finish running experiment first:"

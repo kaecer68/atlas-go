@@ -141,11 +141,11 @@ analyze_experiment() {
         return 1
     fi
     
-    # Extract key metrics using simple parsing
-	local status=$(cat "$result_file" | grep '"Status"' | head -1 | sed 's/.*"Status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-	local baseline=$(cat "$result_file" | grep '"BaselineValue"' | head -1 | sed 's/.*"BaselineValue"[[:space:]]*:[[:space:]]*\([0-9.\-]*\).*/\1/')
-	local candidate=$(cat "$result_file" | grep '"CandidateValue"' | head -1 | sed 's/.*"CandidateValue"[[:space:]]*:[[:space:]]*\([0-9.\-]*\).*/\1/')
-	local agent=$(cat "$result_file" | grep '"TargetAgentID"' | head -1 | sed 's/.*"TargetAgentID"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+    # Extract key metrics with dual-read for snake_case / PascalCase
+	local status=$(jq -r '.experiment.status // .Experiment.Status // empty' "$result_file" 2>/dev/null)
+	local baseline=$(jq -r '.experiment.baseline_value // .Experiment.BaselineValue // empty' "$result_file" 2>/dev/null)
+	local candidate=$(jq -r '.experiment.candidate_value // .Experiment.CandidateValue // empty' "$result_file" 2>/dev/null)
+	local agent=$(jq -r '.experiment.target_agent_id // .Experiment.TargetAgentID // empty' "$result_file" 2>/dev/null)
     
     echo "Experiment Summary:"
     echo "  Agent: ${agent:-unknown}"
@@ -182,7 +182,7 @@ check_promotion_safety() {
     
     # Check 1: Status is accepted or ready
     ((checks_total++))
-	local status=$(cat "$result_file" | grep '"Status"' | head -1 | sed 's/.*"Status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+	local status=$(jq -r '.experiment.status // .Experiment.Status // empty' "$result_file" 2>/dev/null)
     if [ "$status" = "accepted" ] || [ "$status" = "running" ]; then
         echo -e "  ${GREEN}✓${NC} Experiment status: ${status}"
         ((checks_passed++))
@@ -192,7 +192,7 @@ check_promotion_safety() {
     
     # Check 2: Has valid metrics
     ((checks_total++))
-    if grep -q '"CandidateValue":' "$result_file"; then
+    if [ -n "$(jq -r '.experiment.candidate_value // .Experiment.CandidateValue // empty' "$result_file" 2>/dev/null)" ]; then
         echo -e "  ${GREEN}✓${NC} Has candidate metrics"
         ((checks_passed++))
     else
@@ -272,7 +272,7 @@ execute_revert() {
     
     # Show current state
     if [ -f "data/state/baseline_policy.json" ]; then
-        local current_version=$(cat data/state/baseline_policy.json | grep -o '"Version": [0-9]*' | head -1 | grep -o '[0-9]*')
+        local current_version=$(jq -r '.version // .Version // empty' data/state/baseline_policy.json 2>/dev/null)
         echo "Current version: ${current_version}"
         if [ -n "$version" ]; then
             echo "Target version: ${version}"
@@ -328,9 +328,9 @@ interactive_mode() {
     if [ -f "data/state/experiments.jsonl" ]; then
         echo "Recent experiments:"
         tail -5 data/state/experiments.jsonl | while read line; do
-            local id=$(echo "$line" | grep -o '"ID":"[^"]*"' | cut -d'"' -f4)
-	local status=$(echo "$line" | grep '"Status"' | sed 's/.*"Status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-            local agent=$(echo "$line" | grep -o '"TargetAgentID":"[^"]*"' | cut -d'"' -f4)
+            local id=$(echo "$line" | jq -r '.id // .ID // empty')
+            local status=$(echo "$line" | jq -r '.status // .Status // empty')
+            local agent=$(echo "$line" | jq -r '.target_agent_id // .TargetAgentID // empty')
             echo "  - ${id} (${status}) - ${agent}"
         done
         echo ""
