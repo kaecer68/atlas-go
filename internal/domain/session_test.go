@@ -2,7 +2,9 @@ package domain
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestSessionSummaryUnmarshalSnakeCase(t *testing.T) {
@@ -65,5 +67,63 @@ func TestSessionSummaryUnmarshalSnakeCase(t *testing.T) {
 	}
 	if got.GuardOutcomes[0].GuardSkill != "cro_risk" {
 		t.Fatalf("guard_outcomes[0].guard_skill: got %q", got.GuardOutcomes[0].GuardSkill)
+	}
+}
+
+func TestSessionSummaryMarshalRoundTripStaysCanonical(t *testing.T) {
+	summary := SessionSummary{
+		SessionID:      "session-20260407-daily",
+		Regime:         RegimeRiskOn,
+		OrderCount:     3,
+		PositionCount:  2,
+		EndingCash:     313967.48,
+		PortfolioValue: 1046223.78,
+		OutcomeCount:   26,
+		BrokerRuntime: BrokerRuntimeAudit{
+			Mode:             "dry-run",
+			Adapter:          "guarded",
+			Signer:           "placeholder",
+			SignerVersion:    "v1",
+			MaxRetries:       1,
+			HTTPTimeoutSec:   5,
+			HTTPAttempts:     2,
+			RetryStatusCodes: []int{408, 429, 503},
+			MaxClockSkewSec:  300,
+			NonceTTLSec:      300,
+			NonceStore:       "memory",
+			NonceRedisPrefix: "atlas:nonce:",
+		},
+		GuardOutcomes: []GuardOutcome{{
+			GuardID:     "cro-01",
+			GuardSkill:  "cro_risk",
+			Severity:    "hard",
+			Passed:      true,
+			Reason:      "ok",
+			InputCount:  26,
+			OutputCount: 24,
+		}},
+		RecordedAt: time.Date(2026, 4, 22, 4, 2, 30, 434394000, time.FixedZone("UTC+8", 8*60*60)),
+	}
+
+	first, err := json.MarshalIndent(summary, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal first: %v", err)
+	}
+
+	var roundTripped SessionSummary
+	if err := json.Unmarshal(first, &roundTripped); err != nil {
+		t.Fatalf("unmarshal round trip: %v", err)
+	}
+
+	second, err := json.MarshalIndent(roundTripped, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal second: %v", err)
+	}
+
+	if string(first) != string(second) {
+		t.Fatalf("expected canonical round trip to be stable\nfirst:\n%s\nsecond:\n%s", first, second)
+	}
+	if strings.Contains(string(second), `"SessionID"`) {
+		t.Fatalf("expected canonical round trip not to contain PascalCase SessionID, got:\n%s", second)
 	}
 }

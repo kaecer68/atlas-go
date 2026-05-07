@@ -239,10 +239,7 @@ func (h *Handlers) HandleRecommendationPipeline(w http.ResponseWriter, r *http.R
 		return
 	}
 	if data == nil {
-		shared.WriteJSON(w, http.StatusOK, RecommendationPipelineResponse{
-			Status:        "no_session",
-			StatusMessage: "尚未執行任何回測場次，請先執行回測",
-		})
+		shared.WriteJSON(w, http.StatusOK, RecommendationPipelineResponse{})
 		return
 	}
 
@@ -271,15 +268,12 @@ func (h *Handlers) HandleRecommendationPipeline(w http.ResponseWriter, r *http.R
 	}
 
 	resp := RecommendationPipelineResponse{
-		SessionID:         data.SessionID,
-		Regime:            data.Regime,
-		Items:             items,
-		GuardOutcomes:     data.GuardOutcomes,
-		ScreenedItems:     data.ScreenedItems,
-		RecordedAt:        data.RecordedAt,
-		Status:            string(data.Status),
-		StatusMessage:     data.StatusMessage,
-		AvailableSessions: data.AvailableSessions,
+		SessionID:     data.SessionID,
+		Regime:        data.Regime,
+		Items:         items,
+		GuardOutcomes: data.GuardOutcomes,
+		ScreenedItems: data.ScreenedItems,
+		RecordedAt:    data.RecordedAt,
 	}
 	shared.WriteJSON(w, http.StatusOK, resp)
 }
@@ -308,15 +302,12 @@ type PipelineItem struct {
 
 // RecommendationPipelineResponse is the API response for recommendation pipeline.
 type RecommendationPipelineResponse struct {
-	SessionID         string                   `json:"session_id"`
-	Regime            domain.Regime            `json:"regime"`
-	Items             []PipelineItem           `json:"items"`
-	GuardOutcomes     []domain.GuardOutcome    `json:"guard_outcomes"`
-	ScreenedItems     []domain.ScreeningReject `json:"screened_items"`
-	RecordedAt        time.Time                `json:"recorded_at"`
-	Status            string                   `json:"status"`
-	StatusMessage     string                   `json:"status_message"`
-	AvailableSessions []string                 `json:"available_sessions,omitempty"`
+	SessionID     string                   `json:"session_id"`
+	Regime        domain.Regime            `json:"regime"`
+	Items         []PipelineItem           `json:"items"`
+	GuardOutcomes []domain.GuardOutcome    `json:"guard_outcomes"`
+	ScreenedItems []domain.ScreeningReject `json:"screened_items"`
+	RecordedAt    time.Time                `json:"recorded_at"`
 }
 
 // HandleSessions handles GET /api/dashboard/sessions.

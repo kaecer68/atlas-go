@@ -1,12 +1,12 @@
 package live
 
 import (
-	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"context"
 	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -14,8 +14,8 @@ type Scheduler struct {
 	marketData     marketdata.Provider
 	watchlist      []string
 	config         OrchestratorConfig
-	eventBus       *Channellivestore.EventBus
-	stateStore     *livestore.livestore.StateStore
+	eventBus       *ChannelEventBus
+	stateStore     *livestore.StateStore
 	circuitBreaker *CircuitBreaker
 	metrics        MetricsRecorder
 	system         interface {
@@ -40,7 +40,7 @@ type Scheduler struct {
 func NewScheduler(
 	ctx context.Context,
 	marketData marketdata.Provider,
-	stateStore *livestore.livestore.StateStore,
+	stateStore *livestore.StateStore,
 	circuitBreaker *CircuitBreaker,
 	config OrchestratorConfig,
 	effectiveBrokerMode string,
@@ -78,7 +78,7 @@ func (s *Scheduler) SetMetrics(m MetricsRecorder) {
 	s.metrics = m
 }
 
-func (s *Scheduler) Setlivestore.EventBus(eb *Channellivestore.EventBus) {
+func (s *Scheduler) SetEventBus(eb *ChannelEventBus) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.eventBus = eb
@@ -224,7 +224,7 @@ func (s *Scheduler) quotePoller() {
 	}
 }
 
-func (s *Scheduler) publishlivestore.Event(event Buslivestore.Event) {
+func (s *Scheduler) publishEvent(event BusEvent) {
 	s.mu.RLock()
 	eb := s.eventBus
 	s.mu.RUnlock()
