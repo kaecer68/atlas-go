@@ -166,7 +166,8 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 | **同一件事不可有三種算法** | 放行/過濾筆數必須由單一權威來源（如 `GuardOutcomes`）計算，前端不可各自重算。 |
 | **ScreeningCriteria 靜默過濾** | `configs/agents.json` 中若設定了 `screening_criteria`，標的在進入 sector/style executor **之前**就會被 `screener` 過濾。P/E、P/B 或成交量門檻過高可能導致某檔標的「完全沒有推薦」，這是預期行為，不是 bug。調整門檻前請先用 `go test ./internal/screener/...` 確認篩選邏輯。 |
 | **JSON tag 大小寫錯誤** | API handler (`dashboard_api.go`) 讀取 JSONL 時，若 anonymous struct 的 JSON tag 用了 PascalCase（如 `json:"FactorScores"`）而 JSON 檔案實際寫入時是 snake_case（如 `factor_scores`），unmarshal 會靜默失敗，導致該欄位永遠為 nil/零值。所有 `domain.*` struct 的 JSON tag 均為 snake_case，API parsing struct 必須對齊。 |
-| **前端欄位命名不一致** | 前端 JavaScript 必須使用 **snake_case** 存取 API 回應欄位（如 `g.input_count`），不可使用 PascalCase（如 `g.InputCount`）。JavaScript 存取不存在的屬性會靜默回傳 `undefined`，不會報錯，導致畫面顯示 `undefined 筆推薦` 等問題。前端已新增 `validateApiResponse()` 防禦函數自動檢測此類錯誤。 |
+| **前端欄位命名不一致 → 已自動解決** | 修改 `internal/domain/*.go` 中的 struct JSON tag 後，**git pre-commit hook 會自動執行 `go generate .`** 並將產生的 `field_names.js`、`field_types.ts`、`field_types.d.ts` 自動 staged。不需手動執行任何命令。AI 提交代碼時自動觸發，前端類型定義永遠與後端同步。 |
+| **Go → 前端類型自動生成** | `cmd/gentags` 從 Go struct 的 JSON tag 自動生成前端類型定義（`field_names.js` + `field_types.ts` + `field_types.d.ts`，48 個 struct）。`go generate .` 由 pre-commit hook 自動觸發。CI（`quality.yml` 的 `generate` job）也會檢查。 |
 | **Live 交易風險** | `cmd/atlas` 有 `-allow-live-broker`、`-allow-real-signor` 等旗標，本地測試時切勿意外啟用。 |
 
 ---
