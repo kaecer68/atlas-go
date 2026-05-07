@@ -18,9 +18,9 @@ type IntegrityCheck struct {
 }
 
 type DataIntegrityResponse struct {
-	Overall  string            `json:"overall"` // "ok", "degraded", "failing"
-	Checks   []IntegrityCheck  `json:"checks"`
-	Warnings []string          `json:"warnings"`
+	Overall  string           `json:"overall"` // "ok", "degraded", "failing"
+	Checks   []IntegrityCheck `json:"checks"`
+	Warnings []string         `json:"warnings"`
 }
 
 // HandleDataIntegrity checks data health across the system.

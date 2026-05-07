@@ -4,9 +4,10 @@
 //
 // Reads: internal/domain/*.go
 // Writes:
-//   web/static/js/shared/field_names.js  — snake_case field name constants
-//   web/static/js/shared/field_types.ts   — TypeScript interfaces for explicit import
-//   web/static/js/shared/field_types.d.ts — ambient declarations, IDE auto-discovers
+//
+//	web/static/js/shared/field_names.js  — snake_case field name constants
+//	web/static/js/shared/field_types.ts   — TypeScript interfaces for explicit import
+//	web/static/js/shared/field_types.d.ts — ambient declarations, IDE auto-discovers
 //
 // This eliminates manual synchronization between Go backend structs
 // and frontend field access — a single source of truth.

@@ -1,12 +1,12 @@
 package live
 
 import (
-	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"

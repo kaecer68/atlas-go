@@ -632,6 +632,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
   </div>
   <nav role="navigation" aria-label="主要導航">
     <a class="active" data-page="overview" onclick="switchPage('overview')" tabindex="0" title="總覽">📊 總覽</a>
+    <a data-page="evolution" onclick="switchPage('evolution')" tabindex="0" title="演化透視">🧬 演化透視</a>
     <a data-page="narrative" onclick="switchPage('narrative')" tabindex="0" title="宏觀敘事">🌍 宏觀敘事</a>
     <a data-page="industry" onclick="switchPage('industry')" tabindex="0" title="產業生態系">🏭 產業生態系</a>
     <a data-page="pipeline" onclick="switchPage('pipeline')" tabindex="0" title="投資管線">📋 投資管線</a>
@@ -648,7 +649,6 @@ body { display: flex; margin: 0; min-height: 100vh; }
     <a data-page="metrics" onclick="switchPage('metrics')" tabindex="0" title="指標監控">📉 指標監控</a>
     <a data-page="parameters" onclick="switchPage('parameters')" tabindex="0" title="參數管理">🎛️ 參數管理</a>
     <a data-page="synergy" onclick="switchPage('synergy')" tabindex="0" title="人機協同">🤝 人機協同</a>
-    <a data-page="evolution" onclick="switchPage('evolution')" tabindex="0" title="演化透視">🧬 演化透視</a>
   </nav>
   <div class="foot">
     <span class="text-muted">v8 · 統一介面</span>
@@ -891,8 +891,12 @@ body { display: flex; margin: 0; min-height: 100vh; }
             <div class="control-group">
               <select id="revertSelect"><option value="">-- 選擇要回滾的版本 --</option></select>
               <input id="revertReason" type="text" placeholder="原因" class="input-w-md">
-              <button class="danger" onclick="revertExperiment()">回滾</button>
-       </div>
+               <button class="danger" onclick="revertExperiment()">回滾</button>
+        </div>
+     </div>
+  </div>
+</div>
+      <div class="panel wide"><h2>人工干預紀錄</h2><div id="auditLog" class="empty loading">載入中…</div></div>
     </div>
     <div class="page" id="page-evolution">
       <div class="panel wide" style="margin-bottom:12px">
@@ -903,12 +907,12 @@ body { display: flex; margin: 0; min-height: 100vh; }
           <button class="view-btn" id="evView-categorical" onclick="window._evSwitch('categorical')">分类视图</button>
         </div>
       </div>
-      <div id="evolutionContent" class="empty loading">载入中…</div>
+      <div id="evolutionContent" class="empty loading">載入中…</div>
       <div id="evolutionCatContent" style="display:none;margin-top:12px"></div>
-    </div>
-  </div>
-</div>
-      <div class="panel wide"><h2>人工干預紀錄</h2><div id="auditLog" class="empty loading">載入中…</div></div>
+      <div class="panel wide" id="equityCurvePanel" style="display:none;margin-top:12px">
+        <h3>權益曲線</h3>
+        <canvas id="equityChart" style="width:100%"></canvas>
+      </div>
     </div>
     <!-- 信息通道 -->
     <div class="page" id="page-datachannels">

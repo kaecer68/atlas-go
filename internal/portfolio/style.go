@@ -101,9 +101,15 @@ func (d *StyleRotationDetector) DetectRotation() *RotationSignal {
 		mom := StyleMomentumData{Style: style}
 		if len(returns) > 0 {
 			start20 := len(returns) - 20
-			if start20 < 0 { start20 = 0 }
-			for i := start20; i < len(returns); i++ { mom.Return20D += returns[i] }
-			for _, r := range returns { mom.Return60D += r }
+			if start20 < 0 {
+				start20 = 0
+			}
+			for i := start20; i < len(returns); i++ {
+				mom.Return20D += returns[i]
+			}
+			for _, r := range returns {
+				mom.Return60D += r
+			}
 		}
 		momentums[style] = mom
 	}
