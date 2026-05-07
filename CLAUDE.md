@@ -168,7 +168,7 @@ Baseline policy is loaded from `data/state/baseline_policy.json`. The experiment
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (19106 symbols, 42282 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (19293 symbols, 42213 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -186,7 +186,6 @@ This project is indexed by GitNexus as **atlas-go** (19106 symbols, 42282 relati
 - NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
 - NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
 - NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
-- **NEVER change business logic during rename/refactor tasks.** File renames and cross-reference updates must not alter function signatures, method bodies, or type definitions. After any rename task, run `git diff` to verify only filenames and import paths changed.
 
 ## Resources
 
