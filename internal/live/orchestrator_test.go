@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/live/store"
 )
 
 func TestCheckRiskTriggers(t *testing.T) {
@@ -102,7 +103,7 @@ func TestCheckRiskTriggers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			store := NewStateStore(t.TempDir())
+			store := store.NewStateStore(t.TempDir())
 			if tt.withPosition {
 				store.UpdatePosition(tt.position)
 			}
@@ -169,7 +170,7 @@ func TestCheckRiskTriggers(t *testing.T) {
 }
 
 func TestExecuteOrderBlockedByCircuitBreaker(t *testing.T) {
-	store := NewStateStore(t.TempDir())
+	store := store.NewStateStore(t.TempDir())
 	bus := NewChannelEventBus(16)
 	t.Cleanup(func() { _ = bus.Close() })
 
@@ -177,7 +178,7 @@ func TestExecuteOrderBlockedByCircuitBreaker(t *testing.T) {
 	cb := NewCircuitBreaker(tmpDir+"/cb_log.jsonl", tmpDir+"/cb_state.json")
 	cb.ResetDayState(1000000)
 	// Halt trading via daily loss
-	cb.Evaluate(PortfolioState{Cash: 1000000, DayPnL: -30000}, nil, nil)
+	cb.Evaluate(store.PortfolioState{Cash: 1000000, DayPnL: -30000}, nil, nil)
 
 	o := &Orchestrator{
 		stateStore:     store,
@@ -204,8 +205,8 @@ func TestExecuteOrderBlockedByCircuitBreaker(t *testing.T) {
 
 	// Reset and verify sell works in paused state
 	cb.ResetDayState(1000000)
-	cb.Evaluate(PortfolioState{Cash: 1000000, UnrealizedPnL: 0}, nil, nil)
-	cb.Evaluate(PortfolioState{Cash: 965000, UnrealizedPnL: 0}, nil, nil) // 3.5% drawdown > 3% threshold
+	cb.Evaluate(store.PortfolioState{Cash: 1000000, UnrealizedPnL: 0}, nil, nil)
+	cb.Evaluate(store.PortfolioState{Cash: 965000, UnrealizedPnL: 0}, nil, nil) // 3.5% drawdown > 3% threshold
 	if cb.State() != CircuitPaused {
 		t.Fatalf("expected paused state, got %s", cb.State())
 	}

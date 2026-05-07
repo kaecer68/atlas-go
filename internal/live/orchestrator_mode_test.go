@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/live/store"
 )
 
 type stubProvider struct {
@@ -131,7 +132,7 @@ func TestResolveBrokerModeLiveHTTPInvalidNonceStoreFallsBackToGuarded(t *testing
 }
 
 func TestNewOrchestratorAppliesLiveGuardedMode(t *testing.T) {
-	store := NewStateStore(t.TempDir())
+	store := store.NewStateStore(t.TempDir())
 	bus := NewChannelEventBus(32)
 	t.Cleanup(func() {
 		_ = bus.Close()
@@ -197,7 +198,7 @@ func TestNewOrchestratorAppliesLiveGuardedMode(t *testing.T) {
 }
 
 func TestNewOrchestratorAppliesLiveHTTPFileNonceStoreConfig(t *testing.T) {
-	store := NewStateStore(t.TempDir())
+	store := store.NewStateStore(t.TempDir())
 	bus := NewChannelEventBus(32)
 	t.Cleanup(func() {
 		_ = bus.Close()
