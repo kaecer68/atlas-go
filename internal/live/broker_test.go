@@ -11,7 +11,7 @@ import (
 )
 
 func TestExecuteOrderPublishesFilledEventInDryRunMode(t *testing.T) {
-	store := store.NewStateStore(t.TempDir())
+	s := store.NewStateStore(t.TempDir())
 	bus := NewChannelEventBus(16)
 	t.Cleanup(func() {
 		_ = bus.Close()
@@ -70,7 +70,7 @@ func TestExecuteOrderPublishesFilledEventInDryRunMode(t *testing.T) {
 }
 
 func TestExecuteOrderPublishesSystemErrorWhenOrderInvalid(t *testing.T) {
-	store := store.NewStateStore(t.TempDir())
+	s := store.NewStateStore(t.TempDir())
 	bus := NewChannelEventBus(16)
 	t.Cleanup(func() {
 		_ = bus.Close()
