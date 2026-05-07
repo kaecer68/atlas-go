@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/live"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 )
 
@@ -20,7 +19,7 @@ func TestLiveTradingRules(t *testing.T) {
 			t.Fatal("rule not found")
 		}
 		state := &livestore.State{
-			Portfolio: store.livestore.PortfolioState{Cash: 1000000, DayPnL: -30000},
+			Portfolio: livestore.PortfolioState{Cash: 1000000, DayPnL: -30000},
 		}
 		fired, msg := rule.Condition(state)
 		if !fired {
@@ -34,7 +33,7 @@ func TestLiveTradingRules(t *testing.T) {
 			t.Fatal("rule not found")
 		}
 		state := &livestore.State{
-			Portfolio: store.livestore.PortfolioState{Cash: 1000000, DayPnL: -18000},
+			Portfolio: livestore.PortfolioState{Cash: 1000000, DayPnL: -18000},
 		}
 		fired, msg := rule.Condition(state)
 		if !fired {
@@ -48,7 +47,7 @@ func TestLiveTradingRules(t *testing.T) {
 			t.Fatal("rule not found")
 		}
 		state := &livestore.State{
-			Portfolio: store.livestore.PortfolioState{Cash: 1000000, UnrealizedPnL: 0},
+			Portfolio: livestore.PortfolioState{Cash: 1000000, UnrealizedPnL: 0},
 			Positions: []domain.Position{
 				{Symbol: "2330", MarketValue: 200000, AverageCost: 100},
 			},
@@ -65,7 +64,7 @@ func TestLiveTradingRules(t *testing.T) {
 			t.Fatal("rule not found")
 		}
 		state := &livestore.State{
-			Portfolio: store.livestore.PortfolioState{Cash: 1000000},
+			Portfolio: livestore.PortfolioState{Cash: 1000000},
 			Positions: []domain.Position{
 				{Symbol: "2330", MarketValue: 94, AverageCost: 100},
 			},
