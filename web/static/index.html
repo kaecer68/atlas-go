@@ -4721,18 +4721,8 @@ async function loadPageData(pageId) {
       break;
     case 'portfolio':
       try {
-        const [ps, dw, regimeData, pipeline] = await Promise.all([
-          getJSON('/api/dashboard/portfolio-state').catch(() => null),
-          getJSON('/api/synergy/darwinian-status').catch(() => null),
-          getJSON('/api/dashboard/regime-history').catch(() => null),
-          getJSON('/api/dashboard/recommendation-pipeline').catch(() => null),
-        ]);
-        renderPortfolioKPIs(ps, pipeline);
-        renderRegimeContext(ps, regimeData);
-        renderAllocationGuidance(ps, regimeData);
-        renderAgentScoreboard(dw);
-        renderEquityCurve((ps && ps.equity_curve) || []);
-        renderPositionsTable((ps && ps.positions) || [], pipeline);
+        const m = await import('./js/pages/portfolio.js');
+        await m.loadPortfolioPage(getJSON, agentName);
       } catch (e) { console.error('Failed to load portfolio:', e); }
       break;
     case 'parameters':
