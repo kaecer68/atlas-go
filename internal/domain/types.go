@@ -262,6 +262,14 @@ type CapitalSnapshot struct {
 	AdvanceReason     string       `json:"advance_reason,omitempty"`
 }
 
+type RetailSentimentSnapshot struct {
+	MarginBalance    float64   `json:"margin_balance"`
+	MarginChangePct  float64   `json:"margin_change_pct"`
+	DayTradingRatio  float64   `json:"day_trading_ratio"`
+	MarginPercentile float64   `json:"margin_percentile"`
+	Timestamp        time.Time `json:"timestamp"`
+}
+
 func (s RetailSentimentSnapshot) CalculateSentimentScore() float64 {
 	return (s.MarginPercentile - 0.5) * 2
 }
