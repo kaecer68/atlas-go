@@ -22,6 +22,56 @@ func TestLoadMissingReturnsDefaultPolicy(t *testing.T) {
 	}
 }
 
+func TestDefaultPolicy_ContractGuards(t *testing.T) {
+	policy := DefaultPolicy()
+
+	if policy.Constraints.StartingCash != 3000000 {
+		t.Errorf("default StartingCash drift: expected 3000000, got %v", policy.Constraints.StartingCash)
+	}
+	if policy.Constraints.MaxPositionWeight != 0.18 {
+		t.Errorf("default MaxPositionWeight drift: expected 0.18, got %v", policy.Constraints.MaxPositionWeight)
+	}
+	if policy.Constraints.MaxOpenPositions != 5 {
+		t.Errorf("default MaxOpenPositions drift: expected 5, got %d", policy.Constraints.MaxOpenPositions)
+	}
+	if policy.Constraints.MinTradableVolume != 1000000 {
+		t.Errorf("default MinTradableVolume drift: expected 1000000, got %v", policy.Constraints.MinTradableVolume)
+	}
+	if policy.Constraints.MinRecommendationConviction != 60 {
+		t.Errorf("default MinRecommendationConviction drift: expected 60, got %d", policy.Constraints.MinRecommendationConviction)
+	}
+	if !policy.Constraints.RequireCROPass {
+		t.Error("default RequireCROPass drift: expected true")
+	}
+	if policy.Constraints.TransactionCostBPS != 1.425 {
+		t.Errorf("default TransactionCostBPS drift: expected 1.425, got %v", policy.Constraints.TransactionCostBPS)
+	}
+	if policy.Constraints.SlippageBPS != 4.0 {
+		t.Errorf("default SlippageBPS drift: expected 4.0, got %v", policy.Constraints.SlippageBPS)
+	}
+	if policy.Constraints.ReserveCashFraction != 0.1 {
+		t.Errorf("default ReserveCashFraction drift: expected 0.1, got %v", policy.Constraints.ReserveCashFraction)
+	}
+	if policy.Constraints.StopLossPct != 0 {
+		t.Errorf("default StopLossPct drift: expected 0, got %v", policy.Constraints.StopLossPct)
+	}
+	if policy.Constraints.TakeProfitPct != 0 {
+		t.Errorf("default TakeProfitPct drift: expected 0, got %v", policy.Constraints.TakeProfitPct)
+	}
+	if policy.ExecutionPolicy.ConvictionFloor != 60 {
+		t.Errorf("default ConvictionFloor drift: expected 60, got %d", policy.ExecutionPolicy.ConvictionFloor)
+	}
+	if !policy.ExecutionPolicy.RequireCROPass {
+		t.Error("default ExecutionPolicy.RequireCROPass drift: expected true")
+	}
+	if policy.ExecutionPolicy.MomentumCrashProtection {
+		t.Error("default MomentumCrashProtection drift: expected false")
+	}
+	if policy.ExecutionPolicy.EnableConvictionNormalization {
+		t.Error("default EnableConvictionNormalization drift: expected false")
+	}
+}
+
 func TestPromoteAcceptedPromptExperiment(t *testing.T) {
 	policy := DefaultPolicy()
 	result := domain.PromptExperimentResult{
