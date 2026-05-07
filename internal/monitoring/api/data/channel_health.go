@@ -246,38 +246,3 @@ func (s *channelHealthStore) SyncAllToDB() error {
 	}
 	return nil
 }
-
-func (s *channelHealthStore) alertsFromDB() []ChannelAlert {
-	if s.pool == nil {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	rows, err := s.pool.Query(ctx, `
-		SELECT channel_id, status, COALESCE(last_error,''), last_fetch_at
-		FROM channel_health
-		WHERE status NOT IN ('ok','inactive')
-	`)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-
-	var alerts []ChannelAlert
-	for rows.Next() {
-		var a ChannelAlert
-		var fetchAt *time.Time
-		if err := rows.Scan(&a.ChannelID, &a.Status, &a.Error, &fetchAt); err != nil {
-			continue
-		}
-		if fetchAt != nil {
-			a.FetchAt = fetchAt.Format(time.RFC3339)
-		}
-		alerts = append(alerts, a)
-	}
-	if err := rows.Err(); err != nil {
-		return nil
-	}
-	return alerts
-}

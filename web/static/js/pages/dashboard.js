@@ -322,12 +322,6 @@ export function toggleBreakdown(key) {
     btn.textContent = '展開';
   }
 }
-export function renderConvictionBreakdown(cb) {
-  if (!cb) return '<div class="text-muted text-xs">無計算明細</div>';
-  const steps = (cb.steps || []).map(s => {
-    const deltaCls = s.delta > 0 ? 'color:var(--up)' : (s.delta < 0 ? 'color:var(--down)' : 'color:var(--muted)');
-    const deltaLabel = s.delta > 0 ? '+' + s.delta : String(s.delta);
-    return `<div style="display:flex;gap:8px;align-items:flex-start;margin:3px 0;padding:3px 6px;background:var(--bg);border-radius:4px">
 export function renderAIEvolution(inbox, phase3) {
   const el = document.getElementById('aiEvolution');
   el.classList.remove('loading');

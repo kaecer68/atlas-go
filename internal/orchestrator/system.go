@@ -977,34 +977,6 @@ func (s *System) updateCapitalMetrics(result domain.SimulationResult) {
 	}
 }
 
-func (s *System) filterAgentsByStrategy(registry domain.AgentRegistry, strat *strategy.Strategy) domain.AgentRegistry {
-	if strat == nil || len(strat.Agents) == 0 {
-		return registry
-	}
-
-	if len(strat.Agents) == 1 && strat.Agents[0] == "*" {
-		return registry
-	}
-
-	filtered := domain.AgentRegistry{
-		Agents: make([]domain.AgentSpec, len(registry.Agents)),
-	}
-	copy(filtered.Agents, registry.Agents)
-
-	agentSet := make(map[string]bool)
-	for _, id := range strat.Agents {
-		agentSet[id] = true
-	}
-
-	for i := range filtered.Agents {
-		if !agentSet[filtered.Agents[i].ID] {
-			filtered.Agents[i].Enabled = false
-		}
-	}
-
-	return filtered
-}
-
 func vixFromQuotes(quotes []domain.Quote) float64 {
 	for _, q := range quotes {
 		if q.Symbol == "VIX" || q.Symbol == "^VIX" {

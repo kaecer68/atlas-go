@@ -379,9 +379,7 @@ export const FIELD = {
     margin_balance: 'margin_balance',
     margin_change_pct: 'margin_change_pct',
     day_trading_ratio: 'day_trading_ratio',
-    retail_futures_oi: 'retail_futures_oi',
     margin_percentile: 'margin_percentile',
-    sentiment_score: 'sentiment_score',
     timestamp: 'timestamp',
   },
   RiskSnapshot: {
@@ -412,9 +410,6 @@ export const FIELD = {
     volume_intraday: 'volume_intraday',
     min_total_factor_score: 'min_total_factor_score',
     required_factors: 'required_factors',
-    min_liquidity_score: 'min_liquidity_score',
-    max_spread_estimate: 'max_spread_estimate',
-    exclude_abnormal_volume: 'exclude_abnormal_volume',
   },
   ScreeningReject: {
     session_id: 'session_id',

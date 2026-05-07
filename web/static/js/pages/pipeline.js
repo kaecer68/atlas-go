@@ -1,4 +1,6 @@
 import { agentName, stockName, sectorName } from '../names.js';
+import { computePipelineSummary, factorBar, renderFactorMini, renderFactorBreakdown, toggleBreakdown } from './dashboard.js';
+import { formatDate, getJSON, notify } from '../shared/app-utils.js';
 
 export function renderConvictionBreakdown(cb) {
   if (!cb) return '<div class="text-muted text-xs">無計算明細</div>';
@@ -288,44 +290,6 @@ export function renderDecisionChain(pipeline, macro, agentsData, stress, events,
     ${layerCard('4', '控制決策', guardContent, 'var(--layer-4)')}
     ${layerCard('5', '績效追蹤', perfContent, 'var(--layer-5)')}
     ${layerCard('6', '稅務影響', taxContent, 'var(--layer-6)')}
-  `;
-}
-
-export function renderAIEvolution(inbox, phase3) {
-  const el = document.getElementById('aiEvolution');
-  el.classList.remove('loading');
-  const items = (inbox && inbox.items) ? inbox.items : [];
-  const pending = items.filter(i => i.status === 'pending' || i.status === 'planned');
-  const latest = items.slice(0, 3);
-
-  const prismCompleted = phase3 && phase3.prism_completed_results != null ? phase3.prism_completed_results : (phase3 && phase3.PRISMCompletedResults != null ? phase3.PRISMCompletedResults : '-');
-  const swarmRunning = phase3 && (phase3.swarm_running || phase3.SwarmRunning) ? '運作中' : '待機';
-
-  el.innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
-      <div class="panel-card">
-    <div class="text-sm text-muted mb-xs">待評判實驗</div>
-    <div class="text-xl font-bold">${pending.length}</div>
-    <div class="text-xs text-muted mt-xs">共 ${items.length} 個歷史實驗</div>
-      </div>
-      <div class="panel-card">
-    <div class="text-sm text-muted mb-xs">PRISM 已完成訓練</div>
-    <div class="text-xl font-bold">${prismCompleted}</div>
-    <div class="text-xs text-muted mt-xs">5 體制佇列</div>
-      </div>
-      <div class="panel-card">
-    <div class="text-sm text-muted mb-xs">Swarm 狀態</div>
-    <div class="text-xl font-bold">${swarmRunning}</div>
-    <div class="text-xs text-muted mt-xs">MiroFish 共識模擬</div>
-      </div>
-    </div>
-    ${latest.length ? `
-  <div class="mt-sm">
-  <div class="text-sm font-bold mb-xs">最近實驗</div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${latest.map(it => `<span class="badge info">${it.experiment_id} · ${it.mutation_type || it.target_agent_id || '實驗'}</span>`).join(' ')}
-      </div>
-    </div>` : ''}
   `;
 }
 

@@ -317,6 +317,7 @@ func TestSelectorSelectFallback(t *testing.T) {
 	}
 	if strat == nil {
 		t.Error("Select returned nil strategy")
+		return
 	}
 	if strat.ID != "all_weather" && strat.ID != "fallback" {
 		t.Errorf("Expected all_weather or fallback, got %s", strat.ID)

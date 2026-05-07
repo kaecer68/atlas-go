@@ -145,12 +145,6 @@ func (s *channelHealthStore) loadLocked() error {
 	return nil
 }
 
-func (s *channelHealthStore) save() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.saveLocked()
-}
-
 func (s *channelHealthStore) saveLocked() error {
 	wrapper := struct {
 		Channels map[string]*ChannelHealthRecord `json:"channels"`
