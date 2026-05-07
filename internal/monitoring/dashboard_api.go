@@ -4,7 +4,6 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
-	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	apibacktest "github.com/kaecer68/atlas-go/internal/monitoring/api/backtest"
 	apicontrol "github.com/kaecer68/atlas-go/internal/monitoring/api/control"
-	apidata "github.com/kaecer68/atlas-go/internal/monitoring/api/data"
 	apiexperiment "github.com/kaecer68/atlas-go/internal/monitoring/api/experiment"
 	apihealth "github.com/kaecer68/atlas-go/internal/monitoring/api/health"
 	apiindustry "github.com/kaecer68/atlas-go/internal/monitoring/api/industry"
@@ -248,50 +246,3 @@ func (a *DashboardAPI) RegisterTaskExecRoutes(mux *http.ServeMux) {
 	handlers.RegisterRoutes(mux)
 }
 
-type channelHealthAdapter struct {
-	mu    sync.Mutex
-	store *ChannelHealthStore
-}
-
-func (a *channelHealthAdapter) Record(channelID, status, errMsg string) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.store.Record(channelID, status, errMsg)
-}
-
-func (a *channelHealthAdapter) Get(channelID string) *apidata.ChannelHealthRecord {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	rec := a.store.Get(channelID)
-	if rec == nil {
-		return nil
-	}
-	return &apidata.ChannelHealthRecord{
-		Status:        rec.Status,
-		LastFetchAt:   rec.LastFetchAt,
-		LastError:     rec.LastError,
-		LastSuccessAt: rec.LastSuccessAt,
-	}
-}
-
-func (a *channelHealthAdapter) Alerts() []apidata.ChannelAlert {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	alerts := a.store.Alerts()
-	result := make([]apidata.ChannelAlert, len(alerts))
-	for i, al := range alerts {
-		result[i] = apidata.ChannelAlert{
-			ChannelID: al.ChannelID,
-			Status:    al.Status,
-			Error:     al.Error,
-			FetchAt:   al.FetchAt,
-		}
-	}
-	return result
-}
-
-func (a *channelHealthAdapter) SyncAllToDB() error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.store.SyncAllToDB()
-}

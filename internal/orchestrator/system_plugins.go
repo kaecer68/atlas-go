@@ -1,8 +1,6 @@
 package orchestrator
 
 import (
-	"time"
-
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -80,67 +78,4 @@ func (s *System) WithPhase3Controller(ctrl *Phase3Controller) *System {
 	}
 	s.host.Register(&phase3Plugin{controller: ctrl}, s.SystemCore)
 	return s
-}
-
-// The following methods are retained for test backward compatibility.
-// They look up the specific plugin in the host and delegate to it.
-
-func (s *System) applySwarmConsensus(recs []domain.Recommendation) []domain.Recommendation {
-	if s.host == nil {
-		return recs
-	}
-	for _, p := range s.host.plugins {
-		if sp, ok := p.(*swarmPlugin); ok {
-			return sp.ProcessRecommendations(domain.RegimeNeutral, recs)
-		}
-	}
-	return recs
-}
-
-func (s *System) applyPRISMWeights(recs []domain.Recommendation, regime domain.Regime) []domain.Recommendation {
-	if s.host == nil {
-		return recs
-	}
-	for _, p := range s.host.plugins {
-		if pp, ok := p.(*prismPlugin); ok {
-			return pp.ProcessRecommendations(regime, recs)
-		}
-	}
-	return recs
-}
-
-func (s *System) runPhase3Optimization(quotes []domain.Quote, regime domain.Regime, asOf time.Time) {
-	if s.host == nil {
-		return
-	}
-	for _, p := range s.host.plugins {
-		if pp, ok := p.(*phase3Plugin); ok {
-			pp.PostSimulation(quotes, regime, asOf)
-			return
-		}
-	}
-}
-
-func (s *System) schedulePRISMForRegime(regime domain.Regime, asOf time.Time) {
-	if s.host == nil {
-		return
-	}
-	for _, p := range s.host.plugins {
-		if pp, ok := p.(*prismPlugin); ok {
-			pp.PostSimulation(nil, regime, asOf)
-			return
-		}
-	}
-}
-
-func (s *System) runSpawningCycle() {
-	if s.host == nil {
-		return
-	}
-	for _, p := range s.host.plugins {
-		if sp, ok := p.(*spawningPlugin); ok {
-			sp.PostSimulation(nil, domain.RegimeNeutral, time.Time{})
-			return
-		}
-	}
 }
