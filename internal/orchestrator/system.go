@@ -143,7 +143,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	symbols := RegistrySymbols(s.registry)
 	quotes, err := s.provider.GetQuotes(s.ctx, asOf, symbols)
 	if err != nil {
-		return domain.SimulationResult{}, err
+		return domain.SimulationResult{}, fmt.Errorf("get quotes: %w", err)
 	}
 
 	events := s.detectNarrativeEvents(quotes)
@@ -560,7 +560,7 @@ func (s *System) applyAlphaDiscovery(quotes []domain.Quote, recs []domain.Recomm
 func (s *System) NextExperimentCandidate() (*evolution.Candidate, error) {
 	outcomes, err := s.ledger.LoadOutcomes()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load outcomes: %w", err)
 	}
 	scorecards := ledger.BuildScorecards(outcomes)
 	candidate := evolution.SelectWeakestAgent(s.registry, scorecards)
@@ -613,7 +613,10 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 		}
 	}
 
-	return s.ledger.RecordSessionSummary(s.session, summary)
+	if err := s.ledger.RecordSessionSummary(s.session, summary); err != nil {
+		return fmt.Errorf("record session summary: %w", err)
+	}
+	return nil
 }
 
 func quoteBySymbolMap(quotes []domain.Quote) map[string]domain.Quote {
@@ -803,7 +806,7 @@ func (s *System) checkCapitalPhase() (bool, string) {
 				"criteria met for transition from live to full capital",
 			)
 			if err != nil {
-				return false, fmt.Errorf("request approval: %w", err).Error()
+				return false, fmt.Sprintf("request approval: %s", err)
 			}
 			return false, "approval requested for live→full transition"
 		}

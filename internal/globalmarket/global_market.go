@@ -616,7 +616,7 @@ func (gmm *GlobalMarketManager) Save(filepath string) error {
 
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal state: %w", err)
 	}
 
 	return os.WriteFile(filepath, data, 0644)
@@ -629,7 +629,7 @@ func (gmm *GlobalMarketManager) Load(filepath string) error {
 
 	data, err := os.ReadFile(filepath)
 	if err != nil {
-		return err
+		return fmt.Errorf("read state file: %w", err)
 	}
 
 	var state struct {
@@ -639,7 +639,7 @@ func (gmm *GlobalMarketManager) Load(filepath string) error {
 	}
 
 	if err := json.Unmarshal(data, &state); err != nil {
-		return err
+		return fmt.Errorf("unmarshal state: %w", err)
 	}
 
 	gmm.markets = state.Markets

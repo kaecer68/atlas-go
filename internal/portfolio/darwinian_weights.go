@@ -442,7 +442,7 @@ func (m *DarwinianWeightManager) Save() error {
 	// Ensure directory exists
 	dir := filepath.Dir(m.configPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
+		return fmt.Errorf("create directory: %w", err)
 	}
 
 	data := struct {
@@ -457,11 +457,11 @@ func (m *DarwinianWeightManager) Save() error {
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal weights: %w", err)
+		return fmt.Errorf("marshal weights: %w", err)
 	}
 
 	if err := os.WriteFile(m.configPath, jsonData, 0644); err != nil {
-		return fmt.Errorf("failed to write weights file: %w", err)
+		return fmt.Errorf("write weights file: %w", err)
 	}
 
 	return nil
@@ -478,7 +478,7 @@ func (m *DarwinianWeightManager) Load() error {
 			// File doesn't exist yet, that's ok
 			return nil
 		}
-		return fmt.Errorf("failed to read weights file: %w", err)
+		return fmt.Errorf("read weights file: %w", err)
 	}
 
 	var saved struct {
@@ -488,7 +488,7 @@ func (m *DarwinianWeightManager) Load() error {
 	}
 
 	if err := json.Unmarshal(data, &saved); err != nil {
-		return fmt.Errorf("failed to unmarshal weights: %w", err)
+		return fmt.Errorf("unmarshal weights: %w", err)
 	}
 
 	m.weights = saved.Weights
@@ -683,11 +683,11 @@ func (m *DarwinianWeightManager) SaveReport(path string) error {
 
 	data, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal report: %w", err)
+		return fmt.Errorf("marshal report: %w", err)
 	}
 
 	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("failed to write report: %w", err)
+		return fmt.Errorf("write report: %w", err)
 	}
 
 	return nil
