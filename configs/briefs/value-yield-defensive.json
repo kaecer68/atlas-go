@@ -6,7 +6,7 @@
   "target_skill": "etf_rotation_desk",
   "target_layer": "sector",
   "prompt_file": "prompts/agents/etf_rotation_desk.md",
-  "mutation_type": "prompt_expansion",
+  "mutation_type": "prompt_tightening",
   "failure_pattern": "Defensive value-yield setups with weak trend but resilient payout profiles are rejected too early, missing income-oriented opportunities.",
   "hypothesis": "Expanding criteria for defensive value-yield setups while maintaining payout-resilience checks can improve defensive capture during risk-off periods.",
   "acceptance_metric": "sharpe_like",
