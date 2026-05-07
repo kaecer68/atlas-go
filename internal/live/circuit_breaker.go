@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/live/store"
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
@@ -78,7 +78,7 @@ func NewCircuitBreaker(logPath, statePath string) *CircuitBreaker {
 		logPath = "data/state/circuit_breaker_log.jsonl"
 	}
 	if statePath == "" {
-		statePath = store.DefaultCircuitBreakerStatePath
+		statePath = livestore.DefaultCircuitBreakerStatePath
 	}
 	cb := &CircuitBreaker{
 		rules:          DefaultCircuitBreakerRules(),
@@ -144,7 +144,7 @@ func (cb *CircuitBreaker) RecordStopLoss() {
 }
 
 // Evaluate checks all rules against current portfolio and may trigger state changes.
-func (cb *CircuitBreaker) Evaluate(portfolio store.PortfolioState, positions map[string]domain.Position, events []store.Event) {
+func (cb *CircuitBreaker) Evaluate(portfolio livestore.PortfolioState, positions map[string]domain.Position, events []livestore.Event) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
@@ -261,7 +261,7 @@ func (cb *CircuitBreaker) persistStateLocked() error {
 	if err != nil {
 		return fmt.Errorf("marshal circuit breaker state: %w", err)
 	}
-	if err := store.WriteFileAtomic(cb.statePath, string(data)); err != nil {
+	if err := livestore.WriteFileAtomic(cb.statePath, string(data)); err != nil {
 		return fmt.Errorf("persist circuit breaker state: %w", err)
 	}
 	return nil

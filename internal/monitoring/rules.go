@@ -6,14 +6,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/live/store"
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 )
 
 // AlertRule 告警规则
 type AlertRule struct {
 	Name        string
 	Description string
-	Condition   func(state *store.State) (bool, string)
+	Condition   func(state *livestore.State) (bool, string)
 	Level       AlertLevel
 	Cooldown    time.Duration
 }
@@ -50,7 +50,7 @@ func (e *RuleEngine) SetCheckInterval(interval time.Duration) {
 }
 
 // Start 启动规则引擎
-func (e *RuleEngine) Start(ctx context.Context, stateStore *store.StateStore) {
+func (e *RuleEngine) Start(ctx context.Context, stateStore *livestore.StateStore) {
 	ticker := time.NewTicker(e.checkInterval)
 	defer ticker.Stop()
 
@@ -68,7 +68,7 @@ func (e *RuleEngine) Start(ctx context.Context, stateStore *store.StateStore) {
 }
 
 // evaluateRules 评估所有规则
-func (e *RuleEngine) evaluateRules(state *store.State) {
+func (e *RuleEngine) evaluateRules(state *livestore.State) {
 	e.mu.RLock()
 	rules := make([]AlertRule, len(e.rules))
 	copy(rules, e.rules)
@@ -100,7 +100,7 @@ func DefaultRules() []AlertRule {
 		{
 			Name:        "portfolio_value_drop",
 			Description: "Portfolio value dropped significantly",
-			Condition: func(state *store.State) (bool, string) {
+			Condition: func(state *livestore.State) (bool, string) {
 				if state == nil {
 					return false, ""
 				}
@@ -116,7 +116,7 @@ func DefaultRules() []AlertRule {
 		{
 			Name:        "position_concentration",
 			Description: "High position concentration detected",
-			Condition: func(state *store.State) (bool, string) {
+			Condition: func(state *livestore.State) (bool, string) {
 				if state == nil || len(state.Positions) == 0 {
 					return false, ""
 				}
@@ -132,7 +132,7 @@ func DefaultRules() []AlertRule {
 		{
 			Name:        "system_ready",
 			Description: "System is ready for trading",
-			Condition: func(state *store.State) (bool, string) {
+			Condition: func(state *livestore.State) (bool, string) {
 				if state == nil {
 					return false, ""
 				}
@@ -151,7 +151,7 @@ func LiveTradingRules() []AlertRule {
 		{
 			Name:        "circuit_breaker_triggered",
 			Description: "Circuit breaker entered paused or halted state",
-			Condition: func(state *store.State) (bool, string) {
+			Condition: func(state *livestore.State) (bool, string) {
 				if state == nil {
 					return false, ""
 				}
@@ -172,7 +172,7 @@ func LiveTradingRules() []AlertRule {
 		{
 			Name:        "daily_loss_warning",
 			Description: "Portfolio day PnL approaching daily loss limit",
-			Condition: func(state *store.State) (bool, string) {
+			Condition: func(state *livestore.State) (bool, string) {
 				if state == nil {
 					return false, ""
 				}
@@ -191,7 +191,7 @@ func LiveTradingRules() []AlertRule {
 		{
 			Name:        "high_position_concentration",
 			Description: "Single position exceeds 15% of portfolio",
-			Condition: func(state *store.State) (bool, string) {
+			Condition: func(state *livestore.State) (bool, string) {
 				if state == nil || len(state.Positions) == 0 {
 					return false, ""
 				}
@@ -213,7 +213,7 @@ func LiveTradingRules() []AlertRule {
 		{
 			Name:        "unrealized_loss_position",
 			Description: "Position unrealized loss exceeds 5%",
-			Condition: func(state *store.State) (bool, string) {
+			Condition: func(state *livestore.State) (bool, string) {
 				if state == nil || len(state.Positions) == 0 {
 					return false, ""
 				}

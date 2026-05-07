@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/live/store"
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 )
 
 func TestGuardedToHTTPFlowIntegration(t *testing.T) {

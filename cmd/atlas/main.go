@@ -19,7 +19,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/live"
-	"github.com/kaecer68/atlas-go/internal/live/store"
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
@@ -352,7 +352,7 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		log.Printf("[Repository] injected into live trading system")
 	}
 
-	stateStore := store.NewStateStore("data/state/live")
+	stateStore := livestore.NewStateStore("data/state/live")
 	eventBus := live.NewChannelEventBus(64)
 	provider := marketdata.NewMockProvider()
 

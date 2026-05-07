@@ -272,15 +272,10 @@ func (a *channelHealthAdapter) Get(channelID string) *apidata.ChannelHealthRecor
 		return nil
 	}
 	return &apidata.ChannelHealthRecord{
-		Status:             rec.Status,
-		LastFetchAt:        rec.LastFetchAt,
-		LastError:          rec.LastError,
-		LastSuccessAt:      rec.LastSuccessAt,
-		RateLimitRemaining: rec.RateLimitRemaining,
-		LatencyMs:          rec.LatencyMs,
-		RecordsFetched:     rec.RecordsFetched,
-		SymbolsProcessed:   rec.SymbolsProcessed,
-		Errors:             rec.Errors,
+		Status:        rec.Status,
+		LastFetchAt:   rec.LastFetchAt,
+		LastError:     rec.LastError,
+		LastSuccessAt: rec.LastSuccessAt,
 	}
 }
 

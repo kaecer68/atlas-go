@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/live/store"
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 )
 
 // LiveService provides live trading status and portfolio state operations.
@@ -59,15 +59,15 @@ func (s *LiveService) LoadLiveStatus() LiveStatusResponse {
 	cbState := CircuitBreakerStatus{
 		State: "unknown",
 	}
-	if data, err := os.ReadFile(filepath.Join(s.WorkDir, store.DefaultCircuitBreakerStatePath)); err == nil {
+	if data, err := os.ReadFile(filepath.Join(s.WorkDir, livestore.DefaultCircuitBreakerStatePath)); err == nil {
 		if err := json.Unmarshal(data, &cbState); err != nil {
 			log.Printf("[LiveService] warn: failed to unmarshal circuit breaker state: %v", err)
 		}
 	}
 
 	portfolio := PortfolioSummary{}
-	liveBasePath := filepath.Join(s.WorkDir, store.DefaultLiveStateBasePath)
-	if p, err := store.LoadLastPortfolioState(liveBasePath); err == nil {
+	liveBasePath := filepath.Join(s.WorkDir, livestore.DefaultLiveStateBasePath)
+	if p, err := livestore.LoadLastPortfolioState(liveBasePath); err == nil {
 		portfolio.Cash = p.Cash
 		portfolio.TotalExposure = p.TotalExposure
 		portfolio.AvailableCash = p.AvailableCash
@@ -78,7 +78,7 @@ func (s *LiveService) LoadLiveStatus() LiveStatusResponse {
 	}
 
 	positionsCount := 0
-	if posMap, err := store.LoadLastPositions(liveBasePath); err == nil {
+	if posMap, err := livestore.LoadLastPositions(liveBasePath); err == nil {
 		positionsCount = len(posMap)
 	} else {
 		log.Printf("[LiveService] warn: failed to read positions state: %v", err)
@@ -124,15 +124,15 @@ type EquityCurvePoint struct {
 
 // LoadPortfolioState returns the current portfolio state with positions and equity curve.
 func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
-	liveBasePath := filepath.Join(s.WorkDir, store.DefaultLiveStateBasePath)
+	liveBasePath := filepath.Join(s.WorkDir, livestore.DefaultLiveStateBasePath)
 
-	portfolio, err := store.LoadLastPortfolioState(liveBasePath)
+	portfolio, err := livestore.LoadLastPortfolioState(liveBasePath)
 	if err != nil {
 		log.Printf("[LiveService] warn: failed to load portfolio state: %v", err)
 		return PortfolioStateResponse{}
 	}
 
-	posMap, err := store.LoadLastPositions(liveBasePath)
+	posMap, err := livestore.LoadLastPositions(liveBasePath)
 	if err != nil {
 		log.Printf("[LiveService] warn: failed to load positions: %v", err)
 	}
