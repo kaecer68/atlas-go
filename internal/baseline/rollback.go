@@ -3,6 +3,8 @@ package baseline
 import (
 	"fmt"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 type RevertType string
@@ -139,6 +141,37 @@ func (m *Manager) reconstructPolicyAtVersion(current Policy, targetVersion int) 
 	reconstructed := DefaultPolicy()
 	reconstructed.Version = targetVersion
 
+	// Find the last constraint promotion at or before targetVersion that has a snapshot.
+	var lastConstraintSnapshot *domain.SimulationConstraints
+	for i, promo := range current.Promotions {
+		promoVersion := i + 2
+		if promoVersion > targetVersion {
+			break
+		}
+		if (promo.MutationType == "risk_rule_change" || promo.MutationType == "portfolio_constraint_revision") && promo.ConstraintsSnapshot != nil {
+			lastConstraintSnapshot = promo.ConstraintsSnapshot
+		}
+	}
+
+	if lastConstraintSnapshot != nil {
+		reconstructed.Constraints = *lastConstraintSnapshot
+		reconstructed.ExecutionPolicy = ExecutionPolicyFromConstraints(*lastConstraintSnapshot)
+	} else {
+		// Fallback: if no later constraint changes, current constraints are valid.
+		hasLaterConstraintChange := false
+		for i, promo := range current.Promotions {
+			promoVersion := i + 2
+			if promoVersion > targetVersion && (promo.MutationType == "risk_rule_change" || promo.MutationType == "portfolio_constraint_revision") {
+				hasLaterConstraintChange = true
+				break
+			}
+		}
+		if !hasLaterConstraintChange {
+			reconstructed.Constraints = current.Constraints
+			reconstructed.ExecutionPolicy = current.ExecutionPolicy
+		}
+	}
+
 	for i, promo := range current.Promotions {
 		promoVersion := i + 2
 		if promoVersion > targetVersion {
@@ -146,7 +179,9 @@ func (m *Manager) reconstructPolicyAtVersion(current Policy, targetVersion int) 
 		}
 
 		if promo.MutationType == "" || promo.MutationType == "prompt_tightening" {
-			if currentOverride, ok := current.PromptOverrides[promo.TargetAgentID]; ok {
+			if promo.PromptSnapshot != "" {
+				reconstructed.PromptOverrides[promo.TargetAgentID] = promo.PromptSnapshot
+			} else if currentOverride, ok := current.PromptOverrides[promo.TargetAgentID]; ok {
 				reconstructed.PromptOverrides[promo.TargetAgentID] = currentOverride
 			}
 		}
