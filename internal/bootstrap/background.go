@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"log"
 	"os"
@@ -185,4 +186,105 @@ func getLatestReplayDate(csvPath string) (time.Time, error) {
 		return time.Time{}, errors.New("no valid dates found")
 	}
 	return latest, nil
+}
+
+// StartEncodingDaemon periodically checks for PascalCase summary.json files and auto-fixes them.
+func StartEncodingDaemon(ctx context.Context, ledgerDir string) {
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(30 * time.Second):
+		}
+
+		// Run immediately, then every 5 minutes
+		doCheck := func() {
+			sessionsDir := filepath.Join(ledgerDir, "sessions")
+			entries, err := os.ReadDir(sessionsDir)
+			if err != nil {
+				return
+			}
+			for _, e := range entries {
+				if !e.IsDir() || !strings.HasSuffix(e.Name(), "-daily") {
+					continue
+				}
+				sp := filepath.Join(sessionsDir, e.Name(), "summary.json")
+				data, err := os.ReadFile(sp)
+				if err != nil {
+					continue
+				}
+				if !strings.Contains(string(data[:200]), `"SessionID"`) {
+					continue
+				}
+				// PascalCase detected — auto-fix
+				log.Printf("[EncodingDaemon] fixing PascalCase: %s", e.Name())
+				var raw map[string]any
+				if json.Unmarshal(data, &raw) != nil {
+					continue
+				}
+				fixed := fixKeys(raw)
+				newData, _ := json.MarshalIndent(fixed, "", "  ")
+				tmp := sp + ".tmp"
+				if err := os.WriteFile(tmp, newData, 0o644); err != nil {
+					continue
+				}
+				_ = os.Rename(tmp, sp)
+			}
+		}
+
+		doCheck()
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				doCheck()
+			}
+		}
+	}()
+}
+
+func fixKeys(obj any) any {
+	switch v := obj.(type) {
+	case map[string]any:
+		result := make(map[string]any, len(v))
+		for k, val := range v {
+			result[keyMap(k)] = fixKeys(val)
+		}
+		return result
+	case []any:
+		result := make([]any, len(v))
+		for i, val := range v {
+			result[i] = fixKeys(val)
+		}
+		return result
+	default:
+		return v
+	}
+}
+
+func keyMap(k string) string {
+	m := map[string]string{
+		"SessionID": "session_id", "Regime": "regime", "OrderCount": "order_count",
+		"PositionCount": "position_count", "EndingCash": "ending_cash",
+		"PortfolioValue": "portfolio_value", "OutcomeCount": "outcome_count",
+		"RecordedAt": "recorded_at", "BrokerRuntime": "broker_runtime",
+		"GuardOutcomes": "guard_outcomes", "Mode": "mode", "Adapter": "adapter",
+		"Signer": "signer", "SignerVersion": "signer_version", "KeyID": "key_id",
+		"MaxRetries": "max_retries", "HTTPTimeoutSec": "http_timeout_sec",
+		"HTTPAttempts": "http_attempts", "RetryStatusCodes": "retry_status_codes",
+		"MaxClockSkewSec": "max_clock_skew_sec", "NonceTTLSec": "nonce_ttl_sec",
+		"NonceStore": "nonce_store", "NonceStorePath": "nonce_store_path",
+		"NonceRedisPrefix": "nonce_redis_prefix",
+		"GuardID": "guard_id", "GuardSkill": "guard_skill", "Severity": "severity",
+		"Passed": "passed", "Reason": "reason", "InputCount": "input_count",
+		"OutputCount": "output_count", "NextExperimentAgentID": "next_experiment_agent_id",
+		"ProposalID": "proposal_id", "CommitID": "commit_id", "ApprovalID": "approval_id",
+	}
+	if n, ok := m[k]; ok {
+		return n
+	}
+	return k
 }

@@ -234,9 +234,10 @@ func run(args []string, deps appDeps) error {
 		}
 		mux.Handle("/", http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static"))))
 		log.Printf("dashboard api listening on %s", *apiAddr)
-		bootstrap.StartChannelHealthSyncLoop(sysCtx, cfg.WorkDir, pool)
-		bootstrap.StartAutoBackfill(sysCtx, cfg.WorkDir)
-		bootstrap.StartAutoCapitalFlowFetch(sysCtx, cfg.WorkDir)
+	bootstrap.StartChannelHealthSyncLoop(sysCtx, cfg.WorkDir, pool)
+	bootstrap.StartAutoBackfill(sysCtx, cfg.WorkDir)
+	bootstrap.StartAutoCapitalFlowFetch(sysCtx, cfg.WorkDir)
+	bootstrap.StartEncodingDaemon(sysCtx, cfg.LedgerDir)
 
 		srv := &http.Server{Addr: *apiAddr, Handler: mux}
 		srvErr := make(chan error, 1)
