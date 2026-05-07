@@ -5,19 +5,19 @@ import (
 	"fmt"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
 // Screener evaluates whether a symbol passes an agent's ScreeningCriteria.
 type Screener interface {
 	Screen(ctx context.Context, symbol string, criteria domain.ScreeningCriteria, quotes map[string]domain.Quote) (bool, error)
+	ScreenDetailed(ctx context.Context, symbol string, criteria domain.ScreeningCriteria, quotes map[string]domain.Quote) (ScreenResult, error)
 	ScreenUniverse(ctx context.Context, symbols []string, criteria domain.ScreeningCriteria, quotes map[string]domain.Quote) ([]string, error)
 }
 
 // Engine implements Screener using FactorEngine and FundamentalProvider.
 type Engine struct {
-	factorEngine *portfolio.FactorEngine
+	factorEngine portfolio.FactorEngineInterface
 	fundamentals *portfolio.FundamentalProvider
 }
 
@@ -29,21 +29,52 @@ func NewEngine(fe *portfolio.FactorEngine, fp *portfolio.FundamentalProvider) *E
 	}
 }
 
+// ScreenResult carries the outcome of a single screening evaluation.
+type ScreenResult struct {
+	Passed    bool
+	Reason    string
+	Criterion string
+	Label     string
+	Threshold string
+	Actual    string
+}
+
 // Screen evaluates a single symbol against criteria. Returns true if it passes all present filters.
 func (e *Engine) Screen(ctx context.Context, symbol string, criteria domain.ScreeningCriteria, quotes map[string]domain.Quote) (bool, error) {
+	res, err := e.ScreenDetailed(ctx, symbol, criteria, quotes)
+	return res.Passed, err
+}
+
+// ScreenDetailed evaluates a single symbol and returns detailed pass/fail metadata.
+// ScreenDetailed never returns a non-nil error; the error return is reserved for future use.
+func (e *Engine) ScreenDetailed(ctx context.Context, symbol string, criteria domain.ScreeningCriteria, quotes map[string]domain.Quote) (ScreenResult, error) {
+	pass := func() ScreenResult {
+		return ScreenResult{Passed: true}
+	}
+	fail := func(criterion, label, threshold, actual string) ScreenResult {
+		return ScreenResult{
+			Passed:    false,
+			Reason:    fmt.Sprintf("%s: %s (threshold %s, actual %s)", criterion, label, threshold, actual),
+			Criterion: criterion,
+			Label:     label,
+			Threshold: threshold,
+			Actual:    actual,
+		}
+	}
+
 	if !criteria.HasFilters() {
-		return true, nil
+		return pass(), nil
 	}
 
 	quote, hasQuote := quotes[symbol]
 
 	if criteria.VolumeIntraday != nil && criteria.VolumeIntraday.Min != nil {
 		if !hasQuote {
-			return false, nil
+			return fail("volume_intraday_min", "Volume intraday", fmt.Sprintf("%d", *criteria.VolumeIntraday.Min), "missing quote"), nil
 		}
 		minVol := *criteria.VolumeIntraday.Min
 		if quote.Volume < minVol {
-			return false, nil
+			return fail("volume_intraday_min", "Volume intraday", fmt.Sprintf("%d", minVol), fmt.Sprintf("%d", quote.Volume)), nil
 		}
 	}
 
@@ -53,36 +84,36 @@ func (e *Engine) Screen(ctx context.Context, symbol string, criteria domain.Scre
 		if criteria.PE != nil {
 			if data.PE > 0 {
 				if criteria.PE.Min != nil && data.PE < *criteria.PE.Min {
-					return false, nil
+					return fail("pe_min", "P/E", fmt.Sprintf("%.2f", *criteria.PE.Min), fmt.Sprintf("%.2f", data.PE)), nil
 				}
 				if criteria.PE.Max != nil && data.PE > *criteria.PE.Max {
-					return false, nil
+					return fail("pe_max", "P/E", fmt.Sprintf("%.2f", *criteria.PE.Max), fmt.Sprintf("%.2f", data.PE)), nil
 				}
 			} else {
-				return false, nil
+				return fail("pe_missing", "P/E", "required", "missing data"), nil
 			}
 		}
 
 		if criteria.PB != nil {
 			if data.PB > 0 {
 				if criteria.PB.Min != nil && data.PB < *criteria.PB.Min {
-					return false, nil
+					return fail("pb_min", "P/B", fmt.Sprintf("%.2f", *criteria.PB.Min), fmt.Sprintf("%.2f", data.PB)), nil
 				}
 				if criteria.PB.Max != nil && data.PB > *criteria.PB.Max {
-					return false, nil
+					return fail("pb_max", "P/B", fmt.Sprintf("%.2f", *criteria.PB.Max), fmt.Sprintf("%.2f", data.PB)), nil
 				}
 			} else {
-				return false, nil
+				return fail("pb_missing", "P/B", "required", "missing data"), nil
 			}
 		}
 
 		if criteria.DividendYield != nil {
 			if data.DividendYield > 0 {
 				if criteria.DividendYield.Min != nil && data.DividendYield < *criteria.DividendYield.Min {
-					return false, nil
+					return fail("dividend_yield_min", "Dividend yield", fmt.Sprintf("%.2f", *criteria.DividendYield.Min), fmt.Sprintf("%.2f", data.DividendYield)), nil
 				}
 				if criteria.DividendYield.Max != nil && data.DividendYield > *criteria.DividendYield.Max {
-					return false, nil
+					return fail("dividend_yield_max", "Dividend yield", fmt.Sprintf("%.2f", *criteria.DividendYield.Max), fmt.Sprintf("%.2f", data.DividendYield)), nil
 				}
 			}
 		}
@@ -92,10 +123,10 @@ func (e *Engine) Screen(ctx context.Context, symbol string, criteria domain.Scre
 		if criteria.Momentum20Day != nil {
 			momentum := e.factorEngine.CalculateMomentumScore(symbol, quotes)
 			if criteria.Momentum20Day.Min != nil && momentum < *criteria.Momentum20Day.Min {
-				return false, nil
+				return fail("momentum_20d_min", "20-day momentum", fmt.Sprintf("%.2f", *criteria.Momentum20Day.Min), fmt.Sprintf("%.2f", momentum)), nil
 			}
 			if criteria.Momentum20Day.Max != nil && momentum > *criteria.Momentum20Day.Max {
-				return false, nil
+				return fail("momentum_20d_max", "20-day momentum", fmt.Sprintf("%.2f", *criteria.Momentum20Day.Max), fmt.Sprintf("%.2f", momentum)), nil
 			}
 		}
 
@@ -109,34 +140,16 @@ func (e *Engine) Screen(ctx context.Context, symbol string, criteria domain.Scre
 			scores := e.factorEngine.CalculateAllScores(symbol, quotes, nil, nil, defaultWeights)
 			total, ok := scores["total"]
 			if !ok || total < *criteria.MinTotalFactorScore {
-				return false, nil
+				actual := "missing"
+				if ok {
+					actual = fmt.Sprintf("%.3f", total)
+				}
+				return fail("min_total_factor_score", "Total factor score", fmt.Sprintf("%.3f", *criteria.MinTotalFactorScore), actual), nil
 			}
 		}
 	}
 
-	_ = ctx
-	return true, nil
-}
-
-func (e *Engine) ApplyMicrostructureFilter(symbol string, criteria domain.ScreeningCriteria, microData map[string]marketdata.MicrostructureSnapshot) (bool, string) {
-	snap, ok := microData[symbol]
-	if !ok {
-		return false, "missing microstructure data"
-	}
-
-	if criteria.MinLiquidityScore != nil && snap.LiquidityScore < *criteria.MinLiquidityScore {
-		return false, fmt.Sprintf("liquidity score too low: %.1f < %.1f", snap.LiquidityScore, *criteria.MinLiquidityScore)
-	}
-
-	if criteria.MaxSpreadEstimate != nil && snap.SpreadEstimate > *criteria.MaxSpreadEstimate {
-		return false, fmt.Sprintf("spread too wide: %.3f > %.3f", snap.SpreadEstimate, *criteria.MaxSpreadEstimate)
-	}
-
-	if criteria.ExcludeAbnormalVolume != nil && *criteria.ExcludeAbnormalVolume && snap.AbnormalVolume {
-		return false, "abnormal volume detected"
-	}
-
-	return true, ""
+	return pass(), nil
 }
 
 // ScreenUniverse filters a list of symbols, returning only those that pass.

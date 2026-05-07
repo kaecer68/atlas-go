@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 )
 
 // helper to add an agent directly into the manager's internal map
@@ -153,7 +155,7 @@ func TestDarwinianWeightManager(t *testing.T) {
 		}
 
 		// Perform daily adjustment
-		adjustments := m.PerformDailyAdjustment()
+		adjustments, _ := m.PerformDailyAdjustment()
 
 		if len(adjustments) == 0 {
 			t.Log("No adjustments returned (may be due to cooldown)")
@@ -174,24 +176,124 @@ func TestDarwinianWeightManager(t *testing.T) {
 	t.Run("ConstrainWeight", func(t *testing.T) {
 		m := NewDarwinianWeightManager("/tmp/test_dw.json")
 
-		// Test via constrainWeight (private but accessible in same package)
-		clamped := m.constrainWeight(3.0)
+		clamped, _ := m.constrainWeight("test-agent", 3.0)
 		if clamped != DarwinianWeightMax {
 			t.Errorf("Expected max %f, got %f", DarwinianWeightMax, clamped)
 		}
 
-		clamped = m.constrainWeight(0.1)
+		clamped, _ = m.constrainWeight("test-agent", 0.1)
 		if clamped != DarwinianWeightMin {
 			t.Errorf("Expected min %f, got %f", DarwinianWeightMin, clamped)
 		}
 
-		clamped = m.constrainWeight(1.5)
+		clamped, _ = m.constrainWeight("test-agent", 1.5)
 		if clamped != 1.5 {
 			t.Errorf("Expected 1.5, got %f", clamped)
 		}
 	})
 
-	t.Run("ApplyDarwinianWeights", func(t *testing.T) {
+	t.Run("ClampingEvent", func(t *testing.T) {
+		m := NewDarwinianWeightManager("/tmp/test_dw.json")
+
+		// Case 1: clamped to MAX
+		clamped, event := m.constrainWeight("agent-max", 3.0)
+		if clamped != DarwinianWeightMax {
+			t.Errorf("Expected clamped to max %f, got %f", DarwinianWeightMax, clamped)
+		}
+		if event == nil {
+			t.Fatal("Expected non-nil ClampingEvent when clamping to max")
+		}
+		if event.Boundary != "max" {
+			t.Errorf("Expected boundary 'max', got '%s'", event.Boundary)
+		}
+		if event.RawWeight != 3.0 {
+			t.Errorf("Expected raw weight 3.0, got %f", event.RawWeight)
+		}
+		if event.FinalWeight != DarwinianWeightMax {
+			t.Errorf("Expected final weight %f, got %f", DarwinianWeightMax, event.FinalWeight)
+		}
+		if event.AgentID != "agent-max" {
+			t.Errorf("Expected agent ID 'agent-max', got '%s'", event.AgentID)
+		}
+		if event.Timestamp.IsZero() {
+			t.Error("Expected non-zero timestamp")
+		}
+
+		// Case 2: clamped to MIN
+		clamped, event = m.constrainWeight("agent-min", 0.1)
+		if clamped != DarwinianWeightMin {
+			t.Errorf("Expected clamped to min %f, got %f", DarwinianWeightMin, clamped)
+		}
+		if event == nil {
+			t.Fatal("Expected non-nil ClampingEvent when clamping to min")
+		}
+		if event.Boundary != "min" {
+			t.Errorf("Expected boundary 'min', got '%s'", event.Boundary)
+		}
+		if event.RawWeight != 0.1 {
+			t.Errorf("Expected raw weight 0.1, got %f", event.RawWeight)
+		}
+		if event.FinalWeight != DarwinianWeightMin {
+			t.Errorf("Expected final weight %f, got %f", DarwinianWeightMin, event.FinalWeight)
+		}
+
+		// Case 3: no clamping (within bounds)
+		clamped, event = m.constrainWeight("agent-ok", 1.5)
+		if clamped != 1.5 {
+			t.Errorf("Expected unchanged 1.5, got %f", clamped)
+		}
+		if event != nil {
+			t.Errorf("Expected nil ClampingEvent when no clamping, got %+v", event)
+		}
+	})
+
+	t.Run("PerformDailyAdjustment_ClampingEvents", func(t *testing.T) {
+		m := NewDarwinianWeightManager("/tmp/test_clamp.json")
+		defer os.Remove("/tmp/test_clamp.json")
+
+		// Seed agents: one will get huge multiplier → clamped to max
+		seedAgent(m, "top-performer", "tech", "sector", 2.4)
+		seedAgent(m, "bottom-performer", "val", "style", 0.35)
+
+		// Record enough outcomes to trigger cooldown bypass (20+ outcomes)
+		for i := 0; i < 25; i++ {
+			m.RecordOutcome("top-performer", 0.02, true)
+			m.RecordOutcome("bottom-performer", -0.02, false)
+		}
+
+		adjustments, events := m.PerformDailyAdjustment()
+		if len(adjustments) == 0 {
+			t.Fatal("Expected some adjustments")
+		}
+
+		// Verify events are populated when clamping occurs
+		for _, e := range events {
+			if e.AgentID == "" {
+				t.Error("ClampingEvent has empty AgentID")
+			}
+			if e.Boundary != "min" && e.Boundary != "max" {
+				t.Errorf("Invalid boundary '%s', expected 'min' or 'max'", e.Boundary)
+			}
+			if e.RawWeight == e.FinalWeight {
+				t.Error("ClampingEvent raw_weight equals final_weight, no clamping occurred")
+			}
+			if e.Timestamp.IsZero() {
+				t.Error("ClampingEvent has zero timestamp")
+			}
+			t.Logf("ClampingEvent: agent=%s raw=%.3f final=%.3f boundary=%s",
+				e.AgentID, e.RawWeight, e.FinalWeight, e.Boundary)
+		}
+
+		// All weights must stay in bounds after adjustment
+		for id, w := range m.GetAllWeights() {
+			if w < DarwinianWeightMin || w > DarwinianWeightMax {
+				t.Errorf("Agent %s weight %.3f outside bounds [%.1f, %.1f]",
+					id, w, DarwinianWeightMin, DarwinianWeightMax)
+			}
+		}
+	})
+
+	t.Run("ApplyDarwinianWeightsWithEvents", func(t *testing.T) {
 		m := NewDarwinianWeightManager("/tmp/test_dw.json")
 
 		seedAgent(m, "agent_001", "tech", "sector", 2.0) // High weight
@@ -202,7 +304,7 @@ func TestDarwinianWeightManager(t *testing.T) {
 			{Agent: "agent_002", Symbol: "2881.TW", Conviction: 80},
 		}
 
-		weighted := m.ApplyDarwinianWeights(recs)
+		weighted, _ := m.ApplyDarwinianWeightsWithEvents(recs)
 
 		// agent_001 has high weight (2.0) so should boost conviction
 		// agent_002 has low weight (0.5) so should reduce conviction
@@ -297,6 +399,59 @@ func TestDarwinianWeightManager(t *testing.T) {
 	})
 }
 
+func TestDarwinianWeightManagerWithParameters(t *testing.T) {
+	m := NewDarwinianWeightManager("/tmp/test_dw.json")
+	params := DefaultRuntimeParameters()
+	params.Darwinian.LookbackDays = 30
+	result := m.WithParameters(params)
+	if result != m {
+		t.Error("expected WithParameters to return the same manager")
+	}
+	if m.lookbackDays != 30 {
+		t.Errorf("expected lookbackDays 30, got %d", m.lookbackDays)
+	}
+}
+
+func TestDarwinianWeightManagerGetBottomPerformers(t *testing.T) {
+	m := NewDarwinianWeightManager("/tmp/test_dw.json")
+	seedAgent(m, "agent_001", "tech", "sector", 1.5)
+	seedAgent(m, "agent_002", "val", "style", 0.8)
+
+	for i := 0; i < 10; i++ {
+		m.RecordOutcome("agent_001", 0.02, true)
+		m.RecordOutcome("agent_002", -0.01, false)
+	}
+
+	bottom := m.GetBottomPerformers(1)
+	if len(bottom) != 1 {
+		t.Fatalf("expected 1 bottom performer, got %d", len(bottom))
+	}
+	if bottom[0].AgentID == "" {
+		t.Error("bottom performer AgentID should not be empty")
+	}
+}
+
+func TestDarwinianWeightManagerGetAllAgentWeightData(t *testing.T) {
+	m := NewDarwinianWeightManager("/tmp/test_dw.json")
+	seedAgent(m, "agent_001", "tech", "sector", 1.5)
+	seedAgent(m, "agent_002", "val", "style", 0.8)
+
+	data := m.GetAllAgentWeightData()
+	if len(data) != 2 {
+		t.Fatalf("expected 2 agents, got %d", len(data))
+	}
+	found := false
+	for _, d := range data {
+		if d.AgentID == "agent_001" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected agent_001 in data")
+	}
+}
+
 func TestDarwinianWeightReport(t *testing.T) {
 	t.Run("GenerateReport", func(t *testing.T) {
 		m := NewDarwinianWeightManager("/tmp/test_dw.json")
@@ -328,76 +483,74 @@ func TestDarwinianWeightReport(t *testing.T) {
 	})
 }
 
-func TestDarwinianConfig_Defaults(t *testing.T) {
-	cfg := DefaultDarwinianConfig()
+func TestApplyDarwinianWeightsWithEvents_PreservesAllFields(t *testing.T) {
+	m := NewDarwinianWeightManager("/tmp/test_dw_preserve.json")
 
-	if cfg.RollingWindowDays != 60 {
-		t.Errorf("expected rolling window 60, got %d", cfg.RollingWindowDays)
+	input := domain.Recommendation{
+		Agent: "test_agent", Skill: "momentum", Layer: domain.LayerStyle, Symbol: "2330.TW",
+		Side: domain.SideBuy, Conviction: 80, TargetPrice: 650, StopLossPrice: 580,
+		Reason: "strong signal", ReasoningChain: []string{"step1"}, SupportingEvents: []string{"ev1"},
+		FactorScores:        domain.FactorScores{Momentum: 0.85, Total: 0.72},
+		ConvictionBreakdown: &domain.ConvictionBreakdown{Base: 60, Final: 80},
 	}
-	if !cfg.UseExponentialDecay {
-		t.Error("expected exponential decay enabled by default")
-	}
-	if cfg.NewAgentProtectionDays != 30 {
-		t.Errorf("expected protection days 30, got %d", cfg.NewAgentProtectionDays)
-	}
-	if cfg.MinAdjustmentInterval != 3 {
-		t.Errorf("expected min interval 3, got %d", cfg.MinAdjustmentInterval)
-	}
-}
+	seedAgent(m, "test_agent", "momentum", "style", 1.0)
 
-func TestDarwinianWeightManager_WithConfig(t *testing.T) {
-	cfg := DefaultDarwinianConfig()
-	cfg.RollingWindowDays = 30
-	cfg.NewAgentFixedWeight = 1.5
-
-	m := NewDarwinianWeightManagerWithConfig("/tmp/test_dw.json", cfg)
-	if m.config.RollingWindowDays != 30 {
-		t.Errorf("expected custom rolling window 30, got %d", m.config.RollingWindowDays)
+	weighted, events := m.ApplyDarwinianWeightsWithEvents([]domain.Recommendation{input})
+	if len(weighted) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(weighted))
 	}
-	if m.config.NewAgentFixedWeight != 1.5 {
-		t.Errorf("expected custom fixed weight 1.5, got %f", m.config.NewAgentFixedWeight)
+	out := weighted[0]
+	if out.TargetPrice != input.TargetPrice {
+		t.Errorf("TargetPrice: got %f, want %f", out.TargetPrice, input.TargetPrice)
 	}
-}
-
-func TestCalculateExponentialWeights(t *testing.T) {
-	weights := calculateExponentialWeights(5, 2)
-
-	if len(weights) != 5 {
-		t.Fatalf("expected 5 weights, got %d", len(weights))
+	if out.StopLossPrice != input.StopLossPrice {
+		t.Errorf("StopLossPrice: got %f, want %f", out.StopLossPrice, input.StopLossPrice)
 	}
-
-	if weights[4] <= weights[0] {
-		t.Error("expected recent weights to be higher")
+	if out.ConvictionBreakdown == nil || out.ConvictionBreakdown.Final != input.ConvictionBreakdown.Final {
+		t.Error("ConvictionBreakdown not preserved")
 	}
-
-	var sum float64
-	for _, w := range weights {
-		sum += w
+	if out.FactorScores.Total != input.FactorScores.Total {
+		t.Errorf("FactorScores.Total: got %f, want %f", out.FactorScores.Total, input.FactorScores.Total)
 	}
-	if sum < 0.99 || sum > 1.01 {
-		t.Errorf("expected sum ~1.0, got %f", sum)
+	if out.Layer != input.Layer {
+		t.Errorf("Layer: got %q, want %q", out.Layer, input.Layer)
+	}
+	if out.Conviction <= 0 {
+		t.Error("Conviction should be positive")
+	}
+	if len(events) > 0 {
+		t.Errorf("expected 0 clamping events with weight 1.0, got %d", len(events))
 	}
 }
 
-func TestDarwinianWeightManager_NewAgentProtection(t *testing.T) {
-	cfg := DefaultDarwinianConfig()
-	cfg.NewAgentProtectionDays = 30
-	cfg.NewAgentFixedWeight = 1.0
-
-	m := NewDarwinianWeightManagerWithConfig("/tmp/test_dw.json", cfg)
-	m.weights["new-agent"] = &DarwinianAgentWeight{
-		AgentID:         "new-agent",
-		Skill:           "momentum",
-		Layer:           "sector",
-		Weight:          1.0,
-		FirstSignalDate: time.Now(),
-		LastAdjustedAt:  time.Now().Add(-24 * time.Hour),
+func TestDarwinianWeightManager_WithEventBus(t *testing.T) {
+	bus := &eventbus.ChannelEventBus{}
+	m := NewDarwinianWeightManager("/tmp/test_dw_eb.json").WithEventBus(bus)
+	if m == nil {
+		t.Fatal("WithEventBus returned nil")
 	}
+	report := m.GenerateReport()
+	if report.TotalAgents != 0 {
+		t.Errorf("expected 0 agents, got %d", report.TotalAgents)
+	}
+}
 
-	m.PerformDailyAdjustment()
+func TestDarwinianWeightManager_SaveReport(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "report.json")
+	m := NewDarwinianWeightManager("/tmp/test_dw_sr.json")
+	_ = m.SaveReport(path)
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("expected report file at %s: %v", path, err)
+	}
+}
 
-	weight, _ := m.GetAgentWeightData("new-agent")
-	if weight == nil || weight.Weight != 1.0 {
-		t.Errorf("expected protected weight 1.0, got %v", weight)
+func TestDarwinianWeightManager_ResetAgent(t *testing.T) {
+	m := NewDarwinianWeightManager("/tmp/test_dw_ra.json")
+	seedAgent(m, "agent_001", "tech", "sector", 2.0)
+	m.ResetAgent("agent_001")
+	w := m.GetWeight("agent_001")
+	if w != DarwinianNeutralWeight {
+		t.Errorf("expected neutral weight after reset, got %f", w)
 	}
 }

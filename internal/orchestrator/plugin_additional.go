@@ -1,23 +1,18 @@
 package orchestrator
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
-// Common conviction thresholds used across executors.
-const (
-	defaultConvictionFloor = 50
-)
+const defaultConvictionFloor = 50
 
-// priceTargets returns reasonable target and stop-loss prices based on current quote.
-// Multipliers vary by strategy volatility profile.
 func priceTargets(quote domain.Quote, targetMult, stopLossMult float64) (float64, float64) {
 	return quote.Last * targetMult, quote.Last * stopLossMult
 }
 
-// Financials desk thresholds.
 const (
 	finDividendBoost            = 8
 	finBalanceSheetPenalty      = 6
@@ -30,32 +25,30 @@ const (
 	finPriceToHighThreshold     = 0.995
 )
 
-// Shipping desk thresholds.
 const (
 	shipTacticalBoost      = 10
 	shipWeakClosePenalty   = 12
 	shipWeakCloseThreshold = 0.992
 )
 
-// Value-yield desk thresholds.
 const (
 	vyCashFlowBoost    = 10
 	vyYieldTrapPenalty = 10
 )
 
-// Earnings quality desk thresholds.
 const (
 	eqRepeatableBoost   = 9
 	eqGuidancePenalty   = 8
 	eqGuidanceThreshold = 0.99
 )
 
-// Technical breakout desk thresholds.
 const (
 	tbDefaultVolumeFloor     = 5_000_000
 	tbStrictVolumeFloor      = 7_000_000
 	tbRelaxedVolumeFloor     = 0
 	tbLowVolumeFloor         = 3_000_000
+	tbLowVolumeBoost         = 3
+	tbRejectLowVolumeFloor   = 5_000_000
 	tbVolumeBoost            = 8
 	tbCloseStrengthPenalty   = 1
 	tbCloseStrengthThreshold = 0.985
@@ -70,8 +63,6 @@ const (
 	tbCatchUpBoost           = 6
 	tbCatchUpLowerThreshold  = 0.993
 	tbCatchUpUpperThreshold  = 0.998
-	tbLowVolumeBoost         = 3
-	tbRejectLowVolumeFloor   = 5_000_000
 )
 
 type FinancialsExecutor struct{}
@@ -81,50 +72,51 @@ func (FinancialsExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (FinancialsExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	conviction := finConviction(agent, prompt, quote)
+	conviction, cb := finConviction(agent, prompt, quote)
 	if conviction < 50 {
 		return domain.Recommendation{}, false
 	}
 	tp, slp := priceTargets(quote, 1.05, 0.96)
 	return domain.Recommendation{
-		Agent:         agent.ID,
-		Skill:         agent.Skill,
-		Layer:         agent.Layer,
-		Symbol:        quote.Symbol,
-		Side:          domain.SideBuy,
-		Conviction:    conviction,
-		Reason:        "financial carry with resilient balance-sheet posture",
-		TargetPrice:   tp,
-		StopLossPrice: slp,
+		Agent:               agent.ID,
+		Skill:               agent.Skill,
+		Layer:               agent.Layer,
+		Symbol:              quote.Symbol,
+		Side:                domain.SideBuy,
+		Conviction:          conviction,
+		Reason:              "financial carry with resilient balance-sheet posture",
+		TargetPrice:         tp,
+		StopLossPrice:       slp,
+		ConvictionBreakdown: cb,
 	}, true
 }
 
-func finConviction(agent domain.AgentSpec, prompt string, quote domain.Quote) int {
-	conviction := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
+func finConviction(agent domain.AgentSpec, prompt string, quote domain.Quote) (int, *domain.ConvictionBreakdown) {
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), 50)
 	if strings.Contains(prompt, "dividend") && quote.Last >= quote.Open {
-		conviction += finDividendBoost
+		b.add("dividend_boost", finDividendBoost, "dividend keyword + last >= open")
 	}
 	if strings.Contains(prompt, "balance-sheet") && quote.Low < quote.Open*finPriceToOpenThreshold {
-		conviction -= finBalanceSheetPenalty
+		b.add("balance_sheet_penalty", -finBalanceSheetPenalty, "balance-sheet keyword + low < open*0.985")
 	}
 	if strings.Contains(prompt, "credit quality gate") {
 		if quote.Last >= quote.Open {
-			conviction += finCreditQualityBoost
+			b.add("credit_quality_boost", finCreditQualityBoost, "credit quality gate + last >= open")
 		} else {
-			conviction -= finCreditQualityPenalty
+			b.add("credit_quality_penalty", -finCreditQualityPenalty, "credit quality gate + last < open")
 		}
 	}
 	if strings.Contains(prompt, "spread sensitivity downgrade") {
 		if quote.Last >= quote.High*finPriceToHighThreshold {
-			conviction += finSpreadSensitivityBoost
+			b.add("spread_sensitivity_boost", finSpreadSensitivityBoost, "last >= high*0.995")
 		} else {
-			conviction -= finSpreadSensitivityPenalty
+			b.add("spread_sensitivity_penalty", -finSpreadSensitivityPenalty, "last < high*0.995")
 		}
 	}
 	if strings.Contains(prompt, "capital adequacy premium") && quote.Last >= quote.Open && quote.Last >= quote.High*finPriceToHighThreshold {
-		conviction += finCapitalAdequacyBoost
+		b.add("capital_adequacy_boost", finCapitalAdequacyBoost, "capital adequacy premium + last >= open & high*0.995")
 	}
-	return conviction
+	return b.build()
 }
 
 type ShippingExecutor struct{}
@@ -134,27 +126,29 @@ func (ShippingExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (ShippingExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	conviction := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), defaultConvictionFloor)
 	if strings.Contains(prompt, "tactical") && quote.Last > quote.Open {
-		conviction += shipTacticalBoost
+		b.add("tactical_boost", shipTacticalBoost, "tactical keyword + last > open")
 	}
 	if strings.Contains(prompt, "avoid weak closes") && quote.Last < quote.High*shipWeakCloseThreshold {
-		conviction -= shipWeakClosePenalty
+		b.add("weak_close_penalty", -shipWeakClosePenalty, "avoid weak closes + last < high*0.992")
 	}
-	if conviction < defaultConvictionFloor {
+	if !b.floorCheck() {
 		return domain.Recommendation{}, false
 	}
 	tp, slp := priceTargets(quote, 1.07, 0.94)
+	conv, cb := b.build()
 	return domain.Recommendation{
-		Agent:         agent.ID,
-		Skill:         agent.Skill,
-		Layer:         agent.Layer,
-		Symbol:        quote.Symbol,
-		Side:          domain.SideBuy,
-		Conviction:    conviction,
-		Reason:        "shipping beta used as tactical cycle exposure",
-		TargetPrice:   tp,
-		StopLossPrice: slp,
+		Agent:               agent.ID,
+		Skill:               agent.Skill,
+		Layer:               agent.Layer,
+		Symbol:              quote.Symbol,
+		Side:                domain.SideBuy,
+		Conviction:          conv,
+		Reason:              "shipping beta used as tactical cycle exposure",
+		TargetPrice:         tp,
+		StopLossPrice:       slp,
+		ConvictionBreakdown: cb,
 	}, true
 }
 
@@ -165,27 +159,29 @@ func (ValueYieldExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (ValueYieldExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	conviction := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), defaultConvictionFloor)
 	if strings.Contains(prompt, "cash-flow support") && quote.Last >= quote.Open {
-		conviction += vyCashFlowBoost
+		b.add("cash_flow_boost", vyCashFlowBoost, "cash-flow support keyword + last >= open")
 	}
 	if strings.Contains(prompt, "yield trap") && quote.Last < quote.Open {
-		conviction -= vyYieldTrapPenalty
+		b.add("yield_trap_penalty", -vyYieldTrapPenalty, "yield trap keyword + last < open")
 	}
-	if conviction < defaultConvictionFloor {
+	if !b.floorCheck() {
 		return domain.Recommendation{}, false
 	}
 	tp, slp := priceTargets(quote, 1.05, 0.96)
+	conv, cb := b.build()
 	return domain.Recommendation{
-		Agent:         agent.ID,
-		Skill:         agent.Skill,
-		Layer:         agent.Layer,
-		Symbol:        quote.Symbol,
-		Side:          domain.SideBuy,
-		Conviction:    conviction,
-		Reason:        "defensive yield lens with valuation discipline",
-		TargetPrice:   tp,
-		StopLossPrice: slp,
+		Agent:               agent.ID,
+		Skill:               agent.Skill,
+		Layer:               agent.Layer,
+		Symbol:              quote.Symbol,
+		Side:                domain.SideBuy,
+		Conviction:          conv,
+		Reason:              "defensive yield lens with valuation discipline",
+		TargetPrice:         tp,
+		StopLossPrice:       slp,
+		ConvictionBreakdown: cb,
 	}, true
 }
 
@@ -196,27 +192,29 @@ func (EarningsQualityExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (EarningsQualityExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	conviction := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), defaultConvictionFloor)
 	if strings.Contains(prompt, "repeatable") && quote.Last > quote.Open {
-		conviction += eqRepeatableBoost
+		b.add("repeatable_boost", eqRepeatableBoost, "repeatable keyword + last > open")
 	}
 	if strings.Contains(prompt, "guidance") && quote.Last < quote.High*eqGuidanceThreshold {
-		conviction -= eqGuidancePenalty
+		b.add("guidance_penalty", -eqGuidancePenalty, "guidance keyword + last < high*0.99")
 	}
-	if conviction < defaultConvictionFloor {
+	if !b.floorCheck() {
 		return domain.Recommendation{}, false
 	}
 	tp, slp := priceTargets(quote, 1.06, 0.95)
+	conv, cb := b.build()
 	return domain.Recommendation{
-		Agent:         agent.ID,
-		Skill:         agent.Skill,
-		Layer:         agent.Layer,
-		Symbol:        quote.Symbol,
-		Side:          domain.SideBuy,
-		Conviction:    conviction,
-		Reason:        "earnings quality and forward visibility support",
-		TargetPrice:   tp,
-		StopLossPrice: slp,
+		Agent:               agent.ID,
+		Skill:               agent.Skill,
+		Layer:               agent.Layer,
+		Symbol:              quote.Symbol,
+		Side:                domain.SideBuy,
+		Conviction:          conv,
+		Reason:              "earnings quality and forward visibility support",
+		TargetPrice:         tp,
+		StopLossPrice:       slp,
+		ConvictionBreakdown: cb,
 	}, true
 }
 
@@ -228,21 +226,22 @@ func (TechnicalBreakoutExecutor) Supports(agent domain.AgentSpec) bool {
 
 func (TechnicalBreakoutExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
 	volumeFloor := tbVolumeFloor(prompt)
-	conviction := tbConviction(agent, prompt, quote, volumeFloor)
+	conviction, cb := tbConviction(agent, prompt, quote, volumeFloor)
 	if tbReject(prompt, quote, volumeFloor, conviction) {
 		return domain.Recommendation{}, false
 	}
 	tp, slp := priceTargets(quote, 1.10, 0.94)
 	return domain.Recommendation{
-		Agent:         agent.ID,
-		Skill:         agent.Skill,
-		Layer:         agent.Layer,
-		Symbol:        quote.Symbol,
-		Side:          domain.SideBuy,
-		Conviction:    conviction,
-		Reason:        "breakout structure confirmed by volume and close",
-		TargetPrice:   tp,
-		StopLossPrice: slp,
+		Agent:               agent.ID,
+		Skill:               agent.Skill,
+		Layer:               agent.Layer,
+		Symbol:              quote.Symbol,
+		Side:                domain.SideBuy,
+		Conviction:          conviction,
+		Reason:              "breakout structure confirmed by volume and close",
+		TargetPrice:         tp,
+		StopLossPrice:       slp,
+		ConvictionBreakdown: cb,
 	}, true
 }
 
@@ -256,41 +255,43 @@ func tbVolumeFloor(prompt string) int64 {
 	return tbDefaultVolumeFloor
 }
 
-func tbConviction(agent domain.AgentSpec, prompt string, quote domain.Quote, volumeFloor int64) int {
-	conviction := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
+func tbConviction(agent domain.AgentSpec, prompt string, quote domain.Quote, volumeFloor int64) (int, *domain.ConvictionBreakdown) {
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), defaultConvictionFloor)
 	if strings.Contains(prompt, "volume") && quote.Volume >= tbDefaultVolumeFloor {
-		conviction += tbVolumeBoost
+		b.add("volume_boost", tbVolumeBoost, "volume keyword + vol >= 5M")
 	}
 	if strings.Contains(prompt, "close strength") && quote.Last < quote.High*tbCloseStrengthThreshold {
 		penalty := tbCloseStrengthPenalty
 		if strings.Contains(prompt, "close-strength tolerance") && quote.Last >= quote.High*tbCloseStrengthTolerance {
 			penalty = 0
 		}
-		conviction -= penalty
+		if penalty != 0 {
+			b.add("close_strength_penalty", -penalty, "last < high*0.985")
+		}
 	}
 	if strings.Contains(prompt, "volume surge requirement") {
 		if quote.Volume >= volumeFloor {
-			conviction += tbSurgeBoost
+			b.add("surge_boost", tbSurgeBoost, fmt.Sprintf("vol >= %d", volumeFloor))
 		} else {
-			conviction -= tbSurgePenalty
+			b.add("surge_penalty", -tbSurgePenalty, fmt.Sprintf("vol < %d", volumeFloor))
 		}
 	}
 	if strings.Contains(prompt, "structure-first breakout filter") && quote.Last < quote.Open {
-		conviction -= tbOpenRejectionPenalty
+		b.add("open_rejection_penalty", -tbOpenRejectionPenalty, "last < open")
 	}
 	if strings.Contains(prompt, "late-breakout penalty") && quote.Last < quote.High*tbLateBreakoutThreshold {
-		conviction -= tbLateBreakoutPenalty
+		b.add("late_breakout_penalty", -tbLateBreakoutPenalty, "last < high*0.998")
 	}
 	if strings.Contains(prompt, "breakout confirmation bonus") && quote.Last >= quote.High*tbConfirmationThreshold && quote.Volume >= tbDefaultVolumeFloor {
-		conviction += tbConfirmationBoost
+		b.add("confirmation_boost", tbConfirmationBoost, "last >= high*0.998 + vol >= 5M")
 	}
 	if strings.Contains(prompt, "catch-up momentum") && quote.Last >= quote.High*tbCatchUpLowerThreshold && quote.Last < quote.High*tbCatchUpUpperThreshold && quote.Last >= quote.Open {
-		conviction += tbCatchUpBoost
+		b.add("catch_up_boost", tbCatchUpBoost, "catch-up momentum zone")
 	}
 	if strings.Contains(prompt, "volume participation acceptance") && quote.Volume >= tbLowVolumeFloor && quote.Volume < tbDefaultVolumeFloor {
-		conviction += tbLowVolumeBoost
+		b.add("low_volume_boost", tbLowVolumeBoost, "3M <= vol < 5M")
 	}
-	return conviction
+	return b.build()
 }
 
 func tbReject(prompt string, quote domain.Quote, volumeFloor int64, conviction int) bool {

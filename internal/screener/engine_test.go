@@ -216,3 +216,188 @@ func TestScreenMissingFundamentalRejectsWhenFilterRequired(t *testing.T) {
 		t.Error("expected rejection when symbol is missing from loaded fundamentals and PE filter is required")
 	}
 }
+
+func TestScreenDetailedVolumeFail(t *testing.T) {
+	fe := portfolio.NewFactorEngine()
+	fp := portfolio.NewFundamentalProvider()
+	e := NewEngine(fe, fp)
+	minVol := int64(1000000)
+	criteria := domain.ScreeningCriteria{
+		VolumeIntraday: &domain.MinFilter{Min: &minVol},
+	}
+	quotes := map[string]domain.Quote{
+		"2330.TW": {Symbol: "2330.TW", Volume: 500000, IsTradable: true},
+	}
+	res, err := e.ScreenDetailed(context.Background(), "2330.TW", criteria, quotes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Passed {
+		t.Fatal("expected fail")
+	}
+	if res.Criterion == "" {
+		t.Fatal("expected criterion to be set")
+	}
+	if res.Criterion != "volume_intraday_min" {
+		t.Errorf("expected criterion 'volume_intraday_min', got %q", res.Criterion)
+	}
+	if res.Label == "" {
+		t.Fatal("expected label to be set")
+	}
+	if res.Threshold == "" {
+		t.Fatal("expected threshold to be set")
+	}
+	if res.Actual == "" {
+		t.Fatal("expected actual to be set")
+	}
+}
+
+func TestScreenDetailedPEMinFail(t *testing.T) {
+	fp := loadTestFundamentals(t, map[string]portfolio.FundamentalData{
+		"LOW_PE.TW": {PE: 5},
+	})
+	e := NewEngine(nil, fp)
+	quotes := map[string]domain.Quote{}
+	criteria := domain.ScreeningCriteria{
+		PE: &domain.RangeFilter{Min: ptrFloat64(10)},
+	}
+	res, err := e.ScreenDetailed(context.Background(), "LOW_PE.TW", criteria, quotes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Passed {
+		t.Fatal("expected fail")
+	}
+	if res.Criterion != "pe_min" {
+		t.Errorf("expected criterion 'pe_min', got %q", res.Criterion)
+	}
+	if res.Label != "P/E" {
+		t.Errorf("expected label 'P/E', got %q", res.Label)
+	}
+	if res.Threshold == "" {
+		t.Fatal("expected threshold to be set")
+	}
+	if res.Actual == "" {
+		t.Fatal("expected actual to be set")
+	}
+}
+
+func TestScreenDetailedPEMaxFail(t *testing.T) {
+	fp := loadTestFundamentals(t, map[string]portfolio.FundamentalData{
+		"HIGH_PE.TW": {PE: 30},
+	})
+	e := NewEngine(nil, fp)
+	quotes := map[string]domain.Quote{}
+	criteria := domain.ScreeningCriteria{
+		PE: &domain.RangeFilter{Max: ptrFloat64(20)},
+	}
+	res, err := e.ScreenDetailed(context.Background(), "HIGH_PE.TW", criteria, quotes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Passed {
+		t.Fatal("expected fail")
+	}
+	if res.Criterion != "pe_max" {
+		t.Errorf("expected criterion 'pe_max', got %q", res.Criterion)
+	}
+	if res.Label != "P/E" {
+		t.Errorf("expected label 'P/E', got %q", res.Label)
+	}
+	if res.Threshold == "" {
+		t.Fatal("expected threshold to be set")
+	}
+	if res.Actual == "" {
+		t.Fatal("expected actual to be set")
+	}
+}
+
+func TestScreenDetailedPBMissingFail(t *testing.T) {
+	fp := loadTestFundamentals(t, map[string]portfolio.FundamentalData{
+		"OTHER.TW": {PE: 15},
+	})
+	e := NewEngine(nil, fp)
+	quotes := map[string]domain.Quote{}
+	criteria := domain.ScreeningCriteria{
+		PB: &domain.RangeFilter{Max: ptrFloat64(2.0)},
+	}
+	res, err := e.ScreenDetailed(context.Background(), "NO_DATA.TW", criteria, quotes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Passed {
+		t.Fatal("expected fail for symbol not in fundamentals")
+	}
+	if res.Criterion != "pb_missing" {
+		t.Errorf("expected criterion 'pb_missing', got %q", res.Criterion)
+	}
+	if res.Label != "P/B" {
+		t.Errorf("expected label 'P/B', got %q", res.Label)
+	}
+	if res.Threshold != "required" {
+		t.Errorf("expected threshold 'required', got %q", res.Threshold)
+	}
+	if res.Actual != "missing data" {
+		t.Errorf("expected actual 'missing data', got %q", res.Actual)
+	}
+}
+
+func TestScreenDetailedMomentum20DMaxFail(t *testing.T) {
+	fe := portfolio.NewFactorEngine()
+	e := NewEngine(fe, nil)
+	quotes := map[string]domain.Quote{
+		"SKY_HIGH.TW": {Symbol: "SKY_HIGH.TW", Open: 100, Last: 200, IsTradable: true},
+	}
+	criteria := domain.ScreeningCriteria{
+		Momentum20Day: &domain.RangeFilter{Max: ptrFloat64(0.5)},
+	}
+	res, err := e.ScreenDetailed(context.Background(), "SKY_HIGH.TW", criteria, quotes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Passed {
+		t.Fatal("expected fail")
+	}
+	if res.Criterion != "momentum_20d_max" {
+		t.Errorf("expected criterion 'momentum_20d_max', got %q", res.Criterion)
+	}
+	if res.Label != "20-day momentum" {
+		t.Errorf("expected label '20-day momentum', got %q", res.Label)
+	}
+	if res.Threshold == "" {
+		t.Fatal("expected threshold to be set")
+	}
+	if res.Actual == "" {
+		t.Fatal("expected actual to be set")
+	}
+}
+
+func TestScreenDetailedMinTotalFactorScoreMissing(t *testing.T) {
+	fe := portfolio.NewFactorEngine()
+	e := NewEngine(fe, nil)
+	quotes := map[string]domain.Quote{
+		"NO_SCORE.TW": {Symbol: "NO_SCORE.TW", Open: 100, Last: 100, IsTradable: true},
+	}
+	criteria := domain.ScreeningCriteria{
+		MinTotalFactorScore: ptrFloat64(0.5),
+	}
+	res, err := e.ScreenDetailed(context.Background(), "NO_SCORE.TW", criteria, quotes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Passed {
+		t.Fatal("expected fail for missing total score")
+	}
+	if res.Criterion != "min_total_factor_score" {
+		t.Errorf("expected criterion 'min_total_factor_score', got %q", res.Criterion)
+	}
+	if res.Label != "Total factor score" {
+		t.Errorf("expected label 'Total factor score', got %q", res.Label)
+	}
+	if res.Threshold == "" {
+		t.Fatal("expected threshold to be set")
+	}
+	if res.Actual == "" {
+		t.Fatal("expected actual to be set")
+	}
+}

@@ -132,19 +132,49 @@ func NewNarrativeEngine() *NarrativeEngine {
 				Name:           "地緣政治避險模型",
 				Description:    "假設地緣政治風險升溫且資金流向避險；偏好黃金、美元避險資產與台股防禦型板塊（金融、高股息、航運）。",
 				Rationale:      "地緣政治風險飆升會引發市場風險規避本能，投資人要求更高風險溢酬，直接壓縮股票估值。對外資持股比重高的台股影響尤其劇烈。此時應押注金融（估值低、現金流穩定）、高股息（下跌保護）、航運（地緣衝突初期運價常飆升）；同時迴避 AI 供應鏈與小盤股——科技股本益比高、對風險溢酬最敏感，小盤股流動性差會被外資優先減持。歷史上地緣風險指數突破150時，台灣電子股相對報酬常落後大盤 3~5 個百分點。",
-				ActiveThemes:   []string{"geopolitical_risk_spike", "oil_price_shock"},
+				ActiveThemes:   []string{"geopolitical_risk_spike", "oil_price_shock", "taiwan_political_risk"},
 				FavoredSectors: []string{"financials", "high_dividend", "shipping"},
 				AvoidedSectors: []string{"ai_supply_chain", "small_cap"},
 				Weight:         1.0,
 			},
 			{
-				ID:             "retail_sentiment_model",
-				Name:           "散戶情緒逆向模型",
-				Description:    "假設散戶極端情緒為反向指標；狂熱時防禦，恐慌時進取。",
-				Rationale:      "散戶是台股市場的重要參與者，但行為常呈現『追高殺低』的羊群效應。當融資餘額達極端高點（90th percentile），代表散戶過度樂觀，後續回調機率高，應轉向防禦；當融資餘額達極端低點（10th percentile），代表散戶過度悲觀，籌碼已清洗乾淨，反彈機率高，應積極布局。",
-				ActiveThemes:   []string{"retail_frenzy", "retail_fear"},
-				FavoredSectors: []string{"high_dividend", "financials"},
-				AvoidedSectors: []string{"small_cap", "ai_supply_chain"},
+				ID:             "taiwan_political_risk_model",
+				Name:           "台灣地緣風險模型",
+				Description:    "假設台灣地緣政治風險升溫；偏好內需、金融、高股息等防禦型板塊。",
+				Rationale:      "台灣地緣政治風險是台股特有的系統性風險。當兩岸關係緊張、軍事演習頻繁或國際制裁升級時，外資會因擔憂尾部風險而主動減持台股，導致資金面緊縮與估值下修。此時應押注內需（較不受地緣風險直接影響）、金融（估值低、現金流穩定）、高股息（提供下跌保護）；同時迴避 AI 供應鏈、半導體、小盤股——外資持股比重高，地緣風險升高時首當其衝。",
+				ActiveThemes:   []string{"taiwan_political_risk", "USD_TWD_volatility"},
+				FavoredSectors: []string{"financials", "high_dividend", "consumer"},
+				AvoidedSectors: []string{"ai_supply_chain", "semiconductor", "small_cap"},
+				Weight:         1.0,
+			},
+			{
+				ID:             "semiconductor_cycle_model",
+				Name:           "半導體週期模型",
+				Description:    "假設半導體週期下行；偏好防禦型板塊，迴避科技股。",
+				Rationale:      "半導體是台灣經濟的核心引擎，佔出口比重超過 35%。當電子零組件出口連續下滑時，意味著全球科技需求正在放緩，半導體庫存開始堆積，產能利用率下降。此時應押注高股息、內需、金融（在週期下行時提供防禦）；同時迴避半導體、AI 供應鏈、PCB——庫存去化期通常持續 2-4 個季度，期間股價承壓。",
+				ActiveThemes:   []string{"semiconductor_downturn", "USD_TWD_volatility"},
+				FavoredSectors: []string{"high_dividend", "consumer", "financials"},
+				AvoidedSectors: []string{"ai_supply_chain", "semiconductor", "pcb"},
+				Weight:         1.0,
+			},
+			{
+				ID:             "seasonal_model",
+				Name:           "季節性輪動模型",
+				Description:    "假設春節季節性行情；偏好高股息、金融、中小型股。",
+				Rationale:      "台股有明顯的春節季節性規律。年前2周上漲概率超過70%，年後1個月外資回流推升大盤。Q2進入除權除息旺季，高股息股提前受追捧。此時應押注高股息（除權除息確定性收益）、金融（淨息差擴大）、中小型股（年後資金回流彈性大）；同時迴避電子股（進入傳統淡季）。",
+				ActiveThemes:   []string{"spring_festival_season"},
+				FavoredSectors: []string{"high_dividend", "financials", "small_cap"},
+				AvoidedSectors: []string{"ai_supply_chain", "semiconductor"},
+				Weight:         1.0,
+			},
+			{
+				ID:             "election_model",
+				Name:           "選舉週期模型",
+				Description:    "假設選舉週期影響；選前防禦，選後押注政策受惠股。",
+				Rationale:      "台灣選舉對台股有顯著週期性影響。選前3個月政策不確定性導致外資觀望，波動率上升30%。選後1個月政策明朗化帶動資金回流，上漲概率約65%。選前應押注高股息、金融（防禦型配置）；選後押注綠能、基建、國防（受惠於新政府政策方向）；迴避高Beta科技股（選前波動大，外資減持首當其衝）。",
+				ActiveThemes:   []string{"election_cycle"},
+				FavoredSectors: []string{"high_dividend", "financials", "consumer"},
+				AvoidedSectors: []string{"ai_supply_chain", "small_cap"},
 				Weight:         1.0,
 			},
 		},
@@ -169,7 +199,19 @@ func (ne *NarrativeEngine) DetectEvents(data MarketNarrativeData) []NarrativeEve
 	if evt := detectJPYCarryUnwindEvent(data); evt != nil {
 		events = append(events, *evt)
 	}
+	if evt := detectUSDTWDEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
+	if evt := detectTaiwanPoliticalRiskEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
+	if evt := detectSemiconductorDownturnEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
 	if evt := detectSeasonalEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
+	if evt := detectRetailDivergenceEvent(data); evt != nil {
 		events = append(events, *evt)
 	}
 	return events
@@ -267,6 +309,14 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 		} else {
 			m.RecentError = 0.5
 		}
+
+		hitRate := 1.0 - m.RecentError
+		if hitRate < 0 {
+			hitRate = 0
+		} else if hitRate > 1 {
+			hitRate = 1
+		}
+		m.HitRate = hitRate
 	}
 
 	ne.UpdateModelWeights()
@@ -305,29 +355,32 @@ func (ne *NarrativeEngine) ListModels() []InvestmentModel {
 
 // MarketNarrativeData carries raw inputs for narrative detection.
 type MarketNarrativeData struct {
-	US10YChangeBps            float64
-	DXYChangePct              float64
-	VIXLevel                  float64
-	USD_TWD_ChangePct         float64
-	OilChangePct              float64
-	GoldChangePct             float64
-	JPY_ChangePct             float64
-	AICapexSentiment          float64 // +1 bullish, -1 bearish
-	GeopoliticalGPR           float64 // Geopolitical risk index level
-	SpringFestivalExpectation *SeasonalExpectation
+	US10YChangeBps                float64
+	DXYChangePct                  float64
+	VIXLevel                      float64
+	USD_TWD_ChangePct             float64
+	OilChangePct                  float64
+	GoldChangePct                 float64
+	JPY_ChangePct                 float64
+	AICapexSentiment              float64 // +1 bullish, -1 bearish
+	GeopoliticalGPR               float64 // Geopolitical risk index level
+	RetailInstitutionalDivergence float64 // + retail bullish, - retail bearish
+	MarginZScore                  float64 // how extreme current margin balance is (reverse indicator)
 }
 
 func detectUSRatesEvent(data MarketNarrativeData) *NarrativeEvent {
 	if data.US10YChangeBps > 10 || data.DXYChangePct > 1.5 {
 		return &NarrativeEvent{
-			ID:          fmt.Sprintf("evt-us-rates-%d", nowUnix()),
-			Theme:       "US_rates_up",
-			Region:      "US",
-			Sentiment:   -0.6,
-			Confidence:  0.75,
-			CapitalFlow: "flight_to_USD",
-			TimeWindow:  "1_week",
-			Timestamp:   time.Now().UTC(),
+			ID:               fmt.Sprintf("evt-us-rates-%d", nowUnix()),
+			Theme:            "US_rates_up",
+			Region:           "US",
+			Sentiment:        -0.6,
+			Confidence:       0.75,
+			ConfidenceSource: "heuristic_fixed_v1",
+			HitRate:          hitRateForTheme("US_rates_up"),
+			CapitalFlow:      "flight_to_USD",
+			TimeWindow:       "1_week",
+			Timestamp:        time.Now().UTC(),
 			SourceData: map[string]float64{
 				"us10y_change_bps": data.US10YChangeBps,
 				"dxy_change_pct":   data.DXYChangePct,
@@ -340,14 +393,16 @@ func detectUSRatesEvent(data MarketNarrativeData) *NarrativeEvent {
 func detectAICapexEvent(data MarketNarrativeData) *NarrativeEvent {
 	if data.AICapexSentiment > 0.5 {
 		return &NarrativeEvent{
-			ID:          fmt.Sprintf("evt-ai-capex-%d", nowUnix()),
-			Theme:       "AI_capex_surge",
-			Region:      "US",
-			Sentiment:   0.8,
-			Confidence:  0.70,
-			CapitalFlow: "tech_capex_inflow",
-			TimeWindow:  "1_month",
-			Timestamp:   time.Now().UTC(),
+			ID:               fmt.Sprintf("evt-ai-capex-%d", nowUnix()),
+			Theme:            "AI_capex_surge",
+			Region:           "US",
+			Sentiment:        0.8,
+			Confidence:       0.70,
+			ConfidenceSource: "heuristic_fixed_v1",
+			HitRate:          hitRateForTheme("AI_capex_surge"),
+			CapitalFlow:      "tech_capex_inflow",
+			TimeWindow:       "1_month",
+			Timestamp:        time.Now().UTC(),
 			SourceData: map[string]float64{
 				"ai_capex_sentiment": data.AICapexSentiment,
 			},
@@ -359,14 +414,16 @@ func detectAICapexEvent(data MarketNarrativeData) *NarrativeEvent {
 func detectGeopoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
 	if data.GeopoliticalGPR > 150 || data.GoldChangePct > 2.0 {
 		return &NarrativeEvent{
-			ID:          fmt.Sprintf("evt-geo-%d", nowUnix()),
-			Theme:       "geopolitical_risk_spike",
-			Region:      "Global",
-			Sentiment:   -0.8,
-			Confidence:  0.65,
-			CapitalFlow: "risk_off",
-			TimeWindow:  "immediate",
-			Timestamp:   time.Now().UTC(),
+			ID:               fmt.Sprintf("evt-geo-%d", nowUnix()),
+			Theme:            "geopolitical_risk_spike",
+			Region:           "Global",
+			Sentiment:        -0.8,
+			Confidence:       0.65,
+			ConfidenceSource: "heuristic_fixed_v1",
+			HitRate:          hitRateForTheme("geopolitical_risk_spike"),
+			CapitalFlow:      "risk_off",
+			TimeWindow:       "immediate",
+			Timestamp:        time.Now().UTC(),
 			SourceData: map[string]float64{
 				"geopolitical_gpr": data.GeopoliticalGPR,
 				"gold_change_pct":  data.GoldChangePct,
@@ -379,14 +436,16 @@ func detectGeopoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
 func detectOilShockEvent(data MarketNarrativeData) *NarrativeEvent {
 	if data.OilChangePct > 5.0 || data.OilChangePct < -5.0 {
 		return &NarrativeEvent{
-			ID:          fmt.Sprintf("evt-oil-%d", nowUnix()),
-			Theme:       "oil_price_shock",
-			Region:      "Global",
-			Sentiment:   -0.5,
-			Confidence:  0.60,
-			CapitalFlow: "inflation_reprice",
-			TimeWindow:  "1_week",
-			Timestamp:   time.Now().UTC(),
+			ID:               fmt.Sprintf("evt-oil-%d", nowUnix()),
+			Theme:            "oil_price_shock",
+			Region:           "Global",
+			Sentiment:        -0.5,
+			Confidence:       0.60,
+			ConfidenceSource: "heuristic_fixed_v1",
+			HitRate:          hitRateForTheme("oil_price_shock"),
+			CapitalFlow:      "inflation_reprice",
+			TimeWindow:       "1_week",
+			Timestamp:        time.Now().UTC(),
 			SourceData: map[string]float64{
 				"oil_change_pct": data.OilChangePct,
 			},
@@ -398,14 +457,16 @@ func detectOilShockEvent(data MarketNarrativeData) *NarrativeEvent {
 func detectJPYCarryUnwindEvent(data MarketNarrativeData) *NarrativeEvent {
 	if data.JPY_ChangePct > 2.0 || data.VIXLevel > 25 {
 		return &NarrativeEvent{
-			ID:          fmt.Sprintf("evt-jpy-%d", nowUnix()),
-			Theme:       "JPY_carry_unwind",
-			Region:      "JP",
-			Sentiment:   -0.6,
-			Confidence:  0.65,
-			CapitalFlow: "global_liquidity_drain",
-			TimeWindow:  "immediate",
-			Timestamp:   time.Now().UTC(),
+			ID:               fmt.Sprintf("evt-jpy-%d", nowUnix()),
+			Theme:            "JPY_carry_unwind",
+			Region:           "JP",
+			Sentiment:        -0.6,
+			Confidence:       0.65,
+			ConfidenceSource: "heuristic_fixed_v1",
+			HitRate:          hitRateForTheme("JPY_carry_unwind"),
+			CapitalFlow:      "global_liquidity_drain",
+			TimeWindow:       "immediate",
+			Timestamp:        time.Now().UTC(),
 			SourceData: map[string]float64{
 				"jpy_change_pct": data.JPY_ChangePct,
 				"vix_level":      data.VIXLevel,
@@ -415,25 +476,91 @@ func detectJPYCarryUnwindEvent(data MarketNarrativeData) *NarrativeEvent {
 	return nil
 }
 
-func detectSeasonalEvent(data MarketNarrativeData) *NarrativeEvent {
-	return detectSeasonalEventAt(time.Now().UTC(), data)
+func detectUSDTWDEvent(data MarketNarrativeData) *NarrativeEvent {
+	if math.Abs(data.USD_TWD_ChangePct) > 1.0 {
+		sentiment := -0.5
+		if data.USD_TWD_ChangePct > 0 {
+			sentiment = -0.7
+		}
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-usd-twd-%d", nowUnix()),
+			Theme:            "USD_TWD_volatility",
+			Region:           "TW",
+			Sentiment:        sentiment,
+			Confidence:       0.60,
+			ConfidenceSource: "heuristic_fixed_v1",
+			HitRate:          hitRateForTheme("USD_TWD_volatility"),
+			CapitalFlow:      "fx_driven_outflow",
+			TimeWindow:       "1_week",
+			Timestamp:        time.Now().UTC(),
+			SourceData: map[string]float64{
+				"usd_twd_change_pct": data.USD_TWD_ChangePct,
+			},
+		}
+	}
+	return nil
 }
 
-func detectSeasonalEventAt(now time.Time, data MarketNarrativeData) *NarrativeEvent {
+func detectTaiwanPoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
+	if data.GeopoliticalGPR > 150 {
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-tw-pol-%d", nowUnix()),
+			Theme:            "taiwan_political_risk",
+			Region:           "TW",
+			Sentiment:        -0.8,
+			Confidence:       0.70,
+			ConfidenceSource: "heuristic_fixed_v1",
+			HitRate:          hitRateForTheme("taiwan_political_risk"),
+			CapitalFlow:      "risk_off",
+			TimeWindow:       "immediate",
+			Timestamp:        time.Now().UTC(),
+			SourceData: map[string]float64{
+				"geopolitical_gpr": data.GeopoliticalGPR,
+			},
+		}
+	}
+	return nil
+}
+
+func detectSemiconductorDownturnEvent(data MarketNarrativeData) *NarrativeEvent {
+	if data.VIXLevel > 25 && data.DXYChangePct > 1.0 && data.AICapexSentiment < -0.3 {
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-semi-dt-%d", nowUnix()),
+			Theme:            "semiconductor_downturn",
+			Region:           "TW",
+			Sentiment:        -0.6,
+			Confidence:       0.55,
+			ConfidenceSource: "heuristic_composite_v1",
+			HitRate:          hitRateForTheme("semiconductor_downturn"),
+			CapitalFlow:      "tech_capex_slowdown",
+			TimeWindow:       "1_month",
+			Timestamp:        time.Now().UTC(),
+			SourceData: map[string]float64{
+				"vix_level":          data.VIXLevel,
+				"dxy_change_pct":     data.DXYChangePct,
+				"ai_capex_sentiment": data.AICapexSentiment,
+			},
+		}
+	}
+	return nil
+}
+
+func detectSeasonalEvent(data MarketNarrativeData) *NarrativeEvent {
+	now := time.Now().UTC()
 	month := now.Month()
 	day := now.Day()
 
-	if month == time.January && day > 16 {
+	if (month == 1 && day >= 15) || (month == 2 && day <= 15) {
 		return &NarrativeEvent{
-			ID:               fmt.Sprintf("evt-post-election-%d", nowUnix()),
-			Theme:            "post_election_relief",
+			ID:               fmt.Sprintf("evt-spring-%d", nowUnix()),
+			Theme:            "spring_festival_season",
 			Region:           "TW",
-			Sentiment:        0.4,
-			Confidence:       0.55,
-			ConfidenceSource: "post_election_relief_pattern",
-			HitRate:          hitRateForTheme("post_election_relief"),
-			CapitalFlow:      "policy_clarity_rebound",
-			TimeWindow:       "4_weeks",
+			Sentiment:        0.3,
+			Confidence:       0.65,
+			ConfidenceSource: "calendar_seasonal",
+			HitRate:          hitRateForTheme("spring_festival_season"),
+			CapitalFlow:      "seasonal_rotation",
+			TimeWindow:       "1_month",
 			Timestamp:        now,
 			SourceData: map[string]float64{
 				"month": float64(month),
@@ -442,40 +569,7 @@ func detectSeasonalEventAt(now time.Time, data MarketNarrativeData) *NarrativeEv
 		}
 	}
 
-	if (month == 1 && day >= 15) || (month == 2 && day <= 15) {
-		confidence := 0.65
-		sourceData := map[string]float64{
-			"month": float64(month),
-			"day":   float64(day),
-		}
-
-		if data.SpringFestivalExpectation != nil {
-			expectation := data.SpringFestivalExpectation
-			confidence = 0.70 * expectation.SurprisePotential
-			if expectation.AlreadyPricedIn {
-				confidence *= 0.3
-			}
-			sourceData["historical_avg_return"] = expectation.HistoricalAvgReturn
-			sourceData["current_return"] = expectation.CurrentReturn
-			sourceData["expectation_gap"] = expectation.ExpectationGap
-		}
-
-		return &NarrativeEvent{
-			ID:               fmt.Sprintf("evt-spring-%d", nowUnix()),
-			Theme:            "spring_festival_season",
-			Region:           "TW",
-			Sentiment:        0.3,
-			Confidence:       confidence,
-			ConfidenceSource: "calendar_seasonal_with_expectation_gap",
-			HitRate:          hitRateForTheme("spring_festival_season"),
-			CapitalFlow:      "seasonal_rotation",
-			TimeWindow:       "1_month",
-			Timestamp:        now,
-			SourceData:       sourceData,
-		}
-	}
-
-	if month == 12 || month == 1 || month == 2 {
+	if (month == 1 && day <= 15) || (month == 12 && day >= 20) {
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-election-%d", nowUnix()),
 			Theme:            "election_cycle",
@@ -485,7 +579,7 @@ func detectSeasonalEventAt(now time.Time, data MarketNarrativeData) *NarrativeEv
 			ConfidenceSource: "calendar_political",
 			HitRate:          hitRateForTheme("election_cycle"),
 			CapitalFlow:      "policy_uncertainty",
-			TimeWindow:       "3_month",
+			TimeWindow:       "1_month",
 			Timestamp:        now,
 			SourceData: map[string]float64{
 				"month": float64(month),
@@ -494,6 +588,85 @@ func detectSeasonalEventAt(now time.Time, data MarketNarrativeData) *NarrativeEv
 		}
 	}
 
+	if (month == 3 && day >= 1) || (month == 4 && day <= 15) {
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-blackout-%d", nowUnix()),
+			Theme:            "earnings_blackout",
+			Region:           "TW",
+			Sentiment:        0.1,
+			Confidence:       0.55,
+			ConfidenceSource: "calendar_seasonal",
+			HitRate:          0.55,
+			CapitalFlow:      "pre_earnings_positioning",
+			TimeWindow:       "1_month",
+			Timestamp:        now,
+			SourceData: map[string]float64{
+				"month": float64(month),
+				"day":   float64(day),
+			},
+		}
+	}
+
+	if (month == 7 && day >= 1) || (month == 8) || (month == 9 && day <= 15) {
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-tech-peak-%d", nowUnix()),
+			Theme:            "tech_peak_season",
+			Region:           "TW",
+			Sentiment:        0.5,
+			Confidence:       0.75,
+			ConfidenceSource: "calendar_seasonal",
+			HitRate:          0.75,
+			CapitalFlow:      "tech_capex_inflow",
+			TimeWindow:       "2_months",
+			Timestamp:        now,
+			SourceData: map[string]float64{
+				"month": float64(month),
+				"day":   float64(day),
+			},
+		}
+	}
+
+	if month == 11 || month == 12 {
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-yearend-%d", nowUnix()),
+			Theme:            "year_end_window_dressing",
+			Region:           "TW",
+			Sentiment:        0.2,
+			Confidence:       0.58,
+			ConfidenceSource: "calendar_seasonal",
+			HitRate:          0.58,
+			CapitalFlow:      "institutional_rebalancing",
+			TimeWindow:       "2_months",
+			Timestamp:        now,
+			SourceData: map[string]float64{
+				"month": float64(month),
+				"day":   float64(day),
+			},
+		}
+	}
+
+	return nil
+}
+
+func detectRetailDivergenceEvent(data MarketNarrativeData) *NarrativeEvent {
+	if data.MarginZScore > 1.5 && data.RetailInstitutionalDivergence > 0 {
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-retail-div-%d", nowUnix()),
+			Theme:            "retail_institutional_divergence",
+			Region:           "TW",
+			Sentiment:        -0.5,
+			Confidence:       0.60,
+			ConfidenceSource: "divergence_zscore_v1",
+			HitRate:          hitRateForTheme("retail_institutional_divergence"),
+			CapitalFlow:      "crowding_risk",
+			TimeWindow:       "immediate",
+			Timestamp:        time.Now().UTC(),
+			SourceData: map[string]float64{
+				"margin_zscore":                   data.MarginZScore,
+				"retail_institutional_divergence": data.RetailInstitutionalDivergence,
+			},
+		}
+	}
 	return nil
 }
 

@@ -14,10 +14,12 @@ import (
 type FactorType string
 
 const (
-	FactorMomentum FactorType = "momentum"
-	FactorValue    FactorType = "value"
-	FactorQuality  FactorType = "quality"
-	FactorAgent    FactorType = "agent"
+	FactorMomentum  FactorType = "momentum"
+	FactorValue     FactorType = "value"
+	FactorQuality   FactorType = "quality"
+	FactorAgent     FactorType = "agent"
+	FactorInstSent  FactorType = "institutional_sentiment"
+	FactorLiquidity FactorType = "liquidity"
 )
 
 // FactorScore 因子评分
@@ -50,21 +52,23 @@ type Constraints struct {
 	CashReserve      float64    // 现金储备比例
 }
 
-// DefaultConstraints 默认约束
+// DefaultConstraints 默认约束（使用运行时参数）
 func DefaultConstraints() Constraints {
+	params := DefaultRuntimeParameters()
 	return Constraints{
-		MaxPositionPct:   0.15,
-		MaxSectorPct:     0.40,
-		MaxTurnoverDaily: 0.20,
-		TargetBeta:       1.0,
-		BetaRange:        [2]float64{0.8, 1.2},
-		MinTradeSize:     1,
-		CashReserve:      0.05,
+		MaxPositionPct:   params.Optimizer.MaxPositionPct,
+		MaxSectorPct:     params.Optimizer.MaxSectorPct,
+		MaxTurnoverDaily: params.Optimizer.MaxTurnoverDaily,
+		TargetBeta:       params.Optimizer.TargetBeta,
+		BetaRange:        [2]float64{params.Optimizer.BetaRangeMin, params.Optimizer.BetaRangeMax},
+		MinTradeSize:     params.Optimizer.MinTradeSize,
+		CashReserve:      params.Optimizer.CashReserve,
 	}
 }
 
 // Optimizer 组合优化器
 type Optimizer struct {
+	runtimeParams *RuntimeParameters
 	constraints   Constraints
 	agentWeights  map[string]float64
 	styleWeights  map[string]float64
@@ -77,22 +81,33 @@ type Optimizer struct {
 
 // NewOptimizer 创建优化器
 func NewOptimizer() *Optimizer {
-	return &Optimizer{
-		constraints:   DefaultConstraints(),
-		agentWeights:  make(map[string]float64),
-		styleWeights:  make(map[string]float64),
-		factorWeights: defaultFactorWeights(),
-		factorEngine:  NewFactorEngine(),
-	}
+	params := DefaultRuntimeParameters()
+	return newOptimizerWithParams(params)
 }
 
-// defaultFactorWeights 默认因子权重
-func defaultFactorWeights() map[FactorType]float64 {
-	return map[FactorType]float64{
-		FactorMomentum: 0.30,
-		FactorValue:    0.25,
-		FactorQuality:  0.25,
-		FactorAgent:    0.20,
+func newOptimizerWithParams(params *RuntimeParameters) *Optimizer {
+	constraints := Constraints{
+		MaxPositionPct:   params.Optimizer.MaxPositionPct,
+		MaxSectorPct:     params.Optimizer.MaxSectorPct,
+		MaxTurnoverDaily: params.Optimizer.MaxTurnoverDaily,
+		TargetBeta:       params.Optimizer.TargetBeta,
+		BetaRange:        [2]float64{params.Optimizer.BetaRangeMin, params.Optimizer.BetaRangeMax},
+		MinTradeSize:     params.Optimizer.MinTradeSize,
+		CashReserve:      params.Optimizer.CashReserve,
+	}
+
+	factorWeights := make(map[FactorType]float64)
+	for k, v := range params.Optimizer.FactorWeights {
+		factorWeights[FactorType(k)] = v
+	}
+
+	return &Optimizer{
+		runtimeParams: params,
+		constraints:   constraints,
+		agentWeights:  make(map[string]float64),
+		styleWeights:  make(map[string]float64),
+		factorWeights: factorWeights,
+		factorEngine:  NewFactorEngine(),
 	}
 }
 
