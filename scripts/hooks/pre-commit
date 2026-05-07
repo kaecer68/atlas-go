@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# scripts/hooks/pre-commit — Prevent committing compiled binaries
+#
+# Install: cp scripts/hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+#
+# Detects Mach-O, ELF, and PE executables in the staging area and blocks
+# the commit. Uses `file` command for fast detection (no build required).
+
+set -euo pipefail
+
+BINARIES_FOUND=false
+
+# Check staged files
+while IFS= read -r file; do
+    # Skip deleted files
+    if [[ ! -f "$file" ]]; then
+        continue
+    fi
+
+    # Use `file` to detect binary types
+    if file "$file" | grep -qE "Mach-O|ELF|PE32|PE32\+"; then
+        echo "❌ BINARY DETECTED: $file"
+        echo "   Type: $(file "$file" | cut -d: -f2-)"
+        BINARIES_FOUND=true
+    fi
+done < <(git diff --cached --name-only --diff-filter=ACMR)
+
+if $BINARIES_FOUND; then
+    echo ""
+    echo "⚠️  Commit blocked. Remove the binary before committing:"
+    echo "   git rm --cached <file>     # remove from tracking"
+    echo "   echo <file> >> .gitignore  # prevent future tracking"
+    exit 1
+fi
+
+exit 0
