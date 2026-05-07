@@ -43,7 +43,7 @@ go tool cover -func=coverage.out | grep total
 go run ./cmd/atlas
 
 # 實驗生命週期
-go run ./cmd/execute-experiment -brief <file>
+go run ./cmd/run-experiment -brief <file>
 go run ./cmd/judge-experiment              # auto-discovers latest
 go run ./cmd/promote-baseline              # auto-discovers latest accepted
 go run ./cmd/revert-baseline --list
@@ -282,7 +282,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (18178 symbols, 40358 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (23087 symbols, 44884 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

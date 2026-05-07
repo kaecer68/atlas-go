@@ -209,7 +209,7 @@ Execute this experiment? [Y/n]: y
 
 Executing experiment: exec-growth-momentum-01-1774800459
 Found experiment file: data/state/experiments/exec-growth-momentum-01-1774800459.json
-Command: go run ./cmd/execute-experiment
+Command: go run ./cmd/run-experiment
 
 [執行中...]
 

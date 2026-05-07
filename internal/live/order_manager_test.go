@@ -62,7 +62,7 @@ func TestOrderManagerRetriesThenPublishesFilled(t *testing.T) {
 		Price:    101.5,
 	})
 	if err != nil {
-		t.Fatalf("Execute returned error: %v", err)
+		t.Fatalf("Run returned error: %v", err)
 	}
 
 	select {

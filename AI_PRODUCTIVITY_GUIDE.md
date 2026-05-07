@@ -53,7 +53,7 @@ go tool cover -func=coverage.out | tail -n 1  # Summary line
 |---------|----------|-----------|
 | `go run ./cmd/atlas` | Daily simulation replay, next experiment candidate selection | ~30s-2m |
 | `go run ./cmd/backtest-window -start YYYY-MM-DD -end YYYY-MM-DD` | Multi-session evaluation, baseline comparison | ~2-5m |
-| `go run ./cmd/execute-experiment -brief <brief-file>` | Run proposed mutation experiment | ~1-2m per session |
+| `go run ./cmd/run-experiment -brief <brief-file>` | Run proposed mutation experiment | ~1-2m per session |
 | `go run ./cmd/judge-experiment` | Evaluate experiment vs baseline using metrics | ~30s |
 | `go run ./cmd/promote-baseline` or `./scripts/openclaw/decide.sh` | Accept and promote mutated policy | Immediate (state update) |
 | `go run ./cmd/revert-baseline` | Roll back failed promotion | Immediate (state update) |

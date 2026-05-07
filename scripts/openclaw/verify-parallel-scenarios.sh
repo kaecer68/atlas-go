@@ -112,24 +112,24 @@ if [[ ! -f "$BASE_POLICY_PATH" ]]; then
 	BASE_POLICY_PATH="$TMP_ROOT/default-baseline-policy.json"
 	cat > "$BASE_POLICY_PATH" <<'EOF'
 {
-	"Version": 1,
-	"PromptOverrides": {},
-	"Constraints": {
-		"StartingCash": 3000000,
-		"MaxPositionWeight": 0.18,
-		"MaxOpenPositions": 5,
-		"MinTradableVolume": 1000000,
-		"MinRecommendationConviction": 60,
-		"RequireCROPass": true,
-		"TransactionCostBPS": 1.425,
-		"SlippageBPS": 4,
-		"ReserveCashFraction": 0.1
+	"version": 1,
+	"prompt_overrides": {},
+	"constraints": {
+		"starting_cash": 3000000,
+		"max_position_weight": 0.18,
+		"max_open_positions": 5,
+		"min_tradable_volume": 1000000,
+		"min_recommendation_conviction": 60,
+		"require_cro_pass": true,
+		"transaction_cost_bps": 1.425,
+		"slippage_bps": 4,
+		"reserve_cash_fraction": 0.1
 	},
-	"ExecutionPolicy": {
-		"ConvictionFloor": 60,
-		"RequireCROPass": true
+	"execution_policy": {
+		"conviction_floor": 60,
+		"require_cro_pass": true
 	},
-	"Promotions": []
+	"promotions": []
 }
 EOF
 fi
@@ -139,17 +139,17 @@ STRESS_POLICY_JSON="$TMP_ROOT/stress.policy.json"
 SHOCK_POLICY_JSON="$TMP_ROOT/shock.policy.json"
 cp "$BASE_POLICY_PATH" "$BASE_POLICY_JSON"
 
-jq '.Constraints.MinRecommendationConviction = 55
-    | .ExecutionPolicy.ConvictionFloor = 55
-    | .Constraints.MaxPositionWeight = 0.18
-    | .Constraints.ReserveCashFraction = 0.15' "$BASE_POLICY_JSON" > "$STRESS_POLICY_JSON"
+jq '.constraints.min_recommendation_conviction = 55
+    | .execution_policy.conviction_floor = 55
+    | .constraints.max_position_weight = 0.18
+    | .constraints.reserve_cash_fraction = 0.15' "$BASE_POLICY_JSON" > "$STRESS_POLICY_JSON"
 
-jq '.Constraints.MinRecommendationConviction = 70
-    | .ExecutionPolicy.ConvictionFloor = 70
-    | .Constraints.MaxPositionWeight = 0.12
-    | .Constraints.MaxOpenPositions = 3
-    | .Constraints.ReserveCashFraction = 0.25
-    | .Constraints.SlippageBPS = 8' "$BASE_POLICY_JSON" > "$SHOCK_POLICY_JSON"
+jq '.constraints.min_recommendation_conviction = 70
+    | .execution_policy.conviction_floor = 70
+    | .constraints.max_position_weight = 0.12
+    | .constraints.max_open_positions = 3
+    | .constraints.reserve_cash_fraction = 0.25
+    | .constraints.slippage_bps = 8' "$BASE_POLICY_JSON" > "$SHOCK_POLICY_JSON"
 
 run_once() {
 	local policy_path="$1"
@@ -207,14 +207,14 @@ extract_scenario_signal() {
 		exit 1
 	fi
 
-	jq -S 'del(.RecordedAt, .ProposalID, .CommitID, .ApprovalID)' "$session_summary" > "$session_normalized"
+	jq -S 'del(.recorded_at, .proposal_id, .commit_id, .approval_id)' "$session_summary" > "$session_normalized"
 	jq -s '{
 		total: length,
-		hit_count: (map(select(.Hit == true)) | length),
-		avg_forward_return: (if length == 0 then 0 else (map(.ForwardReturn) | add / length) end),
-		avg_benchmark_delta: (if length == 0 then 0 else (map(.BenchmarkDelta) | add / length) end),
-		unique_symbols: (map(.Symbol) | unique | length),
-		unique_agents: (map(.AgentID) | unique | length)
+		hit_count: (map(select(.hit == true)) | length),
+		avg_forward_return: (if length == 0 then 0 else (map(.forward_return) | add / length) end),
+		avg_benchmark_delta: (if length == 0 then 0 else (map(.benchmark_delta) | add / length) end),
+		unique_symbols: (map(.symbol) | unique | length),
+		unique_agents: (map(.agent_id) | unique | length)
 	}' "$outcomes_file" > "$outcomes_stats"
 
 	jq -n \
@@ -231,17 +231,17 @@ extract_scenario_signal() {
 		--slurpfile session "$session_normalized" \
 		--slurpfile outcomes "$outcomes_stats" \
 		'{
-			order_count: ($session[0].OrderCount // 0),
-			position_count: ($session[0].PositionCount // 0),
-			ending_cash: ($session[0].EndingCash // 0),
-			outcome_count: ($session[0].OutcomeCount // 0),
-			next_experiment_agent_id: ($session[0].NextExperimentAgentID // ""),
+		order_count: ($session[0].order_count // 0),
+		position_count: ($session[0].position_count // 0),
+		ending_cash: ($session[0].ending_cash // 0),
+		outcome_count: ($session[0].outcome_count // 0),
+		next_experiment_agent_id: ($session[0].next_experiment_agent_id // ""),
 			guard: {
-				total: (($session[0].GuardOutcomes // []) | length),
-				hard_total: (($session[0].GuardOutcomes // []) | map(select(.Severity == "hard")) | length),
-				hard_blocked: (($session[0].GuardOutcomes // []) | map(select(.Severity == "hard" and (.Passed | not))) | length),
-				soft_total: (($session[0].GuardOutcomes // []) | map(select(.Severity == "soft")) | length),
-				soft_blocked: (($session[0].GuardOutcomes // []) | map(select(.Severity == "soft" and (.Passed | not))) | length)
+				total: (($session[0].guard_outcomes // []) | length),
+				hard_total: (($session[0].guard_outcomes // []) | map(select(.severity == "hard")) | length),
+				hard_blocked: (($session[0].guard_outcomes // []) | map(select(.severity == "hard" and (.passed | not))) | length),
+				soft_total: (($session[0].guard_outcomes // []) | map(select(.severity == "soft")) | length),
+				soft_blocked: (($session[0].guard_outcomes // []) | map(select(.severity == "soft" and (.passed | not))) | length)
 			},
 			outcomes_stats: $outcomes[0]
 		}' > "$metrics_out"

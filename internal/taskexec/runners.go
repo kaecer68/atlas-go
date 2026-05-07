@@ -18,19 +18,19 @@ import (
 	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
-type executeExperimentRunner struct {
+type runExperimentRunner struct {
 	cfg config.Config
 }
 
-func NewExecuteExperimentRunner(cfg config.Config) Runner {
-	return &executeExperimentRunner{cfg: cfg}
+func NewRunExperimentRunner(cfg config.Config) Runner {
+	return &runExperimentRunner{cfg: cfg}
 }
 
-func (r *executeExperimentRunner) Name() string {
-	return "execute-experiment"
+func (r *runExperimentRunner) Name() string {
+	return "run-experiment"
 }
 
-func (r *executeExperimentRunner) Run(ctx context.Context, req SubmitRequest, sink EventSink) error {
+func (r *runExperimentRunner) Run(ctx context.Context, req SubmitRequest, sink EventSink) error {
 	briefPath, _ := req.Payload["brief_path"].(string)
 	if briefPath == "" {
 		briefPath = "data/state/windows/window-20260326-20260327-mutation-brief.json"

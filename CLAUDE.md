@@ -61,7 +61,7 @@ go run ./cmd/atlas
 go run ./cmd/backtest-window -start 2026-03-26 -end 2026-03-27
 
 # Experiment lifecycle
-go run ./cmd/execute-experiment -brief <brief-file>
+go run ./cmd/run-experiment -brief <brief-file>
 go run ./cmd/judge-experiment              # auto-discovers latest experiment
 go run ./cmd/promote-baseline              # auto-discovers latest accepted experiment
 go run ./cmd/revert-baseline --list
@@ -123,7 +123,7 @@ Defined in `internal/domain/types.go`:
 ### Experiment & Baseline Lifecycle
 
 1. **Propose**: generate a mutation brief
-2. **Execute**: `cmd/execute-experiment` generates a candidate prompt and records an experiment
+2. **Execute**: `cmd/run-experiment` generates a candidate prompt and records an experiment
 3. **Judge**: `cmd/judge-experiment` replays candidate vs. baseline; requires sufficient observations (n≥10 preferred)
 4. **Promote/Revert**: `cmd/promote-baseline` advances accepted experiments; `cmd/revert-baseline` rolls back
 
@@ -168,7 +168,7 @@ Baseline policy is loaded from `data/state/baseline_policy.json`. The experiment
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (18178 symbols, 40358 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (23087 symbols, 44884 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

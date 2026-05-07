@@ -100,9 +100,9 @@ mutation_recent_stats() {
 
 	for f in $(ls -t data/state/experiments/*.json 2>/dev/null); do
 		local agent mtype win baseline candidate delta
-		agent=$(jq -r '.Experiment.TargetAgentID // empty' "$f" 2>/dev/null)
-		mtype=$(jq -r '.Experiment.MutationType // .Brief.mutation_type // empty' "$f" 2>/dev/null)
-		win=$(jq -r '.Brief.window_id // empty' "$f" 2>/dev/null)
+		agent=$(jq -r '.experiment.target_agent_id // empty' "$f" 2>/dev/null)
+		mtype=$(jq -r '.experiment.mutation_type // .brief.mutation_type // empty' "$f" 2>/dev/null)
+		win=$(jq -r '.brief.window_id // empty' "$f" 2>/dev/null)
 		if [[ "$agent" != "$agent_id" || "$mtype" != "$mutation_type" ]]; then
 			continue
 		fi
@@ -110,8 +110,8 @@ mutation_recent_stats() {
 			continue
 		fi
 
-		baseline=$(jq -r '.Experiment.BaselineValue // empty' "$f" 2>/dev/null)
-		candidate=$(jq -r '.Experiment.CandidateValue // empty' "$f" 2>/dev/null)
+		baseline=$(jq -r '.experiment.baseline_value // empty' "$f" 2>/dev/null)
+		candidate=$(jq -r '.experiment.candidate_value // empty' "$f" 2>/dev/null)
 		if [[ -z "$baseline" || -z "$candidate" || "$baseline" == "null" || "$candidate" == "null" ]]; then
 			continue
 		fi
@@ -335,9 +335,9 @@ is_mutation_futile() {
 
 	for f in $(ls -t data/state/experiments/*.json 2>/dev/null); do
 		local agent mtype win baseline candidate
-		agent=$(jq -r '.Experiment.TargetAgentID // empty' "$f" 2>/dev/null)
-		mtype=$(jq -r '.Experiment.MutationType // .Brief.mutation_type // empty' "$f" 2>/dev/null)
-		win=$(jq -r '.Brief.window_id // empty' "$f" 2>/dev/null)
+		agent=$(jq -r '.experiment.target_agent_id // empty' "$f" 2>/dev/null)
+		mtype=$(jq -r '.experiment.mutation_type // .brief.mutation_type // empty' "$f" 2>/dev/null)
+		win=$(jq -r '.brief.window_id // empty' "$f" 2>/dev/null)
 		if [[ "$agent" != "$agent_id" || "$mtype" != "$mutation_type" ]]; then
 			continue
 		fi
@@ -345,8 +345,8 @@ is_mutation_futile() {
 			continue
 		fi
 
-		baseline=$(jq -r '.Experiment.BaselineValue // empty' "$f" 2>/dev/null)
-		candidate=$(jq -r '.Experiment.CandidateValue // empty' "$f" 2>/dev/null)
+		baseline=$(jq -r '.experiment.baseline_value // empty' "$f" 2>/dev/null)
+		candidate=$(jq -r '.experiment.candidate_value // empty' "$f" 2>/dev/null)
 		if [[ -z "$baseline" || -z "$candidate" || "$baseline" == "null" || "$candidate" == "null" ]]; then
 			continue
 		fi

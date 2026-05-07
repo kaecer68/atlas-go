@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 )
 
 // helper to add an agent directly into the manager's internal map
@@ -518,5 +520,37 @@ func TestApplyDarwinianWeightsWithEvents_PreservesAllFields(t *testing.T) {
 	}
 	if len(events) > 0 {
 		t.Errorf("expected 0 clamping events with weight 1.0, got %d", len(events))
+	}
+}
+
+func TestDarwinianWeightManager_WithEventBus(t *testing.T) {
+	bus := &eventbus.ChannelEventBus{}
+	m := NewDarwinianWeightManager("/tmp/test_dw_eb.json").WithEventBus(bus)
+	if m == nil {
+		t.Fatal("WithEventBus returned nil")
+	}
+	report := m.GenerateReport()
+	if report.TotalAgents != 0 {
+		t.Errorf("expected 0 agents, got %d", report.TotalAgents)
+	}
+}
+
+func TestDarwinianWeightManager_SaveReport(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "report.json")
+	m := NewDarwinianWeightManager("/tmp/test_dw_sr.json")
+	_ = m.SaveReport(path)
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("expected report file at %s: %v", path, err)
+	}
+}
+
+func TestDarwinianWeightManager_ResetAgent(t *testing.T) {
+	m := NewDarwinianWeightManager("/tmp/test_dw_ra.json")
+	seedAgent(m, "agent_001", "tech", "sector", 2.0)
+	m.ResetAgent("agent_001")
+	w := m.GetWeight("agent_001")
+	if w != DarwinianNeutralWeight {
+		t.Errorf("expected neutral weight after reset, got %f", w)
 	}
 }

@@ -163,3 +163,113 @@ func TestManagerPromoteResultWritesPolicyFile(t *testing.T) {
 		t.Fatalf("expected policy file to be written: %v", err)
 	}
 }
+
+func TestResolvePromptOverride(t *testing.T) {
+	policy := Policy{
+		PromptOverrides: map[string]string{
+			"agent-1":         "custom prompt for agent-1",
+			"growth_momentum": "custom prompt for skill",
+		},
+	}
+
+	tests := []struct {
+		name    string
+		agentID string
+		skill   string
+		want    string
+	}{
+		{"agent match", "agent-1", "any_skill", "custom prompt for agent-1"},
+		{"skill match", "agent-2", "growth_momentum", "custom prompt for skill"},
+		{"agent priority over skill", "agent-1", "growth_momentum", "custom prompt for agent-1"},
+		{"no match", "agent-3", "unknown_skill", ""},
+		{"empty policy", "", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ResolvePromptOverride(policy, tt.agentID, tt.skill)
+			if got != tt.want {
+				t.Errorf("ResolvePromptOverride(%q, %q) = %q, want %q", tt.agentID, tt.skill, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolvePromptOverride_EmptyPolicy(t *testing.T) {
+	policy := Policy{}
+	if got := ResolvePromptOverride(policy, "agent-1", "skill"); got != "" {
+		t.Errorf("expected empty string for empty policy, got %q", got)
+	}
+}
+
+func TestParseIntValue(t *testing.T) {
+	tests := []struct {
+		line   string
+		wantV  int
+		wantOk bool
+	}{
+		{"conviction_floor: 5", 5, true},
+		{"conviction_floor:0", 0, true},
+		{"conviction_floor: -2", -2, true},
+		{"conviction_floor: abc", 0, false},
+		{"conviction_floor:", 0, false},
+	}
+	for _, tt := range tests {
+		v, ok := parseIntValue(tt.line)
+		if ok != tt.wantOk || v != tt.wantV {
+			t.Errorf("parseIntValue(%q) = (%d, %v), want (%d, %v)", tt.line, v, ok, tt.wantV, tt.wantOk)
+		}
+	}
+}
+
+func TestParseInt64Value(t *testing.T) {
+	v, ok := parseInt64Value("liquidity_floor: 1000000")
+	if !ok || v != 1000000 {
+		t.Errorf("parseInt64Value = (%d, %v), want (1000000, true)", v, ok)
+	}
+	v, ok = parseInt64Value("liquidity_floor: abc")
+	if ok {
+		t.Error("expected false for invalid input")
+	}
+}
+
+func TestParsePctFloatValue(t *testing.T) {
+	v, ok := parsePctFloatValue("stop_loss_pct: -0.05")
+	if !ok || v != -0.05 {
+		t.Errorf("parsePctFloatValue = (%f, %v), want (-0.05, true)", v, ok)
+	}
+	v, ok = parsePctFloatValue("stop_loss_pct: abc")
+	if ok {
+		t.Error("expected false for invalid input")
+	}
+}
+
+func TestExecutionPolicyFromConstraints_DefaultFloor(t *testing.T) {
+	c := domain.SimulationConstraints{MinRecommendationConviction: 0}
+	ep := ExecutionPolicyFromConstraints(c)
+	if ep.ConvictionFloor <= 0 {
+		t.Errorf("expected positive conviction floor when input is 0, got %d", ep.ConvictionFloor)
+	}
+}
+
+func TestExecutionPolicyFromConstraints_PreserveFloor(t *testing.T) {
+	c := domain.SimulationConstraints{MinRecommendationConviction: 15, RequireCROPass: true}
+	ep := ExecutionPolicyFromConstraints(c)
+	if ep.ConvictionFloor != 15 {
+		t.Errorf("ConvictionFloor = %d, want 15", ep.ConvictionFloor)
+	}
+	if !ep.RequireCROPass {
+		t.Error("RequireCROPass should be true")
+	}
+}
+
+func TestApplyConstraintCandidate(t *testing.T) {
+	base := domain.SimulationConstraints{}
+	result := ApplyConstraintCandidate(base, "conviction_floor: 10\nrequire_cro_pass: true")
+	if result.MinRecommendationConviction != 10 {
+		t.Errorf("MinRecommendationConviction = %d, want 10", result.MinRecommendationConviction)
+	}
+	if !result.RequireCROPass {
+		t.Error("RequireCROPass should be true")
+	}
+}
