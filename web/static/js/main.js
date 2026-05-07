@@ -76,17 +76,23 @@ var modules = {};
 
 async function loadModules() {
   if (modules._loaded) return modules;
-  var results = await Promise.allSettled([
+  var imports = [
     import('./pages/dashboard.js'),
     import('./pages/pipeline.js'),
     import('./pages/risk.js'),
     import('./pages/narrative.js'),
     import('./pages/backtest.js'),
-    import('./pages/management.js'),
-  ]);
+    import('./pages/inbox.js'),
+    import('./pages/experiments.js'),
+    import('./pages/alerts.js'),
+    import('./pages/metrics.js'),
+    import('./pages/industry.js'),
+    import('./pages/datachannels.js'),
+  ];
+  var results = await Promise.allSettled(imports);
+  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels'];
   results.forEach(function(r, i) {
-    var names = ['dash', 'pipe', 'risk', 'narr', 'back', 'mgmt'];
-    modules[names[i]] = r.status === 'fulfilled' ? r.value : {};
+    modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
   modules._loaded = true;
   return modules;
@@ -162,17 +168,17 @@ async function loadAll() {
     if (m.risk.renderLiveStatus) m.risk.renderLiveStatus(live);
     if (m.risk.renderRiskCards) m.risk.renderRiskCards(risk, pipeline);
 
-    if (m.mgmt.renderInbox) m.mgmt.renderInbox(inbox);
-    if (m.mgmt.renderDataChannels) m.mgmt.renderDataChannels(dataChannels);
-    if (m.mgmt.renderAlerts) m.mgmt.renderAlerts(alerts);
-    if (m.mgmt.loadMetrics) m.mgmt.loadMetrics();
-    if (m.mgmt.loadIndustryData) m.mgmt.loadIndustryData();
+    if (m.inbox.renderInbox) m.inbox.renderInbox(inbox);
+    if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dataChannels);
+    if (m.alerts.renderAlerts) m.alerts.renderAlerts(alerts);
+    if (m.metrics.loadMetrics) m.metrics.loadMetrics();
+    if (m.industry.loadIndustryData) m.industry.loadIndustryData();
 
     if (m.back.renderBacktestReport) m.back.renderBacktestReport();
 
-    if (m.mgmt.loadOverrides) m.mgmt.loadOverrides();
-    if (m.mgmt.loadAuditLog) m.mgmt.loadAuditLog();
-    if (m.mgmt.loadExperimentHistory) m.mgmt.loadExperimentHistory();
+    if (m.experiments.loadOverrides) m.experiments.loadOverrides();
+    if (m.experiments.loadAuditLog) m.experiments.loadAuditLog();
+    if (m.experiments.loadExperimentHistory) m.experiments.loadExperimentHistory();
 
   } catch (e) {
     console.error(e);
@@ -275,9 +281,16 @@ async function loadPageData(pageId) {
         getJSON('/api/dashboard/live-status').catch(function() { return null; }),
         getJSON('/api/dashboard/recommendation-pipeline').catch(function() { return null; }),
         getJSON('/api/dashboard/risk').catch(function() { return null; }),
+        getJSON('/api/dashboard/macro-radar').catch(function() { return null; }),
+        getJSON('/api/narrative/events').catch(function() { return null; }),
+        getJSON('/api/taiwan/stress-index').catch(function() { return null; }),
+        getJSON('/api/narrative/chains').catch(function() { return null; }),
+        getJSON('/api/narrative/models').catch(function() { return null; }),
       ]);
       if (m.risk.renderLiveStatus) m.risk.renderLiveStatus(liveResults[0]);
       if (m.risk.renderRiskCards) m.risk.renderRiskCards(liveResults[2], liveResults[1]);
+      if (m.dash.renderMacroRadar) m.dash.renderMacroRadar(liveResults[3], liveResults[1]);
+      if (m.narr.renderLiveNarrativeStrip) m.narr.renderLiveNarrativeStrip(liveResults[4], liveResults[5], liveResults[7], liveResults[6]);
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'portfolio') {
