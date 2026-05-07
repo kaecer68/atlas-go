@@ -97,7 +97,16 @@ func (p *Policy) UnmarshalJSON(data []byte) error {
 
 	promotions := make([]PromotionRecord, len(legacy.Promotions))
 	for i, lp := range legacy.Promotions {
-		promotions[i] = PromotionRecord(lp)
+		promotions[i] = PromotionRecord{
+			ExperimentID:  lp.ExperimentID,
+			TargetAgentID: lp.TargetAgentID,
+			TargetSkill:   lp.TargetSkill,
+			MutationType:  lp.MutationType,
+			CandidatePath: lp.CandidatePath,
+			PromotedAt:    lp.PromotedAt,
+			Status:        lp.Status,
+			VersionAfter:  lp.VersionAfter,
+		}
 	}
 
 	revertHistory := make([]RevertRecord, len(legacy.RevertHistory))
@@ -135,14 +144,16 @@ func (p *Policy) UnmarshalJSON(data []byte) error {
 }
 
 type PromotionRecord struct {
-	ExperimentID  string    `json:"experiment_id"`
-	TargetAgentID string    `json:"target_agent_id"`
-	TargetSkill   string    `json:"target_skill"`
-	MutationType  string    `json:"mutation_type"`
-	CandidatePath string    `json:"candidate_path"`
-	PromotedAt    time.Time `json:"promoted_at"`
-	Status        string    `json:"status"`
-	VersionAfter  int       `json:"version_after"`
+	ExperimentID        string                        `json:"experiment_id"`
+	TargetAgentID       string                        `json:"target_agent_id"`
+	TargetSkill         string                        `json:"target_skill"`
+	MutationType        string                        `json:"mutation_type"`
+	CandidatePath       string                        `json:"candidate_path"`
+	PromotedAt          time.Time                     `json:"promoted_at"`
+	Status              string                        `json:"status"`
+	VersionAfter        int                           `json:"version_after"`
+	ConstraintsSnapshot *domain.SimulationConstraints `json:"constraints_snapshot,omitempty"`
+	PromptSnapshot      string                        `json:"prompt_snapshot,omitempty"`
 }
 
 type RevertRecord struct {
@@ -306,7 +317,7 @@ func Promote(policy Policy, result domain.PromptExperimentResult, candidate stri
 	}
 
 	next.Version++
-	next.Promotions = append(next.Promotions, PromotionRecord{
+	record := PromotionRecord{
 		ExperimentID:  result.Experiment.ID,
 		TargetAgentID: result.Experiment.TargetAgentID,
 		TargetSkill:   result.Experiment.Skill,
@@ -315,7 +326,14 @@ func Promote(policy Policy, result domain.PromptExperimentResult, candidate stri
 		PromotedAt:    time.Now(),
 		Status:        string(result.Experiment.Status),
 		VersionAfter:  next.Version,
-	})
+	}
+	if result.Experiment.MutationType == "risk_rule_change" || result.Experiment.MutationType == "portfolio_constraint_revision" {
+		snapshot := next.Constraints
+		record.ConstraintsSnapshot = &snapshot
+	} else if result.Experiment.MutationType == "prompt_tightening" || result.Experiment.MutationType == "" {
+		record.PromptSnapshot = candidate
+	}
+	next.Promotions = append(next.Promotions, record)
 	return next, nil
 }
 
