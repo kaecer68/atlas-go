@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/live/store"
 )
 
 type HTTPBrokerAdapterConfig struct {
@@ -28,7 +29,7 @@ type HTTPBrokerAdapterConfig struct {
 	RetryableStatusCodes []int
 	MaxClockSkew         time.Duration
 	NonceTTL             time.Duration
-	NonceStore           NonceReplayStore
+	NonceStore           store.NonceReplayStore
 	Client               *http.Client
 	Signer               string
 	Now                  func() time.Time
@@ -53,7 +54,7 @@ type HTTPBrokerAdapter struct {
 	nonceFn              func() string
 	maxClockSkew         time.Duration
 	nonceTTL             time.Duration
-	nonceStore           NonceReplayStore
+	nonceStore           store.NonceReplayStore
 }
 
 type requestSigner interface {
@@ -136,7 +137,7 @@ func NewHTTPBrokerAdapter(cfg HTTPBrokerAdapterConfig) *HTTPBrokerAdapter {
 	}
 	nonceStore := cfg.NonceStore
 	if nonceStore == nil {
-		nonceStore = NewInMemoryNonceReplayStore()
+		nonceStore = store.NewInMemoryNonceReplayStore()
 	}
 
 	return &HTTPBrokerAdapter{
@@ -245,11 +246,11 @@ func (a *HTTPBrokerAdapter) validateClockSkew(requestTime time.Time) error {
 
 func (a *HTTPBrokerAdapter) registerRequestNonce(nonce string, requestTime time.Time) error {
 	if a.nonceStore == nil {
-		a.nonceStore = NewInMemoryNonceReplayStore()
+		a.nonceStore = store.NewInMemoryNonceReplayStore()
 	}
 	err := a.nonceStore.Register(nonce, requestTime, a.nonceTTL)
 	if err != nil {
-		if errors.Is(err, ErrNonceReplayDetected) {
+		if errors.Is(err, store.ErrNonceReplayDetected) {
 			return fmt.Errorf("request nonce replay detected: nonce=%s", nonce)
 		}
 		return fmt.Errorf("register nonce replay guard: %w", err)

@@ -1018,6 +1018,34 @@ body { display: flex; margin: 0; min-height: 100vh; }
 
 <script>
 
+/**
+ * API 回應欄位驗證工具
+ * 目的：捕獲前後端 JSON 欄位命名不一致的問題（PascalCase vs snake_case）
+ * 當發現關鍵欄位缺失時，在 console 輸出明確錯誤訊息，幫助開發者定位問題。
+ */
+function validateApiResponse(data, requiredFields, context) {
+  if (!data || typeof data !== 'object') return;
+  const missing = [];
+  const wrongCase = [];
+  for (const field of requiredFields) {
+    if (!(field in data)) {
+      // 檢查是否使用了 PascalCase（常見錯誤）
+      const pascalCase = field.replace(/_(.)/g, (_, char) => char.toUpperCase()).replace(/^[a-z]/, c => c.toUpperCase());
+      if (pascalCase in data) {
+        wrongCase.push({ expected: field, found: pascalCase });
+      } else {
+        missing.push(field);
+      }
+    }
+  }
+  if (wrongCase.length) {
+    console.error(`[API 欄位錯誤] ${context}: 前端使用 snake_case，但後端回傳了 PascalCase。請將前端欄位名改為 snake_case。`, wrongCase);
+  }
+  if (missing.length) {
+    console.warn(`[API 欄位缺失] ${context}: 以下欄位不存在於 API 回應中：`, missing);
+  }
+}
+
 const pageLoadStatus = {};
 
 function switchPage(id) {
@@ -1570,8 +1598,8 @@ function computePipelineSummary(guardOutcomes) {
   const guard = guardOutcomes || [];
   const firstGuard = guard[0];
   const lastGuard = guard[guard.length - 1];
-  const rawInputs = firstGuard ? firstGuard.InputCount : 0;
-  const finalOutputs = lastGuard ? lastGuard.OutputCount : 0;
+  const rawInputs = firstGuard ? (firstGuard.input_count || 0) : 0;
+  const finalOutputs = lastGuard ? (lastGuard.output_count || 0) : 0;
   const filteredCount = Math.max(0, rawInputs - finalOutputs);
   return { rawInputs, finalOutputs, filteredCount, guard };
 }
@@ -1588,10 +1616,12 @@ function renderMacroRadar(data, pipelineData) {
   let controlSummary = '';
   if (guard.length) {
     const lines = guard.map(g => {
-      const filtered = g.InputCount - g.OutputCount;
-      if (!g.Passed) return `<span class="text-down">● ${agentName(g.GuardID)} 強制阻擋全部推薦（${g.InputCount} → 0）</span>`;
-      if (filtered > 0) return `<span class="text-warn">● ${agentName(g.GuardID)} 過濾了 ${filtered} 筆推薦（${g.InputCount} → ${g.OutputCount}）</span>`;
-      return `<span class="text-up">● ${agentName(g.GuardID)} 未過濾任何推薦，全部放行</span>`;
+      const inputCount = g.input_count || 0;
+      const outputCount = g.output_count || 0;
+      const filtered = inputCount - outputCount;
+      if (!g.passed) return `<span class="text-down">● ${agentName(g.guard_id)} 強制阻擋全部推薦（${inputCount} → 0）</span>`;
+      if (filtered > 0) return `<span class="text-warn">● ${agentName(g.guard_id)} 過濾了 ${filtered} 筆推薦（${inputCount} → ${outputCount}）</span>`;
+      return `<span class="text-up">● ${agentName(g.guard_id)} 未過濾任何推薦，全部放行</span>`;
     });
     controlSummary = `<div style="margin:8px 0;font-size:12px;line-height:1.6;background:var(--bg);padding:8px 10px;border-radius:6px">${lines.join('<br>')}</div>`;
   }
@@ -1630,12 +1660,14 @@ function renderMacroRadar(data, pipelineData) {
     ${controlSummary}
     ${symbolTable}
     ${guard.length ? '<table style="margin-top:8px;font-size:12px"><thead><tr><th>AI</th><th>結果</th><th>處理數量</th><th>說明</th></tr></thead><tbody>' + guard.map(g => {
-      const filtered = g.InputCount - g.OutputCount;
+      const inputCount = g.input_count || 0;
+      const outputCount = g.output_count || 0;
+      const filtered = inputCount - outputCount;
       let actionText = '放行';
       let actionClass = 'ok';
-      if (!g.Passed) { actionText = '阻擋'; actionClass = 'err'; }
+      if (!g.passed) { actionText = '阻擋'; actionClass = 'err'; }
       else if (filtered > 0) { actionText = '過濾'; actionClass = 'warn'; }
-      return `<tr><td>${agentName(g.GuardID) || '-'}</td><td><span class="badge ${actionClass}">${actionText}</span></td><td>${g.InputCount} → ${g.OutputCount}</td><td>${g.Reason || '-'}</td></tr>`;
+      return `<tr><td>${agentName(g.guard_id) || '-'}</td><td><span class="badge ${actionClass}">${actionText}</span></td><td>${inputCount} → ${outputCount}</td><td>${g.reason || '-'}</td></tr>`;
     }).join('') + '</tbody></table>' : renderEmptyState('本場次無控制層紀錄', '')}
   `;
 }
@@ -1988,12 +2020,14 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
   `;
 
   const guardContent = guards.map(g => {
-    const filtered = (g.InputCount || 0) - (g.OutputCount || 0);
+    const inputCount = g.input_count || 0;
+    const outputCount = g.output_count || 0;
+    const filtered = inputCount - outputCount;
     let cls = 'ok';
-    let txt = `放行 ${g.OutputCount || 0} 筆`;
-    if (!g.Passed) { cls = 'err'; txt = `阻擋（輸出 ${g.OutputCount || 0} 筆）`; }
-    else if (filtered > 0) { cls = 'warn'; txt = `過濾 ${filtered} 筆後放行 ${g.OutputCount || 0} 筆`; }
-    return `<div class="my-xs"><span class="badge ${cls}">${agentName(g.GuardID)}</span> ${txt}（輸入 ${g.InputCount || 0} → 輸出 ${g.OutputCount || 0}）</div>`;
+    let txt = `放行 ${outputCount} 筆`;
+    if (!g.passed) { cls = 'err'; txt = `阻擋（輸出 ${outputCount} 筆）`; }
+    else if (filtered > 0) { cls = 'warn'; txt = `過濾 ${filtered} 筆後放行 ${outputCount} 筆`; }
+    return `<div class="my-xs"><span class="badge ${cls}">${agentName(g.guard_id)}</span> ${txt}（輸入 ${inputCount} → 輸出 ${outputCount}）</div>`;
   }).join('') || renderEmptyState('暫無控制層紀錄', '');
 
   const perfRows = items.slice(0, 20).map(it => {
@@ -2231,12 +2265,14 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
   ` : `<span class="text-muted text-sm">載入場次中…</span>`;
 
   const guardBadges = guard.length ? `<div class="mb-sm">${guard.map(g => {
-    const filtered = g.InputCount - g.OutputCount;
+    const inputCount = g.input_count || 0;
+    const outputCount = g.output_count || 0;
+    const filtered = inputCount - outputCount;
     let label = '放行';
     let cls = 'ok';
-    if (!g.Passed) { label = '阻擋'; cls = 'err'; }
+    if (!g.passed) { label = '阻擋'; cls = 'err'; }
     else if (filtered > 0) { label = `過濾 ${filtered} 筆`; cls = 'warn'; }
-    return `<span class="badge ${cls}">${agentName(g.GuardID)}：${label}（${g.InputCount}→${g.OutputCount}）</span>`;
+    return `<span class="badge ${cls}">${agentName(g.guard_id)}：${label}（${inputCount}→${outputCount}）</span>`;
   }).join('')}</div>` : '';
 
   const screeningBadge = screenedItems.length ? `（${screenedItems.length} 檔被篩除）` : '';
@@ -3411,6 +3447,23 @@ async function loadAll() {
       getJSON('/api/dashboard/tax-snapshot').catch(() => null),
       getJSON('/api/narrative/seasonal').catch(() => null),
     ]);
+
+    // 防禦性驗證：檢查關鍵 API 回應欄位是否正確
+    if (macro) {
+      validateApiResponse(macro, ['session_id', 'regime', 'guard_outcomes', 'recorded_at'], 'macro-radar');
+      if (macro.guard_outcomes && macro.guard_outcomes.length > 0) {
+        validateApiResponse(macro.guard_outcomes[0], ['guard_id', 'guard_skill', 'severity', 'passed', 'reason', 'input_count', 'output_count'], 'macro-radar.guard_outcomes[0]');
+      }
+    }
+    if (pipeline) {
+      validateApiResponse(pipeline, ['session_id', 'regime', 'items', 'guard_outcomes', 'screened_items', 'recorded_at'], 'recommendation-pipeline');
+      if (pipeline.items && pipeline.items.length > 0) {
+        validateApiResponse(pipeline.items[0], ['agent_id', 'symbol', 'skill', 'layer', 'side', 'conviction', 'forward_return', 'passed_guards'], 'recommendation-pipeline.items[0]');
+      }
+    }
+    if (agents) {
+      validateApiResponse(agents, ['weakest_agent_scorecards', 'session_id', 'next_experiment_agent_id', 'recorded_at'], 'agent-observatory');
+    }
 
     const allNull = [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal].every(v => v === null);
     if (allNull) {

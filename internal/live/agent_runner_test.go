@@ -8,7 +8,7 @@ import (
 )
 
 func TestAgentRunner_ApplyExecutionInput(t *testing.T) {
-	store := NewStateStore(t.TempDir())
+	store := store.Newstore.StateStore(t.TempDir())
 	runner := &AgentRunner{
 		stateStore: store,
 		marketData: nil,
@@ -43,7 +43,7 @@ func TestAgentRunner_ApplyExecutionInput(t *testing.T) {
 }
 
 func TestAgentRunner_ApplyExecutionInput_EmptyRecommendations(t *testing.T) {
-	store := NewStateStore(t.TempDir())
+	store := store.Newstore.StateStore(t.TempDir())
 	runner := &AgentRunner{stateStore: store}
 
 	input := ExecutionInput{
