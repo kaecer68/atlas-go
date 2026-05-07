@@ -23,7 +23,6 @@ func main() {
 	stateDir := filepath.Join(*workDir, "data/state")
 	snapshotDir := filepath.Join(stateDir, "macro")
 	capitalFlowDir := filepath.Join(stateDir, "capital_flow")
-	marginDir := filepath.Join(stateDir, "margin")
 	exportDir := filepath.Join(stateDir, "export")
 
 	var pool *pgxpool.Pool
@@ -41,14 +40,11 @@ func main() {
 		}
 	}
 
-	tsmcDir := filepath.Join(stateDir, "tsmc_revenue")
 
 	provider := marketdata.NewCompositeMacroProvider(
 		marketdata.NewYahooFinanceMacroProvider(),
 		marketdata.NewTWSECapitalFlowProvider(capitalFlowDir),
-		marketdata.NewTWSEBalanceProvider(marginDir),
 		marketdata.NewExportStatisticsProvider(exportDir),
-		marketdata.NewTSMCRevenueProvider(tsmcDir),
 	)
 
 	ingestor := narrative.NewMacroIngestor(provider, snapshotDir)

@@ -316,7 +316,6 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 		} else if hitRate > 1 {
 			hitRate = 1
 		}
-		m.HitRate = hitRate
 	}
 
 	ne.UpdateModelWeights()

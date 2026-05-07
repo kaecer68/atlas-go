@@ -47,7 +47,7 @@ type SystemCore struct {
 	lastOutcomes     []domain.RecommendationOutcome
 	portfolioHistory []float64
 	returnHistory    []float64
-	darwinian        *portfolio.DarwinianWeightManager
+	darwinian        portfolio.DarwinianWeightManagerInterface
 
 	capitalController *risk.CapitalPhaseController
 	capitalAllocator  *portfolio.CapitalAllocator
@@ -440,9 +440,9 @@ func selectProvider(cfg config.Config) marketdata.Provider {
 		// 纯 TWSE 模式（免费，rate limited）
 		return marketdata.NewTWSEOpenAPIProvider()
 	case "hybrid", "":
-		return marketdata.NewHybridProvider(marketdata.NewTWSEClient(), cfg.FinMindAPIKey, cfg.FubonAPIKey, cfg.FugleAPIKey)
+		return marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 	default:
-		return marketdata.NewHybridProvider(marketdata.NewTWSEClient(), cfg.FinMindAPIKey, cfg.FubonAPIKey, cfg.FugleAPIKey)
+		return marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 	}
 }
 
