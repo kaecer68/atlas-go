@@ -8,7 +8,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-CONFIG_FILE="${PROJECT_DIR}/configs/monitor-limits.json"
+CONFIG_FILE="${PROJECT_DIR}/configs/monitor_limits.json"
 
 # 默认阈值（平衡配置）
 DEFAULT_CPU_THRESHOLD=75
@@ -214,7 +214,7 @@ Resource Guard - 资源监控脚本
   0 - 资源正常
   1 - 资源超过阈值
 
-配置文件: configs/monitor-limits.json
+配置文件: configs/monitor_limits.json
 EOF
             exit 0
             ;;

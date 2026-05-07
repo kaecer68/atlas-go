@@ -169,44 +169,10 @@ func mutatePromptCandidate(source string, brief domain.MutationBrief) string {
 	return b.String()
 }
 
-func mutatePromptCandidateV3(source string, brief domain.MutationBrief) string {
-	base := stripMutationSections(source)
-	ctrl, bullets := v3ControlBlockAndBullets(brief)
-	var b strings.Builder
-	b.WriteString(strings.TrimSpace(base))
-	b.WriteString("\n\n")
-	b.WriteString(domain.RenderPromptControl(ctrl))
-	b.WriteString("\n\n")
-	b.WriteString("## Candidate Mutation v3 - Incremental Tightening\n\n")
-	b.WriteString("This mutation applies an additional bounded refinement on top of the previously accepted prompt override.\n\n")
-	b.WriteString("### Executable Prompt Controls\n\n")
-	for _, line := range bullets {
-		b.WriteString(line)
-		b.WriteString("\n")
-	}
-	b.WriteString("\n")
-	b.WriteString("### Operator Notes\n\n")
-	b.WriteString("- Apply only one additional bounded change.\n")
-	b.WriteString("- Preserve all previously accepted guardrails and skill boundaries.\n")
-	for _, guidance := range brief.IterationGuidance {
-		b.WriteString("- ")
-		b.WriteString(guidance)
-		b.WriteString("\n")
-	}
-	b.WriteString("\n**Required skills preserved**: ")
-	b.WriteString(strings.Join(brief.RequiredSkills, ", "))
-	b.WriteString("\n**Forbidden actions avoided**: ")
-	b.WriteString(strings.Join(brief.ForbiddenActions, ", "))
-	b.WriteString("\n")
-	return b.String()
-}
-
 // stripMutationSections removes appended Candidate Mutation sections and trailing
 // control blocks so that new mutations are generated from a clean base prompt.
 func stripMutationSections(source string) string {
-	// Remove control_block first.
 	s := domain.ControlBlockRe.ReplaceAllString(source, "")
-	// Remove Candidate Mutation sections (v2, v3, etc.).
 	mutationRe := regexp.MustCompile(`\n*## Candidate Mutation v\d+[\s\S]*`)
 	s = mutationRe.ReplaceAllString(s, "")
 	return strings.TrimSpace(s)
@@ -215,140 +181,19 @@ func stripMutationSections(source string) string {
 func v2ControlBlockAndBullets(brief domain.MutationBrief) (domain.PromptControl, []string) {
 	switch brief.TargetSkill {
 	case "semiconductor_desk":
-		return domain.PromptControl{
-				VolumeFloor:        1500000,
-				VolumeDowngrade:    25,
-				CloseStrengthBoost: 10,
-				HardRejectVolume:   1500000,
-				PriceCondition:     "close_below_open",
-			}, []string{
-				"- downgrade conviction when weak volume is accompanied by price below open",
-				"- tolerate volume between 1.5M and 3M if close strength confirms leadership",
-				"- reject setups only when volume is below 1.5M and price action is weak",
-				"- keep exploratory coverage: do not hard-filter solely on one weak signal",
-			}
+		return domain.PromptControl{VolumeFloor: 1500000, VolumeDowngrade: 25, CloseStrengthBoost: 10, HardRejectVolume: 1500000, PriceCondition: "close_below_open"}, []string{"- downgrade conviction when weak volume is accompanied by price below open", "- tolerate volume between 1.5M and 3M if close strength confirms leadership", "- reject setups only when volume is below 1.5M and price action is weak", "- keep exploratory coverage: do not hard-filter solely on one weak signal"}
 	case "financials_desk":
-		return domain.PromptControl{
-				VolumeDowngrade: 20,
-				PriceCondition:  "close_below_open",
-			}, []string{
-				"- credit quality gate: downgrade conviction when close is weak vs open",
-				"- spread sensitivity downgrade: penalize weak intraday close strength",
-				"- capital adequacy premium: upgrade conviction when close strength confirms balance-sheet resilience",
-				"- enforce illiquid rejection for weak volume names",
-			}
+		return domain.PromptControl{VolumeDowngrade: 20, PriceCondition: "close_below_open"}, []string{"- credit quality gate: downgrade conviction when close is weak vs open", "- spread sensitivity downgrade: penalize weak intraday close strength", "- capital adequacy premium: upgrade conviction when close strength confirms balance-sheet resilience", "- enforce illiquid rejection for weak volume names"}
 	case "technical_breakout":
-		return domain.PromptControl{
-				VolumeBoost:    5,
-				PriceCondition: "close_near_high",
-			}, []string{
-				"- catch-up momentum: boost conviction for stocks closing strong but below session peak",
-				"- volume participation acceptance: include moderate volume names alongside high-volume breakouts",
-				"- close-strength tolerance: do not downgrade minor below-high closes unless breakdown is material",
-				"- breakout confirmation bonus: boost conviction when close confirms strength near session high with volume",
-			}
+		return domain.PromptControl{VolumeBoost: 5, PriceCondition: "close_near_high"}, []string{"- catch-up momentum: boost conviction for stocks closing strong but below session peak", "- volume participation acceptance: include moderate volume names alongside high-volume breakouts", "- close-strength tolerance: do not downgrade minor below-high closes unless breakdown is material", "- breakout confirmation bonus: boost conviction when close confirms strength near session high with volume"}
 	case "etf_rotation_desk":
-		return domain.PromptControl{
-				CloseStrengthBoost: 6,
-				VolumeBoost:        5,
-				HardRejectVolume:   5000000,
-				PriceCondition:     "close_below_low_threshold",
-			}, []string{
-				"- rotation boost when close confirms strength above open",
-				"- sector leadership premium when volume confirms institutional participation",
-				"- reject setups that close near session low under controlled risk",
-				"- keep exploratory coverage: do not hard-filter solely on one weak signal",
-			}
+		return domain.PromptControl{CloseStrengthBoost: 6, VolumeBoost: 5, HardRejectVolume: 5000000, PriceCondition: "close_below_low_threshold"}, []string{"- rotation boost when close confirms strength above open", "- sector leadership premium when volume confirms institutional participation", "- reject setups that close near session low under controlled risk", "- keep exploratory coverage: do not hard-filter solely on one weak signal"}
 	case "value_yield":
-		return domain.PromptControl{
-				VolumeDowngrade: 15,
-				PriceCondition:  "close_below_open",
-			}, []string{
-				"- require dividend cover stability before upgrading conviction",
-				"- downgrade yield traps with weak balance-sheet trends",
-				"- keep exploratory coverage: do not hard-filter solely on one weak signal",
-			}
+		return domain.PromptControl{VolumeDowngrade: 15, PriceCondition: "close_below_open"}, []string{"- require dividend cover stability before upgrading conviction", "- downgrade yield traps with weak balance-sheet trends", "- keep exploratory coverage: do not hard-filter solely on one weak signal"}
 	case "growth_momentum":
-		return domain.PromptControl{
-				VolumeDowngrade: 15,
-				PriceCondition:  "close_below_open",
-				RequireTrend:    brief.ObservedWindowCount >= 5,
-			}, []string{
-				"- keep momentum bias but tolerate one weak confirmation signal in exploratory mode",
-				"- downgrade conviction when price is below intraday strength or open",
-				"- enforce illiquid rejection for weak volume names",
-				"- keep exploratory coverage: do not hard-filter solely on one weak signal",
-			}
+		return domain.PromptControl{VolumeDowngrade: 15, PriceCondition: "close_below_open", RequireTrend: brief.ObservedWindowCount >= 5}, []string{"- keep momentum bias but tolerate one weak confirmation signal in exploratory mode", "- downgrade conviction when price is below intraday strength or open", "- enforce illiquid rejection for weak volume names", "- keep exploratory coverage: do not hard-filter solely on one weak signal"}
 	default:
-		return domain.PromptControl{
-				VolumeDowngrade: 15,
-				PriceCondition:  "close_below_open",
-				RequireTrend:    brief.ObservedWindowCount >= 5,
-			}, []string{
-				"- keep momentum bias but tolerate one weak confirmation signal in exploratory mode",
-				"- downgrade conviction when price is below intraday strength or open",
-				"- enforce illiquid rejection for weak volume names",
-				"- keep exploratory coverage: do not hard-filter solely on one weak signal",
-			}
-	}
-}
-
-func v3ControlBlockAndBullets(brief domain.MutationBrief) (domain.PromptControl, []string) {
-	switch brief.TargetSkill {
-	case "semiconductor_desk":
-		return domain.PromptControl{
-				VolumeFloor:        2000000,
-				VolumeDowngrade:    30,
-				CloseStrengthBoost: 10,
-				HardRejectVolume:   2000000,
-				PriceCondition:     "close_below_open",
-			}, []string{
-				"- raise the effective volume floor from 1.5M to 2.0M for leadership confirmation",
-				"- downgrade conviction more aggressively when close is below open on weak volume",
-				"- keep exploratory coverage but tighten the illiquid rejection threshold",
-				"- require at least one additional price-strength signal in ambiguous regimes",
-			}
-	case "technical_breakout":
-		return domain.PromptControl{
-				VolumeBoost:    8,
-				PriceCondition: "close_within_2pct_of_high",
-			}, []string{
-				"- require volume surge to be at least 1.5x the 20-day average for breakout confirmation",
-				"- penalize late-breakout entries more aggressively",
-				"- do not accept catch-up momentum unless close is within 2% of session high",
-			}
-	case "financials_desk":
-		return domain.PromptControl{
-				VolumeDowngrade: 30,
-				PriceCondition:  "close_below_30th_percentile",
-			}, []string{
-				"- downgrade conviction when intraday close strength is below 30th percentile",
-				"- require credit-spread stability before upgrading conviction",
-				"- reject setups with deteriorating capital-adequacy trends",
-			}
-	case "growth_momentum":
-		return domain.PromptControl{
-				VolumeDowngrade:         15,
-				PriceCondition:          "close_below_open_and_prior_close",
-				RequireTrend:            false,
-				CloseStrengthBoost:      8,
-				ConvictionFloor:         40,
-				NeutralPenaltyReduction: 0,
-			}, []string{
-				"- keep momentum bias but tolerate one weak confirmation signal in exploratory mode",
-				"- downgrade conviction when price is below both open and prior close",
-				"- reward close strength to favor higher-quality momentum setups",
-			}
-	default:
-		return domain.PromptControl{
-				VolumeDowngrade: 20,
-				PriceCondition:  "close_below_open_and_prior_close",
-				RequireTrend:    true,
-			}, []string{
-				"- require two confirming signals instead of one in exploratory mode",
-				"- downgrade conviction when price is below both open and prior close",
-				"- hard-filter the weakest setup when multiple weak signals stack",
-			}
+		return domain.PromptControl{VolumeDowngrade: 15, PriceCondition: "close_below_open", RequireTrend: brief.ObservedWindowCount >= 5}, []string{"- keep momentum bias but tolerate one weak confirmation signal in exploratory mode", "- downgrade conviction when price is below intraday strength or open", "- enforce illiquid rejection for weak volume names", "- keep exploratory coverage: do not hard-filter solely on one weak signal"}
 	}
 }
 

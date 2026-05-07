@@ -120,9 +120,9 @@ For the complete operating skill map and guardrails, see:
 - `.claude/skills/atlas-risk-management/SKILL.md` — 風險管理
 - `.claude/skills/atlas-strategy-evolution/SKILL.md` — 策略進化
 - `.claude/skills/atlas-operations-guide/SKILL.md` — 操作指南
-- `docs/operations-playbook.md` — 操作手冊
-- `docs/iteration-playbook.md` — 迭代指南
-- `docs/evolution-loop.md` — 演化循環
+- `docs/operations_playbook.md` — 操作手冊
+- `docs/iteration_playbook.md` — 迭代指南
+- `docs/evolution_loop.md` — 演化循環
 
 ## Repository Structure
 

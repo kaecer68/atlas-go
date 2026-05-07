@@ -47,6 +47,6 @@ go test ./...
 
 ## 參考文件
 
-- `AGENTS.md`：倉庫層級邊界與預設指令
+- `agents.md`：倉庫層級邊界與預設指令
 - `docs/architecture.md`：分層設計原則
-- `docs/ai-agent-architecture.md`：代理協調細節
+- `docs/ai_agent_architecture.md`：代理協調細節

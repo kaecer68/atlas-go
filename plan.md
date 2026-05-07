@@ -1,6 +1,6 @@
 # ATLAS 策略進化系統修復與優化迭代計劃
 
-**來源**: ANALYSIS_REPORT.md
+**來源**: analysis_report.md
 **日期**: 2026-04-25
 **版本**: 1.0
 
@@ -8,7 +8,7 @@
 
 ## 計劃概述
 
-本計劃將 ANALYSIS_REPORT.md 中的 7 個問題轉為可執行的修復任務，按優先順序分三波執行：
+本計劃將 analysis_report.md 中的 7 個問題轉為可執行的修復任務，按優先順序分三波執行：
 
 | 波次 | 時間框架 | 任務 | 風險 |
 |------|---------|------|------|
@@ -141,7 +141,7 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (adjustments map[strin
 // DEPRECATED: AgentWeightManager is not used in production.
 // The active weight management system is DarwinianWeightManager in darwinian_weights.go.
 // This file is retained for reference but should not be used for new code.
-// See ANALYSIS_REPORT.md (P2) for details.
+// See analysis_report.md (P2) for details.
 ```
 
 **驗證**:
@@ -160,7 +160,7 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (adjustments map[strin
 ```go
 // DEPRECATED: MetaLearner is not integrated into the production experiment flow.
 // It is not called by experiment/executor.go, orchestrator/system.go, or any other production code.
-// See ANALYSIS_REPORT.md (P7) for integration plan or removal decision.
+// See analysis_report.md (P7) for integration plan or removal decision.
 ```
 
 **驗證**:
@@ -646,4 +646,4 @@ Phase 7: 切換並移除 JSONLStore
 ## 原始計劃完成記錄
 
 *計劃產出時間: 2026-04-25*
-*來源: ANALYSIS_REPORT.md*
+*來源: analysis_report.md*

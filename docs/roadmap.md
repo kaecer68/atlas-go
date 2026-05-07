@@ -68,7 +68,7 @@ Infrastructure improvements required before or during production hardening. Trig
 - 需要多 consumer（如 dashboard、backtest）共用同一筆資料
 - Production 環境需要 ELK/Loki 等 structured logging 工具
 
-See: `PLAN.md` — P-Infra 章節
+See: `plan.md` — P-Infra 章節
 
 ## Execution Roadmap (2026 Q2-Q4)
 

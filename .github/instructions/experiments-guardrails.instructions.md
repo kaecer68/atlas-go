@@ -53,8 +53,8 @@ go test ./...
 
 ## 參考文件
 
-- `docs/operations-playbook.md`：日常 mutation 工作流程
-- `docs/evolution-loop.md`：接受門檻與循環機制
+- `docs/operations_playbook.md`：日常 mutation 工作流程
+- `docs/evolution_loop.md`：接受門檻與循環機制
 - `docs/archive/experiment-baseline-report.md`：稀疏資料教訓與門檻調整背景
-- `docs/iteration-playbook.md`：mutation 策略模式
-- `AGENTS.md`：倉庫層級建置/測試與架構邊界
+- `docs/iteration_playbook.md`：mutation 策略模式
+- `agents.md`：倉庫層級建置/測試與架構邊界

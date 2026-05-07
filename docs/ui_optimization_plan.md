@@ -2,7 +2,7 @@
 
 **產出日期**: 2026-04-21
 **適用範圍**: `web/static/index.html` 及相關前端資源
-**原始稽核報告**: `UI-REVIEW.md`
+**原始稽核報告**: `ui_review.md`
 
 ---
 
@@ -168,7 +168,7 @@ staticcheck ./...
 
 ### 6.1 相關文件
 
-- `UI-REVIEW.md` — 完整稽核報告（含對比度計算）
+- `ui_review.md` — 完整稽核報告（含對比度計算）
 - `web/static/index.html` — 主 SPA 檔案
 - `docs/superpowers/plans/2026-04-21-atlas-ui-fixes.md` — 原始實作計畫
 

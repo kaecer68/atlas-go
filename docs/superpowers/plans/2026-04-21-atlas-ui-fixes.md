@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 基於 UI-REVIEW.md 的稽核結果，修復 Atlas-Go 前端的所有關鍵與中級問題，提升可及性、一致性與視覺品質。
+**Goal:** 基於 ui_review.md 的稽核結果，修復 Atlas-Go 前端的所有關鍵與中級問題，提升可及性、一致性與視覺品質。
 
 **Architecture:** 所有變更集中在單一檔案 `web/static/index.html`（2361 行的 SPA）。透過修改 CSS `<style>` 區塊與少量 JavaScript，逐步導入設計系統變數、無障礙支援與互動回饋。
 
@@ -15,7 +15,7 @@
 | 檔案 | 職責 | 變更範圍 |
 |------|------|---------|
 | `web/static/index.html` | 主 SPA（HTML + CSS + JS） | 修改 `<style>` 區塊 (lines 7-200) 與少量 JS |
-| `UI-REVIEW.md` | 稽核報告（已存在） | 參考用，不修改 |
+| `ui_review.md` | 稽核報告（已存在） | 參考用，不修改 |
 
 ---
 
@@ -522,4 +522,4 @@
 ---
 
 *計畫建立日期: 2026-04-21*  
-*基於: UI-REVIEW.md 稽核結果*
+*基於: ui_review.md 稽核結果*

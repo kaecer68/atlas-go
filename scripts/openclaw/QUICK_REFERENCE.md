@@ -101,7 +101,7 @@
 - 接受率低於 15%
 - CPU > 75% 或內存 > 80%
 
-配置文件：`configs/monitor-limits.json`
+配置文件：`configs/monitor_limits.json`
 
 ### 📝 生成改進建議
 ```bash
@@ -244,7 +244,7 @@ data/
 ./scripts/openclaw/decide.sh --help
 
 # 詳細教學
-cat docs/SCRIPT_USAGE_GUIDE.md
+cat docs/script_usage_guide.md
 
 # 協議文件
 cat docs/openclaw-protocol.md

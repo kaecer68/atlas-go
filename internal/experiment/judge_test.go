@@ -437,3 +437,36 @@ func TestMeanAndVariance(t *testing.T) {
 		t.Fatalf("expected variance=%.4f, got %.4f", expectedVariance, variance)
 	}
 }
+
+func TestCalculateVolatility(t *testing.T) {
+	if v := calculateVolatility(nil); v != 0 {
+		t.Errorf("nil returns: got %f, want 0", v)
+	}
+	if v := calculateVolatility([]float64{0.01}); v != 0 {
+		t.Errorf("single return: got %f, want 0", v)
+	}
+	v := calculateVolatility([]float64{0.01, -0.02, 0.03, -0.01, 0.005})
+	if v <= 0 {
+		t.Errorf("expected positive volatility, got %f", v)
+	}
+}
+
+func TestJudge_WithEventBus(t *testing.T) {
+	dir := t.TempDir()
+	store := ledger.NewStore(dir)
+	j := NewJudge(store, dir, dir)
+	result := j.WithEventBus(nil)
+	if result == nil {
+		t.Fatal("WithEventBus returned nil")
+	}
+}
+
+func TestJudge_WithParameters(t *testing.T) {
+	dir := t.TempDir()
+	store := ledger.NewStore(dir)
+	j := NewJudge(store, dir, dir)
+	result := j.WithParameters(nil)
+	if result == nil {
+		t.Fatal("WithParameters returned nil")
+	}
+}

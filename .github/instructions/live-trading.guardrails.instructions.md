@@ -37,6 +37,6 @@ go run ./cmd/atlas
 
 ## 參考文件
 
-- `AGENTS.md`：架構邊界與常見陷阱
-- `docs/operations-playbook.md`：操作流程期待
+- `agents.md`：架構邊界與常見陷阱
+- `docs/operations_playbook.md`：操作流程期待
 - `docs/architecture.md`：執行流程與分層邊界
