@@ -144,11 +144,8 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	riskHandlers := apirisk.NewHandlers(a.ledgerDir)
 	riskHandlers.RegisterRoutes(mux)
 
-<<<<<<< HEAD
-=======
 	// TODO: marketdata API handlers — NewHandlers not yet implemented
 	// marketdataHandlers.RegisterRoutes(mux)
->>>>>>> origin/main
 
 	taxHandlers := apitax.NewHandlers()
 	taxHandlers.RegisterRoutes(mux)

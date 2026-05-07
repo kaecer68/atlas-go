@@ -11,7 +11,7 @@ import (
 // AlphaDiscoveryEngine identifies symbols with high multi-factor scores
 // but low agent coverage, generating exploratory recommendations.
 type AlphaDiscoveryEngine struct {
-	factorEngine    portfolio.FactorEngineInterface
+	factorEngine    *portfolio.FactorEngine
 	factorThreshold float64
 }
 

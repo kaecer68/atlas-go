@@ -29,40 +29,55 @@ import (
 )
 
 // SystemCore holds the essential simulation state and services.
-type SystemCore struct {
-	cfg              config.Config
-	provider         marketdata.Provider
-	engine           *sim.Engine
-	registry         domain.AgentRegistry
-	policy           baseline.Policy
-	ledger           *ledger.Store
-	replay           *replay.Dataset
-	session          domain.ReplaySession
-	alphaDiscovery   *AlphaDiscoveryEngine
-	optimizer        *portfolio.Optimizer
-	plugins          *PluginRegistry
-	narrativeEngine  *narrative.NarrativeEngine
-	persistentState  *domain.SimulationState
-	ctx              context.Context
+type SimulationCore struct {
+	cfg             config.Config
+	provider        marketdata.Provider
+	engine          *sim.Engine
+	registry        domain.AgentRegistry
+	policy          baseline.Policy
+	ledger          *ledger.Store
+	replay          *replay.Dataset
+	session         domain.ReplaySession
+	persistentState *domain.SimulationState
+	ctx             context.Context
+
 	lastOutcomes     []domain.RecommendationOutcome
 	portfolioHistory []float64
 	returnHistory    []float64
-	darwinian        portfolio.DarwinianWeightManagerInterface
+}
 
-	capitalController *risk.CapitalPhaseController
+type PortfolioManager struct {
+	alphaDiscovery    *AlphaDiscoveryEngine
+	optimizer         *portfolio.Optimizer
+	darwinian         *portfolio.DarwinianWeightManager
 	capitalAllocator  *portfolio.CapitalAllocator
+	factorWeightEngine *portfolio.FactorWeightEngine
+}
+
+type StrategyLayer struct {
+	strategyRegistry *strategy.Registry
+	strategySelector *strategy.Selector
+	comparisonEngine *strategy.ComparisonEngine
+	thresholdEngine  *sim.DynamicThresholdEngine
+}
+
+type RiskOps struct {
+	capitalController *risk.CapitalPhaseController
 	approvalWorkflow  *risk.ApprovalWorkflow
 	metricsCollector  interface{ RecordScreening(passed, rejected int64) }
 	eventBus          *eventbus.ChannelEventBus
 	clampingLogger    *clampingLogger
+	repo              repository.OutcomeRepository
+}
 
-	strategyRegistry   *strategy.Registry
-	strategySelector   *strategy.Selector
-	comparisonEngine   *strategy.ComparisonEngine
-	factorWeightEngine *portfolio.FactorWeightEngine
-	thresholdEngine    *sim.DynamicThresholdEngine
+type SystemCore struct {
+	SimulationCore
+	PortfolioManager
+	StrategyLayer
+	RiskOps
 
-	repo repository.OutcomeRepository
+	plugins         *PluginRegistry
+	narrativeEngine *narrative.NarrativeEngine
 }
 
 // CoreServices interface implementation for SystemCore
@@ -141,27 +156,35 @@ func NewSystem(cfg config.Config) *System {
 		)
 	return &System{
 		SystemCore: &SystemCore{
-			cfg:                cfg,
-			provider:           selectProvider(cfg),
-			engine:             engine.WithContext(context.Background()),
-			registry:           registry,
-			policy:             policy,
-			ledger:             ledger.NewStore(cfg.LedgerDir),
-			replay:             ds,
-			session:            session,
-			optimizer:          optimizer,
-			plugins:            plugins,
-			alphaDiscovery:     NewAlphaDiscoveryEngine(factorEngine),
-			narrativeEngine:    narrative.NewNarrativeEngine(),
-			ctx:                context.Background(),
-			darwinian:          darwinian,
-			eventBus:           eventBus,
-			clampingLogger:     newClampingLogger(filepath.Join(cfg.LedgerDir, "clamping_events.jsonl")),
-			strategyRegistry:   strategyRegistry,
-			strategySelector:   strategySelector,
-			comparisonEngine:   comparisonEngine,
-			factorWeightEngine: factorWeightEngine,
-			thresholdEngine:    thresholdEngine,
+			SimulationCore: SimulationCore{
+				cfg:        cfg,
+				provider:   selectProvider(cfg),
+				engine:     engine.WithContext(context.Background()),
+				registry:   registry,
+				policy:     policy,
+				ledger:     ledger.NewStore(cfg.LedgerDir),
+				replay:     ds,
+				session:    session,
+				ctx:        context.Background(),
+			},
+			PortfolioManager: PortfolioManager{
+				optimizer:         optimizer,
+				alphaDiscovery:    NewAlphaDiscoveryEngine(factorEngine),
+				darwinian:         darwinian,
+				factorWeightEngine: factorWeightEngine,
+			},
+			StrategyLayer: StrategyLayer{
+				strategyRegistry: strategyRegistry,
+				strategySelector: strategySelector,
+				comparisonEngine: comparisonEngine,
+				thresholdEngine:  thresholdEngine,
+			},
+			RiskOps: RiskOps{
+				eventBus:       eventBus,
+				clampingLogger: newClampingLogger(filepath.Join(cfg.LedgerDir, "clamping_events.jsonl")),
+			},
+			plugins:         plugins,
+			narrativeEngine: narrative.NewNarrativeEngine(),
 		},
 	}
 }

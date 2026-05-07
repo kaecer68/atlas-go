@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+var taipei = time.FixedZone("CST", 8*3600)
+
 func TestParseTaiwan5SecIndexResponse(t *testing.T) {
 	raw := `{
 		"msg": "success",
@@ -32,7 +34,7 @@ func TestParseTaiwan5SecIndexResponse(t *testing.T) {
 		t.Fatalf("expected 3 bars, got %d", len(bars))
 	}
 
-	expectedFirst := time.Date(2026, 4, 29, 9, 0, 0, 0, time.UTC)
+	expectedFirst := time.Date(2026, 4, 29, 9, 0, 0, 0, taipei)
 	if !bars[0].Date.Equal(expectedFirst) {
 		t.Errorf("first bar date: got %v, want %v", bars[0].Date, expectedFirst)
 	}
@@ -40,7 +42,7 @@ func TestParseTaiwan5SecIndexResponse(t *testing.T) {
 		t.Errorf("first bar TAIEX: got %f, want 39521.73", bars[0].TAIEX)
 	}
 
-	expectedThird := time.Date(2026, 4, 29, 9, 0, 10, 0, time.UTC)
+	expectedThird := time.Date(2026, 4, 29, 9, 0, 10, 0, taipei)
 	if !bars[2].Date.Equal(expectedThird) {
 		t.Errorf("third bar date: got %v, want %v", bars[2].Date, expectedThird)
 	}
@@ -67,7 +69,7 @@ func TestParseTaiwan5SecIndexResponse_MinuteFormat(t *testing.T) {
 		t.Fatalf("expected 1 bar, got %d", len(bars))
 	}
 
-	expected := time.Date(2026, 4, 29, 9, 0, 0, 0, time.UTC)
+	expected := time.Date(2026, 4, 29, 9, 0, 0, 0, taipei)
 	if !bars[0].Date.Equal(expected) {
 		t.Errorf("date: got %v, want %v", bars[0].Date, expected)
 	}
@@ -219,8 +221,8 @@ func TestFetchTaiwan5SecIndex_Integration(t *testing.T) {
 
 func TestSave5SecIndexToLedger(t *testing.T) {
 	bars := []Taiwan5SecIndexBar{
-		{Date: time.Date(2026, 4, 29, 9, 0, 0, 0, time.UTC), TAIEX: 39521.73},
-		{Date: time.Date(2026, 4, 29, 9, 0, 5, 0, time.UTC), TAIEX: 39081.34},
+		{Date: time.Date(2026, 4, 29, 9, 0, 0, 0, taipei), TAIEX: 39521.73},
+		{Date: time.Date(2026, 4, 29, 9, 0, 5, 0, taipei), TAIEX: 39081.34},
 	}
 
 	tmpDir := t.TempDir()
@@ -288,10 +290,10 @@ func TestSave5SecIndexToLedger_EmptyBars(t *testing.T) {
 
 func TestSave5SecIndexToLedger_Append(t *testing.T) {
 	bars1 := []Taiwan5SecIndexBar{
-		{Date: time.Date(2026, 4, 29, 9, 0, 0, 0, time.UTC), TAIEX: 39521.73},
+		{Date: time.Date(2026, 4, 29, 9, 0, 0, 0, taipei), TAIEX: 39521.73},
 	}
 	bars2 := []Taiwan5SecIndexBar{
-		{Date: time.Date(2026, 4, 29, 9, 0, 5, 0, time.UTC), TAIEX: 39081.34},
+		{Date: time.Date(2026, 4, 29, 9, 0, 5, 0, taipei), TAIEX: 39081.34},
 	}
 
 	tmpDir := t.TempDir()
