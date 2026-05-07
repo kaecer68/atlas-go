@@ -7,10 +7,11 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/live/store"
 )
 
 func TestExecuteOrderPublishesFilledEventInDryRunMode(t *testing.T) {
-	store := store.Newstore.StateStore(t.TempDir())
+	store := store.NewStateStore(t.TempDir())
 	bus := NewChannelEventBus(16)
 	t.Cleanup(func() {
 		_ = bus.Close()
@@ -69,7 +70,7 @@ func TestExecuteOrderPublishesFilledEventInDryRunMode(t *testing.T) {
 }
 
 func TestExecuteOrderPublishesSystemErrorWhenOrderInvalid(t *testing.T) {
-	store := store.Newstore.StateStore(t.TempDir())
+	store := store.NewStateStore(t.TempDir())
 	bus := NewChannelEventBus(16)
 	t.Cleanup(func() {
 		_ = bus.Close()

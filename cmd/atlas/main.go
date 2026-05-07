@@ -352,7 +352,7 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		log.Printf("[Repository] injected into live trading system")
 	}
 
-	stateStore := live.store.Newstore.StateStore("data/state/live")
+	stateStore := store.NewStateStore("data/state/live")
 	eventBus := live.NewChannelEventBus(64)
 	provider := marketdata.NewMockProvider()
 

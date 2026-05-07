@@ -45,7 +45,7 @@ func main() {
 	circuitStatePath := filepath.Join(tempDir, "circuit_breaker_state.json")
 
 	system := orchestrator.NewProductionSystem(cfg)
-	stateStore := live.store.Newstore.StateStore(liveStateDir)
+	stateStore := store.NewStateStore(liveStateDir)
 	eventBus := live.NewChannelEventBus(64)
 	provider := marketdata.NewMockProvider()
 

@@ -5,10 +5,11 @@ import (
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/live/store"
 )
 
 func TestAgentRunner_ApplyExecutionInput(t *testing.T) {
-	store := store.Newstore.StateStore(t.TempDir())
+	store := store.NewStateStore(t.TempDir())
 	runner := &AgentRunner{
 		stateStore: store,
 		marketData: nil,
@@ -43,7 +44,7 @@ func TestAgentRunner_ApplyExecutionInput(t *testing.T) {
 }
 
 func TestAgentRunner_ApplyExecutionInput_EmptyRecommendations(t *testing.T) {
-	store := store.Newstore.StateStore(t.TempDir())
+	store := store.NewStateStore(t.TempDir())
 	runner := &AgentRunner{stateStore: store}
 
 	input := ExecutionInput{
