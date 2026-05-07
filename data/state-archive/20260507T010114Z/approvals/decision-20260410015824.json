@@ -1,0 +1,11 @@
+{
+  "decision_id": "decision-20260410015824",
+  "timestamp": "2026-04-09T17:58:24Z",
+  "actor": "verify-bot",
+  "action": "reject",
+  "experiment_id": "exp-verify-human-approval",
+  "experiment_status": "",
+  "reason": "schema-replay verification",
+  "revert_target": "",
+  "dry_run": true
+}

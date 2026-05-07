@@ -1,0 +1,39 @@
+{
+  "id": "brief-growth-momentum-01-1775434866",
+  "window_id": "window-20260328-20260331",
+  "target_agent": "growth-momentum-01",
+  "target_agent_id": "growth-momentum-01",
+  "target_skill": "growth_momentum",
+  "target_layer": "style",
+  "prompt_file": "prompts/agents/growth_momentum.md",
+  "mutation_type": "portfolio_constraint_revision",
+  "timestamp": "2026-04-06T00:21:06Z",
+  "acceptance_metric": "sharpe_like",
+  "acceptance_gates": ["improve_sharpe_like","no_material_drawdown_degradation","no_constraint_bypass"],
+  "required_skills": ["growth_momentum"],
+  "forbidden_actions": ["illiquid_breakout_chasing"],
+  "observed_window_count": 2,
+  "maturity_level": "level_2_window_validated",
+  "iteration_guidance": ["preserve required skills while tightening setup quality","avoid weakening control-layer constraints"],
+  "generated_at": "2026-04-06T00:21:06Z",
+  "hypothesis": "Refine growth-momentum-01 to improve risk-adjusted recommendation quality",
+  "suggested_mutation_type": "portfolio_constraint_revision",
+  "rationale": [
+    "Portfolio shows concentration risk in replay analysis",
+    "Drawdown periods correlate with high position sizing",
+    "Reserve cash levels may be insufficient for volatile periods"
+  ],
+  "proposed_changes": [
+    "Reduce max position weight to limit concentration",
+    "Increase reserve cash fraction for defensive positioning",
+    "Add correlation-based position limits"
+  ],
+  "acceptance_criteria": [
+    "Sharpe-like score improvement > 0.001",
+    "No material drawdown degradation",
+    "Maintains required skills coverage"
+  ],
+  "estimated_complexity": "high",
+  "recommended_window": "10_trading_days",
+  "notes_for_reviewer": "This is a portfolio_constraint_revision mutation targeting growth-momentum-01"
+}

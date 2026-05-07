@@ -1,0 +1,60 @@
+{
+  "session_id": "session-20260316-daily",
+  "regime": "RISK_ON",
+  "order_count": 0,
+  "position_count": 5,
+  "ending_cash": 377017.4935318255,
+  "portfolio_value": 2272209.2235318255,
+  "outcome_count": 2748,
+  "broker_runtime": {
+    "mode": "dry-run",
+    "adapter": "guarded",
+    "signer": "placeholder",
+    "signer_version": "v1",
+    "key_id": "",
+    "max_retries": 1,
+    "http_timeout_sec": 5,
+    "http_attempts": 2,
+    "retry_status_codes": [
+      408,
+      425,
+      429,
+      500,
+      502,
+      503,
+      504
+    ],
+    "max_clock_skew_sec": 300,
+    "nonce_ttl_sec": 300,
+    "nonce_store": "memory",
+    "nonce_store_path": "",
+    "nonce_redis_prefix": "atlas:nonce:"
+  },
+  "next_experiment_agent_id": "growth-momentum-01",
+  "proposal_id": "proposal-exp-growth-momentum-01-1776122246",
+  "commit_id": "",
+  "approval_id": "",
+  "guard_outcomes": [
+    {
+      "guard_id": "cro-01",
+      "guard_skill": "cro_risk",
+      "severity": "hard",
+      "passed": true,
+      "reason": "passed without filtering",
+      "input_count": 26,
+      "output_count": 26
+    },
+    {
+      "guard_id": "cio-01",
+      "guard_skill": "cio_portfolio",
+      "severity": "soft",
+      "passed": true,
+      "reason": "filtered 17 recommendation(s)",
+      "input_count": 26,
+      "output_count": 9
+    }
+  ],
+  "recorded_at": "2026-04-14T07:17:26.37993+08:00",
+  "after_tax_pnl": 0,
+  "total_tax_paid": 0
+}

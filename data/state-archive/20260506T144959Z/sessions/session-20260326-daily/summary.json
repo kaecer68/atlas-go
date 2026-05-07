@@ -1,0 +1,49 @@
+{
+  "SessionID": "session-20260326-daily",
+  "Regime": "NEUTRAL",
+  "OrderCount": 0,
+  "PositionCount": 0,
+  "EndingCash": 0,
+  "PortfolioValue": 0,
+  "OutcomeCount": 0,
+  "BrokerRuntime": {
+    "Mode": "dry-run",
+    "Adapter": "guarded",
+    "Signer": "placeholder",
+    "SignerVersion": "v1",
+    "KeyID": "",
+    "MaxRetries": 1,
+    "HTTPTimeoutSec": 5,
+    "HTTPAttempts": 2,
+    "RetryStatusCodes": [
+      408,
+      425,
+      429,
+      500,
+      502,
+      503,
+      504
+    ],
+    "MaxClockSkewSec": 300,
+    "NonceTTLSec": 300,
+    "NonceStore": "memory",
+    "NonceStorePath": "",
+    "NonceRedisPrefix": "atlas:nonce:"
+  },
+  "NextExperimentAgentID": "",
+  "ProposalID": "",
+  "CommitID": "",
+  "ApprovalID": "",
+  "GuardOutcomes": [
+    {
+      "GuardID": "control-bypass",
+      "GuardSkill": "control_bypass",
+      "Severity": "soft",
+      "Passed": true,
+      "Reason": "控制層已略過（未啟用 CRO 檢查）",
+      "InputCount": 0,
+      "OutputCount": 0
+    }
+  ],
+  "RecordedAt": "2026-05-06T14:49:15.690978761Z"
+}

@@ -1,0 +1,60 @@
+{
+  "session_id": "session-20260324-daily",
+  "regime": "RISK_ON",
+  "order_count": 2,
+  "position_count": 2,
+  "ending_cash": 541717.1046250004,
+  "portfolio_value": 3024367.1046250006,
+  "outcome_count": 5,
+  "broker_runtime": {
+    "mode": "dry-run",
+    "adapter": "guarded",
+    "signer": "placeholder",
+    "signer_version": "v1",
+    "key_id": "",
+    "max_retries": 1,
+    "http_timeout_sec": 5,
+    "http_attempts": 2,
+    "retry_status_codes": [
+      408,
+      425,
+      429,
+      500,
+      502,
+      503,
+      504
+    ],
+    "max_clock_skew_sec": 300,
+    "nonce_ttl_sec": 300,
+    "nonce_store": "memory",
+    "nonce_store_path": "",
+    "nonce_redis_prefix": "atlas:nonce:"
+  },
+  "next_experiment_agent_id": "shipping-desk-01",
+  "proposal_id": "proposal-exp-shipping-desk-01-1777425971",
+  "commit_id": "",
+  "approval_id": "",
+  "guard_outcomes": [
+    {
+      "guard_id": "cro-01",
+      "guard_skill": "cro_risk",
+      "severity": "hard",
+      "passed": true,
+      "reason": "未過濾任何推薦，全部放行",
+      "input_count": 5,
+      "output_count": 5
+    },
+    {
+      "guard_id": "cio-01",
+      "guard_skill": "cio_portfolio",
+      "severity": "soft",
+      "passed": true,
+      "reason": "過濾了 2 筆推薦，僅保留符合條件的標的",
+      "input_count": 5,
+      "output_count": 3
+    }
+  ],
+  "recorded_at": "2026-04-29T09:26:11.740683+08:00",
+  "after_tax_pnl": 0,
+  "total_tax_paid": 0
+}

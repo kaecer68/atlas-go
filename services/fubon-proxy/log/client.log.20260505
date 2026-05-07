@@ -1,0 +1,127 @@
+[2026-05-05 01:15:41.851343 +08:00 INFO] [apikey_dma_login] personal_id="M120628569"
+[2026-05-05 01:15:41.997416 +08:00 INFO] [apikey_dma_login] Loaded permissions from XPSAZBIZS: {FutoptAccounting, StockTrading, MarketData, StockAccounting, FutoptTrading}
+[2026-05-05 02:16:38.408115 +08:00 INFO] [apikey_dma_login] personal_id="M120628569"
+[2026-05-05 02:16:38.429131 +08:00 INFO] [apikey_dma_login] Loaded permissions from XPSAZBIZS: {FutoptAccounting, StockTrading, FutoptTrading, StockAccounting, MarketData}
+[2026-05-05 03:17:44.354449 +08:00 INFO] [apikey_dma_login] personal_id="M120628569"
+[2026-05-05 03:17:44.401287 +08:00 INFO] [apikey_dma_login] Loaded permissions from XPSAZBIZS: {StockTrading, FutoptTrading, StockAccounting, MarketData, FutoptAccounting}
+[2026-05-05 04:18:40.525844 +08:00 INFO] [apikey_dma_login] personal_id="M120628569"
+[2026-05-05 04:18:40.543618 +08:00 INFO] [apikey_dma_login] Loaded permissions from XPSAZBIZS: {MarketData, StockAccounting, StockTrading, FutoptAccounting, FutoptTrading}
+[2026-05-05 05:23:22.538018 +08:00 INFO] [apikey_dma_login] personal_id="M120628569"
+[2026-05-05 05:23:22.576066 +08:00 INFO] [apikey_dma_login] Loaded permissions from XPSAZBIZS: {MarketData, FutoptTrading, StockAccounting, FutoptAccounting, StockTrading}
+[2026-05-05 06:20:21.390151 +08:00 INFO] [apikey_dma_login] personal_id="M120628569"
+[2026-05-05 06:20:21.409803 +08:00 INFO] [apikey_dma_login] Loaded permissions from XPSAZBIZS: {FutoptTrading, FutoptAccounting, StockTrading, StockAccounting, MarketData}
+[2026-05-05 07:21:42.512846 +08:00 INFO] [apikey_dma_login] personal_id="M120628569"
+[2026-05-05 07:21:42.674865 +08:00 INFO] [apikey_dma_login] Loaded permissions from XPSAZBIZS: {StockAccounting, StockTrading, MarketData, FutoptAccounting, FutoptTrading}
+[2026-05-05 07:50:30.500437 +08:00 INFO] [apikey_dma_login] personal_id="M120628569"
+[2026-05-05 07:50:30.522714 +08:00 INFO] [apikey_dma_login] Loaded permissions from XPSAZBIZS: {StockAccounting, MarketData, StockTrading, FutoptAccounting, FutoptTrading}
+[2026-05-05 08:22:57.248875 +08:00 INFO] [apikey_dma_login] personal_id="M120628569"
+[2026-05-05 08:22:57.265368 +08:00 INFO] [apikey_dma_login] Loaded permissions from XPSAZBIZS: {MarketData, FutoptTrading, StockTrading, FutoptAccounting, StockAccounting}
+[2026-05-05 08:51:14.505648 +08:00 INFO] [apikey_dma_login] personal_id="M120628569"
+[2026-05-05 08:51:14.524068 +08:00 INFO] [apikey_dma_login] Loaded permissions from XPSAZBIZS: {FutoptTrading, StockAccounting, MarketData, StockTrading, FutoptAccounting}
+[2026-05-05 08:52:14.381927 +08:00 INFO] [apikey_dma_login] personal_id="M120628569"
+[2026-05-05 08:52:14.402097 +08:00 INFO] [apikey_dma_login] Loaded permissions from XPSAZBIZS: {StockAccounting, FutoptTrading, FutoptAccounting, StockTrading, MarketData}
+[2026-05-05 08:53:14.405294 +08:00 INFO] [apikey_dma_login] personal_id="M120628569"
+[2026-05-05 08:53:14.423526 +08:00 INFO] [apikey_dma_login] Loaded permissions from XPSAZBIZS: {StockAccounting, FutoptTrading, FutoptAccounting, MarketData, StockTrading}
+[2026-05-05 08:54:14.447738 +08:00 INFO] [apikey_dma_login] personal_id="M120628569"
+[2026-05-05 08:54:14.469961 +08:00 INFO] [apikey_dma_login] Loaded permissions from XPSAZBIZS: {FutoptTrading, MarketData, StockAccounting, FutoptAccounting, StockTrading}
+[2026-05-05 08:55:14.384806 +08:00 INFO] [apikey_dma_login] personal_id="M120628569"
+[2026-05-05 08:55:14.402154 +08:00 INFO] [apikey_dma_login] Loaded permissions from XPSAZBIZS: {MarketData, FutoptTrading, StockTrading, FutoptAccounting, StockAccounting}
+[2026-05-05 08:55:24.881087 +08:00 INFO] [login] personal_id="M120628569"
+[2026-05-05 08:55:24.910059 +08:00 INFO] this account require 2fa
+[2026-05-05 08:55:24.985638 +08:00 INFO] [future_option_mapping]: 59.775292ms
+[2026-05-05 08:55:25.002655 +08:00 INFO] [future_option_mapping]: 15.809875ms
+[2026-05-05 08:55:25.160311 +08:00 INFO] [future_option_mapping]: 157.493ms
+[2026-05-05 08:55:25.177143 +08:00 INFO] [future_option_mapping]: 13.392167ms
+[2026-05-05 08:55:25.270205 +08:00 INFO] [logout] user manually logout
+[2026-05-05 08:55:52.078065 +08:00 INFO] [login] personal_id="M120628569"
+[2026-05-05 08:55:52.102726 +08:00 INFO] this account require 2fa
+[2026-05-05 08:55:52.185460 +08:00 INFO] [future_option_mapping]: 65.685709ms
+[2026-05-05 08:55:52.201250 +08:00 INFO] [future_option_mapping]: 14.645375ms
+[2026-05-05 08:55:52.272432 +08:00 INFO] [future_option_mapping]: 71.004833ms
+[2026-05-05 08:55:52.291683 +08:00 INFO] [future_option_mapping]: 15.932375ms
+[2026-05-05 08:57:40.112197 +08:00 INFO] [login] personal_id="M120628569"
+[2026-05-05 08:57:40.142468 +08:00 INFO] this account require 2fa
+[2026-05-05 08:57:40.252642 +08:00 INFO] [logout] user manually logout
+[2026-05-05 08:58:55.690732 +08:00 INFO] [login] personal_id="M120628569"
+[2026-05-05 08:58:55.712815 +08:00 INFO] this account require 2fa
+[2026-05-05 08:58:55.882968 +08:00 INFO] [future_option_mapping]: 154.694042ms
+[2026-05-05 08:58:55.899522 +08:00 INFO] [future_option_mapping]: 15.638292ms
+[2026-05-05 08:58:55.968867 +08:00 INFO] [future_option_mapping]: 69.18225ms
+[2026-05-05 08:58:55.985705 +08:00 INFO] [future_option_mapping]: 13.42875ms
+[2026-05-05 09:00:48.999851 +08:00 INFO] [login] personal_id="M120628569"
+[2026-05-05 09:00:49.039616 +08:00 INFO] this account require 2fa
+[2026-05-05 09:00:49.155730 +08:00 INFO] [logout] user manually logout
+[2026-05-05 09:01:59.918650 +08:00 INFO] [login] personal_id="M120628569"
+[2026-05-05 09:01:59.942916 +08:00 INFO] this account require 2fa
+[2026-05-05 09:02:00.033778 +08:00 INFO] [future_option_mapping]: 72.794666ms
+[2026-05-05 09:02:00.051701 +08:00 INFO] [future_option_mapping]: 16.832125ms
+[2026-05-05 09:02:00.122558 +08:00 INFO] [future_option_mapping]: 70.69425ms
+[2026-05-05 09:02:00.139416 +08:00 INFO] [future_option_mapping]: 13.308125ms
+[2026-05-05 10:02:14.317124 +08:00 INFO] [login] personal_id="M120628569"
+[2026-05-05 10:02:14.339132 +08:00 INFO] this account require 2fa
+[2026-05-05 11:03:14.342049 +08:00 INFO] [login] personal_id="M120628569"
+[2026-05-05 11:03:14.363477 +08:00 INFO] this account require 2fa
+[2026-05-05 11:03:14.450654 +08:00 INFO] [future_option_mapping]: 72.708083ms
+[2026-05-05 11:03:14.475060 +08:00 INFO] [future_option_mapping]: 21.891833ms
+[2026-05-05 11:03:14.549452 +08:00 INFO] [future_option_mapping]: 73.766458ms
+[2026-05-05 11:03:14.566206 +08:00 INFO] [future_option_mapping]: 13.472417ms
+[2026-05-05 12:08:03.633846 +08:00 INFO] [login] personal_id="M120628569"
+[2026-05-05 12:08:03.664972 +08:00 INFO] this account require 2fa
+[2026-05-05 12:08:04.007158 +08:00 INFO] [future_option_mapping]: 190.306791ms
+[2026-05-05 12:08:04.051700 +08:00 INFO] [future_option_mapping]: 43.696ms
+[2026-05-05 12:08:04.314106 +08:00 INFO] [future_option_mapping]: 262.291208ms
+[2026-05-05 12:08:04.336369 +08:00 INFO] [future_option_mapping]: 19.066875ms
+[2026-05-05 13:15:40.658915 +08:00 INFO] [login] personal_id="M120628569"
+[2026-05-05 13:15:40.680325 +08:00 INFO] this account require 2fa
+[2026-05-05 13:15:40.767003 +08:00 INFO] [future_option_mapping]: 71.055875ms
+[2026-05-05 13:15:40.783155 +08:00 INFO] [future_option_mapping]: 15.227292ms
+[2026-05-05 13:15:40.852214 +08:00 INFO] [future_option_mapping]: 68.956459ms
+[2026-05-05 13:15:40.868979 +08:00 INFO] [future_option_mapping]: 13.55225ms
+[2026-05-05 14:16:28.132830 +08:00 INFO] [login] personal_id="M120628569"
+[2026-05-05 14:16:28.154798 +08:00 INFO] this account require 2fa
+[2026-05-05 14:16:28.240176 +08:00 INFO] [future_option_mapping]: 69.737292ms
+[2026-05-05 14:16:28.259063 +08:00 INFO] [future_option_mapping]: 18.059917ms
+[2026-05-05 14:16:28.343411 +08:00 INFO] [future_option_mapping]: 84.206875ms
+[2026-05-05 14:16:28.364249 +08:00 INFO] [future_option_mapping]: 17.668333ms
+[2026-05-05 15:50:07.463406 +08:00 INFO] [login] personal_id="M120628569"
+[2026-05-05 15:50:07.510745 +08:00 INFO] this account require 2fa
+[2026-05-05 15:50:07.615509 +08:00 INFO] [future_option_mapping]: 69.981917ms
+[2026-05-05 15:50:07.631142 +08:00 INFO] [future_option_mapping]: 14.792833ms
+[2026-05-05 15:50:07.706495 +08:00 INFO] [future_option_mapping]: 75.223416ms
+[2026-05-05 15:50:07.725442 +08:00 INFO] [future_option_mapping]: 15.551083ms
+[2026-05-05 16:59:46.252452 +08:00 INFO] [login] personal_id="M120628569"
+[2026-05-05 16:59:46.273440 +08:00 INFO] this account require 2fa
+[2026-05-05 16:59:46.356787 +08:00 INFO] [future_option_mapping]: 67.777875ms
+[2026-05-05 16:59:46.373488 +08:00 INFO] [future_option_mapping]: 15.880416ms
+[2026-05-05 16:59:46.457971 +08:00 INFO] [future_option_mapping]: 84.343667ms
+[2026-05-05 16:59:46.474539 +08:00 INFO] [future_option_mapping]: 13.235625ms
+[2026-05-05 17:59:52.248585 +08:00 INFO] [login] personal_id="M120628569"
+[2026-05-05 17:59:52.270788 +08:00 INFO] this account require 2fa
+[2026-05-05 17:59:52.357745 +08:00 INFO] [future_option_mapping]: 66.777583ms
+[2026-05-05 17:59:52.374077 +08:00 INFO] [future_option_mapping]: 15.274709ms
+[2026-05-05 17:59:52.454964 +08:00 INFO] [future_option_mapping]: 80.707708ms
+[2026-05-05 17:59:52.472157 +08:00 INFO] [future_option_mapping]: 14.037417ms
+[2026-05-05 19:00:30.692811 +08:00 INFO] [login] personal_id="M120628569"
+[2026-05-05 19:00:30.717352 +08:00 INFO] this account require 2fa
+[2026-05-05 19:00:30.943535 +08:00 INFO] [future_option_mapping]: 203.673375ms
+[2026-05-05 19:00:30.960342 +08:00 INFO] [future_option_mapping]: 15.809208ms
+[2026-05-05 19:00:31.142457 +08:00 INFO] [future_option_mapping]: 181.985708ms
+[2026-05-05 19:00:31.158298 +08:00 INFO] [future_option_mapping]: 12.729375ms
+[2026-05-05 20:01:30.625156 +08:00 INFO] [login] personal_id="M120628569"
+[2026-05-05 20:01:30.646361 +08:00 INFO] this account require 2fa
+[2026-05-05 20:01:30.730748 +08:00 INFO] [future_option_mapping]: 69.372458ms
+[2026-05-05 20:01:30.747295 +08:00 INFO] [future_option_mapping]: 15.587375ms
+[2026-05-05 20:01:30.830853 +08:00 INFO] [future_option_mapping]: 83.45825ms
+[2026-05-05 20:01:30.847237 +08:00 INFO] [future_option_mapping]: 13.108916ms
+[2026-05-05 21:02:30.622826 +08:00 INFO] [login] personal_id="M120628569"
+[2026-05-05 21:02:30.648201 +08:00 INFO] this account require 2fa
+[2026-05-05 21:02:30.756331 +08:00 INFO] [future_option_mapping]: 91.703084ms
+[2026-05-05 21:02:30.773909 +08:00 INFO] [future_option_mapping]: 16.658334ms
+[2026-05-05 21:02:30.858672 +08:00 INFO] [future_option_mapping]: 84.618041ms
+[2026-05-05 21:02:30.875532 +08:00 INFO] [future_option_mapping]: 13.5515ms
+[2026-05-05 22:02:35.924928 +08:00 INFO] [login] personal_id="M120628569"
+[2026-05-05 22:02:35.950025 +08:00 INFO] this account require 2fa
+[2026-05-05 22:02:36.038059 +08:00 INFO] [future_option_mapping]: 71.962292ms
+[2026-05-05 22:02:36.056697 +08:00 INFO] [future_option_mapping]: 17.801708ms
+[2026-05-05 22:02:36.136144 +08:00 INFO] [future_option_mapping]: 79.312667ms
+[2026-05-05 22:02:36.152821 +08:00 INFO] [future_option_mapping]: 12.989666ms

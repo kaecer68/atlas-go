@@ -1,0 +1,74 @@
+{
+  "Experiment": {
+    "ID": "exec-growth-momentum-01-1775602355",
+    "ProposalID": "",
+    "CommitID": "",
+    "ApprovalID": "",
+    "TargetAgentID": "growth-momentum-01",
+    "Skill": "growth_momentum",
+    "Hypothesis": "Refine growth-momentum-01 to improve risk-adjusted recommendation quality",
+    "PromptVersionFrom": "v1",
+    "PromptVersionTo": "v2",
+    "MutationType": "risk_rule_change",
+    "AcceptanceGates": [
+      "improve_sharpe_like",
+      "no_material_drawdown_degradation",
+      "no_constraint_bypass"
+    ],
+    "WindowStart": "2026-04-08T06:52:35.745375+08:00",
+    "WindowEnd": "2026-04-08T06:52:35.745376+08:00",
+    "AcceptanceMetric": "sharpe_like",
+    "BaselineValue": 0,
+    "CandidateValue": 0,
+    "Status": "expired",
+    "RevertReason": "Auto-expired after 24h0m0s"
+  },
+  "Brief": {
+    "window_id": "window-20260328-20260331",
+    "target_agent_id": "growth-momentum-01",
+    "target_skill": "growth_momentum",
+    "target_layer": "style",
+    "prompt_file": "prompts/agents/growth_momentum.md",
+    "mutation_type": "risk_rule_change",
+    "failure_pattern": "",
+    "hypothesis": "Refine growth-momentum-01 to improve risk-adjusted recommendation quality",
+    "acceptance_metric": "sharpe_like",
+    "acceptance_gates": [
+      "improve_sharpe_like",
+      "no_material_drawdown_degradation",
+      "no_constraint_bypass"
+    ],
+    "forbidden_actions": [
+      "illiquid_breakout_chasing"
+    ],
+    "required_skills": [
+      "growth_momentum"
+    ],
+    "observed_window_count": 2,
+    "maturity_level": "level_2_window_validated",
+    "iteration_guidance": [
+      "preserve required skills while tightening setup quality",
+      "avoid weakening control-layer constraints"
+    ],
+    "recommended_window": "10_trading_days",
+    "generated_at": "2026-04-06T00:40:39Z"
+  },
+  "CandidatePrompt": "prompts/experiments/growth-momentum-01/exec-growth-momentum-01-1775602355/v2.md",
+  "EvaluationMode": "policy_checked_pending_replay",
+  "PolicyChecks": [
+    "required skill preserved: growth_momentum",
+    "forbidden action explicitly guarded: illiquid_breakout_chasing"
+  ],
+  "Notes": [
+    "Candidate prompt generated successfully.",
+    "Policy checks passed for required skill and forbidden action boundaries.",
+    "Iteration guidance was embedded from layer-aware and evidence-aware mutation policy.",
+    "Candidate artifact template was selected from the mutation type profile.",
+    "Replay performance evaluation is the next step before acceptance or rejection."
+  ],
+  "JudgeChecks": null,
+  "BaselineObservations": 0,
+  "CandidateObservations": 0,
+  "UsedFallbackWindow": false,
+  "RecordedAt": "2026-04-14T01:21:25.928374+08:00"
+}

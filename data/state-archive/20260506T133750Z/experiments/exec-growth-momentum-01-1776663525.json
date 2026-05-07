@@ -1,0 +1,93 @@
+{
+  "Experiment": {
+    "ID": "exec-growth-momentum-01-1776663525",
+    "ProposalID": "proposal-window-20260325-20260331",
+    "CommitID": "commit-exec-growth-momentum-01-1776663525",
+    "ApprovalID": "approval-exec-growth-momentum-01-1776663525",
+    "TargetAgentID": "growth-momentum-01",
+    "Skill": "growth_momentum",
+    "Hypothesis": "A targeted prompt refinement can improve risk-adjusted recommendation quality.",
+    "PromptVersionFrom": "v1",
+    "PromptVersionTo": "v2",
+    "MutationType": "prompt_tightening",
+    "AcceptanceGates": [
+      "improve_sharpe_like",
+      "no_material_drawdown_degradation",
+      "no_constraint_bypass"
+    ],
+    "WindowStart": "2026-03-25T00:00:00Z",
+    "WindowEnd": "2026-03-31T00:00:00Z",
+    "AcceptanceMetric": "sharpe_like",
+    "BaselineValue": 0.05566718037935777,
+    "CandidateValue": -0.19971123353771547,
+    "Status": "rejected",
+    "RevertReason": "Replay judge did not satisfy maturity-aware acceptance gates."
+  },
+  "Brief": {
+    "contract_version": 1,
+    "proposal_id": "proposal-window-20260325-20260331",
+    "window_id": "window-20260325-20260331",
+    "target_agent_id": "growth-momentum-01",
+    "target_skill": "growth_momentum",
+    "target_layer": "style",
+    "prompt_file": "prompts/agents/growth_momentum.md",
+    "mutation_type": "prompt_tightening",
+    "failure_pattern": "",
+    "hypothesis": "A targeted prompt refinement can improve risk-adjusted recommendation quality.",
+    "acceptance_metric": "sharpe_like",
+    "acceptance_gates": [
+      "improve_sharpe_like",
+      "no_material_drawdown_degradation",
+      "no_constraint_bypass"
+    ],
+    "forbidden_actions": [
+      "late_cycle_chasing",
+      "macro_override"
+    ],
+    "required_skills": [
+      "growth_momentum",
+      "earnings_quality",
+      "technical_breakout"
+    ],
+    "observed_window_count": 10,
+    "maturity_level": "level_2_validated",
+    "iteration_guidance": [
+      "Change one bounded behavior only",
+      "Preserve required skills and forbidden action boundaries",
+      "Tighten momentum confirmation without reducing exploratory coverage"
+    ],
+    "recommended_window": "short validation window before broader promotion",
+    "generated_at": "2026-04-13T23:08:45Z"
+  },
+  "CandidatePrompt": "prompts/experiments/growth-momentum-01/exec-growth-momentum-01-1776663525/v2.md",
+  "EvaluationMode": "prompt_aware_replay_judged",
+  "PolicyChecks": [
+    "required skill preserved: growth_momentum",
+    "required skill preserved: earnings_quality",
+    "required skill preserved: technical_breakout",
+    "forbidden action explicitly guarded: late_cycle_chasing",
+    "forbidden action explicitly guarded: macro_override"
+  ],
+  "Notes": [
+    "Candidate prompt generated successfully.",
+    "Policy checks passed for required skill and forbidden action boundaries.",
+    "Iteration guidance was embedded from layer-aware and evidence-aware mutation policy.",
+    "Candidate artifact template was selected from the mutation type profile.",
+    "Candidate constraints are generated relative to current baseline to ensure meaningful delta.",
+    "Replay performance evaluation is the next step before acceptance or rejection.",
+    "Replay judge rejected the candidate."
+  ],
+  "JudgeChecks": [
+    "contains stronger trend confirmation rule",
+    "contains conviction downgrade logic",
+    "required skill policy checks preserved",
+    "forbidden actions still named in candidate prompt",
+    "baseline observations: 10",
+    "candidate observations: 6",
+    "rejected: candidate did not improve over baseline"
+  ],
+  "BaselineObservations": 10,
+  "CandidateObservations": 6,
+  "UsedFallbackWindow": false,
+  "RecordedAt": "2026-04-20T13:39:10.373951+08:00"
+}

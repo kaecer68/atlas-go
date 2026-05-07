@@ -1,0 +1,103 @@
+{
+  "experiment": {
+    "id": "exec-value-yield-01-1776084503",
+    "proposal_id": "proposal-exp-value-yield-01-1775813260",
+    "commit_id": "commit-exec-value-yield-01-1776084503",
+    "approval_id": "approval-exec-value-yield-01-1776084503",
+    "target_agent_id": "value-yield-01",
+    "skill": "value_yield",
+    "hypothesis": "A targeted prompt refinement can improve risk-adjusted recommendation quality.",
+    "prompt_version_from": "v1",
+    "prompt_version_to": "v2",
+    "mutation_type": "prompt_tightening",
+    "acceptance_gates": [
+      "improve_sharpe_like",
+      "no_material_drawdown_degradation",
+      "no_constraint_bypass"
+    ],
+    "window_start": "2026-03-26T00:00:00Z",
+    "window_end": "2026-03-27T00:00:00Z",
+    "acceptance_metric": "sharpe_like",
+    "baseline_value": 1.8238828216705636,
+    "candidate_value": 1.8238828216705636,
+    "status": "rejected",
+    "revert_reason": "Replay judge did not satisfy maturity-aware acceptance gates."
+  },
+  "brief": {
+    "contract_version": 1,
+    "proposal_id": "proposal-exp-value-yield-01-1775813260",
+    "window_id": "window-20260326-20260327",
+    "target_agent_id": "value-yield-01",
+    "target_skill": "value_yield",
+    "target_layer": "style",
+    "prompt_file": "prompts/agents/value_yield.md",
+    "mutation_type": "prompt_tightening",
+    "failure_pattern": "Repeated negative risk-adjusted outcomes across replay sessions.",
+    "hypothesis": "A targeted prompt refinement can improve risk-adjusted recommendation quality.",
+    "acceptance_metric": "sharpe_like",
+    "acceptance_gates": [
+      "improve_sharpe_like",
+      "no_material_drawdown_degradation",
+      "no_constraint_bypass"
+    ],
+    "forbidden_actions": [
+      "yield_trap_selection",
+      "narrative_chasing"
+    ],
+    "required_skills": [
+      "value_yield",
+      "financials_desk"
+    ],
+    "observed_window_count": 1,
+    "maturity_level": "level_1_exploratory",
+    "iteration_guidance": [
+      "Change one bounded behavior only.",
+      "Preserve required skills and forbidden action boundaries.",
+      "Tighten entry filters and false-positive control before changing role identity.",
+      "Do not smuggle sector or portfolio policy into a style mutation.",
+      "Evidence is still thin; prefer conservative prompt tightening over ambitious rewrites."
+    ],
+    "recommended_window": "next short validation window before broader promotion",
+    "generated_at": "2026-04-10T17:27:40.591879+08:00"
+  },
+  "candidate_prompt": "prompts/experiments/value-yield-01/exec-value-yield-01-1776084503/v2.md",
+  "evaluation_mode": "prompt_aware_replay_judged",
+  "policy_checks": [
+    "required skill preserved: value_yield",
+    "required skill preserved: financials_desk",
+    "forbidden action explicitly guarded: yield_trap_selection",
+    "forbidden action explicitly guarded: narrative_chasing"
+  ],
+  "notes": [
+    "Candidate prompt generated successfully.",
+    "Policy checks passed for required skill and forbidden action boundaries.",
+    "Iteration guidance was embedded from layer-aware and evidence-aware mutation policy.",
+    "Candidate artifact template was selected from the mutation type profile.",
+    "Candidate constraints are generated relative to current baseline to ensure meaningful delta.",
+    "Replay performance evaluation is the next step before acceptance or rejection.",
+    "Replay judge rejected the candidate.",
+    "Replay judge rejected the candidate.",
+    "Replay judge rejected the candidate.",
+    "Replay judge rejected the candidate.",
+    "Replay judge rejected the candidate.",
+    "Replay judge rejected the candidate."
+  ],
+  "judge_checks": [
+    "contains conviction downgrade logic",
+    "required skill policy checks preserved",
+    "forbidden actions still named in candidate prompt",
+    "baseline observations: 1",
+    "candidate observations: 1",
+    "rejected: insufficient replay observations (baseline=1 candidate=1 required=3)"
+  ],
+  "baseline_observations": 1,
+  "candidate_observations": 1,
+  "used_fallback_window": false,
+  "recorded_at": "2026-04-25T13:52:41.846676+08:00",
+  "baseline_returns": [
+    1.8238828216705636
+  ],
+  "candidate_returns": [
+    1.8238828216705636
+  ]
+}

@@ -1,0 +1,1340 @@
+{
+  "id": "exp-exec-test-agent-01-1778074685",
+  "timestamp": "2026-05-06T21:38:05.923376+08:00",
+  "reason": "Experiment execution: exec-test-agent-01-1778074685",
+  "params": {
+    "version": "1.0",
+    "updated_at": "2026-05-06T21:38:05.923372+08:00",
+    "darwinian": {
+      "weight_min": {
+        "value": 0.3,
+        "rationale": "Whisper level: agent influence reduced to 30%",
+        "source": "heuristic",
+        "todo": "Calibrate from backtest: test [0.2, 0.5] range"
+      },
+      "weight_max": {
+        "value": 2.5,
+        "rationale": "Shout level: agent influence amplified to 250%",
+        "source": "heuristic",
+        "todo": "Calibrate from backtest: test [2.0, 3.0] range"
+      },
+      "weight_neutral": {
+        "value": 1,
+        "rationale": "Baseline: no adjustment",
+        "source": "heuristic"
+      },
+      "top_quartile_multiplier": {
+        "value": 1.05,
+        "rationale": "5% daily boost for top performers",
+        "source": "heuristic",
+        "todo": "Literature review: Atlas-GIC uses tiered scaling, exact value unverified"
+      },
+      "bottom_quartile_multiplier": {
+        "value": 0.95,
+        "rationale": "5% daily cut for bottom performers",
+        "source": "heuristic",
+        "todo": "Calibrate: test asymmetric penalties"
+      },
+      "daily_adjustment_cooldown": {
+        "value": "20h",
+        "rationale": "Slightly less than 24h for daily trading frequency",
+        "source": "heuristic"
+      },
+      "lookback_days": {
+        "value": 20,
+        "rationale": "One trading month (approx 20 business days)",
+        "source": "heuristic",
+        "todo": "Literature: 20-day Sharpe has low statistical power; consider 60-day"
+      },
+      "ema_alpha": {
+        "value": 0.3,
+        "rationale": "Standard EMA smoothing factor",
+        "source": "literature"
+      },
+      "sharpe_normalize_denom": {
+        "value": 2,
+        "rationale": "Sigmoid-like normalization: Sharpe/(Sharpe+2.0)",
+        "source": "heuristic",
+        "todo": "Calibrate from historical Sharpe distribution: use 90th percentile"
+      },
+      "max_performance_bonus_pct": {
+        "value": 0.2,
+        "rationale": "Cap performance bonus at +20%",
+        "source": "heuristic",
+        "todo": "Calibrate from backtest optimization"
+      },
+      "volatility_penalty_threshold": {
+        "value": 0.05,
+        "rationale": "5% daily volatility (~79% annualized) is high for TW market",
+        "source": "empirical"
+      },
+      "volatility_penalty_multiplier": {
+        "value": 0.95,
+        "rationale": "5% penalty for high volatility agents",
+        "source": "heuristic"
+      },
+      "risk_volatility_threshold": {
+        "value": 0.08,
+        "rationale": "8% daily volatility is extreme; extra penalty warranted",
+        "source": "empirical"
+      },
+      "risk_multiplier": {
+        "value": 0.9,
+        "rationale": "Extra 10% cut for extreme volatility",
+        "source": "heuristic"
+      },
+      "hit_rate_high_threshold": {
+        "value": 0.6,
+        "rationale": "60% hit rate is good in TW equity market",
+        "source": "empirical"
+      },
+      "hit_rate_low_threshold": {
+        "value": 0.4,
+        "rationale": "40% hit rate is poor and warrants reduction",
+        "source": "empirical"
+      },
+      "middle_tier_boost_multiplier": {
+        "value": 1.02,
+        "rationale": "2% mild boost for middle tier with good hit rate",
+        "source": "heuristic"
+      },
+      "middle_tier_cut_multiplier": {
+        "value": 0.98,
+        "rationale": "2% mild cut for middle tier with poor hit rate",
+        "source": "heuristic"
+      },
+      "sharpe_min_sample_size": {
+        "value": 5,
+        "rationale": "Minimum observations for Sharpe calculation",
+        "source": "literature",
+        "todo": "Literature: 5 is insufficient for stable Sharpe; recommend 20+"
+      },
+      "stddev_mean_ratio_threshold": {
+        "value": 0.001,
+        "rationale": "Guard against IEEE 754 precision edge case for identical returns",
+        "source": "inferred"
+      },
+      "conviction_clamp_min": {
+        "value": 1,
+        "rationale": "Minimum conviction after weight scaling",
+        "source": "heuristic"
+      },
+      "conviction_clamp_max": {
+        "value": 250,
+        "rationale": "Maximum conviction after weight scaling (100 * 2.5)",
+        "source": "heuristic"
+      }
+    },
+    "factor": {
+      "momentum_lookback_days": {
+        "value": 20,
+        "rationale": "Standard 20-day momentum window",
+        "source": "literature"
+      },
+      "momentum_stddev_divisor": {
+        "value": 0.3,
+        "rationale": "30% return = full score; most TW stocks score below 0.3",
+        "source": "heuristic",
+        "todo": "Calibrate: use historical return distribution 90th percentile"
+      },
+      "momentum_intraday_discount": {
+        "value": 0.5,
+        "rationale": "50% discount for intraday returns when historical data unavailable",
+        "source": "heuristic",
+        "todo": "SCOR-01: review discount factor with more data"
+      },
+      "momentum_intraday_threshold": {
+        "value": 0.1,
+        "rationale": "10% intraday return = full score",
+        "source": "heuristic"
+      },
+      "value_pe_range_center": {
+        "value": 5,
+        "rationale": "P/E=5 is cheap; P/E=50 is expensive",
+        "source": "heuristic"
+      },
+      "value_pe_range_width": {
+        "value": 45,
+        "rationale": "Range [5, 50] covers most TW stocks",
+        "source": "empirical"
+      },
+      "value_pb_range_center": {
+        "value": 0.5,
+        "rationale": "P/B=0.5 is cheap",
+        "source": "heuristic"
+      },
+      "value_pb_range_width": {
+        "value": 4.5,
+        "rationale": "Range [0.5, 5.0]",
+        "source": "heuristic"
+      },
+      "value_ps_range_center": {
+        "value": 0.5,
+        "rationale": "P/S=0.5 is cheap",
+        "source": "heuristic"
+      },
+      "value_ps_range_width": {
+        "value": 9.5,
+        "rationale": "Range [0.5, 10.0]",
+        "source": "heuristic"
+      },
+      "quality_dividend_yield_cap": {
+        "value": 5,
+        "rationale": "5% dividend yield is excellent for TW market",
+        "source": "empirical"
+      },
+      "quality_volatility_std": {
+        "value": 0.05,
+        "rationale": "5% daily volatility as quality benchmark",
+        "source": "heuristic",
+        "todo": "Review: TW market average daily vol is 1-3%, this may be too high"
+      },
+      "quality_fallback_score": {
+        "value": 0.05,
+        "rationale": "Low fallback score when data unavailable",
+        "source": "heuristic"
+      },
+      "value_fallback_score": {
+        "value": 0.1,
+        "rationale": "Moderate fallback score when data unavailable",
+        "source": "heuristic",
+        "todo": "Inconsistent with QualityFallbackScore (0.05); harmonize"
+      },
+      "institutional_sentiment_weights": {
+        "value": {
+          "domestic": 0.3,
+          "foreign": 0.5,
+          "margin": 0.2
+        },
+        "rationale": "Foreign flow 50%, domestic 30%, margin balance 20%",
+        "source": "heuristic",
+        "todo": "Calibrate from regression: predict next-day returns"
+      },
+      "fallback_weight_reduction": {
+        "value": 0.5,
+        "rationale": "50% weight reduction for fallback estimates",
+        "source": "heuristic",
+        "todo": "Calibrate: measure fallback estimate accuracy"
+      }
+    },
+    "optimizer": {
+      "max_position_pct": {
+        "value": 0.15,
+        "rationale": "15% max single position for diversification",
+        "source": "literature"
+      },
+      "max_sector_pct": {
+        "value": 0.4,
+        "rationale": "40% max single sector concentration",
+        "source": "heuristic"
+      },
+      "max_turnover_daily": {
+        "value": 0.2,
+        "rationale": "20% daily turnover limit",
+        "source": "heuristic",
+        "todo": "Currently unused in optimizer; implement or remove"
+      },
+      "target_beta": {
+        "value": 1,
+        "rationale": "Market-neutral target beta",
+        "source": "literature",
+        "todo": "Currently unused; implement beta constraint"
+      },
+      "beta_range_min": {
+        "value": 0.8,
+        "rationale": "Minimum portfolio beta",
+        "source": "heuristic",
+        "todo": "Currently unused"
+      },
+      "beta_range_max": {
+        "value": 1.2,
+        "rationale": "Maximum portfolio beta",
+        "source": "heuristic",
+        "todo": "Currently unused"
+      },
+      "min_trade_size": {
+        "value": 1,
+        "rationale": "Minimum 1 share",
+        "source": "heuristic",
+        "todo": "Currently unused; implement minimum trade size"
+      },
+      "cash_reserve": {
+        "value": 0.05,
+        "rationale": "5% cash reserve for liquidity",
+        "source": "heuristic"
+      },
+      "factor_weights": {
+        "value": {
+          "agent": 0.2,
+          "momentum": 0.3,
+          "quality": 0.25,
+          "value": 0.25
+        },
+        "rationale": "Momentum 30%, Value 25%, Quality 25%, Agent 20%",
+        "source": "heuristic",
+        "todo": "AGENTS.md claims different weights (20/15/15/20); reconcile"
+      }
+    },
+    "sizing": {
+      "kelly_fraction": {
+        "value": 0.25,
+        "rationale": "Half-Kelly for safety; literature recommends 0.2-0.5",
+        "source": "literature"
+      },
+      "vol_lookback_days": {
+        "value": 20,
+        "rationale": "20-day volatility lookback",
+        "source": "literature"
+      },
+      "max_position_by_adv": {
+        "value": 0.01,
+        "rationale": "1% of average daily volume",
+        "source": "literature"
+      },
+      "max_drawdown_limit": {
+        "value": 0.1,
+        "rationale": "10% max drawdown limit",
+        "source": "heuristic",
+        "todo": "Currently unused; implement drawdown stop"
+      },
+      "atr_multiplier": {
+        "value": 2,
+        "rationale": "2x ATR stop-loss is standard",
+        "source": "literature"
+      },
+      "correlation_penalty": {
+        "value": 0.5,
+        "rationale": "50% correlation penalty scaling",
+        "source": "heuristic",
+        "todo": "Calibrate from portfolio optimization backtest"
+      },
+      "correlation_threshold": {
+        "value": 0.7,
+        "rationale": "70% correlation is high and warrants penalty",
+        "source": "heuristic"
+      },
+      "default_win_rate": {
+        "value": 0.5,
+        "rationale": "Neutral prior: 50% win rate",
+        "source": "heuristic",
+        "todo": "Should be overridden by agent historical stats"
+      },
+      "default_payoff_ratio": {
+        "value": 1,
+        "rationale": "Neutral prior: 1:1 payoff ratio",
+        "source": "heuristic",
+        "todo": "Should be overridden by agent historical stats"
+      },
+      "target_volatility": {
+        "value": 0.2,
+        "rationale": "20% annual target volatility",
+        "source": "literature"
+      },
+      "vol_adjustment_min": {
+        "value": 0.25,
+        "rationale": "Minimum 0.25x size adjustment",
+        "source": "heuristic"
+      },
+      "vol_adjustment_max": {
+        "value": 2,
+        "rationale": "Maximum 2.0x size adjustment",
+        "source": "heuristic"
+      },
+      "atr_target_risk": {
+        "value": 0.02,
+        "rationale": "2% risk per trade",
+        "source": "literature"
+      },
+      "atr_adjustment_min": {
+        "value": 0.25,
+        "rationale": "Minimum 0.25x ATR adjustment",
+        "source": "heuristic"
+      },
+      "atr_adjustment_max": {
+        "value": 2,
+        "rationale": "Maximum 2.0x ATR adjustment",
+        "source": "heuristic"
+      },
+      "correlation_penalty_factor": {
+        "value": 0.7,
+        "rationale": "70% of correlation used as penalty",
+        "source": "heuristic",
+        "todo": "Calibrate from backtest"
+      },
+      "max_correlation_penalty": {
+        "value": 0.7,
+        "rationale": "Maximum 70% correlation penalty",
+        "source": "heuristic"
+      },
+      "default_volatility": {
+        "value": 0.25,
+        "rationale": "25% annualized default volatility",
+        "source": "heuristic"
+      },
+      "default_adv": {
+        "value": 100000000,
+        "rationale": "100M TWD default average daily volume",
+        "source": "heuristic"
+      },
+      "default_atr": {
+        "value": 0.02,
+        "rationale": "Non-zero default for ATR-based position sizing (2% of price as fallback)",
+        "source": "heuristic",
+        "todo": "Calibrate from backtest: test [0.01, 0.03] range"
+      }
+    },
+    "health": {
+      "mute_threshold": {
+        "value": 5,
+        "rationale": "5 consecutive losses triggers mute",
+        "source": "heuristic"
+      },
+      "unmute_threshold": {
+        "value": 3,
+        "rationale": "3 consecutive wins triggers recovery",
+        "source": "heuristic"
+      },
+      "auto_recover_days": {
+        "value": 7,
+        "rationale": "Auto-recover after 7 days muted",
+        "source": "heuristic"
+      },
+      "min_sample_size": {
+        "value": 10,
+        "rationale": "Minimum 10 observations for health assessment",
+        "source": "literature",
+        "todo": "Currently defined but unused; implement in evaluateInterventions"
+      },
+      "negative_sharpe_threshold": {
+        "value": -0.5,
+        "rationale": "Sharpe below -0.5 indicates severe underperformance",
+        "source": "heuristic"
+      },
+      "sharpe_weight": {
+        "value": 0.4,
+        "rationale": "Sharpe contributes 40% to composite score",
+        "source": "heuristic",
+        "todo": "Calibrate from predictive power regression"
+      },
+      "hit_rate_weight": {
+        "value": 0.3,
+        "rationale": "Hit rate contributes 30% to composite score",
+        "source": "heuristic"
+      },
+      "streak_weight": {
+        "value": 0.3,
+        "rationale": "Streak contributes 30% to composite score",
+        "source": "heuristic"
+      },
+      "max_sharpe": {
+        "value": 5,
+        "rationale": "Cap Sharpe at 5.0 for normalization",
+        "source": "heuristic",
+        "todo": "Use historical distribution instead of hard cap"
+      },
+      "min_sharpe": {
+        "value": -5,
+        "rationale": "Floor Sharpe at -5.0 for normalization",
+        "source": "heuristic"
+      },
+      "streak_max": {
+        "value": 10,
+        "rationale": "10 consecutive wins = full streak score",
+        "source": "heuristic"
+      }
+    },
+    "garch": {
+      "omega": {
+        "value": 0.000001,
+        "rationale": "GARCH(1,1) omega: long-run variance component",
+        "source": "literature",
+        "todo": "MLE estimation from historical returns"
+      },
+      "alpha": {
+        "value": 0.1,
+        "rationale": "GARCH(1,1) alpha: shock persistence",
+        "source": "literature",
+        "todo": "MLE estimation from historical returns"
+      },
+      "beta": {
+        "value": 0.85,
+        "rationale": "GARCH(1,1) beta: variance persistence",
+        "source": "literature",
+        "todo": "MLE estimation from historical returns"
+      },
+      "max_history": {
+        "value": 252,
+        "rationale": "One year of trading days",
+        "source": "literature"
+      },
+      "correlation_min_days": {
+        "value": 30,
+        "rationale": "Minimum 30 days for correlation calculation",
+        "source": "literature"
+      },
+      "smoothing_factor": {
+        "value": 0.3,
+        "rationale": "EMA smoothing factor for volatility",
+        "source": "literature"
+      },
+      "rebalance_threshold": {
+        "value": 0.05,
+        "rationale": "5% deviation threshold for rebalancing",
+        "source": "heuristic"
+      },
+      "min_forecast_days": {
+        "value": 100,
+        "rationale": "Minimum 100 days for GARCH forecast",
+        "source": "heuristic"
+      },
+      "max_history_points": {
+        "value": 1000,
+        "rationale": "Maximum volatility history points to retain",
+        "source": "heuristic"
+      },
+      "high_vol_threshold": {
+        "value": 1.5,
+        "rationale": "Asset vol \u003e target*1.5 triggers reduction",
+        "source": "heuristic"
+      },
+      "low_vol_threshold": {
+        "value": 0.7,
+        "rationale": "Current vol \u003c target*0.7 triggers increase",
+        "source": "heuristic"
+      },
+      "reduce_magnitude": {
+        "value": 0.5,
+        "rationale": "Reduce by 50% for high vol assets",
+        "source": "heuristic"
+      },
+      "increase_magnitude": {
+        "value": 0.2,
+        "rationale": "Increase by 20% for low vol assets",
+        "source": "heuristic"
+      },
+      "weekly_rebalance_days": {
+        "value": 7,
+        "rationale": "Weekly rebalancing interval",
+        "source": "heuristic"
+      }
+    },
+    "experiment": {
+      "maturity_level1_observations": {
+        "value": 3,
+        "rationale": "Minimum 3 observations for exploratory experiments",
+        "source": "heuristic",
+        "todo": "Literature suggests n\u003e=10 for any statistical conclusion"
+      },
+      "maturity_level2_observations": {
+        "value": 8,
+        "rationale": "Minimum 8 observations for window-validated experiments",
+        "source": "heuristic"
+      },
+      "maturity_level3_observations": {
+        "value": 12,
+        "rationale": "Minimum 12 observations for regime-aware experiments",
+        "source": "heuristic"
+      },
+      "improvement_threshold": {
+        "value": 0.0005,
+        "rationale": "0.05% minimum improvement over baseline",
+        "source": "heuristic",
+        "todo": "Calibrate: too low may accept noise; too high rejects real improvements"
+      },
+      "welch_t_test_threshold": {
+        "value": 2,
+        "rationale": "|t| \u003e= 2.0 corresponds to ~95% confidence",
+        "source": "literature"
+      },
+      "drawdown_protection_ratio": {
+        "value": 0.8,
+        "rationale": "Candidate drawdown must be \u003e= 80% of baseline",
+        "source": "heuristic"
+      },
+      "volatility_tolerance_ratio": {
+        "value": 1.5,
+        "rationale": "Candidate volatility \u003c= 150% of baseline",
+        "source": "heuristic"
+      },
+      "oos_window_days": {
+        "value": 30,
+        "rationale": "30-day out-of-sample validation window",
+        "source": "heuristic"
+      },
+      "sharpe_stability_threshold": {
+        "value": 0.5,
+        "rationale": "Sharpe stability: stderr \u003c 0.5 AND |mean|/stddev \u003e= 0.5",
+        "source": "heuristic"
+      },
+      "max_fallback_ratio": {
+        "value": 0.6,
+        "rationale": "Maximum fraction of factors allowed to be IsFallback (60%) before degrading experiment confidence",
+        "source": "heuristic"
+      }
+    },
+    "baseline": {
+      "starting_cash": {
+        "value": 3000000,
+        "rationale": "3M TWD starting capital for simulation",
+        "source": "heuristic"
+      },
+      "max_position_weight": {
+        "value": 0.18,
+        "rationale": "18% max position weight for diversification",
+        "source": "literature"
+      },
+      "max_open_positions": {
+        "value": 5,
+        "rationale": "Maximum 5 open positions for focus",
+        "source": "heuristic"
+      },
+      "min_tradable_volume": {
+        "value": 1000000,
+        "rationale": "1M TWD minimum daily volume for liquidity",
+        "source": "empirical"
+      },
+      "min_recommendation_conviction": {
+        "value": 60,
+        "rationale": "Minimum 60 conviction for recommendations to pass CRO",
+        "source": "heuristic"
+      },
+      "require_cro_pass": {
+        "value": true,
+        "rationale": "Require CRO approval before execution",
+        "source": "heuristic"
+      },
+      "transaction_cost_bps": {
+        "value": 1.425,
+        "rationale": "TW stock transaction cost in basis points",
+        "source": "empirical"
+      },
+      "slippage_bps": {
+        "value": 4,
+        "rationale": "4 bps estimated slippage for market orders",
+        "source": "empirical"
+      },
+      "reserve_cash_fraction": {
+        "value": 0.1,
+        "rationale": "10% cash reserve for liquidity and opportunities",
+        "source": "literature"
+      }
+    },
+    "orchestrator": {
+      "conviction_floor_default": {
+        "value": 50,
+        "rationale": "Default conviction floor when not set by policy",
+        "source": "heuristic"
+      },
+      "superinvestor_min_conviction": {
+        "value": 65,
+        "rationale": "Higher bar for superinvestor recommendations",
+        "source": "heuristic"
+      },
+      "cro_zscore_threshold": {
+        "value": -1.5,
+        "rationale": "Z-score threshold for CRO conviction normalization filter",
+        "source": "heuristic"
+      },
+      "sector_concentration_threshold": {
+        "value": 0.4,
+        "rationale": "Sector concentration threshold (\u003c 10 recommendations)",
+        "source": "heuristic"
+      },
+      "sector_concentration_threshold_high": {
+        "value": 0.35,
+        "rationale": "Sector concentration threshold (\u003e= 10 recommendations)",
+        "source": "heuristic"
+      },
+      "sector_conviction_multiplier": {
+        "value": 0.7,
+        "rationale": "Conviction multiplier when sector is overcrowded",
+        "source": "heuristic"
+      },
+      "crowded_conviction_multiplier": {
+        "value": 0.7,
+        "rationale": "Conviction multiplier when 3+ agents recommend same symbol",
+        "source": "heuristic"
+      },
+      "factor_weight_momentum": {
+        "value": 0.3,
+        "rationale": "Momentum factor weight in total score",
+        "source": "heuristic"
+      },
+      "factor_weight_value": {
+        "value": 0.25,
+        "rationale": "Value factor weight in total score",
+        "source": "heuristic"
+      },
+      "factor_weight_quality": {
+        "value": 0.25,
+        "rationale": "Quality factor weight in total score",
+        "source": "heuristic"
+      },
+      "factor_weight_agent": {
+        "value": 0.2,
+        "rationale": "Agent factor weight in total score",
+        "source": "heuristic"
+      },
+      "prism_boost_multiplier": {
+        "value": 20,
+        "rationale": "Multiplier for PRISM Sharpe to conviction boost",
+        "source": "heuristic"
+      },
+      "prism_boost_min": {
+        "value": -10,
+        "rationale": "Minimum PRISM conviction boost",
+        "source": "heuristic"
+      },
+      "prism_boost_max": {
+        "value": 15,
+        "rationale": "Maximum PRISM conviction boost",
+        "source": "heuristic"
+      },
+      "promotion_min_observations": {
+        "value": 10,
+        "rationale": "Minimum observations before auto-promotion consideration",
+        "source": "heuristic"
+      },
+      "promotion_sharpe_threshold": {
+        "value": 0.5,
+        "rationale": "Sharpe threshold for auto-promotion",
+        "source": "heuristic"
+      },
+      "promotion_hitrate_threshold": {
+        "value": 0.45,
+        "rationale": "Hit rate threshold for auto-promotion",
+        "source": "heuristic"
+      },
+      "rejection_sharpe_threshold": {
+        "value": 0,
+        "rationale": "Sharpe threshold for auto-rejection",
+        "source": "heuristic"
+      },
+      "rejection_hitrate_threshold": {
+        "value": 0.3,
+        "rationale": "Hit rate threshold for auto-rejection",
+        "source": "heuristic"
+      }
+    },
+    "risk": {
+      "var_confidence_level": {
+        "value": 0.95,
+        "rationale": "95% VaR confidence level (primary)",
+        "source": "literature"
+      },
+      "var_secondary_confidence": {
+        "value": 0.99,
+        "rationale": "99% VaR confidence level (secondary/tail risk)",
+        "source": "literature"
+      },
+      "var_alert_threshold": {
+        "value": 0.02,
+        "rationale": "2% portfolio value at risk triggers alert",
+        "source": "heuristic"
+      },
+      "var_critical_threshold": {
+        "value": 0.05,
+        "rationale": "5% portfolio value at risk is critical",
+        "source": "heuristic"
+      },
+      "consecutive_loss_limit": {
+        "value": 5,
+        "rationale": "5 consecutive losses triggers capital phase review",
+        "source": "heuristic"
+      },
+      "sector_constraints_risk_off": {
+        "value": {
+          "ai_supply_chain": 0.3,
+          "emerging_market": 0.1,
+          "gold": 1.5,
+          "small_cap": 0.2,
+          "utilities": 1.2
+        },
+        "rationale": "Reduce risk assets, increase defensive assets during risk_off",
+        "source": "heuristic"
+      },
+      "sector_constraints_carry_trade_unwind": {
+        "value": {
+          "all_equities": 0.1,
+          "cash": 2,
+          "financials": 0.1,
+          "tech": 0.05
+        },
+        "rationale": "Exit equities, move to cash/bonds during carry trade unwind",
+        "source": "heuristic"
+      },
+      "sector_constraints_sector_rotation": {
+        "value": {
+          "energy": 1.8,
+          "high_valuation_tech": 0.3,
+          "oil_services": 1.5,
+          "rate_sensitive": 0.4
+        },
+        "rationale": "Rotate to energy, reduce tech during sector rotation",
+        "source": "heuristic"
+      },
+      "max_drawdown_pct": {
+        "value": 0.08,
+        "rationale": "8% max portfolio drawdown",
+        "source": "heuristic"
+      },
+      "max_position_size": {
+        "value": 0.15,
+        "rationale": "15% max single position size",
+        "source": "literature"
+      },
+      "max_daily_loss_pct": {
+        "value": 0.03,
+        "rationale": "3% max daily loss",
+        "source": "heuristic"
+      },
+      "stop_loss": {
+        "value": -0.05,
+        "rationale": "5% stop loss triggers alert",
+        "source": "heuristic"
+      },
+      "take_profit": {
+        "value": 0.2,
+        "rationale": "20% take profit triggers alert",
+        "source": "heuristic"
+      },
+      "max_loss_per_trade": {
+        "value": 0.02,
+        "rationale": "2% max loss per trade for Kelly calculation",
+        "source": "literature"
+      },
+      "max_total_exposure": {
+        "value": 0.8,
+        "rationale": "80% max total exposure",
+        "source": "heuristic"
+      }
+    },
+    "realtime": {
+      "volatility_threshold": {
+        "value": 0.02,
+        "rationale": "2% daily volatility threshold for regime detection",
+        "source": "heuristic"
+      },
+      "volume_spike_threshold": {
+        "value": 2,
+        "rationale": "2x average volume indicates unusual activity",
+        "source": "heuristic"
+      },
+      "price_change_threshold": {
+        "value": 0.01,
+        "rationale": "1% price move threshold for signal detection",
+        "source": "heuristic"
+      },
+      "min_confidence": {
+        "value": 0.7,
+        "rationale": "70% minimum confidence for real-time signals",
+        "source": "heuristic"
+      },
+      "weight_adjustment_rate": {
+        "value": 0.1,
+        "rationale": "10% weight adjustment per signal for stability",
+        "source": "heuristic"
+      },
+      "max_weight_change": {
+        "value": 0.5,
+        "rationale": "Maximum 50% weight change per adjustment",
+        "source": "heuristic"
+      },
+      "min_weight": {
+        "value": 0.1,
+        "rationale": "Minimum 10% weight to maintain position",
+        "source": "heuristic"
+      },
+      "update_interval_ms": {
+        "value": 100,
+        "rationale": "100ms update interval for real-time processing",
+        "source": "heuristic"
+      }
+    },
+    "janus": {
+      "short_window_days": {
+        "value": 5,
+        "rationale": "Short lookback window (~1 trading week) for cohort performance",
+        "source": "heuristic",
+        "todo": "Calibrate: test [3, 10] range for short-term sensitivity"
+      },
+      "medium_window_days": {
+        "value": 20,
+        "rationale": "Medium lookback window (~1 trading month) for cohort performance",
+        "source": "heuristic",
+        "todo": "Calibrate: test [15, 30] range for medium-term stability"
+      },
+      "long_window_days": {
+        "value": 60,
+        "rationale": "Long lookback window (~1 trading quarter) for cohort performance",
+        "source": "heuristic",
+        "todo": "Calibrate: test [40, 90] range for long-term memory"
+      },
+      "max_history_days": {
+        "value": 90,
+        "rationale": "Maximum rolling history per cohort; must cover longest window comfortably",
+        "source": "heuristic"
+      },
+      "min_weight": {
+        "value": 0.05,
+        "rationale": "Floor for any cohort weight; prevents total elimination",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.01, 0.10] range"
+      },
+      "max_weight": {
+        "value": 0.6,
+        "rationale": "Ceiling for any cohort weight; prevents single-cohort dominance",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.40, 0.80] range"
+      },
+      "novel_threshold": {
+        "value": 0.15,
+        "rationale": "Weight delta threshold for NOVEL_REGIME detection; short-window winner surges past long-window standing",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.10, 0.25] range"
+      },
+      "historical_threshold": {
+        "value": 0.15,
+        "rationale": "Weight delta threshold for HISTORICAL_REGIME detection; long-window winner maintains stable lead",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.10, 0.25] range"
+      },
+      "epsilon_weight": {
+        "value": 0.02,
+        "rationale": "Minimal weight assigned to negative-Sharpe cohorts when others are positive",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.01, 0.05] range"
+      },
+      "short_window_blend": {
+        "value": 0.5,
+        "rationale": "50% weight on short-window Sharpe in blended score; emphasizes recent accuracy",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.3, 0.6] range; must sum with medium+long to 1.0"
+      },
+      "medium_window_blend": {
+        "value": 0.3,
+        "rationale": "30% weight on medium-window Sharpe in blended score",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.2, 0.4] range; must sum with short+long to 1.0"
+      },
+      "long_window_blend": {
+        "value": 0.2,
+        "rationale": "20% weight on long-window Sharpe in blended score; retains long-term memory",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.1, 0.3] range; must sum with short+medium to 1.0"
+      },
+      "health_stale_hours": {
+        "value": 168,
+        "rationale": "Hours before JANUS data is considered stale (7 days); triggers error-level health alert",
+        "source": "heuristic"
+      },
+      "health_warn_hours": {
+        "value": 48,
+        "rationale": "Hours before JANUS data triggers warning-level health alert (2 days)",
+        "source": "heuristic"
+      }
+    },
+    "narrative": {
+      "min_trend_strength": {
+        "value": 0.7,
+        "rationale": "Minimum trend strength (0-1) to be considered significant for structural override",
+        "source": "heuristic",
+        "todo": "Calibrate from backtest: test [0.5, 0.8] range"
+      },
+      "min_confidence": {
+        "value": 0.75,
+        "rationale": "Minimum confidence level for structural trend detection",
+        "source": "heuristic",
+        "todo": "Calibrate from backtest: test [0.6, 0.85] range"
+      },
+      "min_hit_rate": {
+        "value": 0.7,
+        "rationale": "Minimum historical hit rate for structural trend validity",
+        "source": "heuristic",
+        "todo": "Calibrate from backtest: test [0.6, 0.8] range"
+      },
+      "override_threshold": {
+        "value": 0.65,
+        "rationale": "Score threshold for structural trends to override macro risk signals",
+        "source": "heuristic",
+        "todo": "Calibrate from backtest: test [0.55, 0.75] range"
+      },
+      "ai_revenue_growth_threshold": {
+        "value": 50,
+        "rationale": "AI revenue YoY growth % threshold to detect AI capex surge (TSMC revenue proxy)",
+        "source": "heuristic",
+        "todo": "Calibrate from historical TSMC revenue data"
+      },
+      "cowos_utilization_threshold": {
+        "value": 85,
+        "rationale": "CoWoS capacity utilization % threshold indicating structural AI demand",
+        "source": "heuristic",
+        "todo": "Calibrate from CoWoS utilization reports"
+      },
+      "capex_growth_threshold": {
+        "value": 40,
+        "rationale": "AI-related capex growth % threshold for cloud infrastructure expansion",
+        "source": "heuristic",
+        "todo": "Calibrate from cloud provider capex data"
+      },
+      "us10y_change_bps_threshold": {
+        "value": 10,
+        "rationale": "US 10Y yield change in basis points to trigger US_rates_up event",
+        "source": "heuristic",
+        "todo": "Calibrate from historical yield volatility distribution"
+      },
+      "dxy_change_pct_threshold": {
+        "value": 1.5,
+        "rationale": "DXY change % threshold to trigger US_rates_up event alongside yield move",
+        "source": "heuristic",
+        "todo": "Calibrate from historical DXY distribution"
+      },
+      "geopolitical_gpr_threshold": {
+        "value": 150,
+        "rationale": "Geopolitical risk index (GPR) threshold to trigger geopolitical_risk_spike event",
+        "source": "heuristic",
+        "todo": "Calibrate from Caldara-Iacoviello GPR index historical data"
+      },
+      "oil_change_pct_threshold": {
+        "value": 5,
+        "rationale": "Oil price change % threshold (absolute) to trigger oil_price_shock event",
+        "source": "heuristic",
+        "todo": "Calibrate from historical oil price volatility"
+      },
+      "jpy_change_pct_threshold": {
+        "value": 2,
+        "rationale": "JPY change % threshold to trigger JPY_carry_unwind event",
+        "source": "heuristic",
+        "todo": "Calibrate from historical JPY volatility around BOJ policy shifts"
+      },
+      "vix_level_threshold": {
+        "value": 25,
+        "rationale": "VIX level threshold to trigger JPY_carry_unwind and geopolitical events",
+        "source": "heuristic",
+        "todo": "Calibrate from historical VIX distribution around crisis periods"
+      },
+      "taiwan_stress_dxy_weight": {
+        "value": 0.15,
+        "rationale": "DXY component weight in Taiwan stress index (15%)",
+        "source": "heuristic",
+        "todo": "Calibrate from regression: DXY vs foreign flow correlation"
+      },
+      "taiwan_stress_us10y_weight": {
+        "value": 0.2,
+        "rationale": "US 10Y yield component weight in Taiwan stress index (20%)",
+        "source": "heuristic",
+        "todo": "Calibrate from regression: US10Y vs foreign flow correlation"
+      },
+      "taiwan_stress_foreign_weight": {
+        "value": 0.25,
+        "rationale": "Foreign investor net flow component weight in Taiwan stress index (25%)",
+        "source": "heuristic",
+        "todo": "Calibrate from regression: foreign flow vs TAIEX returns"
+      },
+      "taiwan_stress_vix_weight": {
+        "value": 0.15,
+        "rationale": "VIX component weight in Taiwan stress index (15%)",
+        "source": "heuristic",
+        "todo": "Calibrate from regression: VIX vs foreign flow correlation"
+      },
+      "taiwan_stress_jpy_weight": {
+        "value": 0.1,
+        "rationale": "JPY component weight in Taiwan stress index (10%)",
+        "source": "heuristic",
+        "todo": "Calibrate from regression: JPY vs carry trade flow"
+      },
+      "taiwan_stress_geo_weight": {
+        "value": 0.15,
+        "rationale": "Geopolitical risk component weight in Taiwan stress index (15%)",
+        "source": "heuristic",
+        "todo": "Calibrate from regression: GPR vs TAIEX returns"
+      },
+      "event_ttl_multiplier": {
+        "value": {
+          "AI_capex_surge": 90,
+          "Fed_emergency_cut": 3,
+          "JPY_carry_unwind": 14,
+          "US_rates_up": 7,
+          "earnings_surprise": 10,
+          "geopolitical_risk_spike": 30,
+          "oil_price_shock": 15
+        },
+        "rationale": "Event TTL in days per theme: AI capex 90d (structural), rates 7d (transient), carry unwind 14d, geopolitical 30d, oil 15d, Fed emergency 3d, earnings 10d",
+        "source": "heuristic",
+        "todo": "Calibrate from historical event impact decay analysis"
+      },
+      "model_lookback_days": {
+        "value": 10,
+        "rationale": "Lookback window in trading days for model evaluation",
+        "source": "heuristic",
+        "todo": "Calibrate from backtest: test [5, 20] range"
+      },
+      "model_hold_window_days": {
+        "value": 5,
+        "rationale": "Forward hold window in trading days for model evaluation",
+        "source": "heuristic",
+        "todo": "Calibrate from backtest: test [3, 10] range"
+      }
+    },
+    "marketdata": {
+      "twse_api_rate_limit": {
+        "value": 0.6,
+        "rationale": "TWSE OpenAPI rate limit: 3 requests per 5 seconds = 0.6 req/s",
+        "source": "heuristic",
+        "todo": "Verify: check TWSE documentation for current limits"
+      },
+      "twse_api_rate_burst": {
+        "value": 3,
+        "rationale": "TWSE OpenAPI burst limit: 3 requests per 5-second window",
+        "source": "heuristic",
+        "todo": "Verify: check TWSE documentation for current burst limits"
+      },
+      "twse_api_timeout_sec": {
+        "value": 15,
+        "rationale": "HTTP timeout for TWSE API calls; balances responsiveness vs slow responses",
+        "source": "heuristic",
+        "todo": "Calibrate: test [10, 30] range based on observed latency distribution"
+      },
+      "fubon_intraday_limit": {
+        "value": 30,
+        "rationale": "Fubon intraday API burst limit; prevents overwhelming the proxy",
+        "source": "heuristic",
+        "todo": "Verify: check Fubon DMA documentation for actual limits"
+      },
+      "fubon_historical_limit": {
+        "value": 60,
+        "rationale": "Fubon historical data API rate limit; conservative to avoid throttling",
+        "source": "heuristic",
+        "todo": "Verify: check Fubon DMA documentation for actual limits"
+      },
+      "fubon_api_timeout_sec": {
+        "value": 10,
+        "rationale": "HTTP timeout for Fubon API calls; proxy adds latency, keep short",
+        "source": "heuristic",
+        "todo": "Calibrate: test [5, 15] range based on proxy latency"
+      },
+      "tej_calls_per_second": {
+        "value": 5,
+        "rationale": "TEJ free tier rate limit: 500 calls/day, burst at 5 calls/second",
+        "source": "heuristic",
+        "todo": "Verify: check TEJ subscription tier for actual limits"
+      },
+      "tej_api_timeout_sec": {
+        "value": 30,
+        "rationale": "HTTP timeout for TEJ API; historical queries can be slow",
+        "source": "heuristic",
+        "todo": "Calibrate: test [20, 45] range"
+      },
+      "fugle_rate_limit": {
+        "value": 10,
+        "rationale": "Fugle API burst limit; circuit breaker protected, use conservatively",
+        "source": "heuristic",
+        "todo": "Verify: check Fugle subscription for actual rate limits"
+      },
+      "fugle_api_timeout_sec": {
+        "value": 10,
+        "rationale": "HTTP timeout for Fugle API; premium service, expect fast responses",
+        "source": "heuristic",
+        "todo": "Calibrate: test [5, 15] range"
+      },
+      "max_retry_attempts": {
+        "value": 3,
+        "rationale": "Maximum retry attempts for transient failures; exponential backoff",
+        "source": "heuristic",
+        "todo": "Calibrate: test [2, 5] range based on failure rate analysis"
+      },
+      "retry_backoff_ms": {
+        "value": 1000,
+        "rationale": "Base backoff between retries in milliseconds; doubles each attempt",
+        "source": "heuristic",
+        "todo": "Calibrate: test [500, 2000] range"
+      }
+    },
+    "industry": {
+      "sector_weights": {
+        "value": {
+          "ai_supply_chain": 0.15,
+          "biotech": 0.03,
+          "electronics": 0.1,
+          "financials": 0.12,
+          "other": 0.02,
+          "renewable_energy": 0.03,
+          "semiconductor": 0.45,
+          "shipping": 0.05,
+          "traditional": 0.05
+        },
+        "rationale": "Taiwan market sector weights aligned with TAIEX composition (2024); semiconductor ~45% vs previous 25%",
+        "source": "empirical",
+        "todo": "Recalibrate: update quarterly from TAIEX sector breakdown"
+      },
+      "seasonal_adjustment_enabled": {
+        "value": true,
+        "rationale": "Enable seasonal revenue adjustment for quarterly earnings analysis",
+        "source": "heuristic",
+        "todo": "Validate: backtest with/without adjustment"
+      },
+      "cycle_thresholds": {
+        "value": {
+          "financials": {
+            "expansion_revenue_pct": 0.1,
+            "expansion_profit_pct": 0.15,
+            "recovery_revenue_pct": 0.05,
+            "recovery_profit_pct": 0.08,
+            "mature_revenue_pct": 0.02,
+            "mature_profit_pct": 0.05
+          },
+          "semiconductor": {
+            "expansion_revenue_pct": 0.2,
+            "expansion_profit_pct": 0.25,
+            "recovery_revenue_pct": 0.1,
+            "recovery_profit_pct": 0.15,
+            "mature_revenue_pct": 0.05,
+            "mature_profit_pct": 0.08
+          },
+          "shipping": {
+            "expansion_revenue_pct": 0.3,
+            "expansion_profit_pct": 0.35,
+            "recovery_revenue_pct": 0.15,
+            "recovery_profit_pct": 0.2,
+            "mature_revenue_pct": 0.05,
+            "mature_profit_pct": 0.1
+          }
+        },
+        "rationale": "Per-industry business cycle thresholds; semiconductor high-growth, financials stable, shipping cyclical",
+        "source": "heuristic",
+        "todo": "Calibrate: derive from historical revenue/ profit CAGR per sector"
+      },
+      "concentration_risk_enabled": {
+        "value": true,
+        "rationale": "Enable customer concentration risk scoring for supply chain analysis",
+        "source": "heuristic"
+      },
+      "news_latency_risk_enabled": {
+        "value": true,
+        "rationale": "Enable news latency risk scoring for event-driven positions",
+        "source": "heuristic"
+      },
+      "asymmetric_risk_enabled": {
+        "value": true,
+        "rationale": "Enable asymmetric downside risk scoring (tail risk analysis)",
+        "source": "heuristic"
+      },
+      "customer_concentration_limit": {
+        "value": 0.4,
+        "rationale": "Flag customer concentration \u003e40% as high risk; TSMC Apple exposure ~25% is acceptable",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.30, 0.50] range; consider industry norms"
+      },
+      "geographic_exposure_limit": {
+        "value": 0.6,
+        "rationale": "Flag geographic revenue concentration \u003e60% as high risk; China exposure threshold",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.50, 0.70] range based on geopolitical risk assessment"
+      },
+      "customer_share_threshold_1": {
+        "value": 30,
+        "rationale": "First tier customer concentration threshold (30%); triggers initial risk score",
+        "source": "heuristic",
+        "todo": "Calibrate: test [20, 40] range"
+      },
+      "customer_share_threshold_2": {
+        "value": 50,
+        "rationale": "Second tier customer concentration threshold (50%); triggers higher risk score",
+        "source": "heuristic",
+        "todo": "Calibrate: test [40, 60] range"
+      },
+      "us_exposure_threshold_1": {
+        "value": 50,
+        "rationale": "US geographic exposure threshold (50%); triggers initial risk score",
+        "source": "heuristic",
+        "todo": "Calibrate: test [40, 60] range"
+      },
+      "us_exposure_threshold_2": {
+        "value": 70,
+        "rationale": "High US geographic exposure threshold (70%); triggers higher risk score",
+        "source": "heuristic",
+        "todo": "Calibrate: test [60, 80] range"
+      },
+      "risk_score_weight_1": {
+        "value": 0.4,
+        "rationale": "Risk score weight for first tier customer concentration",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.2, 0.5] range"
+      },
+      "risk_score_weight_2": {
+        "value": 0.3,
+        "rationale": "Risk score weight for second tier customer concentration",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.2, 0.4] range"
+      },
+      "risk_score_weight_3": {
+        "value": 0.2,
+        "rationale": "Risk score weight for first tier US exposure",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.1, 0.3] range"
+      },
+      "risk_score_weight_4": {
+        "value": 0.1,
+        "rationale": "Risk score weight for second tier US exposure",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.05, 0.2] range"
+      },
+      "severity_threshold_medium": {
+        "value": 0.4,
+        "rationale": "Risk score threshold for medium severity",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.3, 0.5] range"
+      },
+      "severity_threshold_high": {
+        "value": 0.6,
+        "rationale": "Risk score threshold for high severity",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.5, 0.7] range"
+      },
+      "severity_threshold_critical": {
+        "value": 0.8,
+        "rationale": "Risk score threshold for critical severity",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.7, 0.9] range"
+      },
+      "impact_multiplier": {
+        "value": 0.15,
+        "rationale": "Multiplier for estimated price impact from risk score",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.10, 0.25] range"
+      },
+      "risk_confidence": {
+        "value": 0.85,
+        "rationale": "Confidence level for risk assessment",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.70, 0.95] range"
+      }
+    },
+    "strategy": {
+      "min_switch_interval_days": {
+        "value": 7,
+        "rationale": "Minimum days between strategy switches; prevents whipsaw",
+        "source": "heuristic",
+        "todo": "Calibrate: test [3, 14] range based on transaction costs"
+      },
+      "switch_threshold": {
+        "value": 0.1,
+        "rationale": "Minimum score advantage (10%) required to switch strategies",
+        "source": "heuristic",
+        "todo": "Calibrate: test [0.05, 0.20] range"
+      },
+      "score_lookback_days": {
+        "value": 30,
+        "rationale": "Days of historical performance to evaluate when scoring strategies",
+        "source": "heuristic",
+        "todo": "Calibrate: test [14, 60] range"
+      },
+      "fallback_strategy": {
+        "value": "momentum",
+        "rationale": "Default strategy when no clear winner; momentum has broad applicability",
+        "source": "heuristic",
+        "todo": "Validate: backtest fallback strategy vs alternatives"
+      }
+    }
+  }
+}

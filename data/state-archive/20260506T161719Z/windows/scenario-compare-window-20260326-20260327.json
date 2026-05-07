@@ -1,0 +1,188 @@
+{
+  "version": "v1",
+  "generated_at": "2026-04-19T12:57:11Z",
+  "window": {
+    "start_date": "2026-03-26",
+    "end_date": "2026-03-27"
+  },
+  "sources": {
+    "replay_data_path": "samples/replay/twse_stock_day_all_sample.csv",
+    "baseline_policy_path": "data/state/baseline_policy.json"
+  },
+  "evaluation": {
+    "deterministic_per_scenario": true,
+    "signal_deterministic_per_scenario": true,
+    "require_diversity": false,
+    "scenario_diversity": true
+  },
+  "scenarios": {
+    "base": {
+      "window_deterministic_sha": "f42bed33993679adf963925625a5d594112ce8ab",
+      "signal_deterministic_sha": "018313ec387098259432934d2831187c32b5e470",
+      "constraints": {
+        "StartingCash": 3000000,
+        "MaxPositionWeight": 0.22,
+        "MaxOpenPositions": 5,
+        "MinTradableVolume": 2000000,
+        "MinRecommendationConviction": 35,
+        "RequireCROPass": true,
+        "TransactionCostBPS": 1.425,
+        "SlippageBPS": 4,
+        "ReserveCashFraction": 0.08,
+        "StopLossPct": 0.08,
+        "TakeProfitPct": 0
+      },
+      "execution_policy": {
+        "ConvictionFloor": 35,
+        "RequireCROPass": true
+      },
+      "metrics": {
+        "order_count": 5,
+        "position_count": 5,
+        "ending_cash": 612219.3313450003,
+        "outcome_count": 9,
+        "next_experiment_agent_id": "shipping-desk-01",
+        "guard": {
+          "total": 2,
+          "hard_total": 1,
+          "hard_blocked": 0,
+          "soft_total": 1,
+          "soft_blocked": 0
+        },
+        "outcomes_stats": {
+          "total": 9,
+          "hit_count": 5,
+          "avg_forward_return": 0.004738417587047223,
+          "avg_benchmark_delta": 0.0017384175870472248,
+          "unique_symbols": 5,
+          "unique_agents": 5
+        }
+      },
+      "summary": {
+        "WindowID": "window-20260326-20260327",
+        "StartDate": "2026-03-26T00:00:00Z",
+        "EndDate": "2026-03-27T00:00:00Z",
+        "SessionCount": 1,
+        "OutcomeCount": 9,
+        "WorstAgentID": "shipping-desk-01",
+        "WorstAgentSkill": "shipping_desk",
+        "WorstAgentLayer": "sector",
+        "WorstAgentWindowCount": 1,
+        "WorstAgentSharpeLike": -0.019704433497536946,
+        "GeneratedAt": "2026-04-19T20:57:10.609654+08:00"
+      }
+    },
+    "stress": {
+      "window_deterministic_sha": "f42bed33993679adf963925625a5d594112ce8ab",
+      "signal_deterministic_sha": "96578f090b6c46ad85e492a538a4526f257e99e7",
+      "constraints": {
+        "StartingCash": 3000000,
+        "MaxPositionWeight": 0.18,
+        "MaxOpenPositions": 5,
+        "MinTradableVolume": 2000000,
+        "MinRecommendationConviction": 55,
+        "RequireCROPass": true,
+        "TransactionCostBPS": 1.425,
+        "SlippageBPS": 4,
+        "ReserveCashFraction": 0.15,
+        "StopLossPct": 0.08,
+        "TakeProfitPct": 0
+      },
+      "execution_policy": {
+        "ConvictionFloor": 55,
+        "RequireCROPass": true
+      },
+      "metrics": {
+        "order_count": 4,
+        "position_count": 4,
+        "ending_cash": 1646980.384845,
+        "outcome_count": 9,
+        "next_experiment_agent_id": "shipping-desk-01",
+        "guard": {
+          "total": 2,
+          "hard_total": 1,
+          "hard_blocked": 0,
+          "soft_total": 1,
+          "soft_blocked": 0
+        },
+        "outcomes_stats": {
+          "total": 9,
+          "hit_count": 5,
+          "avg_forward_return": 0.004738417587047223,
+          "avg_benchmark_delta": 0.0017384175870472248,
+          "unique_symbols": 5,
+          "unique_agents": 5
+        }
+      },
+      "summary": {
+        "WindowID": "window-20260326-20260327",
+        "StartDate": "2026-03-26T00:00:00Z",
+        "EndDate": "2026-03-27T00:00:00Z",
+        "SessionCount": 1,
+        "OutcomeCount": 9,
+        "WorstAgentID": "shipping-desk-01",
+        "WorstAgentSkill": "shipping_desk",
+        "WorstAgentLayer": "sector",
+        "WorstAgentWindowCount": 1,
+        "WorstAgentSharpeLike": -0.019704433497536946,
+        "GeneratedAt": "2026-04-19T20:57:11.0252+08:00"
+      }
+    },
+    "shock": {
+      "window_deterministic_sha": "f42bed33993679adf963925625a5d594112ce8ab",
+      "signal_deterministic_sha": "292057667537d845359fbaafc9ffc93eb363467a",
+      "constraints": {
+        "StartingCash": 3000000,
+        "MaxPositionWeight": 0.12,
+        "MaxOpenPositions": 3,
+        "MinTradableVolume": 2000000,
+        "MinRecommendationConviction": 70,
+        "RequireCROPass": true,
+        "TransactionCostBPS": 1.425,
+        "SlippageBPS": 8,
+        "ReserveCashFraction": 0.25,
+        "StopLossPct": 0.08,
+        "TakeProfitPct": 0
+      },
+      "execution_policy": {
+        "ConvictionFloor": 70,
+        "RequireCROPass": true
+      },
+      "metrics": {
+        "order_count": 3,
+        "position_count": 3,
+        "ending_cash": 2234779.45875,
+        "outcome_count": 9,
+        "next_experiment_agent_id": "shipping-desk-01",
+        "guard": {
+          "total": 2,
+          "hard_total": 1,
+          "hard_blocked": 0,
+          "soft_total": 1,
+          "soft_blocked": 0
+        },
+        "outcomes_stats": {
+          "total": 9,
+          "hit_count": 5,
+          "avg_forward_return": 0.004738417587047223,
+          "avg_benchmark_delta": 0.0017384175870472248,
+          "unique_symbols": 5,
+          "unique_agents": 5
+        }
+      },
+      "summary": {
+        "WindowID": "window-20260326-20260327",
+        "StartDate": "2026-03-26T00:00:00Z",
+        "EndDate": "2026-03-27T00:00:00Z",
+        "SessionCount": 1,
+        "OutcomeCount": 9,
+        "WorstAgentID": "shipping-desk-01",
+        "WorstAgentSkill": "shipping_desk",
+        "WorstAgentLayer": "sector",
+        "WorstAgentWindowCount": 1,
+        "WorstAgentSharpeLike": -0.019704433497536946,
+        "GeneratedAt": "2026-04-19T20:57:11.424486+08:00"
+      }
+    }
+  }
+}

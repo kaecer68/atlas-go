@@ -1,0 +1,58 @@
+{
+  "SessionID": "session-20260326-daily",
+  "Regime": "NEUTRAL",
+  "OrderCount": 0,
+  "PositionCount": 0,
+  "EndingCash": 3000000,
+  "PortfolioValue": 3000000,
+  "OutcomeCount": 0,
+  "BrokerRuntime": {
+    "Mode": "dry-run",
+    "Adapter": "guarded",
+    "Signer": "placeholder",
+    "SignerVersion": "v1",
+    "KeyID": "",
+    "MaxRetries": 1,
+    "HTTPTimeoutSec": 5,
+    "HTTPAttempts": 2,
+    "RetryStatusCodes": [
+      408,
+      425,
+      429,
+      500,
+      502,
+      503,
+      504
+    ],
+    "MaxClockSkewSec": 300,
+    "NonceTTLSec": 300,
+    "NonceStore": "memory",
+    "NonceStorePath": "",
+    "NonceRedisPrefix": "atlas:nonce:"
+  },
+  "NextExperimentAgentID": "",
+  "ProposalID": "",
+  "CommitID": "",
+  "ApprovalID": "",
+  "GuardOutcomes": [
+    {
+      "GuardID": "cro-01",
+      "GuardSkill": "cro_risk",
+      "Severity": "hard",
+      "Passed": true,
+      "Reason": "未過濾任何推薦，全部放行",
+      "InputCount": 0,
+      "OutputCount": 0
+    },
+    {
+      "GuardID": "cio-01",
+      "GuardSkill": "cio_portfolio",
+      "Severity": "soft",
+      "Passed": true,
+      "Reason": "未過濾任何推薦，全部放行",
+      "InputCount": 0,
+      "OutputCount": 0
+    }
+  ],
+  "RecordedAt": "2026-05-06T13:37:41.82125676Z"
+}

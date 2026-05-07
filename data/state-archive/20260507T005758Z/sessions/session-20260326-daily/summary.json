@@ -1,0 +1,49 @@
+{
+  "approval_id": "",
+  "broker_runtime": {
+    "adapter": "guarded",
+    "http_attempts": 2,
+    "http_timeout_sec": 5,
+    "key_id": "",
+    "max_clock_skew_sec": 300,
+    "max_retries": 1,
+    "mode": "dry-run",
+    "nonce_redis_prefix": "atlas:nonce:",
+    "nonce_store": "memory",
+    "nonce_store_path": "",
+    "nonce_ttl_sec": 300,
+    "retry_status_codes": [
+      408,
+      425,
+      429,
+      500,
+      502,
+      503,
+      504
+    ],
+    "signer": "placeholder",
+    "signer_version": "v1"
+  },
+  "commit_id": "",
+  "ending_cash": 0,
+  "guard_outcomes": [
+    {
+      "guard_id": "control-bypass",
+      "guard_skill": "control_bypass",
+      "input_count": 0,
+      "output_count": 0,
+      "passed": true,
+      "reason": "控制層已略過（未啟用 CRO 檢查）",
+      "severity": "soft"
+    }
+  ],
+  "next_experiment_agent_id": "",
+  "order_count": 0,
+  "outcome_count": 0,
+  "portfolio_value": 0,
+  "position_count": 0,
+  "proposal_id": "",
+  "recorded_at": "2026-05-07T00:57:02.280465584Z",
+  "regime": "NEUTRAL",
+  "session_id": "session-20260326-daily"
+}

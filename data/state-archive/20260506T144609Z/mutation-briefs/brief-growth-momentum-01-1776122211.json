@@ -1,0 +1,55 @@
+{
+    "id": "brief-growth-momentum-01-1776122211",
+    "window_id": "window-20260325-20260331",
+    "target_agent": "growth-momentum-01",
+    "target_agent_id": "growth-momentum-01",
+    "target_skill": "growth_momentum",
+    "target_layer": "style",
+    "prompt_file": "prompts/agents/growth_momentum.md",
+    "mutation_type": "prompt_tightening",
+    "timestamp": "2026-04-13T23:16:51Z",
+    "acceptance_metric": "sharpe_like",
+    "acceptance_gates": [
+        "improve_sharpe_like",
+        "no_material_drawdown_degradation",
+        "no_constraint_bypass"
+    ],
+    "required_skills": [
+        "growth_momentum",
+        "earnings_quality",
+        "technical_breakout"
+    ],
+    "forbidden_actions": [
+        "late_cycle_chasing",
+        "macro_override"
+    ],
+    "observed_window_count": 12,
+    "maturity_level": "level_2_validated",
+    "iteration_guidance": [
+        "Change one bounded behavior only",
+        "Preserve required skills and forbidden action boundaries",
+        "Build on the successful v3 regime-aware foundation"
+    ],
+    "generated_at": "2026-04-13T23:16:51Z",
+    "hypothesis": "A further targeted prompt refinement can improve risk-adjusted recommendation quality by strengthening reward for high-quality setups while maintaining regime-aware penalties.",
+    "suggested_mutation_type": "prompt_tightening",
+    "rationale": [
+        "v3 regime-aware mutation improved Sharpe-like score",
+        "Room exists to increase close-strength reward and volume-boost without harming coverage",
+        "Further neutral-penalty reduction may help in sideways markets"
+    ],
+    "proposed_changes": [
+        "Increase close-strength reward from 8 to 12",
+        "Add volume-boost reward for breakouts above 5M volume",
+        "Further reduce penalty severity in neutral regimes from 5 to 8",
+        "Raise conviction floor from 48 to 50"
+    ],
+    "acceptance_criteria": [
+        "Sharpe-like score improvement > 0",
+        "No material drawdown degradation",
+        "Maintains required skills coverage"
+    ],
+    "estimated_complexity": "low",
+    "recommended_window": "short validation window before broader promotion",
+    "notes_for_reviewer": "Regime-aware v4 incremental tightening for growth-momentum-01 building on v3 success"
+}

@@ -1,0 +1,37 @@
+{
+  "contract_version": 1,
+  "proposal_id": "proposal-exp-shipping-desk-01-1777423475",
+  "window_id": "window-20260301-20260331",
+  "target_agent_id": "shipping-desk-01",
+  "target_skill": "shipping_desk",
+  "target_layer": "sector",
+  "prompt_file": "prompts/agents/shipping_desk.md",
+  "mutation_type": "risk_rule_change",
+  "failure_pattern": "Repeated negative risk-adjusted outcomes across replay sessions.",
+  "hypothesis": "Sector selection criteria need stronger conviction thresholds to avoid weak setups.",
+  "acceptance_metric": "sharpe_like",
+  "acceptance_gates": [
+    "improve_sharpe_like",
+    "reduce_sector_blindspots",
+    "maintain_industry_coverage"
+  ],
+  "forbidden_actions": [
+    "cycle_blindness",
+    "headline_only_selection"
+  ],
+  "required_skills": [
+    "shipping_desk",
+    "technical_breakout"
+  ],
+  "observed_window_count": 15,
+  "maturity_level": "level_3_regime_aware",
+  "iteration_guidance": [
+    "Change one bounded behavior only.",
+    "Preserve required skills and forbidden action boundaries.",
+    "Refine sector thesis quality and symbol qualification, not portfolio sizing.",
+    "Prefer industry-specific evidence over broad market narration.",
+    "Evidence coverage is adequate for a focused replay challenge."
+  ],
+  "recommended_window": "next cross-regime replay window",
+  "generated_at": "2026-04-29T08:44:35.644885+08:00"
+}
