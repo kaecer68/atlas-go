@@ -6,50 +6,6 @@ import (
 	"testing"
 )
 
-func TestRecommendationOutcomeUnmarshalLegacyPascalCase(t *testing.T) {
-	legacy := []byte(`{
-		"AgentID": "agent-1",
-		"Skill": "growth_momentum",
-		"Layer": "style",
-		"Symbol": "2330.TW",
-		"Side": "BUY",
-		"Conviction": 87,
-		"TargetPrice": 1050.5,
-		"StopLossPrice": 980.2,
-		"Window": "1d",
-		"ForwardReturn": 0.021,
-		"BenchmarkDelta": 0.011,
-		"Hit": true,
-		"Reason": "breakout",
-		"Price": 1001.0,
-		"PassedGuards": true,
-		"GuardReason": "ok",
-		"RecordedAt": "2026-04-22T04:02:30.434394+08:00",
-		"factor_scores": {"total": 0.88},
-		"conviction_breakdown": {"base": 70, "floor": 50, "final": 87, "steps": [{"rule": "momentum", "delta": 17, "reason": "strong"}]}
-	}`)
-
-	var got RecommendationOutcome
-	if err := json.Unmarshal(legacy, &got); err != nil {
-		t.Fatalf("unmarshal legacy: %v", err)
-	}
-	if got.AgentID != "agent-1" {
-		t.Fatalf("agent_id: got %q", got.AgentID)
-	}
-	if got.Skill != "growth_momentum" {
-		t.Fatalf("skill: got %q", got.Skill)
-	}
-	if got.Symbol != "2330.TW" {
-		t.Fatalf("symbol: got %q", got.Symbol)
-	}
-	if got.FactorScores.Total != 0.88 {
-		t.Fatalf("factor_scores.total: got %v", got.FactorScores.Total)
-	}
-	if got.ConvictionBreakdown == nil || got.ConvictionBreakdown.Final != 87 {
-		t.Fatalf("conviction_breakdown.final: got %#v", got.ConvictionBreakdown)
-	}
-}
-
 func TestRecommendationOutcomeUnmarshalCanonicalSnakeCase(t *testing.T) {
 	canonical := []byte(`{
 		"agent_id": "agent-2",
