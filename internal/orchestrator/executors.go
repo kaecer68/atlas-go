@@ -71,7 +71,7 @@ type ExecutionContext struct {
 	Policy                     domain.ExecutionPolicy
 	Plugins                    *PluginRegistry
 	SessionID                  string
-	WeightManager              *portfolio.DarwinianWeightManager
+	WeightManager              portfolio.DarwinianWeightManagerInterface
 	Context                    context.Context            // request-level context for cancellation propagation
 	NarrativeEvents            []narrative.NarrativeEvent // narrative events for regime evidence fusion
 	ConvictionClampingCallback func([]portfolio.ConvictionClampingEvent)
@@ -240,7 +240,7 @@ func executeRegistryResearchDetailedWithPolicyAndGuardsAndDarwinian(
 	policy domain.ExecutionPolicy,
 	plugins *PluginRegistry,
 	sessionID string,
-	weightManager *portfolio.DarwinianWeightManager,
+	weightManager portfolio.DarwinianWeightManagerInterface,
 ) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome, []domain.ScreeningReject) {
 	result := ExecuteWithContext(ExecutionContext{
 		Registry:      registry,
@@ -261,7 +261,7 @@ func ExecuteRegistryResearchWithDarwinianWeights(
 	quotes []domain.Quote,
 	overrides map[string]string,
 	policy domain.ExecutionPolicy,
-	weightManager *portfolio.DarwinianWeightManager,
+	weightManager portfolio.DarwinianWeightManagerInterface,
 ) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []*portfolio.DarwinianAgentWeight) {
 	regime, raw, final, weightData, _ := executeRegistryResearchWithDarwinianWeights(registry, quotes, overrides, policy, weightManager, NewPluginRegistry(), "")
 	return regime, raw, final, weightData
@@ -272,7 +272,7 @@ func executeRegistryResearchWithDarwinianWeights(
 	quotes []domain.Quote,
 	overrides map[string]string,
 	policy domain.ExecutionPolicy,
-	weightManager *portfolio.DarwinianWeightManager,
+	weightManager portfolio.DarwinianWeightManagerInterface,
 	plugins *PluginRegistry,
 	sessionID string,
 ) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []*portfolio.DarwinianAgentWeight, []domain.ScreeningReject) {

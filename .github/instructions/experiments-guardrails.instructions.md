@@ -1,5 +1,5 @@
 ---
-applyTo: "internal/experiment/**,internal/evolution/**,internal/baseline/**,cmd/execute-experiment/**,cmd/judge-experiment/**,cmd/promote-baseline/**,cmd/revert-baseline/**"
+applyTo: "internal/experiment/**,internal/evolution/**,internal/baseline/**,cmd/run-experiment/**,cmd/judge-experiment/**,cmd/promote-baseline/**,cmd/revert-baseline/**"
 description: "適用於 atlas-go 的實驗執行、評估、baseline 升降級與 mutation 流程調整。強制 baseline 優先、replay 視窗就緒檢查、保守接受邏輯與可稽核變更。"
 ---
 

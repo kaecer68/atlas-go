@@ -17,7 +17,7 @@ type Screener interface {
 
 // Engine implements Screener using FactorEngine and FundamentalProvider.
 type Engine struct {
-	factorEngine *portfolio.FactorEngine
+	factorEngine portfolio.FactorEngineInterface
 	fundamentals *portfolio.FundamentalProvider
 }
 

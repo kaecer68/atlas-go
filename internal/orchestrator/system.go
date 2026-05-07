@@ -35,7 +35,7 @@ type SystemCore struct {
 	replay           *replay.Dataset
 	session          domain.ReplaySession
 	alphaDiscovery   *AlphaDiscoveryEngine
-	optimizer        *portfolio.Optimizer
+	optimizer        portfolio.OptimizerInterface
 	plugins          *PluginRegistry
 	narrativeEngine  *narrative.NarrativeEngine
 	persistentState  *domain.SimulationState
@@ -43,7 +43,7 @@ type SystemCore struct {
 	lastOutcomes     []domain.RecommendationOutcome
 	portfolioHistory []float64
 	returnHistory    []float64
-	darwinian        *portfolio.DarwinianWeightManager
+	darwinian        portfolio.DarwinianWeightManagerInterface
 
 	capitalController *risk.CapitalPhaseController
 	capitalAllocator  *portfolio.CapitalAllocator

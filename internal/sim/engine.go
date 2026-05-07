@@ -15,7 +15,7 @@ import (
 
 type Engine struct {
 	constraints     domain.SimulationConstraints
-	optimizer       *portfolio.Optimizer
+	optimizer       portfolio.OptimizerInterface
 	useOptimizer    bool
 	reflexRules     []reflexivity.Rule
 	ctx             context.Context
@@ -36,7 +36,7 @@ func (e *Engine) WithContext(ctx context.Context) *Engine {
 }
 
 // WithOptimizer enables portfolio-optimizer-driven order generation.
-func (e *Engine) WithOptimizer(o *portfolio.Optimizer) *Engine {
+func (e *Engine) WithOptimizer(o portfolio.OptimizerInterface) *Engine {
 	e.optimizer = o
 	e.useOptimizer = true
 	return e

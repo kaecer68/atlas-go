@@ -18,7 +18,7 @@ Create auditable schema contracts for proposal and commit payloads.
 ## Candidate Paths
 
 - `internal/domain/`
-- `cmd/execute-experiment/`
+- `cmd/run-experiment/`
 - `cmd/judge-experiment/`
 
 ## Acceptance Criteria
@@ -31,7 +31,7 @@ Create auditable schema contracts for proposal and commit payloads.
 
 ```bash
 go test ./internal/domain/...
-go test ./cmd/execute-experiment/...
+go test ./cmd/run-experiment/...
 go test ./cmd/judge-experiment/...
 ```
 

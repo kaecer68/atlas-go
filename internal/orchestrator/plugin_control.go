@@ -16,7 +16,7 @@ type ControlExecutor interface {
 }
 
 type CRORiskExecutor struct {
-	convictionNormalizer *portfolio.ConvictionNormalizer
+	convictionNormalizer portfolio.ConvictionNormalizerInterface
 }
 
 func NewCRORiskExecutor() *CRORiskExecutor {
@@ -204,7 +204,7 @@ func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommen
 // CIOPortfolioExecutorWithWeights extends CIOPortfolioExecutor with Darwinian weight support
 // This aggregator weights recommendations by agent performance (Atlas-GIC style)
 type CIOPortfolioExecutorWithWeights struct {
-	WeightManager *portfolio.DarwinianWeightManager
+	WeightManager portfolio.DarwinianWeightManagerInterface
 }
 
 func (e CIOPortfolioExecutorWithWeights) Supports(agent domain.AgentSpec) bool {

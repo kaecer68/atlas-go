@@ -137,12 +137,6 @@ func mutateCandidate(source string, brief domain.MutationBrief, base domain.Simu
 }
 
 func mutatePromptCandidate(source string, brief domain.MutationBrief) string {
-	if strings.Contains(source, "## Candidate Mutation v3") {
-		return mutatePromptCandidateV4(source, brief)
-	}
-	if strings.Contains(source, "## Candidate Mutation v2") {
-		return mutatePromptCandidateV3(source, brief)
-	}
 	base := stripMutationSections(source)
 	ctrl, bullets := v2ControlBlockAndBullets(brief)
 	var b strings.Builder
@@ -354,100 +348,6 @@ func v3ControlBlockAndBullets(brief domain.MutationBrief) (domain.PromptControl,
 				"- require two confirming signals instead of one in exploratory mode",
 				"- downgrade conviction when price is below both open and prior close",
 				"- hard-filter the weakest setup when multiple weak signals stack",
-			}
-	}
-}
-
-func mutatePromptCandidateV4(source string, brief domain.MutationBrief) string {
-	base := stripMutationSections(source)
-	ctrl, bullets := v4ControlBlockAndBullets(brief)
-	var b strings.Builder
-	b.WriteString(strings.TrimSpace(base))
-	b.WriteString("\n\n")
-	b.WriteString(domain.RenderPromptControl(ctrl))
-	b.WriteString("\n\n")
-	b.WriteString("## Candidate Mutation v4 - Advanced Tightening\n\n")
-	b.WriteString("This mutation applies a further bounded refinement for agents that have already accepted v2 and v3 improvements.\n\n")
-	b.WriteString("### Executable Prompt Controls\n\n")
-	for _, line := range bullets {
-		b.WriteString(line)
-		b.WriteString("\n")
-	}
-	b.WriteString("\n")
-	b.WriteString("### Operator Notes\n\n")
-	b.WriteString("- Apply only one additional bounded change beyond v3.\n")
-	b.WriteString("- Preserve all previously accepted guardrails and skill boundaries.\n")
-	for _, guidance := range brief.IterationGuidance {
-		b.WriteString("- ")
-		b.WriteString(guidance)
-		b.WriteString("\n")
-	}
-	b.WriteString("\n**Required skills preserved**: ")
-	b.WriteString(strings.Join(brief.RequiredSkills, ", "))
-	b.WriteString("\n**Forbidden actions avoided**: ")
-	b.WriteString(strings.Join(brief.ForbiddenActions, ", "))
-	b.WriteString("\n")
-	return b.String()
-}
-
-func v4ControlBlockAndBullets(brief domain.MutationBrief) (domain.PromptControl, []string) {
-	switch brief.TargetSkill {
-	case "semiconductor_desk":
-		return domain.PromptControl{
-				VolumeFloor:        2000000,
-				VolumeDowngrade:    30,
-				CloseStrengthBoost: 15,
-				HardRejectVolume:   2000000,
-				PriceCondition:     "close_below_open",
-				ConvictionFloor:    65,
-			}, []string{
-				"- keep the volume floor at 2.0M to preserve coverage",
-				"- raise the minimum conviction floor from 60 to 65 for higher-quality entries",
-				"- increase close-strength boost reward to 15 for stronger leadership confirmation",
-				"- require at least one price-strength signal in all regime conditions",
-			}
-	case "technical_breakout":
-		return domain.PromptControl{
-				VolumeBoost:    10,
-				PriceCondition: "close_within_1pct_of_high",
-			}, []string{
-				"- require volume surge to be at least 2x the 20-day average for breakout confirmation",
-				"- penalize late-breakout entries aggressively",
-				"- do not accept catch-up momentum unless close is within 1% of session high",
-			}
-	case "financials_desk":
-		return domain.PromptControl{
-				VolumeDowngrade: 35,
-				PriceCondition:  "close_below_20th_percentile",
-			}, []string{
-				"- downgrade conviction when intraday close strength is below 20th percentile",
-				"- require credit-spread stability and liquidity confirmation before upgrading conviction",
-				"- reject setups with any deteriorating capital-adequacy trend",
-			}
-	case "growth_momentum":
-		return domain.PromptControl{
-				VolumeDowngrade:         15,
-				PriceCondition:          "close_below_open_and_prior_close",
-				RequireTrend:            true,
-				CloseStrengthBoost:      12,
-				ConvictionFloor:         50,
-				NeutralPenaltyReduction: 8,
-				VolumeBoost:             5,
-			}, []string{
-				"- further reduce penalty severity in neutral regimes",
-				"- increase close-strength reward to 12 for stronger leadership",
-				"- add volume-boost reward for high-conviction breakouts above 5M",
-				"- raise conviction floor to 50 without reducing coverage",
-			}
-	default:
-		return domain.PromptControl{
-				VolumeDowngrade: 25,
-				PriceCondition:  "close_below_open_and_prior_close",
-				RequireTrend:    true,
-			}, []string{
-				"- require two strong confirming signals in exploratory mode",
-				"- downgrade conviction aggressively when price is below both open and prior close",
-				"- hard-filter any setup with stacked weak signals",
 			}
 	}
 }

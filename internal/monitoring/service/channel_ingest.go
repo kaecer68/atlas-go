@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
 	"sync"
 
@@ -378,7 +377,7 @@ func (s *ChannelIngestService) triggerJanusIngest(ctx context.Context) error {
 }
 
 func (s *ChannelIngestService) triggerTejIngest(ctx context.Context) error {
-	tejKey := os.Getenv("TEJ_API_KEY")
+	tejKey := config.GetSecret("TEJ_API_KEY")
 	if tejKey == "" {
 		s.healthStore.Record("tej", "inactive", "TEJ_API_KEY not set")
 		return fmt.Errorf("TEJ_API_KEY not set")
