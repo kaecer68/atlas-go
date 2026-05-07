@@ -1,4 +1,4 @@
-# AGENTS.md — atlas-go
+# agents.md — atlas-go
 
 本檔是此儲存庫的 AI 開發代理工作守則。閱讀者應假設對本專案一無所知，所有資訊均以實際程式碼與設定為準，不做臆測。
 
@@ -221,9 +221,9 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 - `.github/instructions/live-trading.guardrails.instructions.md` — Live trading 邊界
 - `.github/copilot-instructions.md` — 綜合入口與常見工作流程
 
-## Local AGENTS.md 導覽
+## Local agents.md 導覽
 
-以下子目錄已有局部說明，進入該區域工作時**先讀該目錄下的 `AGENTS.md`**，不要只依賴本檔：
+以下子目錄已有局部說明，進入該區域工作時**先讀該目錄下的 `agents.md`**，不要只依賴本檔：
 
 | 目錄 | 主題 |
 |------|------|
@@ -239,13 +239,13 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 | `cmd/experimental/` | 驗證 / drill / smoke-test 類 CLI |
 | `scripts/openclaw/` | OpenClaw 治理、審核、promote / revert 腳本 |
 
-### 什麼情況要往下讀局部 AGENTS.md
+### 什麼情況要往下讀局部 agents.md
 
 - 你正在改 `cmd/experimental/*` 的驗證 CLI。
 - 你正在跑或修改 `scripts/openclaw/*` 的治理腳本。
 - 你碰到某個 `internal/*` 子系統有自己的術語、陷阱或資料流。
 
-### 什麼情況不用再拆更多 AGENTS.md
+### 什麼情況不用再拆更多 agents.md
 
 - `internal/config/`、`internal/db/`、`internal/ledger/`、`internal/repository/`、`internal/taskexec/` 屬於共享基礎設施；通常由本檔 + 對應程式碼即可覆蓋。
 - `data/`、`graphify-out/`、`.worktrees/`、`.gocache/` 屬於狀態 / 產物 / 快取，不作為主要開發規範來源。
@@ -275,14 +275,14 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 > **文件優先順序**（當內容衝突時）：
 > 1. `.claude/SKILLS-MAP.md`
 > 2. `.claude/skills/atlas-*/SKILL.md`
-> 3. `AGENTS.md`
+> 3. `agents.md`
 > 4. `docs/*.md`
 > 5. 原始碼（最終真理來源）
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (23036 symbols, 44895 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (23042 symbols, 44941 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
