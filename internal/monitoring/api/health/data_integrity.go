@@ -127,6 +127,38 @@ func HandleDataIntegrity(workDir, ledgerDir string) http.HandlerFunc {
 			checks = append(checks, IntegrityCheck{"replay_data", "ok", ""})
 		}
 
+		// 6. Check for known stub handlers (always return empty/zero)
+		if !taxHasData && dailyCount > 0 {
+			// Tax was separately flagged above; this consolidates the "stub" concept
+			warnings = append(warnings, "Tax handler may be returning stub data — verify tax calculator is wired")
+		}
+
+		// 7. Check for sessions with zero portfolio value (data gap)
+		zeroPVCount := 0
+		for _, e := range entries {
+			if !e.IsDir() || !strings.HasSuffix(e.Name(), "-daily") {
+				continue
+			}
+			sp := filepath.Join(sessionsDir, e.Name(), "summary.json")
+			data, err := os.ReadFile(sp)
+			if err != nil {
+				continue
+			}
+			var summary domain.SessionSummary
+			if json.Unmarshal(data, &summary) != nil {
+				continue
+			}
+			if summary.PortfolioValue == 0 {
+				zeroPVCount++
+			}
+		}
+		if zeroPVCount > 0 {
+			checks = append(checks, IntegrityCheck{"zero_pv_sessions", "warn", "some sessions have zero portfolio value"})
+			warnings = append(warnings, "Sessions with zero portfolio value detected — may indicate data gaps")
+		} else {
+			checks = append(checks, IntegrityCheck{"zero_pv_sessions", "ok", ""})
+		}
+
 		overall := "ok"
 		if errorCount > 0 {
 			overall = "failing"
