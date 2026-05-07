@@ -9,10 +9,10 @@ import (
 func TestLayerRouter(t *testing.T) {
 	registry := domain.AgentRegistry{
 		Agents: []domain.AgentSpec{
-		{ID: "macro-01", Layer: domain.LayerContext, Enabled: true},
-		{ID: "semi-01", Layer: domain.LayerSector, Enabled: true},
-		{ID: "growth-01", Layer: domain.LayerStyle, Enabled: true},
-		{ID: "cro-01", Layer: domain.LayerControl, Enabled: true},
+			{ID: "macro-01", Layer: domain.LayerContext, Enabled: true},
+			{ID: "semi-01", Layer: domain.LayerSector, Enabled: true},
+			{ID: "growth-01", Layer: domain.LayerStyle, Enabled: true},
+			{ID: "cro-01", Layer: domain.LayerControl, Enabled: true},
 		},
 	}
 	router := DefaultLayerRouter{}
