@@ -713,7 +713,12 @@ body { display: flex; margin: 0; min-height: 100vh; }
         <div class="panel"><h2>總經雷達</h2><div id="macroRadar" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>即時狀態</h2><div id="liveStatus" class="empty loading">載入中…</div></div>
       </div>
-      <div class="panel wide" id="riskCardsPanel" style="display:none;"><h2>風險指標（VaR）</h2><div id="riskCards" class="grid cols-3"></div></div>
+      <div class="panel wide" id="riskCardsPanel" style="display:none;">
+        <h2>風險指標</h2>
+        <div id="riskCards" class="grid cols-3"></div>
+        <div id="riskPositionConcentration" style="margin-top:16px;"></div>
+        <div id="riskSectorDistribution" style="margin-top:16px;"></div>
+      </div>
     </div>
 
     <!-- 投資管線 -->
@@ -2662,9 +2667,11 @@ function renderLiveStatus(data) {
   `;
 }
 
-function renderRiskCards(data) {
+function renderRiskCards(data, pipelineData) {
   const el = document.getElementById('riskCards');
   const panel = document.getElementById('riskCardsPanel');
+  const posEl = document.getElementById('riskPositionConcentration');
+  const sectorEl = document.getElementById('riskSectorDistribution');
   if (!el || !data || !data.risk_snapshot) {
     if (panel) panel.style.display = 'none';
     return;
@@ -2673,11 +2680,137 @@ function renderRiskCards(data) {
   const rs = data.risk_snapshot;
   const insufficient = rs.insufficient_data || rs.data_points < 30;
   const fmtPct = v => (typeof v === 'number' && !isNaN(v)) ? (v * 100).toFixed(1) + '%' : '-';
+
+  // --- 計算投組風險指標（從 pipelineData） ---
+  const items = (pipelineData && pipelineData.items) || [];
+  const passedItems = items.filter(it => it.passed_guards);
+
+  // 1. 投組 Sharpe（簡易計算：平均報酬 / 標準差）
+  let portfolioSharpe = null;
+  if (passedItems.length >= 3) {
+    const returns = passedItems.map(it => it.forward_return || 0);
+    const avg = returns.reduce((a, b) => a + b, 0) / returns.length;
+    const variance = returns.reduce((sum, r) => sum + Math.pow(r - avg, 2), 0) / returns.length;
+    const std = Math.sqrt(variance);
+    portfolioSharpe = std > 0 ? (avg / std) : 0;
+  }
+
+  // 2. 倉位集中度（前 5 大標的佔比）
+  let concentrationHtml = '';
+  if (passedItems.length > 0) {
+    const totalConviction = passedItems.reduce((sum, it) => sum + (it.conviction || 0), 0);
+    const sorted = passedItems.slice().sort((a, b) => (b.conviction || 0) - (a.conviction || 0));
+    const top5 = sorted.slice(0, 5);
+    const top5Weight = totalConviction > 0
+      ? top5.reduce((sum, it) => sum + (it.conviction || 0), 0) / totalConviction
+      : 0;
+    const top1Weight = totalConviction > 0 ? (sorted[0].conviction || 0) / totalConviction : 0;
+
+    const rows = top5.map((it, idx) => {
+      const weight = totalConviction > 0 ? ((it.conviction || 0) / totalConviction * 100).toFixed(1) : '0.0';
+      return `<tr><td style="padding:3px 8px;font-size:12px">${idx + 1}</td><td style="padding:3px 8px;font-size:12px">${it.symbol}</td><td style="padding:3px 8px;font-size:12px;text-align:right">${weight}%</td></tr>`;
+    }).join('');
+
+    concentrationHtml = `
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px">
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">前 5 大持倉集中度</div>
+          <div style="font-size:20px;font-weight:700;color:${top5Weight > 0.6 ? 'var(--down)' : (top5Weight > 0.4 ? 'var(--warn)' : 'var(--up)')}">${(top5Weight * 100).toFixed(1)}%</div>
+          <div style="font-size:11px;color:var(--muted)">最高單一持倉 ${(top1Weight * 100).toFixed(1)}%</div>
+        </div>
+        <div style="flex:2;min-width:280px">
+          <table style="width:100%;font-size:12px;border-collapse:collapse">
+            <thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:4px 8px">#</th><th style="text-align:left;padding:4px 8px">標的</th><th style="text-align:right;padding:4px 8px">權重</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  } else {
+    concentrationHtml = `<div style="font-size:12px;color:var(--muted);margin-top:12px">暫無持倉資料（本場次無控制層放行標的）</div>`;
+  }
+
+  // 3. 板塊分布（從 agent_id / layer 推導）
+  let sectorHtml = '';
+  if (passedItems.length > 0) {
+    const sectorMap = {};
+    passedItems.forEach(it => {
+      // 簡易推導：使用 agent_id 對應的 sector（若無法對應則標為「其他」）
+      const sector = inferSectorFromAgent(it.agent_id, it.layer) || '其他';
+      if (!sectorMap[sector]) sectorMap[sector] = { count: 0, conviction: 0 };
+      sectorMap[sector].count++;
+      sectorMap[sector].conviction += (it.conviction || 0);
+    });
+
+    const totalConv = passedItems.reduce((sum, it) => sum + (it.conviction || 0), 0);
+    const sectors = Object.entries(sectorMap)
+      .map(([name, data]) => ({ name, ...data, weight: totalConv > 0 ? data.conviction / totalConv : 0 }))
+      .sort((a, b) => b.weight - a.weight);
+
+    const sectorBars = sectors.map(s => {
+      const pct = (s.weight * 100).toFixed(1);
+      const color = s.weight > 0.3 ? 'var(--accent)' : (s.weight > 0.15 ? 'var(--accent-secondary)' : 'var(--muted)');
+      return `
+        <div style="margin:4px 0">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
+            <span>${sectorName(s.name) || s.name}</span>
+            <span>${pct}% (${s.count} 檔)</span>
+          </div>
+          <div style="width:100%;height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
+            <div style="width:${pct}%;height:100%;background:${color};border-radius:3px;transition:width 0.3s"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    sectorHtml = `
+      <div style="margin-top:16px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px">板塊配置分布</div>
+        ${sectorBars}
+      </div>
+    `;
+  } else {
+    sectorHtml = `<div style="font-size:12px;color:var(--muted);margin-top:16px">暫無板塊分布資料</div>`;
+  }
+
+  // 渲染主風險指標卡片
   el.innerHTML = `
     <div class="panel" style="text-align:center"><div class="kpi-label">VaR 95%</div><div class="kpi-value" style="color:var(--down)">${insufficient ? '資料不足' : fmtPct(rs.var_95)}</div><div class="kpi-hint">95% 信賴區間最大虧損</div></div>
     <div class="panel" style="text-align:center"><div class="kpi-label">CVaR 95%</div><div class="kpi-value" style="color:var(--down)">${insufficient ? '資料不足' : fmtPct(rs.cvar_95)}</div><div class="kpi-hint">95% 條件期望虧損</div></div>
     <div class="panel" style="text-align:center"><div class="kpi-label">最大回撤</div><div class="kpi-value" style="color:var(--warn)">${insufficient ? '資料不足' : fmtPct(rs.max_drawdown_pct)}</div><div class="kpi-hint">歷史最大回撤幅度</div></div>
+    <div class="panel" style="text-align:center"><div class="kpi-label">投組 Sharpe</div><div class="kpi-value" style="color:${portfolioSharpe !== null ? (portfolioSharpe > 1 ? 'var(--up)' : (portfolioSharpe < 0 ? 'var(--down)' : 'var(--warn)')) : 'var(--muted)'}"">${portfolioSharpe !== null ? portfolioSharpe.toFixed(2) : 'N/A'}</div><div class="kpi-hint">風險調整後收益比</div></div>
+    <div class="panel" style="text-align:center"><div class="kpi-label">放行標的數</div><div class="kpi-value">${passedItems.length}</div><div class="kpi-hint">控制層放行進模擬投組</div></div>
+    <div class="panel" style="text-align:center"><div class="kpi-label">資料點數</div><div class="kpi-value" style="color:${rs.data_points < 30 ? 'var(--warn)' : 'var(--up)'}"">${rs.data_points || 0}</div><div class="kpi-hint">統計可信度 ${rs.data_points >= 30 ? '充足' : '不足'}</div></div>
   `;
+
+  // 渲染倉位集中度
+  if (posEl) posEl.innerHTML = `
+    <div style="border-top:1px solid var(--border);padding-top:12px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:6px">倉位集中度分析</div>
+      ${concentrationHtml}
+    </div>
+  `;
+
+  // 渲染板塊分布
+  if (sectorEl) sectorEl.innerHTML = sectorHtml;
+}
+
+// 簡易 sector 推導函數
+function inferSectorFromAgent(agentID, layer) {
+  const agentSectorMap = {
+    'semiconductor': 'semiconductor',
+    'ai_supply_chain': 'ai_supply_chain',
+    'financials': 'financials',
+    'shipping': 'shipping',
+    'value_yield': 'high_dividend',
+    'etf_rotation': 'etf_rotation',
+    'technical_breakout': 'small_cap',
+    'growth_momentum': 'small_cap',
+    'macro': 'TAIEX',
+    'cro': 'control',
+    'cio': 'control'
+  };
+  return agentSectorMap[agentID] || (layer === 'sector' ? agentID : null);
 }
 
 function renderLiveNarrativeStrip(events, stress, models, chains) {

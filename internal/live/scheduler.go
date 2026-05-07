@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/live/store"
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -15,7 +15,7 @@ type Scheduler struct {
 	watchlist      []string
 	config         OrchestratorConfig
 	eventBus       *ChannelEventBus
-	stateStore     *store.StateStore
+	stateStore     *livestore.StateStore
 	circuitBreaker *CircuitBreaker
 	metrics        MetricsRecorder
 	system         interface {
@@ -40,7 +40,7 @@ type Scheduler struct {
 func NewScheduler(
 	ctx context.Context,
 	marketData marketdata.Provider,
-	stateStore *store.StateStore,
+	stateStore *livestore.StateStore,
 	circuitBreaker *CircuitBreaker,
 	config OrchestratorConfig,
 	effectiveBrokerMode string,

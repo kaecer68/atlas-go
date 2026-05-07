@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/live/store"
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -35,12 +35,12 @@ func (s HealthStatus) String() string {
 type HealthChecker struct {
 	monitor    *Monitor
 	provider   marketdata.Provider
-	stateStore *store.StateStore
+	stateStore *livestore.StateStore
 	interval   time.Duration
 }
 
 // NewHealthChecker 创建健康检查器
-func NewHealthChecker(monitor *Monitor, provider marketdata.Provider, stateStore *store.StateStore) *HealthChecker {
+func NewHealthChecker(monitor *Monitor, provider marketdata.Provider, stateStore *livestore.StateStore) *HealthChecker {
 	return &HealthChecker{
 		monitor:    monitor,
 		provider:   provider,

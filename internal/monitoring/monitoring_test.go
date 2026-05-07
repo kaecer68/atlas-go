@@ -7,7 +7,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/live"
-	"github.com/kaecer68/atlas-go/internal/live/store"
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 )
 
 // ─── AlertLevel ──────────────────────────────────────────────────────────────
@@ -200,14 +200,14 @@ func TestRuleEngine_EvaluateRules_TriggersAlert(t *testing.T) {
 	engine.RegisterRule(AlertRule{
 		Name:        "always_fires",
 		Description: "test rule",
-		Condition: func(*store.State) (bool, string) {
+		Condition: func(*livestore.State) (bool, string) {
 			return true, "always triggered"
 		},
 		Level:    AlertLevelWarning,
 		Cooldown: 0,
 	})
 
-	engine.evaluateRules(&store.State{})
+	engine.evaluateRules(&livestore.State{})
 
 	time.Sleep(50 * time.Millisecond)
 
@@ -232,7 +232,7 @@ func TestRuleEngine_EvaluateRules_CooldownPreventsRefire(t *testing.T) {
 	engine := NewRuleEngine(m)
 	engine.RegisterRule(AlertRule{
 		Name: "cooldown_rule",
-		Condition: func(*store.State) (bool, string) {
+		Condition: func(*livestore.State) (bool, string) {
 			return true, "triggered"
 		},
 		Level:    AlertLevelInfo,
@@ -240,8 +240,8 @@ func TestRuleEngine_EvaluateRules_CooldownPreventsRefire(t *testing.T) {
 	})
 
 	// 連續觸發兩次 evaluate
-	engine.evaluateRules(&store.State{})
-	engine.evaluateRules(&store.State{})
+	engine.evaluateRules(&livestore.State{})
+	engine.evaluateRules(&livestore.State{})
 
 	time.Sleep(50 * time.Millisecond)
 
@@ -266,14 +266,14 @@ func TestRuleEngine_EvaluateRules_ConditionFalse(t *testing.T) {
 	engine := NewRuleEngine(m)
 	engine.RegisterRule(AlertRule{
 		Name: "never_fires",
-		Condition: func(*store.State) (bool, string) {
+		Condition: func(*livestore.State) (bool, string) {
 			return false, ""
 		},
 		Level:    AlertLevelInfo,
 		Cooldown: 0,
 	})
 
-	engine.evaluateRules(&store.State{})
+	engine.evaluateRules(&livestore.State{})
 	time.Sleep(50 * time.Millisecond)
 
 	mu.Lock()
@@ -300,12 +300,12 @@ func TestDefaultRules_PortfolioValueDrop(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		state    *store.State
+		state    *livestore.State
 		wantFire bool
 	}{
 		{"nil state no fire", nil, false},
-		{"cash below threshold fires", &store.State{Portfolio: store.store.PortfolioState{Cash: 50000}}, true},
-		{"cash above threshold no fire", &store.State{Portfolio: store.store.PortfolioState{Cash: 500000}}, false},
+		{"cash below threshold fires", &livestore.State{Portfolio: store.livestore.PortfolioState{Cash: 50000}}, true},
+		{"cash above threshold no fire", &livestore.State{Portfolio: store.livestore.PortfolioState{Cash: 500000}}, false},
 	}
 
 	for _, tt := range tests {
@@ -338,13 +338,13 @@ func TestDefaultRules_PositionConcentration(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		state    *store.State
+		state    *livestore.State
 		wantFire bool
 	}{
 		{"nil state", nil, false},
-		{"no positions", &store.State{}, false},
-		{"21 positions fires", &store.State{Positions: manyPositions}, true},
-		{"5 positions no fire", &store.State{Positions: manyPositions[:5]}, false},
+		{"no positions", &livestore.State{}, false},
+		{"21 positions fires", &livestore.State{Positions: manyPositions}, true},
+		{"5 positions no fire", &livestore.State{Positions: manyPositions[:5]}, false},
 	}
 
 	for _, tt := range tests {

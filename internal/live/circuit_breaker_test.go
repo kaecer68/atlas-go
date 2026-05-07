@@ -5,14 +5,14 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/live/store"
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 )
 
 func TestCircuitBreakerDailyLossHalt(t *testing.T) {
 	cb := NewCircuitBreaker("", "")
 	cb.ResetDayState(1000000)
 
-	cb.Evaluate(store.store.PortfolioState{Cash: 1000000, DayPnL: -30000}, nil, nil)
+	cb.Evaluate(store.livestore.PortfolioState{Cash: 1000000, DayPnL: -30000}, nil, nil)
 	if cb.State() != CircuitHalted {
 		t.Fatalf("expected halted, got %s", cb.State())
 	}
@@ -29,9 +29,9 @@ func TestCircuitBreakerDrawdownPause(t *testing.T) {
 	cb.ResetDayState(1000000)
 
 	// Push peak up first
-	cb.Evaluate(store.store.PortfolioState{Cash: 1100000, UnrealizedPnL: 0}, nil, nil)
+	cb.Evaluate(store.livestore.PortfolioState{Cash: 1100000, UnrealizedPnL: 0}, nil, nil)
 	// Then drop 5%
-	cb.Evaluate(store.store.PortfolioState{Cash: 1045000, UnrealizedPnL: 0}, nil, nil)
+	cb.Evaluate(store.livestore.PortfolioState{Cash: 1045000, UnrealizedPnL: 0}, nil, nil)
 	if cb.State() != CircuitPaused {
 		t.Fatalf("expected paused, got %s", cb.State())
 	}
@@ -73,7 +73,7 @@ func TestCircuitBreakerAutoRecoverAfterCooldown(t *testing.T) {
 
 	// Immediate evaluate should recover because cooldown=0
 	time.Sleep(10 * time.Millisecond)
-	cb.Evaluate(store.store.PortfolioState{Cash: 1000000}, nil, nil)
+	cb.Evaluate(store.livestore.PortfolioState{Cash: 1000000}, nil, nil)
 	if cb.State() != CircuitNormal {
 		t.Fatalf("expected normal after cooldown expired, got %s", cb.State())
 	}
