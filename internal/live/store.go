@@ -354,12 +354,15 @@ type State struct {
 func appendToFile(path, content string) error {
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return err
+		return fmt.Errorf("open file: %w", err)
 	}
 	defer f.Close()
 
 	_, err = f.WriteString(content + "\n")
-	return err
+	if err != nil {
+		return fmt.Errorf("write file: %w", err)
+	}
+	return nil
 }
 
 // writeFileAtomic writes content to a temp file and renames it to the target path.
@@ -392,7 +395,7 @@ func writeFileAtomic(path, content string) error {
 func readLastJSONLLine(path string, v any) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("read file: %w", err)
 	}
 	if len(data) == 0 {
 		return nil
@@ -415,7 +418,7 @@ func LoadLastPortfolioState(basePath string) (PortfolioState, error) {
 	var p PortfolioState
 	path := filepath.Join(basePath, LiveStateSubDir, PortfolioStateFile)
 	if err := readLastJSONLLine(path, &p); err != nil {
-		return p, err
+		return p, fmt.Errorf("read portfolio state: %w", err)
 	}
 	return p, nil
 }
@@ -425,7 +428,7 @@ func LoadLastPositions(basePath string) (map[string]domain.Position, error) {
 	path := filepath.Join(basePath, LiveStateSubDir, PositionsStateFile)
 	var list []domain.Position
 	if err := readLastJSONLLine(path, &list); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read positions: %w", err)
 	}
 	m := make(map[string]domain.Position, len(list))
 	for _, pos := range list {
@@ -439,7 +442,7 @@ func LoadLastRegime(basePath string) (RegimeState, error) {
 	var r RegimeState
 	path := filepath.Join(basePath, LiveStateSubDir, RegimeStateFile)
 	if err := readLastJSONLLine(path, &r); err != nil {
-		return r, err
+		return r, fmt.Errorf("read regime state: %w", err)
 	}
 	return r, nil
 }

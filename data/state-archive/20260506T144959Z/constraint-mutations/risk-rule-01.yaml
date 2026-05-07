@@ -1,0 +1,5 @@
+mutation_type: risk_rule_change
+constraint_changes:
+  conviction_floor: 60
+  min_tradable_volume: 1500000
+  max_position_weight: 0.15

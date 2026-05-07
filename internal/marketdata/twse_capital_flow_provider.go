@@ -47,7 +47,7 @@ func (t *TWSECapitalFlowProvider) Name() string {
 func (t *TWSECapitalFlowProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
 	flow, err := t.fetchLatestTradingDay(ctx)
 	if err != nil {
-		return MacroDataSnapshot{}, err
+		return MacroDataSnapshot{}, fmt.Errorf("fetch capital flow: %w", err)
 	}
 
 	// Persist for audit.
@@ -83,24 +83,24 @@ func (t *TWSECapitalFlowProvider) fetchDate(ctx context.Context, dateStr string)
 	url := fmt.Sprintf("https://www.twse.com.tw/rwd/zh/fund/T86?response=json&date=%s&selectType=ALLBUT0999", dateStr)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return TWSECapitalFlow{}, err
+		return TWSECapitalFlow{}, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 
 	resp, err := t.client.Do(req)
 	if err != nil {
-		return TWSECapitalFlow{}, err
+		return TWSECapitalFlow{}, fmt.Errorf("http request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return TWSECapitalFlow{}, err
+		return TWSECapitalFlow{}, fmt.Errorf("read body: %w", err)
 	}
 
 	var apiResp twseT86Response
 	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return TWSECapitalFlow{}, err
+		return TWSECapitalFlow{}, fmt.Errorf("unmarshal response: %w", err)
 	}
 	if apiResp.Stat != "OK" || len(apiResp.Data) == 0 {
 		return TWSECapitalFlow{}, fmt.Errorf("TWSE API returned no data: %s", apiResp.Stat)
@@ -135,12 +135,12 @@ func (t *TWSECapitalFlowProvider) fetchDate(ctx context.Context, dateStr string)
 
 func (t *TWSECapitalFlowProvider) saveFlow(flow TWSECapitalFlow) error {
 	if err := os.MkdirAll(t.storageDir, 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir: %w", err)
 	}
 	path := filepath.Join(t.storageDir, flow.Date+".json")
 	data, err := json.MarshalIndent(flow, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal flow: %w", err)
 	}
 	return os.WriteFile(path, data, 0o644)
 }

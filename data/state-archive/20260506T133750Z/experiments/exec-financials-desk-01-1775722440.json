@@ -1,0 +1,86 @@
+{
+  "Experiment": {
+    "ID": "exec-financials-desk-01-1775722440",
+    "ProposalID": "proposal-window-20260301-20260331",
+    "CommitID": "commit-exec-financials-desk-01-1775722440",
+    "ApprovalID": "approval-exec-financials-desk-01-1775722440",
+    "TargetAgentID": "financials-desk-01",
+    "Skill": "financials_desk",
+    "Hypothesis": "Refine financials-desk-01 to improve risk-adjusted recommendation quality",
+    "PromptVersionFrom": "v1",
+    "PromptVersionTo": "v2",
+    "MutationType": "prompt_tightening",
+    "AcceptanceGates": [
+      "improve_sharpe_like",
+      "no_material_drawdown_degradation",
+      "no_constraint_bypass"
+    ],
+    "WindowStart": "2026-03-01T00:00:00Z",
+    "WindowEnd": "2026-03-31T00:00:00Z",
+    "AcceptanceMetric": "sharpe_like",
+    "BaselineValue": -0.002249500449059267,
+    "CandidateValue": -0.003244615407063669,
+    "Status": "rejected",
+    "RevertReason": "Replay judge did not satisfy maturity-aware acceptance gates."
+  },
+  "Brief": {
+    "contract_version": 1,
+    "proposal_id": "proposal-window-20260301-20260331",
+    "window_id": "window-20260301-20260331",
+    "target_agent_id": "financials-desk-01",
+    "target_skill": "financials_desk",
+    "target_layer": "style",
+    "prompt_file": "prompts/agents/financials_desk.md",
+    "mutation_type": "prompt_tightening",
+    "failure_pattern": "",
+    "hypothesis": "Refine financials-desk-01 to improve risk-adjusted recommendation quality",
+    "acceptance_metric": "sharpe_like",
+    "acceptance_gates": [
+      "improve_sharpe_like",
+      "no_material_drawdown_degradation",
+      "no_constraint_bypass"
+    ],
+    "forbidden_actions": [
+      "illiquid_breakout_chasing"
+    ],
+    "required_skills": [
+      "financials_desk"
+    ],
+    "observed_window_count": 63,
+    "maturity_level": "level_3_regime_aware",
+    "iteration_guidance": [
+      "preserve required skills while tightening setup quality",
+      "avoid weakening control-layer constraints"
+    ],
+    "recommended_window": "next cross-regime replay window",
+    "generated_at": "2026-04-09T08:13:59Z"
+  },
+  "CandidatePrompt": "prompts/experiments/financials-desk-01/exec-financials-desk-01-1775722440/v2.md",
+  "EvaluationMode": "prompt_aware_replay_judged",
+  "PolicyChecks": [
+    "required skill preserved: financials_desk",
+    "forbidden action explicitly guarded: illiquid_breakout_chasing"
+  ],
+  "Notes": [
+    "Candidate prompt generated successfully.",
+    "Policy checks passed for required skill and forbidden action boundaries.",
+    "Iteration guidance was embedded from layer-aware and evidence-aware mutation policy.",
+    "Candidate artifact template was selected from the mutation type profile.",
+    "Replay performance evaluation is the next step before acceptance or rejection.",
+    "Replay judge rejected the candidate."
+  ],
+  "JudgeChecks": [
+    "contains credit quality gate",
+    "contains spread sensitivity downgrade",
+    "contains capital adequacy premium",
+    "required skill policy checks preserved",
+    "forbidden actions still named in candidate prompt",
+    "baseline observations: 63",
+    "candidate observations: 35",
+    "rejected: candidate did not improve over baseline"
+  ],
+  "BaselineObservations": 63,
+  "CandidateObservations": 35,
+  "UsedFallbackWindow": false,
+  "RecordedAt": "2026-04-09T16:14:01.318588+08:00"
+}

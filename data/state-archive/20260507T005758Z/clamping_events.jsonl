@@ -1,0 +1,4 @@
+{"agent_id":"etf-rotation-01","raw_weight":3.11354072191683,"final_weight":2.5,"boundary":"max","timestamp":"2026-05-06T15:32:27.799655+08:00"}
+{"agent_id":"ai-desk-01","raw_weight":3.108013735717127,"final_weight":2.5,"boundary":"max","timestamp":"2026-05-06T15:32:27.799658+08:00"}
+{"agent_id":"growth-momentum-01","raw_weight":3.033228820189609,"final_weight":2.5,"boundary":"max","timestamp":"2026-05-06T15:32:27.799661+08:00"}
+{"agent_id":"semi-desk-01","raw_weight":2.55,"final_weight":2.5,"boundary":"max","timestamp":"2026-05-06T15:32:27.799664+08:00"}

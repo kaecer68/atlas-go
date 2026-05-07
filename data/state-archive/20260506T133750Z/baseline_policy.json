@@ -1,0 +1,221 @@
+{
+  "Version": 19,
+  "PromptOverrides": {
+    "etf-rotation-01": "# ETF Rotation Desk\n\nEvaluate broad Taiwan ETF allocations when single-name conviction is weak, dispersion is high, or drawdown control is prioritized.\n\n## Candidate Mutation v2\n\nTarget layer: sector.\nObserved evidence windows: 1.\nMaturity level: level_1_exploratory.\n\nUse a tighter qualification process before upgrading conviction.\n\n- Require trend confirmation and volume confirmation before promoting a breakout.\n- Downgrade conviction when earnings support or estimate support is unclear.\n- Reject setups that look illiquid, narrative-only, or structurally fragile.\n- Change one bounded behavior only.\n- Preserve required skills and forbidden action boundaries.\n- Refine sector thesis quality and symbol qualification, not portfolio sizing.\n- Prefer industry-specific evidence over broad market narration.\n- Evidence is still thin; prefer conservative prompt tightening over ambitious rewrites.\n- Respect required skills: etf_rotation_desk, value_yield.\n- Respect forbidden actions: single_name_substitution_bias.\n",
+    "growth-momentum-01": "# Growth Momentum\n\nQualify candidates using trend persistence, estimate support, and volume confirmation. Avoid illiquid and narrative-only names.\n\n## Candidate Mutation v2 - Prompt Tightening\n\nThis mutation tightens setup quality while preserving required skill and guardrail boundaries.\n\n### Executable Prompt Controls\n\n- keep momentum bias but tolerate one weak confirmation signal in exploratory mode\n- downgrade conviction when price is below intraday strength or open\n- keep exploratory coverage: do not hard-filter solely on one weak signal\n- enforce illiquid rejection for weak volume names\n\n### Operator Notes\n\n- Keep conviction selective and avoid narrative-only entries\n- Prefer clean continuation structures over low-quality breakouts\n- Preserve control-layer sequencing and CRO/CIO boundaries\n- preserve required skills while tightening setup quality\n- avoid weakening control-layer constraints\n\n**Required skills preserved**: growth_momentum\n**Forbidden actions avoided**: illiquid_breakout_chasing\n",
+    "semi-desk-01": "# Semiconductor Desk\n\nFocus on foundry, packaging, IP, and key semiconductor supply-chain names in Taiwan. Rank candidate longs by durability, liquidity, and regime fit.\n\n## Candidate Mutation v2 - Prompt Tightening\n\nThis mutation tightens setup quality while preserving required skill and guardrail boundaries.\n\n### Executable Prompt Controls\n\n- downgrade conviction when weak volume is accompanied by price below open\n- tolerate volume between 1.5M and 3M if close strength confirms leadership\n- reject setups only when volume is below 1.5M and price action is weak\n- keep exploratory coverage: do not hard-filter solely on one weak signal\n\n### Operator Notes\n\n- Keep conviction selective and avoid narrative-only entries\n- Prefer clean continuation structures over low-quality breakouts\n- Preserve control-layer sequencing and CRO/CIO boundaries\n- Change one bounded behavior only.\n- Preserve required skills and forbidden action boundaries.\n- Refine sector thesis quality and symbol qualification, not portfolio sizing.\n- Prefer industry-specific evidence over broad market narration.\n- Evidence is still thin; prefer conservative prompt tightening over ambitious rewrites.\n\n**Required skills preserved**: semiconductor_desk, earnings_quality, technical_breakout\n**Forbidden actions avoided**: illiquid_name_selection, macro_override\n\n## Candidate Mutation v3 - Incremental Tightening\n\nThis mutation applies an additional bounded refinement on top of the previously accepted prompt override.\n\n### Executable Prompt Controls\n\n- raise the effective volume floor from 1.5M to 2.0M for leadership confirmation\n- downgrade conviction more aggressively when close is below open on weak volume\n- keep exploratory coverage but tighten the illiquid rejection threshold\n- require at least one additional price-strength signal in ambiguous regimes\n\n### Operator Notes\n\n- Apply only one additional bounded change.\n- Preserve all previously accepted guardrails and skill boundaries.\n- Change one bounded behavior only.\n- Preserve required skills and forbidden action boundaries.\n- Refine sector thesis quality and symbol qualification, not portfolio sizing.\n- Prefer industry-specific evidence over broad market narration.\n- Evidence is still thin; prefer conservative prompt tightening over ambitious rewrites.\n\n**Required skills preserved**: semiconductor_desk, earnings_quality, technical_breakout\n**Forbidden actions avoided**: illiquid_name_selection, macro_override\n"
+  },
+  "Constraints": {
+    "StartingCash": 3000000,
+    "MaxPositionWeight": 0.25,
+    "MaxOpenPositions": 5,
+    "MinTradableVolume": 2000000,
+    "MinRecommendationConviction": 35,
+    "RequireCROPass": true,
+    "TransactionCostBPS": 1.425,
+    "SlippageBPS": 4,
+    "ReserveCashFraction": 0.1,
+    "StopLossPct": 0.08,
+    "TakeProfitPct": 0
+  },
+  "ExecutionPolicy": {
+    "ConvictionFloor": 35,
+    "RequireCROPass": true,
+    "MomentumCrashProtection": false,
+    "EnableConvictionNormalization": false
+  },
+  "Promotions": [
+    {
+      "ExperimentID": "exec-etf-rotation-01-1775356834",
+      "TargetAgentID": "etf-rotation-01",
+      "TargetSkill": "etf_rotation_desk",
+      "MutationType": "prompt_tightening",
+      "CandidatePath": "prompts/experiments/etf-rotation-01/exec-etf-rotation-01-1775356834/v2.md",
+      "PromotedAt": "2026-04-05T10:43:52.774491+08:00",
+      "Status": "accepted",
+      "VersionAfter": 0
+    },
+    {
+      "ExperimentID": "exec-growth-momentum-01-1775436040",
+      "TargetAgentID": "growth-momentum-01",
+      "TargetSkill": "growth_momentum",
+      "MutationType": "risk_rule_change",
+      "CandidatePath": "prompts/experiments/growth-momentum-01/exec-growth-momentum-01-1775436040/v2.md",
+      "PromotedAt": "2026-04-06T10:57:49.555629+08:00",
+      "Status": "accepted",
+      "VersionAfter": 0
+    },
+    {
+      "ExperimentID": "exec-growth-momentum-01-1775704507",
+      "TargetAgentID": "growth-momentum-01",
+      "TargetSkill": "growth_momentum",
+      "MutationType": "prompt_tightening",
+      "CandidatePath": "prompts/experiments/growth-momentum-01/exec-growth-momentum-01-1775704507/v2.md",
+      "PromotedAt": "2026-04-09T11:26:59.550454+08:00",
+      "Status": "accepted",
+      "VersionAfter": 0
+    },
+    {
+      "ExperimentID": "exec-semi-desk-01-1776096483",
+      "TargetAgentID": "semi-desk-01",
+      "TargetSkill": "semiconductor_desk",
+      "MutationType": "prompt_tightening",
+      "CandidatePath": "prompts/experiments/semi-desk-01/exec-semi-desk-01-1776096483/v2.md",
+      "PromotedAt": "2026-04-14T00:08:16.648892+08:00",
+      "Status": "accepted",
+      "VersionAfter": 0
+    },
+    {
+      "ExperimentID": "exec-semi-desk-01-1776099629",
+      "TargetAgentID": "semi-desk-01",
+      "TargetSkill": "semiconductor_desk",
+      "MutationType": "prompt_tightening",
+      "CandidatePath": "prompts/experiments/semi-desk-01/exec-semi-desk-01-1776099629/v2.md",
+      "PromotedAt": "2026-04-14T01:00:39.458797+08:00",
+      "Status": "accepted",
+      "VersionAfter": 6
+    },
+    {
+      "ExperimentID": "exec-semi-desk-01-1776103302",
+      "TargetAgentID": "semi-desk-01",
+      "TargetSkill": "semiconductor_desk",
+      "MutationType": "prompt_tightening",
+      "CandidatePath": "prompts/experiments/semi-desk-01/exec-semi-desk-01-1776103302/v2.md",
+      "PromotedAt": "2026-04-14T02:01:59.312589+08:00",
+      "Status": "accepted",
+      "VersionAfter": 7
+    },
+    {
+      "ExperimentID": "exec-growth-momentum-01-1776121726",
+      "TargetAgentID": "growth-momentum-01",
+      "TargetSkill": "growth_momentum",
+      "MutationType": "prompt_tightening",
+      "CandidatePath": "prompts/experiments/growth-momentum-01/exec-growth-momentum-01-1776121726/v2.md",
+      "PromotedAt": "2026-04-14T07:08:57.841524+08:00",
+      "Status": "accepted",
+      "VersionAfter": 8
+    },
+    {
+      "ExperimentID": "exec-growth-momentum-01-1776121726",
+      "TargetAgentID": "growth-momentum-01",
+      "TargetSkill": "growth_momentum",
+      "MutationType": "prompt_tightening",
+      "CandidatePath": "prompts/experiments/growth-momentum-01/exec-growth-momentum-01-1776121726/v2.md",
+      "PromotedAt": "2026-04-14T12:03:43.323624+08:00",
+      "Status": "accepted",
+      "VersionAfter": 9
+    },
+    {
+      "ExperimentID": "exec-semi-desk-01-1776103302",
+      "TargetAgentID": "semi-desk-01",
+      "TargetSkill": "semiconductor_desk",
+      "MutationType": "prompt_tightening",
+      "CandidatePath": "prompts/experiments/semi-desk-01/exec-semi-desk-01-1776103302/v2.md",
+      "PromotedAt": "2026-04-14T12:03:48.625093+08:00",
+      "Status": "accepted",
+      "VersionAfter": 10
+    },
+    {
+      "ExperimentID": "exec-growth-momentum-01-1775704439",
+      "TargetAgentID": "growth-momentum-01",
+      "TargetSkill": "growth_momentum",
+      "MutationType": "prompt_tightening",
+      "CandidatePath": "prompts/experiments/growth-momentum-01/exec-growth-momentum-01-1775704439/v2.md",
+      "PromotedAt": "2026-04-14T12:06:20.530222+08:00",
+      "Status": "accepted",
+      "VersionAfter": 11
+    },
+    {
+      "ExperimentID": "exec-semi-desk-01-1776099629",
+      "TargetAgentID": "semi-desk-01",
+      "TargetSkill": "semiconductor_desk",
+      "MutationType": "prompt_tightening",
+      "CandidatePath": "prompts/experiments/semi-desk-01/exec-semi-desk-01-1776099629/v2.md",
+      "PromotedAt": "2026-04-14T12:06:25.013682+08:00",
+      "Status": "accepted",
+      "VersionAfter": 12
+    },
+    {
+      "ExperimentID": "exec-etf-rotation-01-1775435912",
+      "TargetAgentID": "etf-rotation-01",
+      "TargetSkill": "etf_rotation_desk",
+      "MutationType": "risk_rule_change",
+      "CandidatePath": "prompts/experiments/etf-rotation-01/exec-etf-rotation-01-1775435912/v2.md",
+      "PromotedAt": "2026-04-14T12:07:29.445284+08:00",
+      "Status": "accepted",
+      "VersionAfter": 13
+    },
+    {
+      "ExperimentID": "exec-value-yield-01-1775435908",
+      "TargetAgentID": "value-yield-01",
+      "TargetSkill": "value_yield",
+      "MutationType": "risk_rule_change",
+      "CandidatePath": "prompts/experiments/value-yield-01/exec-value-yield-01-1775435908/v2.md",
+      "PromotedAt": "2026-04-14T12:07:29.505814+08:00",
+      "Status": "accepted",
+      "VersionAfter": 14
+    },
+    {
+      "ExperimentID": "exec-technical-breakout-01-1775435904",
+      "TargetAgentID": "technical-breakout-01",
+      "TargetSkill": "technical_breakout",
+      "MutationType": "risk_rule_change",
+      "CandidatePath": "prompts/experiments/technical-breakout-01/exec-technical-breakout-01-1775435904/v2.md",
+      "PromotedAt": "2026-04-14T12:07:29.566552+08:00",
+      "Status": "accepted",
+      "VersionAfter": 15
+    },
+    {
+      "ExperimentID": "exec-growth-momentum-01-1775435882",
+      "TargetAgentID": "growth-momentum-01",
+      "TargetSkill": "growth_momentum",
+      "MutationType": "portfolio_constraint_revision",
+      "CandidatePath": "prompts/experiments/growth-momentum-01/exec-growth-momentum-01-1775435882/v2.md",
+      "PromotedAt": "2026-04-14T12:07:29.630744+08:00",
+      "Status": "accepted",
+      "VersionAfter": 16
+    },
+    {
+      "ExperimentID": "exec-etf-rotation-01-1775435436",
+      "TargetAgentID": "etf-rotation-01",
+      "TargetSkill": "etf_rotation_desk",
+      "MutationType": "portfolio_constraint_revision",
+      "CandidatePath": "prompts/experiments/etf-rotation-01/exec-etf-rotation-01-1775435436/v2.md",
+      "PromotedAt": "2026-04-14T12:07:29.693719+08:00",
+      "Status": "accepted",
+      "VersionAfter": 17
+    },
+    {
+      "ExperimentID": "exec-value-yield-01-1775435101",
+      "TargetAgentID": "value-yield-01",
+      "TargetSkill": "value_yield",
+      "MutationType": "portfolio_constraint_revision",
+      "CandidatePath": "prompts/experiments/value-yield-01/exec-value-yield-01-1775435101/v2.md",
+      "PromotedAt": "2026-04-14T12:07:29.753846+08:00",
+      "Status": "accepted",
+      "VersionAfter": 18
+    },
+    {
+      "ExperimentID": "exec-value-yield-01-1775435908",
+      "TargetAgentID": "value-yield-01",
+      "TargetSkill": "value_yield",
+      "MutationType": "risk_rule_change",
+      "CandidatePath": "prompts/experiments/value-yield-01/exec-value-yield-01-1775435908/v2.md",
+      "PromotedAt": "2026-04-25T13:53:13.967029+08:00",
+      "Status": "accepted",
+      "VersionAfter": 19
+    }
+  ],
+  "RevertHistory": [
+    {
+      "FromVersion": 19,
+      "ToVersion": 18,
+      "RevertedExperiments": [
+        "exec-value-yield-01-1775435908"
+      ],
+      "Reason": "E2E pipeline test",
+      "RevertedAt": "2026-04-25T13:53:07.997773+08:00"
+    }
+  ],
+  "LastUpdatedAt": "2026-04-25T13:53:13.967034+08:00"
+}

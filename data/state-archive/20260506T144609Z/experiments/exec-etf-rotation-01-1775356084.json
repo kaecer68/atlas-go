@@ -1,0 +1,87 @@
+{
+  "experiment": {
+    "id": "exec-etf-rotation-01-1775356084",
+    "proposal_id": "",
+    "commit_id": "",
+    "approval_id": "",
+    "target_agent_id": "etf-rotation-01",
+    "skill": "etf_rotation_desk",
+    "hypothesis": "A targeted prompt refinement can improve risk-adjusted recommendation quality.",
+    "prompt_version_from": "v1",
+    "prompt_version_to": "v2",
+    "mutation_type": "prompt_tightening",
+    "acceptance_gates": [
+      "improve_sharpe_like",
+      "no_material_drawdown_degradation",
+      "no_constraint_bypass"
+    ],
+    "window_start": "2026-03-26T00:00:00Z",
+    "window_end": "2026-03-27T00:00:00Z",
+    "acceptance_metric": "sharpe_like",
+    "baseline_value": 0.0047519582245431225,
+    "candidate_value": 0.0047519582245431225,
+    "status": "rejected",
+    "revert_reason": "Replay judge did not satisfy maturity-aware acceptance gates."
+  },
+  "brief": {
+    "window_id": "window-20260326-20260327",
+    "target_agent_id": "etf-rotation-01",
+    "target_skill": "etf_rotation_desk",
+    "target_layer": "sector",
+    "prompt_file": "prompts/agents/etf_rotation_desk.md",
+    "mutation_type": "prompt_tightening",
+    "failure_pattern": "Repeated negative risk-adjusted outcomes across replay sessions.",
+    "hypothesis": "A targeted prompt refinement can improve risk-adjusted recommendation quality.",
+    "acceptance_metric": "sharpe_like",
+    "acceptance_gates": [
+      "improve_sharpe_like",
+      "no_material_drawdown_degradation",
+      "no_constraint_bypass"
+    ],
+    "forbidden_actions": [
+      "single_name_substitution_bias"
+    ],
+    "required_skills": [
+      "etf_rotation_desk",
+      "value_yield"
+    ],
+    "observed_window_count": 1,
+    "maturity_level": "level_1_exploratory",
+    "iteration_guidance": [
+      "Change one bounded behavior only.",
+      "Preserve required skills and forbidden action boundaries.",
+      "Refine sector thesis quality and symbol qualification, not portfolio sizing.",
+      "Prefer industry-specific evidence over broad market narration.",
+      "Evidence is still thin; prefer conservative prompt tightening over ambitious rewrites."
+    ],
+    "recommended_window": "next short validation window before broader promotion",
+    "generated_at": "2026-03-31T00:07:39.715867+08:00"
+  },
+  "candidate_prompt": "prompts/experiments/etf-rotation-01/exec-etf-rotation-01-1775356084/v2.md",
+  "evaluation_mode": "prompt_aware_replay_judged",
+  "policy_checks": [
+    "required skill preserved: etf_rotation_desk",
+    "required skill preserved: value_yield",
+    "forbidden action explicitly guarded: single_name_substitution_bias"
+  ],
+  "notes": [
+    "Candidate prompt generated successfully.",
+    "Policy checks passed for required skill and forbidden action boundaries.",
+    "Iteration guidance was embedded from layer-aware and evidence-aware mutation policy.",
+    "Candidate artifact template was selected from the mutation type profile.",
+    "Replay performance evaluation is the next step before acceptance or rejection.",
+    "Replay judge rejected the candidate."
+  ],
+  "judge_checks": [
+    "contains stronger trend confirmation rule",
+    "contains conviction downgrade logic",
+    "contains explicit rejection filter",
+    "required skill policy checks preserved",
+    "forbidden actions still named in candidate prompt",
+    "rejected: candidate did not improve over baseline"
+  ],
+  "baseline_observations": 0,
+  "candidate_observations": 0,
+  "used_fallback_window": false,
+  "recorded_at": "2026-04-05T10:28:27.165839+08:00"
+}

@@ -221,6 +221,35 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 - `.github/instructions/live-trading.guardrails.instructions.md` — Live trading 邊界
 - `.github/copilot-instructions.md` — 綜合入口與常見工作流程
 
+## Local AGENTS.md 導覽
+
+以下子目錄已有局部說明，進入該區域工作時**先讀該目錄下的 `AGENTS.md`**，不要只依賴本檔：
+
+| 目錄 | 主題 |
+|------|------|
+| `internal/orchestrator/` | `SystemCore`、`PluginHost`、三層 executor 路由 |
+| `internal/experiment/` | mutation → execute → judge → promote / revert |
+| `internal/portfolio/` | Darwinian 權重、FactorEngine、組合優化 |
+| `internal/marketdata/` | TWSE / FinMind / Fubon / Fugle provider abstraction |
+| `internal/monitoring/` | Dashboard API、監控、人工干預入口 |
+| `internal/narrative/` | 巨集觀敘事、因果鏈、台灣壓力指數 |
+| `internal/janus/` | cohort regime detection 與 PRISM 權重調整 |
+| `internal/baseline/` | baseline policy 版本控制與回滾 |
+| `internal/domain/` | canonical types / string enums / JSON schema |
+| `cmd/experimental/` | 驗證 / drill / smoke-test 類 CLI |
+| `scripts/openclaw/` | OpenClaw 治理、審核、promote / revert 腳本 |
+
+### 什麼情況要往下讀局部 AGENTS.md
+
+- 你正在改 `cmd/experimental/*` 的驗證 CLI。
+- 你正在跑或修改 `scripts/openclaw/*` 的治理腳本。
+- 你碰到某個 `internal/*` 子系統有自己的術語、陷阱或資料流。
+
+### 什麼情況不用再拆更多 AGENTS.md
+
+- `internal/config/`、`internal/db/`、`internal/ledger/`、`internal/repository/`、`internal/taskexec/` 屬於共享基礎設施；通常由本檔 + 對應程式碼即可覆蓋。
+- `data/`、`graphify-out/`、`.worktrees/`、`.gocache/` 屬於狀態 / 產物 / 快取，不作為主要開發規範來源。
+
 ## 技能地圖與 AI 代理指南
 
 **所有 AI 代理在進行任何程式修改前，必須先閱讀以下文件以理解系統架構與設計意圖：**
@@ -253,7 +282,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (17355 symbols, 38718 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (18178 symbols, 40358 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

@@ -226,11 +226,11 @@ func (cb *CircuitBreaker) transitionLocked(to CircuitState, reason string, dayPn
 
 func (cb *CircuitBreaker) appendLog(event CircuitBreakerEvent) error {
 	if err := os.MkdirAll(filepath.Dir(cb.logPath), 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir: %w", err)
 	}
 	f, err := os.OpenFile(cb.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		return err
+		return fmt.Errorf("open log file: %w", err)
 	}
 	defer f.Close()
 	enc := json.NewEncoder(f)
@@ -280,7 +280,7 @@ func (cb *CircuitBreaker) loadState() error {
 		DayStartValue  float64      `json:"day_start_value"`
 	}
 	if err := json.Unmarshal(data, &state); err != nil {
-		return err
+		return fmt.Errorf("unmarshal circuit breaker state: %w", err)
 	}
 	cb.mu.Lock()
 	defer cb.mu.Unlock()

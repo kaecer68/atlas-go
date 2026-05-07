@@ -1,0 +1,107 @@
+{
+  "experiment": {
+    "id": "exec-semi-desk-01-1777812079",
+    "proposal_id": "default-semiconductor-tightening",
+    "commit_id": "commit-exec-semi-desk-01-1777812079",
+    "approval_id": "approval-exec-semi-desk-01-1777812079",
+    "target_agent_id": "semi-desk-01",
+    "skill": "semiconductor_desk",
+    "hypothesis": "Bounded tightening can improve setup quality while preserving exploratory semiconductor coverage.",
+    "prompt_version_from": "v1",
+    "prompt_version_to": "v2",
+    "mutation_type": "prompt_tightening",
+    "acceptance_gates": [
+      "maintain_sharpe_like",
+      "preserve_downside_protection",
+      "no_drawdown_spike"
+    ],
+    "window_start": "2026-03-26T00:00:00Z",
+    "window_end": "2026-03-27T00:00:00Z",
+    "acceptance_metric": "sharpe_like",
+    "baseline_value": 0.15781705201122248,
+    "candidate_value": 0.20727762314343953,
+    "status": "rejected",
+    "revert_reason": "Replay judge did not satisfy maturity-aware acceptance gates."
+  },
+  "brief": {
+    "contract_version": 1,
+    "proposal_id": "default-semiconductor-tightening",
+    "window_id": "window-20260326-20260327",
+    "target_agent_id": "semi-desk-01",
+    "target_skill": "semiconductor_desk",
+    "target_layer": "sector",
+    "prompt_file": "prompts/agents/semiconductor_desk.md",
+    "mutation_type": "prompt_tightening",
+    "failure_pattern": "Weak follow-through on moderate-volume names and over-rejection of early leadership setups.",
+    "hypothesis": "Bounded tightening can improve setup quality while preserving exploratory semiconductor coverage.",
+    "acceptance_metric": "sharpe_like",
+    "acceptance_gates": [
+      "maintain_sharpe_like",
+      "preserve_downside_protection",
+      "no_drawdown_spike"
+    ],
+    "forbidden_actions": [
+      "remove required skill boundaries",
+      "bypass control layer",
+      "change CRO sequencing"
+    ],
+    "required_skills": [
+      "semiconductor_desk"
+    ],
+    "observed_window_count": 8,
+    "maturity_level": "level_2_window_validated",
+    "iteration_guidance": [
+      "Downgrade weak-volume setups instead of rejecting too early.",
+      "Keep institutional-participation logic explicit.",
+      "Preserve bounded exploratory coverage."
+    ],
+    "recommended_window": "window-20260326-20260327",
+    "generated_at": "0001-01-01T00:00:00Z"
+  },
+  "candidate_prompt": "prompts/experiments/semi-desk-01/exec-semi-desk-01-1777812079/v2.md",
+  "evaluation_mode": "prompt_aware_replay_judged",
+  "policy_checks": [
+    "required skill preserved: semiconductor_desk",
+    "forbidden action explicitly guarded: remove required skill boundaries",
+    "forbidden action explicitly guarded: bypass control layer",
+    "forbidden action explicitly guarded: change CRO sequencing"
+  ],
+  "notes": [
+    "Candidate prompt generated successfully.",
+    "Policy checks passed for required skill and forbidden action boundaries.",
+    "Iteration guidance was embedded from layer-aware and evidence-aware mutation policy.",
+    "Candidate artifact template was selected from the mutation type profile.",
+    "Candidate constraints are generated relative to current baseline to ensure meaningful delta.",
+    "Replay performance evaluation is the next step before acceptance or rejection.",
+    "Replay judge rejected the candidate.",
+    "Replay judge rejected the candidate.",
+    "Replay judge rejected the candidate.",
+    "Replay judge rejected the candidate."
+  ],
+  "judge_checks": [
+    "required skill policy checks preserved",
+    "forbidden actions still named in candidate prompt",
+    "baseline observations: 1",
+    "candidate observations: 1",
+    "rejected: insufficient replay observations (baseline=1 candidate=1 required=8)"
+  ],
+  "baseline_observations": 1,
+  "candidate_observations": 1,
+  "used_fallback_window": false,
+  "recorded_at": "2026-05-03T20:44:00.8437+08:00",
+  "data_metadata": {
+    "source_path": "data/replay/tw_extended_90days.csv",
+    "date_range_start": "2026-01-01T00:00:00Z",
+    "date_range_end": "2026-04-30T00:00:00Z",
+    "days_delayed": 3,
+    "covers_window": true,
+    "last_modified": "2026-05-01T17:18:44.885186938+08:00",
+    "record_count": 85
+  },
+  "baseline_returns": [
+    0.15781705201122248
+  ],
+  "candidate_returns": [
+    0.20727762314343953
+  ]
+}

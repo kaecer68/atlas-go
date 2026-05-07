@@ -28,7 +28,7 @@ func (r *PostgresRepository) RecordScreeningRejects(ctx context.Context, session
 	defer br.Close()
 
 	_, err := br.Exec()
-	return err
+	return fmt.Errorf("insert screening rejects: %w", err)
 }
 
 func (r *PostgresRepository) QueryScreeningRejectsBySession(ctx context.Context, sessionID string) ([]domain.ScreeningReject, error) {
@@ -94,7 +94,7 @@ func (r *PostgresRepository) SaveSessionSummary(ctx context.Context, summary dom
 		brokerRuntime, summary.NextExperimentAgentID, summary.ProposalID, summary.CommitID,
 		summary.ApprovalID, guardOutcomes)
 
-	return err
+	return fmt.Errorf("save session summary: %w", err)
 }
 
 func (r *PostgresRepository) LoadSessionSummary(ctx context.Context, sessionID string) (*domain.SessionSummary, error) {
@@ -185,7 +185,7 @@ func (r *PostgresRepository) RecordHumanIntervention(ctx context.Context, interv
 		intervention.TargetModelID, intervention.TargetSector, intervention.TargetSymbol,
 		intervention.Value, intervention.Reason, intervention.Operator, intervention.SessionID)
 
-	return err
+	return fmt.Errorf("record human intervention: %w", err)
 }
 
 func (r *PostgresRepository) LoadHumanInterventions(ctx context.Context) ([]domain.HumanIntervention, error) {

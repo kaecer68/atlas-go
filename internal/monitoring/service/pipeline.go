@@ -39,6 +39,17 @@ func NewPipelineService(workDir, ledgerDir string) *PipelineService {
 	}
 }
 
+// PipelineLoadStatus indicates the health of the loaded recommendation pipeline data.
+type PipelineLoadStatus string
+
+const (
+	PipelineStatusOK        PipelineLoadStatus = "ok"
+	PipelineStatusDegraded  PipelineLoadStatus = "degraded"
+	PipelineStatusMinimal   PipelineLoadStatus = "minimal"
+	PipelineStatusNoSession PipelineLoadStatus = "no_session"
+	PipelineStatusError     PipelineLoadStatus = "error"
+)
+
 func (s *PipelineService) loadRegistry() (domain.AgentRegistry, error) {
 	if s.registryProvider != nil {
 		return s.registryProvider()
@@ -83,9 +94,15 @@ func (s *PipelineService) LoadAgentObservatory(sessionID string, limit int) (*Ag
 	}
 
 	store := ledger.NewStore(s.LedgerDir)
-	outcomes, err := store.LoadOutcomes()
-	if err != nil {
-		return nil, fmt.Errorf("load recommendation outcomes: %w", err)
+	var outcomes []domain.RecommendationOutcome
+	if summary != nil {
+		outcomes, _ = store.LoadSessionOutcomes(summary.SessionID)
+	}
+	if outcomes == nil {
+		outcomes, err = store.LoadOutcomes()
+		if err != nil {
+			return nil, fmt.Errorf("load recommendation outcomes: %w", err)
+		}
 	}
 	scorecards := ledger.BuildScorecards(outcomes)
 	if len(scorecards) > limit {
@@ -120,25 +137,39 @@ func (s *PipelineService) LoadForecastVsReality(agentID string, limit int) (*For
 		return nil, fmt.Errorf("load forecast-vs-reality data: %w", err)
 	}
 
-	predictions, err := s.loadSymbolPredictions(limit)
+	summary, err := LoadSessionSummary(s.LedgerDir, "")
+	if err != nil {
+		logging.Warn("pipeline_service", "load_session_summary", logging.Err(err))
+		summary = nil
+	}
+
+	predictions, err := s.loadSymbolPredictions(limit, summary)
 	if err != nil {
 		logging.Warn("pipeline_service", "load_symbol_predictions", logging.Err(err))
 		predictions = nil
 	}
 
 	data := &ForecastVsRealityData{Items: items, SymbolPredictions: predictions}
-	summary, err := LoadSessionSummary(s.LedgerDir, "")
-	if err != nil {
-		return data, nil
-	}
 	if summary != nil {
 		data.BrokerRuntime = summary.BrokerRuntime
 	}
 	return data, nil
 }
 
-func (s *PipelineService) loadSymbolPredictions(limit int) ([]SymbolPredictionItem, error) {
-	path := filepath.Join(s.LedgerDir, "recommendation_outcomes.jsonl")
+type rawOutcome struct {
+	AgentID       string  `json:"agent_id"`
+	Symbol        string  `json:"symbol"`
+	Side          string  `json:"side"`
+	Conviction    int     `json:"conviction"`
+	TargetPrice   float64 `json:"target_price"`
+	ForwardReturn float64 `json:"forward_return"`
+	Hit           bool    `json:"hit"`
+	PassedGuards  bool    `json:"passed_guards"`
+	RecordedAt    string  `json:"recorded_at"`
+	SessionID     string  `json:"session_id"`
+}
+
+func readOutcomeFile(path string) ([]rawOutcome, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -148,35 +179,38 @@ func (s *PipelineService) loadSymbolPredictions(limit int) ([]SymbolPredictionIt
 	}
 	defer f.Close()
 
-	type rawOutcome struct {
-		AgentID       string  `json:"agent_id"`
-		Symbol        string  `json:"symbol"`
-		Side          string  `json:"side"`
-		Conviction    int     `json:"conviction"`
-		TargetPrice   float64 `json:"target_price"`
-		ForwardReturn float64 `json:"forward_return"`
-		Hit           bool    `json:"hit"`
-		PassedGuards  bool    `json:"passed_guards"`
-		RecordedAt    string  `json:"recorded_at"`
-		SessionID     string  `json:"session_id"`
-	}
-
-	var outcomes []rawOutcome
+	var results []rawOutcome
 	var dropped int
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		var out rawOutcome
-		if err := json.Unmarshal(scanner.Bytes(), &out); err != nil {
+		var r rawOutcome
+		if err := json.Unmarshal(scanner.Bytes(), &r); err != nil {
 			dropped++
 			continue
 		}
-		outcomes = append(outcomes, out)
+		results = append(results, r)
 	}
 	if dropped > 0 {
 		logging.Warn("pipeline_service", "dropped_corrupted_outcomes", logging.FInt("count", dropped))
 	}
+	return results, scanner.Err()
+}
 
-	slices.SortFunc(outcomes, func(a, b rawOutcome) int {
+func (s *PipelineService) loadSymbolPredictions(limit int, summary *domain.SessionSummary) ([]SymbolPredictionItem, error) {
+	var rawOutcomes []rawOutcome
+	if summary != nil {
+		path := filepath.Join(s.LedgerDir, "sessions", summary.SessionID, "recommendation_outcomes.jsonl")
+		rawOutcomes, _ = readOutcomeFile(path)
+	}
+	if rawOutcomes == nil {
+		path := filepath.Join(s.LedgerDir, "recommendation_outcomes.jsonl")
+		rawOutcomes, _ = readOutcomeFile(path)
+	}
+	if rawOutcomes == nil {
+		return nil, nil
+	}
+
+	slices.SortFunc(rawOutcomes, func(a, b rawOutcome) int {
 		if a.SessionID > b.SessionID {
 			return -1
 		}
@@ -186,12 +220,12 @@ func (s *PipelineService) loadSymbolPredictions(limit int) ([]SymbolPredictionIt
 		return 0
 	})
 
-	if len(outcomes) > limit {
-		outcomes = outcomes[:limit]
+	if len(rawOutcomes) > limit {
+		rawOutcomes = rawOutcomes[:limit]
 	}
 
-	result := make([]SymbolPredictionItem, len(outcomes))
-	for i, o := range outcomes {
+	result := make([]SymbolPredictionItem, len(rawOutcomes))
+	for i, o := range rawOutcomes {
 		result[i] = SymbolPredictionItem{
 			AgentID:       o.AgentID,
 			Symbol:        o.Symbol,
@@ -305,12 +339,101 @@ func (s *PipelineService) loadForecastVsRealityItems(agentID string, limit int) 
 
 // LoadRecommendationPipeline loads the recommendation pipeline for a session.
 func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll bool) (*RecommendationPipelineData, error) {
-	summary, err := LoadSessionSummary(s.LedgerDir, sessionID)
+	sessionsDir := filepath.Join(s.LedgerDir, "sessions")
+
+	entries, err := os.ReadDir(sessionsDir)
 	if err != nil {
-		return nil, fmt.Errorf("load recommendation pipeline summary: %w", err)
+		if os.IsNotExist(err) {
+			return &RecommendationPipelineData{
+				Status:        PipelineStatusNoSession,
+				StatusMessage: "尚未執行任何回測場次，請先執行回測",
+			}, nil
+		}
+		return nil, fmt.Errorf("read sessions dir: %w", err)
 	}
+
+	var availableSessions []string
+	var sessionDirs []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			availableSessions = append(availableSessions, entry.Name())
+			sessionDirs = append(sessionDirs, entry.Name())
+		}
+	}
+
+	if len(sessionDirs) == 0 {
+		return &RecommendationPipelineData{
+			Status:            PipelineStatusNoSession,
+			StatusMessage:     "尚未執行任何回測場次，請先執行回測",
+			AvailableSessions: availableSessions,
+		}, nil
+	}
+
+	var targetSession string
+	if sessionID != "" {
+		for _, dir := range sessionDirs {
+			if dir == sessionID {
+				targetSession = sessionID
+				break
+			}
+		}
+	} else {
+		slices.SortFunc(sessionDirs, func(a, b string) int {
+			aDate := sessionDateFromID(a)
+			bDate := sessionDateFromID(b)
+			switch {
+			case aDate.After(bDate):
+				return -1
+			case aDate.Before(bDate):
+				return 1
+			default:
+				return 0
+			}
+		})
+		targetSession = sessionDirs[0]
+	}
+
+	if targetSession == "" {
+		return &RecommendationPipelineData{
+			Status:            PipelineStatusNoSession,
+			StatusMessage:     "尚未執行任何回測場次，請先執行回測",
+			AvailableSessions: availableSessions,
+		}, nil
+	}
+
+	var summary *domain.SessionSummary
+	var guards []domain.GuardOutcome
+	var regime domain.Regime
+	var recordedAt time.Time
+
+	summaryPath := filepath.Join(sessionsDir, targetSession, "summary.json")
+	if summaryBytes, err := os.ReadFile(summaryPath); err == nil {
+		var s domain.SessionSummary
+		if err := json.Unmarshal(summaryBytes, &s); err == nil {
+			summary = &s
+			regime = s.Regime
+			recordedAt = s.RecordedAt
+			guards = make([]domain.GuardOutcome, 0, len(s.GuardOutcomes))
+			for _, g := range s.GuardOutcomes {
+				guards = append(guards, domain.GuardOutcome{
+					GuardID:     g.GuardID,
+					GuardSkill:  g.GuardSkill,
+					Severity:    g.Severity,
+					Passed:      g.Passed,
+					Reason:      g.Reason,
+					InputCount:  g.InputCount,
+					OutputCount: g.OutputCount,
+				})
+			}
+		}
+	}
+
+	status := PipelineStatusOK
+	statusMessage := ""
+
 	if summary == nil {
-		return nil, nil
+		status = PipelineStatusDegraded
+		statusMessage = "控制層過濾記錄未載入（summary.json 缺失），推薦清單仍可用"
 	}
 
 	var ds *replay.Dataset
@@ -328,8 +451,7 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 		}
 	}
 
-	sessionsDir := filepath.Join(s.LedgerDir, "sessions")
-	outcomesPath := filepath.Join(sessionsDir, summary.SessionID, "recommendation_outcomes.jsonl")
+	outcomesPath := filepath.Join(sessionsDir, targetSession, "recommendation_outcomes.jsonl")
 	items := make([]PipelineItemData, 0)
 	if data, err := os.ReadFile(outcomesPath); err == nil {
 		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
@@ -337,31 +459,13 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 			if strings.TrimSpace(line) == "" {
 				continue
 			}
-			var outcome struct {
-				AgentID             string                      `json:"AgentID"`
-				Skill               string                      `json:"Skill"`
-				Layer               string                      `json:"Layer"`
-				Symbol              string                      `json:"Symbol"`
-				Side                string                      `json:"Side"`
-				Conviction          int                         `json:"Conviction"`
-				TargetPrice         float64                     `json:"TargetPrice"`
-				StopLossPrice       float64                     `json:"StopLossPrice"`
-				ForwardReturn       float64                     `json:"ForwardReturn"`
-				Hit                 bool                        `json:"Hit"`
-				Reason              string                      `json:"Reason"`
-				Price               float64                     `json:"Price"`
-				PassedGuards        bool                        `json:"PassedGuards"`
-				GuardReason         string                      `json:"GuardReason"`
-				RecordedAt          time.Time                   `json:"RecordedAt"`
-				FactorScores        domain.FactorScores         `json:"factor_scores,omitempty"`
-				ConvictionBreakdown *domain.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
-			}
+			var outcome domain.RecommendationOutcome
 			if err := json.Unmarshal([]byte(line), &outcome); err != nil {
 				continue
 			}
 			fr := outcome.ForwardReturn
 			price := outcome.Price
-			side := outcome.Side
+			side := string(outcome.Side)
 			passedGuards := outcome.PassedGuards
 			// Legacy sessions (generated before PassedGuards field existed)
 			// should default to true to preserve backward-compatible display.
@@ -396,7 +500,7 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 				Symbol:              outcome.Symbol,
 				AgentID:             outcome.AgentID,
 				Skill:               outcome.Skill,
-				Layer:               outcome.Layer,
+				Layer:               string(outcome.Layer),
 				Side:                side,
 				Conviction:          outcome.Conviction,
 				TargetPrice:         tp,
@@ -413,46 +517,42 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 				ConvictionBreakdown: outcome.ConvictionBreakdown,
 			})
 		}
-	}
-
-	guards := make([]domain.GuardOutcome, 0, len(summary.GuardOutcomes))
-	for _, g := range summary.GuardOutcomes {
-		guards = append(guards, domain.GuardOutcome{
-			GuardID:     g.GuardID,
-			GuardSkill:  g.GuardSkill,
-			Severity:    g.Severity,
-			Passed:      g.Passed,
-			Reason:      g.Reason,
-			InputCount:  g.InputCount,
-			OutputCount: g.OutputCount,
-		})
+	} else {
+		status = PipelineStatusMinimal
+		statusMessage = "本場次尚無推薦產出記錄"
 	}
 
 	store := ledger.NewStore(s.LedgerDir)
-	screened, err := store.LoadSessionScreeningRejects(summary.SessionID)
+	screened, err := store.LoadSessionScreeningRejects(targetSession)
 	if err != nil {
 		// Log but don't fail
 		screened = nil
 	}
 
 	return &RecommendationPipelineData{
-		SessionID:     summary.SessionID,
-		Regime:        summary.Regime,
-		Items:         items,
-		GuardOutcomes: guards,
-		ScreenedItems: screened,
-		RecordedAt:    summary.RecordedAt,
+		SessionID:         targetSession,
+		Regime:            regime,
+		Items:             items,
+		GuardOutcomes:     guards,
+		ScreenedItems:     screened,
+		RecordedAt:        recordedAt,
+		Status:            status,
+		StatusMessage:     statusMessage,
+		AvailableSessions: availableSessions,
 	}, nil
 }
 
 // RecommendationPipelineData is the internal representation for recommendation pipeline response.
 type RecommendationPipelineData struct {
-	SessionID     string
-	Regime        domain.Regime
-	Items         []PipelineItemData
-	GuardOutcomes []domain.GuardOutcome
-	ScreenedItems []domain.ScreeningReject
-	RecordedAt    time.Time
+	SessionID         string
+	Regime            domain.Regime
+	Items             []PipelineItemData
+	GuardOutcomes     []domain.GuardOutcome
+	ScreenedItems     []domain.ScreeningReject
+	RecordedAt        time.Time
+	Status            PipelineLoadStatus
+	StatusMessage     string
+	AvailableSessions []string
 }
 
 // PipelineItemData represents a single recommendation in the pipeline.
@@ -493,21 +593,34 @@ func (s *PipelineService) LoadSessions() ([]SessionMeta, error) {
 		if !entry.IsDir() {
 			continue
 		}
-		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
-		bytes, err := os.ReadFile(summaryPath)
-		if err != nil {
-			continue
+		sessionID := entry.Name()
+		meta := SessionMeta{
+			SessionID:    sessionID,
+			Regime:       "unknown",
+			OutcomeCount: 0,
 		}
-		var summary domain.SessionSummary
-		if err := json.Unmarshal(bytes, &summary); err != nil {
-			continue
+
+		summaryPath := filepath.Join(sessionsDir, sessionID, "summary.json")
+		if bytes, err := os.ReadFile(summaryPath); err == nil {
+			var summary domain.SessionSummary
+			if err := json.Unmarshal(bytes, &summary); err == nil {
+				meta.SessionID = summary.SessionID
+				if !summary.RecordedAt.IsZero() {
+					meta.RecordedAt = summary.RecordedAt
+				}
+				if summary.Regime != "" {
+					meta.Regime = string(summary.Regime)
+				}
+				meta.OutcomeCount = summary.OutcomeCount
+			}
 		}
-		sessions = append(sessions, SessionMeta{
-			SessionID:    summary.SessionID,
-			RecordedAt:   summary.RecordedAt,
-			Regime:       string(summary.Regime),
-			OutcomeCount: summary.OutcomeCount,
-		})
+
+		// Fall back to session ID date if RecordedAt was not set from summary.
+		if meta.RecordedAt.IsZero() {
+			meta.RecordedAt = sessionDateFromID(sessionID)
+		}
+
+		sessions = append(sessions, meta)
 	}
 
 	// Sort by session trading date descending, then RecordedAt tiebreaker.

@@ -31,16 +31,16 @@ func ApplyBrokerConfig(cfg *config.Config, o BrokerOverrides) error {
 	applyBrokerOverrides(cfg, o)
 	normalizeBrokerStrings(cfg)
 	if err := validateBrokerEnums(cfg); err != nil {
-		return err
+		return fmt.Errorf("validate broker enums: %w", err)
 	}
 	if err := validateBrokerLiveMode(cfg, o.AllowLiveBroker, o.AllowHTTPBroker, o.AllowRealSigner); err != nil {
-		return err
+		return fmt.Errorf("validate broker live mode: %w", err)
 	}
 	if err := validateBrokerRetryConfig(cfg); err != nil {
-		return err
+		return fmt.Errorf("validate broker retry config: %w", err)
 	}
 	if err := validateBrokerNonceConfig(cfg); err != nil {
-		return err
+		return fmt.Errorf("validate broker nonce config: %w", err)
 	}
 	return nil
 }

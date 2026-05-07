@@ -68,6 +68,12 @@ func LoadSessionSummary(ledgerDir, sessionID string) (*domain.SessionSummary, er
 			return 0
 		}
 	})
+	for i := range summaries {
+		if summaries[i].OutcomeCount > 0 {
+			selected := summaries[i]
+			return &selected, nil
+		}
+	}
 	latest := summaries[0]
 	return &latest, nil
 }

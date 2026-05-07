@@ -85,7 +85,7 @@ func (e *ExportStatisticsProvider) FetchSnapshot(ctx context.Context) (MacroData
 func (e *ExportStatisticsProvider) fetchLatestTwoMonths(ctx context.Context) (CustomsExportImport, CustomsExportImport, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, e.baseURL, nil)
 	if err != nil {
-		return CustomsExportImport{}, CustomsExportImport{}, err
+		return CustomsExportImport{}, CustomsExportImport{}, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	req.Header.Set("Accept", "text/csv")
@@ -130,7 +130,7 @@ func parseCustomsCSV(body []byte) ([]CustomsExportImport, error) {
 
 	records, err := reader.ReadAll()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read CSV: %w", err)
 	}
 	if len(records) < 2 {
 		return nil, fmt.Errorf("CSV has no data rows")
@@ -173,12 +173,12 @@ func parseCustomsCSV(body []byte) ([]CustomsExportImport, error) {
 
 func (e *ExportStatisticsProvider) saveExport(data CustomsExportImport) error {
 	if err := os.MkdirAll(e.storageDir, 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir: %w", err)
 	}
 	path := filepath.Join(e.storageDir, fmt.Sprintf("%03d%02d_export.json", data.Year, data.Month))
 	out, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal export: %w", err)
 	}
 	return os.WriteFile(path, out, 0o644)
 }

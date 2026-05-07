@@ -1,0 +1,39 @@
+{
+  "id": "brief-technical-breakout-01-1775749967",
+  "window_id": "window-20260301-20260331",
+  "target_agent": "technical-breakout-01",
+  "target_agent_id": "technical-breakout-01",
+  "target_skill": "technical_breakout",
+  "target_layer": "style",
+  "prompt_file": "prompts/agents/technical_breakout.md",
+  "mutation_type": "risk_rule_change",
+  "timestamp": "2026-04-09T15:53:13Z",
+  "acceptance_metric": "sharpe_like",
+  "acceptance_gates": ["improve_sharpe_like","no_material_drawdown_degradation","no_constraint_bypass"],
+  "required_skills": ["technical_breakout"],
+  "forbidden_actions": ["illiquid_breakout_chasing"],
+  "observed_window_count": 105,
+  "maturity_level": "level_3_regime_aware",
+  "iteration_guidance": ["preserve required skills while tightening setup quality","avoid weakening control-layer constraints"],
+  "generated_at": "2026-04-09T15:53:14Z",
+  "hypothesis": "Refine technical-breakout-01 to improve risk-adjusted recommendation quality",
+  "suggested_mutation_type": "risk_rule_change",
+  "rationale": [
+    "Agent shows inconsistent filtering of weak setups",
+    "Conviction thresholds may be too low for current market regime",
+    "Risk-adjusted returns suffer from false positive rate"
+  ],
+  "proposed_changes": [
+    "Raise minimum conviction threshold from current level",
+    "Add explicit liquidity filtering requirements",
+    "Strengthen regime-aware downgrade rules"
+  ],
+  "acceptance_criteria": [
+    "Sharpe-like score improvement > 0.001",
+    "No material drawdown degradation",
+    "Maintains required skills coverage"
+  ],
+  "estimated_complexity": "medium",
+    "recommended_window": "next cross-regime replay window",
+  "notes_for_reviewer": "This is a risk_rule_change mutation targeting technical-breakout-01"
+}

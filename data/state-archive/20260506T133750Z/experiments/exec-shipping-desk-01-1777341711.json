@@ -1,0 +1,112 @@
+{
+  "Experiment": {
+    "ID": "exec-shipping-desk-01-1777341711",
+    "ProposalID": "proposal-window-20260320-20260327",
+    "CommitID": "commit-exec-shipping-desk-01-1777341711",
+    "ApprovalID": "approval-exec-shipping-desk-01-1777341711",
+    "TargetAgentID": "shipping-desk-01",
+    "Skill": "shipping_desk",
+    "Hypothesis": "Tightening the shipping desk prompt to focus on higher-conviction signals will improve hit rate.",
+    "PromptVersionFrom": "v1",
+    "PromptVersionTo": "v2",
+    "MutationType": "prompt_tightening",
+    "AcceptanceGates": [
+      "improve_sharpe_like"
+    ],
+    "WindowStart": "2026-03-20T00:00:00Z",
+    "WindowEnd": "2026-03-27T00:00:00Z",
+    "AcceptanceMetric": "sharpe_like",
+    "BaselineValue": -0.002415019767325915,
+    "CandidateValue": -0.002415019767325915,
+    "Status": "rejected",
+    "RevertReason": "Replay judge did not satisfy maturity-aware acceptance gates."
+  },
+  "Brief": {
+    "contract_version": 1,
+    "proposal_id": "proposal-window-20260320-20260327",
+    "window_id": "window-20260320-20260327",
+    "target_agent_id": "shipping-desk-01",
+    "target_skill": "shipping_desk",
+    "target_layer": "sector",
+    "prompt_file": "prompts/agents/shipping_desk.md",
+    "mutation_type": "prompt_tightening",
+    "failure_pattern": "Repeated negative Sharpe-like score (-31.77) in backtest window.",
+    "hypothesis": "Tightening the shipping desk prompt to focus on higher-conviction signals will improve hit rate.",
+    "acceptance_metric": "sharpe_like",
+    "acceptance_gates": [
+      "improve_sharpe_like"
+    ],
+    "forbidden_actions": null,
+    "required_skills": null,
+    "observed_window_count": 0,
+    "maturity_level": "",
+    "iteration_guidance": null,
+    "recommended_window": "",
+    "generated_at": "0001-01-01T00:00:00Z"
+  },
+  "CandidatePrompt": "prompts/experiments/shipping-desk-01/exec-shipping-desk-01-1777341711/v2.md",
+  "EvaluationMode": "prompt_aware_replay_judged",
+  "PolicyChecks": [],
+  "Notes": [
+    "Candidate prompt generated successfully.",
+    "Policy checks passed for required skill and forbidden action boundaries.",
+    "Iteration guidance was embedded from layer-aware and evidence-aware mutation policy.",
+    "Candidate artifact template was selected from the mutation type profile.",
+    "Candidate constraints are generated relative to current baseline to ensure meaningful delta.",
+    "Replay performance evaluation is the next step before acceptance or rejection.",
+    "Replay judge rejected the candidate."
+  ],
+  "JudgeChecks": [
+    "contains conviction downgrade logic",
+    "required skill policy checks preserved",
+    "baseline observations: 14",
+    "candidate observations: 14",
+    "fallback replay window used due to sparse primary window",
+    "rejected: candidate score equals baseline (no constraint delta applied)"
+  ],
+  "BaselineObservations": 14,
+  "CandidateObservations": 14,
+  "UsedFallbackWindow": true,
+  "RecordedAt": "2026-04-28T10:03:13.256268+08:00",
+  "data_metadata": {
+    "source_path": "samples/replay/twse_stock_day_all_sample.csv",
+    "date_range_start": "2026-03-20T00:00:00Z",
+    "date_range_end": "2026-03-27T00:00:00Z",
+    "days_delayed": 32,
+    "covers_window": true,
+    "last_modified": "2026-04-23T09:48:25.985650477+08:00",
+    "record_count": 6
+  },
+  "baseline_returns": [
+    -0.011659077684979952,
+    0.002250788199817861,
+    -0.0030003350250028204,
+    -0.0014152342170171417,
+    -0.004130633096150346,
+    -0.007688461437977866,
+    -0.0005077643442093603,
+    0.00999245974228344,
+    -0.006964938395294642,
+    -0.007783636862089629,
+    0.00007287348920815667,
+    0.000803458067726043,
+    -0.0049364298845991725,
+    0.0011566547057226203
+  ],
+  "candidate_returns": [
+    -0.011659077684979952,
+    0.002250788199817861,
+    -0.0030003350250028204,
+    -0.0014152342170171417,
+    -0.004130633096150346,
+    -0.007688461437977866,
+    -0.0005077643442093603,
+    0.00999245974228344,
+    -0.006964938395294642,
+    -0.007783636862089629,
+    0.00007287348920815667,
+    0.000803458067726043,
+    -0.0049364298845991725,
+    0.0011566547057226203
+  ]
+}
