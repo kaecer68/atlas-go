@@ -285,7 +285,7 @@ function renderEmptyState(containerId, message, action) {
 // 使用範例:
 renderEmptyState('pipelinePanel', 
     '尚無回測場次資料', 
-    '執行「go run ./cmd/execute-experiment -brief <file>」後將自動顯示'
+    '執行「go run ./cmd/run-experiment -brief <file>」後將自動顯示'
 );
 ```
 
@@ -808,7 +808,7 @@ async function getJSON(url) {
 const EMPTY_STATE_GUIDES = {
     'pipelinePanel': {
         message: '尚無回測場次資料',
-        action: '執行「go run ./cmd/execute-experiment -brief <file>」後將自動顯示'
+        action: '執行「go run ./cmd/run-experiment -brief <file>」後將自動顯示'
     },
     'alertsPanel': {
         message: '目前沒有警報',

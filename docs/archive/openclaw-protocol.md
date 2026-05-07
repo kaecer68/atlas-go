@@ -254,7 +254,7 @@ atlas/
 |--------------|------------|------|
 | `status.sh` | 無 | 新增：統一狀態報告 |
 | `propose-mutation.sh` | 無 | 新增：Mutation 建議生成 |
-| `execute-next.sh` | `go run ./cmd/execute-experiment` | 包裝層 |
+| `execute-next.sh` | `go run ./cmd/run-experiment` | 包裝層 |
 | `judge-latest.sh` | `go run ./cmd/judge-experiment` | 包裝層 |
 | `decide.sh --promote` | `go run ./cmd/promote-baseline` | 包裝層 + 安全檢查 |
 | `decide.sh --revert` | `go run ./cmd/revert-baseline` | 包裝層 + 確認流程 |

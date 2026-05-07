@@ -19,7 +19,7 @@ func main() {
 }
 
 func run(args []string) error {
-	fs := flag.NewFlagSet("execute-experiment", flag.ContinueOnError)
+	fs := flag.NewFlagSet("run-experiment", flag.ContinueOnError)
 	brief := fs.String("brief", "data/state/windows/window-20260326-20260327-mutation-brief.json", "mutation brief json path")
 	if err := fs.Parse(args); err != nil {
 		return err

@@ -75,13 +75,13 @@ find_latest_experiment() {
     if [ -f "data/state/experiments.jsonl" ]; then
         local latest
         if [ -n "$status_filter" ]; then
-            latest=$(grep '"Status":"'$status_filter'"' data/state/experiments.jsonl | tail -1)
+            latest=$(grep '"status":"'$status_filter'"' data/state/experiments.jsonl | tail -1)
         else
             latest=$(tail -1 data/state/experiments.jsonl)
         fi
         
         if [ -n "$latest" ]; then
-            local exp_id=$(echo "$latest" | grep -o '"ID":"[^"]*"' | head -1 | cut -d'"' -f4)
+            local exp_id=$(echo "$latest" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
             echo "$exp_id"
             return 0
         fi
@@ -125,17 +125,17 @@ display_results() {
     local exp_data
     exp_data=$(tr -d '\n' < "$result_file")
     local exp_id
-    exp_id=$(echo "$exp_data" | grep -o '"ID"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
+    exp_id=$(echo "$exp_data" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
     local agent
-    agent=$(echo "$exp_data" | grep -o '"TargetAgentID"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
+    agent=$(echo "$exp_data" | grep -o '"target_agent_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
     local status
-    status=$(echo "$exp_data" | grep -o '"Status"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
+    status=$(echo "$exp_data" | grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
     local baseline
-    baseline=$(echo "$exp_data" | grep -o '"BaselineValue"[[:space:]]*:[[:space:]]*[^,}]*' | head -1 | cut -d':' -f2 | xargs)
+    baseline=$(echo "$exp_data" | grep -o '"baseline_value"[[:space:]]*:[[:space:]]*[^,}]*' | head -1 | cut -d':' -f2 | xargs)
     local candidate
-    candidate=$(echo "$exp_data" | grep -o '"CandidateValue"[[:space:]]*:[[:space:]]*[^,}]*' | head -1 | cut -d':' -f2 | xargs)
+    candidate=$(echo "$exp_data" | grep -o '"candidate_value"[[:space:]]*:[[:space:]]*[^,}]*' | head -1 | cut -d':' -f2 | xargs)
     local mutation
-    mutation=$(echo "$exp_data" | grep -o '"MutationType"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
+    mutation=$(echo "$exp_data" | grep -o '"mutation_type"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
     
     echo "  Experiment ID: $exp_id"
     echo "  Agent: $agent"
@@ -158,7 +158,7 @@ display_results() {
     
     echo ""
     echo "Acceptance Checks:"
-    local checks=$(echo "$exp_data" | grep -o '"JudgeChecks"[[:space:]]*:[[:space:]]*\[[^\]]*\]' | grep -o '"[^"]*"' | tr '"' ' ')
+    local checks=$(echo "$exp_data" | grep -o '"judge_checks"[[:space:]]*:[[:space:]]*\[[^\]]*\]' | grep -o '"[^"]*"' | tr '"' ' ')
     if [ -n "$checks" ]; then
         echo "$checks" | while read check; do
             echo "  ✓ $check"
@@ -175,13 +175,13 @@ provide_recommendation() {
     local exp_data
     exp_data=$(tr -d '\n' < "$result_file")
     local status
-    status=$(echo "$exp_data" | grep -o '"Status"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
+    status=$(echo "$exp_data" | grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
     local baseline
-    baseline=$(echo "$exp_data" | grep -o '"BaselineValue"[[:space:]]*:[[:space:]]*[^,}]*' | head -1 | cut -d':' -f2 | xargs)
+    baseline=$(echo "$exp_data" | grep -o '"baseline_value"[[:space:]]*:[[:space:]]*[^,}]*' | head -1 | cut -d':' -f2 | xargs)
     local candidate
-    candidate=$(echo "$exp_data" | grep -o '"CandidateValue"[[:space:]]*:[[:space:]]*[^,}]*' | head -1 | cut -d':' -f2 | xargs)
+    candidate=$(echo "$exp_data" | grep -o '"candidate_value"[[:space:]]*:[[:space:]]*[^,}]*' | head -1 | cut -d':' -f2 | xargs)
     local exp_id
-    exp_id=$(echo "$exp_data" | grep -o '"ID"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
+    exp_id=$(echo "$exp_data" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
     
     local oos_passed
     oos_passed=$(echo "$exp_data" | grep -o '"oos_result"[[:space:]]*:[[:space:]]*{[^}]*"passed"[[:space:]]*:[[:space:]]*\(true\|false\)[^}]*}' | grep -o '"passed"[[:space:]]*:[[:space:]]*\(true\|false\)' | cut -d':' -f2 | xargs || echo "")
@@ -255,10 +255,10 @@ execute_judge() {
     fi
     
     local needs_replay_judge="false"
-    if grep -Eq '"EvaluationMode"[[:space:]]*:[[:space:]]*"policy_checked_pending_replay"' "$result_file" 2>/dev/null; then
+    if grep -Eq '"evaluation_mode"[[:space:]]*:[[:space:]]*"policy_checked_pending_replay"' "$result_file" 2>/dev/null; then
         needs_replay_judge="true"
     fi
-    if grep -Eq '"Status"[[:space:]]*:[[:space:]]*"running"' "$result_file" 2>/dev/null; then
+    if grep -Eq '"status"[[:space:]]*:[[:space:]]*"running"' "$result_file" 2>/dev/null; then
         needs_replay_judge="true"
     fi
 

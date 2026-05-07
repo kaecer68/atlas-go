@@ -118,7 +118,7 @@ func InitTaskManager(pool *pgxpool.Pool, cfg Config) *taskexec.Manager {
 
 func registerTaskRunners(mgr *taskexec.Manager, cfg Config) {
 	taskCfg := config.Config{WorkDir: cfg.WorkDir}
-	mgr.RegisterRunner(string(domain.TaskTypeExecuteExperiment), taskexec.NewExecuteExperimentRunner(taskCfg))
+	mgr.RegisterRunner(string(domain.TaskTypeRunExperiment), taskexec.NewRunExperimentRunner(taskCfg))
 	mgr.RegisterRunner(string(domain.TaskTypeJudgeExperiment), taskexec.NewJudgeExperimentRunner(taskCfg))
 	mgr.RegisterRunner(string(domain.TaskTypePromoteBaseline), taskexec.NewPromoteBaselineRunner(taskCfg))
 	mgr.RegisterRunner(string(domain.TaskTypeBacktestWindow), taskexec.NewBacktestWindowRunner(taskCfg))

@@ -446,7 +446,7 @@ func (pm *PRISMManager) worker(queue *TrainingQueue, stopCh <-chan struct{}) {
 			continue
 		}
 
-		// Execute training
+		// Run training
 		result := pm.executeTraining(task)
 
 		// Update status

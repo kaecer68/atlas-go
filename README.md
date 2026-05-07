@@ -66,7 +66,7 @@ go run ./cmd/atlas
 Run experiment flow:
 
 ```bash
-go run ./cmd/execute-experiment -brief <brief-file>
+go run ./cmd/run-experiment -brief <brief-file>
 go run ./cmd/judge-experiment              # auto-discovers latest experiment
 # or: go run ./cmd/judge-experiment -result <experiment-result-file>
 ```

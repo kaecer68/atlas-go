@@ -67,7 +67,7 @@ func TestRunExecutesExperiment(t *testing.T) {
 	os.Setenv("ATLAS_REPLAY_DATA_PATH", replayPath)
 
 	if err := run([]string{"--brief", briefPath}); err != nil {
-		t.Fatalf("run execute-experiment: %v", err)
+		t.Fatalf("run run-experiment: %v", err)
 	}
 }
 

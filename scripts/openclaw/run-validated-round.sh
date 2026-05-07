@@ -71,7 +71,7 @@ if [ -z "${brief_path:-}" ]; then
 fi
 
 echo -e "${CYAN}[2/4] Execute experiment with brief...${NC}"
-exec_out=$(go run ./cmd/execute-experiment --brief "$brief_path" 2>&1) || {
+exec_out=$(go run ./cmd/run-experiment --brief "$brief_path" 2>&1) || {
   echo "$exec_out"
   exit 1
 }

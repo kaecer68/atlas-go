@@ -50,7 +50,7 @@ Goal:
 
 Primary touchpoints:
 - `internal/domain/`
-- `cmd/execute-experiment/`
+- `cmd/run-experiment/`
 - `cmd/judge-experiment/`
 
 Acceptance:

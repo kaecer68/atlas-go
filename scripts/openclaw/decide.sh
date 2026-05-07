@@ -142,10 +142,10 @@ analyze_experiment() {
     fi
     
     # Extract key metrics using simple parsing
-	local status=$(cat "$result_file" | grep '"Status"' | head -1 | sed 's/.*"Status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-	local baseline=$(cat "$result_file" | grep '"BaselineValue"' | head -1 | sed 's/.*"BaselineValue"[[:space:]]*:[[:space:]]*\([0-9.\-]*\).*/\1/')
-	local candidate=$(cat "$result_file" | grep '"CandidateValue"' | head -1 | sed 's/.*"CandidateValue"[[:space:]]*:[[:space:]]*\([0-9.\-]*\).*/\1/')
-	local agent=$(cat "$result_file" | grep '"TargetAgentID"' | head -1 | sed 's/.*"TargetAgentID"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+	local status=$(cat "$result_file" | grep '"status"' | head -1 | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+	local baseline=$(cat "$result_file" | grep '"baseline_value"' | head -1 | sed 's/.*"baseline_value"[[:space:]]*:[[:space:]]*\([0-9.\-]*\).*/\1/')
+	local candidate=$(cat "$result_file" | grep '"candidate_value"' | head -1 | sed 's/.*"candidate_value"[[:space:]]*:[[:space:]]*\([0-9.\-]*\).*/\1/')
+	local agent=$(cat "$result_file" | grep '"target_agent_id"' | head -1 | sed 's/.*"target_agent_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
     
     echo "Experiment Summary:"
     echo "  Agent: ${agent:-unknown}"
@@ -182,7 +182,7 @@ check_promotion_safety() {
     
     # Check 1: Status is accepted or ready
     ((checks_total++))
-	local status=$(cat "$result_file" | grep '"Status"' | head -1 | sed 's/.*"Status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+	local status=$(cat "$result_file" | grep '"status"' | head -1 | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
     if [ "$status" = "accepted" ]; then
         echo -e "  ${GREEN}✓${NC} Experiment status: ${status}"
         ((checks_passed++))
@@ -192,7 +192,7 @@ check_promotion_safety() {
     
     # Check 2: Has valid metrics
     ((checks_total++))
-    if grep -q '"CandidateValue":' "$result_file"; then
+    if grep -q '"candidate_value":' "$result_file"; then
         echo -e "  ${GREEN}✓${NC} Has candidate metrics"
         ((checks_passed++))
     else
@@ -272,7 +272,7 @@ execute_revert() {
     
     # Show current state
     if [ -f "data/state/baseline_policy.json" ]; then
-        local current_version=$(cat data/state/baseline_policy.json | grep -o '"Version": [0-9]*' | head -1 | grep -o '[0-9]*')
+        local current_version=$(cat data/state/baseline_policy.json | grep -o '"version": [0-9]*' | head -1 | grep -o '[0-9]*')
         echo "Current version: ${current_version}"
         if [ -n "$version" ]; then
             echo "Target version: ${version}"
@@ -328,9 +328,9 @@ interactive_mode() {
     if [ -f "data/state/experiments.jsonl" ]; then
         echo "Recent experiments:"
         tail -5 data/state/experiments.jsonl | while read line; do
-            local id=$(echo "$line" | grep -o '"ID":"[^"]*"' | cut -d'"' -f4)
-	local status=$(echo "$line" | grep '"Status"' | sed 's/.*"Status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-            local agent=$(echo "$line" | grep -o '"TargetAgentID":"[^"]*"' | cut -d'"' -f4)
+            local id=$(echo "$line" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+	local status=$(echo "$line" | grep '"status"' | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+            local agent=$(echo "$line" | grep -o '"target_agent_id":"[^"]*"' | cut -d'"' -f4)
             echo "  - ${id} (${status}) - ${agent}"
         done
         echo ""

@@ -5,7 +5,7 @@ import "time"
 type TaskType string
 
 const (
-	TaskTypeExecuteExperiment TaskType = "execute_experiment"
+	TaskTypeRunExperiment    TaskType = "run_experiment"
 	TaskTypeJudgeExperiment   TaskType = "judge_experiment"
 	TaskTypePromoteBaseline   TaskType = "promote_baseline"
 	TaskTypeBacktestWindow    TaskType = "backtest_window"
