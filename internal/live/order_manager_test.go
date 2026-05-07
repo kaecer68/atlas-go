@@ -55,7 +55,7 @@ func TestOrderManagerRetriesThenPublishesFilled(t *testing.T) {
 	}
 
 	mgr := NewOrderManager(broker, bus, 1, 0)
-	err := mgr.Execute(context.Background(), domain.Order{
+	err := 	mgr.Run(context.Background(), domain.Order{
 		Symbol:   "2330",
 		Side:     domain.SideBuy,
 		Quantity: 10,
@@ -94,7 +94,7 @@ func TestOrderManagerPublishRejectedWithReason(t *testing.T) {
 	}
 
 	mgr := NewOrderManager(broker, bus, 0, 0)
-	err := mgr.Execute(context.Background(), domain.Order{
+	err := 	mgr.Run(context.Background(), domain.Order{
 		Symbol:   "2317",
 		Side:     domain.SideBuy,
 		Quantity: 200,
@@ -143,7 +143,7 @@ func TestOrderManagerPublishSystemErrorAfterRetryExhausted(t *testing.T) {
 	}
 
 	mgr := NewOrderManager(broker, bus, 1, 0)
-	err := mgr.Execute(context.Background(), domain.Order{
+	err := 	mgr.Run(context.Background(), domain.Order{
 		Symbol:   "2603",
 		Side:     domain.SideSell,
 		Quantity: 5,
@@ -189,7 +189,7 @@ func TestOrderManagerPublishesSignerErrorClassification(t *testing.T) {
 	}
 
 	mgr := NewOrderManager(broker, bus, 0, 0)
-	err := mgr.Execute(context.Background(), domain.Order{
+	err := 	mgr.Run(context.Background(), domain.Order{
 		Symbol:   "2330",
 		Side:     domain.SideBuy,
 		Quantity: 1,

@@ -291,7 +291,7 @@ func TestDarwinianWeightManager(t *testing.T) {
 		}
 	})
 
-	t.Run("ApplyDarwinianWeights", func(t *testing.T) {
+	t.Run("ApplyDarwinianWeightsWithEvents", func(t *testing.T) {
 		m := NewDarwinianWeightManager("/tmp/test_dw.json")
 
 		seedAgent(m, "agent_001", "tech", "sector", 2.0) // High weight
@@ -302,7 +302,7 @@ func TestDarwinianWeightManager(t *testing.T) {
 			{Agent: "agent_002", Symbol: "2881.TW", Conviction: 80},
 		}
 
-		weighted := m.ApplyDarwinianWeights(recs)
+		weighted, _ := m.ApplyDarwinianWeightsWithEvents(recs)
 
 		// agent_001 has high weight (2.0) so should boost conviction
 		// agent_002 has low weight (0.5) so should reduce conviction
@@ -479,4 +479,44 @@ func TestDarwinianWeightReport(t *testing.T) {
 			t.Error("Expected positive average weight")
 		}
 	})
+}
+
+func TestApplyDarwinianWeightsWithEvents_PreservesAllFields(t *testing.T) {
+	m := NewDarwinianWeightManager("/tmp/test_dw_preserve.json")
+
+	input := domain.Recommendation{
+		Agent: "test_agent", Skill: "momentum", Layer: domain.LayerStyle, Symbol: "2330.TW",
+		Side: domain.SideBuy, Conviction: 80, TargetPrice: 650, StopLossPrice: 580,
+		Reason: "strong signal", ReasoningChain: []string{"step1"}, SupportingEvents: []string{"ev1"},
+		FactorScores:        domain.FactorScores{Momentum: 0.85, Total: 0.72},
+		ConvictionBreakdown: &domain.ConvictionBreakdown{Base: 60, Final: 80},
+	}
+	seedAgent(m, "test_agent", "momentum", "style", 1.0)
+
+	weighted, events := m.ApplyDarwinianWeightsWithEvents([]domain.Recommendation{input})
+	if len(weighted) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(weighted))
+	}
+	out := weighted[0]
+	if out.TargetPrice != input.TargetPrice {
+		t.Errorf("TargetPrice: got %f, want %f", out.TargetPrice, input.TargetPrice)
+	}
+	if out.StopLossPrice != input.StopLossPrice {
+		t.Errorf("StopLossPrice: got %f, want %f", out.StopLossPrice, input.StopLossPrice)
+	}
+	if out.ConvictionBreakdown == nil || out.ConvictionBreakdown.Final != input.ConvictionBreakdown.Final {
+		t.Error("ConvictionBreakdown not preserved")
+	}
+	if out.FactorScores.Total != input.FactorScores.Total {
+		t.Errorf("FactorScores.Total: got %f, want %f", out.FactorScores.Total, input.FactorScores.Total)
+	}
+	if out.Layer != input.Layer {
+		t.Errorf("Layer: got %q, want %q", out.Layer, input.Layer)
+	}
+	if out.Conviction <= 0 {
+		t.Error("Conviction should be positive")
+	}
+	if len(events) > 0 {
+		t.Errorf("expected 0 clamping events with weight 1.0, got %d", len(events))
+	}
 }

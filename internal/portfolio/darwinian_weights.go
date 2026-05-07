@@ -730,46 +730,6 @@ func (m *DarwinianWeightManager) RemoveAgent(agentID string) {
 	delete(m.weights, agentID)
 }
 
-// ApplyDarwinianWeights applies Darwinian weights to recommendations
-// Returns weighted recommendations where conviction is scaled by agent weight
-func (m *DarwinianWeightManager) ApplyDarwinianWeights(
-	recommendations []domain.Recommendation,
-) []domain.Recommendation {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	weighted := make([]domain.Recommendation, 0, len(recommendations))
-
-	for _, rec := range recommendations {
-		weight := m.params.Darwinian.WeightNeutral
-		if w, ok := m.weights[rec.Agent]; ok {
-			weight = w.Weight
-		}
-
-		weightedConviction := int(float64(rec.Conviction) * weight)
-
-		clampMin := m.params.Darwinian.ConvictionClampMin
-		clampMax := m.params.Darwinian.ConvictionClampMax
-		if weightedConviction > clampMax {
-			weightedConviction = clampMax
-		}
-		if weightedConviction < clampMin {
-			weightedConviction = clampMin
-		}
-
-		weighted = append(weighted, domain.Recommendation{
-			Agent:      rec.Agent,
-			Skill:      rec.Skill,
-			Symbol:     rec.Symbol,
-			Side:       rec.Side,
-			Conviction: weightedConviction,
-			Reason:     fmt.Sprintf("%s [DW:%.2f]", rec.Reason, weight),
-		})
-	}
-
-	return weighted
-}
-
 // ApplyDarwinianWeightsWithEvents applies Darwinian weights and returns clamping events for monitoring.
 // This is the preferred method when you need audit trail of conviction clamping.
 func (m *DarwinianWeightManager) ApplyDarwinianWeightsWithEvents(
@@ -814,12 +774,19 @@ func (m *DarwinianWeightManager) ApplyDarwinianWeightsWithEvents(
 		}
 
 		weighted = append(weighted, domain.Recommendation{
-			Agent:      rec.Agent,
-			Skill:      rec.Skill,
-			Symbol:     rec.Symbol,
-			Side:       rec.Side,
-			Conviction: weightedConviction,
-			Reason:     fmt.Sprintf("%s [DW:%.2f]", rec.Reason, weight),
+			Agent:               rec.Agent,
+			Skill:               rec.Skill,
+			Layer:               rec.Layer,
+			Symbol:              rec.Symbol,
+			Side:                rec.Side,
+			Conviction:          weightedConviction,
+			TargetPrice:         rec.TargetPrice,
+			StopLossPrice:       rec.StopLossPrice,
+			Reason:              fmt.Sprintf("%s [DW:%.2f]", rec.Reason, weight),
+			ReasoningChain:      rec.ReasoningChain,
+			SupportingEvents:    rec.SupportingEvents,
+			FactorScores:        rec.FactorScores,
+			ConvictionBreakdown: rec.ConvictionBreakdown,
 		})
 	}
 

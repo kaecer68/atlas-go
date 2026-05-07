@@ -75,7 +75,7 @@ func (e *ExecutionManager) ExecuteOrder(ctx context.Context, order domain.Order)
 		}
 		e.orderMgr = NewOrderManager(e.broker, e.eventBus, retries, 100*time.Millisecond)
 	}
-	if err := e.orderMgr.Execute(ctx, order); err != nil {
+	if err := e.orderMgr.Run(ctx, order); err != nil {
 		if e.metrics != nil {
 			e.metrics.RecordCounter("orders_failed_total", 1, map[string]string{
 				"symbol": order.Symbol,

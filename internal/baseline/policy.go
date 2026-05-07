@@ -12,6 +12,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 type Policy struct {
@@ -177,11 +178,13 @@ func DefaultPolicy() Policy {
 
 func Load(path string) (Policy, error) {
 	if path == "" {
+		logging.Warn("baseline", "using_default_policy", "reason", "empty_path")
 		return DefaultPolicy(), nil
 	}
 	bytes, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			logging.Warn("baseline", "using_default_policy", "reason", "file_not_found", "path", path)
 			return DefaultPolicy(), nil
 		}
 		return Policy{}, fmt.Errorf("read policy file: %w", err)

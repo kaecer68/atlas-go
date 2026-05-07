@@ -12,21 +12,21 @@ import (
 	"github.com/kaecer68/atlas-go/internal/taskexec"
 )
 
-type Handler struct {
+type Handlers struct {
 	manager *taskexec.Manager
 }
 
-func NewHandler(manager *taskexec.Manager) *Handler {
-	return &Handler{manager: manager}
+func NewHandlers(manager *taskexec.Manager) *Handlers {
+	return &Handlers{manager: manager}
 }
 
-func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
+func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	log.Printf("[TaskExec] registering routes: /api/tasks (POST/GET), /api/tasks/:id (GET/POST), /api/tasks/:id/events (SSE)")
 	mux.HandleFunc("/api/tasks", h.handleTasks)
 	mux.HandleFunc("/api/tasks/", h.handleTaskPath)
 }
 
-func (h *Handler) handleTaskPath(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) handleTaskPath(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[TaskExec] handleTaskPath: method=%s path=%s", r.Method, r.URL.Path)
 	if strings.HasSuffix(r.URL.Path, "/events") {
 		h.handleTaskEvents(w, r)
@@ -47,7 +47,7 @@ type submitTaskResponse struct {
 	Status string `json:"status"`
 }
 
-func (h *Handler) handleTasks(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) handleTasks(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[TaskExec] handleTasks: method=%s path=%s", r.Method, r.URL.Path)
 	switch r.Method {
 	case http.MethodPost:
@@ -113,7 +113,7 @@ func (h *Handler) handleTasks(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Path[len("/api/tasks/"):]
 	if id == "" {
 		http.Error(w, "task id required", http.StatusBadRequest)
@@ -192,7 +192,7 @@ func (h *Handler) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) handleTaskEvents(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) handleTaskEvents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return

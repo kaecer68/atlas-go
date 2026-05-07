@@ -64,7 +64,7 @@ func (r *executeExperimentRunner) Run(ctx context.Context, req SubmitRequest, si
 	})
 
 	executor := experiment.NewExecutor(ledger.NewStore(cfg.LedgerDir), cfg.BaselinePolicyPath)
-	result, err := executor.Execute(briefPath, cfg.ReplayDataPath)
+	result, err := executor.Run(briefPath, cfg.ReplayDataPath)
 	if err != nil {
 		return fmt.Errorf("execute experiment: %w", err)
 	}

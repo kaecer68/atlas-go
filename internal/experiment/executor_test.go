@@ -65,9 +65,9 @@ func TestExecuteCreatesCandidatePrompt(t *testing.T) {
 		t.Fatalf("write brief: %v", err)
 	}
 
-	result, err := executor.Execute(briefPath, replayPath)
+	result, err := executor.Run(briefPath, replayPath)
 	if err != nil {
-		t.Fatalf("execute experiment: %v", err)
+		t.Fatalf("run experiment: %v", err)
 	}
 	if result.CandidatePrompt == "" {
 		t.Fatalf("expected candidate prompt path")
@@ -123,9 +123,9 @@ func TestExecuteUsesRiskRuleTemplate(t *testing.T) {
 		t.Fatalf("write brief: %v", err)
 	}
 
-	result, err := executor.Execute(briefPath, replayPath)
+	result, err := executor.Run(briefPath, replayPath)
 	if err != nil {
-		t.Fatalf("execute experiment: %v", err)
+		t.Fatalf("run experiment: %v", err)
 	}
 	promptBytes, err := os.ReadFile(result.CandidatePrompt)
 	if err != nil {
@@ -175,9 +175,9 @@ func TestExecuteUsesPortfolioConstraintTemplate(t *testing.T) {
 		t.Fatalf("write brief: %v", err)
 	}
 
-	result, err := executor.Execute(briefPath, replayPath)
+	result, err := executor.Run(briefPath, replayPath)
 	if err != nil {
-		t.Fatalf("execute experiment: %v", err)
+		t.Fatalf("run experiment: %v", err)
 	}
 	promptBytes, err := os.ReadFile(result.CandidatePrompt)
 	if err != nil {
@@ -213,7 +213,7 @@ func TestExecuteRejectsInvalidBriefContract(t *testing.T) {
 		t.Fatalf("write brief: %v", err)
 	}
 
-	if _, err := executor.Execute(briefPath, replayPath); err == nil {
+	if _, err := executor.Run(briefPath, replayPath); err == nil {
 		t.Fatalf("expected invalid brief contract to fail")
 	}
 }

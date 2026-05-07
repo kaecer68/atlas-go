@@ -33,7 +33,7 @@ func run(args []string) error {
 		return fmt.Errorf("load baseline policy: %w", err)
 	}
 	executor := experiment.NewExecutor(ledger.NewStore(cfg.LedgerDir), cfg.BaselinePolicyPath)
-	result, err := executor.Execute(*brief, cfg.ReplayDataPath)
+	result, err := executor.Run(*brief, cfg.ReplayDataPath)
 	if err != nil {
 		return fmt.Errorf("execute experiment: %w", err)
 	}

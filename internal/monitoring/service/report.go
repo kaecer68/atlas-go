@@ -275,15 +275,15 @@ func (s *ReportService) loadRecommendationsForDate(date string) []domain.Recomme
 				continue
 			}
 			var outcome struct {
-				AgentID             string                      `json:"AgentID"`
-				Skill               string                      `json:"Skill"`
-				Layer               string                      `json:"Layer"`
-				Symbol              string                      `json:"Symbol"`
-				Side                string                      `json:"Side"`
-				Conviction          int                         `json:"Conviction"`
-				TargetPrice         float64                     `json:"TargetPrice"`
-				StopLossPrice       float64                     `json:"StopLossPrice"`
-				Reason              string                      `json:"Reason"`
+				AgentID             string                      `json:"agent_id"`
+				Skill               string                      `json:"skill"`
+				Layer               string                      `json:"layer"`
+				Symbol              string                      `json:"symbol"`
+				Side                string                      `json:"side"`
+				Conviction          int                         `json:"conviction"`
+				TargetPrice         float64                     `json:"target_price"`
+				StopLossPrice       float64                     `json:"stop_loss_price"`
+				Reason              string                      `json:"reason"`
 				FactorScores        domain.FactorScores         `json:"factor_scores,omitempty"`
 				ConvictionBreakdown *domain.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
 			}

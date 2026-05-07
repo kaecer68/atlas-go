@@ -18,7 +18,7 @@ func TestGuardedToHTTPFlowIntegration(t *testing.T) {
 	order := domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 100}
 
 	guardedOnlyMgr := NewOrderManager(NewGuardedLiveBroker(nil), nil, 0, 0)
-	err := guardedOnlyMgr.Execute(context.Background(), order)
+	err := guardedOnlyMgr.Run(context.Background(), order)
 	if err == nil {
 		t.Fatalf("expected guarded broker rejection")
 	}
@@ -72,14 +72,14 @@ func TestGuardedToHTTPFlowIntegration(t *testing.T) {
 	})
 
 	httpMgr := NewOrderManager(NewGuardedLiveBroker(adapter), nil, 0, 0)
-	if err := httpMgr.Execute(context.Background(), order); err != nil {
-		t.Fatalf("http manager execute failed: %v", err)
+	if err := httpMgr.Run(context.Background(), order); err != nil {
+		t.Fatalf("http manager run failed: %v", err)
 	}
 	if got := atomic.LoadInt32(&calls); got != 2 {
 		t.Fatalf("calls = %d, want 2", got)
 	}
 
-	err = httpMgr.Execute(context.Background(), order)
+	err = httpMgr.Run(context.Background(), order)
 	if err == nil {
 		t.Fatalf("expected replay nonce error")
 	}
@@ -108,7 +108,7 @@ func TestHTTPFlowIntegrationRejectsClockSkew(t *testing.T) {
 	})
 
 	mgr := NewOrderManager(NewGuardedLiveBroker(adapter), nil, 0, 0)
-	err := mgr.Execute(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 100})
+	err := mgr.Run(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 100})
 	if err == nil {
 		t.Fatalf("expected clock skew error")
 	}

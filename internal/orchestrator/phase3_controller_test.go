@@ -35,7 +35,7 @@ func TestPRISMTrainingExecutorWithRealReplay(t *testing.T) {
 		Regime:      prism.RegimeRiskOn,
 	}
 
-	result, err := exec.Execute(task)
+	result, err := exec.Run(task)
 	if err != nil {
 		t.Fatalf("executor failed: %v", err)
 	}
