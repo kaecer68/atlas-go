@@ -27,7 +27,7 @@ func main() {
 	fmt.Println("==================================================")
 
 	twseClient := marketdata.NewTWSEClient()
-	provider := marketdata.NewHybridProvider(twseClient, cfg.FinMindAPIKey, cfg.FubonAPIKey, cfg.FugleAPIKey)
+	provider := marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 	fmt.Printf("✅ Provider 創建成功: %s\n\n", provider.Name())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)

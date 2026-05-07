@@ -470,9 +470,9 @@ func selectProvider(cfg config.Config) marketdata.Provider {
 	case "twse":
 		return marketdata.NewTWSEOpenAPIProvider()
 	case "hybrid", "":
-		return marketdata.NewHybridProvider(marketdata.NewTWSEClient(), cfg.FinMindAPIKey, cfg.FubonAPIKey, cfg.FugleAPIKey)
+		return marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 	default:
-		return marketdata.NewHybridProvider(marketdata.NewTWSEClient(), cfg.FinMindAPIKey, cfg.FubonAPIKey, cfg.FugleAPIKey)
+		return marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 	}
 }
 
