@@ -184,28 +184,28 @@ func (s *fileNonceReplayStore) load() (map[string]time.Time, error) {
 		if os.IsNotExist(err) {
 			return items, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("read nonce store: %w", err)
 	}
 	if len(bytes) == 0 {
 		return items, nil
 	}
 	if err := json.Unmarshal(bytes, &items); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal nonce store: %w", err)
 	}
 	return items, nil
 }
 
 func (s *fileNonceReplayStore) save(items map[string]time.Time) error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir: %w", err)
 	}
 	bytes, err := json.Marshal(items)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal nonce store: %w", err)
 	}
 	tmpPath := s.path + ".tmp"
 	if err := os.WriteFile(tmpPath, bytes, 0o644); err != nil {
-		return err
+		return fmt.Errorf("write temp file: %w", err)
 	}
 	return os.Rename(tmpPath, s.path)
 }

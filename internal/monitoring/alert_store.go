@@ -63,7 +63,7 @@ func (s *AlertStore) LoadUnacknowledged() ([]domain.AlertRecord, error) {
 
 	all, err := s.loadFromFile()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load alerts: %w", err)
 	}
 
 	var unacked []domain.AlertRecord
@@ -83,7 +83,7 @@ func (s *AlertStore) Acknowledge(alertID string, user string) error {
 
 	all, err := s.loadFromFile()
 	if err != nil {
-		return err
+		return fmt.Errorf("load alerts: %w", err)
 	}
 
 	now := time.Now()

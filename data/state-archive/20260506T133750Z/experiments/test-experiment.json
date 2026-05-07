@@ -1,0 +1,63 @@
+{
+  "Experiment": {
+    "ID": "test-experiment",
+    "TargetAgentID": "growth-momentum-01",
+    "Skill": "growth_momentum",
+    "Hypothesis": "",
+    "PromptVersionFrom": "",
+    "PromptVersionTo": "",
+    "MutationType": "",
+    "AcceptanceGates": [
+      "improve_sharpe_like",
+      "no_material_drawdown_degradation",
+      "no_constraint_bypass"
+    ],
+    "WindowStart": "2026-03-26T00:00:00Z",
+    "WindowEnd": "2026-03-27T00:00:00Z",
+    "AcceptanceMetric": "sharpe_like",
+    "BaselineValue": 0.001923648303498588,
+    "CandidateValue": 0.004270837325062184,
+    "Status": "accepted",
+    "RevertReason": ""
+  },
+  "Brief": {
+    "WindowID": "window-test",
+    "TargetAgentID": "growth-momentum-01",
+    "TargetSkill": "growth_momentum",
+    "TargetLayer": "style",
+    "PromptFile": "/Users/kaecer/.openclaw/workspace/agents/finance/atlas/prompts/agents/growth_momentum.md",
+    "MutationType": "",
+    "FailurePattern": "",
+    "Hypothesis": "",
+    "AcceptanceMetric": "",
+    "AcceptanceGates": null,
+    "ForbiddenActions": [
+      "illiquid_breakout_chasing"
+    ],
+    "RequiredSkills": [
+      "growth_momentum"
+    ],
+    "ObservedWindowCount": 2,
+    "MaturityLevel": "level_1_exploratory",
+    "IterationGuidance": null,
+    "RecommendedWindow": "",
+    "GeneratedAt": "0001-01-01T00:00:00Z"
+  },
+  "CandidatePrompt": "/Users/kaecer/.openclaw/workspace/agents/finance/atlas/prompts/experiments/test-agent/exp/v2.md",
+  "EvaluationMode": "prompt_aware_replay_judged",
+  "PolicyChecks": [
+    "required skill preserved: growth_momentum"
+  ],
+  "Notes": [
+    "Replay judge accepted the candidate for the next baseline promotion step."
+  ],
+  "JudgeChecks": [
+    "contains stronger trend confirmation rule",
+    "contains conviction downgrade logic",
+    "contains explicit rejection filter",
+    "required skill policy checks preserved",
+    "forbidden actions still named in candidate prompt",
+    "accepted: maturity-aware gates satisfied"
+  ],
+  "RecordedAt": "2026-03-30T02:22:02.402656+08:00"
+}

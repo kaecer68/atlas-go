@@ -1,0 +1,34 @@
+[
+  {
+    "symbol": "2603.TW",
+    "quantity": 3300,
+    "average_cost": 199.10795749999997,
+    "current_price": 199,
+    "market_value": 656700,
+    "unrealized_pnl": 0
+  },
+  {
+    "symbol": "0050.TW",
+    "quantity": 3400,
+    "average_cost": 192.904594,
+    "current_price": 192.8,
+    "market_value": 655520,
+    "unrealized_pnl": 0
+  },
+  {
+    "symbol": "2382.TW",
+    "quantity": 2076,
+    "average_cost": 278.15081499999997,
+    "current_price": 278,
+    "market_value": 577128,
+    "unrealized_pnl": 0
+  },
+  {
+    "symbol": "2317.TW",
+    "quantity": 1153,
+    "average_cost": 159.0862575,
+    "current_price": 159,
+    "market_value": 183327,
+    "unrealized_pnl": 0
+  }
+]

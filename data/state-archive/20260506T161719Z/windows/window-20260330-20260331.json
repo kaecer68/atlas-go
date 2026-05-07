@@ -1,0 +1,13 @@
+{
+  "WindowID": "window-20260330-20260331",
+  "StartDate": "2026-03-30T00:00:00Z",
+  "EndDate": "2026-03-31T00:00:00Z",
+  "SessionCount": 1,
+  "OutcomeCount": 1775,
+  "WorstAgentID": "semi-desk-01",
+  "WorstAgentSkill": "semiconductor_desk",
+  "WorstAgentLayer": "sector",
+  "WorstAgentWindowCount": 1,
+  "WorstAgentSharpeLike": 0.14029251470246004,
+  "GeneratedAt": "2026-04-15T12:28:07.813318+08:00"
+}

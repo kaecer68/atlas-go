@@ -1,0 +1,69 @@
+{
+  "us10y": {
+    "symbol": "^TNX",
+    "value": 9.882309857536764,
+    "change_pct": 0.9882309857536764,
+    "timestamp": 1776797994
+  },
+  "dxy": {
+    "symbol": "DX-Y.NYB",
+    "value": 98.40799713134766,
+    "change_pct": 0.3651137872998013,
+    "timestamp": 1776809093
+  },
+  "vix": {
+    "symbol": "^VIX",
+    "value": 19.5,
+    "change_pct": 3.3386281544659195,
+    "timestamp": 1776802501
+  },
+  "usd_twd": {
+    "symbol": "",
+    "value": 0,
+    "change_pct": 0,
+    "timestamp": 0
+  },
+  "oil": {
+    "symbol": "CL=F",
+    "value": 90.41000366210938,
+    "change_pct": 0.8927609042616141,
+    "timestamp": 1776814327
+  },
+  "gold": {
+    "symbol": "GC=F",
+    "value": 4750,
+    "change_pct": -1.1775495465880097,
+    "timestamp": 1776814357
+  },
+  "jpy": {
+    "symbol": "JPY=X",
+    "value": 159.4219970703125,
+    "change_pct": 0.36388088376560995,
+    "timestamp": 1776814967
+  },
+  "foreign_investor_net": {
+    "symbol": "TAIWAN_FOREIGN",
+    "value": 3.99268075,
+    "change_pct": 0,
+    "timestamp": 1776700800
+  },
+  "domestic_fund_net": {
+    "symbol": "TAIWAN_DOMESTIC",
+    "value": 0,
+    "change_pct": 0,
+    "timestamp": 1776700800
+  },
+  "dealer_net": {
+    "symbol": "TAIWAN_DEALER",
+    "value": -1.010581,
+    "change_pct": 0,
+    "timestamp": 1776700800
+  },
+  "export_electronics": {
+    "symbol": "",
+    "value": 0,
+    "change_pct": 0,
+    "timestamp": 0
+  },
+  "recorded_at": 1776814970
+}

@@ -22,52 +22,52 @@ func NewStore(baseDir string) *Store {
 
 func (s *Store) RecordOutcomes(outcomes []domain.RecommendationOutcome) error {
 	if err := os.MkdirAll(s.baseDir, 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir all: %w", err)
 	}
 
 	path := filepath.Join(s.baseDir, "recommendation_outcomes.jsonl")
 	tmp := path + ".tmp"
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
-		return err
+		return fmt.Errorf("open file: %w", err)
 	}
 	enc := json.NewEncoder(f)
 	for _, outcome := range outcomes {
 		if err := enc.Encode(outcome); err != nil {
 			f.Close()
 			os.Remove(tmp)
-			return err
+			return fmt.Errorf("encode outcome: %w", err)
 		}
 	}
 	if err := f.Close(); err != nil {
 		os.Remove(tmp)
-		return err
+		return fmt.Errorf("close file: %w", err)
 	}
 	return os.Rename(tmp, path)
 }
 
 func (s *Store) RecordSessionOutcomes(session domain.ReplaySession, outcomes []domain.RecommendationOutcome) error {
 	if err := os.MkdirAll(s.sessionDir(session.ID), 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir session dir: %w", err)
 	}
 
 	path := filepath.Join(s.sessionDir(session.ID), "recommendation_outcomes.jsonl")
 	tmp := path + ".tmp"
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
-		return err
+		return fmt.Errorf("open file: %w", err)
 	}
 	enc := json.NewEncoder(f)
 	for _, outcome := range outcomes {
 		if err := enc.Encode(outcome); err != nil {
 			f.Close()
 			os.Remove(tmp)
-			return err
+			return fmt.Errorf("encode outcome: %w", err)
 		}
 	}
 	if err := f.Close(); err != nil {
 		os.Remove(tmp)
-		return err
+		return fmt.Errorf("close file: %w", err)
 	}
 	return os.Rename(tmp, path)
 }
@@ -80,7 +80,7 @@ func (s *Store) LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOu
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("open file: %w", err)
 	}
 	defer f.Close()
 
@@ -103,7 +103,7 @@ func (s *Store) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("open file: %w", err)
 	}
 	defer f.Close()
 
@@ -121,13 +121,13 @@ func (s *Store) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
 
 func (s *Store) RecordExperiment(record domain.ExperimentRecord) error {
 	if err := os.MkdirAll(s.baseDir, 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir all: %w", err)
 	}
 
 	path := filepath.Join(s.baseDir, "experiments.jsonl")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
-		return err
+		return fmt.Errorf("open file: %w", err)
 	}
 	defer f.Close()
 
@@ -136,13 +136,13 @@ func (s *Store) RecordExperiment(record domain.ExperimentRecord) error {
 
 func (s *Store) RecordSessionExperiment(session domain.ReplaySession, record domain.ExperimentRecord) error {
 	if err := os.MkdirAll(s.sessionDir(session.ID), 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir session dir: %w", err)
 	}
 
 	path := filepath.Join(s.sessionDir(session.ID), "experiments.jsonl")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
-		return err
+		return fmt.Errorf("open file: %w", err)
 	}
 	defer f.Close()
 
@@ -151,18 +151,18 @@ func (s *Store) RecordSessionExperiment(session domain.ReplaySession, record dom
 
 func (s *Store) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
 	if err := os.MkdirAll(s.sessionDir(session.ID), 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir session dir: %w", err)
 	}
 
 	path := filepath.Join(s.sessionDir(session.ID), "summary.json")
 	bytes, err := json.MarshalIndent(summary, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal summary: %w", err)
 	}
 
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, bytes, 0o644); err != nil {
-		return err
+		return fmt.Errorf("write file: %w", err)
 	}
 	return os.Rename(tmp, path)
 }
@@ -174,7 +174,7 @@ func (s *Store) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.Recomme
 		if os.IsNotExist(err) {
 			return nil, nil, nil
 		}
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("read dir: %w", err)
 	}
 
 	outcomes := make([]domain.RecommendationOutcome, 0)
@@ -185,7 +185,7 @@ func (s *Store) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.Recomme
 		path := filepath.Join(root, entry.Name(), "recommendation_outcomes.jsonl")
 		fileOutcomes, err := loadOutcomeFile(path)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("load outcome file %s: %w", path, err)
 		}
 		outcomes = append(outcomes, fileOutcomes...)
 	}
@@ -196,17 +196,17 @@ func (s *Store) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.Recomme
 func (s *Store) RecordWindowSummary(summary domain.BacktestWindowSummary) error {
 	dir := filepath.Join(s.baseDir, "windows")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir window dir: %w", err)
 	}
 	path := filepath.Join(dir, summary.WindowID+".json")
 	bytes, err := json.MarshalIndent(summary, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal summary: %w", err)
 	}
 
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, bytes, 0o644); err != nil {
-		return err
+		return fmt.Errorf("write file: %w", err)
 	}
 	return os.Rename(tmp, path)
 }
@@ -214,17 +214,17 @@ func (s *Store) RecordWindowSummary(summary domain.BacktestWindowSummary) error 
 func (s *Store) RecordMutationBrief(windowID string, brief domain.MutationBrief) error {
 	dir := filepath.Join(s.baseDir, "windows")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir window dir: %w", err)
 	}
 	path := filepath.Join(dir, windowID+"-mutation-brief.json")
 	bytes, err := json.MarshalIndent(brief, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal brief: %w", err)
 	}
 
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, bytes, 0o644); err != nil {
-		return err
+		return fmt.Errorf("write file: %w", err)
 	}
 	return os.Rename(tmp, path)
 }
@@ -245,12 +245,12 @@ type SpawnRecord struct {
 
 func (s *Store) RecordSpawnRecord(record SpawnRecord) error {
 	if err := os.MkdirAll(s.baseDir, 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir all: %w", err)
 	}
 	path := filepath.Join(s.baseDir, "spawn_records.jsonl")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
-		return err
+		return fmt.Errorf("open file: %w", err)
 	}
 	defer f.Close()
 	record.UpdatedAt = time.Now()
@@ -264,7 +264,7 @@ func (s *Store) LoadSpawnRecords() ([]SpawnRecord, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("open file: %w", err)
 	}
 	defer f.Close()
 	scanner := bufio.NewScanner(f)
@@ -281,12 +281,12 @@ func (s *Store) LoadSpawnRecords() ([]SpawnRecord, error) {
 
 func (s *Store) RecordHumanIntervention(intervention domain.HumanIntervention) error {
 	if err := os.MkdirAll(s.baseDir, 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir all: %w", err)
 	}
 	path := filepath.Join(s.baseDir, "human_interventions.jsonl")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
-		return err
+		return fmt.Errorf("open file: %w", err)
 	}
 	defer f.Close()
 	return json.NewEncoder(f).Encode(intervention)
@@ -299,7 +299,7 @@ func (s *Store) LoadHumanInterventions() ([]domain.HumanIntervention, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("open file: %w", err)
 	}
 	defer f.Close()
 	scanner := bufio.NewScanner(f)
@@ -317,17 +317,17 @@ func (s *Store) LoadHumanInterventions() ([]domain.HumanIntervention, error) {
 func (s *Store) RecordPromptExperimentResult(experimentID string, result domain.PromptExperimentResult) error {
 	dir := filepath.Join(s.baseDir, "experiments")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir experiment dir: %w", err)
 	}
 	path := filepath.Join(dir, experimentID+".json")
 	bytes, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal result: %w", err)
 	}
 
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, bytes, 0o644); err != nil {
-		return err
+		return fmt.Errorf("write file: %w", err)
 	}
 	return os.Rename(tmp, path)
 }
@@ -465,18 +465,18 @@ func maxDrawdown(values []float64) float64 {
 
 func (s *Store) RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error {
 	if err := os.MkdirAll(s.sessionDir(sessionID), 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir session dir: %w", err)
 	}
 	path := filepath.Join(s.sessionDir(sessionID), "screened_symbols.jsonl")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
-		return err
+		return fmt.Errorf("open file: %w", err)
 	}
 	defer f.Close()
 	enc := json.NewEncoder(f)
 	for _, r := range rejects {
 		if err := enc.Encode(r); err != nil {
-			return err
+			return fmt.Errorf("encode reject: %w", err)
 		}
 	}
 	return nil
@@ -489,7 +489,7 @@ func (s *Store) LoadSessionScreeningRejects(sessionID string) ([]domain.Screenin
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("open file: %w", err)
 	}
 	defer f.Close()
 	scanner := bufio.NewScanner(f)
@@ -516,7 +516,7 @@ func (s *Store) LoadSessionSummaries() ([]domain.SessionSummary, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("read dir: %w", err)
 	}
 
 	summaries := make([]domain.SessionSummary, 0, len(entries))
@@ -548,7 +548,7 @@ func loadOutcomeFile(path string) ([]domain.RecommendationOutcome, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("open file: %w", err)
 	}
 	defer f.Close()
 

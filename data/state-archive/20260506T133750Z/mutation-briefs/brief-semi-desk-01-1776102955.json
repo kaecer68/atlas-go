@@ -1,0 +1,55 @@
+{
+    "id": "brief-semi-desk-01-1776102955",
+    "window_id": "window-20260325-20260331",
+    "target_agent": "semi-desk-01",
+    "target_agent_id": "semi-desk-01",
+    "target_skill": "semiconductor_desk",
+    "target_layer": "sector",
+    "prompt_file": "prompts/agents/semiconductor_desk.md",
+    "mutation_type": "prompt_tightening",
+    "timestamp": "2026-04-13T17:55:55Z",
+    "acceptance_metric": "sharpe_like",
+    "acceptance_gates": [
+        "improve_sharpe_like",
+        "no_material_drawdown_degradation",
+        "no_constraint_bypass"
+    ],
+    "required_skills": [
+        "semiconductor_desk",
+        "earnings_quality",
+        "technical_breakout"
+    ],
+    "forbidden_actions": [
+        "illiquid_name_selection",
+        "macro_override"
+    ],
+    "observed_window_count": 8,
+    "maturity_level": "level_2_validated",
+    "iteration_guidance": [
+        "Change one bounded behavior only",
+        "Preserve required skills and forbidden action boundaries",
+        "Refine sector thesis quality and symbol qualification, not portfolio sizing",
+        "Prefer industry-specific evidence over broad market narration",
+        "Evidence is still thin; prefer conservative prompt tightening over ambitious rewrites"
+    ],
+    "generated_at": "2026-04-13T17:55:55Z",
+    "hypothesis": "A targeted prompt refinement can improve risk-adjusted recommendation quality.",
+    "suggested_mutation_type": "prompt_tightening",
+    "rationale": [
+        "Agent has accepted v2 and v3 mutations; further bounded tightening may improve Sharpe-like score",
+        "Current volume floor at 2.0M could be incrementally raised to 2.5M for stronger leadership confirmation"
+    ],
+    "proposed_changes": [
+        "Raise effective volume floor from 2.0M to 2.5M",
+        "Increase volume downgrade penalty on weak setups",
+        "Preserve all previously accepted guardrails"
+    ],
+    "acceptance_criteria": [
+        "Sharpe-like score improvement > 0",
+        "No material drawdown degradation",
+        "Maintains required skills coverage"
+    ],
+    "estimated_complexity": "low",
+    "recommended_window": "short validation window before broader promotion",
+    "notes_for_reviewer": "v4 incremental tightening for semi-desk-01 after successful v2/v3 promotions"
+}

@@ -82,7 +82,7 @@ func (s *localSink) RecordLineage(lineage domain.ExperimentLineageRecord) error 
 	ctx := context.Background()
 	if err := s.manager.store.UpsertLineage(ctx, lineage); err != nil {
 		log.Printf("[taskexec] failed to record lineage: %v", err)
-		return err
+		return fmt.Errorf("record lineage: %w", err)
 	}
 	return nil
 }
@@ -91,7 +91,7 @@ func (s *localSink) RecordBaselineHistory(record domain.BaselineHistoryRecord) e
 	ctx := context.Background()
 	if err := s.manager.store.InsertBaselineHistory(ctx, record); err != nil {
 		log.Printf("[taskexec] failed to record baseline history: %v", err)
-		return err
+		return fmt.Errorf("record baseline history: %w", err)
 	}
 	return nil
 }
@@ -100,7 +100,7 @@ func (s *localSink) RecordMetrics(points []domain.MetricTrendPoint) error {
 	ctx := context.Background()
 	if err := s.manager.store.InsertMetricPoints(ctx, points); err != nil {
 		log.Printf("[taskexec] failed to record metrics: %v", err)
-		return err
+		return fmt.Errorf("record metrics: %w", err)
 	}
 	return nil
 }

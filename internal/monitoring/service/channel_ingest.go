@@ -271,7 +271,7 @@ func (s *ChannelIngestService) triggerMacroIngest(ctx context.Context) error {
 	if err != nil {
 		s.healthStore.Record("us_yahoo", "error", err.Error())
 		s.healthStore.Record("jpy_yahoo", "error", err.Error())
-		return err
+		return fmt.Errorf("macro ingest: %w", err)
 	}
 	s.healthStore.Record("us_yahoo", "ok", "")
 	s.healthStore.Record("jpy_yahoo", "ok", "")
@@ -284,12 +284,12 @@ func (s *ChannelIngestService) triggerGeoIngest(ctx context.Context) error {
 	score, err := s.GeoProvider.FetchScore(ctx)
 	if err != nil {
 		s.healthStore.Record("geopolitical", "error", err.Error())
-		return err
+		return fmt.Errorf("geo fetch: %w", err)
 	}
 	store := narrative.NewGeopoliticalStore(filepath.Join(stateDir, "geopolitical"))
 	if err := store.Save(score); err != nil {
 		s.healthStore.Record("geopolitical", "error", err.Error())
-		return err
+		return fmt.Errorf("geo save: %w", err)
 	}
 	s.healthStore.Record("geopolitical", "ok", "")
 	return nil
@@ -301,7 +301,7 @@ func (s *ChannelIngestService) triggerCapFlowIngest(ctx context.Context) error {
 	_, err := capFlowProvider.FetchSnapshot(ctx)
 	if err != nil {
 		s.healthStore.Record("twse_capital_flow", "error", err.Error())
-		return err
+		return fmt.Errorf("capital flow fetch: %w", err)
 	}
 	s.healthStore.Record("twse_capital_flow", "ok", "")
 	return nil
@@ -313,7 +313,7 @@ func (s *ChannelIngestService) triggerExportIngest(ctx context.Context) error {
 	_, err := exportProvider.FetchSnapshot(ctx)
 	if err != nil {
 		s.healthStore.Record("export_statistics", "error", err.Error())
-		return err
+		return fmt.Errorf("export statistics fetch: %w", err)
 	}
 	s.healthStore.Record("export_statistics", "ok", "")
 	return nil
@@ -325,7 +325,7 @@ func (s *ChannelIngestService) triggerMarginIngest(ctx context.Context) error {
 	_, err := marginProvider.FetchSnapshot(ctx)
 	if err != nil {
 		s.healthStore.Record("twse_margin", "error", err.Error())
-		return err
+		return fmt.Errorf("margin fetch: %w", err)
 	}
 	s.healthStore.Record("twse_margin", "ok", "")
 	return nil
@@ -337,7 +337,7 @@ func (s *ChannelIngestService) triggerTsmcIngest(ctx context.Context) error {
 	_, err := tsmcProvider.FetchSnapshot(ctx)
 	if err != nil {
 		s.healthStore.Record("tsmc_revenue", "error", err.Error())
-		return err
+		return fmt.Errorf("tsmc revenue fetch: %w", err)
 	}
 	s.healthStore.Record("tsmc_revenue", "ok", "")
 	return nil
@@ -348,12 +348,12 @@ func (s *ChannelIngestService) triggerTaiwanGeoIngest(ctx context.Context) error
 	twGeoScore, err := s.TaiwanGeoProvider.FetchScore(ctx)
 	if err != nil {
 		s.healthStore.Record("geopolitical_taiwan", "error", err.Error())
-		return err
+		return fmt.Errorf("taiwan geo fetch: %w", err)
 	}
 	twStore := narrative.NewGeopoliticalStore(filepath.Join(stateDir, "geopolitical", "taiwan"))
 	if err := twStore.Save(twGeoScore); err != nil {
 		s.healthStore.Record("geopolitical_taiwan", "error", err.Error())
-		return err
+		return fmt.Errorf("taiwan geo save: %w", err)
 	}
 	s.healthStore.Record("geopolitical_taiwan", "ok", "")
 	return nil
@@ -385,7 +385,7 @@ func (s *ChannelIngestService) triggerTejIngest(ctx context.Context) error {
 	tejClient := marketdata.NewTEJClient(tejKey)
 	if err := tejClient.Ping(ctx); err != nil {
 		s.healthStore.Record("tej", "error", err.Error())
-		return err
+		return fmt.Errorf("tej ping: %w", err)
 	}
 	s.healthStore.Record("tej", "ok", "")
 	return nil

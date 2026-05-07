@@ -1,0 +1,31 @@
+[0;36mAnalyzing agent: growth-momentum-01[0m
+
+[1;33m⚠ Prompt file not found: prompts/agents/growth_momentum_01.md[0m
+
+[0;36mGenerating mutation proposal...[0m
+
+{
+  "id": "brief-growth-momentum-01-1775014443",
+  "target_agent": "growth-momentum-01",
+  "timestamp": "2026-04-01T03:34:03Z",
+  "hypothesis": "Refine growth-momentum-01 prompt to improve risk-adjusted recommendation quality",
+  "suggested_mutation_type": "prompt_tightening",
+  "rationale": [
+    "Agent shows lower Sharpe ratio compared to peers",
+    "Recommendations may lack sufficient conviction filtering",
+    "Prompt could benefit from clearer risk context"
+  ],
+  "proposed_changes": [
+    "Add explicit conviction threshold requirements",
+    "Clarify regime-aware downgrade rules",
+    "Strengthen liquidity filtering language"
+  ],
+  "acceptance_criteria": [
+    "Sharpe-like score improvement > 0.001",
+    "No material drawdown degradation",
+    "Maintains required skills coverage"
+  ],
+  "estimated_complexity": "low",
+  "recommended_window": "10_trading_days",
+  "notes_for_reviewer": "This is a conservative tightening mutation focused on entry criteria"
+}

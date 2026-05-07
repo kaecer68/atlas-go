@@ -1,0 +1,13 @@
+{
+  "WindowID": "window-20260201-20260228",
+  "StartDate": "2026-02-01T00:00:00Z",
+  "EndDate": "2026-02-28T00:00:00Z",
+  "SessionCount": 0,
+  "OutcomeCount": 719,
+  "WorstAgentID": "growth-momentum-01",
+  "WorstAgentSkill": "growth_momentum",
+  "WorstAgentLayer": "style",
+  "WorstAgentWindowCount": 1,
+  "WorstAgentSharpeLike": 8.35311866065726,
+  "GeneratedAt": "2026-04-05T10:34:05.674054+08:00"
+}

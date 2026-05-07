@@ -3,6 +3,7 @@ package marketdata
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -85,7 +86,7 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 	if len(errs) > 0 {
 		logging.Warn("yahoo_macro_provider", "partial_fetch_failures", "errors", fmt.Sprintf("%v", errs))
 		if len(errs) == len(symbols) {
-			return snap, fmt.Errorf("all indicators failed: %v", errs)
+			return snap, fmt.Errorf("all indicators failed: %w", errors.Join(errs...))
 		}
 	}
 	return snap, nil

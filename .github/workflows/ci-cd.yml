@@ -39,6 +39,9 @@ jobs:
     - name: Build
       run: go build -v ./...
 
+    - name: Persistence format check
+      run: go run ./cmd/check-persistence-format -dir data/state
+
     - name: Test
       run: go test -v -race -coverprofile=coverage.out ./...
 

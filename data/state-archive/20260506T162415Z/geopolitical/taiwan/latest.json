@@ -1,0 +1,12 @@
+{
+  "region": "Taiwan",
+  "intensity": 5,
+  "sentiment": -0.4,
+  "confidence": 0.6,
+  "oil_impact": 0.1,
+  "shipping_impact": 0.4,
+  "sources": [
+    "taiwan_rss_geopolitical"
+  ],
+  "timestamp": "2026-05-06T07:43:45.471922Z"
+}

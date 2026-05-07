@@ -1,0 +1,13 @@
+{
+  "window_id": "window-20260420-20260421",
+  "start_date": "2026-04-20T00:00:00Z",
+  "end_date": "2026-04-21T00:00:00Z",
+  "session_count": 0,
+  "outcome_count": 0,
+  "worst_agent_id": "shipping-desk-01",
+  "worst_agent_skill": "shipping_desk",
+  "worst_agent_layer": "sector",
+  "worst_agent_window_count": 14,
+  "worst_agent_sharpe_like": -28.83986513768478,
+  "generated_at": "2026-05-06T19:56:50.176555+08:00"
+}

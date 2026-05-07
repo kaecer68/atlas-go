@@ -164,7 +164,7 @@ func (w *ApprovalWorkflow) filePath() string {
 func (w *ApprovalWorkflow) appendRequest(req *ApprovalRequest) error {
 	f, err := os.OpenFile(w.filePath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
-		return err
+		return fmt.Errorf("open approvals file: %w", err)
 	}
 	defer f.Close()
 
@@ -178,7 +178,7 @@ func (w *ApprovalWorkflow) loadAll() ([]ApprovalRequest, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("open approvals file: %w", err)
 	}
 	defer f.Close()
 
@@ -206,14 +206,14 @@ func (w *ApprovalWorkflow) loadAll() ([]ApprovalRequest, error) {
 func (w *ApprovalWorkflow) rewriteAll(reqs []ApprovalRequest) error {
 	f, err := os.OpenFile(w.filePath(), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
-		return err
+		return fmt.Errorf("open approvals file: %w", err)
 	}
 	defer f.Close()
 
 	enc := json.NewEncoder(f)
 	for _, r := range reqs {
 		if err := enc.Encode(r); err != nil {
-			return err
+			return fmt.Errorf("encode approval: %w", err)
 		}
 	}
 	return nil
