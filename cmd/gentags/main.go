@@ -20,8 +20,17 @@ func main() {
 }
 
 func run() error {
+	// When invoked from go:generate, working dir is internal/domain/
+	// When invoked from root, working dir is atlas/
 	domainDir := "internal/domain"
+	if _, err := os.Stat(domainDir); os.IsNotExist(err) {
+		// Running from internal/domain/ via go generate
+		domainDir = "."
+	}
 	outDir := "web/static/js/shared"
+	if domainDir == "." {
+		outDir = "../web/static/js/shared"
+	}
 
 	fset := token.NewFileSet()
 	pkgs, err := parser.ParseDir(fset, domainDir, func(fi os.FileInfo) bool {
