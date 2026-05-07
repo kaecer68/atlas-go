@@ -1,0 +1,78 @@
+# atlas-go EditorConfig
+# https://editorconfig.org
+#
+# This project standardizes on:
+#   - Unix (LF) line endings
+#   - UTF-8 charset
+#   - snake_case file naming for all new files
+#   - Exceptions: README.md, CLAUDE.md, Dockerfile, SKILL.md (tool conventions)
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Go — tabs, per `gofmt` standard
+[*.go]
+indent_style = tab
+indent_size = 4
+
+# Markdown — 2 spaces (most editors default)
+[*.md]
+indent_style = space
+indent_size = 2
+
+# YAML — 2 spaces (CI configs, docker-compose)
+[{*.yml,*.yaml,docker-compose.yml}]
+indent_style = space
+indent_size = 2
+
+# JSON — 2 spaces
+[*.json]
+indent_style = space
+indent_size = 2
+
+# JSONL — keep as-is (append-only ledger format)
+[*.jsonl]
+insert_final_newline = false
+
+# Shell scripts — 2 spaces (project convention)
+[*.sh]
+indent_style = space
+indent_size = 2
+
+# Web frontend
+[*.html]
+indent_style = space
+indent_size = 2
+
+[*.css]
+indent_style = space
+indent_size = 2
+
+[*.js]
+indent_style = space
+indent_size = 2
+
+# Python (Fubon proxy)
+[*.py]
+indent_style = space
+indent_size = 4
+
+# SQL
+[*.sql]
+indent_style = space
+indent_size = 2
+
+# CSV — raw data, don't modify
+[*.csv]
+trim_trailing_whitespace = false
+insert_final_newline = false
+
+# Docker
+[Dockerfile]
+indent_style = space
+indent_size = 4
