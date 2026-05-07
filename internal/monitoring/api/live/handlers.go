@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/live"
+	"github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/risk"
@@ -460,9 +460,9 @@ func (h *Handlers) HandleRiskExposure(w http.ResponseWriter, r *http.Request) {
 		insufficient = true
 	}
 
-	liveBasePath := filepath.Join(h.WorkDir, live.DefaultLiveStateBasePath)
-	portfolio, _ := live.LoadLastPortfolioState(liveBasePath)
-	positions, _ := live.LoadLastPositions(liveBasePath)
+	liveBasePath := filepath.Join(h.WorkDir, store.DefaultLiveStateBasePath)
+	portfolio, _ := store.LoadLastPortfolioState(liveBasePath)
+	positions, _ := store.LoadLastPositions(liveBasePath)
 
 	var totalMV float64
 	for _, p := range positions {

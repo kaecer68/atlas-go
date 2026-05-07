@@ -6,11 +6,12 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 )
 
 type AgentRunner struct {
-	stateStore *StateStore
+	stateStore *store.StateStore
 	marketData interface {
 		GetQuotes(ctx context.Context, t time.Time, symbols []string) ([]domain.Quote, error)
 	}
@@ -25,7 +26,7 @@ type AgentRunner struct {
 }
 
 func NewAgentRunner(
-	stateStore *StateStore,
+	stateStore *store.StateStore,
 	marketData interface {
 		GetQuotes(ctx context.Context, t time.Time, symbols []string) ([]domain.Quote, error)
 	},

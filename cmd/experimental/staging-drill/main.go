@@ -12,6 +12,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/live"
+	"github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
@@ -44,7 +45,7 @@ func main() {
 	circuitStatePath := filepath.Join(tempDir, "circuit_breaker_state.json")
 
 	system := orchestrator.NewProductionSystem(cfg)
-	stateStore := live.NewStateStore(liveStateDir)
+	stateStore := live.store.Newstore.StateStore(liveStateDir)
 	eventBus := live.NewChannelEventBus(64)
 	provider := marketdata.NewMockProvider()
 

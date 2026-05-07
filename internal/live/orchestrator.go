@@ -8,12 +8,13 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 type Orchestrator struct {
-	stateStore             *StateStore
+	stateStore             *store.StateStore
 	eventBus               *ChannelEventBus
 	marketData             marketdata.Provider
 	broker                 Broker
@@ -111,7 +112,7 @@ func DefaultOrchestratorConfig() OrchestratorConfig {
 
 func NewOrchestrator(
 	ctx context.Context,
-	stateStore *StateStore,
+	stateStore *store.StateStore,
 	eventBus *ChannelEventBus,
 	marketData marketdata.Provider,
 	registry domain.AgentRegistry,
@@ -593,7 +594,7 @@ func resolveBrokerMode(cfg OrchestratorConfig) (requested string, effective stri
 		case "mock":
 			return requested, "live-mock", NewGuardedLiveBroker(NewMockLiveAdapter()), "live mode uses mock adapter; no real orders are sent"
 		case "http":
-			nonceStore, err := BuildNonceReplayStoreWithOptions(cfg.BrokerNonceStore, NonceReplayStoreOptions{
+			nonceStore, err := store.BuildNonceReplayStoreWithOptions(cfg.BrokerNonceStore, store.NonceReplayStoreOptions{
 				FilePath:       cfg.BrokerNonceStorePath,
 				RedisURL:       cfg.BrokerNonceRedisURL,
 				RedisKeyPrefix: cfg.BrokerNonceRedisKeyPrefix,

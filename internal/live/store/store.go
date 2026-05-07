@@ -1,4 +1,4 @@
-package live
+package store
 
 import (
 	"encoding/json"
@@ -131,7 +131,7 @@ func (s *StateStore) Save() error {
 	if err != nil {
 		return fmt.Errorf("marshal portfolio: %w", err)
 	}
-	if err := writeFileAtomic(portfolioPath, string(portfolioJSON)); err != nil {
+	if err := WriteFileAtomic(portfolioPath, string(portfolioJSON)); err != nil {
 		return fmt.Errorf("save portfolio: %w", err)
 	}
 
@@ -145,7 +145,7 @@ func (s *StateStore) Save() error {
 	if err != nil {
 		return fmt.Errorf("marshal positions: %w", err)
 	}
-	if err := writeFileAtomic(positionsPath, string(positionsJSON)); err != nil {
+	if err := WriteFileAtomic(positionsPath, string(positionsJSON)); err != nil {
 		return fmt.Errorf("save positions: %w", err)
 	}
 
@@ -155,7 +155,7 @@ func (s *StateStore) Save() error {
 	if err != nil {
 		return fmt.Errorf("marshal regime: %w", err)
 	}
-	if err := writeFileAtomic(regimePath, string(regimeJSON)); err != nil {
+	if err := WriteFileAtomic(regimePath, string(regimeJSON)); err != nil {
 		return fmt.Errorf("save regime: %w", err)
 	}
 
@@ -367,7 +367,7 @@ func appendToFile(path, content string) error {
 
 // writeFileAtomic writes content to a temp file and renames it to the target path.
 // This ensures readers never see a partially written file.
-func writeFileAtomic(path, content string) error {
+func WriteFileAtomic(path, content string) error {
 	dir := filepath.Dir(path)
 	tmp, err := os.CreateTemp(dir, ".tmp-*.jsonl")
 	if err != nil {
