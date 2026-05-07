@@ -1,7 +1,7 @@
 {
   "contract_version": 1,
   "proposal_id": "default-financials-credit-quality",
-  "window_id": "window-20260326-20260327",
+  "window_id": "window-20260101-20260424",
   "target_agent_id": "financials-desk-01",
   "target_skill": "financials_desk",
   "target_layer": "sector",
@@ -31,5 +31,5 @@
     "Require explicit credit-quality signal before downgrade.",
     "Preserve dividend-support logic as a floor."
   ],
-  "recommended_window": "window-20260326-20260327"
+  "recommended_window": "window-20260101-20260424"
 }
