@@ -268,7 +268,7 @@
       },
       "rationale": "Momentum 30%, Value 25%, Quality 25%, Agent 20%",
       "source": "heuristic",
-      "todo": "AGENTS.md claims different weights (20/15/15/20); reconcile"
+      "todo": "agents.md claims different weights (20/15/15/20); reconcile"
     }
   },
   "sizing": {

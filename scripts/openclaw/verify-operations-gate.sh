@@ -81,7 +81,7 @@ if [[ "$KEEP_TEMP" != true ]]; then
 fi
 
 validate_runbook_contract() {
-	local runbook="docs/operations-playbook.md"
+	local runbook="docs/operations_playbook.md"
 	if [[ ! -f "$runbook" ]]; then
 		echo "[error] runbook not found: $runbook"
 		exit 1

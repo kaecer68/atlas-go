@@ -5,9 +5,9 @@
 > 本文用于记录当时的问题、修复与结果对比；其阈值与结论可能已被后续版本更新。
 > 当前实验接受条件、mutation 类型语义与运行守卫，请优先参考：
 > - `docs/skills-map.md`
-> - `docs/iteration-playbook.md`
-> - `docs/operations-playbook.md`
-> - `docs/evolution-loop.md`
+> - `docs/iteration_playbook.md`
+> - `docs/operations_playbook.md`
+> - `docs/evolution_loop.md`
 
 ## 执行日期
 2026-04-06

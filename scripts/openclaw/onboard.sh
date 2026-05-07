@@ -203,7 +203,7 @@ show_next_steps() {
     echo ""
     echo "  2. 閱讀詳細文檔："
     echo "     • README.md - 系統概覽和快速開始"
-    echo "     • AGENTS.md - 實驗執行流程詳解"
+    echo "     • agents.md - 實驗執行流程詳解"
     echo "     • docs/skills-map.md - 技能系統說明"
     echo "     • scripts/openclaw/QUICK_REFERENCE.md - 命令速查"
     echo ""

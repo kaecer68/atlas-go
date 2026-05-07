@@ -47,8 +47,8 @@
 
 **對應文件**:
 - `docs/architecture.md`
-- `docs/ai-agent-architecture.md`
-- `AGENTS.md`
+- `docs/ai_agent_architecture.md`
+- `agents.md`
 
 ---
 
@@ -134,8 +134,8 @@
 
 **對應文件**:
 - `.claude/skills/atlas-operations-guide/SKILL.md`
-- `docs/operations-playbook.md`
-- `docs/iteration-playbook.md`
+- `docs/operations_playbook.md`
+- `docs/iteration_playbook.md`
 
 ---
 
@@ -174,7 +174,7 @@
 | 技能文件 | `.claude/skills/atlas-*/SKILL.md` | 散落各處 |
 | 設計規格 | `docs/superpowers/specs/` | `docs/superpowers/specs/`（維持）|
 | 實施計劃 | `docs/superpowers/plans/` | `docs/superpowers/plans/`（維持）|
-| 操作手冊 | `docs/operations-playbook.md` | `docs/operations-playbook.md`（維持）|
+| 操作手冊 | `docs/operations_playbook.md` | `docs/operations_playbook.md`（維持）|
 
 ---
 

@@ -20,23 +20,23 @@ Welcome to atlas-go! This is a **simulation-first, audit-driven investment resea
 
 | File | Purpose |
 |------|---------|
-| [AGENTS.md](AGENTS.md) | **Start here** — Build commands, architecture boundaries, project pitfalls |
+| [agents.md](agents.md) | **Start here** — Build commands, architecture boundaries, project pitfalls |
 | [.github/instructions/go-core.instructions.md](.github/instructions/go-core.instructions.md) | Go coding rules, interface design, error handling, import order |
 | [.github/instructions/experiments-guardrails.instructions.md](.github/instructions/experiments-guardrails.instructions.md) | Baseline policy, experiment flow, acceptance logic, mutation safety |
 | [.github/instructions/live-trading.guardrails.instructions.md](.github/instructions/live-trading.guardrails.instructions.md) | Live trading path, replay prioritization, TODO boundaries |
-| [AI_PRODUCTIVITY_GUIDE.md](AI_PRODUCTIVITY_GUIDE.md) | Detailed pitfalls lookup, gotchas, anti-patterns, idioms |
+| [ai_productivity_guide.md](ai_productivity_guide.md) | Detailed pitfalls lookup, gotchas, anti-patterns, idioms |
 | [docs/architecture.md](docs/architecture.md) | Layered design, component responsibilities, failure modes |
 
 ## 🎯 Common Workflows by Task
 
 ### I want to modify Go code (internal/ or cmd/)
-1. ✅ Read: [AGENTS.md](AGENTS.md) (§架構邊界) + [.github/instructions/go-core.instructions.md](.github/instructions/go-core.instructions.md)
+1. ✅ Read: [agents.md](agents.md) (§架構邊界) + [.github/instructions/go-core.instructions.md](.github/instructions/go-core.instructions.md)
 2. 🔍 Check: `gofmt -w .` before editing
 3. 🧪 Test: Focus on relevant package (e.g., `go test ./internal/orchestrator/...`)
 4. ✔️ Verify: `test -z "$(gofmt -l .)"` && `go build ./...`
 
 ### I want to add/modify prompts or agents
-1. ✅ Read: [AGENTS.md](AGENTS.md) (§重要陷阱 near configs/agents.json)
+1. ✅ Read: [agents.md](agents.md) (§重要陷阱 near configs/agents.json)
 2. 🔍 Check: `configs/agents.json` for enabled agents, `prompts/agents/` for corresponding prompt files
 3. ⚠️ Remember: Every enabled agent needs a valid prompt file
 4. 📋 Validate: Run experiments with small replay window first
@@ -48,7 +48,7 @@ Welcome to atlas-go! This is a **simulation-first, audit-driven investment resea
 4. 🔄 Flow: propose mutation → execute → judge → accept/revert (explicit gates)
 
 ### I want to understand/fix a bug
-1. ✅ Read: [AGENTS.md](AGENTS.md) (§重要陷阱) + [AI_PRODUCTIVITY_GUIDE.md](AI_PRODUCTIVITY_GUIDE.md)
+1. ✅ Read: [agents.md](agents.md) (§重要陷阱) + [ai_productivity_guide.md](ai_productivity_guide.md)
 2. 🔍 Search gotchas: Sparse replay? Reused slices? Silent Darwinian clipping? Missing baseline?
 3. 🧪 Run focused tests on the relevant package
 4. 📖 Check: [docs/architecture.md](docs/architecture.md) for component flow
@@ -125,7 +125,7 @@ Ledger (internal/ledger/)
 | **Darwinian weight clipping (0.3–2.5) is silent** | Don't assume boundaries; values outside range auto-clamp with no warning |
 | **Missing prompt files for enabled agents** | Every entry in agents.json must have matching `prompts/agents/<name>.md` |
 
-**See** [AI_PRODUCTIVITY_GUIDE.md](AI_PRODUCTIVITY_GUIDE.md) for the full gotcha lookup table with symptoms & fixes.
+**See** [ai_productivity_guide.md](ai_productivity_guide.md) for the full gotcha lookup table with symptoms & fixes.
 
 ---
 
@@ -169,18 +169,18 @@ internal/orchestrator/
 
 ### Architecture & Design
 - [docs/architecture.md](docs/architecture.md) — Layered architecture, component responsibilities
-- [docs/ai-agent-architecture.md](docs/ai-agent-architecture.md) — Agent coordination, decision flow
-- [AGENTS.md](AGENTS.md) — Repository boundaries and conventions
+- [docs/ai_agent_architecture.md](docs/ai_agent_architecture.md) — Agent coordination, decision flow
+- [agents.md](agents.md) — Repository boundaries and conventions
 
 ### Operations & Experimentation
-- [docs/operations-playbook.md](docs/operations-playbook.md) — Day-to-day workflows
-- [docs/iteration-playbook.md](docs/iteration-playbook.md) — Mutation and evolution cycle
-- [docs/evolution-loop.md](docs/evolution-loop.md) — Full acceptance gate logic
-- [docs/SCRIPT_USAGE_GUIDE.md](docs/SCRIPT_USAGE_GUIDE.md) — Helper scripts (darwinian-adjust, swarm-manage, etc.)
+- [docs/operations_playbook.md](docs/operations_playbook.md) — Day-to-day workflows
+- [docs/iteration_playbook.md](docs/iteration_playbook.md) — Mutation and evolution cycle
+- [docs/evolution_loop.md](docs/evolution_loop.md) — Full acceptance gate logic
+- [docs/script_usage_guide.md](docs/script_usage_guide.md) — Helper scripts (darwinian-adjust, swarm-manage, etc.)
 
 ### Data & Configuration
-- [docs/data-sources.md](docs/data-sources.md) — Market data import, replay format (JSONL)
-- [AI_PRODUCTIVITY_GUIDE.md](AI_PRODUCTIVITY_GUIDE.md) — Detailed gotchas, configuration patterns, command cheat sheet
+- [docs/data_sources.md](docs/data_sources.md) — Market data import, replay format (JSONL)
+- [ai_productivity_guide.md](ai_productivity_guide.md) — Detailed gotchas, configuration patterns, command cheat sheet
 
 ### Implementation History
 - `docs/archive/phase2-implementation.md` through `docs/archive/phase5-architecture.md` — Historical phase decisions and architecture details
@@ -217,7 +217,7 @@ A: **Replay**: deterministic run-through of historical data with current config.
 A: Run `go test ./...` (full suite) + spot-check key packages. Check `go vet ./...` for common issues. Review git diff for unintended side effects.
 
 **Q: When should I read each instruction file?**  
-A: Start with [AGENTS.md](AGENTS.md) for orientation. Then pick the domain-specific instruction matching your task (go-core, experiments-guardrails, or live-trading).
+A: Start with [agents.md](agents.md) for orientation. Then pick the domain-specific instruction matching your task (go-core, experiments-guardrails, or live-trading).
 
 ---
 

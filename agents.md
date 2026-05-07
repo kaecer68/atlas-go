@@ -143,7 +143,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 ## 設定檔慣例
 
 - `configs/agents.json`（及 `agents.yaml`）定義代理註冊表。**每個 `enabled: true` 的 agent 必須在 `prompts/agents/` 下有對應 prompt 檔案**。
-- `configs/portfolio-allocation.json` 為投組配置版本檔案。
+- `configs/portfolio_allocation.json` 為投組配置版本檔案。
 - `internal/config/config.go` 會自動讀取根目錄 `.env`，**不會覆蓋已存在的環境變數**；`.env` 中的值若帶引號（單雙引號）會被自動去除。
 - 關鍵環境變數前綴為 `ATLAS_*`（如 `ATLAS_MARKET_DATA_PROVIDER`、`ATLAS_REPLAY_DATA_PATH`、`ATLAS_BASELINE_POLICY_PATH`、`ATLAS_BROKER_MODE`）。
 
@@ -221,9 +221,9 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 - `.github/instructions/live-trading.guardrails.instructions.md` — Live trading 邊界
 - `.github/copilot-instructions.md` — 綜合入口與常見工作流程
 
-## Local agents.md 導覽
+## Local AGENTS.md 導覽
 
-以下子目錄已有局部說明，進入該區域工作時**先讀該目錄下的 `agents.md`**，不要只依賴本檔：
+以下子目錄已有局部說明，進入該區域工作時**先讀該目錄下的 `AGENTS.md`**，不要只依賴本檔：
 
 | 目錄 | 主題 |
 |------|------|
@@ -239,13 +239,13 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 | `cmd/experimental/` | 驗證 / drill / smoke-test 類 CLI |
 | `scripts/openclaw/` | OpenClaw 治理、審核、promote / revert 腳本 |
 
-### 什麼情況要往下讀局部 agents.md
+### 什麼情況要往下讀局部 AGENTS.md
 
 - 你正在改 `cmd/experimental/*` 的驗證 CLI。
 - 你正在跑或修改 `scripts/openclaw/*` 的治理腳本。
 - 你碰到某個 `internal/*` 子系統有自己的術語、陷阱或資料流。
 
-### 什麼情況不用再拆更多 agents.md
+### 什麼情況不用再拆更多 AGENTS.md
 
 - `internal/config/`、`internal/db/`、`internal/ledger/`、`internal/repository/`、`internal/taskexec/` 屬於共享基礎設施；通常由本檔 + 對應程式碼即可覆蓋。
 - `data/`、`graphify-out/`、`.worktrees/`、`.gocache/` 屬於狀態 / 產物 / 快取，不作為主要開發規範來源。
@@ -266,10 +266,10 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 
 ### 補充文件（詳細規格）
 - `docs/architecture.md` — 架構詳細說明
-- `docs/ai-agent-architecture.md` — AI 代理架構
-- `docs/operations-playbook.md` — 操作手冊
-- `docs/iteration-playbook.md` — 迭代指南
-- `docs/evolution-loop.md` — 演化循環
+- `docs/ai_agent_architecture.md` — AI 代理架構
+- `docs/operations_playbook.md` — 操作手冊
+- `docs/iteration_playbook.md` — 迭代指南
+- `docs/evolution_loop.md` — 演化循環
 - `docs/roadmap.md` — 開發路線圖
 
 > **文件優先順序**（當內容衝突時）：

@@ -1,4 +1,4 @@
-# UI-REVIEW.md — Atlas-Go 前端視覺稽核
+# ui_review.md — Atlas-Go 前端視覺稽核
 
 **稽核日期**: 2026-04-21
 **稽核範圍**: `web/static/index.html`（主 SPA）、`narrative-dashboard.html`、`trading-dashboard.html`

@@ -163,7 +163,7 @@ Baseline policy is loaded from `data/state/baseline_policy.json`. The experiment
 - `.github/instructions/experiments-guardrails.instructions.md` — experiment safety rules
 - `.github/instructions/live-trading.guardrails.instructions.md` — live trading guardrails
 - `docs/architecture.md` — layered architecture details
-- `docs/operations-playbook.md` — day-to-day workflows
+- `docs/operations_playbook.md` — day-to-day workflows
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence

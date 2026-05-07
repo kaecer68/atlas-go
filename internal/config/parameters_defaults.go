@@ -305,7 +305,7 @@ func defaultOptimizerParameters() OptimizerParameters {
 			},
 			Rationale: "Momentum 30%, Value 25%, Quality 25%, Agent 20%",
 			Source:    SourceHeuristic,
-			Todo:      "AGENTS.md claims different weights (20/15/15/20); reconcile",
+			Todo:      "agents.md claims different weights (20/15/15/20); reconcile",
 		},
 	}
 }

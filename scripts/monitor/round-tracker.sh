@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 STATE_DIR="${PROJECT_DIR}/data/state"
 TRACKER_FILE="${STATE_DIR}/round-tracker.jsonl"
-CONFIG_FILE="${PROJECT_DIR}/configs/monitor-limits.json"
+CONFIG_FILE="${PROJECT_DIR}/configs/monitor_limits.json"
 
 # 颜色输出
 RED='\033[0;31m'
@@ -203,7 +203,7 @@ Round Tracker - 实验轮次追踪
   reset              重置追踪器 (自动备份)
   --help             显示此帮助
 
-停止条件 (可在 configs/monitor-limits.json 配置):
+停止条件 (可在 configs/monitor_limits.json 配置):
   - 达到最大轮次 (默认: 20)
   - 连续拒绝次数 (默认: 3)
   - 接受率过低 (默认: <15%)

@@ -53,7 +53,7 @@ ls scripts/openclaw/  # 應該有 6 個腳本
 ## 關鍵檔案
 
 - `docs/openclaw-protocol.md` - 完整協議
-- `docs/SCRIPT_USAGE_GUIDE.md` - 詳細教學
+- `docs/script_usage_guide.md` - 詳細教學
 - `docs/skills-map.md` - 技能定義
 
 ## 安全規則
