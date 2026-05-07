@@ -1,7 +1,6 @@
 package orchestrator
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -14,67 +13,60 @@ func (SemiconductorExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (SemiconductorExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), 60)
+	conviction := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
 
 	ctrl, ok := domain.ExtractPromptControl(prompt)
 	if !ok {
 		if strings.Contains(prompt, "close strength confirms leadership") && quote.Last > quote.Open {
-			b.add("prompt_boost", 10, "close strength confirms leadership")
+			conviction += 10
 		}
 		if strings.Contains(prompt, "weak volume") {
-			b.add("prompt_penalty", -15, "weak volume")
+			conviction -= 15
 		}
-		if !b.floorCheck() {
+		if conviction < 60 {
 			return domain.Recommendation{}, false
 		}
 		tp, slp := priceTargets(quote, 1.06, 0.95)
-		conv, cb := b.build()
 		return domain.Recommendation{
-			Agent:               agent.ID,
-			Skill:               agent.Skill,
-			Layer:               agent.Layer,
-			Symbol:              quote.Symbol,
-			Side:                domain.SideBuy,
-			Conviction:          conv,
-			Reason:              "semiconductor leadership and supply-chain role",
-			TargetPrice:         tp,
-			StopLossPrice:       slp,
-			ConvictionBreakdown: cb,
+			Agent:         agent.ID,
+			Skill:         agent.Skill,
+			Layer:         agent.Layer,
+			Symbol:        quote.Symbol,
+			Side:          domain.SideBuy,
+			Conviction:    conviction,
+			Reason:        "semiconductor leadership and supply-chain role",
+			TargetPrice:   tp,
+			StopLossPrice: slp,
 		}, true
 	}
 
 	if ctrl.CloseStrengthBoost > 0 && quote.Last > quote.Open {
-		b.add("close_strength_boost", ctrl.CloseStrengthBoost, "last > open")
+		conviction += ctrl.CloseStrengthBoost
 	}
 
 	if ctrl.VolumeDowngrade > 0 && quote.Last < quote.Open {
-		b.add("volume_downgrade", -max(10, ctrl.VolumeDowngrade/2), "last < open")
+		conviction -= max(10, ctrl.VolumeDowngrade/2)
 	}
 
 	minConviction := 60
 	if ctrl.ConvictionFloor > 0 {
-		b.floor = ctrl.ConvictionFloor
 		minConviction = ctrl.ConvictionFloor
 	}
-	if b.final < minConviction {
-		b.add("floor", minConviction-b.final, fmt.Sprintf("below floor %d", minConviction))
-		b.final = minConviction
+	if conviction < minConviction {
 		return domain.Recommendation{}, false
 	}
 
 	tp, slp := priceTargets(quote, 1.06, 0.95)
-	conv, cb := b.build()
 	return domain.Recommendation{
-		Agent:               agent.ID,
-		Skill:               agent.Skill,
-		Layer:               agent.Layer,
-		Symbol:              quote.Symbol,
-		Side:                domain.SideBuy,
-		Conviction:          conv,
-		Reason:              "semiconductor leadership and supply-chain role",
-		TargetPrice:         tp,
-		StopLossPrice:       slp,
-		ConvictionBreakdown: cb,
+		Agent:         agent.ID,
+		Skill:         agent.Skill,
+		Layer:         agent.Layer,
+		Symbol:        quote.Symbol,
+		Side:          domain.SideBuy,
+		Conviction:    conviction,
+		Reason:        "semiconductor leadership and supply-chain role",
+		TargetPrice:   tp,
+		StopLossPrice: slp,
 	}, true
 }
 
@@ -130,32 +122,30 @@ func (AISupplyChainExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (AISupplyChainExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), 60)
+	conviction := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
 	if quote.Last < quote.Open {
-		b.add("price_penalty", -5, "last < open")
+		conviction -= 5
 	}
 	if strings.Contains(prompt, "order-flow") && quote.Last > quote.Open {
-		b.add("order_flow_boost", 8, "order-flow keyword + last > open")
+		conviction += 8
 	}
 	if strings.Contains(prompt, "downgrade") && quote.Last < quote.High*0.99 {
-		b.add("downgrade_penalty", -10, "downgrade keyword + last < high*0.99")
+		conviction -= 10
 	}
-	if !b.floorCheck() {
+	if conviction < 60 {
 		return domain.Recommendation{}, false
 	}
 	tp, slp := priceTargets(quote, 1.08, 0.95)
-	conv, cb := b.build()
 	return domain.Recommendation{
-		Agent:               agent.ID,
-		Skill:               agent.Skill,
-		Layer:               agent.Layer,
-		Symbol:              quote.Symbol,
-		Side:                domain.SideBuy,
-		Conviction:          conv,
-		Reason:              "ai infrastructure order-flow sensitivity",
-		TargetPrice:         tp,
-		StopLossPrice:       slp,
-		ConvictionBreakdown: cb,
+		Agent:         agent.ID,
+		Skill:         agent.Skill,
+		Layer:         agent.Layer,
+		Symbol:        quote.Symbol,
+		Side:          domain.SideBuy,
+		Conviction:    conviction,
+		Reason:        "ai infrastructure order-flow sensitivity",
+		TargetPrice:   tp,
+		StopLossPrice: slp,
 	}, true
 }
 
@@ -166,65 +156,63 @@ func (ETFRotationExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (ETFRotationExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), 55)
+	conviction := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
 
 	ctrl, ok := domain.ExtractPromptControl(prompt)
 	if ok {
 		if quote.Last < quote.Open {
-			b.add("price_penalty", -3, "last < open")
+			conviction -= 3
 		}
 		if ctrl.CloseStrengthBoost > 0 && quote.Last > quote.Open {
-			b.add("close_strength_boost", ctrl.CloseStrengthBoost, "last > open")
+			conviction += ctrl.CloseStrengthBoost
 		}
 		if ctrl.VolumeBoost > 0 && quote.Last > quote.Open {
-			b.add("volume_boost", ctrl.VolumeBoost, "last > open")
+			conviction += ctrl.VolumeBoost
 		}
+		minConviction := 55
 		if ctrl.ConvictionFloor > 0 {
-			b.floor = ctrl.ConvictionFloor
+			minConviction = ctrl.ConvictionFloor
 		}
-		if !b.floorCheck() {
+		if conviction < minConviction {
 			return domain.Recommendation{}, false
 		}
 		tp, slp := priceTargets(quote, 1.04, 0.97)
-		conv, cb := b.build()
 		return domain.Recommendation{
-			Agent:               agent.ID,
-			Skill:               agent.Skill,
-			Layer:               agent.Layer,
-			Symbol:              quote.Symbol,
-			Side:                domain.SideBuy,
-			Conviction:          conv,
-			Reason:              "broad ETF fallback under controlled risk",
-			TargetPrice:         tp,
-			StopLossPrice:       slp,
-			ConvictionBreakdown: cb,
+			Agent:         agent.ID,
+			Skill:         agent.Skill,
+			Layer:         agent.Layer,
+			Symbol:        quote.Symbol,
+			Side:          domain.SideBuy,
+			Conviction:    conviction,
+			Reason:        "broad ETF fallback under controlled risk",
+			TargetPrice:   tp,
+			StopLossPrice: slp,
 		}, true
 	}
 
+	// Legacy fallback
 	if quote.Last < quote.Open {
-		b.add("price_penalty", -3, "last < open")
+		conviction -= 3
 	}
 	if strings.Contains(prompt, "rotation") && quote.Last > quote.Open {
-		b.add("rotation_boost", 6, "rotation keyword + last > open")
+		conviction += 6
 	}
 	if strings.Contains(prompt, "sector leadership") {
-		b.add("sector_leadership_boost", 5, "sector leadership keyword")
+		conviction += 5
 	}
-	if !b.floorCheck() {
+	if conviction < 55 {
 		return domain.Recommendation{}, false
 	}
 	tp, slp := priceTargets(quote, 1.04, 0.97)
-	conv, cb := b.build()
 	return domain.Recommendation{
-		Agent:               agent.ID,
-		Skill:               agent.Skill,
-		Layer:               agent.Layer,
-		Symbol:              quote.Symbol,
-		Side:                domain.SideBuy,
-		Conviction:          conv,
-		Reason:              "broad ETF fallback under controlled risk",
-		TargetPrice:         tp,
-		StopLossPrice:       slp,
-		ConvictionBreakdown: cb,
+		Agent:         agent.ID,
+		Skill:         agent.Skill,
+		Layer:         agent.Layer,
+		Symbol:        quote.Symbol,
+		Side:          domain.SideBuy,
+		Conviction:    conviction,
+		Reason:        "broad ETF fallback under controlled risk",
+		TargetPrice:   tp,
+		StopLossPrice: slp,
 	}, true
 }

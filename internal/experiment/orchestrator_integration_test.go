@@ -100,7 +100,7 @@ func TestScreenedRecommendationsFlowThroughExperimentAndJudge(t *testing.T) {
 		t.Errorf("expected candidate agent growth-momentum-test, got %s", candidate.Agent.ID)
 	}
 
-	brief := evolution.BuildMutationBrief("window-20260325-20260327", candidate)
+	brief := evolution.BuildMutationBrief("window-test", candidate)
 	if brief == nil {
 		t.Fatal("expected mutation brief")
 	}
@@ -136,31 +136,23 @@ func TestScreenedRecommendationsFlowThroughExperimentAndJudge(t *testing.T) {
 		t.Fatalf("write brief: %v", err)
 	}
 
-	windowPath := filepath.Join(stateDir, "windows", brief.WindowID+".json")
-	if err := os.MkdirAll(filepath.Dir(windowPath), 0o755); err != nil {
-		t.Fatalf("mkdir windows dir: %v", err)
-	}
-	window := domain.BacktestWindowSummary{
-		WindowID:     brief.WindowID,
-		StartDate:    time.Date(2026, 3, 25, 0, 0, 0, 0, time.UTC),
-		EndDate:      time.Date(2026, 3, 27, 0, 0, 0, 0, time.UTC),
-		SessionCount: 3,
-		OutcomeCount: 10,
-		GeneratedAt:  time.Now(),
-	}
-	windowBytes, err := json.Marshal(window)
-	if err != nil {
-		t.Fatalf("marshal window: %v", err)
-	}
-	if err := os.WriteFile(windowPath, windowBytes, 0o644); err != nil {
-		t.Fatalf("write window: %v", err)
-	}
-
 	baselinePath := filepath.Join(stateDir, "baseline_policy.json")
 	baselinePolicy := baseline.DefaultPolicy()
 	baselineBytes, _ := json.Marshal(baselinePolicy)
 	if err := os.WriteFile(baselinePath, baselineBytes, 0o644); err != nil {
 		t.Fatalf("write baseline: %v", err)
+	}
+
+	exec := experiment.NewExecutor(store, baselinePath)
+	execResult, err := exec.Execute(briefPath)
+	if err != nil {
+		t.Fatalf("experiment execute: %v", err)
+	}
+	if execResult.Experiment.Status != domain.ExperimentRunning {
+		t.Errorf("expected experiment status running, got %s", execResult.Experiment.Status)
+	}
+	if execResult.CandidatePrompt == "" {
+		t.Fatal("expected candidate prompt path from experiment executor")
 	}
 
 	wd, _ := os.Getwd()
@@ -170,16 +162,19 @@ func TestScreenedRecommendationsFlowThroughExperimentAndJudge(t *testing.T) {
 		t.Skipf("sample replay data missing, skipping judge integration: %v", err)
 	}
 
-	exec := experiment.NewExecutor(store, baselinePath)
-	execResult, err := exec.Run(briefPath, replayPath)
-	if err != nil {
-		t.Fatalf("experiment run: %v", err)
+	windowPath := filepath.Join(stateDir, "windows", "window-test.json")
+	if err := os.MkdirAll(filepath.Dir(windowPath), 0o755); err != nil {
+		t.Fatalf("mkdir window dir: %v", err)
 	}
-	if execResult.Experiment.Status != domain.ExperimentRunning {
-		t.Errorf("expected experiment status running, got %s", execResult.Experiment.Status)
+	window := domain.BacktestWindowSummary{
+		WindowID:             "window-test",
+		StartDate:            asOf.AddDate(0, 0, -1),
+		EndDate:              asOf,
+		WorstAgentSharpeLike: -100,
 	}
-	if execResult.CandidatePrompt == "" {
-		t.Fatal("expected candidate prompt path from experiment executor")
+	windowBytes, _ := json.Marshal(window)
+	if err := os.WriteFile(windowPath, windowBytes, 0o644); err != nil {
+		t.Fatalf("write window: %v", err)
 	}
 
 	resultPath := filepath.Join(stateDir, "experiments", "e2e-experiment.json")

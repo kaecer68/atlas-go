@@ -1,0 +1,31 @@
+- generic [ref=e1]:
+  - complementary "側邊導航" [ref=e2]:
+    - generic [ref=e3]:
+      - heading "Atlas-Go" [level=1] [ref=e4]
+      - paragraph [ref=e5]: 人機協作控制塔
+      - button "🌓" [ref=e6] [cursor=pointer]
+    - navigation "主要導航" [ref=e7]:
+      - generic "總覽" [ref=e8] [cursor=pointer]: 📊 總覽
+      - generic "宏觀敘事" [ref=e9] [cursor=pointer]: 🌍 宏觀敘事
+      - generic "產業生態系" [ref=e10] [cursor=pointer]: 🏭 產業生態系
+      - generic "投資管線" [ref=e11] [cursor=pointer]: 📋 投資管線
+      - generic "決策鏈" [ref=e12] [cursor=pointer]: 🔗 決策鏈
+      - generic "風控結果" [ref=e13] [cursor=pointer]: 🛡️ 風控結果
+      - generic "組合持倉" [active] [ref=e14] [cursor=pointer]: 📂 組合持倉
+      - generic "AI 觀測台" [ref=e15] [cursor=pointer]: 🤖 AI 觀測台
+      - generic "模擬交易" [ref=e16] [cursor=pointer]: 🧪 模擬交易
+      - generic "最新回測" [ref=e17] [cursor=pointer]: 📈 最新回測
+      - generic "控制與稽核" [ref=e18] [cursor=pointer]: ⚙️ 控制與稽核
+      - generic "信息通道" [ref=e20] [cursor=pointer]: 📡 信息通道
+      - generic "系統警報" [ref=e21] [cursor=pointer]: 🚨 系統警報
+      - generic "指標監控" [ref=e22] [cursor=pointer]: 📉 指標監控
+    - generic [ref=e23]: v8 · 統一介面
+  - main [ref=e24]:
+    - generic [ref=e25]:
+      - heading "組合持倉" [level=2] [ref=e101]
+      - generic [ref=e28]:
+        - generic [ref=e30]: 上次更新 上午10:02:48
+        - button "⏸" [ref=e31] [cursor=pointer]
+    - generic [ref=e32]: ▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸ ▸
+    - button "🔄 重新整理" [ref=e64] [cursor=pointer]
+    - status "通知中心"
