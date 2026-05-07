@@ -23,10 +23,10 @@ func main() {
 
 	cfg := config.Load()
 
-	fmt.Println("🔄 測試 Hybrid Provider (Fubon → Fugle → TWSE)")
+	fmt.Println("🔄 測試 Hybrid Provider (FinMind → Fugle → TWSE)")
 	fmt.Println("==================================================")
 
-	provider := marketdata.NewHybridProvider(cfg.FubonAPIKey, cfg.FugleAPIKey)
+	provider := marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 	fmt.Printf("✅ Provider 創建成功: %s\n\n", provider.Name())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)

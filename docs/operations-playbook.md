@@ -390,6 +390,14 @@ The CI governance job runs strict mode by default:
 
 Use this strict mode after scenario design is calibrated for your replay window.
 
+The governance gate script now covers the full G1-G4 gate set:
+- **G1**: agent registry schema, prompt file contract, baseline policy validity
+- **G2**: replay determinism (hash compare across clean ledger directories)
+- **G3**: hard guard blocking (targeted test)
+- **G4**: trace chain and dashboard persistence (targeted tests)
+
+For the complete operations gate (G5 / M8: rollback drill, runbook, prometheus), use the separate verifier:
+
 ## Operations Gate (M8)
 
 Use the operations gate verifier for staging-safe production-readiness checks:

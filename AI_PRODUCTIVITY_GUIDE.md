@@ -777,7 +777,7 @@ go vet ./...                                    # Static analysis
 
 staticcheck ./...                               # Additional lint
 
-# Governance deep verification gates (G2/G3/G4 + M5 + M7)
+# Governance deep verification gates (G1/G2/G3/G4 + M5 + M7)
 ./scripts/openclaw/verify-governance-gates.sh
 
 # M5 parallel simulation verification (base/stress/shock + determinism)

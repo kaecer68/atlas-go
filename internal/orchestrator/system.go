@@ -28,6 +28,7 @@ type SystemCore struct {
 	provider         marketdata.Provider
 	engine           *sim.Engine
 	registry         domain.AgentRegistry
+	originalRegistry domain.AgentRegistry
 	policy           baseline.Policy
 	ledger           *ledger.Store
 	replay           *replay.Dataset
@@ -115,6 +116,7 @@ func NewSystem(cfg config.Config) *System {
 			provider:           selectProvider(cfg),
 			engine:             engine.WithContext(context.Background()),
 			registry:           registry,
+			originalRegistry:   registry,
 			policy:             policy,
 			ledger:             ledger.NewStore(cfg.LedgerDir),
 			replay:             ds,
@@ -184,7 +186,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 			if s.thresholdEngine != nil {
 				s.thresholdEngine.SetRiskAppetite(sim.RiskAppetite(selectedStrategy.RiskAppetite))
 			}
-			s.registry = s.filterAgentsByStrategy(s.registry, selectedStrategy)
+			s.registry = s.filterAgentsByStrategy(s.originalRegistry, selectedStrategy)
 		}
 	}
 
@@ -285,7 +287,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 			if s.thresholdEngine != nil {
 				s.thresholdEngine.SetRiskAppetite(sim.RiskAppetite(selectedStrategy.RiskAppetite))
 			}
-			s.registry = s.filterAgentsByStrategy(s.registry, selectedStrategy)
+			s.registry = s.filterAgentsByStrategy(s.originalRegistry, selectedStrategy)
 		}
 	}
 
@@ -351,9 +353,19 @@ func selectProvider(cfg config.Config) marketdata.Provider {
 	case "twse":
 		return marketdata.NewTWSEOpenAPIProvider()
 	case "hybrid", "":
-		return marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
+		finmindKey := cfg.FinMindAPIKey
+		if finmindKey == "" && cfg.FubonAPIKey != "" {
+			fmt.Println("[DEPRECATION] FUBON_API_KEY is deprecated for hybrid provider. Please migrate to FINMIND_API_KEY.")
+			finmindKey = cfg.FubonAPIKey
+		}
+		return marketdata.NewHybridProvider(finmindKey, cfg.FugleAPIKey)
 	default:
-		return marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
+		finmindKey := cfg.FinMindAPIKey
+		if finmindKey == "" && cfg.FubonAPIKey != "" {
+			fmt.Println("[DEPRECATION] FUBON_API_KEY is deprecated for hybrid provider. Please migrate to FINMIND_API_KEY.")
+			finmindKey = cfg.FubonAPIKey
+		}
+		return marketdata.NewHybridProvider(finmindKey, cfg.FugleAPIKey)
 	}
 }
 

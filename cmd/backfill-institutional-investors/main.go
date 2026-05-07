@@ -23,6 +23,13 @@ const (
 	pacingSeconds  = 6
 )
 
+func dataDir() string {
+	if d := os.Getenv("ATLAS_DATA_DIR"); d != "" {
+		return d
+	}
+	return filepath.Join(os.Getenv("HOME"), "workspace", "atlas", "data")
+}
+
 var (
 	symbolsArg = flag.String("symbols", "", "comma-separated stock IDs (or use fundamentals.json)")
 	date       = flag.String("date", "", "specific date (YYYY-MM-DD), default: yesterday")
@@ -41,7 +48,7 @@ type InstitutionalInvestorRow struct {
 func main() {
 	flag.Parse()
 
-	stateDir := filepath.Join(os.Getenv("HOME"), "workspace", "atlas", "data", "state")
+	stateDir := filepath.Join(dataDir(), "state")
 	os.MkdirAll(stateDir, 0755)
 
 	apiKey := os.Getenv("FINMIND_API_KEY")
@@ -60,7 +67,7 @@ func main() {
 
 	fmt.Printf("Backfill institutional investors for %d symbols on %s\n", len(symbols), targetDate)
 
-	outputPath := filepath.Join(os.Getenv("HOME"), "workspace", "atlas", "data", "replay", "institutional_investors.jsonl")
+	outputPath := filepath.Join(dataDir(), "replay", "institutional_investors.jsonl")
 	existing := loadExistingRecords(outputPath)
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -134,7 +141,7 @@ func loadSymbols(symbolsArg string) []string {
 		return strings.Split(symbolsArg, ",")
 	}
 
-	fundamentalsPath := filepath.Join(os.Getenv("HOME"), "workspace", "atlas", "data", "fundamentals.json")
+	fundamentalsPath := filepath.Join(dataDir(), "fundamentals.json")
 	data, err := os.ReadFile(fundamentalsPath)
 	if err != nil {
 		return nil
@@ -164,9 +171,12 @@ func loadExistingRecords(path string) map[string]struct{} {
 
 	br := io.LimitReader(f, 100<<20)
 	dec := json.NewDecoder(br)
-	for dec.More() {
+	for {
 		var rec map[string]interface{}
 		if err := dec.Decode(&rec); err != nil {
+			if err == io.EOF {
+				break
+			}
 			continue
 		}
 		date, _ := rec["date"].(string)
