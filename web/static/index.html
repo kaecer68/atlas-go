@@ -1630,14 +1630,33 @@ function escapeHtml(text) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
+const apiErrors = [];
+
+function showAPIErrorBanner() {
+  const existing = document.getElementById('apiErrorBanner');
+  if (existing) existing.remove();
+  if (apiErrors.length === 0) return;
+  const latest = apiErrors.slice(-5);
+  const banner = document.createElement('div');
+  banner.id = 'apiErrorBanner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#dc2626;color:#fff;padding:8px 16px;font-size:12px;line-height:1.5;cursor:pointer';
+  banner.title = '點擊關閉';
+  banner.innerHTML = `<strong>⚠️ ${apiErrors.length} API 錯誤</strong> ${latest.map(e => e.url.split('/').pop() + ': ' + e.msg).join(' | ')}`;
+  banner.onclick = () => { banner.remove(); apiErrors.length = 0; };
+  document.body.prepend(banner);
+}
+
 async function getJSON(url) {
   try {
     const r = await fetch(url);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return r.json();
   } catch (err) {
-    if (err.message && !err.message.includes('404')) {
-      notify(`載入失敗: ${url.split('/').pop()} - ${err.message}`, 'error');
+    const msg = err.message || String(err);
+    if (!msg.includes('404')) {
+      apiErrors.push({url, msg, time: new Date()});
+      showAPIErrorBanner();
+      notify(`載入失敗: ${url.split('/').pop()} - ${msg}`, 'error');
     }
     throw err;
   }
@@ -4473,7 +4492,7 @@ async function loadAll() {
   showSkeletons();
 
   try {
-    const [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal, regimeHistory, darwinianTrend] = await Promise.all([
+    const [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal, regimeHistory, darwinianTrend, dataIntegrity] = await Promise.all([
       getJSON('/api/dashboard/system-health').catch(() => null),
       getJSON('/api/dashboard/macro-radar').catch(() => null),
       getJSON('/api/dashboard/agent-observatory').catch(() => null),
@@ -4497,9 +4516,10 @@ async function loadAll() {
       getJSON('/api/narrative/seasonal').catch(() => null),
       getJSON('/api/dashboard/regime-history').catch(() => null),
       getJSON('/api/synergy/darwinian-trend').catch(() => null),
+      getJSON('/api/health/data-integrity').catch(() => null),
     ]);
 
-    const allNull = [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal, regimeHistory, darwinianTrend].every(v => v === null);
+    const allNull = [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal, regimeHistory, darwinianTrend, dataIntegrity].every(v => v === null);
     if (allNull) {
       consecutiveFailures++;
       if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
@@ -4510,6 +4530,13 @@ async function loadAll() {
       consecutiveFailures = 0;
       hideErrorBanner();
       updateRefreshPill('ok');
+    }
+
+    // Check data integrity
+    if (dataIntegrity && dataIntegrity.overall !== 'ok') {
+      const badge = dataIntegrity.overall === 'failing' ? '🔴' : '🟡';
+      const warnings = (dataIntegrity.warnings || []).join('; ');
+      notify(`${badge} 資料完整性: ${dataIntegrity.overall} — ${warnings || '請查看 /api/health/data-integrity'}`, 'warn');
     }
 
     if (sessions && sessions.sessions) {
