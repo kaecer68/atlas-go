@@ -19,7 +19,6 @@ import (
 	apiindustry "github.com/kaecer68/atlas-go/internal/monitoring/api/industry"
 	apilive "github.com/kaecer68/atlas-go/internal/monitoring/api/live"
 	apimacro "github.com/kaecer68/atlas-go/internal/monitoring/api/macro"
-	apimarketdata "github.com/kaecer68/atlas-go/internal/monitoring/api/marketdata"
 	apimetrics "github.com/kaecer68/atlas-go/internal/monitoring/api/metrics"
 	apinarrative "github.com/kaecer68/atlas-go/internal/monitoring/api/narrative"
 	apiparameters "github.com/kaecer68/atlas-go/internal/monitoring/api/parameters"
@@ -149,8 +148,8 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	riskHandlers := apirisk.NewHandlers(a.ledgerDir)
 	riskHandlers.RegisterRoutes(mux)
 
-	marketdataHandlers := apimarketdata.NewHandlers(a.workDir)
-	marketdataHandlers.RegisterRoutes(mux)
+	// TODO: marketdata API handlers — NewHandlers not yet implemented
+	// marketdataHandlers.RegisterRoutes(mux)
 
 	taxHandlers := apitax.NewHandlers()
 	taxHandlers.RegisterRoutes(mux)
