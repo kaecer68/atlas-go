@@ -2,10 +2,7 @@ package orchestrator
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"log"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -25,44 +22,70 @@ import (
 	"github.com/kaecer68/atlas-go/internal/screener"
 	"github.com/kaecer68/atlas-go/internal/sim"
 	"github.com/kaecer68/atlas-go/internal/strategy"
-	"github.com/kaecer68/atlas-go/internal/tax"
 )
 
-// SystemCore holds the essential simulation state and services.
-type SystemCore struct {
-	cfg              config.Config
-	provider         marketdata.Provider
-	engine           *sim.Engine
-	registry         domain.AgentRegistry
-	policy           baseline.Policy
-	ledger           *ledger.Store
-	replay           *replay.Dataset
-	session          domain.ReplaySession
-	alphaDiscovery   *AlphaDiscoveryEngine
-	optimizer        *portfolio.Optimizer
-	plugins          *PluginRegistry
-	narrativeEngine  *narrative.NarrativeEngine
-	persistentState  *domain.SimulationState
-	ctx              context.Context
+// SimulationCore holds the core simulation lifecycle state: config,
+// market data provider, simulation engine, registry, policy, ledger,
+// replay dataset, and session-scoped state.
+type SimulationCore struct {
+	cfg             config.Config
+	provider        marketdata.Provider
+	engine          *sim.Engine
+	registry        domain.AgentRegistry
+	policy          baseline.Policy
+	ledger          *ledger.Store
+	replay          *replay.Dataset
+	session         domain.ReplaySession
+	persistentState *domain.SimulationState
+	ctx             context.Context
+
+	// Session-local outcome tracking
 	lastOutcomes     []domain.RecommendationOutcome
 	portfolioHistory []float64
 	returnHistory    []float64
-	darwinian        *portfolio.DarwinianWeightManager
+}
 
+// PortfolioManager holds portfolio-level components: alpha discovery,
+// darwinian weights, optimizer, capital allocation, and factor weighting.
+type PortfolioManager struct {
+	alphaDiscovery     *AlphaDiscoveryEngine
+	optimizer          portfolio.OptimizerInterface
+	darwinian          portfolio.DarwinianWeightManagerInterface
+	capitalAllocator   *portfolio.CapitalAllocator
+	factorWeightEngine *portfolio.FactorWeightEngine
+}
+
+// StrategyLayer holds strategy registry, selector, comparison engine,
+// and dynamic threshold engine.
+type StrategyLayer struct {
+	strategyRegistry *strategy.Registry
+	strategySelector *strategy.Selector
+	comparisonEngine *strategy.ComparisonEngine
+	thresholdEngine  *sim.DynamicThresholdEngine
+}
+
+// RiskOps holds risk management, capital control, approval workflow,
+// metrics, event bus, and outcome repository.
+type RiskOps struct {
 	capitalController *risk.CapitalPhaseController
-	capitalAllocator  *portfolio.CapitalAllocator
 	approvalWorkflow  *risk.ApprovalWorkflow
 	metricsCollector  interface{ RecordScreening(passed, rejected int64) }
 	eventBus          *eventbus.ChannelEventBus
 	clampingLogger    *clampingLogger
+	repo              repository.OutcomeRepository
+}
 
-	strategyRegistry   *strategy.Registry
-	strategySelector   *strategy.Selector
-	comparisonEngine   *strategy.ComparisonEngine
-	factorWeightEngine *portfolio.FactorWeightEngine
-	thresholdEngine    *sim.DynamicThresholdEngine
+// SystemCore holds the essential simulation state and services.
+// Embedded structs provide logical grouping while preserving
+// backward-compatible field access (e.g. s.engine, s.darwinian).
+type SystemCore struct {
+	SimulationCore
+	PortfolioManager
+	StrategyLayer
+	RiskOps
 
-	repo repository.OutcomeRepository
+	plugins         *PluginRegistry
+	narrativeEngine *narrative.NarrativeEngine
 }
 
 // CoreServices interface implementation for SystemCore
@@ -131,7 +154,6 @@ func NewSystem(cfg config.Config) *System {
 	engine := sim.NewEngine(policy.Constraints).
 		WithOptimizer(optimizer).
 		WithThresholdEngine(thresholdEngine).
-		WithTaxCalculator(tax.NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig())).
 		WithReflexivityRules(
 			reflexivity.PriceToFundamentalsRule{},
 			reflexivity.PnLBehaviorRule{},
@@ -141,27 +163,35 @@ func NewSystem(cfg config.Config) *System {
 		)
 	return &System{
 		SystemCore: &SystemCore{
-			cfg:                cfg,
-			provider:           selectProvider(cfg),
-			engine:             engine.WithContext(context.Background()),
-			registry:           registry,
-			policy:             policy,
-			ledger:             ledger.NewStore(cfg.LedgerDir),
-			replay:             ds,
-			session:            session,
-			optimizer:          optimizer,
-			plugins:            plugins,
-			alphaDiscovery:     NewAlphaDiscoveryEngine(factorEngine),
-			narrativeEngine:    narrative.NewNarrativeEngine(),
-			ctx:                context.Background(),
-			darwinian:          darwinian,
-			eventBus:           eventBus,
-			clampingLogger:     newClampingLogger(filepath.Join(cfg.LedgerDir, "clamping_events.jsonl")),
-			strategyRegistry:   strategyRegistry,
-			strategySelector:   strategySelector,
-			comparisonEngine:   comparisonEngine,
-			factorWeightEngine: factorWeightEngine,
-			thresholdEngine:    thresholdEngine,
+			SimulationCore: SimulationCore{
+				cfg:      cfg,
+				provider: selectProvider(cfg),
+				engine:   engine.WithContext(context.Background()),
+				registry: registry,
+				policy:   policy,
+				ledger:   ledger.NewStore(cfg.LedgerDir),
+				replay:   ds,
+				session:  session,
+				ctx:      context.Background(),
+			},
+			PortfolioManager: PortfolioManager{
+				optimizer:          optimizer,
+				alphaDiscovery:     NewAlphaDiscoveryEngine(factorEngine),
+				darwinian:          darwinian,
+				factorWeightEngine: factorWeightEngine,
+			},
+			StrategyLayer: StrategyLayer{
+				strategyRegistry: strategyRegistry,
+				strategySelector: strategySelector,
+				comparisonEngine: comparisonEngine,
+				thresholdEngine:  thresholdEngine,
+			},
+			RiskOps: RiskOps{
+				eventBus:       eventBus,
+				clampingLogger: newClampingLogger(filepath.Join(cfg.LedgerDir, "clamping_events.jsonl")),
+			},
+			plugins:         plugins,
+			narrativeEngine: narrative.NewNarrativeEngine(),
 		},
 	}
 }
@@ -174,7 +204,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	symbols := RegistrySymbols(s.registry)
 	quotes, err := s.provider.GetQuotes(s.ctx, asOf, symbols)
 	if err != nil {
-		return domain.SimulationResult{}, err
+		return domain.SimulationResult{}, fmt.Errorf("get quotes: %w", err)
 	}
 
 	events := s.detectNarrativeEvents(quotes)
@@ -440,9 +470,9 @@ func selectProvider(cfg config.Config) marketdata.Provider {
 		// 纯 TWSE 模式（免费，rate limited）
 		return marketdata.NewTWSEOpenAPIProvider()
 	case "hybrid", "":
-		return marketdata.NewHybridProvider(marketdata.NewTWSEClient(), cfg.FinMindAPIKey, cfg.FubonAPIKey, cfg.FugleAPIKey)
+		return marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 	default:
-		return marketdata.NewHybridProvider(marketdata.NewTWSEClient(), cfg.FinMindAPIKey, cfg.FubonAPIKey, cfg.FugleAPIKey)
+		return marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 	}
 }
 
@@ -649,7 +679,7 @@ func (s *System) applyAlphaDiscovery(quotes []domain.Quote, recs []domain.Recomm
 func (s *System) NextExperimentCandidate() (*evolution.Candidate, error) {
 	outcomes, err := s.ledger.LoadOutcomes()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load outcomes: %w", err)
 	}
 	scorecards := ledger.BuildScorecards(outcomes)
 	candidate := evolution.SelectWeakestAgent(s.registry, scorecards)
@@ -691,9 +721,6 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 		},
 		GuardOutcomes: append([]domain.GuardOutcome(nil), result.GuardOutcomes...),
 		RecordedAt:    time.Now(),
-		TaxSnapshots:  append([]domain.TaxSnapshot(nil), result.TaxSnapshots...),
-		AfterTaxPnL:   result.AfterTaxPnL,
-		TotalTaxPaid:  result.TotalTaxPaid,
 	}
 	if candidate != nil {
 		summary.NextExperimentAgentID = candidate.Agent.ID
@@ -706,29 +733,9 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 	}
 
 	if err := s.ledger.RecordSessionSummary(s.session, summary); err != nil {
-		return err
+		return fmt.Errorf("record session summary: %w", err)
 	}
-
-	// Save per-session position snapshot for portfolio page
-	s.saveSessionPositions(s.session.ID, result.Positions)
 	return nil
-}
-
-func (s *System) saveSessionPositions(sessionID string, positions []domain.Position) {
-	if len(positions) == 0 {
-		return
-	}
-	sessionDir := filepath.Join(s.cfg.LedgerDir, "sessions", sessionID)
-	_ = os.MkdirAll(sessionDir, 0o755)
-	path := filepath.Join(sessionDir, "positions.json")
-	bytes, err := json.MarshalIndent(positions, "", "  ")
-	if err != nil {
-		log.Printf("[System] warn: failed to marshal positions for %s: %v", sessionID, err)
-		return
-	}
-	if err := os.WriteFile(path, bytes, 0o644); err != nil {
-		log.Printf("[System] warn: failed to write positions for %s: %v", sessionID, err)
-	}
 }
 
 func quoteBySymbolMap(quotes []domain.Quote) map[string]domain.Quote {
@@ -924,7 +931,7 @@ func (s *System) checkCapitalPhase() (bool, string) {
 				"criteria met for transition from live to full capital",
 			)
 			if err != nil {
-				return false, fmt.Errorf("request approval: %w", err).Error()
+				return false, fmt.Sprintf("request approval: %s", err)
 			}
 			return false, "approval requested for live→full transition"
 		}
