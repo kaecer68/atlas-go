@@ -1,7 +1,7 @@
 {
   "contract_version": 1,
   "proposal_id": "default-semiconductor-tightening",
-  "window_id": "window-20260326-20260327",
+  "window_id": "window-20260101-20260424",
   "target_agent_id": "semi-desk-01",
   "target_skill": "semiconductor_desk",
   "target_layer": "sector",
@@ -30,5 +30,5 @@
     "Keep institutional-participation logic explicit.",
     "Preserve bounded exploratory coverage."
   ],
-  "recommended_window": "window-20260326-20260327"
+  "recommended_window": "window-20260101-20260424"
 }

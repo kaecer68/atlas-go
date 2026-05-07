@@ -26,16 +26,13 @@ func run(args []string) error {
 	}
 
 	cfg := config.Load()
-	if cfg.ReplayDataPath == "samples/replay/twse_stock_day_all_sample.csv" {
-		cfg.ReplayDataPath = "data/replay/tw_extended_90days.csv"
-	}
 	if _, err := baseline.Load(cfg.BaselinePolicyPath); err != nil {
 		return fmt.Errorf("load baseline policy: %w", err)
 	}
 	executor := experiment.NewExecutor(ledger.NewStore(cfg.LedgerDir), cfg.BaselinePolicyPath)
 	result, err := executor.Run(*brief, cfg.ReplayDataPath)
 	if err != nil {
-		return fmt.Errorf("execute experiment: %w", err)
+		return fmt.Errorf("run experiment: %w", err)
 	}
 
 	fmt.Printf("experiment: %s\n", result.Experiment.ID)

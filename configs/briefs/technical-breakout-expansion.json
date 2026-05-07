@@ -1,7 +1,7 @@
 {
   "contract_version": 1,
   "proposal_id": "default-technical-breakout-expansion",
-  "window_id": "window-20260326-20260327",
+  "window_id": "window-20260101-20260424",
   "target_agent_id": "ai-desk-01",
   "target_skill": "ai_supply_chain_desk",
   "target_layer": "sector",
@@ -31,5 +31,5 @@
     "Maintain strict rejection for setups without structural support.",
     "Preserve differentiation between durable order flow and hype."
   ],
-  "recommended_window": "window-20260326-20260327"
+  "recommended_window": "window-20260101-20260424"
 }
