@@ -1,5 +1,7 @@
 package domain
 
+import "time"
+
 // ScreeningCriteria defines declarative thresholds for stock screening.
 // When a field is nil or absent, that filter is skipped (pass-through).
 type ScreeningCriteria struct {
@@ -16,11 +18,6 @@ type ScreeningCriteria struct {
 	// Composite filters
 	MinTotalFactorScore *float64 `json:"min_total_factor_score,omitempty"`
 	RequiredFactors     []string `json:"required_factors,omitempty"`
-
-	MinLiquidityScore     *float64 `json:"min_liquidity_score,omitempty"`
-	MaxSpreadEstimate     *float64 `json:"max_spread_estimate,omitempty"`
-	MaxRealizedVolatility *float64 `json:"max_realized_volatility,omitempty"`
-	ExcludeAbnormalVolume *bool    `json:"exclude_abnormal_volume,omitempty"`
 }
 
 // RangeFilter defines an inclusive numeric range [Min, Max].
@@ -44,9 +41,19 @@ func (sc ScreeningCriteria) HasFilters() bool {
 		sc.Volatility20Day != nil ||
 		sc.VolumeIntraday != nil ||
 		sc.MinTotalFactorScore != nil ||
-		len(sc.RequiredFactors) > 0 ||
-		sc.MinLiquidityScore != nil ||
-		sc.MaxSpreadEstimate != nil ||
-		sc.MaxRealizedVolatility != nil ||
-		sc.ExcludeAbnormalVolume != nil
+		len(sc.RequiredFactors) > 0
+}
+
+// ScreeningReject records a single symbol-agent screening failure for audit.
+type ScreeningReject struct {
+	SessionID      string       `json:"session_id"`
+	Symbol         string       `json:"symbol"`
+	AgentID        string       `json:"agent_id"`
+	Skill          string       `json:"skill"`
+	Criterion      string       `json:"criterion"`
+	CriterionLabel string       `json:"criterion_label"`
+	Threshold      string       `json:"threshold"`
+	ActualValue    string       `json:"actual_value"`
+	FactorScores   FactorScores `json:"factor_scores,omitempty"`
+	RecordedAt     time.Time    `json:"recorded_at"`
 }
