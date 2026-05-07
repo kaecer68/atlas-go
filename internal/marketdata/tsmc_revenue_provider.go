@@ -88,7 +88,7 @@ func (t *TSMCRevenueProvider) fetchMonth(ctx context.Context, yearMonth string) 
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return TSMCRevenue{}, err
+		return TSMCRevenue{}, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	req.Header.Set("Accept", "application/json")
@@ -148,13 +148,13 @@ type monthlyRevenueRecord struct {
 
 func (t *TSMCRevenueProvider) saveRevenue(rev TSMCRevenue) error {
 	if err := os.MkdirAll(t.storageDir, 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir: %w", err)
 	}
 	safeDate := strings.ReplaceAll(rev.Date, "/", "")
 	path := filepath.Join(t.storageDir, safeDate+"_revenue.json")
 	out, err := json.MarshalIndent(rev, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal revenue: %w", err)
 	}
 	return os.WriteFile(path, out, 0o644)
 }

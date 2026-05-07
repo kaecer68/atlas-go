@@ -44,7 +44,7 @@ func (t *TWSEBalanceProvider) Name() string {
 func (t *TWSEBalanceProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
 	bal, err := t.fetchLatestTradingDay(ctx)
 	if err != nil {
-		return MacroDataSnapshot{}, err
+		return MacroDataSnapshot{}, fmt.Errorf("fetch margin balance: %w", err)
 	}
 
 	if err := t.saveBalance(bal); err != nil {
@@ -82,7 +82,7 @@ func (t *TWSEBalanceProvider) fetchDate(ctx context.Context, dateStr string) (TW
 	url := "https://openapi.twse.com.tw/v1/exchangeReport/MI_MARGN"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return TWSEBalance{}, err
+		return TWSEBalance{}, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	req.Header.Set("Accept", "application/json")
@@ -152,12 +152,12 @@ type marginRecord struct {
 
 func (t *TWSEBalanceProvider) saveBalance(bal TWSEBalance) error {
 	if err := os.MkdirAll(t.storageDir, 0o755); err != nil {
-		return err
+		return fmt.Errorf("mkdir: %w", err)
 	}
 	path := filepath.Join(t.storageDir, bal.Date+"_margin.json")
 	data, err := json.MarshalIndent(bal, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal balance: %w", err)
 	}
 	return os.WriteFile(path, data, 0o644)
 }

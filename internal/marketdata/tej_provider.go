@@ -73,7 +73,7 @@ func (c *TEJClient) Ping(ctx context.Context) error {
 	}
 	rows, err := c.GetStockPriceDaily(ctx, "2330", "2024-01-02", "2024-01-02")
 	if err != nil {
-		return err
+		return fmt.Errorf("ping stock price: %w", err)
 	}
 	if len(rows) == 0 {
 		return fmt.Errorf("TEJ returned no data for test query")
