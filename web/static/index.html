@@ -614,7 +614,11 @@ body { display: flex; margin: 0; min-height: 100vh; }
 .empty-state-guidance .desc { font-size: 12px; margin-bottom: 12px; }
 .empty-state-guidance .action { font-size: 11px; color: var(--accent); }
 
-</style>
+    .view-btn { padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--panel);color:var(--text);font-size:12px;cursor:pointer;transition:all 0.15s }
+    .view-btn.active { background:var(--accent);color:var(--bg);border-color:var(--accent) }
+    .cat-tab { padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--panel);color:var(--muted);font-size:11px;cursor:pointer }
+    .cat-tab.active { background:var(--accent-secondary);color:#fff;border-color:var(--accent-secondary) }
+  </style>
 </head>
 <body>
 
@@ -642,6 +646,9 @@ body { display: flex; margin: 0; min-height: 100vh; }
     <a data-page="datachannels" onclick="switchPage('datachannels')" tabindex="0" title="信息通道">📡 信息通道</a>
     <a data-page="alerts" onclick="switchPage('alerts')" tabindex="0" title="系統警報">🚨 系統警報</a>
     <a data-page="metrics" onclick="switchPage('metrics')" tabindex="0" title="指標監控">📉 指標監控</a>
+    <a data-page="parameters" onclick="switchPage('parameters')" tabindex="0" title="參數管理">🎛️ 參數管理</a>
+    <a data-page="synergy" onclick="switchPage('synergy')" tabindex="0" title="人機協同">🤝 人機協同</a>
+    <a data-page="evolution" onclick="switchPage('evolution')" tabindex="0" title="演化透視">🧬 演化透視</a>
   </nav>
   <div class="foot">
     <span class="text-muted">v8 · 統一介面</span>
@@ -885,10 +892,22 @@ body { display: flex; margin: 0; min-height: 100vh; }
               <select id="revertSelect"><option value="">-- 選擇要回滾的版本 --</option></select>
               <input id="revertReason" type="text" placeholder="原因" class="input-w-md">
               <button class="danger" onclick="revertExperiment()">回滾</button>
-            </div>
-          </div>
+       </div>
+    </div>
+    <div class="page" id="page-evolution">
+      <div class="panel wide" style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap" id="evolutionViews">
+          <span style="font-size:13px;font-weight:700">视图：</span>
+          <button class="view-btn active" id="evView-compact" onclick="window._evSwitch('compact')">总览仪表板</button>
+          <button class="view-btn" id="evView-detailed" onclick="window._evSwitch('detailed')">详细分析</button>
+          <button class="view-btn" id="evView-categorical" onclick="window._evSwitch('categorical')">分类视图</button>
         </div>
       </div>
+      <div id="evolutionContent" class="empty loading">载入中…</div>
+      <div id="evolutionCatContent" style="display:none;margin-top:12px"></div>
+    </div>
+  </div>
+</div>
       <div class="panel wide"><h2>人工干預紀錄</h2><div id="auditLog" class="empty loading">載入中…</div></div>
     </div>
     <!-- 信息通道 -->
@@ -939,6 +958,23 @@ body { display: flex; margin: 0; min-height: 100vh; }
       </div>
     </div>
 
+    <!-- 人機協同 -->
+    <div class="page" id="page-synergy">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        本頁顯示 AI Agent 的 Darwinian 權重（權重越大代表影響力越高），以及新實驗的候選者。
+        如果某個 Agent 表現持續優異，權重會逐漸上升（最高 2.5）；表現不佳則會下降（最低 0.3）。
+      </details>
+      <div class="panel wide mb-md">
+        <h2>Darwinian 權重排行</h2>
+        <div id="synergyLeaderboard" class="empty loading">載入中…</div>
+      </div>
+      <div class="panel wide">
+        <h2>實驗收件匣（新候選者）</h2>
+        <div class="inbox-grid" id="synergyInbox" class="empty loading">載入中…</div>
+      </div>
+    </div>
+
+    <!-- 指標監控 -->
     <div class="page" id="page-metrics">
       <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
         本頁呈現 Atlas 系統的<strong>即時運行指標</strong>，包含篩選率、警報觸發率、資金階段等關鍵數據。
@@ -967,6 +1003,17 @@ body { display: flex; margin: 0; min-height: 100vh; }
       <div class="panel wide">
         <h2>指標趨勢</h2>
         <div id="metricsTrend" class="empty">載入中…</div>
+      </div>
+    </div>
+
+    <div class="page" id="page-parameters">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        參數配置為唯讀檢視。修改請使用 CLI 或 API。
+      </details>
+      <div id="parametersContent" class="empty loading">載入中…</div>
+      <div class="panel wide mt-md">
+        <h2>變更紀錄 (Audit Log)</h2>
+        <div id="parametersAuditLog" class="empty loading">載入中…</div>
       </div>
     </div>
   </div>

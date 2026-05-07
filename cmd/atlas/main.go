@@ -39,6 +39,31 @@ type routeRegistrar interface {
 	RegisterLiveRoutes(mux *http.ServeMux)
 }
 
+// registerCommonDashboardRoutes registers the shared set of dashboard API routes
+// that are common between apiMode and liveMode. Backtest routes are only registered
+// in apiMode, and swagger routes are conditional on the swaggerMode flag.
+func registerCommonDashboardRoutes(
+	dashboard routeRegistrar,
+	mux *http.ServeMux,
+	swaggerMode bool,
+	includeBacktest bool,
+) {
+	dashboard.RegisterNarrativeRoutes(mux)
+	dashboard.RegisterControlRoutes(mux)
+	dashboard.RegisterMacroRoutes(mux)
+	dashboard.RegisterExperimentRoutes(mux)
+	if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+		if includeBacktest {
+			d.RegisterBacktestRoutes(mux)
+		}
+		if swaggerMode {
+			d.RegisterSwaggerRoutes(mux)
+		}
+		d.RegisterIndustryRoutes(mux)
+		d.RegisterLiveRoutes(mux)
+	}
+}
+
 type appDeps struct {
 	loadConfig      func() config.Config
 	newDashboardAPI func(string, string, *monitoring.MetricsCollector) routeRegistrar
@@ -220,19 +245,8 @@ func run(args []string, deps appDeps) error {
 				}
 			}()
 		}
-		dashboard.RegisterNarrativeRoutes(mux)
-		dashboard.RegisterControlRoutes(mux)
-		dashboard.RegisterMacroRoutes(mux)
-		dashboard.RegisterExperimentRoutes(mux)
-		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-			d.RegisterPhase3Routes(mux)
-			d.RegisterBacktestRoutes(mux)
-			d.RegisterIndustryRoutes(mux)
-			d.RegisterLiveRoutes(mux)
-		}
-		if *swaggerMode {
-			dashboard.RegisterSwaggerRoutes(mux)
-		}
+		registerCommonDashboardRoutes(dashboard, mux, *swaggerMode, true)
+
 		mux.Handle("/", http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static"))))
 		log.Printf("dashboard api listening on %s", *apiAddr)
 		bootstrap.StartChannelHealthSyncLoop(sysCtx, cfg.WorkDir, pool)
@@ -411,16 +425,8 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		alertAPI.RegisterRoutes(mux)
 		monitor.SetAlertStore(alertStore)
 	}
-	dashboard.RegisterNarrativeRoutes(mux)
-	dashboard.RegisterControlRoutes(mux)
-	dashboard.RegisterMacroRoutes(mux)
-	dashboard.RegisterExperimentRoutes(mux)
-	if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-		d.RegisterSwaggerRoutes(mux)
-		d.RegisterPhase3Routes(mux)
-		d.RegisterLiveRoutes(mux)
-		d.RegisterIndustryRoutes(mux)
-	}
+	registerCommonDashboardRoutes(dashboard, mux, true, false)
+
 	mux.Handle("/", http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static"))))
 	apiAddr := ":8080"
 	srv := &http.Server{Addr: apiAddr, Handler: mux}

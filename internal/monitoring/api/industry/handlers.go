@@ -23,17 +23,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/industry-overview", h.HandleIndustryOverview)
 	mux.HandleFunc("/api/dashboard/industry-shock-simulation", h.HandleShockSimulation)
 	mux.HandleFunc("/api/dashboard/industry-graph", h.HandleIndustryGraph)
-
-	mux.HandleFunc("/api/industry/classification", h.HandleIndustryClassification)
-	mux.HandleFunc("/api/industry/seasonality", h.HandleIndustrySeasonality)
-	mux.HandleFunc("/api/industry/seasonality/calendar", h.HandleIndustrySeasonalityCalendar)
-	mux.HandleFunc("/api/industry/cycle", h.HandleIndustryCycle)
-	mux.HandleFunc("/api/industry/linkage", h.HandleIndustryLinkage)
-	mux.HandleFunc("/api/industry/risk", h.HandleIndustryRisk)
-	mux.HandleFunc("/api/industry/overview", h.HandleIndustryOverview)
-	mux.HandleFunc("/api/industry/detail", h.HandleIndustryDetail)
-	mux.HandleFunc("/api/industry/shock-simulation", h.HandleShockSimulation)
-	mux.HandleFunc("/api/industry/graph", h.HandleIndustryGraph)
+	mux.HandleFunc("/api/dashboard/industry-detail", h.HandleIndustryDetail)
 }
 
 func (h *Handlers) HandleIndustryClassification(w http.ResponseWriter, r *http.Request) {

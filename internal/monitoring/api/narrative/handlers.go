@@ -11,7 +11,8 @@ import (
 )
 
 type Handlers struct {
-	Svc *service.NarrativeService
+	Svc             *service.NarrativeService
+	IndustryService *service.IndustryService
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
@@ -100,10 +101,21 @@ func (h *Handlers) HandleSeasonalAnalysis(w http.ResponseWriter, r *http.Request
 	}
 
 	now := time.Now()
-	month := now.Month()
 
+	if h.IndustryService != nil {
+		active, historical, adjustment := h.IndustryService.GetSeasonalPatterns("", now)
+		shared.WriteJSON(w, http.StatusOK, map[string]interface{}{
+			"month":               now.Month().String(),
+			"active_patterns":     active,
+			"all_patterns":        historical,
+			"combined_adjustment": adjustment,
+		})
+		return
+	}
+
+	// Fallback stub behavior
 	shared.WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"month": month.String(),
+		"month": now.Month().String(),
 		"note":  "seasonal patterns are embedded in narrative engine",
 	})
 }

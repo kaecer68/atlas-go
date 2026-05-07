@@ -20,7 +20,8 @@ export function switchPage(id) {
     pipeline: '投資管線', decision: '決策鏈', agents: 'AI 觀測台',
     experiments: '模擬交易', reports: '最新回測', controls: '控制與稽核',
     datachannels: '信息通道', synergy: '人機協同', alerts: '系統警報',
-    metrics: '指標監控', industry: '產業生態系', portfolio: '組合持倉', parameters: '參數管理'
+    metrics: '指標監控', industry: '產業生態系', portfolio: '組合持倉', parameters: '參數管理',
+    evolution: '演化透視'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
@@ -97,9 +98,12 @@ async function loadModules() {
     import('./pages/metrics.js?v=' + APP_VERSION),
     import('./pages/industry.js?v=' + APP_VERSION),
     import('./pages/datachannels.js?v=' + APP_VERSION),
+    import('./pages/parameters.js?v=' + APP_VERSION),
+    import('./pages/synergy.js?v=' + APP_VERSION),
+    import('./pages/evolution.js?v=' + APP_VERSION),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels'];
+  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'synergy', 'evolution'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -120,7 +124,7 @@ async function loadAll() {
       getJSON('/api/dashboard/agent-observatory').catch(function() { return null; }),
       getJSON('/api/dashboard/recommendation-pipeline').catch(function() { return null; }),
       getJSON('/api/dashboard/live-status').catch(function() { return null; }),
-      getJSON('/api/dashboard/risk').catch(function() { return null; }),
+      getJSON('/api/dashboard/risk-exposure').catch(function() { return null; }),
       getJSON('/api/dashboard/experiment-inbox').catch(function() { return null; }),
       getJSON('/api/dashboard/universe-overlap').catch(function() { return null; }),
       getJSON('/api/taiwan/stress-index').catch(function() { return null; }),
@@ -140,14 +144,15 @@ async function loadAll() {
       getJSON('/api/dashboard/regime-history').catch(function() { return null; }),
       getJSON('/api/synergy/darwinian-trend').catch(function() { return null; }),
       getJSON('/api/health/data-integrity').catch(function() { return null; }),
+      getJSON('/api/synergy/darwinian-status').catch(function() { return null; }),
     ]);
 
     var health = results[0], macro = results[1], agents = results[2], pipeline = results[3], live = results[4],
-        risk = results[5], inbox = results[6], overlap = results[7], stress = results[8], events = results[9], chains = results[10],
+        riskExposure = results[5], inbox = results[6], overlap = results[7], stress = results[8], events = results[9], chains = results[10],
         models = results[11], templates = results[12], snapshot = results[13], dataChannels = results[14],
         sessions = results[15], phase3 = results[16], alerts = results[17], retailSentiment = results[18],
         capitalPhase = results[19], taxSnapshot = results[20], seasonal = results[21], regimeHistory = results[22],
-        darwinianTrend = results[23], dataIntegrity = results[24];
+        darwinianTrend = results[23], dataIntegrity = results[24], darwinianStatus = results[25];
 
     var allNull = [health, macro, agents, pipeline, live, inbox, overlap].every(function(v) { return v === null; });
     if (allNull) {
@@ -175,7 +180,7 @@ async function loadAll() {
     if (m.narr.renderNarrativePage) m.narr.renderNarrativePage(snapshot, stress, events, chains, models, templates, retailSentiment, seasonal);
 
     if (m.risk.renderLiveStatus) m.risk.renderLiveStatus(live);
-    if (m.risk.renderRiskCards) m.risk.renderRiskCards(risk, pipeline);
+    if (m.risk.renderRiskCards) m.risk.renderRiskCards(riskExposure, pipeline, capitalPhase);
 
     if (m.inbox.renderInbox) m.inbox.renderInbox(inbox);
     if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dataChannels);
@@ -188,6 +193,7 @@ async function loadAll() {
     if (m.experiments.loadOverrides) m.experiments.loadOverrides();
     if (m.experiments.loadAuditLog) m.experiments.loadAuditLog();
     if (m.experiments.loadExperimentHistory) m.experiments.loadExperimentHistory();
+    if (m.synergy.renderSynergyPage) m.synergy.renderSynergyPage(darwinianStatus, darwinianTrend, inbox);
 
   } catch (e) {
     console.error(e);
@@ -273,7 +279,14 @@ async function loadPageData(pageId) {
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'synergy') {
-    try { console.log('Synergy page: data pending'); } catch(e) { console.error(e); }
+    try {
+      var s = await Promise.all([
+        getJSON('/api/synergy/darwinian-status').catch(function() { return null; }),
+        getJSON('/api/synergy/darwinian-trend').catch(function() { return null; }),
+        getJSON('/api/dashboard/experiment-inbox').catch(function() { return null; })
+      ]);
+      if (m.synergy && m.synergy.renderSynergyPage) m.synergy.renderSynergyPage(s[0], s[1], s[2]);
+    } catch(e) { console.error(e); }
   }
   else if (pageId === 'alerts') {
     try { if (m.alerts.loadAlerts) m.alerts.loadAlerts(); } catch(e) { console.error(e); }
@@ -289,15 +302,16 @@ async function loadPageData(pageId) {
       var liveResults = await Promise.all([
         getJSON('/api/dashboard/live-status').catch(function() { return null; }),
         getJSON('/api/dashboard/recommendation-pipeline').catch(function() { return null; }),
-        getJSON('/api/dashboard/risk').catch(function() { return null; }),
+        getJSON('/api/dashboard/risk-exposure').catch(function() { return null; }),
         getJSON('/api/dashboard/macro-radar').catch(function() { return null; }),
         getJSON('/api/narrative/events').catch(function() { return null; }),
         getJSON('/api/taiwan/stress-index').catch(function() { return null; }),
         getJSON('/api/narrative/chains').catch(function() { return null; }),
         getJSON('/api/narrative/models').catch(function() { return null; }),
+        getJSON('/api/dashboard/capital-phase').catch(function() { return null; }),
       ]);
       if (m.risk.renderLiveStatus) m.risk.renderLiveStatus(liveResults[0]);
-      if (m.risk.renderRiskCards) m.risk.renderRiskCards(liveResults[2], liveResults[1]);
+      if (m.risk.renderRiskCards) m.risk.renderRiskCards(liveResults[2], liveResults[1], liveResults[8]);
       if (m.dash.renderMacroRadar) m.dash.renderMacroRadar(liveResults[3], liveResults[1]);
       if (m.narr.renderLiveNarrativeStrip) m.narr.renderLiveNarrativeStrip(liveResults[4], liveResults[5], liveResults[7], liveResults[6]);
     } catch(e) { console.error(e); }
@@ -306,6 +320,25 @@ async function loadPageData(pageId) {
     try {
       var portfolioModule = await import('./pages/portfolio.js?v=' + APP_VERSION).catch(function() { return null; });
       if (portfolioModule) portfolioModule.loadPortfolioPage(getJSON, window.agentNameEsm || function(id) { return id; });
+    } catch(e) { console.error(e); }
+  }
+  else if (pageId === 'parameters') {
+    try {
+      var pData = await Promise.all([
+        getJSON('/api/parameters').catch(function() { return null; }),
+        getJSON('/api/parameters/categories').catch(function() { return null; }),
+        getJSON('/api/parameters/audit-log').catch(function() { return null; })
+      ]);
+      if (m.parameters && m.parameters.renderParametersPage) {
+        m.parameters.renderParametersPage(pData[0], pData[1], pData[2]);
+      }
+    } catch(e) { console.error(e); }
+  }
+  else if (pageId === 'evolution') {
+    try {
+      if (m.evolution && m.evolution.loadEvolutionData) {
+        m.evolution.loadEvolutionData();
+      }
     } catch(e) { console.error(e); }
   }
 }

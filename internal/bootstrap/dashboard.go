@@ -35,7 +35,6 @@ func RegisterDashboardRoutes(mux *http.ServeMux, dashboard *monitoring.Dashboard
 	dashboard.RegisterMacroRoutes(mux)
 	dashboard.RegisterExperimentRoutes(mux)
 
-	dashboard.RegisterPhase3Routes(mux)
 	dashboard.RegisterBacktestRoutes(mux)
 	dashboard.RegisterIndustryRoutes(mux)
 	if includeLive {

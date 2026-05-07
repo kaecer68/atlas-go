@@ -1,9 +1,11 @@
 package monitoring
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -23,6 +25,7 @@ import (
 	apipipeline "github.com/kaecer68/atlas-go/internal/monitoring/api/pipeline"
 	apireport "github.com/kaecer68/atlas-go/internal/monitoring/api/report"
 	apirisk "github.com/kaecer68/atlas-go/internal/monitoring/api/risk"
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	apiswagger "github.com/kaecer68/atlas-go/internal/monitoring/api/swagger"
 	apisystem "github.com/kaecer68/atlas-go/internal/monitoring/api/system"
 	apitaskexec "github.com/kaecer68/atlas-go/internal/monitoring/api/taskexec"
@@ -138,18 +141,34 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	handlers := &apihealth.Handlers{}
 	handlers.RegisterRoutes(mux)
 
+	mux.HandleFunc("/api/health/data-integrity", apihealth.HandleDataIntegrity(a.workDir, a.ledgerDir))
 
 	riskHandlers := apirisk.NewHandlers(a.ledgerDir)
 	riskHandlers.RegisterRoutes(mux)
 
-	// TODO: marketdata API handlers — NewHandlers not yet implemented
-	// marketdataHandlers.RegisterRoutes(mux)
-
-	taxHandlers := apitax.NewHandlers()
+	taxHandlers := apitax.NewHandlers(a.ledgerDir)
 	taxHandlers.RegisterRoutes(mux)
 
 	paramHandlers := apiparameters.NewHandlers(filepath.Join(a.workDir, "configs/parameters.json"))
 	paramHandlers.RegisterRoutes(mux)
+
+	// Data channels endpoint — reuses system health's data_channel building logic.
+	mux.HandleFunc("/api/dashboard/data-channels", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		health, err := systemSvc.LoadSystemHealth()
+		if err != nil {
+			shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load system health: %v", err))
+			return
+		}
+		shared.WriteJSON(w, http.StatusOK, map[string]any{
+			"channels":  health.DataChannels,
+			"alerts":    []any{},
+			"generated": time.Now().Format(time.RFC3339),
+		})
+	})
 }
 
 func (a *DashboardAPI) RegisterIndustryRoutes(mux *http.ServeMux) {
@@ -167,7 +186,8 @@ func (a *DashboardAPI) RegisterSwaggerRoutes(mux *http.ServeMux) {
 func (a *DashboardAPI) RegisterNarrativeRoutes(mux *http.ServeMux) {
 	svc := service.NewNarrativeService(a.workDir, a.narrativeEngine, a.reportGenerator)
 	handlers := &apinarrative.Handlers{
-		Svc: svc,
+		Svc:             svc,
+		IndustryService: a.industryService,
 	}
 	handlers.RegisterRoutes(mux)
 }
@@ -188,15 +208,13 @@ func (a *DashboardAPI) RegisterMacroRoutes(mux *http.ServeMux) {
 	handlers.RegisterRoutes(mux)
 }
 
-func (a *DashboardAPI) RegisterPhase3Routes(mux *http.ServeMux) {
-}
-
 func (a *DashboardAPI) RegisterLiveRoutes(mux *http.ServeMux) {
 	svc := service.NewLiveService(a.workDir, a.ledgerDir)
 	handlers := &apilive.Handlers{
-		LedgerDir: a.ledgerDir,
-		WorkDir:   a.workDir,
-		Svc:       svc,
+		LedgerDir:  a.ledgerDir,
+		WorkDir:    a.workDir,
+		Svc:        svc,
+		Classifier: a.industryService.Classifier,
 	}
 	handlers.RegisterRoutes(mux)
 }
@@ -245,4 +263,3 @@ func (a *DashboardAPI) RegisterTaskExecRoutes(mux *http.ServeMux) {
 	handlers := apitaskexec.NewHandlers(a.taskManager)
 	handlers.RegisterRoutes(mux)
 }
-
