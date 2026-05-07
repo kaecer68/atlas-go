@@ -2263,7 +2263,7 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
       <div class="scroll-box-lg">
         <div class="table-wrapper">
         <table class="text-sm">
-          <thead><tr><th>標的</th><th>公司名稱</th><th>策略來源</th><th>未通過條件</th><th>門檻</th><th>實際值</th></tr></thead>
+          <thead><tr><th>標的</th><th>公司名稱</th><th>策略來源</th><th>未通過條件</th><th>門檻</th><th>實際值</th><th>因子分數</th></tr></thead>
           <tbody>
             ${screenedItems.map(s => `<tr style="border-left:3px solid #666;color:var(--muted)">
               <td>${s.symbol}</td>
@@ -2272,6 +2272,7 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
               <td>${s.criterion_label || s.criterion || '-'}</td>
               <td>${s.threshold || '-'}</td>
               <td>${s.actual_value || '-'}</td>
+              <td>${renderFactorMini(s.factor_scores)}</td>
             </tr>`).join('')}
           </tbody>
         </table>

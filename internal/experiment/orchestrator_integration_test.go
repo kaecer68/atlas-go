@@ -171,9 +171,9 @@ func TestScreenedRecommendationsFlowThroughExperimentAndJudge(t *testing.T) {
 	}
 
 	exec := experiment.NewExecutor(store, baselinePath)
-	execResult, err := exec.Execute(briefPath, replayPath)
+	execResult, err := exec.Run(briefPath, replayPath)
 	if err != nil {
-		t.Fatalf("experiment execute: %v", err)
+		t.Fatalf("experiment run: %v", err)
 	}
 	if execResult.Experiment.Status != domain.ExperimentRunning {
 		t.Errorf("expected experiment status running, got %s", execResult.Experiment.Status)

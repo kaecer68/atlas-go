@@ -24,7 +24,7 @@ func NewExecutor(store *ledger.Store, baselinePath string) *Executor {
 	return &Executor{store: store, baselinePath: baselinePath}
 }
 
-func (e *Executor) Execute(briefPath string, replayPath string) (domain.PromptExperimentResult, error) {
+func (e *Executor) Run(briefPath string, replayPath string) (domain.PromptExperimentResult, error) {
 	brief, err := loadBrief(briefPath)
 	if err != nil {
 		return domain.PromptExperimentResult{}, err

@@ -1,7 +1,7 @@
 package experiment
 
 import (
-	"errors"
+	"fmt"
 	"math"
 )
 
@@ -16,7 +16,7 @@ const DefaultSharpeStabilityThreshold = 0.5
 // which in financial terms is not a reliable signal.
 func SharpeStabilityCheck(sharpeSeries []float64, threshold float64) (stable bool, stderr float64, err error) {
 	if len(sharpeSeries) < 2 {
-		return false, 0, errors.New("insufficient data: need at least 2 data points")
+		return false, 0, fmt.Errorf("insufficient data: need at least 2 data points")
 	}
 
 	mean := 0.0

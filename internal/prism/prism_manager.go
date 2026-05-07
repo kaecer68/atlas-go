@@ -225,9 +225,9 @@ type CompletedTrainingResult struct {
 	Result     TrainingResult
 }
 
-// TrainingExecutor executes a single training task and returns real metrics.
+// TrainingExecutor runs a single training task and returns real metrics.
 type TrainingExecutor interface {
-	Execute(task TrainingTask) (TrainingResult, error)
+	Run(task TrainingTask) (TrainingResult, error)
 }
 
 // PRISMManager manages all 5 regime-specific training queues
@@ -472,7 +472,7 @@ func (pm *PRISMManager) executeTraining(task *TrainingTask) *TrainingResult {
 	ex := pm.executor
 	pm.mu.RUnlock()
 	if ex != nil {
-		result, err := ex.Execute(*task)
+		result, err := ex.Run(*task)
 		if err == nil {
 			return &result
 		}

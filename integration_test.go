@@ -1,5 +1,7 @@
+//go:build integration
+
 // Package main provides integration tests for Phase 2 and Phase 3 components
-// Run with: go test -v ./... -run Integration
+// Run with: go test -v -tags=integration ./...
 package main
 
 import (
@@ -40,7 +42,7 @@ func TestPhase2Integration(t *testing.T) {
 		}
 
 		// Apply weights
-		weighted := weightManager.ApplyDarwinianWeights(recs)
+		weighted, _ := weightManager.ApplyDarwinianWeightsWithEvents(recs)
 
 		// Verify high-weight agent's conviction boosted
 		for _, w := range weighted {
@@ -362,7 +364,7 @@ func TestEndToEndWorkflow(t *testing.T) {
 		t.Logf("  - Detected %d feedback loops", len(loops))
 
 		t.Log("Step 5: Apply Darwinian Weights to Final Recommendations")
-		weightedRecs := weightManager.ApplyDarwinianWeights(allRecs)
+		weightedRecs, _ := weightManager.ApplyDarwinianWeightsWithEvents(allRecs)
 		t.Logf("  - Weighted %d recommendations", len(weightedRecs))
 
 		t.Log("✓ Complete daily workflow executed successfully")
@@ -404,7 +406,7 @@ func TestPerformance(t *testing.T) {
 		}
 
 		start := time.Now()
-		weighted := weightManager.ApplyDarwinianWeights(recs)
+		weighted, _ := weightManager.ApplyDarwinianWeightsWithEvents(recs)
 		duration := time.Since(start)
 
 		t.Logf("Applied weights to %d recommendations in %v", len(weighted), duration)

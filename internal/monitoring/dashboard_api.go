@@ -249,7 +249,7 @@ func (a *DashboardAPI) RegisterTaskExecRoutes(mux *http.ServeMux) {
 		return
 	}
 	log.Printf("[TaskExec] registering task execution routes")
-	handlers := apitaskexec.NewHandler(a.taskManager)
+	handlers := apitaskexec.NewHandlers(a.taskManager)
 	handlers.RegisterRoutes(mux)
 }
 

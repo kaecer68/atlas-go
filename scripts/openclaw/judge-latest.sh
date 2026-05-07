@@ -183,12 +183,21 @@ provide_recommendation() {
     local exp_id
     exp_id=$(echo "$exp_data" | grep -o '"ID"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
     
+    local oos_passed
+    oos_passed=$(echo "$exp_data" | grep -o '"oos_result"[[:space:]]*:[[:space:]]*{[^}]*"passed"[[:space:]]*:[[:space:]]*\(true\|false\)[^}]*}' | grep -o '"passed"[[:space:]]*:[[:space:]]*\(true\|false\)' | cut -d':' -f2 | xargs || echo "")
+
     local recommendation=""
     local reason=""
-    
+
     if [ "$status" = "accepted" ]; then
-        recommendation="--promote $exp_id"
-        reason="Experiment passed all acceptance gates"
+        # Check OOS validation as additional gate
+        if [ "$oos_passed" = "false" ]; then
+            recommendation="SKIP"
+            reason="Experiment passed acceptance but OOS validation failed"
+        else
+            recommendation="--promote $exp_id"
+            reason="Experiment passed all acceptance gates"
+        fi
     elif [ "$status" = "rejected" ]; then
         recommendation="SKIP"
         reason="Experiment failed acceptance criteria"

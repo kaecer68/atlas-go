@@ -14,9 +14,9 @@ import (
 
 // Well-known filenames used by StateStore for persistence.
 const (
-	PortfolioStateFile = "portfolio_state.jsonl"
-	PositionsStateFile = "positions_current.jsonl"
-	RegimeStateFile    = "regime_state.jsonl"
+	PortfolioStateFile = "portfolio_state.json"
+	PositionsStateFile = "positions_current.json"
+	RegimeStateFile    = "regime_state.json"
 	LiveStateSubDir    = "state"
 )
 

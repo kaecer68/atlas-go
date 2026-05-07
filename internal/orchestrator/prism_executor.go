@@ -26,8 +26,8 @@ func NewPRISMTrainingExecutor(dataset *replay.Dataset, registry domain.AgentRegi
 	}
 }
 
-// Execute runs the agent over the training window and returns real metrics.
-func (e *PRISMTrainingExecutor) Execute(task prism.TrainingTask) (prism.TrainingResult, error) {
+// Run runs the agent over the training window and returns real metrics.
+func (e *PRISMTrainingExecutor) Run(task prism.TrainingTask) (prism.TrainingResult, error) {
 	if e.dataset == nil {
 		return prism.TrainingResult{}, fmt.Errorf("no replay dataset available")
 	}

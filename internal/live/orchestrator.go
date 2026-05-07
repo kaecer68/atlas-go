@@ -538,7 +538,7 @@ func (o *Orchestrator) executeOrder(ctx context.Context, order domain.Order) err
 		if !o.circuitBreaker.CanPlaceOrder(order.Side) {
 			return fmt.Errorf("circuit breaker blocks %s order for %s (state=%s)", order.Side, order.Symbol, o.circuitBreaker.State())
 		}
-		if err := o.orderMgr.Execute(ctx, order); err != nil {
+		if err := o.orderMgr.Run(ctx, order); err != nil {
 			return fmt.Errorf("execute order via manager: %w", err)
 		}
 		return nil

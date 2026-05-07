@@ -1,7 +1,6 @@
 package baseline
 
 import (
-	"errors"
 	"fmt"
 	"time"
 )
@@ -41,7 +40,7 @@ func (m *Manager) Revert(target RevertTarget, reason string, dryRun bool) (Rever
 	}
 
 	if targetVersion == current.Version {
-		return RevertResult{}, errors.New("already at target version, nothing to revert")
+		return RevertResult{}, fmt.Errorf("already at target version, nothing to revert")
 	}
 
 	if targetVersion > current.Version {
@@ -87,7 +86,7 @@ func (m *Manager) resolveTargetVersion(current Policy, target RevertTarget) (int
 	switch target.Type {
 	case RevertLast:
 		if len(current.Promotions) == 0 {
-			return 0, errors.New("no promotions to revert")
+			return 0, fmt.Errorf("no promotions to revert")
 		}
 
 		lastPromoIdx := len(current.Promotions) - 1
@@ -99,13 +98,13 @@ func (m *Manager) resolveTargetVersion(current Policy, target RevertTarget) (int
 
 	case RevertToVersion:
 		if target.Version < 1 {
-			return 0, errors.New("target version must be >= 1")
+			return 0, fmt.Errorf("target version must be >= 1")
 		}
 		return target.Version, nil
 
 	case RevertToExperiment:
 		if target.ExperimentID == "" {
-			return 0, errors.New("experiment ID required for experiment revert")
+			return 0, fmt.Errorf("experiment ID required for experiment revert")
 		}
 
 		for i, promo := range current.Promotions {

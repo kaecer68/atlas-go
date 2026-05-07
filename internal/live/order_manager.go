@@ -42,7 +42,7 @@ func (m *OrderManager) Mode() string {
 	return m.broker.Mode()
 }
 
-func (m *OrderManager) Execute(ctx context.Context, order domain.Order) error {
+func (m *OrderManager) Run(ctx context.Context, order domain.Order) error {
 	if m.broker == nil {
 		m.broker = NewDryRunBroker()
 	}

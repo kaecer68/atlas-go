@@ -143,7 +143,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 ## 設定檔慣例
 
 - `configs/agents.json`（及 `agents.yaml`）定義代理註冊表。**每個 `enabled: true` 的 agent 必須在 `prompts/agents/` 下有對應 prompt 檔案**。
-- `configs/portfolio-allocation.v23.json` 為投組配置版本檔案。
+- `configs/portfolio-allocation.json` 為投組配置版本檔案。
 - `internal/config/config.go` 會自動讀取根目錄 `.env`，**不會覆蓋已存在的環境變數**；`.env` 中的值若帶引號（單雙引號）會被自動去除。
 - 關鍵環境變數前綴為 `ATLAS_*`（如 `ATLAS_MARKET_DATA_PROVIDER`、`ATLAS_REPLAY_DATA_PATH`、`ATLAS_BASELINE_POLICY_PATH`、`ATLAS_BROKER_MODE`）。
 

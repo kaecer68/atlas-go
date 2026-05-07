@@ -143,3 +143,70 @@ func TestFlexTime_JSONRoundTrip_InStruct(t *testing.T) {
 		t.Errorf("round-trip mismatch: got %v, want %v", decoded.T.Time, original.T.Time)
 	}
 }
+
+func TestRecommendationOutcome_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		outcome RecommendationOutcome
+		wantErr bool
+	}{
+		{name: "valid", outcome: RecommendationOutcome{AgentID: "a", Symbol: "s", Side: SideBuy, Window: "2026-01-01", Conviction: 80}, wantErr: false},
+		{name: "empty agent_id", outcome: RecommendationOutcome{Symbol: "s", Side: SideBuy, Window: "2026-01-01", Conviction: 1}, wantErr: true},
+		{name: "empty symbol", outcome: RecommendationOutcome{AgentID: "a", Side: SideBuy, Window: "2026-01-01", Conviction: 1}, wantErr: true},
+		{name: "empty side", outcome: RecommendationOutcome{AgentID: "a", Symbol: "s", Window: "2026-01-01", Conviction: 1}, wantErr: true},
+		{name: "empty window", outcome: RecommendationOutcome{AgentID: "a", Symbol: "s", Side: SideBuy, Conviction: 1}, wantErr: true},
+		{name: "zero conviction", outcome: RecommendationOutcome{AgentID: "a", Symbol: "s", Side: SideBuy, Window: "2026-01-01", Conviction: 0}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.outcome.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr = %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestRecommendationOutcome_JSONRoundTrip(t *testing.T) {
+	orig := RecommendationOutcome{
+		AgentID: "a", Skill: "m", Symbol: "2330.TW", Side: SideBuy, Conviction: 80,
+		TargetPrice: 650, StopLossPrice: 580, Window: "2026-01-01", ForwardReturn: 0.025, Hit: true,
+		PassedGuards: true, FactorScores: FactorScores{Momentum: 0.85, Total: 0.72},
+		ConvictionBreakdown: &ConvictionBreakdown{Base: 60, Final: 80},
+	}
+	data, _ := json.Marshal(orig)
+	var decoded RecommendationOutcome
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if decoded.AgentID != orig.AgentID {
+		t.Errorf("AgentID: got %q, want %q", decoded.AgentID, orig.AgentID)
+	}
+	if decoded.TargetPrice != orig.TargetPrice {
+		t.Errorf("TargetPrice mismatch")
+	}
+	if decoded.FactorScores.Total != orig.FactorScores.Total {
+		t.Error("FactorScores not preserved")
+	}
+	if decoded.ConvictionBreakdown == nil {
+		t.Error("ConvictionBreakdown not preserved")
+	}
+	if decoded.PassedGuards != orig.PassedGuards {
+		t.Error("PassedGuards not preserved")
+	}
+}
+
+func TestRecommendationOutcome_JSONKeysSnakeCase(t *testing.T) {
+	outcome := RecommendationOutcome{AgentID: "a", Symbol: "s", Side: SideBuy, Window: "2026-01-01", Conviction: 80}
+	data, _ := json.Marshal(outcome)
+	var m map[string]interface{}
+	json.Unmarshal(data, &m)
+	for k := range m {
+		if len(k) > 0 && k[0] >= 'A' && k[0] <= 'Z' {
+			t.Errorf("PascalCase key %q found — must be snake_case", k)
+		}
+	}
+	if _, ok := m["agent_id"]; !ok {
+		t.Error("missing snake_case key 'agent_id'")
+	}
+}

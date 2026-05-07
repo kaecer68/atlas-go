@@ -183,7 +183,7 @@ check_promotion_safety() {
     # Check 1: Status is accepted or ready
     ((checks_total++))
 	local status=$(cat "$result_file" | grep '"Status"' | head -1 | sed 's/.*"Status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-    if [ "$status" = "accepted" ] || [ "$status" = "running" ]; then
+    if [ "$status" = "accepted" ]; then
         echo -e "  ${GREEN}✓${NC} Experiment status: ${status}"
         ((checks_passed++))
     else
