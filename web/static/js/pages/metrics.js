@@ -1,4 +1,5 @@
 // Metrics monitoring page
+import { getJSON } from '../shared/app-utils.js';
 
 export async function loadMetrics() {
   try {

@@ -1,4 +1,5 @@
 // Alert management page
+import { getJSON } from '../shared/app-utils.js';
 
 export function renderAlerts(data) {
   const el = document.getElementById('alertsPanel');

@@ -1,5 +1,6 @@
 // Industry ecosystem page
 import { sectorName } from '../names.js';
+import { getJSON, notify } from '../shared/app-utils.js';
 
 export async function loadIndustryData() {
   try {

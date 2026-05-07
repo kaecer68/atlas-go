@@ -147,40 +147,6 @@ export function renderRiskCards(data, pipelineData) {
   if (sectorEl) sectorEl.innerHTML = sectorHtml;
 }
 
-export function renderPortfolioKPIs(data, pipeline) {
-  const el = document.getElementById('portfolioKPIs');
-  if (!el) return;
-  const items = (pipeline && pipeline.items) || [];
-  const passed = items.filter(it => it.passed_guards);
-  const totalConviction = passed.reduce((sum, it) => sum + (it.conviction || 0), 0);
-  el.innerHTML = `
-    <div class="metric"><div class="label">推薦標的</div><div class="value">${passed.length}</div></div>
-    <div class="metric"><div class="label">總信念度</div><div class="value">${totalConviction.toFixed(2)}</div></div>
-  `;
-}
-
-export function renderEquityCurve(points) {
-  const canvas = document.getElementById('equityCurveCanvas');
-  if (!canvas || !points || points.length < 2) return;
-  // Simple canvas-based equity curve (placeholder for full implementation)
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width, h = canvas.height;
-  const max = Math.max(...points);
-  const min = Math.min(...points);
-  const range = max - min || 1;
-  ctx.clearRect(0, 0, w, h);
-  ctx.strokeStyle = 'var(--accent)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  points.forEach((v, i) => {
-    const x = (i / (points.length - 1)) * w;
-    const y = h - ((v - min) / range) * h;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.stroke();
-}
-
 // Simple sector inference from agent ID and layer
 export function inferSectorFromAgent(agentID, layer) {
   const agentSectorMap = {
