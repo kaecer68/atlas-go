@@ -45,3 +45,5 @@ export async function loadAlerts() {
     console.error(e);
   }
 }
+
+if (typeof window !== "undefined") Object.assign(window, { loadAlerts });

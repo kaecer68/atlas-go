@@ -1,4 +1,13 @@
+/**
+ * @typedef {import('./shared/field_types.d.ts').GuardOutcome} GuardOutcome
+ * @typedef {import('./shared/field_types.d.ts').RecommendationOutcome} RecommendationOutcome
+ * @typedef {import('./shared/field_types.d.ts').RiskSnapshot} RiskSnapshot
+ * @typedef {import('./shared/field_types.d.ts').SessionSummary} SessionSummary
+ * @typedef {import('./shared/field_types.d.ts').Scorecard} Scorecard
+ */
+
 const pageLoadStatus = {};
+const APP_VERSION = '20260507';
 
 export function switchPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -77,17 +86,17 @@ var modules = {};
 async function loadModules() {
   if (modules._loaded) return modules;
   var imports = [
-    import('./pages/dashboard.js'),
-    import('./pages/pipeline.js'),
-    import('./pages/risk.js'),
-    import('./pages/narrative.js'),
-    import('./pages/backtest.js'),
-    import('./pages/inbox.js'),
-    import('./pages/experiments.js'),
-    import('./pages/alerts.js'),
-    import('./pages/metrics.js'),
-    import('./pages/industry.js'),
-    import('./pages/datachannels.js'),
+    import('./pages/dashboard.js?v=' + APP_VERSION),
+    import('./pages/pipeline.js?v=' + APP_VERSION),
+    import('./pages/risk.js?v=' + APP_VERSION),
+    import('./pages/narrative.js?v=' + APP_VERSION),
+    import('./pages/backtest.js?v=' + APP_VERSION),
+    import('./pages/inbox.js?v=' + APP_VERSION),
+    import('./pages/experiments.js?v=' + APP_VERSION),
+    import('./pages/alerts.js?v=' + APP_VERSION),
+    import('./pages/metrics.js?v=' + APP_VERSION),
+    import('./pages/industry.js?v=' + APP_VERSION),
+    import('./pages/datachannels.js?v=' + APP_VERSION),
   ];
   var results = await Promise.allSettled(imports);
   var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels'];
@@ -295,7 +304,7 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'portfolio') {
     try {
-      var portfolioModule = await import('./pages/portfolio.js').catch(function() { return null; });
+      var portfolioModule = await import('./pages/portfolio.js?v=' + APP_VERSION).catch(function() { return null; });
       if (portfolioModule) portfolioModule.loadPortfolioPage(getJSON, window.agentNameEsm || function(id) { return id; });
     } catch(e) { console.error(e); }
   }
@@ -315,11 +324,24 @@ function initBacktestDates() {
   if (e) e.value = today.toISOString().split('T')[0];
 }
 
-window.switchPage = switchPage;
-window.toggleSidebar = toggleSidebar;
-window.retryLoad = retryLoad;
+if (typeof window !== "undefined") window.switchPage = switchPage;
+if (typeof window !== "undefined") window.toggleSidebar = toggleSidebar;
+if (typeof window !== "undefined") window.retryLoad = retryLoad;
 
-populateAgentSelect();
-initBacktestDates();
-loadAll();
-startAutoRefresh();
+if (typeof window !== 'undefined') {
+  populateAgentSelect();
+  initBacktestDates();
+  loadAll();
+  startAutoRefresh();
+}
+
+if (typeof window !== "undefined") window.toggleTheme = function() {
+  var r = document.documentElement;
+  r.setAttribute('data-theme', r.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
+};
+if (typeof window !== "undefined") window.showUnacknowledgedOnly = function() { console.log('showUnacknowledgedOnly: not yet reimplemented'); };
+
+// datachannels globals
+import('./pages/datachannels.js?v=' + APP_VERSION).then(function(m) {
+  if (m.triggerChannelsIngest && typeof window !== 'undefined') window.triggerChannelsIngest = m.triggerChannelsIngest;
+});
