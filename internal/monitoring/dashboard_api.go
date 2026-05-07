@@ -19,7 +19,6 @@ import (
 	apiindustry "github.com/kaecer68/atlas-go/internal/monitoring/api/industry"
 	apilive "github.com/kaecer68/atlas-go/internal/monitoring/api/live"
 	apimacro "github.com/kaecer68/atlas-go/internal/monitoring/api/macro"
-	apimarketdata "github.com/kaecer68/atlas-go/internal/monitoring/api/marketdata"
 	apimetrics "github.com/kaecer68/atlas-go/internal/monitoring/api/metrics"
 	apinarrative "github.com/kaecer68/atlas-go/internal/monitoring/api/narrative"
 	apiparameters "github.com/kaecer68/atlas-go/internal/monitoring/api/parameters"
@@ -62,9 +61,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	provider := marketdata.NewCompositeMacroProvider(
 		marketdata.NewYahooFinanceMacroProvider(),
 		marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")),
-		marketdata.NewTWSEBalanceProvider(filepath.Join(workDir, "data/state/margin")),
 		marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export")),
-		marketdata.NewTSMCRevenueProvider(filepath.Join(workDir, "data/state/tsmc_revenue")),
 	)
 	geoProvider := narrative.NewCompositeGeopoliticalProvider(
 		narrative.NewRSSGeopoliticalProvider(),
@@ -143,14 +140,10 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	handlers := &apihealth.Handlers{}
 	handlers.RegisterRoutes(mux)
 
-	dataHandlers := apidata.NewHandlers(a.workDir, a.pool, a.macroIngestor, a.geoProvider, a.taiwanGeoProvider, a.janusEngine, &channelHealthAdapter{store: NewChannelHealthStoreWithPool(filepath.Join(a.workDir, "data/state"), a.pool)})
-	dataHandlers.RegisterRoutes(mux)
 
 	riskHandlers := apirisk.NewHandlers(a.ledgerDir)
 	riskHandlers.RegisterRoutes(mux)
 
-	marketdataHandlers := apimarketdata.NewHandlers(a.workDir)
-	marketdataHandlers.RegisterRoutes(mux)
 
 	taxHandlers := apitax.NewHandlers()
 	taxHandlers.RegisterRoutes(mux)

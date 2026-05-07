@@ -1018,6 +1018,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
   import { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState } from './js/shared/utils.js';
   import { agentName as agentNameEsm, regimeLabel as regimeLabelEsm, AGENT_NAME_MAP, PAGE_TITLES } from './js/shared/constants.js';
   import { FIELD } from './js/shared/field_names.js';
+  import { renderEquityCurve, renderAgentScoreboard, renderRegimeContext, renderAllocationGuidance } from './js/components/sparkline.js';
   Object.assign(window, { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState, agentNameEsm, regimeLabelEsm, FIELD });
 </script>
 
@@ -3559,7 +3560,7 @@ async function loadAll() {
   showSkeletons();
 
   try {
-    const [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal] = await Promise.all([
+    const [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal, portfolioState, darwinianStatus] = await Promise.all([
       getJSON('/api/dashboard/system-health').catch(() => null),
       getJSON('/api/dashboard/macro-radar').catch(() => null),
       getJSON('/api/dashboard/agent-observatory').catch(() => null),
@@ -3581,7 +3582,13 @@ async function loadAll() {
       getJSON('/api/dashboard/capital-phase').catch(() => null),
       getJSON('/api/dashboard/tax-snapshot').catch(() => null),
       getJSON('/api/narrative/seasonal').catch(() => null),
+      getJSON('/api/dashboard/portfolio-state').catch(() => null),
+      getJSON('/api/synergy/darwinian-status').catch(() => null),
     ]);
+
+    // Sparkline rendering: equity curve + agent scoreboard
+    renderEquityCurve((portfolioState && portfolioState.equity_curve) || []);
+    if (darwinianStatus) renderAgentScoreboard(darwinianStatus, agentNameEsm);
 
     // 防禦性驗證：檢查關鍵 API 回應欄位是否正確
     if (macro) {

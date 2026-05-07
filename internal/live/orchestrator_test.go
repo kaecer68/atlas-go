@@ -103,13 +103,9 @@ func TestCheckRiskTriggers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_ = livestore.NewStateStore(t.TempDir()) // assigned but mainly used via stateStore field
+			st := livestore.NewStateStore(t.TempDir())
 			if tt.withPosition {
-<<<<<<< Updated upstream
 				st.UpdatePosition(tt.position)
-=======
-				s.UpdatePosition(tt.position)
->>>>>>> Stashed changes
 			}
 
 			bus := NewChannelEventBus(16)
@@ -174,7 +170,7 @@ func TestCheckRiskTriggers(t *testing.T) {
 }
 
 func TestExecuteOrderBlockedByCircuitBreaker(t *testing.T) {
-	_ = livestore.NewStateStore(t.TempDir()) // assigned but mainly used via stateStore field
+	st := livestore.NewStateStore(t.TempDir())
 	bus := NewChannelEventBus(16)
 	t.Cleanup(func() { _ = bus.Close() })
 
@@ -185,7 +181,7 @@ func TestExecuteOrderBlockedByCircuitBreaker(t *testing.T) {
 	cb.Evaluate(livestore.PortfolioState{Cash: 1000000, DayPnL: -30000}, nil, nil)
 
 	o := &Orchestrator{
-		stateStore:     s,
+		stateStore:     st,
 		eventBus:       bus,
 		circuitBreaker: cb,
 		broker:         NewDryRunBroker(),
