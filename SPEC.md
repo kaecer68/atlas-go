@@ -1,122 +1,346 @@
-# SPEC.md — 富邦 DMA Login 整合
+# Real-Time Quote Architecture Specification
 
-## 1. 目標
+## 1. Overview
 
-將富邦新一代 API（`fubon_neo` Python SDK）的 `apikey_dma_login()` 整合進 atlas-go，成為可切換的實盤下單介面。整合完成後，signaled account 可直接透過 DMA 線路執行訂單。
+本規格定義 `atlas-go` 即時報價基礎設施的設計目標、介面契約與實作約束。
 
-## 2. 現況
+**目標**：新增基於 WebSocket 的即時報價能力，作為現有 `HybridProvider`（FinMind/Fugle/TWSE）的補充層。
 
-| 元件 | 狀態 | 說明 |
-|------|------|------|
-| 富邦報價 API | ✅ 已整合 | `FubonProvider` / `FubonClient` in `internal/marketdata/` |
-| Broker 抽象 | ✅ 存在 | `DryRunBroker` / `GuardedLiveBroker` + `LiveExecutionAdapter` |
-| `apikey_dma_login()` | 🔒 待開通 | 需要「API使用風險暨聲明書」簽署完成才可成功 |
-| Python SDK | ✅ 已就緒 | `fubon_neo-2.2.8-cp37-abi3-macosx_11_0_arm64.zip` 在 worktree |
+---
 
-## 3. 整合架構
+## 2. 現有基礎設施分析
 
-```
-cmd/atlas (with -allow-live-broker)
-  └── internal/live/orchestrator.go  →  GuardedLiveBroker
-                                        └── FubonDMAAdapter  (NEW)
-                                              └── Python subprocess (fubon_neo SDK)
-```
+### 2.1 現有 Provider 堆疊
 
-### 新增元件
+| Provider | 類型 | 用途 |
+|----------|------|------|
+| `FinMindProvider` | HTTP REST (日線) | 每日收盤報價 |
+| `FugleProvider` | HTTP REST (日內) | 盤中快照報價 |
+| `TWSEClient` | HTTP REST | 最後備援 |
+| `PollingAdapter` | 輪詢 | 將任何 `Provider` 包裝為 `StreamingProvider` |
 
-| 檔案 | 職責 |
-|------|------|
-| `internal/live/fubon_dma.go` | `FubonDMAAdapter` — 實現 `LiveExecutionAdapter` |
-| `internal/live/fubon_session.go` | Session 管理（login logout lifecycle） |
-| `cmd/fubon-dma/` | DMA 指令集（login, logout, submit, status） |
-
-### 環境變數
-
-```bash
-FUBON_DMA_PERSONAL_ID=M120628569
-FUBON_DMA_API_KEY=F6049D5DD934EFFEDE91EDE4E337C32E5CAC3A0FDEC0D75CFEC46B94845A6AAA
-ATLAS_BROKER_MODE=fubon-dma   # 替換 dry-run
-```
-
-## 4. Python subprocess 設計
-
-Go 無法直接呼叫 Python SDK，透過以下方式整合：
-
-```
-┌─────────────┐     stdin JSON      ┌────────────────────┐
-│ Go process  │ ────────────────→  │ Python wrapper      │
-│ (fubon_dma) │                     │ (fubon_neo SDK)     │
-│             │  ← stdout JSON     │                     │
-└─────────────┘                    └────────────────────┘
-```
-
-**Protocol:**
-- 啟動時建立一個長期 Python 行程（subprocess）
-- 溝通格式：JSONL（每行一個 JSON 物件）
-- Commands: `{ "cmd": "login" }`, `{ "cmd": "submit_order", ... }`, `{ "cmd": "logout" }`
-
-## 5. FubonDMAAdapter 介面
+### 2.2 現有 `Quote` 結構 (`internal/domain/types.go`)
 
 ```go
-// internal/live/fubon_dma.go
-type FubonDMAAdapter struct {
-    personalID string
-    apiKey     string
-    session    *DMAClientSession  // Python subprocess handle
-    mu         sync.RWMutex
+type Quote struct {
+    Symbol     string
+    Last       float64   // 最新成交價
+    Open       float64   // 開盤價
+    High       float64   // 最高價
+    Low        float64   // 最低價
+    Volume     int64     // 成交量
+    Market     string    // "TW"
+    AsOf       time.Time // 報價時間
+    IsTradable bool
+    Source     string    // "finmind", "fugle", "twse"
 }
-
-func (a *FubonDMAAdapter) SubmitOrder(ctx context.Context, order domain.Order) (BrokerResult, error)
 ```
 
-**SubmitOrder 轉譯邏輯：**
-1. `domain.Order` → Python order dict
-2. 送至 subprocess stdin
-3. 解析 stdout JSON 回應
-4. 回傳 `BrokerResult`
-
-## 6. Session 管理
+### 2.3 現有 `StreamingProvider` 介面 (`internal/marketdata/streaming.go`)
 
 ```go
-type DMAClientSession struct {
-    process   *exec.Cmd
-    connected bool
-    accountNo string
-}
+type QuoteHandler func(quote domain.Quote)
 
-func (s *DMAClientSession) Login(ctx context.Context, personalID, apiKey string) error
-func (s *DMAClientSession) SubmitOrder(ctx context.Context, order map[string]any) (map[string]any, error)
-func (s *DMAClientSession) Logout(ctx context.Context) error
+type StreamingProvider interface {
+    Subscribe(ctx context.Context, symbols []string, handler QuoteHandler) error
+    Unsubscribe(ctx context.Context, symbols []string) error
+}
 ```
 
-**Login 驗證：**
-- API 回應 `is_success: false`（尚未簽署）仍視為連線成功（網路可達）
-- 真正下單時若仍是 `is_success: false`，則回傳明確錯誤 `ErrAccountNotEnabled`
+**問題**：`PollingAdapter` 依賴 `time.Ticker`，在多訂閱者情境下會重複輪詢，效率低落。
 
-## 7. 錯誤處理
+---
 
-| 錯誤情境 | 回應 |
-|----------|------|
-| Python subprocess 未啟動 | `ErrDMANotConnected` |
-| 尚未簽署 API 聲明書 | `ErrAccountNotEnabled`（含聲明書 URL） |
-| 下單失敗（API 錯誤） | 解析回傳 error code，回傳結構化 `BrokerResult` |
-| 超時（10s） | `ErrDMARequestTimeout` |
+## 3. 新增元件設計
 
-## 8. Feature Flag / Guard
+### 3.1 `RealtimeProvider` 介面
 
-`ATLAS_BROKER_MODE=fubon-dma` 時才啟動 DMA adapter。
-其他模式（dry-run / mock）維持現有行為。
+```go
+// QuoteCallback 是接收即時報價的回調函式。
+type QuoteCallback func(quote domain.Quote)
 
-## 9. 驗收標準
+// RealtimeProvider 為即時報價來源的最高層級介面。
+type RealtimeProvider interface {
+    // Connect 建立 WebSocket 連線。
+    Connect(ctx context.Context) error
 
-- [ ] `go build ./cmd/fubon-dma/...` 成功
-- [ ] `FUBON_DMA_API_KEY=... ATLAS_BROKER_MODE=fubon-dma go run ./cmd/atlas -allow-live-broker` 啟動不 panic
-- [ ] `apikey_dma_login()` 連線成功（即便 `is_success: false`）
-- [ ] 簽署完成後，`SubmitOrder` 可成功送出並回傳 `BrokerResult`
-- [ ] `go test ./internal/live/...` 全數通過
+    // Disconnect 關閉 WebSocket 連線。
+    Disconnect(ctx context.Context) error
 
-## 10. 參考文獻
+    // Subscribe 訂閱指定 symbols 的即時報價。
+    Subscribe(symbols []string) error
 
-- [富邦API文件](https://www.fubon.com.tw/) — 新一代 API 規格
-- `internal/live/broker.go` — 既有的 adapter 模式
-- `internal/marketdata/fubon_client.go` — 富邦 API call 慣例
+    // Unsubscribe 取消訂閱指定 symbols。
+    Unsubscribe(symbols []string) error
+
+    // OnQuote 設定報價回調。
+    OnQuote(callback QuoteCallback)
+
+    // IsConnected 查詢連線狀態。
+    IsConnected() bool
+
+    // Name 回傳 provider 名稱。
+    Name() string
+}
+```
+
+### 3.2 `FugleWebSocketProvider` 實作
+
+Fugle 富果行情 WebSocket API：
+
+- **端點**：`wss://api.fugle.tw/marketdata/v1.0/stock/streaming`
+- **驗證**：`auth` 事件攜帶 `apikey`
+- **訂閱**：`subscribe` 事件指定 `channel` 與 `symbol`
+- **頻道**：`trades`（最新成交）、`candles`（分鐘 K）、`books`（五檔）、`aggregates`（聚合）
+- **心跳**：Server 每 30 秒發送 heartbeat
+
+#### 3.2.1 連線生命週期
+
+```
+Connect()
+  ├─ 建立 WebSocket 連線
+  ├─ 發送 auth 事件 {event: "auth", data: {apikey: "..."}}
+  └─ 等待 authenticated 事件確認
+
+Subscribe(symbols)
+  ├─ 發送 subscribe 事件 {event: "subscribe", data: {channel: "trades", symbol: "2330"}}
+  └─ 啟動訊息讀取 goroutine
+
+Disconnect()
+  ├─ 發送 unsubscribe 事件（可選）
+  └─ 關閉 WebSocket 連線
+```
+
+#### 3.2.2 重連機制（指數退避）
+
+```go
+const (
+    initialBackoff = 1 * time.Second
+    maxBackoff     = 60 * time.Second
+    backoffFactor  = 2.0
+)
+
+func (p *FugleWebSocketProvider) reconnect() error {
+    p.mu.Lock()
+    p.backoff = p.backoff * backoffFactor
+    if p.backoff > maxBackoff {
+        p.backoff = maxBackoff
+    }
+    p.mu.Unlock()
+
+    time.Sleep(p.backoff)
+    return p.Connect(context.Background())
+}
+```
+
+觸發條件：
+- WebSocket 連線斷開
+- 收到錯誤訊息
+- 認證失敗
+
+### 3.3 `RealtimeRouter`（多 Provider 路由）
+
+```go
+// RealtimeRouter 整合多個即時 Provider，支援備援切換。
+type RealtimeRouter struct {
+    providers []RealtimeProvider
+    primary   int // 目前主動 provider 索引
+    mu        sync.RWMutex
+}
+
+// Subscribe 將符號訂閱請求路由到目前 primary provider。
+func (r *RealtimeRouter) Subscribe(symbols []string) error
+
+// SwitchToNext 若 primary provider 失敗，自動切換到下一個。
+func (r *RealtimeRouter) SwitchToNext() error
+```
+
+---
+
+## 4. Fugle WebSocket 訊息格式
+
+### 4.1 認證
+
+```json
+// 發送
+{"event": "auth", "data": {"apikey": "YOUR_API_KEY"}}
+
+// 接收
+{"event": "authenticated", "data": {"apikey": "YOUR_API_KEY"}}
+```
+
+### 4.2 訂閱 (`trades` 頻道)
+
+```json
+// 發送
+{"event": "subscribe", "data": {"channel": "trades", "symbol": "2330"}}
+
+// 接收
+{
+  "event": "data",
+  "data": {
+    "symbol": "2330",
+    "type": "EQUITY",
+    "exchange": "TWSE",
+    "date": "2026-04-30T14:30:00.000+08:00",
+    "price": 1050.0,
+    "unit": 1000,
+    "volume": 4778,
+    "bid": 1045.0,
+    "ask": 1050.0
+  },
+  "channel": "trades"
+}
+```
+
+### 4.3 轉換為 `domain.Quote`
+
+```go
+func parseFugleTrade(data map[string]interface{}) (domain.Quote, error) {
+    quote := domain.Quote{
+        Symbol: data["symbol"].(string),
+        Last:   data["price"].(float64),
+        Volume: int64(data["volume"].(float64)),
+        Market: "TW",
+        AsOf:   parseTime(data["date"].(string)),
+        Source: "fugle-ws",
+    }
+    return quote, nil
+}
+```
+
+---
+
+## 5. 與現有系統整合
+
+### 5.1 整合 `HybridProvider`
+
+`RealtimeProvider` 為獨立擴展，不修改現有 `HybridProvider` 結構。建議使用方式：
+
+```go
+// 場景 1：純輪詢（現有）
+hybrid := NewHybridProvider(finmindKey, fugleKey)
+polling := &PollingAdapter{Base: hybrid, Interval: 30}
+polling.Subscribe(ctx, symbols, handler)
+
+// 場景 2：即時優先（新建）
+realtime := NewFugleWebSocketProvider(fugleKey)
+realtime.OnQuote(func(q domain.Quote) { ... })
+realtime.Connect(ctx)
+realtime.Subscribe(symbols)
+```
+
+### 5.2 整合 `StreamingProvider`
+
+擴展 `StreamingProvider` 介面以支援 WebSocket：
+
+```go
+// ConnectiveStreamingProvider 為支援主動連線的 StreamingProvider。
+type ConnectiveStreamingProvider interface {
+    StreamingProvider
+    Connect(ctx context.Context) error
+    Disconnect(ctx context.Context) error
+    IsConnected() bool
+}
+```
+
+---
+
+## 6. 錯誤處理
+
+| 錯誤情境 | 處理策略 |
+|----------|----------|
+| WebSocket 連線失敗 | 指數退避重連（1s → 2s → 4s → ... → 60s 上限） |
+| 認證失敗 | 記錄錯誤，不重連（API Key 問題需人工修復） |
+| 訂閱失敗 | 記錄錯誤，返回錯誤給呼叫者 |
+| 訊息解析失敗 | 記錄錯誤訊息，繼續處理下一條 |
+| Provider 斷線 | 觸發 `SwitchToNext()` 切換備援 |
+
+---
+
+## 7. 速率限制
+
+Fugle 富果行情 WebSocket API 目前**無明確速率限制**，但需遵守：
+
+- 每個連線同時訂閱 symbols 有限制（建議 ≤ 50）
+- 若有新 symbols 需求，先 `Unsubscribe` 不再需要的，再 `Subscribe` 新的
+
+---
+
+## 8. 設定檔結構
+
+```yaml
+# configs/realtime.yaml
+realtime:
+  enabled: true
+  provider: fugle  # 目前僅支援 fugle
+
+  fugle:
+    api_key: ${FUGLE_API_KEY}
+    endpoint: "wss://api.fugle.tw/marketdata/v1.0/stock/streaming"
+
+  reconnection:
+    initial_backoff: "1s"
+    max_backoff: "60s"
+    backoff_factor: 2.0
+
+  channels:
+    - trades      # 即時成交（主要使用）
+    # - candles    # 分鐘K（可選）
+    # - books       # 五檔（可選）
+
+  symbols:
+    max_per_connection: 50
+```
+
+---
+
+## 9. 測試策略
+
+### 9.1 單元測試
+
+- `FugleWebSocketProvider` 狀態機測試（Connect → Subscribe → Disconnect）
+- 訊息解析測試（Fugle JSON → `domain.Quote`）
+- 重連邏輯測試（計數器、倍數、上限）
+
+### 9.2 整合測試
+
+- Mock WebSocket Server（`net/http/httptest` + `golang.org/x/net/websocket`）
+- 端對端訂閱流程測試
+
+---
+
+## 10. 預定產出檔案
+
+```
+internal/marketdata/
+  ├─ realtime/
+  │   ├─ provider.go        # RealtimeProvider 介面
+  │   ├─ fugle_ws.go        # FugleWebSocketProvider 實作
+  │   ├─ router.go          # RealtimeRouter 多路器
+  │   ├─ fugle_ws_test.go   # 單元測試
+  │   └─ fugle_ws_mock_test.go  # Mock WebSocket 整合測試
+
+configs/
+  └─ realtime.yaml          # 設定檔
+```
+
+---
+
+## 11. 約束
+
+1. **不修改現有 Provider**：新實作位於 `internal/marketdata/realtime/` 子目錄
+2. **不引入全域狀態**：使用依賴注入，由 caller 持有 `RealtimeRouter` 實例
+3. **符合 Go 程式碼慣例**：介面小而聚焦，錯誤包裝，`gofmt` 格式化
+4. **支援 `context.Context`**：所有連線操作支援取消
+
+---
+
+## 12. Status
+
+**NEEDS_CONTEXT** - 需要以下資訊才能實作：
+
+1. **WebSocket 函式庫選擇**：目前無 WebSocket 依賴，需確認是否使用 `gorilla/websocket` 或標準庫 `net/http` + `golang.org/x/net/websocket`
+2. **長期報價擴展**：`candles`（分鐘K）是否需要與 `domain.Quote` 不同的結構？
+3. **與 Orchestrator 整合點**：`RealtimeRouter` 的輸出如何傳遞給現有 Orchestrator？
+
