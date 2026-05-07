@@ -215,12 +215,11 @@ func TestLoad_FugleAPIKeyPriority(t *testing.T) {
 		}
 	})
 
-	t.Run("falls back to ATLAS_FUGLE_API_KEY", func(t *testing.T) {
+	t.Run("returns empty when not set", func(t *testing.T) {
 		t.Setenv("FUGLE_API_KEY", "")
-		t.Setenv("ATLAS_FUGLE_API_KEY", "fallback-key")
 		cfg := Load()
-		if cfg.FugleAPIKey != "fallback-key" {
-			t.Errorf("FugleAPIKey = %q, want fallback-key", cfg.FugleAPIKey)
+		if cfg.FugleAPIKey != "" {
+			t.Errorf("FugleAPIKey = %q, want empty (falls back to Keychain at runtime)", cfg.FugleAPIKey)
 		}
 	})
 }
