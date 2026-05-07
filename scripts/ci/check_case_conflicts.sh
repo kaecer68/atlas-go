@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# scripts/ci/check-case-conflicts.sh
+# scripts/ci/check_case_conflicts.sh
 # Detects case-conflicting filenames in the git index.
 # Prevents the class of bug where macOS APFS (case-insensitive) allows
 # AGENTS.md and agents.md to coexist in git history but explode on
 # case-sensitive filesystems (Linux CI, case-sensitive APFS volumes).
 #
 # Usage:
-#   bash scripts/ci/check-case-conflicts.sh          # check all tracked files
-#   bash scripts/ci/check-case-conflicts.sh --strict # fail on any mixed-case filename
+#   bash scripts/ci/check_case_conflicts.sh          # check all tracked files
+#   bash scripts/ci/check_case_conflicts.sh --strict # fail on any mixed-case filename
 
 set -euo pipefail
 

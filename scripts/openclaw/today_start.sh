@@ -267,7 +267,7 @@ run_cycle() {
 	local required_for_cycle
 
 	echo "[2/5] ${cycle_label}: generate mutation brief (auto)"
-	propose_cmd=(./scripts/openclaw/propose-mutation.sh --auto)
+	propose_cmd=(./scripts/openclaw/propose_mutation.sh --auto)
 	if [[ -n "$AGENT" ]]; then
 		propose_cmd+=(--agent "$AGENT")
 	fi
@@ -312,11 +312,11 @@ run_cycle() {
 
 	echo "[3/5] ${cycle_label}: execute generated mutation brief (auto)"
 	echo "Using brief: $latest_brief"
-	./scripts/openclaw/execute-next.sh --auto --brief "$latest_brief"
+	./scripts/openclaw/execute_next.sh --auto --brief "$latest_brief"
 
 	echo "[4/5] ${cycle_label}: judge latest experiment (auto, json)"
 	judge_log=$(mktemp)
-	./scripts/openclaw/judge-latest.sh --auto --json | tee "$judge_log"
+	./scripts/openclaw/judge_latest.sh --auto --json | tee "$judge_log"
 	LAST_JUDGE_LOG="$judge_log"
 }
 

@@ -9,13 +9,13 @@
 ./scripts/openclaw/status.sh
 
 # 2. 生成 mutation 建議
-./scripts/openclaw/propose-mutation.sh
+./scripts/openclaw/propose_mutation.sh
 
 # 3. 執行實驗
-./scripts/openclaw/execute-next.sh
+./scripts/openclaw/execute_next.sh
 
 # 4. 判斷實驗結果
-./scripts/openclaw/judge-latest.sh
+./scripts/openclaw/judge_latest.sh
 
 # 5. 決策 promote/revert
 ./scripts/openclaw/decide.sh --promote EXP-ID --reason "..."
@@ -40,12 +40,12 @@
 
 互動模式：
 ```bash
-./scripts/openclaw/propose-mutation.sh
+./scripts/openclaw/propose_mutation.sh
 ```
 
 自動模式（供 OpenClaw 使用）：
 ```bash
-./scripts/openclaw/propose-mutation.sh --auto --agent growth-momentum-01
+./scripts/openclaw/propose_mutation.sh --auto --agent growth-momentum-01
 ```
 
 輸出：
@@ -58,16 +58,16 @@
 
 ```bash
 # 使用建議的 brief
-./scripts/openclaw/execute-next.sh
+./scripts/openclaw/execute_next.sh
 
 # 或直接指定
-./scripts/openclaw/execute-next.sh --brief path/to/brief.json
+./scripts/openclaw/execute_next.sh --brief path/to/brief.json
 ```
 
 ### Phase 4: 實驗判斷
 
 ```bash
-./scripts/openclaw/judge-latest.sh
+./scripts/openclaw/judge_latest.sh
 ```
 
 自動分析：
@@ -110,22 +110,22 @@ while true; do
     
     # 2. 如果沒有進行中的實驗，生成 mutation
     if ! echo "$STATUS" | grep -q "running"; then
-        ./scripts/openclaw/propose-mutation.sh --auto --dry-run
+        ./scripts/openclaw/propose_mutation.sh --auto --dry-run
         
         # 人工確認點
         read -p "Proceed with mutation? [y/N]: " confirm
         if [[ $confirm =~ ^[Yy]$ ]]; then
-            ./scripts/openclaw/propose-mutation.sh --auto
-            ./scripts/openclaw/execute-next.sh
+            ./scripts/openclaw/propose_mutation.sh --auto
+            ./scripts/openclaw/execute_next.sh
         fi
     fi
     
     # 3. 檢查完成的實驗
     if echo "$STATUS" | grep -q "completed"; then
-        ./scripts/openclaw/judge-latest.sh
+        ./scripts/openclaw/judge_latest.sh
         
         # 獲取建議
-        RECOMMENDATION=$(./scripts/openclaw/judge-latest.sh --recommendation)
+        RECOMMENDATION=$(./scripts/openclaw/judge_latest.sh --recommendation)
         
         # 人工確認點
         echo "Recommendation: $RECOMMENDATION"
@@ -160,7 +160,7 @@ done
 所有操作都支援 `--dry-run`：
 
 ```bash
-./scripts/openclaw/propose-mutation.sh --dry-run
+./scripts/openclaw/propose_mutation.sh --dry-run
 ./scripts/openclaw/decide.sh --promote EXP --reason "..." --dry-run
 ./scripts/openclaw/decide.sh --revert 2 --reason "..." --dry-run
 ```
@@ -214,7 +214,7 @@ ls -la data/replay/
 grep '"Status":"running"' data/state/experiments.jsonl
 
 # 手動判斷
-./scripts/openclaw/judge-latest.sh --force
+./scripts/openclaw/judge_latest.sh --force
 ```
 
 ### 需要回滾
@@ -236,9 +236,9 @@ grep '"Status":"running"' data/state/experiments.jsonl
 atlas/
 ├── scripts/openclaw/
 │   ├── status.sh           # 狀態報告
-│   ├── propose-mutation.sh # Mutation 建議
-│   ├── execute-next.sh     # 執行下一個實驗
-│   ├── judge-latest.sh     # 判斷最新實驗
+│   ├── propose_mutation.sh # Mutation 建議
+│   ├── execute_next.sh     # 執行下一個實驗
+│   ├── judge_latest.sh     # 判斷最新實驗
 │   └── decide.sh           # Promote/Revert 決策
 ├── docs/
 │   └── openclaw-protocol.md # 本文件
@@ -253,9 +253,9 @@ atlas/
 | OpenClaw 腳本 | 對應 Go 命令 | 說明 |
 |--------------|------------|------|
 | `status.sh` | 無 | 新增：統一狀態報告 |
-| `propose-mutation.sh` | 無 | 新增：Mutation 建議生成 |
-| `execute-next.sh` | `go run ./cmd/run-experiment` | 包裝層 |
-| `judge-latest.sh` | `go run ./cmd/judge-experiment` | 包裝層 |
+| `propose_mutation.sh` | 無 | 新增：Mutation 建議生成 |
+| `execute_next.sh` | `go run ./cmd/run-experiment` | 包裝層 |
+| `judge_latest.sh` | `go run ./cmd/judge-experiment` | 包裝層 |
 | `decide.sh --promote` | `go run ./cmd/promote-baseline` | 包裝層 + 安全檢查 |
 | `decide.sh --revert` | `go run ./cmd/revert-baseline` | 包裝層 + 確認流程 |
 
@@ -263,13 +263,13 @@ atlas/
 
 ### Phase 1: 核心腳本（已完成）
 - ✅ status.sh
-- ✅ propose-mutation.sh
+- ✅ propose_mutation.sh
 - ✅ decide.sh
 - ✅ Revert CLI
 
 ### Phase 2: 自動化強化
-- ⏳ execute-next.sh
-- ⏳ judge-latest.sh
+- ⏳ execute_next.sh
+- ⏳ judge_latest.sh
 - ⏳ --json 輸出模式
 - ⏳ OpenClaw 整合模式
 

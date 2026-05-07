@@ -17,7 +17,7 @@
 |------|------|------|
 | 智能 Mutation 选择 | `runner.go:selectMutationType()` | ✅ 通过 backtest |
 | 多样 Mutation 类型 | `prompt_tightening`, `risk_rule_change`, `portfolio_constraint_revision` | ✅ 实验验证 +9.4% |
-| 交互式脚本 | `propose-mutation.sh` 支持 `--type` 参数 | ✅ 手动测试 |
+| 交互式脚本 | `propose_mutation.sh` 支持 `--type` 参数 | ✅ 手动测试 |
 | 约束参数调整 | `MinRecommendationConviction: 0 → 60` | ✅ Full cycle 验证 |
 | 实验生命周期 | propose → execute → judge → promote | ✅ 完整运行 |
 
@@ -113,7 +113,7 @@ FUGLE_API_KEY=your_api_key_here
 ### 修改文件
 - `internal/evolution/runner.go` - 智能 mutation 选择
 - `internal/baseline/policy.go` - MinRecommendationConviction 调整
-- `scripts/openclaw/propose-mutation.sh` - 交互式 mutation 选择
+- `scripts/openclaw/propose_mutation.sh` - 交互式 mutation 选择
 - `internal/orchestrator/system.go` - Provider 整合
 - `internal/config/config.go` - .env 文件支持
 

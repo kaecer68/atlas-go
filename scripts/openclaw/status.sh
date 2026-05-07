@@ -136,19 +136,19 @@ recommend_action() {
         
         if [ "$RUNNING" -gt 0 ]; then
             print_warning "Finish running experiment first:"
-            echo "  ./scripts/openclaw/judge-latest.sh"
+            echo "  ./scripts/openclaw/judge_latest.sh"
         elif [ "$PLANNED" -gt 0 ]; then
             print_success "Execute planned experiment:"
-            echo "  ./scripts/openclaw/execute-next.sh"
+            echo "  ./scripts/openclaw/execute_next.sh"
         else
             print_success "Start new iteration cycle:"
-            echo "  ./scripts/openclaw/propose-mutation.sh"
+            echo "  ./scripts/openclaw/propose_mutation.sh"
         fi
     else
         print_success "Initialize system:"
         echo "  1. Import replay data: go run ./cmd/import-replay ..."
         echo "  2. Run backtest: go run ./cmd/backtest-window ..."
-        echo "  3. Generate mutation: ./scripts/openclaw/propose-mutation.sh"
+        echo "  3. Generate mutation: ./scripts/openclaw/propose_mutation.sh"
     fi
 }
 
@@ -167,9 +167,9 @@ main() {
     
     print_header "Quick Commands"
     echo "  ./scripts/openclaw/status.sh          # Show this report"
-    echo "  ./scripts/openclaw/propose-mutation.sh # Generate mutation suggestion"
-    echo "  ./scripts/openclaw/execute-next.sh    # Execute next planned experiment"
-    echo "  ./scripts/openclaw/judge-latest.sh    # Judge latest experiment"
+    echo "  ./scripts/openclaw/propose_mutation.sh # Generate mutation suggestion"
+    echo "  ./scripts/openclaw/execute_next.sh    # Execute next planned experiment"
+    echo "  ./scripts/openclaw/judge_latest.sh    # Judge latest experiment"
     echo "  ./scripts/openclaw/decide.sh          # Promote or revert decision"
 }
 

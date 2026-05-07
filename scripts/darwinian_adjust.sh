@@ -3,7 +3,7 @@
 # Darwinian Weight Daily Adjustment Script
 # Atlas-GIC Style: Adjusts agent weights based on rolling Sharpe performance
 #
-# Usage: ./scripts/darwinian-adjust.sh [--dry-run] [--reset]
+# Usage: ./scripts/darwinian_adjust.sh [--dry-run] [--reset]
 #
 
 set -euo pipefail

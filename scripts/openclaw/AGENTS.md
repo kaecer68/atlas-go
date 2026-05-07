@@ -12,7 +12,7 @@ OpenClaw 是 `atlas-go` 的治理層，將實驗驅動的開發流程（propose 
 
 ## 核心職責
 
-### 1. 日常執行 (`today-start.sh`)
+### 1. 日常執行 (`today_start.sh`)
 - 每日自動化啟動流程：`status` → `propose(auto)` → `execute(auto)` → `judge(auto)` → 決策提醒。
 - 支援視窗模式（window mode）：可指定回測日期區間。
 - 智慧變異選擇：若當前 mutation type 無效，自動嘗試替代方案（prompt_tightening → risk_rule_change → portfolio_constraint_revision）。
@@ -22,24 +22,24 @@ OpenClaw 是 `atlas-go` 的治理層，將實驗驅動的開發流程（propose 
 - `--dry-run` 預覽模式：不實際執行，僅輸出預計操作。
 - `--yes` 自動確認：用於 CI 或自動化 pipeline。
 
-### 3. 變異提案 (`propose-mutation.sh`)
+### 3. 變異提案 (`propose_mutation.sh`)
 - 根據 agent 績效與歷史實驗結果，自動產生 mutation brief。
 - 支援多種變異類型：`prompt_tightening`、`risk_rule_change`、`portfolio_constraint_revision`。
 
 ### 4. 閘門驗證
-- `verify-governance-gates.sh`：驗證 G2 replay 確定性、G3 hard-guard 阻擋行為、G4 trace 持久化、M5 多場景一致性、M7 approval event 可重播性。
-- `verify-operations-gate.sh`：操作層面檢查（部署就緒性）。
-- `verify-parallel-scenarios.sh`：平行場景驗證。
+- `verify_governance_gates.sh`：驗證 G2 replay 確定性、G3 hard-guard 阻擋行為、G4 trace 持久化、M5 多場景一致性、M7 approval event 可重播性。
+- `verify_operations_gate.sh`：操作層面檢查（部署就緒性）。
+- `verify_parallel_scenarios.sh`：平行場景驗證。
 
 ### 5. 實驗執行與評判
-- `execute-next.sh`：執行下一個待處理的 mutation brief。
-- `judge-latest.sh`：自動評判最新的實驗結果。
-- `run-validated-round.sh`：執行已驗證的完整實驗回合。
+- `execute_next.sh`：執行下一個待處理的 mutation brief。
+- `judge_latest.sh`：自動評判最新的實驗結果。
+- `run_validated_round.sh`：執行已驗證的完整實驗回合。
 
 ### 6. 狀態與管理
 - `status.sh`：查詢當前實驗與 baseline 狀態。
 - `onboard.sh`：新環境初始化與設定檔檢查。
-- `human-approval.sh`：人工審核事件處理。
+- `human_approval.sh`：人工審核事件處理。
 
 ---
 
@@ -55,8 +55,8 @@ OpenClaw 是 `atlas-go` 的治理層，將實驗驅動的開發流程（propose 
 ## ANTI-PATTERNS
 
 - **不可手動修改 baseline_policy.json**：所有政策變更必須透過 `promote-baseline` 或 `revert-baseline` 命令，禁止直接編輯 JSON。
-- **不可跳過閘門**：`verify-governance-gates.sh` 失敗時禁止繼續 promote，必須先修復問題。
-- **不可在生產環境執行 propose**：`propose-mutation.sh` 應在開發或 staging 環境執行，避免污染生產實驗歷史。
+- **不可跳過閘門**：`verify_governance_gates.sh` 失敗時禁止繼續 promote，必須先修復問題。
+- **不可在生產環境執行 propose**：`propose_mutation.sh` 應在開發或 staging 環境執行，避免污染生產實驗歷史。
 - **不可忽略 dry-run**：`decide.sh --dry-run` 輸出應仔細審查後再執行實際操作。
 
 ---
@@ -68,10 +68,10 @@ OpenClaw 是 `atlas-go` 的治理層，將實驗驅動的開發流程（propose 
 bash ./scripts/openclaw/status.sh
 
 # 驗證治理閘門（開發後必跑）
-bash ./scripts/openclaw/verify-governance-gates.sh --require-scenario-diversity
+bash ./scripts/openclaw/verify_governance_gates.sh --require-scenario-diversity
 
 # 執行完整日常流程（dry-run 預覽）
-bash ./scripts/openclaw/today-start.sh --dry-run
+bash ./scripts/openclaw/today_start.sh --dry-run
 
 # 決策輔助（promote 預覽）
 bash ./scripts/openclaw/decide.sh --promote exp-001 --reason "Improved Sharpe" --dry-run

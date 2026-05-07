@@ -134,8 +134,8 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 - **Coverage 門檻**：總覆蓋率不得低於 **40%**。
 - **治理與操作 gate**：
   ```bash
-  bash ./scripts/openclaw/verify-governance-gates.sh --require-scenario-diversity
-  bash ./scripts/openclaw/verify-operations-gate.sh
+  bash ./scripts/openclaw/verify_governance_gates.sh --require-scenario-diversity
+  bash ./scripts/openclaw/verify_operations_gate.sh
   ```
 
 ---

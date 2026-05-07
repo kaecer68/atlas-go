@@ -5,9 +5,9 @@
 ## 目錄
 
 1. [status.sh - 狀態報告](#statussh---狀態報告)
-2. [propose-mutation.sh - Mutation 建議](#propose-mutationsh---mutation-建議)
-3. [execute-next.sh - 執行實驗](#execute-nextsh---執行實驗)
-4. [judge-latest.sh - 判斷實驗](#judge-latestsh---判斷實驗)
+2. [propose_mutation.sh - Mutation 建議](#propose-mutationsh---mutation-建議)
+3. [execute_next.sh - 執行實驗](#execute-nextsh---執行實驗)
+4. [judge_latest.sh - 判斷實驗](#judge-latestsh---判斷實驗)
 5. [decide.sh - 決策執行](#decidesh---決策執行)
 6. [完整工作流程範例](#完整工作流程範例)
 7. [常見問題](#常見問題)
@@ -62,13 +62,13 @@
 
 === Recommended Next Action ===
 ⚠ Finish running experiment first:        ← 系統建議
-  ./scripts/openclaw/judge-latest.sh
+  ./scripts/openclaw/judge_latest.sh
 
 === Quick Commands ===
   ./scripts/openclaw/status.sh
-  ./scripts/openclaw/propose-mutation.sh
-  ./scripts/openclaw/execute-next.sh
-  ./scripts/openclaw/judge-latest.sh
+  ./scripts/openclaw/propose_mutation.sh
+  ./scripts/openclaw/execute_next.sh
+  ./scripts/openclaw/judge_latest.sh
   ./scripts/openclaw/decide.sh
 ```
 
@@ -81,7 +81,7 @@
 
 ---
 
-## propose-mutation.sh - Mutation 建議
+## propose_mutation.sh - Mutation 建議
 
 ### 用途
 分析 weakest agent，生成 mutation 改進建議。
@@ -90,7 +90,7 @@
 
 **互動模式（推薦給人類）**
 ```bash
-./scripts/openclaw/propose-mutation.sh
+./scripts/openclaw/propose_mutation.sh
 ```
 
 流程：
@@ -102,13 +102,13 @@
 **自動模式（推薦給 OpenClaw）**
 ```bash
 # 自動選擇 weakest agent
-./scripts/openclaw/propose-mutation.sh --auto
+./scripts/openclaw/propose_mutation.sh --auto
 
 # 指定特定 agent
-./scripts/openclaw/propose-mutation.sh --auto --agent growth-momentum-01
+./scripts/openclaw/propose_mutation.sh --auto --agent growth-momentum-01
 
 # 預覽不保存（dry-run）
-./scripts/openclaw/propose-mutation.sh --auto --dry-run
+./scripts/openclaw/propose_mutation.sh --auto --dry-run
 ```
 
 ### 輸出範例
@@ -157,7 +157,7 @@ Save this brief? [Y/n]: y
 Next Steps:
 1. Review the generated brief
 2. Execute experiment:
-   ./scripts/openclaw/execute-next.sh
+   ./scripts/openclaw/execute_next.sh
 ```
 
 ### 什麼時候使用
@@ -168,7 +168,7 @@ Next Steps:
 
 ---
 
-## execute-next.sh - 執行實驗
+## execute_next.sh - 執行實驗
 
 ### 用途
 執行下一個準備好的實驗（planned 狀態或 mutation brief）。
@@ -177,17 +177,17 @@ Next Steps:
 
 **互動模式**
 ```bash
-./scripts/openclaw/execute-next.sh
+./scripts/openclaw/execute_next.sh
 ```
 
 **指定 mutation brief**
 ```bash
-./scripts/openclaw/execute-next.sh --brief data/state/mutation-briefs/brief-xxx.json
+./scripts/openclaw/execute_next.sh --brief data/state/mutation-briefs/brief-xxx.json
 ```
 
 **自動模式**
 ```bash
-./scripts/openclaw/execute-next.sh --auto
+./scripts/openclaw/execute_next.sh --auto
 ```
 
 ### 執行流程
@@ -217,7 +217,7 @@ Command: go run ./cmd/run-experiment
 
 Next steps:
   1. Wait for execution to complete
-  2. Run: ./scripts/openclaw/judge-latest.sh
+  2. Run: ./scripts/openclaw/judge_latest.sh
 ```
 
 ### 什麼時候使用
@@ -228,7 +228,7 @@ Next steps:
 
 ---
 
-## judge-latest.sh - 判斷實驗
+## judge_latest.sh - 判斷實驗
 
 ### 用途
 判斷最新完成的實驗，提供決策建議。
@@ -237,17 +237,17 @@ Next steps:
 
 **互動模式**
 ```bash
-./scripts/openclaw/judge-latest.sh
+./scripts/openclaw/judge_latest.sh
 ```
 
 **JSON 輸出（供 OpenClaw 使用）**
 ```bash
-./scripts/openclaw/judge-latest.sh --json
+./scripts/openclaw/judge_latest.sh --json
 ```
 
 **自動模式**
 ```bash
-./scripts/openclaw/judge-latest.sh --auto
+./scripts/openclaw/judge_latest.sh --auto
 ```
 
 ### 輸出範例
@@ -287,7 +287,7 @@ Next step:
 ### JSON 輸出範例
 
 ```bash
-$ ./scripts/openclaw/judge-latest.sh --json
+$ ./scripts/openclaw/judge_latest.sh --json
 {
   "recommendation": "--promote exec-growth-momentum-01-1774800459",
   "reason": "Experiment passed all acceptance gates",
@@ -298,7 +298,7 @@ $ ./scripts/openclaw/judge-latest.sh --json
 
 ### 什麼時候使用
 
-- ✅ execute-next.sh 執行完成後
+- ✅ execute_next.sh 執行完成後
 - ✅ status.sh 顯示有 completed experiments 時
 - ✅ 想要了解實驗結果時
 
@@ -408,7 +408,7 @@ reverted_experiment_ids:
 
 ### 什麼時候使用
 
-- ✅ judge-latest.sh 建議 promote 時
+- ✅ judge_latest.sh 建議 promote 時
 - ✅ 發現問題需要回滾時
 - ✅ 想要回退到穩定版本時
 
@@ -425,18 +425,18 @@ reverted_experiment_ids:
 #          Recommended: Start new iteration cycle
 
 # Step 2: 生成 mutation 建議
-./scripts/openclaw/propose-mutation.sh
+./scripts/openclaw/propose_mutation.sh
 # 系統找出 growth-momentum-01 是最弱的
 # 顯示 mutation brief
 # 確認保存
 
 # Step 3: 執行實驗
-./scripts/openclaw/execute-next.sh
+./scripts/openclaw/execute_next.sh
 # 確認執行
 # 等待完成
 
 # Step 4: 判斷結果（稍後執行）
-./scripts/openclaw/judge-latest.sh
+./scripts/openclaw/judge_latest.sh
 # 顯示：Candidate improved by 5.2%
 #       Recommendation: promote
 
@@ -466,7 +466,7 @@ if echo "$STATUS" | grep -q "Start new iteration cycle"; then
     echo "🤖 OpenClaw: Proposing mutation..."
     
     # 生成 mutation brief
-    ./scripts/openclaw/propose-mutation.sh --auto --dry-run
+    ./scripts/openclaw/propose_mutation.sh --auto --dry-run
     
     # 人工確認點 1
     echo ""
@@ -474,8 +474,8 @@ if echo "$STATUS" | grep -q "Start new iteration cycle"; then
     
     if [[ "$approve" =~ ^[Yy]$ ]]; then
         # 保存並執行
-        ./scripts/openclaw/propose-mutation.sh --auto
-        ./scripts/openclaw/execute-next.sh --auto
+        ./scripts/openclaw/propose_mutation.sh --auto
+        ./scripts/openclaw/execute_next.sh --auto
         echo "✅ Experiment started"
     else
         echo "❌ Cancelled"
@@ -488,7 +488,7 @@ if echo "$STATUS" | grep -q "completed"; then
     echo "🤖 OpenClaw: Judging latest experiment..."
     
     # 判斷
-    JUDGMENT=$(./scripts/openclaw/judge-latest.sh --json)
+    JUDGMENT=$(./scripts/openclaw/judge_latest.sh --json)
     RECOMMENDATION=$(echo "$JUDGMENT" | grep -o '"recommendation": "[^"]*"' | cut -d'"' -f4)
     REASON=$(echo "$JUDGMENT" | grep -o '"reason": "[^"]*"' | cut -d'"' -f4)
     
@@ -528,14 +528,14 @@ ls data/replay/
 ./scripts/openclaw/status.sh
 
 # 3. 如果顯示 "Start new iteration cycle"
-./scripts/openclaw/propose-mutation.sh
+./scripts/openclaw/propose_mutation.sh
 # 跟隨互動提示
 ```
 
 ### Q: 如何指定特定 agent 進行改進？
 
 ```bash
-./scripts/openclaw/propose-mutation.sh --agent semiconductor_desk-01
+./scripts/openclaw/propose_mutation.sh --agent semiconductor_desk-01
 ```
 
 ### Q: 實驗執行後如何知道完成了？
@@ -570,13 +570,13 @@ ls -lt data/state/experiments/
 
 ```bash
 # 自動生成 mutation（不交互）
-./scripts/openclaw/propose-mutation.sh --auto
+./scripts/openclaw/propose_mutation.sh --auto
 
 # 自動執行實驗
-./scripts/openclaw/execute-next.sh --auto
+./scripts/openclaw/execute_next.sh --auto
 
 # 自動判斷
-./scripts/openclaw/judge-latest.sh --auto --json
+./scripts/openclaw/judge_latest.sh --auto --json
 
 # 自動 promote（謹慎使用）
 ./scripts/openclaw/decide.sh --promote EXP-ID --reason "..." --yes
@@ -587,7 +587,7 @@ ls -lt data/state/experiments/
 所有腳本都支援 dry-run：
 
 ```bash
-./scripts/openclaw/propose-mutation.sh --dry-run
+./scripts/openclaw/propose_mutation.sh --dry-run
 ./scripts/openclaw/decide.sh --promote EXP-ID --reason "..." --dry-run
 ./scripts/openclaw/decide.sh --revert --reason "..." --dry-run
 ```
@@ -613,9 +613,9 @@ Error: --reason is required for revert (use --dry-run to preview)
 | 腳本 | 核心功能 | 人工確認點 |
 |------|----------|------------|
 | `status.sh` | 查看狀態 | 無需確認 |
-| `propose-mutation.sh` | 生成改進建議 | **需要確認** |
-| `execute-next.sh` | 執行實驗 | 可選確認 |
-| `judge-latest.sh` | 判斷結果 | 無需確認 |
+| `propose_mutation.sh` | 生成改進建議 | **需要確認** |
+| `execute_next.sh` | 執行實驗 | 可選確認 |
+| `judge_latest.sh` | 判斷結果 | 無需確認 |
 | `decide.sh` | **Promote/Revert** | **必須確認** |
 
 **記住**：Promote 和 Revert 是單向門操作，系統強制要求 reason 和確認。

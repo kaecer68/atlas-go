@@ -24,7 +24,7 @@
   ```
 - [ ] **Agent Prompt**: 確認所有 enabled agent 有對應 prompt 檔案
   ```bash
-  bash ./scripts/openclaw/verify-governance-gates.sh --require-scenario-diversity
+  bash ./scripts/openclaw/verify_governance_gates.sh --require-scenario-diversity
   ```
 
 ### 盤中（09:00-13:30）

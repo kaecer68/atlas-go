@@ -14,7 +14,7 @@ REQUIRE_DIVERSITY=false
 
 usage() {
 	cat <<'EOF'
-Usage: ./scripts/openclaw/verify-parallel-scenarios.sh [options]
+Usage: ./scripts/openclaw/verify_parallel_scenarios.sh [options]
 
 Options:
   --start YYYY-MM-DD      Backtest window start date (default: 2026-03-26)

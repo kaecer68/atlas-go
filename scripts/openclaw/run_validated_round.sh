@@ -11,9 +11,9 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 # 资源监控检查
 check_resources() {
-  if [[ -f "${PROJECT_ROOT}/scripts/monitor/resource-guard.sh" ]]; then
+  if [[ -f "${PROJECT_ROOT}/scripts/monitor/resource_guard.sh" ]]; then
     echo -e "${CYAN}[Resource Check]${NC} Checking system resources..."
-    if ! bash "${PROJECT_ROOT}/scripts/monitor/resource-guard.sh" check; then
+    if ! bash "${PROJECT_ROOT}/scripts/monitor/resource_guard.sh" check; then
       echo -e "${YELLOW}Warning: System resources are constrained.${NC}"
       read -r -p "Continue anyway? [y/N]: " response
       if [[ ! "$response" =~ ^[Yy]$ ]]; then
@@ -26,9 +26,9 @@ check_resources() {
 
 # 轮次停止条件检查
 check_round_limits() {
-  if [[ -f "${PROJECT_ROOT}/scripts/monitor/round-tracker.sh" ]]; then
+  if [[ -f "${PROJECT_ROOT}/scripts/monitor/round_tracker.sh" ]]; then
     echo -e "${CYAN}[Round Check]${NC} Checking round limits..."
-    local stop_check=$(bash "${PROJECT_ROOT}/scripts/monitor/round-tracker.sh" check 2>&1)
+    local stop_check=$(bash "${PROJECT_ROOT}/scripts/monitor/round_tracker.sh" check 2>&1)
     if echo "$stop_check" | grep -q '"should_stop":true'; then
       echo -e "${RED}Stop condition met:${NC}"
       echo "$stop_check"
@@ -58,7 +58,7 @@ if [ "$#" -gt 0 ]; then
 fi
 
 echo -e "${CYAN}[1/4] Propose mutation brief...${NC}"
-./scripts/openclaw/propose-mutation.sh "${PROPOSE_ARGS[@]}" >/tmp/openclaw_propose.out 2>&1 || {
+./scripts/openclaw/propose_mutation.sh "${PROPOSE_ARGS[@]}" >/tmp/openclaw_propose.out 2>&1 || {
   cat /tmp/openclaw_propose.out
   exit 1
 }
@@ -117,8 +117,8 @@ else
 fi
 
 # 记录本轮结果到轮次追踪器
-if [[ -f "${PROJECT_ROOT}/scripts/monitor/round-tracker.sh" ]]; then
-  round=$(bash "${PROJECT_ROOT}/scripts/monitor/round-tracker.sh" check 2>&1 | grep -o '"current_round":[0-9]*' | cut -d: -f2)
+if [[ -f "${PROJECT_ROOT}/scripts/monitor/round_tracker.sh" ]]; then
+  round=$(bash "${PROJECT_ROOT}/scripts/monitor/round_tracker.sh" check 2>&1 | grep -o '"current_round":[0-9]*' | cut -d: -f2)
   round=${round:-0}
   result="${status:-rejected}"
   
@@ -133,10 +133,10 @@ if [[ -f "${PROJECT_ROOT}/scripts/monitor/round-tracker.sh" ]]; then
     improvement="0"
   fi
   
-  bash "${PROJECT_ROOT}/scripts/monitor/round-tracker.sh" record "$round" "$result" "$exp_id" "$agent" "$mutation_type" "$improvement" 2>/dev/null || true
+  bash "${PROJECT_ROOT}/scripts/monitor/round_tracker.sh" record "$round" "$result" "$exp_id" "$agent" "$mutation_type" "$improvement" 2>/dev/null || true
   echo -e "${CYAN}[Round Recorded]${NC} Round $round: $result (improvement: $improvement)"
 fi
 
 echo ""
-echo "Next: Run ./scripts/openclaw/run-validated-round.sh for another round"
-echo "      or check stats: ./scripts/monitor/round-tracker.sh stats"
+echo "Next: Run ./scripts/openclaw/run_validated_round.sh for another round"
+echo "      or check stats: ./scripts/monitor/round_tracker.sh stats"

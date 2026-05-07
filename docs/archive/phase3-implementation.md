@@ -340,7 +340,7 @@ cat reports/gap_detection_$(date +%Y%m%d).json
 ./scripts/prism-train.sh --new-agents-only
 
 # 4. Check reflexivity alerts
-./scripts/reflexivity-report.sh
+./scripts/reflexivity_report.sh
 
 # 5. Run swarm simulation for market scenarios
 ./scripts/swarm-run.sh --duration=1h
@@ -349,7 +349,7 @@ cat reports/gap_detection_$(date +%Y%m%d).json
 ### Evening Routine
 ```bash
 # 1. Darwinian weight adjustment
-./scripts/darwinian-adjust.sh
+./scripts/darwinian_adjust.sh
 
 # 2. Spawn agents for detected gaps (if any)
 ./scripts/spawning-cycle.sh
@@ -358,7 +358,7 @@ cat reports/gap_detection_$(date +%Y%m%d).json
 ./scripts/prism-update.sh
 
 # 4. Generate reflexivity report
-./scripts/reflexivity-report.sh --save
+./scripts/reflexivity_report.sh --save
 
 # 5. Export swarm training data
 ./scripts/swarm-export.sh

@@ -207,7 +207,7 @@ services:
     restart: unless-stopped
     environment:
       - CRON_SCHEDULE=0 9 * * *
-      - CRON_COMMAND=/app/scripts/darwinian-adjust.sh --apply
+      - CRON_COMMAND=/app/scripts/darwinian_adjust.sh --apply
       - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas_secret}@postgres:5432/atlas?sslmode=disable
     volumes:
       - ./data:/app/data

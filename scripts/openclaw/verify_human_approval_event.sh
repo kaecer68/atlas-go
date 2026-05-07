@@ -10,7 +10,7 @@ TMP_ROOT=""
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/openclaw/verify-human-approval-event.sh [OPTIONS]
+Usage: ./scripts/openclaw/verify_human_approval_event.sh [OPTIONS]
 
 Verifies human approval event schema and replayability.
 
@@ -66,7 +66,7 @@ EVENT_JSON="$TMP_ROOT/event.json"
 SCHEMA_CHECK="$TMP_ROOT/schema_check.json"
 
 log "Generating reject decision event in dry-run mode"
-./scripts/openclaw/human-approval.sh \
+./scripts/openclaw/human_approval.sh \
   --reject \
   --experiment "exp-verify-human-approval" \
   --reason "schema-replay verification" \
@@ -115,7 +115,7 @@ if ! diff -u "$TMP_ROOT/event.sorted.json" "$TMP_ROOT/file.sorted.json" >/dev/nu
 fi
 
 log "Replaying stored event in dry-run mode"
-./scripts/openclaw/replay-approval-event.sh --event "$EVENT_FILE" --dry-run --json > "$SCHEMA_CHECK"
+./scripts/openclaw/replay_approval_event.sh --event "$EVENT_FILE" --dry-run --json > "$SCHEMA_CHECK"
 jq -e '.replayed_from == "'"$EVENT_ID"'"' "$SCHEMA_CHECK" >/dev/null
 jq -e '.replay_output.action == "reject"' "$SCHEMA_CHECK" >/dev/null
 

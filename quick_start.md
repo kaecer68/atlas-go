@@ -25,21 +25,21 @@ ls scripts/openclaw/  # 應該有 6 個腳本
 
 ### 場景 A：系統建議 "judge-latest"
 ```bash
-./scripts/openclaw/judge-latest.sh --auto --json
+./scripts/openclaw/judge_latest.sh --auto --json
 # 分析結果 → 如果 accepted → promote
 #                rejected → 跳過
 ```
 
 ### 場景 B：系統建議 "execute-next"
 ```bash
-./scripts/openclaw/execute-next.sh --auto
-./scripts/openclaw/judge-latest.sh --auto --json
+./scripts/openclaw/execute_next.sh --auto
+./scripts/openclaw/judge_latest.sh --auto --json
 # 然後 promote 或 skip
 ```
 
 ### 場景 C：系統建議 "propose-mutation"
 ```bash
-./scripts/openclaw/propose-mutation.sh --auto
+./scripts/openclaw/propose_mutation.sh --auto
 # 審查生成的 brief → 確認 → execute
 ```
 
@@ -66,7 +66,7 @@ ls scripts/openclaw/  # 應該有 6 個腳本
 
 | 問題 | 解決 |
 |------|------|
-| "No experiments" | 執行 propose-mutation.sh |
+| "No experiments" | 執行 propose_mutation.sh |
 | "Cannot find file" | 稍等後重試 |
 | BaselineValue=0 | 先執行 backtest-window |
 
