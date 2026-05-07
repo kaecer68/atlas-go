@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -580,7 +581,7 @@ func (s *DataChannelService) buildJanusRegimeChannel(now time.Time) DataChannel 
 func (s *DataChannelService) buildTEJChannel(now time.Time) DataChannel {
 	status := "inactive"
 	updated := "TEJ_API_KEY not configured"
-	tejKey := os.Getenv("TEJ_API_KEY")
+	tejKey := config.GetSecret("TEJ_API_KEY")
 	if tejKey != "" {
 		status = "ok"
 		updated = "TEJ API key configured"

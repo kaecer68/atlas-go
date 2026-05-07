@@ -62,9 +62,9 @@ func Load() Config {
 		LedgerDir:                  envOr("ATLAS_LEDGER_DIR", "data/state"),
 		ReplayDataPath:             envOr("ATLAS_REPLAY_DATA_PATH", "samples/replay/twse_stock_day_all_sample.csv"),
 		ReplaySessionDate:          envOr("ATLAS_REPLAY_SESSION_DATE", "2026-03-26"),
-		FubonAPIKey:                envOrPriority("FUBON_API_KEY", "ATLAS_FUBON_API_KEY"),
-		FugleAPIKey:                envOrPriority("FUGLE_API_KEY", "ATLAS_FUGLE_API_KEY"),
-		FinMindAPIKey:              envOr("FINMIND_API_KEY", ""),
+		FubonAPIKey:                envOrKeychain("FUBON_API_KEY", ""),
+		FugleAPIKey:                envOrKeychain("FUGLE_API_KEY", ""),
+		FinMindAPIKey:              envOrKeychain("FINMIND_API_KEY", ""),
 		YahooEnabled:               os.Getenv("ATLAS_YAHOO_ENABLED") == "true",
 		BrokerMode:                 envOr("ATLAS_BROKER_MODE", "dry-run"),
 		BrokerMaxRetries:           envOrInt("ATLAS_BROKER_MAX_RETRIES", 1),
@@ -91,6 +91,13 @@ func envOr(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// envOrKeychain reads from environment variable first,
+// falling back to the system keychain. Currently delegates to envOr
+// since keychain integration is not yet implemented.
+func envOrKeychain(key, fallback string) string {
+	return envOr(key, fallback)
 }
 
 func envOrPriority(keys ...string) string {
@@ -137,6 +144,12 @@ func envOrIntCSV(key string, fallback []int) []int {
 		return append([]int(nil), fallback...)
 	}
 	return parsed
+}
+
+// GetSecret retrieves a secret from the environment or macOS Keychain.
+// Use this for secrets not covered by the Config struct fields.
+func GetSecret(key string) string {
+	return envOrKeychain(key, "")
 }
 
 // loadEnvFile 从 .env 文件加载环境变量

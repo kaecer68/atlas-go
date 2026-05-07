@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -227,7 +228,7 @@ func (s *ChannelIngestService) TriggerAllIngests(ctx context.Context) ChannelIng
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		tejKey := os.Getenv("TEJ_API_KEY")
+		tejKey := config.GetSecret("TEJ_API_KEY")
 		if tejKey == "" {
 			s.healthStore.Record("tej", "inactive", "TEJ_API_KEY not set")
 			log.Printf("[ChannelIngest] TEJ ingest skipped: TEJ_API_KEY not set")
