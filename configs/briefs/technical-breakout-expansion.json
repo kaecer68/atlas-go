@@ -6,7 +6,7 @@
   "target_skill": "ai_supply_chain_desk",
   "target_layer": "sector",
   "prompt_file": "prompts/agents/ai_supply_chain_desk.md",
-  "mutation_type": "prompt_expansion",
+  "mutation_type": "prompt_tightening",
   "failure_pattern": "Overly strict breakout criteria miss early institutional accumulation phases, leaving alpha on the table.",
   "hypothesis": "Expanding acceptable breakout participation criteria while maintaining structural quality can capture more early-move alpha.",
   "acceptance_metric": "sharpe_like",
