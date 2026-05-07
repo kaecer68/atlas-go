@@ -1,0 +1,368 @@
+import { agentName, stockName, regimeLabel, eventName, stressLabel, sectorName } from '../names.js';
+
+
+// Main overview dashboard
+export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents, stress, dataChannels, capitalPhase) {
+  const gridMarket = document.getElementById('overviewMarket');
+  const gridRisk = document.getElementById('overviewRisk');
+  const gridSystem = document.getElementById('overviewSystem');
+  [gridMarket, gridRisk, gridSystem].forEach(g => g.classList.remove('loading'));
+  const health = data || {};
+  const cards = agentsData || {};
+  const weakest = cards.next_experiment_agent_id || '-';
+  const weakCard = (cards.weakest_agent_scorecards || []).find(c => c.agent_id === weakest);
+  const weakSharpe = weakCard ? (weakCard.sharpe || 0).toFixed(3) : '-';
+
+  const warnings = health.warnings || [];
+  const crowdingWarnings = warnings.filter(w => w.toLowerCase().includes('crowded trade') || w.toLowerCase().includes('high overlap'));
+
+  const pendingJudges = (inbox && inbox.pending_judges) ? inbox.pending_judges.length : 0;
+  const pendingPromotes = (inbox && inbox.pending_promotes) ? inbox.pending_promotes.length : 0;
+  const experimentText = (pendingJudges || pendingPromotes) ? `待評判 ${pendingJudges} · 待晉升 ${pendingPromotes}` : '全部完成';
+
+  const regime = (data && data.regime) || '-';
+  const regimeColor = regime === 'RISK_ON' ? 'var(--up)' : (regime === 'RISK_OFF' ? 'var(--down)' : (regime === 'NEUTRAL' ? 'var(--warn)' : 'inherit'));
+
+  const nev = (narrativeEvents && narrativeEvents.events) || [];
+  // 以「情緒絕對值 × 信心度」排序，取最強烈的事件作為代表
+  const sortedEvents = nev.slice().sort((a, b) => {
+    const strengthA = Math.abs(a.sentiment || 0) * (a.confidence || 1);
+    const strengthB = Math.abs(b.sentiment || 0) * (b.confidence || 1);
+    return strengthB - strengthA;
+  });
+  const topEvent = sortedEvents[0];
+  const stressScore = stress && typeof stress.score === 'number' ? stress.score.toFixed(1) : '-';
+  const stressRegime = stress ? stressLabel(stress.regime || '-') : '-';
+  const narrativeTitle = topEvent ? eventName(topEvent.theme) : '無活躍事件';
+  const narrativeSub = `外資出逃指數 ${stressScore}分（${stressRegime}）· ${nev.length} 個事件`;
+
+  let crowdingHtml = '';
+  if (crowdingWarnings.length) {
+    crowdingHtml = crowdingWarnings.map(w => {
+      const text = w.replace('擁擠交易：', '').replace('重疊過高：', '');
+      return `<div class="my-xs text-sm text-warn">⚠ ${text}</div>`;
+    }).join('');
+  } else {
+    crowdingHtml = '<div class="my-xs text-sm text-up">✓ 無擁擠標的</div>';
+  }
+
+  // Data channel alerts - unified from system-health API
+  const sysChannels = (health && health.data_channels) || [];
+  const errorChannels = sysChannels.filter(c => c.status === 'error');
+  const warnChannels = sysChannels.filter(c => c.status === 'warn');
+  const totalAlerts = errorChannels.length;
+  const alertHtml = totalAlerts > 0
+    ? `<div style="margin:4px 0;font-size:13px;color:var(--down)">⚠ ${errorChannels.map(c => escapeHtml(c.label)).join('、')} 發生異常</div>`
+    : (warnChannels.length > 0
+      ? `<div class="my-xs text-sm text-warn">⚠ ${warnChannels.map(c => escapeHtml(c.label)).join('、')} 資料延遲</div>`
+      : '<div class="my-xs text-sm text-up">✓ 所有通道正常</div>');
+
+  const phaseMap = { simulation: '模擬', paper: '模擬', live: '實盤', full: '全倉' };
+  const phaseColor = capitalPhase ? (capitalPhase.can_advance ? 'var(--up)' : 'var(--warn)') : 'inherit';
+  const phaseHtml = capitalPhase
+    ? `<div class="my-xs text-sm text-muted">第 ${capitalPhase.days_in_phase} 天 · Sharpe ${(capitalPhase.rolling_sharpe || 0).toFixed(2)}</div>`
+    : '<div class="my-xs text-sm text-muted">-</div>';
+
+  gridMarket.innerHTML = `
+    <div class="kpi-card clickable" onclick="openKpiHelp('narrative')"><div class="kpi-label">敘事脈絡</div><div class="kpi-value text-lg">${narrativeTitle}</div><div class="kpi-hint">${narrativeSub} · <a href="#" onclick="event.stopPropagation();switchPage('narrative');return false;" class="text-accent">開啟宏觀敘事 →</a></div></div>
+    <div class="kpi-card clickable" onclick="openKpiHelp('regime')"><div class="kpi-label">市場狀態</div><div class="kpi-value" style="color:${regimeColor}">${regimeLabel(regime)}</div></div>
+  `;
+  gridRisk.innerHTML = `
+    <div class="kpi-card clickable" onclick="openKpiHelp('weakest')"><div class="kpi-label">表現最差 AI</div><div class="kpi-value">${agentName(weakest)}</div><div class="kpi-hint">Sharpe-like：${weakSharpe}</div></div>
+    <div class="kpi-card ${crowdingWarnings.length ? 'alert-err' : ''} clickable" onclick="openKpiHelp('crowding')"><div class="kpi-label">擁擠標的</div><div class="kpi-value text-lg">${crowdingWarnings.length ? crowdingWarnings.length + ' 筆' : '正常'}</div>${crowdingHtml}</div>
+    <div class="kpi-card ${totalAlerts > 0 ? 'alert-err' : ''} clickable" onclick="switchPage('datachannels')"><div class="kpi-label">信息通道預警</div><div class="kpi-value text-lg">${totalAlerts > 0 ? totalAlerts + ' 筆異常' : (warnChannels.length > 0 ? warnChannels.length + ' 筆延遲' : '正常')}</div>${alertHtml}</div>
+  `;
+  gridSystem.innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">資料時間</div><div class="kpi-value text-lg">${health.replay_data_latest_date || '?'}</div><div class="kpi-hint">窗口 ${health.last_window_id || '?'} · 生成於 ${formatDate(health.last_window_generated_at)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">基線版本</div><div class="kpi-value">${health.baseline_version || '?'}</div><div class="kpi-hint">目前生效的政策</div></div>
+    <div class="kpi-card clickable" onclick="openKpiHelp('experiment')"><div class="kpi-label">實驗狀態</div><div class="kpi-value text-lg">${experimentText}</div><div class="kpi-hint">待處理項目</div></div>
+    <div class="kpi-card clickable" onclick="switchPage('controls')"><div class="kpi-label">資金階段</div><div class="kpi-value" style="color:${phaseColor};font-size:18px">${capitalPhase ? phaseMap[capitalPhase.phase] || capitalPhase.phase : '-'}</div>${phaseHtml}</div>
+  `;
+}
+
+
+// --- Utilities ---
+
+function formatDate(d) { return d ? new Date(d).toLocaleString('zh-TW') : '-'; }
+function fmt(num, digits=3) { return (num ?? 0).toFixed(digits); }
+
+
+export function renderEmptyState(message, action, hint) {
+  return `<div class="empty-state-guidance">
+    <div class="icon">📭</div>
+    <div class="title">${message}</div>
+    ${hint ? `<div class="desc">${hint}</div>` : ''}
+    ${action ? `<div class="action">${action}</div>` : ''}
+  </div>`;
+}
+
+export function renderSkeleton(lines=4) {
+  let html = '';
+  for (let i = 0; i < lines; i++) {
+    const w = Math.random() * 30 + 50;
+    html += `<div class="skeleton skeleton-line" style="width:${w}%"></div>`;
+  }
+  return `<div class="skeleton-block"></div><div style="padding:8px">${html}</div>`;
+}
+
+export function computePipelineSummary(guardOutcomes) {
+  const guard = guardOutcomes || [];
+  const firstGuard = guard[0];
+  const lastGuard = guard[guard.length - 1];
+  const rawInputs = firstGuard ? (firstGuard.input_count || 0) : 0;
+  const finalOutputs = lastGuard ? (lastGuard.output_count || 0) : 0;
+  const filteredCount = Math.max(0, rawInputs - finalOutputs);
+  return { rawInputs, finalOutputs, filteredCount, guard };
+}
+
+export function renderMacroRadar(data, pipelineData) {
+  const el = document.getElementById('macroRadar');
+  if (!data || !data.session_id) { el.innerHTML = renderEmptyState('尚無回測資料', '執行回測後將自動顯示'); el.classList.remove('loading'); return; }
+  el.classList.remove('loading');
+  const { rawInputs, finalOutputs, filteredCount, guard } = computePipelineSummary(data.guard_outcomes);
+  const regimeColor = data.regime === 'RISK_ON' ? 'var(--up)' : (data.regime === 'RISK_OFF' ? 'var(--down)' : (data.regime === 'NEUTRAL' ? 'var(--warn)' : 'inherit'));
+  const recordedAt = data.recorded_at ? formatDate(data.recorded_at) : '-';
+  const items = (pipelineData && pipelineData.items) || [];
+
+  let controlSummary = '';
+  if (guard.length) {
+    const lines = guard.map(g => {
+      const inputCount = g.input_count || 0;
+      const outputCount = g.output_count || 0;
+      const filtered = inputCount - outputCount;
+      if (!g.passed) return `<span class="text-down">● ${agentName(g.guard_id)} 強制阻擋全部推薦（${inputCount} → 0）</span>`;
+      if (filtered > 0) return `<span class="text-warn">● ${agentName(g.guard_id)} 過濾了 ${filtered} 筆推薦（${inputCount} → ${outputCount}）</span>`;
+      return `<span class="text-up">● ${agentName(g.guard_id)} 未過濾任何推薦，全部放行</span>`;
+    });
+    controlSummary = `<div style="margin:8px 0;font-size:12px;line-height:1.6;background:var(--bg);padding:8px 10px;border-radius:6px">${lines.join('<br>')}</div>`;
+  }
+
+  const passedItems = items.filter(it => it.passed_guards);
+  const topItems = passedItems.slice(0, 5);
+  let symbolTable = '';
+  if (topItems.length) {
+    symbolTable = `
+      <div style="margin-top:10px;font-size:13px;font-weight:700">最新回測認為可進場的標的（${finalOutputs} 檔中的前 ${topItems.length} 檔）</div>
+      <table style="margin-top:6px;font-size:12px">
+        <thead><tr><th>標的</th><th>公司名稱</th><th>推薦 AI</th><th>信念 <span class="cursor-pointer text-accent" onclick="event.stopPropagation();openInfoHelp('信念說明', \`<p><strong>信念（Conviction）是什麼？</strong></p><p>這是 AI Agent 對該標的推薦信心分數，範圍通常為 <strong>0 ~ 100</strong>。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>&gt;70</strong>：高信念，AI 認為該標的強烈符合策略條件且風險可控。</li><li><strong>40~70</strong>：中等信念，條件部分符合，但可能存在不確定性。</li><li><strong>&lt;40</strong>：低信念，條件邊緣符合，容易被控制層過濾。</li></ul><p>當多個 AI 同時推薦同一標的時，控制層可能會對信念較低的推薦進行懲罰或過濾。</p>\`)">ℹ️</span></th><th>遠期報酬 <span class="cursor-pointer text-accent" onclick="event.stopPropagation();openInfoHelp('遠期報酬說明', \`<p><strong>遠期報酬是什麼？</strong></p><p>這是系統在回測模擬中，假設「以當日收盤價買入該標的並持有固定天數」後計算出的收益率。</p><p>數值可正可負，例如 <strong>+8.5%</strong> 代表回測中持有期間上漲，<strong>-20.9%</strong> 代表下跌。幅度大小取決於市場波動與持有期間長度。</p><p><strong>這不是未來保證</strong>，而是用來驗證 AI 推薦品質的歷史參考值。持續為正的遠期報酬代表該 AI 的選股邏輯在當前市場體制下相對有效。</p>\`)">ℹ️</span></th></tr></thead>
+        <tbody>
+          ${topItems.map(it => {
+            const retCls = it.forward_return > 0 ? 'up' : (it.forward_return < 0 ? 'down' : '');
+            return `<tr><td>${it.symbol}</td><td>${stockName(it.symbol) || '-'}</td><td>${agentName(it.agent_id)}</td><td>${it.conviction || '-'}</td><td class="${retCls}">${(it.forward_return*100).toFixed(1)}%</td></tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      ${passedItems.length > 5 ? `<div style="margin-top:4px;font-size:12px;color:var(--muted)">尚有 ${passedItems.length - 5} 檔標的，請前往<a href="#" onclick="switchPage('pipeline');return false;" style="color:var(--accent);text-decoration:underline">【投資管線】</a>查看完整清單與操作建議 →</div>` : ''}
+    `;
+  } else if (finalOutputs > 0) {
+    symbolTable = `<div style="margin-top:10px;font-size:12px;color:var(--warn)">控制層放行 ${finalOutputs} 筆，但投資管線暫無詳細標的資料（可能該場次尚未載入管線數據）。</div>`;
+  } else if (guard.length) {
+    symbolTable = renderEmptyState('本場次無被推薦標的進入模擬投組', 'AI 推薦可能全部被控制層過濾');
+  }
+
+  el.innerHTML = `
+    <div class="mb-sm text-muted text-sm">
+      以下為 <strong>最新回測場次</strong>（${recordedAt}）。這不是即時持倉，而是系統以當時資料與基線策略模擬後，控制層對 AI 推薦的最終處置。
+    </div>
+    <div class="metric"><div class="label">回測場次</div><div class="value">${data.session_id}</div></div>
+    <div class="metric"><div class="label">市場狀態</div><div class="value" style="color:${regimeColor}">${regimeLabel(data.regime || '-')}</div></div>
+    <div class="metric"><div class="label">推薦處置</div><div class="value">${rawInputs} 筆推薦 → 最終放行 ${finalOutputs} 筆</div></div>
+    ${filteredCount > 0 ? `<div style="font-size:12px;color:var(--warn);margin:4px 0">其中 ${filteredCount} 筆因風控條件未通過而被過濾（詳見下方控制層紀錄）</div>` : ''}
+    ${controlSummary}
+    ${symbolTable}
+    ${guard.length ? '<table style="margin-top:8px;font-size:12px"><thead><tr><th>AI</th><th>結果</th><th>處理數量</th><th>說明</th></tr></thead><tbody>' + guard.map(g => {
+      const inputCount = g.input_count || 0;
+      const outputCount = g.output_count || 0;
+      const filtered = inputCount - outputCount;
+      let actionText = '放行';
+      let actionClass = 'ok';
+      if (!g.passed) { actionText = '阻擋'; actionClass = 'err'; }
+      else if (filtered > 0) { actionText = '過濾'; actionClass = 'warn'; }
+      return `<tr><td>${agentName(g.guard_id) || '-'}</td><td><span class="badge ${actionClass}">${actionText}</span></td><td>${inputCount} → ${outputCount}</td><td>${g.reason || '-'}</td></tr>`;
+    }).join('') + '</tbody></table>' : renderEmptyState('本場次無控制層紀錄', '')}
+  `;
+}
+
+export function renderAgentObservatory(data, overlapData) {
+  const el = document.getElementById('agentObservatory');
+  if (!data) { el.innerHTML = renderEmptyState('尚無資料', ''); el.classList.remove('loading'); return; }
+  const cards = data.weakest_agent_scorecards || [];
+  if (!cards.length) { el.innerHTML = renderEmptyState('尚無 Agent 績效資料', ''); el.classList.remove('loading'); return; }
+  el.classList.remove('loading');
+  const weakest = data.next_experiment_agent_id || '';
+  const helpIcon = (title, html) => `<span class="cursor-pointer text-accent text-sm ml-xs" onclick="event.stopPropagation();openInfoHelp('${title}', \`${html.replace(/"/g, '&quot;')}\`)">ℹ️</span>`;
+
+  let criteriaHtml = '';
+  if (overlapData && overlapData.agents) {
+    const stockPickingLayers = ['sector', 'style', 'superinvestor'];
+    const agentsWithCriteria = overlapData.agents.filter(a => stockPickingLayers.includes(a.layer));
+    if (agentsWithCriteria.length) {
+      criteriaHtml = '<div style="margin-top:14px"><div style="font-size:13px;font-weight:700;margin-bottom:8px">篩選條件</div>' +
+        agentsWithCriteria.map(a => {
+          const sc = a.screening_criteria || {};
+          const badges = [];
+          if (sc.pe && sc.pe.max != null) badges.push(`P/E≤${sc.pe.max}`);
+          if (sc.pe && sc.pe.min != null && sc.pe.max == null) badges.push(`P/E≥${sc.pe.min}`);
+          if (sc.pb && sc.pb.max != null) badges.push(`P/B≤${sc.pb.max}`);
+          if (sc.pb && sc.pb.min != null && sc.pb.max == null) badges.push(`P/B≥${sc.pb.min}`);
+          if (sc.dividend_yield && sc.dividend_yield.min != null) badges.push(`股息≥${sc.dividend_yield.min}%`);
+          if (sc.volume_intraday && sc.volume_intraday.min != null) badges.push(`Vol≥${(sc.volume_intraday.min/10000).toFixed(0)}萬`);
+          if (sc.momentum_20d && sc.momentum_20d.min != null) badges.push(`動能≥${sc.momentum_20d.min}`);
+          if (sc.min_total_factor_score != null) badges.push(`因子≥${sc.min_total_factor_score}`);
+          if (!badges.length) return '';
+          return `<div style="margin:6px 0;font-size:12px"><strong>${agentName(a.agent_id)}</strong> <span class="text-muted">${badges.map(b => `<span class="badge info" class="cursor-help" title="${b}">${b}</span>`).join(' ')}</span></div>`;
+        }).filter(s => s).join('') + '</div>';
+    }
+  }
+
+  el.innerHTML = `<table>
+    <thead><tr><th>策略來源</th><th>窗口數 ${helpIcon('窗口數說明', '<p>該 Agent 參與過多少個回測窗口。</p><p>窗口數越多，統計信心度越高；窗口數過少時，績效數字可能僅供參考。</p>')}</th><th>命中率 ${helpIcon('命中率說明', '<p>推薦產生正向隔日回測報酬的比例。</p><p>持續 >50% 代表該 Agent 的選股邏輯在當前市場體制下相對有效。</p>')}</th><th>Sharpe ${helpIcon('Sharpe 說明', '<p>風險調整後報酬指標。</p><p>越高代表單位風險帶來的報酬越好；<0 表示經風險調整後整體為負貢獻（虧損）。</p>')}</th><th>最大回撤 ${helpIcon('最大回撤說明', '<p>歷史推薦中曾出現的最大累積虧損幅度。</p><p>數值越接近 0，代表風險控制越好；絕對值過大時應檢查該 Agent 的停損機制。</p>')}</th></tr></thead>
+    <tbody>
+      ${cards.map(c => {
+        const isWeak = c.agent_id === weakest;
+        return `<tr class="${isWeak ? 'weak' : ''}">
+          <td>${agentName(c.agent_id) || ''}</td>
+          <td>${c.windows || 0}</td>
+          <td>${((c.hit_rate || 0) * 100).toFixed(1)}%</td>
+          <td style="${(c.sharpe || 0) < 0 ? 'color:#ff6b6b' : ''}">${(c.sharpe || 0).toFixed(3)}</td>
+          <td>${((c.max_drawdown || 0) * 100).toFixed(1)}%</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>
+  ${weakest ? `<div style="margin-top:8px;font-size:12px;color:var(--down)">表現最差策略來源：<strong>${agentName(weakest)}</strong></div>` : ''}
+  ${criteriaHtml}`;
+}
+
+
+export function renderUniverseOverlap(data) {
+  const el = document.getElementById('universeOverlap');
+  if (!data || !data.agents) { el.innerHTML = renderEmptyState('尚無資料', ''); el.classList.remove('loading'); return; }
+  el.classList.remove('loading');
+  const agents = data.agents || [];
+  const matrix = data.matrix || {};
+  const warnings = data.warnings || [];
+  const styleAgents = agents.filter(a => a.layer === 'style');
+  const uoHelp = (title, html) => `<span class="cursor-pointer text-accent text-sm ml-xs" onclick="event.stopPropagation();openInfoHelp('${title}', \`${html.replace(/"/g, '&quot;')}\`)">ℹ️</span>`;
+  el.innerHTML = `
+    <div style="margin-bottom:10px;font-size:12px;color:var(--text);line-height:1.6">
+      <strong>如何解讀本區塊：</strong>以下顯示各策略來源（Agent）設定的關注標的池，以及 <strong>Style 層</strong> 之間的標的重疊程度。當兩個 Style Agent 同時關注 >=3 檔相同標的時，CIO 層會自動施加信念懲罰（擁擠交易警告）。
+    </div>
+    ${warnings.length ? `<div class="mb-sm">${warnings.map(w => `<span class="badge warn">⚠ ${w}</span>`).join('')}</div>` : ''}
+    <div class="two-col-grid">
+      <div>
+        <div class="mb-xs text-sm"><strong>策略來源標的池</strong></div>
+        <table>
+          <thead><tr><th>策略來源 ${uoHelp('策略來源', '<p>Agent 的中文名稱，對應 <code>configs/agents.json</code> 中的 <code>name</code> 欄位。</p><p>同一策略技能未來可能由多個 Agent 競爭執行。</p>')}</th><th>層級 ${uoHelp('層級', '<p>Agent 在 Atlas 分層架構中的所屬層級。</p><ul style="margin:6px 0;padding-left:18px;line-height:1.8"><li><strong>產業主題</strong>（sector）：決定板塊配置。</li><li><strong>風格因子</strong>（style）：決定成長／價值／動能等風格傾向。</li><li><strong>超級投資者</strong>（superinvestor）：模擬特定投資大師的選股邏輯。</li><li><strong>總經情境</strong>（context）：根據總經 regime 產生方向性建議，不直接選股。</li><li><strong>控制層</strong>（control）：風控長／投資長，負責過濾與後置風控。</li></ul>')}</th><th>數量 ${uoHelp('數量', '<p>該 Agent 關注的股票檔數。</p><p>若 Agent 未在設定中指定標的池，會自動 fallback 至系統預設的 24 檔台股。</p><p>數量過少可能導致策略覆蓋不足；過多則可能失去聚焦。</p>')}</th><th>標的 ${uoHelp('標的', '<p>該 Agent 會進行評估與推薦的具體股票代碼清單。</p><p>此清單來自 <code>configs/agents.json</code> 的 <code>universe</code> 欄位。</p>')}</th></tr></thead>
+          <tbody>
+            ${agents.map(a => `<tr><td>${agentName(a.agent_id) || a.agent_id}</td><td>${a.layer || '-'}</td><td>${a.universe ? a.universe.length : 0}</td><td class="text-muted text-xs">${(a.universe || []).join(', ')}</td></tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <div class="mb-xs text-sm"><strong>Style 層重疊矩陣</strong></div>
+        ${styleAgents.length ? `<table>
+          <thead><tr><th>策略來源 ${uoHelp('策略來源（列）', '<p>矩陣中的每一列代表一個 Style 層 Agent。</p><p>交叉格子顯示的是「該列 Agent」與「該欄 Agent」同時關注的相同標的數量。</p>')}</th>${styleAgents.map(b => `<th>${agentName(b.agent_id)} ${uoHelp(agentName(b.agent_id), '<p>Style 層 Agent 之一。</p><p>列與欄的交叉數字代表兩個 Agent 標的池的重疊檔數。</p>')}</th>`).join('')}</tr></thead>
+          <tbody>
+            ${styleAgents.map(a => `<tr><td>${agentName(a.agent_id)}</td>${styleAgents.map(b => `<td style="${a.agent_id === b.agent_id ? 'background:var(--bg)' : (matrix[a.agent_id] && matrix[a.agent_id][b.agent_id] >= 3 ? 'color:var(--warn);font-weight:700' : '')}">${a.agent_id === b.agent_id ? '-' : (matrix[a.agent_id] && matrix[a.agent_id][b.agent_id] || 0)}</td>`).join('')}</tr>`).join('')}
+          </tbody>
+        </table>` : renderEmptyState('無風格層 Agent', '請在 configs/agents.json 中設定 style 層 Agent')}
+      </div>
+    </div>
+  `;
+}
+export function factorBar(score, minVal, maxVal) {
+  if (score == null || isNaN(score)) return '<span class="text-muted">-</span>';
+  const range = maxVal - minVal;
+  const pct = Math.max(0, Math.min(100, ((score - minVal) / range) * 100));
+  let color = 'var(--warn)';
+  if (score >= (minVal + range * 0.6)) color = 'var(--up)';
+  else if (score <= (minVal + range * 0.4)) color = 'var(--down)';
+  return `<div class="factor-bar-bg" title="${score.toFixed(3)}"><div style="width:${pct}%;height:100%;background:${color}"></div></div>`;
+}
+export function renderFactorMini(fs) {
+  if (!fs || fs.total == null || isNaN(fs.total)) return '<span class="text-muted">-</span>';
+  const t = fs.total;
+  let color = 'var(--warn)';
+  if (t >= 0.5) color = 'var(--up)';
+  else if (t <= 0) color = 'var(--down)';
+  const pct = Math.max(0, Math.min(100, ((t + 1) / 2) * 100));
+  return `<div class="factor-mini"><div class="factor-mini-bar"><div style="width:${pct}%;background:${color}"></div></div><span class="factor-mini-val" style="${t >= 0.5 ? 'color:var(--up)' : (t <= 0 ? 'color:var(--down)' : '')}">${t.toFixed(2)}</span></div>`;
+}
+export function renderFactorBreakdown(breakdown) {
+  if (!breakdown) return '<div class="text-muted text-xs">無計算明細</div>';
+  const item = (label, it) => {
+    if (!it) return '';
+    const inputs = it.raw_inputs ? Object.entries(it.raw_inputs).map(([k, v]) => `${k}: ${typeof v === 'number' ? v.toFixed(3) : v}`).join(', ') : '';
+    const fallback = it.is_fallback ? '<span style="color:var(--warn);font-size:10px">fallback</span> ' : '';
+    const weight = it.weight ? `<span style="color:var(--muted);font-size:10px">權重 ${it.weight.toFixed(2)}</span> ` : '';
+    return `<div style="margin:4px 0;padding:4px 6px;background:var(--bg);border-radius:4px">
+      <div class="text-xs font-semibold">${label} ${fallback}${weight}= <span class="text-accent">${it.score != null ? it.score.toFixed(3) : '-'}</span></div>
+      <div style="font-size:10px;color:var(--muted);margin-top:2px">公式: ${it.formula || '-'}</div>
+      ${inputs ? `<div class="text-muted text-xs">原始輸入: ${inputs}</div>` : ''}
+    </div>`;
+  };
+  return `<div class="py-sm">
+    ${item('動能', breakdown.momentum)}
+    ${item('價值', breakdown.value)}
+    ${item('品質', breakdown.quality)}
+    ${item('Agent', breakdown.agent)}
+    ${item('總分', breakdown.total)}
+  </div>`;
+}
+export function toggleBreakdown(key) {
+  const row = document.getElementById('breakdown-' + key);
+  const btn = document.getElementById('btn-' + key);
+  if (!row || !btn) return;
+  if (row.style.display === 'none') {
+    row.style.display = 'table-row';
+    btn.textContent = '收起';
+  } else {
+    row.style.display = 'none';
+    btn.textContent = '展開';
+  }
+}
+export function renderConvictionBreakdown(cb) {
+  if (!cb) return '<div class="text-muted text-xs">無計算明細</div>';
+  const steps = (cb.steps || []).map(s => {
+    const deltaCls = s.delta > 0 ? 'color:var(--up)' : (s.delta < 0 ? 'color:var(--down)' : 'color:var(--muted)');
+    const deltaLabel = s.delta > 0 ? '+' + s.delta : String(s.delta);
+    return `<div style="display:flex;gap:8px;align-items:flex-start;margin:3px 0;padding:3px 6px;background:var(--bg);border-radius:4px">
+export function renderAIEvolution(inbox, phase3) {
+  const el = document.getElementById('aiEvolution');
+  el.classList.remove('loading');
+  const items = (inbox && inbox.items) ? inbox.items : [];
+  const pending = items.filter(i => i.status === 'pending' || i.status === 'planned');
+  const latest = items.slice(0, 3);
+
+  const prismCompleted = phase3 && phase3.prism_completed_results != null ? phase3.prism_completed_results : (phase3 && phase3.PRISMCompletedResults != null ? phase3.PRISMCompletedResults : '-');
+  const swarmRunning = phase3 && (phase3.swarm_running || phase3.SwarmRunning) ? '運作中' : '待機';
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+      <div class="panel-card">
+    <div class="text-sm text-muted mb-xs">待評判實驗</div>
+    <div class="text-xl font-bold">${pending.length}</div>
+    <div class="text-xs text-muted mt-xs">共 ${items.length} 個歷史實驗</div>
+      </div>
+      <div class="panel-card">
+    <div class="text-sm text-muted mb-xs">PRISM 已完成訓練</div>
+    <div class="text-xl font-bold">${prismCompleted}</div>
+    <div class="text-xs text-muted mt-xs">5 體制佇列</div>
+      </div>
+      <div class="panel-card">
+    <div class="text-sm text-muted mb-xs">Swarm 狀態</div>
+    <div class="text-xl font-bold">${swarmRunning}</div>
+    <div class="text-xs text-muted mt-xs">MiroFish 共識模擬</div>
+      </div>
+    </div>
+    ${latest.length ? `
+  <div class="mt-sm">
+  <div class="text-sm font-bold mb-xs">最近實驗</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${latest.map(it => `<span class="badge info">${it.experiment_id} · ${it.mutation_type || it.target_agent_id || '實驗'}</span>`).join(' ')}
+      </div>
+    </div>` : ''}
+  `;
+}
+

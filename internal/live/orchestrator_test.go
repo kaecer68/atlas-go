@@ -128,7 +128,7 @@ func TestCheckRiskTriggers(t *testing.T) {
 			cb.ResetDayState(0)
 
 			o := &Orchestrator{
-				stateStore: livestore.NewStateStore(t.TempDir()),
+				stateStore: st,
 				eventBus:   bus,
 				config: OrchestratorConfig{
 					MaxPositionLossPct: tt.maxLossPct,
