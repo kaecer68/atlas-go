@@ -15,6 +15,10 @@ type NarrativeEvent struct {
 	TimeWindow       string             `json:"time_window"`  // "immediate", "1_week", "1_month"
 	Timestamp        time.Time          `json:"timestamp"`
 	SourceData       map[string]float64 `json:"source_data,omitempty"`
+	Duration         time.Duration      `json:"duration"`
+	ExpiresAt        time.Time          `json:"expires_at"`
+	Severity         string             `json:"severity"`
+	Status           string             `json:"status"`
 }
 
 // CausalStep represents one step in a causal transmission chain.
@@ -55,5 +59,6 @@ type InvestmentModel struct {
 	AvoidedSectors   []string `json:"avoided_sectors"`
 	RecentPrediction float64  `json:"recent_prediction"`
 	RecentError      float64  `json:"recent_error"` // lower is better
+	HitRate          float64  `json:"hit_rate"`     // 1 - RecentError, clamped to [0, 1]
 	Weight           float64  `json:"weight"`
 }

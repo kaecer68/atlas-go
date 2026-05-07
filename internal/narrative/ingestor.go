@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -13,25 +14,18 @@ import (
 
 // MacroIngestor fetches macro data, compares with previous snapshot, and emits events.
 type MacroIngestor struct {
-	provider    marketdata.MacroDataProvider
-	snapshotDir string
+	provider         marketdata.MacroDataProvider
+	snapshotDir      string
+	divergenceDetect *DivergenceDetector
 }
 
 // NewMacroIngestor creates an ingestor with a given provider and snapshot directory.
 func NewMacroIngestor(provider marketdata.MacroDataProvider, snapshotDir string) *MacroIngestor {
 	return &MacroIngestor{
-		provider:    provider,
-		snapshotDir: snapshotDir,
+		provider:         provider,
+		snapshotDir:      snapshotDir,
+		divergenceDetect: NewDivergenceDetector(),
 	}
-}
-
-func hitRateForTheme(theme string) float64 {
-	for _, t := range DefaultTemplates() {
-		if t.TriggerTheme == theme {
-			return t.HistoricalHitRate
-		}
-	}
-	return 0.0
 }
 
 // SnapshotDir returns the directory where snapshots are stored.
@@ -47,7 +41,7 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 	}
 
 	prev, _ := m.loadLatestSnapshot()
-	events := detectEventsFromSnapshot(snap, prev)
+	events := detectEventsFromSnapshot(snap, prev, m.divergenceDetect)
 
 	if err := m.saveSnapshot(snap); err != nil {
 		return events, snap, fmt.Errorf("save snapshot: %w", err)
@@ -89,7 +83,22 @@ func (m *MacroIngestor) saveSnapshot(snap marketdata.MacroDataSnapshot) error {
 	return nil
 }
 
-func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot) []NarrativeEvent {
+var templateHitRates = func() map[string]float64 {
+	m := make(map[string]float64)
+	for _, t := range DefaultTemplates() {
+		m[t.TriggerTheme] = t.HistoricalHitRate
+	}
+	return m
+}()
+
+func hitRateForTheme(theme string) float64 {
+	if r, ok := templateHitRates[theme]; ok {
+		return r
+	}
+	return 0.0
+}
+
+func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot, div *DivergenceDetector) []NarrativeEvent {
 	var events []NarrativeEvent
 	now := time.Now().UTC()
 
@@ -99,20 +108,65 @@ func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot) []Narrati
 	if event := detectJPYCarryUnwindEventFromSnapshot(curr.JPY, prev.JPY, curr.VIX, now); event != nil {
 		events = append(events, *event)
 	}
-	if event := detectGeopoliticalRiskEventFromSnapshot(curr.Gold, curr.VIX, now); event != nil {
+	if event := detectGeopoliticalRiskEventFromSnapshot(curr.Gold, curr.VIX, curr.USD_TWD, now); event != nil {
 		events = append(events, *event)
 	}
 	if event := detectOilShockEventFromSnapshot(curr.Oil, now); event != nil {
 		events = append(events, *event)
 	}
-	if event := detectRetailFrenzyEvent(curr); event != nil {
+	if event := detectUSDTWDEventFromSnapshot(curr.USD_TWD, prev.USD_TWD, now); event != nil {
 		events = append(events, *event)
 	}
-	if event := detectRetailFearEvent(curr); event != nil {
+	if event := detectSemiconductorEventFromSnapshot(curr.ExportElectronics, prev.ExportElectronics, now); event != nil {
 		events = append(events, *event)
 	}
-	// AI capex sentiment remains externally supplied for now.
+
+	if div != nil && curr.RetailMarginBalance.Symbol != "" && curr.ForeignInvestorNet.Symbol != "" {
+		div.Update(curr.RetailMarginBalance.Value, curr.ForeignInvestorNet.Value)
+		_, marginZ := div.RetailDivergenceAndMarginZScore(curr.RetailMarginBalance.Value, curr.ForeignInvestorNet.Value)
+		if event := detectRetailDivergenceEventFromSnapshot(curr.ForeignInvestorNet, marginZ, now); event != nil {
+			events = append(events, *event)
+		}
+	}
+
+	if curr.TSMCRevenue.Symbol != "" && curr.TSMCRevenue.ChangePct > 0 {
+		sentiment := computeAICapexSentiment(curr.TSMCRevenue.ChangePct)
+		if event := detectAICapexEventFromSnapshot(sentiment, prev.TSMCRevenue, now); event != nil {
+			events = append(events, *event)
+		}
+	}
+
+	if curr.RetailMarginBalance.Symbol != "" {
+		if event := detectRetailFrenzyEventFromSnapshot(curr.RetailMarginBalance, now); event != nil {
+			events = append(events, *event)
+		}
+		if event := detectRetailFearEventFromSnapshot(curr.RetailMarginBalance, now); event != nil {
+			events = append(events, *event)
+		}
+	}
+
 	return events
+}
+
+func detectRetailDivergenceEventFromSnapshot(foreignNet marketdata.MacroDataPoint, marginZScore float64, now time.Time) *NarrativeEvent {
+	if marginZScore > 1.5 && foreignNet.Value < 0 {
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-retail-div-%d", now.UnixNano()),
+			Theme:            "retail_institutional_divergence",
+			Region:           "TW",
+			Sentiment:        -0.5,
+			Confidence:       0.60,
+			ConfidenceSource: "divergence_zscore_v1",
+			HitRate:          hitRateForTheme("retail_institutional_divergence"),
+			CapitalFlow:      "crowding_risk",
+			TimeWindow:       "immediate",
+			Timestamp:        now,
+			SourceData: map[string]float64{
+				"margin_zscore": marginZScore,
+			},
+		}
+	}
+	return nil
 }
 
 func detectUSRatesEventFromSnapshot(curr, prev marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
@@ -126,14 +180,16 @@ func detectUSRatesEventFromSnapshot(curr, prev marketdata.MacroDataPoint, now ti
 	}
 	if changeBps > 10 || curr.ChangePct > 1.5 {
 		return &NarrativeEvent{
-			ID:          fmt.Sprintf("evt-us-rates-%d", now.UnixNano()),
-			Theme:       "US_rates_up",
-			Region:      "US",
-			Sentiment:   -0.6,
-			Confidence:  0.75,
-			CapitalFlow: "flight_to_USD",
-			TimeWindow:  "1_week",
-			Timestamp:   now,
+			ID:               fmt.Sprintf("evt-us-rates-%d", now.UnixNano()),
+			Theme:            "US_rates_up",
+			Region:           "US",
+			Sentiment:        -0.6,
+			Confidence:       0.75,
+			ConfidenceSource: "heuristic_fixed_v1",
+			HitRate:          hitRateForTheme("US_rates_up"),
+			CapitalFlow:      "flight_to_USD",
+			TimeWindow:       "1_week",
+			Timestamp:        now,
 			SourceData: map[string]float64{
 				"us10y_change_bps": changeBps,
 				"us10y_level":      curr.Value,
@@ -157,14 +213,16 @@ func detectJPYCarryUnwindEventFromSnapshot(currJPY, prevJPY, currVIX marketdata.
 	}
 	if jpyChange > 2.0 || vixLevel > 25 {
 		return &NarrativeEvent{
-			ID:          fmt.Sprintf("evt-jpy-%d", now.UnixNano()),
-			Theme:       "JPY_carry_unwind",
-			Region:      "JP",
-			Sentiment:   -0.6,
-			Confidence:  0.65,
-			CapitalFlow: "global_liquidity_drain",
-			TimeWindow:  "immediate",
-			Timestamp:   now,
+			ID:               fmt.Sprintf("evt-jpy-%d", now.UnixNano()),
+			Theme:            "JPY_carry_unwind",
+			Region:           "JP",
+			Sentiment:        -0.6,
+			Confidence:       0.65,
+			ConfidenceSource: "heuristic_fixed_v1",
+			HitRate:          hitRateForTheme("JPY_carry_unwind"),
+			CapitalFlow:      "global_liquidity_drain",
+			TimeWindow:       "immediate",
+			Timestamp:        now,
 			SourceData: map[string]float64{
 				"jpy_change_pct": jpyChange,
 				"vix_level":      vixLevel,
@@ -174,7 +232,7 @@ func detectJPYCarryUnwindEventFromSnapshot(currJPY, prevJPY, currVIX marketdata.
 	return nil
 }
 
-func detectGeopoliticalRiskEventFromSnapshot(currGold, currVIX marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+func detectGeopoliticalRiskEventFromSnapshot(currGold, currVIX, currUSDTWD marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
 	goldChange := 0.0
 	if currGold.Symbol != "" {
 		goldChange = currGold.ChangePct
@@ -184,19 +242,102 @@ func detectGeopoliticalRiskEventFromSnapshot(currGold, currVIX marketdata.MacroD
 	if currVIX.Symbol != "" && currVIX.Value > 25 {
 		vixSpike = true
 	}
-	if goldChange > 2.0 || vixSpike {
+	// NARR-05: Taiwan Stress Index proxy via USD/TWD depreciation
+	taiwanStress := false
+	if currUSDTWD.Symbol != "" && currUSDTWD.ChangePct > 1.0 {
+		taiwanStress = true
+	}
+	if goldChange > 2.0 || vixSpike || taiwanStress {
+		confidence := 0.65
+		if taiwanStress {
+			confidence = 0.70
+		}
 		return &NarrativeEvent{
-			ID:          fmt.Sprintf("evt-geo-%d", now.UnixNano()),
-			Theme:       "geopolitical_risk_spike",
-			Region:      "Global",
-			Sentiment:   -0.8,
-			Confidence:  0.65,
-			CapitalFlow: "risk_off",
-			TimeWindow:  "immediate",
-			Timestamp:   now,
+			ID:               fmt.Sprintf("evt-geo-%d", now.UnixNano()),
+			Theme:            "geopolitical_risk_spike",
+			Region:           "Global",
+			Sentiment:        -0.8,
+			Confidence:       confidence,
+			ConfidenceSource: "heuristic_fixed_v1",
+			HitRate:          hitRateForTheme("geopolitical_risk_spike"),
+			CapitalFlow:      "risk_off",
+			TimeWindow:       "immediate",
+			Timestamp:        now,
 			SourceData: map[string]float64{
 				"gold_change_pct": goldChange,
 				"vix_level":       currVIX.Value,
+				"usd_twd_change":  currUSDTWD.ChangePct,
+				"taiwan_stress":   boolToFloat(taiwanStress),
+			},
+		}
+	}
+	return nil
+}
+
+func boolToFloat(b bool) float64 {
+	if b {
+		return 1.0
+	}
+	return 0.0
+}
+
+func detectUSDTWDEventFromSnapshot(curr, prev marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+	if curr.Symbol == "" {
+		return nil
+	}
+	changePct := curr.ChangePct
+	if prev.Symbol != "" && prev.Value != 0 {
+		changePct = (curr.Value - prev.Value) / prev.Value * 100
+	}
+	if math.Abs(changePct) > 1.0 {
+		sentiment := -0.5
+		if changePct > 0 {
+			sentiment = -0.7 // USD strengthening against TWD is negative for Taiwan exports
+		}
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-usd-twd-%d", now.UnixNano()),
+			Theme:            "USD_TWD_volatility",
+			Region:           "TW",
+			Sentiment:        sentiment,
+			Confidence:       0.60,
+			ConfidenceSource: "heuristic_fixed_v1",
+			HitRate:          hitRateForTheme("USD_TWD_volatility"),
+			CapitalFlow:      "fx_driven_outflow",
+			TimeWindow:       "1_week",
+			Timestamp:        now,
+			SourceData: map[string]float64{
+				"usd_twd_change_pct": changePct,
+				"usd_twd_level":      curr.Value,
+			},
+		}
+	}
+	return nil
+}
+
+func detectSemiconductorEventFromSnapshot(curr, prev marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+	if curr.Symbol == "" {
+		return nil
+	}
+	// NARR-04: Detect semiconductor downturn from export data
+	changePct := curr.ChangePct
+	if prev.Symbol != "" && prev.Value != 0 {
+		changePct = (curr.Value - prev.Value) / prev.Value * 100
+	}
+	if changePct < -5.0 {
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-semi-%d", now.UnixNano()),
+			Theme:            "semiconductor_downturn",
+			Region:           "TW",
+			Sentiment:        -0.6,
+			Confidence:       0.55,
+			ConfidenceSource: "heuristic_fixed_v1",
+			HitRate:          hitRateForTheme("semiconductor_downturn"),
+			CapitalFlow:      "tech_capex_slowdown",
+			TimeWindow:       "1_month",
+			Timestamp:        now,
+			SourceData: map[string]float64{
+				"export_electronics_change_pct": changePct,
+				"export_electronics_level":      curr.Value,
 			},
 		}
 	}
@@ -209,14 +350,16 @@ func detectOilShockEventFromSnapshot(currOil marketdata.MacroDataPoint, now time
 	}
 	if currOil.ChangePct > 5.0 || currOil.ChangePct < -5.0 {
 		return &NarrativeEvent{
-			ID:          fmt.Sprintf("evt-oil-%d", now.UnixNano()),
-			Theme:       "oil_price_shock",
-			Region:      "Global",
-			Sentiment:   -0.5,
-			Confidence:  0.60,
-			CapitalFlow: "inflation_reprice",
-			TimeWindow:  "1_week",
-			Timestamp:   now,
+			ID:               fmt.Sprintf("evt-oil-%d", now.UnixNano()),
+			Theme:            "oil_price_shock",
+			Region:           "Global",
+			Sentiment:        -0.5,
+			Confidence:       0.60,
+			ConfidenceSource: "heuristic_fixed_v1",
+			HitRate:          hitRateForTheme("oil_price_shock"),
+			CapitalFlow:      "inflation_reprice",
+			TimeWindow:       "1_week",
+			Timestamp:        now,
 			SourceData: map[string]float64{
 				"oil_change_pct": currOil.ChangePct,
 			},
@@ -225,52 +368,85 @@ func detectOilShockEventFromSnapshot(currOil marketdata.MacroDataPoint, now time
 	return nil
 }
 
-func detectRetailFrenzyEvent(snap marketdata.MacroDataSnapshot) *NarrativeEvent {
-	if snap.RetailSentiment.Symbol == "" {
+func computeAICapexSentiment(tsmcYoYChangePct float64) float64 {
+	if tsmcYoYChangePct > 10 {
+		return 0.8
+	}
+	if tsmcYoYChangePct > 0 {
+		return 0.5
+	}
+	return -0.3
+}
+
+func detectRetailFrenzyEventFromSnapshot(marginBalance marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+	if marginBalance.Symbol == "" {
 		return nil
 	}
-	if snap.RetailSentiment.Value >= 0.8 {
-		now := time.Now().UTC()
+	if marginBalance.Value > 2000 {
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-retail-frenzy-%d", now.UnixNano()),
 			Theme:            "retail_frenzy",
 			Region:           "TW",
 			Sentiment:        1.0,
-			Confidence:       snap.RetailSentiment.Value,
-			ConfidenceSource: "retail_sentiment_90th_percentile",
+			Confidence:       0.55,
+			ConfidenceSource: "margin_balance_threshold",
 			HitRate:          hitRateForTheme("retail_frenzy"),
 			CapitalFlow:      "retail_chasing",
 			TimeWindow:       "1-2_weeks",
 			Timestamp:        now,
 			SourceData: map[string]float64{
-				"sentiment_score": snap.RetailSentiment.Value,
+				"margin_balance": marginBalance.Value,
 			},
 		}
 	}
 	return nil
 }
 
-func detectRetailFearEvent(snap marketdata.MacroDataSnapshot) *NarrativeEvent {
-	if snap.RetailSentiment.Symbol == "" {
+func detectRetailFearEventFromSnapshot(marginBalance marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+	if marginBalance.Symbol == "" {
 		return nil
 	}
-	if snap.RetailSentiment.Value <= -0.8 {
-		now := time.Now().UTC()
+	if marginBalance.Value < 1200 {
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-retail-fear-%d", now.UnixNano()),
 			Theme:            "retail_fear",
 			Region:           "TW",
 			Sentiment:        -1.0,
-			Confidence:       -snap.RetailSentiment.Value,
-			ConfidenceSource: "retail_sentiment_10th_percentile",
+			Confidence:       0.60,
+			ConfidenceSource: "margin_balance_threshold",
 			HitRate:          hitRateForTheme("retail_fear"),
 			CapitalFlow:      "retail_fleeing",
 			TimeWindow:       "1-2_weeks",
 			Timestamp:        now,
 			SourceData: map[string]float64{
-				"sentiment_score": snap.RetailSentiment.Value,
+				"margin_balance": marginBalance.Value,
 			},
 		}
 	}
 	return nil
+}
+
+func detectAICapexEventFromSnapshot(sentiment float64, prevTSMC marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+	if sentiment <= 0.5 {
+		return nil
+	}
+	confidence := 0.70
+	if prevTSMC.Symbol != "" && prevTSMC.ChangePct > 0 {
+		confidence = 0.75
+	}
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-ai-capex-%d", now.UnixNano()),
+		Theme:            "AI_capex_surge",
+		Region:           "US",
+		Sentiment:        0.8,
+		Confidence:       confidence,
+		ConfidenceSource: "tsmc_revenue_yoy_v1",
+		HitRate:          hitRateForTheme("AI_capex_surge"),
+		CapitalFlow:      "tech_capex_inflow",
+		TimeWindow:       "1_month",
+		Timestamp:        now,
+		SourceData: map[string]float64{
+			"ai_capex_sentiment": sentiment,
+		},
+	}
 }

@@ -15,18 +15,20 @@ type MacroDataPoint struct {
 
 // MacroDataSnapshot holds the latest readings for all tracked indicators.
 type MacroDataSnapshot struct {
-	US10Y              MacroDataPoint `json:"us10y"`
-	DXY                MacroDataPoint `json:"dxy"`
-	VIX                MacroDataPoint `json:"vix"`
-	USD_TWD            MacroDataPoint `json:"usd_twd"`
-	Oil                MacroDataPoint `json:"oil"`
-	Gold               MacroDataPoint `json:"gold"`
-	JPY                MacroDataPoint `json:"jpy"`
-	ForeignInvestorNet MacroDataPoint `json:"foreign_investor_net"`
-	DomesticFundNet    MacroDataPoint `json:"domestic_fund_net"`
-	DealerNet          MacroDataPoint `json:"dealer_net"`
-	RetailSentiment    MacroDataPoint `json:"retail_sentiment"`
-	RecordedAt         int64          `json:"recorded_at"`
+	US10Y               MacroDataPoint `json:"us10y"`
+	DXY                 MacroDataPoint `json:"dxy"`
+	VIX                 MacroDataPoint `json:"vix"`
+	USD_TWD             MacroDataPoint `json:"usd_twd"`
+	Oil                 MacroDataPoint `json:"oil"`
+	Gold                MacroDataPoint `json:"gold"`
+	JPY                 MacroDataPoint `json:"jpy"`
+	ForeignInvestorNet  MacroDataPoint `json:"foreign_investor_net"`
+	DomesticFundNet     MacroDataPoint `json:"domestic_fund_net"`
+	DealerNet           MacroDataPoint `json:"dealer_net"`
+	ExportElectronics   MacroDataPoint `json:"export_electronics"`
+	RetailMarginBalance MacroDataPoint `json:"retail_margin_balance"`
+	TSMCRevenue         MacroDataPoint `json:"tsmc_revenue"`
+	RecordedAt          int64          `json:"recorded_at"`
 }
 
 // MacroDataProvider fetches macroeconomic indicators.
@@ -88,8 +90,14 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 		if snap.DealerNet.Symbol != "" {
 			merged.DealerNet = snap.DealerNet
 		}
-		if snap.RetailSentiment.Symbol != "" {
-			merged.RetailSentiment = snap.RetailSentiment
+		if snap.ExportElectronics.Symbol != "" {
+			merged.ExportElectronics = snap.ExportElectronics
+		}
+		if snap.RetailMarginBalance.Symbol != "" {
+			merged.RetailMarginBalance = snap.RetailMarginBalance
+		}
+		if snap.TSMCRevenue.Symbol != "" {
+			merged.TSMCRevenue = snap.TSMCRevenue
 		}
 		if snap.RecordedAt > merged.RecordedAt {
 			merged.RecordedAt = snap.RecordedAt

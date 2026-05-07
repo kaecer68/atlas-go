@@ -2,7 +2,10 @@ package marketdata
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"time"
 
@@ -15,109 +18,171 @@ type RetailSentimentProvider interface {
 	FetchSnapshot(ctx context.Context) (domain.RetailSentimentSnapshot, error)
 }
 
-// TWSERetailSentimentProvider fetches retail data from TWSE APIs.
+// TWSERetailSentimentProvider uses real TWSE margin balance data.
 type TWSERetailSentimentProvider struct {
-	storageDir               string
-	marginHistory            []float64
-	fetchMarginBalanceFunc   func(ctx context.Context) (float64, error)
-	fetchDayTradingRatioFunc func(ctx context.Context) (float64, error)
+	marginProvider *TWSEBalanceProvider
+	storageDir     string
 }
 
-// NewTWSERetailSentimentProvider creates a new provider.
+// NewTWSERetailSentimentProvider creates a provider that reads from TWSE margin data.
 func NewTWSERetailSentimentProvider(storageDir string) *TWSERetailSentimentProvider {
-	p := &TWSERetailSentimentProvider{
-		storageDir: storageDir,
+	return &TWSERetailSentimentProvider{
+		marginProvider: NewTWSEBalanceProvider(storageDir),
+		storageDir:     storageDir,
 	}
-	p.fetchMarginBalanceFunc = p.fetchMarginBalance
-	p.fetchDayTradingRatioFunc = p.fetchDayTradingRatio
-	return p
 }
 
-// Name returns the provider name.
-func (t *TWSERetailSentimentProvider) Name() string {
+func (p *TWSERetailSentimentProvider) Name() string {
 	return "twse_retail_sentiment"
 }
 
-// FetchSnapshot retrieves the latest retail sentiment snapshot.
-func (t *TWSERetailSentimentProvider) FetchSnapshot(ctx context.Context) (domain.RetailSentimentSnapshot, error) {
-	margin, err := t.fetchMarginBalanceFunc(ctx)
+// FetchSnapshot retrieves the latest retail sentiment from TWSE margin data.
+func (p *TWSERetailSentimentProvider) FetchSnapshot(ctx context.Context) (domain.RetailSentimentSnapshot, error) {
+	// Fetch latest margin balance from TWSE.
+	latest, err := p.marginProvider.fetchLatestTradingDay(ctx)
 	if err != nil {
 		return domain.RetailSentimentSnapshot{}, fmt.Errorf("fetch margin balance: %w", err)
 	}
 
-	dtRatio, err := t.fetchDayTradingRatioFunc(ctx)
-	if err != nil {
-		dtRatio = 0
+	// Load historical data for change percentage and percentile.
+	history := p.loadMarginHistory()
+
+	marginBalance := latest.MarginBalance
+	marginChangePct := 0.0
+	marginPercentile := 0.5
+
+	if len(history) >= 2 {
+		// Sort by date ascending.
+		sort.Slice(history, func(i, j int) bool {
+			return history[i].Date < history[j].Date
+		})
+
+		// Find previous trading day (most recent before latest).
+		var prevBalance float64
+		for i := len(history) - 2; i >= 0; i-- {
+			if history[i].Date != latest.Date {
+				prevBalance = history[i].MarginBalance
+				break
+			}
+		}
+
+		if prevBalance > 0 {
+			marginChangePct = (marginBalance - prevBalance) / prevBalance * 100
+		}
+
+		// Calculate percentile from available history (simplified).
+		marginPercentile = p.calculatePercentile(marginBalance, history)
 	}
 
-	percentile := t.calculatePercentile(margin, t.marginHistory)
-
-	snap := domain.RetailSentimentSnapshot{
-		MarginBalance:    int64(margin),
-		DayTradingRatio:  dtRatio,
-		MarginPercentile: percentile,
-		Timestamp:        time.Now().UTC(),
-	}
-	snap.CalculateSentimentScore()
-
-	return snap, nil
+	return domain.RetailSentimentSnapshot{
+		MarginBalance:    marginBalance,
+		MarginChangePct:  marginChangePct,
+		MarginPercentile: marginPercentile,
+		Timestamp:        time.Now(),
+	}, nil
 }
 
-func (t *TWSERetailSentimentProvider) calculatePercentile(value float64, history []float64) float64 {
+// loadMarginHistory reads all stored margin balance files.
+func (p *TWSERetailSentimentProvider) loadMarginHistory() []TWSEBalance {
+	entries, err := os.ReadDir(p.storageDir)
+	if err != nil {
+		return nil
+	}
+
+	var history []TWSEBalance
+	for _, entry := range entries {
+		if entry.IsDir() || !isMarginFile(entry.Name()) {
+			continue
+		}
+
+		data, err := os.ReadFile(filepath.Join(p.storageDir, entry.Name()))
+		if err != nil {
+			continue
+		}
+
+		var bal TWSEBalance
+		if err := json.Unmarshal(data, &bal); err != nil {
+			continue
+		}
+		history = append(history, bal)
+	}
+	return history
+}
+
+// isMarginFile checks if filename matches margin balance storage pattern.
+func isMarginFile(name string) bool {
+	return len(name) == 16 && name[8:] == "_margin.json"
+}
+
+// calculatePercentile computes the percentile of current balance in historical data.
+func (p *TWSERetailSentimentProvider) calculatePercentile(current float64, history []TWSEBalance) float64 {
 	if len(history) == 0 {
 		return 0.5
 	}
 
-	sorted := make([]float64, len(history))
-	copy(sorted, history)
-	sort.Float64s(sorted)
+	var values []float64
+	for _, h := range history {
+		if h.MarginBalance > 0 {
+			values = append(values, h.MarginBalance)
+		}
+	}
 
+	if len(values) == 0 {
+		return 0.5
+	}
+
+	sort.Float64s(values)
+
+	// Find rank of current value.
 	count := 0
-	for _, v := range sorted {
-		if v <= value {
+	for _, v := range values {
+		if v <= current {
 			count++
 		}
 	}
 
-	return float64(count) / float64(len(sorted))
+	return float64(count) / float64(len(values))
 }
 
-func (t *TWSERetailSentimentProvider) fetchMarginBalance(ctx context.Context) (float64, error) {
-	return 0, fmt.Errorf("not implemented: TWSE T13 API")
-}
-
-func (t *TWSERetailSentimentProvider) fetchDayTradingRatio(ctx context.Context) (float64, error) {
-	return 0, fmt.Errorf("not implemented: TWSE T23 API")
-}
-
-// RetailSentimentMacroAdapter adapts RetailSentimentProvider to MacroDataProvider.
-type RetailSentimentMacroAdapter struct {
-	provider RetailSentimentProvider
-}
-
-// NewRetailSentimentMacroAdapter creates an adapter.
-func NewRetailSentimentMacroAdapter(provider RetailSentimentProvider) *RetailSentimentMacroAdapter {
-	return &RetailSentimentMacroAdapter{provider: provider}
-}
-
-// Name returns the adapter name.
-func (a *RetailSentimentMacroAdapter) Name() string {
-	return a.provider.Name() + "_macro"
-}
-
-// FetchSnapshot converts retail sentiment data into MacroDataSnapshot format.
-func (a *RetailSentimentMacroAdapter) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
-	rs, err := a.provider.FetchSnapshot(ctx)
-	if err != nil {
-		return MacroDataSnapshot{}, err
+// parseMarginDate extracts date from margin filename (e.g. "20260503_margin.json" → "20260503").
+func parseMarginDate(filename string) string {
+	if len(filename) >= 8 {
+		return filename[:8]
 	}
+	return ""
+}
 
-	return MacroDataSnapshot{
-		RecordedAt: rs.Timestamp.Unix(),
-		RetailSentiment: MacroDataPoint{
-			Symbol:    "RETAIL_SENTIMENT",
-			Value:     rs.SentimentScore,
-			Timestamp: rs.Timestamp.Unix(),
-		},
-	}, nil
+// parseDateToTime converts "20060102" string to time.Time.
+func parseDateToTime(dateStr string) time.Time {
+	t, _ := time.Parse("20060102", dateStr)
+	return t
+}
+
+// formatDate converts time.Time to "20060102" string.
+func formatDate(t time.Time) string {
+	return t.Format("20060102")
+}
+
+// CompositeRetailSentimentProvider tries multiple providers in order.
+type CompositeRetailSentimentProvider struct {
+	providers []RetailSentimentProvider
+}
+
+// NewCompositeRetailSentimentProvider creates a composite provider.
+func NewCompositeRetailSentimentProvider(providers ...RetailSentimentProvider) *CompositeRetailSentimentProvider {
+	return &CompositeRetailSentimentProvider{providers: providers}
+}
+
+func (p *CompositeRetailSentimentProvider) Name() string {
+	return "composite_retail_sentiment"
+}
+
+func (p *CompositeRetailSentimentProvider) FetchSnapshot(ctx context.Context) (domain.RetailSentimentSnapshot, error) {
+	for _, provider := range p.providers {
+		snap, err := provider.FetchSnapshot(ctx)
+		if err == nil {
+			return snap, nil
+		}
+	}
+	return domain.RetailSentimentSnapshot{}, fmt.Errorf("all retail sentiment providers failed")
 }
