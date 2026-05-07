@@ -1,5 +1,7 @@
 package domain
 
+//go:generate go run ../../cmd/gentags
+
 import "time"
 
 type Regime string
@@ -89,12 +91,12 @@ type Recommendation struct {
 }
 
 type Position struct {
-	Symbol        string
-	Quantity      int
-	AverageCost   float64
-	CurrentPrice  float64
-	MarketValue   float64
-	UnrealizedPnL float64
+	Symbol        string  `json:"symbol"`
+	Quantity      int     `json:"quantity"`
+	AverageCost   float64 `json:"average_cost"`
+	CurrentPrice  float64 `json:"current_price"`
+	MarketValue   float64 `json:"market_value"`
+	UnrealizedPnL float64 `json:"unrealized_pnl"`
 }
 
 type Order struct {
@@ -106,24 +108,24 @@ type Order struct {
 }
 
 type SimulationConstraints struct {
-	StartingCash                float64
-	MaxPositionWeight           float64
-	MaxOpenPositions            int
-	MinTradableVolume           int64
-	MinRecommendationConviction int
-	RequireCROPass              bool
-	TransactionCostBPS          float64
-	SlippageBPS                 float64
-	ReserveCashFraction         float64
-	StopLossPct                 float64 // sell when price drops below avgCost*(1+StopLossPct)
-	TakeProfitPct               float64 // sell when price rises above avgCost*(1+TakeProfitPct)
+	StartingCash                float64 `json:"starting_cash"`
+	MaxPositionWeight           float64 `json:"max_position_weight"`
+	MaxOpenPositions            int     `json:"max_open_positions"`
+	MinTradableVolume           int64   `json:"min_tradable_volume"`
+	MinRecommendationConviction int     `json:"min_recommendation_conviction"`
+	RequireCROPass              bool    `json:"require_cro_pass"`
+	TransactionCostBPS          float64 `json:"transaction_cost_bps"`
+	SlippageBPS                 float64 `json:"slippage_bps"`
+	ReserveCashFraction         float64 `json:"reserve_cash_fraction"`
+	StopLossPct                 float64 `json:"stop_loss_pct"`   // sell when price drops below avgCost*(1+StopLossPct)
+	TakeProfitPct               float64 `json:"take_profit_pct"` // sell when price rises above avgCost*(1+TakeProfitPct)
 }
 
 type ExecutionPolicy struct {
-	ConvictionFloor               int
-	RequireCROPass                bool
-	MomentumCrashProtection       bool
-	EnableConvictionNormalization bool
+	ConvictionFloor               int  `json:"conviction_floor"`
+	RequireCROPass                bool `json:"require_cro_pass"`
+	MomentumCrashProtection       bool `json:"momentum_crash_protection"`
+	EnableConvictionNormalization bool `json:"enable_conviction_normalization"`
 }
 
 type RiskSnapshot struct {
@@ -258,14 +260,6 @@ type CapitalSnapshot struct {
 	ConsecutiveLosses int          `json:"consecutive_losses"`
 	CanAdvance        bool         `json:"can_advance"`
 	AdvanceReason     string       `json:"advance_reason,omitempty"`
-}
-
-type RetailSentimentSnapshot struct {
-	MarginBalance    float64   `json:"margin_balance"`
-	MarginChangePct  float64   `json:"margin_change_pct"`
-	DayTradingRatio  float64   `json:"day_trading_ratio"`
-	MarginPercentile float64   `json:"margin_percentile"`
-	Timestamp        time.Time `json:"timestamp"`
 }
 
 func (s RetailSentimentSnapshot) CalculateSentimentScore() float64 {
