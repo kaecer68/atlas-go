@@ -51,6 +51,32 @@ type ClampingEvent struct {
 	Timestamp   time.Time `json:"timestamp"`
 }
 
+// DarwinianConfig holds configuration for the Darwinian weight system.
+// These settings control exponential decay, new-agent protection,
+// and adjustment frequency.
+type DarwinianConfig struct {
+	RollingWindowDays      int     `json:"rolling_window_days"`
+	UseExponentialDecay    bool    `json:"use_exponential_decay"`
+	DecayHalfLifeDays      int     `json:"decay_half_life_days"`
+	NewAgentProtectionDays int     `json:"new_agent_protection_days"`
+	NewAgentFixedWeight    float64 `json:"new_agent_fixed_weight"`
+	MinAdjustmentInterval  int     `json:"min_adjustment_interval"`
+	WeightMomentumFactor   float64 `json:"weight_momentum_factor"`
+}
+
+// DefaultDarwinianConfig returns sensible defaults for the weight system.
+func DefaultDarwinianConfig() DarwinianConfig {
+	return DarwinianConfig{
+		RollingWindowDays:      60,
+		UseExponentialDecay:    true,
+		DecayHalfLifeDays:      10,
+		NewAgentProtectionDays: 30,
+		NewAgentFixedWeight:    1.0,
+		MinAdjustmentInterval:  3,
+		WeightMomentumFactor:   0.2,
+	}
+}
+
 // DarwinianAgentWeight represents an agent's Darwinian weight with performance tracking
 type DarwinianAgentWeight struct {
 	AgentID           string    `json:"agent_id"`
