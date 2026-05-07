@@ -25,7 +25,7 @@ type PluginRegistry struct {
 	agentExecutors   []AgentExecutor
 	controlExecutors []ControlExecutor
 	screener         screener.Screener
-	factorEngine     portfolio.FactorEngineInterface
+	factorEngine     *portfolio.FactorEngine
 	healthManager    *portfolio.AgentHealthManager
 }
 

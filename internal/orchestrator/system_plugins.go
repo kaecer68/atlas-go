@@ -56,7 +56,7 @@ func (s *System) WithSpawning(sm *spawning.SpawningManager) *System {
 
 // WithDarwinian attaches a Darwinian weight manager to the system for dynamic
 // agent weight adjustment based on performance.
-func (s *System) WithDarwinian(dw portfolio.DarwinianWeightManagerInterface) *System {
+func (s *System) WithDarwinian(dw *portfolio.DarwinianWeightManager) *System {
 	s.darwinian = dw
 	return s
 }

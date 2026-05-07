@@ -97,7 +97,15 @@ func (d *StyleRotationDetector) DetectRotation() *RotationSignal {
 	// 计算各风格动量
 	momentums := make(map[Style]StyleMomentumData)
 	for _, style := range []Style{StyleGrowth, StyleValue, StyleMomentum, StyleQuality} {
-		momentums[style] = d.GetStyleMomentum(style)
+		returns := d.styleReturns[style]
+		mom := StyleMomentumData{Style: style}
+		if len(returns) > 0 {
+			start20 := len(returns) - 20
+			if start20 < 0 { start20 = 0 }
+			for i := start20; i < len(returns); i++ { mom.Return20D += returns[i] }
+			for _, r := range returns { mom.Return60D += r }
+		}
+		momentums[style] = mom
 	}
 
 	// 找出最强风格
