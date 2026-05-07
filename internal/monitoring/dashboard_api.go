@@ -140,8 +140,8 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	systemHandlers := apisystem.NewHandlers(systemSvc)
 	systemHandlers.RegisterRoutes(mux)
 
-	handlers := &apihealth.Handlers{}
-	handlers.RegisterRoutes(mux)
+	healthHandlers := apihealth.NewHandlers(a.workDir, a.ledgerDir)
+	healthHandlers.RegisterRoutes(mux)
 
 	dataHandlers := apidata.NewHandlers(a.workDir, a.pool, a.macroIngestor, a.geoProvider, a.taiwanGeoProvider, a.janusEngine, &channelHealthAdapter{store: NewChannelHealthStoreWithPool(filepath.Join(a.workDir, "data/state"), a.pool)})
 	dataHandlers.RegisterRoutes(mux)
