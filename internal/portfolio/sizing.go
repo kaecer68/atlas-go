@@ -43,6 +43,7 @@ type Signal struct {
 // Sizer 仓位规模管理器
 type Sizer struct {
 	params               RiskParameters
+	runtimeParams        *RuntimeParameters
 	volatilities         map[string]float64            // 股票波动率缓存
 	correlations         map[string]map[string]float64 // 相关性矩阵
 	advCache             map[string]float64            // 日均成交量缓存
@@ -55,11 +56,12 @@ type Sizer struct {
 func NewSizer() *Sizer {
 	return &Sizer{
 		params:               DefaultRiskParameters(),
+		runtimeParams:        DefaultRuntimeParameters(),
 		volatilities:         make(map[string]float64),
 		correlations:         make(map[string]map[string]float64),
 		advCache:             make(map[string]float64),
 		atrCache:             make(map[string]float64),
-		correlationThreshold: 0.70, // 默认静态阈值
+		correlationThreshold: DefaultRuntimeParameters().Sizing.CorrelationThreshold,
 	}
 }
 
@@ -68,6 +70,14 @@ func (s *Sizer) SetRiskParameters(params RiskParameters) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.params = params
+}
+
+// WithParameters 设置运行时参数（链式调用）
+func (s *Sizer) WithParameters(p *RuntimeParameters) *Sizer {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.runtimeParams = p
+	return s
 }
 
 // SetCorrelationThreshold 设置动态相关性阈值
@@ -122,16 +132,20 @@ func (s *Sizer) CalculateSize(
 
 // calculateKellySize 计算 Kelly 最优规模
 func (s *Sizer) calculateKellySize(signal Signal, portfolio PortfolioSnapshot) float64 {
+	s.mu.RLock()
+	runtimeParams := s.runtimeParams
+	s.mu.RUnlock()
+
 	// Kelly 公式: f* = (p*b - q) / b
 	// p = 胜率, q = 败率 = 1-p, b = 盈亏比
 	p := signal.WinRate
 	if p == 0 {
-		p = 0.5 // 默认 50% 胜率
+		p = runtimeParams.Sizing.DefaultWinRate
 	}
 	q := 1 - p
 	b := signal.PayoffRatio
 	if b == 0 {
-		b = 1.0 // 默认 1:1 盈亏比
+		b = runtimeParams.Sizing.DefaultPayoffRatio
 	}
 
 	kelly := (p*b - q) / b
@@ -141,13 +155,14 @@ func (s *Sizer) calculateKellySize(signal Signal, portfolio PortfolioSnapshot) f
 
 	s.mu.RLock()
 	params := s.params
+	runtimeParams = s.runtimeParams
 	s.mu.RUnlock()
 
 	// 应用分数 Kelly (保守)
 	fractionalKelly := kelly * params.KellyFraction
 
 	// 限制在组合资金的合理范围内
-	maxPosition := portfolio.TotalValue * 0.15 // 单票最大 15%
+	maxPosition := portfolio.TotalValue * runtimeParams.Optimizer.MaxPositionPct
 	size := portfolio.TotalValue * fractionalKelly
 
 	if size > maxPosition {
@@ -159,21 +174,24 @@ func (s *Sizer) calculateKellySize(signal Signal, portfolio PortfolioSnapshot) f
 
 // adjustForVolatility 基于波动率调整
 func (s *Sizer) adjustForVolatility(baseSize, volatility float64) float64 {
+	s.mu.RLock()
+	runtimeParams := s.runtimeParams
+	s.mu.RUnlock()
+
 	if volatility == 0 {
 		return baseSize
 	}
 
 	// 波动率越高，仓位越小
-	// 目标波动率 20%，实际波动率 40% -> 仓位减半
-	targetVol := 0.20
+	targetVol := runtimeParams.Sizing.TargetVolatility
 	adjustment := targetVol / volatility
 
-	// 限制调整范围 0.25 - 2.0
-	if adjustment < 0.25 {
-		adjustment = 0.25
+	// 限制调整范围
+	if adjustment < runtimeParams.Sizing.VolAdjustmentMin {
+		adjustment = runtimeParams.Sizing.VolAdjustmentMin
 	}
-	if adjustment > 2.0 {
-		adjustment = 2.0
+	if adjustment > runtimeParams.Sizing.VolAdjustmentMax {
+		adjustment = runtimeParams.Sizing.VolAdjustmentMax
 	}
 
 	return baseSize * adjustment
@@ -181,28 +199,26 @@ func (s *Sizer) adjustForVolatility(baseSize, volatility float64) float64 {
 
 // adjustForATR 基于 ATR 调整仓位 (ATR 止损法)
 func (s *Sizer) adjustForATR(baseSize, atr, price, multiplier float64) float64 {
+	s.mu.RLock()
+	runtimeParams := s.runtimeParams
+	s.mu.RUnlock()
+
 	if atr == 0 || price == 0 {
 		return baseSize
 	}
 
-	// 固定风险金额法
-	// 假设每笔交易最多承担组合 1% 的风险
-	// 风险金额 = 股数 * ATR * 乘数
-	// 股数 = 风险金额 / (ATR * 乘数)
-
-	// 这里简化处理，基于 ATR 相对于价格的百分比调整
 	atrPct := (atr * multiplier) / price
 	if atrPct == 0 {
 		return baseSize
 	}
 
 	// ATR 越大，仓位越小
-	adjustment := 0.02 / atrPct // 假设目标风险 2%
-	if adjustment > 2.0 {
-		adjustment = 2.0
+	adjustment := runtimeParams.Sizing.ATRTargetRisk / atrPct
+	if adjustment > runtimeParams.Sizing.ATRAdjustmentMax {
+		adjustment = runtimeParams.Sizing.ATRAdjustmentMax
 	}
-	if adjustment < 0.25 {
-		adjustment = 0.25
+	if adjustment < runtimeParams.Sizing.ATRAdjustmentMin {
+		adjustment = runtimeParams.Sizing.ATRAdjustmentMin
 	}
 
 	return baseSize * adjustment
@@ -226,7 +242,7 @@ func (s *Sizer) applyLiquidityLimit(size, adv, maxPct float64) float64 {
 func (s *Sizer) calculateCorrelationPenalty(symbol string, portfolio PortfolioSnapshot) float64 {
 	s.mu.RLock()
 	correlations := s.correlations[symbol]
-	threshold := s.correlationThreshold
+	runtimeParams := s.runtimeParams
 	s.mu.RUnlock()
 
 	if len(correlations) == 0 || len(portfolio.Positions) == 0 {
@@ -242,7 +258,7 @@ func (s *Sizer) calculateCorrelationPenalty(symbol string, portfolio PortfolioSn
 			absCorr := math.Abs(corr)
 			totalCorr += absCorr
 			count++
-			if absCorr > threshold {
+			if absCorr > runtimeParams.Sizing.CorrelationThreshold {
 				highCorrCount++
 			}
 		}
@@ -253,12 +269,9 @@ func (s *Sizer) calculateCorrelationPenalty(symbol string, portfolio PortfolioSn
 	}
 
 	avgCorr := totalCorr / float64(count)
-
-	// 动态阈值：高相关性惩罚 = avgCorr * (highCorrCount/count)
-	// 相关性越高、超过阈值的标的越多，惩罚越大
-	penalty := avgCorr * 0.7
-	if penalty > 0.7 {
-		penalty = 0.7
+	penalty := avgCorr * runtimeParams.Sizing.CorrelationPenaltyFactor
+	if penalty > runtimeParams.Sizing.MaxCorrelationPenalty {
+		penalty = runtimeParams.Sizing.MaxCorrelationPenalty
 	}
 
 	return penalty
@@ -316,7 +329,7 @@ func (s *Sizer) getVolatility(symbol string) float64 {
 	if v, ok := s.volatilities[symbol]; ok {
 		return v
 	}
-	return 0.25 // 默认 25% 年化波动率
+	return s.runtimeParams.Sizing.DefaultVolatility
 }
 
 // getADV 获取日均成交量
@@ -326,7 +339,7 @@ func (s *Sizer) getADV(symbol string) float64 {
 	if v, ok := s.advCache[symbol]; ok {
 		return v
 	}
-	return 100000000 // 默认 1亿
+	return s.runtimeParams.Sizing.DefaultADV
 }
 
 // getATR 获取 ATR

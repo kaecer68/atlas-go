@@ -5,6 +5,8 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 // RiskLevel represents the severity of a risk.
@@ -146,19 +148,21 @@ func (rm *RiskMonitor) CalculateCustomerConcentrationRisk(symbol string) *RiskEv
 		}
 	}
 
+	params := config.GetParametersConfig().Industry
+
 	// Calculate risk score
 	riskScore := 0.0
-	if topCustomerShare > 30 {
-		riskScore += 0.4
+	if topCustomerShare > params.CustomerShareThreshold1.Value {
+		riskScore += params.RiskScoreWeight1.Value
 	}
-	if topCustomerShare > 50 {
-		riskScore += 0.3
+	if topCustomerShare > params.CustomerShareThreshold2.Value {
+		riskScore += params.RiskScoreWeight2.Value
 	}
-	if usExposure > 50 {
-		riskScore += 0.2
+	if usExposure > params.USExposureThreshold1.Value {
+		riskScore += params.RiskScoreWeight3.Value
 	}
-	if usExposure > 70 {
-		riskScore += 0.1
+	if usExposure > params.USExposureThreshold2.Value {
+		riskScore += params.RiskScoreWeight4.Value
 	}
 
 	if riskScore == 0 {
@@ -166,11 +170,11 @@ func (rm *RiskMonitor) CalculateCustomerConcentrationRisk(symbol string) *RiskEv
 	}
 
 	severity := RiskLevelLow
-	if riskScore > 0.8 {
+	if riskScore > params.SeverityThresholdCritical.Value {
 		severity = RiskLevelCritical
-	} else if riskScore > 0.6 {
+	} else if riskScore > params.SeverityThresholdHigh.Value {
 		severity = RiskLevelHigh
-	} else if riskScore > 0.4 {
+	} else if riskScore > params.SeverityThresholdMedium.Value {
 		severity = RiskLevelMedium
 	}
 
@@ -181,8 +185,8 @@ func (rm *RiskMonitor) CalculateCustomerConcentrationRisk(symbol string) *RiskEv
 		IndustryID:        "semiconductor", // Default, should be parameterized
 		Symbol:            symbol,
 		Description:       fmt.Sprintf("Top customer %s accounts for %.0f%% of revenue; US exposure %.0f%%", topCustomerName, topCustomerShare, usExposure),
-		ImpactEstimate:    -riskScore * 0.15, // Estimated 15% max impact
-		Confidence:        0.85,
+		ImpactEstimate:    -riskScore * params.ImpactMultiplier.Value,
+		Confidence:        params.RiskConfidence.Value,
 		DetectedAt:        time.Now(),
 		Source:            "internal_analysis",
 		RecommendedAction: rm.getCustomerConcentrationAction(riskScore),
@@ -190,12 +194,13 @@ func (rm *RiskMonitor) CalculateCustomerConcentrationRisk(symbol string) *RiskEv
 }
 
 func (rm *RiskMonitor) getCustomerConcentrationAction(riskScore float64) string {
+	params := config.GetParametersConfig().Industry
 	switch {
-	case riskScore > 0.8:
+	case riskScore > params.SeverityThresholdCritical.Value:
 		return "立即減碼，建立避險部位"
-	case riskScore > 0.6:
+	case riskScore > params.SeverityThresholdHigh.Value:
 		return "降低權重，監控客戶動態"
-	case riskScore > 0.4:
+	case riskScore > params.SeverityThresholdMedium.Value:
 		return "維持觀察，設定停損點"
 	default:
 		return "正常監控"

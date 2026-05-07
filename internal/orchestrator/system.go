@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
@@ -16,6 +17,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
 	"github.com/kaecer68/atlas-go/internal/replay"
+	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/screener"
 	"github.com/kaecer68/atlas-go/internal/sim"
@@ -48,13 +50,22 @@ type SystemCore struct {
 	approvalWorkflow  *risk.ApprovalWorkflow
 	metricsCollector  interface{ RecordScreening(passed, rejected int64) }
 	eventBus          *eventbus.ChannelEventBus
+	clampingLogger    *clampingLogger
 
 	strategyRegistry   *strategy.Registry
 	strategySelector   *strategy.Selector
 	comparisonEngine   *strategy.ComparisonEngine
 	factorWeightEngine *portfolio.FactorWeightEngine
 	thresholdEngine    *sim.DynamicThresholdEngine
+
+	repo repository.OutcomeRepository
 }
+
+// CoreServices interface implementation for SystemCore
+func (s *SystemCore) GetReplay() *replay.Dataset                      { return s.replay }
+func (s *SystemCore) GetRegistry() domain.AgentRegistry               { return s.registry }
+func (s *SystemCore) GetPolicy() baseline.Policy                      { return s.policy }
+func (s *SystemCore) GetLastOutcomes() []domain.RecommendationOutcome { return s.lastOutcomes }
 
 // System orchestrates the full simulation loop via a SystemCore and a PluginHost.
 type System struct {
@@ -73,6 +84,14 @@ func NewSystem(cfg config.Config) *System {
 	}
 	ds, _ := replay.LoadTWSEOpenDataCSV(cfg.ReplayDataPath)
 	session := newSession(cfg, ds)
+
+	// Load parameters config and convert to runtime parameters
+	paramsCfg, err := config.LoadParametersConfig(cfg.ParametersConfigPath)
+	if err != nil || paramsCfg == nil {
+		paramsCfg = config.DefaultParametersConfig()
+	}
+	runtimeParams := portfolio.ToRuntimeParameters(paramsCfg)
+
 	optimizer := portfolio.NewOptimizer()
 	hp := portfolio.NewHistoricalPrices()
 	if err := hp.LoadFromExtendedJSONL("data/replay/tw_extended_90days.jsonl"); err != nil {
@@ -83,15 +102,21 @@ func NewSystem(cfg config.Config) *System {
 		fmt.Printf("[System] warn: failed to load fundamentals: %v\n", err)
 	}
 	factorEngine := portfolio.NewFactorEngine().
+		WithParameters(runtimeParams).
 		WithHistoricalPrices(hp).
 		WithFundamentalProvider(fp)
 	optimizer.WithHistoricalPrices(hp).WithFundamentalProvider(fp).WithFactorEngine(factorEngine)
 	screenerEngine := screener.NewEngine(factorEngine, fp)
 	plugins := NewPluginRegistry().WithScreener(screenerEngine).WithFactorEngine(factorEngine)
 
-	darwinian := portfolio.NewDarwinianWeightManager("data/state/darwinian_weights.json")
+	darwinian := portfolio.NewDarwinianWeightManager("data/state/darwinian_weights.json").
+		WithHistoryPath("data/state/darwinian_history.jsonl").
+		WithParameters(runtimeParams)
 	darwinian.InitializeFromRegistry(registry)
 	_ = darwinian.Load()
+
+	eventBus := eventbus.NewChannelEventBus(256)
+	darwinian.WithEventBus(eventBus)
 
 	thresholdEngine := sim.NewDynamicThresholdEngine()
 	strategyRegistry := strategy.NewRegistryWithDefaults()
@@ -125,7 +150,8 @@ func NewSystem(cfg config.Config) *System {
 			narrativeEngine:    narrative.NewNarrativeEngine(),
 			ctx:                context.Background(),
 			darwinian:          darwinian,
-			eventBus:           eventbus.NewChannelEventBus(256),
+			eventBus:           eventBus,
+			clampingLogger:     newClampingLogger(filepath.Join(cfg.LedgerDir, "clamping_events.jsonl")),
 			strategyRegistry:   strategyRegistry,
 			strategySelector:   strategySelector,
 			comparisonEngine:   comparisonEngine,
@@ -148,14 +174,20 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 
 	events := s.detectNarrativeEvents(quotes)
 	researchResult := ExecuteWithContext(ExecutionContext{
-		Registry:      s.registry,
-		Quotes:        quotes,
-		Overrides:     s.policy.PromptOverrides,
-		Policy:        s.policy.ExecutionPolicy,
-		Plugins:       s.plugins,
-		SessionID:     s.session.ID,
-		WeightManager: s.darwinian,
-		Context:       s.ctx,
+		Registry:        s.registry,
+		Quotes:          quotes,
+		Overrides:       s.policy.PromptOverrides,
+		Policy:          s.policy.ExecutionPolicy,
+		Plugins:         s.plugins,
+		SessionID:       s.session.ID,
+		WeightManager:   s.darwinian,
+		Context:         s.ctx,
+		NarrativeEvents: events,
+		ConvictionClampingCallback: func(evts []portfolio.ConvictionClampingEvent) {
+			if s.clampingLogger != nil {
+				s.clampingLogger.AppendConvictionEvents(evts)
+			}
+		},
 	})
 	regime := researchResult.Regime
 	rawRecs := researchResult.RawRecommendations
@@ -223,7 +255,11 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	s.updateCapitalMetrics(result)
 
 	outcomes := buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf)
-	_ = s.ledger.RecordOutcomes(outcomes)
+	if s.repo != nil {
+		_ = s.repo.RecordOutcomes(s.ctx, outcomes)
+	} else {
+		_ = s.ledger.RecordOutcomes(outcomes)
+	}
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)
 	_ = s.ledger.RecordSessionScreeningRejects(s.session.ID, rejects)
 	if s.metricsCollector != nil {
@@ -235,8 +271,28 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		for _, outcome := range outcomes {
 			s.darwinian.RecordOutcome(outcome.AgentID, outcome.ForwardReturn, outcome.Hit)
 		}
-		s.darwinian.PerformDailyAdjustment()
+		_, clampingEvents := s.darwinian.PerformDailyAdjustment()
 		_ = s.darwinian.Save()
+		_ = s.darwinian.AppendSnapshot()
+		// Publish clamping events for monitoring and audit trail
+		if len(clampingEvents) > 0 && s.eventBus != nil {
+			payloads := make([]eventbus.ClampingEventPayload, len(clampingEvents))
+			for i, e := range clampingEvents {
+				payloads[i] = eventbus.ClampingEventPayload{
+					AgentID:     e.AgentID,
+					RawWeight:   e.RawWeight,
+					FinalWeight: e.FinalWeight,
+					Boundary:    e.Boundary,
+					Timestamp:   e.Timestamp,
+				}
+			}
+			go s.eventBus.PublishDarwinianClamping(payloads)
+			if s.clampingLogger != nil {
+				for _, p := range payloads {
+					s.clampingLogger.Append(p)
+				}
+			}
+		}
 	}
 
 	s.host.PostSimulation(quotes, regime, asOf)
@@ -248,14 +304,20 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	quotes := s.replay.QuotesForDate(sessionDate, symbols)
 	events := s.detectNarrativeEvents(quotes)
 	researchResult := ExecuteWithContext(ExecutionContext{
-		Registry:      s.registry,
-		Quotes:        quotes,
-		Overrides:     s.policy.PromptOverrides,
-		Policy:        s.policy.ExecutionPolicy,
-		Plugins:       s.plugins,
-		SessionID:     s.session.ID,
-		WeightManager: s.darwinian,
-		Context:       s.ctx,
+		Registry:        s.registry,
+		Quotes:          quotes,
+		Overrides:       s.policy.PromptOverrides,
+		Policy:          s.policy.ExecutionPolicy,
+		Plugins:         s.plugins,
+		SessionID:       s.session.ID,
+		WeightManager:   s.darwinian,
+		Context:         s.ctx,
+		NarrativeEvents: events,
+		ConvictionClampingCallback: func(evts []portfolio.ConvictionClampingEvent) {
+			if s.clampingLogger != nil {
+				s.clampingLogger.AppendConvictionEvents(evts)
+			}
+		},
 	})
 	regime := researchResult.Regime
 	rawRecs := researchResult.RawRecommendations
@@ -308,7 +370,11 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		go s.eventBus.PublishGuardOutcomes(s.session.ID, guardOutcomes)
 	}
 	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, sessionDate, s.replay)
-	_ = s.ledger.RecordOutcomes(outcomes)
+	if s.repo != nil {
+		_ = s.repo.RecordOutcomes(s.ctx, outcomes)
+	} else {
+		_ = s.ledger.RecordOutcomes(outcomes)
+	}
 	_ = s.ledger.RecordSessionOutcomes(s.session, outcomes)
 	_ = s.ledger.RecordSessionScreeningRejects(s.session.ID, rejects)
 	if s.metricsCollector != nil {
@@ -330,8 +396,26 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		for _, outcome := range outcomes {
 			s.darwinian.RecordOutcome(outcome.AgentID, outcome.ForwardReturn, outcome.Hit)
 		}
-		s.darwinian.PerformDailyAdjustment()
+		_, clampingEvents := s.darwinian.PerformDailyAdjustment()
 		_ = s.darwinian.Save()
+		if len(clampingEvents) > 0 && s.eventBus != nil {
+			payloads := make([]eventbus.ClampingEventPayload, len(clampingEvents))
+			for i, e := range clampingEvents {
+				payloads[i] = eventbus.ClampingEventPayload{
+					AgentID:     e.AgentID,
+					RawWeight:   e.RawWeight,
+					FinalWeight: e.FinalWeight,
+					Boundary:    e.Boundary,
+					Timestamp:   e.Timestamp,
+				}
+			}
+			go s.eventBus.PublishDarwinianClamping(payloads)
+			if s.clampingLogger != nil {
+				for _, p := range payloads {
+					s.clampingLogger.Append(p)
+				}
+			}
+		}
 	}
 
 	s.host.PostSimulation(quotes, regime, sessionDate)
@@ -351,9 +435,9 @@ func selectProvider(cfg config.Config) marketdata.Provider {
 		// 纯 TWSE 模式（免费，rate limited）
 		return marketdata.NewTWSEOpenAPIProvider()
 	case "hybrid", "":
-		return marketdata.NewHybridProvider(cfg.FubonAPIKey, cfg.FugleAPIKey)
+		return marketdata.NewHybridProvider(marketdata.NewTWSEClient(), cfg.FinMindAPIKey, cfg.FubonAPIKey, cfg.FugleAPIKey)
 	default:
-		return marketdata.NewHybridProvider(cfg.FubonAPIKey, cfg.FugleAPIKey)
+		return marketdata.NewHybridProvider(marketdata.NewTWSEClient(), cfg.FinMindAPIKey, cfg.FubonAPIKey, cfg.FugleAPIKey)
 	}
 }
 
@@ -786,6 +870,12 @@ func (s *System) WithCapitalManagement(
 
 func (s *System) WithMetricsCollector(mc interface{ RecordScreening(passed, rejected int64) }) {
 	s.metricsCollector = mc
+}
+
+// SetRepository injects an optional repository for dual-write persistence.
+// When set, outcomes are written to both PostgreSQL and JSONL via the repository.
+func (s *System) SetRepository(repo repository.OutcomeRepository) {
+	s.repo = repo
 }
 
 func (s *System) checkCapitalPhase() (bool, string) {

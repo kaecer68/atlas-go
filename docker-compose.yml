@@ -32,6 +32,28 @@ services:
       retries: 3
       start_period: 40s
 
+  # Fubon MarketData Proxy (Python microservice)
+  fubon-proxy:
+    build:
+      context: ./services/fubon-proxy
+      dockerfile: Dockerfile
+    container_name: atlas-fubon-proxy
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - FUBON_PERSONAL_ID=${FUBON_PERSONAL_ID}
+      - FUBON_API_KEY=${FUBON_API_KEY}
+      - FUBON_PROXY_PORT=8081
+    networks:
+      - atlas-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
   # Redis for caching and message queue
   redis:
     image: redis:7-alpine
@@ -45,21 +67,29 @@ services:
       - atlas-network
     command: redis-server --appendonly yes
 
-  # PostgreSQL for persistent storage
+  # TimescaleDB for persistent storage and time-series data
   postgres:
-    image: postgres:15-alpine
+    image: timescale/timescaledb:latest-pg15
     container_name: atlas-postgres
     restart: unless-stopped
     environment:
       - POSTGRES_USER=atlas
       - POSTGRES_PASSWORD=${DB_PASSWORD:-atlas_secret}
       - POSTGRES_DB=atlas
+      - TS_TUNE_MEMORY=2GB
+      - TS_TUNE_NUM_CPUS=4
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - atlas-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atlas -d atlas"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # Prometheus for metrics
   prometheus:

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 )
@@ -84,6 +85,17 @@ func (e *Executor) Execute(briefPath string, replayPath string) (domain.PromptEx
 		return domain.PromptExperimentResult{}, fmt.Errorf("start experiment %s: %w", expID, err)
 	}
 
+	// Capture parameter snapshot for experiment traceability
+	var paramSnapshotID string
+	paramsCfg, err := config.LoadParametersConfig("configs/parameters.json")
+	if err == nil {
+		snap := config.SnapshotForExperiment(paramsCfg, expID)
+		store := config.NewSnapshotStore("data/state/parameter-snapshots")
+		if err := store.SaveSnapshot(snap); err == nil {
+			paramSnapshotID = snap.ID
+		}
+	}
+
 	result := domain.PromptExperimentResult{
 		Experiment:      record,
 		Brief:           brief,
@@ -98,8 +110,9 @@ func (e *Executor) Execute(briefPath string, replayPath string) (domain.PromptEx
 			"Candidate constraints are generated relative to current baseline to ensure meaningful delta.",
 			"Replay performance evaluation is the next step before acceptance or rejection.",
 		},
-		RecordedAt:   time.Now(),
-		DataMetadata: dataMeta,
+		RecordedAt:          time.Now(),
+		DataMetadata:        dataMeta,
+		ParameterSnapshotID: paramSnapshotID,
 	}
 
 	if err := e.store.RecordExperiment(record); err != nil {

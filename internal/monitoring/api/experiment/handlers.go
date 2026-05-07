@@ -14,6 +14,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 )
 
 // ExperimentInboxItem represents a single experiment in the inbox.
@@ -54,16 +55,6 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/experiment/judge", h.HandleJudge)
 	mux.HandleFunc("/api/experiment/diff", h.HandleDiff)
 	mux.HandleFunc("/api/dashboard/experiment-inbox", h.HandleInbox)
-}
-
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func writeJSONError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
 }
 
 func buildMutationSummary(policy baseline.Policy, result domain.PromptExperimentResult) string {
@@ -135,33 +126,33 @@ func promotionHistoryToAPI(history []baseline.PromotionRecordWithVersion) []map[
 // HandlePromote promotes an experiment result to baseline.
 func (h *Handlers) HandlePromote(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	var req struct {
 		ResultPath string `json:"result_path"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json")
+		shared.WriteJSONError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
 	if req.ResultPath == "" {
-		writeJSONError(w, http.StatusBadRequest, "result_path required")
+		shared.WriteJSONError(w, http.StatusBadRequest, "result_path required")
 		return
 	}
 	mgr := baseline.NewManager(h.BaselinePath)
 	policy, err := mgr.PromoteResult(req.ResultPath)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("promote failed: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("promote failed: %v", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "version": policy.Version})
+	shared.WriteJSON(w, http.StatusOK, map[string]any{"success": true, "version": policy.Version})
 }
 
 // HandleRevert reverts baseline to a previous version.
 func (h *Handlers) HandleRevert(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	var req struct {
@@ -172,17 +163,17 @@ func (h *Handlers) HandleRevert(w http.ResponseWriter, r *http.Request) {
 		DryRun       bool   `json:"dry_run"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json")
+		shared.WriteJSONError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
 	target := baseline.RevertTarget{Type: baseline.RevertType(req.Type), Version: req.Version, ExperimentID: req.ExperimentID}
 	mgr := baseline.NewManager(h.BaselinePath)
 	result, err := mgr.Revert(target, req.Reason, req.DryRun)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("revert failed: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("revert failed: %v", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, result)
+	shared.WriteJSON(w, http.StatusOK, result)
 }
 
 // HandleHistory returns the promotion history.
@@ -190,33 +181,33 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	mgr := baseline.NewManager(h.BaselinePath)
 	history, err := mgr.GetPromotionHistory()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load history: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load history: %v", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"history": promotionHistoryToAPI(history)})
+	shared.WriteJSON(w, http.StatusOK, map[string]any{"history": promotionHistoryToAPI(history)})
 }
 
 // HandleJudge evaluates an experiment result.
 func (h *Handlers) HandleJudge(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	var req struct {
 		ExperimentID string `json:"experiment_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json")
+		shared.WriteJSONError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
 	if req.ExperimentID == "" {
-		writeJSONError(w, http.StatusBadRequest, "experiment_id required")
+		shared.WriteJSONError(w, http.StatusBadRequest, "experiment_id required")
 		return
 	}
 
 	resultPath := filepath.Join(h.LedgerDir, "experiments", req.ExperimentID+".json")
 	if _, err := os.Stat(resultPath); err != nil {
-		writeJSONError(w, http.StatusNotFound, "experiment result not found")
+		shared.WriteJSONError(w, http.StatusNotFound, "experiment result not found")
 		return
 	}
 
@@ -224,11 +215,11 @@ func (h *Handlers) HandleJudge(w http.ResponseWriter, r *http.Request) {
 	judge := experiment.NewJudge(ledger.NewStore(h.LedgerDir), replayPath, h.BaselinePath)
 	result, err := judge.Evaluate(resultPath)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("judge failed: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("judge failed: %v", err))
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	shared.WriteJSON(w, http.StatusOK, map[string]any{
 		"success":    true,
 		"status":     result.Experiment.Status,
 		"baseline":   result.Experiment.BaselineValue,
@@ -240,24 +231,24 @@ func (h *Handlers) HandleJudge(w http.ResponseWriter, r *http.Request) {
 // HandleDiff returns the prompt diff for an experiment.
 func (h *Handlers) HandleDiff(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	experimentID := strings.TrimSpace(r.URL.Query().Get("experiment_id"))
 	if experimentID == "" {
-		writeJSONError(w, http.StatusBadRequest, "experiment_id required")
+		shared.WriteJSONError(w, http.StatusBadRequest, "experiment_id required")
 		return
 	}
 
 	resultPath := filepath.Join(h.LedgerDir, "experiments", experimentID+".json")
 	bytes, err := os.ReadFile(resultPath)
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, "experiment result not found")
+		shared.WriteJSONError(w, http.StatusNotFound, "experiment result not found")
 		return
 	}
 	var result domain.PromptExperimentResult
 	if err := json.Unmarshal(bytes, &result); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "invalid experiment result")
+		shared.WriteJSONError(w, http.StatusInternalServerError, "invalid experiment result")
 		return
 	}
 
@@ -273,11 +264,11 @@ func (h *Handlers) HandleDiff(w http.ResponseWriter, r *http.Request) {
 
 	candidateBytes, err := os.ReadFile(result.CandidatePrompt)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "cannot read candidate prompt")
+		shared.WriteJSONError(w, http.StatusInternalServerError, "cannot read candidate prompt")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	shared.WriteJSON(w, http.StatusOK, map[string]any{
 		"baseline_prompt":  baselinePrompt,
 		"candidate_prompt": string(candidateBytes),
 		"target_agent_id":  result.Experiment.TargetAgentID,
@@ -288,7 +279,7 @@ func (h *Handlers) HandleDiff(w http.ResponseWriter, r *http.Request) {
 // HandleInbox returns the experiment inbox with pending judges, promotes, and recent history.
 func (h *Handlers) HandleInbox(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -305,10 +296,10 @@ func (h *Handlers) HandleInbox(w http.ResponseWriter, r *http.Request) {
 	entries, err := os.ReadDir(experimentsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusOK, ExperimentInboxResponse{BaselineVersion: policy.Version})
+			shared.WriteJSON(w, http.StatusOK, ExperimentInboxResponse{BaselineVersion: policy.Version})
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read experiments dir: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read experiments dir: %v", err))
 		return
 	}
 
@@ -398,7 +389,7 @@ func (h *Handlers) HandleInbox(w http.ResponseWriter, r *http.Request) {
 		recentHistory = recentHistory[:10]
 	}
 
-	writeJSON(w, http.StatusOK, ExperimentInboxResponse{
+	shared.WriteJSON(w, http.StatusOK, ExperimentInboxResponse{
 		PendingJudges:   pendingJudges,
 		PendingPromotes: pendingPromotes,
 		RecentHistory:   recentHistory,

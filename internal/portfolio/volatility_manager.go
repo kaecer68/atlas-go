@@ -18,6 +18,9 @@ type VolatilityManager struct {
 	smoothingFactor    float64 // EMA smoothing factor
 	rebalanceThreshold float64 // Threshold for rebalancing
 
+	// Runtime parameters for configuration
+	params *RuntimeParameters
+
 	// Current state
 	currentVolatility float64
 	volatilityHistory []VolatilityPoint
@@ -70,7 +73,14 @@ func NewVolatilityManager(targetVol, maxVol float64) *VolatilityManager {
 		betaValues:         make(map[string]float64),
 		lastRebalance:      time.Now(),
 		volatilityHistory:  make([]VolatilityPoint, 0),
+		params:             DefaultRuntimeParameters(),
 	}
+}
+
+// WithParameters sets the runtime parameters and returns the manager for chaining
+func (vm *VolatilityManager) WithParameters(p *RuntimeParameters) *VolatilityManager {
+	vm.params = p
+	return vm
 }
 
 // UpdateReturns updates the returns history for volatility calculation
@@ -78,15 +88,13 @@ func (vm *VolatilityManager) UpdateReturns(asset string, returns []float64) {
 	vm.mu.Lock()
 	defer vm.mu.Unlock()
 
-	// Keep only recent returns (last 252 trading days)
-	maxHistory := 252
+	maxHistory := vm.params.GARCH.MaxHistory
 	if len(returns) > maxHistory {
 		returns = returns[len(returns)-maxHistory:]
 	}
 
 	vm.returnsHistory[asset] = returns
 
-	// Update beta and correlation matrices
 	vm.updateBetaValues(asset)
 	vm.updateCorrelationMatrix(asset)
 }
@@ -94,12 +102,10 @@ func (vm *VolatilityManager) UpdateReturns(asset string, returns []float64) {
 // updateBetaValues calculates beta values for assets
 func (vm *VolatilityManager) updateBetaValues(asset string) {
 	returns, exists := vm.returnsHistory[asset]
-	if !exists || len(returns) < 30 {
+	if !exists || len(returns) < vm.params.GARCH.CorrelationMinDays {
 		return
 	}
 
-	// Calculate beta relative to portfolio (simplified)
-	// In practice, this would be calculated against a market benchmark
 	beta := vm.calculateBeta(returns, vm.getPortfolioReturns())
 	vm.betaValues[asset] = beta
 }
@@ -111,13 +117,13 @@ func (vm *VolatilityManager) updateCorrelationMatrix(asset string) {
 	}
 
 	assetReturns, exists := vm.returnsHistory[asset]
-	if !exists || len(assetReturns) < 30 {
+	if !exists || len(assetReturns) < vm.params.GARCH.CorrelationMinDays {
 		return
 	}
 
-	// Calculate correlation with other assets
+	minDays := vm.params.GARCH.CorrelationMinDays
 	for otherAsset, otherReturns := range vm.returnsHistory {
-		if otherAsset == asset || len(otherReturns) < 30 {
+		if otherAsset == asset || len(otherReturns) < minDays {
 			continue
 		}
 
@@ -129,11 +135,10 @@ func (vm *VolatilityManager) updateCorrelationMatrix(asset string) {
 
 // calculateBeta calculates beta coefficient
 func (vm *VolatilityManager) calculateBeta(assetReturns, marketReturns []float64) float64 {
-	if len(assetReturns) != len(marketReturns) || len(assetReturns) < 30 {
-		return 1.0 // Default beta
+	if len(assetReturns) != len(marketReturns) || len(assetReturns) < vm.params.GARCH.CorrelationMinDays {
+		return 1.0
 	}
 
-	// Calculate covariance and variance
 	assetMean := vm.mean(assetReturns)
 	marketMean := vm.mean(marketReturns)
 
@@ -153,7 +158,7 @@ func (vm *VolatilityManager) calculateBeta(assetReturns, marketReturns []float64
 
 // calculateCorrelation calculates Pearson correlation coefficient
 func (vm *VolatilityManager) calculateCorrelation(returns1, returns2 []float64) float64 {
-	if len(returns1) != len(returns2) || len(returns1) < 30 {
+	if len(returns1) != len(returns2) || len(returns1) < vm.params.GARCH.CorrelationMinDays {
 		return 0.0
 	}
 
@@ -191,15 +196,12 @@ func (vm *VolatilityManager) CalculateCurrentVolatility(weights map[string]float
 
 	vm.assetWeights = weights
 
-	// Calculate portfolio variance using the formula:
-	// σ²p = Σ(wi² * σi²) + ΣΣ(wi * wj * σi * σj * ρij)
-
 	portfolioVariance := 0.0
+	minDays := vm.params.GARCH.CorrelationMinDays
 
-	// Individual asset contributions
 	for asset := range weights {
 		returns, exists := vm.returnsHistory[asset]
-		if !exists || len(returns) < 30 {
+		if !exists || len(returns) < minDays {
 			continue
 		}
 
@@ -208,7 +210,6 @@ func (vm *VolatilityManager) CalculateCurrentVolatility(weights map[string]float
 		portfolioVariance += weight * weight * assetVol * assetVol
 	}
 
-	// Correlation contributions
 	for asset1, weight1 := range weights {
 		for asset2, weight2 := range weights {
 			if asset1 >= asset2 {
@@ -219,7 +220,7 @@ func (vm *VolatilityManager) CalculateCurrentVolatility(weights map[string]float
 			returns1, exists1 := vm.returnsHistory[asset1]
 			returns2, exists2 := vm.returnsHistory[asset2]
 
-			if !exists1 || !exists2 || len(returns1) < 30 || len(returns2) < 30 {
+			if !exists1 || !exists2 || len(returns1) < minDays || len(returns2) < minDays {
 				continue
 			}
 
@@ -233,7 +234,6 @@ func (vm *VolatilityManager) CalculateCurrentVolatility(weights map[string]float
 	currentVol := math.Sqrt(portfolioVariance)
 	vm.currentVolatility = currentVol
 
-	// Add to history
 	point := VolatilityPoint{
 		Timestamp:  time.Now(),
 		Volatility: currentVol,
@@ -242,7 +242,7 @@ func (vm *VolatilityManager) CalculateCurrentVolatility(weights map[string]float
 	}
 
 	vm.volatilityHistory = append(vm.volatilityHistory, point)
-	if len(vm.volatilityHistory) > 1000 {
+	if len(vm.volatilityHistory) > vm.params.GARCH.MaxHistoryPoints {
 		vm.volatilityHistory = vm.volatilityHistory[1:]
 	}
 
@@ -255,22 +255,21 @@ func (vm *VolatilityManager) GetVolatilityAdjustments() []VolatilityAdjustment {
 	defer vm.mu.RUnlock()
 
 	adjustments := make([]VolatilityAdjustment, 0)
+	minDays := vm.params.GARCH.CorrelationMinDays
 
-	// Check if volatility is too high
 	if vm.currentVolatility > vm.maxVolatility {
-		// Reduce exposure to high-volatility assets
 		for asset := range vm.assetWeights {
 			returns, exists := vm.returnsHistory[asset]
-			if !exists || len(returns) < 30 {
+			if !exists || len(returns) < minDays {
 				continue
 			}
 
 			assetVol := vm.standardDeviation(returns)
-			if assetVol > vm.targetVolatility*1.5 {
+			if assetVol > vm.targetVolatility*vm.params.GARCH.HighVolThreshold {
 				adjustment := VolatilityAdjustment{
 					Asset:     asset,
 					Action:    ActionReduce,
-					Magnitude: 0.5, // Reduce by 50%
+					Magnitude: vm.params.GARCH.ReduceMagnitude,
 					Reason:    fmt.Sprintf("Asset volatility %.2f%% exceeds target", assetVol*100),
 					Priority:  1,
 				}
@@ -279,24 +278,21 @@ func (vm *VolatilityManager) GetVolatilityAdjustments() []VolatilityAdjustment {
 		}
 	}
 
-	// Check if volatility is too low
-	if vm.currentVolatility < vm.targetVolatility*0.7 {
-		// Increase exposure to low-volatility, high-return assets
+	if vm.currentVolatility < vm.targetVolatility*vm.params.GARCH.LowVolThreshold {
 		for asset := range vm.assetWeights {
 			returns, exists := vm.returnsHistory[asset]
-			if !exists || len(returns) < 30 {
+			if !exists || len(returns) < minDays {
 				continue
 			}
 
 			assetVol := vm.standardDeviation(returns)
 			assetReturn := vm.mean(returns)
 
-			// Look for assets with low volatility but positive returns
 			if assetVol < vm.targetVolatility && assetReturn > 0 {
 				adjustment := VolatilityAdjustment{
 					Asset:     asset,
 					Action:    ActionIncrease,
-					Magnitude: 0.2, // Increase by 20%
+					Magnitude: vm.params.GARCH.IncreaseMagnitude,
 					Reason:    fmt.Sprintf("Low volatility asset with positive return: %.2f%%", assetReturn*100),
 					Priority:  2,
 				}
@@ -305,9 +301,7 @@ func (vm *VolatilityManager) GetVolatilityAdjustments() []VolatilityAdjustment {
 		}
 	}
 
-	// Check for rebalancing needs
-	if time.Since(vm.lastRebalance) > 7*24*time.Hour { // Weekly rebalancing
-		_ = struct{}{} // Use the rebalancing logic
+	if time.Since(vm.lastRebalance) > time.Duration(vm.params.GARCH.WeeklyRebalanceDays)*24*time.Hour {
 		adjustment := VolatilityAdjustment{
 			Asset:     "portfolio",
 			Action:    ActionRebalance,
@@ -318,7 +312,6 @@ func (vm *VolatilityManager) GetVolatilityAdjustments() []VolatilityAdjustment {
 		adjustments = append(adjustments, adjustment)
 	}
 
-	// Sort by priority
 	sort.Slice(adjustments, func(i, j int) bool {
 		return adjustments[i].Priority < adjustments[j].Priority
 	})
@@ -349,8 +342,7 @@ func (vm *VolatilityManager) GetVolatilityForecast(asset string, periods int) []
 	defer vm.mu.RUnlock()
 
 	returns, exists := vm.returnsHistory[asset]
-	if !exists || len(returns) < 100 {
-		// Return simple historical volatility forecast
+	if !exists || len(returns) < vm.params.GARCH.MinForecastDays {
 		baseVol := vm.currentVolatility
 		forecast := make([]float64, periods)
 		for i := range forecast {
@@ -359,17 +351,14 @@ func (vm *VolatilityManager) GetVolatilityForecast(asset string, periods int) []
 		return forecast
 	}
 
-	// Simplified GARCH(1,1) parameters
-	omega := 0.000001
-	alpha := 0.1
-	beta := 0.85
+	omega := vm.params.GARCH.Omega
+	alpha := vm.params.GARCH.Alpha
+	beta := vm.params.GARCH.Beta
 
-	// Calculate initial variance
 	variance := vm.variance(returns)
 	forecast := make([]float64, periods)
 
 	for i := 0; i < periods; i++ {
-		// GARCH(1,1) formula: σ²t = ω + α * ε²t-1 + β * σ²t-1
 		if i == 0 {
 			forecast[i] = math.Sqrt(variance)
 		} else {

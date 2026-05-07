@@ -10,8 +10,8 @@ import (
 
 func TestRealTimeAdapter(t *testing.T) {
 	t.Run("NewRealTimeAdapter", func(t *testing.T) {
-		config := DefaultRealTimeConfig()
-		adapter := NewRealTimeAdapter(config)
+		params := defaultRealtimeConfig()
+		adapter := NewRealTimeAdapter(params)
 
 		if adapter == nil {
 			t.Fatal("Expected non-nil adapter")
@@ -27,28 +27,24 @@ func TestRealTimeAdapter(t *testing.T) {
 	})
 
 	t.Run("DefaultConfig", func(t *testing.T) {
-		config := DefaultRealTimeConfig()
+		params := defaultRealtimeConfig()
 
-		if config.UpdateInterval != 100*time.Millisecond {
-			t.Errorf("Expected UpdateInterval 100ms, got %v", config.UpdateInterval)
+		if params.UpdateIntervalMs.Value != 100 {
+			t.Errorf("Expected UpdateInterval 100ms, got %d", params.UpdateIntervalMs.Value)
 		}
 
-		if config.DataWindowSize != 60 {
-			t.Errorf("Expected DataWindowSize 60, got %d", config.DataWindowSize)
+		if params.MinConfidence.Value != 0.7 {
+			t.Errorf("Expected MinConfidence 0.7, got %f", params.MinConfidence.Value)
 		}
 
-		if config.MinConfidence != 0.7 {
-			t.Errorf("Expected MinConfidence 0.7, got %f", config.MinConfidence)
-		}
-
-		if config.MaxWeightChange != 0.5 {
-			t.Errorf("Expected MaxWeightChange 0.5, got %f", config.MaxWeightChange)
+		if params.MaxWeightChange.Value != 0.5 {
+			t.Errorf("Expected MaxWeightChange 0.5, got %f", params.MaxWeightChange.Value)
 		}
 	})
 
 	t.Run("IngestData", func(t *testing.T) {
-		config := DefaultRealTimeConfig()
-		adapter := NewRealTimeAdapter(config)
+		params := defaultRealtimeConfig()
+		adapter := NewRealTimeAdapter(params)
 
 		point := MarketDataPoint{
 			Symbol:    "2330.TW",
@@ -73,8 +69,8 @@ func TestRealTimeAdapter(t *testing.T) {
 	})
 
 	t.Run("RegisterAgent", func(t *testing.T) {
-		config := DefaultRealTimeConfig()
-		adapter := NewRealTimeAdapter(config)
+		params := defaultRealtimeConfig()
+		adapter := NewRealTimeAdapter(params)
 
 		adapter.RegisterAgent("trend_agent", []string{"2330.TW", "2317.TW"}, 1.0)
 
@@ -91,8 +87,8 @@ func TestRealTimeAdapter(t *testing.T) {
 	})
 
 	t.Run("GetCurrentRegime", func(t *testing.T) {
-		config := DefaultRealTimeConfig()
-		adapter := NewRealTimeAdapter(config)
+		params := defaultRealtimeConfig()
+		adapter := NewRealTimeAdapter(params)
 
 		// Ingest enough data to detect regime
 		baseTime := time.Now()
@@ -129,8 +125,8 @@ func TestRealTimeAdapter(t *testing.T) {
 	})
 
 	t.Run("GetRegimeConfidence", func(t *testing.T) {
-		config := DefaultRealTimeConfig()
-		adapter := NewRealTimeAdapter(config)
+		params := defaultRealtimeConfig()
+		adapter := NewRealTimeAdapter(params)
 
 		// No data yet
 		confidence := adapter.GetRegimeConfidence("TEST")
@@ -158,8 +154,8 @@ func TestRealTimeAdapter(t *testing.T) {
 	})
 
 	t.Run("ApplyToRecommendation", func(t *testing.T) {
-		config := DefaultRealTimeConfig()
-		adapter := NewRealTimeAdapter(config)
+		params := defaultRealtimeConfig()
+		adapter := NewRealTimeAdapter(params)
 
 		adapter.RegisterAgent("test_agent", []string{"2330.TW"}, 1.5)
 
@@ -187,8 +183,8 @@ func TestRealTimeAdapter(t *testing.T) {
 	})
 
 	t.Run("GetActiveSymbols", func(t *testing.T) {
-		config := DefaultRealTimeConfig()
-		adapter := NewRealTimeAdapter(config)
+		params := defaultRealtimeConfig()
+		adapter := NewRealTimeAdapter(params)
 
 		adapter.IngestData(MarketDataPoint{Symbol: "A", Price: 100})
 		adapter.IngestData(MarketDataPoint{Symbol: "B", Price: 200})
@@ -202,8 +198,8 @@ func TestRealTimeAdapter(t *testing.T) {
 	})
 
 	t.Run("GetStatistics", func(t *testing.T) {
-		config := DefaultRealTimeConfig()
-		adapter := NewRealTimeAdapter(config)
+		params := defaultRealtimeConfig()
+		adapter := NewRealTimeAdapter(params)
 
 		adapter.IngestData(MarketDataPoint{Symbol: "A", Price: 100})
 		adapter.RegisterAgent("agent1", []string{"A"}, 1.0)
@@ -220,8 +216,8 @@ func TestRealTimeAdapter(t *testing.T) {
 	})
 
 	t.Run("GenerateReport", func(t *testing.T) {
-		config := DefaultRealTimeConfig()
-		adapter := NewRealTimeAdapter(config)
+		params := defaultRealtimeConfig()
+		adapter := NewRealTimeAdapter(params)
 
 		// Add some data
 		for i := 0; i < 30; i++ {
@@ -239,9 +235,9 @@ func TestRealTimeAdapter(t *testing.T) {
 			t.Fatal("Expected non-nil report")
 		}
 
-		if report.UpdateInterval != config.UpdateInterval {
+		if report.UpdateInterval != time.Duration(params.UpdateIntervalMs.Value)*time.Millisecond {
 			t.Errorf("Expected update interval %v, got %v",
-				config.UpdateInterval, report.UpdateInterval)
+				time.Duration(params.UpdateIntervalMs.Value)*time.Millisecond, report.UpdateInterval)
 		}
 
 		if len(report.SymbolReports) == 0 {
@@ -272,7 +268,7 @@ func TestRealTimeAdapter(t *testing.T) {
 
 func TestRegimeDetector(t *testing.T) {
 	t.Run("NewRegimeDetector", func(t *testing.T) {
-		detector := NewRegimeDetector()
+		detector := NewRegimeDetector(nil)
 		if detector == nil {
 			t.Fatal("Expected non-nil detector")
 		}
@@ -283,7 +279,7 @@ func TestRegimeDetector(t *testing.T) {
 	})
 
 	t.Run("DetectRegimeCalm", func(t *testing.T) {
-		detector := NewRegimeDetector()
+		detector := NewRegimeDetector(nil)
 
 		// Create calm data (stable prices)
 		data := make([]MarketDataPoint, 60)
@@ -306,7 +302,7 @@ func TestRegimeDetector(t *testing.T) {
 	})
 
 	t.Run("DetectRegimeVolatile", func(t *testing.T) {
-		detector := NewRegimeDetector()
+		detector := NewRegimeDetector(nil)
 
 		// Create volatile data (large price swings)
 		data := make([]MarketDataPoint, 60)
@@ -334,7 +330,7 @@ func TestRegimeDetector(t *testing.T) {
 	})
 
 	t.Run("DetectVolumeSpike", func(t *testing.T) {
-		detector := NewRegimeDetector()
+		detector := NewRegimeDetector(nil)
 
 		// Normal volume data
 		data := make([]MarketDataPoint, 20)
@@ -358,7 +354,7 @@ func TestRegimeDetector(t *testing.T) {
 	})
 
 	t.Run("DetectReversal", func(t *testing.T) {
-		detector := NewRegimeDetector()
+		detector := NewRegimeDetector(nil)
 
 		// Create reversal pattern: up then down
 		data := make([]MarketDataPoint, 40)
@@ -391,8 +387,8 @@ func TestRegimeDetector(t *testing.T) {
 
 func TestRealTimeAdapterLifecycle(t *testing.T) {
 	t.Run("StartAndStop", func(t *testing.T) {
-		config := DefaultRealTimeConfig()
-		adapter := NewRealTimeAdapter(config)
+		params := defaultRealtimeConfig()
+		adapter := NewRealTimeAdapter(params)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()

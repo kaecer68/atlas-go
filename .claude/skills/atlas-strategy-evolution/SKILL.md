@@ -93,10 +93,13 @@ Propose → Execute → Judge → Promote/Revert
 ### 改良重點（v2.0）
 
 1. **觀測值門檻提高**：level_1: 3→8, level_2: 8→12, level_3: 12→15
-   > ⚠️ **Warning**: v2.0 is not yet implemented. Current thresholds remain at level_1: 3, level_2: 8, level_3: 12 (see `internal/experiment/judge.go:340-363`).
+   > ⚠️ **Pending**: Thresholds remain at level_1: 3, level_2: 8, level_3: 12 (see `internal/experiment/judge.go:393-404`). Requires data collection infrastructure upgrade.
 2. **統計穩定性檢查**：Sharpe ratio 標準誤差 < 0.5
+   > ✅ **Implemented**: `maintain_sharpe_like` gate uses `SharpeStabilityCheck()`.
 3. **Out-of-sample 驗證**：Candidate 必須在第二個獨立窗口優於 Baseline
+   > ✅ **Implemented**: `no_drawdown_spike` and `preserve_downside_protection` gates.
 4. **透明度強化**：Darwinian 權重截斷事件記錄 + 連續截斷警告
+   > ✅ **Implemented**: Logging in `constrainWeight()` at `darwinian_weights.go:315-319`.
 
 ---
 

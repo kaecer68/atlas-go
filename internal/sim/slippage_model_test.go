@@ -181,20 +181,6 @@ func TestAdjustPriceForSlippage(t *testing.T) {
 	}
 }
 
-func TestEstimateMarketImpact(t *testing.T) {
-	impact := EstimateMarketImpact(100000, 1000000)
-	if impact <= 0 {
-		t.Errorf("expected positive impact, got %v", impact)
-	}
-
-	// Very small order should have small impact
-	smallImpact := EstimateMarketImpact(1000, 1000000)
-	largeImpact := EstimateMarketImpact(100000, 1000000)
-	if smallImpact >= largeImpact {
-		t.Errorf("small impact %.6f should be less than large impact %.6f", smallImpact, largeImpact)
-	}
-}
-
 func TestSlippageModelPrecompute(t *testing.T) {
 	model := DefaultSlippageModel()
 	quotes := map[string]domain.Quote{

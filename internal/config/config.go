@@ -11,11 +11,14 @@ import (
 
 type Config struct {
 	WorkDir                    string
+	DatabaseURL                string
+	MigrationsPath             string
 	MarketDataProvider         string
 	PrimaryMarket              string
 	ReplayMode                 string
 	AgentRegistryPath          string
 	BaselinePolicyPath         string
+	ParametersConfigPath       string
 	LedgerDir                  string
 	ReplayDataPath             string
 	ReplaySessionDate          string
@@ -48,11 +51,14 @@ func Load() Config {
 
 	return Config{
 		WorkDir:                    envOr("ATLAS_WORK_DIR", "."),
+		DatabaseURL:                envOr("DATABASE_URL", ""),
+		MigrationsPath:             envOr("ATLAS_MIGRATIONS_PATH", "sql/migrations"),
 		MarketDataProvider:         envOr("ATLAS_MARKET_DATA_PROVIDER", "twse"),
 		PrimaryMarket:              envOr("ATLAS_PRIMARY_MARKET", "TW"),
 		ReplayMode:                 envOr("ATLAS_REPLAY_MODE", "daily"),
 		AgentRegistryPath:          envOr("ATLAS_AGENT_REGISTRY_PATH", "configs/agents.json"),
 		BaselinePolicyPath:         envOr("ATLAS_BASELINE_POLICY_PATH", "data/state/baseline_policy.json"),
+		ParametersConfigPath:       envOr("ATLAS_PARAMETERS_CONFIG_PATH", "configs/parameters.json"),
 		LedgerDir:                  envOr("ATLAS_LEDGER_DIR", "data/state"),
 		ReplayDataPath:             envOr("ATLAS_REPLAY_DATA_PATH", "samples/replay/twse_stock_day_all_sample.csv"),
 		ReplaySessionDate:          envOr("ATLAS_REPLAY_SESSION_DATE", "2026-03-26"),

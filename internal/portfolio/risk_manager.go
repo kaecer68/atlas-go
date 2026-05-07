@@ -11,25 +11,23 @@ import (
 type RiskManager struct {
 	mu sync.RWMutex
 
-	// Risk parameters
-	maxDrawdownPct    float64 // Maximum allowed drawdown (e.g., 0.08 for 8%)
-	maxPositionSize   float64 // Maximum position size as percentage of portfolio
-	maxDailyLossPct   float64 // Maximum daily loss percentage
+	runtimeParams *RuntimeParameters
+
+	maxDrawdownPct    float64
+	maxPositionSize   float64
+	maxDailyLossPct   float64
 	stopLossEnabled   bool
 	takeProfitEnabled bool
 
-	// Current state
 	currentDrawdown float64
 	peakValue       float64
 	currentValue    float64
 	dailyStartValue float64
 	lastUpdate      time.Time
 
-	// Risk alerts
 	riskAlerts   []RiskAlert
 	alertHistory []RiskAlert
 
-	// Position tracking
 	positions     map[string]*Position
 	totalExposure float64
 }
@@ -69,7 +67,6 @@ const (
 	LevelEmergency
 )
 
-// Position represents a trading position
 type Position struct {
 	Symbol       string
 	Size         float64
@@ -81,17 +78,28 @@ type Position struct {
 	LastUpdate   time.Time
 }
 
+// Position is for real-time risk tracking, distinct from domain.Position
+// which is the canonical cross-package snapshot for persistence.
+// This struct tracks execution details (entry time, realized P&L) needed for
+// stop-loss/take-profit decisions.
+
 // NewRiskManager creates a new risk manager with default parameters
 func NewRiskManager() *RiskManager {
+	params := DefaultRuntimeParameters()
+	return newRiskManagerWithParams(params)
+}
+
+func newRiskManagerWithParams(params *RuntimeParameters) *RiskManager {
 	return &RiskManager{
-		maxDrawdownPct:    0.08, // 8% max drawdown
-		maxPositionSize:   0.15, // 15% max position size
-		maxDailyLossPct:   0.03, // 3% max daily loss
+		runtimeParams:     params,
+		maxDrawdownPct:    params.Risk.MaxDrawdownPct,
+		maxPositionSize:   params.Risk.MaxPositionSize,
+		maxDailyLossPct:   params.Risk.MaxDailyLossPct,
 		stopLossEnabled:   true,
 		takeProfitEnabled: true,
 		positions:         make(map[string]*Position),
 		lastUpdate:        time.Now(),
-		dailyStartValue:   100000.0, // Default starting value
+		dailyStartValue:   100000.0,
 		currentValue:      100000.0,
 		peakValue:         100000.0,
 	}
@@ -173,8 +181,8 @@ func (rm *RiskManager) AddPosition(symbol string, size, price float64) error {
 
 	// Check total exposure
 	newTotalExposure := rm.totalExposure + positionValue
-	if newTotalExposure > rm.currentValue*0.8 { // 80% max total exposure
-		return fmt.Errorf("total exposure would exceed 80%% of portfolio")
+	if newTotalExposure > rm.currentValue*rm.runtimeParams.Risk.MaxTotalExposure {
+		return fmt.Errorf("total exposure would exceed %.0f%% of portfolio", rm.runtimeParams.Risk.MaxTotalExposure*100)
 	}
 
 	// Add position
@@ -210,17 +218,19 @@ func (rm *RiskManager) UpdatePosition(symbol string, currentPrice float64) {
 	position.Unrealized = (currentPrice - position.EntryPrice) * position.Size
 
 	// Check for stop loss or take profit
-	if rm.stopLossEnabled && position.Unrealized < -position.EntryPrice*position.Size*0.05 {
+	stopLossThreshold := position.EntryPrice * position.Size * rm.runtimeParams.Risk.StopLoss
+	if rm.stopLossEnabled && position.Unrealized < stopLossThreshold {
 		alert := rm.createAlert(AlertPositionSize, LevelWarning,
 			fmt.Sprintf("Stop loss triggered for %s at %.2f", symbol, currentPrice),
-			symbol, currentPrice, position.EntryPrice*0.95)
+			symbol, currentPrice, position.EntryPrice*(1+rm.runtimeParams.Risk.StopLoss))
 		rm.riskAlerts = append(rm.riskAlerts, alert)
 	}
 
-	if rm.takeProfitEnabled && position.Unrealized > position.EntryPrice*position.Size*0.20 {
+	takeProfitThreshold := position.EntryPrice * position.Size * rm.runtimeParams.Risk.TakeProfit
+	if rm.takeProfitEnabled && position.Unrealized > takeProfitThreshold {
 		alert := rm.createAlert(AlertPositionSize, LevelInfo,
 			fmt.Sprintf("Take profit triggered for %s at %.2f", symbol, currentPrice),
-			symbol, currentPrice, position.EntryPrice*1.20)
+			symbol, currentPrice, position.EntryPrice*(1+rm.runtimeParams.Risk.TakeProfit))
 		rm.riskAlerts = append(rm.riskAlerts, alert)
 	}
 }
@@ -335,17 +345,13 @@ func (rm *RiskManager) CalculatePositionSize(price, volatility float64) float64 
 	rm.mu.RLock()
 	defer rm.mu.RUnlock()
 
-	// Kelly criterion with risk adjustment
-	maxLoss := 0.02 // 2% max loss per trade
+	maxLoss := rm.runtimeParams.Risk.MaxLossPerTrade
 	if volatility > 0 {
-		// Adjust for volatility
 		maxLoss = math.Min(maxLoss, 0.01/volatility)
 	}
 
-	// Position size as percentage of portfolio
 	positionSize := (rm.currentValue * maxLoss) / price
 
-	// Apply maximum position size limit
 	maxPosValue := rm.currentValue * rm.maxPositionSize
 	if positionSize*price > maxPosValue {
 		positionSize = maxPosValue / price

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -12,11 +13,33 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+type ChannelAlert struct {
+	ChannelID string `json:"channel_id"`
+	Status    string `json:"status"`
+	Error     string `json:"error"`
+	FetchAt   string `json:"fetch_at"`
+}
+
+type ChannelHealthRecord struct {
+	Status        string `json:"status"`
+	LastFetchAt   string `json:"last_fetch_at"`
+	LastError     string `json:"last_error,omitempty"`
+	LastSuccessAt string `json:"last_success_at,omitempty"`
+}
+
+type ChannelHealthRecorder interface {
+	Record(channelID, status, errMsg string) error
+	Get(channelID string) *ChannelHealthRecord
+	Alerts() []ChannelAlert
+	SyncAllToDB() error
+}
+
 type channelHealthStore struct {
-	path string
-	mu   sync.RWMutex
-	data map[string]*ChannelHealthRecord
-	pool *pgxpool.Pool
+	path   string
+	mu     sync.RWMutex
+	data   map[string]*ChannelHealthRecord
+	pool   *pgxpool.Pool
+	loaded bool
 }
 
 func NewChannelHealthStoreWithPool(dir string, pool *pgxpool.Pool) ChannelHealthRecorder {
@@ -30,9 +53,13 @@ func NewChannelHealthStoreWithPool(dir string, pool *pgxpool.Pool) ChannelHealth
 func (s *channelHealthStore) load() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.loaded {
+		return nil
+	}
 	b, err := os.ReadFile(s.path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			s.loaded = true
 			return nil
 		}
 		return fmt.Errorf("read channel health file: %w", err)
@@ -47,6 +74,7 @@ func (s *channelHealthStore) load() error {
 	if s.data == nil {
 		s.data = make(map[string]*ChannelHealthRecord)
 	}
+	s.loaded = true
 	return nil
 }
 
@@ -88,10 +116,9 @@ func (s *channelHealthStore) Record(channelID, status, errMsg string) error {
 
 	if s.pool != nil {
 		dbErr := s.recordToDB(channelID, status, errMsg)
-		if dbErr == nil {
-			return s.save()
+		if dbErr != nil {
+			log.Printf("[ChannelHealth] DB write failed for %s: %v", channelID, dbErr)
 		}
-		fmt.Fprintf(os.Stderr, "[ChannelHealth] DB write failed for %s, fallback to JSON: %v\n", channelID, dbErr)
 	}
 	return s.save()
 }
@@ -132,18 +159,22 @@ func (s *channelHealthStore) recordToDB(channelID, status, errMsg string) error 
 }
 
 func (s *channelHealthStore) Get(channelID string) *ChannelHealthRecord {
-	if rec := s.getFromDB(channelID); rec != nil {
-		return rec
-	}
 	_ = s.load()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	rec := s.data[channelID]
-	if rec == nil {
-		return nil
+
+	if rec, ok := s.data[channelID]; ok {
+		cp := *rec
+		return &cp
 	}
-	cp := *rec
-	return &cp
+
+	if s.pool != nil {
+		if rec := s.getFromDB(channelID); rec != nil {
+			return rec
+		}
+	}
+
+	return nil
 }
 
 func (s *channelHealthStore) getFromDB(channelID string) *ChannelHealthRecord {
@@ -175,9 +206,6 @@ func (s *channelHealthStore) getFromDB(channelID string) *ChannelHealthRecord {
 }
 
 func (s *channelHealthStore) Alerts() []ChannelAlert {
-	if alerts := s.alertsFromDB(); alerts != nil {
-		return alerts
-	}
 	_ = s.load()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -193,6 +221,30 @@ func (s *channelHealthStore) Alerts() []ChannelAlert {
 		}
 	}
 	return alerts
+}
+
+func (s *channelHealthStore) SyncAllToDB() error {
+	if s.pool == nil {
+		return fmt.Errorf("database pool not initialized")
+	}
+	_ = s.load()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var failed []string
+	for id, rec := range s.data {
+		errMsg := ""
+		if rec.Status != "ok" {
+			errMsg = rec.LastError
+		}
+		if err := s.recordToDB(id, rec.Status, errMsg); err != nil {
+			failed = append(failed, fmt.Sprintf("%s: %v", id, err))
+		}
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("sync partial failure: %v", failed)
+	}
+	return nil
 }
 
 func (s *channelHealthStore) alertsFromDB() []ChannelAlert {

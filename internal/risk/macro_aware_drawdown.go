@@ -235,29 +235,21 @@ func (e *MacroAwareDrawdownEngine) GetSectorConstraints(
 
 	switch macro.PrimaryFlow {
 	case "risk_off":
-		// Reduce exposure to risk assets
-		constraints["ai_supply_chain"] = 0.3
-		constraints["small_cap"] = 0.2
-		constraints["emerging_market"] = 0.1
-		constraints["gold"] = 1.5 // Increase
-		constraints["utilities"] = 1.2
+		for k, v := range e.cfg.SectorConstraintsRiskOff {
+			constraints[k] = v
+		}
 
 	case "carry_trade_unwind":
-		// Exit equities, move to cash/bonds
-		constraints["all_equities"] = 0.1
-		constraints["tech"] = 0.05
-		constraints["financials"] = 0.1
-		constraints["cash"] = 2.0
+		for k, v := range e.cfg.SectorConstraintsCarryTradeUnwind {
+			constraints[k] = v
+		}
 
 	case "sector_rotation":
-		// Rotate to energy, reduce tech
-		constraints["energy"] = 1.8
-		constraints["oil_services"] = 1.5
-		constraints["high_valuation_tech"] = 0.3
-		constraints["rate_sensitive"] = 0.4
+		for k, v := range e.cfg.SectorConstraintsSectorRotation {
+			constraints[k] = v
+		}
 
 	default:
-		// No special constraints
 	}
 
 	return constraints

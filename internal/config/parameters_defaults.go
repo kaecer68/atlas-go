@@ -1,0 +1,1411 @@
+package config
+
+import (
+	"time"
+)
+
+// DefaultParametersConfig returns a configuration that exactly mirrors
+// the current hard-coded values in the portfolio, experiment, and baseline
+// packages. This ensures zero behavioral drift when no config file exists.
+func DefaultParametersConfig() *ParametersConfig {
+	now := time.Now()
+	return &ParametersConfig{
+		Version:      "1.0",
+		UpdatedAt:    now,
+		Darwinian:    defaultDarwinianParameters(),
+		Factor:       defaultFactorParameters(),
+		Optimizer:    defaultOptimizerParameters(),
+		Sizing:       defaultSizingParameters(),
+		Health:       defaultHealthParameters(),
+		GARCH:        defaultGARCHParameters(),
+		Experiment:   defaultExperimentParameters(),
+		Baseline:     defaultBaselineParameters(),
+		Orchestrator: defaultOrchestratorParameters(),
+		Risk:         defaultRiskParameters(),
+		Realtime:     defaultRealtimeParameters(),
+		Narrative:    defaultNarrativeParameters(),
+		Janus:        defaultJanusParameters(),
+		Marketdata:   defaultMarketdataParameters(),
+		Industry:     defaultIndustryParameters(),
+		Strategy:     defaultStrategyParameters(),
+	}
+}
+
+func defaultDarwinianParameters() DarwinianParameters {
+	return DarwinianParameters{
+		WeightMin: ParameterMetadata[float64]{
+			Value:     0.3,
+			Rationale: "Whisper level: agent influence reduced to 30%",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from backtest: test [0.2, 0.5] range",
+		},
+		WeightMax: ParameterMetadata[float64]{
+			Value:     2.5,
+			Rationale: "Shout level: agent influence amplified to 250%",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from backtest: test [2.0, 3.0] range",
+		},
+		WeightNeutral: ParameterMetadata[float64]{
+			Value:     1.0,
+			Rationale: "Baseline: no adjustment",
+			Source:    SourceHeuristic,
+		},
+		TopQuartileMultiplier: ParameterMetadata[float64]{
+			Value:     1.05,
+			Rationale: "5% daily boost for top performers",
+			Source:    SourceHeuristic,
+			Todo:      "Literature review: Atlas-GIC uses tiered scaling, exact value unverified",
+		},
+		BottomQuartileMultiplier: ParameterMetadata[float64]{
+			Value:     0.95,
+			Rationale: "5% daily cut for bottom performers",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test asymmetric penalties",
+		},
+		DailyAdjustmentCooldown: ParameterMetadata[string]{
+			Value:     "20h",
+			Rationale: "Slightly less than 24h for daily trading frequency",
+			Source:    SourceHeuristic,
+		},
+		LookbackDays: ParameterMetadata[int]{
+			Value:     20,
+			Rationale: "One trading month (approx 20 business days)",
+			Source:    SourceHeuristic,
+			Todo:      "Literature: 20-day Sharpe has low statistical power; consider 60-day",
+		},
+		EMAAlpha: ParameterMetadata[float64]{
+			Value:     0.3,
+			Rationale: "Standard EMA smoothing factor",
+			Source:    SourceLiterature,
+		},
+		SharpeNormalizeDenom: ParameterMetadata[float64]{
+			Value:     2.0,
+			Rationale: "Sigmoid-like normalization: Sharpe/(Sharpe+2.0)",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from historical Sharpe distribution: use 90th percentile",
+		},
+		MaxPerformanceBonusPct: ParameterMetadata[float64]{
+			Value:     0.20,
+			Rationale: "Cap performance bonus at +20%",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from backtest optimization",
+		},
+		VolatilityPenaltyThreshold: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "5% daily volatility (~79% annualized) is high for TW market",
+			Source:    SourceEmpirical,
+		},
+		VolatilityPenaltyMultiplier: ParameterMetadata[float64]{
+			Value:     0.95,
+			Rationale: "5% penalty for high volatility agents",
+			Source:    SourceHeuristic,
+		},
+		RiskVolatilityThreshold: ParameterMetadata[float64]{
+			Value:     0.08,
+			Rationale: "8% daily volatility is extreme; extra penalty warranted",
+			Source:    SourceEmpirical,
+		},
+		RiskMultiplier: ParameterMetadata[float64]{
+			Value:     0.9,
+			Rationale: "Extra 10% cut for extreme volatility",
+			Source:    SourceHeuristic,
+		},
+		HitRateHighThreshold: ParameterMetadata[float64]{
+			Value:     0.6,
+			Rationale: "60% hit rate is good in TW equity market",
+			Source:    SourceEmpirical,
+		},
+		HitRateLowThreshold: ParameterMetadata[float64]{
+			Value:     0.4,
+			Rationale: "40% hit rate is poor and warrants reduction",
+			Source:    SourceEmpirical,
+		},
+		MiddleTierBoostMultiplier: ParameterMetadata[float64]{
+			Value:     1.02,
+			Rationale: "2% mild boost for middle tier with good hit rate",
+			Source:    SourceHeuristic,
+		},
+		MiddleTierCutMultiplier: ParameterMetadata[float64]{
+			Value:     0.98,
+			Rationale: "2% mild cut for middle tier with poor hit rate",
+			Source:    SourceHeuristic,
+		},
+		SharpeMinSampleSize: ParameterMetadata[int]{
+			Value:     5,
+			Rationale: "Minimum observations for Sharpe calculation",
+			Source:    SourceLiterature,
+			Todo:      "Literature: 5 is insufficient for stable Sharpe; recommend 20+",
+		},
+		StdDevMeanRatioThreshold: ParameterMetadata[float64]{
+			Value:     0.001,
+			Rationale: "Guard against IEEE 754 precision edge case for identical returns",
+			Source:    SourceInferred,
+		},
+		ConvictionClampMin: ParameterMetadata[int]{
+			Value:     1,
+			Rationale: "Minimum conviction after weight scaling",
+			Source:    SourceHeuristic,
+		},
+		ConvictionClampMax: ParameterMetadata[int]{
+			Value:     250,
+			Rationale: "Maximum conviction after weight scaling (100 * 2.5)",
+			Source:    SourceHeuristic,
+		},
+	}
+}
+
+func defaultFactorParameters() FactorParameters {
+	return FactorParameters{
+		MomentumLookbackDays: ParameterMetadata[int]{
+			Value:     20,
+			Rationale: "Standard 20-day momentum window",
+			Source:    SourceLiterature,
+		},
+		MomentumStdDevDivisor: ParameterMetadata[float64]{
+			Value:     0.30,
+			Rationale: "30% return = full score; most TW stocks score below 0.3",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: use historical return distribution 90th percentile",
+		},
+		MomentumIntradayDiscount: ParameterMetadata[float64]{
+			Value:     0.5,
+			Rationale: "50% discount for intraday returns when historical data unavailable",
+			Source:    SourceHeuristic,
+			Todo:      "SCOR-01: review discount factor with more data",
+		},
+		MomentumIntradayThreshold: ParameterMetadata[float64]{
+			Value:     0.10,
+			Rationale: "10% intraday return = full score",
+			Source:    SourceHeuristic,
+		},
+		ValuePERangeCenter: ParameterMetadata[float64]{
+			Value:     5.0,
+			Rationale: "P/E=5 is cheap; P/E=50 is expensive",
+			Source:    SourceHeuristic,
+		},
+		ValuePERangeWidth: ParameterMetadata[float64]{
+			Value:     45.0,
+			Rationale: "Range [5, 50] covers most TW stocks",
+			Source:    SourceEmpirical,
+		},
+		ValuePBRangeCenter: ParameterMetadata[float64]{
+			Value:     0.5,
+			Rationale: "P/B=0.5 is cheap",
+			Source:    SourceHeuristic,
+		},
+		ValuePBRangeWidth: ParameterMetadata[float64]{
+			Value:     4.5,
+			Rationale: "Range [0.5, 5.0]",
+			Source:    SourceHeuristic,
+		},
+		ValuePSRangeCenter: ParameterMetadata[float64]{
+			Value:     0.5,
+			Rationale: "P/S=0.5 is cheap",
+			Source:    SourceHeuristic,
+		},
+		ValuePSRangeWidth: ParameterMetadata[float64]{
+			Value:     9.5,
+			Rationale: "Range [0.5, 10.0]",
+			Source:    SourceHeuristic,
+		},
+		QualityDividendYieldCap: ParameterMetadata[float64]{
+			Value:     5.0,
+			Rationale: "5% dividend yield is excellent for TW market",
+			Source:    SourceEmpirical,
+		},
+		QualityVolatilityStd: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "5% daily volatility as quality benchmark",
+			Source:    SourceHeuristic,
+			Todo:      "Review: TW market average daily vol is 1-3%, this may be too high",
+		},
+		QualityFallbackScore: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "Low fallback score when data unavailable",
+			Source:    SourceHeuristic,
+		},
+		ValueFallbackScore: ParameterMetadata[float64]{
+			Value:     0.1,
+			Rationale: "Moderate fallback score when data unavailable",
+			Source:    SourceHeuristic,
+			Todo:      "Inconsistent with QualityFallbackScore (0.05); harmonize",
+		},
+		InstitutionalSentimentWeights: ParameterMetadata[map[string]float64]{
+			Value: map[string]float64{
+				"foreign":  0.50,
+				"domestic": 0.30,
+				"margin":   0.20,
+			},
+			Rationale: "Foreign flow 50%, domestic 30%, margin balance 20%",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from regression: predict next-day returns",
+		},
+		FallbackWeightReduction: ParameterMetadata[float64]{
+			Value:     0.5,
+			Rationale: "50% weight reduction for fallback estimates",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: measure fallback estimate accuracy",
+		},
+	}
+}
+
+func defaultOptimizerParameters() OptimizerParameters {
+	return OptimizerParameters{
+		MaxPositionPct: ParameterMetadata[float64]{
+			Value:     0.15,
+			Rationale: "15% max single position for diversification",
+			Source:    SourceLiterature,
+		},
+		MaxSectorPct: ParameterMetadata[float64]{
+			Value:     0.40,
+			Rationale: "40% max single sector concentration",
+			Source:    SourceHeuristic,
+		},
+		MaxTurnoverDaily: ParameterMetadata[float64]{
+			Value:     0.20,
+			Rationale: "20% daily turnover limit",
+			Source:    SourceHeuristic,
+			Todo:      "Currently unused in optimizer; implement or remove",
+		},
+		TargetBeta: ParameterMetadata[float64]{
+			Value:     1.0,
+			Rationale: "Market-neutral target beta",
+			Source:    SourceLiterature,
+			Todo:      "Currently unused; implement beta constraint",
+		},
+		BetaRangeMin: ParameterMetadata[float64]{
+			Value:     0.8,
+			Rationale: "Minimum portfolio beta",
+			Source:    SourceHeuristic,
+			Todo:      "Currently unused",
+		},
+		BetaRangeMax: ParameterMetadata[float64]{
+			Value:     1.2,
+			Rationale: "Maximum portfolio beta",
+			Source:    SourceHeuristic,
+			Todo:      "Currently unused",
+		},
+		MinTradeSize: ParameterMetadata[int]{
+			Value:     1,
+			Rationale: "Minimum 1 share",
+			Source:    SourceHeuristic,
+			Todo:      "Currently unused; implement minimum trade size",
+		},
+		CashReserve: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "5% cash reserve for liquidity",
+			Source:    SourceHeuristic,
+		},
+		FactorWeights: ParameterMetadata[map[string]float64]{
+			Value: map[string]float64{
+				"momentum": 0.30,
+				"value":    0.25,
+				"quality":  0.25,
+				"agent":    0.20,
+			},
+			Rationale: "Momentum 30%, Value 25%, Quality 25%, Agent 20%",
+			Source:    SourceHeuristic,
+			Todo:      "AGENTS.md claims different weights (20/15/15/20); reconcile",
+		},
+	}
+}
+
+func defaultSizingParameters() SizingParameters {
+	return SizingParameters{
+		KellyFraction: ParameterMetadata[float64]{
+			Value:     0.25,
+			Rationale: "Half-Kelly for safety; literature recommends 0.2-0.5",
+			Source:    SourceLiterature,
+		},
+		VolLookbackDays: ParameterMetadata[int]{
+			Value:     20,
+			Rationale: "20-day volatility lookback",
+			Source:    SourceLiterature,
+		},
+		MaxPositionByADV: ParameterMetadata[float64]{
+			Value:     0.01,
+			Rationale: "1% of average daily volume",
+			Source:    SourceLiterature,
+		},
+		MaxDrawdownLimit: ParameterMetadata[float64]{
+			Value:     0.10,
+			Rationale: "10% max drawdown limit",
+			Source:    SourceHeuristic,
+			Todo:      "Currently unused; implement drawdown stop",
+		},
+		ATRMultiplier: ParameterMetadata[float64]{
+			Value:     2.0,
+			Rationale: "2x ATR stop-loss is standard",
+			Source:    SourceLiterature,
+		},
+		CorrelationPenalty: ParameterMetadata[float64]{
+			Value:     0.5,
+			Rationale: "50% correlation penalty scaling",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from portfolio optimization backtest",
+		},
+		CorrelationThreshold: ParameterMetadata[float64]{
+			Value:     0.70,
+			Rationale: "70% correlation is high and warrants penalty",
+			Source:    SourceHeuristic,
+		},
+		DefaultWinRate: ParameterMetadata[float64]{
+			Value:     0.5,
+			Rationale: "Neutral prior: 50% win rate",
+			Source:    SourceHeuristic,
+			Todo:      "Should be overridden by agent historical stats",
+		},
+		DefaultPayoffRatio: ParameterMetadata[float64]{
+			Value:     1.0,
+			Rationale: "Neutral prior: 1:1 payoff ratio",
+			Source:    SourceHeuristic,
+			Todo:      "Should be overridden by agent historical stats",
+		},
+		TargetVolatility: ParameterMetadata[float64]{
+			Value:     0.20,
+			Rationale: "20% annual target volatility",
+			Source:    SourceLiterature,
+		},
+		VolAdjustmentMin: ParameterMetadata[float64]{
+			Value:     0.25,
+			Rationale: "Minimum 0.25x size adjustment",
+			Source:    SourceHeuristic,
+		},
+		VolAdjustmentMax: ParameterMetadata[float64]{
+			Value:     2.0,
+			Rationale: "Maximum 2.0x size adjustment",
+			Source:    SourceHeuristic,
+		},
+		ATRTargetRisk: ParameterMetadata[float64]{
+			Value:     0.02,
+			Rationale: "2% risk per trade",
+			Source:    SourceLiterature,
+		},
+		ATRAdjustmentMin: ParameterMetadata[float64]{
+			Value:     0.25,
+			Rationale: "Minimum 0.25x ATR adjustment",
+			Source:    SourceHeuristic,
+		},
+		ATRAdjustmentMax: ParameterMetadata[float64]{
+			Value:     2.0,
+			Rationale: "Maximum 2.0x ATR adjustment",
+			Source:    SourceHeuristic,
+		},
+		CorrelationPenaltyFactor: ParameterMetadata[float64]{
+			Value:     0.7,
+			Rationale: "70% of correlation used as penalty",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from backtest",
+		},
+		MaxCorrelationPenalty: ParameterMetadata[float64]{
+			Value:     0.7,
+			Rationale: "Maximum 70% correlation penalty",
+			Source:    SourceHeuristic,
+		},
+		DefaultVolatility: ParameterMetadata[float64]{
+			Value:     0.25,
+			Rationale: "25% annualized default volatility",
+			Source:    SourceHeuristic,
+		},
+		DefaultADV: ParameterMetadata[float64]{
+			Value:     100000000,
+			Rationale: "100M TWD default average daily volume",
+			Source:    SourceHeuristic,
+		},
+		DefaultATR: ParameterMetadata[float64]{
+			Value:     0.02,
+			Rationale: "Non-zero default for ATR-based position sizing (2% of price as fallback)",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from backtest: test [0.01, 0.03] range",
+		},
+	}
+}
+
+func defaultHealthParameters() HealthParameters {
+	return HealthParameters{
+		MuteThreshold: ParameterMetadata[int]{
+			Value:     5,
+			Rationale: "5 consecutive losses triggers mute",
+			Source:    SourceHeuristic,
+		},
+		UnmuteThreshold: ParameterMetadata[int]{
+			Value:     3,
+			Rationale: "3 consecutive wins triggers recovery",
+			Source:    SourceHeuristic,
+		},
+		AutoRecoverDays: ParameterMetadata[int]{
+			Value:     7,
+			Rationale: "Auto-recover after 7 days muted",
+			Source:    SourceHeuristic,
+		},
+		MinSampleSize: ParameterMetadata[int]{
+			Value:     10,
+			Rationale: "Minimum 10 observations for health assessment",
+			Source:    SourceLiterature,
+			Todo:      "Currently defined but unused; implement in evaluateInterventions",
+		},
+		NegativeSharpeThreshold: ParameterMetadata[float64]{
+			Value:     -0.5,
+			Rationale: "Sharpe below -0.5 indicates severe underperformance",
+			Source:    SourceHeuristic,
+		},
+		SharpeWeight: ParameterMetadata[float64]{
+			Value:     0.40,
+			Rationale: "Sharpe contributes 40% to composite score",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from predictive power regression",
+		},
+		HitRateWeight: ParameterMetadata[float64]{
+			Value:     0.30,
+			Rationale: "Hit rate contributes 30% to composite score",
+			Source:    SourceHeuristic,
+		},
+		StreakWeight: ParameterMetadata[float64]{
+			Value:     0.30,
+			Rationale: "Streak contributes 30% to composite score",
+			Source:    SourceHeuristic,
+		},
+		MaxSharpe: ParameterMetadata[float64]{
+			Value:     5.0,
+			Rationale: "Cap Sharpe at 5.0 for normalization",
+			Source:    SourceHeuristic,
+			Todo:      "Use historical distribution instead of hard cap",
+		},
+		MinSharpe: ParameterMetadata[float64]{
+			Value:     -5.0,
+			Rationale: "Floor Sharpe at -5.0 for normalization",
+			Source:    SourceHeuristic,
+		},
+		StreakMax: ParameterMetadata[int]{
+			Value:     10,
+			Rationale: "10 consecutive wins = full streak score",
+			Source:    SourceHeuristic,
+		},
+	}
+}
+
+func defaultGARCHParameters() GARCHParameters {
+	return GARCHParameters{
+		Omega: ParameterMetadata[float64]{
+			Value:     0.000001,
+			Rationale: "GARCH(1,1) omega: long-run variance component",
+			Source:    SourceLiterature,
+			Todo:      "MLE estimation from historical returns",
+		},
+		Alpha: ParameterMetadata[float64]{
+			Value:     0.1,
+			Rationale: "GARCH(1,1) alpha: shock persistence",
+			Source:    SourceLiterature,
+			Todo:      "MLE estimation from historical returns",
+		},
+		Beta: ParameterMetadata[float64]{
+			Value:     0.85,
+			Rationale: "GARCH(1,1) beta: variance persistence",
+			Source:    SourceLiterature,
+			Todo:      "MLE estimation from historical returns",
+		},
+		MaxHistory: ParameterMetadata[int]{
+			Value:     252,
+			Rationale: "One year of trading days",
+			Source:    SourceLiterature,
+		},
+		CorrelationMinDays: ParameterMetadata[int]{
+			Value:     30,
+			Rationale: "Minimum 30 days for correlation calculation",
+			Source:    SourceLiterature,
+		},
+		SmoothingFactor: ParameterMetadata[float64]{
+			Value:     0.3,
+			Rationale: "EMA smoothing factor for volatility",
+			Source:    SourceLiterature,
+		},
+		RebalanceThreshold: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "5% deviation threshold for rebalancing",
+			Source:    SourceHeuristic,
+		},
+		MinForecastDays: ParameterMetadata[int]{
+			Value:     100,
+			Rationale: "Minimum 100 days for GARCH forecast",
+			Source:    SourceHeuristic,
+		},
+		MaxHistoryPoints: ParameterMetadata[int]{
+			Value:     1000,
+			Rationale: "Maximum volatility history points to retain",
+			Source:    SourceHeuristic,
+		},
+		HighVolThreshold: ParameterMetadata[float64]{
+			Value:     1.5,
+			Rationale: "Asset vol > target*1.5 triggers reduction",
+			Source:    SourceHeuristic,
+		},
+		LowVolThreshold: ParameterMetadata[float64]{
+			Value:     0.7,
+			Rationale: "Current vol < target*0.7 triggers increase",
+			Source:    SourceHeuristic,
+		},
+		ReduceMagnitude: ParameterMetadata[float64]{
+			Value:     0.5,
+			Rationale: "Reduce by 50% for high vol assets",
+			Source:    SourceHeuristic,
+		},
+		IncreaseMagnitude: ParameterMetadata[float64]{
+			Value:     0.2,
+			Rationale: "Increase by 20% for low vol assets",
+			Source:    SourceHeuristic,
+		},
+		WeeklyRebalanceDays: ParameterMetadata[int]{
+			Value:     7,
+			Rationale: "Weekly rebalancing interval",
+			Source:    SourceHeuristic,
+		},
+	}
+}
+
+func defaultExperimentParameters() ExperimentParameters {
+	return ExperimentParameters{
+		MaturityLevel1Observations: ParameterMetadata[int]{
+			Value:     3,
+			Rationale: "Minimum 3 observations for exploratory experiments",
+			Source:    SourceHeuristic,
+			Todo:      "Literature suggests n>=10 for any statistical conclusion",
+		},
+		MaturityLevel2Observations: ParameterMetadata[int]{
+			Value:     8,
+			Rationale: "Minimum 8 observations for window-validated experiments",
+			Source:    SourceHeuristic,
+		},
+		MaturityLevel3Observations: ParameterMetadata[int]{
+			Value:     12,
+			Rationale: "Minimum 12 observations for regime-aware experiments",
+			Source:    SourceHeuristic,
+		},
+		ImprovementThreshold: ParameterMetadata[float64]{
+			Value:     0.0005,
+			Rationale: "0.05% minimum improvement over baseline",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: too low may accept noise; too high rejects real improvements",
+		},
+		WelchTTestThreshold: ParameterMetadata[float64]{
+			Value:     2.0,
+			Rationale: "|t| >= 2.0 corresponds to ~95% confidence",
+			Source:    SourceLiterature,
+		},
+		DrawdownProtectionRatio: ParameterMetadata[float64]{
+			Value:     0.8,
+			Rationale: "Candidate drawdown must be >= 80% of baseline",
+			Source:    SourceHeuristic,
+		},
+		VolatilityToleranceRatio: ParameterMetadata[float64]{
+			Value:     1.5,
+			Rationale: "Candidate volatility <= 150% of baseline",
+			Source:    SourceHeuristic,
+		},
+		OOSWindowDays: ParameterMetadata[int]{
+			Value:     30,
+			Rationale: "30-day out-of-sample validation window",
+			Source:    SourceHeuristic,
+		},
+		SharpeStabilityThreshold: ParameterMetadata[float64]{
+			Value:     0.5,
+			Rationale: "Sharpe stability: stderr < 0.5 AND |mean|/stddev >= 0.5",
+			Source:    SourceHeuristic,
+		},
+		MaxFallbackRatio: ParameterMetadata[float64]{
+			Value:     0.6,
+			Rationale: "Maximum fraction of factors allowed to be IsFallback (60%) before degrading experiment confidence",
+			Source:    SourceHeuristic,
+		},
+	}
+}
+
+func defaultOrchestratorParameters() OrchestratorParameters {
+	return OrchestratorParameters{
+		ConvictionFloorDefault: ParameterMetadata[int]{
+			Value:     50,
+			Rationale: "Default conviction floor when not set by policy",
+			Source:    SourceHeuristic,
+		},
+		SuperinvestorMinConviction: ParameterMetadata[int]{
+			Value:     65,
+			Rationale: "Higher bar for superinvestor recommendations",
+			Source:    SourceHeuristic,
+		},
+		CROZScoreThreshold: ParameterMetadata[float64]{
+			Value:     -1.5,
+			Rationale: "Z-score threshold for CRO conviction normalization filter",
+			Source:    SourceHeuristic,
+		},
+		SectorConcentrationThreshold: ParameterMetadata[float64]{
+			Value:     0.40,
+			Rationale: "Sector concentration threshold (< 10 recommendations)",
+			Source:    SourceHeuristic,
+		},
+		SectorConcentrationThresholdHigh: ParameterMetadata[float64]{
+			Value:     0.35,
+			Rationale: "Sector concentration threshold (>= 10 recommendations)",
+			Source:    SourceHeuristic,
+		},
+		SectorConvictionMultiplier: ParameterMetadata[float64]{
+			Value:     0.7,
+			Rationale: "Conviction multiplier when sector is overcrowded",
+			Source:    SourceHeuristic,
+		},
+		CrowdedConvictionMultiplier: ParameterMetadata[float64]{
+			Value:     0.7,
+			Rationale: "Conviction multiplier when 3+ agents recommend same symbol",
+			Source:    SourceHeuristic,
+		},
+		FactorWeightMomentum: ParameterMetadata[float64]{
+			Value:     0.30,
+			Rationale: "Momentum factor weight in total score",
+			Source:    SourceHeuristic,
+		},
+		FactorWeightValue: ParameterMetadata[float64]{
+			Value:     0.25,
+			Rationale: "Value factor weight in total score",
+			Source:    SourceHeuristic,
+		},
+		FactorWeightQuality: ParameterMetadata[float64]{
+			Value:     0.25,
+			Rationale: "Quality factor weight in total score",
+			Source:    SourceHeuristic,
+		},
+		FactorWeightAgent: ParameterMetadata[float64]{
+			Value:     0.20,
+			Rationale: "Agent factor weight in total score",
+			Source:    SourceHeuristic,
+		},
+		PRISMBoostMultiplier: ParameterMetadata[float64]{
+			Value:     20.0,
+			Rationale: "Multiplier for PRISM Sharpe to conviction boost",
+			Source:    SourceHeuristic,
+		},
+		PRISMBoostMin: ParameterMetadata[int]{
+			Value:     -10,
+			Rationale: "Minimum PRISM conviction boost",
+			Source:    SourceHeuristic,
+		},
+		PRISMBoostMax: ParameterMetadata[int]{
+			Value:     15,
+			Rationale: "Maximum PRISM conviction boost",
+			Source:    SourceHeuristic,
+		},
+		PromotionMinObservations: ParameterMetadata[int]{
+			Value:     10,
+			Rationale: "Minimum observations before auto-promotion consideration",
+			Source:    SourceHeuristic,
+		},
+		PromotionSharpeThreshold: ParameterMetadata[float64]{
+			Value:     0.5,
+			Rationale: "Sharpe threshold for auto-promotion",
+			Source:    SourceHeuristic,
+		},
+		PromotionHitRateThreshold: ParameterMetadata[float64]{
+			Value:     0.45,
+			Rationale: "Hit rate threshold for auto-promotion",
+			Source:    SourceHeuristic,
+		},
+		RejectionSharpeThreshold: ParameterMetadata[float64]{
+			Value:     0.0,
+			Rationale: "Sharpe threshold for auto-rejection",
+			Source:    SourceHeuristic,
+		},
+		RejectionHitRateThreshold: ParameterMetadata[float64]{
+			Value:     0.30,
+			Rationale: "Hit rate threshold for auto-rejection",
+			Source:    SourceHeuristic,
+		},
+	}
+}
+
+func defaultRiskParameters() RiskParameters {
+	return RiskParameters{
+		VaRConfidenceLevel: ParameterMetadata[float64]{
+			Value:     0.95,
+			Rationale: "95% VaR confidence level (primary)",
+			Source:    SourceLiterature,
+		},
+		VaRSecondaryConfidence: ParameterMetadata[float64]{
+			Value:     0.99,
+			Rationale: "99% VaR confidence level (secondary/tail risk)",
+			Source:    SourceLiterature,
+		},
+		VaRAlertThreshold: ParameterMetadata[float64]{
+			Value:     0.02,
+			Rationale: "2% portfolio value at risk triggers alert",
+			Source:    SourceHeuristic,
+		},
+		VaRCriticalThreshold: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "5% portfolio value at risk is critical",
+			Source:    SourceHeuristic,
+		},
+		ConsecutiveLossLimit: ParameterMetadata[int]{
+			Value:     5,
+			Rationale: "5 consecutive losses triggers capital phase review",
+			Source:    SourceHeuristic,
+		},
+		SectorConstraintsRiskOff: ParameterMetadata[map[string]float64]{
+			Value: map[string]float64{
+				"ai_supply_chain": 0.3,
+				"small_cap":       0.2,
+				"emerging_market": 0.1,
+				"gold":            1.5,
+				"utilities":       1.2,
+			},
+			Rationale: "Reduce risk assets, increase defensive assets during risk_off",
+			Source:    SourceHeuristic,
+		},
+		SectorConstraintsCarryTrade: ParameterMetadata[map[string]float64]{
+			Value: map[string]float64{
+				"all_equities": 0.1,
+				"tech":         0.05,
+				"financials":   0.1,
+				"cash":         2.0,
+			},
+			Rationale: "Exit equities, move to cash/bonds during carry trade unwind",
+			Source:    SourceHeuristic,
+		},
+		SectorConstraintsSectorRotation: ParameterMetadata[map[string]float64]{
+			Value: map[string]float64{
+				"energy":              1.8,
+				"oil_services":        1.5,
+				"high_valuation_tech": 0.3,
+				"rate_sensitive":      0.4,
+			},
+			Rationale: "Rotate to energy, reduce tech during sector rotation",
+			Source:    SourceHeuristic,
+		},
+		MaxDrawdownPct: ParameterMetadata[float64]{
+			Value:     0.08,
+			Rationale: "8% max portfolio drawdown",
+			Source:    SourceHeuristic,
+		},
+		MaxPositionSize: ParameterMetadata[float64]{
+			Value:     0.15,
+			Rationale: "15% max single position size",
+			Source:    SourceLiterature,
+		},
+		MaxDailyLossPct: ParameterMetadata[float64]{
+			Value:     0.03,
+			Rationale: "3% max daily loss",
+			Source:    SourceHeuristic,
+		},
+		StopLoss: ParameterMetadata[float64]{
+			Value:     -0.05,
+			Rationale: "5% stop loss triggers alert",
+			Source:    SourceHeuristic,
+		},
+		TakeProfit: ParameterMetadata[float64]{
+			Value:     0.20,
+			Rationale: "20% take profit triggers alert",
+			Source:    SourceHeuristic,
+		},
+		MaxLossPerTrade: ParameterMetadata[float64]{
+			Value:     0.02,
+			Rationale: "2% max loss per trade for Kelly calculation",
+			Source:    SourceLiterature,
+		},
+		MaxTotalExposure: ParameterMetadata[float64]{
+			Value:     0.80,
+			Rationale: "80% max total exposure",
+			Source:    SourceHeuristic,
+		},
+	}
+}
+
+func defaultBaselineParameters() BaselineParameters {
+	return BaselineParameters{
+		StartingCash: ParameterMetadata[float64]{
+			Value:     3000000,
+			Rationale: "3M TWD starting capital for simulation",
+			Source:    SourceHeuristic,
+		},
+		MaxPositionWeight: ParameterMetadata[float64]{
+			Value:     0.18,
+			Rationale: "18% max position weight for diversification",
+			Source:    SourceLiterature,
+		},
+		MaxOpenPositions: ParameterMetadata[int]{
+			Value:     5,
+			Rationale: "Maximum 5 open positions for focus",
+			Source:    SourceHeuristic,
+		},
+		MinTradableVolume: ParameterMetadata[float64]{
+			Value:     1000000,
+			Rationale: "1M TWD minimum daily volume for liquidity",
+			Source:    SourceEmpirical,
+		},
+		MinRecommendationConviction: ParameterMetadata[int]{
+			Value:     60,
+			Rationale: "Minimum 60 conviction for recommendations to pass CRO",
+			Source:    SourceHeuristic,
+		},
+		RequireCROPass: ParameterMetadata[bool]{
+			Value:     true,
+			Rationale: "Require CRO approval before execution",
+			Source:    SourceHeuristic,
+		},
+		TransactionCostBPS: ParameterMetadata[float64]{
+			Value:     1.425,
+			Rationale: "TW stock transaction cost in basis points",
+			Source:    SourceEmpirical,
+		},
+		SlippageBPS: ParameterMetadata[float64]{
+			Value:     4.0,
+			Rationale: "4 bps estimated slippage for market orders",
+			Source:    SourceEmpirical,
+		},
+		ReserveCashFraction: ParameterMetadata[float64]{
+			Value:     0.1,
+			Rationale: "10% cash reserve for liquidity and opportunities",
+			Source:    SourceLiterature,
+		},
+	}
+}
+
+func defaultRealtimeParameters() RealtimeParameters {
+	return RealtimeParameters{
+		VolatilityThreshold: ParameterMetadata[float64]{
+			Value:     0.02,
+			Rationale: "2% daily volatility threshold for regime detection",
+			Source:    SourceHeuristic,
+		},
+		VolumeSpikeThreshold: ParameterMetadata[float64]{
+			Value:     2.0,
+			Rationale: "2x average volume indicates unusual activity",
+			Source:    SourceHeuristic,
+		},
+		PriceChangeThreshold: ParameterMetadata[float64]{
+			Value:     0.01,
+			Rationale: "1% price move threshold for signal detection",
+			Source:    SourceHeuristic,
+		},
+		MinConfidence: ParameterMetadata[float64]{
+			Value:     0.7,
+			Rationale: "70% minimum confidence for real-time signals",
+			Source:    SourceHeuristic,
+		},
+		WeightAdjustmentRate: ParameterMetadata[float64]{
+			Value:     0.1,
+			Rationale: "10% weight adjustment per signal for stability",
+			Source:    SourceHeuristic,
+		},
+		MaxWeightChange: ParameterMetadata[float64]{
+			Value:     0.5,
+			Rationale: "Maximum 50% weight change per adjustment",
+			Source:    SourceHeuristic,
+		},
+		MinWeight: ParameterMetadata[float64]{
+			Value:     0.1,
+			Rationale: "Minimum 10% weight to maintain position",
+			Source:    SourceHeuristic,
+		},
+		UpdateIntervalMs: ParameterMetadata[int]{
+			Value:     100,
+			Rationale: "100ms update interval for real-time processing",
+			Source:    SourceHeuristic,
+		},
+	}
+}
+
+func defaultNarrativeParameters() NarrativeParameters {
+	return NarrativeParameters{
+		MinTrendStrength: ParameterMetadata[float64]{
+			Value:     0.7,
+			Rationale: "Minimum trend strength (0-1) to be considered significant for structural override",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from backtest: test [0.5, 0.8] range",
+		},
+		MinConfidence: ParameterMetadata[float64]{
+			Value:     0.75,
+			Rationale: "Minimum confidence level for structural trend detection",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from backtest: test [0.6, 0.85] range",
+		},
+		MinHitRate: ParameterMetadata[float64]{
+			Value:     0.70,
+			Rationale: "Minimum historical hit rate for structural trend validity",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from backtest: test [0.6, 0.8] range",
+		},
+		OverrideThreshold: ParameterMetadata[float64]{
+			Value:     0.65,
+			Rationale: "Score threshold for structural trends to override macro risk signals",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from backtest: test [0.55, 0.75] range",
+		},
+		AIRevenueGrowthThreshold: ParameterMetadata[float64]{
+			Value:     50.0,
+			Rationale: "AI revenue YoY growth % threshold to detect AI capex surge (TSMC revenue proxy)",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from historical TSMC revenue data",
+		},
+		CoWoSUtilizationThreshold: ParameterMetadata[float64]{
+			Value:     85.0,
+			Rationale: "CoWoS capacity utilization % threshold indicating structural AI demand",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from CoWoS utilization reports",
+		},
+		CapexGrowthThreshold: ParameterMetadata[float64]{
+			Value:     40.0,
+			Rationale: "AI-related capex growth % threshold for cloud infrastructure expansion",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from cloud provider capex data",
+		},
+		US10YChangeBpsThreshold: ParameterMetadata[float64]{
+			Value:     10.0,
+			Rationale: "US 10Y yield change in basis points to trigger US_rates_up event",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from historical yield volatility distribution",
+		},
+		DXYChangePctThreshold: ParameterMetadata[float64]{
+			Value:     1.5,
+			Rationale: "DXY change % threshold to trigger US_rates_up event alongside yield move",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from historical DXY distribution",
+		},
+		GeopoliticalGPRThreshold: ParameterMetadata[float64]{
+			Value:     150.0,
+			Rationale: "Geopolitical risk index (GPR) threshold to trigger geopolitical_risk_spike event",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from Caldara-Iacoviello GPR index historical data",
+		},
+		OilChangePctThreshold: ParameterMetadata[float64]{
+			Value:     5.0,
+			Rationale: "Oil price change % threshold (absolute) to trigger oil_price_shock event",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from historical oil price volatility",
+		},
+		JPYChangePctThreshold: ParameterMetadata[float64]{
+			Value:     2.0,
+			Rationale: "JPY change % threshold to trigger JPY_carry_unwind event",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from historical JPY volatility around BOJ policy shifts",
+		},
+		VIXLevelThreshold: ParameterMetadata[float64]{
+			Value:     25.0,
+			Rationale: "VIX level threshold to trigger JPY_carry_unwind and geopolitical events",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from historical VIX distribution around crisis periods",
+		},
+		TaiwanStressDXYWeight: ParameterMetadata[float64]{
+			Value:     0.15,
+			Rationale: "DXY component weight in Taiwan stress index (15%)",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from regression: DXY vs foreign flow correlation",
+		},
+		TaiwanStressUS10YWeight: ParameterMetadata[float64]{
+			Value:     0.20,
+			Rationale: "US 10Y yield component weight in Taiwan stress index (20%)",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from regression: US10Y vs foreign flow correlation",
+		},
+		TaiwanStressForeignWeight: ParameterMetadata[float64]{
+			Value:     0.25,
+			Rationale: "Foreign investor net flow component weight in Taiwan stress index (25%)",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from regression: foreign flow vs TAIEX returns",
+		},
+		TaiwanStressVIXWeight: ParameterMetadata[float64]{
+			Value:     0.15,
+			Rationale: "VIX component weight in Taiwan stress index (15%)",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from regression: VIX vs foreign flow correlation",
+		},
+		TaiwanStressJPYWeight: ParameterMetadata[float64]{
+			Value:     0.10,
+			Rationale: "JPY component weight in Taiwan stress index (10%)",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from regression: JPY vs carry trade flow",
+		},
+		TaiwanStressGeoWeight: ParameterMetadata[float64]{
+			Value:     0.15,
+			Rationale: "Geopolitical risk component weight in Taiwan stress index (15%)",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from regression: GPR vs TAIEX returns",
+		},
+		EventTTLMultiplier: ParameterMetadata[map[string]float64]{
+			Value: map[string]float64{
+				"AI_capex_surge":          90,
+				"US_rates_up":             7,
+				"JPY_carry_unwind":        14,
+				"geopolitical_risk_spike": 30,
+				"oil_price_shock":         15,
+				"Fed_emergency_cut":       3,
+				"earnings_surprise":       10,
+			},
+			Rationale: "Event TTL in days per theme: AI capex 90d (structural), rates 7d (transient), carry unwind 14d, geopolitical 30d, oil 15d, Fed emergency 3d, earnings 10d",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from historical event impact decay analysis",
+		},
+		ModelLookbackDays: ParameterMetadata[int]{
+			Value:     10,
+			Rationale: "Lookback window in trading days for model evaluation",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from backtest: test [5, 20] range",
+		},
+		ModelHoldWindowDays: ParameterMetadata[int]{
+			Value:     5,
+			Rationale: "Forward hold window in trading days for model evaluation",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from backtest: test [3, 10] range",
+		},
+	}
+}
+
+func defaultJanusParameters() JanusParameters {
+	return JanusParameters{
+		ShortWindowDays: ParameterMetadata[int]{
+			Value:     5,
+			Rationale: "Short lookback window (~1 trading week) for cohort performance",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [3, 10] range for short-term sensitivity",
+		},
+		MediumWindowDays: ParameterMetadata[int]{
+			Value:     20,
+			Rationale: "Medium lookback window (~1 trading month) for cohort performance",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [15, 30] range for medium-term stability",
+		},
+		LongWindowDays: ParameterMetadata[int]{
+			Value:     60,
+			Rationale: "Long lookback window (~1 trading quarter) for cohort performance",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [40, 90] range for long-term memory",
+		},
+		MaxHistoryDays: ParameterMetadata[int]{
+			Value:     90,
+			Rationale: "Maximum rolling history per cohort; must cover longest window comfortably",
+			Source:    SourceHeuristic,
+		},
+		MinWeight: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "Floor for any cohort weight; prevents total elimination",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.01, 0.10] range",
+		},
+		MaxWeight: ParameterMetadata[float64]{
+			Value:     0.60,
+			Rationale: "Ceiling for any cohort weight; prevents single-cohort dominance",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.40, 0.80] range",
+		},
+		NovelThreshold: ParameterMetadata[float64]{
+			Value:     0.15,
+			Rationale: "Weight delta threshold for NOVEL_REGIME detection; short-window winner surges past long-window standing",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.10, 0.25] range",
+		},
+		HistoricalThreshold: ParameterMetadata[float64]{
+			Value:     0.15,
+			Rationale: "Weight delta threshold for HISTORICAL_REGIME detection; long-window winner maintains stable lead",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.10, 0.25] range",
+		},
+		EpsilonWeight: ParameterMetadata[float64]{
+			Value:     0.02,
+			Rationale: "Minimal weight assigned to negative-Sharpe cohorts when others are positive",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.01, 0.05] range",
+		},
+		ShortWindowBlend: ParameterMetadata[float64]{
+			Value:     0.5,
+			Rationale: "50% weight on short-window Sharpe in blended score; emphasizes recent accuracy",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.3, 0.6] range; must sum with medium+long to 1.0",
+		},
+		MediumWindowBlend: ParameterMetadata[float64]{
+			Value:     0.3,
+			Rationale: "30% weight on medium-window Sharpe in blended score",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.2, 0.4] range; must sum with short+long to 1.0",
+		},
+		LongWindowBlend: ParameterMetadata[float64]{
+			Value:     0.2,
+			Rationale: "20% weight on long-window Sharpe in blended score; retains long-term memory",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.1, 0.3] range; must sum with short+medium to 1.0",
+		},
+		HealthStaleHours: ParameterMetadata[int]{
+			Value:     168,
+			Rationale: "Hours before JANUS data is considered stale (7 days); triggers error-level health alert",
+			Source:    SourceHeuristic,
+		},
+		HealthWarnHours: ParameterMetadata[int]{
+			Value:     48,
+			Rationale: "Hours before JANUS data triggers warning-level health alert (2 days)",
+			Source:    SourceHeuristic,
+		},
+	}
+}
+
+func defaultMarketdataParameters() MarketdataParameters {
+	return MarketdataParameters{
+		TWSEAPIRateLimit: ParameterMetadata[float64]{
+			Value:     0.6,
+			Rationale: "TWSE OpenAPI rate limit: 3 requests per 5 seconds = 0.6 req/s",
+			Source:    SourceHeuristic,
+			Todo:      "Verify: check TWSE documentation for current limits",
+		},
+		TWSEAPIRateBurst: ParameterMetadata[int]{
+			Value:     3,
+			Rationale: "TWSE OpenAPI burst limit: 3 requests per 5-second window",
+			Source:    SourceHeuristic,
+			Todo:      "Verify: check TWSE documentation for current burst limits",
+		},
+		TWSEAPITimeoutSec: ParameterMetadata[int]{
+			Value:     15,
+			Rationale: "HTTP timeout for TWSE API calls; balances responsiveness vs slow responses",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [10, 30] range based on observed latency distribution",
+		},
+		FubonIntradayLimit: ParameterMetadata[int]{
+			Value:     30,
+			Rationale: "Fubon intraday API burst limit; prevents overwhelming the proxy",
+			Source:    SourceHeuristic,
+			Todo:      "Verify: check Fubon DMA documentation for actual limits",
+		},
+		FubonHistoricalLimit: ParameterMetadata[int]{
+			Value:     60,
+			Rationale: "Fubon historical data API rate limit; conservative to avoid throttling",
+			Source:    SourceHeuristic,
+			Todo:      "Verify: check Fubon DMA documentation for actual limits",
+		},
+		FubonAPITimeoutSec: ParameterMetadata[int]{
+			Value:     10,
+			Rationale: "HTTP timeout for Fubon API calls; proxy adds latency, keep short",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [5, 15] range based on proxy latency",
+		},
+		TEJCallsPerSecond: ParameterMetadata[int]{
+			Value:     5,
+			Rationale: "TEJ free tier rate limit: 500 calls/day, burst at 5 calls/second",
+			Source:    SourceHeuristic,
+			Todo:      "Verify: check TEJ subscription tier for actual limits",
+		},
+		TEJAPITimeoutSec: ParameterMetadata[int]{
+			Value:     30,
+			Rationale: "HTTP timeout for TEJ API; historical queries can be slow",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [20, 45] range",
+		},
+		FugleRateLimit: ParameterMetadata[int]{
+			Value:     10,
+			Rationale: "Fugle API burst limit; circuit breaker protected, use conservatively",
+			Source:    SourceHeuristic,
+			Todo:      "Verify: check Fugle subscription for actual rate limits",
+		},
+		FugleAPITimeoutSec: ParameterMetadata[int]{
+			Value:     10,
+			Rationale: "HTTP timeout for Fugle API; premium service, expect fast responses",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [5, 15] range",
+		},
+		MaxRetryAttempts: ParameterMetadata[int]{
+			Value:     3,
+			Rationale: "Maximum retry attempts for transient failures; exponential backoff",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [2, 5] range based on failure rate analysis",
+		},
+		RetryBackoffMs: ParameterMetadata[int]{
+			Value:     1000,
+			Rationale: "Base backoff between retries in milliseconds; doubles each attempt",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [500, 2000] range",
+		},
+	}
+}
+
+func defaultIndustryParameters() IndustryParameters {
+	return IndustryParameters{
+		SectorWeights: ParameterMetadata[map[string]float64]{
+			Value: map[string]float64{
+				"semiconductor":    0.45,
+				"ai_supply_chain":  0.15,
+				"electronics":      0.10,
+				"financials":       0.12,
+				"shipping":         0.05,
+				"biotech":          0.03,
+				"traditional":      0.05,
+				"renewable_energy": 0.03,
+				"other":            0.02,
+			},
+			Rationale: "Taiwan market sector weights aligned with TAIEX composition (2024); semiconductor ~45% vs previous 25%",
+			Source:    SourceEmpirical,
+			Todo:      "Recalibrate: update quarterly from TAIEX sector breakdown",
+		},
+		SeasonalAdjustmentEnabled: ParameterMetadata[bool]{
+			Value:     true,
+			Rationale: "Enable seasonal revenue adjustment for quarterly earnings analysis",
+			Source:    SourceHeuristic,
+			Todo:      "Validate: backtest with/without adjustment",
+		},
+		CycleThresholds: ParameterMetadata[map[string]CycleThresholdConfig]{
+			Value: map[string]CycleThresholdConfig{
+				"semiconductor": {
+					ExpansionRevenuePct: 0.20,
+					ExpansionProfitPct:  0.25,
+					RecoveryRevenuePct:  0.10,
+					RecoveryProfitPct:   0.15,
+					MatureRevenuePct:    0.05,
+					MatureProfitPct:     0.08,
+				},
+				"financials": {
+					ExpansionRevenuePct: 0.10,
+					ExpansionProfitPct:  0.15,
+					RecoveryRevenuePct:  0.05,
+					RecoveryProfitPct:   0.08,
+					MatureRevenuePct:    0.02,
+					MatureProfitPct:     0.05,
+				},
+				"shipping": {
+					ExpansionRevenuePct: 0.30,
+					ExpansionProfitPct:  0.35,
+					RecoveryRevenuePct:  0.15,
+					RecoveryProfitPct:   0.20,
+					MatureRevenuePct:    0.05,
+					MatureProfitPct:     0.10,
+				},
+			},
+			Rationale: "Per-industry business cycle thresholds; semiconductor high-growth, financials stable, shipping cyclical",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: derive from historical revenue/ profit CAGR per sector",
+		},
+		ConcentrationRiskEnabled: ParameterMetadata[bool]{
+			Value:     true,
+			Rationale: "Enable customer concentration risk scoring for supply chain analysis",
+			Source:    SourceHeuristic,
+		},
+		NewsLatencyRiskEnabled: ParameterMetadata[bool]{
+			Value:     true,
+			Rationale: "Enable news latency risk scoring for event-driven positions",
+			Source:    SourceHeuristic,
+		},
+		AsymmetricRiskEnabled: ParameterMetadata[bool]{
+			Value:     true,
+			Rationale: "Enable asymmetric downside risk scoring (tail risk analysis)",
+			Source:    SourceHeuristic,
+		},
+		CustomerConcentrationLimit: ParameterMetadata[float64]{
+			Value:     0.40,
+			Rationale: "Flag customer concentration >40% as high risk; TSMC Apple exposure ~25% is acceptable",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.30, 0.50] range; consider industry norms",
+		},
+		GeographicExposureLimit: ParameterMetadata[float64]{
+			Value:     0.60,
+			Rationale: "Flag geographic revenue concentration >60% as high risk; China exposure threshold",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.50, 0.70] range based on geopolitical risk assessment",
+		},
+		CustomerShareThreshold1: ParameterMetadata[float64]{
+			Value:     30.0,
+			Rationale: "First tier customer concentration threshold (30%); triggers initial risk score",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [20, 40] range",
+		},
+		CustomerShareThreshold2: ParameterMetadata[float64]{
+			Value:     50.0,
+			Rationale: "Second tier customer concentration threshold (50%); triggers higher risk score",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [40, 60] range",
+		},
+		USExposureThreshold1: ParameterMetadata[float64]{
+			Value:     50.0,
+			Rationale: "US geographic exposure threshold (50%); triggers initial risk score",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [40, 60] range",
+		},
+		USExposureThreshold2: ParameterMetadata[float64]{
+			Value:     70.0,
+			Rationale: "High US geographic exposure threshold (70%); triggers higher risk score",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [60, 80] range",
+		},
+		RiskScoreWeight1: ParameterMetadata[float64]{
+			Value:     0.4,
+			Rationale: "Risk score weight for first tier customer concentration",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.2, 0.5] range",
+		},
+		RiskScoreWeight2: ParameterMetadata[float64]{
+			Value:     0.3,
+			Rationale: "Risk score weight for second tier customer concentration",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.2, 0.4] range",
+		},
+		RiskScoreWeight3: ParameterMetadata[float64]{
+			Value:     0.2,
+			Rationale: "Risk score weight for first tier US exposure",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.1, 0.3] range",
+		},
+		RiskScoreWeight4: ParameterMetadata[float64]{
+			Value:     0.1,
+			Rationale: "Risk score weight for second tier US exposure",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.05, 0.2] range",
+		},
+		SeverityThresholdMedium: ParameterMetadata[float64]{
+			Value:     0.4,
+			Rationale: "Risk score threshold for medium severity",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.3, 0.5] range",
+		},
+		SeverityThresholdHigh: ParameterMetadata[float64]{
+			Value:     0.6,
+			Rationale: "Risk score threshold for high severity",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.5, 0.7] range",
+		},
+		SeverityThresholdCritical: ParameterMetadata[float64]{
+			Value:     0.8,
+			Rationale: "Risk score threshold for critical severity",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.7, 0.9] range",
+		},
+		ImpactMultiplier: ParameterMetadata[float64]{
+			Value:     0.15,
+			Rationale: "Multiplier for estimated price impact from risk score",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.10, 0.25] range",
+		},
+		RiskConfidence: ParameterMetadata[float64]{
+			Value:     0.85,
+			Rationale: "Confidence level for risk assessment",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.70, 0.95] range",
+		},
+	}
+}
+
+func defaultStrategyParameters() StrategyParameters {
+	return StrategyParameters{
+		MinSwitchIntervalDays: ParameterMetadata[int]{
+			Value:     7,
+			Rationale: "Minimum days between strategy switches; prevents whipsaw",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [3, 14] range based on transaction costs",
+		},
+		SwitchThreshold: ParameterMetadata[float64]{
+			Value:     0.10,
+			Rationale: "Minimum score advantage (10%) required to switch strategies",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.05, 0.20] range",
+		},
+		ScoreLookbackDays: ParameterMetadata[int]{
+			Value:     30,
+			Rationale: "Days of historical performance to evaluate when scoring strategies",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [14, 60] range",
+		},
+		FallbackStrategy: ParameterMetadata[string]{
+			Value:     "momentum",
+			Rationale: "Default strategy when no clear winner; momentum has broad applicability",
+			Source:    SourceHeuristic,
+			Todo:      "Validate: backtest fallback strategy vs alternatives",
+		},
+	}
+}

@@ -1,7 +1,7 @@
 package swagger
 
 import (
-	"encoding/json"
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,12 +21,6 @@ func NewHandlers(workDir string) *Handlers {
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/docs", h.HandleSwaggerUI)
 	mux.HandleFunc("/api/docs/swagger.json", h.HandleSwaggerJSON)
-}
-
-func writeJSONError(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
 // HandleSwaggerUI serves the Swagger UI HTML page.
@@ -57,7 +51,7 @@ SwaggerUIBundle({
 func (h *Handlers) HandleSwaggerJSON(w http.ResponseWriter, r *http.Request) {
 	data, err := os.ReadFile(filepath.Join(h.WorkDir, "docs/swagger.json"))
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, "swagger spec not found")
+		shared.WriteJSONError(w, http.StatusNotFound, "swagger spec not found")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

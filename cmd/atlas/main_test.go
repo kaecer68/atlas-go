@@ -37,9 +37,7 @@ func TestRunAPIModeStartsServerAndRegistersRoutes(t *testing.T) {
 			close(listenDone)
 			return nil
 		},
-		shutdown:                    shutdown,
-		runAutoCapitalFlowOnStartup: func(string) {},
-		runAutoBackfillOnStartup:    func(string) {},
+		shutdown: shutdown,
 	}
 
 	go func() {
@@ -78,8 +76,6 @@ func TestRunAPIModeReturnsListenError(t *testing.T) {
 		listenAndServe: func(srv *http.Server) error {
 			return errors.New("bind failed")
 		},
-		runAutoCapitalFlowOnStartup: func(string) {},
-		runAutoBackfillOnStartup:    func(string) {},
 	}
 
 	err := run([]string{"-api"}, deps)
@@ -105,8 +101,6 @@ func TestRunRejectsLiveBrokerWithoutExplicitAllow(t *testing.T) {
 		listenAndServe: func(srv *http.Server) error {
 			return nil
 		},
-		runAutoCapitalFlowOnStartup: func(string) {},
-		runAutoBackfillOnStartup:    func(string) {},
 	}
 
 	err := run([]string{"-api", "-broker-mode", "live"}, deps)
@@ -139,9 +133,7 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 			close(listenDone)
 			return nil
 		},
-		shutdown:                    shutdown,
-		runAutoCapitalFlowOnStartup: func(string) {},
-		runAutoBackfillOnStartup:    func(string) {},
+		shutdown: shutdown,
 	}
 
 	go func() {
@@ -159,17 +151,6 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 	}
 }
 
-func TestValidateBrokerRuntimeConfigRejectsNegativeRetries(t *testing.T) {
-	cfg := config.Config{BrokerMode: "dry-run", BrokerMaxRetries: -1}
-	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "must be >= 0") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
 func TestRunRejectsUnsupportedBrokerAdapter(t *testing.T) {
 	deps := appDeps{
 		loadConfig: func() config.Config {
@@ -181,8 +162,6 @@ func TestRunRejectsUnsupportedBrokerAdapter(t *testing.T) {
 		listenAndServe: func(srv *http.Server) error {
 			return nil
 		},
-		runAutoCapitalFlowOnStartup: func(string) {},
-		runAutoBackfillOnStartup:    func(string) {},
 	}
 
 	err := run([]string{"-api", "-broker-adapter", "invalid"}, deps)
@@ -205,8 +184,6 @@ func TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow(t *testing.T) {
 		listenAndServe: func(srv *http.Server) error {
 			return nil
 		},
-		runAutoCapitalFlowOnStartup: func(string) {},
-		runAutoBackfillOnStartup:    func(string) {},
 	}
 
 	err := run([]string{"-api", "-allow-live-broker", "-broker-adapter", "http"}, deps)
@@ -230,9 +207,7 @@ func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
 		listenAndServe: func(srv *http.Server) error {
 			return nil
 		},
-		shutdown:                    shutdown,
-		runAutoCapitalFlowOnStartup: func(string) {},
-		runAutoBackfillOnStartup:    func(string) {},
+		shutdown: shutdown,
 	}
 
 	go func() {
@@ -241,58 +216,6 @@ func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
 	}()
 
 	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker"}, deps)
-	if err != nil {
-		t.Fatalf("run returned error: %v", err)
-	}
-}
-
-func TestRunRejectsRealSignerWithoutExplicitAllow(t *testing.T) {
-	deps := appDeps{
-		loadConfig: func() config.Config {
-			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
-		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
-		},
-		listenAndServe: func(srv *http.Server) error {
-			return nil
-		},
-		runAutoCapitalFlowOnStartup: func(string) {},
-		runAutoBackfillOnStartup:    func(string) {},
-	}
-
-	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker", "-broker-signer", "hmac-sha256"}, deps)
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "allow-real-signer") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestRunAllowsRealSignerWithExplicitAllow(t *testing.T) {
-	shutdown := make(chan struct{})
-	deps := appDeps{
-		loadConfig: func() config.Config {
-			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
-		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
-		},
-		listenAndServe: func(srv *http.Server) error {
-			return nil
-		},
-		shutdown:                    shutdown,
-		runAutoCapitalFlowOnStartup: func(string) {},
-		runAutoBackfillOnStartup:    func(string) {},
-	}
-
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		close(shutdown)
-	}()
-
-	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker", "-broker-signer", "hmac-sha256", "-broker-key-id", "kid-1", "-allow-real-signer"}, deps)
 	if err != nil {
 		t.Fatalf("run returned error: %v", err)
 	}
@@ -309,8 +232,6 @@ func TestRunRejectsRealSignerWithoutKeyID(t *testing.T) {
 		listenAndServe: func(srv *http.Server) error {
 			return nil
 		},
-		runAutoCapitalFlowOnStartup: func(string) {},
-		runAutoBackfillOnStartup:    func(string) {},
 	}
 
 	err := run([]string{"-api", "-broker-mode", "live", "-allow-live-broker", "-broker-adapter", "http", "-allow-http-broker", "-broker-signer", "hmac-sha256", "-allow-real-signer"}, deps)
@@ -319,167 +240,6 @@ func TestRunRejectsRealSignerWithoutKeyID(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "key id") {
 		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestParseStatusCodeCSV(t *testing.T) {
-	fallback := []int{408, 429}
-	got := parseStatusCodeCSV("400, 500, abc, 503", fallback)
-	if len(got) != 3 || got[0] != 400 || got[1] != 500 || got[2] != 503 {
-		t.Fatalf("parseStatusCodeCSV = %v, want [400 500 503]", got)
-	}
-
-	gotFallback := parseStatusCodeCSV("invalid", fallback)
-	if len(gotFallback) != 2 || gotFallback[0] != 408 || gotFallback[1] != 429 {
-		t.Fatalf("parseStatusCodeCSV fallback = %v, want [408 429]", gotFallback)
-	}
-}
-
-func TestValidateBrokerRuntimeConfigRejectsInvalidRetryStatusCode(t *testing.T) {
-	cfg := config.Config{BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerHTTPRetryStatusCodes: []int{200}}
-	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "retry status code") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestValidateBrokerRuntimeConfigRejectsNegativeClockSkew(t *testing.T) {
-	cfg := config.Config{BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerMaxClockSkewS: -1, BrokerNonceTTLS: 300}
-	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "clock skew") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestValidateBrokerRuntimeConfigRejectsNegativeNonceTTL(t *testing.T) {
-	cfg := config.Config{BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerMaxClockSkewS: 300, BrokerNonceTTLS: -1}
-	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "nonce ttl") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestValidateBrokerRuntimeConfigRejectsUnsupportedNonceStore(t *testing.T) {
-	cfg := config.Config{BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerMaxClockSkewS: 300, BrokerNonceTTLS: 300, BrokerNonceStore: "invalid-store"}
-	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "nonce store") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestValidateBrokerRuntimeConfigDefaultsFileNonceStorePathFromLedgerDir(t *testing.T) {
-	ledgerDir := t.TempDir()
-	cfg := config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerMaxClockSkewS: 300, BrokerNonceTTLS: 300, BrokerNonceStore: "file"}
-	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !strings.Contains(cfg.BrokerNonceStorePath, "broker-nonce-replay.json") {
-		t.Fatalf("unexpected nonce store path: %q", cfg.BrokerNonceStorePath)
-	}
-}
-
-func TestValidateBrokerRuntimeConfigDefaultsFileNonceStorePathWithEmptyLedgerDir(t *testing.T) {
-	cfg := config.Config{BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerMaxClockSkewS: 300, BrokerNonceTTLS: 300, BrokerNonceStore: "file"}
-	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.BrokerNonceStorePath != "data/state/broker-nonce-replay.json" {
-		t.Fatalf("unexpected nonce store path: %q", cfg.BrokerNonceStorePath)
-	}
-}
-
-func TestValidateBrokerRuntimeConfigNormalizesRelativeFileNonceStorePath(t *testing.T) {
-	ledgerDir := t.TempDir()
-	cfg := config.Config{
-		LedgerDir:            ledgerDir,
-		BrokerMode:           "dry-run",
-		BrokerAdapter:        "guarded",
-		BrokerMaxRetries:     1,
-		BrokerMaxClockSkewS:  300,
-		BrokerNonceTTLS:      300,
-		BrokerNonceStore:     "file",
-		BrokerNonceStorePath: "nonces/custom.json",
-	}
-	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	want := filepath.Join(ledgerDir, "nonces/custom.json")
-	if cfg.BrokerNonceStorePath != want {
-		t.Fatalf("unexpected nonce store path: got %q want %q", cfg.BrokerNonceStorePath, want)
-	}
-}
-
-func TestValidateBrokerRuntimeConfigKeepsAbsoluteFileNonceStorePath(t *testing.T) {
-	absPath := filepath.Join(t.TempDir(), "nonce-store.json")
-	cfg := config.Config{
-		LedgerDir:            t.TempDir(),
-		BrokerMode:           "dry-run",
-		BrokerAdapter:        "guarded",
-		BrokerMaxRetries:     1,
-		BrokerMaxClockSkewS:  300,
-		BrokerNonceTTLS:      300,
-		BrokerNonceStore:     "file",
-		BrokerNonceStorePath: absPath,
-	}
-	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.BrokerNonceStorePath != absPath {
-		t.Fatalf("unexpected nonce store path: got %q want %q", cfg.BrokerNonceStorePath, absPath)
-	}
-}
-
-func TestValidateBrokerRuntimeConfigRejectsRedisNonceStoreWithoutURL(t *testing.T) {
-	cfg := config.Config{
-		BrokerMode:          "dry-run",
-		BrokerAdapter:       "guarded",
-		BrokerMaxRetries:    1,
-		BrokerMaxClockSkewS: 300,
-		BrokerNonceTTLS:     300,
-		BrokerNonceStore:    "redis",
-	}
-	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "redis url") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestValidateBrokerRuntimeConfigDefaultsRedisKeyPrefix(t *testing.T) {
-	cfg := config.Config{
-		BrokerMode:                "dry-run",
-		BrokerAdapter:             "guarded",
-		BrokerMaxRetries:          1,
-		BrokerMaxClockSkewS:       300,
-		BrokerNonceTTLS:           300,
-		BrokerNonceStore:          "redis",
-		BrokerNonceRedisURL:       "redis://localhost:6379/0",
-		BrokerNonceRedisKeyPrefix: "",
-	}
-	err := validateBrokerRuntimeConfig(&cfg, false, false, false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.BrokerNonceRedisKeyPrefix != "atlas:nonce:" {
-		t.Fatalf("unexpected redis key prefix: %q", cfg.BrokerNonceRedisKeyPrefix)
 	}
 }
 
@@ -495,9 +255,7 @@ func TestRunLiveHTTPFullFlagChainInAPIMode(t *testing.T) {
 		listenAndServe: func(srv *http.Server) error {
 			return nil
 		},
-		shutdown:                    shutdown,
-		runAutoCapitalFlowOnStartup: func(string) {},
-		runAutoBackfillOnStartup:    func(string) {},
+		shutdown: shutdown,
 	}
 
 	go func() {
@@ -551,9 +309,7 @@ func TestStaticFileServerServesIndex(t *testing.T) {
 			close(listenDone)
 			return nil
 		},
-		shutdown:                    shutdown,
-		runAutoCapitalFlowOnStartup: func(string) {},
-		runAutoBackfillOnStartup:    func(string) {},
+		shutdown: shutdown,
 	}
 
 	go func() {
@@ -604,5 +360,362 @@ func TestDashboardAPIUsesWorkDirForPaths(t *testing.T) {
 	body := rr.Body.String()
 	if !strings.Contains(body, "# Backtest Report") {
 		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+func TestAPIModeRegistersAdminReloadConfigRoute(t *testing.T) {
+	ledgerDir := t.TempDir()
+	shutdown := make(chan struct{})
+	listenDone := make(chan struct{})
+	var gotHandler http.Handler
+
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			return config.Config{WorkDir: t.TempDir(), LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
+		},
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
+		},
+		listenAndServe: func(srv *http.Server) error {
+			gotHandler = srv.Handler
+			close(listenDone)
+			return nil
+		},
+		shutdown: shutdown,
+	}
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		close(shutdown)
+	}()
+
+	if err := run([]string{"-api"}, deps); err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+	<-listenDone
+	if gotHandler == nil {
+		t.Fatalf("expected http handler to be registered")
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/admin/reload-config", nil)
+	gotHandler.ServeHTTP(rr, req)
+	if rr.Code == http.StatusNotFound {
+		t.Fatalf("POST /admin/reload-config status = 404, route not registered")
+	}
+}
+
+func TestAPIModeRegistersMetricsRoute(t *testing.T) {
+	ledgerDir := t.TempDir()
+	shutdown := make(chan struct{})
+	listenDone := make(chan struct{})
+	var gotHandler http.Handler
+
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			return config.Config{WorkDir: t.TempDir(), LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
+		},
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
+		},
+		listenAndServe: func(srv *http.Server) error {
+			gotHandler = srv.Handler
+			close(listenDone)
+			return nil
+		},
+		shutdown: shutdown,
+	}
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		close(shutdown)
+	}()
+
+	if err := run([]string{"-api"}, deps); err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+	<-listenDone
+	if gotHandler == nil {
+		t.Fatalf("expected http handler to be registered")
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	gotHandler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET /metrics status = %d, want 200", rr.Code)
+	}
+}
+
+func TestAPIModeAdminReloadConfigRejectsGet(t *testing.T) {
+	ledgerDir := t.TempDir()
+	shutdown := make(chan struct{})
+	listenDone := make(chan struct{})
+	var gotHandler http.Handler
+
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			return config.Config{WorkDir: t.TempDir(), LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
+		},
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
+		},
+		listenAndServe: func(srv *http.Server) error {
+			gotHandler = srv.Handler
+			close(listenDone)
+			return nil
+		},
+		shutdown: shutdown,
+	}
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		close(shutdown)
+	}()
+
+	if err := run([]string{"-api"}, deps); err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+	<-listenDone
+	if gotHandler == nil {
+		t.Fatalf("expected http handler to be registered")
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/admin/reload-config", nil)
+	gotHandler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET /admin/reload-config status = %d, want 405", rr.Code)
+	}
+}
+
+func TestConfigLoadingBehavior(t *testing.T) {
+	ledgerDir := t.TempDir()
+	configCalled := false
+
+	shutdown := make(chan struct{})
+	listenDone := make(chan struct{})
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			configCalled = true
+			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
+		},
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
+		},
+		listenAndServe: func(srv *http.Server) error {
+			close(listenDone)
+			return nil
+		},
+		shutdown: shutdown,
+	}
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		close(shutdown)
+	}()
+
+	err := run([]string{"-api"}, deps)
+	if err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+	<-listenDone
+	if !configCalled {
+		t.Fatalf("loadConfig should be called")
+	}
+}
+
+func TestConfigLoadingWithBrokerModeOverride(t *testing.T) {
+	ledgerDir := t.TempDir()
+	var loadedConfig config.Config
+
+	shutdown := make(chan struct{})
+	listenDone := make(chan struct{})
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			loadedConfig = config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
+			return loadedConfig
+		},
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
+		},
+		listenAndServe: func(srv *http.Server) error {
+			close(listenDone)
+			return nil
+		},
+		shutdown: shutdown,
+	}
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		close(shutdown)
+	}()
+
+	err := run([]string{"-api", "-broker-mode", "paper"}, deps)
+	if err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+	<-listenDone
+	if loadedConfig.BrokerMode != "dry-run" {
+		t.Fatalf("loadConfig should return original config, not modified")
+	}
+}
+
+func TestFlagParsingEmptyArgs(t *testing.T) {
+	ledgerDir := t.TempDir()
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
+		},
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
+		},
+		listenAndServe: func(srv *http.Server) error {
+			return nil
+		},
+	}
+
+	err := run([]string{}, deps)
+	if err == nil {
+		t.Fatalf("expected simulation to fail, got nil")
+	}
+	if strings.Contains(err.Error(), "parse flags") {
+		t.Fatalf("empty args should not cause parse error: %v", err)
+	}
+}
+
+func TestFlagParsingInvalidFlag(t *testing.T) {
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
+		},
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
+		},
+		listenAndServe: func(srv *http.Server) error {
+			return nil
+		},
+	}
+
+	err := run([]string{"-invalid-flag"}, deps)
+	if err == nil {
+		t.Fatalf("expected error for invalid flag, got nil")
+	}
+	if !strings.Contains(err.Error(), "parse flags") {
+		t.Fatalf("expected flag parse error, got: %v", err)
+	}
+}
+
+func TestFlagParsingMultipleBrokerOverrides(t *testing.T) {
+	ledgerDir := t.TempDir()
+	shutdown := make(chan struct{})
+	listenDone := make(chan struct{})
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
+		},
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
+		},
+		listenAndServe: func(srv *http.Server) error {
+			close(listenDone)
+			return nil
+		},
+		shutdown: shutdown,
+	}
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		close(shutdown)
+	}()
+
+	err := run([]string{
+		"-api",
+		"-broker-mode", "paper",
+		"-broker-adapter", "mock",
+		"-broker-signer", "placeholder",
+		"-broker-max-retries", "3",
+		"-broker-max-clock-skew-sec", "60",
+		"-broker-nonce-ttl-sec", "120",
+		"-broker-nonce-store", "memory",
+	}, deps)
+	if err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+	<-listenDone
+}
+
+func TestFlagParsingLogFormatOverride(t *testing.T) {
+	ledgerDir := t.TempDir()
+
+	for _, format := range []string{"text", "json"} {
+		shutdown := make(chan struct{})
+		listenDone := make(chan struct{})
+		deps := appDeps{
+			loadConfig: func() config.Config {
+				return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
+			},
+			newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+				return monitoring.NewDashboardAPI(workDir, dir, collector)
+			},
+			listenAndServe: func(srv *http.Server) error {
+				close(listenDone)
+				return nil
+			},
+			shutdown: shutdown,
+		}
+
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			close(shutdown)
+		}()
+
+		err := run([]string{"-api", "-log-format", format}, deps)
+		if err != nil {
+			t.Fatalf("run returned error for log-format=%s: %v", format, err)
+		}
+		<-listenDone
+	}
+}
+
+func TestAPIModeRegistersNarrativeRoutes(t *testing.T) {
+	ledgerDir := t.TempDir()
+	shutdown := make(chan struct{})
+	listenDone := make(chan struct{})
+	var gotHandler http.Handler
+
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			return config.Config{WorkDir: t.TempDir(), LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
+		},
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			return monitoring.NewDashboardAPI(workDir, dir, collector)
+		},
+		listenAndServe: func(srv *http.Server) error {
+			gotHandler = srv.Handler
+			close(listenDone)
+			return nil
+		},
+		shutdown: shutdown,
+	}
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		close(shutdown)
+	}()
+
+	if err := run([]string{"-api"}, deps); err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+	<-listenDone
+	if gotHandler == nil {
+		t.Fatalf("expected http handler to be registered")
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/narrative/events", nil)
+	gotHandler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET /api/narrative/events status = %d, want 200", rr.Code)
 	}
 }

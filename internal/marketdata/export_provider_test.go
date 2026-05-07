@@ -2,7 +2,13 @@ package marketdata
 
 import (
 	"context"
+	"encoding/json"
+	"math"
 	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -42,5 +48,190 @@ func TestExportStatisticsProvider_FetchSnapshot_Decommissioned(t *testing.T) {
 	_, err := p.FetchSnapshot(ctx)
 	if err == nil {
 		t.Fatal("expected error since FAS210 is decommissioned")
+	}
+}
+
+func TestParseCustomsCSV_ValidData(t *testing.T) {
+	input := `年月,出口總值,進口總值,出超,出超(與上月比較),出超(與上年同月比較),出口總值(與上月比較),出口總值(與上年同月比較),出超值
+"114","01","50,000,000","45,000,000","5,000,000","10.0","5.0","8.0","5,000,000"
+"113","12","48,000,000","43,000,000","5,000,000","9.0","4.0","7.0","5,000,000"`
+
+	records, err := parseCustomsCSV([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(records) != 2 {
+		t.Fatalf("expected 2 records, got %d", len(records))
+	}
+
+	// Check first record (newest)
+	if records[0].Year != 114 || records[0].Month != 1 {
+		t.Errorf("expected 114/01, got %d/%d", records[0].Year, records[0].Month)
+	}
+	// 50,000,000 / 1000 = 50,000 (million USD)
+	if records[0].ExportTotal != 50000 {
+		t.Errorf("expected export total 50000, got %f", records[0].ExportTotal)
+	}
+	if records[0].ImportTotal != 45000 {
+		t.Errorf("expected import total 45000, got %f", records[0].ImportTotal)
+	}
+	if records[0].TradeBalance != 5000 {
+		t.Errorf("expected trade balance 5000, got %f", records[0].TradeBalance)
+	}
+
+	// Check second record
+	if records[1].Year != 113 || records[1].Month != 12 {
+		t.Errorf("expected 113/12, got %d/%d", records[1].Year, records[1].Month)
+	}
+}
+
+func TestParseCustomsCSV_HeaderOnly(t *testing.T) {
+	input := `年月,出口總值,進口總值,出超`
+	records, err := parseCustomsCSV([]byte(input))
+	if err == nil {
+		t.Fatal("expected error for header-only CSV")
+	}
+	if records != nil {
+		t.Errorf("expected nil records, got %v", records)
+	}
+}
+
+func TestParseCustomsCSV_MalformedRows(t *testing.T) {
+	input := `年月,出口總值,進口總值,出超,出超(與上月比較),出超(與上年同月比較),出口總值(與上月比較),出口總值(與上年同月比較),出超值
+"114","01","50,000,000","45,000,000","5,000,000","10.0","5.0","8.0","5,000,000"
+bad_row
+"113","invalid_month","48,000,000","43,000,000","5,000,000","9.0","4.0","7.0","5,000,000"`
+
+	records, err := parseCustomsCSV([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Should skip bad rows and keep valid ones
+	if len(records) != 1 {
+		t.Errorf("expected 1 valid record, got %d", len(records))
+	}
+	if records[0].Year != 114 {
+		t.Errorf("expected year 114, got %d", records[0].Year)
+	}
+}
+
+func TestParseCustomsCSV_UTF8BOM(t *testing.T) {
+	data := []byte{0xef, 0xbb, 0xbf} // UTF-8 BOM
+	data = append(data, []byte(`年月,出口總值,進口總值,出超,出超(與上月比較),出超(與上年同月比較),出口總值(與上月比較),出口總值(與上年同月比較),出超值
+"114","01","50,000,000","45,000,000","5,000,000","10.0","5.0","8.0","5,000,000"`)...)
+
+	records, err := parseCustomsCSV(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+	if records[0].Year != 114 {
+		t.Errorf("expected year 114, got %d", records[0].Year)
+	}
+}
+
+func TestExportStatisticsProvider_FetchSnapshot_MockServer(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Accept") != "text/csv" {
+			t.Errorf("expected Accept: text/csv, got %s", r.Header.Get("Accept"))
+		}
+		csv := `年月,出口總值,進口總值,出超,出超(與上月比較),出超(與上年同月比較),出口總值(與上月比較),出口總值(與上年同月比較),出超值
+"114","01","50,000,000","45,000,000","5,000,000","10.0","5.0","8.0","5,000,000"
+"113","12","48,000,000","43,000,000","5,000,000","9.0","4.0","7.0","5,000,000"`
+		w.Header().Set("Content-Type", "text/csv")
+		w.Write([]byte(csv))
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	provider := ExportStatisticsProviderWithClient(server.Client(), tmpDir)
+	provider.baseURL = server.URL
+
+	snap, err := provider.FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if snap.ExportElectronics.Symbol != "TW_EXPORT_ELECTRONICS" {
+		t.Errorf("expected symbol TW_EXPORT_ELECTRONICS, got %s", snap.ExportElectronics.Symbol)
+	}
+	// 50,000,000 / 1000 / 1e6 = 0.05 (trillion USD)
+	if snap.ExportElectronics.Value != 0.05 {
+		t.Errorf("expected value 0.05, got %f", snap.ExportElectronics.Value)
+	}
+	// ((50M - 48M) / 48M) * 100 = 4.166...%
+	expectedChange := ((50000000.0 - 48000000.0) / 48000000.0) * 100
+	if math.Abs(snap.ExportElectronics.ChangePct-expectedChange) > 0.0001 {
+		t.Errorf("expected change %f, got %f", expectedChange, snap.ExportElectronics.ChangePct)
+	}
+}
+
+func TestExportStatisticsProvider_FetchSnapshot_InsufficientData(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		csv := `年月,出口總值,進口總值,出超
+"114","01","50,000,000","45,000,000","5,000,000"`
+		w.Header().Set("Content-Type", "text/csv")
+		w.Write([]byte(csv))
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	provider := ExportStatisticsProviderWithClient(server.Client(), tmpDir)
+	provider.baseURL = server.URL
+
+	_, err := provider.FetchSnapshot(context.Background())
+	if err == nil {
+		t.Fatal("expected error for insufficient data")
+	}
+	if !strings.Contains(err.Error(), "expected at least 2 rows") {
+		t.Errorf("expected 'expected at least 2 rows' error, got: %v", err)
+	}
+}
+
+func TestExportStatisticsProvider_SaveExport(t *testing.T) {
+	tmpDir := t.TempDir()
+	provider := NewExportStatisticsProvider(tmpDir)
+
+	data := CustomsExportImport{
+		Year:         114,
+		Month:        1,
+		ExportTotal:  50000,
+		ImportTotal:  45000,
+		TradeBalance: 5000,
+		DownloadedAt: 1234567890,
+	}
+
+	err := provider.saveExport(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify filename format (year padded to 3 digits)
+	expectedPath := filepath.Join(tmpDir, "11401_export.json")
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Errorf("expected file %s to exist", expectedPath)
+	}
+
+	// Verify file content
+	content, err := os.ReadFile(expectedPath)
+	if err != nil {
+		t.Fatalf("failed to read saved file: %v", err)
+	}
+
+	var saved CustomsExportImport
+	if err := json.Unmarshal(content, &saved); err != nil {
+		t.Fatalf("failed to unmarshal saved file: %v", err)
+	}
+
+	if saved.Year != data.Year {
+		t.Errorf("expected year %d, got %d", data.Year, saved.Year)
+	}
+	if saved.Month != data.Month {
+		t.Errorf("expected month %d, got %d", data.Month, saved.Month)
+	}
+	if saved.ExportTotal != data.ExportTotal {
+		t.Errorf("expected export total %f, got %f", data.ExportTotal, saved.ExportTotal)
 	}
 }

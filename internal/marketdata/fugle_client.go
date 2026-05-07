@@ -4,19 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"golang.org/x/time/rate"
 )
 
 const (
 	fugleAPIBaseURL = "https://api.fugle.tw/realtime/v0.3"
-	// 免费版限制: 50 requests/minute
-	fugleRateLimit = 50
-	fugleRateBurst = 10
 )
 
 // FugleClient Fugle API 客户端
@@ -61,13 +60,14 @@ type FugleQuoteResponse struct {
 
 // NewFugleClient 创建 Fugle 客户端
 func NewFugleClient(apiKey string) *FugleClient {
+	params := config.GetParametersConfig()
 	return &FugleClient{
 		apiKey: apiKey,
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: time.Duration(params.Marketdata.FugleAPITimeoutSec.Value) * time.Second,
 		},
 		baseURL:     fugleAPIBaseURL,
-		rateLimiter: rate.NewLimiter(rate.Every(time.Minute/fugleRateLimit), fugleRateBurst),
+		rateLimiter: rate.NewLimiter(rate.Every(time.Minute/time.Duration(params.Marketdata.FugleRateLimit.Value)), params.Marketdata.FugleRateLimit.Value),
 	}
 }
 
@@ -104,7 +104,8 @@ func (c *FugleClient) GetQuote(ctx context.Context, symbol string) (domain.Quote
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return domain.Quote{}, fmt.Errorf("api error: status %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return domain.Quote{}, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	// 解析响应
@@ -172,7 +173,8 @@ func (c *FugleClient) GetMeta(ctx context.Context, symbol string) (*FugleMetaRes
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("api error: status %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	var metaResp FugleMetaResponse

@@ -149,18 +149,19 @@ func (s *ChannelHealthStore) recordToDB(channelID, status, errMsg string) error 
 
 // Get retrieves the health record for a channel (nil if missing).
 func (s *ChannelHealthStore) Get(channelID string) *ChannelHealthRecord {
-	if rec := s.getFromDB(channelID); rec != nil {
-		return rec
-	}
 	_ = s.load()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	rec := s.data[channelID]
-	if rec == nil {
-		return nil
+	if rec, ok := s.data[channelID]; ok {
+		cp := *rec
+		return &cp
 	}
-	cp := *rec
-	return &cp
+	if s.pool != nil {
+		if rec := s.getFromDB(channelID); rec != nil {
+			return rec
+		}
+	}
+	return nil
 }
 
 func (s *ChannelHealthStore) getFromDB(channelID string) *ChannelHealthRecord {
@@ -193,9 +194,6 @@ func (s *ChannelHealthStore) getFromDB(channelID string) *ChannelHealthRecord {
 
 // Alerts returns all channels with non-ok status.
 func (s *ChannelHealthStore) Alerts() []ChannelAlert {
-	if alerts := s.alertsFromDB(); alerts != nil {
-		return alerts
-	}
 	_ = s.load()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -213,39 +211,29 @@ func (s *ChannelHealthStore) Alerts() []ChannelAlert {
 	return alerts
 }
 
-func (s *ChannelHealthStore) alertsFromDB() []ChannelAlert {
+// SyncAllToDB writes all in-memory health records to the database.
+func (s *ChannelHealthStore) SyncAllToDB() error {
 	if s.pool == nil {
-		return nil
+		return fmt.Errorf("database pool not initialized")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
+	_ = s.load()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	rows, err := s.pool.Query(ctx, `
-		SELECT channel_id, status, COALESCE(last_error,''), last_fetch_at
-		FROM channel_health
-		WHERE status NOT IN ('ok','inactive')
-	`)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-
-	var alerts []ChannelAlert
-	for rows.Next() {
-		var a ChannelAlert
-		var fetchAt *time.Time
-		if err := rows.Scan(&a.ChannelID, &a.Status, &a.Error, &fetchAt); err != nil {
-			continue
+	var failed []string
+	for id, rec := range s.data {
+		errMsg := ""
+		if rec.Status != "ok" {
+			errMsg = rec.LastError
 		}
-		if fetchAt != nil {
-			a.FetchAt = fetchAt.Format(time.RFC3339)
+		if err := s.recordToDB(id, rec.Status, errMsg); err != nil {
+			failed = append(failed, fmt.Sprintf("%s: %v", id, err))
 		}
-		alerts = append(alerts, a)
 	}
-	if err := rows.Err(); err != nil {
-		return nil
+	if len(failed) > 0 {
+		return fmt.Errorf("sync partial failure: %v", failed)
 	}
-	return alerts
+	return nil
 }
 
 // ChannelAlert represents a single unhealthy channel.

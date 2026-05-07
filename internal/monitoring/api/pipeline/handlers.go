@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
@@ -27,16 +27,9 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/recommendation-pipeline", h.HandleRecommendationPipeline)
 	mux.HandleFunc("/api/dashboard/sessions", h.HandleSessions)
 	mux.HandleFunc("/api/dashboard/universe-overlap", h.HandleUniverseOverlap)
-}
-
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func writeJSONError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
+	mux.HandleFunc("/api/synergy/darwinian-status", h.HandleDarwinianStatus)
+	mux.HandleFunc("/api/synergy/darwinian-trend", h.HandleDarwinianTrend)
+	mux.HandleFunc("/api/dashboard/regime-history", h.HandleRegimeHistory)
 }
 
 func parseLimit(r *http.Request, defaultValue, maxValue int) (int, error) {
@@ -60,18 +53,18 @@ func parseLimit(r *http.Request, defaultValue, maxValue int) (int, error) {
 // HandleMacroRadar handles GET /api/dashboard/macro-radar.
 func (h *Handlers) HandleMacroRadar(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	sessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
 	data, err := h.Svc.LoadMacroRadar(sessionID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load macro radar data: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load macro radar data: %v", err))
 		return
 	}
 	if data == nil {
-		writeJSON(w, http.StatusOK, MacroRadarResponse{})
+		shared.WriteJSON(w, http.StatusOK, MacroRadarResponse{})
 		return
 	}
 
@@ -82,7 +75,7 @@ func (h *Handlers) HandleMacroRadar(w http.ResponseWriter, r *http.Request) {
 		BrokerRuntime: data.BrokerRuntime,
 		RecordedAt:    data.RecordedAt,
 	}
-	writeJSON(w, http.StatusOK, resp)
+	shared.WriteJSON(w, http.StatusOK, resp)
 }
 
 // MacroRadarResponse is the API response for macro radar.
@@ -97,20 +90,20 @@ type MacroRadarResponse struct {
 // HandleAgentObservatory handles GET /api/dashboard/agent-observatory.
 func (h *Handlers) HandleAgentObservatory(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	sessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
 	limit, err := parseLimit(r, 5, 50)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		shared.WriteJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	data, err := h.Svc.LoadAgentObservatory(sessionID, limit)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load agent observatory: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load agent observatory: %v", err))
 		return
 	}
 
@@ -121,7 +114,7 @@ func (h *Handlers) HandleAgentObservatory(w http.ResponseWriter, r *http.Request
 		BrokerRuntime:          data.BrokerRuntime,
 		RecordedAt:             data.RecordedAt,
 	}
-	writeJSON(w, http.StatusOK, resp)
+	shared.WriteJSON(w, http.StatusOK, resp)
 }
 
 // AgentObservatoryResponse is the API response for agent observatory.
@@ -136,20 +129,20 @@ type AgentObservatoryResponse struct {
 // HandleForecastVsReality handles GET /api/dashboard/forecast-vs-reality.
 func (h *Handlers) HandleForecastVsReality(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	limit, err := parseLimit(r, 20, 100)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		shared.WriteJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	agentID := strings.TrimSpace(r.URL.Query().Get("agent_id"))
 
 	data, err := h.Svc.LoadForecastVsReality(agentID, limit)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load forecast-vs-reality data: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load forecast-vs-reality data: %v", err))
 		return
 	}
 
@@ -170,11 +163,28 @@ func (h *Handlers) HandleForecastVsReality(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	resp := ForecastVsRealityResponse{
-		Items:         items,
-		BrokerRuntime: data.BrokerRuntime,
+	symbolPredictions := make([]SymbolPredictionItem, len(data.SymbolPredictions))
+	for i, p := range data.SymbolPredictions {
+		symbolPredictions[i] = SymbolPredictionItem{
+			AgentID:       p.AgentID,
+			Symbol:        p.Symbol,
+			Side:          p.Side,
+			Conviction:    p.Conviction,
+			TargetPrice:   p.TargetPrice,
+			ForwardReturn: p.ForwardReturn,
+			Hit:           p.Hit,
+			PassedGuards:  p.PassedGuards,
+			RecordedAt:    p.RecordedAt,
+			SessionID:     p.SessionID,
+		}
 	}
-	writeJSON(w, http.StatusOK, resp)
+
+	resp := ForecastVsRealityResponse{
+		Items:             items,
+		SymbolPredictions: symbolPredictions,
+		BrokerRuntime:     data.BrokerRuntime,
+	}
+	shared.WriteJSON(w, http.StatusOK, resp)
 }
 
 // ForecastVsRealityItem is the API response item for forecast vs reality.
@@ -194,14 +204,29 @@ type ForecastVsRealityItem struct {
 
 // ForecastVsRealityResponse is the API response for forecast vs reality.
 type ForecastVsRealityResponse struct {
-	Items         []ForecastVsRealityItem   `json:"items"`
-	BrokerRuntime domain.BrokerRuntimeAudit `json:"broker_runtime"`
+	Items             []ForecastVsRealityItem   `json:"items"`
+	SymbolPredictions []SymbolPredictionItem    `json:"symbol_predictions"`
+	BrokerRuntime     domain.BrokerRuntimeAudit `json:"broker_runtime"`
+}
+
+// SymbolPredictionItem is the API response item for symbol-level predictions.
+type SymbolPredictionItem struct {
+	AgentID       string  `json:"agent_id"`
+	Symbol        string  `json:"symbol"`
+	Side          string  `json:"side"`
+	Conviction    int     `json:"conviction"`
+	TargetPrice   float64 `json:"target_price"`
+	ForwardReturn float64 `json:"forward_return"`
+	Hit           bool    `json:"hit"`
+	PassedGuards  bool    `json:"passed_guards"`
+	RecordedAt    string  `json:"recorded_at"`
+	SessionID     string  `json:"session_id"`
 }
 
 // HandleRecommendationPipeline handles GET /api/dashboard/recommendation-pipeline.
 func (h *Handlers) HandleRecommendationPipeline(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -210,11 +235,11 @@ func (h *Handlers) HandleRecommendationPipeline(w http.ResponseWriter, r *http.R
 
 	data, err := h.Svc.LoadRecommendationPipeline(sessionID, showAll)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load recommendation pipeline: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load recommendation pipeline: %v", err))
 		return
 	}
 	if data == nil {
-		writeJSON(w, http.StatusOK, RecommendationPipelineResponse{})
+		shared.WriteJSON(w, http.StatusOK, RecommendationPipelineResponse{})
 		return
 	}
 
@@ -250,7 +275,7 @@ func (h *Handlers) HandleRecommendationPipeline(w http.ResponseWriter, r *http.R
 		ScreenedItems: data.ScreenedItems,
 		RecordedAt:    data.RecordedAt,
 	}
-	writeJSON(w, http.StatusOK, resp)
+	shared.WriteJSON(w, http.StatusOK, resp)
 }
 
 // PipelineItem is the API response item for recommendation pipeline.
@@ -288,17 +313,17 @@ type RecommendationPipelineResponse struct {
 // HandleSessions handles GET /api/dashboard/sessions.
 func (h *Handlers) HandleSessions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	sessions, err := h.Svc.LoadSessions()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load sessions: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load sessions: %v", err))
 		return
 	}
 	if sessions == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"sessions": []any{}})
+		shared.WriteJSON(w, http.StatusOK, map[string]any{"sessions": []any{}})
 		return
 	}
 
@@ -311,19 +336,19 @@ func (h *Handlers) HandleSessions(w http.ResponseWriter, r *http.Request) {
 			"outcome_count": s.OutcomeCount,
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"sessions": result})
+	shared.WriteJSON(w, http.StatusOK, map[string]any{"sessions": result})
 }
 
 // HandleUniverseOverlap handles GET /api/dashboard/universe-overlap.
 func (h *Handlers) HandleUniverseOverlap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	data, err := h.Svc.LoadUniverseOverlap()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load universe overlap: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load universe overlap: %v", err))
 		return
 	}
 
@@ -343,7 +368,7 @@ func (h *Handlers) HandleUniverseOverlap(w http.ResponseWriter, r *http.Request)
 		Matrix:   data.Matrix,
 		Warnings: data.Warnings,
 	}
-	writeJSON(w, http.StatusOK, resp)
+	shared.WriteJSON(w, http.StatusOK, resp)
 }
 
 // AgentUniverseView is the API response for agent universe view.
@@ -360,4 +385,53 @@ type UniverseOverlapResponse struct {
 	Agents   []AgentUniverseView       `json:"agents"`
 	Matrix   map[string]map[string]int `json:"matrix"`
 	Warnings []string                  `json:"warnings"`
+}
+
+func (h *Handlers) HandleDarwinianStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	data, err := h.Svc.LoadDarwinianStatus()
+	if err != nil {
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load darwinian status: %v", err))
+		return
+	}
+	shared.WriteJSON(w, http.StatusOK, data)
+}
+
+func (h *Handlers) HandleDarwinianTrend(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	limit, err := parseLimit(r, 30, 200)
+	if err != nil {
+		shared.WriteJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	points, err := h.Svc.LoadDarwinianHistory(limit)
+	if err != nil {
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load darwinian history: %v", err))
+		return
+	}
+	shared.WriteJSON(w, http.StatusOK, map[string]interface{}{"points": points})
+}
+
+func (h *Handlers) HandleRegimeHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	limit, err := parseLimit(r, 30, 100)
+	if err != nil {
+		shared.WriteJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	data, err := h.Svc.LoadRegimeHistory(limit)
+	if err != nil {
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load regime history: %v", err))
+		return
+	}
+	shared.WriteJSON(w, http.StatusOK, data)
 }

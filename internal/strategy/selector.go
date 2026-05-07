@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -21,12 +22,13 @@ type Selector struct {
 }
 
 func NewSelector(registry *Registry, comparison *ComparisonEngine) *Selector {
+	params := config.GetParametersConfig().Strategy
 	return &Selector{
 		registry:   registry,
 		comparison: comparison,
 		config: SelectorConfig{
-			MinSwitchInterval: 5 * 24 * time.Hour,
-			SwitchThreshold:   0.10,
+			MinSwitchInterval: time.Duration(params.MinSwitchIntervalDays.Value) * 24 * time.Hour,
+			SwitchThreshold:   params.SwitchThreshold.Value,
 		},
 		lastSwitch: time.Time{},
 	}
@@ -47,8 +49,9 @@ func (s *Selector) Select(ctx context.Context, vix float64, regime domain.Regime
 	}
 
 	scores := make(map[string]float64)
+	params := config.GetParametersConfig().Strategy
 	for _, c := range candidates {
-		score, _ := s.comparison.GetScore(c.ID, 20)
+		score, _ := s.comparison.GetScore(c.ID, params.ScoreLookbackDays.Value)
 		scores[c.ID] = score
 	}
 

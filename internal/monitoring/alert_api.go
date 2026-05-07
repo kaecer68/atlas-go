@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 )
 
 type AlertAPI struct {
@@ -24,41 +25,41 @@ func (a *AlertAPI) RegisterRoutes(mux *http.ServeMux) {
 
 func (a *AlertAPI) handleListAlerts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	records, err := a.store.LoadAll()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load alerts: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load alerts: %v", err))
 		return
 	}
 	if records == nil {
 		records = []domain.AlertRecord{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"alerts": records, "total": len(records)})
+	shared.WriteJSON(w, http.StatusOK, map[string]any{"alerts": records, "total": len(records)})
 }
 
 func (a *AlertAPI) handleUnacknowledged(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	records, err := a.store.LoadUnacknowledged()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load unacknowledged alerts: %v", err))
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load unacknowledged alerts: %v", err))
 		return
 	}
 	if records == nil {
 		records = []domain.AlertRecord{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"alerts": records, "total": len(records)})
+	shared.WriteJSON(w, http.StatusOK, map[string]any{"alerts": records, "total": len(records)})
 }
 
 func (a *AlertAPI) handleAcknowledge(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -67,21 +68,21 @@ func (a *AlertAPI) handleAcknowledge(w http.ResponseWriter, r *http.Request) {
 		User    string `json:"user"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json")
+		shared.WriteJSONError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
 	if req.AlertID == "" {
-		writeJSONError(w, http.StatusBadRequest, "alert_id required")
+		shared.WriteJSONError(w, http.StatusBadRequest, "alert_id required")
 		return
 	}
 	if req.User == "" {
-		writeJSONError(w, http.StatusBadRequest, "user required")
+		shared.WriteJSONError(w, http.StatusBadRequest, "user required")
 		return
 	}
 
 	if err := a.store.Acknowledge(req.AlertID, req.User); err != nil {
-		writeJSONError(w, http.StatusNotFound, fmt.Sprintf("acknowledge: %v", err))
+		shared.WriteJSONError(w, http.StatusNotFound, fmt.Sprintf("acknowledge: %v", err))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "alert_id": req.AlertID})
+	shared.WriteJSON(w, http.StatusOK, map[string]any{"success": true, "alert_id": req.AlertID})
 }

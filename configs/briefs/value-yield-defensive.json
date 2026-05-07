@@ -1,0 +1,35 @@
+{
+  "contract_version": 1,
+  "proposal_id": "default-value-yield-defensive",
+  "window_id": "window-20260326-20260327",
+  "target_agent_id": "etf-rotation-01",
+  "target_skill": "etf_rotation_desk",
+  "target_layer": "sector",
+  "prompt_file": "prompts/agents/etf_rotation_desk.md",
+  "mutation_type": "prompt_expansion",
+  "failure_pattern": "Defensive value-yield setups with weak trend but resilient payout profiles are rejected too early, missing income-oriented opportunities.",
+  "hypothesis": "Expanding criteria for defensive value-yield setups while maintaining payout-resilience checks can improve defensive capture during risk-off periods.",
+  "acceptance_metric": "sharpe_like",
+  "acceptance_gates": [
+    "maintain_sharpe_like",
+    "improve_defensive_capture",
+    "preserve_yield_quality"
+  ],
+  "forbidden_actions": [
+    "remove required skill boundaries",
+    "bypass control layer",
+    "ignore_payout_sustainability"
+  ],
+  "required_skills": [
+    "etf_rotation_desk",
+    "value_yield"
+  ],
+  "observed_window_count": 8,
+  "maturity_level": "level_2_window_validated",
+  "iteration_guidance": [
+    "Allow participation when payout coverage is strong despite weak price trend.",
+    "Require explicit dividend sustainability signal.",
+    "Maintain strict rejection for payout-coverage concerns regardless of yield."
+  ],
+  "recommended_window": "window-20260326-20260327"
+}

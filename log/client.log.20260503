@@ -1,0 +1,5 @@
+[2026-05-03 09:40:25.185296 +08:00 INFO] [apikey_dma_login] personal_id="M120628569"
+[2026-05-03 09:40:25.206350 +08:00 INFO] [apikey_dma_login] Loaded permissions from XPSAZBIZS: {FutoptAccounting, MarketData, FutoptTrading, StockAccounting, StockTrading}
+[2026-05-03 09:40:44.378525 +08:00 INFO] [apikey_login] personal_id="M120628569"
+[2026-05-03 09:41:07.678392 +08:00 INFO] [apikey_dma_login] personal_id="M120628569"
+[2026-05-03 09:41:07.705535 +08:00 INFO] [apikey_dma_login] Loaded permissions from XPSAZBIZS: {FutoptAccounting, FutoptTrading, MarketData, StockAccounting, StockTrading}

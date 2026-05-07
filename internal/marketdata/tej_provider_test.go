@@ -11,18 +11,19 @@ import (
 
 func TestTEJClient_GetStockPriceDaily_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-API-Key") == "" {
-			t.Error("expected X-API-Key header")
+		if r.URL.Query().Get("api_key") == "" {
+			t.Error("expected api_key query parameter")
 		}
 		if r.Header.Get("Accept") != "application/json" {
 			t.Errorf("expected Accept: application/json, got %s", r.Header.Get("Accept"))
 		}
 
 		resp := map[string]any{
-			"stat": "OK",
-			"data": [][]any{
-				{"2330", "2024-01-02", 586.0, 595.0, 584.0, 593.0, 35000.0, 20745000.0},
-				{"2330", "2024-01-03", 593.0, 601.0, 591.0, 598.0, 28000.0, 16744000.0},
+			"datatable": map[string]any{
+				"data": [][]any{
+					{"2330", "2025-01-02", 1070.0, 1075.0, 1055.0, 1065.0, 45045.0, 47883206.0},
+					{"2330", "2025-01-03", 1065.0, 1070.0, 1050.0, 1060.0, 40000.0, 42400000.0},
+				},
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -40,8 +41,8 @@ func TestTEJClient_GetStockPriceDaily_Success(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("expected 2 rows, got %d", len(rows))
 	}
-	if rows[0].Close != 593.0 {
-		t.Errorf("expected close 593.0, got %f", rows[0].Close)
+	if rows[0].Close != 1065.0 {
+		t.Errorf("expected close 1065.0, got %f", rows[0].Close)
 	}
 	if rows[1].CoID != "2330" {
 		t.Errorf("expected coid 2330, got %s", rows[1].CoID)
@@ -51,7 +52,7 @@ func TestTEJClient_GetStockPriceDaily_Success(t *testing.T) {
 func TestTEJClient_GetStockPriceDaily_APIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
-		w.Write([]byte(`{"stat":"Forbidden"}`))
+		w.Write([]byte(`{"error":{"code":"Forbidden","message":"Access denied"}}`))
 	}))
 	defer server.Close()
 
@@ -66,8 +67,9 @@ func TestTEJClient_GetStockPriceDaily_APIError(t *testing.T) {
 func TestTEJClient_GetStockPriceDaily_EmptyResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
-			"stat": "OK",
-			"data": [][]any{},
+			"datatable": map[string]any{
+				"data": [][]any{},
+			},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
@@ -126,10 +128,11 @@ func TestToInt64(t *testing.T) {
 func TestTEJClient_GetFinancialStatements(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
-			"stat": "OK",
-			"data": [][]any{
-				{"2330", "2024-Q1", 500000.0},
-				{"2330", "2024-Q2", 600000.0},
+			"datatable": map[string]any{
+				"data": [][]any{
+					{"2330", "2024-Q1", 500000.0},
+					{"2330", "2024-Q2", 600000.0},
+				},
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -161,13 +164,14 @@ func TestTEJClient_RateLimiter(t *testing.T) {
 
 func TestTEJClient_Ping_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-API-Key") == "" {
-			t.Error("expected X-API-Key header")
+		if r.URL.Query().Get("api_key") == "" {
+			t.Error("expected api_key query parameter")
 		}
 		resp := map[string]any{
-			"stat": "OK",
-			"data": [][]any{
-				{"2330", "2024-01-02", 586.0, 595.0, 584.0, 593.0, 35000.0, 20745000.0},
+			"datatable": map[string]any{
+				"data": [][]any{
+					{"2330", "2025-01-03", 1080.0, 1085.0, 1075.0, 1075.0, 31244.0, 33728652.0},
+				},
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -195,8 +199,9 @@ func TestTEJClient_Ping_NoAPIKey(t *testing.T) {
 func TestTEJClient_Ping_EmptyResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
-			"stat": "OK",
-			"data": [][]any{},
+			"datatable": map[string]any{
+				"data": [][]any{},
+			},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)

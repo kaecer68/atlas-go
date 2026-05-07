@@ -1,0 +1,35 @@
+{
+  "contract_version": 1,
+  "proposal_id": "default-technical-breakout-expansion",
+  "window_id": "window-20260326-20260327",
+  "target_agent_id": "ai-desk-01",
+  "target_skill": "ai_supply_chain_desk",
+  "target_layer": "sector",
+  "prompt_file": "prompts/agents/ai_supply_chain_desk.md",
+  "mutation_type": "prompt_expansion",
+  "failure_pattern": "Overly strict breakout criteria miss early institutional accumulation phases, leaving alpha on the table.",
+  "hypothesis": "Expanding acceptable breakout participation criteria while maintaining structural quality can capture more early-move alpha.",
+  "acceptance_metric": "sharpe_like",
+  "acceptance_gates": [
+    "maintain_sharpe_like",
+    "improve_hit_rate",
+    "control_false_positive_rate"
+  ],
+  "forbidden_actions": [
+    "remove required skill boundaries",
+    "bypass control layer",
+    "ignore volume_confirmation"
+  ],
+  "required_skills": [
+    "ai_supply_chain_desk",
+    "growth_momentum"
+  ],
+  "observed_window_count": 8,
+  "maturity_level": "level_2_window_validated",
+  "iteration_guidance": [
+    "Allow earlier participation on confirmed volume expansion.",
+    "Maintain strict rejection for setups without structural support.",
+    "Preserve differentiation between durable order flow and hype."
+  ],
+  "recommended_window": "window-20260326-20260327"
+}

@@ -48,9 +48,10 @@ func TestMockProvider_IsMock(t *testing.T) {
 // ─── HybridProvider ──────────────────────────────────────────────────────────
 
 func TestHybridProvider_NoAPIKey(t *testing.T) {
-	p := NewHybridProvider("", "")
-	if p.Name() != "hybrid-twse" {
-		t.Fatalf("Name() = %q, want %q", p.Name(), "hybrid-twse")
+	twseClient := NewTWSEClient()
+	p := NewHybridProvider(twseClient, "", "", "")
+	if p.Name() != "hybrid" {
+		t.Fatalf("Name() = %q, want %q", p.Name(), "hybrid")
 	}
 	if p.GetFugleClient() != nil {
 		t.Fatal("GetFugleClient() should be nil when no API key")
@@ -58,22 +59,23 @@ func TestHybridProvider_NoAPIKey(t *testing.T) {
 }
 
 func TestHybridProvider_WithAPIKey(t *testing.T) {
-	p := NewHybridProvider("", "test-key")
-	if p.Name() != "hybrid-fugle" {
-		t.Fatalf("Name() = %q, want %q", p.Name(), "hybrid-fugle")
+	twseClient := NewTWSEClient()
+	p := NewHybridProvider(twseClient, "", "", "test-key")
+	if p.Name() != "hybrid" {
+		t.Fatalf("Name() = %q, want %q", p.Name(), "hybrid")
 	}
 	if p.GetFugleClient() == nil {
 		t.Fatal("GetFugleClient() should not be nil when API key is set")
 	}
 
-	p2 := NewHybridProvider("fubon-key", "")
-	if p2.Name() != "hybrid-fubon" {
-		t.Fatalf("Name() = %q, want %q", p2.Name(), "hybrid-fubon")
+	p2 := NewHybridProvider(twseClient, "", "fubon-key", "")
+	if p2.Name() != "hybrid" {
+		t.Fatalf("Name() = %q, want %q", p2.Name(), "hybrid")
 	}
 
-	p3 := NewHybridProvider("fubon-key", "fugle-key")
-	if p3.Name() != "hybrid-fubon" {
-		t.Fatalf("Name() = %q, want %q (Fubon primary)", p3.Name(), "hybrid-fubon")
+	p3 := NewHybridProvider(twseClient, "finmind-key", "fubon-key", "fugle-key")
+	if p3.Name() != "hybrid" {
+		t.Fatalf("Name() = %q, want %q", p3.Name(), "hybrid")
 	}
 }
 
@@ -83,42 +85,44 @@ func TestHybridProvider_Reset(t *testing.T) {
 		apiKey   string
 		wantTWSE bool
 	}{
-		{"no fugle configured: stays twse after reset", "", true},
-		{"fugle configured: resets to fugle after UseTWSE", "key", false},
+		{"no fugle configured: twse always primary", "", true},
+		{"fugle configured: twse still primary", "key", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := NewHybridProvider("", tt.apiKey)
+			twseClient := NewTWSEClient()
+			p := NewHybridProvider(twseClient, "", "", tt.apiKey)
 			p.UseTWSE() // force TWSE
 			p.Reset()
 			if tt.wantTWSE && !p.IsUsingTWSE() {
-				t.Error("expected IsUsingTWSE()=true after Reset with no Fugle configured")
+				t.Error("expected IsUsingTWSE()=true after Reset")
 			}
 			if !tt.wantTWSE && p.IsUsingTWSE() {
-				t.Error("expected IsUsingTWSE()=false after Reset when Fugle is configured")
+				t.Error("expected IsUsingTWSE()=false after Reset")
 			}
 		})
 	}
 }
 
 func TestHybridProvider_UseTWSE_UseFugle(t *testing.T) {
-	p := NewHybridProvider("", "key")
+	twseClient := NewTWSEClient()
+	p := NewHybridProvider(twseClient, "", "", "key")
 
 	p.UseTWSE()
-	if p.Name() != "hybrid-fugle" {
-		t.Fatalf("after UseTWSE with only Fugle: Name() = %q, want hybrid-fugle", p.Name())
+	if p.Name() != "hybrid" {
+		t.Fatalf("after UseTWSE: Name() = %q, want hybrid", p.Name())
 	}
 
 	p.UseFugle()
-	if p.Name() != "hybrid-fugle" {
-		t.Fatalf("after UseFugle: Name() = %q, want hybrid-fugle", p.Name())
+	if p.Name() != "hybrid" {
+		t.Fatalf("after UseFugle: Name() = %q, want hybrid", p.Name())
 	}
 
-	p2 := NewHybridProvider("fubon-key", "fugle-key")
+	p2 := NewHybridProvider(twseClient, "", "fubon-key", "fugle-key")
 	p2.UseTWSE()
-	if p2.Name() != "hybrid-fubon" {
-		t.Fatalf("after UseTWSE with Fubon+Fugle: Name() = %q, want hybrid-fubon", p2.Name())
+	if p2.Name() != "hybrid" {
+		t.Fatalf("after UseTWSE with Fubon+Fugle: Name() = %q, want hybrid", p2.Name())
 	}
 }
 

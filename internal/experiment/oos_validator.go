@@ -7,42 +7,38 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
-const (
-	DefaultOOSWindowDays = 30
-)
-
-// oosAcceptanceThreshold returns the minimum improvement required for OOS validation.
-func oosAcceptanceThreshold() float64 {
-	return 0.0005
-}
-
-// oosMinimumObservations returns the minimum observations required for OOS validation.
-func oosMinimumObservations() int {
-	return 3
-}
-
 type OOSValidator struct {
 	replayDataPath string
 	store          *ledger.Store
+	params         *config.ParametersConfig
 }
 
 func NewOOSValidator(store *ledger.Store, replayDataPath string) *OOSValidator {
 	return &OOSValidator{
 		replayDataPath: replayDataPath,
 		store:          store,
+		params:         config.DefaultParametersConfig(),
 	}
 }
 
-// oosWindow computes the out-of-sample window: the period immediately following
-// the primary backtest window.
-func oosWindow(primaryWindowEnd time.Time) (start, end time.Time) {
+func (v *OOSValidator) WithParameters(p *config.ParametersConfig) *OOSValidator {
+	v.params = p
+	return v
+}
+
+func (v *OOSValidator) oosWindow(primaryWindowEnd time.Time) (start, end time.Time) {
 	start = primaryWindowEnd.AddDate(0, 0, 1)
-	end = start.AddDate(0, 0, DefaultOOSWindowDays)
+	days := 30
+	if v.params != nil {
+		days = v.params.Experiment.OOSWindowDays.Value
+	}
+	end = start.AddDate(0, 0, days)
 	return start, end
 }
 
@@ -66,12 +62,8 @@ func (v *OOSValidator) Validate(candidatePath, baselinePath string, primaryWindo
 	return v.ValidateWithBrief(candidatePath, baselinePath, brief, primaryWindowEnd)
 }
 
-// ValidateWithBrief validates the candidate against the baseline using out-of-sample
-// data. The OOS window starts the day after the primary window ends and spans
-// DefaultOOSWindowDays days. It delegates to the appropriate scoring function based
-// on mutation type (constraint-based vs prompt-based).
 func (v *OOSValidator) ValidateWithBrief(candidatePath, baselinePath string, brief domain.MutationBrief, primaryWindowEnd time.Time) (*domain.OOSResult, error) {
-	oosStart, oosEnd := oosWindow(primaryWindowEnd)
+	oosStart, oosEnd := v.oosWindow(primaryWindowEnd)
 
 	result := &domain.OOSResult{
 		OOSWindowStart: oosStart,
@@ -105,8 +97,8 @@ func (v *OOSValidator) ValidateWithBrief(candidatePath, baselinePath string, bri
 		baselineConstraints := policy.Constraints
 		candidateConstraints := baseline.ApplyConstraintCandidate(policy.Constraints, string(candidateBytes))
 
-		baselineScore, baselineObs, _ := scoreConstraintWindowWithObservations(ds, baselineConstraints, oosStart, oosEnd)
-		candidateScore, candidateObs, _ := scoreConstraintWindowWithObservations(ds, candidateConstraints, oosStart, oosEnd)
+		baselineScore, baselineObs, _, _ := scoreConstraintWindowWithObservations(ds, baselineConstraints, oosStart, oosEnd)
+		candidateScore, candidateObs, _, _ := scoreConstraintWindowWithObservations(ds, candidateConstraints, oosStart, oosEnd)
 
 		result.BaselineScore = baselineScore
 		result.CandidateScore = candidateScore
@@ -116,8 +108,8 @@ func (v *OOSValidator) ValidateWithBrief(candidatePath, baselinePath string, bri
 		if result.UsedFallback {
 			fbStart, fbEnd, ok := fallbackWindow(ds, 1)
 			if ok {
-				baselineScore, baselineObs, _ = scoreConstraintWindowWithObservations(ds, baselineConstraints, fbStart, fbEnd)
-				candidateScore, candidateObs, _ = scoreConstraintWindowWithObservations(ds, candidateConstraints, fbStart, fbEnd)
+				baselineScore, baselineObs, _, _ = scoreConstraintWindowWithObservations(ds, baselineConstraints, fbStart, fbEnd)
+				candidateScore, candidateObs, _, _ = scoreConstraintWindowWithObservations(ds, candidateConstraints, fbStart, fbEnd)
 				result.BaselineScore = baselineScore
 				result.CandidateScore = candidateScore
 				result.Observations = min(baselineObs, candidateObs)
@@ -133,8 +125,8 @@ func (v *OOSValidator) ValidateWithBrief(candidatePath, baselinePath string, bri
 			}
 		}
 
-		baselineScore, baselineObs, _ := scorePromptWindowWithObservations(ds, brief.TargetSkill, baselinePrompt, policy.ExecutionPolicy, oosStart, oosEnd)
-		candidateScore, candidateObs, _ := scorePromptWindowWithObservations(ds, brief.TargetSkill, string(candidateBytes), policy.ExecutionPolicy, oosStart, oosEnd)
+		baselineScore, baselineObs, _, _ := scorePromptWindowWithObservations(ds, brief.TargetSkill, baselinePrompt, policy.ExecutionPolicy, oosStart, oosEnd)
+		candidateScore, candidateObs, _, _ := scorePromptWindowWithObservations(ds, brief.TargetSkill, string(candidateBytes), policy.ExecutionPolicy, oosStart, oosEnd)
 
 		result.BaselineScore = baselineScore
 		result.CandidateScore = candidateScore
@@ -144,8 +136,8 @@ func (v *OOSValidator) ValidateWithBrief(candidatePath, baselinePath string, bri
 		if result.UsedFallback {
 			fbStart, fbEnd, ok := fallbackWindow(ds, 1)
 			if ok {
-				baselineScore, baselineObs, _ = scorePromptWindowWithObservations(ds, brief.TargetSkill, baselinePrompt, policy.ExecutionPolicy, fbStart, fbEnd)
-				candidateScore, candidateObs, _ = scorePromptWindowWithObservations(ds, brief.TargetSkill, string(candidateBytes), policy.ExecutionPolicy, fbStart, fbEnd)
+				baselineScore, baselineObs, _, _ = scorePromptWindowWithObservations(ds, brief.TargetSkill, baselinePrompt, policy.ExecutionPolicy, fbStart, fbEnd)
+				candidateScore, candidateObs, _, _ = scorePromptWindowWithObservations(ds, brief.TargetSkill, string(candidateBytes), policy.ExecutionPolicy, fbStart, fbEnd)
 				result.BaselineScore = baselineScore
 				result.CandidateScore = candidateScore
 				result.Observations = min(baselineObs, candidateObs)
@@ -156,8 +148,8 @@ func (v *OOSValidator) ValidateWithBrief(candidatePath, baselinePath string, bri
 	result.Improvement = result.CandidateScore - result.BaselineScore
 
 	// Apply OOS acceptance gates.
-	minObs := oosMinimumObservations()
-	minImprovement := oosAcceptanceThreshold()
+	minObs := v.params.Experiment.MaturityLevel1Observations.Value
+	minImprovement := v.params.Experiment.ImprovementThreshold.Value
 
 	if result.Observations < minObs {
 		result.Passed = false
@@ -175,10 +167,8 @@ func (v *OOSValidator) ValidateWithBrief(candidatePath, baselinePath string, bri
 	return result, nil
 }
 
-// ValidateWithConstraints validates constraint-based mutations where both baseline
-// and candidate constraint patches are provided as file paths.
 func (v *OOSValidator) ValidateWithConstraints(candidateConstraintsPath, baselineConstraintsPath string, brief domain.MutationBrief, primaryWindowEnd time.Time) (*domain.OOSResult, error) {
-	oosStart, oosEnd := oosWindow(primaryWindowEnd)
+	oosStart, oosEnd := v.oosWindow(primaryWindowEnd)
 
 	result := &domain.OOSResult{
 		OOSWindowStart: oosStart,
@@ -210,8 +200,8 @@ func (v *OOSValidator) ValidateWithConstraints(candidateConstraintsPath, baselin
 	baselineConstraints := policy.Constraints
 	candidateConstraints := baseline.ApplyConstraintCandidate(policy.Constraints, string(candidateBytes))
 
-	baselineScore, baselineObs, _ := scoreConstraintWindowWithObservations(ds, baselineConstraints, oosStart, oosEnd)
-	candidateScore, candidateObs, _ := scoreConstraintWindowWithObservations(ds, candidateConstraints, oosStart, oosEnd)
+	baselineScore, baselineObs, _, _ := scoreConstraintWindowWithObservations(ds, baselineConstraints, oosStart, oosEnd)
+	candidateScore, candidateObs, _, _ := scoreConstraintWindowWithObservations(ds, candidateConstraints, oosStart, oosEnd)
 
 	result.BaselineScore = baselineScore
 	result.CandidateScore = candidateScore
@@ -221,8 +211,8 @@ func (v *OOSValidator) ValidateWithConstraints(candidateConstraintsPath, baselin
 	if result.UsedFallback {
 		fbStart, fbEnd, ok := fallbackWindow(ds, 1)
 		if ok {
-			baselineScore, baselineObs, _ = scoreConstraintWindowWithObservations(ds, baselineConstraints, fbStart, fbEnd)
-			candidateScore, candidateObs, _ = scoreConstraintWindowWithObservations(ds, candidateConstraints, fbStart, fbEnd)
+			baselineScore, baselineObs, _, _ = scoreConstraintWindowWithObservations(ds, baselineConstraints, fbStart, fbEnd)
+			candidateScore, candidateObs, _, _ = scoreConstraintWindowWithObservations(ds, candidateConstraints, fbStart, fbEnd)
 			result.BaselineScore = baselineScore
 			result.CandidateScore = candidateScore
 			result.Observations = min(baselineObs, candidateObs)
@@ -231,8 +221,8 @@ func (v *OOSValidator) ValidateWithConstraints(candidateConstraintsPath, baselin
 
 	result.Improvement = result.CandidateScore - result.BaselineScore
 
-	minObs := oosMinimumObservations()
-	minImprovement := oosAcceptanceThreshold()
+	minObs := v.params.Experiment.MaturityLevel1Observations.Value
+	minImprovement := v.params.Experiment.ImprovementThreshold.Value
 
 	if result.Observations < minObs {
 		result.Passed = false

@@ -227,15 +227,20 @@ func (p *FinMindProvider) GetQuotes(ctx context.Context, asOf time.Time, symbols
 	date := asOf.Format("2006-01-02")
 	quotes := make([]domain.Quote, 0, len(symbols))
 
+	var lastErr error
 	for _, symbol := range symbols {
 		quote, err := p.client.GetStockPrice(ctx, symbol, date)
 		if err != nil {
 			fmt.Printf("[FinMind] Error fetching %s: %v\n", symbol, err)
+			lastErr = err
 			continue
 		}
 		quotes = append(quotes, quote)
 	}
 
+	if len(quotes) == 0 && lastErr != nil {
+		return nil, fmt.Errorf("finmind: all symbols failed: %w", lastErr)
+	}
 	return quotes, nil
 }
 

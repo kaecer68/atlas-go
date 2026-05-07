@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 )
 
 type AgentHealthStatus string
@@ -36,20 +39,23 @@ type AgentHealthConfig struct {
 }
 
 func DefaultAgentHealthConfig() AgentHealthConfig {
+	cfg := config.DefaultParametersConfig()
 	return AgentHealthConfig{
-		DefaultMuteThreshold:    5,
-		DefaultUnmuteThreshold:  3,
-		DefaultAutoRecoverDays:  7,
-		MinSampleSize:           10,
-		NegativeSharpeThreshold: -0.5,
+		DefaultMuteThreshold:    cfg.Health.MuteThreshold.Value,
+		DefaultUnmuteThreshold:  cfg.Health.UnmuteThreshold.Value,
+		DefaultAutoRecoverDays:  cfg.Health.AutoRecoverDays.Value,
+		MinSampleSize:           cfg.Health.MinSampleSize.Value,
+		NegativeSharpeThreshold: cfg.Health.NegativeSharpeThreshold.Value,
 	}
 }
 
 type AgentHealthManager struct {
-	mu     sync.RWMutex
-	health map[string]*AgentHealth
-	config AgentHealthConfig
-	store  *AgentHealthStore
+	mu            sync.RWMutex
+	health        map[string]*AgentHealth
+	config        AgentHealthConfig
+	runtimeParams *RuntimeParameters
+	store         *AgentHealthStore
+	eventBus      *eventbus.ChannelEventBus
 }
 
 func NewAgentHealthManager() *AgentHealthManager {
@@ -58,8 +64,9 @@ func NewAgentHealthManager() *AgentHealthManager {
 
 func NewAgentHealthManagerWithConfig(config AgentHealthConfig) *AgentHealthManager {
 	return &AgentHealthManager{
-		health: make(map[string]*AgentHealth),
-		config: config,
+		health:        make(map[string]*AgentHealth),
+		config:        config,
+		runtimeParams: DefaultRuntimeParameters(),
 	}
 }
 
@@ -71,6 +78,19 @@ func NewAgentHealthManagerWithStore(config AgentHealthConfig, store *AgentHealth
 			m.health = saved
 		}
 	}
+	return m
+}
+
+// WithParameters returns a new AgentHealthManager with the specified runtime parameters.
+// This is a chainable setter.
+func (m *AgentHealthManager) WithParameters(p *RuntimeParameters) *AgentHealthManager {
+	m.runtimeParams = p
+	return m
+}
+
+// WithEventBus sets the event bus for publishing health change events.
+func (m *AgentHealthManager) WithEventBus(eb *eventbus.ChannelEventBus) *AgentHealthManager {
+	m.eventBus = eb
 	return m
 }
 
@@ -135,14 +155,12 @@ func (m *AgentHealthManager) RecordOutcome(agentID string, isWin bool, sharpe fl
 }
 
 func (m *AgentHealthManager) calculateCompositeScore(sharpe, hitRate float64, consecutiveWins, consecutiveLosses int) float64 {
-	const (
-		sharpeWeight  = 0.40
-		hitRateWeight = 0.30
-		streakWeight  = 0.30
-		maxSharpe     = 5.0
-		minSharpe     = -5.0
-		streakMax     = 10
-	)
+	sharpeWeight := m.runtimeParams.Health.SharpeWeight
+	hitRateWeight := m.runtimeParams.Health.HitRateWeight
+	streakWeight := m.runtimeParams.Health.StreakWeight
+	maxSharpe := m.runtimeParams.Health.MaxSharpe
+	minSharpe := m.runtimeParams.Health.MinSharpe
+	streakMax := m.runtimeParams.Health.StreakMax
 
 	sharpeNorm := (sharpe - minSharpe) / (maxSharpe - minSharpe)
 	if sharpeNorm < 0 {
@@ -171,36 +189,60 @@ func (m *AgentHealthManager) calculateCompositeScore(sharpe, hitRate float64, co
 }
 
 func (m *AgentHealthManager) evaluateInterventions(h *AgentHealth) {
+	muteThreshold := m.runtimeParams.Health.MuteThreshold
+	if muteThreshold == 0 {
+		muteThreshold = m.config.DefaultMuteThreshold
+	}
+	unmuteThreshold := m.runtimeParams.Health.UnmuteThreshold
+	if unmuteThreshold == 0 {
+		unmuteThreshold = m.config.DefaultUnmuteThreshold
+	}
+	autoRecoverDays := m.runtimeParams.Health.AutoRecoverDays
+	if autoRecoverDays == 0 {
+		autoRecoverDays = m.config.DefaultAutoRecoverDays
+	}
+	negativeSharpeThreshold := m.runtimeParams.Health.NegativeSharpeThreshold
+
+	oldStatus := h.Status
 	switch h.Status {
 	case HealthStatusHealthy, HealthStatusDegraded:
-		if h.ConsecutiveLosses >= m.config.DefaultMuteThreshold {
+		if h.ConsecutiveLosses >= muteThreshold {
 			h.Status = HealthStatusMuted
 			now := time.Now()
 			h.MutedAt = &now
 			h.UnmutedAt = nil
+			m.publishHealthChange(h.AgentID, oldStatus, h.Status, "consecutive_losses")
 			return
 		}
-		if h.AnnualizedSharpe < m.config.NegativeSharpeThreshold {
+		if negativeSharpeThreshold != 0 && h.AnnualizedSharpe < negativeSharpeThreshold {
 			h.Status = HealthStatusMuted
 			now := time.Now()
 			h.MutedAt = &now
 			h.UnmutedAt = nil
+			m.publishHealthChange(h.AgentID, oldStatus, h.Status, "negative_sharpe")
 			return
 		}
 
 	case HealthStatusMuted:
-		if h.ConsecutiveWins >= m.config.DefaultUnmuteThreshold {
+		if h.ConsecutiveWins >= unmuteThreshold {
 			h.Status = HealthStatusRecovering
 			h.UnmutedAt = nil
+			m.publishHealthChange(h.AgentID, oldStatus, h.Status, "consecutive_wins")
 			return
 		}
 		if h.MutedAt != nil {
-			recoverDays := m.config.DefaultAutoRecoverDays
-			if time.Since(*h.MutedAt) >= time.Duration(recoverDays)*time.Hour*24 {
+			if time.Since(*h.MutedAt) >= time.Duration(autoRecoverDays)*time.Hour*24 {
 				h.Status = HealthStatusRecovering
 				h.UnmutedAt = nil
+				m.publishHealthChange(h.AgentID, oldStatus, h.Status, "auto_recover")
 			}
 		}
+	}
+}
+
+func (m *AgentHealthManager) publishHealthChange(agentID string, oldStatus, newStatus AgentHealthStatus, reason string) {
+	if m.eventBus != nil {
+		go m.eventBus.PublishAgentHealthChange(agentID, string(oldStatus), string(newStatus), reason)
 	}
 }
 

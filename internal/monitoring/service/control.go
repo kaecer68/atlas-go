@@ -13,9 +13,10 @@ import (
 )
 
 type ControlService struct {
-	WorkDir       string
-	LedgerDir     string
-	HealthManager *portfolio.AgentHealthManager
+	WorkDir          string
+	LedgerDir        string
+	HealthManager    *portfolio.AgentHealthManager
+	registryProvider RegistryProviderFunc
 }
 
 func NewControlService(workDir, ledgerDir string, healthManager *portfolio.AgentHealthManager) *ControlService {
@@ -24,6 +25,19 @@ func NewControlService(workDir, ledgerDir string, healthManager *portfolio.Agent
 		LedgerDir:     ledgerDir,
 		HealthManager: healthManager,
 	}
+}
+
+func (s *ControlService) WithRegistryProvider(fn RegistryProviderFunc) *ControlService {
+	s.registryProvider = fn
+	return s
+}
+
+func (s *ControlService) loadRegistry() (domain.AgentRegistry, error) {
+	if s.registryProvider != nil {
+		return s.registryProvider()
+	}
+	registryPath := filepath.Join(s.WorkDir, "configs/agents.json")
+	return orchestrator.LoadRegistry(registryPath)
 }
 
 func (s *ControlService) RecordIntervention(intervention domain.HumanIntervention) error {
@@ -75,8 +89,7 @@ func (s *ControlService) GetAgentHealth() ([]*portfolio.AgentHealth, int, error)
 		return []*portfolio.AgentHealth{}, 0, nil
 	}
 
-	registryPath := filepath.Join(s.WorkDir, "configs/agents.json")
-	registry, err := orchestrator.LoadRegistry(registryPath)
+	registry, err := s.loadRegistry()
 	if err != nil {
 		registry = orchestrator.SeedRegistry()
 	}

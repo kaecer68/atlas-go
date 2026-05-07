@@ -103,14 +103,16 @@ func TestOOSValidator_ValidateWithConstraints(t *testing.T) {
 }
 
 func TestOOSAcceptanceThreshold(t *testing.T) {
-	threshold := oosAcceptanceThreshold()
+	v := NewOOSValidator(nil, "")
+	threshold := v.params.Experiment.ImprovementThreshold.Value
 	if threshold <= 0 {
 		t.Errorf("expected positive threshold, got %f", threshold)
 	}
 }
 
 func TestOOSMinimumObservations(t *testing.T) {
-	minObs := oosMinimumObservations()
+	v := NewOOSValidator(nil, "")
+	minObs := v.params.Experiment.MaturityLevel1Observations.Value
 	if minObs <= 0 {
 		t.Errorf("expected positive minimum observations, got %d", minObs)
 	}

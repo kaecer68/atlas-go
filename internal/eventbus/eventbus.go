@@ -43,9 +43,24 @@ const (
 	// 控制层事件
 	EventGuardOutcome EventType = "guard.outcome"
 
+	// 演化权重事件
+	EventDarwinianClamping EventType = "darwinian.clamping"
+
+	// Agent 健康状态事件
+	EventAgentHealthChange EventType = "agent.health.change"
+
+	// Conviction 夹制事件
+	EventConvictionClamping EventType = "darwinian.conviction_clamping"
+
 	// 系统事件
 	EventSystemStart EventType = "system.start"
 	EventSystemError EventType = "system.error"
+
+	// 实验事件
+	EventExperimentInsufficientData EventType = "experiment.insufficient_data"
+
+	// 订单错误事件
+	EventOrderError EventType = "order.error"
 )
 
 // MarketEventPayload 市场事件载荷
@@ -82,6 +97,39 @@ type GuardOutcomeEventPayload struct {
 	Outcomes  []domain.GuardOutcome `json:"outcomes"`
 }
 
+// DarwinianClampingEventPayload 演化权重夹制事件载荷
+type DarwinianClampingEventPayload struct {
+	ClampingEvents []ClampingEventPayload `json:"clamping_events"`
+}
+
+// AgentHealthChangeEventPayload Agent 健康状态变更事件载荷
+type AgentHealthChangeEventPayload struct {
+	AgentID   string    `json:"agent_id"`
+	OldStatus string    `json:"old_status"`
+	NewStatus string    `json:"new_status"`
+	Reason    string    `json:"reason"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+type ConvictionClampingEventPayload struct {
+	AgentID         string    `json:"agent_id"`
+	Symbol          string    `json:"symbol"`
+	RawConviction   int       `json:"raw_conviction"`
+	FinalConviction int       `json:"final_conviction"`
+	Weight          float64   `json:"weight"`
+	Boundary        string    `json:"boundary"`
+	Timestamp       time.Time `json:"timestamp"`
+}
+
+// ClampingEventPayload 单个夹制事件载荷
+type ClampingEventPayload struct {
+	AgentID     string    `json:"agent_id"`
+	RawWeight   float64   `json:"raw_weight"`
+	FinalWeight float64   `json:"final_weight"`
+	Boundary    string    `json:"boundary"`
+	Timestamp   time.Time `json:"timestamp"`
+}
+
 // OrderEventPayload 订单事件载荷
 type OrderEventPayload struct {
 	OrderID   string       `json:"order_id"`
@@ -97,6 +145,30 @@ type RiskEventPayload struct {
 	Position     domain.Position `json:"position"`
 	TriggerType  string          `json:"trigger_type"` // "stop_loss", "take_profit", "max_loss"
 	TriggerPrice float64         `json:"trigger_price"`
+}
+
+// ExperimentInsufficientDataEventPayload 实验数据不足事件载荷
+type ExperimentInsufficientDataEventPayload struct {
+	ExperimentID  string `json:"experiment_id"`
+	BaselineObs   int    `json:"baseline_observations"`
+	CandidateObs  int    `json:"candidate_observations"`
+	RequiredObs   int    `json:"required_observations"`
+	MaturityLevel string `json:"maturity_level"`
+	UsedFallback  bool   `json:"used_fallback_window"`
+}
+
+// OrderErrorEventPayload 订单错误事件载荷
+type OrderErrorEventPayload struct {
+	OrderID      string    `json:"order_id"`
+	Symbol       string    `json:"symbol"`
+	Side         string    `json:"side"`
+	Price        float64   `json:"price"`
+	Quantity     int       `json:"quantity"`
+	ErrorCode    string    `json:"error_code"`
+	ErrorMessage string    `json:"error_message"`
+	Attempts     int       `json:"attempts"`
+	LastStatus   string    `json:"last_status"`
+	Timestamp    time.Time `json:"timestamp"`
 }
 
 // BusEvent 总线事件
@@ -239,6 +311,44 @@ func (b *ChannelEventBus) PublishGuardOutcomes(sessionID string, outcomes []doma
 	})
 }
 
+// PublishDarwinianClamping 发布演化权重夹制事件
+func (b *ChannelEventBus) PublishDarwinianClamping(events []ClampingEventPayload) error {
+	return b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventDarwinianClamping,
+		Timestamp: time.Now(),
+		Payload: DarwinianClampingEventPayload{
+			ClampingEvents: events,
+		},
+	})
+}
+
+// PublishAgentHealthChange 发布 Agent 健康状态变更事件
+func (b *ChannelEventBus) PublishAgentHealthChange(agentID, oldStatus, newStatus, reason string) error {
+	return b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventAgentHealthChange,
+		Timestamp: time.Now(),
+		Payload: AgentHealthChangeEventPayload{
+			AgentID:   agentID,
+			OldStatus: oldStatus,
+			NewStatus: newStatus,
+			Reason:    reason,
+			Timestamp: time.Now(),
+		},
+	})
+}
+
+// PublishConvictionClamping 发布 Conviction 夹制事件
+func (b *ChannelEventBus) PublishConvictionClamping(events []ConvictionClampingEventPayload) error {
+	return b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventConvictionClamping,
+		Timestamp: time.Now(),
+		Payload:   events,
+	})
+}
+
 // PublishOrderEvent 发布订单事件
 func (b *ChannelEventBus) PublishOrderEvent(order domain.Order, orderID, status string, fillPrice float64) error {
 	payload := OrderEventPayload{
@@ -277,6 +387,44 @@ func (b *ChannelEventBus) PublishRiskEvent(eventType EventType, symbol string, p
 			Position:     position,
 			TriggerType:  triggerType,
 			TriggerPrice: triggerPrice,
+		},
+	})
+}
+
+// PublishExperimentInsufficientData 发布实验数据不足事件
+func (b *ChannelEventBus) PublishExperimentInsufficientData(experimentID string, baselineObs, candidateObs, requiredObs int, maturityLevel string, usedFallback bool) error {
+	return b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventExperimentInsufficientData,
+		Timestamp: time.Now(),
+		Payload: ExperimentInsufficientDataEventPayload{
+			ExperimentID:  experimentID,
+			BaselineObs:   baselineObs,
+			CandidateObs:  candidateObs,
+			RequiredObs:   requiredObs,
+			MaturityLevel: maturityLevel,
+			UsedFallback:  usedFallback,
+		},
+	})
+}
+
+// PublishOrderError 发布订单错误事件
+func (b *ChannelEventBus) PublishOrderError(orderID, symbol, side string, price float64, quantity int, errorCode, errorMessage string, attempts int, lastStatus string) error {
+	return b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventOrderError,
+		Timestamp: time.Now(),
+		Payload: OrderErrorEventPayload{
+			OrderID:      orderID,
+			Symbol:       symbol,
+			Side:         side,
+			Price:        price,
+			Quantity:     quantity,
+			ErrorCode:    errorCode,
+			ErrorMessage: errorMessage,
+			Attempts:     attempts,
+			LastStatus:   lastStatus,
+			Timestamp:    time.Now(),
 		},
 	})
 }

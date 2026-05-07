@@ -106,18 +106,21 @@ func TestOrderManagerPublishRejectedWithReason(t *testing.T) {
 
 	select {
 	case got := <-eventCh:
-		if got.Type != EventOrderRejected {
-			t.Fatalf("unexpected event type: got=%s want=%s", got.Type, EventOrderRejected)
+		if got.Type != EventOrderError {
+			t.Fatalf("unexpected event type: got=%s want=%s", got.Type, EventOrderError)
 		}
-		payload, ok := got.Payload.(OrderEventPayload)
+		payload, ok := got.Payload.(OrderErrorEventPayload)
 		if !ok {
 			t.Fatalf("unexpected payload type: %T", got.Payload)
 		}
-		if payload.Order.Reason != "risk limit exceeded" {
-			t.Fatalf("unexpected reject reason: %q", payload.Order.Reason)
+		if payload.ErrorCode != "rejected" {
+			t.Fatalf("unexpected error code: %q", payload.ErrorCode)
+		}
+		if payload.ErrorMessage != "risk limit exceeded" {
+			t.Fatalf("unexpected error message: %q", payload.ErrorMessage)
 		}
 	case <-time.After(1 * time.Second):
-		t.Fatalf("expected rejected event but none was received")
+		t.Fatalf("expected order error event but none was received")
 	}
 }
 
@@ -152,11 +155,18 @@ func TestOrderManagerPublishSystemErrorAfterRetryExhausted(t *testing.T) {
 
 	select {
 	case got := <-eventCh:
-		if got.Type != EventSystemError {
-			t.Fatalf("unexpected event type: got=%s want=%s", got.Type, EventSystemError)
+		if got.Type != EventOrderError {
+			t.Fatalf("unexpected event type: got=%s want=%s", got.Type, EventOrderError)
+		}
+		payload, ok := got.Payload.(OrderErrorEventPayload)
+		if !ok {
+			t.Fatalf("unexpected payload type: %T", got.Payload)
+		}
+		if payload.ErrorCode != "retry_exhausted" {
+			t.Fatalf("unexpected error code: %q", payload.ErrorCode)
 		}
 	case <-time.After(1 * time.Second):
-		t.Fatalf("expected system error event but none was received")
+		t.Fatalf("expected order error event but none was received")
 	}
 }
 
@@ -191,17 +201,17 @@ func TestOrderManagerPublishesSignerErrorClassification(t *testing.T) {
 
 	select {
 	case got := <-eventCh:
-		if got.Type != EventSystemError {
-			t.Fatalf("unexpected event type: got=%s want=%s", got.Type, EventSystemError)
+		if got.Type != EventOrderError {
+			t.Fatalf("unexpected event type: got=%s want=%s", got.Type, EventOrderError)
 		}
-		payload, ok := got.Payload.(map[string]string)
+		payload, ok := got.Payload.(OrderErrorEventPayload)
 		if !ok {
 			t.Fatalf("unexpected payload type: %T", got.Payload)
 		}
-		if !strings.Contains(payload["error"], "auth.signature_invalid") {
-			t.Fatalf("expected signer classification in error payload: %v", payload)
+		if !strings.Contains(payload.ErrorMessage, "auth.signature_invalid") {
+			t.Fatalf("expected signer classification in error message: %v", payload.ErrorMessage)
 		}
 	case <-time.After(1 * time.Second):
-		t.Fatalf("expected system error event but none was received")
+		t.Fatalf("expected order error event but none was received")
 	}
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/csv"
 	"flag"
 	"fmt"
 	"io"
@@ -10,18 +9,13 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
+	"github.com/kaecer68/atlas-go/internal/bootstrap"
 	"github.com/kaecer68/atlas-go/internal/config"
-	"github.com/kaecer68/atlas-go/internal/db"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/live"
@@ -30,6 +24,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
 
@@ -44,12 +39,10 @@ type routeRegistrar interface {
 }
 
 type appDeps struct {
-	loadConfig                  func() config.Config
-	newDashboardAPI             func(string, string, *monitoring.MetricsCollector) routeRegistrar
-	listenAndServe              func(*http.Server) error
-	shutdown                    chan struct{}
-	runAutoCapitalFlowOnStartup func(string)
-	runAutoBackfillOnStartup    func(string)
+	loadConfig      func() config.Config
+	newDashboardAPI func(string, string, *monitoring.MetricsCollector) routeRegistrar
+	listenAndServe  func(*http.Server) error
+	shutdown        chan struct{}
 }
 
 func defaultAppDeps() appDeps {
@@ -58,10 +51,8 @@ func defaultAppDeps() appDeps {
 		newDashboardAPI: func(workDir, ledgerDir string, collector *monitoring.MetricsCollector) routeRegistrar {
 			return monitoring.NewDashboardAPI(workDir, ledgerDir, collector)
 		},
-		listenAndServe:              func(srv *http.Server) error { return srv.ListenAndServe() },
-		shutdown:                    make(chan struct{}),
-		runAutoCapitalFlowOnStartup: runAutoCapitalFlowFetchOnStartup,
-		runAutoBackfillOnStartup:    runAutoBackfillOnStartup,
+		listenAndServe: func(srv *http.Server) error { return srv.ListenAndServe() },
+		shutdown:       make(chan struct{}),
 	}
 }
 
@@ -101,85 +92,82 @@ func run(args []string, deps appDeps) error {
 
 	cfg := deps.loadConfig()
 	logging.Init(*logFormat, slog.LevelInfo)
-	if *brokerMode != "" {
-		cfg.BrokerMode = *brokerMode
-	}
-	if *brokerAdapter != "" {
-		cfg.BrokerAdapter = *brokerAdapter
-	}
-	if *brokerSigner != "" {
-		cfg.BrokerSigner = *brokerSigner
-	}
-	if *brokerKeyID != "" {
-		cfg.BrokerKeyID = *brokerKeyID
-	}
-	if *brokerRetryStatusCodes != "" {
-		cfg.BrokerHTTPRetryStatusCodes = parseStatusCodeCSV(*brokerRetryStatusCodes, cfg.BrokerHTTPRetryStatusCodes)
-	}
-	if *brokerMaxRetries >= 0 {
-		cfg.BrokerMaxRetries = *brokerMaxRetries
-	}
-	if *brokerMaxClockSkew >= 0 {
-		cfg.BrokerMaxClockSkewS = *brokerMaxClockSkew
-	}
-	if *brokerNonceTTL >= 0 {
-		cfg.BrokerNonceTTLS = *brokerNonceTTL
-	}
-	if *brokerNonceStore != "" {
-		cfg.BrokerNonceStore = *brokerNonceStore
-	}
-	if *brokerNonceStorePath != "" {
-		cfg.BrokerNonceStorePath = *brokerNonceStorePath
-	}
-	if *brokerNonceRedisURL != "" {
-		cfg.BrokerNonceRedisURL = *brokerNonceRedisURL
-	}
-	if *brokerNonceRedisKeyPrefix != "" {
-		cfg.BrokerNonceRedisKeyPrefix = *brokerNonceRedisKeyPrefix
-	}
-	if err := validateBrokerRuntimeConfig(&cfg, *allowLiveBroker, *allowHTTPBroker, *allowRealSigner); err != nil {
+	if err := bootstrap.ApplyBrokerConfig(&cfg, bootstrap.BrokerOverrides{
+		Mode:                *brokerMode,
+		Adapter:             *brokerAdapter,
+		Signer:              *brokerSigner,
+		KeyID:               *brokerKeyID,
+		RetryStatusCodes:    *brokerRetryStatusCodes,
+		MaxRetries:          *brokerMaxRetries,
+		MaxClockSkewSec:     *brokerMaxClockSkew,
+		NonceTTLSec:         *brokerNonceTTL,
+		NonceStore:          *brokerNonceStore,
+		NonceStorePath:      *brokerNonceStorePath,
+		NonceRedisURL:       *brokerNonceRedisURL,
+		NonceRedisKeyPrefix: *brokerNonceRedisKeyPrefix,
+		AllowLiveBroker:     *allowLiveBroker,
+		AllowHTTPBroker:     *allowHTTPBroker,
+		AllowRealSigner:     *allowRealSigner,
+	}); err != nil {
 		return err
 	}
 
-	collector := monitoring.NewMetricsCollector()
+	// Initialize runtime using bootstrap package
+	rt, err := bootstrap.InitRuntime(context.Background(), bootstrap.Config{
+		WorkDir:   cfg.WorkDir,
+		LedgerDir: cfg.LedgerDir,
+	})
+	if err != nil {
+		return fmt.Errorf("initialize runtime: %w", err)
+	}
+	defer rt.Close()
+
+	collector := rt.MetricsCollector
+	pool := rt.Pool
+	alertStore := rt.Stores.AlertStore
+	repo := rt.Repository
+	taskManager := rt.TaskManager
 
 	if *apiMode {
-		var pool *pgxpool.Pool
-		if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
-			migrationsPath := filepath.Join(cfg.WorkDir, "sql/migrations")
-			if _, err := os.Stat(migrationsPath); err == nil {
-				var dbErr error
-				pool, dbErr = db.Init(context.Background(), dsn, migrationsPath)
-				if dbErr != nil {
-					log.Printf("[DB] failed to initialize database: %v", dbErr)
-				} else {
-					log.Printf("[DB] connected and migrations applied")
-					defer pool.Close()
-				}
-			}
-		}
-
 		mux := http.NewServeMux()
 		healthStore, err := portfolio.NewAgentHealthStore(filepath.Join(cfg.WorkDir, "data/state"))
 		if err != nil {
 			log.Printf("[AgentHealth] failed to create health store: %v", err)
 		}
+		paramsCfg, err := config.LoadParametersConfig(cfg.ParametersConfigPath)
+		if err != nil {
+			log.Printf("[Parameters] failed to load parameters config: %v", err)
+		}
+		runtimeParams := portfolio.ToRuntimeParameters(paramsCfg)
 		dashboard := deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 			d.SetPool(pool)
-			d.SetHealthManager(portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore))
+			d.SetHealthManager(portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore).WithParameters(runtimeParams))
 			janusEngine := janus.NewEngine()
+			janusEngine.EnsureAllRegimes()
 			d.SetJanusEngine(janusEngine)
 			log.Printf("[JANUS] engine injected into dashboard API")
 		}
 		dashboard.RegisterRoutes(mux)
 
-		alertStore, err := monitoring.NewAlertStore(filepath.Join(cfg.WorkDir, "data/state/alerts"))
-		if err != nil {
-			log.Printf("[Alerts] failed to create alert store: %v", err)
-		} else {
+		if alertStore != nil {
 			alertAPI := monitoring.NewAlertAPI(alertStore)
 			alertAPI.RegisterRoutes(mux)
+		}
+
+		if repo != nil {
+			if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+				d.SetRepository(repo)
+				log.Printf("[Repository] injected into dashboard API")
+			}
+		}
+
+		if taskManager != nil {
+			if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+				d.SetTaskManager(taskManager)
+				d.RegisterTaskExecRoutes(mux)
+				log.Printf("[TaskExec] injected into dashboard API")
+			}
 		}
 
 		mux.HandleFunc("/admin/reload-config", func(w http.ResponseWriter, r *http.Request) {
@@ -203,6 +191,34 @@ func run(args []string, deps appDeps) error {
 		sysMetrics := monitoring.NewSystemMetrics(collector, monitor)
 		sysCtx, sysCancel := context.WithCancel(context.Background())
 		go sysMetrics.Start(sysCtx)
+
+		// Periodic metrics snapshot save
+		if repo != nil {
+			go func() {
+				ticker := time.NewTicker(60 * time.Second)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-sysCtx.Done():
+						return
+					case <-ticker.C:
+						snap := collector.GetMetricsSnapshot()
+						repoSnap := repository.MetricsSnapshot{
+							ScreeningTotal:     snap.ScreeningTotal,
+							ScreeningPassed:    snap.ScreeningPassed,
+							ScreeningRate:      snap.ScreeningRate,
+							AlertsTriggered:    snap.AlertsTriggered,
+							AlertsAcknowledged: snap.AlertsAcknowledged,
+							AlertsByType:       snap.AlertsByType,
+							Timestamp:          snap.Timestamp,
+						}
+						if err := repo.SaveSnapshot(sysCtx, &repoSnap); err != nil {
+							log.Printf("[Metrics] snapshot save failed: %v", err)
+						}
+					}
+				}
+			}()
+		}
 		dashboard.RegisterNarrativeRoutes(mux)
 		dashboard.RegisterControlRoutes(mux)
 		dashboard.RegisterMacroRoutes(mux)
@@ -218,9 +234,9 @@ func run(args []string, deps appDeps) error {
 		}
 		mux.Handle("/", http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static"))))
 		log.Printf("dashboard api listening on %s", *apiAddr)
-		// Trigger automatic backfill if replay data has gaps.
-		deps.runAutoBackfillOnStartup(cfg.WorkDir)
-		deps.runAutoCapitalFlowOnStartup(cfg.WorkDir)
+		bootstrap.StartChannelHealthSyncLoop(sysCtx, cfg.WorkDir, pool)
+		bootstrap.StartAutoBackfill(sysCtx, cfg.WorkDir)
+		bootstrap.StartAutoCapitalFlowFetch(sysCtx, cfg.WorkDir)
 
 		srv := &http.Server{Addr: *apiAddr, Handler: mux}
 		srvErr := make(chan error, 1)
@@ -254,161 +270,19 @@ func run(args []string, deps appDeps) error {
 	}
 
 	if *liveMode {
-		return runLiveTrading(cfg, deps, collector)
+		return runLiveTrading(cfg, deps, collector, repo)
 	}
-	return runSimulation(cfg, collector)
+	return runSimulation(cfg, collector, repo)
 }
 
-func validateBrokerRuntimeConfig(cfg *config.Config, allowLiveBroker bool, allowHTTPBroker bool, allowRealSigner bool) error {
-	normalizeBrokerStrings(cfg)
-	if err := validateBrokerEnums(cfg); err != nil {
-		return err
-	}
-	if err := validateBrokerLiveMode(cfg, allowLiveBroker, allowHTTPBroker, allowRealSigner); err != nil {
-		return err
-	}
-	if err := validateBrokerRetryConfig(cfg); err != nil {
-		return err
-	}
-	if err := validateBrokerNonceConfig(cfg); err != nil {
-		return err
-	}
-	return nil
-}
-
-func normalizeBrokerStrings(cfg *config.Config) {
-	cfg.BrokerMode = strings.TrimSpace(strings.ToLower(cfg.BrokerMode))
-	if cfg.BrokerMode == "" {
-		cfg.BrokerMode = "dry-run"
-	}
-	cfg.BrokerAdapter = strings.TrimSpace(strings.ToLower(cfg.BrokerAdapter))
-	if cfg.BrokerAdapter == "" {
-		cfg.BrokerAdapter = "guarded"
-	}
-	cfg.BrokerSigner = strings.TrimSpace(strings.ToLower(cfg.BrokerSigner))
-	if cfg.BrokerSigner == "" {
-		cfg.BrokerSigner = "placeholder"
-	}
-	cfg.BrokerKeyID = strings.TrimSpace(cfg.BrokerKeyID)
-}
-
-func validateBrokerEnums(cfg *config.Config) error {
-	if cfg.BrokerAdapter != "guarded" && cfg.BrokerAdapter != "mock" && cfg.BrokerAdapter != "http" {
-		return fmt.Errorf("unsupported broker adapter %q (allowed: guarded, mock, http)", cfg.BrokerAdapter)
-	}
-	if cfg.BrokerSigner != "placeholder" && cfg.BrokerSigner != "hmac-sha256" {
-		return fmt.Errorf("unsupported broker signer %q (allowed: placeholder, hmac-sha256)", cfg.BrokerSigner)
-	}
-	return nil
-}
-
-func validateBrokerLiveMode(cfg *config.Config, allowLiveBroker bool, allowHTTPBroker bool, allowRealSigner bool) error {
-	switch cfg.BrokerMode {
-	case "dry-run", "paper":
-		return nil
-	case "live":
-		if !allowLiveBroker {
-			return fmt.Errorf("broker mode %q is disabled by default; pass -allow-live-broker to enable", cfg.BrokerMode)
-		}
-		if cfg.BrokerAdapter == "http" && !allowHTTPBroker {
-			return fmt.Errorf("broker adapter %q is disabled by default in live mode; pass -allow-http-broker to enable", cfg.BrokerAdapter)
-		}
-		if cfg.BrokerAdapter == "http" && cfg.BrokerSigner != "placeholder" && !allowRealSigner {
-			return fmt.Errorf("broker signer %q is disabled by default for http adapter; pass -allow-real-signer to enable", cfg.BrokerSigner)
-		}
-		if cfg.BrokerAdapter == "http" && cfg.BrokerSigner != "placeholder" && cfg.BrokerKeyID == "" {
-			return fmt.Errorf("broker key id is required when using signer %q with http adapter", cfg.BrokerSigner)
-		}
-		return nil
-	default:
-		return fmt.Errorf("unsupported broker mode %q (allowed: dry-run, paper, live)", cfg.BrokerMode)
-	}
-}
-
-func validateBrokerRetryConfig(cfg *config.Config) error {
-	if cfg.BrokerMaxRetries < 0 {
-		return fmt.Errorf("broker max retries must be >= 0, got %d", cfg.BrokerMaxRetries)
-	}
-	if len(cfg.BrokerHTTPRetryStatusCodes) == 0 {
-		cfg.BrokerHTTPRetryStatusCodes = []int{408, 425, 429, 500, 502, 503, 504}
-	}
-	for _, code := range cfg.BrokerHTTPRetryStatusCodes {
-		if code < 400 || code > 599 {
-			return fmt.Errorf("broker retry status code must be 4xx/5xx, got %d", code)
-		}
-	}
-	if cfg.BrokerMaxClockSkewS < 0 {
-		return fmt.Errorf("broker max clock skew must be >= 0, got %d", cfg.BrokerMaxClockSkewS)
-	}
-	return nil
-}
-
-func validateBrokerNonceConfig(cfg *config.Config) error {
-	if cfg.BrokerNonceTTLS == 0 {
-		cfg.BrokerNonceTTLS = 300
-	}
-	if cfg.BrokerNonceTTLS < 0 {
-		return fmt.Errorf("broker nonce ttl must be >= 0, got %d", cfg.BrokerNonceTTLS)
-	}
-	cfg.BrokerNonceStore = strings.TrimSpace(strings.ToLower(cfg.BrokerNonceStore))
-	if cfg.BrokerNonceStore == "" {
-		cfg.BrokerNonceStore = "memory"
-	}
-	if cfg.BrokerNonceStore != "memory" && cfg.BrokerNonceStore != "file" && cfg.BrokerNonceStore != "redis" {
-		return fmt.Errorf("unsupported broker nonce store %q (allowed: memory, file, redis)", cfg.BrokerNonceStore)
-	}
-	cfg.BrokerNonceStorePath = strings.TrimSpace(cfg.BrokerNonceStorePath)
-	defaultedNonceStorePath := false
-	if cfg.BrokerNonceStore == "file" && cfg.BrokerNonceStorePath == "" {
-		ledgerDir := strings.TrimSpace(cfg.LedgerDir)
-		if ledgerDir == "" {
-			ledgerDir = "data/state"
-		}
-		cfg.BrokerNonceStorePath = filepath.Join(ledgerDir, "broker-nonce-replay.json")
-		defaultedNonceStorePath = true
-	}
-	if cfg.BrokerNonceStore == "file" && !defaultedNonceStorePath && !filepath.IsAbs(cfg.BrokerNonceStorePath) {
-		ledgerDir := strings.TrimSpace(cfg.LedgerDir)
-		if ledgerDir == "" {
-			ledgerDir = "data/state"
-		}
-		cfg.BrokerNonceStorePath = filepath.Join(ledgerDir, cfg.BrokerNonceStorePath)
-	}
-	cfg.BrokerNonceRedisURL = strings.TrimSpace(cfg.BrokerNonceRedisURL)
-	cfg.BrokerNonceRedisKeyPrefix = strings.TrimSpace(cfg.BrokerNonceRedisKeyPrefix)
-	if cfg.BrokerNonceRedisKeyPrefix == "" {
-		cfg.BrokerNonceRedisKeyPrefix = "atlas:nonce:"
-	}
-	if cfg.BrokerNonceStore == "redis" && cfg.BrokerNonceRedisURL == "" {
-		return fmt.Errorf("broker nonce redis url is required when broker nonce store is redis")
-	}
-	return nil
-}
-
-func parseStatusCodeCSV(raw string, fallback []int) []int {
-	parts := strings.Split(raw, ",")
-	parsed := make([]int, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		n, err := strconv.Atoi(part)
-		if err != nil {
-			continue
-		}
-		parsed = append(parsed, n)
-	}
-	if len(parsed) == 0 {
-		return append([]int(nil), fallback...)
-	}
-	return parsed
-}
-
-func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector) error {
+func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
 	system := orchestrator.NewProductionSystem(cfg)
 	if collector != nil {
 		system.WithMetricsCollector(collector)
+	}
+	if repo != nil {
+		system.SetRepository(repo)
+		log.Printf("[Repository] injected into simulation system")
 	}
 
 	capitalCfg := domain.DefaultCapitalPhaseConfig()
@@ -467,10 +341,14 @@ func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector) er
 	return nil
 }
 
-func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector) error {
+func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
 	system := orchestrator.NewProductionSystem(cfg)
 	if collector != nil {
 		system.WithMetricsCollector(collector)
+	}
+	if repo != nil {
+		system.SetRepository(repo)
+		log.Printf("[Repository] injected into live trading system")
 	}
 
 	stateStore := live.NewStateStore("data/state/live")
@@ -496,13 +374,15 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	adapter := orchestrator.NewAdapterProducer(provider, system)
+
 	o := live.NewOrchestrator(
 		ctx,
 		stateStore,
 		eventBus,
 		provider,
 		system.Registry(),
-		system,
+		adapter,
 		liveCfg,
 	)
 
@@ -573,122 +453,4 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	}
 	log.Println("live trading orchestrator stopped")
 	return nil
-}
-
-// runAutoBackfillOnStartup checks for missing trading days in the replay CSV
-// and automatically triggers FinMind backfill in a background goroutine.
-func runAutoBackfillOnStartup(workDir string) {
-	go func() {
-		// Give the server a moment to start before doing I/O.
-		time.Sleep(3 * time.Second)
-
-		csvPath := filepath.Join(workDir, "data/replay/tw_extended_90days.csv")
-		latestDate, err := getLatestReplayDate(csvPath)
-		if err != nil {
-			log.Printf("[AutoBackfill] cannot read replay csv: %v", err)
-			return
-		}
-
-		now := time.Now()
-		if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
-			now = now.In(tz)
-		}
-
-		// Determine backfill end: yesterday before 15:30 TW, else today.
-		end := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-		if now.Hour() < 15 || (now.Hour() == 15 && now.Minute() < 30) {
-			end = end.AddDate(0, 0, -1)
-		}
-
-		start := latestDate.AddDate(0, 0, 1)
-		// Fast-forward through weekends so we don't backfill Saturdays/Sundays.
-		for start.Weekday() == time.Saturday || start.Weekday() == time.Sunday {
-			start = start.AddDate(0, 0, 1)
-		}
-		for end.Weekday() == time.Saturday || end.Weekday() == time.Sunday {
-			end = end.AddDate(0, 0, -1)
-		}
-
-		if start.After(end) {
-			log.Printf("[AutoBackfill] no gap detected (latest=%s, target=%s)", latestDate.Format("2006-01-02"), end.Format("2006-01-02"))
-			return
-		}
-
-		startStr := start.Format("2006-01-02")
-		endStr := end.Format("2006-01-02")
-		log.Printf("[AutoBackfill] detected gap %s ~ %s. Triggering backfill...", startStr, endStr)
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-
-		var cmd *exec.Cmd
-		binaryPath := filepath.Join(workDir, "backfill-replay")
-		if _, err := os.Stat(binaryPath); err == nil {
-			cmd = exec.CommandContext(ctx, binaryPath, "-csv", csvPath, "-start", startStr, "-end", endStr)
-		} else if _, err := exec.LookPath("go"); err == nil {
-			cmd = exec.CommandContext(ctx, "go", "run", "./cmd/backfill-replay", "-csv", csvPath, "-start", startStr, "-end", endStr)
-			cmd.Dir = workDir
-		} else {
-			log.Printf("[AutoBackfill] backfill-replay binary not found and go not in PATH; skipping auto-backfill")
-			return
-		}
-
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			log.Printf("[AutoBackfill] backfill failed: %v\noutput: %s", err, string(out))
-			return
-		}
-		log.Printf("[AutoBackfill] success:\n%s", string(out))
-	}()
-}
-
-func getLatestReplayDate(csvPath string) (time.Time, error) {
-	f, err := os.Open(csvPath)
-	if err != nil {
-		return time.Time{}, err
-	}
-	defer f.Close()
-
-	reader := csv.NewReader(f)
-	var latest time.Time
-	_, _ = reader.Read() // skip header
-	for {
-		row, err := reader.Read()
-		if err != nil {
-			break
-		}
-		if len(row) == 0 {
-			continue
-		}
-		d, err := time.Parse("2006-01-02", strings.TrimSpace(row[0]))
-		if err != nil {
-			continue
-		}
-		if d.After(latest) {
-			latest = d
-		}
-	}
-	if latest.IsZero() {
-		return time.Time{}, fmt.Errorf("no valid dates found")
-	}
-	return latest, nil
-}
-
-// runAutoCapitalFlowFetchOnStartup fetches capital flow data from TWSE in a background
-// goroutine after a short delay to allow the server to fully start.
-func runAutoCapitalFlowFetchOnStartup(workDir string) {
-	go func() {
-		time.Sleep(5 * time.Second)
-
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-
-		capFlowProvider := marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow"))
-		_, err := capFlowProvider.FetchSnapshot(ctx)
-		if err != nil {
-			log.Printf("[AutoCapitalFlow] fetch failed: %v", err)
-			return
-		}
-		log.Printf("[AutoCapitalFlow] fetch succeeded")
-	}()
 }

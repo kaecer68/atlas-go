@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -275,8 +276,10 @@ func TestNewSelector(t *testing.T) {
 	if s.current != nil {
 		t.Error("current should be nil initially")
 	}
-	if s.config.MinSwitchInterval != 5*24*time.Hour {
-		t.Errorf("MinSwitchInterval = %v, want 5*24*time.Hour", s.config.MinSwitchInterval)
+	// Default MinSwitchInterval comes from config (7 days)
+	expectedInterval := time.Duration(config.GetParametersConfig().Strategy.MinSwitchIntervalDays.Value) * 24 * time.Hour
+	if s.config.MinSwitchInterval != expectedInterval {
+		t.Errorf("MinSwitchInterval = %v, want %v", s.config.MinSwitchInterval, expectedInterval)
 	}
 }
 
