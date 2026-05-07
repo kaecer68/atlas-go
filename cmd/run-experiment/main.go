@@ -29,7 +29,8 @@ func run(args []string) error {
 	if _, err := baseline.Load(cfg.BaselinePolicyPath); err != nil {
 		return fmt.Errorf("load baseline policy: %w", err)
 	}
-	executor := experiment.NewExecutor(ledger.NewStore(cfg.LedgerDir), cfg.BaselinePolicyPath)
+	store := ledger.NewStore(cfg.LedgerDir)
+	executor := experiment.NewExecutor(store.(ledger.FullStore), cfg.BaselinePolicyPath)
 	result, err := executor.Run(*brief, cfg.ReplayDataPath)
 	if err != nil {
 		return fmt.Errorf("run experiment: %w", err)

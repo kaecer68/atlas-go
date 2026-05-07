@@ -25,7 +25,7 @@ type Phase3Controller struct {
 	swarm           *swarm.MiroFishSwarm
 	spawningManager *spawning.SpawningManager
 	reflexEngine    *reflexivity.ReflexivityEngine
-	ledger          *ledger.Store
+	ledger          ledger.OutcomeStore
 	advRunner       *AdversarialScenarioRunner
 	lastAdvResult   *adversarial.StressTestResult
 
@@ -43,7 +43,7 @@ func NewPhase3Controller(
 	sw *swarm.MiroFishSwarm,
 	spawningMgr *spawning.SpawningManager,
 	reflexEng *reflexivity.ReflexivityEngine,
-	ledgerStore *ledger.Store,
+	ledgerStore ledger.OutcomeStore,
 ) *Phase3Controller {
 	return &Phase3Controller{
 		registry:         registry,

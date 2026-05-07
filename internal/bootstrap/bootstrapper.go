@@ -54,7 +54,7 @@ func InitDatabase(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
 type Stores struct {
 	AlertStore   *monitoring.AlertStore
 	MetricsStore *monitoring.MetricsStore
-	OutcomeStore *ledger.Store
+	OutcomeStore ledger.OutcomeStore
 }
 
 func InitStores(cfg Config) (Stores, error) {

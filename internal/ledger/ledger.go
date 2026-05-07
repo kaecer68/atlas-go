@@ -17,7 +17,7 @@ type Store struct {
 	baseDir string
 }
 
-func NewStore(baseDir string) *Store {
+func NewStore(baseDir string) OutcomeStore {
 	return &Store{baseDir: baseDir}
 }
 

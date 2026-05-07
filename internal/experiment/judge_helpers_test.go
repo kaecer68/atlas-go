@@ -39,7 +39,7 @@ func TestCalculateVolatility_Helpers(t *testing.T) {
 
 func TestJudge_WithMethods(t *testing.T) {
 	dir := t.TempDir()
-	store := ledger.NewStore(dir)
+	store := ledger.NewStore(dir).(ledger.ExperimentStore)
 	j := NewJudge(store, dir, dir)
 	if r := j.WithEventBus(nil); r == nil {
 		t.Fatal("WithEventBus returned nil")

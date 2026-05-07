@@ -158,12 +158,25 @@ function renderCompact() {
     '</div>';
 
   el.innerHTML = '<div class="panel wide" style="margin-bottom:12px;padding:10px 14px">' +
+    '<div style="font-size:13px;font-weight:700;margin-bottom:8px">Agent 回報分佈</div>' +
+    '<div id="inlineEquityCurve"></div>' +
+    '</div>' +
+    '<div class="panel wide" style="margin-bottom:12px;padding:10px 14px">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
       '<div style="font-size:13px;font-weight:700">Regime 演化</div>' +
       '<div style="font-size:11px;color:var(--muted)">' + sessions.length + ' 個 session</div>' +
     '</div>' +
     regimeHtml +
     '</div>' +
+
+  // 繪製內嵌權益曲線
+  var sortedForCurve = sorted.slice().sort(function(a, b) {
+    return (a.last_updated_at || '').localeCompare(b.last_updated_at || '');
+  });
+  var curvePoints = sortedForCurve.map(function(a, i) {
+    return { value: a.average_return || 0, label: (i + 1).toString() };
+  });
+  setTimeout(function() { renderInlineEquityCurve('inlineEquityCurve', curvePoints); }, 100);
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
       '<div class="panel" style="padding:10px 14px">' +
         '<div style="font-size:13px;font-weight:700;margin-bottom:8px">Agent 表現 Top 5</div>' +

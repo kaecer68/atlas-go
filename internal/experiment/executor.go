@@ -16,11 +16,11 @@ import (
 )
 
 type Executor struct {
-	store        *ledger.Store
+	store        ledger.FullStore
 	baselinePath string
 }
 
-func NewExecutor(store *ledger.Store, baselinePath string) *Executor {
+func NewExecutor(store ledger.FullStore, baselinePath string) *Executor {
 	return &Executor{store: store, baselinePath: baselinePath}
 }
 

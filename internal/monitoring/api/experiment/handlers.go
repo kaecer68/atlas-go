@@ -212,7 +212,7 @@ func (h *Handlers) HandleJudge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	replayPath := filepath.Join(h.WorkDir, "data/replay/tw_extended_90days.csv")
-	judge := experiment.NewJudge(ledger.NewStore(h.LedgerDir), replayPath, h.BaselinePath)
+	judge := experiment.NewJudge(ledger.NewStore(h.LedgerDir).(ledger.ExperimentStore), replayPath, h.BaselinePath)
 	result, err := judge.Evaluate(resultPath)
 	if err != nil {
 		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("judge failed: %v", err))

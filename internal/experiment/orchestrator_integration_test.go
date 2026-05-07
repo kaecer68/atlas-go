@@ -170,7 +170,7 @@ func TestScreenedRecommendationsFlowThroughExperimentAndJudge(t *testing.T) {
 		t.Skipf("sample replay data missing, skipping judge integration: %v", err)
 	}
 
-	exec := experiment.NewExecutor(store, baselinePath)
+	exec := experiment.NewExecutor(store.(ledger.FullStore), baselinePath)
 	execResult, err := exec.Run(briefPath, replayPath)
 	if err != nil {
 		t.Fatalf("experiment run: %v", err)
@@ -219,7 +219,7 @@ func TestScreenedRecommendationsFlowThroughExperimentAndJudge(t *testing.T) {
 		t.Fatalf("write result: %v", err)
 	}
 
-	judge := experiment.NewJudge(store, replayPath, baselinePath)
+	judge := experiment.NewJudge(store.(ledger.ExperimentStore), replayPath, baselinePath)
 	judged, err := judge.Evaluate(resultPath)
 	if err != nil {
 		t.Fatalf("judge evaluate: %v", err)

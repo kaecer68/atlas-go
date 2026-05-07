@@ -14,7 +14,7 @@ import (
 
 func TestSessionWriter_WriteSession_AllArtifacts(t *testing.T) {
 	dir := t.TempDir()
-	store := NewStore(dir)
+	store := NewStore(dir).(*Store)
 	writer := NewSessionWriter(store)
 
 	session := domain.ReplaySession{ID: "session-20260422-daily"}
@@ -70,7 +70,7 @@ func TestSessionWriter_WriteSession_AllArtifacts(t *testing.T) {
 
 func TestSessionWriter_WriteSession_OutcomesOnly(t *testing.T) {
 	dir := t.TempDir()
-	store := NewStore(dir)
+	store := NewStore(dir).(*Store)
 	writer := NewSessionWriter(store)
 
 	req := SessionWriteRequest{
@@ -103,7 +103,7 @@ func TestSessionWriter_WriteSession_OutcomesOnly(t *testing.T) {
 
 func TestSessionWriter_WriteSession_ContextCancelled(t *testing.T) {
 	dir := t.TempDir()
-	store := NewStore(dir)
+	store := NewStore(dir).(*Store)
 	writer := NewSessionWriter(store)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -131,7 +131,7 @@ func TestSessionWriter_WriteSession_ContextCancelled(t *testing.T) {
 
 func TestSessionWriter_WriteSession_WriteError(t *testing.T) {
 	dir := t.TempDir()
-	store := NewStore(dir)
+	store := NewStore(dir).(*Store)
 	writer := NewSessionWriter(store)
 
 	req := SessionWriteRequest{
@@ -221,7 +221,7 @@ func TestWriteSummaryToFile_RoundTrip(t *testing.T) {
 
 func TestRecordSessionSummary_RoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	store := NewStore(dir)
+	store := NewStore(dir).(*Store)
 
 	session := domain.ReplaySession{ID: "session-summary-test"}
 	summary := domain.SessionSummary{
@@ -257,7 +257,7 @@ func TestRecordSessionSummary_RoundTrip(t *testing.T) {
 
 func TestLoadSessionOutcomes_MissingDir(t *testing.T) {
 	dir := t.TempDir()
-	store := NewStore(dir)
+	store := NewStore(dir).(*Store)
 
 	outcomes, err := store.LoadSessionOutcomes("nonexistent-session")
 	if err != nil {

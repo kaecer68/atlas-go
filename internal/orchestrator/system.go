@@ -35,7 +35,7 @@ type SimulationCore struct {
 	engine          *sim.Engine
 	registry        domain.AgentRegistry
 	policy          baseline.Policy
-	ledger          *ledger.Store
+	ledger          ledger.OutcomeStore
 	replay          *replay.Dataset
 	session         domain.ReplaySession
 	persistentState *domain.SimulationState
@@ -47,10 +47,10 @@ type SimulationCore struct {
 }
 
 type PortfolioManager struct {
-	alphaDiscovery    *AlphaDiscoveryEngine
-	optimizer         *portfolio.Optimizer
-	darwinian         *portfolio.DarwinianWeightManager
-	capitalAllocator  *portfolio.CapitalAllocator
+	alphaDiscovery     *AlphaDiscoveryEngine
+	optimizer          *portfolio.Optimizer
+	darwinian          *portfolio.DarwinianWeightManager
+	capitalAllocator   *portfolio.CapitalAllocator
 	factorWeightEngine *portfolio.FactorWeightEngine
 }
 
@@ -157,20 +157,20 @@ func NewSystem(cfg config.Config) *System {
 	return &System{
 		SystemCore: &SystemCore{
 			SimulationCore: SimulationCore{
-				cfg:        cfg,
-				provider:   selectProvider(cfg),
-				engine:     engine.WithContext(context.Background()),
-				registry:   registry,
-				policy:     policy,
-				ledger:     ledger.NewStore(cfg.LedgerDir),
-				replay:     ds,
-				session:    session,
-				ctx:        context.Background(),
+				cfg:      cfg,
+				provider: selectProvider(cfg),
+				engine:   engine.WithContext(context.Background()),
+				registry: registry,
+				policy:   policy,
+				ledger:   ledger.NewStore(cfg.LedgerDir),
+				replay:   ds,
+				session:  session,
+				ctx:      context.Background(),
 			},
 			PortfolioManager: PortfolioManager{
-				optimizer:         optimizer,
-				alphaDiscovery:    NewAlphaDiscoveryEngine(factorEngine),
-				darwinian:         darwinian,
+				optimizer:          optimizer,
+				alphaDiscovery:     NewAlphaDiscoveryEngine(factorEngine),
+				darwinian:          darwinian,
 				factorWeightEngine: factorWeightEngine,
 			},
 			StrategyLayer: StrategyLayer{

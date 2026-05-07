@@ -77,7 +77,8 @@ func run(args []string) error {
 	if cfg.ReplayDataPath == "samples/replay/twse_stock_day_all_sample.csv" {
 		cfg.ReplayDataPath = "data/replay/tw_extended_90days.csv"
 	}
-	judge := experiment.NewJudge(ledger.NewStore(cfg.LedgerDir), cfg.ReplayDataPath, cfg.BaselinePolicyPath)
+	store := ledger.NewStore(cfg.LedgerDir)
+	judge := experiment.NewJudge(store.(ledger.ExperimentStore), cfg.ReplayDataPath, cfg.BaselinePolicyPath)
 	result, err := judge.Evaluate(*path)
 	if err != nil {
 		return fmt.Errorf("judge experiment: %w", err)
