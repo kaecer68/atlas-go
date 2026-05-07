@@ -1009,6 +1009,13 @@ body { display: flex; margin: 0; min-height: 100vh; }
   </div>
 </div>
 
+<script type="module">
+  import { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState } from './js/shared/utils.js';
+  import { agentName as agentNameEsm, regimeLabel as regimeLabelEsm, AGENT_NAME_MAP, PAGE_TITLES } from './js/shared/constants.js';
+  import { FIELD } from './js/shared/field_names.js';
+  Object.assign(window, { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState, agentNameEsm, regimeLabelEsm, FIELD });
+</script>
+
 <script>
 
 const pageLoadStatus = {};
@@ -2636,115 +2643,6 @@ function renderRiskCards(data) {
   `;
 }
 
-async function loadPortfolioState() {
-  const el = document.getElementById('portfolioKPIs');
-  if (el) el.innerHTML = '<div class="loading">載入中...</div>';
-  try {
-    const data = await getJSON('/api/dashboard/portfolio-state');
-    renderPortfolioKPIs(data);
-    renderEquityCurve(data.equity_curve);
-    renderPositionsTable(data.positions);
-  } catch (e) {
-    if (el) el.innerHTML = '<div class="text-muted">載入失敗：' + e.message + '</div>';
-  }
-}
-
-function renderPortfolioKPIs(data) {
-  const el = document.getElementById('portfolioKPIs');
-  if (!el) return;
-  const fmt = v => typeof v === 'number' ? v.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0}) : '-';
-  const fmtPct = v => typeof v === 'number' ? (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%' : '-';
-  const pnlColor = v => typeof v === 'number' ? (v >= 0 ? 'var(--up)' : 'var(--down)') : '';
-  el.innerHTML = `
-    <div class="panel" style="text-align:center"><div class="kpi-label">總資產</div><div class="kpi-value">${fmt(data.portfolio_value)}</div></div>
-    <div class="panel" style="text-align:center"><div class="kpi-label">可用現金</div><div class="kpi-value">${fmt(data.cash)}</div></div>
-    <div class="panel" style="text-align:center"><div class="kpi-label">累計損益</div><div class="kpi-value" style="color:${pnlColor(data.cumulative_pnl_pct)}">${fmtPct(data.cumulative_pnl_pct)}</div></div>
-    <div class="panel" style="text-align:center"><div class="kpi-label">目前回撤</div><div class="kpi-value" style="color:var(--warn)">${fmtPct(data.current_drawdown)}</div></div>
-    <div class="panel" style="text-align:center"><div class="kpi-label">持倉數</div><div class="kpi-value">${data.positions_count || 0} 檔</div></div>
-  `;
-}
-
-function renderEquityCurve(points) {
-  const panel = document.getElementById('equityCurvePanel');
-  const canvas = document.getElementById('equityChart');
-  if (!panel || !canvas) return;
-  if (!points || points.length < 2) {
-    panel.style.display = 'none';
-    return;
-  }
-  panel.style.display = '';
-  const ctx = canvas.getContext('2d');
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.parentElement.getBoundingClientRect();
-  canvas.width = (rect.width - 40) * dpr;
-  canvas.height = 200 * dpr;
-  canvas.style.width = (rect.width - 40) + 'px';
-  canvas.style.height = '200px';
-  ctx.scale(dpr, dpr);
-  const w = rect.width - 40, h = 200;
-  const pad = {top: 20, right: 20, bottom: 30, left: 60};
-  const chartW = w - pad.left - pad.right, chartH = h - pad.top - pad.bottom;
-  const values = points.map(p => p.value);
-  const minV = Math.min(...values), maxV = Math.max(...values);
-  const range = maxV - minV || 1;
-  ctx.clearRect(0, 0, w, h);
-  ctx.strokeStyle = '#333'; ctx.lineWidth = 0.5;
-  for (let i = 0; i <= 4; i++) {
-    const y = pad.top + (chartH / 4) * i;
-    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
-    const val = maxV - (range / 4) * i;
-    ctx.fillStyle = '#888'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
-    ctx.fillText(val.toFixed(0), pad.left - 5, y + 3);
-  }
-  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#3b82f6';
-  ctx.lineWidth = 2; ctx.beginPath();
-  points.forEach((p, i) => {
-    const x = pad.left + (i / (points.length - 1)) * chartW;
-    const y = pad.top + (1 - (p.value - minV) / range) * chartH;
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-  });
-  ctx.stroke();
-  ctx.fillStyle = '#888'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
-  const step = Math.max(1, Math.floor(points.length / 6));
-  points.forEach((p, i) => {
-    if (i % step === 0 || i === points.length - 1) {
-      const x = pad.left + (i / (points.length - 1)) * chartW;
-      ctx.fillText(p.label, x, h - 5);
-    }
-  });
-}
-
-function renderPositionsTable(positions) {
-  const el = document.getElementById('positionsTable');
-  if (!el) return;
-  if (!positions || positions.length === 0) {
-    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">目前無持倉</div>';
-    return;
-  }
-  const fmt = v => typeof v === 'number' ? v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
-  const fmtInt = v => typeof v === 'number' ? v.toLocaleString('en-US') : '-';
-  const pnlColor = v => typeof v === 'number' ? (v >= 0 ? 'var(--up)' : 'var(--down)') : 'var(--muted)';
-  const pnlSign = v => typeof v === 'number' ? (v >= 0 ? '+' : '') : '';
-  el.innerHTML = `
-    <div class="table-wrapper">
-    <table id="positionsTableEl">
-      <thead><tr><th>符號</th><th>數量</th><th>成本</th><th>現價</th><th>市值</th><th>損益</th><th>損益%</th></tr></thead>
-      <tbody>
-        ${positions.map(p => `<tr>
-          <td><strong>${p.symbol}</strong></td>
-          <td>${fmtInt(p.quantity)}</td>
-          <td>${fmt(p.average_cost)}</td>
-          <td>${fmt(p.current_price)}</td>
-          <td>${fmt(p.market_value)}</td>
-          <td style="color:${pnlColor(p.unrealized_pnl)};font-weight:700">${pnlSign(p.unrealized_pnl)}${fmt(p.unrealized_pnl)}</td>
-          <td style="color:${pnlColor(p.pnl_pct)};font-weight:700">${pnlSign(p.pnl_pct)}${(p.pnl_pct * 100).toFixed(2)}%</td>
-        </tr>`).join('')}
-      </tbody>
-    </table>
-    </div>
-  `;
-}
-
 function renderLiveNarrativeStrip(events, stress, models, chains) {
   const el = document.getElementById('liveNarrativeStrip');
   if (!el) return;
@@ -3685,7 +3583,10 @@ async function loadPageData(pageId) {
       } catch (e) { console.error('Failed to load live status:', e); }
       break;
     case 'portfolio':
-      loadPortfolioState();
+      try {
+        const m = await import('./js/pages/portfolio.js');
+        await m.loadPortfolioPage(getJSON, agentName);
+      } catch (e) { console.error('Failed to load portfolio:', e); }
       break;
   }
 }
