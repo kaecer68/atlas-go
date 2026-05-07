@@ -1,8 +1,6 @@
 package service
 
 import (
-	livestore "github.com/kaecer68/atlas-go/internal/live/store"
-	"bufio"
 	"encoding/json"
 	"log"
 	"os"
@@ -12,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 )
 
 // LiveService provides live trading status and portfolio state operations.
@@ -60,15 +59,15 @@ func (s *LiveService) LoadLiveStatus() LiveStatusResponse {
 	cbState := CircuitBreakerStatus{
 		State: "unknown",
 	}
-	if data, err := os.ReadFile(filepath.Join(s.WorkDir, livestore.livestore.DefaultCircuitBreakerStatePath)); err == nil {
+	if data, err := os.ReadFile(filepath.Join(s.WorkDir, livestore.DefaultCircuitBreakerStatePath)); err == nil {
 		if err := json.Unmarshal(data, &cbState); err != nil {
 			log.Printf("[LiveService] warn: failed to unmarshal circuit breaker state: %v", err)
 		}
 	}
 
 	portfolio := PortfolioSummary{}
-	liveBasePath := filepath.Join(s.WorkDir, livestore.livestore.DefaultLiveStateBasePath)
-	if p, err := livestore.LoadLastlivestore.PortfolioState(liveBasePath); err == nil {
+	liveBasePath := filepath.Join(s.WorkDir, livestore.DefaultLiveStateBasePath)
+	if p, err := livestore.LoadLastPortfolioState(liveBasePath); err == nil {
 		portfolio.Cash = p.Cash
 		portfolio.TotalExposure = p.TotalExposure
 		portfolio.AvailableCash = p.AvailableCash
@@ -79,7 +78,7 @@ func (s *LiveService) LoadLiveStatus() LiveStatusResponse {
 	}
 
 	positionsCount := 0
-	if posMap, err := livestore.livestore.LoadLastPositions(liveBasePath); err == nil {
+	if posMap, err := livestore.LoadLastPositions(liveBasePath); err == nil {
 		positionsCount = len(posMap)
 	} else {
 		log.Printf("[LiveService] warn: failed to read positions state: %v", err)
@@ -93,8 +92,8 @@ func (s *LiveService) LoadLiveStatus() LiveStatusResponse {
 	}
 }
 
-// livestore.PortfolioStateResponse is the response for portfolio state endpoint.
-type livestore.PortfolioStateResponse struct {
+// PortfolioStateResponse is the response for portfolio state endpoint.
+type PortfolioStateResponse struct {
 	SnapshotTime     time.Time          `json:"snapshot_time"`
 	Cash             float64            `json:"cash"`
 	PortfolioValue   float64            `json:"portfolio_value"`
@@ -104,8 +103,6 @@ type livestore.PortfolioStateResponse struct {
 	PositionsCount   int                `json:"positions_count"`
 	Positions        []PositionDTO      `json:"positions"`
 	EquityCurve      []EquityCurvePoint `json:"equity_curve"`
-	Regime           string             `json:"regime"`
-	RegimeLabel      string             `json:"regime_label"`
 }
 
 // PositionDTO represents a single position with computed P&L percentage.
@@ -117,9 +114,6 @@ type PositionDTO struct {
 	MarketValue   float64 `json:"market_value"`
 	UnrealizedPnL float64 `json:"unrealized_pnl"`
 	PnlPct        float64 `json:"pnl_pct"`
-	AgentID       string  `json:"agent_id"`
-	AgentName     string  `json:"agent_name"`
-	Conviction    float64 `json:"conviction"`
 }
 
 // EquityCurvePoint is a single point on the equity curve.
@@ -128,40 +122,26 @@ type EquityCurvePoint struct {
 	Value float64 `json:"value"`
 }
 
-// Loadlivestore.PortfolioState returns the current portfolio state with positions and equity curve.
-func (s *LiveService) Loadlivestore.PortfolioState() livestore.PortfolioStateResponse {
-	liveBasePath := filepath.Join(s.WorkDir, livestore.livestore.DefaultLiveStateBasePath)
+// LoadPortfolioState returns the current portfolio state with positions and equity curve.
+func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
+	liveBasePath := filepath.Join(s.WorkDir, livestore.DefaultLiveStateBasePath)
 
-	portfolio, err := livestore.LoadLastlivestore.PortfolioState(liveBasePath)
+	portfolio, err := livestore.LoadLastPortfolioState(liveBasePath)
 	if err != nil {
 		log.Printf("[LiveService] warn: failed to load portfolio state: %v", err)
-		return livestore.PortfolioStateResponse{}
+		return PortfolioStateResponse{}
 	}
 
-	posMap, err := livestore.livestore.LoadLastPositions(liveBasePath)
+	posMap, err := livestore.LoadLastPositions(liveBasePath)
 	if err != nil {
 		log.Printf("[LiveService] warn: failed to load positions: %v", err)
 	}
-
-	// Fallback: if live state has no positions, try loading from latest session
-	if len(posMap) == 0 {
-		posMap = s.loadSessionPositions()
-	}
-
-	// Load agent attribution from latest session outcomes
-	symbolAgentMap := s.buildSymbolAgentMap()
 
 	positions := make([]PositionDTO, 0, len(posMap))
 	for _, pos := range posMap {
 		pnlPct := 0.0
 		if cost := float64(pos.Quantity) * pos.AverageCost; cost > 0 {
 			pnlPct = pos.UnrealizedPnL / cost
-		}
-		agentID, agentName, conviction := "", "", 0.0
-		if attr, ok := symbolAgentMap[pos.Symbol]; ok {
-			agentID = attr.agentID
-			agentName = attr.agentName
-			conviction = attr.conviction
 		}
 		positions = append(positions, PositionDTO{
 			Symbol:        pos.Symbol,
@@ -171,9 +151,6 @@ func (s *LiveService) Loadlivestore.PortfolioState() livestore.PortfolioStateRes
 			MarketValue:   pos.MarketValue,
 			UnrealizedPnL: pos.UnrealizedPnL,
 			PnlPct:        pnlPct,
-			AgentID:       agentID,
-			AgentName:     agentName,
-			Conviction:    conviction,
 		})
 	}
 	slices.SortFunc(positions, func(a, b PositionDTO) int {
@@ -186,233 +163,23 @@ func (s *LiveService) Loadlivestore.PortfolioState() livestore.PortfolioStateRes
 	}
 
 	equityCurve := s.buildEquityCurve()
-	drawdown := computeCurrentDrawdown(equityCurve, portfolio.Cash+totalMarketValue)
 
-	// Load regime from latest session summary
-	regime, regimeLabel := s.loadLatestRegime()
-
-	resp := livestore.PortfolioStateResponse{
+	resp := PortfolioStateResponse{
 		SnapshotTime:     portfolio.LastUpdated,
 		Cash:             portfolio.Cash,
 		PortfolioValue:   portfolio.Cash + totalMarketValue,
 		CumulativePnL:    portfolio.RealizedPnL + portfolio.UnrealizedPnL,
 		CumulativePnLPct: 0,
-		CurrentDrawdown:  drawdown,
+		CurrentDrawdown:  0,
 		PositionsCount:   len(positions),
 		Positions:        positions,
 		EquityCurve:      equityCurve,
-		Regime:           regime,
-		RegimeLabel:      regimeLabel,
 	}
 	if portfolio.Cash > 0 {
 		resp.CumulativePnLPct = resp.CumulativePnL / portfolio.Cash
 	}
 
 	return resp
-}
-
-// symbolAgentAttr holds agent attribution for a position.
-type symbolAgentAttr struct {
-	agentID    string
-	agentName  string
-	conviction float64
-}
-
-// buildSymbolAgentMap loads the latest session's recommendation outcomes
-// and builds a map from symbol to agent attribution.
-func (s *LiveService) buildSymbolAgentMap() map[string]symbolAgentAttr {
-	result := make(map[string]symbolAgentAttr)
-
-	sessionsDir := filepath.Join(s.LedgerDir, "sessions")
-	entries, err := os.ReadDir(sessionsDir)
-	if err != nil {
-		return result
-	}
-
-	// Find latest daily session
-	var latest string
-	for _, e := range entries {
-		if !e.IsDir() || !strings.HasSuffix(e.Name(), "-daily") {
-			continue
-		}
-		if e.Name() > latest {
-			latest = e.Name()
-		}
-	}
-	if latest == "" {
-		return result
-	}
-
-	// Read recommendation outcomes JSONL
-	outcomesPath := filepath.Join(sessionsDir, latest, "recommendation_outcomes.jsonl")
-	f, err := os.Open(outcomesPath)
-	if err != nil {
-		return result
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-		// Parse minimal fields - only need symbol, agent_id, skill, conviction
-		var raw struct {
-			Symbol     string  `json:"symbol"`
-			AgentID    string  `json:"agent_id"`
-			Skill      string  `json:"skill"`
-			Conviction float64 `json:"conviction"`
-			Passed     *bool   `json:"passed_guards"`
-		}
-		if err := json.Unmarshal([]byte(line), &raw); err != nil {
-			continue
-		}
-		// Only attribute passed recommendations
-		if raw.Passed != nil && !*raw.Passed {
-			continue
-		}
-		// Take the first agent for each symbol (or highest conviction could be better)
-		if _, exists := result[raw.Symbol]; !exists {
-			result[raw.Symbol] = symbolAgentAttr{
-				agentID:    raw.AgentID,
-				agentName:  raw.Skill,
-				conviction: raw.Conviction,
-			}
-		}
-	}
-
-	return result
-}
-
-// loadSessionPositions loads positions from the latest session's positions.json as fallback.
-func (s *LiveService) loadSessionPositions() map[string]domain.Position {
-	result := make(map[string]domain.Position)
-
-	sessionsDir := filepath.Join(s.LedgerDir, "sessions")
-	entries, err := os.ReadDir(sessionsDir)
-	if err != nil {
-		return result
-	}
-
-	// Find the latest daily session that has a positions.json file
-	type candidate struct {
-		name string
-		date time.Time
-	}
-	var latest candidate
-	for _, e := range entries {
-		if !e.IsDir() || !strings.HasSuffix(e.Name(), "-daily") {
-			continue
-		}
-		positionsPath := filepath.Join(sessionsDir, e.Name(), "positions.json")
-		if _, err := os.Stat(positionsPath); err != nil {
-			continue
-		}
-		// Extract date from session ID (session-YYYYMMDD-daily)
-		dateStr := strings.TrimPrefix(e.Name(), "session-")
-		dateStr = strings.TrimSuffix(dateStr, "-daily")
-		if parsed, err := time.Parse("20060102", dateStr); err == nil {
-			if parsed.After(latest.date) {
-				latest = candidate{name: e.Name(), date: parsed}
-			}
-		}
-	}
-	if latest.name == "" {
-		return result
-	}
-
-	positionsPath := filepath.Join(sessionsDir, latest.name, "positions.json")
-	bytes, err := os.ReadFile(positionsPath)
-	if err != nil {
-		return result
-	}
-
-	var positions []domain.Position
-	if err := json.Unmarshal(bytes, &positions); err != nil {
-		log.Printf("[LiveService] warn: failed to parse session positions: %v", err)
-		return result
-	}
-
-	for _, p := range positions {
-		result[p.Symbol] = p
-	}
-	return result
-}
-
-// loadLatestRegime reads the regime from the latest session summary.
-func (s *LiveService) loadLatestRegime() (string, string) {
-	sessionsDir := filepath.Join(s.LedgerDir, "sessions")
-	entries, err := os.ReadDir(sessionsDir)
-	if err != nil {
-		return "", ""
-	}
-
-	var latest string
-	for _, e := range entries {
-		if !e.IsDir() || !strings.HasSuffix(e.Name(), "-daily") {
-			continue
-		}
-		if e.Name() > latest {
-			latest = e.Name()
-		}
-	}
-	if latest == "" {
-		return "", ""
-	}
-
-	summaryPath := filepath.Join(sessionsDir, latest, "summary.json")
-	bytes, err := os.ReadFile(summaryPath)
-	if err != nil {
-		return "", ""
-	}
-	var summary domain.SessionSummary
-	if err := json.Unmarshal(bytes, &summary); err != nil {
-		return "", ""
-	}
-
-	regime := string(summary.Regime)
-	label := regimeLabel(regime)
-	return regime, label
-}
-
-// computeCurrentDrawdown calculates the current drawdown from equity curve peaks.
-func computeCurrentDrawdown(curve []EquityCurvePoint, currentValue float64) float64 {
-	if len(curve) == 0 {
-		return 0
-	}
-	peak := curve[0].Value
-	for _, p := range curve {
-		if p.Value > peak {
-			peak = p.Value
-		}
-	}
-	if peak <= 0 {
-		return 0
-	}
-	// Use currentValue if provided (live portfolio), otherwise last curve point
-	cv := currentValue
-	if cv <= 0 && len(curve) > 0 {
-		cv = curve[len(curve)-1].Value
-	}
-	if cv >= peak {
-		return 0
-	}
-	return (peak - cv) / peak
-}
-
-// regimeLabel returns a Chinese label for the regime.
-func regimeLabel(regime string) string {
-	switch regime {
-	case "RISK_ON":
-		return "多頭"
-	case "RISK_OFF":
-		return "空頭"
-	case "NEUTRAL":
-		return "盤整"
-	default:
-		return regime
-	}
 }
 
 // buildEquityCurve constructs an equity curve from all session summaries.

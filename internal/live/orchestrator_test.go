@@ -1,12 +1,12 @@
 package live
 
 import (
-	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"context"
 	"testing"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 )
 
 func TestCheckRiskTriggers(t *testing.T) {
@@ -18,7 +18,7 @@ func TestCheckRiskTriggers(t *testing.T) {
 		stopLoss      bool
 		takeProfit    bool
 		maxLossPct    float64
-		expectedlivestore.Event livestore.EventType
+		expectedEvent EventType
 	}{
 		{
 			name:          "no position no event",
@@ -27,7 +27,7 @@ func TestCheckRiskTriggers(t *testing.T) {
 			stopLoss:      true,
 			takeProfit:    true,
 			maxLossPct:    5,
-			expectedlivestore.Event: "",
+			expectedEvent: "",
 		},
 		{
 			name:         "stop loss triggered",
@@ -41,7 +41,7 @@ func TestCheckRiskTriggers(t *testing.T) {
 			stopLoss:      true,
 			takeProfit:    false,
 			maxLossPct:    5,
-			expectedlivestore.Event: livestore.EventStopLossTriggered,
+			expectedEvent: EventStopLossTriggered,
 		},
 		{
 			name:         "take profit triggered",
@@ -55,7 +55,7 @@ func TestCheckRiskTriggers(t *testing.T) {
 			stopLoss:      false,
 			takeProfit:    true,
 			maxLossPct:    5,
-			expectedlivestore.Event: livestore.EventTakeProfitTriggered,
+			expectedEvent: EventTakeProfitTriggered,
 		},
 		{
 			name:         "loss not deep enough",
@@ -69,7 +69,7 @@ func TestCheckRiskTriggers(t *testing.T) {
 			stopLoss:      true,
 			takeProfit:    false,
 			maxLossPct:    5,
-			expectedlivestore.Event: "",
+			expectedEvent: "",
 		},
 		{
 			name:         "gain not high enough",
@@ -83,7 +83,7 @@ func TestCheckRiskTriggers(t *testing.T) {
 			stopLoss:      false,
 			takeProfit:    true,
 			maxLossPct:    5,
-			expectedlivestore.Event: "",
+			expectedEvent: "",
 		},
 		{
 			name:         "stop loss disabled",
@@ -97,24 +97,24 @@ func TestCheckRiskTriggers(t *testing.T) {
 			stopLoss:      false,
 			takeProfit:    false,
 			maxLossPct:    5,
-			expectedlivestore.Event: "",
+			expectedEvent: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_ = livestore.Newlivestore.StateStore(t.TempDir()) // assigned but mainly used via stateStore field
+			_ = livestore.NewStateStore(t.TempDir()) // assigned but mainly used via stateStore field
 			if tt.withPosition {
 				st.UpdatePosition(tt.position)
 			}
 
-			bus := NewChannellivestore.EventBus(16)
+			bus := NewChannelEventBus(16)
 			t.Cleanup(func() {
 				_ = bus.Close()
 			})
 
-			eventCh := make(chan Buslivestore.Event, 4)
-			sub := bus.SubscribeAll(func(ctx context.Context, event Buslivestore.Event) error {
+			eventCh := make(chan BusEvent, 4)
+			sub := bus.SubscribeAll(func(ctx context.Context, event BusEvent) error {
 				select {
 				case eventCh <- event:
 				default:
@@ -128,7 +128,7 @@ func TestCheckRiskTriggers(t *testing.T) {
 			cb.ResetDayState(0)
 
 			o := &Orchestrator{
-				stateStore: livestore.Newlivestore.StateStore(t.TempDir()),
+				stateStore: livestore.NewStateStore(t.TempDir()),
 				eventBus:   bus,
 				config: OrchestratorConfig{
 					MaxPositionLossPct: tt.maxLossPct,
@@ -140,7 +140,7 @@ func TestCheckRiskTriggers(t *testing.T) {
 
 			o.checkRiskTriggers("2330", tt.currentPrice)
 
-			if tt.expectedlivestore.Event == "" {
+			if tt.expectedEvent == "" {
 				select {
 				case got := <-eventCh:
 					t.Fatalf("unexpected event type: %s", got.Type)
@@ -151,11 +151,11 @@ func TestCheckRiskTriggers(t *testing.T) {
 
 			select {
 			case got := <-eventCh:
-				if got.Type != tt.expectedlivestore.Event {
-					t.Fatalf("unexpected event type: got=%s want=%s", got.Type, tt.expectedlivestore.Event)
+				if got.Type != tt.expectedEvent {
+					t.Fatalf("unexpected event type: got=%s want=%s", got.Type, tt.expectedEvent)
 				}
 
-				payload, ok := got.Payload.(Risklivestore.EventPayload)
+				payload, ok := got.Payload.(RiskEventPayload)
 				if !ok {
 					t.Fatalf("unexpected payload type: %T", got.Payload)
 				}
@@ -163,22 +163,22 @@ func TestCheckRiskTriggers(t *testing.T) {
 					t.Fatalf("unexpected payload symbol: %s", payload.Symbol)
 				}
 			case <-time.After(1 * time.Second):
-				t.Fatalf("expected risk event %s but none was received", tt.expectedlivestore.Event)
+				t.Fatalf("expected risk event %s but none was received", tt.expectedEvent)
 			}
 		})
 	}
 }
 
 func TestExecuteOrderBlockedByCircuitBreaker(t *testing.T) {
-	_ = livestore.Newlivestore.StateStore(t.TempDir()) // assigned but mainly used via stateStore field
-	bus := NewChannellivestore.EventBus(16)
+	_ = livestore.NewStateStore(t.TempDir()) // assigned but mainly used via stateStore field
+	bus := NewChannelEventBus(16)
 	t.Cleanup(func() { _ = bus.Close() })
 
 	tmpDir := t.TempDir()
 	cb := NewCircuitBreaker(tmpDir+"/cb_log.jsonl", tmpDir+"/cb_state.json")
 	cb.ResetDayState(1000000)
 	// Halt trading via daily loss
-	cb.Evaluate(livestore.livestore.PortfolioState{Cash: 1000000, DayPnL: -30000}, nil, nil)
+	cb.Evaluate(livestore.PortfolioState{Cash: 1000000, DayPnL: -30000}, nil, nil)
 
 	o := &Orchestrator{
 		stateStore:     s,
@@ -205,8 +205,8 @@ func TestExecuteOrderBlockedByCircuitBreaker(t *testing.T) {
 
 	// Reset and verify sell works in paused state
 	cb.ResetDayState(1000000)
-	cb.Evaluate(livestore.livestore.PortfolioState{Cash: 1000000, UnrealizedPnL: 0}, nil, nil)
-	cb.Evaluate(livestore.livestore.PortfolioState{Cash: 965000, UnrealizedPnL: 0}, nil, nil) // 3.5% drawdown > 3% threshold
+	cb.Evaluate(livestore.PortfolioState{Cash: 1000000, UnrealizedPnL: 0}, nil, nil)
+	cb.Evaluate(livestore.PortfolioState{Cash: 965000, UnrealizedPnL: 0}, nil, nil) // 3.5% drawdown > 3% threshold
 	if cb.State() != CircuitPaused {
 		t.Fatalf("expected paused state, got %s", cb.State())
 	}

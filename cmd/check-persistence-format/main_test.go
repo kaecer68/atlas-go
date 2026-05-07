@@ -459,6 +459,77 @@ func TestCheckWriterConsistencyEmptyWithPositiveOutcomeCount(t *testing.T) {
 	}
 }
 
+func TestCheckWriterConsistencyEmptyWithZeroOutcomeCountLegacyPascalCase(t *testing.T) {
+	dir := t.TempDir()
+	sessionDir := filepath.Join(dir, "sessions", "session-20260326")
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	summaryPath := filepath.Join(sessionDir, "summary.json")
+	summaryContent := `{"SessionID":"session-20260326","OutcomeCount":0}`
+	if err := os.WriteFile(summaryPath, []byte(summaryContent), 0o644); err != nil {
+		t.Fatalf("write summary: %v", err)
+	}
+
+	outcomesPath := filepath.Join(sessionDir, "recommendation_outcomes.jsonl")
+	if err := os.WriteFile(outcomesPath, []byte{}, 0o644); err != nil {
+		t.Fatalf("write empty outcomes: %v", err)
+	}
+
+	issues := checkWriterConsistency(outcomesPath)
+	if len(issues) != 0 {
+		t.Fatalf("expected no issues for empty outcomes file with legacy OutcomeCount==0, got: %v", issues)
+	}
+}
+
+func TestCheckWriterConsistencyEmptyWithPositiveOutcomeCountLegacyPascalCase(t *testing.T) {
+	dir := t.TempDir()
+	sessionDir := filepath.Join(dir, "sessions", "session-20260326")
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	summaryPath := filepath.Join(sessionDir, "summary.json")
+	summaryContent := `{"SessionID":"session-20260326","OutcomeCount":5}`
+	if err := os.WriteFile(summaryPath, []byte(summaryContent), 0o644); err != nil {
+		t.Fatalf("write summary: %v", err)
+	}
+
+	outcomesPath := filepath.Join(sessionDir, "recommendation_outcomes.jsonl")
+	if err := os.WriteFile(outcomesPath, []byte{}, 0o644); err != nil {
+		t.Fatalf("write empty outcomes: %v", err)
+	}
+
+	issues := checkWriterConsistency(outcomesPath)
+	if len(issues) == 0 {
+		t.Fatalf("expected issues for empty outcomes file with legacy OutcomeCount==5, got none")
+	}
+	found := false
+	for _, issue := range issues {
+		if strings.Contains(issue, "outcome_count") || strings.Contains(issue, "expected") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected issue mentioning outcome_count mismatch, got: %v", issues)
+	}
+}
+
+func TestCheckWriterConsistencyEmptyRootLevelOutcomesAllowed(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "recommendation_outcomes.jsonl")
+	if err := os.WriteFile(path, []byte{}, 0o644); err != nil {
+		t.Fatalf("write empty outcomes: %v", err)
+	}
+
+	issues := checkWriterConsistency(path)
+	if len(issues) != 0 {
+		t.Fatalf("expected no issues for empty root-level recommendation_outcomes.jsonl, got: %v", issues)
+	}
+}
+
 func TestClassifyArtifactEmptyWithSiblingSummary(t *testing.T) {
 	dir := t.TempDir()
 	sessionDir := filepath.Join(dir, "sessions", "session-20260326")

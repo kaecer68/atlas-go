@@ -1,75 +1,90 @@
 # AGENTS.md — scripts/openclaw
 
-本目錄是 **OpenClaw 治理 / 審核 / promote-revert 操作層**。這不是一般 helper scripts 集合，而是一套有流程約束的 operator interface。
+本目錄是 **OpenClaw 治理引擎**的 shell script 實作，負責實驗生命週期的自動化、安全閘門檢查與人機協作決策。
 
 ---
 
 ## OVERVIEW
 
-OpenClaw 腳本負責把 mutation proposal、execute、judge、approve/reject、replay audit event、governance gate、operations gate 串成可追蹤流程。
-
-核心特性：
-
-- 人工決策可審計（`data/state/approvals/*.json`）
-- promote / revert 必須附 `--reason`
-- 多數危險操作支援 `--dry-run`
-- G2/G3/G4/M5/M7/M8 驗證有對應腳本，不靠口頭流程
+OpenClaw 是 `atlas-go` 的治理層，將實驗驅動的開發流程（propose → execute → judge → promote/revert）封裝為可重複執行的腳本。所有腳本遵循 `set -euo pipefail`，確保錯誤即時中斷。
 
 ---
 
-## WHERE TO LOOK
+## 核心職責
 
-| 任務 | 腳本 | 備註 |
-|------|------|------|
-| 查看當前狀態 | `status.sh` | 最先跑；不知道下一步時先看這裡 |
-| 生成 mutation 建議 | `propose-mutation.sh` | 可互動、可 `--auto` |
-| 執行下一個實驗 | `execute-next.sh` | 也可指定 `--brief` |
-| 評判最新結果 | `judge-latest.sh` | 支援 `--json` |
-| promote / revert 決策 | `decide.sh` | 直接決策入口 |
-| 人工審核入口 | `human-approval.sh` | 產生 approval event，推薦用這個 |
-| 重播審核事件 | `replay-approval-event.sh` | 先 `--dry-run` |
-| 治理 gate 驗證 | `verify-governance-gates.sh` | G2/G3/G4 + M5 + M7 |
-| operations gate 驗證 | `verify-operations-gate.sh` | runbook / monitoring / rollback drill |
-| branch protection 設定 | `setup-branch-protection.sh` | 預設 dry-run |
-| 每日啟動 / 完整 round | `today-start.sh`, `run-validated-round.sh` | operator convenience entrypoint |
+### 1. 日常執行 (`today-start.sh`)
+- 每日自動化啟動流程：`status` → `propose(auto)` → `execute(auto)` → `judge(auto)` → 決策提醒。
+- 支援視窗模式（window mode）：可指定回測日期區間。
+- 智慧變異選擇：若當前 mutation type 無效，自動嘗試替代方案（prompt_tightening → risk_rule_change → portfolio_constraint_revision）。
+
+### 2. 決策輔助 (`decide.sh`)
+- 輔助 promote/revert/skip 決策，提供安全檢查與互動確認。
+- `--dry-run` 預覽模式：不實際執行，僅輸出預計操作。
+- `--yes` 自動確認：用於 CI 或自動化 pipeline。
+
+### 3. 變異提案 (`propose-mutation.sh`)
+- 根據 agent 績效與歷史實驗結果，自動產生 mutation brief。
+- 支援多種變異類型：`prompt_tightening`、`risk_rule_change`、`portfolio_constraint_revision`。
+
+### 4. 閘門驗證
+- `verify-governance-gates.sh`：驗證 G2 replay 確定性、G3 hard-guard 阻擋行為、G4 trace 持久化、M5 多場景一致性、M7 approval event 可重播性。
+- `verify-operations-gate.sh`：操作層面檢查（部署就緒性）。
+- `verify-parallel-scenarios.sh`：平行場景驗證。
+
+### 5. 實驗執行與評判
+- `execute-next.sh`：執行下一個待處理的 mutation brief。
+- `judge-latest.sh`：自動評判最新的實驗結果。
+- `run-validated-round.sh`：執行已驗證的完整實驗回合。
+
+### 6. 狀態與管理
+- `status.sh`：查詢當前實驗與 baseline 狀態。
+- `onboard.sh`：新環境初始化與設定檔檢查。
+- `human-approval.sh`：人工審核事件處理。
 
 ---
 
 ## CONVENTIONS
 
-- 預設 workflow：`status.sh` → `propose-mutation.sh` → `execute-next.sh` → `judge-latest.sh` → `human-approval.sh` / `decide.sh`。
-- `human-approval.sh` 比直接 `decide.sh` 更可稽核，因為會先落 approval event。
-- Gate 驗證不是可選裝飾：`verify-governance-gates.sh` / `verify-operations-gate.sh` 是流程契約的一部分。
-- rollback / replay / approval contract 都透過 shell + `jq` 驗證，腳本本身就是 runbook 的 executable form。
+- **錯誤處理**：所有腳本開頭 `set -euo pipefail`，任何命令失敗立即中斷。
+- **路徑解析**：使用 `ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"` 確保從任何位置呼叫都能正確定位專案根目錄。
+- **色彩輸出**：使用標準 ANSI 色彩碼（RED/GREEN/YELLOW/BLUE/CYAN/NC）標記錯誤、警告與成功狀態。
+- **日誌格式**：統一使用 `[script-name] message` 格式輸出，方便追蹤。
 
 ---
 
 ## ANTI-PATTERNS
 
-- **不要在沒有 `--reason` 的情況 promote / revert**：這違反本目錄的稽核假設。
-- **不要略過 `--dry-run` 就直接 replay / rollback**：尤其是 approval event replay 與 branch protection restore。
-- **不要把 gate 訊號當錯誤**：`futility guard`、`auto-pivot`、`skip` 常是控制信號，不代表腳本壞掉。
-- **不要手動改 approval event JSON 來模擬流程**：應透過 `human-approval.sh` 產生事件，再用 `replay-approval-event.sh` 重播。
-- **不要把 OpenClaw 腳本與一般 scripts 混用**：這裡的腳本有治理語義與狀態假設，跟 `coverage.sh`、`darwinian-adjust.sh` 不同。
-- **不要忽略 `verify-governance-gates.sh --require-scenario-diversity`**：strict mode 是檢查 scenario 是否真的區分得開。
+- **不可手動修改 baseline_policy.json**：所有政策變更必須透過 `promote-baseline` 或 `revert-baseline` 命令，禁止直接編輯 JSON。
+- **不可跳過閘門**：`verify-governance-gates.sh` 失敗時禁止繼續 promote，必須先修復問題。
+- **不可在生產環境執行 propose**：`propose-mutation.sh` 應在開發或 staging 環境執行，避免污染生產實驗歷史。
+- **不可忽略 dry-run**：`decide.sh --dry-run` 輸出應仔細審查後再執行實際操作。
 
 ---
 
-## FILES & STATE
+## 常用指令
 
-| 路徑 | 用途 |
-|------|------|
-| `data/state/baseline_policy.json` | 當前 baseline policy |
-| `data/state/experiments.jsonl` | 實驗紀錄索引 |
-| `data/state/experiments/` | 實驗結果明細 |
-| `data/state/approvals/` | promote / revert / approve / reject 稽核事件 |
-| `configs/briefs/` | mutation brief 範本 |
-| `docs/operations-playbook.md` | operator runbook，腳本契約會檢查這份文件 |
+```bash
+# 查看當前狀態
+bash ./scripts/openclaw/status.sh
+
+# 驗證治理閘門（開發後必跑）
+bash ./scripts/openclaw/verify-governance-gates.sh --require-scenario-diversity
+
+# 執行完整日常流程（dry-run 預覽）
+bash ./scripts/openclaw/today-start.sh --dry-run
+
+# 決策輔助（promote 預覽）
+bash ./scripts/openclaw/decide.sh --promote exp-001 --reason "Improved Sharpe" --dry-run
+
+# 初始化新環境
+bash ./scripts/openclaw/onboard.sh
+```
 
 ---
 
-## NOTES
+## 依賴
 
-- `QUICK_REFERENCE.md` 是最快的 operator cheat sheet；新增腳本時記得同步更新。
-- 若腳本需要驗證文件存在、JSON schema、replayability，延續現有 `jq` + explicit failure message 風格。
-- 本目錄偏 shell orchestration；真正的業務邏輯應回到 `internal/experiment/`、`internal/baseline/`、`internal/monitoring/`、`internal/orchestrator/`。
+- `bash` >= 4.0
+- `awk`（用於數值比較）
+- `jq`（JSON 處理，若未安裝會優雅降級）
+- 專案編譯後的二進位（`atlas`、`judge-experiment`、`promote-baseline` 等）

@@ -1,12 +1,12 @@
 package monitoring
 
 import (
-	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"context"
 	"fmt"
 	"sync"
 	"time"
 
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 )
 
 // AlertRule 告警规则
@@ -50,7 +50,7 @@ func (e *RuleEngine) SetCheckInterval(interval time.Duration) {
 }
 
 // Start 启动规则引擎
-func (e *RuleEngine) Start(ctx context.Context, stateStore *livestore.livestore.StateStore) {
+func (e *RuleEngine) Start(ctx context.Context, stateStore *livestore.StateStore) {
 	ticker := time.NewTicker(e.checkInterval)
 	defer ticker.Stop()
 

@@ -1,11 +1,11 @@
 package monitoring
 
 import (
-	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"context"
 	"fmt"
 	"time"
 
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -35,12 +35,12 @@ func (s HealthStatus) String() string {
 type HealthChecker struct {
 	monitor    *Monitor
 	provider   marketdata.Provider
-	stateStore *livestore.livestore.StateStore
+	stateStore *livestore.StateStore
 	interval   time.Duration
 }
 
 // NewHealthChecker 创建健康检查器
-func NewHealthChecker(monitor *Monitor, provider marketdata.Provider, stateStore *livestore.livestore.StateStore) *HealthChecker {
+func NewHealthChecker(monitor *Monitor, provider marketdata.Provider, stateStore *livestore.StateStore) *HealthChecker {
 	return &HealthChecker{
 		monitor:    monitor,
 		provider:   provider,
@@ -75,7 +75,7 @@ func (h *HealthChecker) Start(ctx context.Context) {
 // checkAll 执行所有健康检查
 func (h *HealthChecker) checkAll() {
 	h.checkDataProvider()
-	h.checklivestore.StateStore()
+	h.checkStateStore()
 }
 
 // checkDataProvider 检查数据提供者健康状态
@@ -97,8 +97,8 @@ func (h *HealthChecker) checkDataProvider() {
 	}
 }
 
-// checklivestore.StateStore 检查状态存储健康状态
-func (h *HealthChecker) checklivestore.StateStore() {
+// checkStateStore 检查状态存储健康状态
+func (h *HealthChecker) checkStateStore() {
 	if h.stateStore == nil {
 		h.monitor.Warning("state_store", "State store not initialized", nil)
 		return
@@ -106,7 +106,7 @@ func (h *HealthChecker) checklivestore.StateStore() {
 
 	// 检查状态存储是否可写（通过获取投资组合信息）
 	portfolio := h.stateStore.GetPortfolio()
-	// livestore.PortfolioState 是值类型，不能直接比较 nil，通过 LastUpdated 判断是否有效
+	// PortfolioState 是值类型，不能直接比较 nil，通过 LastUpdated 判断是否有效
 	if portfolio.LastUpdated.IsZero() && portfolio.Cash == 0 {
 		h.monitor.Error("state_store", "Failed to retrieve valid portfolio from state store", nil)
 		return

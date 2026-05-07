@@ -100,9 +100,9 @@ mutation_recent_stats() {
 
 	for f in $(ls -t data/state/experiments/*.json 2>/dev/null); do
 		local agent mtype win baseline candidate delta
-		agent=$(jq -r '.experiment.target_agent_id // .Experiment.TargetAgentID // empty' "$f" 2>/dev/null)
-		mtype=$(jq -r '.experiment.mutation_type // .Experiment.MutationType // .brief.mutation_type // .Brief.mutation_type // empty' "$f" 2>/dev/null)
-		win=$(jq -r '.brief.window_id // .Brief.window_id // empty' "$f" 2>/dev/null)
+		agent=$(jq -r '.experiment.target_agent_id // empty' "$f" 2>/dev/null)
+		mtype=$(jq -r '.experiment.mutation_type // .brief.mutation_type // empty' "$f" 2>/dev/null)
+		win=$(jq -r '.brief.window_id // empty' "$f" 2>/dev/null)
 		if [[ "$agent" != "$agent_id" || "$mtype" != "$mutation_type" ]]; then
 			continue
 		fi
@@ -110,8 +110,8 @@ mutation_recent_stats() {
 			continue
 		fi
 
-		baseline=$(jq -r '.experiment.baseline_value // .Experiment.BaselineValue // empty' "$f" 2>/dev/null)
-		candidate=$(jq -r '.experiment.candidate_value // .Experiment.CandidateValue // empty' "$f" 2>/dev/null)
+		baseline=$(jq -r '.experiment.baseline_value // empty' "$f" 2>/dev/null)
+		candidate=$(jq -r '.experiment.candidate_value // empty' "$f" 2>/dev/null)
 		if [[ -z "$baseline" || -z "$candidate" || "$baseline" == "null" || "$candidate" == "null" ]]; then
 			continue
 		fi
@@ -335,9 +335,9 @@ is_mutation_futile() {
 
 	for f in $(ls -t data/state/experiments/*.json 2>/dev/null); do
 		local agent mtype win baseline candidate
-		agent=$(jq -r '.experiment.target_agent_id // .Experiment.TargetAgentID // empty' "$f" 2>/dev/null)
-		mtype=$(jq -r '.experiment.mutation_type // .Experiment.MutationType // .brief.mutation_type // .Brief.mutation_type // empty' "$f" 2>/dev/null)
-		win=$(jq -r '.brief.window_id // .Brief.window_id // empty' "$f" 2>/dev/null)
+		agent=$(jq -r '.experiment.target_agent_id // empty' "$f" 2>/dev/null)
+		mtype=$(jq -r '.experiment.mutation_type // .brief.mutation_type // empty' "$f" 2>/dev/null)
+		win=$(jq -r '.brief.window_id // empty' "$f" 2>/dev/null)
 		if [[ "$agent" != "$agent_id" || "$mtype" != "$mutation_type" ]]; then
 			continue
 		fi
@@ -345,8 +345,8 @@ is_mutation_futile() {
 			continue
 		fi
 
-		baseline=$(jq -r '.experiment.baseline_value // .Experiment.BaselineValue // empty' "$f" 2>/dev/null)
-		candidate=$(jq -r '.experiment.candidate_value // .Experiment.CandidateValue // empty' "$f" 2>/dev/null)
+		baseline=$(jq -r '.experiment.baseline_value // empty' "$f" 2>/dev/null)
+		candidate=$(jq -r '.experiment.candidate_value // empty' "$f" 2>/dev/null)
 		if [[ -z "$baseline" || -z "$candidate" || "$baseline" == "null" || "$candidate" == "null" ]]; then
 			continue
 		fi
@@ -462,7 +462,7 @@ if [[ -n "$primary_log" && "$ENABLE_FALLBACK" == true ]] && [[ "$FALLBACK_TYPE" 
 	fi
 
 	if [[ "$fallback_skipped_futility" != true ]]; then
-		observed_count=$(jq -r '.brief.observed_window_count // .Brief.ObservedWindowCount // 0' "$primary_log" 2>/dev/null | head -1)
+		observed_count=$(grep -o '"observed_window_count": [0-9]*' "$primary_log" | head -1 | awk '{print $2}')
 		if [[ -z "$observed_count" ]]; then
 			observed_count=0
 		fi
@@ -480,7 +480,7 @@ if [[ -n "$primary_log" && "$ENABLE_FALLBACK" == true ]] && [[ "$FALLBACK_TYPE" 
 				;;
 		esac
 
-		if grep -iq '"status": "rejected"' "$primary_log" && grep -iq 'candidate did not improve over baseline' "$primary_log"; then
+		if grep -q '"status": "rejected"' "$primary_log" && grep -q 'candidate did not improve over baseline' "$primary_log"; then
 			if [[ "$observed_count" -lt "$required_for_fallback" ]]; then
 				echo ""
 				echo "Fallback skipped: observed_window_count=$observed_count is too low for $FALLBACK_TYPE (need >= $required_for_fallback)."

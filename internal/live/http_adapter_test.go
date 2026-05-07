@@ -1,7 +1,6 @@
 package live
 
 import (
-	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -514,7 +513,7 @@ func TestHTTPBrokerAdapterRejectsReplayNonceAcrossRestartsWithFileStore(t *testi
 		Now:         func() time.Time { return now },
 		Nonce:       func() string { return "nonce-persist-1" },
 		NonceTTL:    10 * time.Minute,
-		NonceStore:  NewFilelivestore.NonceReplayStore(storePath),
+		NonceStore:  NewFileNonceReplayStore(storePath),
 	})
 	if _, err := adapterA.SubmitOrder(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 1}); err != nil {
 		t.Fatalf("adapterA SubmitOrder error: %v", err)
@@ -530,7 +529,7 @@ func TestHTTPBrokerAdapterRejectsReplayNonceAcrossRestartsWithFileStore(t *testi
 		Now:         func() time.Time { return now.Add(1 * time.Minute) },
 		Nonce:       func() string { return "nonce-persist-1" },
 		NonceTTL:    10 * time.Minute,
-		NonceStore:  NewFilelivestore.NonceReplayStore(storePath),
+		NonceStore:  NewFileNonceReplayStore(storePath),
 	})
 	if _, err := adapterB.SubmitOrder(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 1}); err == nil {
 		t.Fatalf("expected replay nonce error, got nil")

@@ -75,13 +75,13 @@ find_latest_experiment() {
     if [ -f "data/state/experiments.jsonl" ]; then
         local latest
         if [ -n "$status_filter" ]; then
-            latest=$(grep -i '"status":"'$status_filter'"' data/state/experiments.jsonl | tail -1)
+            latest=$(grep '"status":"'$status_filter'"' data/state/experiments.jsonl | tail -1)
         else
             latest=$(tail -1 data/state/experiments.jsonl)
         fi
-
+        
         if [ -n "$latest" ]; then
-            local exp_id=$(echo "$latest" | jq -r '.id // .ID // empty')
+            local exp_id=$(echo "$latest" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
             echo "$exp_id"
             return 0
         fi
@@ -121,19 +121,21 @@ display_results() {
     echo -e "${CYAN}Experiment Results:${NC}"
     echo ""
     
-    # Extract key data with dual-read for snake_case / PascalCase
+    # Extract key data
+    local exp_data
+    exp_data=$(tr -d '\n' < "$result_file")
     local exp_id
-    exp_id=$(jq -r '.experiment.id // .Experiment.ID // empty' "$result_file" 2>/dev/null)
+    exp_id=$(echo "$exp_data" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
     local agent
-    agent=$(jq -r '.experiment.target_agent_id // .Experiment.TargetAgentID // empty' "$result_file" 2>/dev/null)
+    agent=$(echo "$exp_data" | grep -o '"target_agent_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
     local status
-    status=$(jq -r '.experiment.status // .Experiment.Status // empty' "$result_file" 2>/dev/null)
+    status=$(echo "$exp_data" | grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
     local baseline
-    baseline=$(jq -r '.experiment.baseline_value // .Experiment.BaselineValue // empty' "$result_file" 2>/dev/null)
+    baseline=$(echo "$exp_data" | grep -o '"baseline_value"[[:space:]]*:[[:space:]]*[^,}]*' | head -1 | cut -d':' -f2 | xargs)
     local candidate
-    candidate=$(jq -r '.experiment.candidate_value // .Experiment.CandidateValue // empty' "$result_file" 2>/dev/null)
+    candidate=$(echo "$exp_data" | grep -o '"candidate_value"[[:space:]]*:[[:space:]]*[^,}]*' | head -1 | cut -d':' -f2 | xargs)
     local mutation
-    mutation=$(jq -r '.experiment.mutation_type // .Experiment.MutationType // empty' "$result_file" 2>/dev/null)
+    mutation=$(echo "$exp_data" | grep -o '"mutation_type"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
     
     echo "  Experiment ID: $exp_id"
     echo "  Agent: $agent"
@@ -156,13 +158,11 @@ display_results() {
     
     echo ""
     echo "Acceptance Checks:"
-    local checks
-    checks=$(jq -r '(.judge_checks // .JudgeChecks // [])[]?' "$result_file" 2>/dev/null)
+    local checks=$(echo "$exp_data" | grep -o '"judge_checks"[[:space:]]*:[[:space:]]*\[[^\]]*\]' | grep -o '"[^"]*"' | tr '"' ' ')
     if [ -n "$checks" ]; then
-        while IFS= read -r check; do
-            [ -n "$check" ] || continue
+        echo "$checks" | while read check; do
             echo "  ✓ $check"
-        done <<< "$checks"
+        done
     else
         echo "  (No checks recorded)"
     fi
@@ -172,21 +172,32 @@ display_results() {
 provide_recommendation() {
     local result_file="$1"
     
+    local exp_data
+    exp_data=$(tr -d '\n' < "$result_file")
     local status
-    status=$(jq -r '.experiment.status // .Experiment.Status // empty' "$result_file" 2>/dev/null)
+    status=$(echo "$exp_data" | grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
     local baseline
-    baseline=$(jq -r '.experiment.baseline_value // .Experiment.BaselineValue // empty' "$result_file" 2>/dev/null)
+    baseline=$(echo "$exp_data" | grep -o '"baseline_value"[[:space:]]*:[[:space:]]*[^,}]*' | head -1 | cut -d':' -f2 | xargs)
     local candidate
-    candidate=$(jq -r '.experiment.candidate_value // .Experiment.CandidateValue // empty' "$result_file" 2>/dev/null)
+    candidate=$(echo "$exp_data" | grep -o '"candidate_value"[[:space:]]*:[[:space:]]*[^,}]*' | head -1 | cut -d':' -f2 | xargs)
     local exp_id
-    exp_id=$(jq -r '.experiment.id // .Experiment.ID // empty' "$result_file" 2>/dev/null)
+    exp_id=$(echo "$exp_data" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
     
+    local oos_passed
+    oos_passed=$(echo "$exp_data" | grep -o '"oos_result"[[:space:]]*:[[:space:]]*{[^}]*"passed"[[:space:]]*:[[:space:]]*\(true\|false\)[^}]*}' | grep -o '"passed"[[:space:]]*:[[:space:]]*\(true\|false\)' | cut -d':' -f2 | xargs || echo "")
+
     local recommendation=""
     local reason=""
-    
+
     if [ "$status" = "accepted" ]; then
-        recommendation="--promote $exp_id"
-        reason="Experiment passed all acceptance gates"
+        # Check OOS validation as additional gate
+        if [ "$oos_passed" = "false" ]; then
+            recommendation="SKIP"
+            reason="Experiment passed acceptance but OOS validation failed"
+        else
+            recommendation="--promote $exp_id"
+            reason="Experiment passed all acceptance gates"
+        fi
     elif [ "$status" = "rejected" ]; then
         recommendation="SKIP"
         reason="Experiment failed acceptance criteria"
@@ -244,14 +255,10 @@ execute_judge() {
     fi
     
     local needs_replay_judge="false"
-    local eval_mode
-    eval_mode=$(jq -r '.experiment.evaluation_mode // .Experiment.EvaluationMode // empty' "$result_file" 2>/dev/null)
-    local exp_status
-    exp_status=$(jq -r '.experiment.status // .Experiment.Status // empty' "$result_file" 2>/dev/null)
-    if [ "$eval_mode" = "policy_checked_pending_replay" ]; then
+    if grep -Eq '"evaluation_mode"[[:space:]]*:[[:space:]]*"policy_checked_pending_replay"' "$result_file" 2>/dev/null; then
         needs_replay_judge="true"
     fi
-    if [ "$exp_status" = "running" ]; then
+    if grep -Eq '"status"[[:space:]]*:[[:space:]]*"running"' "$result_file" 2>/dev/null; then
         needs_replay_judge="true"
     fi
 

@@ -144,201 +144,69 @@ func TestFlexTime_JSONRoundTrip_InStruct(t *testing.T) {
 	}
 }
 
-// ─── SimulationConstraints JSON canonical snake_case ──────────────────────────
-
-func TestSimulationConstraints_JSONKeys(t *testing.T) {
-	orig := SimulationConstraints{
-		StartingCash:                1_000_000.0,
-		MaxPositionWeight:           0.05,
-		MaxOpenPositions:            20,
-		MinTradableVolume:           1000,
-		MinRecommendationConviction: 5,
-		RequireCROPass:              true,
-		TransactionCostBPS:          10.0,
-		SlippageBPS:                 5.0,
-		ReserveCashFraction:         0.10,
-		StopLossPct:                 -0.05,
-		TakeProfitPct:               0.15,
+func TestRecommendationOutcome_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		outcome RecommendationOutcome
+		wantErr bool
+	}{
+		{name: "valid", outcome: RecommendationOutcome{AgentID: "a", Symbol: "s", Side: SideBuy, Window: "2026-01-01", Conviction: 80}, wantErr: false},
+		{name: "empty agent_id", outcome: RecommendationOutcome{Symbol: "s", Side: SideBuy, Window: "2026-01-01", Conviction: 1}, wantErr: true},
+		{name: "empty symbol", outcome: RecommendationOutcome{AgentID: "a", Side: SideBuy, Window: "2026-01-01", Conviction: 1}, wantErr: true},
+		{name: "empty side", outcome: RecommendationOutcome{AgentID: "a", Symbol: "s", Window: "2026-01-01", Conviction: 1}, wantErr: true},
+		{name: "empty window", outcome: RecommendationOutcome{AgentID: "a", Symbol: "s", Side: SideBuy, Conviction: 1}, wantErr: true},
+		{name: "zero conviction", outcome: RecommendationOutcome{AgentID: "a", Symbol: "s", Side: SideBuy, Window: "2026-01-01", Conviction: 0}, wantErr: true},
 	}
-
-	data, err := json.Marshal(orig)
-	if err != nil {
-		t.Fatalf("Marshal error: %v", err)
-	}
-
-	// Parse as generic map to inspect keys
-	var m map[string]interface{}
-	if err := json.Unmarshal(data, &m); err != nil {
-		t.Fatalf("Unmarshal to map error: %v", err)
-	}
-
-	// Assert exact canonical snake_case keys
-	expectedKeys := []string{
-		"starting_cash",
-		"max_position_weight",
-		"max_open_positions",
-		"min_tradable_volume",
-		"min_recommendation_conviction",
-		"require_cro_pass",
-		"transaction_cost_bps",
-		"slippage_bps",
-		"reserve_cash_fraction",
-		"stop_loss_pct",
-		"take_profit_pct",
-	}
-
-	for _, k := range expectedKeys {
-		if _, ok := m[k]; !ok {
-			t.Errorf("missing expected snake_case key %q; got keys: %v", k, mapKeys(m))
-		}
-	}
-
-	// Ensure no PascalCase keys leak through
-	for k := range m {
-		if k != "" && k[0] >= 'A' && k[0] <= 'Z' {
-			t.Errorf("PascalCase key %q found — all keys must be snake_case", k)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.outcome.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr = %v", err, tt.wantErr)
+			}
+		})
 	}
 }
 
-func TestSimulationConstraints_RoundTrip(t *testing.T) {
-	orig := SimulationConstraints{
-		StartingCash:                1_000_000.0,
-		MaxPositionWeight:           0.05,
-		MaxOpenPositions:            20,
-		MinTradableVolume:           1000,
-		MinRecommendationConviction: 5,
-		RequireCROPass:              true,
-		TransactionCostBPS:          10.0,
-		SlippageBPS:                 5.0,
-		ReserveCashFraction:         0.10,
-		StopLossPct:                 -0.05,
-		TakeProfitPct:               0.15,
+func TestRecommendationOutcome_JSONRoundTrip(t *testing.T) {
+	orig := RecommendationOutcome{
+		AgentID: "a", Skill: "m", Symbol: "2330.TW", Side: SideBuy, Conviction: 80,
+		TargetPrice: 650, StopLossPrice: 580, Window: "2026-01-01", ForwardReturn: 0.025, Hit: true,
+		PassedGuards: true, FactorScores: FactorScores{Momentum: 0.85, Total: 0.72},
+		ConvictionBreakdown: &ConvictionBreakdown{Base: 60, Final: 80},
 	}
-
-	data, err := json.Marshal(orig)
-	if err != nil {
-		t.Fatalf("Marshal error: %v", err)
-	}
-
-	var decoded SimulationConstraints
+	data, _ := json.Marshal(orig)
+	var decoded RecommendationOutcome
 	if err := json.Unmarshal(data, &decoded); err != nil {
-		t.Fatalf("Unmarshal error: %v", err)
+		t.Fatalf("Unmarshal: %v", err)
 	}
-
-	if decoded.StartingCash != orig.StartingCash {
-		t.Errorf("StartingCash = %v, want %v", decoded.StartingCash, orig.StartingCash)
+	if decoded.AgentID != orig.AgentID {
+		t.Errorf("AgentID: got %q, want %q", decoded.AgentID, orig.AgentID)
 	}
-	if decoded.MaxPositionWeight != orig.MaxPositionWeight {
-		t.Errorf("MaxPositionWeight = %v, want %v", decoded.MaxPositionWeight, orig.MaxPositionWeight)
+	if decoded.TargetPrice != orig.TargetPrice {
+		t.Errorf("TargetPrice mismatch")
 	}
-	if decoded.MaxOpenPositions != orig.MaxOpenPositions {
-		t.Errorf("MaxOpenPositions = %v, want %v", decoded.MaxOpenPositions, orig.MaxOpenPositions)
+	if decoded.FactorScores.Total != orig.FactorScores.Total {
+		t.Error("FactorScores not preserved")
 	}
-	if decoded.MinTradableVolume != orig.MinTradableVolume {
-		t.Errorf("MinTradableVolume = %v, want %v", decoded.MinTradableVolume, orig.MinTradableVolume)
+	if decoded.ConvictionBreakdown == nil {
+		t.Error("ConvictionBreakdown not preserved")
 	}
-	if decoded.MinRecommendationConviction != orig.MinRecommendationConviction {
-		t.Errorf("MinRecommendationConviction = %v, want %v", decoded.MinRecommendationConviction, orig.MinRecommendationConviction)
-	}
-	if decoded.RequireCROPass != orig.RequireCROPass {
-		t.Errorf("RequireCROPass = %v, want %v", decoded.RequireCROPass, orig.RequireCROPass)
-	}
-	if decoded.TransactionCostBPS != orig.TransactionCostBPS {
-		t.Errorf("TransactionCostBPS = %v, want %v", decoded.TransactionCostBPS, orig.TransactionCostBPS)
-	}
-	if decoded.SlippageBPS != orig.SlippageBPS {
-		t.Errorf("SlippageBPS = %v, want %v", decoded.SlippageBPS, orig.SlippageBPS)
-	}
-	if decoded.ReserveCashFraction != orig.ReserveCashFraction {
-		t.Errorf("ReserveCashFraction = %v, want %v", decoded.ReserveCashFraction, orig.ReserveCashFraction)
-	}
-	if decoded.StopLossPct != orig.StopLossPct {
-		t.Errorf("StopLossPct = %v, want %v", decoded.StopLossPct, orig.StopLossPct)
-	}
-	if decoded.TakeProfitPct != orig.TakeProfitPct {
-		t.Errorf("TakeProfitPct = %v, want %v", decoded.TakeProfitPct, orig.TakeProfitPct)
+	if decoded.PassedGuards != orig.PassedGuards {
+		t.Error("PassedGuards not preserved")
 	}
 }
 
-// ─── ExecutionPolicy JSON canonical snake_case ───────────────────────────────
-
-func TestExecutionPolicy_JSONKeys(t *testing.T) {
-	orig := ExecutionPolicy{
-		ConvictionFloor:               3,
-		RequireCROPass:                true,
-		MomentumCrashProtection:       true,
-		EnableConvictionNormalization: false,
-	}
-
-	data, err := json.Marshal(orig)
-	if err != nil {
-		t.Fatalf("Marshal error: %v", err)
-	}
-
+func TestRecommendationOutcome_JSONKeysSnakeCase(t *testing.T) {
+	outcome := RecommendationOutcome{AgentID: "a", Symbol: "s", Side: SideBuy, Window: "2026-01-01", Conviction: 80}
+	data, _ := json.Marshal(outcome)
 	var m map[string]interface{}
-	if err := json.Unmarshal(data, &m); err != nil {
-		t.Fatalf("Unmarshal to map error: %v", err)
-	}
-
-	expectedKeys := []string{
-		"conviction_floor",
-		"require_cro_pass",
-		"momentum_crash_protection",
-		"enable_conviction_normalization",
-	}
-
-	for _, k := range expectedKeys {
-		if _, ok := m[k]; !ok {
-			t.Errorf("missing expected snake_case key %q; got keys: %v", k, mapKeys(m))
+	json.Unmarshal(data, &m)
+	for k := range m {
+		if len(k) > 0 && k[0] >= 'A' && k[0] <= 'Z' {
+			t.Errorf("PascalCase key %q found — must be snake_case", k)
 		}
 	}
-
-	for k := range m {
-		if k != "" && k[0] >= 'A' && k[0] <= 'Z' {
-			t.Errorf("PascalCase key %q found — all keys must be snake_case", k)
-		}
+	if _, ok := m["agent_id"]; !ok {
+		t.Error("missing snake_case key 'agent_id'")
 	}
-}
-
-func TestExecutionPolicy_RoundTrip(t *testing.T) {
-	orig := ExecutionPolicy{
-		ConvictionFloor:               3,
-		RequireCROPass:                true,
-		MomentumCrashProtection:       true,
-		EnableConvictionNormalization: false,
-	}
-
-	data, err := json.Marshal(orig)
-	if err != nil {
-		t.Fatalf("Marshal error: %v", err)
-	}
-
-	var decoded ExecutionPolicy
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		t.Fatalf("Unmarshal error: %v", err)
-	}
-
-	if decoded.ConvictionFloor != orig.ConvictionFloor {
-		t.Errorf("ConvictionFloor = %v, want %v", decoded.ConvictionFloor, orig.ConvictionFloor)
-	}
-	if decoded.RequireCROPass != orig.RequireCROPass {
-		t.Errorf("RequireCROPass = %v, want %v", decoded.RequireCROPass, orig.RequireCROPass)
-	}
-	if decoded.MomentumCrashProtection != orig.MomentumCrashProtection {
-		t.Errorf("MomentumCrashProtection = %v, want %v", decoded.MomentumCrashProtection, orig.MomentumCrashProtection)
-	}
-	if decoded.EnableConvictionNormalization != orig.EnableConvictionNormalization {
-		t.Errorf("EnableConvictionNormalization = %v, want %v", decoded.EnableConvictionNormalization, orig.EnableConvictionNormalization)
-	}
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-func mapKeys(m map[string]interface{}) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
 }
