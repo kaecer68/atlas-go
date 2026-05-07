@@ -62,18 +62,18 @@ func TestLoadSessionSummaryPrefersNonEmptyOutcomeCount(t *testing.T) {
 
 	// Older session: date is earlier but has real OutcomeCount.
 	writeTestSessionSummaryOnly(t, baseDir, olderID, domain.SessionSummary{
-		SessionID:     olderID,
-		Regime:        domain.RegimeRiskOn,
-		RecordedAt:    olderDate,
-		OutcomeCount:  5,
+		SessionID:    olderID,
+		Regime:       domain.RegimeRiskOn,
+		RecordedAt:   olderDate,
+		OutcomeCount: 5,
 	})
 
 	// Newer session: date is later but OutcomeCount is zero (no recommendations produced).
 	writeTestSessionSummaryOnly(t, baseDir, newerID, domain.SessionSummary{
-		SessionID:     newerID,
-		Regime:        domain.RegimeRiskOn,
-		RecordedAt:    newerDate,
-		OutcomeCount:  0,
+		SessionID:    newerID,
+		Regime:       domain.RegimeRiskOn,
+		RecordedAt:   newerDate,
+		OutcomeCount: 0,
 	})
 
 	// When sessionID is empty, auto-selection runs.

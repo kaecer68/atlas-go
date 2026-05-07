@@ -81,8 +81,8 @@ type ConvictionNormalizerInterface interface {
 
 // Compile-time checks that concrete types satisfy interfaces.
 var (
-	_ FactorEngineInterface          = (*FactorEngine)(nil)
-	_ OptimizerInterface             = (*Optimizer)(nil)
+	_ FactorEngineInterface           = (*FactorEngine)(nil)
+	_ OptimizerInterface              = (*Optimizer)(nil)
 	_ DarwinianWeightManagerInterface = (*DarwinianWeightManager)(nil)
-	_ ConvictionNormalizerInterface  = (*ConvictionNormalizer)(nil)
+	_ ConvictionNormalizerInterface   = (*ConvictionNormalizer)(nil)
 )

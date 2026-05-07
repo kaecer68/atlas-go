@@ -5,10 +5,10 @@ import "time"
 type TaskType string
 
 const (
-	TaskTypeRunExperiment    TaskType = "run_experiment"
-	TaskTypeJudgeExperiment   TaskType = "judge_experiment"
-	TaskTypePromoteBaseline   TaskType = "promote_baseline"
-	TaskTypeBacktestWindow    TaskType = "backtest_window"
+	TaskTypeRunExperiment   TaskType = "run_experiment"
+	TaskTypeJudgeExperiment TaskType = "judge_experiment"
+	TaskTypePromoteBaseline TaskType = "promote_baseline"
+	TaskTypeBacktestWindow  TaskType = "backtest_window"
 )
 
 type TaskStatus string

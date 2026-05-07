@@ -259,7 +259,7 @@ func TestReflexivityMutatesSwarmScenarios(t *testing.T) {
 
 func TestSystemAppliesPRISMWeightsWhenControllerAttached(t *testing.T) {
 	registry := SeedRegistry()
-	s := &System{SystemCore: &SystemCore{registry: registry}}
+	s := &System{SystemCore: &SystemCore{SimulationCore: SimulationCore{registry: registry}}}
 	recs := []domain.Recommendation{
 		{Agent: "taiwan_macro", Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 60},
 	}
@@ -307,7 +307,7 @@ func TestPhase3MetricsSaveAndLoad(t *testing.T) {
 
 func TestSystemRunPhase3OptimizationNoPanic(t *testing.T) {
 	registry := SeedRegistry()
-	s := &System{SystemCore: &SystemCore{registry: registry}}
+	s := &System{SystemCore: &SystemCore{SimulationCore: SimulationCore{registry: registry}}}
 	quotes := []domain.Quote{
 		{Symbol: "2330.TW", Last: 850, Volume: 1000000},
 	}

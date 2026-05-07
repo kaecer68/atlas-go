@@ -24,41 +24,68 @@ import (
 	"github.com/kaecer68/atlas-go/internal/strategy"
 )
 
-// SystemCore holds the essential simulation state and services.
-type SystemCore struct {
-	cfg              config.Config
-	provider         marketdata.Provider
-	engine           *sim.Engine
-	registry         domain.AgentRegistry
-	policy           baseline.Policy
-	ledger           *ledger.Store
-	replay           *replay.Dataset
-	session          domain.ReplaySession
-	alphaDiscovery   *AlphaDiscoveryEngine
-	optimizer        portfolio.OptimizerInterface
-	plugins          *PluginRegistry
-	narrativeEngine  *narrative.NarrativeEngine
-	persistentState  *domain.SimulationState
-	ctx              context.Context
+// SimulationCore holds the core simulation lifecycle state: config,
+// market data provider, simulation engine, registry, policy, ledger,
+// replay dataset, and session-scoped state.
+type SimulationCore struct {
+	cfg             config.Config
+	provider        marketdata.Provider
+	engine          *sim.Engine
+	registry        domain.AgentRegistry
+	policy          baseline.Policy
+	ledger          *ledger.Store
+	replay          *replay.Dataset
+	session         domain.ReplaySession
+	persistentState *domain.SimulationState
+	ctx             context.Context
+
+	// Session-local outcome tracking
 	lastOutcomes     []domain.RecommendationOutcome
 	portfolioHistory []float64
 	returnHistory    []float64
-	darwinian        portfolio.DarwinianWeightManagerInterface
+}
 
+// PortfolioManager holds portfolio-level components: alpha discovery,
+// darwinian weights, optimizer, capital allocation, and factor weighting.
+type PortfolioManager struct {
+	alphaDiscovery     *AlphaDiscoveryEngine
+	optimizer          portfolio.OptimizerInterface
+	darwinian          portfolio.DarwinianWeightManagerInterface
+	capitalAllocator   *portfolio.CapitalAllocator
+	factorWeightEngine *portfolio.FactorWeightEngine
+}
+
+// StrategyLayer holds strategy registry, selector, comparison engine,
+// and dynamic threshold engine.
+type StrategyLayer struct {
+	strategyRegistry *strategy.Registry
+	strategySelector *strategy.Selector
+	comparisonEngine *strategy.ComparisonEngine
+	thresholdEngine  *sim.DynamicThresholdEngine
+}
+
+// RiskOps holds risk management, capital control, approval workflow,
+// metrics, event bus, and outcome repository.
+type RiskOps struct {
 	capitalController *risk.CapitalPhaseController
-	capitalAllocator  *portfolio.CapitalAllocator
 	approvalWorkflow  *risk.ApprovalWorkflow
 	metricsCollector  interface{ RecordScreening(passed, rejected int64) }
 	eventBus          *eventbus.ChannelEventBus
 	clampingLogger    *clampingLogger
+	repo              repository.OutcomeRepository
+}
 
-	strategyRegistry   *strategy.Registry
-	strategySelector   *strategy.Selector
-	comparisonEngine   *strategy.ComparisonEngine
-	factorWeightEngine *portfolio.FactorWeightEngine
-	thresholdEngine    *sim.DynamicThresholdEngine
+// SystemCore holds the essential simulation state and services.
+// Embedded structs provide logical grouping while preserving
+// backward-compatible field access (e.g. s.engine, s.darwinian).
+type SystemCore struct {
+	SimulationCore
+	PortfolioManager
+	StrategyLayer
+	RiskOps
 
-	repo repository.OutcomeRepository
+	plugins         *PluginRegistry
+	narrativeEngine *narrative.NarrativeEngine
 }
 
 // CoreServices interface implementation for SystemCore
@@ -136,27 +163,35 @@ func NewSystem(cfg config.Config) *System {
 		)
 	return &System{
 		SystemCore: &SystemCore{
-			cfg:                cfg,
-			provider:           selectProvider(cfg),
-			engine:             engine.WithContext(context.Background()),
-			registry:           registry,
-			policy:             policy,
-			ledger:             ledger.NewStore(cfg.LedgerDir),
-			replay:             ds,
-			session:            session,
-			optimizer:          optimizer,
-			plugins:            plugins,
-			alphaDiscovery:     NewAlphaDiscoveryEngine(factorEngine),
-			narrativeEngine:    narrative.NewNarrativeEngine(),
-			ctx:                context.Background(),
-			darwinian:          darwinian,
-			eventBus:           eventBus,
-			clampingLogger:     newClampingLogger(filepath.Join(cfg.LedgerDir, "clamping_events.jsonl")),
-			strategyRegistry:   strategyRegistry,
-			strategySelector:   strategySelector,
-			comparisonEngine:   comparisonEngine,
-			factorWeightEngine: factorWeightEngine,
-			thresholdEngine:    thresholdEngine,
+			SimulationCore: SimulationCore{
+				cfg:      cfg,
+				provider: selectProvider(cfg),
+				engine:   engine.WithContext(context.Background()),
+				registry: registry,
+				policy:   policy,
+				ledger:   ledger.NewStore(cfg.LedgerDir),
+				replay:   ds,
+				session:  session,
+				ctx:      context.Background(),
+			},
+			PortfolioManager: PortfolioManager{
+				optimizer:          optimizer,
+				alphaDiscovery:     NewAlphaDiscoveryEngine(factorEngine),
+				darwinian:          darwinian,
+				factorWeightEngine: factorWeightEngine,
+			},
+			StrategyLayer: StrategyLayer{
+				strategyRegistry: strategyRegistry,
+				strategySelector: strategySelector,
+				comparisonEngine: comparisonEngine,
+				thresholdEngine:  thresholdEngine,
+			},
+			RiskOps: RiskOps{
+				eventBus:       eventBus,
+				clampingLogger: newClampingLogger(filepath.Join(cfg.LedgerDir, "clamping_events.jsonl")),
+			},
+			plugins:         plugins,
+			narrativeEngine: narrative.NewNarrativeEngine(),
 		},
 	}
 }

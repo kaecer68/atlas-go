@@ -70,7 +70,7 @@ func TestSystemWithSwarm(t *testing.T) {
 
 func TestSystemWithSpawning(t *testing.T) {
 	registry := SeedRegistry()
-	s := &System{SystemCore: &SystemCore{registry: registry}}
+	s := &System{SystemCore: &SystemCore{SimulationCore: SimulationCore{registry: registry}}}
 	sm := spawning.NewSpawningManager(&registry, spawning.DefaultSpawningConfig())
 	s.WithSpawning(sm)
 	sp := findSpawningPlugin(s)
@@ -111,7 +111,7 @@ func TestApplySwarmConsensusBoostsBullishBuy(t *testing.T) {
 
 func TestSchedulePRISMForRegime(t *testing.T) {
 	registry := SeedRegistry()
-	s := &System{SystemCore: &SystemCore{registry: registry}}
+	s := &System{SystemCore: &SystemCore{SimulationCore: SimulationCore{registry: registry}}}
 	pm := prism.NewPRISMManager(prism.DefaultPRISMConfig())
 	s.WithPRISM(pm)
 
@@ -128,7 +128,7 @@ func TestSchedulePRISMForRegime(t *testing.T) {
 
 func TestRunSpawningCycleDoesNotPanic(t *testing.T) {
 	registry := SeedRegistry()
-	s := &System{SystemCore: &SystemCore{registry: registry}}
+	s := &System{SystemCore: &SystemCore{SimulationCore: SimulationCore{registry: registry}}}
 	// nil spawning manager should not panic
 	s.runSpawningCycle()
 

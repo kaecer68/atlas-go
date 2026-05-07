@@ -19,9 +19,9 @@ const (
 )
 
 type FubonClient struct {
-	proxyURL          string
-	httpClient        *http.Client
-	intradayLimiter   *rate.Limiter
+	proxyURL        string
+	httpClient      *http.Client
+	intradayLimiter *rate.Limiter
 }
 
 type FubonQuoteResponse struct {
@@ -68,7 +68,7 @@ func NewFubonClient(authToken string) *FubonClient {
 		httpClient: &http.Client{
 			Timeout: time.Duration(params.Marketdata.FubonAPITimeoutSec.Value) * time.Second,
 		},
-		intradayLimiter:   rate.NewLimiter(rate.Every(time.Minute/time.Duration(params.Marketdata.FubonIntradayLimit.Value)), params.Marketdata.FubonIntradayLimit.Value),
+		intradayLimiter: rate.NewLimiter(rate.Every(time.Minute/time.Duration(params.Marketdata.FubonIntradayLimit.Value)), params.Marketdata.FubonIntradayLimit.Value),
 	}
 }
 

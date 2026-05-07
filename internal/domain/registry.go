@@ -204,5 +204,3 @@ type PromptExperimentResult struct {
 	BaselineFactorCount    int                 `json:"baseline_factor_count,omitempty"`
 	CandidateFactorCount   int                 `json:"candidate_factor_count,omitempty"`
 }
-
-
