@@ -11,7 +11,7 @@ import (
 
 func TestRecordAndLoadOutcomes(t *testing.T) {
 	dir := t.TempDir()
-	store := NewStore(dir)
+	store := NewStore(dir).(*Store)
 
 	outcomes := []domain.RecommendationOutcome{
 		{AgentID: "a1", Skill: "s1", Window: "1d", ForwardReturn: 0.01, Hit: true, RecordedAt: time.Now()},
@@ -36,7 +36,7 @@ func TestRecordAndLoadOutcomes(t *testing.T) {
 
 func TestRecordAndLoadSessionOutcomes(t *testing.T) {
 	dir := t.TempDir()
-	store := NewStore(dir)
+	store := NewStore(dir).(*Store)
 	session := domain.ReplaySession{ID: "session-1"}
 
 	outcomes := []domain.RecommendationOutcome{
@@ -55,7 +55,7 @@ func TestRecordAndLoadSessionOutcomes(t *testing.T) {
 
 func TestLoadOutcomesMissingReturnsNil(t *testing.T) {
 	dir := t.TempDir()
-	store := NewStore(dir)
+	store := NewStore(dir).(*Store)
 
 	loaded, err := store.LoadOutcomes()
 	if err != nil {
@@ -68,7 +68,7 @@ func TestLoadOutcomesMissingReturnsNil(t *testing.T) {
 
 func TestRecordAndUpdatePromptExperimentResult(t *testing.T) {
 	dir := t.TempDir()
-	store := NewStore(dir)
+	store := NewStore(dir).(*Store)
 
 	result := domain.PromptExperimentResult{
 		Experiment: domain.ExperimentRecord{
@@ -101,7 +101,7 @@ func TestRecordAndUpdatePromptExperimentResult(t *testing.T) {
 
 func TestRecordExperimentJSONL(t *testing.T) {
 	dir := t.TempDir()
-	store := NewStore(dir)
+	store := NewStore(dir).(*Store)
 
 	record := domain.ExperimentRecord{
 		ID:     "exp-2",
@@ -120,7 +120,7 @@ func TestRecordExperimentJSONL(t *testing.T) {
 
 func TestRecordSessionExperiment(t *testing.T) {
 	dir := t.TempDir()
-	store := NewStore(dir)
+	store := NewStore(dir).(*Store)
 	session := domain.ReplaySession{ID: "session-exp"}
 
 	record := domain.ExperimentRecord{
@@ -140,7 +140,7 @@ func TestRecordSessionExperiment(t *testing.T) {
 
 func TestRecordMutationBrief(t *testing.T) {
 	dir := t.TempDir()
-	store := NewStore(dir)
+	store := NewStore(dir).(*Store)
 
 	brief := domain.MutationBrief{
 		WindowID:      "w1",
@@ -161,7 +161,7 @@ func TestRecordMutationBrief(t *testing.T) {
 
 func TestRecordAndLoadSpawnRecords(t *testing.T) {
 	dir := t.TempDir()
-	store := NewStore(dir)
+	store := NewStore(dir).(*Store)
 
 	record := SpawnRecord{
 		AgentID:    "spawn-1",
@@ -189,7 +189,7 @@ func TestRecordAndLoadSpawnRecords(t *testing.T) {
 
 func TestRecordAndLoadHumanInterventions(t *testing.T) {
 	dir := t.TempDir()
-	store := NewStore(dir)
+	store := NewStore(dir).(*Store)
 
 	intervention := domain.HumanIntervention{
 		ID:            "hi-1",
@@ -218,7 +218,7 @@ func TestRecordAndLoadHumanInterventions(t *testing.T) {
 
 func TestLoadSessionSummaries(t *testing.T) {
 	dir := t.TempDir()
-	store := NewStore(dir)
+	store := NewStore(dir).(*Store)
 	session := domain.ReplaySession{ID: "session-sum-1"}
 
 	summary := domain.SessionSummary{
@@ -246,7 +246,7 @@ func TestLoadSessionSummaries(t *testing.T) {
 
 func TestLoadSessionSummariesMissingReturnsNil(t *testing.T) {
 	dir := t.TempDir()
-	store := NewStore(dir)
+	store := NewStore(dir).(*Store)
 
 	summaries, err := store.LoadSessionSummaries()
 	if err != nil {

@@ -16,7 +16,7 @@ import (
 )
 
 type Judge struct {
-	store          *ledger.Store
+	store          ledger.ExperimentStore
 	replayDataPath string
 	baselinePath   string
 	oosValidator   *OOSValidator
@@ -24,7 +24,7 @@ type Judge struct {
 	eventBus       *eventbus.ChannelEventBus
 }
 
-func NewJudge(store *ledger.Store, replayDataPath, baselinePath string) *Judge {
+func NewJudge(store ledger.ExperimentStore, replayDataPath, baselinePath string) *Judge {
 	return &Judge{
 		store:          store,
 		replayDataPath: replayDataPath,

@@ -15,11 +15,11 @@ import (
 
 type OOSValidator struct {
 	replayDataPath string
-	store          *ledger.Store
+	store          ledger.ExperimentStore
 	params         *config.ParametersConfig
 }
 
-func NewOOSValidator(store *ledger.Store, replayDataPath string) *OOSValidator {
+func NewOOSValidator(store ledger.ExperimentStore, replayDataPath string) *OOSValidator {
 	return &OOSValidator{
 		replayDataPath: replayDataPath,
 		store:          store,

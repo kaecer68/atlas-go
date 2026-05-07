@@ -19,7 +19,7 @@ func TestEvaluateUpdatesStatus(t *testing.T) {
 	}
 	root := filepath.Clean(filepath.Join(wd, "../.."))
 	stateDir := t.TempDir()
-	store := ledger.NewStore(stateDir)
+	store := ledger.NewStore(stateDir).(ledger.ExperimentStore)
 	judge := NewJudge(store, filepath.Join(root, "samples", "replay", "twse_stock_day_all_sample.csv"), filepath.Join(stateDir, "baseline_policy.json"))
 	resultPath := filepath.Join(stateDir, "experiments", "test-experiment.json")
 	promptPath := filepath.Join(t.TempDir(), "v2.md")
@@ -256,7 +256,7 @@ require_cro_pass: true`
 
 func TestEvaluateRejectsMalformedResultContract(t *testing.T) {
 	stateDir := t.TempDir()
-	store := ledger.NewStore(stateDir)
+	store := ledger.NewStore(stateDir).(ledger.ExperimentStore)
 	judge := NewJudge(store, "", "")
 	resultPath := filepath.Join(stateDir, "experiments", "malformed.json")
 
@@ -298,7 +298,7 @@ func TestEvaluateRejectsInvalidStatusTransition(t *testing.T) {
 	}
 	root := filepath.Clean(filepath.Join(wd, "../.."))
 	stateDir := t.TempDir()
-	store := ledger.NewStore(stateDir)
+	store := ledger.NewStore(stateDir).(ledger.ExperimentStore)
 	judge := NewJudge(store, filepath.Join(root, "samples", "replay", "twse_stock_day_all_sample.csv"), filepath.Join(stateDir, "baseline_policy.json"))
 	resultPath := filepath.Join(stateDir, "experiments", "test-experiment-invalid-transition.json")
 	promptPath := filepath.Join(t.TempDir(), "v2.md")
@@ -453,7 +453,7 @@ func TestCalculateVolatility(t *testing.T) {
 
 func TestJudge_WithEventBus(t *testing.T) {
 	dir := t.TempDir()
-	store := ledger.NewStore(dir)
+	store := ledger.NewStore(dir).(ledger.ExperimentStore)
 	j := NewJudge(store, dir, dir)
 	result := j.WithEventBus(nil)
 	if result == nil {
@@ -463,7 +463,7 @@ func TestJudge_WithEventBus(t *testing.T) {
 
 func TestJudge_WithParameters(t *testing.T) {
 	dir := t.TempDir()
-	store := ledger.NewStore(dir)
+	store := ledger.NewStore(dir).(ledger.ExperimentStore)
 	j := NewJudge(store, dir, dir)
 	result := j.WithParameters(nil)
 	if result == nil {

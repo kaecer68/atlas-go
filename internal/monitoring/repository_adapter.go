@@ -90,13 +90,13 @@ func (a *AlertStoreAdapter) Acknowledge(alertID string, user string) error {
 	return a.store.Acknowledge(alertID, user)
 }
 
-// OutcomeStoreAdapter adapts ledger.Store to repository.OutcomeStore interface.
+// OutcomeStoreAdapter adapts ledger.OutcomeStore to repository.OutcomeStore interface.
 type OutcomeStoreAdapter struct {
-	store *ledger.Store
+	store ledger.OutcomeStore
 }
 
 // NewOutcomeStoreAdapter creates a new adapter.
-func NewOutcomeStoreAdapter(store *ledger.Store) *OutcomeStoreAdapter {
+func NewOutcomeStoreAdapter(store ledger.OutcomeStore) *OutcomeStoreAdapter {
 	return &OutcomeStoreAdapter{store: store}
 }
 

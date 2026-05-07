@@ -105,11 +105,15 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 		summary.WorstAgentSharpeLike = candidate.Scorecard.SharpeLike
 	}
 
-	if err := store.RecordWindowSummary(summary); err != nil {
+	bt, ok := store.(ledger.BacktestStore)
+	if !ok {
+		return domain.BacktestWindowSummary{}, fmt.Errorf("store does not implement BacktestStore")
+	}
+	if err := bt.RecordWindowSummary(summary); err != nil {
 		return domain.BacktestWindowSummary{}, err
 	}
 	if brief := evolution.BuildMutationBrief(summary.WindowID, candidate); brief != nil {
-		if err := store.RecordMutationBrief(summary.WindowID, *brief); err != nil {
+		if err := bt.RecordMutationBrief(summary.WindowID, *brief); err != nil {
 			return domain.BacktestWindowSummary{}, err
 		}
 	}
