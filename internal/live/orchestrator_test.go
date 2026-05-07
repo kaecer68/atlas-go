@@ -105,7 +105,11 @@ func TestCheckRiskTriggers(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_ = livestore.NewStateStore(t.TempDir()) // assigned but mainly used via stateStore field
 			if tt.withPosition {
+<<<<<<< Updated upstream
 				st.UpdatePosition(tt.position)
+=======
+				s.UpdatePosition(tt.position)
+>>>>>>> Stashed changes
 			}
 
 			bus := NewChannelEventBus(16)
