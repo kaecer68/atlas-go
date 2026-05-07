@@ -1315,6 +1315,14 @@ body { display: flex; margin: 0; min-height: 100vh; }
   </div>
 </div>
 
+<script type="module">
+  import { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState } from './js/shared/utils.js';
+  import { agentName, regimeLabel, AGENT_NAME_MAP, PAGE_TITLES } from './js/shared/constants.js';
+  import { FIELD } from './js/shared/field_names.js';
+  // Expose to global scope for gradual migration
+  Object.assign(window, { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState, agentName_esm: agentName, regimeLabel_esm: regimeLabel, FIELD });
+</script>
+
 <script>
 
 const pageLoadStatus = {};

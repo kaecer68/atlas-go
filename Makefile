@@ -27,9 +27,16 @@ lint:
 test:
 	go test ./...
 
-ci: lint test build check-format
+ci: lint test build check-format gen-check
 	@echo "✅ CI checks passed"
+
+gen-check:
+	@echo "🔍 Checking generated files..."
+	@go generate ./internal/domain/...
+	@test -z "$$(git diff -- web/static/js/shared/field_names.js)" || \
+		(echo "❌ field_names.js outdated. Run: go generate ./internal/domain/..." && exit 1)
+	@echo "  field_names.js: up to date"
 
 check-format:
 	@echo "🔍 Checking persistence format..."
-	@go run ./cmd/check-persistence-format -dir data/state 2>&1 | grep -v "^ok$$" || true
+	@go run ./cmd/check-persistence-format -dir data/state

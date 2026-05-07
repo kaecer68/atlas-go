@@ -1,5 +1,7 @@
 package domain
 
+//go:generate go run ../../cmd/gentags
+
 import "time"
 
 type Regime string
