@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -64,13 +65,22 @@ func TestRecordSessionSummaryPersistsTraceIDs(t *testing.T) {
 	}
 
 	path := filepath.Join(baseDir, "sessions", session.ID, "summary.json")
-	bytes, err := os.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read summary file: %v", err)
 	}
 
+	// Root-cause evidence: summary.json must be snake_case to match domain json tags.
+	// If this fails, it proves the writer is not using the tagged domain.SessionSummary (or tags are not applied).
+	if !bytes.Contains(b, []byte(`"session_id"`)) {
+		t.Fatalf("expected summary.json to contain snake_case key session_id; got:\n%s", b)
+	}
+	if bytes.Contains(b, []byte(`"SessionID"`)) {
+		t.Fatalf("expected summary.json NOT to contain PascalCase key SessionID; got:\n%s", b)
+	}
+
 	var got domain.SessionSummary
-	if err := json.Unmarshal(bytes, &got); err != nil {
+	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatalf("unmarshal summary: %v", err)
 	}
 	if got.ProposalID != summary.ProposalID {

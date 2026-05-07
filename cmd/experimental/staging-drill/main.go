@@ -1,6 +1,7 @@
 package main
 
 import (
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"context"
 	"encoding/json"
 	"flag"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/live"
-	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
@@ -45,8 +45,8 @@ func main() {
 	circuitStatePath := filepath.Join(tempDir, "circuit_breaker_state.json")
 
 	system := orchestrator.NewProductionSystem(cfg)
-	stateStore := livestore.NewStateStore(liveStateDir)
-	eventBus := live.NewChannelEventBus(64)
+	stateStore := livestore.Newlivestore.StateStore(liveStateDir)
+	eventBus := live.NewChannellivestore.EventBus(64)
 	provider := marketdata.NewMockProvider()
 
 	liveCfg := live.DefaultOrchestratorConfig()

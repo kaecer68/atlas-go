@@ -108,14 +108,14 @@ find_weakest_agent() {
     local weakest
     weakest=$(awk '
     {
-        if (match($0, /"agent_id":"[^"]+"/)) {
-            agent = substr($0, RSTART+12, RLENGTH-13)
+        if (match($0, /"AgentID":"[^"]+"/)) {
+            agent = substr($0, RSTART+11, RLENGTH-12)
         } else {
             next
         }
 
-        if (match($0, /"forward_return":-?[0-9.]+([eE][-+]?[0-9]+)?/)) {
-            val = substr($0, RSTART+17, RLENGTH-17) + 0
+        if (match($0, /"ForwardReturn":-?[0-9.]+([eE][-+]?[0-9]+)?/)) {
+            val = substr($0, RSTART+16, RLENGTH-16) + 0
         } else {
             next
         }
@@ -180,14 +180,14 @@ observed_windows_for_agent() {
     {
         id = ""
         win = ""
-        if (match($0, /"agent_id":"[^"]+"/)) {
-            id = substr($0, RSTART+12, RLENGTH-13)
+        if (match($0, /"AgentID":"[^"]+"/)) {
+            id = substr($0, RSTART+11, RLENGTH-12)
         }
         if (id != agent) {
             next
         }
-        if (match($0, /"window":"[^"]+"/)) {
-            win = substr($0, RSTART+9, RLENGTH-10)
+        if (match($0, /"Window":"[^"]+"/)) {
+            win = substr($0, RSTART+10, RLENGTH-11)
         }
         if (win != "") {
             seen[win] = 1
@@ -218,13 +218,13 @@ recent_judged_observations_for_agent_profile() {
     for f in data/state/experiments/*.json; do
         [ -f "$f" ] || continue
         local agent
-        agent=$(jq -r '.experiment.target_agent_id // empty' "$f" 2>/dev/null)
+        agent=$(jq -r '.experiment.target_agent_id // .Experiment.TargetAgentID // empty' "$f" 2>/dev/null)
         if [ "$agent" != "$target_agent" ]; then
             continue
         fi
         local mtype win
-        mtype=$(jq -r '.experiment.mutation_type // .brief.mutation_type // empty' "$f" 2>/dev/null)
-        win=$(jq -r '.brief.window_id // empty' "$f" 2>/dev/null)
+        mtype=$(jq -r '.experiment.mutation_type // .Experiment.MutationType // .brief.mutation_type // .Brief.mutation_type // empty' "$f" 2>/dev/null)
+        win=$(jq -r '.brief.window_id // .Brief.window_id // empty' "$f" 2>/dev/null)
         if [ -n "$mutation_type" ] && [ "$mtype" != "$mutation_type" ]; then
             continue
         fi
@@ -232,8 +232,8 @@ recent_judged_observations_for_agent_profile() {
             continue
         fi
         local bobs cobs
-        bobs=$(jq -r '.baseline_observations // 0' "$f" 2>/dev/null)
-        cobs=$(jq -r '.candidate_observations // 0' "$f" 2>/dev/null)
+        bobs=$(jq -r '.baseline_observations // .BaselineObservations // 0' "$f" 2>/dev/null)
+        cobs=$(jq -r '.candidate_observations // .CandidateObservations // 0' "$f" 2>/dev/null)
         if [[ "$bobs" =~ ^[0-9]+$ ]] && [ "$bobs" -gt "$max_obs" ]; then
             max_obs="$bobs"
         fi
@@ -259,8 +259,8 @@ recent_judged_observations_for_agent_window() {
     for f in data/state/experiments/*.json; do
         [ -f "$f" ] || continue
         local agent win
-        agent=$(jq -r '.experiment.target_agent_id // empty' "$f" 2>/dev/null)
-        win=$(jq -r '.brief.window_id // empty' "$f" 2>/dev/null)
+        agent=$(jq -r '.experiment.target_agent_id // .Experiment.TargetAgentID // empty' "$f" 2>/dev/null)
+        win=$(jq -r '.brief.window_id // .Brief.window_id // empty' "$f" 2>/dev/null)
         if [ "$agent" != "$target_agent" ]; then
             continue
         fi
@@ -268,8 +268,8 @@ recent_judged_observations_for_agent_window() {
             continue
         fi
         local bobs cobs
-        bobs=$(jq -r '.baseline_observations // 0' "$f" 2>/dev/null)
-        cobs=$(jq -r '.candidate_observations // 0' "$f" 2>/dev/null)
+        bobs=$(jq -r '.baseline_observations // .BaselineObservations // 0' "$f" 2>/dev/null)
+        cobs=$(jq -r '.candidate_observations // .CandidateObservations // 0' "$f" 2>/dev/null)
         if [[ "$bobs" =~ ^[0-9]+$ ]] && [ "$bobs" -gt "$max_obs" ]; then
             max_obs="$bobs"
         fi
@@ -536,7 +536,7 @@ print_next_steps() {
         echo "   ./scripts/openclaw/execute-next.sh"
         echo ""
         echo "Or manually:"
-        echo "   go run ./cmd/run-experiment ..."
+        echo "   go run ./cmd/execute-experiment ..."
     fi
 }
 

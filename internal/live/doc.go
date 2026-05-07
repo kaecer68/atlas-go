@@ -17,5 +17,5 @@
 //
 // Blocked by: high internal coupling through orchestrator.go central
 // coordinator. Requires first extracting interfaces for Broker,
-// livestore.StateStore, and EventBus before splitting.
+// livestore.livestore.StateStore, and livestore.EventBus before splitting.
 package live

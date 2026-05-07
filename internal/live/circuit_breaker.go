@@ -1,6 +1,7 @@
 package live
 
 import (
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,7 +10,6 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
@@ -46,8 +46,8 @@ func DefaultCircuitBreakerRules() []CircuitBreakerRule {
 	}
 }
 
-// CircuitBreakerEvent records a state transition.
-type CircuitBreakerEvent struct {
+// CircuitBreakerlivestore.Event records a state transition.
+type CircuitBreakerlivestore.Event struct {
 	Timestamp   time.Time    `json:"timestamp"`
 	FromState   CircuitState `json:"from_state"`
 	ToState     CircuitState `json:"to_state"`
@@ -78,7 +78,7 @@ func NewCircuitBreaker(logPath, statePath string) *CircuitBreaker {
 		logPath = "data/state/circuit_breaker_log.jsonl"
 	}
 	if statePath == "" {
-		statePath = livestore.DefaultCircuitBreakerStatePath
+		statePath = livestore.livestore.DefaultCircuitBreakerStatePath
 	}
 	cb := &CircuitBreaker{
 		rules:          DefaultCircuitBreakerRules(),
@@ -144,7 +144,7 @@ func (cb *CircuitBreaker) RecordStopLoss() {
 }
 
 // Evaluate checks all rules against current portfolio and may trigger state changes.
-func (cb *CircuitBreaker) Evaluate(portfolio livestore.PortfolioState, positions map[string]domain.Position, events []livestore.Event) {
+func (cb *CircuitBreaker) Evaluate(portfolio livestore.livestore.PortfolioState, positions map[string]domain.Position, events []livestore.livestore.Event) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
@@ -206,7 +206,7 @@ func (cb *CircuitBreaker) transitionLocked(to CircuitState, reason string, dayPn
 	if cb.state == to {
 		return
 	}
-	event := CircuitBreakerEvent{
+	event := CircuitBreakerlivestore.Event{
 		Timestamp:   time.Now(),
 		FromState:   cb.state,
 		ToState:     to,
@@ -225,7 +225,7 @@ func (cb *CircuitBreaker) transitionLocked(to CircuitState, reason string, dayPn
 	fmt.Printf("[CircuitBreaker] %s -> %s | %s\n", event.FromState, event.ToState, reason)
 }
 
-func (cb *CircuitBreaker) appendLog(event CircuitBreakerEvent) error {
+func (cb *CircuitBreaker) appendLog(event CircuitBreakerlivestore.Event) error {
 	if err := os.MkdirAll(filepath.Dir(cb.logPath), 0o755); err != nil {
 		return fmt.Errorf("mkdir: %w", err)
 	}
@@ -261,7 +261,7 @@ func (cb *CircuitBreaker) persistStateLocked() error {
 	if err != nil {
 		return fmt.Errorf("marshal circuit breaker state: %w", err)
 	}
-	if err := livestore.WriteFileAtomic(cb.statePath, string(data)); err != nil {
+	if err := livestore.livestore.WriteFileAtomic(cb.statePath, string(data)); err != nil {
 		return fmt.Errorf("persist circuit breaker state: %w", err)
 	}
 	return nil

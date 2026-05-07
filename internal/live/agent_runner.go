@@ -1,17 +1,17 @@
 package live
 
 import (
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"context"
 	"fmt"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 )
 
 type AgentRunner struct {
-	stateStore *livestore.StateStore
+	stateStore *livestore.livestore.StateStore
 	marketData interface {
 		GetQuotes(ctx context.Context, t time.Time, symbols []string) ([]domain.Quote, error)
 	}
@@ -21,12 +21,12 @@ type AgentRunner struct {
 		GetExecutionPolicy() domain.ExecutionPolicy
 	}
 	effectiveBrokerMode string
-	eventBus            *ChannelEventBus
+	eventBus            *Channellivestore.EventBus
 	metrics             MetricsRecorder
 }
 
 func NewAgentRunner(
-	stateStore *livestore.StateStore,
+	stateStore *livestore.livestore.StateStore,
 	marketData interface {
 		GetQuotes(ctx context.Context, t time.Time, symbols []string) ([]domain.Quote, error)
 	},
@@ -45,7 +45,7 @@ func NewAgentRunner(
 	}
 }
 
-func (r *AgentRunner) SetEventBus(eb *ChannelEventBus) {
+func (r *AgentRunner) Setlivestore.EventBus(eb *Channellivestore.EventBus) {
 	r.eventBus = eb
 }
 
@@ -64,9 +64,9 @@ func (r *AgentRunner) ApplyExecutionInput(ctx context.Context, input ExecutionIn
 		r.stateStore.SetFilteredRecommendations(input.FinalRecommendations)
 	}
 
-	r.publishEvent(BusEvent{
+	r.publishlivestore.Event(Buslivestore.Event{
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      EventSystemStart,
+		Type:      livestore.EventSystemStart,
 		Timestamp: time.Now(),
 		Payload: map[string]interface{}{
 			"regime":        string(input.Regime),
@@ -109,9 +109,9 @@ func (r *AgentRunner) RunContextAgent(ctx context.Context, watchlist []string) e
 	regime := r.inferRegime(registry, quoteMap, plugins)
 	r.stateStore.SetCurrentRegime(regime)
 
-	r.publishEvent(BusEvent{
+	r.publishlivestore.Event(Buslivestore.Event{
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      EventSystemStart,
+		Type:      livestore.EventSystemStart,
 		Timestamp: time.Now(),
 		Payload: map[string]interface{}{
 			"regime": string(regime),
@@ -204,9 +204,9 @@ func (r *AgentRunner) RunStyleAndSectorAgents(ctx context.Context, watchlist []s
 		fmt.Printf("[StyleAndSectorAgents] Generated %d recommendations\n", len(recommendations))
 	}
 
-	r.publishEvent(BusEvent{
+	r.publishlivestore.Event(Buslivestore.Event{
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      EventSystemStart,
+		Type:      livestore.EventSystemStart,
 		Timestamp: time.Now(),
 		Payload: map[string]interface{}{
 			"recommendation_count": len(recommendations),
@@ -248,9 +248,9 @@ func (r *AgentRunner) ApplyRiskFilters(ctx context.Context) error {
 	fmt.Printf("[RiskFilters] Applied CRO/CIO filters: %d passed, %d blocked\n", len(filtered), blockedCount)
 
 	if blockedCount > 0 {
-		r.publishEvent(BusEvent{
+		r.publishlivestore.Event(Buslivestore.Event{
 			ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-			Type:      EventRiskAlert,
+			Type:      livestore.EventRiskAlert,
 			Timestamp: time.Now(),
 			Payload: map[string]interface{}{
 				"blocked_count": blockedCount,
@@ -263,7 +263,7 @@ func (r *AgentRunner) ApplyRiskFilters(ctx context.Context) error {
 	return nil
 }
 
-func (r *AgentRunner) publishEvent(event BusEvent) {
+func (r *AgentRunner) publishlivestore.Event(event Buslivestore.Event) {
 	if r.eventBus == nil {
 		return
 	}

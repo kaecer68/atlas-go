@@ -3,7 +3,6 @@ package baseline
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 type Policy struct {
@@ -28,14 +26,14 @@ type Policy struct {
 func (p *Policy) UnmarshalJSON(data []byte) error {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return fmt.Errorf("unmarshal raw policy: %w", err)
+		return err
 	}
 
 	if _, ok := raw["version"]; ok {
 		type alias Policy
 		var current alias
 		if err := json.Unmarshal(data, &current); err != nil {
-			return fmt.Errorf("unmarshal current policy: %w", err)
+			return err
 		}
 		*p = Policy(current)
 		return nil
@@ -93,21 +91,12 @@ func (p *Policy) UnmarshalJSON(data []byte) error {
 
 	var legacy legacyPolicy
 	if err := json.Unmarshal(data, &legacy); err != nil {
-		return fmt.Errorf("unmarshal legacy policy: %w", err)
+		return err
 	}
 
 	promotions := make([]PromotionRecord, len(legacy.Promotions))
 	for i, lp := range legacy.Promotions {
-		promotions[i] = PromotionRecord{
-			ExperimentID:  lp.ExperimentID,
-			TargetAgentID: lp.TargetAgentID,
-			TargetSkill:   lp.TargetSkill,
-			MutationType:  lp.MutationType,
-			CandidatePath: lp.CandidatePath,
-			PromotedAt:    lp.PromotedAt,
-			Status:        lp.Status,
-			VersionAfter:  lp.VersionAfter,
-		}
+		promotions[i] = PromotionRecord(lp)
 	}
 
 	revertHistory := make([]RevertRecord, len(legacy.RevertHistory))
@@ -145,16 +134,14 @@ func (p *Policy) UnmarshalJSON(data []byte) error {
 }
 
 type PromotionRecord struct {
-	ExperimentID        string                        `json:"experiment_id"`
-	TargetAgentID       string                        `json:"target_agent_id"`
-	TargetSkill         string                        `json:"target_skill"`
-	MutationType        string                        `json:"mutation_type"`
-	CandidatePath       string                        `json:"candidate_path"`
-	PromotedAt          time.Time                     `json:"promoted_at"`
-	Status              string                        `json:"status"`
-	VersionAfter        int                           `json:"version_after"`
-	ConstraintsSnapshot *domain.SimulationConstraints `json:"constraints_snapshot,omitempty"`
-	PromptSnapshot      string                        `json:"prompt_snapshot,omitempty"`
+	ExperimentID  string    `json:"experiment_id"`
+	TargetAgentID string    `json:"target_agent_id"`
+	TargetSkill   string    `json:"target_skill"`
+	MutationType  string    `json:"mutation_type"`
+	CandidatePath string    `json:"candidate_path"`
+	PromotedAt    time.Time `json:"promoted_at"`
+	Status        string    `json:"status"`
+	VersionAfter  int       `json:"version_after"`
 }
 
 type RevertRecord struct {
@@ -189,20 +176,18 @@ func DefaultPolicy() Policy {
 
 func Load(path string) (Policy, error) {
 	if path == "" {
-		logging.Warn("baseline", "using_default_policy", "reason", "empty_path")
 		return DefaultPolicy(), nil
 	}
 	bytes, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			logging.Warn("baseline", "using_default_policy", "reason", "file_not_found", "path", path)
 			return DefaultPolicy(), nil
 		}
-		return Policy{}, fmt.Errorf("read policy file: %w", err)
+		return Policy{}, err
 	}
 	var policy Policy
 	if err := json.Unmarshal(bytes, &policy); err != nil {
-		return Policy{}, fmt.Errorf("unmarshal policy: %w", err)
+		return Policy{}, err
 	}
 	if policy.PromptOverrides == nil {
 		policy.PromptOverrides = map[string]string{}
@@ -221,12 +206,12 @@ func Save(path string, policy Policy) error {
 		return errors.New("baseline policy path must not be empty")
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("mkdir: %w", err)
+		return err
 	}
 	policy.LastUpdatedAt = time.Now()
 	bytes, err := json.MarshalIndent(policy, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal policy: %w", err)
+		return err
 	}
 	return os.WriteFile(path, bytes, 0o644)
 }
@@ -320,7 +305,7 @@ func Promote(policy Policy, result domain.PromptExperimentResult, candidate stri
 	}
 
 	next.Version++
-	record := PromotionRecord{
+	next.Promotions = append(next.Promotions, PromotionRecord{
 		ExperimentID:  result.Experiment.ID,
 		TargetAgentID: result.Experiment.TargetAgentID,
 		TargetSkill:   result.Experiment.Skill,
@@ -329,14 +314,7 @@ func Promote(policy Policy, result domain.PromptExperimentResult, candidate stri
 		PromotedAt:    time.Now(),
 		Status:        string(result.Experiment.Status),
 		VersionAfter:  next.Version,
-	}
-	if result.Experiment.MutationType == "risk_rule_change" || result.Experiment.MutationType == "portfolio_constraint_revision" {
-		snapshot := next.Constraints
-		record.ConstraintsSnapshot = &snapshot
-	} else if result.Experiment.MutationType == "prompt_tightening" || result.Experiment.MutationType == "" {
-		record.PromptSnapshot = candidate
-	}
-	next.Promotions = append(next.Promotions, record)
+	})
 	return next, nil
 }
 

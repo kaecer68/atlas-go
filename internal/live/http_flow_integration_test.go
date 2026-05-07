@@ -1,6 +1,7 @@
 package live
 
 import (
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -12,7 +13,6 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 )
 
 func TestGuardedToHTTPFlowIntegration(t *testing.T) {
@@ -50,7 +50,7 @@ func TestGuardedToHTTPFlowIntegration(t *testing.T) {
 	defer server.Close()
 
 	storePath := filepath.Join(t.TempDir(), "nonce-store.json")
-	nonceStore, err := livestore.BuildNonceReplayStore("file", storePath)
+	nonceStore, err := livestore.Buildlivestore.NonceReplayStore("file", storePath)
 	if err != nil {
 		t.Fatalf("build nonce store: %v", err)
 	}

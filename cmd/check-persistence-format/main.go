@@ -290,13 +290,7 @@ func checkWriterConsistency(path string) []string {
 }
 
 func checkEmptyWithSiblingSummary(outcomesPath string) []string {
-	parentDir := filepath.Dir(outcomesPath)
-	grandparentDir := filepath.Dir(parentDir)
-	if filepath.Base(outcomesPath) == "recommendation_outcomes.jsonl" && filepath.Base(grandparentDir) != "sessions" {
-		return nil
-	}
-
-	sessionDir := parentDir
+	sessionDir := filepath.Dir(outcomesPath)
 	summaryPath := filepath.Join(sessionDir, "summary.json")
 
 	data, err := os.ReadFile(summaryPath)
@@ -310,9 +304,6 @@ func checkEmptyWithSiblingSummary(outcomesPath string) []string {
 	}
 
 	countVal, ok := raw["outcome_count"]
-	if !ok {
-		countVal, ok = raw["OutcomeCount"]
-	}
 	if !ok {
 		return []string{"file empty"}
 	}

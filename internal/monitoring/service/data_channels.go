@@ -11,7 +11,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -131,13 +130,13 @@ func (s *channelHealthStore) loadLocked() error {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return fmt.Errorf("read channel health file: %w", err)
+		return err
 	}
 	var wrapper struct {
 		Channels map[string]*ChannelHealthRecord `json:"channels"`
 	}
 	if err := json.Unmarshal(data, &wrapper); err != nil {
-		return fmt.Errorf("unmarshal channel health: %w", err)
+		return err
 	}
 	if wrapper.Channels != nil {
 		s.data = wrapper.Channels
@@ -157,12 +156,12 @@ func (s *channelHealthStore) saveLocked() error {
 	}{Channels: s.data}
 	b, err := json.MarshalIndent(wrapper, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal channel health: %w", err)
+		return err
 	}
 	_ = os.MkdirAll(filepath.Dir(s.path), 0o755)
 	tmp := s.path + ".tmp"
 	if err := os.WriteFile(tmp, b, 0o644); err != nil {
-		return fmt.Errorf("write temp file: %w", err)
+		return err
 	}
 	return os.Rename(tmp, s.path)
 }
@@ -182,7 +181,7 @@ func NewDataChannelService(workDir string, pool *pgxpool.Pool, macroIngestor *na
 func (s *DataChannelService) GetChannelStatus(ctx context.Context, channel string) (DataChannel, error) {
 	channels, err := s.GetAllChannelStatuses(ctx)
 	if err != nil {
-		return DataChannel{}, fmt.Errorf("get all channel statuses: %w", err)
+		return DataChannel{}, err
 	}
 	for _, c := range channels {
 		if c.ChannelID == channel {
@@ -292,9 +291,9 @@ func (s *DataChannelService) buildTWSECapitalFlowChannel(now time.Time) DataChan
 }
 
 func (s *DataChannelService) buildFugleChannel(now time.Time) DataChannel {
-	fugleKey := config.GetSecret("FUGLE_API_KEY")
+	fugleKey := os.Getenv("FUGLE_API_KEY")
 	if fugleKey == "" {
-		fugleKey = config.GetSecret("ATLAS_FUGLE_API_KEY")
+		fugleKey = os.Getenv("ATLAS_FUGLE_API_KEY")
 	}
 	status := "inactive"
 	updated := "-"
@@ -330,9 +329,9 @@ func (s *DataChannelService) buildFugleChannel(now time.Time) DataChannel {
 }
 
 func (s *DataChannelService) buildFubonChannel(now time.Time) DataChannel {
-	fubonKey := config.GetSecret("FUBON_API_KEY")
+	fubonKey := os.Getenv("FUBON_API_KEY")
 	if fubonKey == "" {
-		fubonKey = config.GetSecret("ATLAS_FUBON_API_KEY")
+		fubonKey = os.Getenv("ATLAS_FUBON_API_KEY")
 	}
 	status := "inactive"
 	updated := "-"
@@ -368,7 +367,7 @@ func (s *DataChannelService) buildFubonChannel(now time.Time) DataChannel {
 }
 
 func (s *DataChannelService) buildFinMindChannel(now time.Time) DataChannel {
-	finmindKey := config.GetSecret("FINMIND_API_KEY")
+	finmindKey := os.Getenv("FINMIND_API_KEY")
 	status := "inactive"
 	updated := "-"
 	lastError := ""
@@ -581,7 +580,7 @@ func (s *DataChannelService) buildJanusRegimeChannel(now time.Time) DataChannel 
 func (s *DataChannelService) buildTEJChannel(now time.Time) DataChannel {
 	status := "inactive"
 	updated := "TEJ_API_KEY not configured"
-	tejKey := config.GetSecret("TEJ_API_KEY")
+	tejKey := os.Getenv("TEJ_API_KEY")
 	if tejKey != "" {
 		status = "ok"
 		updated = "TEJ API key configured"
@@ -611,7 +610,7 @@ func (s *DataChannelService) buildTEJChannel(now time.Time) DataChannel {
 func (s *DataChannelService) GetAlerts(ctx context.Context) ([]ChannelAlert, error) {
 	channels, err := s.GetAllChannelStatuses(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("get all channel statuses: %w", err)
+		return nil, err
 	}
 	knownInactive := map[string]bool{}
 	var alerts []ChannelAlert
