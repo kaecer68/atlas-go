@@ -1,3 +1,7 @@
+.grid { display: grid; gap: var(--space-md); }
+.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.cols-2 { grid-template-columns: repeat(2, 1fr); }
+
 .panel {
   background: var(--panel);
   border: 1px solid var(--border);
