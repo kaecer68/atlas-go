@@ -204,3 +204,13 @@ export async function unbanSector() {
 
 // --- Boot ---
 export function populateAgentSelect() {
+
+if (typeof window !== "undefined") Object.assign(window, {
+  closeModal, closeInfoModal, closePromoteModal, openKpiHelp, openInfoHelp,
+  confirmPromote, promoteExperiment, revertExperiment,
+  pauseAgent, resumeAgent, banSector, unbanSector,
+  judgeExperiment, viewDiff
+});
+  const select = document.getElementById('agentSelect');
+  if (!select) return;
+}

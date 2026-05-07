@@ -1,4 +1,5 @@
 // Backtest rendering module
+import { getJSON, formatDate, renderEmptyState } from '../shared/app-utils.js';
 
 export function initBacktestDates() {
   const today = new Date();
@@ -89,6 +90,16 @@ export function paginateTable(containerId, rows, pageSize=50) {
 
 // Simple markdown-to-HTML
 export function mdToHtml(md) {
+  if (!md) return '';
+  return String(md)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^### (.+)/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)/gm, '<h1>$1</h1>')
+    .replace(/\n/g, '<br>');
+}
+
 export async function renderBacktestReport() {
   const el = document.getElementById('backtestReport');
   try {
@@ -193,3 +204,5 @@ export async function pollBacktestStatus() {
     </div>
   `;
 }
+
+if (typeof window !== "undefined") Object.assign(window, { runBacktest });

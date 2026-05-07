@@ -1,4 +1,5 @@
 // Inbox / experiment overview page
+import { getJSON, formatDate } from '../shared/app-utils.js';
 import { agentName } from '../names.js';
 
 export function renderInbox(data) {

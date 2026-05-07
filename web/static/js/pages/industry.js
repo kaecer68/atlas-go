@@ -237,3 +237,4 @@ export function renderSeasonalityCalendar(data) {
 
 export function showIndustryDetail(industryId) {
   notify(`產業詳細分析功能開發中: ${industryId}`, 'info');
+}

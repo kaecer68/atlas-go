@@ -587,3 +587,7 @@ export async function togglePipelineSession(select) {
   const data = await getJSON(url);
   renderPipeline(data, showAll, select.value, showScreened);
 }
+
+if (typeof window !== "undefined") Object.assign(window, {
+  applyFilters, clearFilters, toggleFilterPanel, toggleWorkflowScreening
+});

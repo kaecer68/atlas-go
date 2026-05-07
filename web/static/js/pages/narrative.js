@@ -1,4 +1,5 @@
-import { eventName, stressLabel, regionName, sectorName, templateName } from '../names.js';
+import { eventName, stressLabel, regionName, sectorName, templateName, capitalFlowName, modelName, timeWindowName } from '../names.js';
+import { renderEmptyState } from '../shared/app-utils.js';
 
 export function renderLiveNarrativeStrip(events, stress, models, chains) {
   const el = document.getElementById('liveNarrativeStrip');
@@ -335,5 +336,3 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     }
   }
 }
-
-export function renderDataIngestHealth(snapshot) {

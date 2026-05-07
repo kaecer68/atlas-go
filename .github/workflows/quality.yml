@@ -69,6 +69,29 @@ jobs:
     - name: Run staticcheck
       run: staticcheck ./...
 
+  # Go generate check — ensures generated files are up-to-date
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+
+    - name: Run go generate
+      run: go generate .
+
+    - name: Check for uncommitted generated changes
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "ERROR: go generate produced uncommitted changes."
+          echo "Run 'go generate .' locally and commit the results."
+          git diff --stat
+          exit 1
+        fi
+
   # Test coverage
   coverage:
     runs-on: ubuntu-latest
