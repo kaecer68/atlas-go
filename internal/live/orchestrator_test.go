@@ -103,7 +103,7 @@ func TestCheckRiskTriggers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			store := store.NewStateStore(t.TempDir())
+			s := store.NewStateStore(t.TempDir())
 			if tt.withPosition {
 				store.UpdatePosition(tt.position)
 			}
@@ -170,7 +170,7 @@ func TestCheckRiskTriggers(t *testing.T) {
 }
 
 func TestExecuteOrderBlockedByCircuitBreaker(t *testing.T) {
-	store := store.NewStateStore(t.TempDir())
+	s := store.NewStateStore(t.TempDir())
 	bus := NewChannelEventBus(16)
 	t.Cleanup(func() { _ = bus.Close() })
 
