@@ -1,0 +1,215 @@
+package repository
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/kaecer68/atlas-go/internal/domain"
+)
+
+func (r *PostgresRepository) RecordScreeningRejects(ctx context.Context, sessionID string, rejects []domain.ScreeningReject) error {
+	if len(rejects) == 0 {
+		return nil
+	}
+
+	batch := &pgx.Batch{}
+	for _, sr := range rejects {
+		factorScores, _ := json.Marshal(sr.FactorScores)
+		batch.Queue(`
+			INSERT INTO screening_rejects (time, session_id, symbol, agent_id, skill, criterion, criterion_label, threshold, actual_value, factor_scores)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		`, sr.RecordedAt, sr.SessionID, sr.Symbol, sr.AgentID, sr.Skill,
+			sr.Criterion, sr.CriterionLabel, sr.Threshold, sr.ActualValue, factorScores)
+	}
+
+	br := r.pool.SendBatch(ctx, batch)
+	defer br.Close()
+
+	_, err := br.Exec()
+	return fmt.Errorf("insert screening rejects: %w", err)
+}
+
+func (r *PostgresRepository) QueryScreeningRejectsBySession(ctx context.Context, sessionID string) ([]domain.ScreeningReject, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT time, session_id, symbol, agent_id, skill, criterion, criterion_label, threshold, actual_value, factor_scores
+		FROM screening_rejects
+		WHERE session_id = $1
+		ORDER BY time DESC
+	`, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("query screening rejects by session: %w", err)
+	}
+	defer rows.Close()
+
+	return scanScreeningRejects(rows)
+}
+
+func scanScreeningRejects(rows pgx.Rows) ([]domain.ScreeningReject, error) {
+	var rejects []domain.ScreeningReject
+	for rows.Next() {
+		var sr domain.ScreeningReject
+		var factorScores []byte
+		err := rows.Scan(
+			&sr.RecordedAt, &sr.SessionID, &sr.Symbol, &sr.AgentID, &sr.Skill,
+			&sr.Criterion, &sr.CriterionLabel, &sr.Threshold, &sr.ActualValue, &factorScores,
+		)
+		if err != nil {
+			continue
+		}
+		if len(factorScores) > 0 {
+			if err := json.Unmarshal(factorScores, &sr.FactorScores); err != nil {
+				continue
+			}
+		}
+		rejects = append(rejects, sr)
+	}
+	return rejects, rows.Err()
+}
+
+func (r *PostgresRepository) SaveSessionSummary(ctx context.Context, summary domain.SessionSummary) error {
+	brokerRuntime, _ := json.Marshal(summary.BrokerRuntime)
+	guardOutcomes, _ := json.Marshal(summary.GuardOutcomes)
+
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO session_summaries (time, session_id, regime, order_count, position_count, ending_cash, portfolio_value, outcome_count, broker_runtime, next_experiment_agent_id, proposal_id, commit_id, approval_id, guard_outcomes)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		ON CONFLICT (session_id) DO UPDATE SET
+			time = EXCLUDED.time,
+			regime = EXCLUDED.regime,
+			order_count = EXCLUDED.order_count,
+			position_count = EXCLUDED.position_count,
+			ending_cash = EXCLUDED.ending_cash,
+			portfolio_value = EXCLUDED.portfolio_value,
+			outcome_count = EXCLUDED.outcome_count,
+			broker_runtime = EXCLUDED.broker_runtime,
+			next_experiment_agent_id = EXCLUDED.next_experiment_agent_id,
+			proposal_id = EXCLUDED.proposal_id,
+			commit_id = EXCLUDED.commit_id,
+			approval_id = EXCLUDED.approval_id,
+			guard_outcomes = EXCLUDED.guard_outcomes
+	`, summary.RecordedAt, summary.SessionID, string(summary.Regime), summary.OrderCount,
+		summary.PositionCount, summary.EndingCash, summary.PortfolioValue, summary.OutcomeCount,
+		brokerRuntime, summary.NextExperimentAgentID, summary.ProposalID, summary.CommitID,
+		summary.ApprovalID, guardOutcomes)
+
+	return fmt.Errorf("save session summary: %w", err)
+}
+
+func (r *PostgresRepository) LoadSessionSummary(ctx context.Context, sessionID string) (*domain.SessionSummary, error) {
+	var summary domain.SessionSummary
+	var regime string
+	var brokerRuntime, guardOutcomes []byte
+
+	err := r.pool.QueryRow(ctx, `
+		SELECT time, session_id, regime, order_count, position_count, ending_cash, portfolio_value, outcome_count, broker_runtime, next_experiment_agent_id, proposal_id, commit_id, approval_id, guard_outcomes
+		FROM session_summaries
+		WHERE session_id = $1
+	`, sessionID).Scan(
+		&summary.RecordedAt, &summary.SessionID, &regime, &summary.OrderCount,
+		&summary.PositionCount, &summary.EndingCash, &summary.PortfolioValue, &summary.OutcomeCount,
+		&brokerRuntime, &summary.NextExperimentAgentID, &summary.ProposalID, &summary.CommitID,
+		&summary.ApprovalID, &guardOutcomes,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("load session summary: %w", err)
+	}
+
+	summary.Regime = domain.Regime(regime)
+	if len(brokerRuntime) > 0 {
+		if err := json.Unmarshal(brokerRuntime, &summary.BrokerRuntime); err != nil {
+			return nil, fmt.Errorf("unmarshal broker_runtime: %w", err)
+		}
+	}
+	if len(guardOutcomes) > 0 {
+		if err := json.Unmarshal(guardOutcomes, &summary.GuardOutcomes); err != nil {
+			return nil, fmt.Errorf("unmarshal guard_outcomes: %w", err)
+		}
+	}
+
+	return &summary, nil
+}
+
+func (r *PostgresRepository) LoadAllSessionSummaries(ctx context.Context) ([]domain.SessionSummary, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT time, session_id, regime, order_count, position_count, ending_cash, portfolio_value, outcome_count, broker_runtime, next_experiment_agent_id, proposal_id, commit_id, approval_id, guard_outcomes
+		FROM session_summaries
+		ORDER BY time DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("load all session summaries: %w", err)
+	}
+	defer rows.Close()
+
+	var summaries []domain.SessionSummary
+	for rows.Next() {
+		var summary domain.SessionSummary
+		var regime string
+		var brokerRuntime, guardOutcomes []byte
+
+		err := rows.Scan(
+			&summary.RecordedAt, &summary.SessionID, &regime, &summary.OrderCount,
+			&summary.PositionCount, &summary.EndingCash, &summary.PortfolioValue, &summary.OutcomeCount,
+			&brokerRuntime, &summary.NextExperimentAgentID, &summary.ProposalID, &summary.CommitID,
+			&summary.ApprovalID, &guardOutcomes,
+		)
+		if err != nil {
+			continue
+		}
+		summary.Regime = domain.Regime(regime)
+		if len(brokerRuntime) > 0 {
+			if err := json.Unmarshal(brokerRuntime, &summary.BrokerRuntime); err != nil {
+				continue
+			}
+		}
+		if len(guardOutcomes) > 0 {
+			if err := json.Unmarshal(guardOutcomes, &summary.GuardOutcomes); err != nil {
+				continue
+			}
+		}
+		summaries = append(summaries, summary)
+	}
+	return summaries, rows.Err()
+}
+
+func (r *PostgresRepository) RecordHumanIntervention(ctx context.Context, intervention domain.HumanIntervention) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO human_interventions (time, intervention_id, type, target_agent_id, target_model_id, target_sector, target_symbol, value, reason, operator, session_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		ON CONFLICT (intervention_id) DO NOTHING
+	`, intervention.RecordedAt, intervention.ID, intervention.Type, intervention.TargetAgentID,
+		intervention.TargetModelID, intervention.TargetSector, intervention.TargetSymbol,
+		intervention.Value, intervention.Reason, intervention.Operator, intervention.SessionID)
+
+	return fmt.Errorf("record human intervention: %w", err)
+}
+
+func (r *PostgresRepository) LoadHumanInterventions(ctx context.Context) ([]domain.HumanIntervention, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT time, intervention_id, type, target_agent_id, target_model_id, target_sector, target_symbol, value, reason, operator, session_id
+		FROM human_interventions
+		ORDER BY time DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("load human interventions: %w", err)
+	}
+	defer rows.Close()
+
+	var interventions []domain.HumanIntervention
+	for rows.Next() {
+		var hi domain.HumanIntervention
+		err := rows.Scan(
+			&hi.RecordedAt, &hi.ID, &hi.Type, &hi.TargetAgentID, &hi.TargetModelID,
+			&hi.TargetSector, &hi.TargetSymbol, &hi.Value, &hi.Reason, &hi.Operator, &hi.SessionID,
+		)
+		if err != nil {
+			continue
+		}
+		interventions = append(interventions, hi)
+	}
+	return interventions, rows.Err()
+}

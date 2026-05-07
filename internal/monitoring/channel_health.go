@@ -50,13 +50,13 @@ func (s *ChannelHealthStore) load() error {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return err
+		return fmt.Errorf("read channel health file: %w", err)
 	}
 	var wrapper struct {
 		Channels map[string]*ChannelHealthRecord `json:"channels"`
 	}
 	if err := json.Unmarshal(b, &wrapper); err != nil {
-		return err
+		return fmt.Errorf("unmarshal channel health: %w", err)
 	}
 	s.data = wrapper.Channels
 	if s.data == nil {
@@ -73,12 +73,12 @@ func (s *ChannelHealthStore) save() error {
 	}{Channels: s.data}
 	b, err := json.MarshalIndent(wrapper, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal channel health: %w", err)
 	}
 	_ = os.MkdirAll(filepath.Dir(s.path), 0o755)
 	tmp := s.path + ".tmp"
 	if err := os.WriteFile(tmp, b, 0o644); err != nil {
-		return err
+		return fmt.Errorf("write temp file: %w", err)
 	}
 	return os.Rename(tmp, s.path)
 }
@@ -141,7 +141,10 @@ func (s *ChannelHealthStore) recordToDB(channelID, status, errMsg string) error 
 					  last_success_at = EXCLUDED.last_success_at,
 					  updated_at = EXCLUDED.updated_at
 	`, channelID, status, now, lastErrorPtr, lastSuccessAt, now)
-	return err
+	if err != nil {
+		return fmt.Errorf("exec channel health query: %w", err)
+	}
+	return nil
 }
 
 // Get retrieves the health record for a channel (nil if missing).

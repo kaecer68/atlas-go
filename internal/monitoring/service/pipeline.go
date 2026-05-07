@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,22 +13,49 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
 // PipelineService encapsulates dashboard pipeline data loading operations.
 type PipelineService struct {
-	WorkDir   string
-	LedgerDir string
+	WorkDir          string
+	LedgerDir        string
+	registryProvider RegistryProviderFunc
 }
 
-// NewPipelineService creates a new PipelineService.
+type RegistryProviderFunc func() (domain.AgentRegistry, error)
+
+func (s *PipelineService) WithRegistryProvider(fn RegistryProviderFunc) *PipelineService {
+	s.registryProvider = fn
+	return s
+}
+
 func NewPipelineService(workDir, ledgerDir string) *PipelineService {
 	return &PipelineService{
 		WorkDir:   workDir,
 		LedgerDir: ledgerDir,
 	}
+}
+
+// PipelineLoadStatus indicates the health of the loaded recommendation pipeline data.
+type PipelineLoadStatus string
+
+const (
+	PipelineStatusOK        PipelineLoadStatus = "ok"
+	PipelineStatusDegraded  PipelineLoadStatus = "degraded"
+	PipelineStatusMinimal   PipelineLoadStatus = "minimal"
+	PipelineStatusNoSession PipelineLoadStatus = "no_session"
+	PipelineStatusError     PipelineLoadStatus = "error"
+)
+
+func (s *PipelineService) loadRegistry() (domain.AgentRegistry, error) {
+	if s.registryProvider != nil {
+		return s.registryProvider()
+	}
+	registryPath := filepath.Join(s.WorkDir, "configs/agents.json")
+	return orchestrator.LoadRegistry(registryPath)
 }
 
 // LoadMacroRadar loads macro radar summary for the given session.
@@ -66,9 +94,15 @@ func (s *PipelineService) LoadAgentObservatory(sessionID string, limit int) (*Ag
 	}
 
 	store := ledger.NewStore(s.LedgerDir)
-	outcomes, err := store.LoadOutcomes()
-	if err != nil {
-		return nil, fmt.Errorf("load recommendation outcomes: %w", err)
+	var outcomes []domain.RecommendationOutcome
+	if summary != nil {
+		outcomes, _ = store.LoadSessionOutcomes(summary.SessionID)
+	}
+	if outcomes == nil {
+		outcomes, err = store.LoadOutcomes()
+		if err != nil {
+			return nil, fmt.Errorf("load recommendation outcomes: %w", err)
+		}
 	}
 	scorecards := ledger.BuildScorecards(outcomes)
 	if len(scorecards) > limit {
@@ -103,21 +137,130 @@ func (s *PipelineService) LoadForecastVsReality(agentID string, limit int) (*For
 		return nil, fmt.Errorf("load forecast-vs-reality data: %w", err)
 	}
 
-	data := &ForecastVsRealityData{Items: items}
 	summary, err := LoadSessionSummary(s.LedgerDir, "")
 	if err != nil {
-		return data, nil
+		logging.Warn("pipeline_service", "load_session_summary", logging.Err(err))
+		summary = nil
 	}
+
+	predictions, err := s.loadSymbolPredictions(limit, summary)
+	if err != nil {
+		logging.Warn("pipeline_service", "load_symbol_predictions", logging.Err(err))
+		predictions = nil
+	}
+
+	data := &ForecastVsRealityData{Items: items, SymbolPredictions: predictions}
 	if summary != nil {
 		data.BrokerRuntime = summary.BrokerRuntime
 	}
 	return data, nil
 }
 
+type rawOutcome struct {
+	AgentID       string  `json:"agent_id"`
+	Symbol        string  `json:"symbol"`
+	Side          string  `json:"side"`
+	Conviction    int     `json:"conviction"`
+	TargetPrice   float64 `json:"target_price"`
+	ForwardReturn float64 `json:"forward_return"`
+	Hit           bool    `json:"hit"`
+	PassedGuards  bool    `json:"passed_guards"`
+	RecordedAt    string  `json:"recorded_at"`
+	SessionID     string  `json:"session_id"`
+}
+
+func readOutcomeFile(path string) ([]rawOutcome, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+
+	var results []rawOutcome
+	var dropped int
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var r rawOutcome
+		if err := json.Unmarshal(scanner.Bytes(), &r); err != nil {
+			dropped++
+			continue
+		}
+		results = append(results, r)
+	}
+	if dropped > 0 {
+		logging.Warn("pipeline_service", "dropped_corrupted_outcomes", logging.FInt("count", dropped))
+	}
+	return results, scanner.Err()
+}
+
+func (s *PipelineService) loadSymbolPredictions(limit int, summary *domain.SessionSummary) ([]SymbolPredictionItem, error) {
+	var rawOutcomes []rawOutcome
+	if summary != nil {
+		path := filepath.Join(s.LedgerDir, "sessions", summary.SessionID, "recommendation_outcomes.jsonl")
+		rawOutcomes, _ = readOutcomeFile(path)
+	}
+	if rawOutcomes == nil {
+		path := filepath.Join(s.LedgerDir, "recommendation_outcomes.jsonl")
+		rawOutcomes, _ = readOutcomeFile(path)
+	}
+	if rawOutcomes == nil {
+		return nil, nil
+	}
+
+	slices.SortFunc(rawOutcomes, func(a, b rawOutcome) int {
+		if a.SessionID > b.SessionID {
+			return -1
+		}
+		if a.SessionID < b.SessionID {
+			return 1
+		}
+		return 0
+	})
+
+	if len(rawOutcomes) > limit {
+		rawOutcomes = rawOutcomes[:limit]
+	}
+
+	result := make([]SymbolPredictionItem, len(rawOutcomes))
+	for i, o := range rawOutcomes {
+		result[i] = SymbolPredictionItem{
+			AgentID:       o.AgentID,
+			Symbol:        o.Symbol,
+			Side:          o.Side,
+			Conviction:    o.Conviction,
+			TargetPrice:   o.TargetPrice,
+			ForwardReturn: o.ForwardReturn,
+			Hit:           o.Hit,
+			PassedGuards:  o.PassedGuards,
+			RecordedAt:    o.RecordedAt,
+			SessionID:     o.SessionID,
+		}
+	}
+	return result, nil
+}
+
 // ForecastVsRealityData is the internal representation for forecast vs reality response.
 type ForecastVsRealityData struct {
-	Items         []ForecastVsRealityItem
-	BrokerRuntime domain.BrokerRuntimeAudit
+	Items             []ForecastVsRealityItem
+	SymbolPredictions []SymbolPredictionItem
+	BrokerRuntime     domain.BrokerRuntimeAudit
+}
+
+// SymbolPredictionItem represents a single symbol's prediction vs actual outcome.
+type SymbolPredictionItem struct {
+	AgentID       string  `json:"agent_id"`
+	Symbol        string  `json:"symbol"`
+	Side          string  `json:"side"`
+	Conviction    int     `json:"conviction"`
+	TargetPrice   float64 `json:"target_price"`
+	ForwardReturn float64 `json:"forward_return"`
+	Hit           bool    `json:"hit"`
+	PassedGuards  bool    `json:"passed_guards"`
+	RecordedAt    string  `json:"recorded_at"`
+	SessionID     string  `json:"session_id"`
 }
 
 // ForecastVsRealityItem represents a single experiment result.
@@ -196,12 +339,101 @@ func (s *PipelineService) loadForecastVsRealityItems(agentID string, limit int) 
 
 // LoadRecommendationPipeline loads the recommendation pipeline for a session.
 func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll bool) (*RecommendationPipelineData, error) {
-	summary, err := LoadSessionSummary(s.LedgerDir, sessionID)
+	sessionsDir := filepath.Join(s.LedgerDir, "sessions")
+
+	entries, err := os.ReadDir(sessionsDir)
 	if err != nil {
-		return nil, fmt.Errorf("load recommendation pipeline summary: %w", err)
+		if os.IsNotExist(err) {
+			return &RecommendationPipelineData{
+				Status:        PipelineStatusNoSession,
+				StatusMessage: "尚未執行任何回測場次，請先執行回測",
+			}, nil
+		}
+		return nil, fmt.Errorf("read sessions dir: %w", err)
 	}
+
+	var availableSessions []string
+	var sessionDirs []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			availableSessions = append(availableSessions, entry.Name())
+			sessionDirs = append(sessionDirs, entry.Name())
+		}
+	}
+
+	if len(sessionDirs) == 0 {
+		return &RecommendationPipelineData{
+			Status:            PipelineStatusNoSession,
+			StatusMessage:     "尚未執行任何回測場次，請先執行回測",
+			AvailableSessions: availableSessions,
+		}, nil
+	}
+
+	var targetSession string
+	if sessionID != "" {
+		for _, dir := range sessionDirs {
+			if dir == sessionID {
+				targetSession = sessionID
+				break
+			}
+		}
+	} else {
+		slices.SortFunc(sessionDirs, func(a, b string) int {
+			aDate := sessionDateFromID(a)
+			bDate := sessionDateFromID(b)
+			switch {
+			case aDate.After(bDate):
+				return -1
+			case aDate.Before(bDate):
+				return 1
+			default:
+				return 0
+			}
+		})
+		targetSession = sessionDirs[0]
+	}
+
+	if targetSession == "" {
+		return &RecommendationPipelineData{
+			Status:            PipelineStatusNoSession,
+			StatusMessage:     "尚未執行任何回測場次，請先執行回測",
+			AvailableSessions: availableSessions,
+		}, nil
+	}
+
+	var summary *domain.SessionSummary
+	var guards []domain.GuardOutcome
+	var regime domain.Regime
+	var recordedAt time.Time
+
+	summaryPath := filepath.Join(sessionsDir, targetSession, "summary.json")
+	if summaryBytes, err := os.ReadFile(summaryPath); err == nil {
+		var s domain.SessionSummary
+		if err := json.Unmarshal(summaryBytes, &s); err == nil {
+			summary = &s
+			regime = s.Regime
+			recordedAt = s.RecordedAt
+			guards = make([]domain.GuardOutcome, 0, len(s.GuardOutcomes))
+			for _, g := range s.GuardOutcomes {
+				guards = append(guards, domain.GuardOutcome{
+					GuardID:     g.GuardID,
+					GuardSkill:  g.GuardSkill,
+					Severity:    g.Severity,
+					Passed:      g.Passed,
+					Reason:      g.Reason,
+					InputCount:  g.InputCount,
+					OutputCount: g.OutputCount,
+				})
+			}
+		}
+	}
+
+	status := PipelineStatusOK
+	statusMessage := ""
+
 	if summary == nil {
-		return nil, nil
+		status = PipelineStatusDegraded
+		statusMessage = "控制層過濾記錄未載入（summary.json 缺失），推薦清單仍可用"
 	}
 
 	var ds *replay.Dataset
@@ -219,8 +451,7 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 		}
 	}
 
-	sessionsDir := filepath.Join(s.LedgerDir, "sessions")
-	outcomesPath := filepath.Join(sessionsDir, summary.SessionID, "recommendation_outcomes.jsonl")
+	outcomesPath := filepath.Join(sessionsDir, targetSession, "recommendation_outcomes.jsonl")
 	items := make([]PipelineItemData, 0)
 	if data, err := os.ReadFile(outcomesPath); err == nil {
 		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
@@ -228,31 +459,13 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 			if strings.TrimSpace(line) == "" {
 				continue
 			}
-			var outcome struct {
-				AgentID             string                      `json:"AgentID"`
-				Skill               string                      `json:"Skill"`
-				Layer               string                      `json:"Layer"`
-				Symbol              string                      `json:"Symbol"`
-				Side                string                      `json:"Side"`
-				Conviction          int                         `json:"Conviction"`
-				TargetPrice         float64                     `json:"TargetPrice"`
-				StopLossPrice       float64                     `json:"StopLossPrice"`
-				ForwardReturn       float64                     `json:"ForwardReturn"`
-				Hit                 bool                        `json:"Hit"`
-				Reason              string                      `json:"Reason"`
-				Price               float64                     `json:"Price"`
-				PassedGuards        bool                        `json:"PassedGuards"`
-				GuardReason         string                      `json:"GuardReason"`
-				RecordedAt          time.Time                   `json:"RecordedAt"`
-				FactorScores        domain.FactorScores         `json:"factor_scores,omitempty"`
-				ConvictionBreakdown *domain.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
-			}
+			var outcome domain.RecommendationOutcome
 			if err := json.Unmarshal([]byte(line), &outcome); err != nil {
 				continue
 			}
 			fr := outcome.ForwardReturn
 			price := outcome.Price
-			side := outcome.Side
+			side := string(outcome.Side)
 			passedGuards := outcome.PassedGuards
 			// Legacy sessions (generated before PassedGuards field existed)
 			// should default to true to preserve backward-compatible display.
@@ -287,7 +500,7 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 				Symbol:              outcome.Symbol,
 				AgentID:             outcome.AgentID,
 				Skill:               outcome.Skill,
-				Layer:               outcome.Layer,
+				Layer:               string(outcome.Layer),
 				Side:                side,
 				Conviction:          outcome.Conviction,
 				TargetPrice:         tp,
@@ -304,46 +517,42 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 				ConvictionBreakdown: outcome.ConvictionBreakdown,
 			})
 		}
-	}
-
-	guards := make([]domain.GuardOutcome, 0, len(summary.GuardOutcomes))
-	for _, g := range summary.GuardOutcomes {
-		guards = append(guards, domain.GuardOutcome{
-			GuardID:     g.GuardID,
-			GuardSkill:  g.GuardSkill,
-			Severity:    g.Severity,
-			Passed:      g.Passed,
-			Reason:      g.Reason,
-			InputCount:  g.InputCount,
-			OutputCount: g.OutputCount,
-		})
+	} else {
+		status = PipelineStatusMinimal
+		statusMessage = "本場次尚無推薦產出記錄"
 	}
 
 	store := ledger.NewStore(s.LedgerDir)
-	screened, err := store.LoadSessionScreeningRejects(summary.SessionID)
+	screened, err := store.LoadSessionScreeningRejects(targetSession)
 	if err != nil {
 		// Log but don't fail
 		screened = nil
 	}
 
 	return &RecommendationPipelineData{
-		SessionID:     summary.SessionID,
-		Regime:        summary.Regime,
-		Items:         items,
-		GuardOutcomes: guards,
-		ScreenedItems: screened,
-		RecordedAt:    summary.RecordedAt,
+		SessionID:         targetSession,
+		Regime:            regime,
+		Items:             items,
+		GuardOutcomes:     guards,
+		ScreenedItems:     screened,
+		RecordedAt:        recordedAt,
+		Status:            status,
+		StatusMessage:     statusMessage,
+		AvailableSessions: availableSessions,
 	}, nil
 }
 
 // RecommendationPipelineData is the internal representation for recommendation pipeline response.
 type RecommendationPipelineData struct {
-	SessionID     string
-	Regime        domain.Regime
-	Items         []PipelineItemData
-	GuardOutcomes []domain.GuardOutcome
-	ScreenedItems []domain.ScreeningReject
-	RecordedAt    time.Time
+	SessionID         string
+	Regime            domain.Regime
+	Items             []PipelineItemData
+	GuardOutcomes     []domain.GuardOutcome
+	ScreenedItems     []domain.ScreeningReject
+	RecordedAt        time.Time
+	Status            PipelineLoadStatus
+	StatusMessage     string
+	AvailableSessions []string
 }
 
 // PipelineItemData represents a single recommendation in the pipeline.
@@ -384,21 +593,34 @@ func (s *PipelineService) LoadSessions() ([]SessionMeta, error) {
 		if !entry.IsDir() {
 			continue
 		}
-		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
-		bytes, err := os.ReadFile(summaryPath)
-		if err != nil {
-			continue
+		sessionID := entry.Name()
+		meta := SessionMeta{
+			SessionID:    sessionID,
+			Regime:       "unknown",
+			OutcomeCount: 0,
 		}
-		var summary domain.SessionSummary
-		if err := json.Unmarshal(bytes, &summary); err != nil {
-			continue
+
+		summaryPath := filepath.Join(sessionsDir, sessionID, "summary.json")
+		if bytes, err := os.ReadFile(summaryPath); err == nil {
+			var summary domain.SessionSummary
+			if err := json.Unmarshal(bytes, &summary); err == nil {
+				meta.SessionID = summary.SessionID
+				if !summary.RecordedAt.IsZero() {
+					meta.RecordedAt = summary.RecordedAt
+				}
+				if summary.Regime != "" {
+					meta.Regime = string(summary.Regime)
+				}
+				meta.OutcomeCount = summary.OutcomeCount
+			}
 		}
-		sessions = append(sessions, SessionMeta{
-			SessionID:    summary.SessionID,
-			RecordedAt:   summary.RecordedAt,
-			Regime:       string(summary.Regime),
-			OutcomeCount: summary.OutcomeCount,
-		})
+
+		// Fall back to session ID date if RecordedAt was not set from summary.
+		if meta.RecordedAt.IsZero() {
+			meta.RecordedAt = sessionDateFromID(sessionID)
+		}
+
+		sessions = append(sessions, meta)
 	}
 
 	// Sort by session trading date descending, then RecordedAt tiebreaker.
@@ -432,8 +654,7 @@ type SessionMeta struct {
 
 // LoadUniverseOverlap loads agent universe overlap data.
 func (s *PipelineService) LoadUniverseOverlap() (*UniverseOverlapData, error) {
-	registryPath := filepath.Join(s.WorkDir, "configs/agents.json")
-	registry, err := orchestrator.LoadRegistry(registryPath)
+	registry, err := s.loadRegistry()
 	if err != nil {
 		registry = orchestrator.SeedRegistry()
 	}
@@ -532,167 +753,174 @@ type AgentUniverseViewData struct {
 	ScreeningCriteria domain.ScreeningCriteria
 }
 
-func isStockPickingLayer(layer string) bool {
-	return layer == "sector" || layer == "style" || layer == "superinvestor"
+// DarwinianStatusData holds the current Darwinian weight state for the dashboard.
+type DarwinianStatusData struct {
+	Status       string                        `json:"status"`
+	LastComputed string                        `json:"last_computed,omitempty"`
+	AgentCount   int                           `json:"agent_count"`
+	Agents       map[string]DarwinianAgentInfo `json:"agents"`
 }
 
-func isStockPickingLayerByID(agentID string, views []AgentUniverseViewData) bool {
-	for _, v := range views {
-		if v.AgentID == agentID {
-			return isStockPickingLayer(v.Layer)
-		}
-	}
-	return false
+// DarwinianAgentInfo holds weight and performance data for a single agent.
+type DarwinianAgentInfo struct {
+	Weight        float64 `json:"weight"`
+	RollingSharpe float64 `json:"rolling_sharpe"`
+	HitRate       float64 `json:"hit_rate"`
+	TotalSignals  int     `json:"total_signals"`
+	WinCount      int     `json:"win_count"`
+	LossCount     int     `json:"loss_count"`
+	AvgReturn     float64 `json:"avg_return"`
+	LastUpdated   string  `json:"last_updated,omitempty"`
 }
 
-func fallbackPriceTargets(skill string, price float64) (float64, float64) {
-	var targetMult, stopLossMult float64
-	switch skill {
-	case "semiconductor_desk":
-		targetMult, stopLossMult = 1.06, 0.95
-	case "ai_supply_chain_desk":
-		targetMult, stopLossMult = 1.08, 0.95
-	case "etf_rotation_desk":
-		targetMult, stopLossMult = 1.04, 0.97
-	case "financials_desk":
-		targetMult, stopLossMult = 1.05, 0.96
-	case "shipping_desk":
-		targetMult, stopLossMult = 1.07, 0.94
-	case "growth_momentum":
-		targetMult, stopLossMult = 1.08, 0.95
-	case "value_yield":
-		targetMult, stopLossMult = 1.05, 0.96
-	case "earnings_quality":
-		targetMult, stopLossMult = 1.06, 0.95
-	case "technical_breakout":
-		targetMult, stopLossMult = 1.10, 0.94
-	case "alpha_discovery":
-		targetMult, stopLossMult = 1.06, 0.95
-	default:
-		targetMult, stopLossMult = 1.05, 0.95
-	}
-	return price * targetMult, price * stopLossMult
-}
-
-func computePipelineTags(ds *replay.Dataset, symbol string, date time.Time) []string {
-	if ds == nil {
-		return nil
-	}
-	dateKey := date.Format("2006-01-02")
-	bar, ok := ds.ByDate[dateKey][symbol]
-	if !ok {
-		return nil
-	}
-	var prevBar domain.DailyBar
-	var hasPrev bool
-	for i, d := range ds.Dates {
-		if d.Format("2006-01-02") == dateKey && i > 0 {
-			prevBar = ds.ByDate[ds.Dates[i-1].Format("2006-01-02")][symbol]
-			hasPrev = prevBar.Close > 0
-			break
-		}
-	}
-
-	tags := make([]string, 0, 3)
-	changePct := 0.0
-	if bar.Open > 0 {
-		changePct = (bar.Close - bar.Open) / bar.Open
-	}
-	if changePct > 0.035 {
-		tags = append(tags, "長紅")
-	} else if changePct < -0.035 {
-		tags = append(tags, "長黑")
-	}
-	if hasPrev && prevBar.Volume > 0 && bar.Volume > int64(float64(prevBar.Volume)*1.5) {
-		tags = append(tags, "放量")
-	}
-
-	high5 := bar.Close
-	low5 := bar.Close
-	for i, d := range ds.Dates {
-		if d.Format("2006-01-02") == dateKey {
-			start := i - 4
-			if start < 0 {
-				start = 0
-			}
-			for _, pd := range ds.Dates[start : i+1] {
-				b := ds.ByDate[pd.Format("2006-01-02")][symbol]
-				if b.Close > high5 {
-					high5 = b.Close
-				}
-				if b.Close > 0 && (low5 == 0 || b.Close < low5) {
-					low5 = b.Close
-				}
-			}
-			break
-		}
-	}
-	if bar.Close > 0 && bar.Close == high5 {
-		tags = append(tags, "創5日高")
-	}
-	if bar.Close > 0 && low5 > 0 && bar.Close == low5 {
-		tags = append(tags, "創5日低")
-	}
-	return tags
-}
-
-// LoadSessionSummary loads a session summary by session ID or returns the latest.
-func LoadSessionSummary(ledgerDir, sessionID string) (*domain.SessionSummary, error) {
-	sessionsDir := filepath.Join(ledgerDir, "sessions")
-	entries, err := os.ReadDir(sessionsDir)
+// LoadDarwinianStatus loads the current Darwinian weight state from disk.
+func (s *PipelineService) LoadDarwinianHistory(limit int) ([]DarwinianHistoryPoint, error) {
+	historyPath := filepath.Join(s.WorkDir, "data/state/darwinian_history.jsonl")
+	data, err := os.ReadFile(historyPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("read darwinian history: %w", err)
 	}
-
-	summaries := make([]domain.SessionSummary, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.IsDir() {
+	var points []DarwinianHistoryPoint
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	for i := len(lines) - 1; i >= 0 && len(points) < limit; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
 			continue
 		}
-		if sessionID != "" && entry.Name() != sessionID {
+		var snap struct {
+			Timestamp string `json:"timestamp"`
+			Weights   map[string]struct {
+				Weight        float64 `json:"weight"`
+				RollingSharpe float64 `json:"rolling_sharpe"`
+				HitRate       float64 `json:"hit_rate"`
+			} `json:"weights"`
+		}
+		if err := json.Unmarshal([]byte(line), &snap); err != nil {
 			continue
 		}
-		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
-		bytes, err := os.ReadFile(summaryPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return nil, err
+		ts := snap.Timestamp
+		for agentID, w := range snap.Weights {
+			points = append(points, DarwinianHistoryPoint{
+				AgentID:       agentID,
+				Timestamp:     ts,
+				Weight:        w.Weight,
+				RollingSharpe: w.RollingSharpe,
+				HitRate:       w.HitRate,
+			})
 		}
-		var summary domain.SessionSummary
-		if err := json.Unmarshal(bytes, &summary); err != nil {
-			return nil, err
-		}
-		summaries = append(summaries, summary)
 	}
-	if len(summaries) == 0 {
-		return nil, nil
-	}
-	if sessionID != "" {
-		selected := summaries[0]
-		return &selected, nil
-	}
+	return points, nil
+}
 
-	slices.SortFunc(summaries, func(a, b domain.SessionSummary) int {
-		aDate := sessionDateFromID(a.SessionID)
-		bDate := sessionDateFromID(b.SessionID)
-		switch {
-		case aDate.After(bDate):
-			return -1
-		case aDate.Before(bDate):
-			return 1
-		case a.RecordedAt.After(b.RecordedAt):
-			return -1
-		case a.RecordedAt.Before(b.RecordedAt):
-			return 1
-		default:
-			return 0
+type DarwinianHistoryPoint struct {
+	AgentID       string  `json:"agent_id"`
+	Timestamp     string  `json:"timestamp"`
+	Weight        float64 `json:"weight"`
+	RollingSharpe float64 `json:"rolling_sharpe"`
+	HitRate       float64 `json:"hit_rate"`
+}
+
+func (s *PipelineService) LoadDarwinianStatus() (*DarwinianStatusData, error) {
+	weightsPath := filepath.Join(s.WorkDir, "data/state/darwinian_weights.json")
+	data, err := os.ReadFile(weightsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &DarwinianStatusData{Status: "not_found"}, nil
 		}
-	})
-	latest := summaries[0]
-	return &latest, nil
+		return nil, fmt.Errorf("read darwinian weights: %w", err)
+	}
+	var saved struct {
+		SavedAt string `json:"saved_at"`
+		Weights map[string]struct {
+			Weight        float64 `json:"weight"`
+			RollingSharpe float64 `json:"rolling_sharpe"`
+			HitRate       float64 `json:"hit_rate"`
+			TotalSignals  int     `json:"total_signals"`
+			WinCount      int     `json:"win_count"`
+			LossCount     int     `json:"loss_count"`
+			AvgReturn     float64 `json:"avg_return"`
+			LastUpdatedAt string  `json:"last_updated_at"`
+		} `json:"weights"`
+	}
+	if err := json.Unmarshal(data, &saved); err != nil {
+		return nil, fmt.Errorf("parse darwinian weights: %w", err)
+	}
+	agents := make(map[string]DarwinianAgentInfo, len(saved.Weights))
+	for id, w := range saved.Weights {
+		agents[id] = DarwinianAgentInfo{
+			Weight:        w.Weight,
+			RollingSharpe: w.RollingSharpe,
+			HitRate:       w.HitRate,
+			TotalSignals:  w.TotalSignals,
+			WinCount:      w.WinCount,
+			LossCount:     w.LossCount,
+			AvgReturn:     w.AvgReturn,
+			LastUpdated:   w.LastUpdatedAt,
+		}
+	}
+	return &DarwinianStatusData{
+		Status:       "ok",
+		LastComputed: saved.SavedAt,
+		AgentCount:   len(agents),
+		Agents:       agents,
+	}, nil
+}
+
+type RegimeHistoryData struct {
+	Sessions    []RegimeSessionEntry `json:"sessions"`
+	Transitions []RegimeTransition   `json:"transitions"`
+	Current     string               `json:"current_regime"`
+}
+
+type RegimeSessionEntry struct {
+	SessionID  string `json:"session_id"`
+	Regime     string `json:"regime"`
+	RecordedAt string `json:"recorded_at"`
+}
+
+type RegimeTransition struct {
+	From      string `json:"from_regime"`
+	To        string `json:"to_regime"`
+	Timestamp string `json:"timestamp"`
+}
+
+func (s *PipelineService) LoadRegimeHistory(limit int) (*RegimeHistoryData, error) {
+	store := ledger.NewStore(s.LedgerDir)
+	summaries, err := store.LoadSessionSummaries()
+	if err != nil {
+		return nil, fmt.Errorf("load session summaries: %w", err)
+	}
+	if len(summaries) > limit {
+		summaries = summaries[len(summaries)-limit:]
+	}
+	sessions := make([]RegimeSessionEntry, len(summaries))
+	var transitions []RegimeTransition
+	var prevRegime string
+	for i, sum := range summaries {
+		sessions[i] = RegimeSessionEntry{
+			SessionID:  sum.SessionID,
+			Regime:     string(sum.Regime),
+			RecordedAt: sum.RecordedAt.Format(time.RFC3339),
+		}
+		if i > 0 && string(sum.Regime) != prevRegime {
+			transitions = append(transitions, RegimeTransition{
+				From:      prevRegime,
+				To:        string(sum.Regime),
+				Timestamp: sum.RecordedAt.Format(time.RFC3339),
+			})
+		}
+		prevRegime = string(sum.Regime)
+	}
+	current := ""
+	if len(summaries) > 0 {
+		current = string(summaries[len(summaries)-1].Regime)
+	}
+	return &RegimeHistoryData{
+		Sessions:    sessions,
+		Transitions: transitions,
+		Current:     current,
+	}, nil
 }

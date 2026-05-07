@@ -1,0 +1,208 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"slices"
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/replay"
+)
+
+func LoadSessionSummary(ledgerDir, sessionID string) (*domain.SessionSummary, error) {
+	sessionsDir := filepath.Join(ledgerDir, "sessions")
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	summaries := make([]domain.SessionSummary, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if sessionID != "" && entry.Name() != sessionID {
+			continue
+		}
+		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
+		bytes, err := os.ReadFile(summaryPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, err
+		}
+		var summary domain.SessionSummary
+		if err := json.Unmarshal(bytes, &summary); err != nil {
+			return nil, err
+		}
+		summaries = append(summaries, summary)
+	}
+	if len(summaries) == 0 {
+		return nil, nil
+	}
+	if sessionID != "" {
+		selected := summaries[0]
+		return &selected, nil
+	}
+
+	slices.SortFunc(summaries, func(a, b domain.SessionSummary) int {
+		aDate := sessionDateFromID(a.SessionID)
+		bDate := sessionDateFromID(b.SessionID)
+		switch {
+		case aDate.After(bDate):
+			return -1
+		case aDate.Before(bDate):
+			return 1
+		case a.RecordedAt.After(b.RecordedAt):
+			return -1
+		case a.RecordedAt.Before(b.RecordedAt):
+			return 1
+		default:
+			return 0
+		}
+	})
+	for i := range summaries {
+		if summaries[i].OutcomeCount > 0 {
+			selected := summaries[i]
+			return &selected, nil
+		}
+	}
+	latest := summaries[0]
+	return &latest, nil
+}
+
+func StatusText(status string) string {
+	switch status {
+	case "ok":
+		return "正常"
+	case "warn":
+		return "延遲"
+	case "error":
+		return "異常"
+	case "inactive":
+		return "未啟用"
+	default:
+		return "未知"
+	}
+}
+
+func ComputePipelineTags(_ context.Context, ds *replay.Dataset, symbol string, date time.Time) ([]string, error) {
+	tags := computePipelineTags(ds, symbol, date)
+	return tags, nil
+}
+
+func computePipelineTags(ds *replay.Dataset, symbol string, date time.Time) []string {
+	if ds == nil {
+		return nil
+	}
+	dateKey := date.Format("2006-01-02")
+	bar, ok := ds.ByDate[dateKey][symbol]
+	if !ok {
+		return nil
+	}
+	var prevBar domain.DailyBar
+	var hasPrev bool
+	for i, d := range ds.Dates {
+		if d.Format("2006-01-02") == dateKey && i > 0 {
+			prevBar = ds.ByDate[ds.Dates[i-1].Format("2006-01-02")][symbol]
+			hasPrev = prevBar.Close > 0
+			break
+		}
+	}
+
+	tags := make([]string, 0, 3)
+	changePct := 0.0
+	if bar.Open > 0 {
+		changePct = (bar.Close - bar.Open) / bar.Open
+	}
+	if changePct > 0.035 {
+		tags = append(tags, "長紅")
+	} else if changePct < -0.035 {
+		tags = append(tags, "長黑")
+	}
+	if hasPrev && prevBar.Volume > 0 && bar.Volume > int64(float64(prevBar.Volume)*1.5) {
+		tags = append(tags, "放量")
+	}
+
+	high5 := bar.Close
+	low5 := bar.Close
+	for i, d := range ds.Dates {
+		if d.Format("2006-01-02") == dateKey {
+			start := i - 4
+			if start < 0 {
+				start = 0
+			}
+			for _, pd := range ds.Dates[start : i+1] {
+				b := ds.ByDate[pd.Format("2006-01-02")][symbol]
+				if b.Close > high5 {
+					high5 = b.Close
+				}
+				if b.Close > 0 && (low5 == 0 || b.Close < low5) {
+					low5 = b.Close
+				}
+			}
+			break
+		}
+	}
+	if bar.Close > 0 && bar.Close == high5 {
+		tags = append(tags, "創5日高")
+	}
+	if bar.Close > 0 && low5 > 0 && bar.Close == low5 {
+		tags = append(tags, "創5日低")
+	}
+	return tags
+}
+
+func FallbackPriceTargets(_ context.Context, skill string, price float64) (float64, float64, error) {
+	target, stopLoss := fallbackPriceTargets(skill, price)
+	return target, stopLoss, nil
+}
+
+func fallbackPriceTargets(skill string, price float64) (float64, float64) {
+	var targetMult, stopLossMult float64
+	switch skill {
+	case "semiconductor_desk":
+		targetMult, stopLossMult = 1.06, 0.95
+	case "ai_supply_chain_desk":
+		targetMult, stopLossMult = 1.08, 0.95
+	case "etf_rotation_desk":
+		targetMult, stopLossMult = 1.04, 0.97
+	case "financials_desk":
+		targetMult, stopLossMult = 1.05, 0.96
+	case "shipping_desk":
+		targetMult, stopLossMult = 1.07, 0.94
+	case "growth_momentum":
+		targetMult, stopLossMult = 1.08, 0.95
+	case "value_yield":
+		targetMult, stopLossMult = 1.05, 0.96
+	case "earnings_quality":
+		targetMult, stopLossMult = 1.06, 0.95
+	case "technical_breakout":
+		targetMult, stopLossMult = 1.10, 0.94
+	case "alpha_discovery":
+		targetMult, stopLossMult = 1.06, 0.95
+	default:
+		targetMult, stopLossMult = 1.05, 0.95
+	}
+	return price * targetMult, price * stopLossMult
+}
+
+func isStockPickingLayer(layer string) bool {
+	return layer == "sector" || layer == "style" || layer == "superinvestor"
+}
+
+func isStockPickingLayerByID(agentID string, views []AgentUniverseViewData) bool {
+	for _, v := range views {
+		if v.AgentID == agentID {
+			return isStockPickingLayer(v.Layer)
+		}
+	}
+	return false
+}
