@@ -125,7 +125,7 @@
 go run ./cmd/atlas
 
 # 實驗生命週期
-go run ./cmd/execute-experiment -brief <file>
+go run ./cmd/run-experiment -brief <file>
 go run ./cmd/judge-experiment              # auto-discovers latest
 go run ./cmd/promote-baseline              # auto-discovers latest accepted
 go run ./cmd/revert-baseline --list

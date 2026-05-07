@@ -208,7 +208,7 @@ Before submitting changes, verify:
 A: Implement the executor interface from `internal/orchestrator/plugin_registry.go` in a new `internal/<domain>/executor.go`. If it needs lifecycle hooks (attach / before-sim / after-sim), also implement `Plugin` from `internal/orchestrator/plugin.go` and register it via `PluginHost` in `internal/orchestrator/factory.go`.
 
 **Q: How do I add a new prompt to an agent?**  
-A: Create `prompts/agents/<agent-name>.prompt.md`, update `configs/agents.json` with enabled=true, then test with `go run ./cmd/execute-experiment -brief <test.brief>`.
+A: Create `prompts/agents/<agent-name>.prompt.md`, update `configs/agents.json` with enabled=true, then test with `go run ./cmd/run-experiment -brief <test.brief>`.
 
 **Q: What's the difference between replay and simulate?**  
 A: **Replay**: deterministic run-through of historical data with current config. **Simulate**: forward-looking portfolio updates via orchestrator recommendations. Both feed Ledger.

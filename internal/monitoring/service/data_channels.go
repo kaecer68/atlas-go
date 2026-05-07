@@ -292,9 +292,9 @@ func (s *DataChannelService) buildTWSECapitalFlowChannel(now time.Time) DataChan
 }
 
 func (s *DataChannelService) buildFugleChannel(now time.Time) DataChannel {
-	fugleKey := os.Getenv("FUGLE_API_KEY")
+	fugleKey := config.GetSecret("FUGLE_API_KEY")
 	if fugleKey == "" {
-		fugleKey = os.Getenv("ATLAS_FUGLE_API_KEY")
+		fugleKey = config.GetSecret("ATLAS_FUGLE_API_KEY")
 	}
 	status := "inactive"
 	updated := "-"
@@ -330,9 +330,9 @@ func (s *DataChannelService) buildFugleChannel(now time.Time) DataChannel {
 }
 
 func (s *DataChannelService) buildFubonChannel(now time.Time) DataChannel {
-	fubonKey := os.Getenv("FUBON_API_KEY")
+	fubonKey := config.GetSecret("FUBON_API_KEY")
 	if fubonKey == "" {
-		fubonKey = os.Getenv("ATLAS_FUBON_API_KEY")
+		fubonKey = config.GetSecret("ATLAS_FUBON_API_KEY")
 	}
 	status := "inactive"
 	updated := "-"
@@ -368,7 +368,7 @@ func (s *DataChannelService) buildFubonChannel(now time.Time) DataChannel {
 }
 
 func (s *DataChannelService) buildFinMindChannel(now time.Time) DataChannel {
-	finmindKey := os.Getenv("FINMIND_API_KEY")
+	finmindKey := config.GetSecret("FINMIND_API_KEY")
 	status := "inactive"
 	updated := "-"
 	lastError := ""

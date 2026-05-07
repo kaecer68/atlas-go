@@ -100,15 +100,6 @@ func envOrKeychain(key, fallback string) string {
 	return envOr(key, fallback)
 }
 
-func envOrPriority(keys ...string) string {
-	for _, key := range keys {
-		if value := os.Getenv(key); value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
 func envOrInt(key string, fallback int) int {
 	value := strings.TrimSpace(os.Getenv(key))
 	if value == "" {

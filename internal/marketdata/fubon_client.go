@@ -22,7 +22,6 @@ type FubonClient struct {
 	proxyURL          string
 	httpClient        *http.Client
 	intradayLimiter   *rate.Limiter
-	historicalLimiter *rate.Limiter
 }
 
 type FubonQuoteResponse struct {
@@ -70,7 +69,6 @@ func NewFubonClient(authToken string) *FubonClient {
 			Timeout: time.Duration(params.Marketdata.FubonAPITimeoutSec.Value) * time.Second,
 		},
 		intradayLimiter:   rate.NewLimiter(rate.Every(time.Minute/time.Duration(params.Marketdata.FubonIntradayLimit.Value)), params.Marketdata.FubonIntradayLimit.Value),
-		historicalLimiter: rate.NewLimiter(rate.Every(time.Minute/time.Duration(params.Marketdata.FubonHistoricalLimit.Value)), params.Marketdata.FubonHistoricalLimit.Value),
 	}
 }
 
@@ -188,17 +186,6 @@ func (c *FubonClient) GetQuotes(ctx context.Context, symbols []string) ([]domain
 	}
 
 	return quotes, nil
-}
-
-// GetHistoricalQuote is currently a stub - not yet implemented.
-// 富盤 proxy does not support historical quote retrieval via HTTP API.
-// If historical quotes are needed, use TWSE historical data or other providers.
-// TODO: Either implement via fubon proxy historical endpoint or remove this method.
-func (c *FubonClient) GetHistoricalQuote(ctx context.Context, symbol string, date time.Time) (domain.Quote, error) {
-	if err := c.historicalLimiter.Wait(ctx); err != nil {
-		return domain.Quote{}, fmt.Errorf("fubon proxy: historical rate limit wait: %w", err)
-	}
-	return domain.Quote{}, fmt.Errorf("fubon proxy: historical quote not yet implemented")
 }
 
 func (c *FubonClient) CheckMarketStatus(ctx context.Context) (bool, error) {
