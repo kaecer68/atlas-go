@@ -274,28 +274,16 @@ func (s *ReportService) loadRecommendationsForDate(date string) []domain.Recomme
 			if strings.TrimSpace(line) == "" {
 				continue
 			}
-			var outcome struct {
-				AgentID             string                      `json:"agent_id"`
-				Skill               string                      `json:"skill"`
-				Layer               string                      `json:"layer"`
-				Symbol              string                      `json:"symbol"`
-				Side                string                      `json:"side"`
-				Conviction          int                         `json:"conviction"`
-				TargetPrice         float64                     `json:"target_price"`
-				StopLossPrice       float64                     `json:"stop_loss_price"`
-				Reason              string                      `json:"reason"`
-				FactorScores        domain.FactorScores         `json:"factor_scores,omitempty"`
-				ConvictionBreakdown *domain.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
-			}
+			var outcome domain.RecommendationOutcome
 			if err := json.Unmarshal([]byte(line), &outcome); err != nil {
 				continue
 			}
 			recs = append(recs, domain.Recommendation{
 				Agent:               outcome.AgentID,
 				Skill:               outcome.Skill,
-				Layer:               domain.AgentLayer(outcome.Layer),
+				Layer:               outcome.Layer,
 				Symbol:              outcome.Symbol,
-				Side:                domain.Side(outcome.Side),
+				Side:                outcome.Side,
 				Conviction:          outcome.Conviction,
 				TargetPrice:         outcome.TargetPrice,
 				StopLossPrice:       outcome.StopLossPrice,

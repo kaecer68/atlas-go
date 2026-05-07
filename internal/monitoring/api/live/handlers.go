@@ -1,6 +1,7 @@
 package live
 
 import (
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"bufio"
 	"encoding/json"
 	"math"
@@ -12,7 +13,6 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/risk"
@@ -37,7 +37,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/pnl-attribution", h.HandlePnLAttribution)
 	mux.HandleFunc("/api/dashboard/risk-exposure", h.HandleRiskExposure)
 	mux.HandleFunc("/api/dashboard/live-status", h.HandleLiveStatus)
-	mux.HandleFunc("/api/dashboard/portfolio-state", h.HandlePortfolioState)
+	mux.HandleFunc("/api/dashboard/portfolio-state", h.Handlelivestore.PortfolioState)
 }
 
 func getSymbolSector(symbol string, symMap map[string]string) string {
@@ -460,9 +460,9 @@ func (h *Handlers) HandleRiskExposure(w http.ResponseWriter, r *http.Request) {
 		insufficient = true
 	}
 
-	liveBasePath := filepath.Join(h.WorkDir, livestore.DefaultLiveStateBasePath)
-	portfolio, _ := livestore.LoadLastPortfolioState(liveBasePath)
-	positions, _ := livestore.LoadLastPositions(liveBasePath)
+	liveBasePath := filepath.Join(h.WorkDir, livestore.livestore.DefaultLiveStateBasePath)
+	portfolio, _ := livestore.LoadLastlivestore.PortfolioState(liveBasePath)
+	positions, _ := livestore.livestore.LoadLastPositions(liveBasePath)
 
 	var totalMV float64
 	for _, p := range positions {
@@ -533,14 +533,14 @@ func (h *Handlers) HandleLiveStatus(w http.ResponseWriter, r *http.Request) {
 	shared.WriteJSON(w, http.StatusOK, status)
 }
 
-// HandlePortfolioState returns the current portfolio state with positions.
-func (h *Handlers) HandlePortfolioState(w http.ResponseWriter, r *http.Request) {
+// Handlelivestore.PortfolioState returns the current portfolio state with positions.
+func (h *Handlers) Handlelivestore.PortfolioState(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	state := h.getService().LoadPortfolioState()
+	state := h.getService().Loadlivestore.PortfolioState()
 	shared.WriteJSON(w, http.StatusOK, state)
 }
 

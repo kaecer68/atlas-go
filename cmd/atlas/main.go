@@ -1,6 +1,7 @@
 package main
 
 import (
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"context"
 	"flag"
 	"fmt"
@@ -19,7 +20,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/live"
-	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
@@ -235,9 +235,10 @@ func run(args []string, deps appDeps) error {
 		}
 		mux.Handle("/", http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static"))))
 		log.Printf("dashboard api listening on %s", *apiAddr)
-		bootstrap.StartChannelHealthSyncLoop(sysCtx, cfg.WorkDir, pool)
-		bootstrap.StartAutoBackfill(sysCtx, cfg.WorkDir)
-		bootstrap.StartAutoCapitalFlowFetch(sysCtx, cfg.WorkDir)
+	bootstrap.StartChannelHealthSyncLoop(sysCtx, cfg.WorkDir, pool)
+	bootstrap.StartAutoBackfill(sysCtx, cfg.WorkDir)
+	bootstrap.StartAutoCapitalFlowFetch(sysCtx, cfg.WorkDir)
+	bootstrap.StartEncodingDaemon(sysCtx, cfg.LedgerDir)
 
 		srv := &http.Server{Addr: *apiAddr, Handler: mux}
 		srvErr := make(chan error, 1)
@@ -352,8 +353,8 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		log.Printf("[Repository] injected into live trading system")
 	}
 
-	stateStore := livestore.NewStateStore("data/state/live")
-	eventBus := live.NewChannelEventBus(64)
+	stateStore := livestore.Newlivestore.StateStore("data/state/live")
+	eventBus := live.NewChannellivestore.EventBus(64)
 	provider := marketdata.NewMockProvider()
 
 	liveCfg := live.DefaultOrchestratorConfig()

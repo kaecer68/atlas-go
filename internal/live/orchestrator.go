@@ -1,6 +1,7 @@
 package live
 
 import (
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"context"
 	"fmt"
 	"strings"
@@ -8,14 +9,13 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 type Orchestrator struct {
-	stateStore             *livestore.StateStore
-	eventBus               *ChannelEventBus
+	stateStore             *livestore.livestore.StateStore
+	eventBus               *Channellivestore.EventBus
 	marketData             marketdata.Provider
 	broker                 Broker
 	orderMgr               *OrderManager
@@ -51,7 +51,7 @@ type MetricsRecorder interface {
 	RecordPosition(position domain.Position)
 	RecordPortfolio(cash, totalValue float64)
 	RecordCircuitBreakerState(state string)
-	RecordRiskEvent(eventType, symbol string)
+	RecordRisklivestore.Event(eventType, symbol string)
 	RecordCounter(name string, value float64, labels map[string]string)
 	RecordGauge(name string, value float64, labels map[string]string)
 }
@@ -120,8 +120,8 @@ func DefaultOrchestratorConfig() OrchestratorConfig {
 
 func NewOrchestrator(
 	ctx context.Context,
-	stateStore *livestore.StateStore,
-	eventBus *ChannelEventBus,
+	stateStore *livestore.livestore.StateStore,
+	eventBus *Channellivestore.EventBus,
 	marketData marketdata.Provider,
 	registry domain.AgentRegistry,
 	inputProvider interface {
@@ -159,14 +159,14 @@ func NewOrchestrator(
 	o.executionMgr = NewExecutionManager(broker, o.circuitBreaker, config, nil)
 
 	o.scheduler.SetMetrics(o.metrics)
-	o.scheduler.SetEventBus(eventBus)
-	o.agentRunner.SetEventBus(eventBus)
+	o.scheduler.Setlivestore.EventBus(eventBus)
+	o.agentRunner.Setlivestore.EventBus(eventBus)
 	o.agentRunner.SetMetrics(o.metrics)
-	o.executionMgr.SetEventBus(eventBus)
+	o.executionMgr.Setlivestore.EventBus(eventBus)
 
 	o.scheduler.SetCycleCallbacks(o.onMarketOpen, o.onIntradayCycle, o.onMarketClose, o.fetchAndDispatchQuotes)
 
-	o.setupEventHandlers()
+	o.setuplivestore.EventHandlers()
 
 	return o
 }
@@ -236,9 +236,9 @@ func (o *Orchestrator) Start() error {
 	}
 	o.isRunning = true
 
-	o.publishEvent(BusEvent{
+	o.publishlivestore.Event(Buslivestore.Event{
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      EventSystemStart,
+		Type:      livestore.EventSystemStart,
 		Timestamp: time.Now(),
 		Payload: map[string]interface{}{
 			"market_data_provider":           o.marketData.Name(),
@@ -262,9 +262,9 @@ func (o *Orchestrator) Start() error {
 	})
 
 	if o.executionAuditMsg != "" {
-		o.publishEvent(BusEvent{
+		o.publishlivestore.Event(Buslivestore.Event{
 			ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-			Type:      EventSystemError,
+			Type:      livestore.EventSystemError,
 			Timestamp: time.Now(),
 			Payload: map[string]string{
 				"error": o.executionAuditMsg,
@@ -306,9 +306,9 @@ func (o *Orchestrator) Stop() error {
 	return nil
 }
 
-func (o *Orchestrator) setupEventHandlers() {
-	o.eventBus.Subscribe(EventMarketSnapshot, func(ctx context.Context, event BusEvent) error {
-		if payload, ok := event.Payload.(MarketEventPayload); ok {
+func (o *Orchestrator) setuplivestore.EventHandlers() {
+	o.eventBus.Subscribe(livestore.EventMarketSnapshot, func(ctx context.Context, event Buslivestore.Event) error {
+		if payload, ok := event.Payload.(Marketlivestore.EventPayload); ok {
 			quotes := []domain.Quote{payload.Quote}
 			o.stateStore.UpdatePositionPrices(quotes)
 
@@ -319,8 +319,8 @@ func (o *Orchestrator) setupEventHandlers() {
 		return nil
 	})
 
-	o.eventBus.Subscribe(EventPositionUpdate, func(ctx context.Context, event BusEvent) error {
-		if payload, ok := event.Payload.(PositionEventPayload); ok {
+	o.eventBus.Subscribe(livestore.EventPositionUpdate, func(ctx context.Context, event Buslivestore.Event) error {
+		if payload, ok := event.Payload.(Positionlivestore.EventPayload); ok {
 			fmt.Printf("[Position] %s: %s %s x%d @ %.2f\n",
 				payload.ChangeType,
 				payload.Symbol,
@@ -331,8 +331,8 @@ func (o *Orchestrator) setupEventHandlers() {
 		return nil
 	})
 
-	o.eventBus.Subscribe(EventOrderPlaced, func(ctx context.Context, event BusEvent) error {
-		if payload, ok := event.Payload.(OrderEventPayload); ok {
+	o.eventBus.Subscribe(livestore.EventOrderPlaced, func(ctx context.Context, event Buslivestore.Event) error {
+		if payload, ok := event.Payload.(Orderlivestore.EventPayload); ok {
 			fmt.Printf("[Order] Placed: %s %s x%d @ %.2f\n",
 				payload.Order.Side,
 				payload.Order.Symbol,
@@ -354,9 +354,9 @@ func (o *Orchestrator) onMarketOpen() {
 	positions := o.stateStore.GetPositions()
 	fmt.Printf("[Orchestrator] Loaded %d positions\n", len(positions))
 
-	o.publishEvent(BusEvent{
+	o.publishlivestore.Event(Buslivestore.Event{
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      EventMarketOpen,
+		Type:      livestore.EventMarketOpen,
 		Timestamp: time.Now(),
 		Payload: map[string]interface{}{
 			"positions_count": len(positions),
@@ -397,7 +397,7 @@ func (o *Orchestrator) onIntradayCycle() {
 	dayPnLPct := (dayPnL / portfolio.Cash) * 100
 	if o.config.MaxDailyLossPct > 0 && dayPnLPct < -o.config.MaxDailyLossPct {
 		fmt.Printf("[Risk] Daily loss limit hit: %.2f%%\n", dayPnLPct)
-		o.publishRiskEvent(EventRiskAlert, "", domain.Position{}, "max_daily_loss", 0)
+		o.publishRisklivestore.Event(livestore.EventRiskAlert, "", domain.Position{}, "max_daily_loss", 0)
 	}
 
 	if err := o.applyExecutionInput(); err != nil {
@@ -422,9 +422,9 @@ func (o *Orchestrator) onMarketClose() {
 		fmt.Printf("[Error] Save state: %v\n", err)
 	}
 
-	o.publishEvent(BusEvent{
+	o.publishlivestore.Event(Buslivestore.Event{
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Type:      EventMarketClose,
+		Type:      livestore.EventMarketClose,
 		Timestamp: time.Now(),
 		Payload: map[string]interface{}{
 			"day_pnl":        portfolio.DayPnL,
@@ -444,9 +444,9 @@ func (o *Orchestrator) fetchAndProcessQuotes() {
 
 	quotes, err := o.marketData.GetQuotes(ctx, time.Now(), o.watchlist)
 	if err != nil {
-		o.publishEvent(BusEvent{
+		o.publishlivestore.Event(Buslivestore.Event{
 			ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-			Type:      EventSystemError,
+			Type:      livestore.EventSystemError,
 			Timestamp: time.Now(),
 			Payload: map[string]string{
 				"error": fmt.Sprintf("fetch quotes: %v", err),
@@ -475,18 +475,18 @@ func (o *Orchestrator) checkRiskTriggers(symbol string, currentPrice float64) {
 	if o.config.StopLossEnabled && pnlPct < -o.config.MaxPositionLossPct {
 		o.circuitBreaker.RecordStopLoss()
 		if o.metrics != nil {
-			o.metrics.RecordRiskEvent("stop_loss", symbol)
+			o.metrics.RecordRisklivestore.Event("stop_loss", symbol)
 		}
-		o.publishRiskEvent(EventStopLossTriggered, symbol, position, "stop_loss", currentPrice)
+		o.publishRisklivestore.Event(livestore.EventStopLossTriggered, symbol, position, "stop_loss", currentPrice)
 		fmt.Printf("[Risk] Stop loss triggered for %s at %.2f (loss: %.2f%%)\n",
 			symbol, currentPrice, pnlPct)
 	}
 
 	if o.config.TakeProfitEnabled && pnlPct > o.config.MaxPositionLossPct*2 {
 		if o.metrics != nil {
-			o.metrics.RecordRiskEvent("take_profit", symbol)
+			o.metrics.RecordRisklivestore.Event("take_profit", symbol)
 		}
-		o.publishRiskEvent(EventTakeProfitTriggered, symbol, position, "take_profit", currentPrice)
+		o.publishRisklivestore.Event(livestore.EventTakeProfitTriggered, symbol, position, "take_profit", currentPrice)
 		fmt.Printf("[Risk] Take profit triggered for %s at %.2f (gain: %.2f%%)\n",
 			symbol, currentPrice, pnlPct)
 	}
@@ -564,7 +564,7 @@ func (o *Orchestrator) ExecuteOrder(ctx context.Context, order domain.Order) err
 	return o.executionMgr.ExecuteOrder(ctx, order)
 }
 
-func (o *Orchestrator) publishEvent(event BusEvent) {
+func (o *Orchestrator) publishlivestore.Event(event Buslivestore.Event) {
 	if o.eventBus == nil {
 		return
 	}
@@ -579,11 +579,11 @@ func (o *Orchestrator) publishMarketSnapshot(quote domain.Quote) {
 	_ = o.eventBus.PublishMarketSnapshot(quote)
 }
 
-func (o *Orchestrator) publishRiskEvent(eventType EventType, symbol string, position domain.Position, triggerType string, triggerPrice float64) {
+func (o *Orchestrator) publishRisklivestore.Event(eventType livestore.EventType, symbol string, position domain.Position, triggerType string, triggerPrice float64) {
 	if o.eventBus == nil {
 		return
 	}
-	_ = o.eventBus.PublishRiskEvent(eventType, symbol, position, triggerType, triggerPrice)
+	_ = o.eventBus.PublishRisklivestore.Event(eventType, symbol, position, triggerType, triggerPrice)
 }
 
 func resolveBrokerMode(cfg OrchestratorConfig) (requested string, effective string, broker Broker, auditMsg string) {
@@ -607,7 +607,7 @@ func resolveBrokerMode(cfg OrchestratorConfig) (requested string, effective stri
 		case "mock":
 			return requested, "live-mock", NewGuardedLiveBroker(NewMockLiveAdapter()), "live mode uses mock adapter; no real orders are sent"
 		case "http":
-			nonceStore, err := livestore.BuildNonceReplayStoreWithOptions(cfg.BrokerNonceStore, livestore.NonceReplayStoreOptions{
+			nonceStore, err := livestore.Buildlivestore.NonceReplayStoreWithOptions(cfg.BrokerNonceStore, livestore.livestore.NonceReplayStoreOptions{
 				FilePath:       cfg.BrokerNonceStorePath,
 				RedisURL:       cfg.BrokerNonceRedisURL,
 				RedisKeyPrefix: cfg.BrokerNonceRedisKeyPrefix,

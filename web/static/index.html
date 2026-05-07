@@ -77,7 +77,16 @@ header p { margin: 0; color: var(--muted); font-size: var(--text-sm); }
   .badge.ok { background: rgba(38,161,123,.18); color: var(--up); border: 1px solid rgba(38,161,123,.4); }
   .badge.warn { background: rgba(245,166,35,.18); color: var(--warn); border: 1px solid rgba(245,166,35,.4); }
   .badge.err { background: rgba(239,68,68,.18); color: var(--down); border: 1px solid rgba(239,68,68,.4); }
+  .badge.muted { background: rgba(255,255,255,.05); color: var(--muted); border: 1px solid rgba(255,255,255,.1); }
   .badge.info { background: rgba(79,193,255,.15); color: var(--accent); border: 1px solid rgba(79,193,255,.35); }
+  .status-details { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; overflow: hidden; }
+  .status-details > summary { padding: 6px 10px; list-style: none; display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,.02); }
+  .status-details > summary::-webkit-details-marker { display: none; }
+  .detail-body { padding: 8px 10px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); line-height: 1.6; }
+  .detail-body ul { margin: 4px 0 4px 16px; padding: 0; }
+  .detail-body li { margin-bottom: 3px; }
+  .btn-xs { font-size: 10px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; }
+  .btn-xs:hover { border-color: var(--accent); }
   .empty { color: var(--muted); font-size: 13px; padding: 10px 0; }
   pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: #0d1015; padding: 10px; border-radius: 6px; max-height: 280px; overflow: auto; }
   .control-group { display: flex; flex-wrap: wrap; gap: 7px; margin: 8px 0; align-items: center; }
@@ -116,7 +125,51 @@ header p { margin: 0; color: var(--muted); font-size: var(--text-sm); }
   .diff { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px; }
   .diff pre { margin: 0; max-height: 60vh; }
 
+  .industry-tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .tab-btn { background: transparent; border: none; color: var(--muted); padding: 8px 14px; cursor: pointer; font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s; }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-btn:hover { color: var(--text); }
+
+  .weight-factor { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .weight-factor:last-child { border-bottom: none; }
+  .weight-factor .factor-name { color: var(--muted); }
+  .weight-factor .factor-weight { font-weight: 600; }
+  .weight-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .weight-badge.high { background: rgba(79,193,255,.15); color: var(--accent); }
+  .weight-badge.medium { background: rgba(245,166,35,.15); color: var(--warn); }
+  .weight-badge.low { background: rgba(38,161,123,.15); color: var(--up); }
+
+  .cycle-indicator { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 12px; }
+  .cycle-indicator.expansion { background: rgba(38,161,123,.2); color: var(--up); }
+  .cycle-indicator.recovery { background: rgba(79,193,255,.2); color: var(--accent); }
+  .cycle-indicator.mature { background: rgba(245,166,35,.2); color: var(--warn); }
+  .cycle-indicator.recession { background: rgba(217,58,58,.2); color: var(--down); }
+
+  .recommendation-box { padding: 12px; border-radius: 8px; margin: 10px 0; }
+  .recommendation-box.buy { background: rgba(38,161,123,.1); border: 1px solid rgba(38,161,123,.3); }
+  .recommendation-box.sell { background: rgba(217,58,58,.1); border: 1px solid rgba(217,58,58,.3); }
+  .recommendation-box.neutral { background: rgba(154,165,184,.1); border: 1px solid rgba(154,165,184,.3); }
+  .recommendation-box .rec-action { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .recommendation-box .rec-target { font-size: 13px; color: var(--muted); }
+
+  .linkage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .linkage-col h4 { margin: 0 0 8px; font-size: 12px; color: var(--muted); text-transform: uppercase; }
+  .linkage-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 12px; margin-bottom: 6px; }
+
+  .risk-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; }
+  .risk-item .risk-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .risk-item .risk-type { font-weight: 600; font-size: 13px; }
+  .risk-item .risk-severity { font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+  .risk-item .risk-severity.high { background: rgba(217,58,58,.15); color: var(--down); }
+  .risk-item .risk-severity.medium { background: rgba(245,166,35,.15); color: var(--warn); }
+  .risk-item .risk-severity.low { background: rgba(38,161,123,.15); color: var(--up); }
+  .risk-item .risk-desc { font-size: 12px; color: var(--muted); }
+
+  .regime-banner { padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; background: var(--bg); border: 1px solid var(--border); }
+
   .notification-center { position: fixed; right: 14px; top: 14px; width: min(340px, 92vw); z-index: 150; }
+  @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
   .notification { background: var(--panel-l2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; font-size: var(--text-sm); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4); animation: notifyIn 0.3s ease; }
 @keyframes notifyIn {
   from { opacity: 0; transform: translateX(20px); }
@@ -628,6 +681,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
   </div>
   <nav role="navigation" aria-label="主要導航">
     <a class="active" data-page="overview" onclick="switchPage('overview')" tabindex="0" title="總覽">📊 總覽</a>
+    <a data-page="synergy" onclick="switchPage('synergy')" tabindex="0" title="人機協同">🤝 人機協同</a>
     <a data-page="narrative" onclick="switchPage('narrative')" tabindex="0" title="宏觀敘事">🌍 宏觀敘事</a>
     <a data-page="industry" onclick="switchPage('industry')" tabindex="0" title="產業生態系">🏭 產業生態系</a>
     <a data-page="pipeline" onclick="switchPage('pipeline')" tabindex="0" title="投資管線">📋 投資管線</a>
@@ -642,6 +696,8 @@ body { display: flex; margin: 0; min-height: 100vh; }
     <a data-page="datachannels" onclick="switchPage('datachannels')" tabindex="0" title="信息通道">📡 信息通道</a>
     <a data-page="alerts" onclick="switchPage('alerts')" tabindex="0" title="系統警報">🚨 系統警報</a>
     <a data-page="metrics" onclick="switchPage('metrics')" tabindex="0" title="指標監控">📉 指標監控</a>
+    <div class="nav-divider"></div>
+    <a data-page="parameters" onclick="switchPage('parameters')" tabindex="0" title="參數管理">📐 參數管理</a>
   </nav>
   <div class="foot">
     <span class="text-muted">v8 · 統一介面</span>
@@ -713,12 +769,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
         <div class="panel"><h2>總經雷達</h2><div id="macroRadar" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>即時狀態</h2><div id="liveStatus" class="empty loading">載入中…</div></div>
       </div>
-      <div class="panel wide" id="riskCardsPanel" style="display:none;">
-        <h2>風險指標</h2>
-        <div id="riskCards" class="grid cols-3"></div>
-        <div id="riskPositionConcentration" style="margin-top:16px;"></div>
-        <div id="riskSectorDistribution" style="margin-top:16px;"></div>
-      </div>
+      <div class="panel wide" id="riskCardsPanel" style="display:none;"><h2>風險指標（VaR）</h2><div id="riskCards" class="grid cols-3"></div></div>
     </div>
 
     <!-- 投資管線 -->
@@ -796,18 +847,23 @@ body { display: flex; margin: 0; min-height: 100vh; }
     <div id="page-portfolio" class="page">
       <h1 id="pageTitle">📂 組合持倉</h1>
       <div class="kpi-grid" id="portfolioKPIs"></div>
-      <div class="panel wide" id="equityCurvePanel" style="display:none">
-        <h2>淨值趨勢</h2>
-        <canvas id="equityChart" height="200"></canvas>
+      <div class="live-grid">
+        <div class="panel"><h2>📊 市場體制</h2><div id="regimeContext"></div></div>
+        <div class="panel"><h2>💰 配置指引</h2><div id="allocationGuidance"></div></div>
       </div>
+      <div class="panel wide"><h2>🤖 AI 策略儀表板</h2><div id="agentScoreboard"></div></div>
       <div class="panel wide" id="positionsPanel">
         <h2>持倉明細</h2>
         <div id="positionsTable"></div>
       </div>
+      <div class="panel wide" id="equityCurvePanel" style="display:none">
+        <h2>淨值趨勢</h2>
+        <canvas id="equityChart" height="200"></canvas>
+      </div>
       <details class="help-details">
         <summary><strong>📖 如何解讀本頁</strong></summary>
-        <p>顯示最新模擬場次的持倉狀態與淨值變化。損益為未實現損益，實際損益需待部位平倉後確認。</p>
-        <p class="text-muted text-sm">資料來源：live state store（data/state/live/）。若無持倉資料，代表尚未執行模擬或所有部位已平倉。</p>
+        <p>本頁為<strong>策略駕駛艙</strong>，整合三大決策維度：<strong>市場體制</strong>（現在該積極還是保守？）、<strong>AI 信心度</strong>（哪些 AI 策略正在賺錢？）、<strong>資金規模</strong>（以你的資金適合怎樣的配置比例？）。</p>
+        <p class="text-muted text-sm">Darwinian 權重系統會自動根據 AI 近 20 日績效調整影響力（0.3×～2.5×）。持倉中的「推薦 AI」欄位對應到最後一次 pipeline 中通過控制層審核的推薦來源。</p>
       </details>
     </div>
 
@@ -909,6 +965,205 @@ body { display: flex; margin: 0; min-height: 100vh; }
     </div>
 
     
+    <div class="page" id="page-synergy">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        本頁呈現 Atlas 系統中<strong>人機協作界面</strong>的管理功能。左側為全自動排程任務的運行狀態，右側為需要人工啟動的操作項目。
+        <span style="color:var(--muted);font-size:12px;display:block;margin-top:6px">「全自動」任務由系統定時排程執行，「手動操作」需要你主動觸發。</span>
+      </details>
+      <div class="two-col-grid">
+        <div class="panel">
+          <h2>🤖 全自動（系統排程）</h2>
+          <div id="cronStatusList" class="mt-sm">
+            <details class="status-details">
+              <summary class="flex-between cursor-pointer">
+                <div><strong>地緣政治資料</strong><div class="text-sm text-muted">每日 08:00 抓取</div></div>
+                <div class="flex-center-gap">
+                  <button class="btn-xs" onclick="event.stopPropagation(); triggerGeoIngest()">🔄 重新檢查</button>
+                  <span class="badge ok" id="cron-geo-status">-</span>
+                </div>
+              </summary>
+              <div class="text-xs text-muted mt-xs" id="cron-geo-last">-</div>
+              <div class="detail-body">
+                <p><strong>資料來源：</strong>兩個獨立的地緣政治風險 Provider，同時抓取後分別儲存。</p>
+                <table class="sub-channel-table" style="width:100%;margin:8px 0;font-size:12px;border-collapse:collapse">
+                  <thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:4px">Channel</th><th style="text-align:center;padding:4px">狀態</th><th style="text-align:right;padding:4px">最後更新</th></tr></thead>
+                  <tbody id="geo-sub-channels">
+                    <tr><td colspan="3" style="text-align:center;padding:8px;color:var(--muted)">載入中…</td></tr>
+                  </tbody>
+                </table>
+                <p><strong>寫入路徑：</strong><code>data/state/geopolitical/geopolitical_latest.json</code>（全球）與 <code>data/state/geopolitical/taiwan/geopolitical_latest.json</code>（台灣）</p>
+                <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin:8px 0">
+                  <p style="margin:0 0 6px 0;font-weight:bold">🤔 看到「未設定」？</p>
+                  <p style="margin:0;font-size:12px;color:var(--muted)">表示系統啟動後從未成功執行過此任務。可能原因：(1) 系統剛重啟 (2) cron 排程尚未觸發 (3) 前次執行失敗。請點擊「🔄 重新檢查」手動觸發，或等待下次排程時間（每日 08:00）。</p>
+                </div>
+                <button class="secondary mt-xs" onclick="this.parentElement.open=false">收起說明</button>
+              </div>
+            </details>
+            <details class="status-details">
+              <summary class="flex-between cursor-pointer">
+                <div><strong>總經宏觀資料</strong><div class="text-sm text-muted">每日 08:00 抓取（美債、匯率、VIX）</div></div>
+                <div class="flex-center-gap">
+                  <button class="btn-xs" onclick="event.stopPropagation(); triggerMacroIngest()">🔄 重新檢查</button>
+                  <span class="badge ok" id="cron-macro-status">-</span>
+                </div>
+              </summary>
+              <div class="text-xs text-muted mt-xs" id="cron-macro-last">-</div>
+              <div class="detail-body">
+                <p><strong>資料來源：</strong>MacroIngestor 並行抓取多個宏觀數據，任一失敗即顯示異常。</p>
+                <table class="sub-channel-table" style="width:100%;margin:8px 0;font-size:12px;border-collapse:collapse">
+                  <thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:4px">Channel</th><th style="text-align:center;padding:4px">狀態</th><th style="text-align:right;padding:4px">最後更新</th></tr></thead>
+                  <tbody id="macro-sub-channels">
+                    <tr><td colspan="3" style="text-align:center;padding:8px;color:var(--muted)">載入中…</td></tr>
+                  </tbody>
+                </table>
+                <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin:8px 0">
+                  <p style="margin:0 0 6px 0;font-weight:bold">🤔 看到「未設定」？</p>
+                  <p style="margin:0;font-size:12px;color:var(--muted)">表示系統啟動後從未成功執行過此任務。可能原因：(1) 系統剛重啟 (2) cron 排程尚未觸發 (3) 前次執行失敗。請點擊「🔄 重新檢查」手動觸發，或等待下次排程時間（每日 08:00）。</p>
+                </div>
+                <button class="secondary mt-xs" onclick="this.parentElement.open=false">收起說明</button>
+              </div>
+            </details>
+            <details class="status-details">
+              <summary class="flex-between cursor-pointer">
+                <div><strong>台股Replay同步</strong><div class="text-sm text-muted">每日 15:30 同步台股資料</div></div>
+                <div class="flex-center-gap">
+                  <button class="btn-xs" onclick="event.stopPropagation(); triggerReplaySync()">🔄 立即同步</button>
+                  <span class="badge ok" id="cron-replay-status">-</span>
+                </div>
+              </summary>
+              <div class="text-xs text-muted mt-xs" id="cron-replay-last">-</div>
+              <div class="detail-body">
+                <p><strong>資料來源：</strong>TWSE 官方 Open Data（`TWSECapitalFlowProvider`），由系統每日 15:30 自動同步。</p>
+                <table class="sub-channel-table" style="width:100%;margin:8px 0;font-size:12px;border-collapse:collapse">
+                  <thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:4px">Channel</th><th style="text-align:center;padding:4px">狀態</th><th style="text-align:right;padding:4px">最後更新</th></tr></thead>
+                  <tbody id="replay-sub-channels">
+                    <tr><td colspan="3" style="text-align:center;padding:8px;color:var(--muted)">載入中…</td></tr>
+                  </tbody>
+                </table>
+                <p><strong>寫入路徑：</strong><code>data/state/capital_flow/*.json</code></p>
+                <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin:8px 0">
+                  <p style="margin:0 0 6px 0;font-weight:bold">🤔 看到「未設定」？</p>
+                  <p style="margin:0;font-size:12px;color:var(--muted)">表示系統啟動後從未成功執行過此任務。可能原因：(1) 系統剛重啟 (2) 非交易日 15:30 尚未到達 (3) 前次同步失敗。請點擊「🔄 立即同步」手動觸發，或等待下一個交易日 15:30。</p>
+                </div>
+                <button class="secondary mt-xs" onclick="this.parentElement.open=false">收起說明</button>
+              </div>
+            </details>
+            <details class="status-details">
+              <summary class="flex-between cursor-pointer">
+                <div><strong>Agent權重動態調整</strong><div class="text-sm text-muted">Simulation 觸發後自動執行</div></div>
+                <div class="flex-center-gap">
+                  <button class="btn-xs" onclick="event.stopPropagation(); triggerDarwinianCalc()">🔄 重新計算</button>
+                  <span class="badge ok" id="cron-darwin-status">-</span>
+                </div>
+              </summary>
+              <div class="text-xs text-muted mt-xs" id="cron-darwin-last">-</div>
+              <div class="detail-body">
+                <p><strong>最後計算：</strong><span id="darwinian-last-computed">查詢中…</span></p>
+                <p><strong>Agent 數量：</strong><span id="darwinian-agent-count">-</span></p>
+                <table class="sub-channel-table" style="width:100%;margin:8px 0;font-size:12px;border-collapse:collapse">
+                  <thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:4px">Agent</th><th style="text-align:center;padding:4px">權重</th><th style="text-align:right;padding:4px">Sharpe</th></tr></thead>
+                  <tbody id="darwinian-sub-channels">
+                    <tr><td colspan="3" style="text-align:center;padding:8px;color:var(--muted)">載入中…</td></tr>
+                  </tbody>
+                </table>
+                <p><strong>觸發方式：</strong>隨 simulation 被動執行，非 cron job。每次 <code>System.RunDailySimulation()</code> 結束後自動呼叫 <code>PerformDailyAdjustment()</code>。</p>
+                <p>若長期無 simulation 執行（如超過一個月），權重將停滯，建議點擊「🔄 重新計算」或跑一個 experiment / backtest window 來更新。</p>
+                <ul>
+                  <li>每筆交易Outcome由 <code>RecordOutcome()</code> 記錄。</li>
+                  <li><code>PerformDailyAdjustment()</code> 每天依 <strong>20日滾動 Sharpe Ratio</strong> 調整權重：Top 1/3 → 提升 1.05x；Bottom 1/3 → 降低 0.95x。</li>
+                  <li>權重範圍夾制於 <code>[0.3, 2.5]</code>：0.3 = whisper，2.5 = shout，1.0 = neutral。</li>
+                  <li>調整後由 <code>ApplyDarwinianWeights()</code> 將 Conviction 乘上權重，結果限制在 <code>[1, 250]</code>。</li>
+                  <li>權重資料寫入 <code>data/state/darwinian_weights.json</code>，重啟後自動恢復。</li>
+                </ul>
+                <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin:8px 0">
+                  <p style="margin:0 0 6px 0;font-weight:bold">🤔 看到「未設定」？</p>
+                  <p style="margin:0;font-size:12px;color:var(--muted)">表示從未執行過 Darwinian 計算。可能原因：(1) 系統剛重啟 (2) 從未跑過 simulation / experiment (3) darwinian_weights.json 不存在。請點擊「🔄 重新計算」觸發，或執行一次 backtest window。</p>
+                </div>
+                <button class="secondary mt-xs" onclick="this.parentElement.open=false">收起說明</button>
+              </div>
+            </details>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>👤 手動操作（人機互動）</h2>
+          <div class="mt-sm">
+            <div class="status-item">
+              <div class="flex-between">
+                <div><strong>實驗流程</strong><div class="text-sm text-muted">產生候選prompt/規則變異</div></div>
+                <button class="primary" onclick="showExecuteForm('execute-experiment')">▶ 執行</button>
+              </div>
+              <div id="form-execute-experiment" style="display:none;margin-top:8px">
+                <label class="text-sm text-muted">選擇預設 Brief</label>
+                <select id="brief-select" class="mt-xs" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--fg)">
+                  <option value="configs/briefs/semiconductor-tightening.json">半導體緊縮 (semiconductor-tightening)</option>
+                  <option value="configs/briefs/technical-breakout-expansion.json">技術突破擴張 (technical-breakout-expansion)</option>
+                  <option value="configs/briefs/financials-credit-quality.json">金融信用品質 (financials-credit-quality)</option>
+                  <option value="configs/briefs/etf-rotation-liquidity.json">ETF輪動流動性 (etf-rotation-liquidity)</option>
+                  <option value="configs/briefs/value-yield-defensive.json">價值收益防禦 (value-yield-defensive)</option>
+                </select>
+                <div class="text-xs text-muted mt-xs">使用預設的 mutation brief 執行實驗。實驗會產生候選 prompt 並與 baseline 比較。</div>
+                <button class="primary mt-sm" onclick="submitTask('execute_experiment', {brief_path: document.getElementById('brief-select').value})">確認執行</button>
+                <button class="secondary mt-sm" onclick="hideExecuteForm('execute-experiment')">取消</button>
+              </div>
+            </div>
+            <div class="status-item">
+              <div class="flex-between">
+                <div><strong>評判實驗</strong><div class="text-sm text-muted">對比Baseline vs Candidate</div></div>
+                <button class="primary" onclick="submitTask('judge_experiment')">▶ 執行</button>
+              </div>
+            </div>
+            <div class="status-item">
+              <div class="flex-between">
+                <div><strong>晉升Baseline</strong><div class="text-sm text-muted">接受通過的實驗結果</div></div>
+                <button class="primary" onclick="submitTask('promote_baseline')">▶ 執行</button>
+              </div>
+            </div>
+            <div class="status-item">
+              <div class="flex-between">
+                <div><strong>回測窗口</strong><div class="text-sm text-muted">評估特定期間表現</div></div>
+                <button class="primary" onclick="showExecuteForm('backtest-window')">▶ 執行</button>
+              </div>
+              <div id="form-backtest-window" style="display:none;margin-top:8px">
+                <label class="text-sm text-muted">開始日期</label>
+                <input type="date" id="backtest-start" class="mt-xs" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--fg)" value="2026-03-26">
+                <label class="text-sm text-muted mt-sm">結束日期</label>
+                <input type="date" id="backtest-end" class="mt-xs" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--fg)" value="2026-03-27">
+                <div class="text-xs text-muted mt-xs">選擇回測日期範圍。系統會在這段期間內模擬每日交易，評估策略表現。日期範圍需有對應的 replay 資料。</div>
+                <button class="primary mt-sm" onclick="submitTask('backtest_window', {start_date: document.getElementById('backtest-start').value, end_date: document.getElementById('backtest-end').value})">確認執行</button>
+                <button class="secondary mt-sm" onclick="hideExecuteForm('backtest-window')">取消</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="panel mt-md" id="taskLogPanel" style="display:none">
+          <h2>📋 執行日誌</h2>
+          <div id="taskLog" class="mt-sm" style="font-family:monospace;font-size:12px;max-height:300px;overflow-y:auto;background:var(--card-bg);padding:12px;border-radius:8px;border:1px solid var(--border)"></div>
+          <div class="flex-gap mt-sm">
+            <button class="secondary" onclick="clearTaskLog()">清除</button>
+            <button class="secondary" onclick="document.getElementById('taskLogPanel').style.display='none'">關閉</button>
+          </div>
+        </div>
+        <div class="panel mt-md">
+          <div class="flex-between">
+            <h2 class="m-0">📜 執行歷史</h2>
+            <button class="secondary" onclick="loadTaskHistory()">🔄 重新整理</button>
+          </div>
+          <div id="taskHistory" class="mt-sm">
+            <div class="text-sm text-muted">載入中...</div>
+          </div>
+        </div>
+      </div>
+      <div class="panel mt-md">
+        <h2>📊 資料管理</h2>
+        <div class="flex-gap mt-sm">
+          <button class="primary" id="btnSyncReplay" onclick="triggerReplaySync()">🔄 同步台股Replay</button>
+          <button class="secondary" id="btnBackfill" onclick="triggerBackfill()">📥 補齊Replay缺口</button>
+          <button class="secondary" id="btnIngestAll" onclick="triggerAllIngest()">🌐 更新所有外部資料</button>
+        </div>
+        <div id="dataMgmtStatus" class="mt-sm text-sm text-muted">-</div>
+      </div>
+    </div>
+
     <div class="page" id="page-alerts">
       <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
         本頁呈現 Atlas 系統產生的所有<strong>風險警報與系統通知</strong>。每條警報都有嚴重程度標記，你可以確認已處理的警報。
@@ -969,6 +1224,35 @@ body { display: flex; margin: 0; min-height: 100vh; }
         <div id="metricsTrend" class="empty">載入中…</div>
       </div>
     </div>
+
+    <div class="page" id="page-parameters">
+      <details class="help-details"><summary><strong>💡 參數管理</strong></summary>
+        本頁提供投資模型所有可調參數的集中管理。每個參數均顯示當前值、預設值、來源說明與最後校準時間。
+        修改參數後會即時生效，但建議在模擬環境驗證後再應用於實盤。
+      </details>
+      <div class="panel wide">
+        <h2>參數總覽</h2>
+        <div id="parametersContent" class="empty">載入中…</div>
+      </div>
+      <div class="panel wide">
+        <h2>參數快照與版本控制</h2>
+        <div id="snapshotContent" class="empty">載入中…</div>
+      </div>
+      <div class="panel wide">
+        <h2>參數異動稽核記錄</h2>
+        <div id="paramAuditLog" class="empty">載入中…</div>
+      </div>
+      <div class="panel wide">
+        <h2>GARCH 自動校準</h2>
+        <div class="control-group">
+          <textarea id="garchReturns" placeholder="貼上歷史報酬率 JSON 陣列，例如: [0.01, -0.02, 0.015, ...]" rows="3" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--font-mono);font-size:12px;"></textarea>
+        </div>
+        <div class="control-group">
+          <button class="primary" onclick="inferGARCH()">推論 GARCH 參數</button>
+        </div>
+        <div id="garchResult"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1014,42 +1298,32 @@ body { display: flex; margin: 0; min-height: 100vh; }
   </div>
 </div>
 
+<!-- Modal: Industry Detail -->
+<div class="modal-overlay" id="industryModal" role="dialog" aria-modal="true" onclick="if(event.target===this)closeIndustryModal()">
+  <div class="modal" style="width:min(800px,94vw);max-height:90vh;overflow-y:auto">
+    <h3 id="industryModalTitle">產業詳細分析</h3>
+    <div class="industry-tabs" id="industryTabs">
+      <button class="tab-btn active" data-tab="overview" onclick="switchIndustryTab('overview')">概覽</button>
+      <button class="tab-btn" data-tab="cycle" onclick="switchIndustryTab('cycle')">週期</button>
+      <button class="tab-btn" data-tab="linkage" onclick="switchIndustryTab('linkage')">供應鏈</button>
+      <button class="tab-btn" data-tab="risk" onclick="switchIndustryTab('risk')">風險</button>
+    </div>
+    <div id="industryModalContent"><div class="empty">載入中…</div></div>
+    <div class="control-group" style="margin-top:14px;justify-content:flex-end">
+      <button onclick="closeIndustryModal()">關閉</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
   import { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState } from './js/shared/utils.js';
-  import { agentName as agentNameEsm, regimeLabel as regimeLabelEsm, AGENT_NAME_MAP, PAGE_TITLES } from './js/shared/constants.js';
+  import { agentName, regimeLabel, AGENT_NAME_MAP, PAGE_TITLES } from './js/shared/constants.js';
   import { FIELD } from './js/shared/field_names.js';
-  Object.assign(window, { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState, agentNameEsm, regimeLabelEsm, FIELD });
+  // Expose to global scope for gradual migration
+  Object.assign(window, { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState, agentName_esm: agentName, regimeLabel_esm: regimeLabel, FIELD });
 </script>
 
 <script>
-
-/**
- * API 回應欄位驗證工具
- * 目的：捕獲前後端 JSON 欄位命名不一致的問題（PascalCase vs snake_case）
- * 當發現關鍵欄位缺失時，在 console 輸出明確錯誤訊息，幫助開發者定位問題。
- */
-function validateApiResponse(data, requiredFields, context) {
-  if (!data || typeof data !== 'object') return;
-  const missing = [];
-  const wrongCase = [];
-  for (const field of requiredFields) {
-    if (!(field in data)) {
-      // 檢查是否使用了 PascalCase（常見錯誤）
-      const pascalCase = field.replace(/_(.)/g, (_, char) => char.toUpperCase()).replace(/^[a-z]/, c => c.toUpperCase());
-      if (pascalCase in data) {
-        wrongCase.push({ expected: field, found: pascalCase });
-      } else {
-        missing.push(field);
-      }
-    }
-  }
-  if (wrongCase.length) {
-    console.error(`[API 欄位錯誤] ${context}: 前端使用 snake_case，但後端回傳了 PascalCase。請將前端欄位名改為 snake_case。`, wrongCase);
-  }
-  if (missing.length) {
-    console.warn(`[API 欄位缺失] ${context}: 以下欄位不存在於 API 回應中：`, missing);
-  }
-}
 
 const pageLoadStatus = {};
 
@@ -1070,10 +1344,12 @@ function switchPage(id) {
     reports: '最新回測',
     controls: '控制與稽核',
     datachannels: '信息通道',
+    synergy: '人機協同',
     alerts: '系統警報',
     metrics: '指標監控',
     industry: '產業生態系',
-    portfolio: '組合持倉'
+    portfolio: '組合持倉',
+    parameters: '參數管理'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   // Close mobile sidebar
@@ -1262,9 +1538,7 @@ const SECTOR_NAME_MAP = {
   'TAIEX': '台股大盤',
   'GPR_index': '地緣政治風險指數',
   'EM_currencies': '新興市場貨幣',
-  'foreign_flow_TW': '外資流向_台股',
-  'control': '控制層',
-  '其他': '其他'
+  'foreign_flow_TW': '外資流向_台股'
 };
 function sectorName(s) { return SECTOR_NAME_MAP[s] || s; }
 
@@ -1364,14 +1638,33 @@ function escapeHtml(text) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
+const apiErrors = [];
+
+function showAPIErrorBanner() {
+  const existing = document.getElementById('apiErrorBanner');
+  if (existing) existing.remove();
+  if (apiErrors.length === 0) return;
+  const latest = apiErrors.slice(-5);
+  const banner = document.createElement('div');
+  banner.id = 'apiErrorBanner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#dc2626;color:#fff;padding:8px 16px;font-size:12px;line-height:1.5;cursor:pointer';
+  banner.title = '點擊關閉';
+  banner.innerHTML = `<strong>⚠️ ${apiErrors.length} API 錯誤</strong> ${latest.map(e => e.url.split('/').pop() + ': ' + e.msg).join(' | ')}`;
+  banner.onclick = () => { banner.remove(); apiErrors.length = 0; };
+  document.body.prepend(banner);
+}
+
 async function getJSON(url) {
   try {
     const r = await fetch(url);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return r.json();
   } catch (err) {
-    if (err.message && !err.message.includes('404')) {
-      notify(`載入失敗: ${url.split('/').pop()} - ${err.message}`, 'error');
+    const msg = err.message || String(err);
+    if (!msg.includes('404')) {
+      apiErrors.push({url, msg, time: new Date()});
+      showAPIErrorBanner();
+      notify(`載入失敗: ${url.split('/').pop()} - ${msg}`, 'error');
     }
     throw err;
   }
@@ -1549,7 +1842,7 @@ function showSkeletons() {
 
 function renderInbox(data) {
   const el = document.getElementById('experimentInbox');
-  if (!data) { el.innerHTML = renderEmptyState('尚無實驗資料', '執行「go run ./cmd/run-experiment -brief &lt;file&gt;」後將自動顯示'); el.classList.remove('loading'); return; }
+  if (!data) { el.innerHTML = renderEmptyState('尚無實驗資料', '執行「go run ./cmd/execute-experiment -brief <file>」後將自動顯示'); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
   const pending = data.pending_judges || [];
   const promotes = data.pending_promotes || [];
@@ -1605,8 +1898,8 @@ function computePipelineSummary(guardOutcomes) {
   const guard = guardOutcomes || [];
   const firstGuard = guard[0];
   const lastGuard = guard[guard.length - 1];
-  const rawInputs = firstGuard ? (firstGuard.input_count || 0) : 0;
-  const finalOutputs = lastGuard ? (lastGuard.output_count || 0) : 0;
+const rawInputs = firstGuard ? firstGuard.input_count : 0;
+		const finalOutputs = lastGuard ? lastGuard.output_count : 0;
   const filteredCount = Math.max(0, rawInputs - finalOutputs);
   return { rawInputs, finalOutputs, filteredCount, guard };
 }
@@ -1623,11 +1916,9 @@ function renderMacroRadar(data, pipelineData) {
   let controlSummary = '';
   if (guard.length) {
     const lines = guard.map(g => {
-      const inputCount = g.input_count || 0;
-      const outputCount = g.output_count || 0;
-      const filtered = inputCount - outputCount;
-      if (!g.passed) return `<span class="text-down">● ${agentName(g.guard_id)} 強制阻擋全部推薦（${inputCount} → 0）</span>`;
-      if (filtered > 0) return `<span class="text-warn">● ${agentName(g.guard_id)} 過濾了 ${filtered} 筆推薦（${inputCount} → ${outputCount}）</span>`;
+      const filtered = g.input_count - g.output_count;
+      if (!g.passed) return `<span class="text-down">● ${agentName(g.guard_id)} 強制阻擋全部推薦（${g.input_count} → 0）</span>`;
+      if (filtered > 0) return `<span class="text-warn">● ${agentName(g.guard_id)} 過濾了 ${filtered} 筆推薦（${g.input_count} → ${g.output_count}）</span>`;
       return `<span class="text-up">● ${agentName(g.guard_id)} 未過濾任何推薦，全部放行</span>`;
     });
     controlSummary = `<div style="margin:8px 0;font-size:12px;line-height:1.6;background:var(--bg);padding:8px 10px;border-radius:6px">${lines.join('<br>')}</div>`;
@@ -1667,19 +1958,31 @@ function renderMacroRadar(data, pipelineData) {
     ${controlSummary}
     ${symbolTable}
     ${guard.length ? '<table style="margin-top:8px;font-size:12px"><thead><tr><th>AI</th><th>結果</th><th>處理數量</th><th>說明</th></tr></thead><tbody>' + guard.map(g => {
-      const inputCount = g.input_count || 0;
-      const outputCount = g.output_count || 0;
-      const filtered = inputCount - outputCount;
+      const filtered = g.input_count - g.output_count;
       let actionText = '放行';
       let actionClass = 'ok';
       if (!g.passed) { actionText = '阻擋'; actionClass = 'err'; }
       else if (filtered > 0) { actionText = '過濾'; actionClass = 'warn'; }
-      return `<tr><td>${agentName(g.guard_id) || '-'}</td><td><span class="badge ${actionClass}">${actionText}</span></td><td>${inputCount} → ${outputCount}</td><td>${g.reason || '-'}</td></tr>`;
+      return `<tr><td>${agentName(g.guard_id) || '-'}</td><td><span class="badge ${actionClass}">${actionText}</span></td><td>${g.input_count} → ${g.output_count}</td><td>${g.reason || '-'}</td></tr>`;
     }).join('') + '</tbody></table>' : renderEmptyState('本場次無控制層紀錄', '')}
   `;
 }
 
-function renderAgentObservatory(data, overlapData) {
+function sparkline(values, color) {
+  if (!values || values.length < 2) return '<span class="text-muted text-xs">-</span>';
+  const w = 64, h = 20;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * w;
+    const y = h - ((v - min) / range) * h;
+    return x.toFixed(1) + ',' + y.toFixed(1);
+  }).join(' ');
+  return `<svg width="${w}" height="${h}" style="vertical-align:middle"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+}
+
+function renderAgentObservatory(data, overlapData, darwinianTrend) {
   const el = document.getElementById('agentObservatory');
   if (!data) { el.innerHTML = renderEmptyState('尚無資料', ''); el.classList.remove('loading'); return; }
   const cards = data.weakest_agent_scorecards || [];
@@ -1712,16 +2015,20 @@ function renderAgentObservatory(data, overlapData) {
   }
 
   el.innerHTML = `<table>
-    <thead><tr><th>策略來源</th><th>窗口數 ${helpIcon('窗口數說明', '<p>該 Agent 參與過多少個回測窗口。</p><p>窗口數越多，統計信心度越高；窗口數過少時，績效數字可能僅供參考。</p>')}</th><th>命中率 ${helpIcon('命中率說明', '<p>推薦產生正向隔日回測報酬的比例。</p><p>持續 >50% 代表該 Agent 的選股邏輯在當前市場體制下相對有效。</p>')}</th><th>Sharpe ${helpIcon('Sharpe 說明', '<p>風險調整後報酬指標。</p><p>越高代表單位風險帶來的報酬越好；<0 表示經風險調整後整體為負貢獻（虧損）。</p>')}</th><th>最大回撤 ${helpIcon('最大回撤說明', '<p>歷史推薦中曾出現的最大累積虧損幅度。</p><p>數值越接近 0，代表風險控制越好；絕對值過大時應檢查該 Agent 的停損機制。</p>')}</th></tr></thead>
+    <thead><tr><th>策略來源</th><th>窗口數 ${helpIcon('窗口數說明', '<p>該 Agent 參與過多少個回測窗口。</p><p>窗口數越多，統計信心度越高；窗口數過少時，績效數字可能僅供參考。</p>')}</th><th>命中率 ${helpIcon('命中率說明', '<p>推薦產生正向隔日回測報酬的比例。</p><p>持續 >50% 代表該 Agent 的選股邏輯在當前市場體制下相對有效。</p>')}</th><th>Sharpe ${helpIcon('Sharpe 說明', '<p>風險調整後報酬指標。</p><p>越高代表單位風險帶來的報酬越好；<0 表示經風險調整後整體為負貢獻（虧損）。</p>')}</th><th>最大回撤 ${helpIcon('最大回撤說明', '<p>歷史推薦中曾出現的最大累積虧損幅度。</p><p>數值越接近 0，代表風險控制越好；絕對值過大時應檢查該 Agent 的停損機制。</p>')}</th><th>權重趨勢 ${helpIcon('權重說明', '<p>Darwinian 權重歷史走勢圖。</p><p>範圍 0.3~2.5，越高代表該 Agent 近期表現越好。</p>')}</th></tr></thead>
     <tbody>
       ${cards.map(c => {
         const isWeak = c.agent_id === weakest;
+        const trendPoints = (darwinianTrend && darwinianTrend.points) ? darwinianTrend.points.filter(p => p.agent_id === c.agent_id).reverse() : [];
+        const weightVals = trendPoints.map(p => p.weight);
+        const wColor = weightVals.length > 0 && weightVals[weightVals.length - 1] >= 2.0 ? 'var(--up)' : weightVals.length > 0 && weightVals[weightVals.length - 1] <= 0.5 ? 'var(--down)' : 'var(--accent)';
         return `<tr class="${isWeak ? 'weak' : ''}">
           <td>${agentName(c.agent_id) || ''}</td>
           <td>${c.windows || 0}</td>
           <td>${((c.hit_rate || 0) * 100).toFixed(1)}%</td>
           <td style="${(c.sharpe || 0) < 0 ? 'color:#ff6b6b' : ''}">${(c.sharpe || 0).toFixed(3)}</td>
           <td>${((c.max_drawdown || 0) * 100).toFixed(1)}%</td>
+          <td>${sparkline(weightVals, wColor)}</td>
         </tr>`;
       }).join('')}
     </tbody>
@@ -1834,7 +2141,7 @@ function renderConvictionBreakdown(cb) {
     ${steps}
   </div>`;
 }
-function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains, models, inbox, phase3, taxSnapshot) {
+function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains, models, inbox, phase3, taxSnapshot, regimeHistory) {
   const el = document.getElementById('decisionChain');
   el.classList.remove('loading');
   const regime = (pipeline && pipeline.regime) || (macro && macro.regime) || '-';
@@ -1873,6 +2180,17 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
       <span class="badge info">市場狀態：${regimeLabel(regime)}</span>
       ${stressVal != null ? `<span class="badge ${stressVal >= 70 ? 'err' : (stressVal >= 50 ? 'warn' : 'ok')}">外資出逃指數：${stressVal.toFixed(1)}分（${stressVal >= 70 ? '紅燈-危機' : (stressVal >= 50 ? '黃燈-高壓' : (stressVal >= 30 ? '黃燈-警戒' : '綠燈-低壓'))}）</span>` : ''}
     </div>
+    ${(regimeHistory && regimeHistory.transitions && regimeHistory.transitions.length > 0) ? `
+    <div style="margin-bottom:10px;padding:8px 12px;background:var(--bg);border-radius:8px;border-left:3px solid #8b5cf6">
+      <div class="text-xs font-bold mb-xs" style="color:var(--accent-secondary)">⚡ Regime 切換記錄</div>
+      ${regimeHistory.transitions.slice(-5).map(t => `
+        <div style="font-size:11px;margin:3px 0">
+          <span style="color:var(--down)">${t.from_regime || '-'}</span>
+          → <span style="color:var(--up)">${t.to_regime}</span>
+          <span class="text-muted"> · ${t.timestamp ? new Date(t.timestamp).toLocaleDateString('zh-TW') : ''}</span>
+        </div>
+      `).join('')}
+    </div>` : ''}
     <div class="mb-sm">
       <div class="text-sm font-bold mb-xs">宏觀敘事事件（${eventList.length} 個）</div>
       ${eventList.length ? `<div class="scroll-box">
@@ -2027,14 +2345,12 @@ function renderDecisionChain(pipeline, macro, agentsData, stress, events, chains
   `;
 
   const guardContent = guards.map(g => {
-    const inputCount = g.input_count || 0;
-    const outputCount = g.output_count || 0;
-    const filtered = inputCount - outputCount;
+    const filtered = (g.input_count || 0) - (g.output_count || 0);
     let cls = 'ok';
-    let txt = `放行 ${outputCount} 筆`;
-    if (!g.passed) { cls = 'err'; txt = `阻擋（輸出 ${outputCount} 筆）`; }
-    else if (filtered > 0) { cls = 'warn'; txt = `過濾 ${filtered} 筆後放行 ${outputCount} 筆`; }
-    return `<div class="my-xs"><span class="badge ${cls}">${agentName(g.guard_id)}</span> ${txt}（輸入 ${inputCount} → 輸出 ${outputCount}）</div>`;
+    let txt = `放行 ${g.output_count || 0} 筆`;
+    if (!g.passed) { cls = 'err'; txt = `阻擋（輸出 ${g.output_count || 0} 筆）`; }
+    else if (filtered > 0) { cls = 'warn'; txt = `過濾 ${filtered} 筆後放行 ${g.output_count || 0} 筆`; }
+    return `<div class="my-xs"><span class="badge ${cls}">${agentName(g.guard_id)}</span> ${txt}（輸入 ${g.input_count || 0} → 輸出 ${g.output_count || 0}）</div>`;
   }).join('') || renderEmptyState('暫無控制層紀錄', '');
 
   const perfRows = items.slice(0, 20).map(it => {
@@ -2241,12 +2557,81 @@ function passesFilter(item) {
 
 let pipelineSessions = [];
 
+function renderStatusBanner(status, statusMessage) {
+  if (!status || status === 'ok') return '';
+  let bgColor = 'var(--panel)';
+  let borderColor = 'var(--border)';
+  let icon = 'ℹ️';
+  let title = '提示 (Info)';
+  
+  if (status === 'degraded') {
+    bgColor = 'rgba(245, 158, 11, 0.1)';
+    borderColor = 'var(--warn)';
+    icon = '⚠️';
+    title = '部分服務降級 (Degraded)';
+  } else if (status === 'minimal') {
+    bgColor = 'rgba(245, 158, 11, 0.1)';
+    borderColor = 'var(--warn)';
+    icon = '⚠️';
+    title = '最小可用模式 (Minimal)';
+  } else if (status === 'error') {
+    bgColor = 'rgba(239, 68, 68, 0.1)';
+    borderColor = 'var(--down)';
+    icon = '❌';
+    title = '系統錯誤 (Error)';
+  } else if (status === 'no_session') {
+    bgColor = 'rgba(59, 130, 246, 0.1)';
+    borderColor = '#3b82f6'; // using a blue color for info
+    icon = 'ℹ️';
+    title = '無可用場次 (No Session)';
+  }
+  
+  return `
+    <div style="background:${bgColor}; border-left: 4px solid ${borderColor}; padding: 12px; border-radius: 4px; margin-bottom: 16px; color: var(--text); font-size: 13px; display: flex; align-items: flex-start; gap: 8px;">
+      <span style="font-size: 16px;">${icon}</span>
+      <div>
+        <strong style="display: block; margin-bottom: 2px;">${title}</strong>
+        <span style="color: var(--muted);">${statusMessage || ''}</span>
+      </div>
+    </div>
+  `;
+}
+
 function renderPipeline(data, showAll, sessionId, showScreened) {
   if (showAll === undefined) showAll = false;
   if (showScreened === undefined) showScreened = false;
   const el = document.getElementById('recommendationPipeline');
-  if (!data || !data.session_id) { el.innerHTML = renderEmptyState('尚無回測場次資料', '執行回測後將自動顯示'); el.classList.remove('loading'); return; }
+
+  if (!data || data.status === 'no_session') {
+    const sessions = data?.available_sessions || [];
+    const sessionList = sessions.length 
+      ? `<div class="mt-sm"><strong>可用場次：</strong><ul class="list-unstyled" style="margin-top:8px;padding-left:16px">${sessions.map(s => `<li style="margin-bottom:4px"><code>${s}</code></li>`).join('')}</ul></div>`
+      : '';
+    el.innerHTML = renderEmptyState(
+      '尚無回測場次資料',
+      '執行回測後將自動顯示',
+      (data?.status_message || '') + sessionList
+    );
+    el.classList.remove('loading');
+    return;
+  }
+
+  if (data.status === 'error') {
+    el.innerHTML = renderEmptyState(
+      '資料載入異常',
+      '',
+      data.status_message || '系統發生錯誤，請檢查日誌或聯絡管理員'
+    );
+    el.classList.remove('loading');
+    return;
+  }
+
+  if (!data.session_id) { el.innerHTML = renderEmptyState('尚無回測場次資料', '執行回測後將自動顯示'); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
+
+  const statusBanner = (data.status === 'degraded' || data.status === 'minimal') 
+    ? renderStatusBanner(data.status, data.status_message) 
+    : '';
 
   // Store data for filter access
   window._pipelineData = data;
@@ -2271,16 +2656,19 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
     </select>
   ` : `<span class="text-muted text-sm">載入場次中…</span>`;
 
-  const guardBadges = guard.length ? `<div class="mb-sm">${guard.map(g => {
-    const inputCount = g.input_count || 0;
-    const outputCount = g.output_count || 0;
-    const filtered = inputCount - outputCount;
-    let label = '放行';
-    let cls = 'ok';
-    if (!g.passed) { label = '阻擋'; cls = 'err'; }
-    else if (filtered > 0) { label = `過濾 ${filtered} 筆`; cls = 'warn'; }
-    return `<span class="badge ${cls}">${agentName(g.guard_id)}：${label}（${inputCount}→${outputCount}）</span>`;
-  }).join('')}</div>` : '';
+  let guardBadges = '';
+  if (guard.length) {
+    guardBadges = `<div class="mb-sm">${guard.map(g => {
+      const filtered = g.input_count - g.output_count;
+      let label = '放行';
+      let cls = 'ok';
+      if (!g.passed) { label = '阻擋'; cls = 'err'; }
+      else if (filtered > 0) { label = `過濾 ${filtered} 筆`; cls = 'warn'; }
+      return `<span class="badge ${cls}">${agentName(g.guard_id)}：${label}（${g.input_count}→${g.output_count}）</span>`;
+    }).join('')}</div>`;
+  } else if (data.status === 'degraded') {
+    guardBadges = `<div class="mb-sm text-sm" style="color:var(--warn)">⚠️ 控制層過濾記錄未載入</div>`;
+  }
 
   const screeningBadge = screenedItems.length ? `（${screenedItems.length} 檔被篩除）` : '';
   const workflowScreening = document.getElementById('workflowScreening');
@@ -2306,7 +2694,7 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
       <div class="scroll-box-lg">
         <div class="table-wrapper">
         <table class="text-sm">
-          <thead><tr><th>標的</th><th>公司名稱</th><th>策略來源</th><th>未通過條件</th><th>門檻</th><th>實際值</th><th>因子分數</th></tr></thead>
+          <thead><tr><th>標的</th><th>公司名稱</th><th>策略來源</th><th>未通過條件</th><th>門檻</th><th>實際值</th></tr></thead>
           <tbody>
             ${screenedItems.map(s => `<tr style="border-left:3px solid #666;color:var(--muted)">
               <td>${s.symbol}</td>
@@ -2315,7 +2703,6 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
               <td>${s.criterion_label || s.criterion || '-'}</td>
               <td>${s.threshold || '-'}</td>
               <td>${s.actual_value || '-'}</td>
-              <td>${renderFactorMini(s.factor_scores)}</td>
             </tr>`).join('')}
           </tbody>
         </table>
@@ -2385,11 +2772,18 @@ function renderPipeline(data, showAll, sessionId, showScreened) {
     ${paginationControls}
   ` : '';
 
-  const emptyMsg = !items.length ? (finalOutputs === 0
-    ? '本場次經控制層審核後，沒有任何標的被放行進入模擬投組。原因可能是風控長強制阻擋，或所有推薦均被投資長過濾。'
-    : `控制層放行 ${finalOutputs} 筆，但投資管線暫無詳細標的資料（可能該場次尚未載入管線數據）。`) : '';
+  let emptyMsg = '';
+  if (!items.length) {
+    if (data.status === 'minimal') {
+      emptyMsg = data.status_message || '處於最小可用模式，暫無標的資料。';
+    } else if (finalOutputs === 0) {
+      emptyMsg = '本場次經控制層審核後，沒有任何標的被放行進入模擬投組。原因可能是風控長強制阻擋，或所有推薦均被投資長過濾。';
+    } else {
+      emptyMsg = `控制層放行 ${finalOutputs} 筆，但投資管線暫無詳細標的資料（可能該場次尚未載入管線數據）。`;
+    }
+  }
 
-  el.innerHTML = `
+  el.innerHTML = statusBanner + `
     <div style="margin-bottom:8px;font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>場次：</span>${sessionSelect} · 市場狀態：<strong>${regimeLabel(data.regime || '-')}</strong> · ${recordedAt}</div>
     <div class="mb-sm text-muted text-sm">
       本場次共有 ${rawInputs} 筆 AI 推薦，經控制層後放行 ${finalOutputs} 筆${filteredCount > 0 ? `（過濾 ${filteredCount} 筆）` : ''}。
@@ -2487,6 +2881,399 @@ async function triggerChannelsIngest() {
   } finally {
     btn.disabled = false;
     btn.textContent = '立即更新 Macro + Geo 資料';
+  }
+}
+
+async function triggerReplaySync() {
+  const btn = document.getElementById('btnSyncReplay');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = '同步中…';
+  try {
+    const res = await fetch('/api/synergy/trigger-replay-sync', { method: 'POST' });
+    const data = await res.json().catch(() => ({ error: 'Unknown error' }));
+    if (!res.ok) { notify('Replay同步失敗: ' + (data.error || res.statusText), 'err'); return; }
+    notify('Replay同步已觸發（背景執行）', 'info');
+    document.getElementById('dataMgmtStatus').textContent = '⏳ Replay同步執行中…';
+  } catch (e) {
+    notify('Replay同步失敗: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 同步台股Replay';
+  }
+}
+
+async function triggerBackfill() {
+  const btn = document.getElementById('btnBackfill');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = '補齊中…';
+  try {
+    const res = await fetch('/api/synergy/trigger-backfill', { method: 'POST' });
+    const data = await res.json().catch(() => ({ error: 'Unknown error' }));
+    if (!res.ok) { notify('Backfill失敗: ' + (data.error || res.statusText), 'err'); return; }
+    notify('Backfill已觸發（背景執行）', 'info');
+    document.getElementById('dataMgmtStatus').textContent = '⏳ Backfill執行中…';
+  } catch (e) {
+    notify('Backfill失敗: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📥 補齊Replay缺口';
+  }
+}
+
+async function triggerAllIngest() {
+  const btn = document.getElementById('btnIngestAll');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = '更新中…';
+  try {
+    const res = await fetch('/api/channels/ingest', { method: 'POST' });
+    const data = await res.json().catch(() => ({ error: 'Unknown error' }));
+    if (!res.ok) { notify('資料更新失敗: ' + (data.error || res.statusText), 'err'); return; }
+    const parts = [];
+    if (data.macro_ok) parts.push('Macro'); else parts.push('Macro✗');
+    if (data.geo_ok) parts.push('Geo'); else parts.push('Geo✗');
+    if (data.cap_flow_ok) parts.push('CapFlow'); else parts.push('CapFlow✗');
+    if (data.export_ok) parts.push('Export'); else parts.push('Export✗');
+    notify('所有外部資料更新完成: ' + parts.join(' | '), 'info');
+    loadDataChannels();
+  } catch (e) {
+    notify('更新失敗: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🌐 更新所有外部資料';
+  }
+}
+
+async function loadSynergyCronStatus() {
+  try {
+    const res = await fetch('/api/dashboard/data-channels');
+    if (!res.ok) return;
+    const data = await res.json().catch(() => null);
+    if (!data || !data.channels) return;
+    const byID = {};
+    data.channels.forEach(c => { byID[c.channel_id] = c; });
+
+    // Helper: compute aggregate status from multiple channels
+    const aggregateStatus = (channels) => {
+      const valid = channels.filter(c => c && c.status);
+      if (valid.length === 0) return null;
+      if (valid.some(c => c.status === 'error')) return { status: 'error', status_text: '異常', updated_at: valid[0].updated_at };
+      if (valid.some(c => c.status === 'warn')) return { status: 'warn', status_text: '延遲', updated_at: valid[0].updated_at };
+      return { status: 'ok', status_text: '正常', updated_at: valid[0].updated_at };
+    };
+
+    // Helper: render sub-channel table
+    const renderSubChannels = (tbodyId, channels) => {
+      const tbody = document.getElementById(tbodyId);
+      if (!tbody) return;
+      if (channels.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:8px;color:var(--muted)">無資料</td></tr>';
+        return;
+      }
+      tbody.innerHTML = channels.map(c => {
+        const status = c && c.status ? c.status : 'unknown';
+        const statusText = c && c.status_text ? c.status_text : status;
+        const updated = c && c.updated_at ? c.updated_at : '-';
+        const cls = status === 'ok' ? 'ok' : status === 'warn' ? 'warn' : status === 'error' ? 'err' : 'muted';
+        return `<tr style="border-bottom:1px solid var(--border-lite)">
+          <td style="padding:4px">${c.channel_id}</td>
+          <td style="text-align:center;padding:4px"><span class="badge ${cls}">${statusText}</span></td>
+          <td style="text-align:right;padding:4px;color:var(--muted)">${updated}</td>
+        </tr>`;
+      }).join('');
+    };
+
+    const set = (id, c) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (c && c.status) {
+        const now = Date.now();
+        const updatedMs = c.updated_at ? new Date(c.updated_at).getTime() : 0;
+        const ageHours = updatedMs ? (now - updatedMs) / 3600000 : Infinity;
+        let cls = 'badge ' + (c.status === 'ok' ? 'ok' : c.status === 'warn' ? 'warn' : c.status === 'error' ? 'err' : 'muted');
+        let txt = c.status_text || c.status;
+        if (c.status === 'ok' && ageHours > 36) {
+          cls = 'badge warn';
+          const days = Math.floor(ageHours / 24);
+          txt = days > 0 ? '資料過期（' + days + '天）' : '資料過期（' + Math.floor(ageHours) + '小時）';
+        }
+        el.className = cls;
+        el.textContent = txt;
+      } else {
+        el.className = 'badge muted';
+        el.textContent = '未設定';
+      }
+      const lastEl = document.getElementById(id.replace('_status', '_last'));
+      if (lastEl && c && c.updated_at) lastEl.textContent = '最後更新：' + c.updated_at;
+    };
+
+    // 1. 地緣政治資料: aggregate geopolitical + geopolitical_taiwan
+    const geoChannels = [byID['geopolitical'], byID['geopolitical_taiwan']];
+    const geoAgg = aggregateStatus(geoChannels);
+    set('cron-geo-status', geoAgg || byID['geopolitical']);
+    renderSubChannels('geo-sub-channels', geoChannels);
+
+    // 2. 總經宏觀資料: aggregate all 6 macro channels
+    const macroChannels = [byID['us_yahoo'], byID['jpy_yahoo'], byID['twse_capital_flow'], byID['export_statistics'], byID['twse_margin'], byID['tsmc_revenue']];
+    const macroAgg = aggregateStatus(macroChannels);
+    set('cron-macro-status', macroAgg || byID['us_yahoo']);
+    renderSubChannels('macro-sub-channels', macroChannels);
+
+    // 3. 台股Replay同步
+    set('cron-replay-status', byID['twse_replay']);
+    renderSubChannels('replay-sub-channels', [byID['twse_replay']]);
+
+    // 4. Agent權重動態調整 (Darwinian)
+    try {
+      const dwRes = await fetch('/api/synergy/darwinian-status');
+      if (dwRes.ok) {
+        const dwData = await dwRes.json().catch(() => null);
+        if (dwData) {
+          const dwEl = document.getElementById('darwinian-last-computed');
+          if (dwEl) {
+            if (dwData.last_computed) {
+              dwEl.textContent = dwData.last_computed;
+            } else if (dwData.last_modified) {
+              dwEl.textContent = '檔案已修改：' + dwData.last_modified + '（尚無計算記錄）';
+            } else {
+              dwEl.textContent = '從未計算';
+            }
+          }
+          const cntEl = document.getElementById('darwinian-agent-count');
+          if (cntEl) cntEl.textContent = dwData.agent_count + ' 個 Agent';
+
+          // Render agent sub-channel table
+          const agentTbody = document.getElementById('darwinian-sub-channels');
+          if (agentTbody && dwData.agents) {
+            const agents = Object.entries(dwData.agents).map(([name, info]) => ({
+              channel_id: name,
+              status: 'ok',
+              status_text: info.weight.toFixed(2),
+              updated_at: info.rolling_sharpe ? info.rolling_sharpe.toFixed(2) : '-'
+            }));
+            renderSubChannels('darwinian-sub-channels', agents);
+          }
+
+          const darwinBadge = document.getElementById('cron-darwin-status');
+          if (darwinBadge) {
+            if (dwData.status !== 'ok') {
+              const map = { 'not_found': '未設定', 'read_error': '讀取失敗', 'parse_error': '格式錯誤' };
+              darwinBadge.className = 'badge err';
+              darwinBadge.textContent = map[dwData.status] || dwData.status;
+            } else if (dwData.last_computed) {
+              const age = Date.now() - new Date(dwData.last_computed).getTime();
+              const days = age / 86400000;
+              if (days > 7) { darwinBadge.className = 'badge warn'; darwinBadge.textContent = '過期（' + Math.floor(days) + '天）'; }
+              else { darwinBadge.className = 'badge ok'; darwinBadge.textContent = '正常'; }
+            } else { darwinBadge.className = 'badge warn'; darwinBadge.textContent = '待計算'; }
+          }
+          const darwinLastEl = document.getElementById('cron-darwin-last');
+          if (darwinLastEl && dwData.last_computed) darwinLastEl.textContent = '最後計算：' + dwData.last_computed;
+        }
+      }
+    } catch (e) {}
+  } catch (e) {}
+}
+
+async function triggerGeoIngest() {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '抓取中…';
+  notify('正在重新檢查地緣政治資料…', 'info');
+  try {
+    const res = await fetch('/api/channels/ingest', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (data.geo_ok) { notify('地緣政治資料抓取成功 ✓', 'ok'); }
+    else { notify('地緣政治資料抓取失敗：' + (data.geo_error || 'unknown'), 'err'); }
+    loadSynergyCronStatus();
+  } catch (e) {
+    notify('地緣政治資料抓取失敗：' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 重新檢查';
+  }
+}
+
+async function triggerMacroIngest() {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '抓取中…';
+  notify('正在重新檢查總經宏觀資料…', 'info');
+  try {
+    const res = await fetch('/api/channels/ingest', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    const parts = [];
+    if (data.macro_ok) parts.push('Macro'); else parts.push('Macro✗');
+    if (data.cap_flow_ok) parts.push('CapFlow'); else parts.push('CapFlow✗');
+    if (data.export_ok) parts.push('Export'); else parts.push('Export✗');
+    const ok = data.macro_ok || data.cap_flow_ok || data.export_ok;
+    notify('總經宏觀資料：' + parts.join(' | '), ok ? 'ok' : 'err');
+    loadSynergyCronStatus();
+  } catch (e) {
+    notify('總經宏觀資料抓取失敗：' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 重新檢查';
+  }
+}
+
+async function triggerReplaySync() {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '同步中…';
+  notify('正在同步台股 Replay 資料…', 'info');
+  try {
+    const res = await fetch('/api/synergy/trigger-replay-sync', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (data.success) { notify('台股 Replay 同步成功 ✓', 'ok'); }
+    else { notify('台股 Replay 同步失敗：' + (data.error || 'unknown'), 'err'); }
+    loadSynergyCronStatus();
+  } catch (e) {
+    notify('台股 Replay 同步失敗：' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 立即同步';
+  }
+}
+
+async function triggerDarwinianCalc() {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '計算中…';
+  notify('正在執行 Darwinian 權重計算…', 'info');
+  try {
+    // Note: Darwinian calculation requires simulation outcomes.
+    // For now, we trigger a backtest window to generate outcomes, then adjust.
+    const res = await fetch('/api/synergy/trigger-darwinian-calc', { method: 'POST' });
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      notify('Darwinian 權重計算完成 ✓ 調整 ' + (data.adjusted_count || 0) + ' 個 Agent', 'ok');
+    } else {
+      notify('Darwinian 計算 API 未實作，請手動執行 backtest window', 'warn');
+    }
+    loadSynergyCronStatus();
+  } catch (e) {
+    notify('Darwinian 計算失敗：' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 重新計算';
+  }
+}
+
+function showCommandHint(cmd) {
+  const hints = {
+    'execute-experiment': 'go run ./cmd/execute-experiment -brief <mutation-brief.json>',
+    'judge-experiment': 'go run ./cmd/judge-experiment',
+    'promote-baseline': 'go run ./cmd/promote-baseline',
+    'backtest-window': 'go run ./cmd/backtest-window -start 2026-03-26 -end 2026-03-27',
+  };
+  const msg = hints[cmd] || '無可用指令';
+  notify(msg, 'info');
+}
+
+function showExecuteForm(taskType) {
+  document.getElementById('form-' + taskType).style.display = 'block';
+}
+
+function hideExecuteForm(taskType) {
+  document.getElementById('form-' + taskType).style.display = 'none';
+}
+
+let activeEventSource = null;
+
+async function submitTask(taskType, payload) {
+  payload = payload || {};
+  try {
+    const res = await fetch('/api/tasks', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({task_type: taskType, payload: payload}),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      notify('執行失敗: ' + err, 'error');
+      return;
+    }
+    const data = await res.json();
+    notify('任務已提交: ' + data.id, 'success');
+    showTaskLog(data.id);
+  } catch (e) {
+    notify('執行失敗: ' + e.message, 'error');
+  }
+}
+
+function showTaskLog(executionId) {
+  const panel = document.getElementById('taskLogPanel');
+  const log = document.getElementById('taskLog');
+  panel.style.display = 'block';
+  log.innerHTML = '<div style="color:var(--muted)">連線中...</div>';
+
+  if (activeEventSource) {
+    activeEventSource.close();
+  }
+
+  const es = new EventSource('/api/tasks/' + executionId + '/events');
+  activeEventSource = es;
+  let buffer = '';
+
+  es.onmessage = function(event) {
+    try {
+      const data = JSON.parse(event.data);
+      const time = new Date(data.created_at).toLocaleTimeString();
+      const level = data.level || 'info';
+      const color = level === 'error' ? 'var(--down)' : (level === 'warn' ? 'var(--status-warn)' : 'var(--fg)');
+      buffer += '<div style="color:' + color + '">[' + time + '] [' + data.stream + '] ' + escapeHtml(data.message) + '</div>';
+      log.innerHTML = buffer;
+      log.scrollTop = log.scrollHeight;
+    } catch (e) {
+      buffer += '<div style="color:var(--muted)">' + escapeHtml(event.data) + '</div>';
+      log.innerHTML = buffer;
+    }
+  };
+
+  es.onerror = function() {
+    buffer += '<div style="color:var(--muted)">[連線結束]</div>';
+    log.innerHTML = buffer;
+    es.close();
+  };
+}
+
+function clearTaskLog() {
+  document.getElementById('taskLog').innerHTML = '';
+}
+
+async function loadTaskHistory() {
+  const el = document.getElementById('taskHistory');
+  el.innerHTML = '<div class="text-sm text-muted">載入中...</div>';
+  try {
+    const res = await fetch('/api/tasks?limit=20');
+    if (!res.ok) {
+      el.innerHTML = '<div class="text-sm text-muted">載入失敗</div>';
+      return;
+    }
+    const tasks = await res.json();
+    if (!tasks || tasks.length === 0) {
+      el.innerHTML = '<div class="text-sm text-muted">尚無執行紀錄</div>';
+      return;
+    }
+    let html = '<table class="text-sm" style="width:100%"><thead><tr><th>類型</th><th>狀態</th><th>執行者</th><th>時間</th><th>操作</th></tr></thead><tbody>';
+    tasks.forEach(t => {
+      const statusColor = t.status === 'succeeded' ? 'var(--status-ok)' : (t.status === 'failed' ? 'var(--status-err)' : (t.status === 'running' ? 'var(--accent)' : 'var(--muted)'));
+      const time = t.submitted_at ? new Date(t.submitted_at).toLocaleString() : '-';
+      html += `<tr>
+        <td>${escapeHtml(t.task_type)}</td>
+        <td><span style="color:${statusColor}">${escapeHtml(t.status)}</span></td>
+        <td>${escapeHtml(t.actor)}</td>
+        <td class="text-muted">${time}</td>
+        <td><button class="secondary text-xs" onclick="showTaskLog('${t.id}')">日誌</button></td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = '<div class="text-sm text-muted">載入失敗: ' + escapeHtml(e.message) + '</div>';
   }
 }
 
@@ -2669,11 +3456,9 @@ function renderLiveStatus(data) {
   `;
 }
 
-function renderRiskCards(data, pipelineData) {
+function renderRiskCards(data) {
   const el = document.getElementById('riskCards');
   const panel = document.getElementById('riskCardsPanel');
-  const posEl = document.getElementById('riskPositionConcentration');
-  const sectorEl = document.getElementById('riskSectorDistribution');
   if (!el || !data || !data.risk_snapshot) {
     if (panel) panel.style.display = 'none';
     return;
@@ -2682,137 +3467,293 @@ function renderRiskCards(data, pipelineData) {
   const rs = data.risk_snapshot;
   const insufficient = rs.insufficient_data || rs.data_points < 30;
   const fmtPct = v => (typeof v === 'number' && !isNaN(v)) ? (v * 100).toFixed(1) + '%' : '-';
-
-  // --- 計算投組風險指標（從 pipelineData） ---
-  const items = (pipelineData && pipelineData.items) || [];
-  const passedItems = items.filter(it => it.passed_guards);
-
-  // 1. 投組 Sharpe（簡易計算：平均報酬 / 標準差）
-  let portfolioSharpe = null;
-  if (passedItems.length >= 3) {
-    const returns = passedItems.map(it => it.forward_return || 0);
-    const avg = returns.reduce((a, b) => a + b, 0) / returns.length;
-    const variance = returns.reduce((sum, r) => sum + Math.pow(r - avg, 2), 0) / returns.length;
-    const std = Math.sqrt(variance);
-    portfolioSharpe = std > 0 ? (avg / std) : 0;
-  }
-
-  // 2. 倉位集中度（前 5 大標的佔比）
-  let concentrationHtml = '';
-  if (passedItems.length > 0) {
-    const totalConviction = passedItems.reduce((sum, it) => sum + (it.conviction || 0), 0);
-    const sorted = passedItems.slice().sort((a, b) => (b.conviction || 0) - (a.conviction || 0));
-    const top5 = sorted.slice(0, 5);
-    const top5Weight = totalConviction > 0
-      ? top5.reduce((sum, it) => sum + (it.conviction || 0), 0) / totalConviction
-      : 0;
-    const top1Weight = totalConviction > 0 ? (sorted[0].conviction || 0) / totalConviction : 0;
-
-    const rows = top5.map((it, idx) => {
-      const weight = totalConviction > 0 ? ((it.conviction || 0) / totalConviction * 100).toFixed(1) : '0.0';
-      return `<tr><td style="padding:3px 8px;font-size:12px">${idx + 1}</td><td style="padding:3px 8px;font-size:12px">${it.symbol}</td><td style="padding:3px 8px;font-size:12px;text-align:right">${weight}%</td></tr>`;
-    }).join('');
-
-    concentrationHtml = `
-      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px">
-        <div style="flex:1;min-width:200px">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">前 5 大持倉集中度</div>
-          <div style="font-size:20px;font-weight:700;color:${top5Weight > 0.6 ? 'var(--down)' : (top5Weight > 0.4 ? 'var(--warn)' : 'var(--up)')}">${(top5Weight * 100).toFixed(1)}%</div>
-          <div style="font-size:11px;color:var(--muted)">最高單一持倉 ${(top1Weight * 100).toFixed(1)}%</div>
-        </div>
-        <div style="flex:2;min-width:280px">
-          <table style="width:100%;font-size:12px;border-collapse:collapse">
-            <thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:4px 8px">#</th><th style="text-align:left;padding:4px 8px">標的</th><th style="text-align:right;padding:4px 8px">權重</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
-      </div>
-    `;
-  } else {
-    concentrationHtml = `<div style="font-size:12px;color:var(--muted);margin-top:12px">暫無持倉資料（本場次無控制層放行標的）</div>`;
-  }
-
-  // 3. 板塊分布（從 agent_id / layer 推導）
-  let sectorHtml = '';
-  if (passedItems.length > 0) {
-    const sectorMap = {};
-    passedItems.forEach(it => {
-      // 簡易推導：使用 agent_id 對應的 sector（若無法對應則標為「其他」）
-      const sector = inferSectorFromAgent(it.agent_id, it.layer) || '其他';
-      if (!sectorMap[sector]) sectorMap[sector] = { count: 0, conviction: 0 };
-      sectorMap[sector].count++;
-      sectorMap[sector].conviction += (it.conviction || 0);
-    });
-
-    const totalConv = passedItems.reduce((sum, it) => sum + (it.conviction || 0), 0);
-    const sectors = Object.entries(sectorMap)
-      .map(([name, data]) => ({ name, ...data, weight: totalConv > 0 ? data.conviction / totalConv : 0 }))
-      .sort((a, b) => b.weight - a.weight);
-
-    const sectorBars = sectors.map(s => {
-      const pct = (s.weight * 100).toFixed(1);
-      const color = s.weight > 0.3 ? 'var(--accent)' : (s.weight > 0.15 ? 'var(--accent-secondary)' : 'var(--muted)');
-      return `
-        <div style="margin:4px 0">
-          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
-            <span>${sectorName(s.name) || s.name}</span>
-            <span>${pct}% (${s.count} 檔)</span>
-          </div>
-          <div style="width:100%;height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
-            <div style="width:${pct}%;height:100%;background:${color};border-radius:3px;transition:width 0.3s"></div>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    sectorHtml = `
-      <div style="margin-top:16px">
-        <div style="font-size:13px;font-weight:700;margin-bottom:8px">板塊配置分布</div>
-        ${sectorBars}
-      </div>
-    `;
-  } else {
-    sectorHtml = `<div style="font-size:12px;color:var(--muted);margin-top:16px">暫無板塊分布資料</div>`;
-  }
-
-  // 渲染主風險指標卡片
   el.innerHTML = `
     <div class="panel" style="text-align:center"><div class="kpi-label">VaR 95%</div><div class="kpi-value" style="color:var(--down)">${insufficient ? '資料不足' : fmtPct(rs.var_95)}</div><div class="kpi-hint">95% 信賴區間最大虧損</div></div>
     <div class="panel" style="text-align:center"><div class="kpi-label">CVaR 95%</div><div class="kpi-value" style="color:var(--down)">${insufficient ? '資料不足' : fmtPct(rs.cvar_95)}</div><div class="kpi-hint">95% 條件期望虧損</div></div>
     <div class="panel" style="text-align:center"><div class="kpi-label">最大回撤</div><div class="kpi-value" style="color:var(--warn)">${insufficient ? '資料不足' : fmtPct(rs.max_drawdown_pct)}</div><div class="kpi-hint">歷史最大回撤幅度</div></div>
-    <div class="panel" style="text-align:center"><div class="kpi-label">投組 Sharpe</div><div class="kpi-value" style="color:${portfolioSharpe !== null ? (portfolioSharpe > 1 ? 'var(--up)' : (portfolioSharpe < 0 ? 'var(--down)' : 'var(--warn)')) : 'var(--muted)'}">${portfolioSharpe !== null ? portfolioSharpe.toFixed(2) : 'N/A'}</div><div class="kpi-hint">風險調整後收益比</div></div>
-    <div class="panel" style="text-align:center"><div class="kpi-label">放行標的數</div><div class="kpi-value">${passedItems.length}</div><div class="kpi-hint">控制層放行進模擬投組</div></div>
-    <div class="panel" style="text-align:center"><div class="kpi-label">資料點數</div><div class="kpi-value" style="color:${rs.data_points < 30 ? 'var(--warn)' : 'var(--up)'}">${rs.data_points || 0}</div><div class="kpi-hint">統計可信度 ${rs.data_points >= 30 ? '充足' : '不足'}</div></div>
   `;
-
-  // 渲染倉位集中度
-  if (posEl) posEl.innerHTML = `
-    <div style="border-top:1px solid var(--border);padding-top:12px">
-      <div style="font-size:13px;font-weight:700;margin-bottom:6px">倉位集中度分析</div>
-      ${concentrationHtml}
-    </div>
-  `;
-
-  // 渲染板塊分布
-  if (sectorEl) sectorEl.innerHTML = sectorHtml;
 }
 
-// 簡易 sector 推導函數
-function inferSectorFromAgent(agentID, layer) {
-  const agentSectorMap = {
-    'semiconductor': 'semiconductor',
-    'ai_supply_chain': 'ai_supply_chain',
-    'financials': 'financials',
-    'shipping': 'shipping',
-    'value_yield': 'high_dividend',
-    'etf_rotation': 'etf_rotation',
-    'technical_breakout': 'small_cap',
-    'growth_momentum': 'small_cap',
-    'macro': 'TAIEX',
-    'cro': 'control',
-    'cio': 'control'
-  };
-  return agentSectorMap[agentID] || (layer === 'sector' ? agentID : null);
+function renderPortfolioKPIs(data, pipeline) {
+  const el = document.getElementById('portfolioKPIs');
+  if (!el) return;
+  if (!data) { el.innerHTML = '<div class="empty">尚無組合資料</div>'; return; }
+  const fmt = v => typeof v === 'number' ? v.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0}) : '-';
+  const fmtPct = v => typeof v === 'number' ? (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%' : '-';
+  const pnlColor = v => typeof v === 'number' ? (v >= 0 ? 'var(--up)' : 'var(--down)') : '';
+  const dd = data.current_drawdown;
+  const ddPct = dd > 0 ? (dd * 100).toFixed(1) + '%' : '0%';
+  const ddColor = dd > 0.2 ? 'var(--down)' : (dd > 0.1 ? 'var(--warn)' : 'var(--up)');
+
+  // Count pipeline suggestions when positions are empty
+  const positionsCount = data.positions_count || 0;
+  let positionLabel = positionsCount + ' 檔';
+  if (positionsCount === 0 && pipeline && pipeline.items) {
+    const passed = pipeline.items.filter(it => it.passed_guards !== false).length;
+    if (passed > 0) positionLabel = `0 檔 <span style="font-size:10px;color:var(--muted)">（${passed} 筆建議）</span>`;
+  }
+
+  el.innerHTML = `
+    <div class="panel" style="text-align:center"><div class="kpi-label">總資產</div><div class="kpi-value">${fmt(data.portfolio_value)}</div></div>
+    <div class="panel" style="text-align:center"><div class="kpi-label">可用現金</div><div class="kpi-value">${fmt(data.cash)}</div></div>
+    <div class="panel" style="text-align:center"><div class="kpi-label">目前回撤</div><div class="kpi-value" style="color:${ddColor}">${ddPct}</div></div>
+    <div class="panel" style="text-align:center"><div class="kpi-label">累計損益</div><div class="kpi-value" style="color:${pnlColor(data.cumulative_pnl_pct)}">${fmtPct(data.cumulative_pnl_pct)}</div></div>
+    <div class="panel" style="text-align:center"><div class="kpi-label">持倉數</div><div class="kpi-value">${positionLabel}</div></div>
+  `;
+}
+
+function renderEquityCurve(points) {
+  const panel = document.getElementById('equityCurvePanel');
+  const canvas = document.getElementById('equityChart');
+  if (!panel || !canvas) return;
+  if (!points || points.length < 2) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = '';
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = (rect.width - 40) * dpr;
+  canvas.height = 200 * dpr;
+  canvas.style.width = (rect.width - 40) + 'px';
+  canvas.style.height = '200px';
+  ctx.scale(dpr, dpr);
+  const w = rect.width - 40, h = 200;
+  const pad = {top: 20, right: 20, bottom: 30, left: 60};
+  const chartW = w - pad.left - pad.right, chartH = h - pad.top - pad.bottom;
+  const values = points.map(p => p.value);
+  const minV = Math.min(...values), maxV = Math.max(...values);
+  const range = maxV - minV || 1;
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 0.5;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (chartH / 4) * i;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
+    const val = maxV - (range / 4) * i;
+    ctx.fillStyle = '#888'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(val.toFixed(0), pad.left - 5, y + 3);
+  }
+  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#3b82f6';
+  ctx.lineWidth = 2; ctx.beginPath();
+  points.forEach((p, i) => {
+    const x = pad.left + (i / (points.length - 1)) * chartW;
+    const y = pad.top + (1 - (p.value - minV) / range) * chartH;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  ctx.fillStyle = '#888'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+  const step = Math.max(1, Math.floor(points.length / 6));
+  points.forEach((p, i) => {
+    if (i % step === 0 || i === points.length - 1) {
+      const x = pad.left + (i / (points.length - 1)) * chartW;
+      ctx.fillText(p.label, x, h - 5);
+    }
+  });
+}
+
+function renderPositionsTable(positions, pipeline) {
+  const el = document.getElementById('positionsTable');
+  if (!el) return;
+
+  if (!positions || positions.length === 0) {
+    // Fallback: show latest pipeline recommendations as suggested positions
+    const items = (pipeline && pipeline.items) || [];
+    const passedItems = items.filter(it => it.passed_guards !== false);
+    if (passedItems.length > 0) {
+      el.innerHTML = renderSuggestedPositions(passedItems, pipeline);
+      return;
+    }
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">目前無持倉，且尚無 pipeline 建議資料</div>';
+    return;
+  }
+
+  const fmt = v => typeof v === 'number' ? v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
+  const fmtInt = v => typeof v === 'number' ? v.toLocaleString('en-US') : '-';
+  const pnlColor = v => typeof v === 'number' ? (v >= 0 ? 'var(--up)' : 'var(--down)') : 'var(--muted)';
+  const pnlSign = v => typeof v === 'number' ? (v >= 0 ? '+' : '') : '';
+  const convColor = v => typeof v === 'number' ? (v >= 0.7 ? 'var(--up)' : (v >= 0.4 ? 'var(--warn)' : 'var(--muted)')) : 'var(--muted)';
+  el.innerHTML = `
+    <div class="table-wrapper">
+    <table id="positionsTableEl">
+      <thead><tr><th>符號</th><th>數量</th><th>成本</th><th>現價</th><th>市值</th><th>損益</th><th>損益%</th><th>推薦 AI</th><th>信心</th></tr></thead>
+      <tbody>
+        ${positions.map(p => `<tr>
+          <td><strong>${p.symbol}</strong></td>
+          <td>${fmtInt(p.quantity)}</td>
+          <td>${fmt(p.average_cost)}</td>
+          <td>${fmt(p.current_price)}</td>
+          <td>${fmt(p.market_value)}</td>
+          <td style="color:${pnlColor(p.unrealized_pnl)};font-weight:700">${pnlSign(p.unrealized_pnl)}${fmt(p.unrealized_pnl)}</td>
+          <td style="color:${pnlColor(p.pnl_pct)};font-weight:700">${pnlSign(p.pnl_pct)}${(p.pnl_pct * 100).toFixed(2)}%</td>
+          <td style="font-size:11px">${agentName(p.agent_id) || p.agent_name || '-'}</td>
+          <td style="color:${convColor(p.conviction)};font-size:11px">${p.conviction ? (p.conviction * 100).toFixed(0) + '%' : '-'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    </div>
+  `;
+}
+
+function renderSuggestedPositions(items, pipeline) {
+  const sessionID = (pipeline && pipeline.session_id) || '-';
+  const regime = (pipeline && pipeline.regime) || '-';
+  return `
+    <div style="margin-bottom:8px;font-size:11px;color:var(--warn)">
+      ⚠️ 目前無 live 持倉資料，以下為最新模擬場次（${sessionID}｜${regime}）的 <strong>AI 建議持倉</strong>
+    </div>
+    <div class="table-wrapper">
+    <table>
+      <thead><tr><th>標的</th><th>方向</th><th>推薦 AI</th><th>信心</th><th>目標價</th><th>停損價</th><th>理由</th></tr></thead>
+      <tbody>
+        ${items.map(i => {
+          const sideLabel = i.side === 'BUY' ? '買入' : (i.side === 'SELL' ? '賣出' : i.side);
+          const sideColor = i.side === 'BUY' ? 'var(--up)' : 'var(--down)';
+          const conv = i.conviction || 0;
+          const convColor = conv >= 0.7 ? 'var(--up)' : (conv >= 0.4 ? 'var(--warn)' : 'var(--muted)');
+          return `<tr>
+            <td><strong>${i.symbol || '-'}</strong></td>
+            <td style="color:${sideColor};font-weight:600">${sideLabel}</td>
+            <td style="font-size:11px">${agentName(i.agent_id) || i.skill || '-'}</td>
+            <td style="color:${convColor};font-weight:600">${(conv * 100).toFixed(0)}%</td>
+            <td>${i.target_price ? i.target_price.toFixed(1) : '-'}</td>
+            <td>${i.stop_loss_price ? i.stop_loss_price.toFixed(1) : '-'}</td>
+            <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(i.reason || '-').replace(/"/g,'&quot;')}">${(i.reason || '-').substring(0, 50)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-top:4px">共 ${items.length} 筆通過控制層審核的推薦（來自 ${pipeline.session_id || '?'}）</div>
+  `;
+}
+
+function renderRegimeContext(ps, regimeData) {
+  const el = document.getElementById('regimeContext');
+  if (!el) return;
+  const regime = (ps && ps.regime) || '-';
+  const regimeLabel = (ps && ps.regime_label) || regime;
+  const transitions = (regimeData && regimeData.transitions) || [];
+  const sessions = (regimeData && regimeData.sessions) || [];
+
+  // Count regime distribution
+  const counts = {};
+  sessions.forEach(s => { const r = s.regime || '-'; counts[r] = (counts[r] || 0) + 1; });
+  const total = sessions.length || 1;
+
+  let advice = '';
+  if (regime === 'RISK_ON') advice = '市場處於多頭格局，適合提高曝險、偏重動能與成長型策略。';
+  else if (regime === 'RISK_OFF') advice = '市場處於空頭格局，應降低曝險、增持現金、偏好防禦型策略。';
+  else if (regime === 'NEUTRAL') advice = '市場處於盤整格局，方向不明朗，建議適度曝險、分散配置。';
+  else advice = '體制資料尚未載入，系統將以中性配置運行。';
+
+  const regimeColor = regime === 'RISK_ON' ? 'var(--up)' : (regime === 'RISK_OFF' ? 'var(--down)' : 'var(--warn)');
+
+  // Last transition info
+  let transitionHtml = '';
+  if (transitions.length > 0) {
+    const last = transitions[transitions.length - 1];
+    const fromLabel = last.from || '-';
+    const toLabel = last.to || '-';
+    transitionHtml = `<div style="font-size:10px;color:var(--muted);margin-top:6px">最近轉變：${fromLabel} → ${toLabel}（${last.session_id || ''}）</div>`;
+  }
+
+  el.innerHTML = `
+    <div style="text-align:center">
+      <div class="kpi-value" style="color:${regimeColor};font-size:22px">${regimeLabel}</div>
+      <div class="kpi-label" style="margin-top:2px">${regime}</div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6">${advice}</div>
+    ${transitionHtml}
+    <div style="margin-top:8px;display:flex;gap:8px;font-size:11px;color:var(--muted)">
+      <span>🟢 ${counts['RISK_ON'] || 0} 天</span>
+      <span>🟡 ${counts['NEUTRAL'] || 0} 天</span>
+      <span>🔴 ${counts['RISK_OFF'] || 0} 天</span>
+    </div>
+  `;
+}
+
+function renderAllocationGuidance(ps, regimeData) {
+  const el = document.getElementById('allocationGuidance');
+  if (!el) return;
+  const cash = (ps && ps.cash) || 0;
+  const portfolioValue = (ps && ps.portfolio_value) || cash;
+  const regime = (ps && ps.regime) || 'NEUTRAL';
+
+  // Capital-tier-based allocation guidance
+  let tier, suggestedCashPct, maxPositionPct, diversificationNote;
+  if (portfolioValue < 500000) {
+    tier = '小型資金（&lt;50 萬）';
+    suggestedCashPct = regime === 'RISK_ON' ? 0.05 : (regime === 'RISK_OFF' ? 0.30 : 0.15);
+    maxPositionPct = 0.40;
+    diversificationNote = '建議 3～5 檔集中配置，追求資本成長';
+  } else if (portfolioValue < 3000000) {
+    tier = '中型資金（50～300 萬）';
+    suggestedCashPct = regime === 'RISK_ON' ? 0.10 : (regime === 'RISK_OFF' ? 0.35 : 0.20);
+    maxPositionPct = 0.20;
+    diversificationNote = '建議 6～10 檔適度分散，平衡成長與風控';
+  } else {
+    tier = '大型資金（&gt;300 萬）';
+    suggestedCashPct = regime === 'RISK_ON' ? 0.20 : (regime === 'RISK_OFF' ? 0.45 : 0.30);
+    maxPositionPct = 0.10;
+    diversificationNote = '建議 10～20 檔全市場配置，資本保值優先';
+  }
+
+  const currentCashPct = portfolioValue > 0 ? cash / portfolioValue : 1;
+  const cashStatus = currentCashPct >= suggestedCashPct ? '✅' : '⚠️';
+  const exposurePct = 1 - currentCashPct;
+  const suggestedExposurePct = 1 - suggestedCashPct;
+
+  el.innerHTML = `
+    <div style="font-size:11px;color:var(--muted);margin-bottom:4px">${tier}</div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+      <div><span style="font-size:18px;font-weight:700">${(exposurePct * 100).toFixed(0)}%</span><br><span style="font-size:10px;color:var(--muted)">目前曝險</span></div>
+      <div><span style="font-size:18px;color:var(--muted)">→</span></div>
+      <div><span style="font-size:18px;font-weight:700;color:var(--accent)">${(suggestedExposurePct * 100).toFixed(0)}%</span><br><span style="font-size:10px;color:var(--muted)">建議曝險</span></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);line-height:1.5">
+      <div>${cashStatus} 現金比例：${(currentCashPct * 100).toFixed(0)}%（建議 ≥ ${(suggestedCashPct * 100).toFixed(0)}%）</div>
+      <div>📌 單一持倉上限：${(maxPositionPct * 100).toFixed(0)}%</div>
+      <div style="margin-top:2px">${diversificationNote}</div>
+    </div>
+  `;
+}
+
+function renderAgentScoreboard(dw) {
+  const el = document.getElementById('agentScoreboard');
+  if (!el) return;
+  if (!dw || !dw.agents || dw.status !== 'ok') {
+    el.innerHTML = '<div style="padding:12px;text-align:center;color:var(--muted)">Darwinian 權重資料尚未載入</div>';
+    return;
+  }
+
+  const agents = Object.values(dw.agents);
+  const sorted = agents.sort((a, b) => (b.rolling_sharpe || 0) - (a.rolling_sharpe || 0));
+
+  el.innerHTML = `
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      ${sorted.map(a => {
+        const w = a.weight || 1;
+        const sharpe = a.rolling_sharpe || 0;
+        const hitRate = (a.hit_rate || 0) * 100;
+        const barW = Math.max(1, Math.round(w / 2.5 * 100));
+        const color = w >= 2.0 ? 'var(--up)' : (w >= 1.0 ? 'var(--accent)' : (w >= 0.5 ? 'var(--warn)' : 'var(--down)'));
+        return `<div style="flex:1;min-width:180px;max-width:240px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+            <div style="width:${barW}%;max-width:100%;height:3px;background:${color};border-radius:2px;flex-shrink:0" title="權重 ${w.toFixed(2)}"></div>
+            <span style="font-size:10px;font-weight:700;white-space:nowrap">${agentName(a.agent_id)}</span>
+          </div>
+          <div style="font-size:10px;color:var(--muted);display:flex;gap:8px">
+            <span>S:${sharpe.toFixed(1)}</span>
+            <span>Hit:${hitRate.toFixed(0)}%</span>
+            <span>N:${a.total_signals || 0}</span>
+            <span style="font-weight:700;color:${color}">×${w.toFixed(2)}</span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-top:6px">Darwinian 權重範圍：0.3～2.5× | 基於近 20 日滾動績效自動調整 | 更新時間：${dw.last_computed || '-'}</div>
+  `;
 }
 
 function renderLiveNarrativeStrip(events, stress, models, chains) {
@@ -3559,7 +4500,7 @@ async function loadAll() {
   showSkeletons();
 
   try {
-    const [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal] = await Promise.all([
+    const [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal, regimeHistory, darwinianTrend, dataIntegrity] = await Promise.all([
       getJSON('/api/dashboard/system-health').catch(() => null),
       getJSON('/api/dashboard/macro-radar').catch(() => null),
       getJSON('/api/dashboard/agent-observatory').catch(() => null),
@@ -3581,26 +4522,12 @@ async function loadAll() {
       getJSON('/api/dashboard/capital-phase').catch(() => null),
       getJSON('/api/dashboard/tax-snapshot').catch(() => null),
       getJSON('/api/narrative/seasonal').catch(() => null),
+      getJSON('/api/dashboard/regime-history').catch(() => null),
+      getJSON('/api/synergy/darwinian-trend').catch(() => null),
+      getJSON('/api/health/data-integrity').catch(() => null),
     ]);
 
-    // 防禦性驗證：檢查關鍵 API 回應欄位是否正確
-    if (macro) {
-      validateApiResponse(macro, ['session_id', 'regime', 'guard_outcomes', 'recorded_at'], 'macro-radar');
-      if (macro.guard_outcomes && macro.guard_outcomes.length > 0) {
-        validateApiResponse(macro.guard_outcomes[0], ['guard_id', 'guard_skill', 'severity', 'passed', 'reason', 'input_count', 'output_count'], 'macro-radar.guard_outcomes[0]');
-      }
-    }
-    if (pipeline) {
-      validateApiResponse(pipeline, ['session_id', 'regime', 'items', 'guard_outcomes', 'screened_items', 'recorded_at'], 'recommendation-pipeline');
-      if (pipeline.items && pipeline.items.length > 0) {
-        validateApiResponse(pipeline.items[0], ['agent_id', 'symbol', 'skill', 'layer', 'side', 'conviction', 'forward_return', 'passed_guards'], 'recommendation-pipeline.items[0]');
-      }
-    }
-    if (agents) {
-      validateApiResponse(agents, ['weakest_agent_scorecards', 'session_id', 'next_experiment_agent_id', 'recorded_at'], 'agent-observatory');
-    }
-
-    const allNull = [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal].every(v => v === null);
+    const allNull = [health, macro, agents, pipeline, live, inbox, overlap, stress, events, chains, models, templates, snapshot, dataChannels, sessions, phase3, alerts, retailSentiment, capitalPhase, taxSnapshot, seasonal, regimeHistory, darwinianTrend, dataIntegrity].every(v => v === null);
     if (allNull) {
       consecutiveFailures++;
       if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
@@ -3613,6 +4540,13 @@ async function loadAll() {
       updateRefreshPill('ok');
     }
 
+    // Check data integrity
+    if (dataIntegrity && dataIntegrity.overall !== 'ok') {
+      const badge = dataIntegrity.overall === 'failing' ? '🔴' : '🟡';
+      const warnings = (dataIntegrity.warnings || []).join('; ');
+      notify(`${badge} 資料完整性: ${dataIntegrity.overall} — ${warnings || '請查看 /api/health/data-integrity'}`, 'warn');
+    }
+
     if (sessions && sessions.sessions) {
       pipelineSessions = sessions.sessions;
     }
@@ -3622,7 +4556,7 @@ async function loadAll() {
     renderAgentObservatory(agents, overlap);
     renderUniverseOverlap(overlap);
     renderPipeline(pipeline, false, '');
-    renderDecisionChain(pipeline, macro, agents, stress, events, chains, models, inbox, phase3, taxSnapshot);
+    renderDecisionChain(pipeline, macro, agents, stress, events, chains, models, inbox, phase3, taxSnapshot, regimeHistory);
     renderAIEvolution(inbox, phase3);
     renderLiveStatus(live);
     renderInbox(inbox);
@@ -3631,6 +4565,10 @@ async function loadAll() {
     renderAlerts(alerts);
     loadMetrics();
     loadIndustryData();
+    if (document.getElementById('page-synergy')?.classList.contains('active')) {
+      loadSynergyCronStatus();
+      loadTaskHistory();
+    }
   } catch (e) {
     console.error(e);
     consecutiveFailures++;
@@ -3691,12 +4629,15 @@ async function loadPageData(pageId) {
     case 'pipeline':
       try {
         const pipeline = await getJSON('/api/dashboard/recommendation-pipeline').catch(() => null);
+        if (pipeline && pipeline.status && pipeline.status !== 'ok') {
+          console.warn(`[Pipeline] API returned non-ok status: ${pipeline.status} - ${pipeline.status_message}`);
+        }
         renderPipeline(pipeline, false, '');
       } catch (e) { console.error('Failed to load pipeline:', e); }
       break;
     case 'decision':
       try {
-        const [pipeline, macro, agents, stress, events, chains, models, inbox, phase3, taxSnapshot] = await Promise.all([
+        const [pipeline, macro, agents, stress, events, chains, models, inbox, phase3, taxSnapshot, regimeHistory] = await Promise.all([
           getJSON('/api/dashboard/recommendation-pipeline').catch(() => null),
           getJSON('/api/dashboard/macro-radar').catch(() => null),
           getJSON('/api/dashboard/agent-observatory').catch(() => null),
@@ -3707,8 +4648,9 @@ async function loadPageData(pageId) {
           getJSON('/api/dashboard/experiment-inbox').catch(() => null),
           getJSON('/api/dashboard/phase3-status').catch(() => null),
           getJSON('/api/dashboard/tax-snapshot').catch(() => null),
+          getJSON('/api/dashboard/regime-history').catch(() => null),
         ]);
-        renderDecisionChain(pipeline, macro, agents, stress, events, chains, models, inbox, phase3, taxSnapshot);
+        renderDecisionChain(pipeline, macro, agents, stress, events, chains, models, inbox, phase3, taxSnapshot, regimeHistory);
       } catch (e) { console.error('Failed to load decision chain:', e); }
       break;
     case 'agents':
@@ -3717,7 +4659,7 @@ async function loadPageData(pageId) {
           getJSON('/api/dashboard/agent-observatory').catch(() => null),
           getJSON('/api/dashboard/universe-overlap').catch(() => null),
         ]);
-        renderAgentObservatory(agents, overlap);
+    renderAgentObservatory(agents, overlap, darwinianTrend);
         renderUniverseOverlap(overlap);
       } catch (e) { console.error('Failed to load agents:', e); }
       break;
@@ -3745,6 +4687,12 @@ async function loadPageData(pageId) {
         renderDataChannels(dataChannels);
       } catch (e) { console.error('Failed to load data channels:', e); }
       break;
+    case 'synergy':
+      try {
+        loadSynergyCronStatus();
+        loadTaskHistory();
+      } catch (e) { console.error('Failed to load synergy status:', e); }
+      break;
     case 'alerts':
       try {
         const alerts = await getJSON('/api/alerts').catch(() => null);
@@ -3763,13 +4711,12 @@ async function loadPageData(pageId) {
       break;
     case 'live':
       try {
-        const [live, risk, pipelineData] = await Promise.all([
+        const [live, risk] = await Promise.all([
           getJSON('/api/dashboard/live-status').catch(() => null),
           getJSON('/api/dashboard/risk').catch(() => null),
-          getJSON('/api/dashboard/recommendation-pipeline').catch(() => null),
         ]);
         renderLiveStatus(live);
-        renderRiskCards(risk, pipelineData);
+        renderRiskCards(risk);
       } catch (e) { console.error('Failed to load live status:', e); }
       break;
     case 'portfolio':
@@ -3778,7 +4725,385 @@ async function loadPageData(pageId) {
         await m.loadPortfolioPage(getJSON, agentName);
       } catch (e) { console.error('Failed to load portfolio:', e); }
       break;
+    case 'parameters':
+      try {
+        await Promise.all([
+          loadParameters(),
+          loadSnapshots(),
+          loadParamAuditLog()
+        ]);
+      } catch (e) { console.error('Failed to load parameters:', e); }
+      break;
   }
+}
+
+// Parameter management functions
+async function loadParameters() {
+  try {
+    const params = await getJSON('/api/parameters');
+    renderParameters(params);
+  } catch (e) {
+    console.error('Failed to load parameters:', e);
+    document.getElementById('parametersContent').innerHTML = '<div class="empty">載入參數失敗: ' + e.message + '</div>';
+  }
+}
+
+function renderParameters(params) {
+  if (!params) {
+    document.getElementById('parametersContent').innerHTML = '<div class="empty">無參數資料</div>';
+    return;
+  }
+
+  const categories = [
+    { key: 'darwinian', label: 'Darwinian 權重', icon: '⚖️' },
+    { key: 'factor', label: '因子引擎', icon: '📊' },
+    { key: 'optimizer', label: '組合優化', icon: '📈' },
+    { key: 'sizing', label: '倉位規模', icon: '💰' },
+    { key: 'health', label: 'Agent 健康', icon: '❤️' },
+    { key: 'garch', label: '波動率預測', icon: '📉' },
+    { key: 'experiment', label: '實驗評估', icon: '🧪' },
+    { key: 'baseline', label: '基線政策', icon: '🏛️' },
+    { key: 'orchestrator', label: '協調器', icon: '🔀' },
+    { key: 'risk', label: '風險管理', icon: '🛡️' },
+    { key: 'realtime', label: '即時適應', icon: '⚡' },
+    { key: 'narrative', label: '宏觀敘事', icon: '📰' },
+    { key: 'janus', label: 'JANUS 權重', icon: '🔮' },
+    { key: 'marketdata', label: '市場數據', icon: '📡' },
+    { key: 'industry', label: '產業分析', icon: '🏭' },
+    { key: 'strategy', label: '策略選擇', icon: '🎯' }
+  ];
+
+  let html = '<div class="parameters-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;">';
+
+  for (const cat of categories) {
+    const catParams = params[cat.key];
+    if (!catParams) continue;
+
+    html += '<div class="panel">';
+    html += '<h3>' + cat.icon + ' ' + cat.label + '</h3>';
+
+    for (const [key, meta] of Object.entries(catParams)) {
+      if (!meta || typeof meta !== 'object') continue;
+      const value = meta.value !== undefined ? meta.value : meta.Value;
+      const source = meta.source || meta.Source || 'unknown';
+      const rationale = meta.rationale || meta.Rationale || '暫無說明';
+      const lastCalibrated = meta.last_calibrated || meta.LastCalibrated;
+      const calibrationMethod = meta.calibration_method || meta.CalibrationMethod || '未校準';
+      const todo = meta.todo || meta.Todo || '';
+
+      const paramId = cat.key + '_' + key;
+      let displayValue;
+      if (typeof value === 'number') {
+        displayValue = Math.abs(value) < 0.001 ? value.toExponential(2) : value.toString();
+      } else if (typeof value === 'object' && value !== null) {
+        displayValue = JSON.stringify(value);
+      } else {
+        displayValue = String(value);
+      }
+
+      html += '<div class="param-card" style="border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden;">';
+      html += '<div class="param-header" style="padding:10px 12px;background:var(--panel-l2);display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleParamDetails(\'' + paramId + '\')">';
+      html += '<div style="display:flex;align-items:center;gap:8px;flex:1;">';
+      html += '<code style="font-size:11px;background:rgba(255,255,255,.08);padding:2px 8px;border-radius:4px;font-weight:600;">' + escapeHtml(key) + '</code>';
+      html += '<span class="badge ' + getSourceBadgeClass(source) + '" style="font-size:10px;">' + escapeHtml(source) + '</span>';
+      html += '</div>';
+      html += '<div style="display:flex;align-items:center;gap:10px;">';
+      html += '<input type="text" value="' + escapeHtml(displayValue) + '" ' +
+        'data-category="' + cat.key + '" data-key="' + key + '" ' +
+        'onchange="updateParameter(this)" onclick="event.stopPropagation()" ' +
+        'style="width:90px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:13px;font-family:var(--font-mono);text-align:right;" />';
+      html += '<span id="toggle-' + paramId + '" style="font-size:10px;color:var(--muted);transition:transform .2s;">▼</span>';
+      html += '</div>';
+      html += '</div>';
+
+      html += '<div id="details-' + paramId + '" style="display:none;padding:12px;border-top:1px solid var(--border);background:var(--panel-l3);">';
+      html += '<div style="font-size:12px;line-height:1.7;color:var(--text);">';
+      html += '<div style="margin-bottom:8px;"><strong style="color:var(--accent);">📋 理由說明</strong><br/><span style="color:var(--muted);">' + escapeHtml(rationale) + '</span></div>';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">';
+      html += '<div><strong style="color:var(--accent);">🔬 校準方法</strong><br/><span style="color:var(--muted);font-size:11px;">' + escapeHtml(calibrationMethod) + '</span></div>';
+      html += '<div><strong style="color:var(--accent);">📅 最後校準</strong><br/><span style="color:var(--muted);font-size:11px;">' + (lastCalibrated ? escapeHtml(new Date(lastCalibrated).toLocaleDateString('zh-TW')) : '從未校準') + '</span></div>';
+      html += '</div>';
+      if (todo) {
+        html += '<div style="background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);border-radius:6px;padding:8px;margin-top:8px;">';
+        html += '<strong style="color:var(--warn);font-size:11px;">⚠️ 待改進</strong><br/><span style="color:var(--warn);font-size:11px;">' + escapeHtml(todo) + '</span>';
+        html += '</div>';
+      }
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+    }
+
+    html += '</div>';
+  }
+
+  html += '</div>';
+  html += '<div style="margin-top:16px;text-align:right;">';
+  html += '<button class="primary" onclick="saveAllParameters()">💾 儲存所有變更</button>';
+  html += '</div>';
+
+  document.getElementById('parametersContent').innerHTML = html;
+}
+
+function getSourceBadgeClass(source) {
+  switch(String(source).toLowerCase()) {
+    case 'literature': return 'info';
+    case 'empirical': return 'ok';
+    case 'calibrated': return 'info';
+    case 'heuristic': return 'warn';
+    case 'inferred': return 'warn';
+    default: return 'muted';
+  }
+}
+
+function toggleParamDetails(paramId) {
+  const details = document.getElementById('details-' + paramId);
+  const toggle = document.getElementById('toggle-' + paramId);
+  if (details.style.display === 'none') {
+    details.style.display = 'block';
+    toggle.style.transform = 'rotate(180deg)';
+  } else {
+    details.style.display = 'none';
+    toggle.style.transform = 'rotate(0deg)';
+  }
+}
+
+let parameterChanges = {};
+
+function updateParameter(input) {
+  const category = input.dataset.category;
+  const key = input.dataset.key;
+  const value = input.value;
+
+  parameterChanges[category + '.' + key] = {
+    category: category,
+    key: key,
+    value: isNaN(Number(value)) ? value : Number(value)
+  };
+
+  input.style.borderColor = 'var(--accent)';
+}
+
+async function saveAllParameters() {
+  if (Object.keys(parameterChanges).length === 0) {
+    showNotification('沒有變更需要儲存', 'info');
+    return;
+  }
+
+  const updates = {};
+  for (const change of Object.values(parameterChanges)) {
+    updates[change.category + '_' + change.key] = change.value;
+  }
+
+  try {
+    const response = await fetch('/api/parameters', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+
+    if (response.ok) {
+      showNotification('參數已更新', 'success');
+      parameterChanges = {};
+      await loadParameters();
+    } else {
+      const error = await response.json();
+      showNotification('更新失敗: ' + (error.error || '未知錯誤'), 'error');
+    }
+  } catch (e) {
+    showNotification('更新失敗: ' + e.message, 'error');
+  }
+}
+
+async function inferGARCH() {
+  const textarea = document.getElementById('garchReturns');
+  const resultDiv = document.getElementById('garchResult');
+
+  try {
+    const returns = JSON.parse(textarea.value);
+    if (!Array.isArray(returns) || returns.length < 100) {
+      resultDiv.innerHTML = '<div class="badge err">需要至少 100 筆報酬率資料</div>';
+      return;
+    }
+
+    resultDiv.innerHTML = '<div class="badge info">計算中...</div>';
+
+    const response = await fetch('/api/parameters/infer-garch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ returns: returns })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      resultDiv.innerHTML = '<div class="badge err">' + escapeHtml(error.error || '推論失敗') + '</div>';
+      return;
+    }
+
+    const garch = await response.json();
+    resultDiv.innerHTML =
+      '<div class="panel" style="margin-top:10px;">' +
+      '<h3>推論結果</h3>' +
+      '<div class="metric"><span class="label">Omega (長期波動)</span><span class="value">' + garch.omega.toExponential(4) + '</span></div>' +
+      '<div class="metric"><span class="label">Alpha (新聞反應)</span><span class="value">' + garch.alpha.toFixed(4) + '</span></div>' +
+      '<div class="metric"><span class="label">Beta (持續性)</span><span class="value">' + garch.beta.toFixed(4) + '</span></div>' +
+      '<div style="margin-top:10px;"><button class="primary" onclick="applyGARCH(' + garch.omega + ',' + garch.alpha + ',' + garch.beta + ')">套用至參數</button></div>' +
+      '</div>';
+  } catch (e) {
+    resultDiv.innerHTML = '<div class="badge err">解析失敗: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+async function applyGARCH(omega, alpha, beta) {
+  const updates = {
+    'garch_omega': omega,
+    'garch_alpha': alpha,
+    'garch_beta': beta
+  };
+
+  try {
+    const response = await fetch('/api/parameters', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+
+    if (response.ok) {
+      showNotification('GARCH 參數已套用', 'success');
+      await loadParameters();
+    } else {
+      const error = await response.json();
+      showNotification('套用失敗: ' + (error.error || '未知錯誤'), 'error');
+    }
+  } catch (e) {
+    showNotification('套用失敗: ' + e.message, 'error');
+  }
+}
+
+async function loadSnapshots() {
+  try {
+    const data = await getJSON('/api/parameters/snapshots');
+    renderSnapshots(data.snapshots || []);
+  } catch (e) {
+    console.error('Failed to load snapshots:', e);
+    document.getElementById('snapshotContent').innerHTML = '<div class="empty">載入快照失敗</div>';
+  }
+}
+
+function renderSnapshots(snapshots) {
+  if (!snapshots || snapshots.length === 0) {
+    document.getElementById('snapshotContent').innerHTML = '<div class="empty">尚無參數快照</div>';
+    return;
+  }
+
+  let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;">';
+  for (const snap of snapshots) {
+    html += '<div class="panel" style="border:1px solid var(--border);">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+    html += '<code style="font-size:11px;">' + escapeHtml(snap.id) + '</code>';
+    html += '<span class="badge muted" style="font-size:10px;">' + new Date(snap.timestamp).toLocaleString('zh-TW') + '</span>';
+    html += '</div>';
+    html += '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">' + escapeHtml(snap.reason || '無說明') + '</div>';
+    html += '<div style="display:flex;gap:8px;align-items:center;">';
+    html += '<span class="badge info" style="font-size:10px;">' + (snap.change_count || 0) + ' 項變更</span>';
+    html += '<button class="primary" style="font-size:11px;padding:4px 10px;" onclick="rollbackToSnapshot(\'' + escapeHtml(snap.id) + '\')">還原至此版本</button>';
+    html += '</div>';
+    html += '</div>';
+  }
+  html += '</div>';
+  document.getElementById('snapshotContent').innerHTML = html;
+}
+
+async function rollbackToSnapshot(snapshotId) {
+  if (!confirm('確定要還原到快照 ' + snapshotId + ' 嗎？當前參數將被備份。')) return;
+
+  try {
+    const response = await fetch('/api/parameters/rollback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ snapshot_id: snapshotId, reason: '使用者手動還原', user: 'dashboard' })
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      showNotification('已還原至 ' + snapshotId + ' (' + result.change_count + ' 項差異)', 'success');
+      await loadParameters();
+      await loadSnapshots();
+      await loadParamAuditLog();
+    } else {
+      const error = await response.json();
+      showNotification('還原失敗: ' + (error.error || '未知錯誤'), 'error');
+    }
+  } catch (e) {
+    showNotification('還原失敗: ' + e.message, 'error');
+  }
+}
+
+async function loadParamAuditLog() {
+  try {
+    const data = await getJSON('/api/parameters/audit-log');
+    renderParamAuditLog(data.changes || []);
+  } catch (e) {
+    console.error('Failed to load audit log:', e);
+    document.getElementById('paramAuditLog').innerHTML = '<div class="empty">載入稽核記錄失敗</div>';
+  }
+}
+
+function renderParamAuditLog(changes) {
+  if (!changes || changes.length === 0) {
+    document.getElementById('paramAuditLog').innerHTML = '<div class="empty">尚無參數異動記錄</div>';
+    return;
+  }
+
+  let html = '<div style="max-height:400px;overflow-y:auto;">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  html += '<thead><tr style="border-bottom:1px solid var(--border);">';
+  html += '<th style="text-align:left;padding:8px;">時間</th>';
+  html += '<th style="text-align:left;padding:8px;">參數</th>';
+  html += '<th style="text-align:right;padding:8px;">舊值</th>';
+  html += '<th style="text-align:right;padding:8px;">新值</th>';
+  html += '<th style="text-align:left;padding:8px;">原因</th>';
+  html += '</tr></thead><tbody>';
+
+  for (const change of changes) {
+    html += '<tr style="border-bottom:1px solid var(--border);">';
+    html += '<td style="padding:8px;color:var(--muted);font-size:11px;">' + new Date(change.timestamp).toLocaleString('zh-TW') + '</td>';
+    html += '<td style="padding:8px;"><code>' + escapeHtml(change.parameter) + '</code></td>';
+    html += '<td style="padding:8px;text-align:right;color:var(--color-danger);">' + escapeHtml(String(change.old_value)) + '</td>';
+    html += '<td style="padding:8px;text-align:right;color:var(--color-success);">' + escapeHtml(String(change.new_value)) + '</td>';
+    html += '<td style="padding:8px;color:var(--muted);font-size:11px;">' + escapeHtml(change.reason || '-') + '</td>';
+    html += '</tr>';
+  }
+
+  html += '</tbody></table></div>';
+  document.getElementById('paramAuditLog').innerHTML = html;
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function showNotification(message, type) {
+  const notificationCenter = document.getElementById('notificationCenter');
+  if (!notificationCenter) return;
+
+  const notif = document.createElement('div');
+  notif.className = 'notification ' + type;
+  notif.textContent = message;
+  notif.style.cssText = 'background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:8px;animation:slideIn 0.3s ease;';
+
+  if (type === 'success') notif.style.borderColor = 'var(--color-success)';
+  if (type === 'error') notif.style.borderColor = 'var(--color-danger)';
+  if (type === 'warning') notif.style.borderColor = 'var(--color-warning)';
+
+  notificationCenter.appendChild(notif);
+
+  setTimeout(() => {
+    notif.style.animation = 'slideOut 0.3s ease';
+    setTimeout(() => notif.remove(), 300);
+  }, 5000);
 }
 
 populateAgentSelect();
@@ -4053,7 +5378,281 @@ function renderSeasonalityCalendar(data) {
 }
 
 function showIndustryDetail(industryId) {
-  notify(`產業詳細分析功能開發中: ${industryId}`, 'info');
+  document.getElementById('industryModalTitle').textContent = '載入中…';
+  document.getElementById('industryModalContent').innerHTML = '<div class="empty">載入中…</div>';
+  document.getElementById('industryModal').classList.add('show');
+
+  getJSON(`/api/industry/detail?industry=${industryId}`)
+    .then(data => {
+      if (!data) {
+        document.getElementById('industryModalContent').innerHTML = '<div class="empty">無資料</div>';
+        return;
+      }
+      window.industryDetailData = data;
+      document.getElementById('industryModalTitle').textContent = data.name + ' (' + data.name_en + ')';
+      switchIndustryTab('overview');
+    })
+    .catch(() => {
+      document.getElementById('industryModalContent').innerHTML = '<div class="empty">載入失敗</div>';
+    });
+}
+
+function closeIndustryModal() {
+  document.getElementById('industryModal').classList.remove('show');
+  window.industryDetailData = null;
+}
+
+function switchIndustryTab(tab) {
+  document.querySelectorAll('#industryTabs .tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.tab-btn[data-tab="${tab}"]`).classList.add('active');
+
+  const data = window.industryDetailData;
+  if (!data) return;
+
+  const el = document.getElementById('industryModalContent');
+  switch (tab) {
+    case 'overview': el.innerHTML = renderModalIndustryOverview(data); break;
+    case 'cycle': el.innerHTML = renderModalIndustryCycle(data); break;
+    case 'linkage': el.innerHTML = renderModalIndustryLinkage(data); break;
+    case 'risk': el.innerHTML = renderModalIndustryRisk(data); break;
+  }
+}
+
+function renderModalIndustryOverview(data) {
+  const wd = data.weight_derivation;
+  const rec = data.recommendation;
+  let html = '';
+
+  if (data.regime_context) {
+    html += `<div class="regime-banner">${data.regime_context}</div>`;
+  }
+
+  html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">`;
+  html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px">`;
+  html += `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">基準權重</div>`;
+  html += `<div style="font-size:24px;font-weight:700;color:var(--accent)">${(data.weight * 100).toFixed(1)}%</div>`;
+  html += `</div>`;
+  html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px">`;
+  html += `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">建議動作</div>`;
+  const recClass = rec.action.includes('增持') ? 'buy' : rec.action.includes('減持') ? 'sell' : 'neutral';
+  html += `<div class="recommendation-box ${recClass}" style="margin:0">`;
+  html += `<div class="rec-action">${rec.action}</div>`;
+  html += `<div class="rec-target">目標 ${(rec.target_weight * 100).toFixed(1)}% (${rec.conviction}信念)</div>`;
+  html += `</div></div></div>`;
+
+  html += `<h4 style="margin:16px 0 8px;font-size:13px;color:var(--accent)">權重推論</h4>`;
+  html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px">`;
+  html += `<div style="font-size:13px;margin-bottom:10px">${wd.interpretation}</div>`;
+  html += `<div style="font-size:12px;color:var(--muted);margin-bottom:8px">推論因子：</div>`;
+  wd.derivation_factors.forEach(f => {
+    const badgeClass = f.weight >= 0.3 ? 'high' : f.weight >= 0.2 ? 'medium' : 'low';
+    html += `<div class="weight-factor">`;
+    html += `<span class="factor-name">${f.factor}</span>`;
+    html += `<span><span class="weight-badge ${badgeClass}">${(f.weight * 100).toFixed(0)}%</span> <span style="font-size:11px;color:var(--muted)">${f.source}</span></span>`;
+    html += `</div>`;
+  });
+  html += `</div>`;
+
+  if (wd.risk_factors && wd.risk_factors.length > 0) {
+    html += `<h4 style="margin:16px 0 8px;font-size:13px;color:var(--down)">風險因素</h4>`;
+    html += `<div style="display:flex;flex-wrap:wrap;gap:6px">`;
+    wd.risk_factors.forEach(r => {
+      html += `<span style="background:rgba(217,58,58,.1);border:1px solid rgba(217,58,58,.3);color:var(--down);padding:4px 8px;border-radius:4px;font-size:12px">${r}</span>`;
+    });
+    html += `</div>`;
+  }
+
+  if (wd.opportunities && wd.opportunities.length > 0) {
+    html += `<h4 style="margin:16px 0 8px;font-size:13px;color:var(--up)">機會因素</h4>`;
+    html += `<div style="display:flex;flex-wrap:wrap;gap:6px">`;
+    wd.opportunities.forEach(r => {
+      html += `<span style="background:rgba(38,161,123,.1);border:1px solid rgba(38,161,123,.3);color:var(--up);padding:4px 8px;border-radius:4px;font-size:12px">${r}</span>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `<h4 style="margin:16px 0 8px;font-size:13px;color:var(--accent)">代表性個股</h4>`;
+  html += `<div style="display:flex;flex-wrap:wrap;gap:6px">`;
+  data.representative_stocks.forEach(s => {
+    html += `<span style="background:var(--bg);border:1px solid var(--border);padding:4px 8px;border-radius:4px;font-size:12px">${s}</span>`;
+  });
+  html += `</div>`;
+
+  return html;
+}
+
+function renderModalIndustryCycle(data) {
+  const cp = data.cycle_position;
+  if (!cp) return '<div class="empty">無週期數據</div>';
+
+  let html = '';
+
+  html += `<div class="regime-banner" style="margin-bottom:12px">`;
+  html += `目前市場體制：<strong>${cp.business_cycle}</strong>，信心度 <strong>${(cp.confidence * 100).toFixed(0)}%</strong>`;
+  html += `</div>`;
+
+  html += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">`;
+
+  const cycleClassMap = {
+    'expansion': 'expansion', '擴張': 'expansion', '擴張期': 'expansion',
+    'recovery': 'recovery', '復甦': 'recovery', '復甦期': 'recovery',
+    'mature': 'mature', '成熟': 'mature', '成熟期': 'mature',
+    'recession': 'recession', '衰退': 'recession', '衰退期': 'recession'
+  };
+  const bcClass = cycleClassMap[cp.business_cycle] || 'mature';
+  html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">`;
+  html += `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">景氣循環</div>`;
+  html += `<span class="cycle-indicator ${bcClass}">${cp.business_cycle}</span>`;
+  html += `</div>`;
+
+  html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">`;
+  html += `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">庫存週期</div>`;
+  html += `<span class="cycle-indicator">${cp.inventory_cycle}</span>`;
+  html += `</div>`;
+
+  html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">`;
+  html += `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">資本支出</div>`;
+  html += `<span class="cycle-indicator">${cp.capex_cycle}</span>`;
+  html += `</div>`;
+
+  html += `</div>`;
+
+  html += `<h4 style="margin:0 0 8px;font-size:13px;color:var(--accent)">評估摘要</h4>`;
+  html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px">`;
+  html += `<div style="display:flex;justify-content:space-between;margin-bottom:8px">`;
+  html += `<span style="font-size:13px">目前趨勢</span><strong style="font-size:13px">${cp.trend}</strong>`;
+  html += `</div>`;
+  html += `<div style="display:flex;justify-content:space-between;margin-bottom:8px">`;
+  html += `<span style="font-size:13px">期態評分</span><strong style="font-size:13px">${cp.phase_score.toFixed(2)}</strong>`;
+  html += `</div>`;
+  html += `<div style="display:flex;justify-content:space-between">`;
+  html += `<span style="font-size:13px">評估時間</span><strong style="font-size:13px">${new Date(cp.updated_at).toLocaleString('zh-TW')}</strong>`;
+  html += `</div>`;
+  html += `</div>`;
+
+  if (data.seasonal_patterns && data.seasonal_patterns.length > 0) {
+    html += `<h4 style="margin:16px 0 8px;font-size:13px;color:var(--accent)">季節性模式</h4>`;
+    html += `<div style="display:flex;flex-direction:column;gap:8px">`;
+    data.seasonal_patterns.forEach(p => {
+      html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px">`;
+      html += `<div style="font-weight:600;font-size:13px;margin-bottom:4px">${p.name}</div>`;
+      html += `<div style="font-size:12px;color:var(--muted)">${p.description}</div>`;
+      html += `<div style="font-size:11px;color:var(--accent);margin-top:4px">歷史準確度 ${Math.round(p.historical_accuracy * 100)}%</div>`;
+      html += `</div>`;
+    });
+    html += `</div>`;
+  }
+
+  return html;
+}
+
+function renderModalIndustryLinkage(data) {
+  const li = data.linkage_info;
+  if (!li) return '<div class="empty">無供應鏈數據</div>';
+
+  let html = '';
+
+  html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">`;
+  html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">`;
+  html += `<div style="font-size:11px;color:var(--muted)">上游產業</div>`;
+  html += `<div style="font-size:24px;font-weight:700;color:var(--accent)">${li.upstream ? li.upstream.length : 0}</div>`;
+  html += `</div>`;
+  html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">`;
+  html += `<div style="font-size:11px;color:var(--muted)">下游產業</div>`;
+  html += `<div style="font-size:24px;font-weight:700;color:var(--accent)">${li.downstream ? li.downstream.length : 0}</div>`;
+  html += `</div>`;
+  html += `</div>`;
+
+  if (li.linkage_score) {
+    html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px">`;
+    html += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">`;
+    html += `<div><div style="font-size:11px;color:var(--muted)">系統重要性</div><strong>${li.linkage_score.systemic_importance.toFixed(2)}</strong></div>`;
+    html += `<div><div style="font-size:11px;color:var(--muted)">平均相關性</div><strong>${li.linkage_score.avg_correlation.toFixed(2)}</strong></div>`;
+    html += `<div><div style="font-size:11px;color:var(--muted)">衝擊傳導</div><strong>${li.linkage_score.shock_propagation_speed.toFixed(2)}</strong></div>`;
+    html += `</div></div>`;
+  }
+
+  html += `<div class="linkage-grid">`;
+  html += `<div class="linkage-col">`;
+  html += `<h4>上游產業</h4>`;
+  if (li.upstream && li.upstream.length > 0) {
+    li.upstream.forEach(ind => {
+      html += `<div class="linkage-item">${ind}</div>`;
+    });
+  } else {
+    html += `<div class="linkage-item" style="color:var(--muted)">無</div>`;
+  }
+  html += `</div>`;
+  html += `<div class="linkage-col">`;
+  html += `<h4>下游產業</h4>`;
+  if (li.downstream && li.downstream.length > 0) {
+    li.downstream.forEach(ind => {
+      html += `<div class="linkage-item">${ind}</div>`;
+    });
+  } else {
+    html += `<div class="linkage-item" style="color:var(--muted)">無</div>`;
+  }
+  html += `</div>`;
+  html += `</div>`;
+
+  if (li.correlations && li.correlations.length > 0) {
+    html += `<h4 style="margin:16px 0 8px;font-size:13px;color:var(--accent)">相關性分析</h4>`;
+    html += `<div style="max-height:200px;overflow-y:auto">`;
+    li.correlations.slice(0, 10).forEach(c => {
+      html += `<div class="linkage-item" style="display:flex;justify-content:space-between">`;
+      html += `<span>${c.industry}</span>`;
+      html += `<span style="color:${c.strength === 'high' ? 'var(--up)' : c.strength === 'medium' ? 'var(--warn)' : 'var(--muted)'}">${c.correlation.toFixed(2)} (${c.strength})</span>`;
+      html += `</div>`;
+    });
+    html += `</div>`;
+  }
+
+  return html;
+}
+
+function renderModalIndustryRisk(data) {
+  const ri = data.risk_info;
+  if (!ri) return '<div class="empty">無風險數據</div>';
+
+  let html = '';
+
+  html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px;text-align:center">`;
+  html += `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">風險事件數</div>`;
+  html += `<div style="font-size:32px;font-weight:700;color:${ri.risk_count > 3 ? 'var(--down)' : ri.risk_count > 0 ? 'var(--warn)' : 'var(--up)'}">${ri.risk_count}</div>`;
+  html += `</div>`;
+
+  if (ri.highest_risk) {
+    html += `<h4 style="margin:0 0 8px;font-size:13px;color:var(--down)">最高風險</h4>`;
+    html += `<div class="risk-item" style="margin-bottom:12px">`;
+    html += `<div class="risk-header">`;
+    html += `<span class="risk-type">${ri.highest_risk.type}</span>`;
+    html += `<span class="risk-severity ${ri.highest_risk.severity}">${ri.highest_risk.severity}</span>`;
+    html += `</div>`;
+    html += `<div class="risk-desc">${ri.highest_risk.description}</div>`;
+    html += `</div>`;
+  }
+
+  if (ri.risks && ri.risks.length > 0) {
+    html += `<h4 style="margin:0 0 8px;font-size:13px;color:var(--accent)">所有風險事件</h4>`;
+    ri.risks.forEach(r => {
+      html += `<div class="risk-item">`;
+      html += `<div class="risk-header">`;
+      html += `<span class="risk-type">${r.type}</span>`;
+      html += `<span class="risk-severity ${r.severity}">${r.severity}</span>`;
+      html += `</div>`;
+      html += `<div class="risk-desc">${r.description}</div>`;
+      if (r.recommended_action) {
+        html += `<div style="font-size:11px;color:var(--accent);margin-top:4px">建議：${r.recommended_action}</div>`;
+      }
+      html += `</div>`;
+    });
+  }
+
+  if (ri.risk_count === 0) {
+    html += `<div style="text-align:center;padding:24px;color:var(--up)">目前無風險事件</div>`;
+  }
+
+  return html;
 }
 
 </script>

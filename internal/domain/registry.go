@@ -1,7 +1,7 @@
 package domain
 
 import (
-	"fmt"
+	"encoding/json"
 	"time"
 )
 
@@ -59,21 +59,61 @@ type RecommendationOutcome struct {
 	ConvictionBreakdown *ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
 }
 
-func (r *RecommendationOutcome) Validate() error {
-	if r.AgentID == "" {
-		return fmt.Errorf("RecommendationOutcome.Validate: missing AgentID")
+func (r *RecommendationOutcome) UnmarshalJSON(data []byte) error {
+	type alias RecommendationOutcome
+	var current alias
+	if err := json.Unmarshal(data, &current); err == nil && current.AgentID != "" {
+		*r = RecommendationOutcome(current)
+		return nil
 	}
-	if r.Symbol == "" {
-		return fmt.Errorf("RecommendationOutcome.Validate: missing Symbol")
+
+	type legacyRecommendationOutcome struct {
+		AgentID             string               `json:"AgentID"`
+		Skill               string               `json:"Skill"`
+		Layer               AgentLayer           `json:"Layer"`
+		Symbol              string               `json:"Symbol"`
+		Side                Side                 `json:"Side"`
+		Conviction          int                  `json:"Conviction"`
+		TargetPrice         float64              `json:"TargetPrice"`
+		StopLossPrice       float64              `json:"StopLossPrice"`
+		Window              string               `json:"Window"`
+		ForwardReturn       float64              `json:"ForwardReturn"`
+		BenchmarkDelta      float64              `json:"BenchmarkDelta"`
+		Hit                 bool                 `json:"Hit"`
+		Reason              string               `json:"Reason"`
+		Price               float64              `json:"Price"`
+		PassedGuards        bool                 `json:"PassedGuards"`
+		GuardReason         string               `json:"GuardReason"`
+		RecordedAt          time.Time            `json:"RecordedAt"`
+		FactorScores        FactorScores         `json:"factor_scores,omitempty"`
+		ConvictionBreakdown *ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
 	}
-	if r.Side == "" {
-		return fmt.Errorf("RecommendationOutcome.Validate: missing Side")
+
+	var legacy legacyRecommendationOutcome
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
 	}
-	if r.Window == "" {
-		return fmt.Errorf("RecommendationOutcome.Validate: missing Window")
-	}
-	if r.Conviction <= 0 {
-		return fmt.Errorf("RecommendationOutcome.Validate: missing Conviction")
+
+	*r = RecommendationOutcome{
+		AgentID:             legacy.AgentID,
+		Skill:               legacy.Skill,
+		Layer:               legacy.Layer,
+		Symbol:              legacy.Symbol,
+		Side:                legacy.Side,
+		Conviction:          legacy.Conviction,
+		TargetPrice:         legacy.TargetPrice,
+		StopLossPrice:       legacy.StopLossPrice,
+		Window:              legacy.Window,
+		ForwardReturn:       legacy.ForwardReturn,
+		BenchmarkDelta:      legacy.BenchmarkDelta,
+		Hit:                 legacy.Hit,
+		Reason:              legacy.Reason,
+		Price:               legacy.Price,
+		PassedGuards:        legacy.PassedGuards,
+		GuardReason:         legacy.GuardReason,
+		RecordedAt:          legacy.RecordedAt,
+		FactorScores:        legacy.FactorScores,
+		ConvictionBreakdown: legacy.ConvictionBreakdown,
 	}
 	return nil
 }
@@ -137,6 +177,87 @@ type ExperimentRecord struct {
 	RevertReason      string           `json:"revert_reason"`
 }
 
+func (r *ExperimentRecord) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	isCanonical := false
+	for key := range raw {
+		if key == "id" {
+			isCanonical = true
+			break
+		}
+		for i := 0; i < len(key); i++ {
+			if key[i] == '_' {
+				isCanonical = true
+				break
+			}
+		}
+		if isCanonical {
+			break
+		}
+	}
+
+	if isCanonical {
+		type alias ExperimentRecord
+		var current alias
+		if err := json.Unmarshal(data, &current); err == nil {
+			*r = ExperimentRecord(current)
+			return nil
+		}
+	}
+
+	type legacyExperimentRecord struct {
+		ID                string           `json:"ID"`
+		ProposalID        string           `json:"ProposalID"`
+		CommitID          string           `json:"CommitID"`
+		ApprovalID        string           `json:"ApprovalID"`
+		TargetAgentID     string           `json:"TargetAgentID"`
+		Skill             string           `json:"Skill"`
+		Hypothesis        string           `json:"Hypothesis"`
+		PromptVersionFrom string           `json:"PromptVersionFrom"`
+		PromptVersionTo   string           `json:"PromptVersionTo"`
+		MutationType      string           `json:"MutationType"`
+		AcceptanceGates   []string         `json:"AcceptanceGates"`
+		WindowStart       time.Time        `json:"WindowStart"`
+		WindowEnd         time.Time        `json:"WindowEnd"`
+		AcceptanceMetric  string           `json:"AcceptanceMetric"`
+		BaselineValue     float64          `json:"BaselineValue"`
+		CandidateValue    float64          `json:"CandidateValue"`
+		Status            ExperimentStatus `json:"Status"`
+		RevertReason      string           `json:"RevertReason"`
+	}
+
+	var legacy legacyExperimentRecord
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
+
+	*r = ExperimentRecord{
+		ID:                legacy.ID,
+		ProposalID:        legacy.ProposalID,
+		CommitID:          legacy.CommitID,
+		ApprovalID:        legacy.ApprovalID,
+		TargetAgentID:     legacy.TargetAgentID,
+		Skill:             legacy.Skill,
+		Hypothesis:        legacy.Hypothesis,
+		PromptVersionFrom: legacy.PromptVersionFrom,
+		PromptVersionTo:   legacy.PromptVersionTo,
+		MutationType:      legacy.MutationType,
+		AcceptanceGates:   legacy.AcceptanceGates,
+		WindowStart:       legacy.WindowStart,
+		WindowEnd:         legacy.WindowEnd,
+		AcceptanceMetric:  legacy.AcceptanceMetric,
+		BaselineValue:     legacy.BaselineValue,
+		CandidateValue:    legacy.CandidateValue,
+		Status:            legacy.Status,
+		RevertReason:      legacy.RevertReason,
+	}
+	return nil
+}
+
 type MutationBrief struct {
 	ContractVersion     int        `json:"contract_version,omitempty"`
 	ProposalID          string     `json:"proposal_id,omitempty"`
@@ -159,6 +280,65 @@ type MutationBrief struct {
 	GeneratedAt         time.Time  `json:"generated_at"`
 }
 
+func (b *MutationBrief) UnmarshalJSON(data []byte) error {
+	type alias MutationBrief
+	var current alias
+	if err := json.Unmarshal(data, &current); err == nil && current.WindowID != "" {
+		*b = MutationBrief(current)
+		return nil
+	}
+
+	type legacyMutationBrief struct {
+		ContractVersion     int        `json:"ContractVersion"`
+		ProposalID          string     `json:"ProposalID"`
+		WindowID            string     `json:"WindowID"`
+		TargetAgentID       string     `json:"TargetAgentID"`
+		TargetSkill         string     `json:"TargetSkill"`
+		TargetLayer         AgentLayer `json:"TargetLayer"`
+		PromptFile          string     `json:"PromptFile"`
+		MutationType        string     `json:"MutationType"`
+		FailurePattern      string     `json:"FailurePattern"`
+		Hypothesis          string     `json:"Hypothesis"`
+		AcceptanceMetric    string     `json:"AcceptanceMetric"`
+		AcceptanceGates     []string   `json:"AcceptanceGates"`
+		ForbiddenActions    []string   `json:"ForbiddenActions"`
+		RequiredSkills      []string   `json:"RequiredSkills"`
+		ObservedWindowCount int        `json:"ObservedWindowCount"`
+		MaturityLevel       string     `json:"MaturityLevel"`
+		IterationGuidance   []string   `json:"IterationGuidance"`
+		RecommendedWindow   string     `json:"RecommendedWindow"`
+		GeneratedAt         time.Time  `json:"GeneratedAt"`
+	}
+
+	var legacy legacyMutationBrief
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
+
+	*b = MutationBrief{
+		ContractVersion:     legacy.ContractVersion,
+		ProposalID:          legacy.ProposalID,
+		WindowID:            legacy.WindowID,
+		TargetAgentID:       legacy.TargetAgentID,
+		TargetSkill:         legacy.TargetSkill,
+		TargetLayer:         legacy.TargetLayer,
+		PromptFile:          legacy.PromptFile,
+		MutationType:        legacy.MutationType,
+		FailurePattern:      legacy.FailurePattern,
+		Hypothesis:          legacy.Hypothesis,
+		AcceptanceMetric:    legacy.AcceptanceMetric,
+		AcceptanceGates:     legacy.AcceptanceGates,
+		ForbiddenActions:    legacy.ForbiddenActions,
+		RequiredSkills:      legacy.RequiredSkills,
+		ObservedWindowCount: legacy.ObservedWindowCount,
+		MaturityLevel:       legacy.MaturityLevel,
+		IterationGuidance:   legacy.IterationGuidance,
+		RecommendedWindow:   legacy.RecommendedWindow,
+		GeneratedAt:         legacy.GeneratedAt,
+	}
+	return nil
+}
+
 type ReplayDataMetadata struct {
 	SourcePath     string    `json:"source_path"`
 	DateRangeStart time.Time `json:"date_range_start"`
@@ -167,6 +347,41 @@ type ReplayDataMetadata struct {
 	CoversWindow   bool      `json:"covers_window"`
 	LastModified   time.Time `json:"last_modified"`
 	RecordCount    int       `json:"record_count"`
+}
+
+func (m *ReplayDataMetadata) UnmarshalJSON(data []byte) error {
+	type alias ReplayDataMetadata
+	var current alias
+	if err := json.Unmarshal(data, &current); err == nil && current.SourcePath != "" {
+		*m = ReplayDataMetadata(current)
+		return nil
+	}
+
+	type legacyReplayDataMetadata struct {
+		SourcePath     string    `json:"SourcePath"`
+		DateRangeStart time.Time `json:"DateRangeStart"`
+		DateRangeEnd   time.Time `json:"DateRangeEnd"`
+		DaysDelayed    int       `json:"DaysDelayed"`
+		CoversWindow   bool      `json:"CoversWindow"`
+		LastModified   time.Time `json:"LastModified"`
+		RecordCount    int       `json:"RecordCount"`
+	}
+
+	var legacy legacyReplayDataMetadata
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
+
+	*m = ReplayDataMetadata{
+		SourcePath:     legacy.SourcePath,
+		DateRangeStart: legacy.DateRangeStart,
+		DateRangeEnd:   legacy.DateRangeEnd,
+		DaysDelayed:    legacy.DaysDelayed,
+		CoversWindow:   legacy.CoversWindow,
+		LastModified:   legacy.LastModified,
+		RecordCount:    legacy.RecordCount,
+	}
+	return nil
 }
 
 type OOSResult struct {
@@ -180,6 +395,47 @@ type OOSResult struct {
 	UsedFallback   bool      `json:"used_fallback"`
 	ValidationAt   time.Time `json:"validation_at"`
 	Reason         string    `json:"reason"`
+}
+
+func (r *OOSResult) UnmarshalJSON(data []byte) error {
+	type alias OOSResult
+	var current alias
+	if err := json.Unmarshal(data, &current); err == nil {
+		*r = OOSResult(current)
+		return nil
+	}
+
+	type legacyOOSResult struct {
+		Passed         bool      `json:"Passed"`
+		BaselineScore  float64   `json:"BaselineScore"`
+		CandidateScore float64   `json:"CandidateScore"`
+		Improvement    float64   `json:"Improvement"`
+		Observations   int       `json:"Observations"`
+		OOSWindowStart time.Time `json:"OOSWindowStart"`
+		OOSWindowEnd   time.Time `json:"OOSWindowEnd"`
+		UsedFallback   bool      `json:"UsedFallback"`
+		ValidationAt   time.Time `json:"ValidationAt"`
+		Reason         string    `json:"Reason"`
+	}
+
+	var legacy legacyOOSResult
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
+
+	*r = OOSResult{
+		Passed:         legacy.Passed,
+		BaselineScore:  legacy.BaselineScore,
+		CandidateScore: legacy.CandidateScore,
+		Improvement:    legacy.Improvement,
+		Observations:   legacy.Observations,
+		OOSWindowStart: legacy.OOSWindowStart,
+		OOSWindowEnd:   legacy.OOSWindowEnd,
+		UsedFallback:   legacy.UsedFallback,
+		ValidationAt:   legacy.ValidationAt,
+		Reason:         legacy.Reason,
+	}
+	return nil
 }
 
 type PromptExperimentResult struct {
@@ -203,4 +459,103 @@ type PromptExperimentResult struct {
 	CandidateFallbackCount int                 `json:"candidate_fallback_count,omitempty"`
 	BaselineFactorCount    int                 `json:"baseline_factor_count,omitempty"`
 	CandidateFactorCount   int                 `json:"candidate_factor_count,omitempty"`
+}
+
+func (r *PromptExperimentResult) UnmarshalJSON(data []byte) error {
+	type alias PromptExperimentResult
+
+	var current alias
+	_ = json.Unmarshal(data, &current)
+
+	type legacyPromptExperimentResult struct {
+		Experiment             ExperimentRecord    `json:"Experiment"`
+		Brief                  MutationBrief       `json:"Brief"`
+		CandidatePrompt        string              `json:"CandidatePrompt"`
+		EvaluationMode         string              `json:"EvaluationMode"`
+		PolicyChecks           []string            `json:"PolicyChecks"`
+		Notes                  []string            `json:"Notes"`
+		JudgeChecks            []string            `json:"JudgeChecks"`
+		BaselineObservations   int                 `json:"BaselineObservations"`
+		CandidateObservations  int                 `json:"CandidateObservations"`
+		UsedFallbackWindow     bool                `json:"UsedFallbackWindow"`
+		RecordedAt             time.Time           `json:"RecordedAt"`
+		DataMetadata           *ReplayDataMetadata `json:"DataMetadata,omitempty"`
+		OOSResult              *OOSResult          `json:"OOSResult,omitempty"`
+		BaselineReturns        []float64           `json:"BaselineReturns,omitempty"`
+		CandidateReturns       []float64           `json:"CandidateReturns,omitempty"`
+		ParameterSnapshotID    string              `json:"ParameterSnapshotID,omitempty"`
+		BaselineFallbackCount  int                 `json:"BaselineFallbackCount,omitempty"`
+		CandidateFallbackCount int                 `json:"CandidateFallbackCount,omitempty"`
+		BaselineFactorCount    int                 `json:"BaselineFactorCount,omitempty"`
+		CandidateFactorCount   int                 `json:"CandidateFactorCount,omitempty"`
+	}
+
+	var legacy legacyPromptExperimentResult
+	_ = json.Unmarshal(data, &legacy)
+
+	result := PromptExperimentResult(current)
+
+	if result.Experiment.ID == "" {
+		result.Experiment = legacy.Experiment
+	}
+	if result.Brief.WindowID == "" {
+		result.Brief = legacy.Brief
+	}
+	if result.CandidatePrompt == "" {
+		result.CandidatePrompt = legacy.CandidatePrompt
+	}
+	if result.EvaluationMode == "" {
+		result.EvaluationMode = legacy.EvaluationMode
+	}
+	if len(result.PolicyChecks) == 0 {
+		result.PolicyChecks = legacy.PolicyChecks
+	}
+	if len(result.Notes) == 0 {
+		result.Notes = legacy.Notes
+	}
+	if len(result.JudgeChecks) == 0 {
+		result.JudgeChecks = legacy.JudgeChecks
+	}
+	if result.BaselineObservations == 0 {
+		result.BaselineObservations = legacy.BaselineObservations
+	}
+	if result.CandidateObservations == 0 {
+		result.CandidateObservations = legacy.CandidateObservations
+	}
+	if !result.UsedFallbackWindow {
+		result.UsedFallbackWindow = legacy.UsedFallbackWindow
+	}
+	if result.RecordedAt.IsZero() {
+		result.RecordedAt = legacy.RecordedAt
+	}
+	if result.DataMetadata == nil {
+		result.DataMetadata = legacy.DataMetadata
+	}
+	if result.OOSResult == nil {
+		result.OOSResult = legacy.OOSResult
+	}
+	if len(result.BaselineReturns) == 0 {
+		result.BaselineReturns = legacy.BaselineReturns
+	}
+	if len(result.CandidateReturns) == 0 {
+		result.CandidateReturns = legacy.CandidateReturns
+	}
+	if result.ParameterSnapshotID == "" {
+		result.ParameterSnapshotID = legacy.ParameterSnapshotID
+	}
+	if result.BaselineFallbackCount == 0 {
+		result.BaselineFallbackCount = legacy.BaselineFallbackCount
+	}
+	if result.CandidateFallbackCount == 0 {
+		result.CandidateFallbackCount = legacy.CandidateFallbackCount
+	}
+	if result.BaselineFactorCount == 0 {
+		result.BaselineFactorCount = legacy.BaselineFactorCount
+	}
+	if result.CandidateFactorCount == 0 {
+		result.CandidateFactorCount = legacy.CandidateFactorCount
+	}
+
+	*r = result
+	return nil
 }

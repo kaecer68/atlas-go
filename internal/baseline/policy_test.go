@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -120,6 +121,39 @@ func TestPromoteAcceptedConstraintExperiment(t *testing.T) {
 	}
 	if next.ExecutionPolicy.ConvictionFloor != 60 {
 		t.Fatalf("expected execution policy to remain aligned with conviction floor 60, got %d", next.ExecutionPolicy.ConvictionFloor)
+	}
+}
+
+func TestPolicyMarshalUsesSnakeCase(t *testing.T) {
+	policy := Policy{Version: 2, PromptOverrides: map[string]string{"growth_momentum": "v2"}}
+	data, err := json.Marshal(policy)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	text := string(data)
+	if !strings.Contains(text, `"prompt_overrides"`) {
+		t.Fatalf("expected prompt_overrides; got %s", text)
+	}
+	if strings.Contains(text, `"PromptOverrides"`) {
+		t.Fatalf("unexpected PascalCase PromptOverrides; got %s", text)
+	}
+	if !strings.Contains(text, `"version"`) {
+		t.Fatalf("expected snake_case version; got %s", text)
+	}
+	if !strings.Contains(text, `"constraints"`) {
+		t.Fatalf("expected snake_case constraints; got %s", text)
+	}
+	if !strings.Contains(text, `"execution_policy"`) {
+		t.Fatalf("expected snake_case execution_policy; got %s", text)
+	}
+	if !strings.Contains(text, `"promotions"`) {
+		t.Fatalf("expected snake_case promotions; got %s", text)
+	}
+	if !strings.Contains(text, `"revert_history"`) {
+		t.Fatalf("expected snake_case revert_history; got %s", text)
+	}
+	if !strings.Contains(text, `"last_updated_at"`) {
+		t.Fatalf("expected snake_case last_updated_at; got %s", text)
 	}
 }
 

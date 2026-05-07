@@ -1,13 +1,13 @@
 package monitoring
 
 import (
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/live"
-	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 )
 
 // ─── AlertLevel ──────────────────────────────────────────────────────────────
@@ -304,8 +304,8 @@ func TestDefaultRules_PortfolioValueDrop(t *testing.T) {
 		wantFire bool
 	}{
 		{"nil state no fire", nil, false},
-		{"cash below threshold fires", &livestore.State{Portfolio: store.livestore.PortfolioState{Cash: 50000}}, true},
-		{"cash above threshold no fire", &livestore.State{Portfolio: store.livestore.PortfolioState{Cash: 500000}}, false},
+		{"cash below threshold fires", &livestore.State{Portfolio: store.livestore.livestore.PortfolioState{Cash: 50000}}, true},
+		{"cash above threshold no fire", &livestore.State{Portfolio: store.livestore.livestore.PortfolioState{Cash: 500000}}, false},
 	}
 
 	for _, tt := range tests {

@@ -1,15 +1,15 @@
 package live
 
 import (
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"context"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 )
 
 func TestAgentRunner_ApplyExecutionInput(t *testing.T) {
-	st := livestore.NewStateStore(t.TempDir())
+	st := livestore.Newlivestore.StateStore(t.TempDir())
 	runner := &AgentRunner{
 		stateStore: st,
 		marketData: nil,
@@ -44,7 +44,7 @@ func TestAgentRunner_ApplyExecutionInput(t *testing.T) {
 }
 
 func TestAgentRunner_ApplyExecutionInput_EmptyRecommendations(t *testing.T) {
-	st := livestore.NewStateStore(t.TempDir())
+	st := livestore.Newlivestore.StateStore(t.TempDir())
 	runner := &AgentRunner{stateStore: st}
 
 	input := ExecutionInput{

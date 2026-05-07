@@ -1,18 +1,18 @@
 package live
 
 import (
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"context"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 )
 
-func TestExecuteOrderPublishesFilledEventInDryRunMode(t *testing.T) {
-	st := livestore.NewStateStore(t.TempDir())
-	bus := NewChannelEventBus(16)
+func TestExecuteOrderPublishesFilledlivestore.EventInDryRunMode(t *testing.T) {
+	st := livestore.Newlivestore.StateStore(t.TempDir())
+	bus := NewChannellivestore.EventBus(16)
 	t.Cleanup(func() {
 		_ = bus.Close()
 	})
@@ -28,8 +28,8 @@ func TestExecuteOrderPublishesFilledEventInDryRunMode(t *testing.T) {
 		circuitBreaker: cb,
 	}
 
-	eventCh := make(chan BusEvent, 4)
-	sub := bus.SubscribeAll(func(ctx context.Context, event BusEvent) error {
+	eventCh := make(chan Buslivestore.Event, 4)
+	sub := bus.SubscribeAll(func(ctx context.Context, event Buslivestore.Event) error {
 		select {
 		case eventCh <- event:
 		default:
@@ -51,10 +51,10 @@ func TestExecuteOrderPublishesFilledEventInDryRunMode(t *testing.T) {
 
 	select {
 	case got := <-eventCh:
-		if got.Type != EventOrderFilled {
-			t.Fatalf("unexpected event type: got=%s want=%s", got.Type, EventOrderFilled)
+		if got.Type != livestore.EventOrderFilled {
+			t.Fatalf("unexpected event type: got=%s want=%s", got.Type, livestore.EventOrderFilled)
 		}
-		payload, ok := got.Payload.(OrderEventPayload)
+		payload, ok := got.Payload.(Orderlivestore.EventPayload)
 		if !ok {
 			t.Fatalf("unexpected payload type: %T", got.Payload)
 		}
@@ -70,8 +70,8 @@ func TestExecuteOrderPublishesFilledEventInDryRunMode(t *testing.T) {
 }
 
 func TestExecuteOrderPublishesSystemErrorWhenOrderInvalid(t *testing.T) {
-	st := livestore.NewStateStore(t.TempDir())
-	bus := NewChannelEventBus(16)
+	st := livestore.Newlivestore.StateStore(t.TempDir())
+	bus := NewChannellivestore.EventBus(16)
 	t.Cleanup(func() {
 		_ = bus.Close()
 	})
@@ -87,8 +87,8 @@ func TestExecuteOrderPublishesSystemErrorWhenOrderInvalid(t *testing.T) {
 		circuitBreaker: cb,
 	}
 
-	eventCh := make(chan BusEvent, 4)
-	sub := bus.SubscribeAll(func(ctx context.Context, event BusEvent) error {
+	eventCh := make(chan Buslivestore.Event, 4)
+	sub := bus.SubscribeAll(func(ctx context.Context, event Buslivestore.Event) error {
 		select {
 		case eventCh <- event:
 		default:
@@ -109,8 +109,8 @@ func TestExecuteOrderPublishesSystemErrorWhenOrderInvalid(t *testing.T) {
 
 	select {
 	case got := <-eventCh:
-		if got.Type != EventOrderError {
-			t.Fatalf("unexpected event type: got=%s want=%s", got.Type, EventOrderError)
+		if got.Type != livestore.EventOrderError {
+			t.Fatalf("unexpected event type: got=%s want=%s", got.Type, livestore.EventOrderError)
 		}
 	case <-time.After(1 * time.Second):
 		t.Fatalf("expected order error event but none was received")
