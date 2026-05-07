@@ -13,12 +13,12 @@ func (GrowthMomentumExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (GrowthMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), 45)
+	conviction := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
 
 	ctrl, ok := domain.ExtractPromptControl(prompt)
 	if ok {
 		if quote.Last < quote.Open {
-			b.add("price_penalty", -8, "last < open")
+			conviction -= 8
 		}
 		penalty := 0
 		if ctrl.RequireTrend {
@@ -37,43 +37,41 @@ func (GrowthMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quo
 		if regime == domain.RegimeNeutral && ctrl.NeutralPenaltyReduction > 0 {
 			penalty = max(0, penalty-ctrl.NeutralPenaltyReduction)
 		}
-		if penalty > 0 {
-			b.add("control_penalty", -penalty, "prompt control penalties")
-		}
+		conviction -= penalty
 		if ctrl.CloseStrengthBoost > 0 && quote.Last > quote.Open {
-			b.add("close_strength_boost", ctrl.CloseStrengthBoost, "last > open")
+			conviction += ctrl.CloseStrengthBoost
 		}
 		if ctrl.VolumeBoost > 0 && quote.Last > quote.Open {
-			b.add("volume_boost", ctrl.VolumeBoost, "last > open")
+			conviction += ctrl.VolumeBoost
 		}
+		minConviction := 45
 		if ctrl.ConvictionFloor > 0 {
-			b.floor = ctrl.ConvictionFloor
+			minConviction = ctrl.ConvictionFloor
 		}
-		if !b.floorCheck() {
+		if conviction < minConviction {
 			return domain.Recommendation{}, false
 		}
 		tp, slp := priceTargets(quote, 1.08, 0.95)
-		conv, cb := b.build()
 		return domain.Recommendation{
-			Agent:               agent.ID,
-			Skill:               agent.Skill,
-			Layer:               agent.Layer,
-			Symbol:              quote.Symbol,
-			Side:                domain.SideBuy,
-			Conviction:          conv,
-			Reason:              "price persistence with style overlay",
-			TargetPrice:         tp,
-			StopLossPrice:       slp,
-			ConvictionBreakdown: cb,
+			Agent:         agent.ID,
+			Skill:         agent.Skill,
+			Layer:         agent.Layer,
+			Symbol:        quote.Symbol,
+			Side:          domain.SideBuy,
+			Conviction:    conviction,
+			Reason:        "price persistence with style overlay",
+			TargetPrice:   tp,
+			StopLossPrice: slp,
 		}, true
 	}
 
+	// Legacy fallback
 	if quote.Last < quote.Open {
-		b.add("price_penalty", -8, "last < open")
+		conviction -= 8
 	}
 	if strings.Contains(prompt, "require trend confirmation") {
 		if quote.Last < quote.Open {
-			b.add("trend_confirmation_penalty", -15, "require trend confirmation + last < open")
+			conviction -= 15
 		}
 	}
 	if strings.Contains(prompt, "downgrade conviction") {
@@ -84,27 +82,25 @@ func (GrowthMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quo
 			openPenalty = 4
 		}
 		if quote.Last < quote.High*0.995 {
-			b.add("downgrade_price_penalty", -pricePenalty, "last < high*0.995")
+			conviction -= pricePenalty
 		}
 		if quote.Last < quote.Open {
-			b.add("downgrade_open_penalty", -openPenalty, "last < open")
+			conviction -= openPenalty
 		}
 	}
-	if !b.floorCheck() {
+	if conviction < 45 {
 		return domain.Recommendation{}, false
 	}
 	tp, slp := priceTargets(quote, 1.08, 0.95)
-	conv, cb := b.build()
 	return domain.Recommendation{
-		Agent:               agent.ID,
-		Skill:               agent.Skill,
-		Layer:               agent.Layer,
-		Symbol:              quote.Symbol,
-		Side:                domain.SideBuy,
-		Conviction:          conv,
-		Reason:              "price persistence with style overlay",
-		TargetPrice:         tp,
-		StopLossPrice:       slp,
-		ConvictionBreakdown: cb,
+		Agent:         agent.ID,
+		Skill:         agent.Skill,
+		Layer:         agent.Layer,
+		Symbol:        quote.Symbol,
+		Side:          domain.SideBuy,
+		Conviction:    conviction,
+		Reason:        "price persistence with style overlay",
+		TargetPrice:   tp,
+		StopLossPrice: slp,
 	}, true
 }

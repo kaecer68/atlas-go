@@ -103,9 +103,9 @@ func TestCheckRiskTriggers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := livestore.NewStateStore(t.TempDir())
+			_ = livestore.NewStateStore(t.TempDir()) // assigned but mainly used via stateStore field
 			if tt.withPosition {
-				store.UpdatePosition(tt.position)
+				st.UpdatePosition(tt.position)
 			}
 
 			bus := NewChannelEventBus(16)
@@ -128,7 +128,7 @@ func TestCheckRiskTriggers(t *testing.T) {
 			cb.ResetDayState(0)
 
 			o := &Orchestrator{
-				stateStore: s,
+				stateStore: livestore.NewStateStore(t.TempDir()),
 				eventBus:   bus,
 				config: OrchestratorConfig{
 					MaxPositionLossPct: tt.maxLossPct,
@@ -170,7 +170,7 @@ func TestCheckRiskTriggers(t *testing.T) {
 }
 
 func TestExecuteOrderBlockedByCircuitBreaker(t *testing.T) {
-	s := livestore.NewStateStore(t.TempDir())
+	_ = livestore.NewStateStore(t.TempDir()) // assigned but mainly used via stateStore field
 	bus := NewChannelEventBus(16)
 	t.Cleanup(func() { _ = bus.Close() })
 

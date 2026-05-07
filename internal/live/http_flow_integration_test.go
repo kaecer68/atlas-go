@@ -50,7 +50,7 @@ func TestGuardedToHTTPFlowIntegration(t *testing.T) {
 	defer server.Close()
 
 	storePath := filepath.Join(t.TempDir(), "nonce-store.json")
-	nonceStore, err := BuildNonceReplayStore("file", storePath)
+	nonceStore, err := livestore.BuildNonceReplayStore("file", storePath)
 	if err != nil {
 		t.Fatalf("build nonce store: %v", err)
 	}

@@ -9,9 +9,9 @@ import (
 )
 
 func TestAgentRunner_ApplyExecutionInput(t *testing.T) {
-	s := livestore.NewStateStore(t.TempDir())
+	st := livestore.NewStateStore(t.TempDir())
 	runner := &AgentRunner{
-		stateStore: s,
+		stateStore: st,
 		marketData: nil,
 		system:     nil,
 	}
@@ -28,24 +28,24 @@ func TestAgentRunner_ApplyExecutionInput(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if got := store.GetCurrentRegime(); got != domain.RegimeRiskOn {
+	if got := st.GetCurrentRegime(); got != domain.RegimeRiskOn {
 		t.Errorf("expected regime RiskOn, got %v", got)
 	}
 
-	pending := store.GetPendingRecommendations()
+	pending := st.GetPendingRecommendations()
 	if len(pending) != 1 || pending[0].Symbol != "2330.TW" {
 		t.Errorf("expected 1 pending rec for 2330.TW, got %v", pending)
 	}
 
-	filtered := store.GetFilteredRecommendations()
+	filtered := st.GetFilteredRecommendations()
 	if len(filtered) != 1 || filtered[0].Symbol != "2330.TW" {
 		t.Errorf("expected 1 filtered rec for 2330.TW, got %v", filtered)
 	}
 }
 
 func TestAgentRunner_ApplyExecutionInput_EmptyRecommendations(t *testing.T) {
-	s := livestore.NewStateStore(t.TempDir())
-	runner := &AgentRunner{stateStore: store}
+	st := livestore.NewStateStore(t.TempDir())
+	runner := &AgentRunner{stateStore: st}
 
 	input := ExecutionInput{
 		Regime:               domain.RegimeNeutral,
@@ -59,11 +59,11 @@ func TestAgentRunner_ApplyExecutionInput_EmptyRecommendations(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if got := store.GetCurrentRegime(); got != domain.RegimeNeutral {
+	if got := st.GetCurrentRegime(); got != domain.RegimeNeutral {
 		t.Errorf("expected regime Neutral, got %v", got)
 	}
 
-	if pending := store.GetPendingRecommendations(); len(pending) != 0 {
+	if pending := st.GetPendingRecommendations(); len(pending) != 0 {
 		t.Errorf("expected no pending recs, got %v", pending)
 	}
 }
