@@ -1514,7 +1514,7 @@ function showSkeletons() {
 
 function renderInbox(data) {
   const el = document.getElementById('experimentInbox');
-  if (!data) { el.innerHTML = renderEmptyState('尚無實驗資料', '執行「go run ./cmd/execute-experiment -brief <file>」後將自動顯示'); el.classList.remove('loading'); return; }
+  if (!data) { el.innerHTML = renderEmptyState('尚無實驗資料', '執行「go run ./cmd/run-experiment -brief &lt;file&gt;」後將自動顯示'); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
   const pending = data.pending_judges || [];
   const promotes = data.pending_promotes || [];

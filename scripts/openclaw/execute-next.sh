@@ -127,15 +127,15 @@ display_experiment_info() {
     echo ""
 }
 
-# Execute experiment
+# Run experiment
 execute_experiment() {
     local exp_id="$1"
     local brief_path="$2"
 
     if [ -n "$exp_id" ]; then
-        echo -e "${CYAN}Executing experiment: $exp_id${NC}"
+        echo -e "${CYAN}Running experiment: $exp_id${NC}"
     else
-        echo -e "${CYAN}Executing experiment from explicit brief${NC}"
+        echo -e "${CYAN}Running experiment from explicit brief${NC}"
     fi
     echo ""
     
