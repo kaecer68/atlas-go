@@ -245,7 +245,7 @@ If a run looks wrong, inspect in this order:
 
 If mutation flow behaves unexpectedly, also inspect:
 
-6. futility guard status in `scripts/openclaw/today-start.sh`
+6. futility guard status in `scripts/openclaw/today_start.sh`
 7. `--min-sample-for-rank` value and candidate sample counts (`n` in pivot logs)
 
 ## Baseline Promotion
@@ -266,13 +266,13 @@ Use the human-in-the-loop wrapper as the default decision entrypoint for promote
 
 ```bash
 # approve and promote
-./scripts/openclaw/human-approval.sh --approve --experiment <exp-id> --reason "Passes replay and guard gates"
+./scripts/openclaw/human_approval.sh --approve --experiment <exp-id> --reason "Passes replay and guard gates"
 
 # reject (audit-only)
-./scripts/openclaw/human-approval.sh --reject --experiment <exp-id> --reason "Insufficient improvement evidence"
+./scripts/openclaw/human_approval.sh --reject --experiment <exp-id> --reason "Insufficient improvement evidence"
 
 # revert baseline
-./scripts/openclaw/human-approval.sh --revert --reason "Rollback after post-promotion alert"
+./scripts/openclaw/human_approval.sh --revert --reason "Rollback after post-promotion alert"
 ```
 
 ### Audit Artifact Check
@@ -293,7 +293,7 @@ Use approval event replay to verify the decision can be reconstructed from audit
 
 ```bash
 # replay one stored approval/reject/revert event without state mutation
-./scripts/openclaw/replay-approval-event.sh --event data/state/approvals/<decision-file>.json --dry-run
+./scripts/openclaw/replay_approval_event.sh --event data/state/approvals/<decision-file>.json --dry-run
 ```
 
 ### One-Command Verification
@@ -301,7 +301,7 @@ Use approval event replay to verify the decision can be reconstructed from audit
 Run the dedicated checker when changing decision scripts or event schema:
 
 ```bash
-./scripts/openclaw/verify-human-approval-event.sh
+./scripts/openclaw/verify_human_approval_event.sh
 ```
 
 This verifies:
@@ -326,10 +326,10 @@ Preferred path (automation + guided approval):
 
 ```bash
 # default: dry-run, show current config, options, and risk notes
-./scripts/openclaw/setup-branch-protection.sh
+./scripts/openclaw/setup_branch_protection.sh
 
 # apply after reviewing prompts and confirmation phrase
-./scripts/openclaw/setup-branch-protection.sh --apply
+./scripts/openclaw/setup_branch_protection.sh --apply
 ```
 
 The setup script includes anti-misconfiguration checks:
@@ -343,17 +343,17 @@ The setup script includes anti-misconfiguration checks:
 Optional snapshot location override:
 
 ```bash
-./scripts/openclaw/setup-branch-protection.sh --apply --backup-dir data/state/custom-branch-protection-backups
+./scripts/openclaw/setup_branch_protection.sh --apply --backup-dir data/state/custom-branch-protection-backups
 ```
 
 Restore from a previous snapshot:
 
 ```bash
 # preview restore payload and risk notes (dry-run)
-./scripts/openclaw/setup-branch-protection.sh --restore-from data/state/branch-protection-snapshots/<snapshot>.json
+./scripts/openclaw/setup_branch_protection.sh --restore-from data/state/branch-protection-snapshots/<snapshot>.json
 
 # apply restore (requires explicit confirmation phrase)
-./scripts/openclaw/setup-branch-protection.sh --restore-from data/state/branch-protection-snapshots/<snapshot>.json --apply
+./scripts/openclaw/setup_branch_protection.sh --restore-from data/state/branch-protection-snapshots/<snapshot>.json --apply
 ```
 
 Restore mode anti-misconfiguration checks:
@@ -385,7 +385,7 @@ Quick verification checklist after saving:
 The CI governance job runs strict mode by default:
 
 ```bash
-./scripts/openclaw/verify-governance-gates.sh --require-scenario-diversity
+./scripts/openclaw/verify_governance_gates.sh --require-scenario-diversity
 ```
 
 Use this strict mode after scenario design is calibrated for your replay window.
@@ -395,7 +395,7 @@ Use this strict mode after scenario design is calibrated for your replay window.
 Use the operations gate verifier for staging-safe production-readiness checks:
 
 ```bash
-./scripts/openclaw/verify-operations-gate.sh
+./scripts/openclaw/verify_operations_gate.sh
 ```
 
 What it checks:
@@ -408,7 +408,7 @@ What it checks:
 Optional deep mode:
 
 ```bash
-./scripts/openclaw/verify-operations-gate.sh --with-governance
+./scripts/openclaw/verify_operations_gate.sh --with-governance
 ```
 
 Use `--with-governance` when you want to chain M8 checks with strict governance verification in one run.

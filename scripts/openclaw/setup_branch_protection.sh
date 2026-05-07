@@ -37,7 +37,7 @@ REQUIRE_CODE_OWNER_REVIEWS_SET=false
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/openclaw/setup-branch-protection.sh [OPTIONS]
+Usage: ./scripts/openclaw/setup_branch_protection.sh [OPTIONS]
 
 Automate branch protection setup with guided human approval.
 Default mode is DRY RUN (no changes).
@@ -62,11 +62,11 @@ Options:
   --help                       Show help
 
 Examples:
-  ./scripts/openclaw/setup-branch-protection.sh
-  ./scripts/openclaw/setup-branch-protection.sh --apply
-  ./scripts/openclaw/setup-branch-protection.sh --profile strict --apply
-  ./scripts/openclaw/setup-branch-protection.sh --non-interactive --apply --yes
-  ./scripts/openclaw/setup-branch-protection.sh --restore-from data/state/branch-protection-snapshots/<file>.json --apply
+  ./scripts/openclaw/setup_branch_protection.sh
+  ./scripts/openclaw/setup_branch_protection.sh --apply
+  ./scripts/openclaw/setup_branch_protection.sh --profile strict --apply
+  ./scripts/openclaw/setup_branch_protection.sh --non-interactive --apply --yes
+  ./scripts/openclaw/setup_branch_protection.sh --restore-from data/state/branch-protection-snapshots/<file>.json --apply
 EOF
 }
 

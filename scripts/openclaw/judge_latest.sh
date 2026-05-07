@@ -280,8 +280,8 @@ interactive_mode() {
         echo -e "${YELLOW}No experiments found to judge.${NC}"
         echo ""
         echo "To create a new experiment:"
-        echo "  ./scripts/openclaw/propose-mutation.sh"
-        echo "  ./scripts/openclaw/execute-next.sh"
+        echo "  ./scripts/openclaw/propose_mutation.sh"
+        echo "  ./scripts/openclaw/execute_next.sh"
         return 1
     fi
     
@@ -310,7 +310,7 @@ main() {
             echo -e "${YELLOW}No experiments found to judge.${NC}"
             echo ""
             echo "Create a new experiment:"
-            echo "  ./scripts/openclaw/propose-mutation.sh"
+            echo "  ./scripts/openclaw/propose_mutation.sh"
         fi
         exit 1
     fi

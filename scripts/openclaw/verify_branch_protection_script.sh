@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
-TARGET="scripts/openclaw/setup-branch-protection.sh"
+TARGET="scripts/openclaw/setup_branch_protection.sh"
 
 log() {
 	echo "[verify-branch-protection] $*"

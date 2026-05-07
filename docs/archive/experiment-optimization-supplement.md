@@ -28,10 +28,10 @@
 `etf-rotation-01` agent 测试失败，提示找不到 `etf_rotation.md`
 
 ### 根因
-`propose-mutation.sh` 脚本从 agent ID 推导文件名（`etf-rotation-01` → `etf_rotation.md`），但实际文件是 `etf_rotation_desk.md`
+`propose_mutation.sh` 脚本从 agent ID 推导文件名（`etf-rotation-01` → `etf_rotation.md`），但实际文件是 `etf_rotation_desk.md`
 
 ### 修复
-修改 `propose-mutation.sh`，优先从 `configs/agents.json` 读取 `promptFile` 字段：
+修改 `propose_mutation.sh`，优先从 `configs/agents.json` 读取 `promptFile` 字段：
 
 ```bash
 # Read current prompt - get promptFile from configs/agents.json
@@ -49,7 +49,7 @@ fi
 
 ### 验证结果
 ```bash
-./scripts/openclaw/run-validated-round.sh --agent etf-rotation-01 --type portfolio_constraint_revision
+./scripts/openclaw/run_validated_round.sh --agent etf-rotation-01 --type portfolio_constraint_revision
 # Output: status: accepted, baseline: 0.006419, candidate: 0.007973
 ```
 
@@ -148,7 +148,7 @@ go run ./cmd/backtest-window -start 2026-01-01 -end 2026-03-31
 
 ### 验证实验效果（90天窗口）
 ```bash
-./scripts/openclaw/run-validated-round.sh --agent growth-momentum-01 --type risk_rule_change
+./scripts/openclaw/run_validated_round.sh --agent growth-momentum-01 --type risk_rule_change
 
 # Output:
 # experiment: exec-growth-momentum-01-1775436040
@@ -253,7 +253,7 @@ go run ./cmd/backtest-window -start 2026-01-01 -end 2026-03-31
 
 ```bash
 # 1. 修复 prompt 文件引用
-# 修改 scripts/openclaw/propose-mutation.sh 从 configs/agents.json 读取 promptFile
+# 修改 scripts/openclaw/propose_mutation.sh 从 configs/agents.json 读取 promptFile
 
 # 2. 优化 mutation 策略
 # 修改 internal/experiment/executor.go
@@ -268,9 +268,9 @@ cp data/replay/atlas_combined_2024_2026.jsonl data/replay/tw_combined.jsonl
 go run ./cmd/backtest-window -start 2026-01-01 -end 2026-03-31
 
 # 5. 跨 agent 测试
-./scripts/openclaw/run-validated-round.sh --agent technical-breakout-01 --type risk_rule_change
-./scripts/openclaw/run-validated-round.sh --agent value-yield-01 --type risk_rule_change
-./scripts/openclaw/run-validated-round.sh --agent etf-rotation-01 --type risk_rule_change
+./scripts/openclaw/run_validated_round.sh --agent technical-breakout-01 --type risk_rule_change
+./scripts/openclaw/run_validated_round.sh --agent value-yield-01 --type risk_rule_change
+./scripts/openclaw/run_validated_round.sh --agent etf-rotation-01 --type risk_rule_change
 ```
 
 ---

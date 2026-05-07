@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check case-conflict filenames
-        run: bash ./scripts/ci/check-case-conflicts.sh --strict
+        run: bash ./scripts/ci/check_case_conflicts.sh --strict
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -33,7 +33,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Verify Governance Gates
-        run: bash ./scripts/openclaw/verify-governance-gates.sh --require-scenario-diversity
+        run: bash ./scripts/openclaw/verify_governance_gates.sh --require-scenario-diversity
 
   operations:
     runs-on: ubuntu-latest
@@ -43,5 +43,5 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Verify Operations Gate
-        run: bash ./scripts/openclaw/verify-operations-gate.sh
+        run: bash ./scripts/openclaw/verify_operations_gate.sh
 

@@ -12,7 +12,7 @@ REQUIRE_SCENARIO_DIVERSITY=false
 
 usage() {
 	cat <<'EOF'
-Usage: ./scripts/openclaw/verify-governance-gates.sh [options]
+Usage: ./scripts/openclaw/verify_governance_gates.sh [options]
 
 Options:
 	--start YYYY-MM-DD     Backtest window start date (default: 2026-03-26)
@@ -152,7 +152,7 @@ run_determinism_check() {
 
 run_human_approval_event_check() {
 	log "Running human approval event verification (M7)"
-	./scripts/openclaw/verify-human-approval-event.sh
+	./scripts/openclaw/verify_human_approval_event.sh
 }
 
 run_parallel_scenario_check() {
@@ -167,7 +167,7 @@ run_parallel_scenario_check() {
 	fi
 
 	log "Running parallel scenario verification (M5)"
-	./scripts/openclaw/verify-parallel-scenarios.sh "${args[@]}"
+	./scripts/openclaw/verify_parallel_scenarios.sh "${args[@]}"
 }
 
 log "Start governance gate verification"

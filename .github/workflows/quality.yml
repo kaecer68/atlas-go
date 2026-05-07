@@ -50,7 +50,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Check naming conventions
-      run: bash scripts/ci/check-case-conflicts.sh --strict
+      run: bash scripts/ci/check_case_conflicts.sh --strict
 
   # Static analysis
   staticcheck:

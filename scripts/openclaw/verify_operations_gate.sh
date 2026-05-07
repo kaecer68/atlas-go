@@ -11,7 +11,7 @@ TMP_ROOT=""
 
 usage() {
 	cat <<'EOF'
-Usage: ./scripts/openclaw/verify-operations-gate.sh [OPTIONS]
+Usage: ./scripts/openclaw/verify_operations_gate.sh [OPTIONS]
 
 Verifies M8 operations readiness with staging-safe drills.
 
@@ -114,7 +114,7 @@ run_rollback_dryrun_drill() {
 	local event_file
 
 	log "Running dry-run rollback drill via human approval wrapper"
-	./scripts/openclaw/human-approval.sh \
+	./scripts/openclaw/human_approval.sh \
 		--revert \
 		0 \
 		--reason "operations gate rollback drill" \
@@ -139,13 +139,13 @@ run_rollback_dryrun_drill() {
 	fi
 
 	log "Replaying rollback drill event (dry-run)"
-	./scripts/openclaw/replay-approval-event.sh --event "$event_file" --dry-run > "$replay_log"
+	./scripts/openclaw/replay_approval_event.sh --event "$event_file" --dry-run > "$replay_log"
 	assert_file_contains "$replay_log" '^\[replay\] action: revert' 'replay action log'
 }
 
 run_human_approval_contract_check() {
 	log "Running human approval event schema/replay verifier"
-	./scripts/openclaw/verify-human-approval-event.sh
+	./scripts/openclaw/verify_human_approval_event.sh
 }
 
 run_optional_governance_check() {
@@ -154,7 +154,7 @@ run_optional_governance_check() {
 	fi
 
 	log "Running strict governance verification (optional)"
-	./scripts/openclaw/verify-governance-gates.sh --require-scenario-diversity
+	./scripts/openclaw/verify_governance_gates.sh --require-scenario-diversity
 }
 
 log "Start operations gate verification"

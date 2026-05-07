@@ -69,7 +69,7 @@ Each agent includes:
   - Higher conviction threshold (65 minimum)
   - Marks recommendations as superinvestor-sourced
 
-#### 5. Daily Adjustment Script (`scripts/darwinian-adjust.sh`)
+#### 5. Daily Adjustment Script (`scripts/darwinian_adjust.sh`)
 
 Bash script for daily weight management:
 - Dry-run mode for testing
@@ -103,7 +103,7 @@ prompts/agents/
 └── super_ackman.md                # Quality compounder style
 
 scripts/
-└── darwinian-adjust.sh            # Daily weight adjustment script
+└── darwinian_adjust.sh            # Daily weight adjustment script
 ```
 
 ## Usage
@@ -112,7 +112,7 @@ scripts/
 
 ```bash
 # Make script executable
-chmod +x scripts/darwinian-adjust.sh
+chmod +x scripts/darwinian_adjust.sh
 
 # Initialize weights from registry (first run)
 go run cmd/atlas/main.go --init-darwinian
@@ -126,13 +126,13 @@ export DARWINIAN_WEIGHTS_FILE=configs/darwinian_weights.json
 go run cmd/atlas/main.go research --darwinian
 
 # Adjust weights after market close
-./scripts/darwinian-adjust.sh
+./scripts/darwinian_adjust.sh
 
 # Dry run to preview adjustments
-./scripts/darwinian-adjust.sh --dry-run
+./scripts/darwinian_adjust.sh --dry-run
 
 # Reset all weights to neutral (1.0)
-./scripts/darwinian-adjust.sh --reset
+./scripts/darwinian_adjust.sh --reset
 ```
 
 ### Integration Example

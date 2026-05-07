@@ -529,11 +529,11 @@ print_next_steps() {
     if [ "$DRY_RUN" = true ]; then
         echo "1. Review the proposal above"
         echo "2. Run without --dry-run to save the brief"
-        echo "3. Execute: ./scripts/openclaw/execute-next.sh"
+        echo "3. Execute: ./scripts/openclaw/execute_next.sh"
     else
         echo "1. Review the generated brief"
         echo "2. Execute experiment:"
-        echo "   ./scripts/openclaw/execute-next.sh"
+        echo "   ./scripts/openclaw/execute_next.sh"
         echo ""
         echo "Or manually:"
         echo "   go run ./cmd/run-experiment ..."

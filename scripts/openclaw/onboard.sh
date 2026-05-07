@@ -106,10 +106,10 @@ show_mutation_guide() {
     
     if ask_yes_no "運行一個 risk_rule_change 實驗?"; then
         echo ""
-        print_info "即將運行: ./scripts/openclaw/run-validated-round.sh --type risk_rule_change"
+        print_info "即將運行: ./scripts/openclaw/run_validated_round.sh --type risk_rule_change"
         echo ""
         read -r -p "按 Enter 繼續..."
-        "${SCRIPT_DIR}/run-validated-round.sh" --type risk_rule_change
+        "${SCRIPT_DIR}/run_validated_round.sh" --type risk_rule_change
     fi
 }
 
@@ -117,16 +117,16 @@ show_quick_commands() {
     print_step "3" "常用快捷命令"
     echo ""
     echo "  一鍵實驗循環："
-    echo "    ${CYAN}./scripts/openclaw/run-validated-round.sh${NC}"
+    echo "    ${CYAN}./scripts/openclaw/run_validated_round.sh${NC}"
     echo ""
     echo "  指定 mutation 類型："
-    echo "    ${CYAN}./scripts/openclaw/run-validated-round.sh --type risk_rule_change${NC}"
-    echo "    ${CYAN}./scripts/openclaw/run-validated-round.sh --agent growth-momentum-01${NC}"
+    echo "    ${CYAN}./scripts/openclaw/run_validated_round.sh --type risk_rule_change${NC}"
+    echo "    ${CYAN}./scripts/openclaw/run_validated_round.sh --agent growth-momentum-01${NC}"
     echo ""
     echo "  分步執行（手動控制）："
-    echo "    ${CYAN}./scripts/openclaw/propose-mutation.sh --auto${NC}    # 生成建議"
-    echo "    ${CYAN}./scripts/openclaw/execute-next.sh --auto${NC}        # 執行實驗"
-    echo "    ${CYAN}./scripts/openclaw/judge-latest.sh --auto${NC}        # 判斷結果"
+    echo "    ${CYAN}./scripts/openclaw/propose_mutation.sh --auto${NC}    # 生成建議"
+    echo "    ${CYAN}./scripts/openclaw/execute_next.sh --auto${NC}        # 執行實驗"
+    echo "    ${CYAN}./scripts/openclaw/judge_latest.sh --auto${NC}        # 判斷結果"
     echo ""
     echo "  查看狀態："
     echo "    ${CYAN}./scripts/openclaw/status.sh${NC}                     # 完整狀態"
@@ -199,7 +199,7 @@ show_next_steps() {
     echo "  您現在可以："
     echo ""
     echo "  1. 運行完整實驗循環："
-    echo "     ${CYAN}./scripts/openclaw/run-validated-round.sh${NC}"
+    echo "     ${CYAN}./scripts/openclaw/run_validated_round.sh${NC}"
     echo ""
     echo "  2. 閱讀詳細文檔："
     echo "     • README.md - 系統概覽和快速開始"

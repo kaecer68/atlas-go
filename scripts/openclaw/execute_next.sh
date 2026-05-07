@@ -171,7 +171,7 @@ run_experiment() {
         echo ""
         echo "Next steps:"
         echo "  1. Run replay judge to fill baseline/candidate metrics"
-        echo "  2. Run: ./scripts/openclaw/judge-latest.sh --auto"
+        echo "  2. Run: ./scripts/openclaw/judge_latest.sh --auto"
     else
         echo -e "${RED}✗ Experiment execution failed${NC}"
         return 1
@@ -242,7 +242,7 @@ interactive_mode() {
         echo -e "${YELLOW}No planned experiments or briefs found.${NC}"
         echo ""
         echo "To create a new experiment:"
-        echo "  ./scripts/openclaw/propose-mutation.sh"
+        echo "  ./scripts/openclaw/propose_mutation.sh"
     fi
 }
 
@@ -274,7 +274,7 @@ main() {
                 run_experiment "" "$brief"
             else
                 echo "No mutation briefs found either."
-                echo "Run: ./scripts/openclaw/propose-mutation.sh --auto"
+                echo "Run: ./scripts/openclaw/propose_mutation.sh --auto"
                 exit 1
             fi
         else
@@ -282,7 +282,7 @@ main() {
             local brief=$(find_mutation_brief)
             if [ -z "$brief" ]; then
                 echo -e "${RED}Error: No mutation brief found.${NC}"
-                echo "Run: ./scripts/openclaw/propose-mutation.sh --auto"
+                echo "Run: ./scripts/openclaw/propose_mutation.sh --auto"
                 exit 1
             fi
             run_experiment "$target_exp" "$brief"

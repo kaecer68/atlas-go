@@ -22,7 +22,7 @@ NC='\033[0m'
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/openclaw/human-approval.sh [OPTIONS]
+Usage: ./scripts/openclaw/human_approval.sh [OPTIONS]
 
 Human-in-the-loop decision wrapper for experiment approval/rejection/revert.
 
@@ -39,9 +39,9 @@ Options:
   --help                 Show this help
 
 Examples:
-  ./scripts/openclaw/human-approval.sh --approve --experiment exp-123 --reason "Passes gates"
-  ./scripts/openclaw/human-approval.sh --reject --reason "Insufficient evidence"
-  ./scripts/openclaw/human-approval.sh --revert --reason "Rollback after monitoring alert"
+  ./scripts/openclaw/human_approval.sh --approve --experiment exp-123 --reason "Passes gates"
+  ./scripts/openclaw/human_approval.sh --reject --reason "Insufficient evidence"
+  ./scripts/openclaw/human_approval.sh --revert --reason "Rollback after monitoring alert"
 EOF
 }
 
@@ -122,7 +122,7 @@ require_cmd jq
 
 resolve_latest_experiment() {
   local judge_json
-  judge_json="$(./scripts/openclaw/judge-latest.sh --auto --json 2>/dev/null || true)"
+  judge_json="$(./scripts/openclaw/judge_latest.sh --auto --json 2>/dev/null || true)"
   if [[ -z "$judge_json" ]]; then
     echo ""
     return 0

@@ -213,9 +213,9 @@ portfolio_constraint_revision:
 go run ./cmd/backtest-window -start 2026-03-01 -end 2026-03-31
 
 # 运行完整实验流程
-./scripts/openclaw/run-validated-round.sh --type portfolio_constraint_revision
-./scripts/openclaw/run-validated-round.sh --agent technical-breakout-01 --type portfolio_constraint_revision
-./scripts/openclaw/run-validated-round.sh --agent value-yield-01 --type portfolio_constraint_revision
+./scripts/openclaw/run_validated_round.sh --type portfolio_constraint_revision
+./scripts/openclaw/run_validated_round.sh --agent technical-breakout-01 --type portfolio_constraint_revision
+./scripts/openclaw/run_validated_round.sh --agent value-yield-01 --type portfolio_constraint_revision
 
 # 分析 Agent 表现
 cat data/state/recommendation_outcomes.jsonl | jq -s '

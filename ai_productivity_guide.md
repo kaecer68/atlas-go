@@ -9,7 +9,7 @@ This guide is an execution productivity reference. For current OpenClaw mutation
 - `docs/skills-map.md`
 - `docs/iteration_playbook.md`
 - `docs/operations_playbook.md`
-- `scripts/openclaw/today-start.sh`
+- `scripts/openclaw/today_start.sh`
 
 Historical reports may contain point-in-time findings and should not override the current guard and acceptance behavior documented above.
 
@@ -582,10 +582,10 @@ These are **documentation for prompt design**, not enforced by code.
    └─ Modify prompt or rule  →  outputs: MutationBrief
 
 3. EXECUTE on new replay window
-   └─ Run: `./scripts/openclaw/execute-next.sh`  →  outputs: experiment record
+   └─ Run: `./scripts/openclaw/execute_next.sh`  →  outputs: experiment record
 
 4. JUDGE against baseline
-   └─ Run: `./scripts/openclaw/judge-latest.sh`  →  decision: ACCEPT or REJECT
+   └─ Run: `./scripts/openclaw/judge_latest.sh`  →  decision: ACCEPT or REJECT
 
 5. PROMOTE (if accepted) or SKIP (if rejected)
    └─ Run: `./scripts/openclaw/decide.sh --promote EXP-ID --reason "improved X%"`
@@ -641,10 +641,10 @@ These are **documentation for prompt design**, not enforced by code.
 ./scripts/openclaw/status.sh
 
 # Execute mutation experiment (from proposal)
-./scripts/openclaw/execute-next.sh --auto
+./scripts/openclaw/execute_next.sh --auto
 
 # Judge latest experiment
-./scripts/openclaw/judge-latest.sh --auto --json
+./scripts/openclaw/judge_latest.sh --auto --json
 
 # Promote (after human decision)
 ./scripts/openclaw/decide.sh --promote EXP-ID --reason "reason text"
@@ -745,9 +745,9 @@ go run ./cmd/backtest-window \                  # Evaluate over date range
 ./scripts/openclaw/status.sh                    # View system status & recommendations
 
 # === MUTATION WORKFLOW ===
-./scripts/openclaw/execute-next.sh --auto      # Execute the proposed mutation
+./scripts/openclaw/execute_next.sh --auto      # Execute the proposed mutation
 
-./scripts/openclaw/judge-latest.sh --auto      # Judge experiment vs baseline
+./scripts/openclaw/judge_latest.sh --auto      # Judge experiment vs baseline
   --json                                        # Output structured results
 
 ./scripts/openclaw/decide.sh \                  # Promote (accept) mutation
@@ -778,39 +778,39 @@ go vet ./...                                    # Static analysis
 staticcheck ./...                               # Additional lint
 
 # Governance deep verification gates (G2/G3/G4 + M5 + M7)
-./scripts/openclaw/verify-governance-gates.sh
+./scripts/openclaw/verify_governance_gates.sh
 
 # M5 parallel simulation verification (base/stress/shock + determinism)
-./scripts/openclaw/verify-parallel-scenarios.sh
+./scripts/openclaw/verify_parallel_scenarios.sh
 
 # M5 strict mode: require scenario diversity
-./scripts/openclaw/verify-parallel-scenarios.sh --require-diversity
+./scripts/openclaw/verify_parallel_scenarios.sh --require-diversity
 
 # Unified governance strict mode: fail if M5 has no scenario diversity
-./scripts/openclaw/verify-governance-gates.sh --require-scenario-diversity
+./scripts/openclaw/verify_governance_gates.sh --require-scenario-diversity
 
 # Required CI status checks for branch protection
 # - ci / governance
 # - ci / operations
 
 # Guided branch protection setup (safe default: dry-run)
-./scripts/openclaw/setup-branch-protection.sh
+./scripts/openclaw/setup_branch_protection.sh
 
 # Apply branch protection after interactive confirmation
-./scripts/openclaw/setup-branch-protection.sh --apply
+./scripts/openclaw/setup_branch_protection.sh --apply
 
 # Note: --apply creates a pre-change snapshot in data/state/branch-protection-snapshots/
 
 # Human-in-the-loop approval/reject/revert entrypoint (M7)
-./scripts/openclaw/human-approval.sh --approve --experiment <EXP-ID> --reason "..."
-./scripts/openclaw/human-approval.sh --reject --experiment <EXP-ID> --reason "..."
-./scripts/openclaw/human-approval.sh --revert --reason "..."
+./scripts/openclaw/human_approval.sh --approve --experiment <EXP-ID> --reason "..."
+./scripts/openclaw/human_approval.sh --reject --experiment <EXP-ID> --reason "..."
+./scripts/openclaw/human_approval.sh --revert --reason "..."
 
 # Approval event schema + replayability verification
-./scripts/openclaw/verify-human-approval-event.sh
+./scripts/openclaw/verify_human_approval_event.sh
 
 # Replay one stored approval event (safe default: dry-run)
-./scripts/openclaw/replay-approval-event.sh --event data/state/approvals/<decision-file>.json --dry-run
+./scripts/openclaw/replay_approval_event.sh --event data/state/approvals/<decision-file>.json --dry-run
 
 # === FULL AUTOMATION ===
 go run enhanced_experiment_runner.go            # End-to-end evolution: mutate → execute → judge → promote

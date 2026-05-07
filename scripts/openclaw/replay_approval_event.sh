@@ -12,7 +12,7 @@ JSON_MODE=false
 
 usage() {
 	cat <<'EOF'
-Usage: ./scripts/openclaw/replay-approval-event.sh --event <event.json> [OPTIONS]
+Usage: ./scripts/openclaw/replay_approval_event.sh --event <event.json> [OPTIONS]
 
 Replay one stored human-approval event.
 
@@ -91,7 +91,7 @@ if [[ -z "$decision_id" || -z "$action" || -z "$reason" ]]; then
 	exit 1
 fi
 
-cmd=(./scripts/openclaw/human-approval.sh)
+cmd=(./scripts/openclaw/human_approval.sh)
 case "$action" in
 	approve)
 		if [[ -z "$experiment_id" ]]; then

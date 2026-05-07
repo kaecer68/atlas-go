@@ -189,7 +189,7 @@ Validation commands:
 ```bash
 go test ./internal/sim/...
 go test ./internal/portfolio/...
-bash ./scripts/openclaw/verify-parallel-scenarios.sh
+bash ./scripts/openclaw/verify_parallel_scenarios.sh
 ```
 
 Required evidence artifacts:
@@ -230,8 +230,8 @@ Done definition:
 
 Validation commands:
 ```bash
-bash ./scripts/openclaw/verify-operations-gate.sh
-bash ./scripts/openclaw/verify-governance-gates.sh
+bash ./scripts/openclaw/verify_operations_gate.sh
+bash ./scripts/openclaw/verify_governance_gates.sh
 go build ./...
 go test ./...
 ```
@@ -283,8 +283,8 @@ go test ./internal/globalmarket/...
 go test ./internal/replay/...
 go test ./internal/sim/...
 go test ./internal/portfolio/...
-./scripts/openclaw/verify-parallel-scenarios.sh --require-diversity
-./scripts/openclaw/verify-operations-gate.sh --with-governance
+./scripts/openclaw/verify_parallel_scenarios.sh --require-diversity
+./scripts/openclaw/verify_operations_gate.sh --with-governance
 go run ./cmd/backtest-window -start 2026-03-26 -end 2026-03-27
 ```
 
