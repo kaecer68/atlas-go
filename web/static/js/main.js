@@ -246,34 +246,34 @@ async function loadPageData(pageId) {
   else if (pageId === 'experiments') {
     try {
       var inbox = await getJSON('/api/dashboard/experiment-inbox').catch(function() { return null; });
-      if (m.mgmt.renderInbox) m.mgmt.renderInbox(inbox);
-      if (m.mgmt.loadAuditLog) m.mgmt.loadAuditLog();
-      if (m.mgmt.loadExperimentHistory) m.mgmt.loadExperimentHistory();
+      if (m.inbox.renderInbox) m.inbox.renderInbox(inbox);
+      if (m.experiments.loadAuditLog) m.experiments.loadAuditLog();
+      if (m.experiments.loadExperimentHistory) m.experiments.loadExperimentHistory();
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'reports') {
     try { if (m.back.renderBacktestReport) m.back.renderBacktestReport(); } catch(e) { console.error(e); }
   }
   else if (pageId === 'controls') {
-    try { if (m.mgmt.loadOverrides) m.mgmt.loadOverrides(); } catch(e) { console.error(e); }
+    try { if (m.experiments.loadOverrides) m.experiments.loadOverrides(); } catch(e) { console.error(e); }
   }
   else if (pageId === 'datachannels') {
     try {
       var dc = await getJSON('/api/dashboard/data-channels').catch(function() { return null; });
-      if (m.mgmt.renderDataChannels) m.mgmt.renderDataChannels(dc);
+      if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dc);
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'synergy') {
-    try { if (m.mgmt.loadSynergyCronStatus) m.mgmt.loadSynergyCronStatus(); if (m.mgmt.loadTaskHistory) m.mgmt.loadTaskHistory(); } catch(e) { console.error(e); }
+    try { console.log('Synergy page: data pending'); } catch(e) { console.error(e); }
   }
   else if (pageId === 'alerts') {
-    try { if (m.mgmt.loadAlerts) m.mgmt.loadAlerts(); } catch(e) { console.error(e); }
+    try { if (m.alerts.loadAlerts) m.alerts.loadAlerts(); } catch(e) { console.error(e); }
   }
   else if (pageId === 'metrics') {
-    try { if (m.mgmt.loadMetrics) m.mgmt.loadMetrics(); } catch(e) { console.error(e); }
+    try { if (m.metrics.loadMetrics) m.metrics.loadMetrics(); } catch(e) { console.error(e); }
   }
   else if (pageId === 'industry') {
-    try { if (m.mgmt.loadIndustryData) m.mgmt.loadIndustryData(); } catch(e) { console.error(e); }
+    try { if (m.industry.loadIndustryData) m.industry.loadIndustryData(); } catch(e) { console.error(e); }
   }
   else if (pageId === 'live') {
     try {

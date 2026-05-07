@@ -1,6 +1,6 @@
-import { agentName, stockName, sectorName } from '../names.js';
+import { agentName, stockName, sectorName, regimeLabel } from '../names.js';
 import { computePipelineSummary, factorBar, renderFactorMini, renderFactorBreakdown, toggleBreakdown } from './dashboard.js';
-import { formatDate, getJSON, notify } from '../shared/app-utils.js';
+import { formatDate, getJSON, notify, renderEmptyState } from '../shared/app-utils.js';
 
 export function renderConvictionBreakdown(cb) {
   if (!cb) return '<div class="text-muted text-xs">無計算明細</div>';
