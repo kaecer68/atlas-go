@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/industry"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
@@ -20,9 +21,10 @@ import (
 
 // Handlers holds the dependencies for live trading handlers.
 type Handlers struct {
-	LedgerDir string
-	WorkDir   string
-	Svc       *service.LiveService
+	LedgerDir  string
+	WorkDir    string
+	Svc        *service.LiveService
+	Classifier *industry.ClassificationTree
 }
 
 func (h *Handlers) getService() *service.LiveService {
@@ -274,7 +276,7 @@ func (h *Handlers) HandlePnLAttribution(w http.ResponseWriter, r *http.Request) 
 	}
 
 	outcomes, _ := loadRecommendationOutcomes(h.LedgerDir, latestSession)
-	symSectorMap := buildSymbolSectorMap(h.WorkDir)
+	symSectorMap := buildSymbolSectorMap(h.Classifier)
 	var (
 		agentMap                                    = make(map[string]*AgentAttribution)
 		sectorMap                                   = make(map[string]*SectorAttribution)
@@ -475,7 +477,7 @@ func (h *Handlers) HandleRiskExposure(w http.ResponseWriter, r *http.Request) {
 	}
 
 	outcomes, _ := loadRecommendationOutcomes(h.LedgerDir, "")
-	symSectorMap := buildSymbolSectorMap(h.WorkDir)
+	symSectorMap := buildSymbolSectorMap(h.Classifier)
 	sectorWeights, factorExp := computeSectorFactorExposure(outcomes, portfolioValue, symSectorMap)
 
 	var concentration []PositionConcentration
@@ -582,10 +584,15 @@ func loadRecommendationOutcomes(ledgerDir, sessionID string) ([]domain.Recommend
 	return outcomes, scanner.Err()
 }
 
-func buildSymbolSectorMap(workDir string) map[string]string {
+func buildSymbolSectorMap(classifier *industry.ClassificationTree) map[string]string {
 	m := make(map[string]string)
-	// Load from industry classifier if available; for now return empty map
-	// This is a simplified version - the full implementation would load from industry.ClassificationTree
-	_ = workDir
+	if classifier == nil {
+		return m
+	}
+	for _, seg := range classifier.GetAllSegments() {
+		for _, sym := range seg.RepresentativeStocks {
+			m[sym] = seg.ID
+		}
+	}
 	return m
 }

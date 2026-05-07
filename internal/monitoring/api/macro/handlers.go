@@ -15,6 +15,7 @@ type Handlers struct {
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/macro/ingest", h.HandleMacroIngest)
+	mux.HandleFunc("/api/channels/ingest", h.HandleChannelsIngest)
 	mux.HandleFunc("/api/macro/snapshot/latest", h.HandleMacroSnapshotLatest)
 	mux.HandleFunc("/api/macro/snapshot/history", h.HandleMacroSnapshotHistory)
 	mux.HandleFunc("/api/macro/capital-flow/latest", h.HandleCapitalFlowLatest)
@@ -92,4 +93,28 @@ func (h *Handlers) HandleTaiwanStressIndex(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	shared.WriteJSON(w, http.StatusOK, index)
+}
+
+func (h *Handlers) HandleChannelsIngest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	_, _, err := h.Service.Ingest(r.Context())
+	if err != nil {
+		shared.WriteJSON(w, http.StatusOK, map[string]any{
+			"macro_ok":    false,
+			"macro_error": err.Error(),
+			"geo_ok":      false,
+			"geo_error":   "geo ingest not yet wired to macro service",
+		})
+		return
+	}
+	shared.WriteJSON(w, http.StatusOK, map[string]any{
+		"macro_ok":    true,
+		"macro_error": "",
+		"geo_ok":      false,
+		"geo_error":   "geo ingest not yet wired to macro service",
+	})
 }

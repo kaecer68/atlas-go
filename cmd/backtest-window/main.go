@@ -66,7 +66,6 @@ func run(args []string) error {
 		dashboard.RegisterControlRoutes(mux)
 		dashboard.RegisterMacroRoutes(mux)
 		dashboard.RegisterExperimentRoutes(mux)
-		dashboard.RegisterPhase3Routes(mux)
 		dashboard.RegisterLiveRoutes(mux)
 		dashboard.RegisterBacktestRoutes(mux)
 		fmt.Printf("\nDashboard ready at http://localhost%s\n", *addr)
