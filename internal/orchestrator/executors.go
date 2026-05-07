@@ -4,254 +4,46 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"time"
 
-	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/logging"
-	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
-// LayerRouter encapsulates layer-based agent routing logic.
-// This decouples AgentRegistry layer filtering from executor dispatch,
-// allowing routing strategy to be tested and evolved independently.
-type LayerRouter interface {
-	// GetContextAgents returns agents for regime inference (LayerContext only).
-	GetContextAgents(registry domain.AgentRegistry) []domain.AgentSpec
-	// GetSectorAgents returns agents for sector allocation (LayerSector only).
-	GetSectorAgents(registry domain.AgentRegistry) []domain.AgentSpec
-	// GetStyleAgents returns agents for style allocation (LayerStyle only).
-	GetStyleAgents(registry domain.AgentRegistry) []domain.AgentSpec
-	// GetControlAgents returns agents for control layer (LayerControl only).
-	GetControlAgents(registry domain.AgentRegistry) []domain.AgentSpec
-	// FilterByLayer returns agents matching the specified layer.
-	FilterByLayer(registry domain.AgentRegistry, layer domain.AgentLayer) []domain.AgentSpec
-}
-
-// DefaultLayerRouter is the default layer-based router implementation.
-type DefaultLayerRouter struct{}
-
-func (DefaultLayerRouter) GetContextAgents(registry domain.AgentRegistry) []domain.AgentSpec {
-	return FilterAgentsByLayer(registry.Agents, domain.LayerContext)
-}
-
-func (DefaultLayerRouter) GetSectorAgents(registry domain.AgentRegistry) []domain.AgentSpec {
-	return FilterAgentsByLayer(registry.Agents, domain.LayerSector)
-}
-
-func (DefaultLayerRouter) GetStyleAgents(registry domain.AgentRegistry) []domain.AgentSpec {
-	return FilterAgentsByLayer(registry.Agents, domain.LayerStyle)
-}
-
-func (DefaultLayerRouter) GetControlAgents(registry domain.AgentRegistry) []domain.AgentSpec {
-	return FilterAgentsByLayer(registry.Agents, domain.LayerControl)
-}
-
-func (r DefaultLayerRouter) FilterByLayer(registry domain.AgentRegistry, layer domain.AgentLayer) []domain.AgentSpec {
-	return FilterAgentsByLayer(registry.Agents, layer)
-}
-
-// FilterAgentsByLayer returns enabled agents matching the specified layer.
-func FilterAgentsByLayer(agents []domain.AgentSpec, layer domain.AgentLayer) []domain.AgentSpec {
-	result := make([]domain.AgentSpec, 0, len(agents))
-	for _, a := range agents {
-		if a.Enabled && a.Layer == layer {
-			result = append(result, a)
-		}
-	}
-	return result
-}
-
-// ExecutionContext holds all parameters needed to execute registry research.
-type ExecutionContext struct {
-	Registry                   domain.AgentRegistry
-	Quotes                     []domain.Quote
-	Overrides                  map[string]string
-	Policy                     domain.ExecutionPolicy
-	Plugins                    *PluginRegistry
-	SessionID                  string
-	WeightManager              portfolio.DarwinianWeightManagerInterface
-	Context                    context.Context            // request-level context for cancellation propagation
-	NarrativeEvents            []narrative.NarrativeEvent // narrative events for regime evidence fusion
-	ConvictionClampingCallback func([]portfolio.ConvictionClampingEvent)
-}
-
-// ResearchResult holds all outputs from executing registry research.
-type ResearchResult struct {
-	Regime               domain.Regime
-	RawRecommendations   []domain.Recommendation
-	FinalRecommendations []domain.Recommendation
-	GuardOutcomes        []domain.GuardOutcome
-	ScreeningRejects     []domain.ScreeningReject
-	DarwinianWeights     []*portfolio.DarwinianAgentWeight
-}
-
-// ExecuteWithContext executes registry research using a unified context.
-func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
-	if ctx.Plugins == nil {
-		ctx.Plugins = NewPluginRegistry()
-	}
-	if ctx.Policy == (domain.ExecutionPolicy{}) {
-		ctx.Policy = DefaultExecutionPolicy()
-	}
-	if ctx.Context == nil {
-		ctx.Context = context.Background()
-	}
-
-	quoteBySymbol := make(map[string]domain.Quote, len(ctx.Quotes))
-	for _, quote := range ctx.Quotes {
-		quoteBySymbol[quote.Symbol] = quote
-	}
-
-	registry := filterMutedAgents(ctx.Registry, ctx.Plugins)
-
-	regime := inferRegime(registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, ctx.NarrativeEvents)
-	raw, rejects := collectRecommendations(ctx.Context, registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, regime, ctx.SessionID)
-
-	if ctx.Policy.MomentumCrashProtection {
-		raw = applyMomentumCrashProtection(raw, quoteBySymbol)
-	}
-
-	var weightData []*portfolio.DarwinianAgentWeight
-	controlInput := raw
-	if ctx.WeightManager != nil {
-		var convictionEvents []portfolio.ConvictionClampingEvent
-		controlInput, convictionEvents = ctx.WeightManager.ApplyDarwinianWeightsWithEvents(raw)
-		weightData = ctx.WeightManager.GetAllAgentWeightData()
-		if len(convictionEvents) > 0 && ctx.ConvictionClampingCallback != nil {
-			ctx.ConvictionClampingCallback(convictionEvents)
-		}
-	}
-
-	final, guardOutcomes := applyControlLayerWithOutcomes(registry, ctx.Plugins, controlInput, ctx.Policy)
-
-	return ResearchResult{
-		Regime:               regime,
-		RawRecommendations:   raw,
-		FinalRecommendations: final,
-		GuardOutcomes:        guardOutcomes,
-		ScreeningRejects:     rejects,
-		DarwinianWeights:     weightData,
-	}
-}
-
 func ExecuteRegistryResearch(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string) (domain.Regime, []domain.Recommendation) {
-	result := ExecuteWithContext(ExecutionContext{
-		Registry:  registry,
-		Quotes:    quotes,
-		Overrides: overrides,
-	})
-	return result.Regime, result.FinalRecommendations
+	regime, _, final := ExecuteRegistryResearchDetailed(registry, quotes, overrides)
+	return regime, final
 }
 
 func ExecuteRegistryResearchDetailed(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string) (domain.Regime, []domain.Recommendation, []domain.Recommendation) {
-	result := ExecuteWithContext(ExecutionContext{
-		Registry:  registry,
-		Quotes:    quotes,
-		Overrides: overrides,
-	})
-	return result.Regime, result.RawRecommendations, result.FinalRecommendations
+	return ExecuteRegistryResearchDetailedWithPolicy(registry, quotes, overrides, DefaultExecutionPolicy())
 }
 
 func ExecuteRegistryResearchDetailedWithPolicy(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string, policy domain.ExecutionPolicy) (domain.Regime, []domain.Recommendation, []domain.Recommendation) {
-	result := ExecuteWithContext(ExecutionContext{
-		Registry:  registry,
-		Quotes:    quotes,
-		Overrides: overrides,
-		Policy:    policy,
-	})
-	return result.Regime, result.RawRecommendations, result.FinalRecommendations
+	regime, raw, final, _ := ExecuteRegistryResearchDetailedWithPolicyAndGuards(registry, quotes, overrides, policy)
+	return regime, raw, final
 }
 
 func ExecuteRegistryResearchDetailedWithPolicyAndGuards(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string, policy domain.ExecutionPolicy) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome) {
-	result := ExecuteWithContext(ExecutionContext{
-		Registry:  registry,
-		Quotes:    quotes,
-		Overrides: overrides,
-		Policy:    policy,
-	})
-	return result.Regime, result.RawRecommendations, result.FinalRecommendations, result.GuardOutcomes
+	return executeRegistryResearchDetailedWithPolicyAndGuards(registry, quotes, overrides, policy, NewPluginRegistry())
 }
 
-func ExecuteRegistryResearchDetailedWithPolicyAndGuardsAndPlugins(
-	registry domain.AgentRegistry,
-	quotes []domain.Quote,
-	overrides map[string]string,
-	policy domain.ExecutionPolicy,
-	plugins *PluginRegistry,
-) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome) {
-	result := ExecuteWithContext(ExecutionContext{
-		Registry:  registry,
-		Quotes:    quotes,
-		Overrides: overrides,
-		Policy:    policy,
-		Plugins:   plugins,
-	})
-	return result.Regime, result.RawRecommendations, result.FinalRecommendations, result.GuardOutcomes
-}
-
-func filterMutedAgents(registry domain.AgentRegistry, plugins *PluginRegistry) domain.AgentRegistry {
-	if plugins == nil || plugins.healthManager == nil {
-		return registry
+func executeRegistryResearchDetailedWithPolicyAndGuards(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string, policy domain.ExecutionPolicy, plugins *PluginRegistry) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome) {
+	quoteBySymbol := make(map[string]domain.Quote, len(quotes))
+	for _, quote := range quotes {
+		quoteBySymbol[quote.Symbol] = quote
 	}
-	filtered := make([]domain.AgentSpec, 0, len(registry.Agents))
-	for _, agent := range registry.Agents {
-		if !plugins.IsAgentHealthy(agent.ID) {
-			health := plugins.healthManager.GetHealth(agent.ID)
-			score := 0.0
-			if health != nil {
-				score = health.CompositeScore
-			}
-			logging.Info("executors", "agent_muted", logging.AgentID(agent.ID), "composite_score", score)
-			continue
-		}
-		filtered = append(filtered, agent)
-	}
-	return domain.AgentRegistry{
-		Version: registry.Version,
-		Agents:  filtered,
-	}
+
+	regime := inferRegime(registry, quoteBySymbol, plugins, overrides)
+	raw := collectRecommendations(registry, quoteBySymbol, plugins, overrides, regime)
+	final, guardOutcomes := applyControlLayerWithOutcomes(registry, plugins, raw, policy)
+	return regime, raw, final, guardOutcomes
 }
 
-func executeRegistryResearchDetailedWithPolicyAndGuards(
-	registry domain.AgentRegistry,
-	quotes []domain.Quote,
-	overrides map[string]string,
-	policy domain.ExecutionPolicy,
-	plugins *PluginRegistry,
-	sessionID string,
-) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome, []domain.ScreeningReject) {
-	result := ExecuteWithContext(ExecutionContext{
-		Registry:  registry,
-		Quotes:    quotes,
-		Overrides: overrides,
-		Policy:    policy,
-		Plugins:   plugins,
-		SessionID: sessionID,
-	})
-	return result.Regime, result.RawRecommendations, result.FinalRecommendations, result.GuardOutcomes, result.ScreeningRejects
-}
-
-func executeRegistryResearchDetailedWithPolicyAndGuardsAndDarwinian(
-	registry domain.AgentRegistry,
-	quotes []domain.Quote,
-	overrides map[string]string,
-	policy domain.ExecutionPolicy,
-	plugins *PluginRegistry,
-	sessionID string,
-	weightManager portfolio.DarwinianWeightManagerInterface,
-) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome, []domain.ScreeningReject) {
-	result := ExecuteWithContext(ExecutionContext{
-		Registry:      registry,
-		Quotes:        quotes,
-		Overrides:     overrides,
-		Policy:        policy,
-		Plugins:       plugins,
-		SessionID:     sessionID,
-		WeightManager: weightManager,
-	})
-	return result.Regime, result.RawRecommendations, result.FinalRecommendations, result.GuardOutcomes, result.ScreeningRejects
+// ExecuteRegistryResearchDetailedWithPolicyAndGuardsAndPlugins is the plugin-aware variant
+// of ExecuteRegistryResearchDetailedWithPolicyAndGuards. It allows callers to supply a
+// custom PluginRegistry (e.g. one with a screener attached) for testing and advanced use.
+func ExecuteRegistryResearchDetailedWithPolicyAndGuardsAndPlugins(registry domain.AgentRegistry, quotes []domain.Quote, overrides map[string]string, policy domain.ExecutionPolicy, plugins *PluginRegistry) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []domain.GuardOutcome) {
+	return executeRegistryResearchDetailedWithPolicyAndGuards(registry, quotes, overrides, policy, plugins)
 }
 
 // ExecuteRegistryResearchWithDarwinianWeights executes research with Darwinian weight application
@@ -261,10 +53,9 @@ func ExecuteRegistryResearchWithDarwinianWeights(
 	quotes []domain.Quote,
 	overrides map[string]string,
 	policy domain.ExecutionPolicy,
-	weightManager portfolio.DarwinianWeightManagerInterface,
+	weightManager *portfolio.DarwinianWeightManager,
 ) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []*portfolio.DarwinianAgentWeight) {
-	regime, raw, final, weightData, _ := executeRegistryResearchWithDarwinianWeights(registry, quotes, overrides, policy, weightManager, NewPluginRegistry(), "")
-	return regime, raw, final, weightData
+	return executeRegistryResearchWithDarwinianWeights(registry, quotes, overrides, policy, weightManager, NewPluginRegistry())
 }
 
 func executeRegistryResearchWithDarwinianWeights(
@@ -272,66 +63,58 @@ func executeRegistryResearchWithDarwinianWeights(
 	quotes []domain.Quote,
 	overrides map[string]string,
 	policy domain.ExecutionPolicy,
-	weightManager portfolio.DarwinianWeightManagerInterface,
+	weightManager *portfolio.DarwinianWeightManager,
 	plugins *PluginRegistry,
-	sessionID string,
-) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []*portfolio.DarwinianAgentWeight, []domain.ScreeningReject) {
-	wm := weightManager
-	if wm == nil {
-		wm = portfolio.NewDarwinianWeightManager("configs/darwinian_weights.json")
-		wm.InitializeFromRegistry(registry)
-		_ = wm.Load()
+) (domain.Regime, []domain.Recommendation, []domain.Recommendation, []*portfolio.DarwinianAgentWeight) {
+	quoteBySymbol := make(map[string]domain.Quote, len(quotes))
+	for _, quote := range quotes {
+		quoteBySymbol[quote.Symbol] = quote
 	}
 
-	result := ExecuteWithContext(ExecutionContext{
-		Registry:      registry,
-		Quotes:        quotes,
-		Overrides:     overrides,
-		Policy:        policy,
-		Plugins:       plugins,
-		SessionID:     sessionID,
-		WeightManager: wm,
-	})
-	return result.Regime, result.RawRecommendations, result.FinalRecommendations, result.DarwinianWeights, result.ScreeningRejects
+	// Initialize weight manager if needed
+	if weightManager == nil {
+		weightManager = portfolio.NewDarwinianWeightManager("configs/darwinian_weights.json")
+		weightManager.InitializeFromRegistry(registry)
+		_ = weightManager.Load() // Try to load existing weights
+	}
+
+	regime := inferRegime(registry, quoteBySymbol, plugins, overrides)
+	raw := collectRecommendations(registry, quoteBySymbol, plugins, overrides, regime)
+
+	// Apply Darwinian weights to recommendations
+	weighted := weightManager.ApplyDarwinianWeights(raw)
+
+	// Apply control layer (CRO) to weighted recommendations
+	final := applyControlLayer(registry, plugins, weighted, policy)
+
+	// Get current weight data for reporting
+	weightData := weightManager.GetAllAgentWeightData()
+
+	return regime, raw, final, weightData
 }
 
-func inferRegime(registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string, events []narrative.NarrativeEvent) domain.Regime {
-	sources := []RegimeEvidenceSource{
-		NewMacroEvidenceSource(),
-		NewTechnicalEvidenceSource(),
-		NewNarrativeEvidenceSource(),
-		NewAgentSignalEvidenceSource(registry, plugins, overrides),
-	}
-
-	var totalScore, totalWeight float64
-	for _, src := range sources {
-		ev := src.Evidence(quotes, events)
-		if ev.Confidence > 0 {
-			totalScore += ev.Score * ev.Confidence
-			totalWeight += ev.Confidence
+func inferRegime(registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string) domain.Regime {
+	score := 0
+	for _, agent := range registry.Agents {
+		if !agent.Enabled || agent.Layer != domain.LayerContext {
+			continue
 		}
+		prompt := plugins.ResolvePrompt(agent, overrides)
+		score += plugins.RegimeScore(agent, quotes, prompt)
 	}
-
-	if totalWeight == 0 {
-		return domain.RegimeNeutral
-	}
-
-	normalized := totalScore / totalWeight
 
 	switch {
-	case normalized > 0.15:
+	case score > 0:
 		return domain.RegimeRiskOn
-	case normalized < -0.15:
+	case score < 0:
 		return domain.RegimeRiskOff
 	default:
 		return domain.RegimeNeutral
 	}
 }
 
-func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string, regime domain.Regime, sessionID string) ([]domain.Recommendation, []domain.ScreeningReject) {
+func collectRecommendations(registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string, regime domain.Regime) []domain.Recommendation {
 	recs := make([]domain.Recommendation, 0)
-	rejects := make([]domain.ScreeningReject, 0)
-	now := time.Now().UTC()
 	for _, agent := range registry.Agents {
 		if !agent.Enabled {
 			continue
@@ -351,26 +134,7 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 			if !ok || !quote.IsTradable {
 				continue
 			}
-			screenRes, err := plugins.ScreenDetailed(ctx, agent, symbol, quotes)
-			if err != nil || !screenRes.Passed {
-				if !screenRes.Passed {
-					logging.Debug("screener", "screen_reject",
-						logging.Symbol(symbol),
-						logging.AgentID(agent.ID),
-						logging.FStr("criterion", screenRes.Criterion),
-						logging.FStr("reason", screenRes.Reason))
-					rejects = append(rejects, domain.ScreeningReject{
-						SessionID:      sessionID,
-						Symbol:         symbol,
-						AgentID:        agent.ID,
-						Skill:          agent.Skill,
-						Criterion:      screenRes.Criterion,
-						CriterionLabel: screenRes.Label,
-						Threshold:      screenRes.Threshold,
-						ActualValue:    screenRes.Actual,
-						RecordedAt:     now,
-					})
-				}
+			if pass, err := plugins.Screen(context.Background(), agent, symbol, quotes); err != nil || !pass {
 				continue
 			}
 			rec, ok := plugins.Recommendation(agent, quote, prompt, regime)
@@ -378,78 +142,6 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 				continue
 			}
 			recs = append(recs, rec)
-		}
-	}
-
-	agentWeights := make(map[string]float64)
-	for i := range recs {
-		breakdown, scores := plugins.CalculateFactorScoresWithBreakdown(recs[i].Symbol, quotes, recs, agentWeights)
-		if scores != nil {
-			recs[i].FactorScores = domain.FactorScores{
-				Momentum:               scores[portfolio.FactorMomentum],
-				Value:                  scores[portfolio.FactorValue],
-				Quality:                scores[portfolio.FactorQuality],
-				Agent:                  scores[portfolio.FactorAgent],
-				InstitutionalSentiment: scores[portfolio.FactorInstSent],
-				Liquidity:              scores[portfolio.FactorLiquidity],
-				Total:                  scores["total"],
-				Breakdown:              breakdown,
-			}
-		}
-	}
-	for i := range rejects {
-		breakdown, scores := plugins.CalculateFactorScoresWithBreakdown(rejects[i].Symbol, quotes, recs, agentWeights)
-		if scores != nil {
-			rejects[i].FactorScores = domain.FactorScores{
-				Momentum:               scores[portfolio.FactorMomentum],
-				Value:                  scores[portfolio.FactorValue],
-				Quality:                scores[portfolio.FactorQuality],
-				Agent:                  scores[portfolio.FactorAgent],
-				InstitutionalSentiment: scores[portfolio.FactorInstSent],
-				Liquidity:              scores[portfolio.FactorLiquidity],
-				Total:                  scores["total"],
-				Breakdown:              breakdown,
-			}
-		}
-	}
-
-	return recs, rejects
-}
-
-func applyMomentumCrashProtection(recs []domain.Recommendation, quotes map[string]domain.Quote) []domain.Recommendation {
-	vix := 0.0
-	vixFound := false
-	for _, q := range quotes {
-		if q.Symbol == "VIX" || q.Symbol == "^VIX" {
-			vix = q.Last
-			vixFound = true
-			break
-		}
-	}
-	if !vixFound {
-		logging.Warn("executors", "vix_not_found", "event", "momentum_crash_protection_disabled")
-		return recs
-	}
-	cfg := config.GetEngineConfig().Executors
-	if vix <= cfg.VIXMomentumCrashThreshold {
-		return recs
-	}
-
-	params := config.GetParametersConfig().Orchestrator
-	for i := range recs {
-		if recs[i].FactorScores.Momentum == 0 {
-			continue
-		}
-		recs[i].FactorScores.Momentum = 0
-		if recs[i].FactorScores.Breakdown != nil {
-			recs[i].FactorScores.Breakdown.Momentum.Score = 0
-		}
-		remainingWeight := params.FactorWeightValue.Value + params.FactorWeightQuality.Value + params.FactorWeightAgent.Value
-		recs[i].FactorScores.Total = recs[i].FactorScores.Value*(params.FactorWeightValue.Value/remainingWeight) +
-			recs[i].FactorScores.Quality*(params.FactorWeightQuality.Value/remainingWeight) +
-			recs[i].FactorScores.Agent*(params.FactorWeightAgent.Value/remainingWeight)
-		if recs[i].FactorScores.Breakdown != nil {
-			recs[i].FactorScores.Breakdown.Total.Score = recs[i].FactorScores.Total
 		}
 	}
 	return recs
@@ -504,7 +196,7 @@ func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *Plugi
 	}
 
 	current = applyCrowdingPenalty(current)
-	current = applyAntiCorrelationLayer(current, 0)
+	current = applyAntiCorrelationLayer(current)
 
 	// Align the last guard's OutputCount with the true final recommendation count
 	// so that downstream outcome building and UI display are consistent.
@@ -534,15 +226,14 @@ func applyCrowdingPenalty(recs []domain.Recommendation) []domain.Recommendation 
 		symbolAgents[rec.Symbol][rec.Agent] = struct{}{}
 	}
 
-	cfg := config.GetEngineConfig().Executors
 	out := make([]domain.Recommendation, len(recs))
 	for i, rec := range recs {
 		agents := symbolAgents[rec.Symbol]
 		penalty := 1.0
 		if len(agents) >= 4 {
-			penalty = cfg.CrowdingPenaltyAgents4
+			penalty = 0.6
 		} else if len(agents) >= 3 {
-			penalty = cfg.CrowdingPenaltyAgents3
+			penalty = 0.75
 		}
 		rec.Conviction = int(float64(rec.Conviction) * penalty)
 		out[i] = rec
@@ -551,10 +242,11 @@ func applyCrowdingPenalty(recs []domain.Recommendation) []domain.Recommendation 
 }
 
 // applyAntiCorrelationLayer deduplicates by symbol and enforces skill-level diversity.
-func applyAntiCorrelationLayer(recs []domain.Recommendation, availableCash float64) []domain.Recommendation {
+func applyAntiCorrelationLayer(recs []domain.Recommendation) []domain.Recommendation {
 	if len(recs) == 0 {
 		return recs
 	}
+	// Keep highest-conviction rec per symbol
 	bySymbol := map[string]domain.Recommendation{}
 	for _, rec := range recs {
 		existing, ok := bySymbol[rec.Symbol]
@@ -563,6 +255,7 @@ func applyAntiCorrelationLayer(recs []domain.Recommendation, availableCash float
 		}
 	}
 
+	// Group by skill and enforce max 2 symbols per skill to improve diversification
 	skillRecs := map[string][]domain.Recommendation{}
 	for _, rec := range bySymbol {
 		skillRecs[rec.Skill] = append(skillRecs[rec.Skill], rec)
@@ -579,35 +272,26 @@ func applyAntiCorrelationLayer(recs []domain.Recommendation, availableCash float
 		})
 	}
 
-	cfg := config.GetEngineConfig().Executors
-	minTrade := cfg.MinTradeAmount
-	maxStocks := cfg.MaxStocksDefault
-	if availableCash > 0 {
-		calculated := int(availableCash / minTrade)
-		if calculated < cfg.MaxStocksMin {
-			calculated = cfg.MaxStocksMin
-		}
-		if calculated > cfg.MaxStocksMax {
-			calculated = cfg.MaxStocksMax
-		}
-		maxStocks = calculated
-	}
-
 	out := make([]domain.Recommendation, 0, len(bySymbol))
+	skillCount := map[string]int{}
+	// First pass: add highest conviction from each skill up to limit
 	for _, recsForSkill := range skillRecs {
 		for i, rec := range recsForSkill {
 			if i >= 2 {
 				continue
 			}
 			out = append(out, rec)
+			skillCount[rec.Skill]++
 		}
 	}
+	// Second pass: add remaining symbols that didn't make the cut if portfolio still has room
 	for _, recsForSkill := range skillRecs {
 		for i, rec := range recsForSkill {
 			if i < 2 {
 				continue
 			}
-			if len(out) < maxStocks {
+			// Only add if total portfolio under 8 symbols and skill already represented
+			if len(out) < 8 {
 				out = append(out, rec)
 			}
 		}
@@ -639,11 +323,9 @@ func severityForControlAgent(agent domain.AgentSpec) domain.GuardSeverity {
 }
 
 func DefaultExecutionPolicy() domain.ExecutionPolicy {
-	cfg := config.GetEngineConfig().Executors
 	return domain.ExecutionPolicy{
-		ConvictionFloor:         cfg.ConvictionFloorDefault,
-		RequireCROPass:          true,
-		MomentumCrashProtection: true,
+		ConvictionFloor: 50,
+		RequireCROPass:  true,
 	}
 }
 

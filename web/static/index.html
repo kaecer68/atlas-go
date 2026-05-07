@@ -1262,7 +1262,9 @@ const SECTOR_NAME_MAP = {
   'TAIEX': '台股大盤',
   'GPR_index': '地緣政治風險指數',
   'EM_currencies': '新興市場貨幣',
-  'foreign_flow_TW': '外資流向_台股'
+  'foreign_flow_TW': '外資流向_台股',
+  'control': '控制層',
+  '其他': '其他'
 };
 function sectorName(s) { return SECTOR_NAME_MAP[s] || s; }
 
@@ -2778,9 +2780,9 @@ function renderRiskCards(data, pipelineData) {
     <div class="panel" style="text-align:center"><div class="kpi-label">VaR 95%</div><div class="kpi-value" style="color:var(--down)">${insufficient ? '資料不足' : fmtPct(rs.var_95)}</div><div class="kpi-hint">95% 信賴區間最大虧損</div></div>
     <div class="panel" style="text-align:center"><div class="kpi-label">CVaR 95%</div><div class="kpi-value" style="color:var(--down)">${insufficient ? '資料不足' : fmtPct(rs.cvar_95)}</div><div class="kpi-hint">95% 條件期望虧損</div></div>
     <div class="panel" style="text-align:center"><div class="kpi-label">最大回撤</div><div class="kpi-value" style="color:var(--warn)">${insufficient ? '資料不足' : fmtPct(rs.max_drawdown_pct)}</div><div class="kpi-hint">歷史最大回撤幅度</div></div>
-    <div class="panel" style="text-align:center"><div class="kpi-label">投組 Sharpe</div><div class="kpi-value" style="color:${portfolioSharpe !== null ? (portfolioSharpe > 1 ? 'var(--up)' : (portfolioSharpe < 0 ? 'var(--down)' : 'var(--warn)')) : 'var(--muted)'}"">${portfolioSharpe !== null ? portfolioSharpe.toFixed(2) : 'N/A'}</div><div class="kpi-hint">風險調整後收益比</div></div>
+    <div class="panel" style="text-align:center"><div class="kpi-label">投組 Sharpe</div><div class="kpi-value" style="color:${portfolioSharpe !== null ? (portfolioSharpe > 1 ? 'var(--up)' : (portfolioSharpe < 0 ? 'var(--down)' : 'var(--warn)')) : 'var(--muted)'}">${portfolioSharpe !== null ? portfolioSharpe.toFixed(2) : 'N/A'}</div><div class="kpi-hint">風險調整後收益比</div></div>
     <div class="panel" style="text-align:center"><div class="kpi-label">放行標的數</div><div class="kpi-value">${passedItems.length}</div><div class="kpi-hint">控制層放行進模擬投組</div></div>
-    <div class="panel" style="text-align:center"><div class="kpi-label">資料點數</div><div class="kpi-value" style="color:${rs.data_points < 30 ? 'var(--warn)' : 'var(--up)'}"">${rs.data_points || 0}</div><div class="kpi-hint">統計可信度 ${rs.data_points >= 30 ? '充足' : '不足'}</div></div>
+    <div class="panel" style="text-align:center"><div class="kpi-label">資料點數</div><div class="kpi-value" style="color:${rs.data_points < 30 ? 'var(--warn)' : 'var(--up)'}">${rs.data_points || 0}</div><div class="kpi-hint">統計可信度 ${rs.data_points >= 30 ? '充足' : '不足'}</div></div>
   `;
 
   // 渲染倉位集中度
@@ -3761,12 +3763,13 @@ async function loadPageData(pageId) {
       break;
     case 'live':
       try {
-        const [live, risk] = await Promise.all([
+        const [live, risk, pipelineData] = await Promise.all([
           getJSON('/api/dashboard/live-status').catch(() => null),
           getJSON('/api/dashboard/risk').catch(() => null),
+          getJSON('/api/dashboard/recommendation-pipeline').catch(() => null),
         ]);
         renderLiveStatus(live);
-        renderRiskCards(risk);
+        renderRiskCards(risk, pipelineData);
       } catch (e) { console.error('Failed to load live status:', e); }
       break;
     case 'portfolio':
