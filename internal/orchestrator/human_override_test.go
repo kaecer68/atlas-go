@@ -22,7 +22,7 @@ func TestApplyHumanOverridesFiltersPausedAgentsAndBannedSectors(t *testing.T) {
 		TargetSector: "ai_supply_chain",
 	})
 
-	sys := &System{SystemCore: &SystemCore{ledger: store, registry: SeedRegistry()}}
+	sys := &System{SystemCore: &SystemCore{SimulationCore: SimulationCore{ledger: store, registry: SeedRegistry()}}}
 
 	recs := []domain.Recommendation{
 		{Agent: "growth-momentum-01", Skill: "growth_momentum", Symbol: "2317.TW"},
@@ -67,7 +67,7 @@ func TestApplyHumanOverridesResumesAgentAndUnbansSector(t *testing.T) {
 		TargetAgentID: "growth-momentum-01",
 	})
 
-	sys := &System{SystemCore: &SystemCore{ledger: store, registry: SeedRegistry()}}
+	sys := &System{SystemCore: &SystemCore{SimulationCore: SimulationCore{ledger: store, registry: SeedRegistry()}}}
 
 	recs := []domain.Recommendation{
 		{Agent: "growth-momentum-01", Skill: "growth_momentum", Symbol: "2317.TW"},
