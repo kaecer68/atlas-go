@@ -7,49 +7,20 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/eventbus"
-	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 const (
-	// DEPRECATED: Use RuntimeParameters instead. These constants exist for test compatibility.
-	DarwinianWeightMin = 0.3
-	// DEPRECATED: Use RuntimeParameters instead. These constants exist for test compatibility.
-	DarwinianWeightMax = 2.5
-	// DEPRECATED: Use RuntimeParameters instead. These constants exist for test compatibility.
-	DarwinianNeutralWeight = 1.0
-	// DEPRECATED: Use RuntimeParameters instead. These constants exist for test compatibility.
-	TopQuartileMultiplier = 1.05
-	// DEPRECATED: Use RuntimeParameters instead. These constants exist for test compatibility.
+	DarwinianWeightMin       = 0.3
+	DarwinianWeightMax       = 2.5
+	DarwinianNeutralWeight   = 1.0
+	TopQuartileMultiplier    = 1.05
 	BottomQuartileMultiplier = 0.95
-	// DEPRECATED: Use RuntimeParameters instead. These constants exist for test compatibility.
-	DailyAdjustmentCooldown = 20 * time.Hour
+	DailyAdjustmentCooldown  = 20 * time.Hour
 )
-
-// ConvictionClampingEvent records when a conviction value was clamped.
-type ConvictionClampingEvent struct {
-	AgentID         string    `json:"agent_id"`
-	Symbol          string    `json:"symbol"`
-	RawConviction   int       `json:"raw_conviction"`
-	FinalConviction int       `json:"final_conviction"`
-	Weight          float64   `json:"weight"`
-	Boundary        string    `json:"boundary"`
-	Timestamp       time.Time `json:"timestamp"`
-}
-
-// ClampingEvent records when a weight was clamped to a boundary.
-type ClampingEvent struct {
-	AgentID     string    `json:"agent_id"`
-	RawWeight   float64   `json:"raw_weight"`
-	FinalWeight float64   `json:"final_weight"`
-	Boundary    string    `json:"boundary"`
-	Timestamp   time.Time `json:"timestamp"`
-}
 
 // DarwinianAgentWeight represents an agent's Darwinian weight with performance tracking
 type DarwinianAgentWeight struct {
@@ -66,129 +37,61 @@ type DarwinianAgentWeight struct {
 	AvgReturn         float64   `json:"avg_return"`
 	LastAdjustedAt    time.Time `json:"last_adjusted_at"`
 	LastUpdatedAt     time.Time `json:"last_updated_at"`
-	DailyReturns      []float64 `json:"daily_returns"` // Last 20 days returns for Sharpe calc
+	DailyReturns      []float64 `json:"daily_returns"`
+	FirstSignalDate   time.Time `json:"first_signal_date"`
+}
+
+// DarwinianConfig holds configurable parameters for weight management.
+type DarwinianConfig struct {
+	RollingWindowDays      int     `json:"rolling_window_days"`
+	UseExponentialDecay    bool    `json:"use_exponential_decay"`
+	DecayHalfLifeDays      int     `json:"decay_half_life_days"`
+	NewAgentProtectionDays int     `json:"new_agent_protection_days"`
+	NewAgentFixedWeight    float64 `json:"new_agent_fixed_weight"`
+	MinAdjustmentInterval  int     `json:"min_adjustment_interval"`
+	WeightMomentumFactor   float64 `json:"weight_momentum_factor"`
+}
+
+// DefaultDarwinianConfig returns sensible defaults.
+func DefaultDarwinianConfig() DarwinianConfig {
+	return DarwinianConfig{
+		RollingWindowDays:      60,
+		UseExponentialDecay:    true,
+		DecayHalfLifeDays:      10,
+		NewAgentProtectionDays: 30,
+		NewAgentFixedWeight:    1.0,
+		MinAdjustmentInterval:  3,
+		WeightMomentumFactor:   0.2,
+	}
 }
 
 // DarwinianWeightManager implements Atlas-GIC style Darwinian weight system
 type DarwinianWeightManager struct {
 	weights      map[string]*DarwinianAgentWeight
 	configPath   string
-	historyPath  string
 	lookbackDays int
-	params       *RuntimeParameters
+	config       DarwinianConfig
 	mu           sync.RWMutex
-	eventBus     *eventbus.ChannelEventBus
 }
 
 // NewDarwinianWeightManager creates a new Darwinian weight manager
 func NewDarwinianWeightManager(configPath string) *DarwinianWeightManager {
-	params := DefaultRuntimeParameters()
 	return &DarwinianWeightManager{
 		weights:      make(map[string]*DarwinianAgentWeight),
 		configPath:   configPath,
-		historyPath:  "",
-		lookbackDays: params.Darwinian.LookbackDays,
-		params:       params,
+		lookbackDays: 20,
+		config:       DefaultDarwinianConfig(),
 	}
 }
 
-// WithParameters sets runtime parameters for the manager.
-// Call this immediately after NewDarwinianWeightManager to override defaults.
-func (m *DarwinianWeightManager) WithParameters(p *RuntimeParameters) *DarwinianWeightManager {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if p != nil {
-		m.params = p
-		m.lookbackDays = p.Darwinian.LookbackDays
+// NewDarwinianWeightManagerWithConfig creates a manager with custom config.
+func NewDarwinianWeightManagerWithConfig(configPath string, cfg DarwinianConfig) *DarwinianWeightManager {
+	return &DarwinianWeightManager{
+		weights:      make(map[string]*DarwinianAgentWeight),
+		configPath:   configPath,
+		lookbackDays: 20,
+		config:       cfg,
 	}
-	return m
-}
-
-func (m *DarwinianWeightManager) WithHistoryPath(path string) *DarwinianWeightManager {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.historyPath = path
-	return m
-}
-
-// AppendSnapshot appends current weights as a timestamped history entry to the JSONL file.
-func (m *DarwinianWeightManager) AppendSnapshot() error {
-	if m.historyPath == "" {
-		return nil
-	}
-	m.mu.RLock()
-	snapshot := DarwinianSnapshot{
-		Timestamp: time.Now(),
-		Weights:   make(map[string]DarwinianAgentWeight, len(m.weights)),
-	}
-	for id, w := range m.weights {
-		cp := *w
-		cp.DailyReturns = make([]float64, len(w.DailyReturns))
-		copy(cp.DailyReturns, w.DailyReturns)
-		snapshot.Weights[id] = cp
-	}
-	m.mu.RUnlock()
-
-	data, err := json.Marshal(snapshot)
-	if err != nil {
-		return fmt.Errorf("marshal snapshot: %w", err)
-	}
-	dir := filepath.Dir(m.historyPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("create history dir: %w", err)
-	}
-	f, err := os.OpenFile(m.historyPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("open history file: %w", err)
-	}
-	defer f.Close()
-	if _, err := f.Write(append(data, '\n')); err != nil {
-		return fmt.Errorf("append snapshot: %w", err)
-	}
-	return nil
-}
-
-type DarwinianSnapshot struct {
-	Timestamp time.Time                       `json:"timestamp"`
-	Weights   map[string]DarwinianAgentWeight `json:"weights"`
-}
-
-// LoadHistory loads up to limit recent snapshots from the JSONL history file.
-// Returns snapshots in reverse chronological order (newest first, oldest last).
-// The frontend reverses this again for sparkline display to show oldest-to-newest.
-func (m *DarwinianWeightManager) LoadHistory(limit int) ([]DarwinianSnapshot, error) {
-	if m.historyPath == "" {
-		return nil, nil
-	}
-	data, err := os.ReadFile(m.historyPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("read history: %w", err)
-	}
-	var snapshots []DarwinianSnapshot
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	for i := len(lines) - 1; i >= 0 && len(snapshots) < limit; i-- {
-		line := strings.TrimSpace(lines[i])
-		if line == "" {
-			continue
-		}
-		var snap DarwinianSnapshot
-		if err := json.Unmarshal([]byte(line), &snap); err != nil {
-			continue
-		}
-		snapshots = append(snapshots, snap)
-	}
-	return snapshots, nil
-}
-
-// WithEventBus sets the event bus for publishing clamping events.
-func (m *DarwinianWeightManager) WithEventBus(eb *eventbus.ChannelEventBus) *DarwinianWeightManager {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.eventBus = eb
-	return m
 }
 
 // InitializeFromRegistry initializes weights from agent registry
@@ -210,7 +113,7 @@ func (m *DarwinianWeightManager) InitializeFromRegistry(registry domain.AgentReg
 			// Use agent's DarwinianWeight if specified, otherwise use neutral weight
 			initialWeight := agent.DarwinianWeight
 			if initialWeight <= 0 {
-				initialWeight = m.params.Darwinian.WeightNeutral
+				initialWeight = DarwinianNeutralWeight
 			}
 
 			m.weights[agent.ID] = &DarwinianAgentWeight{
@@ -248,7 +151,7 @@ func (m *DarwinianWeightManager) RecordOutcome(agentID string, forwardReturn flo
 	}
 
 	// Update average return with EMA
-	alpha := m.params.Darwinian.EMAAlpha
+	alpha := 0.3 // smoothing factor
 	if w.TotalSignals == 1 {
 		w.AvgReturn = forwardReturn
 	} else {
@@ -293,14 +196,12 @@ func (m *DarwinianWeightManager) updateRollingMetrics(w *DarwinianAgentWeight) {
 	for _, r := range recentReturns {
 		variance += (r - mean) * (r - mean)
 	}
-	w.RollingVolatility = math.Sqrt(variance / float64(len(recentReturns)))
+	w.RollingVolatility = variance / float64(len(recentReturns))
 }
 
-// calculateSharpe calculates Sharpe ratio for a series of returns.
-// Returns 0 if the series has insufficient data, near-zero variance (IEEE 754
-// precision edge case), or negative mean (upside-down risk profile).
+// calculateSharpe calculates Sharpe ratio for a series of returns
 func (m *DarwinianWeightManager) calculateSharpe(returns []float64) float64 {
-	if len(returns) < m.params.Darwinian.SharpeMinSampleSize {
+	if len(returns) < 5 {
 		return 0.0
 	}
 
@@ -311,65 +212,57 @@ func (m *DarwinianWeightManager) calculateSharpe(returns []float64) float64 {
 	}
 	mean := sum / float64(len(returns))
 
-	// Guard: negative mean means upside-down risk profile, not a good signal
-	if mean <= 0 {
-		return 0.0
-	}
-
 	// Calculate standard deviation
 	var variance float64
 	for _, r := range returns {
-		diff := r - mean
-		variance += diff * diff
+		variance += (r - mean) * (r - mean)
 	}
-	stdDev := math.Sqrt(variance / float64(len(returns)-1))
-
-	// Guard: near-zero stdDev catches IEEE 754 precision edge case where
-	// identical values produce non-zero variance (e.g. all 0.02 returns).
-	// Use relative threshold: stdDev/mean < 0.001 means effectively zero variance.
-	if stdDev == 0 || stdDev/mean < m.params.Darwinian.StdDevMeanRatioThreshold {
+	stdDev := variance / float64(len(returns))
+	if stdDev == 0 {
 		return 0.0
 	}
 
 	// Sharpe = mean / stdDev (assuming risk-free rate = 0 for simplicity)
-	return (mean / stdDev) * math.Sqrt(252)
+	return mean / stdDev
 }
 
-// PerformDailyAdjustment performs the daily Darwinian weight adjustment.
-// Enhanced algorithm with performance-based scaling and volatility adjustment.
-// Returns adjustments map and any clamping events that occurred.
-func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, []ClampingEvent) {
+// PerformDailyAdjustment performs the daily Darwinian weight adjustment
+// Enhanced algorithm with performance-based scaling and volatility adjustment
+func (m *DarwinianWeightManager) PerformDailyAdjustment() map[string]float64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	adjustments := make(map[string]float64)
-	var clampingEvents []ClampingEvent
-
-	// Check cooldown and collect eligible agents
 	now := time.Now()
 	eligible := make([]*DarwinianAgentWeight, 0)
 
 	for _, w := range m.weights {
-		if now.Sub(w.LastAdjustedAt) >= m.params.Darwinian.DailyAdjustmentCooldown {
+		if m.isNewAgent(w, now) {
+			w.Weight = m.config.NewAgentFixedWeight
+			continue
+		}
+
+		if m.isInCooldown(w, now) {
+			continue
+		}
+
+		if now.Sub(w.LastAdjustedAt) >= DailyAdjustmentCooldown {
 			eligible = append(eligible, w)
 		}
 	}
 
 	if len(eligible) < 2 {
-		return adjustments, clampingEvents
+		return adjustments
 	}
 
-	// Calculate performance metrics for all eligible agents
 	for _, w := range eligible {
-		m.updateRollingMetrics(w)
+		m.updateRollingMetricsWithConfig(w)
 	}
 
-	// Sort by rolling Sharpe ratio
 	sort.Slice(eligible, func(i, j int) bool {
 		return eligible[i].RollingSharpe > eligible[j].RollingSharpe
 	})
 
-	// Enhanced adjustment algorithm
 	n := len(eligible)
 	topTier := n / 3
 	if topTier < 1 {
@@ -380,98 +273,58 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		bottomTier = 1
 	}
 
-	// Top tier: significant increase with performance scaling
 	for i := 0; i < topTier; i++ {
 		w := eligible[i]
 		oldWeight := w.Weight
 
-		// Normalize Sharpe to [0,1] before using in bonus.
-		// Using sigmoid-like: sharpe/(sharpe+2.0) ensures:
-		//   Sharpe 0 → 0 (no bonus)
-		//   Sharpe 2 → ~0.5 (moderate bonus)
-		//   Sharpe 4+ → →1.0 (capped bonus)
-		// This prevents overflow from IEEE 754 edge cases in calculateSharpe.
-		denom := m.params.Darwinian.SharpeNormalizeDenom
-		normalizedSharpe := w.RollingSharpe / (w.RollingSharpe + denom)
-		performanceBonus := 1.0 + normalizedSharpe*m.params.Darwinian.MaxPerformanceBonusPct
-
+		performanceBonus := 1.0 + (w.RollingSharpe * 0.1)
 		volatilityPenalty := 1.0
-		if w.RollingVolatility > m.params.Darwinian.VolatilityPenaltyThreshold {
-			volatilityPenalty = m.params.Darwinian.VolatilityPenaltyMultiplier
+		if w.RollingVolatility > 0.05 {
+			volatilityPenalty = 0.95
 		}
 
-		multiplier := m.params.Darwinian.TopQuartileMultiplier * performanceBonus * volatilityPenalty
-		clamped, event := m.constrainWeight(w.AgentID, oldWeight*multiplier)
-		w.Weight = clamped
-		if event != nil {
-			clampingEvents = append(clampingEvents, *event)
-		}
+		multiplier := TopQuartileMultiplier * performanceBonus * volatilityPenalty
+		targetWeight := m.constrainWeight(oldWeight * multiplier)
+
+		w.Weight = oldWeight + (targetWeight-oldWeight)*m.config.WeightMomentumFactor
+		w.Weight = m.constrainWeight(w.Weight)
 		w.LastAdjustedAt = now
-
 		adjustments[w.AgentID] = w.Weight - oldWeight
 	}
 
-	// Middle tier: maintain or slight adjustment
 	for i := topTier; i < n-bottomTier; i++ {
 		w := eligible[i]
 		oldWeight := w.Weight
 
-		// Slight adjustment based on hit rate
-		if w.HitRate > m.params.Darwinian.HitRateHighThreshold {
-			clamped, event := m.constrainWeight(w.AgentID, oldWeight*m.params.Darwinian.MiddleTierBoostMultiplier)
-			w.Weight = clamped
-			if event != nil {
-				clampingEvents = append(clampingEvents, *event)
-			}
-		} else if w.HitRate < m.params.Darwinian.HitRateLowThreshold {
-			clamped, event := m.constrainWeight(w.AgentID, oldWeight*m.params.Darwinian.MiddleTierCutMultiplier)
-			w.Weight = clamped
-			if event != nil {
-				clampingEvents = append(clampingEvents, *event)
-			}
+		if w.HitRate > 0.6 {
+			w.Weight = m.constrainWeight(oldWeight * 1.02)
+		} else if w.HitRate < 0.4 {
+			w.Weight = m.constrainWeight(oldWeight * 0.98)
 		}
 
 		w.LastAdjustedAt = now
 		adjustments[w.AgentID] = w.Weight - oldWeight
 	}
 
-	// Bottom tier: decrease with risk consideration
 	for i := n - bottomTier; i < n; i++ {
 		w := eligible[i]
 		oldWeight := w.Weight
 
-		// Risk-based reduction: poor performance + high volatility = bigger cut
 		riskMultiplier := 1.0
-		if w.RollingVolatility > m.params.Darwinian.RiskVolatilityThreshold {
-			riskMultiplier = m.params.Darwinian.RiskMultiplier
+		if w.RollingVolatility > 0.08 {
+			riskMultiplier = 0.9
 		}
 
-		multiplier := m.params.Darwinian.BottomQuartileMultiplier * riskMultiplier
-		clamped, event := m.constrainWeight(w.AgentID, oldWeight*multiplier)
-		w.Weight = clamped
-		if event != nil {
-			clampingEvents = append(clampingEvents, *event)
-		}
+		multiplier := BottomQuartileMultiplier * riskMultiplier
+		targetWeight := m.constrainWeight(oldWeight * multiplier)
+
+		w.Weight = oldWeight + (targetWeight-oldWeight)*m.config.WeightMomentumFactor
+		w.Weight = m.constrainWeight(w.Weight)
 		w.LastAdjustedAt = now
-
 		adjustments[w.AgentID] = w.Weight - oldWeight
 	}
 
-	if len(clampingEvents) > 0 && m.eventBus != nil {
-		payloads := make([]eventbus.ClampingEventPayload, len(clampingEvents))
-		for i, e := range clampingEvents {
-			payloads[i] = eventbus.ClampingEventPayload{
-				AgentID:     e.AgentID,
-				RawWeight:   e.RawWeight,
-				FinalWeight: e.FinalWeight,
-				Boundary:    e.Boundary,
-				Timestamp:   e.Timestamp,
-			}
-		}
-		_ = m.eventBus.PublishDarwinianClamping(payloads)
-	}
-
-	return adjustments, clampingEvents
+	return adjustments
 }
 
 // rankBySharpe ranks agents by rolling Sharpe ratio (descending)
@@ -488,32 +341,15 @@ func (m *DarwinianWeightManager) rankBySharpe() []*DarwinianAgentWeight {
 	return agents
 }
 
-// constrainWeight ensures weight stays within configured bounds.
-// Must be called while holding m.mu (either read or write lock).
-func (m *DarwinianWeightManager) constrainWeight(agentID string, weight float64) (float64, *ClampingEvent) {
-	minW := m.params.Darwinian.WeightMin
-	maxW := m.params.Darwinian.WeightMax
-	if weight < minW {
-		logging.Warn("darwinian_weights", "weight_clamped_min", logging.AgentID(agentID), logging.FFloat64("weight", weight), logging.FFloat64("min", minW))
-		return minW, &ClampingEvent{
-			AgentID:     agentID,
-			RawWeight:   weight,
-			FinalWeight: minW,
-			Boundary:    "min",
-			Timestamp:   time.Now(),
-		}
+// constrainWeight ensures weight stays within [0.3, 2.5] bounds
+func (m *DarwinianWeightManager) constrainWeight(weight float64) float64 {
+	if weight < DarwinianWeightMin {
+		return DarwinianWeightMin
 	}
-	if weight > maxW {
-		logging.Warn("darwinian_weights", "weight_clamped_max", logging.AgentID(agentID), logging.FFloat64("weight", weight), logging.FFloat64("max", maxW))
-		return maxW, &ClampingEvent{
-			AgentID:     agentID,
-			RawWeight:   weight,
-			FinalWeight: maxW,
-			Boundary:    "max",
-			Timestamp:   time.Now(),
-		}
+	if weight > DarwinianWeightMax {
+		return DarwinianWeightMax
 	}
-	return weight, nil
+	return weight
 }
 
 // GetWeight gets the Darwinian weight for an agent
@@ -524,7 +360,7 @@ func (m *DarwinianWeightManager) GetWeight(agentID string) float64 {
 	if w, ok := m.weights[agentID]; ok {
 		return w.Weight
 	}
-	return m.params.Darwinian.WeightNeutral
+	return DarwinianNeutralWeight
 }
 
 // GetAllWeights gets all agent weights
@@ -636,7 +472,7 @@ func (m *DarwinianWeightManager) Save() error {
 	// Ensure directory exists
 	dir := filepath.Dir(m.configPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("create directory: %w", err)
+		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
 	data := struct {
@@ -651,11 +487,11 @@ func (m *DarwinianWeightManager) Save() error {
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal weights: %w", err)
+		return fmt.Errorf("failed to marshal weights: %w", err)
 	}
 
 	if err := os.WriteFile(m.configPath, jsonData, 0644); err != nil {
-		return fmt.Errorf("write weights file: %w", err)
+		return fmt.Errorf("failed to write weights file: %w", err)
 	}
 
 	return nil
@@ -672,7 +508,7 @@ func (m *DarwinianWeightManager) Load() error {
 			// File doesn't exist yet, that's ok
 			return nil
 		}
-		return fmt.Errorf("read weights file: %w", err)
+		return fmt.Errorf("failed to read weights file: %w", err)
 	}
 
 	var saved struct {
@@ -682,7 +518,7 @@ func (m *DarwinianWeightManager) Load() error {
 	}
 
 	if err := json.Unmarshal(data, &saved); err != nil {
-		return fmt.Errorf("unmarshal weights: %w", err)
+		return fmt.Errorf("failed to unmarshal weights: %w", err)
 	}
 
 	m.weights = saved.Weights
@@ -696,9 +532,8 @@ func (m *DarwinianWeightManager) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	neutral := m.params.Darwinian.WeightNeutral
 	for _, w := range m.weights {
-		w.Weight = neutral
+		w.Weight = DarwinianNeutralWeight
 		w.RollingSharpe = 0
 		w.DailyReturns = w.DailyReturns[:0]
 		w.LastAdjustedAt = time.Now()
@@ -715,7 +550,7 @@ func (m *DarwinianWeightManager) ResetAgent(agentID string) bool {
 		return false
 	}
 
-	w.Weight = m.params.Darwinian.WeightNeutral
+	w.Weight = DarwinianNeutralWeight
 	w.RollingSharpe = 0
 	w.DailyReturns = w.DailyReturns[:0]
 	w.LastAdjustedAt = time.Now()
@@ -730,67 +565,46 @@ func (m *DarwinianWeightManager) RemoveAgent(agentID string) {
 	delete(m.weights, agentID)
 }
 
-// ApplyDarwinianWeightsWithEvents applies Darwinian weights and returns clamping events for monitoring.
-// This is the preferred method when you need audit trail of conviction clamping.
-func (m *DarwinianWeightManager) ApplyDarwinianWeightsWithEvents(
+// ApplyDarwinianWeights applies Darwinian weights to recommendations
+// Returns weighted recommendations where conviction is scaled by agent weight
+func (m *DarwinianWeightManager) ApplyDarwinianWeights(
 	recommendations []domain.Recommendation,
-) ([]domain.Recommendation, []ConvictionClampingEvent) {
+) []domain.Recommendation {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	weighted := make([]domain.Recommendation, 0, len(recommendations))
-	var clampingEvents []ConvictionClampingEvent
 
 	for _, rec := range recommendations {
-		weight := m.params.Darwinian.WeightNeutral
+		weight := DarwinianNeutralWeight
 		if w, ok := m.weights[rec.Agent]; ok {
 			weight = w.Weight
 		}
 
-		rawConviction := rec.Conviction
+		// Scale conviction by weight
+		// weight 2.5 = conviction × 2.5 (max 250 if conviction was 100)
+		// weight 0.3 = conviction × 0.3 (min 3 if conviction was 10)
 		weightedConviction := int(float64(rec.Conviction) * weight)
 
-		clampMin := m.params.Darwinian.ConvictionClampMin
-		clampMax := m.params.Darwinian.ConvictionClampMax
-		boundary := ""
-		if weightedConviction > clampMax {
-			boundary = "max"
-			weightedConviction = clampMax
-		} else if weightedConviction < clampMin {
-			boundary = "min"
-			weightedConviction = clampMin
+		// Clamp to valid range
+		if weightedConviction > 250 {
+			weightedConviction = 250
 		}
-
-		if boundary != "" {
-			clampingEvents = append(clampingEvents, ConvictionClampingEvent{
-				AgentID:         rec.Agent,
-				Symbol:          rec.Symbol,
-				RawConviction:   rawConviction,
-				FinalConviction: weightedConviction,
-				Weight:          weight,
-				Boundary:        boundary,
-				Timestamp:       time.Now(),
-			})
+		if weightedConviction < 1 {
+			weightedConviction = 1
 		}
 
 		weighted = append(weighted, domain.Recommendation{
-			Agent:               rec.Agent,
-			Skill:               rec.Skill,
-			Layer:               rec.Layer,
-			Symbol:              rec.Symbol,
-			Side:                rec.Side,
-			Conviction:          weightedConviction,
-			TargetPrice:         rec.TargetPrice,
-			StopLossPrice:       rec.StopLossPrice,
-			Reason:              fmt.Sprintf("%s [DW:%.2f]", rec.Reason, weight),
-			ReasoningChain:      rec.ReasoningChain,
-			SupportingEvents:    rec.SupportingEvents,
-			FactorScores:        rec.FactorScores,
-			ConvictionBreakdown: rec.ConvictionBreakdown,
+			Agent:      rec.Agent,
+			Skill:      rec.Skill,
+			Symbol:     rec.Symbol,
+			Side:       rec.Side,
+			Conviction: weightedConviction,
+			Reason:     fmt.Sprintf("%s [DW:%.2f]", rec.Reason, weight),
 		})
 	}
 
-	return weighted, clampingEvents
+	return weighted
 }
 
 // DarwinianWeightReport represents a comprehensive weight status report
@@ -899,12 +713,136 @@ func (m *DarwinianWeightManager) SaveReport(path string) error {
 
 	data, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal report: %w", err)
+		return fmt.Errorf("failed to marshal report: %w", err)
 	}
 
 	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("write report: %w", err)
+		return fmt.Errorf("failed to write report: %w", err)
 	}
 
 	return nil
+}
+
+func calculateExponentialWeights(days int, halfLife int) []float64 {
+	weights := make([]float64, days)
+	lambda := math.Ln2 / float64(halfLife)
+
+	total := 0.0
+	for i := 0; i < days; i++ {
+		w := math.Exp(-lambda * float64(days-1-i))
+		weights[i] = w
+		total += w
+	}
+
+	for i := range weights {
+		weights[i] /= total
+	}
+	return weights
+}
+
+func (m *DarwinianWeightManager) isNewAgent(w *DarwinianAgentWeight, now time.Time) bool {
+	if w.FirstSignalDate.IsZero() {
+		return true
+	}
+	daysSinceFirst := int(now.Sub(w.FirstSignalDate).Hours() / 24)
+	return daysSinceFirst < m.config.NewAgentProtectionDays
+}
+
+func (m *DarwinianWeightManager) isInCooldown(w *DarwinianAgentWeight, now time.Time) bool {
+	if w.LastAdjustedAt.IsZero() {
+		return false
+	}
+	daysSinceAdjust := int(now.Sub(w.LastAdjustedAt).Hours() / 24)
+	return daysSinceAdjust < m.config.MinAdjustmentInterval
+}
+
+func (m *DarwinianWeightManager) updateRollingMetricsWithConfig(w *DarwinianAgentWeight) {
+	if len(w.DailyReturns) == 0 {
+		w.RollingSharpe = 0
+		w.RollingVolatility = 0
+		return
+	}
+
+	returns := w.DailyReturns
+	if len(returns) > m.config.RollingWindowDays {
+		returns = returns[len(returns)-m.config.RollingWindowDays:]
+	}
+
+	if m.config.UseExponentialDecay {
+		weights := calculateExponentialWeights(len(returns), m.config.DecayHalfLifeDays)
+		w.RollingSharpe = calculateWeightedSharpe(returns, weights)
+	} else {
+		w.RollingSharpe = calculateSimpleSharpe(returns)
+	}
+
+	w.RollingVolatility = calculateVolatility(returns)
+}
+
+func calculateWeightedSharpe(returns, weights []float64) float64 {
+	if len(returns) != len(weights) {
+		return 0
+	}
+
+	weightedAvg := 0.0
+	for i, r := range returns {
+		weightedAvg += r * weights[i]
+	}
+
+	weightedVar := 0.0
+	for i, r := range returns {
+		diff := r - weightedAvg
+		weightedVar += weights[i] * diff * diff
+	}
+
+	if weightedVar == 0 {
+		return 0
+	}
+
+	return weightedAvg / math.Sqrt(weightedVar)
+}
+
+func calculateSimpleSharpe(returns []float64) float64 {
+	if len(returns) == 0 {
+		return 0
+	}
+
+	avg := 0.0
+	for _, r := range returns {
+		avg += r
+	}
+	avg /= float64(len(returns))
+
+	variance := 0.0
+	for _, r := range returns {
+		diff := r - avg
+		variance += diff * diff
+	}
+	variance /= float64(len(returns))
+
+	if variance == 0 {
+		return 0
+	}
+
+	return avg / math.Sqrt(variance)
+}
+
+func calculateVolatility(returns []float64) float64 {
+	if len(returns) == 0 {
+		return 0
+	}
+
+	avg := 0.0
+	for _, r := range returns {
+		avg += r
+	}
+	avg /= float64(len(returns))
+
+	variance := 0.0
+	for _, r := range returns {
+		diff := r - avg
+		variance += diff * diff
+	}
+	variance /= float64(len(returns))
+
+	return math.Sqrt(variance)
 }
