@@ -149,6 +149,30 @@ func (s *Store) RecordExperiment(record domain.ExperimentRecord) error {
 	return json.NewEncoder(f).Encode(record)
 }
 
+// LoadExperiments reads all experiment records from experiments.jsonl.
+func (s *Store) LoadExperiments() ([]domain.ExperimentRecord, error) {
+	path := filepath.Join(s.baseDir, "experiments.jsonl")
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("open experiments file: %w", err)
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	records := make([]domain.ExperimentRecord, 0)
+	for scanner.Scan() {
+		var record domain.ExperimentRecord
+		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
+			return nil, fmt.Errorf("decode experiment record: %w", err)
+		}
+		records = append(records, record)
+	}
+	return records, scanner.Err()
+}
+
 func (s *Store) RecordSessionExperiment(session domain.ReplaySession, record domain.ExperimentRecord) error {
 	if err := os.MkdirAll(s.sessionDir(session.ID), 0o755); err != nil {
 		return fmt.Errorf("mkdir session dir: %w", err)
