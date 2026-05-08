@@ -3,7 +3,6 @@ package live
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"os"
 	"strings"
 	"testing"
