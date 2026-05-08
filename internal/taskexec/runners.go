@@ -280,7 +280,7 @@ func (r *backtestWindowRunner) Run(ctx context.Context, req SubmitRequest, sink 
 	default:
 	}
 
-	runner := backtest.NewRunner(r.cfg)
+	runner := backtest.NewRunner(r.cfg, ledger.NewStore(r.cfg.LedgerDir))
 	summary, err := runner.Run(startDate, endDate)
 	if err != nil {
 		return fmt.Errorf("run backtest window: %w", err)

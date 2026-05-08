@@ -97,6 +97,8 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	var outcomeStore ledger.OutcomeStore
 	if a.repo != nil {
 		outcomeStore = NewDualWriteOutcomeStoreAdapter(a.repo)
+	} else {
+		outcomeStore = ledger.NewStore(a.ledgerDir)
 	}
 
 	pipelineSvc := service.NewPipelineService(a.workDir, a.ledgerDir, outcomeStore)

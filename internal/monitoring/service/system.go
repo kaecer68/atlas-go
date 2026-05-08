@@ -38,13 +38,6 @@ func NewSystemService(workDir, ledgerDir, baselinePath string, store ledger.Outc
 	}
 }
 
-func (s *SystemService) getStore() ledger.OutcomeStore {
-	if s.store != nil {
-		return s.store
-	}
-	return ledger.NewStore(s.LedgerDir)
-}
-
 // LoadPhase3Status loads Phase 3 metrics from the well-known path.
 func (s *SystemService) LoadPhase3Status() (orchestrator.Phase3Metrics, error) {
 	return orchestrator.LoadPhase3Metrics("")
@@ -120,9 +113,9 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 	}
 
 	// Crowding check from latest session outcomes
-	latestSummary, _ := FindLatestSessionSummary(s.getStore(), s.LedgerDir)
+	latestSummary, _ := FindLatestSessionSummary(s.store, s.LedgerDir)
 	if latestSummary != nil {
-		outcomes, _ := s.getStore().LoadSessionOutcomes(latestSummary.SessionID)
+		outcomes, _ := s.store.LoadSessionOutcomes(latestSummary.SessionID)
 		symbolAgents := make(map[string]map[string]struct{})
 		for _, outcome := range outcomes {
 			if symbolAgents[outcome.Symbol] == nil {
@@ -140,7 +133,7 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 		}
 	}
 	regime := domain.RegimeNeutral
-	if summary, err := FindLatestSessionSummary(s.getStore(), s.LedgerDir); err == nil && summary != nil {
+	if summary, err := FindLatestSessionSummary(s.store, s.LedgerDir); err == nil && summary != nil {
 		regime = summary.Regime
 	}
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
 func writeTestSessionArtifacts(t *testing.T, baseDir, sessionID string, summary domain.SessionSummary, outcome domain.RecommendationOutcome) {
@@ -148,7 +149,7 @@ func TestLoadAgentObservatoryReadsFromSessionScope(t *testing.T) {
 		},
 	)
 
-	svc := NewPipelineService(baseDir, baseDir, nil)
+	svc := NewPipelineService(baseDir, baseDir, ledger.NewStore(baseDir))
 	data, err := svc.LoadAgentObservatory(sessionID, 10)
 	if err != nil {
 		t.Fatalf("LoadAgentObservatory: %v", err)
@@ -198,7 +199,7 @@ func TestLoadForecastVsRealityReadsPredictionsFromSelectedSession(t *testing.T) 
 		},
 	)
 
-	svc := NewPipelineService(baseDir, baseDir, nil)
+	svc := NewPipelineService(baseDir, baseDir, ledger.NewStore(baseDir))
 	data, err := svc.LoadForecastVsReality("", 50)
 	if err != nil {
 		t.Fatalf("LoadForecastVsReality: %v", err)
@@ -284,7 +285,7 @@ func TestPipelineServiceLoadRecommendationPipelineSupportsCanonicalOutcomeJSON(t
 		},
 	)
 
-	svc := NewPipelineService(baseDir, baseDir, nil)
+	svc := NewPipelineService(baseDir, baseDir, ledger.NewStore(baseDir))
 	data, err := svc.LoadRecommendationPipeline(sessionID, true)
 	if err != nil {
 		t.Fatalf("load recommendation pipeline: %v", err)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
@@ -16,8 +17,9 @@ type Runner struct {
 }
 
 func NewRunner(cfg config.Config) *Runner {
+	store := ledger.NewStore(cfg.LedgerDir)
 	return &Runner{
-		btRunner: backtest.NewRunner(cfg),
+		btRunner: backtest.NewRunner(cfg, store),
 		cfg:      cfg,
 	}
 }

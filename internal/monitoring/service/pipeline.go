@@ -33,13 +33,6 @@ func (s *PipelineService) WithRegistryProvider(fn RegistryProviderFunc) *Pipelin
 	return s
 }
 
-func (s *PipelineService) getStore() ledger.OutcomeStore {
-	if s.store != nil {
-		return s.store
-	}
-	return ledger.NewStore(s.LedgerDir)
-}
-
 func NewPipelineService(workDir, ledgerDir string, store ledger.OutcomeStore) *PipelineService {
 	return &PipelineService{
 		WorkDir:   workDir,
@@ -72,7 +65,7 @@ func (s *PipelineService) LoadMacroRadar(sessionID string) (*MacroRadarData, err
 	var summary *domain.SessionSummary
 	var err error
 	if sessionID == "" {
-		summary, err = FindLatestSessionSummary(s.getStore(), s.LedgerDir)
+		summary, err = FindLatestSessionSummary(s.store, s.LedgerDir)
 	} else {
 		summary, err = LoadSessionSummary(s.LedgerDir, sessionID)
 	}
@@ -106,7 +99,7 @@ func (s *PipelineService) LoadAgentObservatory(sessionID string, limit int) (*Ag
 	var summary *domain.SessionSummary
 	var err error
 	if sessionID == "" {
-		summary, err = FindLatestSessionSummary(s.getStore(), s.LedgerDir)
+		summary, err = FindLatestSessionSummary(s.store, s.LedgerDir)
 	} else {
 		summary, err = LoadSessionSummary(s.LedgerDir, sessionID)
 	}
@@ -114,7 +107,7 @@ func (s *PipelineService) LoadAgentObservatory(sessionID string, limit int) (*Ag
 		return nil, fmt.Errorf("load agent observatory summary: %w", err)
 	}
 
-	store := s.getStore()
+	store := s.store
 	var outcomes []domain.RecommendationOutcome
 	if summary != nil {
 		outcomes, _ = store.LoadSessionOutcomes(summary.SessionID)
@@ -158,7 +151,7 @@ func (s *PipelineService) LoadForecastVsReality(agentID string, limit int) (*For
 		return nil, fmt.Errorf("load forecast-vs-reality data: %w", err)
 	}
 
-	summary, err := FindLatestSessionSummary(s.getStore(), s.LedgerDir)
+	summary, err := FindLatestSessionSummary(s.store, s.LedgerDir)
 	if err != nil {
 		logging.Warn("pipeline_service", "load_session_summary", logging.Err(err))
 		summary = nil
@@ -529,7 +522,7 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 		statusMessage = "本場次尚無推薦產出記錄"
 	}
 
-	store := s.getStore()
+	store := s.store
 	screened, err := store.LoadSessionScreeningRejects(targetSession)
 	if err != nil {
 		// Log but don't fail
@@ -895,7 +888,7 @@ type RegimeTransition struct {
 }
 
 func (s *PipelineService) LoadRegimeHistory(limit int) (*RegimeHistoryData, error) {
-	store := s.getStore()
+	store := s.store
 	summaries, err := store.LoadSessionSummaries()
 	if err != nil {
 		return nil, fmt.Errorf("load session summaries: %w", err)

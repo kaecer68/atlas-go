@@ -7,13 +7,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
 func newTestHandlers(t *testing.T) *Handlers {
 	t.Helper()
 	dir := t.TempDir()
-	svc := service.NewControlService(dir, dir, nil, nil)
+	svc := service.NewControlService(dir, dir, nil, ledger.NewStore(dir))
 	return &Handlers{Svc: svc}
 }
 
