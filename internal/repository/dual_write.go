@@ -40,11 +40,26 @@ type MetricsStore interface {
 	LoadRecent(n int) ([]MetricsSnapshot, error)
 }
 
-// OutcomeStore defines the interface for the existing outcome store
+// OutcomeStore defines the interface for the existing outcome store.
+// Mirrors ledger.OutcomeStore for interface compatibility.
 type OutcomeStore interface {
 	RecordOutcomes(outcomes []domain.RecommendationOutcome) error
-	LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOutcome, error)
+	RecordSessionOutcomes(session domain.ReplaySession, outcomes []domain.RecommendationOutcome) error
 	LoadOutcomes() ([]domain.RecommendationOutcome, error)
+	LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOutcome, error)
+
+	RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error
+	LoadSessionSummaries() ([]domain.SessionSummary, error)
+	LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error)
+
+	RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error
+	LoadSessionScreeningRejects(sessionID string) ([]domain.ScreeningReject, error)
+
+	RecordExperiment(record domain.ExperimentRecord) error
+	RecordSessionExperiment(session domain.ReplaySession, record domain.ExperimentRecord) error
+
+	RecordHumanIntervention(intervention domain.HumanIntervention) error
+	LoadHumanInterventions() ([]domain.HumanIntervention, error)
 }
 
 type ScreeningRejectStore interface {

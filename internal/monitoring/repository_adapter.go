@@ -111,3 +111,43 @@ func (a *OutcomeStoreAdapter) LoadSessionOutcomes(sessionID string) ([]domain.Re
 func (a *OutcomeStoreAdapter) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
 	return a.store.LoadOutcomes()
 }
+
+func (a *OutcomeStoreAdapter) RecordSessionOutcomes(session domain.ReplaySession, outcomes []domain.RecommendationOutcome) error {
+	return a.store.RecordSessionOutcomes(session, outcomes)
+}
+
+func (a *OutcomeStoreAdapter) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
+	return a.store.RecordSessionSummary(session, summary)
+}
+
+func (a *OutcomeStoreAdapter) LoadSessionSummaries() ([]domain.SessionSummary, error) {
+	return a.store.LoadSessionSummaries()
+}
+
+func (a *OutcomeStoreAdapter) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
+	return a.store.LoadAllSessionScorecards()
+}
+
+func (a *OutcomeStoreAdapter) RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error {
+	return a.store.RecordSessionScreeningRejects(sessionID, rejects)
+}
+
+func (a *OutcomeStoreAdapter) LoadSessionScreeningRejects(sessionID string) ([]domain.ScreeningReject, error) {
+	return a.store.LoadSessionScreeningRejects(sessionID)
+}
+
+func (a *OutcomeStoreAdapter) RecordExperiment(record domain.ExperimentRecord) error {
+	return a.store.RecordExperiment(record)
+}
+
+func (a *OutcomeStoreAdapter) RecordSessionExperiment(session domain.ReplaySession, record domain.ExperimentRecord) error {
+	return a.store.RecordSessionExperiment(session, record)
+}
+
+func (a *OutcomeStoreAdapter) RecordHumanIntervention(intervention domain.HumanIntervention) error {
+	return a.store.RecordHumanIntervention(intervention)
+}
+
+func (a *OutcomeStoreAdapter) LoadHumanInterventions() ([]domain.HumanIntervention, error) {
+	return a.store.LoadHumanInterventions()
+}
