@@ -45,7 +45,7 @@ func main() {
 
 	baselineCfg := cfg
 	baselineCfg.LedgerDir = baselineDir
-	baselineRunner := backtest.NewRunner(baselineCfg)
+	baselineRunner := backtest.NewRunner(baselineCfg, ledger.NewStore(baselineDir))
 	baselineSummary, err := baselineRunner.Run(startDate, endDate)
 	if err != nil {
 		log.Fatalf("baseline run: %v", err)
@@ -73,7 +73,7 @@ func main() {
 	seedAllCohortsExtreme(engine, baselineRegime, startDate)
 	engine.Update()
 
-	janusRunner := backtest.NewRunner(janusCfg).WithJANUS(engine)
+	janusRunner := backtest.NewRunner(janusCfg, ledger.NewStore(janusDir)).WithJANUS(engine)
 	_, err = janusRunner.Run(startDate, endDate)
 	if err != nil {
 		log.Fatalf("janus run: %v", err)

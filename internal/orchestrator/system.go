@@ -113,10 +113,11 @@ func NewSystem(cfg config.Config) *System {
 	optimizer := portfolio.NewOptimizer()
 	optimizer.WithHistoricalPrices(hp).WithFundamentalProvider(fp).WithFactorEngine(factorEngine)
 	thresholdEngine := sim.NewDynamicThresholdEngine()
+	store := ledger.NewStore(cfg.LedgerDir)
 
 	return &System{
 		SystemCore: &SystemCore{
-			sim:             buildSimulationCore(cfg, registry, policy, ds, optimizer),
+			sim:             buildSimulationCore(cfg, registry, policy, ds, optimizer, store.(*ledger.Store)),
 			port:            buildPortfolioManager(runtimeParams, registry, eventBus, factorEngine),
 			strat:           buildStrategyLayer(thresholdEngine),
 			risk:            buildRiskOps(cfg, eventBus),

@@ -10,6 +10,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
@@ -39,7 +40,7 @@ func run(args []string) error {
 	}
 
 	cfg := config.Load()
-	runner := backtest.NewRunner(cfg)
+	runner := backtest.NewRunner(cfg, ledger.NewStore(cfg.LedgerDir))
 	summary, err := runner.Run(startDate, endDate)
 	if err != nil {
 		return fmt.Errorf("run backtest window: %w", err)

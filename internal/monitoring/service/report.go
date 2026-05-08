@@ -42,13 +42,6 @@ func NewReportService(workDir, ledgerDir string, store ledger.OutcomeStore) *Rep
 	}
 }
 
-func (s *ReportService) getStore() ledger.OutcomeStore {
-	if s.store != nil {
-		return s.store
-	}
-	return ledger.NewStore(s.ledgerDir)
-}
-
 // LoadLatestReport returns the content and filename of the most recent backtest report.
 func (s *ReportService) LoadLatestReport() (content []byte, filename string, err error) {
 	summary, err := s.loadLatestWindowSummary()
@@ -213,7 +206,7 @@ func (s *ReportService) loadAllWindowSummaries() ([]domain.BacktestWindowSummary
 }
 
 func (s *ReportService) renderWindowReport(summary domain.BacktestWindowSummary) (string, error) {
-	store := s.getStore()
+	store := s.store
 	scorecards, _, err := store.LoadAllSessionScorecards()
 	if err != nil {
 		return "", fmt.Errorf("load scorecards: %w", err)

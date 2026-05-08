@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
 func (r *PostgresRepository) RecordScreeningRejects(ctx context.Context, sessionID string, rejects []domain.ScreeningReject) error {
@@ -212,4 +213,13 @@ func (r *PostgresRepository) LoadHumanInterventions(ctx context.Context) ([]doma
 		interventions = append(interventions, hi)
 	}
 	return interventions, rows.Err()
+}
+
+func (r *PostgresRepository) QueryAllSessionScorecards(ctx context.Context) ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
+	outcomes, err := r.QueryAllOutcomes(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("query all outcomes: %w", err)
+	}
+	scorecards := ledger.BuildScorecards(outcomes)
+	return scorecards, outcomes, nil
 }

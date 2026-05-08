@@ -8,6 +8,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
@@ -49,7 +50,8 @@ func (s *BacktestService) Start(startDate, endDate time.Time) error {
 		if cfg.ReplayDataPath == "samples/replay/twse_stock_day_all_sample.csv" {
 			cfg.ReplayDataPath = "data/replay/tw_extended_90days.csv"
 		}
-		runner := backtest.NewRunner(cfg)
+		store := ledger.NewStore(cfg.LedgerDir)
+		runner := backtest.NewRunner(cfg, store)
 		summary, err := runner.Run(startDate, endDate)
 		if err == nil {
 			if _, rerr := runner.GenerateReport(summary); rerr != nil {
