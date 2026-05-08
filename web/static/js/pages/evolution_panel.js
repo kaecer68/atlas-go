@@ -25,6 +25,18 @@ function renderTrendSummary(scorecards, sessions) {
   }
   var stability = sessions.length > 0 ? Math.round((1 - transitions / sessions.length) * 100) : 100;
 
+  var recentSlice = sessions.slice(-5);
+  var recentTransitions = 0;
+  for (var j = 1; j < recentSlice.length; j++) {
+    if (recentSlice[j].regime !== recentSlice[j - 1].regime) recentTransitions++;
+  }
+  var regimeWarning = '';
+  if (recentTransitions >= 3) {
+    regimeWarning = '<span style="display:block;color:var(--warn);margin-top:2px">⚠ 近期 Regime 波動加劇：近 5 場切換 <strong>' + recentTransitions + '</strong> 次，市場方向不明確</span>';
+  } else if (recentTransitions === 2 && recentSlice.length >= 4) {
+    regimeWarning = '<span style="display:block;color:var(--warn);margin-top:2px">⚡ 近期 Regime 出現波動：近 5 場切換 ' + recentTransitions + ' 次，注意方向轉變</span>';
+  }
+
   var sharpeCls = medianSharpe > 1 ? 'ev-summary-good' : (medianSharpe > 0.5 ? 'ev-summary-warn' : 'ev-summary-bad');
   var hitCls = avgHitRate > 0.6 ? 'ev-summary-good' : (avgHitRate > 0.4 ? 'ev-summary-warn' : 'ev-summary-bad');
   var healthCls = healthPct > 70 ? 'ev-summary-good' : (healthPct > 40 ? 'ev-summary-warn' : 'ev-summary-bad');
@@ -57,6 +69,7 @@ function renderTrendSummary(scorecards, sessions) {
     '<div class="ev-summary-footer">' +
       'Regime 穩定度 <strong>' + stability + '%</strong> — ' + transitions + ' 次切換 / ' + sessions.length + ' 場次 · ' +
       '<span style="color:var(--muted)">系統正以 mutation → judge → promote 循環持續優化 Agent 策略</span>' +
+      regimeWarning +
     '</div>' +
     '</div>';
 }
