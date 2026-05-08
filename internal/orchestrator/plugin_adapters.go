@@ -12,12 +12,12 @@ import (
 
 type janusPlugin struct {
 	engine *janus.Engine
-	core   CoreServices
+	core   ServiceRegistry
 }
 
 func (p *janusPlugin) Name() string { return "janus" }
 
-func (p *janusPlugin) Attach(core CoreServices) {
+func (p *janusPlugin) Attach(core ServiceRegistry) {
 	p.core = core
 }
 
@@ -95,7 +95,7 @@ type swarmPlugin struct {
 
 func (p *swarmPlugin) Name() string { return "swarm" }
 
-func (p *swarmPlugin) Attach(core CoreServices) {}
+func (p *swarmPlugin) Attach(core ServiceRegistry) {}
 
 func (p *swarmPlugin) ProcessRecommendations(regime domain.Regime, recs []domain.Recommendation) []domain.Recommendation {
 	if len(recs) == 0 {
@@ -142,15 +142,15 @@ func (p *swarmPlugin) PostSimulation(quotes []domain.Quote, regime domain.Regime
 type prismPlugin struct {
 	manager    *prism.PRISMManager
 	controller *Phase3Controller
-	core       CoreServices
+	core       ServiceRegistry
 }
 
 func (p *prismPlugin) Name() string { return "prism" }
 
-func (p *prismPlugin) Attach(core CoreServices) {
+func (p *prismPlugin) Attach(core ServiceRegistry) {
 	p.core = core
-	if p.manager != nil && core != nil && core.GetReplay() != nil {
-		p.manager.WithExecutor(NewPRISMTrainingExecutor(core.GetReplay(), core.GetRegistry(), core.GetPolicy()))
+	if p.manager != nil && core != nil && core.Replay() != nil {
+		p.manager.WithExecutor(NewPRISMTrainingExecutor(core.Replay(), core.GetRegistry(), core.GetPolicy()))
 	}
 }
 
@@ -196,7 +196,7 @@ type spawningPlugin struct {
 
 func (p *spawningPlugin) Name() string { return "spawning" }
 
-func (p *spawningPlugin) Attach(core CoreServices) {}
+func (p *spawningPlugin) Attach(core ServiceRegistry) {}
 
 func (p *spawningPlugin) ProcessRecommendations(regime domain.Regime, recs []domain.Recommendation) []domain.Recommendation {
 	return recs
@@ -219,9 +219,9 @@ type phase3Plugin struct {
 
 func (p *phase3Plugin) Name() string { return "phase3" }
 
-func (p *phase3Plugin) Attach(core CoreServices) {
-	if p.controller != nil && core != nil && core.GetReplay() != nil {
-		p.controller.WithAdversarialRunner(NewAdversarialScenarioRunner(core.GetReplay(), core.GetRegistry()))
+func (p *phase3Plugin) Attach(core ServiceRegistry) {
+	if p.controller != nil && core != nil && core.Replay() != nil {
+		p.controller.WithAdversarialRunner(NewAdversarialScenarioRunner(core.Replay(), core.GetRegistry()))
 	}
 }
 
