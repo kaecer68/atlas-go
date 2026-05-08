@@ -252,6 +252,7 @@ func run(args []string, deps appDeps) error {
 		bootstrap.StartChannelHealthSyncLoop(sysCtx, cfg.WorkDir, pool)
 		bootstrap.StartAutoBackfill(sysCtx, cfg.WorkDir)
 		bootstrap.StartAutoCapitalFlowFetch(sysCtx, cfg.WorkDir)
+		bootstrap.StartAutoBacktestLoop(sysCtx, cfg)
 
 		srv := &http.Server{Addr: *apiAddr, Handler: mux}
 		srvErr := make(chan error, 1)

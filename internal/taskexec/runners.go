@@ -292,7 +292,7 @@ func (r *backtestWindowRunner) Run(ctx context.Context, req SubmitRequest, sink 
 	default:
 	}
 
-	if err := runner.GenerateReport(summary); err != nil {
+	if _, err := runner.GenerateReport(summary); err != nil {
 		sink.Emit(domain.TaskExecutionEvent{
 			EventType: domain.TaskEventStderr,
 			Stream:    "system",

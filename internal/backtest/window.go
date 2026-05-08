@@ -2,8 +2,6 @@ package backtest
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
@@ -121,17 +119,16 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 	return summary, nil
 }
 
-// GenerateReport creates a markdown report from the backtest summary and persists it to reports/.
-func (r *Runner) GenerateReport(summary domain.BacktestWindowSummary) error {
+func (r *Runner) GenerateReport(summary domain.BacktestWindowSummary) (string, error) {
 	store := ledger.NewStore(r.cfg.LedgerDir)
 	scorecards, _, err := store.LoadAllSessionScorecards()
 	if err != nil {
-		return fmt.Errorf("load scorecards: %w", err)
+		return "", fmt.Errorf("load scorecards: %w", err)
 	}
 
 	sessionSummaries, err := store.LoadSessionSummaries()
 	if err != nil {
-		return fmt.Errorf("load session summaries: %w", err)
+		return "", fmt.Errorf("load session summaries: %w", err)
 	}
 
 	equityCurve := make([]float64, 0, len(sessionSummaries))
@@ -160,16 +157,7 @@ func (r *Runner) GenerateReport(summary domain.BacktestWindowSummary) error {
 		RegimeCounts:    regimeCounts,
 	}
 
-	report := reporting.RenderMarkdown(reportData)
-	reportDir := "reports"
-	if err := os.MkdirAll(reportDir, 0o755); err != nil {
-		return fmt.Errorf("create report dir: %w", err)
-	}
-	reportPath := filepath.Join(reportDir, fmt.Sprintf("backtest_%s.md", summary.WindowID))
-	if err := os.WriteFile(reportPath, []byte(report), 0o644); err != nil {
-		return fmt.Errorf("write report: %w", err)
-	}
-	return nil
+	return reporting.RenderMarkdown(reportData), nil
 }
 
 // WithJANUS attaches a JANUS engine to the runner for A/B validation.
