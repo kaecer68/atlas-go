@@ -2,11 +2,6 @@
 // Run: go generate ./...  or  go run ./cmd/gentags
 // Source: internal/domain/*.go json tags
 
-declare interface AgentSpec {
-  darwinian_weight?: number;
-  screening_criteria?: string;
-}
-
 declare interface AlertChannelConfig {
   telegram_bot_token?: string;
   telegram_chat_id?: string;
@@ -101,19 +96,6 @@ declare interface CapitalSnapshot {
   advance_reason?: string;
 }
 
-declare interface ConvictionBreakdown {
-  base: number;
-  floor: number;
-  final: number;
-  steps: string[];
-}
-
-declare interface ConvictionStep {
-  rule: string;
-  delta: number;
-  reason: string;
-}
-
 declare interface DailyBar {
   date: string;
   symbol: string;
@@ -174,80 +156,6 @@ declare interface ExperimentLineageRecord {
   judged_at?: string | null;
 }
 
-declare interface ExperimentRecord {
-  id: string;
-  proposal_id: string;
-  commit_id: string;
-  approval_id: string;
-  target_agent_id: string;
-  skill: string;
-  hypothesis: string;
-  prompt_version_from: string;
-  prompt_version_to: string;
-  mutation_type: string;
-  acceptance_gates: string[];
-  window_start: string;
-  window_end: string;
-  acceptance_metric: string;
-  baseline_value: number;
-  candidate_value: number;
-  status: string;
-  revert_reason: string;
-}
-
-declare interface FactorScoreBreakdown {
-  momentum: string;
-  value: string;
-  quality: string;
-  agent: string;
-  institutional_sentiment: string;
-  liquidity: string;
-  total: string;
-}
-
-declare interface FactorScoreItem {
-  score: number;
-  weight?: number;
-  formula: string;
-  raw_inputs: Record<string, number>;
-  is_fallback: boolean;
-}
-
-declare interface FactorScores {
-  momentum: number;
-  value: number;
-  quality: number;
-  agent: number;
-  institutional_sentiment: number;
-  liquidity: number;
-  total: number;
-  breakdown?: string | null;
-}
-
-declare interface GuardOutcome {
-  guard_id: string;
-  guard_skill: string;
-  severity: string;
-  passed: boolean;
-  reason: string;
-  input_count: number;
-  output_count: number;
-}
-
-declare interface HumanIntervention {
-  id: string;
-  type: string;
-  target_agent_id?: string;
-  target_model_id?: string;
-  target_sector?: string;
-  target_symbol?: string;
-  value?: number;
-  reason: string;
-  operator: string;
-  session_id?: string;
-  recorded_at: string;
-}
-
 declare interface MetricTrendPoint {
   id: string;
   execution_id: string;
@@ -262,45 +170,6 @@ declare interface MetricTrendPoint {
   tags?: string[];
 }
 
-declare interface MinFilter {
-  min?: number | null;
-}
-
-declare interface MutationBrief {
-  contract_version?: number;
-  proposal_id?: string;
-  window_id: string;
-  target_agent_id: string;
-  target_skill: string;
-  target_layer: string;
-  prompt_file: string;
-  mutation_type: string;
-  failure_pattern: string;
-  hypothesis: string;
-  acceptance_metric: string;
-  acceptance_gates: string[];
-  forbidden_actions: string[];
-  required_skills: string[];
-  observed_window_count: number;
-  maturity_level: string;
-  iteration_guidance: string[];
-  recommended_window: string;
-  generated_at: string;
-}
-
-declare interface OOSResult {
-  passed: boolean;
-  baseline_score: number;
-  candidate_score: number;
-  improvement: number;
-  observations: number;
-  oos_window_start: string;
-  oos_window_end: string;
-  used_fallback: boolean;
-  validation_at: string;
-  reason: string;
-}
-
 declare interface Position {
   symbol: string;
   quantity: number;
@@ -308,98 +177,6 @@ declare interface Position {
   current_price: number;
   market_value: number;
   unrealized_pnl: number;
-}
-
-declare interface PromptControl {
-  volume_floor?: number;
-  volume_downgrade?: number;
-  close_strength_boost?: number;
-  hard_reject_volume?: number;
-  price_condition?: string;
-  conviction_floor?: number;
-  volume_boost?: number;
-  require_trend?: boolean;
-  neutral_penalty_reduction?: number;
-}
-
-declare interface PromptExperimentResult {
-  experiment: string;
-  brief: string;
-  candidate_prompt: string;
-  evaluation_mode: string;
-  policy_checks: string[];
-  notes: string[];
-  judge_checks: string[];
-  baseline_observations: number;
-  candidate_observations: number;
-  used_fallback_window: boolean;
-  recorded_at: string;
-  data_metadata?: string | null;
-  oos_result?: string | null;
-  baseline_returns?: number[];
-  candidate_returns?: number[];
-  parameter_snapshot_id?: string;
-  baseline_fallback_count?: number;
-  candidate_fallback_count?: number;
-  baseline_factor_count?: number;
-  candidate_factor_count?: number;
-}
-
-declare interface Quote {
-  symbol: string;
-  last: number;
-  open: number;
-  high: number;
-  low: number;
-  volume: number;
-  market: string;
-  as_of: string;
-  is_tradable: boolean;
-  source: string;
-}
-
-declare interface RangeFilter {
-  min?: number | null;
-  max?: number | null;
-}
-
-declare interface Recommendation {
-  reasoning_chain?: string[];
-  supporting_events?: string[];
-  factor_scores?: string;
-  conviction_breakdown?: string | null;
-}
-
-declare interface RecommendationOutcome {
-  agent_id: string;
-  skill: string;
-  layer: string;
-  symbol: string;
-  side: string;
-  conviction: number;
-  target_price: number;
-  stop_loss_price: number;
-  window: string;
-  forward_return: number;
-  benchmark_delta: number;
-  hit: boolean;
-  reason: string;
-  price: number;
-  passed_guards: boolean;
-  guard_reason: string;
-  recorded_at: string;
-  factor_scores?: string;
-  conviction_breakdown?: string | null;
-}
-
-declare interface ReplayDataMetadata {
-  source_path: string;
-  date_range_start: string;
-  date_range_end: string;
-  days_delayed: number;
-  covers_window: boolean;
-  last_modified: string;
-  record_count: number;
 }
 
 declare interface ReportSection {
@@ -421,44 +198,6 @@ declare interface RiskSnapshot {
   var_99: number;
   cvar_95: number;
   max_drawdown_pct: number;
-}
-
-declare interface Scorecard {
-  agent_id: string;
-  skill: string;
-  layer: string;
-  observations: number;
-  windows: number;
-  hit_rate: number;
-  average_return: number;
-  sharpe: number;
-  max_drawdown: number;
-  concentration_warnings: number;
-  last_updated_at: string;
-}
-
-declare interface ScreeningCriteria {
-  pe?: string | null;
-  pb?: string | null;
-  dividend_yield?: string | null;
-  momentum_20d?: string | null;
-  volatility_20d?: string | null;
-  volume_intraday?: string | null;
-  min_total_factor_score?: number | null;
-  required_factors?: string[];
-}
-
-declare interface ScreeningReject {
-  session_id: string;
-  symbol: string;
-  agent_id: string;
-  skill: string;
-  criterion: string;
-  criterion_label: string;
-  threshold: string;
-  actual_value: string;
-  factor_scores?: string;
-  recorded_at: string;
 }
 
 declare interface SessionSummary {

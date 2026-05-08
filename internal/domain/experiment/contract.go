@@ -1,11 +1,11 @@
-package domain
+package experiment
 
 import (
 	"fmt"
 	"strings"
-)
 
-const MutationBriefContractVersion = 1
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
+)
 
 var supportedMutationTypes = map[string]struct{}{
 	"prompt_tightening":             {},
@@ -122,9 +122,9 @@ func (r *PromptExperimentResult) NormalizeAndValidateForJudge() error {
 	return nil
 }
 
-func isValidAgentLayer(layer AgentLayer) bool {
+func isValidAgentLayer(layer shared.AgentLayer) bool {
 	switch layer {
-	case LayerContext, LayerMacro, LayerSector, LayerStyle, LayerSuperinvestor, LayerControl:
+	case shared.LayerContext, shared.LayerMacro, shared.LayerSector, shared.LayerStyle, shared.LayerSuperinvestor, shared.LayerControl:
 		return true
 	default:
 		return false
