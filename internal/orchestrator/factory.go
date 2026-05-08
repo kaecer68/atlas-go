@@ -16,7 +16,7 @@ import (
 func NewProductionSystem(cfg config.Config) *System {
 	system := NewSystem(cfg)
 
-	system.WithDarwinian(system.darwinian)
+	system.WithDarwinian(system.Port().darwinian)
 
 	pm := prism.NewPRISMManager(prism.DefaultPRISMConfig())
 	system.WithPRISM(pm)
@@ -27,11 +27,11 @@ func NewProductionSystem(cfg config.Config) *System {
 	je := janus.NewEngineWithConfig(janus.DefaultJANUSConfig())
 	system.WithJANUS(je)
 
-	sm := spawning.NewSpawningManager(&system.registry, spawning.DefaultSpawningConfig())
+	sm := spawning.NewSpawningManager(&system.Sim().registry, spawning.DefaultSpawningConfig())
 	system.WithSpawning(sm)
 
 	re := reflexivity.NewReflexivityEngine()
-	ctrl := NewPhase3Controller(&system.registry, pm, sw, sm, re, system.ledger)
+	ctrl := NewPhase3Controller(&system.Sim().registry, pm, sw, sm, re, system.Sim().ledger)
 	system.WithPhase3Controller(ctrl)
 
 	return system

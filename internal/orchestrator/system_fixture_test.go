@@ -15,7 +15,7 @@ func newTestSystem(t *testing.T) *System {
 	t.Helper()
 	return &System{
 		SystemCore: &SystemCore{
-			SimulationCore: SimulationCore{
+			sim: SimulationCore{
 				cfg:      config.Config{PrimaryMarket: "TW"},
 				provider: marketdata.NewMockProvider(),
 				engine:   sim.NewEngine(domain.SimulationConstraints{StartingCash: 1_000_000}),
@@ -30,7 +30,7 @@ func newTestSystem(t *testing.T) *System {
 
 func TestNewTestSystem_Constructs(t *testing.T) {
 	sys := newTestSystem(t)
-	if sys == nil || sys.provider == nil || sys.engine == nil {
+	if sys == nil || sys.Sim().provider == nil || sys.Sim().engine == nil {
 		t.Fatal("essential fields must be populated")
 	}
 }
