@@ -15,7 +15,7 @@ type ReasoningHandler struct {
 type ReasoningTraceResponse struct {
 	SessionID    string                        `json:"session_id"`
 	Traces       []orchestrator.ReasoningTrace `json:"traces"`
-	Explanations []string                     `json:"explanations,omitempty"`
+	Explanations []string                      `json:"explanations,omitempty"`
 }
 
 func (h *ReasoningHandler) HandleReasoningTrace(r *http.Request) (int, any) {
