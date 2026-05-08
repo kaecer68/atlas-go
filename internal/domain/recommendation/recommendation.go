@@ -18,9 +18,9 @@ type Recommendation struct {
 	TargetPrice         float64
 	StopLossPrice       float64
 	Reason              string
-	ReasoningChain      []string                   `json:"reasoning_chain,omitempty"`
-	SupportingEvents    []string                   `json:"supporting_events,omitempty"`
-	FactorScores        shared.FactorScores        `json:"factor_scores,omitempty"`
+	ReasoningChain      []string                    `json:"reasoning_chain,omitempty"`
+	SupportingEvents    []string                    `json:"supporting_events,omitempty"`
+	FactorScores        shared.FactorScores         `json:"factor_scores,omitempty"`
 	ConvictionBreakdown *shared.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
 }
 
@@ -37,8 +37,8 @@ type AgentSpec struct {
 	RequiredSkills    []string
 	ForbiddenActions  []string
 	OperatingNotes    []string
-	DarwinianWeight   float64            `json:"darwinian_weight,omitempty"`
-	ScreeningCriteria ScreeningCriteria  `json:"screening_criteria,omitempty"`
+	DarwinianWeight   float64           `json:"darwinian_weight,omitempty"`
+	ScreeningCriteria ScreeningCriteria `json:"screening_criteria,omitempty"`
 }
 
 // AgentRegistry holds the set of registered agents.
@@ -49,24 +49,24 @@ type AgentRegistry struct {
 
 // RecommendationOutcome records the realized result of a recommendation.
 type RecommendationOutcome struct {
-	AgentID             string                     `json:"agent_id"`
-	Skill               string                     `json:"skill"`
-	Layer               shared.AgentLayer          `json:"layer"`
-	Symbol              string                     `json:"symbol"`
-	Side                shared.Side                `json:"side"`
-	Conviction          int                        `json:"conviction"`
-	TargetPrice         float64                    `json:"target_price"`
-	StopLossPrice       float64                    `json:"stop_loss_price"`
-	Window              string                     `json:"window"`
-	ForwardReturn       float64                    `json:"forward_return"`
-	BenchmarkDelta      float64                    `json:"benchmark_delta"`
-	Hit                 bool                       `json:"hit"`
-	Reason              string                     `json:"reason"`
-	Price               float64                    `json:"price"`
-	PassedGuards        bool                       `json:"passed_guards"`
-	GuardReason         string                     `json:"guard_reason"`
-	RecordedAt          time.Time                  `json:"recorded_at"`
-	FactorScores        shared.FactorScores        `json:"factor_scores,omitempty"`
+	AgentID             string                      `json:"agent_id"`
+	Skill               string                      `json:"skill"`
+	Layer               shared.AgentLayer           `json:"layer"`
+	Symbol              string                      `json:"symbol"`
+	Side                shared.Side                 `json:"side"`
+	Conviction          int                         `json:"conviction"`
+	TargetPrice         float64                     `json:"target_price"`
+	StopLossPrice       float64                     `json:"stop_loss_price"`
+	Window              string                      `json:"window"`
+	ForwardReturn       float64                     `json:"forward_return"`
+	BenchmarkDelta      float64                     `json:"benchmark_delta"`
+	Hit                 bool                        `json:"hit"`
+	Reason              string                      `json:"reason"`
+	Price               float64                     `json:"price"`
+	PassedGuards        bool                        `json:"passed_guards"`
+	GuardReason         string                      `json:"guard_reason"`
+	RecordedAt          time.Time                   `json:"recorded_at"`
+	FactorScores        shared.FactorScores         `json:"factor_scores,omitempty"`
 	ConvictionBreakdown *shared.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
 }
 

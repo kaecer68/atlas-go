@@ -8,14 +8,14 @@ import (
 
 // ScreeningCriteria defines declarative thresholds for stock screening.
 type ScreeningCriteria struct {
-	PE            *RangeFilter `json:"pe,omitempty"`
-	PB            *RangeFilter `json:"pb,omitempty"`
-	DividendYield *RangeFilter `json:"dividend_yield,omitempty"`
-	Momentum20Day   *RangeFilter `json:"momentum_20d,omitempty"`
-	Volatility20Day *RangeFilter `json:"volatility_20d,omitempty"`
-	VolumeIntraday  *MinFilter   `json:"volume_intraday,omitempty"`
-	MinTotalFactorScore *float64 `json:"min_total_factor_score,omitempty"`
-	RequiredFactors     []string `json:"required_factors,omitempty"`
+	PE                  *RangeFilter `json:"pe,omitempty"`
+	PB                  *RangeFilter `json:"pb,omitempty"`
+	DividendYield       *RangeFilter `json:"dividend_yield,omitempty"`
+	Momentum20Day       *RangeFilter `json:"momentum_20d,omitempty"`
+	Volatility20Day     *RangeFilter `json:"volatility_20d,omitempty"`
+	VolumeIntraday      *MinFilter   `json:"volume_intraday,omitempty"`
+	MinTotalFactorScore *float64     `json:"min_total_factor_score,omitempty"`
+	RequiredFactors     []string     `json:"required_factors,omitempty"`
 }
 
 func (sc ScreeningCriteria) HasFilters() bool {
