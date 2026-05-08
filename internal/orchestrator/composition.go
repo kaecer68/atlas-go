@@ -10,9 +10,12 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
 	"github.com/kaecer68/atlas-go/internal/replay"
+	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/screener"
 	"github.com/kaecer68/atlas-go/internal/sim"
 	"github.com/kaecer68/atlas-go/internal/strategy"
@@ -97,11 +100,21 @@ func buildStrategyLayer(thresholdEngine *sim.DynamicThresholdEngine) StrategyLay
 	}
 }
 
+// buildMacroEngines constructs the macro assessment engines.
+func buildMacroEngines(sectorDataDir string) (macroRiskEngine *narrative.MacroRiskAssessmentEngine, structuralTrendEngine *narrative.StructuralTrendEngine, macroDrawdownEngine *risk.MacroAwareDrawdownEngine, sectorDataProvider *marketdata.SectorDataProvider) {
+	sectorDataProvider = marketdata.NewSectorDataProvider(sectorDataDir)
+	return narrative.NewMacroRiskAssessmentEngine(), narrative.NewStructuralTrendEngine(), risk.NewMacroAwareDrawdownEngine(), sectorDataProvider
+}
+
 // buildRiskOps constructs the risk management subsystem.
-func buildRiskOps(cfg config.Config, eventBus *eventbus.ChannelEventBus) RiskOps {
+func buildRiskOps(cfg config.Config, eventBus *eventbus.ChannelEventBus, macroRiskEngine *narrative.MacroRiskAssessmentEngine, structuralTrendEngine *narrative.StructuralTrendEngine, macroDrawdownEngine *risk.MacroAwareDrawdownEngine, sectorDataProvider *marketdata.SectorDataProvider) RiskOps {
 	return RiskOps{
-		eventBus:       eventBus,
-		clampingLogger: newClampingLogger(filepath.Join(cfg.LedgerDir, "clamping_events.jsonl")),
+		eventBus:              eventBus,
+		clampingLogger:        newClampingLogger(filepath.Join(cfg.LedgerDir, "clamping_events.jsonl")),
+		macroRiskEngine:       macroRiskEngine,
+		structuralTrendEngine: structuralTrendEngine,
+		macroDrawdownEngine:   macroDrawdownEngine,
+		sectorDataProvider:    sectorDataProvider,
 	}
 }
 

@@ -123,7 +123,7 @@ run_clean_backtest() {
 		exit 1
 	fi
 
-	jq -S 'del(.GeneratedAt)' "$window_path" > "$normalized_out"
+	jq -S 'del(.generated_at)' "$window_path" > "$normalized_out"
 }
 
 run_determinism_check() {

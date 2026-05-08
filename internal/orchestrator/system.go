@@ -41,6 +41,7 @@ type SimulationCore struct {
 	lastOutcomes     []domain.RecommendationOutcome
 	portfolioHistory []float64
 	returnHistory    []float64
+	lastQuotes       []domain.Quote
 }
 
 type PortfolioManager struct {
@@ -58,12 +59,16 @@ type StrategyLayer struct {
 }
 
 type RiskOps struct {
-	capitalController *risk.CapitalPhaseController
-	approvalWorkflow  *risk.ApprovalWorkflow
-	metricsCollector  interface{ RecordScreening(passed, rejected int64) }
-	eventBus          *eventbus.ChannelEventBus
-	clampingLogger    *clampingLogger
-	repo              repository.OutcomeRepository
+	capitalController     *risk.CapitalPhaseController
+	approvalWorkflow      *risk.ApprovalWorkflow
+	metricsCollector      interface{ RecordScreening(passed, rejected int64) }
+	eventBus              *eventbus.ChannelEventBus
+	clampingLogger        *clampingLogger
+	repo                  repository.OutcomeRepository
+	macroRiskEngine       *narrative.MacroRiskAssessmentEngine
+	structuralTrendEngine *narrative.StructuralTrendEngine
+	macroDrawdownEngine   *risk.MacroAwareDrawdownEngine
+	sectorDataProvider    *marketdata.SectorDataProvider
 }
 
 type SystemCore struct {
@@ -115,12 +120,14 @@ func NewSystem(cfg config.Config) *System {
 	thresholdEngine := sim.NewDynamicThresholdEngine()
 	store := ledger.NewStore(cfg.LedgerDir)
 
+	macroRiskEngine, structuralTrendEngine, macroDrawdownEngine, sectorDataProvider := buildMacroEngines(cfg.LedgerDir)
+
 	return &System{
 		SystemCore: &SystemCore{
 			sim:             buildSimulationCore(cfg, registry, policy, ds, optimizer, store.(*ledger.Store)),
 			port:            buildPortfolioManager(runtimeParams, registry, eventBus, factorEngine),
 			strat:           buildStrategyLayer(thresholdEngine),
-			risk:            buildRiskOps(cfg, eventBus),
+			risk:            buildRiskOps(cfg, eventBus, macroRiskEngine, structuralTrendEngine, macroDrawdownEngine, sectorDataProvider),
 			plugins:         plugins,
 			narrativeEngine: narrative.NewNarrativeEngine(),
 		},
@@ -218,6 +225,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		snap := risk.ComputeRiskSnapshot(s.Sim().returnHistory, s.Sim().portfolioHistory)
 		result.RiskSnapshot = &snap
 	}
+	s.Sim().lastQuotes = quotes
 	s.updateCapitalMetrics(result)
 
 	outcomes := buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf)
@@ -356,6 +364,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 			s.Sim().returnHistory = append(s.Sim().returnHistory, dailyReturn)
 		}
 	}
+	s.Sim().lastQuotes = quotes
 	s.updateCapitalMetrics(result)
 
 	if s.Port().darwinian != nil {
@@ -867,6 +876,58 @@ func (s *System) SetRepository(repo repository.OutcomeRepository) {
 	s.Risk().repo = repo
 }
 
+func QuotesToMacroDataSnapshot(quotes []domain.Quote) narrative.MacroDataSnapshot {
+	data := narrative.MacroDataSnapshot{}
+	for _, q := range quotes {
+		switch q.Symbol {
+		case "US10Y", "^TNX":
+			data.US10Y = narrative.MacroDataPoint{Value: q.Last, ChangePct: (q.Last - q.Open) / q.Open * 100}
+		case "DXY", "^DXY":
+			data.DXY = narrative.MacroDataPoint{Value: q.Last, ChangePct: (q.Last - q.Open) / q.Open * 100}
+		case "VIX", "^VIX":
+			data.VIX = narrative.MacroDataPoint{Value: q.Last, ChangePct: (q.Last - q.Open) / q.Open * 100}
+		case "USD/TWD", "USDTWD=X":
+			data.USD_TWD = narrative.MacroDataPoint{Value: q.Last, ChangePct: (q.Last - q.Open) / q.Open * 100}
+		case "OIL", "CL=F":
+			data.Oil = narrative.MacroDataPoint{Value: q.Last, ChangePct: (q.Last - q.Open) / q.Open * 100}
+		case "GOLD", "GC=F":
+			data.Gold = narrative.MacroDataPoint{Value: q.Last, ChangePct: (q.Last - q.Open) / q.Open * 100}
+		case "JPY=X", "USDJPY=X":
+			data.JPY = narrative.MacroDataPoint{Value: q.Last, ChangePct: (q.Last - q.Open) / q.Open * 100}
+		}
+	}
+	return data
+}
+
+func (s *System) assessMacroRisk(quotes []domain.Quote) *narrative.MacroRiskAssessment {
+	if s.Risk().macroRiskEngine == nil {
+		return nil
+	}
+	macroData := QuotesToMacroDataSnapshot(quotes)
+	return s.Risk().macroRiskEngine.Assess(macroData)
+}
+
+func (s *System) assessStructuralTrends(macroData narrative.MacroDataSnapshot) (*narrative.StructuralTrendAssessment, narrative.SectorDataSnapshot) {
+	if s.Risk().structuralTrendEngine == nil || s.Risk().sectorDataProvider == nil {
+		return nil, narrative.SectorDataSnapshot{}
+	}
+	sectorSnap, _ := s.Risk().sectorDataProvider.FetchSnapshot(context.Background())
+	sectorData := narrative.SectorDataSnapshot{
+		AIRevenueGrowth:    sectorSnap.TSMCRevenue.Value,
+		CoWoSUtilization:   sectorSnap.CoWoSUtilization.Value,
+		CapexGrowth:        sectorSnap.CapexGrowth.Value,
+		SemiconductorIndex: sectorSnap.SOXIndex.Value,
+	}
+	return s.Risk().structuralTrendEngine.Assess(macroData, sectorData), sectorData
+}
+
+func (s *System) evaluateDrawdown(macroAssessment *narrative.MacroRiskAssessment, structuralAssessment *narrative.StructuralTrendAssessment) *risk.MacroAwareDrawdownDecision {
+	if s.Risk().macroDrawdownEngine == nil || macroAssessment == nil {
+		return nil
+	}
+	return s.Risk().macroDrawdownEngine.Evaluate(macroAssessment, structuralAssessment)
+}
+
 func (s *System) checkCapitalPhase() (bool, string) {
 	if s.Risk().capitalController == nil {
 		return false, "capital controller not initialized"
@@ -912,6 +973,13 @@ func (s *System) updateCapitalMetrics(result domain.SimulationResult) {
 		s.Risk().capitalController.RecordLoss()
 	} else {
 		s.Risk().capitalController.RecordWin()
+	}
+
+	// Macro pipeline: assess macro risk, structural trends, and drawdown
+	macroAssessment := s.assessMacroRisk(s.Sim().lastQuotes)
+	if macroAssessment != nil {
+		structuralAssessment, _ := s.assessStructuralTrends(QuotesToMacroDataSnapshot(s.Sim().lastQuotes))
+		_ = s.evaluateDrawdown(macroAssessment, structuralAssessment)
 	}
 }
 
