@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -254,12 +255,7 @@ func countSkillRecommendations(recs []domain.Recommendation, skill string) int {
 }
 
 func containsSymbol(symbols []string, want string) bool {
-	for _, symbol := range symbols {
-		if symbol == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(symbols, want)
 }
 
 func TestExecuteRegistryResearchWithDarwinianWeightsAppliesWeightMarker(t *testing.T) {

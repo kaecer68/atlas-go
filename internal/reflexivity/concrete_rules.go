@@ -30,10 +30,7 @@ func (r PriceToFundamentalsRule) Apply(recs []domain.Recommendation, state domai
 	adjusted := make([]domain.Recommendation, len(recs))
 	for i, rec := range recs {
 		adjusted[i] = rec
-		adjusted[i].Conviction = int(float64(rec.Conviction) * 0.95)
-		if adjusted[i].Conviction < 0 {
-			adjusted[i].Conviction = 0
-		}
+		adjusted[i].Conviction = max(int(float64(rec.Conviction)*0.95), 0)
 	}
 	return adjusted
 }
@@ -48,10 +45,7 @@ func (r PnLBehaviorRule) Apply(recs []domain.Recommendation, state domain.Simula
 	adjusted := make([]domain.Recommendation, len(recs))
 	for i, rec := range recs {
 		adjusted[i] = rec
-		adjusted[i].Conviction = int(float64(rec.Conviction) * 0.90)
-		if adjusted[i].Conviction < 0 {
-			adjusted[i].Conviction = 0
-		}
+		adjusted[i].Conviction = max(int(float64(rec.Conviction)*0.90), 0)
 	}
 	return adjusted
 }
@@ -85,10 +79,7 @@ func (r NarrativeFlowsRule) Apply(recs []domain.Recommendation, state domain.Sim
 	for i, rec := range recs {
 		adjusted[i] = rec
 		if crowded[rec.Symbol] {
-			adjusted[i].Conviction = int(float64(rec.Conviction) * 0.90)
-			if adjusted[i].Conviction < 0 {
-				adjusted[i].Conviction = 0
-			}
+			adjusted[i].Conviction = max(int(float64(rec.Conviction)*0.90), 0)
 		}
 	}
 	return adjusted
@@ -126,10 +117,7 @@ func (r MarketPolicyRule) Apply(recs []domain.Recommendation, state domain.Simul
 	adjusted := make([]domain.Recommendation, len(recs))
 	for i, rec := range recs {
 		adjusted[i] = rec
-		adjusted[i].Conviction = int(float64(rec.Conviction) * 1.05)
-		if adjusted[i].Conviction > 100 {
-			adjusted[i].Conviction = 100
-		}
+		adjusted[i].Conviction = min(int(float64(rec.Conviction)*1.05), 100)
 	}
 	return adjusted
 }
@@ -174,10 +162,7 @@ func (r *ReversalDetectionRule) Apply(recs []domain.Recommendation, state domain
 	for i, rec := range recs {
 		adjusted[i] = rec
 		if extreme[rec.Symbol] {
-			adjusted[i].Conviction = int(float64(rec.Conviction) * 0.85)
-			if adjusted[i].Conviction < 0 {
-				adjusted[i].Conviction = 0
-			}
+			adjusted[i].Conviction = max(int(float64(rec.Conviction)*0.85), 0)
 		}
 	}
 	return adjusted

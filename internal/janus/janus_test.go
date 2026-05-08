@@ -31,7 +31,7 @@ func TestCohortPerformanceTracker_RecordAndRetrieve(t *testing.T) {
 func TestCohortPerformanceTracker_RollingWindow(t *testing.T) {
 	tracker := NewCohortPerformanceTracker(10)
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		tracker.RecordSnapshot(CohortSnapshot{
 			Regime:      prism.RegimeRiskOn,
 			SharpeRatio: float64(i),
@@ -183,8 +183,8 @@ func TestEngine_EndToEnd(t *testing.T) {
 
 	// Simulate 20 days of observations where RiskOn dominates recently.
 	now := time.Now()
-	for day := 0; day < 20; day++ {
-		for r := 0; r < int(prism.RegimeCount); r++ {
+	for day := range 20 {
+		for r := range int(prism.RegimeCount) {
 			regime := prism.RegimeType(r)
 			sharpe := 0.3
 			if regime == prism.RegimeRiskOn {
@@ -226,7 +226,7 @@ func TestEngine_ApplyAdjustment(t *testing.T) {
 	engine.EnsureAllRegimes()
 
 	// Seed data so that RiskOn gets a high weight and others low.
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		engine.RecordSnapshot(CohortSnapshot{
 			Regime:      prism.RegimeRiskOn,
 			SharpeRatio: 2.0,
@@ -234,7 +234,7 @@ func TestEngine_ApplyAdjustment(t *testing.T) {
 		})
 	}
 	for r := 1; r < int(prism.RegimeCount); r++ {
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			engine.RecordSnapshot(CohortSnapshot{
 				Regime:      prism.RegimeType(r),
 				SharpeRatio: -0.1,

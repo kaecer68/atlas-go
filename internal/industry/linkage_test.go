@@ -1,6 +1,7 @@
 package industry
 
 import (
+	"slices"
 	"testing"
 )
 
@@ -56,11 +57,8 @@ func TestGetUpstreamChain(t *testing.T) {
 
 	// Should include semiconductor and its suppliers
 	var hasSemiconductor bool
-	for _, industry := range chain {
-		if industry == "semiconductor" {
-			hasSemiconductor = true
-			break
-		}
+	if slices.Contains(chain, "semiconductor") {
+		hasSemiconductor = true
 	}
 	if !hasSemiconductor {
 		t.Error("expected semiconductor in upstream chain")

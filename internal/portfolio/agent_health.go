@@ -2,6 +2,7 @@ package portfolio
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -270,12 +271,12 @@ func (m *AgentHealthManager) String() string {
 }
 
 func joinLines(parts ...string) string {
-	result := ""
+	var result strings.Builder
 	for i, p := range parts {
 		if i > 0 {
-			result += "\n"
+			result.WriteString("\n")
 		}
-		result += p
+		result.WriteString(p)
 	}
-	return result
+	return result.String()
 }

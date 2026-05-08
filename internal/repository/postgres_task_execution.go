@@ -86,7 +86,7 @@ func (s *TaskExecutionStore) ListExecutions(ctx context.Context, filter domain.E
 			exit_code, error_message, summary, created_at, updated_at
 		FROM task_executions WHERE 1=1
 	`
-	args := []interface{}{}
+	args := []any{}
 	argIdx := 1
 
 	if filter.TaskType != "" {
@@ -306,7 +306,7 @@ func (s *TaskExecutionStore) QueryMetricTrends(ctx context.Context, filter domai
 		SELECT id, execution_id, experiment_id, series_key, metric_name, metric_scope, metric_value, baseline_value, delta_value, sampled_at, tags
 		FROM metric_trends WHERE 1=1
 	`
-	args := []interface{}{}
+	args := []any{}
 	argIdx := 1
 
 	if filter.ExperimentID != "" {
@@ -361,7 +361,7 @@ func (s *TaskExecutionStore) QueryMetricTrends(ctx context.Context, filter domai
 	return results, rows.Err()
 }
 
-func mustJSON(v interface{}) []byte {
+func mustJSON(v any) []byte {
 	b, _ := json.Marshal(v)
 	return b
 }

@@ -68,7 +68,7 @@ func (r *AgentRunner) ApplyExecutionInput(ctx context.Context, input ExecutionIn
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 		Type:      EventSystemStart,
 		Timestamp: time.Now(),
-		Payload: map[string]interface{}{
+		Payload: map[string]any{
 			"regime":        string(input.Regime),
 			"raw_count":     len(input.RawRecommendations),
 			"final_count":   len(input.FinalRecommendations),
@@ -113,7 +113,7 @@ func (r *AgentRunner) RunContextAgent(ctx context.Context, watchlist []string) e
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 		Type:      EventSystemStart,
 		Timestamp: time.Now(),
-		Payload: map[string]interface{}{
+		Payload: map[string]any{
 			"regime": string(regime),
 			"type":   "regime_inference",
 		},
@@ -208,7 +208,7 @@ func (r *AgentRunner) RunStyleAndSectorAgents(ctx context.Context, watchlist []s
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 		Type:      EventSystemStart,
 		Timestamp: time.Now(),
-		Payload: map[string]interface{}{
+		Payload: map[string]any{
 			"recommendation_count": len(recommendations),
 			"type":                 "agent_recommendations",
 		},
@@ -252,7 +252,7 @@ func (r *AgentRunner) ApplyRiskFilters(ctx context.Context) error {
 			ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 			Type:      EventRiskAlert,
 			Timestamp: time.Now(),
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"blocked_count": blockedCount,
 				"passed_count":  len(filtered),
 				"type":          "risk_filter",

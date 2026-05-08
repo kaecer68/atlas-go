@@ -39,14 +39,14 @@ type MetricsSnapshot struct {
 
 // MetricPoint represents a single time-series data point.
 type MetricPoint struct {
-	Time      time.Time              `json:"time"`
-	Name      string                 `json:"name"`
-	Value     float64                `json:"value"`
-	AgentID   string                 `json:"agent_id,omitempty"`
-	SessionID string                 `json:"session_id,omitempty"`
-	Symbol    string                 `json:"symbol,omitempty"`
-	Regime    string                 `json:"regime,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	Time      time.Time      `json:"time"`
+	Name      string         `json:"name"`
+	Value     float64        `json:"value"`
+	AgentID   string         `json:"agent_id,omitempty"`
+	SessionID string         `json:"session_id,omitempty"`
+	Symbol    string         `json:"symbol,omitempty"`
+	Regime    string         `json:"regime,omitempty"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
 }
 
 // AlertRepository defines the interface for alert persistence.

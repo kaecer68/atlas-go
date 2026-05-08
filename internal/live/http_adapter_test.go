@@ -52,7 +52,7 @@ func TestHTTPBrokerAdapterSubmitOrderSuccess(t *testing.T) {
 			t.Fatalf("unexpected idempotency key header: %s", got)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"order_id":   "oid-100",
 			"status":     "filled",
 			"fill_price": 99.5,
@@ -99,7 +99,7 @@ func TestHTTPBrokerAdapterHMACSignerSetsMethodAndVersion(t *testing.T) {
 			t.Fatalf("unexpected hmac signature value: got=%s want=%s", got, expected)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "placed"})
 	}))
 	defer server.Close()
 
@@ -195,7 +195,7 @@ func TestHTTPBrokerAdapterCustomRetryMatrixRetriesOnConfiguredCode(t *testing.T)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "placed"})
 	}))
 	defer server.Close()
 
@@ -230,7 +230,7 @@ func TestHTTPBrokerAdapterRetriesOnTooManyRequests(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "placed"})
 	}))
 	defer server.Close()
 
@@ -264,7 +264,7 @@ func TestHTTPBrokerAdapterRetriesOnServerError(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "placed"})
 	}))
 	defer server.Close()
 
@@ -305,7 +305,7 @@ func TestHTTPBrokerAdapterRejectsReplayNonceWithinTTL(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&calls, 1)
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "placed"})
 	}))
 	defer server.Close()
 
@@ -341,7 +341,7 @@ func TestHTTPBrokerAdapterAllowsNonceReuseAfterTTL(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&calls, 1)
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "placed"})
 	}))
 	defer server.Close()
 
@@ -375,7 +375,7 @@ func TestHTTPBrokerAdapterAllowsNonceReuseAfterTTL(t *testing.T) {
 func TestHTTPBrokerAdapterRejectsTimestampOutsideClockSkew(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "placed"})
 	}))
 	defer server.Close()
 
@@ -401,7 +401,7 @@ func TestHTTPBrokerAdapterRejectsTimestampOutsideClockSkew(t *testing.T) {
 func TestHTTPBrokerAdapterRejectsHMACSignerWithoutSecret(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "placed"})
 	}))
 	defer server.Close()
 
@@ -456,7 +456,7 @@ func TestHTTPBrokerAdapterKeyRotationUsesNewKeyID(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		keyIDs = append(keyIDs, r.Header.Get("X-Key-Id"))
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "placed"})
 	}))
 	defer server.Close()
 
@@ -497,7 +497,7 @@ func TestHTTPBrokerAdapterRejectsReplayNonceAcrossRestartsWithFileStore(t *testi
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&calls, 1)
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "placed"})
 	}))
 	defer server.Close()
 

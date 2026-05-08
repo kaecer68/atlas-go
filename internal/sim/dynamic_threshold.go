@@ -153,10 +153,10 @@ func (e *DynamicThresholdEngine) getAppetiteAdjustment() float64 {
 	}
 }
 
-func (e *DynamicThresholdEngine) GetStats() map[string]interface{} {
+func (e *DynamicThresholdEngine) GetStats() map[string]any {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	return map[string]interface{}{
+	return map[string]any{
 		"base_threshold":    e.baseThreshold,
 		"min_threshold":     e.minThreshold,
 		"max_threshold":     e.maxThreshold,

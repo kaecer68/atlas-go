@@ -241,7 +241,7 @@ func TestRunMultiDayTwentyDays(t *testing.T) {
 	dates := make([]time.Time, 20)
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		d := base.AddDate(0, 0, i)
 		dates[i] = d
 		key := d.Format("2006-01-02")

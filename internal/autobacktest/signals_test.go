@@ -1,6 +1,7 @@
 package autobacktest
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -46,7 +47,7 @@ func TestSignalEngineVaRWarningActive(t *testing.T) {
 	store := ledger.NewStore(dir).(*ledger.Store)
 
 	var outcomes []domain.RecommendationOutcome
-	for i := 0; i < 25; i++ {
+	for range 25 {
 		outcomes = append(outcomes, domain.RecommendationOutcome{
 			AgentID:       "agent1",
 			Symbol:        "2330",
@@ -68,13 +69,7 @@ func TestSignalEngineVaRWarningActive(t *testing.T) {
 		t.Fatalf("Evaluate: %v", err)
 	}
 
-	found := false
-	for _, s := range sigs.Active {
-		if s == SignalVaRWarning {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(sigs.Active, SignalVaRWarning)
 	if !found {
 		t.Errorf("expected SignalVaRWarning when VaR95 < -0.05, got active=%v", sigs.Active)
 	}
@@ -85,7 +80,7 @@ func TestSignalEngineVaRNoWarning(t *testing.T) {
 	store := ledger.NewStore(dir).(*ledger.Store)
 
 	var outcomes []domain.RecommendationOutcome
-	for i := 0; i < 25; i++ {
+	for range 25 {
 		outcomes = append(outcomes, domain.RecommendationOutcome{
 			AgentID:       "agent1",
 			Symbol:        "2330",
@@ -119,7 +114,7 @@ func TestSignalEngineCircuitBreakerActive(t *testing.T) {
 	store := ledger.NewStore(dir).(*ledger.Store)
 
 	var allOutcomes []domain.RecommendationOutcome
-	for i := 0; i < 25; i++ {
+	for i := range 25 {
 		session := domain.ReplaySession{ID: "sess-cb-" + string(rune('a'+i))}
 		summary := domain.SessionSummary{
 			SessionID:      session.ID,
@@ -131,7 +126,7 @@ func TestSignalEngineCircuitBreakerActive(t *testing.T) {
 			t.Fatalf("RecordSessionSummary[%d]: %v", i, err)
 		}
 		var outs []domain.RecommendationOutcome
-		for j := 0; j < 5; j++ {
+		for range 5 {
 			out := domain.RecommendationOutcome{
 				AgentID:       "agent1",
 				Symbol:        "2330",
@@ -159,13 +154,7 @@ func TestSignalEngineCircuitBreakerActive(t *testing.T) {
 		t.Fatalf("Evaluate: %v", err)
 	}
 
-	found := false
-	for _, s := range sigs.Active {
-		if s == SignalCircuitBreaker {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(sigs.Active, SignalCircuitBreaker)
 	if !found {
 		t.Errorf("expected SignalCircuitBreaker for drawdown < -0.15, got active=%v", sigs.Active)
 	}
@@ -176,7 +165,7 @@ func TestSignalEngineCircuitBreakerInactive(t *testing.T) {
 	store := ledger.NewStore(dir).(*ledger.Store)
 
 	var allOutcomes []domain.RecommendationOutcome
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		session := domain.ReplaySession{ID: "sess-ok-" + string(rune('0'+i))}
 		summary := domain.SessionSummary{
 			SessionID:      session.ID,
@@ -188,7 +177,7 @@ func TestSignalEngineCircuitBreakerInactive(t *testing.T) {
 			t.Fatalf("RecordSessionSummary: %v", err)
 		}
 		var outs []domain.RecommendationOutcome
-		for j := 0; j < 5; j++ {
+		for range 5 {
 			out := domain.RecommendationOutcome{
 				AgentID:       "agent1",
 				Symbol:        "2330",

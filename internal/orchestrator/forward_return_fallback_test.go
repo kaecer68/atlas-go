@@ -97,7 +97,7 @@ func TestGenerateForwardReturn_SymbolHashDeterminism(t *testing.T) {
 	}
 
 	results := make(map[float64]bool)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		fr := GenerateForwardReturn("2330", quote, domain.RegimeRiskOn, fallback)
 		results[fr] = true
 	}

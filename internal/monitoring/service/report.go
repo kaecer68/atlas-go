@@ -338,8 +338,8 @@ func (s *ReportService) loadRecommendationsForDate(date string) []domain.Recomme
 		}
 
 		var recs []domain.Recommendation
-		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-		for _, line := range lines {
+		lines := strings.SplitSeq(strings.TrimSpace(string(data)), "\n")
+		for line := range lines {
 			if strings.TrimSpace(line) == "" {
 				continue
 			}
@@ -353,7 +353,7 @@ func (s *ReportService) loadRecommendationsForDate(date string) []domain.Recomme
 				TargetPrice         float64                     `json:"target_price"`
 				StopLossPrice       float64                     `json:"stop_loss_price"`
 				Reason              string                      `json:"reason"`
-				FactorScores        domain.FactorScores         `json:"factor_scores,omitempty"`
+				FactorScores        domain.FactorScores         `json:"factor_scores"`
 				ConvictionBreakdown *domain.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
 			}
 			if err := json.Unmarshal([]byte(line), &outcome); err != nil {

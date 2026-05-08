@@ -86,12 +86,12 @@ func (h *HealthChecker) checkDataProvider() {
 	// 尝试获取行情（使用常见股票代码）
 	_, err := h.provider.GetQuotes(ctx, time.Now(), []string{"0050", "2330"})
 	if err != nil {
-		h.monitor.Warning("data_provider", fmt.Sprintf("Data provider check failed: %v", err), map[string]interface{}{
+		h.monitor.Warning("data_provider", fmt.Sprintf("Data provider check failed: %v", err), map[string]any{
 			"provider": h.provider.Name(),
 			"error":    err.Error(),
 		})
 	} else {
-		h.monitor.Info("data_provider", "Data provider healthy", map[string]interface{}{
+		h.monitor.Info("data_provider", "Data provider healthy", map[string]any{
 			"provider": h.provider.Name(),
 		})
 	}
@@ -112,7 +112,7 @@ func (h *HealthChecker) checkStateStore() {
 		return
 	}
 
-	h.monitor.Info("state_store", "State store healthy", map[string]interface{}{
+	h.monitor.Info("state_store", "State store healthy", map[string]any{
 		"cash":      portfolio.Cash,
 		"positions": len(h.stateStore.GetPositions()),
 	})

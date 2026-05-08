@@ -2,6 +2,7 @@ package janus
 
 import (
 	"fmt"
+	"maps"
 	"sync"
 	"time"
 
@@ -89,9 +90,7 @@ func (e *Engine) GetCohortWeights() map[prism.RegimeType]CohortWeight {
 
 	// Defensive copy.
 	out := make(map[prism.RegimeType]CohortWeight, len(e.lastWeights))
-	for k, v := range e.lastWeights {
-		out[k] = v
-	}
+	maps.Copy(out, e.lastWeights)
 	return out
 }
 
@@ -162,13 +161,7 @@ func (e *Engine) ApplyAdjustment(
 		// We use a gentler scaling: 1.0 + (weight - neutral) so that weight 0.30 => 1.10x.
 		neutral := 1.0 / float64(len(weights))
 		scale := 1.0 + (cw.Weight - neutral)
-		adj.Conviction = int(float64(adj.Conviction) * scale)
-		if adj.Conviction > 100 {
-			adj.Conviction = 100
-		}
-		if adj.Conviction < 0 {
-			adj.Conviction = 0
-		}
+		adj.Conviction = max(min(int(float64(adj.Conviction)*scale), 100), 0)
 		adjusted[i] = adj
 	}
 	return adjusted
@@ -213,7 +206,7 @@ func mapDomainRegimeToPRISM(r domain.Regime) prism.RegimeType {
 // EnsureAllRegimes initializes tracker slots for every PRISM regime so that
 // weight calculations produce entries even before data arrives.
 func (e *Engine) EnsureAllRegimes() {
-	for i := 0; i < int(prism.RegimeCount); i++ {
+	for i := range int(prism.RegimeCount) {
 		regime := prism.RegimeType(i)
 		// Inject a neutral zero snapshot so the regime appears in performance maps.
 		e.tracker.RecordSnapshot(CohortSnapshot{

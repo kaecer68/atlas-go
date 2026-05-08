@@ -85,7 +85,7 @@ func (e *RuleEngine) evaluateRules(state *livestore.State) {
 		// 评估条件
 		triggered, message := rule.Condition(state)
 		if triggered {
-			e.monitor.Alert(rule.Level, "rule_engine", fmt.Sprintf("[%s] %s", rule.Name, message), map[string]interface{}{
+			e.monitor.Alert(rule.Level, "rule_engine", fmt.Sprintf("[%s] %s", rule.Name, message), map[string]any{
 				"rule":        rule.Name,
 				"description": rule.Description,
 			})

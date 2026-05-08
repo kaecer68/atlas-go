@@ -2,6 +2,7 @@ package narrative
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 )
@@ -27,11 +28,8 @@ func TestTaiwanRSSGeopoliticalProvider_Feeds(t *testing.T) {
 
 	found := 0
 	for _, feed := range p.feeds {
-		for _, expected := range expectedFeeds {
-			if feed == expected {
-				found++
-				break
-			}
+		if slices.Contains(expectedFeeds, feed) {
+			found++
 		}
 	}
 
@@ -49,13 +47,7 @@ func TestTaiwanRSSGeopoliticalProvider_Keywords(t *testing.T) {
 	// Verify Chinese keywords
 	chineseKeywords := []string{"台灣", "中國", "兩岸", "軍演", "制裁"}
 	for _, kw := range chineseKeywords {
-		found := false
-		for _, k := range p.keywords {
-			if k == kw {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(p.keywords, kw)
 		if !found {
 			t.Fatalf("expected keyword %q not found", kw)
 		}
@@ -64,13 +56,7 @@ func TestTaiwanRSSGeopoliticalProvider_Keywords(t *testing.T) {
 	// Verify English keywords
 	englishKeywords := []string{"taiwan", "china", "cross-strait", "military drill"}
 	for _, kw := range englishKeywords {
-		found := false
-		for _, k := range p.keywords {
-			if k == kw {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(p.keywords, kw)
 		if !found {
 			t.Fatalf("expected keyword %q not found", kw)
 		}

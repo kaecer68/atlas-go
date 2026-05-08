@@ -111,7 +111,7 @@ func main() {
 	}
 
 	// Verification
-	report := make(map[string]interface{})
+	report := make(map[string]any)
 	passed := true
 
 	status := o.Status()
@@ -135,7 +135,7 @@ func main() {
 	// Check circuit breaker state file from the injected CB
 	cbData, cbErr := os.ReadFile(circuitStatePath)
 	if cbErr == nil {
-		var cbState map[string]interface{}
+		var cbState map[string]any
 		if err := json.Unmarshal(cbData, &cbState); err != nil {
 			log.Printf("[Staging Drill] WARNING: failed to unmarshal circuit breaker state: %v", err)
 			report["circuit_breaker_state"] = "unknown (invalid json)"

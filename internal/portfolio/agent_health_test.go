@@ -38,7 +38,7 @@ func TestMuteAfterConsecutiveLosses(t *testing.T) {
 	m := NewAgentHealthManagerWithConfig(DefaultAgentHealthConfig())
 	agentID := "test-agent-2"
 
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		m.RecordOutcome(agentID, false, 0.5, 0.5)
 	}
 	h := m.GetHealth(agentID)
@@ -71,7 +71,7 @@ func TestAutoUnmuteAfterConsecutiveWins(t *testing.T) {
 	m := NewAgentHealthManagerWithConfig(DefaultAgentHealthConfig())
 	agentID := "test-agent-4"
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		m.RecordOutcome(agentID, false, 0.5, 0.5)
 	}
 	h := m.GetHealth(agentID)
@@ -79,7 +79,7 @@ func TestAutoUnmuteAfterConsecutiveWins(t *testing.T) {
 		t.Fatalf("precondition: expected status=muted after 5 losses, got %s", h.Status)
 	}
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		m.RecordOutcome(agentID, true, 0.5, 0.5)
 	}
 	h = m.GetHealth(agentID)
@@ -98,7 +98,7 @@ func TestAutoUnmuteAfterTimeBasedRecovery(t *testing.T) {
 	m := NewAgentHealthManagerWithConfig(DefaultAgentHealthConfig())
 	agentID := "test-agent-5"
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		m.RecordOutcome(agentID, false, 0.5, 0.5)
 	}
 	h := m.GetHealth(agentID)
@@ -157,7 +157,7 @@ func TestIsAgentHealthy(t *testing.T) {
 		t.Error("expected agent with healthy status to be healthy")
 	}
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		m.RecordOutcome(agentID, false, 0.5, 0.5)
 	}
 	if m.IsAgentHealthy(agentID) {
@@ -169,7 +169,7 @@ func TestGetMutedAgents(t *testing.T) {
 	m := NewAgentHealthManagerWithConfig(DefaultAgentHealthConfig())
 
 	m.RecordOutcome("agent-a", false, 0.5, 0.5)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		m.RecordOutcome("agent-b", false, 0.5, 0.5)
 	}
 	m.RecordOutcome("agent-c", true, 1.0, 0.7)

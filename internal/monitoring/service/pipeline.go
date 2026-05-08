@@ -381,11 +381,8 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 
 	var targetSession string
 	if sessionID != "" {
-		for _, dir := range sessionDirs {
-			if dir == sessionID {
-				targetSession = sessionID
-				break
-			}
+		if slices.Contains(sessionDirs, sessionID) {
+			targetSession = sessionID
 		}
 	} else {
 		slices.SortFunc(sessionDirs, func(a, b string) int {
@@ -464,8 +461,8 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 	outcomesPath := filepath.Join(sessionsDir, targetSession, "recommendation_outcomes.jsonl")
 	items := make([]PipelineItemData, 0)
 	if data, err := os.ReadFile(outcomesPath); err == nil {
-		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-		for _, line := range lines {
+		lines := strings.SplitSeq(strings.TrimSpace(string(data)), "\n")
+		for line := range lines {
 			if strings.TrimSpace(line) == "" {
 				continue
 			}

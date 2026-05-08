@@ -29,7 +29,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 func (h *Handlers) HandleIndustryClassification(r *http.Request) (int, any) {
 	result := h.Svc.GetClassificationTree()
 
-	return http.StatusOK, map[string]interface{}{
+	return http.StatusOK, map[string]any{
 		"industries": result,
 		"count":      len(result),
 	}
@@ -41,9 +41,9 @@ func (h *Handlers) HandleIndustrySeasonality(r *http.Request) (int, any) {
 
 	active, historical, adjustment := h.Svc.GetSeasonalPatterns(industryID, now)
 
-	var activePatterns []map[string]interface{}
+	var activePatterns []map[string]any
 	for _, p := range active {
-		activePatterns = append(activePatterns, map[string]interface{}{
+		activePatterns = append(activePatterns, map[string]any{
 			"id":                  p.ID,
 			"name":                p.Name,
 			"description":         p.Description,
@@ -57,9 +57,9 @@ func (h *Handlers) HandleIndustrySeasonality(r *http.Request) (int, any) {
 		})
 	}
 
-	var historicalPatterns []map[string]interface{}
+	var historicalPatterns []map[string]any
 	for _, p := range historical {
-		historicalPatterns = append(historicalPatterns, map[string]interface{}{
+		historicalPatterns = append(historicalPatterns, map[string]any{
 			"id":                  p.ID,
 			"name":                p.Name,
 			"name_en":             p.NameEN,
@@ -77,7 +77,7 @@ func (h *Handlers) HandleIndustrySeasonality(r *http.Request) (int, any) {
 		})
 	}
 
-	return http.StatusOK, map[string]interface{}{
+	return http.StatusOK, map[string]any{
 		"current_date":        now.Format("2006-01-02"),
 		"active_patterns":     activePatterns,
 		"pattern_count":       len(activePatterns),
@@ -92,7 +92,7 @@ func (h *Handlers) HandleIndustrySeasonalityCalendar(r *http.Request) (int, any)
 	now := time.Now()
 	months := h.Svc.GetSeasonalCalendar(industryID, now.Year())
 
-	return http.StatusOK, map[string]interface{}{
+	return http.StatusOK, map[string]any{
 		"year":     now.Year(),
 		"industry": industryID,
 		"months":   months,
@@ -108,9 +108,9 @@ func (h *Handlers) HandleIndustryCycle(r *http.Request) (int, any) {
 	}
 
 	if industryID == "" {
-		var allPositions []map[string]interface{}
+		var allPositions []map[string]any
 		for _, pos := range positions {
-			allPositions = append(allPositions, map[string]interface{}{
+			allPositions = append(allPositions, map[string]any{
 				"industry":        pos.Industry,
 				"name":            pos.Name,
 				"business_cycle":  pos.BusinessCycle,
@@ -123,14 +123,14 @@ func (h *Handlers) HandleIndustryCycle(r *http.Request) (int, any) {
 				"trend":           pos.Trend,
 			})
 		}
-		return http.StatusOK, map[string]interface{}{
+		return http.StatusOK, map[string]any{
 			"industries": allPositions,
 			"count":      len(allPositions),
 		}
 	}
 
 	pos := positions[0]
-	return http.StatusOK, map[string]interface{}{
+	return http.StatusOK, map[string]any{
 		"industry":        pos.Industry,
 		"business_cycle":  pos.BusinessCycle,
 		"inventory_cycle": pos.InventoryCycle,
@@ -154,7 +154,7 @@ func (h *Handlers) HandleIndustryLinkage(r *http.Request) (int, any) {
 		return http.StatusInternalServerError, map[string]string{"error": err.Error()}
 	}
 
-	return http.StatusOK, map[string]interface{}{
+	return http.StatusOK, map[string]any{
 		"industry":      info.Industry,
 		"upstream":      info.Upstream,
 		"downstream":    info.Downstream,
@@ -172,7 +172,7 @@ func (h *Handlers) HandleIndustryRisk(r *http.Request) (int, any) {
 
 	info := h.Svc.GetRiskInfo(symbol, industryID)
 
-	return http.StatusOK, map[string]interface{}{
+	return http.StatusOK, map[string]any{
 		"symbol":       info.Symbol,
 		"industry":     info.Industry,
 		"risk_count":   info.RiskCount,
@@ -185,9 +185,9 @@ func (h *Handlers) HandleIndustryOverview(r *http.Request) (int, any) {
 	now := time.Now()
 	overviews := h.Svc.GetIndustryOverview(now)
 
-	var industries []map[string]interface{}
+	var industries []map[string]any
 	for _, o := range overviews {
-		industries = append(industries, map[string]interface{}{
+		industries = append(industries, map[string]any{
 			"id":                o.ID,
 			"name":              o.Name,
 			"cycle_phase":       o.CyclePhase,
@@ -200,7 +200,7 @@ func (h *Handlers) HandleIndustryOverview(r *http.Request) (int, any) {
 		})
 	}
 
-	return http.StatusOK, map[string]interface{}{
+	return http.StatusOK, map[string]any{
 		"industries": industries,
 		"count":      len(industries),
 		"updated_at": now,
@@ -243,15 +243,15 @@ func (h *Handlers) HandleShockSimulation(r *http.Request) (int, any) {
 
 	impacts := h.Svc.PropagateShock(req.SourceIndustry, req.ShockMagnitude, req.MaxDepth)
 
-	var impactList []map[string]interface{}
+	var impactList []map[string]any
 	for _, impact := range impacts {
-		impactList = append(impactList, map[string]interface{}{
+		impactList = append(impactList, map[string]any{
 			"industry": impact.Industry,
 			"impact":   impact.Impact,
 		})
 	}
 
-	return http.StatusOK, map[string]interface{}{
+	return http.StatusOK, map[string]any{
 		"source":       req.SourceIndustry,
 		"shock":        req.ShockMagnitude,
 		"max_depth":    req.MaxDepth,
@@ -263,9 +263,9 @@ func (h *Handlers) HandleShockSimulation(r *http.Request) (int, any) {
 func (h *Handlers) HandleIndustryGraph(r *http.Request) (int, any) {
 	nodes, edges := h.Svc.GetIndustryGraph()
 
-	var nodeList []map[string]interface{}
+	var nodeList []map[string]any
 	for _, n := range nodes {
-		nodeList = append(nodeList, map[string]interface{}{
+		nodeList = append(nodeList, map[string]any{
 			"id":                  n.ID,
 			"systemic_importance": n.SystemicImportance,
 			"upstream_count":      n.UpstreamCount,
@@ -273,9 +273,9 @@ func (h *Handlers) HandleIndustryGraph(r *http.Request) (int, any) {
 		})
 	}
 
-	var edgeList []map[string]interface{}
+	var edgeList []map[string]any
 	for _, e := range edges {
-		edgeList = append(edgeList, map[string]interface{}{
+		edgeList = append(edgeList, map[string]any{
 			"source":      e.Source,
 			"target":      e.Target,
 			"correlation": e.Correlation,
@@ -283,7 +283,7 @@ func (h *Handlers) HandleIndustryGraph(r *http.Request) (int, any) {
 		})
 	}
 
-	return http.StatusOK, map[string]interface{}{
+	return http.StatusOK, map[string]any{
 		"nodes": nodeList,
 		"edges": edgeList,
 	}

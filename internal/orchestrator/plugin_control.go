@@ -323,10 +323,7 @@ func (SuperinvestorExecutor) Supports(agent domain.AgentSpec) bool {
 
 func (SuperinvestorExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy) []domain.Recommendation {
 	params := config.GetParametersConfig().Orchestrator
-	minConviction := params.SuperinvestorMinConviction.Value
-	if policy.ConvictionFloor > minConviction {
-		minConviction = policy.ConvictionFloor
-	}
+	minConviction := max(policy.ConvictionFloor, params.SuperinvestorMinConviction.Value)
 
 	filtered := make([]domain.Recommendation, 0, len(recs))
 	for _, rec := range recs {

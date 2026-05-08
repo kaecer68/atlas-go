@@ -111,10 +111,7 @@ func (hp *HistoricalPrices) Volatility(symbol string, days int) float64 {
 		return 0
 	}
 	returns := make([]float64, 0, days)
-	start := len(series) - days - 1
-	if start < 0 {
-		start = 0
-	}
+	start := max(len(series)-days-1, 0)
 	for i := start + 1; i < len(series); i++ {
 		if series[i-1] == 0 {
 			continue

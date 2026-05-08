@@ -21,11 +21,11 @@ type ParameterSnapshot struct {
 
 // ParameterChange records a single parameter modification.
 type ParameterChange struct {
-	Parameter string      `json:"parameter"`
-	OldValue  interface{} `json:"old_value"`
-	NewValue  interface{} `json:"new_value"`
-	Reason    string      `json:"reason,omitempty"`
-	Timestamp time.Time   `json:"timestamp"`
+	Parameter string    `json:"parameter"`
+	OldValue  any       `json:"old_value"`
+	NewValue  any       `json:"new_value"`
+	Reason    string    `json:"reason,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // SnapshotStore manages parameter snapshots and audit history.

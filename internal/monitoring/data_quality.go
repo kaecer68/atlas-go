@@ -11,12 +11,12 @@ import (
 
 // DataQualityCheck represents a single data quality check result.
 type DataQualityCheck struct {
-	Name      string                 `json:"name"`
-	Status    CheckStatus            `json:"status"`
-	Message   string                 `json:"message"`
-	Details   map[string]interface{} `json:"details,omitempty"`
-	CheckedAt time.Time              `json:"checked_at"`
-	Duration  time.Duration          `json:"duration_ms"`
+	Name      string         `json:"name"`
+	Status    CheckStatus    `json:"status"`
+	Message   string         `json:"message"`
+	Details   map[string]any `json:"details,omitempty"`
+	CheckedAt time.Time      `json:"checked_at"`
+	Duration  time.Duration  `json:"duration_ms"`
 }
 
 // CheckStatus represents the status of a quality check.
@@ -125,7 +125,7 @@ func (dq *DataQualityChecker) checkAlertsFile(ctx context.Context) DataQualityCh
 	if info.Size() == 0 {
 		check.Status = StatusWarning
 		check.Message = "警報檔案為空（尚無警報觸發）"
-		check.Details = map[string]interface{}{
+		check.Details = map[string]any{
 			"path":       alertsPath,
 			"size_bytes": 0,
 			"modified":   info.ModTime(),
@@ -141,7 +141,7 @@ func (dq *DataQualityChecker) checkAlertsFile(ctx context.Context) DataQualityCh
 		check.Message = "警報檔案正常"
 	}
 
-	check.Details = map[string]interface{}{
+	check.Details = map[string]any{
 		"path":       alertsPath,
 		"size_bytes": info.Size(),
 		"modified":   info.ModTime(),
@@ -192,7 +192,7 @@ func (dq *DataQualityChecker) checkLedgerFiles(ctx context.Context) DataQualityC
 
 	check.Status = StatusOK
 	check.Message = fmt.Sprintf("找到 %d 個 Ledger 檔案", jsonlCount)
-	check.Details = map[string]interface{}{
+	check.Details = map[string]any{
 		"file_count":    jsonlCount,
 		"total_size_mb": float64(totalSize) / (1024 * 1024),
 		"newest_file":   newestMod.Format("2006-01-02 15:04:05"),
@@ -237,7 +237,7 @@ func (dq *DataQualityChecker) checkSessionFiles(ctx context.Context) DataQuality
 		check.Message = fmt.Sprintf("找到 %d 個 Session 記錄", jsonCount)
 	}
 
-	check.Details = map[string]interface{}{
+	check.Details = map[string]any{
 		"session_count": jsonCount,
 	}
 
@@ -269,7 +269,7 @@ func (dq *DataQualityChecker) checkExperimentFiles(ctx context.Context) DataQual
 
 	check.Status = StatusOK
 	check.Message = fmt.Sprintf("找到 %d 個實驗記錄", jsonCount)
-	check.Details = map[string]interface{}{
+	check.Details = map[string]any{
 		"experiment_count": jsonCount,
 	}
 
@@ -300,7 +300,7 @@ func (dq *DataQualityChecker) checkConfigFiles(ctx context.Context) DataQualityC
 
 	check.Status = StatusOK
 	check.Message = "所有必要設定檔存在"
-	check.Details = map[string]interface{}{
+	check.Details = map[string]any{
 		"checked_files": requiredFiles,
 	}
 
@@ -376,7 +376,7 @@ func (dq *DataQualityChecker) checkDataDirectorySize(ctx context.Context) DataQu
 
 	check.Status = StatusOK
 	check.Message = fmt.Sprintf("資料目錄大小 %.1f MB (%d 個檔案)", sizeMB, fileCount)
-	check.Details = map[string]interface{}{
+	check.Details = map[string]any{
 		"size_mb":    sizeMB,
 		"file_count": fileCount,
 	}

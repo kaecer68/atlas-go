@@ -280,7 +280,7 @@ func TestSpawningManager(t *testing.T) {
 		}
 
 		// Day 1-2: not extinct yet
-		for i := 0; i < 2; i++ {
+		for i := range 2 {
 			extinct := manager.CheckExtinction(weights)
 			if len(extinct) != 0 {
 				t.Fatalf("expected no extinction on day %d", i+1)

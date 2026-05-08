@@ -138,10 +138,7 @@ func (ie *InferenceEngine) EstimateVaR(returns []float64, confidence float64) (V
 	sort.Float64s(sorted)
 
 	// Historical VaR: the quantile at (1-confidence) level
-	idx := int(math.Floor(float64(len(sorted)) * (1.0 - confidence)))
-	if idx < 0 {
-		idx = 0
-	}
+	idx := max(int(math.Floor(float64(len(sorted))*(1.0-confidence))), 0)
 	if idx >= len(sorted) {
 		idx = len(sorted) - 1
 	}

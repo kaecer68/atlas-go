@@ -45,7 +45,7 @@ func TestGuardedToHTTPFlowIntegration(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed", "order_id": "oid-int-1"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "placed", "order_id": "oid-int-1"})
 	}))
 	defer server.Close()
 
@@ -92,7 +92,7 @@ func TestGuardedToHTTPFlowIntegration(t *testing.T) {
 func TestHTTPFlowIntegrationRejectsClockSkew(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "placed"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "placed"})
 	}))
 	defer server.Close()
 

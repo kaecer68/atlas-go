@@ -98,7 +98,7 @@ func TestInMemoryStore_Concurrent(t *testing.T) {
 	store := NewInMemoryStore()
 	var wg sync.WaitGroup
 	n := 50
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
@@ -238,7 +238,7 @@ func TestGenerateID_Format(t *testing.T) {
 
 func TestGenerateID_Unique(t *testing.T) {
 	ids := make(map[string]bool)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		id := generateID()
 		if ids[id] {
 			t.Errorf("duplicate: %s", id)

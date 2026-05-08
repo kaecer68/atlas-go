@@ -2,6 +2,7 @@ package industry
 
 import (
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -177,9 +178,7 @@ func (ct *CycleTracker) GetPosition(industryID string) (*CyclePosition, bool) {
 // GetAllPositions returns all current cycle positions.
 func (ct *CycleTracker) GetAllPositions() map[string]*CyclePosition {
 	result := make(map[string]*CyclePosition)
-	for k, v := range ct.positions {
-		result[k] = v
-	}
+	maps.Copy(result, ct.positions)
 	return result
 }
 
