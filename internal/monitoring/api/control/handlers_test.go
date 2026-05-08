@@ -10,7 +10,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
-// newTestHandlers creates Handlers backed by a temp directory for testing.
 func newTestHandlers(t *testing.T) *Handlers {
 	t.Helper()
 	dir := t.TempDir()
@@ -18,7 +17,7 @@ func newTestHandlers(t *testing.T) *Handlers {
 	return &Handlers{Svc: svc}
 }
 
-func postJSON(t *testing.T, url string, body any) (*httptest.ResponseRecorder, *http.Request) {
+func postJSON(t *testing.T, url string, body any) *http.Request {
 	t.Helper()
 	b, err := json.Marshal(body)
 	if err != nil {
@@ -26,21 +25,21 @@ func postJSON(t *testing.T, url string, body any) (*httptest.ResponseRecorder, *
 	}
 	req := httptest.NewRequest(http.MethodPost, url, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	return w, req
+	return req
 }
 
-func assertStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
+func assertStatus(t *testing.T, status int, want int) {
 	t.Helper()
-	if w.Code != want {
-		t.Errorf("status = %d, want %d", w.Code, want)
+	if status != want {
+		t.Errorf("status = %d, want %d", status, want)
 	}
 }
 
-func assertJSONKey(t *testing.T, w *httptest.ResponseRecorder, key string) map[string]any {
+func assertJSONKey(t *testing.T, body any, key string) map[string]any {
 	t.Helper()
+	b, _ := json.Marshal(body)
 	var m map[string]any
-	if err := json.NewDecoder(w.Body).Decode(&m); err != nil {
+	if err := json.NewDecoder(bytes.NewReader(b)).Decode(&m); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 	if _, ok := m[key]; !ok {
@@ -49,16 +48,14 @@ func assertJSONKey(t *testing.T, w *httptest.ResponseRecorder, key string) map[s
 	return m
 }
 
-// --- Pause Agent ---
-
 func TestHandlePauseAgent_Success(t *testing.T) {
 	h := newTestHandlers(t)
-	w, req := postJSON(t, "/api/control/pause-agent", map[string]string{
+	req := postJSON(t, "/api/control/pause-agent", map[string]string{
 		"agent_id": "growth-01", "reason": "underperforming", "operator": "admin",
 	})
-	h.HandlePauseAgent(w, req)
-	assertStatus(t, w, http.StatusOK)
-	m := assertJSONKey(t, w, "success")
+	status, body := h.HandlePauseAgent(req)
+	assertStatus(t, status, http.StatusOK)
+	m := assertJSONKey(t, body, "success")
 	if m["success"] != true {
 		t.Errorf("success = %v", m["success"])
 	}
@@ -66,161 +63,138 @@ func TestHandlePauseAgent_Success(t *testing.T) {
 
 func TestHandlePauseAgent_MissingAgentID(t *testing.T) {
 	h := newTestHandlers(t)
-	w, req := postJSON(t, "/api/control/pause-agent", map[string]string{"reason": "test"})
-	h.HandlePauseAgent(w, req)
-	assertStatus(t, w, http.StatusBadRequest)
+	req := postJSON(t, "/api/control/pause-agent", map[string]string{"reason": "test"})
+	status, _ := h.HandlePauseAgent(req)
+	assertStatus(t, status, http.StatusBadRequest)
 }
 
 func TestHandlePauseAgent_MethodNotAllowed(t *testing.T) {
-	h := newTestHandlers(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/control/pause-agent", nil)
-	w := httptest.NewRecorder()
-	h.HandlePauseAgent(w, req)
-	assertStatus(t, w, http.StatusMethodNotAllowed)
+	t.Skip("method enforcement moved to shared.Get/Post adapter at routing level")
 }
-
-// --- Resume Agent ---
 
 func TestHandleResumeAgent_Success(t *testing.T) {
 	h := newTestHandlers(t)
-	w, req := postJSON(t, "/api/control/resume-agent", map[string]string{
+	req := postJSON(t, "/api/control/resume-agent", map[string]string{
 		"agent_id": "growth-01", "reason": "recovered", "operator": "admin",
 	})
-	h.HandleResumeAgent(w, req)
-	assertStatus(t, w, http.StatusOK)
-	assertJSONKey(t, w, "success")
+	status, body := h.HandleResumeAgent(req)
+	assertStatus(t, status, http.StatusOK)
+	assertJSONKey(t, body, "success")
 }
 
 func TestHandleResumeAgent_MissingAgentID(t *testing.T) {
 	h := newTestHandlers(t)
-	w, req := postJSON(t, "/api/control/resume-agent", map[string]string{"reason": "test"})
-	h.HandleResumeAgent(w, req)
-	assertStatus(t, w, http.StatusBadRequest)
+	req := postJSON(t, "/api/control/resume-agent", map[string]string{"reason": "test"})
+	status, _ := h.HandleResumeAgent(req)
+	assertStatus(t, status, http.StatusBadRequest)
 }
-
-// --- Set Model Weight ---
 
 func TestHandleSetModelWeight_Success(t *testing.T) {
 	h := newTestHandlers(t)
-	w, req := postJSON(t, "/api/control/set-model-weight", map[string]any{
+	req := postJSON(t, "/api/control/set-model-weight", map[string]any{
 		"model_id": "growth-01", "weight": 1.5, "operator": "admin", "reason": "boosting",
 	})
-	h.HandleSetModelWeight(w, req)
-	assertStatus(t, w, http.StatusOK)
-	assertJSONKey(t, w, "success")
+	status, body := h.HandleSetModelWeight(req)
+	assertStatus(t, status, http.StatusOK)
+	assertJSONKey(t, body, "success")
 }
 
 func TestHandleSetModelWeight_MissingAgentID(t *testing.T) {
 	h := newTestHandlers(t)
-	w, req := postJSON(t, "/api/control/set-model-weight", map[string]any{"weight": 1.5})
-	h.HandleSetModelWeight(w, req)
-	assertStatus(t, w, http.StatusBadRequest)
+	req := postJSON(t, "/api/control/set-model-weight", map[string]any{"weight": 1.5})
+	status, _ := h.HandleSetModelWeight(req)
+	assertStatus(t, status, http.StatusBadRequest)
 }
-
-// --- Approve Recommendation ---
 
 func TestHandleApproveRecommendation_Success(t *testing.T) {
 	h := newTestHandlers(t)
-	w, req := postJSON(t, "/api/control/approve-recommendation", map[string]string{
+	req := postJSON(t, "/api/control/approve-recommendation", map[string]string{
 		"symbol": "2330", "agent_id": "growth-01", "operator": "admin",
 	})
-	h.HandleApproveRecommendation(w, req)
-	assertStatus(t, w, http.StatusOK)
-	assertJSONKey(t, w, "success")
+	status, body := h.HandleApproveRecommendation(req)
+	assertStatus(t, status, http.StatusOK)
+	assertJSONKey(t, body, "success")
 }
-
-// --- Reject Recommendation ---
 
 func TestHandleRejectRecommendation_Success(t *testing.T) {
 	h := newTestHandlers(t)
-	w, req := postJSON(t, "/api/control/reject-recommendation", map[string]string{
+	req := postJSON(t, "/api/control/reject-recommendation", map[string]string{
 		"symbol": "2330", "agent_id": "growth-01", "operator": "admin", "reason": "overvalued",
 	})
-	h.HandleRejectRecommendation(w, req)
-	assertStatus(t, w, http.StatusOK)
-	assertJSONKey(t, w, "success")
+	status, body := h.HandleRejectRecommendation(req)
+	assertStatus(t, status, http.StatusOK)
+	assertJSONKey(t, body, "success")
 }
-
-// --- Active Overrides ---
 
 func TestHandleActiveOverrides_EmptyInitially(t *testing.T) {
 	h := newTestHandlers(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/control/active-overrides", nil)
-	w := httptest.NewRecorder()
-	h.HandleActiveOverrides(w, req)
-	assertStatus(t, w, http.StatusOK)
+	status, _ := h.HandleActiveOverrides(req)
+	assertStatus(t, status, http.StatusOK)
 }
 
 func TestHandleActiveOverrides_AfterIntervention(t *testing.T) {
 	h := newTestHandlers(t)
-	// Pause an agent first
-	w, req := postJSON(t, "/api/control/pause-agent", map[string]string{
+	req := postJSON(t, "/api/control/pause-agent", map[string]string{
 		"agent_id": "growth-01", "reason": "underperforming", "operator": "admin",
 	})
-	h.HandlePauseAgent(w, req)
+	_, _ = h.HandlePauseAgent(req)
 
-	// Check active overrides includes it
 	req2 := httptest.NewRequest(http.MethodGet, "/api/control/active-overrides", nil)
-	w2 := httptest.NewRecorder()
-	h.HandleActiveOverrides(w2, req2)
-	assertStatus(t, w2, http.StatusOK)
+	status, _ := h.HandleActiveOverrides(req2)
+	assertStatus(t, status, http.StatusOK)
 }
-
-// --- Audit Log ---
 
 func TestHandleAuditLog_EmptyInitially(t *testing.T) {
 	h := newTestHandlers(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/control/audit-log", nil)
-	w := httptest.NewRecorder()
-	h.HandleAuditLog(w, req)
-	assertStatus(t, w, http.StatusOK)
+	status, _ := h.HandleAuditLog(req)
+	assertStatus(t, status, http.StatusOK)
 }
 
 func TestHandleAuditLog_AfterInterventions(t *testing.T) {
 	h := newTestHandlers(t)
-	// Record a few interventions
 	for i, action := range []string{"pause_agent", "resume_agent"} {
-		w, req := postJSON(t, "/api/control/"+action, map[string]string{
+		req := postJSON(t, "/api/control/"+action, map[string]string{
 			"agent_id": "test-0" + string(rune('1'+i)), "reason": "test", "operator": "admin",
 		})
 		if action == "pause_agent" {
-			h.HandlePauseAgent(w, req)
+			_, _ = h.HandlePauseAgent(req)
 		} else {
-			h.HandleResumeAgent(w, req)
+			_, _ = h.HandleResumeAgent(req)
 		}
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/control/audit-log", nil)
-	w := httptest.NewRecorder()
-	h.HandleAuditLog(w, req)
-	assertStatus(t, w, http.StatusOK)
+	status, _ := h.HandleAuditLog(req)
+	assertStatus(t, status, http.StatusOK)
 }
-
-// --- Route Registration ---
 
 func TestRegisterRoutes(t *testing.T) {
 	h := newTestHandlers(t)
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
-	routes := []string{
-		"/api/control/pause-agent",
-		"/api/control/resume-agent",
-		"/api/control/set-model-weight",
-		"/api/control/sector-ban",
-		"/api/control/approve-recommendation",
-		"/api/control/reject-recommendation",
-		"/api/control/audit-log",
-		"/api/control/active-overrides",
-		"/api/agents/health",
+	routes := []struct {
+		method string
+		path   string
+	}{
+		{"POST", "/api/control/pause-agent"},
+		{"POST", "/api/control/resume-agent"},
+		{"POST", "/api/control/set-model-weight"},
+		{"POST", "/api/control/sector-ban"},
+		{"POST", "/api/control/approve-recommendation"},
+		{"POST", "/api/control/reject-recommendation"},
+		{"GET", "/api/control/audit-log"},
+		{"GET", "/api/control/active-overrides"},
+		{"GET", "/api/agents/health"},
 	}
-	for _, route := range routes {
-		req := httptest.NewRequest(http.MethodGet, route, nil)
+	for _, r := range routes {
+		req := httptest.NewRequest(r.method, r.path, nil)
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)
-		// All routes should handle GET (even if they return 405, they're registered)
 		if w.Code == 0 {
-			t.Errorf("route %s not registered (no handler)", route)
+			t.Errorf("route %s %s not registered (no handler)", r.method, r.path)
 		}
 	}
 }
