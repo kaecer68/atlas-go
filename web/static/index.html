@@ -1283,6 +1283,44 @@ body { display: flex; margin: 0; min-height: 100vh; }
     border-top: 1px solid var(--border);
     line-height: 1.6;
   }
+
+  /* Scatter tooltip */
+  .ev-scatter-tip {
+    display: none;
+    position: absolute;
+    z-index: 10;
+    pointer-events: none;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text);
+    box-shadow: 0 4px 12px rgba(0,0,0,.3);
+    min-width: 110px;
+  }
+  .ev-scatter-tip strong { font-size: 12px; display: block; margin-bottom: 2px; }
+  .ev-tip-layer {
+    display: inline-block;
+    font-size: 9px;
+    padding: 0 5px;
+    border-radius: 3px;
+    background: var(--bg);
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .ev-tip-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .ev-tip-row span:last-child {
+    font-family: var(--font-mono);
+    font-weight: 600;
+  }
   </style>
 </head>
 <body>

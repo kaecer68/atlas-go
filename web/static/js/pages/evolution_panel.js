@@ -599,6 +599,7 @@ function renderScatterPlot(scorecards) {
     legendY += 14;
   }
 
+  var tip = document.getElementById('evScatterTip');
   canvas.onmousemove = function(e) {
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
@@ -609,12 +610,22 @@ function renderScatterPlot(scorecards) {
       const sh = Math.min(yMax, Math.max(yMin, a.sharpe || 0));
       const dx = mx - toX(hr);
       const dy = my - toY(sh);
-      if (Math.sqrt(dx * dx + dy * dy) < 12) { found = a; break; }
+      if (Math.sqrt(dx * dx + dy * dy) < 14) { found = a; break; }
     }
-    canvas.title = found
-      ? agentName(found.agent_id) + ' — 層: ' + (found.layer || '?') + ' | 命中: ' + ((found.hit_rate || 0) * 100).toFixed(0) + '% | Sharpe: ' + (found.sharpe || 0).toFixed(2)
-      : '';
+    if (found && tip) {
+      tip.innerHTML = '<strong>' + agentName(found.agent_id) + '</strong>' +
+        '<span class="ev-tip-layer">' + escapeHtml(found.layer || '?') + '</span>' +
+        '<div class="ev-tip-row"><span>命中率</span><span style="color:' + (found.hit_rate > 0.6 ? 'var(--up)' : (found.hit_rate > 0.3 ? 'var(--warn)' : 'var(--muted)')) + '">' + ((found.hit_rate || 0) * 100).toFixed(0) + '%</span></div>' +
+        '<div class="ev-tip-row"><span>Sharpe</span><span style="color:' + (found.sharpe > 1 ? 'var(--up)' : (found.sharpe > 0 ? 'var(--warn)' : 'var(--down)')) + '">' + (found.sharpe || 0).toFixed(2) + '</span></div>' +
+        (found.observations ? '<div class="ev-tip-row"><span>觀察數</span><span>' + found.observations + '</span></div>' : '');
+      tip.style.display = 'block';
+      tip.style.left = Math.min(mx + 14, rect.width - 130) + 'px';
+      tip.style.top = Math.max(my - 40, 4) + 'px';
+    } else if (tip) {
+      tip.style.display = 'none';
+    }
   };
+  canvas.onmouseleave = function() { if (tip) tip.style.display = 'none'; };
 }
 
 function renderCatContent(tab, scorecards, sessions, judges, promotes) {
@@ -627,8 +638,9 @@ function renderCatContent(tab, scorecards, sessions, judges, promotes) {
 
   if (tab === 'agents') {
     el.innerHTML = '<div class="ev-section-title">Agent 競爭散布圖 <span class="ev-section-count">X: 命中率 / Y: Sharpe</span></div>' +
-      '<div id="evScatterWrap" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">' +
-      '<canvas id="evScatterCanvas"></canvas></div>' +
+      '<div id="evScatterWrap" style="position:relative;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">' +
+      '<canvas id="evScatterCanvas"></canvas>' +
+      '<div id="evScatterTip" class="ev-scatter-tip"></div></div>' +
       '<div class="ev-scatter-guide">' +
         '<strong>📖 如何閱讀散布圖：</strong>每一點代表一個 AI Agent。<strong>X 軸 = 命中率</strong>（推薦成功率），<strong>Y 軸 = Sharpe</strong>（風險調整報酬）。' +
         '<strong>越往右上角越優秀</strong>（高命中 + 高報酬）。水平虛線為 Sharpe = 0（盈虧分界）。不同顏色代表不同策略層（layer）。' +
