@@ -167,7 +167,7 @@ run_once() {
 		echo "[error] expected window artifact not found: $window_path"
 		exit 1
 	fi
-	jq -S 'del(.GeneratedAt)' "$window_path" > "$normalized_out"
+	jq -S 'del(.generated_at)' "$window_path" > "$normalized_out"
 }
 
 latest_session_dir() {

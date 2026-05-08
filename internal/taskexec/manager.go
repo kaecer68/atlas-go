@@ -177,6 +177,8 @@ func (m *Manager) startRun(exec *domain.TaskExecution, req SubmitRequest, runner
 	m.mu.Unlock()
 
 	go func() {
+		// Work on a copy to avoid racing with the caller.
+		execCopy := *exec
 		defer func() {
 			m.mu.Lock()
 			delete(m.active, exec.ID)
@@ -185,9 +187,9 @@ func (m *Manager) startRun(exec *domain.TaskExecution, req SubmitRequest, runner
 		}()
 
 		now := time.Now()
-		exec.Status = domain.TaskStatusRunning
-		exec.StartedAt = &now
-		if err := m.store.UpdateExecution(ctx, *exec); err != nil {
+		execCopy.Status = domain.TaskStatusRunning
+		execCopy.StartedAt = &now
+		if err := m.store.UpdateExecution(ctx, execCopy); err != nil {
 			log.Printf("[taskexec] failed to update execution to running: %v", err)
 		}
 
@@ -201,10 +203,10 @@ func (m *Manager) startRun(exec *domain.TaskExecution, req SubmitRequest, runner
 		err := runner.Run(ctx, req, sink)
 
 		finishTime := time.Now()
-		exec.FinishedAt = &finishTime
+		execCopy.FinishedAt = &finishTime
 		if err != nil {
-			exec.Status = domain.TaskStatusFailed
-			exec.ErrorMessage = err.Error()
+			execCopy.Status = domain.TaskStatusFailed
+			execCopy.ErrorMessage = err.Error()
 			sink.Emit(domain.TaskExecutionEvent{
 				EventType: domain.TaskEventDone,
 				Stream:    "system",
@@ -213,7 +215,7 @@ func (m *Manager) startRun(exec *domain.TaskExecution, req SubmitRequest, runner
 				Payload:   mustJSON(map[string]string{"status": "failed"}),
 			})
 		} else {
-			exec.Status = domain.TaskStatusSucceeded
+			execCopy.Status = domain.TaskStatusSucceeded
 			sink.Emit(domain.TaskExecutionEvent{
 				EventType: domain.TaskEventDone,
 				Stream:    "system",
@@ -222,7 +224,7 @@ func (m *Manager) startRun(exec *domain.TaskExecution, req SubmitRequest, runner
 			})
 		}
 
-		if updateErr := m.store.UpdateExecution(ctx, *exec); updateErr != nil {
+		if updateErr := m.store.UpdateExecution(ctx, execCopy); updateErr != nil {
 			log.Printf("[taskexec] failed to update execution to final status: %v", updateErr)
 		}
 	}()
