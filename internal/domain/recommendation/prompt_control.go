@@ -1,4 +1,4 @@
-package domain
+package recommendation
 
 import (
 	"encoding/json"
@@ -19,11 +19,9 @@ type PromptControl struct {
 	NeutralPenaltyReduction int    `json:"neutral_penalty_reduction,omitempty"`
 }
 
-var ControlBlockRe = regexp.MustCompile(`<!--\s*control_block\s*-->([\s\S]*?)<!--\s*/control_block\s*-->`)
+var ControlBlockRe = regexp.MustCompile(`(?s)<!--\s*control_block\s*-->([\s\S]*?)<!--\s*/control_block\s*-->`)
 
 // ExtractPromptControl parses a prompt string and returns the embedded control block.
-// If no block is found, it returns an empty PromptControl and callers should fall back
-// to legacy string-matching behavior.
 func ExtractPromptControl(prompt string) (PromptControl, bool) {
 	matches := ControlBlockRe.FindStringSubmatch(prompt)
 	if len(matches) < 2 {
