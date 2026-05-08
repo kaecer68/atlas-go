@@ -267,7 +267,7 @@ func TestMetricPoint_Struct(t *testing.T) {
 		SessionID: "session-20260101",
 		Symbol:    "2330",
 		Regime:    "bull",
-		Metadata:  map[string]interface{}{"key": "value"},
+		Metadata:  map[string]any{"key": "value"},
 	}
 
 	if mp.Name != "test-metric" {

@@ -63,10 +63,7 @@ func buildASCIIGrid(points []float64, height int, minVal, maxVal float64) [][]ru
 	}
 
 	for x, v := range points {
-		y := int(math.Round(float64(height-1) * (maxVal - v) / (maxVal - minVal)))
-		if y < 0 {
-			y = 0
-		}
+		y := max(int(math.Round(float64(height-1)*(maxVal-v)/(maxVal-minVal))), 0)
 		if y >= height {
 			y = height - 1
 		}

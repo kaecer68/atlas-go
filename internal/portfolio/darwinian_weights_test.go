@@ -143,7 +143,7 @@ func TestDarwinianWeightManager(t *testing.T) {
 		}
 
 		// Simulate performance: top performers get positive returns
-		for i := 0; i < 20; i++ {
+		for range 20 {
 			m.RecordOutcome("top_001", 0.03, true)
 			m.RecordOutcome("top_002", 0.025, true)
 			m.RecordOutcome("mid_001", 0.01, true)
@@ -256,7 +256,7 @@ func TestDarwinianWeightManager(t *testing.T) {
 		seedAgent(m, "bottom-performer", "val", "style", 0.35)
 
 		// Record enough outcomes to trigger cooldown bypass (20+ outcomes)
-		for i := 0; i < 25; i++ {
+		for range 25 {
 			m.RecordOutcome("top-performer", 0.02, true)
 			m.RecordOutcome("bottom-performer", -0.02, false)
 		}
@@ -326,7 +326,7 @@ func TestDarwinianWeightManager(t *testing.T) {
 		seedAgent(m, "agent_001", "tech", "sector", 1.5)
 
 		// Add some returns
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			m.RecordOutcome("agent_001", 0.01, true)
 		}
 
@@ -368,7 +368,7 @@ func TestDarwinianWeightManager(t *testing.T) {
 
 			// Different performance levels
 			ret := float64(i) * 0.1 / 30
-			for j := 0; j < 30; j++ {
+			for range 30 {
 				m.RecordOutcome(agentID, ret, true)
 			}
 		}
@@ -417,7 +417,7 @@ func TestDarwinianWeightManagerGetBottomPerformers(t *testing.T) {
 	seedAgent(m, "agent_001", "tech", "sector", 1.5)
 	seedAgent(m, "agent_002", "val", "style", 0.8)
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		m.RecordOutcome("agent_001", 0.02, true)
 		m.RecordOutcome("agent_002", -0.01, false)
 	}
@@ -460,7 +460,7 @@ func TestDarwinianWeightReport(t *testing.T) {
 		seedAgent(m, "agent_002", "val", "style", 0.8)
 		seedAgent(m, "agent_003", "growth", "sector", 2.2)
 
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			m.RecordOutcome("agent_001", 0.02, true)
 			m.RecordOutcome("agent_002", -0.01, false)
 			m.RecordOutcome("agent_003", 0.03, true)

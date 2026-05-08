@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"sync"
 	"time"
@@ -157,9 +158,7 @@ func (c *Phase3Controller) ApplyPRISMWeights(recs []domain.Recommendation, regim
 	}
 
 	c.mu.Lock()
-	for k, v := range agentSharpe {
-		c.prismWeightCache[k] = v
-	}
+	maps.Copy(c.prismWeightCache, agentSharpe)
 	c.mu.Unlock()
 
 	params := config.GetParametersConfig().Orchestrator
@@ -185,9 +184,7 @@ func (c *Phase3Controller) GetPRISMWeightCache() map[string]float64 {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	out := make(map[string]float64, len(c.prismWeightCache))
-	for k, v := range c.prismWeightCache {
-		out[k] = v
-	}
+	maps.Copy(out, c.prismWeightCache)
 	return out
 }
 

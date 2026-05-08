@@ -2,6 +2,7 @@ package industry
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"sync"
 	"time"
@@ -85,9 +86,7 @@ func NewRiskMonitor() *RiskMonitor {
 	}
 
 	// Load default customer concentration data during initialization
-	for symbol, customers := range DefaultCustomerConcentrations() {
-		rm.customerData[symbol] = customers
-	}
+	maps.Copy(rm.customerData, DefaultCustomerConcentrations())
 
 	return rm
 }

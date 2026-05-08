@@ -8,18 +8,20 @@ import (
 
 // BacktestReportData is the input container for report generation.
 type BacktestReportData struct {
-	WindowID        string
-	StartDate       time.Time
-	EndDate         time.Time
-	SessionCount    int
-	OutcomeCount    int
-	EquityCurve     []float64
-	AgentRows       []AgentPerformanceRow
-	MutationStats   MutationStats
-	WorstAgentID    string
-	WorstAgentSkill string
-	WorstSharpeLike float64
-	RegimeCounts    map[string]int
+	WindowID              string
+	StartDate             time.Time
+	EndDate               time.Time
+	SessionCount          int
+	OutcomeCount          int
+	EquityCurve           []float64
+	AgentRows             []AgentPerformanceRow
+	MutationStats         MutationStats
+	WorstAgentID          string
+	WorstAgentSkill       string
+	WorstAgentLayer       string
+	WorstAgentWindowCount int
+	WorstSharpeLike       float64
+	RegimeCounts          map[string]int
 }
 
 // RenderMarkdown assembles a full Markdown backtest report.
@@ -69,6 +71,12 @@ func RenderMarkdown(data BacktestReportData) string {
 	sb.WriteString("## Experiment Candidate\n\n")
 	if data.WorstAgentID != "" {
 		sb.WriteString(fmt.Sprintf("- **Weakest Agent:** `%s` (%s)\n", data.WorstAgentID, data.WorstAgentSkill))
+		if data.WorstAgentLayer != "" {
+			sb.WriteString(fmt.Sprintf("- **Layer:** %s\n", data.WorstAgentLayer))
+		}
+		if data.WorstAgentWindowCount > 0 {
+			sb.WriteString(fmt.Sprintf("- **Window Count:** %d\n", data.WorstAgentWindowCount))
+		}
 		sb.WriteString(fmt.Sprintf("- **Sharpe-like Score:** %.4f\n", data.WorstSharpeLike))
 	} else {
 		sb.WriteString("_No experiment candidate identified._\n")

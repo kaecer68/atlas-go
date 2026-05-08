@@ -2,6 +2,7 @@ package risk
 
 import (
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -235,19 +236,13 @@ func (e *MacroAwareDrawdownEngine) GetSectorConstraints(
 
 	switch macro.PrimaryFlow {
 	case "risk_off":
-		for k, v := range e.cfg.SectorConstraintsRiskOff {
-			constraints[k] = v
-		}
+		maps.Copy(constraints, e.cfg.SectorConstraintsRiskOff)
 
 	case "carry_trade_unwind":
-		for k, v := range e.cfg.SectorConstraintsCarryTradeUnwind {
-			constraints[k] = v
-		}
+		maps.Copy(constraints, e.cfg.SectorConstraintsCarryTradeUnwind)
 
 	case "sector_rotation":
-		for k, v := range e.cfg.SectorConstraintsSectorRotation {
-			constraints[k] = v
-		}
+		maps.Copy(constraints, e.cfg.SectorConstraintsSectorRotation)
 
 	default:
 	}

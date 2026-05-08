@@ -98,7 +98,7 @@ func TestMonitor_HistoryMaxCap(t *testing.T) {
 	m := NewMonitor()
 	m.maxHistory = 5
 
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		m.Alert(AlertLevelInfo, "cat", "msg", nil)
 	}
 
@@ -110,7 +110,7 @@ func TestMonitor_HistoryMaxCap(t *testing.T) {
 
 func TestMonitor_GetHistory_Limit(t *testing.T) {
 	m := NewMonitor()
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		m.Alert(AlertLevelInfo, "cat", "msg", nil)
 	}
 

@@ -2,6 +2,8 @@ package portfolio
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"time"
 
@@ -62,9 +64,7 @@ func (r *SectorRotator) GeneratePlan(
 
 	// Start with base allocations
 	targetAllocations := make(map[string]float64)
-	for sector, alloc := range r.baseAllocations {
-		targetAllocations[sector] = alloc
-	}
+	maps.Copy(targetAllocations, r.baseAllocations)
 
 	// Apply macro-driven adjustments
 	r.applyMacroAdjustments(targetAllocations, macroAssessment)
@@ -166,7 +166,7 @@ func (r *SectorRotator) normalizeAllocations(allocations map[string]float64) {
 	}
 
 	// Iteratively normalize and clamp until stable
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		// Calculate total
 		total := 0.0
 		for _, alloc := range allocations {
@@ -204,17 +204,13 @@ func (r *SectorRotator) normalizeAllocations(allocations map[string]float64) {
 
 func (r *SectorRotator) getAllocationRationale(sector string, macro *narrative.MacroRiskAssessment) string {
 	// Check if sector is in favored list
-	for _, favored := range macro.FavoredSectors {
-		if favored == sector {
-			return fmt.Sprintf("Favored sector during %s conditions", macro.PrimaryFlow)
-		}
+	if slices.Contains(macro.FavoredSectors, sector) {
+		return fmt.Sprintf("Favored sector during %s conditions", macro.PrimaryFlow)
 	}
 
 	// Check if sector is in avoided list
-	for _, avoided := range macro.AvoidedSectors {
-		if avoided == sector {
-			return fmt.Sprintf("Avoided sector during %s conditions", macro.PrimaryFlow)
-		}
+	if slices.Contains(macro.AvoidedSectors, sector) {
+		return fmt.Sprintf("Avoided sector during %s conditions", macro.PrimaryFlow)
 	}
 
 	return "Base allocation"

@@ -30,7 +30,7 @@ func TestSharpeStabilityCheck_StableSeries(t *testing.T) {
 
 func TestSharpeStabilityCheck_UnstableSeries(t *testing.T) {
 	series := make([]float64, 20)
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		series[i] = float64(i%2) * 10.0
 	}
 	stable, stderr, err := SharpeStabilityCheck(series, 0.5)

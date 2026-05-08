@@ -1,7 +1,7 @@
 package sim
 
 import (
-	"sort"
+	"slices"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
@@ -40,9 +40,7 @@ func (sm *SlippageModel) Precompute(quotes map[string]domain.Quote) {
 		return
 	}
 
-	sort.Slice(sm.sortedVolumes, func(i, j int) bool {
-		return sm.sortedVolumes[i] < sm.sortedVolumes[j]
-	})
+	slices.Sort(sm.sortedVolumes)
 
 	sm.precomputedLen = len(quotes)
 
@@ -128,9 +126,7 @@ func calculateVolumePercentile(volume int64, quotes map[string]domain.Quote) flo
 		return 0.5
 	}
 
-	sort.Slice(volumes, func(i, j int) bool {
-		return volumes[i] < volumes[j]
-	})
+	slices.Sort(volumes)
 
 	// Find rank
 	countBelow := 0

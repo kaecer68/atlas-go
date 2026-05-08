@@ -136,7 +136,7 @@ type OrderEventPayload struct {
 	Order     domain.Order `json:"order"`
 	Status    string       `json:"status"` // "placed", "filled", "rejected"
 	FillPrice float64      `json:"fill_price,omitempty"`
-	FillTime  time.Time    `json:"fill_time,omitempty"`
+	FillTime  time.Time    `json:"fill_time"`
 }
 
 // RiskEventPayload 风险事件载荷
@@ -173,10 +173,10 @@ type OrderErrorEventPayload struct {
 
 // BusEvent 总线事件
 type BusEvent struct {
-	ID        string      `json:"id"`
-	Type      EventType   `json:"type"`
-	Timestamp time.Time   `json:"timestamp"`
-	Payload   interface{} `json:"payload"`
+	ID        string    `json:"id"`
+	Type      EventType `json:"type"`
+	Timestamp time.Time `json:"timestamp"`
+	Payload   any       `json:"payload"`
 }
 
 // EventHandler 事件处理器函数类型
@@ -549,11 +549,11 @@ func (b *ChannelEventBus) Close() error {
 }
 
 // Stats 获取统计信息
-func (b *ChannelEventBus) Stats() map[string]interface{} {
+func (b *ChannelEventBus) Stats() map[string]any {
 	b.mutex.RLock()
 	defer b.mutex.RUnlock()
 
-	stats := make(map[string]interface{})
+	stats := make(map[string]any)
 	subscriberCount := len(b.allSubscribers)
 	for _, subs := range b.subscribers {
 		subscriberCount += len(subs)

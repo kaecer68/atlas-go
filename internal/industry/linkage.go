@@ -2,6 +2,7 @@ package industry
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"sync"
 	"time"
@@ -197,9 +198,7 @@ func (cm *CorrelationMatrix) GetAllCorrelations() map[string]map[string]float64 
 	result := make(map[string]map[string]float64)
 	for industryA, correlations := range cm.correlations {
 		result[industryA] = make(map[string]float64)
-		for industryB, correlation := range correlations {
-			result[industryA][industryB] = correlation
-		}
+		maps.Copy(result[industryA], correlations)
 	}
 	return result
 }

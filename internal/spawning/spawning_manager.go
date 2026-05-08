@@ -190,7 +190,7 @@ func (m *SpawningManager) prioritizeGaps(gaps []*KnowledgeGap) []*KnowledgeGap {
 	}
 
 	// Simple bubble sort (small list, not performance critical)
-	for i := 0; i < len(scored); i++ {
+	for i := range scored {
 		for j := i + 1; j < len(scored); j++ {
 			if scored[j].score > scored[i].score {
 				scored[i], scored[j] = scored[j], scored[i]

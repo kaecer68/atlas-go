@@ -81,6 +81,20 @@ func (r *PostgresRepository) QueryOutcomesByAgent(ctx context.Context, agentID s
 	return scanRecommendationOutcomes(rows)
 }
 
+func (r *PostgresRepository) QueryAllOutcomes(ctx context.Context) ([]domain.RecommendationOutcome, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata
+		FROM recommendation_outcomes
+		ORDER BY time DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("query all outcomes: %w", err)
+	}
+	defer rows.Close()
+
+	return scanRecommendationOutcomes(rows)
+}
+
 func (r *PostgresRepository) QueryPassRate(ctx context.Context, agentID string, window time.Duration) (float64, error) {
 	start := time.Now().Add(-window)
 

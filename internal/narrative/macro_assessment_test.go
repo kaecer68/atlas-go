@@ -1,6 +1,7 @@
 package narrative
 
 import (
+	"slices"
 	"testing"
 )
 
@@ -111,13 +112,7 @@ func TestMacroRiskAssessmentEngine_HistoricalScenarios(t *testing.T) {
 			// Check favored sectors
 			if len(tt.wantFavored) > 0 {
 				for _, want := range tt.wantFavored {
-					found := false
-					for _, got := range result.FavoredSectors {
-						if got == want {
-							found = true
-							break
-						}
-					}
+					found := slices.Contains(result.FavoredSectors, want)
 					if !found {
 						t.Errorf("Expected favored sector %s not found in %v", want, result.FavoredSectors)
 					}
@@ -127,13 +122,7 @@ func TestMacroRiskAssessmentEngine_HistoricalScenarios(t *testing.T) {
 			// Check avoided sectors
 			if len(tt.wantAvoided) > 0 {
 				for _, want := range tt.wantAvoided {
-					found := false
-					for _, got := range result.AvoidedSectors {
-						if got == want {
-							found = true
-							break
-						}
-					}
+					found := slices.Contains(result.AvoidedSectors, want)
 					if !found {
 						t.Errorf("Expected avoided sector %s not found in %v", want, result.AvoidedSectors)
 					}

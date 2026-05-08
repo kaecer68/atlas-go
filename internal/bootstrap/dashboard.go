@@ -12,16 +12,16 @@ func NewDashboardAPI(workDir, ledgerDir string, collector *monitoring.MetricsCol
 }
 
 func RegisterDashboardRoutes(mux *http.ServeMux, dashboard *monitoring.DashboardAPI, enableSwagger, includeLive bool, rt *Runtime) {
+	if rt.Repository != nil {
+		dashboard.SetRepository(rt.Repository)
+		log.Printf("[Repository] injected into dashboard API")
+	}
+
 	dashboard.RegisterRoutes(mux)
 
 	if rt.Stores.AlertStore != nil {
 		alertAPI := monitoring.NewAlertAPI(rt.Stores.AlertStore)
 		alertAPI.RegisterRoutes(mux)
-	}
-
-	if rt.Repository != nil {
-		dashboard.SetRepository(rt.Repository)
-		log.Printf("[Repository] injected into dashboard API")
 	}
 
 	if rt.TaskManager != nil {

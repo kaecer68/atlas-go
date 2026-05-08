@@ -2,6 +2,7 @@ package realtime
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -92,7 +93,7 @@ func TestRealTimeAdapter(t *testing.T) {
 
 		// Ingest enough data to detect regime
 		baseTime := time.Now()
-		for i := 0; i < 40; i++ {
+		for i := range 40 {
 			point := MarketDataPoint{
 				Symbol:    "TEST",
 				Price:     100.0 + float64(i)*0.5, // Trending up
@@ -112,13 +113,7 @@ func TestRealTimeAdapter(t *testing.T) {
 
 		// Should detect trending up or calm
 		validRegimes := []RegimeType{RegimeCalm, RegimeTrendingUp, RegimeTrendingDown, RegimeVolatile}
-		found := false
-		for _, r := range validRegimes {
-			if regime == r {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(validRegimes, regime)
 		if !found {
 			t.Errorf("Unexpected regime: %s", regime)
 		}
@@ -135,7 +130,7 @@ func TestRealTimeAdapter(t *testing.T) {
 		}
 
 		// Add some data
-		for i := 0; i < 20; i++ {
+		for i := range 20 {
 			point := MarketDataPoint{
 				Symbol:    "TEST",
 				Price:     100.0,
@@ -170,10 +165,7 @@ func TestRealTimeAdapter(t *testing.T) {
 		adjusted := adapter.ApplyToRecommendation(rec)
 
 		// Weight is 1.5, so conviction should be boosted
-		expectedConviction := int(float64(70) * 1.5)
-		if expectedConviction > 100 {
-			expectedConviction = 100
-		}
+		expectedConviction := min(int(float64(70)*1.5), 100)
 
 		if adjusted.Conviction != expectedConviction {
 			t.Errorf("Expected conviction %d, got %d", expectedConviction, adjusted.Conviction)
@@ -220,7 +212,7 @@ func TestRealTimeAdapter(t *testing.T) {
 		adapter := NewRealTimeAdapter(params)
 
 		// Add some data
-		for i := 0; i < 30; i++ {
+		for i := range 30 {
 			adapter.IngestData(MarketDataPoint{
 				Symbol:    "TEST",
 				Price:     100.0 + float64(i)*0.1,
@@ -284,7 +276,7 @@ func TestRegimeDetector(t *testing.T) {
 		// Create calm data (stable prices)
 		data := make([]MarketDataPoint, 60)
 		baseTime := time.Now()
-		for i := 0; i < 60; i++ {
+		for i := range 60 {
 			data[i] = MarketDataPoint{
 				Price:     100.0 + float64(i)*0.01, // Very slight trend
 				Volume:    1000000,
@@ -307,7 +299,7 @@ func TestRegimeDetector(t *testing.T) {
 		// Create volatile data (large price swings)
 		data := make([]MarketDataPoint, 60)
 		baseTime := time.Now()
-		for i := 0; i < 60; i++ {
+		for i := range 60 {
 			price := 100.0
 			if i%2 == 0 {
 				price = 105.0 // Up 5%
@@ -335,7 +327,7 @@ func TestRegimeDetector(t *testing.T) {
 		// Normal volume data
 		data := make([]MarketDataPoint, 20)
 		baseTime := time.Now()
-		for i := 0; i < 20; i++ {
+		for i := range 20 {
 			volume := 1000000.0
 			if i == 19 {
 				volume = 5000000.0 // 5x spike
@@ -361,7 +353,7 @@ func TestRegimeDetector(t *testing.T) {
 		baseTime := time.Now()
 
 		// First half: trending up
-		for i := 0; i < 20; i++ {
+		for i := range 20 {
 			data[i] = MarketDataPoint{
 				Price:     100.0 + float64(i)*0.5, // Up to 110
 				Volume:    1000000,

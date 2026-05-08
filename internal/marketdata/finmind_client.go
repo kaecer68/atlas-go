@@ -25,9 +25,9 @@ type FinMindClient struct {
 }
 
 type FinMindResponse struct {
-	Msg    string                   `json:"msg"`
-	Status int                      `json:"status"`
-	Data   []map[string]interface{} `json:"data"`
+	Msg    string           `json:"msg"`
+	Status int              `json:"status"`
+	Data   []map[string]any `json:"data"`
 }
 
 func NewFinMindClient(apiKey string) *FinMindClient {
@@ -44,7 +44,7 @@ func (c *FinMindClient) SetHTTPClient(client *http.Client) {
 	c.httpClient = client
 }
 
-func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId string, startDate string, endDate string) ([]map[string]interface{}, error) {
+func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId string, startDate string, endDate string) ([]map[string]any, error) {
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("finmind: rate limit wait: %w", err)
 	}

@@ -205,7 +205,7 @@ func TestPostTradeAnalyzerFilterByPeriod(t *testing.T) {
 func TestPostTradeAnalyzerGenerateSuggestions(t *testing.T) {
 	a := NewPostTradeAnalyzer()
 	now := time.Now()
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		a.AddTrade(TradeRecord{Symbol: "A", Pnl: -10, ExitTime: now})
 	}
 	suggestions := a.GenerateSuggestions()

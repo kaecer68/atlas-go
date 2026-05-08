@@ -28,6 +28,9 @@ type MacroDataSnapshot struct {
 	ExportElectronics   MacroDataPoint `json:"export_electronics"`
 	RetailMarginBalance MacroDataPoint `json:"retail_margin_balance"`
 	TSMCRevenue         MacroDataPoint `json:"tsmc_revenue"`
+	SOXIndex            MacroDataPoint `json:"sox_index"`
+	CoWoSUtilization    MacroDataPoint `json:"cowos_utilization"`
+	CapexGrowth         MacroDataPoint `json:"capex_growth"`
 	RecordedAt          int64          `json:"recorded_at"`
 }
 
@@ -98,6 +101,15 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 		}
 		if snap.TSMCRevenue.Symbol != "" {
 			merged.TSMCRevenue = snap.TSMCRevenue
+		}
+		if snap.SOXIndex.Symbol != "" {
+			merged.SOXIndex = snap.SOXIndex
+		}
+		if snap.CoWoSUtilization.Symbol != "" {
+			merged.CoWoSUtilization = snap.CoWoSUtilization
+		}
+		if snap.CapexGrowth.Symbol != "" {
+			merged.CapexGrowth = snap.CapexGrowth
 		}
 		if snap.RecordedAt > merged.RecordedAt {
 			merged.RecordedAt = snap.RecordedAt

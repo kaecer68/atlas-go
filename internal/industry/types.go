@@ -73,7 +73,7 @@ type IndustryClassification struct {
 	Symbol    string          `json:"symbol"`
 	Level1    IndustrySegment `json:"level1"`
 	Level2    IndustrySegment `json:"level2"`
-	Level3    IndustrySegment `json:"level3,omitempty"`
+	Level3    IndustrySegment `json:"level3"`
 	UpdatedAt time.Time       `json:"updated_at"`
 }
 

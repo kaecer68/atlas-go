@@ -33,12 +33,12 @@ const (
 
 // DataQualityCheck represents a single data quality check result
 type DataQualityCheck struct {
-	Name      string                 `json:"name"`
-	Status    CheckStatus            `json:"status"`
-	Message   string                 `json:"message"`
-	Details   map[string]interface{} `json:"details,omitempty"`
-	CheckedAt time.Time              `json:"checked_at"`
-	Duration  time.Duration          `json:"duration_ms"`
+	Name      string         `json:"name"`
+	Status    CheckStatus    `json:"status"`
+	Message   string         `json:"message"`
+	Details   map[string]any `json:"details,omitempty"`
+	CheckedAt time.Time      `json:"checked_at"`
+	Duration  time.Duration  `json:"duration_ms"`
 }
 
 // DataQualityReport is the overall data quality report

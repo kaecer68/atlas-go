@@ -1,6 +1,8 @@
 package monitoring
 
 import (
+	"context"
+
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/repository"
@@ -150,4 +152,64 @@ func (a *OutcomeStoreAdapter) RecordHumanIntervention(intervention domain.HumanI
 
 func (a *OutcomeStoreAdapter) LoadHumanInterventions() ([]domain.HumanIntervention, error) {
 	return a.store.LoadHumanInterventions()
+}
+
+type DualWriteOutcomeStoreAdapter struct {
+	repo *repository.DualWriteRepository
+}
+
+func NewDualWriteOutcomeStoreAdapter(repo *repository.DualWriteRepository) *DualWriteOutcomeStoreAdapter {
+	return &DualWriteOutcomeStoreAdapter{repo: repo}
+}
+
+func (a *DualWriteOutcomeStoreAdapter) RecordOutcomes(outcomes []domain.RecommendationOutcome) error {
+	return a.repo.RecordOutcomes(context.Background(), outcomes)
+}
+
+func (a *DualWriteOutcomeStoreAdapter) LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOutcome, error) {
+	return a.repo.QueryOutcomesBySession(context.Background(), sessionID)
+}
+
+func (a *DualWriteOutcomeStoreAdapter) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
+	return a.repo.QueryAllOutcomes(context.Background())
+}
+
+func (a *DualWriteOutcomeStoreAdapter) RecordSessionOutcomes(session domain.ReplaySession, outcomes []domain.RecommendationOutcome) error {
+	return a.repo.RecordSessionOutcomes(context.Background(), session, outcomes)
+}
+
+func (a *DualWriteOutcomeStoreAdapter) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
+	return a.repo.RecordSessionSummary(context.Background(), session, summary)
+}
+
+func (a *DualWriteOutcomeStoreAdapter) LoadSessionSummaries() ([]domain.SessionSummary, error) {
+	return a.repo.LoadAllSessionSummaries(context.Background())
+}
+
+func (a *DualWriteOutcomeStoreAdapter) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
+	return a.repo.QueryAllSessionScorecards(context.Background())
+}
+
+func (a *DualWriteOutcomeStoreAdapter) RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error {
+	return a.repo.RecordSessionScreeningRejects(context.Background(), sessionID, rejects)
+}
+
+func (a *DualWriteOutcomeStoreAdapter) LoadSessionScreeningRejects(sessionID string) ([]domain.ScreeningReject, error) {
+	return a.repo.LoadSessionScreeningRejects(context.Background(), sessionID)
+}
+
+func (a *DualWriteOutcomeStoreAdapter) RecordExperiment(record domain.ExperimentRecord) error {
+	return a.repo.RecordExperiment(context.Background(), record)
+}
+
+func (a *DualWriteOutcomeStoreAdapter) RecordSessionExperiment(session domain.ReplaySession, record domain.ExperimentRecord) error {
+	return a.repo.RecordSessionExperiment(context.Background(), session, record)
+}
+
+func (a *DualWriteOutcomeStoreAdapter) RecordHumanIntervention(intervention domain.HumanIntervention) error {
+	return a.repo.RecordHumanIntervention(context.Background(), intervention)
+}
+
+func (a *DualWriteOutcomeStoreAdapter) LoadHumanInterventions() ([]domain.HumanIntervention, error) {
+	return a.repo.LoadHumanInterventions(context.Background())
 }

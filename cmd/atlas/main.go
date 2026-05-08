@@ -174,18 +174,17 @@ func run(args []string, deps appDeps) error {
 			d.SetJanusEngine(janusEngine)
 			log.Printf("[JANUS] engine injected into dashboard API")
 		}
-		dashboard.RegisterRoutes(mux)
-
-		if alertStore != nil {
-			alertAPI := monitoring.NewAlertAPI(alertStore)
-			alertAPI.RegisterRoutes(mux)
-		}
-
 		if repo != nil {
 			if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 				d.SetRepository(repo)
 				log.Printf("[Repository] injected into dashboard API")
 			}
+		}
+		dashboard.RegisterRoutes(mux)
+
+		if alertStore != nil {
+			alertAPI := monitoring.NewAlertAPI(alertStore)
+			alertAPI.RegisterRoutes(mux)
 		}
 
 		if taskManager != nil {
@@ -416,6 +415,10 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	// Start dashboard API server for live status endpoint
 	mux := http.NewServeMux()
 	dashboard := deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
+	if d, ok := dashboard.(*monitoring.DashboardAPI); ok && repo != nil {
+		d.SetRepository(repo)
+		log.Printf("[Repository] injected into live trading dashboard API")
+	}
 	dashboard.RegisterRoutes(mux)
 	alertStore, err := monitoring.NewAlertStore(filepath.Join(cfg.WorkDir, "data/state/alerts"))
 	if err != nil {

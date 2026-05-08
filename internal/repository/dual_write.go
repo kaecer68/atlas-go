@@ -226,6 +226,43 @@ func (r *DualWriteRepository) QueryTopSymbols(ctx context.Context, limit int, st
 	return r.pg.QueryTopSymbols(ctx, limit, start, end)
 }
 
+func (r *DualWriteRepository) QueryAllOutcomes(ctx context.Context) ([]domain.RecommendationOutcome, error) {
+	// PostgreSQL does not have a dedicated "query all" method; fallback to JSONL.
+	return r.jsonl.outcomeStore.LoadOutcomes()
+}
+
+func (r *DualWriteRepository) QueryAllSessionScorecards(ctx context.Context) ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
+	return r.jsonl.sessionSummaryStore.LoadAllSessionScorecards()
+}
+
+func (r *DualWriteRepository) RecordSessionOutcomes(ctx context.Context, session domain.ReplaySession, outcomes []domain.RecommendationOutcome) error {
+	_ = r.jsonl.outcomeStore.RecordSessionOutcomes(session, outcomes)
+	return nil
+}
+
+func (r *DualWriteRepository) RecordSessionSummary(ctx context.Context, session domain.ReplaySession, summary domain.SessionSummary) error {
+	_ = r.jsonl.sessionSummaryStore.RecordSessionSummary(session, summary)
+	return r.pg.SaveSessionSummary(ctx, summary)
+}
+
+func (r *DualWriteRepository) RecordExperiment(ctx context.Context, record domain.ExperimentRecord) error {
+	_ = r.jsonl.outcomeStore.RecordExperiment(record)
+	return nil
+}
+
+func (r *DualWriteRepository) RecordSessionExperiment(ctx context.Context, session domain.ReplaySession, record domain.ExperimentRecord) error {
+	_ = r.jsonl.outcomeStore.RecordSessionExperiment(session, record)
+	return nil
+}
+
+func (r *DualWriteRepository) RecordSessionScreeningRejects(ctx context.Context, sessionID string, rejects []domain.ScreeningReject) error {
+	return r.RecordScreeningRejects(ctx, sessionID, rejects)
+}
+
+func (r *DualWriteRepository) LoadSessionScreeningRejects(ctx context.Context, sessionID string) ([]domain.ScreeningReject, error) {
+	return r.QueryScreeningRejectsBySession(ctx, sessionID)
+}
+
 // ============================================
 // Capital Flow Operations
 // ============================================

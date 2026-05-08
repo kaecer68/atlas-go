@@ -23,6 +23,7 @@ type PipelineService struct {
 	WorkDir          string
 	LedgerDir        string
 	registryProvider RegistryProviderFunc
+	store            ledger.OutcomeStore
 }
 
 type RegistryProviderFunc func() (domain.AgentRegistry, error)
@@ -32,10 +33,11 @@ func (s *PipelineService) WithRegistryProvider(fn RegistryProviderFunc) *Pipelin
 	return s
 }
 
-func NewPipelineService(workDir, ledgerDir string) *PipelineService {
+func NewPipelineService(workDir, ledgerDir string, store ledger.OutcomeStore) *PipelineService {
 	return &PipelineService{
 		WorkDir:   workDir,
 		LedgerDir: ledgerDir,
+		store:     store,
 	}
 }
 
@@ -60,7 +62,13 @@ func (s *PipelineService) loadRegistry() (domain.AgentRegistry, error) {
 
 // LoadMacroRadar loads macro radar summary for the given session.
 func (s *PipelineService) LoadMacroRadar(sessionID string) (*MacroRadarData, error) {
-	summary, err := LoadSessionSummary(s.LedgerDir, sessionID)
+	var summary *domain.SessionSummary
+	var err error
+	if sessionID == "" {
+		summary, err = FindLatestSessionSummary(s.store, s.LedgerDir)
+	} else {
+		summary, err = LoadSessionSummary(s.LedgerDir, sessionID)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("load macro radar data: %w", err)
 	}
@@ -88,12 +96,18 @@ type MacroRadarData struct {
 
 // LoadAgentObservatory loads agent observatory data with scorecards.
 func (s *PipelineService) LoadAgentObservatory(sessionID string, limit int) (*AgentObservatoryData, error) {
-	summary, err := LoadSessionSummary(s.LedgerDir, sessionID)
+	var summary *domain.SessionSummary
+	var err error
+	if sessionID == "" {
+		summary, err = FindLatestSessionSummary(s.store, s.LedgerDir)
+	} else {
+		summary, err = LoadSessionSummary(s.LedgerDir, sessionID)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("load agent observatory summary: %w", err)
 	}
 
-	store := ledger.NewStore(s.LedgerDir)
+	store := s.store
 	var outcomes []domain.RecommendationOutcome
 	if summary != nil {
 		outcomes, _ = store.LoadSessionOutcomes(summary.SessionID)
@@ -137,7 +151,7 @@ func (s *PipelineService) LoadForecastVsReality(agentID string, limit int) (*For
 		return nil, fmt.Errorf("load forecast-vs-reality data: %w", err)
 	}
 
-	summary, err := LoadSessionSummary(s.LedgerDir, "")
+	summary, err := FindLatestSessionSummary(s.store, s.LedgerDir)
 	if err != nil {
 		logging.Warn("pipeline_service", "load_session_summary", logging.Err(err))
 		summary = nil
@@ -360,11 +374,8 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 
 	var targetSession string
 	if sessionID != "" {
-		for _, dir := range sessionDirs {
-			if dir == sessionID {
-				targetSession = sessionID
-				break
-			}
+		if slices.Contains(sessionDirs, sessionID) {
+			targetSession = sessionID
 		}
 	} else {
 		slices.SortFunc(sessionDirs, func(a, b string) int {
@@ -443,8 +454,8 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 	outcomesPath := filepath.Join(sessionsDir, targetSession, "recommendation_outcomes.jsonl")
 	items := make([]PipelineItemData, 0)
 	if data, err := os.ReadFile(outcomesPath); err == nil {
-		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-		for _, line := range lines {
+		lines := strings.SplitSeq(strings.TrimSpace(string(data)), "\n")
+		for line := range lines {
 			if strings.TrimSpace(line) == "" {
 				continue
 			}
@@ -511,7 +522,7 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 		statusMessage = "本場次尚無推薦產出記錄"
 	}
 
-	store := ledger.NewStore(s.LedgerDir)
+	store := s.store
 	screened, err := store.LoadSessionScreeningRejects(targetSession)
 	if err != nil {
 		// Log but don't fail
@@ -877,7 +888,7 @@ type RegimeTransition struct {
 }
 
 func (s *PipelineService) LoadRegimeHistory(limit int) (*RegimeHistoryData, error) {
-	store := ledger.NewStore(s.LedgerDir)
+	store := s.store
 	summaries, err := store.LoadSessionSummaries()
 	if err != nil {
 		return nil, fmt.Errorf("load session summaries: %w", err)

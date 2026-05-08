@@ -268,7 +268,7 @@ type PipelineItem struct {
 	GuardReason         string                      `json:"guard_reason"`
 	Tags                []string                    `json:"tags"`
 	RecordedAt          time.Time                   `json:"recorded_at"`
-	FactorScores        domain.FactorScores         `json:"factor_scores,omitempty"`
+	FactorScores        domain.FactorScores         `json:"factor_scores"`
 	ConvictionBreakdown *domain.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
 }
 
@@ -363,7 +363,7 @@ func (h *Handlers) HandleDarwinianTrend(r *http.Request) (int, any) {
 	if err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("load darwinian history: %v", err)}
 	}
-	return http.StatusOK, map[string]interface{}{"points": points}
+	return http.StatusOK, map[string]any{"points": points}
 }
 
 func (h *Handlers) HandleRegimeHistory(r *http.Request) (int, any) {

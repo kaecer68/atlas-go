@@ -182,16 +182,16 @@ func writeTypeScriptInterfaces(structs map[string][]structField, out string, amb
 
 func extractJSONName(tag string) string {
 	tag = strings.Trim(tag, "`")
-	idx := strings.Index(tag, `json:"`)
-	if idx < 0 {
+	_, after, ok := strings.Cut(tag, `json:"`)
+	if !ok {
 		return ""
 	}
-	rest := tag[idx+6:]
-	end := strings.IndexByte(rest, '"')
-	if end < 0 {
+	rest := after
+	before, _, ok := strings.Cut(rest, "\"")
+	if !ok {
 		return ""
 	}
-	name := rest[:end]
+	name := before
 	if comma := strings.IndexByte(name, ','); comma >= 0 {
 		name = name[:comma]
 	}
