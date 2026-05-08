@@ -97,6 +97,8 @@ func (p *swarmPlugin) Name() string { return "swarm" }
 
 func (p *swarmPlugin) Attach(core ServiceRegistry) {}
 
+func (p *swarmPlugin) SetController(ctrl *Phase3Controller) { p.controller = ctrl }
+
 func (p *swarmPlugin) ProcessRecommendations(regime domain.Regime, recs []domain.Recommendation) []domain.Recommendation {
 	if len(recs) == 0 {
 		return recs
@@ -146,6 +148,8 @@ type prismPlugin struct {
 }
 
 func (p *prismPlugin) Name() string { return "prism" }
+
+func (p *prismPlugin) SetController(ctrl *Phase3Controller) { p.controller = ctrl }
 
 func (p *prismPlugin) Attach(core ServiceRegistry) {
 	p.core = core
@@ -197,6 +201,8 @@ type spawningPlugin struct {
 func (p *spawningPlugin) Name() string { return "spawning" }
 
 func (p *spawningPlugin) Attach(core ServiceRegistry) {}
+
+func (p *spawningPlugin) SetController(ctrl *Phase3Controller) { p.controller = ctrl }
 
 func (p *spawningPlugin) ProcessRecommendations(regime domain.Regime, recs []domain.Recommendation) []domain.Recommendation {
 	return recs

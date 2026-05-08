@@ -39,3 +39,32 @@ func Post(h Handler) http.Handler {
 		return h(r)
 	})
 }
+
+// RawHandler is for handlers that need direct access to http.ResponseWriter
+// (raw bytes, streaming, non-JSON content types like HTML/markdown).
+// When a RawHandler returns (0, nil), it signals that the response was
+// already written and AdaptRaw should not write anything further.
+type RawHandler func(w http.ResponseWriter, r *http.Request) (status int, data any)
+
+// AdaptRaw wraps a RawHandler into a standard http.Handler.
+// If the handler already wrote the response (returned 0, nil), AdaptRaw
+// returns immediately. Otherwise it writes JSON like Adapt.
+func AdaptRaw(h RawHandler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		status, data := h(w, r)
+		if status == 0 && data == nil {
+			return
+		}
+		WriteJSON(w, status, data)
+	})
+}
+
+// GetRaw is a convenience adapter for GET-only RawHandler endpoints.
+func GetRaw(h RawHandler) http.Handler {
+	return AdaptRaw(func(w http.ResponseWriter, r *http.Request) (int, any) {
+		if r.Method != http.MethodGet {
+			return http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"}
+		}
+		return h(w, r)
+	})
+}

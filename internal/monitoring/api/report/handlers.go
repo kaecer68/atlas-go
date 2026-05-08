@@ -16,35 +16,28 @@ func NewHandlers(svc *service.ReportService) *Handlers {
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/report/latest", h.HandleLatestReport)
+	mux.Handle("GET /api/report/latest", shared.GetRaw(h.HandleLatestReport))
 	mux.Handle("GET /api/report/list", shared.Get(h.HandleReportList))
 	mux.Handle("GET /api/dashboard/daily-summary", shared.Get(h.HandleDailySummary))
 }
 
-func (h *Handlers) HandleLatestReport(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
+func (h *Handlers) HandleLatestReport(w http.ResponseWriter, r *http.Request) (int, any) {
 	content, filename, err := h.svc.LoadLatestReport()
 	if err != nil {
 		if err.Error() == "no reports directory found" {
-			shared.WriteJSONError(w, http.StatusNotFound, err.Error())
-			return
+			return http.StatusNotFound, map[string]string{"error": err.Error()}
 		}
 		if err.Error() == "no backtest report found" {
-			shared.WriteJSONError(w, http.StatusNotFound, err.Error())
-			return
+			return http.StatusNotFound, map[string]string{"error": err.Error()}
 		}
-		shared.WriteJSONError(w, http.StatusInternalServerError, err.Error())
-		return
+		return http.StatusInternalServerError, map[string]string{"error": err.Error()}
 	}
 
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 	w.Header().Set("X-Filename", filename)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(content)
+	return 0, nil
 }
 
 func (h *Handlers) HandleReportList(r *http.Request) (int, any) {

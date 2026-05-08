@@ -29,14 +29,30 @@ func (s *MacroService) Ingest(ctx context.Context) ([]narrative.NarrativeEvent, 
 	return s.MacroIngestor.Ingest(ctx)
 }
 
-func (s *MacroService) GetLatestSnapshot() ([]byte, error) {
+func (s *MacroService) GetLatestSnapshot() (*marketdata.MacroDataSnapshot, error) {
 	path := filepath.Join(s.MacroIngestor.SnapshotDir(), "latest.json")
-	return os.ReadFile(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var snap marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(data, &snap); err != nil {
+		return nil, err
+	}
+	return &snap, nil
 }
 
-func (s *MacroService) GetSnapshotByDate(date string) ([]byte, error) {
+func (s *MacroService) GetSnapshotByDate(date string) (*marketdata.MacroDataSnapshot, error) {
 	path := filepath.Join(s.MacroIngestor.SnapshotDir(), date+".json")
-	return os.ReadFile(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var snap marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(data, &snap); err != nil {
+		return nil, err
+	}
+	return &snap, nil
 }
 
 func (s *MacroService) GetCapitalFlow() (*marketdata.MacroDataSnapshot, error) {

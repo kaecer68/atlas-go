@@ -65,15 +65,9 @@ func (s *System) WithPhase3Controller(ctrl *Phase3Controller) *System {
 	if s.host == nil {
 		s.host = &PluginHost{}
 	}
-	// Sync sub-managers so existing plugins delegate to the controller when appropriate.
 	for _, p := range s.host.plugins {
-		switch pp := p.(type) {
-		case *swarmPlugin:
-			pp.controller = ctrl
-		case *prismPlugin:
-			pp.controller = ctrl
-		case *spawningPlugin:
-			pp.controller = ctrl
+		if ca, ok := p.(ControllerAware); ok {
+			ca.SetController(ctrl)
 		}
 	}
 	s.host.Register(&phase3Plugin{controller: ctrl}, s.SystemCore)

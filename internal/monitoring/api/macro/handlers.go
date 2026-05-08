@@ -18,9 +18,8 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/channels/ingest", shared.Post(h.HandleChannelsIngest))
 	mux.Handle("GET /api/macro/capital-flow/latest", shared.Get(h.HandleCapitalFlowLatest))
 	mux.Handle("GET /api/taiwan/stress-index", shared.Get(h.HandleTaiwanStressIndex))
-	// Raw-write handlers (cannot use Adapt — write raw bytes)
-	mux.HandleFunc("/api/macro/snapshot/latest", h.HandleMacroSnapshotLatest)
-	mux.HandleFunc("/api/macro/snapshot/history", h.HandleMacroSnapshotHistory)
+	mux.Handle("GET /api/macro/snapshot/latest", shared.Get(h.HandleMacroSnapshotLatest))
+	mux.Handle("GET /api/macro/snapshot/history", shared.Get(h.HandleMacroSnapshotHistory))
 }
 
 func (h *Handlers) HandleMacroIngest(r *http.Request) (int, any) {
@@ -34,29 +33,24 @@ func (h *Handlers) HandleMacroIngest(r *http.Request) (int, any) {
 	}
 }
 
-func (h *Handlers) HandleMacroSnapshotLatest(w http.ResponseWriter, r *http.Request) {
-	data, err := h.Service.GetLatestSnapshot()
+func (h *Handlers) HandleMacroSnapshotLatest(r *http.Request) (int, any) {
+	snap, err := h.Service.GetLatestSnapshot()
 	if err != nil {
-		shared.WriteJSONError(w, http.StatusNotFound, "no macro snapshot available")
-		return
+		return http.StatusNotFound, map[string]string{"error": "no macro snapshot available"}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(data)
+	return http.StatusOK, snap
 }
 
-func (h *Handlers) HandleMacroSnapshotHistory(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleMacroSnapshotHistory(r *http.Request) (int, any) {
 	date := strings.TrimSpace(r.URL.Query().Get("date"))
 	if date == "" {
-		shared.WriteJSONError(w, http.StatusBadRequest, "date query param required (YYYY-MM-DD)")
-		return
+		return http.StatusBadRequest, map[string]string{"error": "date query param required (YYYY-MM-DD)"}
 	}
-	data, err := h.Service.GetSnapshotByDate(date)
+	snap, err := h.Service.GetSnapshotByDate(date)
 	if err != nil {
-		shared.WriteJSONError(w, http.StatusNotFound, "snapshot not found for date")
-		return
+		return http.StatusNotFound, map[string]string{"error": "snapshot not found for date"}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(data)
+	return http.StatusOK, snap
 }
 
 func (h *Handlers) HandleCapitalFlowLatest(r *http.Request) (int, any) {
