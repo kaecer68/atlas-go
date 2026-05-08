@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
@@ -183,3 +184,5 @@ func getLatestReplayDate(csvPath string) (time.Time, error) {
 	}
 	return latest, nil
 }
+
+

@@ -51,7 +51,7 @@ func (s *BacktestService) Start(startDate, endDate time.Time) error {
 		runner := backtest.NewRunner(cfg)
 		summary, err := runner.Run(startDate, endDate)
 		if err == nil {
-			if rerr := runner.GenerateReport(summary); rerr != nil {
+			if _, rerr := runner.GenerateReport(summary); rerr != nil {
 				logging.Error("backtest_service", "report_generation_failed", logging.Err(rerr))
 			}
 		}

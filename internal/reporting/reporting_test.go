@@ -92,3 +92,58 @@ func TestBuildAgentRows(t *testing.T) {
 		t.Errorf("expected weight 1.5, got %f", rows[0].Weight)
 	}
 }
+
+func TestRenderMarkdown_CoversAllSummaryFields(t *testing.T) {
+	summary := domain.BacktestWindowSummary{
+		WindowID:              "window-20260101-20260131",
+		StartDate:             time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		EndDate:               time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC),
+		SessionCount:          20,
+		OutcomeCount:          100,
+		WorstAgentID:          "bad_agent",
+		WorstAgentSkill:       "value",
+		WorstAgentLayer:       "style",
+		WorstAgentWindowCount: 5,
+		WorstAgentSharpeLike:  -0.25,
+		GeneratedAt:           time.Date(2026, 1, 31, 12, 0, 0, 0, time.UTC),
+	}
+
+	data := BacktestReportData{
+		WindowID:        summary.WindowID,
+		StartDate:       summary.StartDate,
+		EndDate:         summary.EndDate,
+		SessionCount:    summary.SessionCount,
+		OutcomeCount:    summary.OutcomeCount,
+		EquityCurve:     []float64{1_000_000, 1_020_000},
+		AgentRows:       []AgentPerformanceRow{{AgentID: "a", Layer: "sector", WindowCount: 5, HitRate: 0.5, SharpeLike: 0.8, MaxDrawdown: 0.03, Weight: 1.0}},
+		MutationStats:   MutationStats{Total: 5, Kept: 3, Reverted: 1, Pending: 1, SurvivalRate: 0.75},
+		WorstAgentID:    summary.WorstAgentID,
+		WorstAgentSkill: summary.WorstAgentSkill,
+		WorstSharpeLike: summary.WorstAgentSharpeLike,
+		RegimeCounts:    map[string]int{"RISK_ON": 15, "RISK_OFF": 5},
+	}
+
+	md := RenderMarkdown(data)
+
+	fields := map[string]string{
+		summary.WindowID:       "WindowID",
+		"2026-01-01":           "StartDate",
+		"2026-01-31":           "EndDate",
+		"20":                   "SessionCount",
+		"100":                  "OutcomeCount",
+		"bad_agent":            "WorstAgentID",
+		"value":                "WorstAgentSkill",
+		"-0.2500":              "WorstSharpeLike",
+		"Equity Curve":         "Section",
+		"Agent Performance":    "Section",
+		"Mutation Summary":     "Section",
+		"Regime Distribution":  "Section",
+		"Experiment Candidate": "Section",
+	}
+
+	for expected, fieldName := range fields {
+		if !strings.Contains(md, expected) {
+			t.Errorf("field %s (value: %q) not found in rendered report", fieldName, expected)
+		}
+	}
+}

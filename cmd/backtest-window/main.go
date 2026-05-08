@@ -52,10 +52,11 @@ func run(args []string) error {
 	fmt.Printf("worst_skill: %s\n", summary.WorstAgentSkill)
 	fmt.Printf("worst_sharpe_like: %.6f\n", summary.WorstAgentSharpeLike)
 
-	if err := runner.GenerateReport(summary); err != nil {
+	report, err := runner.GenerateReport(summary)
+	if err != nil {
 		log.Printf("warn: failed to generate report: %v", err)
 	} else {
-		fmt.Printf("report written to: reports/backtest_%s.md\n", summary.WindowID)
+		fmt.Println(report)
 	}
 
 	if *serve {

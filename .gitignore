@@ -111,3 +111,9 @@ internal/marketdata/data/state/
 /rewrite-state
 # State archives
 data/state-archive/
+
+# Legacy runtime reports (now rendered on-demand)
+/reports/
+
+# Stale prompt archives from spawning runs
+prompts/archive/
