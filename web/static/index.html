@@ -632,7 +632,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
   </div>
   <nav role="navigation" aria-label="主要導航">
     <a class="active" data-page="overview" onclick="switchPage('overview')" tabindex="0" title="總覽">📊 總覽</a>
-    <a data-page="evolution" onclick="switchPage('evolution')" tabindex="0" title="演化透視">🧬 演化透視</a>
+    <a data-page="evolution_panel" onclick="switchPage('evolution_panel')" tabindex="0" title="演化透視">🧬 演化透視</a>
     <a data-page="narrative" onclick="switchPage('narrative')" tabindex="0" title="宏觀敘事">🌍 宏觀敘事</a>
     <a data-page="industry" onclick="switchPage('industry')" tabindex="0" title="產業生態系">🏭 產業生態系</a>
     <a data-page="pipeline" onclick="switchPage('pipeline')" tabindex="0" title="投資管線">📋 投資管線</a>
@@ -898,13 +898,13 @@ body { display: flex; margin: 0; min-height: 100vh; }
 </div>
       <div class="panel wide"><h2>人工干預紀錄</h2><div id="auditLog" class="empty loading">載入中…</div></div>
     </div>
-    <div class="page" id="page-evolution">
+    <div class="page" id="page-evolution_panel">
       <div class="panel wide" style="margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap" id="evolutionViews">
-          <span style="font-size:13px;font-weight:700">视图：</span>
-          <button class="view-btn active" id="evView-compact" onclick="window._evSwitch('compact')">总览仪表板</button>
-          <button class="view-btn" id="evView-detailed" onclick="window._evSwitch('detailed')">详细分析</button>
-          <button class="view-btn" id="evView-categorical" onclick="window._evSwitch('categorical')">分类视图</button>
+           <span style="font-size:13px;font-weight:700">視覺圖：</span>
+           <button class="view-btn active" id="evView-compact" onclick="window._evSwitch('compact')">總覽儀表板</button>
+           <button class="view-btn" id="evView-detailed" onclick="window._evSwitch('detailed')">詳細分析</button>
+           <button class="view-btn" id="evView-categorical" onclick="window._evSwitch('categorical')">分類視覺圖</button>
         </div>
       </div>
       <div id="evolutionContent" class="empty loading">載入中…</div>
