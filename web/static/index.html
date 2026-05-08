@@ -1224,6 +1224,66 @@ body { display: flex; margin: 0; min-height: 100vh; }
   .ev-quad.warn { border-left: 2px solid var(--warn); }
   .ev-quad.bad { border-left: 2px solid var(--down); }
 
+  /* -- Trend Summary -- */
+  .ev-trend-summary {
+    margin-bottom: 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .ev-summary-title {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .ev-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+  }
+  .ev-summary-grid .ev-summary-card {
+    padding: 12px 10px;
+    text-align: center;
+    border-right: 1px solid var(--border);
+  }
+  .ev-summary-grid .ev-summary-card:last-child { border-right: none; }
+  .ev-summary-grid .ev-summary-card:nth-child(odd) { background: rgba(255,255,255,.01); }
+  .ev-summary-value {
+    font-size: 22px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .ev-summary-label {
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .ev-summary-tag {
+    font-size: 9px;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+  .ev-summary-card.ev-summary-good .ev-summary-value { color: var(--up); }
+  .ev-summary-card.ev-summary-good .ev-summary-tag { background: rgba(16,185,129,.12); color: var(--up); }
+  .ev-summary-card.ev-summary-warn .ev-summary-value { color: var(--warn); }
+  .ev-summary-card.ev-summary-warn .ev-summary-tag { background: rgba(245,158,11,.12); color: var(--warn); }
+  .ev-summary-card.ev-summary-bad .ev-summary-value { color: var(--down); }
+  .ev-summary-card.ev-summary-bad .ev-summary-tag { background: rgba(239,68,68,.12); color: var(--down); }
+
+  .ev-summary-footer {
+    font-size: 10px;
+    color: var(--muted);
+    padding: 8px 14px;
+    border-top: 1px solid var(--border);
+    line-height: 1.6;
+  }
+
   /* Scatter tooltip */
   .ev-scatter-tip {
     display: none;
