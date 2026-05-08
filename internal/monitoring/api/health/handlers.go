@@ -9,7 +9,7 @@ import (
 type Handlers struct{}
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
-	mux.Handle("/health", shared.Get(h.HandleHealth))
+	mux.Handle("GET /health", shared.Get(h.HandleHealth))
 }
 
 func (h *Handlers) HandleHealth(r *http.Request) (int, any) {

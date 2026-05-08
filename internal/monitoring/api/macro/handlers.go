@@ -14,28 +14,24 @@ type Handlers struct {
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/macro/ingest", h.HandleMacroIngest)
-	mux.HandleFunc("/api/channels/ingest", h.HandleChannelsIngest)
+	mux.Handle("POST /api/macro/ingest", shared.Post(h.HandleMacroIngest))
+	mux.Handle("POST /api/channels/ingest", shared.Post(h.HandleChannelsIngest))
+	mux.Handle("GET /api/macro/capital-flow/latest", shared.Get(h.HandleCapitalFlowLatest))
+	mux.Handle("GET /api/taiwan/stress-index", shared.Get(h.HandleTaiwanStressIndex))
+	// Raw-write handlers (cannot use Adapt — write raw bytes)
 	mux.HandleFunc("/api/macro/snapshot/latest", h.HandleMacroSnapshotLatest)
 	mux.HandleFunc("/api/macro/snapshot/history", h.HandleMacroSnapshotHistory)
-	mux.HandleFunc("/api/macro/capital-flow/latest", h.HandleCapitalFlowLatest)
-	mux.HandleFunc("/api/taiwan/stress-index", h.HandleTaiwanStressIndex)
 }
 
-func (h *Handlers) HandleMacroIngest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+func (h *Handlers) HandleMacroIngest(r *http.Request) (int, any) {
 	events, snap, err := h.Service.Ingest(r.Context())
 	if err != nil {
-		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("ingest failed: %v", err))
-		return
+		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("ingest failed: %v", err)}
 	}
-	shared.WriteJSON(w, http.StatusOK, map[string]any{
+	return http.StatusOK, map[string]any{
 		"events":   events,
 		"snapshot": snap,
-	})
+	}
 }
 
 func (h *Handlers) HandleMacroSnapshotLatest(w http.ResponseWriter, r *http.Request) {
@@ -63,58 +59,41 @@ func (h *Handlers) HandleMacroSnapshotHistory(w http.ResponseWriter, r *http.Req
 	_, _ = w.Write(data)
 }
 
-func (h *Handlers) HandleCapitalFlowLatest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+func (h *Handlers) HandleCapitalFlowLatest(r *http.Request) (int, any) {
 	snap, err := h.Service.GetCapitalFlow()
 	if err != nil {
-		shared.WriteJSONError(w, http.StatusNotFound, "no macro snapshot available")
-		return
+		return http.StatusNotFound, map[string]string{"error": "no macro snapshot available"}
 	}
-	shared.WriteJSON(w, http.StatusOK, map[string]any{
+	return http.StatusOK, map[string]any{
 		"foreign_investor_net": snap.ForeignInvestorNet,
 		"domestic_fund_net":    snap.DomesticFundNet,
 		"dealer_net":           snap.DealerNet,
 		"recorded_at":          snap.RecordedAt,
-	})
+	}
 }
 
-func (h *Handlers) HandleTaiwanStressIndex(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
+func (h *Handlers) HandleTaiwanStressIndex(r *http.Request) (int, any) {
 	index, err := h.Service.CalculateStressIndex(r.Context())
 	if err != nil {
-		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("calculate stress index: %v", err))
-		return
+		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("calculate stress index: %v", err)}
 	}
-	shared.WriteJSON(w, http.StatusOK, index)
+	return http.StatusOK, index
 }
 
-func (h *Handlers) HandleChannelsIngest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
+func (h *Handlers) HandleChannelsIngest(r *http.Request) (int, any) {
 	_, _, err := h.Service.Ingest(r.Context())
 	if err != nil {
-		shared.WriteJSON(w, http.StatusOK, map[string]any{
+		return http.StatusOK, map[string]any{
 			"macro_ok":    false,
 			"macro_error": err.Error(),
 			"geo_ok":      false,
 			"geo_error":   "geo ingest not yet wired to macro service",
-		})
-		return
+		}
 	}
-	shared.WriteJSON(w, http.StatusOK, map[string]any{
+	return http.StatusOK, map[string]any{
 		"macro_ok":    true,
 		"macro_error": "",
 		"geo_ok":      false,
 		"geo_error":   "geo ingest not yet wired to macro service",
-	})
+	}
 }

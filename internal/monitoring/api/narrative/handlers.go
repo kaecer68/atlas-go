@@ -16,11 +16,11 @@ type Handlers struct {
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/narrative/events", h.HandleNarrativeEvents)
-	mux.HandleFunc("/api/narrative/chains", h.HandleNarrativeChains)
-	mux.HandleFunc("/api/narrative/models", h.HandleNarrativeModels)
-	mux.HandleFunc("/api/narrative/templates", h.HandleNarrativeTemplates)
-	mux.HandleFunc("/api/narrative/seasonal", h.HandleSeasonalAnalysis)
+	mux.Handle("GET /api/narrative/events", shared.Get(h.HandleNarrativeEvents))
+	mux.Handle("GET /api/narrative/chains", shared.Get(h.HandleNarrativeChains))
+	mux.Handle("GET /api/narrative/models", shared.Get(h.HandleNarrativeModels))
+	mux.Handle("GET /api/narrative/templates", shared.Get(h.HandleNarrativeTemplates))
+	mux.Handle("GET /api/narrative/seasonal", shared.Get(h.HandleSeasonalAnalysis))
 }
 
 func parseFloatQuery(r *http.Request, key string, defaultVal float64) float64 {
@@ -33,7 +33,7 @@ func parseFloatQuery(r *http.Request, key string, defaultVal float64) float64 {
 	return defaultVal
 }
 
-func (h *Handlers) HandleNarrativeEvents(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleNarrativeEvents(r *http.Request) (int, any) {
 	data := narrative.MarketNarrativeData{
 		US10YChangeBps:                parseFloatQuery(r, "us10y_change_bps", 15),
 		DXYChangePct:                  parseFloatQuery(r, "dxy_change_pct", 2.0),
@@ -47,11 +47,10 @@ func (h *Handlers) HandleNarrativeEvents(w http.ResponseWriter, r *http.Request)
 		RetailInstitutionalDivergence: parseFloatQuery(r, "retail_divergence", 0),
 		MarginZScore:                  parseFloatQuery(r, "margin_zscore", 0),
 	}
-	events := h.Svc.DetectEvents(data)
-	shared.WriteJSON(w, http.StatusOK, map[string]any{"events": events})
+	return http.StatusOK, map[string]any{"events": h.Svc.DetectEvents(data)}
 }
 
-func (h *Handlers) HandleNarrativeChains(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleNarrativeChains(r *http.Request) (int, any) {
 	data := narrative.MarketNarrativeData{
 		US10YChangeBps:    parseFloatQuery(r, "us10y_change_bps", 15),
 		DXYChangePct:      parseFloatQuery(r, "dxy_change_pct", 2.0),
@@ -64,11 +63,10 @@ func (h *Handlers) HandleNarrativeChains(w http.ResponseWriter, r *http.Request)
 		GeopoliticalGPR:   parseFloatQuery(r, "geopolitical_gpr", 160),
 	}
 	events := h.Svc.DetectEvents(data)
-	chains := h.Svc.MatchChains(events)
-	shared.WriteJSON(w, http.StatusOK, map[string]any{"chains": chains})
+	return http.StatusOK, map[string]any{"chains": h.Svc.MatchChains(events)}
 }
 
-func (h *Handlers) HandleNarrativeModels(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleNarrativeModels(r *http.Request) (int, any) {
 	data := narrative.MarketNarrativeData{
 		US10YChangeBps:    parseFloatQuery(r, "us10y_change_bps", 15),
 		DXYChangePct:      parseFloatQuery(r, "dxy_change_pct", 2.0),
@@ -85,37 +83,28 @@ func (h *Handlers) HandleNarrativeModels(w http.ResponseWriter, r *http.Request)
 	for i, e := range events {
 		themes[i] = e.Theme
 	}
-	models := h.Svc.GetActiveModels(themes)
-	shared.WriteJSON(w, http.StatusOK, map[string]any{"models": models})
+	return http.StatusOK, map[string]any{"models": h.Svc.GetActiveModels(themes)}
 }
 
-func (h *Handlers) HandleNarrativeTemplates(w http.ResponseWriter, r *http.Request) {
-	templates := h.Svc.GetTemplates()
-	shared.WriteJSON(w, http.StatusOK, map[string]any{"templates": templates})
+func (h *Handlers) HandleNarrativeTemplates(r *http.Request) (int, any) {
+	return http.StatusOK, map[string]any{"templates": h.Svc.GetTemplates()}
 }
 
-func (h *Handlers) HandleSeasonalAnalysis(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
+func (h *Handlers) HandleSeasonalAnalysis(r *http.Request) (int, any) {
 	now := time.Now()
 
 	if h.IndustryService != nil {
 		active, historical, adjustment := h.IndustryService.GetSeasonalPatterns("", now)
-		shared.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		return http.StatusOK, map[string]interface{}{
 			"month":               now.Month().String(),
 			"active_patterns":     active,
 			"all_patterns":        historical,
 			"combined_adjustment": adjustment,
-		})
-		return
+		}
 	}
 
-	// Fallback stub behavior
-	shared.WriteJSON(w, http.StatusOK, map[string]interface{}{
+	return http.StatusOK, map[string]interface{}{
 		"month": now.Month().String(),
 		"note":  "seasonal patterns are embedded in narrative engine",
-	})
+	}
 }

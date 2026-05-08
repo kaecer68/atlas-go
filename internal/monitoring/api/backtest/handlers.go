@@ -18,56 +18,42 @@ func NewHandlers(svc *service.BacktestService) *Handlers {
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/backtest/run", h.HandleBacktestRun)
-	mux.HandleFunc("/api/backtest/status", h.HandleBacktestStatus)
+	mux.Handle("POST /api/backtest/run", shared.Post(h.HandleBacktestRun))
+	mux.Handle("GET /api/backtest/status", shared.Get(h.HandleBacktestStatus))
 }
 
-func (h *Handlers) HandleBacktestRun(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+func (h *Handlers) HandleBacktestRun(r *http.Request) (int, any) {
 	var req struct {
 		Start string `json:"start"`
 		End   string `json:"end"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		shared.WriteJSONError(w, http.StatusBadRequest, "invalid json")
-		return
+		return http.StatusBadRequest, map[string]string{"error": "invalid json"}
 	}
 	if req.Start == "" || req.End == "" {
-		shared.WriteJSONError(w, http.StatusBadRequest, "start and end dates required")
-		return
+		return http.StatusBadRequest, map[string]string{"error": "start and end dates required"}
 	}
 	startDate, err := time.Parse("2006-01-02", req.Start)
 	if err != nil {
-		shared.WriteJSONError(w, http.StatusBadRequest, "invalid start date format (YYYY-MM-DD)")
-		return
+		return http.StatusBadRequest, map[string]string{"error": "invalid start date format (YYYY-MM-DD)"}
 	}
 	endDate, err := time.Parse("2006-01-02", req.End)
 	if err != nil {
-		shared.WriteJSONError(w, http.StatusBadRequest, "invalid end date format (YYYY-MM-DD)")
-		return
+		return http.StatusBadRequest, map[string]string{"error": "invalid end date format (YYYY-MM-DD)"}
 	}
 
 	if err := h.svc.Start(startDate, endDate); err != nil {
-		shared.WriteJSONError(w, http.StatusConflict, "backtest already running")
-		return
+		return http.StatusConflict, map[string]string{"error": "backtest already running"}
 	}
 
-	shared.WriteJSON(w, http.StatusAccepted, map[string]interface{}{
+	return http.StatusAccepted, map[string]interface{}{
 		"running":      true,
 		"check_status": "/api/backtest/status",
 		"start":        req.Start,
 		"end":          req.End,
-	})
+	}
 }
 
-func (h *Handlers) HandleBacktestStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	status := h.svc.GetStatus()
-	shared.WriteJSON(w, http.StatusOK, status)
+func (h *Handlers) HandleBacktestStatus(r *http.Request) (int, any) {
+	return http.StatusOK, h.svc.GetStatus()
 }
