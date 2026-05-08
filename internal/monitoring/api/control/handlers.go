@@ -14,91 +14,60 @@ type Handlers struct {
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/control/pause-agent", h.HandlePauseAgent)
-	mux.HandleFunc("/api/control/resume-agent", h.HandleResumeAgent)
-	mux.HandleFunc("/api/control/set-model-weight", h.HandleSetModelWeight)
-	mux.HandleFunc("/api/control/sector-ban", h.HandleSectorBan)
-	mux.HandleFunc("/api/control/approve-recommendation", h.HandleApproveRecommendation)
-	mux.HandleFunc("/api/control/reject-recommendation", h.HandleRejectRecommendation)
-	mux.HandleFunc("/api/control/audit-log", h.HandleAuditLog)
-	mux.HandleFunc("/api/control/active-overrides", h.HandleActiveOverrides)
-	mux.HandleFunc("/api/agents/health", h.HandleAgentHealth)
+	mux.Handle("POST /api/control/pause-agent", shared.Post(h.HandlePauseAgent))
+	mux.Handle("POST /api/control/resume-agent", shared.Post(h.HandleResumeAgent))
+	mux.Handle("POST /api/control/set-model-weight", shared.Post(h.HandleSetModelWeight))
+	mux.Handle("POST /api/control/sector-ban", shared.Post(h.HandleSectorBan))
+	mux.Handle("POST /api/control/approve-recommendation", shared.Post(h.HandleApproveRecommendation))
+	mux.Handle("POST /api/control/reject-recommendation", shared.Post(h.HandleRejectRecommendation))
+	mux.Handle("GET /api/control/audit-log", shared.Get(h.HandleAuditLog))
+	mux.Handle("GET /api/control/active-overrides", shared.Get(h.HandleActiveOverrides))
+	mux.Handle("GET /api/agents/health", shared.Get(h.HandleAgentHealth))
 }
 
-func (h *Handlers) HandlePauseAgent(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+func decodeInterventionBody(r *http.Request) (agentID, reason, operator string, _ error) {
 	var req struct {
 		AgentID  string `json:"agent_id"`
 		Reason   string `json:"reason"`
 		Operator string `json:"operator"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		shared.WriteJSONError(w, http.StatusBadRequest, "invalid json")
-		return
+		return "", "", "", err
 	}
-	if req.AgentID == "" {
-		shared.WriteJSONError(w, http.StatusBadRequest, "agent_id required")
-		return
-	}
-	intervention := h.Svc.CreateIntervention("pause_agent", req.AgentID, req.Reason, req.Operator, 0)
-	if err := h.Svc.RecordIntervention(intervention); err != nil {
-		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
-		return
-	}
-	shared.WriteJSON(w, http.StatusOK, map[string]any{"success": true, "intervention": intervention})
+	return req.AgentID, req.Reason, req.Operator, nil
 }
 
-func (h *Handlers) HandleResumeAgent(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	var req struct {
-		AgentID  string `json:"agent_id"`
-		Reason   string `json:"reason"`
-		Operator string `json:"operator"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		shared.WriteJSONError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
-	if req.AgentID == "" {
-		shared.WriteJSONError(w, http.StatusBadRequest, "agent_id required")
-		return
-	}
-	intervention := h.Svc.CreateIntervention("resume_agent", req.AgentID, req.Reason, req.Operator, 0)
+func (h *Handlers) recordIntervention(interventionType, targetID, reason, operator string) (int, any) {
+	intervention := h.Svc.CreateIntervention(interventionType, targetID, reason, operator, 0)
 	if err := h.Svc.RecordIntervention(intervention); err != nil {
-		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
-		return
+		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("record intervention: %v", err)}
 	}
-	shared.WriteJSON(w, http.StatusOK, map[string]any{"success": true, "intervention": intervention})
+	return http.StatusOK, map[string]any{"success": true, "intervention": intervention}
 }
 
-func (h *Handlers) HandleAgentHealth(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	agents, mutedCount, err := h.Svc.GetAgentHealth()
+func (h *Handlers) HandlePauseAgent(r *http.Request) (int, any) {
+	agentID, reason, operator, err := decodeInterventionBody(r)
 	if err != nil {
-		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("get agent health: %v", err))
-		return
+		return http.StatusBadRequest, map[string]string{"error": "invalid json"}
 	}
-	shared.WriteJSON(w, http.StatusOK, map[string]any{
-		"agents":      agents,
-		"total":       len(agents),
-		"muted_count": mutedCount,
-	})
+	if agentID == "" {
+		return http.StatusBadRequest, map[string]string{"error": "agent_id required"}
+	}
+	return h.recordIntervention("pause_agent", agentID, reason, operator)
 }
 
-func (h *Handlers) HandleSetModelWeight(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
+func (h *Handlers) HandleResumeAgent(r *http.Request) (int, any) {
+	agentID, reason, operator, err := decodeInterventionBody(r)
+	if err != nil {
+		return http.StatusBadRequest, map[string]string{"error": "invalid json"}
 	}
+	if agentID == "" {
+		return http.StatusBadRequest, map[string]string{"error": "agent_id required"}
+	}
+	return h.recordIntervention("resume_agent", agentID, reason, operator)
+}
+
+func (h *Handlers) HandleSetModelWeight(r *http.Request) (int, any) {
 	var req struct {
 		ModelID  string  `json:"model_id"`
 		Weight   float64 `json:"weight"`
@@ -106,26 +75,15 @@ func (h *Handlers) HandleSetModelWeight(w http.ResponseWriter, r *http.Request) 
 		Operator string  `json:"operator"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		shared.WriteJSONError(w, http.StatusBadRequest, "invalid json")
-		return
+		return http.StatusBadRequest, map[string]string{"error": "invalid json"}
 	}
 	if req.ModelID == "" {
-		shared.WriteJSONError(w, http.StatusBadRequest, "model_id required")
-		return
+		return http.StatusBadRequest, map[string]string{"error": "model_id required"}
 	}
-	intervention := h.Svc.CreateIntervention("set_model_weight", req.ModelID, req.Reason, req.Operator, req.Weight)
-	if err := h.Svc.RecordIntervention(intervention); err != nil {
-		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
-		return
-	}
-	shared.WriteJSON(w, http.StatusOK, map[string]any{"success": true, "intervention": intervention})
+	return h.recordIntervention("set_model_weight", req.ModelID, req.Reason, req.Operator)
 }
 
-func (h *Handlers) HandleSectorBan(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+func (h *Handlers) HandleSectorBan(r *http.Request) (int, any) {
 	var req struct {
 		Sector   string `json:"sector"`
 		Banned   bool   `json:"banned"`
@@ -133,30 +91,19 @@ func (h *Handlers) HandleSectorBan(w http.ResponseWriter, r *http.Request) {
 		Operator string `json:"operator"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		shared.WriteJSONError(w, http.StatusBadRequest, "invalid json")
-		return
+		return http.StatusBadRequest, map[string]string{"error": "invalid json"}
 	}
 	if req.Sector == "" {
-		shared.WriteJSONError(w, http.StatusBadRequest, "sector required")
-		return
+		return http.StatusBadRequest, map[string]string{"error": "sector required"}
 	}
 	interventionType := "sector_unban"
 	if req.Banned {
 		interventionType = "sector_ban"
 	}
-	intervention := h.Svc.CreateIntervention(interventionType, req.Sector, req.Reason, req.Operator, 0)
-	if err := h.Svc.RecordIntervention(intervention); err != nil {
-		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
-		return
-	}
-	shared.WriteJSON(w, http.StatusOK, map[string]any{"success": true, "intervention": intervention})
+	return h.recordIntervention(interventionType, req.Sector, req.Reason, req.Operator)
 }
 
-func (h *Handlers) HandleApproveRecommendation(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+func (h *Handlers) HandleApproveRecommendation(r *http.Request) (int, any) {
 	var req struct {
 		Symbol   string `json:"symbol"`
 		AgentID  string `json:"agent_id"`
@@ -164,22 +111,12 @@ func (h *Handlers) HandleApproveRecommendation(w http.ResponseWriter, r *http.Re
 		Operator string `json:"operator"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		shared.WriteJSONError(w, http.StatusBadRequest, "invalid json")
-		return
+		return http.StatusBadRequest, map[string]string{"error": "invalid json"}
 	}
-	intervention := h.Svc.CreateIntervention("approve_rec", req.Symbol, req.Reason, req.Operator, 0)
-	if err := h.Svc.RecordIntervention(intervention); err != nil {
-		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
-		return
-	}
-	shared.WriteJSON(w, http.StatusOK, map[string]any{"success": true, "intervention": intervention})
+	return h.recordIntervention("approve_rec", req.Symbol, req.Reason, req.Operator)
 }
 
-func (h *Handlers) HandleRejectRecommendation(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
+func (h *Handlers) HandleRejectRecommendation(r *http.Request) (int, any) {
 	var req struct {
 		Symbol   string `json:"symbol"`
 		AgentID  string `json:"agent_id"`
@@ -187,31 +124,36 @@ func (h *Handlers) HandleRejectRecommendation(w http.ResponseWriter, r *http.Req
 		Operator string `json:"operator"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		shared.WriteJSONError(w, http.StatusBadRequest, "invalid json")
-		return
+		return http.StatusBadRequest, map[string]string{"error": "invalid json"}
 	}
-	intervention := h.Svc.CreateIntervention("reject_rec", req.Symbol, req.Reason, req.Operator, 0)
-	if err := h.Svc.RecordIntervention(intervention); err != nil {
-		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("record intervention: %v", err))
-		return
-	}
-	shared.WriteJSON(w, http.StatusOK, map[string]any{"success": true, "intervention": intervention})
+	return h.recordIntervention("reject_rec", req.Symbol, req.Reason, req.Operator)
 }
 
-func (h *Handlers) HandleAuditLog(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleAgentHealth(r *http.Request) (int, any) {
+	agents, mutedCount, err := h.Svc.GetAgentHealth()
+	if err != nil {
+		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("get agent health: %v", err)}
+	}
+	return http.StatusOK, map[string]any{
+		"agents":      agents,
+		"total":       len(agents),
+		"muted_count": mutedCount,
+	}
+}
+
+func (h *Handlers) HandleAuditLog(r *http.Request) (int, any) {
 	interventions, err := h.Svc.LoadInterventions()
 	if err != nil {
-		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load interventions: %v", err))
-		return
+		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("load interventions: %v", err)}
 	}
-	shared.WriteJSON(w, http.StatusOK, map[string]any{"interventions": interventions})
+	return http.StatusOK, map[string]any{"interventions": interventions}
 }
 
-func (h *Handlers) HandleActiveOverrides(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleActiveOverrides(r *http.Request) (int, any) {
 	pausedAgents, bannedSectors, modelWeights := h.Svc.GetActiveOverrides()
-	shared.WriteJSON(w, http.StatusOK, map[string]any{
+	return http.StatusOK, map[string]any{
 		"paused_agents":  pausedAgents,
 		"banned_sectors": bannedSectors,
 		"model_weights":  modelWeights,
-	})
+	}
 }
