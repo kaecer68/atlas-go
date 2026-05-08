@@ -23,6 +23,7 @@ type PipelineService struct {
 	WorkDir          string
 	LedgerDir        string
 	registryProvider RegistryProviderFunc
+	store            ledger.OutcomeStore
 }
 
 type RegistryProviderFunc func() (domain.AgentRegistry, error)
@@ -32,10 +33,18 @@ func (s *PipelineService) WithRegistryProvider(fn RegistryProviderFunc) *Pipelin
 	return s
 }
 
-func NewPipelineService(workDir, ledgerDir string) *PipelineService {
+func (s *PipelineService) getStore() ledger.OutcomeStore {
+	if s.store != nil {
+		return s.store
+	}
+	return ledger.NewStore(s.LedgerDir)
+}
+
+func NewPipelineService(workDir, ledgerDir string, store ledger.OutcomeStore) *PipelineService {
 	return &PipelineService{
 		WorkDir:   workDir,
 		LedgerDir: ledgerDir,
+		store:     store,
 	}
 }
 
@@ -93,7 +102,7 @@ func (s *PipelineService) LoadAgentObservatory(sessionID string, limit int) (*Ag
 		return nil, fmt.Errorf("load agent observatory summary: %w", err)
 	}
 
-	store := ledger.NewStore(s.LedgerDir)
+	store := s.getStore()
 	var outcomes []domain.RecommendationOutcome
 	if summary != nil {
 		outcomes, _ = store.LoadSessionOutcomes(summary.SessionID)
@@ -511,7 +520,7 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 		statusMessage = "本場次尚無推薦產出記錄"
 	}
 
-	store := ledger.NewStore(s.LedgerDir)
+	store := s.getStore()
 	screened, err := store.LoadSessionScreeningRejects(targetSession)
 	if err != nil {
 		// Log but don't fail
@@ -877,7 +886,7 @@ type RegimeTransition struct {
 }
 
 func (s *PipelineService) LoadRegimeHistory(limit int) (*RegimeHistoryData, error) {
-	store := ledger.NewStore(s.LedgerDir)
+	store := s.getStore()
 	summaries, err := store.LoadSessionSummaries()
 	if err != nil {
 		return nil, fmt.Errorf("load session summaries: %w", err)

@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/reporting"
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
 
@@ -27,89 +29,59 @@ type ReportService struct {
 	workDir         string
 	ledgerDir       string
 	reportGenerator *narrative.ReportGenerator
+	store           ledger.OutcomeStore
 }
 
 // NewReportService creates a new ReportService.
-func NewReportService(workDir, ledgerDir string) *ReportService {
+func NewReportService(workDir, ledgerDir string, store ledger.OutcomeStore) *ReportService {
 	return &ReportService{
 		workDir:         workDir,
 		ledgerDir:       ledgerDir,
 		reportGenerator: narrative.NewReportGenerator(),
+		store:           store,
 	}
+}
+
+func (s *ReportService) getStore() ledger.OutcomeStore {
+	if s.store != nil {
+		return s.store
+	}
+	return ledger.NewStore(s.ledgerDir)
 }
 
 // LoadLatestReport returns the content and filename of the most recent backtest report.
 func (s *ReportService) LoadLatestReport() (content []byte, filename string, err error) {
-	reportDir := filepath.Join(s.workDir, "reports")
-	entries, err := os.ReadDir(reportDir)
+	summary, err := s.loadLatestWindowSummary()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, "", fmt.Errorf("no reports directory found")
-		}
-		return nil, "", fmt.Errorf("read reports dir: %w", err)
+		return nil, "", err
 	}
 
-	var latestFile string
-	var latestTime time.Time
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if !strings.HasPrefix(name, "backtest_") || !strings.HasSuffix(name, ".md") {
-			continue
-		}
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-		if latestFile == "" || info.ModTime().After(latestTime) {
-			latestFile = name
-			latestTime = info.ModTime()
-		}
-	}
-
-	if latestFile == "" {
-		return nil, "", fmt.Errorf("no backtest report found")
-	}
-
-	path := filepath.Join(reportDir, latestFile)
-	content, err = os.ReadFile(path)
+	report, err := s.renderWindowReport(summary)
 	if err != nil {
-		return nil, "", fmt.Errorf("read report: %w", err)
+		return nil, "", fmt.Errorf("render report: %w", err)
 	}
 
-	return content, latestFile, nil
+	filename = fmt.Sprintf("backtest_%s.md", summary.WindowID)
+	return []byte(report), filename, nil
 }
 
 // LoadReportList returns all backtest report entries sorted by updated_at descending.
 func (s *ReportService) LoadReportList() ([]ReportEntry, error) {
-	reportDir := filepath.Join(s.workDir, "reports")
-	entries, err := os.ReadDir(reportDir)
+	summaries, err := s.loadAllWindowSummaries()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return []ReportEntry{}, nil
-		}
-		return nil, fmt.Errorf("read reports dir: %w", err)
+		return nil, err
+	}
+	if len(summaries) == 0 {
+		return []ReportEntry{}, nil
 	}
 
-	reports := make([]ReportEntry, 0)
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if !strings.HasPrefix(name, "backtest_") || !strings.HasSuffix(name, ".md") {
-			continue
-		}
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
+	reports := make([]ReportEntry, 0, len(summaries))
+	for _, summary := range summaries {
+		filename := fmt.Sprintf("backtest_%s.md", summary.WindowID)
 		reports = append(reports, ReportEntry{
-			Filename:  name,
-			Path:      "/api/report/latest?file=" + name,
-			UpdatedAt: info.ModTime().UTC().Format(time.RFC3339),
+			Filename:  filename,
+			Path:      "/api/report/latest?window_id=" + summary.WindowID,
+			UpdatedAt: summary.GeneratedAt.UTC().Format(time.RFC3339),
 		})
 	}
 
@@ -184,6 +156,103 @@ func (s *ReportService) loadNarrativeEventsForDate(date string) []narrative.Narr
 	}
 
 	return nil
+}
+
+func (s *ReportService) loadLatestWindowSummary() (domain.BacktestWindowSummary, error) {
+	summaries, err := s.loadAllWindowSummaries()
+	if err != nil {
+		return domain.BacktestWindowSummary{}, err
+	}
+	if len(summaries) == 0 {
+		return domain.BacktestWindowSummary{}, fmt.Errorf("no backtest window found")
+	}
+
+	latest := summaries[0]
+	for _, summary := range summaries[1:] {
+		if summary.GeneratedAt.After(latest.GeneratedAt) {
+			latest = summary
+		}
+	}
+	return latest, nil
+}
+
+func (s *ReportService) loadAllWindowSummaries() ([]domain.BacktestWindowSummary, error) {
+	windowsDir := filepath.Join(s.ledgerDir, "windows")
+	entries, err := os.ReadDir(windowsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read windows dir: %w", err)
+	}
+
+	var summaries []domain.BacktestWindowSummary
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".json") || strings.HasSuffix(name, "-mutation-brief.json") {
+			continue
+		}
+
+		path := filepath.Join(windowsDir, name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+
+		var summary domain.BacktestWindowSummary
+		if err := json.Unmarshal(data, &summary); err != nil {
+			continue
+		}
+		summaries = append(summaries, summary)
+	}
+
+	return summaries, nil
+}
+
+func (s *ReportService) renderWindowReport(summary domain.BacktestWindowSummary) (string, error) {
+	store := s.getStore()
+	scorecards, _, err := store.LoadAllSessionScorecards()
+	if err != nil {
+		return "", fmt.Errorf("load scorecards: %w", err)
+	}
+
+	sessionSummaries, err := store.LoadSessionSummaries()
+	if err != nil {
+		return "", fmt.Errorf("load session summaries: %w", err)
+	}
+
+	equityCurve := make([]float64, 0, len(sessionSummaries))
+	regimeCounts := make(map[string]int)
+	for _, sess := range sessionSummaries {
+		pv := sess.PortfolioValue
+		if pv == 0 {
+			pv = sess.EndingCash
+		}
+		equityCurve = append(equityCurve, pv)
+		regimeCounts[string(sess.Regime)]++
+	}
+
+	reportData := reporting.BacktestReportData{
+		WindowID:              summary.WindowID,
+		StartDate:             summary.StartDate,
+		EndDate:               summary.EndDate,
+		SessionCount:          summary.SessionCount,
+		OutcomeCount:          summary.OutcomeCount,
+		EquityCurve:           equityCurve,
+		AgentRows:             reporting.BuildAgentRows(scorecards, nil),
+		MutationStats:         reporting.MutationStats{},
+		WorstAgentID:          summary.WorstAgentID,
+		WorstAgentSkill:       summary.WorstAgentSkill,
+		WorstAgentLayer:       string(summary.WorstAgentLayer),
+		WorstAgentWindowCount: summary.WorstAgentWindowCount,
+		WorstSharpeLike:       summary.WorstAgentSharpeLike,
+		RegimeCounts:          regimeCounts,
+	}
+
+	return reporting.RenderMarkdown(reportData), nil
 }
 
 func (s *ReportService) loadRiskSnapshot() *domain.RiskSnapshot {

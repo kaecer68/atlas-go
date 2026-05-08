@@ -13,7 +13,7 @@ import (
 func newTestHandlers(t *testing.T) *Handlers {
 	t.Helper()
 	dir := t.TempDir()
-	svc := service.NewControlService(dir, dir, nil)
+	svc := service.NewControlService(dir, dir, nil, nil)
 	return &Handlers{Svc: svc}
 }
 
