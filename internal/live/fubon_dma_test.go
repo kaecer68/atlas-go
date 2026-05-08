@@ -466,12 +466,6 @@ func TestFubonDMAAdapterConcurrentAccess(t *testing.T) {
 	}
 }
 
-// readAll 從 io.Reader 讀取全部內容（測試輔助函式）。
-func readAll(r io.Reader) string {
-	data, _ := io.ReadAll(r)
-	return string(data)
-}
-
 func TestFubonDMARequestNoOmitEmpty(t *testing.T) {
 	req := fubonDMARequest{Cmd: "ping"}
 	data, err := json.Marshal(req)

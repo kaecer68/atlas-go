@@ -117,3 +117,6 @@ data/state-archive/
 
 # Stale prompt archives from spawning runs
 prompts/archive/
+
+# Incomplete Phase C packages
+internal/autobacktest/

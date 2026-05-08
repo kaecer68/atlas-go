@@ -224,16 +224,6 @@ func (s *Scheduler) quotePoller() {
 	}
 }
 
-func (s *Scheduler) publishEvent(event BusEvent) {
-	s.mu.RLock()
-	eb := s.eventBus
-	s.mu.RUnlock()
-	if eb == nil {
-		return
-	}
-	_ = eb.Publish(event)
-}
-
 func (s *Scheduler) Status() map[string]interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
