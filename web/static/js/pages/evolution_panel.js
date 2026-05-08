@@ -4,6 +4,63 @@ import { getJSON } from '../shared/app-utils.js';
 let evolutionData = null;
 let currentView = 'compact';
 
+// ====== Trend Summary ======
+
+function renderTrendSummary(scorecards, sessions) {
+  if (!scorecards.length) return '';
+  const sharpeValues = scorecards.map(function(a) { return a.sharpe || 0; }).sort(function(a, b) { return a - b; });
+  const mid = Math.floor(sharpeValues.length / 2);
+  const medianSharpe = sharpeValues.length % 2 === 0
+    ? (sharpeValues[mid - 1] + sharpeValues[mid]) / 2
+    : sharpeValues[mid];
+  const avgHitRate = scorecards.reduce(function(s, a) { return s + (a.hit_rate || 0); }, 0) / scorecards.length;
+  const healthyCount = scorecards.filter(function(a) { return (a.sharpe || 0) > 0.5 && (a.hit_rate || 0) > 0.3; }).length;
+  const weakCount = scorecards.filter(function(a) { return (a.sharpe || 0) < 0.5; }).length;
+  const healthPct = Math.round(healthyCount / scorecards.length * 100);
+  const weakPct = Math.round(weakCount / scorecards.length * 100);
+
+  var transitions = 0;
+  for (var i = 1; i < sessions.length; i++) {
+    if (sessions[i].regime !== sessions[i - 1].regime) transitions++;
+  }
+  var stability = sessions.length > 0 ? Math.round((1 - transitions / sessions.length) * 100) : 100;
+
+  var sharpeCls = medianSharpe > 1 ? 'ev-summary-good' : (medianSharpe > 0.5 ? 'ev-summary-warn' : 'ev-summary-bad');
+  var hitCls = avgHitRate > 0.6 ? 'ev-summary-good' : (avgHitRate > 0.4 ? 'ev-summary-warn' : 'ev-summary-bad');
+  var healthCls = healthPct > 70 ? 'ev-summary-good' : (healthPct > 40 ? 'ev-summary-warn' : 'ev-summary-bad');
+  var weakCls = weakPct < 20 ? 'ev-summary-good' : (weakPct < 40 ? 'ev-summary-warn' : 'ev-summary-bad');
+
+  return '<div class="ev-trend-summary">' +
+    '<div class="ev-summary-title">📊 演化趨勢摘要</div>' +
+    '<div class="ev-summary-grid">' +
+      '<div class="ev-summary-card ' + sharpeCls + '">' +
+        '<div class="ev-summary-value">' + medianSharpe.toFixed(2) + '</div>' +
+        '<div class="ev-summary-label">Sharpe 中位數</div>' +
+        '<div class="ev-summary-tag">' + (medianSharpe > 1 ? '✅ 良好' : (medianSharpe > 0.5 ? '⚠ 一般' : '❌ 偏弱')) + '</div>' +
+      '</div>' +
+      '<div class="ev-summary-card ' + hitCls + '">' +
+        '<div class="ev-summary-value">' + Math.round(avgHitRate * 100) + '%</div>' +
+        '<div class="ev-summary-label">命中率 整體</div>' +
+        '<div class="ev-summary-tag">' + (avgHitRate > 0.6 ? '✅ 優秀' : (avgHitRate > 0.4 ? '⚠ 一般' : '❌ 偏低')) + '</div>' +
+      '</div>' +
+      '<div class="ev-summary-card ' + healthCls + '">' +
+        '<div class="ev-summary-value">' + healthyCount + '<span style="font-size:16px">/</span>' + scorecards.length + '</div>' +
+        '<div class="ev-summary-label">策略健康度</div>' +
+        '<div class="ev-summary-tag">' + (healthPct > 70 ? '✅ 健康' : (healthPct > 40 ? '⚠ 注意' : '❌ 堪慮')) + ' (' + healthPct + '%)</div>' +
+      '</div>' +
+      '<div class="ev-summary-card ' + weakCls + '">' +
+        '<div class="ev-summary-value">' + weakCount + '</div>' +
+        '<div class="ev-summary-label">淘汰壓力</div>' +
+        '<div class="ev-summary-tag">' + (weakPct < 20 ? '✅ 低壓' : (weakPct < 40 ? '⚠ 關注' : '❌ 高壓')) + ' (' + weakPct + '%)</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="ev-summary-footer">' +
+      'Regime 穩定度 <strong>' + stability + '%</strong> — ' + transitions + ' 次切換 / ' + sessions.length + ' 場次 · ' +
+      '<span style="color:var(--muted)">系統正以 mutation → judge → promote 循環持續優化 Agent 策略</span>' +
+    '</div>' +
+    '</div>';
+}
+
 // ====== Page-Level Reading Guide ======
 
 function renderPageGuide(view) {
@@ -304,7 +361,7 @@ stateHtml +
     (elimRows ? elimRows : '<div class="empty" style="padding:12px 0">目前無低績效 Agent</div>') +
     '</div>';
 
-  el.innerHTML = renderPageGuide('compact') + regimeSection + expSection +
+  el.innerHTML = renderPageGuide('compact') + renderTrendSummary(scorecards, sessions) + regimeSection + expSection +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
       agentSection + elimSection +
     '</div>';
