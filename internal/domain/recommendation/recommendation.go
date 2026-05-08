@@ -20,7 +20,7 @@ type Recommendation struct {
 	Reason              string
 	ReasoningChain      []string                    `json:"reasoning_chain,omitempty"`
 	SupportingEvents    []string                    `json:"supporting_events,omitempty"`
-	FactorScores        shared.FactorScores         `json:"factor_scores,omitempty"`
+	FactorScores        shared.FactorScores         `json:"factor_scores"`
 	ConvictionBreakdown *shared.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
 }
 
@@ -38,7 +38,7 @@ type AgentSpec struct {
 	ForbiddenActions  []string
 	OperatingNotes    []string
 	DarwinianWeight   float64           `json:"darwinian_weight,omitempty"`
-	ScreeningCriteria ScreeningCriteria `json:"screening_criteria,omitempty"`
+	ScreeningCriteria ScreeningCriteria `json:"screening_criteria"`
 }
 
 // AgentRegistry holds the set of registered agents.
@@ -66,7 +66,7 @@ type RecommendationOutcome struct {
 	PassedGuards        bool                        `json:"passed_guards"`
 	GuardReason         string                      `json:"guard_reason"`
 	RecordedAt          time.Time                   `json:"recorded_at"`
-	FactorScores        shared.FactorScores         `json:"factor_scores,omitempty"`
+	FactorScores        shared.FactorScores         `json:"factor_scores"`
 	ConvictionBreakdown *shared.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
 }
 

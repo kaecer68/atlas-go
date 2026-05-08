@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
 func writeTestSessionArtifacts(t *testing.T, baseDir, sessionID string, summary domain.SessionSummary, outcome domain.RecommendationOutcome) {
@@ -49,9 +50,9 @@ func writeTestSessionSummaryOnly(t *testing.T, baseDir, sessionID string, summar
 	}
 }
 
-// Test (a): LoadSessionSummary should prefer the session with non-zero OutcomeCount
-// when auto-selecting (sessionID="") from two sessions where the newest has zero outcomes.
-func TestLoadSessionSummaryPrefersNonEmptyOutcomeCount(t *testing.T) {
+// Test (a): FindLatestSessionSummary should prefer the session with non-zero OutcomeCount
+// when auto-selecting from two sessions where the newest has zero outcomes.
+func TestFindLatestSessionSummaryPrefersNonEmptyOutcomeCount(t *testing.T) {
 	baseDir := t.TempDir()
 
 	olderDate := time.Date(2026, time.April, 20, 4, 0, 0, 0, time.UTC)
@@ -76,21 +77,50 @@ func TestLoadSessionSummaryPrefersNonEmptyOutcomeCount(t *testing.T) {
 		OutcomeCount: 0,
 	})
 
-	// When sessionID is empty, auto-selection runs.
-	// The bug: current implementation sorts by date (newest first), ignoring OutcomeCount.
-	// Expected correct behavior: prefer the session with non-zero OutcomeCount when the
-	// newest one has zero outcomes.
-	summary, err := LoadSessionSummary(baseDir, "")
+	// FindLatestSessionSummary with nil store falls back to disk-based auto-selection.
+	// Expected: prefer the session with non-zero OutcomeCount when the newest one has zero outcomes.
+	summary, err := FindLatestSessionSummary(nil, baseDir)
+	if err != nil {
+		t.Fatalf("FindLatestSessionSummary: %v", err)
+	}
+	if summary == nil {
+		t.Fatal("expected a summary, got nil")
+	}
+	if summary.SessionID != olderID {
+		t.Fatalf("auto-selection: expected %q (non-empty OutcomeCount), got %q", olderID, summary.SessionID)
+	}
+}
+
+func TestLoadSessionSummaryRequiresNonEmptySessionID(t *testing.T) {
+	baseDir := t.TempDir()
+
+	_, err := LoadSessionSummary(baseDir, "")
+	if err == nil {
+		t.Fatal("expected error for empty sessionID, got nil")
+	}
+}
+
+func TestLoadSessionSummarySpecificSession(t *testing.T) {
+	baseDir := t.TempDir()
+	recordedAt := time.Date(2026, time.April, 22, 4, 2, 30, 0, time.UTC)
+	sessionID := "session-20260422-daily"
+
+	writeTestSessionSummaryOnly(t, baseDir, sessionID, domain.SessionSummary{
+		SessionID:    sessionID,
+		Regime:       domain.RegimeRiskOn,
+		RecordedAt:   recordedAt,
+		OutcomeCount: 3,
+	})
+
+	summary, err := LoadSessionSummary(baseDir, sessionID)
 	if err != nil {
 		t.Fatalf("LoadSessionSummary: %v", err)
 	}
 	if summary == nil {
 		t.Fatal("expected a summary, got nil")
 	}
-	// The regression: this assertion currently fails because the code returns the newest
-	// (empty) session instead of the older non-empty one.
-	if summary.SessionID != olderID {
-		t.Fatalf("auto-selection: expected %q (non-empty OutcomeCount), got %q", olderID, summary.SessionID)
+	if summary.SessionID != sessionID {
+		t.Fatalf("expected %q, got %q", sessionID, summary.SessionID)
 	}
 }
 
@@ -119,7 +149,7 @@ func TestLoadAgentObservatoryReadsFromSessionScope(t *testing.T) {
 		},
 	)
 
-	svc := NewPipelineService(baseDir, baseDir)
+	svc := NewPipelineService(baseDir, baseDir, ledger.NewStore(baseDir))
 	data, err := svc.LoadAgentObservatory(sessionID, 10)
 	if err != nil {
 		t.Fatalf("LoadAgentObservatory: %v", err)
@@ -169,7 +199,7 @@ func TestLoadForecastVsRealityReadsPredictionsFromSelectedSession(t *testing.T) 
 		},
 	)
 
-	svc := NewPipelineService(baseDir, baseDir)
+	svc := NewPipelineService(baseDir, baseDir, ledger.NewStore(baseDir))
 	data, err := svc.LoadForecastVsReality("", 50)
 	if err != nil {
 		t.Fatalf("LoadForecastVsReality: %v", err)
@@ -213,7 +243,7 @@ func TestReportServiceLoadRecommendationsForDateSupportsCanonicalOutcomeJSON(t *
 		},
 	)
 
-	svc := NewReportService(baseDir, baseDir)
+	svc := NewReportService(baseDir, baseDir, nil)
 	recs := svc.loadRecommendationsForDate("2026-04-22")
 	if len(recs) != 1 {
 		t.Fatalf("expected 1 recommendation, got %d", len(recs))
@@ -255,7 +285,7 @@ func TestPipelineServiceLoadRecommendationPipelineSupportsCanonicalOutcomeJSON(t
 		},
 	)
 
-	svc := NewPipelineService(baseDir, baseDir)
+	svc := NewPipelineService(baseDir, baseDir, ledger.NewStore(baseDir))
 	data, err := svc.LoadRecommendationPipeline(sessionID, true)
 	if err != nil {
 		t.Fatalf("load recommendation pipeline: %v", err)

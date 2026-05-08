@@ -1,6 +1,7 @@
 package portfolio
 
 import (
+	"maps"
 	"sync"
 
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -35,9 +36,7 @@ func (e *FactorWeightEngine) GetWeights(regime string) map[FactorType]float64 {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	weights := make(map[FactorType]float64)
-	for k, v := range e.baseWeights {
-		weights[k] = v
-	}
+	maps.Copy(weights, e.baseWeights)
 	for _, event := range e.activeEvents {
 		if adj, ok := e.eventWeights[event.Theme]; ok {
 			for ft, delta := range adj {

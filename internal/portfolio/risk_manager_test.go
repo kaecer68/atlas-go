@@ -291,7 +291,7 @@ func TestRiskManagerShouldStopTradingCriticalAlerts(t *testing.T) {
 	rm.SetRiskParameters(0.08, 0.15, 0.03)
 
 	// Add 3 critical alerts
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		alert := rm.createAlert(AlertDrawdown, LevelCritical, "test", "portfolio", 0.1, 0.08)
 		rm.riskAlerts = append(rm.riskAlerts, alert)
 	}
@@ -306,7 +306,7 @@ func TestRiskManagerShouldStopTradingNormal(t *testing.T) {
 	rm.SetRiskParameters(0.08, 0.15, 0.03)
 
 	// Add 2 critical alerts (below threshold)
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		alert := rm.createAlert(AlertDrawdown, LevelCritical, "test", "portfolio", 0.1, 0.08)
 		rm.riskAlerts = append(rm.riskAlerts, alert)
 	}

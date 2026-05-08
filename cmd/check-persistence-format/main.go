@@ -133,7 +133,7 @@ func classifyArtifact(path string) string {
 }
 
 func classifyJSONContent(data []byte) string {
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return "unknown"
 	}
@@ -156,7 +156,7 @@ func classifyJSONLContent(data []byte) string {
 		return "empty"
 	}
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(firstLine, &raw); err != nil {
 		return "unknown"
 	}
@@ -164,7 +164,7 @@ func classifyJSONLContent(data []byte) string {
 	return classifyKeys(raw)
 }
 
-func classifyKeys(obj map[string]interface{}) string {
+func classifyKeys(obj map[string]any) string {
 	if len(obj) == 0 {
 		return "empty"
 	}
@@ -269,7 +269,7 @@ func checkWriterConsistency(path string) []string {
 			issues = append(issues, fmt.Sprintf("line %d: contains PascalCase keys (legacy format)", lineNum))
 		}
 
-		var decoded map[string]interface{}
+		var decoded map[string]any
 		if err := json.Unmarshal(reencoded, &decoded); err != nil {
 			issues = append(issues, fmt.Sprintf("line %d: re-decode error: %v", lineNum, err))
 			continue
@@ -304,7 +304,7 @@ func checkEmptyWithSiblingSummary(outcomesPath string) []string {
 		return []string{"file empty"}
 	}
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return []string{"file empty"}
 	}
@@ -329,7 +329,7 @@ func checkEmptyWithSiblingSummary(outcomesPath string) []string {
 	return []string{fmt.Sprintf("file empty but summary reports outcome_count=%.0f", count)}
 }
 
-func toFloat64(v interface{}) (float64, bool) {
+func toFloat64(v any) (float64, bool) {
 	switch n := v.(type) {
 	case float64:
 		return n, true

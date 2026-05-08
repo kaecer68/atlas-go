@@ -25,14 +25,16 @@ type SystemService struct {
 	WorkDir      string
 	LedgerDir    string
 	BaselinePath string
+	store        ledger.OutcomeStore
 }
 
 // NewSystemService creates a new SystemService.
-func NewSystemService(workDir, ledgerDir, baselinePath string) *SystemService {
+func NewSystemService(workDir, ledgerDir, baselinePath string, store ledger.OutcomeStore) *SystemService {
 	return &SystemService{
 		WorkDir:      workDir,
 		LedgerDir:    ledgerDir,
 		BaselinePath: baselinePath,
+		store:        store,
 	}
 }
 
@@ -111,10 +113,9 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 	}
 
 	// Crowding check from latest session outcomes
-	latestSummary, _ := LoadSessionSummary(s.LedgerDir, "")
+	latestSummary, _ := FindLatestSessionSummary(s.store, s.LedgerDir)
 	if latestSummary != nil {
-		store := ledger.NewStore(s.LedgerDir)
-		outcomes, _ := store.LoadSessionOutcomes(latestSummary.SessionID)
+		outcomes, _ := s.store.LoadSessionOutcomes(latestSummary.SessionID)
 		symbolAgents := make(map[string]map[string]struct{})
 		for _, outcome := range outcomes {
 			if symbolAgents[outcome.Symbol] == nil {
@@ -132,7 +133,7 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 		}
 	}
 	regime := domain.RegimeNeutral
-	if summary, err := LoadSessionSummary(s.LedgerDir, ""); err == nil && summary != nil {
+	if summary, err := FindLatestSessionSummary(s.store, s.LedgerDir); err == nil && summary != nil {
 		regime = summary.Regime
 	}
 

@@ -212,10 +212,10 @@ func (p *HybridProvider) IsUsingTWSE() bool {
 	return p.isCircuitOpen()
 }
 
-func (p *HybridProvider) CircuitBreakerStats() map[string]interface{} {
+func (p *HybridProvider) CircuitBreakerStats() map[string]any {
 	p.cbMutex.RLock()
 	defer p.cbMutex.RUnlock()
-	return map[string]interface{}{
+	return map[string]any{
 		"state":             string(p.cbState),
 		"failure_count":     p.cbFailureCount,
 		"failure_threshold": p.cbConfig.failureThreshold,

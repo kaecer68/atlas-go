@@ -20,7 +20,7 @@ type Scheduler struct {
 	metrics        MetricsRecorder
 	system         interface {
 		Registry() domain.AgentRegistry
-		GetPlugins() interface{}
+		GetPlugins() any
 	}
 	effectiveBrokerMode string
 
@@ -59,7 +59,7 @@ func NewScheduler(
 
 func (s *Scheduler) SetSystem(system interface {
 	Registry() domain.AgentRegistry
-	GetPlugins() interface{}
+	GetPlugins() any
 }) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -224,10 +224,10 @@ func (s *Scheduler) quotePoller() {
 	}
 }
 
-func (s *Scheduler) Status() map[string]interface{} {
+func (s *Scheduler) Status() map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return map[string]interface{}{
+	return map[string]any{
 		"quote_ticker":     s.quoteTicker != nil,
 		"intraday_ticker":  s.intradayTicker != nil,
 		"watchlist_size":   len(s.watchlist),

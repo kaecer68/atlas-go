@@ -50,6 +50,6 @@ type ScreeningReject struct {
 	CriterionLabel string              `json:"criterion_label"`
 	Threshold      string              `json:"threshold"`
 	ActualValue    string              `json:"actual_value"`
-	FactorScores   shared.FactorScores `json:"factor_scores,omitempty"`
+	FactorScores   shared.FactorScores `json:"factor_scores"`
 	RecordedAt     time.Time           `json:"recorded_at"`
 }

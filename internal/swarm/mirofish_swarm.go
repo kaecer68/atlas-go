@@ -213,7 +213,7 @@ func (sw *MiroFishSwarm) InitializeScenarios(baseState MarketState) {
 	// Spawn fish for each scenario
 	fishPerScenario := sw.config.FishCount / len(sw.scenarios)
 	for _, scenario := range sw.scenarios {
-		for i := 0; i < fishPerScenario; i++ {
+		for i := range fishPerScenario {
 			fish := &MiroFish{
 				ID:           fmt.Sprintf("fish_%s_%d", scenario.ID, i),
 				Scenario:     scenario,
@@ -674,18 +674,4 @@ func calculateSentiment(state MarketState, scenario MarketScenario) float64 {
 	}
 
 	return base + rand.Float64()*0.2 - 0.1
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

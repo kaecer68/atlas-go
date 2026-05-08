@@ -277,8 +277,8 @@ type SpawnRecord struct {
 	TrainingSharpe  float64   `json:"training_sharpe"`
 	TrainingHitRate float64   `json:"training_hit_rate"`
 	FinalFate       string    `json:"final_fate"` // active / extinct / promoted
-	ExtinctAt       time.Time `json:"extinct_at,omitempty"`
-	PromotedAt      time.Time `json:"promoted_at,omitempty"`
+	ExtinctAt       time.Time `json:"extinct_at"`
+	PromotedAt      time.Time `json:"promoted_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 

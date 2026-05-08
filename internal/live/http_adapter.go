@@ -127,10 +127,7 @@ func NewHTTPBrokerAdapter(cfg HTTPBrokerAdapterConfig) *HTTPBrokerAdapter {
 	if currentTimeFn == nil {
 		currentTimeFn = time.Now
 	}
-	maxClockSkew := cfg.MaxClockSkew
-	if maxClockSkew < 0 {
-		maxClockSkew = 0
-	}
+	maxClockSkew := max(cfg.MaxClockSkew, 0)
 	nonceTTL := cfg.NonceTTL
 	if nonceTTL <= 0 {
 		nonceTTL = 5 * time.Minute
@@ -179,7 +176,7 @@ func (a *HTTPBrokerAdapter) SubmitOrder(ctx context.Context, order domain.Order)
 		return BrokerResult{}, err
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"symbol":   order.Symbol,
 		"side":     order.Side,
 		"quantity": order.Quantity,

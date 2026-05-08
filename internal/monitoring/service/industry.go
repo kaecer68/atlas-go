@@ -31,25 +31,25 @@ func NewIndustryService(
 	}
 }
 
-func (s *IndustryService) GetClassificationTree() []map[string]interface{} {
+func (s *IndustryService) GetClassificationTree() []map[string]any {
 	segments := s.Classifier.GetAllSegments()
-	var result []map[string]interface{}
+	var result []map[string]any
 	for _, seg := range segments {
 		if seg.ParentID == "" {
 			children := s.Classifier.GetChildren(seg.ID)
-			var childList []map[string]interface{}
+			var childList []map[string]any
 			for _, child := range children {
 				grandchildren := s.Classifier.GetChildren(child.ID)
-				var grandchildList []map[string]interface{}
+				var grandchildList []map[string]any
 				for _, gc := range grandchildren {
-					grandchildList = append(grandchildList, map[string]interface{}{
+					grandchildList = append(grandchildList, map[string]any{
 						"id":          gc.ID,
 						"name":        gc.Name,
 						"weight":      gc.Weight,
 						"description": gc.Description,
 					})
 				}
-				childList = append(childList, map[string]interface{}{
+				childList = append(childList, map[string]any{
 					"id":          child.ID,
 					"name":        child.Name,
 					"weight":      child.Weight,
@@ -57,7 +57,7 @@ func (s *IndustryService) GetClassificationTree() []map[string]interface{} {
 					"children":    grandchildList,
 				})
 			}
-			result = append(result, map[string]interface{}{
+			result = append(result, map[string]any{
 				"id":          seg.ID,
 				"name":        seg.Name,
 				"weight":      seg.Weight,
@@ -138,15 +138,15 @@ func (s *IndustryService) GetSeasonalPatterns(industryID string, now time.Time) 
 	return active, historical, adjustment
 }
 
-func (s *IndustryService) GetSeasonalCalendar(industryID string, year int) []map[string]interface{} {
+func (s *IndustryService) GetSeasonalCalendar(industryID string, year int) []map[string]any {
 	calendar := s.SeasonalEngine.GenerateCalendar(year)
-	var months []map[string]interface{}
+	var months []map[string]any
 	for m := 1; m <= 12; m++ {
 		monthPatterns := calendar.ByMonth[m]
-		var relevantPatterns []map[string]interface{}
+		var relevantPatterns []map[string]any
 		for _, p := range monthPatterns {
 			if industryID == "" || p.IsRelevantForIndustry(industryID) {
-				relevantPatterns = append(relevantPatterns, map[string]interface{}{
+				relevantPatterns = append(relevantPatterns, map[string]any{
 					"id":                  p.ID,
 					"name":                p.Name,
 					"historical_accuracy": p.HistoricalAccuracy,
@@ -155,7 +155,7 @@ func (s *IndustryService) GetSeasonalCalendar(industryID string, year int) []map
 				})
 			}
 		}
-		months = append(months, map[string]interface{}{
+		months = append(months, map[string]any{
 			"month":    m,
 			"patterns": relevantPatterns,
 			"count":    len(relevantPatterns),
@@ -223,7 +223,7 @@ type LinkageInfo struct {
 	Industry     string                         `json:"industry"`
 	Upstream     []string                       `json:"upstream"`
 	Downstream   []string                       `json:"downstream"`
-	Correlations []map[string]interface{}       `json:"correlations"`
+	Correlations []map[string]any               `json:"correlations"`
 	LinkageScore *industry.IndustryLinkageScore `json:"linkage_score"`
 }
 
@@ -233,7 +233,7 @@ func (s *IndustryService) GetLinkageInfo(industryID string) (*LinkageInfo, error
 	downstream := graph.GetDownstream(industryID)
 
 	correlations := s.LinkageAnalyzer.GetCorrelationMatrix().GetCorrelatedIndustries(industryID, 0.0)
-	var correlationList []map[string]interface{}
+	var correlationList []map[string]any
 	for otherIndustry, correlation := range correlations {
 		strength := "low"
 		if abs(correlation) > 0.7 {
@@ -241,7 +241,7 @@ func (s *IndustryService) GetLinkageInfo(industryID string) (*LinkageInfo, error
 		} else if abs(correlation) > 0.4 {
 			strength = "medium"
 		}
-		correlationList = append(correlationList, map[string]interface{}{
+		correlationList = append(correlationList, map[string]any{
 			"industry":    otherIndustry,
 			"correlation": correlation,
 			"strength":    strength,
@@ -267,11 +267,11 @@ func abs(x float64) float64 {
 }
 
 type RiskInfo struct {
-	Symbol      string                   `json:"symbol"`
-	Industry    string                   `json:"industry"`
-	RiskCount   int                      `json:"risk_count"`
-	Risks       []map[string]interface{} `json:"risks"`
-	HighestRisk map[string]interface{}   `json:"highest_risk"`
+	Symbol      string           `json:"symbol"`
+	Industry    string           `json:"industry"`
+	RiskCount   int              `json:"risk_count"`
+	Risks       []map[string]any `json:"risks"`
+	HighestRisk map[string]any   `json:"highest_risk"`
 }
 
 func (s *IndustryService) GetRiskInfo(symbol, industryID string) *RiskInfo {
@@ -282,9 +282,9 @@ func (s *IndustryService) GetRiskInfo(symbol, industryID string) *RiskInfo {
 		risks = s.RiskMonitor.GetAllRisks(symbol, industryID, 0, 0)
 	}
 
-	var riskList []map[string]interface{}
+	var riskList []map[string]any
 	for _, risk := range risks {
-		riskList = append(riskList, map[string]interface{}{
+		riskList = append(riskList, map[string]any{
 			"id":                 risk.ID,
 			"type":               risk.Type,
 			"severity":           risk.Severity,
@@ -297,9 +297,9 @@ func (s *IndustryService) GetRiskInfo(symbol, industryID string) *RiskInfo {
 	}
 
 	highest := s.RiskMonitor.GetHighestRisk(risks)
-	var highestRisk map[string]interface{}
+	var highestRisk map[string]any
 	if highest != nil {
-		highestRisk = map[string]interface{}{
+		highestRisk = map[string]any{
 			"id":          highest.ID,
 			"type":        highest.Type,
 			"severity":    highest.Severity,

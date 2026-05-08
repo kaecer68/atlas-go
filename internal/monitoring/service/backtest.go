@@ -2,23 +2,25 @@ package service
 
 import (
 	"fmt"
+	"maps"
 	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 type BacktestService struct {
 	mu      sync.Mutex
 	running bool
-	status  map[string]interface{}
+	status  map[string]any
 }
 
 func NewBacktestService() *BacktestService {
 	return &BacktestService{
-		status: make(map[string]interface{}),
+		status: make(map[string]any),
 	}
 }
 
@@ -35,7 +37,7 @@ func (s *BacktestService) Start(startDate, endDate time.Time) error {
 		return fmt.Errorf("backtest already running")
 	}
 	s.running = true
-	s.status = map[string]interface{}{
+	s.status = map[string]any{
 		"running":    true,
 		"started_at": time.Now().UTC(),
 		"start":      startDate.Format("2006-01-02"),
@@ -48,7 +50,8 @@ func (s *BacktestService) Start(startDate, endDate time.Time) error {
 		if cfg.ReplayDataPath == "samples/replay/twse_stock_day_all_sample.csv" {
 			cfg.ReplayDataPath = "data/replay/tw_extended_90days.csv"
 		}
-		runner := backtest.NewRunner(cfg)
+		store := ledger.NewStore(cfg.LedgerDir)
+		runner := backtest.NewRunner(cfg, store)
 		summary, err := runner.Run(startDate, endDate)
 		if err == nil {
 			if _, rerr := runner.GenerateReport(summary); rerr != nil {
@@ -74,12 +77,10 @@ func (s *BacktestService) Start(startDate, endDate time.Time) error {
 	return nil
 }
 
-func (s *BacktestService) GetStatus() map[string]interface{} {
+func (s *BacktestService) GetStatus() map[string]any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	status := make(map[string]interface{}, len(s.status))
-	for k, v := range s.status {
-		status[k] = v
-	}
+	status := make(map[string]any, len(s.status))
+	maps.Copy(status, s.status)
 	return status
 }

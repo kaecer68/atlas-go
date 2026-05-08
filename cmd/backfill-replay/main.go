@@ -241,7 +241,7 @@ func validateRow(row []string, prevCloseByCode map[string]float64) {
 func fetchFinMindWithRetry(client *http.Client, code, start, end string) (*finmindResp, error) {
 	url := fmt.Sprintf("%s?dataset=TaiwanStockPrice&data_id=%s&start_date=%s&end_date=%s", finmindAPI, code, start, end)
 	var lastErr error
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := range 3 {
 		if attempt > 0 {
 			backoff := time.Duration(attempt) * time.Second
 			time.Sleep(backoff)

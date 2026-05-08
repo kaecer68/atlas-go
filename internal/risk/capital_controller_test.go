@@ -303,7 +303,7 @@ func TestRecordLoss_BlocksAdvance(t *testing.T) {
 	ctrl := NewCapitalPhaseController(cfg)
 	ctrl.UpdateMetrics(1.5, 0.05)
 
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		ctrl.RecordLoss()
 	}
 
@@ -330,7 +330,7 @@ func TestRecordWin_AllowsRecovery(t *testing.T) {
 	ctrl := NewCapitalPhaseController(cfg)
 	ctrl.UpdateMetrics(1.5, 0.05)
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		ctrl.RecordLoss()
 	}
 

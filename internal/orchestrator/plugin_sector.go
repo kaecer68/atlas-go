@@ -78,13 +78,6 @@ func (SemiconductorExecutor) Recommend(agent domain.AgentSpec, quote domain.Quot
 	}, true
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 type signalParams struct {
 	volumeThreshold int64
 	priceBoost      int

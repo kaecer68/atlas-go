@@ -615,13 +615,7 @@ func (rta *RealTimeAdapter) ApplyToRecommendation(rec domain.Recommendation) dom
 	weight := rta.GetAgentWeight(rec.Agent, rec.Symbol)
 
 	// Adjust conviction based on real-time weight
-	adjustedConviction := int(float64(rec.Conviction) * weight)
-	if adjustedConviction > 100 {
-		adjustedConviction = 100
-	}
-	if adjustedConviction < 1 {
-		adjustedConviction = 1
-	}
+	adjustedConviction := max(min(int(float64(rec.Conviction)*weight), 100), 1)
 
 	return domain.Recommendation{
 		Agent:      rec.Agent,

@@ -742,7 +742,7 @@ func TestRiskMonitor_ConcurrentAccess(t *testing.T) {
 	done := make(chan bool, 2)
 
 	go func() {
-		for i := 0; i < 100; i++ {
+		for i := range 100 {
 			customers := []CustomerConcentration{
 				{CustomerName: "Test", RevenueSharePct: float64(i), GeographicRegion: "US"},
 			}
@@ -752,7 +752,7 @@ func TestRiskMonitor_ConcurrentAccess(t *testing.T) {
 	}()
 
 	go func() {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			rm.GetCustomerConcentration("TEST.TW")
 			rm.CalculateCustomerConcentrationRisk("TEST.TW")
 		}

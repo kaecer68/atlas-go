@@ -412,3 +412,37 @@ Optional deep mode:
 ```
 
 Use `--with-governance` when you want to chain M8 checks with strict governance verification in one run.
+
+## Rollback and Replay Workflow
+
+### Revert Decision
+
+To record a revert decision for an experiment:
+
+```bash
+./scripts/openclaw/human-approval.sh --revert <experiment-id> --reason "performance regression"
+```
+
+### Approval Event Replay
+
+To replay an approval event for testing:
+
+```bash
+./scripts/openclaw/replay-approval-event.sh --event <event-file>
+```
+
+### Approval Event Verification
+
+To verify approval event schema and replay contract:
+
+```bash
+./scripts/openclaw/verify-human-approval-event.sh
+```
+
+### Strict Governance Gate
+
+To run strict governance verification with scenario diversity:
+
+```bash
+./scripts/openclaw/verify-governance-gates.sh --require-scenario-diversity
+```

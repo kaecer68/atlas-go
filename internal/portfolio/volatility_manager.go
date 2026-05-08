@@ -358,7 +358,7 @@ func (vm *VolatilityManager) GetVolatilityForecast(asset string, periods int) []
 	variance := vm.variance(returns)
 	forecast := make([]float64, periods)
 
-	for i := 0; i < periods; i++ {
+	for i := range periods {
 		if i == 0 {
 			forecast[i] = math.Sqrt(variance)
 		} else {

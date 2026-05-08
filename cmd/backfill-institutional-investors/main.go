@@ -143,7 +143,7 @@ func loadSymbols(symbolsArg string) []string {
 		return nil
 	}
 
-	var fund map[string]interface{}
+	var fund map[string]any
 	if err := json.Unmarshal(data, &fund); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to parse fundamentals: %v\n", err)
 	}
@@ -170,7 +170,7 @@ func loadExistingRecords(path string) map[string]struct{} {
 	br := io.LimitReader(f, 100<<20)
 	dec := json.NewDecoder(br)
 	for dec.More() {
-		var rec map[string]interface{}
+		var rec map[string]any
 		if err := dec.Decode(&rec); err != nil {
 			continue
 		}

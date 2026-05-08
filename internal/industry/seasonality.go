@@ -2,6 +2,7 @@ package industry
 
 import (
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -23,17 +24,10 @@ type SeasonalPattern struct {
 }
 
 func (p SeasonalPattern) IsRelevantForIndustry(industryID string) bool {
-	for _, favored := range p.FavoredIndustries {
-		if favored == industryID {
-			return true
-		}
+	if slices.Contains(p.FavoredIndustries, industryID) {
+		return true
 	}
-	for _, avoided := range p.AvoidedIndustries {
-		if avoided == industryID {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(p.AvoidedIndustries, industryID)
 }
 
 func (p SeasonalPattern) TypicalReturn() float64 {
@@ -194,18 +188,12 @@ func (se *SeasonalEngine) GetPatternAdjustment(industryID string, t time.Time) f
 	adjustment := 1.0
 	for _, p := range patterns {
 		// Check if industry is favored
-		for _, favored := range p.FavoredIndustries {
-			if favored == industryID {
-				adjustment *= p.AdjustmentFactor
-				break
-			}
+		if slices.Contains(p.FavoredIndustries, industryID) {
+			adjustment *= p.AdjustmentFactor
 		}
 		// Check if industry is avoided
-		for _, avoided := range p.AvoidedIndustries {
-			if avoided == industryID {
-				adjustment *= (1.0 / p.AdjustmentFactor)
-				break
-			}
+		if slices.Contains(p.AvoidedIndustries, industryID) {
+			adjustment *= (1.0 / p.AdjustmentFactor)
 		}
 	}
 
@@ -269,15 +257,11 @@ func (se *SeasonalEngine) GetIndustryImpact(patternID, industryID string) (impac
 		return "neutral", 1.0
 	}
 
-	for _, favored := range pattern.FavoredIndustries {
-		if favored == industryID {
-			return "favored", pattern.AdjustmentFactor
-		}
+	if slices.Contains(pattern.FavoredIndustries, industryID) {
+		return "favored", pattern.AdjustmentFactor
 	}
-	for _, avoided := range pattern.AvoidedIndustries {
-		if avoided == industryID {
-			return "avoided", 1.0 / pattern.AdjustmentFactor
-		}
+	if slices.Contains(pattern.AvoidedIndustries, industryID) {
+		return "avoided", 1.0 / pattern.AdjustmentFactor
 	}
 	return "neutral", 1.0
 }

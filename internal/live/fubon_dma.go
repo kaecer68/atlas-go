@@ -33,13 +33,13 @@ type fubonDMARequest struct {
 
 // fubonDMAResponse 是 Python wrapper 回傳的 JSONL 回應。
 type fubonDMAResponse struct {
-	Status    string      `json:"status"`
-	Code      string      `json:"code,omitempty"`
-	Message   string      `json:"message,omitempty"`
-	IsSuccess bool        `json:"is_success,omitempty"`
-	OrderID   string      `json:"order_id,omitempty"`
-	Accounts  []string    `json:"accounts,omitempty"`
-	Detail    interface{} `json:"detail,omitempty"`
+	Status    string   `json:"status"`
+	Code      string   `json:"code,omitempty"`
+	Message   string   `json:"message,omitempty"`
+	IsSuccess bool     `json:"is_success,omitempty"`
+	OrderID   string   `json:"order_id,omitempty"`
+	Accounts  []string `json:"accounts,omitempty"`
+	Detail    any      `json:"detail,omitempty"`
 }
 
 // FubonDMAAdapter 透過 Python subprocess 與富邦 DMA SDK 通訊，

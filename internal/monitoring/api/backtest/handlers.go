@@ -3,8 +3,10 @@ package backtest
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/autobacktest"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
@@ -49,7 +51,7 @@ func (h *Handlers) HandleBacktestRun(r *http.Request) (int, any) {
 		return http.StatusConflict, map[string]string{"error": "backtest already running"}
 	}
 
-	return http.StatusAccepted, map[string]interface{}{
+	return http.StatusAccepted, map[string]any{
 		"running":      true,
 		"check_status": "/api/backtest/status",
 		"start":        req.Start,
@@ -96,10 +98,10 @@ func (h *Handlers) HandleBacktestSignals(r *http.Request) (int, any) {
 	}
 	return http.StatusOK, map[string]any{
 		"active_signals": active,
-		"var_95":        sigs.VaR95,
-		"var_99":        sigs.VaR99,
-		"sharpe_short":  sigs.SharpeShort,
-		"sharpe_long":   sigs.SharpeLong,
-		"drawdown_pct":  sigs.DrawdownPct,
+		"var_95":         sigs.VaR95,
+		"var_99":         sigs.VaR99,
+		"sharpe_short":   sigs.SharpeShort,
+		"sharpe_long":    sigs.SharpeLong,
+		"drawdown_pct":   sigs.DrawdownPct,
 	}
 }

@@ -17,14 +17,20 @@ type ControlService struct {
 	LedgerDir        string
 	HealthManager    *portfolio.AgentHealthManager
 	registryProvider RegistryProviderFunc
+	store            ledger.OutcomeStore
 }
 
-func NewControlService(workDir, ledgerDir string, healthManager *portfolio.AgentHealthManager) *ControlService {
+func NewControlService(workDir, ledgerDir string, healthManager *portfolio.AgentHealthManager, store ledger.OutcomeStore) *ControlService {
 	return &ControlService{
 		WorkDir:       workDir,
 		LedgerDir:     ledgerDir,
 		HealthManager: healthManager,
+		store:         store,
 	}
+}
+
+func (s *ControlService) RecordIntervention(intervention domain.HumanIntervention) error {
+	return s.store.RecordHumanIntervention(intervention)
 }
 
 func (s *ControlService) WithRegistryProvider(fn RegistryProviderFunc) *ControlService {
@@ -40,14 +46,8 @@ func (s *ControlService) loadRegistry() (domain.AgentRegistry, error) {
 	return orchestrator.LoadRegistry(registryPath)
 }
 
-func (s *ControlService) RecordIntervention(intervention domain.HumanIntervention) error {
-	store := ledger.NewStore(s.LedgerDir)
-	return store.RecordHumanIntervention(intervention)
-}
-
 func (s *ControlService) LoadInterventions() ([]domain.HumanIntervention, error) {
-	store := ledger.NewStore(s.LedgerDir)
-	interventions, err := store.LoadHumanInterventions()
+	interventions, err := s.store.LoadHumanInterventions()
 	if err != nil {
 		return nil, err
 	}
@@ -56,8 +56,7 @@ func (s *ControlService) LoadInterventions() ([]domain.HumanIntervention, error)
 }
 
 func (s *ControlService) GetActiveOverrides() (pausedAgents, bannedSectors []string, modelWeights map[string]float64) {
-	store := ledger.NewStore(s.LedgerDir)
-	interventions, err := store.LoadHumanInterventions()
+	interventions, err := s.store.LoadHumanInterventions()
 	if err != nil {
 		return nil, nil, nil
 	}

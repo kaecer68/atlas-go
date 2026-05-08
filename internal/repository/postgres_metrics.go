@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -56,36 +57,37 @@ func (r *PostgresRepository) QueryRange(ctx context.Context, metricName string, 
 }
 
 func (r *PostgresRepository) QueryLatest(ctx context.Context, metricName string, labels map[string]string) (*MetricPoint, error) {
-	query := `
+	var query strings.Builder
+	query.WriteString(`
 		SELECT time, metric_name, value, agent_id, session_id, symbol, regime, metadata
 		FROM metrics
 		WHERE metric_name = $1
-	`
-	args := []interface{}{metricName}
+	`)
+	args := []any{metricName}
 	argIdx := 2
 
 	for key, value := range labels {
 		switch key {
 		case "agent_id":
-			query += fmt.Sprintf(" AND agent_id = $%d", argIdx)
+			query.WriteString(fmt.Sprintf(" AND agent_id = $%d", argIdx))
 			args = append(args, value)
 			argIdx++
 		case "session_id":
-			query += fmt.Sprintf(" AND session_id = $%d", argIdx)
+			query.WriteString(fmt.Sprintf(" AND session_id = $%d", argIdx))
 			args = append(args, value)
 			argIdx++
 		case "symbol":
-			query += fmt.Sprintf(" AND symbol = $%d", argIdx)
+			query.WriteString(fmt.Sprintf(" AND symbol = $%d", argIdx))
 			args = append(args, value)
 			argIdx++
 		}
 	}
 
-	query += " ORDER BY time DESC LIMIT 1"
+	query.WriteString(" ORDER BY time DESC LIMIT 1")
 
 	var point MetricPoint
 	var metadata []byte
-	err := r.pool.QueryRow(ctx, query, args...).Scan(
+	err := r.pool.QueryRow(ctx, query.String(), args...).Scan(
 		&point.Time, &point.Name, &point.Value,
 		&point.AgentID, &point.SessionID, &point.Symbol, &point.Regime,
 		&metadata,

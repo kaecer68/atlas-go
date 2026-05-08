@@ -17,11 +17,12 @@ import (
 
 type Runner struct {
 	cfg         config.Config
+	store       ledger.OutcomeStore
 	janusEngine *janus.Engine
 }
 
-func NewRunner(cfg config.Config) *Runner {
-	return &Runner{cfg: cfg}
+func NewRunner(cfg config.Config, store ledger.OutcomeStore) *Runner {
+	return &Runner{cfg: cfg, store: store}
 }
 
 func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary, error) {
@@ -68,8 +69,7 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 		sessionCount++
 	}
 
-	store := ledger.NewStore(r.cfg.LedgerDir)
-	scorecards, outcomes, err := store.LoadAllSessionScorecards()
+	scorecards, outcomes, err := r.store.LoadAllSessionScorecards()
 	if err != nil {
 		return domain.BacktestWindowSummary{}, err
 	}
@@ -103,7 +103,7 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 		summary.WorstAgentSharpeLike = candidate.Scorecard.SharpeLike
 	}
 
-	bt, ok := store.(ledger.BacktestStore)
+	bt, ok := r.store.(ledger.BacktestStore)
 	if !ok {
 		return domain.BacktestWindowSummary{}, fmt.Errorf("store does not implement BacktestStore")
 	}
@@ -120,13 +120,12 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 }
 
 func (r *Runner) GenerateReport(summary domain.BacktestWindowSummary) (string, error) {
-	store := ledger.NewStore(r.cfg.LedgerDir)
-	scorecards, _, err := store.LoadAllSessionScorecards()
+	scorecards, _, err := r.store.LoadAllSessionScorecards()
 	if err != nil {
 		return "", fmt.Errorf("load scorecards: %w", err)
 	}
 
-	sessionSummaries, err := store.LoadSessionSummaries()
+	sessionSummaries, err := r.store.LoadSessionSummaries()
 	if err != nil {
 		return "", fmt.Errorf("load session summaries: %w", err)
 	}

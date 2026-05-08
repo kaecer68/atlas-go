@@ -369,10 +369,7 @@ func (p *FugleWebSocketProvider) reconnectWithBackoff() {
 
 		if err := p.dial(); err != nil {
 			p.lastErr = err
-			p.backoff = time.Duration(float64(p.backoff) * backoffMultiplier)
-			if p.backoff > maxBackoff {
-				p.backoff = maxBackoff
-			}
+			p.backoff = min(time.Duration(float64(p.backoff)*backoffMultiplier), maxBackoff)
 			continue
 		}
 

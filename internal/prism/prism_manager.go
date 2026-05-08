@@ -277,7 +277,7 @@ func NewPRISMManager(config PRISMConfig) *PRISMManager {
 	}
 
 	// Initialize 5 regime queues
-	for i := 0; i < int(RegimeCount); i++ {
+	for i := range int(RegimeCount) {
 		regime := RegimeType(i)
 		pm.queues[i] = NewTrainingQueue(regime, config.QueueSize, config.WorkersPerQueue)
 	}
@@ -306,7 +306,7 @@ func (pm *PRISMManager) Start() {
 	pm.stopCh = make(chan struct{})
 
 	// Start worker goroutines for each queue
-	for i := 0; i < int(RegimeCount); i++ {
+	for i := range int(RegimeCount) {
 		for j := 0; j < pm.config.WorkersPerQueue; j++ {
 			go pm.worker(pm.queues[i], pm.stopCh)
 		}
@@ -372,7 +372,7 @@ func (pm *PRISMManager) GetQueueStats() []QueueStats {
 	defer pm.mu.RUnlock()
 
 	stats := make([]QueueStats, RegimeCount)
-	for i := 0; i < int(RegimeCount); i++ {
+	for i := range int(RegimeCount) {
 		queue := pm.queues[i]
 		stats[i] = QueueStats{
 			Regime:  queue.Regime,
@@ -416,13 +416,13 @@ func (pm *PRISMManager) Rebalance() {
 
 	// Calculate average load
 	totalLoad := 0
-	for i := 0; i < int(RegimeCount); i++ {
+	for i := range int(RegimeCount) {
 		totalLoad += pm.queues[i].Len()
 	}
 	avgLoad := totalLoad / int(RegimeCount)
 
 	// Log imbalances
-	for i := 0; i < int(RegimeCount); i++ {
+	for i := range int(RegimeCount) {
 		queue := pm.queues[i]
 		deviation := queue.Len() - avgLoad
 		if abs(deviation) > avgLoad/2 {
@@ -590,7 +590,7 @@ func (pm *PRISMManager) calculatePriority(agent domain.AgentSpec) int {
 // countActiveQueues returns number of queues with pending tasks
 func (pm *PRISMManager) countActiveQueues() int {
 	count := 0
-	for i := 0; i < int(RegimeCount); i++ {
+	for i := range int(RegimeCount) {
 		if pm.queues[i].Len() > 0 {
 			count++
 		}

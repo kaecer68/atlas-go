@@ -23,15 +23,15 @@ const (
 
 // AdversarialScenario represents an attack or defense scenario
 type AdversarialScenario struct {
-	ID              string                 `json:"id"`
-	Name            string                 `json:"name"`
-	Type            ScenarioType           `json:"type"`
-	Team            TeamType               `json:"team"`
-	Target          string                 `json:"target"` // Agent or market target
-	Severity        SeverityLevel          `json:"severity"`
-	Parameters      map[string]interface{} `json:"parameters"`
-	ExpectedOutcome string                 `json:"expected_outcome"`
-	CreatedAt       time.Time              `json:"created_at"`
+	ID              string         `json:"id"`
+	Name            string         `json:"name"`
+	Type            ScenarioType   `json:"type"`
+	Team            TeamType       `json:"team"`
+	Target          string         `json:"target"` // Agent or market target
+	Severity        SeverityLevel  `json:"severity"`
+	Parameters      map[string]any `json:"parameters"`
+	ExpectedOutcome string         `json:"expected_outcome"`
+	CreatedAt       time.Time      `json:"created_at"`
 }
 
 // ScenarioType defines different attack/defense patterns
@@ -234,7 +234,7 @@ func (at *AdversarialTrainer) initializeScenarios() {
 			Type:     ScenarioFlashCrash,
 			Team:     TeamRed,
 			Severity: SeverityCritical,
-			Parameters: map[string]interface{}{
+			Parameters: map[string]any{
 				"drop_percent":     0.20,
 				"duration_minutes": 5,
 				"recovery_time":    60,
@@ -247,7 +247,7 @@ func (at *AdversarialTrainer) initializeScenarios() {
 			Type:     ScenarioCorrelationSpike,
 			Team:     TeamRed,
 			Severity: SeverityHigh,
-			Parameters: map[string]interface{}{
+			Parameters: map[string]any{
 				"correlation_target": 0.95,
 				"affected_sectors":   []string{"semiconductor", "hardware", "software"},
 			},
@@ -259,7 +259,7 @@ func (at *AdversarialTrainer) initializeScenarios() {
 			Type:     ScenarioLiquidityCrisis,
 			Team:     TeamRed,
 			Severity: SeverityHigh,
-			Parameters: map[string]interface{}{
+			Parameters: map[string]any{
 				"spread_widening":  5.0,
 				"volume_reduction": 0.8,
 				"duration_hours":   2,
@@ -272,7 +272,7 @@ func (at *AdversarialTrainer) initializeScenarios() {
 			Type:     ScenarioSectorRotation,
 			Team:     TeamRed,
 			Severity: SeverityMedium,
-			Parameters: map[string]interface{}{
+			Parameters: map[string]any{
 				"from_sectors": []string{"tech"},
 				"to_sectors":   []string{"utilities", "consumer_staples"},
 				"speed":        "rapid",
@@ -289,7 +289,7 @@ func (at *AdversarialTrainer) initializeScenarios() {
 			Type:     ScenarioStabilityControl,
 			Team:     TeamBlue,
 			Severity: SeverityMedium,
-			Parameters: map[string]interface{}{
+			Parameters: map[string]any{
 				"volatility_target": 0.15,
 				"hedge_ratio":       0.3,
 			},
@@ -301,7 +301,7 @@ func (at *AdversarialTrainer) initializeScenarios() {
 			Type:     ScenarioRecoveryMode,
 			Team:     TeamBlue,
 			Severity: SeverityHigh,
-			Parameters: map[string]interface{}{
+			Parameters: map[string]any{
 				"recovery_target": 0.95, // 95% of pre-crash value
 				"max_drawdown":    0.15,
 			},
@@ -587,7 +587,7 @@ func (at *AdversarialTrainer) rebalanceTeams() {
 func sortAgents(agents []*AdversarialAgent) {
 	// Simple bubble sort for small arrays
 	n := len(agents)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		for j := 0; j < n-i-1; j++ {
 			winRate1 := float64(agents[j].WinCount) / float64(agents[j].WinCount+agents[j].LossCount+1)
 			winRate2 := float64(agents[j+1].WinCount) / float64(agents[j+1].WinCount+agents[j+1].LossCount+1)
@@ -840,7 +840,7 @@ type TrainingSummary struct {
 	BlueImprovement float64       `json:"blue_improvement"`
 }
 
-func (at *AdversarialTrainer) calculateWinRate(team interface{}) float64 {
+func (at *AdversarialTrainer) calculateWinRate(team any) float64 {
 	total := len(at.results)
 	if total == 0 {
 		return 0.0

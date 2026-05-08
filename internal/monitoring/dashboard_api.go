@@ -11,6 +11,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	apibacktest "github.com/kaecer68/atlas-go/internal/monitoring/api/backtest"
 	apicontrol "github.com/kaecer68/atlas-go/internal/monitoring/api/control"
@@ -93,11 +94,18 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 }
 
 func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
-	pipelineSvc := service.NewPipelineService(a.workDir, a.ledgerDir)
+	var outcomeStore ledger.OutcomeStore
+	if a.repo != nil {
+		outcomeStore = NewDualWriteOutcomeStoreAdapter(a.repo)
+	} else {
+		outcomeStore = ledger.NewStore(a.ledgerDir)
+	}
+
+	pipelineSvc := service.NewPipelineService(a.workDir, a.ledgerDir, outcomeStore)
 	pipelineHandlers := apipipeline.NewHandlers(pipelineSvc)
 	pipelineHandlers.RegisterRoutes(mux)
 
-	reportSvc := service.NewReportService(a.workDir, a.ledgerDir)
+	reportSvc := service.NewReportService(a.workDir, a.ledgerDir, outcomeStore)
 	reportHandlers := apireport.NewHandlers(reportSvc)
 	reportHandlers.RegisterRoutes(mux)
 
@@ -134,7 +142,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	metricsHandlers := apimetrics.NewHandlers(metricsSvc)
 	metricsHandlers.RegisterRoutes(mux)
 
-	systemSvc := service.NewSystemService(a.workDir, a.ledgerDir, a.baselinePath)
+	systemSvc := service.NewSystemService(a.workDir, a.ledgerDir, a.baselinePath, outcomeStore)
 	systemHandlers := apisystem.NewHandlers(systemSvc)
 	systemHandlers.RegisterRoutes(mux)
 
@@ -193,7 +201,11 @@ func (a *DashboardAPI) RegisterNarrativeRoutes(mux *http.ServeMux) {
 }
 
 func (a *DashboardAPI) RegisterControlRoutes(mux *http.ServeMux) {
-	svc := service.NewControlService(a.workDir, a.ledgerDir, a.healthManager)
+	var outcomeStore ledger.OutcomeStore
+	if a.repo != nil {
+		outcomeStore = NewDualWriteOutcomeStoreAdapter(a.repo)
+	}
+	svc := service.NewControlService(a.workDir, a.ledgerDir, a.healthManager, outcomeStore)
 	handlers := &apicontrol.Handlers{
 		Svc: svc,
 	}

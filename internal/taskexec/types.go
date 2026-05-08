@@ -7,12 +7,12 @@ import (
 )
 
 type SubmitRequest struct {
-	TaskType       string                 `json:"task_type"`
-	Actor          string                 `json:"actor"`
-	ActorSource    string                 `json:"actor_source"`
-	Payload        map[string]interface{} `json:"payload"`
-	Confirmed      bool                   `json:"confirmed"`
-	IdempotencyKey string                 `json:"idempotency_key,omitempty"`
+	TaskType       string         `json:"task_type"`
+	Actor          string         `json:"actor"`
+	ActorSource    string         `json:"actor_source"`
+	Payload        map[string]any `json:"payload"`
+	Confirmed      bool           `json:"confirmed"`
+	IdempotencyKey string         `json:"idempotency_key,omitempty"`
 }
 
 type EventSink interface {

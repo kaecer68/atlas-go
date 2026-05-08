@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
 func TestRunWindow(t *testing.T) {
@@ -16,7 +17,7 @@ func TestRunWindow(t *testing.T) {
 		LedgerDir:         dir,
 		AgentRegistryPath: "../../configs/agents.json",
 		ReplaySessionDate: "2026-03-26",
-	})
+	}, ledger.NewStore(dir))
 
 	start, _ := time.Parse("2006-01-02", "2026-03-26")
 	end, _ := time.Parse("2006-01-02", "2026-03-27")

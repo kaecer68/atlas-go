@@ -138,7 +138,7 @@ func testEnhancedDarwinianWeights() (float64, float64, []string) {
 	wm.InitializeFromRegistry(registry)
 
 	// 模擬更多交易結果以測試增強算法
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		agentID := fmt.Sprintf("agent_%d", (i%5)+1)
 		var return_ float64
 		switch agentID {
@@ -274,7 +274,7 @@ func testEnhancedReflexivity() (float64, []string) {
 	engine := reflexivity.NewReflexivityEngine()
 
 	registeredCount := 0
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		bias := &reflexivity.MarketBias{
 			ID:         fmt.Sprintf("bias_%d", i),
 			Type:       reflexivity.Confirmation,
@@ -581,7 +581,7 @@ func sqrt(x float64) float64 {
 		return 0
 	}
 	z := 1.0
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		z -= (z*z - x) / (2 * z)
 	}
 	return z

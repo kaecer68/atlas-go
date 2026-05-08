@@ -16,7 +16,6 @@ services:
       - ATLAS_LOG_LEVEL=info
       - ATLAS_DATA_DIR=/app/data
       - ATLAS_CONFIG_DIR=/app/configs
-      - ATLAS_REPORTS_DIR=/app/reports
       - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas_secret}@postgres:5432/atlas?sslmode=disable
     volumes:
       - ./data:/app/data
