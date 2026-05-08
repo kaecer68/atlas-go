@@ -17,8 +17,8 @@ func NewHandlers(svc *service.ReportService) *Handlers {
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/report/latest", h.HandleLatestReport)
-	mux.HandleFunc("/api/report/list", h.HandleReportList)
-	mux.HandleFunc("/api/dashboard/daily-summary", h.HandleDailySummary)
+	mux.Handle("GET /api/report/list", shared.Get(h.HandleReportList))
+	mux.Handle("GET /api/dashboard/daily-summary", shared.Get(h.HandleDailySummary))
 }
 
 func (h *Handlers) HandleLatestReport(w http.ResponseWriter, r *http.Request) {
@@ -47,33 +47,19 @@ func (h *Handlers) HandleLatestReport(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(content)
 }
 
-func (h *Handlers) HandleReportList(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
+func (h *Handlers) HandleReportList(r *http.Request) (int, any) {
 	reports, err := h.svc.LoadReportList()
 	if err != nil {
-		shared.WriteJSONError(w, http.StatusInternalServerError, err.Error())
-		return
+		return http.StatusInternalServerError, map[string]string{"error": err.Error()}
 	}
-
-	shared.WriteJSON(w, http.StatusOK, map[string]any{"reports": reports})
+	return http.StatusOK, map[string]any{"reports": reports}
 }
 
-func (h *Handlers) HandleDailySummary(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
+func (h *Handlers) HandleDailySummary(r *http.Request) (int, any) {
 	date := r.URL.Query().Get("date")
 	report, err := h.svc.LoadDailySummary(date)
 	if err != nil {
-		shared.WriteJSONError(w, http.StatusInternalServerError, err.Error())
-		return
+		return http.StatusInternalServerError, map[string]string{"error": err.Error()}
 	}
-
-	shared.WriteJSON(w, http.StatusOK, report)
+	return http.StatusOK, report
 }
