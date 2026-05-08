@@ -14,32 +14,26 @@ import (
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
 
-// Handlers provides risk metrics API endpoints.
 type Handlers struct {
 	LedgerDir string
 }
 
-// NewHandlers creates a new risk Handlers.
 func NewHandlers(ledgerDir string) *Handlers {
 	return &Handlers{LedgerDir: ledgerDir}
 }
 
-// RegisterRoutes mounts risk endpoints on the given mux.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/dashboard/risk", h.HandleRiskMetrics)
+	mux.Handle("GET /api/dashboard/risk", shared.Get(h.HandleRiskMetrics))
 }
 
-// HandleRiskMetrics handles GET /api/dashboard/risk.
-func (h *Handlers) HandleRiskMetrics(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
 	sessionsDir := filepath.Join(h.LedgerDir, "sessions")
 	entries, err := os.ReadDir(sessionsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			shared.WriteJSON(w, http.StatusOK, map[string]any{"message": "no sessions available"})
-			return
+			return http.StatusOK, map[string]any{"message": "no sessions available"}
 		}
-		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("read sessions: %v", err))
-		return
+		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("read sessions: %v", err)}
 	}
 
 	type sessionEntry struct {
@@ -100,8 +94,8 @@ func (h *Handlers) HandleRiskMetrics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	shared.WriteJSON(w, http.StatusOK, map[string]any{
+	return http.StatusOK, map[string]any{
 		"risk_snapshot": snap,
 		"session_count": len(portfolioValues),
-	})
+	}
 }
