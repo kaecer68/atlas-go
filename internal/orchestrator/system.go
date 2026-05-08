@@ -18,14 +18,11 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
-	"github.com/kaecer68/atlas-go/internal/reflexivity"
 	"github.com/kaecer68/atlas-go/internal/replay"
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
-	"github.com/kaecer68/atlas-go/internal/screener"
 	"github.com/kaecer68/atlas-go/internal/sim"
 	"github.com/kaecer68/atlas-go/internal/strategy"
-	"github.com/kaecer68/atlas-go/internal/tax"
 )
 
 // SystemCore holds the essential simulation state and services.
@@ -84,11 +81,13 @@ func (sc *SystemCore) Sim() *SimulationCore    { return &sc.sim }
 func (sc *SystemCore) Port() *PortfolioManager { return &sc.port }
 func (sc *SystemCore) Risk() *RiskOps          { return &sc.risk }
 
-// CoreServices interface implementation for SystemCore
-func (s *SystemCore) GetReplay() *replay.Dataset                      { return s.Sim().replay }
+// ServiceRegistry interface implementation for SystemCore
+func (s *SystemCore) Replay() *replay.Dataset                         { return s.Sim().replay }
 func (s *SystemCore) GetRegistry() domain.AgentRegistry               { return s.Sim().registry }
 func (s *SystemCore) GetPolicy() baseline.Policy                      { return s.Sim().policy }
 func (s *SystemCore) GetLastOutcomes() []domain.RecommendationOutcome { return s.Sim().lastOutcomes }
+func (s *SystemCore) Ledger() ledger.OutcomeStore                     { return s.Sim().ledger }
+func (s *SystemCore) EventBus() *eventbus.ChannelEventBus             { return s.Risk().eventBus }
 
 // System orchestrates the full simulation loop via a SystemCore and a PluginHost.
 type System struct {
@@ -106,87 +105,18 @@ func NewSystem(cfg config.Config) *System {
 		policy = baseline.DefaultPolicy()
 	}
 	ds, _ := replay.LoadTWSEOpenDataCSV(cfg.ReplayDataPath)
-	session := newSession(cfg, ds)
 
-	// Load parameters config and convert to runtime parameters
-	paramsCfg, err := config.LoadParametersConfig(cfg.ParametersConfigPath)
-	if err != nil || paramsCfg == nil {
-		paramsCfg = config.DefaultParametersConfig()
-	}
-	runtimeParams := portfolio.ToRuntimeParameters(paramsCfg)
-
-	optimizer := portfolio.NewOptimizer()
-	hp := portfolio.NewHistoricalPrices()
-	if err := hp.LoadFromExtendedJSONL("data/replay/tw_extended_90days.jsonl"); err != nil {
-		fmt.Printf("[System] warn: failed to load historical prices: %v\n", err)
-	}
-	fp := portfolio.NewFundamentalProvider()
-	if err := fp.LoadFromJSON("data/fundamentals.json"); err != nil {
-		fmt.Printf("[System] warn: failed to load fundamentals: %v\n", err)
-	}
-	factorEngine := portfolio.NewFactorEngine().
-		WithParameters(runtimeParams).
-		WithHistoricalPrices(hp).
-		WithFundamentalProvider(fp)
-	optimizer.WithHistoricalPrices(hp).WithFundamentalProvider(fp).WithFactorEngine(factorEngine)
-	screenerEngine := screener.NewEngine(factorEngine, fp)
-	plugins := NewPluginRegistry().WithScreener(screenerEngine).WithFactorEngine(factorEngine)
-
-	darwinian := portfolio.NewDarwinianWeightManager("data/state/darwinian_weights.json").
-		WithHistoryPath("data/state/darwinian_history.jsonl").
-		WithParameters(runtimeParams)
-	darwinian.InitializeFromRegistry(registry)
-	_ = darwinian.Load()
-
+	runtimeParams := loadRuntimeParamsOrDefault()
+	factorEngine, _, fp := buildFactorEngine(runtimeParams)
 	eventBus := eventbus.NewChannelEventBus(256)
-	darwinian.WithEventBus(eventBus)
+	plugins := buildPluginRegistry(factorEngine, fp)
 
-	thresholdEngine := sim.NewDynamicThresholdEngine()
-	strategyRegistry := strategy.NewRegistryWithDefaults()
-	comparisonEngine := strategy.NewComparisonEngine(20)
-	strategySelector := strategy.NewSelector(strategyRegistry, comparisonEngine)
-	factorWeightEngine := portfolio.NewFactorWeightEngine()
-
-	engine := sim.NewEngine(policy.Constraints).
-		WithOptimizer(optimizer).
-		WithThresholdEngine(thresholdEngine).
-		WithTaxCalculator(tax.NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig())).
-		WithReflexivityRules(
-			reflexivity.PriceToFundamentalsRule{},
-			reflexivity.PnLBehaviorRule{},
-			reflexivity.NarrativeFlowsRule{Threshold: 3},
-			reflexivity.MarketPolicyRule{Threshold: 0.03},
-			reflexivity.NewReversalDetectionRule(),
-		)
 	return &System{
 		SystemCore: &SystemCore{
-			sim: SimulationCore{
-				cfg:      cfg,
-				provider: selectProvider(cfg),
-				engine:   engine.WithContext(context.Background()),
-				registry: registry,
-				policy:   policy,
-				ledger:   ledger.NewStore(cfg.LedgerDir),
-				replay:   ds,
-				session:  session,
-				ctx:      context.Background(),
-			},
-			port: PortfolioManager{
-				optimizer:          optimizer,
-				alphaDiscovery:     NewAlphaDiscoveryEngine(factorEngine),
-				darwinian:          darwinian,
-				factorWeightEngine: factorWeightEngine,
-			},
-			strat: StrategyLayer{
-				strategyRegistry: strategyRegistry,
-				strategySelector: strategySelector,
-				comparisonEngine: comparisonEngine,
-				thresholdEngine:  thresholdEngine,
-			},
-			risk: RiskOps{
-				eventBus:       eventBus,
-				clampingLogger: newClampingLogger(filepath.Join(cfg.LedgerDir, "clamping_events.jsonl")),
-			},
+			sim:             buildSimulationCore(cfg, registry, policy, ds),
+			port:            buildPortfolioManager(runtimeParams, registry, eventBus, factorEngine),
+			strat:           buildStrategyLayer(),
+			risk:            buildRiskOps(cfg, eventBus),
 			plugins:         plugins,
 			narrativeEngine: narrative.NewNarrativeEngine(),
 		},
