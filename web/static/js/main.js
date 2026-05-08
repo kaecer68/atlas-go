@@ -7,7 +7,7 @@
  */
 
 const pageLoadStatus = {};
-const APP_VERSION = '20260507';
+const APP_VERSION = '20260509';
 
 export function switchPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
