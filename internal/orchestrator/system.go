@@ -45,7 +45,6 @@ type SimulationCore struct {
 
 type PortfolioManager struct {
 	alphaDiscovery     *AlphaDiscoveryEngine
-	optimizer          *portfolio.Optimizer
 	darwinian          *portfolio.DarwinianWeightManager
 	capitalAllocator   *portfolio.CapitalAllocator
 	factorWeightEngine *portfolio.FactorWeightEngine

@@ -227,7 +227,7 @@ func TestParseInt64Value(t *testing.T) {
 	if !ok || v != 1000000 {
 		t.Errorf("parseInt64Value = (%d, %v), want (1000000, true)", v, ok)
 	}
-	v, ok = parseInt64Value("liquidity_floor: abc")
+	_, ok = parseInt64Value("liquidity_floor: abc")
 	if ok {
 		t.Error("expected false for invalid input")
 	}
@@ -238,7 +238,7 @@ func TestParsePctFloatValue(t *testing.T) {
 	if !ok || v != -0.05 {
 		t.Errorf("parsePctFloatValue = (%f, %v), want (-0.05, true)", v, ok)
 	}
-	v, ok = parsePctFloatValue("stop_loss_pct: abc")
+	_, ok = parsePctFloatValue("stop_loss_pct: abc")
 	if ok {
 		t.Error("expected false for invalid input")
 	}

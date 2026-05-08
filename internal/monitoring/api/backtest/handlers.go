@@ -3,9 +3,11 @@ package backtest
 import (
 	"encoding/json"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/autobacktest"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
@@ -70,22 +72,37 @@ func (h *Handlers) HandleBacktestSnapshots(r *http.Request) (int, any) {
 			days = parsed
 		}
 	}
-	_ = days
+
+	hist := autobacktest.NewHistory(h.LedgerDir)
+	snapshots, err := hist.LatestN(days)
+	if err != nil {
+		return http.StatusInternalServerError, map[string]string{"error": err.Error()}
+	}
+	if snapshots == nil {
+		snapshots = []autobacktest.AutoSnapshot{}
+	}
 	return http.StatusOK, map[string]any{
-		"snapshots": []any{},
-		"count":     0,
-		"note":      "autobacktest package pending implementation",
+		"snapshots": snapshots,
+		"count":     len(snapshots),
 	}
 }
 
 func (h *Handlers) HandleBacktestSignals(r *http.Request) (int, any) {
+	eng := autobacktest.NewSignalEngine(h.LedgerDir)
+	sigs, err := eng.Evaluate()
+	if err != nil {
+		return http.StatusInternalServerError, map[string]string{"error": err.Error()}
+	}
+	var active []string
+	for _, s := range sigs.Active {
+		active = append(active, string(s))
+	}
 	return http.StatusOK, map[string]any{
-		"active_signals": []string{},
-		"var_95":         0,
-		"var_99":         0,
-		"sharpe_short":   0,
-		"sharpe_long":    0,
-		"drawdown_pct":   0,
-		"note":           "autobacktest package pending implementation",
+		"active_signals": active,
+		"var_95":        sigs.VaR95,
+		"var_99":        sigs.VaR99,
+		"sharpe_short":  sigs.SharpeShort,
+		"sharpe_long":   sigs.SharpeLong,
+		"drawdown_pct":  sigs.DrawdownPct,
 	}
 }

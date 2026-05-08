@@ -226,18 +226,7 @@ func (s *PipelineService) loadSymbolPredictions(limit int, summary *domain.Sessi
 
 	result := make([]SymbolPredictionItem, len(rawOutcomes))
 	for i, o := range rawOutcomes {
-		result[i] = SymbolPredictionItem{
-			AgentID:       o.AgentID,
-			Symbol:        o.Symbol,
-			Side:          o.Side,
-			Conviction:    o.Conviction,
-			TargetPrice:   o.TargetPrice,
-			ForwardReturn: o.ForwardReturn,
-			Hit:           o.Hit,
-			PassedGuards:  o.PassedGuards,
-			RecordedAt:    o.RecordedAt,
-			SessionID:     o.SessionID,
-		}
+		result[i] = SymbolPredictionItem(o)
 	}
 	return result, nil
 }
