@@ -4,6 +4,34 @@ import { getJSON } from '../shared/app-utils.js';
 let evolutionData = null;
 let currentView = 'compact';
 
+// ====== Page-Level Reading Guide ======
+
+function renderPageGuide(view) {
+  var views = {
+    compact: '<strong>精簡檢視</strong>：一目了然看趨勢 — 上方 Regime 點矩陣判斷市場環境，中間實驗卡了解進化熱度，下方 Agent 排名與淘汰名單判斷策略健康度。',
+    detailed: '<strong>詳細檢視</strong>：數字全貌 — 完整的 Regime 時間線、Agent 評分表（含命中率、Sharpe、最大回撤）、以及實驗日誌。適合深入分析個別 Agent 的歷史績效。',
+    categorical: '<strong>分類檢視</strong>：關係探索 — Agent 競爭散布圖以 X=命中率 Y=Sharpe 二維展開，直觀看出哪些層（layer）的 Agent 在右上角「優秀區」聚集。'
+  };
+  var viewDesc = views[view] || '';
+
+  return '<details class="ev-reading-guide" id="evReadingGuide">' +
+    '<summary><strong>💡 如何解讀本頁</strong> — ' + (view === 'compact' ? '精簡' : (view === 'detailed' ? '詳細' : '分類')) + '檢視</summary>' +
+    '<div class="ev-guide-body">' +
+      '<p><strong>演化透視</strong> 是系統的「達爾文進化儀表板」— 顯示 AI Agent 在回測中的競爭、淘汰與進化過程。</p>' +
+      '<p style="margin-bottom:6px">目前模式：' + viewDesc + '</p>' +
+      '<h4>核心概念</h4>' +
+      '<ul>' +
+        '<li><strong>Regime（市場體制）</strong>：系統對當前市場環境的自動分類。多頭（RISK_ON）= 偏向積極配置；空頭（RISK_OFF）= 偏向防禦或減倉；盤整（NEUTRAL）= 中性觀望；過渡（TRANSITIONAL）= 體制正在切換中。</li>' +
+        '<li><strong>命中率（Hit Rate）</strong>：AI Agent 推薦產生正向回測報酬的比例。<strong>&gt;60% 為優秀</strong>（綠），30~60% 為一般（黃），&lt;30% 為低（灰）。持續高命中率代表該 Agent 的選股邏輯在當前市場體制下相對有效。</li>' +
+        '<li><strong>Sharpe Ratio</strong>：風險調整後報酬指標。<strong>&gt;1.0 為良好</strong>（綠），0~1 為一般（黃），&lt;0 表示經風險調整後整體為負貢獻（紅）。數值越高代表承擔單位風險所獲得的報酬越好。</li>' +
+        '<li><strong>Delta（▲/▼）</strong>：候選策略 vs 基線策略的績效差異。正值（▲）表示候選策略優於基線，負值（▼）表示劣於基線。這是系統判斷是否「晉升」候選策略的核心依據。</li>' +
+        '<li><strong>最大回撤（Max Drawdown）</strong>：歷史推薦中曾出現的最大累積虧損幅度。數值越接近 0 風險控制越好；絕對值過大時應檢查該 Agent 的停損機制。</li>' +
+      '</ul>' +
+      '<div class="ev-guide-note">💬 本頁所有數據均來自歷史回測，不代表未來績效。系統透過持續的 mutation（突變）→ judge（評判）→ promote（晉升）循環來優化 Agent 策略。</div>' +
+    '</div>' +
+    '</details>';
+}
+
 export async function loadEvolutionData() {
   const [agents, regime, inbox] = await Promise.all([
     getJSON('/api/dashboard/agent-observatory').catch(() => null),
@@ -114,6 +142,11 @@ function renderExperimentList(judges, promotes, showStatus) {
         (showStatus ? '<span class="ev-exp-id">' + escapeHtml(e.experiment_id || '') + '</span>' : '') +
       '</div></div>';
   }
+  html += '<div class="ev-delta-legend">' +
+    '<span><span class="ev-exp-delta positive" style="display:inline-block;vertical-align:middle;margin:0">▲ +N%</span> 候選優於基線</span>' +
+    '<span><span class="ev-exp-delta negative" style="display:inline-block;vertical-align:middle;margin:0">▼ -N%</span> 候選劣於基線</span>' +
+    '<span><span class="ev-exp-delta neutral" style="display:inline-block;vertical-align:middle;margin:0">— 0%</span> 無顯著差異</span>' +
+    '</div>';
   return html;
 }
 
@@ -166,6 +199,8 @@ function renderRegimeTimeline(sessions, maxDots) {
   }
   dotsHtml += '</div>';
 
+  let hintHtml = '<div class="ev-section-hint">🟢 多頭（RISK_ON）= 偏向積極配置 · 🔴 空頭（RISK_OFF）= 防禦或減倉 · 🟡 盤整（NEUTRAL）= 中性觀望 · 🟣 過渡（TRANSITIONAL）= 體制切換中。藍色分隔線標記體制切換點；同色密集區 = 市場穩定期，頻繁變色 = 動盪期。</div>';
+
   let metaHtml = '<div class="ev-regime-meta">' +
     '<div class="ev-regime-legend">' +
       '<span><span class="dot risk-on"></span> 多頭</span>' +
@@ -176,7 +211,7 @@ function renderRegimeTimeline(sessions, maxDots) {
     '<span class="ev-regime-range">' + display[0].session_id.split('-')[1] + ' → ' + display[display.length - 1].session_id.split('-')[1] + '</span>' +
     '</div>';
 
-  return statsHtml + dotsHtml + metaHtml;
+  return statsHtml + dotsHtml + hintHtml + metaHtml;
 }
 
 // ====== Compact View ======
@@ -214,9 +249,9 @@ function renderCompact() {
   let expSection = '<div class="panel wide" style="margin-bottom:12px;padding:14px 16px">' +
     '<div class="ev-section-title">實驗活動 <span class="ev-section-count">' + expCount + ' active</span></div>' +
     '<div class="ev-kpi-grid">' +
-      '<div class="ev-kpi-card"><div class="ev-kpi-value" style="color:' + (judges.length > 0 ? 'var(--warn)' : 'var(--muted)') + '">' + judges.length + '</div><div class="ev-kpi-label">待評判</div></div>' +
-      '<div class="ev-kpi-card"><div class="ev-kpi-value" style="color:' + (promotes.length > 0 ? 'var(--up)' : 'var(--muted)') + '">' + promotes.length + '</div><div class="ev-kpi-label">待晉升</div></div>' +
-      '<div class="ev-kpi-card"><div class="ev-kpi-value">' + scorecards.length + '</div><div class="ev-kpi-label">活躍 Agent</div></div>' +
+      '<div class="ev-kpi-card"><div class="ev-kpi-value" style="color:' + (judges.length > 0 ? 'var(--warn)' : 'var(--muted)') + '">' + judges.length + '</div><div class="ev-kpi-label">待評判</div><div class="ev-kpi-hint">需人工確認</div></div>' +
+      '<div class="ev-kpi-card"><div class="ev-kpi-value" style="color:' + (promotes.length > 0 ? 'var(--up)' : 'var(--muted)') + '">' + promotes.length + '</div><div class="ev-kpi-label">待晉升</div><div class="ev-kpi-hint">可升級為基線</div></div>' +
+      '<div class="ev-kpi-card"><div class="ev-kpi-value">' + scorecards.length + '</div><div class="ev-kpi-label">活躍 Agent</div><div class="ev-kpi-hint">策略總數</div></div>' +
     '</div>' +
 stateHtml +
     (allExps.length > 0 ? '<div style="margin-top:12px;max-height:180px;overflow:auto">' + renderExperimentList(judges, promotes, false) + '</div>' : '') +
@@ -238,6 +273,14 @@ stateHtml +
   }
   let agentSection = '<div class="panel" style="padding:14px 16px">' +
     '<div class="ev-section-title">🏆 Agent 表現 Top 5</div>' +
+    '<div class="ev-metric-legend" style="margin-bottom:6px">' +
+      '<span><span class="ev-legend-swatch high"></span> 命中率 &gt;60%</span>' +
+      '<span><span class="ev-legend-swatch mid"></span> 30-60%</span>' +
+      '<span><span class="ev-legend-swatch low"></span> &lt;30%</span>' +
+      '<span style="margin-left:8px"><span class="ev-legend-swatch good"></span> Sharpe &gt;1</span>' +
+      '<span><span class="ev-legend-swatch warn"></span> 0-1</span>' +
+      '<span><span class="ev-legend-swatch bad"></span> &lt;0</span>' +
+    '</div>' +
     agentRows + '</div>';
 
   let elimRows = '';
@@ -257,10 +300,11 @@ stateHtml +
   }
   let elimSection = '<div class="panel ev-elim-panel" style="padding:14px 16px">' +
     '<div class="ev-section-title">⚡ 淘汰候選</div>' +
+    '<div class="ev-section-hint" style="margin-bottom:6px">Sharpe &lt;0.5 的 Agent，績效顯著落後。若持續低於門檻，將在下一進化週期被淘汰並由新突變策略取代。</div>' +
     (elimRows ? elimRows : '<div class="empty" style="padding:12px 0">目前無低績效 Agent</div>') +
     '</div>';
 
-  el.innerHTML = regimeSection + expSection +
+  el.innerHTML = renderPageGuide('compact') + regimeSection + expSection +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
       agentSection + elimSection +
     '</div>';
@@ -273,7 +317,6 @@ function renderDetailed() {
   if (!el) return;
   const { scorecards, sessions, judges, promotes } = getData();
   const sorted = scorecards.slice().sort((a, b) => (b.sharpe || 0) - (a.sharpe || 0));
-  const allExps = judges.concat(promotes);
   const current = latestRegime(sessions);
 
   let regimeSection = '<div class="panel wide" style="margin-bottom:12px;padding:14px 16px">' +
@@ -282,9 +325,10 @@ function renderDetailed() {
     '</div>';
 
   let tableHtml = '<table class="ev-score-table"><thead><tr>' +
-    '<th>Agent</th><th>技能</th><th style="text-align:center">層</th><th style="text-align:right">觀察</th>' +
-    '<th style="text-align:right">命中率</th><th style="text-align:right">Sharpe</th>' +
-    '<th style="text-align:right">最大回撤</th></tr></thead><tbody>';
+    '<th>Agent</th><th>技能</th><th style="text-align:center">層</th><th style="text-align:right" title="該 Agent 參與過的歷史回測視窗數。越多表示統計可信度越高。">觀察 ⓘ</th>' +
+    '<th style="text-align:right" title="推薦產生正向報酬的比例。>60% 優秀（綠），30-60% 一般（黃），<30% 偏低（灰）。">命中率 ⓘ</th>' +
+    '<th style="text-align:right" title="風險調整後報酬。>1 良好（綠），0-1 一般（黃），<0 虧損（紅）。越高代表單位風險報酬越好。">Sharpe ⓘ</th>' +
+    '<th style="text-align:right" title="歷史推薦中最大累積虧損。越接近 0 風險控制越好。">最大回撤 ⓘ</th></tr></thead><tbody>';
 
   for (let i = 0; i < sorted.length; i++) {
     const a = sorted[i];
@@ -311,7 +355,7 @@ function renderDetailed() {
     renderExperimentList(judges, promotes, true) +
     '</div>';
 
-  el.innerHTML = regimeSection + scoreSection + expSection;
+  el.innerHTML = renderPageGuide('detailed') + regimeSection + scoreSection + expSection;
 }
 
 // ====== Categorical View ======
@@ -322,7 +366,7 @@ function renderCategorical() {
   if (!el || !catEl) return;
   catEl.style.display = 'block';
 
-  el.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:16px" id="evolutionTabs">' +
+  el.innerHTML = renderPageGuide('categorical') + '<div style="display:flex;gap:8px;margin-bottom:16px" id="evolutionTabs">' +
     '<button class="cat-tab active" id="catTab-agents" onclick="window._evCatTab(\'agents\')">Agent 競爭</button>' +
     '<button class="cat-tab" id="catTab-regime" onclick="window._evCatTab(\'regime\')">Regime 演化</button>' +
     '<button class="cat-tab" id="catTab-experiments" onclick="window._evCatTab(\'experiments\')">實驗日誌</button>' +
@@ -349,7 +393,8 @@ function renderScatterPlot(scorecards) {
   ctx.scale(dpr, dpr);
 
   if (!scorecards || !scorecards.length) {
-    ctx.fillStyle = 'var(--muted)';
+    var mutedColor = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#9ca3af';
+    ctx.fillStyle = mutedColor;
     ctx.font = '12px ' + getComputedStyle(document.body).fontFamily;
     ctx.textAlign = 'center';
     ctx.fillText('無 Agent 數據', W / 2, H / 2);
@@ -417,6 +462,18 @@ function renderScatterPlot(scorecards) {
   ctx.font = '9px sans-serif';
   ctx.fillText('Sharpe = 0', pad.left + plotW - 50, y0 - 5);
 
+  // Vertical reference line at 60% hit rate
+  ctx.strokeStyle = cs.getPropertyValue('--muted').trim() || '#9ca3af';
+  ctx.lineWidth = 0.5;
+  ctx.setLineDash([3, 5]);
+  const x60 = toX(0.6);
+  ctx.beginPath(); ctx.moveTo(x60, pad.top); ctx.lineTo(x60, pad.top + plotH); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = cs.getPropertyValue('--muted').trim() || '#9ca3af';
+  ctx.textAlign = 'left';
+  ctx.font = '8px sans-serif';
+  ctx.fillText('60%', x60 + 2, pad.top + 10);
+
   ctx.fillStyle = 'rgba(16,185,129,0.04)';
   ctx.fillRect(toX(0), toY(3), plotW * (1 / (xMax - xMin)), plotH * ((3 - 0) / (yMax - yMin)));
   ctx.fillStyle = 'rgba(239,68,68,0.04)';
@@ -443,6 +500,28 @@ function renderScatterPlot(scorecards) {
     ctx.lineWidth = 1;
     ctx.stroke();
   }
+
+  // Quadrant annotations
+  var mutedColor = cs.getPropertyValue('--muted').trim() || '#9ca3af';
+  var upColor = cs.getPropertyValue('--up').trim() || '#10b981';
+  var downColor = cs.getPropertyValue('--down').trim() || '#ef4444';
+  ctx.textAlign = 'left';
+  ctx.font = 'bold 10px sans-serif';
+  // Top-right: good zone
+  ctx.fillStyle = upColor;
+  ctx.globalAlpha = 0.25;
+  ctx.fillText('★ 優秀區', toX(0.65), toY(2.2));
+  // Bottom-right: high hit_rate, low sharpe
+  ctx.fillStyle = mutedColor;
+  ctx.globalAlpha = 0.3;
+  ctx.fillText('高勝率低報酬', toX(0.65), toY(0.4));
+  // Top-left: low hit_rate, high sharpe  
+  ctx.fillText('低勝率高報酬', toX(0.05), toY(2.2));
+  // Bottom-left: weak zone
+  ctx.fillStyle = downColor;
+  ctx.globalAlpha = 0.25;
+  ctx.fillText('⚠ 弱勢區', toX(0.05), toY(0.4));
+  ctx.globalAlpha = 1;
 
   const legendItems = [
     { layer: 'sector', label: '產業', color: layerColors.sector },
@@ -492,7 +571,17 @@ function renderCatContent(tab, scorecards, sessions, judges, promotes) {
   if (tab === 'agents') {
     el.innerHTML = '<div class="ev-section-title">Agent 競爭散布圖 <span class="ev-section-count">X: 命中率 / Y: Sharpe</span></div>' +
       '<div id="evScatterWrap" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">' +
-      '<canvas id="evScatterCanvas"></canvas></div>';
+      '<canvas id="evScatterCanvas"></canvas></div>' +
+      '<div class="ev-scatter-guide">' +
+        '<strong>📖 如何閱讀散布圖：</strong>每一點代表一個 AI Agent。<strong>X 軸 = 命中率</strong>（推薦成功率），<strong>Y 軸 = Sharpe</strong>（風險調整報酬）。' +
+        '<strong>越往右上角越優秀</strong>（高命中 + 高報酬）。水平虛線為 Sharpe = 0（盈虧分界）。不同顏色代表不同策略層（layer）。' +
+        '<div class="ev-quadrant-grid">' +
+          '<div class="ev-quad good"><strong>★ 右上角：優秀區</strong><br>命中率 &gt;60% 且 Sharpe &gt;1。這些 Agent 在當前市場體制下表現最佳，最不可能被淘汰。</div>' +
+          '<div class="ev-quad warn"><strong>左上角：低勝率高報酬</strong><br>命中率偏低但每次命中回報極高。可能是激進型策略，需注意風險控制。</div>' +
+          '<div class="ev-quad warn"><strong>右下角：高勝率低報酬</strong><br>命中率高但 Sharpe 偏低。策略偏保守，適合穩健配置。</div>' +
+          '<div class="ev-quad bad"><strong>⚠ 左下角：弱勢區</strong><br>命中率 &lt;30% 且 Sharpe &lt;0。這些 Agent 很可能在下一波進化中被淘汰。</div>' +
+        '</div>' +
+      '</div>';
       requestAnimationFrame(function() { renderScatterPlot(scorecards); });
   } else if (tab === 'regime') {
     el.innerHTML = '<div class="ev-section-title">Regime 演化時間線 <span class="ev-section-count">' + sessions.length + ' sessions</span></div>' +
