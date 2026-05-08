@@ -9,12 +9,14 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	apibacktest "github.com/kaecer68/atlas-go/internal/monitoring/api/backtest"
 	apicontrol "github.com/kaecer68/atlas-go/internal/monitoring/api/control"
+	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 	apiexperiment "github.com/kaecer68/atlas-go/internal/monitoring/api/experiment"
 	apihealth "github.com/kaecer68/atlas-go/internal/monitoring/api/health"
 	apiindustry "github.com/kaecer68/atlas-go/internal/monitoring/api/industry"
@@ -57,6 +59,7 @@ type DashboardAPI struct {
 	janusEngine        *janus.Engine
 	repo               *repository.DualWriteRepository
 	taskManager        *taskexec.Manager
+	eventBus           *eventbus.ChannelEventBus
 }
 
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
@@ -93,12 +96,22 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	}
 }
 
+func (a *DashboardAPI) SetEventBus(eventBus *eventbus.ChannelEventBus) {
+	a.eventBus = eventBus
+}
+
 func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	var outcomeStore ledger.OutcomeStore
 	if a.repo != nil {
 		outcomeStore = NewDualWriteOutcomeStoreAdapter(a.repo)
 	} else {
 		outcomeStore = ledger.NewStore(a.ledgerDir)
+	}
+
+	// Register SSE event stream endpoint.
+	if a.eventBus != nil {
+		sseHandler := apievents.NewSSEHandler(a.eventBus)
+		mux.HandleFunc("/api/events/stream", sseHandler.ServeHTTP)
 	}
 
 	pipelineSvc := service.NewPipelineService(a.workDir, a.ledgerDir, outcomeStore)

@@ -53,8 +53,10 @@ const (
 	EventConvictionClamping EventType = "darwinian.conviction_clamping"
 
 	// 系统事件
-	EventSystemStart EventType = "system.start"
-	EventSystemError EventType = "system.error"
+	EventSimulationStart    EventType = "simulation.start"
+	EventSimulationComplete EventType = "simulation.complete"
+	EventSystemStart        EventType = "system.start"
+	EventSystemError        EventType = "system.error"
 
 	// 实验事件
 	EventExperimentInsufficientData EventType = "experiment.insufficient_data"
@@ -252,6 +254,34 @@ func (b *ChannelEventBus) PublishMarketSnapshot(quote domain.Quote) error {
 			Symbol:    quote.Symbol,
 			Quote:     quote,
 			Timestamp: time.Now(),
+		},
+	})
+}
+
+// PublishSimulationStart 发布模擬開始事件
+func (b *ChannelEventBus) PublishSimulationStart(sessionID string, asOf time.Time) error {
+	return b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventSimulationStart,
+		Timestamp: time.Now(),
+		Payload: map[string]any{
+			"session_id": sessionID,
+			"as_of":      asOf.Format("2006-01-02"),
+		},
+	})
+}
+
+// PublishSimulationComplete 发布模擬完成事件
+func (b *ChannelEventBus) PublishSimulationComplete(sessionID string, portfolioValue float64, orderCount, positionCount int) error {
+	return b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventSimulationComplete,
+		Timestamp: time.Now(),
+		Payload: map[string]any{
+			"session_id":      sessionID,
+			"portfolio_value": portfolioValue,
+			"order_count":     orderCount,
+			"position_count":  positionCount,
 		},
 	})
 }

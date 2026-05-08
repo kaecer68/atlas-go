@@ -75,6 +75,7 @@ type ExecutionContext struct {
 	Context                    context.Context            // request-level context for cancellation propagation
 	NarrativeEvents            []narrative.NarrativeEvent // narrative events for regime evidence fusion
 	ConvictionClampingCallback func([]portfolio.ConvictionClampingEvent)
+	Scratchpad                 *Scratchpad // optional reasoning trace recorder
 }
 
 // ResearchResult holds all outputs from executing registry research.
@@ -99,6 +100,20 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 		ctx.Context = context.Background()
 	}
 
+	if ctx.Scratchpad != nil {
+		ctx.Scratchpad.Record(ReasoningTrace{
+			SessionID:  ctx.SessionID,
+			Timestamp:  time.Now().UTC(),
+			Phase:      PhaseRegimeDetection,
+			Step:       0,
+			Component:  "orchestrator",
+			Action:     "execute_start",
+			Reasoning:  "Starting registry research execution",
+			Data:       map[string]any{"registry_version": ctx.Registry.Version, "quote_count": len(ctx.Quotes)},
+			Confidence: 1.0,
+		})
+	}
+
 	quoteBySymbol := make(map[string]domain.Quote, len(ctx.Quotes))
 	for _, quote := range ctx.Quotes {
 		quoteBySymbol[quote.Symbol] = quote
@@ -106,8 +121,8 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 
 	registry := filterMutedAgents(ctx.Registry, ctx.Plugins)
 
-	regime := inferRegime(registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, ctx.NarrativeEvents)
-	raw, rejects := collectRecommendations(ctx.Context, registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, regime, ctx.SessionID)
+	regime := inferRegime(registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, ctx.NarrativeEvents, ctx.Scratchpad, ctx.SessionID)
+	raw, rejects := collectRecommendations(ctx.Context, registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, regime, ctx.SessionID, ctx.Scratchpad)
 
 	if ctx.Policy.MomentumCrashProtection {
 		raw = applyMomentumCrashProtection(raw, quoteBySymbol)
@@ -124,7 +139,7 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 		}
 	}
 
-	final, guardOutcomes := applyControlLayerWithOutcomes(registry, ctx.Plugins, controlInput, ctx.Policy)
+	final, guardOutcomes := applyControlLayerWithOutcomes(registry, ctx.Plugins, controlInput, ctx.Policy, ctx.Scratchpad, ctx.SessionID)
 
 	return ResearchResult{
 		Regime:               regime,
@@ -295,7 +310,7 @@ func executeRegistryResearchWithDarwinianWeights(
 	return result.Regime, result.RawRecommendations, result.FinalRecommendations, result.DarwinianWeights, result.ScreeningRejects
 }
 
-func inferRegime(registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string, events []narrative.NarrativeEvent) domain.Regime {
+func inferRegime(registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string, events []narrative.NarrativeEvent, scratchpad *Scratchpad, sessionID string) domain.Regime {
 	sources := []RegimeEvidenceSource{
 		NewMacroEvidenceSource(),
 		NewTechnicalEvidenceSource(),
@@ -313,22 +328,52 @@ func inferRegime(registry domain.AgentRegistry, quotes map[string]domain.Quote, 
 	}
 
 	if totalWeight == 0 {
+		if scratchpad != nil {
+			scratchpad.Record(ReasoningTrace{
+				SessionID:  sessionID,
+				Timestamp:  time.Now().UTC(),
+				Phase:      PhaseRegimeDetection,
+				Step:       1,
+				Component:  "regime_inference",
+				Action:     "detect_regime",
+				Reasoning:  "No evidence sources produced confidence; defaulting to neutral",
+				Data:       map[string]any{"regime": domain.RegimeNeutral, "score": 0.0, "evidence_count": len(sources)},
+				Confidence: 0.0,
+			})
+		}
 		return domain.RegimeNeutral
 	}
 
 	normalized := totalScore / totalWeight
 
+	var regime domain.Regime
 	switch {
 	case normalized > 0.15:
-		return domain.RegimeRiskOn
+		regime = domain.RegimeRiskOn
 	case normalized < -0.15:
-		return domain.RegimeRiskOff
+		regime = domain.RegimeRiskOff
 	default:
-		return domain.RegimeNeutral
+		regime = domain.RegimeNeutral
 	}
+
+	if scratchpad != nil {
+		scratchpad.Record(ReasoningTrace{
+			SessionID:  sessionID,
+			Timestamp:  time.Now().UTC(),
+			Phase:      PhaseRegimeDetection,
+			Step:       1,
+			Component:  "regime_inference",
+			Action:     "detect_regime",
+			Reasoning:  fmt.Sprintf("Regime detected: %s (normalized score: %.4f)", regime, normalized),
+			Data:       map[string]any{"regime": regime, "score": normalized, "evidence_count": len(sources)},
+			Confidence: totalWeight,
+		})
+	}
+
+	return regime
 }
 
-func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string, regime domain.Regime, sessionID string) ([]domain.Recommendation, []domain.ScreeningReject) {
+func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string, regime domain.Regime, sessionID string, scratchpad *Scratchpad) ([]domain.Recommendation, []domain.ScreeningReject) {
 	recs := make([]domain.Recommendation, 0)
 	rejects := make([]domain.ScreeningReject, 0)
 	now := time.Now().UTC()
@@ -413,6 +458,28 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 		}
 	}
 
+	if scratchpad != nil {
+		recData := make([]map[string]any, 0, len(recs))
+		for _, rec := range recs {
+			recData = append(recData, map[string]any{
+				"symbol":     rec.Symbol,
+				"agent":      rec.Agent,
+				"conviction": rec.Conviction,
+			})
+		}
+		scratchpad.Record(ReasoningTrace{
+			SessionID:  sessionID,
+			Timestamp:  now,
+			Phase:      PhaseAgentRecommendation,
+			Step:       2,
+			Component:  "recommendation_collector",
+			Action:     "collect_recommendations",
+			Reasoning:  fmt.Sprintf("Collected %d recommendations, %d screening rejects", len(recs), len(rejects)),
+			Data:       map[string]any{"recommendation_count": len(recs), "reject_count": len(rejects), "recommendations": recData},
+			Confidence: 1.0,
+		})
+	}
+
 	return recs, rejects
 }
 
@@ -456,11 +523,11 @@ func applyMomentumCrashProtection(recs []domain.Recommendation, quotes map[strin
 }
 
 func applyControlLayer(registry domain.AgentRegistry, plugins *PluginRegistry, recs []domain.Recommendation, policy domain.ExecutionPolicy) []domain.Recommendation {
-	final, _ := applyControlLayerWithOutcomes(registry, plugins, recs, policy)
+	final, _ := applyControlLayerWithOutcomes(registry, plugins, recs, policy, nil, "")
 	return final
 }
 
-func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *PluginRegistry, recs []domain.Recommendation, policy domain.ExecutionPolicy) ([]domain.Recommendation, []domain.GuardOutcome) {
+func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *PluginRegistry, recs []domain.Recommendation, policy domain.ExecutionPolicy, scratchpad *Scratchpad, sessionID string) ([]domain.Recommendation, []domain.GuardOutcome) {
 	if !policy.RequireCROPass {
 		return recs, []domain.GuardOutcome{{
 			GuardID:     "control-bypass",
@@ -501,6 +568,62 @@ func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *Plugi
 			OutputCount: after,
 		})
 		current = next
+
+		if scratchpad != nil {
+			if agent.Skill == "cro_risk" {
+				scratchpad.Record(ReasoningTrace{
+					SessionID: sessionID,
+					Timestamp: time.Now().UTC(),
+					Phase:     PhaseControlFilter,
+					Step:      3,
+					Component: "cro_filter",
+					Action:    "apply_cro_filter",
+					Reasoning: fmt.Sprintf("CRO filter: %d in -> %d out, conviction floor: %d", before, after, policy.ConvictionFloor),
+					Data: map[string]any{
+						"input_count":               before,
+						"output_count":              after,
+						"conviction_floor":          policy.ConvictionFloor,
+						"z_score_enabled":           policy.EnableConvictionNormalization,
+						"momentum_crash_protection": policy.MomentumCrashProtection,
+					},
+					Confidence: 1.0,
+				})
+			}
+			if agent.Skill == "cio_portfolio" {
+				symbolAgents := make(map[string][]map[string]any)
+				for _, rec := range recs[:before] {
+					symbolAgents[rec.Symbol] = append(symbolAgents[rec.Symbol], map[string]any{
+						"agent":      rec.Agent,
+						"conviction": rec.Conviction,
+					})
+				}
+				symbolData := make([]map[string]any, 0, len(next))
+				for _, rec := range next {
+					agents := symbolAgents[rec.Symbol]
+					symbolData = append(symbolData, map[string]any{
+						"symbol":              rec.Symbol,
+						"agent_count":         len(agents),
+						"weighted_conviction": rec.Conviction,
+						"agents":              agents,
+					})
+				}
+				scratchpad.Record(ReasoningTrace{
+					SessionID: sessionID,
+					Timestamp: time.Now().UTC(),
+					Phase:     PhaseControlFilter,
+					Step:      4,
+					Component: "cio_aggregator",
+					Action:    "apply_cio_aggregation",
+					Reasoning: fmt.Sprintf("CIO aggregation: %d recommendations -> %d unique symbols", before, len(next)),
+					Data: map[string]any{
+						"input_count":  before,
+						"output_count": len(next),
+						"symbols":      symbolData,
+					},
+					Confidence: 1.0,
+				})
+			}
+		}
 	}
 
 	current = applyCrowdingPenalty(current)

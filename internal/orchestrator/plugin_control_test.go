@@ -62,7 +62,7 @@ func TestControlLayerProducesGuardOutcomes(t *testing.T) {
 		{Agent: "b", Skill: "growth_momentum", Symbol: "2317.TW", Conviction: 80, Side: domain.SideBuy, Reason: "strong"},
 	}
 
-	_, outcomes := applyControlLayerWithOutcomes(registry, plugins, recs, DefaultExecutionPolicy())
+	_, outcomes := applyControlLayerWithOutcomes(registry, plugins, recs, DefaultExecutionPolicy(), nil, "")
 	if len(outcomes) != 2 {
 		t.Fatalf("expected 2 guard outcomes for CRO and CIO, got %d", len(outcomes))
 	}
@@ -86,7 +86,7 @@ func TestControlLayerHardGuardCanBlockAllRecommendations(t *testing.T) {
 	final, outcomes := applyControlLayerWithOutcomes(registry, plugins, recs, domain.ExecutionPolicy{
 		ConvictionFloor: 50,
 		RequireCROPass:  true,
-	})
+	}, nil, "")
 	if len(final) != 0 {
 		t.Fatalf("expected hard guard to block all recommendations")
 	}
