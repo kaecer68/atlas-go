@@ -1091,6 +1091,138 @@ body { display: flex; margin: 0; min-height: 100vh; }
     color: var(--muted);
     border: 1px solid rgba(156,163,175,.2);
   }
+
+  /* ===== Evolution Panel — Reading Guide ===== */
+  .ev-reading-guide {
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+    overflow: hidden;
+  }
+  .ev-reading-guide summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--muted);
+    padding: 10px 14px;
+    list-style: none;
+    user-select: none;
+  }
+  .ev-reading-guide summary::-webkit-details-marker { display: none; }
+  .ev-reading-guide summary::before { content: '▸ '; font-size: 11px; }
+  .ev-reading-guide[open] summary::before { content: '▾ '; }
+  .ev-reading-guide[open] summary { border-bottom: 1px solid var(--border); margin-bottom: 0; }
+  .ev-reading-guide .ev-guide-body {
+    padding: 14px;
+    font-size: 11px;
+    line-height: 1.7;
+    color: var(--muted);
+    background: var(--bg);
+  }
+  .ev-reading-guide .ev-guide-body strong { color: var(--text); }
+  .ev-reading-guide .ev-guide-body h4 {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 12px 0 4px 0;
+  }
+  .ev-reading-guide .ev-guide-body h4:first-child { margin-top: 0; }
+  .ev-reading-guide .ev-guide-body ul {
+    margin: 4px 0;
+    padding-left: 16px;
+    line-height: 1.8;
+  }
+  .ev-reading-guide .ev-guide-body ul li { margin-bottom: 2px; }
+  .ev-reading-guide .ev-guide-body .ev-guide-note {
+    font-size: 10px;
+    color: var(--warn);
+    border-left: 2px solid var(--warn);
+    padding-left: 8px;
+    margin-top: 8px;
+  }
+
+  /* Section-level hints */
+  .ev-section-hint {
+    font-size: 10px;
+    color: var(--muted);
+    opacity: .7;
+    margin-top: 4px;
+    line-height: 1.5;
+    font-style: italic;
+  }
+  .ev-kpi-hint {
+    font-size: 9px;
+    color: var(--muted);
+    opacity: .65;
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+  .ev-metric-legend {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 9px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+  .ev-metric-legend span {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .ev-metric-legend .ev-legend-swatch {
+    width: 8px;
+    height: 3px;
+    border-radius: 1px;
+    display: inline-block;
+  }
+  .ev-legend-swatch.high { background: var(--up); }
+  .ev-legend-swatch.mid { background: var(--warn); }
+  .ev-legend-swatch.low { background: var(--muted); opacity: .4; }
+  .ev-legend-swatch.good { background: var(--up); }
+  .ev-legend-swatch.bad { background: var(--down); }
+  .ev-legend-swatch.warn { background: var(--warn); }
+
+  /* Experiment delta explanation */
+  .ev-delta-legend {
+    display: flex;
+    gap: 16px;
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 8px;
+    padding: 6px 10px;
+    background: var(--bg);
+    border-radius: 6px;
+  }
+  .ev-delta-legend span { display: flex; align-items: center; gap: 4px; }
+
+  /* Scatter plot reading guide (below canvas) */
+  .ev-scatter-guide {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .ev-scatter-guide strong { color: var(--text); }
+  .ev-scatter-guide .ev-quadrant-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin-top: 6px;
+    font-size: 10px;
+  }
+  .ev-scatter-guide .ev-quad {
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: var(--panel);
+  }
+  .ev-quad.good { border-left: 2px solid var(--up); }
+  .ev-quad.warn { border-left: 2px solid var(--warn); }
+  .ev-quad.bad { border-left: 2px solid var(--down); }
   </style>
 </head>
 <body>
