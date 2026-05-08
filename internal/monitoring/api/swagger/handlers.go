@@ -1,30 +1,27 @@
 package swagger
 
 import (
-	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 )
 
-// Handlers provides Swagger UI and spec endpoints.
 type Handlers struct {
 	WorkDir string
 }
 
-// NewHandlers creates a new swagger Handlers.
 func NewHandlers(workDir string) *Handlers {
 	return &Handlers{WorkDir: workDir}
 }
 
-// RegisterRoutes mounts swagger endpoints on the given mux.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/docs", h.HandleSwaggerUI)
-	mux.HandleFunc("/api/docs/swagger.json", h.HandleSwaggerJSON)
+	mux.Handle("GET /api/docs", shared.GetRaw(h.HandleSwaggerUI))
+	mux.Handle("GET /api/docs/swagger.json", shared.GetRaw(h.HandleSwaggerJSON))
 }
 
-// HandleSwaggerUI serves the Swagger UI HTML page.
-func (h *Handlers) HandleSwaggerUI(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleSwaggerUI(w http.ResponseWriter, r *http.Request) (int, any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(`<!DOCTYPE html>
 <html lang="en">
@@ -45,15 +42,15 @@ SwaggerUIBundle({
 </script>
 </body>
 </html>`))
+	return 0, nil
 }
 
-// HandleSwaggerJSON serves the OpenAPI spec JSON file.
-func (h *Handlers) HandleSwaggerJSON(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleSwaggerJSON(w http.ResponseWriter, r *http.Request) (int, any) {
 	data, err := os.ReadFile(filepath.Join(h.WorkDir, "docs/swagger.json"))
 	if err != nil {
-		shared.WriteJSONError(w, http.StatusNotFound, "swagger spec not found")
-		return
+		return http.StatusNotFound, map[string]string{"error": "swagger spec not found"}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(data)
+	return 0, nil
 }

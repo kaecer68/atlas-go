@@ -27,8 +27,12 @@ type ServiceRegistry interface {
 type Plugin interface {
 	Name() string
 	Attach(registry ServiceRegistry)
-	// ProcessRecommendations transforms recommendations during the simulation loop.
 	ProcessRecommendations(regime domain.Regime, recs []domain.Recommendation) []domain.Recommendation
-	// PostSimulation runs after the daily simulation completes.
 	PostSimulation(quotes []domain.Quote, regime domain.Regime, asOf time.Time)
+}
+
+// ControllerAware is implemented by plugins that accept a Phase3Controller.
+// This allows Phase3Controller to be injected without type-asserting on concrete plugin types.
+type ControllerAware interface {
+	SetController(ctrl *Phase3Controller)
 }
