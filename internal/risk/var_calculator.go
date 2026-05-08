@@ -72,7 +72,7 @@ func CalculateCVaR(dailyReturns []float64, confidence float64) float64 {
 }
 
 // CalculateMaxDrawdown computes the maximum peak-to-trough decline from a
-// series of portfolio values.
+// series of portfolio values. Returns a positive magnitude (e.g., 0.20 = 20% drawdown).
 func CalculateMaxDrawdown(values []float64) float64 {
 	if len(values) == 0 {
 		return 0.0
