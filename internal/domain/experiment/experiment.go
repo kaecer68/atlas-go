@@ -44,25 +44,25 @@ type ExperimentRecord struct {
 
 // MutationBrief defines the mutation specification for an experiment.
 type MutationBrief struct {
-	ContractVersion     int              `json:"contract_version,omitempty"`
-	ProposalID          string           `json:"proposal_id,omitempty"`
-	WindowID            string           `json:"window_id"`
-	TargetAgentID       string           `json:"target_agent_id"`
-	TargetSkill         string           `json:"target_skill"`
+	ContractVersion     int               `json:"contract_version,omitempty"`
+	ProposalID          string            `json:"proposal_id,omitempty"`
+	WindowID            string            `json:"window_id"`
+	TargetAgentID       string            `json:"target_agent_id"`
+	TargetSkill         string            `json:"target_skill"`
 	TargetLayer         shared.AgentLayer `json:"target_layer"`
-	PromptFile          string           `json:"prompt_file"`
-	MutationType        string           `json:"mutation_type"`
-	FailurePattern      string           `json:"failure_pattern"`
-	Hypothesis          string           `json:"hypothesis"`
-	AcceptanceMetric    string           `json:"acceptance_metric"`
-	AcceptanceGates     []string         `json:"acceptance_gates"`
-	ForbiddenActions    []string         `json:"forbidden_actions"`
-	RequiredSkills      []string         `json:"required_skills"`
-	ObservedWindowCount int              `json:"observed_window_count"`
-	MaturityLevel       string           `json:"maturity_level"`
-	IterationGuidance   []string         `json:"iteration_guidance"`
-	RecommendedWindow   string           `json:"recommended_window"`
-	GeneratedAt         time.Time        `json:"generated_at"`
+	PromptFile          string            `json:"prompt_file"`
+	MutationType        string            `json:"mutation_type"`
+	FailurePattern      string            `json:"failure_pattern"`
+	Hypothesis          string            `json:"hypothesis"`
+	AcceptanceMetric    string            `json:"acceptance_metric"`
+	AcceptanceGates     []string          `json:"acceptance_gates"`
+	ForbiddenActions    []string          `json:"forbidden_actions"`
+	RequiredSkills      []string          `json:"required_skills"`
+	ObservedWindowCount int               `json:"observed_window_count"`
+	MaturityLevel       string            `json:"maturity_level"`
+	IterationGuidance   []string          `json:"iteration_guidance"`
+	RecommendedWindow   string            `json:"recommended_window"`
+	GeneratedAt         time.Time         `json:"generated_at"`
 }
 
 // ReplayDataMetadata describes a replay dataset for experiment validation.
