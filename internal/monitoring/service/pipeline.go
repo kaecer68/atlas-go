@@ -69,7 +69,13 @@ func (s *PipelineService) loadRegistry() (domain.AgentRegistry, error) {
 
 // LoadMacroRadar loads macro radar summary for the given session.
 func (s *PipelineService) LoadMacroRadar(sessionID string) (*MacroRadarData, error) {
-	summary, err := LoadSessionSummary(s.LedgerDir, sessionID)
+	var summary *domain.SessionSummary
+	var err error
+	if sessionID == "" {
+		summary, err = FindLatestSessionSummary(s.getStore(), s.LedgerDir)
+	} else {
+		summary, err = LoadSessionSummary(s.LedgerDir, sessionID)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("load macro radar data: %w", err)
 	}
@@ -97,7 +103,13 @@ type MacroRadarData struct {
 
 // LoadAgentObservatory loads agent observatory data with scorecards.
 func (s *PipelineService) LoadAgentObservatory(sessionID string, limit int) (*AgentObservatoryData, error) {
-	summary, err := LoadSessionSummary(s.LedgerDir, sessionID)
+	var summary *domain.SessionSummary
+	var err error
+	if sessionID == "" {
+		summary, err = FindLatestSessionSummary(s.getStore(), s.LedgerDir)
+	} else {
+		summary, err = LoadSessionSummary(s.LedgerDir, sessionID)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("load agent observatory summary: %w", err)
 	}
@@ -146,7 +158,7 @@ func (s *PipelineService) LoadForecastVsReality(agentID string, limit int) (*For
 		return nil, fmt.Errorf("load forecast-vs-reality data: %w", err)
 	}
 
-	summary, err := LoadSessionSummary(s.LedgerDir, "")
+	summary, err := FindLatestSessionSummary(s.getStore(), s.LedgerDir)
 	if err != nil {
 		logging.Warn("pipeline_service", "load_session_summary", logging.Err(err))
 		summary = nil

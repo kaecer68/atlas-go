@@ -120,7 +120,7 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 	}
 
 	// Crowding check from latest session outcomes
-	latestSummary, _ := LoadSessionSummary(s.LedgerDir, "")
+	latestSummary, _ := FindLatestSessionSummary(s.getStore(), s.LedgerDir)
 	if latestSummary != nil {
 		outcomes, _ := s.getStore().LoadSessionOutcomes(latestSummary.SessionID)
 		symbolAgents := make(map[string]map[string]struct{})
@@ -140,7 +140,7 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 		}
 	}
 	regime := domain.RegimeNeutral
-	if summary, err := LoadSessionSummary(s.LedgerDir, ""); err == nil && summary != nil {
+	if summary, err := FindLatestSessionSummary(s.getStore(), s.LedgerDir); err == nil && summary != nil {
 		regime = summary.Regime
 	}
 

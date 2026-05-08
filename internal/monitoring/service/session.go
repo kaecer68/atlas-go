@@ -3,16 +3,18 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
-func LoadSessionSummary(ledgerDir, sessionID string) (*domain.SessionSummary, error) {
+func loadLatestSessionSummaryFromDisk(ledgerDir string) (*domain.SessionSummary, error) {
 	sessionsDir := filepath.Join(ledgerDir, "sessions")
 	entries, err := os.ReadDir(sessionsDir)
 	if err != nil {
@@ -25,9 +27,6 @@ func LoadSessionSummary(ledgerDir, sessionID string) (*domain.SessionSummary, er
 	summaries := make([]domain.SessionSummary, 0, len(entries))
 	for _, entry := range entries {
 		if !entry.IsDir() {
-			continue
-		}
-		if sessionID != "" && entry.Name() != sessionID {
 			continue
 		}
 		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
@@ -46,10 +45,6 @@ func LoadSessionSummary(ledgerDir, sessionID string) (*domain.SessionSummary, er
 	}
 	if len(summaries) == 0 {
 		return nil, nil
-	}
-	if sessionID != "" {
-		selected := summaries[0]
-		return &selected, nil
 	}
 
 	slices.SortFunc(summaries, func(a, b domain.SessionSummary) int {
@@ -76,6 +71,77 @@ func LoadSessionSummary(ledgerDir, sessionID string) (*domain.SessionSummary, er
 	}
 	latest := summaries[0]
 	return &latest, nil
+}
+
+func LoadSessionSummary(ledgerDir, sessionID string) (*domain.SessionSummary, error) {
+	if sessionID == "" {
+		return nil, fmt.Errorf("LoadSessionSummary requires non-empty sessionID; use FindLatestSessionSummary for latest")
+	}
+
+	sessionsDir := filepath.Join(ledgerDir, "sessions")
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if entry.Name() != sessionID {
+			continue
+		}
+		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
+		bytes, err := os.ReadFile(summaryPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		var summary domain.SessionSummary
+		if err := json.Unmarshal(bytes, &summary); err != nil {
+			return nil, err
+		}
+		return &summary, nil
+	}
+	return nil, nil
+}
+
+func FindLatestSessionSummary(store ledger.OutcomeStore, ledgerDir string) (*domain.SessionSummary, error) {
+	if store != nil {
+		summaries, err := store.LoadSessionSummaries()
+		if err == nil && len(summaries) > 0 {
+			slices.SortFunc(summaries, func(a, b domain.SessionSummary) int {
+				aDate := sessionDateFromID(a.SessionID)
+				bDate := sessionDateFromID(b.SessionID)
+				switch {
+				case aDate.After(bDate):
+					return -1
+				case aDate.Before(bDate):
+					return 1
+				case a.RecordedAt.After(b.RecordedAt):
+					return -1
+				case a.RecordedAt.Before(b.RecordedAt):
+					return 1
+				default:
+					return 0
+				}
+			})
+			for i := range summaries {
+				if summaries[i].OutcomeCount > 0 {
+					selected := summaries[i]
+					return &selected, nil
+				}
+			}
+			latest := summaries[0]
+			return &latest, nil
+		}
+	}
+	return loadLatestSessionSummaryFromDisk(ledgerDir)
 }
 
 func StatusText(status string) string {
