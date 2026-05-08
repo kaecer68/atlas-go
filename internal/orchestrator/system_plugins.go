@@ -20,7 +20,7 @@ func (s *System) WithJANUS(j *janus.Engine) *System {
 
 // WithPersistentState enables cross-day simulation state carry-over for backtests.
 func (s *System) WithPersistentState(state *domain.SimulationState) *System {
-	s.persistentState = state
+	s.Sim().persistentState = state
 	return s
 }
 
@@ -55,7 +55,7 @@ func (s *System) WithSpawning(sm *spawning.SpawningManager) *System {
 // WithDarwinian attaches a Darwinian weight manager to the system for dynamic
 // agent weight adjustment based on performance.
 func (s *System) WithDarwinian(dw *portfolio.DarwinianWeightManager) *System {
-	s.darwinian = dw
+	s.Port().darwinian = dw
 	return s
 }
 

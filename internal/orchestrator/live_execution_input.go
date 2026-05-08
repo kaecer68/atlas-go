@@ -28,21 +28,21 @@ func (p *liveExecutionInputProvider) Produce(ctx context.Context, symbols []stri
 	}
 
 	var quotes []domain.Quote
-	if p.system.provider != nil {
+	if p.system.Sim().provider != nil {
 		var err error
-		quotes, err = p.system.provider.GetQuotes(ctx, p.system.session.SessionDate, symbols)
+		quotes, err = p.system.Sim().provider.GetQuotes(ctx, p.system.Sim().session.SessionDate, symbols)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	result := ExecuteWithContext(ExecutionContext{
-		Registry:      p.system.registry,
+		Registry:      p.system.Sim().registry,
 		Quotes:        quotes,
-		Policy:        p.system.policy.ExecutionPolicy,
+		Policy:        p.system.Sim().policy.ExecutionPolicy,
 		Plugins:       p.system.plugins,
-		SessionID:     p.system.session.ID,
-		WeightManager: p.system.darwinian,
+		SessionID:     p.system.Sim().session.ID,
+		WeightManager: p.system.Port().darwinian,
 		Context:       ctx,
 	})
 
@@ -75,19 +75,19 @@ func (a *AdapterProducer) Produce(ctx context.Context, symbols []string) (*domai
 	var quotes []domain.Quote
 	if a.marketData != nil {
 		var err error
-		quotes, err = a.marketData.GetQuotes(ctx, a.system.session.SessionDate, symbols)
+		quotes, err = a.marketData.GetQuotes(ctx, a.system.Sim().session.SessionDate, symbols)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	result := ExecuteWithContext(ExecutionContext{
-		Registry:      a.system.registry,
+		Registry:      a.system.Sim().registry,
 		Quotes:        quotes,
-		Policy:        a.system.policy.ExecutionPolicy,
+		Policy:        a.system.Sim().policy.ExecutionPolicy,
 		Plugins:       a.system.plugins,
-		SessionID:     a.system.session.ID,
-		WeightManager: a.system.darwinian,
+		SessionID:     a.system.Sim().session.ID,
+		WeightManager: a.system.Port().darwinian,
 		Context:       ctx,
 	})
 

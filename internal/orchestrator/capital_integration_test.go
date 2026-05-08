@@ -24,13 +24,13 @@ func TestWithCapitalManagement_SetsFields(t *testing.T) {
 
 	sys.WithCapitalManagement(controller, allocator, workflow)
 
-	if sys.capitalController == nil {
+	if sys.Risk().capitalController == nil {
 		t.Fatal("capitalController should be set")
 	}
-	if sys.capitalAllocator == nil {
+	if sys.Port().capitalAllocator == nil {
 		t.Fatal("capitalAllocator should be set")
 	}
-	if sys.approvalWorkflow == nil {
+	if sys.Risk().approvalWorkflow == nil {
 		t.Fatal("approvalWorkflow should be set")
 	}
 }
@@ -114,8 +114,8 @@ func TestCheckCapitalPhase_LivePhaseRequestsApproval(t *testing.T) {
 func TestUpdateCapitalMetrics_NilController(t *testing.T) {
 	sys := NewSystem(testCapitalConfig())
 
-	sys.portfolioHistory = []float64{100000, 101000, 102000}
-	sys.returnHistory = []float64{0.01, 0.01}
+	sys.Sim().portfolioHistory = []float64{100000, 101000, 102000}
+	sys.Sim().returnHistory = []float64{0.01, 0.01}
 
 	sys.updateCapitalMetrics(domain.SimulationResult{})
 }
@@ -127,8 +127,8 @@ func TestUpdateCapitalMetrics_UpdatesController(t *testing.T) {
 	controller := risk.NewCapitalPhaseController(capitalCfg)
 	sys.WithCapitalManagement(controller, nil, nil)
 
-	sys.portfolioHistory = []float64{100000, 101000, 102000, 99000}
-	sys.returnHistory = []float64{0.01, 0.01, -0.029}
+	sys.Sim().portfolioHistory = []float64{100000, 101000, 102000, 99000}
+	sys.Sim().returnHistory = []float64{0.01, 0.01, -0.029}
 
 	sys.updateCapitalMetrics(domain.SimulationResult{})
 
@@ -148,7 +148,7 @@ func TestUpdateCapitalMetrics_ShortHistory(t *testing.T) {
 	controller := risk.NewCapitalPhaseController(capitalCfg)
 	sys.WithCapitalManagement(controller, nil, nil)
 
-	sys.returnHistory = []float64{0.01}
+	sys.Sim().returnHistory = []float64{0.01}
 
 	sys.updateCapitalMetrics(domain.SimulationResult{})
 
