@@ -111,8 +111,8 @@ func buildPluginRegistry(factorEngine *portfolio.FactorEngine, fp *portfolio.Fun
 	return NewPluginRegistry().WithScreener(screenerEngine).WithFactorEngine(factorEngine)
 }
 
-func loadRuntimeParamsOrDefault() *portfolio.RuntimeParameters {
-	paramsCfg, err := config.LoadParametersConfig(config.Load().ParametersConfigPath)
+func loadRuntimeParamsOrDefault(parametersConfigPath string) *portfolio.RuntimeParameters {
+	paramsCfg, err := config.LoadParametersConfig(parametersConfigPath)
 	if err != nil || paramsCfg == nil {
 		paramsCfg = config.DefaultParametersConfig()
 	}

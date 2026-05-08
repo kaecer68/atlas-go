@@ -7,6 +7,10 @@ import (
 
 // WriteJSON writes a JSON response with the given status code and payload.
 func WriteJSON(w http.ResponseWriter, status int, payload any) {
+	if status == http.StatusNoContent {
+		w.WriteHeader(status)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)

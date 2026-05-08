@@ -106,7 +106,7 @@ func NewSystem(cfg config.Config) *System {
 	}
 	ds, _ := replay.LoadTWSEOpenDataCSV(cfg.ReplayDataPath)
 
-	runtimeParams := loadRuntimeParamsOrDefault()
+	runtimeParams := loadRuntimeParamsOrDefault(cfg.ParametersConfigPath)
 	factorEngine, hp, fp := buildFactorEngine(runtimeParams)
 	eventBus := eventbus.NewChannelEventBus(256)
 	plugins := buildPluginRegistry(factorEngine, fp)
