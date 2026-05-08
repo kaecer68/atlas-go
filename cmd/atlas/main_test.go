@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
@@ -339,15 +341,26 @@ func TestStaticFileServerServesIndex(t *testing.T) {
 
 func TestDashboardAPIUsesWorkDirForPaths(t *testing.T) {
 	tmpDir := t.TempDir()
-	reportsDir := filepath.Join(tmpDir, "reports")
-	if err := os.MkdirAll(reportsDir, 0755); err != nil {
+	ledgerDir := filepath.Join(tmpDir, "data", "state")
+	windowsDir := filepath.Join(ledgerDir, "windows")
+	if err := os.MkdirAll(windowsDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(reportsDir, "backtest_test.md"), []byte("# Backtest Report"), 0644); err != nil {
-		t.Fatalf("write report: %v", err)
+
+	summary := domain.BacktestWindowSummary{
+		WindowID:     "window-test",
+		StartDate:    time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		EndDate:      time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
+		SessionCount: 1,
+		OutcomeCount: 1,
+		GeneratedAt:  time.Now(),
+	}
+	summaryBytes, _ := json.Marshal(summary)
+	if err := os.WriteFile(filepath.Join(windowsDir, "window-test.json"), summaryBytes, 0644); err != nil {
+		t.Fatalf("write window summary: %v", err)
 	}
 
-	api := monitoring.NewDashboardAPI(tmpDir, filepath.Join(tmpDir, "data", "state"), nil)
+	api := monitoring.NewDashboardAPI(tmpDir, ledgerDir, nil)
 	mux := http.NewServeMux()
 	api.RegisterRoutes(mux)
 

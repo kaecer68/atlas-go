@@ -25,15 +25,24 @@ type SystemService struct {
 	WorkDir      string
 	LedgerDir    string
 	BaselinePath string
+	store        ledger.OutcomeStore
 }
 
 // NewSystemService creates a new SystemService.
-func NewSystemService(workDir, ledgerDir, baselinePath string) *SystemService {
+func NewSystemService(workDir, ledgerDir, baselinePath string, store ledger.OutcomeStore) *SystemService {
 	return &SystemService{
 		WorkDir:      workDir,
 		LedgerDir:    ledgerDir,
 		BaselinePath: baselinePath,
+		store:        store,
 	}
+}
+
+func (s *SystemService) getStore() ledger.OutcomeStore {
+	if s.store != nil {
+		return s.store
+	}
+	return ledger.NewStore(s.LedgerDir)
 }
 
 // LoadPhase3Status loads Phase 3 metrics from the well-known path.
@@ -113,8 +122,7 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 	// Crowding check from latest session outcomes
 	latestSummary, _ := LoadSessionSummary(s.LedgerDir, "")
 	if latestSummary != nil {
-		store := ledger.NewStore(s.LedgerDir)
-		outcomes, _ := store.LoadSessionOutcomes(latestSummary.SessionID)
+		outcomes, _ := s.getStore().LoadSessionOutcomes(latestSummary.SessionID)
 		symbolAgents := make(map[string]map[string]struct{})
 		for _, outcome := range outcomes {
 			if symbolAgents[outcome.Symbol] == nil {

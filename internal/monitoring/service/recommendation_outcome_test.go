@@ -119,7 +119,7 @@ func TestLoadAgentObservatoryReadsFromSessionScope(t *testing.T) {
 		},
 	)
 
-	svc := NewPipelineService(baseDir, baseDir)
+	svc := NewPipelineService(baseDir, baseDir, nil)
 	data, err := svc.LoadAgentObservatory(sessionID, 10)
 	if err != nil {
 		t.Fatalf("LoadAgentObservatory: %v", err)
@@ -169,7 +169,7 @@ func TestLoadForecastVsRealityReadsPredictionsFromSelectedSession(t *testing.T) 
 		},
 	)
 
-	svc := NewPipelineService(baseDir, baseDir)
+	svc := NewPipelineService(baseDir, baseDir, nil)
 	data, err := svc.LoadForecastVsReality("", 50)
 	if err != nil {
 		t.Fatalf("LoadForecastVsReality: %v", err)
@@ -213,7 +213,7 @@ func TestReportServiceLoadRecommendationsForDateSupportsCanonicalOutcomeJSON(t *
 		},
 	)
 
-	svc := NewReportService(baseDir, baseDir)
+	svc := NewReportService(baseDir, baseDir, nil)
 	recs := svc.loadRecommendationsForDate("2026-04-22")
 	if len(recs) != 1 {
 		t.Fatalf("expected 1 recommendation, got %d", len(recs))
@@ -255,7 +255,7 @@ func TestPipelineServiceLoadRecommendationPipelineSupportsCanonicalOutcomeJSON(t
 		},
 	)
 
-	svc := NewPipelineService(baseDir, baseDir)
+	svc := NewPipelineService(baseDir, baseDir, nil)
 	data, err := svc.LoadRecommendationPipeline(sessionID, true)
 	if err != nil {
 		t.Fatalf("load recommendation pipeline: %v", err)
