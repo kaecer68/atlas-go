@@ -21,7 +21,7 @@ export function switchPage(id) {
     experiments: '模擬交易', reports: '最新回測', controls: '控制與稽核',
     datachannels: '信息通道', synergy: '人機協同', alerts: '系統警報',
     metrics: '指標監控', industry: '產業生態系', portfolio: '組合持倉', parameters: '參數管理',
-    evolution: '演化透視'
+    evolution_panel: '演化透視'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
@@ -100,10 +100,10 @@ async function loadModules() {
     import('./pages/datachannels.js?v=' + APP_VERSION),
     import('./pages/parameters.js?v=' + APP_VERSION),
     import('./pages/synergy.js?v=' + APP_VERSION),
-    import('./pages/evolution.js?v=' + APP_VERSION),
+    import('./pages/evolution_panel.js?v=' + APP_VERSION),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'synergy', 'evolution'];
+  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'synergy', 'evolution_panel'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -334,11 +334,11 @@ async function loadPageData(pageId) {
       }
     } catch(e) { console.error(e); }
   }
-  else if (pageId === 'evolution') {
+  else if (pageId === 'evolution_panel') {
     try {
-      if (m.evolution && m.evolution.loadEvolutionData) {
-        m.evolution.loadEvolutionData();
-      }
+      import('./pages/evolution_panel.js?v=' + APP_VERSION).then(function(evo) {
+        if (evo.loadEvolutionData) evo.loadEvolutionData();
+      });
     } catch(e) { console.error(e); }
   }
 }
