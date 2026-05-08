@@ -583,10 +583,7 @@ func applyAntiCorrelationLayer(recs []domain.Recommendation, availableCash float
 	minTrade := cfg.MinTradeAmount
 	maxStocks := cfg.MaxStocksDefault
 	if availableCash > 0 {
-		calculated := max(int(availableCash/minTrade), cfg.MaxStocksMin)
-		if calculated > cfg.MaxStocksMax {
-			calculated = cfg.MaxStocksMax
-		}
+		calculated := min(max(int(availableCash/minTrade), cfg.MaxStocksMin), cfg.MaxStocksMax)
 		maxStocks = calculated
 	}
 
