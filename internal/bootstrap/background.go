@@ -183,5 +183,3 @@ func getLatestReplayDate(csvPath string) (time.Time, error) {
 	}
 	return latest, nil
 }
-
-
