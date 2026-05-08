@@ -1,4 +1,4 @@
-import { agentName, sectorName, regimeLabel } from '../names.js';
+import { agentName, regimeLabel } from '../names.js';
 import { getJSON } from '../shared/app-utils.js';
 
 let evolutionData = null;
@@ -39,128 +39,290 @@ function getData() {
   };
 }
 
-// ====== 總覽儀表板 ======
+// ====== Helpers ======
+
+function regimeClass(regime) {
+  const map = { RISK_ON: 'risk-on', RISK_OFF: 'risk-off', NEUTRAL: 'neutral', TRANSITIONAL: 'transitional' };
+  return map[regime] || 'neutral';
+}
+
+function sharpeClass(v) {
+  return (v || 0) > 1 ? 'value-up' : ((v || 0) < 0 ? 'value-down' : 'value-warn');
+}
+
+function hitRateBarClass(v) {
+  const p = (v || 0) * 100;
+  return p > 60 ? 'high' : (p > 30 ? 'mid' : 'low');
+}
+
+function escapeHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function latestRegime(sessions) {
+  if (!sessions || !sessions.length) return 'NEUTRAL';
+  return sessions[sessions.length - 1].regime || 'NEUTRAL';
+}
+
+function evolutionState(judgeCount, promoteCount) {
+  const total = judgeCount + promoteCount;
+  if (total === 0) return 'stable';
+  if (judgeCount > 0) return 'pending';
+  return 'experimenting';
+}
+
+function formatDelta(baseline, candidate) {
+  if (!baseline || baseline === 0) return { cls: 'neutral', text: '—', value: 0 };
+  const delta = ((candidate - baseline) / Math.abs(baseline)) * 100;
+  const cls = delta > 1 ? 'positive' : (delta < -1 ? 'negative' : 'neutral');
+  const arrow = delta > 1 ? '▲' : (delta < -1 ? '▼' : '—');
+  return { cls, text: arrow + ' ' + Math.abs(delta).toFixed(1) + '%', value: delta };
+}
+
+// ====== Shared Experiment List ======
+
+function renderExperimentList(judges, promotes, showStatus) {
+  const all = judges.concat(promotes);
+  if (!all.length) {
+    return '<div class="empty-state-guidance"><div class="icon">🧪</div><div class="title">無實驗記錄</div><div class="desc">系統處於穩態運行</div></div>';
+  }
+  let html = '';
+  for (const e of all) {
+    const isJudge = judges.includes(e);
+    const delta = formatDelta(e.baseline_value, e.candidate_value);
+    let statusBadge = '';
+    if (showStatus) {
+      statusBadge = e.status === 'running'
+        ? '<span class="badge warn">進行中</span>'
+        : (e.status === 'completed' ? '<span class="badge ok">完成</span>' : '<span class="badge info">' + escapeHtml(e.status || '') + '</span>');
+    } else {
+      statusBadge = isJudge
+        ? '<span class="badge warn">待評判</span>'
+        : '<span class="badge ok">待晉升</span>';
+    }
+    html += '<div class="ev-exp-item">' +
+      '<div class="ev-exp-header">' +
+        '<div><strong>' + escapeHtml(agentName(e.target_agent_id)) + '</strong> · ' + escapeHtml(e.mutation_type || '實驗') + '</div>' +
+        statusBadge +
+      '</div>' +
+      '<div class="ev-exp-detail">' + escapeHtml(e.mutation_summary || '') + '</div>' +
+      '<div class="ev-exp-metrics">' +
+        '<span class="baseline">基線: ' + (e.baseline_value || 0).toFixed(3) + '</span>' +
+        '<span class="candidate">候選: ' + (e.candidate_value || 0).toFixed(3) + '</span>' +
+        '<span class="ev-exp-delta ' + delta.cls + '">' + delta.text + '</span>' +
+        (showStatus ? '<span class="ev-exp-id">' + escapeHtml(e.experiment_id || '') + '</span>' : '') +
+      '</div></div>';
+  }
+  return html;
+}
+
+// ====== Regime Timeline ======
+
+function renderRegimeTimeline(sessions, maxDots) {
+  if (!sessions || !sessions.length) {
+    return '<div class="empty-state-guidance"><div class="icon">📡</div><div class="title">無 Regime 歷史</div><div class="desc">系統尚未累積足夠 session 數據</div></div>';
+  }
+  let display = sessions;
+  if (maxDots > 0 && sessions.length > maxDots) {
+    const step = Math.floor(sessions.length / maxDots);
+    display = [];
+    for (let i = 0; i < sessions.length; i += step) {
+      display.push(sessions[i]);
+      if (display.length >= maxDots) break;
+    }
+  }
+
+  let statsHtml = '<div class="ev-regime-stats">';
+  const counts = { RISK_ON: 0, RISK_OFF: 0, NEUTRAL: 0, TRANSITIONAL: 0 };
+  for (const s of display) { counts[s.regime] = (counts[s.regime] || 0) + 1; }
+  const total = display.length;
+  const statItems = [
+    { key: 'RISK_ON', cls: 'risk-on', label: '多頭' },
+    { key: 'RISK_OFF', cls: 'risk-off', label: '空頭' },
+    { key: 'NEUTRAL', cls: 'neutral', label: '盤整' },
+    { key: 'TRANSITIONAL', cls: 'transitional', label: '過渡' },
+  ];
+  for (const item of statItems) {
+    const cnt = counts[item.key] || 0;
+    if (cnt === 0) continue;
+    const pct = (cnt / total * 100).toFixed(0);
+    statsHtml += '<div class="ev-regime-stat"><span class="ev-regime-stat-dot ' + item.cls + '"></span>' +
+      '<span class="ev-regime-stat-label">' + item.label + '</span>' +
+      '<span class="ev-regime-stat-pct ' + item.cls + '">' + pct + '%</span>' +
+      '<span class="ev-regime-stat-count">' + cnt + '</span></div>';
+  }
+  statsHtml += '</div>';
+
+  let dotsHtml = '<div class="ev-regime-dots">';
+  for (let i = 0; i < display.length; i++) {
+    const s = display[i];
+    const cls = regimeClass(s.regime);
+    const dateHint = s.session_id ? s.session_id.split('-')[1] : '';
+    if (i > 0 && display[i].regime !== display[i - 1].regime) {
+      dotsHtml += '<span class="ev-regime-transition"></span>';
+    }
+    dotsHtml += '<span class="ev-regime-dot ' + cls + '" title="' + regimeLabel(s.regime) + ' (' + dateHint + ')"></span>';
+  }
+  dotsHtml += '</div>';
+
+  let metaHtml = '<div class="ev-regime-meta">' +
+    '<div class="ev-regime-legend">' +
+      '<span><span class="dot risk-on"></span> 多頭</span>' +
+      '<span><span class="dot risk-off"></span> 空頭</span>' +
+      '<span><span class="dot neutral"></span> 盤整</span>' +
+      '<span><span class="dot transitional"></span> 過渡</span>' +
+    '</div>' +
+    '<span class="ev-regime-range">' + display[0].session_id.split('-')[1] + ' → ' + display[display.length - 1].session_id.split('-')[1] + '</span>' +
+    '</div>';
+
+  return statsHtml + dotsHtml + metaHtml;
+}
+
+// ====== Compact View ======
+
 function renderCompact() {
   const el = document.getElementById('evolutionContent');
   if (!el) return;
   const { scorecards, sessions, judges, promotes } = getData();
+  var allExps = judges.concat(promotes);
+
   const sorted = scorecards.slice().sort((a, b) => (b.sharpe || 0) - (a.sharpe || 0));
   const top5 = sorted.slice(0, 5);
+  const weakest = sorted.slice(-3).reverse();
+  const current = latestRegime(sessions);
+  const state = evolutionState(judges.length, promotes.length);
   const expCount = judges.length + promotes.length;
 
-  const agentRows = top5.map((a, i) => {
-    const barW = Math.max(5, Math.min(100, (a.hit_rate || 0) * 100));
-    const sColor = (a.sharpe || 0) > 1 ? 'var(--up)' : ((a.sharpe || 0) < 0 ? 'var(--down)' : 'var(--warn)');
-    return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)">' +
-      '<span style="font-size:11px;color:var(--muted);width:18px">' + (i + 1) + '</span>' +
-      '<span style="flex:1;font-size:12px">' + agentName(a.agent_id) + '</span>' +
-      '<div style="width:80px;height:4px;background:var(--bg);border-radius:2px">' +
-        '<div style="width:' + barW + '%;height:100%;background:' + (barW > 50 ? 'var(--up)' : 'var(--warn)') + ';border-radius:2px"></div>' +
-      '</div>' +
-      '<span style="font-size:11px;color:var(--muted);width:35px;text-align:right">' + ((a.hit_rate || 0) * 100).toFixed(0) + '%</span>' +
-      '<span style="font-size:11px;color:' + sColor + ';width:45px;text-align:right">S:' + (a.sharpe || 0).toFixed(2) + '</span>' +
-      '</div>';
-  }).join('');
+  let regimeIndicator = '<div class="ev-current-regime ' + regimeClass(current) + '">' +
+    regimeLabel(current) + '</div>';
+  let regimeSection = '<div class="panel wide" style="margin-bottom:12px;padding:14px 16px">' +
+    '<div class="ev-section-title">Regime 演化 ' + regimeIndicator + '</div>' +
+    '<div class="ev-section-count">' + sessions.length + ' sessions</div>' +
+    renderRegimeTimeline(sessions, 60) +
+    '</div>';
 
-  el.innerHTML =
-    '<div class="panel wide" style="margin-bottom:12px;padding:10px 14px">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-        '<div style="font-size:13px;font-weight:700">Regime 演化</div>' +
-        '<div style="font-size:11px;color:var(--muted)">' + sessions.length + ' 個 session</div>' +
-      '</div>' +
-      renderRegimeTimeline(sessions, 60) +
+  let stateHtml = '';
+  if (state === 'stable') {
+    stateHtml = '<div class="ev-state stable"><span class="ev-state-dot"></span>系統處於穩態運行，所有 Agent 策略已收斂</div>';
+  } else if (state === 'pending') {
+    stateHtml = '<div class="ev-state pending"><span class="ev-state-dot"></span>有 ' + judges.length + ' 個候選者等待評判，' + promotes.length + ' 個待晉升</div>';
+  } else {
+    stateHtml = '<div class="ev-state experimenting"><span class="ev-state-dot"></span>系統正在持續進化 Agent 策略，' + expCount + ' 個實驗進行中</div>';
+  }
+
+  let expSection = '<div class="panel wide" style="margin-bottom:12px;padding:14px 16px">' +
+    '<div class="ev-section-title">實驗活動 <span class="ev-section-count">' + expCount + ' active</span></div>' +
+    '<div class="ev-kpi-grid">' +
+      '<div class="ev-kpi-card"><div class="ev-kpi-value" style="color:' + (judges.length > 0 ? 'var(--warn)' : 'var(--muted)') + '">' + judges.length + '</div><div class="ev-kpi-label">待評判</div></div>' +
+      '<div class="ev-kpi-card"><div class="ev-kpi-value" style="color:' + (promotes.length > 0 ? 'var(--up)' : 'var(--muted)') + '">' + promotes.length + '</div><div class="ev-kpi-label">待晉升</div></div>' +
+      '<div class="ev-kpi-card"><div class="ev-kpi-value">' + scorecards.length + '</div><div class="ev-kpi-label">活躍 Agent</div></div>' +
     '</div>' +
+stateHtml +
+    (allExps.length > 0 ? '<div style="margin-top:12px;max-height:180px;overflow:auto">' + renderExperimentList(judges, promotes, false) + '</div>' : '') +
+    '</div>';
+
+  let agentRows = '';
+  for (let i = 0; i < top5.length; i++) {
+    const a = top5[i];
+    const barW = Math.max(5, Math.min(100, (a.hit_rate || 0) * 100));
+    const barCls = hitRateBarClass(a.hit_rate);
+    agentRows += '<div class="ev-agent-row">' +
+      '<span class="ev-agent-rank ' + (i < 3 ? 'top' : '') + '">' + (i + 1) + '</span>' +
+      '<span class="ev-agent-name">' + escapeHtml(agentName(a.agent_id)) + '</span>' +
+      '<span class="ev-agent-layer" data-layer="' + escapeHtml(a.layer || '') + '">' + escapeHtml(a.layer || '-') + '</span>' +
+      '<div class="ev-agent-bar-track"><div class="ev-agent-bar-fill ' + barCls + '" style="width:' + barW + '%"></div></div>' +
+      '<span class="ev-agent-stat">' + ((a.hit_rate || 0) * 100).toFixed(0) + '%</span>' +
+      '<span class="ev-agent-stat ' + sharpeClass(a.sharpe) + '">S:' + (a.sharpe || 0).toFixed(2) + '</span>' +
+      '</div>';
+  }
+  let agentSection = '<div class="panel" style="padding:14px 16px">' +
+    '<div class="ev-section-title">🏆 Agent 表現 Top 5</div>' +
+    agentRows + '</div>';
+
+  let elimRows = '';
+  for (let i = 0; i < weakest.length; i++) {
+    const a = weakest[i];
+    if ((a.sharpe || 0) > 0.5) continue;
+    const barW = Math.max(5, Math.min(100, (a.hit_rate || 0) * 100));
+    const barCls = hitRateBarClass(a.hit_rate);
+    elimRows += '<div class="ev-agent-row ev-agent-elimination">' +
+      '<span class="ev-elim-icon">⚠</span>' +
+      '<span class="ev-agent-name">' + escapeHtml(agentName(a.agent_id)) + '</span>' +
+      '<span class="ev-agent-layer" data-layer="' + escapeHtml(a.layer || '') + '">' + escapeHtml(a.layer || '-') + '</span>' +
+      '<div class="ev-agent-bar-track"><div class="ev-agent-bar-fill ' + barCls + '" style="width:' + barW + '%"></div></div>' +
+      '<span class="ev-agent-stat">' + ((a.hit_rate || 0) * 100).toFixed(0) + '%</span>' +
+      '<span class="ev-agent-stat value-down">S:' + (a.sharpe || 0).toFixed(2) + '</span>' +
+      '</div>';
+  }
+  let elimSection = '<div class="panel ev-elim-panel" style="padding:14px 16px">' +
+    '<div class="ev-section-title">⚡ 淘汰候選</div>' +
+    (elimRows ? elimRows : '<div class="empty" style="padding:12px 0">目前無低績效 Agent</div>') +
+    '</div>';
+
+  el.innerHTML = regimeSection + expSection +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
-      '<div class="panel" style="padding:10px 14px">' +
-        '<div style="font-size:13px;font-weight:700;margin-bottom:8px">Agent 表現 Top 5</div>' +
-        agentRows +
-      '</div>' +
-      '<div class="panel" style="padding:10px 14px">' +
-        '<div style="font-size:13px;font-weight:700;margin-bottom:8px">實驗活動</div>' +
-        '<div style="display:flex;gap:24px;margin-top:4px">' +
-          '<div style="text-align:center"><div style="font-size:20px;font-weight:700;color:' + (judges.length > 0 ? 'var(--warn)' : 'var(--muted)') + '">' + judges.length + '</div><div style="font-size:11px;color:var(--muted)">待評判</div></div>' +
-          '<div style="text-align:center"><div style="font-size:20px;font-weight:700;color:' + (promotes.length > 0 ? 'var(--up)' : 'var(--muted)') + '">' + promotes.length + '</div><div style="font-size:11px;color:var(--muted)">待晉升</div></div>' +
-          '<div style="text-align:center"><div style="font-size:20px;font-weight:700">' + scorecards.length + '</div><div style="font-size:11px;color:var(--muted)">活躍 Agent</div></div>' +
-        '</div>' +
-        '<div style="margin-top:12px;font-size:11px;color:var(--muted)">' +
-          (expCount > 0 ? '當前有 ' + expCount + ' 個實驗排隊。系統正在持續進化 Agent 策略。' : '當前無待處理實驗。系統處於穩態運行。') +
-        '</div>' +
-      '</div>' +
+      agentSection + elimSection +
     '</div>';
 }
 
-// ====== 詳細分析 ======
+// ====== Detailed View ======
+
 function renderDetailed() {
   const el = document.getElementById('evolutionContent');
   if (!el) return;
   const { scorecards, sessions, judges, promotes } = getData();
   const sorted = scorecards.slice().sort((a, b) => (b.sharpe || 0) - (a.sharpe || 0));
   const allExps = judges.concat(promotes);
+  const current = latestRegime(sessions);
 
-  let scoreboardHtml = '<table style="width:100%;font-size:12px;border-collapse:collapse">' +
-    '<thead><tr style="border-bottom:2px solid var(--border)">' +
-    '<th style="text-align:left;padding:6px">Agent</th><th style="text-align:left;padding:6px">技能</th>' +
-    '<th style="text-align:center;padding:6px">層</th><th style="text-align:right;padding:6px">觀察</th>' +
-    '<th style="text-align:right;padding:6px">命中率</th><th style="text-align:right;padding:6px">Sharpe</th>' +
-    '<th style="text-align:right;padding:6px">最大回撤</th></tr></thead><tbody>';
+  let regimeSection = '<div class="panel wide" style="margin-bottom:12px;padding:14px 16px">' +
+    '<div class="ev-section-title">Regime 時間線 <span class="ev-current-regime ' + regimeClass(current) + '" style="margin-left:auto">' + regimeLabel(current) + '</span></div>' +
+    renderRegimeTimeline(sessions, 80) +
+    '</div>';
+
+  let tableHtml = '<table class="ev-score-table"><thead><tr>' +
+    '<th>Agent</th><th>技能</th><th style="text-align:center">層</th><th style="text-align:right">觀察</th>' +
+    '<th style="text-align:right">命中率</th><th style="text-align:right">Sharpe</th>' +
+    '<th style="text-align:right">最大回撤</th></tr></thead><tbody>';
+
   for (let i = 0; i < sorted.length; i++) {
     const a = sorted[i];
-    const sColor = (a.sharpe || 0) > 1 ? 'var(--up)' : ((a.sharpe || 0) < 0 ? 'var(--down)' : 'var(--warn)');
+    const sClass = sharpeClass(a.sharpe);
     const hColor = (a.hit_rate || 0) > 0.5 ? 'var(--up)' : ((a.hit_rate || 0) > 0.3 ? 'var(--warn)' : 'var(--muted)');
-    scoreboardHtml += '<tr style="border-bottom:1px solid var(--border)">' +
-      '<td style="padding:6px">' + agentName(a.agent_id) + '</td>' +
-      '<td style="padding:6px;color:var(--muted)">' + (a.skill || '-') + '</td>' +
-      '<td style="padding:6px;text-align:center"><span class="badge">' + (a.layer || '-') + '</span></td>' +
-      '<td style="padding:6px;text-align:right">' + (a.observations || 0) + '</td>' +
-      '<td style="padding:6px;text-align:right;color:' + hColor + '">' + ((a.hit_rate || 0) * 100).toFixed(0) + '%</td>' +
-      '<td style="padding:6px;text-align:right;color:' + sColor + '">' + (a.sharpe || 0).toFixed(2) + '</td>' +
-      '<td style="padding:6px;text-align:right;color:var(--down)">' + ((a.max_drawdown || 0) * 100).toFixed(1) + '%</td></tr>';
+    tableHtml += '<tr>' +
+      '<td>' + escapeHtml(agentName(a.agent_id)) + '</td>' +
+      '<td class="text-muted">' + escapeHtml(a.skill || '-') + '</td>' +
+      '<td style="text-align:center"><span class="badge info">' + escapeHtml(a.layer || '-') + '</span></td>' +
+      '<td style="text-align:right">' + (a.observations || 0) + '</td>' +
+      '<td style="text-align:right;color:' + hColor + '">' + ((a.hit_rate || 0) * 100).toFixed(0) + '%</td>' +
+      '<td style="text-align:right"><span class="' + sClass + '">' + (a.sharpe || 0).toFixed(2) + '</span></td>' +
+      '<td style="text-align:right;color:var(--down)">' + ((a.max_drawdown || 0) * 100).toFixed(1) + '%</td>' +
+      '</tr>';
   }
-  scoreboardHtml += '</tbody></table>';
+  tableHtml += '</tbody></table>';
 
-  let expLogHtml = '';
-  if (allExps.length > 0) {
-    expLogHtml = '<div style="font-size:12px">';
-    for (let j = 0; j < allExps.length; j++) {
-      const e = allExps[j];
-      const badge = e.status === 'running' ? '<span style="color:var(--warn)">● 進行中</span>' :
-        (e.status === 'completed' ? '<span style="color:var(--up)">✓ 完成</span>' : '<span style="color:var(--muted)">○ ' + e.status + '</span>');
-      expLogHtml += '<div style="padding:6px 0;border-bottom:1px solid var(--border)">' +
-        '<div><strong>' + agentName(e.target_agent_id) + '</strong> · ' + (e.mutation_type || '實驗') + '</div>' +
-        '<div style="color:var(--muted);font-size:11px">' + (e.mutation_summary || '') + '</div>' +
-        '<div style="display:flex;gap:16px;margin-top:4px;font-size:11px">' + badge +
-          '<span>基線: ' + ((e.baseline_value || 0)).toFixed(3) + '</span>' +
-          '<span>候選: ' + ((e.candidate_value || 0)).toFixed(3) + '</span>' +
-          '<span style="color:var(--muted)">' + (e.experiment_id || '') + '</span></div></div>';
-    }
-    expLogHtml += '</div>';
-  } else {
-    expLogHtml = '<div style="padding:20px;text-align:center;color:var(--muted)">當前無實驗記錄。系統處於穩態運行。</div>';
-  }
+  let scoreSection = '<div class="panel wide" style="margin-bottom:12px;padding:14px 16px">' +
+    '<div class="ev-section-title">Agent 評分表 <span class="ev-section-count">' + sorted.length + ' agents</span></div>' +
+    tableHtml + '</div>';
 
-  el.innerHTML =
-    '<div class="panel wide" style="margin-bottom:12px;padding:10px 14px">' +
-      '<div style="font-size:13px;font-weight:700;margin-bottom:8px">Regime 時間線</div>' +
-      renderRegimeTimeline(sessions, 80) +
-    '</div>' +
-    '<div class="panel wide" style="margin-bottom:12px;padding:10px 14px">' +
-      '<div style="font-size:13px;font-weight:700;margin-bottom:8px">Agent 評分表</div>' +
-      scoreboardHtml +
-    '</div>' +
-    '<div class="panel wide" style="padding:10px 14px">' +
-      '<div style="font-size:13px;font-weight:700;margin-bottom:8px">實驗日誌</div>' +
-      expLogHtml +
+  let expSection = '<div class="panel wide" style="padding:14px 16px">' +
+    '<div class="ev-section-title">實驗日誌</div>' +
+    renderExperimentList(judges, promotes, true) +
     '</div>';
+
+  el.innerHTML = regimeSection + scoreSection + expSection;
 }
 
-// ====== 分類視覺圖 ======
+// ====== Categorical View ======
+
 function renderCategorical() {
   const el = document.getElementById('evolutionContent');
   const catEl = document.getElementById('evolutionCatContent');
   if (!el || !catEl) return;
   catEl.style.display = 'block';
 
-  el.innerHTML = '<div id="evolutionTabs" style="display:flex;gap:8px;margin-bottom:16px">' +
+  el.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:16px" id="evolutionTabs">' +
     '<button class="cat-tab active" id="catTab-agents" onclick="window._evCatTab(\'agents\')">Agent 競爭</button>' +
     '<button class="cat-tab" id="catTab-regime" onclick="window._evCatTab(\'regime\')">Regime 演化</button>' +
     '<button class="cat-tab" id="catTab-experiments" onclick="window._evCatTab(\'experiments\')">實驗日誌</button>' +
@@ -168,6 +330,155 @@ function renderCategorical() {
 
   const { scorecards, sessions, judges, promotes } = getData();
   renderCatContent('agents', scorecards, sessions, judges, promotes);
+}
+
+function renderScatterPlot(scorecards) {
+  const container = document.getElementById('evScatterWrap');
+  const canvas = document.getElementById('evScatterCanvas');
+  if (!canvas || !container) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const rect = container.getBoundingClientRect();
+  const W = rect.width;
+  const H = Math.min(280, Math.max(200, W * 0.45));
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  if (!scorecards || !scorecards.length) {
+    ctx.fillStyle = 'var(--muted)';
+    ctx.font = '12px ' + getComputedStyle(document.body).fontFamily;
+    ctx.textAlign = 'center';
+    ctx.fillText('無 Agent 數據', W / 2, H / 2);
+    return;
+  }
+
+  const pad = { top: 24, right: 20, bottom: 34, left: 44 };
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+
+  // Scales: hit_rate [0,1] → X, sharpe [-1.5, 3] → Y (inverted)
+  const xMin = 0, xMax = 1;
+  const yMin = -1.5, yMax = 3;
+  function toX(v) { return pad.left + ((v - xMin) / (xMax - xMin)) * plotW; }
+  function toY(v) { return pad.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH; }
+
+  const cs = getComputedStyle(document.documentElement);
+  const layerColors = {
+    sector: cs.getPropertyValue('--layer-1').trim() || '#3b82f6',
+    style: cs.getPropertyValue('--layer-2').trim() || '#8b5cf6',
+    superinvestor: cs.getPropertyValue('--layer-3').trim() || '#10b981',
+    context: cs.getPropertyValue('--layer-4').trim() || '#f59e0b',
+    control: cs.getPropertyValue('--layer-5').trim() || '#ef4444',
+    unknown: cs.getPropertyValue('--muted').trim() || '#9ca3af',
+  };
+
+  ctx.fillStyle = cs.getPropertyValue('--bg').trim() || '#0b0d11';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.strokeStyle = cs.getPropertyValue('--border').trim() || '#242a33';
+  ctx.lineWidth = 0.5;
+  ctx.font = '10px monospace';
+  ctx.fillStyle = cs.getPropertyValue('--muted').trim() || '#b8c4d0';
+  ctx.textAlign = 'center';
+  for (let v = 0; v <= 1; v += 0.25) {
+    const x = toX(v);
+    ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, pad.top + plotH); ctx.stroke();
+    ctx.fillText((v * 100).toFixed(0) + '%', x, pad.top + plotH + 14);
+  }
+  ctx.textAlign = 'right';
+  for (let v = -1; v <= 3; v += 1) {
+    const y = toY(v);
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + plotW, y); ctx.stroke();
+    ctx.fillText(v.toFixed(0), pad.left - 6, y + 4);
+  }
+
+  ctx.fillStyle = cs.getPropertyValue('--muted').trim() || '#b8c4d0';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('命中率', pad.left + plotW / 2, H - 4);
+  ctx.save();
+  ctx.translate(10, pad.top + plotH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('Sharpe Ratio', 0, 0);
+  ctx.restore();
+
+  ctx.strokeStyle = cs.getPropertyValue('--color-warning').trim() || '#f59e0b';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  const y0 = toY(0);
+  ctx.beginPath(); ctx.moveTo(pad.left, y0); ctx.lineTo(pad.left + plotW, y0); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = cs.getPropertyValue('--color-warning').trim() || '#f59e0b';
+  ctx.textAlign = 'left';
+  ctx.font = '9px sans-serif';
+  ctx.fillText('Sharpe = 0', pad.left + plotW - 50, y0 - 5);
+
+  ctx.fillStyle = 'rgba(16,185,129,0.04)';
+  ctx.fillRect(toX(0), toY(3), plotW * (1 / (xMax - xMin)), plotH * ((3 - 0) / (yMax - yMin)));
+  ctx.fillStyle = 'rgba(239,68,68,0.04)';
+  ctx.fillRect(pad.left, toY(0), plotW, plotH * ((0 - yMin) / (yMax - yMin)));
+
+  for (const a of scorecards) {
+    const hr = Math.min(xMax, Math.max(xMin, a.hit_rate || 0));
+    const sh = Math.min(yMax, Math.max(yMin, a.sharpe || 0));
+    const x = toX(hr);
+    const y = toY(sh);
+    const layer = a.layer || 'unknown';
+    const color = layerColors[layer] || layerColors.unknown;
+
+    ctx.beginPath();
+    ctx.arc(x, y, 10, 0, Math.PI * 2);
+    ctx.fillStyle = color.replace(')', ',0.15)').replace('rgb', 'rgba');
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = cs.getPropertyValue('--panel').trim() || '#13161c';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  const legendItems = [
+    { layer: 'sector', label: '產業', color: layerColors.sector },
+    { layer: 'style', label: '風格', color: layerColors.style },
+    { layer: 'superinvestor', label: '超級投資者', color: layerColors.superinvestor },
+    { layer: 'context', label: '宏觀', color: layerColors.context },
+    { layer: 'control', label: '控制', color: layerColors.control },
+  ];
+  const legendX = pad.left + plotW - 8;
+  let legendY = pad.top + 8;
+  ctx.textAlign = 'right';
+  ctx.font = '9px sans-serif';
+  for (const item of legendItems) {
+    ctx.fillStyle = item.color;
+    ctx.fillRect(legendX - 30, legendY - 5, 8, 8);
+    ctx.fillStyle = cs.getPropertyValue('--muted').trim() || '#b8c4d0';
+    ctx.fillText(item.label, legendX - 2, legendY + 2);
+    legendY += 14;
+  }
+
+  canvas.onmousemove = function(e) {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    let found = null;
+    for (const a of scorecards) {
+      const hr = Math.min(xMax, Math.max(xMin, a.hit_rate || 0));
+      const sh = Math.min(yMax, Math.max(yMin, a.sharpe || 0));
+      const dx = mx - toX(hr);
+      const dy = my - toY(sh);
+      if (Math.sqrt(dx * dx + dy * dy) < 12) { found = a; break; }
+    }
+    canvas.title = found
+      ? agentName(found.agent_id) + ' — 層: ' + (found.layer || '?') + ' | 命中: ' + ((found.hit_rate || 0) * 100).toFixed(0) + '% | Sharpe: ' + (found.sharpe || 0).toFixed(2)
+      : '';
+  };
 }
 
 function renderCatContent(tab, scorecards, sessions, judges, promotes) {
@@ -179,105 +490,20 @@ function renderCatContent(tab, scorecards, sessions, judges, promotes) {
   if (btn) btn.classList.add('active');
 
   if (tab === 'agents') {
-    const sorted = scorecards.slice().sort((a, b) => (b.sharpe || 0) - (a.sharpe || 0));
-    const byLayer = {};
-    for (const a of sorted) {
-      const layer = a.layer || 'unknown';
-      if (!byLayer[layer]) byLayer[layer] = [];
-      byLayer[layer].push(a);
-    }
-    const layers = ['sector', 'style', 'superinvestor', 'context', 'control'];
-    const layerLabels = { sector: '🏭 產業', style: '🎨 風格', superinvestor: '🧠 超級投資者', context: '🌍 宏觀', control: '⚙️ 控制' };
-    let html = '';
-    for (const l of layers) {
-      const agents = byLayer[l];
-      if (!agents || !agents.length) continue;
-      html += '<div style="margin-bottom:16px"><div style="font-size:13px;font-weight:700;margin-bottom:8px">' +
-        (layerLabels[l] || l) + ' (' + agents.length + ')</div>';
-      for (const a of agents) {
-        const barLen = Math.max(5, Math.min(100, (a.hit_rate || 0) * 100));
-        const barColor = barLen > 60 ? 'var(--up)' : (barLen > 30 ? 'var(--warn)' : 'var(--muted)');
-        html += '<div style="display:flex;align-items:center;gap:8px;padding:3px 0">' +
-          '<span style="font-size:11px;flex:1">' + agentName(a.agent_id) + '</span>' +
-          '<span style="font-size:10px;color:var(--muted);width:40px">命中</span>' +
-          '<div style="width:100px;height:5px;background:var(--bg);border-radius:3px">' +
-            '<div style="width:' + barLen + '%;height:100%;background:' + barColor + ';border-radius:3px"></div></div>' +
-          '<span style="font-size:10px;color:var(--muted);width:30px;text-align:right">' + ((a.hit_rate || 0) * 100).toFixed(0) + '%</span>' +
-          '<span style="font-size:10px;color:var(--muted);width:55px;text-align:right">S:' + (a.sharpe || 0).toFixed(2) + '</span></div>';
-      }
-      html += '</div>';
-    }
-    el.innerHTML = html || '<div style="padding:20px;color:var(--muted);text-align:center">無 Agent 數據</div>';
+    el.innerHTML = '<div class="ev-section-title">Agent 競爭散布圖 <span class="ev-section-count">X: 命中率 / Y: Sharpe</span></div>' +
+      '<div id="evScatterWrap" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">' +
+      '<canvas id="evScatterCanvas"></canvas></div>';
+      requestAnimationFrame(function() { renderScatterPlot(scorecards); });
   } else if (tab === 'regime') {
-    el.innerHTML = '<div style="font-size:13px;font-weight:700;margin-bottom:8px">Regime 演化時間線</div>' +
-      '<div style="font-size:11px;color:var(--muted);margin-bottom:12px">共 ' + sessions.length + ' 個 session</div>' +
+    el.innerHTML = '<div class="ev-section-title">Regime 演化時間線 <span class="ev-section-count">' + sessions.length + ' sessions</span></div>' +
       renderRegimeTimeline(sessions, -1);
   } else if (tab === 'experiments') {
-    const all = judges.concat(promotes);
-    let html = '';
-    if (all.length > 0) {
-      for (const e of all) {
-        const isJudge = judges.includes(e);
-        html += '<div style="padding:8px 0;border-bottom:1px solid var(--border)">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center">' +
-            '<div><strong>' + agentName(e.target_agent_id) + '</strong> · ' + (e.mutation_type || '') + '</div>' +
-            '<span style="font-size:11px;color:' + (isJudge ? 'var(--warn)' : 'var(--up)') + '">' + (isJudge ? '待評判' : '待晉升') + '</span></div>' +
-          '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + (e.mutation_summary || '') + '</div>' +
-          '<div style="display:flex;gap:16px;margin-top:2px;font-size:11px">' +
-            '<span>基線: ' + (e.baseline_value || 0).toFixed(3) + '</span>' +
-            '<span>候選: ' + (e.candidate_value || 0).toFixed(3) + '</span></div></div>';
-      }
-    } else {
-      html = '<div style="padding:20px;color:var(--muted);text-align:center">無實驗記錄</div>';
-    }
-    el.innerHTML = html;
+    el.innerHTML = '<div class="ev-section-title">實驗日誌</div>' +
+      renderExperimentList(judges, promotes, false);
   }
 }
 
-// ====== Regime 時間線 ======
-function renderRegimeTimeline(sessions, maxBars) {
-  if (!sessions || !sessions.length) {
-    return '<div style="padding:8px;color:var(--muted);font-size:11px">無 regime 歷史數據</div>';
-  }
-  let display = sessions;
-  if (maxBars > 0 && sessions.length > maxBars) {
-    const step = Math.floor(sessions.length / maxBars);
-    display = [];
-    for (let i = 0; i < sessions.length; i += step) {
-      display.push(sessions[i]);
-      if (display.length >= maxBars) break;
-    }
-  }
-  const colors = { RISK_ON: 'var(--up)', RISK_OFF: 'var(--down)', NEUTRAL: 'var(--warn)' };
-  const segments = [];
-  let cur = display[0].regime, start = 0;
-  for (let i = 1; i < display.length; i++) {
-    if (display[i].regime !== cur) {
-      segments.push({ regime: cur, count: i - start });
-      cur = display[i].regime; start = i;
-    }
-  }
-  segments.push({ regime: cur, count: display.length - start });
-
-  const total = display.length;
-  let html = '<div style="display:flex;width:100%;height:24px;border-radius:4px;overflow:hidden;margin-bottom:6px">';
-  for (const s of segments) {
-    const w = (s.count / total * 100).toFixed(2);
-    const color = colors[s.regime] || 'var(--muted)';
-    const label = s.count > 3 ? '<span style="position:absolute;left:4px;top:50%;transform:translateY(-50%);font-size:9px;font-weight:600;color:var(--bg);white-space:nowrap">' + regimeLabel(s.regime) + '</span>' : '';
-    html += '<div title="' + regimeLabel(s.regime) + ': ' + s.count + ' sessions" ' +
-      'style="width:' + w + '%;height:100%;background:' + color + ';position:relative">' + label + '</div>';
-  }
-  html += '</div>';
-  html += '<div style="display:flex;gap:16px;font-size:10px;color:var(--muted)">' +
-    '<span style="color:var(--up)">🟢 多頭</span>' +
-    '<span style="color:var(--down)">🔴 空頭</span>' +
-    '<span style="color:var(--warn)">🟡 盤整</span>' +
-    '<span style="margin-left:auto">' + display[0].session_id.split('-')[1] + ' → ' + display[display.length - 1].session_id.split('-')[1] + '</span></div>';
-  return html;
-}
-
-// ====== 全域視圖切換（從 HTML onclick 調用）======
+// ====== Global bridges ======
 window._evSwitch = function(mode) { switchView(mode); };
 window._evCatTab = function(tab) {
   const { scorecards, sessions, judges, promotes } = getData();
