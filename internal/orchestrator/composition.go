@@ -20,11 +20,11 @@ import (
 )
 
 // buildSimulationCore constructs the core simulation subsystem.
-func buildSimulationCore(cfg config.Config, registry domain.AgentRegistry, policy baseline.Policy, ds *replay.Dataset) SimulationCore {
+func buildSimulationCore(cfg config.Config, registry domain.AgentRegistry, policy baseline.Policy, ds *replay.Dataset, optimizer *portfolio.Optimizer) SimulationCore {
 	return SimulationCore{
 		cfg:      cfg,
 		provider: selectProvider(cfg),
-		engine:   buildSimEngine(policy, ds),
+		engine:   buildSimEngine(policy, optimizer),
 		registry: registry,
 		policy:   policy,
 		ledger:   ledger.NewStore(cfg.LedgerDir),
@@ -34,17 +34,10 @@ func buildSimulationCore(cfg config.Config, registry domain.AgentRegistry, polic
 	}
 }
 
-func buildSimEngine(policy baseline.Policy, ds *replay.Dataset) *sim.Engine {
-	optimizer := portfolio.NewOptimizer()
-	runtimeParams := loadRuntimeParamsOrDefault()
-	factorEngine, hp, fp := buildFactorEngine(runtimeParams)
-	optimizer.WithHistoricalPrices(hp).WithFundamentalProvider(fp).WithFactorEngine(factorEngine)
-
-	thresholdEngine := sim.NewDynamicThresholdEngine()
-
+func buildSimEngine(policy baseline.Policy, optimizer *portfolio.Optimizer) *sim.Engine {
 	return sim.NewEngine(policy.Constraints).
 		WithOptimizer(optimizer).
-		WithThresholdEngine(thresholdEngine).
+		WithThresholdEngine(sim.NewDynamicThresholdEngine()).
 		WithTaxCalculator(tax.NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig())).
 		WithReflexivityRules(
 			reflexivity.PriceToFundamentalsRule{},
@@ -91,11 +84,10 @@ func buildPortfolioManager(runtimeParams *portfolio.RuntimeParameters, registry 
 }
 
 // buildStrategyLayer constructs the strategy subsystem.
-func buildStrategyLayer() StrategyLayer {
+func buildStrategyLayer(thresholdEngine *sim.DynamicThresholdEngine) StrategyLayer {
 	strategyRegistry := strategy.NewRegistryWithDefaults()
 	comparisonEngine := strategy.NewComparisonEngine(20)
 	strategySelector := strategy.NewSelector(strategyRegistry, comparisonEngine)
-	thresholdEngine := sim.NewDynamicThresholdEngine()
 
 	return StrategyLayer{
 		strategyRegistry: strategyRegistry,

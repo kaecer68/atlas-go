@@ -107,15 +107,19 @@ func NewSystem(cfg config.Config) *System {
 	ds, _ := replay.LoadTWSEOpenDataCSV(cfg.ReplayDataPath)
 
 	runtimeParams := loadRuntimeParamsOrDefault()
-	factorEngine, _, fp := buildFactorEngine(runtimeParams)
+	factorEngine, hp, fp := buildFactorEngine(runtimeParams)
 	eventBus := eventbus.NewChannelEventBus(256)
 	plugins := buildPluginRegistry(factorEngine, fp)
 
+	optimizer := portfolio.NewOptimizer()
+	optimizer.WithHistoricalPrices(hp).WithFundamentalProvider(fp).WithFactorEngine(factorEngine)
+	thresholdEngine := sim.NewDynamicThresholdEngine()
+
 	return &System{
 		SystemCore: &SystemCore{
-			sim:             buildSimulationCore(cfg, registry, policy, ds),
+			sim:             buildSimulationCore(cfg, registry, policy, ds, optimizer),
 			port:            buildPortfolioManager(runtimeParams, registry, eventBus, factorEngine),
-			strat:           buildStrategyLayer(),
+			strat:           buildStrategyLayer(thresholdEngine),
 			risk:            buildRiskOps(cfg, eventBus),
 			plugins:         plugins,
 			narrativeEngine: narrative.NewNarrativeEngine(),
