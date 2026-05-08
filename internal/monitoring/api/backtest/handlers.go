@@ -3,11 +3,8 @@ package backtest
 import (
 	"encoding/json"
 	"net/http"
-	"path/filepath"
-	"strconv"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/autobacktest"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
