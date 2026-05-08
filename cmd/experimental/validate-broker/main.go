@@ -98,7 +98,7 @@ func main() {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"order_id":   "validation-oid",
 			"status":     "filled",
 			"fill_price": order.Price,

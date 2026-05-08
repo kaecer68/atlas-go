@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"maps"
 	"sync"
 	"time"
 
@@ -13,12 +14,12 @@ import (
 type BacktestService struct {
 	mu      sync.Mutex
 	running bool
-	status  map[string]interface{}
+	status  map[string]any
 }
 
 func NewBacktestService() *BacktestService {
 	return &BacktestService{
-		status: make(map[string]interface{}),
+		status: make(map[string]any),
 	}
 }
 
@@ -35,7 +36,7 @@ func (s *BacktestService) Start(startDate, endDate time.Time) error {
 		return fmt.Errorf("backtest already running")
 	}
 	s.running = true
-	s.status = map[string]interface{}{
+	s.status = map[string]any{
 		"running":    true,
 		"started_at": time.Now().UTC(),
 		"start":      startDate.Format("2006-01-02"),
@@ -74,12 +75,10 @@ func (s *BacktestService) Start(startDate, endDate time.Time) error {
 	return nil
 }
 
-func (s *BacktestService) GetStatus() map[string]interface{} {
+func (s *BacktestService) GetStatus() map[string]any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	status := make(map[string]interface{}, len(s.status))
-	for k, v := range s.status {
-		status[k] = v
-	}
+	status := make(map[string]any, len(s.status))
+	maps.Copy(status, s.status)
 	return status
 }

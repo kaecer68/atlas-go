@@ -294,7 +294,7 @@ func (m *Manager) Retry(ctx context.Context, id string, actor string) (*domain.T
 		TaskType:    string(original.TaskType),
 		Actor:       actor,
 		ActorSource: "web_ui",
-		Payload:     make(map[string]interface{}),
+		Payload:     make(map[string]any),
 		Confirmed:   true,
 	}
 	m.startRun(&exec, req, runner)
@@ -327,7 +327,7 @@ func (m *Manager) Subscribe(executionID string) (<-chan domain.TaskExecutionEven
 	return ch, unsubscribe
 }
 
-func mustJSON(v interface{}) []byte {
+func mustJSON(v any) []byte {
 	b, _ := json.Marshal(v)
 	return b
 }

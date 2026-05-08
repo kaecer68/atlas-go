@@ -208,7 +208,7 @@ func (ml *MetaLearner) initializePopulation() {
 		ml.population = append(ml.population, strategy)
 
 		// Create mutated variations
-		for j := 0; j < 3; j++ {
+		for j := range 3 {
 			mutated := ml.mutateStrategy(strategy, fmt.Sprintf("%s_v%d", strategy.ID, j+1))
 			ml.strategies[mutated.ID] = mutated
 			ml.population = append(ml.population, mutated)
@@ -329,10 +329,7 @@ func (ml *MetaLearner) evolvePopulation() {
 	ml.evaluateStrategies()
 
 	// 2. Select elite
-	eliteCount := int(float64(len(ml.population)) * ml.config.EliteRatio)
-	if eliteCount < 2 {
-		eliteCount = 2
-	}
+	eliteCount := max(int(float64(len(ml.population))*ml.config.EliteRatio), 2)
 
 	sort.Slice(ml.population, func(i, j int) bool {
 		scoreI := ml.calculateStrategyScore(ml.population[i])

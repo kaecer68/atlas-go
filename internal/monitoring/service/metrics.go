@@ -50,17 +50,17 @@ func NewMetricsService(collector MetricsCollector, history MetricsHistory) *Metr
 }
 
 // GetMetrics returns metrics based on the requested type
-func (s *MetricsService) GetMetrics(metricType string) interface{} {
+func (s *MetricsService) GetMetrics(metricType string) any {
 	switch metricType {
 	case "screening":
-		return map[string]interface{}{
+		return map[string]any{
 			"screening_rate":   s.collector.GetScreeningRate(),
 			"screening_total":  s.collector.GetMetricsSnapshot().ScreeningTotal,
 			"screening_passed": s.collector.GetMetricsSnapshot().ScreeningPassed,
 		}
 	case "alerts":
 		snapshot := s.collector.GetMetricsSnapshot()
-		return map[string]interface{}{
+		return map[string]any{
 			"alerts_triggered":    snapshot.AlertsTriggered,
 			"alerts_acknowledged": snapshot.AlertsAcknowledged,
 			"alerts_by_type":      snapshot.AlertsByType,
@@ -73,7 +73,7 @@ func (s *MetricsService) GetMetrics(metricType string) interface{} {
 }
 
 // GetMetricsTrend returns trend data for a metric over a time period
-func (s *MetricsService) GetMetricsTrend(metric, period string) map[string]interface{} {
+func (s *MetricsService) GetMetricsTrend(metric, period string) map[string]any {
 	if metric == "" {
 		metric = "screening_rate"
 	}
@@ -104,7 +104,7 @@ func (s *MetricsService) GetMetricsTrend(metric, period string) map[string]inter
 		}
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"metric":      metric,
 		"period":      period,
 		"duration":    duration.String(),

@@ -32,10 +32,10 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 }
 
 type submitTaskRequest struct {
-	TaskType       string                 `json:"task_type"`
-	Payload        map[string]interface{} `json:"payload,omitempty"`
-	Confirmed      bool                   `json:"confirmed,omitempty"`
-	IdempotencyKey string                 `json:"idempotency_key,omitempty"`
+	TaskType       string         `json:"task_type"`
+	Payload        map[string]any `json:"payload,omitempty"`
+	Confirmed      bool           `json:"confirmed,omitempty"`
+	IdempotencyKey string         `json:"idempotency_key,omitempty"`
 }
 
 type submitTaskResponse struct {
@@ -148,7 +148,7 @@ func (h *Handlers) HandleConfirmTask(r *http.Request) (int, any) {
 		TaskType:    string(exec.TaskType),
 		Actor:       actor,
 		ActorSource: "web_ui",
-		Payload:     make(map[string]interface{}),
+		Payload:     make(map[string]any),
 		Confirmed:   true,
 	})
 	if err != nil {

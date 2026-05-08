@@ -97,7 +97,7 @@ func TestGenerateDailySummary_TopPicks(t *testing.T) {
 func TestGenerateDailySummary_TopPicksCapped(t *testing.T) {
 	rg := NewReportGenerator()
 	var recs []domain.Recommendation
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		recs = append(recs, domain.Recommendation{
 			Agent:      "agent",
 			Symbol:     "2330.TW",

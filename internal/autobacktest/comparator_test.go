@@ -25,7 +25,7 @@ func TestComparatorComparePortfolio(t *testing.T) {
 	dir := t.TempDir()
 	store := ledger.NewStore(dir).(*ledger.Store)
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		session := domain.ReplaySession{ID: "pfolio-" + string(rune('0'+i))}
 		pv := 100000.0 + float64(i)*1000.0
 		summary := domain.SessionSummary{
@@ -77,10 +77,10 @@ func TestComparatorCompareSharpe(t *testing.T) {
 	dir := t.TempDir()
 	store := ledger.NewStore(dir).(*ledger.Store)
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		session := domain.ReplaySession{ID: "sharpe-" + string(rune('0'+i))}
 		var outs []domain.RecommendationOutcome
-		for j := 0; j < 5; j++ {
+		for range 5 {
 			outs = append(outs, domain.RecommendationOutcome{
 				AgentID:       "agent1",
 				Symbol:        "2330",
@@ -113,7 +113,7 @@ func TestComparatorRecentRegimes(t *testing.T) {
 	store := ledger.NewStore(dir).(*ledger.Store)
 
 	regimes := []domain.Regime{domain.RegimeRiskOn, domain.RegimeRiskOff, domain.RegimeNeutral, domain.RegimeRiskOn, domain.RegimeRiskOff}
-	for i := 0; i < len(regimes); i++ {
+	for i := range regimes {
 		session := domain.ReplaySession{ID: "regime-" + string(rune('0'+i))}
 		summary := domain.SessionSummary{
 			SessionID:      session.ID,

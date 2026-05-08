@@ -3,6 +3,7 @@ package stress
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
@@ -155,21 +156,22 @@ func (r *Runner) RunAll(stockQuotes []domain.Quote, recs []domain.Recommendation
 
 // FormatReport returns a human-readable summary of the stress test report.
 func FormatReport(report Report) string {
-	output := "=== Stress Test Report ===\n\n"
+	var output strings.Builder
+	output.WriteString("=== Stress Test Report ===\n\n")
 	for _, r := range report.ScenarioResults {
-		output += fmt.Sprintf("Scenario: %s\n", r.ScenarioName)
-		output += fmt.Sprintf("  Return:     %.2f%%\n", r.TotalReturn*100)
-		output += fmt.Sprintf("  Drawdown:   %.2f%%\n", r.MaxDrawdown*100)
-		output += fmt.Sprintf("  VaR95:      %.2f%%\n", r.VaR95*100)
-		output += fmt.Sprintf("  Trades:     %d\n", r.TradeCount)
-		output += fmt.Sprintf("  Regime:     %s\n", r.FinalRegime)
+		output.WriteString(fmt.Sprintf("Scenario: %s\n", r.ScenarioName))
+		output.WriteString(fmt.Sprintf("  Return:     %.2f%%\n", r.TotalReturn*100))
+		output.WriteString(fmt.Sprintf("  Drawdown:   %.2f%%\n", r.MaxDrawdown*100))
+		output.WriteString(fmt.Sprintf("  VaR95:      %.2f%%\n", r.VaR95*100))
+		output.WriteString(fmt.Sprintf("  Trades:     %d\n", r.TradeCount))
+		output.WriteString(fmt.Sprintf("  Regime:     %s\n", r.FinalRegime))
 		if r.MomentumDisabled {
-			output += "  Momentum:   DISABLED (VIX > 30)\n"
+			output.WriteString("  Momentum:   DISABLED (VIX > 30)\n")
 		}
-		output += "\n"
+		output.WriteString("\n")
 	}
-	output += fmt.Sprintf("Worst Drawdown: %.2f%%\n", report.WorstDrawdown*100)
-	output += fmt.Sprintf("Worst VaR95:    %.2f%%\n", report.WorstVaR*100)
-	output += fmt.Sprintf("Avg Return:     %.2f%%\n", report.AvgReturn*100)
-	return output
+	output.WriteString(fmt.Sprintf("Worst Drawdown: %.2f%%\n", report.WorstDrawdown*100))
+	output.WriteString(fmt.Sprintf("Worst VaR95:    %.2f%%\n", report.WorstVaR*100))
+	output.WriteString(fmt.Sprintf("Avg Return:     %.2f%%\n", report.AvgReturn*100))
+	return output.String()
 }

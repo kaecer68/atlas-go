@@ -43,7 +43,7 @@ func (n *WebhookNotifier) Notify(alert domain.AlertRecord) error {
 		return fmt.Errorf("webhook not configured")
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"rule":      alert.Rule,
 		"severity":  alert.Severity,
 		"message":   alert.Message,
@@ -121,7 +121,7 @@ func (n *TelegramNotifier) Notify(alert domain.AlertRecord) error {
 	if url == "" {
 		url = fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", n.BotToken)
 	}
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"chat_id":    n.ChatID,
 		"text":       message,
 		"parse_mode": "Markdown",

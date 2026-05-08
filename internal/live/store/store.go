@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,10 +62,10 @@ type RegimeState struct {
 
 // Event 事件记录
 type Event struct {
-	ID        string      `json:"id"`
-	Type      string      `json:"type"`
-	Timestamp time.Time   `json:"timestamp"`
-	Payload   interface{} `json:"payload"`
+	ID        string    `json:"id"`
+	Type      string    `json:"type"`
+	Timestamp time.Time `json:"timestamp"`
+	Payload   any       `json:"payload"`
 }
 
 // NewStateStore 创建新的状态存储
@@ -183,9 +184,7 @@ func (s *StateStore) GetPositions() map[string]domain.Position {
 	defer s.mutex.RUnlock()
 
 	result := make(map[string]domain.Position, len(s.positions))
-	for k, v := range s.positions {
-		result[k] = v
-	}
+	maps.Copy(result, s.positions)
 	return result
 }
 
@@ -231,7 +230,7 @@ func (s *StateStore) UpdateRegime(regime domain.Regime, confidence float64, dete
 }
 
 // RecordEvent 记录事件
-func (s *StateStore) RecordEvent(eventType string, payload interface{}) {
+func (s *StateStore) RecordEvent(eventType string, payload any) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 

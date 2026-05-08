@@ -109,7 +109,7 @@ func TestPRISMManager(t *testing.T) {
 
 		// Add tasks to only one queue to create imbalance
 		agent := domain.AgentSpec{ID: "test_agent", Skill: "test", Layer: domain.LayerSector}
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			windows := []TrainingWindow{
 				{
 					Start:  time.Now().AddDate(0, 0, -30),

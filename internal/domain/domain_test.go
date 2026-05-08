@@ -199,7 +199,7 @@ func TestRecommendationOutcome_JSONRoundTrip(t *testing.T) {
 func TestRecommendationOutcome_JSONKeysSnakeCase(t *testing.T) {
 	outcome := RecommendationOutcome{AgentID: "a", Symbol: "s", Side: SideBuy, Window: "2026-01-01", Conviction: 80}
 	data, _ := json.Marshal(outcome)
-	var m map[string]interface{}
+	var m map[string]any
 	json.Unmarshal(data, &m)
 	for k := range m {
 		if len(k) > 0 && k[0] >= 'A' && k[0] <= 'Z' {

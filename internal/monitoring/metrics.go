@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"maps"
 	"sync"
 	"time"
 )
@@ -164,9 +165,7 @@ func (m *MetricsCollector) GetMetricsSnapshot() MetricsSnapshot {
 	defer m.mu.RUnlock()
 
 	alertsByTypeCopy := make(map[string]int64)
-	for k, v := range m.alertsByType {
-		alertsByTypeCopy[k] = v
-	}
+	maps.Copy(alertsByTypeCopy, m.alertsByType)
 
 	return MetricsSnapshot{
 		ScreeningTotal:     m.screeningTotal,

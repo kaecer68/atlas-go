@@ -87,9 +87,9 @@ func (s *mockWSServer) BroadcastTrade(symbol string, price float64, volume int64
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	trade := map[string]interface{}{
+	trade := map[string]any{
 		"event": "trade",
-		"data": map[string]interface{}{
+		"data": map[string]any{
 			"symbol": symbol,
 			"price":  price,
 			"volume": volume,
@@ -102,7 +102,7 @@ func (s *mockWSServer) BroadcastTrade(symbol string, price float64, volume int64
 	s.messages = append(s.messages, mustMarshal(trade))
 }
 
-func mustMarshal(v interface{}) json.RawMessage {
+func mustMarshal(v any) json.RawMessage {
 	b, _ := json.Marshal(v)
 	return b
 }

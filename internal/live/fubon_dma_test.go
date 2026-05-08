@@ -318,7 +318,7 @@ func TestFubonDMARequestLoginMarshal(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	var decoded map[string]interface{}
+	var decoded map[string]any
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -391,7 +391,7 @@ func TestFubonDMAAdapterSideMapping(t *testing.T) {
 			t.Fatalf("marshal: %v", err)
 		}
 
-		var decoded map[string]interface{}
+		var decoded map[string]any
 		if err := json.Unmarshal(data, &decoded); err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
@@ -444,7 +444,7 @@ func TestFubonDMAAdapterConcurrentAccess(t *testing.T) {
 	defer adapter.Close()
 
 	errCh := make(chan error, 5)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		go func() {
 			order := domain.Order{
 				Symbol:   "2330",
@@ -458,7 +458,7 @@ func TestFubonDMAAdapterConcurrentAccess(t *testing.T) {
 		}()
 	}
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if err := <-errCh; err != nil {
 			t.Errorf("concurrent SubmitOrder %d: %v", i, err)
 		}
@@ -471,7 +471,7 @@ func TestFubonDMARequestNoOmitEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var decoded map[string]interface{}
+	var decoded map[string]any
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -496,7 +496,7 @@ func TestFubonDMARequestWithPrice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var decoded map[string]interface{}
+	var decoded map[string]any
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -516,7 +516,7 @@ func TestFubonDMARequestWithoutPrice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var decoded map[string]interface{}
+	var decoded map[string]any
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -568,7 +568,7 @@ func TestFubonDMAAdapterFormatRequest(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	var decoded map[string]interface{}
+	var decoded map[string]any
 	if err := json.Unmarshal(encoded, &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}

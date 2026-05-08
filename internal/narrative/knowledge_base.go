@@ -280,10 +280,7 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 		return fmt.Errorf("insufficient replay data: %d dates", len(ds.Dates))
 	}
 
-	startIdx := len(ds.Dates) - lookback - holdWindow
-	if startIdx < 0 {
-		startIdx = 0
-	}
+	startIdx := max(len(ds.Dates)-lookback-holdWindow, 0)
 
 	for i := range ne.models {
 		m := &ne.models[i]

@@ -66,8 +66,8 @@ func (s *LinkageHistoryStore) GetHistory(industryID string, days int) ([]Linkage
 	cutoff := time.Now().AddDate(0, 0, -days)
 	var history []LinkageHistoryRecord
 
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(data), "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

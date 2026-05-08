@@ -134,5 +134,5 @@ func (ft FlexTime) MarshalJSON() ([]byte, error) {
 	if ft.IsZero() {
 		return []byte("null"), nil
 	}
-	return []byte(fmt.Sprintf("%q", ft.Format(time.RFC3339Nano))), nil
+	return fmt.Appendf(nil, "%q", ft.Format(time.RFC3339Nano)), nil
 }

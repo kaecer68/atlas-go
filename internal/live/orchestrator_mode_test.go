@@ -170,7 +170,7 @@ func TestNewOrchestratorAppliesLiveGuardedMode(t *testing.T) {
 	}
 
 	status := o.Status()
-	configMap, ok := status["config"].(map[string]interface{})
+	configMap, ok := status["config"].(map[string]any)
 	if !ok {
 		t.Fatalf("unexpected config status type: %T", status["config"])
 	}
@@ -232,7 +232,7 @@ func TestNewOrchestratorAppliesLiveHTTPFileNonceStoreConfig(t *testing.T) {
 	}
 
 	status := o.Status()
-	configMap, ok := status["config"].(map[string]interface{})
+	configMap, ok := status["config"].(map[string]any)
 	if !ok {
 		t.Fatalf("unexpected config status type: %T", status["config"])
 	}

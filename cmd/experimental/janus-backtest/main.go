@@ -146,7 +146,7 @@ func loadMetrics(ledgerDir string) RunMetrics {
 }
 
 func seedCohort(engine *janus.Engine, regime prism.RegimeType, sharpe, hitRate, totalReturn float64, baseTime time.Time) {
-	for day := 0; day < 20; day++ {
+	for day := range 20 {
 		engine.RecordSnapshot(janus.CohortSnapshot{
 			Regime:      regime,
 			SharpeRatio: sharpe,
@@ -170,7 +170,7 @@ func detectDominantRegime(ledgerDir string) domain.Regime {
 func seedAllCohortsExtreme(engine *janus.Engine, suppressRegime domain.Regime, baseTime time.Time) {
 	// Map domain regime to the cohort we want to suppress.
 	suppress := mapDomainRegimeToPRISM(suppressRegime)
-	for i := 0; i < int(prism.RegimeCount); i++ {
+	for i := range int(prism.RegimeCount) {
 		regime := prism.RegimeType(i)
 		if regime == suppress {
 			seedCohort(engine, regime, -0.8, 0.40, -0.15, baseTime)
@@ -216,13 +216,7 @@ func printConvictionProof(cfg config.Config, regime domain.Regime, engine *janus
 	fmt.Println("| Agent | Pre-JANUS | Post-JANUS |")
 	fmt.Println("|-------|-----------|------------|")
 	for _, rec := range sampleRecommendations() {
-		post := int(float64(rec.Conviction) * scale)
-		if post > 100 {
-			post = 100
-		}
-		if post < 0 {
-			post = 0
-		}
+		post := max(min(int(float64(rec.Conviction)*scale), 100), 0)
 		fmt.Printf("| %s | %d | %d |\n", rec.Agent, rec.Conviction, post)
 	}
 	fmt.Println()

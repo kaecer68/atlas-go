@@ -44,7 +44,7 @@ func main() {
 
 func seedCohort(engine *janus.Engine, regime prism.RegimeType, sharpe, hitRate, totalReturn float64, baseTime time.Time) {
 	// Seed 20 days of identical performance for stable window aggregates.
-	for day := 0; day < 20; day++ {
+	for day := range 20 {
 		engine.RecordSnapshot(janus.CohortSnapshot{
 			Regime:      regime,
 			SharpeRatio: sharpe,

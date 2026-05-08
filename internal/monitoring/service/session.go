@@ -201,10 +201,7 @@ func computePipelineTags(ds *replay.Dataset, symbol string, date time.Time) []st
 	low5 := bar.Close
 	for i, d := range ds.Dates {
 		if d.Format("2006-01-02") == dateKey {
-			start := i - 4
-			if start < 0 {
-				start = 0
-			}
+			start := max(i-4, 0)
 			for _, pd := range ds.Dates[start : i+1] {
 				b := ds.ByDate[pd.Format("2006-01-02")][symbol]
 				if b.Close > high5 {

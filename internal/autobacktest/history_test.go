@@ -57,7 +57,7 @@ func TestHistoryLatestN(t *testing.T) {
 	dir := t.TempDir()
 	hist := NewHistory(dir)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		snap := AutoSnapshot{
 			Date:         time.Date(2026, 1, i+2, 0, 0, 0, 0, time.UTC),
 			PortfolioVal: float64(10000 * (i + 1)),

@@ -253,8 +253,8 @@ func ResolvePromptOverride(policy Policy, agentID, skill string) string {
 }
 
 func ApplyConstraintCandidate(base domain.SimulationConstraints, candidate string) domain.SimulationConstraints {
-	lines := strings.Split(candidate, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(candidate, "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		switch {
 		case strings.HasPrefix(line, "conviction_floor:"):

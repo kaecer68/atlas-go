@@ -397,17 +397,11 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 
 	// Enhanced adjustment algorithm
 	n := len(eligible)
-	topTier := n / 3
-	if topTier < 1 {
-		topTier = 1
-	}
-	bottomTier := n / 3
-	if bottomTier < 1 {
-		bottomTier = 1
-	}
+	topTier := max(n/3, 1)
+	bottomTier := max(n/3, 1)
 
 	// Top tier: significant increase with performance scaling
-	for i := 0; i < topTier; i++ {
+	for i := range topTier {
 		w := eligible[i]
 		oldWeight := w.Weight
 

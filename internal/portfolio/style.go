@@ -68,10 +68,7 @@ func (d *StyleRotationDetector) GetStyleMomentum(style Style) StyleMomentumData 
 
 	// 计算 20 日收益
 	var return20D float64
-	start20 := len(returns) - 20
-	if start20 < 0 {
-		start20 = 0
-	}
+	start20 := max(len(returns)-20, 0)
 	for i := start20; i < len(returns); i++ {
 		return20D += returns[i]
 	}
@@ -100,10 +97,7 @@ func (d *StyleRotationDetector) DetectRotation() *RotationSignal {
 		returns := d.styleReturns[style]
 		mom := StyleMomentumData{Style: style}
 		if len(returns) > 0 {
-			start20 := len(returns) - 20
-			if start20 < 0 {
-				start20 = 0
-			}
+			start20 := max(len(returns)-20, 0)
 			for i := start20; i < len(returns); i++ {
 				mom.Return20D += returns[i]
 			}

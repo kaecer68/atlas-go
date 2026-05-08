@@ -95,7 +95,7 @@ func (h *Handlers) HandleSeasonalAnalysis(r *http.Request) (int, any) {
 
 	if h.IndustryService != nil {
 		active, historical, adjustment := h.IndustryService.GetSeasonalPatterns("", now)
-		return http.StatusOK, map[string]interface{}{
+		return http.StatusOK, map[string]any{
 			"month":               now.Month().String(),
 			"active_patterns":     active,
 			"all_patterns":        historical,
@@ -103,7 +103,7 @@ func (h *Handlers) HandleSeasonalAnalysis(r *http.Request) (int, any) {
 		}
 	}
 
-	return http.StatusOK, map[string]interface{}{
+	return http.StatusOK, map[string]any{
 		"month": now.Month().String(),
 		"note":  "seasonal patterns are embedded in narrative engine",
 	}

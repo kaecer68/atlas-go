@@ -51,7 +51,7 @@ func (h *Handlers) HandleBacktestRun(r *http.Request) (int, any) {
 		return http.StatusConflict, map[string]string{"error": "backtest already running"}
 	}
 
-	return http.StatusAccepted, map[string]interface{}{
+	return http.StatusAccepted, map[string]any{
 		"running":      true,
 		"check_status": "/api/backtest/status",
 		"start":        req.Start,

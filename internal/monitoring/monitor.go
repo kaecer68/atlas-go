@@ -41,7 +41,7 @@ type Alert struct {
 	Category  string
 	Message   string
 	Timestamp time.Time
-	Metadata  map[string]interface{}
+	Metadata  map[string]any
 }
 
 // AlertHandler 告警处理器
@@ -75,7 +75,7 @@ func (m *Monitor) RegisterHandler(handler AlertHandler) {
 }
 
 // Alert 发送告警
-func (m *Monitor) Alert(level AlertLevel, category string, message string, metadata map[string]interface{}) {
+func (m *Monitor) Alert(level AlertLevel, category string, message string, metadata map[string]any) {
 	alert := Alert{
 		ID:        generateAlertID(),
 		Level:     level,
@@ -133,22 +133,22 @@ func (m *Monitor) Alert(level AlertLevel, category string, message string, metad
 }
 
 // Info 发送信息级别告警
-func (m *Monitor) Info(category string, message string, metadata map[string]interface{}) {
+func (m *Monitor) Info(category string, message string, metadata map[string]any) {
 	m.Alert(AlertLevelInfo, category, message, metadata)
 }
 
 // Warning 发送警告级别告警
-func (m *Monitor) Warning(category string, message string, metadata map[string]interface{}) {
+func (m *Monitor) Warning(category string, message string, metadata map[string]any) {
 	m.Alert(AlertLevelWarning, category, message, metadata)
 }
 
 // Error 发送错误级别告警
-func (m *Monitor) Error(category string, message string, metadata map[string]interface{}) {
+func (m *Monitor) Error(category string, message string, metadata map[string]any) {
 	m.Alert(AlertLevelError, category, message, metadata)
 }
 
 // Critical 发送严重级别告警
-func (m *Monitor) Critical(category string, message string, metadata map[string]interface{}) {
+func (m *Monitor) Critical(category string, message string, metadata map[string]any) {
 	m.Alert(AlertLevelCritical, category, message, metadata)
 }
 
@@ -176,10 +176,7 @@ func (m *Monitor) GetHistory(limit int) []Alert {
 	}
 
 	// 返回最新的记录
-	start := len(m.history) - limit
-	if start < 0 {
-		start = 0
-	}
+	start := max(len(m.history)-limit, 0)
 
 	result := make([]Alert, limit)
 	copy(result, m.history[start:])
@@ -231,28 +228,28 @@ func NewCompositeMonitor(monitors ...*Monitor) *CompositeMonitor {
 }
 
 // Alert 向所有监控器发送告警
-func (c *CompositeMonitor) Alert(level AlertLevel, category string, message string, metadata map[string]interface{}) {
+func (c *CompositeMonitor) Alert(level AlertLevel, category string, message string, metadata map[string]any) {
 	for _, m := range c.monitors {
 		m.Alert(level, category, message, metadata)
 	}
 }
 
 // Info 发送信息级别告警
-func (c *CompositeMonitor) Info(category string, message string, metadata map[string]interface{}) {
+func (c *CompositeMonitor) Info(category string, message string, metadata map[string]any) {
 	c.Alert(AlertLevelInfo, category, message, metadata)
 }
 
 // Warning 发送警告级别告警
-func (c *CompositeMonitor) Warning(category string, message string, metadata map[string]interface{}) {
+func (c *CompositeMonitor) Warning(category string, message string, metadata map[string]any) {
 	c.Alert(AlertLevelWarning, category, message, metadata)
 }
 
 // Error 发送错误级别告警
-func (c *CompositeMonitor) Error(category string, message string, metadata map[string]interface{}) {
+func (c *CompositeMonitor) Error(category string, message string, metadata map[string]any) {
 	c.Alert(AlertLevelError, category, message, metadata)
 }
 
 // Critical 发送严重级别告警
-func (c *CompositeMonitor) Critical(category string, message string, metadata map[string]interface{}) {
+func (c *CompositeMonitor) Critical(category string, message string, metadata map[string]any) {
 	c.Alert(AlertLevelCritical, category, message, metadata)
 }

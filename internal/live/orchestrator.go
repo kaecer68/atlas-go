@@ -131,10 +131,7 @@ func NewOrchestrator(
 ) *Orchestrator {
 	ctx, cancel := context.WithCancel(ctx)
 	requestedMode, effectiveMode, broker, audit := resolveBrokerMode(config)
-	maxRetries := config.BrokerMaxRetries
-	if maxRetries < 0 {
-		maxRetries = 0
-	}
+	maxRetries := max(config.BrokerMaxRetries, 0)
 
 	o := &Orchestrator{
 		stateStore:             stateStore,
@@ -200,10 +197,7 @@ func (o *Orchestrator) SetCircuitBreaker(cb *CircuitBreaker) {
 func (o *Orchestrator) SetBroker(broker Broker) {
 	o.mutex.Lock()
 	defer o.mutex.Unlock()
-	retries := o.config.BrokerMaxRetries
-	if retries < 0 {
-		retries = 0
-	}
+	retries := max(o.config.BrokerMaxRetries, 0)
 	if broker == nil {
 		o.broker = NewDryRunBroker()
 		o.orderMgr = NewOrderManager(o.broker, o.eventBus, retries, 100*time.Millisecond)
@@ -240,7 +234,7 @@ func (o *Orchestrator) Start() error {
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 		Type:      EventSystemStart,
 		Timestamp: time.Now(),
-		Payload: map[string]interface{}{
+		Payload: map[string]any{
 			"market_data_provider":           o.marketData.Name(),
 			"watchlist_count":                len(o.watchlist),
 			"broker_mode_requested":          o.requestedBrokerMode,
@@ -358,7 +352,7 @@ func (o *Orchestrator) onMarketOpen() {
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 		Type:      EventMarketOpen,
 		Timestamp: time.Now(),
-		Payload: map[string]interface{}{
+		Payload: map[string]any{
 			"positions_count": len(positions),
 			"cash":            o.stateStore.GetPortfolio().Cash,
 		},
@@ -426,7 +420,7 @@ func (o *Orchestrator) onMarketClose() {
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 		Type:      EventMarketClose,
 		Timestamp: time.Now(),
-		Payload: map[string]interface{}{
+		Payload: map[string]any{
 			"day_pnl":        portfolio.DayPnL,
 			"unrealized_pnl": portfolio.UnrealizedPnL,
 			"total_exposure": portfolio.TotalExposure,
@@ -492,26 +486,26 @@ func (o *Orchestrator) checkRiskTriggers(symbol string, currentPrice float64) {
 	}
 }
 
-func (o *Orchestrator) Status() map[string]interface{} {
+func (o *Orchestrator) Status() map[string]any {
 	o.mutex.RLock()
 	defer o.mutex.RUnlock()
 
 	portfolio := o.stateStore.GetPortfolio()
 	positions := o.stateStore.GetPositions()
 
-	return map[string]interface{}{
+	return map[string]any{
 		"is_running":         o.isRunning,
 		"market_data_source": o.marketData.Name(),
 		"watchlist_size":     len(o.watchlist),
 		"positions_count":    len(positions),
-		"portfolio": map[string]interface{}{
+		"portfolio": map[string]any{
 			"cash":           portfolio.Cash,
 			"available_cash": portfolio.AvailableCash,
 			"total_exposure": portfolio.TotalExposure,
 			"day_pnl":        portfolio.DayPnL,
 			"unrealized_pnl": portfolio.UnrealizedPnL,
 		},
-		"config": map[string]interface{}{
+		"config": map[string]any{
 			"market_open":                    o.config.MarketOpenTime,
 			"market_close":                   o.config.MarketCloseTime,
 			"intraday_cycle":                 o.config.IntradayInterval.String(),
@@ -541,10 +535,7 @@ func (o *Orchestrator) Status() map[string]interface{} {
 
 func (o *Orchestrator) executeOrder(ctx context.Context, order domain.Order) error {
 	if o.executionMgr == nil {
-		retries := o.config.BrokerMaxRetries
-		if retries < 0 {
-			retries = 0
-		}
+		retries := max(o.config.BrokerMaxRetries, 0)
 		if o.broker == nil {
 			o.broker = NewDryRunBroker()
 		}

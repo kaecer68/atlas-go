@@ -69,7 +69,7 @@ func (t *TWSECapitalFlowProvider) FetchSnapshot(ctx context.Context) (MacroDataS
 func (t *TWSECapitalFlowProvider) fetchLatestTradingDay(ctx context.Context) (TWSECapitalFlow, error) {
 	now := time.Now().UTC()
 	// Try up to 7 days back to find the most recent trading day with data.
-	for i := 0; i < 7; i++ {
+	for i := range 7 {
 		dateStr := now.AddDate(0, 0, -i).Format("20060102")
 		flow, err := t.fetchDate(ctx, dateStr)
 		if err == nil {
