@@ -104,17 +104,19 @@ type PositionConcentration struct {
 }
 
 type ExperimentInboxItem struct {
-	ExperimentID    string                  `json:"experiment_id"`
-	TargetAgentID   string                  `json:"target_agent_id"`
-	Skill           string                  `json:"skill"`
-	MutationType    string                  `json:"mutation_type"`
-	MutationSummary string                  `json:"mutation_summary,omitempty"`
-	Status          domain.ExperimentStatus `json:"status"`
-	BaselineValue   float64                 `json:"baseline_value"`
-	CandidateValue  float64                 `json:"candidate_value"`
-	CandidatePath   string                  `json:"candidate_path"`
-	RejectReason    string                  `json:"reject_reason,omitempty"`
-	RecordedAt      time.Time               `json:"recorded_at"`
+	ExperimentID         string                  `json:"experiment_id"`
+	TargetAgentID        string                  `json:"target_agent_id"`
+	Skill                string                  `json:"skill"`
+	MutationType         string                  `json:"mutation_type"`
+	MutationSummary      string                  `json:"mutation_summary,omitempty"`
+	Status               domain.ExperimentStatus `json:"status"`
+	BaselineValue        float64                 `json:"baseline_value"`
+	CandidateValue       float64                 `json:"candidate_value"`
+	BaselineMonetaryNTD  float64                 `json:"baseline_monetary_ntd,omitempty"`
+	CandidateMonetaryNTD float64                 `json:"candidate_monetary_ntd,omitempty"`
+	CandidatePath        string                  `json:"candidate_path"`
+	RejectReason         string                  `json:"reject_reason,omitempty"`
+	RecordedAt           time.Time               `json:"recorded_at"`
 }
 
 type ExperimentInboxResponse struct {
