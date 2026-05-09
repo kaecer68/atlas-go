@@ -78,7 +78,7 @@ func (c *FubonClient) SetHTTPClient(client *http.Client) {
 
 func (c *FubonClient) GetQuote(ctx context.Context, symbol string) (domain.Quote, error) {
 	if err := c.intradayLimiter.Wait(ctx); err != nil {
-		return domain.Quote{}, fmt.Errorf("fubon proxy: rate limit wait: %w", err)
+		return domain.Quote{}, fmt.Errorf("fubon proxy: rate limit wait: %w", ErrRateLimited)
 	}
 
 	endpoint := fmt.Sprintf("%s/quote/%s", c.proxyURL, symbol)
@@ -135,7 +135,7 @@ func (c *FubonClient) GetQuotes(ctx context.Context, symbols []string) ([]domain
 	}
 
 	if err := c.intradayLimiter.Wait(ctx); err != nil {
-		return nil, fmt.Errorf("fubon proxy: rate limit wait: %w", err)
+		return nil, fmt.Errorf("fubon proxy: rate limit wait: %w", ErrRateLimited)
 	}
 
 	endpoint := fmt.Sprintf("%s/quotes", c.proxyURL)

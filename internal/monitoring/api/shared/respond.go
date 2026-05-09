@@ -11,6 +11,7 @@ func WriteJSON(w http.ResponseWriter, status int, payload any) {
 		w.WriteHeader(status)
 		return
 	}
+	w.Header().Set("Content-Security-Policy", "default-src 'self'")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)

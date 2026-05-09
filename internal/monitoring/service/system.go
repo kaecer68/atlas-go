@@ -15,6 +15,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/replay"
@@ -188,7 +189,9 @@ func checkMacroHealth(path string, now time.Time) (string, string) {
 			Timestamp int64 `json:"timestamp"`
 		} `json:"oil"`
 	}
-	_ = json.Unmarshal(data, &snap)
+	if err := json.Unmarshal(data, &snap); err != nil {
+		logging.Warn("system_service", "parse_macro_health", logging.Err(err))
+	}
 
 	latest := info.ModTime()
 	if snap.RecordedAt > 0 {
@@ -229,7 +232,9 @@ func checkGeopoliticalHealth(path string, now time.Time) (string, string) {
 	var score struct {
 		Timestamp time.Time `json:"timestamp"`
 	}
-	_ = json.Unmarshal(data, &score)
+	if err := json.Unmarshal(data, &score); err != nil {
+		logging.Warn("system_service", "parse_geopolitical_health", logging.Err(err))
+	}
 	var latest time.Time
 	if !score.Timestamp.IsZero() {
 		latest = score.Timestamp
@@ -389,7 +394,9 @@ func checkJPYHealth(path string, now time.Time) (string, string) {
 			Timestamp int64 `json:"timestamp"`
 		} `json:"jpy"`
 	}
-	_ = json.Unmarshal(data, &snap)
+	if err := json.Unmarshal(data, &snap); err != nil {
+		logging.Warn("system_service", "parse_jpy_health", logging.Err(err))
+	}
 	if snap.JPY.Timestamp == 0 {
 		return "error", "無 JPY 資料"
 	}
@@ -494,6 +501,7 @@ func (s *SystemService) LoadClampingEvents(limit int) ([]eventbus.ClampingEventP
 	for scanner.Scan() {
 		var e eventbus.ClampingEventPayload
 		if err := json.Unmarshal(scanner.Bytes(), &e); err != nil {
+			logging.Warn("system_service", "corrupted_clamping_event_skipped", logging.Err(err))
 			continue
 		}
 		events = append(events, e)
@@ -524,6 +532,7 @@ func (s *SystemService) LoadConvictionClampingEvents(limit int) ([]portfolio.Con
 	for scanner.Scan() {
 		var e portfolio.ConvictionClampingEvent
 		if err := json.Unmarshal(scanner.Bytes(), &e); err != nil {
+			logging.Warn("system_service", "corrupted_conviction_clamping_event_skipped", logging.Err(err))
 			continue
 		}
 		events = append(events, e)

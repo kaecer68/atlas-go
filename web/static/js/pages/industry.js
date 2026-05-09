@@ -1,14 +1,14 @@
 // Industry ecosystem page
 import { sectorName } from '../names.js';
-import { getJSON, notify } from '../shared/app-utils.js';
+import { silentGetJSON, notify } from '../shared/app-utils.js';
 
 export async function loadIndustryData() {
   try {
     const [classification, overview, seasonality, calendar] = await Promise.all([
-      getJSON('/api/dashboard/industry-classification').catch(() => null),
-      getJSON('/api/dashboard/industry-overview').catch(() => null),
-      getJSON('/api/dashboard/industry-seasonality').catch(() => null),
-      getJSON('/api/dashboard/industry-seasonality-calendar').catch(() => null),
+      silentGetJSON('/api/dashboard/industry-classification'),
+      silentGetJSON('/api/dashboard/industry-overview'),
+      silentGetJSON('/api/dashboard/industry-seasonality'),
+      silentGetJSON('/api/dashboard/industry-seasonality-calendar'),
     ]);
     renderIndustryMap(classification);
     renderIndustryCycle(overview);

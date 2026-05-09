@@ -44,7 +44,10 @@ func main() {
 	circuitLogPath := filepath.Join(tempDir, "circuit_breaker_log.jsonl")
 	circuitStatePath := filepath.Join(tempDir, "circuit_breaker_state.json")
 
-	system := orchestrator.NewProductionSystem(cfg)
+	system, err := orchestrator.NewProductionSystem(cfg)
+	if err != nil {
+		log.Fatalf("create system: %v", err)
+	}
 	stateStore := livestore.NewStateStore(liveStateDir)
 	eventBus := live.NewChannelEventBus(64)
 	provider := marketdata.NewMockProvider()

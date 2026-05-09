@@ -1,8 +1,8 @@
 // Data channels page
-import { getJSON, notify } from '../shared/app-utils.js';
+import { silentGetJSON, notify } from '../shared/app-utils.js';
 
 export async function loadDataChannels() {
-  const data = await getJSON('/api/dashboard/data-channels').catch(() => null);
+  const data = await silentGetJSON('/api/dashboard/data-channels');
   renderDataChannels(data);
 }
 

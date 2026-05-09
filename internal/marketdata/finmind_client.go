@@ -47,7 +47,7 @@ func (c *FinMindClient) SetHTTPClient(client *http.Client) {
 
 func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId string, startDate string, endDate string) ([]map[string]any, error) {
 	if err := c.rateLimiter.Wait(ctx); err != nil {
-		return nil, fmt.Errorf("finmind: rate limit wait: %w", err)
+		return nil, fmt.Errorf("finmind: rate limit wait: %w", ErrRateLimited)
 	}
 
 	endpoint := fmt.Sprintf("%s/data", finmindBaseURL)

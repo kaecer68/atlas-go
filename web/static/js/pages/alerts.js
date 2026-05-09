@@ -1,5 +1,6 @@
 // Alert management page
 import { getJSON } from '../shared/app-utils.js';
+import { escapeHtml } from '../shared/utils.js';
 
 export function renderAlerts(data) {
   const el = document.getElementById('alertsPanel');
@@ -21,8 +22,8 @@ export function renderAlerts(data) {
   const severityMap = { critical: '嚴重', warning: '警告', info: '資訊' };
   const rows = data.alerts.map(a => {
     const sevClass = a.severity === 'critical' ? 'err' : a.severity === 'warning' ? 'warn' : 'info';
-    const ackBtn = a.acknowledged ? '<span class="badge ok">已確認</span>' : `<button class="pipeline-action" onclick="acknowledgeAlert('${a.id}')">確認</button>`;
-    return `<tr><td>${new Date(a.timestamp).toLocaleString('zh-TW')}</td><td><span class="badge ${sevClass}">${severityMap[a.severity] || a.severity}</span></td><td>${a.rule}</td><td>${a.message}</td><td>${a.value !== undefined ? a.value.toFixed(2) : '-'}</td><td>${ackBtn}</td></tr>`;
+    const ackBtn = a.acknowledged ? '<span class="badge ok">已確認</span>' : `<button class="pipeline-action" onclick="acknowledgeAlert('${escapeHtml(a.id)}')">確認</button>`;
+    return `<tr><td>${new Date(a.timestamp).toLocaleString('zh-TW')}</td><td><span class="badge ${sevClass}">${escapeHtml(severityMap[a.severity]) || escapeHtml(a.severity)}</span></td><td>${escapeHtml(a.rule)}</td><td>${escapeHtml(a.message)}</td><td>${a.value !== undefined ? a.value.toFixed(2) : '-'}</td><td>${ackBtn}</td></tr>`;
   }).join('');
   el.innerHTML = `<div style="display:flex;justify-content:flex-end;margin-bottom:6px"><button onclick="exportTableToCSV('alertsTable','alerts_export.csv')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer">📥 匯出 CSV</button></div><table id="alertsTable"><thead><tr><th>時間</th><th>嚴重度</th><th>規則</th><th>訊息</th><th>數值</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table>`;
 }

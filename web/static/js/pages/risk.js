@@ -1,6 +1,7 @@
 // Risk Control Page - Enhanced Risk Indicators
 // Extracted from index.html - DO NOT EDIT inline
 import { sectorName } from '../names.js';
+import { escapeHtml } from '../shared/utils.js';
 
 export function renderLiveStatus(data) {
   const el = document.getElementById('liveStatus');
@@ -81,7 +82,7 @@ export function renderRiskCards(riskExposure, pipelineData, capitalPhase) {
 
     const rows = conc.map((c, idx) => {
       const w = ((c.weight || 0) * 100).toFixed(1);
-      return `<tr><td style="padding:3px 8px;font-size:12px">${idx + 1}</td><td style="padding:3px 8px;font-size:12px">${c.symbol}</td><td style="padding:3px 8px;font-size:12px;text-align:right">${w}%</td><td style="padding:3px 8px;font-size:12px;text-align:right">${(c.market_value || 0).toLocaleString()}</td></tr>`;
+      return `<tr><td style="padding:3px 8px;font-size:12px">${idx + 1}</td><td style="padding:3px 8px;font-size:12px">${escapeHtml(c.symbol)}</td><td style="padding:3px 8px;font-size:12px;text-align:right">${w}%</td><td style="padding:3px 8px;font-size:12px;text-align:right">${(c.market_value || 0).toLocaleString()}</td></tr>`;
     }).join('');
 
     concentrationHtml = `
@@ -118,7 +119,7 @@ export function renderRiskCards(riskExposure, pipelineData, capitalPhase) {
       return `
         <div style="margin:4px 0">
           <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
-            <span>${sectorName(s.sector) || s.sector}</span>
+            <span>${escapeHtml(sectorName(s.sector) || s.sector)}</span>
             <span>${pct}%</span>
           </div>
           <div style="width:100%;height:6px;background:var(--bg);border-radius:3px;overflow:hidden">

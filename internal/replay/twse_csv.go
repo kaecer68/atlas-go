@@ -2,6 +2,7 @@ package replay
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +14,9 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
+// ErrReplayDataMissing is returned when the replay CSV file cannot be found.
+var ErrReplayDataMissing = errors.New("replay data missing")
+
 type Dataset struct {
 	ByDate map[string]map[string]domain.DailyBar
 	Dates  []time.Time
@@ -21,7 +25,7 @@ type Dataset struct {
 func LoadTWSEOpenDataCSV(path string) (*Dataset, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %s", ErrReplayDataMissing, path)
 	}
 	defer f.Close()
 

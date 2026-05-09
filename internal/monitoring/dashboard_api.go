@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
@@ -48,6 +50,8 @@ import (
 type DashboardAPI struct {
 	workDir            string
 	ledgerDir          string
+	storeBackend       string
+	sqlitePath         string
 	baselinePath       string
 	narrativeEngine    *narrative.NarrativeEngine
 	macroIngestor      *narrative.MacroIngestor
@@ -88,6 +92,8 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	return &DashboardAPI{
 		workDir:            workDir,
 		ledgerDir:          ledgerDir,
+		storeBackend:       os.Getenv("ATLAS_STORE_BACKEND"),
+		sqlitePath:         os.Getenv("ATLAS_SQLITE_PATH"),
 		baselinePath:       filepath.Join(workDir, "data/state/baseline_policy.json"),
 		narrativeEngine:    narrative.NewNarrativeEngine(),
 		macroIngestor:      narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro")),
@@ -119,7 +125,17 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		a.outcomeStore = NewDualWriteOutcomeStoreAdapter(a.repo)
 		outcomeStore = a.outcomeStore
 	} else {
-		outcomeStore = ledger.NewStore(a.ledgerDir)
+		cfg := config.Config{
+			LedgerDir:    a.ledgerDir,
+			StoreBackend: a.storeBackend,
+			SQLitePath:   a.sqlitePath,
+		}
+		var err error
+		outcomeStore, err = ledger.NewOutcomeStore(cfg)
+		if err != nil {
+			logging.Error("dashboardapi", "create_outcome_store_failed", "err", err)
+			outcomeStore = nil
+		}
 	}
 
 	// Register SSE event stream endpoint.

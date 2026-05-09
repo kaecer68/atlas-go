@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/reporting"
 )
@@ -22,6 +23,9 @@ func (h *ReasoningHandler) HandleReasoningTrace(r *http.Request) (int, any) {
 	sessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
 	if sessionID == "" {
 		return http.StatusBadRequest, map[string]string{"error": "session_id is required"}
+	}
+	if err := shared.ValidateSessionID(sessionID); err != nil {
+		return http.StatusBadRequest, map[string]string{"error": err.Error()}
 	}
 
 	sp, err := orchestrator.LoadScratchpad(sessionID, h.BaseDir)

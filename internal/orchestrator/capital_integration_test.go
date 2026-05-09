@@ -15,7 +15,7 @@ func testCapitalConfig() config.Config {
 }
 
 func TestWithCapitalManagement_SetsFields(t *testing.T) {
-	sys := NewSystem(testCapitalConfig())
+	sys, _ := NewSystem(testCapitalConfig())
 
 	capitalCfg := domain.DefaultCapitalPhaseConfig()
 	controller := risk.NewCapitalPhaseController(capitalCfg)
@@ -36,7 +36,7 @@ func TestWithCapitalManagement_SetsFields(t *testing.T) {
 }
 
 func TestCheckCapitalPhase_NilController(t *testing.T) {
-	sys := NewSystem(testCapitalConfig())
+	sys, _ := NewSystem(testCapitalConfig())
 
 	can, reason := sys.checkCapitalPhase()
 	if can {
@@ -48,7 +48,7 @@ func TestCheckCapitalPhase_NilController(t *testing.T) {
 }
 
 func TestCheckCapitalPhase_CannotAdvance(t *testing.T) {
-	sys := NewSystem(testCapitalConfig())
+	sys, _ := NewSystem(testCapitalConfig())
 
 	capitalCfg := domain.DefaultCapitalPhaseConfig()
 	capitalCfg.MinDaysPerPhase = 30
@@ -65,7 +65,7 @@ func TestCheckCapitalPhase_CannotAdvance(t *testing.T) {
 }
 
 func TestCheckCapitalPhase_CanAdvance(t *testing.T) {
-	sys := NewSystem(testCapitalConfig())
+	sys, _ := NewSystem(testCapitalConfig())
 
 	capitalCfg := domain.DefaultCapitalPhaseConfig()
 	capitalCfg.MinDaysPerPhase = 10
@@ -82,7 +82,7 @@ func TestCheckCapitalPhase_CanAdvance(t *testing.T) {
 }
 
 func TestCheckCapitalPhase_LivePhaseRequestsApproval(t *testing.T) {
-	sys := NewSystem(testCapitalConfig())
+	sys, _ := NewSystem(testCapitalConfig())
 
 	capitalCfg := domain.DefaultCapitalPhaseConfig()
 	capitalCfg.CurrentPhase = domain.PhaseLive
@@ -112,7 +112,7 @@ func TestCheckCapitalPhase_LivePhaseRequestsApproval(t *testing.T) {
 }
 
 func TestUpdateCapitalMetrics_NilController(t *testing.T) {
-	sys := NewSystem(testCapitalConfig())
+	sys, _ := NewSystem(testCapitalConfig())
 
 	sys.Sim().portfolioHistory = []float64{100000, 101000, 102000}
 	sys.Sim().returnHistory = []float64{0.01, 0.01}
@@ -121,7 +121,7 @@ func TestUpdateCapitalMetrics_NilController(t *testing.T) {
 }
 
 func TestUpdateCapitalMetrics_UpdatesController(t *testing.T) {
-	sys := NewSystem(testCapitalConfig())
+	sys, _ := NewSystem(testCapitalConfig())
 
 	capitalCfg := domain.DefaultCapitalPhaseConfig()
 	controller := risk.NewCapitalPhaseController(capitalCfg)
@@ -142,7 +142,7 @@ func TestUpdateCapitalMetrics_UpdatesController(t *testing.T) {
 }
 
 func TestUpdateCapitalMetrics_ShortHistory(t *testing.T) {
-	sys := NewSystem(testCapitalConfig())
+	sys, _ := NewSystem(testCapitalConfig())
 
 	capitalCfg := domain.DefaultCapitalPhaseConfig()
 	controller := risk.NewCapitalPhaseController(capitalCfg)

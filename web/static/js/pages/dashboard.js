@@ -1,5 +1,6 @@
 import { agentName, stockName, regimeLabel, eventName, stressLabel, sectorName } from '../names.js';
 import { getJSON, notify } from '../shared/app-utils.js';
+import { escapeHtml } from '../shared/utils.js';
 
 
 // Main overview dashboard
@@ -149,7 +150,7 @@ export function renderMacroRadar(data, pipelineData) {
         <tbody>
           ${topItems.map(it => {
             const retCls = it.forward_return > 0 ? 'up' : (it.forward_return < 0 ? 'down' : '');
-            return `<tr><td>${it.symbol}</td><td>${stockName(it.symbol) || '-'}</td><td>${agentName(it.agent_id)}</td><td>${it.conviction || '-'}</td><td class="${retCls}">${(it.forward_return*100).toFixed(1)}%</td></tr>`;
+            return `<tr><td>${escapeHtml(it.symbol)}</td><td>${escapeHtml(stockName(it.symbol)) || '-'}</td><td>${escapeHtml(agentName(it.agent_id))}</td><td>${it.conviction != null ? escapeHtml(String(it.conviction)) : '-'}</td><td class="${retCls}">${(it.forward_return*100).toFixed(1)}%</td></tr>`;
           }).join('')}
         </tbody>
       </table>
@@ -179,7 +180,7 @@ export function renderMacroRadar(data, pipelineData) {
       let actionClass = 'ok';
       if (!g.passed) { actionText = '阻擋'; actionClass = 'err'; }
       else if (filtered > 0) { actionText = '過濾'; actionClass = 'warn'; }
-      return `<tr><td>${agentName(g.guard_id) || '-'}</td><td><span class="badge ${actionClass}">${actionText}</span></td><td>${inputCount} → ${outputCount}</td><td>${g.reason || '-'}</td></tr>`;
+      return `<tr><td>${escapeHtml(agentName(g.guard_id)) || '-'}</td><td><span class="badge ${actionClass}">${actionText}</span></td><td>${inputCount} → ${outputCount}</td><td>${g.reason ? escapeHtml(g.reason) : '-'}</td></tr>`;
     }).join('') + '</tbody></table>' : renderEmptyState('本場次無控制層紀錄', '')}
   `;
 }
@@ -211,7 +212,7 @@ export function renderAgentObservatory(data, overlapData) {
           if (sc.momentum_20d && sc.momentum_20d.min != null) badges.push(`動能≥${sc.momentum_20d.min}`);
           if (sc.min_total_factor_score != null) badges.push(`因子≥${sc.min_total_factor_score}`);
           if (!badges.length) return '';
-          return `<div style="margin:6px 0;font-size:12px"><strong>${agentName(a.agent_id)}</strong> <span class="text-muted">${badges.map(b => `<span class="badge info" class="cursor-help" title="${b}">${b}</span>`).join(' ')}</span></div>`;
+          return `<div style="margin:6px 0;font-size:12px"><strong>${escapeHtml(agentName(a.agent_id))}</strong> <span class="text-muted">${badges.map(b => `<span class="badge info" class="cursor-help" title="${escapeHtml(b)}">${escapeHtml(b)}</span>`).join(' ')}</span></div>`;
         }).filter(s => s).join('') + '</div>';
     }
   }
