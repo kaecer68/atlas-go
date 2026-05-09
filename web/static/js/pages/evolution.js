@@ -248,6 +248,7 @@ function renderDetailed() {
           statusBadge +
           '<span>基線: ' + ((e.baseline_value || 0)).toFixed(3) + '</span>' +
           '<span>候選: ' + ((e.candidate_value || 0)).toFixed(3) + '</span>' +
+          '<span>' + (window.fmtNTD ? window.fmtNTD(e.baseline_monetary_ntd) : '—') + ' → ' + (window.fmtNTD ? window.fmtNTD(e.candidate_monetary_ntd) : '—') + '</span>' +
           '<span style="color:let(--muted)">' + (e.experiment_id || '') + '</span>' +
         '</div></div>';
     }
@@ -355,6 +356,7 @@ function renderCatTabContent(tab, scorecards, sessions, judges, promotes) {
           '<div style="display:flex;gap:16px;margin-top:2px;font-size:11px">' +
             '<span>基線: ' + (e.baseline_value || 0).toFixed(3) + '</span>' +
             '<span>候選: ' + (e.candidate_value || 0).toFixed(3) + '</span>' +
+            '<span>' + (window.fmtNTD ? window.fmtNTD(e.baseline_monetary_ntd) : '—') + ' → ' + (window.fmtNTD ? window.fmtNTD(e.candidate_monetary_ntd) : '—') + '</span>' +
           '</div></div>';
       }
     } else {
