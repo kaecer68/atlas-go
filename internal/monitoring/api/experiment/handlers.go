@@ -14,6 +14,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 )
 
@@ -186,6 +187,9 @@ func (h *Handlers) HandleJudge(r *http.Request) (int, any) {
 	if req.ExperimentID == "" {
 		return http.StatusBadRequest, map[string]string{"error": "experiment_id required"}
 	}
+	if err := shared.ValidateExperimentID(req.ExperimentID); err != nil {
+		return http.StatusBadRequest, map[string]string{"error": err.Error()}
+	}
 
 	resultPath := filepath.Join(h.LedgerDir, "experiments", req.ExperimentID+".json")
 	if _, err := os.Stat(resultPath); err != nil {
@@ -213,6 +217,9 @@ func (h *Handlers) HandleDiff(r *http.Request) (int, any) {
 	experimentID := strings.TrimSpace(r.URL.Query().Get("experiment_id"))
 	if experimentID == "" {
 		return http.StatusBadRequest, map[string]string{"error": "experiment_id required"}
+	}
+	if err := shared.ValidateExperimentID(experimentID); err != nil {
+		return http.StatusBadRequest, map[string]string{"error": err.Error()}
 	}
 
 	resultPath := filepath.Join(h.LedgerDir, "experiments", experimentID+".json")
@@ -285,10 +292,12 @@ func (h *Handlers) HandleInbox(r *http.Request) (int, any) {
 		path := filepath.Join(experimentsDir, entry.Name())
 		bytes, err := os.ReadFile(path)
 		if err != nil {
+			logging.Warn("experiment_handler", "read_experiment_file_failed", logging.Err(err))
 			continue
 		}
 		var result domain.PromptExperimentResult
 		if err := json.Unmarshal(bytes, &result); err != nil {
+			logging.Warn("experiment_handler", "parse_experiment_file_failed", logging.Err(err))
 			continue
 		}
 

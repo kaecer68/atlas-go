@@ -1,5 +1,6 @@
 import { eventName, stressLabel, regionName, sectorName, templateName, capitalFlowName, modelName, timeWindowName } from '../names.js';
 import { renderEmptyState } from '../shared/app-utils.js';
+import { escapeHtml } from '../shared/utils.js';
 
 export function renderLiveNarrativeStrip(events, stress, models, chains) {
   const el = document.getElementById('liveNarrativeStrip');
@@ -185,8 +186,8 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
         const sText = e.sentiment > 0 ? '正面' : '負面';
         const tw = timeWindowName(e.time_window || '-');
         return `<div style="border-left:3px solid var(--accent);padding:10px 12px;margin:8px 0;background:#0d1015;border-radius:8px">
-          <div class="font-bold">${eventName(e.theme)} <span class="${sClass}">${sText} (${e.sentiment})</span></div>
-          <div class="text-muted text-sm mt-xs">區域：${regionName(e.region)} · 信心度：${((e.confident || e.confidence || 0) * 100).toFixed(0)}% · 資金流：${capitalFlowName(e.capital_flow || '-')} · 時間窗口：${tw}</div>
+          <div class="font-bold">${escapeHtml(eventName(e.theme))} <span class="${sClass}">${sText} (${e.sentiment})</span></div>
+          <div class="text-muted text-sm mt-xs">區域：${escapeHtml(regionName(e.region))} · 信心度：${((e.confident || e.confidence || 0) * 100).toFixed(0)}% · 資金流：${escapeHtml(capitalFlowName(e.capital_flow || '-'))} · 時間窗口：${escapeHtml(tw)}</div>
         </div>`;
       }).join('');
     }
@@ -200,14 +201,14 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     else {
       chainsEl.innerHTML = list.map(c => `
         <div style="margin:10px 0">
-          <div style="font-weight:700;margin-bottom:4px">${templateName(c.template_id)} <span class="text-muted text-sm">分數 ${(c.score || 0).toFixed(3)}</span></div>
+          <div style="font-weight:700;margin-bottom:4px">${escapeHtml(templateName(c.template_id))} <span class="text-muted text-sm">分數 ${(c.score || 0).toFixed(3)}</span></div>
           ${(c.steps || []).map((s, i) => {
             const impClass = s.impact > 0 ? 'up' : 'down';
-            const affected = (s.affected || []).map(a => `<span style="display:inline-block;font-size:11px;padding:2px 8px;margin:2px 4px 2px 0;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--border)">${sectorName(a) || a}</span>`).join('');
+            const affected = (s.affected || []).map(a => `<span style="display:inline-block;font-size:11px;padding:2px 8px;margin:2px 4px 2px 0;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--border)">${escapeHtml(sectorName(a) || a)}</span>`).join('');
             return `<div class="py-sm border-b-dashed">
               <div class="flex-center-gap-sm">
                 <div class="layer-num">${i+1}</div>
-                <div style="flex:1;font-size:12px">${s.description}</div>
+                <div style="flex:1;font-size:12px">${escapeHtml(s.description)}</div>
                 <div class="${impClass}" style="font-size:11px;padding:2px 8px;border-radius:999px;background:#0d1015;flex-shrink:0">影響力 ${s.impact}</div>
               </div>
               ${affected ? `<div style="margin-top:6px;padding-left:30px">${affected}</div>` : ''}
@@ -330,7 +331,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     else {
       const rows = seasonal.expectations.map(e => {
         const statusBadge = e.already_priced_in ? '<span class="badge">已反應</span>' : '<span class="badge ok">有驚喜潛力</span>';
-        return `<tr><td>${eventName(e.theme)}</td><td>${(e.historical_avg_return * 100).toFixed(1)}%</td><td>${(e.current_return * 100).toFixed(1)}%</td><td>${(e.expectation_gap * 100).toFixed(1)}%</td><td>${statusBadge}</td></tr>`;
+        return `<tr><td>${escapeHtml(eventName(e.theme))}</td><td>${(e.historical_avg_return * 100).toFixed(1)}%</td><td>${(e.current_return * 100).toFixed(1)}%</td><td>${(e.expectation_gap * 100).toFixed(1)}%</td><td>${statusBadge}</td></tr>`;
       }).join('');
       seasonalEl.innerHTML = `<table><thead><tr><th>主題</th><th>歷史平均</th><th>當前報酬</th><th>預期差</th><th>狀態</th></tr></thead><tbody>${rows}</tbody></table>`;
     }

@@ -20,6 +20,8 @@ type Config struct {
 	BaselinePolicyPath         string
 	ParametersConfigPath       string
 	LedgerDir                  string
+	StoreBackend               string // "jsonl" (default) or "sqlite" — ATLAS_STORE_BACKEND
+	SQLitePath                 string // path to SQLite database file — ATLAS_SQLITE_PATH
 	ReplayDataPath             string
 	ReplaySessionDate          string
 	FubonAPIKey                string
@@ -68,6 +70,8 @@ func Load() Config {
 		BaselinePolicyPath:         envOr("ATLAS_BASELINE_POLICY_PATH", "data/state/baseline_policy.json"),
 		ParametersConfigPath:       envOr("ATLAS_PARAMETERS_CONFIG_PATH", "configs/parameters.json"),
 		LedgerDir:                  envOr("ATLAS_LEDGER_DIR", "data/state"),
+		StoreBackend:               envOr("ATLAS_STORE_BACKEND", "jsonl"),
+		SQLitePath:                 envOr("ATLAS_SQLITE_PATH", "data/state/atlas.db"),
 		ReplayDataPath:             envOr("ATLAS_REPLAY_DATA_PATH", "samples/replay/twse_stock_day_all_sample.csv"),
 		ReplaySessionDate:          envOr("ATLAS_REPLAY_SESSION_DATE", "2026-03-26"),
 		FubonAPIKey:                envOrKeychain("FUBON_API_KEY", ""),

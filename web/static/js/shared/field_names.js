@@ -131,6 +131,7 @@ export const FIELD = {
     cash: 'cash',
     portfolio_value: 'portfolio_value',
     daily_pnl: 'daily_pnl',
+    fallback_events: 'fallback_events',
   },
   ExecutionPolicy: {
     conviction_floor: 'conviction_floor',
@@ -468,6 +469,7 @@ export const FIELD = {
     trade_count: 'trade_count',
     start_date: 'start_date',
     end_date: 'end_date',
+    fallback_events: 'fallback_events',
   },
   SimulationResult: {
     risk_snapshot: 'risk_snapshot',
@@ -475,6 +477,7 @@ export const FIELD = {
     before_tax_pnl: 'before_tax_pnl',
     after_tax_pnl: 'after_tax_pnl',
     total_tax_paid: 'total_tax_paid',
+    fallback_events: 'fallback_events',
   },
   SimulationState: {
     cash: 'cash',

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
@@ -52,6 +53,7 @@ func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
 		}
 		var summary domain.SessionSummary
 		if err := json.Unmarshal(bytes, &summary); err != nil {
+			logging.Warn("risk_handler", "corrupted_summary_skipped", logging.Err(err))
 			continue
 		}
 		sessions = append(sessions, sessionEntry{name: entry.Name(), value: summary.PortfolioValue})

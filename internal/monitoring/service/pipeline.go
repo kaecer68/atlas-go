@@ -110,7 +110,11 @@ func (s *PipelineService) LoadAgentObservatory(sessionID string, limit int) (*Ag
 	store := s.store
 	var outcomes []domain.RecommendationOutcome
 	if summary != nil {
-		outcomes, _ = store.LoadSessionOutcomes(summary.SessionID)
+		if o, err := store.LoadSessionOutcomes(summary.SessionID); err != nil {
+			logging.Warn("pipeline_service", "load_session_outcomes_failed", logging.Err(err))
+		} else {
+			outcomes = o
+		}
 	}
 	if outcomes == nil {
 		outcomes, err = store.LoadOutcomes()
@@ -214,11 +218,19 @@ func (s *PipelineService) loadSymbolPredictions(limit int, summary *domain.Sessi
 	var rawOutcomes []rawOutcome
 	if summary != nil {
 		path := filepath.Join(s.LedgerDir, "sessions", summary.SessionID, "recommendation_outcomes.jsonl")
-		rawOutcomes, _ = readOutcomeFile(path)
+		if r, err := readOutcomeFile(path); err != nil {
+			logging.Warn("pipeline_service", "read_outcome_file_failed", logging.Err(err))
+		} else {
+			rawOutcomes = r
+		}
 	}
 	if rawOutcomes == nil {
 		path := filepath.Join(s.LedgerDir, "recommendation_outcomes.jsonl")
-		rawOutcomes, _ = readOutcomeFile(path)
+		if r, err := readOutcomeFile(path); err != nil {
+			logging.Warn("pipeline_service", "read_outcome_file_failed", logging.Err(err))
+		} else {
+			rawOutcomes = r
+		}
 	}
 	if rawOutcomes == nil {
 		return nil, nil
@@ -425,7 +437,11 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 					OutputCount: g.OutputCount,
 				})
 			}
+		} else {
+			logging.Warn("pipeline_service", "parse_summary_failed", logging.Err(err))
 		}
+	} else {
+		logging.Warn("pipeline_service", "read_summary_failed", logging.Err(err))
 	}
 
 	status := PipelineStatusOK
@@ -448,6 +464,8 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 		}
 		if dsTmp, err := replay.LoadTWSEOpenDataCSV(replayPath); err == nil {
 			ds = dsTmp
+		} else {
+			logging.Warn("pipeline_service", "load_replay_csv_failed", logging.Err(err))
 		}
 	}
 
@@ -461,6 +479,7 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 			}
 			var outcome domain.RecommendationOutcome
 			if err := json.Unmarshal([]byte(line), &outcome); err != nil {
+				logging.Warn("pipeline_service", "corrupted_outcome_skipped", logging.Err(err))
 				continue
 			}
 			fr := outcome.ForwardReturn
@@ -612,7 +631,11 @@ func (s *PipelineService) LoadSessions() ([]SessionMeta, error) {
 					meta.Regime = string(summary.Regime)
 				}
 				meta.OutcomeCount = summary.OutcomeCount
+			} else {
+				logging.Warn("pipeline_service", "parse_session_summary_failed", logging.Err(err))
 			}
+		} else {
+			logging.Warn("pipeline_service", "read_session_summary_failed", logging.Err(err))
 		}
 
 		// Fall back to session ID date if RecordedAt was not set from summary.
@@ -799,6 +822,7 @@ func (s *PipelineService) LoadDarwinianHistory(limit int) ([]DarwinianHistoryPoi
 			} `json:"weights"`
 		}
 		if err := json.Unmarshal([]byte(line), &snap); err != nil {
+			logging.Warn("pipeline_service", "corrupted_darwinian_history_skipped", logging.Err(err))
 			continue
 		}
 		ts := snap.Timestamp

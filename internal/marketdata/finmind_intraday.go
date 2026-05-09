@@ -42,7 +42,7 @@ var twseLocation = time.FixedZone("CST", 8*60*60) // UTC+8
 // FetchTaiwan5SecIndex 向 FinMind 取得指定日期的台股指數 5 秒頻率資料。
 func (c *FinMindClient) FetchTaiwan5SecIndex(ctx context.Context, date string) ([]Taiwan5SecIndexBar, error) {
 	if err := c.rateLimiter.Wait(ctx); err != nil {
-		return nil, fmt.Errorf("finmind 5sec index: rate limit wait: %w", err)
+		return nil, fmt.Errorf("finmind 5sec index: rate limit wait: %w", ErrRateLimited)
 	}
 
 	endpoint := fmt.Sprintf("%s/data", finmindBaseURL)

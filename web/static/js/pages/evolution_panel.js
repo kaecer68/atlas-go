@@ -1,5 +1,5 @@
 import { agentName, regimeLabel } from '../names.js';
-import { getJSON } from '../shared/app-utils.js';
+import { silentGetJSON } from '../shared/app-utils.js';
 
 let evolutionData = null;
 let currentView = 'compact';
@@ -104,9 +104,9 @@ function renderPageGuide(view) {
 
 export async function loadEvolutionData() {
   const [agents, regime, inbox] = await Promise.all([
-    getJSON('/api/dashboard/agent-observatory').catch(() => null),
-    getJSON('/api/dashboard/regime-history').catch(() => null),
-    getJSON('/api/dashboard/experiment-inbox').catch(() => null),
+    silentGetJSON('/api/dashboard/agent-observatory'),
+    silentGetJSON('/api/dashboard/regime-history'),
+    silentGetJSON('/api/dashboard/experiment-inbox'),
   ]);
   evolutionData = { agents, regime, inbox };
   const el = document.getElementById('evolutionContent');

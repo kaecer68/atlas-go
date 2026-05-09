@@ -185,6 +185,12 @@ type BusEvent struct {
 // EventHandler 事件处理器函数类型
 type EventHandler func(ctx context.Context, event BusEvent) error
 
+type HandlerError struct {
+	EventType    EventType
+	SubscriberID string
+	Err          error
+}
+
 // EventBus 事件总线接口
 type EventBus interface {
 	Publish(event BusEvent) error
@@ -206,24 +212,27 @@ type ChannelEventBus struct {
 	allSubscribers []*subscriber
 	mutex          sync.RWMutex
 	eventChan      chan BusEvent
+	criticalErrCh  chan HandlerError
 	ctx            context.Context
 	cancel         context.CancelFunc
 	wg             sync.WaitGroup
 }
 
 type subscriber struct {
-	id      string
-	handler EventHandler
+	id       string
+	handler  EventHandler
+	critical bool
 }
 
 // NewChannelEventBus 创建新的事件总线
 func NewChannelEventBus(bufferSize int) *ChannelEventBus {
 	ctx, cancel := context.WithCancel(context.Background())
 	bus := &ChannelEventBus{
-		subscribers: make(map[EventType][]*subscriber),
-		eventChan:   make(chan BusEvent, bufferSize),
-		ctx:         ctx,
-		cancel:      cancel,
+		subscribers:   make(map[EventType][]*subscriber),
+		eventChan:     make(chan BusEvent, bufferSize),
+		criticalErrCh: make(chan HandlerError, 10),
+		ctx:           ctx,
+		cancel:        cancel,
 	}
 
 	// 启动事件分发器
@@ -498,6 +507,34 @@ func (b *ChannelEventBus) SubscribeAll(handler EventHandler) Subscription {
 	}
 }
 
+func (b *ChannelEventBus) SubscribeCritical(eventType EventType, handler EventHandler) (Subscription, <-chan error) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
+	id := fmt.Sprintf("sub-crit-%d", time.Now().UnixNano())
+	sub := &subscriber{id: id, handler: handler, critical: true}
+
+	b.subscribers[eventType] = append(b.subscribers[eventType], sub)
+
+	errCh := make(chan error)
+	go func() {
+		defer close(errCh)
+		for he := range b.criticalErrCh {
+			if he.SubscriberID == id {
+				errCh <- he.Err
+			}
+		}
+	}()
+
+	return Subscription{
+		ID:        id,
+		EventType: eventType,
+		Cancel: func() {
+			b.unsubscribe(eventType, id)
+		},
+	}, errCh
+}
+
 // dispatcher 事件分发器协程
 func (b *ChannelEventBus) dispatcher() {
 	defer b.wg.Done()
@@ -530,14 +567,30 @@ func (b *ChannelEventBus) dispatch(event BusEvent) {
 	}
 }
 
-// handleEvent 处理单个事件
 func (b *ChannelEventBus) handleEvent(sub *subscriber, event BusEvent) {
+	defer func() {
+		if r := recover(); r != nil {
+			logging.Error("eventbus", "handler_panic", "subscriber_id", sub.id, "panic", r)
+		}
+	}()
+
 	ctx, cancel := context.WithTimeout(b.ctx, 30*time.Second)
 	defer cancel()
 
 	if err := sub.handler(ctx, event); err != nil {
-		// 记录错误但不中断其他处理器
 		logging.Error("eventbus", "handler_error", "subscriber_id", sub.id, logging.Err(err))
+
+		if sub.critical {
+			select {
+			case b.criticalErrCh <- HandlerError{
+				EventType:    event.Type,
+				SubscriberID: sub.id,
+				Err:          err,
+			}:
+			default:
+				logging.Error("eventbus", "critical_err_ch_full", "subscriber_id", sub.id)
+			}
+		}
 	}
 }
 
@@ -576,6 +629,7 @@ func (b *ChannelEventBus) Close() error {
 	b.cancel()
 	close(b.eventChan)
 	b.wg.Wait()
+	close(b.criticalErrCh)
 	return nil
 }
 

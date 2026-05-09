@@ -119,3 +119,4 @@ data/state-archive/
 prompts/archive/
 
 # Incomplete Phase C packages
+migrate-jsonl-to-sqlite

@@ -81,7 +81,7 @@ func (c *FugleClient) SetHTTPClient(client *http.Client) {
 func (c *FugleClient) GetQuote(ctx context.Context, symbol string) (domain.Quote, error) {
 	// 等待速率限制
 	if err := c.rateLimiter.Wait(ctx); err != nil {
-		return domain.Quote{}, fmt.Errorf("rate limit wait: %w", err)
+		return domain.Quote{}, fmt.Errorf("rate limit wait: %w", ErrRateLimited)
 	}
 
 	// 构建 URL
@@ -152,7 +152,7 @@ func (c *FugleClient) GetQuotes(ctx context.Context, symbols []string) ([]domain
 // GetMeta 获取股票元数据
 func (c *FugleClient) GetMeta(ctx context.Context, symbol string) (*FugleMetaResponse, error) {
 	if err := c.rateLimiter.Wait(ctx); err != nil {
-		return nil, fmt.Errorf("rate limit wait: %w", err)
+		return nil, fmt.Errorf("rate limit wait: %w", ErrRateLimited)
 	}
 
 	endpoint := fmt.Sprintf("%s/intraday/meta", c.baseURL)

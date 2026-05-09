@@ -45,9 +45,11 @@ export async function getJSON(url) {
   return res.json();
 }
 
-async function postJSON(url, body) {
-  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  return res.json();
+function safeGetJSON(url) {
+  return getJSON(url).catch(function(err) {
+    console.error(url + ':', err.message);
+    return null;
+  });
 }
 
 function notify(msg, type) { console.log('[' + (type || 'info') + '] ' + msg); }
@@ -126,32 +128,32 @@ async function loadAll() {
 
   try {
     var results = await Promise.all([
-      getJSON('/api/dashboard/system-health').catch(function() { return null; }),
-      getJSON('/api/dashboard/macro-radar').catch(function() { return null; }),
-      getJSON('/api/dashboard/agent-observatory').catch(function() { return null; }),
-      getJSON('/api/dashboard/recommendation-pipeline').catch(function() { return null; }),
-      getJSON('/api/dashboard/live-status').catch(function() { return null; }),
-      getJSON('/api/dashboard/risk-exposure').catch(function() { return null; }),
-      getJSON('/api/dashboard/experiment-inbox').catch(function() { return null; }),
-      getJSON('/api/dashboard/universe-overlap').catch(function() { return null; }),
-      getJSON('/api/taiwan/stress-index').catch(function() { return null; }),
-      getJSON('/api/narrative/events').catch(function() { return null; }),
-      getJSON('/api/narrative/chains').catch(function() { return null; }),
-      getJSON('/api/narrative/models').catch(function() { return null; }),
-      getJSON('/api/narrative/templates').catch(function() { return null; }),
-      getJSON('/api/macro/snapshot/latest').catch(function() { return null; }),
-      getJSON('/api/dashboard/data-channels').catch(function() { return null; }),
-      getJSON('/api/dashboard/sessions').catch(function() { return null; }),
-      getJSON('/api/dashboard/phase3-status').catch(function() { return null; }),
-      getJSON('/api/alerts').catch(function() { return null; }),
-      getJSON('/api/dashboard/retail-sentiment').catch(function() { return null; }),
-      getJSON('/api/dashboard/capital-phase').catch(function() { return null; }),
-      getJSON('/api/dashboard/tax-snapshot').catch(function() { return null; }),
-      getJSON('/api/narrative/seasonal').catch(function() { return null; }),
-      getJSON('/api/dashboard/regime-history').catch(function() { return null; }),
-      getJSON('/api/synergy/darwinian-trend').catch(function() { return null; }),
-      getJSON('/api/health/data-integrity').catch(function() { return null; }),
-      getJSON('/api/synergy/darwinian-status').catch(function() { return null; }),
+      safeGetJSON('/api/dashboard/system-health'),
+      safeGetJSON('/api/dashboard/macro-radar'),
+      safeGetJSON('/api/dashboard/agent-observatory'),
+      safeGetJSON('/api/dashboard/recommendation-pipeline'),
+      safeGetJSON('/api/dashboard/live-status'),
+      safeGetJSON('/api/dashboard/risk-exposure'),
+      safeGetJSON('/api/dashboard/experiment-inbox'),
+      safeGetJSON('/api/dashboard/universe-overlap'),
+      safeGetJSON('/api/taiwan/stress-index'),
+      safeGetJSON('/api/narrative/events'),
+      safeGetJSON('/api/narrative/chains'),
+      safeGetJSON('/api/narrative/models'),
+      safeGetJSON('/api/narrative/templates'),
+      safeGetJSON('/api/macro/snapshot/latest'),
+      safeGetJSON('/api/dashboard/data-channels'),
+      safeGetJSON('/api/dashboard/sessions'),
+      safeGetJSON('/api/dashboard/phase3-status'),
+      safeGetJSON('/api/alerts'),
+      safeGetJSON('/api/dashboard/retail-sentiment'),
+      safeGetJSON('/api/dashboard/capital-phase'),
+      safeGetJSON('/api/dashboard/tax-snapshot'),
+      safeGetJSON('/api/narrative/seasonal'),
+      safeGetJSON('/api/dashboard/regime-history'),
+      safeGetJSON('/api/synergy/darwinian-trend'),
+      safeGetJSON('/api/health/data-integrity'),
+      safeGetJSON('/api/synergy/darwinian-status'),
     ]);
 
     var health = results[0], macro = results[1], agents = results[2], pipeline = results[3], live = results[4],
@@ -161,8 +163,8 @@ async function loadAll() {
         capitalPhase = results[19], taxSnapshot = results[20], seasonal = results[21], regimeHistory = results[22],
         darwinianTrend = results[23], dataIntegrity = results[24], darwinianStatus = results[25];
 
-    var allNull = [health, macro, agents, pipeline, live, inbox, overlap].every(function(v) { return v === null; });
-    if (allNull) {
+    var failures = results.filter(function(v) { return v === null; }).length;
+    if (failures > results.length * 0.5) {
       consecutiveFailures++;
       if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) showErrorBanner();
     } else {
@@ -219,38 +221,38 @@ async function loadPageData(pageId) {
   if (pageId === 'narrative') {
     try {
       var results = await Promise.all([
-        getJSON('/api/macro/snapshot/latest').catch(function() { return null; }),
-        getJSON('/api/taiwan/stress-index').catch(function() { return null; }),
-        getJSON('/api/narrative/events').catch(function() { return null; }),
-        getJSON('/api/narrative/chains').catch(function() { return null; }),
-        getJSON('/api/narrative/models').catch(function() { return null; }),
-        getJSON('/api/narrative/templates').catch(function() { return null; }),
-        getJSON('/api/dashboard/retail-sentiment').catch(function() { return null; }),
-        getJSON('/api/narrative/seasonal').catch(function() { return null; }),
+        safeGetJSON('/api/macro/snapshot/latest'),
+        safeGetJSON('/api/taiwan/stress-index'),
+        safeGetJSON('/api/narrative/events'),
+        safeGetJSON('/api/narrative/chains'),
+        safeGetJSON('/api/narrative/models'),
+        safeGetJSON('/api/narrative/templates'),
+        safeGetJSON('/api/dashboard/retail-sentiment'),
+        safeGetJSON('/api/narrative/seasonal'),
       ]);
       if (m.narr.renderNarrativePage) m.narr.renderNarrativePage(results[0], results[1], results[2], results[3], results[4], results[5], results[6], results[7]);
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'pipeline') {
     try {
-      var p = await getJSON('/api/dashboard/recommendation-pipeline').catch(function() { return null; });
+      var p = await safeGetJSON('/api/dashboard/recommendation-pipeline');
       if (m.pipe.renderPipeline) m.pipe.renderPipeline(p, false, '');
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'decision') {
     try {
       var d = await Promise.all([
-        getJSON('/api/dashboard/recommendation-pipeline').catch(function() { return null; }),
-        getJSON('/api/dashboard/macro-radar').catch(function() { return null; }),
-        getJSON('/api/dashboard/agent-observatory').catch(function() { return null; }),
-        getJSON('/api/taiwan/stress-index').catch(function() { return null; }),
-        getJSON('/api/narrative/events').catch(function() { return null; }),
-        getJSON('/api/narrative/chains').catch(function() { return null; }),
-        getJSON('/api/narrative/models').catch(function() { return null; }),
-        getJSON('/api/dashboard/experiment-inbox').catch(function() { return null; }),
-        getJSON('/api/dashboard/phase3-status').catch(function() { return null; }),
-        getJSON('/api/dashboard/tax-snapshot').catch(function() { return null; }),
-        getJSON('/api/dashboard/regime-history').catch(function() { return null; }),
+        safeGetJSON('/api/dashboard/recommendation-pipeline'),
+        safeGetJSON('/api/dashboard/macro-radar'),
+        safeGetJSON('/api/dashboard/agent-observatory'),
+        safeGetJSON('/api/taiwan/stress-index'),
+        safeGetJSON('/api/narrative/events'),
+        safeGetJSON('/api/narrative/chains'),
+        safeGetJSON('/api/narrative/models'),
+        safeGetJSON('/api/dashboard/experiment-inbox'),
+        safeGetJSON('/api/dashboard/phase3-status'),
+        safeGetJSON('/api/dashboard/tax-snapshot'),
+        safeGetJSON('/api/dashboard/regime-history'),
       ]);
       if (m.pipe.renderDecisionChain) m.pipe.renderDecisionChain(d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9], d[10]);
     } catch(e) { console.error(e); }
@@ -261,8 +263,8 @@ async function loadPageData(pageId) {
   else if (pageId === 'agents') {
     try {
       var a = await Promise.all([
-        getJSON('/api/dashboard/agent-observatory').catch(function() { return null; }),
-        getJSON('/api/dashboard/universe-overlap').catch(function() { return null; }),
+        safeGetJSON('/api/dashboard/agent-observatory'),
+        safeGetJSON('/api/dashboard/universe-overlap'),
       ]);
       if (m.dash.renderAgentObservatory) m.dash.renderAgentObservatory(a[0], a[1], window.darwinianTrend);
       if (m.dash.renderUniverseOverlap) m.dash.renderUniverseOverlap(a[1]);
@@ -270,7 +272,7 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'experiments') {
     try {
-      var inbox = await getJSON('/api/dashboard/experiment-inbox').catch(function() { return null; });
+      var inbox = await safeGetJSON('/api/dashboard/experiment-inbox');
       if (m.inbox.renderInbox) m.inbox.renderInbox(inbox);
       if (m.experiments.loadAuditLog) m.experiments.loadAuditLog();
       if (m.experiments.loadExperimentHistory) m.experiments.loadExperimentHistory();
@@ -284,16 +286,16 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'datachannels') {
     try {
-      var dc = await getJSON('/api/dashboard/data-channels').catch(function() { return null; });
+      var dc = await safeGetJSON('/api/dashboard/data-channels');
       if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dc);
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'synergy') {
     try {
       var s = await Promise.all([
-        getJSON('/api/synergy/darwinian-status').catch(function() { return null; }),
-        getJSON('/api/synergy/darwinian-trend').catch(function() { return null; }),
-        getJSON('/api/dashboard/experiment-inbox').catch(function() { return null; })
+        safeGetJSON('/api/synergy/darwinian-status'),
+        safeGetJSON('/api/synergy/darwinian-trend'),
+        safeGetJSON('/api/dashboard/experiment-inbox')
       ]);
       if (m.synergy && m.synergy.renderSynergyPage) m.synergy.renderSynergyPage(s[0], s[1], s[2]);
     } catch(e) { console.error(e); }
@@ -310,15 +312,15 @@ async function loadPageData(pageId) {
   else if (pageId === 'live') {
     try {
       var liveResults = await Promise.all([
-        getJSON('/api/dashboard/live-status').catch(function() { return null; }),
-        getJSON('/api/dashboard/recommendation-pipeline').catch(function() { return null; }),
-        getJSON('/api/dashboard/risk-exposure').catch(function() { return null; }),
-        getJSON('/api/dashboard/macro-radar').catch(function() { return null; }),
-        getJSON('/api/narrative/events').catch(function() { return null; }),
-        getJSON('/api/taiwan/stress-index').catch(function() { return null; }),
-        getJSON('/api/narrative/chains').catch(function() { return null; }),
-        getJSON('/api/narrative/models').catch(function() { return null; }),
-        getJSON('/api/dashboard/capital-phase').catch(function() { return null; }),
+        safeGetJSON('/api/dashboard/live-status'),
+        safeGetJSON('/api/dashboard/recommendation-pipeline'),
+        safeGetJSON('/api/dashboard/risk-exposure'),
+        safeGetJSON('/api/dashboard/macro-radar'),
+        safeGetJSON('/api/narrative/events'),
+        safeGetJSON('/api/taiwan/stress-index'),
+        safeGetJSON('/api/narrative/chains'),
+        safeGetJSON('/api/narrative/models'),
+        safeGetJSON('/api/dashboard/capital-phase'),
       ]);
       if (m.risk.renderLiveStatus) m.risk.renderLiveStatus(liveResults[0]);
       if (m.risk.renderRiskCards) m.risk.renderRiskCards(liveResults[2], liveResults[1], liveResults[8]);
@@ -328,16 +330,19 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'portfolio') {
     try {
-      var portfolioModule = await import('./pages/portfolio.js?v=' + APP_VERSION).catch(function() { return null; });
+      var portfolioModule = await import('./pages/portfolio.js?v=' + APP_VERSION).catch(function(err) {
+        console.error('[Dynamic import] portfolio module load failed:', err);
+        return null;
+      });
       if (portfolioModule) portfolioModule.loadPortfolioPage(getJSON, window.agentNameEsm || function(id) { return id; });
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'parameters') {
     try {
       var pData = await Promise.all([
-        getJSON('/api/parameters').catch(function() { return null; }),
-        getJSON('/api/parameters/categories').catch(function() { return null; }),
-        getJSON('/api/parameters/audit-log').catch(function() { return null; })
+        safeGetJSON('/api/parameters'),
+        safeGetJSON('/api/parameters/categories'),
+        safeGetJSON('/api/parameters/audit-log')
       ]);
       if (m.parameters && m.parameters.renderParametersPage) {
         m.parameters.renderParametersPage(pData[0], pData[1], pData[2]);
@@ -348,6 +353,8 @@ async function loadPageData(pageId) {
     try {
       import('./pages/evolution_panel.js?v=' + APP_VERSION).then(function(evo) {
         if (evo.loadEvolutionData) evo.loadEvolutionData();
+      }).catch(function(err) {
+        console.error('[Dynamic import] evolution_panel module load failed:', err);
       });
     } catch(e) { console.error(e); }
   }
@@ -366,6 +373,14 @@ function initBacktestDates() {
   if (s) s.value = start.toISOString().split('T')[0];
   if (e) e.value = today.toISOString().split('T')[0];
 }
+
+// --- Global unhandled rejection handler (defense in depth) ---
+window.addEventListener('unhandledrejection', function(event) {
+  var reason = event.reason || {};
+  var msg = reason.message || String(reason);
+  console.error('Unhandled Promise rejection: ' + msg, reason.stack || '');
+  event.preventDefault();
+});
 
 if (typeof window !== "undefined") window.switchPage = switchPage;
 if (typeof window !== "undefined") window.toggleSidebar = toggleSidebar;
@@ -447,4 +462,6 @@ if (typeof window !== "undefined") window.showUnacknowledgedOnly = function() { 
 // datachannels globals
 import('./pages/datachannels.js?v=' + APP_VERSION).then(function(m) {
   if (m.triggerChannelsIngest && typeof window !== 'undefined') window.triggerChannelsIngest = m.triggerChannelsIngest;
+}).catch(function(err) {
+  console.error('[Dynamic import] datachannels module load failed:', err);
 });

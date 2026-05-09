@@ -13,8 +13,11 @@ import (
 // It registers each subsystem as a Plugin on the System's PluginHost so that
 // cross-package boundaries are explicit and the simulation loop delegates to
 // a unified lifecycle interface.
-func NewProductionSystem(cfg config.Config) *System {
-	system := NewSystem(cfg)
+func NewProductionSystem(cfg config.Config) (*System, error) {
+	system, err := NewSystem(cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	system.WithDarwinian(system.Port().darwinian)
 
@@ -34,5 +37,5 @@ func NewProductionSystem(cfg config.Config) *System {
 	ctrl := NewPhase3Controller(&system.Sim().registry, pm, sw, sm, re, system.Sim().ledger)
 	system.WithPhase3Controller(ctrl)
 
-	return system
+	return system, nil
 }

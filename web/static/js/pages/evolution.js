@@ -1,6 +1,9 @@
 // 演化透視面板 — Agent 競爭、Regime 時間線、實驗記錄
 import { agentName, sectorName, regimeLabel } from '../names.js';
-import { getJSON, formatDate, notify } from '../shared/app-utils.js';
+
+import { silentGetJSON, formatDate, notify } from '../shared/app-utils.js';
+
+
 import { renderEquityCurve, renderComparisonChart, renderRadarChart, renderRegimeVolumeChart } from '../components/sparkline.js';
 
 let evolutionData = null;
@@ -9,9 +12,9 @@ let loaded = false;
 
 export async function loadEvolutionData() {
   const [agents, regime, inbox] = await Promise.all([
-    getJSON('/api/dashboard/agent-observatory').catch(() => null),
-    getJSON('/api/dashboard/regime-history').catch(() => null),
-    getJSON('/api/dashboard/experiment-inbox').catch(() => null),
+    silentGetJSON('/api/dashboard/agent-observatory'),
+    silentGetJSON('/api/dashboard/regime-history'),
+    silentGetJSON('/api/dashboard/experiment-inbox'),
   ]);
   evolutionData = { agents, regime, inbox };
   let el = document.getElementById('evolutionContent');

@@ -69,7 +69,7 @@ func (c *TWSEClient) SetHTTPClient(client *http.Client) {
 // GetQuotes 批量获取当日所有上市股票行情
 func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
 	if err := c.rateLimiter.Wait(ctx); err != nil {
-		return nil, fmt.Errorf("rate limit wait: %w", err)
+		return nil, fmt.Errorf("rate limit wait: %w", ErrRateLimited)
 	}
 
 	endpoint := fmt.Sprintf("%s/exchangeReport/STOCK_DAY_ALL", c.baseURL)
@@ -149,7 +149,7 @@ func (c *TWSEClient) GetQuotesBySymbols(ctx context.Context, symbols []string) (
 // GetDailyQuote 获取指定日期和股票的行情
 func (c *TWSEClient) GetDailyQuote(ctx context.Context, date string, symbol string) (domain.Quote, error) {
 	if err := c.rateLimiter.Wait(ctx); err != nil {
-		return domain.Quote{}, fmt.Errorf("rate limit wait: %w", err)
+		return domain.Quote{}, fmt.Errorf("rate limit wait: %w", ErrRateLimited)
 	}
 
 	endpoint := fmt.Sprintf("%s/exchangeReport/STOCK_DAY", c.baseURL)

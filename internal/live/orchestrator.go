@@ -307,7 +307,7 @@ func (o *Orchestrator) Stop() error {
 }
 
 func (o *Orchestrator) setupEventHandlers() {
-	o.eventBus.Subscribe(EventMarketSnapshot, func(ctx context.Context, event BusEvent) error {
+	sub, errCh := o.eventBus.SubscribeCritical(EventMarketSnapshot, func(ctx context.Context, event BusEvent) error {
 		if payload, ok := event.Payload.(MarketEventPayload); ok {
 			quotes := []domain.Quote{payload.Quote}
 			o.stateStore.UpdatePositionPrices(quotes)
@@ -318,6 +318,15 @@ func (o *Orchestrator) setupEventHandlers() {
 		}
 		return nil
 	})
+	_ = sub
+
+	go func() {
+		for err := range errCh {
+			logging.Critical("live_orchestrator", "critical_event_handler_failed",
+				"event", EventMarketSnapshot,
+				logging.Err(err))
+		}
+	}()
 
 	o.eventBus.Subscribe(EventPositionUpdate, func(ctx context.Context, event BusEvent) error {
 		if payload, ok := event.Payload.(PositionEventPayload); ok {

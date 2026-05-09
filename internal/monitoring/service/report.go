@@ -143,6 +143,7 @@ func (s *ReportService) loadNarrativeEventsForDate(date string) []narrative.Narr
 
 		var events []narrative.NarrativeEvent
 		if err := json.Unmarshal(data, &events); err != nil {
+			logging.Warn("report_service", "parse_narrative_events_failed", logging.Err(err))
 			return nil
 		}
 		return events
@@ -197,6 +198,7 @@ func (s *ReportService) loadAllWindowSummaries() ([]domain.BacktestWindowSummary
 
 		var summary domain.BacktestWindowSummary
 		if err := json.Unmarshal(data, &summary); err != nil {
+			logging.Warn("report_service", "corrupted_window_summary_skipped", logging.Err(err))
 			continue
 		}
 		summaries = append(summaries, summary)
@@ -271,6 +273,7 @@ func (s *ReportService) loadRiskSnapshot() *domain.RiskSnapshot {
 		}
 		var summary domain.SessionSummary
 		if err := json.Unmarshal(bytes, &summary); err != nil {
+			logging.Warn("report_service", "corrupted_session_summary_skipped", logging.Err(err))
 			continue
 		}
 		sessions = append(sessions, sessionEntry{name: entry.Name(), value: summary.PortfolioValue})
@@ -350,6 +353,7 @@ func (s *ReportService) loadRecommendationsForDate(date string) []domain.Recomme
 				ConvictionBreakdown *domain.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
 			}
 			if err := json.Unmarshal([]byte(line), &outcome); err != nil {
+				logging.Warn("report_service", "corrupted_recommendation_skipped", logging.Err(err))
 				continue
 			}
 			recs = append(recs, domain.Recommendation{
