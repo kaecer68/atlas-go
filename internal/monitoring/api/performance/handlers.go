@@ -55,6 +55,8 @@ func (h *Handlers) HandleExport(w http.ResponseWriter, r *http.Request) (int, an
 
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(md))
+	if _, err := w.Write([]byte(md)); err != nil {
+		return http.StatusInternalServerError, map[string]string{"error": "failed to write response"}
+	}
 	return 0, nil
 }

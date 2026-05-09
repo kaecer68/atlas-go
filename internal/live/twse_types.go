@@ -31,7 +31,7 @@ const (
 	TWSEStatusSubmitted TWSEOrderStatus = "submitted"
 	TWSEStatusPartial   TWSEOrderStatus = "partial"
 	TWSEStatusFilled    TWSEOrderStatus = "filled"
-	TWSEStatusCancelled TWSEOrderStatus = "cancelled"
+	TWSEStatusCanceled  TWSEOrderStatus = "canceled"
 	TWSEStatusRejected  TWSEOrderStatus = "rejected"
 	TWSEStatusError     TWSEOrderStatus = "error"
 )

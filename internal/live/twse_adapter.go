@@ -197,7 +197,10 @@ func (a *TWSEBrokerAdapter) SubmitOrder(ctx context.Context, order domain.Order)
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return BrokerResult{}, fmt.Errorf("twse_adapter: read response body: %w", err)
+	}
 
 	if resp.StatusCode >= 400 {
 		return BrokerResult{}, fmt.Errorf("twse_adapter: API error status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(respBody)))
@@ -258,7 +261,10 @@ func (a *TWSEBrokerAdapter) QueryOrderStatus(ctx context.Context, orderID string
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("twse_adapter: read status response body: %w", err)
+	}
 
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("twse_adapter: status API error status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(respBody)))
@@ -306,7 +312,10 @@ func (a *TWSEBrokerAdapter) CancelOrder(ctx context.Context, orderID string) err
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("twse_adapter: read cancel response body: %w", err)
+	}
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("twse_adapter: cancel API error status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(respBody)))
