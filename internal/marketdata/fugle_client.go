@@ -11,6 +11,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"golang.org/x/time/rate"
 )
 
@@ -139,7 +140,7 @@ func (c *FugleClient) GetQuotes(ctx context.Context, symbols []string) ([]domain
 		quote, err := c.GetQuote(ctx, symbol)
 		if err != nil {
 			// 记录错误但继续获取其他股票
-			fmt.Printf("[Fugle] Error fetching %s: %v\n", symbol, err)
+			logging.Error("fugle", "fetch_failed", "symbol", symbol, logging.Err(err))
 			continue
 		}
 		quotes = append(quotes, quote)

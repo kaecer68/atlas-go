@@ -438,7 +438,7 @@ func selectProvider(cfg config.Config) marketdata.Provider {
 		if cfg.FugleAPIKey != "" {
 			return marketdata.NewFugleProviderWithAPIKey(cfg.FugleAPIKey)
 		}
-		fmt.Println("[WARNING] Fugle API key not configured, falling back to mock provider. DO NOT USE IN PRODUCTION.")
+		logging.Warn("system", "Fugle API key not configured, falling back to mock provider. DO NOT USE IN PRODUCTION.")
 		return marketdata.NewMockProvider()
 	case "twse":
 		// 纯 TWSE 模式（免费，rate limited）

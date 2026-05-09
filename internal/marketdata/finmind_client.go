@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"golang.org/x/time/rate"
 )
 
@@ -231,7 +232,7 @@ func (p *FinMindProvider) GetQuotes(ctx context.Context, asOf time.Time, symbols
 	for _, symbol := range symbols {
 		quote, err := p.client.GetStockPrice(ctx, symbol, date)
 		if err != nil {
-			fmt.Printf("[FinMind] Error fetching %s: %v\n", symbol, err)
+			logging.Error("finmind", "fetch_failed", "symbol", symbol, logging.Err(err))
 			lastErr = err
 			continue
 		}

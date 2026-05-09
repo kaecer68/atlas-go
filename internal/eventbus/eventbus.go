@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // EventType 事件类型
@@ -536,7 +537,7 @@ func (b *ChannelEventBus) handleEvent(sub *subscriber, event BusEvent) {
 
 	if err := sub.handler(ctx, event); err != nil {
 		// 记录错误但不中断其他处理器
-		fmt.Printf("[EventBus] Handler error for %s: %v\n", sub.id, err)
+		logging.Error("eventbus", "handler_error", "subscriber_id", sub.id, logging.Err(err))
 	}
 }
 
