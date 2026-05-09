@@ -55,7 +55,7 @@ go run ./cmd/backtest-window -start 2026-03-26 -end 2026-03-27
 go run ./cmd/import-replay -source <csv> -target <jsonl>
 ```
 
-`cmd/experimental/` 下另有 11 個驗證/演練子命令（如 `janus-backtest`、`validate-broker`、`staging-drill` 等）。
+`cmd/experimental/` 下另有 10 個驗證/演練子命令目錄（含 9 個 CLI 與 `AGENTS.md`），如 `janus-backtest`、`validate-broker`、`staging-drill` 等。
 
 ---
 
@@ -95,7 +95,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 | `internal/importer/` | CSV → JSONL 資料匯入（TWSE、FinMind） |
 | `internal/industry/` | 產業分析（行業輪動、供給需求分析） |
 | `internal/logging/` | 統一日誌介面（Info/Error/Err） |
-| `internal/monitoring/` | 監控 API 與 Dashboard（200 symbols，36 個 API handlers） |
+| `internal/monitoring/` | 監控 API 與 Dashboard（200 symbols，115 個 API handlers） |
 | `internal/realtime/` | 即時資料轉接器（RealTimeAdapter） |
 | `internal/reflexivity/` | 自反性價格動態引擎 |
 | `internal/replay/` | TWSE CSV 載入與 forward return 計算 |
@@ -107,6 +107,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 | `internal/stress/` | 壓力測試場景（RunScenario） |
 | `internal/taskexec/` | 非同步任務執行器（Manager、Cancel/Subscribe） |
 | `internal/tax/` | 台灣稅務計算（TaiwanTaxCalculator） |
+| `internal/metalearning/` | 元學習協調器（MetaLearner、策略選擇優化） |
 
 **分層資料流**：
 `Market Data → Orchestrator (context → screener → sector/style → control) → Simulator → Ledger`
@@ -284,7 +285,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (19354 symbols, 42452 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (20284 symbols, 42970 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

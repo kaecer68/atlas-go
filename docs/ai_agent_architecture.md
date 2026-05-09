@@ -2,7 +2,7 @@
 
 ## Overview
 
-Atlas-Go implements a sophisticated multi-layer AI agent system with 15 specialized agents working in coordination. This document provides a comprehensive mapping between the agent registry, skill definitions, and system architecture.
+Atlas-Go implements a sophisticated multi-layer AI agent system with 17 specialized agents working in coordination. This document provides a comprehensive mapping between the agent registry, skill definitions, and system architecture.
 
 ## Agent Layer Architecture
 

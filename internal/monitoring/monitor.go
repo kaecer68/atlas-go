@@ -207,12 +207,16 @@ func ConsoleHandler(alert Alert) {
 	prefix := fmt.Sprintf("[%s] [%s] %s:", alert.Timestamp.Format("15:04:05"), alert.Level.String(), alert.Category)
 	switch alert.Level {
 	case AlertLevelCritical:
+		logging.Error("monitor", "alert", "severity", "critical", "category", alert.Category, "message", alert.Message)
 		fmt.Printf("\033[31m%s %s\033[0m\n", prefix, alert.Message)
 	case AlertLevelError:
+		logging.Error("monitor", "alert", "severity", "error", "category", alert.Category, "message", alert.Message)
 		fmt.Printf("\033[31m%s %s\033[0m\n", prefix, alert.Message)
 	case AlertLevelWarning:
+		logging.Warn("monitor", "alert", "severity", "warning", "category", alert.Category, "message", alert.Message)
 		fmt.Printf("\033[33m%s %s\033[0m\n", prefix, alert.Message)
 	default:
+		logging.Info("monitor", "alert", "severity", "info", "category", alert.Category, "message", alert.Message)
 		fmt.Printf("%s %s\n", prefix, alert.Message)
 	}
 }

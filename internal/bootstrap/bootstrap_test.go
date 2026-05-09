@@ -60,7 +60,7 @@ func TestInitRepositoryNilPool(t *testing.T) {
 }
 
 func TestInitTaskManagerNoPool(t *testing.T) {
-	mgr := InitTaskManager(nil, Config{WorkDir: t.TempDir()})
+	mgr := InitTaskManager(context.Background(), nil, Config{WorkDir: t.TempDir()})
 	if mgr == nil {
 		t.Fatal("expected non-nil manager")
 	}

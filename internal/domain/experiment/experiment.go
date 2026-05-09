@@ -22,24 +22,26 @@ const (
 
 // ExperimentRecord captures the execution state of a single experiment.
 type ExperimentRecord struct {
-	ID                string           `json:"id"`
-	ProposalID        string           `json:"proposal_id"`
-	CommitID          string           `json:"commit_id"`
-	ApprovalID        string           `json:"approval_id"`
-	TargetAgentID     string           `json:"target_agent_id"`
-	Skill             string           `json:"skill"`
-	Hypothesis        string           `json:"hypothesis"`
-	PromptVersionFrom string           `json:"prompt_version_from"`
-	PromptVersionTo   string           `json:"prompt_version_to"`
-	MutationType      string           `json:"mutation_type"`
-	AcceptanceGates   []string         `json:"acceptance_gates"`
-	WindowStart       time.Time        `json:"window_start"`
-	WindowEnd         time.Time        `json:"window_end"`
-	AcceptanceMetric  string           `json:"acceptance_metric"`
-	BaselineValue     float64          `json:"baseline_value"`
-	CandidateValue    float64          `json:"candidate_value"`
-	Status            ExperimentStatus `json:"status"`
-	RevertReason      string           `json:"revert_reason"`
+	ID                   string           `json:"id"`
+	ProposalID           string           `json:"proposal_id"`
+	CommitID             string           `json:"commit_id"`
+	ApprovalID           string           `json:"approval_id"`
+	TargetAgentID        string           `json:"target_agent_id"`
+	Skill                string           `json:"skill"`
+	Hypothesis           string           `json:"hypothesis"`
+	PromptVersionFrom    string           `json:"prompt_version_from"`
+	PromptVersionTo      string           `json:"prompt_version_to"`
+	MutationType         string           `json:"mutation_type"`
+	AcceptanceGates      []string         `json:"acceptance_gates"`
+	WindowStart          time.Time        `json:"window_start"`
+	WindowEnd            time.Time        `json:"window_end"`
+	AcceptanceMetric     string           `json:"acceptance_metric"`
+	BaselineValue        float64          `json:"baseline_value"`
+	CandidateValue       float64          `json:"candidate_value"`
+	BaselineMonetaryNTD  float64          `json:"baseline_monetary_ntd,omitempty"`
+	CandidateMonetaryNTD float64          `json:"candidate_monetary_ntd,omitempty"`
+	Status               ExperimentStatus `json:"status"`
+	RevertReason         string           `json:"revert_reason"`
 }
 
 // MutationBrief defines the mutation specification for an experiment.
@@ -112,4 +114,6 @@ type PromptExperimentResult struct {
 	CandidateFallbackCount int                 `json:"candidate_fallback_count,omitempty"`
 	BaselineFactorCount    int                 `json:"baseline_factor_count,omitempty"`
 	CandidateFactorCount   int                 `json:"candidate_factor_count,omitempty"`
+	BaselineMonetaryNTD    float64             `json:"baseline_monetary_ntd,omitempty"`
+	CandidateMonetaryNTD   float64             `json:"candidate_monetary_ntd,omitempty"`
 }

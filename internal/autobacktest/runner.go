@@ -2,12 +2,12 @@ package autobacktest
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
@@ -32,7 +32,7 @@ func (r *Runner) RunAndStore() error {
 
 	latest, err := NewHistory(r.cfg.LedgerDir).LatestN(1)
 	if err == nil && len(latest) > 0 && latest[0].Date.Equal(targetDate) {
-		log.Printf("[Autobacktest] snapshot for %s already exists; skipping", targetDate.Format("2006-01-02"))
+		logging.Info("autobacktest", "snapshot_exists_skip", "target_date", targetDate.Format("2006-01-02"))
 		return nil
 	}
 

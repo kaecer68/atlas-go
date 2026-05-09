@@ -2,7 +2,6 @@ package orchestrator
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
@@ -10,6 +9,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -55,11 +55,11 @@ func buildSimEngine(policy baseline.Policy, optimizer *portfolio.Optimizer) *sim
 func buildFactorEngine(runtimeParams *portfolio.RuntimeParameters) (*portfolio.FactorEngine, *portfolio.HistoricalPrices, *portfolio.FundamentalProvider) {
 	hp := portfolio.NewHistoricalPrices()
 	if err := hp.LoadFromExtendedJSONL("data/replay/tw_extended_90days.jsonl"); err != nil {
-		fmt.Printf("[System] warn: failed to load historical prices: %v\n", err)
+		logging.Warn("composition", "failed to load historical prices", "err", err)
 	}
 	fp := portfolio.NewFundamentalProvider()
 	if err := fp.LoadFromJSON("data/fundamentals.json"); err != nil {
-		fmt.Printf("[System] warn: failed to load fundamentals: %v\n", err)
+		logging.Warn("composition", "failed to load fundamentals", "err", err)
 	}
 	fe := portfolio.NewFactorEngine().
 		WithParameters(runtimeParams).

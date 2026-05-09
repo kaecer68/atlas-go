@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // Well-known filenames used by StateStore for persistence.
@@ -258,11 +259,11 @@ func (s *StateStore) persistEvent(event Event) {
 
 	eventJSON, err := json.Marshal(event)
 	if err != nil {
-		fmt.Printf("[StateStore] warn: failed to marshal event: %v\n", err)
+		logging.Warn("state_store", "marshal_event_failed", logging.Err(err))
 		return
 	}
 	if err := appendToFile(eventsPath, string(eventJSON)); err != nil {
-		fmt.Printf("[StateStore] warn: failed to append event: %v\n", err)
+		logging.Warn("state_store", "append_event_failed", logging.Err(err))
 	}
 }
 

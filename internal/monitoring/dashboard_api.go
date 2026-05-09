@@ -1,20 +1,25 @@
 package monitoring
 
 import (
+	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"path/filepath"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/live"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	apibacktest "github.com/kaecer68/atlas-go/internal/monitoring/api/backtest"
+	apicircuitbreaker "github.com/kaecer68/atlas-go/internal/monitoring/api/circuitbreaker"
 	apicontrol "github.com/kaecer68/atlas-go/internal/monitoring/api/control"
+	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 	apiexperiment "github.com/kaecer68/atlas-go/internal/monitoring/api/experiment"
 	apihealth "github.com/kaecer68/atlas-go/internal/monitoring/api/health"
 	apiindustry "github.com/kaecer68/atlas-go/internal/monitoring/api/industry"
@@ -22,7 +27,9 @@ import (
 	apimacro "github.com/kaecer68/atlas-go/internal/monitoring/api/macro"
 	apimetrics "github.com/kaecer68/atlas-go/internal/monitoring/api/metrics"
 	apinarrative "github.com/kaecer68/atlas-go/internal/monitoring/api/narrative"
+	apiorders "github.com/kaecer68/atlas-go/internal/monitoring/api/orders"
 	apiparameters "github.com/kaecer68/atlas-go/internal/monitoring/api/parameters"
+	apiperformance "github.com/kaecer68/atlas-go/internal/monitoring/api/performance"
 	apipipeline "github.com/kaecer68/atlas-go/internal/monitoring/api/pipeline"
 	apireport "github.com/kaecer68/atlas-go/internal/monitoring/api/report"
 	apirisk "github.com/kaecer68/atlas-go/internal/monitoring/api/risk"
@@ -57,6 +64,9 @@ type DashboardAPI struct {
 	janusEngine        *janus.Engine
 	repo               *repository.DualWriteRepository
 	taskManager        *taskexec.Manager
+	eventBus           *eventbus.ChannelEventBus
+	outcomeStore       *DualWriteOutcomeStoreAdapter
+	orderMgr           *live.OrderManager
 }
 
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
@@ -93,12 +103,29 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	}
 }
 
+func (a *DashboardAPI) SetEventBus(eventBus *eventbus.ChannelEventBus) {
+	a.eventBus = eventBus
+}
+
+func (a *DashboardAPI) SetContext(ctx context.Context) {
+	if a.outcomeStore != nil && ctx != nil {
+		a.outcomeStore.SetContext(ctx)
+	}
+}
+
 func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	var outcomeStore ledger.OutcomeStore
 	if a.repo != nil {
-		outcomeStore = NewDualWriteOutcomeStoreAdapter(a.repo)
+		a.outcomeStore = NewDualWriteOutcomeStoreAdapter(a.repo)
+		outcomeStore = a.outcomeStore
 	} else {
 		outcomeStore = ledger.NewStore(a.ledgerDir)
+	}
+
+	// Register SSE event stream endpoint.
+	if a.eventBus != nil {
+		sseHandler := apievents.NewSSEHandler(a.eventBus)
+		mux.HandleFunc("/api/events/stream", sseHandler.ServeHTTP)
 	}
 
 	pipelineSvc := service.NewPipelineService(a.workDir, a.ledgerDir, outcomeStore)
@@ -177,6 +204,10 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			"generated": time.Now().Format(time.RFC3339),
 		})
 	})
+
+	a.RegisterOrderRoutes(mux)
+	a.RegisterPerformanceRoutes(mux)
+	a.RegisterCircuitBreakerRoutes(mux)
 }
 
 func (a *DashboardAPI) RegisterIndustryRoutes(mux *http.ServeMux) {
@@ -246,6 +277,20 @@ func (a *DashboardAPI) RegisterBacktestRoutes(mux *http.ServeMux) {
 	handlers.RegisterRoutes(mux)
 }
 
+func (a *DashboardAPI) RegisterPerformanceRoutes(mux *http.ServeMux) {
+	svc := service.NewPerformanceService(a.ledgerDir)
+	handlers := apiperformance.NewHandlers(svc)
+	handlers.RegisterRoutes(mux)
+}
+
+func (a *DashboardAPI) RegisterCircuitBreakerRoutes(mux *http.ServeMux) {
+	svc := service.NewCircuitBreakerService(a.workDir)
+	handlers := &apicircuitbreaker.Handlers{
+		Svc: svc,
+	}
+	handlers.RegisterRoutes(mux)
+}
+
 func (a *DashboardAPI) SetPool(pool *pgxpool.Pool) {
 	a.pool = pool
 }
@@ -266,12 +311,24 @@ func (a *DashboardAPI) SetTaskManager(m *taskexec.Manager) {
 	a.taskManager = m
 }
 
+func (a *DashboardAPI) SetOrderManager(om *live.OrderManager) {
+	a.orderMgr = om
+}
+
+func (a *DashboardAPI) RegisterOrderRoutes(mux *http.ServeMux) {
+	orderSvc := service.NewOrderService(a.orderMgr)
+	handlers := &apiorders.Handlers{
+		Svc: orderSvc,
+	}
+	handlers.RegisterRoutes(mux)
+}
+
 func (a *DashboardAPI) RegisterTaskExecRoutes(mux *http.ServeMux) {
 	if a.taskManager == nil {
-		log.Printf("[TaskExec] skipping route registration: taskManager is nil")
+		logging.Warn("dashboardapi", "taskexec_skip_registration", "reason", "taskManager is nil")
 		return
 	}
-	log.Printf("[TaskExec] registering task execution routes")
+	logging.Info("dashboardapi", "taskexec_registering_routes")
 	handlers := apitaskexec.NewHandlers(a.taskManager)
 	handlers.RegisterRoutes(mux)
 }

@@ -83,6 +83,10 @@ type OrchestratorConfig struct {
 	BrokerNonceRedisKeyPrefix  string
 	BrokerSigner               string
 	BrokerKeyID                string
+	TWSEAPIURL                 string
+	TWSEAPIKey                 string
+	TWSEAPISecret              string
+	TWSEAccountID              string
 	FubonDMAPersonalID         string
 	FubonDMAAPIKey             string
 	FubonDMAScriptPath         string
@@ -270,8 +274,10 @@ func (o *Orchestrator) Start() error {
 		return fmt.Errorf("start scheduler: %w", err)
 	}
 
-	fmt.Printf("[Orchestrator] Started with %d symbols, poll interval: %v, broker=%s\n",
-		len(o.watchlist), o.config.QuotePollInterval, o.effectiveBrokerMode)
+	logging.Info("orchestrator", "started",
+		"symbols_count", len(o.watchlist),
+		"poll_interval", o.config.QuotePollInterval.String(),
+		"broker_mode", o.effectiveBrokerMode)
 
 	return nil
 }
@@ -287,7 +293,7 @@ func (o *Orchestrator) Stop() error {
 	o.cancel()
 
 	if err := o.scheduler.Stop(); err != nil {
-		fmt.Printf("[Orchestrator] scheduler stop error: %v\n", err)
+		logging.Error("orchestrator", "scheduler_stop_error", logging.Err(err))
 	}
 
 	o.wg.Wait()
@@ -296,7 +302,7 @@ func (o *Orchestrator) Stop() error {
 		return fmt.Errorf("save final state: %w", err)
 	}
 
-	fmt.Println("[Orchestrator] Stopped")
+	logging.Info("orchestrator", "stopped")
 	return nil
 }
 
@@ -315,30 +321,28 @@ func (o *Orchestrator) setupEventHandlers() {
 
 	o.eventBus.Subscribe(EventPositionUpdate, func(ctx context.Context, event BusEvent) error {
 		if payload, ok := event.Payload.(PositionEventPayload); ok {
-			fmt.Printf("[Position] %s: %s %s x%d @ %.2f\n",
-				payload.ChangeType,
-				payload.Symbol,
-				payload.Position.Symbol,
-				payload.Position.Quantity,
-				payload.Position.AverageCost)
+			logging.Info("position", string(payload.ChangeType),
+				"symbol", payload.Symbol,
+				"quantity", payload.Position.Quantity,
+				"average_cost", payload.Position.AverageCost)
 		}
 		return nil
 	})
 
 	o.eventBus.Subscribe(EventOrderPlaced, func(ctx context.Context, event BusEvent) error {
 		if payload, ok := event.Payload.(OrderEventPayload); ok {
-			fmt.Printf("[Order] Placed: %s %s x%d @ %.2f\n",
-				payload.Order.Side,
-				payload.Order.Symbol,
-				payload.Order.Quantity,
-				payload.Order.Price)
+			logging.Info("order", "placed",
+				"side", payload.Order.Side,
+				"symbol", payload.Order.Symbol,
+				"quantity", payload.Order.Quantity,
+				"price", payload.Order.Price)
 		}
 		return nil
 	})
 }
 
 func (o *Orchestrator) onMarketOpen() {
-	fmt.Println("[Orchestrator] Market OPEN")
+	logging.Info("orchestrator", "market_open")
 
 	o.stateStore.ResetDayState()
 	portfolio := o.stateStore.GetPortfolio()
@@ -346,7 +350,7 @@ func (o *Orchestrator) onMarketOpen() {
 	o.circuitBreaker.ResetDayState(startingValue)
 
 	positions := o.stateStore.GetPositions()
-	fmt.Printf("[Orchestrator] Loaded %d positions\n", len(positions))
+	logging.Info("orchestrator", "loaded_positions", "count", len(positions))
 
 	o.publishEvent(BusEvent{
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
@@ -368,7 +372,7 @@ func (o *Orchestrator) onMarketOpen() {
 }
 
 func (o *Orchestrator) onIntradayCycle() {
-	fmt.Printf("[Orchestrator] Intraday cycle at %s\n", time.Now().Format("15:04:05"))
+	logging.Info("orchestrator", "intraday_cycle", "time", time.Now().Format("15:04:05"))
 
 	o.fetchAndProcessQuotes()
 
@@ -381,7 +385,7 @@ func (o *Orchestrator) onIntradayCycle() {
 		o.metrics.RecordGauge("portfolio_day_pnl", portfolio.DayPnL, nil)
 	}
 	if state != CircuitNormal {
-		fmt.Printf("[CircuitBreaker] Trading restricted: state=%s\n", state)
+		logging.Warn("circuit_breaker", "trading_restricted", "state", state)
 		if state == CircuitHalted {
 			return
 		}
@@ -390,7 +394,7 @@ func (o *Orchestrator) onIntradayCycle() {
 	dayPnL := portfolio.DayPnL
 	dayPnLPct := (dayPnL / portfolio.Cash) * 100
 	if o.config.MaxDailyLossPct > 0 && dayPnLPct < -o.config.MaxDailyLossPct {
-		fmt.Printf("[Risk] Daily loss limit hit: %.2f%%\n", dayPnLPct)
+		logging.Warn("risk", "daily_loss_limit_hit", "day_pnl_pct", dayPnLPct)
 		o.publishRiskEvent(EventRiskAlert, "", domain.Position{}, "max_daily_loss", 0)
 	}
 
@@ -406,14 +410,14 @@ func (o *Orchestrator) onIntradayCycle() {
 }
 
 func (o *Orchestrator) onMarketClose() {
-	fmt.Println("[Orchestrator] Market CLOSE")
+	logging.Info("orchestrator", "market_close")
 
 	o.fetchAndProcessQuotes()
 
 	portfolio := o.stateStore.GetPortfolio()
 
 	if err := o.stateStore.Save(); err != nil {
-		fmt.Printf("[Error] Save state: %v\n", err)
+		logging.Error("orchestrator", "save_state_error", logging.Err(err))
 	}
 
 	o.publishEvent(BusEvent{
@@ -472,8 +476,8 @@ func (o *Orchestrator) checkRiskTriggers(symbol string, currentPrice float64) {
 			o.metrics.RecordRiskEvent("stop_loss", symbol)
 		}
 		o.publishRiskEvent(EventStopLossTriggered, symbol, position, "stop_loss", currentPrice)
-		fmt.Printf("[Risk] Stop loss triggered for %s at %.2f (loss: %.2f%%)\n",
-			symbol, currentPrice, pnlPct)
+		logging.Warn("risk", "stop_loss_triggered",
+			"symbol", symbol, "price", currentPrice, "loss_pct", pnlPct)
 	}
 
 	if o.config.TakeProfitEnabled && pnlPct > o.config.MaxPositionLossPct*2 {
@@ -481,8 +485,8 @@ func (o *Orchestrator) checkRiskTriggers(symbol string, currentPrice float64) {
 			o.metrics.RecordRiskEvent("take_profit", symbol)
 		}
 		o.publishRiskEvent(EventTakeProfitTriggered, symbol, position, "take_profit", currentPrice)
-		fmt.Printf("[Risk] Take profit triggered for %s at %.2f (gain: %.2f%%)\n",
-			symbol, currentPrice, pnlPct)
+		logging.Info("risk", "take_profit_triggered",
+			"symbol", symbol, "price", currentPrice, "gain_pct", pnlPct)
 	}
 }
 
@@ -626,6 +630,26 @@ func resolveBrokerMode(cfg OrchestratorConfig) (requested string, effective stri
 				return requested, "live-guarded", NewGuardedLiveBroker(nil), "live+http adapter requested but ATLAS_BROKER_API_KEY is empty; fallback to guarded"
 			}
 			return requested, "live-http", NewGuardedLiveBroker(httpAdapter), "live mode uses http adapter with signature placeholder; verify credentials and endpoint before production use"
+		case "twse":
+			if strings.TrimSpace(cfg.TWSEAPIURL) == "" {
+				return requested, "live-guarded", NewGuardedLiveBroker(nil), "live+twse adapter requested but ATLAS_TWSE_API_URL is empty; fallback to guarded"
+			}
+			if strings.TrimSpace(cfg.TWSEAPIKey) == "" {
+				return requested, "live-guarded", NewGuardedLiveBroker(nil), "live+twse adapter requested but ATLAS_TWSE_API_KEY is empty; fallback to guarded"
+			}
+			if strings.TrimSpace(cfg.TWSEAPISecret) == "" {
+				return requested, "live-guarded", NewGuardedLiveBroker(nil), "live+twse adapter requested but ATLAS_TWSE_API_SECRET is empty; fallback to guarded"
+			}
+			if strings.TrimSpace(cfg.TWSEAccountID) == "" {
+				return requested, "live-guarded", NewGuardedLiveBroker(nil), "live+twse adapter requested but ATLAS_TWSE_ACCOUNT_ID is empty; fallback to guarded"
+			}
+			twseAdapter := NewTWSEBrokerAdapter(TWSEBrokerAdapterConfig{
+				BaseURL:   cfg.TWSEAPIURL,
+				APIKey:    cfg.TWSEAPIKey,
+				APISecret: cfg.TWSEAPISecret,
+				AccountID: cfg.TWSEAccountID,
+			}, NewCircuitBreaker("", ""))
+			return requested, "live-twse", NewGuardedLiveBroker(twseAdapter), "live mode uses TWSE adapter with HMAC-SHA256 signing; verify credentials before production use"
 		case "fubon-dma":
 			personalID := strings.TrimSpace(cfg.FubonDMAPersonalID)
 			apiKey := strings.TrimSpace(cfg.FubonDMAAPIKey)

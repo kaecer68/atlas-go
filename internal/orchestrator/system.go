@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"path/filepath"
 	"time"
 
@@ -37,6 +38,7 @@ type SimulationCore struct {
 	session         domain.ReplaySession
 	persistentState *domain.SimulationState
 	ctx             context.Context
+	scratchpad      *Scratchpad
 
 	lastOutcomes     []domain.RecommendationOutcome
 	portfolioHistory []float64
@@ -122,7 +124,7 @@ func NewSystem(cfg config.Config) *System {
 
 	macroRiskEngine, structuralTrendEngine, macroDrawdownEngine, sectorDataProvider := buildMacroEngines(cfg.LedgerDir)
 
-	return &System{
+	sys := &System{
 		SystemCore: &SystemCore{
 			sim:             buildSimulationCore(cfg, registry, policy, ds, optimizer, store.(*ledger.Store)),
 			port:            buildPortfolioManager(runtimeParams, registry, eventBus, factorEngine),
@@ -132,9 +134,17 @@ func NewSystem(cfg config.Config) *System {
 			narrativeEngine: narrative.NewNarrativeEngine(),
 		},
 	}
+
+	sys.Sim().scratchpad = NewScratchpad(sys.Sim().session.ID, cfg.LedgerDir)
+
+	return sys
 }
 
 func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, error) {
+	if s.Risk().eventBus != nil {
+		go s.Risk().eventBus.PublishSimulationStart(s.Sim().session.ID, asOf)
+	}
+
 	if sessionDate, ok := s.resolveReplayDate(); ok && s.Sim().replay != nil {
 		return s.runReplaySimulation(sessionDate)
 	}
@@ -161,6 +171,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 				s.Risk().clampingLogger.AppendConvictionEvents(evts)
 			}
 		},
+		Scratchpad: s.Sim().scratchpad,
 	})
 	regime := researchResult.Regime
 	rawRecs := researchResult.RawRecommendations
@@ -270,10 +281,23 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	}
 
 	s.host.PostSimulation(quotes, regime, asOf)
+
+	if s.Risk().eventBus != nil {
+		go s.Risk().eventBus.PublishSimulationComplete(s.Sim().session.ID, result.PortfolioValue, len(result.Orders), len(result.Positions))
+	}
+
+	if s.Sim().scratchpad != nil {
+		_, _ = s.Sim().scratchpad.ExportJSONL()
+	}
+
 	return result, nil
 }
 
 func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationResult, error) {
+	if s.Risk().eventBus != nil {
+		go s.Risk().eventBus.PublishSimulationStart(s.Sim().session.ID, sessionDate)
+	}
+
 	symbols := RegistrySymbols(s.Sim().registry)
 	quotes := s.Sim().replay.QuotesForDate(sessionDate, symbols)
 	events := s.detectNarrativeEvents(quotes)
@@ -292,6 +316,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 				s.Risk().clampingLogger.AppendConvictionEvents(evts)
 			}
 		},
+		Scratchpad: s.Sim().scratchpad,
 	})
 	regime := researchResult.Regime
 	rawRecs := researchResult.RawRecommendations
@@ -394,6 +419,15 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	}
 
 	s.host.PostSimulation(quotes, regime, sessionDate)
+
+	if s.Risk().eventBus != nil {
+		go s.Risk().eventBus.PublishSimulationComplete(s.Sim().session.ID, result.PortfolioValue, len(result.Orders), len(result.Positions))
+	}
+
+	if s.Sim().scratchpad != nil {
+		_, _ = s.Sim().scratchpad.ExportJSONL()
+	}
+
 	return result, nil
 }
 
@@ -404,7 +438,7 @@ func selectProvider(cfg config.Config) marketdata.Provider {
 		if cfg.FugleAPIKey != "" {
 			return marketdata.NewFugleProviderWithAPIKey(cfg.FugleAPIKey)
 		}
-		fmt.Println("[WARNING] Fugle API key not configured, falling back to mock provider. DO NOT USE IN PRODUCTION.")
+		logging.Warn("system", "Fugle API key not configured, falling back to mock provider. DO NOT USE IN PRODUCTION.")
 		return marketdata.NewMockProvider()
 	case "twse":
 		// 纯 TWSE 模式（免费，rate limited）
@@ -693,11 +727,11 @@ func (s *System) saveSessionPositions(sessionID string, positions []domain.Posit
 	path := filepath.Join(sessionDir, "positions.json")
 	bytes, err := json.MarshalIndent(positions, "", "  ")
 	if err != nil {
-		log.Printf("[System] warn: failed to marshal positions for %s: %v", sessionID, err)
+		logging.Warn("System", "failed to marshal positions", "session_id", sessionID, "err", err)
 		return
 	}
 	if err := os.WriteFile(path, bytes, 0o644); err != nil {
-		log.Printf("[System] warn: failed to write positions for %s: %v", sessionID, err)
+		logging.Warn("System", "failed to write positions", "session_id", sessionID, "err", err)
 	}
 }
 
