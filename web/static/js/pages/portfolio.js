@@ -1,3 +1,5 @@
+import { renderDualEquityCurve } from '../components/sparkline.js';
+
 export async function loadPortfolioPage(getJSON, agentNameFn) {
   const kpis = document.getElementById('portfolioKPIs');
   const tableEl = document.getElementById('positionsTable');
@@ -8,34 +10,45 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
   tableEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">資料載入中…</div>';
   
   try {
-    const [liveData, stateData] = await Promise.all([
+    const [liveData, stateData, taxData] = await Promise.all([
       getJSON('/api/dashboard/live-status').catch(() => ({})),
-      getJSON('/api/dashboard/portfolio-state').catch(() => ({}))
+      getJSON('/api/dashboard/portfolio-state').catch(() => ({})),
+      getJSON('/api/dashboard/tax-snapshot').catch(() => ({}))
     ]);
     
     const p = liveData?.portfolio || {};
     const state = stateData || {};
     const positions = state.positions || [];
+    const tax = taxData || {};
+
+    const totalTaxPaid = tax.total_tax_paid || 0;
+    const afterTaxValue = (state.portfolio_value || 0) - totalTaxPaid;
     
     kpis.innerHTML = `
       <div class="kpi-card">
-        <div class="kpi-label">組合總淨值</div>
-        <div class="kpi-value">${window.fmtFloat ? window.fmtFloat(state.portfolio_value) : (state.portfolio_value || 0).toFixed(0)}</div>
-        <div class="kpi-hint">可用現金: ${window.fmtFloat ? window.fmtFloat(state.cash) : (state.cash || 0).toFixed(0)}</div>
+        <div class="kpi-label">稅前淨值</div>
+        <div class="kpi-value">${window.fmtNTD ? window.fmtNTD(state.portfolio_value || 0) : (state.portfolio_value || 0).toFixed(0)}</div>
+        <div class="kpi-hint">可用現金: ${window.fmtNTD ? window.fmtNTD(state.cash || 0) : (state.cash || 0).toFixed(0)}</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">今日未實現損益</div>
-        <div class="kpi-value ${window.pnlColor ? window.pnlColor(p.day_pnl) : ''}">${p.day_pnl > 0 ? '+' : ''}${window.fmtFloat ? window.fmtFloat(p.day_pnl) : (p.day_pnl || 0).toFixed(0)}</div>
+        <div class="kpi-label">稅後淨值</div>
+        <div class="kpi-value">${window.fmtNTD ? window.fmtNTD(afterTaxValue) : afterTaxValue.toFixed(0)}</div>
+        <div class="kpi-hint">已扣除累積稅負</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">累積總報酬</div>
-        <div class="kpi-value ${window.pnlColor ? window.pnlColor(state.cumulative_pnl) : ''}">
-          ${state.cumulative_pnl > 0 ? '+' : ''}${window.fmtFloat ? window.fmtFloat(state.cumulative_pnl) : (state.cumulative_pnl || 0).toFixed(0)} 
-          <span style="font-size:14px; opacity:0.8">(${state.cumulative_pnl_pct > 0 ? '+' : ''}${window.fmtPct ? window.fmtPct(state.cumulative_pnl_pct) : (state.cumulative_pnl_pct * 100 || 0).toFixed(2) + '%'})</span>
-        </div>
+        <div class="kpi-label">累積稅負</div>
+        <div class="kpi-value text-down">${window.fmtNTD ? window.fmtNTD(totalTaxPaid) : totalTaxPaid.toFixed(0)}</div>
         <div class="kpi-hint">持倉檔數: ${positions.length} | 更新: ${state.snapshot_time ? new Date(state.snapshot_time).toLocaleTimeString() : '-'}</div>
       </div>
     `;
+
+    // Render dual-curve equity chart with pre-tax and after-tax lines
+    const equityCurve = state.equity_curve || [];
+    const preTaxPoints = equityCurve.map(p => ({ label: p.label, value: p.value }));
+    const afterTaxPoints = equityCurve
+      .filter(p => p.after_tax_value !== undefined)
+      .map(p => ({ label: p.label, value: p.after_tax_value }));
+    renderDualEquityCurve(preTaxPoints, afterTaxPoints);
 
     if (!positions || positions.length === 0) {
       tableEl.innerHTML = window.emptyState ? window.emptyState('尚無持倉資料', '') : '<div style="padding:20px;text-align:center;color:var(--muted)">尚無持倉資料</div>';

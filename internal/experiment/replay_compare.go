@@ -23,6 +23,9 @@ type replayScoreSummary struct {
 	CandidateReturns       []float64
 	BaselineFallbackStats  FallbackStats
 	CandidateFallbackStats FallbackStats
+	StartingCash           float64
+	BaselineMonetaryNTD    float64
+	CandidateMonetaryNTD   float64
 }
 
 // FallbackStats tracks factor quality based on IsFallback ratio.
@@ -114,6 +117,10 @@ func comparePromptPerformanceDetailed(replayDataPath, baselinePolicyPath string,
 				summary.UsedFallbackWindow = true
 			}
 		}
+		startingCash := baselineConstraints.StartingCash
+		summary.StartingCash = startingCash
+		summary.BaselineMonetaryNTD = baseline * startingCash
+		summary.CandidateMonetaryNTD = candidate * startingCash
 		return summary, nil
 	default:
 		baseline, baselineObs, baselineReturns, baselineFallback := scorePromptWindowWithObservations(ds, brief.TargetSkill, baselinePrompt, policy.ExecutionPolicy, window.StartDate, window.EndDate)
@@ -142,6 +149,10 @@ func comparePromptPerformanceDetailed(replayDataPath, baselinePolicyPath string,
 				summary.UsedFallbackWindow = true
 			}
 		}
+		startingCash := policy.Constraints.StartingCash
+		summary.StartingCash = startingCash
+		summary.BaselineMonetaryNTD = baseline * startingCash
+		summary.CandidateMonetaryNTD = candidate * startingCash
 		return summary, nil
 	}
 }

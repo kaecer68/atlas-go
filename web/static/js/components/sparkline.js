@@ -1,8 +1,8 @@
 // sparkline.js — Darwinian weight sparkline + equity curve + agent scoreboard
 // Standalone component, importable into dashboard.js or portfolio pages.
-import { fmt, fmtPct, fmtFloat } from '../shared/utils.js';
+import { fmt, fmtPct, fmtFloat, fmtNTD } from '../shared/utils.js';
 
-export { renderEquityCurve, renderAgentScoreboard, renderRegimeContext, renderAllocationGuidance };
+export { renderEquityCurve, renderDualEquityCurve, renderAgentScoreboard, renderRegimeContext, renderAllocationGuidance };
 
 /**
  * Renders a canvas-based equity curve sparkline.
@@ -86,6 +86,113 @@ function renderEquityCurve(points) {
       ctx.fillText(p.label, pad.left + (i / (points.length - 1)) * chartW, pad.top + chartH + 18);
     }
   });
+}
+
+/**
+ * Renders a dual-curve equity chart showing pre-tax and after-tax values.
+ * @param {Array<{value: number, label: string}>} preTaxPoints - Pre-tax equity data points
+ * @param {Array<{value: number, label: string}>} afterTaxPoints - After-tax equity data points
+ */
+function renderDualEquityCurve(preTaxPoints, afterTaxPoints) {
+  const panel = document.getElementById('equityCurvePanel');
+  const canvas = document.getElementById('equityChart');
+  if (!panel || !canvas) return;
+  if (!preTaxPoints || preTaxPoints.length < 2) { panel.style.display = 'none'; return; }
+  panel.style.display = '';
+  
+  const hasAfterTax = afterTaxPoints && afterTaxPoints.length > 0;
+  
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const W = rect.width - 40, H = 220;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.scale(dpr, dpr);
+  const pad = {top: 20, right: 20, bottom: 28, left: 80}; // Wider left pad for NT$ labels
+  const chartW = W - pad.left - pad.right, chartH = H - pad.top - pad.bottom;
+
+  const preTaxValues = preTaxPoints.map(p => p.value);
+  const afterTaxValues = hasAfterTax ? afterTaxPoints.map(p => p.value) : [];
+  const allValues = [...preTaxValues, ...afterTaxValues];
+  
+  const minV = Math.min(...allValues), maxV = Math.max(...allValues), range = maxV - minV || 1;
+  ctx.clearRect(0, 0, W, H);
+
+  ctx.fillStyle = 'rgba(19,22,28,0.6)';
+  ctx.beginPath(); ctx.roundRect(pad.left, pad.top, chartW, chartH, 6); ctx.fill();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 0.5;
+  for (let i = 1; i <= 3; i++) {
+    const y = pad.top + (chartH / 4) * i;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + chartW, y); ctx.stroke();
+  }
+
+  ctx.fillStyle = 'rgba(184,196,208,0.6)'; ctx.font = '10px system-ui'; ctx.textAlign = 'right';
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (chartH / 4) * i;
+    const val = maxV - (range / 4) * i;
+    ctx.fillText(fmtNTD(val), pad.left - 8, y + 3);
+  }
+
+  function drawCurve(points, colorRGB, glowColor) {
+    if (!points || points.length === 0) return;
+    const pts = points.map((p, i) => ({
+      x: pad.left + (i / (points.length - 1)) * chartW,
+      y: pad.top + (1 - (p.value - minV) / range) * chartH
+    }));
+
+    const gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
+    gradient.addColorStop(0, `rgba(${colorRGB},0.25)`);
+    gradient.addColorStop(1, `rgba(${colorRGB},0.02)`);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pad.top + chartH);
+    for (let i = 0; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.lineTo(pts[pts.length - 1].x, pad.top + chartH);
+    ctx.closePath();
+    ctx.fillStyle = gradient; ctx.fill();
+
+    ctx.save();
+    ctx.shadowColor = `rgba(${colorRGB},0.4)`; ctx.shadowBlur = 6;
+    ctx.strokeStyle = glowColor;
+    ctx.lineWidth = 2.2; ctx.lineJoin = 'round'; ctx.beginPath();
+    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.stroke();
+    ctx.restore();
+
+    if (pts.length <= 30) {
+      ctx.fillStyle = glowColor;
+      pts.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill(); });
+    }
+  }
+
+  if (hasAfterTax) {
+    drawCurve(afterTaxPoints, '255,165,0', '#ffa500'); 
+  }
+  drawCurve(preTaxPoints, '79,193,255', '#4fc1ff'); 
+
+  ctx.fillStyle = 'rgba(184,196,208,0.5)'; ctx.font = '9px system-ui'; ctx.textAlign = 'center';
+  const step = Math.max(1, Math.floor(preTaxPoints.length / 6));
+  preTaxPoints.forEach((p, i) => {
+    if (i % step === 0 || i === preTaxPoints.length - 1) {
+      ctx.fillText(p.label, pad.left + (i / (preTaxPoints.length - 1)) * chartW, pad.top + chartH + 18);
+    }
+  });
+
+  if (hasAfterTax) {
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    
+    ctx.fillStyle = '#4fc1ff';
+    ctx.fillRect(pad.left + 10, pad.top + 10, 10, 10);
+    ctx.fillStyle = 'rgba(184,196,208,0.8)';
+    ctx.fillText('稅前淨值 (Pre-tax)', pad.left + 25, pad.top + 19);
+    
+    ctx.fillStyle = '#ffa500';
+    ctx.fillRect(pad.left + 130, pad.top + 10, 10, 10);
+    ctx.fillStyle = 'rgba(184,196,208,0.8)';
+    ctx.fillText('稅後淨值 (After-tax)', pad.left + 145, pad.top + 19);
+  }
 }
 
 /**
