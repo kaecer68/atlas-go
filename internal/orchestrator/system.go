@@ -140,9 +140,7 @@ func NewSystem(cfg config.Config) (*System, error) {
 
 	sys.Sim().scratchpad = NewScratchpad(sys.Sim().session.ID, cfg.LedgerDir)
 
-
 	return sys, nil
-
 
 }
 
