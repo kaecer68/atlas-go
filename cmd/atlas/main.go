@@ -185,6 +185,7 @@ func run(args []string, deps appDeps) error {
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 			eventBus := eventbus.NewChannelEventBus(256)
 			d.SetEventBus(eventBus)
+			d.SetContext(context.Background())
 			log.Printf("[EventBus] injected into dashboard API for SSE streaming")
 		}
 		dashboard.RegisterRoutes(mux)
@@ -428,6 +429,8 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 			log.Printf("[Repository] injected into live trading dashboard API")
 		}
 		d.SetEventBus(eventBus)
+		d.SetContext(ctx)
+		logging.SetLogContext(ctx)
 		log.Printf("[EventBus] injected into live trading dashboard API for SSE streaming")
 	}
 	dashboard.RegisterRoutes(mux)
