@@ -3,10 +3,48 @@ package live
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
+
+// OrderEvent records a single event in an order's lifecycle.
+type OrderEvent struct {
+	Status    string    `json:"status"`
+	Timestamp time.Time `json:"timestamp"`
+	FillPrice float64   `json:"fill_price,omitempty"`
+	Reason    string    `json:"reason,omitempty"`
+}
+
+// OrderRecord is a complete order record with lifecycle events.
+type OrderRecord struct {
+	OrderID    string       `json:"order_id"`
+	Symbol     string       `json:"symbol"`
+	Side       string       `json:"side"`
+	Quantity   int          `json:"quantity"`
+	Price      float64      `json:"price"`
+	Status     string       `json:"status"`
+	CreatedAt  time.Time    `json:"created_at"`
+	UpdatedAt  time.Time    `json:"updated_at"`
+	BrokerMode string       `json:"broker_mode"`
+	FillPrice  float64      `json:"fill_price,omitempty"`
+	Reason     string       `json:"reason,omitempty"`
+	Events     []OrderEvent `json:"events"`
+}
+
+// OrderFilter filters the order list.
+type OrderFilter struct {
+	Status   string
+	Symbol   string
+	Side     string
+	DateFrom time.Time
+	DateTo   time.Time
+	Page     int
+	PageSize int
+}
 
 // OrderManager 负责下单重试与事件稽核。
 type OrderManager struct {
@@ -14,6 +52,9 @@ type OrderManager struct {
 	eventBus     *ChannelEventBus
 	maxRetries   int
 	retryBackoff time.Duration
+
+	mu     sync.RWMutex
+	orders map[string]OrderRecord
 }
 
 func NewOrderManager(broker Broker, eventBus *ChannelEventBus, maxRetries int, retryBackoff time.Duration) *OrderManager {
@@ -32,6 +73,7 @@ func NewOrderManager(broker Broker, eventBus *ChannelEventBus, maxRetries int, r
 		eventBus:     eventBus,
 		maxRetries:   maxRetries,
 		retryBackoff: retryBackoff,
+		orders:       make(map[string]OrderRecord),
 	}
 }
 
@@ -40,6 +82,12 @@ func (m *OrderManager) Mode() string {
 		return "dry-run"
 	}
 	return m.broker.Mode()
+}
+
+func (m *OrderManager) RecordOrder(order OrderRecord) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.orders[order.OrderID] = order
 }
 
 func (m *OrderManager) Run(ctx context.Context, order domain.Order) error {
@@ -113,4 +161,61 @@ func (m *OrderManager) Run(ctx context.Context, order domain.Order) error {
 	}
 
 	return fmt.Errorf("submit order %s failed after %d attempts: %w", order.Symbol, attempts, lastErr)
+}
+
+func (m *OrderManager) GetOrders(filter OrderFilter) ([]OrderRecord, int, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if filter.Page <= 0 {
+		filter.Page = 1
+	}
+	if filter.PageSize <= 0 {
+		filter.PageSize = 20
+	}
+
+	var all []OrderRecord
+	for _, rec := range m.orders {
+		if filter.Symbol != "" && !strings.EqualFold(rec.Symbol, filter.Symbol) {
+			continue
+		}
+		if filter.Side != "" && !strings.EqualFold(rec.Side, filter.Side) {
+			continue
+		}
+		if filter.Status != "" && !strings.EqualFold(rec.Status, filter.Status) {
+			continue
+		}
+		if !filter.DateFrom.IsZero() && rec.CreatedAt.Before(filter.DateFrom) {
+			continue
+		}
+		if !filter.DateTo.IsZero() && rec.CreatedAt.After(filter.DateTo) {
+			continue
+		}
+		all = append(all, rec)
+	}
+
+	slices.SortFunc(all, func(a, b OrderRecord) int {
+		return b.CreatedAt.Compare(a.CreatedAt)
+	})
+
+	total := len(all)
+	start := (filter.Page - 1) * filter.PageSize
+	if start >= total {
+		return []OrderRecord{}, total, nil
+	}
+	end := start + filter.PageSize
+	if end > total {
+		end = total
+	}
+	return all[start:end], total, nil
+}
+
+func (m *OrderManager) GetOrder(orderID string) (*OrderRecord, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if rec, ok := m.orders[orderID]; ok {
+		return &rec, nil
+	}
+	return nil, fmt.Errorf("order not found: %s", orderID)
 }
