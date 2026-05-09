@@ -24,7 +24,7 @@ func (s *SQLiteSessionStore) RecordSessionSummary(session domain.ReplaySession, 
 		return fmt.Errorf("marshal session summary: %w", err)
 	}
 
-	_, _ = s.db.Exec(`ALTER TABLE session_summaries ADD COLUMN summary_json TEXT`)
+	_, _ = s.db.Exec(`ALTER TABLE session_summaries ADD COLUMN summary_json TEXT`) //nolint:errcheck
 
 	_, err = s.db.Exec(`
 		INSERT INTO session_summaries (session_id, summary_json, timestamp)
