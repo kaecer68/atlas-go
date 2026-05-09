@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-
-	"github.com/kaecer68/atlas-go/internal/logging"
 	"path/filepath"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"

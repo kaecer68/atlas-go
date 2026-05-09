@@ -108,6 +108,7 @@ func (s *SQLiteQuoteStore) LoadLatestQuotes(symbols []string) (map[string]domain
 	}
 
 	// Use a subquery to get the latest date per symbol.
+	// #nosec G202 -- placeholders() generates only '?' characters, no user input.
 	query := `
 		SELECT q.symbol, q.name, q.date, q.open, q.high, q.low, q.close, q.volume, q.source
 		FROM quotes q
