@@ -10,6 +10,7 @@ import { loadReasoningTrace } from './components/reasoning-trace.js';
 import { eventSource } from './services/event-source.js';
 import { renderLiveProgress } from './components/live-progress.js';
 import { renderToolEvents } from './components/tool-events.js';
+import { fmtNTD } from './shared/utils.js';
 
 const pageLoadStatus = {};
 const APP_VERSION = '20260509';
@@ -369,6 +370,7 @@ function initBacktestDates() {
 if (typeof window !== "undefined") window.switchPage = switchPage;
 if (typeof window !== "undefined") window.toggleSidebar = toggleSidebar;
 if (typeof window !== "undefined") window.retryLoad = retryLoad;
+if (typeof window !== "undefined") window.fmtNTD = fmtNTD;
 
 if (typeof window !== 'undefined') {
   populateAgentSelect();

@@ -94,6 +94,10 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 	result.CandidateFallbackCount = summary.CandidateFallbackStats.FallbackCount
 	result.BaselineFactorCount = summary.BaselineFallbackStats.TotalCount
 	result.CandidateFactorCount = summary.CandidateFallbackStats.TotalCount
+	result.BaselineMonetaryNTD = summary.BaselineMonetaryNTD
+	result.CandidateMonetaryNTD = summary.CandidateMonetaryNTD
+	result.Experiment.BaselineMonetaryNTD = summary.BaselineMonetaryNTD
+	result.Experiment.CandidateMonetaryNTD = summary.CandidateMonetaryNTD
 	result.Experiment.WindowStart = windowSummary.StartDate
 	result.Experiment.WindowEnd = windowSummary.EndDate
 	result.EvaluationMode = "prompt_aware_replay_judged"

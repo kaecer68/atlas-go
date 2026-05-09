@@ -2,6 +2,7 @@ package experiment
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -468,5 +469,151 @@ func TestJudge_WithParameters(t *testing.T) {
 	result := j.WithParameters(nil)
 	if result == nil {
 		t.Fatal("WithParameters returned nil")
+	}
+}
+
+func TestEvaluatePopulatesMonetaryFields(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	root := filepath.Clean(filepath.Join(wd, "../.."))
+	stateDir := t.TempDir()
+	store := ledger.NewStore(stateDir).(ledger.ExperimentStore)
+	replayPath := filepath.Join(root, "samples", "replay", "twse_stock_day_all_sample.csv")
+	baselinePolicyPath := filepath.Join(stateDir, "baseline_policy.json")
+	startingCash := 1000000.0
+	baselinePolicy := `{"version":1,"constraints":{"starting_cash":` + fmt.Sprintf("%.0f", startingCash) + `,"max_position_weight":0.25,"max_open_positions":10,"min_tradable_volume":1000,"min_recommendation_conviction":0,"require_cro_pass":false,"transaction_cost_bps":1,"slippage_bps":5,"reserve_cash_fraction":0.1},"execution_policy":{"conviction_floor":0,"require_cro_pass":false,"momentum_crash_protection":false}}`
+	if err := os.WriteFile(baselinePolicyPath, []byte(baselinePolicy), 0o644); err != nil {
+		t.Fatalf("write baseline policy: %v", err)
+	}
+	judge := NewJudge(store, replayPath, baselinePolicyPath)
+	resultPath := filepath.Join(stateDir, "experiments", "test-monetary.json")
+	promptPath := filepath.Join(t.TempDir(), "v2.md")
+	baselinePromptPath := filepath.Join(root, "prompts/agents/growth_momentum.md")
+	windowPath := filepath.Join(stateDir, "windows", "window-monetary.json")
+
+	if err := os.MkdirAll(filepath.Dir(promptPath), 0o755); err != nil {
+		t.Fatalf("mkdir prompt dir: %v", err)
+	}
+	if err := os.WriteFile(promptPath, []byte("require trend confirmation\ndowngrade conviction\nreject setups\n"), 0o644); err != nil {
+		t.Fatalf("write prompt: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(resultPath), 0o755); err != nil {
+		t.Fatalf("mkdir result dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(windowPath), 0o755); err != nil {
+		t.Fatalf("mkdir window dir: %v", err)
+	}
+
+	window := domain.BacktestWindowSummary{
+		WindowID:             "window-monetary",
+		StartDate:            time.Date(2026, 3, 26, 0, 0, 0, 0, time.UTC),
+		EndDate:              time.Date(2026, 3, 27, 0, 0, 0, 0, time.UTC),
+		WorstAgentSharpeLike: -100,
+	}
+	windowBytes, err := json.Marshal(window)
+	if err != nil {
+		t.Fatalf("marshal window: %v", err)
+	}
+	if err := os.WriteFile(windowPath, windowBytes, 0o644); err != nil {
+		t.Fatalf("write window: %v", err)
+	}
+
+	resultFixture := domain.PromptExperimentResult{
+		Experiment: domain.ExperimentRecord{
+			ID:               "test-monetary",
+			TargetAgentID:    "growth-momentum-01",
+			Skill:            "growth_momentum",
+			MutationType:     "prompt_tightening",
+			AcceptanceMetric: "sharpe_like",
+			AcceptanceGates:  []string{"improve_sharpe_like", "no_material_drawdown_degradation", "no_constraint_bypass"},
+			Status:           domain.ExperimentRunning,
+		},
+		Brief: domain.MutationBrief{
+			WindowID:            "window-monetary",
+			TargetAgentID:       "growth-momentum-01",
+			TargetSkill:         "growth_momentum",
+			TargetLayer:         domain.LayerStyle,
+			PromptFile:          baselinePromptPath,
+			MutationType:        "prompt_tightening",
+			AcceptanceMetric:    "sharpe_like",
+			AcceptanceGates:     []string{"improve_sharpe_like", "no_material_drawdown_degradation", "no_constraint_bypass"},
+			ForbiddenActions:    []string{"illiquid_breakout_chasing"},
+			RequiredSkills:      []string{"growth_momentum"},
+			ObservedWindowCount: 2,
+			MaturityLevel:       "level_1_exploratory",
+		},
+		CandidatePrompt: promptPath,
+		EvaluationMode:  "policy_checked_pending_replay",
+		PolicyChecks:    []string{"required skill preserved: growth_momentum"},
+	}
+	resultBytes, err := json.Marshal(resultFixture)
+	if err != nil {
+		t.Fatalf("marshal result fixture: %v", err)
+	}
+	if err := os.WriteFile(resultPath, resultBytes, 0o644); err != nil {
+		t.Fatalf("write result fixture: %v", err)
+	}
+
+	result, err := judge.Evaluate(resultPath)
+	if err != nil {
+		t.Fatalf("judge evaluate: %v", err)
+	}
+
+	if result.BaselineMonetaryNTD == 0 && result.Experiment.BaselineMonetaryNTD == 0 {
+		if result.Experiment.BaselineValue != 0 {
+			t.Errorf("expected BaselineMonetaryNTD to be populated from BaselineValue=%.4f", result.Experiment.BaselineValue)
+		}
+	} else {
+		if result.BaselineMonetaryNTD != result.Experiment.BaselineMonetaryNTD {
+			t.Errorf("expected top-level and Experiment-level monetary fields to match")
+		}
+	}
+	if result.CandidateMonetaryNTD == 0 && result.Experiment.CandidateMonetaryNTD == 0 {
+		if result.Experiment.CandidateValue != 0 {
+			t.Errorf("expected CandidateMonetaryNTD to be populated from CandidateValue=%.4f", result.Experiment.CandidateValue)
+		}
+	} else {
+		if result.CandidateMonetaryNTD != result.Experiment.CandidateMonetaryNTD {
+			t.Errorf("expected top-level and Experiment-level monetary fields to match")
+		}
+	}
+}
+
+func TestEvaluateMonetaryFieldsJSONSerialization(t *testing.T) {
+	result := domain.PromptExperimentResult{
+		Experiment: domain.ExperimentRecord{
+			ID:                   "test-json",
+			BaselineValue:        0.05,
+			CandidateValue:       0.07,
+			BaselineMonetaryNTD:  50000.0,
+			CandidateMonetaryNTD: 70000.0,
+		},
+		BaselineMonetaryNTD:  50000.0,
+		CandidateMonetaryNTD: 70000.0,
+	}
+
+	bytes, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+
+	var decoded domain.PromptExperimentResult
+	if err := json.Unmarshal(bytes, &decoded); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+
+	if decoded.BaselineMonetaryNTD != 50000.0 {
+		t.Errorf("expected BaselineMonetaryNTD=50000.0, got %.2f", decoded.BaselineMonetaryNTD)
+	}
+	if decoded.CandidateMonetaryNTD != 70000.0 {
+		t.Errorf("expected CandidateMonetaryNTD=70000.0, got %.2f", decoded.CandidateMonetaryNTD)
+	}
+	if decoded.Experiment.BaselineMonetaryNTD != 50000.0 {
+		t.Errorf("expected Experiment.BaselineMonetaryNTD=50000.0, got %.2f", decoded.Experiment.BaselineMonetaryNTD)
+	}
+	if decoded.Experiment.CandidateMonetaryNTD != 70000.0 {
+		t.Errorf("expected Experiment.CandidateMonetaryNTD=70000.0, got %.2f", decoded.Experiment.CandidateMonetaryNTD)
 	}
 }

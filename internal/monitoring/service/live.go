@@ -118,8 +118,11 @@ type PositionDTO struct {
 
 // EquityCurvePoint is a single point on the equity curve.
 type EquityCurvePoint struct {
-	Label string  `json:"label"`
-	Value float64 `json:"value"`
+	Label         string  `json:"label"`
+	Value         float64 `json:"value"`
+	Currency      string  `json:"currency,omitempty"`
+	AfterTaxValue float64 `json:"after_tax_value,omitempty"`
+	TaxPaid       float64 `json:"tax_paid,omitempty"`
 }
 
 // LoadPortfolioState returns the current portfolio state with positions and equity curve.
@@ -194,9 +197,11 @@ func (s *LiveService) buildEquityCurve() []EquityCurvePoint {
 	}
 
 	type sessionPoint struct {
-		date  time.Time
-		label string
-		value float64
+		date          time.Time
+		label         string
+		value         float64
+		taxPaid       float64
+		afterTaxValue float64
 	}
 	points := make([]sessionPoint, 0, len(entries))
 	for _, entry := range entries {
@@ -216,10 +221,13 @@ func (s *LiveService) buildEquityCurve() []EquityCurvePoint {
 			continue
 		}
 		date := sessionDateFromID(summary.SessionID)
+		afterTaxValue := summary.PortfolioValue - summary.TotalTaxPaid
 		points = append(points, sessionPoint{
-			date:  date,
-			label: summary.SessionID,
-			value: summary.PortfolioValue,
+			date:          date,
+			label:         summary.SessionID,
+			value:         summary.PortfolioValue,
+			taxPaid:       summary.TotalTaxPaid,
+			afterTaxValue: afterTaxValue,
 		})
 	}
 
@@ -234,8 +242,11 @@ func (s *LiveService) buildEquityCurve() []EquityCurvePoint {
 	curve := make([]EquityCurvePoint, len(points))
 	for i, p := range points {
 		curve[i] = EquityCurvePoint{
-			Label: p.label,
-			Value: p.value,
+			Label:         p.label,
+			Value:         p.value,
+			Currency:      "TWD",
+			AfterTaxValue: p.afterTaxValue,
+			TaxPaid:       p.taxPaid,
 		}
 	}
 	return curve
