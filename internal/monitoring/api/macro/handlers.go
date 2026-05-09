@@ -46,6 +46,9 @@ func (h *Handlers) HandleMacroSnapshotHistory(r *http.Request) (int, any) {
 	if date == "" {
 		return http.StatusBadRequest, map[string]string{"error": "date query param required (YYYY-MM-DD)"}
 	}
+	if err := shared.ValidateDateParam(date); err != nil {
+		return http.StatusBadRequest, map[string]string{"error": err.Error()}
+	}
 	snap, err := h.Service.GetSnapshotByDate(date)
 	if err != nil {
 		return http.StatusNotFound, map[string]string{"error": "snapshot not found for date"}

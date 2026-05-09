@@ -8,6 +8,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
 	"github.com/kaecer68/atlas-go/internal/tax"
@@ -93,9 +94,13 @@ func (e *Engine) RunWithState(state *domain.SimulationState, regime domain.Regim
 		EndingCash:     state.Cash,
 		PortfolioValue: dayResult.PortfolioValue,
 		GuardOutcomes:  nil,
+		FallbackEvents: dayResult.FallbackEvents,
 	}
 	if e.taxCalc != nil {
 		e.computeTaxAdjustedResults(&result, state)
+	} else {
+		logging.Warn("sim", "tax_fallback", "reason", "nil_calculator", "action", "skip")
+		result.FallbackEvents = append(result.FallbackEvents, "tax: nil calculator, skipping")
 	}
 	return result
 }
@@ -114,6 +119,7 @@ func (e *Engine) RunDay(
 	}
 
 	orders := make([]domain.Order, 0)
+	var fallbackEvents []string
 
 	// 0. Apply reflexivity rules before any trading
 	for _, rule := range e.reflexRules {
@@ -131,12 +137,12 @@ func (e *Engine) RunDay(
 
 	// 2. Sell logic
 	if e.constraints.SellLogicEnabled() {
-		sellOrders := e.executeSells(state, quoteBySymbol, recs)
+		sellOrders := e.executeSells(state, quoteBySymbol, recs, &fallbackEvents)
 		orders = append(orders, sellOrders...)
 	}
 
 	// 3. Buy logic
-	buyOrders, newPositions := e.executeBuys(state.Cash, state.Positions, quoteBySymbol, recs, regime)
+	buyOrders, newPositions := e.executeBuys(state.Cash, state.Positions, quoteBySymbol, recs, regime, &fallbackEvents)
 	orders = append(orders, buyOrders...)
 	state.Positions = newPositions
 	state.Cash -= totalCost(buyOrders)
@@ -171,12 +177,13 @@ func (e *Engine) RunDay(
 		Cash:           state.Cash,
 		PortfolioValue: portfolioValue,
 		DailyPnL:       dailyPnL,
+		FallbackEvents: fallbackEvents,
 	}
 }
 
-func (e *Engine) getSlippageBPS(symbol string, quotes map[string]domain.Quote) float64 {
+func (e *Engine) getSlippageBPS(symbol string, quotes map[string]domain.Quote, fallbackEvents *[]string) float64 {
 	if e.slippageModel != nil {
-		return e.slippageModel.CalculateSlippageBPS(symbol, quotes)
+		return e.slippageModel.CalculateSlippageBPS(symbol, quotes, fallbackEvents)
 	}
 	return e.constraints.SlippageBPS
 }
@@ -185,6 +192,7 @@ func (e *Engine) executeSells(
 	state *domain.SimulationState,
 	quoteBySymbol map[string]domain.Quote,
 	recs []domain.Recommendation,
+	fallbackEvents *[]string,
 ) []domain.Order {
 	remaining := make([]domain.Position, 0, len(state.Positions))
 	var orders []domain.Order
@@ -198,7 +206,7 @@ func (e *Engine) executeSells(
 
 		shouldSell, reason := e.shouldSellPosition(pos, quote, recs)
 		if shouldSell {
-			slippageBPS := e.getSlippageBPS(pos.Symbol, quoteBySymbol)
+			slippageBPS := e.getSlippageBPS(pos.Symbol, quoteBySymbol, fallbackEvents)
 			price := applyBPS(quote.Last, -(slippageBPS + e.constraints.TransactionCostBPS))
 			proceeds := float64(pos.Quantity) * price
 			state.Cash += proceeds
@@ -261,6 +269,7 @@ func (e *Engine) RunMultiDay(
 	}
 
 	var totalTrades int
+	var allFallbackEvents []string
 	for _, date := range dates {
 		key := date.Format("2006-01-02")
 		quotes := quotesByDate[key]
@@ -269,17 +278,19 @@ func (e *Engine) RunMultiDay(
 		regime := domain.RegimeNeutral
 		result := e.RunDay(&state, date, regime, quotes, recs)
 		totalTrades += len(result.Orders)
+		allFallbackEvents = append(allFallbackEvents, result.FallbackEvents...)
 	}
 
 	report := domain.SimulationReport{
-		TotalReturn:   0,
-		SharpeRatio:   0,
-		MaxDrawdown:   state.CurrentDrawdown,
-		EquityCurve:   append([]float64(nil), state.EquityCurve...),
-		AgentHitRates: make(map[string]float64),
-		TradeCount:    totalTrades,
-		StartDate:     firstDate,
-		EndDate:       lastDate,
+		TotalReturn:    0,
+		SharpeRatio:    0,
+		MaxDrawdown:    state.CurrentDrawdown,
+		EquityCurve:    append([]float64(nil), state.EquityCurve...),
+		AgentHitRates:  make(map[string]float64),
+		TradeCount:     totalTrades,
+		StartDate:      firstDate,
+		EndDate:        lastDate,
+		FallbackEvents: allFallbackEvents,
 	}
 
 	if len(state.EquityCurve) > 0 && state.EquityCurve[0] > 0 {
@@ -298,11 +309,12 @@ func (e *Engine) executeBuys(
 	quoteBySymbol map[string]domain.Quote,
 	recs []domain.Recommendation,
 	regime domain.Regime,
+	fallbackEvents *[]string,
 ) ([]domain.Order, []domain.Position) {
 	if e.useOptimizer && e.optimizer != nil {
-		return e.executeOptimizerBuys(cash, existingPositions, quoteBySymbol, recs, regime)
+		return e.executeOptimizerBuys(cash, existingPositions, quoteBySymbol, recs, regime, fallbackEvents)
 	}
-	return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs, regime)
+	return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs, regime, fallbackEvents)
 }
 
 func (e *Engine) executeOptimizerBuys(
@@ -311,10 +323,15 @@ func (e *Engine) executeOptimizerBuys(
 	quoteBySymbol map[string]domain.Quote,
 	recs []domain.Recommendation,
 	regime domain.Regime,
+	fallbackEvents *[]string,
 ) ([]domain.Order, []domain.Position) {
 	orders, err := e.optimizer.OptimizeToOrders(e.ctx, recs, quoteBySymbol, cash)
 	if err != nil {
-		return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs, regime)
+		logging.Warn("sim", "optimizer_fallback", "reason", "optimizer_failed", logging.Err(err))
+		if fallbackEvents != nil {
+			*fallbackEvents = append(*fallbackEvents, "optimizer: fallback to legacy buys")
+		}
+		return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs, regime, fallbackEvents)
 	}
 
 	positions := clonePositions(existingPositions)
@@ -348,7 +365,7 @@ func (e *Engine) executeOptimizerBuys(
 			continue
 		}
 
-		slippageBPS := e.getSlippageBPS(order.Symbol, quoteBySymbol)
+		slippageBPS := e.getSlippageBPS(order.Symbol, quoteBySymbol, fallbackEvents)
 		price := applyBPS(quote.Last, slippageBPS+e.constraints.TransactionCostBPS)
 		quantity := order.Quantity
 		if quantity <= 0 {
@@ -392,6 +409,7 @@ func (e *Engine) executeLegacyBuys(
 	quoteBySymbol map[string]domain.Quote,
 	recs []domain.Recommendation,
 	regime domain.Regime,
+	fallbackEvents *[]string,
 ) ([]domain.Order, []domain.Position) {
 	positions := clonePositions(existingPositions)
 	orders := make([]domain.Order, 0)
@@ -434,7 +452,7 @@ func (e *Engine) executeLegacyBuys(
 			continue
 		}
 
-		slippageBPS := e.getSlippageBPS(rec.Symbol, quoteBySymbol)
+		slippageBPS := e.getSlippageBPS(rec.Symbol, quoteBySymbol, fallbackEvents)
 		price := applyBPS(quote.Last, slippageBPS+e.constraints.TransactionCostBPS)
 		quantity := int(math.Floor(maxPerPosition/price/100.0) * 100)
 		if quantity <= 0 {
@@ -527,6 +545,7 @@ func applyBPS(price, bps float64) float64 {
 
 func (e *Engine) computeTaxAdjustedResults(result *domain.SimulationResult, state *domain.SimulationState) {
 	if e.taxCalc == nil {
+		logging.Warn("sim", "tax_fallback", "reason", "nil_calculator", "action", "skip")
 		return
 	}
 

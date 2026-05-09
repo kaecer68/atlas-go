@@ -86,7 +86,10 @@ func main() {
 
 		dayCfg := cfg
 		dayCfg.ReplaySessionDate = date.Format("2006-01-02")
-		system := orchestrator.NewSystem(dayCfg)
+		system, err := orchestrator.NewSystem(dayCfg)
+		if err != nil {
+			log.Fatalf("create system: %v", err)
+		}
 		system.WithPersistentState(&persistentState)
 		system.WithPhase3Controller(ctrl)
 

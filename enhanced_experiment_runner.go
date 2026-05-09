@@ -404,7 +404,11 @@ func testSystemIntegration() (float64, []string) {
 	errors := make([]string, 0)
 
 	cfg := config.Config{}
-	system := orchestrator.NewSystem(cfg)
+	system, err := orchestrator.NewSystem(cfg)
+	if err != nil {
+		errors = append(errors, fmt.Sprintf("create system: %v", err))
+		return 0, errors
+	}
 
 	registry := system.Registry()
 	if len(registry.Agents) == 0 {

@@ -161,16 +161,15 @@ func TestAlertAPI_Acknowledge(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"alert_id": "alert-1", "user": "admin"})
 	req := httptest.NewRequest(http.MethodPost, "/api/alerts/acknowledge", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
-	api.handleAcknowledge(rec, req)
+	status, respBody := api.handleAcknowledge(req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
 	}
 
-	var resp map[string]any
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode: %v", err)
+	resp, ok := respBody.(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected response type: %T", respBody)
 	}
 	if resp["success"] != true {
 		t.Errorf("success = %v, want true", resp["success"])
@@ -196,11 +195,10 @@ func TestAlertAPI_Acknowledge_NotFound(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"alert_id": "nonexistent", "user": "admin"})
 	req := httptest.NewRequest(http.MethodPost, "/api/alerts/acknowledge", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
-	api.handleAcknowledge(rec, req)
+	status, _ := api.handleAcknowledge(req)
 
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("status = %d, want 404", rec.Code)
+	if status != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", status)
 	}
 }
 
@@ -209,11 +207,10 @@ func TestAlertAPI_Acknowledge_MissingAlertID(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"user": "admin"})
 	req := httptest.NewRequest(http.MethodPost, "/api/alerts/acknowledge", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
-	api.handleAcknowledge(rec, req)
+	status, _ := api.handleAcknowledge(req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want 400", rec.Code)
+	if status != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", status)
 	}
 }
 
@@ -222,11 +219,10 @@ func TestAlertAPI_Acknowledge_MissingUser(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"alert_id": "alert-1"})
 	req := httptest.NewRequest(http.MethodPost, "/api/alerts/acknowledge", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
-	api.handleAcknowledge(rec, req)
+	status, _ := api.handleAcknowledge(req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want 400", rec.Code)
+	if status != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", status)
 	}
 }
 
@@ -234,23 +230,10 @@ func TestAlertAPI_Acknowledge_InvalidJSON(t *testing.T) {
 	api, _ := newTestAlertAPI(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/alerts/acknowledge", bytes.NewReader([]byte("not json")))
-	rec := httptest.NewRecorder()
-	api.handleAcknowledge(rec, req)
+	status, _ := api.handleAcknowledge(req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want 400", rec.Code)
-	}
-}
-
-func TestAlertAPI_Acknowledge_MethodNotAllowed(t *testing.T) {
-	api, _ := newTestAlertAPI(t)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/alerts/acknowledge", nil)
-	rec := httptest.NewRecorder()
-	api.handleAcknowledge(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Errorf("status = %d, want 405", rec.Code)
+	if status != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", status)
 	}
 }
 

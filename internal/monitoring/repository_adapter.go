@@ -118,18 +118,6 @@ func (a *OutcomeStoreAdapter) RecordSessionOutcomes(session domain.ReplaySession
 	return a.store.RecordSessionOutcomes(session, outcomes)
 }
 
-func (a *OutcomeStoreAdapter) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
-	return a.store.RecordSessionSummary(session, summary)
-}
-
-func (a *OutcomeStoreAdapter) LoadSessionSummaries() ([]domain.SessionSummary, error) {
-	return a.store.LoadSessionSummaries()
-}
-
-func (a *OutcomeStoreAdapter) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
-	return a.store.LoadAllSessionScorecards()
-}
-
 func (a *OutcomeStoreAdapter) RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error {
 	return a.store.RecordSessionScreeningRejects(sessionID, rejects)
 }
@@ -185,18 +173,6 @@ func (a *DualWriteOutcomeStoreAdapter) RecordSessionOutcomes(session domain.Repl
 	return a.repo.RecordSessionOutcomes(a.ctx, session, outcomes)
 }
 
-func (a *DualWriteOutcomeStoreAdapter) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
-	return a.repo.RecordSessionSummary(a.ctx, session, summary)
-}
-
-func (a *DualWriteOutcomeStoreAdapter) LoadSessionSummaries() ([]domain.SessionSummary, error) {
-	return a.repo.LoadAllSessionSummaries(a.ctx)
-}
-
-func (a *DualWriteOutcomeStoreAdapter) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
-	return a.repo.QueryAllSessionScorecards(a.ctx)
-}
-
 func (a *DualWriteOutcomeStoreAdapter) RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error {
 	return a.repo.RecordSessionScreeningRejects(a.ctx, sessionID, rejects)
 }
@@ -219,4 +195,63 @@ func (a *DualWriteOutcomeStoreAdapter) RecordHumanIntervention(intervention doma
 
 func (a *DualWriteOutcomeStoreAdapter) LoadHumanInterventions() ([]domain.HumanIntervention, error) {
 	return a.repo.LoadHumanInterventions(a.ctx)
+}
+
+func (a *DualWriteOutcomeStoreAdapter) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
+	return a.repo.RecordSessionSummary(a.ctx, session, summary)
+}
+
+func (a *DualWriteOutcomeStoreAdapter) LoadSessionSummaries() ([]domain.SessionSummary, error) {
+	return a.repo.LoadAllSessionSummaries(a.ctx)
+}
+
+func (a *DualWriteOutcomeStoreAdapter) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
+	return a.repo.QueryAllSessionScorecards(a.ctx)
+}
+
+type SessionStoreAdapter struct {
+	store ledger.SessionStore
+}
+
+func NewSessionStoreAdapter(store ledger.SessionStore) *SessionStoreAdapter {
+	return &SessionStoreAdapter{store: store}
+}
+
+func (a *SessionStoreAdapter) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
+	return a.store.RecordSessionSummary(session, summary)
+}
+
+func (a *SessionStoreAdapter) LoadSessionSummaries() ([]domain.SessionSummary, error) {
+	return a.store.LoadSessionSummaries()
+}
+
+func (a *SessionStoreAdapter) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
+	return a.store.LoadAllSessionScorecards()
+}
+
+type DualWriteSessionStoreAdapter struct {
+	repo *repository.DualWriteRepository
+	ctx  context.Context
+}
+
+func NewDualWriteSessionStoreAdapter(repo *repository.DualWriteRepository) *DualWriteSessionStoreAdapter {
+	return &DualWriteSessionStoreAdapter{repo: repo, ctx: context.Background()}
+}
+
+func (a *DualWriteSessionStoreAdapter) SetContext(ctx context.Context) {
+	if ctx != nil {
+		a.ctx = ctx
+	}
+}
+
+func (a *DualWriteSessionStoreAdapter) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
+	return a.repo.RecordSessionSummary(a.ctx, session, summary)
+}
+
+func (a *DualWriteSessionStoreAdapter) LoadSessionSummaries() ([]domain.SessionSummary, error) {
+	return a.repo.LoadAllSessionSummaries(a.ctx)
+}
+
+func (a *DualWriteSessionStoreAdapter) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
+	return a.repo.QueryAllSessionScorecards(a.ctx)
 }

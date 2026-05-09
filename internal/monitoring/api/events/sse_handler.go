@@ -26,13 +26,17 @@ type SSEHandler struct {
 	clients     map[string]*SSEClient
 	clientCount int64
 	mutex       sync.RWMutex
+	maxClients  int
 }
+
+const defaultMaxSSEClients = 20
 
 // NewSSEHandler creates a new SSE handler.
 func NewSSEHandler(eventBus *eventbus.ChannelEventBus) *SSEHandler {
 	return &SSEHandler{
-		eventBus: eventBus,
-		clients:  make(map[string]*SSEClient),
+		eventBus:   eventBus,
+		clients:    make(map[string]*SSEClient),
+		maxClients: defaultMaxSSEClients,
 	}
 }
 
@@ -48,8 +52,17 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'")
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
+
+	// Enforce max concurrent connections
+	count := atomic.LoadInt64(&h.clientCount)
+	if count >= int64(h.maxClients) {
+		fmt.Fprintf(w, "event: error\ndata: {\"message\":\"too many connections\"}\n\n")
+		flusher.Flush()
+		return
+	}
 
 	clientID := fmt.Sprintf("sse-%d", time.Now().UnixNano())
 	filterTypes := h.parseFilterTypes(r)

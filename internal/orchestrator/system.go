@@ -101,7 +101,7 @@ type System struct {
 	host *PluginHost
 }
 
-func NewSystem(cfg config.Config) *System {
+func NewSystem(cfg config.Config) (*System, error) {
 	registry, err := LoadRegistry(cfg.AgentRegistryPath)
 	if err != nil {
 		registry = SeedRegistry()
@@ -120,13 +120,16 @@ func NewSystem(cfg config.Config) *System {
 	optimizer := portfolio.NewOptimizer()
 	optimizer.WithHistoricalPrices(hp).WithFundamentalProvider(fp).WithFactorEngine(factorEngine)
 	thresholdEngine := sim.NewDynamicThresholdEngine()
-	store := ledger.NewStore(cfg.LedgerDir)
+	store, err := ledger.NewOutcomeStore(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("create store: %w", err)
+	}
 
 	macroRiskEngine, structuralTrendEngine, macroDrawdownEngine, sectorDataProvider := buildMacroEngines(cfg.LedgerDir)
 
 	sys := &System{
 		SystemCore: &SystemCore{
-			sim:             buildSimulationCore(cfg, registry, policy, ds, optimizer, store.(*ledger.Store)),
+			sim:             buildSimulationCore(cfg, registry, policy, ds, optimizer, store),
 			port:            buildPortfolioManager(runtimeParams, registry, eventBus, factorEngine),
 			strat:           buildStrategyLayer(thresholdEngine),
 			risk:            buildRiskOps(cfg, eventBus, macroRiskEngine, structuralTrendEngine, macroDrawdownEngine, sectorDataProvider),
@@ -137,7 +140,7 @@ func NewSystem(cfg config.Config) *System {
 
 	sys.Sim().scratchpad = NewScratchpad(sys.Sim().session.ID, cfg.LedgerDir)
 
-	return sys
+	return sys, nil
 }
 
 func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, error) {

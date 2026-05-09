@@ -93,7 +93,7 @@ func (c *TEJClient) Ping(ctx context.Context) error {
 // startDate / endDate in YYYY-MM-DD format.
 func (c *TEJClient) GetStockPriceDaily(ctx context.Context, stockID, startDate, endDate string) ([]TEJStockPriceRow, error) {
 	if err := c.rateLimiter.Wait(ctx); err != nil {
-		return nil, fmt.Errorf("tej rate limit wait: %w", err)
+		return nil, fmt.Errorf("tej rate limit wait: %w", ErrRateLimited)
 	}
 
 	endpoint := fmt.Sprintf("%s/api/datatables/TRAIL/TAPRCD.json", c.baseURL)
@@ -158,7 +158,7 @@ func (c *TEJClient) GetStockPriceDaily(ctx context.Context, stockID, startDate, 
 // Returns raw JSON rows; caller can parse specific tables.
 func (c *TEJClient) GetFinancialStatements(ctx context.Context, stockID, tableCode, startDate, endDate string) ([]map[string]any, error) {
 	if err := c.rateLimiter.Wait(ctx); err != nil {
-		return nil, fmt.Errorf("tej rate limit wait: %w", err)
+		return nil, fmt.Errorf("tej rate limit wait: %w", ErrRateLimited)
 	}
 
 	// tableCode examples:

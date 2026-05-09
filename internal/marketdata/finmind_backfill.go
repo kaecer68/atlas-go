@@ -107,7 +107,7 @@ func FetchWithRetry(ctx context.Context, client *http.Client, url string, apiKey
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if err := limiter.Wait(ctx); err != nil {
-			return nil, fmt.Errorf("finmind: rate limit: %w", err)
+			return nil, fmt.Errorf("finmind: rate limit: %w", ErrRateLimited)
 		}
 
 		resp, err := client.Do(req)

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/tax"
 )
@@ -33,6 +34,7 @@ func (h *Handlers) loadPositions() ([]domain.Position, error) {
 	sessionsDir := filepath.Join(h.LedgerDir, "sessions")
 	entries, err := os.ReadDir(sessionsDir)
 	if err != nil {
+		logging.Warn("tax_handler", "read_sessions_dir_failed", logging.Err(err))
 		return nil, nil
 	}
 
@@ -49,6 +51,7 @@ func (h *Handlers) loadPositions() ([]domain.Position, error) {
 	summaryPath := filepath.Join(sessionsDir, latest, "summary.json")
 	summaryData, err := os.ReadFile(summaryPath)
 	if err != nil {
+		logging.Warn("tax_handler", "read_summary_failed", logging.Err(err))
 		return nil, nil
 	}
 	var summary struct {

@@ -1,5 +1,5 @@
 // Metrics monitoring page
-import { getJSON } from '../shared/app-utils.js';
+import { getJSON, silentGetJSON } from '../shared/app-utils.js';
 
 export async function loadMetrics() {
   try {
@@ -11,7 +11,7 @@ export async function loadMetrics() {
     if (alertsTriggeredEl) alertsTriggeredEl.textContent = data && data.alerts_triggered != null ? data.alerts_triggered : '-';
     const capitalPhaseEl = document.getElementById('capitalPhase');
     if (capitalPhaseEl) {
-      const cp = await getJSON('/api/dashboard/capital-phase').catch(() => null);
+      const cp = await silentGetJSON('/api/dashboard/capital-phase');
       capitalPhaseEl.textContent = cp && cp.phase ? cp.phase : 'Simulation';
     }
     updateMetricsTrend(data);

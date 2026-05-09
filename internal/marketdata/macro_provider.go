@@ -2,6 +2,7 @@ package marketdata
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -58,9 +59,11 @@ func (c *CompositeMacroProvider) Name() string {
 // FetchSnapshot merges snapshots from all providers (last write wins).
 func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
 	var merged MacroDataSnapshot
+	var errs []error
 	for _, p := range c.providers {
 		snap, err := p.FetchSnapshot(ctx)
 		if err != nil {
+			errs = append(errs, err)
 			continue
 		}
 		if snap.US10Y.Symbol != "" {
@@ -117,6 +120,9 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 	}
 	if merged.RecordedAt == 0 {
 		merged.RecordedAt = time.Now().Unix()
+	}
+	if len(errs) > 0 {
+		return merged, errors.Join(errs...)
 	}
 	return merged, nil
 }

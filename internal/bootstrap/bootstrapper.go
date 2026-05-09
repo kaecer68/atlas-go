@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -66,7 +67,15 @@ func InitStores(cfg Config) (Stores, error) {
 	if err != nil {
 		logging.Warn("bootstrap", "metrics_store_init_warning", "err", err)
 	}
-	outcomeStore := ledger.NewStore(cfg.LedgerDir)
+	fullCfg := config.Config{
+		LedgerDir:    cfg.LedgerDir,
+		StoreBackend: os.Getenv("ATLAS_STORE_BACKEND"),
+		SQLitePath:   os.Getenv("ATLAS_SQLITE_PATH"),
+	}
+	outcomeStore, err := ledger.NewOutcomeStore(fullCfg)
+	if err != nil {
+		return Stores{}, fmt.Errorf("create outcome store: %w", err)
+	}
 
 	return Stores{
 		AlertStore:   alertStore,

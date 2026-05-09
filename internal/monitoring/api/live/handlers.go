@@ -3,6 +3,7 @@ package live
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/risk"
@@ -240,6 +242,7 @@ func (h *Handlers) HandlePnLAttribution(r *http.Request) (int, any) {
 		}
 		var s domain.SessionSummary
 		if err := json.Unmarshal(bytes, &s); err != nil {
+			logging.Warn("live_handler", "corrupted_summary_skipped", logging.Err(err))
 			continue
 		}
 		allSummaries = append(allSummaries, s)
@@ -420,6 +423,7 @@ func (h *Handlers) HandleRiskExposure(r *http.Request) (int, any) {
 		}
 		var summary domain.SessionSummary
 		if err := json.Unmarshal(bytes, &summary); err != nil {
+			logging.Warn("live_handler", "corrupted_summary_skipped", logging.Err(err))
 			continue
 		}
 		sessions = append(sessions, sessionEntry{name: entry.Name(), value: summary.PortfolioValue})
@@ -450,8 +454,14 @@ func (h *Handlers) HandleRiskExposure(r *http.Request) (int, any) {
 	}
 
 	liveBasePath := filepath.Join(h.WorkDir, livestore.DefaultLiveStateBasePath)
-	portfolio, _ := livestore.LoadLastPortfolioState(liveBasePath)
-	positions, _ := livestore.LoadLastPositions(liveBasePath)
+	portfolio, err := livestore.LoadLastPortfolioState(liveBasePath)
+	if err != nil {
+		logging.Warn("live_handler", "load_portfolio_state_failed", logging.Err(err))
+	}
+	positions, err := livestore.LoadLastPositions(liveBasePath)
+	if err != nil {
+		logging.Warn("live_handler", "load_positions_failed", logging.Err(err))
+	}
 
 	var totalMV float64
 	for _, p := range positions {
@@ -537,6 +547,24 @@ func loadRecommendationOutcomes(ledgerDir, sessionID string) ([]domain.Recommend
 			}
 		}
 		sessionID = latest
+	} else {
+		if err := shared.ValidateSessionID(sessionID); err != nil {
+			return nil, err
+		}
+		entries, err := os.ReadDir(sessionsDir)
+		if err != nil {
+			return nil, err
+		}
+		found := false
+		for _, entry := range entries {
+			if entry.IsDir() && entry.Name() == sessionID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("session not found: %s", sessionID)
+		}
 	}
 	path := filepath.Join(sessionsDir, sessionID, "recommendation_outcomes.jsonl")
 	f, err := os.Open(path)
@@ -554,6 +582,7 @@ func loadRecommendationOutcomes(ledgerDir, sessionID string) ([]domain.Recommend
 		}
 		var oc domain.RecommendationOutcome
 		if err := json.Unmarshal([]byte(line), &oc); err != nil {
+			logging.Warn("live_handler", "corrupted_outcome_skipped", logging.Err(err))
 			continue
 		}
 		outcomes = append(outcomes, oc)

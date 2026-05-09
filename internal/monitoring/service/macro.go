@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
 
@@ -43,6 +44,9 @@ func (s *MacroService) GetLatestSnapshot() (*marketdata.MacroDataSnapshot, error
 }
 
 func (s *MacroService) GetSnapshotByDate(date string) (*marketdata.MacroDataSnapshot, error) {
+	if err := shared.ValidateDateParam(date); err != nil {
+		return nil, err
+	}
 	path := filepath.Join(s.MacroIngestor.SnapshotDir(), date+".json")
 	data, err := os.ReadFile(path)
 	if err != nil {

@@ -56,6 +56,11 @@ func Error(component, event string, keyvals ...any) {
 		append(keyvals, "component", component)...)
 }
 
+func Critical(component, event string, keyvals ...any) {
+	logger.Log(logCtx, slog.Level(12), event,
+		append(keyvals, "component", component)...)
+}
+
 func Warn(component, event string, keyvals ...any) {
 	logger.Log(logCtx, slog.LevelWarn, event,
 		append(keyvals, "component", component)...)

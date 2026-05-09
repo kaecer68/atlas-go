@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
+	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/repository"
@@ -157,6 +159,7 @@ func run(args []string, deps appDeps) error {
 
 	if *apiMode {
 		mux := http.NewServeMux()
+		log.Printf("[Auth] API key authentication %s", map[bool]string{true: "ENABLED", false: "DISABLED (no ATLAS_API_KEY set)"}[os.Getenv("ATLAS_API_KEY") != ""])
 		healthStore, err := portfolio.NewAgentHealthStore(filepath.Join(cfg.WorkDir, "data/state"))
 		if err != nil {
 			log.Printf("[AgentHealth] failed to create health store: %v", err)
@@ -260,7 +263,20 @@ func run(args []string, deps appDeps) error {
 		bootstrap.StartAutoBackfill(sysCtx, cfg.WorkDir)
 		bootstrap.StartAutoCapitalFlowFetch(sysCtx, cfg.WorkDir)
 
-		srv := &http.Server{Addr: *apiAddr, Handler: mux}
+		authWrappedMux := apishared.AuthMiddleware(mux)
+		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Security-Policy", "default-src 'self'")
+			if r.URL.Path == "/metrics" || strings.HasPrefix(r.URL.Path, "/static/") {
+				mux.ServeHTTP(w, r)
+				return
+			}
+			authWrappedMux.ServeHTTP(w, r)
+		})
+		srv := &http.Server{
+			Addr:              *apiAddr,
+			Handler:           finalMux,
+			ReadHeaderTimeout: 10 * time.Second,
+		}
 		srvErr := make(chan error, 1)
 		go func() {
 			if err := deps.listenAndServe(srv); err != nil && err != http.ErrServerClosed {
@@ -298,7 +314,10 @@ func run(args []string, deps appDeps) error {
 }
 
 func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
-	system := orchestrator.NewProductionSystem(cfg)
+	system, err := orchestrator.NewProductionSystem(cfg)
+	if err != nil {
+		return fmt.Errorf("create system: %w", err)
+	}
 	if collector != nil {
 		system.WithMetricsCollector(collector)
 	}
@@ -364,7 +383,10 @@ func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, re
 }
 
 func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
-	system := orchestrator.NewProductionSystem(cfg)
+	system, err := orchestrator.NewProductionSystem(cfg)
+	if err != nil {
+		return fmt.Errorf("create system: %w", err)
+	}
 	if collector != nil {
 		system.WithMetricsCollector(collector)
 	}
@@ -450,7 +472,11 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 
 	mux.Handle("/", http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static"))))
 	apiAddr := ":8080"
-	srv := &http.Server{Addr: apiAddr, Handler: mux}
+	srv := &http.Server{
+		Addr:              apiAddr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 	go func() {
 		log.Printf("dashboard api listening on %s", apiAddr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

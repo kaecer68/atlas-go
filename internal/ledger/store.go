@@ -15,11 +15,6 @@ type OutcomeStore interface {
 	LoadOutcomes() ([]domain.RecommendationOutcome, error)
 	LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOutcome, error)
 
-	// Session management
-	RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error
-	LoadSessionSummaries() ([]domain.SessionSummary, error)
-	LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error)
-
 	// Screening rejects
 	RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error
 	LoadSessionScreeningRejects(sessionID string) ([]domain.ScreeningReject, error)
@@ -27,6 +22,10 @@ type OutcomeStore interface {
 	// Experiment lifecycle
 	RecordExperiment(record domain.ExperimentRecord) error
 	RecordSessionExperiment(session domain.ReplaySession, record domain.ExperimentRecord) error
+
+	RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error
+	LoadSessionSummaries() ([]domain.SessionSummary, error)
+	LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error)
 
 	// Human-in-the-loop
 	RecordHumanIntervention(intervention domain.HumanIntervention) error
@@ -51,6 +50,7 @@ type BacktestStore interface {
 // the complete persistence surface.
 type FullStore interface {
 	OutcomeStore
+	SessionStore
 	ExperimentStore
 	BacktestStore
 	RecordSpawnRecord(record SpawnRecord) error
