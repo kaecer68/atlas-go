@@ -1,9 +1,9 @@
 package bootstrap
 
 import (
-	"log"
 	"net/http"
 
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
@@ -14,7 +14,7 @@ func NewDashboardAPI(workDir, ledgerDir string, collector *monitoring.MetricsCol
 func RegisterDashboardRoutes(mux *http.ServeMux, dashboard *monitoring.DashboardAPI, enableSwagger, includeLive bool, rt *Runtime) {
 	if rt.Repository != nil {
 		dashboard.SetRepository(rt.Repository)
-		log.Printf("[Repository] injected into dashboard API")
+		logging.Info("repository", "injected_to_dashboard")
 	}
 
 	dashboard.RegisterRoutes(mux)
@@ -27,7 +27,7 @@ func RegisterDashboardRoutes(mux *http.ServeMux, dashboard *monitoring.Dashboard
 	if rt.TaskManager != nil {
 		dashboard.SetTaskManager(rt.TaskManager)
 		dashboard.RegisterTaskExecRoutes(mux)
-		log.Printf("[TaskExec] injected into dashboard API")
+		logging.Info("taskexec", "injected_to_dashboard")
 	}
 
 	dashboard.RegisterNarrativeRoutes(mux)

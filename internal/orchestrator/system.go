@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"path/filepath"
 	"time"
 
@@ -726,11 +727,11 @@ func (s *System) saveSessionPositions(sessionID string, positions []domain.Posit
 	path := filepath.Join(sessionDir, "positions.json")
 	bytes, err := json.MarshalIndent(positions, "", "  ")
 	if err != nil {
-		log.Printf("[System] warn: failed to marshal positions for %s: %v", sessionID, err)
+		logging.Warn("System", "failed to marshal positions", "session_id", sessionID, "err", err)
 		return
 	}
 	if err := os.WriteFile(path, bytes, 0o644); err != nil {
-		log.Printf("[System] warn: failed to write positions for %s: %v", sessionID, err)
+		logging.Warn("System", "failed to write positions", "session_id", sessionID, "err", err)
 	}
 }
 

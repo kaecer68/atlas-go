@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 type ChannelAlert struct {
@@ -117,7 +118,7 @@ func (s *channelHealthStore) Record(channelID, status, errMsg string) error {
 	if s.pool != nil {
 		dbErr := s.recordToDB(channelID, status, errMsg)
 		if dbErr != nil {
-			log.Printf("[ChannelHealth] DB write failed for %s: %v", channelID, dbErr)
+			logging.Error("channelhealth", "db_write_failed", "channel_id", channelID, "err", dbErr.Error())
 		}
 	}
 	return s.save()
