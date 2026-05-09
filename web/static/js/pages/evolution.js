@@ -1,6 +1,9 @@
 // 演化透視面板 — Agent 競爭、Regime 時間線、實驗記錄
 import { agentName, sectorName, regimeLabel } from '../names.js';
+
 import { silentGetJSON, formatDate, notify } from '../shared/app-utils.js';
+
+
 import { renderEquityCurve, renderComparisonChart, renderRadarChart, renderRegimeVolumeChart } from '../components/sparkline.js';
 
 let evolutionData = null;

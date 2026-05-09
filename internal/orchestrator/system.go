@@ -140,7 +140,10 @@ func NewSystem(cfg config.Config) (*System, error) {
 
 	sys.Sim().scratchpad = NewScratchpad(sys.Sim().session.ID, cfg.LedgerDir)
 
+
 	return sys, nil
+
+
 }
 
 func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, error) {
