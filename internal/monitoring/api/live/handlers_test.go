@@ -17,22 +17,6 @@ import (
 func TestHandlePortfolioState_EquityCurveFields(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessionsDir := filepath.Join(tmpDir, "sessions")
-	liveStateDir := filepath.Join(tmpDir, "data", "state", "live", "state")
-
-	// Create portfolio state file (required by LoadPortfolioState)
-	if err := os.MkdirAll(liveStateDir, 0755); err != nil {
-		t.Fatalf("os.MkdirAll: %v", err)
-	}
-	portfolioState := map[string]any{
-		"cash":           500000.0,
-		"last_updated":   time.Now().Format(time.RFC3339),
-		"realized_pnl":   0.0,
-		"unrealized_pnl": 0.0,
-	}
-	psBytes, _ := json.Marshal(portfolioState)
-	if err := os.WriteFile(filepath.Join(liveStateDir, "portfolio_state.json"), psBytes, 0644); err != nil {
-		t.Fatalf("os.WriteFile portfolio_state: %v", err)
-	}
 
 	session1 := domain.SessionSummary{
 		SessionID:      "session-20260413-daily",
@@ -63,6 +47,21 @@ func TestHandlePortfolioState_EquityCurveFields(t *testing.T) {
 	bytes2, _ := json.Marshal(session2)
 	if err := os.WriteFile(filepath.Join(summary2Path, "summary.json"), bytes2, 0644); err != nil {
 		t.Fatalf("os.WriteFile: %v", err)
+	}
+
+	liveStateDir := filepath.Join(tmpDir, "data", "state", "live", "state")
+	if err := os.MkdirAll(liveStateDir, 0755); err != nil {
+		t.Fatalf("os.MkdirAll: %v", err)
+	}
+	portfolioState := map[string]any{
+		"cash":           500000.0,
+		"last_updated":   time.Now().Format(time.RFC3339),
+		"realized_pnl":   0.0,
+		"unrealized_pnl": 0.0,
+	}
+	psBytes, _ := json.Marshal(portfolioState)
+	if err := os.WriteFile(filepath.Join(liveStateDir, "portfolio_state.json"), psBytes, 0644); err != nil {
+		t.Fatalf("os.WriteFile portfolio_state: %v", err)
 	}
 
 	svc := service.NewLiveService(tmpDir, tmpDir)
@@ -170,16 +169,17 @@ func TestHandlePortfolioState_EmptySessions(t *testing.T) {
 		t.Fatalf("json.Unmarshal response: %v", err)
 	}
 
-	_ = result["equity_curve"]
+	if _, ok := result["equity_curve"]; !ok {
+	}
 }
 
 func TestHandlePortfolioState_JSONSerialization(t *testing.T) {
 	resp := service.PortfolioStateResponse{
-		SnapshotTime:   time.Now(),
-		Cash:           500000.0,
-		PortfolioValue: 1500000.0,
-		CumulativePnL:  50000.0,
-		PositionsCount: 5,
+		SnapshotTime:     time.Now(),
+		Cash:             500000.0,
+		PortfolioValue:   1500000.0,
+		CumulativePnL:    50000.0,
+		PositionsCount:   5,
 		EquityCurve: []service.EquityCurvePoint{
 			{
 				Label:         "session-20260413-daily",

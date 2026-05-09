@@ -166,7 +166,6 @@ function renderReportData(data) {
     regimesBody.innerHTML = '<tr><td colspan="4" class="pr-loading">No regime data available</td></tr>';
   }
 
-  // Monthly Returns
   const monthsBody = document.getElementById('prMonthsBody');
   if (data.monthly_returns && data.monthly_returns.length > 0) {
     monthsBody.innerHTML = data.monthly_returns.map(m => `
