@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"context"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/db"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/taskexec"
@@ -42,10 +42,10 @@ func InitDatabase(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
 	if _, err := os.Stat(migrationsPath); err == nil {
 		pool, err := db.Init(context.Background(), dsn, migrationsPath)
 		if err != nil {
-			log.Printf("[DB] failed to initialize database: %v", err)
+			logging.Error("bootstrap", "db_init_failed", "err", err)
 			return nil, err
 		}
-		log.Printf("[DB] connected and migrations applied")
+		logging.Info("bootstrap", "db_connected_migrations_applied")
 		return pool, nil
 	}
 	return nil, nil
@@ -60,11 +60,11 @@ type Stores struct {
 func InitStores(cfg Config) (Stores, error) {
 	alertStore, err := monitoring.NewAlertStore(filepath.Join(cfg.WorkDir, "data/state/alerts"))
 	if err != nil {
-		log.Printf("[Stores] alert store init warning: %v", err)
+		logging.Warn("bootstrap", "alert_store_init_warning", "err", err)
 	}
 	metricsStore, err := monitoring.NewMetricsStore(filepath.Join(cfg.WorkDir, "data/state"))
 	if err != nil {
-		log.Printf("[Stores] metrics store init warning: %v", err)
+		logging.Warn("bootstrap", "metrics_store_init_warning", "err", err)
 	}
 	outcomeStore := ledger.NewStore(cfg.LedgerDir)
 
@@ -107,13 +107,13 @@ func InitTaskManager(ctx context.Context, pool *pgxpool.Pool, cfg Config) *taske
 		taskStore := repository.NewTaskExecutionStore(pgRepo)
 		mgr := taskexec.NewManager(taskStore)
 		mgr.SetContext(ctx)
-		log.Printf("[TaskExec] PostgreSQL store initialized")
+		logging.Info("bootstrap", "postgres_store_initialized")
 		registerTaskRunners(mgr, cfg)
 		return mgr
 	}
 	mgr := taskexec.NewManager(taskexec.NewInMemoryStore())
 	mgr.SetContext(ctx)
-	log.Printf("[TaskExec] in-memory store initialized (data will not persist across restarts)")
+	logging.Info("bootstrap", "inmemory_store_initialized")
 	registerTaskRunners(mgr, cfg)
 	return mgr
 }
@@ -124,7 +124,7 @@ func registerTaskRunners(mgr *taskexec.Manager, cfg Config) {
 	mgr.RegisterRunner(string(domain.TaskTypeJudgeExperiment), taskexec.NewJudgeExperimentRunner(taskCfg))
 	mgr.RegisterRunner(string(domain.TaskTypePromoteBaseline), taskexec.NewPromoteBaselineRunner(taskCfg))
 	mgr.RegisterRunner(string(domain.TaskTypeBacktestWindow), taskexec.NewBacktestWindowRunner(taskCfg))
-	log.Printf("[TaskExec] manager initialized with 4 runners")
+	logging.Info("bootstrap", "task_manager_initialized", "runner_count", 4)
 }
 
 type Runtime struct {
@@ -140,11 +140,11 @@ func InitRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 	rt := &Runtime{Config: cfg}
 
 	rt.MetricsCollector = InitMetrics()
-	log.Printf("[Metrics] collector initialized")
+	logging.Info("bootstrap", "metrics_collector_initialized")
 
 	pool, err := InitDatabase(ctx, cfg)
 	if err != nil {
-		log.Printf("[DB] initialization warning: %v", err)
+		logging.Warn("bootstrap", "db_init_warning", "err", err)
 	}
 	rt.Pool = pool
 
@@ -156,7 +156,7 @@ func InitRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 
 	rt.Repository = InitRepository(pool, stores)
 	if rt.Repository != nil {
-		log.Printf("[Repository] dual-write mode initialized")
+		logging.Info("repository", "dual_write_initialized")
 	}
 
 	rt.TaskManager = InitTaskManager(ctx, pool, cfg)

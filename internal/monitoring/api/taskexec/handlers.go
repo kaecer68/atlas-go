@@ -3,11 +3,11 @@ package taskexec
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/taskexec"
 )
@@ -21,7 +21,7 @@ func NewHandlers(manager *taskexec.Manager) *Handlers {
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
-	log.Printf("[TaskExec] registering RESTful routes")
+	logging.Info("taskexec", "registering_restful_routes")
 	mux.Handle("POST /api/tasks", shared.Post(h.HandleCreateTask))
 	mux.Handle("GET /api/tasks", shared.Get(h.HandleListTasks))
 	mux.Handle("GET /api/tasks/{id}", shared.Get(h.HandleGetTask))

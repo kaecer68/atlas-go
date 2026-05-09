@@ -3,7 +3,6 @@ package monitoring
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"path/filepath"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	apibacktest "github.com/kaecer68/atlas-go/internal/monitoring/api/backtest"
 	apicontrol "github.com/kaecer68/atlas-go/internal/monitoring/api/control"
@@ -290,10 +290,10 @@ func (a *DashboardAPI) SetTaskManager(m *taskexec.Manager) {
 
 func (a *DashboardAPI) RegisterTaskExecRoutes(mux *http.ServeMux) {
 	if a.taskManager == nil {
-		log.Printf("[TaskExec] skipping route registration: taskManager is nil")
+		logging.Warn("dashboardapi", "taskexec_skip_registration", "reason", "taskManager is nil")
 		return
 	}
-	log.Printf("[TaskExec] registering task execution routes")
+	logging.Info("dashboardapi", "taskexec_registering_routes")
 	handlers := apitaskexec.NewHandlers(a.taskManager)
 	handlers.RegisterRoutes(mux)
 }

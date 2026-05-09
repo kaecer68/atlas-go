@@ -5,12 +5,12 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 func generateID() string {
@@ -58,7 +58,7 @@ func (s *localSink) Emit(event domain.TaskExecutionEvent) {
 
 	ctx := s.manager.ctx
 	if err := s.manager.store.AppendEvent(ctx, event); err != nil {
-		log.Printf("[taskexec] failed to append event: %v", err)
+		logging.Error("taskexec", "append_event_failed", "err", err.Error())
 	}
 
 	s.manager.subMu.RLock()
@@ -82,7 +82,7 @@ func (s *localSink) ExecutionID() string {
 func (s *localSink) RecordLineage(lineage domain.ExperimentLineageRecord) error {
 	ctx := s.manager.ctx
 	if err := s.manager.store.UpsertLineage(ctx, lineage); err != nil {
-		log.Printf("[taskexec] failed to record lineage: %v", err)
+		logging.Error("taskexec", "record_lineage_failed", "err", err.Error())
 		return fmt.Errorf("record lineage: %w", err)
 	}
 	return nil
@@ -91,7 +91,7 @@ func (s *localSink) RecordLineage(lineage domain.ExperimentLineageRecord) error 
 func (s *localSink) RecordBaselineHistory(record domain.BaselineHistoryRecord) error {
 	ctx := s.manager.ctx
 	if err := s.manager.store.InsertBaselineHistory(ctx, record); err != nil {
-		log.Printf("[taskexec] failed to record baseline history: %v", err)
+		logging.Error("taskexec", "record_baseline_history_failed", "err", err.Error())
 		return fmt.Errorf("record baseline history: %w", err)
 	}
 	return nil
@@ -100,7 +100,7 @@ func (s *localSink) RecordBaselineHistory(record domain.BaselineHistoryRecord) e
 func (s *localSink) RecordMetrics(points []domain.MetricTrendPoint) error {
 	ctx := s.manager.ctx
 	if err := s.manager.store.InsertMetricPoints(ctx, points); err != nil {
-		log.Printf("[taskexec] failed to record metrics: %v", err)
+		logging.Error("taskexec", "record_metrics_failed", "err", err.Error())
 		return fmt.Errorf("record metrics: %w", err)
 	}
 	return nil
@@ -198,7 +198,7 @@ func (m *Manager) startRun(exec *domain.TaskExecution, req SubmitRequest, runner
 		execCopy.Status = domain.TaskStatusRunning
 		execCopy.StartedAt = &now
 		if err := m.store.UpdateExecution(ctx, execCopy); err != nil {
-			log.Printf("[taskexec] failed to update execution to running: %v", err)
+			logging.Error("taskexec", "update_execution_to_running_failed", "err", err.Error())
 		}
 
 		sink.Emit(domain.TaskExecutionEvent{
@@ -233,7 +233,7 @@ func (m *Manager) startRun(exec *domain.TaskExecution, req SubmitRequest, runner
 		}
 
 		if updateErr := m.store.UpdateExecution(ctx, execCopy); updateErr != nil {
-			log.Printf("[taskexec] failed to update execution to final status: %v", updateErr)
+			logging.Error("taskexec", "update_execution_to_final_status_failed", "err", updateErr.Error())
 		}
 	}()
 }

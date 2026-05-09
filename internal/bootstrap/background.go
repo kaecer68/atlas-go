@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/csv"
 	"errors"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,8 +12,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
-	"github.com/kaecer68/atlas-go/internal/monitoring"
+	monitoring "github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
 func StartChannelHealthSyncLoop(ctx context.Context, workDir string, pool *pgxpool.Pool) {
@@ -31,7 +31,7 @@ func StartChannelHealthSyncLoop(ctx context.Context, workDir string, pool *pgxpo
 			case <-ticker.C:
 				healthStore := monitoring.NewChannelHealthStoreWithPool(filepath.Join(workDir, "data/state"), pool)
 				if err := healthStore.SyncAllToDB(); err != nil {
-					log.Printf("[ChannelHealth] background sync to DB failed: %v", err)
+					logging.Error("channel_health", "background_sync_failed", "err", err)
 				}
 			}
 		}
@@ -49,7 +49,7 @@ func StartAutoBackfill(ctx context.Context, workDir string) {
 		csvPath := filepath.Join(workDir, "data/replay/tw_extended_90days.csv")
 		latestDate, err := getLatestReplayDate(csvPath)
 		if err != nil {
-			log.Printf("[AutoBackfill] cannot read replay csv: %v", err)
+			logging.Error("bootstrap", "replay_csv_read_failed", "err", err)
 			return
 		}
 
@@ -72,13 +72,13 @@ func StartAutoBackfill(ctx context.Context, workDir string) {
 		}
 
 		if start.After(end) {
-			log.Printf("[AutoBackfill] no gap detected (latest=%s, target=%s)", latestDate.Format("2006-01-02"), end.Format("2006-01-02"))
+			logging.Info("bootstrap", "no_backfill_gap_detected", "latest_date", latestDate.Format("2006-01-02"), "target_date", end.Format("2006-01-02"))
 			return
 		}
 
 		startStr := start.Format("2006-01-02")
 		endStr := end.Format("2006-01-02")
-		log.Printf("[AutoBackfill] detected gap %s ~ %s. Triggering backfill...", startStr, endStr)
+		logging.Info("bootstrap", "backfill_gap_detected", "start_date", startStr, "end_date", endStr)
 
 		bgCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()
@@ -91,16 +91,16 @@ func StartAutoBackfill(ctx context.Context, workDir string) {
 			cmd = exec.CommandContext(bgCtx, "go", "run", "./cmd/backfill-replay", "-csv", csvPath, "-start", startStr, "-end", endStr)
 			cmd.Dir = workDir
 		} else {
-			log.Printf("[AutoBackfill] backfill-replay binary not found and go not in PATH; skipping auto-backfill")
+			logging.Warn("bootstrap", "backfill_binary_not_found")
 			return
 		}
 
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			log.Printf("[AutoBackfill] backfill failed: %v\noutput: %s", err, string(out))
+			logging.Error("bootstrap", "backfill_failed", "err", err, "output", string(out))
 			return
 		}
-		log.Printf("[AutoBackfill] success:\n%s", string(out))
+		logging.Info("bootstrap", "backfill_success", "output", string(out))
 	}()
 }
 
@@ -121,10 +121,10 @@ func StartAutoCapitalFlowFetch(ctx context.Context, workDir string) {
 			defer cancel()
 			_, err := capFlowProvider.FetchSnapshot(bgCtx)
 			if err != nil {
-				log.Printf("[AutoCapitalFlow] fetch failed: %v", err)
+				logging.Error("bootstrap", "capital_flow_fetch_failed", "err", err)
 				return
 			}
-			log.Printf("[AutoCapitalFlow] fetch succeeded")
+			logging.Info("bootstrap", "capital_flow_fetch_succeeded")
 		}
 		doFetch()
 

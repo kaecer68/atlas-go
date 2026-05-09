@@ -3,7 +3,6 @@ package service
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/reporting"
 	"github.com/kaecer68/atlas-go/internal/risk"
@@ -81,12 +81,12 @@ func (s *ReportService) LoadReportList() ([]ReportEntry, error) {
 	slices.SortFunc(reports, func(a, b ReportEntry) int {
 		aTime, err := time.Parse(time.RFC3339, a.UpdatedAt)
 		if err != nil {
-			log.Printf("[report] parse updated_at failed: %v", err)
+			logging.Warn("report", "parse_updated_at_failed", "err", err.Error())
 			return 1
 		}
 		bTime, err := time.Parse(time.RFC3339, b.UpdatedAt)
 		if err != nil {
-			log.Printf("[report] parse updated_at failed: %v", err)
+			logging.Warn("report", "parse_updated_at_failed", "err", err.Error())
 			return -1
 		}
 		switch {

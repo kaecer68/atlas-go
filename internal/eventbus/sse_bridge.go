@@ -1,8 +1,9 @@
 package eventbus
 
 import (
-	"log"
 	"sync"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // SSEClient represents a single SSE client connection.
@@ -73,7 +74,7 @@ func (b *SSEBridge) Broadcast(event BusEvent) {
 			case client.Events <- event:
 			default:
 			}
-			log.Printf("[SSEBridge] Dropped oldest event for client %s (channel full)", client.ID)
+			logging.Info("ssebridge", "dropped_oldest_event", "client_id", client.ID, "reason", "channel full")
 		}
 	}
 }

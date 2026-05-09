@@ -2,7 +2,6 @@ package service
 
 import (
 	"encoding/json"
-	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // LiveService provides live trading status and portfolio state operations.
@@ -61,7 +61,7 @@ func (s *LiveService) LoadLiveStatus() LiveStatusResponse {
 	}
 	if data, err := os.ReadFile(filepath.Join(s.WorkDir, livestore.DefaultCircuitBreakerStatePath)); err == nil {
 		if err := json.Unmarshal(data, &cbState); err != nil {
-			log.Printf("[LiveService] warn: failed to unmarshal circuit breaker state: %v", err)
+			logging.Warn("liveservice", "unmarshal_circuit_breaker_failed", "err", err.Error())
 		}
 	}
 
@@ -74,14 +74,14 @@ func (s *LiveService) LoadLiveStatus() LiveStatusResponse {
 		portfolio.DayPnL = p.DayPnL
 		portfolio.UnrealizedPnL = p.UnrealizedPnL
 	} else {
-		log.Printf("[LiveService] warn: failed to read portfolio state: %v", err)
+		logging.Warn("liveservice", "read_portfolio_state_failed", "err", err.Error())
 	}
 
 	positionsCount := 0
 	if posMap, err := livestore.LoadLastPositions(liveBasePath); err == nil {
 		positionsCount = len(posMap)
 	} else {
-		log.Printf("[LiveService] warn: failed to read positions state: %v", err)
+		logging.Warn("liveservice", "read_positions_state_failed", "err", err.Error())
 	}
 	portfolio.PositionsCount = positionsCount
 
@@ -131,13 +131,13 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 
 	portfolio, err := livestore.LoadLastPortfolioState(liveBasePath)
 	if err != nil {
-		log.Printf("[LiveService] warn: failed to load portfolio state: %v", err)
+		logging.Warn("liveservice", "load_portfolio_state_failed", "err", err.Error())
 		return PortfolioStateResponse{}
 	}
 
 	posMap, err := livestore.LoadLastPositions(liveBasePath)
 	if err != nil {
-		log.Printf("[LiveService] warn: failed to load positions: %v", err)
+		logging.Warn("liveservice", "load_positions_failed", "err", err.Error())
 	}
 
 	positions := make([]PositionDTO, 0, len(posMap))
