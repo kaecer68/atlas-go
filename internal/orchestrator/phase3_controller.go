@@ -316,7 +316,7 @@ func (c *Phase3Controller) RunParallelOptimization(baseState swarm.MarketState, 
 	go func() {
 		defer wg.Done()
 		if err := c.ApplyPRISMWeights(nil, regime); err != nil {
-			fmt.Printf("[Phase3Controller] warn: ApplyPRISMWeights failed: %v\n", err)
+			logging.Warn("Phase3Controller", "ApplyPRISMWeights failed", "err", err)
 		}
 	}()
 
@@ -339,7 +339,7 @@ func (c *Phase3Controller) RunParallelOptimization(baseState swarm.MarketState, 
 
 	wg.Wait()
 	if err := c.SaveMetrics(""); err != nil {
-		fmt.Printf("[Phase3Controller] warn: SaveMetrics failed: %v\n", err)
+		logging.Warn("Phase3Controller", "SaveMetrics failed", "err", err)
 	}
 }
 

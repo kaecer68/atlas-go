@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 type ExecutionManager struct {
@@ -43,7 +44,7 @@ func (e *ExecutionManager) SimulateExecution() {
 		retries := max(e.config.BrokerMaxRetries, 0)
 		e.orderMgr = NewOrderManager(e.broker, e.eventBus, retries, 100*time.Millisecond)
 	}
-	fmt.Printf("[Trading] Execution channel ready (mode=%s)\n", e.orderMgr.Mode())
+	logging.Info("trading", "execution_channel_ready", "mode", e.orderMgr.Mode())
 	if e.metrics != nil {
 		e.metrics.RecordCounter("execution_cycles_total", 1, map[string]string{
 			"broker_mode": e.broker.Mode(),

@@ -222,7 +222,11 @@ func (cb *CircuitBreaker) transitionLocked(to CircuitState, reason string, dayPn
 	if err := cb.persistStateLocked(); err != nil {
 		logging.Warn("circuit_breaker", "failed_to_persist_state", logging.Err(err))
 	}
-	fmt.Printf("[CircuitBreaker] %s -> %s | %s\n", event.FromState, event.ToState, reason)
+	logging.Info("circuit_breaker", "state_transition",
+		"from_state", event.FromState,
+		"to_state", event.ToState,
+		"reason", reason,
+	)
 }
 
 func (cb *CircuitBreaker) appendLog(event CircuitBreakerEvent) error {
