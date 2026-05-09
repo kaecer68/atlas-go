@@ -8,10 +8,18 @@ import (
 )
 
 var logger *slog.Logger
+var logCtx context.Context
 
 func init() {
 	logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
+	logCtx = context.Background()
+}
+
+func SetLogContext(ctx context.Context) {
+	if ctx != nil {
+		logCtx = ctx
+	}
 }
 
 func Init(handler string, level slog.Level) {
@@ -39,22 +47,22 @@ func Default() *slog.Logger {
 }
 
 func Info(component, event string, keyvals ...any) {
-	logger.Log(context.Background(), slog.LevelInfo, event,
+	logger.Log(logCtx, slog.LevelInfo, event,
 		append(keyvals, "component", component)...)
 }
 
 func Error(component, event string, keyvals ...any) {
-	logger.Log(context.Background(), slog.LevelError, event,
+	logger.Log(logCtx, slog.LevelError, event,
 		append(keyvals, "component", component)...)
 }
 
 func Warn(component, event string, keyvals ...any) {
-	logger.Log(context.Background(), slog.LevelWarn, event,
+	logger.Log(logCtx, slog.LevelWarn, event,
 		append(keyvals, "component", component)...)
 }
 
 func Debug(component, event string, keyvals ...any) {
-	logger.Log(context.Background(), slog.LevelDebug, event,
+	logger.Log(logCtx, slog.LevelDebug, event,
 		append(keyvals, "component", component)...)
 }
 
@@ -81,6 +89,6 @@ func FFloat64(key string, val float64) any { return slog.Float64(key, val) }
 func FBool(key string, val bool) any       { return slog.Bool(key, val) }
 
 func LegacyLog(component, format string, args ...any) {
-	logger.Log(context.Background(), slog.LevelInfo, "legacy",
+	logger.Log(logCtx, slog.LevelInfo, "legacy",
 		"component", component, "message", fmt.Sprintf(format, args...))
 }
