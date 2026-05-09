@@ -1466,6 +1466,10 @@ body { display: flex; margin: 0; min-height: 100vh; }
     to { opacity: 1; transform: translateY(0); }
   }
   </style>
+  <link rel="stylesheet" href="/static/css/components/order-manager.css">
+  <link rel="stylesheet" href="/static/css/components/performance-report.css">
+
+<link rel="stylesheet" href="/static/css/components/circuit-breaker.css">
 </head>
 <body>
 
@@ -1487,6 +1491,8 @@ body { display: flex; margin: 0; min-height: 100vh; }
     <a data-page="reasoning-trace" onclick="switchPage('reasoning-trace')" tabindex="0" title="決策追蹤">🔍 決策追蹤</a>
     <a data-page="live" onclick="switchPage('live')" tabindex="0" title="風控結果">🛡️ 風控結果</a>
     <a data-page="portfolio" onclick="switchPage('portfolio')" tabindex="0" title="組合持倉">📂 組合持倉</a>
+    <a data-page="performance-report" onclick="switchPage('performance-report')" tabindex="0" title="績效報告">📊 績效報告</a>
+
     <a data-page="agents" onclick="switchPage('agents')" tabindex="0" title="AI 觀測台">🤖 AI 觀測台</a>
     <a data-page="experiments" onclick="switchPage('experiments')" tabindex="0" title="模擬交易">🧪 模擬交易</a>
     <a data-page="reports" onclick="switchPage('reports')" tabindex="0" title="最新回測">📈 最新回測</a>
@@ -1540,7 +1546,40 @@ body { display: flex; margin: 0; min-height: 100vh; }
         <div class="kpi-card clickable" onclick="openKpiHelp('experiment')"><div class="kpi-label">實驗狀態</div><div class="kpi-value">-</div></div>
       </div>
 
-      <div class="panel wide mt-sm" id="liveEventPanel">
+      
+      <div class="cb-panel" id="circuitBreakerPanel">
+        <div class="cb-header">
+            <h2 class="cb-title m-0">⚡ 熔斷機制 (Circuit Breaker)</h2>
+            <div class="cb-status-indicator" id="cbStatusBadge">
+                <div class="cb-status-dot normal" id="cbStatusDot"></div>
+                <span id="cbStatusText">Normal</span>
+            </div>
+        </div>
+        <div class="cb-metrics">
+            <div class="cb-metric-box">
+                <div class="cb-metric-label">日內回撤</div>
+                <div class="cb-metric-value" id="cbIntradayPeak">-</div>
+            </div>
+            <div class="cb-metric-box">
+                <div class="cb-metric-label">連續停損</div>
+                <div class="cb-metric-value" id="cbConsecutiveSL">-</div>
+            </div>
+            <div class="cb-metric-box">
+                <div class="cb-metric-label">冷卻解鎖</div>
+                <div class="cb-metric-value" id="cbCooldown">-</div>
+            </div>
+        </div>
+        <div class="cb-events-container mt-sm">
+            <ul class="cb-event-list" id="cbEventList">
+                <li class="cb-event-item empty text-center">No events yet.</li>
+            </ul>
+        </div>
+        <div class="cb-actions mt-sm">
+            <button class="cb-btn-reset" id="cbResetBtn" disabled>手動重置 (Reset)</button>
+        </div>
+      </div>
+
+<div class="panel wide mt-sm" id="liveEventPanel">
         <h2>📡 即時事件流</h2>
         <div id="liveProgress"></div>
         <div id="toolEvents" class="mt-sm"></div>
@@ -1669,6 +1708,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
         <h2>持倉明細</h2>
         <div id="positionsTable"></div>
       </div>
+      <div class="panel wide" id="orderManagerContainer"></div>
       <details class="help-details">
         <summary><strong>📖 如何解讀本頁</strong></summary>
         <p>顯示最新模擬場次的持倉狀態與淨值變化。損益為未實現損益，實際損益需待部位平倉後確認。</p>
@@ -1868,6 +1908,10 @@ body { display: flex; margin: 0; min-height: 100vh; }
       </div>
     </div>
 
+    <div class="page" id="page-performance-report">
+      <div id="performanceReportContainer"></div>
+    </div>
+
     <div class="page" id="page-parameters">
       <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
         參數配置為唯讀檢視。修改請使用 CLI 或 API。
@@ -1935,5 +1979,20 @@ body { display: flex; margin: 0; min-height: 100vh; }
   import './js/main.js';
 </script>
 
+
+<script type="module">
+  import { CircuitBreakerPanel } from './js/components/circuit-breaker.js';
+  import { renderPerformanceReport } from './js/components/performance-report.js';
+  import { renderOrderManager } from './js/components/order-manager.js';
+  import { eventSource } from './js/services/event-source.js';
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const cbPanel = new CircuitBreakerPanel('circuitBreakerPanel');
+    eventSource.on('*', (ev) => cbPanel.handleSSE(ev));
+
+    renderPerformanceReport('performanceReportContainer');
+    renderOrderManager('orderManagerContainer');
+  });
+</script>
 </body>
 </html>

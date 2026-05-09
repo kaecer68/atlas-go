@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -295,5 +296,46 @@ func (cb *CircuitBreaker) loadState() error {
 	cb.cooldownUntil = state.CooldownUntil
 	cb.intradayPeak = state.IntradayPeak
 	cb.dayStartValue = state.DayStartValue
+	return nil
+}
+
+func (cb *CircuitBreaker) LoadEvents() ([]CircuitBreakerEvent, error) {
+	cb.mu.RLock()
+	logPath := cb.logPath
+	cb.mu.RUnlock()
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read circuit breaker log: %w", err)
+	}
+	if len(data) == 0 {
+		return nil, nil
+	}
+	var events []CircuitBreakerEvent
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var ev CircuitBreakerEvent
+		if err := json.Unmarshal([]byte(line), &ev); err != nil {
+			continue
+		}
+		events = append(events, ev)
+	}
+	return events, nil
+}
+
+func (cb *CircuitBreaker) Reset(reason string) error {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	if reason == "" {
+		reason = "manual_reset"
+	}
+	cb.transitionLocked(CircuitNormal, reason, 0, 0)
 	return nil
 }

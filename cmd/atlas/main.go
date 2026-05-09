@@ -382,6 +382,10 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	liveCfg.BrokerAdapter = cfg.BrokerAdapter
 	liveCfg.BrokerSigner = cfg.BrokerSigner
 	liveCfg.BrokerKeyID = cfg.BrokerKeyID
+	liveCfg.TWSEAPIURL = cfg.TWSEAPIURL
+	liveCfg.TWSEAPIKey = cfg.TWSEAPIKey
+	liveCfg.TWSEAPISecret = cfg.TWSEAPISecret
+	liveCfg.TWSEAccountID = cfg.TWSEAccountID
 	liveCfg.BrokerMaxRetries = cfg.BrokerMaxRetries
 	liveCfg.BrokerHTTPTimeoutS = cfg.BrokerHTTPTimeoutS
 	liveCfg.BrokerHTTPAttempts = cfg.BrokerHTTPAttempts

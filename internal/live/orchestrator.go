@@ -83,6 +83,10 @@ type OrchestratorConfig struct {
 	BrokerNonceRedisKeyPrefix  string
 	BrokerSigner               string
 	BrokerKeyID                string
+	TWSEAPIURL                 string
+	TWSEAPIKey                 string
+	TWSEAPISecret              string
+	TWSEAccountID              string
 	FubonDMAPersonalID         string
 	FubonDMAAPIKey             string
 	FubonDMAScriptPath         string
@@ -626,6 +630,26 @@ func resolveBrokerMode(cfg OrchestratorConfig) (requested string, effective stri
 				return requested, "live-guarded", NewGuardedLiveBroker(nil), "live+http adapter requested but ATLAS_BROKER_API_KEY is empty; fallback to guarded"
 			}
 			return requested, "live-http", NewGuardedLiveBroker(httpAdapter), "live mode uses http adapter with signature placeholder; verify credentials and endpoint before production use"
+		case "twse":
+			if strings.TrimSpace(cfg.TWSEAPIURL) == "" {
+				return requested, "live-guarded", NewGuardedLiveBroker(nil), "live+twse adapter requested but ATLAS_TWSE_API_URL is empty; fallback to guarded"
+			}
+			if strings.TrimSpace(cfg.TWSEAPIKey) == "" {
+				return requested, "live-guarded", NewGuardedLiveBroker(nil), "live+twse adapter requested but ATLAS_TWSE_API_KEY is empty; fallback to guarded"
+			}
+			if strings.TrimSpace(cfg.TWSEAPISecret) == "" {
+				return requested, "live-guarded", NewGuardedLiveBroker(nil), "live+twse adapter requested but ATLAS_TWSE_API_SECRET is empty; fallback to guarded"
+			}
+			if strings.TrimSpace(cfg.TWSEAccountID) == "" {
+				return requested, "live-guarded", NewGuardedLiveBroker(nil), "live+twse adapter requested but ATLAS_TWSE_ACCOUNT_ID is empty; fallback to guarded"
+			}
+			twseAdapter := NewTWSEBrokerAdapter(TWSEBrokerAdapterConfig{
+				BaseURL:   cfg.TWSEAPIURL,
+				APIKey:    cfg.TWSEAPIKey,
+				APISecret: cfg.TWSEAPISecret,
+				AccountID: cfg.TWSEAccountID,
+			}, NewCircuitBreaker("", ""))
+			return requested, "live-twse", NewGuardedLiveBroker(twseAdapter), "live mode uses TWSE adapter with HMAC-SHA256 signing; verify credentials before production use"
 		case "fubon-dma":
 			personalID := strings.TrimSpace(cfg.FubonDMAPersonalID)
 			apiKey := strings.TrimSpace(cfg.FubonDMAAPIKey)
