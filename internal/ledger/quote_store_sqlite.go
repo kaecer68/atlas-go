@@ -33,7 +33,7 @@ func (s *SQLiteQuoteStore) RecordQuotes(quotes []domain.DailyBar) error {
 	}
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback() //nolint:errcheck
 		}
 	}()
 

@@ -27,7 +27,7 @@ func (s *SQLiteOutcomeStore) RecordOutcomes(outcomes []domain.RecommendationOutc
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() { _ = tx.Rollback() }() //nolint:errcheck
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO outcomes (session_id, symbol, agent_id, action, weight, target_price,
@@ -86,7 +86,7 @@ func (s *SQLiteOutcomeStore) RecordSessionOutcomes(session domain.ReplaySession,
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() { _ = tx.Rollback() }() //nolint:errcheck
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO outcomes (session_id, symbol, agent_id, action, weight, target_price,
@@ -173,7 +173,7 @@ func (s *SQLiteOutcomeStore) RecordSessionScreeningRejects(sessionID string, rej
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() { _ = tx.Rollback() }() //nolint:errcheck
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO screening_rejects (session_id, symbol, reason, timestamp, factor_scores_json)
@@ -481,6 +481,6 @@ func countPassedGuards(outcomes []domain.GuardOutcome) int {
 
 // parseTimestamp parses ISO8601 timestamps from SQLite.
 func parseTimestamp(s string) (t time.Time) {
-	t, _ = time.Parse("2006-01-02T15:04:05Z07:00", s)
+	t, _ = time.Parse("2006-01-02T15:04:05Z07:00", s) //nolint:errcheck
 	return t
 }
