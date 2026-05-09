@@ -173,6 +173,18 @@ func (a *DualWriteOutcomeStoreAdapter) RecordSessionOutcomes(session domain.Repl
 	return a.repo.RecordSessionOutcomes(a.ctx, session, outcomes)
 }
 
+func (a *DualWriteOutcomeStoreAdapter) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
+	return a.repo.RecordSessionSummary(a.ctx, session, summary)
+}
+
+func (a *DualWriteOutcomeStoreAdapter) LoadSessionSummaries() ([]domain.SessionSummary, error) {
+	return a.repo.LoadAllSessionSummaries(a.ctx)
+}
+
+func (a *DualWriteOutcomeStoreAdapter) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
+	return a.repo.QueryAllSessionScorecards(a.ctx)
+}
+
 func (a *DualWriteOutcomeStoreAdapter) RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error {
 	return a.repo.RecordSessionScreeningRejects(a.ctx, sessionID, rejects)
 }
@@ -195,18 +207,6 @@ func (a *DualWriteOutcomeStoreAdapter) RecordHumanIntervention(intervention doma
 
 func (a *DualWriteOutcomeStoreAdapter) LoadHumanInterventions() ([]domain.HumanIntervention, error) {
 	return a.repo.LoadHumanInterventions(a.ctx)
-}
-
-func (a *DualWriteOutcomeStoreAdapter) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
-	return a.repo.RecordSessionSummary(a.ctx, session, summary)
-}
-
-func (a *DualWriteOutcomeStoreAdapter) LoadSessionSummaries() ([]domain.SessionSummary, error) {
-	return a.repo.LoadAllSessionSummaries(a.ctx)
-}
-
-func (a *DualWriteOutcomeStoreAdapter) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
-	return a.repo.QueryAllSessionScorecards(a.ctx)
 }
 
 type SessionStoreAdapter struct {
