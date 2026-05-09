@@ -2,7 +2,7 @@
 //
 // Usage: go run ./cmd/gentags
 //
-// Reads: internal/domain/*.go
+// Reads: internal/domain/**/*.go  (recursively)
 // Writes:
 //
 //	web/static/js/shared/field_names.js  — snake_case field name constants
@@ -45,24 +45,21 @@ func main() {
 }
 
 func parseStructs(domainDir string) map[string][]structField {
-	entries, err := os.ReadDir(domainDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "read dir: %v\n", err)
-		os.Exit(1)
-	}
-
 	fset := token.NewFileSet()
 	structs := make(map[string][]structField)
 
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
-			continue
+	err := filepath.Walk(domainDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
 		}
-		path := filepath.Join(domainDir, e.Name())
+		if info.IsDir() || !strings.HasSuffix(info.Name(), ".go") || strings.HasSuffix(info.Name(), "_test.go") {
+			return nil
+		}
+
 		f, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "parse %s: %v\n", path, err)
-			continue
+			return nil
 		}
 
 		for _, decl := range f.Decls {
@@ -103,6 +100,11 @@ func parseStructs(domainDir string) map[string][]structField {
 				}
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "walk dir: %v\n", err)
+		os.Exit(1)
 	}
 	return structs
 }

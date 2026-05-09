@@ -48,6 +48,9 @@
 ## Phase 6: Production Trading (Next)
 
 - Decision chain transparency (FactorScores breakdown, ConvictionBreakdown, MacroEvent confidence) ✅
+- NT$ currency formatter + after-tax equity curve + cost KPI cards ✅ (Phase 3)
+- Experiment monetary NT$ display on evolution panel ✅ (Phase 3)
+- Evolution panel chart-based UI upgrade (dual-curve chart, monetary trend visualization)
 - Real broker integration
 - Live order management
 - Risk circuit breakers

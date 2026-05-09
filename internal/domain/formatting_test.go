@@ -1,6 +1,9 @@
 package domain
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestFormatNTD(t *testing.T) {
 	tests := []struct {
@@ -13,6 +16,8 @@ func TestFormatNTD(t *testing.T) {
 		{name: "zero", amount: 0, expected: "NT$0.00"},
 		{name: "large value", amount: 1234567890.99, expected: "NT$1,234,567,890.99"},
 		{name: "small decimal", amount: 0.99, expected: "NT$0.99"},
+		{name: "NaN", amount: math.NaN(), expected: "NT$—"},
+		{name: "positive infinity", amount: math.Inf(1), expected: "NT$—"},
 	}
 
 	for _, tt := range tests {
