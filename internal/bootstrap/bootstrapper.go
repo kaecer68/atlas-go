@@ -101,16 +101,18 @@ func InitRepository(pool *pgxpool.Pool, stores Stores) *repository.DualWriteRepo
 	)
 }
 
-func InitTaskManager(pool *pgxpool.Pool, cfg Config) *taskexec.Manager {
+func InitTaskManager(ctx context.Context, pool *pgxpool.Pool, cfg Config) *taskexec.Manager {
 	if pool != nil {
 		pgRepo := repository.NewPostgresRepository(pool)
 		taskStore := repository.NewTaskExecutionStore(pgRepo)
 		mgr := taskexec.NewManager(taskStore)
+		mgr.SetContext(ctx)
 		log.Printf("[TaskExec] PostgreSQL store initialized")
 		registerTaskRunners(mgr, cfg)
 		return mgr
 	}
 	mgr := taskexec.NewManager(taskexec.NewInMemoryStore())
+	mgr.SetContext(ctx)
 	log.Printf("[TaskExec] in-memory store initialized (data will not persist across restarts)")
 	registerTaskRunners(mgr, cfg)
 	return mgr
@@ -157,7 +159,7 @@ func InitRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 		log.Printf("[Repository] dual-write mode initialized")
 	}
 
-	rt.TaskManager = InitTaskManager(pool, cfg)
+	rt.TaskManager = InitTaskManager(ctx, pool, cfg)
 
 	return rt, nil
 }

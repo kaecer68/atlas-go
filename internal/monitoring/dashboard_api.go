@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -60,6 +61,7 @@ type DashboardAPI struct {
 	repo               *repository.DualWriteRepository
 	taskManager        *taskexec.Manager
 	eventBus           *eventbus.ChannelEventBus
+	outcomeStore       *DualWriteOutcomeStoreAdapter
 }
 
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
@@ -100,10 +102,17 @@ func (a *DashboardAPI) SetEventBus(eventBus *eventbus.ChannelEventBus) {
 	a.eventBus = eventBus
 }
 
+func (a *DashboardAPI) SetContext(ctx context.Context) {
+	if a.outcomeStore != nil && ctx != nil {
+		a.outcomeStore.SetContext(ctx)
+	}
+}
+
 func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	var outcomeStore ledger.OutcomeStore
 	if a.repo != nil {
-		outcomeStore = NewDualWriteOutcomeStoreAdapter(a.repo)
+		a.outcomeStore = NewDualWriteOutcomeStoreAdapter(a.repo)
+		outcomeStore = a.outcomeStore
 	} else {
 		outcomeStore = ledger.NewStore(a.ledgerDir)
 	}
