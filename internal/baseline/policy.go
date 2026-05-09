@@ -25,6 +25,10 @@ type Policy struct {
 	LastUpdatedAt   time.Time                    `json:"last_updated_at"`
 }
 
+// ErrBaselineNotLoaded is returned when the baseline policy file cannot be found
+// and strict loading is required.
+var ErrBaselineNotLoaded = errors.New("baseline policy not loaded")
+
 func (p *Policy) UnmarshalJSON(data []byte) error {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -197,6 +201,36 @@ func Load(path string) (Policy, error) {
 		if os.IsNotExist(err) {
 			logging.Warn("baseline", "using_default_policy", "reason", "file_not_found", "path", path)
 			return DefaultPolicy(), nil
+		}
+		return Policy{}, fmt.Errorf("read policy file: %w", err)
+	}
+	var policy Policy
+	if err := json.Unmarshal(bytes, &policy); err != nil {
+		return Policy{}, fmt.Errorf("unmarshal policy: %w", err)
+	}
+	if policy.PromptOverrides == nil {
+		policy.PromptOverrides = map[string]string{}
+	}
+	if policy.Version == 0 {
+		policy.Version = 1
+	}
+	if policy.ExecutionPolicy == (domain.ExecutionPolicy{}) {
+		policy.ExecutionPolicy = ExecutionPolicyFromConstraints(policy.Constraints)
+	}
+	return policy, nil
+}
+
+// LoadStrict loads a baseline policy from the given path.
+// Unlike Load, it returns ErrBaselineNotLoaded if the file does not exist
+// instead of returning DefaultPolicy.
+func LoadStrict(path string) (Policy, error) {
+	if path == "" {
+		return Policy{}, fmt.Errorf("baseline policy path must not be empty")
+	}
+	bytes, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return Policy{}, fmt.Errorf("%w: %s", ErrBaselineNotLoaded, path)
 		}
 		return Policy{}, fmt.Errorf("read policy file: %w", err)
 	}

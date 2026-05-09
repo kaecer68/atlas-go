@@ -1,6 +1,26 @@
 import { agentName, stockName, sectorName, regimeLabel } from '../names.js';
 import { computePipelineSummary, factorBar, renderFactorMini, renderFactorBreakdown, toggleBreakdown } from './dashboard.js';
 import { formatDate, getJSON, notify, renderEmptyState } from '../shared/app-utils.js';
+import { escapeHtml } from '../shared/utils.js';
+
+// Delegated click handler for pipeline approve/reject buttons (replaces inline onclick)
+if (typeof document !== 'undefined') {
+  document.addEventListener('click', function(e) {
+    const btn = e.target.closest('.pipeline-action');
+    if (!btn) return;
+    const text = btn.textContent.trim();
+    if (text !== '放行' && text !== '補追' && text !== '否決') return;
+    const symbol = btn.dataset.symbol;
+    const agentId = btn.dataset.agentId;
+    if (!symbol || !agentId) return;
+    e.stopPropagation();
+    if (text === '否決') {
+      rejectRec(btn, symbol, agentId);
+    } else {
+      approveRec(btn, symbol, agentId);
+    }
+  });
+}
 
 export function renderConvictionBreakdown(cb) {
   if (!cb) return '<div class="text-muted text-xs">無計算明細</div>';
@@ -45,7 +65,7 @@ export function renderDecisionChain(pipeline, macro, agentsData, stress, events,
     const hitRate = typeof e.hit_rate === 'number' ? (e.hit_rate * 100).toFixed(0) + '%' : '-';
     const source = e.confidence_source || '-';
     return `<tr>
-      <td>${e.theme}</td>
+      <td>${escapeHtml(e.theme)}</td>
       <td>${(e.confidence * 100).toFixed(0)}%</td>
       <td class="text-muted text-xs">${source}</td>
       <td>${hitRate}</td>
@@ -92,11 +112,11 @@ export function renderDecisionChain(pipeline, macro, agentsData, stress, events,
   </div>`;
 
   const sectorRow = (it, idx, prefix) => {
-    const key = `${prefix}-${idx}-${it.symbol}-${it.agent_id}`;
+    const key = `${prefix}-${idx}-${escapeHtml(it.symbol)}-${escapeHtml(it.agent_id)}`;
     const cb = it.conviction_breakdown;
     return `<tr>
-      <td>${it.symbol}</td>
-      <td>${agentName(it.agent_id)}</td>
+      <td>${escapeHtml(it.symbol)}</td>
+      <td>${escapeHtml(agentName(it.agent_id))}</td>
       <td>${it.conviction != null ? it.conviction : '-'}</td>
       <td><button class="pipeline-action" onclick="toggleBreakdown('${key}')" id="btn-${key}">展開</button></td>
     </tr>
@@ -124,7 +144,7 @@ export function renderDecisionChain(pipeline, macro, agentsData, stress, events,
     ${sectorTable('風格因子推薦', styleAgents, 'style')}
     <div class="mb-sm"><strong>活躍因果鏈：</strong></div>
     <ul style="margin:0;padding-left:18px;line-height:1.8">
-      ${chainList.map(c => `<li>${c.template_id}（分數 ${c.score?.toFixed(2) || '-' }）</li>`).join('')}
+      ${chainList.map(c => `<li>${escapeHtml(c.template_id)}（分數 ${c.score?.toFixed(2) || '-' }）</li>`).join('')}
       ${!chainList.length ? '<li>暫無活躍因果鏈</li>' : ''}
     </ul>
   `;
@@ -161,13 +181,13 @@ export function renderDecisionChain(pipeline, macro, agentsData, stress, events,
   };
 
   const recRows = items.map((it, idx) => {
-    const rowKey = `rec-${idx}-${it.symbol}-${it.agent_id}`;
-    return `<tr><td>${it.symbol}</td><td>${agentName(it.agent_id)}</td>${factorCells(it.factor_scores, rowKey)}</tr>
+    const rowKey = `rec-${idx}-${escapeHtml(it.symbol)}-${escapeHtml(it.agent_id)}`;
+    return `<tr><td>${escapeHtml(it.symbol)}</td><td>${escapeHtml(agentName(it.agent_id))}</td>${factorCells(it.factor_scores, rowKey)}</tr>
             <tr id="breakdown-${rowKey}" class="hidden"><td colspan="13" class="detail-panel">${renderFactorBreakdown(it.factor_scores && it.factor_scores.breakdown)}</td></tr>`;
   }).join('');
   const screenedRows = screened.map((s, idx) => {
-    const rowKey = `scr-${idx}-${s.symbol}-${s.agent_id}`;
-    return `<tr class="text-muted"><td>${s.symbol}</td><td>${agentName(s.agent_id)}</td><td colspan="2">${s.criterion_label || s.criterion || '-'}</td>${factorCells(s.factor_scores, rowKey)}</tr>
+    const rowKey = `scr-${idx}-${escapeHtml(s.symbol)}-${escapeHtml(s.agent_id)}`;
+    return `<tr class="text-muted"><td>${escapeHtml(s.symbol)}</td><td>${escapeHtml(agentName(s.agent_id))}</td><td colspan="2">${s.criterion_label ? escapeHtml(s.criterion_label) : (s.criterion ? escapeHtml(s.criterion) : '-')}</td>${factorCells(s.factor_scores, rowKey)}</tr>
             <tr id="breakdown-${rowKey}" class="hidden"><td colspan="15" class="detail-panel">${renderFactorBreakdown(s.factor_scores && s.factor_scores.breakdown)}</td></tr>`;
   }).join('');
 
@@ -218,7 +238,7 @@ export function renderDecisionChain(pipeline, macro, agentsData, stress, events,
     let txt = `放行 ${outputCount} 筆`;
     if (!g.passed) { cls = 'err'; txt = `阻擋（輸出 ${outputCount} 筆）`; }
     else if (filtered > 0) { cls = 'warn'; txt = `過濾 ${filtered} 筆後放行 ${outputCount} 筆`; }
-    return `<div class="my-xs"><span class="badge ${cls}">${agentName(g.guard_id)}</span> ${txt}（輸入 ${inputCount} → 輸出 ${outputCount}）</div>`;
+    return `<div class="my-xs"><span class="badge ${cls}">${escapeHtml(agentName(g.guard_id))}</span> ${txt}（輸入 ${inputCount} → 輸出 ${outputCount}）</div>`;
   }).join('') || renderEmptyState('暫無控制層紀錄', '');
 
   const perfRows = items.slice(0, 20).map(it => {
@@ -227,8 +247,8 @@ export function renderDecisionChain(pipeline, macro, agentsData, stress, events,
     const frIcon = fr > 0 ? '📈 ' : (fr < 0 ? '📉 ' : '➖ ');
     const hit = it.hit != null ? (it.hit ? '<span class="badge ok">命中</span>' : '<span class="badge err">失誤</span>') : '<span class="badge">待驗證</span>';
     return `<tr>
-      <td>${it.symbol}</td>
-      <td>${agentName(it.agent_id)}</td>
+      <td>${escapeHtml(it.symbol)}</td>
+      <td>${escapeHtml(agentName(it.agent_id))}</td>
       <td>${it.price ? it.price.toFixed(2) : '-'}</td>
       <td>${it.target_price > 0 ? it.target_price.toFixed(2) : '-'}</td>
       <td>${it.stop_loss_price > 0 ? it.stop_loss_price.toFixed(2) : '-'}</td>
@@ -277,7 +297,7 @@ export function renderDecisionChain(pipeline, macro, agentsData, stress, events,
       <div class="table-wrapper">
       <table class="text-sm">
         <thead><tr><th>標的</th><th>交易稅</th><th>股息稅</th><th>總稅額</th><th>稅後損益</th></tr></thead>
-        <tbody>${taxSnapshot.snapshots.map(s => `<tr><td>${s.symbol}</td><td>${s.transaction_tax.toFixed(0)}</td><td>${s.dividend_tax.toFixed(0)}</td><td>${s.total_tax.toFixed(0)}</td><td>${s.after_tax_pnl.toFixed(0)}</td></tr>`).join('')}</tbody>
+        <tbody>${taxSnapshot.snapshots.map(s => `<tr><td>${escapeHtml(s.symbol)}</td><td>${s.transaction_tax.toFixed(0)}</td><td>${s.dividend_tax.toFixed(0)}</td><td>${s.total_tax.toFixed(0)}</td><td>${s.after_tax_pnl.toFixed(0)}</td></tr>`).join('')}</tbody>
       </table>
       </div>
     </div>
@@ -413,7 +433,7 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
 
   const sessionSelect = pipelineSessions.length ? `
     <select id="pipelineSessionSelect" style="font-size:12px;padding:2px 6px;border-radius:4px;border:1px solid var(--border);background:var(--panel);color:var(--text)" onchange="togglePipelineSession(this)">
-      ${pipelineSessions.map(s => `<option value="${s.session_id}" ${s.session_id === data.session_id ? 'selected' : ''}>${s.session_id} · ${s.regime} · ${new Date(s.recorded_at).toLocaleDateString('zh-TW')}</option>`).join('')}
+      ${pipelineSessions.map(s => `<option value="${escapeHtml(s.session_id)}" ${s.session_id === data.session_id ? 'selected' : ''}>${escapeHtml(s.session_id)} · ${escapeHtml(s.regime)} · ${new Date(s.recorded_at).toLocaleDateString('zh-TW')}</option>`).join('')}
     </select>
   ` : `<span class="text-muted text-sm">載入場次中…</span>`;
 
@@ -425,7 +445,7 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
     let cls = 'ok';
     if (!g.passed) { label = '阻擋'; cls = 'err'; }
     else if (filtered > 0) { label = `過濾 ${filtered} 筆`; cls = 'warn'; }
-    return `<span class="badge ${cls}">${agentName(g.guard_id)}：${label}（${inputCount}→${outputCount}）</span>`;
+    return `<span class="badge ${cls}">${escapeHtml(agentName(g.guard_id))}：${label}（${inputCount}→${outputCount}）</span>`;
   }).join('')}</div>` : '';
 
   const screeningBadge = screenedItems.length ? `（${screenedItems.length} 檔被篩除）` : '';
@@ -455,12 +475,12 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
           <thead><tr><th>標的</th><th>公司名稱</th><th>策略來源</th><th>未通過條件</th><th>門檻</th><th>實際值</th><th>因子分數</th></tr></thead>
           <tbody>
             ${screenedItems.map(s => `<tr style="border-left:3px solid #666;color:var(--muted)">
-              <td>${s.symbol}</td>
-              <td>${stockName(s.symbol) || '-'}</td>
-              <td>${agentName(s.agent_id)}</td>
-              <td>${s.criterion_label || s.criterion || '-'}</td>
-              <td>${s.threshold || '-'}</td>
-              <td>${s.actual_value || '-'}</td>
+              <td>${escapeHtml(s.symbol)}</td>
+              <td>${escapeHtml(stockName(s.symbol)) || '-'}</td>
+              <td>${escapeHtml(agentName(s.agent_id))}</td>
+              <td>${s.criterion_label ? escapeHtml(s.criterion_label) : (s.criterion ? escapeHtml(s.criterion) : '-')}</td>
+              <td>${s.threshold != null ? escapeHtml(String(s.threshold)) : '-'}</td>
+              <td>${s.actual_value != null ? escapeHtml(String(s.actual_value)) : '-'}</td>
               <td>${renderFactorMini(s.factor_scores)}</td>
             </tr>`).join('')}
           </tbody>
@@ -496,12 +516,12 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
     else if (it.forward_return < 0) { frCls = 'color:var(--down);font-weight:700'; frIcon = '📉 '; }
     const layerMap = { sector: '產業主題', style: '風格因子', superinvestor: '超級投資者', context: '總經情境', control: '控制層', macro: '總經情境' };
     const layerName = layerMap[it.layer] || (it.layer || (it.agent_id === 'alpha_discovery' ? '風格因子' : '-'));
-    const tags = (it.tags || []).map(t => `<span class="badge" style="font-size:10px;padding:1px 5px;background:var(--bg);border:1px solid var(--border);margin-right:3px">${t}</span>`).join('');
+    const tags = (it.tags || []).map(t => `<span class="badge" style="font-size:10px;padding:1px 5px;background:var(--bg);border:1px solid var(--border);margin-right:3px">${escapeHtml(t)}</span>`).join('');
     const actionBtns = it.passed_guards
-      ? `<button class="pipeline-action" onclick="approveRec(this,'${it.symbol}','${it.agent_id}')">放行</button> <button class="pipeline-action" onclick="rejectRec(this,'${it.symbol}','${it.agent_id}')">否決</button>`
-      : `<button class="pipeline-action" onclick="approveRec(this,'${it.symbol}','${it.agent_id}')">補追</button>`;
+      ? `<button class="pipeline-action" data-symbol="${escapeHtml(it.symbol)}" data-agent-id="${escapeHtml(it.agent_id)}">放行</button> <button class="pipeline-action" data-symbol="${escapeHtml(it.symbol)}" data-agent-id="${escapeHtml(it.agent_id)}">否決</button>`
+      : `<button class="pipeline-action" data-symbol="${escapeHtml(it.symbol)}" data-agent-id="${escapeHtml(it.agent_id)}">補追</button>`;
     const actionHelp = `<span style="cursor:pointer;color:var(--accent);font-size:12px;margin-left:4px" onclick="event.stopPropagation();openInfoHelp('人工覆寫說明', \`<p><strong>放行</strong>：人工背書此推薦，系統後續回測不會將它濾除。</p><p><strong>否決</strong>：人工拒絕此推薦，系統後續回測會強制排除該 (標的, Agent) 組合。</p><p><strong>補追</strong>：對已被控制層擋下的標的進行人工放行。</p>\`)">ℹ️</span>`;
-    return `<tr class="pipeline-row ${cls}" style="${rowStyle}"><td>${it.symbol}</td><td>${stockName(it.symbol) || '-'}</td><td>${agentName(it.agent_id)}（${it.skill}）</td><td>${layerName}</td><td>${sideLabel}</td><td>${priceLabel}</td><td>${targetPriceLabel}</td><td>${stopLossPriceLabel}</td><td>${it.conviction || '-'}</td><td>${renderFactorMini(it.factor_scores)}</td><td style="${frCls}">${frIcon}${(it.forward_return*100).toFixed(1)}%</td><td><div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:4px">${tags}</div>${badge}${it.reason || '-'}${it.guard_reason ? '<br><span class="text-muted text-xs">' + it.guard_reason + '</span>' : ''}</td><td>${actionBtns}${actionHelp}</td></tr>`;
+    return `<tr class="pipeline-row ${cls}" style="${rowStyle}"><td>${escapeHtml(it.symbol)}</td><td>${escapeHtml(stockName(it.symbol)) || '-'}</td><td>${escapeHtml(agentName(it.agent_id))}（${escapeHtml(it.skill)}）</td><td>${escapeHtml(layerName)}</td><td>${sideLabel}</td><td>${priceLabel}</td><td>${targetPriceLabel}</td><td>${stopLossPriceLabel}</td><td>${it.conviction != null ? it.conviction : '-'}</td><td>${renderFactorMini(it.factor_scores)}</td><td style="${frCls}">${frIcon}${(it.forward_return*100).toFixed(1)}%</td><td><div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:4px">${tags}</div>${badge}${it.reason ? escapeHtml(it.reason) : '-'}${it.guard_reason ? '<br><span class="text-muted text-xs">' + escapeHtml(it.guard_reason) + '</span>' : ''}</td><td>${actionBtns}${actionHelp}</td></tr>`;
   }).join('');
 
   const paginationControls = totalItems > PAGE_SIZE ? `

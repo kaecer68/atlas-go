@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -437,29 +438,20 @@ func (dq *DataQualityChecker) determineOverallStatus(checks []DataQualityCheck) 
 }
 
 func parseEnabledAgents(data []byte) []string {
-	var agents []string
-	content := string(data)
-
-	searchStr := `"enabled": true`
-	idx := 0
-	for {
-		pos := strings.Index(content[idx:], searchStr)
-		if pos == -1 {
-			break
-		}
-
-		block := content[idx : idx+pos]
-		namePos := strings.LastIndex(block, `"name": "`)
-		if namePos != -1 {
-			nameStart := idx + pos - len(block) + namePos + len(`"name": "`)
-			nameEnd := strings.Index(content[nameStart:], `"`)
-			if nameEnd != -1 {
-				agents = append(agents, content[nameStart:nameStart+nameEnd])
-			}
-		}
-
-		idx += pos + len(searchStr)
+	var reg struct {
+		Agents []struct {
+			Name    string `json:"name"`
+			Enabled bool   `json:"enabled"`
+		} `json:"agents"`
 	}
-
+	if err := json.Unmarshal(data, &reg); err != nil {
+		return nil
+	}
+	var agents []string
+	for _, a := range reg.Agents {
+		if a.Enabled {
+			agents = append(agents, a.Name)
+		}
+	}
 	return agents
 }

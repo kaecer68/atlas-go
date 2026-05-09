@@ -50,15 +50,17 @@ type DayResult struct {
 	Cash           float64    `json:"cash"`
 	PortfolioValue float64    `json:"portfolio_value"`
 	DailyPnL       float64    `json:"daily_pnl"`
+	FallbackEvents []string   `json:"fallback_events,omitempty"`
 }
 
 type SimulationReport struct {
-	TotalReturn   float64            `json:"total_return"`
-	SharpeRatio   float64            `json:"sharpe_ratio"`
-	MaxDrawdown   float64            `json:"max_drawdown"`
-	EquityCurve   []float64          `json:"equity_curve"`
-	AgentHitRates map[string]float64 `json:"agent_hit_rates"`
-	TradeCount    int                `json:"trade_count"`
-	StartDate     time.Time          `json:"start_date"`
-	EndDate       time.Time          `json:"end_date"`
+	TotalReturn    float64            `json:"total_return"`
+	SharpeRatio    float64            `json:"sharpe_ratio"`
+	MaxDrawdown    float64            `json:"max_drawdown"`
+	EquityCurve    []float64          `json:"equity_curve"`
+	AgentHitRates  map[string]float64 `json:"agent_hit_rates"`
+	TradeCount     int                `json:"trade_count"`
+	StartDate      time.Time          `json:"start_date"`
+	EndDate        time.Time          `json:"end_date"`
+	FallbackEvents []string           `json:"fallback_events,omitempty"`
 }

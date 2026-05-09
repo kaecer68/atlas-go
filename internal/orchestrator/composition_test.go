@@ -20,7 +20,7 @@ func TestNewSystem_UsesParametersConfigPathFromConfig(t *testing.T) {
 		t.Fatalf("save parameters config: %v", err)
 	}
 
-	sys := NewSystem(config.Config{ParametersConfigPath: parametersPath})
+	sys, _ := NewSystem(config.Config{ParametersConfigPath: parametersPath})
 	got := sys.Port().darwinian.GetWeight("missing-agent")
 
 	if math.Abs(got-1.23) > 1e-9 {

@@ -48,10 +48,6 @@ type OutcomeStore interface {
 	LoadOutcomes() ([]domain.RecommendationOutcome, error)
 	LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOutcome, error)
 
-	RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error
-	LoadSessionSummaries() ([]domain.SessionSummary, error)
-	LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error)
-
 	RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error
 	LoadSessionScreeningRejects(sessionID string) ([]domain.ScreeningReject, error)
 
@@ -60,6 +56,13 @@ type OutcomeStore interface {
 
 	RecordHumanIntervention(intervention domain.HumanIntervention) error
 	LoadHumanInterventions() ([]domain.HumanIntervention, error)
+}
+
+// SessionStore mirrors ledger.SessionStore for interface compatibility.
+type SessionStore interface {
+	RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error
+	LoadSessionSummaries() ([]domain.SessionSummary, error)
+	LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error)
 }
 
 type ScreeningRejectStore interface {

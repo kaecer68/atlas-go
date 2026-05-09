@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 )
 
@@ -56,6 +57,7 @@ func HandleDataIntegrity(workDir, ledgerDir string) http.HandlerFunc {
 			sp := filepath.Join(sessionsDir, e.Name(), "summary.json")
 			data, err := os.ReadFile(sp)
 			if err != nil {
+				logging.Warn("health_handler", "read_summary_failed", logging.Err(err))
 				continue
 			}
 			if strings.Contains(string(data[:200]), `"SessionID"`) {
@@ -81,10 +83,12 @@ func HandleDataIntegrity(workDir, ledgerDir string) http.HandlerFunc {
 			sp := filepath.Join(sessionsDir, e.Name(), "summary.json")
 			data, err := os.ReadFile(sp)
 			if err != nil {
+				logging.Warn("health_handler", "read_summary_failed", logging.Err(err))
 				continue
 			}
 			var summary domain.SessionSummary
 			if json.Unmarshal(data, &summary) != nil {
+				logging.Warn("health_handler", "parse_summary_failed", logging.Err(err))
 				continue
 			}
 			if len(summary.TaxSnapshots) > 0 || summary.TotalTaxPaid != 0 {
@@ -142,10 +146,12 @@ func HandleDataIntegrity(workDir, ledgerDir string) http.HandlerFunc {
 			sp := filepath.Join(sessionsDir, e.Name(), "summary.json")
 			data, err := os.ReadFile(sp)
 			if err != nil {
+				logging.Warn("health_handler", "read_summary_failed", logging.Err(err))
 				continue
 			}
 			var summary domain.SessionSummary
 			if json.Unmarshal(data, &summary) != nil {
+				logging.Warn("health_handler", "parse_summary_failed", logging.Err(err))
 				continue
 			}
 			if summary.PortfolioValue == 0 {

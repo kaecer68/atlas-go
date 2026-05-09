@@ -3,12 +3,15 @@ package monitoring
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 )
 
 // DataLoader provides methods for loading session data and building symbol-sector mappings.
@@ -34,6 +37,24 @@ func LoadRecommendationOutcomes(ledgerDir, sessionID string) ([]domain.Recommend
 			}
 		}
 		sessionID = latest
+	} else {
+		if err := shared.ValidateSessionID(sessionID); err != nil {
+			return nil, err
+		}
+		entries, err := os.ReadDir(sessionsDir)
+		if err != nil {
+			return nil, err
+		}
+		found := false
+		for _, entry := range entries {
+			if entry.IsDir() && entry.Name() == sessionID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("session not found: %s", sessionID)
+		}
 	}
 	path := filepath.Join(sessionsDir, sessionID, "recommendation_outcomes.jsonl")
 	f, err := os.Open(path)
@@ -51,6 +72,7 @@ func LoadRecommendationOutcomes(ledgerDir, sessionID string) ([]domain.Recommend
 		}
 		var oc domain.RecommendationOutcome
 		if err := json.Unmarshal([]byte(line), &oc); err != nil {
+			logging.Warn("dashboard_dataloaders", "corrupted_outcome_skipped", logging.Err(err))
 			continue
 		}
 		outcomes = append(outcomes, oc)

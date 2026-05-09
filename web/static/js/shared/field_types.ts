@@ -145,6 +145,7 @@ export interface DayResult {
   cash: number;
   portfolio_value: number;
   daily_pnl: number;
+  fallback_events?: string[];
 }
 
 export interface ExecutionPolicy {
@@ -511,6 +512,7 @@ export interface SimulationReport {
   trade_count: number;
   start_date: string;
   end_date: string;
+  fallback_events?: string[];
 }
 
 export interface SimulationResult {
@@ -519,6 +521,7 @@ export interface SimulationResult {
   before_tax_pnl: number;
   after_tax_pnl: number;
   total_tax_paid: number;
+  fallback_events?: string[];
 }
 
 export interface SimulationState {

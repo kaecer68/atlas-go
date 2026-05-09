@@ -1,6 +1,7 @@
 // Inbox / experiment overview page
 import { getJSON, formatDate } from '../shared/app-utils.js';
 import { agentName } from '../names.js';
+import { escapeHtml } from '../shared/utils.js';
 
 export function renderInbox(data) {
   const el = document.getElementById('experimentInbox');
@@ -42,7 +43,7 @@ export function renderInbox(data) {
     <div class="inbox-col">
       <h3>近期歷史 (${history.length})</h3>
       ${history.length ? history.map(h => {
-        const extra = h.status === 'rejected' && h.reject_reason ? `原因: ${h.reject_reason}` : '';
+        const extra = h.status === 'rejected' && h.reject_reason ? `原因: ${escapeHtml(h.reject_reason)}` : '';
         return card(h, extra).replace('${item._actions || \'\'}', histBadge(h.status, h.reject_reason));
       }).join('') : renderEmptyState('無歷史紀錄', '')}
     </div>
@@ -50,7 +51,7 @@ export function renderInbox(data) {
 
   // Populate promote/revert dropdowns
   const promoteSel = document.getElementById('promoteSelect');
-  promoteSel.innerHTML = '<option value="">-- 選擇已接受的實驗 --</option>' + promotes.map(p => `<option value="data/state/experiments/${p.experiment_id}.json">${p.experiment_id} (${agentName(p.target_agent_id)})</option>`).join('');
+  promoteSel.innerHTML = '<option value="">-- 選擇已接受的實驗 --</option>' + promotes.map(p => `<option value="data/state/experiments/${escapeHtml(p.experiment_id)}.json">${escapeHtml(p.experiment_id)} (${escapeHtml(agentName(p.target_agent_id))})</option>`).join('');
   if (promoteSel.options.length > 1 && promoteSel.selectedIndex === 0) {
     promoteSel.selectedIndex = 1;
   }

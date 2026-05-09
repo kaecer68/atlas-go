@@ -33,7 +33,7 @@ func TestDefaultSlippageModelTiers(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := model.CalculateSlippageBPS(tt.symbol, quotes)
+		got := model.CalculateSlippageBPS(tt.symbol, quotes, nil)
 		if got != tt.expected {
 			t.Errorf("CalculateSlippageBPS(%s) = %v, want %v", tt.symbol, got, tt.expected)
 		}
@@ -47,7 +47,7 @@ func TestSlippageModelMissingQuote(t *testing.T) {
 	}
 
 	// Symbol not in quotes should return most conservative (bottom tier)
-	got := model.CalculateSlippageBPS("Z", quotes)
+	got := model.CalculateSlippageBPS("Z", quotes, nil)
 	if got != 50 {
 		t.Errorf("missing symbol slippage = %v, want 50", got)
 	}
@@ -59,7 +59,7 @@ func TestSlippageModelZeroVolume(t *testing.T) {
 		"A": {Symbol: "A", Volume: 0},
 	}
 
-	got := model.CalculateSlippageBPS("A", quotes)
+	got := model.CalculateSlippageBPS("A", quotes, nil)
 	if got != 50 {
 		t.Errorf("zero volume slippage = %v, want 50", got)
 	}
@@ -71,7 +71,7 @@ func TestSlippageModelNil(t *testing.T) {
 		"A": {Symbol: "A", Volume: 1000000},
 	}
 
-	got := model.CalculateSlippageBPS("A", quotes)
+	got := model.CalculateSlippageBPS("A", quotes, nil)
 	if got != 15 {
 		t.Errorf("nil model slippage = %v, want 15", got)
 	}
@@ -249,7 +249,7 @@ func TestSlippageModelUsesPrecomputed(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := model.CalculateSlippageBPS(tt.symbol, quotes)
+		got := model.CalculateSlippageBPS(tt.symbol, quotes, nil)
 		if got != tt.expected {
 			t.Errorf("with precompute: CalculateSlippageBPS(%s) = %v, want %v", tt.symbol, got, tt.expected)
 		}
@@ -278,7 +278,7 @@ func TestSlippageModelFallbackWithoutPrecompute(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := model.CalculateSlippageBPS(tt.symbol, quotes)
+		got := model.CalculateSlippageBPS(tt.symbol, quotes, nil)
 		if got != tt.expected {
 			t.Errorf("without precompute: CalculateSlippageBPS(%s) = %v, want %v", tt.symbol, got, tt.expected)
 		}
@@ -296,10 +296,10 @@ func TestSlippageModelConsistencyWithAndWithoutPrecompute(t *testing.T) {
 	}
 
 	for symbol := range quotes {
-		withoutPrecompute := model.CalculateSlippageBPS(symbol, quotes)
+		withoutPrecompute := model.CalculateSlippageBPS(symbol, quotes, nil)
 
 		model.Precompute(quotes)
-		withPrecompute := model.CalculateSlippageBPS(symbol, quotes)
+		withPrecompute := model.CalculateSlippageBPS(symbol, quotes, nil)
 
 		if withPrecompute != withoutPrecompute {
 			t.Errorf("inconsistent results for %s: precompute=%v, fallback=%v",
@@ -326,7 +326,7 @@ func TestSlippageModelStaleCache(t *testing.T) {
 
 	model.Precompute(quotes5)
 
-	result := model.CalculateSlippageBPS("A", quotes3)
+	result := model.CalculateSlippageBPS("A", quotes3, nil)
 
 	// With 3-item fallback, A's percentile = 2/3 ≈ 0.667 (middle tier = 15)
 	if result != 15 {

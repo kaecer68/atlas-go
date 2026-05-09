@@ -88,6 +88,7 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 		if len(errs) == len(symbols) {
 			return snap, fmt.Errorf("all indicators failed: %w", errors.Join(errs...))
 		}
+		return snap, errors.Join(errs...)
 	}
 	return snap, nil
 }

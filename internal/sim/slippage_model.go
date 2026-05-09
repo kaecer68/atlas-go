@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // SlippageModel calculates dynamic slippage based on liquidity.
@@ -60,25 +61,39 @@ func DefaultSlippageModel() *SlippageModel {
 // CalculateSlippageBPS returns the slippage in BPS for a given symbol
 // based on its volume percentile relative to all available quotes.
 // Uses precomputed data if Precompute was called, otherwise falls back to sorting.
-func (sm *SlippageModel) CalculateSlippageBPS(symbol string, quotes map[string]domain.Quote) float64 {
+// If fallbackEvents is non-nil, descriptive fallback strings are appended when
+// the model takes a non-standard code path.
+func (sm *SlippageModel) CalculateSlippageBPS(symbol string, quotes map[string]domain.Quote, fallbackEvents *[]string) float64 {
 	if sm == nil || len(sm.TierBPS) == 0 {
+		if fallbackEvents != nil {
+			*fallbackEvents = append(*fallbackEvents, "slippage: nil model, using 15 BPS default")
+		}
+		logging.Warn("sim", "slippage_fallback", "reason", "nil_model", "default_bps", 15)
 		return 15 // default mid-tier if no model configured
 	}
 
 	quote, ok := quotes[symbol]
 	if !ok {
+		if fallbackEvents != nil {
+			*fallbackEvents = append(*fallbackEvents, "slippage: missing quote for symbol, using conservative tier")
+		}
+		logging.Warn("sim", "slippage_fallback", "reason", "missing_quote", "symbol", symbol, "fallback_bps", sm.TierBPS[len(sm.TierBPS)-1])
 		return sm.TierBPS[len(sm.TierBPS)-1] // most conservative
 	}
 
 	if quote.Volume <= 0 {
+		if fallbackEvents != nil {
+			*fallbackEvents = append(*fallbackEvents, "slippage: zero/negative volume for symbol, using conservative tier")
+		}
+		logging.Warn("sim", "slippage_fallback", "reason", "zero_volume", "symbol", symbol, "fallback_bps", sm.TierBPS[len(sm.TierBPS)-1])
 		return sm.TierBPS[len(sm.TierBPS)-1]
 	}
 
 	var percentile float64
 	if sm.precomputedLen == len(quotes) && sm.precomputedLen > 0 {
-		percentile = sm.volumePercentilePrecomputed(quote.Volume)
+		percentile = sm.volumePercentilePrecomputed(quote.Volume, fallbackEvents)
 	} else {
-		percentile = calculateVolumePercentile(quote.Volume, quotes)
+		percentile = calculateVolumePercentile(quote.Volume, quotes, fallbackEvents)
 	}
 
 	switch {
@@ -93,8 +108,12 @@ func (sm *SlippageModel) CalculateSlippageBPS(symbol string, quotes map[string]d
 
 // volumePercentilePrecomputed returns the percentile rank using precomputed sorted volumes.
 // Requires Precompute to have been called with matching quote count.
-func (sm *SlippageModel) volumePercentilePrecomputed(volume int64) float64 {
+func (sm *SlippageModel) volumePercentilePrecomputed(volume int64, fallbackEvents *[]string) float64 {
 	if volume <= 0 || len(sm.sortedVolumes) == 0 {
+		if fallbackEvents != nil {
+			*fallbackEvents = append(*fallbackEvents, "slippage: invalid volume or empty precomputed data, using 0 percentile")
+		}
+		logging.Warn("sim", "volume_percentile_fallback", "reason", "zero_volume", "fallback", 0)
 		return 0
 	}
 
@@ -110,8 +129,12 @@ func (sm *SlippageModel) volumePercentilePrecomputed(volume int64) float64 {
 
 // calculateVolumePercentile computes the percentile rank of a symbol's volume
 // relative to all volumes in the quote map.
-func calculateVolumePercentile(volume int64, quotes map[string]domain.Quote) float64 {
+func calculateVolumePercentile(volume int64, quotes map[string]domain.Quote, fallbackEvents *[]string) float64 {
 	if volume <= 0 {
+		if fallbackEvents != nil {
+			*fallbackEvents = append(*fallbackEvents, "slippage: invalid volume, using 0 percentile")
+		}
+		logging.Warn("sim", "volume_percentile_fallback", "reason", "zero_volume", "fallback", 0)
 		return 0
 	}
 
@@ -123,6 +146,10 @@ func calculateVolumePercentile(volume int64, quotes map[string]domain.Quote) flo
 	}
 
 	if len(volumes) == 0 {
+		if fallbackEvents != nil {
+			*fallbackEvents = append(*fallbackEvents, "slippage: no positive volumes in market, using 0.5 percentile")
+		}
+		logging.Warn("sim", "volume_percentile_fallback", "reason", "no_volumes", "fallback", 0.5)
 		return 0.5
 	}
 

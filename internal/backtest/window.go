@@ -50,7 +50,10 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 
 		cfg := r.cfg
 		cfg.ReplaySessionDate = date.Format("2006-01-02")
-		system := orchestrator.NewSystem(cfg)
+		system, err := orchestrator.NewSystem(cfg)
+		if err != nil {
+			return domain.BacktestWindowSummary{}, fmt.Errorf("create system: %w", err)
+		}
 		if r.janusEngine != nil {
 			system.WithJANUS(r.janusEngine)
 		}

@@ -1,6 +1,7 @@
 // Experiments and human intervention controls
 import { agentName, sectorName } from '../names.js';
 import { getJSON, notify, formatDate } from '../shared/app-utils.js';
+import { escapeHtml } from '../shared/utils.js';
 
 export async function loadOverrides() {
   try {
@@ -31,7 +32,7 @@ export async function loadAuditLog() {
       'reject_rec': '拒絕推薦'
     };
     el.innerHTML = `<table><thead><tr><th>時間</th><th>操作者</th><th>動作</th><th>對象</th><th>原因</th></tr></thead><tbody>
-      ${items.map(it => `<tr><td>${formatDate(it.recorded_at)}</td><td>${it.operator || '-'}</td><td>${actionMap[it.type] || it.type}</td><td>${agentName(it.target_agent_id) || sectorName(it.target_sector) || it.target_symbol || it.target_model_id || '-'}</td><td>${it.reason || '-'}</td></tr>`).join('')}
+      ${items.map(it => `<tr><td>${formatDate(it.recorded_at)}</td><td>${it.operator ? escapeHtml(it.operator) : '-'}</td><td>${actionMap[it.type] || escapeHtml(it.type)}</td><td>${escapeHtml(agentName(it.target_agent_id)) || escapeHtml(sectorName(it.target_sector)) || (it.target_symbol ? escapeHtml(it.target_symbol) : '') || (it.target_model_id ? escapeHtml(it.target_model_id) : '') || '-'}</td><td>${it.reason ? escapeHtml(it.reason) : '-'}</td></tr>`).join('')}
     </tbody></table>`;
   } catch (e) { el.innerHTML = '<div class="empty">載入失敗</div>'; }
 }
@@ -44,10 +45,10 @@ export async function loadExperimentHistory() {
     const items = (data.history || []).slice(0, 20);
     if (!items.length) { el.innerHTML = renderEmptyState('無紀錄', ''); return; }
     el.innerHTML = `<table><thead><tr><th>時間</th><th>版本</th><th>實驗</th><th>AI</th><th>狀態</th></tr></thead><tbody>
-      ${items.map(it => `<tr><td>${formatDate(it.promoted_at)}</td><td>v${it.version_after || '-'}</td><td>${it.experiment_id || ''}</td><td>${agentName(it.target_agent_id) || it.target_agent_id || ''}</td><td><span class="badge ${it.status==='accepted'?'ok':'warn'}">${it.status==='accepted'?'已接受':(it.status==='rejected'?'已拒絕':it.status)}</span></td></tr>`).join('')}
+      ${items.map(it => `<tr><td>${formatDate(it.promoted_at)}</td><td>v${it.version_after || '-'}</td><td>${escapeHtml(it.experiment_id) || ''}</td><td>${escapeHtml(agentName(it.target_agent_id)) || (it.target_agent_id ? escapeHtml(it.target_agent_id) : '')}</td><td><span class="badge ${it.status==='accepted'?'ok':'warn'}">${it.status==='accepted'?'已接受':(it.status==='rejected'?'已拒絕':escapeHtml(it.status))}</span></td></tr>`).join('')}
     </tbody></table>`;
     const revertSel = document.getElementById('revertSelect');
-    revertSel.innerHTML = '<option value="">-- 選擇要回滾的版本 --</option>' + items.map((it, i) => `<option value="${it.experiment_id}">v${it.version_after || i} - ${it.experiment_id}</option>`).join('');
+    revertSel.innerHTML = '<option value="">-- 選擇要回滾的版本 --</option>' + items.map((it, i) => `<option value="${escapeHtml(it.experiment_id)}">v${it.version_after || i} - ${escapeHtml(it.experiment_id)}</option>`).join('');
   } catch (e) { el.innerHTML = '<div class="empty">載入失敗</div>'; }
 }
 
@@ -182,24 +183,40 @@ export async function rejectRec(btn, symbol, agentID) {
 export async function pauseAgent() {
   const agent_id = document.getElementById('agentSelect').value;
   if (!agent_id) return;
-  await postJSON('/api/control/pause-agent', { agent_id, reason: '儀表板人工暫停', operator: 'human' });
-  loadOverrides(); notify('已暫停 Agent');
+  try {
+    await postJSON('/api/control/pause-agent', { agent_id, reason: '儀表板人工暫停', operator: 'human' });
+    loadOverrides(); notify('已暫停 Agent');
+  } catch (e) {
+    notify('暫停失敗：' + e.message, 'err');
+  }
 }
 export async function resumeAgent() {
   const agent_id = document.getElementById('agentSelect').value;
   if (!agent_id) return;
-  await postJSON('/api/control/resume-agent', { agent_id, reason: '儀表板人工恢復', operator: 'human' });
-  loadOverrides(); notify('已恢復 Agent');
+  try {
+    await postJSON('/api/control/resume-agent', { agent_id, reason: '儀表板人工恢復', operator: 'human' });
+    loadOverrides(); notify('已恢復 Agent');
+  } catch (e) {
+    notify('恢復失敗：' + e.message, 'err');
+  }
 }
 export async function banSector() {
   const sector = document.getElementById('sectorSelect').value;
-  await postJSON('/api/control/sector-ban', { sector, banned: true, reason: '儀表板人工封鎖', operator: 'human' });
-  loadOverrides(); notify('已封鎖產業');
+  try {
+    await postJSON('/api/control/sector-ban', { sector, banned: true, reason: '儀表板人工封鎖', operator: 'human' });
+    loadOverrides(); notify('已封鎖產業');
+  } catch (e) {
+    notify('封鎖失敗：' + e.message, 'err');
+  }
 }
 export async function unbanSector() {
   const sector = document.getElementById('sectorSelect').value;
-  await postJSON('/api/control/sector-ban', { sector, banned: false, reason: '儀表板人工解除封鎖', operator: 'human' });
-  loadOverrides(); notify('已解除產業封鎖');
+  try {
+    await postJSON('/api/control/sector-ban', { sector, banned: false, reason: '儀表板人工解除封鎖', operator: 'human' });
+    loadOverrides(); notify('已解除產業封鎖');
+  } catch (e) {
+    notify('解除封鎖失敗：' + e.message, 'err');
+  }
 }
 
 // --- Boot ---
@@ -209,7 +226,7 @@ if (typeof window !== "undefined") Object.assign(window, {
   closeModal, closeInfoModal, closePromoteModal, openKpiHelp, openInfoHelp,
   confirmPromote, promoteExperiment, revertExperiment,
   pauseAgent, resumeAgent, banSector, unbanSector,
-  judgeExperiment, viewDiff
+  judgeExperiment, viewDiff, approveRec, rejectRec
 });
   const select = document.getElementById('agentSelect');
   if (!select) return;

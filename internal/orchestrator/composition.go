@@ -23,7 +23,7 @@ import (
 )
 
 // buildSimulationCore constructs the core simulation subsystem.
-func buildSimulationCore(cfg config.Config, registry domain.AgentRegistry, policy baseline.Policy, ds *replay.Dataset, optimizer *portfolio.Optimizer, store *ledger.Store) SimulationCore {
+func buildSimulationCore(cfg config.Config, registry domain.AgentRegistry, policy baseline.Policy, ds *replay.Dataset, optimizer *portfolio.Optimizer, store ledger.OutcomeStore) SimulationCore {
 	return SimulationCore{
 		cfg:      cfg,
 		provider: selectProvider(cfg),
