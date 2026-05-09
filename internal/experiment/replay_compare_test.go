@@ -1,6 +1,7 @@
 package experiment
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -303,5 +304,55 @@ func TestFallbackStatsIsHighFallback(t *testing.T) {
 				t.Errorf("FallbackStats.IsHighFallback(%v) = %v, want %v", tt.maxRatio, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestComparePromptPerformanceComputesMonetaryNTD(t *testing.T) {
+	replayPath := filepath.Join("..", "..", "samples", "replay", "twse_stock_day_all_sample.csv")
+	window := domain.BacktestWindowSummary{
+		StartDate: time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC),
+		EndDate:   time.Date(2026, 3, 27, 0, 0, 0, 0, time.UTC),
+	}
+	brief := domain.MutationBrief{
+		TargetAgentID: "growth-momentum-01",
+		TargetSkill:   "growth_momentum",
+		TargetLayer:   domain.LayerStyle,
+		MutationType:  "prompt_tightening",
+		PromptFile:    filepath.Join("..", "..", "prompts", "agents", "growth_momentum.md"),
+	}
+	candidateDir := t.TempDir()
+	candidatePath := filepath.Join(candidateDir, "v2.md")
+	candidateArtifact := `require trend confirmation
+downgrade conviction
+reject setups
+growth_momentum
+technical_breakout`
+	if err := os.WriteFile(candidatePath, []byte(candidateArtifact), 0o644); err != nil {
+		t.Fatalf("write candidate prompt: %v", err)
+	}
+
+	baselinePolicyPath := filepath.Join(candidateDir, "baseline_policy.json")
+	startingCash := 1000000.0
+	baselinePolicy := `{"version":1,"constraints":{"starting_cash":` + fmt.Sprintf("%.0f", startingCash) + `,"max_position_weight":0.25,"max_open_positions":10,"min_tradable_volume":1000,"min_recommendation_conviction":0,"require_cro_pass":false,"transaction_cost_bps":1,"slippage_bps":5,"reserve_cash_fraction":0.1},"execution_policy":{"conviction_floor":0,"require_cro_pass":false,"momentum_crash_protection":false}}`
+	if err := os.WriteFile(baselinePolicyPath, []byte(baselinePolicy), 0o644); err != nil {
+		t.Fatalf("write baseline policy: %v", err)
+	}
+
+	summary, err := comparePromptPerformanceDetailed(replayPath, baselinePolicyPath, brief, window, candidatePath)
+	if err != nil {
+		t.Fatalf("compare prompt performance: %v", err)
+	}
+
+	if summary.StartingCash != startingCash {
+		t.Errorf("expected StartingCash=%.0f, got %.0f", startingCash, summary.StartingCash)
+	}
+
+	if summary.BaselineScore != 0 && summary.BaselineMonetaryNTD != summary.BaselineScore*startingCash {
+		t.Errorf("expected BaselineMonetaryNTD=BaselineScore*StartingCash (%.4f*%.0f=%.2f), got %.2f",
+			summary.BaselineScore, startingCash, summary.BaselineScore*startingCash, summary.BaselineMonetaryNTD)
+	}
+	if summary.CandidateScore != 0 && summary.CandidateMonetaryNTD != summary.CandidateScore*startingCash {
+		t.Errorf("expected CandidateMonetaryNTD=CandidateScore*StartingCash (%.4f*%.0f=%.2f), got %.2f",
+			summary.CandidateScore, startingCash, summary.CandidateScore*startingCash, summary.CandidateMonetaryNTD)
 	}
 }

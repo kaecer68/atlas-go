@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CONFIGS_DIR="${PROJECT_ROOT}/configs"
 WEIGHTS_FILE="${CONFIGS_DIR}/darwinian_weights.json"
-REPORTS_DIR="${PROJECT_ROOT}/reports"
+REPORTS_DIR="${PROJECT_ROOT}/data/reports"
 LOGS_DIR="${PROJECT_ROOT}/logs"
 
 # Create directories if needed

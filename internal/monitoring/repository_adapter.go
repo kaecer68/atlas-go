@@ -156,60 +156,67 @@ func (a *OutcomeStoreAdapter) LoadHumanInterventions() ([]domain.HumanInterventi
 
 type DualWriteOutcomeStoreAdapter struct {
 	repo *repository.DualWriteRepository
+	ctx  context.Context
 }
 
 func NewDualWriteOutcomeStoreAdapter(repo *repository.DualWriteRepository) *DualWriteOutcomeStoreAdapter {
-	return &DualWriteOutcomeStoreAdapter{repo: repo}
+	return &DualWriteOutcomeStoreAdapter{repo: repo, ctx: context.Background()}
+}
+
+func (a *DualWriteOutcomeStoreAdapter) SetContext(ctx context.Context) {
+	if ctx != nil {
+		a.ctx = ctx
+	}
 }
 
 func (a *DualWriteOutcomeStoreAdapter) RecordOutcomes(outcomes []domain.RecommendationOutcome) error {
-	return a.repo.RecordOutcomes(context.Background(), outcomes)
+	return a.repo.RecordOutcomes(a.ctx, outcomes)
 }
 
 func (a *DualWriteOutcomeStoreAdapter) LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOutcome, error) {
-	return a.repo.QueryOutcomesBySession(context.Background(), sessionID)
+	return a.repo.QueryOutcomesBySession(a.ctx, sessionID)
 }
 
 func (a *DualWriteOutcomeStoreAdapter) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
-	return a.repo.QueryAllOutcomes(context.Background())
+	return a.repo.QueryAllOutcomes(a.ctx)
 }
 
 func (a *DualWriteOutcomeStoreAdapter) RecordSessionOutcomes(session domain.ReplaySession, outcomes []domain.RecommendationOutcome) error {
-	return a.repo.RecordSessionOutcomes(context.Background(), session, outcomes)
+	return a.repo.RecordSessionOutcomes(a.ctx, session, outcomes)
 }
 
 func (a *DualWriteOutcomeStoreAdapter) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
-	return a.repo.RecordSessionSummary(context.Background(), session, summary)
+	return a.repo.RecordSessionSummary(a.ctx, session, summary)
 }
 
 func (a *DualWriteOutcomeStoreAdapter) LoadSessionSummaries() ([]domain.SessionSummary, error) {
-	return a.repo.LoadAllSessionSummaries(context.Background())
+	return a.repo.LoadAllSessionSummaries(a.ctx)
 }
 
 func (a *DualWriteOutcomeStoreAdapter) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
-	return a.repo.QueryAllSessionScorecards(context.Background())
+	return a.repo.QueryAllSessionScorecards(a.ctx)
 }
 
 func (a *DualWriteOutcomeStoreAdapter) RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error {
-	return a.repo.RecordSessionScreeningRejects(context.Background(), sessionID, rejects)
+	return a.repo.RecordSessionScreeningRejects(a.ctx, sessionID, rejects)
 }
 
 func (a *DualWriteOutcomeStoreAdapter) LoadSessionScreeningRejects(sessionID string) ([]domain.ScreeningReject, error) {
-	return a.repo.LoadSessionScreeningRejects(context.Background(), sessionID)
+	return a.repo.LoadSessionScreeningRejects(a.ctx, sessionID)
 }
 
 func (a *DualWriteOutcomeStoreAdapter) RecordExperiment(record domain.ExperimentRecord) error {
-	return a.repo.RecordExperiment(context.Background(), record)
+	return a.repo.RecordExperiment(a.ctx, record)
 }
 
 func (a *DualWriteOutcomeStoreAdapter) RecordSessionExperiment(session domain.ReplaySession, record domain.ExperimentRecord) error {
-	return a.repo.RecordSessionExperiment(context.Background(), session, record)
+	return a.repo.RecordSessionExperiment(a.ctx, session, record)
 }
 
 func (a *DualWriteOutcomeStoreAdapter) RecordHumanIntervention(intervention domain.HumanIntervention) error {
-	return a.repo.RecordHumanIntervention(context.Background(), intervention)
+	return a.repo.RecordHumanIntervention(a.ctx, intervention)
 }
 
 func (a *DualWriteOutcomeStoreAdapter) LoadHumanInterventions() ([]domain.HumanIntervention, error) {
-	return a.repo.LoadHumanInterventions(context.Background())
+	return a.repo.LoadHumanInterventions(a.ctx)
 }

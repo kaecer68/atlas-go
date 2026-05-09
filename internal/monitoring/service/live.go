@@ -2,7 +2,6 @@ package service
 
 import (
 	"encoding/json"
-	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // LiveService provides live trading status and portfolio state operations.
@@ -61,7 +61,7 @@ func (s *LiveService) LoadLiveStatus() LiveStatusResponse {
 	}
 	if data, err := os.ReadFile(filepath.Join(s.WorkDir, livestore.DefaultCircuitBreakerStatePath)); err == nil {
 		if err := json.Unmarshal(data, &cbState); err != nil {
-			log.Printf("[LiveService] warn: failed to unmarshal circuit breaker state: %v", err)
+			logging.Warn("liveservice", "unmarshal_circuit_breaker_failed", "err", err.Error())
 		}
 	}
 
@@ -74,14 +74,14 @@ func (s *LiveService) LoadLiveStatus() LiveStatusResponse {
 		portfolio.DayPnL = p.DayPnL
 		portfolio.UnrealizedPnL = p.UnrealizedPnL
 	} else {
-		log.Printf("[LiveService] warn: failed to read portfolio state: %v", err)
+		logging.Warn("liveservice", "read_portfolio_state_failed", "err", err.Error())
 	}
 
 	positionsCount := 0
 	if posMap, err := livestore.LoadLastPositions(liveBasePath); err == nil {
 		positionsCount = len(posMap)
 	} else {
-		log.Printf("[LiveService] warn: failed to read positions state: %v", err)
+		logging.Warn("liveservice", "read_positions_state_failed", "err", err.Error())
 	}
 	portfolio.PositionsCount = positionsCount
 
@@ -118,8 +118,11 @@ type PositionDTO struct {
 
 // EquityCurvePoint is a single point on the equity curve.
 type EquityCurvePoint struct {
-	Label string  `json:"label"`
-	Value float64 `json:"value"`
+	Label         string  `json:"label"`
+	Value         float64 `json:"value"`
+	Currency      string  `json:"currency,omitempty"`
+	AfterTaxValue float64 `json:"after_tax_value,omitempty"`
+	TaxPaid       float64 `json:"tax_paid,omitempty"`
 }
 
 // LoadPortfolioState returns the current portfolio state with positions and equity curve.
@@ -128,13 +131,13 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 
 	portfolio, err := livestore.LoadLastPortfolioState(liveBasePath)
 	if err != nil {
-		log.Printf("[LiveService] warn: failed to load portfolio state: %v", err)
+		logging.Warn("liveservice", "load_portfolio_state_failed", "err", err.Error())
 		return PortfolioStateResponse{}
 	}
 
 	posMap, err := livestore.LoadLastPositions(liveBasePath)
 	if err != nil {
-		log.Printf("[LiveService] warn: failed to load positions: %v", err)
+		logging.Warn("liveservice", "load_positions_failed", "err", err.Error())
 	}
 
 	positions := make([]PositionDTO, 0, len(posMap))
@@ -194,9 +197,11 @@ func (s *LiveService) buildEquityCurve() []EquityCurvePoint {
 	}
 
 	type sessionPoint struct {
-		date  time.Time
-		label string
-		value float64
+		date          time.Time
+		label         string
+		value         float64
+		taxPaid       float64
+		afterTaxValue float64
 	}
 	points := make([]sessionPoint, 0, len(entries))
 	for _, entry := range entries {
@@ -216,10 +221,13 @@ func (s *LiveService) buildEquityCurve() []EquityCurvePoint {
 			continue
 		}
 		date := sessionDateFromID(summary.SessionID)
+		afterTaxValue := summary.PortfolioValue - summary.TotalTaxPaid
 		points = append(points, sessionPoint{
-			date:  date,
-			label: summary.SessionID,
-			value: summary.PortfolioValue,
+			date:          date,
+			label:         summary.SessionID,
+			value:         summary.PortfolioValue,
+			taxPaid:       summary.TotalTaxPaid,
+			afterTaxValue: afterTaxValue,
 		})
 	}
 
@@ -234,8 +242,11 @@ func (s *LiveService) buildEquityCurve() []EquityCurvePoint {
 	curve := make([]EquityCurvePoint, len(points))
 	for i, p := range points {
 		curve[i] = EquityCurvePoint{
-			Label: p.label,
-			Value: p.value,
+			Label:         p.label,
+			Value:         p.value,
+			Currency:      "TWD",
+			AfterTaxValue: p.afterTaxValue,
+			TaxPaid:       p.taxPaid,
 		}
 	}
 	return curve

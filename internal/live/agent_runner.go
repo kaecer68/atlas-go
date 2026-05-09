@@ -7,6 +7,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 )
 
@@ -77,8 +78,8 @@ func (r *AgentRunner) ApplyExecutionInput(ctx context.Context, input ExecutionIn
 		},
 	})
 
-	fmt.Printf("[AgentRunner] Applied execution input: regime=%s, raw=%d, final=%d\n",
-		input.Regime, len(input.RawRecommendations), len(input.FinalRecommendations))
+	logging.Info("agent_runner", "applied_execution_input",
+		"regime", input.Regime, "raw_count", len(input.RawRecommendations), "final_count", len(input.FinalRecommendations))
 	return nil
 }
 
@@ -119,7 +120,7 @@ func (r *AgentRunner) RunContextAgent(ctx context.Context, watchlist []string) e
 		},
 	})
 
-	fmt.Printf("[ContextAgent] Regime inferred: %s\n", regime)
+	logging.Info("context_agent", "regime_inferred", "regime", regime)
 	return nil
 }
 
@@ -201,7 +202,7 @@ func (r *AgentRunner) RunStyleAndSectorAgents(ctx context.Context, watchlist []s
 
 	if len(recommendations) > 0 {
 		r.stateStore.SetPendingRecommendations(recommendations)
-		fmt.Printf("[StyleAndSectorAgents] Generated %d recommendations\n", len(recommendations))
+		logging.Info("style_sector_agents", "generated_recommendations", "count", len(recommendations))
 	}
 
 	r.publishEvent(BusEvent{
@@ -245,7 +246,7 @@ func (r *AgentRunner) ApplyRiskFilters(ctx context.Context) error {
 	r.stateStore.SetFilteredRecommendations(filtered)
 	blockedCount := len(recommendations) - len(filtered)
 
-	fmt.Printf("[RiskFilters] Applied CRO/CIO filters: %d passed, %d blocked\n", len(filtered), blockedCount)
+	logging.Info("risk_filters", "applied_cro_cio_filters", "passed", len(filtered), "blocked", blockedCount)
 
 	if blockedCount > 0 {
 		r.publishEvent(BusEvent{

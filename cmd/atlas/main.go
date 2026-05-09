@@ -17,6 +17,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/bootstrap"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/live"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
@@ -179,6 +180,13 @@ func run(args []string, deps appDeps) error {
 				d.SetRepository(repo)
 				log.Printf("[Repository] injected into dashboard API")
 			}
+		}
+		// Inject EventBus for SSE streaming endpoint
+		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+			eventBus := eventbus.NewChannelEventBus(256)
+			d.SetEventBus(eventBus)
+			d.SetContext(context.Background())
+			log.Printf("[EventBus] injected into dashboard API for SSE streaming")
 		}
 		dashboard.RegisterRoutes(mux)
 
@@ -374,6 +382,10 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	liveCfg.BrokerAdapter = cfg.BrokerAdapter
 	liveCfg.BrokerSigner = cfg.BrokerSigner
 	liveCfg.BrokerKeyID = cfg.BrokerKeyID
+	liveCfg.TWSEAPIURL = cfg.TWSEAPIURL
+	liveCfg.TWSEAPIKey = cfg.TWSEAPIKey
+	liveCfg.TWSEAPISecret = cfg.TWSEAPISecret
+	liveCfg.TWSEAccountID = cfg.TWSEAccountID
 	liveCfg.BrokerMaxRetries = cfg.BrokerMaxRetries
 	liveCfg.BrokerHTTPTimeoutS = cfg.BrokerHTTPTimeoutS
 	liveCfg.BrokerHTTPAttempts = cfg.BrokerHTTPAttempts
@@ -415,9 +427,15 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	// Start dashboard API server for live status endpoint
 	mux := http.NewServeMux()
 	dashboard := deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
-	if d, ok := dashboard.(*monitoring.DashboardAPI); ok && repo != nil {
-		d.SetRepository(repo)
-		log.Printf("[Repository] injected into live trading dashboard API")
+	if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+		if repo != nil {
+			d.SetRepository(repo)
+			log.Printf("[Repository] injected into live trading dashboard API")
+		}
+		d.SetEventBus(eventBus)
+		d.SetContext(ctx)
+		logging.SetLogContext(ctx)
+		log.Printf("[EventBus] injected into live trading dashboard API for SSE streaming")
 	}
 	dashboard.RegisterRoutes(mux)
 	alertStore, err := monitoring.NewAlertStore(filepath.Join(cfg.WorkDir, "data/state/alerts"))

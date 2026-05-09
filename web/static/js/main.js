@@ -6,6 +6,12 @@
  * @typedef {import('./shared/field_types.d.ts').Scorecard} Scorecard
  */
 
+import { loadReasoningTrace } from './components/reasoning-trace.js';
+import { eventSource } from './services/event-source.js';
+import { renderLiveProgress } from './components/live-progress.js';
+import { renderToolEvents } from './components/tool-events.js';
+import { fmtNTD } from './shared/utils.js';
+
 const pageLoadStatus = {};
 const APP_VERSION = '20260509';
 
@@ -18,6 +24,7 @@ export function switchPage(id) {
   const titles = {
     overview: '總覽', narrative: '宏觀敘事', live: '風控結果',
     pipeline: '投資管線', decision: '決策鏈', agents: 'AI 觀測台',
+    'reasoning-trace': '決策追蹤',
     experiments: '模擬交易', reports: '最新回測', controls: '控制與稽核',
     datachannels: '信息通道', synergy: '人機協同', alerts: '系統警報',
     metrics: '指標監控', industry: '產業生態系', portfolio: '組合持倉', parameters: '參數管理',
@@ -248,6 +255,9 @@ async function loadPageData(pageId) {
       if (m.pipe.renderDecisionChain) m.pipe.renderDecisionChain(d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9], d[10]);
     } catch(e) { console.error(e); }
   }
+  else if (pageId === 'reasoning-trace') {
+    loadReasoningTrace(window._currentSessionId);
+  }
   else if (pageId === 'agents') {
     try {
       var a = await Promise.all([
@@ -360,12 +370,72 @@ function initBacktestDates() {
 if (typeof window !== "undefined") window.switchPage = switchPage;
 if (typeof window !== "undefined") window.toggleSidebar = toggleSidebar;
 if (typeof window !== "undefined") window.retryLoad = retryLoad;
+if (typeof window !== "undefined") window.fmtNTD = fmtNTD;
 
 if (typeof window !== 'undefined') {
   populateAgentSelect();
   initBacktestDates();
   loadAll();
   startAutoRefresh();
+  initEventStream();
+}
+
+function initEventStream() {
+  const recentEvents = [];
+  const maxEvents = 20;
+
+  function mapEventToProgress(eventType) {
+    if (eventType === 'simulation.start' || eventType === 'system.start') return 'fetching_data';
+    if (eventType === 'market.regime.change') return 'regime_detection';
+    if (eventType === 'agent.recommendation') return 'agent_recommendations';
+    if (eventType === 'guard.outcome') return 'control_filtering';
+    if (eventType === 'portfolio.position.update') return 'simulation_running';
+    if (eventType === 'simulation.complete' || eventType === 'system.complete') return 'complete';
+    return null;
+  }
+
+  eventSource.on('*', (ev) => {
+    recentEvents.unshift(ev);
+    if (recentEvents.length > maxEvents) {
+      recentEvents.pop();
+    }
+    
+    const eventsContainer = document.getElementById('toolEvents');
+    if (eventsContainer) renderToolEvents(eventsContainer, recentEvents);
+
+    const newState = mapEventToProgress(ev.type);
+    if (newState) {
+      const progressContainer = document.getElementById('liveProgress');
+      if (progressContainer) renderLiveProgress(progressContainer, newState);
+      
+      if (newState === 'complete') {
+        setTimeout(() => {
+          if (progressContainer) renderLiveProgress(progressContainer, 'idle');
+        }, 2000);
+      }
+    }
+  });
+
+  eventSource.onStatusChange((status) => {
+    const pill = document.getElementById('refreshPill');
+    if (!pill) return;
+    
+    pill.classList.remove('sse-connected', 'sse-connecting', 'sse-error');
+    if (status === 'connected') {
+      pill.classList.add('sse-connected');
+    } else if (status === 'connecting') {
+      pill.classList.add('sse-connecting');
+    } else if (status === 'error' || status === 'disconnected') {
+      pill.classList.add('sse-error');
+    }
+  });
+
+  eventSource.connect();
+  
+  const progressContainer = document.getElementById('liveProgress');
+  const eventsContainer = document.getElementById('toolEvents');
+  if (progressContainer) renderLiveProgress(progressContainer, 'idle');
+  if (eventsContainer) renderToolEvents(eventsContainer, []);
 }
 
 if (typeof window !== "undefined") window.toggleTheme = function() {

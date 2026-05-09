@@ -32,6 +32,14 @@ export function escapeHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+export function fmtNTD(v) {
+  if (typeof v !== 'number' || isNaN(v)) return 'NT$—';
+  const sign = v < 0 ? '-' : '';
+  const abs = Math.abs(v);
+  const formatted = abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `NT$${sign}${formatted}`;
+}
+
 export function emptyState(msg, hint) {
   return `<div style="padding:20px;text-align:center;color:var(--muted)">${msg || '尚無資料'}</div>`;
 }

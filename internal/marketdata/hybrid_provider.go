@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 type ProviderCircuitState string
@@ -84,7 +85,7 @@ func (p *HybridProvider) GetQuotes(ctx context.Context, asOf time.Time, symbols 
 		if err == nil && len(quotes) > 0 && !p.hasInvalidQuotes(quotes) {
 			return quotes, nil
 		}
-		fmt.Printf("[HybridProvider] FinMind failed (%v), falling back to Fugle/TWSE\n", err)
+		logging.Warn("hybrid_provider", "finmind_failed_fallback", logging.Err(err))
 	}
 
 	return p.getQuotesFromFugleOrTWSE(ctx, asOf, symbols)
@@ -98,7 +99,7 @@ func (p *HybridProvider) getQuotesFromFugleOrTWSE(ctx context.Context, asOf time
 			return quotes, nil
 		}
 		if err != nil {
-			fmt.Printf("[HybridProvider] Fugle failed (%v), falling back to TWSE\n", err)
+			logging.Warn("hybrid_provider", "fugle_failed_fallback", logging.Err(err))
 		}
 	}
 	return p.getQuotesFromTWSE(ctx, symbols)

@@ -13,7 +13,8 @@ import (
 )
 
 type Handlers struct {
-	Svc *service.PipelineService
+	Svc              *service.PipelineService
+	ReasoningHandler *ReasoningHandler
 }
 
 func NewHandlers(svc *service.PipelineService) *Handlers {
@@ -27,6 +28,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/recommendation-pipeline", shared.Get(h.HandleRecommendationPipeline))
 	mux.Handle("GET /api/dashboard/sessions", shared.Get(h.HandleSessions))
 	mux.Handle("GET /api/dashboard/universe-overlap", shared.Get(h.HandleUniverseOverlap))
+	mux.Handle("GET /api/dashboard/reasoning-trace", shared.Get(h.ReasoningHandler.HandleReasoningTrace))
 	mux.Handle("POST /api/synergy/darwinian-status", shared.Post(h.HandleDarwinianStatus))
 	mux.Handle("POST /api/synergy/darwinian-trend", shared.Post(h.HandleDarwinianTrend))
 	mux.Handle("POST /api/dashboard/regime-history", shared.Post(h.HandleRegimeHistory))

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `atlas-go` is a simulation-first, audit-driven investment research system for Taiwan equities. It orchestrates layered AI agents over historical market data, evaluates mutations via experiments, and manages baseline policies through an explicit promote/revert gate.
 
-- **Language**: Go 1.25
+- **Language**: Go 1.25.0
 - **Module**: `github.com/kaecer68/atlas-go`
 - **No Makefile**: use native Go toolchain and shell scripts directly
 
@@ -168,7 +168,7 @@ Baseline policy is loaded from `data/state/baseline_policy.json`. The experiment
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (19354 symbols, 42452 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (20284 symbols, 42970 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

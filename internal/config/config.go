@@ -43,6 +43,10 @@ type Config struct {
 	BrokerNonceRedisKeyPrefix  string
 	BrokerSigner               string
 	BrokerKeyID                string
+	TWSEAPIURL                 string
+	TWSEAPIKey                 string
+	TWSEAPISecret              string
+	TWSEAccountID              string
 	FubonDMAPersonalID         string
 	FubonDMAAPIKey             string
 	FubonDMAScriptPath         string
@@ -87,6 +91,10 @@ func Load() Config {
 		BrokerNonceRedisKeyPrefix:  envOr("ATLAS_BROKER_NONCE_REDIS_KEY_PREFIX", "atlas:nonce:"),
 		BrokerSigner:               envOr("ATLAS_BROKER_SIGNER", "placeholder"),
 		BrokerKeyID:                envOr("ATLAS_BROKER_KEY_ID", ""),
+		TWSEAPIURL:                 envOr("ATLAS_TWSE_API_URL", ""),
+		TWSEAPIKey:                 envOr("ATLAS_TWSE_API_KEY", ""),
+		TWSEAPISecret:              envOr("ATLAS_TWSE_API_SECRET", ""),
+		TWSEAccountID:              envOr("ATLAS_TWSE_ACCOUNT_ID", ""),
 		FubonDMAPersonalID:         envOr("FUBON_DMA_PERSONAL_ID", ""),
 		FubonDMAAPIKey:             envOr("FUBON_DMA_API_KEY", ""),
 		FubonDMAScriptPath:         envOr("FUBON_DMA_SCRIPT_PATH", "cmd/fubon-dma/wrapper.py"),

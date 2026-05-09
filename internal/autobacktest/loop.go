@@ -2,8 +2,9 @@ package autobacktest
 
 import (
 	"context"
-	"log"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 func StartDailyLoop(ctx context.Context, runner *Runner) {
@@ -14,30 +15,30 @@ func StartDailyLoop(ctx context.Context, runner *Runner) {
 		case <-time.After(5 * time.Second):
 		}
 
-		log.Printf("[Autobacktest] daily loop started")
+		logging.Info("autobacktest", "daily_loop_started")
 
 		for {
 			now := timeNow()
 			next := next13_30(now)
 
 			wait := next.Sub(now)
-			log.Printf("[Autobacktest] next scheduled run: %s (in %s)", next.Format("2006-01-02 15:04"), wait.Round(time.Second))
+			logging.Info("autobacktest", "next_scheduled_run", "scheduled_time", next.Format("2006-01-02 15:04"), "wait_seconds", wait.Round(time.Second).String())
 
 			select {
 			case <-ctx.Done():
-				log.Printf("[Autobacktest] loop stopped")
+				logging.Info("autobacktest", "loop_stopped")
 				return
 			case <-time.After(wait):
 				if t := timeNow(); t.Weekday() == time.Saturday || t.Weekday() == time.Sunday {
-					log.Printf("[Autobacktest] 13:30 falls on weekend; skipping")
+					logging.Info("autobacktest", "weekend_skip")
 					continue
 				}
 
-				log.Printf("[Autobacktest] triggering daily backtest")
+				logging.Info("autobacktest", "triggering_daily_backtest")
 				if err := runner.RunAndStore(); err != nil {
-					log.Printf("[Autobacktest] run failed: %v", err)
+					logging.Error("autobacktest", "backtest_run_failed", "err", err.Error())
 				} else {
-					log.Printf("[Autobacktest] daily backtest completed successfully")
+					logging.Info("autobacktest", "daily_backtest_completed")
 				}
 			}
 		}
