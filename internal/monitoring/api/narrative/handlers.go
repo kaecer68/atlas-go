@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -90,16 +91,42 @@ func (h *Handlers) HandleNarrativeTemplates(r *http.Request) (int, any) {
 	return http.StatusOK, map[string]any{"templates": h.Svc.GetTemplates()}
 }
 
+type SeasonalExpectation struct {
+	Theme               string  `json:"theme"`
+	HistoricalAvgReturn float64 `json:"historical_avg_return"`
+	CurrentReturn       float64 `json:"current_return"`
+	ExpectationGap      float64 `json:"expectation_gap"`
+	AlreadyPricedIn     bool    `json:"already_priced_in"`
+}
+
 func (h *Handlers) HandleSeasonalAnalysis(r *http.Request) (int, any) {
 	now := time.Now()
 
+	currentReturn := 0.0
+	calc := marketdata.NewTAIEXReturnCalculator()
+	if ret, err := calc.Get1MonthReturn(r.Context()); err == nil {
+		currentReturn = ret
+	}
+
 	if h.IndustryService != nil {
 		active, historical, adjustment := h.IndustryService.GetSeasonalPatterns("", now)
+		expectations := make([]SeasonalExpectation, len(active))
+		for i, p := range active {
+			gap := currentReturn - p.TypicalReturn
+			expectations[i] = SeasonalExpectation{
+				Theme:               p.Name,
+				HistoricalAvgReturn: p.TypicalReturn,
+				CurrentReturn:       currentReturn,
+				ExpectationGap:      gap,
+				AlreadyPricedIn:     currentReturn > p.TypicalReturn,
+			}
+		}
 		return http.StatusOK, map[string]any{
 			"month":               now.Month().String(),
 			"active_patterns":     active,
 			"all_patterns":        historical,
 			"combined_adjustment": adjustment,
+			"expectations":        expectations,
 		}
 	}
 

@@ -44,6 +44,7 @@ func main() {
 		marketdata.NewYahooFinanceMacroProvider(),
 		marketdata.NewTWSECapitalFlowProvider(capitalFlowDir),
 		marketdata.NewExportStatisticsProvider(exportDir),
+		marketdata.NewTWSEMarginBalanceProvider(),
 	)
 
 	ingestor := narrative.NewMacroIngestor(provider, snapshotDir)
@@ -53,12 +54,17 @@ func main() {
 	log.Println("[MacroIngest] Starting macro data ingestion...")
 	events, snap, err := ingestor.Ingest(ctx)
 	if err != nil {
+		// All providers failed — FetchSnapshot only returns error when every provider errors.
+		log.Printf("[MacroIngest] All providers failed: %v", err)
 		monitoring.RecordChannelFetchWithPool(stateDir, "us_yahoo", "error", err.Error(), pool)
 		monitoring.RecordChannelFetchWithPool(stateDir, "jpy_yahoo", "error", err.Error(), pool)
-		log.Fatalf("ingest failed: %v", err)
+	} else {
+		// At least one provider succeeded. Individual provider failures are masked here;
+		// the health store records "ok" for both channels even if one failed.
+		// TODO: Implement per-provider status tracking so partial failures surface
+		// as "warn" instead of "ok" on the data channels dashboard.
+		monitoring.RecordChannelFetchWithPool(stateDir, "us_yahoo", "ok", "", pool)
+		monitoring.RecordChannelFetchWithPool(stateDir, "jpy_yahoo", "ok", "", pool)
 	}
-
-	monitoring.RecordChannelFetchWithPool(stateDir, "us_yahoo", "ok", "", pool)
-	monitoring.RecordChannelFetchWithPool(stateDir, "jpy_yahoo", "ok", "", pool)
 	log.Printf("[MacroIngest] Ingested %d events, snapshot recorded_at=%d", len(events), snap.RecordedAt)
 }
