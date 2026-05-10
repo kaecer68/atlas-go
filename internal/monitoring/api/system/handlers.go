@@ -188,6 +188,9 @@ func calculateMarginPercentile(workDir string, currentValue float64) float64 {
 
 	var values []float64
 	for _, path := range matches {
+		if filepath.Base(path) == "latest.json" {
+			continue
+		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue
