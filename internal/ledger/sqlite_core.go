@@ -105,11 +105,26 @@ func InitSchema(db *sql.DB) error {
 		UNIQUE(symbol, date)
 	);
 
+	CREATE TABLE IF NOT EXISTS trades (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		trade_id TEXT NOT NULL,
+		session_id TEXT NOT NULL,
+		symbol TEXT NOT NULL,
+		side TEXT NOT NULL,
+		quantity INTEGER NOT NULL,
+		price REAL NOT NULL,
+		amount REAL NOT NULL,
+		reason TEXT,
+		timestamp TEXT NOT NULL
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_outcomes_session_id ON outcomes(session_id);
 	CREATE INDEX IF NOT EXISTS idx_outcomes_symbol ON outcomes(symbol);
 	CREATE INDEX IF NOT EXISTS idx_screening_rejects_session_id ON screening_rejects(session_id);
 	CREATE INDEX IF NOT EXISTS idx_experiments_session_id ON experiments(session_id);
 	CREATE INDEX IF NOT EXISTS idx_human_interventions_session_id ON human_interventions(session_id);
+	CREATE INDEX IF NOT EXISTS idx_trades_session_id ON trades(session_id);
+	CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);
 	CREATE INDEX IF NOT EXISTS idx_quotes_symbol_date ON quotes(symbol, date);
 	`
 

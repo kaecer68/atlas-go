@@ -52,6 +52,7 @@ type RiskSnapshot struct {
 type SimulationResult struct {
 	Regime         Regime
 	Orders         []Order
+	Trades         []TradeRecord
 	Positions      []Position
 	EndingCash     float64
 	PortfolioValue float64
@@ -100,6 +101,15 @@ func DefaultTaiwanTaxConfig() TaxConfig {
 		TransactionTaxRate: 0.003,
 		IncludeNHI:         true,
 	}
+}
+
+type DividendRecord struct {
+	Symbol         string  `json:"symbol"`
+	Year           int     `json:"year"`
+	CashDividend   float64 `json:"cash_dividend"`
+	StockDividend  float64 `json:"stock_dividend"`
+	ExDividendDate string  `json:"ex_dividend_date"`
+	PaymentDate    string  `json:"payment_date"`
 }
 
 type AlertRecord struct {

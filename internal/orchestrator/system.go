@@ -217,6 +217,9 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	if s.Risk().eventBus != nil {
 		go s.Risk().eventBus.PublishRecommendation("orchestrator", finalRecs)
 	}
+	if err := s.ensurePersistentStateLoaded(); err != nil {
+		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
+	}
 	var result domain.SimulationResult
 	if s.Sim().persistentState != nil {
 		result = s.Sim().engine.RunWithState(s.Sim().persistentState, regime, quotes, finalRecs)
@@ -239,6 +242,9 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	if len(s.Sim().returnHistory) >= 30 {
 		snap := risk.ComputeRiskSnapshot(s.Sim().returnHistory, s.Sim().portfolioHistory)
 		result.RiskSnapshot = &snap
+	}
+	if err := s.persistPersistentState(); err != nil {
+		logging.Warn("System", "failed to persist simulation state", "session_id", s.Sim().session.ID, "err", err)
 	}
 	s.Sim().lastQuotes = quotes
 	s.updateCapitalMetrics(result)
@@ -362,6 +368,9 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	if s.Risk().eventBus != nil {
 		go s.Risk().eventBus.PublishRecommendation("orchestrator", finalRecs)
 	}
+	if err := s.ensurePersistentStateLoaded(); err != nil {
+		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
+	}
 	var result domain.SimulationResult
 	if s.Sim().persistentState != nil {
 		result = s.Sim().engine.RunWithState(s.Sim().persistentState, regime, quotes, finalRecs)
@@ -392,6 +401,9 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 			dailyReturn := (result.PortfolioValue - prev) / prev
 			s.Sim().returnHistory = append(s.Sim().returnHistory, dailyReturn)
 		}
+	}
+	if err := s.persistPersistentState(); err != nil {
+		logging.Warn("System", "failed to persist simulation state", "session_id", s.Sim().session.ID, "err", err)
 	}
 	s.Sim().lastQuotes = quotes
 	s.updateCapitalMetrics(result)
@@ -719,6 +731,7 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 
 	// Save per-session position snapshot for portfolio page
 	s.saveSessionPositions(s.Sim().session.ID, result.Positions)
+	s.saveSessionTrades(s.Sim().session.ID, result.Trades)
 	return nil
 }
 
@@ -737,6 +750,48 @@ func (s *System) saveSessionPositions(sessionID string, positions []domain.Posit
 	if err := os.WriteFile(path, bytes, 0o644); err != nil {
 		logging.Warn("System", "failed to write positions", "session_id", sessionID, "err", err)
 	}
+}
+
+func (s *System) saveSessionTrades(sessionID string, trades []domain.TradeRecord) {
+	if len(trades) == 0 {
+		return
+	}
+	now := time.Now()
+	for i := range trades {
+		trades[i].SessionID = sessionID
+		if trades[i].TradeID == "" {
+			trades[i].TradeID = fmt.Sprintf("%s-%s-%d", sessionID, trades[i].Symbol, i)
+		}
+		if trades[i].Timestamp.IsZero() {
+			trades[i].Timestamp = now
+		}
+	}
+	if err := s.Sim().ledger.RecordSessionTrades(sessionID, trades); err != nil {
+		logging.Warn("System", "failed to record trades", "session_id", sessionID, "err", err)
+	}
+}
+
+func (s *System) ensurePersistentStateLoaded() error {
+	if s.Sim().session.Mode != "daily" || s.Sim().persistentState != nil {
+		return nil
+	}
+	loaded, err := sim.LoadPersistentState(s.Sim().cfg.LedgerDir)
+	if err != nil {
+		return err
+	}
+	if loaded == nil {
+		state := domain.NewSimulationState(s.Sim().policy.Constraints.StartingCash)
+		loaded = &state
+	}
+	s.Sim().persistentState = loaded
+	return nil
+}
+
+func (s *System) persistPersistentState() error {
+	if s.Sim().session.Mode != "daily" || s.Sim().persistentState == nil {
+		return nil
+	}
+	return sim.SavePersistentState(s.Sim().cfg.LedgerDir, s.Sim().persistentState)
 }
 
 func quoteBySymbolMap(quotes []domain.Quote) map[string]domain.Quote {

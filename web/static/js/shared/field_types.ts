@@ -141,11 +141,21 @@ export interface DayResult {
   date: string;
   regime: string;
   orders: string[];
+  trades: string[];
   positions: string[];
   cash: number;
   portfolio_value: number;
   daily_pnl: number;
   fallback_events?: string[];
+}
+
+export interface DividendRecord {
+  symbol: string;
+  year: number;
+  cash_dividend: number;
+  stock_dividend: number;
+  ex_dividend_date: string;
+  payment_date: string;
 }
 
 export interface ExecutionPolicy {
@@ -527,7 +537,8 @@ export interface SimulationResult {
 export interface SimulationState {
   cash: number;
   positions: string[];
-  cumulative_pnl: number;
+  realized_pnl: number;
+  starting_cash: number;
   equity_curve: number[];
   daily_returns: number[];
   previous_values: Record<string, number>;
@@ -589,5 +600,17 @@ export interface TaxSnapshot {
   transaction_tax: number;
   total_tax: number;
   after_tax_pnl: number;
+}
+
+export interface TradeRecord {
+  trade_id: string;
+  session_id: string;
+  symbol: string;
+  side: string;
+  quantity: number;
+  price: number;
+  amount: number;
+  reason?: string;
+  timestamp: string;
 }
 

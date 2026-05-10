@@ -1,11 +1,13 @@
 package tax
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -13,17 +15,42 @@ import (
 	"github.com/kaecer68/atlas-go/internal/tax"
 )
 
-type Handlers struct {
-	LedgerDir string
+type DividendProvider interface {
+	GetLatestDividend(ctx context.Context, symbol string) (*domain.DividendRecord, error)
 }
 
-func NewHandlers(ledgerDir string) *Handlers {
-	return &Handlers{LedgerDir: ledgerDir}
+type Handlers struct {
+	LedgerDir        string
+	DividendProvider DividendProvider
+}
+
+func NewHandlers(ledgerDir string, dividendProvider DividendProvider) *Handlers {
+	return &Handlers{
+		LedgerDir:        ledgerDir,
+		DividendProvider: dividendProvider,
+	}
 }
 
 func (h *Handlers) loadPositions() ([]domain.Position, error) {
-	livePath := filepath.Join(h.LedgerDir, "..", "live", "state", "positions_current.jsonl")
+	ledgerDir := h.LedgerDir
+	if !filepath.IsAbs(ledgerDir) {
+		if wd, err := os.Getwd(); err == nil {
+			ledgerDir = filepath.Join(wd, ledgerDir)
+		}
+	}
+	livePath := filepath.Join(ledgerDir, "live", "state", "positions_current.json")
 	data, err := os.ReadFile(livePath)
+	if err == nil && len(data) > 2 {
+		var positions []domain.Position
+		if err := json.Unmarshal(data, &positions); err == nil && len(positions) > 0 {
+			return positions, nil
+		}
+	} else if err != nil {
+		logging.Warn("tax_handler", "read_live_positions_failed", "path", livePath, logging.Err(err))
+	}
+
+	livePathJSONL := filepath.Join(h.LedgerDir, "live", "state", "positions_current.jsonl")
+	data, err = os.ReadFile(livePathJSONL)
 	if err == nil && len(data) > 2 {
 		var positions []domain.Position
 		if err := json.Unmarshal(data, &positions); err == nil && len(positions) > 0 {
@@ -64,6 +91,21 @@ func (h *Handlers) loadPositions() ([]domain.Position, error) {
 		return nil, nil
 	}
 
+	positionsPath := filepath.Join(sessionsDir, latest, "positions.json")
+	positionsData, err := os.ReadFile(positionsPath)
+	if err != nil {
+		logging.Warn("tax_handler", "read_positions_failed", logging.Err(err))
+		return nil, nil
+	}
+	var positions []domain.Position
+	if err := json.Unmarshal(positionsData, &positions); err != nil {
+		logging.Warn("tax_handler", "parse_positions_failed", logging.Err(err))
+		return nil, nil
+	}
+	if len(positions) > 0 {
+		return positions, nil
+	}
+
 	return nil, nil
 }
 
@@ -94,23 +136,39 @@ func (h *Handlers) HandleTaxSnapshot(r *http.Request) (int, any) {
 	dividends := make(map[string]float64)
 	for _, pos := range positions {
 		sellPrices[pos.Symbol] = pos.CurrentPrice
+		if h.DividendProvider != nil {
+			symbolWithoutSuffix := strings.TrimSuffix(pos.Symbol, ".TW")
+			record, err := h.DividendProvider.GetLatestDividend(r.Context(), symbolWithoutSuffix)
+			if err == nil && record != nil {
+				dividends[pos.Symbol] = record.CashDividend * float64(pos.Quantity)
+			}
+		}
 	}
 
 	snapshots := calc.CalculatePortfolioTax(positions, sellPrices, dividends)
 
-	var beforeTaxPnL, afterTaxPnL, totalTaxPaid float64
+	var beforeTaxPnL, afterTaxPnL, totalTaxPaid, totalDividendTax float64
 	for _, snap := range snapshots {
 		beforeTaxPnL += snap.AfterTaxPnL + snap.TotalTax
 		afterTaxPnL += snap.AfterTaxPnL
 		totalTaxPaid += snap.TotalTax
+		totalDividendTax += snap.DividendTax
+	}
+
+	note := "tax snapshots computed from live positions using TaiwanTaxCalculator"
+	if h.DividendProvider == nil {
+		note += "; dividend tax is 0 because dividend data provider is not configured"
+	} else if totalDividendTax == 0 {
+		note += "; no dividend tax accrued — holdings may not have paid dividends in the current period"
 	}
 
 	return http.StatusOK, map[string]any{
-		"snapshots":      snapshots,
-		"before_tax_pnl": beforeTaxPnL,
-		"after_tax_pnl":  afterTaxPnL,
-		"total_tax_paid": totalTaxPaid,
-		"is_simulated":   false,
-		"note":           "tax snapshots computed from live positions using TaiwanTaxCalculator",
+		"snapshots":          snapshots,
+		"before_tax_pnl":     beforeTaxPnL,
+		"after_tax_pnl":      afterTaxPnL,
+		"total_tax_paid":     totalTaxPaid,
+		"total_dividend_tax": totalDividendTax,
+		"is_simulated":       false,
+		"note":               note,
 	}
 }

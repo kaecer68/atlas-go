@@ -146,6 +146,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 
 	pipelineSvc := service.NewPipelineService(a.workDir, a.ledgerDir, outcomeStore)
 	pipelineHandlers := apipipeline.NewHandlers(pipelineSvc)
+	pipelineHandlers.ReasoningHandler = &apipipeline.ReasoningHandler{BaseDir: a.ledgerDir}
 	pipelineHandlers.RegisterRoutes(mux)
 
 	reportSvc := service.NewReportService(a.workDir, a.ledgerDir, outcomeStore)
@@ -197,7 +198,13 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	riskHandlers := apirisk.NewHandlers(a.ledgerDir)
 	riskHandlers.RegisterRoutes(mux)
 
-	taxHandlers := apitax.NewHandlers(a.ledgerDir)
+	var dividendProvider apitax.DividendProvider
+	if apiKey := os.Getenv("FINMIND_API_KEY"); apiKey != "" {
+		finMindClient := marketdata.NewFinMindClient(apiKey)
+		cacheDir := filepath.Join(a.workDir, "data", "cache", "dividends")
+		dividendProvider = marketdata.NewFinMindDividendProvider(finMindClient, cacheDir)
+	}
+	taxHandlers := apitax.NewHandlers(a.ledgerDir, dividendProvider)
 	taxHandlers.RegisterRoutes(mux)
 
 	paramHandlers := apiparameters.NewHandlers(filepath.Join(a.workDir, "configs/parameters.json"))
@@ -251,6 +258,18 @@ func (a *DashboardAPI) RegisterControlRoutes(mux *http.ServeMux) {
 	var outcomeStore ledger.OutcomeStore
 	if a.repo != nil {
 		outcomeStore = NewDualWriteOutcomeStoreAdapter(a.repo)
+	} else {
+		cfg := config.Config{
+			LedgerDir:    a.ledgerDir,
+			StoreBackend: a.storeBackend,
+			SQLitePath:   a.sqlitePath,
+		}
+		var err error
+		outcomeStore, err = ledger.NewOutcomeStore(cfg)
+		if err != nil {
+			logging.Error("dashboardapi", "create_control_outcome_store_failed", "err", err)
+			outcomeStore = nil
+		}
 	}
 	svc := service.NewControlService(a.workDir, a.ledgerDir, a.healthManager, outcomeStore)
 	handlers := &apicontrol.Handlers{

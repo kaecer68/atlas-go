@@ -38,7 +38,7 @@ func StartChannelHealthSyncLoop(ctx context.Context, workDir string, pool *pgxpo
 	}()
 }
 
-func StartAutoBackfill(ctx context.Context, workDir string) {
+func StartAutoBackfill(ctx context.Context, workDir, replayDataPath string) {
 	go func() {
 		select {
 		case <-ctx.Done():
@@ -46,8 +46,12 @@ func StartAutoBackfill(ctx context.Context, workDir string) {
 		case <-time.After(3 * time.Second):
 		}
 
-		csvPath := filepath.Join(workDir, "data/replay/tw_extended_90days.csv")
-		latestDate, err := getLatestReplayDate(csvPath)
+		absWorkDir, err := filepath.Abs(workDir)
+		if err != nil {
+			absWorkDir = workDir
+		}
+
+		latestDate, err := getLatestReplayDate(replayDataPath)
 		if err != nil {
 			logging.Error("bootstrap", "replay_csv_read_failed", "err", err)
 			return
@@ -84,12 +88,13 @@ func StartAutoBackfill(ctx context.Context, workDir string) {
 		defer cancel()
 
 		var cmd *exec.Cmd
-		binaryPath := filepath.Join(workDir, "backfill-replay")
+		binaryPath := filepath.Join(absWorkDir, "daily-replay-sync")
 		if _, err := os.Stat(binaryPath); err == nil {
-			cmd = exec.CommandContext(bgCtx, binaryPath, "-csv", csvPath, "-start", startStr, "-end", endStr)
+			cmd = exec.CommandContext(bgCtx, binaryPath, "-csv", replayDataPath, "-backfill-start", startStr, "-backfill-end", endStr)
+			cmd.Dir = absWorkDir
 		} else if _, err := exec.LookPath("go"); err == nil {
-			cmd = exec.CommandContext(bgCtx, "go", "run", "./cmd/backfill-replay", "-csv", csvPath, "-start", startStr, "-end", endStr)
-			cmd.Dir = workDir
+			cmd = exec.CommandContext(bgCtx, "go", "run", "./cmd/daily-replay-sync", "-csv", replayDataPath, "-backfill-start", startStr, "-backfill-end", endStr)
+			cmd.Dir = absWorkDir
 		} else {
 			logging.Warn("bootstrap", "backfill_binary_not_found")
 			return
