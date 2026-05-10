@@ -170,6 +170,7 @@ func TestHandlePortfolioState_EmptySessions(t *testing.T) {
 	}
 
 	if _, ok := result["equity_curve"]; !ok {
+		t.Fatalf("response missing equity_curve field")
 	}
 }
 

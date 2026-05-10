@@ -543,6 +543,76 @@ func (s *Store) LoadSessionScreeningRejects(sessionID string) ([]domain.Screenin
 	return rejects, scanner.Err()
 }
 
+func (s *Store) RecordSessionTrades(sessionID string, trades []domain.TradeRecord) error {
+	if len(trades) == 0 {
+		return nil
+	}
+	if err := os.MkdirAll(s.sessionDir(sessionID), 0o755); err != nil {
+		return fmt.Errorf("mkdir session dir: %w", err)
+	}
+	path := filepath.Join(s.sessionDir(sessionID), "trades.jsonl")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return fmt.Errorf("open file: %w", err)
+	}
+	defer f.Close()
+	enc := json.NewEncoder(f)
+	for _, trade := range trades {
+		if err := enc.Encode(trade); err != nil {
+			return fmt.Errorf("encode trade: %w", err)
+		}
+	}
+	return nil
+}
+
+func (s *Store) LoadSessionTrades(sessionID string) ([]domain.TradeRecord, error) {
+	path := filepath.Join(s.sessionDir(sessionID), "trades.jsonl")
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("open file: %w", err)
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	trades := make([]domain.TradeRecord, 0)
+	for scanner.Scan() {
+		var rec domain.TradeRecord
+		if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
+			return nil, fmt.Errorf("decode trade: %w", err)
+		}
+		trades = append(trades, rec)
+	}
+	return trades, scanner.Err()
+}
+
+func (s *Store) LoadAllSessionTrades() ([]domain.TradeRecord, error) {
+	root := filepath.Join(s.baseDir, "sessions")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read dir: %w", err)
+	}
+	all := make([]domain.TradeRecord, 0)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		trades, err := s.LoadSessionTrades(entry.Name())
+		if err != nil {
+			return nil, fmt.Errorf("load session trades %s: %w", entry.Name(), err)
+		}
+		all = append(all, trades...)
+	}
+	slices.SortFunc(all, func(a, b domain.TradeRecord) int {
+		return b.Timestamp.Compare(a.Timestamp)
+	})
+	return all, nil
+}
+
 func (s *Store) sessionDir(sessionID string) string {
 	return filepath.Join(s.baseDir, "sessions", sessionID)
 }

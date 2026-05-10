@@ -52,6 +52,7 @@ type RiskSnapshot struct {
 type SimulationResult struct {
 	Regime         Regime
 	Orders         []Order
+	Trades         []TradeRecord
 	Positions      []Position
 	EndingCash     float64
 	PortfolioValue float64
