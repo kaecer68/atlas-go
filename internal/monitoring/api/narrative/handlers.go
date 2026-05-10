@@ -118,7 +118,7 @@ func (h *Handlers) HandleSeasonalAnalysis(r *http.Request) (int, any) {
 				HistoricalAvgReturn: p.TypicalReturn,
 				CurrentReturn:       currentReturn,
 				ExpectationGap:      gap,
-				AlreadyPricedIn:     gap > -0.01 && gap < 0.01,
+				AlreadyPricedIn:     currentReturn > p.TypicalReturn,
 			}
 		}
 		return http.StatusOK, map[string]any{
