@@ -19,10 +19,15 @@ type Runner struct {
 	cfg         config.Config
 	store       ledger.OutcomeStore
 	janusEngine *janus.Engine
+	lastState   *domain.SimulationState
 }
 
 func NewRunner(cfg config.Config, store ledger.OutcomeStore) *Runner {
 	return &Runner{cfg: cfg, store: store}
+}
+
+func (r *Runner) LastState() *domain.SimulationState {
+	return r.lastState
 }
 
 func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary, error) {
@@ -43,8 +48,7 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 			continue
 		}
 
-		nextDate, ok := ds.NextDate(date, 1)
-		if !ok || nextDate.After(endDate) {
+		if _, ok := ds.NextDate(date, 1); !ok {
 			continue
 		}
 
@@ -71,6 +75,8 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 		}
 		sessionCount++
 	}
+
+	r.lastState = &persistentState
 
 	scorecards, outcomes, err := r.store.LoadAllSessionScorecards()
 	if err != nil {

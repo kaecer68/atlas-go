@@ -7,6 +7,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
@@ -49,7 +50,49 @@ func (r *Runner) RunAndStore() error {
 		return fmt.Errorf("record snapshot: %w", err)
 	}
 
+	r.syncToLiveStore()
+
 	return nil
+}
+
+func (r *Runner) syncToLiveStore() {
+	state := r.btRunner.LastState()
+	if state == nil {
+		return
+	}
+
+	store := livestore.NewStateStore(livestore.DefaultLiveStateBasePath)
+	if err := store.Load(); err != nil {
+		logging.Warn("autobacktest", "load_live_state_failed", "err", err.Error())
+	}
+
+	for symbol := range store.GetPositions() {
+		store.RemovePosition(symbol)
+	}
+
+	var totalExposure, totalUnrealizedPnL float64
+	for _, pos := range state.Positions {
+		totalExposure += pos.MarketValue
+		totalUnrealizedPnL += pos.UnrealizedPnL
+		store.UpdatePosition(pos)
+	}
+
+	store.UpdatePortfolio(livestore.PortfolioState{
+		Cash:          state.Cash,
+		TotalExposure: totalExposure,
+		AvailableCash: state.Cash,
+		UnrealizedPnL: totalUnrealizedPnL,
+		LastUpdated:   time.Now(),
+	})
+
+	if err := store.Save(); err != nil {
+		logging.Warn("autobacktest", "sync_live_state_failed", "err", err.Error())
+	} else {
+		logging.Info("autobacktest", "synced_to_live_store",
+			"positions", len(state.Positions),
+			"exposure", totalExposure,
+			"cash", state.Cash)
+	}
 }
 
 func (r *Runner) recordSnapshot(date time.Time) error {
@@ -116,6 +159,16 @@ func (r *Runner) mostRecentTradingDay() (time.Time, error) {
 
 	if len(ds.Dates) == 0 {
 		return time.Time{}, fmt.Errorf("no dates found in replay data")
+	}
+
+	now := time.Now()
+	for i := len(ds.Dates) - 1; i >= 0; i-- {
+		if ds.Dates[i].After(now) {
+			continue
+		}
+		if _, ok := ds.NextDate(ds.Dates[i], 1); ok {
+			return ds.Dates[i], nil
+		}
 	}
 
 	return ds.Dates[len(ds.Dates)-1], nil

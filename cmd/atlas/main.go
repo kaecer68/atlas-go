@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/autobacktest"
 	"github.com/kaecer68/atlas-go/internal/bootstrap"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -257,15 +258,23 @@ func run(args []string, deps appDeps) error {
 		}
 		registerCommonDashboardRoutes(dashboard, mux, *swaggerMode, true)
 
-		mux.Handle("/", http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static"))))
+		fs := http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static")))
+		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Expires", "0")
+			fs.ServeHTTP(w, r)
+		}))
+		mux.Handle("/static/", http.StripPrefix("/static/", fs))
 		log.Printf("dashboard api listening on %s", *apiAddr)
 		bootstrap.StartChannelHealthSyncLoop(sysCtx, cfg.WorkDir, pool)
-		bootstrap.StartAutoBackfill(sysCtx, cfg.WorkDir)
+		bootstrap.StartAutoBackfill(sysCtx, cfg.WorkDir, cfg.ReplayDataPath)
 		bootstrap.StartAutoCapitalFlowFetch(sysCtx, cfg.WorkDir)
+		autobacktest.StartDailyLoop(sysCtx, autobacktest.NewRunner(cfg))
 
 		authWrappedMux := apishared.AuthMiddleware(mux)
 		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Security-Policy", "default-src 'self'")
+			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
 			if r.URL.Path == "/metrics" || strings.HasPrefix(r.URL.Path, "/static/") {
 				mux.ServeHTTP(w, r)
 				return
@@ -377,6 +386,37 @@ func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, re
 
 	if err := system.RecordSessionSummary(result, candidate); err != nil {
 		return fmt.Errorf("record session summary failed: %w", err)
+	}
+
+	stateStore := livestore.NewStateStore(livestore.DefaultLiveStateBasePath)
+	if err := stateStore.Load(); err != nil {
+		logging.Warn("main", "load_live_state_failed", "err", err.Error())
+	}
+	for symbol := range stateStore.GetPositions() {
+		stateStore.RemovePosition(symbol)
+	}
+	var totalExposure, totalUnrealizedPnL float64
+	for _, pos := range result.Positions {
+		totalExposure += pos.MarketValue
+		totalUnrealizedPnL += pos.UnrealizedPnL
+		stateStore.UpdatePosition(pos)
+	}
+	stateStore.UpdatePortfolio(livestore.PortfolioState{
+		Cash:          result.EndingCash,
+		TotalExposure: totalExposure,
+		AvailableCash: result.EndingCash,
+		DayPnL:        result.BeforeTaxPnL,
+		UnrealizedPnL: totalUnrealizedPnL,
+		LastUpdated:   time.Now(),
+	})
+	stateStore.UpdateRegime(result.Regime, 0.5, "simulation")
+	if err := stateStore.Save(); err != nil {
+		logging.Warn("main", "sync_live_state_failed", "err", err.Error())
+	} else {
+		logging.Info("main", "synced_simulation_to_live_store",
+			"positions", len(result.Positions),
+			"exposure", totalExposure,
+			"cash", result.EndingCash)
 	}
 
 	return nil

@@ -82,11 +82,7 @@ func TestHandleReasoningTrace_Success(t *testing.T) {
 		t.Errorf("expected 2 traces, got %d", len(resp.Traces))
 	}
 
-	if len(resp.Explanations) != 2 {
-		t.Errorf("expected 2 explanations, got %d", len(resp.Explanations))
-	}
-
-	if len(resp.Explanations[0]) == 0 {
+	if resp.Traces[0].Explanation == "" {
 		t.Error("expected non-empty explanation for first trace")
 	}
 }
@@ -113,26 +109,27 @@ func TestHandleReasoningTrace_MissingSession(t *testing.T) {
 
 func TestHandleReasoningTrace_SessionNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
-	tracesDir := filepath.Join(tmpDir, "traces")
-	if err := os.MkdirAll(tracesDir, 0755); err != nil {
-		t.Fatalf("failed to create traces dir: %v", err)
-	}
-
+	// No trace file created — session exists in sessions/ dir but has no trace.
+	// Should return OK with empty traces (not 404).
 	h := &ReasoningHandler{BaseDir: tmpDir}
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/reasoning-trace?session_id=nonexistent", nil)
 
 	status, data := h.HandleReasoningTrace(req)
 
-	if status != http.StatusNotFound {
-		t.Errorf("expected status %d, got %d", http.StatusNotFound, status)
+	if status != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, status)
 	}
 
-	errResp, ok := data.(map[string]string)
+	resp, ok := data.(ReasoningTraceResponse)
 	if !ok {
-		t.Fatalf("expected map[string]string, got %T", data)
+		t.Fatalf("expected ReasoningTraceResponse, got %T", data)
 	}
 
-	if errResp["error"] != "no traces found for session" {
-		t.Errorf("expected 'no traces found for session', got %q", errResp["error"])
+	if resp.SessionID != "nonexistent" {
+		t.Errorf("expected session_id 'nonexistent', got %q", resp.SessionID)
+	}
+
+	if len(resp.Traces) != 0 {
+		t.Errorf("expected 0 traces for nonexistent session, got %d", len(resp.Traces))
 	}
 }

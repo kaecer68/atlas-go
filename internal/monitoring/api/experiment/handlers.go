@@ -41,6 +41,7 @@ type ExperimentInboxResponse struct {
 	PendingPromotes []ExperimentInboxItem `json:"pending_promotes"`
 	RecentHistory   []ExperimentInboxItem `json:"recent_history"`
 	BaselineVersion int                   `json:"baseline_version"`
+	Items           []ExperimentInboxItem `json:"items"`
 }
 
 // Handlers holds the dependencies for experiment lifecycle handlers.
@@ -365,10 +366,16 @@ func (h *Handlers) HandleInbox(r *http.Request) (int, any) {
 		recentHistory = recentHistory[:10]
 	}
 
+	allItems := make([]ExperimentInboxItem, 0, len(pendingJudges)+len(pendingPromotes)+len(recentHistory))
+	allItems = append(allItems, pendingJudges...)
+	allItems = append(allItems, pendingPromotes...)
+	allItems = append(allItems, recentHistory...)
+
 	return http.StatusOK, ExperimentInboxResponse{
 		PendingJudges:   pendingJudges,
 		PendingPromotes: pendingPromotes,
 		RecentHistory:   recentHistory,
 		BaselineVersion: policy.Version,
+		Items:           allItems,
 	}
 }

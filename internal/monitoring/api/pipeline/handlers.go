@@ -29,9 +29,9 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/sessions", shared.Get(h.HandleSessions))
 	mux.Handle("GET /api/dashboard/universe-overlap", shared.Get(h.HandleUniverseOverlap))
 	mux.Handle("GET /api/dashboard/reasoning-trace", shared.Get(h.ReasoningHandler.HandleReasoningTrace))
-	mux.Handle("POST /api/synergy/darwinian-status", shared.Post(h.HandleDarwinianStatus))
-	mux.Handle("POST /api/synergy/darwinian-trend", shared.Post(h.HandleDarwinianTrend))
-	mux.Handle("POST /api/dashboard/regime-history", shared.Post(h.HandleRegimeHistory))
+	mux.Handle("GET /api/synergy/darwinian-status", shared.Get(h.HandleDarwinianStatus))
+	mux.Handle("GET /api/synergy/darwinian-trend", shared.Get(h.HandleDarwinianTrend))
+	mux.Handle("GET /api/dashboard/regime-history", shared.Get(h.HandleRegimeHistory))
 }
 
 func parseLimit(r *http.Request, defaultValue, maxValue int) (int, error) {
@@ -242,12 +242,14 @@ func (h *Handlers) HandleRecommendationPipeline(r *http.Request) (int, any) {
 	}
 
 	resp := RecommendationPipelineResponse{
-		SessionID:     data.SessionID,
-		Regime:        data.Regime,
-		Items:         items,
-		GuardOutcomes: data.GuardOutcomes,
-		ScreenedItems: data.ScreenedItems,
-		RecordedAt:    data.RecordedAt,
+		SessionID:         data.SessionID,
+		Regime:            data.Regime,
+		Items:             items,
+		GuardOutcomes:     data.GuardOutcomes,
+		ScreenedItems:     data.ScreenedItems,
+		RecordedAt:        data.RecordedAt,
+		IsFallbackSession: data.IsFallbackSession,
+		FallbackMessage:   data.FallbackMessage,
 	}
 	return http.StatusOK, resp
 }
@@ -276,12 +278,14 @@ type PipelineItem struct {
 
 // RecommendationPipelineResponse is the API response for recommendation pipeline.
 type RecommendationPipelineResponse struct {
-	SessionID     string                   `json:"session_id"`
-	Regime        domain.Regime            `json:"regime"`
-	Items         []PipelineItem           `json:"items"`
-	GuardOutcomes []domain.GuardOutcome    `json:"guard_outcomes"`
-	ScreenedItems []domain.ScreeningReject `json:"screened_items"`
-	RecordedAt    time.Time                `json:"recorded_at"`
+	SessionID         string                   `json:"session_id"`
+	Regime            domain.Regime            `json:"regime"`
+	Items             []PipelineItem           `json:"items"`
+	GuardOutcomes     []domain.GuardOutcome    `json:"guard_outcomes"`
+	ScreenedItems     []domain.ScreeningReject `json:"screened_items"`
+	RecordedAt        time.Time                `json:"recorded_at"`
+	IsFallbackSession bool                     `json:"is_fallback_session"`
+	FallbackMessage   string                   `json:"fallback_message"`
 }
 
 // HandleSessions handles GET /api/dashboard/sessions.

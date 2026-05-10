@@ -1,4 +1,20 @@
 import { renderDualEquityCurve } from '../components/sparkline.js';
+import { stockName } from '../names.js';
+
+const SYMBOL_SECTOR_MAP = {
+  '0050.TW': 'ETF', '0056.TW': 'ETF', '00878.TW': 'ETF',
+  '1301.TW': '石化', '1303.TW': '石化', '1326.TW': '石化',
+  '2303.TW': '半導體', '2330.TW': '半導體', '2454.TW': '半導體', '3034.TW': '半導體', '3037.TW': '半導體',
+  '2308.TW': '電子零組件', '2382.TW': 'AI 供應鏈', '6669.TW': 'AI 供應鏈',
+  '2317.TW': '電子組裝',
+  '2603.TW': '航運', '2609.TW': '航運', '2615.TW': '航運',
+  '2881.TW': '金融', '2882.TW': '金融', '2886.TW': '金融', '2891.TW': '金融', '2892.TW': '金融',
+  '3008.TW': '光學', '3017.TW': '散熱'
+};
+
+function getSector(symbol) {
+  return SYMBOL_SECTOR_MAP[symbol] || SYMBOL_SECTOR_MAP[symbol?.replace('.TW', '')] || '—';
+}
 
 export async function loadPortfolioPage(getJSON, agentNameFn) {
   const kpis = document.getElementById('portfolioKPIs');
@@ -26,19 +42,19 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
     
     kpis.innerHTML = `
       <div class="kpi-card">
-        <div class="kpi-label">稅前淨值</div>
+        <div class="kpi-label">投組稅前淨值</div>
         <div class="kpi-value">${window.fmtNTD ? window.fmtNTD(state.portfolio_value || 0) : (state.portfolio_value || 0).toFixed(0)}</div>
-        <div class="kpi-hint">可用現金: ${window.fmtNTD ? window.fmtNTD(state.cash || 0) : (state.cash || 0).toFixed(0)}</div>
+        <div class="kpi-hint">含現金與持倉市值 | 可用現金: ${window.fmtNTD ? window.fmtNTD(state.cash || 0) : (state.cash || 0).toFixed(0)}</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">稅後淨值</div>
+        <div class="kpi-label">投組稅後淨值</div>
         <div class="kpi-value">${window.fmtNTD ? window.fmtNTD(afterTaxValue) : afterTaxValue.toFixed(0)}</div>
-        <div class="kpi-hint">已扣除累積稅負</div>
+        <div class="kpi-hint">已扣除累積稅負 ${window.fmtNTD ? window.fmtNTD(totalTaxPaid) : totalTaxPaid.toFixed(0)}</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">累積稅負</div>
         <div class="kpi-value text-down">${window.fmtNTD ? window.fmtNTD(totalTaxPaid) : totalTaxPaid.toFixed(0)}</div>
-        <div class="kpi-hint">持倉檔數: ${positions.length} | 更新: ${state.snapshot_time ? new Date(state.snapshot_time).toLocaleTimeString() : '-'}</div>
+        <div class="kpi-hint">持倉 ${positions.length} 檔 | 更新: ${state.snapshot_time ? new Date(state.snapshot_time).toLocaleTimeString() : '-'}</div>
       </div>
     `;
 
@@ -56,17 +72,28 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
     }
 
     const rows = positions.map(pos => {
-      const pnl = pos.unrealized_pnl || 0;
-      const pct = pos.pnl_pct || 0;
-      const colorClass = window.pnlColor ? window.pnlColor(pnl) : (pnl > 0 ? 'text-up' : (pnl < 0 ? 'text-down' : ''));
+      let pnl = pos.unrealized_pnl || 0;
+      let pct = pos.pnl_pct || 0;
+      if (pnl === 0 && pos.average_cost && pos.current_price && pos.quantity) {
+        const costBasis = pos.average_cost * pos.quantity;
+        const marketValue = pos.current_price * pos.quantity;
+        pnl = marketValue - costBasis;
+        pct = pos.average_cost > 0 ? (pos.current_price - pos.average_cost) / pos.average_cost : 0;
+      }
+      const colorClass = pnl > 0 ? 'text-up' : (pnl < 0 ? 'text-down' : '');
       const fmtF = window.fmtFloat || (v => v.toFixed(2));
       const fmtI = window.fmtInt || (v => v.toString());
       const fmtP = window.fmtPct || (v => (v*100).toFixed(2) + '%');
+      const name = stockName(pos.symbol);
+      const sector = getSector(pos.symbol);
       
       return `
         <tr>
-          <td style="font-weight:600">${pos.symbol}</td>
-          <td>—</td>
+          <td>
+            <div style="font-weight:600">${pos.symbol}</div>
+            <div style="font-size:12px;color:var(--muted)">${name}</div>
+          </td>
+          <td>${sector}</td>
           <td style="text-align:right">${fmtI(pos.quantity)}</td>
           <td style="text-align:right">${fmtF(pos.average_cost)}</td>
           <td style="text-align:right">${fmtF(pos.current_price)}</td>
