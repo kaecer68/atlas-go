@@ -242,6 +242,87 @@ func (s *SQLiteOutcomeStore) LoadSessionScreeningRejects(sessionID string) ([]do
 	return rejects, rows.Err()
 }
 
+func (s *SQLiteOutcomeStore) RecordSessionTrades(sessionID string, trades []domain.TradeRecord) error {
+	if len(trades) == 0 {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }() //nolint:errcheck
+
+	stmt, err := tx.Prepare(`
+		INSERT INTO trades (trade_id, session_id, symbol, side, quantity, price, amount, reason, timestamp)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, trade := range trades {
+		ts := trade.Timestamp.Format("2006-01-02T15:04:05Z07:00")
+		if _, err := stmt.Exec(trade.TradeID, sessionID, trade.Symbol,
+			string(trade.Side), trade.Quantity, trade.Price, trade.Amount,
+			trade.Reason, ts); err != nil {
+			return fmt.Errorf("insert trade %s: %w", trade.TradeID, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+	return nil
+}
+
+func (s *SQLiteOutcomeStore) LoadSessionTrades(sessionID string) ([]domain.TradeRecord, error) {
+	rows, err := s.db.Query(`
+		SELECT trade_id, session_id, symbol, side, quantity, price, amount, reason, timestamp
+		FROM trades WHERE session_id = ? ORDER BY timestamp ASC`, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("query session trades: %w", err)
+	}
+	defer rows.Close()
+
+	trades := make([]domain.TradeRecord, 0)
+	for rows.Next() {
+		var rec domain.TradeRecord
+		var side, ts string
+		if err := rows.Scan(&rec.TradeID, &rec.SessionID, &rec.Symbol, &side,
+			&rec.Quantity, &rec.Price, &rec.Amount, &rec.Reason, &ts); err != nil {
+			return nil, fmt.Errorf("scan trade row: %w", err)
+		}
+		rec.Side = domain.Side(side)
+		rec.Timestamp, _ = time.Parse("2006-01-02T15:04:05Z07:00", ts)
+		trades = append(trades, rec)
+	}
+	return trades, rows.Err()
+}
+
+func (s *SQLiteOutcomeStore) LoadAllSessionTrades() ([]domain.TradeRecord, error) {
+	rows, err := s.db.Query(`
+		SELECT trade_id, session_id, symbol, side, quantity, price, amount, reason, timestamp
+		FROM trades ORDER BY timestamp DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("query all trades: %w", err)
+	}
+	defer rows.Close()
+
+	trades := make([]domain.TradeRecord, 0)
+	for rows.Next() {
+		var rec domain.TradeRecord
+		var side, ts string
+		if err := rows.Scan(&rec.TradeID, &rec.SessionID, &rec.Symbol, &side,
+			&rec.Quantity, &rec.Price, &rec.Amount, &rec.Reason, &ts); err != nil {
+			return nil, fmt.Errorf("scan trade row: %w", err)
+		}
+		rec.Side = domain.Side(side)
+		rec.Timestamp, _ = time.Parse("2006-01-02T15:04:05Z07:00", ts)
+		trades = append(trades, rec)
+	}
+	return trades, rows.Err()
+}
+
 // RecordExperiment writes an experiment record to the global experiments table.
 func (s *SQLiteOutcomeStore) RecordExperiment(record domain.ExperimentRecord) error {
 	briefJSON, err := json.Marshal(record) // mutation brief fields embedded in record

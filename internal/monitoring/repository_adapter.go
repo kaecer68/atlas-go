@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
@@ -126,6 +127,18 @@ func (a *OutcomeStoreAdapter) LoadSessionScreeningRejects(sessionID string) ([]d
 	return a.store.LoadSessionScreeningRejects(sessionID)
 }
 
+func (a *OutcomeStoreAdapter) RecordSessionTrades(sessionID string, trades []domain.TradeRecord) error {
+	return a.store.RecordSessionTrades(sessionID, trades)
+}
+
+func (a *OutcomeStoreAdapter) LoadSessionTrades(sessionID string) ([]domain.TradeRecord, error) {
+	return a.store.LoadSessionTrades(sessionID)
+}
+
+func (a *OutcomeStoreAdapter) LoadAllSessionTrades() ([]domain.TradeRecord, error) {
+	return a.store.LoadAllSessionTrades()
+}
+
 func (a *OutcomeStoreAdapter) RecordExperiment(record domain.ExperimentRecord) error {
 	return a.store.RecordExperiment(record)
 }
@@ -191,6 +204,18 @@ func (a *DualWriteOutcomeStoreAdapter) RecordSessionScreeningRejects(sessionID s
 
 func (a *DualWriteOutcomeStoreAdapter) LoadSessionScreeningRejects(sessionID string) ([]domain.ScreeningReject, error) {
 	return a.repo.LoadSessionScreeningRejects(a.ctx, sessionID)
+}
+
+func (a *DualWriteOutcomeStoreAdapter) RecordSessionTrades(sessionID string, trades []domain.TradeRecord) error {
+	return fmt.Errorf("record session trades: not supported by dual-write adapter")
+}
+
+func (a *DualWriteOutcomeStoreAdapter) LoadSessionTrades(sessionID string) ([]domain.TradeRecord, error) {
+	return nil, fmt.Errorf("load session trades: not supported by dual-write adapter")
+}
+
+func (a *DualWriteOutcomeStoreAdapter) LoadAllSessionTrades() ([]domain.TradeRecord, error) {
+	return nil, fmt.Errorf("load all session trades: not supported by dual-write adapter")
 }
 
 func (a *DualWriteOutcomeStoreAdapter) RecordExperiment(record domain.ExperimentRecord) error {

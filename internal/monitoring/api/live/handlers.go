@@ -42,6 +42,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/risk-exposure", shared.Get(h.HandleRiskExposure))
 	mux.Handle("GET /api/dashboard/live-status", shared.Get(h.HandleLiveStatus))
 	mux.Handle("GET /api/dashboard/portfolio-state", shared.Get(h.HandlePortfolioState))
+	mux.Handle("GET /api/dashboard/trade-history", shared.Get(h.HandleTradeHistory))
 }
 
 func getSymbolSector(symbol string, symMap map[string]string) string {
@@ -531,6 +532,14 @@ func (h *Handlers) HandleLiveStatus(r *http.Request) (int, any) {
 func (h *Handlers) HandlePortfolioState(r *http.Request) (int, any) {
 	state := h.getService().LoadPortfolioState()
 	return http.StatusOK, state
+}
+
+func (h *Handlers) HandleTradeHistory(r *http.Request) (int, any) {
+	trades := h.getService().LoadTradeHistory()
+	if trades == nil {
+		trades = []domain.TradeRecord{}
+	}
+	return http.StatusOK, trades
 }
 
 func loadRecommendationOutcomes(ledgerDir, sessionID string) ([]domain.RecommendationOutcome, error) {

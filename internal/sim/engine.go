@@ -26,6 +26,14 @@ type Engine struct {
 	thresholdEngine *DynamicThresholdEngine
 }
 
+type sellDetail struct {
+	Symbol    string
+	Quantity  int
+	AvgCost   float64
+	ExecPrice float64
+	Reason    string
+}
+
 func NewEngine(constraints domain.SimulationConstraints) *Engine {
 	return &Engine{constraints: constraints, ctx: context.Background()}
 }
@@ -90,6 +98,7 @@ func (e *Engine) RunWithState(state *domain.SimulationState, regime domain.Regim
 	result := domain.SimulationResult{
 		Regime:         regime,
 		Orders:         dayResult.Orders,
+		Trades:         dayResult.Trades,
 		Positions:      state.Positions,
 		EndingCash:     state.Cash,
 		PortfolioValue: dayResult.PortfolioValue,
@@ -119,6 +128,7 @@ func (e *Engine) RunDay(
 	}
 
 	orders := make([]domain.Order, 0)
+	trades := make([]domain.TradeRecord, 0)
 	var fallbackEvents []string
 
 	// 0. Apply reflexivity rules before any trading
@@ -137,13 +147,34 @@ func (e *Engine) RunDay(
 
 	// 2. Sell logic
 	if e.constraints.SellLogicEnabled() {
-		sellOrders := e.executeSells(state, quoteBySymbol, recs, &fallbackEvents)
+		sellOrders, sellDetails := e.executeSells(state, quoteBySymbol, recs, &fallbackEvents)
 		orders = append(orders, sellOrders...)
+		for _, sd := range sellDetails {
+			state.RealizedPnL += float64(sd.Quantity) * (sd.ExecPrice - sd.AvgCost)
+			trades = append(trades, domain.TradeRecord{
+				Symbol:   sd.Symbol,
+				Side:     domain.SideSell,
+				Quantity: sd.Quantity,
+				Price:    sd.ExecPrice,
+				Amount:   float64(sd.Quantity) * sd.ExecPrice,
+				Reason:   sd.Reason,
+			})
+		}
 	}
 
 	// 3. Buy logic
 	buyOrders, newPositions := e.executeBuys(state.Cash, state.Positions, quoteBySymbol, recs, regime, &fallbackEvents)
 	orders = append(orders, buyOrders...)
+	for _, o := range buyOrders {
+		trades = append(trades, domain.TradeRecord{
+			Symbol:   o.Symbol,
+			Side:     domain.SideBuy,
+			Quantity: o.Quantity,
+			Price:    o.Price,
+			Amount:   float64(o.Quantity) * o.Price,
+			Reason:   o.Reason,
+		})
+	}
 	state.Positions = newPositions
 	state.Cash -= totalCost(buyOrders)
 
@@ -173,6 +204,7 @@ func (e *Engine) RunDay(
 	return domain.DayResult{
 		Regime:         regime,
 		Orders:         orders,
+		Trades:         trades,
 		Positions:      clonePositions(state.Positions),
 		Cash:           state.Cash,
 		PortfolioValue: portfolioValue,
@@ -193,9 +225,10 @@ func (e *Engine) executeSells(
 	quoteBySymbol map[string]domain.Quote,
 	recs []domain.Recommendation,
 	fallbackEvents *[]string,
-) []domain.Order {
+) ([]domain.Order, []sellDetail) {
 	remaining := make([]domain.Position, 0, len(state.Positions))
 	var orders []domain.Order
+	var details []sellDetail
 
 	for _, pos := range state.Positions {
 		quote, ok := quoteBySymbol[pos.Symbol]
@@ -217,12 +250,13 @@ func (e *Engine) executeSells(
 				Price:    price,
 				Reason:   reason,
 			})
+			details = append(details, sellDetail{Symbol: pos.Symbol, Quantity: pos.Quantity, AvgCost: pos.AverageCost, ExecPrice: price, Reason: reason})
 			continue
 		}
 		remaining = append(remaining, pos)
 	}
 	state.Positions = remaining
-	return orders
+	return orders, details
 }
 
 func (e *Engine) shouldSellPosition(pos domain.Position, quote domain.Quote, recs []domain.Recommendation) (bool, string) {
