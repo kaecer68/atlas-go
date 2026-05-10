@@ -46,7 +46,11 @@ func StartDailyLoop(ctx context.Context, runner *Runner) {
 }
 
 func next13_30(from time.Time) time.Time {
-	taipei, _ := time.LoadLocation("Asia/Taipei")
+	taipei, err := time.LoadLocation("Asia/Taipei")
+	if err != nil {
+		logging.Warn("autobacktest", "timezone_load_failed", "err", err.Error())
+		taipei = time.FixedZone("CST", 8*3600)
+	}
 	today := from.In(taipei)
 
 	scheduled := time.Date(today.Year(), today.Month(), today.Day(), 13, 30, 0, 0, taipei)

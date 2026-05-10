@@ -307,7 +307,8 @@ func (a *DashboardAPI) RegisterExperimentRoutes(mux *http.ServeMux) {
 }
 
 func (a *DashboardAPI) RegisterBacktestRoutes(mux *http.ServeMux) {
-	svc := service.NewBacktestService()
+	cfg := config.Normalize(config.Load())
+	svc := service.NewBacktestService(cfg)
 	handlers := apibacktest.NewHandlers(svc, a.ledgerDir)
 	handlers.RegisterRoutes(mux)
 }

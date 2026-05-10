@@ -46,6 +46,9 @@ func (h *Handlers) HandleBacktestRun(r *http.Request) (int, any) {
 	if err != nil {
 		return http.StatusBadRequest, map[string]string{"error": "invalid end date format (YYYY-MM-DD)"}
 	}
+	if !startDate.Before(endDate) && !startDate.Equal(endDate) {
+		return http.StatusBadRequest, map[string]string{"error": "start date must be before or equal to end date"}
+	}
 
 	if err := h.svc.Start(startDate, endDate); err != nil {
 		return http.StatusConflict, map[string]string{"error": "backtest already running"}
