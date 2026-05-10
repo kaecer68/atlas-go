@@ -116,6 +116,34 @@ header p { margin: 0; color: var(--muted); font-size: var(--text-sm); }
   .diff { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px; }
   .diff pre { margin: 0; max-height: 60vh; }
 
+  /* Industry Detail Modal Tabs */
+  .industry-tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .tab-btn { background: transparent; border: none; color: var(--muted); padding: 8px 14px; cursor: pointer; font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s; }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-btn:hover { color: var(--text); }
+  .industry-section { margin-bottom: 16px; }
+  .industry-section h4 { margin: 0 0 8px; font-size: 13px; color: var(--accent); }
+  .cycle-visual { display: flex; align-items: center; gap: 8px; margin: 12px 0; padding: 12px; background: var(--bg); border-radius: 8px; flex-wrap: wrap; }
+  .cycle-phase { padding: 4px 10px; border-radius: 6px; font-size: 12px; background: var(--border); color: var(--muted); }
+  .cycle-phase.active { background: var(--accent); color: var(--bg); }
+  .linkage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 600px) { .linkage-grid { grid-template-columns: 1fr; } }
+  .linkage-col h4 { margin: 0 0 6px; font-size: 12px; color: var(--muted); }
+  .linkage-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 12px; margin-bottom: 6px; }
+  .risk-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; }
+  .risk-item .risk-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .risk-severity { font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+  .risk-severity.high { background: rgba(217,58,58,.15); color: var(--down); border: 1px solid rgba(217,58,58,.3); }
+  .risk-severity.medium { background: rgba(245,166,35,.15); color: var(--warn); border: 1px solid rgba(245,166,35,.3); }
+  .risk-severity.low { background: rgba(38,161,123,.15); color: var(--up); border: 1px solid rgba(38,161,123,.3); }
+  .seasonal-pattern { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+  .seasonal-pattern .pattern-name { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+  .seasonal-pattern .pattern-meta { font-size: 11px; color: var(--muted); }
+  .metric-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .metric-row:last-child { border-bottom: none; }
+  .metric-row .metric-label { color: var(--muted); }
+  .metric-row .metric-value { font-weight: 600; }
+
   .notification-center { position: fixed; right: 14px; top: 14px; width: min(340px, 92vw); z-index: 150; }
   .notification { background: var(--panel-l2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; font-size: var(--text-sm); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4); animation: notifyIn 0.3s ease; }
 @keyframes notifyIn {
@@ -1984,8 +2012,24 @@ body { display: flex; margin: 0; min-height: 100vh; }
   Object.assign(window, { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState, agentNameEsm, regimeLabelEsm, FIELD });
 </script>
 
+<div class="modal-overlay" id="industryModal" role="dialog" aria-modal="true" onclick="if(event.target===this)closeIndustryModal()">
+  <div class="modal" style="width:min(720px,94vw)">
+    <h3 id="industryModalTitle">產業詳細分析</h3>
+    <div class="industry-tabs" id="industryTabs">
+      <button class="tab-btn active" data-tab="cycle" onclick="window.switchIndustryTab('cycle')">週期定位</button>
+      <button class="tab-btn" data-tab="linkage" onclick="window.switchIndustryTab('linkage')">供應鏈</button>
+      <button class="tab-btn" data-tab="seasonality" onclick="window.switchIndustryTab('seasonality')">季節性</button>
+      <button class="tab-btn" data-tab="risk" onclick="window.switchIndustryTab('risk')">風險</button>
+    </div>
+    <div id="industryModalContent"><div class="empty">載入中…</div></div>
+    <div class="control-group" style="margin-top:14px;justify-content:flex-end">
+      <button onclick="closeIndustryModal()">關閉</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
-  import './js/main.js?v=20260510';
+  import './js/main.js';
 </script>
 
 
