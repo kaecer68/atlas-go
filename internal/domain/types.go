@@ -102,6 +102,15 @@ func DefaultTaiwanTaxConfig() TaxConfig {
 	}
 }
 
+type DividendRecord struct {
+	Symbol         string  `json:"symbol"`
+	Year           int     `json:"year"`
+	CashDividend   float64 `json:"cash_dividend"`
+	StockDividend  float64 `json:"stock_dividend"`
+	ExDividendDate string  `json:"ex_dividend_date"`
+	PaymentDate    string  `json:"payment_date"`
+}
+
 type AlertRecord struct {
 	ID             string     `json:"id"`
 	Timestamp      time.Time  `json:"timestamp"`

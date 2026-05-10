@@ -3,6 +3,18 @@ import { computePipelineSummary, factorBar, renderFactorMini, renderFactorBreakd
 import { formatDate, getJSON, notify, renderEmptyState } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
 
+function negStyle(val) {
+  const num = typeof val === 'number' ? val : parseFloat(val);
+  if (isNaN(num)) return '';
+  return num < 0 ? ' style="color:var(--down);font-weight:700"' : '';
+}
+function negSpan(val, fmt) {
+  const num = typeof val === 'number' ? val : parseFloat(val);
+  if (isNaN(num)) return fmt || String(val);
+  const style = num < 0 ? ' style="color:var(--down);font-weight:700"' : '';
+  return `<span${style}>${fmt != null ? fmt : num}</span>`;
+}
+
 // Delegated click handler for pipeline approve/reject buttons (replaces inline onclick)
 if (typeof document !== 'undefined') {
   document.addEventListener('click', function(e) {
@@ -116,11 +128,12 @@ export function renderDecisionChain(pipeline, macro, agentsData, stress, events,
     const cb = it.conviction_breakdown;
     return `<tr>
       <td>${escapeHtml(it.symbol)}</td>
+      <td>${escapeHtml(stockName(it.symbol)) || '-'}</td>
       <td>${escapeHtml(agentName(it.agent_id))}</td>
-      <td>${it.conviction != null ? it.conviction : '-'}</td>
+      <td>${it.conviction != null ? negSpan(it.conviction) : '-'}</td>
       <td><button class="pipeline-action" onclick="toggleBreakdown('${key}')" id="btn-${key}">展開</button></td>
     </tr>
-    <tr id="breakdown-${key}" class="hidden"><td colspan="4" style="background:#0d1015;border-left:3px solid #8b5cf6">${renderConvictionBreakdown(cb)}</td></tr>`;
+    <tr id="breakdown-${key}" class="hidden"><td colspan="5" style="background:#0d1015;border-left:3px solid #8b5cf6">${renderConvictionBreakdown(cb)}</td></tr>`;
   };
 
   const sectorTable = (title, list, prefix) => {
@@ -130,7 +143,7 @@ export function renderDecisionChain(pipeline, macro, agentsData, stress, events,
       <div class="scroll-box">
         <div class="table-wrapper">
         <table class="text-sm">
-          <thead><tr><th>標的</th><th>策略來源</th><th>信念</th><th>明細</th></tr></thead>
+          <thead><tr><th>標的</th><th>公司名稱</th><th>策略來源</th><th>信念</th><th>明細</th></tr></thead>
           <tbody>${list.map((it, idx) => sectorRow(it, idx, prefix)).join('')}</tbody>
         </table>
         </div>
@@ -172,23 +185,23 @@ export function renderDecisionChain(pipeline, macro, agentsData, stress, events,
   const factorCells = (fs, rowKey) => {
     fs = fs || {};
     const btn = `<button class="pipeline-action" onclick="toggleBreakdown('${rowKey}')" id="btn-${rowKey}">展開</button>`;
-    return `<td>${factorBar(fs.momentum, -1, 1)}</td><td class="text-xs">${fs.momentum != null ? fs.momentum.toFixed(2) : '-'}</td>
-            <td>${factorBar(fs.value, -1, 1)}</td><td class="text-xs">${fs.value != null ? fs.value.toFixed(2) : '-'}</td>
-            <td>${factorBar(fs.quality, -1, 1)}</td><td class="text-xs">${fs.quality != null ? fs.quality.toFixed(2) : '-'}</td>
-            <td>${factorBar(fs.agent, 0, 1)}</td><td class="text-xs">${fs.agent != null ? fs.agent.toFixed(2) : '-'}</td>
-            <td>${factorBar(fs.total, -1, 1)}</td><td class="text-xs">${fs.total != null ? fs.total.toFixed(3) : '-'}</td>
+    return `<td>${factorBar(fs.momentum, -1, 1)}</td><td class="text-xs" style="${fs.momentum != null && fs.momentum < 0 ? 'color:var(--down);font-weight:700' : ''}">${fs.momentum != null ? fs.momentum.toFixed(2) : '-'}</td>
+            <td>${factorBar(fs.value, -1, 1)}</td><td class="text-xs" style="${fs.value != null && fs.value < 0 ? 'color:var(--down);font-weight:700' : ''}">${fs.value != null ? fs.value.toFixed(2) : '-'}</td>
+            <td>${factorBar(fs.quality, -1, 1)}</td><td class="text-xs" style="${fs.quality != null && fs.quality < 0 ? 'color:var(--down);font-weight:700' : ''}">${fs.quality != null ? fs.quality.toFixed(2) : '-'}</td>
+            <td>${factorBar(fs.agent, 0, 1)}</td><td class="text-xs" style="${fs.agent != null && fs.agent < 0 ? 'color:var(--down);font-weight:700' : ''}">${fs.agent != null ? fs.agent.toFixed(2) : '-'}</td>
+            <td>${factorBar(fs.total, -1, 1)}</td><td class="text-xs" style="${fs.total != null && fs.total < 0 ? 'color:var(--down);font-weight:700' : ''}">${fs.total != null ? fs.total.toFixed(3) : '-'}</td>
             <td>${btn}</td>`;
   };
 
   const recRows = items.map((it, idx) => {
     const rowKey = `rec-${idx}-${escapeHtml(it.symbol)}-${escapeHtml(it.agent_id)}`;
-    return `<tr><td>${escapeHtml(it.symbol)}</td><td>${escapeHtml(agentName(it.agent_id))}</td>${factorCells(it.factor_scores, rowKey)}</tr>
-            <tr id="breakdown-${rowKey}" class="hidden"><td colspan="13" class="detail-panel">${renderFactorBreakdown(it.factor_scores && it.factor_scores.breakdown)}</td></tr>`;
+    return `<tr><td>${escapeHtml(it.symbol)}</td><td>${escapeHtml(stockName(it.symbol)) || '-'}</td><td>${escapeHtml(agentName(it.agent_id))}</td>${factorCells(it.factor_scores, rowKey)}</tr>
+            <tr id="breakdown-${rowKey}" class="hidden"><td colspan="14" class="detail-panel">${renderFactorBreakdown(it.factor_scores && it.factor_scores.breakdown)}</td></tr>`;
   }).join('');
   const screenedRows = screened.map((s, idx) => {
     const rowKey = `scr-${idx}-${escapeHtml(s.symbol)}-${escapeHtml(s.agent_id)}`;
-    return `<tr class="text-muted"><td>${escapeHtml(s.symbol)}</td><td>${escapeHtml(agentName(s.agent_id))}</td><td colspan="2">${s.criterion_label ? escapeHtml(s.criterion_label) : (s.criterion ? escapeHtml(s.criterion) : '-')}</td>${factorCells(s.factor_scores, rowKey)}</tr>
-            <tr id="breakdown-${rowKey}" class="hidden"><td colspan="15" class="detail-panel">${renderFactorBreakdown(s.factor_scores && s.factor_scores.breakdown)}</td></tr>`;
+    return `<tr class="text-muted"><td>${escapeHtml(s.symbol)}</td><td>${escapeHtml(stockName(s.symbol)) || '-'}</td><td>${escapeHtml(agentName(s.agent_id))}</td><td colspan="2">${s.criterion_label ? escapeHtml(s.criterion_label) : (s.criterion ? escapeHtml(s.criterion) : '-')}</td>${factorCells(s.factor_scores, rowKey)}</tr>
+            <tr id="breakdown-${rowKey}" class="hidden"><td colspan="16" class="detail-panel">${renderFactorBreakdown(s.factor_scores && s.factor_scores.breakdown)}</td></tr>`;
   }).join('');
 
   const algoNote = `
@@ -211,7 +224,7 @@ export function renderDecisionChain(pipeline, macro, agentsData, stress, events,
       ${items.length ? `<div style="max-height:260px;overflow:auto">
         <div class="table-wrapper">
         <table class="text-sm">
-          <thead><tr><th>標的</th><th>策略來源</th><th colspan="2">動能</th><th colspan="2">價值</th><th colspan="2">品質</th><th colspan="2">Agent</th><th colspan="2">總分</th><th>明細</th></tr></thead>
+          <thead><tr><th>標的</th><th>公司名稱</th><th>策略來源</th><th colspan="2">動能</th><th colspan="2">價值</th><th colspan="2">品質</th><th colspan="2">Agent</th><th colspan="2">總分</th><th>明細</th></tr></thead>
           <tbody>${recRows}</tbody>
         </table>
         </div>
@@ -222,7 +235,7 @@ export function renderDecisionChain(pipeline, macro, agentsData, stress, events,
       ${screened.length ? `<div class="scroll-box">
         <div class="table-wrapper">
         <table class="text-sm">
-          <thead><tr><th>標的</th><th>策略來源</th><th colspan="2">未通過條件</th><th colspan="2">動能</th><th colspan="2">價值</th><th colspan="2">品質</th><th colspan="2">Agent</th><th colspan="2">總分</th><th>明細</th></tr></thead>
+          <thead><tr><th>標的</th><th>公司名稱</th><th>策略來源</th><th colspan="2">未通過條件</th><th colspan="2">動能</th><th colspan="2">價值</th><th colspan="2">品質</th><th colspan="2">Agent</th><th colspan="2">總分</th><th>明細</th></tr></thead>
           <tbody>${screenedRows}</tbody>
         </table>
         </div>
@@ -248,6 +261,7 @@ export function renderDecisionChain(pipeline, macro, agentsData, stress, events,
     const hit = it.hit != null ? (it.hit ? '<span class="badge ok">命中</span>' : '<span class="badge err">失誤</span>') : '<span class="badge">待驗證</span>';
     return `<tr>
       <td>${escapeHtml(it.symbol)}</td>
+      <td>${escapeHtml(stockName(it.symbol)) || '-'}</td>
       <td>${escapeHtml(agentName(it.agent_id))}</td>
       <td>${it.price ? it.price.toFixed(2) : '-'}</td>
       <td>${it.target_price > 0 ? it.target_price.toFixed(2) : '-'}</td>
@@ -261,7 +275,7 @@ export function renderDecisionChain(pipeline, macro, agentsData, stress, events,
     <div style="max-height:360px;overflow:auto">
     <div class="table-wrapper">
     <table class="text-sm">
-      <thead><tr><th>標的</th><th>策略來源</th><th>建議價</th><th>目標價</th><th>停損價</th><th>隔日報酬</th><th>命中</th></tr></thead>
+      <thead><tr><th>標的</th><th>公司名稱</th><th>策略來源</th><th>建議價</th><th>目標價</th><th>停損價</th><th>隔日報酬</th><th>命中</th></tr></thead>
       <tbody>${perfRows}</tbody>
     </table>
     </div>
@@ -277,7 +291,7 @@ export function renderDecisionChain(pipeline, macro, agentsData, stress, events,
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
         <div class="kpi-card" class="p-sm">
           <div class="kpi-label">稅前損益</div>
-          <div class="kpi-value" class="text-base">${(taxSnapshot.before_tax_pnl || 0).toFixed(0)}</div>
+          <div class="kpi-value" class="text-base" style="${(taxSnapshot.before_tax_pnl || 0) < 0 ? 'color:var(--down)' : ''}">${(taxSnapshot.before_tax_pnl || 0).toFixed(0)}</div>
         </div>
         <div class="kpi-card" class="p-sm">
           <div class="kpi-label">總稅額</div>
@@ -285,20 +299,23 @@ export function renderDecisionChain(pipeline, macro, agentsData, stress, events,
         </div>
         <div class="kpi-card" class="p-sm">
           <div class="kpi-label">稅後損益</div>
-          <div class="kpi-value" style="font-size:16px;color:var(--up)">${(taxSnapshot.after_tax_pnl || 0).toFixed(0)}</div>
+          <div class="kpi-value" style="font-size:16px;color:${(taxSnapshot.after_tax_pnl || 0) >= 0 ? 'var(--up)' : 'var(--down)'}">${(taxSnapshot.after_tax_pnl || 0).toFixed(0)}</div>
         </div>
         <div class="kpi-card" class="p-sm">
           <div class="kpi-label">有效稅率</div>
-          <div class="kpi-value" class="text-base">${taxSnapshot.before_tax_pnl > 0 ? ((taxSnapshot.total_tax_paid / taxSnapshot.before_tax_pnl) * 100).toFixed(1) : 0}%</div>
+          <div class="kpi-value" class="text-base">${taxSnapshot.before_tax_pnl != 0 ? ((taxSnapshot.total_tax_paid / Math.abs(taxSnapshot.before_tax_pnl)) * 100).toFixed(1) : 0}%</div>
         </div>
       </div>
     </div>
     <div class="scroll-box">
       <div class="table-wrapper">
       <table class="text-sm">
-        <thead><tr><th>標的</th><th>交易稅</th><th>股息稅</th><th>總稅額</th><th>稅後損益</th></tr></thead>
-        <tbody>${taxSnapshot.snapshots.map(s => `<tr><td>${escapeHtml(s.symbol)}</td><td>${s.transaction_tax.toFixed(0)}</td><td>${s.dividend_tax.toFixed(0)}</td><td>${s.total_tax.toFixed(0)}</td><td>${s.after_tax_pnl.toFixed(0)}</td></tr>`).join('')}</tbody>
+        <thead><tr><th>標的</th><th>公司名稱</th><th>交易稅</th><th>股息稅</th><th>總稅額</th><th>稅後損益</th></tr></thead>
+        <tbody>${taxSnapshot.snapshots.map(s => `<tr><td>${escapeHtml(s.symbol)}</td><td>${escapeHtml(stockName(s.symbol)) || '-'}</td><td>${s.transaction_tax.toFixed(0)}</td><td>${s.dividend_tax.toFixed(0)}</td><td>${s.total_tax.toFixed(0)}</td><td style="${s.after_tax_pnl < 0 ? 'color:var(--down);font-weight:700' : ''}">${s.after_tax_pnl.toFixed(0)}</td></tr>`).join('')}</tbody>
       </table>
+      <div style="margin-top:8px;font-size:11px;color:var(--muted);padding:6px 10px;background:var(--bg);border-radius:6px;border-left:3px solid var(--warn)">
+        ${taxSnapshot.note ? `ℹ️ ${escapeHtml(taxSnapshot.note)}` : 'ℹ️ 稅務資料已計算'}
+      </div>
       </div>
     </div>
   ` : renderEmptyState('暫無稅務資料', '');
@@ -555,7 +572,24 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
     ? '本場次經控制層審核後，沒有任何標的被放行進入模擬投組。原因可能是風控長強制阻擋，或所有推薦均被投資長過濾。'
     : `控制層放行 ${finalOutputs} 筆，但投資管線暫無詳細標的資料（可能該場次尚未載入管線數據）。`) : '';
 
+  const fallbackBanner = data.is_fallback_session ? `
+    <div style="margin-bottom:12px;padding:10px 14px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:13px">⚠️ ${escapeHtml(data.fallback_message || '已自動切換至最近有數據的場次')}</span>
+      <button onclick="switchPage('reports')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1px solid var(--warn);background:rgba(245,158,11,.15);color:var(--warn);cursor:pointer;margin-left:auto">🚀 啟動新回測</button>
+    </div>
+  ` : '';
+
+  const emptyStateWithAction = !items.length ? `
+    <div class="empty-state-guidance" style="padding:32px 16px">
+      <div class="icon" style="font-size:40px;margin-bottom:12px">📊</div>
+      <div class="title" style="font-size:15px;margin-bottom:8px">尚無回測場次資料</div>
+      <div class="desc" style="font-size:13px;margin-bottom:16px">執行回測後將自動顯示推薦明細與控制層結果</div>
+      <button onclick="switchPage('reports')" style="font-size:13px;padding:8px 16px;border-radius:6px;border:1px solid var(--accent);background:rgba(79,193,255,.15);color:var(--accent);cursor:pointer">前往【最新回測】啟動回測 →</button>
+    </div>
+  ` : '';
+
   el.innerHTML = `
+    ${fallbackBanner}
     <div style="margin-bottom:8px;font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>場次：</span>${sessionSelect} · 市場狀態：<strong>${regimeLabel(data.regime || '-')}</strong> · ${recordedAt}</div>
     <div class="mb-sm text-muted text-sm">
       本場次共有 ${rawInputs} 筆 AI 推薦，經控制層後放行 ${finalOutputs} 筆${filteredCount > 0 ? `（過濾 ${filteredCount} 筆）` : ''}。
@@ -573,6 +607,7 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
     ${showScreenedCheckbox}
     ${emptyMsg ? `<div style="font-size:12px;color:var(--warn);margin-bottom:8px">${emptyMsg}</div>` : ''}
     ${pipelineTable}
+    ${emptyStateWithAction}
     ${screenedSection}
   `;
 }
@@ -606,6 +641,14 @@ export async function togglePipelineSession(select) {
   const url = '/api/dashboard/recommendation-pipeline?session_id=' + encodeURIComponent(select.value) + (showAll ? '&show_all=true' : '');
   const data = await getJSON(url);
   renderPipeline(data, showAll, select.value, showScreened);
+}
+
+export function toggleWorkflowScreening() {
+  const showScreenedCheckbox = document.getElementById('pipelineShowScreened');
+  if (showScreenedCheckbox) {
+    showScreenedCheckbox.checked = !showScreenedCheckbox.checked;
+    togglePipelineShowScreened(showScreenedCheckbox);
+  }
 }
 
 if (typeof window !== "undefined") Object.assign(window, {
