@@ -18,6 +18,9 @@ type OutcomeStore interface {
 	// Screening rejects
 	RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error
 	LoadSessionScreeningRejects(sessionID string) ([]domain.ScreeningReject, error)
+	RecordSessionTrades(sessionID string, trades []domain.TradeRecord) error
+	LoadSessionTrades(sessionID string) ([]domain.TradeRecord, error)
+	LoadAllSessionTrades() ([]domain.TradeRecord, error)
 
 	// Experiment lifecycle
 	RecordExperiment(record domain.ExperimentRecord) error

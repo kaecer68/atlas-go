@@ -1,0 +1,10 @@
+[
+  {
+    "symbol": "2330.TW",
+    "quantity": 1000,
+    "average_cost": 500.0,
+    "current_price": 550.0,
+    "market_value": 550000.0,
+    "unrealized_pnl": 50000.0
+  }
+]

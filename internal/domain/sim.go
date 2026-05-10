@@ -6,7 +6,8 @@ import "time"
 type SimulationState struct {
 	Cash            float64            `json:"cash"`
 	Positions       []Position         `json:"positions"`
-	CumulativePnL   float64            `json:"cumulative_pnl"`
+	RealizedPnL     float64            `json:"realized_pnl"`
+	StartingCash    float64            `json:"starting_cash"`
 	EquityCurve     []float64          `json:"equity_curve"`
 	DailyReturns    []float64          `json:"daily_returns"`
 	PreviousValues  map[string]float64 `json:"previous_values"`
@@ -18,6 +19,7 @@ type SimulationState struct {
 func NewSimulationState(startingCash float64) SimulationState {
 	return SimulationState{
 		Cash:           startingCash,
+		StartingCash:   startingCash,
 		Positions:      make([]Position, 0),
 		EquityCurve:    make([]float64, 0),
 		DailyReturns:   make([]float64, 0),
@@ -43,14 +45,15 @@ func (c SimulationConstraints) SellLogicEnabled() bool {
 
 // DayResult captures the outcome of a single simulated trading day.
 type DayResult struct {
-	Date           time.Time  `json:"date"`
-	Regime         Regime     `json:"regime"`
-	Orders         []Order    `json:"orders"`
-	Positions      []Position `json:"positions"`
-	Cash           float64    `json:"cash"`
-	PortfolioValue float64    `json:"portfolio_value"`
-	DailyPnL       float64    `json:"daily_pnl"`
-	FallbackEvents []string   `json:"fallback_events,omitempty"`
+	Date           time.Time     `json:"date"`
+	Regime         Regime        `json:"regime"`
+	Orders         []Order       `json:"orders"`
+	Trades         []TradeRecord `json:"trades"`
+	Positions      []Position    `json:"positions"`
+	Cash           float64       `json:"cash"`
+	PortfolioValue float64       `json:"portfolio_value"`
+	DailyPnL       float64       `json:"daily_pnl"`
+	FallbackEvents []string      `json:"fallback_events,omitempty"`
 }
 
 type SimulationReport struct {

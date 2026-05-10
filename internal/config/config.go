@@ -73,7 +73,7 @@ func Load() Config {
 		StoreBackend:               envOr("ATLAS_STORE_BACKEND", "jsonl"),
 		SQLitePath:                 envOr("ATLAS_SQLITE_PATH", "data/state/atlas.db"),
 		ReplayDataPath:             envOr("ATLAS_REPLAY_DATA_PATH", "samples/replay/twse_stock_day_all_sample.csv"),
-		ReplaySessionDate:          envOr("ATLAS_REPLAY_SESSION_DATE", "2026-03-26"),
+		ReplaySessionDate:          envOr("ATLAS_REPLAY_SESSION_DATE", ""),
 		FubonAPIKey:                envOrKeychain("FUBON_API_KEY", ""),
 		FugleAPIKey:                envOrKeychain("FUGLE_API_KEY", ""),
 		FinMindAPIKey:              envOrKeychain("FINMIND_API_KEY", ""),

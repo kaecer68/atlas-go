@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/sim"
 )
 
 // LiveService provides live trading status and portfolio state operations.
@@ -96,10 +98,13 @@ func (s *LiveService) LoadLiveStatus() LiveStatusResponse {
 type PortfolioStateResponse struct {
 	SnapshotTime     time.Time          `json:"snapshot_time"`
 	Cash             float64            `json:"cash"`
+	StartingCash     float64            `json:"starting_cash,omitempty"`
 	PortfolioValue   float64            `json:"portfolio_value"`
+	RealizedPnL      float64            `json:"realized_pnl,omitempty"`
 	CumulativePnL    float64            `json:"cumulative_pnl"`
 	CumulativePnLPct float64            `json:"cumulative_pnl_pct"`
 	CurrentDrawdown  float64            `json:"current_drawdown"`
+	TradeCount       int                `json:"trade_count,omitempty"`
 	PositionsCount   int                `json:"positions_count"`
 	Positions        []PositionDTO      `json:"positions"`
 	EquityCurve      []EquityCurvePoint `json:"equity_curve"`
@@ -166,14 +171,22 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 	}
 
 	equityCurve := s.buildEquityCurve()
+	tradeCount := len(s.LoadTradeHistory())
+	startingCash := 0.0
+	if persistentState, err := sim.LoadPersistentState(s.LedgerDir); err == nil && persistentState != nil {
+		startingCash = persistentState.StartingCash
+	}
 
 	resp := PortfolioStateResponse{
 		SnapshotTime:     portfolio.LastUpdated,
 		Cash:             portfolio.Cash,
+		StartingCash:     startingCash,
 		PortfolioValue:   portfolio.Cash + totalMarketValue,
+		RealizedPnL:      portfolio.RealizedPnL,
 		CumulativePnL:    portfolio.RealizedPnL + portfolio.UnrealizedPnL,
 		CumulativePnLPct: 0,
 		CurrentDrawdown:  0,
+		TradeCount:       tradeCount,
 		PositionsCount:   len(positions),
 		Positions:        positions,
 		EquityCurve:      equityCurve,
@@ -183,6 +196,16 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 	}
 
 	return resp
+}
+
+func (s *LiveService) LoadTradeHistory() []domain.TradeRecord {
+	store := ledger.NewStore(s.LedgerDir)
+	trades, err := store.LoadAllSessionTrades()
+	if err != nil {
+		logging.Warn("liveservice", "load_trade_history_failed", "err", err.Error())
+		return nil
+	}
+	return trades
 }
 
 // buildEquityCurve constructs an equity curve from all session summaries.
