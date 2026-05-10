@@ -121,7 +121,7 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 	if merged.RecordedAt == 0 {
 		merged.RecordedAt = time.Now().Unix()
 	}
-	if len(errs) > 0 {
+	if len(errs) > 0 && len(errs) == len(c.providers) {
 		return merged, errors.Join(errs...)
 	}
 	return merged, nil
