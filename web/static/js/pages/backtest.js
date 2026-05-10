@@ -1,5 +1,5 @@
 // Backtest rendering module
-import { getJSON, formatDate, renderEmptyState } from '../shared/app-utils.js';
+import { getJSON, postJSON, notify, escapeHtml, formatDate, renderEmptyState } from '../shared/app-utils.js';
 
 export function initBacktestDates() {
   const today = new Date();
