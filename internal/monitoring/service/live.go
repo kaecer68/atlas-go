@@ -173,8 +173,10 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 	equityCurve := s.buildEquityCurve()
 	tradeCount := len(s.LoadTradeHistory())
 	startingCash := 0.0
+	realizedPnL := 0.0
 	if persistentState, err := sim.LoadPersistentState(s.LedgerDir); err == nil && persistentState != nil {
 		startingCash = persistentState.StartingCash
+		realizedPnL = persistentState.RealizedPnL
 	}
 
 	resp := PortfolioStateResponse{
@@ -182,8 +184,8 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 		Cash:             portfolio.Cash,
 		StartingCash:     startingCash,
 		PortfolioValue:   portfolio.Cash + totalMarketValue,
-		RealizedPnL:      portfolio.RealizedPnL,
-		CumulativePnL:    portfolio.RealizedPnL + portfolio.UnrealizedPnL,
+		RealizedPnL:      realizedPnL,
+		CumulativePnL:    realizedPnL + portfolio.UnrealizedPnL,
 		CumulativePnLPct: 0,
 		CurrentDrawdown:  0,
 		TradeCount:       tradeCount,
