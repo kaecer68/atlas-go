@@ -13,7 +13,7 @@ import { renderToolEvents } from './components/tool-events.js';
 import { fmtNTD } from './shared/utils.js';
 
 const pageLoadStatus = {};
-const APP_VERSION = '20260509';
+const APP_VERSION = '20260510';
 
 export function switchPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -180,7 +180,7 @@ async function loadAll() {
     if (m.dash.renderMacroRadar) m.dash.renderMacroRadar(macro, pipeline);
     if (m.dash.renderAgentObservatory) m.dash.renderAgentObservatory(agents, overlap, darwinianTrend);
     if (m.dash.renderUniverseOverlap) m.dash.renderUniverseOverlap(overlap);
-    if (m.dash.renderAIEvolution) m.dash.renderAIEvolution(inbox, phase3);
+    if (m.dash.renderAIEvolution) m.dash.renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend, agents, macro, stress);
 
     if (m.pipe.renderPipeline) m.pipe.renderPipeline(pipeline, false, '');
     if (m.pipe.renderDecisionChain) m.pipe.renderDecisionChain(pipeline, macro, agents, stress, events, chains, models, inbox, phase3, taxSnapshot, regimeHistory);
@@ -210,6 +210,8 @@ async function loadAll() {
     if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) showErrorBanner();
   } finally {
     if (loadingBar) loadingBar.classList.remove('active');
+    var refreshTime = document.getElementById('refreshTime');
+    if (refreshTime) refreshTime.textContent = new Date().toLocaleString('zh-TW');
   }
 }
 
@@ -368,8 +370,8 @@ function populateAgentSelect() {
 
 function initBacktestDates() {
   var today = new Date(), start = new Date(today);
-  start.setMonth(start.getMonth() - 1);
-  var s = document.getElementById('backtestStartDate'), e = document.getElementById('backtestEndDate');
+  start.setDate(start.getDate() - 5);
+  var s = document.getElementById('backtestStart'), e = document.getElementById('backtestEnd');
   if (s) s.value = start.toISOString().split('T')[0];
   if (e) e.value = today.toISOString().split('T')[0];
 }

@@ -352,6 +352,135 @@ func (s *PipelineService) loadForecastVsRealityItems(agentID string, limit int) 
 	return items, nil
 }
 
+type sessionData struct {
+	Items         []PipelineItemData
+	ScreenedItems []domain.ScreeningReject
+	Regime        domain.Regime
+	RecordedAt    time.Time
+	GuardOutcomes []domain.GuardOutcome
+	Status        PipelineLoadStatus
+	StatusMessage string
+}
+
+func (s *PipelineService) loadSessionPipelineData(sessionID, sessionsDir string, showAll bool, ds *replay.Dataset) (*sessionData, error) {
+	var summary *domain.SessionSummary
+	var guards []domain.GuardOutcome
+	var regime domain.Regime
+	var recordedAt time.Time
+
+	summaryPath := filepath.Join(sessionsDir, sessionID, "summary.json")
+	if summaryBytes, err := os.ReadFile(summaryPath); err == nil {
+		var s domain.SessionSummary
+		if err := json.Unmarshal(summaryBytes, &s); err == nil {
+			summary = &s
+			regime = s.Regime
+			recordedAt = s.RecordedAt
+			guards = make([]domain.GuardOutcome, 0, len(s.GuardOutcomes))
+			for _, g := range s.GuardOutcomes {
+				guards = append(guards, domain.GuardOutcome{
+					GuardID:     g.GuardID,
+					GuardSkill:  g.GuardSkill,
+					Severity:    g.Severity,
+					Passed:      g.Passed,
+					Reason:      g.Reason,
+					InputCount:  g.InputCount,
+					OutputCount: g.OutputCount,
+				})
+			}
+		}
+	}
+
+	status := PipelineStatusOK
+	statusMessage := ""
+	if summary == nil {
+		status = PipelineStatusDegraded
+		statusMessage = "控制層過濾記錄未載入（summary.json 缺失），推薦清單仍可用"
+	}
+
+	outcomesPath := filepath.Join(sessionsDir, sessionID, "recommendation_outcomes.jsonl")
+	items := make([]PipelineItemData, 0)
+	if data, err := os.ReadFile(outcomesPath); err == nil {
+		lines := strings.SplitSeq(strings.TrimSpace(string(data)), "\n")
+		for line := range lines {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			var outcome domain.RecommendationOutcome
+			if err := json.Unmarshal([]byte(line), &outcome); err != nil {
+				logging.Warn("pipeline_service", "corrupted_outcome_skipped", logging.Err(err))
+				continue
+			}
+			fr := outcome.ForwardReturn
+			price := outcome.Price
+			side := string(outcome.Side)
+			passedGuards := outcome.PassedGuards
+			if !passedGuards && !strings.Contains(line, `"PassedGuards"`) {
+				passedGuards = true
+			}
+			if ds != nil && !outcome.RecordedAt.IsZero() {
+				if fr == 0 {
+					if recalculated, ok := ds.ForwardReturn(outcome.Symbol, outcome.RecordedAt, 1); ok {
+						fr = recalculated
+					}
+				}
+				if price == 0 {
+					if bar, ok := ds.ByDate[outcome.RecordedAt.Format("2006-01-02")][outcome.Symbol]; ok {
+						price = bar.Close
+					}
+				}
+			}
+			if side == "" {
+				side = string(domain.SideBuy)
+			}
+			tp := outcome.TargetPrice
+			slp := outcome.StopLossPrice
+			if tp == 0 && slp == 0 && price > 0 {
+				tp, slp = fallbackPriceTargets(outcome.Skill, price)
+			}
+			if !showAll && !passedGuards {
+				continue
+			}
+			tags := computePipelineTags(ds, outcome.Symbol, outcome.RecordedAt)
+			items = append(items, PipelineItemData{
+				Symbol:              outcome.Symbol,
+				AgentID:             outcome.AgentID,
+				Skill:               outcome.Skill,
+				Layer:               string(outcome.Layer),
+				Side:                side,
+				Conviction:          outcome.Conviction,
+				TargetPrice:         tp,
+				StopLossPrice:       slp,
+				ForwardReturn:       fr,
+				Hit:                 fr > 0,
+				Reason:              outcome.Reason,
+				Price:               price,
+				PassedGuards:        passedGuards,
+				GuardReason:         outcome.GuardReason,
+				Tags:                tags,
+				RecordedAt:          outcome.RecordedAt,
+				FactorScores:        outcome.FactorScores,
+				ConvictionBreakdown: outcome.ConvictionBreakdown,
+			})
+		}
+	} else {
+		status = PipelineStatusMinimal
+		statusMessage = "本場次尚無推薦產出記錄"
+	}
+
+	store := s.store
+	screened, _ := store.LoadSessionScreeningRejects(sessionID)
+
+	return &sessionData{
+		Items:         items,
+		ScreenedItems: screened,
+		Regime:        regime,
+		RecordedAt:    recordedAt,
+		GuardOutcomes: guards,
+		Status:        status,
+		StatusMessage: statusMessage,
+	}, nil
+}
+
 // LoadRecommendationPipeline loads the recommendation pipeline for a session.
 func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll bool) (*RecommendationPipelineData, error) {
 	sessionsDir := filepath.Join(s.LedgerDir, "sessions")
@@ -413,45 +542,6 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 		}, nil
 	}
 
-	var summary *domain.SessionSummary
-	var guards []domain.GuardOutcome
-	var regime domain.Regime
-	var recordedAt time.Time
-
-	summaryPath := filepath.Join(sessionsDir, targetSession, "summary.json")
-	if summaryBytes, err := os.ReadFile(summaryPath); err == nil {
-		var s domain.SessionSummary
-		if err := json.Unmarshal(summaryBytes, &s); err == nil {
-			summary = &s
-			regime = s.Regime
-			recordedAt = s.RecordedAt
-			guards = make([]domain.GuardOutcome, 0, len(s.GuardOutcomes))
-			for _, g := range s.GuardOutcomes {
-				guards = append(guards, domain.GuardOutcome{
-					GuardID:     g.GuardID,
-					GuardSkill:  g.GuardSkill,
-					Severity:    g.Severity,
-					Passed:      g.Passed,
-					Reason:      g.Reason,
-					InputCount:  g.InputCount,
-					OutputCount: g.OutputCount,
-				})
-			}
-		} else {
-			logging.Warn("pipeline_service", "parse_summary_failed", logging.Err(err))
-		}
-	} else {
-		logging.Warn("pipeline_service", "read_summary_failed", logging.Err(err))
-	}
-
-	status := PipelineStatusOK
-	statusMessage := ""
-
-	if summary == nil {
-		status = PipelineStatusDegraded
-		statusMessage = "控制層過濾記錄未載入（summary.json 缺失），推薦清單仍可用"
-	}
-
 	var ds *replay.Dataset
 	cfg := config.Load()
 	replayPath := cfg.ReplayDataPath
@@ -469,95 +559,50 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 		}
 	}
 
-	outcomesPath := filepath.Join(sessionsDir, targetSession, "recommendation_outcomes.jsonl")
-	items := make([]PipelineItemData, 0)
-	if data, err := os.ReadFile(outcomesPath); err == nil {
-		lines := strings.SplitSeq(strings.TrimSpace(string(data)), "\n")
-		for line := range lines {
-			if strings.TrimSpace(line) == "" {
-				continue
-			}
-			var outcome domain.RecommendationOutcome
-			if err := json.Unmarshal([]byte(line), &outcome); err != nil {
-				logging.Warn("pipeline_service", "corrupted_outcome_skipped", logging.Err(err))
-				continue
-			}
-			fr := outcome.ForwardReturn
-			price := outcome.Price
-			side := string(outcome.Side)
-			passedGuards := outcome.PassedGuards
-			// Legacy sessions (generated before PassedGuards field existed)
-			// should default to true to preserve backward-compatible display.
-			if !passedGuards && !strings.Contains(line, `"PassedGuards"`) {
-				passedGuards = true
-			}
-			if ds != nil && !outcome.RecordedAt.IsZero() {
-				if fr == 0 {
-					if recalculated, ok := ds.ForwardReturn(outcome.Symbol, outcome.RecordedAt, 1); ok {
-						fr = recalculated
-					}
-				}
-				if price == 0 {
-					if bar, ok := ds.ByDate[outcome.RecordedAt.Format("2006-01-02")][outcome.Symbol]; ok {
-						price = bar.Close
-					}
-				}
-			}
-			if side == "" {
-				side = string(domain.SideBuy)
-			}
-			tp := outcome.TargetPrice
-			slp := outcome.StopLossPrice
-			if tp == 0 && slp == 0 && price > 0 {
-				tp, slp = fallbackPriceTargets(outcome.Skill, price)
-			}
-			if !showAll && !passedGuards {
-				continue
-			}
-			tags := computePipelineTags(ds, outcome.Symbol, outcome.RecordedAt)
-			items = append(items, PipelineItemData{
-				Symbol:              outcome.Symbol,
-				AgentID:             outcome.AgentID,
-				Skill:               outcome.Skill,
-				Layer:               string(outcome.Layer),
-				Side:                side,
-				Conviction:          outcome.Conviction,
-				TargetPrice:         tp,
-				StopLossPrice:       slp,
-				ForwardReturn:       fr,
-				Hit:                 fr > 0,
-				Reason:              outcome.Reason,
-				Price:               price,
-				PassedGuards:        passedGuards,
-				GuardReason:         outcome.GuardReason,
-				Tags:                tags,
-				RecordedAt:          outcome.RecordedAt,
-				FactorScores:        outcome.FactorScores,
-				ConvictionBreakdown: outcome.ConvictionBreakdown,
-			})
-		}
-	} else {
-		status = PipelineStatusMinimal
-		statusMessage = "本場次尚無推薦產出記錄"
+	sd, err := s.loadSessionPipelineData(targetSession, sessionsDir, showAll, ds)
+	if err != nil {
+		return nil, err
 	}
 
-	store := s.store
-	screened, err := store.LoadSessionScreeningRejects(targetSession)
-	if err != nil {
-		// Log but don't fail
-		screened = nil
+	var fallbackMsg string
+	if len(sd.Items) == 0 && sessionID == "" {
+		for _, dir := range sessionDirs {
+			if dir == targetSession {
+				continue
+			}
+			fallbackPath := filepath.Join(sessionsDir, dir, "recommendation_outcomes.jsonl")
+			if info, err := os.Stat(fallbackPath); err == nil && info.Size() > 0 {
+				fallbackData, err := s.loadSessionPipelineData(dir, sessionsDir, showAll, ds)
+				if err == nil && len(fallbackData.Items) > 0 {
+					targetSession = dir
+					sd = fallbackData
+					fallbackMsg = fmt.Sprintf("最新場次 %s 尚無數據，已自動切換至 %s", sessionDirs[0], dir)
+					logging.Info("pipeline_service", "auto_fallback_session", "from", sessionDirs[0], "to", dir, "items", len(sd.Items))
+					break
+				}
+			}
+		}
+	}
+
+	if len(sd.Items) == 0 && fallbackMsg == "" {
+		sd.Status = PipelineStatusMinimal
+		if sd.StatusMessage == "" {
+			sd.StatusMessage = "本場次尚無推薦產出記錄"
+		}
 	}
 
 	return &RecommendationPipelineData{
 		SessionID:         targetSession,
-		Regime:            regime,
-		Items:             items,
-		GuardOutcomes:     guards,
-		ScreenedItems:     screened,
-		RecordedAt:        recordedAt,
-		Status:            status,
-		StatusMessage:     statusMessage,
+		Regime:            sd.Regime,
+		Items:             sd.Items,
+		GuardOutcomes:     sd.GuardOutcomes,
+		ScreenedItems:     sd.ScreenedItems,
+		RecordedAt:        sd.RecordedAt,
+		Status:            sd.Status,
+		StatusMessage:     sd.StatusMessage,
 		AvailableSessions: availableSessions,
+		IsFallbackSession: fallbackMsg != "",
+		FallbackMessage:   fallbackMsg,
 	}, nil
 }
 
@@ -572,6 +617,8 @@ type RecommendationPipelineData struct {
 	Status            PipelineLoadStatus
 	StatusMessage     string
 	AvailableSessions []string
+	IsFallbackSession bool
+	FallbackMessage   string
 }
 
 // PipelineItemData represents a single recommendation in the pipeline.
@@ -623,7 +670,8 @@ func (s *PipelineService) LoadSessions() ([]SessionMeta, error) {
 		if bytes, err := os.ReadFile(summaryPath); err == nil {
 			var summary domain.SessionSummary
 			if err := json.Unmarshal(bytes, &summary); err == nil {
-				meta.SessionID = summary.SessionID
+				// SessionID is authoritative from directory name only.
+				// summary.json may contain stale or mismatched format data.
 				if !summary.RecordedAt.IsZero() {
 					meta.RecordedAt = summary.RecordedAt
 				}

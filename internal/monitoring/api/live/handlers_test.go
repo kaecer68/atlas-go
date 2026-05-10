@@ -175,11 +175,11 @@ func TestHandlePortfolioState_EmptySessions(t *testing.T) {
 
 func TestHandlePortfolioState_JSONSerialization(t *testing.T) {
 	resp := service.PortfolioStateResponse{
-		SnapshotTime:     time.Now(),
-		Cash:             500000.0,
-		PortfolioValue:   1500000.0,
-		CumulativePnL:    50000.0,
-		PositionsCount:   5,
+		SnapshotTime:   time.Now(),
+		Cash:           500000.0,
+		PortfolioValue: 1500000.0,
+		CumulativePnL:  50000.0,
+		PositionsCount: 5,
 		EquityCurve: []service.EquityCurvePoint{
 			{
 				Label:         "session-20260413-daily",

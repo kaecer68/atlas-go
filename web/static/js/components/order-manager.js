@@ -7,6 +7,8 @@ let currentFilter = { status: 'all', symbol: '', startDate: '', endDate: '' };
 let totalPages = 1;
 
 export function renderOrderManager(container) {
+  if (typeof container === 'string') container = document.getElementById(container);
+  if (!container) { console.error('order-manager: container not found'); return; }
   container.innerHTML = `
     <div class="order-manager">
       <div class="om-header">

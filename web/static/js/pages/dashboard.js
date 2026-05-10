@@ -316,15 +316,20 @@ export function toggleBreakdown(key) {
   const row = document.getElementById('breakdown-' + key);
   const btn = document.getElementById('btn-' + key);
   if (!row || !btn) return;
-  if (row.style.display === 'none') {
+
+  const isHidden = row.style.display === 'none' || row.classList.contains('hidden') || getComputedStyle(row).display === 'none';
+
+  if (isHidden) {
     row.style.display = 'table-row';
+    row.classList.remove('hidden');
     btn.textContent = '收起';
   } else {
     row.style.display = 'none';
     btn.textContent = '展開';
   }
 }
-export function renderAIEvolution(inbox, phase3) {
+if (typeof window !== 'undefined') window.toggleBreakdown = toggleBreakdown;
+export function renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend, agents, macro, stress) {
   const el = document.getElementById('aiEvolution');
   el.classList.remove('loading');
   const items = (inbox && inbox.items) ? inbox.items : [];
@@ -334,28 +339,66 @@ export function renderAIEvolution(inbox, phase3) {
   const prismCompleted = phase3 && phase3.prism_completed_results != null ? phase3.prism_completed_results : (phase3 && phase3.PRISMCompletedResults != null ? phase3.PRISMCompletedResults : '-');
   const swarmRunning = phase3 && (phase3.swarm_running || phase3.SwarmRunning) ? '運作中' : '待機';
 
+  const agentList = (darwinianStatus && darwinianStatus.agent_list) ? darwinianStatus.agent_list : [];
+  const topAgent = agentList.length > 0 ? agentList.reduce((a, b) => (b.weight || 0) > (a.weight || 0) ? b : a) : null;
+  const avgWeight = agentList.length > 0 ? (agentList.reduce((s, a) => s + (a.weight || 0), 0) / agentList.length).toFixed(2) : '-';
+
+  const regime = (macro && macro.regime) || 'NEUTRAL';
+  const regimeLabel = regime === 'RISK_ON' ? '多頭' : (regime === 'RISK_OFF' ? '空頭' : '盤整');
+  const regimeColor = regime === 'RISK_ON' ? 'var(--up)' : (regime === 'RISK_OFF' ? 'var(--down)' : 'var(--warn)');
+
+  const stressVal = (stress && typeof stress.score === 'number') ? stress.score : null;
+  const stressLabel = stressVal >= 70 ? '危機' : (stressVal >= 50 ? '高壓' : (stressVal >= 30 ? '警戒' : '低壓'));
+  const stressColor = stressVal >= 70 ? 'var(--down)' : (stressVal >= 50 ? 'var(--warn)' : 'var(--up)');
+
+  const scorecards = (agents && agents.weakest_agent_scorecards) ? agents.weakest_agent_scorecards : [];
+  const healthyCount = scorecards.filter(a => (a.sharpe || 0) > 0.5 && (a.hit_rate || 0) > 0.3).length;
+  const healthPct = scorecards.length > 0 ? Math.round(healthyCount / scorecards.length * 100) : 0;
+  const healthColor = healthPct > 70 ? 'var(--up)' : (healthPct > 40 ? 'var(--warn)' : 'var(--down)');
+
   el.innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
-      <div class="panel-card">
-    <div class="text-sm text-muted mb-xs">待評判實驗</div>
-    <div class="text-xl font-bold">${pending.length}</div>
-    <div class="text-xs text-muted mt-xs">共 ${items.length} 個歷史實驗</div>
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:12px">
+      <div class="panel-card" style="text-align:center">
+        <div class="text-sm text-muted mb-xs">市場狀態</div>
+        <div class="text-xl font-bold" style="color:${regimeColor}">${regimeLabel}</div>
+        <div class="text-xs text-muted mt-xs">Regime 訊號</div>
       </div>
-      <div class="panel-card">
-    <div class="text-sm text-muted mb-xs">PRISM 已完成訓練</div>
-    <div class="text-xl font-bold">${prismCompleted}</div>
-    <div class="text-xs text-muted mt-xs">5 體制佇列</div>
+      <div class="panel-card" style="text-align:center">
+        <div class="text-sm text-muted mb-xs">外資出逃指數</div>
+        <div class="text-xl font-bold" style="color:${stressColor}">${stressVal != null ? stressVal.toFixed(1) : '-'}</div>
+        <div class="text-xs text-muted mt-xs">${stressVal != null ? stressLabel : '無資料'}</div>
       </div>
-      <div class="panel-card">
-    <div class="text-sm text-muted mb-xs">Swarm 狀態</div>
-    <div class="text-xl font-bold">${swarmRunning}</div>
-    <div class="text-xs text-muted mt-xs">MiroFish 共識模擬</div>
+      <div class="panel-card" style="text-align:center">
+        <div class="text-sm text-muted mb-xs">策略健康度</div>
+        <div class="text-xl font-bold" style="color:${healthColor}">${healthPct}%</div>
+        <div class="text-xs text-muted mt-xs">${healthyCount}/${scorecards.length} Agent 達標</div>
+      </div>
+      <div class="panel-card" style="text-align:center">
+        <div class="text-sm text-muted mb-xs">Darwinian 權重</div>
+        <div class="text-xl font-bold">${avgWeight}</div>
+        <div class="text-xs text-muted mt-xs">平均權重</div>
+      </div>
+      <div class="panel-card" style="text-align:center">
+        <div class="text-sm text-muted mb-xs">待評判實驗</div>
+        <div class="text-xl font-bold" style="color:${pending.length > 0 ? 'var(--warn)' : 'var(--muted)'}">${pending.length}</div>
+        <div class="text-xs text-muted mt-xs">共 ${items.length} 個歷史實驗</div>
+      </div>
+      <div class="panel-card" style="text-align:center">
+        <div class="text-sm text-muted mb-xs">Swarm 狀態</div>
+        <div class="text-xl font-bold">${swarmRunning}</div>
+        <div class="text-xs text-muted mt-xs">MiroFish 共識模擬</div>
       </div>
     </div>
+    ${topAgent ? `
+    <div style="display:flex;gap:12px;align-items:center;padding:8px 12px;background:var(--bg);border-radius:8px;margin-bottom:12px;border-left:3px solid var(--up)">
+      <span style="font-size:12px;color:var(--muted)">🏆 最強 Agent</span>
+      <span style="font-size:13px;font-weight:700">${escapeHtml(agentName(topAgent.agent_id))}</span>
+      <span style="font-size:11px;color:var(--muted)">權重 ${topAgent.weight.toFixed(2)} · 命中率 ${((topAgent.hit_rate || 0) * 100).toFixed(0)}%</span>
+    </div>` : ''}
     ${latest.length ? `
-  <div class="mt-sm">
-  <div class="text-sm font-bold mb-xs">最近實驗</div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <div>
+      <div class="text-sm font-bold mb-xs">最近實驗</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${latest.map(it => `<span class="badge info">${it.experiment_id} · ${it.mutation_type || it.target_agent_id || '實驗'}</span>`).join(' ')}
       </div>
     </div>` : ''}

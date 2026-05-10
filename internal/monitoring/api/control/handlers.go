@@ -38,6 +38,9 @@ func decodeInterventionBody(r *http.Request) (agentID, reason, operator string, 
 }
 
 func (h *Handlers) recordIntervention(interventionType, targetID, reason, operator string) (int, any) {
+	if h.Svc == nil {
+		return http.StatusServiceUnavailable, map[string]string{"error": "control service unavailable"}
+	}
 	intervention := h.Svc.CreateIntervention(interventionType, targetID, reason, operator, 0)
 	if err := h.Svc.RecordIntervention(intervention); err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("record intervention: %v", err)}
@@ -130,6 +133,9 @@ func (h *Handlers) HandleRejectRecommendation(r *http.Request) (int, any) {
 }
 
 func (h *Handlers) HandleAgentHealth(r *http.Request) (int, any) {
+	if h.Svc == nil {
+		return http.StatusServiceUnavailable, map[string]string{"error": "control service unavailable"}
+	}
 	agents, mutedCount, err := h.Svc.GetAgentHealth()
 	if err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("get agent health: %v", err)}
@@ -142,6 +148,9 @@ func (h *Handlers) HandleAgentHealth(r *http.Request) (int, any) {
 }
 
 func (h *Handlers) HandleAuditLog(r *http.Request) (int, any) {
+	if h.Svc == nil {
+		return http.StatusServiceUnavailable, map[string]string{"error": "control service unavailable"}
+	}
 	interventions, err := h.Svc.LoadInterventions()
 	if err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("load interventions: %v", err)}
@@ -150,6 +159,9 @@ func (h *Handlers) HandleAuditLog(r *http.Request) (int, any) {
 }
 
 func (h *Handlers) HandleActiveOverrides(r *http.Request) (int, any) {
+	if h.Svc == nil {
+		return http.StatusServiceUnavailable, map[string]string{"error": "control service unavailable"}
+	}
 	pausedAgents, bannedSectors, modelWeights := h.Svc.GetActiveOverrides()
 	return http.StatusOK, map[string]any{
 		"paused_agents":  pausedAgents,
