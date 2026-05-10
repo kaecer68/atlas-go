@@ -44,6 +44,7 @@ func main() {
 		marketdata.NewYahooFinanceMacroProvider(),
 		marketdata.NewTWSECapitalFlowProvider(capitalFlowDir),
 		marketdata.NewExportStatisticsProvider(exportDir),
+		marketdata.NewTWSEMarginBalanceProvider(),
 	)
 
 	ingestor := narrative.NewMacroIngestor(provider, snapshotDir)
@@ -53,12 +54,12 @@ func main() {
 	log.Println("[MacroIngest] Starting macro data ingestion...")
 	events, snap, err := ingestor.Ingest(ctx)
 	if err != nil {
-		monitoring.RecordChannelFetchWithPool(stateDir, "us_yahoo", "error", err.Error(), pool)
-		monitoring.RecordChannelFetchWithPool(stateDir, "jpy_yahoo", "error", err.Error(), pool)
-		log.Fatalf("ingest failed: %v", err)
+		log.Printf("[MacroIngest] Partial failures during ingest: %v", err)
+		monitoring.RecordChannelFetchWithPool(stateDir, "us_yahoo", "partial", err.Error(), pool)
+		monitoring.RecordChannelFetchWithPool(stateDir, "jpy_yahoo", "partial", err.Error(), pool)
+	} else {
+		monitoring.RecordChannelFetchWithPool(stateDir, "us_yahoo", "ok", "", pool)
+		monitoring.RecordChannelFetchWithPool(stateDir, "jpy_yahoo", "ok", "", pool)
 	}
-
-	monitoring.RecordChannelFetchWithPool(stateDir, "us_yahoo", "ok", "", pool)
-	monitoring.RecordChannelFetchWithPool(stateDir, "jpy_yahoo", "ok", "", pool)
 	log.Printf("[MacroIngest] Ingested %d events, snapshot recorded_at=%d", len(events), snap.RecordedAt)
 }

@@ -99,29 +99,66 @@ func (h *Handlers) HandleCapitalPhase(r *http.Request) (int, any) {
 }
 
 type RetailSentimentResponse struct {
-	Score          float64 `json:"score"`
-	ChangePct      float64 `json:"change_pct"`
-	Interpretation string  `json:"interpretation"`
+	SentimentScore   float64 `json:"sentiment_score"`
+	MarginChangePct  float64 `json:"margin_change_pct"`
+	MarginBalance    float64 `json:"margin_balance"`
+	DayTradingRatio  float64 `json:"day_trading_ratio"`
+	MarginPercentile float64 `json:"margin_percentile"`
+	ExtremeReading   string  `json:"extreme_reading"`
+	Score            float64 `json:"score"`
+	ChangePct        float64 `json:"change_pct"`
+	Interpretation   string  `json:"interpretation"`
+}
+
+func extremeReadingFromScore(score float64) string {
+	switch {
+	case score >= 0.5:
+		return "frenzy"
+	case score <= -0.5:
+		return "fear"
+	default:
+		return "neutral"
+	}
 }
 
 func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 	snap, err := loadLatestMacroSnapshot(h.Svc.WorkDir)
 	if err != nil {
 		return http.StatusOK, RetailSentimentResponse{
-			Score:          0,
-			ChangePct:      0,
-			Interpretation: "no macro snapshot available",
+			SentimentScore:   0,
+			MarginChangePct:  0,
+			MarginBalance:    0,
+			DayTradingRatio:  0,
+			MarginPercentile: 0,
+			ExtremeReading:   "neutral",
+			Score:            0,
+			ChangePct:        0,
+			Interpretation:   "no macro snapshot available",
 		}
 	}
 
 	fb := portfolio.NewFactorBridge()
 	input := fb.Convert(snap)
 
+	marginPercentile := calculateMarginPercentile(h.Svc.WorkDir, snap.RetailMarginBalance.Value)
+
+	dayTradingRatio := 0.0
+	provider := marketdata.NewDayTradingProvider()
+	if stats, err := provider.FetchLatest(r.Context()); err == nil {
+		dayTradingRatio = stats.VolumeRatio
+	}
+
 	interpretation := interpretRetailSentiment(input.RetailSentimentScore)
 	return http.StatusOK, RetailSentimentResponse{
-		Score:          input.RetailSentimentScore,
-		ChangePct:      snap.RetailMarginBalance.ChangePct,
-		Interpretation: interpretation,
+		SentimentScore:   input.RetailSentimentScore,
+		MarginChangePct:  snap.RetailMarginBalance.ChangePct / 100,
+		MarginBalance:    snap.RetailMarginBalance.Value,
+		DayTradingRatio:  dayTradingRatio,
+		MarginPercentile: marginPercentile,
+		ExtremeReading:   extremeReadingFromScore(input.RetailSentimentScore),
+		Score:            input.RetailSentimentScore,
+		ChangePct:        snap.RetailMarginBalance.ChangePct,
+		Interpretation:   interpretation,
 	}
 }
 
@@ -136,6 +173,46 @@ func loadLatestMacroSnapshot(workDir string) (marketdata.MacroDataSnapshot, erro
 		return marketdata.MacroDataSnapshot{}, err
 	}
 	return snap, nil
+}
+
+func calculateMarginPercentile(workDir string, currentValue float64) float64 {
+	if currentValue <= 0 {
+		return 0
+	}
+
+	pattern := filepath.Join(workDir, "data/state/macro", "*.json")
+	matches, err := filepath.Glob(pattern)
+	if err != nil || len(matches) == 0 {
+		return 0
+	}
+
+	var values []float64
+	for _, path := range matches {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var snap marketdata.MacroDataSnapshot
+		if err := json.Unmarshal(data, &snap); err != nil {
+			continue
+		}
+		if snap.RetailMarginBalance.Symbol != "" && snap.RetailMarginBalance.Value > 0 {
+			values = append(values, snap.RetailMarginBalance.Value)
+		}
+	}
+
+	if len(values) < 2 {
+		return 0.5
+	}
+
+	lessThan := 0
+	for _, v := range values {
+		if v < currentValue {
+			lessThan++
+		}
+	}
+
+	return float64(lessThan) / float64(len(values))
 }
 
 func interpretRetailSentiment(score float64) string {

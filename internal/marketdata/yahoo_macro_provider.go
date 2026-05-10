@@ -169,7 +169,8 @@ type yahooChartResponse struct {
 	Chart struct {
 		Result []struct {
 			Meta struct {
-				RegularMarketTime int64 `json:"regularMarketTime"`
+				RegularMarketTime  int64   `json:"regularMarketTime"`
+				RegularMarketPrice float64 `json:"regularMarketPrice"`
 			} `json:"meta"`
 			Indicators struct {
 				Quote []struct {
