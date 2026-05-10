@@ -102,7 +102,7 @@ func (t *TWSEMarginBalanceProvider) fetchDate(ctx context.Context, dateStr strin
 
 	balance := float64(parseTWSEInt(valueRow[5])) / 1e5
 	prevBalance := float64(parseTWSEInt(valueRow[4])) / 1e5
-	
+
 	changePct := 0.0
 	if prevBalance > 0 {
 		changePct = (balance - prevBalance) / prevBalance * 100
@@ -112,9 +112,9 @@ func (t *TWSEMarginBalanceProvider) fetchDate(ctx context.Context, dateStr strin
 }
 
 type twseMarginResponse struct {
-	Stat   string                `json:"stat"`
-	Date   string                `json:"date"`
-	Tables []twseMarginTable     `json:"tables"`
+	Stat   string            `json:"stat"`
+	Date   string            `json:"date"`
+	Tables []twseMarginTable `json:"tables"`
 }
 
 type twseMarginTable struct {

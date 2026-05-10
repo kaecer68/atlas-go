@@ -40,24 +40,24 @@ func (t *TAIEXReturnCalculator) fetchPrice(ctx context.Context) (float64, error)
 	url := "https://query1.finance.yahoo.com/v8/finance/chart/^TWII?interval=1d&range=1d"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 
 	resp, err := t.client.Do(req)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("http request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("read body: %w", err)
 	}
 
 	var result taiexChartResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("unmarshal response: %w", err)
 	}
 
 	if len(result.Chart.Result) == 0 {
