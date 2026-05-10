@@ -133,6 +133,14 @@ export const FIELD = {
     daily_pnl: 'daily_pnl',
     fallback_events: 'fallback_events',
   },
+  DividendRecord: {
+    symbol: 'symbol',
+    year: 'year',
+    cash_dividend: 'cash_dividend',
+    stock_dividend: 'stock_dividend',
+    ex_dividend_date: 'ex_dividend_date',
+    payment_date: 'payment_date',
+  },
   ExecutionPolicy: {
     conviction_floor: 'conviction_floor',
     require_cro_pass: 'require_cro_pass',

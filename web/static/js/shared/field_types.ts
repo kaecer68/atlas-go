@@ -148,6 +148,15 @@ export interface DayResult {
   fallback_events?: string[];
 }
 
+export interface DividendRecord {
+  symbol: string;
+  year: number;
+  cash_dividend: number;
+  stock_dividend: number;
+  ex_dividend_date: string;
+  payment_date: string;
+}
+
 export interface ExecutionPolicy {
   conviction_floor: number;
   require_cro_pass: boolean;
