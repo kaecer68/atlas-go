@@ -545,18 +545,13 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 	var ds *replay.Dataset
 	cfg := config.Load()
 	replayPath := cfg.ReplayDataPath
-	if replayPath == "samples/replay/twse_stock_day_all_sample.csv" {
-		replayPath = "data/replay/tw_extended_90days.csv"
+	if !filepath.IsAbs(replayPath) {
+		replayPath = filepath.Join(s.WorkDir, replayPath)
 	}
-	if replayPath != "" {
-		if !filepath.IsAbs(replayPath) {
-			replayPath = filepath.Join(s.WorkDir, replayPath)
-		}
-		if dsTmp, err := replay.LoadTWSEOpenDataCSV(replayPath); err == nil {
-			ds = dsTmp
-		} else {
-			logging.Warn("pipeline_service", "load_replay_csv_failed", logging.Err(err))
-		}
+	if dsTmp, err := replay.LoadTWSEOpenDataCSV(replayPath); err == nil {
+		ds = dsTmp
+	} else {
+		logging.Warn("pipeline_service", "load_replay_csv_failed", logging.Err(err))
 	}
 
 	sd, err := s.loadSessionPipelineData(targetSession, sessionsDir, showAll, ds)
