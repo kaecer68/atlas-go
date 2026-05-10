@@ -32,16 +32,39 @@ type structField struct {
 }
 
 func main() {
-	domainDir := "internal/domain"
-	outJS := "web/static/js/shared/field_names.js"
-	outTS := "web/static/js/shared/field_types.ts"
-	outDTS := "web/static/js/shared/field_types.d.ts"
+	domainDir := findDomainDir()
+	rootDir := filepath.Dir(domainDir)
+	if filepath.Base(domainDir) == "domain" {
+		rootDir = filepath.Dir(rootDir)
+	}
+	outJS := filepath.Join(rootDir, "web/static/js/shared/field_names.js")
+	outTS := filepath.Join(rootDir, "web/static/js/shared/field_types.ts")
+	outDTS := filepath.Join(rootDir, "web/static/js/shared/field_types.d.ts")
 
 	structs := parseStructs(domainDir)
 
 	writeFieldNames(structs, outJS)
 	writeTypeScriptInterfaces(structs, outTS, false)
 	writeTypeScriptInterfaces(structs, outDTS, true)
+}
+
+func findDomainDir() string {
+	if _, err := os.Stat("internal/domain"); err == nil {
+		return "internal/domain"
+	}
+	cwd, _ := os.Getwd()
+	for {
+		candidate := filepath.Join(cwd, "internal", "domain")
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+		parent := filepath.Dir(cwd)
+		if parent == cwd {
+			break
+		}
+		cwd = parent
+	}
+	return "internal/domain"
 }
 
 func parseStructs(domainDir string) map[string][]structField {
