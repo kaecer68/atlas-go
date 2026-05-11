@@ -2,6 +2,28 @@ import { eventName, stressLabel, regionName, sectorName, templateName, capitalFl
 import { renderEmptyState } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
 
+let templateAccordionState = { openTemplateId: null };
+
+function toggleTemplateAccordion(idx) {
+  const targetRow = document.getElementById('tmpl-rationale-' + idx);
+  const targetBtn = document.getElementById('tmpl-btn-' + idx);
+  if (!targetRow) return;
+
+  const wasOpen = targetRow.style.display !== 'none';
+
+  document.querySelectorAll('[id^="tmpl-rationale-"]').forEach(function(row) { row.style.display = 'none'; });
+  document.querySelectorAll('[id^="tmpl-btn-"]').forEach(function(btn) { if (btn) btn.textContent = '展開 ▼'; });
+
+  if (!wasOpen) {
+    targetRow.style.display = 'table-row';
+    targetBtn.textContent = '收起 ▲';
+  }
+
+  templateAccordionState.openTemplateId = wasOpen ? null : 'tmpl-rationale-' + idx;
+}
+
+window.toggleTemplateAccordion = toggleTemplateAccordion;
+
 export function renderLiveNarrativeStrip(events, stress, models, chains) {
   const el = document.getElementById('liveNarrativeStrip');
   if (!el) return;
@@ -236,18 +258,20 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     if (!list.length) { chainsEl.innerHTML = renderEmptyState('目前無匹配的因果鏈', ''); }
     else {
       chainsEl.innerHTML = list.map(c => `
-        <div style="margin:10px 0">
-          <div style="font-weight:700;margin-bottom:4px">${escapeHtml(templateName(c.template_id))} <span class="text-muted text-sm">分數 ${(c.score || 0).toFixed(3)}</span></div>
+        <div style="margin:12px 0;padding:12px;background:var(--panel-l2);border-radius:10px;border:1px solid var(--border)">
+          <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:var(--text)">${escapeHtml(templateName(c.template_id))}</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:12px">匹配分數 <span style="color:var(--accent);font-weight:600">${(c.score || 0).toFixed(3)}</span></div>
           ${(c.steps || []).map((s, i) => {
-            const impClass = s.impact > 0 ? 'up' : 'down';
-            const affected = (s.affected || []).map(a => `<span style="display:inline-block;font-size:11px;padding:2px 8px;margin:2px 4px 2px 0;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--border)">${escapeHtml(sectorName(a) || a)}</span>`).join('');
-            return `<div class="py-sm border-b-dashed">
-              <div class="flex-center-gap-sm">
-                <div class="layer-num">${i+1}</div>
-                <div style="flex:1;font-size:12px">${escapeHtml(s.description)}</div>
-                <div class="${impClass}" style="font-size:11px;padding:2px 8px;border-radius:999px;background:#0d1015;flex-shrink:0">影響力 ${s.impact}</div>
+            const impClass = s.impact > 0 ? 'positive' : 'negative';
+            const impLabel = s.impact > 0 ? '+' + s.impact : s.impact;
+            const affected = (s.affected || []).map(a => `<span class="sector-tag">${escapeHtml(sectorName(a) || a)}</span>`).join('');
+            return `<div class="chain-step">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="chain-step-num">${i+1}</div>
+                <div style="flex:1;font-size:12px;line-height:1.6;color:var(--text)">${escapeHtml(s.description)}</div>
+                <div class="chain-impact ${impClass}">${impLabel}</div>
               </div>
-              ${affected ? `<div style="margin-top:6px;padding-left:30px">${affected}</div>` : ''}
+              ${affected ? `<div style="margin-top:8px;padding-left:32px">${affected}</div>` : ''}
             </div>`;
           }).join('')}
         </div>
@@ -308,11 +332,11 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
         <thead><tr><th>模板名稱</th><th>觸發主題</th><th>歷史命中率</th><th>資料來源</th><th class="w-90">操作</th></tr></thead>
         <tbody>
           ${items.map((t, idx) => `<tr>
-            <td>${escapeHtml(templateName(t.name))}</td>
-            <td>${escapeHtml(eventName(t.trigger_theme))}</td>
-            <td>${((t.historical_hit_rate || 0) * 100).toFixed(0)}%</td>
+            <td><span style="font-weight:600;color:var(--text)">${escapeHtml(templateName(t.name))}</span></td>
+            <td><span style="color:var(--accent)">${escapeHtml(eventName(t.trigger_theme))}</span></td>
+            <td><span style="font-weight:500;color:var(--up)">${((t.historical_hit_rate || 0) * 100).toFixed(0)}%</span></td>
             <td class="text-muted text-xs">${escapeHtml((t.source_references || []).join(', '))}</td>
-            <td><button onclick="document.getElementById('tmpl-rationale-${idx}').style.display=document.getElementById('tmpl-rationale-${idx}').style.display==='none'?'table-row':'none';this.textContent=this.textContent==='展開 ▼'?'收起 ▲':'展開 ▼'" style="font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer">展開 ▼</button></td>
+            <td><button id="tmpl-btn-${idx}" onclick="toggleTemplateAccordion(${idx})" style="font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer">展開 ▼</button></td>
           </tr>
           <tr id="tmpl-rationale-${idx}" class="hidden">
             <td colspan="5" style="background:var(--bg);padding:12px 14px;font-size:12px;line-height:1.8;color:var(--text);white-space:pre-wrap;border-left:3px solid var(--accent)">${escapeHtml(t.rationale || '暫無論述')}</td>
