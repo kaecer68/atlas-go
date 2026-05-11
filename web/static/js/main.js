@@ -415,20 +415,22 @@ function initEventStream() {
     const hintEl = document.getElementById('liveStatusHint');
     if (!hintEl) return;
     
+    const now = new Date().toLocaleTimeString('zh-TW');
+    
     if (status === 'connecting') {
-      hintEl.innerHTML = '🟡 <strong>連接中...</strong> 正在建立與伺服器的即時連線';
+      hintEl.innerHTML = `🟡 連接中... <span style="opacity:0.6">${now}</span>`;
       hintEl.style.color = 'var(--warn)';
     } else if (status === 'error') {
-      hintEl.innerHTML = '🔴 <strong>連線中斷</strong> 無法接收即時事件，請檢查網路或重新整理頁面';
+      hintEl.innerHTML = `🔴 連線中斷 <span style="opacity:0.6">${now}</span>`;
       hintEl.style.color = 'var(--down)';
     } else if (status === 'connected' && eventCount === 0) {
-      hintEl.innerHTML = '🟢 <strong>已連線</strong> 系統就緒中。執行回測時將自動顯示即時事件流';
+      hintEl.innerHTML = `🟢 已連線 · 等待事件 <span style="opacity:0.6">${now}</span>`;
       hintEl.style.color = 'var(--up)';
     } else if (status === 'connected') {
-      hintEl.innerHTML = `🟢 <strong>已連線</strong> 已接收 ${eventCount} 個事件`;
+      hintEl.innerHTML = `🟢 已連線 · ${eventCount} 個事件 <span style="opacity:0.6">${now}</span>`;
       hintEl.style.color = 'var(--up)';
     } else {
-      hintEl.innerHTML = '⚪ <strong>未連線</strong> 點擊「重試」或重新整理頁面';
+      hintEl.innerHTML = `⚪ 未連線 <span style="opacity:0.6">${now}</span>`;
       hintEl.style.color = 'var(--muted)';
     }
   }
