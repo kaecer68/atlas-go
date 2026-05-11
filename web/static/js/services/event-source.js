@@ -2,13 +2,14 @@ class EventSourceService {
   constructor() {
     this.es = null;
     this.listeners = new Map();
-    this.status = 'disconnected'; // connecting, connected, disconnected, error
+    this.status = 'disconnected';
     this.retryCount = 0;
     this.maxRetries = 10;
     this.baseBackoff = 1000;
     this.maxBackoff = 30000;
     this.retryTimer = null;
     this.statusListeners = new Set();
+    this.boundMessageHandler = this.handleMessage.bind(this);
   }
 
   connect(url = '/api/events/stream') {
@@ -27,15 +28,15 @@ class EventSourceService {
         console.log('[SSE] Connected to event stream');
       };
 
-      this.es.onmessage = (e) => {
-        try {
-          const data = JSON.parse(e.data);
-          this.emit(data.type || 'message', data);
-          this.emit('*', data); // catch-all
-        } catch (err) {
-          console.error('[SSE] Failed to parse message', err);
-        }
-      };
+      this.es.addEventListener('message', this.boundMessageHandler);
+      this.es.addEventListener('simulation.start', this.boundMessageHandler);
+      this.es.addEventListener('simulation.complete', this.boundMessageHandler);
+      this.es.addEventListener('market.regime.change', this.boundMessageHandler);
+      this.es.addEventListener('agent.recommendation', this.boundMessageHandler);
+      this.es.addEventListener('guard.outcome', this.boundMessageHandler);
+      this.es.addEventListener('portfolio.position.update', this.boundMessageHandler);
+      this.es.addEventListener('system.start', this.boundMessageHandler);
+      this.es.addEventListener('system.complete', this.boundMessageHandler);
 
       this.es.onerror = (err) => {
         this.es.close();
@@ -65,6 +66,19 @@ class EventSourceService {
       console.error('[SSE] Initialization failed', err);
       this.status = 'error';
       this.notifyStatusChange();
+    }
+  }
+
+  handleMessage(e) {
+    console.log('[SSE] Raw event received:', e.type, e.data);
+    try {
+      const data = JSON.parse(e.data);
+      const eventType = data.type || e.type || 'message';
+      console.log('[SSE] Parsed event:', eventType, data);
+      this.emit(eventType, data);
+      this.emit('*', data);
+    } catch (err) {
+      console.error('[SSE] Failed to parse message', err);
     }
   }
 

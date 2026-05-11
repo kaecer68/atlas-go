@@ -1192,10 +1192,10 @@ func defaultMarketdataParameters() MarketdataParameters {
 			Todo:      "Calibrate: test [20, 45] range",
 		},
 		FugleRateLimit: ParameterMetadata[int]{
-			Value:     10,
-			Rationale: "Fugle API burst limit; circuit breaker protected, use conservatively",
-			Source:    SourceHeuristic,
-			Todo:      "Verify: check Fugle subscription for actual rate limits",
+			Value:     60,
+			Rationale: "Fugle API free tier: 60 req/min. Developer: 600/min. Advanced: 2000/min",
+			Source:    SourceEmpirical,
+			Todo:      "Set FUGLE_TIER env var if using paid plan",
 		},
 		FugleAPITimeoutSec: ParameterMetadata[int]{
 			Value:     10,

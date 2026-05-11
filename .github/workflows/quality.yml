@@ -117,6 +117,14 @@ jobs:
           exit 1
         fi
 
+  gitnexus-stats:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Verify GitNexus stats in documentation
+      run: bash scripts/verify-gitnexus-stats.sh
+
   # Markdown link check — ensures internal documentation links are valid
   markdown-links:
     runs-on: ubuntu-latest

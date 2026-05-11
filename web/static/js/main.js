@@ -411,6 +411,30 @@ function initEventStream() {
     return null;
   }
 
+  function updateStatusHint(status, eventCount) {
+    const hintEl = document.getElementById('liveStatusHint');
+    if (!hintEl) return;
+    
+    const now = new Date().toLocaleTimeString('zh-TW');
+    
+    if (status === 'connecting') {
+      hintEl.innerHTML = `🟡 連接中... <span style="opacity:0.6">${now}</span>`;
+      hintEl.style.color = 'var(--warn)';
+    } else if (status === 'error') {
+      hintEl.innerHTML = `🔴 連線中斷 <span style="opacity:0.6">${now}</span>`;
+      hintEl.style.color = 'var(--down)';
+    } else if (status === 'connected' && eventCount === 0) {
+      hintEl.innerHTML = `🟢 已連線 · 等待事件 <span style="opacity:0.6">${now}</span>`;
+      hintEl.style.color = 'var(--up)';
+    } else if (status === 'connected') {
+      hintEl.innerHTML = `🟢 已連線 · ${eventCount} 個事件 <span style="opacity:0.6">${now}</span>`;
+      hintEl.style.color = 'var(--up)';
+    } else {
+      hintEl.innerHTML = `⚪ 未連線 <span style="opacity:0.6">${now}</span>`;
+      hintEl.style.color = 'var(--muted)';
+    }
+  }
+
   eventSource.on('*', (ev) => {
     recentEvents.unshift(ev);
     if (recentEvents.length > maxEvents) {
@@ -428,23 +452,27 @@ function initEventStream() {
       if (newState === 'complete') {
         setTimeout(() => {
           if (progressContainer) renderLiveProgress(progressContainer, 'idle');
-        }, 2000);
+        }, 3000);
       }
     }
+    
+    updateStatusHint('connected', recentEvents.length);
   });
 
   eventSource.onStatusChange((status) => {
     const pill = document.getElementById('refreshPill');
-    if (!pill) return;
-    
-    pill.classList.remove('sse-connected', 'sse-connecting', 'sse-error');
-    if (status === 'connected') {
-      pill.classList.add('sse-connected');
-    } else if (status === 'connecting') {
-      pill.classList.add('sse-connecting');
-    } else if (status === 'error' || status === 'disconnected') {
-      pill.classList.add('sse-error');
+    if (pill) {
+      pill.classList.remove('sse-connected', 'sse-connecting', 'sse-error');
+      if (status === 'connected') {
+        pill.classList.add('sse-connected');
+      } else if (status === 'connecting') {
+        pill.classList.add('sse-connecting');
+      } else if (status === 'error' || status === 'disconnected') {
+        pill.classList.add('sse-error');
+      }
     }
+    
+    updateStatusHint(status, recentEvents.length);
   });
 
   eventSource.connect();
@@ -453,6 +481,7 @@ function initEventStream() {
   const eventsContainer = document.getElementById('toolEvents');
   if (progressContainer) renderLiveProgress(progressContainer, 'idle');
   if (eventsContainer) renderToolEvents(eventsContainer, []);
+  updateStatusHint('connecting', 0);
 }
 
 if (typeof window !== "undefined") window.toggleTheme = function() {

@@ -1420,6 +1420,20 @@ body { display: flex; margin: 0; min-height: 100vh; }
   .progress-connector.completed {
     background: var(--color-success);
   }
+  .stage-hint {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: var(--panel-l3);
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--muted);
+    text-align: center;
+    border: 1px solid var(--border);
+  }
+  .stage-hint::before {
+    content: "💡 ";
+  }
 
   /* Tool Events Component */
   .tool-events-list {
@@ -1557,6 +1571,14 @@ body { display: flex; margin: 0; min-height: 100vh; }
         本頁呈現的是基於最新回測窗口計算出的<strong>系統狀態快照</strong>。這不是即時行情，而是 Atlas 在指定 replay 資料區間內，透過多層 AI Agent 模擬與風控後匯總出的「當前體制判斷」。
         下方的每一張卡片都是一個獨立指標；點擊卡片（除資料時間與基線版本外）可查看該指標的詳細解讀與操作建議。
       </details>
+
+      <div class="panel wide mt-sm" id="liveEventPanel">
+        <h2>📡 即時事件流</h2>
+        <div id="liveProgress"></div>
+        <div id="liveStatusHint" class="live-status-hint" style="margin: 8px 0; padding: 8px 12px; background: var(--panel-l2); border-radius: 6px; font-size: 12px; color: var(--muted);"></div>
+        <div id="toolEvents" class="mt-sm"></div>
+      </div>
+
       <div class="kpi-group-title">🌍 市場環境</div>
       <div class="kpi-grid" id="overviewMarket">
         <div class="kpi-card clickable" onclick="openKpiHelp('narrative')"><div class="kpi-label">敘事脈絡</div><div class="kpi-value">-</div></div>
@@ -1597,6 +1619,9 @@ body { display: flex; margin: 0; min-height: 100vh; }
                 <div class="cb-metric-value" id="cbCooldown">-</div>
             </div>
         </div>
+        <div class="cb-hint" style="margin-top: 8px; padding: 8px 12px; background: var(--panel-l2); border-radius: 6px; font-size: 12px; color: var(--muted); line-height: 1.5;">
+            💡 熔斷機制僅在實盤交易（Live Mode）時啟用。狀態顯示「正常」表示未觸發任何熔斷條件，此時無事件記錄為預期行為。
+        </div>
         <div class="cb-events-container mt-sm">
             <ul class="cb-event-list" id="cbEventList">
                 <li class="cb-event-item empty text-center">No events yet.</li>
@@ -1607,11 +1632,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
         </div>
       </div>
 
-<div class="panel wide mt-sm" id="liveEventPanel">
-        <h2>📡 即時事件流</h2>
-        <div id="liveProgress"></div>
-        <div id="toolEvents" class="mt-sm"></div>
-      </div>
+
     </div>
 
     <!-- 宏觀敘事 -->
