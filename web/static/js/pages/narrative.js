@@ -46,19 +46,22 @@ export function renderLiveNarrativeStrip(events, stress, models, chains) {
   const favoredBadges = favored.length ? favored.map(s => `<span class="badge ok">${sectorName(s)}</span>`).join(' ') : '<span class="badge" class="bg-muted text-muted">—</span>';
   const avoidedBadges = avoided.length ? avoided.map(s => `<span class="badge err">${sectorName(s)}</span>`).join(' ') : '<span class="badge" class="bg-muted text-muted">—</span>';
 
+  const stressHelpTitle = '外商出逃指數說明';
+  const stressHelpHtml = `<p><strong>外商出逃指數是什麼？</strong><br>這是追蹤<strong>外商及國際資金撤離台灣市場壓力</strong>的綜合指標，範圍 <strong>0 ~ 100</strong>。分數越高，代表外商賣超壓力越大，台股面臨資金流出風險。</p>
+<p><strong>燈號說明：</strong></p>
+<ul style='margin:6px 0;padding-left:18px;line-height:1.8'>
+  <li><span style='color:var(--up)'><strong>🟢 綠燈（0~29分）</strong></span>：外商流出壓力小。資金面寬鬆，台股上漲機率高。</li>
+  <li><span style='color:var(--warn)'><strong>🟡 黃燈（30~49分）</strong></span>：外商開始流出。可能伴隨台股波動增加，建議觀察。</li>
+  <li><span style='color:var(--warn)'><strong>🟠 橙燈（50~69分）</strong></span>：外商明顯出逃。台股下跌機率高，建議降低持股。</li>
+  <li><span style='color:var(--down)'><strong>🔴 紅燈（70~100分）</strong></span>：外商大量出逃。台股急跌風險高，建議空倉觀望。</li>
+</ul>
+<p><strong>計算組成：</strong><br>指數由六項因子加權構成，核心為外商淨流向（權重25%），輔以美元指數、美債殖利率、VIX、日圓、地緣政治風險。</p>
+<p><strong>重要提醒：</strong><br>此指數僅追蹤<strong>資金面壓力</strong>，不代表台股一定漲跌。外商流出時，內資或散戶可能承接，形成「價跌量縮」或「價穩量縮」等不同走勢。</p>`;
+
   el.innerHTML = `
     <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">
       <div class="metric">
-        <div class="label" style="cursor:pointer;text-decoration:underline dotted;color:var(--accent)" onclick="openInfoHelp('外資出逃指數說明', \`<p><strong>外資出逃指數是什麼？</strong><br>這是追蹤<strong>外資及國際資金撤離台灣市場壓力</strong>的綜合指標，範圍 <strong>0 ~ 100</strong>。分數越高，代表外資賣超壓力越大，台股面臨資金流出風險。</p>
-        <p><strong>燈號說明：</strong></p>
-        <ul style='margin:6px 0;padding-left:18px;line-height:1.8'>
-          <li><span style='color:var(--up)'><strong>🟢 綠燈（0~29分）</strong></span>：外資流出壓力小。資金面寬鬆，台股上漲機率高。</li>
-          <li><span style='color:var(--warn)'><strong>🟡 黃燈（30~49分）</strong></span>：外資開始流出。可能伴隨台股波動增加，建議觀察。</li>
-          <li><span style='color:var(--warn)'><strong>🟠 橙燈（50~69分）</strong></span>：外資明顯出逃。台股下跌機率高，建議降低持股。</li>
-          <li><span style='color:var(--down)'><strong>🔴 紅燈（70~100分）</strong></span>：外資大量出逃。台股急跌風險高，建議空倉觀望。</li>
-        </ul>
-        <p><strong>計算組成：</strong><br>指數由六項因子加權構成，核心為外資淨流向（權重25%），輔以美元指數、美債殖利率、VIX、日圓、地緣政治風險。</p>
-        <p><strong>重要提醒：</strong><br>此指數僅追蹤<strong>資金面壓力</strong>，不代表台股一定漲跌。外資流出時，內資或散戶可能承接，形成「價跌量縮」或「價穩量縮」等不同走勢。</p>\`)">外資出逃指數 <span class="text-xs">ℹ️</span></div>
+        <div class="label" style="cursor:pointer;text-decoration:underline dotted;color:var(--accent)" data-help="${stressHelpHtml.replace(/"/g, '&quot;')}" data-title="${stressHelpTitle}">外商出逃指數 <span class="text-xs">ℹ️</span></div>
         <div class="value" style="color:${stressColor}">${stressScore}</div>
       </div>
       <div class="metric"><div class="label">壓力等級</div><div class="value">${sLabel}</div></div>
@@ -78,6 +81,20 @@ export function renderLiveNarrativeStrip(events, stress, models, chains) {
       </div>
     </div>
   `;
+
+  // Attach event listener for stress help icon
+el.querySelectorAll('[data-help]').forEach(function(el) {
+        el.addEventListener('click', function() {
+          var title = this.getAttribute('data-title');
+          var helpText = this.getAttribute('data-help');
+          var htmlContent = '<p>' + helpText.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>') + '</p>';
+          if (typeof window.openInfoHelp === 'function') {
+            window.openInfoHelp(title, htmlContent);
+          } else if (typeof openInfoHelp === 'function') {
+            openInfoHelp(title, htmlContent);
+          }
+        });
+      });
 }
 
 export function renderNarrativePage(snapshot, stress, events, chains, models, templates, retailSentiment, seasonal) {
@@ -98,10 +115,15 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       let latestTs = 0;
       rows.forEach(([_, pt]) => { if (pt && pt.timestamp > latestTs) latestTs = pt.timestamp; });
       const updateTime = latestTs ? new Date(latestTs * 1000).toLocaleString('zh-TW') : '-';
-      const hasData = rows.some(([_, pt]) => pt && pt.symbol);
+      const validRows = rows.filter(([_, pt]) => pt && pt.symbol);
+      const hasData = validRows.length > 0;
       const isFresh = latestTs && (Date.now()/1000 - latestTs) < 86400;
+      const allPresent = validRows.length === rows.length;
       const channelStatus = hasData
-        ? (isFresh ? {color:'var(--up)',text:'🟢 資料通道正常'} : {color:'var(--warn)',text:'🟡 資料略有延遲'})
+        ? (isFresh && allPresent ? {color:'var(--up)',text:'🟢 資料通道正常'} 
+           : isFresh ? {color:'var(--warn)',text:'🟡 部分指標延遲'} 
+           : allPresent ? {color:'var(--warn)',text:'🟡 資料略有延遲'}
+           : {color:'var(--warn)',text:'🟡 部分資料延遲'})
         : {color:'var(--down)',text:'🔴 資料通道異常'};
       let html = `<div style="margin-bottom:8px;display:flex;align-items:center;gap:10px">
         <span style="font-size:12px;color:${channelStatus.color};font-weight:700">${channelStatus.text}</span>
@@ -115,11 +137,13 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           const cls = pt.change_pct > 0 ? 'up' : (pt.change_pct < 0 ? 'down' : '');
           return `<tr><td>${name}</td><td>${val}</td><td class="${cls}">${chg}</td></tr>`;
         }).join('') + '</tbody></table>';
+      const capitalValidRows = capitalRows.filter(([_, pt]) => pt && pt.symbol);
       const capitalLatestTs = capitalRows.reduce((max, [_, pt]) => (pt && pt.timestamp > max) ? pt.timestamp : max, 0);
-      const capitalHasData = capitalRows.some(([_, pt]) => pt && pt.symbol);
+      const capitalHasData = capitalValidRows.length > 0;
       const capitalIsFresh = capitalLatestTs && (Date.now()/1000 - capitalLatestTs) < 86400;
+      const capitalAllPresent = capitalValidRows.length === capitalRows.length;
       const capitalStatus = capitalHasData
-        ? (capitalIsFresh ? {color:'var(--up)',text:'🟢 正常'} : {color:'var(--warn)',text:'🟡 延遲'})
+        ? (capitalIsFresh && capitalAllPresent ? {color:'var(--up)',text:'🟢 正常'} : {color:'var(--warn)',text:'🟡 延遲'})
         : {color:'var(--down)',text:'🔴 缺失'};
       const capitalTimeStr = capitalLatestTs ? new Date(capitalLatestTs * 1000).toLocaleString('zh-TW') : '-';
       if (capitalRows.some(([_, pt]) => pt && typeof pt.value === 'number')) {
@@ -159,13 +183,25 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       let html = `<div class="mb-sm text-muted text-sm">資料更新時間：${stressTime}</div>`;
       html += `<div style="font-size:28px;font-weight:700;color:${regimeColor}">${score} <span style="font-size:14px;color:var(--muted)">/ 100</span></div>`;
       html += `<div style="margin:4px 0 10px;font-size:14px">出逃等級：<strong>${stressLabel(stress.regime || '-')}</strong>（${stress.score >= 70 ? '🔴 紅燈' : (stress.score >= 50 ? '🟠 橙燈' : (stress.score >= 30 ? '🟡 黃燈' : '🟢 綠燈'))}）</div>`;
-      html += `<table><thead><tr><th>子項</th><th>壓力貢獻 <span class="cursor-pointer text-accent" onclick="event.stopPropagation();openInfoHelp('外資出逃指數分數說明', \`<p><strong>分數代表什麼？</strong></p><p>外資出逃指數由六個因子加權構成。每個子項的分數代表該因子對「外資撤離台灣」這個現象的貢獻度。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>分數越高</strong>：該因子越可能導致外資賣超台股（例如美元走強→外資匯出獲利、VIX飆升→全球避險情緒）。</li><li><strong>分數為 0</strong>：該因子目前沒有施壓（例如外資買超時，外資流向因子為 0）。</li><li><strong>所有子項皆為正值</strong>：指數只累加壓力，不扣除「助力」。這是單向指標。</li></ul><p><strong>為什麼是單向指標？</strong><br>因為外資買超時，系統不會顯示「負壓力」，而是讓總分維持低位（綠燈）。這樣設計是為了突出「危險訊號」，而非平衡呈現多空。</p><p><strong>總分區間意義：</strong><br>• 0-29分（綠燈）：外資流出壓力小，資金面寬鬆<br>• 30-49分（黃燈）：外資開始流出，注意波動<br>• 50-69分（橙燈）：外資明顯出逃，台股下跌機率高<br>• 70-100分（紅燈）：外資大量出逃，系統性風險高</p>\`)">ℹ️</span></th></tr></thead><tbody>`;
+      html += `<table><thead><tr><th>子項</th><th>壓力貢獻 <span class="cursor-pointer text-accent" data-help="<p><strong>分數代表什麼？</strong></p><p>外商出逃指數由六個因子加權構成。每個子項的分數代表該因子對「外商撤離台灣」這個現象的貢獻度。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>分數越高</strong>：該因子越可能導致外商賣超台股（例如美元走強→外商匯出獲利、VIX飆升→全球避險情緒）。</li><li><strong>分數為 0</strong>：該因子目前沒有施壓（例如外商買超時，外商流向因子為 0）。</li><li><strong>所有子項皆為正值</strong>：指數只累加壓力，不扣除「助力」。這是單向指標。</li></ul><p><strong>為什麼是單向指標？</strong><br>因為外商買超時，系統不會顯示「負壓力」，而是讓總分維持低位（綠燈）。這樣設計是為了突出「危險訊號」，而非平衡呈現多空。</p><p><strong>總分區間意義：</strong><br>• 0-29分（綠燈）：外商流出壓力小，資金面寬鬆<br>• 30-49分（黃燈）：外商開始流出，注意波動<br>• 50-69分（橙燈）：外商明顯出逃，台股下跌機率高<br>• 70-100分（紅燈）：外商大量出逃，系統性風險高</p>" data-title="外商出逃指數分數說明">ℹ️</span></th></tr></thead><tbody>`;
       const names = { dxy: 'DXY-美元指數', us10y: 'US10Y-美債10年期', foreign_flow: '外資流向', vix: 'VIX-波動率指數', jpy: '日圓-套利平倉壓力', geopolitical: '地緣政治風險' };
       for (const k of Object.keys(comps)) {
         html += `<tr><td>${names[k] || k}</td><td>${typeof comps[k] === 'number' ? comps[k].toFixed(2) : '-'}</td></tr>`;
       }
       html += '</tbody></table>';
       stressEl.innerHTML = html;
+      stressEl.querySelectorAll('[data-help]').forEach(function(el) {
+        el.addEventListener('click', function() {
+          var title = this.getAttribute('data-title');
+          var helpText = this.getAttribute('data-help');
+          var htmlContent = '<p>' + helpText.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>') + '</p>';
+          if (typeof window.openInfoHelp === 'function') {
+            window.openInfoHelp(title, htmlContent);
+          } else if (typeof openInfoHelp === 'function') {
+            openInfoHelp(title, htmlContent);
+          }
+        });
+      });
     }
   }
 
@@ -291,36 +327,69 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     retailEl.classList.remove('loading');
     if (!retailSentiment) { retailEl.innerHTML = renderEmptyState('無散戶情緒資料', ''); }
     else {
+      const hasValidData = retailSentiment.margin_balance > 0;
       const readingMap = { frenzy: '狂熱', neutral: '中性', fear: '恐慌' };
       const readingClass = retailSentiment.extreme_reading === 'frenzy' ? 'err' : retailSentiment.extreme_reading === 'fear' ? 'warn' : 'ok';
       const score = (retailSentiment.sentiment_score || 0).toFixed(2);
       const changeStr = (retailSentiment.margin_change_pct || 0) >= 0 ? '+' + (retailSentiment.margin_change_pct * 100).toFixed(1) + '%' : (retailSentiment.margin_change_pct * 100).toFixed(1) + '%';
       const changeClass = (retailSentiment.margin_change_pct || 0) >= 0 ? 'up' : 'down';
+      const dataStatusBadge = hasValidData
+        ? '<span class="badge ok">🟢 資料正常</span>'
+        : '<span class="badge">🟡 資料延遲</span>';
+
+      const sentimentScore = retailSentiment.sentiment_score || 0;
+      const marginChange = retailSentiment.margin_change_pct || 0;
+      const marginBalance = retailSentiment.margin_balance || 0;
+      const dayTradingRatio = retailSentiment.day_trading_ratio || 0;
+      const marginPercentile = (retailSentiment.margin_percentile || 0) * 100;
+
+      const sentimentHelp = `綜合融資餘額變化、當沖比率、散戶交易行為等指標計算出的散戶市場情緒指標。\\n\\n分數範圍：-1.0 ~ +1.0\\n• ＞+0.5（狂熱）：散戶過度樂觀，融資大增、當沖猖獗，市場可能接近短期頂部\\n• 0.0 ~ +0.5（偏多）：散戶積極參與，市場熱絡但尚未過熱\\n• -0.5 ~ 0.0（偏空）：散戶趨於保守，融資減少，市場觀望氣氛濃厚\\n• ＜-0.5（恐慌）：散戶極度悲觀，恐慌砍倉，歷史上常是階段性底部訊號\\n\\n當前數值：${score} — ${sentimentScore > 0.5 ? '市場狂熱，建議減碼' : sentimentScore > 0 ? '散戶偏多' : sentimentScore > -0.5 ? '散戶偏空觀望' : '市場恐慌，可能接近底部'}`;
+
+      const marginChangeHelp = `融資餘額相對前一交易日的變化百分比。融資是散戶向券商借錢買股票的行為，是觀察散戶槓桿程度的重要指標。\\n\\n解讀標準：\\n• ＞+5%：散戶瘋狂加碼，槓桿急速攀升，系統性風險劇增\\n• +2% ~ +5%：散戶積極加槓桿，市場過熱跡象浮現\\n• -2% ~ +2%：正常波動區間，散戶情緒平穩\\n• -5% ~ -2%：散戶開始去槓桿，市場降溫\\n• ＜-5%：散戶恐慌砍倉，融資大減，常伴隨市場急跌，但也可能是底部訊號\\n\\n當前數值：${changeStr} — ${Math.abs(marginChange * 100) > 5 ? '散戶情緒劇烈波動' : Math.abs(marginChange * 100) > 2 ? '散戶情緒明顯變化' : '正常波動範圍'}`;
+
+      const marginBalanceHelp = `全市場散戶向券商融資買股票的總金額（單位：億元）。融資餘額越高代表散戶槓桿越大，市場風險越高。\\n\\n歷史百分位解讀：\\n• ＞90th：極高水位，散戶槓桿處於歷史高檔，系統性回調風險極高\\n• 70th ~ 90th：偏高水位，市場過熱，建議逐步降低持股\\n• 30th ~ 70th：正常區間，風險可控\\n• 10th ~ 30th：偏低水位，市場冷清，但可能是佈局時機\\n• ＜10th：極低水位，散戶幾乎離場，歷史上常是長期底部區域\\n\\n當前數值：${marginBalance.toFixed(0)} 億（歷史 ${marginPercentile.toFixed(0)}th 百分位）\\n${marginPercentile > 90 ? '⚠️ 融資處於歷史極高水位，系統性風險極高，建議大幅減碼' : marginPercentile > 70 ? '⚡ 融資偏高，市場過熱，建議逐步獲利了結' : marginPercentile > 30 ? '✅ 融資水位正常，風險可控' : marginPercentile > 10 ? '💡 融資偏低，市場冷清，可關注佈局機會' : '📉 融資極低，散戶幾乎離場，可能是長期底部'}`;
+
+      const dayTradingHelp = `當日沖銷（Day Trading）成交量占總成交量的比例。當沖是散戶在同一天內買進又賣出的交易行為，是觀察市場投機程度的重要指標。\\n\\n解讀標準：\\n• ＞40%：市場極度投機，散戶狂熱當沖，類似2021年航運股狂潮，短期崩盤風險極高\\n• 30% ~ 40%：當沖比率偏高，市場投機氣氛濃厚，注意追高空單風險\\n• 20% ~ 30%：正常偏高的當沖活動，市場熱絡但尚屬健康\\n• 15% ~ 20%：當沖比率正常，市場交易穩定\\n• ＜15%：當沖冷清，市場缺乏投機動能，散戶參與度低\\n\\n當前數值：${(dayTradingRatio * 100).toFixed(1)}% — ${dayTradingRatio * 100 > 40 ? '市場極度投機，高風險警戒！' : dayTradingRatio * 100 > 30 ? '當沖比率偏高，注意風險' : dayTradingRatio * 100 > 20 ? '當沖活躍，市場熱絡' : dayTradingRatio * 100 > 15 ? '當沖比率正常' : '當沖冷清，市場觀望'}`;
+
       retailEl.innerHTML = `
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
           <span class="text-muted text-sm">散戶情緒指標</span>
           <span class="badge ${readingClass}">${readingMap[retailSentiment.extreme_reading] || retailSentiment.extreme_reading}</span>
+          ${dataStatusBadge}
         </div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
-          <div class="kpi-card" class="p-md">
-            <div class="kpi-label">情緒分數</div>
+          <div class="kpi-card" style="cursor:pointer;" data-help="${sentimentHelp.replace(/"/g, '&quot;')}" data-title="情緒分數說明">
+            <div class="kpi-label" style="color:var(--accent);text-decoration:underline dotted;">情緒分數 ℹ️</div>
             <div class="kpi-value" class="text-lg">${score}</div>
           </div>
-          <div class="kpi-card" class="p-md">
-            <div class="kpi-label">融資變化</div>
+          <div class="kpi-card" style="cursor:pointer;" data-help="${marginChangeHelp.replace(/"/g, '&quot;')}" data-title="融資變化說明">
+            <div class="kpi-label" style="color:var(--accent);text-decoration:underline dotted;">融資變化 ℹ️</div>
             <div class="kpi-value ${changeClass}" class="text-lg">${changeStr}</div>
           </div>
-          <div class="kpi-card" class="p-md">
-            <div class="kpi-label">融資餘額</div>
-            <div class="kpi-value" class="text-lg">${(retailSentiment.margin_balance || 0).toFixed(0)} 億</div>
+          <div class="kpi-card" style="cursor:pointer;" data-help="${marginBalanceHelp.replace(/"/g, '&quot;')}" data-title="融資餘額說明">
+            <div class="kpi-label" style="color:var(--accent);text-decoration:underline dotted;">融資餘額 ℹ️</div>
+            <div class="kpi-value" class="text-lg">${marginBalance.toFixed(0)} 億</div>
           </div>
-          <div class="kpi-card" class="p-md">
-            <div class="kpi-label">當沖比率</div>
-            <div class="kpi-value" class="text-lg">${((retailSentiment.day_trading_ratio || 0) * 100).toFixed(1)}%</div>
+          <div class="kpi-card" style="cursor:pointer;" data-help="${dayTradingHelp.replace(/"/g, '&quot;')}" data-title="當沖比率說明">
+            <div class="kpi-label" style="color:var(--accent);text-decoration:underline dotted;">當沖比率 ℹ️</div>
+            <div class="kpi-value" class="text-lg">${(dayTradingRatio * 100).toFixed(1)}%</div>
           </div>
         </div>
-        <div class="mt-sm text-muted text-sm">歷史百分位: ${((retailSentiment.margin_percentile || 0) * 100).toFixed(0)}th</div>
+        <div class="mt-sm text-muted text-sm">歷史百分位: ${marginPercentile.toFixed(0)}th</div>
       `;
+
+      retailEl.querySelectorAll('.kpi-card[data-help]').forEach(function(card) {
+        card.addEventListener('click', function() {
+          var title = this.getAttribute('data-title');
+          var helpText = this.getAttribute('data-help');
+          var htmlContent = '<p>' + helpText.replace(/\\n\\n/g, '</p><p>').replace(/\\n/g, '<br>') + '</p>';
+          if (typeof window.openInfoHelp === 'function') {
+            window.openInfoHelp(title, htmlContent);
+          } else if (typeof openInfoHelp === 'function') {
+            openInfoHelp(title, htmlContent);
+          }
+        });
+      });
     }
   }
 
