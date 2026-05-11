@@ -1,5 +1,5 @@
 const STAGES = [
-  { id: 'idle', label: '閒置中', icon: '⏸️', hint: '系統待命中，等待下一個交易時段開始或手動觸發回測' },
+  { id: 'idle', label: '系統就緒', icon: '⏸️', hint: '系統已就緒，等待執行回測或手動觸發模擬交易' },
   { id: 'fetching_data', label: '獲取資料', icon: '📡', hint: '正在從資料提供者載入市場資料與回測數據' },
   { id: 'regime_detection', label: '體制偵測', icon: '🔍', hint: '分析當前市場體制（多頭/空頭/盤整）與宏觀敘事脈絡' },
   { id: 'agent_recommendations', label: 'AI 推薦', icon: '🤖', hint: '各產業與風格 Agent 產生推薦標的與信心度評分' },

@@ -103,13 +103,21 @@ export class CircuitBreakerPanel {
             if (data.intraday_peak !== undefined && data.day_start_value !== undefined && data.day_start_value > 0) {
                 const drawdown = ((data.intraday_peak - data.day_start_value) / data.day_start_value * 100).toFixed(2);
                 this.intradayPeak.textContent = `${drawdown}%`;
+            } else if (state === 'normal') {
+                this.intradayPeak.textContent = '0.00%';
             } else {
                 this.intradayPeak.textContent = '-';
             }
         }
 
         if (this.consecutiveSL) {
-            this.consecutiveSL.textContent = data.consecutive_sl !== undefined ? data.consecutive_sl : '-';
+            if (data.consecutive_sl !== undefined) {
+                this.consecutiveSL.textContent = data.consecutive_sl;
+            } else if (state === 'normal') {
+                this.consecutiveSL.textContent = '0';
+            } else {
+                this.consecutiveSL.textContent = '-';
+            }
         }
         
         if (this.cooldown) {

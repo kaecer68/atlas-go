@@ -422,7 +422,7 @@ function initEventStream() {
       hintEl.innerHTML = '🔴 <strong>連線中斷</strong> 無法接收即時事件，請檢查網路或重新整理頁面';
       hintEl.style.color = 'var(--down)';
     } else if (status === 'connected' && eventCount === 0) {
-      hintEl.innerHTML = '🟢 <strong>已連線</strong> 等待系統產生事件（回測執行時會自動顯示）';
+      hintEl.innerHTML = '🟢 <strong>已連線</strong> 系統就緒中。執行回測時將自動顯示即時事件流';
       hintEl.style.color = 'var(--up)';
     } else if (status === 'connected') {
       hintEl.innerHTML = `🟢 <strong>已連線</strong> 已接收 ${eventCount} 個事件`;

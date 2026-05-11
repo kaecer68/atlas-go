@@ -1392,6 +1392,20 @@ body { display: flex; margin: 0; min-height: 100vh; }
   .progress-connector.completed {
     background: var(--color-success);
   }
+  .stage-hint {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: var(--panel-l3);
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--muted);
+    text-align: center;
+    border: 1px solid var(--border);
+  }
+  .stage-hint::before {
+    content: "💡 ";
+  }
 
   /* Tool Events Component */
   .tool-events-list {
@@ -1576,6 +1590,9 @@ body { display: flex; margin: 0; min-height: 100vh; }
                 <div class="cb-metric-label">冷卻解鎖</div>
                 <div class="cb-metric-value" id="cbCooldown">-</div>
             </div>
+        </div>
+        <div class="cb-hint" style="margin-top: 8px; padding: 8px 12px; background: var(--panel-l2); border-radius: 6px; font-size: 12px; color: var(--muted); line-height: 1.5;">
+            💡 熔斷機制僅在實盤交易（Live Mode）時啟用。狀態顯示「正常」表示未觸發任何熔斷條件，此時無事件記錄為預期行為。
         </div>
         <div class="cb-events-container mt-sm">
             <ul class="cb-event-list" id="cbEventList">
