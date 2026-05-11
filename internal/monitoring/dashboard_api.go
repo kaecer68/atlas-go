@@ -113,6 +113,10 @@ func (a *DashboardAPI) SetEventBus(eventBus *eventbus.ChannelEventBus) {
 	a.eventBus = eventBus
 }
 
+func (a *DashboardAPI) GetEventBus() *eventbus.ChannelEventBus {
+	return a.eventBus
+}
+
 func (a *DashboardAPI) SetContext(ctx context.Context) {
 	if a.outcomeStore != nil && ctx != nil {
 		a.outcomeStore.SetContext(ctx)

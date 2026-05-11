@@ -95,6 +95,10 @@ func (s *SystemCore) GetLastOutcomes() []domain.RecommendationOutcome { return s
 func (s *SystemCore) Ledger() ledger.OutcomeStore                     { return s.Sim().ledger }
 func (s *SystemCore) EventBus() *eventbus.ChannelEventBus             { return s.Risk().eventBus }
 
+func (s *System) SetEventBus(eventBus *eventbus.ChannelEventBus) {
+	s.Risk().eventBus = eventBus
+}
+
 // System orchestrates the full simulation loop via a SystemCore and a PluginHost.
 type System struct {
 	*SystemCore
