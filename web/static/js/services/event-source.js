@@ -70,9 +70,11 @@ class EventSourceService {
   }
 
   handleMessage(e) {
+    console.log('[SSE] Raw event received:', e.type, e.data);
     try {
       const data = JSON.parse(e.data);
       const eventType = data.type || e.type || 'message';
+      console.log('[SSE] Parsed event:', eventType, data);
       this.emit(eventType, data);
       this.emit('*', data);
     } catch (err) {
