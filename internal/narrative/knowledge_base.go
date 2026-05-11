@@ -89,17 +89,19 @@ type NarrativeEngine struct {
 
 // sectorSymbolMap maps narrative sectors to representative TWSE symbols.
 var sectorSymbolMap = map[string][]string{
-	"financials":      {"2881.TW", "2882.TW", "2886.TW", "2891.TW", "2892.TW"},
+	"financials":      {"2881.TW", "2882.TW", "2884.TW", "2885.TW", "2886.TW", "2891.TW", "2892.TW"},
 	"high_dividend":   {"0056.TW", "00878.TW"},
 	"etf_rotation":    {"0050.TW", "0056.TW", "00878.TW"},
-	"ai_supply_chain": {"2330.TW", "2382.TW", "2317.TW", "3037.TW", "6669.TW"},
-	"semiconductor":   {"2330.TW", "2303.TW", "2454.TW", "3034.TW"},
-	"pcb":             {"3037.TW"},
-	"thermal":         {"2382.TW", "2317.TW"},
+	"ai_supply_chain": {"2330.TW", "2382.TW", "2317.TW", "2345.TW", "3231.TW", "3037.TW", "6669.TW"},
+	"semiconductor":   {"2330.TW", "2303.TW", "2308.TW", "2454.TW", "3034.TW"},
+	"pcb":             {"3037.TW", "2357.TW"},
+	"thermal":         {"2382.TW", "2317.TW", "2357.TW"},
 	"shipping":        {"2603.TW", "2609.TW", "2615.TW"},
-	"small_cap":       {"3008.TW", "3034.TW", "6669.TW"},
-	"consumer":        {"1301.TW", "1303.TW", "1326.TW"},
+	"small_cap":       {"3008.TW", "3034.TW", "6669.TW", "3711.TW"},
+	"consumer":        {"1301.TW", "1303.TW", "1326.TW", "1216.TW"},
 	"tourism":         {},
+	"tech":            {"2330.TW", "2317.TW", "2382.TW", "3231.TW"},
+	"defensive":       {"2881.TW", "0056.TW", "1301.TW"},
 }
 
 // NewNarrativeEngine creates a narrative engine with default templates and models.
@@ -274,7 +276,7 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 		return fmt.Errorf("load replay: %w", err)
 	}
 
-	const lookback = 10
+	const lookback = 30
 	const holdWindow = 5
 	if len(ds.Dates) < lookback+holdWindow {
 		return fmt.Errorf("insufficient replay data: %d dates", len(ds.Dates))
