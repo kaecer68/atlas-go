@@ -18,7 +18,9 @@ export class CircuitBreakerPanel {
     }
 
     bindEvents() {
-        this.resetBtn.addEventListener('click', () => this.handleReset());
+        if (this.resetBtn) {
+            this.resetBtn.addEventListener('click', () => this.handleReset());
+        }
     }
 
     async fetchState() {
@@ -27,51 +29,110 @@ export class CircuitBreakerPanel {
             if (res.ok) {
                 const data = await res.json();
                 this.updateUI(data);
+            } else {
+                console.warn("Circuit breaker API returned status:", res.status);
+                this.showEmptyState();
             }
         } catch (e) {
             console.error("Failed to fetch circuit breaker state:", e);
+            this.showEmptyState();
+        }
+    }
+
+    showEmptyState() {
+        if (this.statusText) this.statusText.textContent = '未連線';
+        if (this.statusDot) {
+            this.statusDot.className = 'cb-status-dot';
+            this.statusDot.classList.add('unknown');
+        }
+        if (this.intradayPeak) this.intradayPeak.textContent = '-';
+        if (this.consecutiveSL) this.consecutiveSL.textContent = '-';
+        if (this.cooldown) this.cooldown.textContent = '-';
+        if (this.eventList) {
+            this.eventList.innerHTML = '<li class="cb-event-item empty text-center" style="text-align: center;">暫無事件</li>';
+        }
+        if (this.resetBtn) {
+            this.resetBtn.disabled = true;
         }
     }
 
     updateUI(data) {
-        // Update Status
+        if (!data || typeof data !== 'object') {
+            this.showEmptyState();
+            return;
+        }
+
         const state = data.state || 'normal';
-        this.statusText.textContent = state.charAt(0).toUpperCase() + state.slice(1);
+        const stateLabels = {
+            'normal': '正常',
+            'paused': '暫停',
+            'halted': '停止',
+            'unknown': '未知'
+        };
         
-        this.statusDot.className = 'cb-status-dot';
-        this.resetBtn.className = 'cb-btn-reset';
-        
-        if (state === 'normal') {
-            this.statusDot.classList.add('normal');
-            this.resetBtn.disabled = true;
-        } else if (state === 'paused') {
-            this.statusDot.classList.add('paused');
-            this.resetBtn.disabled = false;
-        } else if (state === 'halted') {
-            this.statusDot.classList.add('halted');
-            this.resetBtn.disabled = false;
-            this.resetBtn.classList.add('halted');
+        if (this.statusText) {
+            this.statusText.textContent = stateLabels[state] || state;
         }
-
-        // Update Metrics
-        if (data.intraday_peak !== undefined && data.day_start_value !== undefined && data.day_start_value > 0) {
-            const drawdown = ((data.intraday_peak - data.day_start_value) / data.day_start_value * 100).toFixed(2);
-            this.intradayPeak.textContent = `${drawdown}%`;
-        } else {
-            this.intradayPeak.textContent = '-';
-        }
-
-        this.consecutiveSL.textContent = data.consecutive_sl !== undefined ? data.consecutive_sl : '-';
         
-        if (data.cooldown_until) {
-            const cdDate = new Date(data.cooldown_until);
-            if (cdDate > new Date()) {
-                this.cooldown.textContent = cdDate.toLocaleTimeString();
+        if (this.statusDot) {
+            this.statusDot.className = 'cb-status-dot';
+            if (state === 'normal') {
+                this.statusDot.classList.add('normal');
+            } else if (state === 'paused') {
+                this.statusDot.classList.add('paused');
+            } else if (state === 'halted') {
+                this.statusDot.classList.add('halted');
             } else {
-                this.cooldown.textContent = 'None';
+                this.statusDot.classList.add('unknown');
             }
+        }
+        
+        if (this.resetBtn) {
+            this.resetBtn.className = 'cb-btn-reset';
+            if (state === 'normal') {
+                this.resetBtn.disabled = true;
+            } else {
+                this.resetBtn.disabled = false;
+                if (state === 'halted') {
+                    this.resetBtn.classList.add('halted');
+                }
+            }
+        }
+
+        if (this.intradayPeak) {
+            if (data.intraday_peak !== undefined && data.day_start_value !== undefined && data.day_start_value > 0) {
+                const drawdown = ((data.intraday_peak - data.day_start_value) / data.day_start_value * 100).toFixed(2);
+                this.intradayPeak.textContent = `${drawdown}%`;
+            } else {
+                this.intradayPeak.textContent = '-';
+            }
+        }
+
+        if (this.consecutiveSL) {
+            this.consecutiveSL.textContent = data.consecutive_sl !== undefined ? data.consecutive_sl : '-';
+        }
+        
+        if (this.cooldown) {
+            if (data.cooldown_until) {
+                const cdDate = new Date(data.cooldown_until);
+                if (cdDate > new Date()) {
+                    this.cooldown.textContent = cdDate.toLocaleTimeString('zh-TW');
+                } else {
+                    this.cooldown.textContent = '無';
+                }
+            } else {
+                this.cooldown.textContent = '無';
+            }
+        }
+
+        if (data.events && Array.isArray(data.events) && data.events.length > 0) {
+            this.events = data.events;
+            this.renderEvents();
         } else {
-            this.cooldown.textContent = 'None';
+            this.events = [];
+            if (this.eventList) {
+                this.eventList.innerHTML = '<li class="cb-event-item empty text-center" style="text-align: center;">暫無事件</li>';
+            }
         }
     }
 
@@ -84,9 +145,11 @@ export class CircuitBreakerPanel {
     }
 
     renderEvents() {
+        if (!this.eventList) return;
+        
         this.eventList.innerHTML = '';
         if (this.events.length === 0) {
-            this.eventList.innerHTML = '<li class="cb-event-item empty text-center" style="text-align: center;">No events yet.</li>';
+            this.eventList.innerHTML = '<li class="cb-event-item empty text-center" style="text-align: center;">暫無事件</li>';
             return;
         }
 
@@ -94,9 +157,9 @@ export class CircuitBreakerPanel {
             const li = document.createElement('li');
             li.className = 'cb-event-item';
             
-            const time = new Date(ev.timestamp || Date.now()).toLocaleTimeString();
+            const time = new Date(ev.timestamp || Date.now()).toLocaleTimeString('zh-TW');
             const msgSpan = document.createElement('span');
-            msgSpan.textContent = ev.message || JSON.stringify(ev);
+            msgSpan.textContent = ev.reason || ev.message || JSON.stringify(ev);
             
             const timeSpan = document.createElement('span');
             timeSpan.className = 'cb-event-time';
@@ -109,12 +172,14 @@ export class CircuitBreakerPanel {
     }
 
     async handleReset() {
-        const reason = prompt("Enter reason for manual reset:");
+        const reason = prompt("輸入手動重置原因:");
         if (!reason) return;
 
         try {
-            this.resetBtn.disabled = true;
-            this.resetBtn.textContent = 'Resetting...';
+            if (this.resetBtn) {
+                this.resetBtn.disabled = true;
+                this.resetBtn.textContent = '重置中...';
+            }
             
             const res = await fetch('/api/dashboard/circuit-breaker/reset', {
                 method: 'POST',
@@ -125,26 +190,25 @@ export class CircuitBreakerPanel {
             if (res.ok) {
                 await this.fetchState();
             } else {
-                alert("Reset failed");
+                alert("重置失敗");
             }
         } catch (e) {
             console.error("Reset request failed:", e);
-            alert("Error connecting to server");
+            alert("連線錯誤");
         } finally {
-            this.resetBtn.textContent = '手動重置 (Reset)';
-            // State will be updated by fetchState or SSE
+            if (this.resetBtn) {
+                this.resetBtn.textContent = '手動重置 (Reset)';
+            }
         }
     }
 
     handleSSE(event) {
-        // Look for circuit_breaker specific events or general state updates
         if (event.type === 'circuit_breaker_state_change') {
             this.fetchState();
             this.addEvent(event.data);
         } else if (event.type === 'circuit_breaker_event') {
             this.addEvent(event.data);
         } else if (event.type === 'live_event') {
-            // General live events might contain CB info, just an example hook
             if (event.data && event.data.source === 'circuit_breaker') {
                 this.addEvent(event.data);
                 this.fetchState();
