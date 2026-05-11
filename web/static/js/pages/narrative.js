@@ -328,18 +328,17 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     const items = (templates && templates.templates) || [];
     if (!items.length) { templatesEl.innerHTML = renderEmptyState('無模板資料', ''); }
     else {
-      templatesEl.innerHTML = `<table>
-        <thead><tr><th>模板名稱</th><th>觸發主題</th><th>歷史命中率</th><th>資料來源</th><th class="w-90">操作</th></tr></thead>
+      templatesEl.innerHTML = `<table class="template-table">
+        <thead><tr><th style="width:40%">模板名稱</th><th style="width:12%">歷史命中率</th><th style="width:36%">資料來源</th><th style="width:12%">操作</th></tr></thead>
         <tbody>
           ${items.map((t, idx) => `<tr>
             <td><span style="font-weight:600;color:var(--text)">${escapeHtml(templateName(t.name))}</span></td>
-            <td><span style="color:var(--accent)">${escapeHtml(eventName(t.trigger_theme))}</span></td>
             <td><span style="font-weight:500;color:var(--up)">${((t.historical_hit_rate || 0) * 100).toFixed(0)}%</span></td>
             <td class="text-muted text-xs">${escapeHtml((t.source_references || []).join(', '))}</td>
             <td><button id="tmpl-btn-${idx}" onclick="toggleTemplateAccordion(${idx})" style="font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer">展開 ▼</button></td>
           </tr>
           <tr id="tmpl-rationale-${idx}" class="hidden">
-            <td colspan="5" style="background:var(--bg);padding:12px 14px;font-size:12px;line-height:1.8;color:var(--text);white-space:pre-wrap;border-left:3px solid var(--accent)">${escapeHtml(t.rationale || '暫無論述')}</td>
+            <td colspan="4" style="background:var(--bg);padding:12px 14px;font-size:12px;line-height:1.8;color:var(--text);white-space:pre-wrap;border-left:3px solid var(--accent)">${escapeHtml(t.rationale || '暫無論述')}</td>
           </tr>`).join('')}
         </tbody>
       </table>`;
