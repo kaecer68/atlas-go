@@ -13,7 +13,7 @@ import { renderToolEvents } from './components/tool-events.js';
 import { fmtNTD } from './shared/utils.js';
 
 const pageLoadStatus = {};
-const APP_VERSION = '20260510';
+const APP_VERSION = '20260512';
 
 export function switchPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -117,6 +117,10 @@ async function loadModules() {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
   modules._loaded = true;
+  if (modules.experiments) {
+    if (modules.experiments.openInfoHelp) window.openInfoHelp = modules.experiments.openInfoHelp;
+    if (modules.experiments.closeInfoModal) window.closeInfoModal = modules.experiments.closeInfoModal;
+  }
   return modules;
 }
 
