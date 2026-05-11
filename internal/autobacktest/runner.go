@@ -6,6 +6,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -21,6 +22,18 @@ func NewRunner(cfg config.Config) *Runner {
 	store := ledger.NewStore(cfg.LedgerDir)
 	return &Runner{
 		btRunner: backtest.NewRunner(cfg, store),
+		cfg:      cfg,
+	}
+}
+
+func NewRunnerWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus) *Runner {
+	store := ledger.NewStore(cfg.LedgerDir)
+	btRunner := backtest.NewRunner(cfg, store)
+	if eventBus != nil {
+		btRunner.WithEventBus(eventBus)
+	}
+	return &Runner{
+		btRunner: btRunner,
 		cfg:      cfg,
 	}
 }

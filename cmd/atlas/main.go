@@ -174,8 +174,9 @@ func run(args []string, deps appDeps) error {
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 			d.SetPool(pool)
 			d.SetHealthManager(portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore).WithParameters(runtimeParams))
-			janusEngine := janus.NewEngine()
-			janusEngine.EnsureAllRegimes()
+		janusEngine := janus.NewEngine()
+		janusEngine.EnsureAllRegimes()
+		janusEngine.Update()
 			d.SetJanusEngine(janusEngine)
 			log.Printf("[JANUS] engine injected into dashboard API")
 		}
@@ -270,7 +271,16 @@ func run(args []string, deps appDeps) error {
 		bootstrap.StartChannelHealthSyncLoop(sysCtx, cfg.WorkDir, pool)
 		bootstrap.StartAutoBackfill(sysCtx, cfg.WorkDir, cfg.ReplayDataPath)
 		bootstrap.StartAutoCapitalFlowFetch(sysCtx, cfg.WorkDir)
-		autobacktest.StartDailyLoop(sysCtx, autobacktest.NewRunner(cfg))
+		
+		var btRunner *autobacktest.Runner
+		if d, ok := dashboard.(*monitoring.DashboardAPI); ok && d.GetEventBus() != nil {
+			btRunner = autobacktest.NewRunnerWithEventBus(cfg, d.GetEventBus())
+			log.Printf("[AutoBacktest] connected to Dashboard EventBus for SSE streaming")
+		} else {
+			btRunner = autobacktest.NewRunner(cfg)
+			log.Printf("[AutoBacktest] running without EventBus (no SSE events)")
+		}
+		autobacktest.StartDailyLoop(sysCtx, btRunner)
 
 		authWrappedMux := apishared.AuthMiddleware(mux)
 		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

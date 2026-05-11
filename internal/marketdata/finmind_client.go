@@ -13,9 +13,14 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// FinMind API client for Taiwan stock data.
+// NOTE: FinMind requires API key rotation every 7 days.
+// This client is intended as a manual backup / fallback only.
+// For production, prefer Fugle (real-time) or TWSE OpenAPI (free, no key).
+// To rotate key: update FINMIND_API_KEY in .env and restart the service.
 const (
 	finmindBaseURL   = "https://api.finmindtrade.com/api/v4"
-	finmindRateLimit = 600
+	finmindRateLimit = 600 // 600 requests per hour for free tier
 	finmindBurst     = 60
 )
 

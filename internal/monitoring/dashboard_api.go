@@ -113,6 +113,10 @@ func (a *DashboardAPI) SetEventBus(eventBus *eventbus.ChannelEventBus) {
 	a.eventBus = eventBus
 }
 
+func (a *DashboardAPI) GetEventBus() *eventbus.ChannelEventBus {
+	return a.eventBus
+}
+
 func (a *DashboardAPI) SetContext(ctx context.Context) {
 	if a.outcomeStore != nil && ctx != nil {
 		a.outcomeStore.SetContext(ctx)
@@ -210,20 +214,32 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	paramHandlers := apiparameters.NewHandlers(filepath.Join(a.workDir, "configs/parameters.json"))
 	paramHandlers.RegisterRoutes(mux)
 
-	// Data channels endpoint — reuses system health's data_channel building logic.
+	// Data channels endpoint — uses DataChannelService for full channel metadata.
 	mux.HandleFunc("/api/dashboard/data-channels", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		health, err := systemSvc.LoadSystemHealth()
+		channelSvc := service.NewDataChannelService(
+			a.workDir,
+			a.pool,
+			a.macroIngestor,
+			a.geoProvider,
+			a.taiwanGeoProvider,
+			a.janusEngine,
+		)
+		channels, err := channelSvc.GetAllChannelStatuses(r.Context())
 		if err != nil {
-			shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load system health: %v", err))
+			shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load data channels: %v", err))
 			return
 		}
+		alerts, err := channelSvc.GetAlerts(r.Context())
+		if err != nil {
+			alerts = []service.ChannelAlert{}
+		}
 		shared.WriteJSON(w, http.StatusOK, map[string]any{
-			"channels":  health.DataChannels,
-			"alerts":    []any{},
+			"channels":  channels,
+			"alerts":    alerts,
 			"generated": time.Now().Format(time.RFC3339),
 		})
 	})
@@ -309,6 +325,9 @@ func (a *DashboardAPI) RegisterExperimentRoutes(mux *http.ServeMux) {
 func (a *DashboardAPI) RegisterBacktestRoutes(mux *http.ServeMux) {
 	cfg := config.Normalize(config.Load())
 	svc := service.NewBacktestService(cfg)
+	if a.eventBus != nil {
+		svc.WithEventBus(a.eventBus)
+	}
 	handlers := apibacktest.NewHandlers(svc, a.ledgerDir)
 	handlers.RegisterRoutes(mux)
 }

@@ -1122,10 +1122,10 @@
       "todo": "Calibrate: test [20, 45] range"
     },
     "fugle_rate_limit": {
-      "value": 10,
-      "rationale": "Fugle API burst limit; circuit breaker protected, use conservatively",
-      "source": "heuristic",
-      "todo": "Verify: check Fugle subscription for actual rate limits"
+      "value": 60,
+      "rationale": "Fugle API free tier: 60 req/min. Developer tier: 600/min. Advanced: 2000/min. Adjust via env var FUGLE_TIER",
+      "source": "empirical",
+      "todo": "Set FUGLE_TIER=developer or advanced in .env if subscribed to paid plan"
     },
     "fugle_api_timeout_sec": {
       "value": 10,

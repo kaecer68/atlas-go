@@ -13,6 +13,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/replay"
 	"github.com/kaecer68/atlas-go/internal/reporting"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 )
 
 type Runner struct {
@@ -20,10 +21,16 @@ type Runner struct {
 	store       ledger.OutcomeStore
 	janusEngine *janus.Engine
 	lastState   *domain.SimulationState
+	eventBus    *eventbus.ChannelEventBus
 }
 
 func NewRunner(cfg config.Config, store ledger.OutcomeStore) *Runner {
 	return &Runner{cfg: cfg, store: store}
+}
+
+func (r *Runner) WithEventBus(eventBus *eventbus.ChannelEventBus) *Runner {
+	r.eventBus = eventBus
+	return r
 }
 
 func (r *Runner) LastState() *domain.SimulationState {
@@ -57,6 +64,9 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 		system, err := orchestrator.NewSystem(cfg)
 		if err != nil {
 			return domain.BacktestWindowSummary{}, fmt.Errorf("create system: %w", err)
+		}
+		if r.eventBus != nil {
+			system.SetEventBus(r.eventBus)
 		}
 		if r.janusEngine != nil {
 			system.WithJANUS(r.janusEngine)

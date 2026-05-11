@@ -11,15 +11,17 @@ import (
 	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 type BacktestService struct {
-	mu      sync.Mutex
-	running bool
-	status  map[string]any
-	cfg     config.Config
+	mu       sync.Mutex
+	running  bool
+	status   map[string]any
+	cfg      config.Config
+	eventBus *eventbus.ChannelEventBus
 }
 
 func NewBacktestService(cfg config.Config) *BacktestService {
@@ -27,6 +29,11 @@ func NewBacktestService(cfg config.Config) *BacktestService {
 		status: make(map[string]any),
 		cfg:    cfg,
 	}
+}
+
+func (s *BacktestService) WithEventBus(eventBus *eventbus.ChannelEventBus) *BacktestService {
+	s.eventBus = eventBus
+	return s
 }
 
 func (s *BacktestService) IsRunning() bool {
@@ -62,6 +69,9 @@ func (s *BacktestService) Start(startDate, endDate time.Time) error {
 		go func() {
 			store := ledger.NewStore(s.cfg.LedgerDir)
 			runner := backtest.NewRunner(s.cfg, store)
+			if s.eventBus != nil {
+				runner.WithEventBus(s.eventBus)
+			}
 			summary, err := runner.Run(startDate, endDate)
 			if err == nil {
 				if _, rerr := runner.GenerateReport(summary); rerr != nil {

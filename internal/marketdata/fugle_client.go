@@ -59,16 +59,35 @@ type FugleQuoteResponse struct {
 	} `json:"data"`
 }
 
+// getFugleRateLimit returns the rate limit based on FUGLE_TIER env var.
+// free: 60/min (default), developer: 600/min, advanced: 2000/min
+func getFugleRateLimit() int {
+	switch config.GetSecret("FUGLE_TIER") {
+	case "developer":
+		return 600
+	case "advanced":
+		return 2000
+	default:
+		return 60 // free tier
+	}
+}
+
 // NewFugleClient 创建 Fugle 客户端
 func NewFugleClient(apiKey string) *FugleClient {
 	params := config.GetParametersConfig()
+	limit := getFugleRateLimit()
+	// Override with parameters config if explicitly set higher than default free tier
+	if params.Marketdata.FugleRateLimit.Value > 60 {
+		limit = params.Marketdata.FugleRateLimit.Value
+	}
+	logging.Info("fugle", "client_initialized", "tier", config.GetSecret("FUGLE_TIER"), "rate_limit", limit)
 	return &FugleClient{
 		apiKey: apiKey,
 		httpClient: &http.Client{
 			Timeout: time.Duration(params.Marketdata.FugleAPITimeoutSec.Value) * time.Second,
 		},
 		baseURL:     fugleAPIBaseURL,
-		rateLimiter: rate.NewLimiter(rate.Every(time.Minute/time.Duration(params.Marketdata.FugleRateLimit.Value)), params.Marketdata.FugleRateLimit.Value),
+		rateLimiter: rate.NewLimiter(rate.Every(time.Minute/time.Duration(limit)), limit),
 	}
 }
 
