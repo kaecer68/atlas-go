@@ -7,8 +7,11 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -17,6 +20,12 @@ type MacroIngestor struct {
 	provider         marketdata.MacroDataProvider
 	snapshotDir      string
 	divergenceDetect *DivergenceDetector
+	eventBus         eventbusPublisher
+}
+
+// eventbusPublisher abstracts the event bus for testing.
+type eventbusPublisher interface {
+	PublishNarrativeEvent(eventID, theme, region string, sentiment, confidence float64, confidenceSource, hitRate, capitalFlow, timeWindow string) error
 }
 
 // NewMacroIngestor creates an ingestor with a given provider and snapshot directory.
@@ -33,15 +42,46 @@ func (m *MacroIngestor) SnapshotDir() string {
 	return m.snapshotDir
 }
 
+func (m *MacroIngestor) SetEventBus(bus *eventbus.ChannelEventBus) {
+	m.eventBus = bus
+}
+
 // Ingest fetches latest macro data, computes changes from previous snapshot, and returns events.
 func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdata.MacroDataSnapshot, error) {
 	snap, err := m.provider.FetchSnapshot(ctx)
 	if err != nil {
+		prev, prevErr := m.loadLatestSnapshot()
+		if prevErr == nil {
+			prevPrev, _ := m.loadPreviousSnapshot(prev)
+			events := detectEventsFromSnapshot(prev, prevPrev, m.divergenceDetect)
+			if m.eventBus != nil {
+				for _, e := range events {
+					m.eventBus.PublishNarrativeEvent(
+						e.ID, e.Theme, e.Region,
+						e.Sentiment, e.Confidence,
+						e.ConfidenceSource, fmt.Sprintf("%.2f", e.HitRate),
+						e.CapitalFlow, e.TimeWindow,
+					)
+				}
+			}
+			return events, prev, nil
+		}
 		return nil, snap, fmt.Errorf("fetch snapshot: %w", err)
 	}
 
 	prev, _ := m.loadLatestSnapshot()
 	events := detectEventsFromSnapshot(snap, prev, m.divergenceDetect)
+
+	if m.eventBus != nil {
+		for _, e := range events {
+			m.eventBus.PublishNarrativeEvent(
+				e.ID, e.Theme, e.Region,
+				e.Sentiment, e.Confidence,
+				e.ConfidenceSource, fmt.Sprintf("%.2f", e.HitRate),
+				e.CapitalFlow, e.TimeWindow,
+			)
+		}
+	}
 
 	if err := m.saveSnapshot(snap); err != nil {
 		return events, snap, fmt.Errorf("save snapshot: %w", err)
@@ -60,6 +100,41 @@ func (m *MacroIngestor) loadLatestSnapshot() (marketdata.MacroDataSnapshot, erro
 		return marketdata.MacroDataSnapshot{}, fmt.Errorf("unmarshal snapshot: %w", err)
 	}
 	return snap, nil
+}
+
+func (m *MacroIngestor) loadPreviousSnapshot(curr marketdata.MacroDataSnapshot) (marketdata.MacroDataSnapshot, error) {
+	entries, err := os.ReadDir(m.snapshotDir)
+	if err != nil {
+		return marketdata.MacroDataSnapshot{}, fmt.Errorf("read snapshot dir: %w", err)
+	}
+	var candidates []string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || e.Name() == "latest.json" {
+			continue
+		}
+		candidates = append(candidates, e.Name())
+	}
+	if len(candidates) == 0 {
+		return marketdata.MacroDataSnapshot{}, fmt.Errorf("no previous snapshots")
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i] < candidates[j]
+	})
+	for i := len(candidates) - 1; i >= 0; i-- {
+		path := filepath.Join(m.snapshotDir, candidates[i])
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var snap marketdata.MacroDataSnapshot
+		if err := json.Unmarshal(data, &snap); err != nil {
+			continue
+		}
+		if snap.RecordedAt < curr.RecordedAt {
+			return snap, nil
+		}
+	}
+	return marketdata.MacroDataSnapshot{}, fmt.Errorf("no previous snapshot found")
 }
 
 func (m *MacroIngestor) saveSnapshot(snap marketdata.MacroDataSnapshot) error {
