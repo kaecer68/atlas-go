@@ -123,9 +123,6 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Subscribe to EventBus and forward events to this client.
 	sub := h.eventBus.SubscribeAll(func(ctx context.Context, event eventbus.BusEvent) error {
-		if event.Type == eventbus.EventNarrative {
-			BufferNarrativeEvent(event)
-		}
 		if !h.matchesFilter(client, event.Type) {
 			return nil
 		}
