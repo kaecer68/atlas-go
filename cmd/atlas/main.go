@@ -192,6 +192,15 @@ func run(args []string, deps appDeps) error {
 			d.SetEventBus(eventBus)
 			d.SetContext(context.Background())
 			log.Printf("[EventBus] injected into dashboard API for SSE streaming")
+			// Initial macro ingestion on startup to populate snapshot and publish events.
+			ingestCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			_, _, err := d.GetMacroIngestor().Ingest(ingestCtx)
+			cancel()
+			if err != nil {
+				logging.Warn("main", "initial_macro_ingest_failed", "err", err)
+			} else {
+				logging.Info("main", "initial_macro_ingest_ok")
+			}
 		}
 		dashboard.RegisterRoutes(mux)
 
