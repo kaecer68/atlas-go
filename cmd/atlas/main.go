@@ -26,6 +26,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
+	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -192,6 +193,10 @@ func run(args []string, deps appDeps) error {
 			d.SetEventBus(eventBus)
 			d.SetContext(context.Background())
 			log.Printf("[EventBus] injected into dashboard API for SSE streaming")
+			eventBus.Subscribe(eventbus.EventNarrative, func(ctx context.Context, event eventbus.BusEvent) error {
+				apievents.BufferNarrativeEvent(event)
+				return nil
+			})
 			// Initial macro ingestion on startup to populate snapshot and publish events.
 			ingestCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			_, _, err := d.GetMacroIngestor().Ingest(ingestCtx)
