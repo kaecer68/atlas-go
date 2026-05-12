@@ -198,9 +198,9 @@ func TestLoadWeightsConfigIntegratesWithCalculator(t *testing.T) {
 		"thresholds":{"crisis":70,"high":50,"alert":30}}`), 0o644)
 	calc := NewTaiwanStressCalculator(nil, dir)
 	snap := marketdata.MacroDataSnapshot{
-		DXY: marketdata.MacroDataPoint{Value: 104, ChangePct: 1.0},
+		DXY:   marketdata.MacroDataPoint{Value: 104, ChangePct: 1.0},
 		US10Y: marketdata.MacroDataPoint{Value: 4.5},
-		VIX: marketdata.MacroDataPoint{Value: 20},
+		VIX:   marketdata.MacroDataPoint{Value: 20},
 	}
 	geo := GeopoliticalRiskScore{Intensity: 30}
 	idx := calc.Calculate(snap, marketdata.MacroDataSnapshot{}, geo)

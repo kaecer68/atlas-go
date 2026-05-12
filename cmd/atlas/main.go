@@ -305,6 +305,7 @@ func run(args []string, deps appDeps) error {
 		bootstrap.StartChannelHealthSyncLoop(sysCtx, cfg.WorkDir, pool)
 		bootstrap.StartAutoBackfill(sysCtx, cfg.WorkDir, cfg.ReplayDataPath)
 		bootstrap.StartAutoCapitalFlowFetch(sysCtx, cfg.WorkDir)
+		bootstrap.StartAutoGeopoliticalFetch(sysCtx, cfg.WorkDir)
 
 		var btRunner *autobacktest.Runner
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok && d.GetEventBus() != nil {

@@ -54,8 +54,8 @@ func TestAddEventFallsBackToSevenDays(t *testing.T) {
 func TestIsThemeActive(t *testing.T) {
 	lm := NewEventLifecycleManager()
 	ev := &NarrativeEvent{
-		ID:    "test-1",
-		Theme: "AI_capex_surge",
+		ID:     "test-1",
+		Theme:  "AI_capex_surge",
 		Status: "active",
 	}
 	ev.Timestamp = time.Now()
@@ -72,8 +72,8 @@ func TestIsThemeActive(t *testing.T) {
 func TestIsThemeActiveConfirmed(t *testing.T) {
 	lm := NewEventLifecycleManager()
 	ev := &NarrativeEvent{
-		ID:    "test-1",
-		Theme: "US_rates_up",
+		ID:     "test-1",
+		Theme:  "US_rates_up",
 		Status: "confirmed",
 	}
 	ev.Timestamp = time.Now()
@@ -87,8 +87,8 @@ func TestIsThemeActiveConfirmed(t *testing.T) {
 func TestIsThemeActiveExpired(t *testing.T) {
 	lm := NewEventLifecycleManager()
 	ev := &NarrativeEvent{
-		ID:    "test-1",
-		Theme: "oil_price_shock",
+		ID:     "test-1",
+		Theme:  "oil_price_shock",
 		Status: "expired",
 	}
 	ev.Timestamp = time.Now()
@@ -181,7 +181,7 @@ func TestUpdateStatusesToFaded(t *testing.T) {
 
 	lm.UpdateStatuses()
 	if ev.Status != "faded" {
-		t.Fatalf("expected faded (%.1f%% of duration elapsed), got %s", 
+		t.Fatalf("expected faded (%.1f%% of duration elapsed), got %s",
 			float64(time.Since(ev.Timestamp))/float64(ev.Duration)*100, ev.Status)
 	}
 }
