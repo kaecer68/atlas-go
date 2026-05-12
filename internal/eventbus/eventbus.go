@@ -3,6 +3,7 @@ package eventbus
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -61,6 +62,9 @@ const (
 
 	// 实验事件
 	EventExperimentInsufficientData EventType = "experiment.insufficient_data"
+
+	// 叙事事件 (MacroIngestor 生成)
+	EventNarrative EventType = "narrative.event"
 
 	// 订单错误事件
 	EventOrderError EventType = "order.error"
@@ -172,6 +176,21 @@ type OrderErrorEventPayload struct {
 	Attempts     int       `json:"attempts"`
 	LastStatus   string    `json:"last_status"`
 	Timestamp    time.Time `json:"timestamp"`
+}
+
+// NarrativeEventPayload 叙事事件载荷
+type NarrativeEventPayload struct {
+	EventID          string  `json:"event_id"`
+	Theme            string  `json:"theme"`
+	Region           string  `json:"region"`
+	Sentiment        float64 `json:"sentiment"`
+	SentimentText    string  `json:"sentiment_text"`
+	Confidence       float64 `json:"confidence"`
+	ConfidenceSource string  `json:"confidence_source"`
+	HitRate          float64 `json:"hit_rate"`
+	CapitalFlow      string  `json:"capital_flow"`
+	TimeWindow       string  `json:"time_window"`
+	Description      string  `json:"description"`
 }
 
 // BusEvent 总线事件
@@ -467,6 +486,58 @@ func (b *ChannelEventBus) PublishOrderError(orderID, symbol, side string, price 
 			Timestamp:    time.Now(),
 		},
 	})
+}
+
+// PublishNarrativeEvent 发布叙事事件 (MacroIngestor 生成)
+func (b *ChannelEventBus) PublishNarrativeEvent(eventID, theme, region string, sentiment, confidence float64, confidenceSource, hitRate, capitalFlow, timeWindow string) error {
+	sentimentText := "中立"
+	if sentiment > 0.3 {
+		sentimentText = "利多"
+	} else if sentiment < -0.3 {
+		sentimentText = "利空"
+	}
+
+	themeDescriptions := map[string]string{
+		"US_rates_up":                     "美國公債殖利率上升，可能引發資金流向調整",
+		"JPY_carry_unwind":                "日圓套利平倉，顯示全球流動性收緊",
+		"geopolitical_risk_spike":         "地緣政治風險攀升，市場避險情緒升溫",
+		"oil_price_shock":                 "油價劇烈波動，影響通膨預期",
+		"USD_TWD_volatility":              "美元兌台幣波動，反映台灣出口競爭力變化",
+		"semiconductor_downturn":          "半導體出口下滑，景氣放緩訊號",
+		"AI_capex_surge":                  "AI資本支出強勁，科技股展望正面",
+		"retail_frenzy":                   "散戶融資餘額飆升，市場過熱風險",
+		"retail_fear":                     "散戶融資餘額低迷，市場情緒低迷",
+		"retail_institutional_divergence": "散戶與法人方向分歧，可能出現轉向",
+	}
+
+	description := themeDescriptions[theme]
+	if description == "" {
+		description = fmt.Sprintf("%s 區域發生 %s 事件，%s 信號", region, theme, sentimentText)
+	}
+
+	return b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventNarrative,
+		Timestamp: time.Now(),
+		Payload: NarrativeEventPayload{
+			EventID:          eventID,
+			Theme:            theme,
+			Region:           region,
+			Sentiment:        sentiment,
+			SentimentText:    sentimentText,
+			Confidence:       confidence,
+			ConfidenceSource: confidenceSource,
+			HitRate:          parseFloat(hitRate),
+			CapitalFlow:      capitalFlow,
+			TimeWindow:       timeWindow,
+			Description:      description,
+		},
+	})
+}
+
+func parseFloat(s string) float64 {
+	v, _ := strconv.ParseFloat(s, 64)
+	return v
 }
 
 // Subscribe 订阅特定类型事件

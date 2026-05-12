@@ -174,9 +174,9 @@ func run(args []string, deps appDeps) error {
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 			d.SetPool(pool)
 			d.SetHealthManager(portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore).WithParameters(runtimeParams))
-		janusEngine := janus.NewEngine()
-		janusEngine.EnsureAllRegimes()
-		janusEngine.Update()
+			janusEngine := janus.NewEngine()
+			janusEngine.EnsureAllRegimes()
+			janusEngine.Update()
 			d.SetJanusEngine(janusEngine)
 			log.Printf("[JANUS] engine injected into dashboard API")
 		}
@@ -230,6 +230,26 @@ func run(args []string, deps appDeps) error {
 		sysCtx, sysCancel := context.WithCancel(context.Background())
 		go sysMetrics.Start(sysCtx)
 
+		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+			go func() {
+				ticker := time.NewTicker(5 * time.Minute)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-sysCtx.Done():
+						return
+					case <-ticker.C:
+						ingestCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+						_, _, err := d.GetMacroIngestor().Ingest(ingestCtx)
+						cancel()
+						if err != nil {
+							logging.Warn("main", "macro_ingest_failed", "err", err)
+						}
+					}
+				}
+			}()
+		}
+
 		// Periodic metrics snapshot save
 		if repo != nil {
 			go func() {
@@ -271,7 +291,7 @@ func run(args []string, deps appDeps) error {
 		bootstrap.StartChannelHealthSyncLoop(sysCtx, cfg.WorkDir, pool)
 		bootstrap.StartAutoBackfill(sysCtx, cfg.WorkDir, cfg.ReplayDataPath)
 		bootstrap.StartAutoCapitalFlowFetch(sysCtx, cfg.WorkDir)
-		
+
 		var btRunner *autobacktest.Runner
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok && d.GetEventBus() != nil {
 			btRunner = autobacktest.NewRunnerWithEventBus(cfg, d.GetEventBus())

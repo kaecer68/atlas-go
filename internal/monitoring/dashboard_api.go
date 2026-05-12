@@ -74,11 +74,20 @@ type DashboardAPI struct {
 }
 
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
-	provider := marketdata.NewCompositeMacroProvider(
+	providers := []marketdata.MacroDataProvider{
 		marketdata.NewYahooFinanceMacroProvider(),
+		marketdata.NewSOXIndexProvider(),
 		marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")),
+		marketdata.NewTWSEMarginBalanceProvider(),
 		marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export")),
-	)
+	}
+	// Sector data from local cache (graceful degradation if file missing).
+	providers = append(providers, marketdata.NewSectorDataProvider(filepath.Join(workDir, "data/sector_data")))
+	// TSMC Revenue from FinMind (overwrites cached sector data when available).
+	if apiKey := os.Getenv("FINMIND_API_KEY"); apiKey != "" {
+		providers = append(providers, marketdata.NewTSMCRevenueProvider(apiKey))
+	}
+	provider := marketdata.NewCompositeMacroProvider(providers...)
 	geoProvider := narrative.NewCompositeGeopoliticalProvider(
 		narrative.NewRSSGeopoliticalProvider(),
 		narrative.NewGDELTGeopoliticalProvider(),
@@ -111,10 +120,17 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 
 func (a *DashboardAPI) SetEventBus(eventBus *eventbus.ChannelEventBus) {
 	a.eventBus = eventBus
+	if a.macroIngestor != nil {
+		a.macroIngestor.SetEventBus(eventBus)
+	}
 }
 
 func (a *DashboardAPI) GetEventBus() *eventbus.ChannelEventBus {
 	return a.eventBus
+}
+
+func (a *DashboardAPI) GetMacroIngestor() *narrative.MacroIngestor {
+	return a.macroIngestor
 }
 
 func (a *DashboardAPI) SetContext(ctx context.Context) {

@@ -39,7 +39,8 @@ func NewTaiwanStressCalculator(geoProvider GeopoliticalRiskProvider) *TaiwanStre
 }
 
 // Calculate computes the stress index from the given snapshot and geopolitical score.
-func (c *TaiwanStressCalculator) Calculate(snap marketdata.MacroDataSnapshot, geoScore GeopoliticalRiskScore) TaiwanStressIndex {
+// The prev snapshot is used to compute change percentages for indicators where the current change is zero.
+func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapshot, geoScore GeopoliticalRiskScore) TaiwanStressIndex {
 	components := make(map[string]float64)
 
 	// DXY component (weight 15%): absolute change pct scaled to 0-100.
@@ -61,13 +62,14 @@ func (c *TaiwanStressCalculator) Calculate(snap marketdata.MacroDataSnapshot, ge
 	components["us10y"] = us10yComponent * 0.20
 
 	// Foreign investor net sell component (weight 25%): negative flow scaled.
-	foreignFlow := -snap.ForeignInvestorNet.Value // net sell is positive stress
-	if foreignFlow < 0 {
-		foreignFlow = 0
-	}
+	// Positive when foreign investors sell (stress), negative when they buy (relief).
+	foreignFlow := -snap.ForeignInvestorNet.Value
 	foreignComponent := foreignFlow * 10.0
 	if foreignComponent > 100 {
 		foreignComponent = 100
+	}
+	if foreignComponent < -100 {
+		foreignComponent = -100
 	}
 	components["foreign_flow"] = foreignComponent * 0.25
 
@@ -80,6 +82,10 @@ func (c *TaiwanStressCalculator) Calculate(snap marketdata.MacroDataSnapshot, ge
 
 	// JPY component (weight 10%): JPY appreciation or carry unwind increases Taiwan stress.
 	jpyChange := math.Abs(snap.JPY.ChangePct)
+	// If current change is zero but we have a previous value, compute change from previous.
+	if jpyChange == 0 && snap.JPY.Symbol != "" && prev.JPY.Symbol != "" && prev.JPY.Value != 0 {
+		jpyChange = math.Abs((snap.JPY.Value-prev.JPY.Value)/prev.JPY.Value) * 100
+	}
 	jpyComponent := jpyChange * 10.0
 	if jpyComponent > 100 {
 		jpyComponent = 100
@@ -114,7 +120,7 @@ func (c *TaiwanStressCalculator) Calculate(snap marketdata.MacroDataSnapshot, ge
 // CalculateFromSnapshot fetches the geopolitical score and computes the index.
 // If the live fetch fails, it attempts to load the latest persisted score as fallback.
 // Results are cached for 5 minutes to avoid repeated slow external calls on every dashboard refresh.
-func (c *TaiwanStressCalculator) CalculateFromSnapshot(ctx context.Context, snap marketdata.MacroDataSnapshot) (TaiwanStressIndex, error) {
+func (c *TaiwanStressCalculator) CalculateFromSnapshot(ctx context.Context, snap, prev marketdata.MacroDataSnapshot) (TaiwanStressIndex, error) {
 	c.mu.RLock()
 	if c.cache != nil && time.Since(c.cachedAt) < c.cacheTTL {
 		idx := *c.cache
@@ -127,7 +133,7 @@ func (c *TaiwanStressCalculator) CalculateFromSnapshot(ctx context.Context, snap
 	if err != nil {
 		return TaiwanStressIndex{}, fmt.Errorf("fetch geopolitical score: %w", err)
 	}
-	idx := c.Calculate(snap, geoScore)
+	idx := c.Calculate(snap, prev, geoScore)
 
 	c.mu.Lock()
 	c.cache = &idx
@@ -138,7 +144,7 @@ func (c *TaiwanStressCalculator) CalculateFromSnapshot(ctx context.Context, snap
 
 // CalculateFromSnapshotWithStore fetches the geopolitical score and computes the index,
 // falling back to a persisted score from the provided store if the live fetch fails.
-func (c *TaiwanStressCalculator) CalculateFromSnapshotWithStore(ctx context.Context, snap marketdata.MacroDataSnapshot, store *GeopoliticalStore) (TaiwanStressIndex, error) {
+func (c *TaiwanStressCalculator) CalculateFromSnapshotWithStore(ctx context.Context, snap, prev marketdata.MacroDataSnapshot, store *GeopoliticalStore) (TaiwanStressIndex, error) {
 	c.mu.RLock()
 	if c.cache != nil && time.Since(c.cachedAt) < c.cacheTTL {
 		idx := *c.cache
@@ -160,7 +166,7 @@ func (c *TaiwanStressCalculator) CalculateFromSnapshotWithStore(ctx context.Cont
 			return TaiwanStressIndex{}, fmt.Errorf("fetch geopolitical score: %w", err)
 		}
 	}
-	idx := c.Calculate(snap, geoScore)
+	idx := c.Calculate(snap, prev, geoScore)
 
 	c.mu.Lock()
 	c.cache = &idx

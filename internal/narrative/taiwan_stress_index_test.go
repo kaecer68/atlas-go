@@ -20,7 +20,7 @@ func TestTaiwanStressCalculator_Calculate(t *testing.T) {
 	}
 	geo := GeopoliticalRiskScore{Intensity: 30}
 
-	idx := calc.Calculate(snap, geo)
+	idx := calc.Calculate(snap, marketdata.MacroDataSnapshot{}, geo)
 
 	if idx.Score < 0 || idx.Score > 100 {
 		t.Fatalf("score out of range: %v", idx.Score)
@@ -66,14 +66,14 @@ func TestTaiwanStressCalculator_CalculateFromSnapshot_CachesResult(t *testing.T)
 	}
 
 	ctx := context.Background()
-	if _, err := calc.CalculateFromSnapshot(ctx, snap); err != nil {
+	if _, err := calc.CalculateFromSnapshot(ctx, snap, marketdata.MacroDataSnapshot{}); err != nil {
 		t.Fatalf("first call failed: %v", err)
 	}
 	if mock.calls != 1 {
 		t.Fatalf("expected 1 provider call after first invocation, got %d", mock.calls)
 	}
 
-	if _, err := calc.CalculateFromSnapshot(ctx, snap); err != nil {
+	if _, err := calc.CalculateFromSnapshot(ctx, snap, marketdata.MacroDataSnapshot{}); err != nil {
 		t.Fatalf("second call failed: %v", err)
 	}
 	if mock.calls != 1 {
@@ -81,7 +81,7 @@ func TestTaiwanStressCalculator_CalculateFromSnapshot_CachesResult(t *testing.T)
 	}
 
 	time.Sleep(150 * time.Millisecond)
-	if _, err := calc.CalculateFromSnapshot(ctx, snap); err != nil {
+	if _, err := calc.CalculateFromSnapshot(ctx, snap, marketdata.MacroDataSnapshot{}); err != nil {
 		t.Fatalf("third call after ttl failed: %v", err)
 	}
 	if mock.calls != 2 {
@@ -126,7 +126,7 @@ func TestTaiwanStressCalculator_RegimeThresholds(t *testing.T) {
 
 	for _, tt := range tests {
 		geo := GeopoliticalRiskScore{Intensity: tt.geo}
-		idx := calc.Calculate(tt.snap, geo)
+		idx := calc.Calculate(tt.snap, marketdata.MacroDataSnapshot{}, geo)
 		if idx.Regime != tt.want {
 			t.Fatalf("%s: expected regime %q, got %q (score=%.1f)", tt.name, tt.want, idx.Regime, idx.Score)
 		}

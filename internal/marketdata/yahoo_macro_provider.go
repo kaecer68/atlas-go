@@ -99,7 +99,7 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 	if err != nil {
 		return MacroDataPoint{}, err
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
 	resp, err := y.client.Do(req)
 	if err != nil {
@@ -107,14 +107,23 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return MacroDataPoint{}, fmt.Errorf("http status %d", resp.StatusCode)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return MacroDataPoint{}, err
 	}
 
+	// Detect HTML error pages (Yahoo Finance may return HTML on rate limiting or API changes).
+	if len(body) > 0 && body[0] == '<' {
+		return MacroDataPoint{}, fmt.Errorf("received HTML response instead of JSON")
+	}
+
 	var chartResp yahooChartResponse
 	if err := json.Unmarshal(body, &chartResp); err != nil {
-		return MacroDataPoint{}, err
+		return MacroDataPoint{}, fmt.Errorf("unmarshal: %w", err)
 	}
 
 	result := chartResp.Chart.Result

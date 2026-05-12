@@ -12,12 +12,12 @@ import (
 // DailyQuotaTracker tracks API calls per day with persistent storage.
 // Resets automatically at midnight.
 type DailyQuotaTracker struct {
-	mu          sync.RWMutex
-	provider    string
-	stateFile   string
-	dailyLimit  int
-	callsToday  int
-	lastReset   time.Time
+	mu         sync.RWMutex
+	provider   string
+	stateFile  string
+	dailyLimit int
+	callsToday int
+	lastReset  time.Time
 }
 
 // QuotaState is the persisted state format.
