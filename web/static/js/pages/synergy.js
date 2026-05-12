@@ -12,9 +12,12 @@ function renderLeaderboard(status, trend) {
 
   const agentList = agentListFromStatus(status);
   if (!agentList.length) {
+    container.className = 'empty';
     container.innerHTML = '<div class="empty">尚無 Darwinian 權重資料</div>';
     return;
   }
+
+  container.className = '';
 
   const trends = {};
   if (trend && trend.points && trend.points.length > 1) {
