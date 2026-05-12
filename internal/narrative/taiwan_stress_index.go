@@ -2,8 +2,11 @@ package narrative
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -60,85 +63,152 @@ const (
 
 // TaiwanStressCalculator computes the stress index from macro and capital flow data.
 type TaiwanStressCalculator struct {
-	geoProvider GeopoliticalRiskProvider
-	mu          sync.RWMutex
-	cache       *TaiwanStressIndex
-	cachedAt    time.Time
-	cacheTTL    time.Duration
+	geoProvider   GeopoliticalRiskProvider
+	mu            sync.RWMutex
+	cache         *TaiwanStressIndex
+	cachedAt      time.Time
+	cacheTTL      time.Duration
+	weightsConfig *StressIndexWeightsConfig
+}
+
+// StressIndexWeightsConfig holds runtime-configurable weights for the stress index.
+// When nil, the compile-time constants are used as defaults.
+type StressIndexWeightsConfig struct {
+	Scaling    StressIndexScaling    `json:"scaling"`
+	Weights    StressIndexWeights    `json:"weights"`
+	Thresholds StressIndexThresholds `json:"thresholds"`
+}
+
+type StressIndexScaling struct {
+	DXY          float64 `json:"dxy"`
+	US10Y        float64 `json:"us10y"`
+	ForeignFlow  float64 `json:"foreign_flow"`
+	VIX          float64 `json:"vix"`
+	JPY          float64 `json:"jpy"`
+	Geopolitical float64 `json:"geopolitical"`
+}
+
+type StressIndexWeights struct {
+	DXY          float64 `json:"dxy"`
+	US10Y        float64 `json:"us10y"`
+	ForeignFlow  float64 `json:"foreign_flow"`
+	VIX          float64 `json:"vix"`
+	JPY          float64 `json:"jpy"`
+	Geopolitical float64 `json:"geopolitical"`
+}
+
+type StressIndexThresholds struct {
+	Crisis float64 `json:"crisis"`
+	High   float64 `json:"high"`
+	Alert  float64 `json:"alert"`
+}
+
+// LoadWeightsConfig reads stress index weights from a JSON config file.
+// Returns nil if the file doesn't exist (caller falls back to compile-time defaults).
+func LoadWeightsConfig(workDir string) *StressIndexWeightsConfig {
+	path := filepath.Join(workDir, "configs/stress_index_weights.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var cfg StressIndexWeightsConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil
+	}
+	if !cfg.isValid() {
+		return nil
+	}
+	return &cfg
+}
+
+func (c *StressIndexWeightsConfig) isValid() bool {
+	sum := c.Weights.DXY + c.Weights.US10Y + c.Weights.ForeignFlow +
+		c.Weights.VIX + c.Weights.JPY + c.Weights.Geopolitical
+	return sum > 0.99 && sum < 1.01
 }
 
 // NewTaiwanStressCalculator creates a calculator with an optional geopolitical provider.
-func NewTaiwanStressCalculator(geoProvider GeopoliticalRiskProvider) *TaiwanStressCalculator {
+// If workDir is non-empty, attempts to load runtime weights from configs/stress_index_weights.json.
+func NewTaiwanStressCalculator(geoProvider GeopoliticalRiskProvider, workDir string) *TaiwanStressCalculator {
 	if geoProvider == nil {
 		geoProvider = NewRSSGeopoliticalProvider()
 	}
+	var cfg *StressIndexWeightsConfig
+	if workDir != "" {
+		cfg = LoadWeightsConfig(workDir)
+	}
 	return &TaiwanStressCalculator{
-		geoProvider: geoProvider,
-		cacheTTL:    5 * time.Minute,
+		geoProvider:   geoProvider,
+		cacheTTL:      5 * time.Minute,
+		weightsConfig: cfg,
 	}
 }
 
 // Calculate computes the stress index from the given snapshot and geopolitical score.
 // The prev snapshot is used to compute change percentages for indicators where the current change is zero.
+// Uses runtime weights from configs/stress_index_weights.json if loaded, falling back to compile-time defaults.
 func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapshot, geoScore GeopoliticalRiskScore) TaiwanStressIndex {
 	components := make(map[string]float64)
 
-	dxyComponent := math.Abs(snap.DXY.ChangePct) * stressScaleDXY
+	scaleDXY, scaleUS10Y, scaleFlow, scaleVIX, scaleJPY, scaleGeo := c.getScaling()
+	wDXY, wUS10Y, wFlow, wVIX, wJPY, wGeo := c.getWeights()
+	tCrisis, tHigh, tAlert := c.getThresholds()
+
+	dxyComponent := math.Abs(snap.DXY.ChangePct) * scaleDXY
 	if dxyComponent > 100 {
 		dxyComponent = 100
 	}
-	components["dxy"] = dxyComponent * stressWeightDXY
+	components["dxy"] = dxyComponent * wDXY
 
 	us10yChange := snap.US10Y.Value
 	if us10yChange < 0 {
 		us10yChange = -us10yChange
 	}
-	us10yComponent := us10yChange * stressScaleUS10Y
+	us10yComponent := us10yChange * scaleUS10Y
 	if us10yComponent > 100 {
 		us10yComponent = 100
 	}
-	components["us10y"] = us10yComponent * stressWeightUS10Y
+	components["us10y"] = us10yComponent * wUS10Y
 
-	// Positive when foreign investors sell (stress), negative when they buy (relief).
 	foreignFlow := -snap.ForeignInvestorNet.Value
-	foreignComponent := foreignFlow * stressScaleForeignFlow
+	foreignComponent := foreignFlow * scaleFlow
 	if foreignComponent > 100 {
 		foreignComponent = 100
 	}
 	if foreignComponent < -100 {
 		foreignComponent = -100
 	}
-	components["foreign_flow"] = foreignComponent * stressWeightForeignFlow
+	components["foreign_flow"] = foreignComponent * wFlow
 
-	vixComponent := snap.VIX.Value * stressScaleVIX
+	vixComponent := snap.VIX.Value * scaleVIX
 	if vixComponent > 100 {
 		vixComponent = 100
 	}
-	components["vix"] = vixComponent * stressWeightVIX
+	components["vix"] = vixComponent * wVIX
 
 	jpyChange := math.Abs(snap.JPY.ChangePct)
 	if jpyChange == 0 && snap.JPY.Symbol != "" && prev.JPY.Symbol != "" && prev.JPY.Value != 0 {
 		jpyChange = math.Abs((snap.JPY.Value-prev.JPY.Value)/prev.JPY.Value) * 100
 	}
-	jpyComponent := jpyChange * stressScaleJPY
+	jpyComponent := jpyChange * scaleJPY
 	if jpyComponent > 100 {
 		jpyComponent = 100
 	}
-	components["jpy"] = jpyComponent * stressWeightJPY
+	components["jpy"] = jpyComponent * wJPY
 
-	geoComponent := geoScore.Intensity * stressScaleGeopolitical
-	components["geopolitical"] = geoComponent * stressWeightGeopolitical
+	geoComponent := geoScore.Intensity * scaleGeo
+	components["geopolitical"] = geoComponent * wGeo
 
 	score := components["dxy"] + components["us10y"] + components["foreign_flow"] +
 		components["vix"] + components["jpy"] + components["geopolitical"]
 
 	regime := "low"
 	switch {
-	case score >= stressThresholdCrisis:
+	case score >= tCrisis:
 		regime = "crisis"
-	case score >= stressThresholdHigh:
+	case score >= tHigh:
 		regime = "high"
-	case score >= stressThresholdAlert:
+	case score >= tAlert:
 		regime = "alert"
 	}
 
@@ -148,6 +218,34 @@ func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapsh
 		Components: components,
 		Timestamp:  snap.RecordedAt,
 	}
+}
+
+func (c *TaiwanStressCalculator) getScaling() (dxy, us10y, flow, vix, jpy, geo float64) {
+	if c.weightsConfig != nil {
+		return c.weightsConfig.Scaling.DXY, c.weightsConfig.Scaling.US10Y,
+			c.weightsConfig.Scaling.ForeignFlow, c.weightsConfig.Scaling.VIX,
+			c.weightsConfig.Scaling.JPY, c.weightsConfig.Scaling.Geopolitical
+	}
+	return stressScaleDXY, stressScaleUS10Y, stressScaleForeignFlow,
+		stressScaleVIX, stressScaleJPY, stressScaleGeopolitical
+}
+
+func (c *TaiwanStressCalculator) getWeights() (dxy, us10y, flow, vix, jpy, geo float64) {
+	if c.weightsConfig != nil {
+		return c.weightsConfig.Weights.DXY, c.weightsConfig.Weights.US10Y,
+			c.weightsConfig.Weights.ForeignFlow, c.weightsConfig.Weights.VIX,
+			c.weightsConfig.Weights.JPY, c.weightsConfig.Weights.Geopolitical
+	}
+	return stressWeightDXY, stressWeightUS10Y, stressWeightForeignFlow,
+		stressWeightVIX, stressWeightJPY, stressWeightGeopolitical
+}
+
+func (c *TaiwanStressCalculator) getThresholds() (crisis, high, alert float64) {
+	if c.weightsConfig != nil {
+		return c.weightsConfig.Thresholds.Crisis, c.weightsConfig.Thresholds.High,
+			c.weightsConfig.Thresholds.Alert
+	}
+	return stressThresholdCrisis, stressThresholdHigh, stressThresholdAlert
 }
 
 // CalculateFromSnapshot fetches the geopolitical score and computes the index.
