@@ -89,7 +89,7 @@ function renderSkeleton(lines) {
 }
 
 function showSkeletons() {
-  document.querySelectorAll('.skeleton-container, .empty.loading').forEach(function(el) { el.innerHTML = renderSkeleton(4); });
+  document.querySelectorAll('.skeleton-container').forEach(function(el) { el.innerHTML = renderSkeleton(4); });
 }
 
 // --- Module Registry (all modules loaded once) ---
