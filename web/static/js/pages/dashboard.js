@@ -339,7 +339,10 @@ export function renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend
   const prismCompleted = phase3 && phase3.prism_completed_results != null ? phase3.prism_completed_results : (phase3 && phase3.PRISMCompletedResults != null ? phase3.PRISMCompletedResults : '-');
   const swarmRunning = phase3 && (phase3.swarm_running || phase3.SwarmRunning) ? '運作中' : '待機';
 
-  const agentList = (darwinianStatus && darwinianStatus.agent_list) ? darwinianStatus.agent_list : [];
+  let agentList = [];
+  if (darwinianStatus && darwinianStatus.agents) {
+    agentList = Object.keys(darwinianStatus.agents).map(id => Object.assign({agent_id: id}, darwinianStatus.agents[id]));
+  }
   const topAgent = agentList.length > 0 ? agentList.reduce((a, b) => (b.weight || 0) > (a.weight || 0) ? b : a) : null;
   const avgWeight = agentList.length > 0 ? (agentList.reduce((s, a) => s + (a.weight || 0), 0) / agentList.length).toFixed(2) : '-';
 
