@@ -99,15 +99,22 @@ function renderCandidates(inbox) {
 
   let html = '';
   inbox.items.forEach(item => {
-    const brief = item.brief || {};
+    const agentId = item.target_agent_id || '';
+    const mutation = item.mutation_type || '';
+    const summary = item.mutation_summary || '';
+    const status = item.status || '';
+    let statusLabel = '';
+    if (status === 'accepted') statusLabel = '<span style="color:var(--up)">✅ Accepted</span>';
+    else if (status === 'rejected') statusLabel = '<span style="color:var(--down)">❌ Rejected</span>';
+    else if (status === 'expired') statusLabel = '<span style="color:var(--muted)">⏳ Expired</span>';
+    else statusLabel = '<span style="color:var(--warn)">⏳ Pending</span>';
+
     html += `
       <div class="inbox-card">
         <div class="title">${escapeHtml(item.experiment_id)}</div>
-        <div class="meta">Agent: ${escapeHtml(getAgentName(brief.agent_id || 'Unknown'))}</div>
-        <div class="meta">Mutation: ${escapeHtml(brief.mutation_type || 'Unknown')}</div>
-        <div style="font-size:11px; color:var(--muted); margin-top:8px;">
-          Created: ${new Date(item.created_at).toLocaleString()}
-        </div>
+        <div class="meta">Agent: ${escapeHtml(getAgentName(agentId))} ${statusLabel}</div>
+        <div class="meta">Mutation: ${escapeHtml(mutation)}</div>
+        <div style="font-size:10px; color:var(--muted); margin-top:4px; word-break:break-all;">${escapeHtml(summary)}</div>
       </div>
     `;
   });
