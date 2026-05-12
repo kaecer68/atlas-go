@@ -402,8 +402,13 @@ if (typeof window !== 'undefined') {
 }
 
 function initEventStream() {
-  const recentEvents = [];
-  const maxEvents = 20;
+function eventDedupKey(ev) {
+  if (ev.payload && ev.payload.event_id) return ev.payload.event_id;
+  return ev.id || ev.timestamp || '';
+}
+
+const recentEvents = [];
+const maxEvents = 20;
 
   function mapEventToProgress(eventType) {
     if (eventType === 'simulation.start' || eventType === 'system.start') return 'fetching_data';
@@ -440,6 +445,11 @@ function initEventStream() {
   }
 
   eventSource.on('*', (ev) => {
+    var key = eventDedupKey(ev);
+    if (key) {
+      var dupIdx = recentEvents.findIndex(function(e) { return eventDedupKey(e) === key; });
+      if (dupIdx !== -1) recentEvents.splice(dupIdx, 1);
+    }
     recentEvents.unshift(ev);
     if (recentEvents.length > maxEvents) {
       recentEvents.pop();

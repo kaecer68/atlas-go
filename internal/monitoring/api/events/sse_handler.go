@@ -45,9 +45,17 @@ var (
 const defaultMaxSSEClients = 20
 
 // BufferNarrativeEvent stores a narrative event for catchup by new SSE clients.
+// Deduplicates by event payload EventID to prevent the same event from accumulating
+// across multiple ingestion cycles or redundant publications.
 func BufferNarrativeEvent(event eventbus.BusEvent) {
 	lastNarrativeMutex.Lock()
 	defer lastNarrativeMutex.Unlock()
+	key := narrativeEventKey(event)
+	for _, b := range narrativeBuffer {
+		if narrativeEventKey(b.Event) == key {
+			return
+		}
+	}
 	narrativeBuffer = append(narrativeBuffer, BufferedNarrativeEvent{
 		Event:      event,
 		ReceivedAt: time.Now(),
@@ -55,6 +63,24 @@ func BufferNarrativeEvent(event eventbus.BusEvent) {
 	if len(narrativeBuffer) > maxBufferedNarrativeEvents {
 		narrativeBuffer = narrativeBuffer[len(narrativeBuffer)-maxBufferedNarrativeEvents:]
 	}
+}
+
+// narrativeEventKey extracts a stable dedup key from a BusEvent.
+// For narrative events, uses the payload's EventID (stable across publications).
+// For other events, falls back to the BusEvent ID.
+func narrativeEventKey(event eventbus.BusEvent) string {
+	if event.Type != eventbus.EventNarrative {
+		return event.ID
+	}
+	switch p := event.Payload.(type) {
+	case eventbus.NarrativeEventPayload:
+		return p.EventID
+	case map[string]interface{}:
+		if id, ok := p["event_id"].(string); ok {
+			return id
+		}
+	}
+	return event.ID
 }
 
 // NewSSEHandler creates a new SSE handler.
