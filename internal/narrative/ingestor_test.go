@@ -4,10 +4,72 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
+
+type trackEventBus struct {
+	mu         sync.Mutex
+	published  []string
+}
+
+func (t *trackEventBus) PublishNarrativeEvent(eventID, theme, region string, sentiment, confidence float64, confidenceSource, hitRate, capitalFlow, timeWindow string) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.published = append(t.published, theme)
+	return nil
+}
+
+func TestMacroIngestorLifecycleGatesDuplicateTheme(t *testing.T) {
+	dir := t.TempDir()
+	bus := &trackEventBus{}
+
+	lm := NewEventLifecycleManager()
+	now := time.Now()
+	lm.AddEvent(&NarrativeEvent{
+		ID: "existing-1", Theme: "US_rates_up", Status: "active", Timestamp: now,
+		Duration: 7 * 24 * time.Hour,
+	})
+
+	mock := &marketdata.MockMacroProvider{
+		Snapshot: marketdata.MacroDataSnapshot{
+			US10Y: marketdata.MacroDataPoint{Symbol: "^TNX", Value: 150, ChangePct: 2.0},
+			DXY:   marketdata.MacroDataPoint{Symbol: "DX-Y.NYB", Value: 105, ChangePct: 1.8},
+		},
+	}
+	ingestor := NewMacroIngestor(mock, dir)
+	ingestor.SetLifecycleManager(lm)
+	ingestor.SetEventBus(bus)
+
+	events, _, err := ingestor.Ingest(context.Background())
+	if err != nil {
+		t.Fatalf("ingest failed: %v", err)
+	}
+
+	foundUSRates := false
+	for _, e := range events {
+		if e.Theme == "US_rates_up" {
+			foundUSRates = true
+		}
+	}
+	if !foundUSRates {
+		t.Fatal("expected US_rates_up in returned events (detection should still work)")
+	}
+
+	bus.mu.Lock()
+	published := make([]string, len(bus.published))
+	copy(published, bus.published)
+	bus.mu.Unlock()
+
+	for _, theme := range published {
+		if theme == "US_rates_up" {
+			t.Fatal("lifecycle gate FAILED: US_rates_up was published even though it's already active")
+		}
+	}
+}
 
 func TestMacroIngestorDetectsUSRatesEvent(t *testing.T) {
 	dir := t.TempDir()
