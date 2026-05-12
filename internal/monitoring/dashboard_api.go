@@ -108,7 +108,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		macroIngestor:      narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro")),
 		geoProvider:        geoProvider,
 		taiwanGeoProvider:  taiwanGeoProvider,
-		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider),
+		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider, workDir),
 		reportGenerator:    narrative.NewReportGenerator(),
 		industryService:    service.NewIndustryService(industry.DefaultClassification(), industry.NewSeasonalEngine(), industry.NewCycleTracker(), industry.NewLinkageAnalyzer(), industry.NewRiskMonitor()),
 		metricsCollector:   metricsCollector,

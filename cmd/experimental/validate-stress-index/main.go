@@ -66,7 +66,7 @@ func main() {
 		})
 	}
 
-	calc := narrative.NewTaiwanStressCalculator(nil)
+	calc := narrative.NewTaiwanStressCalculator(nil, "")
 	geo := narrative.GeopoliticalRiskScore{Intensity: 30}
 
 	type result struct {

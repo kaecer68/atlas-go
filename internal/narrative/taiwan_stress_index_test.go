@@ -9,7 +9,7 @@ import (
 )
 
 func TestTaiwanStressCalculator_Calculate(t *testing.T) {
-	calc := NewTaiwanStressCalculator(nil)
+	calc := NewTaiwanStressCalculator(nil, "")
 
 	snap := marketdata.MacroDataSnapshot{
 		DXY:                marketdata.MacroDataPoint{Value: 104, ChangePct: 0.5},
@@ -54,7 +54,7 @@ func (m *mockGeoProvider) FetchScore(ctx context.Context) (GeopoliticalRiskScore
 
 func TestTaiwanStressCalculator_CalculateFromSnapshot_CachesResult(t *testing.T) {
 	mock := &mockGeoProvider{score: GeopoliticalRiskScore{Intensity: 10}}
-	calc := NewTaiwanStressCalculator(mock)
+	calc := NewTaiwanStressCalculator(mock, "")
 	calc.cacheTTL = 100 * time.Millisecond
 
 	snap := marketdata.MacroDataSnapshot{
@@ -90,7 +90,7 @@ func TestTaiwanStressCalculator_CalculateFromSnapshot_CachesResult(t *testing.T)
 }
 
 func TestTaiwanStressCalculator_RegimeThresholds(t *testing.T) {
-	calc := NewTaiwanStressCalculator(nil)
+	calc := NewTaiwanStressCalculator(nil, "")
 
 	tests := []struct {
 		name string
