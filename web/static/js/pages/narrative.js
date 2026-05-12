@@ -3,6 +3,7 @@ import { renderEmptyState } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
 
 let templateAccordionState = { openTemplateId: null };
+let modelAccordionState = { openModelId: null };
 
 function toggleTemplateAccordion(idx) {
   const targetRow = document.getElementById('tmpl-rationale-' + idx);
@@ -22,7 +23,26 @@ function toggleTemplateAccordion(idx) {
   templateAccordionState.openTemplateId = wasOpen ? null : 'tmpl-rationale-' + idx;
 }
 
+function toggleModelAccordion(idx) {
+  const targetRow = document.getElementById('model-rationale-' + idx);
+  const targetBtn = document.getElementById('model-btn-' + idx);
+  if (!targetRow) return;
+
+  const wasOpen = targetRow.style.display !== 'none';
+
+  document.querySelectorAll('[id^="model-rationale-"]').forEach(function(row) { row.style.display = 'none'; });
+  document.querySelectorAll('[id^="model-btn-"]').forEach(function(btn) { if (btn) btn.textContent = '展開完整論述 ▼'; });
+
+  if (!wasOpen) {
+    targetRow.style.display = 'block';
+    targetBtn.textContent = '收起論述 ▲';
+  }
+
+  modelAccordionState.openModelId = wasOpen ? null : 'model-rationale-' + idx;
+}
+
 window.toggleTemplateAccordion = toggleTemplateAccordion;
+window.toggleModelAccordion = toggleModelAccordion;
 
 export function renderLiveNarrativeStrip(events, stress, models, chains) {
   const el = document.getElementById('liveNarrativeStrip');
@@ -313,7 +333,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
             ${(m.avoided_sectors || []).map(s => `<span class="badge err">− ${escapeHtml(sectorName(s))}</span>`).join('')}
           </div>
           ${m.rationale ? `<div class="mt-sm">
-            <button onclick="document.getElementById('model-rationale-${idx}').style.display=document.getElementById('model-rationale-${idx}').style.display==='none'?'block':'none';this.textContent=this.textContent==='展開完整論述 ▼'?'收起論述 ▲':'展開完整論述 ▼'" style="font-size:12px;color:var(--accent);background:none;border:none;padding:0;cursor:pointer">展開完整論述 ▼</button>
+            <button id="model-btn-${idx}" onclick="toggleModelAccordion(${idx})" style="font-size:12px;color:var(--accent);background:none;border:none;padding:0;cursor:pointer">展開完整論述 ▼</button>
             <div id="model-rationale-${idx}" style="display:none;margin-top:8px;padding:10px;background:var(--bg);border-radius:6px;font-size:12px;line-height:1.7;color:var(--text);white-space:pre-wrap">${escapeHtml(m.rationale)}</div>
           </div>` : ''}
         </div>

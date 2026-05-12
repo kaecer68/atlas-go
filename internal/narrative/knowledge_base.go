@@ -1,12 +1,15 @@
 package narrative
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
@@ -87,8 +90,7 @@ type NarrativeEngine struct {
 	models []InvestmentModel
 }
 
-// sectorSymbolMap maps narrative sectors to representative TWSE symbols.
-var sectorSymbolMap = map[string][]string{
+var defaultSectorSymbolMap = map[string][]string{
 	"financials":      {"2881.TW", "2882.TW", "2884.TW", "2885.TW", "2886.TW", "2891.TW", "2892.TW"},
 	"high_dividend":   {"0056.TW", "00878.TW"},
 	"etf_rotation":    {"0050.TW", "0056.TW", "00878.TW"},
@@ -102,6 +104,34 @@ var sectorSymbolMap = map[string][]string{
 	"tourism":         {},
 	"tech":            {"2330.TW", "2317.TW", "2382.TW", "3231.TW"},
 	"defensive":       {"2881.TW", "0056.TW", "1301.TW"},
+}
+
+var sectorSymbolMap map[string][]string
+
+func init() {
+	sectorSymbolMap = loadSectorSymbols("configs/sector_symbols.json")
+}
+
+func loadSectorSymbols(path string) map[string][]string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return copySectorMap(defaultSectorSymbolMap)
+	}
+
+	var loaded map[string][]string
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		return copySectorMap(defaultSectorSymbolMap)
+	}
+
+	return loaded
+}
+
+func copySectorMap(src map[string][]string) map[string][]string {
+	dst := make(map[string][]string, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }
 
 // NewNarrativeEngine creates a narrative engine with default templates and models.
@@ -288,6 +318,7 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 		m := &ne.models[i]
 		correct := 0
 		total := 0
+		nanSectorSet := make(map[string]bool)
 
 		for d := startIdx; d < startIdx+lookback && d < len(ds.Dates)-holdWindow; d++ {
 			date := ds.Dates[d]
@@ -295,6 +326,16 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 			avoided := ne.avgSectorReturn(ds, date, holdWindow, m.AvoidedSectors)
 
 			if math.IsNaN(favored) || math.IsNaN(avoided) {
+				if math.IsNaN(favored) {
+					for _, sector := range m.FavoredSectors {
+						nanSectorSet[sector] = true
+					}
+				}
+				if math.IsNaN(avoided) {
+					for _, sector := range m.AvoidedSectors {
+						nanSectorSet[sector] = true
+					}
+				}
 				continue
 			}
 			total++
@@ -306,7 +347,27 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 		if total > 0 {
 			m.RecentError = 1.0 - (float64(correct) / float64(total))
 		} else {
+			logging.Warn("narrative", "model_eval_no_data",
+				logging.FStr("model", m.Name),
+				logging.FStr("reason", "no_valid_sector_comparisons"))
 			m.RecentError = 0.5
+		}
+
+		if total < 5 && total > 0 {
+			logging.Warn("narrative", "model_eval_low_confidence",
+				logging.FStr("model", m.Name),
+				logging.FInt("observations", total),
+				logging.FStr("reason", "few_observations"))
+		}
+
+		if len(nanSectorSet) > 0 {
+			sectors := make([]string, 0, len(nanSectorSet))
+			for s := range nanSectorSet {
+				sectors = append(sectors, s)
+			}
+			logging.Warn("narrative", "model_eval_nan_sectors",
+				logging.FStr("model", m.Name),
+				logging.FStr("sectors", strings.Join(sectors, ",")))
 		}
 
 		hitRate := 1.0 - m.RecentError
