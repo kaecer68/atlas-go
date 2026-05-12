@@ -2,6 +2,7 @@ package narrative
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"sync"
@@ -148,5 +149,132 @@ func TestMacroIngestorNoTriggerOnCalmData(t *testing.T) {
 	}
 	if len(events) != 0 {
 		t.Fatalf("expected 0 events on calm data, got %d", len(events))
+	}
+}
+
+func TestHasValidYahooData(t *testing.T) {
+	empty := marketdata.MacroDataSnapshot{}
+	if hasValidYahooData(empty) {
+		t.Fatal("expected false for empty snapshot")
+	}
+
+	onlyUS10Y := marketdata.MacroDataSnapshot{
+		US10Y: marketdata.MacroDataPoint{Symbol: "^TNX"},
+	}
+	if !hasValidYahooData(onlyUS10Y) {
+		t.Fatal("expected true when US10Y has symbol")
+	}
+
+	onlyDXY := marketdata.MacroDataSnapshot{
+		DXY: marketdata.MacroDataPoint{Symbol: "DX-Y.NYB"},
+	}
+	if !hasValidYahooData(onlyDXY) {
+		t.Fatal("expected true when DXY has symbol")
+	}
+
+	onlyVIX := marketdata.MacroDataSnapshot{
+		VIX: marketdata.MacroDataPoint{Symbol: "^VIX"},
+	}
+	if !hasValidYahooData(onlyVIX) {
+		t.Fatal("expected true when VIX has symbol")
+	}
+}
+
+func TestLoadFallbackDatedSnapshotNoFiles(t *testing.T) {
+	dir := t.TempDir()
+	ingestor := NewMacroIngestor(&marketdata.MockMacroProvider{}, dir)
+
+	_, err := ingestor.loadFallbackDatedSnapshot()
+	if err == nil {
+		t.Fatal("expected error when no dated snapshots exist")
+	}
+}
+
+func TestLoadFallbackDatedSnapshotSkipsLatest(t *testing.T) {
+	dir := t.TempDir()
+
+	invalidLatest := marketdata.MacroDataSnapshot{
+		US10Y: marketdata.MacroDataPoint{Symbol: "", Value: 0},
+	}
+	data, _ := json.Marshal(invalidLatest)
+	os.WriteFile(filepath.Join(dir, "latest.json"), data, 0o644)
+
+	validDated := marketdata.MacroDataSnapshot{
+		US10Y: marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.5},
+		DXY:   marketdata.MacroDataPoint{Symbol: "DX-Y.NYB", Value: 105},
+	}
+	datedData, _ := json.Marshal(validDated)
+	os.WriteFile(filepath.Join(dir, "2026-05-11.json"), datedData, 0o644)
+
+	ingestor := NewMacroIngestor(&marketdata.MockMacroProvider{}, dir)
+	snap, err := ingestor.loadFallbackDatedSnapshot()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if snap.US10Y.Symbol != "^TNX" {
+		t.Fatalf("expected US10Y symbol ^TNX from dated fallback, got %s", snap.US10Y.Symbol)
+	}
+}
+
+func TestLoadFallbackDatedSnapshotPicksNewest(t *testing.T) {
+	dir := t.TempDir()
+
+	older := marketdata.MacroDataSnapshot{
+		US10Y: marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.5},
+	}
+	olderData, _ := json.Marshal(older)
+	olderPath := filepath.Join(dir, "2026-05-10.json")
+	os.WriteFile(olderPath, olderData, 0o644)
+	os.Chtimes(olderPath, time.Now(), time.Now().Add(-2*time.Hour))
+
+	newer := marketdata.MacroDataSnapshot{
+		US10Y: marketdata.MacroDataPoint{Symbol: "^TNX", Value: 5.0},
+	}
+	newerData, _ := json.Marshal(newer)
+	newerPath := filepath.Join(dir, "2026-05-11.json")
+	os.WriteFile(newerPath, newerData, 0o644)
+
+	ingestor := NewMacroIngestor(&marketdata.MockMacroProvider{}, dir)
+	snap, err := ingestor.loadFallbackDatedSnapshot()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if snap.US10Y.Value != 5.0 {
+		t.Fatalf("expected newest snapshot (5.0), got %f", snap.US10Y.Value)
+	}
+}
+
+func TestSnapshotDirAccessor(t *testing.T) {
+	dir := t.TempDir()
+	ingestor := NewMacroIngestor(&marketdata.MockMacroProvider{}, dir)
+	if ingestor.SnapshotDir() != dir {
+		t.Fatalf("expected %s, got %s", dir, ingestor.SnapshotDir())
+	}
+}
+
+func TestHasValidYahooDataAndIngestChain(t *testing.T) {
+	dir := t.TempDir()
+
+	validDated := marketdata.MacroDataSnapshot{
+		US10Y: marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.5, ChangePct: 0.1},
+		VIX:   marketdata.MacroDataPoint{Symbol: "^VIX", Value: 15, ChangePct: 0},
+	}
+	data, _ := json.Marshal(validDated)
+	os.WriteFile(filepath.Join(dir, "2026-05-11.json"), data, 0o644)
+
+	invalidLatest := marketdata.MacroDataSnapshot{}
+	invalidData, _ := json.Marshal(invalidLatest)
+	os.WriteFile(filepath.Join(dir, "latest.json"), invalidData, 0o644)
+
+	mock := &marketdata.MockMacroProvider{
+		Snapshot: marketdata.MacroDataSnapshot{},
+	}
+	ingestor := NewMacroIngestor(mock, dir)
+	snap, err := ingestor.loadLatestSnapshot()
+	if err != nil {
+		t.Fatalf("loadLatestSnapshot should fallback to dated: %v", err)
+	}
+	if snap.US10Y.Symbol != "^TNX" {
+		t.Fatalf("expected fallback US10Y ^TNX, got %s", snap.US10Y.Symbol)
 	}
 }
