@@ -15,7 +15,8 @@ import { fmtNTD } from './shared/utils.js';
 const pageLoadStatus = {};
 const APP_VERSION = '20260512';
 
-export function switchPage(id) {
+export function switchPage(id, silent) {
+  if (document.getElementById('page-' + id).classList.contains('active')) return;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
   document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.remove('active'));
@@ -33,6 +34,7 @@ export function switchPage(id) {
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
   if (!pageLoadStatus[id]) { pageLoadStatus[id] = true; loadPageData(id); }
+  if (!silent) history.pushState({page: id}, '', '#page-' + id);
 }
 
 export function toggleSidebar() {
@@ -120,6 +122,7 @@ async function loadModules() {
   if (modules.experiments) {
     if (modules.experiments.openInfoHelp) window.openInfoHelp = modules.experiments.openInfoHelp;
     if (modules.experiments.closeInfoModal) window.closeInfoModal = modules.experiments.closeInfoModal;
+    if (modules.experiments.openKpiHelp) window.openKpiHelp = modules.experiments.openKpiHelp;
   }
   return modules;
 }
@@ -399,6 +402,7 @@ if (typeof window !== 'undefined') {
   loadAll();
   startAutoRefresh();
   initEventStream();
+  history.replaceState({page: 'overview'}, '', '#page-overview');
 }
 
 function initEventStream() {
@@ -509,4 +513,10 @@ import('./pages/datachannels.js?v=' + APP_VERSION).then(function(m) {
   if (m.triggerChannelsIngest && typeof window !== 'undefined') window.triggerChannelsIngest = m.triggerChannelsIngest;
 }).catch(function(err) {
   console.error('[Dynamic import] datachannels module load failed:', err);
+});
+
+window.addEventListener('popstate', function(e) {
+  if (e.state && e.state.page) {
+    switchPage(e.state.page, true);
+  }
 });
