@@ -21,6 +21,7 @@ type MacroIngestor struct {
 	snapshotDir      string
 	divergenceDetect *DivergenceDetector
 	eventBus         eventbusPublisher
+	lifecycle        *EventLifecycleManager
 }
 
 // eventbusPublisher abstracts the event bus for testing.
@@ -46,24 +47,23 @@ func (m *MacroIngestor) SetEventBus(bus *eventbus.ChannelEventBus) {
 	m.eventBus = bus
 }
 
+func (m *MacroIngestor) SetLifecycleManager(lm *EventLifecycleManager) {
+	m.lifecycle = lm
+}
+
 // Ingest fetches latest macro data, computes changes from previous snapshot, and returns events.
 func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdata.MacroDataSnapshot, error) {
+	if m.lifecycle != nil {
+		m.lifecycle.UpdateStatuses()
+	}
+
 	snap, err := m.provider.FetchSnapshot(ctx)
 	if err != nil {
 		prev, prevErr := m.loadLatestSnapshot()
 		if prevErr == nil {
 			prevPrev, _ := m.loadPreviousSnapshot(prev)
 			events := detectEventsFromSnapshot(prev, prevPrev, m.divergenceDetect)
-			if m.eventBus != nil {
-				for _, e := range events {
-					m.eventBus.PublishNarrativeEvent(
-						e.ID, e.Theme, e.Region,
-						e.Sentiment, e.Confidence,
-						e.ConfidenceSource, fmt.Sprintf("%.2f", e.HitRate),
-						e.CapitalFlow, e.TimeWindow,
-					)
-				}
-			}
+			m.publishEvents(events)
 			return events, prev, nil
 		}
 		return nil, snap, fmt.Errorf("fetch snapshot: %w", err)
@@ -71,26 +71,38 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 
 	prev, _ := m.loadLatestSnapshot()
 	events := detectEventsFromSnapshot(snap, prev, m.divergenceDetect)
+	m.publishEvents(events)
 
-	if m.eventBus != nil {
-		for _, e := range events {
-			m.eventBus.PublishNarrativeEvent(
-				e.ID, e.Theme, e.Region,
-				e.Sentiment, e.Confidence,
-				e.ConfidenceSource, fmt.Sprintf("%.2f", e.HitRate),
-				e.CapitalFlow, e.TimeWindow,
-			)
-		}
-	}
-
-	// Preserve data from previous snapshot for fields that the current
-	// fetch did not populate (e.g. a provider timed out).
 	snap = mergeWithPrev(snap, prev)
 
 	if err := m.saveSnapshot(snap); err != nil {
 		return events, snap, fmt.Errorf("save snapshot: %w", err)
 	}
 	return events, snap, nil
+}
+
+func (m *MacroIngestor) publishEvents(events []NarrativeEvent) {
+	if m.eventBus == nil {
+		return
+	}
+	for i := range events {
+		e := &events[i]
+		if m.lifecycle != nil {
+			if m.lifecycle.IsThemeActive(e.Theme) {
+				if existing := m.lifecycle.GetActiveByTheme(e.Theme); existing != nil {
+					m.lifecycle.UpdateConfidence(existing.ID, e.Confidence)
+				}
+				continue
+			}
+			m.lifecycle.AddEvent(e)
+		}
+		m.eventBus.PublishNarrativeEvent(
+			e.ID, e.Theme, e.Region,
+			e.Sentiment, e.Confidence,
+			e.ConfidenceSource, fmt.Sprintf("%.2f", e.HitRate),
+			e.CapitalFlow, e.TimeWindow,
+		)
+	}
 }
 
 func mergeWithPrev(curr, prev marketdata.MacroDataSnapshot) marketdata.MacroDataSnapshot {
