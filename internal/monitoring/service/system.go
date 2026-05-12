@@ -144,6 +144,11 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 		buildChannelInfo("twse_capital_flow", "TWSE 三大法人", checkCapitalFlowHealth, filepath.Join(s.WorkDir, "data/state/capital_flow"), now),
 		buildChannelInfo("geopolitical", "地緣政治風險", checkGeopoliticalHealth, filepath.Join(s.WorkDir, "data/state/geopolitical/latest.json"), now),
 		buildChannelInfo("twse_replay", "TWSE Replay", checkReplayHealth, filepath.Join(s.WorkDir, "data/replay/tw_extended_90days.csv"), now),
+		buildChannelInfo("jpy_yahoo", "日元匯率 (JPY)", checkJPYHealth, filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now),
+		buildChannelInfo("twse_margin", "TWSE 融資融券", checkCapitalFlowHealth, filepath.Join(s.WorkDir, "data/state/margin"), now),
+		buildChannelInfo("export_statistics", "台灣海關進出口", checkExportHealth, filepath.Join(s.WorkDir, "data/state/export"), now),
+		buildChannelInfo("tsmc_revenue", "台積電月營收", checkCapitalFlowHealth, filepath.Join(s.WorkDir, "data/state/tsmc_revenue"), now),
+		buildChannelInfo("geopolitical_taiwan", "台灣地緣政治", checkGeopoliticalHealth, filepath.Join(s.WorkDir, "data/state/geopolitical/taiwan/latest.json"), now),
 	}
 
 	return SystemHealthResponse{

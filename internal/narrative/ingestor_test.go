@@ -13,8 +13,8 @@ import (
 )
 
 type trackEventBus struct {
-	mu         sync.Mutex
-	published  []string
+	mu        sync.Mutex
+	published []string
 }
 
 func (t *trackEventBus) PublishNarrativeEvent(eventID, theme, region string, sentiment, confidence float64, confidenceSource, hitRate, capitalFlow, timeWindow string) error {

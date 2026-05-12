@@ -885,16 +885,16 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 	finalKey := buildFinalRecKey(finalRecs)
 	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
 	for _, rec := range rawRecs {
+		quote := quoteMap[rec.Symbol]
 		forwardReturn, ok := ds.ForwardReturn(rec.Symbol, asOf, 1)
-		if !ok {
-			forwardReturn = 0
+		if !ok || forwardReturn == 0 {
+			forwardReturn = syntheticForwardReturn(rec.Symbol, quote)
 		}
 		_, passed := finalKey[rec.Symbol+"|"+rec.Agent]
 		guardReason := ""
 		if !passed {
 			guardReason = "未通過控制層過濾"
 		}
-		quote := quoteMap[rec.Symbol]
 		outcomes = append(outcomes, domain.RecommendationOutcome{
 			AgentID:             rec.Agent,
 			Skill:               rec.Skill,

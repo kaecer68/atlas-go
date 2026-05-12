@@ -152,6 +152,8 @@ func StatusText(status string) string {
 		return "延遲"
 	case "error":
 		return "異常"
+	case "partial":
+		return "部分異常"
 	case "inactive":
 		return "未啟用"
 	default:

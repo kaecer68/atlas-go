@@ -212,13 +212,8 @@ func (s *DataChannelService) buildUSYahooChannel(now time.Time) DataChannel {
 	macroPath := filepath.Join(s.WorkDir, "data/state/macro/latest.json")
 	status, updated := checkMacroHealth(macroPath, now)
 	rec := s.healthStore.Get("us_yahoo")
-	if rec != nil && rec.Status != "" {
-		status = rec.Status
-		if rec.LastError != "" {
-			updated = "上次失敗: " + rec.LastError
-		} else {
-			updated = "上次抓取: " + rec.LastFetchAt
-		}
+	if rec != nil && rec.LastError != "" {
+		updated = "上次失敗: " + rec.LastError
 	}
 	return DataChannel{
 		ChannelID:  "us_yahoo",
@@ -238,13 +233,8 @@ func (s *DataChannelService) buildTWSEReplayChannel(now time.Time) DataChannel {
 	replayPath := filepath.Join(s.WorkDir, "data/replay/tw_extended_90days.csv")
 	status, updated := checkReplayHealth(replayPath, now)
 	rec := s.healthStore.Get("twse_replay")
-	if rec != nil && rec.Status != "" {
-		status = rec.Status
-		if rec.LastError != "" {
-			updated = "上次失敗: " + rec.LastError
-		} else if rec.LastSuccessAt != "" {
-			updated = "上次成功: " + rec.LastSuccessAt
-		}
+	if rec != nil && rec.LastError != "" {
+		updated = "上次失敗: " + rec.LastError
 	}
 	return DataChannel{
 		ChannelID:  "twse_replay",
@@ -264,13 +254,8 @@ func (s *DataChannelService) buildTWSECapitalFlowChannel(now time.Time) DataChan
 	capFlowDir := filepath.Join(s.WorkDir, "data/state/capital_flow")
 	status, updated := checkCapitalFlowHealth(capFlowDir, now)
 	rec := s.healthStore.Get("twse_capital_flow")
-	if rec != nil && rec.Status != "" {
-		status = rec.Status
-		if rec.LastError != "" {
-			updated = "上次失敗: " + rec.LastError
-		} else if rec.LastSuccessAt != "" {
-			updated = "上次成功: " + rec.LastSuccessAt
-		}
+	if rec != nil && rec.LastError != "" {
+		updated = "上次失敗: " + rec.LastError
 	}
 	return DataChannel{
 		ChannelID:  "twse_capital_flow",
@@ -400,13 +385,8 @@ func (s *DataChannelService) buildJPYYahooChannel(now time.Time) DataChannel {
 	macroPath := filepath.Join(s.WorkDir, "data/state/macro/latest.json")
 	status, updated := checkJPYHealth(macroPath, now)
 	rec := s.healthStore.Get("jpy_yahoo")
-	if rec != nil && rec.Status != "" {
-		status = rec.Status
-		if rec.LastError != "" {
-			updated = "上次失敗: " + rec.LastError
-		} else {
-			updated = "上次抓取: " + rec.LastFetchAt
-		}
+	if rec != nil && rec.LastError != "" {
+		updated = "上次失敗: " + rec.LastError
 	}
 	return DataChannel{
 		ChannelID:  "jpy_yahoo",
@@ -426,13 +406,8 @@ func (s *DataChannelService) buildGeopoliticalChannel(now time.Time) DataChannel
 	geoPath := filepath.Join(s.WorkDir, "data/state/geopolitical/latest.json")
 	status, updated := checkGeopoliticalHealth(geoPath, now)
 	rec := s.healthStore.Get("geopolitical")
-	if rec != nil && rec.Status != "" {
-		status = rec.Status
-		if rec.LastError != "" {
-			updated = "上次失敗: " + rec.LastError
-		} else {
-			updated = "上次抓取: " + rec.LastFetchAt
-		}
+	if rec != nil && rec.LastError != "" {
+		updated = "上次失敗: " + rec.LastError
 	}
 	return DataChannel{
 		ChannelID:  "geopolitical",
@@ -452,13 +427,8 @@ func (s *DataChannelService) buildTWSEMarginChannel(now time.Time) DataChannel {
 	marginDir := filepath.Join(s.WorkDir, "data/state/margin")
 	status, updated := checkCapitalFlowHealth(marginDir, now)
 	rec := s.healthStore.Get("twse_margin")
-	if rec != nil && rec.Status != "" {
-		status = rec.Status
-		if rec.LastError != "" {
-			updated = "上次失敗: " + rec.LastError
-		} else if rec.LastSuccessAt != "" {
-			updated = "上次成功: " + rec.LastSuccessAt
-		}
+	if rec != nil && rec.LastError != "" {
+		updated = "上次失敗: " + rec.LastError
 	}
 	return DataChannel{
 		ChannelID:  "twse_margin",
@@ -478,13 +448,8 @@ func (s *DataChannelService) buildExportStatisticsChannel(now time.Time) DataCha
 	exportDir := filepath.Join(s.WorkDir, "data/state/export")
 	status, updated := checkExportHealth(exportDir, now)
 	rec := s.healthStore.Get("export_statistics")
-	if rec != nil && rec.Status != "" {
-		status = rec.Status
-		if rec.LastError != "" {
-			updated = "上次失敗: " + rec.LastError
-		} else if rec.LastSuccessAt != "" {
-			updated = "上次成功: " + rec.LastSuccessAt
-		}
+	if rec != nil && rec.LastError != "" {
+		updated = "上次失敗: " + rec.LastError
 	}
 	return DataChannel{
 		ChannelID:  "export_statistics",
@@ -503,13 +468,8 @@ func (s *DataChannelService) buildTSMCRevenueChannel(now time.Time) DataChannel 
 	tsmcDir := filepath.Join(s.WorkDir, "data/state/tsmc_revenue")
 	status, updated := checkCapitalFlowHealth(tsmcDir, now)
 	rec := s.healthStore.Get("tsmc_revenue")
-	if rec != nil && rec.Status != "" {
-		status = rec.Status
-		if rec.LastError != "" {
-			updated = "上次失敗: " + rec.LastError
-		} else if rec.LastSuccessAt != "" {
-			updated = "上次成功: " + rec.LastSuccessAt
-		}
+	if rec != nil && rec.LastError != "" {
+		updated = "上次失敗: " + rec.LastError
 	}
 	return DataChannel{
 		ChannelID:  "tsmc_revenue",
@@ -526,16 +486,11 @@ func (s *DataChannelService) buildTSMCRevenueChannel(now time.Time) DataChannel 
 }
 
 func (s *DataChannelService) buildTaiwanGeopoliticalChannel(now time.Time) DataChannel {
-	twGeoDir := filepath.Join(s.WorkDir, "data/state/geopolitical/taiwan")
-	status, updated := checkCapitalFlowHealth(twGeoDir, now)
+	twGeoPath := filepath.Join(s.WorkDir, "data/state/geopolitical/taiwan/latest.json")
+	status, updated := checkGeopoliticalHealth(twGeoPath, now)
 	rec := s.healthStore.Get("geopolitical_taiwan")
-	if rec != nil && rec.Status != "" {
-		status = rec.Status
-		if rec.LastError != "" {
-			updated = "上次失敗: " + rec.LastError
-		} else if rec.LastSuccessAt != "" {
-			updated = "上次成功: " + rec.LastSuccessAt
-		}
+	if rec != nil && rec.LastError != "" {
+		updated = "上次失敗: " + rec.LastError
 	}
 	return DataChannel{
 		ChannelID:  "geopolitical_taiwan",
@@ -580,13 +535,9 @@ func (s *DataChannelService) buildTEJChannel(now time.Time) DataChannel {
 		status = "ok"
 		updated = "TEJ API key configured"
 		rec := s.healthStore.Get("tej")
-		if rec != nil && rec.Status != "" {
-			status = rec.Status
-			if rec.LastError != "" {
-				updated = "上次失敗: " + rec.LastError
-			} else if rec.LastSuccessAt != "" {
-				updated = "上次成功: " + rec.LastSuccessAt
-			}
+		if rec != nil && rec.LastError != "" {
+			status = "error"
+			updated = "上次失敗: " + rec.LastError
 		}
 	}
 	return DataChannel{
@@ -628,20 +579,7 @@ func (s *DataChannelService) GetAlerts(ctx context.Context) ([]ChannelAlert, err
 }
 
 func statusText(status string) string {
-	switch status {
-	case "ok":
-		return "正常"
-	case "warn":
-		return "延遲"
-	case "error":
-		return "異常"
-	case "partial":
-		return "部分異常"
-	case "inactive":
-		return "未啟用"
-	default:
-		return "未知"
-	}
+	return StatusText(status)
 }
 
 func lastErrorStr(rec *ChannelHealthRecord) string {

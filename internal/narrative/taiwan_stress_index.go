@@ -32,20 +32,20 @@ type TaiwanStressIndex struct {
 // - 日圓套利壓力（10%）：歷史相關性最弱，主要透過新興市場情緒間接傳導
 //
 // 演進機制：這些權重不應永久固定。建議以下演進路徑：
-//   1. 短期（當前）：固定權重，基於領域知識設定
-//   2. 中期（回測校準）：根據 rolling 12-month 回溯測試中每個因子對外資流出的預測準確度重新校準
-//   3. 長期（自適應）：依市場體制（bull / bear / crisis）使用不同權重組合
-//      - Bull market: 提高 VIX、Geopolitical 權重（黑天鵝預警）
-//      - Bear market: 提高 ForeignFlow、US10Y 權重（趨勢跟隨）
-//      - Crisis: 所有權重拉平（全面壓力監控）
+//  1. 短期（當前）：固定權重，基於領域知識設定
+//  2. 中期（回測校準）：根據 rolling 12-month 回溯測試中每個因子對外資流出的預測準確度重新校準
+//  3. 長期（自適應）：依市場體制（bull / bear / crisis）使用不同權重組合
+//     - Bull market: 提高 VIX、Geopolitical 權重（黑天鵝預警）
+//     - Bear market: 提高 ForeignFlow、US10Y 權重（趨勢跟隨）
+//     - Crisis: 所有權重拉平（全面壓力監控）
 const (
 	// 因子標準化縮放係數 — 將原始數據映射到 0-100 區間
-	stressScaleDXY          = 5.0  // DXY 變化率 (%) → 壓力分數：每 1% 變化 = 5 分，20% 達上限
-	stressScaleUS10Y        = 2.0  // 美債殖利率絕對值 → 壓力分數：每 1% = 2 分，50% 達上限
-	stressScaleForeignFlow  = 10.0 // 外資淨賣超（億）→ 壓力分數：每 1 億 = 10 分，10 億達上限
+	stressScaleDXY          = 5.0          // DXY 變化率 (%) → 壓力分數：每 1% 變化 = 5 分，20% 達上限
+	stressScaleUS10Y        = 2.0          // 美債殖利率絕對值 → 壓力分數：每 1% = 2 分，50% 達上限
+	stressScaleForeignFlow  = 10.0         // 外資淨賣超（億）→ 壓力分數：每 1 億 = 10 分，10 億達上限
 	stressScaleVIX          = 100.0 / 40.0 // VIX 原始值 → 壓力分數：VIX=30 → 75 分，VIX=40 → 100 分
-	stressScaleJPY          = 10.0 // 日圓變化率 (%) → 壓力分數：每 1% = 10 分，10% 達上限
-	stressScaleGeopolitical = 1.0  // 地緣風險強度直接使用（已為 0-100）
+	stressScaleJPY          = 10.0         // 日圓變化率 (%) → 壓力分數：每 1% = 10 分，10% 達上限
+	stressScaleGeopolitical = 1.0          // 地緣風險強度直接使用（已為 0-100）
 
 	// 六因子權重 — 總和必須為 1.00
 	stressWeightDXY          = 0.15 // DXY 美元指數：美元走強 → 資金回流美國 → 台股賣壓

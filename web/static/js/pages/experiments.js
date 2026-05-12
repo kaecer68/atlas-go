@@ -83,7 +83,7 @@ export function openKpiHelp(key) {
   const titleMap = {
     narrative: '敘事脈絡',
     regime: '市場狀態',
-    weakest: '表現最差 AI',
+    weakest: '待改進 AI 策略',
     experiment: '實驗狀態',
     crowding: '擁擠標的'
   };
@@ -100,9 +100,9 @@ export function openKpiHelp(key) {
 </ul></p>
 <p><strong>為什麼重要？</strong><br>體制決定了整個投資組合的基調。RISK_ON 時可積極參與成長與動能策略；NEUTRAL 時應控制單一標的比重並提高篩選標準；RISK_OFF 時應優先考慮降低曝險、轉向防禦性配置或提高現金比重。</p>
 <p><strong>該注意什麼？</strong><br>當 regime 從 RISK_ON 快速轉向 RISK_OFF，通常伴隨外資出逃指數飆升（紅燈）。此時請立即前往【相對趨勢】頁檢查總經雷達，並檢視【投資管線】是否有過多推薦被控制層阻擋——這是市場風險情緒惡化的早期信號。</p>`,
-    weakest: `<p><strong>這是什麼？</strong><br>根據最新回測窗口的 Scorecard，Sharpe-like 指標最低的 Agent。它是下一輪突變實驗（Mutation）的首選候選對象。</p>
-<p><strong>為什麼重要？</strong><br>Atlas-Go 的演化循環（Evolution Loop）就是持續識別最弱 Agent，並對其進行 prompt、規則或約束條件的突變改進。這不代表該 Agent 一定會被淘汰，而是指出當前最需要迭代的策略缺口。</p>
-<p><strong>該注意什麼？</strong><br>在提出突變前，建議先進入【AI 觀測台】頁檢查該 Agent 的觀察數（observations）是否充足，以及失敗是否集中在特定 regime。若樣本過少，改善結論的置信度會降低。</p>`,
+    weakest: `<p><strong>這是什麼？</strong><br>演化系統根據策略層級（Sector/Style 優於 Control）、歷史觀察數量（越少越需補足）與 Sharpe-like 風險調整回報，綜合選出最需要改進的 Agent。它就是下一輪突變實驗（Mutation）的目標對象。</p>
+<p><strong>為什麼重要？</strong><br>Atlas-Go 的演化循環（Evolution Loop）持續識別當前最需要迭代的策略，並自動生成 prompt、規則或約束條件的突變改進提案。這不是「應該避開該策略的選股建議」，而是「這個策略的統計表現有改進空間，值得投入實驗資源」的演化訊號。</p>
+<p><strong>該注意什麼？</strong><br>在提出突變前，建議先進入【AI 觀測台】頁檢查該 Agent 的觀察數（observations）是否充足、失效是否集中在特定 regime。若回測資料不足（如最新交易日尚無隔日數據），Sharpe-like 可能基於估算值計算，此時應優先參考歷史窗口的穩定數據。</p>`,
     experiment: `<p><strong>這是什麼？</strong><br>顯示當前待評判（judge）和待晉升（promote）的實驗數量。它是整個 mutation → judge → promote → revert 閉環的可視化入口。</p>
 <p><strong>為什麼重要？</strong><br>若存在「待評判」實驗，表示已有突變運行完成但尚未決定接受或拒絕；若存在「待晉升」實驗，表示已有實驗通過門檻但尚未寫入基線政策（baseline_policy.json）。</p>
 <p><strong>該注意什麼？</strong><br>停滯的實驗會阻塞下一輪改進循環。建議定期進入【模擬交易】頁進行評判與晉升。若晉升後發現績效反轉，可透過【控制與稽核】頁回滾基線版本。</p>`,
