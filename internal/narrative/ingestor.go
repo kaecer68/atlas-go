@@ -155,6 +155,48 @@ func (m *MacroIngestor) loadLatestSnapshot() (marketdata.MacroDataSnapshot, erro
 	if err := json.Unmarshal(data, &snap); err != nil {
 		return marketdata.MacroDataSnapshot{}, fmt.Errorf("unmarshal snapshot: %w", err)
 	}
+	if hasValidYahooData(snap) {
+		return snap, nil
+	}
+	dated, err := m.loadFallbackDatedSnapshot()
+	if err != nil {
+		return snap, nil
+	}
+	return dated, nil
+}
+
+func hasValidYahooData(snap marketdata.MacroDataSnapshot) bool {
+	return snap.US10Y.Symbol != "" || snap.DXY.Symbol != "" || snap.VIX.Symbol != ""
+}
+
+func (m *MacroIngestor) loadFallbackDatedSnapshot() (marketdata.MacroDataSnapshot, error) {
+	entries, err := os.ReadDir(m.snapshotDir)
+	if err != nil {
+		return marketdata.MacroDataSnapshot{}, err
+	}
+	var latest string
+	var latestTime int64
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || e.Name() == "latest.json" {
+			continue
+		}
+		info, _ := e.Info()
+		if info != nil && info.ModTime().Unix() > latestTime {
+			latestTime = info.ModTime().Unix()
+			latest = e.Name()
+		}
+	}
+	if latest == "" {
+		return marketdata.MacroDataSnapshot{}, fmt.Errorf("no dated snapshots")
+	}
+	data, err := os.ReadFile(filepath.Join(m.snapshotDir, latest))
+	if err != nil {
+		return marketdata.MacroDataSnapshot{}, err
+	}
+	var snap marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(data, &snap); err != nil {
+		return marketdata.MacroDataSnapshot{}, err
+	}
 	return snap, nil
 }
 
