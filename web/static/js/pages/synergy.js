@@ -10,7 +10,8 @@ function renderLeaderboard(status, trend) {
   const container = document.getElementById('synergyLeaderboard');
   if (!container) return;
 
-  if (!status || !status.agent_list || status.agent_list.length === 0) {
+  const agentList = agentListFromStatus(status);
+  if (!agentList.length) {
     container.innerHTML = '<div class="empty">尚無 Darwinian 權重資料</div>';
     return;
   }
@@ -29,7 +30,7 @@ function renderLeaderboard(status, trend) {
     }
   }
 
-  const sortedAgents = [...status.agent_list].sort((a, b) => b.weight - a.weight);
+  const sortedAgents = [...agentList].sort((a, b) => b.weight - a.weight);
 
   let html = `
     <div class="table-wrapper">
@@ -75,6 +76,13 @@ function renderLeaderboard(status, trend) {
   `;
 
   container.innerHTML = html;
+}
+
+function agentListFromStatus(status) {
+  if (!status || !status.agents) return [];
+  return Object.keys(status.agents).map(function(id) {
+    return Object.assign({agent_id: id}, status.agents[id]);
+  });
 }
 
 function renderCandidates(inbox) {
