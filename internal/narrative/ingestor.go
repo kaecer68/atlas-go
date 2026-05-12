@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -43,7 +42,7 @@ func (m *MacroIngestor) SnapshotDir() string {
 	return m.snapshotDir
 }
 
-func (m *MacroIngestor) SetEventBus(bus *eventbus.ChannelEventBus) {
+func (m *MacroIngestor) SetEventBus(bus eventbusPublisher) {
 	m.eventBus = bus
 }
 
