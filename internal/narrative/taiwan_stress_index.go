@@ -18,6 +18,46 @@ type TaiwanStressIndex struct {
 	Timestamp  int64              `json:"timestamp"`
 }
 
+// --- 外資出逃壓力指數 六因子權重常數 ---
+//
+// 設計原則：權重反映該因子對「外資撤離台股」的 DIRECTNESS（直接性），而非解釋力。
+// - 外商淨流向（25%）：最直接的可觀察市場數據，真實反映外資行為
+// - 美債殖利率（20%）：強領先指標，機構資金對利率預期最敏感
+// - DXY 美元指數（15%）：美元走強引導資金回流美國，屬於間接但重要的推力
+// - VIX 恐慌指數（15%）：全球風險偏好溫度計，新興市場連動性高
+// - 地緣政治風險（15%）：台海 / 中東 / 全球風險事件的衝擊，間歇性但高度影響
+// - 日圓套利壓力（10%）：歷史相關性最弱，主要透過新興市場情緒間接傳導
+//
+// 演進機制：這些權重不應永久固定。建議以下演進路徑：
+//   1. 短期（當前）：固定權重，基於領域知識設定
+//   2. 中期（回測校準）：根據 rolling 12-month 回溯測試中每個因子對外資流出的預測準確度重新校準
+//   3. 長期（自適應）：依市場體制（bull / bear / crisis）使用不同權重組合
+//      - Bull market: 提高 VIX、Geopolitical 權重（黑天鵝預警）
+//      - Bear market: 提高 ForeignFlow、US10Y 權重（趨勢跟隨）
+//      - Crisis: 所有權重拉平（全面壓力監控）
+const (
+	// 因子標準化縮放係數 — 將原始數據映射到 0-100 區間
+	stressScaleDXY          = 5.0  // DXY 變化率 (%) → 壓力分數：每 1% 變化 = 5 分，20% 達上限
+	stressScaleUS10Y        = 2.0  // 美債殖利率絕對值 → 壓力分數：每 1% = 2 分，50% 達上限
+	stressScaleForeignFlow  = 10.0 // 外資淨賣超（億）→ 壓力分數：每 1 億 = 10 分，10 億達上限
+	stressScaleVIX          = 100.0 / 40.0 // VIX 原始值 → 壓力分數：VIX=30 → 75 分，VIX=40 → 100 分
+	stressScaleJPY          = 10.0 // 日圓變化率 (%) → 壓力分數：每 1% = 10 分，10% 達上限
+	stressScaleGeopolitical = 1.0  // 地緣風險強度直接使用（已為 0-100）
+
+	// 六因子權重 — 總和必須為 1.00
+	stressWeightDXY          = 0.15 // DXY 美元指數：美元走強 → 資金回流美國 → 台股賣壓
+	stressWeightUS10Y        = 0.20 // US10Y 美債殖利率：利率上升 → 資金流向美債 → 外資撤離
+	stressWeightForeignFlow  = 0.25 // 外商淨流向：最直接的壓力指標，權重最高
+	stressWeightVIX          = 0.15 // VIX 恐慌指數：全球避險情緒 → 新興市場資金流出
+	stressWeightJPY          = 0.10 // 日圓套利平倉：間接影響，透過新興市場情緒傳導
+	stressWeightGeopolitical = 0.15 // 地緣政治風險：間歇性但高度衝擊
+
+	// 壓力等級閾值
+	stressThresholdCrisis = 70.0 // 紅燈：系統性風險
+	stressThresholdHigh   = 50.0 // 橙燈：明顯出逃
+	stressThresholdAlert  = 30.0 // 黃燈：注意波動
+)
+
 // TaiwanStressCalculator computes the stress index from macro and capital flow data.
 type TaiwanStressCalculator struct {
 	geoProvider GeopoliticalRiskProvider
@@ -43,69 +83,62 @@ func NewTaiwanStressCalculator(geoProvider GeopoliticalRiskProvider) *TaiwanStre
 func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapshot, geoScore GeopoliticalRiskScore) TaiwanStressIndex {
 	components := make(map[string]float64)
 
-	// DXY component (weight 15%): absolute change pct scaled to 0-100.
-	dxyComponent := math.Abs(snap.DXY.ChangePct) * 5.0
+	dxyComponent := math.Abs(snap.DXY.ChangePct) * stressScaleDXY
 	if dxyComponent > 100 {
 		dxyComponent = 100
 	}
-	components["dxy"] = dxyComponent * 0.15
+	components["dxy"] = dxyComponent * stressWeightDXY
 
-	// US10Y component (weight 20%): change in bps proxy scaled.
 	us10yChange := snap.US10Y.Value
 	if us10yChange < 0 {
 		us10yChange = -us10yChange
 	}
-	us10yComponent := us10yChange * 2.0
+	us10yComponent := us10yChange * stressScaleUS10Y
 	if us10yComponent > 100 {
 		us10yComponent = 100
 	}
-	components["us10y"] = us10yComponent * 0.20
+	components["us10y"] = us10yComponent * stressWeightUS10Y
 
-	// Foreign investor net sell component (weight 25%): negative flow scaled.
 	// Positive when foreign investors sell (stress), negative when they buy (relief).
 	foreignFlow := -snap.ForeignInvestorNet.Value
-	foreignComponent := foreignFlow * 10.0
+	foreignComponent := foreignFlow * stressScaleForeignFlow
 	if foreignComponent > 100 {
 		foreignComponent = 100
 	}
 	if foreignComponent < -100 {
 		foreignComponent = -100
 	}
-	components["foreign_flow"] = foreignComponent * 0.25
+	components["foreign_flow"] = foreignComponent * stressWeightForeignFlow
 
-	// VIX component (weight 15%): raw VIX level scaled (VIX 30 -> 50, VIX 40 -> 100).
-	vixComponent := (snap.VIX.Value / 40.0) * 100.0
+	vixComponent := snap.VIX.Value * stressScaleVIX
 	if vixComponent > 100 {
 		vixComponent = 100
 	}
-	components["vix"] = vixComponent * 0.15
+	components["vix"] = vixComponent * stressWeightVIX
 
-	// JPY component (weight 10%): JPY appreciation or carry unwind increases Taiwan stress.
 	jpyChange := math.Abs(snap.JPY.ChangePct)
-	// If current change is zero but we have a previous value, compute change from previous.
 	if jpyChange == 0 && snap.JPY.Symbol != "" && prev.JPY.Symbol != "" && prev.JPY.Value != 0 {
 		jpyChange = math.Abs((snap.JPY.Value-prev.JPY.Value)/prev.JPY.Value) * 100
 	}
-	jpyComponent := jpyChange * 10.0
+	jpyComponent := jpyChange * stressScaleJPY
 	if jpyComponent > 100 {
 		jpyComponent = 100
 	}
-	components["jpy"] = jpyComponent * 0.10
+	components["jpy"] = jpyComponent * stressWeightJPY
 
-	// Geopolitical risk component (weight 15%).
-	geoComponent := geoScore.Intensity
-	components["geopolitical"] = geoComponent * 0.15
+	geoComponent := geoScore.Intensity * stressScaleGeopolitical
+	components["geopolitical"] = geoComponent * stressWeightGeopolitical
 
 	score := components["dxy"] + components["us10y"] + components["foreign_flow"] +
 		components["vix"] + components["jpy"] + components["geopolitical"]
 
 	regime := "low"
 	switch {
-	case score >= 70:
+	case score >= stressThresholdCrisis:
 		regime = "crisis"
-	case score >= 50:
+	case score >= stressThresholdHigh:
 		regime = "high"
-	case score >= 30:
+	case score >= stressThresholdAlert:
 		regime = "alert"
 	}
 
