@@ -83,10 +83,66 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 		}
 	}
 
+	// Preserve data from previous snapshot for fields that the current
+	// fetch did not populate (e.g. a provider timed out).
+	snap = mergeWithPrev(snap, prev)
+
 	if err := m.saveSnapshot(snap); err != nil {
 		return events, snap, fmt.Errorf("save snapshot: %w", err)
 	}
 	return events, snap, nil
+}
+
+func mergeWithPrev(curr, prev marketdata.MacroDataSnapshot) marketdata.MacroDataSnapshot {
+	if curr.US10Y.Symbol == "" {
+		curr.US10Y = prev.US10Y
+	}
+	if curr.DXY.Symbol == "" {
+		curr.DXY = prev.DXY
+	}
+	if curr.VIX.Symbol == "" {
+		curr.VIX = prev.VIX
+	}
+	if curr.USD_TWD.Symbol == "" {
+		curr.USD_TWD = prev.USD_TWD
+	}
+	if curr.Oil.Symbol == "" {
+		curr.Oil = prev.Oil
+	}
+	if curr.Gold.Symbol == "" {
+		curr.Gold = prev.Gold
+	}
+	if curr.JPY.Symbol == "" {
+		curr.JPY = prev.JPY
+	}
+	if curr.ForeignInvestorNet.Symbol == "" {
+		curr.ForeignInvestorNet = prev.ForeignInvestorNet
+	}
+	if curr.DomesticFundNet.Symbol == "" {
+		curr.DomesticFundNet = prev.DomesticFundNet
+	}
+	if curr.DealerNet.Symbol == "" {
+		curr.DealerNet = prev.DealerNet
+	}
+	if curr.ExportElectronics.Symbol == "" {
+		curr.ExportElectronics = prev.ExportElectronics
+	}
+	if curr.RetailMarginBalance.Symbol == "" {
+		curr.RetailMarginBalance = prev.RetailMarginBalance
+	}
+	if curr.TSMCRevenue.Symbol == "" {
+		curr.TSMCRevenue = prev.TSMCRevenue
+	}
+	if curr.SOXIndex.Symbol == "" {
+		curr.SOXIndex = prev.SOXIndex
+	}
+	if curr.CoWoSUtilization.Symbol == "" {
+		curr.CoWoSUtilization = prev.CoWoSUtilization
+	}
+	if curr.CapexGrowth.Symbol == "" {
+		curr.CapexGrowth = prev.CapexGrowth
+	}
+	return curr
 }
 
 func (m *MacroIngestor) loadLatestSnapshot() (marketdata.MacroDataSnapshot, error) {

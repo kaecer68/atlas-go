@@ -34,11 +34,11 @@ func getTEJDailyLimit() int {
 // TEJClient fetches data from TEJ API.
 // Requires free trial API key from https://api.tej.com.tw/
 type TEJClient struct {
-	apiKey      string
-	httpClient  *http.Client
-	rateLimiter *rate.Limiter      // per-second limiter
+	apiKey       string
+	httpClient   *http.Client
+	rateLimiter  *rate.Limiter      // per-second limiter
 	quotaTracker *DailyQuotaTracker // daily quota tracker
-	baseURL     string             // defaults to tejAPIBaseURL, overridable for tests
+	baseURL      string             // defaults to tejAPIBaseURL, overridable for tests
 }
 
 // TEJ API response wrapper (REST API format).

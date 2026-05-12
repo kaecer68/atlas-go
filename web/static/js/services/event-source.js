@@ -37,6 +37,7 @@ class EventSourceService {
       this.es.addEventListener('portfolio.position.update', this.boundMessageHandler);
       this.es.addEventListener('system.start', this.boundMessageHandler);
       this.es.addEventListener('system.complete', this.boundMessageHandler);
+      this.es.addEventListener('narrative.event', this.boundMessageHandler);
 
       this.es.onerror = (err) => {
         this.es.close();
@@ -126,6 +127,14 @@ class EventSourceService {
 
   offStatusChange(callback) {
     this.statusListeners.delete(callback);
+  }
+
+  addEventListener(eventType, callback) {
+    return this.on(eventType, callback);
+  }
+
+  removeEventListener(eventType, callback) {
+    return this.off(eventType, callback);
   }
 
   notifyStatusChange() {

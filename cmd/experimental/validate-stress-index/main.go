@@ -87,7 +87,7 @@ func main() {
 			VIX:                marketdata.MacroDataPoint{Value: 10.0 + math.Abs(dayOffset-15)*3.5},
 			ForeignInvestorNet: marketdata.MacroDataPoint{Value: -(dayOffset - 5) * 1.5},
 		}
-		idx := calc.Calculate(snap, geo)
+		idx := calc.Calculate(snap, marketdata.MacroDataSnapshot{}, geo)
 		results = append(results, result{
 			date:   d.date,
 			stress: idx.Score,
