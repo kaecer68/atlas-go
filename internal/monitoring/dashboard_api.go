@@ -98,6 +98,9 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	if metricsCollector == nil {
 		metricsCollector = NewMetricsCollector()
 	}
+	lifecycle := narrative.NewEventLifecycleManager()
+	ingestor := narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro"))
+	ingestor.SetLifecycleManager(lifecycle)
 	return &DashboardAPI{
 		workDir:            workDir,
 		ledgerDir:          ledgerDir,
@@ -105,7 +108,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		sqlitePath:         os.Getenv("ATLAS_SQLITE_PATH"),
 		baselinePath:       filepath.Join(workDir, "data/state/baseline_policy.json"),
 		narrativeEngine:    narrative.NewNarrativeEngine(),
-		macroIngestor:      narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro")),
+		macroIngestor:      ingestor,
 		geoProvider:        geoProvider,
 		taiwanGeoProvider:  taiwanGeoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider, workDir),
