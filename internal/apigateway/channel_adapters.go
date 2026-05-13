@@ -10,6 +10,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/narrative"
 	"golang.org/x/time/rate"
 )
 
@@ -683,6 +684,120 @@ func (a *TEJChannelAdapter) Metadata() ChannelMetadata {
 }
 
 // ---------------------------------------------------------------------------
+// GeopoliticalChannelAdapter — wraps narrative geopolitical providers
+// ---------------------------------------------------------------------------
+
+// GeopoliticalChannelAdapter adapts narrative geopolitical providers to the DataProvider interface.
+type GeopoliticalChannelAdapter struct {
+	workDir string
+	limiter *rate.Limiter
+}
+
+// NewGeopoliticalChannelAdapter creates a new adapter for the geopolitical channel.
+func NewGeopoliticalChannelAdapter(workDir string) *GeopoliticalChannelAdapter {
+	return &GeopoliticalChannelAdapter{
+		workDir: workDir,
+		limiter: rate.NewLimiter(rate.Every(time.Minute), 1),
+	}
+}
+
+// Fetch retrieves global and Taiwan geopolitical risk scores.
+func (a *GeopoliticalChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	globalProvider := narrative.NewCompositeGeopoliticalProvider(
+		narrative.NewRSSGeopoliticalProvider(),
+		narrative.NewGDELTGeopoliticalProvider(),
+	)
+	taiwanProvider := narrative.NewCompositeTaiwanGeopoliticalProvider(
+		narrative.NewTaiwanRSSGeopoliticalProvider(),
+	)
+
+	globalStore := narrative.NewGeopoliticalStore(filepath.Join(a.workDir, "data/state/geopolitical"))
+	taiwanStore := narrative.NewGeopoliticalStore(filepath.Join(a.workDir, "data/state/geopolitical/taiwan"))
+
+	type geopoliticalResult struct {
+		Global *narrative.GeopoliticalRiskScore `json:"global,omitempty"`
+		Taiwan *narrative.GeopoliticalRiskScore `json:"taiwan,omitempty"`
+	}
+
+	result := &geopoliticalResult{}
+
+	bgCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	score, err := globalProvider.FetchScore(bgCtx)
+	cancel()
+	if err != nil {
+		logging.Error("apigateway", "geopolitical_fetch_failed", "err", err)
+	} else {
+		score.Timestamp = time.Now()
+		result.Global = &score
+		if err := globalStore.Save(score); err != nil {
+			logging.Error("apigateway", "geopolitical_save_failed", "err", err)
+		}
+	}
+
+	bgCtx2, cancel2 := context.WithTimeout(ctx, 60*time.Second)
+	twScore, err := taiwanProvider.FetchScore(bgCtx2)
+	cancel2()
+	if err != nil {
+		logging.Error("apigateway", "taiwan_geopolitical_fetch_failed", "err", err)
+	} else {
+		twScore.Timestamp = time.Now()
+		result.Taiwan = &twScore
+		if err := taiwanStore.Save(twScore); err != nil {
+			logging.Error("apigateway", "taiwan_geopolitical_save_failed", "err", err)
+		}
+	}
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("geopolitical marshal: %w", err)
+	}
+
+	return &FetchResult{
+		Data: data,
+		Meta: FetchMetadata{
+			ChannelID:          "geopolitical",
+			RateLimitRemaining: int(a.limiter.Tokens()),
+			Timestamp:          time.Now(),
+		},
+	}, nil
+}
+
+// HealthCheck verifies connectivity by fetching scores.
+func (a *GeopoliticalChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
+	_, err := a.Fetch(ctx)
+	if err != nil {
+		return HealthStatus{
+			Status:    "error",
+			LastError: err.Error(),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "liveness",
+		}, err
+	}
+	return HealthStatus{
+		Status:    "ok",
+		UpdatedAt: time.Now().Format(time.RFC3339),
+		CheckType: "liveness",
+	}, nil
+}
+
+// RateLimit returns the geopolitical rate limiter.
+func (a *GeopoliticalChannelAdapter) RateLimit() *rate.Limiter {
+	return a.limiter
+}
+
+// Metadata returns static channel metadata for geopolitical.
+func (a *GeopoliticalChannelAdapter) Metadata() ChannelMetadata {
+	return ChannelMetadata{
+		ChannelID:  "geopolitical",
+		Country:    "全球",
+		Platform:   "RSS + GDELT",
+		APIFormat:  "Composite",
+		Path:       "geopolitical",
+		HasLimiter: true,
+	}
+}
+
+// ---------------------------------------------------------------------------
 // RegisterChannelAdapters — wires concrete clients into the Gateway registry
 // ---------------------------------------------------------------------------
 
@@ -762,6 +877,11 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config) erro
 		g.registry.Register("tej", tejAdapter)
 		logging.Info("apigateway", "adapter_registered", "channel", "tej")
 	}
+
+	// --- Geopolitical (RSS + GDELT) ---
+	geoAdapter := NewGeopoliticalChannelAdapter(workDir)
+	g.registry.Register("geopolitical", geoAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "geopolitical")
 
 	return nil
 }
