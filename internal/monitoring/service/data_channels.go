@@ -230,7 +230,7 @@ func (s *DataChannelService) buildUSYahooChannel(now time.Time) DataChannel {
 }
 
 func (s *DataChannelService) buildTWSEReplayChannel(now time.Time) DataChannel {
-	replayPath := filepath.Join(s.WorkDir, "data/replay/tw_extended_90days.csv")
+	replayPath := config.GetReplayDataPath(s.WorkDir)
 	status, updated := checkReplayHealth(replayPath, now)
 	rec := s.healthStore.Get("twse_replay")
 	if rec != nil && rec.LastError != "" {
@@ -242,7 +242,7 @@ func (s *DataChannelService) buildTWSEReplayChannel(now time.Time) DataChannel {
 		Platform:   "TWSE 證交所",
 		APIFormat:  "OpenAPI / CSV",
 		Path:       "openapi.twse.com.tw / www.twse.com.tw",
-		Storage:    "data/replay/tw_extended_90days.csv",
+		Storage:    config.GetReplayDataPath(s.WorkDir),
 		Status:     status,
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
@@ -425,7 +425,7 @@ func (s *DataChannelService) buildGeopoliticalChannel(now time.Time) DataChannel
 
 func (s *DataChannelService) buildTWSEMarginChannel(now time.Time) DataChannel {
 	marginDir := filepath.Join(s.WorkDir, "data/state/margin")
-	status, updated := checkCapitalFlowHealth(marginDir, now)
+	status, updated := checkMarginHealth(marginDir, now)
 	rec := s.healthStore.Get("twse_margin")
 	if rec != nil && rec.LastError != "" {
 		updated = "上次失敗: " + rec.LastError
@@ -466,7 +466,7 @@ func (s *DataChannelService) buildExportStatisticsChannel(now time.Time) DataCha
 
 func (s *DataChannelService) buildTSMCRevenueChannel(now time.Time) DataChannel {
 	tsmcDir := filepath.Join(s.WorkDir, "data/state/tsmc_revenue")
-	status, updated := checkCapitalFlowHealth(tsmcDir, now)
+	status, updated := checkTSMCRevenueHealth(tsmcDir, now)
 	rec := s.healthStore.Get("tsmc_revenue")
 	if rec != nil && rec.LastError != "" {
 		updated = "上次失敗: " + rec.LastError

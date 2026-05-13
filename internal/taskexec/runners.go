@@ -44,7 +44,7 @@ func (r *runExperimentRunner) Run(ctx context.Context, req SubmitRequest, sink E
 
 	cfg := r.cfg
 	if cfg.ReplayDataPath == "samples/replay/twse_stock_day_all_sample.csv" {
-		cfg.ReplayDataPath = "data/replay/tw_extended_90days.csv"
+		cfg.ReplayDataPath = config.GetReplayDataPath(cfg.WorkDir)
 	}
 
 	if _, err := baseline.Load(cfg.BaselinePolicyPath); err != nil {
@@ -127,7 +127,7 @@ func (r *judgeExperimentRunner) Run(ctx context.Context, req SubmitRequest, sink
 
 	cfg := r.cfg
 	if cfg.ReplayDataPath == "samples/replay/twse_stock_day_all_sample.csv" {
-		cfg.ReplayDataPath = "data/replay/tw_extended_90days.csv"
+		cfg.ReplayDataPath = config.GetReplayDataPath(cfg.WorkDir)
 	}
 
 	select {

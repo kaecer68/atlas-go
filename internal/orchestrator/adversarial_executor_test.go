@@ -4,12 +4,13 @@ import (
 	"math"
 	"testing"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
 func TestAdversarialScenarioRunnerWithRealReplay(t *testing.T) {
-	ds, err := replay.LoadTWSEOpenDataCSV("../../data/replay/tw_extended_90days.csv")
+	ds, err := replay.LoadTWSEOpenDataCSV(config.GetReplayDataPath(".."))
 	if err != nil {
 		t.Skipf("cannot load replay data: %v", err)
 	}
@@ -63,7 +64,7 @@ func TestAdversarialQuoteMutators(t *testing.T) {
 
 func TestPhase3ControllerRunsAdversarialStressTests(t *testing.T) {
 	registry := SeedRegistry()
-	ds, _ := replay.LoadTWSEOpenDataCSV("../../data/replay/tw_extended_90days.csv")
+	ds, _ := replay.LoadTWSEOpenDataCSV(config.GetReplayDataPath(".."))
 	runner := NewAdversarialScenarioRunner(ds, registry)
 
 	ctrl := NewPhase3Controller(&registry, nil, nil, nil, nil, nil)

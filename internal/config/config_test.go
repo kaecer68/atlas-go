@@ -277,8 +277,52 @@ func TestLoad_EnvFileDoesNotOverrideExisting(t *testing.T) {
 	}
 
 	cfg := Load()
-	// 已存在的 process env 不應被 .env 覆蓋
 	if cfg.ReplayMode != "process-env-value" {
 		t.Errorf("ReplayMode = %q, want process-env-value (process env should win)", cfg.ReplayMode)
+	}
+}
+
+func TestGetReplayDataPath_Default(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("ATLAS_REPLAY_DATA_PATH", "")
+
+	got := GetReplayDataPath(tmpDir)
+	want := filepath.Join(tmpDir, "data", "replay", "tw_extended_90days.csv")
+	if got != want {
+		t.Errorf("GetReplayDataPath = %q, want %q", got, want)
+	}
+}
+
+func TestGetReplayDataPath_VERSIONFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	replayDir := filepath.Join(tmpDir, "data", "replay")
+	os.MkdirAll(replayDir, 0o755)
+
+	if err := os.WriteFile(filepath.Join(replayDir, "VERSION"), []byte("merged.csv\n"), 0o644); err != nil {
+		t.Fatalf("write VERSION: %v", err)
+	}
+
+	t.Setenv("ATLAS_REPLAY_DATA_PATH", "")
+	got := GetReplayDataPath(tmpDir)
+	want := filepath.Join(tmpDir, "data", "replay", "merged.csv")
+	if got != want {
+		t.Errorf("GetReplayDataPath = %q, want %q", got, want)
+	}
+}
+
+func TestGetReplayDataPath_EnvOverride(t *testing.T) {
+	tmpDir := t.TempDir()
+	replayDir := filepath.Join(tmpDir, "data", "replay")
+	os.MkdirAll(replayDir, 0o755)
+
+	if err := os.WriteFile(filepath.Join(replayDir, "VERSION"), []byte("merged.csv\n"), 0o644); err != nil {
+		t.Fatalf("write VERSION: %v", err)
+	}
+
+	t.Setenv("ATLAS_REPLAY_DATA_PATH", "/custom/path/replay.csv")
+	got := GetReplayDataPath(tmpDir)
+	want := "/custom/path/replay.csv"
+	if got != want {
+		t.Errorf("GetReplayDataPath = %q, want %q", got, want)
 	}
 }
