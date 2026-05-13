@@ -355,8 +355,6 @@ func run(args []string, deps appDeps) error {
 		}))
 		mux.Handle("/static/", http.StripPrefix("/static/", fs))
 		log.Printf("dashboard api listening on %s", *apiAddr)
-		// TODO: Migrate channel_health_sync to BackgroundTaskManager (DB sync task, not a data fetcher).
-		bootstrap.StartChannelHealthSyncLoop(sysCtx, cfg.WorkDir, pool)
 
 		// Initialize API Gateway with channel adapters and background task manager.
 		gateway, err := apigateway.NewGateway(cfg.WorkDir, pool)
@@ -370,6 +368,20 @@ func run(args []string, deps appDeps) error {
 
 			// BackgroundTaskManager for centralized goroutine lifecycle management.
 			taskMgr = apigateway.NewBackgroundTaskManager(gateway)
+
+			// Register channel_health_sync task (DB sync, not a data fetcher).
+			if pool != nil {
+				taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "channel_health_sync",
+					Interval: 5 * time.Minute,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						healthStore := monitoring.NewChannelHealthStoreWithPool(filepath.Join(cfg.WorkDir, "data/state"), pool)
+						return healthStore.SyncAllToDB()
+					},
+				})
+				log.Printf("[Gateway] registered channel_health_sync background task (5m interval)")
+			}
 
 			// Register TSMC Revenue task via Gateway.
 			if cfg.FinMindAPIKey != "" {
@@ -513,13 +525,23 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered auto_export background task (12h interval)")
 
+			// Register auto_geopolitical via Gateway.
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "auto_geopolitical",
+				ChannelID: "geopolitical",
+				Interval:  6 * time.Hour,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					adapter := apigateway.NewGeopoliticalChannelAdapter(cfg.WorkDir)
+					_, err := adapter.Fetch(ctx)
+					return err
+				},
+			})
+			log.Printf("[Gateway] registered auto_geopolitical background task (6h interval)")
+
 			taskMgr.Start(sysCtx)
 			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
 		}
-
-		// Legacy direct goroutine tasks (not yet migrated to BackgroundTaskManager).
-		// TODO: Migrate auto_geopolitical to BackgroundTaskManager (requires narrative provider adapter).
-		bootstrap.StartAutoGeopoliticalFetch(sysCtx, cfg.WorkDir)
 
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 			if svc := d.GetIndustryService(); svc != nil {
