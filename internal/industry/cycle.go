@@ -3,6 +3,7 @@ package industry
 import (
 	"fmt"
 	"maps"
+	"math"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -203,8 +204,7 @@ func (ct *CycleTracker) detectCyclePosition(industryID string, metrics IndustryM
 	// Detect capex cycle
 	position.CapexCycle = ct.detectCapexCycle(metrics)
 
-	// Calculate confidence based on data quality
-	position.Confidence = ct.calculateConfidence(metrics)
+	position.Confidence = ct.calculateConfidence(industryID, metrics)
 
 	// Set leading and lagging indicators
 	position.LeadingIndicators = ct.getLeadingIndicators(industryID, metrics)
@@ -286,28 +286,80 @@ func (ct *CycleTracker) detectCapexCycle(metrics IndustryMetrics) CapexCycle {
 	}
 }
 
-// calculateConfidence calculates the confidence level of cycle detection.
-func (ct *CycleTracker) calculateConfidence(metrics IndustryMetrics) float64 {
-	confidence := 0.5 // Base confidence
+func (ct *CycleTracker) calculateConfidence(industryID string, metrics IndustryMetrics) float64 {
+	hasData := metrics.RevenueGrowthYoY != 0 || metrics.ProfitGrowthYoY != 0 ||
+		metrics.InventoryTurnover != 0 || metrics.CapacityUtilization > 0
+	if !hasData {
+		return 0.3
+	}
 
-	// Increase confidence if we have all key metrics
+	signal := 0.3
 	if metrics.RevenueGrowthYoY != 0 {
-		confidence += 0.15
+		signal += math.Min(math.Abs(metrics.RevenueGrowthYoY)/0.5, 1.0) * 0.25
 	}
 	if metrics.ProfitGrowthYoY != 0 {
-		confidence += 0.15
+		signal += math.Min(math.Abs(metrics.ProfitGrowthYoY)/0.5, 1.0) * 0.25
 	}
 	if metrics.InventoryTurnover != 0 {
-		confidence += 0.10
+		signal += math.Min(metrics.InventoryTurnover/10.0, 1.0) * 0.10
 	}
-	if metrics.CapacityUtilization != 0 {
-		confidence += 0.10
+	if metrics.CapacityUtilization > 0 {
+		signal += math.Min(metrics.CapacityUtilization, 1.0) * 0.15
 	}
+
+	boundary := ct.boundaryConfidence(industryID, metrics)
+
+	confidence := signal*0.6 + boundary*0.4
 
 	if confidence > 1.0 {
 		confidence = 1.0
 	}
+	if confidence < 0.1 {
+		confidence = 0.1
+	}
 	return confidence
+}
+
+// boundaryConfidence returns 0–1: 0 = metric at a phase threshold (ambiguous),
+// 1 = far from any threshold (strong conviction in detected phase).
+func (ct *CycleTracker) boundaryConfidence(industryID string, metrics IndustryMetrics) float64 {
+	params := config.GetParametersConfig().Industry
+	thresholds, ok := params.CycleThresholds.Value[industryID]
+	if !ok {
+		thresholds = config.CycleThresholdConfig{
+			ExpansionRevenuePct: 0.20,
+			ExpansionProfitPct:  0.20,
+			RecoveryRevenuePct:  0.05,
+			RecoveryProfitPct:   0.05,
+			MatureRevenuePct:    -0.05,
+			MatureProfitPct:     -0.05,
+		}
+	}
+
+	revMinDist := math.Abs(metrics.RevenueGrowthYoY - thresholds.ExpansionRevenuePct)
+	for _, t := range []float64{thresholds.RecoveryRevenuePct, thresholds.MatureRevenuePct} {
+		if d := math.Abs(metrics.RevenueGrowthYoY - t); d < revMinDist {
+			revMinDist = d
+		}
+	}
+
+	profitMinDist := math.Abs(metrics.ProfitGrowthYoY - thresholds.ExpansionProfitPct)
+	for _, t := range []float64{thresholds.RecoveryProfitPct, thresholds.MatureProfitPct} {
+		if d := math.Abs(metrics.ProfitGrowthYoY - t); d < profitMinDist {
+			profitMinDist = d
+		}
+	}
+
+	tr := thresholds.ExpansionRevenuePct - thresholds.MatureRevenuePct
+	if tr <= 0 {
+		tr = 0.25
+	}
+	denom := tr * 0.3
+
+	revScore := math.Min(revMinDist/denom, 1.0)
+	profitScore := math.Min(profitMinDist/denom, 1.0)
+
+	return (revScore + profitScore) / 2.0
 }
 
 // getLeadingIndicators returns leading indicators for an industry.

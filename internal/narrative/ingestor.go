@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -58,6 +59,17 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 
 	snap, err := m.provider.FetchSnapshot(ctx)
 	if err != nil {
+		// Partial success: save valid fields and merge with previous snapshot.
+		if hasValidYahooData(snap) {
+			prev, _ := m.loadLatestSnapshot()
+			snap = mergeWithPrev(snap, prev)
+			if saveErr := m.saveSnapshot(snap); saveErr != nil {
+				logging.Warn("ingestor", "partial_save_failed", logging.Err(saveErr))
+			}
+			events := detectEventsFromSnapshot(snap, prev, m.divergenceDetect)
+			m.publishEvents(events)
+			return events, snap, nil
+		}
 		prev, prevErr := m.loadLatestSnapshot()
 		if prevErr == nil {
 			prevPrev, _ := m.loadPreviousSnapshot(prev)

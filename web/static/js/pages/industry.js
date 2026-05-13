@@ -51,6 +51,15 @@ export function renderIndustryMap(data) {
   el.innerHTML = html;
 }
 
+function confidenceColor(hex, confidence) {
+  // Phase indicator opacity reflects confidence (0.3 dim … 1.0 full)
+  const alpha = 0.3 + (confidence || 0) * 0.7;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return "rgba(" + r + "," + g + "," + b + "," + alpha.toFixed(2) + ")";
+}
+
 export function renderIndustryCycle(data) {
   const el = document.getElementById("industryCycle");
   if (!data || !data.industries) {
@@ -74,7 +83,9 @@ export function renderIndustryCycle(data) {
   };
   let html = '<div style="display:flex;flex-wrap:wrap;gap:10px">';
   industries.forEach((ind) => {
-    const color = cycleColors[ind.cycle_phase] || "#666";
+    const confidence = ind.cycle_confidence || 0;
+    const baseColor = cycleColors[ind.cycle_phase] || "#666";
+    const color = confidenceColor(baseColor, confidence);
     const name = cycleNames[ind.cycle_phase] || ind.cycle_phase;
     html += `<div style="flex:1;min-width:140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px">`;
     html += `<div style="font-weight:700;font-size:14px;margin-bottom:4px">${ind.name}</div>`;
@@ -82,7 +93,7 @@ export function renderIndustryCycle(data) {
     html += `<span style="width:10px;height:10px;border-radius:50%;background:${color};display:inline-block"></span>`;
     html += `<span style="font-size:12px">${name}</span>`;
     html += `</div>`;
-    html += `<div style="font-size:11px;color:var(--muted)">信心度 ${Math.round((ind.cycle_confidence || 0) * 100)}%</div>`;
+    html += `<div style="font-size:11px;color:var(--muted)">信心度 ${Math.round(confidence * 100)}%</div>`;
     html += `</div>`;
   });
   html += "</div>";
@@ -457,9 +468,77 @@ function renderRiskTab(detail) {
   return html;
 }
 
+async function showIndustryDetail(id) {
+  const titleEl = document.getElementById("industryModalTitle");
+  const contentEl = document.getElementById("industryModalContent");
+  const modal = document.getElementById("industryModal");
+  if (!titleEl || !contentEl || !modal) return;
+
+  titleEl.textContent = "載入中…";
+  contentEl.innerHTML = '<div class="empty">載入中…</div>';
+  modal.classList.add("show");
+
+  const detail = await silentGetJSON("/api/dashboard/industry-detail?industry=" + encodeURIComponent(id));
+  if (!detail) {
+    contentEl.innerHTML = '<div class="empty">無法載入產業詳細資料</div>';
+    titleEl.textContent = "產業詳細分析";
+    return;
+  }
+
+  window._industryDetail = detail;
+  titleEl.textContent = (detail.name || id) + " 詳細分析";
+  switchIndustryTab("cycle");
+}
+
+function closeIndustryModal() {
+  const modal = document.getElementById("industryModal");
+  if (modal) modal.classList.remove("show");
+}
+
+function switchIndustryTab(tab) {
+  const detail = window._industryDetail;
+  const contentEl = document.getElementById("industryModalContent");
+  if (!detail || !contentEl) return;
+
+  document.querySelectorAll("#industryTabs .tab-btn").forEach(function(btn) {
+    btn.classList.toggle("active", btn.getAttribute("data-tab") === tab);
+  });
+
+  switch (tab) {
+    case "cycle":
+      contentEl.innerHTML = renderCycleTab(detail);
+      break;
+    case "linkage":
+      contentEl.innerHTML = renderLinkageTab(detail);
+      break;
+    case "seasonality":
+      contentEl.innerHTML = renderSeasonalityTab(detail);
+      break;
+    case "risk":
+      contentEl.innerHTML = renderRiskTab(detail);
+      break;
+    default:
+      contentEl.innerHTML = '<div class="empty">未知的分頁</div>';
+  }
+}
+
+function toggleCycleLegend() {
+  const modal = document.getElementById("cycleLegendModal");
+  if (modal) {
+    modal.classList.toggle("show");
+  }
+}
+
+function closeCycleLegend() {
+  const modal = document.getElementById("cycleLegendModal");
+  if (modal) modal.classList.remove("show");
+}
+
 if (typeof window !== "undefined")
   Object.assign(window, {
     showIndustryDetail,
     closeIndustryModal,
     switchIndustryTab,
+    toggleCycleLegend,
+    closeCycleLegend,
   });

@@ -76,9 +76,10 @@ type DashboardAPI struct {
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
 	providers := []marketdata.MacroDataProvider{
 		marketdata.NewYahooFinanceMacroProvider(),
+		marketdata.NewFrankfurterFXProvider(),
 		marketdata.NewSOXIndexProvider(),
 		marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")),
-		marketdata.NewTWSEMarginBalanceProvider(),
+		marketdata.NewTWSEMarginBalanceProvider(""),
 		marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export")),
 	}
 	// Sector data from local cache (graceful degradation if file missing).
@@ -209,7 +210,10 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	metricsHandlers := apimetrics.NewHandlers(metricsSvc)
 	metricsHandlers.RegisterRoutes(mux)
 
-	systemSvc := service.NewSystemService(a.workDir, a.ledgerDir, a.baselinePath, outcomeStore)
+	systemSvc := service.NewSystemService(a.workDir, a.ledgerDir, a.baselinePath, outcomeStore, a.janusEngine)
+	if a.industryService != nil {
+		systemSvc.SetCycleTracker(a.industryService.CycleTracker)
+	}
 	systemHandlers := apisystem.NewHandlers(systemSvc)
 	systemHandlers.RegisterRoutes(mux)
 
@@ -259,6 +263,24 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		shared.WriteJSON(w, http.StatusOK, map[string]any{
 			"channels":  channels,
 			"alerts":    alerts,
+			"generated": time.Now().Format(time.RFC3339),
+		})
+	})
+
+	// Data pipeline endpoint — tracks producer/consumer freshness for all data sources.
+	mux.HandleFunc("/api/dashboard/data-pipeline", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		pipelineSvc := service.NewDataPipelineService(a.workDir, a.ledgerDir)
+		sources, err := pipelineSvc.GetPipelineStatus()
+		if err != nil {
+			shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load data pipeline: %v", err))
+			return
+		}
+		shared.WriteJSON(w, http.StatusOK, map[string]any{
+			"sources":   sources,
 			"generated": time.Now().Format(time.RFC3339),
 		})
 	})
@@ -395,6 +417,10 @@ func (a *DashboardAPI) RegisterOrderRoutes(mux *http.ServeMux) {
 		Svc: orderSvc,
 	}
 	handlers.RegisterRoutes(mux)
+}
+
+func (a *DashboardAPI) GetIndustryService() *service.IndustryService {
+	return a.industryService
 }
 
 func (a *DashboardAPI) RegisterTaskExecRoutes(mux *http.ServeMux) {

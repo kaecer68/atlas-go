@@ -1919,7 +1919,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
       </details>
       <div class="two-col-grid">
         <div class="panel"><h2>產業地圖</h2><div id="industryMap" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>週期羅盤</h2><div id="industryCycle" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>週期羅盤 <button class="legend-toggle" onclick="toggleCycleLegend()" title="週期燈號計算說明">?</button></h2><div id="industryCycle" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>供應鏈連動</h2><div id="industryLinkage" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>季節性模式</h2><div id="industrySeasonality" class="empty loading">載入中…</div></div>
       </div>
@@ -1938,6 +1938,19 @@ body { display: flex; margin: 0; min-height: 100vh; }
       <div class="panel wide">
         <h2>實驗收件匣（新候選者）</h2>
         <div class="inbox-grid" id="synergyInbox">載入中…</div>
+      </div>
+      <div class="panel wide mt-md" style="border-color:var(--warn)">
+        <h2>🔧 產業週期閾值校正</h2>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.6">
+          閾值校正根據歷史營收數據重新計算各產業的擴張/復甦/成熟/衰退門檻。<br>
+          系統<strong>每月自動執行一次</strong>。若需手動校正，可使用以下按鈕或 CLI：<br>
+          <code style="background:var(--panel-l2);padding:2px 6px;border-radius:4px;font-size:12px">go run ./cmd/calibrate-thresholds</code>
+          （需先執行 <code style="background:var(--panel-l2);padding:2px 6px;border-radius:4px;font-size:12px">backfill-month-revenue</code> 累積歷史數據）
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="fetch('/api/admin/calibrate-thresholds',{method:'POST'}).then(r=>r.json()).then(d=>alert(d.status||d.error||'完成')).catch(e=>alert('校正失敗: '+e))" style="background:var(--warn);color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600">🔄 手動校正閾值</button>
+          <button onclick="switchPage('parameters')" style="background:var(--bg);border:1px solid var(--border);padding:8px 16px;border-radius:6px;cursor:pointer">📋 查看參數管理</button>
+        </div>
       </div>
     </div>
 
@@ -2052,6 +2065,67 @@ body { display: flex; margin: 0; min-height: 100vh; }
     <div id="industryModalContent"><div class="empty">載入中…</div></div>
     <div class="control-group" style="margin-top:14px;justify-content:flex-end">
       <button onclick="closeIndustryModal()">關閉</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="cycleLegendModal" role="dialog" aria-modal="true" onclick="if(event.target===this)closeCycleLegend()">
+  <div class="modal" style="width:min(600px,94vw);max-height:85vh;overflow-y:auto">
+    <h3>📊 週期羅盤 — 燈號計算說明</h3>
+
+    <div style="margin-bottom:14px">
+      <h4 style="margin:12px 0 6px">🟢 燈號顏色</h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:13px">
+        <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#10b981;margin-right:6px"></span>復甦 (綠)</div>
+        <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#3b82f6;margin-right:6px"></span>擴張 (藍)</div>
+        <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#f59e0b;margin-right:6px"></span>成熟 (橙)</div>
+        <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#ef4444;margin-right:6px"></span>衰退 (紅)</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <h4 style="margin:12px 0 6px">🔍 週期判定</h4>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 6px">
+        用 <b>營收年增率</b> 和 <b>獲利年增率</b> 與產業閾值比較：
+      </p>
+      <table style="font-size:12px;width:100%">
+        <thead><tr><th>判定</th><th>營收閾值</th><th>獲利閾值</th><th>範例</th></tr></thead>
+        <tbody>
+          <tr><td>擴張</td><td>&gt; 20%</td><td>&gt; 20%</td><td>AI供應鏈 rev 45%</td></tr>
+          <tr><td>復甦</td><td>&gt; 5%</td><td>&gt; 5%</td><td>電子零組件 rev 12%</td></tr>
+          <tr><td>成熟</td><td>&gt; -5%</td><td>&gt; -5%</td><td>傳產/消費 rev 3%</td></tr>
+          <tr><td>衰退</td><td>其餘</td><td>其餘</td><td>航運 rev -5%</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:11px;color:var(--muted);margin:4px 0 0">
+        半導體 / 金融 / 航運 有獨立閾值（高波動產業閾值更高）
+      </p>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <h4 style="margin:12px 0 6px">📈 信心度</h4>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 6px">
+        <b>信心度 = 訊號強度 × 60% + 邊界距離 × 40%</b>
+      </p>
+      <ul style="font-size:12px;color:var(--muted);padding-left:18px;margin:0">
+        <li><b>訊號強度</b>：指標絕對值越大 → 越可靠</li>
+        <li><b>邊界距離</b>：離閾值越遠 → 判斷越確定</li>
+      </ul>
+      <p style="font-size:12px;color:var(--muted);margin:6px 0 0">
+        🎨 燈號顏色深淺 = 信心度。深 = 高信心；淺 = 邊界搖擺。
+      </p>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <h4 style="margin:12px 0 6px">⚠️ 數據來源</h4>
+      <p style="font-size:12px;color:var(--down);margin:0">
+        目前產業週期指標為<b>預設估算值</b>，尚未接入即時市場數據。
+        燈號僅反映預設假設，可能與當前市場事件有落差。
+      </p>
+    </div>
+
+    <div class="control-group" style="margin-top:14px;justify-content:flex-end">
+      <button onclick="closeCycleLegend()">關閉</button>
     </div>
   </div>
 </div>

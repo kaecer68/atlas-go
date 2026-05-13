@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
@@ -38,7 +39,48 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 
 // HandleGetParameters returns the current parameters.
 func (h *Handlers) HandleGetParameters(r *http.Request) (int, any) {
-	return http.StatusOK, h.params
+	result, err := h.paramsToFlatMap()
+	if err != nil {
+		return http.StatusOK, h.params
+	}
+	return http.StatusOK, result
+}
+
+func (h *Handlers) paramsToFlatMap() (map[string]any, error) {
+	raw, err := json.Marshal(h.params)
+	if err != nil {
+		return nil, fmt.Errorf("marshal: %w", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, fmt.Errorf("unmarshal: %w", err)
+	}
+
+	result := make(map[string]any)
+	flatten(m, "", result)
+	return result, nil
+}
+
+func flatten(src map[string]any, prefix string, dst map[string]any) {
+	for k, v := range src {
+		key := k
+		if prefix != "" {
+			key = prefix + "." + k
+		}
+		if sub, ok := v.(map[string]any); ok {
+			if val, exists := sub["value"]; exists && len(sub) <= 5 {
+				if deep, ok := val.(map[string]any); ok {
+					flatten(deep, key, dst)
+				} else {
+					dst[key] = val
+				}
+			} else {
+				flatten(sub, key, dst)
+			}
+		} else {
+			dst[key] = v
+		}
+	}
 }
 
 // HandlePostParameters updates parameters.
@@ -87,9 +129,31 @@ func (h *Handlers) HandleCategories(r *http.Request) (int, any) {
 		{"id": "garch", "name": "Volatility Forecasting", "description": "GARCH model parameters"},
 		{"id": "experiment", "name": "Experiment Evaluation", "description": "Experiment acceptance thresholds"},
 		{"id": "baseline", "name": "Baseline Policy", "description": "Default baseline policy values"},
+		{"id": "cycle", "name": "Industry Cycle Thresholds", "description": "Per-industry business cycle detection thresholds"},
 	}
 
-	return http.StatusOK, map[string]any{"categories": categories}
+	flatParams, _ := h.paramsToFlatMap()
+	keys := make(map[string][]string)
+	for _, cat := range categories {
+		catID := cat["id"].(string)
+		for k := range flatParams {
+			if k == "version" || k == "updated_at" {
+				continue
+			}
+			matched := strings.HasPrefix(k, catID)
+			if catID == "cycle" && strings.Contains(k, "cycle_thresholds") {
+				matched = true
+			}
+			if matched {
+				keys[catID] = append(keys[catID], k)
+			}
+		}
+		if keys[catID] == nil {
+			keys[catID] = []string{}
+		}
+	}
+
+	return http.StatusOK, map[string]any{"categories": categories, "keys": keys}
 }
 
 // HandleInferGARCH runs GARCH parameter inference from provided returns.

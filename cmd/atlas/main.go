@@ -20,6 +20,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
+	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/live"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
@@ -235,6 +236,22 @@ func run(args []string, deps appDeps) error {
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"status":"ok","version":"%s"}`+"\n", cfg.Version)
 		})
+		mux.HandleFunc("/api/admin/calibrate-thresholds", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			revenuePath := filepath.Join(cfg.WorkDir, "data", "replay", "month_revenue.jsonl")
+			configPath := filepath.Join(cfg.WorkDir, "configs", "parameters.json")
+			if err := industry.RecalibrateThresholds(revenuePath, configPath); err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintf(w, `{"error":"%s"}`+"\n", err.Error())
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"status":"ok","message":"thresholds recalibrated"}`+"\n")
+		})
 		mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
 		monitor := monitoring.NewMonitor()
 		if alertStore != nil {
@@ -305,7 +322,29 @@ func run(args []string, deps appDeps) error {
 		bootstrap.StartChannelHealthSyncLoop(sysCtx, cfg.WorkDir, pool)
 		bootstrap.StartAutoBackfill(sysCtx, cfg.WorkDir, cfg.ReplayDataPath)
 		bootstrap.StartAutoCapitalFlowFetch(sysCtx, cfg.WorkDir)
+		bootstrap.StartAutoMarginFetch(sysCtx, cfg.WorkDir)
 		bootstrap.StartAutoGeopoliticalFetch(sysCtx, cfg.WorkDir)
+		bootstrap.StartAutoExportFetch(sysCtx, cfg.WorkDir)
+		if finmindKey := os.Getenv("FINMIND_API_KEY"); finmindKey != "" {
+			bootstrap.StartAutoTSMCRevenueFetch(sysCtx, cfg.WorkDir, finmindKey)
+			log.Printf("[TSMCRevenue] auto TSMC revenue fetch scheduler started (24h interval)")
+		}
+
+		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+			if svc := d.GetIndustryService(); svc != nil {
+				finmindKey := os.Getenv("FINMIND_API_KEY")
+				var finmindClient *marketdata.FinMindClient
+				if finmindKey != "" {
+					finmindClient = marketdata.NewFinMindClient(finmindKey)
+				}
+				cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient)
+				bootstrap.StartAutoCycleUpdate(sysCtx, cfg.WorkDir, cycleAggregator)
+				log.Printf("[CycleUpdate] auto cycle update scheduler started (6h interval)")
+			}
+		}
+
+		bootstrap.StartAutoThresholdCalibration(sysCtx, cfg.WorkDir)
+		log.Printf("[ThresholdCalibrate] monthly auto-calibration scheduler started")
 
 		var btRunner *autobacktest.Runner
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok && d.GetEventBus() != nil {
