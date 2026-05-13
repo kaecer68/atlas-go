@@ -152,26 +152,40 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	loadChannelStates(workDir)
 
 	providers := []marketdata.MacroDataProvider{
+		// TODO: Migrate to Gateway for direct Yahoo Finance macro provider instantiation.
 		marketdata.NewYahooFinanceMacroProvider(),
+		// TODO: Migrate to Gateway for direct Frankfurter FX provider instantiation.
 		marketdata.NewFrankfurterFXProvider(),
+		// TODO: Migrate to Gateway for direct SOX index provider instantiation.
 		marketdata.NewSOXIndexProvider(),
+		// TODO: Migrate to Gateway for direct TWSE capital flow provider instantiation.
 		marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")),
+		// TODO: Migrate to Gateway for direct TWSE margin balance provider instantiation.
 		marketdata.NewTWSEMarginBalanceProvider(""),
+		// TODO: Migrate to Gateway for direct export statistics provider instantiation.
 		marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export")),
 	}
 	// Sector data from local cache (graceful degradation if file missing).
+	// TODO: Migrate to Gateway for direct sector data provider instantiation.
 	providers = append(providers, marketdata.NewSectorDataProvider(filepath.Join(workDir, "data/sector_data")))
 	// TSMC Revenue from FinMind (overwrites cached sector data when available).
 	cfg := config.Load()
 	if cfg.FinMindAPIKey != "" {
+		// TODO: Migrate to Gateway for direct TSMC revenue provider instantiation.
 		providers = append(providers, marketdata.NewTSMCRevenueProvider(cfg.FinMindAPIKey))
 	}
+	// TODO: Migrate to Gateway for direct composite macro provider instantiation.
 	provider := marketdata.NewCompositeMacroProvider(providers...)
+	// TODO: Migrate to Gateway for direct geopolitical composite provider instantiation.
 	geoProvider := narrative.NewCompositeGeopoliticalProvider(
+		// TODO: Migrate to Gateway for direct RSS geopolitical provider instantiation.
 		narrative.NewRSSGeopoliticalProvider(),
+		// TODO: Migrate to Gateway for direct GDELT geopolitical provider instantiation.
 		narrative.NewGDELTGeopoliticalProvider(),
 	)
+	// TODO: Migrate to Gateway for direct Taiwan geopolitical composite provider instantiation.
 	taiwanGeoProvider := narrative.NewCompositeTaiwanGeopoliticalProvider(
+		// TODO: Migrate to Gateway for direct Taiwan RSS geopolitical provider instantiation.
 		narrative.NewTaiwanRSSGeopoliticalProvider(),
 	)
 	if metricsCollector == nil {
@@ -306,8 +320,10 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	var dividendProvider apitax.DividendProvider
 	cfg := config.Load()
 	if cfg.FinMindAPIKey != "" {
+		// TODO: Migrate to Gateway for direct FinMind client instantiation.
 		finMindClient := marketdata.NewFinMindClient(cfg.FinMindAPIKey)
 		cacheDir := filepath.Join(a.workDir, "data", "cache", "dividends")
+		// TODO: Migrate to Gateway for direct FinMind dividend provider instantiation.
 		dividendProvider = marketdata.NewFinMindDividendProvider(finMindClient, cacheDir)
 	}
 	taxHandlers := apitax.NewHandlers(a.ledgerDir, dividendProvider)
@@ -322,6 +338,19 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
+		fugleKey := config.GetSecret("FUGLE_API_KEY")
+		if fugleKey == "" {
+			fugleKey = config.GetSecret("ATLAS_FUGLE_API_KEY")
+		}
+		fubonKey := config.GetSecret("FUBON_API_KEY")
+		if fubonKey == "" {
+			fubonKey = config.GetSecret("ATLAS_FUBON_API_KEY")
+		}
+		finmindKey := config.GetSecret("FINMIND_API_KEY")
+		if finmindKey == "" {
+			finmindKey = config.GetSecret("ATLAS_FINMIND_API_KEY")
+		}
+		tejKey := config.GetSecret("TEJ_API_KEY")
 		channelSvc := service.NewDataChannelService(
 			a.workDir,
 			a.pool,
@@ -329,6 +358,10 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			a.geoProvider,
 			a.taiwanGeoProvider,
 			a.janusEngine,
+			fugleKey,
+			fubonKey,
+			finmindKey,
+			tejKey,
 		)
 		channels, err := channelSvc.GetAllChannelStatuses(r.Context())
 		if err != nil {

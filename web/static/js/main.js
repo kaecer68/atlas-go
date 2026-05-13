@@ -519,6 +519,8 @@ import('./pages/datachannels.js?v=' + APP_VERSION).then(function(m) {
   if (m.toggleChannel) window.toggleChannel = m.toggleChannel;
   if (m.updateApiKey) window.dcUpdateApiKey = m.updateApiKey;
   if (m.loadFetchLogs) window.loadFetchLogs = m.loadFetchLogs;
+  if (m.loadDataChannels) window.loadDataChannels = m.loadDataChannels;
+  if (m.refreshChannelStatus) window.refreshChannelStatus = m.refreshChannelStatus;
 }).catch(function(err) {
   console.error('[Dynamic import] datachannels module load failed:', err);
 });

@@ -69,6 +69,10 @@ type DataChannelService struct {
 	GeoProvider       narrative.GeopoliticalRiskProvider
 	TaiwanGeoProvider *narrative.CompositeTaiwanGeopoliticalProvider
 	JanusEngine       *janus.Engine
+	FugleAPIKey       string
+	FubonAPIKey       string
+	FinMindAPIKey     string
+	TejAPIKey         string
 	healthStore       *ChannelHealthStoreAdapter
 }
 
@@ -94,7 +98,7 @@ var (
 const fugleHealthCacheTTL = 60 * time.Second
 
 // getCachedFugleHealth returns cached status if fresh, otherwise performs a real check.
-func getCachedFugleHealth() (status, updated, lastError string) {
+func (s *DataChannelService) getCachedFugleHealth() (status, updated, lastError string) {
 	fugleHealthMu.RLock()
 	cache := fugleHealthCache
 	fugleHealthMu.RUnlock()
@@ -111,10 +115,7 @@ func getCachedFugleHealth() (status, updated, lastError string) {
 		return fugleHealthCache.status, fugleHealthCache.updated, fugleHealthCache.lastError
 	}
 
-	fugleKey := config.GetSecret("FUGLE_API_KEY")
-	if fugleKey == "" {
-		fugleKey = config.GetSecret("ATLAS_FUGLE_API_KEY")
-	}
+	fugleKey := s.FugleAPIKey
 
 	if fugleKey == "" {
 		fugleHealthCache = cachedFugleHealth{
@@ -125,6 +126,7 @@ func getCachedFugleHealth() (status, updated, lastError string) {
 		return fugleHealthCache.status, fugleHealthCache.updated, ""
 	}
 
+	// TODO: Migrate to Gateway for direct Fugle client instantiation.
 	fugleClient := marketdata.NewFugleClient(fugleKey)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	_, err := fugleClient.GetQuote(ctx, "1476")
@@ -149,7 +151,7 @@ func getCachedFugleHealth() (status, updated, lastError string) {
 }
 
 // getCachedFubonHealth returns cached status if fresh, otherwise performs a real check.
-func getCachedFubonHealth() (status, updated, lastError string) {
+func (s *DataChannelService) getCachedFubonHealth() (status, updated, lastError string) {
 	fubonHealthMu.RLock()
 	cache := fubonHealthCache
 	fubonHealthMu.RUnlock()
@@ -165,10 +167,7 @@ func getCachedFubonHealth() (status, updated, lastError string) {
 		return fubonHealthCache.status, fubonHealthCache.updated, fubonHealthCache.lastError
 	}
 
-	fubonKey := config.GetSecret("FUBON_API_KEY")
-	if fubonKey == "" {
-		fubonKey = config.GetSecret("ATLAS_FUBON_API_KEY")
-	}
+	fubonKey := s.FubonAPIKey
 
 	if fubonKey == "" {
 		fubonHealthCache = cachedFugleHealth{
@@ -179,6 +178,7 @@ func getCachedFubonHealth() (status, updated, lastError string) {
 		return fubonHealthCache.status, fubonHealthCache.updated, ""
 	}
 
+	// TODO: Migrate to Gateway for direct Fubon client instantiation.
 	fubonClient := marketdata.NewFubonClient(fubonKey)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	err := fubonClient.HealthCheck(ctx)
@@ -203,7 +203,7 @@ func getCachedFubonHealth() (status, updated, lastError string) {
 }
 
 // getCachedFinMindHealth returns cached status if fresh, otherwise performs a real check.
-func getCachedFinMindHealth() (status, updated, lastError string) {
+func (s *DataChannelService) getCachedFinMindHealth() (status, updated, lastError string) {
 	finmindHealthMu.RLock()
 	cache := finmindHealthCache
 	finmindHealthMu.RUnlock()
@@ -219,10 +219,7 @@ func getCachedFinMindHealth() (status, updated, lastError string) {
 		return finmindHealthCache.status, finmindHealthCache.updated, finmindHealthCache.lastError
 	}
 
-	finmindKey := config.GetSecret("FINMIND_API_KEY")
-	if finmindKey == "" {
-		finmindKey = config.GetSecret("ATLAS_FINMIND_API_KEY")
-	}
+	finmindKey := s.FinMindAPIKey
 
 	if finmindKey == "" {
 		finmindHealthCache = cachedFugleHealth{
@@ -233,6 +230,7 @@ func getCachedFinMindHealth() (status, updated, lastError string) {
 		return finmindHealthCache.status, finmindHealthCache.updated, ""
 	}
 
+	// TODO: Migrate to Gateway for direct FinMind client instantiation.
 	finmindClient := marketdata.NewFinMindClient(finmindKey)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	_, err := finmindClient.GetStockPrice(ctx, "2330", time.Now().Format("2006-01-02"))
@@ -373,7 +371,7 @@ func (s *channelHealthStore) saveLocked() error {
 	return os.Rename(tmp, s.path)
 }
 
-func NewDataChannelService(workDir string, pool *pgxpool.Pool, macroIngestor *narrative.MacroIngestor, geoProvider narrative.GeopoliticalRiskProvider, taiwanGeoProvider *narrative.CompositeTaiwanGeopoliticalProvider, janusEngine *janus.Engine) *DataChannelService {
+func NewDataChannelService(workDir string, pool *pgxpool.Pool, macroIngestor *narrative.MacroIngestor, geoProvider narrative.GeopoliticalRiskProvider, taiwanGeoProvider *narrative.CompositeTaiwanGeopoliticalProvider, janusEngine *janus.Engine, fugleAPIKey, fubonAPIKey, finmindAPIKey, tejAPIKey string) *DataChannelService {
 	return &DataChannelService{
 		WorkDir:           workDir,
 		Pool:              pool,
@@ -381,6 +379,10 @@ func NewDataChannelService(workDir string, pool *pgxpool.Pool, macroIngestor *na
 		GeoProvider:       geoProvider,
 		TaiwanGeoProvider: taiwanGeoProvider,
 		JanusEngine:       janusEngine,
+		FugleAPIKey:       fugleAPIKey,
+		FubonAPIKey:       fubonAPIKey,
+		FinMindAPIKey:     finmindAPIKey,
+		TejAPIKey:         tejAPIKey,
 		healthStore:       NewChannelHealthStoreAdapter(filepath.Join(workDir, "data/state"), pool),
 	}
 }
@@ -483,7 +485,7 @@ func (s *DataChannelService) buildTWSECapitalFlowChannel(now time.Time) DataChan
 }
 
 func (s *DataChannelService) buildFugleChannel(now time.Time) DataChannel {
-	status, updated, lastError := getCachedFugleHealth()
+	status, updated, lastError := s.getCachedFugleHealth()
 	return DataChannel{
 		ChannelID:  "fugle",
 		Country:    "台灣",
@@ -499,7 +501,7 @@ func (s *DataChannelService) buildFugleChannel(now time.Time) DataChannel {
 }
 
 func (s *DataChannelService) buildFubonChannel(now time.Time) DataChannel {
-	status, updated, lastError := getCachedFubonHealth()
+	status, updated, lastError := s.getCachedFubonHealth()
 	return DataChannel{
 		ChannelID:  "fubon",
 		Country:    "台灣",
@@ -515,7 +517,7 @@ func (s *DataChannelService) buildFubonChannel(now time.Time) DataChannel {
 }
 
 func (s *DataChannelService) buildFinMindChannel(now time.Time) DataChannel {
-	status, updated, lastError := getCachedFinMindHealth()
+	status, updated, lastError := s.getCachedFinMindHealth()
 	return DataChannel{
 		ChannelID:  "finmind",
 		Country:    "台灣",
@@ -679,7 +681,7 @@ func (s *DataChannelService) buildJanusRegimeChannel(now time.Time) DataChannel 
 func (s *DataChannelService) buildTEJChannel(now time.Time) DataChannel {
 	status := "inactive"
 	updated := "TEJ_API_KEY not configured"
-	tejKey := config.GetSecret("TEJ_API_KEY")
+	tejKey := s.TejAPIKey
 	if tejKey != "" {
 		status = "ok"
 		updated = "TEJ API key configured"
