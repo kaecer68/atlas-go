@@ -327,28 +327,45 @@ func run(args []string, deps appDeps) error {
 		bootstrap.StartAutoGeopoliticalFetch(sysCtx, cfg.WorkDir)
 		bootstrap.StartAutoExportFetch(sysCtx, cfg.WorkDir)
 
-		// TODO: Migrate all background tasks to use apigateway.Gateway
-		// This is part of the Data Source Constitution remediation.
-		// See: docs/audit/remediation_plan.md
-		gatewayInitialized := false
-		var gateway *apigateway.Gateway
-		if cfg.FinMindAPIKey != "" {
-			var err error
-			gateway, err = apigateway.NewGateway(cfg.WorkDir, pool)
-			if err == nil {
-				gatewayInitialized = true
-				log.Printf("[Gateway] apigateway initialized with %d channels", len(gateway.ChannelIDs()))
-			} else {
-				log.Printf("[Gateway] initialization failed: %v", err)
+		// Initialize API Gateway with channel adapters and background task manager.
+		gateway, err := apigateway.NewGateway(cfg.WorkDir, pool)
+		var taskMgr *apigateway.BackgroundTaskManager
+		if err != nil {
+			log.Printf("[Gateway] initialization failed: %v", err)
+		} else if err := apigateway.RegisterChannelAdapters(gateway, cfg.WorkDir, cfg); err != nil {
+			log.Printf("[Gateway] adapter registration failed: %v", err)
+		} else {
+			log.Printf("[Gateway] initialized with %d channels + adapters", len(gateway.ChannelIDs()))
+
+			// BackgroundTaskManager for centralized goroutine lifecycle management.
+			taskMgr = apigateway.NewBackgroundTaskManager(gateway)
+
+			// Register TSMC Revenue task via Gateway.
+			if cfg.FinMindAPIKey != "" {
+				taskMgr.Register(apigateway.ScheduledTask{
+					Name:      "tsmc_revenue",
+					ChannelID: "finmind",
+					Interval:  24 * time.Hour,
+					Enabled:   true,
+					Task: func(ctx context.Context) error {
+						provider := marketdata.NewTSMCRevenueProviderWithStorage(
+							cfg.FinMindAPIKey,
+							filepath.Join(cfg.WorkDir, "data/state/tsmc_revenue"),
+						)
+						_, err := provider.FetchSnapshot(ctx)
+						return err
+					},
+				})
+				log.Printf("[Gateway] registered tsmc_revenue background task (24h interval)")
 			}
+
+			taskMgr.Start(sysCtx)
+			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
 		}
 
+		// Legacy direct goroutine tasks (to be migrated to BackgroundTaskManager).
 		if cfg.FinMindAPIKey != "" {
-			if gatewayInitialized {
-				log.Printf("[TSMCRevenue] auto TSMC revenue fetch scheduler started via Gateway (24h interval)")
-			}
 			bootstrap.StartAutoTSMCRevenueFetch(sysCtx, cfg.WorkDir, cfg.FinMindAPIKey)
-			log.Printf("[TSMCRevenue] auto TSMC revenue fetch scheduler started (24h interval)")
 		}
 
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {

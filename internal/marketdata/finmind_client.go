@@ -49,6 +49,11 @@ func (c *FinMindClient) SetHTTPClient(client *http.Client) {
 	c.httpClient = client
 }
 
+// RateLimiter returns the rate limiter for Gateway adapter registration.
+func (c *FinMindClient) RateLimiter() *rate.Limiter {
+	return c.rateLimiter
+}
+
 func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId string, startDate string, endDate string) ([]map[string]any, error) {
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("finmind: rate limit wait: %w", ErrRateLimited)

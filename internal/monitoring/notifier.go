@@ -92,7 +92,7 @@ func NewTelegramNotifier(botToken, chatID string) *TelegramNotifier {
 	return &TelegramNotifier{
 		BotToken: botToken,
 		ChatID:   chatID,
-		client:   &http.Client{Timeout: 10 * time.Second},
+		client:   httpclient.NewFactory().NewClient(10 * time.Second),
 	}
 }
 
