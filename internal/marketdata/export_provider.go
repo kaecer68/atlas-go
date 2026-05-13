@@ -67,7 +67,10 @@ func (e *ExportStatisticsProvider) FetchSnapshot(ctx context.Context) (MacroData
 	ts := time.Date(latest.Year+1911, time.Month(latest.Month), 1, 12, 0, 0, 0, time.FixedZone("CST", 8*60*60)).Unix()
 
 	if err := e.saveExport(latest); err != nil {
-		logging.Warn("export_statistics_provider", "save_export_warning", logging.Err(err))
+		logging.Warn("export_statistics_provider", "save_export_latest_warning", logging.Err(err))
+	}
+	if err := e.saveExport(prev); err != nil {
+		logging.Warn("export_statistics_provider", "save_export_prev_warning", logging.Err(err))
 	}
 
 	return MacroDataSnapshot{

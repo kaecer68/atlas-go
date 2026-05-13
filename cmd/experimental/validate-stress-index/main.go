@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
@@ -19,11 +20,12 @@ func main() {
 	flag.Parse()
 	if help {
 		fmt.Println("Usage: validate-stress-index [--help]")
-		fmt.Println("Computes the Taiwan market stress index from tw_extended_90days.csv.")
+		fmt.Println("Computes the Taiwan market stress index from replay data.")
 		os.Exit(0)
 	}
 
-	f, err := os.Open("data/replay/tw_extended_90days.csv")
+	replayPath := config.GetReplayDataPath("")
+	f, err := os.Open(replayPath)
 	if err != nil {
 		fmt.Println("Error opening CSV:", err)
 		os.Exit(1)

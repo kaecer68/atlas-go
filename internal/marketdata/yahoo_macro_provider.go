@@ -15,24 +15,34 @@ import (
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
-// YahooFinanceMacroProvider fetches macro indicators from Yahoo Finance.
-type YahooFinanceMacroProvider struct {
-	client *http.Client
+// yahooHosts lists Yahoo Finance API hosts tried in order on failure.
+var yahooHosts = []string{
+	"query1.finance.yahoo.com",
+	"query2.finance.yahoo.com",
 }
 
-// NewYahooFinanceMacroProvider creates a new Yahoo Finance macro provider.
+// modernUserAgents holds recent Chrome User-Agent strings for rotation.
+var modernUserAgents = []string{
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+}
+
+// YahooFinanceMacroProvider fetches macro indicators from Yahoo Finance.
+type YahooFinanceMacroProvider struct {
+	client  *http.Client
+	baseURL string
+}
+
 func NewYahooFinanceMacroProvider() *YahooFinanceMacroProvider {
 	return &YahooFinanceMacroProvider{
 		client: &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
-// Name returns the provider name.
 func (y *YahooFinanceMacroProvider) Name() string {
 	return "yahoo_finance"
 }
-
-// FetchSnapshot retrieves DXY, ^TNX, VIX, Oil, Gold, JPY, USD/TWD from Yahoo Finance concurrently.
 func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
 	symbols := map[string]string{
 		"DX-Y.NYB":  "dxy",
@@ -94,12 +104,31 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 }
 
 func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker string) (MacroDataPoint, error) {
-	url := fmt.Sprintf("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=2d", ticker)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	var lastErr error
+	for _, host := range yahooHosts {
+		point, err := y.fetchFromHost(ctx, host, ticker)
+		if err == nil {
+			return point, nil
+		}
+		lastErr = err
+		logging.Warn("yahoo_macro_provider", "host_failed", "host", host, "error", err)
+	}
+	return MacroDataPoint{}, fmt.Errorf("all hosts failed for %s: %w", ticker, lastErr)
+}
+
+func (y *YahooFinanceMacroProvider) fetchFromHost(ctx context.Context, host, ticker string) (MacroDataPoint, error) {
+	var u string
+	if y.baseURL != "" {
+		u = fmt.Sprintf("%s/v8/finance/chart/%s?interval=1d&range=2d", y.baseURL, ticker)
+	} else {
+		u = fmt.Sprintf("https://%s/v8/finance/chart/%s?interval=1d&range=2d", host, ticker)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return MacroDataPoint{}, err
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	ua := modernUserAgents[time.Now().UnixNano()%int64(len(modernUserAgents))]
+	req.Header.Set("User-Agent", ua)
 
 	resp, err := y.client.Do(req)
 	if err != nil {
@@ -108,7 +137,7 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return MacroDataPoint{}, fmt.Errorf("http status %d", resp.StatusCode)
+		return MacroDataPoint{}, fmt.Errorf("http status %d from %s", resp.StatusCode, host)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -116,9 +145,8 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 		return MacroDataPoint{}, err
 	}
 
-	// Detect HTML error pages (Yahoo Finance may return HTML on rate limiting or API changes).
 	if len(body) > 0 && body[0] == '<' {
-		return MacroDataPoint{}, fmt.Errorf("received HTML response instead of JSON")
+		return MacroDataPoint{}, fmt.Errorf("HTML response from %s", host)
 	}
 
 	var chartResp yahooChartResponse
