@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -316,6 +317,372 @@ func (a *YahooMacroChannelAdapter) Metadata() ChannelMetadata {
 }
 
 // ---------------------------------------------------------------------------
+// TWSECapitalFlowChannelAdapter — wraps *marketdata.TWSECapitalFlowProvider
+// ---------------------------------------------------------------------------
+
+// TWSECapitalFlowChannelAdapter adapts a TWSECapitalFlowProvider to the DataProvider interface.
+type TWSECapitalFlowChannelAdapter struct {
+	provider *marketdata.TWSECapitalFlowProvider
+	limiter  *rate.Limiter
+}
+
+// NewTWSECapitalFlowChannelAdapter creates a new adapter for the TWSE capital flow channel.
+func NewTWSECapitalFlowChannelAdapter(provider *marketdata.TWSECapitalFlowProvider) *TWSECapitalFlowChannelAdapter {
+	return &TWSECapitalFlowChannelAdapter{
+		provider: provider,
+		limiter:  rate.NewLimiter(TWSEOpenAPIRate, TWSEOpenAPIBurst),
+	}
+}
+
+// Fetch retrieves the latest capital flow snapshot.
+func (a *TWSECapitalFlowChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	snap, err := a.provider.FetchSnapshot(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("capital_flow fetch: %w", err)
+	}
+	data, err := json.Marshal(snap)
+	if err != nil {
+		return nil, fmt.Errorf("capital_flow marshal: %w", err)
+	}
+	return &FetchResult{
+		Data: data,
+		Meta: FetchMetadata{
+			ChannelID:          "twse_capital_flow",
+			RateLimitRemaining: int(a.limiter.Tokens()),
+			Timestamp:          time.Now(),
+		},
+	}, nil
+}
+
+// HealthCheck verifies connectivity by fetching a snapshot.
+func (a *TWSECapitalFlowChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
+	_, err := a.provider.FetchSnapshot(ctx)
+	if err != nil {
+		return HealthStatus{
+			Status:    "error",
+			LastError: err.Error(),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "liveness",
+		}, err
+	}
+	return HealthStatus{
+		Status:    "ok",
+		UpdatedAt: time.Now().Format(time.RFC3339),
+		CheckType: "liveness",
+	}, nil
+}
+
+// RateLimit returns the TWSE capital flow rate limiter.
+func (a *TWSECapitalFlowChannelAdapter) RateLimit() *rate.Limiter {
+	return a.limiter
+}
+
+// Metadata returns static channel metadata for TWSE capital flow.
+func (a *TWSECapitalFlowChannelAdapter) Metadata() ChannelMetadata {
+	return ChannelMetadata{
+		ChannelID:  "twse_capital_flow",
+		Country:    "台灣",
+		Platform:   "TWSE 證交所",
+		APIFormat:  "json",
+		Path:       "www.twse.com.tw/rwd/zh/fund/T86",
+		HasLimiter: true,
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TWSEMarginChannelAdapter — wraps *marketdata.TWSEMarginBalanceProvider
+// ---------------------------------------------------------------------------
+
+// TWSEMarginChannelAdapter adapts a TWSEMarginBalanceProvider to the DataProvider interface.
+type TWSEMarginChannelAdapter struct {
+	provider *marketdata.TWSEMarginBalanceProvider
+	limiter  *rate.Limiter
+}
+
+// NewTWSEMarginChannelAdapter creates a new adapter for the TWSE margin channel.
+func NewTWSEMarginChannelAdapter(provider *marketdata.TWSEMarginBalanceProvider) *TWSEMarginChannelAdapter {
+	return &TWSEMarginChannelAdapter{
+		provider: provider,
+		limiter:  rate.NewLimiter(TWSEOpenAPIRate, TWSEOpenAPIBurst),
+	}
+}
+
+// Fetch retrieves the latest margin balance snapshot.
+func (a *TWSEMarginChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	snap, err := a.provider.FetchSnapshot(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("margin fetch: %w", err)
+	}
+	data, err := json.Marshal(snap)
+	if err != nil {
+		return nil, fmt.Errorf("margin marshal: %w", err)
+	}
+	return &FetchResult{
+		Data: data,
+		Meta: FetchMetadata{
+			ChannelID:          "twse_margin",
+			RateLimitRemaining: int(a.limiter.Tokens()),
+			Timestamp:          time.Now(),
+		},
+	}, nil
+}
+
+// HealthCheck verifies connectivity by fetching a snapshot.
+func (a *TWSEMarginChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
+	_, err := a.provider.FetchSnapshot(ctx)
+	if err != nil {
+		return HealthStatus{
+			Status:    "error",
+			LastError: err.Error(),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "liveness",
+		}, err
+	}
+	return HealthStatus{
+		Status:    "ok",
+		UpdatedAt: time.Now().Format(time.RFC3339),
+		CheckType: "liveness",
+	}, nil
+}
+
+// RateLimit returns the TWSE margin rate limiter.
+func (a *TWSEMarginChannelAdapter) RateLimit() *rate.Limiter {
+	return a.limiter
+}
+
+// Metadata returns static channel metadata for TWSE margin balance.
+func (a *TWSEMarginChannelAdapter) Metadata() ChannelMetadata {
+	return ChannelMetadata{
+		ChannelID:  "twse_margin",
+		Country:    "台灣",
+		Platform:   "TWSE 證交所",
+		APIFormat:  "json",
+		Path:       "www.twse.com.tw/rwd/zh/marginTrading",
+		HasLimiter: true,
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ExportStatisticsChannelAdapter — wraps *marketdata.ExportStatisticsProvider
+// ---------------------------------------------------------------------------
+
+// ExportStatisticsChannelAdapter adapts an ExportStatisticsProvider to the DataProvider interface.
+type ExportStatisticsChannelAdapter struct {
+	provider *marketdata.ExportStatisticsProvider
+	limiter  *rate.Limiter
+}
+
+// NewExportStatisticsChannelAdapter creates a new adapter for the export statistics channel.
+func NewExportStatisticsChannelAdapter(provider *marketdata.ExportStatisticsProvider) *ExportStatisticsChannelAdapter {
+	return &ExportStatisticsChannelAdapter{
+		provider: provider,
+		limiter:  rate.NewLimiter(rate.Every(5*time.Second), 1),
+	}
+}
+
+// Fetch retrieves the latest export statistics snapshot.
+func (a *ExportStatisticsChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	snap, err := a.provider.FetchSnapshot(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("export fetch: %w", err)
+	}
+	data, err := json.Marshal(snap)
+	if err != nil {
+		return nil, fmt.Errorf("export marshal: %w", err)
+	}
+	return &FetchResult{
+		Data: data,
+		Meta: FetchMetadata{
+			ChannelID:          "export_statistics",
+			RateLimitRemaining: int(a.limiter.Tokens()),
+			Timestamp:          time.Now(),
+		},
+	}, nil
+}
+
+// HealthCheck verifies connectivity by fetching a snapshot.
+func (a *ExportStatisticsChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
+	_, err := a.provider.FetchSnapshot(ctx)
+	if err != nil {
+		return HealthStatus{
+			Status:    "error",
+			LastError: err.Error(),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "liveness",
+		}, err
+	}
+	return HealthStatus{
+		Status:    "ok",
+		UpdatedAt: time.Now().Format(time.RFC3339),
+		CheckType: "liveness",
+	}, nil
+}
+
+// RateLimit returns the export statistics rate limiter.
+func (a *ExportStatisticsChannelAdapter) RateLimit() *rate.Limiter {
+	return a.limiter
+}
+
+// Metadata returns static channel metadata for export statistics.
+func (a *ExportStatisticsChannelAdapter) Metadata() ChannelMetadata {
+	return ChannelMetadata{
+		ChannelID:  "export_statistics",
+		Country:    "台灣",
+		Platform:   "關務署",
+		APIFormat:  "csv",
+		Path:       "opendata.customs.gov.tw",
+		HasLimiter: true,
+	}
+}
+
+// ---------------------------------------------------------------------------
+// FubonChannelAdapter — wraps *marketdata.FubonClient
+// ---------------------------------------------------------------------------
+
+// FubonChannelAdapter adapts a FubonClient to the DataProvider interface.
+type FubonChannelAdapter struct {
+	client  *marketdata.FubonClient
+	limiter *rate.Limiter
+}
+
+// NewFubonChannelAdapter creates a new adapter for the Fubon channel.
+func NewFubonChannelAdapter(client *marketdata.FubonClient) *FubonChannelAdapter {
+	return &FubonChannelAdapter{
+		client:  client,
+		limiter: rate.NewLimiter(TWSEOpenAPIRate, TWSEOpenAPIBurst),
+	}
+}
+
+// Fetch retrieves quotes for 2330 (台積電) and 0050 as representative samples.
+func (a *FubonChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	quotes, err := a.client.GetQuotes(ctx, []string{"2330", "0050"})
+	if err != nil {
+		return nil, fmt.Errorf("fubon fetch: %w", err)
+	}
+	data, err := json.Marshal(quotes)
+	if err != nil {
+		return nil, fmt.Errorf("fubon marshal: %w", err)
+	}
+	return &FetchResult{
+		Data: data,
+		Meta: FetchMetadata{
+			ChannelID:          "fubon",
+			RateLimitRemaining: int(a.limiter.Tokens()),
+			Timestamp:          time.Now(),
+		},
+	}, nil
+}
+
+// HealthCheck verifies connectivity to the Fubon proxy.
+func (a *FubonChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
+	if err := a.client.HealthCheck(ctx); err != nil {
+		return HealthStatus{
+			Status:    "error",
+			LastError: err.Error(),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "liveness",
+		}, err
+	}
+	return HealthStatus{
+		Status:    "ok",
+		UpdatedAt: time.Now().Format(time.RFC3339),
+		CheckType: "liveness",
+	}, nil
+}
+
+// RateLimit returns the Fubon rate limiter.
+func (a *FubonChannelAdapter) RateLimit() *rate.Limiter {
+	return a.limiter
+}
+
+// Metadata returns static channel metadata for Fubon.
+func (a *FubonChannelAdapter) Metadata() ChannelMetadata {
+	return ChannelMetadata{
+		ChannelID:  "fubon",
+		Country:    "台灣",
+		Platform:   "富邦證券",
+		APIFormat:  "REST JSON",
+		Path:       "api.fubon.com.tw (via Python proxy)",
+		HasLimiter: true,
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TEJChannelAdapter — wraps *marketdata.TEJClient
+// ---------------------------------------------------------------------------
+
+// TEJChannelAdapter adapts a TEJClient to the DataProvider interface.
+type TEJChannelAdapter struct {
+	client  *marketdata.TEJClient
+	limiter *rate.Limiter
+}
+
+// NewTEJChannelAdapter creates a new adapter for the TEJ channel.
+func NewTEJChannelAdapter(client *marketdata.TEJClient) *TEJChannelAdapter {
+	return &TEJChannelAdapter{
+		client:  client,
+		limiter: rate.NewLimiter(TWSEOpenAPIRate, TWSEOpenAPIBurst),
+	}
+}
+
+// Fetch pings the TEJ API and fetches 2330 daily price as a representative sample.
+func (a *TEJChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	now := time.Now()
+	startDate := now.AddDate(0, 0, -5).Format("2006-01-02")
+	endDate := now.Format("2006-01-02")
+	rows, err := a.client.GetStockPriceDaily(ctx, "2330", startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("tej fetch: %w", err)
+	}
+	data, err := json.Marshal(rows)
+	if err != nil {
+		return nil, fmt.Errorf("tej marshal: %w", err)
+	}
+	return &FetchResult{
+		Data: data,
+		Meta: FetchMetadata{
+			ChannelID:          "tej",
+			RateLimitRemaining: int(a.limiter.Tokens()),
+			Timestamp:          time.Now(),
+		},
+	}, nil
+}
+
+// HealthCheck verifies connectivity to the TEJ API.
+func (a *TEJChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
+	if err := a.client.Ping(ctx); err != nil {
+		return HealthStatus{
+			Status:    "error",
+			LastError: err.Error(),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "liveness",
+		}, err
+	}
+	return HealthStatus{
+		Status:    "ok",
+		UpdatedAt: time.Now().Format(time.RFC3339),
+		CheckType: "liveness",
+	}, nil
+}
+
+// RateLimit returns the TEJ rate limiter.
+func (a *TEJChannelAdapter) RateLimit() *rate.Limiter {
+	return a.limiter
+}
+
+// Metadata returns static channel metadata for TEJ.
+func (a *TEJChannelAdapter) Metadata() ChannelMetadata {
+	return ChannelMetadata{
+		ChannelID:  "tej",
+		Country:    "台灣",
+		Platform:   "TEJ 台灣經濟新報",
+		APIFormat:  "REST JSON",
+		Path:       "api.tej.com.tw",
+		HasLimiter: true,
+	}
+}
+
+// ---------------------------------------------------------------------------
 // RegisterChannelAdapters — wires concrete clients into the Gateway registry
 // ---------------------------------------------------------------------------
 
@@ -334,6 +701,18 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config) erro
 		fugleAdapter := NewFugleChannelAdapter(fugleClient)
 		g.registry.Register("fugle", fugleAdapter)
 		logging.Info("apigateway", "adapter_registered", "channel", "fugle")
+	}
+
+	// --- Fubon ---
+	fubonKey := cfg.FubonAPIKey
+	if fubonKey == "" {
+		fubonKey = config.GetSecret("ATLAS_FUBON_API_KEY")
+	}
+	if fubonKey != "" {
+		fubonClient := marketdata.NewFubonClient(fubonKey)
+		fubonAdapter := NewFubonChannelAdapter(fubonClient)
+		g.registry.Register("fubon", fubonAdapter)
+		logging.Info("apigateway", "adapter_registered", "channel", "fubon")
 	}
 
 	// --- FinMind ---
@@ -356,6 +735,32 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config) erro
 		yahooAdapter := NewYahooMacroChannelAdapter(yahooProvider)
 		g.registry.Register("us_yahoo", yahooAdapter)
 		logging.Info("apigateway", "adapter_registered", "channel", "us_yahoo")
+	}
+
+	// --- TWSE Capital Flow (no API key required) ---
+	capFlowProvider := marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow"))
+	capFlowAdapter := NewTWSECapitalFlowChannelAdapter(capFlowProvider)
+	g.registry.Register("twse_capital_flow", capFlowAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "twse_capital_flow")
+
+	// --- TWSE Margin Balance (no API key required) ---
+	marginProvider := marketdata.NewTWSEMarginBalanceProvider(filepath.Join(workDir, "data/state/margin"))
+	marginAdapter := NewTWSEMarginChannelAdapter(marginProvider)
+	g.registry.Register("twse_margin", marginAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "twse_margin")
+
+	// --- Export Statistics (no API key required) ---
+	exportProvider := marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export"))
+	exportAdapter := NewExportStatisticsChannelAdapter(exportProvider)
+	g.registry.Register("export_statistics", exportAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "export_statistics")
+
+	// --- TEJ ---
+	if tejKey := config.GetSecret("TEJ_API_KEY"); tejKey != "" {
+		tejClient := marketdata.NewTEJClient(tejKey)
+		tejAdapter := NewTEJChannelAdapter(tejClient)
+		g.registry.Register("tej", tejAdapter)
+		logging.Info("apigateway", "adapter_registered", "channel", "tej")
 	}
 
 	return nil

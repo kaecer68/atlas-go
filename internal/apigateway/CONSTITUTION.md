@@ -214,7 +214,7 @@ go func() {
 }()
 
 // ✅ 合規：註冊到 TaskManager
-taskMgr.Register(ScheduledTask{
+taskMgr.Register(&ScheduledTask{
     Name:     "auto_capital_flow",
     Interval: 30 * time.Minute,
     Jitter:   3 * time.Minute,

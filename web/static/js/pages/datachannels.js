@@ -32,14 +32,46 @@ export async function triggerChannelsIngest() {
   }
 }
 
-export function enableAllChannels() {
+export async function enableAllChannels() {
   console.log('[Management] Enable all channels');
-  notify('已啟用所有通道', 'info');
+  try {
+    const data = await silentGetJSON('/api/dashboard/data-channels');
+    const channels = data.channels || [];
+    for (const c of channels) {
+      if (c.status === 'inactive') {
+        await fetch(`/api/dashboard/channels/${c.channel_id}/toggle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: true })
+        });
+      }
+    }
+    notify('已啟用所有通道', 'info');
+    refreshChannelStatus();
+  } catch (e) {
+    notify('啟用通道失敗: ' + e.message, 'err');
+  }
 }
 
-export function disableAllChannels() {
+export async function disableAllChannels() {
   console.log('[Management] Disable all channels');
-  notify('已停用所有通道', 'warn');
+  try {
+    const data = await silentGetJSON('/api/dashboard/data-channels');
+    const channels = data.channels || [];
+    for (const c of channels) {
+      if (c.status !== 'inactive') {
+        await fetch(`/api/dashboard/channels/${c.channel_id}/toggle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: false })
+        });
+      }
+    }
+    notify('已停用所有通道', 'warn');
+    refreshChannelStatus();
+  } catch (e) {
+    notify('停用通道失敗: ' + e.message, 'err');
+  }
 }
 
 export function refreshChannelStatus() {
@@ -80,8 +112,16 @@ export async function toggleChannel(channelID, enable) {
   }
 }
 
+const idMap = {
+  'yahoo': 'dcApiKeyYahoo',
+  'finmind': 'dcApiKeyFinmind',
+  'fubon': 'dcApiKeyFubon',
+  'fugle': 'dcApiKeyFugle',
+  'tej': 'dcApiKeyTej'
+};
+
 export async function updateApiKey(provider) {
-  const input = document.getElementById(`apikey-${provider}`);
+  const input = document.getElementById(idMap[provider] || `apikey-${provider}`);
   if (!input) return;
   const key = input.value.trim();
   if (!key) {
@@ -93,7 +133,7 @@ export async function updateApiKey(provider) {
     const res = await fetch('/api/dashboard/api-keys/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, key })
+      body: JSON.stringify({ provider, api_key: key })
     });
     if (res.ok) {
       notify(`${provider} API Key 已更新`, 'info');

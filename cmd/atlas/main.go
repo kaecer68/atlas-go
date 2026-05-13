@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -87,6 +89,39 @@ func defaultAppDeps() appDeps {
 		listenAndServe: func(srv *http.Server) error { return srv.ListenAndServe() },
 		shutdown:       make(chan struct{}),
 	}
+}
+
+// getLatestReplayDate reads the replay CSV and returns the latest date.
+func getLatestReplayDate(csvPath string) (time.Time, error) {
+	f, err := os.Open(csvPath)
+	if err != nil {
+		return time.Time{}, err
+	}
+	defer f.Close()
+
+	reader := csv.NewReader(f)
+	var latest time.Time
+	_, _ = reader.Read()
+	for {
+		row, err := reader.Read()
+		if err != nil {
+			break
+		}
+		if len(row) == 0 {
+			continue
+		}
+		d, err := time.Parse("2006-01-02", strings.TrimSpace(row[0]))
+		if err != nil {
+			continue
+		}
+		if d.After(latest) {
+			latest = d
+		}
+	}
+	if latest.IsZero() {
+		return time.Time{}, fmt.Errorf("no valid dates found")
+	}
+	return latest, nil
 }
 
 func main() {
@@ -320,12 +355,8 @@ func run(args []string, deps appDeps) error {
 		}))
 		mux.Handle("/static/", http.StripPrefix("/static/", fs))
 		log.Printf("dashboard api listening on %s", *apiAddr)
+		// TODO: Migrate channel_health_sync to BackgroundTaskManager (DB sync task, not a data fetcher).
 		bootstrap.StartChannelHealthSyncLoop(sysCtx, cfg.WorkDir, pool)
-		bootstrap.StartAutoBackfill(sysCtx, cfg.WorkDir, cfg.ReplayDataPath)
-		bootstrap.StartAutoCapitalFlowFetch(sysCtx, cfg.WorkDir)
-		bootstrap.StartAutoMarginFetch(sysCtx, cfg.WorkDir)
-		bootstrap.StartAutoGeopoliticalFetch(sysCtx, cfg.WorkDir)
-		bootstrap.StartAutoExportFetch(sysCtx, cfg.WorkDir)
 
 		// Initialize API Gateway with channel adapters and background task manager.
 		gateway, err := apigateway.NewGateway(cfg.WorkDir, pool)
@@ -342,7 +373,7 @@ func run(args []string, deps appDeps) error {
 
 			// Register TSMC Revenue task via Gateway.
 			if cfg.FinMindAPIKey != "" {
-				taskMgr.Register(apigateway.ScheduledTask{
+				taskMgr.Register(&apigateway.ScheduledTask{
 					Name:      "tsmc_revenue",
 					ChannelID: "finmind",
 					Interval:  24 * time.Hour,
@@ -359,14 +390,136 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered tsmc_revenue background task (24h interval)")
 			}
 
+			// Register auto_backfill via Gateway.
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "auto_backfill",
+				ChannelID: "twse_replay",
+				Interval:  24 * time.Hour,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					absWorkDir, err := filepath.Abs(cfg.WorkDir)
+					if err != nil {
+						absWorkDir = cfg.WorkDir
+					}
+					latestDate, err := getLatestReplayDate(cfg.ReplayDataPath)
+					if err != nil {
+						return fmt.Errorf("backfill replay read: %w", err)
+					}
+					now := time.Now()
+					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+						now = now.In(tz)
+					}
+					end := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+					if now.Hour() < 15 || (now.Hour() == 15 && now.Minute() < 30) {
+						end = end.AddDate(0, 0, -1)
+					}
+					start := latestDate.AddDate(0, 0, 1)
+					for start.Weekday() == time.Saturday || start.Weekday() == time.Sunday {
+						start = start.AddDate(0, 0, 1)
+					}
+					for end.Weekday() == time.Saturday || end.Weekday() == time.Sunday {
+						end = end.AddDate(0, 0, -1)
+					}
+					if start.After(end) {
+						return nil
+					}
+					startStr := start.Format("2006-01-02")
+					endStr := end.Format("2006-01-02")
+					log.Printf("[Gateway] backfill gap detected: %s to %s", startStr, endStr)
+					bgCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+					defer cancel()
+					var cmd *exec.Cmd
+					binaryPath := filepath.Join(absWorkDir, "daily-replay-sync")
+					if _, err := os.Stat(binaryPath); err == nil {
+						cmd = exec.CommandContext(bgCtx, binaryPath, "-csv", cfg.ReplayDataPath, "-backfill-start", startStr, "-backfill-end", endStr)
+						cmd.Dir = absWorkDir
+					} else if _, err := exec.LookPath("go"); err == nil {
+						cmd = exec.CommandContext(bgCtx, "go", "run", "./cmd/daily-replay-sync", "-csv", cfg.ReplayDataPath, "-backfill-start", startStr, "-backfill-end", endStr)
+						cmd.Dir = absWorkDir
+					} else {
+						return fmt.Errorf("backfill binary not found")
+					}
+					out, err := cmd.CombinedOutput()
+					if err != nil {
+						return fmt.Errorf("backfill failed: %w, output: %s", err, string(out))
+					}
+					log.Printf("[Gateway] backfill success: %s", string(out))
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered auto_backfill background task (24h interval)")
+
+			// Register auto_capital_flow via Gateway.
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "auto_capital_flow",
+				ChannelID: "twse_capital_flow",
+				Interval:  30 * time.Minute,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					now := time.Now()
+					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+						now = now.In(tz)
+					}
+					if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+						return nil
+					}
+					hour := now.Hour()
+					if hour < 9 || hour >= 16 {
+						return nil
+					}
+					provider := marketdata.NewTWSECapitalFlowProvider(filepath.Join(cfg.WorkDir, "data/state/capital_flow"))
+					_, err := provider.FetchSnapshot(ctx)
+					return err
+				},
+			})
+			log.Printf("[Gateway] registered auto_capital_flow background task (30m interval)")
+
+			// Register auto_margin via Gateway.
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "auto_margin",
+				ChannelID: "twse_margin",
+				Interval:  30 * time.Minute,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					now := time.Now()
+					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+						now = now.In(tz)
+					}
+					if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+						return nil
+					}
+					hour := now.Hour()
+					if hour < 9 || hour >= 16 {
+						return nil
+					}
+					provider := marketdata.NewTWSEMarginBalanceProvider(filepath.Join(cfg.WorkDir, "data/state/margin"))
+					_, err := provider.FetchSnapshot(ctx)
+					return err
+				},
+			})
+			log.Printf("[Gateway] registered auto_margin background task (30m interval)")
+
+			// Register auto_export via Gateway.
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "auto_export",
+				ChannelID: "export_statistics",
+				Interval:  12 * time.Hour,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					provider := marketdata.NewExportStatisticsProvider(filepath.Join(cfg.WorkDir, "data/state/export"))
+					_, err := provider.FetchSnapshot(ctx)
+					return err
+				},
+			})
+			log.Printf("[Gateway] registered auto_export background task (12h interval)")
+
 			taskMgr.Start(sysCtx)
 			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
 		}
 
-		// Legacy direct goroutine tasks (to be migrated to BackgroundTaskManager).
-		if cfg.FinMindAPIKey != "" {
-			bootstrap.StartAutoTSMCRevenueFetch(sysCtx, cfg.WorkDir, cfg.FinMindAPIKey)
-		}
+		// Legacy direct goroutine tasks (not yet migrated to BackgroundTaskManager).
+		// TODO: Migrate auto_geopolitical to BackgroundTaskManager (requires narrative provider adapter).
+		bootstrap.StartAutoGeopoliticalFetch(sysCtx, cfg.WorkDir)
 
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 			if svc := d.GetIndustryService(); svc != nil {
@@ -375,11 +528,13 @@ func run(args []string, deps appDeps) error {
 					finmindClient = marketdata.NewFinMindClient(cfg.FinMindAPIKey)
 				}
 				cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient)
+				// TODO: Migrate auto_cycle_update to BackgroundTaskManager (requires industry aggregator lifecycle hook).
 				bootstrap.StartAutoCycleUpdate(sysCtx, cfg.WorkDir, cycleAggregator)
 				log.Printf("[CycleUpdate] auto cycle update scheduler started (6h interval)")
 			}
 		}
 
+		// TODO: Migrate auto_threshold_calibrate to BackgroundTaskManager (monthly calibration, not a data fetcher).
 		bootstrap.StartAutoThresholdCalibration(sysCtx, cfg.WorkDir)
 		log.Printf("[ThresholdCalibrate] monthly auto-calibration scheduler started")
 

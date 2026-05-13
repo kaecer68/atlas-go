@@ -141,6 +141,7 @@ func StartAutoCapitalFlowFetch(ctx context.Context, workDir string) {
 		case <-time.After(5 * time.Second):
 		}
 
+		// TODO: Migrate to Gateway for direct TWSE capital flow provider instantiation.
 		capFlowProvider := marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow"))
 		healthStore := monitoring.NewChannelHealthStore(filepath.Join(workDir, "data/state"))
 
@@ -225,6 +226,7 @@ func StartAutoTSMCRevenueFetch(ctx context.Context, workDir string, apiKey strin
 		case <-time.After(5 * time.Second):
 		}
 
+		// TODO: Migrate to Gateway for direct TSMC revenue provider instantiation.
 		provider := marketdata.NewTSMCRevenueProviderWithStorage(apiKey, filepath.Join(workDir, "data/state/tsmc_revenue"))
 		healthStore := monitoring.NewChannelHealthStore(filepath.Join(workDir, "data/state"))
 
@@ -266,6 +268,7 @@ func StartAutoMarginFetch(ctx context.Context, workDir string) {
 		case <-time.After(5 * time.Second):
 		}
 
+		// TODO: Migrate to Gateway for direct TWSE margin balance provider instantiation.
 		marginProvider := marketdata.NewTWSEMarginBalanceProvider(filepath.Join(workDir, "data/state/margin"))
 		healthStore := monitoring.NewChannelHealthStore(filepath.Join(workDir, "data/state"))
 
@@ -315,11 +318,16 @@ func StartAutoGeopoliticalFetch(ctx context.Context, workDir string) {
 		case <-time.After(10 * time.Second):
 		}
 
+		// TODO: Migrate to Gateway for direct composite geopolitical provider instantiation.
 		globalProvider := narrative.NewCompositeGeopoliticalProvider(
+			// TODO: Migrate to Gateway for direct RSS geopolitical provider instantiation.
 			narrative.NewRSSGeopoliticalProvider(),
+			// TODO: Migrate to Gateway for direct GDELT geopolitical provider instantiation.
 			narrative.NewGDELTGeopoliticalProvider(),
 		)
+		// TODO: Migrate to Gateway for direct composite Taiwan geopolitical provider instantiation.
 		taiwanProvider := narrative.NewCompositeTaiwanGeopoliticalProvider(
+			// TODO: Migrate to Gateway for direct Taiwan RSS geopolitical provider instantiation.
 			narrative.NewTaiwanRSSGeopoliticalProvider(),
 		)
 
@@ -394,6 +402,7 @@ func StartAutoExportFetch(ctx context.Context, workDir string) {
 		case <-time.After(15 * time.Second):
 		}
 
+		// TODO: Migrate to Gateway for direct export statistics provider instantiation.
 		exportProvider := marketdata.NewExportStatisticsProvider(
 			filepath.Join(workDir, "data/state/export"),
 		)
