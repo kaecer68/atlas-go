@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"golang.org/x/time/rate"
 )
@@ -26,7 +27,7 @@ type TWSEMarginBalanceProvider struct {
 // Pass an empty storageDir to skip saving margin data to disk.
 func NewTWSEMarginBalanceProvider(storageDir string) *TWSEMarginBalanceProvider {
 	return &TWSEMarginBalanceProvider{
-		client:      &http.Client{Timeout: 20 * time.Second},
+		client:      httpclient.NewFactory().NewClient(20 * time.Second),
 		baseURL:     "https://www.twse.com.tw",
 		rateLimiter: rate.NewLimiter(rate.Every(5*time.Second), 1),
 		storageDir:  storageDir,

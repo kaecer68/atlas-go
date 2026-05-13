@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/autobacktest"
 	"github.com/kaecer68/atlas-go/internal/bootstrap"
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -325,7 +326,27 @@ func run(args []string, deps appDeps) error {
 		bootstrap.StartAutoMarginFetch(sysCtx, cfg.WorkDir)
 		bootstrap.StartAutoGeopoliticalFetch(sysCtx, cfg.WorkDir)
 		bootstrap.StartAutoExportFetch(sysCtx, cfg.WorkDir)
+
+		// TODO: Migrate all background tasks to use apigateway.Gateway
+		// This is part of the Data Source Constitution remediation.
+		// See: docs/audit/remediation_plan.md
+		gatewayInitialized := false
+		var gateway *apigateway.Gateway
 		if cfg.FinMindAPIKey != "" {
+			var err error
+			gateway, err = apigateway.NewGateway(cfg.WorkDir, pool)
+			if err == nil {
+				gatewayInitialized = true
+				log.Printf("[Gateway] apigateway initialized with %d channels", len(gateway.ChannelIDs()))
+			} else {
+				log.Printf("[Gateway] initialization failed: %v", err)
+			}
+		}
+
+		if cfg.FinMindAPIKey != "" {
+			if gatewayInitialized {
+				log.Printf("[TSMCRevenue] auto TSMC revenue fetch scheduler started via Gateway (24h interval)")
+			}
 			bootstrap.StartAutoTSMCRevenueFetch(sysCtx, cfg.WorkDir, cfg.FinMindAPIKey)
 			log.Printf("[TSMCRevenue] auto TSMC revenue fetch scheduler started (24h interval)")
 		}

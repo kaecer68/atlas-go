@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -66,7 +67,7 @@ func NewTWSEBrokerAdapter(cfg TWSEBrokerAdapterConfig, cb *CircuitBreaker) *TWSE
 		accountID:         strings.TrimSpace(cfg.AccountID),
 		timeout:           timeout,
 		maxRequestsPerSec: maxRPS,
-		client:            &http.Client{Timeout: timeout},
+		client:            httpclient.NewFactory().NewClient(timeout),
 		circuitBreaker:    cb,
 		nowFn:             time.Now,
 		tokens:            maxRPS,

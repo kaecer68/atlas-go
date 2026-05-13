@@ -12,6 +12,9 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/time/rate"
+
+	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
@@ -28,15 +31,19 @@ var modernUserAgents = []string{
 	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
 }
 
+var yahooSharedLimiter = rate.NewLimiter(rate.Every(time.Second), 1)
+
 // YahooFinanceMacroProvider fetches macro indicators from Yahoo Finance.
 type YahooFinanceMacroProvider struct {
 	client  *http.Client
 	baseURL string
+	limiter *rate.Limiter
 }
 
 func NewYahooFinanceMacroProvider() *YahooFinanceMacroProvider {
 	return &YahooFinanceMacroProvider{
-		client: &http.Client{Timeout: 15 * time.Second},
+		client:  httpclient.NewFactory().NewClient(15 * time.Second),
+		limiter: yahooSharedLimiter,
 	}
 }
 
@@ -104,6 +111,9 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 }
 
 func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker string) (MacroDataPoint, error) {
+	if err := y.limiter.Wait(ctx); err != nil {
+		return MacroDataPoint{}, fmt.Errorf("rate limit: %w", err)
+	}
 	var lastErr error
 	for _, host := range yahooHosts {
 		point, err := y.fetchFromHost(ctx, host, ticker)

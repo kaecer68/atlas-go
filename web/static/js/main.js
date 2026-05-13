@@ -297,6 +297,7 @@ async function loadPageData(pageId) {
     try {
       var dc = await safeGetJSON('/api/dashboard/data-channels');
       if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dc);
+      if (m.datachannels.loadFetchLogs) m.datachannels.loadFetchLogs();
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'synergy') {
@@ -510,7 +511,14 @@ if (typeof window !== "undefined") window.showUnacknowledgedOnly = function() { 
 
 // datachannels globals
 import('./pages/datachannels.js?v=' + APP_VERSION).then(function(m) {
-  if (m.triggerChannelsIngest && typeof window !== 'undefined') window.triggerChannelsIngest = m.triggerChannelsIngest;
+  if (typeof window === 'undefined') return;
+  if (m.triggerChannelsIngest) window.triggerChannelsIngest = m.triggerChannelsIngest;
+  if (m.enableAllChannels) window.dcEnableAll = m.enableAllChannels;
+  if (m.disableAllChannels) window.dcDisableAll = m.disableAllChannels;
+  if (m.triggerChannelFetch) window.triggerChannelFetch = m.triggerChannelFetch;
+  if (m.toggleChannel) window.toggleChannel = m.toggleChannel;
+  if (m.updateApiKey) window.dcUpdateApiKey = m.updateApiKey;
+  if (m.loadFetchLogs) window.loadFetchLogs = m.loadFetchLogs;
 }).catch(function(err) {
   console.error('[Dynamic import] datachannels module load failed:', err);
 });

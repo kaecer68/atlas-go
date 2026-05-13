@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -26,7 +27,7 @@ func NewWebhookNotifier(url string, headers map[string]string) *WebhookNotifier 
 	return &WebhookNotifier{
 		URL:     url,
 		Headers: headers,
-		client:  &http.Client{Timeout: 10 * time.Second},
+		client:  httpclient.NewFactory().NewClient(10 * time.Second),
 	}
 }
 
