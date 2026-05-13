@@ -12,6 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
+	"golang.org/x/time/rate"
+
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
@@ -28,13 +31,15 @@ type TWSECapitalFlow struct {
 type TWSECapitalFlowProvider struct {
 	client     *http.Client
 	storageDir string
+	limiter    *rate.Limiter
 }
 
 // NewTWSECapitalFlowProvider creates a new TWSE capital flow provider.
 func NewTWSECapitalFlowProvider(storageDir string) *TWSECapitalFlowProvider {
 	return &TWSECapitalFlowProvider{
-		client:     &http.Client{Timeout: 20 * time.Second},
+		client:     httpclient.NewFactory().NewClient(20 * time.Second),
 		storageDir: storageDir,
+		limiter:    rate.NewLimiter(rate.Every(5*time.Second), 1),
 	}
 }
 
@@ -80,6 +85,9 @@ func (t *TWSECapitalFlowProvider) fetchLatestTradingDay(ctx context.Context) (TW
 }
 
 func (t *TWSECapitalFlowProvider) fetchDate(ctx context.Context, dateStr string) (TWSECapitalFlow, error) {
+	if err := t.limiter.Wait(ctx); err != nil {
+		return TWSECapitalFlow{}, fmt.Errorf("rate limit: %w", err)
+	}
 	url := fmt.Sprintf("https://www.twse.com.tw/rwd/zh/fund/T86?response=json&date=%s&selectType=ALLBUT0999", dateStr)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

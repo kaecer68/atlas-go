@@ -12,6 +12,7 @@ import (
 
 	"golang.org/x/time/rate"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/config"
 )
 
@@ -74,11 +75,9 @@ func NewTEJClient(apiKey string) *TEJClient {
 	params := config.GetParametersConfig()
 	dailyLimit := getTEJDailyLimit()
 	return &TEJClient{
-		apiKey:  apiKey,
-		baseURL: tejAPIBaseURL,
-		httpClient: &http.Client{
-			Timeout: time.Duration(params.Marketdata.TEJAPITimeoutSec.Value) * time.Second,
-		},
+		apiKey:       apiKey,
+		baseURL:      tejAPIBaseURL,
+		httpClient:   httpclient.NewFactory().NewClient(time.Duration(params.Marketdata.TEJAPITimeoutSec.Value) * time.Second),
 		rateLimiter:  rate.NewLimiter(rate.Limit(params.Marketdata.TEJCallsPerSecond.Value), params.Marketdata.TEJCallsPerSecond.Value),
 		quotaTracker: NewDailyQuotaTracker("tej", "data/state", dailyLimit),
 	}

@@ -2,10 +2,13 @@ package monitoring
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -73,7 +76,81 @@ type DashboardAPI struct {
 	orderMgr           *live.OrderManager
 }
 
+// channelState tracks enable/disable status for each channel.
+type channelState struct {
+	Enabled   bool      `json:"enabled"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+var (
+	channelStates   = make(map[string]channelState)
+	channelStatesMu sync.RWMutex
+)
+
+func loadChannelStates(workDir string) {
+	channelStatesMu.Lock()
+	defer channelStatesMu.Unlock()
+
+	path := filepath.Join(workDir, "data/state/channel_states.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return // file may not exist yet
+	}
+	_ = json.Unmarshal(data, &channelStates)
+}
+
+func saveChannelStates(workDir string) error {
+	channelStatesMu.RLock()
+	defer channelStatesMu.RUnlock()
+
+	path := filepath.Join(workDir, "data/state/channel_states.json")
+	data, err := json.MarshalIndent(channelStates, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+func isChannelEnabled(channelID string) bool {
+	channelStatesMu.RLock()
+	defer channelStatesMu.RUnlock()
+	if s, ok := channelStates[channelID]; ok {
+		return s.Enabled
+	}
+	return true // default: enabled
+}
+
+func setChannelEnabled(workDir, channelID string, enabled bool) error {
+	channelStatesMu.Lock()
+	channelStates[channelID] = channelState{Enabled: enabled, UpdatedAt: time.Now()}
+	channelStatesMu.Unlock()
+	return saveChannelStates(workDir)
+}
+
+func updateEnvFile(envPath, key, value string) error {
+	data, err := os.ReadFile(envPath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	lines := strings.Split(string(data), "\n")
+	found := false
+	prefix := key + "="
+	for i, line := range lines {
+		if strings.HasPrefix(line, prefix) {
+			lines[i] = prefix + value
+			found = true
+			break
+		}
+	}
+	if !found {
+		lines = append(lines, prefix+value)
+	}
+	return os.WriteFile(envPath, []byte(strings.Join(lines, "\n")), 0644)
+}
+
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
+	loadChannelStates(workDir)
+
 	providers := []marketdata.MacroDataProvider{
 		marketdata.NewYahooFinanceMacroProvider(),
 		marketdata.NewFrankfurterFXProvider(),
@@ -284,6 +361,81 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		shared.WriteJSON(w, http.StatusOK, map[string]any{
 			"sources":   sources,
 			"generated": time.Now().Format(time.RFC3339),
+		})
+	})
+
+	// Management center endpoints — channel control and API key management.
+	mux.HandleFunc("/api/dashboard/channels/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		path := strings.TrimPrefix(r.URL.Path, "/api/dashboard/channels/")
+		parts := strings.Split(path, "/")
+		if len(parts) < 2 {
+			shared.WriteJSONError(w, http.StatusBadRequest, "invalid path")
+			return
+		}
+		channelID := parts[0]
+		action := parts[1]
+
+		switch action {
+		case "trigger":
+			shared.WriteJSON(w, http.StatusOK, map[string]any{
+				"channel_id": channelID,
+				"action":     "trigger",
+				"status":     "ok",
+				"note":       "next poll will reflect fresh status",
+			})
+		case "toggle":
+			var req struct {
+				Enabled bool `json:"enabled"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				shared.WriteJSONError(w, http.StatusBadRequest, "invalid body")
+				return
+			}
+			if err := setChannelEnabled(a.workDir, channelID, req.Enabled); err != nil {
+				shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("save state: %v", err))
+				return
+			}
+			shared.WriteJSON(w, http.StatusOK, map[string]any{
+				"channel_id": channelID,
+				"enabled":    req.Enabled,
+				"status":     "ok",
+			})
+		default:
+			shared.WriteJSONError(w, http.StatusBadRequest, "unknown action")
+		}
+	})
+
+	mux.HandleFunc("/api/dashboard/api-keys/update", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		var req struct {
+			Provider string `json:"provider"`
+			APIKey   string `json:"api_key"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			shared.WriteJSONError(w, http.StatusBadRequest, "invalid body")
+			return
+		}
+		if req.Provider == "" || req.APIKey == "" {
+			shared.WriteJSONError(w, http.StatusBadRequest, "provider and api_key required")
+			return
+		}
+		// Write to .env file (append or update).
+		envPath := filepath.Join(a.workDir, ".env")
+		key := strings.ToUpper(req.Provider) + "_API_KEY"
+		if err := updateEnvFile(envPath, key, req.APIKey); err != nil {
+			shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("update env: %v", err))
+			return
+		}
+		shared.WriteJSON(w, http.StatusOK, map[string]any{
+			"provider": req.Provider,
+			"status":   "ok",
 		})
 	})
 

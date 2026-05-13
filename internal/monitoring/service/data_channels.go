@@ -37,10 +37,29 @@ type ChannelAlert struct {
 }
 
 type ChannelHealthRecord struct {
-	Status        string `json:"status"`
-	LastFetchAt   string `json:"last_fetch_at"`
-	LastError     string `json:"last_error,omitempty"`
-	LastSuccessAt string `json:"last_success_at,omitempty"`
+	Status             string   `json:"status"`
+	LastFetchAt        string   `json:"last_fetch_at"`
+	LastDataAt         string   `json:"last_data_at,omitempty"`
+	LastError          string   `json:"last_error,omitempty"`
+	LastSuccessAt      string   `json:"last_success_at,omitempty"`
+	RateLimitRemaining int      `json:"rate_limit_remaining,omitempty"`
+	LatencyMs          int64    `json:"latency_ms,omitempty"`
+	RecordsFetched     int      `json:"records_fetched,omitempty"`
+	SymbolsProcessed   int      `json:"symbols_processed,omitempty"`
+	Errors             []string `json:"errors,omitempty"`
+}
+
+// RecordOption configures optional fields on a ChannelHealthRecord.
+type RecordOption func(*ChannelHealthRecord)
+
+// WithLastDataAt sets the last data timestamp.
+func WithLastDataAt(t time.Time) RecordOption {
+	return func(r *ChannelHealthRecord) { r.LastDataAt = t.Format(time.RFC3339) }
+}
+
+// WithLatencyMs sets the latency in milliseconds.
+func WithLatencyMs(ms int64) RecordOption {
+	return func(r *ChannelHealthRecord) { r.LatencyMs = ms }
 }
 
 type DataChannelService struct {
@@ -53,9 +72,195 @@ type DataChannelService struct {
 	healthStore       *ChannelHealthStoreAdapter
 }
 
+// cachedFugleHealth holds the last Fugle health check result to avoid
+// hitting the real API on every dashboard poll (frontend polls every 5s).
+type cachedFugleHealth struct {
+	status    string
+	updated   string
+	lastError string
+	checkedAt time.Time
+}
+
+var (
+	fugleHealthCache   cachedFugleHealth
+	fugleHealthMu      sync.RWMutex
+	fubonHealthCache   cachedFugleHealth
+	fubonHealthMu      sync.RWMutex
+	finmindHealthCache cachedFugleHealth
+	finmindHealthMu    sync.RWMutex
+)
+
+// fugleHealthCacheTTL is how long we reuse the last live API health check.
+const fugleHealthCacheTTL = 60 * time.Second
+
+// getCachedFugleHealth returns cached status if fresh, otherwise performs a real check.
+func getCachedFugleHealth() (status, updated, lastError string) {
+	fugleHealthMu.RLock()
+	cache := fugleHealthCache
+	fugleHealthMu.RUnlock()
+
+	if time.Since(cache.checkedAt) < fugleHealthCacheTTL {
+		return cache.status, cache.updated, cache.lastError
+	}
+
+	fugleHealthMu.Lock()
+	defer fugleHealthMu.Unlock()
+
+	// Double-check after acquiring write lock
+	if time.Since(fugleHealthCache.checkedAt) < fugleHealthCacheTTL {
+		return fugleHealthCache.status, fugleHealthCache.updated, fugleHealthCache.lastError
+	}
+
+	fugleKey := config.GetSecret("FUGLE_API_KEY")
+	if fugleKey == "" {
+		fugleKey = config.GetSecret("ATLAS_FUGLE_API_KEY")
+	}
+
+	if fugleKey == "" {
+		fugleHealthCache = cachedFugleHealth{
+			status:    "inactive",
+			updated:   "未設定 API Key",
+			checkedAt: time.Now(),
+		}
+		return fugleHealthCache.status, fugleHealthCache.updated, ""
+	}
+
+	fugleClient := marketdata.NewFugleClient(fugleKey)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	_, err := fugleClient.GetQuote(ctx, "1476")
+	cancel()
+
+	if err != nil {
+		fugleHealthCache = cachedFugleHealth{
+			status:    "error",
+			updated:   "API 連線失敗",
+			lastError: err.Error(),
+			checkedAt: time.Now(),
+		}
+	} else {
+		fugleHealthCache = cachedFugleHealth{
+			status:    "ok",
+			updated:   "API 連線正常",
+			checkedAt: time.Now(),
+		}
+	}
+
+	return fugleHealthCache.status, fugleHealthCache.updated, fugleHealthCache.lastError
+}
+
+// getCachedFubonHealth returns cached status if fresh, otherwise performs a real check.
+func getCachedFubonHealth() (status, updated, lastError string) {
+	fubonHealthMu.RLock()
+	cache := fubonHealthCache
+	fubonHealthMu.RUnlock()
+
+	if time.Since(cache.checkedAt) < fugleHealthCacheTTL {
+		return cache.status, cache.updated, cache.lastError
+	}
+
+	fubonHealthMu.Lock()
+	defer fubonHealthMu.Unlock()
+
+	if time.Since(fubonHealthCache.checkedAt) < fugleHealthCacheTTL {
+		return fubonHealthCache.status, fubonHealthCache.updated, fubonHealthCache.lastError
+	}
+
+	fubonKey := config.GetSecret("FUBON_API_KEY")
+	if fubonKey == "" {
+		fubonKey = config.GetSecret("ATLAS_FUBON_API_KEY")
+	}
+
+	if fubonKey == "" {
+		fubonHealthCache = cachedFugleHealth{
+			status:    "inactive",
+			updated:   "未設定 API Key",
+			checkedAt: time.Now(),
+		}
+		return fubonHealthCache.status, fubonHealthCache.updated, ""
+	}
+
+	fubonClient := marketdata.NewFubonClient(fubonKey)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	err := fubonClient.HealthCheck(ctx)
+	cancel()
+
+	if err != nil {
+		fubonHealthCache = cachedFugleHealth{
+			status:    "error",
+			updated:   "API 連線失敗",
+			lastError: err.Error(),
+			checkedAt: time.Now(),
+		}
+	} else {
+		fubonHealthCache = cachedFugleHealth{
+			status:    "ok",
+			updated:   "API 連線正常",
+			checkedAt: time.Now(),
+		}
+	}
+
+	return fubonHealthCache.status, fubonHealthCache.updated, fubonHealthCache.lastError
+}
+
+// getCachedFinMindHealth returns cached status if fresh, otherwise performs a real check.
+func getCachedFinMindHealth() (status, updated, lastError string) {
+	finmindHealthMu.RLock()
+	cache := finmindHealthCache
+	finmindHealthMu.RUnlock()
+
+	if time.Since(cache.checkedAt) < fugleHealthCacheTTL {
+		return cache.status, cache.updated, cache.lastError
+	}
+
+	finmindHealthMu.Lock()
+	defer finmindHealthMu.Unlock()
+
+	if time.Since(finmindHealthCache.checkedAt) < fugleHealthCacheTTL {
+		return finmindHealthCache.status, finmindHealthCache.updated, finmindHealthCache.lastError
+	}
+
+	finmindKey := config.GetSecret("FINMIND_API_KEY")
+	if finmindKey == "" {
+		finmindKey = config.GetSecret("ATLAS_FINMIND_API_KEY")
+	}
+
+	if finmindKey == "" {
+		finmindHealthCache = cachedFugleHealth{
+			status:    "inactive",
+			updated:   "未設定 API Key",
+			checkedAt: time.Now(),
+		}
+		return finmindHealthCache.status, finmindHealthCache.updated, ""
+	}
+
+	finmindClient := marketdata.NewFinMindClient(finmindKey)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	_, err := finmindClient.GetStockPrice(ctx, "2330", time.Now().Format("2006-01-02"))
+	cancel()
+
+	if err != nil {
+		finmindHealthCache = cachedFugleHealth{
+			status:    "error",
+			updated:   "API 連線失敗",
+			lastError: err.Error(),
+			checkedAt: time.Now(),
+		}
+	} else {
+		finmindHealthCache = cachedFugleHealth{
+			status:    "ok",
+			updated:   "API 連線正常",
+			checkedAt: time.Now(),
+		}
+	}
+
+	return finmindHealthCache.status, finmindHealthCache.updated, finmindHealthCache.lastError
+}
+
 type ChannelHealthStoreAdapter struct {
-	pool *pgxpool.Pool
-	dir  string
+	pool  *pgxpool.Pool
+	dir   string
+	store *channelHealthStore
+	once  sync.Once
 }
 
 func NewChannelHealthStoreAdapter(dir string, pool *pgxpool.Pool) *ChannelHealthStoreAdapter {
@@ -63,13 +268,17 @@ func NewChannelHealthStoreAdapter(dir string, pool *pgxpool.Pool) *ChannelHealth
 }
 
 func (a *ChannelHealthStoreAdapter) Get(channelID string) *ChannelHealthRecord {
-	store := newChannelHealthStore(a.dir, a.pool)
-	return store.Get(channelID)
+	a.once.Do(func() {
+		a.store = newChannelHealthStore(a.dir, a.pool)
+	})
+	return a.store.Get(channelID)
 }
 
-func (a *ChannelHealthStoreAdapter) Record(channelID, status, errMsg string) error {
-	store := newChannelHealthStore(a.dir, a.pool)
-	return store.Record(channelID, status, errMsg)
+func (a *ChannelHealthStoreAdapter) Record(channelID, status, errMsg string, opts ...RecordOption) error {
+	a.once.Do(func() {
+		a.store = newChannelHealthStore(a.dir, a.pool)
+	})
+	return a.store.Record(channelID, status, errMsg, opts...)
 }
 
 func newChannelHealthStore(dir string, pool *pgxpool.Pool) *channelHealthStore {
@@ -98,7 +307,7 @@ func (s *channelHealthStore) Get(channelID string) *ChannelHealthRecord {
 	return nil
 }
 
-func (s *channelHealthStore) Record(channelID, status, errMsg string) error {
+func (s *channelHealthStore) Record(channelID, status, errMsg string, opts ...RecordOption) error {
 	s.load()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -114,6 +323,9 @@ func (s *channelHealthStore) Record(channelID, status, errMsg string) error {
 		rec.LastSuccessAt = rec.LastFetchAt
 	} else {
 		rec.LastError = errMsg
+	}
+	for _, opt := range opts {
+		opt(rec)
 	}
 	return s.saveLocked()
 }
@@ -271,29 +483,7 @@ func (s *DataChannelService) buildTWSECapitalFlowChannel(now time.Time) DataChan
 }
 
 func (s *DataChannelService) buildFugleChannel(now time.Time) DataChannel {
-	fugleKey := config.GetSecret("FUGLE_API_KEY")
-	if fugleKey == "" {
-		fugleKey = config.GetSecret("ATLAS_FUGLE_API_KEY")
-	}
-	status := "inactive"
-	updated := "-"
-	lastError := ""
-	if fugleKey != "" {
-		fugleClient := marketdata.NewFugleClient(fugleKey)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_, err := fugleClient.GetQuote(ctx, "1476")
-		cancel()
-		if err != nil {
-			status = "error"
-			updated = "API 連線失敗"
-			lastError = err.Error()
-		} else {
-			status = "ok"
-			updated = "API 連線正常"
-		}
-	} else {
-		updated = "未設定 API Key"
-	}
+	status, updated, lastError := getCachedFugleHealth()
 	return DataChannel{
 		ChannelID:  "fugle",
 		Country:    "台灣",
@@ -309,29 +499,7 @@ func (s *DataChannelService) buildFugleChannel(now time.Time) DataChannel {
 }
 
 func (s *DataChannelService) buildFubonChannel(now time.Time) DataChannel {
-	fubonKey := config.GetSecret("FUBON_API_KEY")
-	if fubonKey == "" {
-		fubonKey = config.GetSecret("ATLAS_FUBON_API_KEY")
-	}
-	status := "inactive"
-	updated := "-"
-	lastError := ""
-	if fubonKey != "" {
-		fubonClient := marketdata.NewFubonClient(fubonKey)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		err := fubonClient.HealthCheck(ctx)
-		cancel()
-		if err != nil {
-			status = "error"
-			updated = "API 連線失敗"
-			lastError = err.Error()
-		} else {
-			status = "ok"
-			updated = "API 連線正常"
-		}
-	} else {
-		updated = "未設定 API Key"
-	}
+	status, updated, lastError := getCachedFubonHealth()
 	return DataChannel{
 		ChannelID:  "fubon",
 		Country:    "台灣",
@@ -347,26 +515,7 @@ func (s *DataChannelService) buildFubonChannel(now time.Time) DataChannel {
 }
 
 func (s *DataChannelService) buildFinMindChannel(now time.Time) DataChannel {
-	finmindKey := config.GetSecret("FINMIND_API_KEY")
-	status := "inactive"
-	updated := "-"
-	lastError := ""
-	if finmindKey != "" {
-		finmindClient := marketdata.NewFinMindClient(finmindKey)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_, err := finmindClient.GetStockPrice(ctx, "2330", time.Now().AddDate(0, 0, -1).Format("2006-01-02"))
-		cancel()
-		if err != nil {
-			status = "error"
-			updated = "API 連線失敗"
-			lastError = err.Error()
-		} else {
-			status = "ok"
-			updated = "API 連線正常"
-		}
-	} else {
-		updated = "未設定 API Key"
-	}
+	status, updated, lastError := getCachedFinMindHealth()
 	return DataChannel{
 		ChannelID:  "finmind",
 		Country:    "台灣",

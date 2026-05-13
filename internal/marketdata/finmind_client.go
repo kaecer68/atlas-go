@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"golang.org/x/time/rate"
@@ -38,10 +39,8 @@ type FinMindResponse struct {
 
 func NewFinMindClient(apiKey string) *FinMindClient {
 	return &FinMindClient{
-		apiKey: apiKey,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		apiKey:      apiKey,
+		httpClient:  httpclient.NewFactory().NewClient(30 * time.Second),
 		rateLimiter: rate.NewLimiter(rate.Every(time.Minute/finmindRateLimit), finmindBurst),
 	}
 }

@@ -1885,13 +1885,66 @@ body { display: flex; margin: 0; min-height: 100vh; }
       </details>
       <div class="panel wide">
         <div class="flex-between">
-          <h2 class="m-0">資料通道監控</h2>
+          <h2 class="m-0">資料通道管理中心</h2>
           <div class="control-group m-0">
             <button class="primary" id="btnIngestChannels" onclick="triggerChannelsIngest()">立即更新 Macro + Geo 資料</button>
           </div>
         </div>
+
+        <!-- 控制面板 -->
+        <div id="dcControlPanel" class="rc-summary mt-md">
+          <div class="rc-summary__left">
+            <button class="primary" onclick="dcEnableAll()">全部啟用</button>
+            <button class="danger" onclick="dcDisableAll()">全部停用</button>
+            <button onclick="loadDataChannels()">刷新狀態</button>
+          </div>
+          <div class="rc-summary__gauge">
+            <div class="rc-summary__bar"><div class="rc-summary__fill" id="dcTotalBar" style="width:100%;background:var(--accent)"></div></div>
+            <span class="rc-summary__score" id="dcTotalScore">- / -</span>
+            <span class="text-muted text-sm" style="margin-left:8px">總通道</span>
+          </div>
+          <div class="flex" style="gap:16px;margin-top:8px">
+            <div class="text-sm"><span class="text-up">●</span> 正常 <span id="dcOkCount">-</span></div>
+            <div class="text-sm"><span class="text-warn">●</span> 異常 <span id="dcWarnCount">-</span></div>
+            <div class="text-sm"><span class="text-down">●</span> 限流中 <span id="dcRateLimitCount">-</span></div>
+          </div>
+        </div>
+
         <div id="dataChannels" class="empty loading mt-sm">載入中…</div>
       </div>
+
+      <!-- API Key 管理 -->
+      <details class="help-details mt-md">
+        <summary><strong>🔑 API Key 管理</strong></summary>
+        <div style="padding:10px 0;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <label class="label-muted" style="width:120px">Yahoo Finance:</label>
+            <input type="password" id="dcApiKeyYahoo" class="input-w-md" placeholder="API Key">
+            <button onclick="dcUpdateApiKey('yahoo')">更新</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <label class="label-muted" style="width:120px">FinMind:</label>
+            <input type="password" id="dcApiKeyFinmind" class="input-w-md" placeholder="API Key">
+            <button onclick="dcUpdateApiKey('finmind')">更新</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <label class="label-muted" style="width:120px">Fugle:</label>
+            <input type="password" id="dcApiKeyFugle" class="input-w-md" placeholder="API Key">
+            <button onclick="dcUpdateApiKey('fugle')">更新</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <label class="label-muted" style="width:120px">TEJ:</label>
+            <input type="password" id="dcApiKeyTej" class="input-w-md" placeholder="API Key">
+            <button onclick="dcUpdateApiKey('tej')">更新</button>
+          </div>
+        </div>
+      </details>
+
+      <!-- 抓取日誌 -->
+      <details class="help-details mt-md">
+        <summary><strong>📋 抓取日誌（最近 10 筆）</strong></summary>
+        <div id="dcFetchLog" class="mt-sm text-muted text-sm">尚無記錄</div>
+      </details>
     </div>
 
     
