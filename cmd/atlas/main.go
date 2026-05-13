@@ -325,17 +325,16 @@ func run(args []string, deps appDeps) error {
 		bootstrap.StartAutoMarginFetch(sysCtx, cfg.WorkDir)
 		bootstrap.StartAutoGeopoliticalFetch(sysCtx, cfg.WorkDir)
 		bootstrap.StartAutoExportFetch(sysCtx, cfg.WorkDir)
-		if finmindKey := os.Getenv("FINMIND_API_KEY"); finmindKey != "" {
-			bootstrap.StartAutoTSMCRevenueFetch(sysCtx, cfg.WorkDir, finmindKey)
+		if cfg.FinMindAPIKey != "" {
+			bootstrap.StartAutoTSMCRevenueFetch(sysCtx, cfg.WorkDir, cfg.FinMindAPIKey)
 			log.Printf("[TSMCRevenue] auto TSMC revenue fetch scheduler started (24h interval)")
 		}
 
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 			if svc := d.GetIndustryService(); svc != nil {
-				finmindKey := os.Getenv("FINMIND_API_KEY")
 				var finmindClient *marketdata.FinMindClient
-				if finmindKey != "" {
-					finmindClient = marketdata.NewFinMindClient(finmindKey)
+				if cfg.FinMindAPIKey != "" {
+					finmindClient = marketdata.NewFinMindClient(cfg.FinMindAPIKey)
 				}
 				cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient)
 				bootstrap.StartAutoCycleUpdate(sysCtx, cfg.WorkDir, cycleAggregator)

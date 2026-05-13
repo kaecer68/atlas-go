@@ -189,7 +189,7 @@ func (m *MacroIngestor) loadLatestSnapshot() (marketdata.MacroDataSnapshot, erro
 }
 
 func hasValidYahooData(snap marketdata.MacroDataSnapshot) bool {
-	return snap.US10Y.Symbol != "" || snap.DXY.Symbol != "" || snap.VIX.Symbol != ""
+	return snap.US10Y.Symbol != "" || snap.DXY.Symbol != "" || snap.VIX.Symbol != "" || snap.JPY.Symbol != ""
 }
 
 func (m *MacroIngestor) loadFallbackDatedSnapshot() (marketdata.MacroDataSnapshot, error) {

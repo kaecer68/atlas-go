@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -37,16 +38,10 @@ func (p *TSMCRevenueProvider) FetchSnapshot(ctx context.Context) (MacroDataSnaps
 	now := time.Now()
 	year, month := now.Year(), int(now.Month())
 
-	current, err := p.client.GetMonthRevenue(ctx, "2330", year, month)
+	current, prior, err := p.fetchWithFallback(ctx, year, month)
 	if err != nil {
-		logging.Warn("tsmc_revenue_provider", "fetch_current_month_failed", logging.Err(err))
-		return MacroDataSnapshot{TSMCRevenue: MacroDataPoint{Symbol: ""}}, nil
-	}
-
-	prior, err := p.client.GetMonthRevenue(ctx, "2330", year-1, month)
-	if err != nil {
-		logging.Warn("tsmc_revenue_provider", "fetch_prior_year_failed", logging.Err(err))
-		return MacroDataSnapshot{TSMCRevenue: MacroDataPoint{Symbol: ""}}, nil
+		logging.Warn("tsmc_revenue_provider", "fetch_failed", logging.Err(err))
+		return p.loadLatestSnapshot()
 	}
 
 	var yoyPct float64
@@ -72,6 +67,64 @@ func (p *TSMCRevenueProvider) FetchSnapshot(ctx context.Context) (MacroDataSnaps
 	}
 
 	return snap, nil
+}
+
+func (p *TSMCRevenueProvider) fetchWithFallback(ctx context.Context, year, month int) (current, prior float64, err error) {
+	current, err = p.client.GetMonthRevenue(ctx, "2330", year, month)
+	if err != nil {
+		return 0, 0, fmt.Errorf("current month: %w", err)
+	}
+
+	prior, err = p.client.GetMonthRevenue(ctx, "2330", year-1, month)
+	if err != nil {
+		return 0, 0, fmt.Errorf("prior year: %w", err)
+	}
+
+	return current, prior, nil
+}
+
+func (p *TSMCRevenueProvider) loadLatestSnapshot() (MacroDataSnapshot, error) {
+	if p.storageDir == "" {
+		return MacroDataSnapshot{TSMCRevenue: MacroDataPoint{Symbol: ""}}, nil
+	}
+
+	entries, err := os.ReadDir(p.storageDir)
+	if err != nil {
+		return MacroDataSnapshot{TSMCRevenue: MacroDataPoint{Symbol: ""}}, nil
+	}
+
+	var latestFile string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), "_revenue.json") {
+			continue
+		}
+		if e.Name() > latestFile {
+			latestFile = e.Name()
+		}
+	}
+
+	if latestFile == "" {
+		return MacroDataSnapshot{TSMCRevenue: MacroDataPoint{Symbol: ""}}, nil
+	}
+
+	data, err := os.ReadFile(filepath.Join(p.storageDir, latestFile))
+	if err != nil {
+		return MacroDataSnapshot{TSMCRevenue: MacroDataPoint{Symbol: ""}}, nil
+	}
+
+	var record tsmcRevenueRecord
+	if err := json.Unmarshal(data, &record); err != nil {
+		return MacroDataSnapshot{TSMCRevenue: MacroDataPoint{Symbol: ""}}, nil
+	}
+
+	return MacroDataSnapshot{
+		TSMCRevenue: MacroDataPoint{
+			Symbol:    "2330.TW",
+			Value:     record.Revenue,
+			ChangePct: record.YoYPct,
+			Timestamp: record.Timestamp,
+		},
+	}, nil
 }
 
 type tsmcRevenueRecord struct {
