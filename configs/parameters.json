@@ -441,7 +441,7 @@
   },
   "garch": {
     "omega": {
-      "value": 0.000001,
+      "value": 1e-06,
       "rationale": "GARCH(1,1) omega: long-run variance component",
       "source": "literature",
       "todo": "MLE estimation from historical returns"
@@ -490,12 +490,12 @@
     },
     "high_vol_threshold": {
       "value": 1.5,
-      "rationale": "Asset vol \u003e target*1.5 triggers reduction",
+      "rationale": "Asset vol > target*1.5 triggers reduction",
       "source": "heuristic"
     },
     "low_vol_threshold": {
       "value": 0.7,
-      "rationale": "Current vol \u003c target*0.7 triggers increase",
+      "rationale": "Current vol < target*0.7 triggers increase",
       "source": "heuristic"
     },
     "reduce_magnitude": {
@@ -519,7 +519,7 @@
       "value": 3,
       "rationale": "Minimum 3 observations for exploratory experiments",
       "source": "heuristic",
-      "todo": "Literature suggests n\u003e=10 for any statistical conclusion"
+      "todo": "Literature suggests n>=10 for any statistical conclusion"
     },
     "maturity_level2_observations": {
       "value": 8,
@@ -539,17 +539,17 @@
     },
     "welch_t_test_threshold": {
       "value": 2,
-      "rationale": "|t| \u003e= 2.0 corresponds to ~95% confidence",
+      "rationale": "|t| >= 2.0 corresponds to ~95% confidence",
       "source": "literature"
     },
     "drawdown_protection_ratio": {
       "value": 0.8,
-      "rationale": "Candidate drawdown must be \u003e= 80% of baseline",
+      "rationale": "Candidate drawdown must be >= 80% of baseline",
       "source": "heuristic"
     },
     "volatility_tolerance_ratio": {
       "value": 1.5,
-      "rationale": "Candidate volatility \u003c= 150% of baseline",
+      "rationale": "Candidate volatility <= 150% of baseline",
       "source": "heuristic"
     },
     "oos_window_days": {
@@ -633,12 +633,12 @@
     },
     "sector_concentration_threshold": {
       "value": 0.4,
-      "rationale": "Sector concentration threshold (\u003c 10 recommendations)",
+      "rationale": "Sector concentration threshold (< 10 recommendations)",
       "source": "heuristic"
     },
     "sector_concentration_threshold_high": {
       "value": 0.35,
-      "rationale": "Sector concentration threshold (\u003e= 10 recommendations)",
+      "rationale": "Sector concentration threshold (>= 10 recommendations)",
       "source": "heuristic"
     },
     "sector_conviction_multiplier": {
@@ -1172,28 +1172,28 @@
     "cycle_thresholds": {
       "value": {
         "financials": {
-          "expansion_revenue_pct": 10,
-          "expansion_profit_pct": 15,
-          "recovery_revenue_pct": 5,
-          "recovery_profit_pct": 8,
-          "mature_revenue_pct": 2,
-          "mature_profit_pct": 5
+          "expansion_revenue_pct": 0.1,
+          "expansion_profit_pct": 0.15,
+          "recovery_revenue_pct": 0.05,
+          "recovery_profit_pct": 0.08,
+          "mature_revenue_pct": 0.02,
+          "mature_profit_pct": 0.05
         },
         "semiconductor": {
-          "expansion_revenue_pct": 20,
-          "expansion_profit_pct": 25,
-          "recovery_revenue_pct": 10,
-          "recovery_profit_pct": 15,
-          "mature_revenue_pct": 5,
-          "mature_profit_pct": 8
+          "expansion_revenue_pct": 0.2,
+          "expansion_profit_pct": 0.25,
+          "recovery_revenue_pct": 0.1,
+          "recovery_profit_pct": 0.15,
+          "mature_revenue_pct": 0.05,
+          "mature_profit_pct": 0.08
         },
         "shipping": {
-          "expansion_revenue_pct": 30,
-          "expansion_profit_pct": 35,
-          "recovery_revenue_pct": 15,
-          "recovery_profit_pct": 20,
-          "mature_revenue_pct": 5,
-          "mature_profit_pct": 10
+          "expansion_revenue_pct": 0.3,
+          "expansion_profit_pct": 0.35,
+          "recovery_revenue_pct": 0.15,
+          "recovery_profit_pct": 0.2,
+          "mature_revenue_pct": 0.05,
+          "mature_profit_pct": 0.1
         }
       },
       "rationale": "Per-industry business cycle thresholds; semiconductor high-growth, financials stable, shipping cyclical",
@@ -1217,13 +1217,13 @@
     },
     "customer_concentration_limit": {
       "value": 0.4,
-      "rationale": "Flag customer concentration \u003e40% as high risk; TSMC Apple exposure ~25% is acceptable",
+      "rationale": "Flag customer concentration >40% as high risk; TSMC Apple exposure ~25% is acceptable",
       "source": "heuristic",
       "todo": "Calibrate: test [0.30, 0.50] range; consider industry norms"
     },
     "geographic_exposure_limit": {
       "value": 0.6,
-      "rationale": "Flag geographic revenue concentration \u003e60% as high risk; China exposure threshold",
+      "rationale": "Flag geographic revenue concentration >60% as high risk; China exposure threshold",
       "source": "heuristic",
       "todo": "Calibrate: test [0.50, 0.70] range based on geopolitical risk assessment"
     }

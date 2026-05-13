@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"golang.org/x/time/rate"
 )
 
@@ -16,14 +19,17 @@ type TWSEMarginBalanceProvider struct {
 	client      *http.Client
 	baseURL     string
 	rateLimiter *rate.Limiter
+	storageDir  string
 }
 
 // NewTWSEMarginBalanceProvider creates a new TWSE margin balance provider.
-func NewTWSEMarginBalanceProvider() *TWSEMarginBalanceProvider {
+// Pass an empty storageDir to skip saving margin data to disk.
+func NewTWSEMarginBalanceProvider(storageDir string) *TWSEMarginBalanceProvider {
 	return &TWSEMarginBalanceProvider{
 		client:      &http.Client{Timeout: 20 * time.Second},
 		baseURL:     "https://www.twse.com.tw",
 		rateLimiter: rate.NewLimiter(rate.Every(5*time.Second), 1),
+		storageDir:  storageDir,
 	}
 }
 
@@ -39,6 +45,9 @@ func (t *TWSEMarginBalanceProvider) FetchSnapshot(ctx context.Context) (MacroDat
 		dateStr := now.AddDate(0, 0, -i).Format("20060102")
 		balance, changePct, err := t.fetchDate(ctx, dateStr)
 		if err == nil {
+			if err := t.saveMargin(dateStr, balance, changePct); err != nil {
+				logging.Warn("twse_margin_provider", "save_margin_warning", logging.Err(err))
+			}
 			ts := time.Now().Unix()
 			return MacroDataSnapshot{
 				RetailMarginBalance: MacroDataPoint{
@@ -109,6 +118,22 @@ func (t *TWSEMarginBalanceProvider) fetchDate(ctx context.Context, dateStr strin
 	}
 
 	return balance, changePct, nil
+}
+
+func (t *TWSEMarginBalanceProvider) saveMargin(dateStr string, balance, changePct float64) error {
+	if t.storageDir == "" {
+		return nil
+	}
+	if err := os.MkdirAll(t.storageDir, 0o755); err != nil {
+		return fmt.Errorf("mkdir: %w", err)
+	}
+	data := map[string]interface{}{
+		"date":           dateStr,
+		"margin_balance": balance,
+		"change_pct":     changePct,
+	}
+	out, _ := json.MarshalIndent(data, "", "  ")
+	return os.WriteFile(filepath.Join(t.storageDir, dateStr+"_margin.json"), out, 0o644)
 }
 
 type twseMarginResponse struct {
