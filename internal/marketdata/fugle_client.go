@@ -96,6 +96,11 @@ func (c *FugleClient) SetHTTPClient(client *http.Client) {
 	c.httpClient = client
 }
 
+// RateLimiter returns the rate limiter for Gateway adapter registration.
+func (c *FugleClient) RateLimiter() *rate.Limiter {
+	return c.rateLimiter
+}
+
 // GetQuote 获取单个股票行情
 func (c *FugleClient) GetQuote(ctx context.Context, symbol string) (domain.Quote, error) {
 	// 等待速率限制
