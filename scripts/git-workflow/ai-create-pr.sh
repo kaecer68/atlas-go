@@ -11,10 +11,10 @@ MSG=${1:-"feat: update"}
 PR_TITLE="$MSG"
 
 # Extract scope and description for body
-if [[ "$MSG" =~ ^([a-z]+)\(([^)]+)\):\ (.+)$ ]]; then
-    TYPE="${BASH_REMATCH[1]}"
-    SCOPE="${BASH_REMATCH[2]}"
-    DESC="${BASH_REMATCH[3]}"
+if echo "$MSG" | grep -qE '^([a-z]+)\([^)]+\):\ .+$'; then
+    TYPE=$(echo "$MSG" | sed -E 's/^([a-z]+)\(.+\):.*/\1/')
+    SCOPE=$(echo "$MSG" | sed -E 's/^[a-z]+\(([^)]+)\):.*/\1/')
+    DESC=$(echo "$MSG" | sed -E 's/^[a-z]+\([^)]+\):\ //')
 else
     TYPE="feat"
     SCOPE="general"
