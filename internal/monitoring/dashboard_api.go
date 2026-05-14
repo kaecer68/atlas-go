@@ -74,6 +74,7 @@ type DashboardAPI struct {
 	eventBus           *eventbus.ChannelEventBus
 	outcomeStore       *DualWriteOutcomeStoreAdapter
 	orderMgr           *live.OrderManager
+	storageReport      apimetrics.StorageReporter
 }
 
 // channelState tracks enable/disable status for each channel.
@@ -291,6 +292,9 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		},
 	)
 	metricsHandlers := apimetrics.NewHandlers(metricsSvc)
+	if a.storageReport != nil {
+		metricsHandlers.WithStorageReporter(a.storageReport)
+	}
 	metricsHandlers.RegisterRoutes(mux)
 
 	systemSvc := service.NewSystemService(a.workDir, a.ledgerDir, a.baselinePath, outcomeStore, a.janusEngine)
@@ -587,6 +591,10 @@ func (a *DashboardAPI) SetTaskManager(m *taskexec.Manager) {
 
 func (a *DashboardAPI) SetOrderManager(om *live.OrderManager) {
 	a.orderMgr = om
+}
+
+func (a *DashboardAPI) SetStorageReporter(r apimetrics.StorageReporter) {
+	a.storageReport = r
 }
 
 func (a *DashboardAPI) RegisterOrderRoutes(mux *http.ServeMux) {
