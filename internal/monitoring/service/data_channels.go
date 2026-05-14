@@ -233,7 +233,9 @@ func (s *DataChannelService) getCachedFinMindHealth() (status, updated, lastErro
 	// TODO: Migrate to Gateway for direct FinMind client instantiation.
 	finmindClient := marketdata.NewFinMindClient(finmindKey)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	_, err := finmindClient.GetStockPrice(ctx, "2330", time.Now().Format("2006-01-02"))
+	// Use yesterday's date to avoid "no price data" error before market close
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	_, err := finmindClient.GetStockPrice(ctx, "2330", yesterday)
 	cancel()
 
 	if err != nil {
