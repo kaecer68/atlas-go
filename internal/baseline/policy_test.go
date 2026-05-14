@@ -43,8 +43,8 @@ func TestDefaultPolicy_ContractGuards(t *testing.T) {
 	if !policy.Constraints.RequireCROPass {
 		t.Error("default RequireCROPass drift: expected true")
 	}
-	if policy.Constraints.TransactionCostBPS != 1.425 {
-		t.Errorf("default TransactionCostBPS drift: expected 1.425, got %v", policy.Constraints.TransactionCostBPS)
+	if policy.Constraints.TransactionCostBPS != 14.25 {
+		t.Errorf("default TransactionCostBPS drift: expected 14.25, got %v", policy.Constraints.TransactionCostBPS)
 	}
 	if policy.Constraints.SlippageBPS != 4.0 {
 		t.Errorf("default SlippageBPS drift: expected 4.0, got %v", policy.Constraints.SlippageBPS)

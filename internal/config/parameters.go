@@ -304,11 +304,14 @@ type IndustryParameters struct {
 	// Sector weights aligned with Taiwan market structure
 	SectorWeights ParameterMetadata[map[string]float64] `json:"sector_weights"`
 
-	// Seasonality pattern parameters
-	SeasonalAdjustmentEnabled ParameterMetadata[bool] `json:"seasonal_adjustment_enabled"`
-
 	// Business cycle thresholds per industry
 	CycleThresholds ParameterMetadata[map[string]CycleThresholdConfig] `json:"cycle_thresholds"`
+
+	// Inventory cycle detection thresholds
+	InventoryCycleThresholds ParameterMetadata[InventoryCycleThresholdConfig] `json:"inventory_cycle_thresholds"`
+
+	// Capex cycle detection thresholds
+	CapexCycleThresholds ParameterMetadata[CapexCycleThresholdConfig] `json:"capex_cycle_thresholds"`
 
 	// Risk scoring parameters
 	ConcentrationRiskEnabled   ParameterMetadata[bool]    `json:"concentration_risk_enabled"`
@@ -339,6 +342,24 @@ type CycleThresholdConfig struct {
 	RecoveryProfitPct   float64 `json:"recovery_profit_pct"`
 	MatureRevenuePct    float64 `json:"mature_revenue_pct"`
 	MatureProfitPct     float64 `json:"mature_profit_pct"`
+}
+
+// InventoryCycleThresholdConfig holds inventory cycle detection thresholds.
+type InventoryCycleThresholdConfig struct {
+	ActiveRestockingInventoryMin  float64 `json:"active_restocking_inventory_min"`
+	ActiveRestockingCapacityMin   float64 `json:"active_restocking_capacity_min"`
+	PassiveRestockingInventoryMin float64 `json:"passive_restocking_inventory_min"`
+	PassiveRestockingCapacityMin  float64 `json:"passive_restocking_capacity_min"`
+	ActiveDestockingInventoryMax  float64 `json:"active_destocking_inventory_max"`
+	ActiveDestockingCapacityMax   float64 `json:"active_destocking_capacity_max"`
+}
+
+// CapexCycleThresholdConfig holds capex cycle detection thresholds.
+type CapexCycleThresholdConfig struct {
+	ExpansionCapacityMin   float64 `json:"expansion_capacity_min"`
+	ExpansionRevenueMin    float64 `json:"expansion_revenue_min"`
+	MaintenanceCapacityMin float64 `json:"maintenance_capacity_min"`
+	MaintenanceRevenueMin  float64 `json:"maintenance_revenue_min"`
 }
 
 // StrategyParameters holds tunable values for strategy selection and switching.

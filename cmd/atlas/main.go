@@ -196,6 +196,8 @@ func run(args []string, deps appDeps) error {
 	repo := rt.Repository
 	taskManager := rt.TaskManager
 
+	var janusEngine *janus.Engine
+
 	if *apiMode {
 		mux := http.NewServeMux()
 		log.Printf("[Auth] API key authentication %s", map[bool]string{true: "ENABLED", false: "DISABLED (no ATLAS_API_KEY set)"}[os.Getenv("ATLAS_API_KEY") != ""])
@@ -212,7 +214,7 @@ func run(args []string, deps appDeps) error {
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 			d.SetPool(pool)
 			d.SetHealthManager(portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore).WithParameters(runtimeParams))
-			janusEngine := janus.NewEngine()
+			janusEngine = janus.NewEngine()
 			janusEngine.EnsureAllRegimes()
 			janusEngine.Update()
 			d.SetJanusEngine(janusEngine)
@@ -361,7 +363,7 @@ func run(args []string, deps appDeps) error {
 		var taskMgr *apigateway.BackgroundTaskManager
 		if err != nil {
 			log.Printf("[Gateway] initialization failed: %v", err)
-		} else if err := apigateway.RegisterChannelAdapters(gateway, cfg.WorkDir, cfg); err != nil {
+		} else if err := apigateway.RegisterChannelAdapters(gateway, cfg.WorkDir, cfg, janusEngine); err != nil {
 			log.Printf("[Gateway] adapter registration failed: %v", err)
 		} else {
 			log.Printf("[Gateway] initialized with %d channels + adapters", len(gateway.ChannelIDs()))
