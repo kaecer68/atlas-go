@@ -35,8 +35,8 @@ func TestFactorEngineCalculateValueScore(t *testing.T) {
 	quotes := map[string]domain.Quote{}
 
 	score := fe.CalculateValueScore("2330.TW", quotes)
-	if score != 0.1 {
-		t.Errorf("expected fallback value score 0.1, got %f", score)
+	if score != 0.05 {
+		t.Errorf("expected fallback value score 0.05, got %f", score)
 	}
 }
 
@@ -274,10 +274,10 @@ func TestFallbackFactorsGetReducedWeight(t *testing.T) {
 
 	// Calculate expected total with 50% weight reduction for fallback factors
 	// Momentum: 0.5 * 0.15 (0.30 * 0.5) = 0.075
-	// Value: 0.1 * 0.125 (0.25 * 0.5) = 0.0125
+	// Value: 0.05 * 0.125 (0.25 * 0.5) = 0.00625
 	// Quality: 0.05 * 0.125 (0.25 * 0.5) = 0.00625
 	// Agent: 0.8 * 0.20 = 0.16 (agent is not fallback)
-	expectedTotal := 0.5*0.15 + 0.1*0.125 + 0.05*0.125 + 0.8*0.20
+	expectedTotal := 0.5*0.15 + 0.05*0.125 + 0.05*0.125 + 0.8*0.20
 
 	if abs(scores["total"]-expectedTotal) > 0.001 {
 		t.Errorf("expected total %f, got %f", expectedTotal, scores["total"])

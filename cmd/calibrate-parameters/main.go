@@ -332,7 +332,7 @@ func calibrateVaR(ie *config.InferenceEngine, returns []float64, n int, cfg *con
 		ie.SetParameter("sizing_target_volatility", math.Min(empiricalVol, 0.30))
 	}
 	if empiricalMaxDD > 0 && empiricalMaxDD < 0.20 {
-		ie.SetParameter("sizing_max_drawdown_limit", math.Min(empiricalMaxDD, 0.20))
+		ie.SetParameter("sizing_max_drawdown_limit", math.Max(0.05, math.Min(empiricalMaxDD, 0.20)))
 	}
 
 	return res
