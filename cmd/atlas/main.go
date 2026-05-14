@@ -306,55 +306,7 @@ func run(args []string, deps appDeps) error {
 		}
 		sysMetrics := monitoring.NewSystemMetrics(collector, monitor)
 		sysCtx, sysCancel := context.WithCancel(context.Background())
-		go sysMetrics.Start(sysCtx)
-
-		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-			go func() {
-				ticker := time.NewTicker(5 * time.Minute)
-				defer ticker.Stop()
-				for {
-					select {
-					case <-sysCtx.Done():
-						return
-					case <-ticker.C:
-						ingestCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-						_, _, err := d.GetMacroIngestor().Ingest(ingestCtx)
-						cancel()
-						if err != nil {
-							logging.Warn("main", "macro_ingest_failed", "err", err)
-						}
-					}
-				}
-			}()
-		}
-
-		// Periodic metrics snapshot save
-		if repo != nil {
-			go func() {
-				ticker := time.NewTicker(60 * time.Second)
-				defer ticker.Stop()
-				for {
-					select {
-					case <-sysCtx.Done():
-						return
-					case <-ticker.C:
-						snap := collector.GetMetricsSnapshot()
-						repoSnap := repository.MetricsSnapshot{
-							ScreeningTotal:     snap.ScreeningTotal,
-							ScreeningPassed:    snap.ScreeningPassed,
-							ScreeningRate:      snap.ScreeningRate,
-							AlertsTriggered:    snap.AlertsTriggered,
-							AlertsAcknowledged: snap.AlertsAcknowledged,
-							AlertsByType:       snap.AlertsByType,
-							Timestamp:          snap.Timestamp,
-						}
-						if err := repo.SaveSnapshot(sysCtx, &repoSnap); err != nil {
-							log.Printf("[Metrics] snapshot save failed: %v", err)
-						}
-					}
-				}
-			}()
-		}
+		sysMetrics.Start(sysCtx)
 		registerCommonDashboardRoutes(dashboard, mux, *swaggerMode, true)
 
 		fs := http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static")))
@@ -575,6 +527,48 @@ func run(args []string, deps appDeps) error {
 				},
 			})
 			log.Printf("[Gateway] registered storage_cleanup background task (24h interval)")
+
+			// Register macro_ingest via BackgroundTaskManager (replaces raw goroutine+ticker).
+			if d, ok := dashboard.(*monitoring.DashboardAPI); ok && d.GetMacroIngestor() != nil {
+				taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "macro_ingest",
+					Interval: 5 * time.Minute,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						ingestCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+						defer cancel()
+						_, _, err := d.GetMacroIngestor().Ingest(ingestCtx)
+						if err != nil {
+							logging.Warn("main", "macro_ingest_failed", "err", err)
+						}
+						return err
+					},
+				})
+				log.Printf("[Gateway] registered macro_ingest background task (5m interval)")
+			}
+
+			// Register metrics_snapshot via BackgroundTaskManager (replaces raw goroutine+ticker).
+			if repo != nil {
+				taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "metrics_snapshot",
+					Interval: 60 * time.Second,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						snap := collector.GetMetricsSnapshot()
+						repoSnap := repository.MetricsSnapshot{
+							ScreeningTotal:     snap.ScreeningTotal,
+							ScreeningPassed:    snap.ScreeningPassed,
+							ScreeningRate:      snap.ScreeningRate,
+							AlertsTriggered:    snap.AlertsTriggered,
+							AlertsAcknowledged: snap.AlertsAcknowledged,
+							AlertsByType:       snap.AlertsByType,
+							Timestamp:          snap.Timestamp,
+						}
+						return repo.SaveSnapshot(ctx, &repoSnap)
+					},
+				})
+				log.Printf("[Gateway] registered metrics_snapshot background task (60s interval)")
+			}
 
 			taskMgr.Start(sysCtx)
 			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))

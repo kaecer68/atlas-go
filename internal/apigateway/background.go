@@ -27,22 +27,22 @@ type RetryPolicy struct {
 
 // ScheduledTask represents a registered background task.
 type ScheduledTask struct {
-	Name             string
-	ChannelID        string
-	Interval         time.Duration
-	Jitter           time.Duration
-	Task             BackgroundTaskFunc
-	Enabled          bool
-	RetryPolicy      *RetryPolicy
-	FailureHandler   TaskFailureHandler
-	MarketHoursOnly  bool
-	MarketOpenTime   string // HHMM format, default "0900" (TWSE)
-	MarketCloseTime  string // HHMM format, default "1330" (TWSE)
-	enabledMu        sync.RWMutex
-	lastRun          time.Time
-	lastRunMu        sync.RWMutex
+	Name                string
+	ChannelID           string
+	Interval            time.Duration
+	Jitter              time.Duration
+	Task                BackgroundTaskFunc
+	Enabled             bool
+	RetryPolicy         *RetryPolicy
+	FailureHandler      TaskFailureHandler
+	MarketHoursOnly     bool
+	MarketOpenTime      string // HHMM format, default "0900" (TWSE)
+	MarketCloseTime     string // HHMM format, default "1330" (TWSE)
+	enabledMu           sync.RWMutex
+	lastRun             time.Time
+	lastRunMu           sync.RWMutex
 	consecutiveFailures int
-	failuresMu       sync.Mutex
+	failuresMu          sync.Mutex
 }
 
 // IsEnabled returns whether the task is enabled.
