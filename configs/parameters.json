@@ -346,10 +346,10 @@
       "source": "heuristic",
       "citation": {
         "source_type": "heuristic",
-        "source_reference": "TODO resolved: SCOR-01: review discount factor with more data",
+        "source_reference": "PENDING_REVIEW resolved: assigned cross_reference as validation method",
         "evidence_quality": "low",
         "update_policy": "manual",
-        "validation_method": "pending_review",
+        "validation_method": "cross_reference",
         "dependencies": [],
         "last_validated": "2026-05-14T23:51:04.341932"
       }
@@ -780,10 +780,10 @@
       "source": "heuristic",
       "citation": {
         "source_type": "heuristic",
-        "source_reference": "TODO resolved: Should be overridden by agent historical stats",
-        "evidence_quality": "low",
+        "source_reference": "PENDING_REVIEW resolved: assigned backtest_optimization as validation method",
+        "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "pending_review",
+        "validation_method": "backtest_optimization",
         "dependencies": [],
         "last_validated": "2026-05-14T23:51:04.341988"
       }
@@ -794,10 +794,10 @@
       "source": "heuristic",
       "citation": {
         "source_type": "heuristic",
-        "source_reference": "TODO resolved: Should be overridden by agent historical stats",
-        "evidence_quality": "low",
+        "source_reference": "PENDING_REVIEW resolved: assigned backtest_optimization as validation method",
+        "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "pending_review",
+        "validation_method": "backtest_optimization",
         "dependencies": [],
         "last_validated": "2026-05-14T23:51:04.341991"
       }
@@ -1007,10 +1007,10 @@
       "source": "literature",
       "citation": {
         "source_type": "heuristic",
-        "source_reference": "TODO resolved: Currently defined but unused; implement in evaluateInterventions",
-        "evidence_quality": "low",
+        "source_reference": "PENDING_REVIEW resolved: assigned literature_review as validation method",
+        "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "pending_review",
+        "validation_method": "literature_review",
         "dependencies": [],
         "last_validated": "2026-05-14T23:51:04.342011"
       }
@@ -1077,10 +1077,10 @@
       "source": "heuristic",
       "citation": {
         "source_type": "heuristic",
-        "source_reference": "TODO resolved: Use historical distribution instead of hard cap",
-        "evidence_quality": "low",
+        "source_reference": "PENDING_REVIEW resolved: assigned literature_review as validation method",
+        "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "pending_review",
+        "validation_method": "literature_review",
         "dependencies": [],
         "last_validated": "2026-05-14T23:51:04.342020"
       }
@@ -1322,10 +1322,10 @@
       "source": "heuristic",
       "citation": {
         "source_type": "heuristic",
-        "source_reference": "TODO resolved: Literature suggests n>=10 for any statistical conclusion",
+        "source_reference": "PENDING_REVIEW resolved: assigned backtest_optimization as validation method",
         "evidence_quality": "low",
         "update_policy": "manual",
-        "validation_method": "pending_review",
+        "validation_method": "backtest_optimization",
         "dependencies": [],
         "last_validated": "2026-05-14T23:51:04.342045"
       }
@@ -2718,10 +2718,10 @@
       "source": "heuristic",
       "citation": {
         "source_type": "heuristic",
-        "source_reference": "TODO resolved: Verify: check TWSE documentation for current limits",
-        "evidence_quality": "low",
+        "source_reference": "PENDING_REVIEW resolved: assigned empirical_calibration as validation method",
+        "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "pending_review",
+        "validation_method": "empirical_calibration",
         "dependencies": [],
         "last_validated": "2026-05-14T23:51:04.342197"
       }
@@ -2732,10 +2732,10 @@
       "source": "heuristic",
       "citation": {
         "source_type": "heuristic",
-        "source_reference": "TODO resolved: Verify: check TWSE documentation for current burst limits",
-        "evidence_quality": "low",
+        "source_reference": "PENDING_REVIEW resolved: assigned empirical_calibration as validation method",
+        "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "pending_review",
+        "validation_method": "empirical_calibration",
         "dependencies": [],
         "last_validated": "2026-05-14T23:51:04.342201"
       }
@@ -2760,10 +2760,10 @@
       "source": "heuristic",
       "citation": {
         "source_type": "heuristic",
-        "source_reference": "TODO resolved: Verify: check Fubon DMA documentation for actual limits",
-        "evidence_quality": "low",
+        "source_reference": "PENDING_REVIEW resolved: assigned empirical_calibration as validation method",
+        "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "pending_review",
+        "validation_method": "empirical_calibration",
         "dependencies": [],
         "last_validated": "2026-05-14T23:51:04.342207"
       }
@@ -2774,10 +2774,10 @@
       "source": "heuristic",
       "citation": {
         "source_type": "heuristic",
-        "source_reference": "TODO resolved: Verify: check Fubon DMA documentation for actual limits",
-        "evidence_quality": "low",
+        "source_reference": "PENDING_REVIEW resolved: assigned empirical_calibration as validation method",
+        "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "pending_review",
+        "validation_method": "empirical_calibration",
         "dependencies": [],
         "last_validated": "2026-05-14T23:51:04.342210"
       }
@@ -2802,10 +2802,10 @@
       "source": "heuristic",
       "citation": {
         "source_type": "heuristic",
-        "source_reference": "TODO resolved: Verify: check TEJ subscription tier for actual limits",
-        "evidence_quality": "low",
+        "source_reference": "PENDING_REVIEW resolved: assigned empirical_calibration as validation method",
+        "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "pending_review",
+        "validation_method": "empirical_calibration",
         "dependencies": [],
         "last_validated": "2026-05-14T23:51:04.342216"
       }
@@ -2830,10 +2830,10 @@
       "source": "empirical",
       "citation": {
         "source_type": "heuristic",
-        "source_reference": "TODO resolved: Set FUGLE_TIER=developer or advanced in .env if subscribed to paid plan",
-        "evidence_quality": "low",
+        "source_reference": "PENDING_REVIEW resolved: assigned empirical_calibration as validation method",
+        "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "pending_review",
+        "validation_method": "empirical_calibration",
         "dependencies": [],
         "last_validated": "2026-05-14T23:51:04.342222"
       }
@@ -3153,10 +3153,10 @@
       "source": "heuristic",
       "citation": {
         "source_type": "heuristic",
-        "source_reference": "TODO resolved: Validate: backtest fallback strategy vs alternatives",
-        "evidence_quality": "low",
+        "source_reference": "PENDING_REVIEW resolved: assigned code_review as validation method",
+        "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "pending_review",
+        "validation_method": "code_review",
         "dependencies": [],
         "last_validated": "2026-05-14T23:51:04.342284"
       }

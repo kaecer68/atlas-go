@@ -218,6 +218,8 @@ func DiffSnapshots(old, new *ParameterSnapshot) []ParameterChange {
 	compareFloat(&changes, "industry.geographic_exposure_limit", old.Params.Industry.GeographicExposureLimit.Value, new.Params.Industry.GeographicExposureLimit.Value, now)
 	compareMapStringFloat(&changes, "industry.sector_weights", old.Params.Industry.SectorWeights.Value, new.Params.Industry.SectorWeights.Value, now)
 	compareMapCycleThreshold(&changes, "industry.cycle_thresholds", old.Params.Industry.CycleThresholds.Value, new.Params.Industry.CycleThresholds.Value, now)
+	compareInventoryCycleThreshold(&changes, "industry.inventory_cycle_thresholds", old.Params.Industry.InventoryCycleThresholds.Value, new.Params.Industry.InventoryCycleThresholds.Value, now)
+	compareCapexCycleThreshold(&changes, "industry.capex_cycle_thresholds", old.Params.Industry.CapexCycleThresholds.Value, new.Params.Industry.CapexCycleThresholds.Value, now)
 
 	compareFloat(&changes, "strategy.min_switch_interval_days", float64(old.Params.Strategy.MinSwitchIntervalDays.Value), float64(new.Params.Strategy.MinSwitchIntervalDays.Value), now)
 	compareFloat(&changes, "strategy.switch_threshold", old.Params.Strategy.SwitchThreshold.Value, new.Params.Strategy.SwitchThreshold.Value, now)
@@ -335,6 +337,54 @@ func compareMapCycleThreshold(changes *[]ParameterChange, param string, oldVal, 
 				Parameter: param + "." + k,
 				OldValue:  "absent",
 				NewValue:  "added",
+				Timestamp: t,
+			})
+		}
+	}
+}
+
+func compareInventoryCycleThreshold(changes *[]ParameterChange, param string, oldVal, newVal InventoryCycleThresholdConfig, t time.Time) {
+	fields := []struct {
+		name string
+		o    float64
+		n    float64
+	}{
+		{"active_restocking_inventory_min", oldVal.ActiveRestockingInventoryMin, newVal.ActiveRestockingInventoryMin},
+		{"active_restocking_capacity_min", oldVal.ActiveRestockingCapacityMin, newVal.ActiveRestockingCapacityMin},
+		{"passive_restocking_inventory_min", oldVal.PassiveRestockingInventoryMin, newVal.PassiveRestockingInventoryMin},
+		{"passive_restocking_capacity_min", oldVal.PassiveRestockingCapacityMin, newVal.PassiveRestockingCapacityMin},
+		{"active_destocking_inventory_max", oldVal.ActiveDestockingInventoryMax, newVal.ActiveDestockingInventoryMax},
+		{"active_destocking_capacity_max", oldVal.ActiveDestockingCapacityMax, newVal.ActiveDestockingCapacityMax},
+	}
+	for _, f := range fields {
+		if f.o != f.n {
+			*changes = append(*changes, ParameterChange{
+				Parameter: param + "." + f.name,
+				OldValue:  f.o,
+				NewValue:  f.n,
+				Timestamp: t,
+			})
+		}
+	}
+}
+
+func compareCapexCycleThreshold(changes *[]ParameterChange, param string, oldVal, newVal CapexCycleThresholdConfig, t time.Time) {
+	fields := []struct {
+		name string
+		o    float64
+		n    float64
+	}{
+		{"expansion_capacity_min", oldVal.ExpansionCapacityMin, newVal.ExpansionCapacityMin},
+		{"expansion_revenue_min", oldVal.ExpansionRevenueMin, newVal.ExpansionRevenueMin},
+		{"maintenance_capacity_min", oldVal.MaintenanceCapacityMin, newVal.MaintenanceCapacityMin},
+		{"maintenance_revenue_min", oldVal.MaintenanceRevenueMin, newVal.MaintenanceRevenueMin},
+	}
+	for _, f := range fields {
+		if f.o != f.n {
+			*changes = append(*changes, ParameterChange{
+				Parameter: param + "." + f.name,
+				OldValue:  f.o,
+				NewValue:  f.n,
 				Timestamp: t,
 			})
 		}
