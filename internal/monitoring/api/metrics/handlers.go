@@ -7,18 +7,33 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
+// StorageReporter provides the latest storage cleanup report.
+type StorageReporter interface {
+	LastReport() any
+}
+
 type Handlers struct {
-	svc *service.MetricsService
+	svc           *service.MetricsService
+	storageReport StorageReporter
 }
 
 func NewHandlers(svc *service.MetricsService) *Handlers {
 	return &Handlers{svc: svc}
 }
 
+// WithStorageReporter attaches a storage reporter for the /api/metrics/storage endpoint.
+func (h *Handlers) WithStorageReporter(r StorageReporter) *Handlers {
+	h.storageReport = r
+	return h
+}
+
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/metrics", shared.Get(h.HandleMetrics))
 	mux.Handle("GET /api/dashboard/metrics/trend", shared.Get(h.HandleMetricsTrend))
 	mux.Handle("GET /api/dashboard/data-quality", shared.Get(h.HandleDataQuality))
+	if h.storageReport != nil {
+		mux.Handle("GET /api/metrics/storage", shared.Get(h.HandleStorage))
+	}
 }
 
 func (h *Handlers) HandleMetrics(r *http.Request) (int, any) {
@@ -40,4 +55,8 @@ func (h *Handlers) HandleMetricsTrend(r *http.Request) (int, any) {
 
 func (h *Handlers) HandleDataQuality(r *http.Request) (int, any) {
 	return http.StatusOK, h.svc.CheckDataQuality("", "")
+}
+
+func (h *Handlers) HandleStorage(r *http.Request) (int, any) {
+	return http.StatusOK, h.storageReport.LastReport()
 }
