@@ -550,15 +550,45 @@ func run(args []string, deps appDeps) error {
 					finmindClient = marketdata.NewFinMindClient(cfg.FinMindAPIKey)
 				}
 				cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient)
-				// TODO: Migrate auto_cycle_update to BackgroundTaskManager (requires industry aggregator lifecycle hook).
-				bootstrap.StartAutoCycleUpdate(sysCtx, cfg.WorkDir, cycleAggregator)
-				log.Printf("[CycleUpdate] auto cycle update scheduler started (6h interval)")
+				if taskMgr != nil {
+					taskMgr.Register(&apigateway.ScheduledTask{
+						Name:     "auto_cycle_update",
+						Interval: 6 * time.Hour,
+						Enabled:  true,
+						Task: func(ctx context.Context) error {
+							bgCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+							defer cancel()
+							return cycleAggregator.AggregateAllIndustries(bgCtx)
+						},
+					})
+					log.Printf("[Gateway] registered auto_cycle_update background task (6h interval)")
+				}
 			}
 		}
 
-		// TODO: Migrate auto_threshold_calibrate to BackgroundTaskManager (monthly calibration, not a data fetcher).
-		bootstrap.StartAutoThresholdCalibration(sysCtx, cfg.WorkDir)
-		log.Printf("[ThresholdCalibrate] monthly auto-calibration scheduler started")
+		if taskMgr != nil {
+			revenuePath := filepath.Join(cfg.WorkDir, "data", "replay", "month_revenue.jsonl")
+			configPath := filepath.Join(cfg.WorkDir, "configs", "parameters.json")
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "auto_threshold_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					now := time.Now()
+					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+						now = now.In(tz)
+					}
+					if now.Day() != 1 || now.Hour() < 3 {
+						return nil
+					}
+					if _, err := os.Stat(revenuePath); os.IsNotExist(err) {
+						return nil
+					}
+					return industry.RecalibrateThresholds(revenuePath, configPath)
+				},
+			})
+			log.Printf("[Gateway] registered auto_threshold_calibrate background task (24h interval, checks 1st of month)")
+		}
 
 		var btRunner *autobacktest.Runner
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok && d.GetEventBus() != nil {
