@@ -1598,7 +1598,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
       </div>
       <div class="kpi-group-title">🔧 系統狀態</div>
       <div class="kpi-grid" id="overviewSystem">
-        <div class="kpi-card"><div class="kpi-label">資料時間</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card clickable" onclick="openKpiHelp('data_time')"><div class="kpi-label">資料時間</div><div class="kpi-value">-</div></div>
         <div class="kpi-card"><div class="kpi-label">基線版本</div><div class="kpi-value">-</div></div>
         <div class="kpi-card clickable" onclick="openKpiHelp('experiment')"><div class="kpi-label">實驗狀態</div><div class="kpi-value">-</div></div>
       </div>
@@ -2037,6 +2037,15 @@ body { display: flex; margin: 0; min-height: 100vh; }
           <div class="kpi-value" id="capitalPhase">-</div>
           <div class="kpi-label">當前資金管理階段</div>
         </div>
+        <div class="panel">
+          <h3>存儲清理</h3>
+          <div class="kpi-value" id="storageDeleted">-</div>
+          <div class="kpi-label">最近清理刪除的檔案數</div>
+        </div>
+      </div>
+      <div class="panel wide" id="storageCleanupPanel" style="display:none">
+        <h2>存儲清理詳情</h2>
+        <div id="storageCleanupDetail" class="empty">載入中…</div>
       </div>
       <div class="panel wide">
         <h2>指標趨勢</h2>
