@@ -318,6 +318,79 @@ func (a *YahooMacroChannelAdapter) Metadata() ChannelMetadata {
 }
 
 // ---------------------------------------------------------------------------
+// JPYYahooChannelAdapter — wraps *marketdata.FrankfurterFXProvider
+// ---------------------------------------------------------------------------
+
+// JPYYahooChannelAdapter adapts a FrankfurterFXProvider to the DataProvider interface for JPY.
+type JPYYahooChannelAdapter struct {
+	provider *marketdata.FrankfurterFXProvider
+	limiter  *rate.Limiter
+}
+
+// NewJPYYahooChannelAdapter creates a new adapter for the JPY Yahoo channel.
+func NewJPYYahooChannelAdapter(provider *marketdata.FrankfurterFXProvider) *JPYYahooChannelAdapter {
+	return &JPYYahooChannelAdapter{
+		provider: provider,
+		limiter:  rate.NewLimiter(YahooFinanceRate, YahooFinanceBurst),
+	}
+}
+
+// Fetch retrieves JPY data from Frankfurter API.
+func (a *JPYYahooChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	snap, err := a.provider.FetchSnapshot(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("jpy fetch: %w", err)
+	}
+	data, err := json.Marshal(snap)
+	if err != nil {
+		return nil, fmt.Errorf("jpy marshal: %w", err)
+	}
+	return &FetchResult{
+		Data: data,
+		Meta: FetchMetadata{
+			ChannelID:          "jpy_yahoo",
+			RateLimitRemaining: int(a.limiter.Tokens()),
+			Timestamp:          time.Now(),
+		},
+	}, nil
+}
+
+// HealthCheck verifies connectivity by fetching JPY data.
+func (a *JPYYahooChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
+	_, err := a.provider.FetchSnapshot(ctx)
+	if err != nil {
+		return HealthStatus{
+			Status:    "error",
+			LastError: err.Error(),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "liveness",
+		}, err
+	}
+	return HealthStatus{
+		Status:    "ok",
+		UpdatedAt: time.Now().Format(time.RFC3339),
+		CheckType: "liveness",
+	}, nil
+}
+
+// RateLimit returns the JPY Yahoo rate limiter.
+func (a *JPYYahooChannelAdapter) RateLimit() *rate.Limiter {
+	return a.limiter
+}
+
+// Metadata returns static channel metadata for JPY Yahoo.
+func (a *JPYYahooChannelAdapter) Metadata() ChannelMetadata {
+	return ChannelMetadata{
+		ChannelID:  "jpy_yahoo",
+		Country:    "日本",
+		Platform:   "Yahoo Finance (via Frankfurter)",
+		APIFormat:  "json",
+		Path:       "api.frankfurter.dev",
+		HasLimiter: true,
+	}
+}
+
+// ---------------------------------------------------------------------------
 // TWSECapitalFlowChannelAdapter — wraps *marketdata.TWSECapitalFlowProvider
 // ---------------------------------------------------------------------------
 
@@ -851,6 +924,12 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config) erro
 		g.registry.Register("us_yahoo", yahooAdapter)
 		logging.Info("apigateway", "adapter_registered", "channel", "us_yahoo")
 	}
+
+	// --- JPY Yahoo (via Frankfurter) ---
+	frankfurterProvider := marketdata.NewFrankfurterFXProvider()
+	jpyAdapter := NewJPYYahooChannelAdapter(frankfurterProvider)
+	g.registry.Register("jpy_yahoo", jpyAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "jpy_yahoo")
 
 	// --- TWSE Capital Flow (no API key required) ---
 	capFlowProvider := marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow"))
