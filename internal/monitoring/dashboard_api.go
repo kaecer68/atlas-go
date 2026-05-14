@@ -111,15 +111,6 @@ func saveChannelStates(workDir string) error {
 	return os.WriteFile(path, data, 0644)
 }
 
-func isChannelEnabled(channelID string) bool {
-	channelStatesMu.RLock()
-	defer channelStatesMu.RUnlock()
-	if s, ok := channelStates[channelID]; ok {
-		return s.Enabled
-	}
-	return true // default: enabled
-}
-
 func setChannelEnabled(workDir, channelID string, enabled bool) error {
 	channelStatesMu.Lock()
 	channelStates[channelID] = channelState{Enabled: enabled, UpdatedAt: time.Now()}

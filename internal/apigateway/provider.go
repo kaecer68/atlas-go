@@ -3,7 +3,6 @@ package apigateway
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -65,7 +64,6 @@ type ChannelMetadata struct {
 // HTTPProvider implements DataProvider for HTTP-based channels.
 type HTTPProvider struct {
 	name       string
-	client     *http.Client
 	limiter    *rate.Limiter
 	meta       ChannelMetadata
 	fetcher    func(ctx context.Context) ([]byte, error)
