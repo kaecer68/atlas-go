@@ -211,7 +211,6 @@ func DiffSnapshots(old, new *ParameterSnapshot) []ParameterChange {
 	compareFloat(&changes, "marketdata.max_retry_attempts", float64(old.Params.Marketdata.MaxRetryAttempts.Value), float64(new.Params.Marketdata.MaxRetryAttempts.Value), now)
 	compareFloat(&changes, "marketdata.retry_backoff_ms", float64(old.Params.Marketdata.RetryBackoffMs.Value), float64(new.Params.Marketdata.RetryBackoffMs.Value), now)
 
-	compareBool(&changes, "industry.seasonal_adjustment_enabled", old.Params.Industry.SeasonalAdjustmentEnabled.Value, new.Params.Industry.SeasonalAdjustmentEnabled.Value, now)
 	compareBool(&changes, "industry.concentration_risk_enabled", old.Params.Industry.ConcentrationRiskEnabled.Value, new.Params.Industry.ConcentrationRiskEnabled.Value, now)
 	compareBool(&changes, "industry.news_latency_risk_enabled", old.Params.Industry.NewsLatencyRiskEnabled.Value, new.Params.Industry.NewsLatencyRiskEnabled.Value, now)
 	compareBool(&changes, "industry.asymmetric_risk_enabled", old.Params.Industry.AsymmetricRiskEnabled.Value, new.Params.Industry.AsymmetricRiskEnabled.Value, now)

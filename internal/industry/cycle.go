@@ -255,15 +255,15 @@ func (ct *CycleTracker) detectBusinessCycle(metrics IndustryMetrics) CyclePhase 
 
 // detectInventoryCycle determines the inventory cycle state.
 func (ct *CycleTracker) detectInventoryCycle(metrics IndustryMetrics) InventoryCycle {
-	inventoryTurnover := metrics.InventoryTurnover
-	capacityUtilization := metrics.CapacityUtilization
+	params := config.GetParametersConfig().Industry
+	t := params.InventoryCycleThresholds.Value
 
 	switch {
-	case inventoryTurnover > 6.0 && capacityUtilization > 0.80:
+	case metrics.InventoryTurnover > t.ActiveRestockingInventoryMin && metrics.CapacityUtilization > t.ActiveRestockingCapacityMin:
 		return InvRestockingActive
-	case inventoryTurnover > 4.0 && capacityUtilization > 0.70:
+	case metrics.InventoryTurnover > t.PassiveRestockingInventoryMin && metrics.CapacityUtilization > t.PassiveRestockingCapacityMin:
 		return InvRestockingPassive
-	case inventoryTurnover < 3.0 && capacityUtilization < 0.60:
+	case metrics.InventoryTurnover < t.ActiveDestockingInventoryMax && metrics.CapacityUtilization < t.ActiveDestockingCapacityMax:
 		return InvDestockingActive
 	default:
 		return InvDestockingPassive
@@ -272,14 +272,13 @@ func (ct *CycleTracker) detectInventoryCycle(metrics IndustryMetrics) InventoryC
 
 // detectCapexCycle determines the capex cycle state.
 func (ct *CycleTracker) detectCapexCycle(metrics IndustryMetrics) CapexCycle {
-	// Based on capacity utilization and revenue growth
-	capacityUtilization := metrics.CapacityUtilization
-	revenueGrowth := metrics.RevenueGrowthYoY
+	params := config.GetParametersConfig().Industry
+	t := params.CapexCycleThresholds.Value
 
 	switch {
-	case capacityUtilization > 0.85 && revenueGrowth > 0.15:
+	case metrics.CapacityUtilization > t.ExpansionCapacityMin && metrics.RevenueGrowthYoY > t.ExpansionRevenueMin:
 		return CapexExpansion
-	case capacityUtilization > 0.70 && revenueGrowth > 0.05:
+	case metrics.CapacityUtilization > t.MaintenanceCapacityMin && metrics.RevenueGrowthYoY > t.MaintenanceRevenueMin:
 		return CapexMaintenance
 	default:
 		return CapexContraction

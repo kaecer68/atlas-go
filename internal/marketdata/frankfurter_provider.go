@@ -12,7 +12,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
-const frankfurterEndpoint = "https://api.frankfurter.dev/v2/latest?from=USD&to=JPY,TWD"
+const frankfurterEndpoint = "https://api.frankfurter.app/latest?from=USD&to=JPY,TWD"
 
 type FrankfurterFXProvider struct {
 	client   *http.Client
