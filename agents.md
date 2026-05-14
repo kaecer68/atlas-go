@@ -150,6 +150,51 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 
 ---
 
+## Git 工作流（強制）
+
+### 分支策略
+
+| 分支類型 | 命名規範 | 用途 |
+|---------|---------|------|
+| `main` | — | 僅接受 PR 合併，**禁止直接 push** |
+| `feat/<name>` | `feat/apigateway-btm-migration` | 新功能開發 |
+| `fix/<name>` | `fix/channel-adapter-race` | Bug 修復 |
+| `refactor/<name>` | `refactor/bootstrap-cleanup` | 重構 |
+
+### AI 執行流程（強制順序）
+
+**絕對禁止直接 `git push origin main`**。無論任務多小，一律遵循：
+
+```bash
+# 1. 從最新 main 建立 feature branch
+git checkout main
+git pull origin main
+git checkout -b feat/<descriptive-name>
+
+# 2. 開發並提交
+git add -A
+git commit -m "feat(scope): description"
+
+# 3. 推送 branch
+git push -u origin feat/<descriptive-name>
+
+# 4. 建立 PR（透過 gh CLI）
+gh pr create --title "feat(scope): description" \
+  --body "## Summary
+- 變更內容
+- 測試結果
+- 風險評估" \
+  --base main
+```
+
+### 提交前檢查清單
+
+- [ ] 是否從 `main` checkout 新的 feature branch？
+- [ ] 是否運行了 `go build ./...` 和 `go test ./...`？
+- [ ] 是否運行了 `gofmt` 和 `staticcheck`？
+- [ ] commit message 是否符合 `type(scope): description` 格式？
+- [ ] 是否 push 到 `origin/<branch>` 而非 `origin/main`？
+
 ## 高危陷阱
 
 調整行為前請先確認：
