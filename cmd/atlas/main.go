@@ -201,7 +201,6 @@ func run(args []string, deps appDeps) error {
 	var janusEngine *janus.Engine
 
 	if *apiMode {
-		var janusEngine *janus.Engine
 		mux := http.NewServeMux()
 		log.Printf("[Auth] API key authentication %s", map[bool]string{true: "ENABLED", false: "DISABLED (no ATLAS_API_KEY set)"}[os.Getenv("ATLAS_API_KEY") != ""])
 		healthStore, err := portfolio.NewAgentHealthStore(filepath.Join(cfg.WorkDir, "data/state"))
