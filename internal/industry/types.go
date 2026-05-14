@@ -86,17 +86,28 @@ type RiskProfile struct {
 	KeyCustomers          []string `json:"key_customers,omitempty"` // Major customer names
 }
 
+// DataFreshness indicates the recency and reliability of industry metric data.
+type DataFreshness string
+
+const (
+	FreshLive     DataFreshness = "live"
+	FreshRecent   DataFreshness = "recent"
+	FreshStale    DataFreshness = "stale"
+	FreshFallback DataFreshness = "fallback"
+)
+
 // IndustryMetrics holds real-time metrics for an industry.
 type IndustryMetrics struct {
-	IndustryID          string    `json:"industry_id"`
-	PE                  float64   `json:"pe"`
-	PB                  float64   `json:"pb"`
-	DividendYield       float64   `json:"dividend_yield"`
-	RevenueGrowthYoY    float64   `json:"revenue_growth_yoy"`
-	ProfitGrowthYoY     float64   `json:"profit_growth_yoy"`
-	InventoryTurnover   float64   `json:"inventory_turnover"`
-	CapacityUtilization float64   `json:"capacity_utilization"`
-	Timestamp           time.Time `json:"timestamp"`
+	IndustryID          string        `json:"industry_id"`
+	PE                  float64       `json:"pe"`
+	PB                  float64       `json:"pb"`
+	DividendYield       float64       `json:"dividend_yield"`
+	RevenueGrowthYoY    float64       `json:"revenue_growth_yoy"`
+	ProfitGrowthYoY     float64       `json:"profit_growth_yoy"`
+	InventoryTurnover   float64       `json:"inventory_turnover"`
+	CapacityUtilization float64       `json:"capacity_utilization"`
+	DataFreshness       DataFreshness `json:"data_freshness"`
+	Timestamp           time.Time     `json:"timestamp"`
 }
 
 // ClassificationTree provides hierarchical access to industry segments.

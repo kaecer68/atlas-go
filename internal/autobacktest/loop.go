@@ -35,7 +35,7 @@ func StartDailyLoop(ctx context.Context, runner *Runner) {
 				}
 
 				logging.Info("autobacktest", "triggering_daily_backtest")
-				if err := runner.RunAndStore(); err != nil {
+				if err := runner.RunOnce(ctx); err != nil {
 					logging.Error("autobacktest", "backtest_run_failed", "err", err.Error())
 				} else {
 					logging.Info("autobacktest", "daily_backtest_completed")

@@ -636,6 +636,26 @@ func run(args []string, deps appDeps) error {
 		}
 		autobacktest.StartDailyLoop(sysCtx, btRunner)
 
+		// Register autobacktest heartbeat with BTM for monitoring and on-demand execution.
+		if taskMgr != nil {
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:            "autobacktest_daily",
+				Interval:        24 * time.Hour,
+				Enabled:         true,
+				MarketHoursOnly: true,
+				RetryPolicy: &apigateway.RetryPolicy{
+					MaxAttempts:  2,
+					InitialDelay: 1 * time.Minute,
+					MaxDelay:     5 * time.Minute,
+					Multiplier:   2.0,
+				},
+				Task: func(ctx context.Context) error {
+					return btRunner.RunOnce(ctx)
+				},
+			})
+			log.Printf("[Gateway] registered autobacktest_daily background task (24h interval, market-hours guard)")
+		}
+
 		authWrappedMux := apishared.AuthMiddleware(mux)
 		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
