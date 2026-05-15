@@ -159,23 +159,36 @@ func CalibrationReport(results []SeasonalCalibration) string {
 // IndustryReturnAggregator computes aggregate industry returns from individual
 // stock returns, using equal-weight averaging.
 func IndustryReturnAggregator(stockReturns map[string]map[string]float64, stockIndustryMap map[string]string) map[string]map[string]float64 {
-	industryReturns := make(map[string]map[string]float64)
+	type accum struct {
+		sum   float64
+		count int
+	}
+	industryAccum := make(map[string]map[string]*accum)
 
 	for symbol, dateReturns := range stockReturns {
 		industryID := stockIndustryMap[symbol]
 		if industryID == "" {
 			continue
 		}
-		if industryReturns[industryID] == nil {
-			industryReturns[industryID] = make(map[string]float64)
+		if industryAccum[industryID] == nil {
+			industryAccum[industryID] = make(map[string]*accum)
 		}
 		for date, ret := range dateReturns {
-			existing, ok := industryReturns[industryID][date]
+			a, ok := industryAccum[industryID][date]
 			if !ok {
-				industryReturns[industryID][date] = ret
+				industryAccum[industryID][date] = &accum{sum: ret, count: 1}
 			} else {
-				industryReturns[industryID][date] = (existing + ret) / 2
+				a.sum += ret
+				a.count++
 			}
+		}
+	}
+
+	industryReturns := make(map[string]map[string]float64)
+	for industryID, dateAccums := range industryAccum {
+		industryReturns[industryID] = make(map[string]float64)
+		for date, a := range dateAccums {
+			industryReturns[industryID][date] = a.sum / float64(a.count)
 		}
 	}
 	return industryReturns

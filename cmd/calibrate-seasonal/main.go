@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+	"sort"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/industry"
@@ -69,23 +69,93 @@ func run(args []string) error {
 }
 
 // buildSyntheticReturns creates placeholder industry returns for testing.
-// Once CSV/JSONL replay data is loaded, industry returns should be built
-// via IndustryReturnAggregator from individual stock returns.
 func buildSyntheticReturns() map[string]map[string]float64 {
-	// In production, call:
-	//   returns := industry.IndustryReturnAggregator(stockReturns, stockIndustryMap)
 	return map[string]map[string]float64{
-		"semiconductor": {
-			"2024-01-15": 0.02, "2024-02-15": 0.03, "2024-07-01": 0.08,
-			"2024-09-15": -0.02, "2024-11-01": 0.01, "2024-12-31": 0.04,
-		},
-		"ai_supply_chain": {
-			"2024-01-15": 0.03, "2024-02-15": 0.04, "2024-07-01": 0.10,
-			"2024-09-15": -0.01, "2024-11-01": 0.02, "2024-12-31": 0.05,
-		},
-		"financials": {
-			"2024-01-15": 0.01, "2024-02-15": 0.02, "2024-07-01": 0.01,
-			"2024-09-15": 0.00, "2024-11-01": 0.03, "2024-12-31": 0.02,
-		},
+		"semiconductor":   {"2024-01-15": 0.02, "2024-02-15": 0.03, "2024-07-01": 0.08, "2024-09-15": -0.02, "2024-11-01": 0.01, "2024-12-31": 0.04},
+		"ai_supply_chain": {"2024-01-15": 0.03, "2024-02-15": 0.04, "2024-07-01": 0.10, "2024-09-15": -0.01, "2024-11-01": 0.02, "2024-12-31": 0.05},
+		"financials":      {"2024-01-15": 0.01, "2024-02-15": 0.02, "2024-07-01": 0.01, "2024-09-15": 0.00, "2024-11-01": 0.03, "2024-12-31": 0.02},
 	}
+}
+
+// loadReplayDataset loads TWSE CSV replay data from a file or directory.
+func loadReplayDataset(path string) (*replay.Dataset, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("stat %s: %w", path, err)
+	}
+	if info.IsDir() {
+		return replay.LoadTWSEOpenDataCSV(filepath.Join(path, "replay.csv"))
+	}
+	return replay.LoadTWSEOpenDataCSV(path)
+}
+
+// aggregateIndustryReturns converts a replay dataset into per-industry daily returns
+// using equal-weight averaging of constituent stock returns.
+func aggregateIndustryReturns(dataset *replay.Dataset) map[string]map[string]float64 {
+	stockReturns := make(map[string]map[string]float64)
+
+	for dateStr, stocks := range dataset.ByDate {
+		for symbol, bar := range stocks {
+			if bar.Close <= 0 {
+				continue
+			}
+			if stockReturns[symbol] == nil {
+				stockReturns[symbol] = make(map[string]float64)
+			}
+			stockReturns[symbol][dateStr] = bar.Close
+		}
+	}
+
+	// Convert close prices to daily returns
+	for symbol, datePrices := range stockReturns {
+		sortedDates := make([]string, 0, len(datePrices))
+		for d := range datePrices {
+			sortedDates = append(sortedDates, d)
+		}
+		sort.Strings(sortedDates)
+
+		for i := len(sortedDates) - 1; i > 0; i-- {
+			curr := sortedDates[i]
+			prev := sortedDates[i-1]
+			currPrice := datePrices[curr]
+			prevPrice := datePrices[prev]
+			if prevPrice > 0 {
+				stockReturns[symbol][curr] = (currPrice - prevPrice) / prevPrice
+			} else {
+				delete(stockReturns[symbol], curr)
+			}
+		}
+		delete(stockReturns[symbol], sortedDates[0])
+	}
+
+	// Map stocks to industries using sector_symbols.json
+	stockIndustryMap := loadSectorSymbols()
+
+	return industry.IndustryReturnAggregator(stockReturns, stockIndustryMap)
+}
+
+// loadSectorSymbols reads the sector-to-stock mapping from config.
+func loadSectorSymbols() map[string]string {
+	type sectorEntry struct {
+		Sector  string   `json:"sector"`
+		Symbols []string `json:"symbols"`
+	}
+
+	mapping := make(map[string]string)
+	data, err := os.ReadFile("configs/sector_symbols.json")
+	if err != nil {
+		return mapping
+	}
+
+	var raw map[string][]string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return mapping
+	}
+
+	for sector, symbols := range raw {
+		for _, sym := range symbols {
+			mapping[sym] = sector
+		}
+	}
+	return mapping
 }
