@@ -1,8 +1,10 @@
 package industry
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 	"slices"
 	"time"
 )
@@ -157,8 +159,9 @@ func CalibrationReport(results []SeasonalCalibration) string {
 }
 
 // IndustryReturnAggregator computes aggregate industry returns from individual
-// stock returns, using equal-weight averaging.
-func IndustryReturnAggregator(stockReturns map[string]map[string]float64, stockIndustryMap map[string]string) map[string]map[string]float64 {
+// stock returns, using equal-weight averaging. A stock may belong to multiple
+// sectors; its returns are distributed to all of them.
+func IndustryReturnAggregator(stockReturns map[string]map[string]float64, stockIndustryMap map[string][]string) map[string]map[string]float64 {
 	type accum struct {
 		sum   float64
 		count int
@@ -166,20 +169,22 @@ func IndustryReturnAggregator(stockReturns map[string]map[string]float64, stockI
 	industryAccum := make(map[string]map[string]*accum)
 
 	for symbol, dateReturns := range stockReturns {
-		industryID := stockIndustryMap[symbol]
-		if industryID == "" {
+		industryIDs := stockIndustryMap[symbol]
+		if len(industryIDs) == 0 {
 			continue
 		}
-		if industryAccum[industryID] == nil {
-			industryAccum[industryID] = make(map[string]*accum)
-		}
-		for date, ret := range dateReturns {
-			a, ok := industryAccum[industryID][date]
-			if !ok {
-				industryAccum[industryID][date] = &accum{sum: ret, count: 1}
-			} else {
-				a.sum += ret
-				a.count++
+		for _, industryID := range industryIDs {
+			if industryAccum[industryID] == nil {
+				industryAccum[industryID] = make(map[string]*accum)
+			}
+			for date, ret := range dateReturns {
+				a, ok := industryAccum[industryID][date]
+				if !ok {
+					industryAccum[industryID][date] = &accum{sum: ret, count: 1}
+				} else {
+					a.sum += ret
+					a.count++
+				}
 			}
 		}
 	}
@@ -213,4 +218,38 @@ func ValidateIndustryIDs(patterns []SeasonalPattern, industryReturns map[string]
 		}
 	}
 	return missing
+}
+
+// LoadCalibrationEvidence reads calibration metadata from parameters.json.
+// Returns nil if no calibration has been performed.
+func LoadCalibrationEvidence(path string) map[string]any {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var config map[string]any
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil
+	}
+	industryCfg, ok := config["industry"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	sp, ok := industryCfg["seasonal_patterns"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	ts, hasTs := sp["calibration_timestamp"]
+	src, _ := sp["calibration_data_source"]
+	if !hasTs {
+		return nil
+	}
+	result := map[string]any{"calibrated": true}
+	if ts != nil {
+		result["timestamp"] = ts
+	}
+	if src != nil {
+		result["data_source"] = src
+	}
+	return result
 }

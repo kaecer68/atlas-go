@@ -107,6 +107,7 @@ func (h *Handlers) HandleIndustrySeasonality(r *http.Request) (int, any) {
 		"narrative_themes":     narrativeThemes,
 		"all_patterns":         historicalPatterns,
 		"total_pattern_count":  len(historicalPatterns),
+		"calibration_evidence": h.Svc.GetCalibrationEvidence(),
 	}
 }
 

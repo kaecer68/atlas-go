@@ -190,10 +190,22 @@ export function renderIndustrySeasonality(data) {
   const activePatterns =
     data && data.active_patterns ? data.active_patterns : [];
 
-  let html =
-    '<div style="font-size:11px;color:var(--warn);margin-bottom:8px;padding:6px 10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:6px">' +
-    '⚠️ <strong>證據品質提示：</strong>以下季節性模式數值基於經驗法則（heuristic），尚未經過回測校準（evidence_quality: low）。請勿將 HistoricalAccuracy 與 AdjustmentFactor 視為實證數據。' +
-    '</div>';
+  const calibEvidence = data && data.calibration_evidence;
+  let evidenceBanner;
+  if (calibEvidence && calibEvidence.calibrated) {
+    const ts = calibEvidence.timestamp ? new Date(calibEvidence.timestamp).toLocaleString("zh-TW") : "未知";
+    const src = calibEvidence.data_source || "未知";
+    evidenceBanner =
+      `<div style="font-size:11px;color:var(--ok);margin-bottom:8px;padding:6px 10px;background:rgba(79,193,255,0.08);border:1px solid rgba(79,193,255,0.2);border-radius:6px">` +
+      `✓ <strong>已校準：</strong>季節性模式數值已透過回測校準（校準時間：${ts}，資料來源：${src}）。校準結果已更新 HistoricalAccuracy 與 AdjustmentFactor。` +
+      `</div>`;
+  } else {
+    evidenceBanner =
+      '<div style="font-size:11px;color:var(--warn);margin-bottom:8px;padding:6px 10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:6px">' +
+      '⚠️ <strong>證據品質提示：</strong>以下季節性模式數值基於經驗法則（heuristic），尚未經過回測校準（evidence_quality: low）。請勿將 HistoricalAccuracy 與 AdjustmentFactor 視為實證數據。' +
+      '</div>';
+  }
+  let html = evidenceBanner;
   html +=
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
   html +=
@@ -236,7 +248,10 @@ export function renderSeasonalityList(allPatterns, activePatterns, data) {
     html += `<tr style="${isActive ? "background:rgba(79,193,255,0.05)" : ""}">`;
     html += `<td><strong>${p.name}</strong><br><span style="font-size:11px;color:var(--muted)">${p.description || ""}</span></td>`;
     html += `<td>${period}</td>`;
-    html += `<td>${accuracy}% <span style="font-size:10px;color:var(--warn);background:rgba(245,158,11,0.1);padding:1px 4px;border-radius:3px" title="evidence_quality: low — 尚未經過回測校準">待驗證</span></td>`;
+    const evidenceBadge = calibEvidence && calibEvidence.calibrated
+      ? `<span style="font-size:10px;color:var(--ok);background:rgba(79,193,255,0.1);padding:1px 4px;border-radius:3px" title="已透過回測校準">已校準</span>`
+      : `<span style="font-size:10px;color:var(--warn);background:rgba(245,158,11,0.1);padding:1px 4px;border-radius:3px" title="evidence_quality: low — 尚未經過回測校準">待驗證</span>`;
+    html += `<td>${accuracy}% ${evidenceBadge}</td>`;
     html += `<td>${returnPct}%</td>`;
     html += `<td>${adjustment}x</td>`;
     html += `<td>${statusBadge}</td>`;
@@ -525,7 +540,11 @@ function renderSeasonalityTab(detail) {
     html += `<div class="pattern-name">${p.name}</div>`;
     html += `<div class="pattern-meta">${period}</div>`;
     html += '<div class="metric-row" style="margin-top:6px">';
-    html += `<span class="metric-label">歷史準確度</span><span class="metric-value">${accuracy}% <span style="font-size:10px;color:var(--warn);background:rgba(245,158,11,0.1);padding:1px 4px;border-radius:3px">待驗證</span></span></div>`;
+    const calEvidence = (window.seasonalityData && window.seasonalityData.calibration_evidence);
+    const accBadge = calEvidence && calEvidence.calibrated
+      ? `<span style="font-size:10px;color:var(--ok);background:rgba(79,193,255,0.1);padding:1px 4px;border-radius:3px">已校準</span>`
+      : `<span style="font-size:10px;color:var(--warn);background:rgba(245,158,11,0.1);padding:1px 4px;border-radius:3px">待驗證</span>`;
+    html += `<span class="metric-label">歷史準確度</span><span class="metric-value">${accuracy}% ${accBadge}</span></div>`;
     html += '<div class="metric-row">';
     html += `<span class="metric-label">典型報酬</span><span class="metric-value" style="color:${returnPct >= 0 ? "var(--up)" : "var(--down)"}">${returnPct}%</span></div>`;
     html += '<div class="metric-row">';
