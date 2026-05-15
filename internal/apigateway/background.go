@@ -126,6 +126,11 @@ func isMarketOpen(task *ScheduledTask) bool {
 		now = now.In(loc)
 	}
 
+	// TWSE is closed on weekends.
+	if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+		return false
+	}
+
 	openStr := task.MarketOpenTime
 	closeStr := task.MarketCloseTime
 	if openStr == "" {
@@ -346,7 +351,7 @@ func (m *BackgroundTaskManager) executeWithRetry(ctx context.Context, task *Sche
 		case <-time.After(delay):
 		}
 	}
-	return lastErr
+	return fmt.Errorf("after %d attempts: %w", maxAttempts, lastErr)
 }
 
 // TaskStatus represents the runtime status of a task.

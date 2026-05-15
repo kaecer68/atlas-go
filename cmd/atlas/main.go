@@ -639,7 +639,7 @@ func run(args []string, deps appDeps) error {
 			taskMgr.Register(&apigateway.ScheduledTask{
 				Name:            "autobacktest_daily",
 				Interval:        24 * time.Hour,
-				Enabled:         true,
+				Enabled:         false, // StartDailyLoop handles daily scheduling; BTM is for monitoring/on-demand
 				MarketHoursOnly: true,
 				RetryPolicy: &apigateway.RetryPolicy{
 					MaxAttempts:  2,
