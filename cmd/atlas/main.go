@@ -570,8 +570,6 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered metrics_snapshot background task (60s interval)")
 			}
 
-			taskMgr.Start(sysCtx)
-			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
 		}
 
 		if taskMgr != nil {
@@ -654,6 +652,11 @@ func run(args []string, deps appDeps) error {
 				},
 			})
 			log.Printf("[Gateway] registered autobacktest_daily background task (24h interval, market-hours guard)")
+		}
+
+		if taskMgr != nil {
+			taskMgr.Start(sysCtx)
+			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
 		}
 
 		authWrappedMux := apishared.AuthMiddleware(mux)
