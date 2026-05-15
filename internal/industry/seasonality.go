@@ -48,6 +48,7 @@ type SeasonalEngine struct {
 	patterns          []SeasonalPattern
 	linkageGraph      *SupplyChainGraph
 	narrativeProvider NarrativeSeasonalProvider
+	dynamicEnv        *DynamicEnvModulator
 }
 
 // NarrativeSeasonalProvider supplies active macro-narrative themes that
@@ -258,6 +259,10 @@ func (se *SeasonalEngine) GetPatternAdjustment(industryID string, t time.Time) f
 		}
 	}
 
+	if se.dynamicEnv != nil {
+		adjustment *= se.dynamicEnv.SeasonalModulation(industryID)
+	}
+
 	if adjustment <= 0 {
 		adjustment = 0.01
 	}
@@ -434,4 +439,12 @@ func (se *SeasonalEngine) SetLinkageGraph(graph *SupplyChainGraph) {
 // Passing nil disables narrative overlay (safe default).
 func (se *SeasonalEngine) SetNarrativeProvider(provider NarrativeSeasonalProvider) {
 	se.narrativeProvider = provider
+}
+
+// SetDynamicEnv enables real-world macro-aware seasonal adjustment.
+// When set, GetPatternAdjustment modulates adjustment factors based on
+// current oil prices, USD strength, and other macro indicators.
+// Passing nil disables dynamic environment overlay (safe default).
+func (se *SeasonalEngine) SetDynamicEnv(modulator *DynamicEnvModulator) {
+	se.dynamicEnv = modulator
 }
