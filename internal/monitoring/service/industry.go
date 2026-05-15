@@ -111,6 +111,12 @@ func (s *IndustryService) UpdateDynamicEnv(snap marketdata.MacroDataSnapshot) {
 	}
 }
 
+// GetCalibrationEvidence returns calibration metadata if seasonal patterns
+// have been calibrated against real market data.
+func (s *IndustryService) GetCalibrationEvidence() map[string]any {
+	return industry.LoadCalibrationEvidence("configs/parameters.json")
+}
+
 // RebuildCorrelations recomputes all pairwise industry correlations from return data.
 func (s *IndustryService) RebuildCorrelations(industryReturns map[string][]float64) {
 	if s.LinkageAnalyzer != nil {

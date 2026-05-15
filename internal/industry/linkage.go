@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 // SupplyChainNode represents a node in the supply chain graph.
@@ -295,6 +297,8 @@ type ShockPropagation struct {
 	graph             *SupplyChainGraph
 	correlation       *CorrelationMatrix
 	narrativeProvider NarrativeLinkageProvider
+	downstreamDecay   float64
+	upstreamDecay     float64
 }
 
 // NewShockPropagation creates a new shock propagation model.
@@ -309,6 +313,14 @@ func NewShockPropagation(graph *SupplyChainGraph, correlation *CorrelationMatrix
 // Passing nil disables narrative overlay (safe default).
 func (sp *ShockPropagation) SetNarrativeProvider(provider NarrativeLinkageProvider) {
 	sp.narrativeProvider = provider
+}
+
+// SetDecayFactors configures the shock decay multipliers for downstream
+// and upstream propagation. If zero is passed, PropagateShock falls back
+// to built-in defaults (0.80 downstream, 0.60 upstream).
+func (sp *ShockPropagation) SetDecayFactors(downstream, upstream float64) {
+	sp.downstreamDecay = downstream
+	sp.upstreamDecay = upstream
 }
 
 // getNarrativeAdjustedCorrelation returns the correlation between two industries,
@@ -339,15 +351,22 @@ func (sp *ShockPropagation) PropagateShock(sourceIndustry string, shockMagnitude
 	downstream := sp.graph.GetDownstreamChain(sourceIndustry, maxDepth)
 	for _, industry := range downstream {
 		correlation := sp.getNarrativeAdjustedCorrelation(sourceIndustry, industry)
-		// Impact decays with distance and correlation
-		impacts[industry] = shockMagnitude * correlation * 0.8
+		decay := sp.downstreamDecay
+		if decay == 0 {
+			decay = 0.8
+		}
+		impacts[industry] = shockMagnitude * correlation * decay
 	}
 
 	// Propagate upstream (suppliers affected)
 	upstream := sp.graph.GetUpstreamChain(sourceIndustry, maxDepth)
 	for _, industry := range upstream {
 		correlation := sp.getNarrativeAdjustedCorrelation(sourceIndustry, industry)
-		impacts[industry] = shockMagnitude * correlation * 0.6 // Upstream impact is typically smaller
+		decay := sp.upstreamDecay
+		if decay == 0 {
+			decay = 0.6
+		}
+		impacts[industry] = shockMagnitude * correlation * decay
 	}
 
 	return impacts
@@ -533,6 +552,27 @@ func DefaultCorrelationMatrix() *CorrelationMatrix {
 	return cm
 }
 
+// LoadCorrelationMatrixFromConfig parses the config's CorrelationMatrix map
+// and populates a CorrelationMatrix. Falls back to DefaultCorrelationMatrix()
+// if cfg is nil or the map is empty.
+func LoadCorrelationMatrixFromConfig(cfg *config.LinkageConfig) *CorrelationMatrix {
+	if cfg == nil || len(cfg.CorrelationMatrix) == 0 {
+		return DefaultCorrelationMatrix()
+	}
+
+	cm := NewCorrelationMatrix(30)
+	for key, value := range cfg.CorrelationMatrix {
+		parts := strings.Split(key, "↔")
+		if len(parts) != 2 {
+			continue
+		}
+		industry1 := strings.TrimSpace(parts[0])
+		industry2 := strings.TrimSpace(parts[1])
+		cm.UpdateCorrelation(industry1, industry2, value)
+	}
+	return cm
+}
+
 func (ls *IndustryLinkageScore) String() string {
 	return fmt.Sprintf("%s: Upstream=%d, Downstream=%d, AvgCorr=%.2f, Systemic=%.0f%%",
 		ls.IndustryID,
@@ -551,12 +591,30 @@ type LinkageAnalyzer struct {
 
 func NewLinkageAnalyzer() *LinkageAnalyzer {
 	graph := DefaultSupplyChainGraph()
-	cm := DefaultCorrelationMatrix()
+	cm := loadCorrelationMatrixWithFallback()
+	propagation := NewShockPropagation(graph, cm)
+
+	cfg := config.GetParametersConfig()
+	if cfg != nil {
+		lp := cfg.Industry.LinkageParams.Value
+		if lp.DownstreamDecayFactor > 0 {
+			propagation.SetDecayFactors(lp.DownstreamDecayFactor, lp.UpstreamDecayFactor)
+		}
+	}
+
 	return &LinkageAnalyzer{
 		graph:       graph,
 		correlation: cm,
-		propagation: NewShockPropagation(graph, cm),
+		propagation: propagation,
 	}
+}
+
+func loadCorrelationMatrixWithFallback() *CorrelationMatrix {
+	cfg := config.GetParametersConfig()
+	if cfg == nil {
+		return DefaultCorrelationMatrix()
+	}
+	return LoadCorrelationMatrixFromConfig(&cfg.Industry.LinkageParams.Value)
 }
 
 func (la *LinkageAnalyzer) SetNarrativeProvider(provider NarrativeLinkageProvider) {
