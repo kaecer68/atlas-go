@@ -344,17 +344,20 @@ type IndustryLinkageScore struct {
 	Timestamp             time.Time `json:"timestamp"`
 }
 
-// CalculateLinkageScore calculates the linkage score for an industry.
+// CalculateLinkageScore calculates the linkage score for an industry with
+// narrative-aware correlation when a narrative provider is active.
 func (sp *ShockPropagation) CalculateLinkageScore(industryID string) *IndustryLinkageScore {
 	upstream := sp.graph.GetUpstream(industryID)
 	downstream := sp.graph.GetDownstream(industryID)
 
-	// Calculate average correlation
 	var totalCorrelation float64
 	var correlationCount int
 
 	allRelated := append(upstream, downstream...)
 	for _, related := range allRelated {
+		if _, ok := sp.correlation.GetCorrelation(industryID, related); !ok {
+			continue
+		}
 		corr := sp.getNarrativeAdjustedCorrelation(industryID, related)
 		totalCorrelation += math.Abs(corr)
 		correlationCount++
@@ -365,7 +368,6 @@ func (sp *ShockPropagation) CalculateLinkageScore(industryID string) *IndustryLi
 		avgCorrelation = totalCorrelation / float64(correlationCount)
 	}
 
-	// Systemic importance based on network position
 	systemicImportance := 0.0
 	if len(upstream)+len(downstream) > 0 {
 		systemicImportance = math.Min(1.0, float64(len(upstream)+len(downstream))/10.0)
@@ -532,6 +534,10 @@ func NewLinkageAnalyzer() *LinkageAnalyzer {
 		correlation: cm,
 		propagation: NewShockPropagation(graph, cm),
 	}
+}
+
+func (la *LinkageAnalyzer) SetNarrativeProvider(provider NarrativeLinkageProvider) {
+	la.propagation.SetNarrativeProvider(provider)
 }
 
 func (la *LinkageAnalyzer) GetSupplyChainGraph() *SupplyChainGraph {

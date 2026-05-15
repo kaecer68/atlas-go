@@ -77,13 +77,36 @@ func (h *Handlers) HandleIndustrySeasonality(r *http.Request) (int, any) {
 		})
 	}
 
+	// Build adjustment breakdown
+	var breakdown map[string]any
+	if industryID != "" {
+		bd := h.Svc.GetAdjustmentBreakdown(industryID, now)
+		if bd != nil {
+			breakdown = map[string]any{
+				"direct_match": bd.DirectMatch,
+				"supply_chain": bd.SupplyChain,
+				"narrative":    bd.Narrative,
+				"dynamic_env":  bd.DynamicEnv,
+				"composite":    bd.Composite,
+			}
+		}
+	}
+
+	// Get active narrative themes for seasonality context
+	var narrativeThemes []string
+	if industryID != "" {
+		narrativeThemes = h.Svc.GetActiveNarrativeThemes(industryID)
+	}
+
 	return http.StatusOK, map[string]any{
-		"current_date":        now.Format("2006-01-02"),
-		"active_patterns":     activePatterns,
-		"pattern_count":       len(activePatterns),
-		"adjustment":          adjustment,
-		"all_patterns":        historicalPatterns,
-		"total_pattern_count": len(historicalPatterns),
+		"current_date":         now.Format("2006-01-02"),
+		"active_patterns":      activePatterns,
+		"pattern_count":        len(activePatterns),
+		"adjustment":           adjustment,
+		"adjustment_breakdown": breakdown,
+		"narrative_themes":     narrativeThemes,
+		"all_patterns":         historicalPatterns,
+		"total_pattern_count":  len(historicalPatterns),
 	}
 }
 

@@ -90,6 +90,23 @@ type SeasonalPattern struct {
 	Impact             string   `json:"impact,omitempty"`
 }
 
+// GetAdjustmentBreakdown returns the per-layer decomposition of the seasonal adjustment.
+func (s *IndustryService) GetAdjustmentBreakdown(industryID string, now time.Time) *industry.AdjustmentBreakdown {
+	if s.SeasonalEngine == nil {
+		return nil
+	}
+	return s.SeasonalEngine.GetAdjustmentBreakdown(industryID, now)
+}
+
+// GetActiveNarrativeThemes returns the narrative themes currently active for an industry.
+func (s *IndustryService) GetActiveNarrativeThemes(industryID string) []string {
+	// Return empty list for now — the SeasonalEngine's narrativeProvider
+	// is wired via the bridge. This method can be extended when the bridge
+	// is connected to a live event source.
+	return nil
+}
+
+// GetSeasonalPatterns returns active and historical seasonal patterns for an industry.
 func (s *IndustryService) GetSeasonalPatterns(industryID string, now time.Time) (active []SeasonalPattern, historical []SeasonalPattern, adjustment float64) {
 	patterns := s.SeasonalEngine.DetectCurrentPatterns(now)
 	for _, p := range patterns {

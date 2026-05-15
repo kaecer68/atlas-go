@@ -2,6 +2,7 @@ package industry
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"time"
 
@@ -396,6 +397,97 @@ func (p SeasonalPattern) String() string {
 		p.HistoricalAccuracy*100,
 		p.AvgMarketReturn*100,
 	)
+}
+
+// AdjustmentBreakdown decomposes the composite seasonal adjustment into
+// per-layer contributions for visualization in the seasonal patterns UI.
+type AdjustmentBreakdown struct {
+	DirectMatch float64 `json:"direct_match"` // contribution from favored/avoided lists
+	SupplyChain float64 `json:"supply_chain"` // extra from supply chain propagation
+	Narrative   float64 `json:"narrative"`    // extra from narrative event overlay
+	DynamicEnv  float64 `json:"dynamic_env"`  // extra from oil/DXY/BDI modulation
+	Composite   float64 `json:"composite"`    // final adjustment (product of all)
+}
+
+// GetAdjustmentBreakdown returns the per-layer contribution breakdown.
+func (se *SeasonalEngine) GetAdjustmentBreakdown(industryID string, t time.Time) *AdjustmentBreakdown {
+	ab := &AdjustmentBreakdown{
+		DirectMatch: 1.0,
+		SupplyChain: 1.0,
+		Narrative:   1.0,
+		DynamicEnv:  1.0,
+		Composite:   1.0,
+	}
+
+	patterns := se.DetectCurrentPatterns(t)
+	if len(patterns) == 0 {
+		return ab
+	}
+
+	// Layer 1: Direct match
+	direct := 1.0
+	for _, p := range patterns {
+		if slices.Contains(p.FavoredIndustries, industryID) {
+			direct *= p.AdjustmentFactor
+		}
+		if slices.Contains(p.AvoidedIndustries, industryID) {
+			direct *= (1.0 / p.AdjustmentFactor)
+		}
+	}
+	ab.DirectMatch = direct
+
+	// Layer 2: Supply chain
+	sc := 1.0
+	if se.linkageGraph != nil {
+		decay := config.GetParametersConfig().Industry.LinkageParams.Value.SeasonalDecayFactor
+		for _, p := range patterns {
+			for _, favoredID := range p.FavoredIndustries {
+				if industryID == favoredID {
+					continue
+				}
+				for _, id := range se.linkageGraph.GetUpstreamChain(favoredID, 3) {
+					if id == industryID {
+						sc *= 1.0 + (p.AdjustmentFactor-1.0)*decay
+					}
+				}
+				for _, id := range se.linkageGraph.GetDownstreamChain(favoredID, 3) {
+					if id == industryID {
+						sc *= 1.0 + (p.AdjustmentFactor-1.0)*decay
+					}
+				}
+			}
+			for _, avoidedID := range p.AvoidedIndustries {
+				if industryID == avoidedID {
+					continue
+				}
+				for _, id := range se.linkageGraph.GetUpstreamChain(avoidedID, 3) {
+					if id == industryID {
+						sc *= 1.0 - (1.0-1.0/p.AdjustmentFactor)*decay
+					}
+				}
+			}
+		}
+	}
+	ab.SupplyChain = sc
+
+	// Layer 3: Narrative overlay
+	narr := 1.0
+	if se.narrativeProvider != nil {
+		for _, theme := range se.narrativeProvider.ActiveThemes() {
+			narr *= se.narrativeProvider.SeasonalMultiplier(theme, industryID)
+		}
+	}
+	ab.Narrative = narr
+
+	// Layer 4: Dynamic environment
+	env := 1.0
+	if se.dynamicEnv != nil {
+		env = se.dynamicEnv.SeasonalModulation(industryID)
+	}
+	ab.DynamicEnv = env
+
+	ab.Composite = math.Max(direct*sc*narr*env, 0.01)
+	return ab
 }
 
 func seasonalPatternsFromConfig(cfgs []config.SeasonalPatternConfig) []SeasonalPattern {
