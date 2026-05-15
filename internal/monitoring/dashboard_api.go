@@ -159,7 +159,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	}
 	// Sector data from local cache (graceful degradation if file missing).
 	// TODO: Migrate to Gateway for direct sector data provider instantiation.
-	providers = append(providers, marketdata.NewSectorDataProvider(filepath.Join(workDir, "data/sector_data")))
+	providers = append(providers, marketdata.NewSectorDataProvider(filepath.Join(workDir, "data/state/sector_data")))
 	// TSMC Revenue from FinMind (overwrites cached sector data when available).
 	cfg := config.Load()
 	if cfg.FinMindAPIKey != "" {
