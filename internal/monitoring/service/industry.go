@@ -22,6 +22,9 @@ func NewIndustryService(
 	linkageAnalyzer *industry.LinkageAnalyzer,
 	riskMonitor *industry.RiskMonitor,
 ) *IndustryService {
+	if seasonalEngine != nil && linkageAnalyzer != nil {
+		seasonalEngine.SetLinkageGraph(linkageAnalyzer.GetSupplyChainGraph())
+	}
 	return &IndustryService{
 		Classifier:      classifier,
 		SeasonalEngine:  seasonalEngine,

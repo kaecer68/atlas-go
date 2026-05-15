@@ -189,6 +189,10 @@ export function renderIndustrySeasonality(data) {
     data && data.active_patterns ? data.active_patterns : [];
 
   let html =
+    '<div style="font-size:11px;color:var(--warn);margin-bottom:8px;padding:6px 10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:6px">' +
+    '⚠️ <strong>證據品質提示：</strong>以下季節性模式數值基於經驗法則（heuristic），尚未經過回測校準（evidence_quality: low）。請勿將 HistoricalAccuracy 與 AdjustmentFactor 視為實證數據。' +
+    '</div>';
+  html +=
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
   html +=
     '<div style="font-size:11px;color:var(--muted)">顯示所有歷史季節性模式與統計數據</div>';
@@ -230,7 +234,7 @@ export function renderSeasonalityList(allPatterns, activePatterns, data) {
     html += `<tr style="${isActive ? "background:rgba(79,193,255,0.05)" : ""}">`;
     html += `<td><strong>${p.name}</strong><br><span style="font-size:11px;color:var(--muted)">${p.description || ""}</span></td>`;
     html += `<td>${period}</td>`;
-    html += `<td>${accuracy}%</td>`;
+    html += `<td>${accuracy}% <span style="font-size:10px;color:var(--warn);background:rgba(245,158,11,0.1);padding:1px 4px;border-radius:3px" title="evidence_quality: low — 尚未經過回測校準">待驗證</span></td>`;
     html += `<td>${returnPct}%</td>`;
     html += `<td>${adjustment}x</td>`;
     html += `<td>${statusBadge}</td>`;
@@ -243,6 +247,54 @@ export function renderSeasonalityList(allPatterns, activePatterns, data) {
       今天是 ${today}，目前無活躍模式。上表列出所有追蹤中的季節性模式供參考。
     </div>`;
   }
+
+  return html;
+}
+
+export function renderSeasonalityCalendar(data) {
+  const calendar = data && data.calendar ? data.calendar : null;
+  if (!calendar || !calendar.months || calendar.months.length === 0) {
+    return renderEmptyState("無日曆視圖資料", "");
+  }
+
+  const monthNames = [
+    "一月", "二月", "三月", "四月", "五月", "六月",
+    "七月", "八月", "九月", "十月", "十一月", "十二月",
+  ];
+
+  let html =
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:12px">';
+  calendar.months.forEach((m) => {
+    const monthIdx = (m.month || 1) - 1;
+    const name = monthNames[monthIdx] || `M${m.month}`;
+    const hasPatterns = m.patterns && m.patterns.length > 0;
+    const bgColor = hasPatterns
+      ? "rgba(79,193,255,0.06)"
+      : "var(--bg)";
+
+    html +=
+      `<div style="background:${bgColor};border:1px solid var(--border);border-radius:8px;padding:8px">`;
+    html +=
+      `<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:${hasPatterns ? "var(--accent)" : "var(--muted)"}">${name}</div>`;
+
+    if (hasPatterns) {
+      m.patterns.forEach((p) => {
+        const accuracy = Math.round((p.historical_accuracy || 0) * 100);
+        const returnPct = ((p.typical_return || 0) * 100).toFixed(1);
+        html += `<div style="font-size:11px;padding:3px 0;border-bottom:1px solid var(--border)">`;
+        html +=
+          `<div style="font-weight:600">${p.name}</div>`;
+        html +=
+          `<div style="color:var(--muted)">準確度 ${accuracy}% · 報酬 ${returnPct}% · 因子 ${(p.adjustment_factor || 1).toFixed(2)}x</div>`;
+        html += `</div>`;
+      });
+    } else {
+      html +=
+        '<div style="font-size:11px;color:var(--muted);padding:4px 0">無活躍模式</div>';
+    }
+    html += "</div>";
+  });
+  html += "</div>";
 
   return html;
 }
@@ -390,6 +442,9 @@ function renderSeasonalityTab(detail) {
     return renderEmptyState("尚無季節性模式資料", "");
 
   let html = '<div class="industry-section"><h4>📅 季節性模式</h4>';
+  html += '<div style="font-size:11px;color:var(--warn);margin-bottom:8px;padding:6px 10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:6px">' +
+    '⚠️ 以下數值基於經驗法則，尚未經過回測校準。' +
+    '</div>';
   patterns.forEach((p) => {
     const accuracy = Math.round((p.historical_accuracy || 0) * 100);
     const returnPct = ((p.typical_return || 0) * 100).toFixed(1);
@@ -405,7 +460,7 @@ function renderSeasonalityTab(detail) {
     html += `<div class="pattern-name">${p.name}</div>`;
     html += `<div class="pattern-meta">${period}</div>`;
     html += '<div class="metric-row" style="margin-top:6px">';
-    html += `<span class="metric-label">歷史準確度</span><span class="metric-value">${accuracy}%</span></div>`;
+    html += `<span class="metric-label">歷史準確度</span><span class="metric-value">${accuracy}% <span style="font-size:10px;color:var(--warn);background:rgba(245,158,11,0.1);padding:1px 4px;border-radius:3px">待驗證</span></span></div>`;
     html += '<div class="metric-row">';
     html += `<span class="metric-label">典型報酬</span><span class="metric-value" style="color:${returnPct >= 0 ? "var(--up)" : "var(--down)"}">${returnPct}%</span></div>`;
     html += '<div class="metric-row">';

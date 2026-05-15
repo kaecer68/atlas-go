@@ -186,24 +186,53 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	lifecycle := narrative.NewEventLifecycleManager()
 	ingestor := narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro"))
 	ingestor.SetLifecycleManager(lifecycle)
+
+	narrativeEng := narrative.NewNarrativeEngine()
 	return &DashboardAPI{
 		workDir:            workDir,
 		ledgerDir:          ledgerDir,
 		storeBackend:       os.Getenv("ATLAS_STORE_BACKEND"),
 		sqlitePath:         os.Getenv("ATLAS_SQLITE_PATH"),
 		baselinePath:       filepath.Join(workDir, "data/state/baseline_policy.json"),
-		narrativeEngine:    narrative.NewNarrativeEngine(),
+		narrativeEngine:    narrativeEng,
 		macroIngestor:      ingestor,
 		geoProvider:        geoProvider,
 		taiwanGeoProvider:  taiwanGeoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider, workDir),
 		reportGenerator:    narrative.NewReportGenerator(),
-		industryService:    service.NewIndustryService(industry.DefaultClassification(), industry.NewSeasonalEngine(), industry.NewCycleTracker(), industry.NewLinkageAnalyzer(), industry.NewRiskMonitor()),
+		industryService:    newWiredIndustryService(narrativeEng),
 		metricsCollector:   metricsCollector,
 		metricsHistory:     NewMetricsHistory(1000),
 		healthManager:      portfolio.NewAgentHealthManager(),
 		dataQualityChecker: NewDataQualityChecker(workDir, ledgerDir),
 	}
+}
+
+func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine) *service.IndustryService {
+	seasonalEngine := industry.NewSeasonalEngine()
+	cycleTracker := industry.NewCycleTracker()
+	linkageAnalyzer := industry.NewLinkageAnalyzer()
+
+	bridge := narrative.NewSeasonalBridge(narrativeEngine)
+	seasonalEngine.SetNarrativeProvider(bridge)
+	cycleTracker.SetNarrativeProvider(func(industryID string) float64 {
+		events := narrativeEngine.DetectEvents(narrative.MarketNarrativeData{})
+		hitRate := 0.0
+		for _, e := range events {
+			if e.HitRate > hitRate {
+				hitRate = e.HitRate
+			}
+		}
+		return hitRate
+	})
+
+	return service.NewIndustryService(
+		industry.DefaultClassification(),
+		seasonalEngine,
+		cycleTracker,
+		linkageAnalyzer,
+		industry.NewRiskMonitor(),
+	)
 }
 
 func (a *DashboardAPI) SetEventBus(eventBus *eventbus.ChannelEventBus) {

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"slices"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 // SeasonalPattern represents a recurring seasonal pattern in Taiwan stock market.
@@ -43,17 +45,24 @@ func (p SeasonalPattern) AffectedIndustries() []string {
 
 // SeasonalEngine detects and evaluates seasonal patterns.
 type SeasonalEngine struct {
-	patterns []SeasonalPattern
+	patterns          []SeasonalPattern
+	linkageGraph      *SupplyChainGraph
+	narrativeProvider NarrativeSeasonalProvider
 }
 
-// NewSeasonalEngine creates a seasonal engine with default Taiwan patterns.
+// NarrativeSeasonalProvider supplies active macro-narrative themes that
+// modulate seasonal adjustment factors based on real-world events.
+type NarrativeSeasonalProvider interface {
+	ActiveThemes() []string
+	SeasonalMultiplier(theme string, industryID string) float64
+}
+
+// NewSeasonalEngine creates a seasonal engine using the parameter-managed seasonal patterns.
 func NewSeasonalEngine() *SeasonalEngine {
-	return &SeasonalEngine{
-		patterns: DefaultSeasonalPatterns(),
-	}
+	return NewSeasonalEngineFromConfig(config.GetParametersConfig())
 }
 
-// DefaultSeasonalPatterns returns the built-in seasonal patterns for Taiwan.
+// Deprecated: use cfg.Industry.SeasonalPatterns from parameters.json instead.
 func DefaultSeasonalPatterns() []SeasonalPattern {
 	return []SeasonalPattern{
 		{
@@ -179,24 +188,79 @@ func (se *SeasonalEngine) DetectCurrentPatterns(t time.Time) []SeasonalPattern {
 }
 
 // GetPatternAdjustment returns the combined adjustment factor for an industry.
+// When a SupplyChainGraph is set via SetLinkageGraph, upstream/downstream
+// industries of favored/avoided sectors receive partial adjustments with decay.
 func (se *SeasonalEngine) GetPatternAdjustment(industryID string, t time.Time) float64 {
 	patterns := se.DetectCurrentPatterns(t)
 	if len(patterns) == 0 {
-		return 1.0 // No adjustment
+		return 1.0
 	}
 
 	adjustment := 1.0
 	for _, p := range patterns {
-		// Check if industry is favored
+		// Direct match: industry is explicitly favored or avoided
 		if slices.Contains(p.FavoredIndustries, industryID) {
 			adjustment *= p.AdjustmentFactor
 		}
-		// Check if industry is avoided
 		if slices.Contains(p.AvoidedIndustries, industryID) {
 			adjustment *= (1.0 / p.AdjustmentFactor)
 		}
+
+		// Supply chain propagation: if our industry is upstream/downstream
+		// of a favored or avoided sector, apply a partial adjustment with decay.
+		if se.linkageGraph != nil {
+			decay := config.GetParametersConfig().Industry.LinkageParams.Value.SeasonalDecayFactor
+			// Check if our industry is upstream of a favored industry
+			for _, favoredID := range p.FavoredIndustries {
+				if industryID == favoredID {
+					continue // already handled above
+				}
+				upstream := se.linkageGraph.GetUpstreamChain(favoredID, 3)
+				for _, id := range upstream {
+					if id == industryID {
+						boost := 1.0 + (p.AdjustmentFactor-1.0)*decay
+						adjustment *= boost
+						break
+					}
+				}
+				downstream := se.linkageGraph.GetDownstreamChain(favoredID, 3)
+				for _, id := range downstream {
+					if id == industryID {
+						boost := 1.0 + (p.AdjustmentFactor-1.0)*decay
+						adjustment *= boost
+						break
+					}
+				}
+			}
+			// Check if our industry is upstream of an avoided industry
+			// (supplying to a struggling industry = negative spillover)
+			for _, avoidedID := range p.AvoidedIndustries {
+				if industryID == avoidedID {
+					continue // already handled above
+				}
+				upstream := se.linkageGraph.GetUpstreamChain(avoidedID, 3)
+				for _, id := range upstream {
+					if id == industryID {
+						dampen := 1.0 - (1.0-1.0/p.AdjustmentFactor)*decay
+						adjustment *= dampen
+						break
+					}
+				}
+			}
+		}
 	}
 
+	// Narrative event overlay: active macro themes modulate seasonal adjustment.
+	if se.narrativeProvider != nil {
+		for _, theme := range se.narrativeProvider.ActiveThemes() {
+			multiplier := se.narrativeProvider.SeasonalMultiplier(theme, industryID)
+			adjustment *= multiplier
+		}
+	}
+
+	if adjustment <= 0 {
+		adjustment = 0.01
+	}
 	return adjustment
 }
 
@@ -327,4 +391,47 @@ func (p SeasonalPattern) String() string {
 		p.HistoricalAccuracy*100,
 		p.AvgMarketReturn*100,
 	)
+}
+
+func seasonalPatternsFromConfig(cfgs []config.SeasonalPatternConfig) []SeasonalPattern {
+	patterns := make([]SeasonalPattern, 0, len(cfgs))
+	for _, c := range cfgs {
+		patterns = append(patterns, SeasonalPattern{
+			ID:                 c.ID,
+			Name:               c.Name,
+			NameEN:             c.NameEN,
+			StartMonth:         c.StartMonth,
+			StartDay:           c.StartDay,
+			EndMonth:           c.EndMonth,
+			EndDay:             c.EndDay,
+			FavoredIndustries:  c.FavoredIndustries,
+			AvoidedIndustries:  c.AvoidedIndustries,
+			AdjustmentFactor:   c.AdjustmentFactor,
+			HistoricalAccuracy: c.HistoricalAccuracy,
+			AvgMarketReturn:    c.AvgMarketReturn,
+			Description:        c.Description,
+		})
+	}
+	return patterns
+}
+
+func NewSeasonalEngineFromConfig(cfg *config.ParametersConfig) *SeasonalEngine {
+	patterns := seasonalPatternsFromConfig(cfg.Industry.SeasonalPatterns.Value)
+	return &SeasonalEngine{patterns: patterns}
+}
+
+// SetLinkageGraph enables supply-chain-aware seasonal adjustment.
+// When set, GetPatternAdjustment propagates partial adjustments to
+// upstream/downstream industries of favored/avoided sectors with decay.
+// Passing nil disables supply-chain propagation (safe default).
+func (se *SeasonalEngine) SetLinkageGraph(graph *SupplyChainGraph) {
+	se.linkageGraph = graph
+}
+
+// SetNarrativeProvider enables narrative-event-aware seasonal adjustment.
+// When set, GetPatternAdjustment applies additional multipliers based on
+// active macro-narrative themes (e.g., oil_price_shock amplifies energy sector).
+// Passing nil disables narrative overlay (safe default).
+func (se *SeasonalEngine) SetNarrativeProvider(provider NarrativeSeasonalProvider) {
+	se.narrativeProvider = provider
 }

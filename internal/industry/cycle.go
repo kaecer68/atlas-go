@@ -66,8 +66,11 @@ type Indicator struct {
 
 // CycleTracker monitors and tracks cycle positions for industries.
 type CycleTracker struct {
-	positions map[string]*CyclePosition
-	history   map[string][]CyclePosition
+	positions        map[string]*CyclePosition
+	history          map[string][]CyclePosition
+	seasonalEngine   *SeasonalEngine
+	linkageAnalyzer  *LinkageAnalyzer
+	narrativeHitRate func(industryID string) float64
 }
 
 // NewCycleTracker creates a new cycle tracker.
@@ -78,6 +81,19 @@ func NewCycleTracker() *CycleTracker {
 	}
 	ct.initializeDefaultPositions()
 	return ct
+}
+
+// SetExternalValidators wires optional external data sources for
+// multi-dimensional confidence. Nil args disable that dimension.
+func (ct *CycleTracker) SetExternalValidators(seasonal *SeasonalEngine, linkage *LinkageAnalyzer) {
+	ct.seasonalEngine = seasonal
+	ct.linkageAnalyzer = linkage
+}
+
+// SetNarrativeProvider sets a function that returns the narrative hit rate
+// for a given industry, used in multi-dimensional confidence scoring.
+func (ct *CycleTracker) SetNarrativeProvider(fn func(industryID string) float64) {
+	ct.narrativeHitRate = fn
 }
 
 // initializeDefaultPositions populates the tracker with default cycle positions
