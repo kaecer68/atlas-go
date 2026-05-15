@@ -186,9 +186,6 @@ func clampGrowth(v float64) float64 {
 	} else if v < minGrowth {
 		return minGrowth
 	}
-	if v < -1.0 {
-		return -1.0
-	}
 	return v
 }
 

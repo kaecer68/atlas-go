@@ -308,7 +308,7 @@ func (ct *CycleTracker) calculateConfidence(industryID string, metrics IndustryM
 	hasData := metrics.RevenueGrowthYoY != 0 || metrics.ProfitGrowthYoY != 0 ||
 		metrics.InventoryTurnover != 0 || metrics.CapacityUtilization > 0
 	if !hasData {
-		return s.ConfidenceFloor
+		return s.SignalBase
 	}
 
 	signal := s.SignalBase

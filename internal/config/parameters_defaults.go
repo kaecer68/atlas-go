@@ -1545,7 +1545,7 @@ func defaultIndustryParameters() IndustryParameters {
 				MinCorrelationThreshold:   0.30,
 				CorrelationWindowDays:     30,
 			},
-			Rationale: "Downstream decay (0.80) > upstream (0.60); default correlation (0.50); window 30 days",
+			Rationale: "Downstream decay (0.80) > upstream (0.60); default correlation (0.50); window 30 days; narrative-aware via SeasonalBridge.CorrelationMultiplier(); SystemicImportanceDivisor deprecated in favor of dynamic MaxDegree()",
 			Source:    SourceHeuristic,
 		},
 		HistoryRetentionDays: ParameterMetadata[int]{

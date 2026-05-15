@@ -163,12 +163,13 @@ func TestCalculateConfidence(t *testing.T) {
 		t.Errorf("expected moderate confidence (~0.55) with moderate metrics, got %f", confidence)
 	}
 
-	// Empty metrics — should return configured confidence floor
+	// Empty metrics — should return configured signal base (was ConfidenceFloor before fix)
 	emptyMetrics := IndustryMetrics{}
-	cfgFloor := config.GetParametersConfig().Industry.ConfidenceSignal.Value.ConfidenceFloor
+	sig := config.GetParametersConfig().Industry.ConfidenceSignal.Value
+	cfgBase := sig.SignalBase
 	confidence = ct.calculateConfidence("test", emptyMetrics)
-	if math.Abs(confidence-cfgFloor) > 0.001 {
-		t.Errorf("expected base confidence %f, got %f", cfgFloor, confidence)
+	if math.Abs(confidence-cfgBase) > 0.001 {
+		t.Errorf("expected base confidence %f (SignalBase), got %f", cfgBase, confidence)
 	}
 }
 

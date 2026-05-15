@@ -3621,8 +3621,8 @@
           "probability": 0.5,
           "typical_duration_days": 180,
           "triggers": [
-            "demand_destruction",
-            "overcapacity"
+            "inventory_buildup",
+            "demand_contraction"
           ]
         }
       ],
