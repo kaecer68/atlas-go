@@ -253,9 +253,10 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 	}
 	seasonalEngine.SetDynamicEnv(modulator)
 
-	// TODO: wire CorrelationMatrix.RecalculateFromReturns() when replay data
-	// is available. This would replace the hardcoded DefaultCorrelationMatrix
-	// with empirically computed pairwise industry correlations from return data.
+	// TODO: wire RebuildCorrelations() when replay data is available, e.g.:
+	//   industryService.RebuildCorrelations(loadIndustryReturnsFromReplay())
+	// This replaces the hardcoded DefaultCorrelationMatrix with empirically
+	// computed pairwise industry correlations from return data.
 
 	// Wire narrative provider into linkage analyzer for dynamic supply chain correlations
 	linkageAnalyzer.SetNarrativeProvider(bridge)

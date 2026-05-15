@@ -35,16 +35,24 @@ var yahooSharedLimiter = rate.NewLimiter(rate.Every(time.Second), 1)
 
 // YahooFinanceMacroProvider fetches macro indicators from Yahoo Finance.
 type YahooFinanceMacroProvider struct {
-	client  *http.Client
-	baseURL string
-	limiter *rate.Limiter
+	client    *http.Client
+	baseURL   string
+	limiter   *rate.Limiter
+	bdiSymbol string // Yahoo Finance symbol for BDI (default: ^BDI, alternative: BDI, BALTIC)
 }
 
 func NewYahooFinanceMacroProvider() *YahooFinanceMacroProvider {
 	return &YahooFinanceMacroProvider{
-		client:  httpclient.NewFactory().NewClient(15 * time.Second),
-		limiter: yahooSharedLimiter,
+		client:    httpclient.NewFactory().NewClient(15 * time.Second),
+		limiter:   yahooSharedLimiter,
+		bdiSymbol: "^BDI",
 	}
+}
+
+// SetBDISymbol overrides the default BDI symbol (^BDI). Use if Yahoo Finance
+// does not serve ^BDI; common alternatives include "BDI" or "BALTT".
+func (y *YahooFinanceMacroProvider) SetBDISymbol(ticker string) {
+	y.bdiSymbol = ticker
 }
 
 func (y *YahooFinanceMacroProvider) Name() string {
@@ -59,7 +67,7 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 		"GC=F":      "gold",
 		"JPY=X":     "jpy",
 		"USD/TWD=X": "usd_twd",
-		"^BDI":      "bdi",
+		y.bdiSymbol: "bdi",
 	}
 
 	snap := MacroDataSnapshot{RecordedAt: time.Now().Unix()}
