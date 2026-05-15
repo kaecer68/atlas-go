@@ -178,11 +178,22 @@ export function loadFetchLogs() {
   el.innerHTML = html;
 }
 
-export function renderDataChannels(data) {
+export function renderDataChannels(data, schedulerTasks) {
   const el = document.getElementById('dataChannels');
   if (!data || !data.channels) { el.innerHTML = renderEmptyState('尚無資料通道資料', ''); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
   const channels = data.channels || [];
+
+  // Build channel → task correlation map
+  var taskMap = {};
+  if (schedulerTasks && Array.isArray(schedulerTasks)) {
+    schedulerTasks.forEach(function(t) {
+      if (t.channel_id) {
+        if (!taskMap[t.channel_id]) taskMap[t.channel_id] = [];
+        taskMap[t.channel_id].push(t.name);
+      }
+    });
+  }
   const statusLight = s => {
     const color = s === 'ok' ? 'var(--status-ok)' : (s === 'warn' ? 'var(--status-warn)' : (s === 'error' ? 'var(--status-err)' : 'var(--status-unknown)'));
     return `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};box-shadow:0 0 6px ${color};margin-right:6px;vertical-align:middle"></span>`;
@@ -225,11 +236,16 @@ export function renderDataChannels(data) {
 
   Object.keys(byCountry).forEach(country => {
     html += `<div style="margin:12px 0"><div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:6px">${country}</div>`;
-    html += '<table class="text-sm"><thead><tr><th class="w-28">燈號</th><th>平台名稱</th><th>API 格式</th><th>資料路徑</th><th>本地儲存</th><th>狀態</th><th>操作</th><th>最後更新</th></tr></thead><tbody>';
+    html += '<table class="text-sm"><thead><tr><th class="w-28">燈號</th><th>平台名稱</th><th>API 格式</th><th>資料路徑</th><th>本地儲存</th><th>狀態</th><th>操作</th><th>最後更新</th><th>排程任務</th></tr></thead><tbody>';
     byCountry[country].forEach(c => {
       const errorHint = c.last_error ? `<div style="font-size:11px;color:var(--down);margin-top:2px">⚠ ${escapeHtml(c.last_error)}</div>` : '';
       const toggleBtn = `<button class="text-xs" onclick="toggleChannel('${c.channel_id}', this.dataset.enabled !== 'true')" data-enabled="${c.status !== 'inactive'}" style="padding:2px 8px;border-radius:4px;background:var(--border);border:1px solid var(--border);cursor:pointer">${c.status === 'inactive' ? '啟用' : '停用'}</button>`;
       const triggerBtn = `<button class="text-xs" onclick="triggerChannelFetch('${c.channel_id}')" style="padding:2px 8px;border-radius:4px;background:var(--primary);border:1px solid var(--primary);color:#fff;cursor:pointer;margin-left:4px">觸發</button>`;
+      // Show related scheduler tasks for this channel
+      var relatedTasks = taskMap[c.channel_id] || [];
+      var tasksHtml = relatedTasks.length > 0
+        ? relatedTasks.map(function(tn) { return '<span class="badge info" style="font-size:10px;cursor:pointer" onclick="switchPage(\'scheduler\')" title="前往排程管理">' + escapeHtml(tn) + '</span>'; }).join(' ')
+        : '<span class="text-muted text-xs">—</span>';
       html += `<tr>
         <td class="text-center">${statusLight(c.status)}</td>
         <td>${c.platform}</td>
@@ -239,6 +255,7 @@ export function renderDataChannels(data) {
         <td><span class="badge ${statusClass(c.status)}">${c.status_text}</span>${errorHint}</td>
         <td>${toggleBtn}${triggerBtn}</td>
         <td class="text-xs">${c.updated_at}</td>
+        <td class="text-xs" style="max-width:200px">${tasksHtml}</td>
       </tr>`;
     });
     html += '</tbody></table></div>';
