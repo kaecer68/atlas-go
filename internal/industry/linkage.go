@@ -386,7 +386,10 @@ func (sp *ShockPropagation) CalculateLinkageScore(industryID string) *IndustryLi
 
 	systemicImportance := 0.0
 	if len(upstream)+len(downstream) > 0 {
-		systemicImportance = math.Min(1.0, float64(len(upstream)+len(downstream))/10.0)
+		maxDeg := sp.graph.MaxDegree()
+		if maxDeg > 0 {
+			systemicImportance = math.Min(1.0, float64(len(upstream)+len(downstream))/float64(maxDeg))
+		}
 	}
 
 	return &IndustryLinkageScore{
