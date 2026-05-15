@@ -220,6 +220,10 @@ func DiffSnapshots(old, new *ParameterSnapshot) []ParameterChange {
 	compareMapCycleThreshold(&changes, "industry.cycle_thresholds", old.Params.Industry.CycleThresholds.Value, new.Params.Industry.CycleThresholds.Value, now)
 	compareInventoryCycleThreshold(&changes, "industry.inventory_cycle_thresholds", old.Params.Industry.InventoryCycleThresholds.Value, new.Params.Industry.InventoryCycleThresholds.Value, now)
 	compareCapexCycleThreshold(&changes, "industry.capex_cycle_thresholds", old.Params.Industry.CapexCycleThresholds.Value, new.Params.Industry.CapexCycleThresholds.Value, now)
+	compareConfidenceSignal(&changes, "industry.confidence_signal", old.Params.Industry.ConfidenceSignal.Value, new.Params.Industry.ConfidenceSignal.Value, now)
+	compareConfidenceMix(&changes, "industry.confidence_mix", old.Params.Industry.ConfidenceMix.Value, new.Params.Industry.ConfidenceMix.Value, now)
+	compareSeasonalPatterns(&changes, "industry.seasonal_patterns", old.Params.Industry.SeasonalPatterns.Value, new.Params.Industry.SeasonalPatterns.Value, now)
+	compareLinkageParams(&changes, "industry.linkage_params", old.Params.Industry.LinkageParams.Value, new.Params.Industry.LinkageParams.Value, now)
 
 	compareFloat(&changes, "strategy.min_switch_interval_days", float64(old.Params.Strategy.MinSwitchIntervalDays.Value), float64(new.Params.Strategy.MinSwitchIntervalDays.Value), now)
 	compareFloat(&changes, "strategy.switch_threshold", old.Params.Strategy.SwitchThreshold.Value, new.Params.Strategy.SwitchThreshold.Value, now)
@@ -248,6 +252,97 @@ func compareBool(changes *[]ParameterChange, param string, oldVal, newVal bool, 
 			Timestamp: t,
 		})
 	}
+}
+
+func compareConfidenceSignal(changes *[]ParameterChange, param string, oldVal, newVal ConfidenceSignalConfig, t time.Time) {
+	fields := []struct {
+		name string
+		o    float64
+		n    float64
+	}{
+		{"signal_base", oldVal.SignalBase, newVal.SignalBase},
+		{"revenue_norm_denom", oldVal.RevenueNormDenom, newVal.RevenueNormDenom},
+		{"revenue_weight", oldVal.RevenueWeight, newVal.RevenueWeight},
+		{"profit_norm_denom", oldVal.ProfitNormDenom, newVal.ProfitNormDenom},
+		{"profit_weight", oldVal.ProfitWeight, newVal.ProfitWeight},
+		{"inventory_norm_denom", oldVal.InventoryNormDenom, newVal.InventoryNormDenom},
+		{"inventory_weight", oldVal.InventoryWeight, newVal.InventoryWeight},
+		{"utilization_weight", oldVal.UtilizationWeight, newVal.UtilizationWeight},
+		{"signal_boundary_mix", oldVal.SignalBoundaryMix, newVal.SignalBoundaryMix},
+		{"boundary_denom_factor", oldVal.BoundaryDenomFactor, newVal.BoundaryDenomFactor},
+		{"confidence_floor", oldVal.ConfidenceFloor, newVal.ConfidenceFloor},
+		{"confidence_ceiling", oldVal.ConfidenceCeiling, newVal.ConfidenceCeiling},
+	}
+	for _, f := range fields {
+		if f.o != f.n {
+			*changes = append(*changes, ParameterChange{
+				Parameter: param + "." + f.name,
+				OldValue:  f.o,
+				NewValue:  f.n,
+				Timestamp: t,
+			})
+		}
+	}
+}
+
+func compareConfidenceMix(changes *[]ParameterChange, param string, oldVal, newVal ConfidenceMixConfig, t time.Time) {
+	fields := []struct {
+		name string
+		o    float64
+		n    float64
+	}{
+		{"weight_boundary", oldVal.WeightBoundary, newVal.WeightBoundary},
+		{"weight_freshness", oldVal.WeightFreshness, newVal.WeightFreshness},
+		{"weight_seasonal", oldVal.WeightSeasonal, newVal.WeightSeasonal},
+		{"weight_linkage", oldVal.WeightLinkage, newVal.WeightLinkage},
+		{"weight_narrative", oldVal.WeightNarrative, newVal.WeightNarrative},
+		{"favorable_confidence_min", oldVal.FavorableConfidenceMin, newVal.FavorableConfidenceMin},
+	}
+	for _, f := range fields {
+		if f.o != f.n {
+			*changes = append(*changes, ParameterChange{
+				Parameter: param + "." + f.name,
+				OldValue:  f.o,
+				NewValue:  f.n,
+				Timestamp: t,
+			})
+		}
+	}
+}
+
+func compareSeasonalPatterns(changes *[]ParameterChange, param string, oldVal, newVal []SeasonalPatternConfig, t time.Time) {
+	if len(oldVal) != len(newVal) {
+		*changes = append(*changes, ParameterChange{
+			Parameter: param + " (count)",
+			OldValue:  len(oldVal),
+			NewValue:  len(newVal),
+			Timestamp: t,
+		})
+		return
+	}
+	for i := range oldVal {
+		o, n := oldVal[i], newVal[i]
+		if o.ID != n.ID {
+			*changes = append(*changes, ParameterChange{
+				Parameter: param + "[" + fmt.Sprintf("%d", i) + "].id",
+				OldValue:  o.ID,
+				NewValue:  n.ID,
+				Timestamp: t,
+			})
+		}
+		compareFloat(changes, param+"["+fmt.Sprintf("%d", i)+"].adjustment_factor", o.AdjustmentFactor, n.AdjustmentFactor, t)
+		compareFloat(changes, param+"["+fmt.Sprintf("%d", i)+"].historical_accuracy", o.HistoricalAccuracy, n.HistoricalAccuracy, t)
+		compareFloat(changes, param+"["+fmt.Sprintf("%d", i)+"].avg_market_return", o.AvgMarketReturn, n.AvgMarketReturn, t)
+	}
+}
+
+func compareLinkageParams(changes *[]ParameterChange, param string, oldVal, newVal LinkageConfig, t time.Time) {
+	compareFloat(changes, param+".downstream_decay_factor", oldVal.DownstreamDecayFactor, newVal.DownstreamDecayFactor, t)
+	compareFloat(changes, param+".upstream_decay_factor", oldVal.UpstreamDecayFactor, newVal.UpstreamDecayFactor, t)
+	compareFloat(changes, param+".seasonal_decay_factor", oldVal.SeasonalDecayFactor, newVal.SeasonalDecayFactor, t)
+	compareFloat(changes, param+".default_correlation", oldVal.DefaultCorrelation, newVal.DefaultCorrelation, t)
+	compareFloat(changes, param+".systemic_importance_divisor", oldVal.SystemicImportanceDivisor, newVal.SystemicImportanceDivisor, t)
+	compareFloat(changes, param+".min_correlation_threshold", oldVal.MinCorrelationThreshold, newVal.MinCorrelationThreshold, t)
 }
 
 func compareMapStringFloat(changes *[]ParameterChange, param string, oldVal, newVal map[string]float64, t time.Time) {
