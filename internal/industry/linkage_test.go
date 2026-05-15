@@ -354,3 +354,57 @@ func TestNarrativeAwareLinkageScore(t *testing.T) {
 		t.Error("expected different shock_propagation_speed when narrative is active")
 	}
 }
+
+func TestLoadSupplyChainGraph_FileNotFound(t *testing.T) {
+	_, _, err := LoadSupplyChainGraph("/nonexistent/path/graph.json")
+	if err == nil {
+		t.Error("expected error for missing file")
+	}
+}
+
+func TestLoadSupplyChainGraph_ValidFile(t *testing.T) {
+	graph, cm, err := LoadSupplyChainGraph("../../configs/supply_chain_graph.json")
+	if err != nil {
+		t.Fatalf("LoadSupplyChainGraph failed: %v", err)
+	}
+	if graph == nil {
+		t.Fatal("expected non-nil graph")
+	}
+	if cm == nil {
+		t.Fatal("expected non-nil correlation matrix")
+	}
+
+	node, ok := graph.GetNode("semiconductor")
+	if !ok {
+		t.Fatal("semiconductor node not found in loaded graph")
+	}
+	if node.Tier != 1 {
+		t.Errorf("expected tier 1, got %d", node.Tier)
+	}
+
+	corr, ok := cm.GetCorrelation("semiconductor", "ai_supply_chain")
+	if !ok {
+		t.Fatal("expected correlation between semiconductor and ai_supply_chain")
+	}
+	if corr != 0.85 {
+		t.Errorf("expected correlation 0.85, got %f", corr)
+	}
+}
+
+func TestSetSupplyChainGraph(t *testing.T) {
+	graph, cm, err := LoadSupplyChainGraph("../../configs/supply_chain_graph.json")
+	if err != nil {
+		t.Fatalf("LoadSupplyChainGraph failed: %v", err)
+	}
+
+	la := NewLinkageAnalyzer()
+	la.SetSupplyChainGraph(graph, cm)
+
+	score := la.CalculateLinkageScore("semiconductor")
+	if score == nil {
+		t.Fatal("expected non-nil linkage score")
+	}
+	if score.IndustryID != "semiconductor" {
+		t.Errorf("expected industry semiconductor, got %s", score.IndustryID)
+	}
+}
