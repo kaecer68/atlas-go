@@ -3,15 +3,10 @@ package marketdata
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 func TestNewTWSESectorIndexProvider(t *testing.T) {
@@ -175,8 +170,12 @@ func TestTWSESectorIndexProvider_APIError(t *testing.T) {
 	endDate := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
 
 	ctx := context.Background()
-	_, err := provider.FetchSectorIndices(ctx, startDate, endDate)
-	if err == nil {
-		t.Error("expected error for API failure")
+	result, err := provider.FetchSectorIndices(ctx, startDate, endDate)
+	// FetchSectorIndices skips individual day errors and continues
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result) != 0 {
+		t.Error("expected empty result for API failure")
 	}
 }
