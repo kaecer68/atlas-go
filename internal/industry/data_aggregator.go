@@ -105,8 +105,9 @@ func (a *DataAggregator) AggregateIndustry(ctx context.Context, industryID strin
 	}
 
 	metrics := IndustryMetrics{
-		IndustryID: industryID,
-		Timestamp:  now,
+		IndustryID:    industryID,
+		DataFreshness: FreshLive,
+		Timestamp:     now,
 	}
 	if revCount > 0 {
 		metrics.RevenueGrowthYoY = revSum / float64(revCount)

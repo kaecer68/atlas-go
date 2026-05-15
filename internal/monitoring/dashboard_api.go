@@ -153,7 +153,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		// TODO: Migrate to Gateway for direct TWSE capital flow provider instantiation.
 		marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")),
 		// TODO: Migrate to Gateway for direct TWSE margin balance provider instantiation.
-		marketdata.NewTWSEMarginBalanceProvider(""),
+		marketdata.NewTWSEMarginBalanceProvider(filepath.Join(workDir, "data/state/margin")),
 		// TODO: Migrate to Gateway for direct export statistics provider instantiation.
 		marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export")),
 	}
@@ -164,7 +164,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	cfg := config.Load()
 	if cfg.FinMindAPIKey != "" {
 		// TODO: Migrate to Gateway for direct TSMC revenue provider instantiation.
-		providers = append(providers, marketdata.NewTSMCRevenueProvider(cfg.FinMindAPIKey))
+		providers = append(providers, marketdata.NewTSMCRevenueProviderWithStorage(cfg.FinMindAPIKey, filepath.Join(workDir, "data/state/tsmc_revenue")))
 	}
 	// TODO: Migrate to Gateway for direct composite macro provider instantiation.
 	provider := marketdata.NewCompositeMacroProvider(providers...)
