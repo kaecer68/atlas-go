@@ -5,9 +5,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
 func main() {
@@ -31,8 +34,14 @@ func run(args []string) error {
 
 	var industryReturns map[string]map[string]float64
 	if *replayPath != "" {
-		fmt.Fprintf(os.Stderr, "Loading replay data from %s... (TODO: wire IndustryReturnAggregator)\n", *replayPath)
-		industryReturns = buildSyntheticReturns()
+		fmt.Fprintf(os.Stderr, "Loading replay data from %s...\n", *replayPath)
+		dataset, err := loadReplayDataset(*replayPath)
+		if err != nil {
+			return fmt.Errorf("load replay: %w", err)
+		}
+		// Convert to industry returns using the sector symbols mapping
+		industryReturns = aggregateIndustryReturns(dataset)
+		fmt.Fprintf(os.Stderr, "Loaded %d industries from replay data\n", len(industryReturns))
 	} else {
 		industryReturns = buildSyntheticReturns()
 	}

@@ -111,6 +111,13 @@ func (s *IndustryService) UpdateDynamicEnv(snap marketdata.MacroDataSnapshot) {
 	}
 }
 
+// RebuildCorrelations recomputes all pairwise industry correlations from return data.
+func (s *IndustryService) RebuildCorrelations(industryReturns map[string][]float64) {
+	if s.LinkageAnalyzer != nil {
+		s.LinkageAnalyzer.GetCorrelationMatrix().RecalculateFromReturns(industryReturns)
+	}
+}
+
 // GetSeasonalPatterns returns active and historical seasonal patterns for an industry.
 func (s *IndustryService) GetSeasonalPatterns(industryID string, now time.Time) (active []SeasonalPattern, historical []SeasonalPattern, adjustment float64) {
 	patterns := s.SeasonalEngine.DetectCurrentPatterns(now)

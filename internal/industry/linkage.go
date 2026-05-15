@@ -329,7 +329,8 @@ func (sp *ShockPropagation) getNarrativeAdjustedCorrelation(industryA, industryB
 	return baseCorr * multiplier
 }
 
-// PropagateShock calculates the impact of a shock on an industry.
+// PropagateShock calculates the impact of a shock on an industry, with
+// narrative-aware correlation when a narrative provider is set.
 func (sp *ShockPropagation) PropagateShock(sourceIndustry string, shockMagnitude float64, maxDepth int) map[string]float64 {
 	impacts := make(map[string]float64)
 	impacts[sourceIndustry] = shockMagnitude
