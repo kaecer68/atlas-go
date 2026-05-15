@@ -3675,11 +3675,11 @@
       "source": "heuristic",
       "citation": {
         "source_type": "heuristic_with_narrative_aware",
-        "source_reference": "Backtested against 2020-2024 TWSE sector index correlations; decay factors calibrated from COVID-era supply chain disruption events; narrative multipliers wired via SeasonalBridge.CorrelationMultiplier() for real-time macro event modulation",
-        "evidence_quality": "medium",
+        "source_reference": "Industry-pair correlations set via expert heuristics; narrative modulation wired via SeasonalBridge.CorrelationMultiplier(); empirical calibration blocked pending TWSE sector index data provider",
+        "evidence_quality": "heuristic_awaiting_data",
         "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": ["narrative.SeasonalBridge", "industry.CorrelationMultiplier"],
+        "validation_method": "pending_empirical_calibration",
+        "dependencies": ["narrative.SeasonalBridge", "industry.CorrelationMultiplier", "marketdata.TWSESectorProvider (missing)"],
         "last_validated": "2026-05-15T12:00:00.000000"
       }
     },

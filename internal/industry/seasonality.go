@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 // SeasonalPattern represents a recurring seasonal pattern in Taiwan stock market.
@@ -539,4 +540,12 @@ func (se *SeasonalEngine) SetNarrativeProvider(provider NarrativeSeasonalProvide
 // Passing nil disables dynamic environment overlay (safe default).
 func (se *SeasonalEngine) SetDynamicEnv(modulator *DynamicEnvModulator) {
 	se.dynamicEnv = modulator
+}
+
+// UpdateDynamicEnv pushes a fresh macro snapshot into the environment modulator.
+// No-op if no modulator is set.
+func (se *SeasonalEngine) UpdateDynamicEnv(snap marketdata.MacroDataSnapshot) {
+	if se.dynamicEnv != nil {
+		se.dynamicEnv.UpdateCurrent(snap)
+	}
 }
