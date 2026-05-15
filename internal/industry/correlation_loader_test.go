@@ -96,3 +96,180 @@ func TestLoadIndustryReturnsFromReplay_EmptySymbols(t *testing.T) {
 		t.Fatal("expected error when all sectors have empty symbol lists")
 	}
 }
+
+func TestLoadIndustryReturnsEmptyReplay(t *testing.T) {
+	dir := t.TempDir()
+
+	replayPath := filepath.Join(dir, "replay.csv")
+	if err := os.WriteFile(replayPath, []byte("Date,Code,Name,TradeVolume,Open,High,Low,Close\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	sectorPath := filepath.Join(dir, "sector_symbols.json")
+	if err := os.WriteFile(sectorPath, []byte(`{"semiconductor":["2330.TW"]}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadIndustryReturnsFromReplay(replayPath, sectorPath)
+	if err == nil {
+		t.Fatal("expected error for empty replay data")
+	}
+}
+
+func TestLoadIndustryReturnsMissingSymbols(t *testing.T) {
+	dir := t.TempDir()
+
+	replayPath := filepath.Join(dir, "replay.csv")
+	csvFile, err := os.Create(replayPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := csv.NewWriter(csvFile)
+	_ = w.Write([]string{"Date", "Code", "Name", "TradeVolume", "Open", "High", "Low", "Close"})
+	for d := 1; d <= 16; d++ {
+		price := float64(100 + d)
+		_ = w.Write([]string{
+			fmt.Sprintf("2024-02-%02d", d),
+			"9999",
+			"Unknown",
+			"10000",
+			fmt.Sprintf("%.0f", price),
+			fmt.Sprintf("%.0f", price+2),
+			fmt.Sprintf("%.0f", price-1),
+			fmt.Sprintf("%.0f", price),
+		})
+	}
+	w.Flush()
+	csvFile.Close()
+
+	sectorPath := filepath.Join(dir, "sector_symbols.json")
+	if err := os.WriteFile(sectorPath, []byte(`{"semiconductor":["2330.TW"]}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = LoadIndustryReturnsFromReplay(replayPath, sectorPath)
+	if err == nil {
+		t.Fatal("expected error when no matched industries exist")
+	}
+}
+
+func TestIndustryReturnsOrdering(t *testing.T) {
+	dir := t.TempDir()
+
+	replayPath := filepath.Join(dir, "replay.csv")
+	csvFile, err := os.Create(replayPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := csv.NewWriter(csvFile)
+	_ = w.Write([]string{"Date", "Code", "Name", "TradeVolume", "Open", "High", "Low", "Close"})
+	// Write dates out of order to verify sorting
+	dates := []string{"2024-03-15", "2024-01-02", "2024-02-10", "2024-03-16",
+		"2024-01-03", "2024-02-11", "2024-03-17", "2024-01-04",
+		"2024-02-12", "2024-03-18", "2024-01-05", "2024-02-13",
+		"2024-03-19", "2024-01-06", "2024-02-14", "2024-03-20",
+		"2024-01-07"}
+	for i, date := range dates {
+		price := float64(100 + i)
+		_ = w.Write([]string{
+			date,
+			"2330",
+			"TSMC",
+			"50000000",
+			fmt.Sprintf("%.0f", price),
+			fmt.Sprintf("%.0f", price+2),
+			fmt.Sprintf("%.0f", price-1),
+			fmt.Sprintf("%.0f", price),
+		})
+	}
+	w.Flush()
+	csvFile.Close()
+
+	sectorPath := filepath.Join(dir, "sector_symbols.json")
+	if err := os.WriteFile(sectorPath, []byte(`{"semiconductor":["2330.TW"]}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := LoadIndustryReturnsFromReplay(replayPath, sectorPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	semi := result["semiconductor"]
+	if len(semi) != 16 {
+		t.Errorf("expected 16 returns, got %d", len(semi))
+	}
+}
+
+func TestIndustryReturnsFormat(t *testing.T) {
+	dir := t.TempDir()
+
+	replayPath := filepath.Join(dir, "replay.csv")
+	csvFile, _ := os.Create(replayPath)
+	w := csv.NewWriter(csvFile)
+	_ = w.Write([]string{"Date", "Code", "Name", "TradeVolume", "Open", "High", "Low", "Close"})
+	for d := 1; d <= 20; d++ {
+		price := float64(100 + d)
+		_ = w.Write([]string{
+			fmt.Sprintf("2024-01-%02d", d),
+			"2330", "TSMC", "50000",
+			fmt.Sprintf("%.0f", price),
+			fmt.Sprintf("%.0f", price+2),
+			fmt.Sprintf("%.0f", price-1),
+			fmt.Sprintf("%.0f", price),
+		})
+	}
+	w.Flush()
+	csvFile.Close()
+
+	sectorPath := filepath.Join(dir, "sector_symbols.json")
+	_ = os.WriteFile(sectorPath, []byte(`{"semiconductor":["2330.TW"]}`), 0644)
+
+	result, err := LoadIndustryReturnsFromReplay(replayPath, sectorPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, ok := result["semiconductor"]; !ok {
+		t.Fatal("expected semiconductor in result")
+	}
+
+	for id, returns := range result {
+		if len(returns) == 0 {
+			t.Errorf("industry %s has empty returns", id)
+		}
+		if len(returns) < 15 {
+			t.Errorf("industry %s has %d returns (need >= 15)", id, len(returns))
+		}
+	}
+}
+
+func TestIndustryReturnsMinimum(t *testing.T) {
+	dir := t.TempDir()
+
+	replayPath := filepath.Join(dir, "replay.csv")
+	csvFile, _ := os.Create(replayPath)
+	w := csv.NewWriter(csvFile)
+	_ = w.Write([]string{"Date", "Code", "Name", "TradeVolume", "Open", "High", "Low", "Close"})
+	for d := 1; d <= 14; d++ {
+		price := float64(90 + d)
+		_ = w.Write([]string{
+			fmt.Sprintf("2024-01-%02d", d),
+			"2330", "TSMC", "50000",
+			fmt.Sprintf("%.0f", price),
+			fmt.Sprintf("%.0f", price+2),
+			fmt.Sprintf("%.0f", price-1),
+			fmt.Sprintf("%.0f", price),
+		})
+	}
+	w.Flush()
+	csvFile.Close()
+
+	sectorPath := filepath.Join(dir, "sector_symbols.json")
+	_ = os.WriteFile(sectorPath, []byte(`{"semiconductor":["2330.TW"]}`), 0644)
+
+	_, err := LoadIndustryReturnsFromReplay(replayPath, sectorPath)
+	if err == nil {
+		t.Fatal("expected error for industry with < 15 observations")
+	}
+}
