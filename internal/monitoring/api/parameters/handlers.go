@@ -68,8 +68,19 @@ func flatten(src map[string]any, prefix string, dst map[string]any) {
 			key = prefix + "." + k
 		}
 		if sub, ok := v.(map[string]any); ok {
-			if val, exists := sub["value"]; exists && len(sub) <= 5 {
-				if deep, ok := val.(map[string]any); ok {
+			if val, exists := sub["value"]; exists {
+				// This is a leaf parameter with citation metadata
+				if _, hasCitation := sub["citation"]; hasCitation {
+					entry := map[string]any{"value": val}
+					for _, meta := range []string{"source", "rationale", "calibration_method", "last_calibrated", "todo"} {
+						if mv, ok := sub[meta]; ok {
+							if str, ok := mv.(string); ok && str != "" {
+								entry[meta] = str
+							}
+						}
+					}
+					dst[key] = entry
+				} else if deep, ok := val.(map[string]any); ok {
 					flatten(deep, key, dst)
 				} else {
 					dst[key] = val

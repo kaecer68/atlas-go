@@ -21,12 +21,24 @@ const (
 
 // ParameterMetadata holds the value and provenance of a tunable parameter.
 type ParameterMetadata[T any] struct {
-	Value             T               `json:"value"`
-	Rationale         string          `json:"rationale"`
-	Source            ParameterSource `json:"source"`
-	LastCalibrated    *time.Time      `json:"last_calibrated,omitempty"`
-	CalibrationMethod string          `json:"calibration_method,omitempty"`
-	Todo              string          `json:"todo,omitempty"`
+	Value             T                  `json:"value"`
+	Rationale         string             `json:"rationale"`
+	Source            ParameterSource    `json:"source"`
+	LastCalibrated    *time.Time         `json:"last_calibrated,omitempty"`
+	CalibrationMethod string             `json:"calibration_method,omitempty"`
+	Todo              string             `json:"todo,omitempty"`
+	Citation          *ParameterCitation `json:"citation,omitempty"`
+}
+
+// ParameterCitation holds the citation/source tracking metadata for a parameter.
+type ParameterCitation struct {
+	SourceType       string   `json:"source_type"`
+	SourceReference  string   `json:"source_reference"`
+	EvidenceQuality  string   `json:"evidence_quality"`
+	UpdatePolicy     string   `json:"update_policy"`
+	ValidationMethod string   `json:"validation_method"`
+	Dependencies     []string `json:"dependencies"`
+	LastValidated    string   `json:"last_validated"`
 }
 
 // DarwinianParameters holds all tunable values for the Darwinian weight system.
