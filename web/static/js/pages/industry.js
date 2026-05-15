@@ -376,6 +376,34 @@ function renderCycleTab(detail) {
   });
   html += "</div>";
 
+  // Confidence breakdown visualization
+  const cb = cp.confidence_breakdown;
+  if (cb && (cb.boundary || cb.seasonal || cb.linkage || cb.narrative)) {
+    const dims = [
+      { key: "boundary", label: "邊界信號", weight: cb.weights ? cb.weights.boundary : 0 },
+      { key: "freshness", label: "數據新鮮度", weight: cb.weights ? cb.weights.freshness : 0 },
+      { key: "seasonal", label: "季節性", weight: cb.weights ? cb.weights.seasonal : 0 },
+      { key: "linkage", label: "供應鏈連動", weight: cb.weights ? cb.weights.linkage : 0 },
+      { key: "narrative", label: "宏觀敘事", weight: cb.weights ? cb.weights.narrative : 0 },
+    ];
+    html += '<div class="industry-section"><h4>📐 信心度分解</h4>';
+    html += '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">各維度信心分數 × 配置權重 → 複合信心 <strong>' + ((cb.composite || 0) * 100).toFixed(0) + '%</strong></div>';
+    dims.forEach(function(d) {
+      const val = cb[d.key] || 0;
+      if (val <= 0) return;
+      const barW = Math.min(val * 100, 100);
+      const wPct = d.weight ? (d.weight * 100).toFixed(0) : 0;
+      html += '<div style="display:flex;align-items:center;gap:6px;margin:3px 0;font-size:11px">';
+      html += '<span style="width:80px;color:var(--muted)">' + d.label + '</span>';
+      html += '<div style="flex:1;height:14px;background:rgba(0,0,0,0.04);border-radius:3px;overflow:hidden">';
+      html += '<div style="width:' + barW + '%;height:100%;background:var(--accent);opacity:0.5;border-radius:3px"></div></div>';
+      html += '<span style="width:40px;text-align:right">' + (val * 100).toFixed(0) + '%</span>';
+      html += '<span style="width:30px;color:var(--muted);font-size:10px;text-align:right">w=' + wPct + '%</span>';
+      html += '</div>';
+    });
+    html += "</div>";
+  }
+
   if (detail.recommendation) {
     const rec = detail.recommendation;
     const actionColor =

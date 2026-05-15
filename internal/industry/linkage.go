@@ -129,6 +129,22 @@ func (g *SupplyChainGraph) collectDownstream(industryID string, depth, maxDepth 
 	}
 }
 
+// MaxDegree returns the maximum number of connections (upstream + downstream)
+// for any node in the graph. Used to normalize systemic importance to [0, 1].
+func (g *SupplyChainGraph) MaxDegree() int {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	maxDeg := 0
+	for _, node := range g.nodes {
+		deg := len(node.UpstreamOf) + len(node.DownstreamOf)
+		if deg > maxDeg {
+			maxDeg = deg
+		}
+	}
+	return maxDeg
+}
+
 // CorrelationMatrix holds the correlation coefficients between industry pairs.
 type CorrelationMatrix struct {
 	correlations map[string]map[string]float64 // industry_a -> industry_b -> correlation

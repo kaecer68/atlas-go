@@ -58,6 +58,7 @@ type DashboardAPI struct {
 	baselinePath       string
 	narrativeEngine    *narrative.NarrativeEngine
 	macroIngestor      *narrative.MacroIngestor
+	macroProvider      marketdata.MacroDataProvider
 	geoProvider        narrative.GeopoliticalRiskProvider
 	taiwanGeoProvider  *narrative.CompositeTaiwanGeopoliticalProvider
 	taiwanStressCalc   *narrative.TaiwanStressCalculator
@@ -196,6 +197,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		baselinePath:       filepath.Join(workDir, "data/state/baseline_policy.json"),
 		narrativeEngine:    narrativeEng,
 		macroIngestor:      ingestor,
+		macroProvider:      provider,
 		geoProvider:        geoProvider,
 		taiwanGeoProvider:  taiwanGeoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider, workDir),
@@ -266,6 +268,18 @@ func (a *DashboardAPI) SetEventBus(eventBus *eventbus.ChannelEventBus) {
 	a.eventBus = eventBus
 	if a.macroIngestor != nil {
 		a.macroIngestor.SetEventBus(eventBus)
+	}
+	// Subscribe to narrative events to keep DynamicEnvModulator current.
+	if eventBus != nil {
+		eventBus.Subscribe(eventbus.EventNarrative, func(ctx context.Context, event eventbus.BusEvent) error {
+			snap, err := a.macroProvider.FetchSnapshot(ctx)
+			if err != nil {
+				logging.Warn("dashboardapi", "dynamic_env_update_failed", "err", err)
+				return nil
+			}
+			a.industryService.UpdateDynamicEnv(snap)
+			return nil
+		})
 	}
 }
 

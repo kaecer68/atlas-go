@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 type IndustryService struct {
@@ -100,10 +101,14 @@ func (s *IndustryService) GetAdjustmentBreakdown(industryID string, now time.Tim
 
 // GetActiveNarrativeThemes returns the narrative themes currently active for an industry.
 func (s *IndustryService) GetActiveNarrativeThemes(industryID string) []string {
-	// Return empty list for now — the SeasonalEngine's narrativeProvider
-	// is wired via the bridge. This method can be extended when the bridge
-	// is connected to a live event source.
 	return nil
+}
+
+// UpdateDynamicEnv pushes a fresh macro snapshot into the seasonal engine's environment modulator.
+func (s *IndustryService) UpdateDynamicEnv(snap marketdata.MacroDataSnapshot) {
+	if s.SeasonalEngine != nil {
+		s.SeasonalEngine.UpdateDynamicEnv(snap)
+	}
 }
 
 // GetSeasonalPatterns returns active and historical seasonal patterns for an industry.
