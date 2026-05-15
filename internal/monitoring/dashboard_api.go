@@ -296,21 +296,28 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 	}
 	seasonalEngine.SetDynamicEnv(modulator)
 
-	// TODO: wire RebuildCorrelations() when replay data is available, e.g.:
-	//   industryService.RebuildCorrelations(loadIndustryReturnsFromReplay())
-	// This replaces the hardcoded DefaultCorrelationMatrix with empirically
-	// computed pairwise industry correlations from return data.
-
 	// Wire narrative provider into linkage analyzer for dynamic supply chain correlations
 	linkageAnalyzer.SetNarrativeProvider(bridge)
 
-	return service.NewIndustryService(
+	svc := service.NewIndustryService(
 		industry.DefaultClassification(),
 		seasonalEngine,
 		cycleTracker,
 		linkageAnalyzer,
 		industry.NewRiskMonitor(),
 	)
+
+	replayPath := config.Load().ReplayDataPath
+	if replayPath != "" {
+		sectorSymbolsPath := filepath.Join(config.Load().WorkDir, "configs", "sector_symbols.json")
+		if returns, err := industry.LoadIndustryReturnsFromReplay(replayPath, sectorSymbolsPath); err == nil {
+			svc.RebuildCorrelations(returns)
+		} else {
+			logging.Warn("monitoring", "correlation_rebuild_failed", "err", err)
+		}
+	}
+
+	return svc
 }
 
 func (a *DashboardAPI) SetEventBus(eventBus *eventbus.ChannelEventBus) {
