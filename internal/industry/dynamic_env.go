@@ -46,15 +46,26 @@ func (dem *DynamicEnvModulator) DXYDeviation() float64 {
 	return (dem.current.DXY.Value - dem.baseline.DXY.Value) / dem.baseline.DXY.Value
 }
 
+// BDIDeviation returns the percentage deviation of BDI from baseline.
+// Positive = shipping demand is strong relative to history.
+func (dem *DynamicEnvModulator) BDIDeviation() float64 {
+	if dem.baseline.BDI.Value <= 0 {
+		return 0
+	}
+	return (dem.current.BDI.Value - dem.baseline.BDI.Value) / dem.baseline.BDI.Value
+}
+
 // SeasonalModulation computes a multiplicative adjustment for seasonal patterns
 // based on current macro conditions, applied per-industry.
 //
 // Oil deviations affect energy and industrial sectors.
 // DXY deviations affect export-heavy sectors (tech, semiconductor).
+// BDI deviations affect shipping demand and downstream logistics costs.
 // Returns a multiplier: 1.0 = no change, >1.0 = amplify seasonal effect.
 func (dem *DynamicEnvModulator) SeasonalModulation(industryID string) float64 {
 	oilDev := dem.OilDeviation()
 	dxyDev := dem.DXYDeviation()
+	bdiDev := dem.BDIDeviation()
 
 	switch industryID {
 	case "energy":
@@ -74,16 +85,28 @@ func (dem *DynamicEnvModulator) SeasonalModulation(industryID string) float64 {
 		if oilDev < -0.10 {
 			mod *= 1.05
 		}
+		// BDI above baseline = strong shipping demand = amplify shipping sector
+		if bdiDev > 0.10 {
+			mod *= 1.0 + bdiDev*0.3
+		}
+		if bdiDev < -0.10 {
+			mod *= 1.0 + bdiDev*0.2
+		}
 		return mod
 
 	case "industrial", "petrochemicals", "steel":
+		mod := 1.0
 		if oilDev > 0.15 {
-			return 0.94
+			mod *= 0.94
 		}
 		if oilDev < -0.10 {
-			return 1.04
+			mod *= 1.04
 		}
-		return 1.0
+		// BDI above baseline = higher input transport costs = negative for manufacturing
+		if bdiDev > 0.15 {
+			mod *= 0.96
+		}
+		return mod
 
 	case "semiconductor", "ai_supply_chain", "electronics":
 		mod := 1.0
@@ -92,6 +115,10 @@ func (dem *DynamicEnvModulator) SeasonalModulation(industryID string) float64 {
 		}
 		if dxyDev < -0.03 {
 			mod *= 1.04
+		}
+		// BDI above baseline = higher logistics costs for export-oriented sectors
+		if bdiDev > 0.20 {
+			mod *= 0.97
 		}
 		return mod
 

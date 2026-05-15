@@ -236,8 +236,9 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine) *servic
 	// Create DynamicEnvModulator with real-time macro data (baseline uses neutral values)
 	// The update will happen when macro ingestor fetches new data.
 	baseline := marketdata.MacroDataSnapshot{
-		Oil: marketdata.MacroDataPoint{Value: 75.0},  // Historical WTI average
-		DXY: marketdata.MacroDataPoint{Value: 103.0}, // Historical DXY average
+		Oil: marketdata.MacroDataPoint{Value: 75.0},   // Historical WTI average
+		DXY: marketdata.MacroDataPoint{Value: 103.0},  // Historical DXY average
+		BDI: marketdata.MacroDataPoint{Value: 1500.0}, // Historical BDI average
 	}
 	modulator := industry.NewDynamicEnvModulator(baseline, baseline)
 	seasonalEngine.SetDynamicEnv(modulator)
