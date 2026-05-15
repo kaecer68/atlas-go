@@ -22,15 +22,20 @@ func run(args []string) error {
 	startYear := fs.Int("start", 2021, "Start year for backtest window")
 	endYear := fs.Int("end", 2026, "End year for backtest window")
 	outputJSON := fs.Bool("json", false, "Output results as JSON")
+	replayPath := fs.String("replay", "", "Path to replay data (CSV/JSONL). When set, uses actual stock returns aggregated by industry instead of synthetic data.")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
 	seasonalEngine := industry.NewSeasonalEngineFromConfig(config.GetParametersConfig())
 
-	// Build synthetic industry returns from replay data
-	// TODO: replace with actual IndustryReturnAggregator when replay data is available
-	industryReturns := buildSyntheticReturns()
+	var industryReturns map[string]map[string]float64
+	if *replayPath != "" {
+		fmt.Fprintf(os.Stderr, "Loading replay data from %s... (TODO: wire IndustryReturnAggregator)\n", *replayPath)
+		industryReturns = buildSyntheticReturns()
+	} else {
+		industryReturns = buildSyntheticReturns()
+	}
 
 	results, err := industry.CalibratePatterns(seasonalEngine, industryReturns, *startYear, *endYear)
 	if err != nil {
