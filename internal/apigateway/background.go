@@ -14,6 +14,29 @@ import (
 // BackgroundTaskFunc is the function signature for background tasks.
 type BackgroundTaskFunc func(ctx context.Context) error
 
+// WrapChannelTask wraps a channel receiver into a BackgroundTaskFunc suitable for BTM.
+// On each invocation, it drains all available messages from the channel and processes them.
+// Returns when the channel is empty, closed, or the context is cancelled.
+func WrapChannelTask[T any](ch <-chan T, handler func(ctx context.Context, item T) error) BackgroundTaskFunc {
+	return func(ctx context.Context) error {
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case item, ok := <-ch:
+				if !ok {
+					return nil
+				}
+				if err := handler(ctx, item); err != nil {
+					return err
+				}
+			default:
+				return nil
+			}
+		}
+	}
+}
+
 // TaskFailureHandler is called when a task fails, receiving the task name and error.
 type TaskFailureHandler func(taskName string, consecutiveFailures int, err error)
 

@@ -199,6 +199,7 @@ func run(args []string, deps appDeps) error {
 	taskManager := rt.TaskManager
 
 	var janusEngine *janus.Engine
+	var taskMgr *apigateway.BackgroundTaskManager
 
 	if *apiMode {
 		mux := http.NewServeMux()
@@ -321,7 +322,6 @@ func run(args []string, deps appDeps) error {
 
 		// Initialize API Gateway with channel adapters and background task manager.
 		gateway, err := apigateway.NewGateway(cfg.WorkDir, pool)
-		var taskMgr *apigateway.BackgroundTaskManager
 		if err != nil {
 			log.Printf("[Gateway] initialization failed: %v", err)
 		} else if err := apigateway.RegisterChannelAdapters(gateway, cfg.WorkDir, cfg, janusEngine); err != nil {
@@ -704,12 +704,12 @@ func run(args []string, deps appDeps) error {
 	}
 
 	if *liveMode {
-		return runLiveTrading(cfg, deps, collector, repo)
+		return runLiveTrading(cfg, deps, collector, repo, taskMgr)
 	}
-	return runSimulation(cfg, collector, repo)
+	return runSimulation(cfg, collector, repo, taskMgr)
 }
 
-func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
+func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, taskMgr *apigateway.BackgroundTaskManager) error {
 	system, err := orchestrator.NewProductionSystem(cfg)
 	if err != nil {
 		return fmt.Errorf("create system: %w", err)
@@ -731,6 +731,27 @@ func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, re
 		return fmt.Errorf("create approval workflow: %w", err)
 	}
 	system.WithCapitalManagement(controller, allocator, workflow)
+
+	if taskMgr != nil {
+		if pm := system.GetPRISMManager(); pm != nil {
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "prism_rebalance",
+				Interval: 1 * time.Hour,
+				Enabled:  true,
+				Task:     pm.RunOnce,
+			})
+			log.Printf("[BTM] registered prism_rebalance background task (1h interval)")
+		}
+		if sm := system.GetSpawningManager(); sm != nil {
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "spawning_cycle",
+				Interval: 1 * time.Hour,
+				Enabled:  true,
+				Task:     sm.RunOnce,
+			})
+			log.Printf("[BTM] registered spawning_cycle background task (1h interval)")
+		}
+	}
 
 	result, err := system.RunDailySimulation(time.Now())
 	if err != nil {
@@ -809,7 +830,7 @@ func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, re
 	return nil
 }
 
-func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
+func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, taskMgr *apigateway.BackgroundTaskManager) error {
 	system, err := orchestrator.NewProductionSystem(cfg)
 	if err != nil {
 		return fmt.Errorf("create system: %w", err)
@@ -820,6 +841,27 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	if repo != nil {
 		system.SetRepository(repo)
 		log.Printf("[Repository] injected into live trading system")
+	}
+
+	if taskMgr != nil {
+		if pm := system.GetPRISMManager(); pm != nil {
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "prism_rebalance",
+				Interval: 1 * time.Hour,
+				Enabled:  true,
+				Task:     pm.RunOnce,
+			})
+			log.Printf("[BTM] registered prism_rebalance background task (1h interval)")
+		}
+		if sm := system.GetSpawningManager(); sm != nil {
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "spawning_cycle",
+				Interval: 1 * time.Hour,
+				Enabled:  true,
+				Task:     sm.RunOnce,
+			})
+			log.Printf("[BTM] registered spawning_cycle background task (1h interval)")
+		}
 	}
 
 	stateStore := livestore.NewStateStore("data/state/live")

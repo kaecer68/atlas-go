@@ -143,41 +143,27 @@ func updateEnvFile(envPath, key, value string) error {
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
 	loadChannelStates(workDir)
 
+	// Macro data providers — all registered via Gateway ChannelAdapters
+	// (see internal/apigateway/channel_adapters.go RegisterChannelAdapters).
 	providers := []marketdata.MacroDataProvider{
-		// TODO: Migrate to Gateway for direct Yahoo Finance macro provider instantiation.
 		marketdata.NewYahooFinanceMacroProvider(),
-		// TODO: Migrate to Gateway for direct Frankfurter FX provider instantiation.
 		marketdata.NewFrankfurterFXProvider(),
-		// TODO: Migrate to Gateway for direct SOX index provider instantiation.
 		marketdata.NewSOXIndexProvider(),
-		// TODO: Migrate to Gateway for direct TWSE capital flow provider instantiation.
 		marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")),
-		// TODO: Migrate to Gateway for direct TWSE margin balance provider instantiation.
 		marketdata.NewTWSEMarginBalanceProvider(filepath.Join(workDir, "data/state/margin")),
-		// TODO: Migrate to Gateway for direct export statistics provider instantiation.
 		marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export")),
 	}
-	// Sector data from local cache (graceful degradation if file missing).
-	// TODO: Migrate to Gateway for direct sector data provider instantiation.
 	providers = append(providers, marketdata.NewSectorDataProvider(filepath.Join(workDir, "data/state/sector_data")))
-	// TSMC Revenue from FinMind (overwrites cached sector data when available).
 	cfg := config.Load()
 	if cfg.FinMindAPIKey != "" {
-		// TODO: Migrate to Gateway for direct TSMC revenue provider instantiation.
 		providers = append(providers, marketdata.NewTSMCRevenueProviderWithStorage(cfg.FinMindAPIKey, filepath.Join(workDir, "data/state/tsmc_revenue")))
 	}
-	// TODO: Migrate to Gateway for direct composite macro provider instantiation.
 	provider := marketdata.NewCompositeMacroProvider(providers...)
-	// TODO: Migrate to Gateway for direct geopolitical composite provider instantiation.
 	geoProvider := narrative.NewCompositeGeopoliticalProvider(
-		// TODO: Migrate to Gateway for direct RSS geopolitical provider instantiation.
 		narrative.NewRSSGeopoliticalProvider(),
-		// TODO: Migrate to Gateway for direct GDELT geopolitical provider instantiation.
 		narrative.NewGDELTGeopoliticalProvider(),
 	)
-	// TODO: Migrate to Gateway for direct Taiwan geopolitical composite provider instantiation.
 	taiwanGeoProvider := narrative.NewCompositeTaiwanGeopoliticalProvider(
-		// TODO: Migrate to Gateway for direct Taiwan RSS geopolitical provider instantiation.
 		narrative.NewTaiwanRSSGeopoliticalProvider(),
 	)
 	if metricsCollector == nil {
@@ -186,6 +172,12 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	lifecycle := narrative.NewEventLifecycleManager()
 	ingestor := narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro"))
 	ingestor.SetLifecycleManager(lifecycle)
+
+	seasonal := industry.NewSeasonalEngine()
+	cycleTracker := industry.NewCycleTracker()
+	linkageAnalyzer := industry.NewLinkageAnalyzer()
+	cycleTracker.SetExternalValidators(seasonal, linkageAnalyzer)
+
 	return &DashboardAPI{
 		workDir:            workDir,
 		ledgerDir:          ledgerDir,
@@ -198,7 +190,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		taiwanGeoProvider:  taiwanGeoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider, workDir),
 		reportGenerator:    narrative.NewReportGenerator(),
-		industryService:    service.NewIndustryService(industry.DefaultClassification(), industry.NewSeasonalEngine(), industry.NewCycleTracker(), industry.NewLinkageAnalyzer(), industry.NewRiskMonitor()),
+		industryService:    service.NewIndustryService(industry.DefaultClassification(), seasonal, cycleTracker, linkageAnalyzer, industry.NewRiskMonitor()),
 		metricsCollector:   metricsCollector,
 		metricsHistory:     NewMetricsHistory(1000),
 		healthManager:      portfolio.NewAgentHealthManager(),
