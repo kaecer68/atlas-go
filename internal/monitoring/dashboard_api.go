@@ -213,6 +213,7 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine) *servic
 	cycleTracker := industry.NewCycleTracker()
 	linkageAnalyzer := industry.NewLinkageAnalyzer()
 
+	// Wire narrative provider
 	bridge := narrative.NewSeasonalBridge(narrativeEngine)
 	seasonalEngine.SetNarrativeProvider(bridge)
 	cycleTracker.SetNarrativeProvider(func(industryID string) float64 {
@@ -225,6 +226,21 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine) *servic
 		}
 		return hitRate
 	})
+
+	// Wire supply chain graph into seasonal engine
+	seasonalEngine.SetLinkageGraph(linkageAnalyzer.GetSupplyChainGraph())
+
+	// Wire external validators into cycle tracker for multi-dimensional confidence
+	cycleTracker.SetExternalValidators(seasonalEngine, linkageAnalyzer)
+
+	// Create DynamicEnvModulator with real-time macro data (baseline uses neutral values)
+	// The update will happen when macro ingestor fetches new data.
+	baseline := marketdata.MacroDataSnapshot{
+		Oil: marketdata.MacroDataPoint{Value: 75.0},  // Historical WTI average
+		DXY: marketdata.MacroDataPoint{Value: 103.0}, // Historical DXY average
+	}
+	modulator := industry.NewDynamicEnvModulator(baseline, baseline)
+	seasonalEngine.SetDynamicEnv(modulator)
 
 	return service.NewIndustryService(
 		industry.DefaultClassification(),

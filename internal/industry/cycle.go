@@ -324,7 +324,36 @@ func (ct *CycleTracker) calculateConfidence(industryID string, metrics IndustryM
 
 	boundary := ct.boundaryConfidence(industryID, metrics)
 
+	// Base confidence: blend signal and boundary (60/40)
 	confidence := signal*0.6 + boundary*0.4
+
+	// Seasonal confidence boost: if seasonal engine available and pattern is active,
+	// boost confidence based on historical accuracy of current patterns.
+	if ct.seasonalEngine != nil {
+		seasonalAccuracy := ct.seasonalEngine.GetHistoricalAccuracy(time.Now())
+		if seasonalAccuracy > 0.5 {
+			// Blend in seasonal confidence (max 15% contribution)
+			confidence = confidence*0.85 + seasonalAccuracy*0.15
+		}
+	}
+
+	// Linkage confidence: if correlated industries share the same cycle phase,
+	// confidence increases (cross-validation).
+	if ct.linkageAnalyzer != nil {
+		linkageConfidence := ct.computeLinkageConfidence(industryID)
+		if linkageConfidence > 0 {
+			confidence = confidence*0.90 + linkageConfidence*0.10
+		}
+	}
+
+	// Narrative confidence: active narrative events with high hit rates
+	// provide an independent signal.
+	if ct.narrativeHitRate != nil {
+		narrativeConfidence := ct.narrativeHitRate(industryID)
+		if narrativeConfidence > 0 {
+			confidence = confidence*0.95 + narrativeConfidence*0.05
+		}
+	}
 
 	if confidence > 1.0 {
 		confidence = 1.0
@@ -333,6 +362,38 @@ func (ct *CycleTracker) calculateConfidence(industryID string, metrics IndustryM
 		confidence = 0.1
 	}
 	return confidence
+}
+
+func (ct *CycleTracker) computeLinkageConfidence(industryID string) float64 {
+	if ct.linkageAnalyzer == nil {
+		return 0
+	}
+	score := ct.linkageAnalyzer.CalculateLinkageScore(industryID)
+	if score == nil {
+		return 0
+	}
+	related := ct.linkageAnalyzer.GetCorrelationMatrix().GetCorrelatedIndustries(industryID, 0.3)
+	if len(related) == 0 {
+		return 0
+	}
+	pos, ok := ct.GetPosition(industryID)
+	if !ok {
+		return 0
+	}
+	consistent := 0.0
+	total := 0.0
+	for relatedID, corr := range related {
+		if rp, rok := ct.GetPosition(relatedID); rok {
+			total += math.Abs(corr)
+			if rp.BusinessCycle == pos.BusinessCycle {
+				consistent += math.Abs(corr)
+			}
+		}
+	}
+	if total == 0 {
+		return 0
+	}
+	return (consistent / total) * score.SystemicImportance
 }
 
 // boundaryConfidence returns 0–1: 0 = metric at a phase threshold (ambiguous),
