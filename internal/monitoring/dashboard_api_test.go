@@ -99,10 +99,3 @@ func TestNewWiredIndustryServiceWithReplay(t *testing.T) {
 		t.Fatal("expected non-nil industry service")
 	}
 }
-
-func padTwoStr(n int) string {
-	if n < 10 {
-		return "0" + string(rune('0'+n))
-	}
-	return string(rune('0'+n/10)) + string(rune('0'+n%10))
-}
