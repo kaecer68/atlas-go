@@ -332,6 +332,22 @@ type IndustryParameters struct {
 	SeverityThresholdCritical  ParameterMetadata[float64] `json:"severity_threshold_critical"`
 	ImpactMultiplier           ParameterMetadata[float64] `json:"impact_multiplier"`
 	RiskConfidence             ParameterMetadata[float64] `json:"risk_confidence"`
+
+	ConfidenceSignal ParameterMetadata[ConfidenceSignalConfig] `json:"confidence_signal"`
+	ConfidenceMix    ParameterMetadata[ConfidenceMixConfig]    `json:"confidence_mix"`
+
+	SeasonalPatterns ParameterMetadata[[]SeasonalPatternConfig] `json:"seasonal_patterns"`
+
+	AsymmetricRisk   ParameterMetadata[AsymmetricRiskConfig]    `json:"asymmetric_risk"`
+	NewsLatencyRisk  ParameterMetadata[NewsLatencyConfig]       `json:"news_latency_risk"`
+	FreshnessScores  ParameterMetadata[FreshnessScoresConfig]   `json:"freshness_scores"`
+	PhaseScores      ParameterMetadata[PhaseScoresConfig]       `json:"phase_scores"`
+	CycleTransitions ParameterMetadata[[]CycleTransitionConfig] `json:"cycle_transitions"`
+
+	LinkageParams ParameterMetadata[LinkageConfig] `json:"linkage_params"`
+
+	// Cycle tracking operational parameters
+	HistoryRetentionDays ParameterMetadata[int] `json:"history_retention_days"`
 }
 
 // CycleThresholdConfig holds business cycle thresholds for a specific industry.
@@ -360,6 +376,120 @@ type CapexCycleThresholdConfig struct {
 	ExpansionRevenueMin    float64 `json:"expansion_revenue_min"`
 	MaintenanceCapacityMin float64 `json:"maintenance_capacity_min"`
 	MaintenanceRevenueMin  float64 `json:"maintenance_revenue_min"`
+}
+
+type ConfidenceSignalConfig struct {
+	SignalBase          float64 `json:"signal_base"`
+	RevenueNormDenom    float64 `json:"revenue_norm_denom"`
+	RevenueWeight       float64 `json:"revenue_weight"`
+	ProfitNormDenom     float64 `json:"profit_norm_denom"`
+	ProfitWeight        float64 `json:"profit_weight"`
+	InventoryNormDenom  float64 `json:"inventory_norm_denom"`
+	InventoryWeight     float64 `json:"inventory_weight"`
+	UtilizationWeight   float64 `json:"utilization_weight"`
+	SignalBoundaryMix   float64 `json:"signal_boundary_mix"`
+	BoundaryDenomFactor float64 `json:"boundary_denom_factor"`
+	ConfidenceFloor     float64 `json:"confidence_floor"`
+	ConfidenceCeiling   float64 `json:"confidence_ceiling"`
+
+	// Indicator trend detection thresholds and weights
+	RevenueTrendThreshold    float64 `json:"revenue_trend_threshold"`
+	RevenueIndicatorWeight   float64 `json:"revenue_indicator_weight"`
+	InventoryTrendThreshold  float64 `json:"inventory_trend_threshold"`
+	InventoryIndicatorWeight float64 `json:"inventory_indicator_weight"`
+	ProfitTrendThreshold     float64 `json:"profit_trend_threshold"`
+	ProfitIndicatorWeight    float64 `json:"profit_indicator_weight"`
+	CapacityTrendThreshold   float64 `json:"capacity_trend_threshold"`
+	CapacityIndicatorWeight  float64 `json:"capacity_indicator_weight"`
+
+	// Trend deviation multipliers (value > threshold*up = "up", < threshold*down = "down")
+	TrendUpMultiplier   float64 `json:"trend_up_multiplier"`
+	TrendDownMultiplier float64 `json:"trend_down_multiplier"`
+
+	// Fallback when cycle threshold range (expansion - mature) <= 0
+	ThresholdRangeFallback float64 `json:"threshold_range_fallback"`
+}
+
+type ConfidenceMixConfig struct {
+	WeightBoundary         float64 `json:"weight_boundary"`
+	WeightFreshness        float64 `json:"weight_freshness"`
+	WeightSeasonal         float64 `json:"weight_seasonal"`
+	WeightLinkage          float64 `json:"weight_linkage"`
+	WeightNarrative        float64 `json:"weight_narrative"`
+	FavorableConfidenceMin float64 `json:"favorable_confidence_min"`
+}
+
+type SeasonalPatternConfig struct {
+	ID                 string   `json:"id"`
+	Name               string   `json:"name"`
+	NameEN             string   `json:"name_en"`
+	StartMonth         int      `json:"start_month"`
+	StartDay           int      `json:"start_day"`
+	EndMonth           int      `json:"end_month"`
+	EndDay             int      `json:"end_day"`
+	FavoredIndustries  []string `json:"favored_industries"`
+	AvoidedIndustries  []string `json:"avoided_industries"`
+	StyleTags          []string `json:"style_tags,omitempty"`
+	AdjustmentFactor   float64  `json:"adjustment_factor"`
+	HistoricalAccuracy float64  `json:"historical_accuracy"`
+	AvgMarketReturn    float64  `json:"avg_market_return"`
+	Description        string   `json:"description"`
+}
+
+type LinkageConfig struct {
+	DownstreamDecayFactor     float64            `json:"downstream_decay_factor"`
+	UpstreamDecayFactor       float64            `json:"upstream_decay_factor"`
+	DefaultCorrelation        float64            `json:"default_correlation"`
+	SystemicImportanceDivisor float64            `json:"systemic_importance_divisor"`
+	MinCorrelationThreshold   float64            `json:"min_correlation_threshold"`
+	CorrelationWindowDays     int                `json:"correlation_window_days"`
+	CorrelationMatrix         map[string]float64 `json:"correlation_matrix"`
+}
+
+// AsymmetricRiskConfig holds thresholds for asymmetric (bad news) risk detection.
+type AsymmetricRiskConfig struct {
+	BadNewsThreshold      float64 `json:"bad_news_threshold"`
+	GoodNewsThreshold     float64 `json:"good_news_threshold"`
+	ReactionTimeMinutes   int     `json:"reaction_time_minutes"`
+	VolumeSpikeMultiplier float64 `json:"volume_spike_multiplier"`
+}
+
+// NewsLatencyConfig holds thresholds for news latency risk detection.
+type NewsLatencyConfig struct {
+	MaxLatencyHours       float64 `json:"max_latency_hours"`
+	SeverityCriticalMin   float64 `json:"severity_critical_min"`
+	SeverityHighMin       float64 `json:"severity_high_min"`
+	ImpactMultiplier      float64 `json:"impact_multiplier"`
+	DropCriticalThreshold float64 `json:"drop_critical_threshold"`
+	DropHighThreshold     float64 `json:"drop_high_threshold"`
+	DropMediumThreshold   float64 `json:"drop_medium_threshold"`
+	ConfidenceDivisor     float64 `json:"confidence_divisor"`
+}
+
+// FreshnessScoresConfig maps DataFreshness enum values to numeric scores.
+type FreshnessScoresConfig struct {
+	ScoreLive     float64 `json:"score_live"`
+	ScoreRecent   float64 `json:"score_recent"`
+	ScoreStale    float64 `json:"score_stale"`
+	ScoreFallback float64 `json:"score_fallback"`
+	ScoreDefault  float64 `json:"score_default"`
+}
+
+// PhaseScoresConfig maps cycle phases to numeric scores.
+type PhaseScoresConfig struct {
+	ScoreExpansion float64 `json:"score_expansion"`
+	ScoreRecovery  float64 `json:"score_recovery"`
+	ScoreMature    float64 `json:"score_mature"`
+	ScoreRecession float64 `json:"score_recession"`
+}
+
+// CycleTransitionConfig holds probability and typical duration for a cycle phase transition.
+type CycleTransitionConfig struct {
+	FromPhase           string   `json:"from_phase"`
+	ToPhase             string   `json:"to_phase"`
+	Triggers            []string `json:"triggers"`
+	Probability         float64  `json:"probability"`
+	TypicalDurationDays int      `json:"typical_duration_days"`
 }
 
 // StrategyParameters holds tunable values for strategy selection and switching.
@@ -705,6 +835,64 @@ func (p *ParametersConfig) Validate() error {
 	}
 	if p.Industry.GeographicExposureLimit.Value < 0 || p.Industry.GeographicExposureLimit.Value > 1 {
 		return fmt.Errorf("industry.geographic_exposure_limit (%.3f) must be in [0,1]", p.Industry.GeographicExposureLimit.Value)
+	}
+
+	cs := p.Industry.ConfidenceSignal.Value
+	if cs.SignalBase < 0 || cs.SignalBase > 1 {
+		return fmt.Errorf("industry.confidence_signal.signal_base (%.3f) must be in [0,1]", cs.SignalBase)
+	}
+	if cs.RevenueWeight+cs.ProfitWeight+cs.InventoryWeight+cs.UtilizationWeight > 1.0+0.01 {
+		return fmt.Errorf("industry.confidence_signal weights (rev=%.2f, profit=%.2f, inv=%.2f, util=%.2f) sum exceeds 1.0", cs.RevenueWeight, cs.ProfitWeight, cs.InventoryWeight, cs.UtilizationWeight)
+	}
+	if cs.SignalBoundaryMix < 0 || cs.SignalBoundaryMix > 1 {
+		return fmt.Errorf("industry.confidence_signal.signal_boundary_mix (%.3f) must be in [0,1]", cs.SignalBoundaryMix)
+	}
+	if cs.ConfidenceFloor < 0 {
+		return fmt.Errorf("industry.confidence_signal.confidence_floor (%.3f) must be >= 0", cs.ConfidenceFloor)
+	}
+	if cs.ConfidenceCeiling <= cs.ConfidenceFloor {
+		return fmt.Errorf("industry.confidence_signal.confidence_ceiling (%.3f) must be > floor (%.3f)", cs.ConfidenceCeiling, cs.ConfidenceFloor)
+	}
+
+	cm := p.Industry.ConfidenceMix.Value
+	mixSum := cm.WeightBoundary + cm.WeightFreshness + cm.WeightSeasonal + cm.WeightLinkage + cm.WeightNarrative
+	if math.Abs(mixSum-1.0) > 0.01 {
+		return fmt.Errorf("industry.confidence_mix weights must sum to 1.0, got %.3f (b=%.2f f=%.2f s=%.2f l=%.2f n=%.2f)", mixSum, cm.WeightBoundary, cm.WeightFreshness, cm.WeightSeasonal, cm.WeightLinkage, cm.WeightNarrative)
+	}
+	if cm.FavorableConfidenceMin < 0 || cm.FavorableConfidenceMin > 1 {
+		return fmt.Errorf("industry.confidence_mix.favorable_confidence_min (%.3f) must be in [0,1]", cm.FavorableConfidenceMin)
+	}
+
+	for i, sp := range p.Industry.SeasonalPatterns.Value {
+		if sp.ID == "" {
+			return fmt.Errorf("industry.seasonal_patterns[%d].id must not be empty", i)
+		}
+		if sp.StartMonth < 1 || sp.StartMonth > 12 || sp.EndMonth < 1 || sp.EndMonth > 12 {
+			return fmt.Errorf("industry.seasonal_patterns[%d] invalid month: start=%d end=%d", i, sp.StartMonth, sp.EndMonth)
+		}
+		if sp.AdjustmentFactor <= 0 {
+			return fmt.Errorf("industry.seasonal_patterns[%d].adjustment_factor (%.3f) must be > 0", i, sp.AdjustmentFactor)
+		}
+		if sp.HistoricalAccuracy < 0 || sp.HistoricalAccuracy > 1 {
+			return fmt.Errorf("industry.seasonal_patterns[%d].historical_accuracy (%.3f) must be in [0,1]", i, sp.HistoricalAccuracy)
+		}
+	}
+
+	lp := p.Industry.LinkageParams.Value
+	if lp.DownstreamDecayFactor < 0 || lp.DownstreamDecayFactor > 1 {
+		return fmt.Errorf("industry.linkage_params.downstream_decay_factor (%.3f) must be in [0,1]", lp.DownstreamDecayFactor)
+	}
+	if lp.UpstreamDecayFactor < 0 || lp.UpstreamDecayFactor > 1 {
+		return fmt.Errorf("industry.linkage_params.upstream_decay_factor (%.3f) must be in [0,1]", lp.UpstreamDecayFactor)
+	}
+	if lp.DefaultCorrelation < 0 || lp.DefaultCorrelation > 1 {
+		return fmt.Errorf("industry.linkage_params.default_correlation (%.3f) must be in [0,1]", lp.DefaultCorrelation)
+	}
+	if lp.SystemicImportanceDivisor <= 0 {
+		return fmt.Errorf("industry.linkage_params.systemic_importance_divisor (%.3f) must be > 0", lp.SystemicImportanceDivisor)
+	}
+	if lp.MinCorrelationThreshold < 0 || lp.MinCorrelationThreshold > 1 {
+		return fmt.Errorf("industry.linkage_params.min_correlation_threshold (%.3f) must be in [0,1]", lp.MinCorrelationThreshold)
 	}
 
 	if p.Strategy.MinSwitchIntervalDays.Value < 0 {

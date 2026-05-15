@@ -74,14 +74,15 @@ type AsymmetricRiskConfig struct {
 
 // NewRiskMonitor creates a new risk monitor with default customer concentration data loaded.
 func NewRiskMonitor() *RiskMonitor {
+	params := config.GetParametersConfig().Industry
 	rm := &RiskMonitor{
 		customerData: make(map[string][]CustomerConcentration),
 		newsSources:  DefaultNewsSources(),
 		asymmetricConfig: AsymmetricRiskConfig{
-			BadNewsThreshold:      -0.03, // 3% drop
-			GoodNewsThreshold:     0.05,  // 5% rise
-			ReactionTimeMinutes:   30,    // 30 minutes
-			VolumeSpikeMultiplier: 2.0,   // 2x average volume
+			BadNewsThreshold:      params.AsymmetricRisk.Value.BadNewsThreshold,
+			GoodNewsThreshold:     params.AsymmetricRisk.Value.GoodNewsThreshold,
+			ReactionTimeMinutes:   params.AsymmetricRisk.Value.ReactionTimeMinutes,
+			VolumeSpikeMultiplier: params.AsymmetricRisk.Value.VolumeSpikeMultiplier,
 		},
 	}
 
@@ -254,13 +255,14 @@ func (rm *RiskMonitor) CalculateNewsLatencyRisk(symbol string, industryID string
 		return nil
 	}
 
-	// Risk increases with latency gap
-	riskScore := math.Min(1.0, latencyGap/24.0) // Max risk at 24h gap
+	params := config.GetParametersConfig().Industry
+
+	riskScore := math.Min(1.0, latencyGap/params.NewsLatencyRisk.Value.MaxLatencyHours)
 
 	severity := RiskLevelLow
-	if riskScore > 0.8 {
+	if riskScore > params.NewsLatencyRisk.Value.SeverityCriticalMin {
 		severity = RiskLevelHigh
-	} else if riskScore > 0.5 {
+	} else if riskScore > params.NewsLatencyRisk.Value.SeverityHighMin {
 		severity = RiskLevelMedium
 	}
 
@@ -271,8 +273,8 @@ func (rm *RiskMonitor) CalculateNewsLatencyRisk(symbol string, industryID string
 		IndustryID:        industryID,
 		Symbol:            symbol,
 		Description:       fmt.Sprintf("台灣新聞延遲 %.0f 小時，美國Tier 1消息先到", latencyGap),
-		ImpactEstimate:    -riskScore * 0.05,
-		Confidence:        0.80,
+		ImpactEstimate:    -riskScore * params.NewsLatencyRisk.Value.ImpactMultiplier,
+		Confidence:        params.RiskConfidence.Value,
 		DetectedAt:        time.Now(),
 		Source:            "news_source_analysis",
 		RecommendedAction: "優先監控美國Tier 1新聞源",
@@ -291,14 +293,15 @@ func (rm *RiskMonitor) CalculateAsymmetricRisk(symbol string, priceChangePct flo
 		return nil
 	}
 
-	// Calculate severity based on price drop
+	params := config.GetParametersConfig().Industry
+
 	severity := RiskLevelLow
 	dropPct := math.Abs(priceChangePct)
-	if dropPct > 0.10 {
+	if dropPct > params.NewsLatencyRisk.Value.DropCriticalThreshold {
 		severity = RiskLevelCritical
-	} else if dropPct > 0.07 {
+	} else if dropPct > params.NewsLatencyRisk.Value.DropHighThreshold {
 		severity = RiskLevelHigh
-	} else if dropPct > 0.05 {
+	} else if dropPct > params.NewsLatencyRisk.Value.DropMediumThreshold {
 		severity = RiskLevelMedium
 	}
 
@@ -306,11 +309,11 @@ func (rm *RiskMonitor) CalculateAsymmetricRisk(symbol string, priceChangePct flo
 		ID:                fmt.Sprintf("risk-asymmetric-%s-%d", symbol, time.Now().Unix()),
 		Type:              "asymmetric",
 		Severity:          severity,
-		IndustryID:        "", // Should be determined from symbol
+		IndustryID:        "",
 		Symbol:            symbol,
 		Description:       fmt.Sprintf("股價下跌 %.1f%%，成交量放大 %.1f 倍，壞消息衝擊", dropPct*100, volumeMultiplier),
 		ImpactEstimate:    priceChangePct,
-		Confidence:        math.Min(1.0, volumeMultiplier/3.0),
+		Confidence:        math.Min(1.0, volumeMultiplier/params.NewsLatencyRisk.Value.ConfidenceDivisor),
 		DetectedAt:        time.Now(),
 		Source:            "price_volume_analysis",
 		RecommendedAction: rm.getAsymmetricAction(dropPct),

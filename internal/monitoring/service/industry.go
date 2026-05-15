@@ -165,16 +165,17 @@ func (s *IndustryService) GetSeasonalCalendar(industryID string, year int) []map
 }
 
 type CyclePosition struct {
-	Industry       string    `json:"industry"`
-	Name           string    `json:"name"`
-	BusinessCycle  string    `json:"business_cycle"`
-	InventoryCycle string    `json:"inventory_cycle"`
-	CapexCycle     string    `json:"capex_cycle"`
-	Confidence     float64   `json:"confidence"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	IsFavorable    bool      `json:"is_favorable"`
-	PhaseScore     float64   `json:"phase_score"`
-	Trend          string    `json:"trend"`
+	Industry            string                        `json:"industry"`
+	Name                string                        `json:"name"`
+	BusinessCycle       string                        `json:"business_cycle"`
+	InventoryCycle      string                        `json:"inventory_cycle"`
+	CapexCycle          string                        `json:"capex_cycle"`
+	Confidence          float64                       `json:"confidence"`
+	ConfidenceBreakdown *industry.ConfidenceBreakdown `json:"confidence_breakdown,omitempty"`
+	UpdatedAt           time.Time                     `json:"updated_at"`
+	IsFavorable         bool                          `json:"is_favorable"`
+	PhaseScore          float64                       `json:"phase_score"`
+	Trend               string                        `json:"trend"`
 }
 
 func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition, bool) {
@@ -186,16 +187,17 @@ func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition,
 			}
 			if pos, ok := s.CycleTracker.GetPosition(seg.ID); ok {
 				allPositions = append(allPositions, CyclePosition{
-					Industry:       seg.ID,
-					Name:           seg.Name,
-					BusinessCycle:  string(pos.BusinessCycle),
-					InventoryCycle: string(pos.InventoryCycle),
-					CapexCycle:     string(pos.CapexCycle),
-					Confidence:     pos.Confidence,
-					UpdatedAt:      pos.UpdatedAt,
-					IsFavorable:    pos.IsFavorable(),
-					PhaseScore:     pos.GetPhaseScore(),
-					Trend:          pos.GetTrend(),
+					Industry:            seg.ID,
+					Name:                seg.Name,
+					BusinessCycle:       string(pos.BusinessCycle),
+					InventoryCycle:      string(pos.InventoryCycle),
+					CapexCycle:          string(pos.CapexCycle),
+					Confidence:          pos.Confidence,
+					ConfidenceBreakdown: pos.ConfidenceBreakdown,
+					UpdatedAt:           pos.UpdatedAt,
+					IsFavorable:         pos.IsFavorable(),
+					PhaseScore:          pos.GetPhaseScore(),
+					Trend:               pos.GetTrend(),
 				})
 			}
 		}
@@ -207,15 +209,16 @@ func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition,
 		return nil, false
 	}
 	return []CyclePosition{{
-		Industry:       industryID,
-		BusinessCycle:  string(position.BusinessCycle),
-		InventoryCycle: string(position.InventoryCycle),
-		CapexCycle:     string(position.CapexCycle),
-		Confidence:     position.Confidence,
-		UpdatedAt:      position.UpdatedAt,
-		IsFavorable:    position.IsFavorable(),
-		PhaseScore:     position.GetPhaseScore(),
-		Trend:          position.GetTrend(),
+		Industry:            industryID,
+		BusinessCycle:       string(position.BusinessCycle),
+		InventoryCycle:      string(position.InventoryCycle),
+		CapexCycle:          string(position.CapexCycle),
+		Confidence:          position.Confidence,
+		ConfidenceBreakdown: position.ConfidenceBreakdown,
+		UpdatedAt:           position.UpdatedAt,
+		IsFavorable:         position.IsFavorable(),
+		PhaseScore:          position.GetPhaseScore(),
+		Trend:               position.GetTrend(),
 	}}, true
 }
 
@@ -317,15 +320,16 @@ func (s *IndustryService) GetRiskInfo(symbol, industryID string) *RiskInfo {
 }
 
 type IndustryOverview struct {
-	ID               string                         `json:"id"`
-	Name             string                         `json:"name"`
-	CyclePhase       string                         `json:"cycle_phase"`
-	InventoryCycle   string                         `json:"inventory_cycle"`
-	CapexCycle       string                         `json:"capex_cycle"`
-	CycleConfidence  float64                        `json:"cycle_confidence"`
-	IsFavorable      bool                           `json:"is_favorable"`
-	SeasonalPatterns []string                       `json:"seasonal_patterns"`
-	LinkageScore     *industry.IndustryLinkageScore `json:"linkage_score"`
+	ID                  string                         `json:"id"`
+	Name                string                         `json:"name"`
+	CyclePhase          string                         `json:"cycle_phase"`
+	InventoryCycle      string                         `json:"inventory_cycle"`
+	CapexCycle          string                         `json:"capex_cycle"`
+	CycleConfidence     float64                        `json:"cycle_confidence"`
+	ConfidenceBreakdown *industry.ConfidenceBreakdown  `json:"confidence_breakdown,omitempty"`
+	IsFavorable         bool                           `json:"is_favorable"`
+	SeasonalPatterns    []string                       `json:"seasonal_patterns"`
+	LinkageScore        *industry.IndustryLinkageScore `json:"linkage_score"`
 }
 
 func (s *IndustryService) GetIndustryOverview(now time.Time) []IndustryOverview {
@@ -352,15 +356,16 @@ func (s *IndustryService) GetIndustryOverview(now time.Time) []IndustryOverview 
 		linkageScore := s.LinkageAnalyzer.CalculateLinkageScore(seg.ID)
 
 		industries = append(industries, IndustryOverview{
-			ID:               seg.ID,
-			Name:             seg.Name,
-			CyclePhase:       string(cyclePos.BusinessCycle),
-			InventoryCycle:   string(cyclePos.InventoryCycle),
-			CapexCycle:       string(cyclePos.CapexCycle),
-			CycleConfidence:  cyclePos.Confidence,
-			IsFavorable:      cyclePos.IsFavorable(),
-			SeasonalPatterns: activePatternNames,
-			LinkageScore:     linkageScore,
+			ID:                  seg.ID,
+			Name:                seg.Name,
+			CyclePhase:          string(cyclePos.BusinessCycle),
+			InventoryCycle:      string(cyclePos.InventoryCycle),
+			CapexCycle:          string(cyclePos.CapexCycle),
+			CycleConfidence:     cyclePos.Confidence,
+			ConfidenceBreakdown: cyclePos.ConfidenceBreakdown,
+			IsFavorable:         cyclePos.IsFavorable(),
+			SeasonalPatterns:    activePatternNames,
+			LinkageScore:        linkageScore,
 		})
 	}
 	return industries
