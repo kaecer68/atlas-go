@@ -71,6 +71,7 @@ type CycleTracker struct {
 	seasonalEngine   *SeasonalEngine
 	linkageAnalyzer  *LinkageAnalyzer
 	narrativeHitRate func() float64
+	narrativeAdjust  func(industryID string) NarrativeAdjustment
 }
 
 // NewCycleTracker creates a new cycle tracker.
@@ -94,6 +95,10 @@ func (ct *CycleTracker) SetExternalValidators(seasonal *SeasonalEngine, linkage 
 // used as an independent signal in multi-dimensional confidence scoring.
 func (ct *CycleTracker) SetNarrativeProvider(fn func() float64) {
 	ct.narrativeHitRate = fn
+}
+
+func (ct *CycleTracker) SetNarrativeAdjuster(fn func(industryID string) NarrativeAdjustment) {
+	ct.narrativeAdjust = fn
 }
 
 // initializeDefaultPositions populates the tracker with default cycle positions
@@ -257,6 +262,12 @@ func (ct *CycleTracker) detectBusinessCycle(metrics IndustryMetrics) CyclePhase 
 	revenueGrowth := metrics.RevenueGrowthYoY
 	profitGrowth := metrics.ProfitGrowthYoY
 
+	if ct.narrativeAdjust != nil {
+		adj := ct.narrativeAdjust(metrics.IndustryID)
+		revenueGrowth += adj.RevenueBias * adj.Confidence
+		profitGrowth += adj.ProfitBias * adj.Confidence
+	}
+
 	switch {
 	case revenueGrowth > thresholds.ExpansionRevenuePct && profitGrowth > thresholds.ExpansionProfitPct:
 		return CycleExpansion
@@ -302,30 +313,31 @@ func (ct *CycleTracker) detectCapexCycle(metrics IndustryMetrics) CapexCycle {
 }
 
 func (ct *CycleTracker) calculateConfidence(industryID string, metrics IndustryMetrics) float64 {
+	cfgSignal := config.GetParametersConfig().Industry.ConfidenceSignal.Value
+	cfgMix := config.GetParametersConfig().Industry.ConfidenceMix.Value
+
 	hasData := metrics.RevenueGrowthYoY != 0 || metrics.ProfitGrowthYoY != 0 ||
 		metrics.InventoryTurnover != 0 || metrics.CapacityUtilization > 0
 	if !hasData {
-		return 0.3
+		return cfgSignal.ConfidenceFloor
 	}
 
-	signal := 0.3
+	signal := cfgSignal.SignalBase
 	if metrics.RevenueGrowthYoY != 0 {
-		signal += math.Min(math.Abs(metrics.RevenueGrowthYoY)/0.5, 1.0) * 0.25
+		signal += math.Min(math.Abs(metrics.RevenueGrowthYoY)/cfgSignal.RevenueNormDenom, 1.0) * cfgSignal.RevenueWeight
 	}
 	if metrics.ProfitGrowthYoY != 0 {
-		signal += math.Min(math.Abs(metrics.ProfitGrowthYoY)/0.5, 1.0) * 0.25
+		signal += math.Min(math.Abs(metrics.ProfitGrowthYoY)/cfgSignal.ProfitNormDenom, 1.0) * cfgSignal.ProfitWeight
 	}
 	if metrics.InventoryTurnover != 0 {
-		signal += math.Min(metrics.InventoryTurnover/10.0, 1.0) * 0.10
+		signal += math.Min(metrics.InventoryTurnover/cfgSignal.InventoryNormDenom, 1.0) * cfgSignal.InventoryWeight
 	}
 	if metrics.CapacityUtilization > 0 {
-		signal += math.Min(metrics.CapacityUtilization, 1.0) * 0.15
+		signal += math.Min(metrics.CapacityUtilization, 1.0) * cfgSignal.UtilizationWeight
 	}
 
 	boundary := ct.boundaryConfidence(industryID, metrics)
-	confidence := signal*0.6 + boundary*0.4
-
-	cfgMix := config.GetParametersConfig().Industry.ConfidenceMix.Value
+	confidence := signal*cfgSignal.SignalBoundaryMix + boundary*(1.0-cfgSignal.SignalBoundaryMix)
 
 	seasonalScore := 0.0
 	hasSeasonal := false
@@ -382,11 +394,11 @@ func (ct *CycleTracker) calculateConfidence(industryID string, metrics IndustryM
 		}
 	}
 
-	if confidence > 1.0 {
-		confidence = 1.0
+	if confidence > cfgSignal.ConfidenceCeiling {
+		confidence = cfgSignal.ConfidenceCeiling
 	}
-	if confidence < 0.1 {
-		confidence = 0.1
+	if confidence < cfgSignal.ConfidenceFloor {
+		confidence = cfgSignal.ConfidenceFloor
 	}
 	return confidence
 }
@@ -457,7 +469,7 @@ func (ct *CycleTracker) boundaryConfidence(industryID string, metrics IndustryMe
 	if tr <= 0 {
 		tr = 0.25
 	}
-	denom := tr * 0.3
+	denom := tr * config.GetParametersConfig().Industry.ConfidenceSignal.Value.BoundaryDenomFactor
 
 	revScore := math.Min(revMinDist/denom, 1.0)
 	profitScore := math.Min(profitMinDist/denom, 1.0)
@@ -559,15 +571,16 @@ func (cp *CyclePosition) GetTrend() string {
 
 // GetPhaseScore returns a numerical score for the cycle phase (-1 to 1).
 func (cp *CyclePosition) GetPhaseScore() float64 {
+	cfg := config.GetParametersConfig().Industry.PhaseScores.Value
 	switch cp.BusinessCycle {
 	case CycleExpansion:
-		return 1.0
+		return cfg.ScoreExpansion
 	case CycleRecovery:
-		return 0.5
+		return cfg.ScoreRecovery
 	case CycleMature:
-		return 0.0
+		return cfg.ScoreMature
 	case CycleRecession:
-		return -1.0
+		return cfg.ScoreRecession
 	default:
 		return 0.0
 	}
@@ -595,6 +608,20 @@ type CyclePhaseTransition struct {
 
 // GetTypicalTransitions returns typical cycle transitions.
 func GetTypicalTransitions() []CyclePhaseTransition {
+	configs := config.GetParametersConfig().Industry.CycleTransitions.Value
+	if len(configs) > 0 {
+		transitions := make([]CyclePhaseTransition, len(configs))
+		for i, c := range configs {
+			transitions[i] = CyclePhaseTransition{
+				FromPhase:           CyclePhase(c.FromPhase),
+				ToPhase:             CyclePhase(c.ToPhase),
+				Probability:         c.Probability,
+				Triggers:            c.Triggers,
+				TypicalDurationDays: c.TypicalDurationDays,
+			}
+		}
+		return transitions
+	}
 	return []CyclePhaseTransition{
 		{FromPhase: CycleRecession, ToPhase: CycleRecovery, Probability: 0.70, Triggers: []string{"inventory_depletion", "demand_stabilization"}, TypicalDurationDays: 180},
 		{FromPhase: CycleRecovery, ToPhase: CycleExpansion, Probability: 0.80, Triggers: []string{"revenue_acceleration", "capex_increase"}, TypicalDurationDays: 270},

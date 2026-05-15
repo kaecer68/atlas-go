@@ -1,6 +1,7 @@
 package industry
 
 import (
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -63,62 +64,60 @@ func (dem *DynamicEnvModulator) BDIDeviation() float64 {
 // BDI deviations affect shipping demand and downstream logistics costs.
 // Returns a multiplier: 1.0 = no change, >1.0 = amplify seasonal effect.
 func (dem *DynamicEnvModulator) SeasonalModulation(industryID string) float64 {
+	cfg := config.GetParametersConfig().Industry.DynamicEnv.Value
 	oilDev := dem.OilDeviation()
 	dxyDev := dem.DXYDeviation()
 	bdiDev := dem.BDIDeviation()
 
 	switch industryID {
 	case "energy":
-		if oilDev > 0.10 {
-			return 1.0 + oilDev*0.5
+		if oilDev > cfg.OilHighThreshold {
+			return 1.0 + oilDev*cfg.OilEnergyMult
 		}
-		if oilDev < -0.10 {
-			return 1.0 + oilDev*0.5
+		if oilDev < -cfg.OilHighThreshold {
+			return 1.0 + oilDev*cfg.OilEnergyMult
 		}
 		return 1.0
 
 	case "shipping":
 		mod := 1.0
-		if oilDev > 0.15 {
-			mod *= 0.95
+		if oilDev > cfg.OilHighThreshold {
+			mod *= 1.0 - cfg.OilShippingPenalty
 		}
-		if oilDev < -0.10 {
-			mod *= 1.05
+		if oilDev < -cfg.OilLowThreshold {
+			mod *= 1.0 + cfg.OilShippingBenefit
 		}
-		// BDI above baseline = strong shipping demand = amplify shipping sector
-		if bdiDev > 0.10 {
-			mod *= 1.0 + bdiDev*0.3
+		if bdiDev > cfg.BDIHighThreshold {
+			mod *= 1.0 + bdiDev*cfg.BDIShippingBoost
 		}
-		if bdiDev < -0.10 {
-			mod *= 1.0 + bdiDev*0.2
+		if bdiDev < -cfg.BDIHighThreshold {
+			mod *= 1.0 + bdiDev*cfg.BDIShippingBoost*0.5
 		}
 		return mod
 
 	case "industrial", "petrochemicals", "steel":
 		mod := 1.0
-		if oilDev > 0.15 {
-			mod *= 0.94
+		if oilDev > cfg.OilHighThreshold {
+			mod *= 1.0 - cfg.OilIndustrialPenalty
 		}
-		if oilDev < -0.10 {
-			mod *= 1.04
+		if oilDev < -cfg.OilLowThreshold {
+			mod *= 1.0 + cfg.OilIndustrialBenefit
 		}
-		// BDI above baseline = higher input transport costs = negative for manufacturing
-		if bdiDev > 0.15 {
-			mod *= 0.96
+		if bdiDev > cfg.BDIHighThreshold {
+			mod *= 1.0 - cfg.BDICostPenalty
 		}
 		return mod
 
 	case "semiconductor", "ai_supply_chain", "electronics":
 		mod := 1.0
-		if dxyDev > 0.05 {
-			mod *= 0.95
+		if dxyDev > cfg.DXYHighThreshold {
+			mod *= 1.0 - cfg.DXYExportPenalty
 		}
-		if dxyDev < -0.03 {
-			mod *= 1.04
+		if dxyDev < -cfg.DXYLowThreshold {
+			mod *= 1.0 + cfg.DXYExportBenefit
 		}
-		// BDI above baseline = higher logistics costs for export-oriented sectors
-		if bdiDev > 0.20 {
-			mod *= 0.97
+		if bdiDev > cfg.BDIHighThreshold*2 {
+			mod *= 1.0 - cfg.BDICostPenalty*0.5
 		}
 		return mod
 

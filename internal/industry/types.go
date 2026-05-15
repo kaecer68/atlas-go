@@ -99,6 +99,16 @@ type IndustryMetrics struct {
 	Timestamp           time.Time `json:"timestamp"`
 }
 
+// NarrativeAdjustment represents how active narrative events shift
+// cycle phase detection for an industry. A negative RevenueBias pushes
+// the effective growth downward, making recession/mature more likely.
+type NarrativeAdjustment struct {
+	RevenueBias float64 `json:"revenue_bias"`
+	ProfitBias  float64 `json:"profit_bias"`
+	Confidence  float64 `json:"confidence"` // 0-1 how reliable this bias is
+	ActiveTheme string  `json:"active_theme,omitempty"`
+}
+
 // ClassificationTree provides hierarchical access to industry segments.
 type ClassificationTree struct {
 	segments map[string]*IndustrySegment

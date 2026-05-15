@@ -229,6 +229,49 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 		}
 		return hitRate
 	})
+	cycleTracker.SetNarrativeAdjuster(func(industryID string) industry.NarrativeAdjustment {
+		events := narrativeEngine.DetectEvents(narrative.MarketNarrativeData{})
+		// theme → {affected industries → baseRevenueBias}
+		type themeImpact struct {
+			industryBias map[string]float64
+		}
+		themeMap := map[string]themeImpact{
+			"AI_capex_surge":          {map[string]float64{"semiconductor": 0.08, "ai_supply_chain": 0.08, "electronics": 0.05}},
+			"US_rates_up":             {map[string]float64{"financials": -0.04}},
+			"JPY_carry_unwind":        {map[string]float64{"financials": -0.03, "semiconductor": -0.05, "electronics": -0.03}},
+			"geopolitical_risk_spike": {map[string]float64{"shipping": -0.05, "energy": -0.05, "industrial": -0.03}},
+			"oil_price_shock":         {map[string]float64{"shipping": -0.04, "energy": -0.04, "industrial": -0.03}},
+			"semiconductor_downturn":  {map[string]float64{"semiconductor": -0.08, "ai_supply_chain": -0.06, "electronics": -0.06}},
+		}
+		totalBias := 0.0
+		maxConf := 0.0
+		activeTheme := ""
+		for _, e := range events {
+			ti, ok := themeMap[e.Theme]
+			if !ok {
+				continue
+			}
+			bias, ok := ti.industryBias[industryID]
+			if !ok {
+				continue
+			}
+			weighted := bias * e.Confidence * e.HitRate
+			totalBias += weighted
+			if e.Confidence*e.HitRate > maxConf {
+				maxConf = e.Confidence * e.HitRate
+				activeTheme = e.Theme
+			}
+		}
+		if maxConf == 0 {
+			return industry.NarrativeAdjustment{}
+		}
+		return industry.NarrativeAdjustment{
+			RevenueBias: totalBias,
+			ProfitBias:  totalBias * 0.8,
+			Confidence:  maxConf,
+			ActiveTheme: activeTheme,
+		}
+	})
 
 	// Wire supply chain graph into seasonal engine
 	seasonalEngine.SetLinkageGraph(linkageAnalyzer.GetSupplyChainGraph())
