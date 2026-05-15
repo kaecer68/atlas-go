@@ -1,6 +1,7 @@
 package spawning
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -113,6 +114,12 @@ func (m *SpawningManager) runLoop() {
 		}
 		m.PerformSpawningCycle()
 	}
+}
+
+// RunOnce performs a single spawning cycle for BTM integration.
+func (m *SpawningManager) RunOnce(ctx context.Context) error {
+	m.PerformSpawningCycle()
+	return nil
 }
 
 // PerformSpawningCycle executes one full spawning cycle

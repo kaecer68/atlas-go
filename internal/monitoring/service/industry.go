@@ -491,7 +491,61 @@ func (s *IndustryService) calculateWeightDerivation(seg *industry.IndustrySegmen
 	}
 	wd.Interpretation = fmt.Sprintf("權重 %.1f%% 來自 configs/parameters.json 的產業配置；因子分布分析待 Phase 2 真實市場數據源整合後提供", seg.Weight*100)
 
+	// 定性風險與機會分析（不宣稱外部數據源，純屬內部分析觀點）
+	wd.RiskFactors = s.getDefaultRiskFactors(seg.ID)
+	wd.Opportunities = s.getDefaultOpportunities(seg.ID)
+
 	return wd
+}
+
+func (s *IndustryService) getDefaultRiskFactors(id string) []string {
+	switch id {
+	case "semiconductor":
+		return []string{"美中科技戰出口管制", "先進製程竞争加剧", "成熟製程中國大陸產能過剩"}
+	case "ai_supply_chain":
+		return []string{"GB200延期出貨風險", "供應商過度集中", "中國供應鏈競爭"}
+	case "robotics":
+		return []string{"中國廠商低價競爭", "日本、歐洲傳統強權技術領先", "景氣循環影響資本支出"}
+	case "financials":
+		return []string{"信用風險攀升", "房市修正壓力", "數位金融顛覆"}
+	case "shipping":
+		return []string{"紅海危機常態化", "新造船交付過剩", "環保法規成本增加"}
+	case "energy":
+		return []string{"國際燃料價格波動", "核能政策不確定性", "電網韌性不足"}
+	case "electronics":
+		return []string{"中國大陸低價競爭", "景氣放緩影響消費電子", "規格標準化壓縮毛利"}
+	case "consumer":
+		return []string{"人均所得停滯", "人口減少趨勢", "電商侵蝕毛利率"}
+	case "industrial":
+		return []string{"中國基建投資放緩", "原物料價格上漲", "環保法規趨嚴"}
+	default:
+		return nil
+	}
+}
+
+func (s *IndustryService) getDefaultOpportunities(id string) []string {
+	switch id {
+	case "semiconductor":
+		return []string{"AI晶片需求爆發", "CoWoS先進封裝供需吃緊", "HPC高效能運算長期趨勢"}
+	case "ai_supply_chain":
+		return []string{"CSP資本支出持續擴張", "邊緣AI運算需求興起", "液冷散熱滲透率提升"}
+	case "robotics":
+		return []string{"半導體先進封裝設備需求", "電動車組裝自動化", "醫療手術機器人滲透"}
+	case "financials":
+		return []string{"升息循環持續利差收益", "理財商品手續費收入", "不動產逆向房貸商機"}
+	case "shipping":
+		return []string{"全球供應鏈重組", "低碳航運轉型落後者", "碼頭擁堵再現"}
+	case "energy":
+		return []string{"離岸風電國產化", "太陽能模組需求", "儲能系統商轉"}
+	case "electronics":
+		return []string{"車用電子滲透率提升", "AI終端裝置", "高速傳輸介面升級"}
+	case "consumer":
+		return []string{"健康意識抬頭", "高端餐飲需求", "寵物經濟"}
+	case "industrial":
+		return []string{"半導體廠建設需求", "綠能基礎設施", "前瞻軌道建設"}
+	default:
+		return nil
+	}
 }
 
 func (s *IndustryService) generateRecommendation(seg *industry.IndustrySegment, pos *industry.CyclePosition, wd WeightDerivation) *IndustryRecommendation {
