@@ -358,6 +358,8 @@ type IndustryParameters struct {
 
 	LinkageParams ParameterMetadata[LinkageConfig] `json:"linkage_params"`
 
+	DynamicEnv ParameterMetadata[DynamicEnvConfig] `json:"dynamic_env"`
+
 	// Cycle tracking operational parameters
 	HistoryRetentionDays ParameterMetadata[int] `json:"history_retention_days"`
 }
@@ -503,6 +505,24 @@ type CycleTransitionConfig struct {
 	Triggers            []string `json:"triggers"`
 	Probability         float64  `json:"probability"`
 	TypicalDurationDays int      `json:"typical_duration_days"`
+}
+
+type DynamicEnvConfig struct {
+	OilHighThreshold     float64 `json:"oil_high_threshold"`
+	OilLowThreshold      float64 `json:"oil_low_threshold"`
+	OilEnergyMult        float64 `json:"oil_energy_mult"`
+	OilShippingPenalty   float64 `json:"oil_shipping_penalty"`
+	OilShippingBenefit   float64 `json:"oil_shipping_benefit"`
+	OilIndustrialPenalty float64 `json:"oil_industrial_penalty"`
+	OilIndustrialBenefit float64 `json:"oil_industrial_benefit"`
+	BDIHighThreshold     float64 `json:"bdi_high_threshold"`
+	BDILowThreshold      float64 `json:"bdi_low_threshold"`
+	BDIShippingBoost     float64 `json:"bdi_shipping_boost"`
+	BDICostPenalty       float64 `json:"bdi_cost_penalty"`
+	DXYHighThreshold     float64 `json:"dxy_high_threshold"`
+	DXYLowThreshold      float64 `json:"dxy_low_threshold"`
+	DXYExportPenalty     float64 `json:"dxy_export_penalty"`
+	DXYExportBenefit     float64 `json:"dxy_export_benefit"`
 }
 
 // StrategyParameters holds tunable values for strategy selection and switching.

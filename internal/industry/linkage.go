@@ -409,6 +409,10 @@ func (sp *ShockPropagation) CalculateLinkageScore(industryID string) *IndustryLi
 
 	systemicImportance := 0.0
 	if len(upstream)+len(downstream) > 0 {
+		// Use max of graph's MaxDegree and config's SystemicImportanceDivisor as the divisor,
+		// ensuring the divisor is never smaller than the configured minimum (10.0).
+		// This preserves dynamic adjustment for dense graphs while honoring the config
+		// calibration intent from parameters.json.
 		divisor := float64(sp.graph.MaxDegree())
 		if cfg := config.GetParametersConfig(); cfg != nil {
 			if configDiv := cfg.Industry.LinkageParams.Value.SystemicImportanceDivisor; configDiv > divisor {

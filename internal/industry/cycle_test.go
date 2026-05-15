@@ -1,7 +1,10 @@
 package industry
 
 import (
+	"math"
 	"testing"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 func TestNewCycleTracker(t *testing.T) {
@@ -160,11 +163,12 @@ func TestCalculateConfidence(t *testing.T) {
 		t.Errorf("expected moderate confidence (~0.55) with moderate metrics, got %f", confidence)
 	}
 
-	// Empty metrics
+	// Empty metrics — should return configured confidence floor
 	emptyMetrics := IndustryMetrics{}
+	cfgFloor := config.GetParametersConfig().Industry.ConfidenceSignal.Value.ConfidenceFloor
 	confidence = ct.calculateConfidence("test", emptyMetrics)
-	if confidence != 0.3 {
-		t.Errorf("expected base confidence 0.3, got %f", confidence)
+	if math.Abs(confidence-cfgFloor) > 0.001 {
+		t.Errorf("expected base confidence %f, got %f", cfgFloor, confidence)
 	}
 }
 

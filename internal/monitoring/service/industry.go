@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
@@ -213,9 +214,47 @@ type CyclePosition struct {
 	IsFavorable    bool      `json:"is_favorable"`
 	PhaseScore     float64   `json:"phase_score"`
 	Trend          string    `json:"trend"`
+	// Confidence decomposition (computed at service layer)
+	ConfidenceBreakdown map[string]float64 `json:"confidence_breakdown,omitempty"`
+	NarrativeTheme      string             `json:"narrative_theme,omitempty"`
+	// Threshold evidence quality from config
+	ThresholdEvidence map[string]string `json:"threshold_evidence,omitempty"`
 }
 
 func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition, bool) {
+	mix := config.GetParametersConfig().Industry.ConfidenceMix.Value
+	breakdown := map[string]float64{
+		"boundary":  mix.WeightBoundary,
+		"freshness": mix.WeightFreshness,
+		"seasonal":  mix.WeightSeasonal,
+		"linkage":   mix.WeightLinkage,
+		"narrative": mix.WeightNarrative,
+	}
+	ev := map[string]string{
+		"source_type":       "heuristic",
+		"evidence_quality":  "low",
+		"update_policy":     "auto",
+		"validation_method": "empirical_calibration",
+	}
+
+	buildCyclePosition := func(pos *industry.CyclePosition, name string) CyclePosition {
+		return CyclePosition{
+			Industry:            pos.IndustryID,
+			Name:                name,
+			BusinessCycle:       string(pos.BusinessCycle),
+			InventoryCycle:      string(pos.InventoryCycle),
+			CapexCycle:          string(pos.CapexCycle),
+			Confidence:          pos.Confidence,
+			UpdatedAt:           pos.UpdatedAt,
+			IsFavorable:         pos.IsFavorable(),
+			PhaseScore:          pos.GetPhaseScore(),
+			Trend:               pos.GetTrend(),
+			ConfidenceBreakdown: breakdown,
+			NarrativeTheme:      "", // populated by narrative adjuster internally
+			ThresholdEvidence:   ev,
+		}
+	}
+
 	if industryID == "" {
 		var allPositions []CyclePosition
 		for _, seg := range s.Classifier.GetAllSegments() {
@@ -223,18 +262,7 @@ func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition,
 				continue
 			}
 			if pos, ok := s.CycleTracker.GetPosition(seg.ID); ok {
-				allPositions = append(allPositions, CyclePosition{
-					Industry:       seg.ID,
-					Name:           seg.Name,
-					BusinessCycle:  string(pos.BusinessCycle),
-					InventoryCycle: string(pos.InventoryCycle),
-					CapexCycle:     string(pos.CapexCycle),
-					Confidence:     pos.Confidence,
-					UpdatedAt:      pos.UpdatedAt,
-					IsFavorable:    pos.IsFavorable(),
-					PhaseScore:     pos.GetPhaseScore(),
-					Trend:          pos.GetTrend(),
-				})
+				allPositions = append(allPositions, buildCyclePosition(pos, seg.Name))
 			}
 		}
 		return allPositions, true
@@ -244,17 +272,12 @@ func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition,
 	if !ok {
 		return nil, false
 	}
-	return []CyclePosition{{
-		Industry:       industryID,
-		BusinessCycle:  string(position.BusinessCycle),
-		InventoryCycle: string(position.InventoryCycle),
-		CapexCycle:     string(position.CapexCycle),
-		Confidence:     position.Confidence,
-		UpdatedAt:      position.UpdatedAt,
-		IsFavorable:    position.IsFavorable(),
-		PhaseScore:     position.GetPhaseScore(),
-		Trend:          position.GetTrend(),
-	}}, true
+	seg, ok := s.Classifier.GetSegment(industryID)
+	name := industryID
+	if ok {
+		name = seg.Name
+	}
+	return []CyclePosition{buildCyclePosition(position, name)}, true
 }
 
 type LinkageInfo struct {

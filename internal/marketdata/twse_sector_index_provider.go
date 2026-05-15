@@ -28,11 +28,10 @@ type SectorIndexData struct {
 // TWSESectorIndexProvider fetches Taiwan industry index data from TWSE.
 // Industry indices are used for empirical correlation calibration between sectors.
 type TWSESectorIndexProvider struct {
-	client     *http.Client
-	baseURL    string
-	limiter    *rate.Limiter
-	cacheDir   string
-	industries map[string]string // industry ID -> TWSE industry code
+	client   *http.Client
+	baseURL  string
+	limiter  *rate.Limiter
+	cacheDir string
 }
 
 // NewTWSESectorIndexProvider creates a new TWSE sector index provider.
@@ -49,18 +48,9 @@ func NewTWSESectorIndexProvider(cacheDir string) *TWSESectorIndexProvider {
 
 	return &TWSESectorIndexProvider{
 		client:   httpclient.NewFactory().NewClient(time.Duration(timeoutSec) * time.Second),
-		baseURL:  "https://www.twse.com.tw",
+		baseURL:  "https://openapi.twse.com.tw/v1",
 		limiter:  rate.NewLimiter(rate.Limit(apiRate), burst),
 		cacheDir: cacheDir,
-		industries: map[string]string{
-			"semiconductor":   "XX", // Placeholder - TWSE industry codes needed
-			"electronics":     "XX",
-			"shipping":        "XX",
-			"financials":      "XX",
-			"energy":          "XX",
-			"ai_supply_chain": "XX",
-			"robotics":        "XX",
-		},
 	}
 }
 
@@ -113,10 +103,18 @@ func (p *TWSESectorIndexProvider) FetchSectorIndices(ctx context.Context, startD
 	return result, nil
 }
 
+type twseIndexItem struct {
+	Index      string `json:"指數"`
+	CloseIndex string `json:"收盤指數"`
+	Change     string `json:"漲跌"`
+	ChangePts  string `json:"漲跌點數"`
+	ChangePct  string `json:"漲跌百分比"`
+}
+
 // fetchSingleDay fetches industry index data for a single trading day.
 func (p *TWSESectorIndexProvider) fetchSingleDay(ctx context.Context, date time.Time) (map[string]SectorIndexData, error) {
 	dateStr := date.Format("20060102")
-	endpoint := fmt.Sprintf("%s/rwd/en/afterTrading/MI_INDEX?date=%s&type=MS&response=json", p.baseURL, dateStr)
+	endpoint := fmt.Sprintf("%s/exchangeReport/MI_INDEX?date=%s&type=MS&response=json", p.baseURL, dateStr)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -133,31 +131,27 @@ func (p *TWSESectorIndexProvider) fetchSingleDay(ctx context.Context, date time.
 		return nil, fmt.Errorf("api error: status %d", resp.StatusCode)
 	}
 
-	var apiResp struct {
-		Stat   string     `json:"stat"`
-		Date   string     `json:"date"`
-		Title  string     `json:"title"`
-		Fields []string   `json:"fields"`
-		Data   [][]string `json:"data"`
-	}
+	var apiResp []twseIndexItem
 	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
-	}
-
-	if apiResp.Stat != "OK" {
-		return nil, fmt.Errorf("api stat not OK: %s", apiResp.Stat)
 	}
 
 	result := make(map[string]SectorIndexData)
 	dateFormatted := date.Format("2006-01-02")
 
-	for _, row := range apiResp.Data {
-		if len(row) < 2 {
+	for _, item := range apiResp {
+		industryName := strings.TrimSpace(item.Index)
+		closeIndex := strings.TrimSpace(item.CloseIndex)
+
+		if closeIndex == "" {
 			continue
 		}
-		industryName := strings.TrimSpace(row[0])
-		indexValue, err := strconv.ParseFloat(strings.ReplaceAll(row[1], ",", ""), 64)
+		indexValue, err := strconv.ParseFloat(strings.ReplaceAll(closeIndex, ",", ""), 64)
 		if err != nil {
+			continue
+		}
+
+		if indexValue == 0 {
 			continue
 		}
 
@@ -176,22 +170,21 @@ func (p *TWSESectorIndexProvider) fetchSingleDay(ctx context.Context, date time.
 	return result, nil
 }
 
-// mapIndustryName maps TWSE industry names to internal industry IDs.
+// mapIndustryName maps TWSE OpenAPI v1 industry names (Chinese) to internal industry IDs.
 func (p *TWSESectorIndexProvider) mapIndustryName(twseName string) string {
 	mapping := map[string]string{
-		"Semiconductors":              "semiconductor",
-		"Electronic Parts/Components": "electronics",
-		"Shipping and Transportation": "shipping",
-		"Financial and Insurance":     "financials",
-		"Oil, Gas and Electricity":    "energy",
-		"Computer and Peripheral":     "ai_supply_chain",
-		"Electric Machinery":          "robotics",
+		"半導體類指數":     "semiconductor",
+		"電腦及週邊設備類指數": "ai_supply_chain",
+		"電子零組件類指數":   "electronics",
+		"其他電子類指數":    "other_electronics",
+		"航運類指數":      "shipping",
+		"金融保險類指數":    "financials",
+		"油電燃氣類指數":    "energy",
+		"電機機械類指數":    "robotics",
 	}
 
-	for twse, internal := range mapping {
-		if strings.Contains(twseName, twse) {
-			return internal
-		}
+	if id, ok := mapping[twseName]; ok {
+		return id
 	}
 	return ""
 }
