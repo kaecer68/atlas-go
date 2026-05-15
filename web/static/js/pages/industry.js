@@ -242,6 +242,41 @@ export function renderSeasonalityList(allPatterns, activePatterns, data) {
   });
   html += "</tbody></table>";
 
+  // Adjustment breakdown visualization
+  const breakdown = data && data.adjustment_breakdown;
+  if (breakdown) {
+    const layers = [
+      { key: "direct_match", label: "直接匹配" },
+      { key: "supply_chain", label: "供應鏈傳導" },
+      { key: "narrative",    label: "敘事事件" },
+      { key: "dynamic_env",  label: "動態環境" },
+    ];
+    const comp = breakdown.composite || 1.0;
+    html += '<div style="margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px">';
+    html += '<div style="font-weight:700;font-size:13px;margin-bottom:8px">調整因子分解（複合值 ' + comp.toFixed(4) + 'x）</div>';
+    layers.forEach(function(layer) {
+      const val = breakdown[layer.key] || 1.0;
+      const barW = Math.min(Math.abs((val - 1) * 100), 30);
+      const color = val >= 1 ? "var(--up)" : "var(--down)";
+      const direction = val >= 1 ? "+" : "";
+      html += '<div style="display:flex;align-items:center;gap:8px;margin:4px 0;font-size:12px">';
+      html += '<span style="width:80px;color:var(--muted)">' + layer.label + '</span>';
+      html += '<div style="flex:1;height:16px;background:rgba(0,0,0,0.05);border-radius:3px;overflow:hidden">';
+      html += '<div style="width:' + barW + '%;height:100%;background:' + color + ';opacity:0.6;border-radius:3px"></div></div>';
+      html += '<span style="width:60px;text-align:right;font-weight:600;color:' + color + '">' + direction + ((val - 1) * 100).toFixed(1) + '%</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Narrative themes overlay
+  const themes = data && data.narrative_themes;
+  if (themes && themes.length > 0) {
+    html += '<div style="margin-top:8px;font-size:11px;color:var(--muted);padding:6px 10px;background:rgba(79,193,255,0.06);border:1px solid rgba(79,193,255,0.2);border-radius:6px">';
+    html += '<strong>活躍敘事主題：</strong>' + themes.join(", ");
+    html += '</div>';
+  }
+
   if (activePatterns.length === 0) {
     html += `<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--muted)">
       今天是 ${today}，目前無活躍模式。上表列出所有追蹤中的季節性模式供參考。

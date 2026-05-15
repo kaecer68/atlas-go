@@ -34,11 +34,11 @@ func TestCorrelationMultiplier(t *testing.T) {
 			want:      1.15,
 		},
 		{
-			name:      "oil_price_shock shipping+industrial normalized to 1.0",
+			name:      "oil_price_shock shipping+industrial dampened",
 			theme:     "oil_price_shock",
 			industryA: "shipping",
 			industryB: "industrial",
-			want:      1.0,
+			want:      0.92,
 		},
 		{
 			name:      "oil_price_shock semiconductor+ai_supply_chain no effect",
@@ -48,18 +48,18 @@ func TestCorrelationMultiplier(t *testing.T) {
 			want:      1.0,
 		},
 		{
-			name:      "AI_capex_surge semiconductor+ai_supply_chain normalized",
+			name:      "AI_capex_surge semiconductor+ai_supply_chain amplified",
 			theme:     "AI_capex_surge",
 			industryA: "semiconductor",
 			industryB: "ai_supply_chain",
-			want:      1.0,
+			want:      1.12,
 		},
 		{
-			name:      "AI_capex_surge semiconductor+electronics normalized",
+			name:      "AI_capex_surge semiconductor+electronics amplified",
 			theme:     "AI_capex_surge",
 			industryA: "semiconductor",
 			industryB: "electronics",
-			want:      1.0,
+			want:      1.12,
 		},
 		{
 			name:      "AI_capex_surge ai_supply_chain+electronics",
@@ -97,11 +97,11 @@ func TestCorrelationMultiplier(t *testing.T) {
 			want:      1.0,
 		},
 		{
-			name:      "JPY_carry_unwind semiconductor+ai_supply_chain normalized",
+			name:      "JPY_carry_unwind semiconductor+ai_supply_chain dampened",
 			theme:     "JPY_carry_unwind",
 			industryA: "semiconductor",
 			industryB: "ai_supply_chain",
-			want:      1.0,
+			want:      0.90,
 		},
 		{
 			name:      "JPY_carry_unwind ai_supply_chain+shipping",

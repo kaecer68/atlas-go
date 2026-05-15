@@ -200,7 +200,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		taiwanGeoProvider:  taiwanGeoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider, workDir),
 		reportGenerator:    narrative.NewReportGenerator(),
-		industryService:    newWiredIndustryService(narrativeEng),
+		industryService:    newWiredIndustryService(narrativeEng, provider),
 		metricsCollector:   metricsCollector,
 		metricsHistory:     NewMetricsHistory(1000),
 		healthManager:      portfolio.NewAgentHealthManager(),
@@ -208,7 +208,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	}
 }
 
-func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine) *service.IndustryService {
+func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroProvider marketdata.MacroDataProvider) *service.IndustryService {
 	seasonalEngine := industry.NewSeasonalEngine()
 	cycleTracker := industry.NewCycleTracker()
 	linkageAnalyzer := industry.NewLinkageAnalyzer()
@@ -216,7 +216,7 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine) *servic
 	// Wire narrative provider
 	bridge := narrative.NewSeasonalBridge(narrativeEngine)
 	seasonalEngine.SetNarrativeProvider(bridge)
-	cycleTracker.SetNarrativeProvider(func(industryID string) float64 {
+	cycleTracker.SetNarrativeProvider(func() float64 {
 		events := narrativeEngine.DetectEvents(narrative.MarketNarrativeData{})
 		hitRate := 0.0
 		for _, e := range events {
@@ -241,7 +241,17 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine) *servic
 		BDI: marketdata.MacroDataPoint{Value: 1500.0}, // Historical BDI average
 	}
 	modulator := industry.NewDynamicEnvModulator(baseline, baseline)
+	if macroProvider != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if snap, err := macroProvider.FetchSnapshot(ctx); err == nil {
+			modulator.UpdateCurrent(snap)
+		}
+	}
 	seasonalEngine.SetDynamicEnv(modulator)
+
+	// Wire narrative provider into linkage analyzer for dynamic supply chain correlations
+	linkageAnalyzer.SetNarrativeProvider(bridge)
 
 	return service.NewIndustryService(
 		industry.DefaultClassification(),

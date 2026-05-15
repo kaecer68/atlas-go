@@ -70,7 +70,7 @@ type CycleTracker struct {
 	history          map[string][]CyclePosition
 	seasonalEngine   *SeasonalEngine
 	linkageAnalyzer  *LinkageAnalyzer
-	narrativeHitRate func(industryID string) float64
+	narrativeHitRate func() float64
 }
 
 // NewCycleTracker creates a new cycle tracker.
@@ -90,9 +90,9 @@ func (ct *CycleTracker) SetExternalValidators(seasonal *SeasonalEngine, linkage 
 	ct.linkageAnalyzer = linkage
 }
 
-// SetNarrativeProvider sets a function that returns the narrative hit rate
-// for a given industry, used in multi-dimensional confidence scoring.
-func (ct *CycleTracker) SetNarrativeProvider(fn func(industryID string) float64) {
+// SetNarrativeProvider sets a function that returns a global narrative hit rate
+// used as an independent signal in multi-dimensional confidence scoring.
+func (ct *CycleTracker) SetNarrativeProvider(fn func() float64) {
 	ct.narrativeHitRate = fn
 }
 
@@ -323,35 +323,62 @@ func (ct *CycleTracker) calculateConfidence(industryID string, metrics IndustryM
 	}
 
 	boundary := ct.boundaryConfidence(industryID, metrics)
-
-	// Base confidence: blend signal and boundary (60/40)
 	confidence := signal*0.6 + boundary*0.4
 
-	// Seasonal confidence boost: if seasonal engine available and pattern is active,
-	// boost confidence based on historical accuracy of current patterns.
+	cfgMix := config.GetParametersConfig().Industry.ConfidenceMix.Value
+
+	seasonalScore := 0.0
+	hasSeasonal := false
 	if ct.seasonalEngine != nil {
-		seasonalAccuracy := ct.seasonalEngine.GetHistoricalAccuracy(time.Now())
-		if seasonalAccuracy > 0.5 {
-			// Blend in seasonal confidence (max 15% contribution)
-			confidence = confidence*0.85 + seasonalAccuracy*0.15
+		accuracy := ct.seasonalEngine.GetHistoricalAccuracy(time.Now())
+		if accuracy > 0.5 {
+			seasonalScore = accuracy
+			hasSeasonal = true
 		}
 	}
 
-	// Linkage confidence: if correlated industries share the same cycle phase,
-	// confidence increases (cross-validation).
-	if ct.linkageAnalyzer != nil {
-		linkageConfidence := ct.computeLinkageConfidence(industryID)
-		if linkageConfidence > 0 {
-			confidence = confidence*0.90 + linkageConfidence*0.10
+	linkageScore := 0.0
+	hasLinkage := false
+	if ct.linkageAnalyzer != nil && cfgMix.WeightLinkage > 0 {
+		ls := ct.computeLinkageConfidence(industryID)
+		if ls > 0 {
+			linkageScore = ls
+			hasLinkage = true
 		}
 	}
 
-	// Narrative confidence: active narrative events with high hit rates
-	// provide an independent signal.
-	if ct.narrativeHitRate != nil {
-		narrativeConfidence := ct.narrativeHitRate(industryID)
-		if narrativeConfidence > 0 {
-			confidence = confidence*0.95 + narrativeConfidence*0.05
+	narrativeScore := 0.0
+	hasNarrative := false
+	if ct.narrativeHitRate != nil && cfgMix.WeightNarrative > 0 {
+		ns := ct.narrativeHitRate()
+		if ns > 0 {
+			narrativeScore = ns
+			hasNarrative = true
+		}
+	}
+
+	if hasSeasonal || hasLinkage || hasNarrative {
+		baseW := cfgMix.WeightBoundary + cfgMix.WeightFreshness
+		seasonalW := cfgMix.WeightSeasonal
+		linkageW := cfgMix.WeightLinkage
+		narrativeW := cfgMix.WeightNarrative
+
+		activeW := baseW
+		if hasSeasonal {
+			activeW += seasonalW
+		}
+		if hasLinkage {
+			activeW += linkageW
+		}
+		if hasNarrative {
+			activeW += narrativeW
+		}
+
+		if activeW > 0 {
+			confidence = confidence*baseW/activeW +
+				seasonalScore*seasonalW/activeW +
+				linkageScore*linkageW/activeW +
+				narrativeScore*narrativeW/activeW
 		}
 	}
 
