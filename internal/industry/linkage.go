@@ -1,9 +1,12 @@
 package industry
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"math"
+	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -573,4 +576,54 @@ func (la *LinkageAnalyzer) CalculateLinkageScore(industryID string) *IndustryLin
 
 func (la *LinkageAnalyzer) PropagateShock(sourceIndustry string, shockMagnitude float64, maxDepth int) map[string]float64 {
 	return la.propagation.PropagateShock(sourceIndustry, shockMagnitude, maxDepth)
+}
+
+func (la *LinkageAnalyzer) SetSupplyChainGraph(graph *SupplyChainGraph, cm *CorrelationMatrix) {
+	la.graph = graph
+	la.correlation = cm
+	la.propagation = NewShockPropagation(graph, cm)
+}
+
+type supplyChainGraphJSON struct {
+	Nodes []struct {
+		IndustryID   string   `json:"industry_id"`
+		Tier         int      `json:"tier"`
+		UpstreamOf   []string `json:"upstream_of"`
+		DownstreamOf []string `json:"downstream_of"`
+		KeyMaterials []string `json:"key_materials"`
+	} `json:"nodes"`
+	Correlations map[string]float64 `json:"correlations"`
+}
+
+func LoadSupplyChainGraph(path string) (*SupplyChainGraph, *CorrelationMatrix, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read supply chain graph: %w", err)
+	}
+
+	var cfg supplyChainGraphJSON
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, nil, fmt.Errorf("parse supply chain graph: %w", err)
+	}
+
+	graph := NewSupplyChainGraph()
+	for _, n := range cfg.Nodes {
+		graph.AddNode(&SupplyChainNode{
+			IndustryID:   n.IndustryID,
+			Tier:         n.Tier,
+			UpstreamOf:   n.UpstreamOf,
+			DownstreamOf: n.DownstreamOf,
+			KeyMaterials: n.KeyMaterials,
+		})
+	}
+
+	cm := NewCorrelationMatrix(30)
+	for key, val := range cfg.Correlations {
+		parts := strings.SplitN(key, "↔", 2)
+		if len(parts) == 2 {
+			cm.UpdateCorrelation(parts[0], parts[1], val)
+		}
+	}
+
+	return graph, cm, nil
 }

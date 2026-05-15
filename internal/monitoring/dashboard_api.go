@@ -217,6 +217,7 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 
 	// Wire narrative provider
 	bridge := narrative.NewSeasonalBridge(narrativeEngine)
+	bridge.SetActiveEvents(narrativeEngine.DetectEvents(narrative.MarketNarrativeData{}))
 	seasonalEngine.SetNarrativeProvider(bridge)
 	cycleTracker.SetNarrativeProvider(func() float64 {
 		events := narrativeEngine.DetectEvents(narrative.MarketNarrativeData{})

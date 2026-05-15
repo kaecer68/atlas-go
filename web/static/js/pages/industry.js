@@ -2,6 +2,7 @@
 import { sectorName, stockName } from "../names.js";
 import {
   silentGetJSON,
+  postJSON,
   notify,
   renderEmptyState,
 } from "../shared/app-utils.js";
@@ -17,6 +18,7 @@ export async function loadIndustryData() {
       ],
     );
     renderIndustryMap(classification);
+    populateShockSourceDropdown(classification);
     renderIndustryCycle(overview);
     renderIndustryLinkage(overview);
     if (seasonality && calendar) {
@@ -652,6 +654,77 @@ function closeCycleLegend() {
   if (modal) modal.classList.remove("show");
 }
 
+function populateShockSourceDropdown(classification) {
+  const sel = document.getElementById("shockSource");
+  if (!sel || !classification || !classification.industries) return;
+  const industries = classification.industries;
+  for (const ind of industries) {
+    const id = ind.id || "";
+    const name = ind.name || id;
+    if (!id) continue;
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  }
+}
+
+window.runShockSimulation = async function () {
+  const source = document.getElementById("shockSource").value;
+  const magnitude = parseFloat(document.getElementById("shockMagnitude").value);
+  const depth = parseInt(document.getElementById("shockDepth").value) || 3;
+  const el = document.getElementById("industryShockSim");
+  if (!source) {
+    el.innerHTML = renderEmptyState("請選擇來源產業", "");
+    el.classList.remove("loading");
+    return;
+  }
+  if (isNaN(magnitude)) {
+    el.innerHTML = renderEmptyState("請輸入衝擊幅度", "");
+    el.classList.remove("loading");
+    return;
+  }
+  el.classList.add("loading");
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">模擬中…</div>';
+  try {
+    const result = await postJSON("/api/dashboard/industry-shock-simulation", {
+      source_industry: source,
+      shock_magnitude: magnitude,
+      max_depth: depth,
+    });
+    renderShockSimulationResult(result);
+  } catch (e) {
+    el.classList.remove("loading");
+    el.innerHTML = renderEmptyState("模擬失敗: " + (e.message || e), "");
+  }
+};
+
+function renderShockSimulationResult(data) {
+  const el = document.getElementById("industryShockSim");
+  el.classList.remove("loading");
+  if (!data || !data.impacts || data.impacts.length === 0) {
+    el.innerHTML = renderEmptyState("該衝擊未影響其他產業", "");
+    return;
+  }
+  const sorted = [...data.impacts].sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
+  let html = '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">';
+  html += `<strong>${data.source}</strong> 遭受 <strong>${(data.shock * 100).toFixed(1)}%</strong> 衝擊 → 影響 ${data.impact_count} 個關聯產業</div>`;
+  html += '<table style="font-size:12px"><thead><tr><th>產業</th><th>影響幅度</th><th>衝擊傳導</th></tr></thead><tbody>';
+  for (const imp of sorted) {
+    const pct = (imp.impact * 100).toFixed(1);
+    const absPct = Math.abs(imp.impact * 100);
+    const color = imp.impact < 0 ? "var(--down)" : "var(--up)";
+    const barW = Math.min(100, absPct * 8);
+    html += `<tr>`;
+    html += `<td>${imp.industry}</td>`;
+    html += `<td style="color:${color};font-weight:600">${pct}%</td>`;
+    html += `<td><div style="width:${barW}%;height:8px;background:${color};border-radius:4px;min-width:4px"></div></td>`;
+    html += `</tr>`;
+  }
+  html += "</tbody></table>";
+  el.innerHTML = html;
+}
+
 if (typeof window !== "undefined")
   Object.assign(window, {
     showIndustryDetail,
@@ -659,4 +732,5 @@ if (typeof window !== "undefined")
     switchIndustryTab,
     toggleCycleLegend,
     closeCycleLegend,
+    runShockSimulation,
   });

@@ -1,0 +1,98 @@
+{
+  "_description": "Taiwan supply chain graph — node relationships and pairwise correlations for industry linkage analysis. Edit this file to update the supply chain model without recompiling. Key: ↤ means 'supplies to' (downstream direction).",
+  "nodes": [
+    {
+      "industry_id": "semiconductor",
+      "tier": 1,
+      "upstream_of": ["ai_supply_chain", "electronics"],
+      "downstream_of": ["semi_equipment", "materials"],
+      "key_materials": ["silicon_wafer", "photoresist", "specialty_gases"]
+    },
+    {
+      "industry_id": "foundry",
+      "tier": 2,
+      "upstream_of": ["ai_supply_chain", "ic_design"],
+      "downstream_of": ["semi_equipment", "materials"],
+      "key_materials": ["silicon_wafer", "chemicals"]
+    },
+    {
+      "industry_id": "ai_supply_chain",
+      "tier": 0,
+      "upstream_of": [],
+      "downstream_of": ["semiconductor", "electronics", "cooling"],
+      "key_materials": ["ai_chips", "memory", "pcb"]
+    },
+    {
+      "industry_id": "server_assembly",
+      "tier": 1,
+      "upstream_of": [],
+      "downstream_of": ["ai_supply_chain", "semiconductor", "cooling", "power_supply"],
+      "key_materials": ["cpu", "gpu", "memory", "motherboard"]
+    },
+    {
+      "industry_id": "cooling",
+      "tier": 2,
+      "upstream_of": ["ai_supply_chain", "server_assembly"],
+      "downstream_of": ["electronics", "metals"],
+      "key_materials": ["copper", "aluminum", "coolant"]
+    },
+    {
+      "industry_id": "electronics",
+      "tier": 2,
+      "upstream_of": ["ai_supply_chain", "consumer", "industrial"],
+      "downstream_of": ["semiconductor", "metals", "chemicals"],
+      "key_materials": ["chips", "passive_components", "connectors"]
+    },
+    {
+      "industry_id": "robotics",
+      "tier": 1,
+      "upstream_of": ["industrial", "consumer"],
+      "downstream_of": ["electronics", "metals", "software"],
+      "key_materials": ["servo_motors", "reducers", "controllers", "sensors"]
+    },
+    {
+      "industry_id": "shipping",
+      "tier": 0,
+      "upstream_of": [],
+      "downstream_of": ["energy", "industrial"],
+      "key_materials": ["fuel", "steel", "containers"]
+    },
+    {
+      "industry_id": "financials",
+      "tier": 0,
+      "upstream_of": [],
+      "downstream_of": [],
+      "key_materials": []
+    },
+    {
+      "industry_id": "energy",
+      "tier": 2,
+      "upstream_of": ["shipping", "industrial", "consumer"],
+      "downstream_of": ["oil_gas", "utilities"],
+      "key_materials": ["crude_oil", "natural_gas", "coal"]
+    }
+  ],
+  "correlations": {
+    "semiconductor↔ai_supply_chain": 0.85,
+    "semiconductor↔electronics": 0.72,
+    "semiconductor↔robotics": 0.45,
+    "semiconductor↔financials": 0.15,
+    "semiconductor↔shipping": -0.10,
+    "ai_supply_chain↔electronics": 0.65,
+    "ai_supply_chain↔robotics": 0.55,
+    "ai_supply_chain↔financials": 0.20,
+    "ai_supply_chain↔shipping": 0.05,
+    "robotics↔electronics": 0.48,
+    "robotics↔industrial": 0.60,
+    "robotics↔financials": 0.10,
+    "financials↔consumer": 0.35,
+    "financials↔industrial": 0.25,
+    "financials↔shipping": 0.05,
+    "shipping↔energy": 0.40,
+    "shipping↔industrial": 0.30,
+    "consumer↔industrial": 0.20,
+    "consumer↔energy": 0.15,
+    "electronics↔energy": 0.10,
+    "semiconductor↔energy": 0.05
+  }
+}
