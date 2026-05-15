@@ -451,6 +451,7 @@ type SeasonalPatternConfig struct {
 type LinkageConfig struct {
 	DownstreamDecayFactor     float64            `json:"downstream_decay_factor"`
 	UpstreamDecayFactor       float64            `json:"upstream_decay_factor"`
+	SeasonalDecayFactor       float64            `json:"seasonal_decay_factor"`
 	DefaultCorrelation        float64            `json:"default_correlation"`
 	SystemicImportanceDivisor float64            `json:"systemic_importance_divisor"`
 	MinCorrelationThreshold   float64            `json:"min_correlation_threshold"`
@@ -896,6 +897,9 @@ func (p *ParametersConfig) Validate() error {
 	}
 	if lp.UpstreamDecayFactor < 0 || lp.UpstreamDecayFactor > 1 {
 		return fmt.Errorf("industry.linkage_params.upstream_decay_factor (%.3f) must be in [0,1]", lp.UpstreamDecayFactor)
+	}
+	if lp.SeasonalDecayFactor < 0 || lp.SeasonalDecayFactor > 1 {
+		return fmt.Errorf("industry.linkage_params.seasonal_decay_factor (%.3f) must be in [0,1]", lp.SeasonalDecayFactor)
 	}
 	if lp.DefaultCorrelation < 0 || lp.DefaultCorrelation > 1 {
 		return fmt.Errorf("industry.linkage_params.default_correlation (%.3f) must be in [0,1]", lp.DefaultCorrelation)

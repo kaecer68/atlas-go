@@ -3642,6 +3642,7 @@
       "value": {
         "downstream_decay_factor": 0.8,
         "upstream_decay_factor": 0.6,
+        "seasonal_decay_factor": 0.3,
         "default_correlation": 0.5,
         "systemic_importance_divisor": 10.0,
         "min_correlation_threshold": 0.3,

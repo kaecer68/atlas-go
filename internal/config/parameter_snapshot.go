@@ -339,6 +339,7 @@ func compareSeasonalPatterns(changes *[]ParameterChange, param string, oldVal, n
 func compareLinkageParams(changes *[]ParameterChange, param string, oldVal, newVal LinkageConfig, t time.Time) {
 	compareFloat(changes, param+".downstream_decay_factor", oldVal.DownstreamDecayFactor, newVal.DownstreamDecayFactor, t)
 	compareFloat(changes, param+".upstream_decay_factor", oldVal.UpstreamDecayFactor, newVal.UpstreamDecayFactor, t)
+	compareFloat(changes, param+".seasonal_decay_factor", oldVal.SeasonalDecayFactor, newVal.SeasonalDecayFactor, t)
 	compareFloat(changes, param+".default_correlation", oldVal.DefaultCorrelation, newVal.DefaultCorrelation, t)
 	compareFloat(changes, param+".systemic_importance_divisor", oldVal.SystemicImportanceDivisor, newVal.SystemicImportanceDivisor, t)
 	compareFloat(changes, param+".min_correlation_threshold", oldVal.MinCorrelationThreshold, newVal.MinCorrelationThreshold, t)
