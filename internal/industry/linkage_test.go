@@ -231,3 +231,126 @@ func TestGetAllCorrelations(t *testing.T) {
 		t.Error("expected semiconductor in correlations")
 	}
 }
+
+type mockNarrativeProvider struct {
+	themes      []string
+	multipliers map[string]float64
+}
+
+func (m *mockNarrativeProvider) ActiveThemes() []string {
+	return m.themes
+}
+
+func (m *mockNarrativeProvider) CorrelationMultiplier(theme, industryA, industryB string) float64 {
+	key := theme + ":" + industryA + ":" + industryB
+	if v, ok := m.multipliers[key]; ok {
+		return v
+	}
+	key = theme + ":" + industryB + ":" + industryA
+	if v, ok := m.multipliers[key]; ok {
+		return v
+	}
+	return 1.0
+}
+
+func TestGetNarrativeAdjustedCorrelation(t *testing.T) {
+	graph := DefaultSupplyChainGraph()
+	cm := DefaultCorrelationMatrix()
+	sp := NewShockPropagation(graph, cm)
+
+	baseCorr, _ := cm.GetCorrelation("semiconductor", "ai_supply_chain")
+
+	mock := &mockNarrativeProvider{
+		themes: []string{"AI_capex_surge"},
+		multipliers: map[string]float64{
+			"AI_capex_surge:semiconductor:ai_supply_chain": 1.12,
+		},
+	}
+	sp.SetNarrativeProvider(mock)
+
+	adj := sp.getNarrativeAdjustedCorrelation("semiconductor", "ai_supply_chain")
+	want := baseCorr * 1.12
+	if adj != want {
+		t.Errorf("expected adjusted correlation %.4f, got %.4f", want, adj)
+	}
+
+	sp.SetNarrativeProvider(nil)
+	adj = sp.getNarrativeAdjustedCorrelation("semiconductor", "ai_supply_chain")
+	if adj != baseCorr {
+		t.Errorf("expected base correlation %.4f without provider, got %.4f", baseCorr, adj)
+	}
+}
+
+func TestNarrativeAwarePropagateShock(t *testing.T) {
+	graph := DefaultSupplyChainGraph()
+	cm := DefaultCorrelationMatrix()
+	sp := NewShockPropagation(graph, cm)
+
+	sp.SetNarrativeProvider(nil)
+	baseline := sp.PropagateShock("semiconductor", 0.10, 2)
+
+	mock := &mockNarrativeProvider{
+		themes: []string{"AI_capex_surge"},
+		multipliers: map[string]float64{
+			"AI_capex_surge:semiconductor:ai_supply_chain": 1.50,
+		},
+	}
+	sp.SetNarrativeProvider(mock)
+	narrative := sp.PropagateShock("semiconductor", 0.10, 2)
+
+	if baseline["semiconductor"] != narrative["semiconductor"] {
+		t.Error("source industry impact should not change with narrative provider")
+	}
+
+	if baseline["ai_supply_chain"] == narrative["ai_supply_chain"] {
+		t.Error("expected different shock impact on ai_supply_chain when narrative is active")
+	}
+
+	if narrative["ai_supply_chain"] <= baseline["ai_supply_chain"] {
+		t.Errorf("expected larger impact with amplified correlation, got baseline=%f narrative=%f",
+			baseline["ai_supply_chain"], narrative["ai_supply_chain"])
+	}
+}
+
+func TestNarrativeAwareLinkageScore(t *testing.T) {
+	graph := DefaultSupplyChainGraph()
+	cm := DefaultCorrelationMatrix()
+	sp := NewShockPropagation(graph, cm)
+
+	sp.SetNarrativeProvider(nil)
+	baseline := sp.CalculateLinkageScore("semiconductor")
+
+	mock := &mockNarrativeProvider{
+		themes: []string{"AI_capex_surge"},
+		multipliers: map[string]float64{
+			"AI_capex_surge:semiconductor:ai_supply_chain": 1.20,
+			"AI_capex_surge:semiconductor:electronics":     1.20,
+		},
+	}
+	sp.SetNarrativeProvider(mock)
+	narrative := sp.CalculateLinkageScore("semiconductor")
+
+	if narrative.UpstreamCount != baseline.UpstreamCount {
+		t.Error("upstream count should not change with narrative provider")
+	}
+	if narrative.DownstreamCount != baseline.DownstreamCount {
+		t.Error("downstream count should not change with narrative provider")
+	}
+
+	if narrative.SystemicImportance != baseline.SystemicImportance {
+		t.Error("systemic importance should not change with narrative provider")
+	}
+
+	if narrative.AvgCorrelation == baseline.AvgCorrelation {
+		t.Error("expected different avg_correlation when narrative is active")
+	}
+
+	if narrative.AvgCorrelation <= baseline.AvgCorrelation {
+		t.Errorf("expected higher avg correlation with amplified narrative, got baseline=%f narrative=%f",
+			baseline.AvgCorrelation, narrative.AvgCorrelation)
+	}
+
+	if narrative.ShockPropagationSpeed == baseline.ShockPropagationSpeed {
+		t.Error("expected different shock_propagation_speed when narrative is active")
+	}
+}

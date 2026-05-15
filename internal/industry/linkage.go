@@ -264,10 +264,18 @@ func pearsonCorrelation(x, y []float64) float64 {
 	return num / den
 }
 
+// NarrativeLinkageProvider supplies active narrative themes and correlation
+// multipliers for dynamic supply chain linkage adjustment.
+type NarrativeLinkageProvider interface {
+	ActiveThemes() []string
+	CorrelationMultiplier(theme, industryA, industryB string) float64
+}
+
 // ShockPropagation models how shocks propagate through the supply chain.
 type ShockPropagation struct {
-	graph       *SupplyChainGraph
-	correlation *CorrelationMatrix
+	graph             *SupplyChainGraph
+	correlation       *CorrelationMatrix
+	narrativeProvider NarrativeLinkageProvider
 }
 
 // NewShockPropagation creates a new shock propagation model.
@@ -278,6 +286,30 @@ func NewShockPropagation(graph *SupplyChainGraph, correlation *CorrelationMatrix
 	}
 }
 
+// SetNarrativeProvider enables narrative-aware correlation adjustment.
+// Passing nil disables narrative overlay (safe default).
+func (sp *ShockPropagation) SetNarrativeProvider(provider NarrativeLinkageProvider) {
+	sp.narrativeProvider = provider
+}
+
+// getNarrativeAdjustedCorrelation returns the correlation between two industries,
+// adjusted by any active narrative themes.
+func (sp *ShockPropagation) getNarrativeAdjustedCorrelation(industryA, industryB string) float64 {
+	baseCorr, ok := sp.correlation.GetCorrelation(industryA, industryB)
+	if !ok {
+		baseCorr = 0.5 // Default moderate correlation
+	}
+	if sp.narrativeProvider == nil {
+		return baseCorr
+	}
+
+	multiplier := 1.0
+	for _, theme := range sp.narrativeProvider.ActiveThemes() {
+		multiplier *= sp.narrativeProvider.CorrelationMultiplier(theme, industryA, industryB)
+	}
+	return baseCorr * multiplier
+}
+
 // PropagateShock calculates the impact of a shock on an industry.
 func (sp *ShockPropagation) PropagateShock(sourceIndustry string, shockMagnitude float64, maxDepth int) map[string]float64 {
 	impacts := make(map[string]float64)
@@ -286,10 +318,7 @@ func (sp *ShockPropagation) PropagateShock(sourceIndustry string, shockMagnitude
 	// Propagate downstream (customers affected)
 	downstream := sp.graph.GetDownstreamChain(sourceIndustry, maxDepth)
 	for _, industry := range downstream {
-		correlation, ok := sp.correlation.GetCorrelation(sourceIndustry, industry)
-		if !ok {
-			correlation = 0.5 // Default moderate correlation
-		}
+		correlation := sp.getNarrativeAdjustedCorrelation(sourceIndustry, industry)
 		// Impact decays with distance and correlation
 		impacts[industry] = shockMagnitude * correlation * 0.8
 	}
@@ -297,10 +326,7 @@ func (sp *ShockPropagation) PropagateShock(sourceIndustry string, shockMagnitude
 	// Propagate upstream (suppliers affected)
 	upstream := sp.graph.GetUpstreamChain(sourceIndustry, maxDepth)
 	for _, industry := range upstream {
-		correlation, ok := sp.correlation.GetCorrelation(sourceIndustry, industry)
-		if !ok {
-			correlation = 0.5 // Default moderate correlation
-		}
+		correlation := sp.getNarrativeAdjustedCorrelation(sourceIndustry, industry)
 		impacts[industry] = shockMagnitude * correlation * 0.6 // Upstream impact is typically smaller
 	}
 
@@ -329,10 +355,9 @@ func (sp *ShockPropagation) CalculateLinkageScore(industryID string) *IndustryLi
 
 	allRelated := append(upstream, downstream...)
 	for _, related := range allRelated {
-		if corr, ok := sp.correlation.GetCorrelation(industryID, related); ok {
-			totalCorrelation += math.Abs(corr)
-			correlationCount++
-		}
+		corr := sp.getNarrativeAdjustedCorrelation(industryID, related)
+		totalCorrelation += math.Abs(corr)
+		correlationCount++
 	}
 
 	avgCorrelation := 0.0
