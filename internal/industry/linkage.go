@@ -435,7 +435,7 @@ func DefaultSupplyChainGraph() *SupplyChainGraph {
 		IndustryID:   "semiconductor",
 		Tier:         1,
 		UpstreamOf:   []string{"ai_supply_chain", "electronics"},
-		DownstreamOf: []string{"semi_equipment", "materials"},
+		DownstreamOf: []string{"semi_equipment", "materials", "financials"},
 		KeyMaterials: []string{"silicon_wafer", "photoresist", "specialty_gases"},
 	})
 
@@ -451,7 +451,7 @@ func DefaultSupplyChainGraph() *SupplyChainGraph {
 		IndustryID:   "ai_supply_chain",
 		Tier:         0,
 		UpstreamOf:   []string{},
-		DownstreamOf: []string{"semiconductor", "electronics", "cooling"},
+		DownstreamOf: []string{"semiconductor", "electronics", "cooling", "financials"},
 		KeyMaterials: []string{"ai_chips", "memory", "pcb"},
 	})
 
@@ -475,7 +475,7 @@ func DefaultSupplyChainGraph() *SupplyChainGraph {
 		IndustryID:   "electronics",
 		Tier:         2,
 		UpstreamOf:   []string{"ai_supply_chain", "consumer", "industrial"},
-		DownstreamOf: []string{"semiconductor", "metals", "chemicals"},
+		DownstreamOf: []string{"semiconductor", "metals", "chemicals", "financials"},
 		KeyMaterials: []string{"chips", "passive_components", "connectors"},
 	})
 
@@ -483,7 +483,7 @@ func DefaultSupplyChainGraph() *SupplyChainGraph {
 		IndustryID:   "robotics",
 		Tier:         1,
 		UpstreamOf:   []string{"industrial", "consumer"},
-		DownstreamOf: []string{"electronics", "metals", "software"},
+		DownstreamOf: []string{"electronics", "metals", "software", "financials"},
 		KeyMaterials: []string{"servo_motors", "reducers", "controllers", "sensors"},
 	})
 
@@ -491,23 +491,23 @@ func DefaultSupplyChainGraph() *SupplyChainGraph {
 		IndustryID:   "shipping",
 		Tier:         0,
 		UpstreamOf:   []string{},
-		DownstreamOf: []string{"energy", "industrial"},
+		DownstreamOf: []string{"energy", "industrial", "financials"},
 		KeyMaterials: []string{"fuel", "steel", "containers"},
 	})
 
 	graph.AddNode(&SupplyChainNode{
 		IndustryID:   "financials",
 		Tier:         0,
-		UpstreamOf:   []string{},
+		UpstreamOf:   []string{"semiconductor", "ai_supply_chain", "electronics", "robotics", "shipping", "energy"},
 		DownstreamOf: []string{},
-		KeyMaterials: []string{},
+		KeyMaterials: []string{"capital", "credit", "insurance", "wealth_management"},
 	})
 
 	graph.AddNode(&SupplyChainNode{
 		IndustryID:   "energy",
 		Tier:         2,
 		UpstreamOf:   []string{"shipping", "industrial", "consumer"},
-		DownstreamOf: []string{"oil_gas", "utilities"},
+		DownstreamOf: []string{"oil_gas", "utilities", "financials"},
 		KeyMaterials: []string{"crude_oil", "natural_gas", "coal"},
 	})
 
@@ -540,6 +540,7 @@ func DefaultCorrelationMatrix() *CorrelationMatrix {
 	cm.UpdateCorrelation("financials", "consumer", 0.35)
 	cm.UpdateCorrelation("financials", "industrial", 0.25)
 	cm.UpdateCorrelation("financials", "shipping", 0.05)
+	cm.UpdateCorrelation("financials", "energy", 0.10)
 
 	// Shipping correlations
 	cm.UpdateCorrelation("shipping", "energy", 0.40)
