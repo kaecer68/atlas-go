@@ -203,6 +203,67 @@ func (cm *CorrelationMatrix) GetAllCorrelations() map[string]map[string]float64 
 	return result
 }
 
+// RecalculateFromReturns recomputes all pairwise correlations from industry
+// return time series. Each map entry maps industryID → []daily returns.
+// Only pairs with sufficient data (≥15 observations) are updated.
+func (cm *CorrelationMatrix) RecalculateFromReturns(industryReturns map[string][]float64) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	industries := make([]string, 0, len(industryReturns))
+	for id := range industryReturns {
+		industries = append(industries, id)
+	}
+
+	for i := 0; i < len(industries); i++ {
+		for j := i + 1; j < len(industries); j++ {
+			a, b := industries[i], industries[j]
+			returnsA, returnsB := industryReturns[a], industryReturns[b]
+			n := len(returnsA)
+			if len(returnsB) < n {
+				n = len(returnsB)
+			}
+			if n < 15 {
+				continue
+			}
+			corr := pearsonCorrelation(returnsA[:n], returnsB[:n])
+			cm.unsafeUpdate(a, b, corr)
+		}
+	}
+}
+
+func (cm *CorrelationMatrix) unsafeUpdate(a, b string, corr float64) {
+	if cm.correlations[a] == nil {
+		cm.correlations[a] = make(map[string]float64)
+	}
+	if cm.correlations[b] == nil {
+		cm.correlations[b] = make(map[string]float64)
+	}
+	cm.correlations[a][b] = corr
+	cm.correlations[b][a] = corr
+}
+
+func pearsonCorrelation(x, y []float64) float64 {
+	n := len(x)
+	if n < 2 {
+		return 0
+	}
+	var sumX, sumY, sumXY, sumX2, sumY2 float64
+	for i := 0; i < n; i++ {
+		sumX += x[i]
+		sumY += y[i]
+		sumXY += x[i] * y[i]
+		sumX2 += x[i] * x[i]
+		sumY2 += y[i] * y[i]
+	}
+	num := float64(n)*sumXY - sumX*sumY
+	den := math.Sqrt((float64(n)*sumX2 - sumX*sumX) * (float64(n)*sumY2 - sumY*sumY))
+	if den == 0 {
+		return 0
+	}
+	return num / den
+}
+
 // ShockPropagation models how shocks propagate through the supply chain.
 type ShockPropagation struct {
 	graph       *SupplyChainGraph
