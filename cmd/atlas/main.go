@@ -270,7 +270,28 @@ func run(args []string, deps appDeps) error {
 			}
 		}
 
-		mux.HandleFunc("/admin/reload-config", func(w http.ResponseWriter, r *http.Request) {
+		adminHandler := func(h http.HandlerFunc) http.HandlerFunc {
+			return func(w http.ResponseWriter, r *http.Request) {
+				apiKey := os.Getenv("ATLAS_API_KEY")
+				if apiKey != "" {
+					provided := r.Header.Get("X-API-Key")
+					if provided == "" {
+						auth := r.Header.Get("Authorization")
+						if strings.HasPrefix(auth, "Bearer ") {
+							provided = strings.TrimPrefix(auth, "Bearer ")
+						}
+					}
+					if provided != apiKey {
+						w.Header().Set("Content-Type", "application/json")
+						w.WriteHeader(http.StatusUnauthorized)
+						fmt.Fprintf(w, `{"error":"unauthorized"}`+"\n")
+						return
+					}
+				}
+				h(w, r)
+			}
+		}
+		mux.HandleFunc("/admin/reload-config", adminHandler(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
@@ -282,8 +303,8 @@ func run(args []string, deps appDeps) error {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"status":"ok","version":"%s"}`+"\n", cfg.Version)
-		})
-		mux.HandleFunc("/api/admin/calibrate-thresholds", func(w http.ResponseWriter, r *http.Request) {
+		}))
+		mux.HandleFunc("/api/admin/calibrate-thresholds", adminHandler(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
@@ -298,7 +319,7 @@ func run(args []string, deps appDeps) error {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"status":"ok","message":"thresholds recalibrated"}`+"\n")
-		})
+		}))
 		mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
 		monitor := monitoring.NewMonitor()
 		if alertStore != nil {

@@ -57,6 +57,9 @@ internal/*/data/
 tmp/
 *.log
 
+# Local environment / secrets
+.fubon-env/
+
 # Build artifacts
 run-stress
 coverage_all.out
@@ -126,3 +129,15 @@ migrate-jsonl-to-sqlite
 data/state/macro/latest.json
 .gstack/
 calibrate-parameters
+<<<<<<< HEAD
+=======
+calibrate-seasonal
+
+# Build artifacts
+# Build artifacts
+/fetch-historical
+
+# Coverage reports
+*.out
+.gitnexus/
+>>>>>>> 066d884 (security: final cleanup before public release)

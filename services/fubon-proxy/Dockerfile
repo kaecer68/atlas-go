@@ -14,8 +14,17 @@ COPY requirements.txt .
 # 安装Python依赖
 RUN pip install --no-cache-dir -r requirements.txt
 
+# 创建非 root 用户
+RUN useradd -m appuser
+
 # 复制应用代码
 COPY main.py .
+
+# 设置文件所有权
+RUN chown -R appuser:appuser /app
+
+# 切换到非 root 用户
+USER appuser
 
 # 暴露端口
 EXPOSE 8081

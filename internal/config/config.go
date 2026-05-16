@@ -57,8 +57,9 @@ type Config struct {
 }
 
 func Load() Config {
-	// 加载 .env 文件
-	loadEnvFile(".env")
+	// 加载 .env 文件 — 优先使用 ATLAS_ENV_FILE 指定的路径，
+	// 然后依次尝试 .env、~/.config/atlas-go/.env
+	loadEnvFile(resolveEnvFilePath())
 
 	return Config{
 		WorkDir:                    envOr("ATLAS_WORK_DIR", "."),
@@ -189,6 +190,25 @@ func envOrIntCSV(key string, fallback []int) []int {
 // Use this for secrets not covered by the Config struct fields.
 func GetSecret(key string) string {
 	return envOrKeychain(key, "")
+}
+
+// resolveEnvFilePath 返回要加载的 .env 文件路径。
+// 优先级：1) ATLAS_ENV_FILE 环境变量 2) 当前目录 .env 3) ~/.config/atlas-go/.env
+func resolveEnvFilePath() string {
+	if p := os.Getenv("ATLAS_ENV_FILE"); p != "" {
+		return p
+	}
+	if _, err := os.Stat(".env"); err == nil {
+		return ".env"
+	}
+	home, err := os.UserHomeDir()
+	if err == nil {
+		p := filepath.Join(home, ".config", "atlas-go", ".env")
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ".env" // fallback: 让 loadEnvFile 静默跳过
 }
 
 // loadEnvFile 从 .env 文件加载环境变量

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -23,13 +24,16 @@ func TestSSEHandler_ServeHTTP_Headers(t *testing.T) {
 	// ServeHTTP blocks, so run it in a goroutine.
 	ctx, cancel := context.WithCancel(req.Context())
 	req = req.WithContext(ctx)
+	handlerDone := make(chan struct{})
 	go func() {
+		defer close(handlerDone)
 		handler.ServeHTTP(rec, req)
 	}()
 
 	// Give it time to set headers.
 	time.Sleep(100 * time.Millisecond)
 	cancel()
+	<-handlerDone
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", rec.Code)
@@ -52,13 +56,16 @@ func TestSSEHandler_ServeHTTP_ConnectedEvent(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(req.Context())
 	req = req.WithContext(ctx)
+	handlerDone := make(chan struct{})
 	go func() {
+		defer close(handlerDone)
 		handler.ServeHTTP(rec, req)
 	}()
 
 	// Wait for the connected event.
 	time.Sleep(100 * time.Millisecond)
 	cancel()
+	<-handlerDone
 
 	body := rec.Body.String()
 	if !strings.Contains(body, "event: connected") {
@@ -76,7 +83,9 @@ func TestSSEHandler_ServeHTTP_FilteredTypes(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(req.Context())
 	req = req.WithContext(ctx)
+	handlerDone := make(chan struct{})
 	go func() {
+		defer close(handlerDone)
 		handler.ServeHTTP(rec, req)
 	}()
 
@@ -101,6 +110,7 @@ func TestSSEHandler_ServeHTTP_FilteredTypes(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 	cancel()
+	<-handlerDone
 
 	body := rec.Body.String()
 	if !strings.Contains(body, "market.snapshot") {
@@ -121,20 +131,22 @@ func TestSSEHandler_ServeHTTP_DisconnectCleanup(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(req.Context())
 	req = req.WithContext(ctx)
+	handlerDone := make(chan struct{})
 	go func() {
+		defer close(handlerDone)
 		handler.ServeHTTP(rec, req)
 	}()
 
 	time.Sleep(50 * time.Millisecond)
-	if handler.clientCount != 1 {
-		t.Errorf("expected client count 1, got %d", handler.clientCount)
+	if atomic.LoadInt64(&handler.clientCount) != 1 {
+		t.Errorf("expected client count 1, got %d", atomic.LoadInt64(&handler.clientCount))
 	}
 
 	cancel()
-	time.Sleep(50 * time.Millisecond)
+	<-handlerDone
 
-	if handler.clientCount != 0 {
-		t.Errorf("expected client count 0 after disconnect, got %d", handler.clientCount)
+	if atomic.LoadInt64(&handler.clientCount) != 0 {
+		t.Errorf("expected client count 0 after disconnect, got %d", atomic.LoadInt64(&handler.clientCount))
 	}
 }
 
@@ -223,7 +235,9 @@ func TestSSEHandler_ServeHTTP_EventDelivery(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(req.Context())
 	req = req.WithContext(ctx)
+	handlerDone := make(chan struct{})
 	go func() {
+		defer close(handlerDone)
 		handler.ServeHTTP(rec, req)
 	}()
 
@@ -238,6 +252,7 @@ func TestSSEHandler_ServeHTTP_EventDelivery(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 	cancel()
+	<-handlerDone
 
 	body := rec.Body.String()
 	expected := fmt.Sprintf("event: %s", eventbus.EventMarketSnapshot)

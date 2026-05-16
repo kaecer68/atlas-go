@@ -454,13 +454,22 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			shared.WriteJSONError(w, http.StatusBadRequest, "provider and api_key required")
 			return
 		}
-		// Write to .env file (append or update).
-		envPath := filepath.Join(a.workDir, ".env")
-		key := strings.ToUpper(req.Provider) + "_API_KEY"
-		if err := updateEnvFile(envPath, key, req.APIKey); err != nil {
-			shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("update env: %v", err))
+		allowedProviders := map[string]bool{
+			"finmind": true,
+			"fugle":   true,
+			"tej":     true,
+			"fubon":   true,
+		}
+		if !allowedProviders[strings.ToLower(req.Provider)] {
+			shared.WriteJSONError(w, http.StatusBadRequest, "invalid provider")
 			return
 		}
+		if len(req.APIKey) < 8 || len(req.APIKey) > 512 {
+			shared.WriteJSONError(w, http.StatusBadRequest, "api_key length invalid")
+			return
+		}
+		key := strings.ToUpper(req.Provider) + "_API_KEY"
+		os.Setenv(key, req.APIKey)
 		shared.WriteJSON(w, http.StatusOK, map[string]any{
 			"provider": req.Provider,
 			"status":   "ok",

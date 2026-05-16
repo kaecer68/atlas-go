@@ -1,0 +1,20 @@
+# Code Owners
+
+# Global owners
+*       @kaecer68
+
+# CI/CD workflows
+.github/workflows/  @kaecer68
+
+# Core architecture
+internal/orchestrator/  @kaecer68
+internal/domain/        @kaecer68
+
+# Security-sensitive areas
+internal/live/          @kaecer68
+internal/risk/          @kaecer68
+configs/                @kaecer68
+
+# Documentation
+docs/                   @kaecer68
+*.md                    @kaecer68
