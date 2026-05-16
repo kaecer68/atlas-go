@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 )
 
-var logger *slog.Logger
-var logCtx context.Context
+var (
+	mu     sync.RWMutex
+	logger *slog.Logger
+	logCtx context.Context
+)
 
 func init() {
 	logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -17,9 +21,12 @@ func init() {
 }
 
 func SetLogContext(ctx context.Context) {
-	if ctx != nil {
-		logCtx = ctx
+	if ctx == nil {
+		return
 	}
+	mu.Lock()
+	logCtx = ctx
+	mu.Unlock()
 }
 
 func Init(handler string, level slog.Level) {
@@ -33,47 +40,77 @@ func Init(handler string, level slog.Level) {
 	default:
 		h = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})
 	}
-	logger = slog.New(h)
-	slog.SetDefault(logger)
+	l := slog.New(h)
+	mu.Lock()
+	logger = l
+	mu.Unlock()
+	slog.SetDefault(l)
 }
 
 func SetLogger(l *slog.Logger) {
+	mu.Lock()
 	logger = l
+	mu.Unlock()
 	slog.SetDefault(l)
 }
 
 func Default() *slog.Logger {
+	mu.RLock()
+	defer mu.RUnlock()
 	return logger
 }
 
 func Info(component, event string, keyvals ...any) {
-	logger.Log(logCtx, slog.LevelInfo, event,
+	mu.RLock()
+	l := logger
+	ctx := logCtx
+	mu.RUnlock()
+	l.Log(ctx, slog.LevelInfo, event,
 		append(keyvals, "component", component)...)
 }
 
 func Error(component, event string, keyvals ...any) {
-	logger.Log(logCtx, slog.LevelError, event,
+	mu.RLock()
+	l := logger
+	ctx := logCtx
+	mu.RUnlock()
+	l.Log(ctx, slog.LevelError, event,
 		append(keyvals, "component", component)...)
 }
 
 func Critical(component, event string, keyvals ...any) {
-	logger.Log(logCtx, slog.Level(12), event,
+	mu.RLock()
+	l := logger
+	ctx := logCtx
+	mu.RUnlock()
+	l.Log(ctx, slog.Level(12), event,
 		append(keyvals, "component", component)...)
 }
 
 func Warn(component, event string, keyvals ...any) {
-	logger.Log(logCtx, slog.LevelWarn, event,
+	mu.RLock()
+	l := logger
+	ctx := logCtx
+	mu.RUnlock()
+	l.Log(ctx, slog.LevelWarn, event,
 		append(keyvals, "component", component)...)
 }
 
 func Debug(component, event string, keyvals ...any) {
-	logger.Log(logCtx, slog.LevelDebug, event,
+	mu.RLock()
+	l := logger
+	ctx := logCtx
+	mu.RUnlock()
+	l.Log(ctx, slog.LevelDebug, event,
 		append(keyvals, "component", component)...)
 }
 
 func With(component string, keyvals ...any) *slog.Logger {
+	mu.RLock()
+	l := logger
+	mu.RUnlock()
 	args := append([]any{"component", component}, keyvals...)
-	return logger.With(args...)
+	return l.With(args...)
 }
 
 func Component(name string) any { return slog.String("component", name) }
@@ -94,6 +131,10 @@ func FFloat64(key string, val float64) any { return slog.Float64(key, val) }
 func FBool(key string, val bool) any       { return slog.Bool(key, val) }
 
 func LegacyLog(component, format string, args ...any) {
-	logger.Log(logCtx, slog.LevelInfo, "legacy",
+	mu.RLock()
+	l := logger
+	ctx := logCtx
+	mu.RUnlock()
+	l.Log(ctx, slog.LevelInfo, "legacy",
 		"component", component, "message", fmt.Sprintf(format, args...))
 }

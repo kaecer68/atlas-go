@@ -58,6 +58,7 @@ type DashboardAPI struct {
 	baselinePath       string
 	narrativeEngine    *narrative.NarrativeEngine
 	macroIngestor      *narrative.MacroIngestor
+	macroProvider      marketdata.MacroDataProvider
 	geoProvider        narrative.GeopoliticalRiskProvider
 	taiwanGeoProvider  *narrative.CompositeTaiwanGeopoliticalProvider
 	taiwanStressCalc   *narrative.TaiwanStressCalculator
@@ -119,27 +120,6 @@ func setChannelEnabled(workDir, channelID string, enabled bool) error {
 	return saveChannelStates(workDir)
 }
 
-func updateEnvFile(envPath, key, value string) error {
-	data, err := os.ReadFile(envPath)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	lines := strings.Split(string(data), "\n")
-	found := false
-	prefix := key + "="
-	for i, line := range lines {
-		if strings.HasPrefix(line, prefix) {
-			lines[i] = prefix + value
-			found = true
-			break
-		}
-	}
-	if !found {
-		lines = append(lines, prefix+value)
-	}
-	return os.WriteFile(envPath, []byte(strings.Join(lines, "\n")), 0644)
-}
-
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
 	loadChannelStates(workDir)
 
@@ -186,19 +166,22 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	lifecycle := narrative.NewEventLifecycleManager()
 	ingestor := narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro"))
 	ingestor.SetLifecycleManager(lifecycle)
+
+	narrativeEng := narrative.NewNarrativeEngine()
 	return &DashboardAPI{
 		workDir:            workDir,
 		ledgerDir:          ledgerDir,
 		storeBackend:       os.Getenv("ATLAS_STORE_BACKEND"),
 		sqlitePath:         os.Getenv("ATLAS_SQLITE_PATH"),
 		baselinePath:       filepath.Join(workDir, "data/state/baseline_policy.json"),
-		narrativeEngine:    narrative.NewNarrativeEngine(),
+		narrativeEngine:    narrativeEng,
 		macroIngestor:      ingestor,
+		macroProvider:      provider,
 		geoProvider:        geoProvider,
 		taiwanGeoProvider:  taiwanGeoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider, workDir),
 		reportGenerator:    narrative.NewReportGenerator(),
-		industryService:    service.NewIndustryService(industry.DefaultClassification(), industry.NewSeasonalEngine(), industry.NewCycleTracker(), industry.NewLinkageAnalyzer(), industry.NewRiskMonitor()),
+		industryService:    newWiredIndustryService(narrativeEng, provider),
 		metricsCollector:   metricsCollector,
 		metricsHistory:     NewMetricsHistory(1000),
 		healthManager:      portfolio.NewAgentHealthManager(),
@@ -206,10 +189,132 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	}
 }
 
+func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroProvider marketdata.MacroDataProvider) *service.IndustryService {
+	seasonalEngine := industry.NewSeasonalEngine()
+	cycleTracker := industry.NewCycleTracker()
+	linkageAnalyzer := industry.NewLinkageAnalyzer()
+
+	// Wire narrative provider
+	bridge := narrative.NewSeasonalBridge(narrativeEngine)
+	bridge.SetActiveEvents(narrativeEngine.DetectEvents(narrative.MarketNarrativeData{}))
+	seasonalEngine.SetNarrativeProvider(bridge)
+	cycleTracker.SetNarrativeProvider(func() float64 {
+		events := narrativeEngine.DetectEvents(narrative.MarketNarrativeData{})
+		hitRate := 0.0
+		for _, e := range events {
+			if e.HitRate > hitRate {
+				hitRate = e.HitRate
+			}
+		}
+		return hitRate
+	})
+	cycleTracker.SetNarrativeAdjuster(func(industryID string) industry.NarrativeAdjustment {
+		events := narrativeEngine.DetectEvents(narrative.MarketNarrativeData{})
+		// theme → {affected industries → baseRevenueBias}
+		type themeImpact struct {
+			industryBias map[string]float64
+		}
+		themeMap := map[string]themeImpact{
+			"AI_capex_surge":          {map[string]float64{"semiconductor": 0.08, "ai_supply_chain": 0.08, "electronics": 0.05}},
+			"US_rates_up":             {map[string]float64{"financials": -0.04}},
+			"JPY_carry_unwind":        {map[string]float64{"financials": -0.03, "semiconductor": -0.05, "electronics": -0.03}},
+			"geopolitical_risk_spike": {map[string]float64{"shipping": -0.05, "energy": -0.05, "industrial": -0.03}},
+			"oil_price_shock":         {map[string]float64{"shipping": -0.04, "energy": -0.04, "industrial": -0.03}},
+			"semiconductor_downturn":  {map[string]float64{"semiconductor": -0.08, "ai_supply_chain": -0.06, "electronics": -0.06}},
+		}
+		totalBias := 0.0
+		maxConf := 0.0
+		activeTheme := ""
+		for _, e := range events {
+			ti, ok := themeMap[e.Theme]
+			if !ok {
+				continue
+			}
+			bias, ok := ti.industryBias[industryID]
+			if !ok {
+				continue
+			}
+			weighted := bias * e.Confidence * e.HitRate
+			totalBias += weighted
+			if e.Confidence*e.HitRate > maxConf {
+				maxConf = e.Confidence * e.HitRate
+				activeTheme = e.Theme
+			}
+		}
+		if maxConf == 0 {
+			return industry.NarrativeAdjustment{}
+		}
+		return industry.NarrativeAdjustment{
+			RevenueBias: totalBias,
+			ProfitBias:  totalBias * 0.8,
+			Confidence:  maxConf,
+			ActiveTheme: activeTheme,
+		}
+	})
+
+	// Wire supply chain graph into seasonal engine
+	seasonalEngine.SetLinkageGraph(linkageAnalyzer.GetSupplyChainGraph())
+
+	// Wire external validators into cycle tracker for multi-dimensional confidence
+	cycleTracker.SetExternalValidators(seasonalEngine, linkageAnalyzer)
+
+	// Create DynamicEnvModulator with real-time macro data (baseline uses neutral values)
+	// The update will happen when macro ingestor fetches new data.
+	baseline := marketdata.MacroDataSnapshot{
+		Oil: marketdata.MacroDataPoint{Value: 75.0},   // Historical WTI average
+		DXY: marketdata.MacroDataPoint{Value: 103.0},  // Historical DXY average
+		BDI: marketdata.MacroDataPoint{Value: 1500.0}, // Historical BDI average
+	}
+	modulator := industry.NewDynamicEnvModulator(baseline, baseline)
+	if macroProvider != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if snap, err := macroProvider.FetchSnapshot(ctx); err == nil {
+			modulator.UpdateCurrent(snap)
+		}
+	}
+	seasonalEngine.SetDynamicEnv(modulator)
+
+	// Wire narrative provider into linkage analyzer for dynamic supply chain correlations
+	linkageAnalyzer.SetNarrativeProvider(bridge)
+
+	svc := service.NewIndustryService(
+		industry.DefaultClassification(),
+		seasonalEngine,
+		cycleTracker,
+		linkageAnalyzer,
+		industry.NewRiskMonitor(),
+	)
+
+	replayPath := config.Load().ReplayDataPath
+	if replayPath != "" {
+		sectorSymbolsPath := filepath.Join(config.Load().WorkDir, "configs", "sector_symbols.json")
+		if returns, err := industry.LoadIndustryReturnsFromReplay(replayPath, sectorSymbolsPath); err == nil {
+			svc.RebuildCorrelations(returns)
+		} else {
+			logging.Warn("monitoring", "correlation_rebuild_failed", "err", err)
+		}
+	}
+
+	return svc
+}
+
 func (a *DashboardAPI) SetEventBus(eventBus *eventbus.ChannelEventBus) {
 	a.eventBus = eventBus
 	if a.macroIngestor != nil {
 		a.macroIngestor.SetEventBus(eventBus)
+	}
+	// Subscribe to narrative events to keep DynamicEnvModulator current.
+	if eventBus != nil {
+		eventBus.Subscribe(eventbus.EventNarrative, func(ctx context.Context, event eventbus.BusEvent) error {
+			snap, err := a.macroProvider.FetchSnapshot(ctx)
+			if err != nil {
+				logging.Warn("dashboardapi", "dynamic_env_update_failed", "err", err)
+				return nil
+			}
+			a.industryService.UpdateDynamicEnv(snap)
+			return nil
+		})
 	}
 }
 

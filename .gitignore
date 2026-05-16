@@ -12,7 +12,6 @@
 /data/replay/*.jsonl
 /data/replay/*.csv
 /data/fundamentals.json
-/reports/
 /prompts/experiments/
 /internal/experiment/prompts/
 /janus-backtest
@@ -32,15 +31,14 @@
 /test-monitor
 *.test
 graphify-out/
- internal/graphify-out/
- */graphify-out/
+internal/graphify-out/
+*/graphify-out/
 complexity_top20.txt
 cmd/*/reports/
 internal/*/data/
 !internal/marketdata/data/
 !internal/config/data/
-.gitnexus
-/cmd/backtest-window/reports/
+.gitnexus/lbug
 .worktrees/
 
 # Development artifacts
@@ -55,7 +53,6 @@ internal/*/data/
 
 # Temporary files
 tmp/
-*.log
 
 # Local environment / secrets
 .fubon-env/
@@ -65,6 +62,7 @@ run-stress
 coverage_all.out
 
 # Compiled binaries (root level)
+atlas-staging
 backfill-replay
 backtest-window
 check-data-health
@@ -129,15 +127,11 @@ migrate-jsonl-to-sqlite
 data/state/macro/latest.json
 .gstack/
 calibrate-parameters
-<<<<<<< HEAD
-=======
 calibrate-seasonal
 
-# Build artifacts
 # Build artifacts
 /fetch-historical
 
 # Coverage reports
 *.out
-.gitnexus/
->>>>>>> 066d884 (security: final cleanup before public release)
+

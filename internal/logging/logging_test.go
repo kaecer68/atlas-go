@@ -10,7 +10,7 @@ import (
 
 func TestInit(t *testing.T) {
 	Init("json", slog.LevelDebug)
-	if logger == nil {
+	if Default() == nil {
 		t.Fatal("logger should not be nil after Init")
 	}
 
@@ -22,7 +22,7 @@ func TestSetLogger(t *testing.T) {
 	custom := slog.New(slog.NewTextHandler(&buf, nil))
 	SetLogger(custom)
 
-	if logger != custom {
+	if Default() != custom {
 		t.Fatal("SetLogger did not set the logger")
 	}
 

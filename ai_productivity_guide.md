@@ -58,7 +58,7 @@ go tool cover -func=coverage.out | tail -n 1  # Summary line
 | `go run ./cmd/promote-baseline` or `./scripts/openclaw/decide.sh` | Accept and promote mutated policy | Immediate (state update) |
 | `go run ./cmd/revert-baseline` | Roll back failed promotion | Immediate (state update) |
 | `go run ./cmd/import-replay -source <csv> -target <jsonl>` | Normalize TWSE/TPEX CSV → replay format | ~10-30s |
-| `./enhanced_experiment_runner.go` | Automated evolution loop with mutation, execute, judge, promote | ~10-30m |
+
 
 ### Non-Obvious Build Steps
 
@@ -652,8 +652,7 @@ These are **documentation for prompt design**, not enforced by code.
 # Revert (if promotion caused issues)
 ./scripts/openclaw/decide.sh --revert --reason "reason text"
 
-# Integrated runner (full evolution cycle)
-go run enhanced_experiment_runner.go
+# Evolution workflow: run-experiment → judge-experiment → promote-baseline
 ```
 
 ### Test Execution Quick Map
@@ -813,7 +812,7 @@ staticcheck ./...                               # Additional lint
 ./scripts/openclaw/replay_approval_event.sh --event data/state/approvals/<decision-file>.json --dry-run
 
 # === FULL AUTOMATION ===
-go run enhanced_experiment_runner.go            # End-to-end evolution: mutate → execute → judge → promote
+go run ./cmd/run-experiment -brief <brief> && go run ./cmd/judge-experiment && go run ./cmd/promote-baseline
 ```
 
 ---

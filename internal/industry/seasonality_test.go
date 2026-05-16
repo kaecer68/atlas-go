@@ -214,3 +214,51 @@ func TestPatternString(t *testing.T) {
 		t.Errorf("expected '%s', got '%s'", expected, s)
 	}
 }
+
+func TestGetAdjustmentBreakdown(t *testing.T) {
+	engine := NewSeasonalEngine()
+	now := time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC) // tech_peak_season active
+
+	// Without linkage/narrative/dynamic env — should just have direct_match
+	bd := engine.GetAdjustmentBreakdown("semiconductor", now)
+	if bd == nil {
+		t.Fatal("expected non-nil breakdown")
+	}
+	if bd.DirectMatch <= 1.0 {
+		t.Errorf("expected DirectMatch > 1.0 for semiconductor during tech_peak_season, got %.4f", bd.DirectMatch)
+	}
+	if bd.SupplyChain != 1.0 {
+		t.Errorf("expected SupplyChain=1.0 (no graph), got %.4f", bd.SupplyChain)
+	}
+	if bd.Narrative != 1.0 {
+		t.Errorf("expected Narrative=1.0 (no provider), got %.4f", bd.Narrative)
+	}
+	if bd.DynamicEnv != 1.0 {
+		t.Errorf("expected DynamicEnv=1.0 (no modulator), got %.4f", bd.DynamicEnv)
+	}
+	if bd.Composite != bd.DirectMatch*bd.SupplyChain*bd.Narrative*bd.DynamicEnv {
+		t.Errorf("Composite %.4f != product of layers %.4f", bd.Composite, bd.DirectMatch*bd.SupplyChain*bd.Narrative*bd.DynamicEnv)
+	}
+
+	// No active patterns for a neutral date
+	neutral := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC) // no pattern
+	bd2 := engine.GetAdjustmentBreakdown("semiconductor", neutral)
+	if bd2 == nil {
+		t.Fatal("expected non-nil breakdown")
+	}
+	if bd2.DirectMatch != 1.0 {
+		t.Errorf("expected DirectMatch=1.0 for neutral date, got %.4f", bd2.DirectMatch)
+	}
+	if bd2.Composite != 1.0 {
+		t.Errorf("expected Composite=1.0 for neutral date, got %.4f", bd2.Composite)
+	}
+
+	// Avoided industry during tech_peak_season
+	bd3 := engine.GetAdjustmentBreakdown("consumer", now)
+	if bd3 == nil {
+		t.Fatal("expected non-nil breakdown")
+	}
+	if bd3.DirectMatch >= 1.0 {
+		t.Errorf("expected DirectMatch < 1.0 for consumer avoided during tech_peak_season, got %.4f", bd3.DirectMatch)
+	}
+}

@@ -12,6 +12,7 @@
 
 路由按職責分類註冊：
 - **核心儀表板** (`RegisterRoutes`): `/api/dashboard/macro-radar`, `/api/dashboard/recommendation-pipeline` 等。
+- **產業生態系** (`RegisterIndustryRoutes`): `/api/industry/cycles`（週期羅盤）、`/api/industry/seasonality`（季節性模式）、`/api/industry/seasonality/calendar`（季節性行事曆）、`/api/industry/linkage`（供應鏈連動）、`/api/industry/classification`（產業分類）、`/api/industry/detail`（產業詳細資訊）。
 - **敘事分析** (`RegisterNarrativeRoutes`): `/api/narrative/events`, `/api/narrative/chains` 等。
 - **人工干預** (`RegisterControlRoutes`): `/api/control/approve-recommendation`, `/api/control/reject-recommendation`, `/api/control/audit-log`。
 - **實驗與回測**: `/api/experiment/*`, `/api/backtest/*`。

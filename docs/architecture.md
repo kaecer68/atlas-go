@@ -133,5 +133,36 @@ The system should eventually:
 - `internal/portfolio`: Darwinian weights and multi-factor engine
 - `internal/sim`: portfolio and execution engine
 - `internal/config`: runtime configuration
+- `internal/industry`: industry ecosystem analysis (supply chain linkage, seasonal patterns, business cycle compass)
+- `internal/narrative`: macro narrative event detection, causal chains, and SeasonalBridge for industry correlation modulation
+- `internal/replay`: historical market data loading and forward return calculation
+- `internal/reporting`: Markdown report generation and performance tables
 - `cmd/atlas`: entrypoint for local simulation runs
+- `cmd/calibrate-seasonal`: CLI for calibrating seasonal patterns from replay data
+
+## Industry Ecosystem
+
+### Supply Chain Linkage (`internal/industry/linkage.go`)
+
+Models upstream/downstream relationships between Taiwan industries with configurable correlation matrices:
+- `CorrelationMatrix` supports three initialization modes: hardcoded defaults, config-driven (parameters.json), and empirical recalculation from returns
+- `ShockPropagation` propagates impact through the supply chain with narrative-aware correlation multipliers
+- `LinkageAnalyzer` exposes scores, graphs, and shock simulation via `GET /api/industry/linkage`
+- Graph topology is defined in `configs/supply_chain_graph.json` (hot-reloadable)
+- Narrative themes from `SeasonalBridge` dynamically adjust pairwise correlations
+
+### Seasonal Patterns (`internal/industry/seasonality.go`)
+
+Calendar effect detection and calibration:
+- `SeasonalEngine` manages per-industry patterns with start/end months and adjustment factors
+- `cmd/calibrate-seasonal` CLI supports synthetic data, replay-based calibration, and automatic parameter update
+- Evidence quality badges (`heuristic_awaiting_data` / `low` / `medium` / `high`) displayed in frontend
+- `GetAdjustmentBreakdown()` provides four-layer decomposition: seasonal x narrative x cycle x environment
+
+### Business Cycle Compass (`internal/industry/cycle.go`)
+
+Multi-phase industry cycle tracking:
+- `CycleTracker` manages five phases (expansion/recovery/mature/recession) with confidence scoring
+- `DynamicEnvModulator` ingests macro data (oil, BDI, DXY) for real-time cycle adjustment
+- External validators integrate seasonal engine and linkage analyzer for multi-dimensional confidence
 

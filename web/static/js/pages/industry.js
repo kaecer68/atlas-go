@@ -2,6 +2,7 @@
 import { sectorName, stockName } from "../names.js";
 import {
   silentGetJSON,
+  postJSON,
   notify,
   renderEmptyState,
 } from "../shared/app-utils.js";
@@ -17,6 +18,7 @@ export async function loadIndustryData() {
       ],
     );
     renderIndustryMap(classification);
+    populateShockSourceDropdown(classification);
     renderIndustryCycle(overview);
     renderIndustryLinkage(overview);
     if (seasonality && calendar) {
@@ -188,7 +190,23 @@ export function renderIndustrySeasonality(data) {
   const activePatterns =
     data && data.active_patterns ? data.active_patterns : [];
 
-  let html =
+  const calibEvidence = data && data.calibration_evidence;
+  let evidenceBanner;
+  if (calibEvidence && calibEvidence.calibrated) {
+    const ts = calibEvidence.timestamp ? new Date(calibEvidence.timestamp).toLocaleString("zh-TW") : "未知";
+    const src = calibEvidence.data_source || "未知";
+    evidenceBanner =
+      `<div style="font-size:11px;color:var(--ok);margin-bottom:8px;padding:6px 10px;background:rgba(79,193,255,0.08);border:1px solid rgba(79,193,255,0.2);border-radius:6px">` +
+      `✓ <strong>已校準：</strong>季節性模式數值已透過回測校準（校準時間：${ts}，資料來源：${src}）。校準結果已更新 HistoricalAccuracy 與 AdjustmentFactor。` +
+      `</div>`;
+  } else {
+    evidenceBanner =
+      '<div style="font-size:11px;color:var(--warn);margin-bottom:8px;padding:6px 10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:6px">' +
+      '⚠️ <strong>證據品質提示：</strong>以下季節性模式數值基於經驗法則（heuristic），尚未經過回測校準（evidence_quality: low）。請勿將 HistoricalAccuracy 與 AdjustmentFactor 視為實證數據。' +
+      '</div>';
+  }
+  let html = evidenceBanner;
+  html +=
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
   html +=
     '<div style="font-size:11px;color:var(--muted)">顯示所有歷史季節性模式與統計數據</div>';
@@ -230,7 +248,10 @@ export function renderSeasonalityList(allPatterns, activePatterns, data) {
     html += `<tr style="${isActive ? "background:rgba(79,193,255,0.05)" : ""}">`;
     html += `<td><strong>${p.name}</strong><br><span style="font-size:11px;color:var(--muted)">${p.description || ""}</span></td>`;
     html += `<td>${period}</td>`;
-    html += `<td>${accuracy}%</td>`;
+    const evidenceBadge = calibEvidence && calibEvidence.calibrated
+      ? `<span style="font-size:10px;color:var(--ok);background:rgba(79,193,255,0.1);padding:1px 4px;border-radius:3px" title="已透過回測校準">已校準</span>`
+      : `<span style="font-size:10px;color:var(--warn);background:rgba(245,158,11,0.1);padding:1px 4px;border-radius:3px" title="evidence_quality: low — 尚未經過回測校準">待驗證</span>`;
+    html += `<td>${accuracy}% ${evidenceBadge}</td>`;
     html += `<td>${returnPct}%</td>`;
     html += `<td>${adjustment}x</td>`;
     html += `<td>${statusBadge}</td>`;
@@ -238,11 +259,94 @@ export function renderSeasonalityList(allPatterns, activePatterns, data) {
   });
   html += "</tbody></table>";
 
+  // Adjustment breakdown visualization
+  const breakdown = data && data.adjustment_breakdown;
+  if (breakdown) {
+    const layers = [
+      { key: "direct_match", label: "直接匹配" },
+      { key: "supply_chain", label: "供應鏈傳導" },
+      { key: "narrative",    label: "敘事事件" },
+      { key: "dynamic_env",  label: "動態環境" },
+    ];
+    const comp = breakdown.composite || 1.0;
+    html += '<div style="margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px">';
+    html += '<div style="font-weight:700;font-size:13px;margin-bottom:8px">調整因子分解（複合值 ' + comp.toFixed(4) + 'x）</div>';
+    layers.forEach(function(layer) {
+      const val = breakdown[layer.key] || 1.0;
+      const barW = Math.min(Math.abs((val - 1) * 100), 30);
+      const color = val >= 1 ? "var(--up)" : "var(--down)";
+      const direction = val >= 1 ? "+" : "";
+      html += '<div style="display:flex;align-items:center;gap:8px;margin:4px 0;font-size:12px">';
+      html += '<span style="width:80px;color:var(--muted)">' + layer.label + '</span>';
+      html += '<div style="flex:1;height:16px;background:rgba(0,0,0,0.05);border-radius:3px;overflow:hidden">';
+      html += '<div style="width:' + barW + '%;height:100%;background:' + color + ';opacity:0.6;border-radius:3px"></div></div>';
+      html += '<span style="width:60px;text-align:right;font-weight:600;color:' + color + '">' + direction + ((val - 1) * 100).toFixed(1) + '%</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Narrative themes overlay
+  const themes = data && data.narrative_themes;
+  if (themes && themes.length > 0) {
+    html += '<div style="margin-top:8px;font-size:11px;color:var(--muted);padding:6px 10px;background:rgba(79,193,255,0.06);border:1px solid rgba(79,193,255,0.2);border-radius:6px">';
+    html += '<strong>活躍敘事主題：</strong>' + themes.join(", ");
+    html += '</div>';
+  }
+
   if (activePatterns.length === 0) {
     html += `<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--muted)">
       今天是 ${today}，目前無活躍模式。上表列出所有追蹤中的季節性模式供參考。
     </div>`;
   }
+
+  return html;
+}
+
+export function renderSeasonalityCalendar(data) {
+  const calendar = data && data.calendar ? data.calendar : null;
+  if (!calendar || !calendar.months || calendar.months.length === 0) {
+    return renderEmptyState("無日曆視圖資料", "");
+  }
+
+  const monthNames = [
+    "一月", "二月", "三月", "四月", "五月", "六月",
+    "七月", "八月", "九月", "十月", "十一月", "十二月",
+  ];
+
+  let html =
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:12px">';
+  calendar.months.forEach((m) => {
+    const monthIdx = (m.month || 1) - 1;
+    const name = monthNames[monthIdx] || `M${m.month}`;
+    const hasPatterns = m.patterns && m.patterns.length > 0;
+    const bgColor = hasPatterns
+      ? "rgba(79,193,255,0.06)"
+      : "var(--bg)";
+
+    html +=
+      `<div style="background:${bgColor};border:1px solid var(--border);border-radius:8px;padding:8px">`;
+    html +=
+      `<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:${hasPatterns ? "var(--accent)" : "var(--muted)"}">${name}</div>`;
+
+    if (hasPatterns) {
+      m.patterns.forEach((p) => {
+        const accuracy = Math.round((p.historical_accuracy || 0) * 100);
+        const returnPct = ((p.typical_return || 0) * 100).toFixed(1);
+        html += `<div style="font-size:11px;padding:3px 0;border-bottom:1px solid var(--border)">`;
+        html +=
+          `<div style="font-weight:600">${p.name}</div>`;
+        html +=
+          `<div style="color:var(--muted)">準確度 ${accuracy}% · 報酬 ${returnPct}% · 因子 ${(p.adjustment_factor || 1).toFixed(2)}x</div>`;
+        html += `</div>`;
+      });
+    } else {
+      html +=
+        '<div style="font-size:11px;color:var(--muted);padding:4px 0">無活躍模式</div>';
+    }
+    html += "</div>";
+  });
+  html += "</div>";
 
   return html;
 }
@@ -288,6 +392,34 @@ function renderCycleTab(detail) {
     html += `<div class="metric-row"><span class="metric-label">${m.label}</span><span class="metric-value">${m.value}</span></div>`;
   });
   html += "</div>";
+
+  // Confidence breakdown visualization
+  const cb = cp.confidence_breakdown;
+  if (cb && (cb.boundary || cb.seasonal || cb.linkage || cb.narrative)) {
+    const dims = [
+      { key: "boundary", label: "邊界信號", weight: cb.weights ? cb.weights.boundary : 0 },
+      { key: "freshness", label: "數據新鮮度", weight: cb.weights ? cb.weights.freshness : 0 },
+      { key: "seasonal", label: "季節性", weight: cb.weights ? cb.weights.seasonal : 0 },
+      { key: "linkage", label: "供應鏈連動", weight: cb.weights ? cb.weights.linkage : 0 },
+      { key: "narrative", label: "宏觀敘事", weight: cb.weights ? cb.weights.narrative : 0 },
+    ];
+    html += '<div class="industry-section"><h4>📐 信心度分解</h4>';
+    html += '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">各維度信心分數 × 配置權重 → 複合信心 <strong>' + ((cb.composite || 0) * 100).toFixed(0) + '%</strong></div>';
+    dims.forEach(function(d) {
+      const val = cb[d.key] || 0;
+      if (val <= 0) return;
+      const barW = Math.min(val * 100, 100);
+      const wPct = d.weight ? (d.weight * 100).toFixed(0) : 0;
+      html += '<div style="display:flex;align-items:center;gap:6px;margin:3px 0;font-size:11px">';
+      html += '<span style="width:80px;color:var(--muted)">' + d.label + '</span>';
+      html += '<div style="flex:1;height:14px;background:rgba(0,0,0,0.04);border-radius:3px;overflow:hidden">';
+      html += '<div style="width:' + barW + '%;height:100%;background:var(--accent);opacity:0.5;border-radius:3px"></div></div>';
+      html += '<span style="width:40px;text-align:right">' + (val * 100).toFixed(0) + '%</span>';
+      html += '<span style="width:30px;color:var(--muted);font-size:10px;text-align:right">w=' + wPct + '%</span>';
+      html += '</div>';
+    });
+    html += "</div>";
+  }
 
   if (detail.recommendation) {
     const rec = detail.recommendation;
@@ -390,6 +522,9 @@ function renderSeasonalityTab(detail) {
     return renderEmptyState("尚無季節性模式資料", "");
 
   let html = '<div class="industry-section"><h4>📅 季節性模式</h4>';
+  html += '<div style="font-size:11px;color:var(--warn);margin-bottom:8px;padding:6px 10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:6px">' +
+    '⚠️ 以下數值基於經驗法則，尚未經過回測校準。' +
+    '</div>';
   patterns.forEach((p) => {
     const accuracy = Math.round((p.historical_accuracy || 0) * 100);
     const returnPct = ((p.typical_return || 0) * 100).toFixed(1);
@@ -405,7 +540,11 @@ function renderSeasonalityTab(detail) {
     html += `<div class="pattern-name">${p.name}</div>`;
     html += `<div class="pattern-meta">${period}</div>`;
     html += '<div class="metric-row" style="margin-top:6px">';
-    html += `<span class="metric-label">歷史準確度</span><span class="metric-value">${accuracy}%</span></div>`;
+    const calEvidence = (window.seasonalityData && window.seasonalityData.calibration_evidence);
+    const accBadge = calEvidence && calEvidence.calibrated
+      ? `<span style="font-size:10px;color:var(--ok);background:rgba(79,193,255,0.1);padding:1px 4px;border-radius:3px">已校準</span>`
+      : `<span style="font-size:10px;color:var(--warn);background:rgba(245,158,11,0.1);padding:1px 4px;border-radius:3px">待驗證</span>`;
+    html += `<span class="metric-label">歷史準確度</span><span class="metric-value">${accuracy}% ${accBadge}</span></div>`;
     html += '<div class="metric-row">';
     html += `<span class="metric-label">典型報酬</span><span class="metric-value" style="color:${returnPct >= 0 ? "var(--up)" : "var(--down)"}">${returnPct}%</span></div>`;
     html += '<div class="metric-row">';
@@ -534,6 +673,77 @@ function closeCycleLegend() {
   if (modal) modal.classList.remove("show");
 }
 
+function populateShockSourceDropdown(classification) {
+  const sel = document.getElementById("shockSource");
+  if (!sel || !classification || !classification.industries) return;
+  const industries = classification.industries;
+  for (const ind of industries) {
+    const id = ind.id || "";
+    const name = ind.name || id;
+    if (!id) continue;
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  }
+}
+
+window.runShockSimulation = async function () {
+  const source = document.getElementById("shockSource").value;
+  const magnitude = parseFloat(document.getElementById("shockMagnitude").value);
+  const depth = parseInt(document.getElementById("shockDepth").value) || 3;
+  const el = document.getElementById("industryShockSim");
+  if (!source) {
+    el.innerHTML = renderEmptyState("請選擇來源產業", "");
+    el.classList.remove("loading");
+    return;
+  }
+  if (isNaN(magnitude)) {
+    el.innerHTML = renderEmptyState("請輸入衝擊幅度", "");
+    el.classList.remove("loading");
+    return;
+  }
+  el.classList.add("loading");
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">模擬中…</div>';
+  try {
+    const result = await postJSON("/api/dashboard/industry-shock-simulation", {
+      source_industry: source,
+      shock_magnitude: magnitude,
+      max_depth: depth,
+    });
+    renderShockSimulationResult(result);
+  } catch (e) {
+    el.classList.remove("loading");
+    el.innerHTML = renderEmptyState("模擬失敗: " + (e.message || e), "");
+  }
+};
+
+function renderShockSimulationResult(data) {
+  const el = document.getElementById("industryShockSim");
+  el.classList.remove("loading");
+  if (!data || !data.impacts || data.impacts.length === 0) {
+    el.innerHTML = renderEmptyState("該衝擊未影響其他產業", "");
+    return;
+  }
+  const sorted = [...data.impacts].sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
+  let html = '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">';
+  html += `<strong>${data.source}</strong> 遭受 <strong>${(data.shock * 100).toFixed(1)}%</strong> 衝擊 → 影響 ${data.impact_count} 個關聯產業</div>`;
+  html += '<table style="font-size:12px"><thead><tr><th>產業</th><th>影響幅度</th><th>衝擊傳導</th></tr></thead><tbody>';
+  for (const imp of sorted) {
+    const pct = (imp.impact * 100).toFixed(1);
+    const absPct = Math.abs(imp.impact * 100);
+    const color = imp.impact < 0 ? "var(--down)" : "var(--up)";
+    const barW = Math.min(100, absPct * 8);
+    html += `<tr>`;
+    html += `<td>${imp.industry}</td>`;
+    html += `<td style="color:${color};font-weight:600">${pct}%</td>`;
+    html += `<td><div style="width:${barW}%;height:8px;background:${color};border-radius:4px;min-width:4px"></div></td>`;
+    html += `</tr>`;
+  }
+  html += "</tbody></table>";
+  el.innerHTML = html;
+}
+
 if (typeof window !== "undefined")
   Object.assign(window, {
     showIndustryDetail,
@@ -541,4 +751,5 @@ if (typeof window !== "undefined")
     switchIndustryTab,
     toggleCycleLegend,
     closeCycleLegend,
+    runShockSimulation,
   });
