@@ -441,23 +441,30 @@ func TestRealtimeRouter_Status(t *testing.T) {
 }
 
 type mockProvider struct {
+	mu        sync.Mutex
 	name      string
 	connected bool
 	subs      []string
 }
 
 func (m *mockProvider) Connect(ctx context.Context) error {
+	m.mu.Lock()
 	m.connected = true
+	m.mu.Unlock()
 	return nil
 }
 
 func (m *mockProvider) Disconnect(ctx context.Context) error {
+	m.mu.Lock()
 	m.connected = false
+	m.mu.Unlock()
 	return nil
 }
 
 func (m *mockProvider) Subscribe(symbols []string) error {
+	m.mu.Lock()
 	m.subs = append(m.subs, symbols...)
+	m.mu.Unlock()
 	return nil
 }
 
