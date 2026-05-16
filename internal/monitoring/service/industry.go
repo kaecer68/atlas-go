@@ -244,6 +244,7 @@ func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition,
 		if s.CycleTracker.HasEmpiricalData(pos.IndustryID) {
 			evidence = "empirical"
 		}
+		narrativeTheme := s.CycleTracker.NarrativeTheme(pos.IndustryID)
 		return CyclePosition{
 			Industry:            pos.IndustryID,
 			Name:                name,
@@ -256,7 +257,7 @@ func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition,
 			PhaseScore:          pos.GetPhaseScore(),
 			Trend:               pos.GetTrend(),
 			ConfidenceBreakdown: breakdown,
-			NarrativeTheme:      "", // populated by narrative adjuster internally
+			NarrativeTheme:      narrativeTheme,
 			ThresholdEvidence:   ev,
 			Evidence:            evidence,
 		}

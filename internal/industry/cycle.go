@@ -66,19 +66,21 @@ type Indicator struct {
 
 // CycleTracker monitors and tracks cycle positions for industries.
 type CycleTracker struct {
-	positions        map[string]*CyclePosition
-	history          map[string][]CyclePosition
-	seasonalEngine   *SeasonalEngine
-	linkageAnalyzer  *LinkageAnalyzer
-	narrativeHitRate func() float64
-	narrativeAdjust  func(industryID string) NarrativeAdjustment
+	positions          map[string]*CyclePosition
+	history            map[string][]CyclePosition
+	seasonalEngine     *SeasonalEngine
+	linkageAnalyzer    *LinkageAnalyzer
+	narrativeHitRate   func() float64
+	narrativeAdjust    func(industryID string) NarrativeAdjustment
+	lastNarrativeTheme map[string]string // active narrative theme per industry (updated during detectBusinessCycle)
 }
 
 // NewCycleTracker creates a new cycle tracker.
 func NewCycleTracker() *CycleTracker {
 	ct := &CycleTracker{
-		positions: make(map[string]*CyclePosition),
-		history:   make(map[string][]CyclePosition),
+		positions:          make(map[string]*CyclePosition),
+		history:            make(map[string][]CyclePosition),
+		lastNarrativeTheme: make(map[string]string),
 	}
 	ct.initializeDefaultPositions()
 	return ct
@@ -103,6 +105,13 @@ func (ct *CycleTracker) SetNarrativeAdjuster(fn func(industryID string) Narrativ
 
 func (ct *CycleTracker) HasEmpiricalData(industryID string) bool {
 	return len(ct.history[industryID]) > 1
+}
+
+func (ct *CycleTracker) NarrativeTheme(industryID string) string {
+	if ct.lastNarrativeTheme == nil {
+		return ""
+	}
+	return ct.lastNarrativeTheme[industryID]
 }
 
 // initializeDefaultPositions populates the tracker with default cycle positions
@@ -291,6 +300,9 @@ func (ct *CycleTracker) detectBusinessCycle(metrics IndustryMetrics) CyclePhase 
 		adj := ct.narrativeAdjust(metrics.IndustryID)
 		revenueGrowth += adj.RevenueBias * adj.Confidence
 		profitGrowth += adj.ProfitBias * adj.Confidence
+		ct.lastNarrativeTheme[metrics.IndustryID] = adj.ActiveTheme
+	} else {
+		delete(ct.lastNarrativeTheme, metrics.IndustryID)
 	}
 
 	switch {
