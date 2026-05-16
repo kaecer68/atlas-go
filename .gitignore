@@ -133,7 +133,6 @@ calibrate-parameters
 calibrate-seasonal
 
 # Build artifacts
-# Build artifacts
 /fetch-historical
 
 # Coverage reports
