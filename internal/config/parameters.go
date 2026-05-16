@@ -356,6 +356,11 @@ type IndustryParameters struct {
 	PhaseScores      ParameterMetadata[PhaseScoresConfig]       `json:"phase_scores"`
 	CycleTransitions ParameterMetadata[[]CycleTransitionConfig] `json:"cycle_transitions"`
 
+	CycleWeightMultipliers ParameterMetadata[CycleWeightMultipliersConfig] `json:"cycle_weight_multipliers"`
+	LinkageWeightImpact    ParameterMetadata[float64]                      `json:"linkage_weight_impact"`
+	WeightFloor            ParameterMetadata[float64]                      `json:"weight_floor"`
+	MaxDailyWeightChange   ParameterMetadata[float64]                      `json:"max_daily_weight_change"`
+
 	LinkageParams ParameterMetadata[LinkageConfig] `json:"linkage_params"`
 
 	DynamicEnv ParameterMetadata[DynamicEnvConfig] `json:"dynamic_env"`
@@ -496,6 +501,13 @@ type PhaseScoresConfig struct {
 	ScoreRecovery  float64 `json:"score_recovery"`
 	ScoreMature    float64 `json:"score_mature"`
 	ScoreRecession float64 `json:"score_recession"`
+}
+
+type CycleWeightMultipliersConfig struct {
+	ExpansionMultiplier float64 `json:"expansion_multiplier"`
+	RecoveryMultiplier  float64 `json:"recovery_multiplier"`
+	MatureMultiplier    float64 `json:"mature_multiplier"`
+	RecessionMultiplier float64 `json:"recession_multiplier"`
 }
 
 // CycleTransitionConfig holds probability and typical duration for a cycle phase transition.

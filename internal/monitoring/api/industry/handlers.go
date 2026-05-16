@@ -220,15 +220,21 @@ func (h *Handlers) HandleIndustryOverview(r *http.Request) (int, any) {
 	var industries []map[string]any
 	for _, o := range overviews {
 		industries = append(industries, map[string]any{
-			"id":                o.ID,
-			"name":              o.Name,
-			"cycle_phase":       o.CyclePhase,
-			"inventory_cycle":   o.InventoryCycle,
-			"capex_cycle":       o.CapexCycle,
-			"cycle_confidence":  o.CycleConfidence,
-			"is_favorable":      o.IsFavorable,
-			"seasonal_patterns": o.SeasonalPatterns,
-			"linkage_score":     o.LinkageScore,
+			"id":                  o.ID,
+			"name":                o.Name,
+			"base_weight":         o.BaseWeight,
+			"adjusted_weight":     o.AdjustedWeight,
+			"cycle_phase":         o.CyclePhase,
+			"inventory_cycle":     o.InventoryCycle,
+			"capex_cycle":         o.CapexCycle,
+			"cycle_confidence":    o.CycleConfidence,
+			"is_favorable":        o.IsFavorable,
+			"seasonal_patterns":   o.SeasonalPatterns,
+			"linkage_score":       o.LinkageScore,
+			"cycle_multiplier":    o.CycleMultiplier,
+			"seasonal_multiplier": o.SeasonalMultiplier,
+			"linkage_multiplier":  o.LinkageMultiplier,
+			"adjustment_log":      o.AdjustmentLog,
 		})
 	}
 
