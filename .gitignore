@@ -58,6 +58,9 @@ internal/*/data/
 tmp/
 *.log
 
+# Local environment / secrets
+.fubon-env/
+
 # Build artifacts
 run-stress
 coverage_all.out

@@ -16,6 +16,10 @@ FROM alpine:latest
 # Install cron and curl
 RUN apk add --no-cache dcron curl bash
 
+# Create non-root user for cron jobs
+RUN addgroup -g 1000 atlas && \
+    adduser -u 1000 -G atlas -s /bin/sh -D atlas
+
 # Create app directory
 WORKDIR /app
 
@@ -38,8 +42,11 @@ COPY --from=builder /build/sql /app/sql
 COPY --from=builder /build/scripts/cron-entrypoint.sh /app/cron-entrypoint.sh
 RUN chmod +x /app/cron-entrypoint.sh
 
-# Create log directory
-RUN mkdir -p /var/log/cron
+# Create log directory and set ownership
+RUN mkdir -p /var/log/cron && chown -R atlas:atlas /app /var/log/cron
+
+# Switch to non-root user
+USER atlas
 
 # Start cron in foreground via entrypoint
 CMD ["/app/cron-entrypoint.sh"]
