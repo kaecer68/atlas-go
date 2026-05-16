@@ -135,16 +135,20 @@ func (h *Handlers) HandleIndustryCycle(r *http.Request) (int, any) {
 		var allPositions []map[string]any
 		for _, pos := range positions {
 			allPositions = append(allPositions, map[string]any{
-				"industry":        pos.Industry,
-				"name":            pos.Name,
-				"business_cycle":  pos.BusinessCycle,
-				"inventory_cycle": pos.InventoryCycle,
-				"capex_cycle":     pos.CapexCycle,
-				"confidence":      pos.Confidence,
-				"updated_at":      pos.UpdatedAt,
-				"is_favorable":    pos.IsFavorable,
-				"phase_score":     pos.PhaseScore,
-				"trend":           pos.Trend,
+				"industry":             pos.Industry,
+				"name":                 pos.Name,
+				"business_cycle":       pos.BusinessCycle,
+				"inventory_cycle":      pos.InventoryCycle,
+				"capex_cycle":          pos.CapexCycle,
+				"confidence":           pos.Confidence,
+				"updated_at":           pos.UpdatedAt,
+				"is_favorable":         pos.IsFavorable,
+				"phase_score":          pos.PhaseScore,
+				"trend":                pos.Trend,
+				"confidence_breakdown": pos.ConfidenceBreakdown,
+				"threshold_evidence":   pos.ThresholdEvidence,
+				"evidence":             pos.Evidence,
+				"narrative_theme":      pos.NarrativeTheme,
 			})
 		}
 		return http.StatusOK, map[string]any{
@@ -155,15 +159,19 @@ func (h *Handlers) HandleIndustryCycle(r *http.Request) (int, any) {
 
 	pos := positions[0]
 	return http.StatusOK, map[string]any{
-		"industry":        pos.Industry,
-		"business_cycle":  pos.BusinessCycle,
-		"inventory_cycle": pos.InventoryCycle,
-		"capex_cycle":     pos.CapexCycle,
-		"confidence":      pos.Confidence,
-		"updated_at":      pos.UpdatedAt,
-		"is_favorable":    pos.IsFavorable,
-		"phase_score":     pos.PhaseScore,
-		"trend":           pos.Trend,
+		"industry":             pos.Industry,
+		"business_cycle":       pos.BusinessCycle,
+		"inventory_cycle":      pos.InventoryCycle,
+		"capex_cycle":          pos.CapexCycle,
+		"confidence":           pos.Confidence,
+		"updated_at":           pos.UpdatedAt,
+		"is_favorable":         pos.IsFavorable,
+		"phase_score":          pos.PhaseScore,
+		"trend":                pos.Trend,
+		"confidence_breakdown": pos.ConfidenceBreakdown,
+		"threshold_evidence":   pos.ThresholdEvidence,
+		"evidence":             pos.Evidence,
+		"narrative_theme":      pos.NarrativeTheme,
 	}
 }
 
