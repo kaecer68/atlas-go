@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -190,16 +191,62 @@ func filterMinObservations(industryReturns map[string][]float64, minObs int) map
 	return result
 }
 
-type jsonlRow struct {
-	Date   string  `json:"Date"`
-	Symbol string  `json:"Symbol"`
-	Name   string  `json:"Name"`
-	Open   float64 `json:"Open"`
-	High   float64 `json:"High"`
-	Low    float64 `json:"Low"`
-	Close  float64 `json:"Close"`
-	Volume int64   `json:"Volume"`
-	Source string  `json:"Source"`
+// jsonlField holds parsed fields from a JSONL row, supporting both
+// PascalCase (tw_extended_90days) and lowercase (finmind, tw_combined) keys.
+type jsonlField struct {
+	Date   string
+	Symbol string
+	Name   string
+	Open   float64
+	High   float64
+	Low    float64
+	Close  float64
+	Volume int64
+	Source string
+}
+
+func parseJSONLRow(line string) (jsonlField, error) {
+	var raw map[string]interface{}
+	if err := json.Unmarshal([]byte(line), &raw); err != nil {
+		return jsonlField{}, fmt.Errorf("unmarshal JSONL row: %w", err)
+	}
+
+	getStr := func(keys ...string) string {
+		for _, k := range keys {
+			if v, ok := raw[k]; ok {
+				if s, ok := v.(string); ok {
+					return s
+				}
+			}
+		}
+		return ""
+	}
+	getFloat := func(keys ...string) float64 {
+		for _, k := range keys {
+			if v, ok := raw[k]; ok {
+				switch n := v.(type) {
+				case float64:
+					return n
+				case string:
+					f, _ := strconv.ParseFloat(n, 64)
+					return f
+				}
+			}
+		}
+		return 0
+	}
+
+	return jsonlField{
+		Date:   getStr("Date", "date"),
+		Symbol: getStr("Symbol", "symbol"),
+		Name:   getStr("Name", "name"),
+		Open:   getFloat("Open", "open"),
+		High:   getFloat("High", "high"),
+		Low:    getFloat("Low", "low"),
+		Close:  getFloat("Close", "close"),
+		Volume: int64(getFloat("Volume", "volume")),
+		Source: getStr("Source", "source"),
+	}, nil
 }
 
 func loadJSONLDataset(path string) (*replay.Dataset, error) {
@@ -223,9 +270,9 @@ func loadJSONLDataset(path string) (*replay.Dataset, error) {
 		if line == "" || line[0] != '{' {
 			continue
 		}
-		var row jsonlRow
-		if err := json.Unmarshal([]byte(line), &row); err != nil {
-			return nil, fmt.Errorf("unmarshal JSONL row: %w", err)
+		row, err := parseJSONLRow(line)
+		if err != nil {
+			return nil, err
 		}
 		date, err := time.Parse(time.RFC3339, row.Date)
 		if err != nil {
