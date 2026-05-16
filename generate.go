@@ -1,2 +1,2 @@
 //go:generate go run ./cmd/gentags
-package main
+package generate
