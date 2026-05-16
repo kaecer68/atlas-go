@@ -1,12 +1,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 func TestTradingDayFilter(t *testing.T) {
@@ -280,9 +286,81 @@ func TestAppendJSONL(t *testing.T) {
 	}
 }
 
-
 func TestFetchDayIntegration(t *testing.T) {
-	t.Skip("requires mock rate limiter - use unit tests for coverage")
+	mockResponse := MIINDEXResponse{
+		Stat:   "OK",
+		Date:   "20260102",
+		Title:  "每日收盤行情(全部)",
+		Fields: []string{"證券代號", "證券名稱", "成交股數", "成交金額", "開盤價", "最高價", "最低價", "收盤價", "漲跌價差", "成交筆數"},
+		Data: [][]string{
+			{"2330", "台積電", "10,000,000", "10,000,000,000", "1000", "1010", "990", "1005", "+5", "5,000"},
+			{"2317", "鴻海", "5,000,000", "500,000,000", "200", "205", "198", "202", "+2", "3,000"},
+			{"0000", "不良股", "0", "0", "0", "0", "0", "0", "0", "0"},
+		},
+	}
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "MI_INDEX") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if r.URL.Query().Get("type") != "ALLBUT0999" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(mockResponse)
+	}))
+	defer mockServer.Close()
+
+	fetcher := &Fetcher{
+		client:      &http.Client{Timeout: 10 * time.Second},
+		baseURL:     mockServer.URL,
+		rateLimiter: rate.NewLimiter(rate.Inf, 1),
+	}
+
+	d := time.Date(2026, 1, 2, 0, 0, 0, 0, time.Local)
+	quotes, err := fetcher.FetchDay(context.Background(), d)
+	if err != nil {
+		t.Fatalf("FetchDay failed: %v", err)
+	}
+
+	if len(quotes) != 3 {
+		t.Fatalf("expected 3 quotes (including 0000), got %d", len(quotes))
+	}
+	if quotes[0].Code != "2330" {
+		t.Errorf("quote[0].Code = %s, want 2330", quotes[0].Code)
+	}
+	if quotes[0].ClosingPrice != "1005" {
+		t.Errorf("quote[0].ClosingPrice = %s, want 1005", quotes[0].ClosingPrice)
+	}
+	if quotes[2].Code != "0000" {
+		t.Errorf("quote[2].Code = %s, want 0000", quotes[2].Code)
+	}
+}
+
+func TestMIINDEXStatNotOK(t *testing.T) {
+	mockResponse := MIINDEXResponse{Stat: "ERROR", Data: nil}
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(mockResponse)
+	}))
+	defer mockServer.Close()
+
+	fetcher := &Fetcher{
+		client:      &http.Client{Timeout: 10 * time.Second},
+		baseURL:     mockServer.URL,
+		rateLimiter: rate.NewLimiter(rate.Inf, 1),
+	}
+
+	quotes, err := fetcher.FetchDay(context.Background(), time.Date(2026, 1, 2, 0, 0, 0, 0, time.Local))
+	if err != nil {
+		t.Fatalf("FetchDay should not error on stat != OK: %v", err)
+	}
+	if len(quotes) != 0 {
+		t.Errorf("expected 0 quotes for stat=ERROR, got %d", len(quotes))
+	}
 }
 
 func TestHistoricalBarJSONFields(t *testing.T) {
