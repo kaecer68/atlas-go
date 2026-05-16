@@ -44,6 +44,17 @@ type TWSEQuote struct {
 	Transaction  string `json:"Transaction"`
 }
 
+// MIINDEXResponse wraps the TWSE MI_INDEX endpoint response format.
+// Unlike STOCK_DAY_ALL (flat array, no date support), MI_INDEX accepts
+// the date parameter and returns historical data for any trading day.
+type MIINDEXResponse struct {
+	Stat   string     `json:"stat"`
+	Date   string     `json:"date"`
+	Title  string     `json:"title"`
+	Fields []string   `json:"fields"`
+	Data   [][]string `json:"data"`
+}
+
 type Fetcher struct {
 	client      *http.Client
 	baseURL     string
@@ -52,19 +63,30 @@ type Fetcher struct {
 
 func NewFetcher() *Fetcher {
 	params := config.GetParametersConfig()
+	rateLimit := rate.Limit(0.2)
+	burst := 1
+	if params != nil {
+		rateLimit = rate.Limit(params.Marketdata.TWSEAPIRateLimit.Value)
+		if params.Marketdata.TWSEAPIRateBurst.Value > 0 {
+			burst = params.Marketdata.TWSEAPIRateBurst.Value
+		}
+	}
 	return &Fetcher{
 		client:      &http.Client{Timeout: 30 * time.Second},
 		baseURL:     twseAPIBaseURL,
-		rateLimiter: rate.NewLimiter(rate.Limit(params.Marketdata.TWSEAPIRateLimit.Value), 1),
+		rateLimiter: rate.NewLimiter(rateLimit, burst),
 	}
 }
 
-func (f *Fetcher) FetchDay(ctx context.Context) ([]TWSEQuote, error) {
+// FetchDay fetches all stock quotes for a specific trading date
+// using TWSE MI_INDEX endpoint (which accepts historical date parameter).
+func (f *Fetcher) FetchDay(ctx context.Context, date time.Time) ([]TWSEQuote, error) {
 	if err := f.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("rate limit wait: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/exchangeReport/STOCK_DAY_ALL", f.baseURL)
+	dateStr := formatYYYYMMDD(date)
+	url := fmt.Sprintf("%s/exchangeReport/MI_INDEX?type=ALLBUT0999&date=%s&response=json", f.baseURL, dateStr)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
@@ -80,9 +102,33 @@ func (f *Fetcher) FetchDay(ctx context.Context) ([]TWSEQuote, error) {
 		return nil, fmt.Errorf("api error: status %d", resp.StatusCode)
 	}
 
-	var quotes []TWSEQuote
-	if err := json.NewDecoder(resp.Body).Decode(&quotes); err != nil {
+	var wrapper MIINDEXResponse
+	if err := json.NewDecoder(resp.Body).Decode(&wrapper); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if wrapper.Stat != "OK" || len(wrapper.Data) == 0 {
+		return nil, nil
+	}
+
+	// MI_INDEX returns fields as 2D string arrays: [Code, Name, Volume, Value, Open, High, Low, Close, Change, TxCount]
+	quotes := make([]TWSEQuote, 0, len(wrapper.Data))
+	for _, row := range wrapper.Data {
+		if len(row) < 10 {
+			continue
+		}
+		quotes = append(quotes, TWSEQuote{
+			Code:         row[0],
+			Name:         row[1],
+			TradeVolume:  row[2],
+			TradeValue:   row[3],
+			OpeningPrice: row[4],
+			HighestPrice: row[5],
+			LowestPrice:  row[6],
+			ClosingPrice: row[7],
+			Change:       row[8],
+			Transaction:  row[9],
+		})
 	}
 
 	return quotes, nil
@@ -217,7 +263,7 @@ func main() {
 		fmt.Printf("Fetched %s (%d/%d)", d.Format("2006-01-02"), i+1, total)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		quotes, err := fetcher.FetchDay(ctx)
+		quotes, err := fetcher.FetchDay(ctx, d)
 		cancel()
 
 		if err != nil {
