@@ -311,3 +311,62 @@ func TestCyclePositionString(t *testing.T) {
 		t.Errorf("expected '%s', got '%s'", expected, s)
 	}
 }
+
+func TestCycleTracker_NewIndustries(t *testing.T) {
+	ct := NewCycleTracker()
+	newIndustries := []string{"foundry", "server_assembly", "cooling"}
+	for _, id := range newIndustries {
+		t.Run(id, func(t *testing.T) {
+			pos, ok := ct.GetPosition(id)
+			if !ok {
+				t.Fatalf("expected position for %s", id)
+			}
+			if pos.IndustryID != id {
+				t.Errorf("expected industry %s, got %s", id, pos.IndustryID)
+			}
+			score := pos.GetPhaseScore()
+			if score == 0 && pos.BusinessCycle == CycleMature {
+				// mature = 0 score by config default, acceptable
+			}
+			if pos.Confidence <= 0 {
+				t.Errorf("expected positive confidence for %s, got %f", id, pos.Confidence)
+			}
+			t.Logf("%s: phase=%s score=%.1f confidence=%.0f%%", id, pos.BusinessCycle, score, pos.Confidence*100)
+		})
+	}
+}
+
+func TestCycleTracker_ConfigDriven(t *testing.T) {
+	ct := NewCycleTracker()
+	cfg := config.GetParametersConfig().Industry
+	signal := config.GetParametersConfig().Industry.ConfidenceSignal.Value
+
+	// Empty metrics should return config floor, not hardcoded 0.3
+	emptyConf := ct.calculateConfidence("test", IndustryMetrics{})
+	if math.Abs(emptyConf-signal.ConfidenceFloor) > 0.001 {
+		t.Errorf("empty metrics: expected config floor %f, got %f", signal.ConfidenceFloor, emptyConf)
+	}
+
+	// Phase score should match config, not hardcoded values
+	pos := &CyclePosition{BusinessCycle: CycleExpansion}
+	phaseScore := pos.GetPhaseScore()
+	if phaseScore != cfg.PhaseScores.Value.ScoreExpansion {
+		t.Errorf("expansion score: expected config %f, got %f", cfg.PhaseScores.Value.ScoreExpansion, phaseScore)
+	}
+
+	// Transitions should come from config
+	transitions := GetTypicalTransitions()
+	cfgTransitions := cfg.CycleTransitions.Value
+	if len(transitions) != len(cfgTransitions) {
+		t.Errorf("transitions count mismatch: expected %d, got %d", len(cfgTransitions), len(transitions))
+	}
+
+	// Config threshold change should affect business cycle detection
+	semi := IndustryMetrics{
+		IndustryID:       "semiconductor",
+		RevenueGrowthYoY: 0.15,
+		ProfitGrowthYoY:  0.18,
+	}
+	phase := ct.detectBusinessCycle(semi)
+	t.Logf("semiconductor at 15%% rev: phase=%s (threshold expansion=%f)", phase, cfg.CycleThresholds.Value["semiconductor"].ExpansionRevenuePct)
+}

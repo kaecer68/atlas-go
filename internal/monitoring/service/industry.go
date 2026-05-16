@@ -219,6 +219,8 @@ type CyclePosition struct {
 	NarrativeTheme      string             `json:"narrative_theme,omitempty"`
 	// Threshold evidence quality from config
 	ThresholdEvidence map[string]string `json:"threshold_evidence,omitempty"`
+	// Evidence tracks whether this cycle position is based on empirical FinMind data or fallback defaults
+	Evidence string `json:"evidence"`
 }
 
 func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition, bool) {
@@ -238,6 +240,10 @@ func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition,
 	}
 
 	buildCyclePosition := func(pos *industry.CyclePosition, name string) CyclePosition {
+		evidence := "insufficient"
+		if s.CycleTracker.HasEmpiricalData(pos.IndustryID) {
+			evidence = "empirical"
+		}
 		return CyclePosition{
 			Industry:            pos.IndustryID,
 			Name:                name,
@@ -252,6 +258,7 @@ func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition,
 			ConfidenceBreakdown: breakdown,
 			NarrativeTheme:      "", // populated by narrative adjuster internally
 			ThresholdEvidence:   ev,
+			Evidence:            evidence,
 		}
 	}
 
