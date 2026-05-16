@@ -120,27 +120,6 @@ func setChannelEnabled(workDir, channelID string, enabled bool) error {
 	return saveChannelStates(workDir)
 }
 
-func updateEnvFile(envPath, key, value string) error {
-	data, err := os.ReadFile(envPath)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	lines := strings.Split(string(data), "\n")
-	found := false
-	prefix := key + "="
-	for i, line := range lines {
-		if strings.HasPrefix(line, prefix) {
-			lines[i] = prefix + value
-			found = true
-			break
-		}
-	}
-	if !found {
-		lines = append(lines, prefix+value)
-	}
-	return os.WriteFile(envPath, []byte(strings.Join(lines, "\n")), 0644)
-}
-
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
 	loadChannelStates(workDir)
 
