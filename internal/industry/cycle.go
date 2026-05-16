@@ -101,6 +101,10 @@ func (ct *CycleTracker) SetNarrativeAdjuster(fn func(industryID string) Narrativ
 	ct.narrativeAdjust = fn
 }
 
+func (ct *CycleTracker) HasEmpiricalData(industryID string) bool {
+	return len(ct.history[industryID]) > 1
+}
+
 // initializeDefaultPositions populates the tracker with default cycle positions
 // for known industries. This ensures the API returns meaningful data even before
 // real-time metrics are available.
@@ -168,6 +172,27 @@ func (ct *CycleTracker) initializeDefaultPositions() {
 			ProfitGrowthYoY:     0.08,
 			InventoryTurnover:   4.0,
 			CapacityUtilization: 0.68,
+		},
+		"foundry": {
+			IndustryID:          "foundry",
+			RevenueGrowthYoY:    0.22,
+			ProfitGrowthYoY:     0.28,
+			InventoryTurnover:   5.0,
+			CapacityUtilization: 0.88,
+		},
+		"server_assembly": {
+			IndustryID:          "server_assembly",
+			RevenueGrowthYoY:    0.40,
+			ProfitGrowthYoY:     0.45,
+			InventoryTurnover:   6.5,
+			CapacityUtilization: 0.85,
+		},
+		"cooling": {
+			IndustryID:          "cooling",
+			RevenueGrowthYoY:    0.20,
+			ProfitGrowthYoY:     0.22,
+			InventoryTurnover:   5.5,
+			CapacityUtilization: 0.80,
 		},
 	}
 
