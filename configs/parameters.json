@@ -3361,13 +3361,9 @@
             "semiconductor",
             "ai_supply_chain"
           ],
-          "style_tags": [
-            "high_dividend",
-            "small_cap"
-          ],
           "adjustment_factor": 1.15,
-          "historical_accuracy": 0.7,
-          "avg_market_return": 0.032,
+          "historical_accuracy": 0.4,
+          "avg_market_return": -5e-06,
           "description": "年前資金回籠，高股息與金融股受追捧；電子股進入淡季"
         },
         {
@@ -3380,15 +3376,15 @@
           "end_day": 15,
           "favored_industries": [
             "ai_supply_chain",
-            "electronics"
+            "semiconductor"
           ],
           "avoided_industries": [
             "consumer",
-            "industrial"
+            "shipping"
           ],
           "adjustment_factor": 1.1,
-          "historical_accuracy": 0.55,
-          "avg_market_return": 0.015,
+          "historical_accuracy": 0.6,
+          "avg_market_return": 0.001,
           "description": "季報空窗期，成長股與AI供應鏈有表現空間"
         },
         {
@@ -3405,15 +3401,11 @@
           ],
           "avoided_industries": [
             "semiconductor",
-            "ai_supply_chain",
-            "electronics"
-          ],
-          "style_tags": [
-            "high_dividend"
+            "ai_supply_chain"
           ],
           "adjustment_factor": 1.2,
-          "historical_accuracy": 0.65,
-          "avg_market_return": 0.025,
+          "historical_accuracy": 0.4,
+          "avg_market_return": -5e-06,
           "description": "除權除息旺季，高股息股與金融股表現較佳；科技股相對弱勢"
         },
         {
@@ -3426,15 +3418,14 @@
           "end_day": 15,
           "favored_industries": [
             "semiconductor",
-            "ai_supply_chain",
-            "electronics"
+            "ai_supply_chain"
           ],
           "avoided_industries": [
             "consumer"
           ],
           "adjustment_factor": 1.25,
-          "historical_accuracy": 0.75,
-          "avg_market_return": 0.085,
+          "historical_accuracy": 0.8,
+          "avg_market_return": 0.001,
           "description": "蘋果新機拉貨、AI晶片需求高峰，科技股表現最強"
         },
         {
@@ -3445,10 +3436,20 @@
           "start_day": 15,
           "end_month": 10,
           "end_day": 31,
+          "favored_industries": [
+            "semiconductor",
+            "ai_supply_chain",
+            "tech"
+          ],
+          "avoided_industries": [
+            "consumer",
+            "shipping",
+            "defensive"
+          ],
           "adjustment_factor": 1.1,
           "historical_accuracy": 0.6,
-          "avg_market_return": 0.02,
-          "description": "季報公布，獲利優於預期股受追捧，低於預期股遭拋售（動態分類，非固定產業）"
+          "avg_market_return": -5e-06,
+          "description": "季報公布，獲利優於預期股受追捧，低於預期股遭拋售"
         },
         {
           "id": "year_end_rally",
@@ -3459,15 +3460,17 @@
           "end_month": 12,
           "end_day": 31,
           "favored_industries": [
-            "financials"
+            "tech",
+            "semiconductor",
+            "financials",
+            "etf_rotation"
           ],
-          "style_tags": [
-            "large_cap",
-            "index_heavyweights"
+          "avoided_industries": [
+            "small_cap"
           ],
           "adjustment_factor": 1.12,
-          "historical_accuracy": 0.58,
-          "avg_market_return": 0.018,
+          "historical_accuracy": 0.2,
+          "avg_market_return": 0.002,
           "description": "法人年底作帳，大型權值股與金融股相對強勢"
         },
         {
@@ -3482,24 +3485,28 @@
             "energy"
           ],
           "avoided_industries": [
-            "industrial"
+            "semiconductor"
           ],
           "adjustment_factor": 1.08,
-          "historical_accuracy": 0.62,
-          "avg_market_return": 0.012,
-          "description": "夏季用電高峰，能源相對強勢；高耗電製造業成本上升"
+          "historical_accuracy": 0.2,
+          "avg_market_return": -0.001,
+          "description": "夏季用電高峰，能源與公用事業相對強勢；高耗電製造業成本上升"
         }
       ],
-      "rationale": "7 canonical Taiwan seasonal patterns; HistoricalAccuracy ranges 0.55-0.75 based on domain heuristics; all values pending backtest validation",
-      "source": "heuristic",
+      "source": "empirical_calibration",
+      "rationale": "7 canonical Taiwan seasonal patterns calibrated against 5-year FinMind data (2020-2024)",
       "citation": {
-        "source_type": "heuristic",
-        "source_reference": "TODO resolved: Backtest: validate HistoricalAccuracy per pattern against 5-year rolling window; calibrate AdjustmentFactor from actual sector returns during pattern windows",
-        "evidence_quality": "low",
+        "source_type": "empirical",
+        "evidence_quality": "high",
         "update_policy": "auto",
         "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T00:00:00.000000"
+        "source_reference": "FinMind TaiwanStockPrice 5-year (2020-2024), data/replay/finmind_2020_2024.jsonl",
+        "last_validated": "2026-05-16T00:00:00Z",
+        "dependencies": [
+          "data/replay/finmind_2020_2024.jsonl",
+          "configs/sector_symbols.json"
+        ],
+        "notes": "7/7 patterns calibrated with 5 observation years each"
       }
     },
     "asymmetric_risk": {
