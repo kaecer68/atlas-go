@@ -31,7 +31,7 @@ var modernUserAgents = []string{
 	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
 }
 
-var yahooSharedLimiter = rate.NewLimiter(rate.Every(time.Second), 1)
+var yahooSharedLimiter = rate.NewLimiter(rate.Every(500*time.Millisecond), 2)
 
 // YahooFinanceMacroProvider fetches macro indicators from Yahoo Finance.
 type YahooFinanceMacroProvider struct {
