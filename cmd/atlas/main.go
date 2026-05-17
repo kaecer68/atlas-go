@@ -257,6 +257,22 @@ func run(args []string, deps appDeps) error {
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"status":"ok","version":"%s"}`+"\n", cfg.Version)
 		})
+		mux.HandleFunc("/api/admin/calibrate-thresholds", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			revenuePath := filepath.Join(cfg.WorkDir, "data", "replay", "month_revenue.jsonl")
+			configPath := filepath.Join(cfg.WorkDir, "configs", "parameters.json")
+			if err := industry.RecalibrateThresholds(revenuePath, configPath); err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintf(w, `{"error":"%s"}`+"\n", err.Error())
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"status":"ok","message":"thresholds recalibrated"}`+"\n")
+		})
 		mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
 		monitor := monitoring.NewMonitor()
 		if alertStore != nil {

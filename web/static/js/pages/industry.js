@@ -1,6 +1,10 @@
 // Industry ecosystem page
-import { sectorName } from '../names.js';
-import { silentGetJSON, notify } from '../shared/app-utils.js';
+import { sectorName, stockName } from "../names.js";
+import {
+  silentGetJSON,
+  notify,
+  renderEmptyState,
+} from "../shared/app-utils.js";
 
 export async function loadIndustryData() {
   try {
@@ -149,8 +153,10 @@ export function renderIndustrySeasonality(data) {
   const allPatterns = data && data.all_patterns ? data.all_patterns : [];
   const activePatterns = data && data.active_patterns ? data.active_patterns : [];
 
-  let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
-  html += '<div style="font-size:11px;color:var(--muted)">顯示所有歷史季節性模式與統計數據</div>';
+  let html =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
+  html +=
+    '<div style="font-size:11px;color:var(--muted)">顯示所有歷史季節性模式與統計數據</div>';
   html += '<div style="display:flex;gap:4px">';
   html += `<button onclick="seasonalityViewMode='list';renderIndustrySeasonality(window.seasonalityData)" style="background:${seasonalityViewMode==='list'?'var(--accent)':'var(--bg)'};color:${seasonalityViewMode==='list'?'#fff':'var(--text)'};border:1px solid var(--border);border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer">列表</button>`;
   html += `<button onclick="seasonalityViewMode='calendar';renderIndustrySeasonality(window.seasonalityData)" style="background:${seasonalityViewMode==='calendar'?'var(--accent)':'var(--bg)'};color:${seasonalityViewMode==='calendar'?'#fff':'var(--text)'};border:1px solid var(--border);border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer">日曆</button>`;
@@ -194,7 +200,7 @@ export function renderSeasonalityList(allPatterns, activePatterns, data) {
     html += `<td>${statusBadge}</td>`;
     html += '</tr>';
   });
-  html += '</tbody></table>';
+  html += "</tbody></table>";
 
   if (activePatterns.length === 0) {
     html += `<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--muted)">
@@ -205,36 +211,298 @@ export function renderSeasonalityList(allPatterns, activePatterns, data) {
   return html;
 }
 
-export function renderSeasonalityCalendar(data) {
-  if (!data || !data.calendar) {
-    return renderEmptyState('無日曆資料', '');
+function renderCycleTab(detail) {
+  const cp = detail.cycle_position;
+  if (!cp) return renderEmptyState("尚無週期定位資料", "");
+
+  const phases = ["復甦", "擴張", "成熟", "衰退"];
+  const phaseKeys = ["recovery", "expansion", "mature", "recession"];
+  const activeIdx = phaseKeys.indexOf((cp.business_cycle || "").toLowerCase());
+
+  let html = '<div class="industry-section">';
+  html += "<h4>📊 產業生命週期定位</h4>";
+  html += '<div class="cycle-visual">';
+  phases.forEach((name, i) => {
+    const active = i === activeIdx ? " active" : "";
+    html += `<span class="cycle-phase${active}">${name}</span>`;
+    if (i < phases.length - 1)
+      html += '<span style="color:var(--muted);font-size:11px">→</span>';
+  });
+  html += "</div></div>";
+
+  const metrics = [
+    { label: "商業週期", value: cp.business_cycle || "-" },
+    { label: "庫存週期", value: cp.inventory_cycle || "-" },
+    { label: "資本支出週期", value: cp.capex_cycle || "-" },
+    { label: "趨勢方向", value: cp.trend || "-" },
+    {
+      label: "週期分數",
+      value: cp.phase_score != null ? cp.phase_score.toFixed(2) : "-",
+    },
+    {
+      label: "信心度",
+      value:
+        cp.confidence != null ? `${(cp.confidence * 100).toFixed(0)}%` : "-",
+    },
+    { label: "是否有利", value: cp.is_favorable ? "✅ 有利" : "⚠️ 不利" },
+  ];
+
+  html += '<div class="industry-section"><h4>📈 關鍵指標</h4>';
+  metrics.forEach((m) => {
+    html += `<div class="metric-row"><span class="metric-label">${m.label}</span><span class="metric-value">${m.value}</span></div>`;
+  });
+  html += "</div>";
+
+  if (detail.recommendation) {
+    const rec = detail.recommendation;
+    const actionColor =
+      rec.action === "overweight"
+        ? "var(--up)"
+        : rec.action === "underweight"
+          ? "var(--down)"
+          : "var(--warn)";
+    html += '<div class="industry-section"><h4>🎯 建議</h4>';
+    html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px">`;
+    html += `<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">操作</span><span style="color:${actionColor};font-weight:700">${rec.action}</span></div>`;
+    if (rec.conviction)
+      html += `<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">信念</span><span>${rec.conviction}</span></div>`;
+    if (rec.target_weight != null)
+      html += `<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">目標權重</span><span>${(rec.target_weight * 100).toFixed(1)}%</span></div>`;
+    if (rec.delta != null)
+      html += `<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">調整幅度</span><span>${(rec.delta * 100).toFixed(1)}%</span></div>`;
+    if (rec.rationale)
+      html += `<div style="margin-top:6px;font-size:12px;color:var(--muted);line-height:1.6">${rec.rationale}</div>`;
+    html += "</div></div>";
   }
 
-  const months = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
-  const calendar = data.calendar;
-
-  let html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">';
-  calendar.months.forEach(m => {
-    const monthName = months[m.month - 1];
-    html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px">`;
-    html += `<div style="font-weight:700;font-size:13px;margin-bottom:6px">${monthName}</div>`;
-    if (m.patterns && m.patterns.length > 0) {
-      m.patterns.forEach(p => {
-        const accuracy = Math.round((p.historical_accuracy || 0) * 100);
-        html += `<div style="font-size:11px;margin:3px 0;padding:4px;background:var(--panel);border-radius:4px">`;
-        html += `<strong>${p.name}</strong> <span style="color:var(--muted)">(${accuracy}%)</span>`;
-        html += `</div>`;
-      });
-    } else {
-      html += `<div style="font-size:11px;color:var(--muted)">無相關模式</div>`;
-    }
-    html += `</div>`;
-  });
-  html += '</div>';
+  if (detail.representative_stocks && detail.representative_stocks.length > 0) {
+    html +=
+      '<div class="industry-section"><h4>🏢 代表性個股</h4><div style="display:flex;flex-wrap:wrap;gap:6px">';
+    detail.representative_stocks.forEach((s) => {
+      const name = stockName(s) || s;
+      html += `<span style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:12px">${name}</span>`;
+    });
+    html += "</div></div>";
+  }
 
   return html;
 }
 
-export function showIndustryDetail(industryId) {
-  notify(`產業詳細分析功能開發中: ${industryId}`, 'info');
+function renderLinkageTab(detail) {
+  const li = detail.linkage_info;
+  if (!li) return renderEmptyState("尚無供應鏈資料", "");
+
+  let html = '<div class="industry-section"><h4>🔗 供應鏈關係</h4>';
+
+  if (li.linkage_score) {
+    const ls = li.linkage_score;
+    html += '<div style="display:flex;gap:8px;margin-bottom:12px">';
+    html += `<div style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">`;
+    html += `<div style="font-size:11px;color:var(--muted)">系統重要性</div>`;
+    html += `<div style="font-size:16px;font-weight:700">${(ls.systemic_importance || 0).toFixed(2)}</div></div>`;
+    html += `<div style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">`;
+    html += `<div style="font-size:11px;color:var(--muted)">衝擊傳導速度</div>`;
+    html += `<div style="font-size:16px;font-weight:700">${(ls.shock_propagation_speed || 0).toFixed(2)}</div></div>`;
+    html += "</div>";
+  }
+
+  html += '<div class="linkage-grid">';
+  html += '<div class="linkage-col"><h4>⬆️ 上游供應</h4>';
+  if (li.upstream && li.upstream.length > 0) {
+    li.upstream.forEach(
+      (u) => (html += `<div class="linkage-item">${sectorName(u) || u}</div>`),
+    );
+  } else {
+    html +=
+      '<div class="linkage-item" style="color:var(--muted)">無上游資料</div>';
+  }
+  html += "</div>";
+
+  html += '<div class="linkage-col"><h4>⬇️ 下游需求</h4>';
+  if (li.downstream && li.downstream.length > 0) {
+    li.downstream.forEach(
+      (d) => (html += `<div class="linkage-item">${sectorName(d) || d}</div>`),
+    );
+  } else {
+    html +=
+      '<div class="linkage-item" style="color:var(--muted)">無下游資料</div>';
+  }
+  html += "</div></div></div>";
+
+  if (li.correlations && li.correlations.length > 0) {
+    html += '<div class="industry-section"><h4>📊 相關性分析</h4>';
+    html +=
+      '<table style="font-size:12px"><thead><tr><th>產業</th><th>相關性</th><th>強度</th></tr></thead><tbody>';
+    li.correlations.forEach((c) => {
+      const corr = c.correlation != null ? c.correlation : 0;
+      const absCorr = Math.abs(corr);
+      const strength = absCorr > 0.7 ? "高" : absCorr > 0.4 ? "中" : "低";
+      const color = corr > 0 ? "var(--up)" : "var(--down)";
+      html += `<tr><td>${sectorName(c.industry) || c.industry || "-"}</td>`;
+      html += `<td style="color:${color}">${corr.toFixed(2)}</td>`;
+      html += `<td>${strength}</td></tr>`;
+    });
+    html += "</tbody></table></div>";
+  }
+
+  return html;
 }
+
+function renderSeasonalityTab(detail) {
+  const patterns = detail.seasonal_patterns;
+  if (!patterns || patterns.length === 0)
+    return renderEmptyState("尚無季節性模式資料", "");
+
+  let html = '<div class="industry-section"><h4>📅 季節性模式</h4>';
+  patterns.forEach((p) => {
+    const accuracy = Math.round((p.historical_accuracy || 0) * 100);
+    const returnPct = ((p.typical_return || 0) * 100).toFixed(1);
+    const period = `${p.start_month}/${p.start_day} ~ ${p.end_month}/${p.end_day}`;
+    const impactColor =
+      p.impact === "positive"
+        ? "var(--up)"
+        : p.impact === "negative"
+          ? "var(--down)"
+          : "var(--warn)";
+
+    html += '<div class="seasonal-pattern">';
+    html += `<div class="pattern-name">${p.name}</div>`;
+    html += `<div class="pattern-meta">${period}</div>`;
+    html += '<div class="metric-row" style="margin-top:6px">';
+    html += `<span class="metric-label">歷史準確度</span><span class="metric-value">${accuracy}%</span></div>`;
+    html += '<div class="metric-row">';
+    html += `<span class="metric-label">典型報酬</span><span class="metric-value" style="color:${returnPct >= 0 ? "var(--up)" : "var(--down)"}">${returnPct}%</span></div>`;
+    html += '<div class="metric-row">';
+    html += `<span class="metric-label">調整因子</span><span class="metric-value">${(p.adjustment_factor || 1.0).toFixed(2)}x</span></div>`;
+    if (p.impact) {
+      html += '<div class="metric-row">';
+      html += `<span class="metric-label">影響方向</span><span class="metric-value" style="color:${impactColor}">${p.impact}</span></div>`;
+    }
+    if (p.description) {
+      html += `<div style="margin-top:6px;font-size:11px;color:var(--muted)">${p.description}</div>`;
+    }
+    html += "</div>";
+  });
+  html += "</div>";
+
+  return html;
+}
+
+function renderRiskTab(detail) {
+  const ri = detail.risk_info;
+  if (!ri || !ri.risks || ri.risks.length === 0)
+    return renderEmptyState("目前無偵測到風險", "");
+
+  let html = `<div class="industry-section"><h4>⚠️ 風險概覽（共 ${ri.risk_count || ri.risks.length} 項）</h4>`;
+
+  ri.risks.forEach((r) => {
+    const severity = (r.severity || "low").toLowerCase();
+    const severityLabel =
+      severity === "high" ? "高" : severity === "medium" ? "中" : "低";
+    const impactColor =
+      severity === "high"
+        ? "var(--down)"
+        : severity === "medium"
+          ? "var(--warn)"
+          : "var(--up)";
+
+    html += '<div class="risk-item">';
+    html += '<div class="risk-header">';
+    html += `<span style="font-weight:600;font-size:13px">${r.type || "未知風險"}</span>`;
+    html += `<span class="risk-severity ${severity}" style="color:${impactColor}">${severityLabel}</span>`;
+    html += "</div>";
+    if (r.description)
+      html += `<div style="font-size:12px;margin-bottom:4px">${r.description}</div>`;
+    if (r.impact_estimate != null) {
+      html += '<div class="metric-row">';
+      html += `<span class="metric-label">預估衝擊</span><span class="metric-value" style="color:${impactColor}">${(r.impact_estimate * 100).toFixed(1)}%</span></div>`;
+    }
+    if (r.confidence != null) {
+      html += '<div class="metric-row">';
+      html += `<span class="metric-label">信心度</span><span class="metric-value">${(r.confidence * 100).toFixed(0)}%</span></div>`;
+    }
+    if (r.source) {
+      html += '<div class="metric-row">';
+      html += `<span class="metric-label">來源</span><span class="metric-value">${r.source}</span></div>`;
+    }
+    html += "</div>";
+  });
+  html += "</div>";
+
+  return html;
+}
+
+async function showIndustryDetail(id) {
+  const titleEl = document.getElementById("industryModalTitle");
+  const contentEl = document.getElementById("industryModalContent");
+  const modal = document.getElementById("industryModal");
+  if (!titleEl || !contentEl || !modal) return;
+
+  titleEl.textContent = "載入中…";
+  contentEl.innerHTML = '<div class="empty">載入中…</div>';
+  modal.classList.add("show");
+
+  const detail = await silentGetJSON("/api/dashboard/industry-detail?industry=" + encodeURIComponent(id));
+  if (!detail) {
+    contentEl.innerHTML = '<div class="empty">無法載入產業詳細資料</div>';
+    titleEl.textContent = "產業詳細分析";
+    return;
+  }
+
+  window._industryDetail = detail;
+  titleEl.textContent = (detail.name || id) + " 詳細分析";
+  switchIndustryTab("cycle");
+}
+
+function closeIndustryModal() {
+  const modal = document.getElementById("industryModal");
+  if (modal) modal.classList.remove("show");
+}
+
+function switchIndustryTab(tab) {
+  const detail = window._industryDetail;
+  const contentEl = document.getElementById("industryModalContent");
+  if (!detail || !contentEl) return;
+
+  document.querySelectorAll("#industryTabs .tab-btn").forEach(function(btn) {
+    btn.classList.toggle("active", btn.getAttribute("data-tab") === tab);
+  });
+
+  switch (tab) {
+    case "cycle":
+      contentEl.innerHTML = renderCycleTab(detail);
+      break;
+    case "linkage":
+      contentEl.innerHTML = renderLinkageTab(detail);
+      break;
+    case "seasonality":
+      contentEl.innerHTML = renderSeasonalityTab(detail);
+      break;
+    case "risk":
+      contentEl.innerHTML = renderRiskTab(detail);
+      break;
+    default:
+      contentEl.innerHTML = '<div class="empty">未知的分頁</div>';
+  }
+}
+
+function toggleCycleLegend() {
+  const modal = document.getElementById("cycleLegendModal");
+  if (modal) {
+    modal.classList.toggle("show");
+  }
+}
+
+function closeCycleLegend() {
+  const modal = document.getElementById("cycleLegendModal");
+  if (modal) modal.classList.remove("show");
+}
+
+if (typeof window !== "undefined")
+  Object.assign(window, {
+    showIndustryDetail,
+    closeIndustryModal,
+    switchIndustryTab,
+    toggleCycleLegend,
+    closeCycleLegend,
+  });
