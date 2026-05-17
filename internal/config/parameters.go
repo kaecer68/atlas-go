@@ -356,14 +356,7 @@ type IndustryParameters struct {
 	PhaseScores      ParameterMetadata[PhaseScoresConfig]       `json:"phase_scores"`
 	CycleTransitions ParameterMetadata[[]CycleTransitionConfig] `json:"cycle_transitions"`
 
-	CycleWeightMultipliers ParameterMetadata[CycleWeightMultipliersConfig] `json:"cycle_weight_multipliers"`
-	LinkageWeightImpact    ParameterMetadata[float64]                      `json:"linkage_weight_impact"`
-	WeightFloor            ParameterMetadata[float64]                      `json:"weight_floor"`
-	MaxDailyWeightChange   ParameterMetadata[float64]                      `json:"max_daily_weight_change"`
-
 	LinkageParams ParameterMetadata[LinkageConfig] `json:"linkage_params"`
-
-	DynamicEnv ParameterMetadata[DynamicEnvConfig] `json:"dynamic_env"`
 
 	// Cycle tracking operational parameters
 	HistoryRetentionDays ParameterMetadata[int] `json:"history_retention_days"`
@@ -503,13 +496,6 @@ type PhaseScoresConfig struct {
 	ScoreRecession float64 `json:"score_recession"`
 }
 
-type CycleWeightMultipliersConfig struct {
-	ExpansionMultiplier float64 `json:"expansion_multiplier"`
-	RecoveryMultiplier  float64 `json:"recovery_multiplier"`
-	MatureMultiplier    float64 `json:"mature_multiplier"`
-	RecessionMultiplier float64 `json:"recession_multiplier"`
-}
-
 // CycleTransitionConfig holds probability and typical duration for a cycle phase transition.
 type CycleTransitionConfig struct {
 	FromPhase           string   `json:"from_phase"`
@@ -517,24 +503,6 @@ type CycleTransitionConfig struct {
 	Triggers            []string `json:"triggers"`
 	Probability         float64  `json:"probability"`
 	TypicalDurationDays int      `json:"typical_duration_days"`
-}
-
-type DynamicEnvConfig struct {
-	OilHighThreshold     float64 `json:"oil_high_threshold"`
-	OilLowThreshold      float64 `json:"oil_low_threshold"`
-	OilEnergyMult        float64 `json:"oil_energy_mult"`
-	OilShippingPenalty   float64 `json:"oil_shipping_penalty"`
-	OilShippingBenefit   float64 `json:"oil_shipping_benefit"`
-	OilIndustrialPenalty float64 `json:"oil_industrial_penalty"`
-	OilIndustrialBenefit float64 `json:"oil_industrial_benefit"`
-	BDIHighThreshold     float64 `json:"bdi_high_threshold"`
-	BDILowThreshold      float64 `json:"bdi_low_threshold"`
-	BDIShippingBoost     float64 `json:"bdi_shipping_boost"`
-	BDICostPenalty       float64 `json:"bdi_cost_penalty"`
-	DXYHighThreshold     float64 `json:"dxy_high_threshold"`
-	DXYLowThreshold      float64 `json:"dxy_low_threshold"`
-	DXYExportPenalty     float64 `json:"dxy_export_penalty"`
-	DXYExportBenefit     float64 `json:"dxy_export_benefit"`
 }
 
 // StrategyParameters holds tunable values for strategy selection and switching.

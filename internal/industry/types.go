@@ -88,25 +88,38 @@ type RiskProfile struct {
 
 // IndustryMetrics holds real-time metrics for an industry.
 type IndustryMetrics struct {
-	IndustryID          string    `json:"industry_id"`
-	PE                  float64   `json:"pe"`
-	PB                  float64   `json:"pb"`
-	DividendYield       float64   `json:"dividend_yield"`
-	RevenueGrowthYoY    float64   `json:"revenue_growth_yoy"`
-	ProfitGrowthYoY     float64   `json:"profit_growth_yoy"`
-	InventoryTurnover   float64   `json:"inventory_turnover"`
-	CapacityUtilization float64   `json:"capacity_utilization"`
-	Timestamp           time.Time `json:"timestamp"`
+	IndustryID          string        `json:"industry_id"`
+	PE                  float64       `json:"pe"`
+	PB                  float64       `json:"pb"`
+	DividendYield       float64       `json:"dividend_yield"`
+	RevenueGrowthYoY    float64       `json:"revenue_growth_yoy"`
+	ProfitGrowthYoY     float64       `json:"profit_growth_yoy"`
+	InventoryTurnover   float64       `json:"inventory_turnover"`
+	CapacityUtilization float64       `json:"capacity_utilization"`
+	DataFreshness       DataFreshness `json:"data_freshness"`
+	Timestamp           time.Time     `json:"timestamp"`
 }
 
-// NarrativeAdjustment represents how active narrative events shift
-// cycle phase detection for an industry. A negative RevenueBias pushes
-// the effective growth downward, making recession/mature more likely.
-type NarrativeAdjustment struct {
-	RevenueBias float64 `json:"revenue_bias"`
-	ProfitBias  float64 `json:"profit_bias"`
-	Confidence  float64 `json:"confidence"` // 0-1 how reliable this bias is
-	ActiveTheme string  `json:"active_theme,omitempty"`
+// DataFreshness indicates how recent/canonical a piece of industry data is.
+type DataFreshness string
+
+const (
+	FreshLive     DataFreshness = "live"     // Real-time or same-day data
+	FreshRecent   DataFreshness = "recent"   // 1-3 day old data
+	FreshStale    DataFreshness = "stale"    // 4-7 day old data
+	FreshFallback DataFreshness = "fallback" // Default/estimated data
+)
+
+type ConfidenceBreakdown struct {
+	Composite          float64            `json:"composite"`
+	Boundary           float64            `json:"boundary"`
+	Freshness          float64            `json:"freshness"`
+	Seasonal           float64            `json:"seasonal"`
+	Linkage            float64            `json:"linkage"`
+	Narrative          float64            `json:"narrative"`
+	Weights            map[string]float64 `json:"weights"`
+	DataFreshnessLevel DataFreshness      `json:"data_freshness_level"`
+	DataFreshnessScore float64            `json:"data_freshness_score"`
 }
 
 // ClassificationTree provides hierarchical access to industry segments.

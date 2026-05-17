@@ -1549,6 +1549,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
     <a data-page="controls" onclick="switchPage('controls')" tabindex="0" title="控制與稽核">⚙️ 控制與稽核</a>
     <div class="nav-divider"></div>
     <a data-page="datachannels" onclick="switchPage('datachannels')" tabindex="0" title="信息通道">📡 信息通道</a>
+    <a data-page="scheduler" onclick="switchPage('scheduler')" tabindex="0" title="排程管理">⏱️ 排程管理</a>
     <a data-page="alerts" onclick="switchPage('alerts')" tabindex="0" title="系統警報">🚨 系統警報</a>
     <a data-page="metrics" onclick="switchPage('metrics')" tabindex="0" title="指標監控">📉 指標監控</a>
     <a data-page="parameters" onclick="switchPage('parameters')" tabindex="0" title="參數管理">🎛️ 參數管理</a>
@@ -1981,15 +1982,6 @@ body { display: flex; margin: 0; min-height: 100vh; }
         <div class="panel"><h2>供應鏈連動</h2><div id="industryLinkage" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>季節性模式</h2><div id="industrySeasonality" class="empty loading">載入中…</div></div>
       </div>
-      <div class="panel" style="margin-top:16px"><h2>衝擊模擬</h2>
-        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
-          <select id="shockSource" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text)"><option value="">選擇來源產業</option></select>
-          <input type="number" id="shockMagnitude" placeholder="衝擊幅度 (例: -0.05)" step="0.01" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:160px">
-          <input type="number" id="shockDepth" value="3" min="1" max="5" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:60px" title="傳導深度">
-          <button onclick="window.runShockSimulation()" style="padding:4px 12px;border-radius:4px;border:1px solid var(--up);background:var(--bg);color:var(--up);cursor:pointer">▶ 執行模擬</button>
-        </div>
-        <div id="industryShockSim" class="empty">選擇產業與衝擊幅度進行供應鏈衝擊傳導模擬</div>
-      </div>
     </div>
 
     <!-- 人機協同 -->
@@ -2074,6 +2066,23 @@ body { display: flex; margin: 0; min-height: 100vh; }
       <div class="panel wide mt-md">
         <h2>變更紀錄 (Audit Log)</h2>
         <div id="parametersAuditLog" class="empty loading">載入中…</div>
+      </div>
+    </div>
+
+    <!-- 排程管理 -->
+    <div class="page" id="page-scheduler">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        本頁顯示所有已註冊的<strong>背景排程任務</strong>，包括名稱、間隔、最後執行時間與連續失効次數。
+        任務可透過右下方的 toggle 開關啟用或停用。部分任務受 <strong>MarketHoursOnly</strong> 保護，僅在台股交易時段（09:00-13:30）執行。
+      </details>
+      <div class="panel wide">
+        <div class="flex-between">
+          <h2 class="m-0">排程任務狀態</h2>
+          <div class="control-group m-0">
+            <button onclick="loadSchedulerPage()">刷新狀態</button>
+          </div>
+        </div>
+        <div id="schedulerContent" class="empty loading mt-sm">載入中…</div>
       </div>
     </div>
   </div>

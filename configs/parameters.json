@@ -3361,9 +3361,13 @@
             "semiconductor",
             "ai_supply_chain"
           ],
+          "style_tags": [
+            "high_dividend",
+            "small_cap"
+          ],
           "adjustment_factor": 1.15,
-          "historical_accuracy": 0.4,
-          "avg_market_return": -5e-06,
+          "historical_accuracy": 0.7,
+          "avg_market_return": 0.032,
           "description": "年前資金回籠，高股息與金融股受追捧；電子股進入淡季"
         },
         {
@@ -3376,15 +3380,15 @@
           "end_day": 15,
           "favored_industries": [
             "ai_supply_chain",
-            "semiconductor"
+            "electronics"
           ],
           "avoided_industries": [
             "consumer",
-            "shipping"
+            "industrial"
           ],
           "adjustment_factor": 1.1,
-          "historical_accuracy": 0.6,
-          "avg_market_return": 0.001,
+          "historical_accuracy": 0.55,
+          "avg_market_return": 0.015,
           "description": "季報空窗期，成長股與AI供應鏈有表現空間"
         },
         {
@@ -3401,11 +3405,15 @@
           ],
           "avoided_industries": [
             "semiconductor",
-            "ai_supply_chain"
+            "ai_supply_chain",
+            "electronics"
+          ],
+          "style_tags": [
+            "high_dividend"
           ],
           "adjustment_factor": 1.2,
-          "historical_accuracy": 0.4,
-          "avg_market_return": -5e-06,
+          "historical_accuracy": 0.65,
+          "avg_market_return": 0.025,
           "description": "除權除息旺季，高股息股與金融股表現較佳；科技股相對弱勢"
         },
         {
@@ -3418,14 +3426,15 @@
           "end_day": 15,
           "favored_industries": [
             "semiconductor",
-            "ai_supply_chain"
+            "ai_supply_chain",
+            "electronics"
           ],
           "avoided_industries": [
             "consumer"
           ],
           "adjustment_factor": 1.25,
-          "historical_accuracy": 0.8,
-          "avg_market_return": 0.001,
+          "historical_accuracy": 0.75,
+          "avg_market_return": 0.085,
           "description": "蘋果新機拉貨、AI晶片需求高峰，科技股表現最強"
         },
         {
@@ -3436,20 +3445,10 @@
           "start_day": 15,
           "end_month": 10,
           "end_day": 31,
-          "favored_industries": [
-            "semiconductor",
-            "ai_supply_chain",
-            "tech"
-          ],
-          "avoided_industries": [
-            "consumer",
-            "shipping",
-            "defensive"
-          ],
           "adjustment_factor": 1.1,
           "historical_accuracy": 0.6,
-          "avg_market_return": -5e-06,
-          "description": "季報公布，獲利優於預期股受追捧，低於預期股遭拋售"
+          "avg_market_return": 0.02,
+          "description": "季報公布，獲利優於預期股受追捧，低於預期股遭拋售（動態分類，非固定產業）"
         },
         {
           "id": "year_end_rally",
@@ -3460,17 +3459,15 @@
           "end_month": 12,
           "end_day": 31,
           "favored_industries": [
-            "tech",
-            "semiconductor",
-            "financials",
-            "etf_rotation"
+            "financials"
           ],
-          "avoided_industries": [
-            "small_cap"
+          "style_tags": [
+            "large_cap",
+            "index_heavyweights"
           ],
           "adjustment_factor": 1.12,
-          "historical_accuracy": 0.2,
-          "avg_market_return": 0.002,
+          "historical_accuracy": 0.58,
+          "avg_market_return": 0.018,
           "description": "法人年底作帳，大型權值股與金融股相對強勢"
         },
         {
@@ -3485,28 +3482,24 @@
             "energy"
           ],
           "avoided_industries": [
-            "semiconductor"
+            "industrial"
           ],
           "adjustment_factor": 1.08,
-          "historical_accuracy": 0.2,
-          "avg_market_return": -0.001,
-          "description": "夏季用電高峰，能源與公用事業相對強勢；高耗電製造業成本上升"
+          "historical_accuracy": 0.62,
+          "avg_market_return": 0.012,
+          "description": "夏季用電高峰，能源相對強勢；高耗電製造業成本上升"
         }
       ],
-      "source": "empirical_calibration",
-      "rationale": "7 canonical Taiwan seasonal patterns calibrated against 5-year FinMind data (2020-2024)",
+      "rationale": "7 canonical Taiwan seasonal patterns; HistoricalAccuracy ranges 0.55-0.75 based on domain heuristics; all values pending backtest validation",
+      "source": "heuristic",
       "citation": {
-        "source_type": "empirical",
-        "evidence_quality": "high",
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Backtest: validate HistoricalAccuracy per pattern against 5-year rolling window; calibrate AdjustmentFactor from actual sector returns during pattern windows",
+        "evidence_quality": "low",
         "update_policy": "auto",
         "validation_method": "empirical_calibration",
-        "source_reference": "FinMind TaiwanStockPrice 5-year (2020-2024), data/replay/finmind_2020_2024.jsonl",
-        "last_validated": "2026-05-16T00:00:00Z",
-        "dependencies": [
-          "data/replay/finmind_2020_2024.jsonl",
-          "configs/sector_symbols.json"
-        ],
-        "notes": "7/7 patterns calibrated with 5 observation years each"
+        "dependencies": [],
+        "last_validated": "2026-05-15T00:00:00.000000"
       }
     },
     "asymmetric_risk": {
@@ -3628,8 +3621,8 @@
           "probability": 0.5,
           "typical_duration_days": 180,
           "triggers": [
-            "demand_destruction",
-            "overcapacity"
+            "inventory_buildup",
+            "demand_contraction"
           ]
         }
       ],
@@ -3645,67 +3638,6 @@
         "last_validated": "2026-05-15T11:48:43.000000"
       }
     },
-    "cycle_weight_multipliers": {
-      "value": {
-        "expansion_multiplier": 1.2,
-        "recovery_multiplier": 1.1,
-        "mature_multiplier": 1.0,
-        "recession_multiplier": 0.7
-      },
-      "rationale": "Cycle phase weight multipliers for industry map: expansion +20%, recovery +10%, mature neutral, recession -30%",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "Industry map weight integration",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-16T00:00:00.000000"
-      }
-    },
-    "linkage_weight_impact": {
-      "value": 0.2,
-      "rationale": "Linkage systemic importance deviation scaling: ±20% max impact on weight",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "Industry map weight integration",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-16T00:00:00.000000"
-      }
-    },
-    "weight_floor": {
-      "value": 0.03,
-      "rationale": "Minimum 3% weight per industry after normalization to prevent elimination",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "Industry map weight integration",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-16T00:00:00.000000"
-      }
-    },
-    "max_daily_weight_change": {
-      "value": 0.05,
-      "rationale": "Maximum 5% daily weight change to prevent excessive volatility",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "Industry map weight integration",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-16T00:00:00.000000"
-      }
-    },
     "linkage_params": {
       "value": {
         "downstream_decay_factor": 0.8,
@@ -3716,106 +3648,34 @@
         "min_correlation_threshold": 0.3,
         "correlation_window_days": 30,
         "correlation_matrix": {
-          "ai_supply_chain↔energy": 0.12,
-          "ai_supply_chain↔electronics": 0.65,
-          "ai_supply_chain↔financials": 0.2,
-          "ai_supply_chain↔robotics": 0.55,
-          "ai_supply_chain↔shipping": 0.05,
-          "consumer↔energy": 0.15,
-          "consumer↔industrial": 0.2,
-          "cooling↔ai_supply_chain": 0.6,
-          "cooling↔consumer": 0.05,
-          "cooling↔electronics": 0.45,
-          "cooling↔energy": 0.25,
-          "cooling↔financials": 0.1,
-          "cooling↔industrial": 0.25,
-          "cooling↔robotics": 0.15,
-          "cooling↔semiconductor": 0.5,
-          "cooling↔server_assembly": 0.7,
-          "cooling↔shipping": -0.05,
-          "electronics↔energy": 0.1,
-          "electronics↔financials": 0.12,
-          "electronics↔shipping": 0.05,
-          "energy↔financials": 0.08,
-          "energy↔industrial": 0.45,
-          "energy↔robotics": 0.3,
+          "semiconductor↔ai_supply_chain": 0.85,
+          "semiconductor↔electronics": 0.72,
+          "semiconductor↔robotics": 0.45,
+          "semiconductor↔financials": 0.15,
+          "semiconductor↔shipping": -0.1,
+          "ai↔supply_chain_electronics": 0.65,
+          "ai↔supply_chain_robotics": 0.55,
+          "ai↔supply_chain_financials": 0.2,
+          "ai↔supply_chain_shipping": 0.05,
+          "robotics↔electronics": 0.48,
+          "robotics↔industrial": 0.6,
+          "robotics↔financials": 0.1,
           "financials↔consumer": 0.35,
           "financials↔industrial": 0.25,
           "financials↔shipping": 0.05,
-          "foundry↔ai_supply_chain": 0.82,
-          "foundry↔consumer": 0.05,
-          "foundry↔cooling": 0.25,
-          "foundry↔electronics": 0.6,
-          "foundry↔energy": 0.05,
-          "foundry↔financials": 0.12,
-          "foundry↔industrial": 0.35,
-          "foundry↔robotics": 0.4,
-          "foundry↔semiconductor": 0.88,
-          "foundry↔server_assembly": 0.78,
-          "foundry↔shipping": -0.08,
-          "robotics↔consumer": 0.25,
-          "robotics↔electronics": 0.48,
-          "robotics↔financials": 0.1,
-          "robotics↔industrial": 0.6,
-          "robotics↔shipping": 0.1,
-          "semiconductor↔ai_supply_chain": 0.85,
-          "semiconductor↔electronics": 0.72,
-          "semiconductor↔energy": 0.05,
-          "semiconductor↔financials": 0.15,
-          "semiconductor↔robotics": 0.45,
-          "semiconductor↔shipping": -0.1,
-          "server_assembly↔ai_supply_chain": 0.8,
-          "server_assembly↔consumer": 0.05,
-          "server_assembly↔electronics": 0.55,
-          "server_assembly↔energy": 0.2,
-          "server_assembly↔financials": 0.15,
-          "server_assembly↔industrial": 0.3,
-          "server_assembly↔robotics": 0.45,
-          "server_assembly↔semiconductor": 0.75,
-          "server_assembly↔shipping": -0.02,
           "shipping↔energy": 0.4,
-          "shipping↔industrial": 0.3
+          "shipping↔industrial": 0.3,
+          "consumer↔industrial": 0.2,
+          "consumer↔energy": 0.15,
+          "electronics↔energy": 0.1,
+          "semiconductor↔energy": 0.05
         }
       },
       "rationale": "Downstream decay (0.80) > upstream (0.60) reflects asymmetric shock propagation; systemic divisor (10.0) normalizes connection count to 0-1; min threshold (0.30) filters noise",
       "source": "heuristic",
       "citation": {
-        "source_type": "heuristic_with_narrative_aware",
-        "source_reference": "Industry-pair correlations set via expert heuristics; narrative modulation wired via SeasonalBridge.CorrelationMultiplier(); empirical calibration blocked pending TWSE sector index data provider",
-        "evidence_quality": "heuristic_awaiting_data",
-        "update_policy": "auto",
-        "validation_method": "pending_empirical_calibration",
-        "dependencies": [
-          "narrative.SeasonalBridge",
-          "industry.CorrelationMultiplier",
-          "marketdata.TWSESectorProvider (missing)"
-        ],
-        "last_validated": "2026-05-15T12:00:00.000000"
-      }
-    },
-    "dynamic_env": {
-      "value": {
-        "oil_high_threshold": 0.1,
-        "oil_low_threshold": 0.1,
-        "oil_energy_mult": 0.5,
-        "oil_shipping_penalty": 0.05,
-        "oil_shipping_benefit": 0.05,
-        "oil_industrial_penalty": 0.06,
-        "oil_industrial_benefit": 0.04,
-        "bdi_high_threshold": 0.1,
-        "bdi_low_threshold": 0.1,
-        "bdi_shipping_boost": 0.3,
-        "bdi_cost_penalty": 0.04,
-        "dxy_high_threshold": 0.05,
-        "dxy_low_threshold": 0.03,
-        "dxy_export_penalty": 0.05,
-        "dxy_export_benefit": 0.04
-      },
-      "rationale": "Dynamic env modulation thresholds and multipliers: oil >10% triggers energy/shipping/industrial adjustments; BDI >10% amplifies shipping; DXY >5% penalizes exporters",
-      "source": "heuristic",
-      "citation": {
         "source_type": "heuristic",
-        "source_reference": "TODO resolved: Calibrate: backtest each multiplier against historical sector returns during macro regime shifts",
+        "source_reference": "TODO resolved: Calibrate: backtest decay factors against actual supply chain disruption events",
         "evidence_quality": "low",
         "update_policy": "auto",
         "validation_method": "empirical_calibration",

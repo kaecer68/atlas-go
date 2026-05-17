@@ -1536,31 +1536,6 @@ func defaultIndustryParameters() IndustryParameters {
 			Rationale: "TW cycle transition probabilities and durations",
 			Source:    SourceHeuristic,
 		},
-		CycleWeightMultipliers: ParameterMetadata[CycleWeightMultipliersConfig]{
-			Value: CycleWeightMultipliersConfig{
-				ExpansionMultiplier: 1.2,
-				RecoveryMultiplier:  1.1,
-				MatureMultiplier:    1.0,
-				RecessionMultiplier: 0.7,
-			},
-			Rationale: "Cycle phase weight multipliers: expansion +20%, recovery +10%, mature neutral, recession -30%",
-			Source:    SourceHeuristic,
-		},
-		LinkageWeightImpact: ParameterMetadata[float64]{
-			Value:     0.2,
-			Rationale: "Linkage systemic importance deviation scaling: ±20% max impact",
-			Source:    SourceHeuristic,
-		},
-		WeightFloor: ParameterMetadata[float64]{
-			Value:     0.03,
-			Rationale: "Minimum 3% weight per industry after normalization",
-			Source:    SourceHeuristic,
-		},
-		MaxDailyWeightChange: ParameterMetadata[float64]{
-			Value:     0.05,
-			Rationale: "Maximum 5% daily weight change to prevent excessive volatility",
-			Source:    SourceHeuristic,
-		},
 		LinkageParams: ParameterMetadata[LinkageConfig]{
 			Value: LinkageConfig{
 				DownstreamDecayFactor:     0.80,
@@ -1571,30 +1546,8 @@ func defaultIndustryParameters() IndustryParameters {
 				MinCorrelationThreshold:   0.30,
 				CorrelationWindowDays:     30,
 			},
-			Rationale: "Downstream decay (0.80) > upstream (0.60); seasonal decay (0.30) for supply-chain propagation; default correlation (0.50); window 30 days; narrative-aware via SeasonalBridge.CorrelationMultiplier() for dynamic macro event modulation",
+			Rationale: "Downstream decay (0.80) > upstream (0.60); seasonal decay (0.30) for supply-chain propagation; default correlation (0.50); window 30 days; narrative-aware via SeasonalBridge.CorrelationMultiplier(); SystemicImportanceDivisor deprecated in favor of dynamic MaxDegree()",
 			Source:    SourceHeuristic,
-		},
-		DynamicEnv: ParameterMetadata[DynamicEnvConfig]{
-			Value: DynamicEnvConfig{
-				OilHighThreshold:     0.10,
-				OilLowThreshold:      0.10,
-				OilEnergyMult:        0.50,
-				OilShippingPenalty:   0.05,
-				OilShippingBenefit:   0.05,
-				OilIndustrialPenalty: 0.06,
-				OilIndustrialBenefit: 0.04,
-				BDIHighThreshold:     0.10,
-				BDILowThreshold:      0.10,
-				BDIShippingBoost:     0.30,
-				BDICostPenalty:       0.04,
-				DXYHighThreshold:     0.05,
-				DXYLowThreshold:      0.03,
-				DXYExportPenalty:     0.05,
-				DXYExportBenefit:     0.04,
-			},
-			Rationale: "Dynamic env modulation thresholds and multipliers: oil >10% triggers energy/shipping/industrial adjustments; BDI >10% amplifies shipping; DXY >5% penalizes exporters; values preserve original heuristic tuning from dynamic_env.go",
-			Source:    SourceHeuristic,
-			Todo:      "Calibrate: backtest each multiplier against historical sector returns during macro regime shifts",
 		},
 		HistoryRetentionDays: ParameterMetadata[int]{
 			Value:     90,

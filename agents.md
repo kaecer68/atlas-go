@@ -65,6 +65,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 
 | 目錄 | 職責 |
 |------|------|
+| `internal/apigateway/` | 統一數據採集層：Gateway（14 通道管理、速率限制、熔斷器、快取）、BackgroundTaskManager（10+ 排程任務、重試策略、盤中保護） |
 | `internal/domain/` | 領域型別（`Regime`、`Recommendation`、`Position` 等字串 enum） |
 | `internal/orchestrator/` | 流程協調（`SystemCore`、`PluginHost`、多層 executor 路由） |
 | `internal/sim/` | 模擬引擎與部位狀態轉換 |
@@ -110,7 +111,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 | `internal/metalearning/` | 元學習協調器（MetaLearner、策略選擇優化） |
 
 **分層資料流**：
-`Market Data → Orchestrator (context → screener → sector/style → control) → Simulator → Ledger`
+`Market Data → Gateway (internal/apigateway/: rate limit + circuit breaker + cache) → BackgroundTaskManager (scheduled fetch) → Orchestrator (context → screener → sector/style → control) → Simulator → Ledger`
 
 > **注意**：`superinvestor` 不是獨立 executor，而是 sector/style agent 的角色型別（參見 `configs/agents.json` 中的 `layer: superinvestor`）。
 
@@ -147,6 +148,44 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 - `configs/portfolio_allocation.json` 為投組配置版本檔案。
 - `internal/config/config.go` 會自動讀取根目錄 `.env`，**不會覆蓋已存在的環境變數**；`.env` 中的值若帶引號（單雙引號）會被自動去除。
 - 關鍵環境變數前綴為 `ATLAS_*`（如 `ATLAS_MARKET_DATA_PROVIDER`、`ATLAS_REPLAY_DATA_PATH`、`ATLAS_BASELINE_POLICY_PATH`、`ATLAS_BROKER_MODE`）。
+
+---
+
+## 參數管理慣例
+
+參數系統是此專案核心基礎設施，所有 237+ 個參數必須統一納管於 `configs/parameters.json`，並遵循以下規範：
+
+### 參數引用註解（Citation）
+
+每個參數必須包含 `citation` 區塊，記錄其來源與有效性：
+
+| 欄位 | 說明 | 可選值 |
+|------|------|--------|
+| `source_type` | 資料來源類別 | `literature` / `empirical` / `heuristic` / `calibrated` |
+| `source_reference` | 具體來源描述（文獻 DOI、TWSE 公告、backtest 報告等） | 自由文字，避免泛泛描述 |
+| `evidence_quality` | 證據品質 | `high` / `medium` / `low` |
+| `update_policy` | 更新策略 | `auto`（可自動校準） / `manual`（需人工審查） / `frozen`（理論固定值） |
+| `validation_method` | 驗證方式 | `backtest_optimization` / `empirical_calibration` / `literature_review` / `cross_reference` / `code_review` 等 |
+| `dependencies` | 相依參數（建議填入） | 字串陣列 |
+| `last_validated` | 最後驗證時間 | ISO 8601 時間戳 |
+
+### AI 開發新參數流程
+
+1. 在 `configs/parameters.json` 中新增參數與 `citation` 區塊
+2. 在 `internal/config/parameters.go` 的對應 struct 中新增 `ParameterMetadata[T]` 欄位
+3. 在 `internal/config/parameters_defaults.go` 中新增預設值
+4. 在 `internal/config/inference.go` 的 `SetParameter`／`GetParameter` 中新增 case
+5. 在 `internal/config/parameter_snapshot.go` 中新增 snapshot compare 調用
+6. 驗證：執行 `go build ./...`、`go test ./internal/config/...` 與 `go run ./cmd/parameter-health-check`
+
+### 參數驗證工具
+
+- `go run ./cmd/parameter-health-check` — 輸出完整參數審計報告（citation 覆蓋率、證據品質分佈、問題清單）
+- `go run ./cmd/calibrate-parameters --module=garch --dry-run` — GARCH/VaR 參數校準
+
+### 完整參考文件
+
+詳細參數系統設計與 schema 請參閱 `docs/PARAMETER_SYSTEM.md`。
 
 ---
 
@@ -269,45 +308,6 @@ gh pr create --title "feat(scope): description" \
 - `.github/instructions/live-trading.guardrails.instructions.md` — Live trading 邊界
 - `.github/copilot-instructions.md` — 綜合入口與常見工作流程
 
----
-
-## 產業生態系（Industry Ecosystem）
-
-前端頁面「產業生態系」包含三個核心板塊，各自對應完整的後端計算鏈：
-
-### 供應鏈連動（Supply Chain Linkage）
-- **核心檔案**：`internal/industry/linkage.go`、`configs/supply_chain_graph.json`
-- **圖譜定義**：`configs/supply_chain_graph.json` 定義節點關係（upstream/downstream/supplier），可在不重新編譯下修改。
-- **圖譜載入**：`LoadSupplyChainGraph()` 從 JSON 載入後同時填入 `SupplyChainGraph` 與 `CorrelationMatrix`。
-- **相關矩陣**：`CorrelationMatrix` 支援三種初始化方式：
-  1. `DefaultCorrelationMatrix()` — 硬編碼預設值（回退方案）
-  2. `LoadCorrelationMatrixFromConfig()` — 從 `configs/parameters.json` 的 `industry.linkage_params.correlation_matrix` 讀取
-  3. `RecalculateFromReturns()` — 從產業報酬率時間序列實證計算
-- **敘事感知調整**：`NarrativeLinkageProvider` 介面允許宏觀敘事主題（如 `oil_price_shock`、`AI_capex_surge`）動態調整產業間相關係數。實作位於 `SeasonalBridge.CorrelationMultiplier()`。
-- **衝擊傳導**：`PropagateShock()` 計算衝擊從來源產業向下游（顧客）與上游（供應商）的傳導，使用可配置的衰減因子（`downstream_decay_factor`/`upstream_decay_factor`）。
-- **系統重要性**：`CalculateLinkageScore()` 基於產業在圖中的連線數與 `systemic_importance_divisor`（預設 10.0）計算系統重要性分數。
-- **實證校準**：`cmd/calibrate-seasonal` 支援 `--replay` 旗標載入歷史回測數據進行實證相關矩陣計算。TWSE 產業指數提供者 `TWSESectorIndexProvider` 可從 TWSE API 抓取產業指數歷史資料。
-
-### 季節性模式（Seasonal Patterns）
-- **核心檔案**：`internal/industry/seasonality.go`、`internal/industry/seasonal_calibrator.go`
-- **季節性引擎**：`SeasonalEngine` 管理各產業的季節性模式（月曆效應），每種模式包含 `StartMonth/Day`、`EndMonth/Day`、`AdjustmentFactor`、`HistoricalAccuracy` 等欄位。
-- **校準管道**：`cmd/calibrate-seasonal` CLI 支援：
-  - 合成數據（預設）或實際歷史回測數據（`--replay`）
-  - `--update` 旗標將校準結果寫回 `configs/parameters.json`
-  - `--update-threshold` 設定最小觀測數門檻
-- **證據品質標記**：每個模式參數包含 `evidence_quality` 欄位（`high`/`medium`/`low`/`heuristic_awaiting_data`），前端根據品質顯示對應 badge（「待驗證」）。
-- **參數驗證**：`ParametersConfig.Validate()` 確保 `seasonal_decay_factor`（預設 0.30）等在合理範圍。
-- **API**：`/api/industry/seasonality` 回傳季節性模式列表；`/api/industry/seasonality/calendar` 回傳年度行事曆。
-- **決策鏈透明化**：`GetAdjustmentBreakdown()` 提供四層調整分解（季節性 × 敘事 × 循環 × 環境），前端逐層展示。
-
-### 週期羅盤（Cycle Compass）
-- **核心檔案**：`internal/industry/cycle.go`、`internal/industry/dynamic_env.go`
-- **商業週期偵測**：`CycleTracker` 管理五種產業階段（`expansion`/`recovery`/`mature`/`recession`）的偵測。
-- **動態環境調變**：`DynamicEnvModulator` 將宏觀數據（原油、BDI、DXY 等）納入週期評分計算。
-- **API**：`/api/industry/cycles` 回傳各產業的週期位置與趨勢。
-
----
-
 ## Local AGENTS.md 導覽
 
 以下子目錄已有局部說明，進入該區域工作時**先讀該目錄下的 `AGENTS.md`**，不要只依賴本檔：
@@ -369,7 +369,7 @@ gh pr create --title "feat(scope): description" \
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (24759 symbols, 54364 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (24048 symbols, 52900 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

@@ -179,11 +179,12 @@ func (a *DataAggregator) fetchProfitYoY(ctx context.Context, symbol string, now 
 }
 
 func clampGrowth(v float64) float64 {
-	if v > 5.0 {
-		return 5.0
-	}
-	if v < -1.0 {
-		return -1.0
+	const maxGrowth = 5.0  // 500% YoY growth cap (sanity check for extreme outliers)
+	const minGrowth = -1.0 // -100% YoY growth floor
+	if v > maxGrowth {
+		return maxGrowth
+	} else if v < minGrowth {
+		return minGrowth
 	}
 	return v
 }

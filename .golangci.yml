@@ -1,5 +1,3 @@
-version: "2"
-
 run:
   timeout: 5m
   go: "1.25"
@@ -7,47 +5,38 @@ run:
 linters:
   enable:
     - errcheck      # unchecked errors
+    - gosimple      # code simplifications
     - govet         # go vet
     - ineffassign   # ineffective assignments
     - staticcheck   # static analysis
     - unused        # unused code/variables
     - gosec         # security checks
+    - gofmt         # formatting
+    - goimports     # import ordering
     - misspell      # spelling in comments
     - unconvert     # unnecessary type conversions
     - unparam       # unused function parameters
 
-  settings:
-    gosec:
-      excludes:
-        - G104     # allow unchecked errors in defer Close() — project convention
-        - G204     # allow os/exec for broker/staging CLI tools
-    misspell:
-      locale: US
-    errcheck:
-      check-blank: true
-
-  exclusions:
-    paths:
-      - ".*_test\\.go"
-      - "internal/experiment/data/.*"
-      - "data/.*"
-      - ".worktrees"
-      - ".gocache"
-      - "graphify-out"
-      # Legacy CLI tools with pre-existing unchecked errors (not part of this PR)
-      - "cmd/calibrate-seasonal/.*"
-      - "cmd/fetch-historical/.*"
-      - "internal/industry/correlation_loader.go"
-      # Legacy industry module files with pre-existing G304 issues (not part of this PR)
-      - "internal/industry/seasonal_calibrator.go"
-      - "internal/industry/linkage.go"
-
-formatters:
-  settings:
-    goimports:
-      local-prefixes:
-        - github.com/kaecer68/atlas-go
+linters-settings:
+  gosec:
+    excludes:
+      - G104     # allow unchecked errors in defer Close() — project convention
+      - G204     # allow os/exec for broker/staging CLI tools
+  goimports:
+    local-prefixes: github.com/kaecer68/atlas-go
+  misspell:
+    locale: US
+  errcheck:
+    check-blank: true
 
 issues:
+  exclude-files:
+    - ".*_test\\.go"
+    - "internal/experiment/data/.*"
+    - "data/.*"
+  exclude-dirs:
+    - .worktrees
+    - .gocache
+    - graphify-out
   max-issues-per-linter: 0
   max-same-issues: 0
