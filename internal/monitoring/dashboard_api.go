@@ -104,13 +104,15 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		marketdata.NewFrankfurterFXProvider(),
 		marketdata.NewSOXIndexProvider(),
 		marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")),
-		marketdata.NewTWSEMarginBalanceProvider(filepath.Join(workDir, "data/state/margin")),
+		marketdata.NewTWSEMarginBalanceProvider(""),
 		marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export")),
 	}
-	providers = append(providers, marketdata.NewSectorDataProvider(filepath.Join(workDir, "data/state/sector_data")))
+	// Sector data from local cache (graceful degradation if file missing).
+	providers = append(providers, marketdata.NewSectorDataProvider(filepath.Join(workDir, "data/sector_data")))
+	// TSMC Revenue from FinMind (overwrites cached sector data when available).
 	cfg := config.Load()
 	if cfg.FinMindAPIKey != "" {
-		providers = append(providers, marketdata.NewTSMCRevenueProviderWithStorage(cfg.FinMindAPIKey, filepath.Join(workDir, "data/state/tsmc_revenue")))
+		providers = append(providers, marketdata.NewTSMCRevenueProvider(cfg.FinMindAPIKey))
 	}
 	provider := marketdata.NewCompositeMacroProvider(providers...)
 	geoProvider := narrative.NewCompositeGeopoliticalProvider(
@@ -246,8 +248,9 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	riskHandlers.RegisterRoutes(mux)
 
 	var dividendProvider apitax.DividendProvider
-	if apiKey := os.Getenv("FINMIND_API_KEY"); apiKey != "" {
-		finMindClient := marketdata.NewFinMindClient(apiKey)
+	cfg := config.Load()
+	if cfg.FinMindAPIKey != "" {
+		finMindClient := marketdata.NewFinMindClient(cfg.FinMindAPIKey)
 		cacheDir := filepath.Join(a.workDir, "data", "cache", "dividends")
 		dividendProvider = marketdata.NewFinMindDividendProvider(finMindClient, cacheDir)
 	}

@@ -111,16 +111,17 @@ func (h *Handlers) HandleIndustryCycle(r *http.Request) (int, any) {
 		var allPositions []map[string]any
 		for _, pos := range positions {
 			allPositions = append(allPositions, map[string]any{
-				"industry":        pos.Industry,
-				"name":            pos.Name,
-				"business_cycle":  pos.BusinessCycle,
-				"inventory_cycle": pos.InventoryCycle,
-				"capex_cycle":     pos.CapexCycle,
-				"confidence":      pos.Confidence,
-				"updated_at":      pos.UpdatedAt,
-				"is_favorable":    pos.IsFavorable,
-				"phase_score":     pos.PhaseScore,
-				"trend":           pos.Trend,
+				"industry":             pos.Industry,
+				"name":                 pos.Name,
+				"business_cycle":       pos.BusinessCycle,
+				"inventory_cycle":      pos.InventoryCycle,
+				"capex_cycle":          pos.CapexCycle,
+				"confidence":           pos.Confidence,
+				"confidence_breakdown": pos.ConfidenceBreakdown,
+				"updated_at":           pos.UpdatedAt,
+				"is_favorable":         pos.IsFavorable,
+				"phase_score":          pos.PhaseScore,
+				"trend":                pos.Trend,
 			})
 		}
 		return http.StatusOK, map[string]any{
@@ -131,15 +132,16 @@ func (h *Handlers) HandleIndustryCycle(r *http.Request) (int, any) {
 
 	pos := positions[0]
 	return http.StatusOK, map[string]any{
-		"industry":        pos.Industry,
-		"business_cycle":  pos.BusinessCycle,
-		"inventory_cycle": pos.InventoryCycle,
-		"capex_cycle":     pos.CapexCycle,
-		"confidence":      pos.Confidence,
-		"updated_at":      pos.UpdatedAt,
-		"is_favorable":    pos.IsFavorable,
-		"phase_score":     pos.PhaseScore,
-		"trend":           pos.Trend,
+		"industry":             pos.Industry,
+		"business_cycle":       pos.BusinessCycle,
+		"inventory_cycle":      pos.InventoryCycle,
+		"capex_cycle":          pos.CapexCycle,
+		"confidence":           pos.Confidence,
+		"confidence_breakdown": pos.ConfidenceBreakdown,
+		"updated_at":           pos.UpdatedAt,
+		"is_favorable":         pos.IsFavorable,
+		"phase_score":          pos.PhaseScore,
+		"trend":                pos.Trend,
 	}
 }
 
@@ -188,15 +190,16 @@ func (h *Handlers) HandleIndustryOverview(r *http.Request) (int, any) {
 	var industries []map[string]any
 	for _, o := range overviews {
 		industries = append(industries, map[string]any{
-			"id":                o.ID,
-			"name":              o.Name,
-			"cycle_phase":       o.CyclePhase,
-			"inventory_cycle":   o.InventoryCycle,
-			"capex_cycle":       o.CapexCycle,
-			"cycle_confidence":  o.CycleConfidence,
-			"is_favorable":      o.IsFavorable,
-			"seasonal_patterns": o.SeasonalPatterns,
-			"linkage_score":     o.LinkageScore,
+			"id":                   o.ID,
+			"name":                 o.Name,
+			"cycle_phase":          o.CyclePhase,
+			"inventory_cycle":      o.InventoryCycle,
+			"capex_cycle":          o.CapexCycle,
+			"cycle_confidence":     o.CycleConfidence,
+			"confidence_breakdown": o.ConfidenceBreakdown,
+			"is_favorable":         o.IsFavorable,
+			"seasonal_patterns":    o.SeasonalPatterns,
+			"linkage_score":        o.LinkageScore,
 		})
 	}
 

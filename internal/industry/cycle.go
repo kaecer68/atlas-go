@@ -39,16 +39,17 @@ const (
 
 // CyclePosition holds the complete cycle positioning for an industry.
 type CyclePosition struct {
-	IndustryID          string         `json:"industry_id"`
-	BusinessCycle       CyclePhase     `json:"business_cycle"`
-	InventoryCycle      InventoryCycle `json:"inventory_cycle"`
-	CapexCycle          CapexCycle     `json:"capex_cycle"`
-	Confidence          float64        `json:"confidence"` // 0.0 to 1.0
-	LeadingIndicators   []Indicator    `json:"leading_indicators"`
-	LaggingIndicators   []Indicator    `json:"lagging_indicators"`
-	CycleDurationDays   int            `json:"cycle_duration_days"` // Days in current phase
-	ExpectedPhaseChange *time.Time     `json:"expected_phase_change,omitempty"`
-	UpdatedAt           time.Time      `json:"updated_at"`
+	IndustryID          string               `json:"industry_id"`
+	BusinessCycle       CyclePhase           `json:"business_cycle"`
+	InventoryCycle      InventoryCycle       `json:"inventory_cycle"`
+	CapexCycle          CapexCycle           `json:"capex_cycle"`
+	Confidence          float64              `json:"confidence"` // 0.0 to 1.0 (backward-compatible composite)
+	ConfidenceBreakdown *ConfidenceBreakdown `json:"confidence_breakdown,omitempty"`
+	LeadingIndicators   []Indicator          `json:"leading_indicators"`
+	LaggingIndicators   []Indicator          `json:"lagging_indicators"`
+	CycleDurationDays   int                  `json:"cycle_duration_days"` // Days in current phase
+	ExpectedPhaseChange *time.Time           `json:"expected_phase_change,omitempty"`
+	UpdatedAt           time.Time            `json:"updated_at"`
 }
 
 // Indicator represents a single economic indicator.
@@ -65,8 +66,11 @@ type Indicator struct {
 
 // CycleTracker monitors and tracks cycle positions for industries.
 type CycleTracker struct {
-	positions map[string]*CyclePosition
-	history   map[string][]CyclePosition
+	positions        map[string]*CyclePosition
+	history          map[string][]CyclePosition
+	seasonalEngine   *SeasonalEngine
+	linkageAnalyzer  *LinkageAnalyzer
+	narrativeHitRate func(industryID string) float64
 }
 
 // NewCycleTracker creates a new cycle tracker.
@@ -77,6 +81,17 @@ func NewCycleTracker() *CycleTracker {
 	}
 	ct.initializeDefaultPositions()
 	return ct
+}
+
+// SetExternalValidators wires optional external data sources for
+// multi-dimensional confidence. Nil args disable that dimension.
+func (ct *CycleTracker) SetExternalValidators(seasonal *SeasonalEngine, linkage *LinkageAnalyzer) {
+	ct.seasonalEngine = seasonal
+	ct.linkageAnalyzer = linkage
+}
+
+func (ct *CycleTracker) SetNarrativeProvider(fn func(industryID string) float64) {
+	ct.narrativeHitRate = fn
 }
 
 // initializeDefaultPositions populates the tracker with default cycle positions
@@ -170,7 +185,7 @@ func (ct *CycleTracker) UpdatePosition(industryID string, metrics IndustryMetric
 
 	// Store historical data
 	ct.history[industryID] = append(ct.history[industryID], *position)
-	if len(ct.history[industryID]) > 90 { // Keep 90 days of history
+	if len(ct.history[industryID]) > config.GetParametersConfig().Industry.HistoryRetentionDays.Value {
 		ct.history[industryID] = ct.history[industryID][1:]
 	}
 
@@ -212,8 +227,8 @@ func (ct *CycleTracker) detectCyclePosition(industryID string, metrics IndustryM
 	// Detect capex cycle
 	position.CapexCycle = ct.detectCapexCycle(metrics)
 
-	// Calculate confidence based on data quality
-	position.Confidence = ct.calculateConfidence(metrics)
+	position.Confidence = ct.calculateConfidence(industryID, metrics)
+	position.ConfidenceBreakdown = ct.calculateConfidenceBreakdown(industryID, metrics)
 
 	// Set leading and lagging indicators
 	position.LeadingIndicators = ct.getLeadingIndicators(industryID, metrics)
@@ -295,43 +310,220 @@ func (ct *CycleTracker) detectCapexCycle(metrics IndustryMetrics) CapexCycle {
 	}
 }
 
-// calculateConfidence calculates the confidence level of cycle detection.
-func (ct *CycleTracker) calculateConfidence(metrics IndustryMetrics) float64 {
-	confidence := 0.5 // Base confidence
+func (ct *CycleTracker) calculateConfidence(industryID string, metrics IndustryMetrics) float64 {
+	cfg := config.GetParametersConfig().Industry
+	s := cfg.ConfidenceSignal.Value
 
-	// Increase confidence if we have all key metrics
+	hasData := metrics.RevenueGrowthYoY != 0 || metrics.ProfitGrowthYoY != 0 ||
+		metrics.InventoryTurnover != 0 || metrics.CapacityUtilization > 0
+	if !hasData {
+		return s.SignalBase
+	}
+
+	signal := s.SignalBase
 	if metrics.RevenueGrowthYoY != 0 {
-		confidence += 0.15
+		signal += math.Min(math.Abs(metrics.RevenueGrowthYoY)/s.RevenueNormDenom, 1.0) * s.RevenueWeight
 	}
 	if metrics.ProfitGrowthYoY != 0 {
-		confidence += 0.15
+		signal += math.Min(math.Abs(metrics.ProfitGrowthYoY)/s.ProfitNormDenom, 1.0) * s.ProfitWeight
 	}
 	if metrics.InventoryTurnover != 0 {
-		confidence += 0.10
+		signal += math.Min(metrics.InventoryTurnover/s.InventoryNormDenom, 1.0) * s.InventoryWeight
 	}
-	if metrics.CapacityUtilization != 0 {
-		confidence += 0.10
+	if metrics.CapacityUtilization > 0 {
+		signal += math.Min(metrics.CapacityUtilization, 1.0) * s.UtilizationWeight
 	}
 
-	if confidence > 1.0 {
-		confidence = 1.0
+	boundary := ct.boundaryConfidence(industryID, metrics)
+
+	confidence := signal*s.SignalBoundaryMix + boundary*(1.0-s.SignalBoundaryMix)
+
+	if confidence > s.ConfidenceCeiling {
+		confidence = s.ConfidenceCeiling
+	}
+	if confidence < s.ConfidenceFloor {
+		confidence = s.ConfidenceFloor
 	}
 	return confidence
 }
 
+func (ct *CycleTracker) calculateConfidenceBreakdown(industryID string, metrics IndustryMetrics) *ConfidenceBreakdown {
+	cfg := config.GetParametersConfig().Industry
+	mix := cfg.ConfidenceMix.Value
+
+	signal := cfg.ConfidenceSignal.Value
+	hasData := metrics.RevenueGrowthYoY != 0 || metrics.ProfitGrowthYoY != 0 ||
+		metrics.InventoryTurnover != 0 || metrics.CapacityUtilization > 0
+
+	var boundaryScore float64
+	if hasData {
+		s := signal.SignalBase
+		if metrics.RevenueGrowthYoY != 0 {
+			s += math.Min(math.Abs(metrics.RevenueGrowthYoY)/signal.RevenueNormDenom, 1.0) * signal.RevenueWeight
+		}
+		if metrics.ProfitGrowthYoY != 0 {
+			s += math.Min(math.Abs(metrics.ProfitGrowthYoY)/signal.ProfitNormDenom, 1.0) * signal.ProfitWeight
+		}
+		if metrics.InventoryTurnover != 0 {
+			s += math.Min(metrics.InventoryTurnover/signal.InventoryNormDenom, 1.0) * signal.InventoryWeight
+		}
+		if metrics.CapacityUtilization > 0 {
+			s += math.Min(metrics.CapacityUtilization, 1.0) * signal.UtilizationWeight
+		}
+		b := ct.boundaryConfidence(industryID, metrics)
+		boundaryScore = s*signal.SignalBoundaryMix + b*(1.0-signal.SignalBoundaryMix)
+		if boundaryScore > signal.ConfidenceCeiling {
+			boundaryScore = signal.ConfidenceCeiling
+		}
+		if boundaryScore < signal.ConfidenceFloor {
+			boundaryScore = signal.ConfidenceFloor
+		}
+	} else {
+		boundaryScore = signal.ConfidenceFloor
+	}
+
+	freshnessScore := freshnessFactor(metrics.DataFreshness)
+
+	seasonalScore := 0.0
+	if ct.seasonalEngine != nil {
+		seasonalScore = ct.seasonalEngine.GetHistoricalAccuracy(time.Now())
+	}
+
+	linkageScore := 0.0
+	if ct.linkageAnalyzer != nil && mix.WeightLinkage > 0 {
+		linkageScore = ct.computeLinkageConfidence(industryID)
+	}
+
+	narrativeScore := 0.0
+	if ct.narrativeHitRate != nil && mix.WeightNarrative > 0 {
+		narrativeScore = ct.narrativeHitRate(industryID)
+	}
+
+	composite := boundaryScore*mix.WeightBoundary +
+		freshnessScore*mix.WeightFreshness +
+		seasonalScore*mix.WeightSeasonal +
+		linkageScore*mix.WeightLinkage +
+		narrativeScore*mix.WeightNarrative
+
+	return &ConfidenceBreakdown{
+		Composite:          composite,
+		Boundary:           boundaryScore,
+		Freshness:          freshnessScore,
+		Seasonal:           seasonalScore,
+		Linkage:            linkageScore,
+		Narrative:          narrativeScore,
+		DataFreshnessLevel: metrics.DataFreshness,
+		DataFreshnessScore: freshnessScore,
+		Weights: map[string]float64{
+			"boundary":  mix.WeightBoundary,
+			"freshness": mix.WeightFreshness,
+			"seasonal":  mix.WeightSeasonal,
+			"linkage":   mix.WeightLinkage,
+			"narrative": mix.WeightNarrative,
+		},
+	}
+}
+
+func freshnessFactor(freshness DataFreshness) float64 {
+	scores := &config.GetParametersConfig().Industry.FreshnessScores.Value
+	switch freshness {
+	case FreshLive:
+		return scores.ScoreLive
+	case FreshRecent:
+		return scores.ScoreRecent
+	case FreshStale:
+		return scores.ScoreStale
+	case FreshFallback:
+		return scores.ScoreFallback
+	default:
+		return scores.ScoreDefault
+	}
+}
+
+func (ct *CycleTracker) computeLinkageConfidence(industryID string) float64 {
+	if ct.linkageAnalyzer == nil {
+		return 0
+	}
+	score := ct.linkageAnalyzer.CalculateLinkageScore(industryID)
+	if score == nil {
+		return 0
+	}
+	minCorr := config.GetParametersConfig().Industry.LinkageParams.Value.MinCorrelationThreshold
+	related := ct.linkageAnalyzer.GetCorrelationMatrix().GetCorrelatedIndustries(industryID, minCorr)
+	if len(related) == 0 {
+		return 0
+	}
+	consistent := 0.0
+	total := 0.0
+	for relatedID, corr := range related {
+		if pos, ok := ct.GetPosition(relatedID); ok {
+			total += math.Abs(corr)
+			if pos.BusinessCycle == ct.positions[industryID].BusinessCycle {
+				consistent += math.Abs(corr)
+			}
+		}
+	}
+	if total == 0 {
+		return 0
+	}
+	return (consistent / total) * score.SystemicImportance
+}
+
+// boundaryConfidence returns 0–1: 0 = metric at a phase threshold (ambiguous),
+// 1 = far from any threshold (strong conviction in detected phase).
+func (ct *CycleTracker) boundaryConfidence(industryID string, metrics IndustryMetrics) float64 {
+	params := config.GetParametersConfig().Industry
+	thresholds, ok := params.CycleThresholds.Value[industryID]
+	if !ok {
+		thresholds = config.CycleThresholdConfig{
+			ExpansionRevenuePct: 0.20,
+			ExpansionProfitPct:  0.20,
+			RecoveryRevenuePct:  0.05,
+			RecoveryProfitPct:   0.05,
+			MatureRevenuePct:    -0.05,
+			MatureProfitPct:     -0.05,
+		}
+	}
+
+	revMinDist := math.Abs(metrics.RevenueGrowthYoY - thresholds.ExpansionRevenuePct)
+	for _, t := range []float64{thresholds.RecoveryRevenuePct, thresholds.MatureRevenuePct} {
+		if d := math.Abs(metrics.RevenueGrowthYoY - t); d < revMinDist {
+			revMinDist = d
+		}
+	}
+
+	profitMinDist := math.Abs(metrics.ProfitGrowthYoY - thresholds.ExpansionProfitPct)
+	for _, t := range []float64{thresholds.RecoveryProfitPct, thresholds.MatureProfitPct} {
+		if d := math.Abs(metrics.ProfitGrowthYoY - t); d < profitMinDist {
+			profitMinDist = d
+		}
+	}
+
+	tr := thresholds.ExpansionRevenuePct - thresholds.MatureRevenuePct
+	if tr <= 0 {
+		tr = config.GetParametersConfig().Industry.ConfidenceSignal.Value.ThresholdRangeFallback
+	}
+	denom := tr * params.ConfidenceSignal.Value.BoundaryDenomFactor
+
+	revScore := math.Min(revMinDist/denom, 1.0)
+	profitScore := math.Min(profitMinDist/denom, 1.0)
+
+	return (revScore + profitScore) / 2.0
+}
+
 // getLeadingIndicators returns leading indicators for an industry.
 func (ct *CycleTracker) getLeadingIndicators(industryID string, metrics IndustryMetrics) []Indicator {
+	sig := config.GetParametersConfig().Industry.ConfidenceSignal.Value
 	var indicators []Indicator
 
-	// Common leading indicators
 	if metrics.RevenueGrowthYoY != 0 {
 		indicators = append(indicators, Indicator{
 			Name:      "Revenue Growth YoY",
 			Value:     metrics.RevenueGrowthYoY,
 			Unit:      "%",
-			Trend:     ct.getTrend(metrics.RevenueGrowthYoY, 0.10),
+			Trend:     ct.getTrend(metrics.RevenueGrowthYoY, sig.RevenueTrendThreshold),
 			IsLeading: true,
-			Weight:    0.30,
+			Weight:    sig.RevenueIndicatorWeight,
 		})
 	}
 
@@ -340,17 +532,17 @@ func (ct *CycleTracker) getLeadingIndicators(industryID string, metrics Industry
 			Name:      "Inventory Turnover",
 			Value:     metrics.InventoryTurnover,
 			Unit:      "x",
-			Trend:     ct.getTrend(metrics.InventoryTurnover, 4.0),
+			Trend:     ct.getTrend(metrics.InventoryTurnover, sig.InventoryTrendThreshold),
 			IsLeading: true,
-			Weight:    0.25,
+			Weight:    sig.InventoryIndicatorWeight,
 		})
 	}
 
 	return indicators
 }
 
-// getLaggingIndicators returns lagging indicators for an industry.
 func (ct *CycleTracker) getLaggingIndicators(industryID string, metrics IndustryMetrics) []Indicator {
+	sig := config.GetParametersConfig().Industry.ConfidenceSignal.Value
 	var indicators []Indicator
 
 	if metrics.ProfitGrowthYoY != 0 {
@@ -358,9 +550,9 @@ func (ct *CycleTracker) getLaggingIndicators(industryID string, metrics Industry
 			Name:      "Profit Growth YoY",
 			Value:     metrics.ProfitGrowthYoY,
 			Unit:      "%",
-			Trend:     ct.getTrend(metrics.ProfitGrowthYoY, 0.10),
+			Trend:     ct.getTrend(metrics.ProfitGrowthYoY, sig.ProfitTrendThreshold),
 			IsLeading: false,
-			Weight:    0.35,
+			Weight:    sig.ProfitIndicatorWeight,
 		})
 	}
 
@@ -369,9 +561,9 @@ func (ct *CycleTracker) getLaggingIndicators(industryID string, metrics Industry
 			Name:      "Capacity Utilization",
 			Value:     metrics.CapacityUtilization,
 			Unit:      "%",
-			Trend:     ct.getTrend(metrics.CapacityUtilization, 0.75),
+			Trend:     ct.getTrend(metrics.CapacityUtilization, sig.CapacityTrendThreshold),
 			IsLeading: false,
-			Weight:    0.30,
+			Weight:    sig.CapacityIndicatorWeight,
 		})
 	}
 
@@ -380,16 +572,19 @@ func (ct *CycleTracker) getLaggingIndicators(industryID string, metrics Industry
 
 // getTrend determines the trend direction based on value and threshold.
 func (ct *CycleTracker) getTrend(value, threshold float64) string {
-	if value > threshold*1.1 {
+	sig := config.GetParametersConfig().Industry.ConfidenceSignal.Value
+	if value > threshold*sig.TrendUpMultiplier {
 		return "up"
-	} else if value < threshold*0.9 {
+	} else if value < threshold*sig.TrendDownMultiplier {
 		return "down"
 	}
 	return "stable"
 }
 
 func (cp *CyclePosition) IsFavorable() bool {
-	return cp.BusinessCycle == CycleRecovery || cp.BusinessCycle == CycleExpansion
+	minConfidence := config.GetParametersConfig().Industry.ConfidenceMix.Value.FavorableConfidenceMin
+	return (cp.BusinessCycle == CycleRecovery || cp.BusinessCycle == CycleExpansion) &&
+		cp.Confidence >= minConfidence
 }
 
 func (cp *CyclePosition) IsFavorablePhase() bool {
@@ -413,15 +608,16 @@ func (cp *CyclePosition) GetTrend() string {
 
 // GetPhaseScore returns a numerical score for the cycle phase (-1 to 1).
 func (cp *CyclePosition) GetPhaseScore() float64 {
+	scores := &config.GetParametersConfig().Industry.PhaseScores.Value
 	switch cp.BusinessCycle {
 	case CycleExpansion:
-		return 1.0
+		return scores.ScoreExpansion
 	case CycleRecovery:
-		return 0.5
+		return scores.ScoreRecovery
 	case CycleMature:
-		return 0.0
+		return scores.ScoreMature
 	case CycleRecession:
-		return -1.0
+		return scores.ScoreRecession
 	default:
 		return 0.0
 	}
@@ -449,10 +645,16 @@ type CyclePhaseTransition struct {
 
 // GetTypicalTransitions returns typical cycle transitions.
 func GetTypicalTransitions() []CyclePhaseTransition {
-	return []CyclePhaseTransition{
-		{FromPhase: CycleRecession, ToPhase: CycleRecovery, Probability: 0.70, Triggers: []string{"inventory_depletion", "demand_stabilization"}, TypicalDurationDays: 180},
-		{FromPhase: CycleRecovery, ToPhase: CycleExpansion, Probability: 0.80, Triggers: []string{"revenue_acceleration", "capex_increase"}, TypicalDurationDays: 270},
-		{FromPhase: CycleExpansion, ToPhase: CycleMature, Probability: 0.60, Triggers: []string{"growth_deceleration", "margin_compression"}, TypicalDurationDays: 360},
-		{FromPhase: CycleMature, ToPhase: CycleRecession, Probability: 0.50, Triggers: []string{"inventory_buildup", "demand_contraction"}, TypicalDurationDays: 180},
+	cfgTransitions := config.GetParametersConfig().Industry.CycleTransitions.Value
+	result := make([]CyclePhaseTransition, 0, len(cfgTransitions))
+	for _, ct := range cfgTransitions {
+		result = append(result, CyclePhaseTransition{
+			FromPhase:           CyclePhase(ct.FromPhase),
+			ToPhase:             CyclePhase(ct.ToPhase),
+			Triggers:            ct.Triggers,
+			Probability:         ct.Probability,
+			TypicalDurationDays: ct.TypicalDurationDays,
+		})
 	}
+	return result
 }

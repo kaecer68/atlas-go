@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"slices"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 // SeasonalPattern represents a recurring seasonal pattern in Taiwan stock market.
@@ -47,7 +49,7 @@ type SeasonalEngine struct {
 	patterns []SeasonalPattern
 }
 
-// NewSeasonalEngine creates a seasonal engine with default Taiwan patterns.
+// NewSeasonalEngine creates a seasonal engine using the parameter-managed seasonal patterns.
 func NewSeasonalEngine() *SeasonalEngine {
 	return &SeasonalEngine{
 		patterns: DefaultSeasonalPatterns(),
@@ -333,4 +335,31 @@ func (p SeasonalPattern) String() string {
 		p.HistoricalAccuracy*100,
 		p.AvgMarketReturn*100,
 	)
+}
+
+func seasonalPatternsFromConfig(cfgs []config.SeasonalPatternConfig) []SeasonalPattern {
+	patterns := make([]SeasonalPattern, 0, len(cfgs))
+	for _, c := range cfgs {
+		patterns = append(patterns, SeasonalPattern{
+			ID:                 c.ID,
+			Name:               c.Name,
+			NameEN:             c.NameEN,
+			StartMonth:         c.StartMonth,
+			StartDay:           c.StartDay,
+			EndMonth:           c.EndMonth,
+			EndDay:             c.EndDay,
+			FavoredIndustries:  c.FavoredIndustries,
+			AvoidedIndustries:  c.AvoidedIndustries,
+			AdjustmentFactor:   c.AdjustmentFactor,
+			HistoricalAccuracy: c.HistoricalAccuracy,
+			AvgMarketReturn:    c.AvgMarketReturn,
+			Description:        c.Description,
+		})
+	}
+	return patterns
+}
+
+func NewSeasonalEngineFromConfig(cfg *config.ParametersConfig) *SeasonalEngine {
+	patterns := seasonalPatternsFromConfig(cfg.Industry.SeasonalPatterns.Value)
+	return &SeasonalEngine{patterns: patterns}
 }

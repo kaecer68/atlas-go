@@ -6,44 +6,44 @@ export function renderParametersPage(params, categories, auditLog) {
 
   if (!params || Object.keys(params).length === 0) {
     contentDiv.innerHTML = '<div class="empty" style="text-align:center;padding:40px">無法載入參數配置或目前無任何參數。</div>';
-  } else {
-    let html = '<div class="two-col-grid">';
-    
-    const uncategorized = new Set(Object.keys(params));
-    
-    if (categories && Object.keys(categories).length > 0) {
-      for (const [catName, keys] of Object.entries(categories)) {
-        html += `<div class="panel"><h3>${escapeHtml(catName)}</h3><table><tbody>`;
-        let hasKeys = false;
-        for (const key of keys) {
-          if (key in params) {
-            let displayVal = params[key];
-            if (typeof displayVal === 'object') displayVal = JSON.stringify(displayVal);
-            else displayVal = String(displayVal);
-            
-            html += `<tr>
-              <td style="word-break:break-all;width:55%;color:var(--muted)">${escapeHtml(key)}</td>
-              <td style="font-family:var(--font-mono);font-size:12px;color:var(--accent)">${escapeHtml(displayVal)}</td>
-            </tr>`;
-            uncategorized.delete(key);
-            hasKeys = true;
-          }
+    contentDiv.classList.remove('empty', 'loading');
+    renderAuditLog(auditLog);
+    return;
+  }
+
+  const uncategorized = new Set(Object.keys(params));
+  const cats = (categoriesResp && categoriesResp.categories) ? categoriesResp.categories : [];
+  const catKeys = (categoriesResp && categoriesResp.keys) ? categoriesResp.keys : {};
+
+  let html = '<div class="parameters-grid">';
+
+  for (const cat of cats) {
+    html += `<div class="panel"><h3>${escapeHtml(cat.name)}</h3><table class="params-table"><thead><tr><th>參數</th><th>值</th><th>來源</th><th>說明</th><th>校準方式</th></tr></thead><tbody>`;
+    let hasKeys = false;
+    const keys = catKeys[cat.id] || [];
+
+    for (const key of keys) {
+      if (key in params) {
+        const p = params[key];
+        let displayVal, displaySource, displayRationale, displayCalib;
+        if (typeof p === 'object' && p !== null && 'value' in p) {
+          displayVal = typeof p.value === 'object' ? JSON.stringify(p.value) : String(p.value);
+          displaySource = p.source || '-';
+          displayRationale = p.rationale || '-';
+          displayCalib = p.calibration_method || '-';
+        } else {
+          displayVal = typeof p === 'object' ? JSON.stringify(p) : String(p);
+          displaySource = '-';
+          displayRationale = '-';
+          displayCalib = '-';
         }
-        if (!hasKeys) html += `<tr><td colspan="2" class="empty">無參數</td></tr>`;
-        html += `</tbody></table></div>`;
-      }
-    }
-    
-    if (uncategorized.size > 0) {
-      html += `<div class="panel"><h3>其他參數</h3><table><tbody>`;
-      for (const key of uncategorized) {
-        let displayVal = params[key];
-        if (typeof displayVal === 'object') displayVal = JSON.stringify(displayVal);
-        else displayVal = String(displayVal);
-        
+
         html += `<tr>
-          <td style="word-break:break-all;width:55%;color:var(--muted)">${escapeHtml(key)}</td>
-          <td style="font-family:var(--font-mono);font-size:12px;color:var(--accent)">${escapeHtml(displayVal)}</td>
+          <td class="param-key">${escapeHtml(key)}</td>
+          <td class="param-val">${escapeHtml(displayVal)}</td>
+          <td style="font-size:11px;color:var(--muted)">${escapeHtml(displaySource)}</td>
+          <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;color:var(--text-dim)" title="${escapeHtml(displayRationale)}">${escapeHtml(displayRationale.substring(0, 60))}</td>
+          <td style="font-size:11px;color:var(--muted)">${escapeHtml(displayCalib)}</td>
         </tr>`;
       }
       html += `</tbody></table></div>`;
@@ -53,7 +53,43 @@ export function renderParametersPage(params, categories, auditLog) {
     contentDiv.innerHTML = html;
     contentDiv.classList.remove('empty', 'loading');
   }
-  
+
+  if (uncategorized.size > 0) {
+    html += `<div class="panel"><h3>其他參數</h3><table class="params-table"><thead><tr><th>參數</th><th>值</th><th>來源</th><th>說明</th><th>校準方式</th></tr></thead><tbody>`;
+    for (const key of uncategorized) {
+      const p = params[key];
+      let displayVal, displaySource, displayRationale, displayCalib;
+      if (typeof p === 'object' && p !== null && 'value' in p) {
+        displayVal = typeof p.value === 'object' ? JSON.stringify(p.value) : String(p.value);
+        displaySource = p.source || '-';
+        displayRationale = p.rationale || '-';
+        displayCalib = p.calibration_method || '-';
+      } else {
+        displayVal = typeof p === 'object' ? JSON.stringify(p) : String(p);
+        displaySource = '-';
+        displayRationale = '-';
+        displayCalib = '-';
+      }
+
+      html += `<tr>
+        <td class="param-key">${escapeHtml(key)}</td>
+        <td class="param-val">${escapeHtml(displayVal)}</td>
+        <td style="font-size:11px;color:var(--muted)">${escapeHtml(displaySource)}</td>
+        <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;color:var(--text-dim)" title="${escapeHtml(displayRationale)}">${escapeHtml(displayRationale.substring(0, 60))}</td>
+        <td style="font-size:11px;color:var(--muted)">${escapeHtml(displayCalib)}</td>
+      </tr>`;
+    }
+    html += `</tbody></table></div>`;
+  }
+
+  html += '</div>';
+  contentDiv.innerHTML = html;
+  contentDiv.classList.remove('empty', 'loading');
+
+  renderAuditLog(auditLog);
+}
+
+function renderAuditLog(auditLog) {
   const logDiv = document.getElementById('parametersAuditLog');
   if (!logDiv) return;
   

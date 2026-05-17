@@ -182,6 +182,11 @@ func NewNarrativeEngine() *NarrativeEngine {
 }
 
 // DetectEvents accepts raw market/narrative data and returns events.
+func HitRateForTheme(theme string) float64 {
+	return hitRateForTheme(theme)
+}
+
+// DetectEvents accepts raw market/narrative data and returns events.
 func (ne *NarrativeEngine) DetectEvents(data MarketNarrativeData) []NarrativeEvent {
 	var events []NarrativeEvent
 	if evt := detectUSRatesEvent(data); evt != nil {
