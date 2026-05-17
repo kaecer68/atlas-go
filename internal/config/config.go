@@ -3,7 +3,6 @@ package config
 import (
 	"bufio"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -113,26 +112,6 @@ func Normalize(cfg Config) Config {
 		cfg.ReplayDataPath = "data/replay/tw_extended_90days.csv"
 	}
 	return cfg
-}
-
-// GetReplayDataPath returns the current replay data path.
-// Priority: 1) ATLAS_REPLAY_DATA_PATH env var, 2) VERSION file, 3) Normalize() default.
-func GetReplayDataPath(workDir string) string {
-	cfg := Load()
-	cfg = Normalize(cfg)
-
-	if v := os.Getenv("ATLAS_REPLAY_DATA_PATH"); v != "" {
-		return v
-	}
-
-	versionFile := filepath.Join(workDir, "data", "replay", "VERSION")
-	if data, err := os.ReadFile(versionFile); err == nil {
-		if name := strings.TrimSpace(string(data)); name != "" {
-			return filepath.Join(workDir, "data", "replay", name)
-		}
-	}
-
-	return filepath.Join(workDir, cfg.ReplayDataPath)
 }
 
 func envOr(key, fallback string) string {

@@ -11,10 +11,8 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
-	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
-	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -29,18 +27,15 @@ type SystemService struct {
 	LedgerDir    string
 	BaselinePath string
 	store        ledger.OutcomeStore
-	JanusEngine  *janus.Engine
-	CycleTracker *industry.CycleTracker
 }
 
 // NewSystemService creates a new SystemService.
-func NewSystemService(workDir, ledgerDir, baselinePath string, store ledger.OutcomeStore, janusEngine *janus.Engine) *SystemService {
+func NewSystemService(workDir, ledgerDir, baselinePath string, store ledger.OutcomeStore) *SystemService {
 	return &SystemService{
 		WorkDir:      workDir,
 		LedgerDir:    ledgerDir,
 		BaselinePath: baselinePath,
 		store:        store,
-		JanusEngine:  janusEngine,
 	}
 }
 
@@ -59,7 +54,6 @@ type SystemHealthResponse struct {
 	Warnings              []string          `json:"warnings"`
 	Regime                domain.Regime     `json:"regime"`
 	DataChannels          []DataChannelInfo `json:"data_channels,omitempty"`
-	CycleStale            bool              `json:"cycle_stale"`
 }
 
 // DataChannelInfo represents a single data channel status.
@@ -83,7 +77,7 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 		baselineVersion = fmt.Sprintf("v%d", policy.Version)
 	}
 
-	replayPath := config.GetReplayDataPath(s.WorkDir)
+	replayPath := filepath.Join(s.WorkDir, "data/replay/tw_extended_90days.csv")
 	replayOK := true
 	latestReplayDate := ""
 	ds, err := replay.LoadTWSEOpenDataCSV(replayPath)
@@ -149,26 +143,7 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 		buildChannelInfo("us_yahoo", "Yahoo Finance Macro", checkMacroHealth, filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now),
 		buildChannelInfo("twse_capital_flow", "TWSE 三大法人", checkCapitalFlowHealth, filepath.Join(s.WorkDir, "data/state/capital_flow"), now),
 		buildChannelInfo("geopolitical", "地緣政治風險", checkGeopoliticalHealth, filepath.Join(s.WorkDir, "data/state/geopolitical/latest.json"), now),
-		buildChannelInfo("twse_replay", "TWSE Replay", checkReplayHealth, config.GetReplayDataPath(s.WorkDir), now),
-		buildChannelInfo("jpy_yahoo", "日元匯率 (JPY)", checkJPYHealth, filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now),
-		buildChannelInfo("twse_margin", "TWSE 融資融券", checkMarginHealth, filepath.Join(s.WorkDir, "data/state/margin"), now),
-		buildChannelInfo("export_statistics", "台灣海關進出口", checkExportHealth, filepath.Join(s.WorkDir, "data/state/export"), now),
-		buildChannelInfo("tsmc_revenue", "台積電月營收", checkTSMCRevenueHealth, filepath.Join(s.WorkDir, "data/state/tsmc_revenue"), now),
-		buildChannelInfo("geopolitical_taiwan", "台灣地緣政治", checkGeopoliticalHealth, filepath.Join(s.WorkDir, "data/state/geopolitical/taiwan/latest.json"), now),
-	}
-	channels = append(channels, buildAPIKeyChannel("fugle", "Fugle 富果", "FUGLE_API_KEY", "ATLAS_FUGLE_API_KEY"))
-	channels = append(channels, buildAPIKeyChannel("fubon", "富邦證券", "FUBON_API_KEY", "ATLAS_FUBON_API_KEY"))
-	channels = append(channels, buildAPIKeyChannel("finmind", "FinMind", "FINMIND_API_KEY", ""))
-	channels = append(channels, buildAPIKeyChannel("tej", "TEJ 台灣經濟新報", "TEJ_API_KEY", ""))
-	if s.JanusEngine != nil {
-		janusStatus, janusUpdated := checkJanusHealth(s.JanusEngine, now)
-		channels = append(channels, DataChannelInfo{
-			ChannelID:  "janus_regime",
-			Label:      "JANUS 盤勢偵測",
-			Status:     janusStatus,
-			StatusText: StatusText(janusStatus),
-			UpdatedAt:  janusUpdated,
-		})
+		buildChannelInfo("twse_replay", "TWSE Replay", checkReplayHealth, filepath.Join(s.WorkDir, "data/replay/tw_extended_90days.csv"), now),
 	}
 
 	return SystemHealthResponse{
@@ -180,32 +155,11 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 		Warnings:              warnings,
 		Regime:                regime,
 		DataChannels:          channels,
-		CycleStale:            s.checkCycleStale(),
 	}, nil
 }
 
 func buildChannelInfo(id, label string, checker func(string, time.Time) (string, string), path string, now time.Time) DataChannelInfo {
 	status, updated := checker(path, now)
-	return DataChannelInfo{
-		ChannelID:  id,
-		Label:      label,
-		Status:     status,
-		StatusText: StatusText(status),
-		UpdatedAt:  updated,
-	}
-}
-
-func buildAPIKeyChannel(id, label, primaryKey, fallbackKey string) DataChannelInfo {
-	key := config.GetSecret(primaryKey)
-	if key == "" && fallbackKey != "" {
-		key = config.GetSecret(fallbackKey)
-	}
-	status := "inactive"
-	updated := "未設定 API Key"
-	if key != "" {
-		status = "ok"
-		updated = "API key 已設定"
-	}
 	return DataChannelInfo{
 		ChannelID:  id,
 		Label:      label,
@@ -383,35 +337,18 @@ func checkCapitalFlowHealth(dir string, now time.Time) (string, string) {
 		return "error", "無資料"
 	}
 	var latestFile string
-	var latestModTime time.Time
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
 		if e.Name() > latestFile {
 			latestFile = e.Name()
-			info, _ := e.Info()
-			if info != nil {
-				latestModTime = info.ModTime()
-			}
 		}
 	}
 	if latestFile == "" {
 		return "error", "無有效檔案"
 	}
 	dateStr := strings.TrimSuffix(latestFile, ".json")
-
-	// Use file modification time to determine freshness, since TWSE data is always 1 day delayed.
-	if !latestModTime.IsZero() {
-		age := now.Sub(latestModTime)
-		if age < 24*time.Hour {
-			return "ok", dateStr
-		}
-		if age < 7*24*time.Hour {
-			return "warn", dateStr
-		}
-		return "error", dateStr
-	}
 
 	var dataTs time.Time
 	data, err := os.ReadFile(filepath.Join(dir, latestFile))
@@ -439,59 +376,6 @@ func checkCapitalFlowHealth(dir string, now time.Time) (string, string) {
 
 	age := now.Sub(t)
 	if age < 24*time.Hour {
-		return "ok", dateStr
-	}
-	if age < 7*24*time.Hour {
-		return "warn", dateStr
-	}
-	return "error", dateStr
-}
-
-func checkMarginHealth(dir string, now time.Time) (string, string) {
-	entries, err := os.ReadDir(dir)
-	if err != nil || len(entries) == 0 {
-		return "error", "無資料"
-	}
-	var latestFile string
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), "_margin.json") {
-			continue
-		}
-		if e.Name() > latestFile {
-			latestFile = e.Name()
-		}
-	}
-	if latestFile == "" {
-		return "error", "無有效檔案"
-	}
-	dateStr := strings.TrimSuffix(latestFile, "_margin.json")
-
-	var dataTs time.Time
-	data, err := os.ReadFile(filepath.Join(dir, latestFile))
-	if err == nil {
-		var margin struct {
-			Date string `json:"date"`
-		}
-		if json.Unmarshal(data, &margin) == nil && margin.Date != "" {
-			if parsed, err := time.ParseInLocation("20060102", margin.Date, time.FixedZone("CST", 8*60*60)); err == nil {
-				dataTs = parsed
-			}
-		}
-	}
-
-	var t time.Time
-	if !dataTs.IsZero() {
-		t = dataTs
-	} else {
-		parsed, err := time.Parse("20060102", dateStr)
-		if err != nil {
-			return "error", "日期解析失敗"
-		}
-		t = parsed
-	}
-
-	age := now.Sub(t)
-	if age < 3*24*time.Hour {
 		return "ok", dateStr
 	}
 	if age < 7*24*time.Hour {
@@ -545,103 +429,24 @@ func checkJanusHealth(engine *janus.Engine, now time.Time) (string, string) {
 	return "error", status.LastUpdated.Format("2006-01-02 15:04:05")
 }
 
-func checkTSMCRevenueHealth(dir string, now time.Time) (string, string) {
-	entries, err := os.ReadDir(dir)
-	if err != nil || len(entries) == 0 {
-		return "error", "無資料"
-	}
-	var latestFile string
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), "_revenue.json") {
-			continue
-		}
-		if e.Name() > latestFile {
-			latestFile = e.Name()
-		}
-	}
-	if latestFile == "" {
-		return "error", "無有效檔案"
-	}
-	dateStr := strings.TrimSuffix(latestFile, "_revenue.json")
-
-	var dataTs time.Time
-	data, err := os.ReadFile(filepath.Join(dir, latestFile))
-	if err == nil {
-		var rev struct {
-			Date string `json:"date"`
-		}
-		if json.Unmarshal(data, &rev) == nil && rev.Date != "" {
-			dataTs = parseROCYearMonth(rev.Date)
-		}
-	}
-
-	var t time.Time
-	if !dataTs.IsZero() {
-		t = dataTs
-	} else {
-		t = parseROCYearMonth(dateStr)
-	}
-	if t.IsZero() {
-		return "error", "日期解析失敗"
-	}
-
-	age := now.Sub(t)
-	if age < 45*24*time.Hour {
-		return "ok", dateStr
-	}
-	if age < 90*24*time.Hour {
-		return "warn", dateStr
-	}
-	return "error", dateStr
-}
-
-func parseROCYearMonth(s string) time.Time {
-	if len(s) != 5 {
-		return time.Time{}
-	}
-	rocYear, err1 := strconv.Atoi(s[:3])
-	month, err2 := strconv.Atoi(s[3:])
-	if err1 != nil || err2 != nil || month < 1 || month > 12 {
-		return time.Time{}
-	}
-	return time.Date(rocYear+1911, time.Month(month), 1, 0, 0, 0, 0, time.FixedZone("CST", 8*60*60))
-}
-
 func checkExportHealth(dir string, now time.Time) (string, string) {
 	entries, err := os.ReadDir(dir)
 	if err != nil || len(entries) == 0 {
 		return "error", "無資料"
 	}
 	var latestFile string
-	var latestModTime time.Time
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), "_export.json") {
 			continue
 		}
 		if e.Name() > latestFile {
 			latestFile = e.Name()
-			info, _ := e.Info()
-			if info != nil {
-				latestModTime = info.ModTime()
-			}
 		}
 	}
 	if latestFile == "" {
 		return "error", "無有效檔案"
 	}
 	dateStr := strings.TrimSuffix(latestFile, "_export.json")
-
-	// Customs data is released with a delay; use file modification time to check if the fetch task is running.
-	if !latestModTime.IsZero() {
-		age := now.Sub(latestModTime)
-		if age < 24*time.Hour {
-			return "ok", dateStr
-		}
-		if age < 7*24*time.Hour {
-			return "warn", dateStr
-		}
-		return "error", dateStr
-	}
 
 	var dataTs time.Time
 	data, err := os.ReadFile(filepath.Join(dir, latestFile))
@@ -740,24 +545,4 @@ func (s *SystemService) LoadConvictionClampingEvents(limit int) ([]portfolio.Con
 		return events[len(events)-limit:], nil
 	}
 	return events, nil
-}
-
-func (s *SystemService) checkCycleStale() bool {
-	if s.CycleTracker == nil {
-		return false
-	}
-	positions := s.CycleTracker.GetAllPositions()
-	if len(positions) == 0 {
-		return true
-	}
-	for _, pos := range positions {
-		if time.Since(pos.UpdatedAt) > 24*time.Hour {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *SystemService) SetCycleTracker(ct *industry.CycleTracker) {
-	s.CycleTracker = ct
 }

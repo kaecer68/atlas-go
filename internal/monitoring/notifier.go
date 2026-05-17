@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -27,7 +26,7 @@ func NewWebhookNotifier(url string, headers map[string]string) *WebhookNotifier 
 	return &WebhookNotifier{
 		URL:     url,
 		Headers: headers,
-		client:  httpclient.NewFactory().NewClient(10 * time.Second),
+		client:  &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
@@ -92,7 +91,7 @@ func NewTelegramNotifier(botToken, chatID string) *TelegramNotifier {
 	return &TelegramNotifier{
 		BotToken: botToken,
 		ChatID:   chatID,
-		client:   httpclient.NewFactory().NewClient(10 * time.Second),
+		client:   &http.Client{Timeout: 10 * time.Second},
 	}
 }
 

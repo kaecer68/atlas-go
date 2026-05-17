@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
@@ -92,38 +91,8 @@ func (s *MacroService) CalculateStressIndex(ctx context.Context) (narrative.Taiw
 		}
 	}
 
-	// Load previous snapshot for computing change percentages.
-	var prev marketdata.MacroDataSnapshot
-	prevPath := filepath.Join(s.MacroIngestor.SnapshotDir(), "previous.json")
-	prevData, prevErr := os.ReadFile(prevPath)
-	if prevErr == nil {
-		_ = json.Unmarshal(prevData, &prev)
-	}
-	// If previous.json does not exist, try to find the most recent dated snapshot.
-	if prev.RecordedAt == 0 {
-		entries, dirErr := os.ReadDir(s.MacroIngestor.SnapshotDir())
-		if dirErr == nil {
-			var latestFile string
-			var latestTime int64
-			for _, entry := range entries {
-				if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") || entry.Name() == "latest.json" {
-					continue
-				}
-				info, _ := entry.Info()
-				if info != nil && info.ModTime().Unix() > latestTime {
-					latestTime = info.ModTime().Unix()
-					latestFile = entry.Name()
-				}
-			}
-			if latestFile != "" {
-				prevData, _ = os.ReadFile(filepath.Join(s.MacroIngestor.SnapshotDir(), latestFile))
-				_ = json.Unmarshal(prevData, &prev)
-			}
-		}
-	}
-
 	geoStore := narrative.NewGeopoliticalStore(filepath.Join(s.WorkDir, "data/state/geopolitical"))
-	index, err := s.TaiwanStressCalc.CalculateFromSnapshotWithStore(ctx, snap, prev, geoStore)
+	index, err := s.TaiwanStressCalc.CalculateFromSnapshotWithStore(ctx, snap, geoStore)
 	if err != nil {
 		return narrative.TaiwanStressIndex{}, err
 	}

@@ -460,17 +460,14 @@ func selectProvider(cfg config.Config) marketdata.Provider {
 			return marketdata.NewFugleProviderWithAPIKey(cfg.FugleAPIKey)
 		}
 		logging.Warn("system", "Fugle API key not configured, falling back to mock provider. DO NOT USE IN PRODUCTION.")
-		// TODO: Migrate to Gateway for direct mock provider instantiation.
 		return marketdata.NewMockProvider()
 	case "twse":
 		// 纯 TWSE 模式（免费，rate limited）
 		// TODO: Migrate to Gateway for direct TWSE OpenAPI provider instantiation.
 		return marketdata.NewTWSEOpenAPIProvider()
 	case "hybrid", "":
-		// TODO: Migrate to Gateway for direct hybrid provider instantiation.
 		return marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 	default:
-		// TODO: Migrate to Gateway for direct hybrid provider instantiation.
 		return marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 	}
 }
@@ -890,16 +887,16 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 	finalKey := buildFinalRecKey(finalRecs)
 	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
 	for _, rec := range rawRecs {
-		quote := quoteMap[rec.Symbol]
 		forwardReturn, ok := ds.ForwardReturn(rec.Symbol, asOf, 1)
-		if !ok || forwardReturn == 0 {
-			forwardReturn = syntheticForwardReturn(rec.Symbol, quote)
+		if !ok {
+			forwardReturn = 0
 		}
 		_, passed := finalKey[rec.Symbol+"|"+rec.Agent]
 		guardReason := ""
 		if !passed {
 			guardReason = "未通過控制層過濾"
 		}
+		quote := quoteMap[rec.Symbol]
 		outcomes = append(outcomes, domain.RecommendationOutcome{
 			AgentID:             rec.Agent,
 			Skill:               rec.Skill,

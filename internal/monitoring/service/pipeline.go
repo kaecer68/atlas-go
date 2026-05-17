@@ -845,7 +845,7 @@ func (s *PipelineService) LoadDarwinianHistory(limit int) ([]DarwinianHistoryPoi
 	data, err := os.ReadFile(historyPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []DarwinianHistoryPoint{}, nil
+			return nil, nil
 		}
 		return nil, fmt.Errorf("read darwinian history: %w", err)
 	}

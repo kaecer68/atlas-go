@@ -8,8 +8,6 @@ import (
 	"math"
 	"net/http"
 	"time"
-
-	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 )
 
 // SOXIndexProvider fetches the Philadelphia Semiconductor Index (^SOX) from Yahoo Finance.
@@ -21,7 +19,7 @@ type SOXIndexProvider struct {
 // NewSOXIndexProvider creates a new SOX index provider.
 func NewSOXIndexProvider() *SOXIndexProvider {
 	return &SOXIndexProvider{
-		httpClient: httpclient.NewFactory().NewClient(15 * time.Second),
+		httpClient: &http.Client{Timeout: 15 * time.Second},
 		baseURL:    "https://query1.finance.yahoo.com",
 	}
 }

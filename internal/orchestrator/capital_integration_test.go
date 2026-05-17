@@ -11,7 +11,7 @@ import (
 )
 
 func testCapitalConfig() config.Config {
-	return config.Config{ReplayDataPath: config.GetReplayDataPath("..")}
+	return config.Config{ReplayDataPath: "../../data/replay/tw_extended_90days.csv"}
 }
 
 func TestWithCapitalManagement_SetsFields(t *testing.T) {
