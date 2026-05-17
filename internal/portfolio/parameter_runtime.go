@@ -176,8 +176,7 @@ type RuntimeMarketdataConfig struct {
 // RuntimeIndustryConfig holds runtime values for industry analysis.
 type RuntimeIndustryConfig struct {
 	SectorWeights              map[string]float64
-	InventoryCycleThresholds   config.InventoryCycleThresholdConfig
-	CapexCycleThresholds       config.CapexCycleThresholdConfig
+	SeasonalAdjustmentEnabled  bool
 	CycleThresholds            map[string]config.CycleThresholdConfig
 	ConcentrationRiskEnabled   bool
 	NewsLatencyRiskEnabled     bool
@@ -384,8 +383,7 @@ func ToRuntimeParameters(cfg *config.ParametersConfig) *RuntimeParameters {
 		},
 		Industry: RuntimeIndustryConfig{
 			SectorWeights:              cfg.Industry.SectorWeights.Value,
-			InventoryCycleThresholds:   cfg.Industry.InventoryCycleThresholds.Value,
-			CapexCycleThresholds:       cfg.Industry.CapexCycleThresholds.Value,
+			SeasonalAdjustmentEnabled:  cfg.Industry.SeasonalAdjustmentEnabled.Value,
 			CycleThresholds:            cfg.Industry.CycleThresholds.Value,
 			ConcentrationRiskEnabled:   cfg.Industry.ConcentrationRiskEnabled.Value,
 			NewsLatencyRiskEnabled:     cfg.Industry.NewsLatencyRiskEnabled.Value,

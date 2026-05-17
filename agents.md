@@ -269,45 +269,6 @@ gh pr create --title "feat(scope): description" \
 - `.github/instructions/live-trading.guardrails.instructions.md` — Live trading 邊界
 - `.github/copilot-instructions.md` — 綜合入口與常見工作流程
 
----
-
-## 產業生態系（Industry Ecosystem）
-
-前端頁面「產業生態系」包含三個核心板塊，各自對應完整的後端計算鏈：
-
-### 供應鏈連動（Supply Chain Linkage）
-- **核心檔案**：`internal/industry/linkage.go`、`configs/supply_chain_graph.json`
-- **圖譜定義**：`configs/supply_chain_graph.json` 定義節點關係（upstream/downstream/supplier），可在不重新編譯下修改。
-- **圖譜載入**：`LoadSupplyChainGraph()` 從 JSON 載入後同時填入 `SupplyChainGraph` 與 `CorrelationMatrix`。
-- **相關矩陣**：`CorrelationMatrix` 支援三種初始化方式：
-  1. `DefaultCorrelationMatrix()` — 硬編碼預設值（回退方案）
-  2. `LoadCorrelationMatrixFromConfig()` — 從 `configs/parameters.json` 的 `industry.linkage_params.correlation_matrix` 讀取
-  3. `RecalculateFromReturns()` — 從產業報酬率時間序列實證計算
-- **敘事感知調整**：`NarrativeLinkageProvider` 介面允許宏觀敘事主題（如 `oil_price_shock`、`AI_capex_surge`）動態調整產業間相關係數。實作位於 `SeasonalBridge.CorrelationMultiplier()`。
-- **衝擊傳導**：`PropagateShock()` 計算衝擊從來源產業向下游（顧客）與上游（供應商）的傳導，使用可配置的衰減因子（`downstream_decay_factor`/`upstream_decay_factor`）。
-- **系統重要性**：`CalculateLinkageScore()` 基於產業在圖中的連線數與 `systemic_importance_divisor`（預設 10.0）計算系統重要性分數。
-- **實證校準**：`cmd/calibrate-seasonal` 支援 `--replay` 旗標載入歷史回測數據進行實證相關矩陣計算。TWSE 產業指數提供者 `TWSESectorIndexProvider` 可從 TWSE API 抓取產業指數歷史資料。
-
-### 季節性模式（Seasonal Patterns）
-- **核心檔案**：`internal/industry/seasonality.go`、`internal/industry/seasonal_calibrator.go`
-- **季節性引擎**：`SeasonalEngine` 管理各產業的季節性模式（月曆效應），每種模式包含 `StartMonth/Day`、`EndMonth/Day`、`AdjustmentFactor`、`HistoricalAccuracy` 等欄位。
-- **校準管道**：`cmd/calibrate-seasonal` CLI 支援：
-  - 合成數據（預設）或實際歷史回測數據（`--replay`）
-  - `--update` 旗標將校準結果寫回 `configs/parameters.json`
-  - `--update-threshold` 設定最小觀測數門檻
-- **證據品質標記**：每個模式參數包含 `evidence_quality` 欄位（`high`/`medium`/`low`/`heuristic_awaiting_data`），前端根據品質顯示對應 badge（「待驗證」）。
-- **參數驗證**：`ParametersConfig.Validate()` 確保 `seasonal_decay_factor`（預設 0.30）等在合理範圍。
-- **API**：`/api/industry/seasonality` 回傳季節性模式列表；`/api/industry/seasonality/calendar` 回傳年度行事曆。
-- **決策鏈透明化**：`GetAdjustmentBreakdown()` 提供四層調整分解（季節性 × 敘事 × 循環 × 環境），前端逐層展示。
-
-### 週期羅盤（Cycle Compass）
-- **核心檔案**：`internal/industry/cycle.go`、`internal/industry/dynamic_env.go`
-- **商業週期偵測**：`CycleTracker` 管理五種產業階段（`expansion`/`recovery`/`mature`/`recession`）的偵測。
-- **動態環境調變**：`DynamicEnvModulator` 將宏觀數據（原油、BDI、DXY 等）納入週期評分計算。
-- **API**：`/api/industry/cycles` 回傳各產業的週期位置與趨勢。
-
----
-
 ## Local AGENTS.md 導覽
 
 以下子目錄已有局部說明，進入該區域工作時**先讀該目錄下的 `AGENTS.md`**，不要只依賴本檔：
@@ -369,7 +330,7 @@ gh pr create --title "feat(scope): description" \
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (24759 symbols, 54364 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (23449 symbols, 51588 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

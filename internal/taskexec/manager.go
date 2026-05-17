@@ -42,7 +42,6 @@ type activeRun struct {
 type subscription struct {
 	ch     chan domain.TaskExecutionEvent
 	closed atomic.Bool
-	mu     sync.Mutex
 }
 
 type localSink struct {
@@ -63,17 +62,17 @@ func (s *localSink) Emit(event domain.TaskExecutionEvent) {
 	}
 
 	s.manager.subMu.RLock()
-	for _, sub := range s.manager.subs[s.executionID] {
-		sub.mu.Lock()
+	subs := s.manager.subs[s.executionID]
+	s.manager.subMu.RUnlock()
+
+	for _, sub := range subs {
 		if !sub.closed.Load() {
 			select {
 			case sub.ch <- event:
 			default:
 			}
 		}
-		sub.mu.Unlock()
 	}
-	s.manager.subMu.RUnlock()
 }
 
 func (s *localSink) ExecutionID() string {
@@ -316,24 +315,13 @@ func (m *Manager) Subscribe(executionID string) (<-chan domain.TaskExecutionEven
 	ch := make(chan domain.TaskExecutionEvent, 100)
 	sub := &subscription{ch: ch}
 
-	// Replay existing events before adding to subscriber list.
-	// Events emitted before Subscribe was called are replayed here;
-	// events emitted afterward are delivered via Emit's normal path.
-	if events, err := m.store.ListEventsAfter(m.ctx, executionID, 0); err == nil {
-		for _, ev := range events {
-			ch <- ev
-		}
-	}
-
 	m.subMu.Lock()
 	m.subs[executionID] = append(m.subs[executionID], sub)
 	m.subMu.Unlock()
 
 	unsubscribe := func() {
-		sub.mu.Lock()
 		sub.closed.Store(true)
 		close(ch)
-		sub.mu.Unlock()
 
 		m.subMu.Lock()
 		subs := m.subs[executionID]

@@ -130,8 +130,6 @@ func (h *Handlers) HandleCategories(r *http.Request) (int, any) {
 		{"id": "experiment", "name": "Experiment Evaluation", "description": "Experiment acceptance thresholds"},
 		{"id": "baseline", "name": "Baseline Policy", "description": "Default baseline policy values"},
 		{"id": "cycle", "name": "Industry Cycle Thresholds", "description": "Per-industry business cycle detection thresholds"},
-		{"id": "industry", "name": "Industry Analysis", "description": "Sector weights, cycle thresholds, inventory/capex, and risk scoring"},
-		{"id": "strategy", "name": "Strategy Selection", "description": "Strategy switching and evaluation parameters"},
 	}
 
 	flatParams, _ := h.paramsToFlatMap()

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -87,14 +86,12 @@ type cachedFugleHealth struct {
 }
 
 var (
-	fugleHealthCache       cachedFugleHealth
-	fugleHealthMu          sync.RWMutex
-	fubonHealthCache       cachedFugleHealth
-	fubonHealthMu          sync.RWMutex
-	finmindHealthCache     cachedFugleHealth
-	finmindHealthMu        sync.RWMutex
-	frankfurterHealthCache cachedFugleHealth
-	frankfurterHealthMu    sync.RWMutex
+	fugleHealthCache   cachedFugleHealth
+	fugleHealthMu      sync.RWMutex
+	fubonHealthCache   cachedFugleHealth
+	fubonHealthMu      sync.RWMutex
+	finmindHealthCache cachedFugleHealth
+	finmindHealthMu    sync.RWMutex
 )
 
 // fugleHealthCacheTTL is how long we reuse the last live API health check.
@@ -236,7 +233,9 @@ func (s *DataChannelService) getCachedFinMindHealth() (status, updated, lastErro
 	// TODO: Migrate to Gateway for direct FinMind client instantiation.
 	finmindClient := marketdata.NewFinMindClient(finmindKey)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	_, err := finmindClient.GetStockPrice(ctx, "2330", time.Now().Format("2006-01-02"))
+	// Use yesterday's date to avoid "no price data" error before market close
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	_, err := finmindClient.GetStockPrice(ctx, "2330", yesterday)
 	cancel()
 
 	if err != nil {
@@ -255,69 +254,6 @@ func (s *DataChannelService) getCachedFinMindHealth() (status, updated, lastErro
 	}
 
 	return finmindHealthCache.status, finmindHealthCache.updated, finmindHealthCache.lastError
-}
-
-// getCachedFrankfurterHealth returns cached status if fresh, otherwise queries the API.
-func (s *DataChannelService) getCachedFrankfurterHealth() (status, updated, lastError string) {
-	frankfurterHealthMu.RLock()
-	cache := frankfurterHealthCache
-	frankfurterHealthMu.RUnlock()
-
-	if time.Since(cache.checkedAt) < fugleHealthCacheTTL {
-		return cache.status, cache.updated, cache.lastError
-	}
-
-	frankfurterHealthMu.Lock()
-	defer frankfurterHealthMu.Unlock()
-
-	if time.Since(frankfurterHealthCache.checkedAt) < fugleHealthCacheTTL {
-		return frankfurterHealthCache.status, frankfurterHealthCache.updated, frankfurterHealthCache.lastError
-	}
-
-	// Test the Frankfurter FX API endpoint used for JPY rate data.
-	client := &http.Client{Timeout: 10 * time.Second}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.frankfurter.dev/v2/latest?from=USD&to=JPY", nil)
-	if err != nil {
-		frankfurterHealthCache = cachedFugleHealth{
-			status:    "error",
-			updated:   "請求建立失敗",
-			lastError: err.Error(),
-			checkedAt: time.Now(),
-		}
-		return frankfurterHealthCache.status, frankfurterHealthCache.updated, frankfurterHealthCache.lastError
-	}
-	req.Header.Set("User-Agent", "atlas-go/1.0")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		frankfurterHealthCache = cachedFugleHealth{
-			status:    "error",
-			updated:   "API 連線失敗",
-			lastError: err.Error(),
-			checkedAt: time.Now(),
-		}
-		return frankfurterHealthCache.status, frankfurterHealthCache.updated, frankfurterHealthCache.lastError
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		frankfurterHealthCache = cachedFugleHealth{
-			status:    "error",
-			updated:   "API 回應異常",
-			lastError: fmt.Sprintf("HTTP %d", resp.StatusCode),
-			checkedAt: time.Now(),
-		}
-		return frankfurterHealthCache.status, frankfurterHealthCache.updated, frankfurterHealthCache.lastError
-	}
-
-	frankfurterHealthCache = cachedFugleHealth{
-		status:    "ok",
-		updated:   "API 連線正常",
-		checkedAt: time.Now(),
-	}
-	return frankfurterHealthCache.status, frankfurterHealthCache.updated, ""
 }
 
 type ChannelHealthStoreAdapter struct {
@@ -605,37 +541,6 @@ func (s *DataChannelService) buildJPYYahooChannel(now time.Time) DataChannel {
 	if rec != nil && rec.LastError != "" {
 		updated = "上次失敗: " + rec.LastError
 	}
-
-	// Also check Frankfurter FX API as an alternative JPY source.
-	fxStatus, _, fxLastError := s.getCachedFrankfurterHealth()
-	if status == "error" && fxStatus == "ok" {
-		// File data is stale but the Frankfurter API (alternative JPY source) is reachable.
-		status = "warn"
-		updated = "檔案數據過期，但替代來源 Frankfurter API 連線正常"
-		rec = s.healthStore.Get("jpy_yahoo")
-		if rec != nil && rec.LastError != "" {
-			updated += " · 最後成功: " + rec.LastSuccessAt
-		}
-	} else if status == "error" && fxStatus == "error" {
-		lastError := fxLastError
-		lastErrorStr := lastErrorStr(rec)
-		if lastErrorStr != "" {
-			lastError = lastErrorStr
-		}
-		return DataChannel{
-			ChannelID:  "jpy_yahoo",
-			Country:    "日本",
-			Platform:   "Yahoo Finance (JPY)",
-			APIFormat:  "REST JSON",
-			Path:       "query1.finance.yahoo.com/v8/finance/chart",
-			Storage:    "data/state/macro/latest.json",
-			Status:     status,
-			StatusText: statusText(status),
-			UpdatedAt:  fmt.Sprintf("Yahoo API 連線失敗 · Frankfurter API 連線失敗: %s", lastError),
-			LastError:  lastError,
-		}
-	}
-
 	return DataChannel{
 		ChannelID:  "jpy_yahoo",
 		Country:    "日本",

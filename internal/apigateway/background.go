@@ -77,17 +77,13 @@ func (t *ScheduledTask) RecordFailure() {
 	t.consecutiveFailures++
 }
 
-// TaskFailureHandler is called when a task fails, receiving the task name and error.
-type TaskFailureHandler func(taskName string, consecutiveFailures int, err error)
-
 // BackgroundTaskManager coordinates all background data fetch tasks.
 type BackgroundTaskManager struct {
-	gateway        *Gateway
-	registry       map[string]*ScheduledTask
-	mu             sync.RWMutex
-	wg             sync.WaitGroup
-	cancel         context.CancelFunc
-	failureHandler TaskFailureHandler
+	gateway  *Gateway
+	registry map[string]*ScheduledTask
+	mu       sync.RWMutex
+	wg       sync.WaitGroup
+	cancel   context.CancelFunc
 }
 
 // NewBackgroundTaskManager creates a task manager.
@@ -149,11 +145,6 @@ func (m *BackgroundTaskManager) Start(ctx context.Context) {
 		m.wg.Add(1)
 		go m.runTask(ctx, task)
 	}
-}
-
-// SetFailureHandler sets a callback invoked when any task fails.
-func (m *BackgroundTaskManager) SetFailureHandler(h TaskFailureHandler) {
-	m.failureHandler = h
 }
 
 // Stop gracefully shuts down all tasks.
@@ -224,9 +215,6 @@ func (m *BackgroundTaskManager) executeTask(ctx context.Context, task *Scheduled
 			"err", err.Error(),
 			"consecutive_failures", task.Failures(),
 		)
-		if m.failureHandler != nil {
-			m.failureHandler(task.Name, task.Failures(), err)
-		}
 	} else {
 		task.RecordSuccess()
 	}
