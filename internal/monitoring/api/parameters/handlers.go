@@ -38,7 +38,59 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 
 // HandleGetParameters returns the current parameters.
 func (h *Handlers) HandleGetParameters(r *http.Request) (int, any) {
-	return http.StatusOK, h.params
+	result, err := h.paramsToFlatMap()
+	if err != nil {
+		return http.StatusOK, h.params
+	}
+	return http.StatusOK, result
+}
+
+func (h *Handlers) paramsToFlatMap() (map[string]any, error) {
+	raw, err := json.Marshal(h.params)
+	if err != nil {
+		return nil, fmt.Errorf("marshal: %w", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, fmt.Errorf("unmarshal: %w", err)
+	}
+
+	result := make(map[string]any)
+	flatten(m, "", result)
+	return result, nil
+}
+
+func flatten(src map[string]any, prefix string, dst map[string]any) {
+	for k, v := range src {
+		key := k
+		if prefix != "" {
+			key = prefix + "." + k
+		}
+		if sub, ok := v.(map[string]any); ok {
+			if val, exists := sub["value"]; exists {
+				// This is a leaf parameter with citation metadata
+				if _, hasCitation := sub["citation"]; hasCitation {
+					entry := map[string]any{"value": val}
+					for _, meta := range []string{"source", "rationale", "calibration_method", "last_calibrated", "todo"} {
+						if mv, ok := sub[meta]; ok {
+							if str, ok := mv.(string); ok && str != "" {
+								entry[meta] = str
+							}
+						}
+					}
+					dst[key] = entry
+				} else if deep, ok := val.(map[string]any); ok {
+					flatten(deep, key, dst)
+				} else {
+					dst[key] = val
+				}
+			} else {
+				flatten(sub, key, dst)
+			}
+		} else {
+			dst[key] = v
+		}
+	}
 }
 
 // HandlePostParameters updates parameters.

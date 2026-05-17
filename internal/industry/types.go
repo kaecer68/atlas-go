@@ -113,6 +113,28 @@ type IndustryMetrics struct {
 	Timestamp           time.Time     `json:"timestamp"`
 }
 
+// DataFreshness indicates how recent/canonical a piece of industry data is.
+type DataFreshness string
+
+const (
+	FreshLive     DataFreshness = "live"     // Real-time or same-day data
+	FreshRecent   DataFreshness = "recent"   // 1-3 day old data
+	FreshStale    DataFreshness = "stale"    // 4-7 day old data
+	FreshFallback DataFreshness = "fallback" // Default/estimated data
+)
+
+type ConfidenceBreakdown struct {
+	Composite          float64            `json:"composite"`
+	Boundary           float64            `json:"boundary"`
+	Freshness          float64            `json:"freshness"`
+	Seasonal           float64            `json:"seasonal"`
+	Linkage            float64            `json:"linkage"`
+	Narrative          float64            `json:"narrative"`
+	Weights            map[string]float64 `json:"weights"`
+	DataFreshnessLevel DataFreshness      `json:"data_freshness_level"`
+	DataFreshnessScore float64            `json:"data_freshness_score"`
+}
+
 // ClassificationTree provides hierarchical access to industry segments.
 type ClassificationTree struct {
 	segments map[string]*IndustrySegment
