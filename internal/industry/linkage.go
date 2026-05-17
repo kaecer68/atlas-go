@@ -520,6 +520,22 @@ func DefaultSupplyChainGraph() *SupplyChainGraph {
 		KeyMaterials: []string{"crude_oil", "natural_gas", "coal"},
 	})
 
+	graph.AddNode(&SupplyChainNode{
+		IndustryID:   "industrial",
+		Tier:         1,
+		UpstreamOf:   []string{"energy", "shipping", "financials"},
+		DownstreamOf: []string{"electronics", "robotics", "energy", "shipping"},
+		KeyMaterials: []string{"steel", "cement", "machinery", "chemicals"},
+	})
+
+	graph.AddNode(&SupplyChainNode{
+		IndustryID:   "consumer",
+		Tier:         1,
+		UpstreamOf:   []string{"electronics", "financials", "energy"},
+		DownstreamOf: []string{"electronics", "robotics", "energy", "shipping"},
+		KeyMaterials: []string{"retail", "food", "durable_goods"},
+	})
+
 	return graph
 }
 
