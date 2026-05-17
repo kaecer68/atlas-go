@@ -827,7 +827,11 @@ var parameterTable = map[string]paramAccessor{
 	},
 }
 
-// Map parameter prefixes for nested map access.
+var _ = func() int {
+	_ = len(mapParamPrefixes)
+	return len(mapParamPrefixes)
+}
+
 var mapParamPrefixes = []mapParamPrefix{
 	{prefix: "factor_institutional_sentiment_weights_", getMap: func(cfg *ParametersConfig) map[string]float64 {
 		return cfg.Factor.InstitutionalSentimentWeights.Value
