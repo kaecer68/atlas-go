@@ -503,7 +503,7 @@ func checkMarginHealth(dir string, now time.Time) (string, string) {
 func checkJPYHealth(path string, now time.Time) (string, string) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "error", fmt.Sprintf("總經快照檔案不存在: %s", err)
+		return "error", "檔案不存在"
 	}
 	var snap struct {
 		JPY struct {
@@ -514,7 +514,7 @@ func checkJPYHealth(path string, now time.Time) (string, string) {
 		logging.Warn("system_service", "parse_jpy_health", logging.Err(err))
 	}
 	if snap.JPY.Timestamp == 0 {
-		return "error", "無 JPY 資料 — Yahoo Finance JPY=X 尚未成功獲取，或 Frankfurter API 未提供 JPY 匯率"
+		return "error", "無 JPY 資料"
 	}
 	t := time.Unix(snap.JPY.Timestamp, 0)
 	age := now.Sub(t)
@@ -522,9 +522,9 @@ func checkJPYHealth(path string, now time.Time) (string, string) {
 		return "ok", t.Format("2006-01-02 15:04:05")
 	}
 	if age < 7*24*time.Hour {
-		return "warn", fmt.Sprintf("%s（%d 天前）", t.Format("2006-01-02 15:04:05"), int(age.Hours()/24))
+		return "warn", t.Format("2006-01-02 15:04:05")
 	}
-	return "error", fmt.Sprintf("%s（%d 天前，已超過 7 天閾值）— Yahoo Finance API 連線失敗", t.Format("2006-01-02 15:04:05"), int(age.Hours()/24))
+	return "error", t.Format("2006-01-02 15:04:05")
 }
 
 func checkJanusHealth(engine *janus.Engine, now time.Time) (string, string) {

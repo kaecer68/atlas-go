@@ -31,13 +31,11 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
-	apischeduler "github.com/kaecer68/atlas-go/internal/monitoring/api/scheduler"
 	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
-	"github.com/kaecer68/atlas-go/internal/storage"
 )
 
 type routeRegistrar interface {
@@ -198,8 +196,6 @@ func run(args []string, deps appDeps) error {
 	repo := rt.Repository
 	taskManager := rt.TaskManager
 
-	var janusEngine *janus.Engine
-
 	if *apiMode {
 		mux := http.NewServeMux()
 		log.Printf("[Auth] API key authentication %s", map[bool]string{true: "ENABLED", false: "DISABLED (no ATLAS_API_KEY set)"}[os.Getenv("ATLAS_API_KEY") != ""])
@@ -216,7 +212,7 @@ func run(args []string, deps appDeps) error {
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 			d.SetPool(pool)
 			d.SetHealthManager(portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore).WithParameters(runtimeParams))
-			janusEngine = janus.NewEngine()
+			janusEngine := janus.NewEngine()
 			janusEngine.EnsureAllRegimes()
 			janusEngine.Update()
 			d.SetJanusEngine(janusEngine)
@@ -248,13 +244,6 @@ func run(args []string, deps appDeps) error {
 				logging.Info("main", "initial_macro_ingest_ok")
 			}
 		}
-
-		lifecycleMgr := storage.NewLifecycleManager(filepath.Join(cfg.WorkDir, "data/state"))
-		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-			d.SetStorageReporter(lifecycleMgr)
-			log.Printf("[Storage] reporter injected into dashboard API")
-		}
-
 		dashboard.RegisterRoutes(mux)
 
 		if alertStore != nil {
@@ -270,28 +259,7 @@ func run(args []string, deps appDeps) error {
 			}
 		}
 
-		adminHandler := func(h http.HandlerFunc) http.HandlerFunc {
-			return func(w http.ResponseWriter, r *http.Request) {
-				apiKey := os.Getenv("ATLAS_API_KEY")
-				if apiKey != "" {
-					provided := r.Header.Get("X-API-Key")
-					if provided == "" {
-						auth := r.Header.Get("Authorization")
-						if strings.HasPrefix(auth, "Bearer ") {
-							provided = strings.TrimPrefix(auth, "Bearer ")
-						}
-					}
-					if provided != apiKey {
-						w.Header().Set("Content-Type", "application/json")
-						w.WriteHeader(http.StatusUnauthorized)
-						fmt.Fprintf(w, `{"error":"unauthorized"}`+"\n")
-						return
-					}
-				}
-				h(w, r)
-			}
-		}
-		mux.HandleFunc("/admin/reload-config", adminHandler(func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/admin/reload-config", func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
@@ -303,8 +271,8 @@ func run(args []string, deps appDeps) error {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"status":"ok","version":"%s"}`+"\n", cfg.Version)
-		}))
-		mux.HandleFunc("/api/admin/calibrate-thresholds", adminHandler(func(w http.ResponseWriter, r *http.Request) {
+		})
+		mux.HandleFunc("/api/admin/calibrate-thresholds", func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
@@ -319,7 +287,7 @@ func run(args []string, deps appDeps) error {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"status":"ok","message":"thresholds recalibrated"}`+"\n")
-		}))
+		})
 		mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
 		monitor := monitoring.NewMonitor()
 		if alertStore != nil {
@@ -393,22 +361,13 @@ func run(args []string, deps appDeps) error {
 		var taskMgr *apigateway.BackgroundTaskManager
 		if err != nil {
 			log.Printf("[Gateway] initialization failed: %v", err)
-		} else if err := apigateway.RegisterChannelAdapters(gateway, cfg.WorkDir, cfg, janusEngine); err != nil {
+		} else if err := apigateway.RegisterChannelAdapters(gateway, cfg.WorkDir, cfg); err != nil {
 			log.Printf("[Gateway] adapter registration failed: %v", err)
 		} else {
 			log.Printf("[Gateway] initialized with %d channels + adapters", len(gateway.ChannelIDs()))
 
 			// BackgroundTaskManager for centralized goroutine lifecycle management.
 			taskMgr = apigateway.NewBackgroundTaskManager(gateway)
-
-			// Wire failure alerts for background tasks.
-			taskMgr.SetFailureHandler(func(name string, consecutiveFailures int, err error) {
-				if consecutiveFailures >= 3 {
-					monitor.Alert(monitoring.AlertLevelError, "background_task",
-						fmt.Sprintf("Task %s failed %d consecutive times: %v", name, consecutiveFailures, err),
-						map[string]any{"task": name, "consecutive_failures": consecutiveFailures})
-				}
-			})
 
 			// Register channel_health_sync task (DB sync, not a data fetcher).
 			if pool != nil {
@@ -580,30 +539,8 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered auto_geopolitical background task (6h interval)")
 
-			// Register storage_cleanup via LifecycleManager.
-			taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "storage_cleanup",
-				Interval: 24 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					report, err := lifecycleMgr.Run(ctx, false)
-					if err != nil {
-						return fmt.Errorf("storage cleanup: %w", err)
-					}
-					log.Printf("[StorageCleanup] processed %d policies: %d files deleted, %d kept",
-						len(report.Policies), report.TotalDeleted, report.TotalKept)
-					return nil
-				},
-			})
-			log.Printf("[Gateway] registered storage_cleanup background task (24h interval)")
-
 			taskMgr.Start(sysCtx)
 			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
-		}
-
-		if taskMgr != nil {
-			apischeduler.NewHandlers(apischeduler.NewSchedulerService(taskMgr)).RegisterRoutes(mux)
-			log.Printf("[Gateway] scheduler API routes registered")
 		}
 
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
