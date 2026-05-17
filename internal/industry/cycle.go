@@ -374,6 +374,13 @@ func (ct *CycleTracker) calculateConfidence(industryID string, metrics IndustryM
 	}
 
 	boundary := ct.boundaryConfidence(industryID, metrics)
+	// When revenue or profit is negative, the industry is in contraction.
+	// High boundary confidence (far from positive thresholds) should not boost
+	// overall confidence — it just means the decline is unambiguous, not that
+	// the industry data is strong. Halve boundary contribution in that case.
+	if metrics.RevenueGrowthYoY < 0 || metrics.ProfitGrowthYoY < 0 {
+		boundary *= 0.5
+	}
 	confidence := signal*cfgSignal.SignalBoundaryMix + boundary*(1.0-cfgSignal.SignalBoundaryMix)
 
 	seasonalScore := 0.0
