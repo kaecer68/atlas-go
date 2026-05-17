@@ -229,6 +229,7 @@ export function renderSeasonalityList(allPatterns, activePatterns, data) {
   if (!allPatterns || allPatterns.length === 0) {
     return renderEmptyState("無季節性模式資料", "");
   }
+  const calibEvidence = data && data.calibration_evidence;
 
   const activeIds = new Set(activePatterns.map((p) => p.id));
   const today = new Date().toLocaleDateString("zh-TW");
