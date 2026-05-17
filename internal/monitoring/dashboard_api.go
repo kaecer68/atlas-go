@@ -94,6 +94,27 @@ func updateEnvFile(envPath, key, value string) error {
 	return os.WriteFile(envPath, []byte(strings.Join(lines, "\n")), 0644)
 }
 
+func updateEnvFile(envPath, key, value string) error {
+	data, err := os.ReadFile(envPath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	lines := strings.Split(string(data), "\n")
+	found := false
+	prefix := key + "="
+	for i, line := range lines {
+		if strings.HasPrefix(line, prefix) {
+			lines[i] = prefix + value
+			found = true
+			break
+		}
+	}
+	if !found {
+		lines = append(lines, prefix+value)
+	}
+	return os.WriteFile(envPath, []byte(strings.Join(lines, "\n")), 0644)
+}
+
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
 	loadChannelStates(workDir)
 
@@ -128,12 +149,6 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	lifecycle := narrative.NewEventLifecycleManager()
 	ingestor := narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro"))
 	ingestor.SetLifecycleManager(lifecycle)
-
-	seasonal := industry.NewSeasonalEngine()
-	cycleTracker := industry.NewCycleTracker()
-	linkageAnalyzer := industry.NewLinkageAnalyzer()
-	cycleTracker.SetExternalValidators(seasonal, linkageAnalyzer)
-
 	return &DashboardAPI{
 		workDir:            workDir,
 		ledgerDir:          ledgerDir,
@@ -141,12 +156,12 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		sqlitePath:         os.Getenv("ATLAS_SQLITE_PATH"),
 		baselinePath:       filepath.Join(workDir, "data/state/baseline_policy.json"),
 		narrativeEngine:    narrative.NewNarrativeEngine(),
-		macroIngestor:      narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro")),
+		macroIngestor:      ingestor,
 		geoProvider:        geoProvider,
 		taiwanGeoProvider:  taiwanGeoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider),
 		reportGenerator:    narrative.NewReportGenerator(),
-		industryService:    service.NewIndustryService(industry.DefaultClassification(), seasonal, cycleTracker, linkageAnalyzer, industry.NewRiskMonitor()),
+		industryService:    service.NewIndustryService(industry.DefaultClassification(), industry.NewSeasonalEngine(), industry.NewCycleTracker(), industry.NewLinkageAnalyzer(), industry.NewRiskMonitor()),
 		metricsCollector:   metricsCollector,
 		metricsHistory:     NewMetricsHistory(1000),
 		healthManager:      portfolio.NewAgentHealthManager(),
@@ -156,6 +171,9 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 
 func (a *DashboardAPI) SetEventBus(eventBus *eventbus.ChannelEventBus) {
 	a.eventBus = eventBus
+	if a.macroIngestor != nil {
+		a.macroIngestor.SetEventBus(eventBus)
+	}
 }
 
 func (a *DashboardAPI) GetEventBus() *eventbus.ChannelEventBus {
@@ -287,6 +305,99 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			"channels":  channels,
 			"alerts":    alerts,
 			"generated": time.Now().Format(time.RFC3339),
+		})
+	})
+
+	// Data pipeline endpoint — tracks producer/consumer freshness for all data sources.
+	mux.HandleFunc("/api/dashboard/data-pipeline", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		pipelineSvc := service.NewDataPipelineService(a.workDir, a.ledgerDir)
+		sources, err := pipelineSvc.GetPipelineStatus()
+		if err != nil {
+			shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load data pipeline: %v", err))
+			return
+		}
+		shared.WriteJSON(w, http.StatusOK, map[string]any{
+			"sources":   sources,
+			"generated": time.Now().Format(time.RFC3339),
+		})
+	})
+
+	// Management center endpoints — channel control and API key management.
+	mux.HandleFunc("/api/dashboard/channels/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		path := strings.TrimPrefix(r.URL.Path, "/api/dashboard/channels/")
+		parts := strings.Split(path, "/")
+		if len(parts) < 2 {
+			shared.WriteJSONError(w, http.StatusBadRequest, "invalid path")
+			return
+		}
+		channelID := parts[0]
+		action := parts[1]
+
+		switch action {
+		case "trigger":
+			shared.WriteJSON(w, http.StatusOK, map[string]any{
+				"channel_id": channelID,
+				"action":     "trigger",
+				"status":     "ok",
+				"note":       "next poll will reflect fresh status",
+			})
+		case "toggle":
+			var req struct {
+				Enabled bool `json:"enabled"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				shared.WriteJSONError(w, http.StatusBadRequest, "invalid body")
+				return
+			}
+			if err := setChannelEnabled(a.workDir, channelID, req.Enabled); err != nil {
+				shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("save state: %v", err))
+				return
+			}
+			shared.WriteJSON(w, http.StatusOK, map[string]any{
+				"channel_id": channelID,
+				"enabled":    req.Enabled,
+				"status":     "ok",
+			})
+		default:
+			shared.WriteJSONError(w, http.StatusBadRequest, "unknown action")
+		}
+	})
+
+	mux.HandleFunc("/api/dashboard/api-keys/update", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		var req struct {
+			Provider string `json:"provider"`
+			APIKey   string `json:"api_key"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			shared.WriteJSONError(w, http.StatusBadRequest, "invalid body")
+			return
+		}
+		if req.Provider == "" || req.APIKey == "" {
+			shared.WriteJSONError(w, http.StatusBadRequest, "provider and api_key required")
+			return
+		}
+		// Write to .env file (append or update).
+		envPath := filepath.Join(a.workDir, ".env")
+		key := strings.ToUpper(req.Provider) + "_API_KEY"
+		if err := updateEnvFile(envPath, key, req.APIKey); err != nil {
+			shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("update env: %v", err))
+			return
+		}
+		shared.WriteJSON(w, http.StatusOK, map[string]any{
+			"provider": req.Provider,
+			"status":   "ok",
 		})
 	})
 

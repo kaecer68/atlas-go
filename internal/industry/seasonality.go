@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"slices"
 	"time"
-
-	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 // SeasonalPattern represents a recurring seasonal pattern in Taiwan stock market.
@@ -49,7 +47,7 @@ type SeasonalEngine struct {
 	patterns []SeasonalPattern
 }
 
-// NewSeasonalEngine creates a seasonal engine using the parameter-managed seasonal patterns.
+// NewSeasonalEngine creates a seasonal engine with default Taiwan patterns.
 func NewSeasonalEngine() *SeasonalEngine {
 	return &SeasonalEngine{
 		patterns: DefaultSeasonalPatterns(),
@@ -57,8 +55,6 @@ func NewSeasonalEngine() *SeasonalEngine {
 }
 
 // DefaultSeasonalPatterns returns the built-in seasonal patterns for Taiwan.
-// All FavoredIndustries/AvoidedIndustries use 9 canonical Level-1 IDs.
-// Non-industry classifications (market cap, style) use StyleTags.
 func DefaultSeasonalPatterns() []SeasonalPattern {
 	return []SeasonalPattern{
 		{
@@ -85,8 +81,8 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           1,
 			EndMonth:           4,
 			EndDay:             15,
-			FavoredIndustries:  []string{"ai_supply_chain", "electronics"},
-			AvoidedIndustries:  []string{"consumer", "industrial"},
+			FavoredIndustries:  []string{"ai_supply_chain", "tech"},
+			AvoidedIndustries:  []string{"consumer", "defensive"},
 			AdjustmentFactor:   1.10,
 			HistoricalAccuracy: 0.55,
 			AvgMarketReturn:    0.015,
@@ -100,9 +96,8 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           1,
 			EndMonth:           6,
 			EndDay:             30,
-			FavoredIndustries:  []string{"financials", "consumer"},
-			AvoidedIndustries:  []string{"semiconductor", "ai_supply_chain", "electronics"},
-			StyleTags:          []string{"high_dividend"},
+			FavoredIndustries:  []string{"financials", "high_dividend", "consumer"},
+			AvoidedIndustries:  []string{"semiconductor", "ai_supply_chain", "tech"},
 			AdjustmentFactor:   1.20,
 			HistoricalAccuracy: 0.65,
 			AvgMarketReturn:    0.025,
@@ -116,8 +111,8 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           1,
 			EndMonth:           9,
 			EndDay:             15,
-			FavoredIndustries:  []string{"semiconductor", "ai_supply_chain", "electronics"},
-			AvoidedIndustries:  []string{"consumer"},
+			FavoredIndustries:  []string{"semiconductor", "ai_supply_chain", "pcb", "tech"},
+			AvoidedIndustries:  []string{"consumer", "tourism", "defensive"},
 			AdjustmentFactor:   1.25,
 			HistoricalAccuracy: 0.75,
 			AvgMarketReturn:    0.085,
@@ -131,8 +126,8 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           15,
 			EndMonth:           10,
 			EndDay:             31,
-			FavoredIndustries:  []string{},
-			AvoidedIndustries:  []string{},
+			FavoredIndustries:  []string{"semiconductor", "ai_supply_chain", "tech"},
+			AvoidedIndustries:  []string{"consumer", "shipping", "defensive"},
 			AdjustmentFactor:   1.10,
 			HistoricalAccuracy: 0.60,
 			AvgMarketReturn:    0.020,
@@ -146,9 +141,8 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           1,
 			EndMonth:           12,
 			EndDay:             31,
-			FavoredIndustries:  []string{"financials"},
-			AvoidedIndustries:  []string{},
-			StyleTags:          []string{"large_cap", "index_heavyweights"},
+			FavoredIndustries:  []string{"tech", "semiconductor", "financials", "etf_rotation"},
+			AvoidedIndustries:  []string{"small_cap"},
 			AdjustmentFactor:   1.12,
 			HistoricalAccuracy: 0.58,
 			AvgMarketReturn:    0.018,
@@ -163,7 +157,7 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			EndMonth:           8,
 			EndDay:             31,
 			FavoredIndustries:  []string{"energy"},
-			AvoidedIndustries:  []string{"industrial"},
+			AvoidedIndustries:  []string{"semiconductor"},
 			AdjustmentFactor:   1.08,
 			HistoricalAccuracy: 0.62,
 			AvgMarketReturn:    0.012,
@@ -335,31 +329,4 @@ func (p SeasonalPattern) String() string {
 		p.HistoricalAccuracy*100,
 		p.AvgMarketReturn*100,
 	)
-}
-
-func seasonalPatternsFromConfig(cfgs []config.SeasonalPatternConfig) []SeasonalPattern {
-	patterns := make([]SeasonalPattern, 0, len(cfgs))
-	for _, c := range cfgs {
-		patterns = append(patterns, SeasonalPattern{
-			ID:                 c.ID,
-			Name:               c.Name,
-			NameEN:             c.NameEN,
-			StartMonth:         c.StartMonth,
-			StartDay:           c.StartDay,
-			EndMonth:           c.EndMonth,
-			EndDay:             c.EndDay,
-			FavoredIndustries:  c.FavoredIndustries,
-			AvoidedIndustries:  c.AvoidedIndustries,
-			AdjustmentFactor:   c.AdjustmentFactor,
-			HistoricalAccuracy: c.HistoricalAccuracy,
-			AvgMarketReturn:    c.AvgMarketReturn,
-			Description:        c.Description,
-		})
-	}
-	return patterns
-}
-
-func NewSeasonalEngineFromConfig(cfg *config.ParametersConfig) *SeasonalEngine {
-	patterns := seasonalPatternsFromConfig(cfg.Industry.SeasonalPatterns.Value)
-	return &SeasonalEngine{patterns: patterns}
 }

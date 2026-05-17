@@ -126,11 +126,3 @@ migrate-jsonl-to-sqlite
 data/state/macro/latest.json
 .gstack/
 calibrate-parameters
-calibrate-seasonal
-
-# Build artifacts
-# Build artifacts
-/fetch-historical
-
-# Coverage reports
-*.out

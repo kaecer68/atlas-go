@@ -149,14 +149,14 @@ Models upstream/downstream relationships between Taiwan industries with configur
 - `CorrelationMatrix` supports three initialization modes: hardcoded defaults, config-driven (parameters.json), and empirical recalculation from returns
 - `ShockPropagation` propagates impact through the supply chain with narrative-aware correlation multipliers
 - `LinkageAnalyzer` exposes scores, graphs, and shock simulation via `GET /api/industry/linkage`
-- Graph topology is defined in `configs/supply_chain_graph.json` (hot-reloadable)
+- Graph topology uses `DefaultSupplyChainGraph()` built-in relationships with configurable correlation matrix from `parameters.json`
 - Narrative themes from `SeasonalBridge` dynamically adjust pairwise correlations
 
 ### Seasonal Patterns (`internal/industry/seasonality.go`)
 
-Calendar effect detection and calibration:
+Calendar effect detection and calibration (calibrated on 5-year historical data 2020-2024):
 - `SeasonalEngine` manages per-industry patterns with start/end months and adjustment factors
-- `cmd/calibrate-seasonal` CLI supports synthetic data, replay-based calibration, and automatic parameter update
+- `cmd/calibrate-seasonal` CLI supports synthetic data, replay-based calibration, and automatic parameter update using 5-year TWSE historical data
 - Evidence quality badges (`heuristic_awaiting_data` / `low` / `medium` / `high`) displayed in frontend
 - `GetAdjustmentBreakdown()` provides four-layer decomposition: seasonal x narrative x cycle x environment
 

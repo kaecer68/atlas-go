@@ -15,19 +15,36 @@ import (
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
+// yahooHosts lists Yahoo Finance API hosts tried in order on failure.
+var yahooHosts = []string{
+	"query1.finance.yahoo.com",
+	"query2.finance.yahoo.com",
+}
+
+// modernUserAgents holds recent Chrome User-Agent strings for rotation.
+var modernUserAgents = []string{
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+}
+
+var yahooSharedLimiter = rate.NewLimiter(rate.Every(time.Second), 1)
+
 // YahooFinanceMacroProvider fetches macro indicators from Yahoo Finance.
 type YahooFinanceMacroProvider struct {
-	client *http.Client
+	client  *http.Client
+	baseURL string
+	limiter *rate.Limiter
 }
 
 // NewYahooFinanceMacroProvider creates a new Yahoo Finance macro provider.
 func NewYahooFinanceMacroProvider() *YahooFinanceMacroProvider {
 	return &YahooFinanceMacroProvider{
-		client: &http.Client{Timeout: 15 * time.Second},
+		client:  httpclient.NewFactory().NewClient(15 * time.Second),
+		limiter: yahooSharedLimiter,
 	}
 }
 
-// Name returns the provider name.
 func (y *YahooFinanceMacroProvider) Name() string {
 	return "yahoo_finance"
 }

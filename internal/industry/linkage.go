@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"maps"
 	"math"
-	"strings"
 	"sync"
 	"time"
 )
@@ -229,18 +228,19 @@ func (sp *ShockPropagation) PropagateShock(sourceIndustry string, shockMagnitude
 	for _, industry := range downstream {
 		correlation, ok := sp.correlation.GetCorrelation(sourceIndustry, industry)
 		if !ok {
-			correlation = cfg.DefaultCorrelation
+			correlation = 0.5 // Default moderate correlation
 		}
-		impacts[industry] = shockMagnitude * correlation * cfg.DownstreamDecayFactor
+		// Impact decays with distance and correlation
+		impacts[industry] = shockMagnitude * correlation * 0.8
 	}
 
 	upstream := sp.graph.GetUpstreamChain(sourceIndustry, maxDepth)
 	for _, industry := range upstream {
 		correlation, ok := sp.correlation.GetCorrelation(sourceIndustry, industry)
 		if !ok {
-			correlation = cfg.DefaultCorrelation
+			correlation = 0.5 // Default moderate correlation
 		}
-		impacts[industry] = shockMagnitude * correlation * cfg.UpstreamDecayFactor
+		impacts[industry] = shockMagnitude * correlation * 0.6 // Upstream impact is typically smaller
 	}
 
 	return impacts
@@ -282,8 +282,7 @@ func (sp *ShockPropagation) CalculateLinkageScore(industryID string) *IndustryLi
 	// Systemic importance based on network position
 	systemicImportance := 0.0
 	if len(upstream)+len(downstream) > 0 {
-		divisor := config.GetParametersConfig().Industry.LinkageParams.Value.SystemicImportanceDivisor
-		systemicImportance = math.Min(1.0, float64(len(upstream)+len(downstream))/divisor)
+		systemicImportance = math.Min(1.0, float64(len(upstream)+len(downstream))/10.0)
 	}
 
 	return &IndustryLinkageScore{

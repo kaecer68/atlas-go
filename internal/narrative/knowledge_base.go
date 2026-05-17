@@ -100,6 +100,39 @@ var sectorSymbolMap = map[string][]string{
 	"small_cap":       {"3008.TW", "3034.TW", "6669.TW"},
 	"consumer":        {"1301.TW", "1303.TW", "1326.TW"},
 	"tourism":         {},
+	"tech":            {"2330.TW", "2317.TW", "2382.TW", "3231.TW"},
+	"defensive":       {"2881.TW", "0056.TW", "1301.TW"},
+	"energy":          {"6505.TW", "8926.TW", "9918.TW"},
+}
+
+var sectorSymbolMap map[string][]string
+
+func init() {
+	sectorSymbolMap = loadSectorSymbols("configs/sector_symbols.json")
+}
+
+func loadSectorSymbols(path string) map[string][]string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		logging.Warn("narrative", "sector_symbols_not_found", "path", path, "err", err)
+		return copySectorMap(defaultSectorSymbolMap)
+	}
+
+	var loaded map[string][]string
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		logging.Warn("narrative", "sector_symbols_parse_failed", "path", path, "err", err)
+		return copySectorMap(defaultSectorSymbolMap)
+	}
+
+	return loaded
+}
+
+func copySectorMap(src map[string][]string) map[string][]string {
+	dst := make(map[string][]string, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }
 
 // NewNarrativeEngine creates a narrative engine with default templates and models.
