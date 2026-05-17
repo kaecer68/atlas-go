@@ -219,6 +219,8 @@ func DiffSnapshots(old, new *ParameterSnapshot) []ParameterChange {
 	compareFloat(&changes, "industry.geographic_exposure_limit", old.Params.Industry.GeographicExposureLimit.Value, new.Params.Industry.GeographicExposureLimit.Value, now)
 	compareMapStringFloat(&changes, "industry.sector_weights", old.Params.Industry.SectorWeights.Value, new.Params.Industry.SectorWeights.Value, now)
 	compareMapCycleThreshold(&changes, "industry.cycle_thresholds", old.Params.Industry.CycleThresholds.Value, new.Params.Industry.CycleThresholds.Value, now)
+	compareInventoryCycleThreshold(&changes, "industry.inventory_cycle_thresholds", old.Params.Industry.InventoryCycleThresholds.Value, new.Params.Industry.InventoryCycleThresholds.Value, now)
+	compareCapexCycleThreshold(&changes, "industry.capex_cycle_thresholds", old.Params.Industry.CapexCycleThresholds.Value, new.Params.Industry.CapexCycleThresholds.Value, now)
 
 	compareFloat(&changes, "strategy.min_switch_interval_days", float64(old.Params.Strategy.MinSwitchIntervalDays.Value), float64(new.Params.Strategy.MinSwitchIntervalDays.Value), now)
 	compareFloat(&changes, "strategy.switch_threshold", old.Params.Strategy.SwitchThreshold.Value, new.Params.Strategy.SwitchThreshold.Value, now)
