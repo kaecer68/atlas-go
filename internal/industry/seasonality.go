@@ -544,11 +544,13 @@ func (se *SeasonalEngine) SetDynamicEnv(modulator *DynamicEnvModulator) {
 	se.dynamicEnv = modulator
 }
 
-// UpdateDynamicEnv pushes a fresh macro snapshot into the environment modulator.
-// No-op if no modulator is set.
+// UpdateDynamicEnv pushes a fresh macro snapshot into the environment modulator
+// and updates the rolling baseline. No-op if no modulator is set.
 func (se *SeasonalEngine) UpdateDynamicEnv(snap marketdata.MacroDataSnapshot) {
 	if se.dynamicEnv != nil {
 		se.dynamicEnv.UpdateCurrent(snap)
+		se.dynamicEnv.RecordSnapshot(snap)
+		se.dynamicEnv.UpdateRollingBaseline()
 	}
 }
 
