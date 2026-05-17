@@ -43,53 +43,82 @@ func (sb *SeasonalBridge) ActiveThemes() []string {
 // narrative theme and industry. Themes are mapped based on known macro→sector
 // causal relationships from the narrative knowledge base:
 //
+//	direction: +1 = shock up (e.g., oil price rises), -1 = shock down (e.g., oil price falls)
+//
 //	oil_price_shock → amplifies energy (+), dampens industrial/shipping (−)
 //	AI_capex_surge → amplifies semiconductor and ai_supply_chain
 //	US_rates_up     → amplifies financials (net interest margin), dampens consumer/industrial
 //	JPY_carry_unwind → dampens risk-on sectors (ai_supply_chain, growth)
 //	geopolitical_risk_spike → amplifies defensive (consumer, financials), dampens export
-func (sb *SeasonalBridge) SeasonalMultiplier(theme string, industryID string) float64 {
+func (sb *SeasonalBridge) SeasonalMultiplier(theme string, industryID string, direction float64) float64 {
 	switch theme {
 	case "oil_price_shock":
 		switch industryID {
 		case "energy":
-			return 1.12
+			if direction > 0 {
+				return 1.12 // oil up = energy benefits
+			}
+			return 0.88 // oil down = energy hurts
 		case "shipping", "industrial":
-			return 0.92
+			if direction > 0 {
+				return 0.92 // oil up = shipping/industrial hurt
+			}
+			return 1.08 // oil down = shipping/industrial benefit
 		default:
 			return 1.0
 		}
 	case "AI_capex_surge":
 		switch industryID {
 		case "semiconductor", "ai_supply_chain", "electronics":
-			return 1.15
+			if direction > 0 {
+				return 1.15 // capex surge
+			}
+			return 0.90 // capex contraction
 		default:
 			return 1.0
 		}
 	case "US_rates_up":
 		switch industryID {
 		case "financials":
-			return 1.08
+			if direction > 0 {
+				return 1.08 // rates up = banks benefit
+			}
+			return 0.95 // rates down = banks hurt
 		case "consumer", "electronics", "industrial":
-			return 0.95
+			if direction > 0 {
+				return 0.95 // rates up = borrowing costs rise
+			}
+			return 1.05 // rates down = borrowing costs fall
 		default:
 			return 1.0
 		}
 	case "JPY_carry_unwind":
 		switch industryID {
 		case "semiconductor", "ai_supply_chain", "shipping":
-			return 0.90
+			if direction > 0 {
+				return 0.90 // unwind = exporters hurt
+			}
+			return 1.05 // stable = slight recovery
 		case "financials", "consumer":
-			return 1.05
+			if direction > 0 {
+				return 1.05 // domestic benefits from repatriation
+			}
+			return 1.0
 		default:
 			return 1.0
 		}
 	case "geopolitical_risk_spike":
 		switch industryID {
 		case "consumer", "financials":
-			return 1.06
+			if direction > 0 {
+				return 1.06 // risk up = safe havens
+			}
+			return 0.98 // risk down = slight normalization
 		case "semiconductor", "ai_supply_chain", "shipping":
-			return 0.94
+			if direction > 0 {
+				return 0.94 // risk up = supply chains hurt
+			}
+			return 1.02 // risk down = slight recovery
 		default:
 			return 1.0
 		}

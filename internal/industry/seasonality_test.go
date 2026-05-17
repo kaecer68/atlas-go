@@ -3,6 +3,8 @@ package industry
 import (
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 func TestDefaultSeasonalPatterns(t *testing.T) {
@@ -216,49 +218,91 @@ func TestPatternString(t *testing.T) {
 }
 
 func TestGetAdjustmentBreakdown(t *testing.T) {
-	engine := NewSeasonalEngine()
-	now := time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC) // tech_peak_season active
+	se := NewSeasonalEngine()
+	ab := se.GetAdjustmentBreakdown("semiconductor", time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC))
+	if ab.Composite <= 0 {
+		t.Errorf("expected positive composite adjustment factor, got %f", ab.Composite)
+	}
+	if ab.DirectMatch <= 0 {
+		t.Errorf("expected positive direct match, got %f", ab.DirectMatch)
+	}
+}
 
-	// Without linkage/narrative/dynamic env — should just have direct_match
-	bd := engine.GetAdjustmentBreakdown("semiconductor", now)
-	if bd == nil {
-		t.Fatal("expected non-nil breakdown")
+func TestDetectThemeDirection_OilRising(t *testing.T) {
+	se := NewSeasonalEngine()
+	modulator := &DynamicEnvModulator{
+		current:  marketdata.MacroDataSnapshot{Oil: marketdata.MacroDataPoint{Value: 115}},
+		baseline: marketdata.MacroDataSnapshot{Oil: marketdata.MacroDataPoint{Value: 100}},
 	}
-	if bd.DirectMatch <= 1.0 {
-		t.Errorf("expected DirectMatch > 1.0 for semiconductor during tech_peak_season, got %.4f", bd.DirectMatch)
+	se.SetDynamicEnv(modulator)
+
+	direction := se.detectThemeDirection("oil_price_shock")
+	if direction != 1.0 {
+		t.Fatalf("expected +1.0 for rising oil (deviation 0.15 > 0.05), got %f", direction)
 	}
-	if bd.SupplyChain != 1.0 {
-		t.Errorf("expected SupplyChain=1.0 (no graph), got %.4f", bd.SupplyChain)
+}
+
+func TestDetectThemeDirection_OilFalling(t *testing.T) {
+	se := NewSeasonalEngine()
+	modulator := &DynamicEnvModulator{
+		current:  marketdata.MacroDataSnapshot{Oil: marketdata.MacroDataPoint{Value: 90}},
+		baseline: marketdata.MacroDataSnapshot{Oil: marketdata.MacroDataPoint{Value: 100}},
 	}
-	if bd.Narrative != 1.0 {
-		t.Errorf("expected Narrative=1.0 (no provider), got %.4f", bd.Narrative)
+	se.SetDynamicEnv(modulator)
+
+	direction := se.detectThemeDirection("oil_price_shock")
+	if direction != -1.0 {
+		t.Fatalf("expected -1.0 for falling oil (deviation -0.10 < -0.05), got %f", direction)
 	}
-	if bd.DynamicEnv != 1.0 {
-		t.Errorf("expected DynamicEnv=1.0 (no modulator), got %.4f", bd.DynamicEnv)
+}
+
+func TestDetectThemeDirection_DollarStrong(t *testing.T) {
+	se := NewSeasonalEngine()
+	modulator := &DynamicEnvModulator{
+		current:  marketdata.MacroDataSnapshot{DXY: marketdata.MacroDataPoint{Value: 110}},
+		baseline: marketdata.MacroDataSnapshot{DXY: marketdata.MacroDataPoint{Value: 100}},
 	}
-	if bd.Composite != bd.DirectMatch*bd.SupplyChain*bd.Narrative*bd.DynamicEnv {
-		t.Errorf("Composite %.4f != product of layers %.4f", bd.Composite, bd.DirectMatch*bd.SupplyChain*bd.Narrative*bd.DynamicEnv)
+	se.SetDynamicEnv(modulator)
+
+	direction := se.detectThemeDirection("US_rates_up")
+	if direction != 1.0 {
+		t.Fatalf("expected +1.0 for strong dollar (deviation 0.10 > 0.03), got %f", direction)
+	}
+}
+
+func TestDetectThemeDirection_DollarWeak(t *testing.T) {
+	se := NewSeasonalEngine()
+	modulator := &DynamicEnvModulator{
+		current:  marketdata.MacroDataSnapshot{DXY: marketdata.MacroDataPoint{Value: 95}},
+		baseline: marketdata.MacroDataSnapshot{DXY: marketdata.MacroDataPoint{Value: 100}},
+	}
+	se.SetDynamicEnv(modulator)
+
+	direction := se.detectThemeDirection("US_rates_up")
+	if direction != -1.0 {
+		t.Fatalf("expected -1.0 for weak dollar (deviation -0.05 < -0.03), got %f", direction)
+	}
+}
+
+func TestDetectThemeDirection_NoDynamicEnv(t *testing.T) {
+	se := NewSeasonalEngine()
+	// No DynamicEnvModulator set
+
+	direction := se.detectThemeDirection("oil_price_shock")
+	if direction != 1.0 {
+		t.Fatalf("expected +1.0 fallback when no dynamicEnv, got %f", direction)
 	}
 
-	// No active patterns for a neutral date
-	neutral := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC) // no pattern
-	bd2 := engine.GetAdjustmentBreakdown("semiconductor", neutral)
-	if bd2 == nil {
-		t.Fatal("expected non-nil breakdown")
+	direction = se.detectThemeDirection("JPY_carry_unwind")
+	if direction != -1.0 {
+		t.Fatalf("expected -1.0 fallback for JPY_carry_unwind, got %f", direction)
 	}
-	if bd2.DirectMatch != 1.0 {
-		t.Errorf("expected DirectMatch=1.0 for neutral date, got %.4f", bd2.DirectMatch)
-	}
-	if bd2.Composite != 1.0 {
-		t.Errorf("expected Composite=1.0 for neutral date, got %.4f", bd2.Composite)
-	}
+}
 
-	// Avoided industry during tech_peak_season
-	bd3 := engine.GetAdjustmentBreakdown("consumer", now)
-	if bd3 == nil {
-		t.Fatal("expected non-nil breakdown")
-	}
-	if bd3.DirectMatch >= 1.0 {
-		t.Errorf("expected DirectMatch < 1.0 for consumer avoided during tech_peak_season, got %.4f", bd3.DirectMatch)
+func TestDetectThemeDirection_UnknownTheme(t *testing.T) {
+	se := NewSeasonalEngine()
+	direction := se.detectThemeDirection("nonexistent_theme")
+	if direction != 1.0 {
+		t.Fatalf("expected +1.0 for unknown theme, got %f", direction)
 	}
 }

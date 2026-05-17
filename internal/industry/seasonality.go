@@ -57,7 +57,7 @@ type SeasonalEngine struct {
 // modulate seasonal adjustment factors based on real-world events.
 type NarrativeSeasonalProvider interface {
 	ActiveThemes() []string
-	SeasonalMultiplier(theme string, industryID string) float64
+	SeasonalMultiplier(theme string, industryID string, direction float64) float64
 }
 
 // NewSeasonalEngine creates a seasonal engine using the parameter-managed seasonal patterns.
@@ -256,7 +256,8 @@ func (se *SeasonalEngine) GetPatternAdjustment(industryID string, t time.Time) f
 	// Narrative event overlay: active macro themes modulate seasonal adjustment.
 	if se.narrativeProvider != nil {
 		for _, theme := range se.narrativeProvider.ActiveThemes() {
-			multiplier := se.narrativeProvider.SeasonalMultiplier(theme, industryID)
+			direction := se.detectThemeDirection(theme)
+			multiplier := se.narrativeProvider.SeasonalMultiplier(theme, industryID, direction)
 			adjustment *= multiplier
 		}
 	}
@@ -475,7 +476,8 @@ func (se *SeasonalEngine) GetAdjustmentBreakdown(industryID string, t time.Time)
 	narr := 1.0
 	if se.narrativeProvider != nil {
 		for _, theme := range se.narrativeProvider.ActiveThemes() {
-			narr *= se.narrativeProvider.SeasonalMultiplier(theme, industryID)
+			direction := se.detectThemeDirection(theme)
+			narr *= se.narrativeProvider.SeasonalMultiplier(theme, industryID, direction)
 		}
 	}
 	ab.Narrative = narr
@@ -542,10 +544,84 @@ func (se *SeasonalEngine) SetDynamicEnv(modulator *DynamicEnvModulator) {
 	se.dynamicEnv = modulator
 }
 
-// UpdateDynamicEnv pushes a fresh macro snapshot into the environment modulator.
-// No-op if no modulator is set.
+// UpdateDynamicEnv pushes a fresh macro snapshot into the environment modulator
+// and updates the rolling baseline. No-op if no modulator is set.
 func (se *SeasonalEngine) UpdateDynamicEnv(snap marketdata.MacroDataSnapshot) {
 	if se.dynamicEnv != nil {
 		se.dynamicEnv.UpdateCurrent(snap)
+		se.dynamicEnv.RecordSnapshot(snap)
+		se.dynamicEnv.UpdateRollingBaseline()
+	}
+}
+
+
+// detectThemeDirection returns the direction multiplier for a given narrative theme.
+// +1 means the event is materializing in its "up" direction (e.g., oil prices rising),
+// -1 means the "down" direction (e.g., oil prices falling).
+// Default is +1 when direction cannot be determined.
+// Uses actual macro data from dynamicEnv when available.
+func (se *SeasonalEngine) detectThemeDirection(theme string) float64 {
+	if se.dynamicEnv == nil {
+		// Fallback to heuristic when no macro data available
+		switch theme {
+		case "JPY_carry_unwind":
+			return -1.0
+		case "geopolitical_risk_spike":
+			return 1.0
+		default:
+			return 1.0
+		}
+	}
+
+	switch theme {
+	case "oil_price_shock":
+		// Use actual oil price deviation
+		dev := se.dynamicEnv.OilDeviation()
+		if dev > 0.05 {
+			return 1.0 // oil rising
+		} else if dev < -0.05 {
+			return -1.0 // oil falling
+		}
+		// Near neutral, use small positive bias (shocks are typically supply disruptions = price up)
+		return 1.0
+
+	case "US_rates_up":
+		// Use US 10Y yield deviation as proxy for rate direction
+		// DXY deviation is positively correlated with rates
+		dxyDev := se.dynamicEnv.DXYDeviation()
+		if dxyDev > 0.03 {
+			return 1.0 // dollar strong = rates likely rising
+		} else if dxyDev < -0.03 {
+			return -1.0 // dollar weak = rates likely falling
+		}
+		return 1.0
+
+	case "AI_capex_surge":
+		// Proxy: strong dollar + high BDI = global trade/Capex expansion
+		dxyDev := se.dynamicEnv.DXYDeviation()
+		bdiDev := se.dynamicEnv.BDIDeviation()
+		if dxyDev > 0 && bdiDev > 0 {
+			return 1.0 // strong dollar + high shipping = expansion
+		} else if dxyDev < 0 && bdiDev < 0 {
+			return -1.0 // weak dollar + low shipping = contraction
+		}
+		return 1.0
+
+	case "JPY_carry_unwind":
+		// JPY carry unwind is inherently a negative event for exporters
+		// Direction is determined by JPY strength (not directly tracked, use DXY inverse)
+		dxyDev := se.dynamicEnv.DXYDeviation()
+		if dxyDev < -0.03 {
+			return -1.0 // dollar weak = JPY likely strong = unwind pressure
+		}
+		return -1.0 // Default negative
+
+	case "geopolitical_risk_spike":
+		// Use VIX or gold deviation as proxy (if available)
+		// For now, risk spikes are always +1 (escalation)
+		return 1.0
+
+	default:
+		return 1.0
 	}
 }

@@ -1421,14 +1421,14 @@ func defaultIndustryParameters() IndustryParameters {
 		},
 		ConfidenceMix: ParameterMetadata[ConfidenceMixConfig]{
 			Value: ConfidenceMixConfig{
-				WeightBoundary:         0.5,
-				WeightFreshness:        0.25,
+				WeightBoundary:         0.45,
+				WeightFreshness:        0.20,
 				WeightSeasonal:         0.15,
-				WeightLinkage:          0.0,
+				WeightLinkage:          0.10,
 				WeightNarrative:        0.1,
 				FavorableConfidenceMin: 0.4,
 			},
-			Rationale: "Confidence mix: boundary(50%) + freshness(25%) + seasonal(15%) + narrative(10%)",
+			Rationale: "Confidence mix: boundary(45%) + freshness(20%) + seasonal(15%) + linkage(10%) + narrative(10%)",
 			Source:    SourceHeuristic,
 		},
 		SeasonalPatterns: ParameterMetadata[[]SeasonalPatternConfig]{
@@ -1570,6 +1570,7 @@ func defaultIndustryParameters() IndustryParameters {
 				SystemicImportanceDivisor: 10.0,
 				MinCorrelationThreshold:   0.30,
 				CorrelationWindowDays:     30,
+				RecessionCorrelationBoost: 0.30,
 			},
 			Rationale: "Downstream decay (0.80) > upstream (0.60); seasonal decay (0.30) for supply-chain propagation; default correlation (0.50); window 30 days; narrative-aware via SeasonalBridge.CorrelationMultiplier() for dynamic macro event modulation",
 			Source:    SourceHeuristic,

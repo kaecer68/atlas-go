@@ -370,3 +370,29 @@ func TestCycleTracker_ConfigDriven(t *testing.T) {
 	phase := ct.detectBusinessCycle(semi)
 	t.Logf("semiconductor at 15%% rev: phase=%s (threshold expansion=%f)", phase, cfg.CycleThresholds.Value["semiconductor"].ExpansionRevenuePct)
 }
+
+func TestCycleTracker_GetPhase(t *testing.T) {
+	ct := NewCycleTracker()
+	metrics := IndustryMetrics{
+		IndustryID:       "test_industry",
+		RevenueGrowthYoY: 0.25,
+		ProfitGrowthYoY:  0.25,
+	}
+	ct.UpdatePosition("test_industry", metrics)
+
+	phase, ok := ct.GetPhase("test_industry")
+	if !ok {
+		t.Fatal("expected phase to be found")
+	}
+	if phase != CycleExpansion {
+		t.Fatalf("expected %s, got %s", CycleExpansion, phase)
+	}
+}
+
+func TestCycleTracker_GetPhase_Missing(t *testing.T) {
+	ct := NewCycleTracker()
+	_, ok := ct.GetPhase("nonexistent")
+	if ok {
+		t.Fatal("expected false for unknown industry")
+	}
+}
