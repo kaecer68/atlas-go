@@ -458,6 +458,10 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 		}
 	}
 
+	if plugins.cycleModulator != nil {
+		plugins.cycleModulator.ModulateRecommendations(recs, registry)
+	}
+
 	if scratchpad != nil {
 		recData := make([]map[string]any, 0, len(recs))
 		for _, rec := range recs {

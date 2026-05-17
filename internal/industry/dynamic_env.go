@@ -1,6 +1,8 @@
 package industry
 
 import (
+	"sync"
+
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
@@ -9,6 +11,7 @@ import (
 // macro indicators (oil prices, USD strength, etc.), moving beyond pure
 // calendar-driven seasonality into environment-aware adjustments.
 type DynamicEnvModulator struct {
+	mu       sync.RWMutex
 	current  marketdata.MacroDataSnapshot
 	baseline marketdata.MacroDataSnapshot
 }
@@ -21,39 +24,55 @@ func NewDynamicEnvModulator(baseline, current marketdata.MacroDataSnapshot) *Dyn
 
 // UpdateCurrent sets the latest macro snapshot.
 func (dem *DynamicEnvModulator) UpdateCurrent(snap marketdata.MacroDataSnapshot) {
+	dem.mu.Lock()
 	dem.current = snap
+	dem.mu.Unlock()
 }
 
 // UpdateBaseline sets the baseline (historical average) snapshot.
 func (dem *DynamicEnvModulator) UpdateBaseline(snap marketdata.MacroDataSnapshot) {
+	dem.mu.Lock()
 	dem.baseline = snap
+	dem.mu.Unlock()
 }
 
 // OilDeviation returns the percentage deviation of current oil price from baseline.
 // Positive = oil is expensive relative to history.
 func (dem *DynamicEnvModulator) OilDeviation() float64 {
-	if dem.baseline.Oil.Value <= 0 {
+	dem.mu.RLock()
+	baselineOil := dem.baseline.Oil.Value
+	currentOil := dem.current.Oil.Value
+	dem.mu.RUnlock()
+	if baselineOil <= 0 {
 		return 0
 	}
-	return (dem.current.Oil.Value - dem.baseline.Oil.Value) / dem.baseline.Oil.Value
+	return (currentOil - baselineOil) / baselineOil
 }
 
 // DXYDeviation returns the percentage deviation of DXY from baseline.
 // Positive = USD is strong relative to history.
 func (dem *DynamicEnvModulator) DXYDeviation() float64 {
-	if dem.baseline.DXY.Value <= 0 {
+	dem.mu.RLock()
+	baselineDXY := dem.baseline.DXY.Value
+	currentDXY := dem.current.DXY.Value
+	dem.mu.RUnlock()
+	if baselineDXY <= 0 {
 		return 0
 	}
-	return (dem.current.DXY.Value - dem.baseline.DXY.Value) / dem.baseline.DXY.Value
+	return (currentDXY - baselineDXY) / baselineDXY
 }
 
 // BDIDeviation returns the percentage deviation of BDI from baseline.
 // Positive = shipping demand is strong relative to history.
 func (dem *DynamicEnvModulator) BDIDeviation() float64 {
-	if dem.baseline.BDI.Value <= 0 {
+	dem.mu.RLock()
+	baselineBDI := dem.baseline.BDI.Value
+	currentBDI := dem.current.BDI.Value
+	dem.mu.RUnlock()
+	if baselineBDI <= 0 {
 		return 0
 	}
-	return (dem.current.BDI.Value - dem.baseline.BDI.Value) / dem.baseline.BDI.Value
+	return (currentBDI - baselineBDI) / baselineBDI
 }
 
 // SeasonalModulation computes a multiplicative adjustment for seasonal patterns

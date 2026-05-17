@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -313,79 +314,6 @@ func (a *YahooMacroChannelAdapter) Metadata() ChannelMetadata {
 		Platform:   "Yahoo Finance",
 		APIFormat:  "json",
 		Path:       "query1.finance.yahoo.com",
-		HasLimiter: true,
-	}
-}
-
-// ---------------------------------------------------------------------------
-// JPYYahooChannelAdapter — wraps *marketdata.FrankfurterFXProvider
-// ---------------------------------------------------------------------------
-
-// JPYYahooChannelAdapter adapts a FrankfurterFXProvider to the DataProvider interface for JPY.
-type JPYYahooChannelAdapter struct {
-	provider *marketdata.FrankfurterFXProvider
-	limiter  *rate.Limiter
-}
-
-// NewJPYYahooChannelAdapter creates a new adapter for the JPY Yahoo channel.
-func NewJPYYahooChannelAdapter(provider *marketdata.FrankfurterFXProvider) *JPYYahooChannelAdapter {
-	return &JPYYahooChannelAdapter{
-		provider: provider,
-		limiter:  rate.NewLimiter(YahooFinanceRate, YahooFinanceBurst),
-	}
-}
-
-// Fetch retrieves JPY data from Frankfurter API.
-func (a *JPYYahooChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
-	snap, err := a.provider.FetchSnapshot(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("jpy fetch: %w", err)
-	}
-	data, err := json.Marshal(snap)
-	if err != nil {
-		return nil, fmt.Errorf("jpy marshal: %w", err)
-	}
-	return &FetchResult{
-		Data: data,
-		Meta: FetchMetadata{
-			ChannelID:          "jpy_yahoo",
-			RateLimitRemaining: int(a.limiter.Tokens()),
-			Timestamp:          time.Now(),
-		},
-	}, nil
-}
-
-// HealthCheck verifies connectivity by fetching JPY data.
-func (a *JPYYahooChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
-	_, err := a.provider.FetchSnapshot(ctx)
-	if err != nil {
-		return HealthStatus{
-			Status:    "error",
-			LastError: err.Error(),
-			UpdatedAt: time.Now().Format(time.RFC3339),
-			CheckType: "liveness",
-		}, err
-	}
-	return HealthStatus{
-		Status:    "ok",
-		UpdatedAt: time.Now().Format(time.RFC3339),
-		CheckType: "liveness",
-	}, nil
-}
-
-// RateLimit returns the JPY Yahoo rate limiter.
-func (a *JPYYahooChannelAdapter) RateLimit() *rate.Limiter {
-	return a.limiter
-}
-
-// Metadata returns static channel metadata for JPY Yahoo.
-func (a *JPYYahooChannelAdapter) Metadata() ChannelMetadata {
-	return ChannelMetadata{
-		ChannelID:  "jpy_yahoo",
-		Country:    "日本",
-		Platform:   "Yahoo Finance (via Frankfurter)",
-		APIFormat:  "json",
-		Path:       "api.frankfurter.dev",
 		HasLimiter: true,
 	}
 }
@@ -762,28 +690,24 @@ func (a *TEJChannelAdapter) Metadata() ChannelMetadata {
 
 // GeopoliticalChannelAdapter adapts narrative geopolitical providers to the DataProvider interface.
 type GeopoliticalChannelAdapter struct {
-	workDir string
-	limiter *rate.Limiter
+	workDir        string
+	limiter        *rate.Limiter
+	globalProvider *narrative.CompositeGeopoliticalProvider
+	taiwanProvider *narrative.CompositeTaiwanGeopoliticalProvider
 }
 
 // NewGeopoliticalChannelAdapter creates a new adapter for the geopolitical channel.
 func NewGeopoliticalChannelAdapter(workDir string) *GeopoliticalChannelAdapter {
 	return &GeopoliticalChannelAdapter{
-		workDir: workDir,
-		limiter: rate.NewLimiter(rate.Every(time.Minute), 1),
+		workDir:        workDir,
+		limiter:        rate.NewLimiter(rate.Every(time.Minute), 1),
+		globalProvider: narrative.NewCompositeGeopoliticalProvider(narrative.NewRSSGeopoliticalProvider(), narrative.NewGDELTGeopoliticalProvider()),
+		taiwanProvider: narrative.NewCompositeTaiwanGeopoliticalProvider(narrative.NewTaiwanRSSGeopoliticalProvider()),
 	}
 }
 
 // Fetch retrieves global and Taiwan geopolitical risk scores.
 func (a *GeopoliticalChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
-	globalProvider := narrative.NewCompositeGeopoliticalProvider(
-		narrative.NewRSSGeopoliticalProvider(),
-		narrative.NewGDELTGeopoliticalProvider(),
-	)
-	taiwanProvider := narrative.NewCompositeTaiwanGeopoliticalProvider(
-		narrative.NewTaiwanRSSGeopoliticalProvider(),
-	)
-
 	globalStore := narrative.NewGeopoliticalStore(filepath.Join(a.workDir, "data/state/geopolitical"))
 	taiwanStore := narrative.NewGeopoliticalStore(filepath.Join(a.workDir, "data/state/geopolitical/taiwan"))
 
@@ -795,7 +719,7 @@ func (a *GeopoliticalChannelAdapter) Fetch(ctx context.Context) (*FetchResult, e
 	result := &geopoliticalResult{}
 
 	bgCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	score, err := globalProvider.FetchScore(bgCtx)
+	score, err := a.globalProvider.FetchScore(bgCtx)
 	cancel()
 	if err != nil {
 		logging.Error("apigateway", "geopolitical_fetch_failed", "err", err)
@@ -808,7 +732,7 @@ func (a *GeopoliticalChannelAdapter) Fetch(ctx context.Context) (*FetchResult, e
 	}
 
 	bgCtx2, cancel2 := context.WithTimeout(ctx, 60*time.Second)
-	twScore, err := taiwanProvider.FetchScore(bgCtx2)
+	twScore, err := a.taiwanProvider.FetchScore(bgCtx2)
 	cancel2()
 	if err != nil {
 		logging.Error("apigateway", "taiwan_geopolitical_fetch_failed", "err", err)
@@ -871,6 +795,324 @@ func (a *GeopoliticalChannelAdapter) Metadata() ChannelMetadata {
 }
 
 // ---------------------------------------------------------------------------
+// JPYYahooChannelAdapter — wraps FrankfurterFXProvider for JPY rate data
+// ---------------------------------------------------------------------------
+
+// JPYYahooChannelAdapter adapts FrankfurterFXProvider to the DataProvider.
+type JPYYahooChannelAdapter struct {
+	provider *marketdata.FrankfurterFXProvider
+	limiter  *rate.Limiter
+}
+
+// NewJPYYahooChannelAdapter creates a new adapter for the JPY Yahoo channel.
+func NewJPYYahooChannelAdapter(provider *marketdata.FrankfurterFXProvider) *JPYYahooChannelAdapter {
+	return &JPYYahooChannelAdapter{
+		provider: provider,
+		limiter:  rate.NewLimiter(rate.Every(10*time.Second), 1),
+	}
+}
+
+// Fetch retrieves the latest USD/JPY exchange rate.
+func (a *JPYYahooChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	snap, err := a.provider.FetchSnapshot(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("jpy_yahoo fetch: %w", err)
+	}
+	data, err := json.Marshal(snap.JPY)
+	if err != nil {
+		return nil, fmt.Errorf("jpy_yahoo marshal: %w", err)
+	}
+	return &FetchResult{
+		Data: data,
+		Meta: FetchMetadata{
+			ChannelID:          "jpy_yahoo",
+			RateLimitRemaining: int(a.limiter.Tokens()),
+			Timestamp:          time.Now(),
+		},
+	}, nil
+}
+
+// HealthCheck verifies the Frankfurter API is reachable.
+func (a *JPYYahooChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
+	_, err := a.provider.FetchSnapshot(ctx)
+	if err != nil {
+		return HealthStatus{
+			Status:    "error",
+			LastError: err.Error(),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "liveness",
+		}, err
+	}
+	return HealthStatus{
+		Status:    "ok",
+		UpdatedAt: time.Now().Format(time.RFC3339),
+		CheckType: "liveness",
+	}, nil
+}
+
+// RateLimit returns the JPY Yahoo rate limiter.
+func (a *JPYYahooChannelAdapter) RateLimit() *rate.Limiter {
+	return a.limiter
+}
+
+// Metadata returns static channel metadata for JPY Yahoo.
+func (a *JPYYahooChannelAdapter) Metadata() ChannelMetadata {
+	return ChannelMetadata{
+		ChannelID:  "jpy_yahoo",
+		Country:    "日本",
+		Platform:   "Yahoo Finance (JPY) / Frankfurter",
+		APIFormat:  "REST JSON",
+		Path:       "api.frankfurter.app/latest?from=USD&to=JPY",
+		HasLimiter: true,
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TSMCRevenueChannelAdapter — wraps TSMCRevenueProvider
+// ---------------------------------------------------------------------------
+
+// TSMCRevenueChannelAdapter adapts a TSMCRevenueProvider to the DataProvider interface.
+type TSMCRevenueChannelAdapter struct {
+	provider *marketdata.TSMCRevenueProvider
+	limiter  *rate.Limiter
+}
+
+// NewTSMCRevenueChannelAdapter creates a new adapter for the TSMC revenue channel.
+func NewTSMCRevenueChannelAdapter(provider *marketdata.TSMCRevenueProvider) *TSMCRevenueChannelAdapter {
+	return &TSMCRevenueChannelAdapter{
+		provider: provider,
+		limiter:  rate.NewLimiter(rate.Every(2*time.Minute), 1),
+	}
+}
+
+// Fetch retrieves the latest TSMC monthly revenue.
+func (a *TSMCRevenueChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	snap, err := a.provider.FetchSnapshot(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("tsmc_revenue fetch: %w", err)
+	}
+	data, err := json.Marshal(snap.TSMCRevenue)
+	if err != nil {
+		return nil, fmt.Errorf("tsmc_revenue marshal: %w", err)
+	}
+	return &FetchResult{
+		Data: data,
+		Meta: FetchMetadata{
+			ChannelID:          "tsmc_revenue",
+			RateLimitRemaining: int(a.limiter.Tokens()),
+			Timestamp:          time.Now(),
+		},
+	}, nil
+}
+
+// HealthCheck verifies connectivity by fetching a snapshot.
+func (a *TSMCRevenueChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
+	_, err := a.provider.FetchSnapshot(ctx)
+	if err != nil {
+		return HealthStatus{
+			Status:    "error",
+			LastError: err.Error(),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "liveness",
+		}, err
+	}
+	return HealthStatus{
+		Status:    "ok",
+		UpdatedAt: time.Now().Format(time.RFC3339),
+		CheckType: "liveness",
+	}, nil
+}
+
+// RateLimit returns the TSMC revenue rate limiter.
+func (a *TSMCRevenueChannelAdapter) RateLimit() *rate.Limiter {
+	return a.limiter
+}
+
+// Metadata returns static channel metadata for TSMC revenue.
+func (a *TSMCRevenueChannelAdapter) Metadata() ChannelMetadata {
+	return ChannelMetadata{
+		ChannelID:  "tsmc_revenue",
+		Country:    "台灣",
+		Platform:   "TWSE 台積電月營收",
+		APIFormat:  "REST JSON / FinMind TWT49U",
+		Path:       "api.finmindtrade.com / www.twse.com.tw",
+		HasLimiter: true,
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TaiwanGeopoliticalChannelAdapter — wraps TaiwanRSSGeopoliticalProvider
+// ---------------------------------------------------------------------------
+
+// TaiwanGeopoliticalChannelAdapter adapts Taiwan RSS geopolitical provider.
+type TaiwanGeopoliticalChannelAdapter struct {
+	provider *narrative.TaiwanRSSGeopoliticalProvider
+	workDir  string
+	limiter  *rate.Limiter
+}
+
+// NewTaiwanGeopoliticalChannelAdapter creates a new adapter.
+func NewTaiwanGeopoliticalChannelAdapter(workDir string) *TaiwanGeopoliticalChannelAdapter {
+	return &TaiwanGeopoliticalChannelAdapter{
+		provider: narrative.NewTaiwanRSSGeopoliticalProvider(),
+		workDir:  workDir,
+		limiter:  rate.NewLimiter(rate.Every(time.Minute), 1),
+	}
+}
+
+// Fetch retrieves the Taiwan-specific geopolitical score.
+func (a *TaiwanGeopoliticalChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	bgCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	score, err := a.provider.FetchScore(bgCtx)
+	if err != nil {
+		return nil, fmt.Errorf("taiwan_geopolitical fetch: %w", err)
+	}
+	score.Timestamp = time.Now()
+	store := narrative.NewGeopoliticalStore(filepath.Join(a.workDir, "data/state/geopolitical/taiwan"))
+	if err := store.Save(score); err != nil {
+		logging.Error("apigateway", "taiwan_geopolitical_save_failed", "err", err)
+	}
+	data, err := json.Marshal(score)
+	if err != nil {
+		return nil, fmt.Errorf("taiwan_geopolitical marshal: %w", err)
+	}
+	return &FetchResult{
+		Data: data,
+		Meta: FetchMetadata{
+			ChannelID:          "geopolitical_taiwan",
+			RateLimitRemaining: int(a.limiter.Tokens()),
+			Timestamp:          time.Now(),
+		},
+	}, nil
+}
+
+// HealthCheck verifies connectivity by fetching scores.
+func (a *TaiwanGeopoliticalChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
+	_, err := a.Fetch(ctx)
+	if err != nil {
+		return HealthStatus{
+			Status:    "error",
+			LastError: err.Error(),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "liveness",
+		}, err
+	}
+	return HealthStatus{
+		Status:    "ok",
+		UpdatedAt: time.Now().Format(time.RFC3339),
+		CheckType: "liveness",
+	}, nil
+}
+
+// RateLimit returns the Taiwan geopolitical rate limiter.
+func (a *TaiwanGeopoliticalChannelAdapter) RateLimit() *rate.Limiter {
+	return a.limiter
+}
+
+// Metadata returns static channel metadata for Taiwan geopolitical.
+func (a *TaiwanGeopoliticalChannelAdapter) Metadata() ChannelMetadata {
+	return ChannelMetadata{
+		ChannelID:  "geopolitical_taiwan",
+		Country:    "台灣",
+		Platform:   "CNA / 自由時報 / TVBS RSS",
+		APIFormat:  "RSS XML",
+		Path:       "www.cna.com.tw / news.ltn.com.tw / news.tvbs.com.tw",
+		HasLimiter: true,
+	}
+}
+
+// ---------------------------------------------------------------------------
+// JANUSRegimeChannelAdapter — wraps janus.Engine for computed regime status
+// ---------------------------------------------------------------------------
+
+// JANUSRegimeChannelAdapter adapts the JANUS engine to the DataProvider interface.
+type JANUSRegimeChannelAdapter struct {
+	engine  *janus.Engine
+	limiter *rate.Limiter
+}
+
+// NewJANUSRegimeChannelAdapter creates a new adapter for the JANUS regime channel.
+func NewJANUSRegimeChannelAdapter(engine *janus.Engine) *JANUSRegimeChannelAdapter {
+	return &JANUSRegimeChannelAdapter{
+		engine:  engine,
+		limiter: rate.NewLimiter(rate.Every(5*time.Second), 1),
+	}
+}
+
+// Fetch retrieves the current JANUS regime status (computed, not fetched).
+func (a *JANUSRegimeChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	if a.engine == nil {
+		return nil, fmt.Errorf("janus_regime: engine not initialized")
+	}
+	status := a.engine.GetStatus()
+	data, err := json.Marshal(status)
+	if err != nil {
+		return nil, fmt.Errorf("janus_regime marshal: %w", err)
+	}
+	return &FetchResult{
+		Data: data,
+		Meta: FetchMetadata{
+			ChannelID:          "janus_regime",
+			RateLimitRemaining: int(a.limiter.Tokens()),
+			Timestamp:          time.Now(),
+		},
+	}, nil
+}
+
+// HealthCheck verifies the JANUS engine is running.
+func (a *JANUSRegimeChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
+	if a.engine == nil {
+		return HealthStatus{
+			Status:    "inactive",
+			LastError: "JANUS engine not initialized",
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "computed",
+		}, nil
+	}
+	status := a.engine.GetStatus()
+	if status.LastUpdated.IsZero() {
+		return HealthStatus{
+			Status:    "warn",
+			LastError: "JANUS loaded but not yet updated",
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "computed",
+		}, nil
+	}
+	age := time.Since(status.LastUpdated)
+	if age > 7*24*time.Hour {
+		return HealthStatus{
+			Status:    "warn",
+			LastError: fmt.Sprintf("JANUS last updated %d days ago", int(age.Hours()/24)),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "computed",
+		}, nil
+	}
+	return HealthStatus{
+		Status:    "ok",
+		UpdatedAt: time.Now().Format(time.RFC3339),
+		CheckType: "computed",
+	}, nil
+}
+
+// RateLimit returns the JANUS regime rate limiter.
+func (a *JANUSRegimeChannelAdapter) RateLimit() *rate.Limiter {
+	return a.limiter
+}
+
+// Metadata returns static channel metadata for JANUS regime.
+func (a *JANUSRegimeChannelAdapter) Metadata() ChannelMetadata {
+	return ChannelMetadata{
+		ChannelID:  "janus_regime",
+		Country:    "全域",
+		Platform:   "JANUS Engine",
+		APIFormat:  "Internal (computed)",
+		Path:       "internal/janus",
+		HasLimiter: false,
+	}
+}
+
+// ---------------------------------------------------------------------------
 // RegisterChannelAdapters — wires concrete clients into the Gateway registry
 // ---------------------------------------------------------------------------
 
@@ -878,7 +1120,7 @@ func (a *GeopoliticalChannelAdapter) Metadata() ChannelMetadata {
 // wraps each in a channel adapter, and registers them in the Gateway's
 // ChannelRegistry. Clients that require API keys are silently skipped
 // when the key is not configured.
-func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config) error {
+func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janusEngine *janus.Engine) error {
 	if g == nil {
 		return fmt.Errorf("gateway is nil")
 	}
@@ -925,12 +1167,6 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config) erro
 		logging.Info("apigateway", "adapter_registered", "channel", "us_yahoo")
 	}
 
-	// --- JPY Yahoo (via Frankfurter) ---
-	frankfurterProvider := marketdata.NewFrankfurterFXProvider()
-	jpyAdapter := NewJPYYahooChannelAdapter(frankfurterProvider)
-	g.registry.Register("jpy_yahoo", jpyAdapter)
-	logging.Info("apigateway", "adapter_registered", "channel", "jpy_yahoo")
-
 	// --- TWSE Capital Flow (no API key required) ---
 	capFlowProvider := marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow"))
 	capFlowAdapter := NewTWSECapitalFlowChannelAdapter(capFlowProvider)
@@ -961,6 +1197,30 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config) erro
 	geoAdapter := NewGeopoliticalChannelAdapter(workDir)
 	g.registry.Register("geopolitical", geoAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "geopolitical")
+
+	// --- JPY Yahoo (FrankfurterFXProvider for USD/JPY rate) ---
+	jpyProvider := marketdata.NewFrankfurterFXProvider()
+	jpyAdapter := NewJPYYahooChannelAdapter(jpyProvider)
+	g.registry.Register("jpy_yahoo", jpyAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "jpy_yahoo")
+
+	// --- TSMC Revenue (FinMind, requires API key) ---
+	tsmcProvider := marketdata.NewTSMCRevenueProvider(cfg.FinMindAPIKey)
+	tsmcAdapter := NewTSMCRevenueChannelAdapter(tsmcProvider)
+	g.registry.Register("tsmc_revenue", tsmcAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "tsmc_revenue")
+
+	// --- Taiwan Geopolitical (CNA / 自由時報 / TVBS RSS) ---
+	taiwanGeoAdapter := NewTaiwanGeopoliticalChannelAdapter(workDir)
+	g.registry.Register("geopolitical_taiwan", taiwanGeoAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "geopolitical_taiwan")
+
+	// --- JANUS Regime (internal computed engine, optional) ---
+	if janusEngine != nil {
+		janusAdapter := NewJANUSRegimeChannelAdapter(janusEngine)
+		g.registry.Register("janus_regime", janusAdapter)
+		logging.Info("apigateway", "adapter_registered", "channel", "janus_regime")
+	}
 
 	return nil
 }

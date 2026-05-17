@@ -83,9 +83,10 @@ export function openKpiHelp(key) {
   const titleMap = {
     narrative: '敘事脈絡',
     regime: '市場狀態',
-    weakest: '表現最差 AI',
+    weakest: '待改進 AI 策略',
     experiment: '實驗狀態',
-    crowding: '擁擠標的'
+    crowding: '擁擠標的',
+    data_time: '資料時間說明'
   };
   const contentMap = {
     narrative: `<p><strong>這是什麼？</strong><br>顯示當前回測窗口中，由總經數據（利率、匯率、資金流向等）驅動的最重要敘事主題，以及外資出逃指數。它回答了「現在市場的主要故事是什麼」。</p>
@@ -100,15 +101,40 @@ export function openKpiHelp(key) {
 </ul></p>
 <p><strong>為什麼重要？</strong><br>體制決定了整個投資組合的基調。RISK_ON 時可積極參與成長與動能策略；NEUTRAL 時應控制單一標的比重並提高篩選標準；RISK_OFF 時應優先考慮降低曝險、轉向防禦性配置或提高現金比重。</p>
 <p><strong>該注意什麼？</strong><br>當 regime 從 RISK_ON 快速轉向 RISK_OFF，通常伴隨外資出逃指數飆升（紅燈）。此時請立即前往【相對趨勢】頁檢查總經雷達，並檢視【投資管線】是否有過多推薦被控制層阻擋——這是市場風險情緒惡化的早期信號。</p>`,
-    weakest: `<p><strong>這是什麼？</strong><br>根據最新回測窗口的 Scorecard，Sharpe-like 指標最低的 Agent。它是下一輪突變實驗（Mutation）的首選候選對象。</p>
-<p><strong>為什麼重要？</strong><br>Atlas-Go 的演化循環（Evolution Loop）就是持續識別最弱 Agent，並對其進行 prompt、規則或約束條件的突變改進。這不代表該 Agent 一定會被淘汰，而是指出當前最需要迭代的策略缺口。</p>
-<p><strong>該注意什麼？</strong><br>在提出突變前，建議先進入【AI 觀測台】頁檢查該 Agent 的觀察數（observations）是否充足，以及失敗是否集中在特定 regime。若樣本過少，改善結論的置信度會降低。</p>`,
+    weakest: `<p><strong>這是什麼？</strong><br>演化系統根據策略層級（Sector/Style 優於 Control）、歷史觀察數量（越少越需補足）與 Sharpe-like 風險調整回報，綜合選出最需要改進的 Agent。它就是下一輪突變實驗（Mutation）的目標對象。</p>
+<p><strong>為什麼重要？</strong><br>Atlas-Go 的演化循環（Evolution Loop）持續識別當前最需要迭代的策略，並自動生成 prompt、規則或約束條件的突變改進提案。這不是「應該避開該策略的選股建議」，而是「這個策略的統計表現有改進空間，值得投入實驗資源」的演化訊號。</p>
+<p><strong>該注意什麼？</strong><br>在提出突變前，建議先進入【AI 觀測台】頁檢查該 Agent 的觀察數（observations）是否充足、失效是否集中在特定 regime。若回測資料不足（如最新交易日尚無隔日數據），Sharpe-like 可能基於估算值計算，此時應優先參考歷史窗口的穩定數據。</p>`,
     experiment: `<p><strong>這是什麼？</strong><br>顯示當前待評判（judge）和待晉升（promote）的實驗數量。它是整個 mutation → judge → promote → revert 閉環的可視化入口。</p>
 <p><strong>為什麼重要？</strong><br>若存在「待評判」實驗，表示已有突變運行完成但尚未決定接受或拒絕；若存在「待晉升」實驗，表示已有實驗通過門檻但尚未寫入基線政策（baseline_policy.json）。</p>
 <p><strong>該注意什麼？</strong><br>停滯的實驗會阻塞下一輪改進循環。建議定期進入【模擬交易】頁進行評判與晉升。若晉升後發現績效反轉，可透過【控制與稽核】頁回滾基線版本。</p>`,
     crowding: `<p><strong>這是什麼？</strong><br>當同一標的同時被 ≥3 個 Agent 推薦，或 Style Layer 的標的池重疊過高時，CIO 層會觸發擁擠懲罰（conviction × 0.7）。此卡片列出當前被多重疊覆蓋的標的。</p>
 <p><strong>為什麼重要？</strong><br>擁擠是風格趨同的信號，往往預示短期波動放大或回調風險。這幫助操作者識別「大家都愛」的熱門標的是否已過度集中。</p>
-<p><strong>該注意什麼？</strong><br>高重疊不一定立刻危險，但如果疊加外資出逃指數紅燈（>70分）或 NEUTRAL regime，應特別警惕。可考慮在【投資管線】頁手動拒絕部分高擁擠標的，或進一步降低該風格 Agent 的 Darwinian 權重。</p>`
+<p><strong>該注意什麼？</strong><br>高重疊不一定立刻危險，但如果疊加外資出逃指數紅燈（>70分）或 NEUTRAL regime，應特別警惕。可考慮在【投資管線】頁手動拒絕部分高擁擠標的，或進一步降低該風格 Agent 的 Darwinian 權重。</p>`,
+    data_time: `<p><strong>卡片上的 3 個時間分別代表什麼？</strong></p>
+<table style="width:100%;font-size:13px;margin:8px 0">
+<thead><tr><th>#</th><th>時間</th><th>來源</th><th>語意</th></tr></thead>
+<tbody>
+<tr><td>①</td><td><strong>主值</strong>（較大數字）</td><td>TWSE 回放 CSV 的最後交易日</td><td>系統擁有的最「新回放資料日期」。<br>這是歷史股價數據的最新一天。</td></tr>
+<tr><td>②</td><td><strong>「最後模擬」ID</strong>（如 <code>window-20260413</code>）</td><td>回測窗口 JSON 檔名</td><td>最近一次模擬運行的窗口編號。<br>編碼了該次模擬的交易日。</td></tr>
+<tr><td>③</td><td><strong>「最後模擬」時間</strong></td><td>窗口檔案的修改時間</td><td>最近一次模擬實際執行的時間點。</td></tr>
+</tbody>
+</table>
+<p><strong>為什麼這 3 個時間會不一致？</strong><br><strong>這是正常的。</strong>它們量測的是完全不同的維度：</p>
+<ul style="margin:4px 0 8px;padding-left:18px;line-height:1.8">
+<li>① 取決於 TWSE 市場交易日與 backfill 排程 — 週末/假日不會有新資料</li>
+<li>② 取決於模擬排程器（每天執行一次）— 窗口 ID 對應排程日而非資料日</li>
+<li>③ 取決於模擬任務的實際執行時間 — 若背景佇列塞車可能延遲數小時</li>
+</ul>
+<p><strong>舉例：</strong>回放資料最新到 4/10（週五），排程器在 4/13（週一）執行模擬，但因為資料量大任務排到 4/14 凌晨才跑完。此時①=4/10、②=<code>window-20260413</code>、③=4/14 02:30。</p>
+<p><strong>需要留意的異常信號：</strong></p>
+<table style="width:100%;font-size:13px">
+<thead><tr><th>信號</th><th>可能含義</th><th>建議行動</th></tr></thead>
+<tbody>
+<tr><td>① 超過 5 天未更新</td><td>TWSE backfill 排程未執行</td><td>檢查 <code>cmd/import-replay</code> 是否正常運作</td></tr>
+<tr><td>② 與 ① 差距超過 7 天</td><td>模擬排程器未定期執行</td><td>檢查 cron / systemd 排程服務狀態</td></tr>
+<tr><td>③ 與 ② 差距過大（>1 天）</td><td>模擬任務阻塞或佇列積壓</td><td>檢查 taskexec 管理器是否有卡住任務</td></tr>
+</tbody>
+</table>`
   };
   document.getElementById('infoTitle').textContent = titleMap[key] || '說明';
   document.getElementById('infoContent').innerHTML = contentMap[key] || '';

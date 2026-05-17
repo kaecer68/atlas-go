@@ -3,6 +3,7 @@ package config
 import (
 	"bufio"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -114,6 +115,26 @@ func Normalize(cfg Config) Config {
 	return cfg
 }
 
+// GetReplayDataPath returns the current replay data path.
+// Priority: 1) ATLAS_REPLAY_DATA_PATH env var, 2) VERSION file, 3) Normalize() default.
+func GetReplayDataPath(workDir string) string {
+	cfg := Load()
+	cfg = Normalize(cfg)
+
+	if v := os.Getenv("ATLAS_REPLAY_DATA_PATH"); v != "" {
+		return v
+	}
+
+	versionFile := filepath.Join(workDir, "data", "replay", "VERSION")
+	if data, err := os.ReadFile(versionFile); err == nil {
+		if name := strings.TrimSpace(string(data)); name != "" {
+			return filepath.Join(workDir, "data", "replay", name)
+		}
+	}
+
+	return filepath.Join(workDir, cfg.ReplayDataPath)
+}
+
 func envOr(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -169,6 +190,18 @@ func envOrIntCSV(key string, fallback []int) []int {
 // Use this for secrets not covered by the Config struct fields.
 func GetSecret(key string) string {
 	return envOrKeychain(key, "")
+}
+
+// resolveEnvFilePath 返回要加载的 .env 文件路径。
+// 优先级：1) ATLAS_ENV_FILE 环境变量 2) 当前目录 .env
+func resolveEnvFilePath() string {
+	if p := os.Getenv("ATLAS_ENV_FILE"); p != "" {
+		return p
+	}
+	if _, err := os.Stat(".env"); err == nil {
+		return ".env"
+	}
+	return ".env" // fallback: 让 loadEnvFile 静默跳过
 }
 
 // loadEnvFile 从 .env 文件加载环境变量

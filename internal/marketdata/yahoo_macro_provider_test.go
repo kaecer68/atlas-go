@@ -5,13 +5,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
 func TestYahooFinanceMacroProvider_UserAgent(t *testing.T) {
-	var capturedUA string
+	var capturedUA atomic.Value
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedUA = r.Header.Get("User-Agent")
+		capturedUA.Store(r.Header.Get("User-Agent"))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"chart":{"result":[{"meta":{"regularMarketTime":1700000000,"regularMarketPrice":150.0},"indicators":{"quote":[{"close":[149.0,150.0]}]}}]}}`))
@@ -30,18 +31,19 @@ func TestYahooFinanceMacroProvider_UserAgent(t *testing.T) {
 		t.Fatalf("FetchSnapshot failed: %v", err)
 	}
 
-	if capturedUA == "" {
+	captured := capturedUA.Load().(string)
+	if captured == "" {
 		t.Fatal("User-Agent header was not sent")
 	}
 	found := false
 	for _, ua := range modernUserAgents {
-		if capturedUA == ua {
+		if captured == ua {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("User-Agent %q not in modern list", capturedUA)
+		t.Errorf("User-Agent %q not in modern list", captured)
 	}
 }
 
@@ -180,5 +182,19 @@ func TestYahooFetchFromHost_InvalidJSON(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unmarshal") {
 		t.Errorf("expected unmarshal error, got: %v", err)
+	}
+}
+
+func TestYahooBDISymbol(t *testing.T) {
+	p := NewYahooFinanceMacroProvider()
+
+	if !strings.Contains(p.bdiSymbol, "BDI") && !strings.Contains(p.bdiSymbol, "BALTT") {
+		t.Errorf("expected bdiSymbol to contain BDI or BALTT, got %s", p.bdiSymbol)
+	}
+
+	// Override
+	p.SetBDISymbol("BALTT")
+	if p.bdiSymbol != "BALTT" {
+		t.Errorf("expected bdiSymbol to be BALTT after SetBDISymbol, got %s", p.bdiSymbol)
 	}
 }

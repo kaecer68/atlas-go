@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -37,10 +38,29 @@ type ChannelAlert struct {
 }
 
 type ChannelHealthRecord struct {
-	Status        string `json:"status"`
-	LastFetchAt   string `json:"last_fetch_at"`
-	LastError     string `json:"last_error,omitempty"`
-	LastSuccessAt string `json:"last_success_at,omitempty"`
+	Status             string   `json:"status"`
+	LastFetchAt        string   `json:"last_fetch_at"`
+	LastDataAt         string   `json:"last_data_at,omitempty"`
+	LastError          string   `json:"last_error,omitempty"`
+	LastSuccessAt      string   `json:"last_success_at,omitempty"`
+	RateLimitRemaining int      `json:"rate_limit_remaining,omitempty"`
+	LatencyMs          int64    `json:"latency_ms,omitempty"`
+	RecordsFetched     int      `json:"records_fetched,omitempty"`
+	SymbolsProcessed   int      `json:"symbols_processed,omitempty"`
+	Errors             []string `json:"errors,omitempty"`
+}
+
+// RecordOption configures optional fields on a ChannelHealthRecord.
+type RecordOption func(*ChannelHealthRecord)
+
+// WithLastDataAt sets the last data timestamp.
+func WithLastDataAt(t time.Time) RecordOption {
+	return func(r *ChannelHealthRecord) { r.LastDataAt = t.Format(time.RFC3339) }
+}
+
+// WithLatencyMs sets the latency in milliseconds.
+func WithLatencyMs(ms int64) RecordOption {
+	return func(r *ChannelHealthRecord) { r.LatencyMs = ms }
 }
 
 type DataChannelService struct {
@@ -50,6 +70,10 @@ type DataChannelService struct {
 	GeoProvider       narrative.GeopoliticalRiskProvider
 	TaiwanGeoProvider *narrative.CompositeTaiwanGeopoliticalProvider
 	JanusEngine       *janus.Engine
+	FugleAPIKey       string
+	FubonAPIKey       string
+	FinMindAPIKey     string
+	TejAPIKey         string
 	healthStore       *ChannelHealthStoreAdapter
 }
 
@@ -63,12 +87,14 @@ type cachedFugleHealth struct {
 }
 
 var (
-	fugleHealthCache   cachedFugleHealth
-	fugleHealthMu      sync.RWMutex
-	fubonHealthCache   cachedFugleHealth
-	fubonHealthMu      sync.RWMutex
-	finmindHealthCache cachedFugleHealth
-	finmindHealthMu    sync.RWMutex
+	fugleHealthCache       cachedFugleHealth
+	fugleHealthMu          sync.RWMutex
+	fubonHealthCache       cachedFugleHealth
+	fubonHealthMu          sync.RWMutex
+	finmindHealthCache     cachedFugleHealth
+	finmindHealthMu        sync.RWMutex
+	frankfurterHealthCache cachedFugleHealth
+	frankfurterHealthMu    sync.RWMutex
 )
 
 // fugleHealthCacheTTL is how long we reuse the last live API health check.
@@ -103,6 +129,7 @@ func (s *DataChannelService) getCachedFugleHealth() (status, updated, lastError 
 		return fugleHealthCache.status, fugleHealthCache.updated, ""
 	}
 
+	// TODO: Migrate to Gateway for direct Fugle client instantiation.
 	fugleClient := marketdata.NewFugleClient(fugleKey)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	_, err := fugleClient.GetQuote(ctx, "1476")
@@ -154,6 +181,7 @@ func (s *DataChannelService) getCachedFubonHealth() (status, updated, lastError 
 		return fubonHealthCache.status, fubonHealthCache.updated, ""
 	}
 
+	// TODO: Migrate to Gateway for direct Fubon client instantiation.
 	fubonClient := marketdata.NewFubonClient(fubonKey)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	err := fubonClient.HealthCheck(ctx)
@@ -205,11 +233,10 @@ func (s *DataChannelService) getCachedFinMindHealth() (status, updated, lastErro
 		return finmindHealthCache.status, finmindHealthCache.updated, ""
 	}
 
+	// TODO: Migrate to Gateway for direct FinMind client instantiation.
 	finmindClient := marketdata.NewFinMindClient(finmindKey)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	// Use yesterday's date to avoid "no price data" error before market close
-	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	_, err := finmindClient.GetStockPrice(ctx, "2330", yesterday)
+	_, err := finmindClient.GetStockPrice(ctx, "2330", time.Now().Format("2006-01-02"))
 	cancel()
 
 	if err != nil {
@@ -230,9 +257,74 @@ func (s *DataChannelService) getCachedFinMindHealth() (status, updated, lastErro
 	return finmindHealthCache.status, finmindHealthCache.updated, finmindHealthCache.lastError
 }
 
+// getCachedFrankfurterHealth returns cached status if fresh, otherwise queries the API.
+func (s *DataChannelService) getCachedFrankfurterHealth() (status, updated, lastError string) {
+	frankfurterHealthMu.RLock()
+	cache := frankfurterHealthCache
+	frankfurterHealthMu.RUnlock()
+
+	if time.Since(cache.checkedAt) < fugleHealthCacheTTL {
+		return cache.status, cache.updated, cache.lastError
+	}
+
+	frankfurterHealthMu.Lock()
+	defer frankfurterHealthMu.Unlock()
+
+	if time.Since(frankfurterHealthCache.checkedAt) < fugleHealthCacheTTL {
+		return frankfurterHealthCache.status, frankfurterHealthCache.updated, frankfurterHealthCache.lastError
+	}
+
+	// Test the Frankfurter FX API endpoint used for JPY rate data.
+	client := &http.Client{Timeout: 10 * time.Second}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.frankfurter.dev/v2/latest?from=USD&to=JPY", nil)
+	if err != nil {
+		frankfurterHealthCache = cachedFugleHealth{
+			status:    "error",
+			updated:   "請求建立失敗",
+			lastError: err.Error(),
+			checkedAt: time.Now(),
+		}
+		return frankfurterHealthCache.status, frankfurterHealthCache.updated, frankfurterHealthCache.lastError
+	}
+	req.Header.Set("User-Agent", "atlas-go/1.0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		frankfurterHealthCache = cachedFugleHealth{
+			status:    "error",
+			updated:   "API 連線失敗",
+			lastError: err.Error(),
+			checkedAt: time.Now(),
+		}
+		return frankfurterHealthCache.status, frankfurterHealthCache.updated, frankfurterHealthCache.lastError
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		frankfurterHealthCache = cachedFugleHealth{
+			status:    "error",
+			updated:   "API 回應異常",
+			lastError: fmt.Sprintf("HTTP %d", resp.StatusCode),
+			checkedAt: time.Now(),
+		}
+		return frankfurterHealthCache.status, frankfurterHealthCache.updated, frankfurterHealthCache.lastError
+	}
+
+	frankfurterHealthCache = cachedFugleHealth{
+		status:    "ok",
+		updated:   "API 連線正常",
+		checkedAt: time.Now(),
+	}
+	return frankfurterHealthCache.status, frankfurterHealthCache.updated, ""
+}
+
 type ChannelHealthStoreAdapter struct {
-	pool *pgxpool.Pool
-	dir  string
+	pool  *pgxpool.Pool
+	dir   string
+	store *channelHealthStore
+	once  sync.Once
 }
 
 func NewChannelHealthStoreAdapter(dir string, pool *pgxpool.Pool) *ChannelHealthStoreAdapter {
@@ -240,13 +332,17 @@ func NewChannelHealthStoreAdapter(dir string, pool *pgxpool.Pool) *ChannelHealth
 }
 
 func (a *ChannelHealthStoreAdapter) Get(channelID string) *ChannelHealthRecord {
-	store := newChannelHealthStore(a.dir, a.pool)
-	return store.Get(channelID)
+	a.once.Do(func() {
+		a.store = newChannelHealthStore(a.dir, a.pool)
+	})
+	return a.store.Get(channelID)
 }
 
-func (a *ChannelHealthStoreAdapter) Record(channelID, status, errMsg string) error {
-	store := newChannelHealthStore(a.dir, a.pool)
-	return store.Record(channelID, status, errMsg)
+func (a *ChannelHealthStoreAdapter) Record(channelID, status, errMsg string, opts ...RecordOption) error {
+	a.once.Do(func() {
+		a.store = newChannelHealthStore(a.dir, a.pool)
+	})
+	return a.store.Record(channelID, status, errMsg, opts...)
 }
 
 func newChannelHealthStore(dir string, pool *pgxpool.Pool) *channelHealthStore {
@@ -275,7 +371,7 @@ func (s *channelHealthStore) Get(channelID string) *ChannelHealthRecord {
 	return nil
 }
 
-func (s *channelHealthStore) Record(channelID, status, errMsg string) error {
+func (s *channelHealthStore) Record(channelID, status, errMsg string, opts ...RecordOption) error {
 	s.load()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -291,6 +387,9 @@ func (s *channelHealthStore) Record(channelID, status, errMsg string) error {
 		rec.LastSuccessAt = rec.LastFetchAt
 	} else {
 		rec.LastError = errMsg
+	}
+	for _, opt := range opts {
+		opt(rec)
 	}
 	return s.saveLocked()
 }
@@ -338,7 +437,7 @@ func (s *channelHealthStore) saveLocked() error {
 	return os.Rename(tmp, s.path)
 }
 
-func NewDataChannelService(workDir string, pool *pgxpool.Pool, macroIngestor *narrative.MacroIngestor, geoProvider narrative.GeopoliticalRiskProvider, taiwanGeoProvider *narrative.CompositeTaiwanGeopoliticalProvider, janusEngine *janus.Engine) *DataChannelService {
+func NewDataChannelService(workDir string, pool *pgxpool.Pool, macroIngestor *narrative.MacroIngestor, geoProvider narrative.GeopoliticalRiskProvider, taiwanGeoProvider *narrative.CompositeTaiwanGeopoliticalProvider, janusEngine *janus.Engine, fugleAPIKey, fubonAPIKey, finmindAPIKey, tejAPIKey string) *DataChannelService {
 	return &DataChannelService{
 		WorkDir:           workDir,
 		Pool:              pool,
@@ -346,6 +445,10 @@ func NewDataChannelService(workDir string, pool *pgxpool.Pool, macroIngestor *na
 		GeoProvider:       geoProvider,
 		TaiwanGeoProvider: taiwanGeoProvider,
 		JanusEngine:       janusEngine,
+		FugleAPIKey:       fugleAPIKey,
+		FubonAPIKey:       fubonAPIKey,
+		FinMindAPIKey:     finmindAPIKey,
+		TejAPIKey:         tejAPIKey,
 		healthStore:       NewChannelHealthStoreAdapter(filepath.Join(workDir, "data/state"), pool),
 	}
 }
@@ -389,13 +492,8 @@ func (s *DataChannelService) buildUSYahooChannel(now time.Time) DataChannel {
 	macroPath := filepath.Join(s.WorkDir, "data/state/macro/latest.json")
 	status, updated := checkMacroHealth(macroPath, now)
 	rec := s.healthStore.Get("us_yahoo")
-	if rec != nil && rec.Status != "" {
-		status = rec.Status
-		if rec.LastError != "" {
-			updated = "上次失敗: " + rec.LastError
-		} else {
-			updated = "上次抓取: " + rec.LastFetchAt
-		}
+	if rec != nil && rec.LastError != "" {
+		updated = "上次失敗: " + rec.LastError
 	}
 	return DataChannel{
 		ChannelID:  "us_yahoo",
@@ -412,16 +510,11 @@ func (s *DataChannelService) buildUSYahooChannel(now time.Time) DataChannel {
 }
 
 func (s *DataChannelService) buildTWSEReplayChannel(now time.Time) DataChannel {
-	replayPath := filepath.Join(s.WorkDir, "data/replay/tw_extended_90days.csv")
+	replayPath := config.GetReplayDataPath(s.WorkDir)
 	status, updated := checkReplayHealth(replayPath, now)
 	rec := s.healthStore.Get("twse_replay")
-	if rec != nil && rec.Status != "" {
-		status = rec.Status
-		if rec.LastError != "" {
-			updated = "上次失敗: " + rec.LastError
-		} else if rec.LastSuccessAt != "" {
-			updated = "上次成功: " + rec.LastSuccessAt
-		}
+	if rec != nil && rec.LastError != "" {
+		updated = "上次失敗: " + rec.LastError
 	}
 	return DataChannel{
 		ChannelID:  "twse_replay",
@@ -429,7 +522,7 @@ func (s *DataChannelService) buildTWSEReplayChannel(now time.Time) DataChannel {
 		Platform:   "TWSE 證交所",
 		APIFormat:  "OpenAPI / CSV",
 		Path:       "openapi.twse.com.tw / www.twse.com.tw",
-		Storage:    "data/replay/tw_extended_90days.csv",
+		Storage:    config.GetReplayDataPath(s.WorkDir),
 		Status:     status,
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
@@ -441,13 +534,8 @@ func (s *DataChannelService) buildTWSECapitalFlowChannel(now time.Time) DataChan
 	capFlowDir := filepath.Join(s.WorkDir, "data/state/capital_flow")
 	status, updated := checkCapitalFlowHealth(capFlowDir, now)
 	rec := s.healthStore.Get("twse_capital_flow")
-	if rec != nil && rec.Status != "" {
-		status = rec.Status
-		if rec.LastError != "" {
-			updated = "上次失敗: " + rec.LastError
-		} else if rec.LastSuccessAt != "" {
-			updated = "上次成功: " + rec.LastSuccessAt
-		}
+	if rec != nil && rec.LastError != "" {
+		updated = "上次失敗: " + rec.LastError
 	}
 	return DataChannel{
 		ChannelID:  "twse_capital_flow",
@@ -463,29 +551,7 @@ func (s *DataChannelService) buildTWSECapitalFlowChannel(now time.Time) DataChan
 }
 
 func (s *DataChannelService) buildFugleChannel(now time.Time) DataChannel {
-	fugleKey := config.GetSecret("FUGLE_API_KEY")
-	if fugleKey == "" {
-		fugleKey = config.GetSecret("ATLAS_FUGLE_API_KEY")
-	}
-	status := "inactive"
-	updated := "-"
-	lastError := ""
-	if fugleKey != "" {
-		fugleClient := marketdata.NewFugleClient(fugleKey)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_, err := fugleClient.GetQuote(ctx, "1476")
-		cancel()
-		if err != nil {
-			status = "error"
-			updated = "API 連線失敗"
-			lastError = err.Error()
-		} else {
-			status = "ok"
-			updated = "API 連線正常"
-		}
-	} else {
-		updated = "未設定 API Key"
-	}
+	status, updated, lastError := s.getCachedFugleHealth()
 	return DataChannel{
 		ChannelID:  "fugle",
 		Country:    "台灣",
@@ -501,29 +567,7 @@ func (s *DataChannelService) buildFugleChannel(now time.Time) DataChannel {
 }
 
 func (s *DataChannelService) buildFubonChannel(now time.Time) DataChannel {
-	fubonKey := config.GetSecret("FUBON_API_KEY")
-	if fubonKey == "" {
-		fubonKey = config.GetSecret("ATLAS_FUBON_API_KEY")
-	}
-	status := "inactive"
-	updated := "-"
-	lastError := ""
-	if fubonKey != "" {
-		fubonClient := marketdata.NewFubonClient(fubonKey)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		err := fubonClient.HealthCheck(ctx)
-		cancel()
-		if err != nil {
-			status = "error"
-			updated = "API 連線失敗"
-			lastError = err.Error()
-		} else {
-			status = "ok"
-			updated = "API 連線正常"
-		}
-	} else {
-		updated = "未設定 API Key"
-	}
+	status, updated, lastError := s.getCachedFubonHealth()
 	return DataChannel{
 		ChannelID:  "fubon",
 		Country:    "台灣",
@@ -539,26 +583,7 @@ func (s *DataChannelService) buildFubonChannel(now time.Time) DataChannel {
 }
 
 func (s *DataChannelService) buildFinMindChannel(now time.Time) DataChannel {
-	finmindKey := config.GetSecret("FINMIND_API_KEY")
-	status := "inactive"
-	updated := "-"
-	lastError := ""
-	if finmindKey != "" {
-		finmindClient := marketdata.NewFinMindClient(finmindKey)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_, err := finmindClient.GetStockPrice(ctx, "2330", time.Now().AddDate(0, 0, -1).Format("2006-01-02"))
-		cancel()
-		if err != nil {
-			status = "error"
-			updated = "API 連線失敗"
-			lastError = err.Error()
-		} else {
-			status = "ok"
-			updated = "API 連線正常"
-		}
-	} else {
-		updated = "未設定 API Key"
-	}
+	status, updated, lastError := s.getCachedFinMindHealth()
 	return DataChannel{
 		ChannelID:  "finmind",
 		Country:    "台灣",
@@ -577,14 +602,40 @@ func (s *DataChannelService) buildJPYYahooChannel(now time.Time) DataChannel {
 	macroPath := filepath.Join(s.WorkDir, "data/state/macro/latest.json")
 	status, updated := checkJPYHealth(macroPath, now)
 	rec := s.healthStore.Get("jpy_yahoo")
-	if rec != nil && rec.Status != "" {
-		status = rec.Status
-		if rec.LastError != "" {
-			updated = "上次失敗: " + rec.LastError
-		} else {
-			updated = "上次抓取: " + rec.LastFetchAt
+	if rec != nil && rec.LastError != "" {
+		updated = "上次失敗: " + rec.LastError
+	}
+
+	// Also check Frankfurter FX API as an alternative JPY source.
+	fxStatus, _, fxLastError := s.getCachedFrankfurterHealth()
+	if status == "error" && fxStatus == "ok" {
+		// File data is stale but the Frankfurter API (alternative JPY source) is reachable.
+		status = "warn"
+		updated = "檔案數據過期，但替代來源 Frankfurter API 連線正常"
+		rec = s.healthStore.Get("jpy_yahoo")
+		if rec != nil && rec.LastError != "" {
+			updated += " · 最後成功: " + rec.LastSuccessAt
+		}
+	} else if status == "error" && fxStatus == "error" {
+		lastError := fxLastError
+		lastErrorStr := lastErrorStr(rec)
+		if lastErrorStr != "" {
+			lastError = lastErrorStr
+		}
+		return DataChannel{
+			ChannelID:  "jpy_yahoo",
+			Country:    "日本",
+			Platform:   "Yahoo Finance (JPY)",
+			APIFormat:  "REST JSON",
+			Path:       "query1.finance.yahoo.com/v8/finance/chart",
+			Storage:    "data/state/macro/latest.json",
+			Status:     status,
+			StatusText: statusText(status),
+			UpdatedAt:  fmt.Sprintf("Yahoo API 連線失敗 · Frankfurter API 連線失敗: %s", lastError),
+			LastError:  lastError,
 		}
 	}
+
 	return DataChannel{
 		ChannelID:  "jpy_yahoo",
 		Country:    "日本",
@@ -603,13 +654,8 @@ func (s *DataChannelService) buildGeopoliticalChannel(now time.Time) DataChannel
 	geoPath := filepath.Join(s.WorkDir, "data/state/geopolitical/latest.json")
 	status, updated := checkGeopoliticalHealth(geoPath, now)
 	rec := s.healthStore.Get("geopolitical")
-	if rec != nil && rec.Status != "" {
-		status = rec.Status
-		if rec.LastError != "" {
-			updated = "上次失敗: " + rec.LastError
-		} else {
-			updated = "上次抓取: " + rec.LastFetchAt
-		}
+	if rec != nil && rec.LastError != "" {
+		updated = "上次失敗: " + rec.LastError
 	}
 	return DataChannel{
 		ChannelID:  "geopolitical",
@@ -627,15 +673,10 @@ func (s *DataChannelService) buildGeopoliticalChannel(now time.Time) DataChannel
 
 func (s *DataChannelService) buildTWSEMarginChannel(now time.Time) DataChannel {
 	marginDir := filepath.Join(s.WorkDir, "data/state/margin")
-	status, updated := checkCapitalFlowHealth(marginDir, now)
+	status, updated := checkMarginHealth(marginDir, now)
 	rec := s.healthStore.Get("twse_margin")
-	if rec != nil && rec.Status != "" {
-		status = rec.Status
-		if rec.LastError != "" {
-			updated = "上次失敗: " + rec.LastError
-		} else if rec.LastSuccessAt != "" {
-			updated = "上次成功: " + rec.LastSuccessAt
-		}
+	if rec != nil && rec.LastError != "" {
+		updated = "上次失敗: " + rec.LastError
 	}
 	return DataChannel{
 		ChannelID:  "twse_margin",
@@ -655,13 +696,8 @@ func (s *DataChannelService) buildExportStatisticsChannel(now time.Time) DataCha
 	exportDir := filepath.Join(s.WorkDir, "data/state/export")
 	status, updated := checkExportHealth(exportDir, now)
 	rec := s.healthStore.Get("export_statistics")
-	if rec != nil && rec.Status != "" {
-		status = rec.Status
-		if rec.LastError != "" {
-			updated = "上次失敗: " + rec.LastError
-		} else if rec.LastSuccessAt != "" {
-			updated = "上次成功: " + rec.LastSuccessAt
-		}
+	if rec != nil && rec.LastError != "" {
+		updated = "上次失敗: " + rec.LastError
 	}
 	return DataChannel{
 		ChannelID:  "export_statistics",
@@ -678,15 +714,10 @@ func (s *DataChannelService) buildExportStatisticsChannel(now time.Time) DataCha
 
 func (s *DataChannelService) buildTSMCRevenueChannel(now time.Time) DataChannel {
 	tsmcDir := filepath.Join(s.WorkDir, "data/state/tsmc_revenue")
-	status, updated := checkCapitalFlowHealth(tsmcDir, now)
+	status, updated := checkTSMCRevenueHealth(tsmcDir, now)
 	rec := s.healthStore.Get("tsmc_revenue")
-	if rec != nil && rec.Status != "" {
-		status = rec.Status
-		if rec.LastError != "" {
-			updated = "上次失敗: " + rec.LastError
-		} else if rec.LastSuccessAt != "" {
-			updated = "上次成功: " + rec.LastSuccessAt
-		}
+	if rec != nil && rec.LastError != "" {
+		updated = "上次失敗: " + rec.LastError
 	}
 	return DataChannel{
 		ChannelID:  "tsmc_revenue",
@@ -703,16 +734,11 @@ func (s *DataChannelService) buildTSMCRevenueChannel(now time.Time) DataChannel 
 }
 
 func (s *DataChannelService) buildTaiwanGeopoliticalChannel(now time.Time) DataChannel {
-	twGeoDir := filepath.Join(s.WorkDir, "data/state/geopolitical/taiwan")
-	status, updated := checkCapitalFlowHealth(twGeoDir, now)
+	twGeoPath := filepath.Join(s.WorkDir, "data/state/geopolitical/taiwan/latest.json")
+	status, updated := checkGeopoliticalHealth(twGeoPath, now)
 	rec := s.healthStore.Get("geopolitical_taiwan")
-	if rec != nil && rec.Status != "" {
-		status = rec.Status
-		if rec.LastError != "" {
-			updated = "上次失敗: " + rec.LastError
-		} else if rec.LastSuccessAt != "" {
-			updated = "上次成功: " + rec.LastSuccessAt
-		}
+	if rec != nil && rec.LastError != "" {
+		updated = "上次失敗: " + rec.LastError
 	}
 	return DataChannel{
 		ChannelID:  "geopolitical_taiwan",
@@ -752,18 +778,14 @@ func (s *DataChannelService) buildJanusRegimeChannel(now time.Time) DataChannel 
 func (s *DataChannelService) buildTEJChannel(now time.Time) DataChannel {
 	status := "inactive"
 	updated := "TEJ_API_KEY not configured"
-	tejKey := config.GetSecret("TEJ_API_KEY")
+	tejKey := s.TejAPIKey
 	if tejKey != "" {
 		status = "ok"
 		updated = "TEJ API key configured"
 		rec := s.healthStore.Get("tej")
-		if rec != nil && rec.Status != "" {
-			status = rec.Status
-			if rec.LastError != "" {
-				updated = "上次失敗: " + rec.LastError
-			} else if rec.LastSuccessAt != "" {
-				updated = "上次成功: " + rec.LastSuccessAt
-			}
+		if rec != nil && rec.LastError != "" {
+			status = "error"
+			updated = "上次失敗: " + rec.LastError
 		}
 	}
 	return DataChannel{
@@ -805,20 +827,7 @@ func (s *DataChannelService) GetAlerts(ctx context.Context) ([]ChannelAlert, err
 }
 
 func statusText(status string) string {
-	switch status {
-	case "ok":
-		return "正常"
-	case "warn":
-		return "延遲"
-	case "error":
-		return "異常"
-	case "partial":
-		return "部分異常"
-	case "inactive":
-		return "未啟用"
-	default:
-		return "未知"
-	}
+	return StatusText(status)
 }
 
 func lastErrorStr(rec *ChannelHealthRecord) string {

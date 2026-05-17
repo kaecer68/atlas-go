@@ -77,13 +77,37 @@ func (h *Handlers) HandleIndustrySeasonality(r *http.Request) (int, any) {
 		})
 	}
 
+	// Build adjustment breakdown
+	var breakdown map[string]any
+	if industryID != "" {
+		bd := h.Svc.GetAdjustmentBreakdown(industryID, now)
+		if bd != nil {
+			breakdown = map[string]any{
+				"direct_match": bd.DirectMatch,
+				"supply_chain": bd.SupplyChain,
+				"narrative":    bd.Narrative,
+				"dynamic_env":  bd.DynamicEnv,
+				"composite":    bd.Composite,
+			}
+		}
+	}
+
+	// Get active narrative themes for seasonality context
+	var narrativeThemes []string
+	if industryID != "" {
+		narrativeThemes = h.Svc.GetActiveNarrativeThemes(industryID)
+	}
+
 	return http.StatusOK, map[string]any{
-		"current_date":        now.Format("2006-01-02"),
-		"active_patterns":     activePatterns,
-		"pattern_count":       len(activePatterns),
-		"adjustment":          adjustment,
-		"all_patterns":        historicalPatterns,
-		"total_pattern_count": len(historicalPatterns),
+		"current_date":         now.Format("2006-01-02"),
+		"active_patterns":      activePatterns,
+		"pattern_count":        len(activePatterns),
+		"adjustment":           adjustment,
+		"adjustment_breakdown": breakdown,
+		"narrative_themes":     narrativeThemes,
+		"all_patterns":         historicalPatterns,
+		"total_pattern_count":  len(historicalPatterns),
+		"calibration_evidence": h.Svc.GetCalibrationEvidence(),
 	}
 }
 
@@ -111,16 +135,20 @@ func (h *Handlers) HandleIndustryCycle(r *http.Request) (int, any) {
 		var allPositions []map[string]any
 		for _, pos := range positions {
 			allPositions = append(allPositions, map[string]any{
-				"industry":        pos.Industry,
-				"name":            pos.Name,
-				"business_cycle":  pos.BusinessCycle,
-				"inventory_cycle": pos.InventoryCycle,
-				"capex_cycle":     pos.CapexCycle,
-				"confidence":      pos.Confidence,
-				"updated_at":      pos.UpdatedAt,
-				"is_favorable":    pos.IsFavorable,
-				"phase_score":     pos.PhaseScore,
-				"trend":           pos.Trend,
+				"industry":             pos.Industry,
+				"name":                 pos.Name,
+				"business_cycle":       pos.BusinessCycle,
+				"inventory_cycle":      pos.InventoryCycle,
+				"capex_cycle":          pos.CapexCycle,
+				"confidence":           pos.Confidence,
+				"updated_at":           pos.UpdatedAt,
+				"is_favorable":         pos.IsFavorable,
+				"phase_score":          pos.PhaseScore,
+				"trend":                pos.Trend,
+				"confidence_breakdown": pos.ConfidenceBreakdown,
+				"threshold_evidence":   pos.ThresholdEvidence,
+				"evidence":             pos.Evidence,
+				"narrative_theme":      pos.NarrativeTheme,
 			})
 		}
 		return http.StatusOK, map[string]any{
@@ -131,15 +159,19 @@ func (h *Handlers) HandleIndustryCycle(r *http.Request) (int, any) {
 
 	pos := positions[0]
 	return http.StatusOK, map[string]any{
-		"industry":        pos.Industry,
-		"business_cycle":  pos.BusinessCycle,
-		"inventory_cycle": pos.InventoryCycle,
-		"capex_cycle":     pos.CapexCycle,
-		"confidence":      pos.Confidence,
-		"updated_at":      pos.UpdatedAt,
-		"is_favorable":    pos.IsFavorable,
-		"phase_score":     pos.PhaseScore,
-		"trend":           pos.Trend,
+		"industry":             pos.Industry,
+		"business_cycle":       pos.BusinessCycle,
+		"inventory_cycle":      pos.InventoryCycle,
+		"capex_cycle":          pos.CapexCycle,
+		"confidence":           pos.Confidence,
+		"updated_at":           pos.UpdatedAt,
+		"is_favorable":         pos.IsFavorable,
+		"phase_score":          pos.PhaseScore,
+		"trend":                pos.Trend,
+		"confidence_breakdown": pos.ConfidenceBreakdown,
+		"threshold_evidence":   pos.ThresholdEvidence,
+		"evidence":             pos.Evidence,
+		"narrative_theme":      pos.NarrativeTheme,
 	}
 }
 
@@ -188,15 +220,21 @@ func (h *Handlers) HandleIndustryOverview(r *http.Request) (int, any) {
 	var industries []map[string]any
 	for _, o := range overviews {
 		industries = append(industries, map[string]any{
-			"id":                o.ID,
-			"name":              o.Name,
-			"cycle_phase":       o.CyclePhase,
-			"inventory_cycle":   o.InventoryCycle,
-			"capex_cycle":       o.CapexCycle,
-			"cycle_confidence":  o.CycleConfidence,
-			"is_favorable":      o.IsFavorable,
-			"seasonal_patterns": o.SeasonalPatterns,
-			"linkage_score":     o.LinkageScore,
+			"id":                  o.ID,
+			"name":                o.Name,
+			"base_weight":         o.BaseWeight,
+			"adjusted_weight":     o.AdjustedWeight,
+			"cycle_phase":         o.CyclePhase,
+			"inventory_cycle":     o.InventoryCycle,
+			"capex_cycle":         o.CapexCycle,
+			"cycle_confidence":    o.CycleConfidence,
+			"is_favorable":        o.IsFavorable,
+			"seasonal_patterns":   o.SeasonalPatterns,
+			"linkage_score":       o.LinkageScore,
+			"cycle_multiplier":    o.CycleMultiplier,
+			"seasonal_multiplier": o.SeasonalMultiplier,
+			"linkage_multiplier":  o.LinkageMultiplier,
+			"adjustment_log":      o.AdjustmentLog,
 		})
 	}
 

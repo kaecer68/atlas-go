@@ -182,8 +182,8 @@ func loadReturnsFromCSV(path string) ([]float64, int, error) {
 
 	var bestSym string
 	var bestCount int
-	for _, date := range ds.Dates {
-		for sym := range ds.ByDate[date.Format("2006-01-02")] {
+	if len(ds.Dates) > 0 {
+		for sym := range ds.ByDate[ds.Dates[0].Format("2006-01-02")] {
 			count := 0
 			for _, d := range ds.Dates {
 				bar, ok := ds.ByDate[d.Format("2006-01-02")][sym]
@@ -196,7 +196,6 @@ func loadReturnsFromCSV(path string) ([]float64, int, error) {
 				bestSym = sym
 			}
 		}
-		break
 	}
 
 	if bestSym == "" {

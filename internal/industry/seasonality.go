@@ -2,8 +2,12 @@ package industry
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 // SeasonalPattern represents a recurring seasonal pattern in Taiwan stock market.
@@ -17,10 +21,9 @@ type SeasonalPattern struct {
 	EndDay             int      `json:"end_day"`
 	FavoredIndustries  []string `json:"favored_industries"`
 	AvoidedIndustries  []string `json:"avoided_industries"`
-	StyleTags          []string `json:"style_tags,omitempty"`   // Non-industry classifications: small_cap, large_cap, index_heavyweights, speculative
-	AdjustmentFactor   float64  `json:"adjustment_factor"`       // e.g., 1.2 for favored
-	HistoricalAccuracy float64  `json:"historical_accuracy"`     // 0.0 to 1.0
-	AvgMarketReturn    float64  `json:"avg_market_return"`       // Historical average TAIEX return
+	AdjustmentFactor   float64  `json:"adjustment_factor"`   // e.g., 1.2 for favored
+	HistoricalAccuracy float64  `json:"historical_accuracy"` // 0.0 to 1.0
+	AvgMarketReturn    float64  `json:"avg_market_return"`   // Historical average TAIEX return
 	Description        string   `json:"description"`
 }
 
@@ -44,17 +47,25 @@ func (p SeasonalPattern) AffectedIndustries() []string {
 
 // SeasonalEngine detects and evaluates seasonal patterns.
 type SeasonalEngine struct {
-	patterns []SeasonalPattern
+	patterns          []SeasonalPattern
+	linkageGraph      *SupplyChainGraph
+	narrativeProvider NarrativeSeasonalProvider
+	dynamicEnv        *DynamicEnvModulator
 }
 
-// NewSeasonalEngine creates a seasonal engine with default Taiwan patterns.
+// NarrativeSeasonalProvider supplies active macro-narrative themes that
+// modulate seasonal adjustment factors based on real-world events.
+type NarrativeSeasonalProvider interface {
+	ActiveThemes() []string
+	SeasonalMultiplier(theme string, industryID string) float64
+}
+
+// NewSeasonalEngine creates a seasonal engine using the parameter-managed seasonal patterns.
 func NewSeasonalEngine() *SeasonalEngine {
-	return &SeasonalEngine{
-		patterns: DefaultSeasonalPatterns(),
-	}
+	return NewSeasonalEngineFromConfig(config.GetParametersConfig())
 }
 
-// DefaultSeasonalPatterns returns the built-in seasonal patterns for Taiwan.
+// Deprecated: use cfg.Industry.SeasonalPatterns from parameters.json instead.
 func DefaultSeasonalPatterns() []SeasonalPattern {
 	return []SeasonalPattern{
 		{
@@ -65,9 +76,8 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           15,
 			EndMonth:           2,
 			EndDay:             15,
-			FavoredIndustries:  []string{"financials"},
+			FavoredIndustries:  []string{"financials", "high_dividend", "small_cap"},
 			AvoidedIndustries:  []string{"semiconductor", "ai_supply_chain"},
-			StyleTags:          []string{"high_dividend", "small_cap"},
 			AdjustmentFactor:   1.15,
 			HistoricalAccuracy: 0.70,
 			AvgMarketReturn:    0.032,
@@ -81,8 +91,8 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           1,
 			EndMonth:           4,
 			EndDay:             15,
-			FavoredIndustries:  []string{"ai_supply_chain", "tech"},
-			AvoidedIndustries:  []string{"consumer", "defensive"},
+			FavoredIndustries:  []string{"ai_supply_chain", "growth_momentum"},
+			AvoidedIndustries:  []string{"traditional", "commodity"},
 			AdjustmentFactor:   1.10,
 			HistoricalAccuracy: 0.55,
 			AvgMarketReturn:    0.015,
@@ -97,7 +107,7 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			EndMonth:           6,
 			EndDay:             30,
 			FavoredIndustries:  []string{"financials", "high_dividend", "consumer"},
-			AvoidedIndustries:  []string{"semiconductor", "ai_supply_chain", "tech"},
+			AvoidedIndustries:  []string{"semiconductor", "ai_supply_chain", "technology"},
 			AdjustmentFactor:   1.20,
 			HistoricalAccuracy: 0.65,
 			AvgMarketReturn:    0.025,
@@ -111,8 +121,8 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           1,
 			EndMonth:           9,
 			EndDay:             15,
-			FavoredIndustries:  []string{"semiconductor", "ai_supply_chain", "pcb", "tech"},
-			AvoidedIndustries:  []string{"consumer", "tourism", "defensive"},
+			FavoredIndustries:  []string{"semiconductor", "ai_supply_chain", "pcb", "electronics"},
+			AvoidedIndustries:  []string{"consumer", "tourism", "traditional"},
 			AdjustmentFactor:   1.25,
 			HistoricalAccuracy: 0.75,
 			AvgMarketReturn:    0.085,
@@ -126,12 +136,12 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           15,
 			EndMonth:           10,
 			EndDay:             31,
-			FavoredIndustries:  []string{"semiconductor", "ai_supply_chain", "tech"},
-			AvoidedIndustries:  []string{"consumer", "shipping", "defensive"},
+			FavoredIndustries:  []string{"earnings_beaters"},
+			AvoidedIndustries:  []string{"earnings_missers"},
 			AdjustmentFactor:   1.10,
 			HistoricalAccuracy: 0.60,
 			AvgMarketReturn:    0.020,
-			Description:        "季報公布，獲利優於預期股受追捧，低於預期股遭拋售（動態分類，非固定產業）",
+			Description:        "季報公布，獲利優於預期股受追捧，低於預期股遭拋售",
 		},
 		{
 			ID:                 "year_end_rally",
@@ -141,8 +151,8 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           1,
 			EndMonth:           12,
 			EndDay:             31,
-			FavoredIndustries:  []string{"tech", "semiconductor", "financials", "etf_rotation"},
-			AvoidedIndustries:  []string{"small_cap"},
+			FavoredIndustries:  []string{"large_cap", "financials", "index_heavyweights"},
+			AvoidedIndustries:  []string{"small_cap", "speculative"},
 			AdjustmentFactor:   1.12,
 			HistoricalAccuracy: 0.58,
 			AvgMarketReturn:    0.018,
@@ -156,12 +166,12 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           1,
 			EndMonth:           8,
 			EndDay:             31,
-			FavoredIndustries:  []string{"energy"},
-			AvoidedIndustries:  []string{"semiconductor"},
+			FavoredIndustries:  []string{"energy", "utilities", "power_equipment"},
+			AvoidedIndustries:  []string{"high_power_consumption", "steel", "petrochemicals"},
 			AdjustmentFactor:   1.08,
 			HistoricalAccuracy: 0.62,
 			AvgMarketReturn:    0.012,
-			Description:        "夏季用電高峰，能源相對強勢；高耗電製造業成本上升",
+			Description:        "夏季用電高峰，能源與公用事業相對強勢；高耗電製造業成本上升",
 		},
 	}
 }
@@ -181,24 +191,83 @@ func (se *SeasonalEngine) DetectCurrentPatterns(t time.Time) []SeasonalPattern {
 }
 
 // GetPatternAdjustment returns the combined adjustment factor for an industry.
+// When a SupplyChainGraph is set via SetLinkageGraph, upstream/downstream
+// industries of favored/avoided sectors receive partial adjustments with decay.
 func (se *SeasonalEngine) GetPatternAdjustment(industryID string, t time.Time) float64 {
 	patterns := se.DetectCurrentPatterns(t)
 	if len(patterns) == 0 {
-		return 1.0 // No adjustment
+		return 1.0
 	}
 
 	adjustment := 1.0
 	for _, p := range patterns {
-		// Check if industry is favored
+		// Direct match: industry is explicitly favored or avoided
 		if slices.Contains(p.FavoredIndustries, industryID) {
 			adjustment *= p.AdjustmentFactor
 		}
-		// Check if industry is avoided
 		if slices.Contains(p.AvoidedIndustries, industryID) {
 			adjustment *= (1.0 / p.AdjustmentFactor)
 		}
+
+		// Supply chain propagation: if our industry is upstream/downstream
+		// of a favored or avoided sector, apply a partial adjustment with decay.
+		if se.linkageGraph != nil {
+			decay := config.GetParametersConfig().Industry.LinkageParams.Value.SeasonalDecayFactor
+			// Check if our industry is upstream of a favored industry
+			for _, favoredID := range p.FavoredIndustries {
+				if industryID == favoredID {
+					continue // already handled above
+				}
+				upstream := se.linkageGraph.GetUpstreamChain(favoredID, 3)
+				for _, id := range upstream {
+					if id == industryID {
+						boost := 1.0 + (p.AdjustmentFactor-1.0)*decay
+						adjustment *= boost
+						break
+					}
+				}
+				downstream := se.linkageGraph.GetDownstreamChain(favoredID, 3)
+				for _, id := range downstream {
+					if id == industryID {
+						boost := 1.0 + (p.AdjustmentFactor-1.0)*decay
+						adjustment *= boost
+						break
+					}
+				}
+			}
+			// Check if our industry is upstream of an avoided industry
+			// (supplying to a struggling industry = negative spillover)
+			for _, avoidedID := range p.AvoidedIndustries {
+				if industryID == avoidedID {
+					continue // already handled above
+				}
+				upstream := se.linkageGraph.GetUpstreamChain(avoidedID, 3)
+				for _, id := range upstream {
+					if id == industryID {
+						dampen := 1.0 - (1.0-1.0/p.AdjustmentFactor)*decay
+						adjustment *= dampen
+						break
+					}
+				}
+			}
+		}
 	}
 
+	// Narrative event overlay: active macro themes modulate seasonal adjustment.
+	if se.narrativeProvider != nil {
+		for _, theme := range se.narrativeProvider.ActiveThemes() {
+			multiplier := se.narrativeProvider.SeasonalMultiplier(theme, industryID)
+			adjustment *= multiplier
+		}
+	}
+
+	if se.dynamicEnv != nil {
+		adjustment *= se.dynamicEnv.SeasonalModulation(industryID)
+	}
+
+	if adjustment <= 0 {
+		adjustment = 0.01
+	}
 	return adjustment
 }
 
@@ -329,4 +398,154 @@ func (p SeasonalPattern) String() string {
 		p.HistoricalAccuracy*100,
 		p.AvgMarketReturn*100,
 	)
+}
+
+// AdjustmentBreakdown decomposes the composite seasonal adjustment into
+// per-layer contributions for visualization in the seasonal patterns UI.
+type AdjustmentBreakdown struct {
+	DirectMatch float64 `json:"direct_match"` // contribution from favored/avoided lists
+	SupplyChain float64 `json:"supply_chain"` // extra from supply chain propagation
+	Narrative   float64 `json:"narrative"`    // extra from narrative event overlay
+	DynamicEnv  float64 `json:"dynamic_env"`  // extra from oil/DXY/BDI modulation
+	Composite   float64 `json:"composite"`    // final adjustment (product of all)
+}
+
+// GetAdjustmentBreakdown returns the per-layer contribution breakdown.
+func (se *SeasonalEngine) GetAdjustmentBreakdown(industryID string, t time.Time) *AdjustmentBreakdown {
+	ab := &AdjustmentBreakdown{
+		DirectMatch: 1.0,
+		SupplyChain: 1.0,
+		Narrative:   1.0,
+		DynamicEnv:  1.0,
+		Composite:   1.0,
+	}
+
+	patterns := se.DetectCurrentPatterns(t)
+	if len(patterns) == 0 {
+		return ab
+	}
+
+	// Layer 1: Direct match
+	direct := 1.0
+	for _, p := range patterns {
+		if slices.Contains(p.FavoredIndustries, industryID) {
+			direct *= p.AdjustmentFactor
+		}
+		if slices.Contains(p.AvoidedIndustries, industryID) {
+			direct *= (1.0 / p.AdjustmentFactor)
+		}
+	}
+	ab.DirectMatch = direct
+
+	// Layer 2: Supply chain
+	sc := 1.0
+	if se.linkageGraph != nil {
+		decay := config.GetParametersConfig().Industry.LinkageParams.Value.SeasonalDecayFactor
+		for _, p := range patterns {
+			for _, favoredID := range p.FavoredIndustries {
+				if industryID == favoredID {
+					continue
+				}
+				for _, id := range se.linkageGraph.GetUpstreamChain(favoredID, 3) {
+					if id == industryID {
+						sc *= 1.0 + (p.AdjustmentFactor-1.0)*decay
+					}
+				}
+				for _, id := range se.linkageGraph.GetDownstreamChain(favoredID, 3) {
+					if id == industryID {
+						sc *= 1.0 + (p.AdjustmentFactor-1.0)*decay
+					}
+				}
+			}
+			for _, avoidedID := range p.AvoidedIndustries {
+				if industryID == avoidedID {
+					continue
+				}
+				for _, id := range se.linkageGraph.GetUpstreamChain(avoidedID, 3) {
+					if id == industryID {
+						sc *= 1.0 - (1.0-1.0/p.AdjustmentFactor)*decay
+					}
+				}
+			}
+		}
+	}
+	ab.SupplyChain = sc
+
+	// Layer 3: Narrative overlay
+	narr := 1.0
+	if se.narrativeProvider != nil {
+		for _, theme := range se.narrativeProvider.ActiveThemes() {
+			narr *= se.narrativeProvider.SeasonalMultiplier(theme, industryID)
+		}
+	}
+	ab.Narrative = narr
+
+	// Layer 4: Dynamic environment
+	env := 1.0
+	if se.dynamicEnv != nil {
+		env = se.dynamicEnv.SeasonalModulation(industryID)
+	}
+	ab.DynamicEnv = env
+
+	ab.Composite = math.Max(direct*sc*narr*env, 0.01)
+	return ab
+}
+
+func seasonalPatternsFromConfig(cfgs []config.SeasonalPatternConfig) []SeasonalPattern {
+	patterns := make([]SeasonalPattern, 0, len(cfgs))
+	for _, c := range cfgs {
+		patterns = append(patterns, SeasonalPattern{
+			ID:                 c.ID,
+			Name:               c.Name,
+			NameEN:             c.NameEN,
+			StartMonth:         c.StartMonth,
+			StartDay:           c.StartDay,
+			EndMonth:           c.EndMonth,
+			EndDay:             c.EndDay,
+			FavoredIndustries:  c.FavoredIndustries,
+			AvoidedIndustries:  c.AvoidedIndustries,
+			AdjustmentFactor:   c.AdjustmentFactor,
+			HistoricalAccuracy: c.HistoricalAccuracy,
+			AvgMarketReturn:    c.AvgMarketReturn,
+			Description:        c.Description,
+		})
+	}
+	return patterns
+}
+
+func NewSeasonalEngineFromConfig(cfg *config.ParametersConfig) *SeasonalEngine {
+	patterns := seasonalPatternsFromConfig(cfg.Industry.SeasonalPatterns.Value)
+	return &SeasonalEngine{patterns: patterns}
+}
+
+// SetLinkageGraph enables supply-chain-aware seasonal adjustment.
+// When set, GetPatternAdjustment propagates partial adjustments to
+// upstream/downstream industries of favored/avoided sectors with decay.
+// Passing nil disables supply-chain propagation (safe default).
+func (se *SeasonalEngine) SetLinkageGraph(graph *SupplyChainGraph) {
+	se.linkageGraph = graph
+}
+
+// SetNarrativeProvider enables narrative-event-aware seasonal adjustment.
+// When set, GetPatternAdjustment applies additional multipliers based on
+// active macro-narrative themes (e.g., oil_price_shock amplifies energy sector).
+// Passing nil disables narrative overlay (safe default).
+func (se *SeasonalEngine) SetNarrativeProvider(provider NarrativeSeasonalProvider) {
+	se.narrativeProvider = provider
+}
+
+// SetDynamicEnv enables real-world macro-aware seasonal adjustment.
+// When set, GetPatternAdjustment modulates adjustment factors based on
+// current oil prices, USD strength, and other macro indicators.
+// Passing nil disables dynamic environment overlay (safe default).
+func (se *SeasonalEngine) SetDynamicEnv(modulator *DynamicEnvModulator) {
+	se.dynamicEnv = modulator
+}
+
+// UpdateDynamicEnv pushes a fresh macro snapshot into the environment modulator.
+// No-op if no modulator is set.
+func (se *SeasonalEngine) UpdateDynamicEnv(snap marketdata.MacroDataSnapshot) {
+	if se.dynamicEnv != nil {
+		se.dynamicEnv.UpdateCurrent(snap)
+	}
 }

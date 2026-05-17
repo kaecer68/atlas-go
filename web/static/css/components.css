@@ -12,8 +12,17 @@
 }
 .panel:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); }
 .panel h2 { margin: 0 0 10px; font-size: var(--text-xl); font-family: var(--font-display); font-weight: var(--font-semibold); color: var(--accent); letter-spacing: -0.01em; }
+.legend-toggle { display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--border);background:var(--bg);color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;vertical-align:middle;margin-left:4px;transition:all .2s }
+.legend-toggle:hover { border-color:var(--accent);color:var(--accent);background:rgba(79,193,255,.1) }
 .panel h3 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
 .panel.wide { grid-column: 1 / -1; }
+
+.parameters-grid { display: flex; flex-direction: column; gap: var(--space-md); max-width: 900px; }
+.params-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+.params-table td { padding: 4px 8px; vertical-align: top; }
+.params-table .param-key { width: 38%; color: var(--muted); font-size: 12px; word-break: break-word; }
+.params-table .param-val { font-family: var(--font-mono); font-size: 12px; color: var(--accent); max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.params-table .param-val:hover { overflow: visible; white-space: normal; word-break: break-all; }
 
 
 

@@ -1,7 +1,6 @@
 package autobacktest
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -37,11 +36,6 @@ func NewRunnerWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 		btRunner: btRunner,
 		cfg:      cfg,
 	}
-}
-
-// RunOnce performs a single backtest run for the most recent trading day.
-func (r *Runner) RunOnce(ctx context.Context) error {
-	return r.RunAndStore()
 }
 
 func (r *Runner) RunAndStore() error {

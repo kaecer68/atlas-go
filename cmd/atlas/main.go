@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"io"
@@ -9,28 +10,34 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/autobacktest"
 	"github.com/kaecer68/atlas-go/internal/bootstrap"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
+	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/live"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
+	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
+	apischeduler "github.com/kaecer68/atlas-go/internal/monitoring/api/scheduler"
 	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
+	"github.com/kaecer68/atlas-go/internal/storage"
 )
 
 type routeRegistrar interface {
@@ -192,7 +199,6 @@ func run(args []string, deps appDeps) error {
 	taskManager := rt.TaskManager
 
 	var janusEngine *janus.Engine
-	var taskMgr *apigateway.BackgroundTaskManager
 
 	if *apiMode {
 		mux := http.NewServeMux()
@@ -210,9 +216,9 @@ func run(args []string, deps appDeps) error {
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 			d.SetPool(pool)
 			d.SetHealthManager(portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore).WithParameters(runtimeParams))
-		janusEngine := janus.NewEngine()
-		janusEngine.EnsureAllRegimes()
-		janusEngine.Update()
+			janusEngine = janus.NewEngine()
+			janusEngine.EnsureAllRegimes()
+			janusEngine.Update()
 			d.SetJanusEngine(janusEngine)
 			log.Printf("[JANUS] engine injected into dashboard API")
 		}
@@ -228,7 +234,27 @@ func run(args []string, deps appDeps) error {
 			d.SetEventBus(eventBus)
 			d.SetContext(context.Background())
 			log.Printf("[EventBus] injected into dashboard API for SSE streaming")
+			eventBus.Subscribe(eventbus.EventNarrative, func(ctx context.Context, event eventbus.BusEvent) error {
+				apievents.BufferNarrativeEvent(event)
+				return nil
+			})
+			// Initial macro ingestion on startup to populate snapshot and publish events.
+			ingestCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			_, _, err := d.GetMacroIngestor().Ingest(ingestCtx)
+			cancel()
+			if err != nil {
+				logging.Warn("main", "initial_macro_ingest_failed", "err", err)
+			} else {
+				logging.Info("main", "initial_macro_ingest_ok")
+			}
 		}
+
+		lifecycleMgr := storage.NewLifecycleManager(filepath.Join(cfg.WorkDir, "data/state"))
+		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+			d.SetStorageReporter(lifecycleMgr)
+			log.Printf("[Storage] reporter injected into dashboard API")
+		}
+
 		dashboard.RegisterRoutes(mux)
 
 		if alertStore != nil {
@@ -244,7 +270,28 @@ func run(args []string, deps appDeps) error {
 			}
 		}
 
-		mux.HandleFunc("/admin/reload-config", func(w http.ResponseWriter, r *http.Request) {
+		adminHandler := func(h http.HandlerFunc) http.HandlerFunc {
+			return func(w http.ResponseWriter, r *http.Request) {
+				apiKey := os.Getenv("ATLAS_API_KEY")
+				if apiKey != "" {
+					provided := r.Header.Get("X-API-Key")
+					if provided == "" {
+						auth := r.Header.Get("Authorization")
+						if strings.HasPrefix(auth, "Bearer ") {
+							provided = strings.TrimPrefix(auth, "Bearer ")
+						}
+					}
+					if provided != apiKey {
+						w.Header().Set("Content-Type", "application/json")
+						w.WriteHeader(http.StatusUnauthorized)
+						fmt.Fprintf(w, `{"error":"unauthorized"}`+"\n")
+						return
+					}
+				}
+				h(w, r)
+			}
+		}
+		mux.HandleFunc("/admin/reload-config", adminHandler(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
@@ -256,8 +303,8 @@ func run(args []string, deps appDeps) error {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"status":"ok","version":"%s"}`+"\n", cfg.Version)
-		})
-		mux.HandleFunc("/api/admin/calibrate-thresholds", func(w http.ResponseWriter, r *http.Request) {
+		}))
+		mux.HandleFunc("/api/admin/calibrate-thresholds", adminHandler(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
@@ -272,7 +319,7 @@ func run(args []string, deps appDeps) error {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"status":"ok","message":"thresholds recalibrated"}`+"\n")
-		})
+		}))
 		mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
 		monitor := monitoring.NewMonitor()
 		if alertStore != nil {
@@ -280,7 +327,55 @@ func run(args []string, deps appDeps) error {
 		}
 		sysMetrics := monitoring.NewSystemMetrics(collector, monitor)
 		sysCtx, sysCancel := context.WithCancel(context.Background())
-		sysMetrics.Start(sysCtx)
+		go sysMetrics.Start(sysCtx)
+
+		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+			go func() {
+				ticker := time.NewTicker(5 * time.Minute)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-sysCtx.Done():
+						return
+					case <-ticker.C:
+						ingestCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+						_, _, err := d.GetMacroIngestor().Ingest(ingestCtx)
+						cancel()
+						if err != nil {
+							logging.Warn("main", "macro_ingest_failed", "err", err)
+						}
+					}
+				}
+			}()
+		}
+
+		// Periodic metrics snapshot save
+		if repo != nil {
+			go func() {
+				ticker := time.NewTicker(60 * time.Second)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-sysCtx.Done():
+						return
+					case <-ticker.C:
+						snap := collector.GetMetricsSnapshot()
+						repoSnap := repository.MetricsSnapshot{
+							ScreeningTotal:     snap.ScreeningTotal,
+							ScreeningPassed:    snap.ScreeningPassed,
+							ScreeningRate:      snap.ScreeningRate,
+							AlertsTriggered:    snap.AlertsTriggered,
+							AlertsAcknowledged: snap.AlertsAcknowledged,
+							AlertsByType:       snap.AlertsByType,
+							Timestamp:          snap.Timestamp,
+						}
+						if err := repo.SaveSnapshot(sysCtx, &repoSnap); err != nil {
+							log.Printf("[Metrics] snapshot save failed: %v", err)
+						}
+					}
+				}
+			}()
+		}
 		registerCommonDashboardRoutes(dashboard, mux, *swaggerMode, true)
 
 		fs := http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static")))
@@ -295,15 +390,25 @@ func run(args []string, deps appDeps) error {
 
 		// Initialize API Gateway with channel adapters and background task manager.
 		gateway, err := apigateway.NewGateway(cfg.WorkDir, pool)
+		var taskMgr *apigateway.BackgroundTaskManager
 		if err != nil {
 			log.Printf("[Gateway] initialization failed: %v", err)
-		} else if err := apigateway.RegisterChannelAdapters(gateway, cfg.WorkDir, cfg); err != nil {
+		} else if err := apigateway.RegisterChannelAdapters(gateway, cfg.WorkDir, cfg, janusEngine); err != nil {
 			log.Printf("[Gateway] adapter registration failed: %v", err)
 		} else {
 			log.Printf("[Gateway] initialized with %d channels + adapters", len(gateway.ChannelIDs()))
 
 			// BackgroundTaskManager for centralized goroutine lifecycle management.
 			taskMgr = apigateway.NewBackgroundTaskManager(gateway)
+
+			// Wire failure alerts for background tasks.
+			taskMgr.SetFailureHandler(func(name string, consecutiveFailures int, err error) {
+				if consecutiveFailures >= 3 {
+					monitor.Alert(monitoring.AlertLevelError, "background_task",
+						fmt.Sprintf("Task %s failed %d consecutive times: %v", name, consecutiveFailures, err),
+						map[string]any{"task": name, "consecutive_failures": consecutiveFailures})
+				}
+			})
 
 			// Register channel_health_sync task (DB sync, not a data fetcher).
 			if pool != nil {
@@ -492,48 +597,13 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered storage_cleanup background task (24h interval)")
 
-			// Register macro_ingest via BackgroundTaskManager (replaces raw goroutine+ticker).
-			if d, ok := dashboard.(*monitoring.DashboardAPI); ok && d.GetMacroIngestor() != nil {
-				taskMgr.Register(&apigateway.ScheduledTask{
-					Name:     "macro_ingest",
-					Interval: 5 * time.Minute,
-					Enabled:  true,
-					Task: func(ctx context.Context) error {
-						ingestCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-						defer cancel()
-						_, _, err := d.GetMacroIngestor().Ingest(ingestCtx)
-						if err != nil {
-							logging.Warn("main", "macro_ingest_failed", "err", err)
-						}
-						return err
-					},
-				})
-				log.Printf("[Gateway] registered macro_ingest background task (5m interval)")
-			}
+			taskMgr.Start(sysCtx)
+			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
+		}
 
-			// Register metrics_snapshot via BackgroundTaskManager (replaces raw goroutine+ticker).
-			if repo != nil {
-				taskMgr.Register(&apigateway.ScheduledTask{
-					Name:     "metrics_snapshot",
-					Interval: 60 * time.Second,
-					Enabled:  true,
-					Task: func(ctx context.Context) error {
-						snap := collector.GetMetricsSnapshot()
-						repoSnap := repository.MetricsSnapshot{
-							ScreeningTotal:     snap.ScreeningTotal,
-							ScreeningPassed:    snap.ScreeningPassed,
-							ScreeningRate:      snap.ScreeningRate,
-							AlertsTriggered:    snap.AlertsTriggered,
-							AlertsAcknowledged: snap.AlertsAcknowledged,
-							AlertsByType:       snap.AlertsByType,
-							Timestamp:          snap.Timestamp,
-						}
-						return repo.SaveSnapshot(ctx, &repoSnap)
-					},
-				})
-				log.Printf("[Gateway] registered metrics_snapshot background task (60s interval)")
-			}
-
+		if taskMgr != nil {
+			apischeduler.NewHandlers(apischeduler.NewSchedulerService(taskMgr)).RegisterRoutes(mux)
+			log.Printf("[Gateway] scheduler API routes registered")
 		}
 
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
@@ -593,31 +663,6 @@ func run(args []string, deps appDeps) error {
 		}
 		autobacktest.StartDailyLoop(sysCtx, btRunner)
 
-		// Register autobacktest heartbeat with BTM for monitoring and on-demand execution.
-		if taskMgr != nil {
-			taskMgr.Register(&apigateway.ScheduledTask{
-				Name:            "autobacktest_daily",
-				Interval:        24 * time.Hour,
-				Enabled:         false, // StartDailyLoop handles daily scheduling; BTM is for monitoring/on-demand
-				MarketHoursOnly: true,
-				RetryPolicy: &apigateway.RetryPolicy{
-					MaxAttempts:  2,
-					InitialDelay: 1 * time.Minute,
-					MaxDelay:     5 * time.Minute,
-					Multiplier:   2.0,
-				},
-				Task: func(ctx context.Context) error {
-					return btRunner.RunOnce(ctx)
-				},
-			})
-			log.Printf("[Gateway] registered autobacktest_daily background task (24h interval, market-hours guard)")
-		}
-
-		if taskMgr != nil {
-			taskMgr.Start(sysCtx)
-			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
-		}
-
 		authWrappedMux := apishared.AuthMiddleware(mux)
 		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
@@ -663,12 +708,12 @@ func run(args []string, deps appDeps) error {
 	}
 
 	if *liveMode {
-		return runLiveTrading(cfg, deps, collector, repo, taskMgr)
+		return runLiveTrading(cfg, deps, collector, repo)
 	}
-	return runSimulation(cfg, collector, repo, taskMgr)
+	return runSimulation(cfg, collector, repo)
 }
 
-func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, taskMgr *apigateway.BackgroundTaskManager) error {
+func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
 	system, err := orchestrator.NewProductionSystem(cfg)
 	if err != nil {
 		return fmt.Errorf("create system: %w", err)
@@ -690,27 +735,6 @@ func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, re
 		return fmt.Errorf("create approval workflow: %w", err)
 	}
 	system.WithCapitalManagement(controller, allocator, workflow)
-
-	if taskMgr != nil {
-		if pm := system.GetPRISMManager(); pm != nil {
-			taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "prism_rebalance",
-				Interval: 1 * time.Hour,
-				Enabled:  true,
-				Task:     pm.RunOnce,
-			})
-			log.Printf("[BTM] registered prism_rebalance background task (1h interval)")
-		}
-		if sm := system.GetSpawningManager(); sm != nil {
-			taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "spawning_cycle",
-				Interval: 1 * time.Hour,
-				Enabled:  true,
-				Task:     sm.RunOnce,
-			})
-			log.Printf("[BTM] registered spawning_cycle background task (1h interval)")
-		}
-	}
 
 	result, err := system.RunDailySimulation(time.Now())
 	if err != nil {
@@ -789,7 +813,7 @@ func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, re
 	return nil
 }
 
-func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, taskMgr *apigateway.BackgroundTaskManager) error {
+func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
 	system, err := orchestrator.NewProductionSystem(cfg)
 	if err != nil {
 		return fmt.Errorf("create system: %w", err)
@@ -800,27 +824,6 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	if repo != nil {
 		system.SetRepository(repo)
 		log.Printf("[Repository] injected into live trading system")
-	}
-
-	if taskMgr != nil {
-		if pm := system.GetPRISMManager(); pm != nil {
-			taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "prism_rebalance",
-				Interval: 1 * time.Hour,
-				Enabled:  true,
-				Task:     pm.RunOnce,
-			})
-			log.Printf("[BTM] registered prism_rebalance background task (1h interval)")
-		}
-		if sm := system.GetSpawningManager(); sm != nil {
-			taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "spawning_cycle",
-				Interval: 1 * time.Hour,
-				Enabled:  true,
-				Task:     sm.RunOnce,
-			})
-			log.Printf("[BTM] registered spawning_cycle background task (1h interval)")
-		}
 	}
 
 	stateStore := livestore.NewStateStore("data/state/live")

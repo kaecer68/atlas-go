@@ -5,9 +5,6 @@ package industry
 import (
 	"fmt"
 	"time"
-
-	"github.com/kaecer68/atlas-go/internal/config"
-	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // IndustryLevel represents the granularity level of industry classification.
@@ -89,28 +86,27 @@ type RiskProfile struct {
 	KeyCustomers          []string `json:"key_customers,omitempty"` // Major customer names
 }
 
-// DataFreshness indicates the recency and reliability of industry metric data.
-type DataFreshness string
-
-const (
-	FreshLive     DataFreshness = "live"
-	FreshRecent   DataFreshness = "recent"
-	FreshStale    DataFreshness = "stale"
-	FreshFallback DataFreshness = "fallback"
-)
-
 // IndustryMetrics holds real-time metrics for an industry.
 type IndustryMetrics struct {
-	IndustryID          string        `json:"industry_id"`
-	PE                  float64       `json:"pe"`
-	PB                  float64       `json:"pb"`
-	DividendYield       float64       `json:"dividend_yield"`
-	RevenueGrowthYoY    float64       `json:"revenue_growth_yoy"`
-	ProfitGrowthYoY     float64       `json:"profit_growth_yoy"`
-	InventoryTurnover   float64       `json:"inventory_turnover"`
-	CapacityUtilization float64       `json:"capacity_utilization"`
-	DataFreshness       DataFreshness `json:"data_freshness"`
-	Timestamp           time.Time     `json:"timestamp"`
+	IndustryID          string    `json:"industry_id"`
+	PE                  float64   `json:"pe"`
+	PB                  float64   `json:"pb"`
+	DividendYield       float64   `json:"dividend_yield"`
+	RevenueGrowthYoY    float64   `json:"revenue_growth_yoy"`
+	ProfitGrowthYoY     float64   `json:"profit_growth_yoy"`
+	InventoryTurnover   float64   `json:"inventory_turnover"`
+	CapacityUtilization float64   `json:"capacity_utilization"`
+	Timestamp           time.Time `json:"timestamp"`
+}
+
+// NarrativeAdjustment represents how active narrative events shift
+// cycle phase detection for an industry. A negative RevenueBias pushes
+// the effective growth downward, making recession/mature more likely.
+type NarrativeAdjustment struct {
+	RevenueBias float64 `json:"revenue_bias"`
+	ProfitBias  float64 `json:"profit_bias"`
+	Confidence  float64 `json:"confidence"` // 0-1 how reliable this bias is
+	ActiveTheme string  `json:"active_theme,omitempty"`
 }
 
 // ClassificationTree provides hierarchical access to industry segments.
@@ -217,13 +213,6 @@ func (t *ClassificationTree) Validate() error {
 // DefaultClassification returns the built-in Taiwan stock industry classification.
 func DefaultClassification() *ClassificationTree {
 	tree := NewClassificationTree()
-	getWeight := func(id string, fallback float64) float64 {
-		if w, ok := config.GetParametersConfig().Industry.SectorWeights.Value[id]; ok {
-			return w
-		}
-		logging.Warn("industry", "weight_not_in_config", "industry_id", id, "fallback", fallback)
-		return fallback
-	}
 
 	// Level 1: Broad sectors
 	// 1. Semiconductor
@@ -232,7 +221,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "半導體",
 		NameEN:               "Semiconductor",
 		Level:                Level1,
-		Weight:               getWeight("semiconductor", 0.25),
+		Weight:               0.25,
 		GeographicExposure:   ExposureExport,
 		Cyclicality:          CyclicalityHigh,
 		TechnologyIntensity:  TechIntensityHigh,
@@ -247,7 +236,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "AI供應鏈",
 		NameEN:               "AI Supply Chain",
 		Level:                Level1,
-		Weight:               getWeight("ai_supply_chain", 0.20),
+		Weight:               0.20,
 		GeographicExposure:   ExposureExport,
 		Cyclicality:          CyclicalityHigh,
 		TechnologyIntensity:  TechIntensityHigh,
@@ -262,7 +251,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "機器人",
 		NameEN:               "Robotics",
 		Level:                Level1,
-		Weight:               getWeight("robotics", 0.08),
+		Weight:               0.08,
 		GeographicExposure:   ExposureExport,
 		Cyclicality:          CyclicalityMedium,
 		TechnologyIntensity:  TechIntensityHigh,
@@ -277,7 +266,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "金融",
 		NameEN:               "Financials",
 		Level:                Level1,
-		Weight:               getWeight("financials", 0.15),
+		Weight:               0.15,
 		GeographicExposure:   ExposureDomestic,
 		Cyclicality:          CyclicalityMedium,
 		TechnologyIntensity:  TechIntensityMedium,
@@ -292,7 +281,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "航運",
 		NameEN:               "Shipping",
 		Level:                Level1,
-		Weight:               getWeight("shipping", 0.10),
+		Weight:               0.10,
 		GeographicExposure:   ExposureExport,
 		Cyclicality:          CyclicalityHigh,
 		TechnologyIntensity:  TechIntensityLow,
@@ -307,7 +296,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "能源",
 		NameEN:               "Energy",
 		Level:                Level1,
-		Weight:               getWeight("energy", 0.05),
+		Weight:               0.05,
 		GeographicExposure:   ExposureMixed,
 		Cyclicality:          CyclicalityMedium,
 		TechnologyIntensity:  TechIntensityMedium,
@@ -322,7 +311,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "電子零組件",
 		NameEN:               "Electronics Components",
 		Level:                Level1,
-		Weight:               getWeight("electronics", 0.07),
+		Weight:               0.07,
 		GeographicExposure:   ExposureExport,
 		Cyclicality:          CyclicalityMedium,
 		TechnologyIntensity:  TechIntensityHigh,
@@ -337,7 +326,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "傳產/消費",
 		NameEN:               "Consumer & Traditional",
 		Level:                Level1,
-		Weight:               getWeight("consumer", 0.05),
+		Weight:               0.05,
 		GeographicExposure:   ExposureDomestic,
 		Cyclicality:          CyclicalityLow,
 		TechnologyIntensity:  TechIntensityLow,
@@ -352,7 +341,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "工業/製造",
 		NameEN:               "Industrial & Manufacturing",
 		Level:                Level1,
-		Weight:               getWeight("industrial", 0.05),
+		Weight:               0.05,
 		GeographicExposure:   ExposureMixed,
 		Cyclicality:          CyclicalityMedium,
 		TechnologyIntensity:  TechIntensityMedium,

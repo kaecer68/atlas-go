@@ -31,7 +31,7 @@ func main() {
 	}
 
 	cfg := config.Config{
-		ReplayDataPath:     "data/replay/tw_extended_90days.csv",
+		ReplayDataPath:     config.GetReplayDataPath(""),
 		BaselinePolicyPath: "data/state/baseline_policy.json",
 		AgentRegistryPath:  "configs/agents.json",
 		LedgerDir:          "data/state",

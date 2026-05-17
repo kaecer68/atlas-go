@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
@@ -67,19 +68,8 @@ func flatten(src map[string]any, prefix string, dst map[string]any) {
 			key = prefix + "." + k
 		}
 		if sub, ok := v.(map[string]any); ok {
-			if val, exists := sub["value"]; exists {
-				// This is a leaf parameter with citation metadata
-				if _, hasCitation := sub["citation"]; hasCitation {
-					entry := map[string]any{"value": val}
-					for _, meta := range []string{"source", "rationale", "calibration_method", "last_calibrated", "todo"} {
-						if mv, ok := sub[meta]; ok {
-							if str, ok := mv.(string); ok && str != "" {
-								entry[meta] = str
-							}
-						}
-					}
-					dst[key] = entry
-				} else if deep, ok := val.(map[string]any); ok {
+			if val, exists := sub["value"]; exists && len(sub) <= 5 {
+				if deep, ok := val.(map[string]any); ok {
 					flatten(deep, key, dst)
 				} else {
 					dst[key] = val
@@ -139,9 +129,33 @@ func (h *Handlers) HandleCategories(r *http.Request) (int, any) {
 		{"id": "garch", "name": "Volatility Forecasting", "description": "GARCH model parameters"},
 		{"id": "experiment", "name": "Experiment Evaluation", "description": "Experiment acceptance thresholds"},
 		{"id": "baseline", "name": "Baseline Policy", "description": "Default baseline policy values"},
+		{"id": "cycle", "name": "Industry Cycle Thresholds", "description": "Per-industry business cycle detection thresholds"},
+		{"id": "industry", "name": "Industry Analysis", "description": "Sector weights, cycle thresholds, inventory/capex, and risk scoring"},
+		{"id": "strategy", "name": "Strategy Selection", "description": "Strategy switching and evaluation parameters"},
 	}
 
-	return http.StatusOK, map[string]any{"categories": categories}
+	flatParams, _ := h.paramsToFlatMap()
+	keys := make(map[string][]string)
+	for _, cat := range categories {
+		catID := cat["id"].(string)
+		for k := range flatParams {
+			if k == "version" || k == "updated_at" {
+				continue
+			}
+			matched := strings.HasPrefix(k, catID)
+			if catID == "cycle" && strings.Contains(k, "cycle_thresholds") {
+				matched = true
+			}
+			if matched {
+				keys[catID] = append(keys[catID], k)
+			}
+		}
+		if keys[catID] == nil {
+			keys[catID] = []string{}
+		}
+	}
+
+	return http.StatusOK, map[string]any{"categories": categories, "keys": keys}
 }
 
 // HandleInferGARCH runs GARCH parameter inference from provided returns.

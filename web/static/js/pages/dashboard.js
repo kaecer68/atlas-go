@@ -11,9 +11,10 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   [gridMarket, gridRisk, gridSystem].forEach(g => g.classList.remove('loading'));
   const health = data || {};
   const cards = agentsData || {};
-  const weakest = cards.next_experiment_agent_id || '-';
-  const weakCard = (cards.weakest_agent_scorecards || []).find(c => c.agent_id === weakest);
-  const weakSharpe = weakCard ? (weakCard.sharpe || 0).toFixed(3) : '-';
+  const scorecards = cards.weakest_agent_scorecards || [];
+  const weakestEntry = scorecards[0];
+  const weakest = weakestEntry ? weakestEntry.agent_id : '-';
+  const weakSharpe = weakestEntry && weakestEntry.sharpe != null ? weakestEntry.sharpe.toFixed(3) : '-';
 
   const warnings = health.warnings || [];
   const crowdingWarnings = warnings.filter(w => w.toLowerCase().includes('crowded trade') || w.toLowerCase().includes('high overlap'));
@@ -52,8 +53,8 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   const sysChannels = (health && health.data_channels) || [];
   const errorChannels = sysChannels.filter(c => c.status === 'error');
   const warnChannels = sysChannels.filter(c => c.status === 'warn');
-  const totalAlerts = errorChannels.length;
-  const alertHtml = totalAlerts > 0
+  const totalAlerts = errorChannels.length + warnChannels.length;
+  const alertHtml = errorChannels.length > 0
     ? `<div style="margin:4px 0;font-size:13px;color:var(--down)">⚠ ${errorChannels.map(c => escapeHtml(c.label)).join('、')} 發生異常</div>`
     : (warnChannels.length > 0
       ? `<div class="my-xs text-sm text-warn">⚠ ${warnChannels.map(c => escapeHtml(c.label)).join('、')} 資料延遲</div>`
@@ -70,15 +71,16 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
     <div class="kpi-card clickable" onclick="openKpiHelp('regime')"><div class="kpi-label">市場狀態</div><div class="kpi-value" style="color:${regimeColor}">${regimeLabel(regime)}</div></div>
   `;
   gridRisk.innerHTML = `
-    <div class="kpi-card clickable" onclick="openKpiHelp('weakest')"><div class="kpi-label">表現最差 AI</div><div class="kpi-value">${agentName(weakest)}</div><div class="kpi-hint">Sharpe-like：${weakSharpe}</div></div>
+    <div class="kpi-card clickable" onclick="openKpiHelp('weakest')"><div class="kpi-label">待改進 AI 策略</div><div class="kpi-value">${agentName(weakest)}</div><div class="kpi-hint">Sharpe-like：<span style="${parseFloat(weakSharpe) < 0 ? 'color:#ff6b6b;font-weight:600' : ''}">${weakSharpe}</span></div></div>
     <div class="kpi-card ${crowdingWarnings.length ? 'alert-err' : ''} clickable" onclick="openKpiHelp('crowding')"><div class="kpi-label">擁擠標的</div><div class="kpi-value text-lg">${crowdingWarnings.length ? crowdingWarnings.length + ' 筆' : '正常'}</div>${crowdingHtml}</div>
-    <div class="kpi-card ${totalAlerts > 0 ? 'alert-err' : ''} clickable" onclick="switchPage('datachannels')"><div class="kpi-label">信息通道預警</div><div class="kpi-value text-lg">${totalAlerts > 0 ? totalAlerts + ' 筆異常' : (warnChannels.length > 0 ? warnChannels.length + ' 筆延遲' : '正常')}</div>${alertHtml}</div>
+    <div class="kpi-card ${totalAlerts > 0 ? 'alert-err' : ''} clickable" onclick="switchPage('datachannels')"><div class="kpi-label">信息通道預警</div><div class="kpi-value text-lg">${errorChannels.length > 0 ? errorChannels.length + ' 筆異常' : (warnChannels.length > 0 ? warnChannels.length + ' 筆延遲' : '正常')}</div>${alertHtml}</div>
   `;
   gridSystem.innerHTML = `
-    <div class="kpi-card"><div class="kpi-label">資料時間</div><div class="kpi-value text-lg">${health.replay_data_latest_date || '?'}</div><div class="kpi-hint">窗口 ${health.last_window_id || '?'} · 生成於 ${formatDate(health.last_window_generated_at)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">資料時間</div><div class="kpi-value text-lg">${health.replay_data_latest_date || '?'}</div><div class="kpi-hint">最新回放數據${health.replay_data_path_ok ? '' : ' ⚠️'}<br>最後模擬：${health.last_window_id || '?'} / ${formatDate(health.last_window_generated_at)}</div></div>
     <div class="kpi-card"><div class="kpi-label">基線版本</div><div class="kpi-value">${health.baseline_version || '?'}</div><div class="kpi-hint">目前生效的政策</div></div>
     <div class="kpi-card clickable" onclick="openKpiHelp('experiment')"><div class="kpi-label">實驗狀態</div><div class="kpi-value text-lg">${experimentText}</div><div class="kpi-hint">待處理項目</div></div>
     <div class="kpi-card clickable" onclick="switchPage('controls')"><div class="kpi-label">資金階段</div><div class="kpi-value" style="color:${phaseColor};font-size:18px">${capitalPhase ? phaseMap[capitalPhase.phase] || capitalPhase.phase : '-'}</div>${phaseHtml}</div>
+    <div class="kpi-card ${health.cycle_stale ? 'alert-err' : ''} clickable" onclick="switchPage('synergy')"><div class="kpi-label">產業週期數據</div><div class="kpi-value text-lg">${health.cycle_stale ? '⚠️ 數據過期' : '正常'}</div><div class="kpi-hint">${health.cycle_stale ? '點擊前往校正 →' : '定時更新中'}</div></div>
   `;
 }
 
@@ -191,7 +193,7 @@ export function renderAgentObservatory(data, overlapData) {
   const cards = data.weakest_agent_scorecards || [];
   if (!cards.length) { el.innerHTML = renderEmptyState('尚無 Agent 績效資料', ''); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
-  const weakest = data.next_experiment_agent_id || '';
+  const weakest = cards[0] ? cards[0].agent_id : '';
   const helpIcon = (title, html) => `<span class="cursor-pointer text-accent text-sm ml-xs" onclick="event.stopPropagation();openInfoHelp('${title}', \`${html.replace(/"/g, '&quot;')}\`)">ℹ️</span>`;
 
   let criteriaHtml = '';
@@ -232,7 +234,7 @@ export function renderAgentObservatory(data, overlapData) {
       }).join('')}
     </tbody>
   </table>
-  ${weakest ? `<div style="margin-top:8px;font-size:12px;color:var(--down)">表現最差策略來源：<strong>${agentName(weakest)}</strong></div>` : ''}
+  ${weakest ? `<div style="margin-top:8px;font-size:12px;color:var(--down)">待改進策略來源：<strong>${agentName(weakest)}</strong></div>` : ''}
   ${criteriaHtml}`;
 }
 
@@ -339,7 +341,10 @@ export function renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend
   const prismCompleted = phase3 && phase3.prism_completed_results != null ? phase3.prism_completed_results : (phase3 && phase3.PRISMCompletedResults != null ? phase3.PRISMCompletedResults : '-');
   const swarmRunning = phase3 && (phase3.swarm_running || phase3.SwarmRunning) ? '運作中' : '待機';
 
-  const agentList = (darwinianStatus && darwinianStatus.agent_list) ? darwinianStatus.agent_list : [];
+  let agentList = [];
+  if (darwinianStatus && darwinianStatus.agents) {
+    agentList = Object.keys(darwinianStatus.agents).map(id => Object.assign({agent_id: id}, darwinianStatus.agents[id]));
+  }
   const topAgent = agentList.length > 0 ? agentList.reduce((a, b) => (b.weight || 0) > (a.weight || 0) ? b : a) : null;
   const avgWeight = agentList.length > 0 ? (agentList.reduce((s, a) => s + (a.weight || 0), 0) / agentList.length).toFixed(2) : '-';
 

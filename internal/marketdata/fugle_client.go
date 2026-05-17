@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -75,13 +76,18 @@ func getFugleRateLimit() int {
 // NewFugleClient 创建 Fugle 客户端
 func NewFugleClient(apiKey string) *FugleClient {
 	params := config.GetParametersConfig()
+	limit := getFugleRateLimit()
+	// Override with parameters config if explicitly set higher than default free tier
+	if params.Marketdata.FugleRateLimit.Value > 60 {
+		limit = params.Marketdata.FugleRateLimit.Value
+	}
+	logging.Info("fugle", "client_initialized", "tier", config.GetSecret("FUGLE_TIER"), "rate_limit", limit)
+	timeout := time.Duration(params.Marketdata.FugleAPITimeoutSec.Value) * time.Second
 	return &FugleClient{
-		apiKey: apiKey,
-		httpClient: &http.Client{
-			Timeout: time.Duration(params.Marketdata.FugleAPITimeoutSec.Value) * time.Second,
-		},
+		apiKey:      apiKey,
+		httpClient:  httpclient.NewFactory().NewClient(timeout),
 		baseURL:     fugleAPIBaseURL,
-		rateLimiter: rate.NewLimiter(rate.Every(time.Minute/time.Duration(params.Marketdata.FugleRateLimit.Value)), params.Marketdata.FugleRateLimit.Value),
+		rateLimiter: rate.NewLimiter(rate.Every(time.Minute/time.Duration(limit)), limit),
 	}
 }
 

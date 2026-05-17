@@ -8,14 +8,20 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"golang.org/x/time/rate"
 )
 
+// FinMind API client for Taiwan stock data.
+// NOTE: FinMind requires API key rotation every 7 days.
+// This client is intended as a manual backup / fallback only.
+// For production, prefer Fugle (real-time) or TWSE OpenAPI (free, no key).
+// To rotate key: update FINMIND_API_KEY in .env and restart the service.
 const (
 	finmindBaseURL   = "https://api.finmindtrade.com/api/v4"
-	finmindRateLimit = 600
+	finmindRateLimit = 600 // 600 requests per hour for free tier
 	finmindBurst     = 60
 )
 
@@ -33,16 +39,19 @@ type FinMindResponse struct {
 
 func NewFinMindClient(apiKey string) *FinMindClient {
 	return &FinMindClient{
-		apiKey: apiKey,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		apiKey:      apiKey,
+		httpClient:  httpclient.NewFactory().NewClient(30 * time.Second),
 		rateLimiter: rate.NewLimiter(rate.Every(time.Minute/finmindRateLimit), finmindBurst),
 	}
 }
 
 func (c *FinMindClient) SetHTTPClient(client *http.Client) {
 	c.httpClient = client
+}
+
+// RateLimiter returns the rate limiter for Gateway adapter registration.
+func (c *FinMindClient) RateLimiter() *rate.Limiter {
+	return c.rateLimiter
 }
 
 func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId string, startDate string, endDate string) ([]map[string]any, error) {

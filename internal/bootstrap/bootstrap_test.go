@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -158,5 +159,62 @@ func TestGetLatestReplayDate(t *testing.T) {
 	expected := time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC)
 	if !latest.Equal(expected) {
 		t.Errorf("expected %v, got %v", expected, latest)
+	}
+}
+
+func TestRecoverPanic(t *testing.T) {
+	panicRecovered := false
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				panicRecovered = true
+			}
+		}()
+		defer recoverPanic("test_task")
+		panic("test panic")
+	}()
+	if panicRecovered {
+		t.Error("panic should have been recovered by recoverPanic, not propagated")
+	}
+}
+
+func TestRecoverPanic_NoPanic(t *testing.T) {
+	called := false
+	func() {
+		defer recoverPanic("test_task")
+		called = true
+	}()
+	if !called {
+		t.Error("function body should have executed")
+	}
+}
+
+func TestBackgroundHealthRecording(t *testing.T) {
+	tmpDir := t.TempDir()
+	stateDir := filepath.Join(tmpDir, "data", "state")
+	os.MkdirAll(stateDir, 0o755)
+
+	healthPath := filepath.Join(stateDir, "channel_health.json")
+	if _, err := os.Stat(healthPath); err == nil {
+		os.Remove(healthPath)
+	}
+
+	healthData := `{"channels":{"auto_backfill":{"status":"ok","last_fetch_at":"2026-05-12T10:00:00+08:00"},"auto_capital_flow":{"status":"error","last_fetch_at":"2026-05-12T10:00:00+08:00","last_error":"fetch timeout"},"auto_geopolitical":{"status":"ok","last_fetch_at":"2026-05-12T10:00:00+08:00"}}}`
+	if err := os.WriteFile(healthPath, []byte(healthData), 0o644); err != nil {
+		t.Fatalf("write health file: %v", err)
+	}
+
+	data, err := os.ReadFile(healthPath)
+	if err != nil {
+		t.Fatalf("read channel_health.json: %v", err)
+	}
+	if !strings.Contains(string(data), "auto_backfill") {
+		t.Error("auto_backfill missing from channel_health.json")
+	}
+	if !strings.Contains(string(data), "auto_capital_flow") {
+		t.Error("auto_capital_flow missing from channel_health.json")
+	}
+	if !strings.Contains(string(data), "auto_geopolitical") {
+		t.Error("auto_geopolitical missing from channel_health.json")
 	}
 }

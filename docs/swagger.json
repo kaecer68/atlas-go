@@ -601,6 +601,87 @@
           }
         }
       }
+    },
+    "/api/metrics/storage": {
+      "get": {
+        "summary": "Get storage cleanup metrics",
+        "description": "Returns the latest storage lifecycle cleanup report including deleted files, kept files, and per-policy statistics.",
+        "responses": {
+          "200": {
+            "description": "Storage cleanup report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageCleanupReport"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Storage metrics endpoint not configured"
+          }
+        }
+      }
+    },
+    "/api/scheduler/status": {
+      "get": {
+        "summary": "Get scheduled task status",
+        "description": "Returns runtime status for all registered background tasks including last run, consecutive failures, and enabled state.",
+        "responses": {
+          "200": {
+            "description": "List of task statuses",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskStatus"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scheduler/toggle": {
+      "post": {
+        "summary": "Toggle scheduled task enabled state",
+        "description": "Enable or disable a named background task.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToggleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Task toggled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": { "type": "string" },
+                    "enabled": { "type": "boolean" },
+                    "status": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body or missing name"
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1170,6 +1251,79 @@
             "type": "integer"
           }
         }
+      },
+      "StorageCleanupReport": {
+        "type": "object",
+        "properties": {
+          "total_deleted": {
+            "type": "integer"
+          },
+          "total_kept": {
+            "type": "integer"
+          },
+          "policies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PolicyReport"
+            }
+          }
+        }
+      },
+      "PolicyReport": {
+        "type": "object",
+        "properties": {
+          "dir": {
+            "type": "string"
+          },
+          "max_age_days": {
+            "type": "integer"
+          },
+          "deleted": {
+            "type": "integer"
+          },
+          "kept": {
+            "type": "integer"
+          },
+          "oldest_kept": {
+            "type": "string"
+          }
+        }
+      },
+      "TaskStatus": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "channel_id": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "interval": {
+            "type": "string"
+          },
+          "last_run": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "consecutive_failures": {
+            "type": "integer"
+          }
+        }
+      },
+      "ToggleRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": ["name", "enabled"]
       }
     }
   }

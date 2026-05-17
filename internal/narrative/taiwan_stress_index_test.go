@@ -2,6 +2,8 @@ package narrative
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -9,7 +11,7 @@ import (
 )
 
 func TestTaiwanStressCalculator_Calculate(t *testing.T) {
-	calc := NewTaiwanStressCalculator(nil)
+	calc := NewTaiwanStressCalculator(nil, "")
 
 	snap := marketdata.MacroDataSnapshot{
 		DXY:                marketdata.MacroDataPoint{Value: 104, ChangePct: 0.5},
@@ -20,7 +22,7 @@ func TestTaiwanStressCalculator_Calculate(t *testing.T) {
 	}
 	geo := GeopoliticalRiskScore{Intensity: 30}
 
-	idx := calc.Calculate(snap, geo)
+	idx := calc.Calculate(snap, marketdata.MacroDataSnapshot{}, geo)
 
 	if idx.Score < 0 || idx.Score > 100 {
 		t.Fatalf("score out of range: %v", idx.Score)
@@ -54,7 +56,7 @@ func (m *mockGeoProvider) FetchScore(ctx context.Context) (GeopoliticalRiskScore
 
 func TestTaiwanStressCalculator_CalculateFromSnapshot_CachesResult(t *testing.T) {
 	mock := &mockGeoProvider{score: GeopoliticalRiskScore{Intensity: 10}}
-	calc := NewTaiwanStressCalculator(mock)
+	calc := NewTaiwanStressCalculator(mock, "")
 	calc.cacheTTL = 100 * time.Millisecond
 
 	snap := marketdata.MacroDataSnapshot{
@@ -66,14 +68,14 @@ func TestTaiwanStressCalculator_CalculateFromSnapshot_CachesResult(t *testing.T)
 	}
 
 	ctx := context.Background()
-	if _, err := calc.CalculateFromSnapshot(ctx, snap); err != nil {
+	if _, err := calc.CalculateFromSnapshot(ctx, snap, marketdata.MacroDataSnapshot{}); err != nil {
 		t.Fatalf("first call failed: %v", err)
 	}
 	if mock.calls != 1 {
 		t.Fatalf("expected 1 provider call after first invocation, got %d", mock.calls)
 	}
 
-	if _, err := calc.CalculateFromSnapshot(ctx, snap); err != nil {
+	if _, err := calc.CalculateFromSnapshot(ctx, snap, marketdata.MacroDataSnapshot{}); err != nil {
 		t.Fatalf("second call failed: %v", err)
 	}
 	if mock.calls != 1 {
@@ -81,7 +83,7 @@ func TestTaiwanStressCalculator_CalculateFromSnapshot_CachesResult(t *testing.T)
 	}
 
 	time.Sleep(150 * time.Millisecond)
-	if _, err := calc.CalculateFromSnapshot(ctx, snap); err != nil {
+	if _, err := calc.CalculateFromSnapshot(ctx, snap, marketdata.MacroDataSnapshot{}); err != nil {
 		t.Fatalf("third call after ttl failed: %v", err)
 	}
 	if mock.calls != 2 {
@@ -90,7 +92,7 @@ func TestTaiwanStressCalculator_CalculateFromSnapshot_CachesResult(t *testing.T)
 }
 
 func TestTaiwanStressCalculator_RegimeThresholds(t *testing.T) {
-	calc := NewTaiwanStressCalculator(nil)
+	calc := NewTaiwanStressCalculator(nil, "")
 
 	tests := []struct {
 		name string
@@ -126,9 +128,83 @@ func TestTaiwanStressCalculator_RegimeThresholds(t *testing.T) {
 
 	for _, tt := range tests {
 		geo := GeopoliticalRiskScore{Intensity: tt.geo}
-		idx := calc.Calculate(tt.snap, geo)
+		idx := calc.Calculate(tt.snap, marketdata.MacroDataSnapshot{}, geo)
 		if idx.Regime != tt.want {
 			t.Fatalf("%s: expected regime %q, got %q (score=%.1f)", tt.name, tt.want, idx.Regime, idx.Score)
 		}
+	}
+}
+
+func TestLoadWeightsConfigFileNotFound(t *testing.T) {
+	cfg := LoadWeightsConfig("/nonexistent/dir")
+	if cfg != nil {
+		t.Fatal("expected nil when config file doesn't exist")
+	}
+}
+
+func TestLoadWeightsConfigValidWeights(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "configs")
+	if err := os.MkdirAll(cfgPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	jsonPath := filepath.Join(cfgPath, "stress_index_weights.json")
+	content := `{
+		"scaling":  {"dxy":5,"us10y":2,"foreign_flow":10,"vix":2.5,"jpy":10,"geopolitical":1},
+		"weights":  {"dxy":0.15,"us10y":0.20,"foreign_flow":0.25,"vix":0.15,"jpy":0.10,"geopolitical":0.15},
+		"thresholds":{"crisis":70,"high":50,"alert":30}
+	}`
+	if err := os.WriteFile(jsonPath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := LoadWeightsConfig(dir)
+	if cfg == nil {
+		t.Fatal("expected non-nil config")
+	}
+	if !cfg.isValid() {
+		t.Fatal("expected valid config (weights sum to 1.0)")
+	}
+}
+
+func TestLoadWeightsConfigRejectsInvalidSum(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "configs")
+	os.MkdirAll(cfgPath, 0o755)
+	os.WriteFile(filepath.Join(cfgPath, "stress_index_weights.json"), []byte(`{"weights":{"dxy":0.3,"us10y":0.3,"foreign_flow":0.2,"vix":0.05,"jpy":0,"geopolitical":0}}`), 0o644)
+	cfg := LoadWeightsConfig(dir)
+	if cfg != nil {
+		t.Fatal("expected nil for invalid weights sum (0.3+0.3+0.2+0.05 = 0.85)")
+	}
+}
+
+func TestLoadWeightsConfigMalformedJSON(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "configs")
+	os.MkdirAll(cfgPath, 0o755)
+	os.WriteFile(filepath.Join(cfgPath, "stress_index_weights.json"), []byte("not json"), 0o644)
+	cfg := LoadWeightsConfig(dir)
+	if cfg != nil {
+		t.Fatal("expected nil for malformed JSON")
+	}
+}
+
+func TestLoadWeightsConfigIntegratesWithCalculator(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "configs")
+	os.MkdirAll(cfgPath, 0o755)
+	os.WriteFile(filepath.Join(cfgPath, "stress_index_weights.json"), []byte(`{
+		"scaling":  {"dxy":5,"us10y":2,"foreign_flow":10,"vix":2.5,"jpy":10,"geopolitical":1},
+		"weights":  {"dxy":0.2,"us10y":0.2,"foreign_flow":0.2,"vix":0.2,"jpy":0.0,"geopolitical":0.2},
+		"thresholds":{"crisis":70,"high":50,"alert":30}}`), 0o644)
+	calc := NewTaiwanStressCalculator(nil, dir)
+	snap := marketdata.MacroDataSnapshot{
+		DXY:   marketdata.MacroDataPoint{Value: 104, ChangePct: 1.0},
+		US10Y: marketdata.MacroDataPoint{Value: 4.5},
+		VIX:   marketdata.MacroDataPoint{Value: 20},
+	}
+	geo := GeopoliticalRiskScore{Intensity: 30}
+	idx := calc.Calculate(snap, marketdata.MacroDataSnapshot{}, geo)
+	if idx.Score < 0 {
+		t.Fatal("expected positive score with loaded config")
 	}
 }

@@ -59,22 +59,11 @@ func (e *RuleEngine) Start(ctx context.Context, stateStore *livestore.StateStore
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			e.evaluateWithStore(stateStore)
+			if stateStore != nil {
+				state := stateStore.GetState()
+				e.evaluateRules(state)
+			}
 		}
-	}
-}
-
-// EvaluateOnce performs a single rule evaluation cycle.
-// Returns nil to satisfy BackgroundTaskFunc signature.
-func (e *RuleEngine) EvaluateOnce(ctx context.Context, stateStore *livestore.StateStore) error {
-	e.evaluateWithStore(stateStore)
-	return nil
-}
-
-func (e *RuleEngine) evaluateWithStore(stateStore *livestore.StateStore) {
-	if stateStore != nil {
-		state := stateStore.GetState()
-		e.evaluateRules(state)
 	}
 }
 

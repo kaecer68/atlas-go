@@ -3,6 +3,7 @@ package marketdata
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -33,6 +34,7 @@ func defaultCircuitBreakerConfig() circuitBreakerConfig {
 }
 
 type HybridProvider struct {
+	fubonProvider   *FubonProvider
 	finmindProvider *FinMindProvider
 	fugleProvider   *FugleProvider
 	twseClient      *TWSEClient
@@ -50,6 +52,12 @@ type HybridProvider struct {
 }
 
 func NewHybridProvider(finmindAPIKey, fugleAPIKey string) *HybridProvider {
+	var fubonProvider *FubonProvider
+	if os.Getenv("FUBON_PROXY_URL") != "" || fubonProxyBaseURL != "" {
+		fubonClient := NewFubonClient("")
+		fubonProvider = NewFubonProviderWithClient(fubonClient)
+	}
+
 	var finmindProvider *FinMindProvider
 	if finmindAPIKey != "" {
 		finmindProvider = NewFinMindProvider(finmindAPIKey)
@@ -61,6 +69,7 @@ func NewHybridProvider(finmindAPIKey, fugleAPIKey string) *HybridProvider {
 	}
 
 	return &HybridProvider{
+		fubonProvider:   fubonProvider,
 		finmindProvider: finmindProvider,
 		fugleProvider:   fugleProvider,
 		twseClient:      NewTWSEClient(),
@@ -70,6 +79,9 @@ func NewHybridProvider(finmindAPIKey, fugleAPIKey string) *HybridProvider {
 }
 
 func (p *HybridProvider) Name() string {
+	if p.fubonProvider != nil {
+		return "hybrid-fubon"
+	}
 	if p.finmindProvider != nil {
 		return "hybrid-finmind"
 	}
@@ -80,6 +92,14 @@ func (p *HybridProvider) Name() string {
 }
 
 func (p *HybridProvider) GetQuotes(ctx context.Context, asOf time.Time, symbols []string) ([]domain.Quote, error) {
+	if p.fubonProvider != nil {
+		quotes, err := p.fubonProvider.GetQuotes(ctx, asOf, symbols)
+		if err == nil && len(quotes) > 0 && !p.hasInvalidQuotes(quotes) {
+			return quotes, nil
+		}
+		logging.Warn("hybrid_provider", "fubon_failed_fallback", logging.Err(err))
+	}
+
 	if p.finmindProvider != nil {
 		quotes, err := p.finmindProvider.GetQuotes(ctx, asOf, symbols)
 		if err == nil && len(quotes) > 0 && !p.hasInvalidQuotes(quotes) {
@@ -207,6 +227,13 @@ func (p *HybridProvider) GetFugleClient() *FugleClient {
 		return nil
 	}
 	return p.fugleProvider.GetClient()
+}
+
+func (p *HybridProvider) GetFubonClient() *FubonClient {
+	if p.fubonProvider == nil {
+		return nil
+	}
+	return p.fubonProvider.GetClient()
 }
 
 func (p *HybridProvider) IsUsingTWSE() bool {

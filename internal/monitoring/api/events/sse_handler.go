@@ -29,7 +29,33 @@ type SSEHandler struct {
 	maxClients  int
 }
 
+// BufferedNarrativeEvent holds a published narrative event for catchup.
+type BufferedNarrativeEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
+const maxBufferedNarrativeEvents = 50
+
+var (
+	narrativeBuffer    []BufferedNarrativeEvent
+	lastNarrativeMutex sync.RWMutex
+)
+
 const defaultMaxSSEClients = 20
+
+// BufferNarrativeEvent stores a narrative event for catchup by new SSE clients.
+func BufferNarrativeEvent(event eventbus.BusEvent) {
+	lastNarrativeMutex.Lock()
+	defer lastNarrativeMutex.Unlock()
+	narrativeBuffer = append(narrativeBuffer, BufferedNarrativeEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(narrativeBuffer) > maxBufferedNarrativeEvents {
+		narrativeBuffer = narrativeBuffer[len(narrativeBuffer)-maxBufferedNarrativeEvents:]
+	}
+}
 
 // NewSSEHandler creates a new SSE handler.
 func NewSSEHandler(eventBus *eventbus.ChannelEventBus) *SSEHandler {
@@ -81,6 +107,19 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Send initial connected event.
 	fmt.Fprintf(w, "event: connected\ndata: %s\n\n", `{"client_id":"`+clientID+`"}`)
 	flusher.Flush()
+
+	// Send any buffered narrative events for catchup.
+	lastNarrativeMutex.RLock()
+	buffered := narrativeBuffer
+	lastNarrativeMutex.RUnlock()
+	for _, b := range buffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
 
 	// Subscribe to EventBus and forward events to this client.
 	sub := h.eventBus.SubscribeAll(func(ctx context.Context, event eventbus.BusEvent) error {

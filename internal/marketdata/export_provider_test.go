@@ -235,3 +235,33 @@ func TestExportStatisticsProvider_SaveExport(t *testing.T) {
 		t.Errorf("expected export total %f, got %f", data.ExportTotal, saved.ExportTotal)
 	}
 }
+
+func TestExportStatisticsProvider_FetchSnapshot_SavesBothMonths(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		csv := `年月,出口總值,進口總值,出超,出超(與上月比較),出超(與上年同月比較),出口總值(與上月比較),出口總值(與上年同月比較),出超值
+"114","03","52,000,000","47,000,000","5,000,000","10.0","5.0","8.0","5,000,000"
+"114","02","50,000,000","45,000,000","5,000,000","9.0","4.0","7.0","5,000,000"`
+		w.Header().Set("Content-Type", "text/csv")
+		w.Write([]byte(csv))
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	provider := ExportStatisticsProviderWithClient(server.Client(), tmpDir)
+	provider.baseURL = server.URL
+
+	_, err := provider.FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	latestFile := filepath.Join(tmpDir, "11403_export.json")
+	prevFile := filepath.Join(tmpDir, "11402_export.json")
+
+	if _, err := os.Stat(latestFile); os.IsNotExist(err) {
+		t.Errorf("expected latest file %s to exist", latestFile)
+	}
+	if _, err := os.Stat(prevFile); os.IsNotExist(err) {
+		t.Errorf("expected previous file %s to exist", prevFile)
+	}
+}

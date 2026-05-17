@@ -87,16 +87,6 @@ docker-compose up -d atlas redis postgres
 ```
 Market Data (replay/*.jsonl or live provider)
          ↓
-Gateway (internal/apigateway/)
-    ├─ 14 ChannelAdapters (Fugle, FinMind, TWSE, Yahoo, TEJ, etc.)
-    ├─ Rate limiting + Circuit breakers + Cache
-    └─ UnifiedHealthStore for channel health tracking
-         ↓
-BackgroundTaskManager (internal/apigateway/background.go)
-    ├─ Manages 10+ scheduled fetch tasks with jitter, overlap guard
-    ├─ Market-hours-aware scheduling (TWSE 09:00-13:30)
-    └─ Retry policy with exponential backoff per task
-         ↓
 Orchestrator (internal/orchestrator/)
     ├─ RegimeExecutor    (context layer: macro regime scoring)
     ├─ AgentExecutor     (sector/style/superinvestor layers: generate recommendations)
@@ -110,8 +100,6 @@ Simulator (internal/sim/)
 Ledger (internal/ledger/)
     └─ Persists outcomes and scorecards for judgment
 ```
-
-**Data collection is unified through the Gateway** — all external data providers (market data, macro, geopolitical) are registered as ChannelAdapters in `internal/apigateway/channel_adapters.go` and managed by the BackgroundTaskManager. Direct provider instantiation (the old pattern) should be avoided in new code; use `gateway.Fetch(channelID)` instead.
 
 ### SystemCore + PluginHost Architecture
 
@@ -160,9 +148,6 @@ Baseline policy is loaded from `data/state/baseline_policy.json`. The experiment
 | **Silent Darwinian clipping** | Weights are clamped to `[0.3, 2.5]` without error; do not assume out-of-range values propagate. |
 | **Mutable recommendation slices** | Do not reuse a mutable `[]Recommendation` across multiple simulation runs. Rebuild or copy per run. |
 | **Live trading incomplete** | `internal/live/` has TODO boundaries. Default safe path is replay/simulation. |
-| **Direct provider instantiation bypasses Gateway** | New data fetchers should use `gateway.Fetch(channelID)` not direct `New*Provider()`. |
-| **BackgroundTaskManager for periodic tasks** | Prefer registering tasks via `taskMgr.Register()` over raw goroutine+ticker. BTM provides jitter, overlap guard, circuit-breaker awareness, and market-hours filtering. |
-| **Channel adapter pattern required** | New data sources MUST implement a ChannelAdapter in `channel_adapters.go` and register via `RegisterChannelAdapters()`. |
 | **Replay format** | Replay data is **JSONL** (one JSON object per line), not a JSON array. |
 
 ## Configuration
@@ -179,12 +164,11 @@ Baseline policy is loaded from `data/state/baseline_policy.json`. The experiment
 - `.github/instructions/live-trading.guardrails.instructions.md` — live trading guardrails
 - `docs/architecture.md` — layered architecture details
 - `docs/operations_playbook.md` — day-to-day workflows
-- `internal/apigateway/` — Gateway, BackgroundTaskManager, and 14 ChannelAdapters for unified data ingestion
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (23970 symbols, 52680 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (24759 symbols, 54364 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

@@ -49,6 +49,36 @@ func (m *EventLifecycleManager) AddEvent(event *NarrativeEvent) {
 	m.events[event.ID] = event
 }
 
+func (m *EventLifecycleManager) IsThemeActive(theme string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, e := range m.events {
+		if e.Theme == theme && (e.Status == "active" || e.Status == "confirmed") {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *EventLifecycleManager) GetActiveByTheme(theme string) *NarrativeEvent {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, e := range m.events {
+		if e.Theme == theme && (e.Status == "active" || e.Status == "confirmed") {
+			return e
+		}
+	}
+	return nil
+}
+
+func (m *EventLifecycleManager) UpdateConfidence(id string, confidence float64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if e, ok := m.events[id]; ok {
+		e.Confidence = confidence
+	}
+}
+
 func (m *EventLifecycleManager) GetActiveEvents() []*NarrativeEvent {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

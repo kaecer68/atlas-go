@@ -13,10 +13,16 @@ import (
 type Handler func(r *http.Request) (status int, data any)
 
 // AuthMiddleware checks API key authentication.
-// If ATLAS_API_KEY is unset or empty, it is a no-op.
+// In production (ATLAS_ENV=production), ATLAS_API_KEY is mandatory.
 // It accepts either Authorization: Bearer <key> or X-API-Key: <key>.
 func AuthMiddleware(next http.Handler) http.Handler {
 	apiKey := os.Getenv("ATLAS_API_KEY")
+	isProduction := strings.ToLower(os.Getenv("ATLAS_ENV")) == "production"
+	if isProduction && apiKey == "" {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			WriteJSONError(w, http.StatusServiceUnavailable, "server misconfigured: ATLAS_API_KEY required in production")
+		})
+	}
 	if apiKey == "" {
 		return next
 	}

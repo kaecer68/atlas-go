@@ -13,6 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
+	"golang.org/x/time/rate"
+
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
@@ -33,14 +36,16 @@ type ExportStatisticsProvider struct {
 	client     *http.Client
 	storageDir string
 	baseURL    string
+	limiter    *rate.Limiter
 }
 
 // NewExportStatisticsProvider creates a new export statistics provider.
 func NewExportStatisticsProvider(storageDir string) *ExportStatisticsProvider {
 	return &ExportStatisticsProvider{
-		client:     &http.Client{Timeout: 30 * time.Second},
+		client:     httpclient.NewFactory().NewClient(30 * time.Second),
 		storageDir: storageDir,
 		baseURL:    "https://opendata.customs.gov.tw/data/6053/csv.csv",
+		limiter:    rate.NewLimiter(rate.Every(5*time.Second), 1),
 	}
 }
 
@@ -67,7 +72,10 @@ func (e *ExportStatisticsProvider) FetchSnapshot(ctx context.Context) (MacroData
 	ts := time.Date(latest.Year+1911, time.Month(latest.Month), 1, 12, 0, 0, 0, time.FixedZone("CST", 8*60*60)).Unix()
 
 	if err := e.saveExport(latest); err != nil {
-		logging.Warn("export_statistics_provider", "save_export_warning", logging.Err(err))
+		logging.Warn("export_statistics_provider", "save_export_latest_warning", logging.Err(err))
+	}
+	if err := e.saveExport(prev); err != nil {
+		logging.Warn("export_statistics_provider", "save_export_prev_warning", logging.Err(err))
 	}
 
 	return MacroDataSnapshot{
@@ -83,6 +91,9 @@ func (e *ExportStatisticsProvider) FetchSnapshot(ctx context.Context) (MacroData
 
 // fetchLatestTwoMonths returns the two most recent monthly records.
 func (e *ExportStatisticsProvider) fetchLatestTwoMonths(ctx context.Context) (CustomsExportImport, CustomsExportImport, error) {
+	if err := e.limiter.Wait(ctx); err != nil {
+		return CustomsExportImport{}, CustomsExportImport{}, fmt.Errorf("rate limit: %w", err)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, e.baseURL, nil)
 	if err != nil {
 		return CustomsExportImport{}, CustomsExportImport{}, fmt.Errorf("create request: %w", err)
@@ -189,5 +200,6 @@ func ExportStatisticsProviderWithClient(client *http.Client, storageDir string) 
 		client:     client,
 		storageDir: storageDir,
 		baseURL:    "https://opendata.customs.gov.tw/data/6053/csv.csv",
+		limiter:    rate.NewLimiter(rate.Every(5*time.Second), 1),
 	}
 }

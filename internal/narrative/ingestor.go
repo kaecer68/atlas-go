@@ -7,8 +7,11 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -17,6 +20,13 @@ type MacroIngestor struct {
 	provider         marketdata.MacroDataProvider
 	snapshotDir      string
 	divergenceDetect *DivergenceDetector
+	eventBus         eventbusPublisher
+	lifecycle        *EventLifecycleManager
+}
+
+// eventbusPublisher abstracts the event bus for testing.
+type eventbusPublisher interface {
+	PublishNarrativeEvent(eventID, theme, region string, sentiment, confidence float64, confidenceSource, hitRate, capitalFlow, timeWindow string) error
 }
 
 // NewMacroIngestor creates an ingestor with a given provider and snapshot directory.
@@ -33,20 +43,129 @@ func (m *MacroIngestor) SnapshotDir() string {
 	return m.snapshotDir
 }
 
+func (m *MacroIngestor) SetEventBus(bus eventbusPublisher) {
+	m.eventBus = bus
+}
+
+func (m *MacroIngestor) SetLifecycleManager(lm *EventLifecycleManager) {
+	m.lifecycle = lm
+}
+
 // Ingest fetches latest macro data, computes changes from previous snapshot, and returns events.
 func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdata.MacroDataSnapshot, error) {
+	if m.lifecycle != nil {
+		m.lifecycle.UpdateStatuses()
+	}
+
 	snap, err := m.provider.FetchSnapshot(ctx)
 	if err != nil {
+		// Partial success: save valid fields and merge with previous snapshot.
+		if hasValidYahooData(snap) {
+			prev, _ := m.loadLatestSnapshot()
+			snap = mergeWithPrev(snap, prev)
+			if saveErr := m.saveSnapshot(snap); saveErr != nil {
+				logging.Warn("ingestor", "partial_save_failed", logging.Err(saveErr))
+			}
+			events := detectEventsFromSnapshot(snap, prev, m.divergenceDetect)
+			m.publishEvents(events)
+			return events, snap, nil
+		}
+		prev, prevErr := m.loadLatestSnapshot()
+		if prevErr == nil {
+			prevPrev, _ := m.loadPreviousSnapshot(prev)
+			events := detectEventsFromSnapshot(prev, prevPrev, m.divergenceDetect)
+			m.publishEvents(events)
+			return events, prev, nil
+		}
 		return nil, snap, fmt.Errorf("fetch snapshot: %w", err)
 	}
 
 	prev, _ := m.loadLatestSnapshot()
 	events := detectEventsFromSnapshot(snap, prev, m.divergenceDetect)
+	m.publishEvents(events)
+
+	snap = mergeWithPrev(snap, prev)
 
 	if err := m.saveSnapshot(snap); err != nil {
 		return events, snap, fmt.Errorf("save snapshot: %w", err)
 	}
 	return events, snap, nil
+}
+
+func (m *MacroIngestor) publishEvents(events []NarrativeEvent) {
+	if m.eventBus == nil {
+		return
+	}
+	for i := range events {
+		e := &events[i]
+		if m.lifecycle != nil {
+			if m.lifecycle.IsThemeActive(e.Theme) {
+				if existing := m.lifecycle.GetActiveByTheme(e.Theme); existing != nil {
+					m.lifecycle.UpdateConfidence(existing.ID, e.Confidence)
+				}
+				continue
+			}
+			m.lifecycle.AddEvent(e)
+		}
+		m.eventBus.PublishNarrativeEvent(
+			e.ID, e.Theme, e.Region,
+			e.Sentiment, e.Confidence,
+			e.ConfidenceSource, fmt.Sprintf("%.2f", e.HitRate),
+			e.CapitalFlow, e.TimeWindow,
+		)
+	}
+}
+
+func mergeWithPrev(curr, prev marketdata.MacroDataSnapshot) marketdata.MacroDataSnapshot {
+	if curr.US10Y.Symbol == "" {
+		curr.US10Y = prev.US10Y
+	}
+	if curr.DXY.Symbol == "" {
+		curr.DXY = prev.DXY
+	}
+	if curr.VIX.Symbol == "" {
+		curr.VIX = prev.VIX
+	}
+	if curr.USD_TWD.Symbol == "" {
+		curr.USD_TWD = prev.USD_TWD
+	}
+	if curr.Oil.Symbol == "" {
+		curr.Oil = prev.Oil
+	}
+	if curr.Gold.Symbol == "" {
+		curr.Gold = prev.Gold
+	}
+	if curr.JPY.Symbol == "" {
+		curr.JPY = prev.JPY
+	}
+	if curr.ForeignInvestorNet.Symbol == "" {
+		curr.ForeignInvestorNet = prev.ForeignInvestorNet
+	}
+	if curr.DomesticFundNet.Symbol == "" {
+		curr.DomesticFundNet = prev.DomesticFundNet
+	}
+	if curr.DealerNet.Symbol == "" {
+		curr.DealerNet = prev.DealerNet
+	}
+	if curr.ExportElectronics.Symbol == "" {
+		curr.ExportElectronics = prev.ExportElectronics
+	}
+	if curr.RetailMarginBalance.Symbol == "" {
+		curr.RetailMarginBalance = prev.RetailMarginBalance
+	}
+	if curr.TSMCRevenue.Symbol == "" {
+		curr.TSMCRevenue = prev.TSMCRevenue
+	}
+	if curr.SOXIndex.Symbol == "" {
+		curr.SOXIndex = prev.SOXIndex
+	}
+	if curr.CoWoSUtilization.Symbol == "" {
+		curr.CoWoSUtilization = prev.CoWoSUtilization
+	}
+	if curr.CapexGrowth.Symbol == "" {
+		curr.CapexGrowth = prev.CapexGrowth
+	}
+	return curr
 }
 
 func (m *MacroIngestor) loadLatestSnapshot() (marketdata.MacroDataSnapshot, error) {
@@ -59,7 +178,84 @@ func (m *MacroIngestor) loadLatestSnapshot() (marketdata.MacroDataSnapshot, erro
 	if err := json.Unmarshal(data, &snap); err != nil {
 		return marketdata.MacroDataSnapshot{}, fmt.Errorf("unmarshal snapshot: %w", err)
 	}
+	if hasValidYahooData(snap) {
+		return snap, nil
+	}
+	dated, err := m.loadFallbackDatedSnapshot()
+	if err != nil {
+		return snap, nil
+	}
+	return dated, nil
+}
+
+func hasValidYahooData(snap marketdata.MacroDataSnapshot) bool {
+	return snap.US10Y.Symbol != "" || snap.DXY.Symbol != "" || snap.VIX.Symbol != "" || snap.JPY.Symbol != ""
+}
+
+func (m *MacroIngestor) loadFallbackDatedSnapshot() (marketdata.MacroDataSnapshot, error) {
+	entries, err := os.ReadDir(m.snapshotDir)
+	if err != nil {
+		return marketdata.MacroDataSnapshot{}, err
+	}
+	var latest string
+	var latestTime int64
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || e.Name() == "latest.json" {
+			continue
+		}
+		info, _ := e.Info()
+		if info != nil && info.ModTime().Unix() > latestTime {
+			latestTime = info.ModTime().Unix()
+			latest = e.Name()
+		}
+	}
+	if latest == "" {
+		return marketdata.MacroDataSnapshot{}, fmt.Errorf("no dated snapshots")
+	}
+	data, err := os.ReadFile(filepath.Join(m.snapshotDir, latest))
+	if err != nil {
+		return marketdata.MacroDataSnapshot{}, err
+	}
+	var snap marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(data, &snap); err != nil {
+		return marketdata.MacroDataSnapshot{}, err
+	}
 	return snap, nil
+}
+
+func (m *MacroIngestor) loadPreviousSnapshot(curr marketdata.MacroDataSnapshot) (marketdata.MacroDataSnapshot, error) {
+	entries, err := os.ReadDir(m.snapshotDir)
+	if err != nil {
+		return marketdata.MacroDataSnapshot{}, fmt.Errorf("read snapshot dir: %w", err)
+	}
+	var candidates []string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || e.Name() == "latest.json" {
+			continue
+		}
+		candidates = append(candidates, e.Name())
+	}
+	if len(candidates) == 0 {
+		return marketdata.MacroDataSnapshot{}, fmt.Errorf("no previous snapshots")
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i] < candidates[j]
+	})
+	for i := len(candidates) - 1; i >= 0; i-- {
+		path := filepath.Join(m.snapshotDir, candidates[i])
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var snap marketdata.MacroDataSnapshot
+		if err := json.Unmarshal(data, &snap); err != nil {
+			continue
+		}
+		if snap.RecordedAt < curr.RecordedAt {
+			return snap, nil
+		}
+	}
+	return marketdata.MacroDataSnapshot{}, fmt.Errorf("no previous snapshot found")
 }
 
 func (m *MacroIngestor) saveSnapshot(snap marketdata.MacroDataSnapshot) error {

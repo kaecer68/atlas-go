@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
@@ -121,7 +122,7 @@ func HandleDataIntegrity(workDir, ledgerDir string) http.HandlerFunc {
 		}
 
 		// 5. Check replay data freshness
-		replayPath := filepath.Join(workDir, "data/replay/tw_extended_90days.csv")
+		replayPath := config.GetReplayDataPath(workDir)
 		if info, err := os.Stat(replayPath); err != nil {
 			checks = append(checks, IntegrityCheck{"replay_data", "error", "replay file missing"})
 			errorCount++

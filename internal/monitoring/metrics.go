@@ -284,25 +284,19 @@ func NewSystemMetrics(collector *MetricsCollector, monitor *Monitor) *SystemMetr
 
 // Start 啟動系統指標收集
 func (sm *SystemMetrics) Start(ctx context.Context) {
-	go sm.runLoop(ctx)
-}
-
-// RunOnce performs a single system metrics evaluation cycle.
-// Returns nil to satisfy BackgroundTaskFunc signature.
-func (sm *SystemMetrics) RunOnce(ctx context.Context) error {
-	return nil
-}
-
-func (sm *SystemMetrics) runLoop(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
+	// 啟動背景收集任務
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				// 定期收集系統指標
+			}
 		}
-	}
+	}()
 }
 
 // AlertThreshold 警報閾值配置

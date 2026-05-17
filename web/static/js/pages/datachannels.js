@@ -1,4 +1,3 @@
-// Data channels page
 import { silentGetJSON, notify } from '../shared/app-utils.js';
 
 export async function loadDataChannels() {
@@ -179,27 +178,21 @@ export function loadFetchLogs() {
   el.innerHTML = html;
 }
 
-export function renderDataChannels(data, schedulerTasks) {
+export function renderDataChannels(data) {
   const el = document.getElementById('dataChannels');
   if (!data || !data.channels) { el.innerHTML = renderEmptyState('尚無資料通道資料', ''); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
   const channels = data.channels || [];
-
-  // Build channel → task correlation map
-  var taskMap = {};
-  if (schedulerTasks && Array.isArray(schedulerTasks)) {
-    schedulerTasks.forEach(function(t) {
-      if (t.channel_id) {
-        if (!taskMap[t.channel_id]) taskMap[t.channel_id] = [];
-        taskMap[t.channel_id].push(t.name);
-      }
-    });
-  }
   const statusLight = s => {
     const color = s === 'ok' ? 'var(--status-ok)' : (s === 'warn' ? 'var(--status-warn)' : (s === 'error' ? 'var(--status-err)' : 'var(--status-unknown)'));
     return `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};box-shadow:0 0 6px ${color};margin-right:6px;vertical-align:middle"></span>`;
   };
   const statusClass = s => s === 'ok' ? 'up' : (s === 'warn' ? 'warn' : (s === 'error' ? 'down' : 'muted'));
+
+  // Calculate summary stats
+  const total = channels.length;
+  const errorCount = channels.filter(c => c.status === 'error').length;
+  const warnCount = channels.filter(c => c.status === 'warn').length;
 
   // Group by country
   const byCountry = {};
@@ -209,18 +202,34 @@ export function renderDataChannels(data, schedulerTasks) {
   });
 
   let html = '';
+
+  // Control panel summary
+  html += `<div class="control-summary" style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+    <div class="metric" style="background:var(--panel);padding:10px 16px;border-radius:8px;border:1px solid var(--border)">
+      <div class="label">總通道</div>
+      <div class="value">${total}</div>
+    </div>
+    <div class="metric" style="background:var(--panel);padding:10px 16px;border-radius:8px;border:1px solid var(--border)">
+      <div class="label">異常</div>
+      <div class="value" style="color:var(--down)">${errorCount}</div>
+    </div>
+    <div class="metric" style="background:var(--panel);padding:10px 16px;border-radius:8px;border:1px solid var(--border)">
+      <div class="label">延遲</div>
+      <div class="value" style="color:var(--warn)">${warnCount}</div>
+    </div>
+    <div class="metric" style="background:var(--panel);padding:10px 16px;border-radius:8px;border:1px solid var(--border)">
+      <div class="label">正常</div>
+      <div class="value" style="color:var(--up)">${total - errorCount - warnCount}</div>
+    </div>
+  </div>`;
+
   Object.keys(byCountry).forEach(country => {
     html += `<div style="margin:12px 0"><div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:6px">${country}</div>`;
-    html += '<table class="text-sm"><thead><tr><th class="w-28">燈號</th><th>平台名稱</th><th>API 格式</th><th>資料路徑</th><th>本地儲存</th><th>狀態</th><th>操作</th><th>最後更新</th><th>排程任務</th></tr></thead><tbody>';
+    html += '<table class="text-sm"><thead><tr><th class="w-28">燈號</th><th>平台名稱</th><th>API 格式</th><th>資料路徑</th><th>本地儲存</th><th>狀態</th><th>操作</th><th>最後更新</th></tr></thead><tbody>';
     byCountry[country].forEach(c => {
       const errorHint = c.last_error ? `<div style="font-size:11px;color:var(--down);margin-top:2px">⚠ ${escapeHtml(c.last_error)}</div>` : '';
       const toggleBtn = `<button class="text-xs" onclick="toggleChannel('${c.channel_id}', this.dataset.enabled !== 'true')" data-enabled="${c.status !== 'inactive'}" style="padding:2px 8px;border-radius:4px;background:var(--border);border:1px solid var(--border);cursor:pointer">${c.status === 'inactive' ? '啟用' : '停用'}</button>`;
       const triggerBtn = `<button class="text-xs" onclick="triggerChannelFetch('${c.channel_id}')" style="padding:2px 8px;border-radius:4px;background:var(--primary);border:1px solid var(--primary);color:#fff;cursor:pointer;margin-left:4px">觸發</button>`;
-      // Show related scheduler tasks for this channel
-      var relatedTasks = taskMap[c.channel_id] || [];
-      var tasksHtml = relatedTasks.length > 0
-        ? relatedTasks.map(function(tn) { return '<span class="badge info" style="font-size:10px;cursor:pointer" onclick="switchPage(\'scheduler\')" title="前往排程管理">' + escapeHtml(tn) + '</span>'; }).join(' ')
-        : '<span class="text-muted text-xs">—</span>';
       html += `<tr>
         <td class="text-center">${statusLight(c.status)}</td>
         <td>${c.platform}</td>
@@ -228,8 +237,8 @@ export function renderDataChannels(data, schedulerTasks) {
         <td class="text-muted text-xs">${c.path}</td>
         <td class="text-muted text-xs">${c.storage}</td>
         <td><span class="badge ${statusClass(c.status)}">${c.status_text}</span>${errorHint}</td>
+        <td>${toggleBtn}${triggerBtn}</td>
         <td class="text-xs">${c.updated_at}</td>
-        <td class="text-xs" style="max-width:200px">${tasksHtml}</td>
       </tr>`;
     });
     html += '</tbody></table></div>';
@@ -244,4 +253,14 @@ export function renderDataChannels(data, schedulerTasks) {
 
   html += `<div class="mt-sm text-muted text-sm">報告生成時間：${data.generated || '-'}</div>`;
   el.innerHTML = html;
+}
+
+function renderEmptyState(title, subtitle) {
+  return `<div class="empty">${title}${subtitle ? `<div class="text-muted">${subtitle}</div>` : ''}</div>`;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }

@@ -8,7 +8,7 @@
 
 `internal/industry` 提供：
 - **供應鏈圖**：產業間的上下游關係與相關係數矩陣，支援敘事感知動態調整
-- **季節性引擎**：各產業的歷史月曆效應偵測與校準（使用 5 年 TWSE 歷史資料，2020-2024）
+- **季節性引擎**：各產業的歷史月曆效應偵測與校準
 - **商業週期偵測**：產業生命週期階段（expansion/recovery/mature/recession）判定
 - **衝擊傳導**：從來源產業出發的上下游衝擊影響計算
 - **產業分類樹**：多層次產業分類結構
@@ -41,10 +41,10 @@ Config (parameters.json)
 Narrative Events (internal/narrative)
   └─ SeasonalBridge.CorrelationMultiplier() ──→ ShockPropagation.getNarrativeAdjustedCorrelation()
 
-Supply Chain Graph (DefaultSupplyChainGraph built-in topology)
-  └─ DefaultSupplyChainGraph() + parameters.json linkage_params ──→ SupplyChainGraph + CorrelationMatrix
+Supply Chain Graph (configs/supply_chain_graph.json)
+  └─ LoadSupplyChainGraph() ──→ SupplyChainGraph + CorrelationMatrix
 
-Replay Data (cmd/calibrate-seasonal --replay, 5-year historical data 2020-2024)
+Replay Data (cmd/calibrate-seasonal --replay)
   └─ CalibratePatterns() ──→ SeasonalCalibration results ──→ updateParametersFile()
 ```
 
@@ -67,7 +67,7 @@ Replay Data (cmd/calibrate-seasonal --replay, 5-year historical data 2020-2024)
 
 | 陷阱 | 說明 |
 |------|------|
-| **financials 節點孤立** | `DefaultSupplyChainGraph()` 中 financials 節點需有 `upstream_of`（提供資本），否則 `CalculateLinkageScore` 中該節點系統重要性為 0 |
+| **financials 節點孤立** | `configs/supply_chain_graph.json` 中 financials 節點需有 `upstream_of`（提供資本），否則 `CalculateLinkageScore` 中該節點系統重要性為 0 |
 | **雙向邊不一致** | 圖中部分節點（如 `foundry↔ai_supply_chain`、`server_assembly↔semiconductor`）的 upstream/downstream 邊不對稱，這是預期行爲（表達單向依賴），但 `CalculateLinkageScore` 和 `PropagateShock` 假設雙向索引 |
 | **敘事感知需求** | `ShockPropagation` 若未呼叫 `SetNarrativeProvider()`，相關調整會回退到純相關矩陣查詢 |
 | **衰減因子回退** | `PropagateShock` 在 `downstreamDecay`/`upstreamDecay` 為 0 時使用硬編碼的 0.8/0.6。`NewLinkageAnalyzer()` 會從 config 設定，但若直接使用 `NewShockPropagation()` 則不會 |

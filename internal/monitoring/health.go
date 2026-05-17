@@ -72,12 +72,6 @@ func (h *HealthChecker) Start(ctx context.Context) {
 	}
 }
 
-// RunOnce performs a single health check cycle for BTM integration.
-func (h *HealthChecker) RunOnce(ctx context.Context) error {
-	h.checkAll()
-	return nil
-}
-
 // checkAll 执行所有健康检查
 func (h *HealthChecker) checkAll() {
 	h.checkDataProvider()

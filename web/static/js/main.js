@@ -13,9 +13,10 @@ import { renderToolEvents } from './components/tool-events.js';
 import { fmtNTD } from './shared/utils.js';
 
 const pageLoadStatus = {};
-const APP_VERSION = '20260510';
+const APP_VERSION = '20260512';
 
-export function switchPage(id) {
+export function switchPage(id, silent) {
+  if (document.getElementById('page-' + id).classList.contains('active')) return;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
   document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.remove('active'));
@@ -27,13 +28,13 @@ export function switchPage(id) {
     'reasoning-trace': '決策追蹤',
     experiments: '模擬交易', reports: '最新回測', controls: '控制與稽核',
     datachannels: '信息通道', synergy: '人機協同', alerts: '系統警報',
-    metrics: '指標監控', industry: '產業生態系', portfolio: '組合持倉',
-    scheduler: '排程管理', parameters: '參數管理',
+    metrics: '指標監控', industry: '產業生態系', portfolio: '組合持倉', parameters: '參數管理',
     evolution_panel: '演化透視'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
   if (!pageLoadStatus[id]) { pageLoadStatus[id] = true; loadPageData(id); }
+  if (!silent) history.pushState({page: id}, '', '#page-' + id);
 }
 
 export function toggleSidebar() {
@@ -88,7 +89,7 @@ function renderSkeleton(lines) {
 }
 
 function showSkeletons() {
-  document.querySelectorAll('.skeleton-container, .empty.loading').forEach(function(el) { el.innerHTML = renderSkeleton(4); });
+  document.querySelectorAll('.skeleton-container').forEach(function(el) { el.innerHTML = renderSkeleton(4); });
 }
 
 // --- Module Registry (all modules loaded once) ---
@@ -108,17 +109,21 @@ async function loadModules() {
     import('./pages/metrics.js?v=' + APP_VERSION),
     import('./pages/industry.js?v=' + APP_VERSION),
     import('./pages/datachannels.js?v=' + APP_VERSION),
-    import('./pages/scheduler.js?v=' + APP_VERSION),
     import('./pages/parameters.js?v=' + APP_VERSION),
     import('./pages/synergy.js?v=' + APP_VERSION),
     import('./pages/evolution_panel.js?v=' + APP_VERSION),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'scheduler', 'parameters', 'synergy', 'evolution_panel'];
+  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'synergy', 'evolution_panel'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
   modules._loaded = true;
+  if (modules.experiments) {
+    if (modules.experiments.openInfoHelp) window.openInfoHelp = modules.experiments.openInfoHelp;
+    if (modules.experiments.closeInfoModal) window.closeInfoModal = modules.experiments.closeInfoModal;
+    if (modules.experiments.openKpiHelp) window.openKpiHelp = modules.experiments.openKpiHelp;
+  }
   return modules;
 }
 
@@ -156,7 +161,6 @@ async function loadAll() {
       safeGetJSON('/api/synergy/darwinian-trend'),
       safeGetJSON('/api/health/data-integrity'),
       safeGetJSON('/api/synergy/darwinian-status'),
-      safeGetJSON('/api/scheduler/status'),
     ]);
 
     var health = results[0], macro = results[1], agents = results[2], pipeline = results[3], live = results[4],
@@ -164,8 +168,7 @@ async function loadAll() {
         models = results[11], templates = results[12], snapshot = results[13], dataChannels = results[14],
         sessions = results[15], phase3 = results[16], alerts = results[17], retailSentiment = results[18],
         capitalPhase = results[19], taxSnapshot = results[20], seasonal = results[21], regimeHistory = results[22],
-        darwinianTrend = results[23], dataIntegrity = results[24], darwinianStatus = results[25],
-        schedulerStatus = results[26];
+        darwinianTrend = results[23], dataIntegrity = results[24], darwinianStatus = results[25];
 
     var failures = results.filter(function(v) { return v === null; }).length;
     if (failures > results.length * 0.5) {
@@ -196,7 +199,7 @@ async function loadAll() {
     if (m.risk.renderRiskCards) m.risk.renderRiskCards(riskExposure, pipeline, capitalPhase);
 
     if (m.inbox.renderInbox) m.inbox.renderInbox(inbox);
-    if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dataChannels, schedulerStatus);
+    if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dataChannels);
     if (m.alerts.renderAlerts) m.alerts.renderAlerts(alerts);
     if (m.metrics.loadMetrics) m.metrics.loadMetrics();
     if (m.industry.loadIndustryData) m.industry.loadIndustryData();
@@ -292,11 +295,8 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'datachannels') {
     try {
-      var dcResults = await Promise.all([
-        safeGetJSON('/api/dashboard/data-channels'),
-        safeGetJSON('/api/scheduler/status'),
-      ]);
-      if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dcResults[0], dcResults[1]);
+      var dc = await safeGetJSON('/api/dashboard/data-channels');
+      if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dc);
       if (m.datachannels.loadFetchLogs) m.datachannels.loadFetchLogs();
     } catch(e) { console.error(e); }
   }
@@ -359,14 +359,6 @@ async function loadPageData(pageId) {
       }
     } catch(e) { console.error(e); }
   }
-  else if (pageId === 'scheduler') {
-    try {
-      var schedData = await safeGetJSON('/api/scheduler/status');
-      if (m.scheduler && m.scheduler.renderSchedulerPage) {
-        m.scheduler.renderSchedulerPage(schedData, safeGetJSON);
-      }
-    } catch(e) { console.error(e); }
-  }
   else if (pageId === 'evolution_panel') {
     try {
       import('./pages/evolution_panel.js?v=' + APP_VERSION).then(function(evo) {
@@ -411,11 +403,17 @@ if (typeof window !== 'undefined') {
   loadAll();
   startAutoRefresh();
   initEventStream();
+  history.replaceState({page: 'overview'}, '', '#page-overview');
 }
 
 function initEventStream() {
-  const recentEvents = [];
-  const maxEvents = 20;
+function eventDedupKey(ev) {
+  if (ev.payload && ev.payload.event_id) return ev.payload.event_id;
+  return ev.id || ev.timestamp || '';
+}
+
+const recentEvents = [];
+const maxEvents = 20;
 
   function mapEventToProgress(eventType) {
     if (eventType === 'simulation.start' || eventType === 'system.start') return 'fetching_data';
@@ -452,6 +450,11 @@ function initEventStream() {
   }
 
   eventSource.on('*', (ev) => {
+    var key = eventDedupKey(ev);
+    if (key) {
+      var dupIdx = recentEvents.findIndex(function(e) { return eventDedupKey(e) === key; });
+      if (dupIdx !== -1) recentEvents.splice(dupIdx, 1);
+    }
     recentEvents.unshift(ev);
     if (recentEvents.length > maxEvents) {
       recentEvents.pop();
@@ -508,7 +511,22 @@ if (typeof window !== "undefined") window.showUnacknowledgedOnly = function() { 
 
 // datachannels globals
 import('./pages/datachannels.js?v=' + APP_VERSION).then(function(m) {
-  if (m.triggerChannelsIngest && typeof window !== 'undefined') window.triggerChannelsIngest = m.triggerChannelsIngest;
+  if (typeof window === 'undefined') return;
+  if (m.triggerChannelsIngest) window.triggerChannelsIngest = m.triggerChannelsIngest;
+  if (m.enableAllChannels) window.dcEnableAll = m.enableAllChannels;
+  if (m.disableAllChannels) window.dcDisableAll = m.disableAllChannels;
+  if (m.triggerChannelFetch) window.triggerChannelFetch = m.triggerChannelFetch;
+  if (m.toggleChannel) window.toggleChannel = m.toggleChannel;
+  if (m.updateApiKey) window.dcUpdateApiKey = m.updateApiKey;
+  if (m.loadFetchLogs) window.loadFetchLogs = m.loadFetchLogs;
+  if (m.loadDataChannels) window.loadDataChannels = m.loadDataChannels;
+  if (m.refreshChannelStatus) window.refreshChannelStatus = m.refreshChannelStatus;
 }).catch(function(err) {
   console.error('[Dynamic import] datachannels module load failed:', err);
+});
+
+window.addEventListener('popstate', function(e) {
+  if (e.state && e.state.page) {
+    switchPage(e.state.page, true);
+  }
 });

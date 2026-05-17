@@ -143,6 +143,7 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 	marginPercentile := calculateMarginPercentile(h.Svc.WorkDir, snap.RetailMarginBalance.Value)
 
 	dayTradingRatio := 0.0
+	// TODO: Migrate to Gateway for direct day trading provider instantiation.
 	provider := marketdata.NewDayTradingProvider()
 	if stats, err := provider.FetchLatest(r.Context()); err == nil {
 		dayTradingRatio = stats.VolumeRatio
