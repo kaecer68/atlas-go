@@ -27,7 +27,8 @@ export function switchPage(id) {
     'reasoning-trace': '決策追蹤',
     experiments: '模擬交易', reports: '最新回測', controls: '控制與稽核',
     datachannels: '信息通道', synergy: '人機協同', alerts: '系統警報',
-    metrics: '指標監控', industry: '產業生態系', portfolio: '組合持倉', parameters: '參數管理',
+    metrics: '指標監控', industry: '產業生態系', portfolio: '組合持倉',
+    scheduler: '排程管理', parameters: '參數管理',
     evolution_panel: '演化透視'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
@@ -107,12 +108,13 @@ async function loadModules() {
     import('./pages/metrics.js?v=' + APP_VERSION),
     import('./pages/industry.js?v=' + APP_VERSION),
     import('./pages/datachannels.js?v=' + APP_VERSION),
+    import('./pages/scheduler.js?v=' + APP_VERSION),
     import('./pages/parameters.js?v=' + APP_VERSION),
     import('./pages/synergy.js?v=' + APP_VERSION),
     import('./pages/evolution_panel.js?v=' + APP_VERSION),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'synergy', 'evolution_panel'];
+  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'scheduler', 'parameters', 'synergy', 'evolution_panel'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -154,6 +156,7 @@ async function loadAll() {
       safeGetJSON('/api/synergy/darwinian-trend'),
       safeGetJSON('/api/health/data-integrity'),
       safeGetJSON('/api/synergy/darwinian-status'),
+      safeGetJSON('/api/scheduler/status'),
     ]);
 
     var health = results[0], macro = results[1], agents = results[2], pipeline = results[3], live = results[4],
@@ -161,7 +164,8 @@ async function loadAll() {
         models = results[11], templates = results[12], snapshot = results[13], dataChannels = results[14],
         sessions = results[15], phase3 = results[16], alerts = results[17], retailSentiment = results[18],
         capitalPhase = results[19], taxSnapshot = results[20], seasonal = results[21], regimeHistory = results[22],
-        darwinianTrend = results[23], dataIntegrity = results[24], darwinianStatus = results[25];
+        darwinianTrend = results[23], dataIntegrity = results[24], darwinianStatus = results[25],
+        schedulerStatus = results[26];
 
     var failures = results.filter(function(v) { return v === null; }).length;
     if (failures > results.length * 0.5) {
@@ -192,7 +196,7 @@ async function loadAll() {
     if (m.risk.renderRiskCards) m.risk.renderRiskCards(riskExposure, pipeline, capitalPhase);
 
     if (m.inbox.renderInbox) m.inbox.renderInbox(inbox);
-    if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dataChannels);
+    if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dataChannels, schedulerStatus);
     if (m.alerts.renderAlerts) m.alerts.renderAlerts(alerts);
     if (m.metrics.loadMetrics) m.metrics.loadMetrics();
     if (m.industry.loadIndustryData) m.industry.loadIndustryData();
@@ -288,8 +292,12 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'datachannels') {
     try {
-      var dc = await safeGetJSON('/api/dashboard/data-channels');
-      if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dc);
+      var dcResults = await Promise.all([
+        safeGetJSON('/api/dashboard/data-channels'),
+        safeGetJSON('/api/scheduler/status'),
+      ]);
+      if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dcResults[0], dcResults[1]);
+      if (m.datachannels.loadFetchLogs) m.datachannels.loadFetchLogs();
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'synergy') {
@@ -348,6 +356,14 @@ async function loadPageData(pageId) {
       ]);
       if (m.parameters && m.parameters.renderParametersPage) {
         m.parameters.renderParametersPage(pData[0], pData[1], pData[2]);
+      }
+    } catch(e) { console.error(e); }
+  }
+  else if (pageId === 'scheduler') {
+    try {
+      var schedData = await safeGetJSON('/api/scheduler/status');
+      if (m.scheduler && m.scheduler.renderSchedulerPage) {
+        m.scheduler.renderSchedulerPage(schedData, safeGetJSON);
       }
     } catch(e) { console.error(e); }
   }

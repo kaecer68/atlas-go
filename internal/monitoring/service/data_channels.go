@@ -53,6 +53,183 @@ type DataChannelService struct {
 	healthStore       *ChannelHealthStoreAdapter
 }
 
+// cachedFugleHealth holds the last Fugle health check result to avoid
+// hitting the real API on every dashboard poll (frontend polls every 5s).
+type cachedFugleHealth struct {
+	status    string
+	updated   string
+	lastError string
+	checkedAt time.Time
+}
+
+var (
+	fugleHealthCache   cachedFugleHealth
+	fugleHealthMu      sync.RWMutex
+	fubonHealthCache   cachedFugleHealth
+	fubonHealthMu      sync.RWMutex
+	finmindHealthCache cachedFugleHealth
+	finmindHealthMu    sync.RWMutex
+)
+
+// fugleHealthCacheTTL is how long we reuse the last live API health check.
+const fugleHealthCacheTTL = 60 * time.Second
+
+// getCachedFugleHealth returns cached status if fresh, otherwise performs a real check.
+func (s *DataChannelService) getCachedFugleHealth() (status, updated, lastError string) {
+	fugleHealthMu.RLock()
+	cache := fugleHealthCache
+	fugleHealthMu.RUnlock()
+
+	if time.Since(cache.checkedAt) < fugleHealthCacheTTL {
+		return cache.status, cache.updated, cache.lastError
+	}
+
+	fugleHealthMu.Lock()
+	defer fugleHealthMu.Unlock()
+
+	// Double-check after acquiring write lock
+	if time.Since(fugleHealthCache.checkedAt) < fugleHealthCacheTTL {
+		return fugleHealthCache.status, fugleHealthCache.updated, fugleHealthCache.lastError
+	}
+
+	fugleKey := s.FugleAPIKey
+
+	if fugleKey == "" {
+		fugleHealthCache = cachedFugleHealth{
+			status:    "inactive",
+			updated:   "未設定 API Key",
+			checkedAt: time.Now(),
+		}
+		return fugleHealthCache.status, fugleHealthCache.updated, ""
+	}
+
+	fugleClient := marketdata.NewFugleClient(fugleKey)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	_, err := fugleClient.GetQuote(ctx, "1476")
+	cancel()
+
+	if err != nil {
+		fugleHealthCache = cachedFugleHealth{
+			status:    "error",
+			updated:   "API 連線失敗",
+			lastError: err.Error(),
+			checkedAt: time.Now(),
+		}
+	} else {
+		fugleHealthCache = cachedFugleHealth{
+			status:    "ok",
+			updated:   "API 連線正常",
+			checkedAt: time.Now(),
+		}
+	}
+
+	return fugleHealthCache.status, fugleHealthCache.updated, fugleHealthCache.lastError
+}
+
+// getCachedFubonHealth returns cached status if fresh, otherwise performs a real check.
+func (s *DataChannelService) getCachedFubonHealth() (status, updated, lastError string) {
+	fubonHealthMu.RLock()
+	cache := fubonHealthCache
+	fubonHealthMu.RUnlock()
+
+	if time.Since(cache.checkedAt) < fugleHealthCacheTTL {
+		return cache.status, cache.updated, cache.lastError
+	}
+
+	fubonHealthMu.Lock()
+	defer fubonHealthMu.Unlock()
+
+	if time.Since(fubonHealthCache.checkedAt) < fugleHealthCacheTTL {
+		return fubonHealthCache.status, fubonHealthCache.updated, fubonHealthCache.lastError
+	}
+
+	fubonKey := s.FubonAPIKey
+
+	if fubonKey == "" {
+		fubonHealthCache = cachedFugleHealth{
+			status:    "inactive",
+			updated:   "未設定 API Key",
+			checkedAt: time.Now(),
+		}
+		return fubonHealthCache.status, fubonHealthCache.updated, ""
+	}
+
+	fubonClient := marketdata.NewFubonClient(fubonKey)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	err := fubonClient.HealthCheck(ctx)
+	cancel()
+
+	if err != nil {
+		fubonHealthCache = cachedFugleHealth{
+			status:    "error",
+			updated:   "API 連線失敗",
+			lastError: err.Error(),
+			checkedAt: time.Now(),
+		}
+	} else {
+		fubonHealthCache = cachedFugleHealth{
+			status:    "ok",
+			updated:   "API 連線正常",
+			checkedAt: time.Now(),
+		}
+	}
+
+	return fubonHealthCache.status, fubonHealthCache.updated, fubonHealthCache.lastError
+}
+
+// getCachedFinMindHealth returns cached status if fresh, otherwise performs a real check.
+func (s *DataChannelService) getCachedFinMindHealth() (status, updated, lastError string) {
+	finmindHealthMu.RLock()
+	cache := finmindHealthCache
+	finmindHealthMu.RUnlock()
+
+	if time.Since(cache.checkedAt) < fugleHealthCacheTTL {
+		return cache.status, cache.updated, cache.lastError
+	}
+
+	finmindHealthMu.Lock()
+	defer finmindHealthMu.Unlock()
+
+	if time.Since(finmindHealthCache.checkedAt) < fugleHealthCacheTTL {
+		return finmindHealthCache.status, finmindHealthCache.updated, finmindHealthCache.lastError
+	}
+
+	finmindKey := s.FinMindAPIKey
+
+	if finmindKey == "" {
+		finmindHealthCache = cachedFugleHealth{
+			status:    "inactive",
+			updated:   "未設定 API Key",
+			checkedAt: time.Now(),
+		}
+		return finmindHealthCache.status, finmindHealthCache.updated, ""
+	}
+
+	finmindClient := marketdata.NewFinMindClient(finmindKey)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Use yesterday's date to avoid "no price data" error before market close
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	_, err := finmindClient.GetStockPrice(ctx, "2330", yesterday)
+	cancel()
+
+	if err != nil {
+		finmindHealthCache = cachedFugleHealth{
+			status:    "error",
+			updated:   "API 連線失敗",
+			lastError: err.Error(),
+			checkedAt: time.Now(),
+		}
+	} else {
+		finmindHealthCache = cachedFugleHealth{
+			status:    "ok",
+			updated:   "API 連線正常",
+			checkedAt: time.Now(),
+		}
+	}
+
+	return finmindHealthCache.status, finmindHealthCache.updated, finmindHealthCache.lastError
+}
+
 type ChannelHealthStoreAdapter struct {
 	pool *pgxpool.Pool
 	dir  string

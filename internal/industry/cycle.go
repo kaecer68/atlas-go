@@ -90,6 +90,7 @@ func (ct *CycleTracker) initializeDefaultPositions() {
 			ProfitGrowthYoY:     0.30,
 			InventoryTurnover:   5.5,
 			CapacityUtilization: 0.85,
+			DataFreshness:       FreshFallback,
 		},
 		"ai_supply_chain": {
 			IndustryID:          "ai_supply_chain",
@@ -97,6 +98,7 @@ func (ct *CycleTracker) initializeDefaultPositions() {
 			ProfitGrowthYoY:     0.50,
 			InventoryTurnover:   6.0,
 			CapacityUtilization: 0.90,
+			DataFreshness:       FreshFallback,
 		},
 		"robotics": {
 			IndustryID:          "robotics",
@@ -104,6 +106,7 @@ func (ct *CycleTracker) initializeDefaultPositions() {
 			ProfitGrowthYoY:     0.12,
 			InventoryTurnover:   4.0,
 			CapacityUtilization: 0.70,
+			DataFreshness:       FreshFallback,
 		},
 		"financials": {
 			IndustryID:          "financials",
@@ -111,6 +114,7 @@ func (ct *CycleTracker) initializeDefaultPositions() {
 			ProfitGrowthYoY:     0.10,
 			InventoryTurnover:   0.0,
 			CapacityUtilization: 0.75,
+			DataFreshness:       FreshFallback,
 		},
 		"shipping": {
 			IndustryID:          "shipping",
@@ -118,6 +122,7 @@ func (ct *CycleTracker) initializeDefaultPositions() {
 			ProfitGrowthYoY:     -0.10,
 			InventoryTurnover:   3.0,
 			CapacityUtilization: 0.65,
+			DataFreshness:       FreshFallback,
 		},
 		"energy": {
 			IndustryID:          "energy",
@@ -125,6 +130,7 @@ func (ct *CycleTracker) initializeDefaultPositions() {
 			ProfitGrowthYoY:     0.03,
 			InventoryTurnover:   4.5,
 			CapacityUtilization: 0.70,
+			DataFreshness:       FreshFallback,
 		},
 		"electronics": {
 			IndustryID:          "electronics",
@@ -132,6 +138,7 @@ func (ct *CycleTracker) initializeDefaultPositions() {
 			ProfitGrowthYoY:     0.15,
 			InventoryTurnover:   5.0,
 			CapacityUtilization: 0.75,
+			DataFreshness:       FreshFallback,
 		},
 		"consumer": {
 			IndustryID:          "consumer",
@@ -139,6 +146,7 @@ func (ct *CycleTracker) initializeDefaultPositions() {
 			ProfitGrowthYoY:     0.05,
 			InventoryTurnover:   6.0,
 			CapacityUtilization: 0.70,
+			DataFreshness:       FreshFallback,
 		},
 		"industrial": {
 			IndustryID:          "industrial",
@@ -146,6 +154,7 @@ func (ct *CycleTracker) initializeDefaultPositions() {
 			ProfitGrowthYoY:     0.08,
 			InventoryTurnover:   4.0,
 			CapacityUtilization: 0.68,
+			DataFreshness:       FreshFallback,
 		},
 	}
 

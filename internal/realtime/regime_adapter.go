@@ -304,6 +304,12 @@ func (rta *RealTimeAdapter) IngestData(point MarketDataPoint) {
 }
 
 // processUpdate performs regime detection and adaptation
+// RunOnce performs a single regime detection cycle for BTM integration.
+func (rta *RealTimeAdapter) RunOnce(ctx context.Context) error {
+	rta.processUpdate()
+	return nil
+}
+
 func (rta *RealTimeAdapter) processUpdate() {
 	rta.mu.Lock()
 	defer rta.mu.Unlock()
