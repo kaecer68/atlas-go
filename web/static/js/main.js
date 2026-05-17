@@ -13,10 +13,9 @@ import { renderToolEvents } from './components/tool-events.js';
 import { fmtNTD } from './shared/utils.js';
 
 const pageLoadStatus = {};
-const APP_VERSION = '20260512';
+const APP_VERSION = '20260510';
 
-export function switchPage(id, silent) {
-  if (document.getElementById('page-' + id).classList.contains('active')) return;
+export function switchPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
   document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.remove('active'));
@@ -34,7 +33,6 @@ export function switchPage(id, silent) {
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
   if (!pageLoadStatus[id]) { pageLoadStatus[id] = true; loadPageData(id); }
-  if (!silent) history.pushState({page: id}, '', '#page-' + id);
 }
 
 export function toggleSidebar() {
@@ -89,7 +87,7 @@ function renderSkeleton(lines) {
 }
 
 function showSkeletons() {
-  document.querySelectorAll('.skeleton-container').forEach(function(el) { el.innerHTML = renderSkeleton(4); });
+  document.querySelectorAll('.skeleton-container, .empty.loading').forEach(function(el) { el.innerHTML = renderSkeleton(4); });
 }
 
 // --- Module Registry (all modules loaded once) ---
@@ -119,11 +117,6 @@ async function loadModules() {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
   modules._loaded = true;
-  if (modules.experiments) {
-    if (modules.experiments.openInfoHelp) window.openInfoHelp = modules.experiments.openInfoHelp;
-    if (modules.experiments.closeInfoModal) window.closeInfoModal = modules.experiments.closeInfoModal;
-    if (modules.experiments.openKpiHelp) window.openKpiHelp = modules.experiments.openKpiHelp;
-  }
   return modules;
 }
 
@@ -297,7 +290,6 @@ async function loadPageData(pageId) {
     try {
       var dc = await safeGetJSON('/api/dashboard/data-channels');
       if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dc);
-      if (m.datachannels.loadFetchLogs) m.datachannels.loadFetchLogs();
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'synergy') {
@@ -403,17 +395,11 @@ if (typeof window !== 'undefined') {
   loadAll();
   startAutoRefresh();
   initEventStream();
-  history.replaceState({page: 'overview'}, '', '#page-overview');
 }
 
 function initEventStream() {
-function eventDedupKey(ev) {
-  if (ev.payload && ev.payload.event_id) return ev.payload.event_id;
-  return ev.id || ev.timestamp || '';
-}
-
-const recentEvents = [];
-const maxEvents = 20;
+  const recentEvents = [];
+  const maxEvents = 20;
 
   function mapEventToProgress(eventType) {
     if (eventType === 'simulation.start' || eventType === 'system.start') return 'fetching_data';
@@ -450,11 +436,6 @@ const maxEvents = 20;
   }
 
   eventSource.on('*', (ev) => {
-    var key = eventDedupKey(ev);
-    if (key) {
-      var dupIdx = recentEvents.findIndex(function(e) { return eventDedupKey(e) === key; });
-      if (dupIdx !== -1) recentEvents.splice(dupIdx, 1);
-    }
     recentEvents.unshift(ev);
     if (recentEvents.length > maxEvents) {
       recentEvents.pop();
@@ -511,22 +492,7 @@ if (typeof window !== "undefined") window.showUnacknowledgedOnly = function() { 
 
 // datachannels globals
 import('./pages/datachannels.js?v=' + APP_VERSION).then(function(m) {
-  if (typeof window === 'undefined') return;
-  if (m.triggerChannelsIngest) window.triggerChannelsIngest = m.triggerChannelsIngest;
-  if (m.enableAllChannels) window.dcEnableAll = m.enableAllChannels;
-  if (m.disableAllChannels) window.dcDisableAll = m.disableAllChannels;
-  if (m.triggerChannelFetch) window.triggerChannelFetch = m.triggerChannelFetch;
-  if (m.toggleChannel) window.toggleChannel = m.toggleChannel;
-  if (m.updateApiKey) window.dcUpdateApiKey = m.updateApiKey;
-  if (m.loadFetchLogs) window.loadFetchLogs = m.loadFetchLogs;
-  if (m.loadDataChannels) window.loadDataChannels = m.loadDataChannels;
-  if (m.refreshChannelStatus) window.refreshChannelStatus = m.refreshChannelStatus;
+  if (m.triggerChannelsIngest && typeof window !== 'undefined') window.triggerChannelsIngest = m.triggerChannelsIngest;
 }).catch(function(err) {
   console.error('[Dynamic import] datachannels module load failed:', err);
-});
-
-window.addEventListener('popstate', function(e) {
-  if (e.state && e.state.page) {
-    switchPage(e.state.page, true);
-  }
 });

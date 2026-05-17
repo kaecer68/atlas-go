@@ -155,16 +155,16 @@ func TestCalculateConfidence(t *testing.T) {
 		InventoryTurnover:   5.0,
 		CapacityUtilization: 0.75,
 	}
-	confidence := ct.calculateConfidence("test", fullMetrics)
-	if confidence < 0.5 || confidence > 0.7 {
-		t.Errorf("expected moderate confidence (~0.55) with moderate metrics, got %f", confidence)
+	confidence := ct.calculateConfidence(fullMetrics)
+	if confidence < 0.8 {
+		t.Errorf("expected high confidence with full metrics, got %f", confidence)
 	}
 
 	// Empty metrics
 	emptyMetrics := IndustryMetrics{}
-	confidence = ct.calculateConfidence("test", emptyMetrics)
-	if confidence != 0.3 {
-		t.Errorf("expected base confidence 0.3, got %f", confidence)
+	confidence = ct.calculateConfidence(emptyMetrics)
+	if confidence != 0.5 {
+		t.Errorf("expected base confidence 0.5, got %f", confidence)
 	}
 }
 

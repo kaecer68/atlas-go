@@ -44,7 +44,7 @@ func main() {
 		marketdata.NewYahooFinanceMacroProvider(),
 		marketdata.NewTWSECapitalFlowProvider(capitalFlowDir),
 		marketdata.NewExportStatisticsProvider(exportDir),
-		marketdata.NewTWSEMarginBalanceProvider(""),
+		marketdata.NewTWSEMarginBalanceProvider(),
 	)
 
 	ingestor := narrative.NewMacroIngestor(provider, snapshotDir)

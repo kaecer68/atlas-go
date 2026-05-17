@@ -12,7 +12,6 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/config"
 )
 
@@ -23,23 +22,13 @@ const (
 	tejAPIBaseURL = "https://api.tej.com.tw"
 )
 
-// getTEJDailyLimit returns the daily call limit based on TEJ_TIER env var.
-// trial: 500/day (default), paid: 2000/day
-func getTEJDailyLimit() int {
-	if config.GetSecret("TEJ_TIER") == "paid" {
-		return 2000
-	}
-	return 500 // trial tier
-}
-
 // TEJClient fetches data from TEJ API.
 // Requires free trial API key from https://api.tej.com.tw/
 type TEJClient struct {
-	apiKey       string
-	httpClient   *http.Client
-	rateLimiter  *rate.Limiter      // per-second limiter
-	quotaTracker *DailyQuotaTracker // daily quota tracker
-	baseURL      string             // defaults to tejAPIBaseURL, overridable for tests
+	apiKey      string
+	httpClient  *http.Client
+	rateLimiter *rate.Limiter // per-second limiter derived from daily budget
+	baseURL     string        // defaults to tejAPIBaseURL, overridable for tests
 }
 
 // TEJ API response wrapper (REST API format).
@@ -73,13 +62,13 @@ type TEJStockPriceRow struct {
 // apiKey: obtained from TEJ website (free trial key).
 func NewTEJClient(apiKey string) *TEJClient {
 	params := config.GetParametersConfig()
-	dailyLimit := getTEJDailyLimit()
 	return &TEJClient{
-		apiKey:       apiKey,
-		baseURL:      tejAPIBaseURL,
-		httpClient:   httpclient.NewFactory().NewClient(time.Duration(params.Marketdata.TEJAPITimeoutSec.Value) * time.Second),
-		rateLimiter:  rate.NewLimiter(rate.Limit(params.Marketdata.TEJCallsPerSecond.Value), params.Marketdata.TEJCallsPerSecond.Value),
-		quotaTracker: NewDailyQuotaTracker("tej", "data/state", dailyLimit),
+		apiKey:  apiKey,
+		baseURL: tejAPIBaseURL,
+		httpClient: &http.Client{
+			Timeout: time.Duration(params.Marketdata.TEJAPITimeoutSec.Value) * time.Second,
+		},
+		rateLimiter: rate.NewLimiter(rate.Limit(params.Marketdata.TEJCallsPerSecond.Value), params.Marketdata.TEJCallsPerSecond.Value),
 	}
 }
 
@@ -103,9 +92,6 @@ func (c *TEJClient) Ping(ctx context.Context) error {
 // Uses TRAIL/TAPRCD dataset (上市(櫃)未調整股價(日)).
 // startDate / endDate in YYYY-MM-DD format.
 func (c *TEJClient) GetStockPriceDaily(ctx context.Context, stockID, startDate, endDate string) ([]TEJStockPriceRow, error) {
-	if !c.quotaTracker.AllowCall() {
-		return nil, fmt.Errorf("tej daily quota exceeded: %d/%d calls", c.quotaTracker.CallsToday(), c.quotaTracker.Remaining()+c.quotaTracker.CallsToday())
-	}
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("tej rate limit wait: %w", ErrRateLimited)
 	}
@@ -171,9 +157,6 @@ func (c *TEJClient) GetStockPriceDaily(ctx context.Context, stockID, startDate, 
 // Uses TWN/AFINA (income statement / balance sheet — trial database).
 // Returns raw JSON rows; caller can parse specific tables.
 func (c *TEJClient) GetFinancialStatements(ctx context.Context, stockID, tableCode, startDate, endDate string) ([]map[string]any, error) {
-	if !c.quotaTracker.AllowCall() {
-		return nil, fmt.Errorf("tej daily quota exceeded: %d/%d calls", c.quotaTracker.CallsToday(), c.quotaTracker.Remaining()+c.quotaTracker.CallsToday())
-	}
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("tej rate limit wait: %w", ErrRateLimited)
 	}

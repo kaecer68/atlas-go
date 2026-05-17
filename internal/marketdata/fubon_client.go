@@ -9,7 +9,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"golang.org/x/time/rate"
@@ -65,8 +64,10 @@ func NewFubonClient(authToken string) *FubonClient {
 
 	params := config.GetParametersConfig()
 	return &FubonClient{
-		proxyURL:        proxyURL,
-		httpClient:      httpclient.NewFactory().NewClient(time.Duration(params.Marketdata.FubonAPITimeoutSec.Value) * time.Second),
+		proxyURL: proxyURL,
+		httpClient: &http.Client{
+			Timeout: time.Duration(params.Marketdata.FubonAPITimeoutSec.Value) * time.Second,
+		},
 		intradayLimiter: rate.NewLimiter(rate.Every(time.Minute/time.Duration(params.Marketdata.FubonIntradayLimit.Value)), params.Marketdata.FubonIntradayLimit.Value),
 	}
 }

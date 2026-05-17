@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"golang.org/x/time/rate"
@@ -54,7 +53,9 @@ type TWSEDailyResponse struct {
 func NewTWSEClient() *TWSEClient {
 	params := config.GetParametersConfig()
 	return &TWSEClient{
-		httpClient:  httpclient.NewFactory().NewClient(time.Duration(params.Marketdata.TWSEAPITimeoutSec.Value) * time.Second),
+		httpClient: &http.Client{
+			Timeout: time.Duration(params.Marketdata.TWSEAPITimeoutSec.Value) * time.Second,
+		},
 		baseURL:     twseAPIBaseURL,
 		rateLimiter: rate.NewLimiter(rate.Limit(params.Marketdata.TWSEAPIRateLimit.Value), params.Marketdata.TWSEAPIRateBurst.Value),
 	}

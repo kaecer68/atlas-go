@@ -7,8 +7,6 @@ import (
 	"io"
 	"net/http"
 	"time"
-
-	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 )
 
 // TAIEXReturnCalculator calculates recent TAIEX returns using Yahoo Finance.
@@ -19,7 +17,7 @@ type TAIEXReturnCalculator struct {
 // NewTAIEXReturnCalculator creates a new calculator.
 func NewTAIEXReturnCalculator() *TAIEXReturnCalculator {
 	return &TAIEXReturnCalculator{
-		client: httpclient.NewFactory().NewClient(15 * time.Second),
+		client: &http.Client{Timeout: 15 * time.Second},
 	}
 }
 

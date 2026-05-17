@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 )
 
 func TestRecordChannelFetch(t *testing.T) {
@@ -103,35 +102,5 @@ func TestRecordChannelFetch_WithErrors(t *testing.T) {
 	}
 	if rec.LatencyMs != 2000 {
 		t.Fatalf("expected latency_ms 2000, got %d", rec.LatencyMs)
-	}
-}
-
-func TestChannelHealthRecord_LastDataAt(t *testing.T) {
-	dataAt := "2026-05-13T10:11:12Z"
-	input := ChannelHealthRecord{LastDataAt: dataAt}
-
-	encoded, err := json.Marshal(input)
-	if err != nil {
-		t.Fatalf("marshal record: %v", err)
-	}
-
-	var got ChannelHealthRecord
-	if err := json.Unmarshal(encoded, &got); err != nil {
-		t.Fatalf("unmarshal record: %v", err)
-	}
-
-	if got.LastDataAt != dataAt {
-		t.Fatalf("expected last_data_at %q, got %q", dataAt, got.LastDataAt)
-	}
-}
-
-func TestWithLastDataAt(t *testing.T) {
-	timestamp := time.Date(2026, 5, 13, 10, 11, 12, 0, time.UTC)
-	rec := &ChannelHealthRecord{}
-
-	WithLastDataAt(timestamp)(rec)
-
-	if rec.LastDataAt != timestamp.Format(time.RFC3339) {
-		t.Fatalf("expected last_data_at %q, got %q", timestamp.Format(time.RFC3339), rec.LastDataAt)
 	}
 }

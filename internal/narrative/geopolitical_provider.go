@@ -11,9 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/time/rate"
-
-	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
@@ -40,14 +37,12 @@ type RSSGeopoliticalProvider struct {
 	client   *http.Client
 	feeds    []string
 	keywords []string
-	limiter  *rate.Limiter
 }
 
 // NewRSSGeopoliticalProvider creates a default RSS-based Middle-East conflict monitor.
 func NewRSSGeopoliticalProvider() *RSSGeopoliticalProvider {
 	return &RSSGeopoliticalProvider{
-		client:  httpclient.NewFactory().NewClient(15 * time.Second),
-		limiter: rate.NewLimiter(rate.Every(10*time.Second), 1),
+		client: &http.Client{Timeout: 15 * time.Second},
 		feeds: []string{
 			"http://feeds.bbci.co.uk/news/world/middle_east/rss.xml",
 			"https://www.aljazeera.com/xml/rss/all.xml",
@@ -110,9 +105,6 @@ func (r *RSSGeopoliticalProvider) FetchScore(ctx context.Context) (GeopoliticalR
 }
 
 func (r *RSSGeopoliticalProvider) countKeywordsInFeed(ctx context.Context, url string) (int, error) {
-	if err := r.limiter.Wait(ctx); err != nil {
-		return 0, fmt.Errorf("rate limit: %w", err)
-	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return 0, err
@@ -169,7 +161,7 @@ type GDELTGeopoliticalProvider struct {
 // NewGDELTGeopoliticalProvider creates a GDELT-based provider.
 func NewGDELTGeopoliticalProvider() *GDELTGeopoliticalProvider {
 	return &GDELTGeopoliticalProvider{
-		client: httpclient.NewFactory().NewClient(20 * time.Second),
+		client: &http.Client{Timeout: 20 * time.Second},
 	}
 }
 
