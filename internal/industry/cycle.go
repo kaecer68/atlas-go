@@ -684,6 +684,55 @@ func (cp *CyclePosition) String() string {
 	)
 }
 
+// GetContinuousPhaseScore returns a probability-weighted continuous phase score
+// for an industry, ranging from -1.0 (deep recession) to +1.0 (full expansion).
+// Uses the position confidence as a weight to blend adjacent phase scores,
+// producing a smooth transition between discrete cycle phases.
+func (ct *CycleTracker) GetContinuousPhaseScore(industryID string) float64 {
+	pos, ok := ct.positions[industryID]
+	if !ok {
+		return 0.0
+	}
+
+	cfg := config.GetParametersConfig().Industry.PhaseScores.Value
+
+	// Map each phase to its discrete score
+	phaseScores := map[CyclePhase]float64{
+		CycleExpansion: cfg.ScoreExpansion,
+		CycleRecovery:  cfg.ScoreRecovery,
+		CycleMature:    cfg.ScoreMature,
+		CycleRecession: cfg.ScoreRecession,
+	}
+
+	// Use confidence as a blend factor toward the next phase.
+	// Low confidence means the industry is "between" phases.
+	confidence := pos.Confidence
+
+	// Determine adjacent phases (forward/backward in the cycle)
+	transitions := GetTypicalTransitions()
+
+	// Find transitions from the current phase
+	transProb := 0.0
+	nextPhaseScore := pos.GetPhaseScore()
+	for _, t := range transitions {
+		if t.FromPhase == pos.BusinessCycle {
+			transProb = t.Probability
+			if ns, ok := phaseScores[t.ToPhase]; ok {
+				nextPhaseScore = ns
+			}
+			break
+		}
+	}
+
+	// Blend: when confidence is low (<0.5), pull toward the next likely phase.
+	// When confidence is high (>=0.5), stay close to the discrete score.
+	// This creates a smooth S-curve transition rather than a step function.
+	blend := 1.0 - (confidence * confidence) // quadratic: at 0% confidence → 100% blend, at 100% → 0%
+	continuousScore := pos.GetPhaseScore()*(1.0-blend*transProb) + nextPhaseScore*(blend*transProb)
+
+	return continuousScore
+}
+
 // CyclePhaseTransition represents a transition from one cycle phase to another.
 type CyclePhaseTransition struct {
 	FromPhase           CyclePhase `json:"from_phase"`

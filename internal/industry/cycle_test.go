@@ -396,3 +396,57 @@ func TestCycleTracker_GetPhase_Missing(t *testing.T) {
 		t.Fatal("expected false for unknown industry")
 	}
 }
+
+func TestCycleTracker_GetContinuousPhaseScore_ExistingIndustry(t *testing.T) {
+	ct := NewCycleTracker()
+	// CycleTracker is initialized with default positions, so "semiconductor" exists
+	score := ct.GetContinuousPhaseScore("semiconductor")
+	if score < -1.0 || score > 1.0 {
+		t.Fatalf("expected score in range [-1, 1], got %f", score)
+	}
+	t.Logf("semiconductor continuous score: %f", score)
+}
+
+func TestCycleTracker_GetContinuousPhaseScore_MissingIndustry(t *testing.T) {
+	ct := NewCycleTracker()
+	score := ct.GetContinuousPhaseScore("nonexistent")
+	if score != 0.0 {
+		t.Fatalf("expected 0.0 for missing industry, got %f", score)
+	}
+}
+
+func TestCycleTracker_GetContinuousPhaseScore_HighConfidence(t *testing.T) {
+	ct := NewCycleTracker()
+	// A position with high confidence should produce a score close to the discrete phase score
+	pos := &CyclePosition{
+		IndustryID:    "test_high",
+		BusinessCycle: CycleExpansion,
+		Confidence:    0.95,
+	}
+	ct.positions["test_high"] = pos
+
+	score := ct.GetContinuousPhaseScore("test_high")
+	if score < 0.7 {
+		t.Fatalf("expected score near 1.0 for high confidence expansion, got %f", score)
+	}
+}
+
+func TestCycleTracker_GetContinuousPhaseScore_LowConfidence(t *testing.T) {
+	ct := NewCycleTracker()
+	pos := &CyclePosition{
+		IndustryID:    "test_low",
+		BusinessCycle: CycleRecovery,
+		Confidence:    0.15,
+	}
+	ct.positions["test_low"] = pos
+
+	score := ct.GetContinuousPhaseScore("test_low")
+	// Low confidence Recovery pulls toward next phase (Expansion = 1.0)
+	// blend = 1 - 0.15² = 0.9775, transProb = 0.80
+	// Score = 0.5 * (1 - 0.9775 * 0.80) + 1.0 * (0.9775 * 0.80) = 0.891
+	if score < 0.80 || score > 0.95 {
+		t.Fatalf("expected ~0.891 for low confidence recovery, got %f", score)
+	}
+}
+	}
+}
