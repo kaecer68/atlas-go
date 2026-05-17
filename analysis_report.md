@@ -1,8 +1,5 @@
 # ATLAS 策略進化系統深度診斷與修復建議報告
 
-> ⚠️ **歷史文件**：本報告為 2026-04-25 的診斷報告，部分問題可能已被後續修復。
-> 建議重新執行診斷以確認當前狀態。
-
 **日期**: 2026-04-25
 **診斷範圍**: Strategy Evolution Skill (`/atlas-strategy-evolution`)
 **執行代理**: Sisyphus (OhMyOpenCode)

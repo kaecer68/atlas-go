@@ -398,7 +398,6 @@ declare interface RecommendationOutcome {
   forward_return: number;
   benchmark_delta: number;
   hit: boolean;
-  hit_rate: number;
   reason: string;
   price: number;
   passed_guards: boolean;

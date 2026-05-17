@@ -18,17 +18,6 @@ export async function loadMetrics() {
   } catch (err) {
     console.error('loadMetrics error:', err);
   }
-
-  try {
-    const storageData = await silentGetJSON('/api/metrics/storage');
-    if (storageData && storageData.total_deleted != null) {
-      const storageDeletedEl = document.getElementById('storageDeleted');
-      if (storageDeletedEl) storageDeletedEl.textContent = storageData.total_deleted;
-      renderStorageCleanup(storageData);
-    }
-  } catch (err) {
-    console.error('loadStorageMetrics error:', err);
-  }
 }
 
 export function updateMetricsTrend(data) {
@@ -51,24 +40,4 @@ export function updateMetricsTrend(data) {
   html += '</tbody></table></div>';
   html += '</div>';
   trendDiv.innerHTML = html;
-}
-
-export function renderStorageCleanup(data) {
-  const panel = document.getElementById('storageCleanupPanel');
-  const detail = document.getElementById('storageCleanupDetail');
-  if (!panel || !detail) return;
-
-  if (!data || !data.policies || data.policies.length === 0) {
-    detail.innerHTML = '<div class="empty">暫無清理記錄</div>';
-    return;
-  }
-
-  panel.style.display = 'block';
-  let html = '<table><thead><tr><th>目錄</th><th>保留天數</th><th>已刪除</th><th>已保留</th><th>最舊保留</th></tr></thead><tbody>';
-  for (const p of data.policies) {
-    html += `<tr><td>${p.dir || '-'}</td><td>${p.max_age_days || '-'}</td><td>${p.deleted != null ? p.deleted : '-'}</td><td>${p.kept != null ? p.kept : '-'}</td><td>${p.oldest_kept || '-'}</td></tr>`;
-  }
-  html += '</tbody></table>';
-  html += `<div style="margin-top:8px;font-size:12px;color:var(--muted)">總計：刪除 ${data.total_deleted != null ? data.total_deleted : '-'} 個檔案，保留 ${data.total_kept != null ? data.total_kept : '-'} 個檔案</div>`;
-  detail.innerHTML = html;
 }

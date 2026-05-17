@@ -1598,7 +1598,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
       </div>
       <div class="kpi-group-title">🔧 系統狀態</div>
       <div class="kpi-grid" id="overviewSystem">
-        <div class="kpi-card clickable" onclick="openKpiHelp('data_time')"><div class="kpi-label">資料時間</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card"><div class="kpi-label">資料時間</div><div class="kpi-value">-</div></div>
         <div class="kpi-card"><div class="kpi-label">基線版本</div><div class="kpi-value">-</div></div>
         <div class="kpi-card clickable" onclick="openKpiHelp('experiment')"><div class="kpi-label">實驗狀態</div><div class="kpi-value">-</div></div>
       </div>
@@ -1981,15 +1981,6 @@ body { display: flex; margin: 0; min-height: 100vh; }
         <div class="panel"><h2>供應鏈連動</h2><div id="industryLinkage" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>季節性模式</h2><div id="industrySeasonality" class="empty loading">載入中…</div></div>
       </div>
-      <div class="panel" style="margin-top:16px"><h2>衝擊模擬</h2>
-        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
-          <select id="shockSource" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text)"><option value="">選擇來源產業</option></select>
-          <input type="number" id="shockMagnitude" placeholder="衝擊幅度 (例: -0.05)" step="0.01" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:160px">
-          <input type="number" id="shockDepth" value="3" min="1" max="5" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:60px" title="傳導深度">
-          <button onclick="window.runShockSimulation()" style="padding:4px 12px;border-radius:4px;border:1px solid var(--up);background:var(--bg);color:var(--up);cursor:pointer">▶ 執行模擬</button>
-        </div>
-        <div id="industryShockSim" class="empty">選擇產業與衝擊幅度進行供應鏈衝擊傳導模擬</div>
-      </div>
     </div>
 
     <!-- 人機協同 -->
@@ -2046,15 +2037,6 @@ body { display: flex; margin: 0; min-height: 100vh; }
           <div class="kpi-value" id="capitalPhase">-</div>
           <div class="kpi-label">當前資金管理階段</div>
         </div>
-        <div class="panel">
-          <h3>存儲清理</h3>
-          <div class="kpi-value" id="storageDeleted">-</div>
-          <div class="kpi-label">最近清理刪除的檔案數</div>
-        </div>
-      </div>
-      <div class="panel wide" id="storageCleanupPanel" style="display:none">
-        <h2>存儲清理詳情</h2>
-        <div id="storageCleanupDetail" class="empty">載入中…</div>
       </div>
       <div class="panel wide">
         <h2>指標趨勢</h2>

@@ -367,7 +367,6 @@ export const FIELD = {
     forward_return: 'forward_return',
     benchmark_delta: 'benchmark_delta',
     hit: 'hit',
-    hit_rate: 'hit_rate',
     reason: 'reason',
     price: 'price',
     passed_guards: 'passed_guards',

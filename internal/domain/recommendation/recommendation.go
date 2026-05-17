@@ -61,7 +61,6 @@ type RecommendationOutcome struct {
 	ForwardReturn       float64                     `json:"forward_return"`
 	BenchmarkDelta      float64                     `json:"benchmark_delta"`
 	Hit                 bool                        `json:"hit"`
-	HitRate             float64                     `json:"hit_rate"`
 	Reason              string                      `json:"reason"`
 	Price               float64                     `json:"price"`
 	PassedGuards        bool                        `json:"passed_guards"`
