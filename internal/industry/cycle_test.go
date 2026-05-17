@@ -448,5 +448,3 @@ func TestCycleTracker_GetContinuousPhaseScore_LowConfidence(t *testing.T) {
 		t.Fatalf("expected ~0.891 for low confidence recovery, got %f", score)
 	}
 }
-	}
-}

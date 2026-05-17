@@ -554,7 +554,6 @@ func (se *SeasonalEngine) UpdateDynamicEnv(snap marketdata.MacroDataSnapshot) {
 	}
 }
 
-
 // detectThemeDirection returns the direction multiplier for a given narrative theme.
 // +1 means the event is materializing in its "up" direction (e.g., oil prices rising),
 // -1 means the "down" direction (e.g., oil prices falling).

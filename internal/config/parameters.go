@@ -464,7 +464,7 @@ type LinkageConfig struct {
 	MinCorrelationThreshold   float64            `json:"min_correlation_threshold"`
 	CorrelationWindowDays     int                `json:"correlation_window_days"`
 	CorrelationMatrix         map[string]float64 `json:"correlation_matrix"`
-	RecessionCorrelationBoost float64 `json:"recession_correlation_boost"`
+	RecessionCorrelationBoost float64            `json:"recession_correlation_boost"`
 }
 
 // AsymmetricRiskConfig holds thresholds for asymmetric (bad news) risk detection.

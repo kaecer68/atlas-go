@@ -12,11 +12,11 @@ import (
 // macro indicators (oil prices, USD strength, etc.), moving beyond pure
 // calendar-driven seasonality into environment-aware adjustments.
 type DynamicEnvModulator struct {
-	mu        sync.RWMutex
-	current   marketdata.MacroDataSnapshot
-	baseline  marketdata.MacroDataSnapshot
-	history   []marketdata.MacroDataSnapshot // rolling history
-	windowDays int                           // default 90
+	mu         sync.RWMutex
+	current    marketdata.MacroDataSnapshot
+	baseline   marketdata.MacroDataSnapshot
+	history    []marketdata.MacroDataSnapshot // rolling history
+	windowDays int                            // default 90
 }
 
 // NewDynamicEnvModulator creates a modulator with the given baseline
