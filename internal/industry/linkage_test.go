@@ -1,6 +1,7 @@
 package industry
 
 import (
+	"math"
 	"slices"
 	"testing"
 )
@@ -407,4 +408,102 @@ func TestSetSupplyChainGraph(t *testing.T) {
 	if score.IndustryID != "semiconductor" {
 		t.Errorf("expected industry semiconductor, got %s", score.IndustryID)
 	}
+}
+
+func TestCorrelationMatrix_RegimeAdjustedCorrelation_NoProvider(t *testing.T) {
+	cm := NewCorrelationMatrix(30)
+	cm.UpdateCorrelation("semiconductor", "ai_supply_chain", 0.85)
+
+	// Without cycle provider, should return raw correlation
+	corr := cm.RegimeAdjustedCorrelation("semiconductor", "ai_supply_chain")
+	if math.Abs(corr-0.85) > 0.0001 {
+		t.Fatalf("expected 0.85 without provider, got %f", corr)
+	}
+}
+
+func TestCorrelationMatrix_RegimeAdjustedCorrelation_RecessionBoost(t *testing.T) {
+	cm := NewCorrelationMatrix(30)
+	cm.UpdateCorrelation("semiconductor", "ai_supply_chain", 0.70)
+
+	mock := &mockCycleProvider{
+		phases: map[string]CyclePhase{
+			"semiconductor":   CycleRecession,
+			"ai_supply_chain": CycleExpansion,
+		},
+	}
+	cm.SetCycleProvider(mock)
+
+	corr := cm.RegimeAdjustedCorrelation("semiconductor", "ai_supply_chain")
+	expected := 0.70 * 1.30 // 30% boost
+	if math.Abs(corr-expected) > 0.0001 {
+		t.Fatalf("expected %f during recession, got %f", expected, corr)
+	}
+}
+
+func TestCorrelationMatrix_RegimeAdjustedCorrelation_NonRecessionPassthrough(t *testing.T) {
+	cm := NewCorrelationMatrix(30)
+	cm.UpdateCorrelation("semiconductor", "ai_supply_chain", 0.60)
+
+	mock := &mockCycleProvider{
+		phases: map[string]CyclePhase{
+			"semiconductor":   CycleExpansion,
+			"ai_supply_chain": CycleExpansion,
+		},
+	}
+	cm.SetCycleProvider(mock)
+
+	corr := cm.RegimeAdjustedCorrelation("semiconductor", "ai_supply_chain")
+	if math.Abs(corr-0.60) > 0.0001 {
+		t.Fatalf("expected 0.60 without recession, got %f", corr)
+	}
+}
+
+func TestCorrelationMatrix_RegimeAdjustedCorrelation_MissingPhase(t *testing.T) {
+	cm := NewCorrelationMatrix(30)
+	cm.UpdateCorrelation("semiconductor", "ai_supply_chain", 0.50)
+
+	mock := &mockCycleProvider{
+		phases: map[string]CyclePhase{
+			// intentionally empty for semiconductor/ai_supply_chain
+		},
+	}
+	cm.SetCycleProvider(mock)
+
+	corr := cm.RegimeAdjustedCorrelation("semiconductor", "ai_supply_chain")
+	if math.Abs(corr-0.50) > 0.0001 {
+		t.Fatalf("expected 0.50 passthrough, got %f", corr)
+	}
+}
+
+func TestShockPropagation_CyclePlusNarrativeCombo(t *testing.T) {
+	graph := DefaultSupplyChainGraph()
+	cm := NewCorrelationMatrix(30)
+	cm.UpdateCorrelation("semiconductor", "ai_supply_chain", 0.70)
+
+	sp := NewShockPropagation(graph, cm)
+
+	cycleProvider := &mockCycleProvider{
+		phases: map[string]CyclePhase{
+			"semiconductor": CycleRecession,
+		},
+	}
+	cm.SetCycleProvider(cycleProvider)
+
+	// cycle boost: 0.70 * 1.30 = 0.91
+	// Without narrative provider, should return 0.91
+	corr := sp.getNarrativeAdjustedCorrelation("semiconductor", "ai_supply_chain")
+	expected := 0.70 * 1.30
+	if math.Abs(corr-expected) > 0.0001 {
+		t.Fatalf("expected %f with cycle boost only, got %f", expected, corr)
+	}
+}
+
+// mockCycleProvider for testing
+type mockCycleProvider struct {
+	phases map[string]CyclePhase
+}
+
+func (m *mockCycleProvider) GetPhase(industryID string) (CyclePhase, bool) {
+	p, ok := m.phases[industryID]
+	return p, ok
 }

@@ -152,9 +152,10 @@ func (g *SupplyChainGraph) MaxDegree() int {
 
 // CorrelationMatrix holds the correlation coefficients between industry pairs.
 type CorrelationMatrix struct {
-	correlations map[string]map[string]float64 // industry_a -> industry_b -> correlation
-	window       int                           // rolling window in days
-	mu           sync.RWMutex
+	correlations  map[string]map[string]float64 // industry_a -> industry_b -> correlation
+	window        int                           // rolling window in days
+	mu            sync.RWMutex
+	cycleProvider CycleProvider
 }
 
 // NewCorrelationMatrix creates a new correlation matrix.
@@ -222,6 +223,48 @@ func (cm *CorrelationMatrix) GetAllCorrelations() map[string]map[string]float64 
 		maps.Copy(result[industryA], correlations)
 	}
 	return result
+}
+
+// SetCycleProvider configures the cycle provider for regime-aware correlation
+// adjustment. Passing nil clears the provider (reverts to raw correlations).
+func (cm *CorrelationMatrix) SetCycleProvider(cp CycleProvider) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.cycleProvider = cp
+}
+
+// RegimeAdjustedCorrelation returns the correlation between two industries,
+// adjusted upward during recession phases (Ang & Chen 2002). When either
+// industry is in recession, the correlation is boosted by the configured
+// RecessionCorrelationBoost factor (capped at 1.0).
+func (cm *CorrelationMatrix) RegimeAdjustedCorrelation(industryA, industryB string) float64 {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	baseCorr := 0.5
+	if cm.correlations[industryA] != nil {
+		if c, ok := cm.correlations[industryA][industryB]; ok {
+			baseCorr = c
+		}
+	}
+
+	if cm.cycleProvider == nil {
+		return baseCorr
+	}
+
+	phaseA, okA := cm.cycleProvider.GetPhase(industryA)
+	phaseB, okB := cm.cycleProvider.GetPhase(industryB)
+	if (okA && phaseA == CycleRecession) || (okB && phaseB == CycleRecession) {
+		boost := 0.30
+		if cfg := config.GetParametersConfig(); cfg != nil {
+			if b := cfg.Industry.LinkageParams.Value.RecessionCorrelationBoost; b > 0 {
+				boost = b
+			}
+		}
+		return math.Min(baseCorr*(1.0+boost), 1.0)
+	}
+
+	return baseCorr
 }
 
 // RecalculateFromReturns recomputes all pairwise correlations from industry
@@ -292,6 +335,12 @@ type NarrativeLinkageProvider interface {
 	CorrelationMultiplier(theme, industryA, industryB string) float64
 }
 
+// CycleProvider supplies business cycle phase information for cycle-aware
+// correlation adjustment. During recession, correlations rise (Ang & Chen 2002).
+type CycleProvider interface {
+	GetPhase(industryID string) (CyclePhase, bool)
+}
+
 // ShockPropagation models how shocks propagate through the supply chain.
 type ShockPropagation struct {
 	graph             *SupplyChainGraph
@@ -326,19 +375,18 @@ func (sp *ShockPropagation) SetDecayFactors(downstream, upstream float64) {
 // getNarrativeAdjustedCorrelation returns the correlation between two industries,
 // adjusted by any active narrative themes.
 func (sp *ShockPropagation) getNarrativeAdjustedCorrelation(industryA, industryB string) float64 {
-	baseCorr, ok := sp.correlation.GetCorrelation(industryA, industryB)
-	if !ok {
-		baseCorr = 0.5 // Default moderate correlation
-	}
+	baseCorr := sp.correlation.RegimeAdjustedCorrelation(industryA, industryB)
+
 	if sp.narrativeProvider == nil {
 		return baseCorr
 	}
 
-	multiplier := 1.0
+	adjusted := baseCorr
 	for _, theme := range sp.narrativeProvider.ActiveThemes() {
-		multiplier *= sp.narrativeProvider.CorrelationMultiplier(theme, industryA, industryB)
+		multiplier := sp.narrativeProvider.CorrelationMultiplier(theme, industryA, industryB)
+		adjusted *= multiplier
 	}
-	return baseCorr * multiplier
+	return math.Max(0, math.Min(1.0, adjusted))
 }
 
 // PropagateShock calculates the impact of a shock on an industry, with
@@ -667,6 +715,12 @@ func (la *LinkageAnalyzer) SetSupplyChainGraph(graph *SupplyChainGraph, cm *Corr
 	la.graph = graph
 	la.correlation = cm
 	la.propagation = NewShockPropagation(graph, cm)
+}
+
+// SetCycleProvider wires a cycle provider into the correlation matrix for
+// regime-aware correlation adjustment during recession phases.
+func (la *LinkageAnalyzer) SetCycleProvider(cp CycleProvider) {
+	la.correlation.SetCycleProvider(cp)
 }
 
 type supplyChainGraphJSON struct {

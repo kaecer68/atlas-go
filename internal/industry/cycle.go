@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -67,6 +68,7 @@ type Indicator struct {
 // CycleTracker monitors and tracks cycle positions for industries.
 type CycleTracker struct {
 	positions          map[string]*CyclePosition
+	mu                 sync.RWMutex
 	history            map[string][]CyclePosition
 	seasonalEngine     *SeasonalEngine
 	linkageAnalyzer    *LinkageAnalyzer
@@ -229,6 +231,18 @@ func (ct *CycleTracker) UpdatePosition(industryID string, metrics IndustryMetric
 func (ct *CycleTracker) GetPosition(industryID string) (*CyclePosition, bool) {
 	pos, ok := ct.positions[industryID]
 	return pos, ok
+}
+
+// GetPhase returns the current business cycle phase for an industry.
+// Implements CycleProvider.
+func (ct *CycleTracker) GetPhase(industryID string) (CyclePhase, bool) {
+	ct.mu.RLock()
+	defer ct.mu.RUnlock()
+	pos, ok := ct.positions[industryID]
+	if !ok {
+		return "", false
+	}
+	return pos.BusinessCycle, true
 }
 
 // GetAllPositions returns all current cycle positions.

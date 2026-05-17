@@ -2179,24 +2179,41 @@ body { display: flex; margin: 0; min-height: 100vh; }
     </div>
 
     <div style="margin-bottom:14px">
-      <h4 style="margin:12px 0 6px">📈 信心度</h4>
+      <h4 style="margin:12px 0 6px">📈 信心度 — 週期判斷可靠度</h4>
       <p style="font-size:13px;color:var(--muted);margin:0 0 6px">
-        <b>信心度 = 訊號強度 × 60% + 邊界距離 × 40%</b>
+        <b>信心度不是「產業強弱」，而是「週期定位的可信程度」</b>（0%～100%）。<br>
+        數值越高，代表當前產業處於該週期階段的證據越充分。
+      </p>
+      <p style="font-size:13px;color:var(--muted);margin:6px 0 6px">
+        <b>信心度 = 邊界距離 × 45% + 訊號新鮮度 × 20% + 季節性契合 × 15% + 供應鏈穩定度 × 10% + 敘事事件吻合 × 10%</b>
       </p>
       <ul style="font-size:12px;color:var(--muted);padding-left:18px;margin:0">
-        <li><b>訊號強度</b>：指標絕對值越大 → 越可靠</li>
-        <li><b>邊界距離</b>：離閾值越遠 → 判斷越確定</li>
+        <li><b>邊界距離（45%）</b>：營收/獲利離週期閾值多遠。越遠越確定</li>
+        <li><b>訊號新鮮度（20%）</b>：指標更新時間。數據越新越可靠</li>
+        <li><b>季節性契合（15%）</b>：當前月份與歷史季節模式匹配程度</li>
+        <li><b>供應鏈穩定度（10%）</b>：產業上下游集中度與相關性結構。連動越少、集中度越低 → 週期判斷越可靠</li>
+        <li><b>敘事事件吻合（10%）</b>：宏觀敘事（如 AI 資本支出、地緣政治）與週期定位的一致性</li>
       </ul>
       <p style="font-size:12px;color:var(--muted);margin:6px 0 0">
-        🎨 燈號顏色深淺 = 信心度。深 = 高信心；淺 = 邊界搖擺。
+        🎨 <b>燈號顏色深淺 = 信心度</b>。深 = 高信心（數據強烈支持）；淺 = 邊界搖擺（需謹慎解讀）。<br>
+        💡 例：半導體顯示「擴張」但信心度僅 35%，代表雖然營收>20%，但供應鏈波動大或季節性異常，實際可能處於擴張末期。
       </p>
     </div>
 
     <div style="margin-bottom:14px">
-      <h4 style="margin:12px 0 6px">⚠️ 數據來源</h4>
+      <h4 style="margin:12px 0 6px">🔗 進階機制</h4>
+      <ul style="font-size:12px;color:var(--muted);padding-left:18px;margin:0">
+        <li><b>衰退期相關性提升</b>：當系統偵測到「衰退」時，產業間的衝擊傳導相關性自動提升 30%（Ang & Chen 2002 實證），反映系統性風險主導下「同漲同跌」現象</li>
+        <li><b>動態環境調變</b>：原油、美元指數、BDI 的 90 日滾動中位數基準，自動適應市場結構變化，消除靜態基準漂移</li>
+        <li><b>方向性感知敘事</b>：油價暴漲 vs 暴跌對能源股的影響相反；系統依據實際 macro 數據偏差方向動態調整</li>
+      </ul>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <h4 style="margin:12px 0 6px">⚠️ 使用須知</h4>
       <p style="font-size:12px;color:var(--down);margin:0">
-        目前產業週期指標為<b>預設估算值</b>，尚未接入即時市場數據。
-        燈號僅反映預設假設，可能與當前市場事件有落差。
+        週期羅盤是<b>輔助判斷工具</b>，非買賣建議。低信心度（&lt;40%）的燈號僅供參考，建議搭配產業詳情頁的供應鏈連動、季節性模式與風險指標綜合評估。
+        產業週期具有慣性，單一月份數據異常不一定代表階段轉換。
       </p>
     </div>
 

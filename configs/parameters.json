@@ -3325,10 +3325,10 @@
     },
     "confidence_mix": {
       "value": {
-        "weight_boundary": 0.5,
-        "weight_freshness": 0.25,
+        "weight_boundary": 0.45,
+        "weight_freshness": 0.20,
         "weight_seasonal": 0.15,
-        "weight_linkage": 0.0,
+        "weight_linkage": 0.10,
         "weight_narrative": 0.1,
         "favorable_confidence_min": 0.4
       },
@@ -3714,6 +3714,7 @@
         "default_correlation": 0.5,
         "systemic_importance_divisor": 10.0,
         "min_correlation_threshold": 0.3,
+        "recession_correlation_boost": 0.30,
         "correlation_window_days": 30,
         "correlation_matrix": {
           "ai_supply_chain↔energy": 0.12,

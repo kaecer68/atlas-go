@@ -266,17 +266,24 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 		BDI: marketdata.MacroDataPoint{Value: 1500.0}, // Historical BDI average
 	}
 	modulator := industry.NewDynamicEnvModulator(baseline, baseline)
+	modulator.RecordSnapshot(baseline) // seed history for rolling baseline
 	if macroProvider != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if snap, err := macroProvider.FetchSnapshot(ctx); err == nil {
 			modulator.UpdateCurrent(snap)
+			modulator.RecordSnapshot(snap)
+			modulator.UpdateRollingBaseline() // compute rolling median baseline
 		}
 	}
 	seasonalEngine.SetDynamicEnv(modulator)
 
 	// Wire narrative provider into linkage analyzer for dynamic supply chain correlations
 	linkageAnalyzer.SetNarrativeProvider(bridge)
+
+	// Wire cycle tracker into linkage analyzer for regime-aware correlation adjustment
+	// During recession, correlations rise (Ang & Chen 2002)
+	linkageAnalyzer.SetCycleProvider(cycleTracker)
 
 	svc := service.NewIndustryService(
 		industry.DefaultClassification(),
