@@ -4,6 +4,7 @@ package prism
 
 import (
 	"container/list"
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -407,6 +408,12 @@ func (pm *PRISMManager) ClearQueue(regime RegimeType) {
 		pm.queues[int(regime)].Clear()
 		logging.Info("prism_manager", "queue_cleared", logging.FStr("regime", regime.String()))
 	}
+}
+
+// RunOnce performs a single rebalance cycle for BTM integration.
+func (pm *PRISMManager) RunOnce(ctx context.Context) error {
+	pm.Rebalance()
+	return nil
 }
 
 // Rebalance redistributes tasks based on current queue loads

@@ -19,10 +19,12 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/replay"
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/sim"
+	"github.com/kaecer68/atlas-go/internal/spawning"
 	"github.com/kaecer68/atlas-go/internal/strategy"
 )
 
@@ -103,6 +105,10 @@ func (s *System) SetEventBus(eventBus *eventbus.ChannelEventBus) {
 type System struct {
 	*SystemCore
 	host *PluginHost
+
+	// Scheduler instances exposed for BackgroundTaskManager registration.
+	prismManager    *prism.PRISMManager
+	spawningManager *spawning.SpawningManager
 }
 
 func NewSystem(cfg config.Config) (*System, error) {
@@ -460,17 +466,14 @@ func selectProvider(cfg config.Config) marketdata.Provider {
 			return marketdata.NewFugleProviderWithAPIKey(cfg.FugleAPIKey)
 		}
 		logging.Warn("system", "Fugle API key not configured, falling back to mock provider. DO NOT USE IN PRODUCTION.")
-		// TODO: Migrate to Gateway for direct mock provider instantiation.
 		return marketdata.NewMockProvider()
 	case "twse":
 		// 纯 TWSE 模式（免费，rate limited）
 		// TODO: Migrate to Gateway for direct TWSE OpenAPI provider instantiation.
 		return marketdata.NewTWSEOpenAPIProvider()
 	case "hybrid", "":
-		// TODO: Migrate to Gateway for direct hybrid provider instantiation.
 		return marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 	default:
-		// TODO: Migrate to Gateway for direct hybrid provider instantiation.
 		return marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 	}
 }

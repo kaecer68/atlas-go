@@ -3,6 +3,7 @@
 package metalearning
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -318,6 +319,12 @@ func (ml *MetaLearner) adaptationLoop() {
 			return
 		}
 	}
+}
+
+// RunOnce performs a single evolution cycle for BTM integration.
+func (ml *MetaLearner) RunOnce(ctx context.Context) error {
+	ml.evolvePopulation()
+	return nil
 }
 
 // evolvePopulation performs one generation of evolution

@@ -47,6 +47,7 @@ FUBON_PROXY_URL=http://localhost:8081  # Optional, defaults to localhost:8081
 
 Main packages:
 
+- `internal/apigateway`: unified data ingestion (14 channel adapters, rate limiting, circuit breakers, cache, BackgroundTaskManager)
 - `internal/domain`: canonical types
 - `internal/orchestrator`: routing and plugin execution
 - `internal/sim`: portfolio/execution simulation

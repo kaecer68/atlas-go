@@ -31,6 +31,7 @@ func (s *System) WithPRISM(pm *prism.PRISMManager) *System {
 		s.host = &PluginHost{}
 	}
 	s.host.Register(&prismPlugin{manager: pm}, s.SystemCore)
+	s.prismManager = pm
 	return s
 }
 
@@ -49,6 +50,7 @@ func (s *System) WithSpawning(sm *spawning.SpawningManager) *System {
 		s.host = &PluginHost{}
 	}
 	s.host.Register(&spawningPlugin{manager: sm}, s.SystemCore)
+	s.spawningManager = sm
 	return s
 }
 
@@ -73,3 +75,9 @@ func (s *System) WithPhase3Controller(ctrl *Phase3Controller) *System {
 	s.host.Register(&phase3Plugin{controller: ctrl}, s.SystemCore)
 	return s
 }
+
+// GetPRISMManager returns the PRISM manager for BTM registration.
+func (s *System) GetPRISMManager() *prism.PRISMManager { return s.prismManager }
+
+// GetSpawningManager returns the spawning manager for BTM registration.
+func (s *System) GetSpawningManager() *spawning.SpawningManager { return s.spawningManager }
