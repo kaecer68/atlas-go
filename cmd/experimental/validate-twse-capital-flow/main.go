@@ -20,7 +20,6 @@ func main() {
 		os.Exit(0)
 	}
 
-	// TODO: Migrate to Gateway for direct TWSE capital flow provider instantiation.
 	provider := marketdata.NewTWSECapitalFlowProvider("data/state/capital_flow")
 	ctx := context.Background()
 

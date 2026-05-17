@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"strings"
 	"sync"
 	"time"
 )
@@ -219,28 +220,27 @@ func NewShockPropagation(graph *SupplyChainGraph, correlation *CorrelationMatrix
 
 // PropagateShock calculates the impact of a shock on an industry.
 func (sp *ShockPropagation) PropagateShock(sourceIndustry string, shockMagnitude float64, maxDepth int) map[string]float64 {
+	cfg := config.GetParametersConfig().Industry.LinkageParams.Value
+
 	impacts := make(map[string]float64)
 	impacts[sourceIndustry] = shockMagnitude
 
-	// Propagate downstream (customers affected)
 	downstream := sp.graph.GetDownstreamChain(sourceIndustry, maxDepth)
 	for _, industry := range downstream {
 		correlation, ok := sp.correlation.GetCorrelation(sourceIndustry, industry)
 		if !ok {
-			correlation = 0.5 // Default moderate correlation
+			correlation = cfg.DefaultCorrelation
 		}
-		// Impact decays with distance and correlation
-		impacts[industry] = shockMagnitude * correlation * 0.8
+		impacts[industry] = shockMagnitude * correlation * cfg.DownstreamDecayFactor
 	}
 
-	// Propagate upstream (suppliers affected)
 	upstream := sp.graph.GetUpstreamChain(sourceIndustry, maxDepth)
 	for _, industry := range upstream {
 		correlation, ok := sp.correlation.GetCorrelation(sourceIndustry, industry)
 		if !ok {
-			correlation = 0.5 // Default moderate correlation
+			correlation = cfg.DefaultCorrelation
 		}
-		impacts[industry] = shockMagnitude * correlation * 0.6 // Upstream impact is typically smaller
+		impacts[industry] = shockMagnitude * correlation * cfg.UpstreamDecayFactor
 	}
 
 	return impacts
@@ -282,7 +282,8 @@ func (sp *ShockPropagation) CalculateLinkageScore(industryID string) *IndustryLi
 	// Systemic importance based on network position
 	systemicImportance := 0.0
 	if len(upstream)+len(downstream) > 0 {
-		systemicImportance = math.Min(1.0, float64(len(upstream)+len(downstream))/10.0)
+		divisor := config.GetParametersConfig().Industry.LinkageParams.Value.SystemicImportanceDivisor
+		systemicImportance = math.Min(1.0, float64(len(upstream)+len(downstream))/divisor)
 	}
 
 	return &IndustryLinkageScore{
@@ -386,7 +387,19 @@ func DefaultSupplyChainGraph() *SupplyChainGraph {
 
 // DefaultCorrelationMatrix returns a sample correlation matrix for Taiwan industries.
 func DefaultCorrelationMatrix() *CorrelationMatrix {
-	cm := NewCorrelationMatrix(30)
+	cfg := config.GetParametersConfig().Industry.LinkageParams.Value
+	cm := NewCorrelationMatrix(cfg.CorrelationWindowDays)
+
+	mat := cfg.CorrelationMatrix
+	if len(mat) > 0 {
+		for key, val := range mat {
+			parts := strings.SplitN(key, "↔", 2)
+			if len(parts) == 2 {
+				cm.UpdateCorrelation(parts[0], parts[1], val)
+			}
+		}
+		return cm
+	}
 
 	// Semiconductor correlations
 	cm.UpdateCorrelation("semiconductor", "ai_supply_chain", 0.85)

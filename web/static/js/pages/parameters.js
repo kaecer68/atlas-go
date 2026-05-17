@@ -18,19 +18,32 @@ export function renderParametersPage(params, categoriesResp, auditLog) {
   let html = '<div class="parameters-grid">';
 
   for (const cat of cats) {
-    html += `<div class="panel"><h3>${escapeHtml(cat.name)}</h3><table class="params-table"><tbody>`;
+    html += `<div class="panel"><h3>${escapeHtml(cat.name)}</h3><table class="params-table"><thead><tr><th>參數</th><th>值</th><th>來源</th><th>說明</th><th>校準方式</th></tr></thead><tbody>`;
     let hasKeys = false;
     const keys = catKeys[cat.id] || [];
 
     for (const key of keys) {
       if (key in params) {
-        let displayVal = params[key];
-        if (typeof displayVal === 'object') displayVal = JSON.stringify(displayVal);
-        else displayVal = String(displayVal);
+        const p = params[key];
+        let displayVal, displaySource, displayRationale, displayCalib;
+        if (typeof p === 'object' && p !== null && 'value' in p) {
+          displayVal = typeof p.value === 'object' ? JSON.stringify(p.value) : String(p.value);
+          displaySource = p.source || '-';
+          displayRationale = p.rationale || '-';
+          displayCalib = p.calibration_method || '-';
+        } else {
+          displayVal = typeof p === 'object' ? JSON.stringify(p) : String(p);
+          displaySource = '-';
+          displayRationale = '-';
+          displayCalib = '-';
+        }
 
         html += `<tr>
           <td class="param-key">${escapeHtml(key)}</td>
           <td class="param-val">${escapeHtml(displayVal)}</td>
+          <td style="font-size:11px;color:var(--muted)">${escapeHtml(displaySource)}</td>
+          <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;color:var(--text-dim)" title="${escapeHtml(displayRationale)}">${escapeHtml(displayRationale.substring(0, 60))}</td>
+          <td style="font-size:11px;color:var(--muted)">${escapeHtml(displayCalib)}</td>
         </tr>`;
         uncategorized.delete(key);
         hasKeys = true;
@@ -41,15 +54,28 @@ export function renderParametersPage(params, categoriesResp, auditLog) {
   }
 
   if (uncategorized.size > 0) {
-    html += `<div class="panel"><h3>其他參數</h3><table class="params-table"><tbody>`;
+    html += `<div class="panel"><h3>其他參數</h3><table class="params-table"><thead><tr><th>參數</th><th>值</th><th>來源</th><th>說明</th><th>校準方式</th></tr></thead><tbody>`;
     for (const key of uncategorized) {
-      let displayVal = params[key];
-      if (typeof displayVal === 'object') displayVal = JSON.stringify(displayVal);
-      else displayVal = String(displayVal);
+      const p = params[key];
+      let displayVal, displaySource, displayRationale, displayCalib;
+      if (typeof p === 'object' && p !== null && 'value' in p) {
+        displayVal = typeof p.value === 'object' ? JSON.stringify(p.value) : String(p.value);
+        displaySource = p.source || '-';
+        displayRationale = p.rationale || '-';
+        displayCalib = p.calibration_method || '-';
+      } else {
+        displayVal = typeof p === 'object' ? JSON.stringify(p) : String(p);
+        displaySource = '-';
+        displayRationale = '-';
+        displayCalib = '-';
+      }
 
       html += `<tr>
         <td class="param-key">${escapeHtml(key)}</td>
         <td class="param-val">${escapeHtml(displayVal)}</td>
+        <td style="font-size:11px;color:var(--muted)">${escapeHtml(displaySource)}</td>
+        <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;color:var(--text-dim)" title="${escapeHtml(displayRationale)}">${escapeHtml(displayRationale.substring(0, 60))}</td>
+        <td style="font-size:11px;color:var(--muted)">${escapeHtml(displayCalib)}</td>
       </tr>`;
     }
     html += `</tbody></table></div>`;

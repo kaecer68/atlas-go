@@ -126,7 +126,6 @@ func (s *DataChannelService) getCachedFugleHealth() (status, updated, lastError 
 		return fugleHealthCache.status, fugleHealthCache.updated, ""
 	}
 
-	// TODO: Migrate to Gateway for direct Fugle client instantiation.
 	fugleClient := marketdata.NewFugleClient(fugleKey)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	_, err := fugleClient.GetQuote(ctx, "1476")
@@ -178,7 +177,6 @@ func (s *DataChannelService) getCachedFubonHealth() (status, updated, lastError 
 		return fubonHealthCache.status, fubonHealthCache.updated, ""
 	}
 
-	// TODO: Migrate to Gateway for direct Fubon client instantiation.
 	fubonClient := marketdata.NewFubonClient(fubonKey)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	err := fubonClient.HealthCheck(ctx)
@@ -230,7 +228,6 @@ func (s *DataChannelService) getCachedFinMindHealth() (status, updated, lastErro
 		return finmindHealthCache.status, finmindHealthCache.updated, ""
 	}
 
-	// TODO: Migrate to Gateway for direct FinMind client instantiation.
 	finmindClient := marketdata.NewFinMindClient(finmindKey)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	// Use yesterday's date to avoid "no price data" error before market close

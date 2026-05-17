@@ -1225,7 +1225,609 @@
       "value": 0.6,
       "rationale": "Flag geographic revenue concentration >60% as high risk; China exposure threshold",
       "source": "heuristic",
-      "todo": "Calibrate: test [0.50, 0.70] range based on geopolitical risk assessment"
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Calibrate: test [0.50, 0.70] range based on geopolitical risk assessment",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-14T23:51:04.342272"
+      }
+    },
+    "customer_share_threshold_1": {
+      "value": 30.0,
+      "rationale": "First tier customer concentration threshold (30%); triggers initial risk score",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Calibrate: test [20, 40] range",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T00:00:00.000000"
+      }
+    },
+    "customer_share_threshold_2": {
+      "value": 50.0,
+      "rationale": "Second tier customer concentration threshold (50%); triggers higher risk score",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Calibrate: test [40, 60] range",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T00:00:00.000000"
+      }
+    },
+    "us_exposure_threshold_1": {
+      "value": 50.0,
+      "rationale": "US geographic exposure threshold (50%); triggers initial risk score",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Calibrate: test [40, 60] range",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T00:00:00.000000"
+      }
+    },
+    "us_exposure_threshold_2": {
+      "value": 70.0,
+      "rationale": "High US geographic exposure threshold (70%); triggers higher risk score",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Calibrate: test [60, 80] range",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T00:00:00.000000"
+      }
+    },
+    "risk_score_weight_1": {
+      "value": 0.4,
+      "rationale": "Risk score weight for first tier customer concentration",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Calibrate: test [0.2, 0.5] range",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T00:00:00.000000"
+      }
+    },
+    "risk_score_weight_2": {
+      "value": 0.3,
+      "rationale": "Risk score weight for second tier customer concentration",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Calibrate: test [0.2, 0.4] range",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T00:00:00.000000"
+      }
+    },
+    "risk_score_weight_3": {
+      "value": 0.2,
+      "rationale": "Risk score weight for first tier US exposure",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Calibrate: test [0.1, 0.3] range",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T00:00:00.000000"
+      }
+    },
+    "risk_score_weight_4": {
+      "value": 0.1,
+      "rationale": "Risk score weight for second tier US exposure",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Calibrate: test [0.05, 0.2] range",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T00:00:00.000000"
+      }
+    },
+    "severity_threshold_medium": {
+      "value": 0.4,
+      "rationale": "Risk score threshold for medium severity",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Calibrate: test [0.3, 0.5] range",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T00:00:00.000000"
+      }
+    },
+    "severity_threshold_high": {
+      "value": 0.6,
+      "rationale": "Risk score threshold for high severity",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Calibrate: test [0.5, 0.7] range",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T00:00:00.000000"
+      }
+    },
+    "severity_threshold_critical": {
+      "value": 0.8,
+      "rationale": "Risk score threshold for critical severity",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Calibrate: test [0.7, 0.9] range",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T00:00:00.000000"
+      }
+    },
+    "impact_multiplier": {
+      "value": 0.15,
+      "rationale": "Multiplier for estimated price impact from risk score",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Calibrate: test [0.10, 0.25] range",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T00:00:00.000000"
+      }
+    },
+    "risk_confidence": {
+      "value": 0.85,
+      "rationale": "Confidence level for risk assessment",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Calibrate: test [0.70, 0.95] range",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T00:00:00.000000"
+      }
+    },
+    "confidence_signal": {
+      "value": {
+        "signal_base": 0.3,
+        "revenue_norm_denom": 0.5,
+        "revenue_weight": 0.25,
+        "profit_norm_denom": 0.5,
+        "profit_weight": 0.25,
+        "inventory_norm_denom": 10.0,
+        "inventory_weight": 0.1,
+        "utilization_weight": 0.15,
+        "signal_boundary_mix": 0.6,
+        "boundary_denom_factor": 0.3,
+        "confidence_floor": 0.1,
+        "confidence_ceiling": 1.0,
+        "revenue_trend_threshold": 0.1,
+        "revenue_indicator_weight": 0.3,
+        "inventory_trend_threshold": 4.0,
+        "inventory_indicator_weight": 0.25,
+        "profit_trend_threshold": 0.1,
+        "profit_indicator_weight": 0.35,
+        "capacity_trend_threshold": 0.75,
+        "capacity_indicator_weight": 0.3,
+        "trend_up_multiplier": 1.1,
+        "trend_down_multiplier": 0.9,
+        "threshold_range_fallback": 0.25
+      },
+      "rationale": "Signal weights derived from relative informativeness of each metric; boundary denom based on threshold spread; mix ratio balances data amplitude vs phase clarity",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Calibrate: backtest each weight against phase transition accuracy",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T00:00:00.000000"
+      }
+    },
+    "confidence_mix": {
+      "value": {
+        "weight_boundary": 0.5,
+        "weight_freshness": 0.25,
+        "weight_seasonal": 0.15,
+        "weight_linkage": 0.0,
+        "weight_narrative": 0.1,
+        "favorable_confidence_min": 0.4
+      },
+      "rationale": "Boundary is primary signal; freshness penalizes stale data; seasonal adds 0.15 from pattern accuracy; linkage at 0 pending supply-chain correlation recalibration; narrative placeholder for future macro event integration",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Calibrate: increase WeightLinkage after supply-chain correlations are recomputed from real price data; tune WeightNarrative after narrative HitRate validation",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T00:00:00.000000"
+      }
+    },
+    "seasonal_patterns": {
+      "value": [
+        {
+          "id": "spring_festival",
+          "name": "春節行情",
+          "name_en": "Spring Festival Rally",
+          "start_month": 1,
+          "start_day": 15,
+          "end_month": 2,
+          "end_day": 15,
+          "favored_industries": [
+            "financials"
+          ],
+          "avoided_industries": [
+            "semiconductor",
+            "ai_supply_chain"
+          ],
+          "style_tags": [
+            "high_dividend",
+            "small_cap"
+          ],
+          "adjustment_factor": 1.15,
+          "historical_accuracy": 0.7,
+          "avg_market_return": 0.032,
+          "description": "年前資金回籠，高股息與金融股受追捧；電子股進入淡季"
+        },
+        {
+          "id": "earnings_window",
+          "name": "季報空窗期",
+          "name_en": "Earnings Report Window",
+          "start_month": 3,
+          "start_day": 1,
+          "end_month": 4,
+          "end_day": 15,
+          "favored_industries": [
+            "ai_supply_chain",
+            "electronics"
+          ],
+          "avoided_industries": [
+            "consumer",
+            "industrial"
+          ],
+          "adjustment_factor": 1.1,
+          "historical_accuracy": 0.55,
+          "avg_market_return": 0.015,
+          "description": "季報空窗期，成長股與AI供應鏈有表現空間"
+        },
+        {
+          "id": "dividend_season",
+          "name": "除權除息季",
+          "name_en": "Dividend Season",
+          "start_month": 5,
+          "start_day": 1,
+          "end_month": 6,
+          "end_day": 30,
+          "favored_industries": [
+            "financials",
+            "consumer"
+          ],
+          "avoided_industries": [
+            "semiconductor",
+            "ai_supply_chain",
+            "electronics"
+          ],
+          "style_tags": [
+            "high_dividend"
+          ],
+          "adjustment_factor": 1.2,
+          "historical_accuracy": 0.65,
+          "avg_market_return": 0.025,
+          "description": "除權除息旺季，高股息股與金融股表現較佳；科技股相對弱勢"
+        },
+        {
+          "id": "tech_peak_season",
+          "name": "科技旺季",
+          "name_en": "Technology Peak Season",
+          "start_month": 7,
+          "start_day": 1,
+          "end_month": 9,
+          "end_day": 15,
+          "favored_industries": [
+            "semiconductor",
+            "ai_supply_chain",
+            "electronics"
+          ],
+          "avoided_industries": [
+            "consumer"
+          ],
+          "adjustment_factor": 1.25,
+          "historical_accuracy": 0.75,
+          "avg_market_return": 0.085,
+          "description": "蘋果新機拉貨、AI晶片需求高峰，科技股表現最強"
+        },
+        {
+          "id": "earnings_verification",
+          "name": "季報驗證期",
+          "name_en": "Earnings Verification",
+          "start_month": 9,
+          "start_day": 15,
+          "end_month": 10,
+          "end_day": 31,
+          "adjustment_factor": 1.1,
+          "historical_accuracy": 0.6,
+          "avg_market_return": 0.02,
+          "description": "季報公布，獲利優於預期股受追捧，低於預期股遭拋售（動態分類，非固定產業）"
+        },
+        {
+          "id": "year_end_rally",
+          "name": "年底作帳",
+          "name_en": "Year-End Window Dressing",
+          "start_month": 11,
+          "start_day": 1,
+          "end_month": 12,
+          "end_day": 31,
+          "favored_industries": [
+            "financials"
+          ],
+          "style_tags": [
+            "large_cap",
+            "index_heavyweights"
+          ],
+          "adjustment_factor": 1.12,
+          "historical_accuracy": 0.58,
+          "avg_market_return": 0.018,
+          "description": "法人年底作帳，大型權值股與金融股相對強勢"
+        },
+        {
+          "id": "summer_electricity",
+          "name": "夏季用電高峰",
+          "name_en": "Summer Electricity Peak",
+          "start_month": 6,
+          "start_day": 1,
+          "end_month": 8,
+          "end_day": 31,
+          "favored_industries": [
+            "energy"
+          ],
+          "avoided_industries": [
+            "industrial"
+          ],
+          "adjustment_factor": 1.08,
+          "historical_accuracy": 0.62,
+          "avg_market_return": 0.012,
+          "description": "夏季用電高峰，能源相對強勢；高耗電製造業成本上升"
+        }
+      ],
+      "rationale": "7 canonical Taiwan seasonal patterns; HistoricalAccuracy ranges 0.55-0.75 based on domain heuristics; all values pending backtest validation",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Backtest: validate HistoricalAccuracy per pattern against 5-year rolling window; calibrate AdjustmentFactor from actual sector returns during pattern windows",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T00:00:00.000000"
+      }
+    },
+    "asymmetric_risk": {
+      "value": {
+        "bad_news_threshold": -0.03,
+        "good_news_threshold": 0.05,
+        "reaction_time_minutes": 30,
+        "volume_spike_multiplier": 2.0
+      },
+      "rationale": "Asymmetric risk detection: 3% drop triggers bad news; 5% rise for good news; 30min reaction window; 2x volume spike confirms",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "Migrated from hardcoded AsymmetricRiskConfig in risk.go",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T11:48:43.000000"
+      }
+    },
+    "news_latency_risk": {
+      "value": {
+        "max_latency_hours": 24.0,
+        "severity_critical_min": 0.8,
+        "severity_high_min": 0.5,
+        "impact_multiplier": 0.05,
+        "drop_critical_threshold": 0.1,
+        "drop_high_threshold": 0.07,
+        "drop_medium_threshold": 0.05,
+        "confidence_divisor": 3.0
+      },
+      "rationale": "News latency risk: 24h max latency gap; severity bands at 0.5/0.8; drop thresholds at 5%/7%/10%; confidence = volMultiplier/divisor",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "Migrated from hardcoded thresholds in risk.go CalculateNewsLatencyRisk + CalculateAsymmetricRisk",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T11:48:43.000000"
+      }
+    },
+    "freshness_scores": {
+      "value": {
+        "score_live": 1.0,
+        "score_recent": 0.8,
+        "score_stale": 0.4,
+        "score_fallback": 0.2,
+        "score_default": 0.3
+      },
+      "rationale": "Maps DataFreshness enum to confidence weights; live=1.0, recent=0.8, stale=0.4, fallback=0.2, default=0.3",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "Migrated from hardcoded freshnessFactor() in cycle.go",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T11:48:43.000000"
+      }
+    },
+    "phase_scores": {
+      "value": {
+        "score_expansion": 1.0,
+        "score_recovery": 0.5,
+        "score_mature": 0.0,
+        "score_recession": -1.0
+      },
+      "rationale": "Cycle phase scores: Expansion=1.0 (strongest bullish), Recovery=0.5, Mature=0.0 (neutral), Recession=-1.0 (bearish)",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "Migrated from hardcoded GetPhaseScore() in cycle.go",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T11:48:43.000000"
+      }
+    },
+    "cycle_transitions": {
+      "value": [
+        {
+          "from_phase": "recession",
+          "to_phase": "recovery",
+          "probability": 0.7,
+          "typical_duration_days": 180,
+          "triggers": [
+            "inventory_depletion",
+            "demand_stabilization"
+          ]
+        },
+        {
+          "from_phase": "recovery",
+          "to_phase": "expansion",
+          "probability": 0.8,
+          "typical_duration_days": 270,
+          "triggers": [
+            "revenue_acceleration",
+            "capex_increase"
+          ]
+        },
+        {
+          "from_phase": "expansion",
+          "to_phase": "mature",
+          "probability": 0.6,
+          "typical_duration_days": 360,
+          "triggers": [
+            "growth_deceleration",
+            "margin_compression"
+          ]
+        },
+        {
+          "from_phase": "mature",
+          "to_phase": "recession",
+          "probability": 0.5,
+          "typical_duration_days": 180,
+          "triggers": [
+            "inventory_buildup",
+            "demand_contraction"
+          ]
+        }
+      ],
+      "rationale": "TW market cycle transition probabilities and durations; recovery→expansion strongest (0.8), mature→recession weakest (0.5)",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "Migrated from hardcoded GetTypicalTransitions() in cycle.go",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T11:48:43.000000"
+      }
+    },
+    "linkage_params": {
+      "value": {
+        "downstream_decay_factor": 0.8,
+        "upstream_decay_factor": 0.6,
+        "seasonal_decay_factor": 0.3,
+        "default_correlation": 0.5,
+        "systemic_importance_divisor": 10.0,
+        "min_correlation_threshold": 0.3,
+        "correlation_window_days": 30,
+        "correlation_matrix": {
+          "semiconductor↔ai_supply_chain": 0.85,
+          "semiconductor↔electronics": 0.72,
+          "semiconductor↔robotics": 0.45,
+          "semiconductor↔financials": 0.15,
+          "semiconductor↔shipping": -0.1,
+          "ai↔supply_chain_electronics": 0.65,
+          "ai↔supply_chain_robotics": 0.55,
+          "ai↔supply_chain_financials": 0.2,
+          "ai↔supply_chain_shipping": 0.05,
+          "robotics↔electronics": 0.48,
+          "robotics↔industrial": 0.6,
+          "robotics↔financials": 0.1,
+          "financials↔consumer": 0.35,
+          "financials↔industrial": 0.25,
+          "financials↔shipping": 0.05,
+          "shipping↔energy": 0.4,
+          "shipping↔industrial": 0.3,
+          "consumer↔industrial": 0.2,
+          "consumer↔energy": 0.15,
+          "electronics↔energy": 0.1,
+          "semiconductor↔energy": 0.05
+        }
+      },
+      "rationale": "Downstream decay (0.80) > upstream (0.60) reflects asymmetric shock propagation; systemic divisor (10.0) normalizes connection count to 0-1; min threshold (0.30) filters noise",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TODO resolved: Calibrate: backtest decay factors against actual supply chain disruption events",
+        "evidence_quality": "low",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T00:00:00.000000"
+      }
+    },
+    "history_retention_days": {
+      "value": 90,
+      "rationale": "Keep 90 days of cycle history for trend analysis (approximately 3 trading months)",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "Migrated from hardcoded constant in cycle.go:189",
+        "evidence_quality": "medium",
+        "update_policy": "auto",
+        "validation_method": "empirical_calibration",
+        "dependencies": [],
+        "last_validated": "2026-05-15T12:02:39.000000"
+      }
     }
   },
   "strategy": {

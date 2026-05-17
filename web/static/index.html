@@ -1549,6 +1549,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
     <a data-page="controls" onclick="switchPage('controls')" tabindex="0" title="控制與稽核">⚙️ 控制與稽核</a>
     <div class="nav-divider"></div>
     <a data-page="datachannels" onclick="switchPage('datachannels')" tabindex="0" title="信息通道">📡 信息通道</a>
+    <a data-page="scheduler" onclick="switchPage('scheduler')" tabindex="0" title="排程管理">⏱️ 排程管理</a>
     <a data-page="alerts" onclick="switchPage('alerts')" tabindex="0" title="系統警報">🚨 系統警報</a>
     <a data-page="metrics" onclick="switchPage('metrics')" tabindex="0" title="指標監控">📉 指標監控</a>
     <a data-page="parameters" onclick="switchPage('parameters')" tabindex="0" title="參數管理">🎛️ 參數管理</a>
@@ -2056,6 +2057,23 @@ body { display: flex; margin: 0; min-height: 100vh; }
       <div class="panel wide mt-md">
         <h2>變更紀錄 (Audit Log)</h2>
         <div id="parametersAuditLog" class="empty loading">載入中…</div>
+      </div>
+    </div>
+
+    <!-- 排程管理 -->
+    <div class="page" id="page-scheduler">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        本頁顯示所有已註冊的<strong>背景排程任務</strong>，包括名稱、間隔、最後執行時間與連續失効次數。
+        任務可透過右下方的 toggle 開關啟用或停用。部分任務受 <strong>MarketHoursOnly</strong> 保護，僅在台股交易時段（09:00-13:30）執行。
+      </details>
+      <div class="panel wide">
+        <div class="flex-between">
+          <h2 class="m-0">排程任務狀態</h2>
+          <div class="control-group m-0">
+            <button onclick="loadSchedulerPage()">刷新狀態</button>
+          </div>
+        </div>
+        <div id="schedulerContent" class="empty loading mt-sm">載入中…</div>
       </div>
     </div>
   </div>

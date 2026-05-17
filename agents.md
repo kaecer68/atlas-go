@@ -65,6 +65,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 
 | 目錄 | 職責 |
 |------|------|
+| `internal/apigateway/` | 統一數據採集層：Gateway（14 通道管理、速率限制、熔斷器、快取）、BackgroundTaskManager（10+ 排程任務、重試策略、盤中保護） |
 | `internal/domain/` | 領域型別（`Regime`、`Recommendation`、`Position` 等字串 enum） |
 | `internal/orchestrator/` | 流程協調（`SystemCore`、`PluginHost`、多層 executor 路由） |
 | `internal/sim/` | 模擬引擎與部位狀態轉換 |
@@ -110,7 +111,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 | `internal/metalearning/` | 元學習協調器（MetaLearner、策略選擇優化） |
 
 **分層資料流**：
-`Market Data → Orchestrator (context → screener → sector/style → control) → Simulator → Ledger`
+`Market Data → Gateway (internal/apigateway/: rate limit + circuit breaker + cache) → BackgroundTaskManager (scheduled fetch) → Orchestrator (context → screener → sector/style → control) → Simulator → Ledger`
 
 > **注意**：`superinvestor` 不是獨立 executor，而是 sector/style agent 的角色型別（參見 `configs/agents.json` 中的 `layer: superinvestor`）。
 
@@ -147,6 +148,44 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 - `configs/portfolio_allocation.json` 為投組配置版本檔案。
 - `internal/config/config.go` 會自動讀取根目錄 `.env`，**不會覆蓋已存在的環境變數**；`.env` 中的值若帶引號（單雙引號）會被自動去除。
 - 關鍵環境變數前綴為 `ATLAS_*`（如 `ATLAS_MARKET_DATA_PROVIDER`、`ATLAS_REPLAY_DATA_PATH`、`ATLAS_BASELINE_POLICY_PATH`、`ATLAS_BROKER_MODE`）。
+
+---
+
+## 參數管理慣例
+
+參數系統是此專案核心基礎設施，所有 237+ 個參數必須統一納管於 `configs/parameters.json`，並遵循以下規範：
+
+### 參數引用註解（Citation）
+
+每個參數必須包含 `citation` 區塊，記錄其來源與有效性：
+
+| 欄位 | 說明 | 可選值 |
+|------|------|--------|
+| `source_type` | 資料來源類別 | `literature` / `empirical` / `heuristic` / `calibrated` |
+| `source_reference` | 具體來源描述（文獻 DOI、TWSE 公告、backtest 報告等） | 自由文字，避免泛泛描述 |
+| `evidence_quality` | 證據品質 | `high` / `medium` / `low` |
+| `update_policy` | 更新策略 | `auto`（可自動校準） / `manual`（需人工審查） / `frozen`（理論固定值） |
+| `validation_method` | 驗證方式 | `backtest_optimization` / `empirical_calibration` / `literature_review` / `cross_reference` / `code_review` 等 |
+| `dependencies` | 相依參數（建議填入） | 字串陣列 |
+| `last_validated` | 最後驗證時間 | ISO 8601 時間戳 |
+
+### AI 開發新參數流程
+
+1. 在 `configs/parameters.json` 中新增參數與 `citation` 區塊
+2. 在 `internal/config/parameters.go` 的對應 struct 中新增 `ParameterMetadata[T]` 欄位
+3. 在 `internal/config/parameters_defaults.go` 中新增預設值
+4. 在 `internal/config/inference.go` 的 `SetParameter`／`GetParameter` 中新增 case
+5. 在 `internal/config/parameter_snapshot.go` 中新增 snapshot compare 調用
+6. 驗證：執行 `go build ./...`、`go test ./internal/config/...` 與 `go run ./cmd/parameter-health-check`
+
+### 參數驗證工具
+
+- `go run ./cmd/parameter-health-check` — 輸出完整參數審計報告（citation 覆蓋率、證據品質分佈、問題清單）
+- `go run ./cmd/calibrate-parameters --module=garch --dry-run` — GARCH/VaR 參數校準
+
+### 完整參考文件
+
+詳細參數系統設計與 schema 請參閱 `docs/PARAMETER_SYSTEM.md`。
 
 ---
 
@@ -330,7 +369,7 @@ gh pr create --title "feat(scope): description" \
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (23449 symbols, 51588 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (24048 symbols, 52900 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

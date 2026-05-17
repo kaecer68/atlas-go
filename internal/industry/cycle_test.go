@@ -160,32 +160,39 @@ func TestCalculateConfidence(t *testing.T) {
 		t.Errorf("expected moderate confidence (~0.55) with moderate metrics, got %f", confidence)
 	}
 
-	// Empty metrics
+	// Empty metrics — should return configured signal base (was ConfidenceFloor before fix)
 	emptyMetrics := IndustryMetrics{}
+	sig := config.GetParametersConfig().Industry.ConfidenceSignal.Value
+	cfgBase := sig.SignalBase
 	confidence = ct.calculateConfidence("test", emptyMetrics)
-	if confidence != 0.3 {
-		t.Errorf("expected base confidence 0.3, got %f", confidence)
+	if math.Abs(confidence-cfgBase) > 0.001 {
+		t.Errorf("expected base confidence %f (SignalBase), got %f", cfgBase, confidence)
 	}
 }
 
 func TestCyclePositionIsFavorable(t *testing.T) {
-	tests := []struct {
-		phase     CyclePhase
-		favorable bool
-	}{
-		{CycleExpansion, true},
-		{CycleRecovery, true},
-		{CycleMature, false},
-		{CycleRecession, false},
+	// Expansion/Recovery + high confidence = favorable
+	expHigh := &CyclePosition{BusinessCycle: CycleExpansion, Confidence: 0.80}
+	if !expHigh.IsFavorable() {
+		t.Errorf("expected favorable=true for expansion with high confidence")
 	}
-
-	for _, tt := range tests {
-		t.Run(string(tt.phase), func(t *testing.T) {
-			pos := &CyclePosition{BusinessCycle: tt.phase}
-			if pos.IsFavorablePhase() != tt.favorable {
-				t.Errorf("expected favorable=%v for %s", tt.favorable, tt.phase)
-			}
-		})
+	recHigh := &CyclePosition{BusinessCycle: CycleRecovery, Confidence: 0.50}
+	if !recHigh.IsFavorable() {
+		t.Errorf("expected favorable=true for recovery with high confidence")
+	}
+	// Expansion + low confidence = not favorable
+	expLow := &CyclePosition{BusinessCycle: CycleExpansion, Confidence: 0.20}
+	if expLow.IsFavorable() {
+		t.Errorf("expected favorable=false for expansion with low confidence")
+	}
+	// Recession = never favorable regardless of confidence
+	recHighConf := &CyclePosition{BusinessCycle: CycleRecession, Confidence: 0.90}
+	if recHighConf.IsFavorable() {
+		t.Errorf("expected favorable=false for recession with high confidence")
+	}
+	mature := &CyclePosition{BusinessCycle: CycleMature, Confidence: 0.50}
+	if mature.IsFavorable() {
+		t.Errorf("expected favorable=false for mature")
 	}
 }
 
