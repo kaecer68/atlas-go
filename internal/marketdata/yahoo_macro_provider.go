@@ -12,52 +12,27 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/time/rate"
-
-	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
-// yahooHosts lists Yahoo Finance API hosts tried in order on failure.
-var yahooHosts = []string{
-	"query1.finance.yahoo.com",
-	"query2.finance.yahoo.com",
-}
-
-// modernUserAgents holds recent Chrome User-Agent strings for rotation.
-var modernUserAgents = []string{
-	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
-	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
-	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
-}
-
-var yahooSharedLimiter = rate.NewLimiter(rate.Every(500*time.Millisecond), 2)
-
 // YahooFinanceMacroProvider fetches macro indicators from Yahoo Finance.
 type YahooFinanceMacroProvider struct {
-	client    *http.Client
-	baseURL   string
-	limiter   *rate.Limiter
-	bdiSymbol string // Yahoo Finance symbol for BDI (default: ^BDI, alternative: BDI, BALTIC)
+	client *http.Client
 }
 
+// NewYahooFinanceMacroProvider creates a new Yahoo Finance macro provider.
 func NewYahooFinanceMacroProvider() *YahooFinanceMacroProvider {
 	return &YahooFinanceMacroProvider{
-		client:    httpclient.NewFactory().NewClient(15 * time.Second),
-		limiter:   yahooSharedLimiter,
-		bdiSymbol: "^BDI",
+		client: &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
-// SetBDISymbol overrides the default BDI symbol (^BDI). Use if Yahoo Finance
-// does not serve ^BDI; common alternatives include "BDI" or "BALTT".
-func (y *YahooFinanceMacroProvider) SetBDISymbol(ticker string) {
-	y.bdiSymbol = ticker
-}
-
+// Name returns the provider name.
 func (y *YahooFinanceMacroProvider) Name() string {
 	return "yahoo_finance"
 }
+
+// FetchSnapshot retrieves DXY, ^TNX, VIX, Oil, Gold, JPY, USD/TWD from Yahoo Finance concurrently.
 func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
 	symbols := map[string]string{
 		"DX-Y.NYB":  "dxy",
@@ -67,7 +42,6 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 		"GC=F":      "gold",
 		"JPY=X":     "jpy",
 		"USD/TWD=X": "usd_twd",
-		y.bdiSymbol: "bdi",
 	}
 
 	snap := MacroDataSnapshot{RecordedAt: time.Now().Unix()}
@@ -102,8 +76,6 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 				snap.JPY = point
 			case "usd_twd":
 				snap.USD_TWD = point
-			case "bdi":
-				snap.BDI = point
 			}
 			mu.Unlock()
 		}(ticker, key)
@@ -122,34 +94,12 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 }
 
 func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker string) (MacroDataPoint, error) {
-	if err := y.limiter.Wait(ctx); err != nil {
-		return MacroDataPoint{}, fmt.Errorf("rate limit: %w", err)
-	}
-	var lastErr error
-	for _, host := range yahooHosts {
-		point, err := y.fetchFromHost(ctx, host, ticker)
-		if err == nil {
-			return point, nil
-		}
-		lastErr = err
-		logging.Warn("yahoo_macro_provider", "host_failed", "host", host, "error", err)
-	}
-	return MacroDataPoint{}, fmt.Errorf("all hosts failed for %s: %w", ticker, lastErr)
-}
-
-func (y *YahooFinanceMacroProvider) fetchFromHost(ctx context.Context, host, ticker string) (MacroDataPoint, error) {
-	var u string
-	if y.baseURL != "" {
-		u = fmt.Sprintf("%s/v8/finance/chart/%s?interval=1d&range=2d", y.baseURL, ticker)
-	} else {
-		u = fmt.Sprintf("https://%s/v8/finance/chart/%s?interval=1d&range=2d", host, ticker)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	url := fmt.Sprintf("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=2d", ticker)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return MacroDataPoint{}, err
 	}
-	ua := modernUserAgents[time.Now().UnixNano()%int64(len(modernUserAgents))]
-	req.Header.Set("User-Agent", ua)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
 
 	resp, err := y.client.Do(req)
 	if err != nil {
@@ -157,22 +107,14 @@ func (y *YahooFinanceMacroProvider) fetchFromHost(ctx context.Context, host, tic
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return MacroDataPoint{}, fmt.Errorf("http status %d from %s", resp.StatusCode, host)
-	}
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return MacroDataPoint{}, err
 	}
 
-	if len(body) > 0 && body[0] == '<' {
-		return MacroDataPoint{}, fmt.Errorf("HTML response from %s", host)
-	}
-
 	var chartResp yahooChartResponse
 	if err := json.Unmarshal(body, &chartResp); err != nil {
-		return MacroDataPoint{}, fmt.Errorf("unmarshal: %w", err)
+		return MacroDataPoint{}, err
 	}
 
 	result := chartResp.Chart.Result

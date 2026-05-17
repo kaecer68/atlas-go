@@ -42,11 +42,8 @@ COPY --from=builder /build/sql /app/sql
 COPY --from=builder /build/scripts/cron-entrypoint.sh /app/cron-entrypoint.sh
 RUN chmod +x /app/cron-entrypoint.sh
 
-# Create log directory and set ownership
-RUN mkdir -p /var/log/cron && chown -R atlas:atlas /app /var/log/cron
-
-# Switch to non-root user
-USER atlas
+# Create log directory
+RUN mkdir -p /var/log/cron
 
 # Start cron in foreground via entrypoint
 CMD ["/app/cron-entrypoint.sh"]

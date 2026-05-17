@@ -2,13 +2,10 @@ package monitoring
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -58,7 +55,6 @@ type DashboardAPI struct {
 	baselinePath       string
 	narrativeEngine    *narrative.NarrativeEngine
 	macroIngestor      *narrative.MacroIngestor
-	macroProvider      marketdata.MacroDataProvider
 	geoProvider        narrative.GeopoliticalRiskProvider
 	taiwanGeoProvider  *narrative.CompositeTaiwanGeopoliticalProvider
 	taiwanStressCalc   *narrative.TaiwanStressCalculator
@@ -75,113 +71,37 @@ type DashboardAPI struct {
 	eventBus           *eventbus.ChannelEventBus
 	outcomeStore       *DualWriteOutcomeStoreAdapter
 	orderMgr           *live.OrderManager
-	storageReport      apimetrics.StorageReporter
-}
-
-// channelState tracks enable/disable status for each channel.
-type channelState struct {
-	Enabled   bool      `json:"enabled"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-var (
-	channelStates   = make(map[string]channelState)
-	channelStatesMu sync.RWMutex
-)
-
-func loadChannelStates(workDir string) {
-	channelStatesMu.Lock()
-	defer channelStatesMu.Unlock()
-
-	path := filepath.Join(workDir, "data/state/channel_states.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return // file may not exist yet
-	}
-	_ = json.Unmarshal(data, &channelStates)
-}
-
-func saveChannelStates(workDir string) error {
-	channelStatesMu.RLock()
-	defer channelStatesMu.RUnlock()
-
-	path := filepath.Join(workDir, "data/state/channel_states.json")
-	data, err := json.MarshalIndent(channelStates, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0644)
-}
-
-func setChannelEnabled(workDir, channelID string, enabled bool) error {
-	channelStatesMu.Lock()
-	channelStates[channelID] = channelState{Enabled: enabled, UpdatedAt: time.Now()}
-	channelStatesMu.Unlock()
-	return saveChannelStates(workDir)
 }
 
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
-	loadChannelStates(workDir)
-
-	providers := []marketdata.MacroDataProvider{
-		// TODO: Migrate to Gateway for direct Yahoo Finance macro provider instantiation.
+	provider := marketdata.NewCompositeMacroProvider(
 		marketdata.NewYahooFinanceMacroProvider(),
-		// TODO: Migrate to Gateway for direct Frankfurter FX provider instantiation.
-		marketdata.NewFrankfurterFXProvider(),
-		// TODO: Migrate to Gateway for direct SOX index provider instantiation.
-		marketdata.NewSOXIndexProvider(),
-		// TODO: Migrate to Gateway for direct TWSE capital flow provider instantiation.
 		marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")),
-		// TODO: Migrate to Gateway for direct TWSE margin balance provider instantiation.
-		marketdata.NewTWSEMarginBalanceProvider(""),
-		// TODO: Migrate to Gateway for direct export statistics provider instantiation.
 		marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export")),
-	}
-	// Sector data from local cache (graceful degradation if file missing).
-	// TODO: Migrate to Gateway for direct sector data provider instantiation.
-	providers = append(providers, marketdata.NewSectorDataProvider(filepath.Join(workDir, "data/sector_data")))
-	// TSMC Revenue from FinMind (overwrites cached sector data when available).
-	cfg := config.Load()
-	if cfg.FinMindAPIKey != "" {
-		// TODO: Migrate to Gateway for direct TSMC revenue provider instantiation.
-		providers = append(providers, marketdata.NewTSMCRevenueProvider(cfg.FinMindAPIKey))
-	}
-	// TODO: Migrate to Gateway for direct composite macro provider instantiation.
-	provider := marketdata.NewCompositeMacroProvider(providers...)
-	// TODO: Migrate to Gateway for direct geopolitical composite provider instantiation.
+	)
 	geoProvider := narrative.NewCompositeGeopoliticalProvider(
-		// TODO: Migrate to Gateway for direct RSS geopolitical provider instantiation.
 		narrative.NewRSSGeopoliticalProvider(),
-		// TODO: Migrate to Gateway for direct GDELT geopolitical provider instantiation.
 		narrative.NewGDELTGeopoliticalProvider(),
 	)
-	// TODO: Migrate to Gateway for direct Taiwan geopolitical composite provider instantiation.
 	taiwanGeoProvider := narrative.NewCompositeTaiwanGeopoliticalProvider(
-		// TODO: Migrate to Gateway for direct Taiwan RSS geopolitical provider instantiation.
 		narrative.NewTaiwanRSSGeopoliticalProvider(),
 	)
 	if metricsCollector == nil {
 		metricsCollector = NewMetricsCollector()
 	}
-	lifecycle := narrative.NewEventLifecycleManager()
-	ingestor := narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro"))
-	ingestor.SetLifecycleManager(lifecycle)
-
-	narrativeEng := narrative.NewNarrativeEngine()
 	return &DashboardAPI{
 		workDir:            workDir,
 		ledgerDir:          ledgerDir,
 		storeBackend:       os.Getenv("ATLAS_STORE_BACKEND"),
 		sqlitePath:         os.Getenv("ATLAS_SQLITE_PATH"),
 		baselinePath:       filepath.Join(workDir, "data/state/baseline_policy.json"),
-		narrativeEngine:    narrativeEng,
-		macroIngestor:      ingestor,
-		macroProvider:      provider,
+		narrativeEngine:    narrative.NewNarrativeEngine(),
+		macroIngestor:      narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro")),
 		geoProvider:        geoProvider,
 		taiwanGeoProvider:  taiwanGeoProvider,
-		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider, workDir),
+		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider),
 		reportGenerator:    narrative.NewReportGenerator(),
-		industryService:    newWiredIndustryService(narrativeEng, provider),
+		industryService:    service.NewIndustryService(industry.DefaultClassification(), industry.NewSeasonalEngine(), industry.NewCycleTracker(), industry.NewLinkageAnalyzer(), industry.NewRiskMonitor()),
 		metricsCollector:   metricsCollector,
 		metricsHistory:     NewMetricsHistory(1000),
 		healthManager:      portfolio.NewAgentHealthManager(),
@@ -189,141 +109,12 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	}
 }
 
-func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroProvider marketdata.MacroDataProvider) *service.IndustryService {
-	seasonalEngine := industry.NewSeasonalEngine()
-	cycleTracker := industry.NewCycleTracker()
-	linkageAnalyzer := industry.NewLinkageAnalyzer()
-
-	// Wire narrative provider
-	bridge := narrative.NewSeasonalBridge(narrativeEngine)
-	bridge.SetActiveEvents(narrativeEngine.DetectEvents(narrative.MarketNarrativeData{}))
-	seasonalEngine.SetNarrativeProvider(bridge)
-	cycleTracker.SetNarrativeProvider(func() float64 {
-		events := narrativeEngine.DetectEvents(narrative.MarketNarrativeData{})
-		hitRate := 0.0
-		for _, e := range events {
-			if e.HitRate > hitRate {
-				hitRate = e.HitRate
-			}
-		}
-		return hitRate
-	})
-	cycleTracker.SetNarrativeAdjuster(func(industryID string) industry.NarrativeAdjustment {
-		events := narrativeEngine.DetectEvents(narrative.MarketNarrativeData{})
-		// theme → {affected industries → baseRevenueBias}
-		type themeImpact struct {
-			industryBias map[string]float64
-		}
-		themeMap := map[string]themeImpact{
-			"AI_capex_surge":          {map[string]float64{"semiconductor": 0.08, "ai_supply_chain": 0.08, "electronics": 0.05}},
-			"US_rates_up":             {map[string]float64{"financials": -0.04}},
-			"JPY_carry_unwind":        {map[string]float64{"financials": -0.03, "semiconductor": -0.05, "electronics": -0.03}},
-			"geopolitical_risk_spike": {map[string]float64{"shipping": -0.05, "energy": -0.05, "industrial": -0.03}},
-			"oil_price_shock":         {map[string]float64{"shipping": -0.04, "energy": -0.04, "industrial": -0.03}},
-			"semiconductor_downturn":  {map[string]float64{"semiconductor": -0.08, "ai_supply_chain": -0.06, "electronics": -0.06}},
-		}
-		totalBias := 0.0
-		maxConf := 0.0
-		activeTheme := ""
-		for _, e := range events {
-			ti, ok := themeMap[e.Theme]
-			if !ok {
-				continue
-			}
-			bias, ok := ti.industryBias[industryID]
-			if !ok {
-				continue
-			}
-			weighted := bias * e.Confidence * e.HitRate
-			totalBias += weighted
-			if e.Confidence*e.HitRate > maxConf {
-				maxConf = e.Confidence * e.HitRate
-				activeTheme = e.Theme
-			}
-		}
-		if maxConf == 0 {
-			return industry.NarrativeAdjustment{}
-		}
-		return industry.NarrativeAdjustment{
-			RevenueBias: totalBias,
-			ProfitBias:  totalBias * 0.8,
-			Confidence:  maxConf,
-			ActiveTheme: activeTheme,
-		}
-	})
-
-	// Wire supply chain graph into seasonal engine
-	seasonalEngine.SetLinkageGraph(linkageAnalyzer.GetSupplyChainGraph())
-
-	// Wire external validators into cycle tracker for multi-dimensional confidence
-	cycleTracker.SetExternalValidators(seasonalEngine, linkageAnalyzer)
-
-	// Create DynamicEnvModulator with real-time macro data (baseline uses neutral values)
-	// The update will happen when macro ingestor fetches new data.
-	baseline := marketdata.MacroDataSnapshot{
-		Oil: marketdata.MacroDataPoint{Value: 75.0},   // Historical WTI average
-		DXY: marketdata.MacroDataPoint{Value: 103.0},  // Historical DXY average
-		BDI: marketdata.MacroDataPoint{Value: 1500.0}, // Historical BDI average
-	}
-	modulator := industry.NewDynamicEnvModulator(baseline, baseline)
-	if macroProvider != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if snap, err := macroProvider.FetchSnapshot(ctx); err == nil {
-			modulator.UpdateCurrent(snap)
-		}
-	}
-	seasonalEngine.SetDynamicEnv(modulator)
-
-	// Wire narrative provider into linkage analyzer for dynamic supply chain correlations
-	linkageAnalyzer.SetNarrativeProvider(bridge)
-
-	svc := service.NewIndustryService(
-		industry.DefaultClassification(),
-		seasonalEngine,
-		cycleTracker,
-		linkageAnalyzer,
-		industry.NewRiskMonitor(),
-	)
-
-	replayPath := config.Load().ReplayDataPath
-	if replayPath != "" {
-		sectorSymbolsPath := filepath.Join(config.Load().WorkDir, "configs", "sector_symbols.json")
-		if returns, err := industry.LoadIndustryReturnsFromReplay(replayPath, sectorSymbolsPath); err == nil {
-			svc.RebuildCorrelations(returns)
-		} else {
-			logging.Warn("monitoring", "correlation_rebuild_failed", "err", err)
-		}
-	}
-
-	return svc
-}
-
 func (a *DashboardAPI) SetEventBus(eventBus *eventbus.ChannelEventBus) {
 	a.eventBus = eventBus
-	if a.macroIngestor != nil {
-		a.macroIngestor.SetEventBus(eventBus)
-	}
-	// Subscribe to narrative events to keep DynamicEnvModulator current.
-	if eventBus != nil {
-		eventBus.Subscribe(eventbus.EventNarrative, func(ctx context.Context, event eventbus.BusEvent) error {
-			snap, err := a.macroProvider.FetchSnapshot(ctx)
-			if err != nil {
-				logging.Warn("dashboardapi", "dynamic_env_update_failed", "err", err)
-				return nil
-			}
-			a.industryService.UpdateDynamicEnv(snap)
-			return nil
-		})
-	}
 }
 
 func (a *DashboardAPI) GetEventBus() *eventbus.ChannelEventBus {
 	return a.eventBus
-}
-
-func (a *DashboardAPI) GetMacroIngestor() *narrative.MacroIngestor {
-	return a.macroIngestor
 }
 
 func (a *DashboardAPI) SetContext(ctx context.Context) {
@@ -397,15 +188,9 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		},
 	)
 	metricsHandlers := apimetrics.NewHandlers(metricsSvc)
-	if a.storageReport != nil {
-		metricsHandlers.WithStorageReporter(a.storageReport)
-	}
 	metricsHandlers.RegisterRoutes(mux)
 
-	systemSvc := service.NewSystemService(a.workDir, a.ledgerDir, a.baselinePath, outcomeStore, a.janusEngine)
-	if a.industryService != nil {
-		systemSvc.SetCycleTracker(a.industryService.CycleTracker)
-	}
+	systemSvc := service.NewSystemService(a.workDir, a.ledgerDir, a.baselinePath, outcomeStore)
 	systemHandlers := apisystem.NewHandlers(systemSvc)
 	systemHandlers.RegisterRoutes(mux)
 
@@ -418,12 +203,9 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	riskHandlers.RegisterRoutes(mux)
 
 	var dividendProvider apitax.DividendProvider
-	cfg := config.Load()
-	if cfg.FinMindAPIKey != "" {
-		// TODO: Migrate to Gateway for direct FinMind client instantiation.
-		finMindClient := marketdata.NewFinMindClient(cfg.FinMindAPIKey)
+	if apiKey := os.Getenv("FINMIND_API_KEY"); apiKey != "" {
+		finMindClient := marketdata.NewFinMindClient(apiKey)
 		cacheDir := filepath.Join(a.workDir, "data", "cache", "dividends")
-		// TODO: Migrate to Gateway for direct FinMind dividend provider instantiation.
 		dividendProvider = marketdata.NewFinMindDividendProvider(finMindClient, cacheDir)
 	}
 	taxHandlers := apitax.NewHandlers(a.ledgerDir, dividendProvider)
@@ -438,19 +220,6 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		fugleKey := config.GetSecret("FUGLE_API_KEY")
-		if fugleKey == "" {
-			fugleKey = config.GetSecret("ATLAS_FUGLE_API_KEY")
-		}
-		fubonKey := config.GetSecret("FUBON_API_KEY")
-		if fubonKey == "" {
-			fubonKey = config.GetSecret("ATLAS_FUBON_API_KEY")
-		}
-		finmindKey := config.GetSecret("FINMIND_API_KEY")
-		if finmindKey == "" {
-			finmindKey = config.GetSecret("ATLAS_FINMIND_API_KEY")
-		}
-		tejKey := config.GetSecret("TEJ_API_KEY")
 		channelSvc := service.NewDataChannelService(
 			a.workDir,
 			a.pool,
@@ -458,10 +227,6 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			a.geoProvider,
 			a.taiwanGeoProvider,
 			a.janusEngine,
-			fugleKey,
-			fubonKey,
-			finmindKey,
-			tejKey,
 		)
 		channels, err := channelSvc.GetAllChannelStatuses(r.Context())
 		if err != nil {
@@ -476,108 +241,6 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			"channels":  channels,
 			"alerts":    alerts,
 			"generated": time.Now().Format(time.RFC3339),
-		})
-	})
-
-	// Data pipeline endpoint — tracks producer/consumer freshness for all data sources.
-	mux.HandleFunc("/api/dashboard/data-pipeline", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-			return
-		}
-		pipelineSvc := service.NewDataPipelineService(a.workDir, a.ledgerDir)
-		sources, err := pipelineSvc.GetPipelineStatus()
-		if err != nil {
-			shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load data pipeline: %v", err))
-			return
-		}
-		shared.WriteJSON(w, http.StatusOK, map[string]any{
-			"sources":   sources,
-			"generated": time.Now().Format(time.RFC3339),
-		})
-	})
-
-	// Management center endpoints — channel control and API key management.
-	mux.HandleFunc("/api/dashboard/channels/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-			return
-		}
-		path := strings.TrimPrefix(r.URL.Path, "/api/dashboard/channels/")
-		parts := strings.Split(path, "/")
-		if len(parts) < 2 {
-			shared.WriteJSONError(w, http.StatusBadRequest, "invalid path")
-			return
-		}
-		channelID := parts[0]
-		action := parts[1]
-
-		switch action {
-		case "trigger":
-			shared.WriteJSON(w, http.StatusOK, map[string]any{
-				"channel_id": channelID,
-				"action":     "trigger",
-				"status":     "ok",
-				"note":       "next poll will reflect fresh status",
-			})
-		case "toggle":
-			var req struct {
-				Enabled bool `json:"enabled"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				shared.WriteJSONError(w, http.StatusBadRequest, "invalid body")
-				return
-			}
-			if err := setChannelEnabled(a.workDir, channelID, req.Enabled); err != nil {
-				shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("save state: %v", err))
-				return
-			}
-			shared.WriteJSON(w, http.StatusOK, map[string]any{
-				"channel_id": channelID,
-				"enabled":    req.Enabled,
-				"status":     "ok",
-			})
-		default:
-			shared.WriteJSONError(w, http.StatusBadRequest, "unknown action")
-		}
-	})
-
-	mux.HandleFunc("/api/dashboard/api-keys/update", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-			return
-		}
-		var req struct {
-			Provider string `json:"provider"`
-			APIKey   string `json:"api_key"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			shared.WriteJSONError(w, http.StatusBadRequest, "invalid body")
-			return
-		}
-		if req.Provider == "" || req.APIKey == "" {
-			shared.WriteJSONError(w, http.StatusBadRequest, "provider and api_key required")
-			return
-		}
-		allowedProviders := map[string]bool{
-			"finmind": true,
-			"fugle":   true,
-			"tej":     true,
-			"fubon":   true,
-		}
-		if !allowedProviders[strings.ToLower(req.Provider)] {
-			shared.WriteJSONError(w, http.StatusBadRequest, "invalid provider")
-			return
-		}
-		if len(req.APIKey) < 8 || len(req.APIKey) > 512 {
-			shared.WriteJSONError(w, http.StatusBadRequest, "api_key length invalid")
-			return
-		}
-		key := strings.ToUpper(req.Provider) + "_API_KEY"
-		os.Setenv(key, req.APIKey)
-		shared.WriteJSON(w, http.StatusOK, map[string]any{
-			"provider": req.Provider,
-			"status":   "ok",
 		})
 	})
 
@@ -707,20 +370,12 @@ func (a *DashboardAPI) SetOrderManager(om *live.OrderManager) {
 	a.orderMgr = om
 }
 
-func (a *DashboardAPI) SetStorageReporter(r apimetrics.StorageReporter) {
-	a.storageReport = r
-}
-
 func (a *DashboardAPI) RegisterOrderRoutes(mux *http.ServeMux) {
 	orderSvc := service.NewOrderService(a.orderMgr)
 	handlers := &apiorders.Handlers{
 		Svc: orderSvc,
 	}
 	handlers.RegisterRoutes(mux)
-}
-
-func (a *DashboardAPI) GetIndustryService() *service.IndustryService {
-	return a.industryService
 }
 
 func (a *DashboardAPI) RegisterTaskExecRoutes(mux *http.ServeMux) {

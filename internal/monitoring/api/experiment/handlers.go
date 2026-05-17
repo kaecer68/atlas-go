@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
-	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/ledger"
@@ -198,7 +197,7 @@ func (h *Handlers) HandleJudge(r *http.Request) (int, any) {
 		return http.StatusNotFound, map[string]string{"error": "experiment result not found"}
 	}
 
-	replayPath := config.GetReplayDataPath(h.WorkDir)
+	replayPath := filepath.Join(h.WorkDir, "data/replay/tw_extended_90days.csv")
 	judge := experiment.NewJudge(ledger.NewStore(h.LedgerDir).(ledger.ExperimentStore), replayPath, h.BaselinePath)
 	result, err := judge.Evaluate(resultPath)
 	if err != nil {

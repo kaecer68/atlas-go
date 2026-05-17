@@ -102,7 +102,6 @@ func buildStrategyLayer(thresholdEngine *sim.DynamicThresholdEngine) StrategyLay
 
 // buildMacroEngines constructs the macro assessment engines.
 func buildMacroEngines(sectorDataDir string) (macroRiskEngine *narrative.MacroRiskAssessmentEngine, structuralTrendEngine *narrative.StructuralTrendEngine, macroDrawdownEngine *risk.MacroAwareDrawdownEngine, sectorDataProvider *marketdata.SectorDataProvider) {
-	// TODO: Migrate to Gateway for direct sector data provider instantiation.
 	sectorDataProvider = marketdata.NewSectorDataProvider(sectorDataDir)
 	return narrative.NewMacroRiskAssessmentEngine(), narrative.NewStructuralTrendEngine(), risk.NewMacroAwareDrawdownEngine(), sectorDataProvider
 }

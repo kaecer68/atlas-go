@@ -23,7 +23,6 @@ type MacroDataSnapshot struct {
 	Oil                 MacroDataPoint `json:"oil"`
 	Gold                MacroDataPoint `json:"gold"`
 	JPY                 MacroDataPoint `json:"jpy"`
-	BDI                 MacroDataPoint `json:"bdi"`
 	ForeignInvestorNet  MacroDataPoint `json:"foreign_investor_net"`
 	DomesticFundNet     MacroDataPoint `json:"domestic_fund_net"`
 	DealerNet           MacroDataPoint `json:"dealer_net"`
@@ -87,9 +86,6 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 		}
 		if snap.JPY.Symbol != "" {
 			merged.JPY = snap.JPY
-		}
-		if snap.BDI.Symbol != "" {
-			merged.BDI = snap.BDI
 		}
 		if snap.ForeignInvestorNet.Symbol != "" {
 			merged.ForeignInvestorNet = snap.ForeignInvestorNet

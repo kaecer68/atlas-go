@@ -11,8 +11,6 @@ import (
 	"time"
 
 	"golang.org/x/time/rate"
-
-	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 )
 
 // DayTradingStats holds daily day trading statistics from TWSE.
@@ -36,7 +34,7 @@ type DayTradingProvider struct {
 // NewDayTradingProvider creates a new TWSE day trading provider.
 func NewDayTradingProvider() *DayTradingProvider {
 	return &DayTradingProvider{
-		client:      httpclient.NewFactory().NewClient(20 * time.Second),
+		client:      &http.Client{Timeout: 20 * time.Second},
 		baseURL:     "https://www.twse.com.tw",
 		rateLimiter: rate.NewLimiter(rate.Every(5*time.Second), 1),
 	}

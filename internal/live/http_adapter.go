@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 )
@@ -109,7 +108,7 @@ func NewHTTPBrokerAdapter(cfg HTTPBrokerAdapterConfig) *HTTPBrokerAdapter {
 	retryableStatusCodes := toRetryableStatusCodeSet(cfg.RetryableStatusCodes)
 	client := cfg.Client
 	if client == nil {
-		client = httpclient.NewFactory().NewClient(timeout)
+		client = &http.Client{Timeout: timeout}
 	}
 	signerName, signer := selectSigner(cfg.Signer)
 	keyID := strings.TrimSpace(cfg.KeyID)

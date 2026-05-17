@@ -14,6 +14,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/replay"
 	"github.com/kaecer68/atlas-go/internal/reporting"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 )
 
 type Runner struct {

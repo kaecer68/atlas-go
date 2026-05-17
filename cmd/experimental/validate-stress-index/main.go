@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
@@ -20,12 +19,11 @@ func main() {
 	flag.Parse()
 	if help {
 		fmt.Println("Usage: validate-stress-index [--help]")
-		fmt.Println("Computes the Taiwan market stress index from replay data.")
+		fmt.Println("Computes the Taiwan market stress index from tw_extended_90days.csv.")
 		os.Exit(0)
 	}
 
-	replayPath := config.GetReplayDataPath("")
-	f, err := os.Open(replayPath)
+	f, err := os.Open("data/replay/tw_extended_90days.csv")
 	if err != nil {
 		fmt.Println("Error opening CSV:", err)
 		os.Exit(1)
@@ -68,7 +66,7 @@ func main() {
 		})
 	}
 
-	calc := narrative.NewTaiwanStressCalculator(nil, "")
+	calc := narrative.NewTaiwanStressCalculator(nil)
 	geo := narrative.GeopoliticalRiskScore{Intensity: 30}
 
 	type result struct {
@@ -89,7 +87,7 @@ func main() {
 			VIX:                marketdata.MacroDataPoint{Value: 10.0 + math.Abs(dayOffset-15)*3.5},
 			ForeignInvestorNet: marketdata.MacroDataPoint{Value: -(dayOffset - 5) * 1.5},
 		}
-		idx := calc.Calculate(snap, marketdata.MacroDataSnapshot{}, geo)
+		idx := calc.Calculate(snap, geo)
 		results = append(results, result{
 			date:   d.date,
 			stress: idx.Score,

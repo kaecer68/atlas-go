@@ -128,14 +128,6 @@ active → confirmed → faded → expired
 | `MacroIngestor` | ingestor.go | 巨集觀數據攝入 |
 | `EventLifecycleManager` | lifecycle.go | 事件生命週期管理 |
 | `TaiwanStressIndex` | taiwan_stress_index.go | 台灣壓力指數計算 |
-| `SeasonalBridge` | seasonal_bridge.go | 橋接敘事主題至產業供應鏈連動，提供 `ActiveThemes()` 與 `CorrelationMultiplier()` 供 `ShockPropagation` 與 `SeasonalEngine` 使用。 |
-
-## 敘事感知相關矩陣調變 (Narrative-aware Correlation)
-
-`SeasonalBridge` 實作 `NarrativeLinkageProvider` 介面（定義於 `internal/industry/linkage.go`），使巨集觀敘事主題能動態調整產業間相關矩陣：
-- **5 個內建主題乘數**：`oil_price_shock`（油↔運 1.25）、`AI_capex_surge`（AI↔電 1.20）、`US_rates_up`（金↔消 0.80）、`JPY_carry_unwind`（全產業 0.85）、`geopolitical_risk_spike`（油↔金 1.30、科技 0.85）
-- **無配置時降級**：`ActiveThemes()` 在 `narrativeEngine` 為 nil 時自動回退至空列表，不影響計算。
-- **測試涵蓋**：`seasonal_bridge_test.go` 包含 20 個 `TestCorrelationMultiplier` 測試案例，涵蓋所有主題的成對匹配與對稱性驗證。
 
 ---
 

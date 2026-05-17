@@ -3,8 +3,6 @@ package main
 import (
 	"net/http"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -41,7 +39,6 @@ func TestLiveModeBrokerGuardrails(t *testing.T) {
 
 func TestLiveModeDashboardAPIWiring(t *testing.T) {
 	ledgerDir := t.TempDir()
-	var mu sync.Mutex
 	dashboardAPICalled := false
 	var capturedLedgerDir string
 	var capturedCollector *monitoring.MetricsCollector
@@ -56,11 +53,9 @@ func TestLiveModeDashboardAPIWiring(t *testing.T) {
 			}
 		},
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
-			mu.Lock()
 			dashboardAPICalled = true
 			capturedLedgerDir = dir
 			capturedCollector = collector
-			mu.Unlock()
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -75,28 +70,20 @@ func TestLiveModeDashboardAPIWiring(t *testing.T) {
 
 	select {
 	case <-time.After(500 * time.Millisecond):
-		mu.Lock()
-		wasCalled := dashboardAPICalled
-		dir := capturedLedgerDir
-		coll := capturedCollector
-		mu.Unlock()
-		if !wasCalled {
+		if !dashboardAPICalled {
 			t.Fatalf("live mode should create dashboard API")
 		}
-		if dir != ledgerDir {
-			t.Fatalf("ledger dir = %q, want %q", dir, ledgerDir)
+		if capturedLedgerDir != ledgerDir {
+			t.Fatalf("ledger dir = %q, want %q", capturedLedgerDir, ledgerDir)
 		}
-		if coll == nil {
+		if capturedCollector == nil {
 			t.Fatalf("metrics collector should be passed to dashboard API")
 		}
 	case err := <-done:
-		mu.Lock()
-		wasCalled := dashboardAPICalled
-		mu.Unlock()
 		if err == nil {
 			t.Fatalf("live mode returned nil unexpectedly (should block)")
 		}
-		if !wasCalled && !strings.Contains(err.Error(), "live orchestrator") {
+		if !dashboardAPICalled && !strings.Contains(err.Error(), "live orchestrator") {
 			t.Fatalf("live mode should create dashboard API before error: %v", err)
 		}
 	}
@@ -159,7 +146,7 @@ func TestLiveModeValidatesBrokerBeforeStarting(t *testing.T) {
 
 func TestLiveModeAcceptsDryRunBroker(t *testing.T) {
 	ledgerDir := t.TempDir()
-	var dashboardAPICalled atomic.Bool
+	dashboardAPICalled := false
 
 	deps := appDeps{
 		loadConfig: func() config.Config {
@@ -171,7 +158,7 @@ func TestLiveModeAcceptsDryRunBroker(t *testing.T) {
 			}
 		},
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
-			dashboardAPICalled.Store(true)
+			dashboardAPICalled = true
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -186,7 +173,7 @@ func TestLiveModeAcceptsDryRunBroker(t *testing.T) {
 
 	select {
 	case <-time.After(500 * time.Millisecond):
-		if !dashboardAPICalled.Load() {
+		if !dashboardAPICalled {
 			t.Fatalf("live mode with dry-run broker should create dashboard API")
 		}
 	case err := <-done:
@@ -239,7 +226,7 @@ func TestLiveModePropagatesBrokerConfig(t *testing.T) {
 
 func TestLiveModeDoesNotStartAPIServerViaDeps(t *testing.T) {
 	ledgerDir := t.TempDir()
-	var listenAndServeCalled atomic.Bool
+	listenAndServeCalled := false
 
 	deps := appDeps{
 		loadConfig: func() config.Config {
@@ -254,7 +241,7 @@ func TestLiveModeDoesNotStartAPIServerViaDeps(t *testing.T) {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
-			listenAndServeCalled.Store(true)
+			listenAndServeCalled = true
 			return nil
 		},
 	}
@@ -266,7 +253,7 @@ func TestLiveModeDoesNotStartAPIServerViaDeps(t *testing.T) {
 
 	select {
 	case <-time.After(500 * time.Millisecond):
-		if listenAndServeCalled.Load() {
+		if listenAndServeCalled {
 			t.Fatalf("live mode should not call deps.listenAndServe")
 		}
 	case <-done:
@@ -275,7 +262,7 @@ func TestLiveModeDoesNotStartAPIServerViaDeps(t *testing.T) {
 
 func TestLiveModeWithSwaggerEnabled(t *testing.T) {
 	ledgerDir := t.TempDir()
-	var dashboardAPICalled atomic.Bool
+	dashboardAPICalled := false
 
 	deps := appDeps{
 		loadConfig: func() config.Config {
@@ -287,7 +274,7 @@ func TestLiveModeWithSwaggerEnabled(t *testing.T) {
 			}
 		},
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
-			dashboardAPICalled.Store(true)
+			dashboardAPICalled = true
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -302,7 +289,7 @@ func TestLiveModeWithSwaggerEnabled(t *testing.T) {
 
 	select {
 	case <-time.After(500 * time.Millisecond):
-		if !dashboardAPICalled.Load() {
+		if !dashboardAPICalled {
 			t.Fatalf("live mode with swagger should still create dashboard API")
 		}
 	case err := <-done:

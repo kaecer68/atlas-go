@@ -10,9 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/time/rate"
-
-	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
@@ -22,15 +19,13 @@ type TaiwanRSSGeopoliticalProvider struct {
 	client   *http.Client
 	feeds    []string
 	keywords []string
-	limiter  *rate.Limiter
 }
 
 // NewTaiwanRSSGeopoliticalProvider creates a Taiwan geopolitical risk monitor.
 // Uses CNA (Central News Agency) and Liberty Times RSS feeds with cross-strait keywords.
 func NewTaiwanRSSGeopoliticalProvider() *TaiwanRSSGeopoliticalProvider {
 	return &TaiwanRSSGeopoliticalProvider{
-		client:  httpclient.NewFactory().NewClient(15 * time.Second),
-		limiter: rate.NewLimiter(rate.Every(10*time.Second), 1),
+		client: &http.Client{Timeout: 15 * time.Second},
 		feeds: []string{
 			"https://www.cna.com.tw/cna/rss/rssfa.xml",     // CNA All News
 			"https://news.ltn.com.tw/rss/focus.xml",        // Liberty Times Focus
@@ -115,9 +110,6 @@ func (t *TaiwanRSSGeopoliticalProvider) FetchScore(ctx context.Context) (Geopoli
 }
 
 func (t *TaiwanRSSGeopoliticalProvider) countKeywordsInFeed(ctx context.Context, url string) (int, error) {
-	if err := t.limiter.Wait(ctx); err != nil {
-		return 0, fmt.Errorf("rate limit: %w", err)
-	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return 0, err

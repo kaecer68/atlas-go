@@ -16,7 +16,6 @@ import (
 type ChannelHealthRecord struct {
 	Status             string   `json:"status"`        // ok | warn | error | inactive
 	LastFetchAt        string   `json:"last_fetch_at"` // RFC3339
-	LastDataAt         string   `json:"last_data_at,omitempty"`
 	LastError          string   `json:"last_error,omitempty"`
 	LastSuccessAt      string   `json:"last_success_at,omitempty"`
 	RateLimitRemaining int      `json:"rate_limit_remaining,omitempty"`
@@ -267,13 +266,6 @@ func WithRateLimitRemaining(remaining int) RecordOption {
 // WithLatencyMs sets the latency in milliseconds.
 func WithLatencyMs(ms int64) RecordOption {
 	return func(r *ChannelHealthRecord) { r.LatencyMs = ms }
-}
-
-// WithLastDataAt sets the last data timestamp.
-func WithLastDataAt(t time.Time) RecordOption {
-	return func(r *ChannelHealthRecord) {
-		r.LastDataAt = t.Format(time.RFC3339)
-	}
 }
 
 // WithRecordsFetched sets the number of records fetched.

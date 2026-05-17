@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/csv"
 	"flag"
 	"fmt"
 	"io"
@@ -10,34 +9,28 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/autobacktest"
 	"github.com/kaecer68/atlas-go/internal/bootstrap"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
-	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/live"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
-	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
-	apischeduler "github.com/kaecer68/atlas-go/internal/monitoring/api/scheduler"
 	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
-	"github.com/kaecer68/atlas-go/internal/storage"
 )
 
 type routeRegistrar interface {
@@ -198,8 +191,6 @@ func run(args []string, deps appDeps) error {
 	repo := rt.Repository
 	taskManager := rt.TaskManager
 
-	var janusEngine *janus.Engine
-
 	if *apiMode {
 		mux := http.NewServeMux()
 		log.Printf("[Auth] API key authentication %s", map[bool]string{true: "ENABLED", false: "DISABLED (no ATLAS_API_KEY set)"}[os.Getenv("ATLAS_API_KEY") != ""])
@@ -216,9 +207,9 @@ func run(args []string, deps appDeps) error {
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 			d.SetPool(pool)
 			d.SetHealthManager(portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore).WithParameters(runtimeParams))
-			janusEngine = janus.NewEngine()
-			janusEngine.EnsureAllRegimes()
-			janusEngine.Update()
+		janusEngine := janus.NewEngine()
+		janusEngine.EnsureAllRegimes()
+		janusEngine.Update()
 			d.SetJanusEngine(janusEngine)
 			log.Printf("[JANUS] engine injected into dashboard API")
 		}
@@ -234,27 +225,7 @@ func run(args []string, deps appDeps) error {
 			d.SetEventBus(eventBus)
 			d.SetContext(context.Background())
 			log.Printf("[EventBus] injected into dashboard API for SSE streaming")
-			eventBus.Subscribe(eventbus.EventNarrative, func(ctx context.Context, event eventbus.BusEvent) error {
-				apievents.BufferNarrativeEvent(event)
-				return nil
-			})
-			// Initial macro ingestion on startup to populate snapshot and publish events.
-			ingestCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			_, _, err := d.GetMacroIngestor().Ingest(ingestCtx)
-			cancel()
-			if err != nil {
-				logging.Warn("main", "initial_macro_ingest_failed", "err", err)
-			} else {
-				logging.Info("main", "initial_macro_ingest_ok")
-			}
 		}
-
-		lifecycleMgr := storage.NewLifecycleManager(filepath.Join(cfg.WorkDir, "data/state"))
-		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-			d.SetStorageReporter(lifecycleMgr)
-			log.Printf("[Storage] reporter injected into dashboard API")
-		}
-
 		dashboard.RegisterRoutes(mux)
 
 		if alertStore != nil {
@@ -270,28 +241,7 @@ func run(args []string, deps appDeps) error {
 			}
 		}
 
-		adminHandler := func(h http.HandlerFunc) http.HandlerFunc {
-			return func(w http.ResponseWriter, r *http.Request) {
-				apiKey := os.Getenv("ATLAS_API_KEY")
-				if apiKey != "" {
-					provided := r.Header.Get("X-API-Key")
-					if provided == "" {
-						auth := r.Header.Get("Authorization")
-						if strings.HasPrefix(auth, "Bearer ") {
-							provided = strings.TrimPrefix(auth, "Bearer ")
-						}
-					}
-					if provided != apiKey {
-						w.Header().Set("Content-Type", "application/json")
-						w.WriteHeader(http.StatusUnauthorized)
-						fmt.Fprintf(w, `{"error":"unauthorized"}`+"\n")
-						return
-					}
-				}
-				h(w, r)
-			}
-		}
-		mux.HandleFunc("/admin/reload-config", adminHandler(func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/admin/reload-config", func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
@@ -303,23 +253,7 @@ func run(args []string, deps appDeps) error {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"status":"ok","version":"%s"}`+"\n", cfg.Version)
-		}))
-		mux.HandleFunc("/api/admin/calibrate-thresholds", adminHandler(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			revenuePath := filepath.Join(cfg.WorkDir, "data", "replay", "month_revenue.jsonl")
-			configPath := filepath.Join(cfg.WorkDir, "configs", "parameters.json")
-			if err := industry.RecalibrateThresholds(revenuePath, configPath); err != nil {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusInternalServerError)
-				fmt.Fprintf(w, `{"error":"%s"}`+"\n", err.Error())
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprintf(w, `{"status":"ok","message":"thresholds recalibrated"}`+"\n")
-		}))
+		})
 		mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
 		monitor := monitoring.NewMonitor()
 		if alertStore != nil {
@@ -328,26 +262,6 @@ func run(args []string, deps appDeps) error {
 		sysMetrics := monitoring.NewSystemMetrics(collector, monitor)
 		sysCtx, sysCancel := context.WithCancel(context.Background())
 		go sysMetrics.Start(sysCtx)
-
-		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-			go func() {
-				ticker := time.NewTicker(5 * time.Minute)
-				defer ticker.Stop()
-				for {
-					select {
-					case <-sysCtx.Done():
-						return
-					case <-ticker.C:
-						ingestCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-						_, _, err := d.GetMacroIngestor().Ingest(ingestCtx)
-						cancel()
-						if err != nil {
-							logging.Warn("main", "macro_ingest_failed", "err", err)
-						}
-					}
-				}
-			}()
-		}
 
 		// Periodic metrics snapshot save
 		if repo != nil {
@@ -387,272 +301,10 @@ func run(args []string, deps appDeps) error {
 		}))
 		mux.Handle("/static/", http.StripPrefix("/static/", fs))
 		log.Printf("dashboard api listening on %s", *apiAddr)
-
-		// Initialize API Gateway with channel adapters and background task manager.
-		gateway, err := apigateway.NewGateway(cfg.WorkDir, pool)
-		var taskMgr *apigateway.BackgroundTaskManager
-		if err != nil {
-			log.Printf("[Gateway] initialization failed: %v", err)
-		} else if err := apigateway.RegisterChannelAdapters(gateway, cfg.WorkDir, cfg, janusEngine); err != nil {
-			log.Printf("[Gateway] adapter registration failed: %v", err)
-		} else {
-			log.Printf("[Gateway] initialized with %d channels + adapters", len(gateway.ChannelIDs()))
-
-			// BackgroundTaskManager for centralized goroutine lifecycle management.
-			taskMgr = apigateway.NewBackgroundTaskManager(gateway)
-
-			// Wire failure alerts for background tasks.
-			taskMgr.SetFailureHandler(func(name string, consecutiveFailures int, err error) {
-				if consecutiveFailures >= 3 {
-					monitor.Alert(monitoring.AlertLevelError, "background_task",
-						fmt.Sprintf("Task %s failed %d consecutive times: %v", name, consecutiveFailures, err),
-						map[string]any{"task": name, "consecutive_failures": consecutiveFailures})
-				}
-			})
-
-			// Register channel_health_sync task (DB sync, not a data fetcher).
-			if pool != nil {
-				taskMgr.Register(&apigateway.ScheduledTask{
-					Name:     "channel_health_sync",
-					Interval: 5 * time.Minute,
-					Enabled:  true,
-					Task: func(ctx context.Context) error {
-						healthStore := monitoring.NewChannelHealthStoreWithPool(filepath.Join(cfg.WorkDir, "data/state"), pool)
-						return healthStore.SyncAllToDB()
-					},
-				})
-				log.Printf("[Gateway] registered channel_health_sync background task (5m interval)")
-			}
-
-			// Register TSMC Revenue task via Gateway.
-			if cfg.FinMindAPIKey != "" {
-				taskMgr.Register(&apigateway.ScheduledTask{
-					Name:      "tsmc_revenue",
-					ChannelID: "finmind",
-					Interval:  24 * time.Hour,
-					Enabled:   true,
-					Task: func(ctx context.Context) error {
-						provider := marketdata.NewTSMCRevenueProviderWithStorage(
-							cfg.FinMindAPIKey,
-							filepath.Join(cfg.WorkDir, "data/state/tsmc_revenue"),
-						)
-						_, err := provider.FetchSnapshot(ctx)
-						return err
-					},
-				})
-				log.Printf("[Gateway] registered tsmc_revenue background task (24h interval)")
-			}
-
-			// Register auto_backfill via Gateway.
-			taskMgr.Register(&apigateway.ScheduledTask{
-				Name:      "auto_backfill",
-				ChannelID: "twse_replay",
-				Interval:  24 * time.Hour,
-				Enabled:   true,
-				Task: func(ctx context.Context) error {
-					absWorkDir, err := filepath.Abs(cfg.WorkDir)
-					if err != nil {
-						absWorkDir = cfg.WorkDir
-					}
-					latestDate, err := getLatestReplayDate(cfg.ReplayDataPath)
-					if err != nil {
-						return fmt.Errorf("backfill replay read: %w", err)
-					}
-					now := time.Now()
-					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
-						now = now.In(tz)
-					}
-					end := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-					if now.Hour() < 15 || (now.Hour() == 15 && now.Minute() < 30) {
-						end = end.AddDate(0, 0, -1)
-					}
-					start := latestDate.AddDate(0, 0, 1)
-					for start.Weekday() == time.Saturday || start.Weekday() == time.Sunday {
-						start = start.AddDate(0, 0, 1)
-					}
-					for end.Weekday() == time.Saturday || end.Weekday() == time.Sunday {
-						end = end.AddDate(0, 0, -1)
-					}
-					if start.After(end) {
-						return nil
-					}
-					startStr := start.Format("2006-01-02")
-					endStr := end.Format("2006-01-02")
-					log.Printf("[Gateway] backfill gap detected: %s to %s", startStr, endStr)
-					bgCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-					defer cancel()
-					var cmd *exec.Cmd
-					binaryPath := filepath.Join(absWorkDir, "daily-replay-sync")
-					if _, err := os.Stat(binaryPath); err == nil {
-						cmd = exec.CommandContext(bgCtx, binaryPath, "-csv", cfg.ReplayDataPath, "-backfill-start", startStr, "-backfill-end", endStr)
-						cmd.Dir = absWorkDir
-					} else if _, err := exec.LookPath("go"); err == nil {
-						cmd = exec.CommandContext(bgCtx, "go", "run", "./cmd/daily-replay-sync", "-csv", cfg.ReplayDataPath, "-backfill-start", startStr, "-backfill-end", endStr)
-						cmd.Dir = absWorkDir
-					} else {
-						return fmt.Errorf("backfill binary not found")
-					}
-					out, err := cmd.CombinedOutput()
-					if err != nil {
-						return fmt.Errorf("backfill failed: %w, output: %s", err, string(out))
-					}
-					log.Printf("[Gateway] backfill success: %s", string(out))
-					return nil
-				},
-			})
-			log.Printf("[Gateway] registered auto_backfill background task (24h interval)")
-
-			// Register auto_capital_flow via Gateway.
-			taskMgr.Register(&apigateway.ScheduledTask{
-				Name:      "auto_capital_flow",
-				ChannelID: "twse_capital_flow",
-				Interval:  30 * time.Minute,
-				Enabled:   true,
-				Task: func(ctx context.Context) error {
-					now := time.Now()
-					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
-						now = now.In(tz)
-					}
-					if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
-						return nil
-					}
-					hour := now.Hour()
-					if hour < 9 || hour >= 16 {
-						return nil
-					}
-					provider := marketdata.NewTWSECapitalFlowProvider(filepath.Join(cfg.WorkDir, "data/state/capital_flow"))
-					_, err := provider.FetchSnapshot(ctx)
-					return err
-				},
-			})
-			log.Printf("[Gateway] registered auto_capital_flow background task (30m interval)")
-
-			// Register auto_margin via Gateway.
-			taskMgr.Register(&apigateway.ScheduledTask{
-				Name:      "auto_margin",
-				ChannelID: "twse_margin",
-				Interval:  30 * time.Minute,
-				Enabled:   true,
-				Task: func(ctx context.Context) error {
-					now := time.Now()
-					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
-						now = now.In(tz)
-					}
-					if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
-						return nil
-					}
-					hour := now.Hour()
-					if hour < 9 || hour >= 16 {
-						return nil
-					}
-					provider := marketdata.NewTWSEMarginBalanceProvider(filepath.Join(cfg.WorkDir, "data/state/margin"))
-					_, err := provider.FetchSnapshot(ctx)
-					return err
-				},
-			})
-			log.Printf("[Gateway] registered auto_margin background task (30m interval)")
-
-			// Register auto_export via Gateway.
-			taskMgr.Register(&apigateway.ScheduledTask{
-				Name:      "auto_export",
-				ChannelID: "export_statistics",
-				Interval:  12 * time.Hour,
-				Enabled:   true,
-				Task: func(ctx context.Context) error {
-					provider := marketdata.NewExportStatisticsProvider(filepath.Join(cfg.WorkDir, "data/state/export"))
-					_, err := provider.FetchSnapshot(ctx)
-					return err
-				},
-			})
-			log.Printf("[Gateway] registered auto_export background task (12h interval)")
-
-			// Register auto_geopolitical via Gateway.
-			taskMgr.Register(&apigateway.ScheduledTask{
-				Name:      "auto_geopolitical",
-				ChannelID: "geopolitical",
-				Interval:  6 * time.Hour,
-				Enabled:   true,
-				Task: func(ctx context.Context) error {
-					adapter := apigateway.NewGeopoliticalChannelAdapter(cfg.WorkDir)
-					_, err := adapter.Fetch(ctx)
-					return err
-				},
-			})
-			log.Printf("[Gateway] registered auto_geopolitical background task (6h interval)")
-
-			// Register storage_cleanup via LifecycleManager.
-			taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "storage_cleanup",
-				Interval: 24 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					report, err := lifecycleMgr.Run(ctx, false)
-					if err != nil {
-						return fmt.Errorf("storage cleanup: %w", err)
-					}
-					log.Printf("[StorageCleanup] processed %d policies: %d files deleted, %d kept",
-						len(report.Policies), report.TotalDeleted, report.TotalKept)
-					return nil
-				},
-			})
-			log.Printf("[Gateway] registered storage_cleanup background task (24h interval)")
-
-			taskMgr.Start(sysCtx)
-			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
-		}
-
-		if taskMgr != nil {
-			apischeduler.NewHandlers(apischeduler.NewSchedulerService(taskMgr)).RegisterRoutes(mux)
-			log.Printf("[Gateway] scheduler API routes registered")
-		}
-
-		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-			if svc := d.GetIndustryService(); svc != nil {
-				var finmindClient *marketdata.FinMindClient
-				if cfg.FinMindAPIKey != "" {
-					finmindClient = marketdata.NewFinMindClient(cfg.FinMindAPIKey)
-				}
-				cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient)
-				if taskMgr != nil {
-					taskMgr.Register(&apigateway.ScheduledTask{
-						Name:     "auto_cycle_update",
-						Interval: 6 * time.Hour,
-						Enabled:  true,
-						Task: func(ctx context.Context) error {
-							bgCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-							defer cancel()
-							return cycleAggregator.AggregateAllIndustries(bgCtx)
-						},
-					})
-					log.Printf("[Gateway] registered auto_cycle_update background task (6h interval)")
-				}
-			}
-		}
-
-		if taskMgr != nil {
-			revenuePath := filepath.Join(cfg.WorkDir, "data", "replay", "month_revenue.jsonl")
-			configPath := filepath.Join(cfg.WorkDir, "configs", "parameters.json")
-			taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "auto_threshold_calibrate",
-				Interval: 24 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					now := time.Now()
-					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
-						now = now.In(tz)
-					}
-					if now.Day() != 1 || now.Hour() < 3 {
-						return nil
-					}
-					if _, err := os.Stat(revenuePath); os.IsNotExist(err) {
-						return nil
-					}
-					return industry.RecalibrateThresholds(revenuePath, configPath)
-				},
-			})
-			log.Printf("[Gateway] registered auto_threshold_calibrate background task (24h interval, checks 1st of month)")
-		}
-
+		bootstrap.StartChannelHealthSyncLoop(sysCtx, cfg.WorkDir, pool)
+		bootstrap.StartAutoBackfill(sysCtx, cfg.WorkDir, cfg.ReplayDataPath)
+		bootstrap.StartAutoCapitalFlowFetch(sysCtx, cfg.WorkDir)
+		
 		var btRunner *autobacktest.Runner
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok && d.GetEventBus() != nil {
 			btRunner = autobacktest.NewRunnerWithEventBus(cfg, d.GetEventBus())

@@ -116,34 +116,6 @@ header p { margin: 0; color: var(--muted); font-size: var(--text-sm); }
   .diff { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px; }
   .diff pre { margin: 0; max-height: 60vh; }
 
-  /* Industry Detail Modal Tabs */
-  .industry-tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-  .tab-btn { background: transparent; border: none; color: var(--muted); padding: 8px 14px; cursor: pointer; font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s; }
-  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .tab-btn:hover { color: var(--text); }
-  .industry-section { margin-bottom: 16px; }
-  .industry-section h4 { margin: 0 0 8px; font-size: 13px; color: var(--accent); }
-  .cycle-visual { display: flex; align-items: center; gap: 8px; margin: 12px 0; padding: 12px; background: var(--bg); border-radius: 8px; flex-wrap: wrap; }
-  .cycle-phase { padding: 4px 10px; border-radius: 6px; font-size: 12px; background: var(--border); color: var(--muted); }
-  .cycle-phase.active { background: var(--accent); color: var(--bg); }
-  .linkage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  @media (max-width: 600px) { .linkage-grid { grid-template-columns: 1fr; } }
-  .linkage-col h4 { margin: 0 0 6px; font-size: 12px; color: var(--muted); }
-  .linkage-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 12px; margin-bottom: 6px; }
-  .risk-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; }
-  .risk-item .risk-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-  .risk-severity { font-size: 11px; padding: 2px 8px; border-radius: 999px; }
-  .risk-severity.high { background: rgba(217,58,58,.15); color: var(--down); border: 1px solid rgba(217,58,58,.3); }
-  .risk-severity.medium { background: rgba(245,166,35,.15); color: var(--warn); border: 1px solid rgba(245,166,35,.3); }
-  .risk-severity.low { background: rgba(38,161,123,.15); color: var(--up); border: 1px solid rgba(38,161,123,.3); }
-  .seasonal-pattern { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
-  .seasonal-pattern .pattern-name { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
-  .seasonal-pattern .pattern-meta { font-size: 11px; color: var(--muted); }
-  .metric-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
-  .metric-row:last-child { border-bottom: none; }
-  .metric-row .metric-label { color: var(--muted); }
-  .metric-row .metric-value { font-weight: 600; }
-
   .notification-center { position: fixed; right: 14px; top: 14px; width: min(340px, 92vw); z-index: 150; }
   .notification { background: var(--panel-l2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; font-size: var(--text-sm); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4); animation: notifyIn 0.3s ease; }
 @keyframes notifyIn {
@@ -399,13 +371,6 @@ body { display: flex; margin: 0; min-height: 100vh; }
   .label-muted { font-size: 12px; color: var(--muted); }
   .text-sm { font-size: 12px; }
   .help-panel { margin-bottom: var(--space-md); font-size: 13px; color: var(--text); line-height: 1.7; }
-  .hidden { display: none; }
-  .chain-step { padding: 10px 12px; margin: 6px 0; background: #0d1015; border-radius: 8px; border-left: 3px solid var(--accent); }
-  .chain-step-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--bg); font-size: 11px; font-weight: 700; flex-shrink: 0; margin-right: 10px; }
-  .chain-impact { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px; flex-shrink: 0; }
-  .chain-impact.positive { background: rgba(16,185,129,.15); color: var(--up); }
-  .chain-impact.negative { background: rgba(239,68,68,.15); color: var(--down); }
-  .sector-tag { display: inline-block; font-size: 11px; padding: 2px 8px; margin: 2px 3px 2px 0; border-radius: 999px; background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
 
  /* Mobile sidebar toggle */
  #menuToggle {
@@ -1533,7 +1498,6 @@ body { display: flex; margin: 0; min-height: 100vh; }
   <nav role="navigation" aria-label="主要導航">
     <a class="active" data-page="overview" onclick="switchPage('overview')" tabindex="0" title="總覽">📊 總覽</a>
     <a data-page="evolution_panel" onclick="switchPage('evolution_panel')" tabindex="0" title="演化透視">🧬 演化透視</a>
-    <a data-page="synergy" onclick="switchPage('synergy')" tabindex="0" title="人機協同">🤝 人機協同</a>
     <a data-page="narrative" onclick="switchPage('narrative')" tabindex="0" title="宏觀敘事">🌍 宏觀敘事</a>
     <a data-page="industry" onclick="switchPage('industry')" tabindex="0" title="產業生態系">🏭 產業生態系</a>
     <a data-page="pipeline" onclick="switchPage('pipeline')" tabindex="0" title="投資管線">📋 投資管線</a>
@@ -1552,6 +1516,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
     <a data-page="alerts" onclick="switchPage('alerts')" tabindex="0" title="系統警報">🚨 系統警報</a>
     <a data-page="metrics" onclick="switchPage('metrics')" tabindex="0" title="指標監控">📉 指標監控</a>
     <a data-page="parameters" onclick="switchPage('parameters')" tabindex="0" title="參數管理">🎛️ 參數管理</a>
+    <a data-page="synergy" onclick="switchPage('synergy')" tabindex="0" title="人機協同">🤝 人機協同</a>
   </nav>
   <div class="foot">
     <span class="text-muted">v8 · 統一介面</span>
@@ -1593,12 +1558,12 @@ body { display: flex; margin: 0; min-height: 100vh; }
       </div>
       <div class="kpi-group-title">⚠️ 風險信號</div>
       <div class="kpi-grid" id="overviewRisk">
-        <div class="kpi-card clickable" onclick="openKpiHelp('weakest')"><div class="kpi-label">待改進 AI 策略</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card clickable" onclick="openKpiHelp('weakest')"><div class="kpi-label">表現最差 AI</div><div class="kpi-value">-</div></div>
         <div class="kpi-card clickable" onclick="openKpiHelp('crowding')"><div class="kpi-label">擁擠標的</div><div class="kpi-value">-</div></div>
       </div>
       <div class="kpi-group-title">🔧 系統狀態</div>
       <div class="kpi-grid" id="overviewSystem">
-        <div class="kpi-card clickable" onclick="openKpiHelp('data_time')"><div class="kpi-label">資料時間</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card"><div class="kpi-label">資料時間</div><div class="kpi-value">-</div></div>
         <div class="kpi-card"><div class="kpi-label">基線版本</div><div class="kpi-value">-</div></div>
         <div class="kpi-card clickable" onclick="openKpiHelp('experiment')"><div class="kpi-label">實驗狀態</div><div class="kpi-value">-</div></div>
       </div>
@@ -1885,71 +1850,13 @@ body { display: flex; margin: 0; min-height: 100vh; }
       </details>
       <div class="panel wide">
         <div class="flex-between">
-          <h2 class="m-0">資料通道管理中心</h2>
+          <h2 class="m-0">資料通道監控</h2>
           <div class="control-group m-0">
             <button class="primary" id="btnIngestChannels" onclick="triggerChannelsIngest()">立即更新 Macro + Geo 資料</button>
           </div>
         </div>
-
-        <!-- 控制面板 -->
-        <div id="dcControlPanel" class="rc-summary mt-md">
-          <div class="rc-summary__left">
-            <button class="primary" onclick="dcEnableAll()">全部啟用</button>
-            <button class="danger" onclick="dcDisableAll()">全部停用</button>
-            <button onclick="loadDataChannels()">刷新狀態</button>
-          </div>
-          <div class="rc-summary__gauge">
-            <div class="rc-summary__bar"><div class="rc-summary__fill" id="dcTotalBar" style="width:100%;background:var(--accent)"></div></div>
-            <span class="rc-summary__score" id="dcTotalScore">- / -</span>
-            <span class="text-muted text-sm" style="margin-left:8px">總通道</span>
-          </div>
-          <div class="flex" style="gap:16px;margin-top:8px">
-            <div class="text-sm"><span class="text-up">●</span> 正常 <span id="dcOkCount">-</span></div>
-            <div class="text-sm"><span class="text-warn">●</span> 異常 <span id="dcWarnCount">-</span></div>
-            <div class="text-sm"><span class="text-down">●</span> 限流中 <span id="dcRateLimitCount">-</span></div>
-          </div>
-        </div>
-
         <div id="dataChannels" class="empty loading mt-sm">載入中…</div>
       </div>
-
-      <!-- API Key 管理 -->
-      <details class="help-details mt-md">
-        <summary><strong>🔑 API Key 管理</strong></summary>
-        <div style="padding:10px 0;display:flex;flex-direction:column;gap:10px">
-          <div style="display:flex;align-items:center;gap:10px">
-            <label class="label-muted" style="width:120px">Yahoo Finance:</label>
-            <input type="password" id="dcApiKeyYahoo" class="input-w-md" placeholder="API Key">
-            <button onclick="dcUpdateApiKey('yahoo')">更新</button>
-          </div>
-          <div style="display:flex;align-items:center;gap:10px">
-            <label class="label-muted" style="width:120px">FinMind:</label>
-            <input type="password" id="dcApiKeyFinmind" class="input-w-md" placeholder="API Key">
-            <button onclick="dcUpdateApiKey('finmind')">更新</button>
-          </div>
-          <div style="display:flex;align-items:center;gap:10px">
-            <label class="label-muted" style="width:120px">Fugle:</label>
-            <input type="password" id="dcApiKeyFugle" class="input-w-md" placeholder="API Key">
-            <button onclick="dcUpdateApiKey('fugle')">更新</button>
-          </div>
-           <div style="display:flex;align-items:center;gap:10px">
-            <label class="label-muted" style="width:120px">Fubon (富邦):</label>
-            <input type="password" id="dcApiKeyFubon" class="input-w-md" placeholder="API Key">
-            <button onclick="dcUpdateApiKey('fubon')">更新</button>
-          </div>
-          <div style="display:flex;align-items:center;gap:10px">
-            <label class="label-muted" style="width:120px">TEJ:</label>
-            <input type="password" id="dcApiKeyTej" class="input-w-md" placeholder="API Key">
-            <button onclick="dcUpdateApiKey('tej')">更新</button>
-          </div>
-        </div>
-      </details>
-
-      <!-- 抓取日誌 -->
-      <details class="help-details mt-md">
-        <summary><strong>📋 抓取日誌（最近 10 筆）</strong></summary>
-        <div id="dcFetchLog" class="mt-sm text-muted text-sm">尚無記錄</div>
-      </details>
     </div>
 
     
@@ -1977,18 +1884,9 @@ body { display: flex; margin: 0; min-height: 100vh; }
       </details>
       <div class="two-col-grid">
         <div class="panel"><h2>產業地圖</h2><div id="industryMap" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>週期羅盤 <button class="legend-toggle" onclick="toggleCycleLegend()" title="週期燈號計算說明">?</button></h2><div id="industryCycle" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>週期羅盤</h2><div id="industryCycle" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>供應鏈連動</h2><div id="industryLinkage" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>季節性模式</h2><div id="industrySeasonality" class="empty loading">載入中…</div></div>
-      </div>
-      <div class="panel" style="margin-top:16px"><h2>衝擊模擬</h2>
-        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
-          <select id="shockSource" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text)"><option value="">選擇來源產業</option></select>
-          <input type="number" id="shockMagnitude" placeholder="衝擊幅度 (例: -0.05)" step="0.01" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:160px">
-          <input type="number" id="shockDepth" value="3" min="1" max="5" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:60px" title="傳導深度">
-          <button onclick="window.runShockSimulation()" style="padding:4px 12px;border-radius:4px;border:1px solid var(--up);background:var(--bg);color:var(--up);cursor:pointer">▶ 執行模擬</button>
-        </div>
-        <div id="industryShockSim" class="empty">選擇產業與衝擊幅度進行供應鏈衝擊傳導模擬</div>
       </div>
     </div>
 
@@ -2004,20 +1902,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
       </div>
       <div class="panel wide">
         <h2>實驗收件匣（新候選者）</h2>
-        <div class="inbox-grid" id="synergyInbox">載入中…</div>
-      </div>
-      <div class="panel wide mt-md" style="border-color:var(--warn)">
-        <h2>🔧 產業週期閾值校正</h2>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.6">
-          閾值校正根據歷史營收數據重新計算各產業的擴張/復甦/成熟/衰退門檻。<br>
-          系統<strong>每月自動執行一次</strong>。若需手動校正，可使用以下按鈕或 CLI：<br>
-          <code style="background:var(--panel-l2);padding:2px 6px;border-radius:4px;font-size:12px">go run ./cmd/calibrate-thresholds</code>
-          （需先執行 <code style="background:var(--panel-l2);padding:2px 6px;border-radius:4px;font-size:12px">backfill-month-revenue</code> 累積歷史數據）
-        </div>
-        <div style="display:flex;gap:8px">
-          <button onclick="fetch('/api/admin/calibrate-thresholds',{method:'POST'}).then(r=>r.json()).then(d=>alert(d.status||d.error||'完成')).catch(e=>alert('校正失敗: '+e))" style="background:var(--warn);color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600">🔄 手動校正閾值</button>
-          <button onclick="switchPage('parameters')" style="background:var(--bg);border:1px solid var(--border);padding:8px 16px;border-radius:6px;cursor:pointer">📋 查看參數管理</button>
-        </div>
+        <div class="inbox-grid" id="synergyInbox" class="empty loading">載入中…</div>
       </div>
     </div>
 
@@ -2046,15 +1931,6 @@ body { display: flex; margin: 0; min-height: 100vh; }
           <div class="kpi-value" id="capitalPhase">-</div>
           <div class="kpi-label">當前資金管理階段</div>
         </div>
-        <div class="panel">
-          <h3>存儲清理</h3>
-          <div class="kpi-value" id="storageDeleted">-</div>
-          <div class="kpi-label">最近清理刪除的檔案數</div>
-        </div>
-      </div>
-      <div class="panel wide" id="storageCleanupPanel" style="display:none">
-        <h2>存儲清理詳情</h2>
-        <div id="storageCleanupDetail" class="empty">載入中…</div>
       </div>
       <div class="panel wide">
         <h2>指標趨勢</h2>
@@ -2129,85 +2005,8 @@ body { display: flex; margin: 0; min-height: 100vh; }
   Object.assign(window, { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState, agentNameEsm, regimeLabelEsm, FIELD });
 </script>
 
-<div class="modal-overlay" id="industryModal" role="dialog" aria-modal="true" onclick="if(event.target===this)closeIndustryModal()">
-  <div class="modal" style="width:min(720px,94vw)">
-    <h3 id="industryModalTitle">產業詳細分析</h3>
-    <div class="industry-tabs" id="industryTabs">
-      <button class="tab-btn active" data-tab="cycle" onclick="window.switchIndustryTab('cycle')">週期定位</button>
-      <button class="tab-btn" data-tab="linkage" onclick="window.switchIndustryTab('linkage')">供應鏈</button>
-      <button class="tab-btn" data-tab="seasonality" onclick="window.switchIndustryTab('seasonality')">季節性</button>
-      <button class="tab-btn" data-tab="risk" onclick="window.switchIndustryTab('risk')">風險</button>
-    </div>
-    <div id="industryModalContent"><div class="empty">載入中…</div></div>
-    <div class="control-group" style="margin-top:14px;justify-content:flex-end">
-      <button onclick="closeIndustryModal()">關閉</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="cycleLegendModal" role="dialog" aria-modal="true" onclick="if(event.target===this)closeCycleLegend()">
-  <div class="modal" style="width:min(600px,94vw);max-height:85vh;overflow-y:auto">
-    <h3>📊 週期羅盤 — 燈號計算說明</h3>
-
-    <div style="margin-bottom:14px">
-      <h4 style="margin:12px 0 6px">🟢 燈號顏色</h4>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:13px">
-        <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#10b981;margin-right:6px"></span>復甦 (綠)</div>
-        <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#3b82f6;margin-right:6px"></span>擴張 (藍)</div>
-        <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#f59e0b;margin-right:6px"></span>成熟 (橙)</div>
-        <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#ef4444;margin-right:6px"></span>衰退 (紅)</div>
-      </div>
-    </div>
-
-    <div style="margin-bottom:14px">
-      <h4 style="margin:12px 0 6px">🔍 週期判定</h4>
-      <p style="font-size:13px;color:var(--muted);margin:0 0 6px">
-        用 <b>營收年增率</b> 和 <b>獲利年增率</b> 與產業閾值比較：
-      </p>
-      <table style="font-size:12px;width:100%">
-        <thead><tr><th>判定</th><th>營收閾值</th><th>獲利閾值</th><th>範例</th></tr></thead>
-        <tbody>
-          <tr><td>擴張</td><td>&gt; 20%</td><td>&gt; 20%</td><td>AI供應鏈 rev 45%</td></tr>
-          <tr><td>復甦</td><td>&gt; 5%</td><td>&gt; 5%</td><td>電子零組件 rev 12%</td></tr>
-          <tr><td>成熟</td><td>&gt; -5%</td><td>&gt; -5%</td><td>傳產/消費 rev 3%</td></tr>
-          <tr><td>衰退</td><td>其餘</td><td>其餘</td><td>航運 rev -5%</td></tr>
-        </tbody>
-      </table>
-      <p style="font-size:11px;color:var(--muted);margin:4px 0 0">
-        半導體 / 金融 / 航運 有獨立閾值（高波動產業閾值更高）
-      </p>
-    </div>
-
-    <div style="margin-bottom:14px">
-      <h4 style="margin:12px 0 6px">📈 信心度</h4>
-      <p style="font-size:13px;color:var(--muted);margin:0 0 6px">
-        <b>信心度 = 訊號強度 × 60% + 邊界距離 × 40%</b>
-      </p>
-      <ul style="font-size:12px;color:var(--muted);padding-left:18px;margin:0">
-        <li><b>訊號強度</b>：指標絕對值越大 → 越可靠</li>
-        <li><b>邊界距離</b>：離閾值越遠 → 判斷越確定</li>
-      </ul>
-      <p style="font-size:12px;color:var(--muted);margin:6px 0 0">
-        🎨 燈號顏色深淺 = 信心度。深 = 高信心；淺 = 邊界搖擺。
-      </p>
-    </div>
-
-    <div style="margin-bottom:14px">
-      <h4 style="margin:12px 0 6px">⚠️ 數據來源</h4>
-      <p style="font-size:12px;color:var(--down);margin:0">
-        目前產業週期指標為<b>預設估算值</b>，尚未接入即時市場數據。
-        燈號僅反映預設假設，可能與當前市場事件有落差。
-      </p>
-    </div>
-
-    <div class="control-group" style="margin-top:14px;justify-content:flex-end">
-      <button onclick="closeCycleLegend()">關閉</button>
-    </div>
-  </div>
-</div>
-
 <script type="module">
-  import './js/main.js';
+  import './js/main.js?v=20260510';
 </script>
 
 

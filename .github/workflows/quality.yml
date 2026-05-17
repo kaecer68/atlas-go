@@ -47,7 +47,7 @@ jobs:
   naming:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - uses: actions/checkout@v4
 
     - name: Check naming conventions
       run: bash scripts/ci/check_case_conflicts.sh --strict
@@ -73,10 +73,10 @@ jobs:
   generate:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - uses: actions/checkout@v4
 
     - name: Set up Go
-      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      uses: actions/setup-go@v5
       with:
         go-version-file: go.mod
 
@@ -120,7 +120,7 @@ jobs:
   gitnexus-stats:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - uses: actions/checkout@v4
 
     - name: Verify GitNexus stats in documentation
       run: bash scripts/verify-gitnexus-stats.sh
@@ -129,7 +129,7 @@ jobs:
   markdown-links:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - uses: actions/checkout@v4
 
     - name: Check markdown links
       run: bash scripts/ci/check_markdown_links.sh

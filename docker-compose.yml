@@ -16,7 +16,7 @@ services:
       - ATLAS_LOG_LEVEL=info
       - ATLAS_DATA_DIR=/app/data
       - ATLAS_CONFIG_DIR=/app/configs
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas_secret}@postgres:5432/atlas?sslmode=disable
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -140,11 +140,12 @@ services:
     environment:
       - CRON_SCHEDULE=0 8 * * *
       - CRON_COMMAND=/app/geo-ingest -work-dir /app
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas_secret}@postgres:5432/atlas?sslmode=disable
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
       - ./logs:/app/logs
+      - ./.env:/app/.env:ro
     networks:
       - atlas-network
     depends_on:
@@ -161,11 +162,12 @@ services:
     environment:
       - CRON_SCHEDULE=0 8 * * *
       - CRON_COMMAND=/app/macro-ingest -work-dir /app
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas_secret}@postgres:5432/atlas?sslmode=disable
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
       - ./logs:/app/logs
+      - ./.env:/app/.env:ro
     networks:
       - atlas-network
     depends_on:
@@ -182,11 +184,12 @@ services:
     environment:
       - CRON_SCHEDULE=30 15 * * *
       - CRON_COMMAND=/app/daily-replay-sync -csv /app/data/replay/tw_extended_90days.csv
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas_secret}@postgres:5432/atlas?sslmode=disable
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
       - ./logs:/app/logs
+      - ./.env:/app/.env:ro
     networks:
       - atlas-network
     depends_on:
@@ -203,70 +206,7 @@ services:
     environment:
       - CRON_SCHEDULE=0 9 * * *
       - CRON_COMMAND=/app/scripts/darwinian_adjust.sh --apply
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
-    volumes:
-      - ./data:/app/data
-      - ./reports:/app/reports
-      - ./logs:/app/logs
-    networks:
-      - atlas-network
-    depends_on:
-      - atlas
-      - postgres
-
-  # Monthly cron job for month revenue backfill (1st of each month)
-  cron-backfill-month-revenue:
-    build:
-      context: .
-      dockerfile: Dockerfile.cron
-    container_name: atlas-cron-backfill-month-revenue
-    restart: unless-stopped
-    environment:
-      - CRON_SCHEDULE=0 0 1 * *
-      - CRON_COMMAND=/app/backfill-month-revenue -start $$(date -d '2 months ago' +%Y-%m-01) -end $$(date -d 'last month' +%Y-%m-%d)
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
-    volumes:
-      - ./data:/app/data
-      - ./reports:/app/reports
-      - ./logs:/app/logs
-    networks:
-      - atlas-network
-    depends_on:
-      - atlas
-      - postgres
-
-  # Monthly cron job for financial statements backfill (1st of each month)
-  cron-backfill-financial-statements:
-    build:
-      context: .
-      dockerfile: Dockerfile.cron
-    container_name: atlas-cron-backfill-financial-statements
-    restart: unless-stopped
-    environment:
-      - CRON_SCHEDULE=0 0 1 * *
-      - CRON_COMMAND=/app/backfill-financial-statements -start $$(date -d '2 months ago' +%Y-%m-01) -end $$(date -d 'last month' +%Y-%m-%d)
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
-    volumes:
-      - ./data:/app/data
-      - ./reports:/app/reports
-      - ./logs:/app/logs
-    networks:
-      - atlas-network
-    depends_on:
-      - atlas
-      - postgres
-
-  # Monthly cron job for institutional investors backfill (1st of each month)
-  cron-backfill-institutional-investors:
-    build:
-      context: .
-      dockerfile: Dockerfile.cron
-    container_name: atlas-cron-backfill-institutional-investors
-    restart: unless-stopped
-    environment:
-      - CRON_SCHEDULE=0 0 1 * *
-      - CRON_COMMAND=/app/backfill-institutional-investors -date $$(date -d 'yesterday' +%Y-%m-%d)
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas_secret}@postgres:5432/atlas?sslmode=disable
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -288,7 +228,7 @@ services:
     environment:
       - ATLAS_ENV=production
       - ATLAS_WORKER_TYPE=prism
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas_secret}@postgres:5432/atlas?sslmode=disable
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -308,7 +248,7 @@ services:
     command: ["/app/atlas-go", "swarm", "run"]
     environment:
       - ATLAS_ENV=production
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas_secret}@postgres:5432/atlas?sslmode=disable
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
