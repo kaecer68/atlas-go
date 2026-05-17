@@ -96,6 +96,11 @@ go tool cover -func=coverage.out | tail -n 1
 ```
 Market Data (configs/agents.json, replay/*.jsonl)
          ↓
+Gateway (internal/apigateway/)
+    ├─ 14 ChannelAdapters (Fugle, FinMind, TWSE, Yahoo, TEJ, etc.)
+    ├─ Rate limiting + Circuit breakers + Cache
+    └─ BackgroundTaskManager (scheduled fetch with retry + market-hours guard)
+         ↓
 Orchestrator (internal/orchestrator/)
     ├─ RouteAgents() calls layer executors
     ├─ RegimeExecutor (context layer)

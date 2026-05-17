@@ -191,6 +191,9 @@ func run(args []string, deps appDeps) error {
 	repo := rt.Repository
 	taskManager := rt.TaskManager
 
+	var janusEngine *janus.Engine
+	var taskMgr *apigateway.BackgroundTaskManager
+
 	if *apiMode {
 		mux := http.NewServeMux()
 		log.Printf("[Auth] API key authentication %s", map[bool]string{true: "ENABLED", false: "DISABLED (no ATLAS_API_KEY set)"}[os.Getenv("ATLAS_API_KEY") != ""])
@@ -261,35 +264,7 @@ func run(args []string, deps appDeps) error {
 		}
 		sysMetrics := monitoring.NewSystemMetrics(collector, monitor)
 		sysCtx, sysCancel := context.WithCancel(context.Background())
-		go sysMetrics.Start(sysCtx)
-
-		// Periodic metrics snapshot save
-		if repo != nil {
-			go func() {
-				ticker := time.NewTicker(60 * time.Second)
-				defer ticker.Stop()
-				for {
-					select {
-					case <-sysCtx.Done():
-						return
-					case <-ticker.C:
-						snap := collector.GetMetricsSnapshot()
-						repoSnap := repository.MetricsSnapshot{
-							ScreeningTotal:     snap.ScreeningTotal,
-							ScreeningPassed:    snap.ScreeningPassed,
-							ScreeningRate:      snap.ScreeningRate,
-							AlertsTriggered:    snap.AlertsTriggered,
-							AlertsAcknowledged: snap.AlertsAcknowledged,
-							AlertsByType:       snap.AlertsByType,
-							Timestamp:          snap.Timestamp,
-						}
-						if err := repo.SaveSnapshot(sysCtx, &repoSnap); err != nil {
-							log.Printf("[Metrics] snapshot save failed: %v", err)
-						}
-					}
-				}
-			}()
-		}
+		sysMetrics.Start(sysCtx)
 		registerCommonDashboardRoutes(dashboard, mux, *swaggerMode, true)
 
 		fs := http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static")))
@@ -301,10 +276,297 @@ func run(args []string, deps appDeps) error {
 		}))
 		mux.Handle("/static/", http.StripPrefix("/static/", fs))
 		log.Printf("dashboard api listening on %s", *apiAddr)
-		bootstrap.StartChannelHealthSyncLoop(sysCtx, cfg.WorkDir, pool)
-		bootstrap.StartAutoBackfill(sysCtx, cfg.WorkDir, cfg.ReplayDataPath)
-		bootstrap.StartAutoCapitalFlowFetch(sysCtx, cfg.WorkDir)
-		
+
+		// Initialize API Gateway with channel adapters and background task manager.
+		gateway, err := apigateway.NewGateway(cfg.WorkDir, pool)
+		if err != nil {
+			log.Printf("[Gateway] initialization failed: %v", err)
+		} else if err := apigateway.RegisterChannelAdapters(gateway, cfg.WorkDir, cfg); err != nil {
+			log.Printf("[Gateway] adapter registration failed: %v", err)
+		} else {
+			log.Printf("[Gateway] initialized with %d channels + adapters", len(gateway.ChannelIDs()))
+
+			// BackgroundTaskManager for centralized goroutine lifecycle management.
+			taskMgr = apigateway.NewBackgroundTaskManager(gateway)
+
+			// Register channel_health_sync task (DB sync, not a data fetcher).
+			if pool != nil {
+				taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "channel_health_sync",
+					Interval: 5 * time.Minute,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						healthStore := monitoring.NewChannelHealthStoreWithPool(filepath.Join(cfg.WorkDir, "data/state"), pool)
+						return healthStore.SyncAllToDB()
+					},
+				})
+				log.Printf("[Gateway] registered channel_health_sync background task (5m interval)")
+			}
+
+			// Register TSMC Revenue task via Gateway.
+			if cfg.FinMindAPIKey != "" {
+				taskMgr.Register(&apigateway.ScheduledTask{
+					Name:      "tsmc_revenue",
+					ChannelID: "finmind",
+					Interval:  24 * time.Hour,
+					Enabled:   true,
+					Task: func(ctx context.Context) error {
+						provider := marketdata.NewTSMCRevenueProviderWithStorage(
+							cfg.FinMindAPIKey,
+							filepath.Join(cfg.WorkDir, "data/state/tsmc_revenue"),
+						)
+						_, err := provider.FetchSnapshot(ctx)
+						return err
+					},
+				})
+				log.Printf("[Gateway] registered tsmc_revenue background task (24h interval)")
+			}
+
+			// Register auto_backfill via Gateway.
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "auto_backfill",
+				ChannelID: "twse_replay",
+				Interval:  24 * time.Hour,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					absWorkDir, err := filepath.Abs(cfg.WorkDir)
+					if err != nil {
+						absWorkDir = cfg.WorkDir
+					}
+					latestDate, err := getLatestReplayDate(cfg.ReplayDataPath)
+					if err != nil {
+						return fmt.Errorf("backfill replay read: %w", err)
+					}
+					now := time.Now()
+					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+						now = now.In(tz)
+					}
+					end := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+					if now.Hour() < 15 || (now.Hour() == 15 && now.Minute() < 30) {
+						end = end.AddDate(0, 0, -1)
+					}
+					start := latestDate.AddDate(0, 0, 1)
+					for start.Weekday() == time.Saturday || start.Weekday() == time.Sunday {
+						start = start.AddDate(0, 0, 1)
+					}
+					for end.Weekday() == time.Saturday || end.Weekday() == time.Sunday {
+						end = end.AddDate(0, 0, -1)
+					}
+					if start.After(end) {
+						return nil
+					}
+					startStr := start.Format("2006-01-02")
+					endStr := end.Format("2006-01-02")
+					log.Printf("[Gateway] backfill gap detected: %s to %s", startStr, endStr)
+					bgCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+					defer cancel()
+					var cmd *exec.Cmd
+					binaryPath := filepath.Join(absWorkDir, "daily-replay-sync")
+					if _, err := os.Stat(binaryPath); err == nil {
+						cmd = exec.CommandContext(bgCtx, binaryPath, "-csv", cfg.ReplayDataPath, "-backfill-start", startStr, "-backfill-end", endStr)
+						cmd.Dir = absWorkDir
+					} else if _, err := exec.LookPath("go"); err == nil {
+						cmd = exec.CommandContext(bgCtx, "go", "run", "./cmd/daily-replay-sync", "-csv", cfg.ReplayDataPath, "-backfill-start", startStr, "-backfill-end", endStr)
+						cmd.Dir = absWorkDir
+					} else {
+						return fmt.Errorf("backfill binary not found")
+					}
+					out, err := cmd.CombinedOutput()
+					if err != nil {
+						return fmt.Errorf("backfill failed: %w, output: %s", err, string(out))
+					}
+					log.Printf("[Gateway] backfill success: %s", string(out))
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered auto_backfill background task (24h interval)")
+
+			// Register auto_capital_flow via Gateway.
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "auto_capital_flow",
+				ChannelID: "twse_capital_flow",
+				Interval:  30 * time.Minute,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					now := time.Now()
+					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+						now = now.In(tz)
+					}
+					if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+						return nil
+					}
+					hour := now.Hour()
+					if hour < 9 || hour >= 16 {
+						return nil
+					}
+					provider := marketdata.NewTWSECapitalFlowProvider(filepath.Join(cfg.WorkDir, "data/state/capital_flow"))
+					_, err := provider.FetchSnapshot(ctx)
+					return err
+				},
+			})
+			log.Printf("[Gateway] registered auto_capital_flow background task (30m interval)")
+
+			// Register auto_margin via Gateway.
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "auto_margin",
+				ChannelID: "twse_margin",
+				Interval:  30 * time.Minute,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					now := time.Now()
+					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+						now = now.In(tz)
+					}
+					if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+						return nil
+					}
+					hour := now.Hour()
+					if hour < 9 || hour >= 16 {
+						return nil
+					}
+					provider := marketdata.NewTWSEMarginBalanceProvider(filepath.Join(cfg.WorkDir, "data/state/margin"))
+					_, err := provider.FetchSnapshot(ctx)
+					return err
+				},
+			})
+			log.Printf("[Gateway] registered auto_margin background task (30m interval)")
+
+			// Register auto_export via Gateway.
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "auto_export",
+				ChannelID: "export_statistics",
+				Interval:  12 * time.Hour,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					provider := marketdata.NewExportStatisticsProvider(filepath.Join(cfg.WorkDir, "data/state/export"))
+					_, err := provider.FetchSnapshot(ctx)
+					return err
+				},
+			})
+			log.Printf("[Gateway] registered auto_export background task (12h interval)")
+
+			// Register auto_geopolitical via Gateway.
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "auto_geopolitical",
+				ChannelID: "geopolitical",
+				Interval:  6 * time.Hour,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					adapter := apigateway.NewGeopoliticalChannelAdapter(cfg.WorkDir)
+					_, err := adapter.Fetch(ctx)
+					return err
+				},
+			})
+			log.Printf("[Gateway] registered auto_geopolitical background task (6h interval)")
+
+			// Register storage_cleanup via LifecycleManager.
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "storage_cleanup",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					report, err := lifecycleMgr.Run(ctx, false)
+					if err != nil {
+						return fmt.Errorf("storage cleanup: %w", err)
+					}
+					log.Printf("[StorageCleanup] processed %d policies: %d files deleted, %d kept",
+						len(report.Policies), report.TotalDeleted, report.TotalKept)
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered storage_cleanup background task (24h interval)")
+
+			// Register macro_ingest via BackgroundTaskManager (replaces raw goroutine+ticker).
+			if d, ok := dashboard.(*monitoring.DashboardAPI); ok && d.GetMacroIngestor() != nil {
+				taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "macro_ingest",
+					Interval: 5 * time.Minute,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						ingestCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+						defer cancel()
+						_, _, err := d.GetMacroIngestor().Ingest(ingestCtx)
+						if err != nil {
+							logging.Warn("main", "macro_ingest_failed", "err", err)
+						}
+						return err
+					},
+				})
+				log.Printf("[Gateway] registered macro_ingest background task (5m interval)")
+			}
+
+			// Register metrics_snapshot via BackgroundTaskManager (replaces raw goroutine+ticker).
+			if repo != nil {
+				taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "metrics_snapshot",
+					Interval: 60 * time.Second,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						snap := collector.GetMetricsSnapshot()
+						repoSnap := repository.MetricsSnapshot{
+							ScreeningTotal:     snap.ScreeningTotal,
+							ScreeningPassed:    snap.ScreeningPassed,
+							ScreeningRate:      snap.ScreeningRate,
+							AlertsTriggered:    snap.AlertsTriggered,
+							AlertsAcknowledged: snap.AlertsAcknowledged,
+							AlertsByType:       snap.AlertsByType,
+							Timestamp:          snap.Timestamp,
+						}
+						return repo.SaveSnapshot(ctx, &repoSnap)
+					},
+				})
+				log.Printf("[Gateway] registered metrics_snapshot background task (60s interval)")
+			}
+
+		}
+
+		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+			if svc := d.GetIndustryService(); svc != nil {
+				var finmindClient *marketdata.FinMindClient
+				if cfg.FinMindAPIKey != "" {
+					finmindClient = marketdata.NewFinMindClient(cfg.FinMindAPIKey)
+				}
+				cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient)
+				if taskMgr != nil {
+					taskMgr.Register(&apigateway.ScheduledTask{
+						Name:     "auto_cycle_update",
+						Interval: 6 * time.Hour,
+						Enabled:  true,
+						Task: func(ctx context.Context) error {
+							bgCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+							defer cancel()
+							return cycleAggregator.AggregateAllIndustries(bgCtx)
+						},
+					})
+					log.Printf("[Gateway] registered auto_cycle_update background task (6h interval)")
+				}
+			}
+		}
+
+		if taskMgr != nil {
+			revenuePath := filepath.Join(cfg.WorkDir, "data", "replay", "month_revenue.jsonl")
+			configPath := filepath.Join(cfg.WorkDir, "configs", "parameters.json")
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "auto_threshold_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					now := time.Now()
+					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+						now = now.In(tz)
+					}
+					if now.Day() != 1 || now.Hour() < 3 {
+						return nil
+					}
+					if _, err := os.Stat(revenuePath); os.IsNotExist(err) {
+						return nil
+					}
+					return industry.RecalibrateThresholds(revenuePath, configPath)
+				},
+			})
+			log.Printf("[Gateway] registered auto_threshold_calibrate background task (24h interval, checks 1st of month)")
+		}
+
 		var btRunner *autobacktest.Runner
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok && d.GetEventBus() != nil {
 			btRunner = autobacktest.NewRunnerWithEventBus(cfg, d.GetEventBus())
@@ -314,6 +576,31 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[AutoBacktest] running without EventBus (no SSE events)")
 		}
 		autobacktest.StartDailyLoop(sysCtx, btRunner)
+
+		// Register autobacktest heartbeat with BTM for monitoring and on-demand execution.
+		if taskMgr != nil {
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:            "autobacktest_daily",
+				Interval:        24 * time.Hour,
+				Enabled:         false, // StartDailyLoop handles daily scheduling; BTM is for monitoring/on-demand
+				MarketHoursOnly: true,
+				RetryPolicy: &apigateway.RetryPolicy{
+					MaxAttempts:  2,
+					InitialDelay: 1 * time.Minute,
+					MaxDelay:     5 * time.Minute,
+					Multiplier:   2.0,
+				},
+				Task: func(ctx context.Context) error {
+					return btRunner.RunOnce(ctx)
+				},
+			})
+			log.Printf("[Gateway] registered autobacktest_daily background task (24h interval, market-hours guard)")
+		}
+
+		if taskMgr != nil {
+			taskMgr.Start(sysCtx)
+			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
+		}
 
 		authWrappedMux := apishared.AuthMiddleware(mux)
 		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -360,12 +647,12 @@ func run(args []string, deps appDeps) error {
 	}
 
 	if *liveMode {
-		return runLiveTrading(cfg, deps, collector, repo)
+		return runLiveTrading(cfg, deps, collector, repo, taskMgr)
 	}
-	return runSimulation(cfg, collector, repo)
+	return runSimulation(cfg, collector, repo, taskMgr)
 }
 
-func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
+func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, taskMgr *apigateway.BackgroundTaskManager) error {
 	system, err := orchestrator.NewProductionSystem(cfg)
 	if err != nil {
 		return fmt.Errorf("create system: %w", err)
@@ -387,6 +674,27 @@ func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, re
 		return fmt.Errorf("create approval workflow: %w", err)
 	}
 	system.WithCapitalManagement(controller, allocator, workflow)
+
+	if taskMgr != nil {
+		if pm := system.GetPRISMManager(); pm != nil {
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "prism_rebalance",
+				Interval: 1 * time.Hour,
+				Enabled:  true,
+				Task:     pm.RunOnce,
+			})
+			log.Printf("[BTM] registered prism_rebalance background task (1h interval)")
+		}
+		if sm := system.GetSpawningManager(); sm != nil {
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "spawning_cycle",
+				Interval: 1 * time.Hour,
+				Enabled:  true,
+				Task:     sm.RunOnce,
+			})
+			log.Printf("[BTM] registered spawning_cycle background task (1h interval)")
+		}
+	}
 
 	result, err := system.RunDailySimulation(time.Now())
 	if err != nil {
@@ -465,7 +773,7 @@ func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, re
 	return nil
 }
 
-func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
+func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, taskMgr *apigateway.BackgroundTaskManager) error {
 	system, err := orchestrator.NewProductionSystem(cfg)
 	if err != nil {
 		return fmt.Errorf("create system: %w", err)
@@ -476,6 +784,27 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	if repo != nil {
 		system.SetRepository(repo)
 		log.Printf("[Repository] injected into live trading system")
+	}
+
+	if taskMgr != nil {
+		if pm := system.GetPRISMManager(); pm != nil {
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "prism_rebalance",
+				Interval: 1 * time.Hour,
+				Enabled:  true,
+				Task:     pm.RunOnce,
+			})
+			log.Printf("[BTM] registered prism_rebalance background task (1h interval)")
+		}
+		if sm := system.GetSpawningManager(); sm != nil {
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "spawning_cycle",
+				Interval: 1 * time.Hour,
+				Enabled:  true,
+				Task:     sm.RunOnce,
+			})
+			log.Printf("[BTM] registered spawning_cycle background task (1h interval)")
+		}
 	}
 
 	stateStore := livestore.NewStateStore("data/state/live")

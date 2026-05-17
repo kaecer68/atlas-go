@@ -95,11 +95,24 @@ func updateEnvFile(envPath, key, value string) error {
 }
 
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
-	provider := marketdata.NewCompositeMacroProvider(
+	loadChannelStates(workDir)
+
+	// Macro data providers — all registered via Gateway ChannelAdapters
+	// (see internal/apigateway/channel_adapters.go RegisterChannelAdapters).
+	providers := []marketdata.MacroDataProvider{
 		marketdata.NewYahooFinanceMacroProvider(),
+		marketdata.NewFrankfurterFXProvider(),
+		marketdata.NewSOXIndexProvider(),
 		marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")),
+		marketdata.NewTWSEMarginBalanceProvider(filepath.Join(workDir, "data/state/margin")),
 		marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export")),
-	)
+	}
+	providers = append(providers, marketdata.NewSectorDataProvider(filepath.Join(workDir, "data/state/sector_data")))
+	cfg := config.Load()
+	if cfg.FinMindAPIKey != "" {
+		providers = append(providers, marketdata.NewTSMCRevenueProviderWithStorage(cfg.FinMindAPIKey, filepath.Join(workDir, "data/state/tsmc_revenue")))
+	}
+	provider := marketdata.NewCompositeMacroProvider(providers...)
 	geoProvider := narrative.NewCompositeGeopoliticalProvider(
 		narrative.NewRSSGeopoliticalProvider(),
 		narrative.NewGDELTGeopoliticalProvider(),
@@ -110,6 +123,15 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	if metricsCollector == nil {
 		metricsCollector = NewMetricsCollector()
 	}
+	lifecycle := narrative.NewEventLifecycleManager()
+	ingestor := narrative.NewMacroIngestor(provider, filepath.Join(workDir, "data/state/macro"))
+	ingestor.SetLifecycleManager(lifecycle)
+
+	seasonal := industry.NewSeasonalEngine()
+	cycleTracker := industry.NewCycleTracker()
+	linkageAnalyzer := industry.NewLinkageAnalyzer()
+	cycleTracker.SetExternalValidators(seasonal, linkageAnalyzer)
+
 	return &DashboardAPI{
 		workDir:            workDir,
 		ledgerDir:          ledgerDir,
@@ -122,7 +144,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		taiwanGeoProvider:  taiwanGeoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider),
 		reportGenerator:    narrative.NewReportGenerator(),
-		industryService:    service.NewIndustryService(industry.DefaultClassification(), industry.NewSeasonalEngine(), industry.NewCycleTracker(), industry.NewLinkageAnalyzer(), industry.NewRiskMonitor()),
+		industryService:    service.NewIndustryService(industry.DefaultClassification(), seasonal, cycleTracker, linkageAnalyzer, industry.NewRiskMonitor()),
 		metricsCollector:   metricsCollector,
 		metricsHistory:     NewMetricsHistory(1000),
 		healthManager:      portfolio.NewAgentHealthManager(),
