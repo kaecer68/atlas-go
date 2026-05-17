@@ -41,16 +41,17 @@ const (
 
 // CyclePosition holds the complete cycle positioning for an industry.
 type CyclePosition struct {
-	IndustryID          string         `json:"industry_id"`
-	BusinessCycle       CyclePhase     `json:"business_cycle"`
-	InventoryCycle      InventoryCycle `json:"inventory_cycle"`
-	CapexCycle          CapexCycle     `json:"capex_cycle"`
-	Confidence          float64        `json:"confidence"` // 0.0 to 1.0
-	LeadingIndicators   []Indicator    `json:"leading_indicators"`
-	LaggingIndicators   []Indicator    `json:"lagging_indicators"`
-	CycleDurationDays   int            `json:"cycle_duration_days"` // Days in current phase
-	ExpectedPhaseChange *time.Time     `json:"expected_phase_change,omitempty"`
-	UpdatedAt           time.Time      `json:"updated_at"`
+	IndustryID            string         `json:"industry_id"`
+	BusinessCycle         CyclePhase     `json:"business_cycle"`
+	InventoryCycle        InventoryCycle `json:"inventory_cycle"`
+	CapexCycle            CapexCycle     `json:"capex_cycle"`
+	Confidence            float64        `json:"confidence"` // 0.0 to 1.0
+	ContinuousPhaseScore  float64        `json:"continuous_phase_score"` // -1.0 to 1.0, probability-weighted
+	LeadingIndicators     []Indicator    `json:"leading_indicators"`
+	LaggingIndicators     []Indicator    `json:"lagging_indicators"`
+	CycleDurationDays     int            `json:"cycle_duration_days"` // Days in current phase
+	ExpectedPhaseChange   *time.Time     `json:"expected_phase_change,omitempty"`
+	UpdatedAt             time.Time      `json:"updated_at"`
 }
 
 // Indicator represents a single economic indicator.
@@ -274,6 +275,9 @@ func (ct *CycleTracker) detectCyclePosition(industryID string, metrics IndustryM
 	position.CapexCycle = ct.detectCapexCycle(metrics)
 
 	position.Confidence = ct.calculateConfidence(industryID, metrics)
+
+	// Calculate continuous phase score (probability-weighted blend)
+	position.ContinuousPhaseScore = ct.GetContinuousPhaseScore(industryID)
 
 	// Set leading and lagging indicators
 	position.LeadingIndicators = ct.getLeadingIndicators(industryID, metrics)
