@@ -329,53 +329,6 @@ func run(args []string, deps appDeps) error {
 		sysCtx, sysCancel := context.WithCancel(context.Background())
 		go sysMetrics.Start(sysCtx)
 
-		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-			go func() {
-				ticker := time.NewTicker(5 * time.Minute)
-				defer ticker.Stop()
-				for {
-					select {
-					case <-sysCtx.Done():
-						return
-					case <-ticker.C:
-						ingestCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-						_, _, err := d.GetMacroIngestor().Ingest(ingestCtx)
-						cancel()
-						if err != nil {
-							logging.Warn("main", "macro_ingest_failed", "err", err)
-						}
-					}
-				}
-			}()
-		}
-
-		// Periodic metrics snapshot save
-		if repo != nil {
-			go func() {
-				ticker := time.NewTicker(60 * time.Second)
-				defer ticker.Stop()
-				for {
-					select {
-					case <-sysCtx.Done():
-						return
-					case <-ticker.C:
-						snap := collector.GetMetricsSnapshot()
-						repoSnap := repository.MetricsSnapshot{
-							ScreeningTotal:     snap.ScreeningTotal,
-							ScreeningPassed:    snap.ScreeningPassed,
-							ScreeningRate:      snap.ScreeningRate,
-							AlertsTriggered:    snap.AlertsTriggered,
-							AlertsAcknowledged: snap.AlertsAcknowledged,
-							AlertsByType:       snap.AlertsByType,
-							Timestamp:          snap.Timestamp,
-						}
-						if err := repo.SaveSnapshot(sysCtx, &repoSnap); err != nil {
-							log.Printf("[Metrics] snapshot save failed: %v", err)
-						}
-					}
-				}
-			}()
-		}
 		registerCommonDashboardRoutes(dashboard, mux, *swaggerMode, true)
 
 		fs := http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static")))
@@ -597,23 +550,13 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered storage_cleanup background task (24h interval)")
 
-			taskMgr.Start(sysCtx)
-			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
-		}
-
-		if taskMgr != nil {
-			apischeduler.NewHandlers(apischeduler.NewSchedulerService(taskMgr)).RegisterRoutes(mux)
-			log.Printf("[Gateway] scheduler API routes registered")
-		}
-
-		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-			if svc := d.GetIndustryService(); svc != nil {
-				var finmindClient *marketdata.FinMindClient
-				if cfg.FinMindAPIKey != "" {
-					finmindClient = marketdata.NewFinMindClient(cfg.FinMindAPIKey)
-				}
-				cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient)
-				if taskMgr != nil {
+			if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+				if svc := d.GetIndustryService(); svc != nil {
+					var finmindClient *marketdata.FinMindClient
+					if cfg.FinMindAPIKey != "" {
+						finmindClient = marketdata.NewFinMindClient(cfg.FinMindAPIKey)
+					}
+					cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient)
 					taskMgr.Register(&apigateway.ScheduledTask{
 						Name:     "auto_cycle_update",
 						Interval: 6 * time.Hour,
@@ -627,30 +570,78 @@ func run(args []string, deps appDeps) error {
 					log.Printf("[Gateway] registered auto_cycle_update background task (6h interval)")
 				}
 			}
+
+			{
+				revenuePath := filepath.Join(cfg.WorkDir, "data", "replay", "month_revenue.jsonl")
+				configPath := filepath.Join(cfg.WorkDir, "configs", "parameters.json")
+				taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "auto_threshold_calibrate",
+					Interval: 24 * time.Hour,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						now := time.Now()
+						if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+							now = now.In(tz)
+						}
+						if now.Day() != 1 || now.Hour() < 3 {
+							return nil
+						}
+						if _, err := os.Stat(revenuePath); os.IsNotExist(err) {
+							return nil
+						}
+						return industry.RecalibrateThresholds(revenuePath, configPath)
+					},
+				})
+				log.Printf("[Gateway] registered auto_threshold_calibrate background task (24h interval, checks 1st of month)")
+			}
+
+			if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+				taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "macro_ingest",
+					Interval: 5 * time.Minute,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						ingestCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+						defer cancel()
+						_, _, err := d.GetMacroIngestor().Ingest(ingestCtx)
+						if err != nil {
+							logging.Warn("main", "macro_ingest_failed", "err", err)
+						}
+						return nil
+					},
+				})
+				log.Printf("[Gateway] registered macro_ingest background task (5m interval)")
+			}
+
+			if repo != nil {
+				taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "metrics_snapshot",
+					Interval: 60 * time.Second,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						snap := collector.GetMetricsSnapshot()
+						repoSnap := repository.MetricsSnapshot{
+							ScreeningTotal:     snap.ScreeningTotal,
+							ScreeningPassed:    snap.ScreeningPassed,
+							ScreeningRate:      snap.ScreeningRate,
+							AlertsTriggered:    snap.AlertsTriggered,
+							AlertsAcknowledged: snap.AlertsAcknowledged,
+							AlertsByType:       snap.AlertsByType,
+							Timestamp:          snap.Timestamp,
+						}
+						return repo.SaveSnapshot(ctx, &repoSnap)
+					},
+				})
+				log.Printf("[Gateway] registered metrics_snapshot background task (60s interval)")
+			}
+
+			taskMgr.Start(sysCtx)
+			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
 		}
 
 		if taskMgr != nil {
-			revenuePath := filepath.Join(cfg.WorkDir, "data", "replay", "month_revenue.jsonl")
-			configPath := filepath.Join(cfg.WorkDir, "configs", "parameters.json")
-			taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "auto_threshold_calibrate",
-				Interval: 24 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					now := time.Now()
-					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
-						now = now.In(tz)
-					}
-					if now.Day() != 1 || now.Hour() < 3 {
-						return nil
-					}
-					if _, err := os.Stat(revenuePath); os.IsNotExist(err) {
-						return nil
-					}
-					return industry.RecalibrateThresholds(revenuePath, configPath)
-				},
-			})
-			log.Printf("[Gateway] registered auto_threshold_calibrate background task (24h interval, checks 1st of month)")
+			apischeduler.NewHandlers(apischeduler.NewSchedulerService(taskMgr)).RegisterRoutes(mux)
+			log.Printf("[Gateway] scheduler API routes registered")
 		}
 
 		var btRunner *autobacktest.Runner
