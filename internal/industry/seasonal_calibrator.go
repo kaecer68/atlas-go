@@ -240,7 +240,7 @@ func LoadCalibrationEvidence(path string) map[string]any {
 		return nil
 	}
 	ts, hasTs := sp["calibration_timestamp"]
-	src := sp["calibration_data_source"]
+	src, _ := sp["calibration_data_source"]
 	if !hasTs {
 		return nil
 	}

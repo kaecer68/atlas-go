@@ -120,6 +120,27 @@ func setChannelEnabled(workDir, channelID string, enabled bool) error {
 	return saveChannelStates(workDir)
 }
 
+func updateEnvFile(envPath, key, value string) error {
+	data, err := os.ReadFile(envPath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	lines := strings.Split(string(data), "\n")
+	found := false
+	prefix := key + "="
+	for i, line := range lines {
+		if strings.HasPrefix(line, prefix) {
+			lines[i] = prefix + value
+			found = true
+			break
+		}
+	}
+	if !found {
+		lines = append(lines, prefix+value)
+	}
+	return os.WriteFile(envPath, []byte(strings.Join(lines, "\n")), 0644)
+}
+
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
 	loadChannelStates(workDir)
 
@@ -559,22 +580,13 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			shared.WriteJSONError(w, http.StatusBadRequest, "provider and api_key required")
 			return
 		}
-		allowedProviders := map[string]bool{
-			"finmind": true,
-			"fugle":   true,
-			"tej":     true,
-			"fubon":   true,
-		}
-		if !allowedProviders[strings.ToLower(req.Provider)] {
-			shared.WriteJSONError(w, http.StatusBadRequest, "invalid provider")
-			return
-		}
-		if len(req.APIKey) < 8 || len(req.APIKey) > 512 {
-			shared.WriteJSONError(w, http.StatusBadRequest, "api_key length invalid")
-			return
-		}
+		// Write to .env file (append or update).
+		envPath := filepath.Join(a.workDir, ".env")
 		key := strings.ToUpper(req.Provider) + "_API_KEY"
-		os.Setenv(key, req.APIKey)
+		if err := updateEnvFile(envPath, key, req.APIKey); err != nil {
+			shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("update env: %v", err))
+			return
+		}
 		shared.WriteJSON(w, http.StatusOK, map[string]any{
 			"provider": req.Provider,
 			"status":   "ok",

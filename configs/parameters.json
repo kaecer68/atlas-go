@@ -3645,67 +3645,6 @@
         "last_validated": "2026-05-15T11:48:43.000000"
       }
     },
-    "cycle_weight_multipliers": {
-      "value": {
-        "expansion_multiplier": 1.2,
-        "recovery_multiplier": 1.1,
-        "mature_multiplier": 1.0,
-        "recession_multiplier": 0.7
-      },
-      "rationale": "Cycle phase weight multipliers for industry map: expansion +20%, recovery +10%, mature neutral, recession -30%",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "Industry map weight integration",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-16T00:00:00.000000"
-      }
-    },
-    "linkage_weight_impact": {
-      "value": 0.2,
-      "rationale": "Linkage systemic importance deviation scaling: ±20% max impact on weight",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "Industry map weight integration",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-16T00:00:00.000000"
-      }
-    },
-    "weight_floor": {
-      "value": 0.03,
-      "rationale": "Minimum 3% weight per industry after normalization to prevent elimination",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "Industry map weight integration",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-16T00:00:00.000000"
-      }
-    },
-    "max_daily_weight_change": {
-      "value": 0.05,
-      "rationale": "Maximum 5% daily weight change to prevent excessive volatility",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "Industry map weight integration",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-16T00:00:00.000000"
-      }
-    },
     "linkage_params": {
       "value": {
         "downstream_decay_factor": 0.8,

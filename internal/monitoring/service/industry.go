@@ -386,36 +386,20 @@ func (s *IndustryService) GetRiskInfo(symbol, industryID string) *RiskInfo {
 }
 
 type IndustryOverview struct {
-	ID                 string                         `json:"id"`
-	Name               string                         `json:"name"`
-	BaseWeight         float64                        `json:"base_weight"`
-	AdjustedWeight     float64                        `json:"adjusted_weight"`
-	CyclePhase         string                         `json:"cycle_phase"`
-	InventoryCycle     string                         `json:"inventory_cycle"`
-	CapexCycle         string                         `json:"capex_cycle"`
-	CycleConfidence    float64                        `json:"cycle_confidence"`
-	IsFavorable        bool                           `json:"is_favorable"`
-	SeasonalPatterns   []string                       `json:"seasonal_patterns"`
-	LinkageScore       *industry.IndustryLinkageScore `json:"linkage_score"`
-	CycleMultiplier    float64                        `json:"cycle_multiplier"`
-	SeasonalMultiplier float64                        `json:"seasonal_multiplier"`
-	LinkageMultiplier  float64                        `json:"linkage_multiplier"`
-	AdjustmentLog      []string                       `json:"adjustment_log"`
+	ID               string                         `json:"id"`
+	Name             string                         `json:"name"`
+	CyclePhase       string                         `json:"cycle_phase"`
+	InventoryCycle   string                         `json:"inventory_cycle"`
+	CapexCycle       string                         `json:"capex_cycle"`
+	CycleConfidence  float64                        `json:"cycle_confidence"`
+	IsFavorable      bool                           `json:"is_favorable"`
+	SeasonalPatterns []string                       `json:"seasonal_patterns"`
+	LinkageScore     *industry.IndustryLinkageScore `json:"linkage_score"`
 }
 
 func (s *IndustryService) GetIndustryOverview(now time.Time) []IndustryOverview {
 	segments := s.Classifier.GetAllSegments()
-	sectorWeights := config.GetParametersConfig().Industry.SectorWeights.Value
-	weightFloor := config.GetParametersConfig().Industry.WeightFloor.Value
-	linkageImpact := config.GetParametersConfig().Industry.LinkageWeightImpact.Value
-
-	type rawWeight struct {
-		overview IndustryOverview
-		raw      float64
-	}
-
-	var rawWeights []rawWeight
-
+	var industries []IndustryOverview
 	for _, seg := range segments {
 		if seg.ParentID != "" {
 			continue
@@ -436,68 +420,18 @@ func (s *IndustryService) GetIndustryOverview(now time.Time) []IndustryOverview 
 
 		linkageScore := s.LinkageAnalyzer.CalculateLinkageScore(seg.ID)
 
-		baseWeight, ok := sectorWeights[seg.ID]
-		if !ok {
-			baseWeight = seg.Weight
-		}
-
-		cycleMultiplier := s.CycleTracker.GetWeightModulator(seg.ID)
-		seasonalMultiplier := s.SeasonalEngine.GetPatternAdjustment(seg.ID, now)
-
-		linkageMultiplier := 1.0
-		if linkageScore != nil {
-			deviation := linkageScore.SystemicImportance - 0.5
-			linkageMultiplier = 1.0 + deviation*linkageImpact
-		}
-
-		rawAdjusted := baseWeight * cycleMultiplier * seasonalMultiplier * linkageMultiplier
-
-		var adjustmentLog []string
-		adjustmentLog = append(adjustmentLog, fmt.Sprintf("base_weight=%.4f", baseWeight))
-		adjustmentLog = append(adjustmentLog, fmt.Sprintf("cycle_multiplier=%.4f (phase=%s, confidence=%.2f)", cycleMultiplier, cyclePos.BusinessCycle, cyclePos.Confidence))
-		adjustmentLog = append(adjustmentLog, fmt.Sprintf("seasonal_multiplier=%.4f", seasonalMultiplier))
-		if linkageScore != nil {
-			adjustmentLog = append(adjustmentLog, fmt.Sprintf("linkage_multiplier=%.4f (systemic_importance=%.4f)", linkageMultiplier, linkageScore.SystemicImportance))
-		}
-		adjustmentLog = append(adjustmentLog, fmt.Sprintf("raw_adjusted=%.4f", rawAdjusted))
-
-		overview := IndustryOverview{
-			ID:                 seg.ID,
-			Name:               seg.Name,
-			BaseWeight:         baseWeight,
-			CyclePhase:         string(cyclePos.BusinessCycle),
-			InventoryCycle:     string(cyclePos.InventoryCycle),
-			CapexCycle:         string(cyclePos.CapexCycle),
-			CycleConfidence:    cyclePos.Confidence,
-			IsFavorable:        cyclePos.IsFavorable(),
-			SeasonalPatterns:   activePatternNames,
-			LinkageScore:       linkageScore,
-			CycleMultiplier:    cycleMultiplier,
-			SeasonalMultiplier: seasonalMultiplier,
-			LinkageMultiplier:  linkageMultiplier,
-			AdjustmentLog:      adjustmentLog,
-		}
-
-		rawWeights = append(rawWeights, rawWeight{overview: overview, raw: rawAdjusted})
+		industries = append(industries, IndustryOverview{
+			ID:               seg.ID,
+			Name:             seg.Name,
+			CyclePhase:       string(cyclePos.BusinessCycle),
+			InventoryCycle:   string(cyclePos.InventoryCycle),
+			CapexCycle:       string(cyclePos.CapexCycle),
+			CycleConfidence:  cyclePos.Confidence,
+			IsFavorable:      cyclePos.IsFavorable(),
+			SeasonalPatterns: activePatternNames,
+			LinkageScore:     linkageScore,
+		})
 	}
-
-	totalWeight := 0.0
-	for i := range rawWeights {
-		if rawWeights[i].raw < weightFloor {
-			rawWeights[i].raw = weightFloor
-		}
-		totalWeight += rawWeights[i].raw
-	}
-
-	var industries []IndustryOverview
-	if totalWeight > 0 {
-		scale := 1.0 / totalWeight
-		for _, rw := range rawWeights {
-			rw.overview.AdjustedWeight = rw.raw * scale
-			industries = append(industries, rw.overview)
-		}
-	}
-
 	return industries
 }
 

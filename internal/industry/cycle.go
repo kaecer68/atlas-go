@@ -587,35 +587,6 @@ func (cp *CyclePosition) IsFavorable() bool {
 	return cp.BusinessCycle == CycleRecovery || cp.BusinessCycle == CycleExpansion
 }
 
-// GetWeightModulator returns a weight multiplier based on cycle phase and confidence.
-// The multiplier scales from the configured phase multiplier toward 1.0 based on
-// confidence level. High confidence in expansion yields a larger boost; low
-// confidence dampens the adjustment toward neutral.
-func (ct *CycleTracker) GetWeightModulator(industryID string) float64 {
-	pos, ok := ct.GetPosition(industryID)
-	if !ok {
-		return 1.0
-	}
-
-	cfg := config.GetParametersConfig().Industry.CycleWeightMultipliers.Value
-	var phaseMultiplier float64
-	switch pos.BusinessCycle {
-	case CycleExpansion:
-		phaseMultiplier = cfg.ExpansionMultiplier
-	case CycleRecovery:
-		phaseMultiplier = cfg.RecoveryMultiplier
-	case CycleMature:
-		phaseMultiplier = cfg.MatureMultiplier
-	case CycleRecession:
-		phaseMultiplier = cfg.RecessionMultiplier
-	default:
-		return 1.0
-	}
-
-	deviation := phaseMultiplier - 1.0
-	return 1.0 + deviation*pos.Confidence
-}
-
 func (cp *CyclePosition) IsFavorablePhase() bool {
 	return cp.IsFavorable()
 }

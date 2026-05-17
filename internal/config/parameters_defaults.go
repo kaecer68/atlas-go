@@ -1536,31 +1536,6 @@ func defaultIndustryParameters() IndustryParameters {
 			Rationale: "TW cycle transition probabilities and durations",
 			Source:    SourceHeuristic,
 		},
-		CycleWeightMultipliers: ParameterMetadata[CycleWeightMultipliersConfig]{
-			Value: CycleWeightMultipliersConfig{
-				ExpansionMultiplier: 1.2,
-				RecoveryMultiplier:  1.1,
-				MatureMultiplier:    1.0,
-				RecessionMultiplier: 0.7,
-			},
-			Rationale: "Cycle phase weight multipliers: expansion +20%, recovery +10%, mature neutral, recession -30%",
-			Source:    SourceHeuristic,
-		},
-		LinkageWeightImpact: ParameterMetadata[float64]{
-			Value:     0.2,
-			Rationale: "Linkage systemic importance deviation scaling: ±20% max impact",
-			Source:    SourceHeuristic,
-		},
-		WeightFloor: ParameterMetadata[float64]{
-			Value:     0.03,
-			Rationale: "Minimum 3% weight per industry after normalization",
-			Source:    SourceHeuristic,
-		},
-		MaxDailyWeightChange: ParameterMetadata[float64]{
-			Value:     0.05,
-			Rationale: "Maximum 5% daily weight change to prevent excessive volatility",
-			Source:    SourceHeuristic,
-		},
 		LinkageParams: ParameterMetadata[LinkageConfig]{
 			Value: LinkageConfig{
 				DownstreamDecayFactor:     0.80,
