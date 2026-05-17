@@ -69,7 +69,7 @@ Decision agents:
 ## Data Flow
 
 ```text
-Market Data -> Layer 1 -> Screener -> Layer 2 -> Layer 3 -> 風控長 -> 投資長 -> Simulation Engine -> Scorecard
+Market Data -> Gateway (rate limit + circuit breaker + cache) -> BackgroundTaskManager -> Layer 1 -> Screener -> Layer 2 -> Layer 3 -> 風控長 -> 投資長 -> Simulation Engine -> Scorecard
 ```
 
 **Screener** (`internal/screener/`) runs before Layer 2/3 executors generate recommendations. It filters symbols using declarative criteria (P/E, P/B, dividend yield, momentum, volume, and total factor score) so that only qualifying stocks reach the sector desks and style filters.
@@ -126,6 +126,7 @@ The system should eventually:
 
 ## Go Package Intent
 
+- `internal/apigateway`: unified data ingestion — Gateway (14 data channel adapters with rate limiting, circuit breakers, caching), BackgroundTaskManager (10+ scheduled fetch tasks with retry and market-hours guard)
 - `internal/domain`: canonical types
 - `internal/marketdata`: provider abstraction and adapters
 - `internal/orchestrator`: layered workflow

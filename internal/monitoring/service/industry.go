@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/industry"
-	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 type IndustryService struct {
@@ -24,9 +22,6 @@ func NewIndustryService(
 	linkageAnalyzer *industry.LinkageAnalyzer,
 	riskMonitor *industry.RiskMonitor,
 ) *IndustryService {
-	if seasonalEngine != nil && linkageAnalyzer != nil {
-		seasonalEngine.SetLinkageGraph(linkageAnalyzer.GetSupplyChainGraph())
-	}
 	return &IndustryService{
 		Classifier:      classifier,
 		SeasonalEngine:  seasonalEngine,
@@ -51,6 +46,7 @@ func (s *IndustryService) GetClassificationTree() []map[string]any {
 						"id":          gc.ID,
 						"name":        gc.Name,
 						"weight":      gc.Weight,
+						"base_weight": gc.Weight,
 						"description": gc.Description,
 					})
 				}
@@ -58,6 +54,7 @@ func (s *IndustryService) GetClassificationTree() []map[string]any {
 					"id":          child.ID,
 					"name":        child.Name,
 					"weight":      child.Weight,
+					"base_weight": child.Weight,
 					"description": child.Description,
 					"children":    grandchildList,
 				})
@@ -66,6 +63,7 @@ func (s *IndustryService) GetClassificationTree() []map[string]any {
 				"id":          seg.ID,
 				"name":        seg.Name,
 				"weight":      seg.Weight,
+				"base_weight": seg.Weight,
 				"description": seg.Description,
 				"children":    childList,
 			})
@@ -92,40 +90,6 @@ type SeasonalPattern struct {
 	Impact             string   `json:"impact,omitempty"`
 }
 
-// GetAdjustmentBreakdown returns the per-layer decomposition of the seasonal adjustment.
-func (s *IndustryService) GetAdjustmentBreakdown(industryID string, now time.Time) *industry.AdjustmentBreakdown {
-	if s.SeasonalEngine == nil {
-		return nil
-	}
-	return s.SeasonalEngine.GetAdjustmentBreakdown(industryID, now)
-}
-
-// GetActiveNarrativeThemes returns the narrative themes currently active for an industry.
-func (s *IndustryService) GetActiveNarrativeThemes(industryID string) []string {
-	return nil
-}
-
-// UpdateDynamicEnv pushes a fresh macro snapshot into the seasonal engine's environment modulator.
-func (s *IndustryService) UpdateDynamicEnv(snap marketdata.MacroDataSnapshot) {
-	if s.SeasonalEngine != nil {
-		s.SeasonalEngine.UpdateDynamicEnv(snap)
-	}
-}
-
-// GetCalibrationEvidence returns calibration metadata if seasonal patterns
-// have been calibrated against real market data.
-func (s *IndustryService) GetCalibrationEvidence() map[string]any {
-	return industry.LoadCalibrationEvidence("configs/parameters.json")
-}
-
-// RebuildCorrelations recomputes all pairwise industry correlations from return data.
-func (s *IndustryService) RebuildCorrelations(industryReturns map[string][]float64) {
-	if s.LinkageAnalyzer != nil {
-		s.LinkageAnalyzer.GetCorrelationMatrix().RecalculateFromReturns(industryReturns)
-	}
-}
-
-// GetSeasonalPatterns returns active and historical seasonal patterns for an industry.
 func (s *IndustryService) GetSeasonalPatterns(industryID string, now time.Time) (active []SeasonalPattern, historical []SeasonalPattern, adjustment float64) {
 	patterns := s.SeasonalEngine.DetectCurrentPatterns(now)
 	for _, p := range patterns {
@@ -214,55 +178,9 @@ type CyclePosition struct {
 	IsFavorable    bool      `json:"is_favorable"`
 	PhaseScore     float64   `json:"phase_score"`
 	Trend          string    `json:"trend"`
-	// Confidence decomposition (computed at service layer)
-	ConfidenceBreakdown map[string]float64 `json:"confidence_breakdown,omitempty"`
-	NarrativeTheme      string             `json:"narrative_theme,omitempty"`
-	// Threshold evidence quality from config
-	ThresholdEvidence map[string]string `json:"threshold_evidence,omitempty"`
-	// Evidence tracks whether this cycle position is based on empirical FinMind data or fallback defaults
-	Evidence string `json:"evidence"`
 }
 
 func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition, bool) {
-	mix := config.GetParametersConfig().Industry.ConfidenceMix.Value
-	breakdown := map[string]float64{
-		"boundary":  mix.WeightBoundary,
-		"freshness": mix.WeightFreshness,
-		"seasonal":  mix.WeightSeasonal,
-		"linkage":   mix.WeightLinkage,
-		"narrative": mix.WeightNarrative,
-	}
-	ev := map[string]string{
-		"source_type":       "heuristic",
-		"evidence_quality":  "low",
-		"update_policy":     "auto",
-		"validation_method": "empirical_calibration",
-	}
-
-	buildCyclePosition := func(pos *industry.CyclePosition, name string) CyclePosition {
-		evidence := "insufficient"
-		if s.CycleTracker.HasEmpiricalData(pos.IndustryID) {
-			evidence = "empirical"
-		}
-		narrativeTheme := s.CycleTracker.NarrativeTheme(pos.IndustryID)
-		return CyclePosition{
-			Industry:            pos.IndustryID,
-			Name:                name,
-			BusinessCycle:       string(pos.BusinessCycle),
-			InventoryCycle:      string(pos.InventoryCycle),
-			CapexCycle:          string(pos.CapexCycle),
-			Confidence:          pos.Confidence,
-			UpdatedAt:           pos.UpdatedAt,
-			IsFavorable:         pos.IsFavorable(),
-			PhaseScore:          pos.GetPhaseScore(),
-			Trend:               pos.GetTrend(),
-			ConfidenceBreakdown: breakdown,
-			NarrativeTheme:      narrativeTheme,
-			ThresholdEvidence:   ev,
-			Evidence:            evidence,
-		}
-	}
-
 	if industryID == "" {
 		var allPositions []CyclePosition
 		for _, seg := range s.Classifier.GetAllSegments() {
@@ -270,7 +188,18 @@ func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition,
 				continue
 			}
 			if pos, ok := s.CycleTracker.GetPosition(seg.ID); ok {
-				allPositions = append(allPositions, buildCyclePosition(pos, seg.Name))
+				allPositions = append(allPositions, CyclePosition{
+					Industry:       seg.ID,
+					Name:           seg.Name,
+					BusinessCycle:  string(pos.BusinessCycle),
+					InventoryCycle: string(pos.InventoryCycle),
+					CapexCycle:     string(pos.CapexCycle),
+					Confidence:     pos.Confidence,
+					UpdatedAt:      pos.UpdatedAt,
+					IsFavorable:    pos.IsFavorable(),
+					PhaseScore:     pos.GetPhaseScore(),
+					Trend:          pos.GetTrend(),
+				})
 			}
 		}
 		return allPositions, true
@@ -280,12 +209,17 @@ func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition,
 	if !ok {
 		return nil, false
 	}
-	seg, ok := s.Classifier.GetSegment(industryID)
-	name := industryID
-	if ok {
-		name = seg.Name
-	}
-	return []CyclePosition{buildCyclePosition(position, name)}, true
+	return []CyclePosition{{
+		Industry:       industryID,
+		BusinessCycle:  string(position.BusinessCycle),
+		InventoryCycle: string(position.InventoryCycle),
+		CapexCycle:     string(position.CapexCycle),
+		Confidence:     position.Confidence,
+		UpdatedAt:      position.UpdatedAt,
+		IsFavorable:    position.IsFavorable(),
+		PhaseScore:     position.GetPhaseScore(),
+		Trend:          position.GetTrend(),
+	}}, true
 }
 
 type LinkageInfo struct {
@@ -386,36 +320,20 @@ func (s *IndustryService) GetRiskInfo(symbol, industryID string) *RiskInfo {
 }
 
 type IndustryOverview struct {
-	ID                 string                         `json:"id"`
-	Name               string                         `json:"name"`
-	BaseWeight         float64                        `json:"base_weight"`
-	AdjustedWeight     float64                        `json:"adjusted_weight"`
-	CyclePhase         string                         `json:"cycle_phase"`
-	InventoryCycle     string                         `json:"inventory_cycle"`
-	CapexCycle         string                         `json:"capex_cycle"`
-	CycleConfidence    float64                        `json:"cycle_confidence"`
-	IsFavorable        bool                           `json:"is_favorable"`
-	SeasonalPatterns   []string                       `json:"seasonal_patterns"`
-	LinkageScore       *industry.IndustryLinkageScore `json:"linkage_score"`
-	CycleMultiplier    float64                        `json:"cycle_multiplier"`
-	SeasonalMultiplier float64                        `json:"seasonal_multiplier"`
-	LinkageMultiplier  float64                        `json:"linkage_multiplier"`
-	AdjustmentLog      []string                       `json:"adjustment_log"`
+	ID               string                         `json:"id"`
+	Name             string                         `json:"name"`
+	CyclePhase       string                         `json:"cycle_phase"`
+	InventoryCycle   string                         `json:"inventory_cycle"`
+	CapexCycle       string                         `json:"capex_cycle"`
+	CycleConfidence  float64                        `json:"cycle_confidence"`
+	IsFavorable      bool                           `json:"is_favorable"`
+	SeasonalPatterns []string                       `json:"seasonal_patterns"`
+	LinkageScore     *industry.IndustryLinkageScore `json:"linkage_score"`
 }
 
 func (s *IndustryService) GetIndustryOverview(now time.Time) []IndustryOverview {
 	segments := s.Classifier.GetAllSegments()
-	sectorWeights := config.GetParametersConfig().Industry.SectorWeights.Value
-	weightFloor := config.GetParametersConfig().Industry.WeightFloor.Value
-	linkageImpact := config.GetParametersConfig().Industry.LinkageWeightImpact.Value
-
-	type rawWeight struct {
-		overview IndustryOverview
-		raw      float64
-	}
-
-	var rawWeights []rawWeight
-
+	var industries []IndustryOverview
 	for _, seg := range segments {
 		if seg.ParentID != "" {
 			continue
@@ -436,68 +354,18 @@ func (s *IndustryService) GetIndustryOverview(now time.Time) []IndustryOverview 
 
 		linkageScore := s.LinkageAnalyzer.CalculateLinkageScore(seg.ID)
 
-		baseWeight, ok := sectorWeights[seg.ID]
-		if !ok {
-			baseWeight = seg.Weight
-		}
-
-		cycleMultiplier := s.CycleTracker.GetWeightModulator(seg.ID)
-		seasonalMultiplier := s.SeasonalEngine.GetPatternAdjustment(seg.ID, now)
-
-		linkageMultiplier := 1.0
-		if linkageScore != nil {
-			deviation := linkageScore.SystemicImportance - 0.5
-			linkageMultiplier = 1.0 + deviation*linkageImpact
-		}
-
-		rawAdjusted := baseWeight * cycleMultiplier * seasonalMultiplier * linkageMultiplier
-
-		var adjustmentLog []string
-		adjustmentLog = append(adjustmentLog, fmt.Sprintf("base_weight=%.4f", baseWeight))
-		adjustmentLog = append(adjustmentLog, fmt.Sprintf("cycle_multiplier=%.4f (phase=%s, confidence=%.2f)", cycleMultiplier, cyclePos.BusinessCycle, cyclePos.Confidence))
-		adjustmentLog = append(adjustmentLog, fmt.Sprintf("seasonal_multiplier=%.4f", seasonalMultiplier))
-		if linkageScore != nil {
-			adjustmentLog = append(adjustmentLog, fmt.Sprintf("linkage_multiplier=%.4f (systemic_importance=%.4f)", linkageMultiplier, linkageScore.SystemicImportance))
-		}
-		adjustmentLog = append(adjustmentLog, fmt.Sprintf("raw_adjusted=%.4f", rawAdjusted))
-
-		overview := IndustryOverview{
-			ID:                 seg.ID,
-			Name:               seg.Name,
-			BaseWeight:         baseWeight,
-			CyclePhase:         string(cyclePos.BusinessCycle),
-			InventoryCycle:     string(cyclePos.InventoryCycle),
-			CapexCycle:         string(cyclePos.CapexCycle),
-			CycleConfidence:    cyclePos.Confidence,
-			IsFavorable:        cyclePos.IsFavorable(),
-			SeasonalPatterns:   activePatternNames,
-			LinkageScore:       linkageScore,
-			CycleMultiplier:    cycleMultiplier,
-			SeasonalMultiplier: seasonalMultiplier,
-			LinkageMultiplier:  linkageMultiplier,
-			AdjustmentLog:      adjustmentLog,
-		}
-
-		rawWeights = append(rawWeights, rawWeight{overview: overview, raw: rawAdjusted})
+		industries = append(industries, IndustryOverview{
+			ID:               seg.ID,
+			Name:             seg.Name,
+			CyclePhase:       string(cyclePos.BusinessCycle),
+			InventoryCycle:   string(cyclePos.InventoryCycle),
+			CapexCycle:       string(cyclePos.CapexCycle),
+			CycleConfidence:  cyclePos.Confidence,
+			IsFavorable:      cyclePos.IsFavorable(),
+			SeasonalPatterns: activePatternNames,
+			LinkageScore:     linkageScore,
+		})
 	}
-
-	totalWeight := 0.0
-	for i := range rawWeights {
-		if rawWeights[i].raw < weightFloor {
-			rawWeights[i].raw = weightFloor
-		}
-		totalWeight += rawWeights[i].raw
-	}
-
-	var industries []IndustryOverview
-	if totalWeight > 0 {
-		scale := 1.0 / totalWeight
-		for _, rw := range rawWeights {
-			rw.overview.AdjustedWeight = rw.raw * scale
-			industries = append(industries, rw.overview)
-		}
-	}
-
 	return industries
 }
 
@@ -618,114 +486,66 @@ func (s *IndustryService) calculateWeightDerivation(seg *industry.IndustrySegmen
 		Opportunities:     []string{},
 	}
 
-	switch seg.ID {
-	case "semiconductor":
-		wd.DerivationFactors = []WeightFactor{
-			{Factor: "出口比重", Weight: 0.35, Source: "海關統計", Evidence: "佔台灣總出口超過35%"},
-			{Factor: "龍頭市值", Weight: 0.25, Source: "TWSE", Evidence: "台積電(2330)為最大權值股"},
-			{Factor: "戰略價值", Weight: 0.25, Source: "地緣政治", Evidence: "全球先進製程核心供應商"},
-			{Factor: "就業創造", Weight: 0.15, Source: "主計總處", Evidence: "直接就業人數超過10萬人"},
-		}
-		wd.Interpretation = "半導體為台灣經濟命脈，权重反映其在出口、市值、就業的核心地位"
-		wd.RiskFactors = []string{"美中科技戰出口管制", "先進製程竞争加剧", "成熟製程中國大陸產能過剩"}
-		wd.Opportunities = []string{"AI晶片需求爆發", "CoWoS先進封裝供需吃緊", "HPC高效能運算長期趨勢"}
-
-	case "ai_supply_chain":
-		wd.DerivationFactors = []WeightFactor{
-			{Factor: "需求增速", Weight: 0.30, Source: "機構預估", Evidence: "2024-2026 AI伺服器CAGR>40%"},
-			{Factor: "台灣供應鏈完整性", Weight: 0.25, Source: "內部分析", Evidence: "全球80% AI伺服器組裝在台灣"},
-			{Factor: "毛利率支撐", Weight: 0.25, Source: "廠商財報", Evidence: "散熱、電源供應商毛利率>25%"},
-			{Factor: "政策支持", Weight: 0.20, Source: "國發基金", Evidence: "AI產業發展獲得政府資源挹注"},
-		}
-		wd.Interpretation = "AI供應鏈為台灣下一個核心成長引擎，权重反映其爆發性成長潛力"
-		wd.RiskFactors = []string{"GB200延期出貨風險", "供應商過度集中", "中國供應鏈競爭"}
-		wd.Opportunities = []string{"CSP資本支出持續擴張", "邊緣AI運算需求興起", "液冷散熱滲透率提升"}
-
-	case "robotics":
-		wd.DerivationFactors = []WeightFactor{
-			{Factor: "技術含量", Weight: 0.35, Source: "專利分析", Evidence: "全球減速機專利密度前三"},
-			{Factor: "製造業升級需求", Weight: 0.30, Source: "工業局", Evidence: "台灣工具機產值全球第四"},
-			{Factor: "人機協作趨勢", Weight: 0.20, Source: "IFR報告", Evidence: "2025協作型機器人安裝量預估成長30%"},
-			{Factor: "出口競爭力", Weight: 0.15, Source: "海關", Evidence: "精密機械出口年成長8%"},
-		}
-		wd.Interpretation = "機器人產業权重低但技術壁壘高，為長期核心戰略產業"
-		wd.RiskFactors = []string{"中國廠商低價競爭", "日本、歐洲傳統強權技術領先", "景氣循環影響資本支出"}
-		wd.Opportunities = []string{"半導體先進封裝設備需求", "電動車組裝自動化", "醫療手術機器人滲透"}
-
-	case "financials":
-		wd.DerivationFactors = []WeightFactor{
-			{Factor: "放款基礎", Weight: 0.35, Source: "金管會", Evidence: "本國銀行放款規模超過40兆"},
-			{Factor: "內需關聯", Weight: 0.30, Source: "央行", Evidence: "民間消費與金融業高度相關"},
-			{Factor: "政策調控", Weight: 0.20, Source: "金管會", Evidence: "金融業受政策影響顯著"},
-			{Factor: "升息環境", Weight: 0.15, Source: "Fed觀察", Evidence: "利差擴張有利銀行獲利"},
-		}
-		wd.Interpretation = "金融業权重反映其在內需與政策中的核心地位，防御性質明顯"
-		wd.RiskFactors = []string{"信用風險攀升", "房市修正壓力", "數位金融顛覆"}
-		wd.Opportunities = []string{"升息循環持續利差收益", "理財商品手續費收入", "不動產逆向房貸商機"}
-
-	case "shipping":
-		wd.DerivationFactors = []WeightFactor{
-			{Factor: "全球貿易量", Weight: 0.35, Source: "Clarksons", Evidence: "BDI指數與全球GDP增速高度相關"},
-			{Factor: "產業集中度", Weight: 0.30, Source: "Alphaliner", Evidence: "長榮、陽明、萬海市佔率全球前10"},
-			{Factor: "景氣循環", Weight: 0.25, Source: "歷史統計", Evidence: "航運景氣與全球貿易波動高度一致"},
-			{Factor: "塞港紅利", Weight: 0.10, Source: "Clarksons", Evidence: "供應鏈瓶頸期超額利潤"},
-		}
-		wd.Interpretation = "航運業景氣循環特性鮮明，权重反映其高波動性但不可預測的本質"
-		wd.RiskFactors = []string{"紅海危機常態化", "新造船交付過剩", "環保法規成本增加"}
-		wd.Opportunities = []string{"全球供應鏈重組", "低碳航運轉型落後者", "碼頭擁堵再現"}
-
-	case "energy":
-		wd.DerivationFactors = []WeightFactor{
-			{Factor: "政策目標", Weight: 0.35, Source: "經濟部", Evidence: "2025綠能發電佔比20%目標"},
-			{Factor: "進口依賴", Weight: 0.30, Source: "能源局", Evidence: "化石燃料進口依賴度>95%"},
-			{Factor: "電價調整", Weight: 0.20, Source: "台電", Evidence: "2022-2024電價累計調漲45%"},
-			{Factor: "地緣風險", Weight: 0.15, Source: "外交部", Evidence: "能源進口集中度高於軍事風險"},
-		}
-		wd.Interpretation = "能源業權重反映台灣對外部能源的高度依賴與能源轉型的結構性需求"
-		wd.RiskFactors = []string{"國際燃料價格波動", "核能政策不確定性", "電網韌性不足"}
-		wd.Opportunities = []string{"離岸風電國產化", "太陽能模組需求", "儲能系統商轉"}
-
-	case "electronics":
-		wd.DerivationFactors = []WeightFactor{
-			{Factor: "終端需求", Weight: 0.35, Source: "IDC", Evidence: "全球電子終端市場規模>2兆美元"},
-			{Factor: "被動元件景氣", Weight: 0.25, Source: "TrendForce", Evidence: "MLCC市場供需循環"},
-			{Factor: "中國供應鏈", Weight: 0.25, Source: "海關", Evidence: "台灣電子零組件對中出口比重高"},
-			{Factor: "規格升級", Weight: 0.15, Source: "廠商財報", Evidence: "車用、工業用毛利率較佳"},
-		}
-		wd.Interpretation = "電子零組件為半導體下游，权重反映其作為供應鏈關鍵零組件的地位"
-		wd.RiskFactors = []string{"中國大陸低價競爭", "景氣放緩影響消費電子", "規格標準化壓縮毛利"}
-		wd.Opportunities = []string{"車用電子滲透率提升", "AI終端裝置", "高速傳輸介面升級"}
-
-	case "consumer":
-		wd.DerivationFactors = []WeightFactor{
-			{Factor: "內需消費", Weight: 0.40, Source: "主計總處", Evidence: "民間消費佔GDP約55%"},
-			{Factor: "通膨轉嫁", Weight: 0.25, Source: "央行", Evidence: "食品飲料價格剛性上漲"},
-			{Factor: "人口結構", Weight: 0.20, Source: "內政部", Evidence: "老化指數持續攀升"},
-			{Factor: "出口導向", Weight: 0.15, Source: "海關", Evidence: "紡織、鞋類出口依賴國際景氣"},
-		}
-		wd.Interpretation = "傳產消費業权重反映其防御性質，與日常民生高度相關但成長性有限"
-		wd.RiskFactors = []string{"人均所得停滯", "人口減少趨勢", "電商侵蝕毛利率"}
-		wd.Opportunities = []string{"健康意識抬頭", "高端餐飲需求", "寵物經濟"}
-
-	case "industrial":
-		wd.DerivationFactors = []WeightFactor{
-			{Factor: "基礎建設", Weight: 0.35, Source: "工程會", Evidence: "公共工程預算持續成長"},
-			{Factor: "製造業PMI", Weight: 0.25, Source: "S&P Global", Evidence: "台灣製造業PMI榮枯線參考"},
-			{Factor: "原物料價格", Weight: 0.25, Source: "商品指數", Evidence: "鋼鐵、塑化報價波動影響獲利"},
-			{Factor: "出口競爭力", Weight: 0.15, Source: "海關", Evidence: "工具機出口中國比重高"},
-		}
-		wd.Interpretation = "工業製造業权重反映其與景氣循環的高度相關性"
-		wd.RiskFactors = []string{"中國基建投資放緩", "原物料價格上漲", "環保法規趨嚴"}
-		wd.Opportunities = []string{"半導體廠建設需求", "綠能基礎設施", "前瞻軌道建設"}
-
-	default:
-		wd.Interpretation = fmt.Sprintf("權重 %.1f%% 基於該產業在台灣經濟中的綜合重要性評估", seg.Weight*100)
-		wd.DerivationFactors = []WeightFactor{
-			{Factor: "綜合評估", Weight: 1.0, Source: "內部分析", Evidence: "結合出口、市值、就業等維度"},
-		}
+	wd.DerivationFactors = []WeightFactor{
+		{Factor: "基準權重", Weight: seg.Weight, Source: "parameters.json (industry.sector_weights)", Evidence: fmt.Sprintf("%.1f%% 來自統一參數配置", seg.Weight*100)},
 	}
+	wd.Interpretation = fmt.Sprintf("權重 %.1f%% 來自 configs/parameters.json 的產業配置；因子分布分析待 Phase 2 真實市場數據源整合後提供", seg.Weight*100)
+
+	// 定性風險與機會分析（不宣稱外部數據源，純屬內部分析觀點）
+	wd.RiskFactors = s.getDefaultRiskFactors(seg.ID)
+	wd.Opportunities = s.getDefaultOpportunities(seg.ID)
 
 	return wd
+}
+
+func (s *IndustryService) getDefaultRiskFactors(id string) []string {
+	switch id {
+	case "semiconductor":
+		return []string{"美中科技戰出口管制", "先進製程竞争加剧", "成熟製程中國大陸產能過剩"}
+	case "ai_supply_chain":
+		return []string{"GB200延期出貨風險", "供應商過度集中", "中國供應鏈競爭"}
+	case "robotics":
+		return []string{"中國廠商低價競爭", "日本、歐洲傳統強權技術領先", "景氣循環影響資本支出"}
+	case "financials":
+		return []string{"信用風險攀升", "房市修正壓力", "數位金融顛覆"}
+	case "shipping":
+		return []string{"紅海危機常態化", "新造船交付過剩", "環保法規成本增加"}
+	case "energy":
+		return []string{"國際燃料價格波動", "核能政策不確定性", "電網韌性不足"}
+	case "electronics":
+		return []string{"中國大陸低價競爭", "景氣放緩影響消費電子", "規格標準化壓縮毛利"}
+	case "consumer":
+		return []string{"人均所得停滯", "人口減少趨勢", "電商侵蝕毛利率"}
+	case "industrial":
+		return []string{"中國基建投資放緩", "原物料價格上漲", "環保法規趨嚴"}
+	default:
+		return nil
+	}
+}
+
+func (s *IndustryService) getDefaultOpportunities(id string) []string {
+	switch id {
+	case "semiconductor":
+		return []string{"AI晶片需求爆發", "CoWoS先進封裝供需吃緊", "HPC高效能運算長期趨勢"}
+	case "ai_supply_chain":
+		return []string{"CSP資本支出持續擴張", "邊緣AI運算需求興起", "液冷散熱滲透率提升"}
+	case "robotics":
+		return []string{"半導體先進封裝設備需求", "電動車組裝自動化", "醫療手術機器人滲透"}
+	case "financials":
+		return []string{"升息循環持續利差收益", "理財商品手續費收入", "不動產逆向房貸商機"}
+	case "shipping":
+		return []string{"全球供應鏈重組", "低碳航運轉型落後者", "碼頭擁堵再現"}
+	case "energy":
+		return []string{"離岸風電國產化", "太陽能模組需求", "儲能系統商轉"}
+	case "electronics":
+		return []string{"車用電子滲透率提升", "AI終端裝置", "高速傳輸介面升級"}
+	case "consumer":
+		return []string{"健康意識抬頭", "高端餐飲需求", "寵物經濟"}
+	case "industrial":
+		return []string{"半導體廠建設需求", "綠能基礎設施", "前瞻軌道建設"}
+	default:
+		return nil
+	}
 }
 
 func (s *IndustryService) generateRecommendation(seg *industry.IndustrySegment, pos *industry.CyclePosition, wd WeightDerivation) *IndustryRecommendation {

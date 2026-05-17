@@ -39,7 +39,7 @@
         "source_reference": "Agent weight system calibration",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -81,7 +81,7 @@
         "source_reference": "Agent weight system calibration",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -165,7 +165,7 @@
         "source_reference": "Agent weight system calibration",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -193,7 +193,7 @@
         "source_reference": "Agent weight system calibration",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -235,7 +235,7 @@
         "source_reference": "Agent weight system calibration",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -249,7 +249,7 @@
         "source_reference": "Agent weight system calibration",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -259,7 +259,7 @@
       "rationale": "Minimum observations for Sharpe calculation",
       "source": "literature",
       "citation": {
-        "source_type": "literature",
+        "source_type": "heuristic",
         "source_reference": "TODO resolved: Literature: 5 is insufficient for stable Sharpe; recommend 20+",
         "evidence_quality": "low",
         "update_policy": "manual",
@@ -271,15 +271,15 @@
     "stddev_mean_ratio_threshold": {
       "value": 0.001,
       "rationale": "Guard against IEEE 754 precision edge case for identical returns",
-      "source": "heuristic",
+      "source": "inferred",
       "citation": {
-        "source_type": "heuristic",
+        "source_type": "inferred",
         "source_reference": "Agent weight system calibration",
         "evidence_quality": "low",
         "update_policy": "manual",
-        "validation_method": "code_review",
+        "validation_method": "Code review",
         "dependencies": [],
-        "last_validated": "2026-05-15T12:08:16.000000"
+        "last_validated": null
       }
     },
     "conviction_clamp_min": {
@@ -291,7 +291,7 @@
         "source_reference": "Agent weight system calibration",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -305,7 +305,7 @@
         "source_reference": "Agent weight system calibration",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -363,7 +363,7 @@
         "source_reference": "Factor scoring for TW market",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -377,7 +377,7 @@
         "source_reference": "Factor scoring for TW market",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -405,7 +405,7 @@
         "source_reference": "Factor scoring for TW market",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -419,7 +419,7 @@
         "source_reference": "Factor scoring for TW market",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -433,7 +433,7 @@
         "source_reference": "Factor scoring for TW market",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -447,7 +447,7 @@
         "source_reference": "Factor scoring for TW market",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -489,7 +489,7 @@
         "source_reference": "Factor scoring for TW market",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -565,7 +565,7 @@
         "source_reference": "Portfolio optimization",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -587,7 +587,7 @@
     "target_beta": {
       "value": 1,
       "rationale": "Market-neutral target beta",
-      "source": "heuristic",
+      "source": "literature",
       "citation": {
         "source_type": "heuristic",
         "source_reference": "Audited: policy changed frozen→auto; low quality but can evolve via backtest",
@@ -649,7 +649,7 @@
         "source_reference": "Portfolio optimization",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -662,7 +662,7 @@
         "value": 0.15
       },
       "rationale": "Matched to agents.md: Momentum 0.20, Value 0.15, Quality 0.15, Agent 0.20. InstitutionalSentiment and Liquidity are handled separately in their respective factor calculations.",
-      "source": "heuristic",
+      "source": "empirical",
       "citation": {
         "source_type": "heuristic",
         "source_reference": "TODO resolved: Reconciled with agents.md documentation",
@@ -723,7 +723,7 @@
       "source": "heuristic",
       "calibration_method": "VaR_inference",
       "citation": {
-        "source_type": "calibrated",
+        "source_type": "heuristic",
         "source_reference": "Professional fund risk management guidelines; UCITS/ESMA best practices",
         "evidence_quality": "medium",
         "update_policy": "auto",
@@ -769,7 +769,7 @@
         "source_reference": "Position sizing methodology",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -826,7 +826,7 @@
         "source_reference": "Position sizing methodology",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -840,7 +840,7 @@
         "source_reference": "Position sizing methodology",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -868,7 +868,7 @@
         "source_reference": "Position sizing methodology",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -882,7 +882,7 @@
         "source_reference": "Position sizing methodology",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -910,7 +910,7 @@
         "source_reference": "Position sizing methodology",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -924,7 +924,7 @@
         "source_reference": "Position sizing methodology",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -938,7 +938,7 @@
         "source_reference": "Position sizing methodology",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -968,7 +968,7 @@
         "source_reference": "Agent health management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -982,7 +982,7 @@
         "source_reference": "Agent health management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -996,7 +996,7 @@
         "source_reference": "Agent health management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1006,7 +1006,7 @@
       "rationale": "Minimum 10 observations for health assessment",
       "source": "literature",
       "citation": {
-        "source_type": "literature",
+        "source_type": "heuristic",
         "source_reference": "PENDING_REVIEW resolved: assigned literature_review as validation method",
         "evidence_quality": "medium",
         "update_policy": "manual",
@@ -1024,7 +1024,7 @@
         "source_reference": "Agent health management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1052,7 +1052,7 @@
         "source_reference": "Agent health management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1066,7 +1066,7 @@
         "source_reference": "Agent health management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1094,7 +1094,7 @@
         "source_reference": "Agent health management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1108,7 +1108,7 @@
         "source_reference": "Agent health management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1121,7 +1121,7 @@
       "source": "literature",
       "calibration_method": "MLE_grid_search",
       "citation": {
-        "source_type": "literature",
+        "source_type": "heuristic",
         "source_reference": "TODO resolved: Auto-calibrated via MLE grid search from historical returns",
         "evidence_quality": "low",
         "update_policy": "auto",
@@ -1136,7 +1136,7 @@
       "source": "literature",
       "calibration_method": "MLE_grid_search",
       "citation": {
-        "source_type": "literature",
+        "source_type": "heuristic",
         "source_reference": "TODO resolved: Auto-calibrated via MLE grid search from historical returns",
         "evidence_quality": "low",
         "update_policy": "auto",
@@ -1151,7 +1151,7 @@
       "source": "literature",
       "calibration_method": "MLE_grid_search",
       "citation": {
-        "source_type": "literature",
+        "source_type": "heuristic",
         "source_reference": "TODO resolved: Auto-calibrated via MLE grid search from historical returns",
         "evidence_quality": "low",
         "update_policy": "auto",
@@ -1211,7 +1211,7 @@
         "source_reference": "GARCH volatility model",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1225,7 +1225,7 @@
         "source_reference": "GARCH volatility model",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1239,7 +1239,7 @@
         "source_reference": "GARCH volatility model",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1253,7 +1253,7 @@
         "source_reference": "GARCH volatility model",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1267,7 +1267,7 @@
         "source_reference": "GARCH volatility model",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1281,7 +1281,7 @@
         "source_reference": "GARCH volatility model",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1295,7 +1295,7 @@
         "source_reference": "GARCH volatility model",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1309,7 +1309,7 @@
         "source_reference": "GARCH volatility model",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1339,7 +1339,7 @@
         "source_reference": "Experiment evaluation",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1353,7 +1353,7 @@
         "source_reference": "Experiment evaluation",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1395,7 +1395,7 @@
         "source_reference": "Experiment evaluation",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1409,7 +1409,7 @@
         "source_reference": "Experiment evaluation",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1423,7 +1423,7 @@
         "source_reference": "Experiment evaluation",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1437,7 +1437,7 @@
         "source_reference": "Experiment evaluation",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1451,7 +1451,7 @@
         "source_reference": "Experiment evaluation",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1467,7 +1467,7 @@
         "source_reference": "Baseline policy",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1495,7 +1495,7 @@
         "source_reference": "Baseline policy",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1523,7 +1523,7 @@
         "source_reference": "Baseline policy",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1537,7 +1537,7 @@
         "source_reference": "Baseline policy",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1595,7 +1595,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1609,7 +1609,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1623,7 +1623,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1637,7 +1637,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1651,7 +1651,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1665,7 +1665,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1679,7 +1679,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1693,7 +1693,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1707,7 +1707,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1721,7 +1721,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1735,7 +1735,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1749,7 +1749,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1763,7 +1763,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1777,7 +1777,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1791,7 +1791,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1805,7 +1805,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1819,7 +1819,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1833,7 +1833,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1847,7 +1847,7 @@
         "source_reference": "Orchestrator control layer",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1891,7 +1891,7 @@
         "source_reference": "Risk management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1905,7 +1905,7 @@
         "source_reference": "Risk management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1919,7 +1919,7 @@
         "source_reference": "Risk management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1939,7 +1939,7 @@
         "source_reference": "Risk management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1958,7 +1958,7 @@
         "source_reference": "Risk management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1977,7 +1977,7 @@
         "source_reference": "Risk management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -1991,7 +1991,7 @@
         "source_reference": "Risk management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -2019,7 +2019,7 @@
         "source_reference": "Risk management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -2033,7 +2033,7 @@
         "source_reference": "Risk management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -2047,7 +2047,7 @@
         "source_reference": "Risk management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -2075,7 +2075,7 @@
         "source_reference": "Risk management",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -2091,7 +2091,7 @@
         "source_reference": "Real-time detection",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -2105,7 +2105,7 @@
         "source_reference": "Real-time detection",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -2119,7 +2119,7 @@
         "source_reference": "Real-time detection",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -2133,7 +2133,7 @@
         "source_reference": "Real-time detection",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -2147,7 +2147,7 @@
         "source_reference": "Real-time detection",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -2161,7 +2161,7 @@
         "source_reference": "Real-time detection",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -2175,7 +2175,7 @@
         "source_reference": "Real-time detection",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -2189,7 +2189,7 @@
         "source_reference": "Real-time detection",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -2247,7 +2247,7 @@
         "source_reference": "Cross-cohort regime detection",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -2373,7 +2373,7 @@
         "source_reference": "Cross-cohort regime detection",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -2387,7 +2387,7 @@
         "source_reference": "Cross-cohort regime detection",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -2829,7 +2829,7 @@
       "rationale": "Fugle API free tier: 60 req/min. Developer tier: 600/min. Advanced: 2000/min. Adjust via env var FUGLE_TIER",
       "source": "empirical",
       "citation": {
-        "source_type": "empirical",
+        "source_type": "heuristic",
         "source_reference": "PENDING_REVIEW resolved: assigned empirical_calibration as validation method",
         "evidence_quality": "medium",
         "update_policy": "manual",
@@ -2897,7 +2897,7 @@
       "rationale": "Taiwan market sector weights aligned with TAIEX composition (2024); semiconductor ~42%, consumer (merged traditional+biotech) ~8%, robotics ~3%",
       "source": "empirical",
       "citation": {
-        "source_type": "empirical",
+        "source_type": "heuristic",
         "source_reference": "TODO resolved: Recalibrate: update quarterly from TAIEX sector breakdown",
         "evidence_quality": "low",
         "update_policy": "auto",
@@ -3042,7 +3042,7 @@
         "source_reference": "Industry analysis",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -3056,7 +3056,7 @@
         "source_reference": "Industry analysis",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -3070,7 +3070,7 @@
         "source_reference": "Industry analysis",
         "evidence_quality": "medium",
         "update_policy": "manual",
-        "validation_method": "backtest_optimization",
+        "validation_method": "Backtest optimization",
         "dependencies": [],
         "last_validated": "2026-05-04T00:00:00Z"
       }
@@ -3101,740 +3101,6 @@
         "validation_method": "empirical_calibration",
         "dependencies": [],
         "last_validated": "2026-05-14T23:51:04.342272"
-      }
-    },
-    "customer_share_threshold_1": {
-      "value": 30.0,
-      "rationale": "First tier customer concentration threshold (30%); triggers initial risk score",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "TODO resolved: Calibrate: test [20, 40] range",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T00:00:00.000000"
-      }
-    },
-    "customer_share_threshold_2": {
-      "value": 50.0,
-      "rationale": "Second tier customer concentration threshold (50%); triggers higher risk score",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "TODO resolved: Calibrate: test [40, 60] range",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T00:00:00.000000"
-      }
-    },
-    "us_exposure_threshold_1": {
-      "value": 50.0,
-      "rationale": "US geographic exposure threshold (50%); triggers initial risk score",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "TODO resolved: Calibrate: test [40, 60] range",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T00:00:00.000000"
-      }
-    },
-    "us_exposure_threshold_2": {
-      "value": 70.0,
-      "rationale": "High US geographic exposure threshold (70%); triggers higher risk score",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "TODO resolved: Calibrate: test [60, 80] range",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T00:00:00.000000"
-      }
-    },
-    "risk_score_weight_1": {
-      "value": 0.4,
-      "rationale": "Risk score weight for first tier customer concentration",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "TODO resolved: Calibrate: test [0.2, 0.5] range",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T00:00:00.000000"
-      }
-    },
-    "risk_score_weight_2": {
-      "value": 0.3,
-      "rationale": "Risk score weight for second tier customer concentration",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "TODO resolved: Calibrate: test [0.2, 0.4] range",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T00:00:00.000000"
-      }
-    },
-    "risk_score_weight_3": {
-      "value": 0.2,
-      "rationale": "Risk score weight for first tier US exposure",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "TODO resolved: Calibrate: test [0.1, 0.3] range",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T00:00:00.000000"
-      }
-    },
-    "risk_score_weight_4": {
-      "value": 0.1,
-      "rationale": "Risk score weight for second tier US exposure",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "TODO resolved: Calibrate: test [0.05, 0.2] range",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T00:00:00.000000"
-      }
-    },
-    "severity_threshold_medium": {
-      "value": 0.4,
-      "rationale": "Risk score threshold for medium severity",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "TODO resolved: Calibrate: test [0.3, 0.5] range",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T00:00:00.000000"
-      }
-    },
-    "severity_threshold_high": {
-      "value": 0.6,
-      "rationale": "Risk score threshold for high severity",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "TODO resolved: Calibrate: test [0.5, 0.7] range",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T00:00:00.000000"
-      }
-    },
-    "severity_threshold_critical": {
-      "value": 0.8,
-      "rationale": "Risk score threshold for critical severity",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "TODO resolved: Calibrate: test [0.7, 0.9] range",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T00:00:00.000000"
-      }
-    },
-    "impact_multiplier": {
-      "value": 0.15,
-      "rationale": "Multiplier for estimated price impact from risk score",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "TODO resolved: Calibrate: test [0.10, 0.25] range",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T00:00:00.000000"
-      }
-    },
-    "risk_confidence": {
-      "value": 0.85,
-      "rationale": "Confidence level for risk assessment",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "TODO resolved: Calibrate: test [0.70, 0.95] range",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T00:00:00.000000"
-      }
-    },
-    "confidence_signal": {
-      "value": {
-        "signal_base": 0.3,
-        "revenue_norm_denom": 0.5,
-        "revenue_weight": 0.25,
-        "profit_norm_denom": 0.5,
-        "profit_weight": 0.25,
-        "inventory_norm_denom": 10.0,
-        "inventory_weight": 0.1,
-        "utilization_weight": 0.15,
-        "signal_boundary_mix": 0.6,
-        "boundary_denom_factor": 0.3,
-        "confidence_floor": 0.1,
-        "confidence_ceiling": 1.0,
-        "revenue_trend_threshold": 0.1,
-        "revenue_indicator_weight": 0.3,
-        "inventory_trend_threshold": 4.0,
-        "inventory_indicator_weight": 0.25,
-        "profit_trend_threshold": 0.1,
-        "profit_indicator_weight": 0.35,
-        "capacity_trend_threshold": 0.75,
-        "capacity_indicator_weight": 0.3,
-        "trend_up_multiplier": 1.1,
-        "trend_down_multiplier": 0.9,
-        "threshold_range_fallback": 0.25
-      },
-      "rationale": "Signal weights derived from relative informativeness of each metric; boundary denom based on threshold spread; mix ratio balances data amplitude vs phase clarity",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "TODO resolved: Calibrate: backtest each weight against phase transition accuracy",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T00:00:00.000000"
-      }
-    },
-    "confidence_mix": {
-      "value": {
-        "weight_boundary": 0.5,
-        "weight_freshness": 0.25,
-        "weight_seasonal": 0.15,
-        "weight_linkage": 0.0,
-        "weight_narrative": 0.1,
-        "favorable_confidence_min": 0.4
-      },
-      "rationale": "Boundary is primary signal; freshness penalizes stale data; seasonal adds 0.15 from pattern accuracy; linkage at 0 pending supply-chain correlation recalibration; narrative placeholder for future macro event integration",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "TODO resolved: Calibrate: increase WeightLinkage after supply-chain correlations are recomputed from real price data; tune WeightNarrative after narrative HitRate validation",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T00:00:00.000000"
-      }
-    },
-    "seasonal_patterns": {
-      "value": [
-        {
-          "id": "spring_festival",
-          "name": "春節行情",
-          "name_en": "Spring Festival Rally",
-          "start_month": 1,
-          "start_day": 15,
-          "end_month": 2,
-          "end_day": 15,
-          "favored_industries": [
-            "financials"
-          ],
-          "avoided_industries": [
-            "semiconductor",
-            "ai_supply_chain"
-          ],
-          "adjustment_factor": 1.15,
-          "historical_accuracy": 0.4,
-          "avg_market_return": -5e-06,
-          "description": "年前資金回籠，高股息與金融股受追捧；電子股進入淡季"
-        },
-        {
-          "id": "earnings_window",
-          "name": "季報空窗期",
-          "name_en": "Earnings Report Window",
-          "start_month": 3,
-          "start_day": 1,
-          "end_month": 4,
-          "end_day": 15,
-          "favored_industries": [
-            "ai_supply_chain",
-            "semiconductor"
-          ],
-          "avoided_industries": [
-            "consumer",
-            "shipping"
-          ],
-          "adjustment_factor": 1.1,
-          "historical_accuracy": 0.6,
-          "avg_market_return": 0.001,
-          "description": "季報空窗期，成長股與AI供應鏈有表現空間"
-        },
-        {
-          "id": "dividend_season",
-          "name": "除權除息季",
-          "name_en": "Dividend Season",
-          "start_month": 5,
-          "start_day": 1,
-          "end_month": 6,
-          "end_day": 30,
-          "favored_industries": [
-            "financials",
-            "consumer"
-          ],
-          "avoided_industries": [
-            "semiconductor",
-            "ai_supply_chain"
-          ],
-          "adjustment_factor": 1.2,
-          "historical_accuracy": 0.4,
-          "avg_market_return": -5e-06,
-          "description": "除權除息旺季，高股息股與金融股表現較佳；科技股相對弱勢"
-        },
-        {
-          "id": "tech_peak_season",
-          "name": "科技旺季",
-          "name_en": "Technology Peak Season",
-          "start_month": 7,
-          "start_day": 1,
-          "end_month": 9,
-          "end_day": 15,
-          "favored_industries": [
-            "semiconductor",
-            "ai_supply_chain"
-          ],
-          "avoided_industries": [
-            "consumer"
-          ],
-          "adjustment_factor": 1.25,
-          "historical_accuracy": 0.8,
-          "avg_market_return": 0.001,
-          "description": "蘋果新機拉貨、AI晶片需求高峰，科技股表現最強"
-        },
-        {
-          "id": "earnings_verification",
-          "name": "季報驗證期",
-          "name_en": "Earnings Verification",
-          "start_month": 9,
-          "start_day": 15,
-          "end_month": 10,
-          "end_day": 31,
-          "favored_industries": [
-            "semiconductor",
-            "ai_supply_chain",
-            "tech"
-          ],
-          "avoided_industries": [
-            "consumer",
-            "shipping",
-            "defensive"
-          ],
-          "adjustment_factor": 1.1,
-          "historical_accuracy": 0.6,
-          "avg_market_return": -5e-06,
-          "description": "季報公布，獲利優於預期股受追捧，低於預期股遭拋售"
-        },
-        {
-          "id": "year_end_rally",
-          "name": "年底作帳",
-          "name_en": "Year-End Window Dressing",
-          "start_month": 11,
-          "start_day": 1,
-          "end_month": 12,
-          "end_day": 31,
-          "favored_industries": [
-            "tech",
-            "semiconductor",
-            "financials",
-            "etf_rotation"
-          ],
-          "avoided_industries": [
-            "small_cap"
-          ],
-          "adjustment_factor": 1.12,
-          "historical_accuracy": 0.2,
-          "avg_market_return": 0.002,
-          "description": "法人年底作帳，大型權值股與金融股相對強勢"
-        },
-        {
-          "id": "summer_electricity",
-          "name": "夏季用電高峰",
-          "name_en": "Summer Electricity Peak",
-          "start_month": 6,
-          "start_day": 1,
-          "end_month": 8,
-          "end_day": 31,
-          "favored_industries": [
-            "energy"
-          ],
-          "avoided_industries": [
-            "semiconductor"
-          ],
-          "adjustment_factor": 1.08,
-          "historical_accuracy": 0.2,
-          "avg_market_return": -0.001,
-          "description": "夏季用電高峰，能源與公用事業相對強勢；高耗電製造業成本上升"
-        }
-      ],
-      "source": "empirical_calibration",
-      "rationale": "7 canonical Taiwan seasonal patterns calibrated against 5-year FinMind data (2020-2024)",
-      "citation": {
-        "source_type": "empirical",
-        "evidence_quality": "high",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "source_reference": "FinMind TaiwanStockPrice 5-year (2020-2024), data/replay/finmind_2020_2024.jsonl",
-        "last_validated": "2026-05-16T00:00:00Z",
-        "dependencies": [
-          "data/replay/finmind_2020_2024.jsonl",
-          "configs/sector_symbols.json"
-        ],
-        "notes": "7/7 patterns calibrated with 5 observation years each"
-      }
-    },
-    "asymmetric_risk": {
-      "value": {
-        "bad_news_threshold": -0.03,
-        "good_news_threshold": 0.05,
-        "reaction_time_minutes": 30,
-        "volume_spike_multiplier": 2.0
-      },
-      "rationale": "Asymmetric risk detection: 3% drop triggers bad news; 5% rise for good news; 30min reaction window; 2x volume spike confirms",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "Migrated from hardcoded AsymmetricRiskConfig in risk.go",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T11:48:43.000000"
-      }
-    },
-    "news_latency_risk": {
-      "value": {
-        "max_latency_hours": 24.0,
-        "severity_critical_min": 0.8,
-        "severity_high_min": 0.5,
-        "impact_multiplier": 0.05,
-        "drop_critical_threshold": 0.1,
-        "drop_high_threshold": 0.07,
-        "drop_medium_threshold": 0.05,
-        "confidence_divisor": 3.0
-      },
-      "rationale": "News latency risk: 24h max latency gap; severity bands at 0.5/0.8; drop thresholds at 5%/7%/10%; confidence = volMultiplier/divisor",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "Migrated from hardcoded thresholds in risk.go CalculateNewsLatencyRisk + CalculateAsymmetricRisk",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T11:48:43.000000"
-      }
-    },
-    "freshness_scores": {
-      "value": {
-        "score_live": 1.0,
-        "score_recent": 0.8,
-        "score_stale": 0.4,
-        "score_fallback": 0.2,
-        "score_default": 0.3
-      },
-      "rationale": "Maps DataFreshness enum to confidence weights; live=1.0, recent=0.8, stale=0.4, fallback=0.2, default=0.3",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "Migrated from hardcoded freshnessFactor() in cycle.go",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T11:48:43.000000"
-      }
-    },
-    "phase_scores": {
-      "value": {
-        "score_expansion": 1.0,
-        "score_recovery": 0.5,
-        "score_mature": 0.0,
-        "score_recession": -1.0
-      },
-      "rationale": "Cycle phase scores: Expansion=1.0 (strongest bullish), Recovery=0.5, Mature=0.0 (neutral), Recession=-1.0 (bearish)",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "Migrated from hardcoded GetPhaseScore() in cycle.go",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T11:48:43.000000"
-      }
-    },
-    "cycle_transitions": {
-      "value": [
-        {
-          "from_phase": "recession",
-          "to_phase": "recovery",
-          "probability": 0.7,
-          "typical_duration_days": 180,
-          "triggers": [
-            "inventory_depletion",
-            "demand_stabilization"
-          ]
-        },
-        {
-          "from_phase": "recovery",
-          "to_phase": "expansion",
-          "probability": 0.8,
-          "typical_duration_days": 270,
-          "triggers": [
-            "revenue_acceleration",
-            "capex_increase"
-          ]
-        },
-        {
-          "from_phase": "expansion",
-          "to_phase": "mature",
-          "probability": 0.6,
-          "typical_duration_days": 360,
-          "triggers": [
-            "growth_deceleration",
-            "margin_compression"
-          ]
-        },
-        {
-          "from_phase": "mature",
-          "to_phase": "recession",
-          "probability": 0.5,
-          "typical_duration_days": 180,
-          "triggers": [
-            "demand_destruction",
-            "overcapacity"
-          ]
-        }
-      ],
-      "rationale": "TW market cycle transition probabilities and durations; recovery→expansion strongest (0.8), mature→recession weakest (0.5)",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "Migrated from hardcoded GetTypicalTransitions() in cycle.go",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T11:48:43.000000"
-      }
-    },
-    "cycle_weight_multipliers": {
-      "value": {
-        "expansion_multiplier": 1.2,
-        "recovery_multiplier": 1.1,
-        "mature_multiplier": 1.0,
-        "recession_multiplier": 0.7
-      },
-      "rationale": "Cycle phase weight multipliers for industry map: expansion +20%, recovery +10%, mature neutral, recession -30%",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "Industry map weight integration",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-16T00:00:00.000000"
-      }
-    },
-    "linkage_weight_impact": {
-      "value": 0.2,
-      "rationale": "Linkage systemic importance deviation scaling: ±20% max impact on weight",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "Industry map weight integration",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-16T00:00:00.000000"
-      }
-    },
-    "weight_floor": {
-      "value": 0.03,
-      "rationale": "Minimum 3% weight per industry after normalization to prevent elimination",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "Industry map weight integration",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-16T00:00:00.000000"
-      }
-    },
-    "max_daily_weight_change": {
-      "value": 0.05,
-      "rationale": "Maximum 5% daily weight change to prevent excessive volatility",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "Industry map weight integration",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-16T00:00:00.000000"
-      }
-    },
-    "linkage_params": {
-      "value": {
-        "downstream_decay_factor": 0.8,
-        "upstream_decay_factor": 0.6,
-        "seasonal_decay_factor": 0.3,
-        "default_correlation": 0.5,
-        "systemic_importance_divisor": 10.0,
-        "min_correlation_threshold": 0.3,
-        "correlation_window_days": 30,
-        "correlation_matrix": {
-          "ai_supply_chain↔energy": 0.12,
-          "ai_supply_chain↔electronics": 0.65,
-          "ai_supply_chain↔financials": 0.2,
-          "ai_supply_chain↔robotics": 0.55,
-          "ai_supply_chain↔shipping": 0.05,
-          "consumer↔energy": 0.15,
-          "consumer↔industrial": 0.2,
-          "cooling↔ai_supply_chain": 0.6,
-          "cooling↔consumer": 0.05,
-          "cooling↔electronics": 0.45,
-          "cooling↔energy": 0.25,
-          "cooling↔financials": 0.1,
-          "cooling↔industrial": 0.25,
-          "cooling↔robotics": 0.15,
-          "cooling↔semiconductor": 0.5,
-          "cooling↔server_assembly": 0.7,
-          "cooling↔shipping": -0.05,
-          "electronics↔energy": 0.1,
-          "electronics↔financials": 0.12,
-          "electronics↔shipping": 0.05,
-          "energy↔financials": 0.08,
-          "energy↔industrial": 0.45,
-          "energy↔robotics": 0.3,
-          "financials↔consumer": 0.35,
-          "financials↔industrial": 0.25,
-          "financials↔shipping": 0.05,
-          "foundry↔ai_supply_chain": 0.82,
-          "foundry↔consumer": 0.05,
-          "foundry↔cooling": 0.25,
-          "foundry↔electronics": 0.6,
-          "foundry↔energy": 0.05,
-          "foundry↔financials": 0.12,
-          "foundry↔industrial": 0.35,
-          "foundry↔robotics": 0.4,
-          "foundry↔semiconductor": 0.88,
-          "foundry↔server_assembly": 0.78,
-          "foundry↔shipping": -0.08,
-          "robotics↔consumer": 0.25,
-          "robotics↔electronics": 0.48,
-          "robotics↔financials": 0.1,
-          "robotics↔industrial": 0.6,
-          "robotics↔shipping": 0.1,
-          "semiconductor↔ai_supply_chain": 0.85,
-          "semiconductor↔electronics": 0.72,
-          "semiconductor↔energy": 0.05,
-          "semiconductor↔financials": 0.15,
-          "semiconductor↔robotics": 0.45,
-          "semiconductor↔shipping": -0.1,
-          "server_assembly↔ai_supply_chain": 0.8,
-          "server_assembly↔consumer": 0.05,
-          "server_assembly↔electronics": 0.55,
-          "server_assembly↔energy": 0.2,
-          "server_assembly↔financials": 0.15,
-          "server_assembly↔industrial": 0.3,
-          "server_assembly↔robotics": 0.45,
-          "server_assembly↔semiconductor": 0.75,
-          "server_assembly↔shipping": -0.02,
-          "shipping↔energy": 0.4,
-          "shipping↔industrial": 0.3
-        }
-      },
-      "rationale": "Downstream decay (0.80) > upstream (0.60) reflects asymmetric shock propagation; systemic divisor (10.0) normalizes connection count to 0-1; min threshold (0.30) filters noise",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic_with_narrative_aware",
-        "source_reference": "Industry-pair correlations set via expert heuristics; narrative modulation wired via SeasonalBridge.CorrelationMultiplier(); empirical calibration blocked pending TWSE sector index data provider",
-        "evidence_quality": "heuristic_awaiting_data",
-        "update_policy": "auto",
-        "validation_method": "pending_empirical_calibration",
-        "dependencies": [
-          "narrative.SeasonalBridge",
-          "industry.CorrelationMultiplier",
-          "marketdata.TWSESectorProvider (missing)"
-        ],
-        "last_validated": "2026-05-15T12:00:00.000000"
-      }
-    },
-    "dynamic_env": {
-      "value": {
-        "oil_high_threshold": 0.1,
-        "oil_low_threshold": 0.1,
-        "oil_energy_mult": 0.5,
-        "oil_shipping_penalty": 0.05,
-        "oil_shipping_benefit": 0.05,
-        "oil_industrial_penalty": 0.06,
-        "oil_industrial_benefit": 0.04,
-        "bdi_high_threshold": 0.1,
-        "bdi_low_threshold": 0.1,
-        "bdi_shipping_boost": 0.3,
-        "bdi_cost_penalty": 0.04,
-        "dxy_high_threshold": 0.05,
-        "dxy_low_threshold": 0.03,
-        "dxy_export_penalty": 0.05,
-        "dxy_export_benefit": 0.04
-      },
-      "rationale": "Dynamic env modulation thresholds and multipliers: oil >10% triggers energy/shipping/industrial adjustments; BDI >10% amplifies shipping; DXY >5% penalizes exporters",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "TODO resolved: Calibrate: backtest each multiplier against historical sector returns during macro regime shifts",
-        "evidence_quality": "low",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T00:00:00.000000"
-      }
-    },
-    "history_retention_days": {
-      "value": 90,
-      "rationale": "Keep 90 days of cycle history for trend analysis (approximately 3 trading months)",
-      "source": "heuristic",
-      "citation": {
-        "source_type": "heuristic",
-        "source_reference": "Migrated from hardcoded constant in cycle.go:189",
-        "evidence_quality": "medium",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration",
-        "dependencies": [],
-        "last_validated": "2026-05-15T12:02:39.000000"
       }
     }
   },
