@@ -341,6 +341,24 @@ type CycleThresholdConfig struct {
 	MatureProfitPct     float64 `json:"mature_profit_pct"`
 }
 
+// InventoryCycleThresholdConfig holds inventory cycle detection thresholds.
+type InventoryCycleThresholdConfig struct {
+	ActiveRestockingInventoryMin  float64 `json:"active_restocking_inventory_min"`
+	ActiveRestockingCapacityMin   float64 `json:"active_restocking_capacity_min"`
+	PassiveRestockingInventoryMin float64 `json:"passive_restocking_inventory_min"`
+	PassiveRestockingCapacityMin  float64 `json:"passive_restocking_capacity_min"`
+	ActiveDestockingInventoryMax  float64 `json:"active_destocking_inventory_max"`
+	ActiveDestockingCapacityMax   float64 `json:"active_destocking_capacity_max"`
+}
+
+// CapexCycleThresholdConfig holds capex cycle detection thresholds.
+type CapexCycleThresholdConfig struct {
+	ExpansionCapacityMin   float64 `json:"expansion_capacity_min"`
+	ExpansionRevenueMin    float64 `json:"expansion_revenue_min"`
+	MaintenanceCapacityMin float64 `json:"maintenance_capacity_min"`
+	MaintenanceRevenueMin  float64 `json:"maintenance_revenue_min"`
+}
+
 // StrategyParameters holds tunable values for strategy selection and switching.
 type StrategyParameters struct {
 	MinSwitchIntervalDays ParameterMetadata[int]     `json:"min_switch_interval_days"`
