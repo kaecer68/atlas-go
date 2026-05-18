@@ -152,7 +152,9 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       const capitalRows = [
         ['外資淨買超(億)', snapshot.foreign_investor_net],
         ['投信淨買超(億)', snapshot.domestic_fund_net],
-        ['自營商淨買超(億)', snapshot.dealer_net]
+        ['自營商淨買超(億)', snapshot.dealer_net],
+        ['融資餘額(億)', snapshot.retail_margin_balance],
+        ['融券餘額(億)', snapshot.retail_short_balance]
       ];
       let latestTs = 0;
       rows.forEach(([_, pt]) => { if (pt && pt.timestamp > latestTs) latestTs = pt.timestamp; });
