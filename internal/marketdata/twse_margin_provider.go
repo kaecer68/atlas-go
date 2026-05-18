@@ -42,9 +42,13 @@ func (t *TWSEMarginBalanceProvider) Name() string {
 
 // FetchSnapshot retrieves the latest margin balance data.
 func (t *TWSEMarginBalanceProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
-	now := time.Now().UTC()
+	return t.FetchSnapshotForDate(ctx, time.Now().UTC())
+}
+
+// FetchSnapshotForDate retrieves margin balance data for a specific date.
+func (t *TWSEMarginBalanceProvider) FetchSnapshotForDate(ctx context.Context, date time.Time) (MacroDataSnapshot, error) {
 	for i := range 7 {
-		dateStr := now.AddDate(0, 0, -i).Format("20060102")
+		dateStr := date.AddDate(0, 0, -i).Format("20060102")
 		balance, shortBalance, changePct, shortChangePct, err := t.fetchDateExpanded(ctx, dateStr)
 		if err == nil {
 			if err := t.saveMargin(dateStr, balance, shortBalance, changePct, shortChangePct); err != nil {

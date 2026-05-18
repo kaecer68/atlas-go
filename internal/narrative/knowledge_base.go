@@ -142,7 +142,8 @@ func copySectorMap(src map[string][]string) map[string][]string {
 // NewNarrativeEngine creates a narrative engine with default templates and models.
 func NewNarrativeEngine() *NarrativeEngine {
 	return &NarrativeEngine{
-		kb: NewKnowledgeBase(),
+		kb:         NewKnowledgeBase(),
+		stressCalc: NewTaiwanStressCalculator(nil, ""),
 		models: []InvestmentModel{
 			{
 				ID:             "hawkish_fed_model",

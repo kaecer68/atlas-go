@@ -33,6 +33,7 @@ import (
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 	apischeduler "github.com/kaecer68/atlas-go/internal/monitoring/api/scheduler"
 	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
+	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/repository"
@@ -504,6 +505,19 @@ func run(args []string, deps appDeps) error {
 				},
 			})
 			log.Printf("[Gateway] registered auto_margin background task (30m interval)")
+
+			// Register margin_history_backfill via Gateway.
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "margin_history_backfill",
+				ChannelID: "twse_margin",
+				Interval:  24 * time.Hour,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					backfiller := narrative.NewMarginHistoryBackfiller(cfg.WorkDir)
+					return backfiller.Backfill()
+				},
+			})
+			log.Printf("[Gateway] registered margin_history_backfill background task (24h interval)")
 
 			// Register auto_export via Gateway.
 			taskMgr.Register(&apigateway.ScheduledTask{

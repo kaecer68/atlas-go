@@ -135,9 +135,9 @@ func marginStage2Confirmed(accel, median float64, positive bool) bool {
 func isMarginHistoryError(err error) bool { return err != nil }
 
 type MarginHistoryBackfiller struct {
-	WorkDir       string
-	Provider      *marketdata.TWSEMarginBalanceProvider
-	LookbackDays  int
+	WorkDir      string
+	Provider     *marketdata.TWSEMarginBalanceProvider
+	LookbackDays int
 }
 
 func NewMarginHistoryBackfiller(workDir string) *MarginHistoryBackfiller {
@@ -168,12 +168,13 @@ func (b *MarginHistoryBackfiller) Backfill() error {
 	ctx := context.Background()
 	fetched := 0
 	for i := 0; i < b.LookbackDays; i++ {
-		date := time.Now().AddDate(0, 0, -i).Format("20060102")
-		if existingDates[date] {
+		date := time.Now().AddDate(0, 0, -i)
+		dateStr := date.Format("20060102")
+		if existingDates[dateStr] {
 			continue
 		}
-		if _, err := b.Provider.FetchSnapshot(ctx); err != nil {
-			logging.Warn("margin_backfill", "fetch_failed", logging.Err(err), "date", date)
+		if _, err := b.Provider.FetchSnapshotForDate(ctx, date); err != nil {
+			logging.Warn("margin_backfill", "fetch_failed", logging.Err(err), "date", dateStr)
 			continue
 		}
 		fetched++
