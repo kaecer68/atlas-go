@@ -30,6 +30,8 @@ type TaiwanStressIndex struct {
 // - VIX 恐慌指數（15%）：全球風險偏好溫度計，新興市場連動性高
 // - 地緣政治風險（15%）：台海 / 中東 / 全球風險事件的衝擊，間歇性但高度影響
 // - 日圓套利壓力（10%）：歷史相關性最弱，主要透過新興市場情緒間接傳導
+// - 原油（7%）：中東/能源衝擊的即時壓力代理
+// - 黃金（6%）：避險資金與通膨/地緣壓力代理
 //
 // 演進機制：這些權重不應永久固定。建議以下演進路徑：
 //  1. 短期（當前）：固定權重，基於領域知識設定
@@ -46,14 +48,18 @@ const (
 	stressScaleVIX          = 100.0 / 40.0 // VIX 原始值 → 壓力分數：VIX=30 → 75 分，VIX=40 → 100 分
 	stressScaleJPY          = 10.0         // 日圓變化率 (%) → 壓力分數：每 1% = 10 分，10% 達上限
 	stressScaleGeopolitical = 1.0          // 地緣風險強度直接使用（已為 0-100）
+	stressScaleOil          = 2.0          // 原油變化率 (%) → 每 $10 變化 = 2 分，$500 達上限
+	stressScaleGold         = 2.0          // 黃金變化率 (%) → 每 $50 變化 = 2 分，$2500 達上限
 
 	// 六因子權重 — 總和必須為 1.00
-	stressWeightDXY          = 0.15 // DXY 美元指數：美元走強 → 資金回流美國 → 台股賣壓
-	stressWeightUS10Y        = 0.20 // US10Y 美債殖利率：利率上升 → 資金流向美債 → 外資撤離
-	stressWeightForeignFlow  = 0.25 // 外商淨流向：最直接的壓力指標，權重最高
-	stressWeightVIX          = 0.15 // VIX 恐慌指數：全球避險情緒 → 新興市場資金流出
-	stressWeightJPY          = 0.10 // 日圓套利平倉：間接影響，透過新興市場情緒傳導
-	stressWeightGeopolitical = 0.15 // 地緣政治風險：間歇性但高度衝擊
+	stressWeightDXY          = 0.13 // DXY 美元指數：美元走強 → 資金回流美國 → 台股賣壓
+	stressWeightUS10Y        = 0.18 // US10Y 美債殖利率：利率上升 → 資金流向美債 → 外資撤離
+	stressWeightForeignFlow  = 0.22 // 外商淨流向：最直接的壓力指標，權重最高
+	stressWeightVIX          = 0.13 // VIX 恐慌指數：全球避險情緒 → 新興市場資金流出
+	stressWeightJPY          = 0.08 // 日圓套利平倉：間接影響，透過新興市場情緒傳導
+	stressWeightGeopolitical = 0.13 // 地緣政治風險：間歇性但高度衝擊
+	stressWeightOil          = 0.07 // 原油：中東/能源風險代理
+	stressWeightGold         = 0.06 // 黃金：避險/通膨代理
 
 	// 壓力等級閾值
 	stressThresholdCrisis = 70.0 // 紅燈：系統性風險
@@ -86,6 +92,8 @@ type StressIndexScaling struct {
 	VIX          float64 `json:"vix"`
 	JPY          float64 `json:"jpy"`
 	Geopolitical float64 `json:"geopolitical"`
+	Oil          float64 `json:"oil"`
+	Gold         float64 `json:"gold"`
 }
 
 type StressIndexWeights struct {
@@ -95,6 +103,8 @@ type StressIndexWeights struct {
 	VIX          float64 `json:"vix"`
 	JPY          float64 `json:"jpy"`
 	Geopolitical float64 `json:"geopolitical"`
+	Oil          float64 `json:"oil"`
+	Gold         float64 `json:"gold"`
 }
 
 type StressIndexThresholds struct {
@@ -123,7 +133,7 @@ func LoadWeightsConfig(workDir string) *StressIndexWeightsConfig {
 
 func (c *StressIndexWeightsConfig) isValid() bool {
 	sum := c.Weights.DXY + c.Weights.US10Y + c.Weights.ForeignFlow +
-		c.Weights.VIX + c.Weights.JPY + c.Weights.Geopolitical
+		c.Weights.VIX + c.Weights.JPY + c.Weights.Geopolitical + c.Weights.Oil + c.Weights.Gold
 	return sum > 0.99 && sum < 1.01
 }
 
@@ -150,8 +160,8 @@ func NewTaiwanStressCalculator(geoProvider GeopoliticalRiskProvider, workDir str
 func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapshot, geoScore GeopoliticalRiskScore) TaiwanStressIndex {
 	components := make(map[string]float64)
 
-	scaleDXY, scaleUS10Y, scaleFlow, scaleVIX, scaleJPY, scaleGeo := c.getScaling()
-	wDXY, wUS10Y, wFlow, wVIX, wJPY, wGeo := c.getWeights()
+	scaleDXY, scaleUS10Y, scaleFlow, scaleVIX, scaleJPY, scaleGeo, scaleOil, scaleGold := c.getScaling()
+	wDXY, wUS10Y, wFlow, wVIX, wJPY, wGeo, wOil, wGold := c.getWeights()
 	tCrisis, tHigh, tAlert := c.getThresholds()
 
 	dxyComponent := math.Abs(snap.DXY.ChangePct) * scaleDXY
@@ -199,8 +209,20 @@ func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapsh
 	geoComponent := geoScore.Intensity * scaleGeo
 	components["geopolitical"] = geoComponent * wGeo
 
+	oilComponent := math.Abs(snap.Oil.ChangePct) * scaleOil
+	if oilComponent > 100 {
+		oilComponent = 100
+	}
+	components["oil"] = oilComponent * wOil
+
+	goldComponent := math.Abs(snap.Gold.ChangePct) * scaleGold
+	if goldComponent > 100 {
+		goldComponent = 100
+	}
+	components["gold"] = goldComponent * wGold
+
 	score := components["dxy"] + components["us10y"] + components["foreign_flow"] +
-		components["vix"] + components["jpy"] + components["geopolitical"]
+		components["vix"] + components["jpy"] + components["geopolitical"] + components["oil"] + components["gold"]
 
 	regime := "low"
 	switch {
@@ -220,24 +242,28 @@ func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapsh
 	}
 }
 
-func (c *TaiwanStressCalculator) getScaling() (dxy, us10y, flow, vix, jpy, geo float64) {
+func (c *TaiwanStressCalculator) getScaling() (dxy, us10y, flow, vix, jpy, geo, oil, gold float64) {
 	if c.weightsConfig != nil {
 		return c.weightsConfig.Scaling.DXY, c.weightsConfig.Scaling.US10Y,
 			c.weightsConfig.Scaling.ForeignFlow, c.weightsConfig.Scaling.VIX,
-			c.weightsConfig.Scaling.JPY, c.weightsConfig.Scaling.Geopolitical
+			c.weightsConfig.Scaling.JPY, c.weightsConfig.Scaling.Geopolitical,
+			c.weightsConfig.Scaling.Oil, c.weightsConfig.Scaling.Gold
 	}
 	return stressScaleDXY, stressScaleUS10Y, stressScaleForeignFlow,
-		stressScaleVIX, stressScaleJPY, stressScaleGeopolitical
+		stressScaleVIX, stressScaleJPY, stressScaleGeopolitical,
+		stressScaleOil, stressScaleGold
 }
 
-func (c *TaiwanStressCalculator) getWeights() (dxy, us10y, flow, vix, jpy, geo float64) {
+func (c *TaiwanStressCalculator) getWeights() (dxy, us10y, flow, vix, jpy, geo, oil, gold float64) {
 	if c.weightsConfig != nil {
 		return c.weightsConfig.Weights.DXY, c.weightsConfig.Weights.US10Y,
 			c.weightsConfig.Weights.ForeignFlow, c.weightsConfig.Weights.VIX,
-			c.weightsConfig.Weights.JPY, c.weightsConfig.Weights.Geopolitical
+			c.weightsConfig.Weights.JPY, c.weightsConfig.Weights.Geopolitical,
+			c.weightsConfig.Weights.Oil, c.weightsConfig.Weights.Gold
 	}
 	return stressWeightDXY, stressWeightUS10Y, stressWeightForeignFlow,
-		stressWeightVIX, stressWeightJPY, stressWeightGeopolitical
+		stressWeightVIX, stressWeightJPY, stressWeightGeopolitical,
+		stressWeightOil, stressWeightGold
 }
 
 func (c *TaiwanStressCalculator) getThresholds() (crisis, high, alert float64) {

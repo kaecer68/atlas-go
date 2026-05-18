@@ -318,7 +318,7 @@ func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot, div *Dive
 	}
 
 	if div != nil && curr.RetailMarginBalance.Symbol != "" && curr.ForeignInvestorNet.Symbol != "" {
-		div.Update(curr.RetailMarginBalance.Value, curr.ForeignInvestorNet.Value)
+		div.Update(curr.RetailMarginBalance.Value, prev.RetailMarginBalance.Value, curr.ForeignInvestorNet.Value, prev.ForeignInvestorNet.Value)
 		_, marginZ := div.RetailDivergenceAndMarginZScore(curr.RetailMarginBalance.Value, curr.ForeignInvestorNet.Value)
 		if event := detectRetailDivergenceEventFromSnapshot(curr.ForeignInvestorNet, marginZ, now); event != nil {
 			events = append(events, *event)
@@ -578,7 +578,59 @@ func detectRetailFrenzyEventFromSnapshot(marginBalance marketdata.MacroDataPoint
 	if marginBalance.Symbol == "" {
 		return nil
 	}
-	if marginBalance.Value > 2000 {
+	history, err := LoadMarginHistory(DefaultMarginHistoryDir)
+	if err == nil && marginHistoryAvailable(history) {
+		percentile, ok := ComputeRollingPercentile(history, marginBalance.Value, 60)
+		if ok && percentile >= 90 {
+			accel, accelOK := ComputeRollingAcceleration(history, 5)
+			medianAccel, medianOK := historicalMedianAcceleration(history, 5)
+			confirmed := accelOK && medianOK && marginStage2Confirmed(accel, medianAccel, true)
+			confidence := 0.45
+			if confirmed {
+				confidence = marginPercentileConfidence(percentile)
+			}
+			return &NarrativeEvent{
+				ID:               fmt.Sprintf("evt-retail-frenzy-%d", now.UnixNano()),
+				Theme:            "retail_frenzy",
+				Region:           "TW",
+				Sentiment:        1.0,
+				Confidence:       confidence,
+				ConfidenceSource: "margin_history_percentile",
+				HitRate:          hitRateForTheme("retail_frenzy"),
+				CapitalFlow:      "retail_chasing",
+				TimeWindow:       "1-2_weeks",
+				Timestamp:        now,
+				SourceData: map[string]float64{
+					"margin_balance": marginBalance.Value,
+					"percentile":     percentile,
+					"acceleration":   accel,
+					"median_accel":   medianAccel,
+				},
+			}
+		}
+		return nil
+	}
+	if err == nil {
+		// TODO: remove fallback once margin history retention reaches 30+ days.
+		if marginBalance.Value > 2000 {
+			return &NarrativeEvent{
+				ID:               fmt.Sprintf("evt-retail-frenzy-%d", now.UnixNano()),
+				Theme:            "retail_frenzy",
+				Region:           "TW",
+				Sentiment:        1.0,
+				Confidence:       0.55,
+				ConfidenceSource: "margin_balance_threshold",
+				HitRate:          hitRateForTheme("retail_frenzy"),
+				CapitalFlow:      "retail_chasing",
+				TimeWindow:       "1-2_weeks",
+				Timestamp:        now,
+				SourceData: map[string]float64{
+					"margin_balance": marginBalance.Value,
+				},
+			}
+		}
+	}
+	if isMarginHistoryError(err) && marginBalance.Value > 2000 {
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-retail-frenzy-%d", now.UnixNano()),
 			Theme:            "retail_frenzy",
@@ -602,7 +654,58 @@ func detectRetailFearEventFromSnapshot(marginBalance marketdata.MacroDataPoint, 
 	if marginBalance.Symbol == "" {
 		return nil
 	}
-	if marginBalance.Value < 1200 {
+	history, err := LoadMarginHistory(DefaultMarginHistoryDir)
+	if err == nil && marginHistoryAvailable(history) {
+		percentile, ok := ComputeRollingPercentile(history, marginBalance.Value, 60)
+		if ok && percentile <= 10 {
+			accel, accelOK := ComputeRollingAcceleration(history, 5)
+			medianAccel, medianOK := historicalMedianAcceleration(history, 5)
+			confirmed := accelOK && medianOK && marginStage2Confirmed(accel, medianAccel, false)
+			confidence := 0.45
+			if confirmed {
+				confidence = marginPercentileConfidence(100 - percentile)
+			}
+			return &NarrativeEvent{
+				ID:               fmt.Sprintf("evt-retail-fear-%d", now.UnixNano()),
+				Theme:            "retail_fear",
+				Region:           "TW",
+				Sentiment:        -1.0,
+				Confidence:       confidence,
+				ConfidenceSource: "margin_history_percentile",
+				HitRate:          hitRateForTheme("retail_fear"),
+				CapitalFlow:      "retail_fleeing",
+				TimeWindow:       "1-2_weeks",
+				Timestamp:        now,
+				SourceData: map[string]float64{
+					"margin_balance": marginBalance.Value,
+					"percentile":     percentile,
+					"acceleration":   accel,
+					"median_accel":   medianAccel,
+				},
+			}
+		}
+		return nil
+	}
+	if err == nil {
+		if marginBalance.Value < 1200 {
+			return &NarrativeEvent{
+				ID:               fmt.Sprintf("evt-retail-fear-%d", now.UnixNano()),
+				Theme:            "retail_fear",
+				Region:           "TW",
+				Sentiment:        -1.0,
+				Confidence:       0.60,
+				ConfidenceSource: "margin_balance_threshold",
+				HitRate:          hitRateForTheme("retail_fear"),
+				CapitalFlow:      "retail_fleeing",
+				TimeWindow:       "1-2_weeks",
+				Timestamp:        now,
+				SourceData: map[string]float64{
+					"margin_balance": marginBalance.Value,
+				},
+			}
+		}
+	}
+	if isMarginHistoryError(err) && marginBalance.Value < 1200 {
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-retail-fear-%d", now.UnixNano()),
 			Theme:            "retail_fear",
