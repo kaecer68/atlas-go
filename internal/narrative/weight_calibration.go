@@ -104,6 +104,13 @@ func (e *WeightCalibrationEngine) LoadHistoricalData(workDir string, windowDays 
 		return nil, fmt.Errorf("load historical data: no paired macro/flow records found")
 	}
 
+	// OutflowTarget uses forward-looking data (t+5) as a lead indicator for
+	// calibration. This is intentional: we want to measure whether each factor
+	// predicts future outflow direction, not current outflow. The 5-day window
+	// aligns with typical foreign fund settlement cycles.
+	//
+	// WARNING: This introduces look-ahead bias if used for real-time prediction.
+	// It is safe for offline weight calibration only.
 	for i := range records {
 		if i+5 < len(records) {
 			records[i].OutflowTarget = records[i+5].Outflow
@@ -210,7 +217,11 @@ func (e *WeightCalibrationEngine) CalibrateWeights(accuracies map[string]float64
 }
 
 func (e *WeightCalibrationEngine) ExportConfig(workDir string, weights StressIndexWeights, scaling StressIndexScaling, thresholds StressIndexThresholds) error {
+	weights = normalizeWeights(weights)
 	cfg := StressIndexWeightsConfig{Scaling: scaling, Weights: weights, Thresholds: thresholds}
+	if !cfg.isValid() {
+		return fmt.Errorf("export config: invalid weights config")
+	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return fmt.Errorf("export config: marshal: %w", err)
@@ -245,6 +256,23 @@ func factorSignal(factor string, snap marketdata.MacroDataSnapshot, foreignNet f
 		return snap.Gold.ChangePct
 	default:
 		return 0
+	}
+}
+
+func normalizeWeights(w StressIndexWeights) StressIndexWeights {
+	sum := w.DXY + w.US10Y + w.ForeignFlow + w.VIX + w.JPY + w.Geopolitical + w.Oil + w.Gold
+	if sum == 0 {
+		return w
+	}
+	return StressIndexWeights{
+		DXY:          w.DXY / sum,
+		US10Y:        w.US10Y / sum,
+		ForeignFlow:  w.ForeignFlow / sum,
+		VIX:          w.VIX / sum,
+		JPY:          w.JPY / sum,
+		Geopolitical: w.Geopolitical / sum,
+		Oil:          w.Oil / sum,
+		Gold:         w.Gold / sum,
 	}
 }
 

@@ -87,12 +87,13 @@ func (kb *KnowledgeBase) MatchChains(event NarrativeEvent) []CausalChain {
 
 // NarrativeEngine orchestrates event detection and causal chain matching.
 type NarrativeEngine struct {
-	kb         *KnowledgeBase
-	models     []InvestmentModel
-	stressCalc *TaiwanStressCalculator
-	lastMacro  marketdata.MacroDataSnapshot
-	prevMacro  marketdata.MacroDataSnapshot
-	lastGeo    GeopoliticalRiskScore
+	kb            *KnowledgeBase
+	models        []InvestmentModel
+	stressCalc    *TaiwanStressCalculator
+	stressHistory []TaiwanStressIndex
+	lastMacro     marketdata.MacroDataSnapshot
+	prevMacro     marketdata.MacroDataSnapshot
+	lastGeo       GeopoliticalRiskScore
 }
 
 var defaultSectorSymbolMap = map[string][]string{
@@ -422,11 +423,22 @@ func (ne *NarrativeEngine) GetCurrentStressIndex() TaiwanStressIndex {
 	if ne.stressCalc == nil {
 		return TaiwanStressIndex{}
 	}
-	return ne.stressCalc.Calculate(ne.lastMacro, ne.prevMacro, ne.lastGeo)
+	idx := ne.stressCalc.Calculate(ne.lastMacro, ne.prevMacro, ne.lastGeo)
+	ne.stressHistory = append(ne.stressHistory, idx)
+	return idx
 }
 
 func (ne *NarrativeEngine) GetStressIndexHistory(days int) []TaiwanStressIndex {
-	return []TaiwanStressIndex{}
+	if days <= 0 {
+		days = 30
+	}
+	if len(ne.stressHistory) == 0 {
+		return []TaiwanStressIndex{}
+	}
+	if days >= len(ne.stressHistory) {
+		return append([]TaiwanStressIndex(nil), ne.stressHistory...)
+	}
+	return append([]TaiwanStressIndex(nil), ne.stressHistory[len(ne.stressHistory)-days:]...)
 }
 
 func (ne *NarrativeEngine) GetStressIndexThresholds() StressIndexThresholds {

@@ -149,7 +149,7 @@ func NewMarginHistoryBackfiller(workDir string) *MarginHistoryBackfiller {
 	}
 }
 
-func (b *MarginHistoryBackfiller) Backfill() error {
+func (b *MarginHistoryBackfiller) Backfill(ctx context.Context) error {
 	marginDir := filepath.Join(b.WorkDir, DefaultMarginHistoryDir)
 	if err := os.MkdirAll(marginDir, 0o755); err != nil {
 		return fmt.Errorf("margin backfill: mkdir: %w", err)
@@ -165,9 +165,13 @@ func (b *MarginHistoryBackfiller) Backfill() error {
 		existingDates[e.Date] = true
 	}
 
-	ctx := context.Background()
 	fetched := 0
 	for i := 0; i < b.LookbackDays; i++ {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		date := time.Now().AddDate(0, 0, -i)
 		dateStr := date.Format("20060102")
 		if existingDates[dateStr] {

@@ -514,7 +514,7 @@ func run(args []string, deps appDeps) error {
 				Enabled:   true,
 				Task: func(ctx context.Context) error {
 					backfiller := narrative.NewMarginHistoryBackfiller(cfg.WorkDir)
-					return backfiller.Backfill()
+					return backfiller.Backfill(ctx)
 				},
 			})
 			log.Printf("[Gateway] registered margin_history_backfill background task (24h interval)")

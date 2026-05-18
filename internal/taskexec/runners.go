@@ -352,6 +352,12 @@ func (r *marginBackfillRunner) Name() string {
 }
 
 func (r *marginBackfillRunner) Run(ctx context.Context, req SubmitRequest, sink EventSink) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	sink.Emit(domain.TaskExecutionEvent{
 		EventType: domain.TaskEventStatus,
 		Stream:    "system",
@@ -359,8 +365,14 @@ func (r *marginBackfillRunner) Run(ctx context.Context, req SubmitRequest, sink 
 	})
 
 	backfiller := narrative.NewMarginHistoryBackfiller(r.workDir)
-	if err := backfiller.Backfill(); err != nil {
+	if err := backfiller.Backfill(ctx); err != nil {
 		return fmt.Errorf("margin backfill: %w", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
 	}
 
 	sink.Emit(domain.TaskExecutionEvent{
