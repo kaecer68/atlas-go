@@ -173,6 +173,9 @@ func (b *MarginHistoryBackfiller) Backfill(ctx context.Context) error {
 		default:
 		}
 		date := time.Now().AddDate(0, 0, -i)
+		if date.Weekday() == time.Saturday || date.Weekday() == time.Sunday {
+			continue
+		}
 		dateStr := date.Format("20060102")
 		if existingDates[dateStr] {
 			continue

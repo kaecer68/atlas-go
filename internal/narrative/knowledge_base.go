@@ -91,6 +91,7 @@ type NarrativeEngine struct {
 	models        []InvestmentModel
 	stressCalc    *TaiwanStressCalculator
 	stressHistory []TaiwanStressIndex
+	stressMu      sync.Mutex
 	lastMacro     marketdata.MacroDataSnapshot
 	prevMacro     marketdata.MacroDataSnapshot
 	lastGeo       GeopoliticalRiskScore
@@ -424,7 +425,12 @@ func (ne *NarrativeEngine) GetCurrentStressIndex() TaiwanStressIndex {
 		return TaiwanStressIndex{}
 	}
 	idx := ne.stressCalc.Calculate(ne.lastMacro, ne.prevMacro, ne.lastGeo)
+	ne.stressMu.Lock()
 	ne.stressHistory = append(ne.stressHistory, idx)
+	if len(ne.stressHistory) > 365 {
+		ne.stressHistory = ne.stressHistory[len(ne.stressHistory)-365:]
+	}
+	ne.stressMu.Unlock()
 	return idx
 }
 
@@ -432,6 +438,8 @@ func (ne *NarrativeEngine) GetStressIndexHistory(days int) []TaiwanStressIndex {
 	if days <= 0 {
 		days = 30
 	}
+	ne.stressMu.Lock()
+	defer ne.stressMu.Unlock()
 	if len(ne.stressHistory) == 0 {
 		return []TaiwanStressIndex{}
 	}

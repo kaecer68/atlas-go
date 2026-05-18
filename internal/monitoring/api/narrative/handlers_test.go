@@ -80,7 +80,7 @@ func TestHandleStressIndexThresholds(t *testing.T) {
 	h := &Handlers{Svc: svc}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/narrative/stress-index/thresholds", nil)
-	status, body := h.HandleStressIndexCurrent(req)
+	status, body := h.HandleStressIndexThresholds(req)
 
 	if status != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", status)
@@ -91,10 +91,13 @@ func TestHandleStressIndexThresholds(t *testing.T) {
 		t.Fatalf("expected map body, got %T", body)
 	}
 
-	if _, ok := m["score"]; !ok {
-		t.Error("expected 'score' field")
+	if _, ok := m["crisis"]; !ok {
+		t.Error("expected 'crisis' field")
 	}
-	if _, ok := m["regime"]; !ok {
-		t.Error("expected 'regime' field")
+	if _, ok := m["high"]; !ok {
+		t.Error("expected 'high' field")
+	}
+	if _, ok := m["alert"]; !ok {
+		t.Error("expected 'alert' field")
 	}
 }
