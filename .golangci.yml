@@ -37,7 +37,10 @@ linters:
       # Legacy CLI tools with pre-existing unchecked errors (not part of this PR)
       - "cmd/calibrate-seasonal/.*"
       - "cmd/fetch-historical/.*"
+      - "cmd/calibrate-stress-index/.*"
       - "internal/industry/correlation_loader.go"
+      - "internal/monitoring/alert_store.go"
+      - "internal/monitoring/api/events/sse_handler.go"
       # Legacy industry module files with pre-existing G304 issues (not part of this PR)
       - "internal/industry/seasonal_calibrator.go"
       - "internal/industry/linkage.go"

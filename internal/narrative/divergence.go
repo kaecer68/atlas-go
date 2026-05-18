@@ -16,9 +16,9 @@ func NewDivergenceDetector() *DivergenceDetector {
 	}
 }
 
-func (d *DivergenceDetector) Update(marginBalance, foreignNet float64) {
-	d.marginHistory = append(d.marginHistory, marginBalance)
-	d.foreignHistory = append(d.foreignHistory, foreignNet)
+func (d *DivergenceDetector) Update(marginBalance, prevMargin, foreignNet, prevForeignNet float64) {
+	d.marginHistory = append(d.marginHistory, marginBalance-prevMargin)
+	d.foreignHistory = append(d.foreignHistory, foreignNet-prevForeignNet)
 	const maxHistory = 60
 	if len(d.marginHistory) > maxHistory {
 		d.marginHistory = d.marginHistory[len(d.marginHistory)-maxHistory:]
@@ -29,17 +29,38 @@ func (d *DivergenceDetector) Update(marginBalance, foreignNet float64) {
 }
 
 func (d *DivergenceDetector) RetailDivergenceAndMarginZScore(currentMargin, currentForeignNet float64) (float64, float64) {
-	if len(d.marginHistory) < 10 {
+	if len(d.marginHistory) < 60 || len(d.foreignHistory) < 60 {
 		return 0, 0
 	}
-	marginMean := mean(d.marginHistory[:len(d.marginHistory)-1])
-	marginStd := stddev(d.marginHistory[:len(d.marginHistory)-1])
+	if currentMargin == currentForeignNet {
+		return 0, 0
+	}
+	marginMean := mean(d.marginHistory)
+	marginStd := stddev(d.marginHistory)
+	foreignMean := mean(d.foreignHistory)
+	foreignStd := stddev(d.foreignHistory)
 	marginZScore := 0.0
+	foreignZScore := 0.0
 	if marginStd > 0 {
 		marginZScore = (currentMargin - marginMean) / marginStd
 	}
-	divergence := currentMargin*1e9 + currentForeignNet
-	return divergence, marginZScore
+	if foreignStd > 0 {
+		foreignZScore = (currentForeignNet - foreignMean) / foreignStd
+	}
+	if marginZScore == 0 || foreignZScore == 0 {
+		return 0, marginZScore
+	}
+	if marginZScore > 0 && foreignZScore > 0 {
+		return 0, marginZScore
+	}
+	if marginZScore < 0 && foreignZScore < 0 {
+		return 0, marginZScore
+	}
+	strength := math.Min(math.Abs(marginZScore), math.Abs(foreignZScore))
+	if marginZScore > 0 && foreignZScore < 0 {
+		return strength, marginZScore
+	}
+	return -strength, marginZScore
 }
 
 func mean(vals []float64) float64 {
