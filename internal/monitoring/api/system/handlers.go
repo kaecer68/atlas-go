@@ -102,6 +102,8 @@ type RetailSentimentResponse struct {
 	SentimentScore   float64 `json:"sentiment_score"`
 	MarginChangePct  float64 `json:"margin_change_pct"`
 	MarginBalance    float64 `json:"margin_balance"`
+	ShortBalance     float64 `json:"short_balance"`
+	ShortChangePct   float64 `json:"short_change_pct"`
 	DayTradingRatio  float64 `json:"day_trading_ratio"`
 	MarginPercentile float64 `json:"margin_percentile"`
 	ExtremeReading   string  `json:"extreme_reading"`
@@ -128,6 +130,8 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 			SentimentScore:   0,
 			MarginChangePct:  0,
 			MarginBalance:    0,
+			ShortBalance:     0,
+			ShortChangePct:   0,
 			DayTradingRatio:  0,
 			MarginPercentile: 0,
 			ExtremeReading:   "neutral",
@@ -154,6 +158,8 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 		SentimentScore:   input.RetailSentimentScore,
 		MarginChangePct:  snap.RetailMarginBalance.ChangePct / 100,
 		MarginBalance:    snap.RetailMarginBalance.Value,
+		ShortBalance:     snap.RetailShortBalance.Value,
+		ShortChangePct:   snap.RetailShortBalance.ChangePct,
 		DayTradingRatio:  dayTradingRatio,
 		MarginPercentile: marginPercentile,
 		ExtremeReading:   extremeReadingFromScore(input.RetailSentimentScore),

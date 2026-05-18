@@ -43,11 +43,7 @@ func LoadMarginHistory(dataDir string) ([]MarginHistoryEntry, error) {
 		if err := json.Unmarshal(data, &file); err != nil {
 			return nil, fmt.Errorf("unmarshal margin history file %s: %w", entry.Name(), err)
 		}
-		history = append(history, MarginHistoryEntry{
-			Date:          file.Date,
-			MarginBalance: file.MarginBalance,
-			ChangePct:     file.ChangePct,
-		})
+		history = append(history, MarginHistoryEntry(file))
 	}
 
 	sort.Slice(history, func(i, j int) bool { return history[i].Date < history[j].Date })

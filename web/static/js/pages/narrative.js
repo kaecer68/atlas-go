@@ -226,7 +226,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       html += `<div style="font-size:28px;font-weight:700;color:${regimeColor}">${score} <span style="font-size:14px;color:var(--muted)">/ 100</span></div>`;
       html += `<div style="margin:4px 0 10px;font-size:14px">出逃等級：<strong>${stressLabel(stress.regime || '-')}</strong>（${stress.score >= 70 ? '🔴 紅燈' : (stress.score >= 50 ? '🟠 橙燈' : (stress.score >= 30 ? '🟡 黃燈' : '🟢 綠燈'))}）</div>`;
       html += `<table><thead><tr><th>子項</th><th>壓力貢獻 <span class="cursor-pointer text-accent" data-help="<p><strong>分數代表什麼？</strong></p><p>外商出逃指數由六個因子加權構成。每個子項的分數代表該因子對「外商撤離台灣」這個現象的貢獻度。</p><ul style='margin:6px 0;padding-left:18px;line-height:1.8'><li><strong>分數越高</strong>：該因子越可能導致外商賣超台股（例如美元走強→外商匯出獲利、VIX飆升→全球避險情緒）。</li><li><strong>分數為 0</strong>：該因子目前沒有施壓（例如外商買超時，外商流向因子為 0）。</li><li><strong>所有子項皆為正值</strong>：指數只累加壓力，不扣除「助力」。這是單向指標。</li></ul><p><strong>為什麼是單向指標？</strong><br>因為外商買超時，系統不會顯示「負壓力」，而是讓總分維持低位（綠燈）。這樣設計是為了突出「危險訊號」，而非平衡呈現多空。</p><p><strong>總分區間意義：</strong><br>• 0-29分（綠燈）：外商流出壓力小，資金面寬鬆<br>• 30-49分（黃燈）：外商開始流出，注意波動<br>• 50-69分（橙燈）：外商明顯出逃，台股下跌機率高<br>• 70-100分（紅燈）：外商大量出逃，系統性風險高</p>" data-title="外商出逃指數分數說明">ℹ️</span></th></tr></thead><tbody>`;
-      const names = { dxy: 'DXY-美元指數', us10y: 'US10Y-美債10年期', foreign_flow: '外資流向', vix: 'VIX-波動率指數', jpy: '日圓-套利平倉壓力', geopolitical: '地緣政治風險' };
+      const names = { dxy: 'DXY-美元指數', us10y: 'US10Y-美債10年期', foreign_flow: '外資流向', vix: 'VIX-波動率指數', jpy: '日圓-套利平倉壓力', geopolitical: '地緣政治風險', oil: '原油價格衝擊', gold: '黃金避險需求' };
       for (const k of Object.keys(comps)) {
         html += `<tr><td>${names[k] || k}</td><td>${typeof comps[k] === 'number' ? comps[k].toFixed(2) : '-'}</td></tr>`;
       }
@@ -385,6 +385,10 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       const marginBalance = retailSentiment.margin_balance || 0;
       const dayTradingRatio = retailSentiment.day_trading_ratio || 0;
       const marginPercentile = (retailSentiment.margin_percentile || 0) * 100;
+      const shortBalance = retailSentiment.short_balance || 0;
+      const shortChangePct = retailSentiment.short_change_pct || 0;
+      const shortChangeStr = shortChangePct >= 0 ? '+' + (shortChangePct * 100).toFixed(1) + '%' : (shortChangePct * 100).toFixed(1) + '%';
+      const shortChangeClass = shortChangePct >= 0 ? 'up' : 'down';
 
       const sentimentHelp = `綜合融資餘額變化、當沖比率、散戶交易行為等指標計算出的散戶市場情緒指標。\\n\\n分數範圍：-1.0 ~ +1.0\\n• ＞+0.5（狂熱）：散戶過度樂觀，融資大增、當沖猖獗，市場可能接近短期頂部\\n• 0.0 ~ +0.5（偏多）：散戶積極參與，市場熱絡但尚未過熱\\n• -0.5 ~ 0.0（偏空）：散戶趨於保守，融資減少，市場觀望氣氛濃厚\\n• ＜-0.5（恐慌）：散戶極度悲觀，恐慌砍倉，歷史上常是階段性底部訊號\\n\\n當前數值：${score} — ${sentimentScore > 0.5 ? '市場狂熱，建議減碼' : sentimentScore > 0 ? '散戶偏多' : sentimentScore > -0.5 ? '散戶偏空觀望' : '市場恐慌，可能接近底部'}`;
 
@@ -393,6 +397,8 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       const marginBalanceHelp = `全市場散戶向券商融資買股票的總金額（單位：億元）。融資餘額越高代表散戶槓桿越大，市場風險越高。\\n\\n歷史百分位解讀：\\n• ＞90th：極高水位，散戶槓桿處於歷史高檔，系統性回調風險極高\\n• 70th ~ 90th：偏高水位，市場過熱，建議逐步降低持股\\n• 30th ~ 70th：正常區間，風險可控\\n• 10th ~ 30th：偏低水位，市場冷清，但可能是佈局時機\\n• ＜10th：極低水位，散戶幾乎離場，歷史上常是長期底部區域\\n\\n當前數值：${marginBalance.toFixed(0)} 億（歷史 ${marginPercentile.toFixed(0)}th 百分位）\\n${marginPercentile > 90 ? '⚠️ 融資處於歷史極高水位，系統性風險極高，建議大幅減碼' : marginPercentile > 70 ? '⚡ 融資偏高，市場過熱，建議逐步獲利了結' : marginPercentile > 30 ? '✅ 融資水位正常，風險可控' : marginPercentile > 10 ? '💡 融資偏低，市場冷清，可關注佈局機會' : '📉 融資極低，散戶幾乎離場，可能是長期底部'}`;
 
       const dayTradingHelp = `當日沖銷（Day Trading）成交量占總成交量的比例。當沖是散戶在同一天內買進又賣出的交易行為，是觀察市場投機程度的重要指標。\\n\\n解讀標準：\\n• ＞40%：市場極度投機，散戶狂熱當沖，類似2021年航運股狂潮，短期崩盤風險極高\\n• 30% ~ 40%：當沖比率偏高，市場投機氣氛濃厚，注意追高空單風險\\n• 20% ~ 30%：正常偏高的當沖活動，市場熱絡但尚屬健康\\n• 15% ~ 20%：當沖比率正常，市場交易穩定\\n• ＜15%：當沖冷清，市場缺乏投機動能，散戶參與度低\\n\\n當前數值：${(dayTradingRatio * 100).toFixed(1)}% — ${dayTradingRatio * 100 > 40 ? '市場極度投機，高風險警戒！' : dayTradingRatio * 100 > 30 ? '當沖比率偏高，注意風險' : dayTradingRatio * 100 > 20 ? '當沖活躍，市場熱絡' : dayTradingRatio * 100 > 15 ? '當沖比率正常' : '當沖冷清，市場觀望'}`;
+
+      const shortBalanceHelp = `全市場散戶向券商融券賣股票的總金額（單位：億元）。融券餘額越高代表散戶看空力道越強，是觀察市場空方情緒的重要指標。\\n\\n解讀標準：\\n• 融券餘額大幅上升：散戶積極做空，市場看空情緒濃厚\\n• 融券餘額大幅下降：散戶回補空單，空方力道減弱，可能出現軋空行情\\n• 融資/融券比率異常：若融資高但融券也高，代表市場分歧加大\\n\\n當前數值：${shortBalance.toFixed(0)} 億（變化 ${shortChangeStr}）\\n${shortChangePct > 0.05 ? '⚠️ 融券大幅增加，散戶積極做空' : shortChangePct < -0.05 ? '📈 融券大幅減少，空方回補，注意軋空風險' : '✅ 融券變化正常'}`;
 
       retailEl.innerHTML = `
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
@@ -416,6 +422,10 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           <div class="kpi-card" style="cursor:pointer;" data-help="${dayTradingHelp.replace(/"/g, '&quot;')}" data-title="當沖比率說明">
             <div class="kpi-label" style="color:var(--accent);text-decoration:underline dotted;">當沖比率 ℹ️</div>
             <div class="kpi-value" class="text-lg">${(dayTradingRatio * 100).toFixed(1)}%</div>
+          </div>
+          <div class="kpi-card" style="cursor:pointer;" data-help="${shortBalanceHelp.replace(/"/g, '&quot;')}" data-title="融券餘額說明">
+            <div class="kpi-label" style="color:var(--accent);text-decoration:underline dotted;">融券餘額 ℹ️</div>
+            <div class="kpi-value ${shortChangeClass}" class="text-lg">${shortBalance.toFixed(0)} 億</div>
           </div>
         </div>
         <div class="mt-sm text-muted text-sm">歷史百分位: ${marginPercentile.toFixed(0)}th</div>

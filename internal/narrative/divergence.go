@@ -63,25 +63,6 @@ func (d *DivergenceDetector) RetailDivergenceAndMarginZScore(currentMargin, curr
 	return -strength, marginZScore
 }
 
-func sum(vals []float64) float64 {
-	var s float64
-	for _, v := range vals {
-		s += v
-	}
-	return s
-}
-
-func rollingSums(vals []float64, window int) []float64 {
-	if len(vals) < window {
-		return nil
-	}
-	out := make([]float64, 0, len(vals)-window+1)
-	for i := window; i <= len(vals); i++ {
-		out = append(out, sum(vals[i-window:i]))
-	}
-	return out
-}
-
 func mean(vals []float64) float64 {
 	if len(vals) == 0 {
 		return 0
