@@ -133,7 +133,8 @@ func registerTaskRunners(mgr *taskexec.Manager, cfg Config) {
 	mgr.RegisterRunner(string(domain.TaskTypeJudgeExperiment), taskexec.NewJudgeExperimentRunner(taskCfg))
 	mgr.RegisterRunner(string(domain.TaskTypePromoteBaseline), taskexec.NewPromoteBaselineRunner(taskCfg))
 	mgr.RegisterRunner(string(domain.TaskTypeBacktestWindow), taskexec.NewBacktestWindowRunner(taskCfg))
-	logging.Info("bootstrap", "task_manager_initialized", "runner_count", 4)
+	mgr.RegisterRunner("margin_backfill", taskexec.NewMarginBackfillRunner(cfg.WorkDir))
+	logging.Info("bootstrap", "task_manager_initialized", "runner_count", 5)
 }
 
 type Runtime struct {

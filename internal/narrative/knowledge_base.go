@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
@@ -86,8 +87,12 @@ func (kb *KnowledgeBase) MatchChains(event NarrativeEvent) []CausalChain {
 
 // NarrativeEngine orchestrates event detection and causal chain matching.
 type NarrativeEngine struct {
-	kb     *KnowledgeBase
-	models []InvestmentModel
+	kb         *KnowledgeBase
+	models     []InvestmentModel
+	stressCalc *TaiwanStressCalculator
+	lastMacro  marketdata.MacroDataSnapshot
+	prevMacro  marketdata.MacroDataSnapshot
+	lastGeo    GeopoliticalRiskScore
 }
 
 var defaultSectorSymbolMap = map[string][]string{
@@ -413,7 +418,10 @@ func (ne *NarrativeEngine) ListModels() []InvestmentModel {
 }
 
 func (ne *NarrativeEngine) GetCurrentStressIndex() TaiwanStressIndex {
-	return TaiwanStressIndex{}
+	if ne.stressCalc == nil {
+		return TaiwanStressIndex{}
+	}
+	return ne.stressCalc.Calculate(ne.lastMacro, ne.prevMacro, ne.lastGeo)
 }
 
 func (ne *NarrativeEngine) GetStressIndexHistory(days int) []TaiwanStressIndex {
@@ -421,7 +429,15 @@ func (ne *NarrativeEngine) GetStressIndexHistory(days int) []TaiwanStressIndex {
 }
 
 func (ne *NarrativeEngine) GetStressIndexThresholds() StressIndexThresholds {
-	return StressIndexThresholds{}
+	if ne.stressCalc == nil {
+		return StressIndexThresholds{}
+	}
+	tCrisis, tHigh, tAlert := ne.stressCalc.getThresholds()
+	return StressIndexThresholds{
+		Crisis: tCrisis,
+		High:   tHigh,
+		Alert:  tAlert,
+	}
 }
 
 // MarketNarrativeData carries raw inputs for narrative detection.

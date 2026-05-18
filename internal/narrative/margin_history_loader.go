@@ -1,6 +1,7 @@
 package narrative
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -8,6 +9,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 const DefaultMarginHistoryDir = "data/state/margin"
@@ -130,11 +135,18 @@ func marginStage2Confirmed(accel, median float64, positive bool) bool {
 func isMarginHistoryError(err error) bool { return err != nil }
 
 type MarginHistoryBackfiller struct {
-	WorkDir string
+	WorkDir       string
+	Provider      *marketdata.TWSEMarginBalanceProvider
+	LookbackDays  int
 }
 
 func NewMarginHistoryBackfiller(workDir string) *MarginHistoryBackfiller {
-	return &MarginHistoryBackfiller{WorkDir: workDir}
+	marginDir := filepath.Join(workDir, DefaultMarginHistoryDir)
+	return &MarginHistoryBackfiller{
+		WorkDir:      workDir,
+		Provider:     marketdata.NewTWSEMarginBalanceProvider(marginDir),
+		LookbackDays: 30,
+	}
 }
 
 func (b *MarginHistoryBackfiller) Backfill() error {
@@ -142,5 +154,31 @@ func (b *MarginHistoryBackfiller) Backfill() error {
 	if err := os.MkdirAll(marginDir, 0o755); err != nil {
 		return fmt.Errorf("margin backfill: mkdir: %w", err)
 	}
+
+	existing, err := LoadMarginHistory(marginDir)
+	if err != nil {
+		return fmt.Errorf("margin backfill: load existing: %w", err)
+	}
+
+	existingDates := make(map[string]bool)
+	for _, e := range existing {
+		existingDates[e.Date] = true
+	}
+
+	ctx := context.Background()
+	fetched := 0
+	for i := 0; i < b.LookbackDays; i++ {
+		date := time.Now().AddDate(0, 0, -i).Format("20060102")
+		if existingDates[date] {
+			continue
+		}
+		if _, err := b.Provider.FetchSnapshot(ctx); err != nil {
+			logging.Warn("margin_backfill", "fetch_failed", logging.Err(err), "date", date)
+			continue
+		}
+		fetched++
+	}
+
+	logging.Info("margin_backfill", "complete", "fetched", fetched, "lookback_days", b.LookbackDays)
 	return nil
 }
