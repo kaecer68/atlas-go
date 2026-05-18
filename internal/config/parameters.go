@@ -247,13 +247,27 @@ type NarrativeParameters struct {
 	JPYChangePctThreshold     ParameterMetadata[float64] `json:"jpy_change_pct_threshold"`
 	VIXLevelThreshold         ParameterMetadata[float64] `json:"vix_level_threshold"`
 
-	// Taiwan stress index weights (must sum to 1.0)
 	TaiwanStressDXYWeight     ParameterMetadata[float64] `json:"taiwan_stress_dxy_weight"`
 	TaiwanStressUS10YWeight   ParameterMetadata[float64] `json:"taiwan_stress_us10y_weight"`
 	TaiwanStressForeignWeight ParameterMetadata[float64] `json:"taiwan_stress_foreign_weight"`
 	TaiwanStressVIXWeight     ParameterMetadata[float64] `json:"taiwan_stress_vix_weight"`
 	TaiwanStressJPYWeight     ParameterMetadata[float64] `json:"taiwan_stress_jpy_weight"`
 	TaiwanStressGeoWeight     ParameterMetadata[float64] `json:"taiwan_stress_geo_weight"`
+	TaiwanStressOilWeight     ParameterMetadata[float64] `json:"taiwan_stress_oil_weight"`
+	TaiwanStressGoldWeight    ParameterMetadata[float64] `json:"taiwan_stress_gold_weight"`
+
+	TaiwanStressDXYScale     ParameterMetadata[float64] `json:"taiwan_stress_dxy_scale"`
+	TaiwanStressUS10YScale   ParameterMetadata[float64] `json:"taiwan_stress_us10y_scale"`
+	TaiwanStressForeignScale ParameterMetadata[float64] `json:"taiwan_stress_foreign_scale"`
+	TaiwanStressVIXScale     ParameterMetadata[float64] `json:"taiwan_stress_vix_scale"`
+	TaiwanStressJPYScale     ParameterMetadata[float64] `json:"taiwan_stress_jpy_scale"`
+	TaiwanStressGeoScale     ParameterMetadata[float64] `json:"taiwan_stress_geo_scale"`
+	TaiwanStressOilScale     ParameterMetadata[float64] `json:"taiwan_stress_oil_scale"`
+	TaiwanStressGoldScale    ParameterMetadata[float64] `json:"taiwan_stress_gold_scale"`
+
+	TaiwanStressCrisisThreshold ParameterMetadata[float64] `json:"taiwan_stress_crisis_threshold"`
+	TaiwanStressHighThreshold   ParameterMetadata[float64] `json:"taiwan_stress_high_threshold"`
+	TaiwanStressAlertThreshold  ParameterMetadata[float64] `json:"taiwan_stress_alert_threshold"`
 
 	// Event lifecycle TTL multipliers (days per theme)
 	EventTTLMultiplier ParameterMetadata[map[string]float64] `json:"event_ttl_multiplier"`
@@ -768,7 +782,9 @@ func (p *ParametersConfig) Validate() error {
 		p.Narrative.TaiwanStressForeignWeight.Value +
 		p.Narrative.TaiwanStressVIXWeight.Value +
 		p.Narrative.TaiwanStressJPYWeight.Value +
-		p.Narrative.TaiwanStressGeoWeight.Value
+		p.Narrative.TaiwanStressGeoWeight.Value +
+		p.Narrative.TaiwanStressOilWeight.Value +
+		p.Narrative.TaiwanStressGoldWeight.Value
 	if math.Abs(stressWeightSum-1.0) > 0.01 {
 		return fmt.Errorf("narrative taiwan stress weights must sum to 1.0, got %.3f", stressWeightSum)
 	}

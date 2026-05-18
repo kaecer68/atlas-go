@@ -93,17 +93,25 @@ func (e *WeightCalibrationEngine) LoadHistoricalData(workDir string, windowDays 
 		foreignNet := flow.ForeignInvestorNet
 		outflow := -foreignNet
 		records = append(records, CalibrationRecord{
-			Date:          dt,
-			Snapshot:      snap,
-			ForeignNet:    foreignNet,
-			Outflow:       outflow,
-			OutflowTarget: outflow,
+			Date:       dt,
+			Snapshot:   snap,
+			ForeignNet: foreignNet,
+			Outflow:    outflow,
 		})
 	}
 
 	if len(records) == 0 {
 		return nil, fmt.Errorf("load historical data: no paired macro/flow records found")
 	}
+
+	for i := range records {
+		if i+5 < len(records) {
+			records[i].OutflowTarget = records[i+5].Outflow
+		} else {
+			records[i].OutflowTarget = records[i].Outflow
+		}
+	}
+
 	return records, nil
 }
 
@@ -202,7 +210,7 @@ func (e *WeightCalibrationEngine) CalibrateWeights(accuracies map[string]float64
 }
 
 func (e *WeightCalibrationEngine) ExportConfig(workDir string, weights StressIndexWeights, scaling StressIndexScaling, thresholds StressIndexThresholds) error {
-	cfg := StressIndexWeightsConfig{Scaling: scaling, Weights: normalizeWeights(weights), Thresholds: thresholds}
+	cfg := StressIndexWeightsConfig{Scaling: scaling, Weights: weights, Thresholds: thresholds}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return fmt.Errorf("export config: marshal: %w", err)
@@ -242,22 +250,6 @@ func factorSignal(factor string, snap marketdata.MacroDataSnapshot, foreignNet f
 
 func sameDirection(a, b float64) bool {
 	return (a >= 0 && b >= 0) || (a <= 0 && b <= 0)
-}
-
-func normalizeWeights(w StressIndexWeights) StressIndexWeights {
-	sum := w.DXY + w.US10Y + w.ForeignFlow + w.VIX + w.JPY + w.Geopolitical + w.Oil + w.Gold
-	if sum <= 0 {
-		return defaultCalibrationWeights()
-	}
-	w.DXY /= sum
-	w.US10Y /= sum
-	w.ForeignFlow /= sum
-	w.VIX /= sum
-	w.JPY /= sum
-	w.Geopolitical /= sum
-	w.Oil /= sum
-	w.Gold /= sum
-	return w
 }
 
 func defaultCalibrationWeights() StressIndexWeights {

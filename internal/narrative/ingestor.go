@@ -101,7 +101,9 @@ func (m *MacroIngestor) publishEvents(events []NarrativeEvent) {
 		if m.lifecycle != nil {
 			if m.lifecycle.IsThemeActive(e.Theme) {
 				if existing := m.lifecycle.GetActiveByTheme(e.Theme); existing != nil {
-					m.lifecycle.UpdateConfidence(existing.ID, e.Confidence)
+					if e.Confidence > existing.Confidence {
+						m.lifecycle.UpdateConfidence(existing.ID, e.Confidence)
+					}
 				}
 				continue
 			}

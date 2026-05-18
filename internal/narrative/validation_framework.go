@@ -103,10 +103,10 @@ func DefaultStressEventTestCases() []StressEventTestCase {
 			Rationale:      "Tariff escalation reprices trade-sensitive Taiwan exporters, hits risk appetite, and lifts policy uncertainty; the shock is broad enough to breach crisis behavior.",
 		},
 		{
-			Name:           "US-Iran Tensions with Oil Spike",
-			Date:           "2026-03-15",
+			Name:           "Saudi Aramco Drone Attack",
+			Date:           "2019-09-14",
 			Window:         5,
-			DXY:            10.0,
+			DXY:            1.0,
 			US10Y:          15.0,
 			VIX:            30.0,
 			ForeignFlow:    -8.0,

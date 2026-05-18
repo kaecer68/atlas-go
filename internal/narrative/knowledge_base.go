@@ -412,6 +412,18 @@ func (ne *NarrativeEngine) ListModels() []InvestmentModel {
 	return out
 }
 
+func (ne *NarrativeEngine) GetCurrentStressIndex() TaiwanStressIndex {
+	return TaiwanStressIndex{}
+}
+
+func (ne *NarrativeEngine) GetStressIndexHistory(days int) []TaiwanStressIndex {
+	return []TaiwanStressIndex{}
+}
+
+func (ne *NarrativeEngine) GetStressIndexThresholds() StressIndexThresholds {
+	return StressIndexThresholds{}
+}
+
 // MarketNarrativeData carries raw inputs for narrative detection.
 type MarketNarrativeData struct {
 	US10YChangeBps                float64

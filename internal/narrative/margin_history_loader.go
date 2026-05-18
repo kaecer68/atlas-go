@@ -128,3 +128,19 @@ func marginStage2Confirmed(accel, median float64, positive bool) bool {
 }
 
 func isMarginHistoryError(err error) bool { return err != nil }
+
+type MarginHistoryBackfiller struct {
+	WorkDir string
+}
+
+func NewMarginHistoryBackfiller(workDir string) *MarginHistoryBackfiller {
+	return &MarginHistoryBackfiller{WorkDir: workDir}
+}
+
+func (b *MarginHistoryBackfiller) Backfill() error {
+	marginDir := filepath.Join(b.WorkDir, DefaultMarginHistoryDir)
+	if err := os.MkdirAll(marginDir, 0o755); err != nil {
+		return fmt.Errorf("margin backfill: mkdir: %w", err)
+	}
+	return nil
+}

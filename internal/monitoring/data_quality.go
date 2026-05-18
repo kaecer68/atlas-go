@@ -282,7 +282,7 @@ func (dq *DataQualityChecker) checkConfigFiles(ctx context.Context) DataQualityC
 
 	requiredFiles := []string{
 		"configs/agents.json",
-		"configs/engine.json",
+		"configs/parameters.json",
 	}
 
 	missing := []string{}

@@ -22,6 +22,9 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/narrative/models", shared.Get(h.HandleNarrativeModels))
 	mux.Handle("GET /api/narrative/templates", shared.Get(h.HandleNarrativeTemplates))
 	mux.Handle("GET /api/narrative/seasonal", shared.Get(h.HandleSeasonalAnalysis))
+	mux.Handle("GET /api/narrative/stress-index/current", shared.Get(h.HandleStressIndexCurrent))
+	mux.Handle("GET /api/narrative/stress-index/history", shared.Get(h.HandleStressIndexHistory))
+	mux.Handle("GET /api/narrative/stress-index/thresholds", shared.Get(h.HandleStressIndexThresholds))
 }
 
 func parseFloatQuery(r *http.Request, key string, defaultVal float64) float64 {
@@ -133,5 +136,35 @@ func (h *Handlers) HandleSeasonalAnalysis(r *http.Request) (int, any) {
 	return http.StatusOK, map[string]any{
 		"month": now.Month().String(),
 		"note":  "seasonal patterns are embedded in narrative engine",
+	}
+}
+
+func (h *Handlers) HandleStressIndexCurrent(r *http.Request) (int, any) {
+	idx := h.Svc.GetCurrentStressIndex()
+	return http.StatusOK, map[string]any{
+		"score":      idx.Score,
+		"regime":     idx.Regime,
+		"components": idx.Components,
+		"timestamp":  idx.Timestamp,
+	}
+}
+
+func (h *Handlers) HandleStressIndexHistory(r *http.Request) (int, any) {
+	days := 30
+	if d := r.URL.Query().Get("days"); d != "" {
+		if n, err := fmt.Sscanf(d, "%d", &days); err != nil || n != 1 {
+			days = 30
+		}
+	}
+	history := h.Svc.GetStressIndexHistory(days)
+	return http.StatusOK, map[string]any{"history": history}
+}
+
+func (h *Handlers) HandleStressIndexThresholds(r *http.Request) (int, any) {
+	thresholds := h.Svc.GetStressIndexThresholds()
+	return http.StatusOK, map[string]any{
+		"crisis": thresholds.Crisis,
+		"high":   thresholds.High,
+		"alert":  thresholds.Alert,
 	}
 }
