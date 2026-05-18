@@ -215,6 +215,58 @@ gh pr create --title "feat(scope): description" \
 | **前端欄位命名不一致 → 已自動解決** | 修改 `internal/domain/*.go` 中的 struct JSON tag 後，**git pre-commit hook 會自動執行 `go generate .`** 並將產生的 `field_names.js`、`field_types.ts`、`field_types.d.ts` 自動 staged。不需手動執行任何命令。AI 提交代碼時自動觸發，前端類型定義永遠與後端同步。 |
 | **Go → 前端類型自動生成** | `cmd/gentags` 從 Go struct 的 JSON tag 自動生成前端類型定義（`field_names.js` + `field_types.ts` + `field_types.d.ts`，48 個 struct）。`go generate .` 由 pre-commit hook 自動觸發。CI（`quality.yml` 的 `generate` job）也會檢查。 |
 | **Live 交易風險** | `cmd/atlas` 有 `-allow-live-broker`、`-allow-real-signor` 等旗標，本地測試時切勿意外啟用。 |
+| **繞過 BackgroundTaskManager 建立獨立排程** | 所有定時自動執行的後台任務**必須且只能**透過 `BackgroundTaskManager` 註冊（`cmd/atlas/main.go`）。禁止在 goroutine 中直接啟動 `time.Ticker`、禁止在 `init()` 中啟動後台工作、禁止繞過統一架構直接呼叫業務邏輯的定時執行。參見 `internal/apigateway/CONSTITUTION.md` 第四條。 |
+| **繞過 ParametersConfig 硬編碼參數** | 所有可調整的參數必須透過 `internal/config/parameters.go` 的 `ParametersConfig` 管理，禁止在業務邏輯中硬編碼 magic number。參數必須包含 `Rationale`、`Source`、`Todo` 欄位說明權威性溯源。 |
+| **建立獨立資料抓取通道** | 所有外部資料抓取必須通過已註冊的 `marketdata.Provider`，禁止為了「方便」而繞過 Gateway 直接建立 HTTP client。參見 `internal/apigateway/CONSTITUTION.md` 第一條。 |
+
+---
+
+## 統一架構規範（強制）
+
+### 背景任務統一排程
+
+所有需要「定時自動執行」的後台任務，**必須且只能**透過 `BackgroundTaskManager` 管理：
+
+- **實作位置**：`internal/apigateway/background.go`
+- **憲法規範**：`internal/apigateway/CONSTITUTION.md`（第一條、第四條）
+- **註冊位置**：`cmd/atlas/main.go`（搜尋 `taskMgr.Register` 或 `taskMgr.RegisterTask`）
+
+**TaskExec vs BackgroundTaskManager 區別**：
+
+| 機制 | 用途 | 觸發方式 |
+|------|------|---------|
+| `internal/taskexec` | 使用者手動提交的長時間任務（可取消、可訂閱） | HTTP API / 手動 |
+| `BackgroundTaskManager` | 系統自動定時執行的維護任務 | 排程（每日/每小時等） |
+
+兩者可共存：BackgroundTaskManager 的定時任務可直接呼叫業務邏輯，不需經過 TaskExec。
+
+### 參數統一管理
+
+所有可調整的參數必須透過 `internal/config/parameters.go` 管理：
+
+- **參數定義**：`ParametersConfig` struct 中的 `ParameterMetadata[T]`
+- **預設值**：`internal/config/parameters_defaults.go`
+- **驗證**：`ParametersConfig.Validate()`
+- **讀取**：`config.GetParametersConfig()`
+
+**參數必須包含**：
+- `Value`：當前值
+- `Rationale`：設定理由
+- `Source`：權威性溯源（`heuristic`、`backtest`、`academic` 等）
+- `Todo`：未來校準計劃
+
+### 資料統一管理
+
+所有外部資料抓取必須通過統一通道：
+
+- **API Gateway**：`internal/apigateway/gateway.go`
+- **Provider 介面**：`internal/marketdata/provider.go`
+- **已註冊 Channel**：`cmd/atlas/main.go` 中 `gateway.RegisterChannel()` 呼叫
+
+**禁止行為**：
+- 禁止直接 `os.Getenv` 建立 HTTP client
+- 禁止繞過 Gateway 直接呼叫外部 API
+- 禁止為單一功能建立獨立資料抓取邏輯
 
 ---
 

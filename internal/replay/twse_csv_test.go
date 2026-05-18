@@ -10,9 +10,9 @@ func TestLoadTWSEOpenDataCSV(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load replay dataset: %v", err)
 	}
-	// 樣本數據包含 6 個交易日 (2026-03-20 至 2026-03-27)
-	if len(ds.Dates) != 6 {
-		t.Fatalf("expected 6 dates, got %d", len(ds.Dates))
+	// 樣本數據包含 7 個交易日 (2026-03-20 至 2026-03-30)
+	if len(ds.Dates) != 7 {
+		t.Fatalf("expected 7 dates, got %d", len(ds.Dates))
 	}
 
 	date, _ := time.Parse("2006-01-02", "2026-03-26")

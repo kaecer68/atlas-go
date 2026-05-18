@@ -93,17 +93,32 @@ func (e *WeightCalibrationEngine) LoadHistoricalData(workDir string, windowDays 
 		foreignNet := flow.ForeignInvestorNet
 		outflow := -foreignNet
 		records = append(records, CalibrationRecord{
-			Date:          dt,
-			Snapshot:      snap,
-			ForeignNet:    foreignNet,
-			Outflow:       outflow,
-			OutflowTarget: outflow,
+			Date:       dt,
+			Snapshot:   snap,
+			ForeignNet: foreignNet,
+			Outflow:    outflow,
 		})
 	}
 
 	if len(records) == 0 {
 		return nil, fmt.Errorf("load historical data: no paired macro/flow records found")
 	}
+
+	// OutflowTarget uses forward-looking data (t+5) as a lead indicator for
+	// calibration. This is intentional: we want to measure whether each factor
+	// predicts future outflow direction, not current outflow. The 5-day window
+	// aligns with typical foreign fund settlement cycles.
+	//
+	// WARNING: This introduces look-ahead bias if used for real-time prediction.
+	// It is safe for offline weight calibration only.
+	for i := range records {
+		if i+5 < len(records) {
+			records[i].OutflowTarget = records[i+5].Outflow
+		} else {
+			records[i].OutflowTarget = records[i].Outflow
+		}
+	}
+
 	return records, nil
 }
 
@@ -202,7 +217,11 @@ func (e *WeightCalibrationEngine) CalibrateWeights(accuracies map[string]float64
 }
 
 func (e *WeightCalibrationEngine) ExportConfig(workDir string, weights StressIndexWeights, scaling StressIndexScaling, thresholds StressIndexThresholds) error {
-	cfg := StressIndexWeightsConfig{Scaling: scaling, Weights: normalizeWeights(weights), Thresholds: thresholds}
+	weights = normalizeWeights(weights)
+	cfg := StressIndexWeightsConfig{Scaling: scaling, Weights: weights, Thresholds: thresholds}
+	if !cfg.isValid() {
+		return fmt.Errorf("export config: invalid weights config")
+	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return fmt.Errorf("export config: marshal: %w", err)
@@ -240,24 +259,25 @@ func factorSignal(factor string, snap marketdata.MacroDataSnapshot, foreignNet f
 	}
 }
 
-func sameDirection(a, b float64) bool {
-	return (a >= 0 && b >= 0) || (a <= 0 && b <= 0)
-}
-
 func normalizeWeights(w StressIndexWeights) StressIndexWeights {
 	sum := w.DXY + w.US10Y + w.ForeignFlow + w.VIX + w.JPY + w.Geopolitical + w.Oil + w.Gold
-	if sum <= 0 {
-		return defaultCalibrationWeights()
+	if sum == 0 {
+		return w
 	}
-	w.DXY /= sum
-	w.US10Y /= sum
-	w.ForeignFlow /= sum
-	w.VIX /= sum
-	w.JPY /= sum
-	w.Geopolitical /= sum
-	w.Oil /= sum
-	w.Gold /= sum
-	return w
+	return StressIndexWeights{
+		DXY:          w.DXY / sum,
+		US10Y:        w.US10Y / sum,
+		ForeignFlow:  w.ForeignFlow / sum,
+		VIX:          w.VIX / sum,
+		JPY:          w.JPY / sum,
+		Geopolitical: w.Geopolitical / sum,
+		Oil:          w.Oil / sum,
+		Gold:         w.Gold / sum,
+	}
+}
+
+func sameDirection(a, b float64) bool {
+	return (a >= 0 && b >= 0) || (a <= 0 && b <= 0)
 }
 
 func defaultCalibrationWeights() StressIndexWeights {

@@ -16,6 +16,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/narrative"
 )
 
 type runExperimentRunner struct {
@@ -335,6 +336,50 @@ func (r *backtestWindowRunner) Run(ctx context.Context, req SubmitRequest, sink 
 		})
 	}
 
+	return nil
+}
+
+type marginBackfillRunner struct {
+	workDir string
+}
+
+func NewMarginBackfillRunner(workDir string) Runner {
+	return &marginBackfillRunner{workDir: workDir}
+}
+
+func (r *marginBackfillRunner) Name() string {
+	return "margin-backfill"
+}
+
+func (r *marginBackfillRunner) Run(ctx context.Context, req SubmitRequest, sink EventSink) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	sink.Emit(domain.TaskExecutionEvent{
+		EventType: domain.TaskEventStatus,
+		Stream:    "system",
+		Message:   "starting margin history backfill",
+	})
+
+	backfiller := narrative.NewMarginHistoryBackfiller(r.workDir)
+	if err := backfiller.Backfill(ctx); err != nil {
+		return fmt.Errorf("margin backfill: %w", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	sink.Emit(domain.TaskExecutionEvent{
+		EventType: domain.TaskEventSummary,
+		Stream:    "system",
+		Message:   "margin history backfill completed",
+	})
 	return nil
 }
 

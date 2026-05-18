@@ -45,3 +45,15 @@ func (s *NarrativeService) GetTemplates() []narrative.CausalTemplate {
 func (s *NarrativeService) GenerateDailySummary(date string, events []narrative.NarrativeEvent, recs []domain.Recommendation, risk *domain.RiskSnapshot) *domain.DailySummaryReport {
 	return s.ReportGenerator.GenerateDailySummary(date, events, recs, risk)
 }
+
+func (s *NarrativeService) GetCurrentStressIndex() narrative.TaiwanStressIndex {
+	return s.NarrativeEngine.GetCurrentStressIndex()
+}
+
+func (s *NarrativeService) GetStressIndexHistory(days int) []narrative.TaiwanStressIndex {
+	return s.NarrativeEngine.GetStressIndexHistory(days)
+}
+
+func (s *NarrativeService) GetStressIndexThresholds() narrative.StressIndexThresholds {
+	return s.NarrativeEngine.GetStressIndexThresholds()
+}

@@ -2,14 +2,12 @@ package narrative
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -113,22 +111,49 @@ type StressIndexThresholds struct {
 	Alert  float64 `json:"alert"`
 }
 
-// LoadWeightsConfig reads stress index weights from a JSON config file.
-// Returns nil if the file doesn't exist (caller falls back to compile-time defaults).
+// LoadWeightsConfig reads stress index weights from the centralized parameters system.
+// Deprecated: Use config.GetParametersConfig().Narrative for authoritative stress index parameters.
 func LoadWeightsConfig(workDir string) *StressIndexWeightsConfig {
-	path := filepath.Join(workDir, "configs/stress_index_weights.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
+	return loadWeightsFromParameters()
+}
+
+func loadWeightsFromParameters() *StressIndexWeightsConfig {
+	p := config.GetParametersConfig()
+	if p == nil {
 		return nil
 	}
-	var cfg StressIndexWeightsConfig
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil
+	n := p.Narrative
+	cfg := &StressIndexWeightsConfig{
+		Scaling: StressIndexScaling{
+			DXY:          n.TaiwanStressDXYScale.Value,
+			US10Y:        n.TaiwanStressUS10YScale.Value,
+			ForeignFlow:  n.TaiwanStressForeignScale.Value,
+			VIX:          n.TaiwanStressVIXScale.Value,
+			JPY:          n.TaiwanStressJPYScale.Value,
+			Geopolitical: n.TaiwanStressGeoScale.Value,
+			Oil:          n.TaiwanStressOilScale.Value,
+			Gold:         n.TaiwanStressGoldScale.Value,
+		},
+		Weights: StressIndexWeights{
+			DXY:          n.TaiwanStressDXYWeight.Value,
+			US10Y:        n.TaiwanStressUS10YWeight.Value,
+			ForeignFlow:  n.TaiwanStressForeignWeight.Value,
+			VIX:          n.TaiwanStressVIXWeight.Value,
+			JPY:          n.TaiwanStressJPYWeight.Value,
+			Geopolitical: n.TaiwanStressGeoWeight.Value,
+			Oil:          n.TaiwanStressOilWeight.Value,
+			Gold:         n.TaiwanStressGoldWeight.Value,
+		},
+		Thresholds: StressIndexThresholds{
+			Crisis: n.TaiwanStressCrisisThreshold.Value,
+			High:   n.TaiwanStressHighThreshold.Value,
+			Alert:  n.TaiwanStressAlertThreshold.Value,
+		},
 	}
 	if !cfg.isValid() {
 		return nil
 	}
-	return &cfg
+	return cfg
 }
 
 func (c *StressIndexWeightsConfig) isValid() bool {
@@ -138,15 +163,12 @@ func (c *StressIndexWeightsConfig) isValid() bool {
 }
 
 // NewTaiwanStressCalculator creates a calculator with an optional geopolitical provider.
-// If workDir is non-empty, attempts to load runtime weights from configs/stress_index_weights.json.
+// Loads runtime weights from the centralized parameters system (config.GetParametersConfig).
 func NewTaiwanStressCalculator(geoProvider GeopoliticalRiskProvider, workDir string) *TaiwanStressCalculator {
 	if geoProvider == nil {
 		geoProvider = NewRSSGeopoliticalProvider()
 	}
-	var cfg *StressIndexWeightsConfig
-	if workDir != "" {
-		cfg = LoadWeightsConfig(workDir)
-	}
+	cfg := loadWeightsFromParameters()
 	return &TaiwanStressCalculator{
 		geoProvider:   geoProvider,
 		cacheTTL:      5 * time.Minute,

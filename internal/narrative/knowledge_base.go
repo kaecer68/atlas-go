@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
@@ -86,8 +87,14 @@ func (kb *KnowledgeBase) MatchChains(event NarrativeEvent) []CausalChain {
 
 // NarrativeEngine orchestrates event detection and causal chain matching.
 type NarrativeEngine struct {
-	kb     *KnowledgeBase
-	models []InvestmentModel
+	kb            *KnowledgeBase
+	models        []InvestmentModel
+	stressCalc    *TaiwanStressCalculator
+	stressHistory []TaiwanStressIndex
+	stressMu      sync.Mutex
+	lastMacro     marketdata.MacroDataSnapshot
+	prevMacro     marketdata.MacroDataSnapshot
+	lastGeo       GeopoliticalRiskScore
 }
 
 var defaultSectorSymbolMap = map[string][]string{
@@ -137,7 +144,8 @@ func copySectorMap(src map[string][]string) map[string][]string {
 // NewNarrativeEngine creates a narrative engine with default templates and models.
 func NewNarrativeEngine() *NarrativeEngine {
 	return &NarrativeEngine{
-		kb: NewKnowledgeBase(),
+		kb:         NewKnowledgeBase(),
+		stressCalc: NewTaiwanStressCalculator(nil, ""),
 		models: []InvestmentModel{
 			{
 				ID:             "hawkish_fed_model",
@@ -410,6 +418,47 @@ func (ne *NarrativeEngine) ListModels() []InvestmentModel {
 	out := make([]InvestmentModel, len(ne.models))
 	copy(out, ne.models)
 	return out
+}
+
+func (ne *NarrativeEngine) GetCurrentStressIndex() TaiwanStressIndex {
+	if ne.stressCalc == nil {
+		return TaiwanStressIndex{}
+	}
+	idx := ne.stressCalc.Calculate(ne.lastMacro, ne.prevMacro, ne.lastGeo)
+	ne.stressMu.Lock()
+	ne.stressHistory = append(ne.stressHistory, idx)
+	if len(ne.stressHistory) > 365 {
+		ne.stressHistory = ne.stressHistory[len(ne.stressHistory)-365:]
+	}
+	ne.stressMu.Unlock()
+	return idx
+}
+
+func (ne *NarrativeEngine) GetStressIndexHistory(days int) []TaiwanStressIndex {
+	if days <= 0 {
+		days = 30
+	}
+	ne.stressMu.Lock()
+	defer ne.stressMu.Unlock()
+	if len(ne.stressHistory) == 0 {
+		return []TaiwanStressIndex{}
+	}
+	if days >= len(ne.stressHistory) {
+		return append([]TaiwanStressIndex(nil), ne.stressHistory...)
+	}
+	return append([]TaiwanStressIndex(nil), ne.stressHistory[len(ne.stressHistory)-days:]...)
+}
+
+func (ne *NarrativeEngine) GetStressIndexThresholds() StressIndexThresholds {
+	if ne.stressCalc == nil {
+		return StressIndexThresholds{}
+	}
+	tCrisis, tHigh, tAlert := ne.stressCalc.getThresholds()
+	return StressIndexThresholds{
+		Crisis: tCrisis,
+		High:   tHigh,
+		Alert:  tAlert,
+	}
 }
 
 // MarketNarrativeData carries raw inputs for narrative detection.

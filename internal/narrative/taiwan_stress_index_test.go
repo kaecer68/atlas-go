@@ -2,8 +2,6 @@ package narrative
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -135,70 +133,29 @@ func TestTaiwanStressCalculator_RegimeThresholds(t *testing.T) {
 	}
 }
 
-func TestLoadWeightsConfigFileNotFound(t *testing.T) {
-	cfg := LoadWeightsConfig("/nonexistent/dir")
-	if cfg != nil {
-		t.Fatal("expected nil when config file doesn't exist")
-	}
-}
-
-func TestLoadWeightsConfigValidWeights(t *testing.T) {
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "configs")
-	if err := os.MkdirAll(cfgPath, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	jsonPath := filepath.Join(cfgPath, "stress_index_weights.json")
-	content := `{
-		"scaling":  {"dxy":5,"us10y":2,"foreign_flow":10,"vix":2.5,"jpy":10,"geopolitical":1,"oil":2,"gold":2},
-		"weights":  {"dxy":0.13,"us10y":0.18,"foreign_flow":0.22,"vix":0.13,"jpy":0.08,"geopolitical":0.13,"oil":0.07,"gold":0.06},
-		"thresholds":{"crisis":70,"high":50,"alert":30}
-	}`
-	if err := os.WriteFile(jsonPath, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cfg := LoadWeightsConfig(dir)
+func TestLoadWeightsConfigFromParameters(t *testing.T) {
+	cfg := loadWeightsFromParameters()
 	if cfg == nil {
-		t.Fatal("expected non-nil config")
+		t.Fatal("expected non-nil config from parameters system")
 	}
 	if !cfg.isValid() {
 		t.Fatal("expected valid config (weights sum to 1.0)")
 	}
-}
-
-func TestLoadWeightsConfigRejectsInvalidSum(t *testing.T) {
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "configs")
-	os.MkdirAll(cfgPath, 0o755)
-	if err := os.WriteFile(filepath.Join(cfgPath, "stress_index_weights.json"), []byte(`{"weights":{"dxy":0.3,"us10y":0.3,"foreign_flow":0.2,"vix":0.05,"jpy":0,"geopolitical":0,"oil":0,"gold":0}}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cfg := LoadWeightsConfig(dir)
-	if cfg != nil {
-		t.Fatal("expected nil for invalid weights sum (0.3+0.3+0.2+0.05 = 0.85)")
+	expected := defaultCalibrationWeights()
+	if cfg.Weights != expected {
+		t.Fatalf("weights mismatch: got %+v, want %+v", cfg.Weights, expected)
 	}
 }
 
-func TestLoadWeightsConfigMalformedJSON(t *testing.T) {
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "configs")
-	os.MkdirAll(cfgPath, 0o755)
-	os.WriteFile(filepath.Join(cfgPath, "stress_index_weights.json"), []byte("not json"), 0o644)
-	cfg := LoadWeightsConfig(dir)
-	if cfg != nil {
-		t.Fatal("expected nil for malformed JSON")
+func TestLoadWeightsConfigFileNotFound(t *testing.T) {
+	cfg := LoadWeightsConfig("/nonexistent/dir")
+	if cfg == nil {
+		t.Fatal("expected non-nil config from parameters system even when workDir doesn't exist")
 	}
 }
 
 func TestLoadWeightsConfigIntegratesWithCalculator(t *testing.T) {
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "configs")
-	os.MkdirAll(cfgPath, 0o755)
-	os.WriteFile(filepath.Join(cfgPath, "stress_index_weights.json"), []byte(`{
-		"scaling":  {"dxy":5,"us10y":2,"foreign_flow":10,"vix":2.5,"jpy":10,"geopolitical":1,"oil":2,"gold":2},
-		"weights":  {"dxy":0.13,"us10y":0.18,"foreign_flow":0.22,"vix":0.13,"jpy":0.08,"geopolitical":0.13,"oil":0.07,"gold":0.06},
-		"thresholds":{"crisis":70,"high":50,"alert":30}}`), 0o644)
-	calc := NewTaiwanStressCalculator(nil, dir)
+	calc := NewTaiwanStressCalculator(nil, "")
 	snap := marketdata.MacroDataSnapshot{
 		DXY:   marketdata.MacroDataPoint{Value: 104, ChangePct: 1.0},
 		US10Y: marketdata.MacroDataPoint{Value: 4.5},
@@ -207,6 +164,6 @@ func TestLoadWeightsConfigIntegratesWithCalculator(t *testing.T) {
 	geo := GeopoliticalRiskScore{Intensity: 30}
 	idx := calc.Calculate(snap, marketdata.MacroDataSnapshot{}, geo)
 	if idx.Score < 0 {
-		t.Fatal("expected positive score with loaded config")
+		t.Fatal("expected positive score with parameters config")
 	}
 }

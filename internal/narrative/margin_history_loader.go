@@ -1,6 +1,7 @@
 package narrative
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -8,6 +9,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 const DefaultMarginHistoryDir = "data/state/margin"
@@ -128,3 +133,60 @@ func marginStage2Confirmed(accel, median float64, positive bool) bool {
 }
 
 func isMarginHistoryError(err error) bool { return err != nil }
+
+type MarginHistoryBackfiller struct {
+	WorkDir      string
+	Provider     *marketdata.TWSEMarginBalanceProvider
+	LookbackDays int
+}
+
+func NewMarginHistoryBackfiller(workDir string) *MarginHistoryBackfiller {
+	marginDir := filepath.Join(workDir, DefaultMarginHistoryDir)
+	return &MarginHistoryBackfiller{
+		WorkDir:      workDir,
+		Provider:     marketdata.NewTWSEMarginBalanceProvider(marginDir),
+		LookbackDays: 30,
+	}
+}
+
+func (b *MarginHistoryBackfiller) Backfill(ctx context.Context) error {
+	marginDir := filepath.Join(b.WorkDir, DefaultMarginHistoryDir)
+	if err := os.MkdirAll(marginDir, 0o750); err != nil {
+		return fmt.Errorf("margin backfill: mkdir: %w", err)
+	}
+
+	existing, err := LoadMarginHistory(marginDir)
+	if err != nil {
+		return fmt.Errorf("margin backfill: load existing: %w", err)
+	}
+
+	existingDates := make(map[string]bool)
+	for _, e := range existing {
+		existingDates[e.Date] = true
+	}
+
+	fetched := 0
+	for i := 0; i < b.LookbackDays; i++ {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		date := time.Now().AddDate(0, 0, -i)
+		if date.Weekday() == time.Saturday || date.Weekday() == time.Sunday {
+			continue
+		}
+		dateStr := date.Format("20060102")
+		if existingDates[dateStr] {
+			continue
+		}
+		if _, err := b.Provider.FetchSnapshotForDate(ctx, date); err != nil {
+			logging.Warn("margin_backfill", "fetch_failed", logging.Err(err), "date", dateStr)
+			continue
+		}
+		fetched++
+	}
+
+	logging.Info("margin_backfill", "complete", "fetched", fetched, "lookback_days", b.LookbackDays)
+	return nil
+}
