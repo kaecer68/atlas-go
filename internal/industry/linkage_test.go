@@ -440,7 +440,7 @@ func TestCorrelationMatrix_RegimeAdjustedCorrelation_RecessionBoost(t *testing.T
 	}
 }
 
-func TestCorrelationMatrix_RegimeAdjustedCorrelation_NonRecessionPassthrough(t *testing.T) {
+func TestCorrelationMatrix_RegimeAdjustedCorrelation_MutualExpansionDampened(t *testing.T) {
 	cm := NewCorrelationMatrix(30)
 	cm.UpdateCorrelation("semiconductor", "ai_supply_chain", 0.60)
 
@@ -453,8 +453,10 @@ func TestCorrelationMatrix_RegimeAdjustedCorrelation_NonRecessionPassthrough(t *
 	cm.SetCycleProvider(mock)
 
 	corr := cm.RegimeAdjustedCorrelation("semiconductor", "ai_supply_chain")
-	if math.Abs(corr-0.60) > 0.0001 {
-		t.Fatalf("expected 0.60 without recession, got %f", corr)
+	// Mutual expansion: correlation dampened by 10% (diversification benefit)
+	expected := 0.60 * 0.90
+	if math.Abs(corr-expected) > 0.0001 {
+		t.Fatalf("expected %f during mutual expansion, got %f", expected, corr)
 	}
 }
 
@@ -495,6 +497,52 @@ func TestShockPropagation_CyclePlusNarrativeCombo(t *testing.T) {
 	expected := 0.70 * 1.30
 	if math.Abs(corr-expected) > 0.0001 {
 		t.Fatalf("expected %f with cycle boost only, got %f", expected, corr)
+	}
+}
+
+func TestGetNarrativeAdjustedCorrelation_NegativeCorrelation(t *testing.T) {
+	graph := DefaultSupplyChainGraph()
+	cm := NewCorrelationMatrix(30)
+	cm.UpdateCorrelation("semiconductor", "energy", -0.45)
+	sp := NewShockPropagation(graph, cm)
+
+	mock := &mockNarrativeProvider{
+		themes: []string{"oil_price_shock"},
+		multipliers: map[string]float64{
+			"oil_price_shock:semiconductor:energy": 1.20,
+		},
+	}
+	sp.SetNarrativeProvider(mock)
+
+	adj := sp.getNarrativeAdjustedCorrelation("semiconductor", "energy")
+	// -0.45 * 1.20 = -0.54 — must NOT be clamped to 0
+	if adj >= 0 {
+		t.Errorf("expected negative correlation after narrative adjustment, got %.4f", adj)
+	}
+	want := -0.45 * 1.20
+	if math.Abs(adj-want) > 0.0001 {
+		t.Errorf("expected %.4f, got %.4f", want, adj)
+	}
+}
+
+func TestGetNarrativeAdjustedCorrelation_StrongNegativeCapped(t *testing.T) {
+	graph := DefaultSupplyChainGraph()
+	cm := NewCorrelationMatrix(30)
+	cm.UpdateCorrelation("semiconductor", "energy", -0.80)
+	sp := NewShockPropagation(graph, cm)
+
+	mock := &mockNarrativeProvider{
+		themes: []string{"geopolitical_risk_spike"},
+		multipliers: map[string]float64{
+			"geopolitical_risk_spike:semiconductor:energy": 2.0,
+		},
+	}
+	sp.SetNarrativeProvider(mock)
+
+	adj := sp.getNarrativeAdjustedCorrelation("semiconductor", "energy")
+	// -0.80 * 2.0 = -1.60 → clamped to -1.0
+	if adj != -1.0 {
+		t.Errorf("expected clamped correlation -1.0, got %.4f", adj)
 	}
 }
 

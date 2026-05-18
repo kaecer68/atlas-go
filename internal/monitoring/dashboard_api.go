@@ -258,6 +258,17 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 	// Wire external validators into cycle tracker for multi-dimensional confidence
 	cycleTracker.SetExternalValidators(seasonalEngine, linkageAnalyzer)
 
+	if macroProvider != nil {
+		cycleTracker.SetMacroSnapshotProvider(func() marketdata.MacroDataSnapshot {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if snap, err := macroProvider.FetchSnapshot(ctx); err == nil {
+				return snap
+			}
+			return marketdata.MacroDataSnapshot{}
+		})
+	}
+
 	// Create DynamicEnvModulator with real-time macro data (baseline uses neutral values)
 	// The update will happen when macro ingestor fetches new data.
 	baseline := marketdata.MacroDataSnapshot{

@@ -16,7 +16,7 @@ import (
 )
 
 func LoadIndustryReturnsFromReplay(replayPath, sectorSymbolsPath string) (map[string][]float64, error) {
-	sectorSymbols, err := loadSectorSymbolsJSON(sectorSymbolsPath)
+	sectorSymbols, err := LoadSectorSymbols(sectorSymbolsPath)
 	if err != nil {
 		return nil, fmt.Errorf("load sector symbols: %w", err)
 	}
@@ -34,14 +34,16 @@ func LoadIndustryReturnsFromReplay(replayPath, sectorSymbolsPath string) (map[st
 
 	result := extractSortedArrays(industryDateReturns)
 
-	filtered := filterMinObservations(result, 15)
+	filtered := filterMinObservations(result, 60)
 	if len(filtered) == 0 {
-		return nil, fmt.Errorf("no industry has at least 15 observations")
+		return nil, fmt.Errorf("no industry has at least 60 observations")
 	}
 	return filtered, nil
 }
 
-func loadSectorSymbolsJSON(path string) (map[string][]string, error) {
+// LoadSectorSymbols reads the sector-symbols mapping from a JSON file.
+// Each key is an industry ID and each value is a list of stock symbols.
+func LoadSectorSymbols(path string) (map[string][]string, error) {
 	if path == "" {
 		cfg := config.Load()
 		path = cfg.WorkDir + "/configs/sector_symbols.json"

@@ -234,9 +234,11 @@ func (cm *CorrelationMatrix) SetCycleProvider(cp CycleProvider) {
 }
 
 // RegimeAdjustedCorrelation returns the correlation between two industries,
-// adjusted upward during recession phases (Ang & Chen 2002). When either
-// industry is in recession, the correlation is boosted by the configured
-// RecessionCorrelationBoost factor (capped at 1.0).
+// adjusted by business cycle phase (Ang & Chen 2002).
+//
+// During recession, correlations are boosted (systemic risk rises).
+// During mutual expansion, correlations are slightly dampened (diversification benefit).
+// All other combinations pass through the base correlation unchanged.
 func (cm *CorrelationMatrix) RegimeAdjustedCorrelation(industryA, industryB string) float64 {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
@@ -254,22 +256,27 @@ func (cm *CorrelationMatrix) RegimeAdjustedCorrelation(industryA, industryB stri
 
 	phaseA, okA := cm.cycleProvider.GetPhase(industryA)
 	phaseB, okB := cm.cycleProvider.GetPhase(industryB)
-	if (okA && phaseA == CycleRecession) || (okB && phaseB == CycleRecession) {
-		boost := 0.30
-		if cfg := config.GetParametersConfig(); cfg != nil {
-			if b := cfg.Industry.LinkageParams.Value.RecessionCorrelationBoost; b > 0 {
-				boost = b
-			}
+
+	boost := 0.30
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		if b := cfg.Industry.LinkageParams.Value.RecessionCorrelationBoost; b > 0 {
+			boost = b
 		}
-		return math.Min(baseCorr*(1.0+boost), 1.0)
 	}
 
-	return baseCorr
+	switch {
+	case (okA && phaseA == CycleRecession) || (okB && phaseB == CycleRecession):
+		return math.Min(baseCorr*(1.0+boost), 1.0)
+	case okA && okB && phaseA == CycleExpansion && phaseB == CycleExpansion:
+		return baseCorr * 0.90
+	default:
+		return baseCorr
+	}
 }
 
 // RecalculateFromReturns recomputes all pairwise correlations from industry
 // return time series. Each map entry maps industryID → []daily returns.
-// Only pairs with sufficient data (≥15 observations) are updated.
+// Only pairs with sufficient data (≥60 observations) are updated.
 func (cm *CorrelationMatrix) RecalculateFromReturns(industryReturns map[string][]float64) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -287,7 +294,7 @@ func (cm *CorrelationMatrix) RecalculateFromReturns(industryReturns map[string][
 			if len(returnsB) < n {
 				n = len(returnsB)
 			}
-			if n < 15 {
+			if n < 60 {
 				continue
 			}
 			corr := pearsonCorrelation(returnsA[:n], returnsB[:n])
@@ -386,7 +393,11 @@ func (sp *ShockPropagation) getNarrativeAdjustedCorrelation(industryA, industryB
 		multiplier := sp.narrativeProvider.CorrelationMultiplier(theme, industryA, industryB)
 		adjusted *= multiplier
 	}
-	return math.Max(0, math.Min(1.0, adjusted))
+	// Clamp to valid correlation range [-1.0, 1.0].
+	// Negative correlations are meaningful — they represent hedging
+	// relationships (e.g., defensive assets rising when risk assets fall)
+	// and must be preserved for correct portfolio optimization.
+	return math.Max(-1.0, math.Min(1.0, adjusted))
 }
 
 // PropagateShock calculates the impact of a shock on an industry, with

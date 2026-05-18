@@ -312,11 +312,17 @@ func run(args []string, deps appDeps) error {
 			}
 			revenuePath := filepath.Join(cfg.WorkDir, "data", "replay", "month_revenue.jsonl")
 			configPath := filepath.Join(cfg.WorkDir, "configs", "parameters.json")
-			if err := industry.RecalibrateThresholds(revenuePath, configPath); err != nil {
+			if results, err := industry.RecalibrateThresholds(revenuePath, configPath); err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
 				fmt.Fprintf(w, `{"error":"%s"}`+"\n", err.Error())
 				return
+			} else if len(results) > 0 {
+				if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+					if svc := d.GetIndustryService(); svc != nil && svc.CycleTracker != nil {
+						svc.CycleTracker.SetCalibratedThresholds(results)
+					}
+				}
 			}
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"status":"ok","message":"thresholds recalibrated"}`+"\n")
@@ -606,7 +612,20 @@ func run(args []string, deps appDeps) error {
 						if _, err := os.Stat(revenuePath); os.IsNotExist(err) {
 							return nil
 						}
-						return industry.RecalibrateThresholds(revenuePath, configPath)
+						return func() error {
+							results, err := industry.RecalibrateThresholds(revenuePath, configPath)
+							if err != nil {
+								return err
+							}
+							if len(results) > 0 {
+								if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+									if svc := d.GetIndustryService(); svc != nil && svc.CycleTracker != nil {
+										svc.CycleTracker.SetCalibratedThresholds(results)
+									}
+								}
+							}
+							return nil
+						}()
 					},
 				})
 				log.Printf("[Gateway] registered auto_threshold_calibrate background task (24h interval, checks 1st of month)")

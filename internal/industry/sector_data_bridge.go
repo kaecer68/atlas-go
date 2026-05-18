@@ -38,8 +38,9 @@ func BridgeSectorDataToCycleTracker(snapshot marketdata.MacroDataSnapshot, track
 	logging.Info("sector_data_bridge", "updated_ai_supply_chain",
 		"rev_growth", aiRev, "cowos_util", cowos)
 
-	metrics.IndustryID = "semiconductor"
-	tracker.UpdatePosition("semiconductor", metrics)
-	logging.Info("sector_data_bridge", "updated_semiconductor",
-		"rev_growth", aiRev, "cowos_util", cowos)
+	// TODO(P1): Add a dedicated semiconductor revenue field in MacroDataSnapshot
+	// sourced from TWSE semiconductor sub-index or aggregate revenue of all
+	// semiconductor stocks in sector_symbols.json. TSMC revenue (aiRev) and
+	// CoWoS (cowos) represent AI-specific supply chain data, not the broader
+	// semiconductor industry which includes DRAM, NAND, IC design, packaging, etc.
 }
