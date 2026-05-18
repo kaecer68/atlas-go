@@ -507,7 +507,7 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[Gateway] registered auto_margin background task (30m interval)")
 
 			// Register margin_history_backfill via Gateway.
-			taskMgr.Register(&apigateway.ScheduledTask{
+			if err := taskMgr.Register(&apigateway.ScheduledTask{
 				Name:      "margin_history_backfill",
 				ChannelID: "twse_margin",
 				Interval:  24 * time.Hour,
@@ -516,8 +516,11 @@ func run(args []string, deps appDeps) error {
 					backfiller := narrative.NewMarginHistoryBackfiller(cfg.WorkDir)
 					return backfiller.Backfill(ctx)
 				},
-			})
-			log.Printf("[Gateway] registered margin_history_backfill background task (24h interval)")
+			}); err != nil {
+				log.Printf("[Gateway] failed to register margin_history_backfill: %v", err)
+			} else {
+				log.Printf("[Gateway] registered margin_history_backfill background task (24h interval)")
+			}
 
 			// Register auto_export via Gateway.
 			taskMgr.Register(&apigateway.ScheduledTask{

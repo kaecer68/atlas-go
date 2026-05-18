@@ -151,7 +151,7 @@ func NewMarginHistoryBackfiller(workDir string) *MarginHistoryBackfiller {
 
 func (b *MarginHistoryBackfiller) Backfill(ctx context.Context) error {
 	marginDir := filepath.Join(b.WorkDir, DefaultMarginHistoryDir)
-	if err := os.MkdirAll(marginDir, 0o755); err != nil {
+	if err := os.MkdirAll(marginDir, 0o750); err != nil {
 		return fmt.Errorf("margin backfill: mkdir: %w", err)
 	}
 
