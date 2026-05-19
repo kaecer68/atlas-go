@@ -59,7 +59,7 @@ func (f *FrankfurterFXProvider) FetchSnapshot(ctx context.Context) (MacroDataSna
 
 	snap := MacroDataSnapshot{RecordedAt: time.Now().Unix()}
 
-	if jpyRate, ok := fxResp.Rates["JPY"]; ok {
+	if jpyRate, ok := fxResp.Rates["JPY"]; ok && jpyRate > 0 {
 		snap.JPY = MacroDataPoint{
 			Symbol:    "JPY=X",
 			Value:     jpyRate,
@@ -67,7 +67,7 @@ func (f *FrankfurterFXProvider) FetchSnapshot(ctx context.Context) (MacroDataSna
 			Timestamp: time.Now().Unix(),
 		}
 	} else {
-		logging.Warn("frankfurter_provider", "missing_rate", "currency", "JPY")
+		logging.Warn("frankfurter_provider", "missing_or_zero_rate", "currency", "JPY")
 	}
 
 	return snap, nil
