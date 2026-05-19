@@ -302,6 +302,7 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 		cycleTracker,
 		linkageAnalyzer,
 		industry.NewRiskMonitor(),
+		bridge,
 	)
 
 	replayPath := config.Load().ReplayDataPath

@@ -182,12 +182,17 @@ func loadLatestMacroSnapshot(workDir string) (marketdata.MacroDataSnapshot, erro
 	return snap, nil
 }
 
+type marginHistoryEntry struct {
+	Date          string  `json:"date"`
+	MarginBalance float64 `json:"margin_balance"`
+}
+
 func calculateMarginPercentile(workDir string, currentValue float64) float64 {
 	if currentValue <= 0 {
 		return 0
 	}
 
-	pattern := filepath.Join(workDir, "data/state/macro", "*.json")
+	pattern := filepath.Join(workDir, "data/state/margin", "*.json")
 	matches, err := filepath.Glob(pattern)
 	if err != nil || len(matches) == 0 {
 		return 0
@@ -195,19 +200,16 @@ func calculateMarginPercentile(workDir string, currentValue float64) float64 {
 
 	var values []float64
 	for _, path := range matches {
-		if filepath.Base(path) == "latest.json" {
-			continue
-		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue
 		}
-		var snap marketdata.MacroDataSnapshot
-		if err := json.Unmarshal(data, &snap); err != nil {
+		var entry marginHistoryEntry
+		if err := json.Unmarshal(data, &entry); err != nil {
 			continue
 		}
-		if snap.RetailMarginBalance.Symbol != "" && snap.RetailMarginBalance.Value > 0 {
-			values = append(values, snap.RetailMarginBalance.Value)
+		if entry.MarginBalance > 0 {
+			values = append(values, entry.MarginBalance)
 		}
 	}
 
