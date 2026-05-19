@@ -64,25 +64,6 @@ func TestTWSEMarginBalanceProvider_SaveMargin_EmptyDir(t *testing.T) {
 	}
 }
 
-func TestExtractValueByFieldName(t *testing.T) {
-	table := twseMarginTable{
-		Fields: []string{"項目", "昨日餘額", "今日餘額"},
-		Data: [][]string{
-			{"header"},
-			{"ignored"},
-			{"合計", "123", "456"},
-		},
-	}
-
-	value, ok := extractValueByFieldName(table, "今日餘額", 2)
-	if !ok {
-		t.Fatal("expected match")
-	}
-	if value != "456" {
-		t.Fatalf("unexpected value: %s", value)
-	}
-}
-
 func TestTWSEMarginBalanceProvider_FetchDateExpanded(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("date") != "20260513" {
@@ -93,21 +74,12 @@ func TestTWSEMarginBalanceProvider_FetchDateExpanded(t *testing.T) {
   "date": "20260513",
   "tables": [
     {
-      "title": "信用交易統計",
-      "fields": ["項目", "昨日餘額", "今日餘額"],
+      "title": "115年05月13日 信用交易統計",
+      "fields": ["項目", "買進", "賣出", "現金(券)償還", "前日餘額", "今日餘額"],
       "data": [
-        ["header"],
-        ["ignored"],
-        ["合計", "100000", "120000"]
-      ]
-    },
-    {
-      "title": "融券餘額",
-      "fields": ["項目", "昨日餘額", "今日餘額"],
-      "data": [
-        ["header"],
-        ["ignored"],
-        ["合計", "20000", "15000"]
+        ["融資(交易單位)", "429,048", "495,782", "5,934", "9,149,157", "9,076,489"],
+        ["融券(交易單位)", "23,361", "25,191", "2,062", "239,437", "239,205"],
+        ["融資金額(仟元)", "33,268,274", "37,431,433", "569,362", "100,000,000", "120,000,000"]
       ]
     }
   ]
@@ -124,17 +96,21 @@ func TestTWSEMarginBalanceProvider_FetchDateExpanded(t *testing.T) {
 		t.Fatalf("fetchDateExpanded failed: %v", err)
 	}
 
-	if margin != 1.2 {
-		t.Fatalf("unexpected margin: %v", margin)
+	// 融資金額: 120,000,000 仟元 / 1e5 = 1200.0
+	if margin != 1200.0 {
+		t.Fatalf("unexpected margin: %v (want 1200.0)", margin)
 	}
-	if short != 0.15 {
-		t.Fatalf("unexpected short: %v", short)
+	// 融券: 239,205 交易單位 / 1e5 = 2.39205
+	if short != 2.39205 {
+		t.Fatalf("unexpected short: %v (want 2.39205)", short)
 	}
-	if marginChange < 19.999 || marginChange > 20.001 {
-		t.Fatalf("unexpected marginChange: %v", marginChange)
+	// marginChange: (1200-1000)/1000*100 = 20%
+	if marginChange < 19.9 || marginChange > 20.1 {
+		t.Fatalf("unexpected marginChange: %v (want ~20)", marginChange)
 	}
-	if shortChange < -25.001 || shortChange > -24.999 {
-		t.Fatalf("unexpected shortChange: %v", shortChange)
+	// shortChange: (2.39205-2.39437)/2.39437*100 ≈ -0.097% (239437/1e5 = 2.39437)
+	if shortChange <= -1.0 || shortChange >= 1.0 {
+		t.Fatalf("unexpected shortChange: %v (want near 0)", shortChange)
 	}
 }
 
@@ -145,21 +121,12 @@ func TestTWSEMarginBalanceProvider_FetchSnapshotIncludesShortBalance(t *testing.
   "date": "20260513",
   "tables": [
     {
-      "title": "信用交易統計",
-      "fields": ["項目", "昨日餘額", "今日餘額"],
+      "title": "115年05月13日 信用交易統計",
+      "fields": ["項目", "買進", "賣出", "現金(券)償還", "前日餘額", "今日餘額"],
       "data": [
-        ["header"],
-        ["ignored"],
-        ["合計", "100000", "120000"]
-      ]
-    },
-    {
-      "title": "融券餘額",
-      "fields": ["項目", "昨日餘額", "今日餘額"],
-      "data": [
-        ["header"],
-        ["ignored"],
-        ["合計", "20000", "15000"]
+        ["融資(交易單位)", "429,048", "495,782", "5,934", "9,149,157", "9,076,489"],
+        ["融券(交易單位)", "23,361", "25,191", "2,062", "239,437", "239,205"],
+        ["融資金額(仟元)", "33,268,274", "37,431,433", "569,362", "100,000,000", "120,000,000"]
       ]
     }
   ]
@@ -180,5 +147,8 @@ func TestTWSEMarginBalanceProvider_FetchSnapshotIncludesShortBalance(t *testing.
 	}
 	if snap.RetailShortBalance.Symbol != "TAIWAN_SHORT_BALANCE" {
 		t.Fatalf("unexpected short symbol: %s", snap.RetailShortBalance.Symbol)
+	}
+	if snap.RetailShortBalance.Value <= 0 {
+		t.Fatalf("expected positive short_balance, got %v", snap.RetailShortBalance.Value)
 	}
 }

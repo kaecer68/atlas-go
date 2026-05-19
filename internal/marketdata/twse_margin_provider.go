@@ -80,7 +80,7 @@ func (t *TWSEMarginBalanceProvider) fetchDateExpanded(ctx context.Context, dateS
 		return 0, 0, 0, 0, fmt.Errorf("rate limit wait: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/en/exchangeReport/MI_MARGN?response=json&date=%s&selectType=MS", t.baseURL, dateStr)
+	url := fmt.Sprintf("%s/zh/exchangeReport/MI_MARGN?response=json&date=%s&selectType=MS", t.baseURL, dateStr)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return 0, 0, 0, 0, fmt.Errorf("create request: %w", err)
@@ -107,33 +107,45 @@ func (t *TWSEMarginBalanceProvider) fetchDateExpanded(ctx context.Context, dateS
 		return 0, 0, 0, 0, fmt.Errorf("TWSE API returned no data: stat=%s tables=%d", apiResp.Stat, len(apiResp.Tables))
 	}
 
-	var marginTable, shortTable *twseMarginTable
-	for i := range apiResp.Tables {
-		table := &apiResp.Tables[i]
-		if marginTable == nil && tableHasField(table, "融資") {
-			marginTable = table
+	// The MI_MARGN API now returns a single table (Table 0) with data rows for
+	// 融資(交易單位), 融券(交易單位), 融資金額(仟元).
+	// Fields: [項目, 買進, 賣出, 現金償還, 前日餘額, 今日餘額]
+	// Index:     0      1     2      3          4         5
+	// data[0] = 融資(交易單位), data[1] = 融券(交易單位), data[2] = 融資金額(仟元)
+	marginRow, shortRow := -1, -1
+	table := apiResp.Tables[0]
+	for i, row := range table.Data {
+		if len(row) < 6 {
+			continue
 		}
-		if shortTable == nil && (tableHasField(table, "融券") || strings.Contains(table.Title, "融券")) {
-			shortTable = table
+		label := row[0]
+		switch {
+		case strings.Contains(label, "融資金額"):
+			marginRow = i
+		case strings.Contains(label, "融券"):
+			shortRow = i
 		}
-	}
-	if marginTable == nil {
-		marginTable = &apiResp.Tables[0]
 	}
 
-	balance, prevBalance, err := extractCurrentAndPreviousValue(*marginTable, "今日餘額", "昨日餘額", 5, 4)
-	if err != nil {
-		return 0, 0, 0, 0, err
+	if marginRow < 0 {
+		return 0, 0, 0, 0, fmt.Errorf("TWSE API response missing 融資金額 row")
 	}
+
+	// Extract margin: row[marginRow], columns 5 (今日餘額) and 4 (前日餘額 or 昨日餘額)
+	marginRaw := table.Data[marginRow][5]
+	marginPrevRaw := table.Data[marginRow][4]
+	balance := float64(parseTWSEInt(marginRaw)) / 1e5
+	prevBalance := float64(parseTWSEInt(marginPrevRaw)) / 1e5
 	changePct := percentChange(balance, prevBalance)
 
 	shortBalance, shortPrevBalance := 0.0, 0.0
 	shortChangePct := 0.0
-	if shortTable != nil {
-		shortBalance, shortPrevBalance, err = extractCurrentAndPreviousValue(*shortTable, "今日餘額", "昨日餘額", 5, 4)
-		if err == nil {
-			shortChangePct = percentChange(shortBalance, shortPrevBalance)
-		}
+	if shortRow >= 0 && len(table.Data[shortRow]) >= 6 {
+		shortRaw := table.Data[shortRow][5]
+		shortPrevRaw := table.Data[shortRow][4]
+		shortBalance = float64(parseTWSEInt(shortRaw)) / 1e5
+		shortPrevBalance = float64(parseTWSEInt(shortPrevRaw)) / 1e5
+		shortChangePct = percentChange(shortBalance, shortPrevBalance)
 	}
 
 	return balance, shortBalance, changePct, shortChangePct, nil
@@ -155,42 +167,6 @@ func (t *TWSEMarginBalanceProvider) saveMargin(dateStr string, balance, shortBal
 	}
 	out, _ := json.MarshalIndent(data, "", "  ")
 	return os.WriteFile(filepath.Join(t.storageDir, dateStr+"_margin.json"), out, 0o644)
-}
-
-func tableHasField(table *twseMarginTable, fieldName string) bool {
-	for _, field := range table.Fields {
-		if strings.Contains(field, fieldName) {
-			return true
-		}
-	}
-	return strings.Contains(table.Title, fieldName)
-}
-
-func extractValueByFieldName(table twseMarginTable, fieldName string, fallbackIdx int) (string, bool) {
-	if len(table.Data) < 3 {
-		return "", false
-	}
-	for i, field := range table.Fields {
-		if strings.Contains(field, fieldName) && i < len(table.Data[2]) {
-			return table.Data[2][i], true
-		}
-	}
-	if fallbackIdx >= 0 && fallbackIdx < len(table.Data[2]) {
-		return table.Data[2][fallbackIdx], true
-	}
-	return "", false
-}
-
-func extractCurrentAndPreviousValue(table twseMarginTable, currentFieldName, prevFieldName string, currentFallbackIdx, prevFallbackIdx int) (float64, float64, error) {
-	currentRaw, ok := extractValueByFieldName(table, currentFieldName, currentFallbackIdx)
-	if !ok {
-		return 0, 0, fmt.Errorf("TWSE API missing current value for %s", currentFieldName)
-	}
-	prevRaw, ok := extractValueByFieldName(table, prevFieldName, prevFallbackIdx)
-	if !ok {
-		return 0, 0, fmt.Errorf("TWSE API missing previous value for %s", prevFieldName)
-	}
-	return float64(parseTWSEInt(currentRaw)) / 1e5, float64(parseTWSEInt(prevRaw)) / 1e5, nil
 }
 
 func percentChange(current, previous float64) float64 {
