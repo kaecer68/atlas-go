@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
@@ -353,14 +354,16 @@ func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot, div *Dive
 }
 
 func detectRetailDivergenceEventFromSnapshot(foreignNet marketdata.MacroDataPoint, marginZScore float64, now time.Time) *NarrativeEvent {
-	if marginZScore > 1.5 && foreignNet.Value < 0 {
+	params := config.GetParametersConfig().Narrative
+	if marginZScore > params.RetailMarginZScoreThreshold.Value && foreignNet.Value < 0 {
+		confidence := computeDeviationConfidence(marginZScore, params.RetailMarginZScoreThreshold.Value, params.ConfidenceBaseTaiwanStress.Value)
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-retail-div-%d", now.UnixNano()),
 			Theme:            "retail_institutional_divergence",
 			Region:           "TW",
 			Sentiment:        -0.5,
-			Confidence:       0.60,
-			ConfidenceSource: "divergence_zscore_v1",
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("retail_institutional_divergence"),
 			CapitalFlow:      "crowding_risk",
 			TimeWindow:       "immediate",
@@ -377,19 +380,26 @@ func detectUSRatesEventFromSnapshot(curr, prev marketdata.MacroDataPoint, now ti
 	if curr.Symbol == "" {
 		return nil
 	}
+	params := config.GetParametersConfig().Narrative
 	// ^TNX is stored as bps proxy in our provider.
 	changeBps := curr.Value
 	if prev.Symbol != "" {
 		changeBps = curr.Value - prev.Value
 	}
-	if changeBps > 10 || curr.ChangePct > 1.5 {
+	if changeBps > params.US10YChangeBpsThreshold.Value || curr.ChangePct > params.DXYChangePctThreshold.Value {
+		confidenceBps := computeDeviationConfidence(changeBps, params.US10YChangeBpsThreshold.Value, params.ConfidenceBaseUSRates.Value)
+		confidenceDXY := computeDeviationConfidence(curr.ChangePct, params.DXYChangePctThreshold.Value, params.ConfidenceBaseUSRates.Value)
+		confidence := confidenceBps
+		if confidenceDXY > confidence {
+			confidence = confidenceDXY
+		}
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-us-rates-%d", now.UnixNano()),
 			Theme:            "US_rates_up",
 			Region:           "US",
 			Sentiment:        -0.6,
-			Confidence:       0.75,
-			ConfidenceSource: "heuristic_fixed_v1",
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("US_rates_up"),
 			CapitalFlow:      "flight_to_USD",
 			TimeWindow:       "1_week",
@@ -407,6 +417,7 @@ func detectJPYCarryUnwindEventFromSnapshot(currJPY, prevJPY, currVIX marketdata.
 	if currJPY.Symbol == "" {
 		return nil
 	}
+	params := config.GetParametersConfig().Narrative
 	jpyChange := currJPY.ChangePct
 	if prevJPY.Symbol != "" && prevJPY.Value != 0 {
 		jpyChange = (currJPY.Value - prevJPY.Value) / prevJPY.Value * 100
@@ -415,14 +426,20 @@ func detectJPYCarryUnwindEventFromSnapshot(currJPY, prevJPY, currVIX marketdata.
 	if currVIX.Symbol != "" {
 		vixLevel = currVIX.Value
 	}
-	if jpyChange > 2.0 || vixLevel > 25 {
+	if jpyChange > params.JPYChangePctThreshold.Value || vixLevel > params.VIXLevelThreshold.Value {
+		confidenceJPY := computeDeviationConfidence(jpyChange, params.JPYChangePctThreshold.Value, params.ConfidenceBaseJPYCarry.Value)
+		confidenceVIX := computeDeviationConfidence(vixLevel, params.VIXLevelThreshold.Value, params.ConfidenceBaseJPYCarry.Value)
+		confidence := confidenceJPY
+		if confidenceVIX > confidence {
+			confidence = confidenceVIX
+		}
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-jpy-%d", now.UnixNano()),
 			Theme:            "JPY_carry_unwind",
 			Region:           "JP",
 			Sentiment:        -0.6,
-			Confidence:       0.65,
-			ConfidenceSource: "heuristic_fixed_v1",
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("JPY_carry_unwind"),
 			CapitalFlow:      "global_liquidity_drain",
 			TimeWindow:       "immediate",
@@ -437,24 +454,31 @@ func detectJPYCarryUnwindEventFromSnapshot(currJPY, prevJPY, currVIX marketdata.
 }
 
 func detectGeopoliticalRiskEventFromSnapshot(currGold, currVIX, currUSDTWD marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+	params := config.GetParametersConfig().Narrative
 	goldChange := 0.0
 	if currGold.Symbol != "" {
 		goldChange = currGold.ChangePct
 	}
 	// Use VIX spike as proxy for geopolitical risk if no GPR index.
 	vixSpike := false
-	if currVIX.Symbol != "" && currVIX.Value > 25 {
+	if currVIX.Symbol != "" && currVIX.Value > params.VIXLevelThreshold.Value {
 		vixSpike = true
 	}
 	// NARR-05: Taiwan Stress Index proxy via USD/TWD depreciation
 	taiwanStress := false
-	if currUSDTWD.Symbol != "" && currUSDTWD.ChangePct > 1.0 {
+	if currUSDTWD.Symbol != "" && currUSDTWD.ChangePct > params.TaiwanStressUSDTWDThreshold.Value {
 		taiwanStress = true
 	}
-	if goldChange > 2.0 || vixSpike || taiwanStress {
-		confidence := 0.65
-		if taiwanStress {
-			confidence = 0.70
+	if goldChange > params.GoldChangePctThreshold.Value || vixSpike || taiwanStress {
+		confidenceGold := computeDeviationConfidence(goldChange, params.GoldChangePctThreshold.Value, params.ConfidenceBaseGeopolitical.Value)
+		confidenceVIX := computeDeviationConfidence(currVIX.Value, params.VIXLevelThreshold.Value, params.ConfidenceBaseGeopolitical.Value)
+		confidenceTW := computeDeviationConfidence(currUSDTWD.ChangePct, params.TaiwanStressUSDTWDThreshold.Value, params.ConfidenceBaseGeopolitical.Value)
+		confidence := confidenceGold
+		if confidenceVIX > confidence {
+			confidence = confidenceVIX
+		}
+		if confidenceTW > confidence {
+			confidence = confidenceTW
 		}
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-geo-%d", now.UnixNano()),
@@ -462,7 +486,7 @@ func detectGeopoliticalRiskEventFromSnapshot(currGold, currVIX, currUSDTWD marke
 			Region:           "Global",
 			Sentiment:        -0.8,
 			Confidence:       confidence,
-			ConfidenceSource: "heuristic_fixed_v1",
+			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("geopolitical_risk_spike"),
 			CapitalFlow:      "risk_off",
 			TimeWindow:       "immediate",
@@ -489,22 +513,24 @@ func detectUSDTWDEventFromSnapshot(curr, prev marketdata.MacroDataPoint, now tim
 	if curr.Symbol == "" {
 		return nil
 	}
+	params := config.GetParametersConfig().Narrative
 	changePct := curr.ChangePct
 	if prev.Symbol != "" && prev.Value != 0 {
 		changePct = (curr.Value - prev.Value) / prev.Value * 100
 	}
-	if math.Abs(changePct) > 1.0 {
+	if math.Abs(changePct) > params.USDTWDChangePctThreshold.Value {
 		sentiment := -0.5
 		if changePct > 0 {
 			sentiment = -0.7 // USD strengthening against TWD is negative for Taiwan exports
 		}
+		confidence := computeDeviationConfidence(changePct, params.USDTWDChangePctThreshold.Value, params.ConfidenceBaseTaiwanStress.Value)
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-usd-twd-%d", now.UnixNano()),
 			Theme:            "USD_TWD_volatility",
 			Region:           "TW",
 			Sentiment:        sentiment,
-			Confidence:       0.60,
-			ConfidenceSource: "heuristic_fixed_v1",
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("USD_TWD_volatility"),
 			CapitalFlow:      "fx_driven_outflow",
 			TimeWindow:       "1_week",
@@ -522,19 +548,21 @@ func detectSemiconductorEventFromSnapshot(curr, prev marketdata.MacroDataPoint, 
 	if curr.Symbol == "" {
 		return nil
 	}
+	params := config.GetParametersConfig().Narrative
 	// NARR-04: Detect semiconductor downturn from export data
 	changePct := curr.ChangePct
 	if prev.Symbol != "" && prev.Value != 0 {
 		changePct = (curr.Value - prev.Value) / prev.Value * 100
 	}
-	if changePct < -5.0 {
+	if changePct < params.SemiconductorExportDropThreshold.Value {
+		confidence := computeDeviationConfidence(math.Abs(changePct), math.Abs(params.SemiconductorExportDropThreshold.Value), params.ConfidenceBaseTSMCRevenue.Value)
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-semi-%d", now.UnixNano()),
 			Theme:            "semiconductor_downturn",
 			Region:           "TW",
 			Sentiment:        -0.6,
-			Confidence:       0.55,
-			ConfidenceSource: "heuristic_fixed_v1",
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("semiconductor_downturn"),
 			CapitalFlow:      "tech_capex_slowdown",
 			TimeWindow:       "1_month",
@@ -552,14 +580,17 @@ func detectOilShockEventFromSnapshot(currOil marketdata.MacroDataPoint, now time
 	if currOil.Symbol == "" {
 		return nil
 	}
-	if currOil.ChangePct > 5.0 || currOil.ChangePct < -5.0 {
+	params := config.GetParametersConfig().Narrative
+	threshold := params.OilChangePctThreshold.Value
+	if currOil.ChangePct > threshold || currOil.ChangePct < -threshold {
+		confidence := computeDeviationConfidence(currOil.ChangePct, threshold, params.ConfidenceBaseOilShock.Value)
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-oil-%d", now.UnixNano()),
 			Theme:            "oil_price_shock",
 			Region:           "Global",
 			Sentiment:        -0.5,
-			Confidence:       0.60,
-			ConfidenceSource: "heuristic_fixed_v1",
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("oil_price_shock"),
 			CapitalFlow:      "inflation_reprice",
 			TimeWindow:       "1_week",
@@ -573,19 +604,21 @@ func detectOilShockEventFromSnapshot(currOil marketdata.MacroDataPoint, now time
 }
 
 func computeAICapexSentiment(tsmcYoYChangePct float64) float64 {
-	if tsmcYoYChangePct > 10 {
+	params := config.GetParametersConfig().Narrative
+	if tsmcYoYChangePct > params.TSMCRevenueYoYThreshold.Value {
 		return 0.8
 	}
-	if tsmcYoYChangePct > 0 {
+	if tsmcYoYChangePct > params.TSMCRevenuePositiveThreshold.Value {
 		return 0.5
 	}
-	return -0.3
+	return params.AICapexFallbackSentiment.Value
 }
 
 func detectRetailFrenzyEventFromSnapshot(marginBalance marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
 	if marginBalance.Symbol == "" {
 		return nil
 	}
+	// TODO: Migrate hardcoded thresholds (90.0 percentile, 5-day acceleration window) to ParametersConfig.
 	history, err := LoadMarginHistory(DefaultMarginHistoryDir)
 	if err == nil && marginHistoryAvailable(history) {
 		percentile, ok := ComputeRollingPercentile(history, marginBalance.Value, 60)
@@ -628,6 +661,7 @@ func detectRetailFearEventFromSnapshot(marginBalance marketdata.MacroDataPoint, 
 	if marginBalance.Symbol == "" {
 		return nil
 	}
+	// TODO: Migrate hardcoded thresholds (10.0 percentile, 5-day acceleration window) to ParametersConfig.
 	history, err := LoadMarginHistory(DefaultMarginHistoryDir)
 	if err == nil && marginHistoryAvailable(history) {
 		percentile, ok := ComputeRollingPercentile(history, marginBalance.Value, 60)
@@ -667,12 +701,17 @@ func detectRetailFearEventFromSnapshot(marginBalance marketdata.MacroDataPoint, 
 }
 
 func detectAICapexEventFromSnapshot(sentiment float64, prevTSMC marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
-	if sentiment <= 0.5 {
+	params := config.GetParametersConfig().Narrative
+	if sentiment <= params.AICapexSentimentThreshold.Value {
 		return nil
 	}
-	confidence := 0.70
+	confidence := computeDeviationConfidence(sentiment, params.AICapexSentimentThreshold.Value, params.ConfidenceBaseAICapex.Value)
 	if prevTSMC.Symbol != "" && prevTSMC.ChangePct > 0 {
-		confidence = 0.75
+		boosted := confidence + 0.05
+		if boosted > 0.95 {
+			boosted = 0.95
+		}
+		confidence = boosted
 	}
 	return &NarrativeEvent{
 		ID:               fmt.Sprintf("evt-ai-capex-%d", now.UnixNano()),
@@ -680,7 +719,7 @@ func detectAICapexEventFromSnapshot(sentiment float64, prevTSMC marketdata.Macro
 		Region:           "US",
 		Sentiment:        0.8,
 		Confidence:       confidence,
-		ConfidenceSource: "tsmc_revenue_yoy_v1",
+		ConfidenceSource: "deviation_based_v1",
 		HitRate:          hitRateForTheme("AI_capex_surge"),
 		CapitalFlow:      "tech_capex_inflow",
 		TimeWindow:       "1_month",

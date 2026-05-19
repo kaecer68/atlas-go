@@ -1,6 +1,6 @@
 {
-  "version": "1.1",
-  "updated_at": "2026-05-04T14:45:36.210127+08:00",
+  "version": "1.2",
+  "updated_at": "2026-05-19T18:30:00+08:00",
   "darwinian": {
     "weight_min": {
       "value": 0.3,
@@ -2709,6 +2709,112 @@
         "dependencies": [],
         "last_validated": "2026-05-14T23:51:04.342194"
       }
+    },
+    "gold_change_pct_threshold": {
+      "value": 2.0,
+      "rationale": "Gold price change % threshold for geopolitical risk detection; gold traditionally serves as safe-haven proxy",
+      "source": "heuristic",
+      "todo": "Calibrate from historical gold volatility around geopolitical events"
+    },
+    "usdtwd_change_pct_threshold": {
+      "value": 1.0,
+      "rationale": "USD/TWD daily change % threshold for FX volatility event; 1% daily move is significant for managed-float TWD",
+      "source": "heuristic",
+      "todo": "Calibrate from historical USD/TWD daily volatility distribution"
+    },
+    "semiconductor_export_drop_threshold": {
+      "value": -5.0,
+      "rationale": "Semiconductor export change % threshold for downturn detection; -5% MoM decline signals demand weakening",
+      "source": "heuristic",
+      "todo": "Calibrate from historical Taiwan electronics export cycles"
+    },
+    "retail_margin_zscore_threshold": {
+      "value": 1.5,
+      "rationale": "Margin balance z-score threshold for retail divergence event; z>1.5 indicates extreme positioning",
+      "source": "heuristic",
+      "todo": "Calibrate from historical margin balance distribution"
+    },
+    "ai_capex_sentiment_threshold": {
+      "value": 0.5,
+      "rationale": "AI capex sentiment score threshold for AI_capex_surge event; >0.5 indicates bullish capex outlook",
+      "source": "heuristic",
+      "todo": "Calibrate from TSMC capex guidance vs forward returns"
+    },
+    "tsmc_revenue_yoy_threshold": {
+      "value": 10.0,
+      "rationale": "TSMC revenue YoY growth % threshold for AI sentiment computation; >10% indicates strong AI demand",
+      "source": "heuristic",
+      "todo": "Calibrate from TSMC quarterly revenue cycles"
+    },
+    "taiwan_stress_usdtwd_threshold": {
+      "value": 1.0,
+      "rationale": "USD/TWD change % threshold for Taiwan stress signal in geopolitical detection; 1% depreciation signals capital outflow",
+      "source": "heuristic",
+      "todo": "Calibrate from historical TWD depreciation episodes"
+    },
+    "retail_institutional_divergence_threshold": {
+      "value": 0.0,
+      "rationale": "Retail-institutional divergence threshold; divergence > 0 means retail is more bullish than institutions",
+      "source": "heuristic",
+      "todo": "Calibrate from divergence index backtest"
+    },
+    "ai_capex_negative_sentiment_threshold": {
+      "value": -0.3,
+      "rationale": "AI capex sentiment threshold for semiconductor downturn detection; <-0.3 indicates bearish outlook",
+      "source": "heuristic",
+      "todo": "Calibrate from historical sentiment floor levels"
+    },
+    "ai_capex_fallback_sentiment": {
+      "value": -0.3,
+      "rationale": "Fallback AI capex sentiment when TSMC revenue YoY is not positive; conservative bearish default",
+      "source": "heuristic",
+      "todo": "Calibrate from historical TSMC revenue-to-sentiment mapping"
+    },
+    "tsmc_revenue_positive_threshold": {
+      "value": 0.0,
+      "rationale": "TSMC revenue YoY threshold for positive growth; >0% triggers moderate bullish sentiment",
+      "source": "heuristic",
+      "todo": "Calibrate from TSMC revenue growth distribution"
+    },
+    "confidence_base_us_rates": {
+      "value": 0.75,
+      "rationale": "Base confidence for US rates event; derived from historical predictability of yield-driven episodes",
+      "source": "empirical"
+    },
+    "confidence_base_jpy_carry": {
+      "value": 0.65,
+      "rationale": "Base confidence for JPY carry unwind event; derived from carry trade unwinding historical patterns",
+      "source": "empirical"
+    },
+    "confidence_base_geopolitical": {
+      "value": 0.65,
+      "rationale": "Base confidence for geopolitical risk event; derived from GPR index historical correlations",
+      "source": "empirical"
+    },
+    "confidence_base_oil_shock": {
+      "value": 0.6,
+      "rationale": "Base confidence for oil price shock event; derived from Hamilton-type oil shock literature",
+      "source": "empirical"
+    },
+    "confidence_base_ai_capex": {
+      "value": 0.7,
+      "rationale": "Base confidence for AI capex event; derived from TSMC capex guidance vs semiconductor cycle correlation",
+      "source": "empirical"
+    },
+    "confidence_base_tsmc_revenue": {
+      "value": 0.7,
+      "rationale": "Base confidence for TSMC revenue-based events; derived from WSTS semiconductor forecast accuracy",
+      "source": "empirical"
+    },
+    "confidence_base_taiwan_stress": {
+      "value": 0.6,
+      "rationale": "Base confidence for Taiwan stress index-based events; conservative heuristic default",
+      "source": "heuristic"
+    },
+    "sox_index_drop_threshold": {
+      "value": -5.0,
+      "rationale": "SOX index change % threshold for semiconductor stress detection; -5% is significant drawdown",
+      "source": "empirical"
     }
   },
   "marketdata": {
@@ -3326,9 +3432,9 @@
     "confidence_mix": {
       "value": {
         "weight_boundary": 0.45,
-        "weight_freshness": 0.20,
+        "weight_freshness": 0.2,
         "weight_seasonal": 0.15,
-        "weight_linkage": 0.10,
+        "weight_linkage": 0.1,
         "weight_narrative": 0.1,
         "favorable_confidence_min": 0.4
       },
@@ -3714,7 +3820,7 @@
         "default_correlation": 0.5,
         "systemic_importance_divisor": 10.0,
         "min_correlation_threshold": 0.3,
-        "recession_correlation_boost": 0.30,
+        "recession_correlation_boost": 0.3,
         "correlation_window_days": 30,
         "correlation_matrix": {
           "ai_supply_chain↔energy": 0.12,

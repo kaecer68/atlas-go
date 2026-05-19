@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 func writeTestReplayCSV(dir string) (string, error) {
@@ -273,6 +275,7 @@ func TestNarrativeEngineUpdateModelWeights(t *testing.T) {
 }
 
 func TestDetectEventsNoTrigger(t *testing.T) {
+	config.ResetParametersConfig()
 	ne := NewNarrativeEngine()
 	data := MarketNarrativeData{
 		US10YChangeBps:   5,   // below 10bps threshold
