@@ -139,7 +139,7 @@ func (s *IndustryService) GetSeasonalPatterns(industryID string, now time.Time) 
 				EndMonth:           p.EndMonth,
 				EndDay:             p.EndDay,
 				HistoricalAccuracy: p.HistoricalAccuracy,
-				TypicalReturn:      p.TypicalReturn(),
+				TypicalReturn:      p.AvgMarketReturn,
 				AffectedIndustries: p.AffectedIndustries(),
 			})
 		}

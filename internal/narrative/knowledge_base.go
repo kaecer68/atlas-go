@@ -420,6 +420,16 @@ func (ne *NarrativeEngine) ListModels() []InvestmentModel {
 	return out
 }
 
+// UpdateMacro updates the engine's macro state after each successful ingestion.
+// Must be called to populate lastMacro/prevMacro/lastGeo used by GetCurrentStressIndex.
+func (ne *NarrativeEngine) UpdateMacro(macro marketdata.MacroDataSnapshot, geo GeopoliticalRiskScore) {
+	ne.stressMu.Lock()
+	defer ne.stressMu.Unlock()
+	ne.prevMacro = ne.lastMacro
+	ne.lastMacro = macro
+	ne.lastGeo = geo
+}
+
 func (ne *NarrativeEngine) GetCurrentStressIndex() TaiwanStressIndex {
 	if ne.stressCalc == nil {
 		return TaiwanStressIndex{}
