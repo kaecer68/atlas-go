@@ -128,7 +128,7 @@ func (t *TaiwanRSSGeopoliticalProvider) countKeywordsInFeed(ctx context.Context,
 	if err != nil {
 		return 0, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
