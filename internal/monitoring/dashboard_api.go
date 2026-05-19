@@ -128,6 +128,8 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		marketdata.NewYahooFinanceMacroProvider(),
 		// TODO: Migrate to Gateway for direct Frankfurter FX provider instantiation.
 		marketdata.NewFrankfurterFXProvider(),
+		// ExchangeRate-API provides TWD (not available in ECB/Frankfurter dataset).
+		marketdata.NewExchangeRateProvider(),
 		// TODO: Migrate to Gateway for direct SOX index provider instantiation.
 		marketdata.NewSOXIndexProvider(),
 		// TODO: Migrate to Gateway for direct TWSE capital flow provider instantiation.

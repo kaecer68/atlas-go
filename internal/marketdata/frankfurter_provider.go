@@ -12,7 +12,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
-const frankfurterEndpoint = "https://api.frankfurter.app/latest?from=USD&to=JPY,TWD"
+const frankfurterEndpoint = "https://api.frankfurter.dev/v1/latest?from=USD&to=JPY"
 
 type FrankfurterFXProvider struct {
 	client   *http.Client
@@ -68,17 +68,6 @@ func (f *FrankfurterFXProvider) FetchSnapshot(ctx context.Context) (MacroDataSna
 		}
 	} else {
 		logging.Warn("frankfurter_provider", "missing_rate", "currency", "JPY")
-	}
-
-	if twdRate, ok := fxResp.Rates["TWD"]; ok && twdRate > 0 {
-		snap.USD_TWD = MacroDataPoint{
-			Symbol:    "USD/TWD=X",
-			Value:     twdRate,
-			ChangePct: 0,
-			Timestamp: time.Now().Unix(),
-		}
-	} else {
-		logging.Warn("frankfurter_provider", "missing_or_zero_rate", "currency", "TWD")
 	}
 
 	return snap, nil
