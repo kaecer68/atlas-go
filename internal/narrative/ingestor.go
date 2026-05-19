@@ -86,6 +86,7 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 	m.publishEvents(events)
 
 	snap = mergeWithPrev(snap, prev)
+	snap = computeChangePct(snap, prev)
 
 	if err := m.saveSnapshot(snap); err != nil {
 		return events, snap, fmt.Errorf("save snapshot: %w", err)
@@ -117,6 +118,18 @@ func (m *MacroIngestor) publishEvents(events []NarrativeEvent) {
 			e.CapitalFlow, e.TimeWindow,
 		)
 	}
+}
+
+// computeChangePct calculates change_pct for indicators where the provider
+// does not supply it (e.g., ExchangeRate-API gives only current rate).
+func computeChangePct(curr, prev marketdata.MacroDataSnapshot) marketdata.MacroDataSnapshot {
+	if curr.JPY.ChangePct == 0 && curr.JPY.Symbol != "" && prev.JPY.Symbol != "" && prev.JPY.Value != 0 {
+		curr.JPY.ChangePct = (curr.JPY.Value - prev.JPY.Value) / prev.JPY.Value * 100
+	}
+	if curr.USD_TWD.ChangePct == 0 && curr.USD_TWD.Symbol != "" && prev.USD_TWD.Symbol != "" && prev.USD_TWD.Value != 0 {
+		curr.USD_TWD.ChangePct = (curr.USD_TWD.Value - prev.USD_TWD.Value) / prev.USD_TWD.Value * 100
+	}
+	return curr
 }
 
 func mergeWithPrev(curr, prev marketdata.MacroDataSnapshot) marketdata.MacroDataSnapshot {
@@ -271,7 +284,14 @@ func (m *MacroIngestor) saveSnapshot(snap marketdata.MacroDataSnapshot) error {
 	if err := os.MkdirAll(m.snapshotDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir snapshot dir: %w", err)
 	}
-	path := filepath.Join(m.snapshotDir, "latest.json")
+	// Preserve current latest as previous.json before overwriting,
+	// so the stress index calculator can compute day-over-day change_pct.
+	latestPath := filepath.Join(m.snapshotDir, "latest.json")
+	prevPath := filepath.Join(m.snapshotDir, "previous.json")
+	if prevData, err := os.ReadFile(latestPath); err == nil {
+		_ = os.WriteFile(prevPath, prevData, 0o644)
+	}
+	path := latestPath
 	data, err := json.MarshalIndent(snap, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal snapshot: %w", err)
