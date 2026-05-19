@@ -240,8 +240,8 @@ func run(args []string, deps appDeps) error {
 				return nil
 			})
 			// Initial macro ingestion on startup to populate snapshot and publish events.
-			ingestCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			_, _, err := d.GetMacroIngestor().Ingest(ingestCtx)
+			ingestCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			_, _, err := d.IngestAndUpdateMacro(ingestCtx)
 			cancel()
 			if err != nil {
 				logging.Warn("main", "initial_macro_ingest_failed", "err", err)
@@ -620,7 +620,7 @@ func run(args []string, deps appDeps) error {
 					Task: func(ctx context.Context) error {
 						ingestCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 						defer cancel()
-						_, _, err := d.GetMacroIngestor().Ingest(ingestCtx)
+						_, _, err := d.IngestAndUpdateMacro(ingestCtx)
 						if err != nil {
 							logging.Warn("main", "macro_ingest_failed", "err", err)
 						}

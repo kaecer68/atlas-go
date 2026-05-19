@@ -70,7 +70,7 @@ func (f *FrankfurterFXProvider) FetchSnapshot(ctx context.Context) (MacroDataSna
 		logging.Warn("frankfurter_provider", "missing_rate", "currency", "JPY")
 	}
 
-	if twdRate, ok := fxResp.Rates["TWD"]; ok {
+	if twdRate, ok := fxResp.Rates["TWD"]; ok && twdRate > 0 {
 		snap.USD_TWD = MacroDataPoint{
 			Symbol:    "USD/TWD=X",
 			Value:     twdRate,
@@ -78,7 +78,7 @@ func (f *FrankfurterFXProvider) FetchSnapshot(ctx context.Context) (MacroDataSna
 			Timestamp: time.Now().Unix(),
 		}
 	} else {
-		logging.Warn("frankfurter_provider", "missing_rate", "currency", "TWD")
+		logging.Warn("frankfurter_provider", "missing_or_zero_rate", "currency", "TWD")
 	}
 
 	return snap, nil

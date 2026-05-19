@@ -125,35 +125,42 @@ func loadWeightsFromParameters() *StressIndexWeightsConfig {
 	n := p.Narrative
 	cfg := &StressIndexWeightsConfig{
 		Scaling: StressIndexScaling{
-			DXY:          n.TaiwanStressDXYScale.Value,
-			US10Y:        n.TaiwanStressUS10YScale.Value,
-			ForeignFlow:  n.TaiwanStressForeignScale.Value,
-			VIX:          n.TaiwanStressVIXScale.Value,
-			JPY:          n.TaiwanStressJPYScale.Value,
-			Geopolitical: n.TaiwanStressGeoScale.Value,
-			Oil:          n.TaiwanStressOilScale.Value,
-			Gold:         n.TaiwanStressGoldScale.Value,
+			DXY:          paramOrDefault(n.TaiwanStressDXYScale.Value, stressScaleDXY),
+			US10Y:        paramOrDefault(n.TaiwanStressUS10YScale.Value, stressScaleUS10Y),
+			ForeignFlow:  paramOrDefault(n.TaiwanStressForeignScale.Value, stressScaleForeignFlow),
+			VIX:          paramOrDefault(n.TaiwanStressVIXScale.Value, stressScaleVIX),
+			JPY:          paramOrDefault(n.TaiwanStressJPYScale.Value, stressScaleJPY),
+			Geopolitical: paramOrDefault(n.TaiwanStressGeoScale.Value, stressScaleGeopolitical),
+			Oil:          paramOrDefault(n.TaiwanStressOilScale.Value, stressScaleOil),
+			Gold:         paramOrDefault(n.TaiwanStressGoldScale.Value, stressScaleGold),
 		},
 		Weights: StressIndexWeights{
-			DXY:          n.TaiwanStressDXYWeight.Value,
-			US10Y:        n.TaiwanStressUS10YWeight.Value,
-			ForeignFlow:  n.TaiwanStressForeignWeight.Value,
-			VIX:          n.TaiwanStressVIXWeight.Value,
-			JPY:          n.TaiwanStressJPYWeight.Value,
-			Geopolitical: n.TaiwanStressGeoWeight.Value,
-			Oil:          n.TaiwanStressOilWeight.Value,
-			Gold:         n.TaiwanStressGoldWeight.Value,
+			DXY:          paramOrDefault(n.TaiwanStressDXYWeight.Value, stressWeightDXY),
+			US10Y:        paramOrDefault(n.TaiwanStressUS10YWeight.Value, stressWeightUS10Y),
+			ForeignFlow:  paramOrDefault(n.TaiwanStressForeignWeight.Value, stressWeightForeignFlow),
+			VIX:          paramOrDefault(n.TaiwanStressVIXWeight.Value, stressWeightVIX),
+			JPY:          paramOrDefault(n.TaiwanStressJPYWeight.Value, stressWeightJPY),
+			Geopolitical: paramOrDefault(n.TaiwanStressGeoWeight.Value, stressWeightGeopolitical),
+			Oil:          paramOrDefault(n.TaiwanStressOilWeight.Value, stressWeightOil),
+			Gold:         paramOrDefault(n.TaiwanStressGoldWeight.Value, stressWeightGold),
 		},
 		Thresholds: StressIndexThresholds{
-			Crisis: n.TaiwanStressCrisisThreshold.Value,
-			High:   n.TaiwanStressHighThreshold.Value,
-			Alert:  n.TaiwanStressAlertThreshold.Value,
+			Crisis: paramOrDefault(n.TaiwanStressCrisisThreshold.Value, stressThresholdCrisis),
+			High:   paramOrDefault(n.TaiwanStressHighThreshold.Value, stressThresholdHigh),
+			Alert:  paramOrDefault(n.TaiwanStressAlertThreshold.Value, stressThresholdAlert),
 		},
 	}
 	if !cfg.isValid() {
 		return nil
 	}
 	return cfg
+}
+
+func paramOrDefault(param, def float64) float64 {
+	if param != 0 {
+		return param
+	}
+	return def
 }
 
 func (c *StressIndexWeightsConfig) isValid() bool {

@@ -133,7 +133,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		// TODO: Migrate to Gateway for direct TWSE capital flow provider instantiation.
 		marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")),
 		// TODO: Migrate to Gateway for direct TWSE margin balance provider instantiation.
-		marketdata.NewTWSEMarginBalanceProvider(""),
+		marketdata.NewTWSEMarginBalanceProvider(filepath.Join(workDir, "data/state/margin")),
 		// TODO: Migrate to Gateway for direct export statistics provider instantiation.
 		marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export")),
 	}
@@ -331,6 +331,57 @@ func (a *DashboardAPI) GetEventBus() *eventbus.ChannelEventBus {
 
 func (a *DashboardAPI) GetMacroIngestor() *narrative.MacroIngestor {
 	return a.macroIngestor
+}
+
+// IngestAndUpdateMacro performs macro ingestion and updates the narrative engine state.
+// This ensures GetCurrentStressIndex() has valid data instead of zero values.
+func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.NarrativeEvent, marketdata.MacroDataSnapshot, error) {
+	events, snap, err := a.macroIngestor.Ingest(ctx)
+	if err != nil {
+		// Even if ingestion fails, try to load existing snapshot for stress index
+		if a.narrativeEngine != nil {
+			a.loadSnapshotIntoNarrativeEngine()
+		}
+		return events, snap, err
+	}
+	if a.narrativeEngine != nil {
+		geoScore := narrative.GeopoliticalRiskScore{}
+		if a.geoProvider != nil {
+			// Use a separate short timeout for geo fetch to avoid blocking startup
+			// when GDELT RSS feeds are slow (can take 55s+ in CI).
+			geoCtx, geoCancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer geoCancel()
+			if score, err := a.geoProvider.FetchScore(geoCtx); err == nil {
+				geoScore = score
+			}
+		}
+		a.narrativeEngine.UpdateMacro(snap, geoScore)
+	}
+	return events, snap, err
+}
+
+// loadSnapshotIntoNarrativeEngine loads the latest snapshot from disk into the narrative engine.
+// Used as fallback when live ingestion fails to ensure stress index has data.
+func (a *DashboardAPI) loadSnapshotIntoNarrativeEngine() {
+	snapDir := filepath.Clean(a.macroIngestor.SnapshotDir())
+	latestPath := filepath.Join(snapDir, "latest.json")
+	data, err := os.ReadFile(latestPath)
+	if err != nil {
+		return
+	}
+	var snap marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(data, &snap); err != nil {
+		return
+	}
+	geoScore := narrative.GeopoliticalRiskScore{}
+	if a.geoProvider != nil {
+		geoCtx, geoCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer geoCancel()
+		if score, err := a.geoProvider.FetchScore(geoCtx); err == nil {
+			geoScore = score
+		}
+	}
+	a.narrativeEngine.UpdateMacro(snap, geoScore)
 }
 
 func (a *DashboardAPI) SetContext(ctx context.Context) {
