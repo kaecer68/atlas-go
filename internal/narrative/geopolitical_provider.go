@@ -123,7 +123,7 @@ func (r *RSSGeopoliticalProvider) countKeywordsInFeed(ctx context.Context, url s
 	if err != nil {
 		return 0, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -199,7 +199,7 @@ func (g *GDELTGeopoliticalProvider) FetchScore(ctx context.Context) (Geopolitica
 	if err != nil {
 		return GeopoliticalRiskScore{}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

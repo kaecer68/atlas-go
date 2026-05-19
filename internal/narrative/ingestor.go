@@ -62,7 +62,7 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 	if err != nil {
 		// Partial success: save valid fields and merge with previous snapshot.
 		if hasValidYahooData(snap) {
-			prev, _ := m.loadLatestSnapshot()
+			prev, _ := m.loadLatestSnapshot() //nolint:errcheck
 			snap = mergeWithPrev(snap, prev)
 			if saveErr := m.saveSnapshot(snap); saveErr != nil {
 				logging.Warn("ingestor", "partial_save_failed", logging.Err(saveErr))
@@ -73,7 +73,7 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 		}
 		prev, prevErr := m.loadLatestSnapshot()
 		if prevErr == nil {
-			prevPrev, _ := m.loadPreviousSnapshot(prev)
+			prevPrev, _ := m.loadPreviousSnapshot(prev) //nolint:errcheck
 			events := detectEventsFromSnapshot(prev, prevPrev, m.divergenceDetect)
 			m.publishEvents(events)
 			return events, prev, nil
@@ -81,7 +81,7 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 		return nil, snap, fmt.Errorf("fetch snapshot: %w", err)
 	}
 
-	prev, _ := m.loadLatestSnapshot()
+	prev, _ := m.loadLatestSnapshot() //nolint:errcheck
 	events := detectEventsFromSnapshot(snap, prev, m.divergenceDetect)
 	m.publishEvents(events)
 
@@ -111,7 +111,7 @@ func (m *MacroIngestor) publishEvents(events []NarrativeEvent) {
 			}
 			m.lifecycle.AddEvent(e)
 		}
-		m.eventBus.PublishNarrativeEvent(
+		m.eventBus.PublishNarrativeEvent( //nolint:errcheck
 			e.ID, e.Theme, e.Region,
 			e.Sentiment, e.Confidence,
 			e.ConfidenceSource, fmt.Sprintf("%.2f", e.HitRate),
@@ -225,7 +225,7 @@ func (m *MacroIngestor) loadFallbackDatedSnapshot() (marketdata.MacroDataSnapsho
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || e.Name() == "latest.json" {
 			continue
 		}
-		info, _ := e.Info()
+		info, _ := e.Info() //nolint:errcheck
 		if info != nil && info.ModTime().Unix() > latestTime {
 			latestTime = info.ModTime().Unix()
 			latest = e.Name()
@@ -289,7 +289,7 @@ func (m *MacroIngestor) saveSnapshot(snap marketdata.MacroDataSnapshot) error {
 	latestPath := filepath.Join(m.snapshotDir, "latest.json")
 	prevPath := filepath.Join(m.snapshotDir, "previous.json")
 	if prevData, err := os.ReadFile(latestPath); err == nil {
-		_ = os.WriteFile(prevPath, prevData, 0o644)
+		_ = os.WriteFile(prevPath, prevData, 0o644) //nolint:errcheck
 	}
 	path := latestPath
 	data, err := json.MarshalIndent(snap, "", "  ")
