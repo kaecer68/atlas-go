@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -132,6 +133,7 @@ func TestMacroIngestorDetectsJPYCarryUnwind(t *testing.T) {
 }
 
 func TestMacroIngestorNoTriggerOnCalmData(t *testing.T) {
+	config.ResetParametersConfig()
 	dir := t.TempDir()
 	mock := &marketdata.MockMacroProvider{
 		Snapshot: marketdata.MacroDataSnapshot{

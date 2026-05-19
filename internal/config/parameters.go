@@ -247,6 +247,31 @@ type NarrativeParameters struct {
 	JPYChangePctThreshold     ParameterMetadata[float64] `json:"jpy_change_pct_threshold"`
 	VIXLevelThreshold         ParameterMetadata[float64] `json:"vix_level_threshold"`
 
+	// Extended event detection thresholds
+	GoldChangePctThreshold                 ParameterMetadata[float64] `json:"gold_change_pct_threshold"`
+	USDTWDChangePctThreshold               ParameterMetadata[float64] `json:"usdtwd_change_pct_threshold"`
+	SemiconductorExportDropThreshold       ParameterMetadata[float64] `json:"semiconductor_export_drop_threshold"`
+	RetailMarginZScoreThreshold            ParameterMetadata[float64] `json:"retail_margin_zscore_threshold"`
+	AICapexSentimentThreshold              ParameterMetadata[float64] `json:"ai_capex_sentiment_threshold"`
+	TSMCRevenueYoYThreshold                ParameterMetadata[float64] `json:"tsmc_revenue_yoy_threshold"`
+	TaiwanStressUSDTWDThreshold            ParameterMetadata[float64] `json:"taiwan_stress_usdtwd_threshold"`
+	RetailInstitutionalDivergenceThreshold ParameterMetadata[float64] `json:"retail_institutional_divergence_threshold"`
+	AICapexNegativeSentimentThreshold      ParameterMetadata[float64] `json:"ai_capex_negative_sentiment_threshold"`
+	AICapexFallbackSentiment               ParameterMetadata[float64] `json:"ai_capex_fallback_sentiment"`
+	TSMCRevenuePositiveThreshold           ParameterMetadata[float64] `json:"tsmc_revenue_positive_threshold"`
+
+	// Confidence base values for deviation-based dynamic confidence calculation
+	ConfidenceBaseUSRates      ParameterMetadata[float64] `json:"confidence_base_us_rates"`
+	ConfidenceBaseJPYCarry     ParameterMetadata[float64] `json:"confidence_base_jpy_carry"`
+	ConfidenceBaseGeopolitical ParameterMetadata[float64] `json:"confidence_base_geopolitical"`
+	ConfidenceBaseOilShock     ParameterMetadata[float64] `json:"confidence_base_oil_shock"`
+	ConfidenceBaseAICapex      ParameterMetadata[float64] `json:"confidence_base_ai_capex"`
+	ConfidenceBaseTSMCRevenue  ParameterMetadata[float64] `json:"confidence_base_tsmc_revenue"`
+	ConfidenceBaseTaiwanStress ParameterMetadata[float64] `json:"confidence_base_taiwan_stress"`
+
+	// SOX index drop threshold for semiconductor stress detection
+	SOXIndexDropThreshold ParameterMetadata[float64] `json:"sox_index_drop_threshold"`
+
 	TaiwanStressDXYWeight     ParameterMetadata[float64] `json:"taiwan_stress_dxy_weight"`
 	TaiwanStressUS10YWeight   ParameterMetadata[float64] `json:"taiwan_stress_us10y_weight"`
 	TaiwanStressForeignWeight ParameterMetadata[float64] `json:"taiwan_stress_foreign_weight"`
@@ -1011,9 +1036,83 @@ func GetParametersConfig() *ParametersConfig {
 		if err != nil {
 			return DefaultParametersConfig()
 		}
+		// Merge zero-valued fields from defaults to ensure newly added fields
+		// have valid values even when the saved parameters.json doesn't include them yet.
+		mergeNarrativeDefaults(cfg)
 		parametersConfig = cfg
 	}
 	return parametersConfig
+}
+
+// mergeNarrativeDefaults fills zero-valued narrative fields with defaults.
+func mergeNarrativeDefaults(cfg *ParametersConfig) {
+	def := DefaultParametersConfig().Narrative
+	n := &cfg.Narrative
+
+	if n.GoldChangePctThreshold.Value == 0 {
+		n.GoldChangePctThreshold = def.GoldChangePctThreshold
+	}
+	if n.USDTWDChangePctThreshold.Value == 0 {
+		n.USDTWDChangePctThreshold = def.USDTWDChangePctThreshold
+	}
+	if n.SemiconductorExportDropThreshold.Value == 0 {
+		n.SemiconductorExportDropThreshold = def.SemiconductorExportDropThreshold
+	}
+	if n.RetailMarginZScoreThreshold.Value == 0 {
+		n.RetailMarginZScoreThreshold = def.RetailMarginZScoreThreshold
+	}
+	if n.AICapexSentimentThreshold.Value == 0 {
+		n.AICapexSentimentThreshold = def.AICapexSentimentThreshold
+	}
+	if n.TSMCRevenueYoYThreshold.Value == 0 {
+		n.TSMCRevenueYoYThreshold = def.TSMCRevenueYoYThreshold
+	}
+	if n.TaiwanStressUSDTWDThreshold.Value == 0 {
+		n.TaiwanStressUSDTWDThreshold = def.TaiwanStressUSDTWDThreshold
+	}
+	if n.RetailInstitutionalDivergenceThreshold.Value == 0 {
+		n.RetailInstitutionalDivergenceThreshold = def.RetailInstitutionalDivergenceThreshold
+	}
+	if n.AICapexNegativeSentimentThreshold.Value == 0 {
+		n.AICapexNegativeSentimentThreshold = def.AICapexNegativeSentimentThreshold
+	}
+	if n.AICapexFallbackSentiment.Value == 0 {
+		n.AICapexFallbackSentiment = def.AICapexFallbackSentiment
+	}
+	if n.TSMCRevenuePositiveThreshold.Value == 0 {
+		n.TSMCRevenuePositiveThreshold = def.TSMCRevenuePositiveThreshold
+	}
+	if n.ConfidenceBaseUSRates.Value == 0 {
+		n.ConfidenceBaseUSRates = def.ConfidenceBaseUSRates
+	}
+	if n.ConfidenceBaseJPYCarry.Value == 0 {
+		n.ConfidenceBaseJPYCarry = def.ConfidenceBaseJPYCarry
+	}
+	if n.ConfidenceBaseGeopolitical.Value == 0 {
+		n.ConfidenceBaseGeopolitical = def.ConfidenceBaseGeopolitical
+	}
+	if n.ConfidenceBaseOilShock.Value == 0 {
+		n.ConfidenceBaseOilShock = def.ConfidenceBaseOilShock
+	}
+	if n.ConfidenceBaseAICapex.Value == 0 {
+		n.ConfidenceBaseAICapex = def.ConfidenceBaseAICapex
+	}
+	if n.ConfidenceBaseTSMCRevenue.Value == 0 {
+		n.ConfidenceBaseTSMCRevenue = def.ConfidenceBaseTSMCRevenue
+	}
+	if n.ConfidenceBaseTaiwanStress.Value == 0 {
+		n.ConfidenceBaseTaiwanStress = def.ConfidenceBaseTaiwanStress
+	}
+	if n.SOXIndexDropThreshold.Value == 0 {
+		n.SOXIndexDropThreshold = def.SOXIndexDropThreshold
+	}
+}
+
+// ResetParametersConfig clears the cached configuration so it will be reloaded
+// from the JSON file on the next call to GetParametersConfig. This is intended
+// for test environments where parameters.json may be updated between tests.
+func ResetParametersConfig() {
+	parametersConfig = nil
 }
 
 // Save writes the configuration to the given JSON file.

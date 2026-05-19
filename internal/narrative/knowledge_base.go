@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/replay"
@@ -487,14 +488,21 @@ type MarketNarrativeData struct {
 }
 
 func detectUSRatesEvent(data MarketNarrativeData) *NarrativeEvent {
-	if data.US10YChangeBps > 10 || data.DXYChangePct > 1.5 {
+	params := config.GetParametersConfig().Narrative
+	if data.US10YChangeBps > params.US10YChangeBpsThreshold.Value || data.DXYChangePct > params.DXYChangePctThreshold.Value {
+		confidenceUS10Y := computeDeviationConfidence(data.US10YChangeBps, params.US10YChangeBpsThreshold.Value, params.ConfidenceBaseUSRates.Value)
+		confidenceDXY := computeDeviationConfidence(data.DXYChangePct, params.DXYChangePctThreshold.Value, params.ConfidenceBaseUSRates.Value)
+		confidence := confidenceUS10Y
+		if confidenceDXY > confidence {
+			confidence = confidenceDXY
+		}
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-us-rates-%d", nowUnix()),
 			Theme:            "US_rates_up",
 			Region:           "US",
 			Sentiment:        -0.6,
-			Confidence:       0.75,
-			ConfidenceSource: "heuristic_fixed_v1",
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("US_rates_up"),
 			CapitalFlow:      "flight_to_USD",
 			TimeWindow:       "1_week",
@@ -509,14 +517,16 @@ func detectUSRatesEvent(data MarketNarrativeData) *NarrativeEvent {
 }
 
 func detectAICapexEvent(data MarketNarrativeData) *NarrativeEvent {
-	if data.AICapexSentiment > 0.5 {
+	params := config.GetParametersConfig().Narrative
+	if data.AICapexSentiment > params.AICapexSentimentThreshold.Value {
+		confidence := computeDeviationConfidence(data.AICapexSentiment, params.AICapexSentimentThreshold.Value, params.ConfidenceBaseAICapex.Value)
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-ai-capex-%d", nowUnix()),
 			Theme:            "AI_capex_surge",
 			Region:           "US",
 			Sentiment:        0.8,
-			Confidence:       0.70,
-			ConfidenceSource: "heuristic_fixed_v1",
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("AI_capex_surge"),
 			CapitalFlow:      "tech_capex_inflow",
 			TimeWindow:       "1_month",
@@ -530,14 +540,21 @@ func detectAICapexEvent(data MarketNarrativeData) *NarrativeEvent {
 }
 
 func detectGeopoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
-	if data.GeopoliticalGPR > 150 || data.GoldChangePct > 2.0 {
+	params := config.GetParametersConfig().Narrative
+	if data.GeopoliticalGPR > params.GeopoliticalGPRThreshold.Value || data.GoldChangePct > params.GoldChangePctThreshold.Value {
+		confidenceGPR := computeDeviationConfidence(data.GeopoliticalGPR, params.GeopoliticalGPRThreshold.Value, params.ConfidenceBaseGeopolitical.Value)
+		confidenceGold := computeDeviationConfidence(data.GoldChangePct, params.GoldChangePctThreshold.Value, params.ConfidenceBaseGeopolitical.Value)
+		confidence := confidenceGPR
+		if confidenceGold > confidence {
+			confidence = confidenceGold
+		}
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-geo-%d", nowUnix()),
 			Theme:            "geopolitical_risk_spike",
 			Region:           "Global",
 			Sentiment:        -0.8,
-			Confidence:       0.65,
-			ConfidenceSource: "heuristic_fixed_v1",
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("geopolitical_risk_spike"),
 			CapitalFlow:      "risk_off",
 			TimeWindow:       "immediate",
@@ -552,14 +569,17 @@ func detectGeopoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
 }
 
 func detectOilShockEvent(data MarketNarrativeData) *NarrativeEvent {
-	if data.OilChangePct > 5.0 || data.OilChangePct < -5.0 {
+	params := config.GetParametersConfig().Narrative
+	threshold := params.OilChangePctThreshold.Value
+	if data.OilChangePct > threshold || data.OilChangePct < -threshold {
+		confidence := computeDeviationConfidence(data.OilChangePct, threshold, params.ConfidenceBaseOilShock.Value)
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-oil-%d", nowUnix()),
 			Theme:            "oil_price_shock",
 			Region:           "Global",
 			Sentiment:        -0.5,
-			Confidence:       0.60,
-			ConfidenceSource: "heuristic_fixed_v1",
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("oil_price_shock"),
 			CapitalFlow:      "inflation_reprice",
 			TimeWindow:       "1_week",
@@ -573,14 +593,21 @@ func detectOilShockEvent(data MarketNarrativeData) *NarrativeEvent {
 }
 
 func detectJPYCarryUnwindEvent(data MarketNarrativeData) *NarrativeEvent {
-	if data.JPY_ChangePct > 2.0 || data.VIXLevel > 25 {
+	params := config.GetParametersConfig().Narrative
+	if data.JPY_ChangePct > params.JPYChangePctThreshold.Value || data.VIXLevel > params.VIXLevelThreshold.Value {
+		confidenceJPY := computeDeviationConfidence(data.JPY_ChangePct, params.JPYChangePctThreshold.Value, params.ConfidenceBaseJPYCarry.Value)
+		confidenceVIX := computeDeviationConfidence(data.VIXLevel, params.VIXLevelThreshold.Value, params.ConfidenceBaseJPYCarry.Value)
+		confidence := confidenceJPY
+		if confidenceVIX > confidence {
+			confidence = confidenceVIX
+		}
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-jpy-%d", nowUnix()),
 			Theme:            "JPY_carry_unwind",
 			Region:           "JP",
 			Sentiment:        -0.6,
-			Confidence:       0.65,
-			ConfidenceSource: "heuristic_fixed_v1",
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("JPY_carry_unwind"),
 			CapitalFlow:      "global_liquidity_drain",
 			TimeWindow:       "immediate",
@@ -595,18 +622,20 @@ func detectJPYCarryUnwindEvent(data MarketNarrativeData) *NarrativeEvent {
 }
 
 func detectUSDTWDEvent(data MarketNarrativeData) *NarrativeEvent {
-	if math.Abs(data.USD_TWD_ChangePct) > 1.0 {
+	params := config.GetParametersConfig().Narrative
+	if math.Abs(data.USD_TWD_ChangePct) > params.USDTWDChangePctThreshold.Value {
 		sentiment := -0.5
 		if data.USD_TWD_ChangePct > 0 {
 			sentiment = -0.7
 		}
+		confidence := computeDeviationConfidence(data.USD_TWD_ChangePct, params.USDTWDChangePctThreshold.Value, params.ConfidenceBaseTaiwanStress.Value)
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-usd-twd-%d", nowUnix()),
 			Theme:            "USD_TWD_volatility",
 			Region:           "TW",
 			Sentiment:        sentiment,
-			Confidence:       0.60,
-			ConfidenceSource: "heuristic_fixed_v1",
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("USD_TWD_volatility"),
 			CapitalFlow:      "fx_driven_outflow",
 			TimeWindow:       "1_week",
@@ -620,14 +649,16 @@ func detectUSDTWDEvent(data MarketNarrativeData) *NarrativeEvent {
 }
 
 func detectTaiwanPoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
-	if data.GeopoliticalGPR > 150 {
+	params := config.GetParametersConfig().Narrative
+	if data.GeopoliticalGPR > params.GeopoliticalGPRThreshold.Value {
+		confidence := computeDeviationConfidence(data.GeopoliticalGPR, params.GeopoliticalGPRThreshold.Value, params.ConfidenceBaseGeopolitical.Value)
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-tw-pol-%d", nowUnix()),
 			Theme:            "taiwan_political_risk",
 			Region:           "TW",
 			Sentiment:        -0.8,
-			Confidence:       0.70,
-			ConfidenceSource: "heuristic_fixed_v1",
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("taiwan_political_risk"),
 			CapitalFlow:      "risk_off",
 			TimeWindow:       "immediate",
@@ -641,14 +672,25 @@ func detectTaiwanPoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
 }
 
 func detectSemiconductorDownturnEvent(data MarketNarrativeData) *NarrativeEvent {
-	if data.VIXLevel > 25 && data.DXYChangePct > 1.0 && data.AICapexSentiment < -0.3 {
+	params := config.GetParametersConfig().Narrative
+	if data.VIXLevel > params.VIXLevelThreshold.Value && data.DXYChangePct > params.DXYChangePctThreshold.Value && data.AICapexSentiment < params.AICapexNegativeSentimentThreshold.Value {
+		confidenceVIX := computeDeviationConfidence(data.VIXLevel, params.VIXLevelThreshold.Value, params.ConfidenceBaseTSMCRevenue.Value)
+		confidenceDXY := computeDeviationConfidence(data.DXYChangePct, params.DXYChangePctThreshold.Value, params.ConfidenceBaseTSMCRevenue.Value)
+		confidenceAI := computeDeviationConfidence(math.Abs(data.AICapexSentiment), math.Abs(params.AICapexNegativeSentimentThreshold.Value), params.ConfidenceBaseTSMCRevenue.Value)
+		confidence := confidenceVIX
+		if confidenceDXY > confidence {
+			confidence = confidenceDXY
+		}
+		if confidenceAI > confidence {
+			confidence = confidenceAI
+		}
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-semi-dt-%d", nowUnix()),
 			Theme:            "semiconductor_downturn",
 			Region:           "TW",
 			Sentiment:        -0.6,
-			Confidence:       0.55,
-			ConfidenceSource: "heuristic_composite_v1",
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("semiconductor_downturn"),
 			CapitalFlow:      "tech_capex_slowdown",
 			TimeWindow:       "1_month",
@@ -767,14 +809,21 @@ func detectSeasonalEvent(data MarketNarrativeData) *NarrativeEvent {
 }
 
 func detectRetailDivergenceEvent(data MarketNarrativeData) *NarrativeEvent {
-	if data.MarginZScore > 1.5 && data.RetailInstitutionalDivergence > 0 {
+	params := config.GetParametersConfig().Narrative
+	if data.MarginZScore > params.RetailMarginZScoreThreshold.Value && data.RetailInstitutionalDivergence > params.RetailInstitutionalDivergenceThreshold.Value {
+		confidenceZScore := computeDeviationConfidence(data.MarginZScore, params.RetailMarginZScoreThreshold.Value, params.ConfidenceBaseTaiwanStress.Value)
+		confidenceDivergence := computeDeviationConfidence(data.RetailInstitutionalDivergence, params.RetailInstitutionalDivergenceThreshold.Value, params.ConfidenceBaseTaiwanStress.Value)
+		confidence := confidenceZScore
+		if confidenceDivergence > confidence {
+			confidence = confidenceDivergence
+		}
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-retail-div-%d", nowUnix()),
 			Theme:            "retail_institutional_divergence",
 			Region:           "TW",
 			Sentiment:        -0.5,
-			Confidence:       0.60,
-			ConfidenceSource: "divergence_zscore_v1",
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("retail_institutional_divergence"),
 			CapitalFlow:      "crowding_risk",
 			TimeWindow:       "immediate",
@@ -786,6 +835,24 @@ func detectRetailDivergenceEvent(data MarketNarrativeData) *NarrativeEvent {
 		}
 	}
 	return nil
+}
+
+// computeDeviationConfidence calculates event confidence based on how far the observed value deviates from the threshold.
+// Uses a base confidence plus a linear interpolation to 0.95 ceiling.
+func computeDeviationConfidence(observed, threshold, base float64) float64 {
+	if threshold <= 0 {
+		return base
+	}
+	ratio := math.Abs(observed) / math.Abs(threshold)
+	if ratio < 1.0 {
+		return base
+	}
+	ceiling := 0.95
+	confidence := base + (ratio-1.0)*(ceiling-base)
+	if confidence > ceiling {
+		confidence = ceiling
+	}
+	return confidence
 }
 
 var nowUnix = func() int64 {

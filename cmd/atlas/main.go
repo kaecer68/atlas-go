@@ -240,9 +240,19 @@ func run(args []string, deps appDeps) error {
 				return nil
 			})
 			// Initial macro ingestion on startup to populate snapshot and publish events.
-			ingestCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			ingestCtx, ingestCancel := context.WithTimeout(context.Background(), 60*time.Second)
+			// Cancel ingest early if shutdown is signaled to avoid blocking
+			// tests that send shutdown after 100ms (otherwise ingest would wait
+			// up to 60s for Yahoo/Frankfurter geo timeouts).
+			go func() {
+				select {
+				case <-deps.shutdown:
+					ingestCancel()
+				case <-ingestCtx.Done():
+				}
+			}()
 			_, _, err := d.IngestAndUpdateMacro(ingestCtx)
-			cancel()
+			ingestCancel()
 			if err != nil {
 				logging.Warn("main", "initial_macro_ingest_failed", "err", err)
 			} else {
