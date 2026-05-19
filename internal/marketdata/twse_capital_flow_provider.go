@@ -119,12 +119,16 @@ func (t *TWSECapitalFlowProvider) fetchDate(ctx context.Context, dateStr string)
 		if len(row) < 12 {
 			continue
 		}
-		// Column mapping based on TWSE T86 schema:
-		// 0: 證券代號, 1: 證券名稱, 2: 外資及陸資買進股數, 3: 外資及陸資賣出股數, 4: 外資及陸資買賣超股數,
-		// 5: 投信買進股數, 6: 投信賣出股數, 7: 投信買賣超股數,
-		// 8: 自營商買賣超股數, 9: 自營商買進股數(自行買賣), 10: 自營商賣出股數(自行買賣), 11: 自營商買賣超股數(自行買賣)
+		// Column mapping based on TWSE T86 schema (19 columns as of 2026):
+		// 0: 證券代號, 1: 證券名稱,
+		// 2: 外陸資買進股數(不含外資自營商), 3: 外陸資賣出股數(不含外資自營商), 4: 外陸資買賣超股數(不含外資自營商),
+		// 5: 外資自營商買進股數, 6: 外資自營商賣出股數, 7: 外資自營商買賣超股數,
+		// 8: 投信買進股數, 9: 投信賣出股數, 10: 投信買賣超股數,
+		// 11: 自營商買賣超股數(含自行+避險), 12: 自營商買進股數(自行買賣), 13: 自營商賣出股數(自行買賣), 14: 自營商買賣超股數(自行買賣),
+		// 15: 自營商買進股數(避險), 16: 自營商賣出股數(避險), 17: 自營商買賣超股數(避險),
+		// 18: 三大法人買賣超股數
 		foreign := parseTWDVolume(row[4])
-		domestic := parseTWDVolume(row[7])
+		domestic := parseTWDVolume(row[10])
 		dealer := parseTWDVolume(row[11])
 		totalForeign += foreign
 		totalDomestic += domestic
