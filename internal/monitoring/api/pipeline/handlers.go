@@ -219,6 +219,25 @@ func (h *Handlers) HandleRecommendationPipeline(r *http.Request) (int, any) {
 
 	items := make([]PipelineItem, len(data.Items))
 	for i, item := range data.Items {
+		var narCtx *NarrativeContextItem
+		var indCtx *IndustryContextItem
+		if item.NarrativeContext != nil {
+			narCtx = &NarrativeContextItem{
+				ActiveThemes:   item.NarrativeContext.ActiveThemes,
+				PrimaryTheme:   item.NarrativeContext.PrimaryTheme,
+				PrimaryHitRate: item.NarrativeContext.PrimaryHitRate,
+				DirectionHint:  item.NarrativeContext.DirectionHint,
+			}
+		}
+		if item.IndustryContext != nil {
+			indCtx = &IndustryContextItem{
+				IndustryID:         item.IndustryContext.IndustryID,
+				BusinessCycle:      item.IndustryContext.BusinessCycle,
+				CycleConfidence:    item.IndustryContext.CycleConfidence,
+				SeasonalMultiplier: item.IndustryContext.SeasonalMultiplier,
+				SystemicImportance: item.IndustryContext.SystemicImportance,
+			}
+		}
 		items[i] = PipelineItem{
 			Symbol:              item.Symbol,
 			AgentID:             item.AgentID,
@@ -239,9 +258,8 @@ func (h *Handlers) HandleRecommendationPipeline(r *http.Request) (int, any) {
 			FactorScores:        item.FactorScores,
 			ConvictionBreakdown: item.ConvictionBreakdown,
 			NarrativeEventIDs:   item.NarrativeEventIDs,
-			// Enriched by P2.2 enrichment service.
-			NarrativeContext:  nil,
-			IndustryContext:   nil,
+			NarrativeContext:    narCtx,
+			IndustryContext:     indCtx,
 		}
 	}
 
