@@ -11,12 +11,12 @@ import (
 )
 
 type FactorWeightEngine struct {
-	mu              sync.RWMutex
-	baseWeights     map[FactorType]float64
-	eventWeights    map[string]map[FactorType]float64
-	activeEvents    map[string]*narrative.NarrativeEvent
-	lifecycle       *narrative.EventLifecycleManager
-	weightSource    string
+	mu           sync.RWMutex
+	baseWeights  map[FactorType]float64
+	eventWeights map[string]map[FactorType]float64
+	activeEvents map[string]*narrative.NarrativeEvent
+	lifecycle    *narrative.EventLifecycleManager
+	weightSource string
 }
 
 func (e *FactorWeightEngine) WeightSource() string {

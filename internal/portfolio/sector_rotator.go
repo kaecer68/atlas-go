@@ -23,11 +23,11 @@ type SectorAllocation struct {
 
 // SectorRotationPlan represents the plan for rotating between sectors
 type SectorRotationPlan struct {
-	Allocations   []SectorAllocation `json:"allocations"`
-	PrimaryFlow   string             `json:"primary_flow"`
-	Rationale     string             `json:"rationale"`
-	Timestamp     time.Time          `json:"timestamp"`
-	ConfigSource  string             `json:"config_source,omitempty"`
+	Allocations  []SectorAllocation `json:"allocations"`
+	PrimaryFlow  string             `json:"primary_flow"`
+	Rationale    string             `json:"rationale"`
+	Timestamp    time.Time          `json:"timestamp"`
+	ConfigSource string             `json:"config_source,omitempty"`
 }
 
 // SectorRotator executes sector rotation based on macro conditions
