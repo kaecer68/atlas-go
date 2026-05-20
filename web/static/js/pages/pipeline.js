@@ -542,12 +542,12 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
     const narrativeCtx = it.narrative_context;
     const hasNarrative = narrativeEvents.length > 0 || narrativeCtx;
     const narrativeBadge = hasNarrative
-      ? `<span class="badge" style="font-size:10px;padding:1px 5px;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.4);color:#3b82f6">${narrativeCtx ? escapeHtml(narrativeCtx.theme || '敘事') : '敘事'} ${narrativeEvents.length > 0 ? narrativeEvents.length : ''}</span>`
+      ? `<span class="badge" style="font-size:10px;padding:1px 5px;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.4);color:#3b82f6">${narrativeCtx ? escapeHtml(narrativeCtx.primary_theme || narrativeCtx.theme || '敘事') : '敘事'} ${narrativeEvents.length > 0 ? narrativeEvents.length : ''}</span>`
       : '<span class="text-muted text-xs">-</span>';
     const industryCtx = it.industry_context;
-    const hasIndustry = industryCtx && industryCtx.cycle_phase;
+    const hasIndustry = industryCtx && industryCtx.business_cycle;
     const industryBadge = hasIndustry
-      ? `<span class="badge" style="font-size:10px;padding:1px 5px;background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);color:#8b5cf6">${escapeHtml(industryCtx.cycle_phase)} ${industryCtx.cycle_score != null ? industryCtx.cycle_score.toFixed(1) : ''}</span>`
+      ? `<span class="badge" style="font-size:10px;padding:1px 5px;background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);color:#8b5cf6">${escapeHtml(industryCtx.business_cycle)} ${industryCtx.cycle_confidence != null ? (industryCtx.cycle_confidence * 100).toFixed(0) + '%' : ''}</span>`
       : '';
     return `<tr class="pipeline-row ${cls}" style="${rowStyle}"><td>${escapeHtml(it.symbol)}</td><td>${escapeHtml(stockName(it.symbol)) || '-'}</td><td>${escapeHtml(agentName(it.agent_id))}（${escapeHtml(it.skill)}）</td><td>${escapeHtml(layerName)}</td><td>${sideLabel}</td><td>${priceLabel}</td><td>${targetPriceLabel}</td><td>${stopLossPriceLabel}</td><td>${it.conviction != null ? it.conviction : '-'}</td><td>${narrativeBadge}${industryBadge ? ' ' + industryBadge : ''}</td><td>${renderFactorMini(it.factor_scores)}</td><td style="${frCls}">${frIcon}${(it.forward_return*100).toFixed(1)}%</td><td><div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:4px">${tags}</div>${badge}${it.reason ? escapeHtml(it.reason) : '-'}${it.guard_reason ? '<br><span class="text-muted text-xs">' + escapeHtml(it.guard_reason) + '</span>' : ''}</td><td>${actionBtns}${actionHelp}</td></tr>`;
   }).join('');
