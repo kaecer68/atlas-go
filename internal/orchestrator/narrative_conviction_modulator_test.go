@@ -8,9 +8,8 @@ import (
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
 
-// TestNarrativeConvictionModulator_NoProvenance is a characterization test
-// that proves ConvictionSteps from this modulator currently lack provenance fields.
-// This is the RED phase — after P0.4, this test will be updated to assert provenance exists.
+// TestNarrativeConvictionModulator_NoProvenance validates that the narrative
+// modulator produces correct ConvictionSteps with provenance fields populated.
 func TestNarrativeConvictionModulator_NoProvenance(t *testing.T) {
 	mod := NewNarrativeConvictionModulator()
 
@@ -31,19 +30,18 @@ func TestNarrativeConvictionModulator_NoProvenance(t *testing.T) {
 	}
 
 	step := recs[0].ConvictionBreakdown.Steps[len(recs[0].ConvictionBreakdown.Steps)-1]
-	if step.Rule != "narrative_boost" {
-		t.Fatalf("expected rule 'narrative_boost', got %q", step.Rule)
+	if step.Rule != "modulator:narrative:narrative_boost" {
+		t.Fatalf("expected rule 'modulator:narrative:narrative_boost', got %q", step.Rule)
 	}
 
-	// RED phase: prove provenance fields are currently empty
-	if step.Source != "" {
-		t.Logf("NOTE: Source is now %q (was expected to be empty before P0.4)", step.Source)
+	if step.Source == "" {
+		t.Error("expected Source to be populated")
 	}
-	if step.ParamRef != "" {
-		t.Logf("NOTE: ParamRef is now %q (was expected to be empty before P0.4)", step.ParamRef)
+	if step.ParamRef == "" {
+		t.Error("expected ParamRef to be populated")
 	}
-	if step.ParamValue != "" {
-		t.Logf("NOTE: ParamValue is now %q (was expected to be empty before P0.4)", step.ParamValue)
+	if step.ParamValue == "" {
+		t.Error("expected ParamValue to be populated")
 	}
 }
 

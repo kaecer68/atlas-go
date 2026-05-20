@@ -7,8 +7,8 @@ import (
 	"github.com/kaecer68/atlas-go/internal/industry"
 )
 
-// TestIndustryCycleModulator_NoProvenance is a characterization test
-// that proves ConvictionSteps from this modulator currently lack provenance fields.
+// TestIndustryCycleModulator_NoProvenance validates that the industry cycle
+// modulator produces correct ConvictionSteps with provenance fields populated.
 func TestIndustryCycleModulator_NoProvenance(t *testing.T) {
 	tracker := industry.NewCycleTracker()
 	tracker.UpdatePosition("semiconductor", industry.IndustryMetrics{
@@ -35,18 +35,17 @@ func TestIndustryCycleModulator_NoProvenance(t *testing.T) {
 	}
 
 	step := recs[0].ConvictionBreakdown.Steps[len(recs[0].ConvictionBreakdown.Steps)-1]
-	if step.Rule != "cycle_phase" {
-		t.Fatalf("expected rule 'cycle_phase', got %q", step.Rule)
+	if step.Rule != "modulator:industry_cycle:cycle_phase" {
+		t.Fatalf("expected rule 'modulator:industry_cycle:cycle_phase', got %q", step.Rule)
 	}
 
-	// RED phase: prove provenance fields are currently empty
-	if step.Source != "" {
-		t.Logf("NOTE: Source is now %q (was expected to be empty before P0.5)", step.Source)
+	if step.Source == "" {
+		t.Error("expected Source to be populated")
 	}
-	if step.ParamRef != "" {
-		t.Logf("NOTE: ParamRef is now %q (was expected to be empty before P0.5)", step.ParamRef)
+	if step.ParamRef == "" {
+		t.Error("expected ParamRef to be populated")
 	}
-	if step.ParamValue != "" {
-		t.Logf("NOTE: ParamValue is now %q (was expected to be empty before P0.5)", step.ParamValue)
+	if step.ParamValue == "" {
+		t.Error("expected ParamValue to be populated")
 	}
 }

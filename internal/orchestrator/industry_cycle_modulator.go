@@ -167,85 +167,24 @@ func (m *IndustryCycleModulator) CollectModulationSteps(
 	return result
 }
 
+// ModulateRecommendations adjusts conviction based on industry cycle phase.
+// Delegates to CollectModulationSteps for provenance logic; preserved for
+// backward compatibility (test callers).
 func (m *IndustryCycleModulator) ModulateRecommendations(
 	recs []domain.Recommendation,
 	registry domain.AgentRegistry,
 ) {
-	if !m.IsAvailable() {
-		return
-	}
-
-	skillLookup := make(map[string]string, len(registry.Agents))
-	for _, agent := range registry.Agents {
-		skillLookup[agent.ID] = agent.Skill
-	}
-
-	for i := range recs {
-		skill := skillLookup[recs[i].Agent]
-		industryID, ok := m.skillToIndustry[skill]
-		if !ok {
+	steps := m.CollectModulationSteps(recs, registry)
+	for _, ms := range steps {
+		if ms.RecIndex >= len(recs) {
 			continue
 		}
-
-		pos, ok := m.tracker.GetPosition(industryID)
-		if !ok {
-			continue
-		}
-
-		delta := phaseDelta(pos.BusinessCycle)
-		if delta == 0 {
-			continue
-		}
-
-		confidenceAdjust := math.Round(float64(delta) * pos.Confidence)
-		adj := int(confidenceAdjust)
-
-		recs[i].Conviction += adj
-
-		phaseName := map[industry.CyclePhase]string{
-			industry.CycleExpansion: "擴張",
-			industry.CycleRecovery:  "復甦",
-			industry.CycleMature:    "成熟",
-			industry.CycleRecession: "衰退",
-		}[pos.BusinessCycle]
-
-		provenanceSource := "hardcoded"
-		provenanceRef := ""
-		provenanceVal := ""
-		if cfg := config.GetParametersConfig(); cfg != nil {
-			var phaseScore float64
-			switch pos.BusinessCycle {
-			case industry.CycleExpansion:
-				phaseScore = cfg.Industry.PhaseScores.Value.ScoreExpansion
-				provenanceRef = "Industry.PhaseScores.ScoreExpansion"
-			case industry.CycleRecovery:
-				phaseScore = cfg.Industry.PhaseScores.Value.ScoreRecovery
-				provenanceRef = "Industry.PhaseScores.ScoreRecovery"
-			case industry.CycleMature:
-				phaseScore = cfg.Industry.PhaseScores.Value.ScoreMature
-				provenanceRef = "Industry.PhaseScores.ScoreMature"
-			case industry.CycleRecession:
-				phaseScore = cfg.Industry.PhaseScores.Value.ScoreRecession
-				provenanceRef = "Industry.PhaseScores.ScoreRecession"
+		for _, step := range ms.Steps {
+			recs[ms.RecIndex].Conviction += step.Delta
+			if recs[ms.RecIndex].ConvictionBreakdown != nil {
+				recs[ms.RecIndex].ConvictionBreakdown.Steps = append(recs[ms.RecIndex].ConvictionBreakdown.Steps, step)
+				recs[ms.RecIndex].ConvictionBreakdown.Final = recs[ms.RecIndex].Conviction
 			}
-			if phaseScore != 0 {
-				provenanceSource = "config"
-				provenanceVal = fmt.Sprintf("%.0f", phaseScore)
-			}
-		}
-
-		step := domain.ConvictionStep{
-			Rule:       "cycle_phase",
-			Delta:      adj,
-			Reason:     fmt.Sprintf("產業%s處於%s期(信心度%.0f%%)", industryID, phaseName, pos.Confidence*100),
-			Source:     provenanceSource,
-			ParamRef:   provenanceRef,
-			ParamValue: provenanceVal,
-		}
-
-		if recs[i].ConvictionBreakdown != nil {
-			recs[i].ConvictionBreakdown.Steps = append(recs[i].ConvictionBreakdown.Steps, step)
-			recs[i].ConvictionBreakdown.Final = recs[i].Conviction
 		}
 	}
 }

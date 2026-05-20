@@ -71,6 +71,13 @@ func parseStructs(domainDir string) map[string][]structField {
 	fset := token.NewFileSet()
 	structs := make(map[string][]structField)
 
+	// Two-pass scan:
+	//   1. Pre-pass: collect all Go struct type names so goTypeToTS can emit
+	//      proper TypeScript interface references (e.g., ParameterSnapshot | null
+	//      instead of string | null) while keeping string type aliases as string.
+	//   2. Main pass: parse fields with type resolution.
+	structNames := preScanStructNames(domainDir)
+
 	err := filepath.Walk(domainDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -110,7 +117,7 @@ func parseStructs(domainDir string) map[string][]structField {
 						continue
 					}
 					optional := strings.Contains(field.Tag.Value, ",omitempty")
-					tsType := goTypeToTS(field.Type)
+					tsType := goTypeToTSWithStructs(field.Type, structNames)
 					fields = append(fields, structField{
 						Name:     field.Names[0].Name,
 						JSONName: jsonName,
@@ -130,6 +137,85 @@ func parseStructs(domainDir string) map[string][]structField {
 		os.Exit(1)
 	}
 	return structs
+}
+
+// preScanStructNames walks the domain directory and collects all Go struct
+// type names (ast.StructType) for use by goTypeToTSWithStructs.
+func preScanStructNames(domainDir string) map[string]bool {
+	structNames := make(map[string]bool)
+	fset := token.NewFileSet()
+
+	filepath.Walk(domainDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() || !strings.HasSuffix(info.Name(), ".go") || strings.HasSuffix(info.Name(), "_test.go") {
+			return nil
+		}
+		f, parseErr := parser.ParseFile(fset, path, nil, parser.ParseComments)
+		if parseErr != nil {
+			return nil
+		}
+		for _, decl := range f.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok || gen.Tok != token.TYPE {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				ts, ok := spec.(*ast.TypeSpec)
+				if !ok {
+					continue
+				}
+				if _, isStruct := ts.Type.(*ast.StructType); isStruct {
+					structNames[ts.Name.Name] = true
+				}
+			}
+		}
+		return nil
+	})
+	return structNames
+}
+
+func goTypeToTSWithStructs(expr ast.Expr, structNames map[string]bool) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		switch t.Name {
+		case "string":
+			return "string"
+		case "bool":
+			return "boolean"
+		case "int", "int8", "int16", "int32", "int64",
+			"uint", "uint8", "uint16", "uint32", "uint64",
+			"float32", "float64", "complex64", "complex128":
+			return "number"
+		default:
+			// Custom types (enums like Regime, GuardSeverity) → string
+			return "string"
+		}
+	case *ast.StarExpr:
+		return goTypeToTSWithStructs(t.X, structNames) + " | null"
+	case *ast.ArrayType:
+		return goTypeToTSWithStructs(t.Elt, structNames) + "[]"
+	case *ast.SelectorExpr:
+		// time.Time → string (serialized as ISO8601)
+		if ident, ok := t.X.(*ast.Ident); ok && ident.Name == "time" {
+			return "string"
+		}
+		// For cross-package struct types, emit the type name
+		// (e.g., shared.ParameterSnapshot → ParameterSnapshot).
+		// Non-struct type aliases (e.g., shared.AgentLayer, shared.Side)
+		// fall through to "string".
+		if structNames[t.Sel.Name] {
+			return t.Sel.Name
+		}
+		return "string"
+	case *ast.MapType:
+		return fmt.Sprintf("Record<%s, %s>", goTypeToTSWithStructs(t.Key, structNames), goTypeToTSWithStructs(t.Value, structNames))
+	case *ast.InterfaceType:
+		return "unknown"
+	default:
+		return "string"
+	}
 }
 
 func writeFieldNames(structs map[string][]structField, out string) {
@@ -221,36 +307,4 @@ func extractJSONName(tag string) string {
 		name = name[:comma]
 	}
 	return name
-}
-
-func goTypeToTS(expr ast.Expr) string {
-	switch t := expr.(type) {
-	case *ast.Ident:
-		switch t.Name {
-		case "string":
-			return "string"
-		case "bool":
-			return "boolean"
-		case "int", "int8", "int16", "int32", "int64",
-			"uint", "uint8", "uint16", "uint32", "uint64",
-			"float32", "float64", "complex64", "complex128":
-			return "number"
-		default:
-			// Custom types (enums like Regime, GuardSeverity) → string
-			return "string"
-		}
-	case *ast.StarExpr:
-		return goTypeToTS(t.X) + " | null"
-	case *ast.ArrayType:
-		return goTypeToTS(t.Elt) + "[]"
-	case *ast.SelectorExpr:
-		// time.Time, domain.GuardSeverity → string
-		return "string"
-	case *ast.MapType:
-		return fmt.Sprintf("Record<%s, %s>", goTypeToTS(t.Key), goTypeToTS(t.Value))
-	case *ast.InterfaceType:
-		return "unknown"
-	default:
-		return "string"
-	}
 }

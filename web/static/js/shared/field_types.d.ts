@@ -413,8 +413,8 @@ declare interface RangeFilter {
 declare interface Recommendation {
   reasoning_chain?: string[];
   supporting_events?: string[];
-  factor_scores: string;
-  conviction_breakdown?: string | null;
+  factor_scores: FactorScores;
+  conviction_breakdown?: ConvictionBreakdown | null;
 }
 
 declare interface RecommendationOutcome {
@@ -436,10 +436,10 @@ declare interface RecommendationOutcome {
   passed_guards: boolean;
   guard_reason: string;
   recorded_at: string;
-  factor_scores: string;
-  conviction_breakdown?: string | null;
+  factor_scores: FactorScores;
+  conviction_breakdown?: ConvictionBreakdown | null;
   supporting_events?: string[];
-  parameter_snapshot?: string | null;
+  parameter_snapshot?: ParameterSnapshot | null;
 }
 
 declare interface ReplayDataMetadata {
@@ -507,7 +507,7 @@ declare interface ScreeningReject {
   criterion_label: string;
   threshold: string;
   actual_value: string;
-  factor_scores: string;
+  factor_scores: FactorScores;
   recorded_at: string;
 }
 
