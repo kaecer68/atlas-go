@@ -357,11 +357,11 @@ func TestFactorEngineWithNarrativeAndIndustryCycleProviders(t *testing.T) {
 		{Agent: "test-agent", Symbol: "TEST.TW", Side: domain.SideBuy, Conviction: 80},
 	}
 	factorWeights := map[FactorType]float64{
-		FactorMomentum:     0.25,
-		FactorValue:        0.20,
-		FactorQuality:      0.20,
-		FactorAgent:        0.15,
-		FactorNarrative:    0.10,
+		FactorMomentum:      0.25,
+		FactorValue:         0.20,
+		FactorQuality:       0.20,
+		FactorAgent:         0.15,
+		FactorNarrative:     0.10,
 		FactorIndustryCycle: 0.10,
 	}
 
@@ -408,11 +408,11 @@ func TestFactorEngineWithoutProvidersOmitsNewFactors(t *testing.T) {
 		{Agent: "test-agent", Symbol: "TEST.TW", Side: domain.SideBuy, Conviction: 80},
 	}
 	factorWeights := map[FactorType]float64{
-		FactorMomentum:     0.25,
-		FactorValue:        0.20,
-		FactorQuality:      0.20,
-		FactorAgent:        0.15,
-		FactorNarrative:    0.10,
+		FactorMomentum:      0.25,
+		FactorValue:         0.20,
+		FactorQuality:       0.20,
+		FactorAgent:         0.15,
+		FactorNarrative:     0.10,
 		FactorIndustryCycle: 0.10,
 	}
 

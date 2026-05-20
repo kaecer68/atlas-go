@@ -14,13 +14,13 @@ import (
 type FactorType string
 
 const (
-	FactorMomentum     FactorType = "momentum"
-	FactorValue        FactorType = "value"
-	FactorQuality      FactorType = "quality"
-	FactorAgent        FactorType = "agent"
-	FactorInstSent     FactorType = "institutional_sentiment"
-	FactorLiquidity    FactorType = "liquidity"
-	FactorNarrative    FactorType = "narrative"
+	FactorMomentum      FactorType = "momentum"
+	FactorValue         FactorType = "value"
+	FactorQuality       FactorType = "quality"
+	FactorAgent         FactorType = "agent"
+	FactorInstSent      FactorType = "institutional_sentiment"
+	FactorLiquidity     FactorType = "liquidity"
+	FactorNarrative     FactorType = "narrative"
 	FactorIndustryCycle FactorType = "industry_cycle"
 )
 
@@ -70,15 +70,15 @@ func DefaultConstraints() Constraints {
 
 // Optimizer 组合优化器
 type Optimizer struct {
-	runtimeParams *RuntimeParameters
-	constraints   Constraints
-	agentWeights  map[string]float64
-	styleWeights  map[string]float64
-	factorWeights map[FactorType]float64
-	history       *HistoricalPrices
-	fundamentals  *FundamentalProvider
-	factorEngine  *FactorEngine
-	mu                sync.RWMutex
+	runtimeParams      *RuntimeParameters
+	constraints        Constraints
+	agentWeights       map[string]float64
+	styleWeights       map[string]float64
+	factorWeights      map[FactorType]float64
+	history            *HistoricalPrices
+	fundamentals       *FundamentalProvider
+	factorEngine       *FactorEngine
+	mu                 sync.RWMutex
 	factorWeightEngine *FactorWeightEngine
 }
 
@@ -105,12 +105,12 @@ func newOptimizerWithParams(params *RuntimeParameters) *Optimizer {
 	}
 
 	return &Optimizer{
-		runtimeParams: params,
-		constraints:   constraints,
-		agentWeights:  make(map[string]float64),
-		styleWeights:  make(map[string]float64),
-		factorWeights: factorWeights,
-		factorEngine:  NewFactorEngine(),
+		runtimeParams:      params,
+		constraints:        constraints,
+		agentWeights:       make(map[string]float64),
+		styleWeights:       make(map[string]float64),
+		factorWeights:      factorWeights,
+		factorEngine:       NewFactorEngine(),
 		factorWeightEngine: NewFactorWeightEngine(),
 	}
 }

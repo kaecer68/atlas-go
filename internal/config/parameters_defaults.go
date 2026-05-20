@@ -296,11 +296,11 @@ func defaultOptimizerParameters() OptimizerParameters {
 		},
 		FactorWeights: ParameterMetadata[map[string]float64]{
 			Value: map[string]float64{
-				"momentum":      0.25,
-				"value":         0.20,
-				"quality":       0.20,
-				"agent":         0.15,
-				"narrative":     0.10,
+				"momentum":       0.25,
+				"value":          0.20,
+				"quality":        0.20,
+				"agent":          0.15,
+				"narrative":      0.10,
 				"industry_cycle": 0.10,
 			},
 			Rationale: "Momentum 25%, Value 20%, Quality 20%, Agent 15%, Narrative 10%, Industry Cycle 10%",

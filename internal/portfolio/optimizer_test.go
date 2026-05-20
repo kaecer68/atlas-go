@@ -526,11 +526,11 @@ func TestOptimizeWithNarrativeAndIndustryCycleFactors(t *testing.T) {
 	c.CashReserve = 0.0
 	o.SetConstraints(c)
 	o.SetFactorWeights(map[FactorType]float64{
-		FactorMomentum:     0.0,
-		FactorValue:        0.0,
-		FactorQuality:      0.0,
-		FactorAgent:        0.0,
-		FactorNarrative:    0.5,
+		FactorMomentum:      0.0,
+		FactorValue:         0.0,
+		FactorQuality:       0.0,
+		FactorAgent:         0.0,
+		FactorNarrative:     0.5,
 		FactorIndustryCycle: 0.5,
 	})
 
