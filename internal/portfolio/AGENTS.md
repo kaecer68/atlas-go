@@ -65,7 +65,8 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
 
 ### 2.4. FactorWeightEngine (動態權重引擎)
 - **職責**：根據市場事件與 Regime 動態調整因子權重，並確保權重總和為 1.0。
-- **基礎權重配置**（8 因子）：
+- **配置化**：所有因子權重、Regime 調整、事件 delta 以及策略調整均已透過 `ParametersConfig.FactorWeight` 進行配置化。`internal/config/parameters.go` 與 `configs/parameters.json` 是唯一的權威來源。
+- **基礎權重配置**（8 因子 - **預設值，可透過 parameters.json 覆蓋**）：
     | 因子 | 基礎權重 |
     |------|----------|
     | Momentum | 0.25 |
@@ -117,11 +118,13 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
 
 ### 6. Sector Rotator (行業輪動管理器)
 - **核心類型**：`SectorAllocation` (目標配置)、`SectorRotationPlan` (輪動計劃)、`RebalancingTrade` (再平衡交易)。
+- **配置化**：宏觀調整 (`SectorRotationMacroAdjustments`) 與流向調整 (`SectorRotationFlowAdjustments`) 偏移值已配置化至 `ParametersConfig.Orchestrator`。
 - **宏觀驅動**：根據 `MacroRiskAssessment.Level` (Green/Yellow/Orange/Red) 調整行業配置。
     - **Green**: 維持基準配置。
     - **Yellow**: 輕度防御 (+defensive +cash, -ai_supply_chain -semiconductor)。
     - **Orange**: 中度防御 (+10% defensive +8% cash +5% gold, -8% ai_supply_chain -8% semiconductor)。
     - **Red**: 極度風險回避 (+25% cash +15% defensive +10% gold)。
+- **註**：上述偏移值為系統預設值；運行時可透過 `parameters.json` 進行動態覆蓋。
 - **Primary Flow**：risk_off / carry_trade_unwind / sector_rotation 三種主流流向。
 - **再平衡觸發**：`RebalanceThreshold` 以下的變動被忽略，大於閾值才生成交易。
 - **Drawdown 整合**：`CanExecuteRotation` 檢查 `MacroAwareDrawdownDecision` — emergency/severe 停止輪動，moderate 以上允許。
