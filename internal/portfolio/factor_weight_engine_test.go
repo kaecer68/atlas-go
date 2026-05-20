@@ -1,6 +1,7 @@
 package portfolio
 
 import (
+	"math"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -220,14 +221,17 @@ func TestFactorWeightEngine_ApplyStrategy_Conservative(t *testing.T) {
 	// Current behavior: ApplyStrategy stores in eventWeights but GetWeights
 	// only reads eventWeights for entries in activeEvents (which has no
 	// "strategy_adjustment" entry), so weights are unchanged.
-	if weights[FactorMomentum] != baseWeights[FactorMomentum] {
-		t.Errorf("conservative strategy should not change momentum yet (bug: adjustment not read), got %.4f want %.4f", weights[FactorMomentum], baseWeights[FactorMomentum])
+	// Use epsilon comparison because maps.Copy iteration order is non-deterministic
+	// and can produce ~5e-17 floating-point drift between successive calls.
+	eps := 1e-10
+	if math.Abs(weights[FactorMomentum]-baseWeights[FactorMomentum]) > eps {
+		t.Errorf("conservative strategy should not change momentum yet (bug: adjustment not read), got %.10f want %.10f", weights[FactorMomentum], baseWeights[FactorMomentum])
 	}
-	if weights[FactorQuality] != baseWeights[FactorQuality] {
-		t.Errorf("conservative strategy should not change quality yet (bug: adjustment not read), got %.4f want %.4f", weights[FactorQuality], baseWeights[FactorQuality])
+	if math.Abs(weights[FactorQuality]-baseWeights[FactorQuality]) > eps {
+		t.Errorf("conservative strategy should not change quality yet (bug: adjustment not read), got %.10f want %.10f", weights[FactorQuality], baseWeights[FactorQuality])
 	}
-	if weights[FactorValue] != baseWeights[FactorValue] {
-		t.Errorf("conservative strategy should not change value yet (bug: adjustment not read), got %.4f want %.4f", weights[FactorValue], baseWeights[FactorValue])
+	if math.Abs(weights[FactorValue]-baseWeights[FactorValue]) > eps {
+		t.Errorf("conservative strategy should not change value yet (bug: adjustment not read), got %.10f want %.10f", weights[FactorValue], baseWeights[FactorValue])
 	}
 }
 
@@ -243,10 +247,11 @@ func TestFactorWeightEngine_ApplyStrategy_Aggressive(t *testing.T) {
 
 	// Current behavior: ApplyStrategy stores in eventWeights but GetWeights
 	// only reads eventWeights for entries in activeEvents, so weights unchanged.
-	if weights[FactorMomentum] != baseWeights[FactorMomentum] {
-		t.Errorf("aggressive strategy should not change momentum yet (bug: adjustment not read), got %.4f want %.4f", weights[FactorMomentum], baseWeights[FactorMomentum])
+	eps := 1e-10
+	if math.Abs(weights[FactorMomentum]-baseWeights[FactorMomentum]) > eps {
+		t.Errorf("aggressive strategy should not change momentum yet (bug: adjustment not read), got %.10f want %.10f", weights[FactorMomentum], baseWeights[FactorMomentum])
 	}
-	if weights[FactorQuality] != baseWeights[FactorQuality] {
-		t.Errorf("aggressive strategy should not change quality yet (bug: adjustment not read), got %.4f want %.4f", weights[FactorQuality], baseWeights[FactorQuality])
+	if math.Abs(weights[FactorQuality]-baseWeights[FactorQuality]) > eps {
+		t.Errorf("aggressive strategy should not change quality yet (bug: adjustment not read), got %.10f want %.10f", weights[FactorQuality], baseWeights[FactorQuality])
 	}
 }
