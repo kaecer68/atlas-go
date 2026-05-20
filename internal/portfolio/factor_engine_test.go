@@ -348,7 +348,90 @@ func TestNonFallbackFactorsKeepNormalWeight(t *testing.T) {
 	}
 }
 
-// abs returns the absolute value of a float64
+func TestFactorEngineWithNarrativeAndIndustryCycleProviders(t *testing.T) {
+	fe := NewFactorEngine()
+	quotes := map[string]domain.Quote{
+		"TEST.TW": {Symbol: "TEST.TW", Open: 100, Last: 110, IsTradable: true},
+	}
+	agentRecs := []domain.Recommendation{
+		{Agent: "test-agent", Symbol: "TEST.TW", Side: domain.SideBuy, Conviction: 80},
+	}
+	factorWeights := map[FactorType]float64{
+		FactorMomentum:     0.25,
+		FactorValue:        0.20,
+		FactorQuality:      0.20,
+		FactorAgent:        0.15,
+		FactorNarrative:    0.10,
+		FactorIndustryCycle: 0.10,
+	}
+
+	fe.WithNarrativeProvider(func(symbol string) *domain.NarrativeFactorScore {
+		if symbol == "TEST.TW" {
+			return &domain.NarrativeFactorScore{Score: 0.75, Theme: "AI_capex_surge", HitRate: 0.81, Confidence: 0.90}
+		}
+		return nil
+	})
+	fe.WithIndustryCycleProvider(func(symbol string) *domain.IndustryCycleFactorScore {
+		if symbol == "TEST.TW" {
+			return &domain.IndustryCycleFactorScore{Score: 0.60, Phase: "expansion", PhaseScore: 0.80, Confidence: 0.85}
+		}
+		return nil
+	})
+
+	breakdown, scores := fe.CalculateAllScoresWithBreakdown("TEST.TW", quotes, agentRecs, nil, factorWeights)
+
+	if breakdown.Narrative.Score != 0.75 {
+		t.Errorf("expected narrative score 0.75, got %f", breakdown.Narrative.Score)
+	}
+	if breakdown.IndustryCycle.Score != 0.60 {
+		t.Errorf("expected industry cycle score 0.60, got %f", breakdown.IndustryCycle.Score)
+	}
+	if scores[FactorNarrative] != 0.75 {
+		t.Errorf("expected narrative score in map 0.75, got %f", scores[FactorNarrative])
+	}
+	if scores[FactorIndustryCycle] != 0.60 {
+		t.Errorf("expected industry cycle score in map 0.60, got %f", scores[FactorIndustryCycle])
+	}
+
+	expectedTotal := 0.5*0.25*0.5 + 0.05*0.20*0.5 + 0.05*0.20*0.5 + 0.8*0.15 + 0.75*0.10 + 0.60*0.10
+	if abs(scores["total"]-expectedTotal) > 0.001 {
+		t.Errorf("expected total %f, got %f", expectedTotal, scores["total"])
+	}
+}
+
+func TestFactorEngineWithoutProvidersOmitsNewFactors(t *testing.T) {
+	fe := NewFactorEngine()
+	quotes := map[string]domain.Quote{
+		"TEST.TW": {Symbol: "TEST.TW", Open: 100, Last: 110, IsTradable: true},
+	}
+	agentRecs := []domain.Recommendation{
+		{Agent: "test-agent", Symbol: "TEST.TW", Side: domain.SideBuy, Conviction: 80},
+	}
+	factorWeights := map[FactorType]float64{
+		FactorMomentum:     0.25,
+		FactorValue:        0.20,
+		FactorQuality:      0.20,
+		FactorAgent:        0.15,
+		FactorNarrative:    0.10,
+		FactorIndustryCycle: 0.10,
+	}
+
+	breakdown, scores := fe.CalculateAllScoresWithBreakdown("TEST.TW", quotes, agentRecs, nil, factorWeights)
+
+	if breakdown.Narrative.Score != 0 {
+		t.Errorf("expected narrative score 0 when no provider, got %f", breakdown.Narrative.Score)
+	}
+	if breakdown.IndustryCycle.Score != 0 {
+		t.Errorf("expected industry cycle score 0 when no provider, got %f", breakdown.IndustryCycle.Score)
+	}
+	if _, ok := scores[FactorNarrative]; ok {
+		t.Error("expected narrative score not in map when no provider")
+	}
+	if _, ok := scores[FactorIndustryCycle]; ok {
+		t.Error("expected industry cycle score not in map when no provider")
+	}
+}
+
 func abs(f float64) float64 {
 	if f < 0 {
 		return -f

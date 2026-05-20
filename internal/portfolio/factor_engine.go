@@ -13,10 +13,12 @@ func isFinite(f float64) bool {
 }
 
 type FactorEngine struct {
-	history      *HistoricalPrices
-	fundamentals *FundamentalProvider
-	params       *RuntimeParameters
-	mu           sync.RWMutex
+	history       *HistoricalPrices
+	fundamentals  *FundamentalProvider
+	params        *RuntimeParameters
+	narrativeProv func(symbol string) *domain.NarrativeFactorScore
+	cycleProv     func(symbol string) *domain.IndustryCycleFactorScore
+	mu            sync.RWMutex
 }
 
 func NewFactorEngine() *FactorEngine {
@@ -41,13 +43,24 @@ func (fe *FactorEngine) WithFundamentalProvider(fp *FundamentalProvider) *Factor
 	return fe
 }
 
-// WithParameters sets the runtime parameters for factor calculations.
-// This allows configuration of lookback periods, thresholds, and weights
-// without changing the public API. Returns the FactorEngine for chaining.
 func (fe *FactorEngine) WithParameters(p *RuntimeParameters) *FactorEngine {
 	fe.mu.Lock()
 	defer fe.mu.Unlock()
 	fe.params = p
+	return fe
+}
+
+func (fe *FactorEngine) WithNarrativeProvider(fn func(symbol string) *domain.NarrativeFactorScore) *FactorEngine {
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
+	fe.narrativeProv = fn
+	return fe
+}
+
+func (fe *FactorEngine) WithIndustryCycleProvider(fn func(symbol string) *domain.IndustryCycleFactorScore) *FactorEngine {
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
+	fe.cycleProv = fn
 	return fe
 }
 
@@ -484,6 +497,33 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 		FactorAgent:    agent.Score,
 	}
 
+	var nar, icl domain.FactorScoreItem
+	fe.mu.RLock()
+	narProv := fe.narrativeProv
+	iclProv := fe.cycleProv
+	fe.mu.RUnlock()
+
+	if narProv != nil {
+		if nfs := narProv(symbol); nfs != nil {
+			nar = domain.FactorScoreItem{
+				Score:     nfs.Score,
+				Formula:   fmt.Sprintf("narrative(theme=%s, hit_rate=%.2f)", nfs.Theme, nfs.HitRate),
+				RawInputs: map[string]float64{"theme_hit_rate": nfs.HitRate, "confidence": nfs.Confidence},
+			}
+			result[FactorNarrative] = nar.Score
+		}
+	}
+	if iclProv != nil {
+		if ics := iclProv(symbol); ics != nil {
+			icl = domain.FactorScoreItem{
+				Score:     ics.Score,
+				Formula:   fmt.Sprintf("industry_cycle(phase=%s, phase_score=%.2f)", ics.Phase, ics.PhaseScore),
+				RawInputs: map[string]float64{"phase_score": ics.PhaseScore, "confidence": ics.Confidence},
+			}
+			result[FactorIndustryCycle] = icl.Score
+		}
+	}
+
 	breakdown := &domain.FactorScoreBreakdown{
 		Momentum:               mom,
 		Value:                  val,
@@ -491,6 +531,8 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 		Agent:                  agent,
 		InstitutionalSentiment: instSent,
 		Liquidity:              liq,
+		Narrative:              nar,
+		IndustryCycle:          icl,
 	}
 
 	if len(bridgeInputs) > 0 {
@@ -534,6 +576,19 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 			liqWeight := getEffectiveWeight(FactorLiquidity, liq, factorWeights[FactorLiquidity])
 			total += liq.Score * liqWeight
 			rawTotal[string(FactorLiquidity)] = liq.Score * liqWeight
+		}
+
+		if nar.Score != 0 || nar.Formula != "" {
+			narWeight := getEffectiveWeight(FactorNarrative, nar, factorWeights[FactorNarrative])
+			total += nar.Score * narWeight
+			rawTotal[string(FactorNarrative)] = nar.Score * narWeight
+			breakdown.Narrative.Weight = factorWeights[FactorNarrative]
+		}
+		if icl.Score != 0 || icl.Formula != "" {
+			iclWeight := getEffectiveWeight(FactorIndustryCycle, icl, factorWeights[FactorIndustryCycle])
+			total += icl.Score * iclWeight
+			rawTotal[string(FactorIndustryCycle)] = icl.Score * iclWeight
+			breakdown.IndustryCycle.Weight = factorWeights[FactorIndustryCycle]
 		}
 
 		result["total"] = total

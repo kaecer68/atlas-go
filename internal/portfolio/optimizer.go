@@ -221,14 +221,16 @@ func (o *Optimizer) aggregateRecommendations(
 
 // calculateMultiFactorScores 计算多因子评分
 type symbolScore struct {
-	Symbol   string
-	Side     domain.Side
-	Momentum float64
-	Value    float64
-	Quality  float64
-	Agent    float64
-	Total    float64
-	Agents   []string
+	Symbol        string
+	Side          domain.Side
+	Momentum      float64
+	Value         float64
+	Quality       float64
+	Agent         float64
+	Narrative     float64
+	IndustryCycle float64
+	Total         float64
+	Agents        []string
 }
 
 func (o *Optimizer) calculateMultiFactorScores(
@@ -274,21 +276,50 @@ func (o *Optimizer) calculateMultiFactorScores(
 		valueScore := o.factorEngine.CalculateValueScore(symbol, quotes)
 		qualityScore := o.factorEngine.CalculateQualityScore(symbol, quotes)
 
+		var narrativeScore, industryCycleScore float64
+		o.mu.RLock()
+		fe := o.factorEngine
+		o.mu.RUnlock()
+		if fe != nil {
+			fe.mu.RLock()
+			narProv := fe.narrativeProv
+			iclProv := fe.cycleProv
+			fe.mu.RUnlock()
+			if narProv != nil {
+				if nfs := narProv(symbol); nfs != nil {
+					narrativeScore = nfs.Score
+				}
+			}
+			if iclProv != nil {
+				if ics := iclProv(symbol); ics != nil {
+					industryCycleScore = ics.Score
+				}
+			}
+		}
+
 		// 综合评分
 		totalScore := momentumScore*factorWeights[FactorMomentum] +
 			valueScore*factorWeights[FactorValue] +
 			qualityScore*factorWeights[FactorQuality] +
 			agentScore*factorWeights[FactorAgent]
+		if narrativeScore != 0 {
+			totalScore += narrativeScore * factorWeights[FactorNarrative]
+		}
+		if industryCycleScore != 0 {
+			totalScore += industryCycleScore * factorWeights[FactorIndustryCycle]
+		}
 
 		scores[key] = &symbolScore{
-			Symbol:   symbol,
-			Side:     side,
-			Momentum: momentumScore,
-			Value:    valueScore,
-			Quality:  qualityScore,
-			Agent:    agentScore,
-			Total:    totalScore,
-			Agents:   agents,
+			Symbol:        symbol,
+			Side:          side,
+			Momentum:      momentumScore,
+			Value:         valueScore,
+			Quality:       qualityScore,
+			Agent:         agentScore,
+			Narrative:     narrativeScore,
+			IndustryCycle: industryCycleScore,
+			Total:         totalScore,
+			Agents:        agents,
 		}
 	}
 
@@ -422,19 +453,27 @@ func (o *Optimizer) buildPositions(
 		// 实际目标金额
 		actualValue := float64(shares) * quote.Last
 
+		factors := map[FactorType]float64{
+			FactorMomentum: score.Momentum,
+			FactorValue:    score.Value,
+			FactorQuality:  score.Quality,
+			FactorAgent:    score.Agent,
+		}
+		if score.Narrative != 0 {
+			factors[FactorNarrative] = score.Narrative
+		}
+		if score.IndustryCycle != 0 {
+			factors[FactorIndustryCycle] = score.IndustryCycle
+		}
+
 		positions = append(positions, OptimizedPosition{
 			Symbol:       w.Symbol,
 			Side:         w.Side,
 			TargetValue:  actualValue,
 			TargetWeight: targetWeight,
 			Confidence:   score.Total,
-			Factors: map[FactorType]float64{
-				FactorMomentum: score.Momentum,
-				FactorValue:    score.Value,
-				FactorQuality:  score.Quality,
-				FactorAgent:    score.Agent,
-			},
-			Agents: score.Agents,
+			Factors:      factors,
+			Agents:       score.Agents,
 		})
 	}
 
