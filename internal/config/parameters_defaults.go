@@ -10,24 +10,26 @@ import (
 func DefaultParametersConfig() *ParametersConfig {
 	now := time.Now()
 	return &ParametersConfig{
-		Version:      "1.0",
-		UpdatedAt:    now,
-		Darwinian:    defaultDarwinianParameters(),
-		Factor:       defaultFactorParameters(),
-		Optimizer:    defaultOptimizerParameters(),
-		Sizing:       defaultSizingParameters(),
-		Health:       defaultHealthParameters(),
-		GARCH:        defaultGARCHParameters(),
-		Experiment:   defaultExperimentParameters(),
-		Baseline:     defaultBaselineParameters(),
-		Orchestrator: defaultOrchestratorParameters(),
-		Risk:         defaultRiskParameters(),
-		Realtime:     defaultRealtimeParameters(),
-		Narrative:    defaultNarrativeParameters(),
-		Janus:        defaultJanusParameters(),
-		Marketdata:   defaultMarketdataParameters(),
-		Industry:     defaultIndustryParameters(),
-		Strategy:     defaultStrategyParameters(),
+		Version:             "1.0",
+		UpdatedAt:           now,
+		Darwinian:           defaultDarwinianParameters(),
+		Factor:              defaultFactorParameters(),
+		Optimizer:           defaultOptimizerParameters(),
+		Sizing:              defaultSizingParameters(),
+		Health:              defaultHealthParameters(),
+		GARCH:               defaultGARCHParameters(),
+		Experiment:          defaultExperimentParameters(),
+		Baseline:            defaultBaselineParameters(),
+		Orchestrator:        defaultOrchestratorParameters(),
+		Risk:                defaultRiskParameters(),
+		Realtime:            defaultRealtimeParameters(),
+		Narrative:           defaultNarrativeParameters(),
+		Janus:               defaultJanusParameters(),
+		Marketdata:          defaultMarketdataParameters(),
+		Industry:            defaultIndustryParameters(),
+		Strategy:            defaultStrategyParameters(),
+		FactorWeight:        defaultFactorWeightParameters(),
+		NarrativeConviction: defaultNarrativeConvictionParameters(),
 	}
 }
 
@@ -714,6 +716,55 @@ func defaultOrchestratorParameters() OrchestratorParameters {
 			Value:     0.30,
 			Rationale: "Hit rate threshold for auto-rejection",
 			Source:    SourceHeuristic,
+		},
+		SectorRotationMacroAdjustments: ParameterMetadata[map[string]map[string]float64]{
+			Value: map[string]map[string]float64{
+				"high_risk": {
+					"gold":      0.05,
+					"cash":      0.10,
+					"defensive": 0.08,
+					"value":     0.03,
+				},
+				"moderate_risk": {
+					"growth": 0.04,
+					"value":  0.03,
+					"cash":   -0.03,
+				},
+				"low_risk": {
+					"growth":    0.08,
+					"momentum":  0.05,
+					"defensive": -0.04,
+				},
+			},
+			Rationale: "Macro risk level → sector allocation adjustments; de-risk to gold/cash/defensive in high risk, rotate to growth in low risk",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: derive from macro regime → sector performance analysis",
+		},
+		SectorRotationFlowAdjustments: ParameterMetadata[map[string]map[string]float64]{
+			Value: map[string]map[string]float64{
+				"gold_surge": {
+					"gold":      0.10,
+					"mining":    0.05,
+					"defensive": 0.03,
+				},
+				"cash_surge": {
+					"cash":       0.30,
+					"short_term": 0.15,
+				},
+				"tech_exodus": {
+					"semiconductor":   -0.08,
+					"ai_supply_chain": -0.05,
+				},
+				"defensive_flight": {
+					"defensive": 0.08,
+					"utilities": 0.05,
+					"staples":   0.05,
+					"growth":    -0.05,
+				},
+			},
+			Rationale: "Capital flow patterns → sector allocation adjustments; gold/cash surges trigger defensive rotation, tech exodus reduces semiconductor exposure, defensive flight shifts to utilities/staples",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: derive from flow pattern → sector return regression analysis",
 		},
 	}
 }
@@ -1704,10 +1755,25 @@ func defaultIndustryParameters() IndustryParameters {
 		},
 		PhaseScores: ParameterMetadata[PhaseScoresConfig]{
 			Value: PhaseScoresConfig{
-				ScoreExpansion: 1.0, ScoreRecovery: 0.5, ScoreMature: 0.0, ScoreRecession: -1.0,
+				ScoreExpansion: 1.2, ScoreRecovery: 1.1, ScoreMature: 1.0, ScoreRecession: 0.8,
 			},
-			Rationale: "Cycle phase correlation scores (-1 bearish to 1 bullish)",
+			Rationale: "Cycle phase conviction multipliers; expansion (1.2x) and recovery (1.1x) amplify, recession (0.8x) dampens",
 			Source:    SourceHeuristic,
+			Todo:      "Calibrate: derive phase scores from sector-level regime performance",
+		},
+		SkillToIndustry: ParameterMetadata[map[string]string]{
+			Value: map[string]string{
+				"semiconductor_desk": "semiconductor",
+				"ai_infrastructure":  "ai_supply_chain",
+				"macro_research":     "financials",
+				"shipping_analyst":   "shipping",
+				"energy_analyst":     "renewable_energy",
+				"defense_industrial": "ai_supply_chain",
+				"consumer_analyst":   "traditional",
+			},
+			Rationale: "Maps agent skills to industry sectors for cycle-aware conviction adjustments",
+			Source:    SourceHeuristic,
+			Todo:      "Validate: verify mapping aligns with sector coverage mandates",
 		},
 		CycleTransitions: ParameterMetadata[[]CycleTransitionConfig]{
 			Value: []CycleTransitionConfig{
@@ -1813,6 +1879,221 @@ func defaultStrategyParameters() StrategyParameters {
 			Rationale: "Default strategy when no clear winner; momentum has broad applicability",
 			Source:    SourceHeuristic,
 			Todo:      "Validate: backtest fallback strategy vs alternatives",
+		},
+	}
+}
+
+func defaultFactorWeightParameters() FactorWeightParameters {
+	return FactorWeightParameters{
+		BaseWeights: ParameterMetadata[map[string]float64]{
+			Value: map[string]float64{
+				"momentum":       0.25,
+				"value":          0.20,
+				"quality":        0.20,
+				"agent":          0.15,
+				"inst_sent":      0.10,
+				"liquidity":      0.05,
+				"narrative":      0.05,
+				"industry_cycle": 0.00,
+			},
+			Rationale: "Eight-factor weight distribution; momentum, value, quality as primary factors (65% combined), agent/inst_sent as secondary, liquidity/narrative as tertiary, industry_cycle as placeholder",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: derive from factor attribution backtest across 2024-2026 regime cycles",
+		},
+		RegimeBullMomentum: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "Bull regime: shift toward momentum (+5%) to capture trend continuation",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: optimize regime delta range via walk-forward backtest",
+		},
+		RegimeBullQuality: ParameterMetadata[float64]{
+			Value:     -0.03,
+			Rationale: "Bull regime: reduce quality (-3%) — defensive quality underperforms in strong rallies",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: optimize regime delta range via walk-forward backtest",
+		},
+		RegimeBullValue: ParameterMetadata[float64]{
+			Value:     -0.02,
+			Rationale: "Bull regime: reduce value (-2%) — value lags in momentum-driven bull markets",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: optimize regime delta range via walk-forward backtest",
+		},
+		RegimeBearQuality: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "Bear regime: shift toward quality (+5%) for defensive positioning",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: bear regime delta from 2022 drawdown data",
+		},
+		RegimeBearValue: ParameterMetadata[float64]{
+			Value:     0.03,
+			Rationale: "Bear regime: shift toward value (+3%) — value provides relative downside protection",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: bear regime delta from 2022 drawdown data",
+		},
+		RegimeBearMomentum: ParameterMetadata[float64]{
+			Value:     -0.05,
+			Rationale: "Bear regime: reduce momentum (-5%) — momentum strategies suffer in reversals",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: bear regime delta from 2022 drawdown data",
+		},
+		RegimeHighVolLiquidity: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "High volatility regime: rotate to liquidity (+5%) for stability",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: high-vol delta from VIX regime analysis",
+		},
+		RegimeHighVolMomentum: ParameterMetadata[float64]{
+			Value:     -0.03,
+			Rationale: "High volatility regime: reduce momentum (-3%) — momentum fragile in volatile markets",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: high-vol delta from VIX regime analysis",
+		},
+		RegimeHighVolInstSent: ParameterMetadata[float64]{
+			Value:     -0.02,
+			Rationale: "High volatility regime: reduce institutional sentiment (-2%) — lagging indicator in fast markets",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: high-vol delta from VIX regime analysis",
+		},
+		SeverityCritical: ParameterMetadata[float64]{
+			Value:     0.10,
+			Rationale: "Critical event: ±10% delta for severe market-moving events",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: severity deltas from event study of 50+ significant events",
+		},
+		SeverityHigh: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "High event: ±5% delta for significant events",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: severity deltas from event study",
+		},
+		SeverityMedium: ParameterMetadata[float64]{
+			Value:     0.02,
+			Rationale: "Medium event: ±2% delta for moderate events",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: severity deltas from event study",
+		},
+		SeverityLow: ParameterMetadata[float64]{
+			Value:     0.01,
+			Rationale: "Low event: ±1% delta for minor events",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: severity deltas from event study",
+		},
+		ClampMin: ParameterMetadata[float64]{
+			Value:     0.02,
+			Rationale: "Minimum factor weight floor (2%) prevents any factor from being eliminated",
+			Source:    SourceHeuristic,
+			Todo:      "Verify: test with 0.01 floor to assess extreme regime impact",
+		},
+		ClampMax: ParameterMetadata[float64]{
+			Value:     0.50,
+			Rationale: "Maximum factor weight ceiling (50%) prevents single-factor dominance",
+			Source:    SourceHeuristic,
+			Todo:      "Verify: test with 0.40 ceiling to assess diversification impact",
+		},
+		RiskOnMomentum: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "RISK_ON mode: boost momentum (+5%) — risk appetite favors trend",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: event-mode deltas from 2023-2024 risk-on/risk-off regime data",
+		},
+		RiskOnQuality: ParameterMetadata[float64]{
+			Value:     -0.03,
+			Rationale: "RISK_ON mode: reduce quality (-3%) — quality premium compresses in risk-on",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: event-mode deltas from 2023-2024 risk-on/risk-off regime data",
+		},
+		RiskOffMomentum: ParameterMetadata[float64]{
+			Value:     -0.05,
+			Rationale: "RISK_OFF mode: reduce momentum (-5%) — momentum crashes in risk-off",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: event-mode deltas from 2023-2024 risk-on/risk-off regime data",
+		},
+		RiskOffQuality: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "RISK_OFF mode: boost quality (+5%) — flight to quality",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: event-mode deltas from 2023-2024 risk-on/risk-off regime data",
+		},
+		RiskOffLiquidity: ParameterMetadata[float64]{
+			Value:     0.03,
+			Rationale: "RISK_OFF mode: boost liquidity (+3%) — liquidity premium in stress",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: event-mode deltas from 2023-2024 risk-on/risk-off regime data",
+		},
+		ConservativeValue: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "Conservative strategy: boost value (+5%) — value orientation for safety",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: strategy deltas from factor-rotation backtest 2024-2026",
+		},
+		ConservativeQuality: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "Conservative strategy: boost quality (+5%) — quality orientation for safety",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: strategy deltas from factor-rotation backtest 2024-2026",
+		},
+		ConservativeMomentum: ParameterMetadata[float64]{
+			Value:     -0.05,
+			Rationale: "Conservative strategy: reduce momentum (-5%) — dampen trend-chasing in defensive mode",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: strategy deltas from factor-rotation backtest 2024-2026",
+		},
+		AggressiveMomentum: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "Aggressive strategy: boost momentum (+5%) — capitalize on trends",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: strategy deltas from factor-rotation backtest 2024-2026",
+		},
+		AggressiveInstSent: ParameterMetadata[float64]{
+			Value:     0.03,
+			Rationale: "Aggressive strategy: boost institutional sentiment (+3%) — follow smart money",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: strategy deltas from factor-rotation backtest 2024-2026",
+		},
+		AggressiveValue: ParameterMetadata[float64]{
+			Value:     -0.03,
+			Rationale: "Aggressive strategy: reduce value (-3%) — value underperforms in aggressive markets",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: strategy deltas from factor-rotation backtest 2024-2026",
+		},
+		AggressiveQuality: ParameterMetadata[float64]{
+			Value:     -0.03,
+			Rationale: "Aggressive strategy: reduce quality (-3%) — quality premium unnecessary in strong uptrend",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: strategy deltas from factor-rotation backtest 2024-2026",
+		},
+	}
+}
+
+func defaultNarrativeConvictionParameters() NarrativeConvictionParameters {
+	return NarrativeConvictionParameters{
+		ThemeHitRates: ParameterMetadata[map[string]float64]{
+			Value: map[string]float64{
+				"AI_capex_surge":          0.81,
+				"US_rates_up":             0.72,
+				"JPY_carry_unwind":        0.68,
+				"geopolitical_risk_spike": 0.65,
+				"oil_price_shock":         0.58,
+			},
+			Rationale: "Historical hit rates for narrative themes; AI_capex_surge highest (0.81), oil_price_shock lowest (0.58) due to TW semiconductor hedging",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: derive from 36-month narrative event backtest",
+		},
+		SkillToTheme: ParameterMetadata[map[string]string]{
+			Value: map[string]string{
+				"semiconductor_desk": "AI_capex_surge",
+				"macro_research":     "US_rates_up",
+				"currency_desk":      "JPY_carry_unwind",
+				"risk_analytics":     "geopolitical_risk_spike",
+				"commodity_research": "oil_price_shock",
+				"ai_infrastructure":  "AI_capex_surge",
+				"fixed_income":       "US_rates_up",
+				"cross_asset":        "JPY_carry_unwind",
+				"defense_industrial": "geopolitical_risk_spike",
+			},
+			Rationale: "Maps research agent skills to narrative themes; semiconductor/ai_infrastructure → AI_capex_surge, macro/fixed_income → US_rates_up, currency/cross_asset → JPY_carry_unwind, risk/defense → geopolitical_risk_spike, commodity → oil_price_shock",
+			Source:    SourceHeuristic,
+			Todo:      "Validate: review agent-narrative alignment with domain experts",
 		},
 	}
 }
