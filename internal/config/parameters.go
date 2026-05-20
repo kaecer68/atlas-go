@@ -1030,6 +1030,83 @@ func (p *ParametersConfig) Validate() error {
 		return fmt.Errorf("industry.linkage_params.min_correlation_threshold (%.3f) must be in [0,1]", lp.MinCorrelationThreshold)
 	}
 
+	// FactorWeight constraints
+	if p.FactorWeight.BaseWeights.Value != nil {
+		expectedBaseKeys := []string{"momentum", "value", "quality", "agent", "inst_sent", "liquidity", "narrative", "industry_cycle"}
+		for _, k := range expectedBaseKeys {
+			if _, ok := p.FactorWeight.BaseWeights.Value[k]; !ok {
+				return fmt.Errorf("factor_weight.base_weights: missing key %q", k)
+			}
+		}
+	}
+	if p.FactorWeight.ClampMin.Value >= p.FactorWeight.ClampMax.Value {
+		return fmt.Errorf("factor_weight: clamp_min (%.2f) must be less than clamp_max (%.2f)", p.FactorWeight.ClampMin.Value, p.FactorWeight.ClampMax.Value)
+	}
+	if p.FactorWeight.SeverityCritical.Value < p.FactorWeight.SeverityHigh.Value {
+		return fmt.Errorf("factor_weight.severity_critical (%.3f) must be >= severity_high (%.3f)", p.FactorWeight.SeverityCritical.Value, p.FactorWeight.SeverityHigh.Value)
+	}
+	if p.FactorWeight.SeverityHigh.Value < p.FactorWeight.SeverityMedium.Value {
+		return fmt.Errorf("factor_weight.severity_high (%.3f) must be >= severity_medium (%.3f)", p.FactorWeight.SeverityHigh.Value, p.FactorWeight.SeverityMedium.Value)
+	}
+	if p.FactorWeight.SeverityMedium.Value < p.FactorWeight.SeverityLow.Value {
+		return fmt.Errorf("factor_weight.severity_medium (%.3f) must be >= severity_low (%.3f)", p.FactorWeight.SeverityMedium.Value, p.FactorWeight.SeverityLow.Value)
+	}
+	regimeDeltaChecks := []struct {
+		name  string
+		value float64
+	}{
+		{"regime_bull_momentum", p.FactorWeight.RegimeBullMomentum.Value},
+		{"regime_bull_quality", p.FactorWeight.RegimeBullQuality.Value},
+		{"regime_bull_value", p.FactorWeight.RegimeBullValue.Value},
+		{"regime_bear_quality", p.FactorWeight.RegimeBearQuality.Value},
+		{"regime_bear_value", p.FactorWeight.RegimeBearValue.Value},
+		{"regime_bear_momentum", p.FactorWeight.RegimeBearMomentum.Value},
+		{"regime_high_vol_liquidity", p.FactorWeight.RegimeHighVolLiquidity.Value},
+		{"regime_high_vol_momentum", p.FactorWeight.RegimeHighVolMomentum.Value},
+		{"regime_high_vol_inst_sent", p.FactorWeight.RegimeHighVolInstSent.Value},
+	}
+	for _, rd := range regimeDeltaChecks {
+		if rd.value < -0.15 || rd.value > 0.15 {
+			return fmt.Errorf("factor_weight.%s (%.3f) must be in [-0.15, 0.15]", rd.name, rd.value)
+		}
+	}
+
+	// NarrativeConviction constraints
+	if p.NarrativeConviction.ThemeHitRates.Value != nil {
+		expectedThemeKeys := []string{"AI_capex_surge", "US_rates_up", "JPY_carry_unwind", "geopolitical_risk_spike", "oil_price_shock"}
+		for _, k := range expectedThemeKeys {
+			if _, ok := p.NarrativeConviction.ThemeHitRates.Value[k]; !ok {
+				return fmt.Errorf("narrative_conviction.theme_hit_rates: missing key %q", k)
+			}
+		}
+		for k, v := range p.NarrativeConviction.ThemeHitRates.Value {
+			if v < 0 || v > 1 {
+				return fmt.Errorf("narrative_conviction.theme_hit_rates[%s] (%.3f) must be in [0,1]", k, v)
+			}
+		}
+	}
+	if len(p.NarrativeConviction.SkillToTheme.Value) == 0 {
+		return fmt.Errorf("narrative_conviction.skill_to_theme must not be empty")
+	}
+
+	// Industry new field constraints
+	if len(p.Industry.SkillToIndustry.Value) == 0 {
+		return fmt.Errorf("industry.skill_to_industry must not be empty")
+	}
+	ps := p.Industry.PhaseScores.Value
+	if ps.ScoreExpansion == 0 || ps.ScoreRecovery == 0 || ps.ScoreMature == 0 || ps.ScoreRecession == 0 {
+		return fmt.Errorf("industry.phase_scores: all four phase scores must be non-zero (expansion=%.2f, recovery=%.2f, mature=%.2f, recession=%.2f)",
+			ps.ScoreExpansion, ps.ScoreRecovery, ps.ScoreMature, ps.ScoreRecession)
+	}
+
+	// Orchestrator new field constraints
+	if len(p.Orchestrator.SectorRotationMacroAdjustments.Value) == 0 {
+		return fmt.Errorf("orchestrator.sector_rotation_macro_adjustments must not be empty")
+	}
+	if len(p.Orchestrator.SectorRotationFlowAdjustments.Value) == 0 {
+		return fmt.Errorf("orchestrator.sector_rotation_flow_adjustments must not be empty")
+	}
+
 	if p.Strategy.MinSwitchIntervalDays.Value < 0 {
 		return fmt.Errorf("strategy.min_switch_interval_days (%d) must be >= 0", p.Strategy.MinSwitchIntervalDays.Value)
 	}
