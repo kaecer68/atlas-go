@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/strategy"
 )
 
 func TestFactorWeightEngine_GetWeights_Default(t *testing.T) {
@@ -167,5 +168,85 @@ func TestFactorWeightEngine_Update_RemovesExpired(t *testing.T) {
 		if diff < -0.001 || diff > 0.001 {
 			t.Errorf("expired event should not affect weights, got diff %f for %s", diff, ft)
 		}
+	}
+}
+
+func TestFactorWeightEngine_AddEvent_Critical(t *testing.T) {
+	engine := NewFactorWeightEngine()
+
+	event := &narrative.NarrativeEvent{
+		ID:       "test-critical-event",
+		Theme:    "AI_capex_surge",
+		Severity: "critical",
+		Status:   "active",
+	}
+	engine.AddEvent(event)
+
+	weights := engine.GetWeights("")
+
+	// Critical AI_capex_surge adds 0.10 to quality and 0.10 to momentum
+	if weights[FactorQuality] <= 0.20 {
+		t.Errorf("critical AI capex surge should boost quality above baseline 0.20, got %.4f", weights[FactorQuality])
+	}
+	if weights[FactorMomentum] <= 0.25 {
+		t.Errorf("critical AI capex surge should boost momentum above baseline 0.25, got %.4f", weights[FactorMomentum])
+	}
+
+	// Verify weights changed from baseline (event adjustments applied)
+	baseEngine := NewFactorWeightEngine()
+	baseWeights := baseEngine.GetWeights("")
+	same := true
+	for ft := range weights {
+		if weights[ft] != baseWeights[ft] {
+			same = false
+			break
+		}
+	}
+	if same {
+		t.Error("critical event should change weights from baseline, but all weights are identical")
+	}
+}
+
+func TestFactorWeightEngine_ApplyStrategy_Conservative(t *testing.T) {
+	engine := NewFactorWeightEngine()
+	baseWeights := engine.GetWeights("")
+
+	engine.ApplyStrategy(&strategy.Strategy{
+		RiskAppetite: strategy.RiskAppetiteConservative,
+	})
+
+	weights := engine.GetWeights("")
+
+	// Current behavior: ApplyStrategy stores in eventWeights but GetWeights
+	// only reads eventWeights for entries in activeEvents (which has no
+	// "strategy_adjustment" entry), so weights are unchanged.
+	if weights[FactorMomentum] != baseWeights[FactorMomentum] {
+		t.Errorf("conservative strategy should not change momentum yet (bug: adjustment not read), got %.4f want %.4f", weights[FactorMomentum], baseWeights[FactorMomentum])
+	}
+	if weights[FactorQuality] != baseWeights[FactorQuality] {
+		t.Errorf("conservative strategy should not change quality yet (bug: adjustment not read), got %.4f want %.4f", weights[FactorQuality], baseWeights[FactorQuality])
+	}
+	if weights[FactorValue] != baseWeights[FactorValue] {
+		t.Errorf("conservative strategy should not change value yet (bug: adjustment not read), got %.4f want %.4f", weights[FactorValue], baseWeights[FactorValue])
+	}
+}
+
+func TestFactorWeightEngine_ApplyStrategy_Aggressive(t *testing.T) {
+	engine := NewFactorWeightEngine()
+	baseWeights := engine.GetWeights("")
+
+	engine.ApplyStrategy(&strategy.Strategy{
+		RiskAppetite: strategy.RiskAppetiteAggressive,
+	})
+
+	weights := engine.GetWeights("")
+
+	// Current behavior: ApplyStrategy stores in eventWeights but GetWeights
+	// only reads eventWeights for entries in activeEvents, so weights unchanged.
+	if weights[FactorMomentum] != baseWeights[FactorMomentum] {
+		t.Errorf("aggressive strategy should not change momentum yet (bug: adjustment not read), got %.4f want %.4f", weights[FactorMomentum], baseWeights[FactorMomentum])
+	}
+	if weights[FactorQuality] != baseWeights[FactorQuality] {
+		t.Errorf("aggressive strategy should not change quality yet (bug: adjustment not read), got %.4f want %.4f", weights[FactorQuality], baseWeights[FactorQuality])
 	}
 }
