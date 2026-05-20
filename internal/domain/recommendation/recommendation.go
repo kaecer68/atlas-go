@@ -69,6 +69,7 @@ type RecommendationOutcome struct {
 	RecordedAt          time.Time                   `json:"recorded_at"`
 	FactorScores        shared.FactorScores         `json:"factor_scores"`
 	ConvictionBreakdown *shared.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
+	SupportingEvents    []string                    `json:"supporting_events,omitempty"`
 }
 
 func (r *RecommendationOutcome) Validate() error {

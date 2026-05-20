@@ -238,6 +238,10 @@ func (h *Handlers) HandleRecommendationPipeline(r *http.Request) (int, any) {
 			RecordedAt:          item.RecordedAt,
 			FactorScores:        item.FactorScores,
 			ConvictionBreakdown: item.ConvictionBreakdown,
+			NarrativeEventIDs:   item.NarrativeEventIDs,
+			// Enriched by P2.2 enrichment service.
+			NarrativeContext:  nil,
+			IndustryContext:   nil,
 		}
 	}
 
@@ -252,6 +256,23 @@ func (h *Handlers) HandleRecommendationPipeline(r *http.Request) (int, any) {
 		FallbackMessage:   data.FallbackMessage,
 	}
 	return http.StatusOK, resp
+}
+
+// NarrativeContextItem provides the narrative context for a recommendation.
+type NarrativeContextItem struct {
+	ActiveThemes   []string `json:"active_themes"`
+	PrimaryTheme   string   `json:"primary_theme,omitempty"`
+	PrimaryHitRate float64  `json:"primary_hit_rate,omitempty"`
+	DirectionHint  string   `json:"direction_hint,omitempty"` // "positive" / "negative" / "neutral"
+}
+
+// IndustryContextItem provides the industry context for a recommendation.
+type IndustryContextItem struct {
+	IndustryID         string  `json:"industry_id"`
+	BusinessCycle      string  `json:"business_cycle"`
+	CycleConfidence    float64 `json:"cycle_confidence"`
+	SeasonalMultiplier float64 `json:"seasonal_multiplier"`
+	SystemicImportance float64 `json:"systemic_importance"`
 }
 
 // PipelineItem is the API response item for recommendation pipeline.
@@ -274,6 +295,9 @@ type PipelineItem struct {
 	RecordedAt          time.Time                   `json:"recorded_at"`
 	FactorScores        domain.FactorScores         `json:"factor_scores"`
 	ConvictionBreakdown *domain.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
+	NarrativeEventIDs   []string                    `json:"narrative_event_ids,omitempty"`
+	NarrativeContext    *NarrativeContextItem       `json:"narrative_context,omitempty"`
+	IndustryContext     *IndustryContextItem        `json:"industry_context,omitempty"`
 }
 
 // RecommendationPipelineResponse is the API response for recommendation pipeline.

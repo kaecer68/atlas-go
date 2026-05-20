@@ -409,6 +409,7 @@ export interface RecommendationOutcome {
   recorded_at: string;
   factor_scores: string;
   conviction_breakdown?: string | null;
+  supporting_events?: string[];
 }
 
 export interface ReplayDataMetadata {

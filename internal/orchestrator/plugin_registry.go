@@ -21,13 +21,14 @@ type RegimeExecutor interface {
 }
 
 type PluginRegistry struct {
-	regimeExecutors  []RegimeExecutor
-	agentExecutors   []AgentExecutor
-	controlExecutors []ControlExecutor
-	screener         screener.Screener
-	factorEngine     *portfolio.FactorEngine
-	healthManager    *portfolio.AgentHealthManager
-	cycleModulator   *IndustryCycleModulator
+	regimeExecutors    []RegimeExecutor
+	agentExecutors     []AgentExecutor
+	controlExecutors   []ControlExecutor
+	screener           screener.Screener
+	factorEngine       *portfolio.FactorEngine
+	healthManager      *portfolio.AgentHealthManager
+	cycleModulator     *IndustryCycleModulator
+	narrativeModulator *NarrativeConvictionModulator
 }
 
 func NewPluginRegistry(loaders ...ExecutorLoader) *PluginRegistry {
@@ -62,6 +63,11 @@ func (r *PluginRegistry) WithAgentHealthManager(m *portfolio.AgentHealthManager)
 
 func (r *PluginRegistry) WithCycleModulator(m *IndustryCycleModulator) *PluginRegistry {
 	r.cycleModulator = m
+	return r
+}
+
+func (r *PluginRegistry) WithNarrativeModulator(m *NarrativeConvictionModulator) *PluginRegistry {
+	r.narrativeModulator = m
 	return r
 }
 

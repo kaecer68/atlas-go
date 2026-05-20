@@ -122,7 +122,7 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 	registry := filterMutedAgents(ctx.Registry, ctx.Plugins)
 
 	regime := inferRegime(registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, ctx.NarrativeEvents, ctx.Scratchpad, ctx.SessionID)
-	raw, rejects := collectRecommendations(ctx.Context, registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, regime, ctx.SessionID, ctx.Scratchpad)
+	raw, rejects := collectRecommendations(ctx.Context, registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, regime, ctx.NarrativeEvents, ctx.SessionID, ctx.Scratchpad)
 
 	if ctx.Policy.MomentumCrashProtection {
 		raw = applyMomentumCrashProtection(raw, quoteBySymbol)
@@ -373,7 +373,7 @@ func inferRegime(registry domain.AgentRegistry, quotes map[string]domain.Quote, 
 	return regime
 }
 
-func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string, regime domain.Regime, sessionID string, scratchpad *Scratchpad) ([]domain.Recommendation, []domain.ScreeningReject) {
+func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string, regime domain.Regime, narrativeEvents []narrative.NarrativeEvent, sessionID string, scratchpad *Scratchpad) ([]domain.Recommendation, []domain.ScreeningReject) {
 	recs := make([]domain.Recommendation, 0)
 	rejects := make([]domain.ScreeningReject, 0)
 	now := time.Now().UTC()
@@ -426,6 +426,15 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 		}
 	}
 
+	// Fill SupportingEvents for all recommendations with narrative event IDs.
+	for i := range recs {
+		eventIDs := make([]string, len(narrativeEvents))
+		for j, e := range narrativeEvents {
+			eventIDs[j] = e.ID
+		}
+		recs[i].SupportingEvents = eventIDs
+	}
+
 	agentWeights := make(map[string]float64)
 	for i := range recs {
 		breakdown, scores := plugins.CalculateFactorScoresWithBreakdown(recs[i].Symbol, quotes, recs, agentWeights)
@@ -460,6 +469,9 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 
 	if plugins.cycleModulator != nil {
 		plugins.cycleModulator.ModulateRecommendations(recs, registry)
+	}
+	if plugins.narrativeModulator != nil {
+		plugins.narrativeModulator.ModulateRecommendations(recs, registry, narrativeEvents)
 	}
 
 	if scratchpad != nil {

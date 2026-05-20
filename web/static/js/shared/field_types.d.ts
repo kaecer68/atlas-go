@@ -406,6 +406,7 @@ declare interface RecommendationOutcome {
   recorded_at: string;
   factor_scores: string;
   conviction_breakdown?: string | null;
+  supporting_events?: string[];
 }
 
 declare interface ReplayDataMetadata {

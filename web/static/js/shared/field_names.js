@@ -375,6 +375,7 @@ export const FIELD = {
     recorded_at: 'recorded_at',
     factor_scores: 'factor_scores',
     conviction_breakdown: 'conviction_breakdown',
+    supporting_events: 'supporting_events',
   },
   ReplayDataMetadata: {
     source_path: 'source_path',

@@ -35,10 +35,10 @@ func TestGrowthMomentumOverrideChangesRecommendations(t *testing.T) {
 
 	baseline, _ := collectRecommendations(context.Background(), registry, quoteBySymbol, plugins, map[string]string{
 		"growth_momentum": "qualify candidates using trend persistence and volume confirmation",
-	}, domain.RegimeNeutral, "", nil)
+	}, domain.RegimeNeutral, nil, "", nil)
 	candidate, _ := collectRecommendations(context.Background(), registry, quoteBySymbol, plugins, map[string]string{
 		"growth_momentum": "require trend confirmation\ndowngrade conviction\nreject setups\n",
-	}, domain.RegimeNeutral, "", nil)
+	}, domain.RegimeNeutral, nil, "", nil)
 
 	baselineCount := countSkillRecommendations(baseline, "growth_momentum")
 	candidateCount := countSkillRecommendations(candidate, "growth_momentum")
@@ -109,10 +109,10 @@ func TestTechnicalBreakoutOverrideRejectsLowVolumeSetups(t *testing.T) {
 
 	baseline, _ := collectRecommendations(context.Background(), registry, quoteBySymbol, plugins, map[string]string{
 		"technical_breakout": "require volume\nrequire close strength",
-	}, domain.RegimeNeutral, "", nil)
+	}, domain.RegimeNeutral, nil, "", nil)
 	candidate, _ := collectRecommendations(context.Background(), registry, quoteBySymbol, plugins, map[string]string{
 		"technical_breakout": "require volume\nrequire close strength\nreject low volume",
-	}, domain.RegimeNeutral, "", nil)
+	}, domain.RegimeNeutral, nil, "", nil)
 
 	baselineCount := countSkillRecommendations(baseline, "technical_breakout")
 	candidateCount := countSkillRecommendations(candidate, "technical_breakout")
@@ -189,7 +189,7 @@ func TestScreenerFiltersRecommendationsBeforeExecutor(t *testing.T) {
 	scr := screener.NewEngine(fe, fp)
 	plugins := NewPluginRegistry().WithScreener(scr)
 
-	recs, _ := collectRecommendations(context.Background(), registry, quotes, plugins, nil, domain.RegimeNeutral, "", nil)
+	recs, _ := collectRecommendations(context.Background(), registry, quotes, plugins, nil, domain.RegimeNeutral, nil, "", nil)
 
 	if len(recs) != 1 {
 		t.Fatalf("expected 1 recommendation after screening, got %d", len(recs))
@@ -222,7 +222,7 @@ func TestScreenerAllowsAllWhenNoCriteriaSet(t *testing.T) {
 	scr := screener.NewEngine(fe, fp)
 	plugins := NewPluginRegistry().WithScreener(scr)
 
-	recs, _ := collectRecommendations(context.Background(), registry, quotes, plugins, nil, domain.RegimeNeutral, "", nil)
+	recs, _ := collectRecommendations(context.Background(), registry, quotes, plugins, nil, domain.RegimeNeutral, nil, "", nil)
 
 	if len(recs) != 2 {
 		t.Fatalf("expected 2 recommendations when no screening criteria set, got %d", len(recs))

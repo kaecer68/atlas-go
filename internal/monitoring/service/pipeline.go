@@ -460,6 +460,9 @@ func (s *PipelineService) loadSessionPipelineData(sessionID, sessionsDir string,
 				RecordedAt:          outcome.RecordedAt,
 				FactorScores:        outcome.FactorScores,
 				ConvictionBreakdown: outcome.ConvictionBreakdown,
+				NarrativeEventIDs:   outcome.SupportingEvents,
+				NarrativeContext:    nil,
+				IndustryContext:     nil,
 			})
 		}
 	} else {
@@ -636,6 +639,9 @@ type PipelineItemData struct {
 	RecordedAt          time.Time
 	FactorScores        domain.FactorScores
 	ConvictionBreakdown *domain.ConvictionBreakdown
+	NarrativeEventIDs   []string
+	NarrativeContext    interface{}
+	IndustryContext     interface{}
 }
 
 // LoadSessions loads all sessions metadata.
