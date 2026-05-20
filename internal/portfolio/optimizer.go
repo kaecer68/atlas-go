@@ -78,7 +78,8 @@ type Optimizer struct {
 	history       *HistoricalPrices
 	fundamentals  *FundamentalProvider
 	factorEngine  *FactorEngine
-	mu            sync.RWMutex
+	mu                sync.RWMutex
+	factorWeightEngine *FactorWeightEngine
 }
 
 // NewOptimizer 创建优化器
@@ -110,6 +111,7 @@ func newOptimizerWithParams(params *RuntimeParameters) *Optimizer {
 		styleWeights:  make(map[string]float64),
 		factorWeights: factorWeights,
 		factorEngine:  NewFactorEngine(),
+		factorWeightEngine: NewFactorWeightEngine(),
 	}
 }
 
@@ -171,6 +173,13 @@ func (o *Optimizer) SetFactorWeights(weights map[FactorType]float64) {
 	o.factorWeights = weights
 }
 
+func (o *Optimizer) WithFactorWeightEngine(fwe *FactorWeightEngine) *Optimizer {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.factorWeightEngine = fwe
+	return o
+}
+
 // Optimize 执行组合优化
 func (o *Optimizer) Optimize(
 	ctx context.Context,
@@ -185,21 +194,18 @@ func (o *Optimizer) Optimize(
 	o.mu.RLock()
 	constraints := o.constraints
 	factorWeights := o.factorWeights
+	fwe := o.factorWeightEngine
 	o.mu.RUnlock()
 
-	// 1. 聚合相同股票的推荐
-	aggregated := o.aggregateRecommendations(recommendations)
+	if fwe != nil {
+		factorWeights = fwe.GetWeights("")
+	}
 
-	// 2. 计算多因子评分
+	aggregated := o.aggregateRecommendations(recommendations)
 	scores := o.calculateMultiFactorScores(aggregated, quotes, factorWeights)
 
-	// 3. 初始权重分配 (基于评分)
 	weights := o.allocateInitialWeights(scores, totalCapital)
-
-	// 4. 应用约束调整
 	weights = o.applyConstraints(weights, constraints, totalCapital)
-
-	// 5. 生成最终仓位
 	positions := o.buildPositions(weights, scores, aggregated, quotes, totalCapital)
 
 	return positions, nil

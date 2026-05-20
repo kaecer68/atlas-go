@@ -2,6 +2,7 @@ package portfolio
 
 import (
 	"maps"
+	"math"
 	"sync"
 
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -19,12 +20,14 @@ type FactorWeightEngine struct {
 func NewFactorWeightEngine() *FactorWeightEngine {
 	return &FactorWeightEngine{
 		baseWeights: map[FactorType]float64{
-			FactorMomentum:  0.20,
-			FactorValue:     0.15,
-			FactorQuality:   0.15,
-			FactorAgent:     0.20,
-			FactorInstSent:  0.15,
-			FactorLiquidity: 0.15,
+			FactorMomentum:      0.25,
+			FactorValue:         0.20,
+			FactorQuality:       0.20,
+			FactorAgent:         0.15,
+			FactorInstSent:      0.10,
+			FactorLiquidity:     0.05,
+			FactorNarrative:     0.05,
+			FactorIndustryCycle: 0.00,
 		},
 		eventWeights: make(map[string]map[FactorType]float64),
 		activeEvents: make(map[string]*narrative.NarrativeEvent),
@@ -37,22 +40,63 @@ func (e *FactorWeightEngine) GetWeights(regime string) map[FactorType]float64 {
 	defer e.mu.RUnlock()
 	weights := make(map[FactorType]float64)
 	maps.Copy(weights, e.baseWeights)
+
+	switch regime {
+	case "bull":
+		weights[FactorMomentum] += 0.05
+		weights[FactorQuality] -= 0.03
+		weights[FactorValue] -= 0.02
+	case "bear":
+		weights[FactorQuality] += 0.05
+		weights[FactorValue] += 0.03
+		weights[FactorMomentum] -= 0.05
+	case "high_vol":
+		weights[FactorLiquidity] += 0.05
+		weights[FactorMomentum] -= 0.03
+		weights[FactorInstSent] -= 0.02
+	}
+
 	for _, event := range e.activeEvents {
-		if adj, ok := e.eventWeights[event.Theme]; ok {
+		if adj, ok := e.eventWeights[event.ID]; ok {
 			for ft, delta := range adj {
 				weights[ft] += delta
 			}
 		}
 	}
+
 	for ft := range weights {
-		if weights[ft] < 0.05 {
-			weights[ft] = 0.05
+		if weights[ft] < 0.02 {
+			weights[ft] = 0.02
 		}
 		if weights[ft] > 0.50 {
 			weights[ft] = 0.50
 		}
 	}
+
+	e.normalizeWeights(weights)
 	return weights
+}
+
+func (e *FactorWeightEngine) SetBaseWeights(weights map[FactorType]float64) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.baseWeights = make(map[FactorType]float64)
+	for k, v := range weights {
+		e.baseWeights[k] = v
+	}
+}
+
+func (e *FactorWeightEngine) normalizeWeights(weights map[FactorType]float64) {
+	var total float64
+	for _, w := range weights {
+		total += w
+	}
+	if total <= 0 || math.Abs(total-1.0) < 0.001 {
+		return
+	}
+	for ft := range weights {
+		weights[ft] /= total
+	}
 }
 
 func (e *FactorWeightEngine) OnRegimeChange(oldRegime, newRegime string, confidence float64) {
