@@ -725,6 +725,9 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 		AfterTaxPnL:   result.AfterTaxPnL,
 		TotalTaxPaid:  result.TotalTaxPaid,
 	}
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		summary.ParametersVersion = cfg.Version
+	}
 	if candidate != nil {
 		summary.NextExperimentAgentID = candidate.Agent.ID
 		summary.ProposalID = candidate.Experiment.ProposalID

@@ -3,11 +3,24 @@ package orchestrator
 import (
 	"fmt"
 	"math"
+	"strconv"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
 )
+
+func paramSensitivity(paramValue string) *float64 {
+	if paramValue == "" {
+		return nil
+	}
+	pv, err := strconv.ParseFloat(paramValue, 64)
+	if err != nil {
+		return nil
+	}
+	s := math.Abs(pv * 0.1)
+	return &s
+}
 
 // IndustryCycleModulator reads industry cycle positions and adjusts
 // recommendation conviction based on the current business cycle phase.
@@ -141,12 +154,13 @@ func (m *IndustryCycleModulator) CollectModulationSteps(
 		result = append(result, ModulationStep{
 			RecIndex: i,
 			Steps: []domain.ConvictionStep{{
-				Rule:       "modulator:industry_cycle:cycle_phase",
-				Delta:      adj,
-				Reason:     fmt.Sprintf("產業%s處於%s期(信心度%.0f%%)", industryID, phaseName, pos.Confidence*100),
-				Source:     provenanceSource,
-				ParamRef:   provenanceRef,
-				ParamValue: provenanceVal,
+				Rule:        "modulator:industry_cycle:cycle_phase",
+				Delta:       adj,
+				Reason:      fmt.Sprintf("產業%s處於%s期(信心度%.0f%%)", industryID, phaseName, pos.Confidence*100),
+				Source:      provenanceSource,
+				ParamRef:    provenanceRef,
+				ParamValue:  provenanceVal,
+				Sensitivity: paramSensitivity(provenanceVal),
 			}},
 		})
 	}

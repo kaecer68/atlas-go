@@ -107,6 +107,7 @@ export const FIELD = {
     source: 'source',
     param_ref: 'param_ref',
     param_value: 'param_value',
+    sensitivity: 'sensitivity',
   },
   DailyBar: {
     date: 'date',
@@ -486,6 +487,7 @@ export const FIELD = {
     tax_snapshots: 'tax_snapshots',
     after_tax_pnl: 'after_tax_pnl',
     total_tax_paid: 'total_tax_paid',
+    parameters_version: 'parameters_version',
   },
   SimulationConstraints: {
     starting_cash: 'starting_cash',

@@ -86,12 +86,13 @@ type IndustryCycleFactorScore struct {
 }
 
 type ConvictionStep struct {
-	Rule       string `json:"rule"`
-	Delta      int    `json:"delta"`
-	Reason     string `json:"reason"`
-	Source     string `json:"source,omitempty"`
-	ParamRef   string `json:"param_ref,omitempty"`
-	ParamValue string `json:"param_value,omitempty"`
+	Rule        string   `json:"rule"`
+	Delta       int      `json:"delta"`
+	Reason      string   `json:"reason"`
+	Source      string   `json:"source,omitempty"`
+	ParamRef    string   `json:"param_ref,omitempty"`
+	ParamValue  string   `json:"param_value,omitempty"`
+	Sensitivity *float64 `json:"sensitivity,omitempty"`
 }
 
 type ConvictionBreakdown struct {

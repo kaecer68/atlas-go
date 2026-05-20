@@ -115,6 +115,7 @@ declare interface ConvictionStep {
   source?: string;
   param_ref?: string;
   param_value?: string;
+  sensitivity?: number | null;
 }
 
 declare interface DailyBar {
@@ -528,6 +529,7 @@ declare interface SessionSummary {
   tax_snapshots?: string[];
   after_tax_pnl: number;
   total_tax_paid: number;
+  parameters_version?: string;
 }
 
 declare interface SimulationConstraints {

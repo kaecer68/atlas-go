@@ -136,12 +136,13 @@ func (m *NarrativeConvictionModulator) CollectModulationSteps(
 		result = append(result, ModulationStep{
 			RecIndex: i,
 			Steps: []domain.ConvictionStep{{
-				Rule:       "modulator:narrative:narrative_boost",
-				Delta:      adj,
-				Reason:     fmt.Sprintf("%s (hit_rate: %.0f%%, confidence: %.0f%%)", theme, info.hitRate*100, info.confidence*100),
-				Source:     provenanceSource,
-				ParamRef:   provenanceRef,
-				ParamValue: provenanceVal,
+				Rule:        "modulator:narrative:narrative_boost",
+				Delta:       adj,
+				Reason:      fmt.Sprintf("%s (hit_rate: %.0f%%, confidence: %.0f%%)", theme, info.hitRate*100, info.confidence*100),
+				Source:      provenanceSource,
+				ParamRef:    provenanceRef,
+				ParamValue:  provenanceVal,
+				Sensitivity: paramSensitivity(provenanceVal),
 			}},
 		})
 	}
