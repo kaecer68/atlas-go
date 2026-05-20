@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
@@ -39,12 +40,25 @@ var defaultSkillToTheme = map[string]string{
 	"technical_breakout":   "AI_capex_surge",
 }
 
-// NewNarrativeConvictionModulator creates a modulator with default theme hit rates
-// and skill-to-theme mappings.
+// NewNarrativeConvictionModulator creates a modulator with theme hit rates and
+// skill-to-theme mappings. It reads from ParametersConfig first and falls back
+// to hardcoded defaults when the configuration is nil or missing.
 func NewNarrativeConvictionModulator() *NarrativeConvictionModulator {
+	hitRates := defaultThemeHitRates
+	skillToTheme := defaultSkillToTheme
+
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		if cfg.NarrativeConviction.ThemeHitRates.Value != nil {
+			hitRates = cfg.NarrativeConviction.ThemeHitRates.Value
+		}
+		if cfg.NarrativeConviction.SkillToTheme.Value != nil {
+			skillToTheme = cfg.NarrativeConviction.SkillToTheme.Value
+		}
+	}
+
 	return &NarrativeConvictionModulator{
-		themeHitRates: defaultThemeHitRates,
-		skillToTheme:  defaultSkillToTheme,
+		themeHitRates: hitRates,
+		skillToTheme:  skillToTheme,
 	}
 }
 
