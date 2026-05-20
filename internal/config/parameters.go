@@ -1094,8 +1094,8 @@ func (p *ParametersConfig) Validate() error {
 		return fmt.Errorf("industry.skill_to_industry must not be empty")
 	}
 	ps := p.Industry.PhaseScores.Value
-	if ps.ScoreExpansion == 0 || ps.ScoreRecovery == 0 || ps.ScoreMature == 0 || ps.ScoreRecession == 0 {
-		return fmt.Errorf("industry.phase_scores: all four phase scores must be non-zero (expansion=%.2f, recovery=%.2f, mature=%.2f, recession=%.2f)",
+	if ps.ScoreRecession > ps.ScoreMature || ps.ScoreMature > ps.ScoreRecovery || ps.ScoreRecovery > ps.ScoreExpansion {
+		return fmt.Errorf("industry.phase_scores: must be monotonically decreasing (expansion=%.0f >= recovery=%.0f >= mature=%.0f >= recession=%.0f)",
 			ps.ScoreExpansion, ps.ScoreRecovery, ps.ScoreMature, ps.ScoreRecession)
 	}
 

@@ -126,7 +126,7 @@ func defaultMacroAdjustments() map[string]map[string]float64 {
 			"gold":            0.05,
 			"ai_supply_chain": -0.08,
 			"semiconductor":   -0.08,
-			"financials":     -0.05,
+			"financials":      -0.05,
 		},
 		"red": {
 			"cash":            0.25,
@@ -134,8 +134,8 @@ func defaultMacroAdjustments() map[string]map[string]float64 {
 			"gold":            0.10,
 			"ai_supply_chain": -0.15,
 			"semiconductor":   -0.15,
-			"financials":     -0.10,
-			"shipping":       -0.05,
+			"financials":      -0.10,
+			"shipping":        -0.05,
 		},
 	}
 }
@@ -163,18 +163,18 @@ func (r *SectorRotator) applyMacroAdjustments(allocations map[string]float64, ma
 func defaultFlowAdjustments() map[string]map[string]float64 {
 	return map[string]map[string]float64{
 		"risk_off": {
-			"gold":              0.10,
-			"utilities":         0.08,
-			"high_dividend":     0.07,
-			"ai_supply_chain":  -0.10,
-			"small_cap":         0.0,
+			"gold":            0.10,
+			"utilities":       0.08,
+			"high_dividend":   0.07,
+			"ai_supply_chain": -0.10,
+			"small_cap":       0.0,
 		},
 		"carry_trade_unwind": {
-			"cash":              0.30,
-			"short_term_bonds":  0.15,
-			"jpy":               0.05,
-			"ai_supply_chain":   0.02,
-			"semiconductor":     0.03,
+			"cash":             0.30,
+			"short_term_bonds": 0.15,
+			"jpy":              0.05,
+			"ai_supply_chain":  0.02,
+			"semiconductor":    0.03,
 			"financials":       -0.10,
 		},
 		"sector_rotation": {
@@ -183,7 +183,7 @@ func defaultFlowAdjustments() map[string]map[string]float64 {
 			"alternative_energy":  0.05,
 			"shipping":            0.05,
 			"high_valuation_tech": 0.02,
-			"rate_sensitive":     -0.08,
+			"rate_sensitive":      -0.08,
 		},
 	}
 }

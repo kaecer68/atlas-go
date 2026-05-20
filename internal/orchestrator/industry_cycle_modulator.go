@@ -13,8 +13,8 @@ import (
 // recommendation conviction based on the current business cycle phase.
 // Expansion → confidence boost; recession → penalty; recovery/mature are neutral.
 type IndustryCycleModulator struct {
-	tracker          *industry.CycleTracker
-	skillToIndustry  map[string]string
+	tracker         *industry.CycleTracker
+	skillToIndustry map[string]string
 }
 
 var skillToIndustry = map[string]string{
