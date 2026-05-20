@@ -36,7 +36,6 @@ type Quote struct {
 	Source     string    `json:"source"`
 }
 
-// FactorScoreItem holds a single factor's score with its computation metadata.
 type FactorScoreItem struct {
 	Score      float64            `json:"score"`
 	Weight     float64            `json:"weight,omitempty"`
@@ -45,7 +44,6 @@ type FactorScoreItem struct {
 	IsFallback bool               `json:"is_fallback"`
 }
 
-// FactorScoreBreakdown contains the six-factor score decomposition.
 type FactorScoreBreakdown struct {
 	Momentum               FactorScoreItem `json:"momentum"`
 	Value                  FactorScoreItem `json:"value"`
@@ -53,10 +51,11 @@ type FactorScoreBreakdown struct {
 	Agent                  FactorScoreItem `json:"agent"`
 	InstitutionalSentiment FactorScoreItem `json:"institutional_sentiment"`
 	Liquidity              FactorScoreItem `json:"liquidity"`
+	Narrative              FactorScoreItem `json:"narrative,omitempty"`
+	IndustryCycle          FactorScoreItem `json:"industry_cycle,omitempty"`
 	Total                  FactorScoreItem `json:"total"`
 }
 
-// FactorScores holds aggregate factor scores with optional breakdown.
 type FactorScores struct {
 	Momentum               float64               `json:"momentum"`
 	Value                  float64               `json:"value"`
@@ -68,14 +67,28 @@ type FactorScores struct {
 	Breakdown              *FactorScoreBreakdown `json:"breakdown,omitempty"`
 }
 
-// ConvictionStep records one step in the conviction calculation chain.
+type NarrativeFactorScore struct {
+	Score      float64  `json:"score"`
+	Theme      string   `json:"theme,omitempty"`
+	HitRate    float64  `json:"hit_rate,omitempty"`
+	Confidence float64  `json:"confidence,omitempty"`
+	EventIDs   []string `json:"event_ids,omitempty"`
+}
+
+type IndustryCycleFactorScore struct {
+	Score      float64 `json:"score"`
+	Phase      string  `json:"phase,omitempty"`
+	PhaseScore float64 `json:"phase_score,omitempty"`
+	Confidence float64 `json:"confidence,omitempty"`
+	IndustryID string  `json:"industry_id,omitempty"`
+}
+
 type ConvictionStep struct {
 	Rule   string `json:"rule"`
 	Delta  int    `json:"delta"`
 	Reason string `json:"reason"`
 }
 
-// ConvictionBreakdown holds the conviction computation trace.
 type ConvictionBreakdown struct {
 	Base  int              `json:"base"`
 	Floor int              `json:"floor"`
@@ -83,7 +96,6 @@ type ConvictionBreakdown struct {
 	Steps []ConvictionStep `json:"steps"`
 }
 
-// AgentLayer classifies an agent's position in the decision hierarchy.
 type AgentLayer string
 
 const (
@@ -95,7 +107,6 @@ const (
 	LayerControl       AgentLayer = "control"
 )
 
-// FlexTime supports flexible time parsing from JSON.
 type FlexTime struct {
 	time.Time
 }

@@ -8,14 +8,10 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
-// isFinite checks if a float64 is finite (not NaN or Inf).
 func isFinite(f float64) bool {
 	return !math.IsInf(f, 0) && !math.IsNaN(f)
 }
 
-// FactorEngine calculates multi-factor scores for individual symbols.
-// It is extracted from Optimizer so that screening layers can reuse
-// the same momentum, value, and quality calculations.
 type FactorEngine struct {
 	history      *HistoricalPrices
 	fundamentals *FundamentalProvider
@@ -23,7 +19,6 @@ type FactorEngine struct {
 	mu           sync.RWMutex
 }
 
-// NewFactorEngine creates an empty factor engine.
 func NewFactorEngine() *FactorEngine {
 	return &FactorEngine{
 		params: DefaultRuntimeParameters(),

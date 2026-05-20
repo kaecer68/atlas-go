@@ -215,6 +215,8 @@ declare interface FactorScoreBreakdown {
   agent: string;
   institutional_sentiment: string;
   liquidity: string;
+  narrative?: string;
+  industry_cycle?: string;
   total: string;
 }
 
@@ -261,6 +263,14 @@ declare interface HumanIntervention {
   recorded_at: string;
 }
 
+declare interface IndustryCycleFactorScore {
+  score: number;
+  phase?: string;
+  phase_score?: number;
+  confidence?: number;
+  industry_id?: string;
+}
+
 declare interface MetricTrendPoint {
   id: string;
   execution_id: string;
@@ -299,6 +309,14 @@ declare interface MutationBrief {
   iteration_guidance: string[];
   recommended_window: string;
   generated_at: string;
+}
+
+declare interface NarrativeFactorScore {
+  score: number;
+  theme?: string;
+  hit_rate?: number;
+  confidence?: number;
+  event_ids?: string[];
 }
 
 declare interface OOSResult {

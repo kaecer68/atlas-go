@@ -296,14 +296,16 @@ func defaultOptimizerParameters() OptimizerParameters {
 		},
 		FactorWeights: ParameterMetadata[map[string]float64]{
 			Value: map[string]float64{
-				"momentum": 0.30,
-				"value":    0.25,
-				"quality":  0.25,
-				"agent":    0.20,
+				"momentum":      0.25,
+				"value":         0.20,
+				"quality":       0.20,
+				"agent":         0.15,
+				"narrative":     0.10,
+				"industry_cycle": 0.10,
 			},
-			Rationale: "Momentum 30%, Value 25%, Quality 25%, Agent 20%",
+			Rationale: "Momentum 25%, Value 20%, Quality 20%, Agent 15%, Narrative 10%, Industry Cycle 10%",
 			Source:    SourceHeuristic,
-			Todo:      "agents.md claims different weights (20/15/15/20); reconcile",
+			Todo:      "Calibrate narrative and industry cycle weights via backtest; verify sum = 1.0",
 		},
 	}
 }

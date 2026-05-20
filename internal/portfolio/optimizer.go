@@ -14,12 +14,14 @@ import (
 type FactorType string
 
 const (
-	FactorMomentum  FactorType = "momentum"
-	FactorValue     FactorType = "value"
-	FactorQuality   FactorType = "quality"
-	FactorAgent     FactorType = "agent"
-	FactorInstSent  FactorType = "institutional_sentiment"
-	FactorLiquidity FactorType = "liquidity"
+	FactorMomentum     FactorType = "momentum"
+	FactorValue        FactorType = "value"
+	FactorQuality      FactorType = "quality"
+	FactorAgent        FactorType = "agent"
+	FactorInstSent     FactorType = "institutional_sentiment"
+	FactorLiquidity    FactorType = "liquidity"
+	FactorNarrative    FactorType = "narrative"
+	FactorIndustryCycle FactorType = "industry_cycle"
 )
 
 // FactorScore 因子评分

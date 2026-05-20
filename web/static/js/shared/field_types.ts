@@ -218,6 +218,8 @@ export interface FactorScoreBreakdown {
   agent: string;
   institutional_sentiment: string;
   liquidity: string;
+  narrative?: string;
+  industry_cycle?: string;
   total: string;
 }
 
@@ -264,6 +266,14 @@ export interface HumanIntervention {
   recorded_at: string;
 }
 
+export interface IndustryCycleFactorScore {
+  score: number;
+  phase?: string;
+  phase_score?: number;
+  confidence?: number;
+  industry_id?: string;
+}
+
 export interface MetricTrendPoint {
   id: string;
   execution_id: string;
@@ -302,6 +312,14 @@ export interface MutationBrief {
   iteration_guidance: string[];
   recommended_window: string;
   generated_at: string;
+}
+
+export interface NarrativeFactorScore {
+  score: number;
+  theme?: string;
+  hit_rate?: number;
+  confidence?: number;
+  event_ids?: string[];
 }
 
 export interface OOSResult {
