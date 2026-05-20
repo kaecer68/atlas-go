@@ -23,10 +23,11 @@ type SectorAllocation struct {
 
 // SectorRotationPlan represents the plan for rotating between sectors
 type SectorRotationPlan struct {
-	Allocations []SectorAllocation `json:"allocations"`
-	PrimaryFlow string             `json:"primary_flow"`
-	Rationale   string             `json:"rationale"`
-	Timestamp   time.Time          `json:"timestamp"`
+	Allocations   []SectorAllocation `json:"allocations"`
+	PrimaryFlow   string             `json:"primary_flow"`
+	Rationale     string             `json:"rationale"`
+	Timestamp     time.Time          `json:"timestamp"`
+	ConfigSource  string             `json:"config_source,omitempty"`
 }
 
 // SectorRotator executes sector rotation based on macro conditions
@@ -58,8 +59,9 @@ func (r *SectorRotator) GeneratePlan(
 	currentAllocations map[string]float64,
 ) *SectorRotationPlan {
 	plan := &SectorRotationPlan{
-		PrimaryFlow: macroAssessment.PrimaryFlow,
-		Timestamp:   time.Now(),
+		PrimaryFlow:  macroAssessment.PrimaryFlow,
+		Timestamp:    time.Now(),
+		ConfigSource: sectorRotationConfigSource(),
 	}
 
 	// Start with base allocations
@@ -138,6 +140,19 @@ func defaultMacroAdjustments() map[string]map[string]float64 {
 			"shipping":        -0.05,
 		},
 	}
+}
+
+func sectorRotationConfigSource() string {
+	cfg := config.GetParametersConfig()
+	if cfg == nil {
+		return "builtin_defaults"
+	}
+	hasMacro := cfg.Orchestrator.SectorRotationMacroAdjustments.Value != nil
+	hasFlow := cfg.Orchestrator.SectorRotationFlowAdjustments.Value != nil
+	if hasMacro || hasFlow {
+		return "config"
+	}
+	return "builtin_defaults"
 }
 
 func (r *SectorRotator) applyMacroAdjustments(allocations map[string]float64, macro *narrative.MacroRiskAssessment) {
