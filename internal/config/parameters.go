@@ -187,25 +187,27 @@ type BaselineParameters struct {
 // OrchestratorParameters holds tunable values for the orchestrator executors,
 // control layer (CRO/CIO), and Phase3 controller.
 type OrchestratorParameters struct {
-	ConvictionFloorDefault           ParameterMetadata[int]     `json:"conviction_floor_default"`
-	SuperinvestorMinConviction       ParameterMetadata[int]     `json:"superinvestor_min_conviction"`
-	CROZScoreThreshold               ParameterMetadata[float64] `json:"cro_zscore_threshold"`
-	SectorConcentrationThreshold     ParameterMetadata[float64] `json:"sector_concentration_threshold"`
-	SectorConcentrationThresholdHigh ParameterMetadata[float64] `json:"sector_concentration_threshold_high"`
-	SectorConvictionMultiplier       ParameterMetadata[float64] `json:"sector_conviction_multiplier"`
-	CrowdedConvictionMultiplier      ParameterMetadata[float64] `json:"crowded_conviction_multiplier"`
-	FactorWeightMomentum             ParameterMetadata[float64] `json:"factor_weight_momentum"`
-	FactorWeightValue                ParameterMetadata[float64] `json:"factor_weight_value"`
-	FactorWeightQuality              ParameterMetadata[float64] `json:"factor_weight_quality"`
-	FactorWeightAgent                ParameterMetadata[float64] `json:"factor_weight_agent"`
-	PRISMBoostMultiplier             ParameterMetadata[float64] `json:"prism_boost_multiplier"`
-	PRISMBoostMin                    ParameterMetadata[int]     `json:"prism_boost_min"`
-	PRISMBoostMax                    ParameterMetadata[int]     `json:"prism_boost_max"`
-	PromotionMinObservations         ParameterMetadata[int]     `json:"promotion_min_observations"`
-	PromotionSharpeThreshold         ParameterMetadata[float64] `json:"promotion_sharpe_threshold"`
-	PromotionHitRateThreshold        ParameterMetadata[float64] `json:"promotion_hitrate_threshold"`
-	RejectionSharpeThreshold         ParameterMetadata[float64] `json:"rejection_sharpe_threshold"`
-	RejectionHitRateThreshold        ParameterMetadata[float64] `json:"rejection_hitrate_threshold"`
+	ConvictionFloorDefault           ParameterMetadata[int]                           `json:"conviction_floor_default"`
+	SuperinvestorMinConviction       ParameterMetadata[int]                           `json:"superinvestor_min_conviction"`
+	CROZScoreThreshold               ParameterMetadata[float64]                       `json:"cro_zscore_threshold"`
+	SectorConcentrationThreshold     ParameterMetadata[float64]                       `json:"sector_concentration_threshold"`
+	SectorConcentrationThresholdHigh ParameterMetadata[float64]                       `json:"sector_concentration_threshold_high"`
+	SectorConvictionMultiplier       ParameterMetadata[float64]                       `json:"sector_conviction_multiplier"`
+	CrowdedConvictionMultiplier      ParameterMetadata[float64]                       `json:"crowded_conviction_multiplier"`
+	FactorWeightMomentum             ParameterMetadata[float64]                       `json:"factor_weight_momentum"`
+	FactorWeightValue                ParameterMetadata[float64]                       `json:"factor_weight_value"`
+	FactorWeightQuality              ParameterMetadata[float64]                       `json:"factor_weight_quality"`
+	FactorWeightAgent                ParameterMetadata[float64]                       `json:"factor_weight_agent"`
+	PRISMBoostMultiplier             ParameterMetadata[float64]                       `json:"prism_boost_multiplier"`
+	PRISMBoostMin                    ParameterMetadata[int]                           `json:"prism_boost_min"`
+	PRISMBoostMax                    ParameterMetadata[int]                           `json:"prism_boost_max"`
+	PromotionMinObservations         ParameterMetadata[int]                           `json:"promotion_min_observations"`
+	PromotionSharpeThreshold         ParameterMetadata[float64]                       `json:"promotion_sharpe_threshold"`
+	PromotionHitRateThreshold        ParameterMetadata[float64]                       `json:"promotion_hitrate_threshold"`
+	RejectionSharpeThreshold         ParameterMetadata[float64]                       `json:"rejection_sharpe_threshold"`
+	RejectionHitRateThreshold        ParameterMetadata[float64]                       `json:"rejection_hitrate_threshold"`
+	SectorRotationMacroAdjustments   ParameterMetadata[map[string]map[string]float64] `json:"sector_rotation_macro_adjustments,omitempty"`
+	SectorRotationFlowAdjustments    ParameterMetadata[map[string]map[string]float64] `json:"sector_rotation_flow_adjustments,omitempty"`
 }
 
 // RiskParameters holds tunable values for risk management.
@@ -393,6 +395,7 @@ type IndustryParameters struct {
 	NewsLatencyRisk  ParameterMetadata[NewsLatencyConfig]       `json:"news_latency_risk"`
 	FreshnessScores  ParameterMetadata[FreshnessScoresConfig]   `json:"freshness_scores"`
 	PhaseScores      ParameterMetadata[PhaseScoresConfig]       `json:"phase_scores"`
+	SkillToIndustry  ParameterMetadata[map[string]string]       `json:"skill_to_industry,omitempty"`
 	CycleTransitions ParameterMetadata[[]CycleTransitionConfig] `json:"cycle_transitions"`
 
 	CycleWeightMultipliers ParameterMetadata[CycleWeightMultipliersConfig] `json:"cycle_weight_multipliers"`
@@ -585,26 +588,68 @@ type StrategyParameters struct {
 	FallbackStrategy      ParameterMetadata[string]  `json:"fallback_strategy"`
 }
 
+// FactorWeightParameters holds regime-aware factor weights used by the factor engine
+// to adjust allocation across market regimes (bull/bear/high-vol/risk-on/risk-off/etc.).
+type FactorWeightParameters struct {
+	BaseWeights            ParameterMetadata[map[string]float64] `json:"base_weights,omitempty"`
+	RegimeBullMomentum     ParameterMetadata[float64]            `json:"regime_bull_momentum,omitempty"`
+	RegimeBullQuality      ParameterMetadata[float64]            `json:"regime_bull_quality,omitempty"`
+	RegimeBullValue        ParameterMetadata[float64]            `json:"regime_bull_value,omitempty"`
+	RegimeBearQuality      ParameterMetadata[float64]            `json:"regime_bear_quality,omitempty"`
+	RegimeBearValue        ParameterMetadata[float64]            `json:"regime_bear_value,omitempty"`
+	RegimeBearMomentum     ParameterMetadata[float64]            `json:"regime_bear_momentum,omitempty"`
+	RegimeHighVolLiquidity ParameterMetadata[float64]            `json:"regime_high_vol_liquidity,omitempty"`
+	RegimeHighVolMomentum  ParameterMetadata[float64]            `json:"regime_high_vol_momentum,omitempty"`
+	RegimeHighVolInstSent  ParameterMetadata[float64]            `json:"regime_high_vol_inst_sent,omitempty"`
+	SeverityCritical       ParameterMetadata[float64]            `json:"severity_critical,omitempty"`
+	SeverityHigh           ParameterMetadata[float64]            `json:"severity_high,omitempty"`
+	SeverityMedium         ParameterMetadata[float64]            `json:"severity_medium,omitempty"`
+	SeverityLow            ParameterMetadata[float64]            `json:"severity_low,omitempty"`
+	ClampMin               ParameterMetadata[float64]            `json:"clamp_min,omitempty"`
+	ClampMax               ParameterMetadata[float64]            `json:"clamp_max,omitempty"`
+	RiskOnMomentum         ParameterMetadata[float64]            `json:"risk_on_momentum,omitempty"`
+	RiskOnQuality          ParameterMetadata[float64]            `json:"risk_on_quality,omitempty"`
+	RiskOffMomentum        ParameterMetadata[float64]            `json:"risk_off_momentum,omitempty"`
+	RiskOffQuality         ParameterMetadata[float64]            `json:"risk_off_quality,omitempty"`
+	RiskOffLiquidity       ParameterMetadata[float64]            `json:"risk_off_liquidity,omitempty"`
+	ConservativeValue      ParameterMetadata[float64]            `json:"conservative_value,omitempty"`
+	ConservativeQuality    ParameterMetadata[float64]            `json:"conservative_quality,omitempty"`
+	ConservativeMomentum   ParameterMetadata[float64]            `json:"conservative_momentum,omitempty"`
+	AggressiveMomentum     ParameterMetadata[float64]            `json:"aggressive_momentum,omitempty"`
+	AggressiveInstSent     ParameterMetadata[float64]            `json:"aggressive_inst_sent,omitempty"`
+	AggressiveValue        ParameterMetadata[float64]            `json:"aggressive_value,omitempty"`
+	AggressiveQuality      ParameterMetadata[float64]            `json:"aggressive_quality,omitempty"`
+}
+
+// NarrativeConvictionParameters maps skill types to narrative themes and their
+// historical hit rates for conviction-driven weight adjustments.
+type NarrativeConvictionParameters struct {
+	ThemeHitRates ParameterMetadata[map[string]float64] `json:"theme_hit_rates,omitempty"`
+	SkillToTheme  ParameterMetadata[map[string]string]  `json:"skill_to_theme,omitempty"`
+}
+
 // ParametersConfig is the top-level configuration for all investment model parameters.
 type ParametersConfig struct {
-	Version      string                 `json:"version"`
-	UpdatedAt    time.Time              `json:"updated_at"`
-	Darwinian    DarwinianParameters    `json:"darwinian"`
-	Factor       FactorParameters       `json:"factor"`
-	Optimizer    OptimizerParameters    `json:"optimizer"`
-	Sizing       SizingParameters       `json:"sizing"`
-	Health       HealthParameters       `json:"health"`
-	GARCH        GARCHParameters        `json:"garch"`
-	Experiment   ExperimentParameters   `json:"experiment"`
-	Baseline     BaselineParameters     `json:"baseline"`
-	Orchestrator OrchestratorParameters `json:"orchestrator"`
-	Risk         RiskParameters         `json:"risk"`
-	Realtime     RealtimeParameters     `json:"realtime"`
-	Janus        JanusParameters        `json:"janus"`
-	Narrative    NarrativeParameters    `json:"narrative"`
-	Marketdata   MarketdataParameters   `json:"marketdata"`
-	Industry     IndustryParameters     `json:"industry"`
-	Strategy     StrategyParameters     `json:"strategy"`
+	Version             string                        `json:"version"`
+	UpdatedAt           time.Time                     `json:"updated_at"`
+	Darwinian           DarwinianParameters           `json:"darwinian"`
+	Factor              FactorParameters              `json:"factor"`
+	FactorWeight        FactorWeightParameters        `json:"factor_weight,omitempty"`
+	Optimizer           OptimizerParameters           `json:"optimizer"`
+	Sizing              SizingParameters              `json:"sizing"`
+	Health              HealthParameters              `json:"health"`
+	GARCH               GARCHParameters               `json:"garch"`
+	Experiment          ExperimentParameters          `json:"experiment"`
+	Baseline            BaselineParameters            `json:"baseline"`
+	Orchestrator        OrchestratorParameters        `json:"orchestrator"`
+	Risk                RiskParameters                `json:"risk"`
+	Realtime            RealtimeParameters            `json:"realtime"`
+	Janus               JanusParameters               `json:"janus"`
+	Narrative           NarrativeParameters           `json:"narrative"`
+	NarrativeConviction NarrativeConvictionParameters `json:"narrative_conviction,omitempty"`
+	Marketdata          MarketdataParameters          `json:"marketdata"`
+	Industry            IndustryParameters            `json:"industry"`
+	Strategy            StrategyParameters            `json:"strategy"`
 }
 
 // Validate checks that all parameters are within acceptable ranges.
