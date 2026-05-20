@@ -78,8 +78,8 @@ func TestFactorWeightEngine_GetWeights_EventClamped(t *testing.T) {
 	weights := engine.GetWeights("")
 
 	for ft, w := range weights {
-		if w < 0.01 || w > 0.50 {
-			t.Errorf("weight for %s should be clamped [0.01, 0.50], got %f", ft, w)
+		if w < 0.015 || w > 0.50 {
+			t.Errorf("weight for %s should be clamped [0.015, 0.50], got %f", ft, w)
 		}
 	}
 }

@@ -74,6 +74,17 @@ func (e *FactorWeightEngine) GetWeights(regime string) map[FactorType]float64 {
 	}
 
 	e.normalizeWeights(weights)
+
+	for ft := range weights {
+		if weights[ft] < 0.02 {
+			weights[ft] = 0.02
+		}
+		if weights[ft] > 0.50 {
+			weights[ft] = 0.50
+		}
+	}
+
+	e.normalizeWeights(weights)
 	return weights
 }
 
