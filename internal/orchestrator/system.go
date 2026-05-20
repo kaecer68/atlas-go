@@ -877,6 +877,7 @@ func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes [
 			RecordedAt:          asOf,
 			FactorScores:        rec.FactorScores,
 			ConvictionBreakdown: rec.ConvictionBreakdown,
+			SupportingEvents:    rec.SupportingEvents,
 		})
 	}
 	return outcomes
@@ -920,6 +921,7 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 			RecordedAt:          asOf,
 			FactorScores:        rec.FactorScores,
 			ConvictionBreakdown: rec.ConvictionBreakdown,
+			SupportingEvents:    rec.SupportingEvents,
 		})
 	}
 	return outcomes

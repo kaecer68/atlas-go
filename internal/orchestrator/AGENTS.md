@@ -28,6 +28,18 @@
 
 ---
 
+## 統一參數管理 (Parameter Management)
+
+為了提高系統靈活性並確保投資模型的可調試性，所有核心硬編碼參數均已遷移至配置驅動架構：
+
+- **配置來源**：`internal/config/parameters.go` (`ParametersConfig`) 與 `configs/parameters.json`。
+- **配置範圍**：
+    - `NarrativeConviction`：敘事主題命中率 (`ThemeHitRates`) 與技能映射 (`SkillToTheme`)。
+    - `Industry`：行業週期分數 (`PhaseScores`) 與技能映射 (`SkillToIndustry`)。
+- **權威準則**：開發者在調整模型參數時，應優先修改 `parameters.json` 而非原始碼。每個參數均包含 `Rationale` (設定理由) 與 `Source` (權威溯源)。
+
+---
+
 ## 開發慣例
 
 - **Executor 註冊**：新增 Executor 需在 `plugin_registry.go` 的 `NewPluginRegistry()` 中手動加入對應陣列。

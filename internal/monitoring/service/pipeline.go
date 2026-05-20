@@ -20,11 +20,31 @@ import (
 
 // PipelineService encapsulates dashboard pipeline data loading operations.
 type PipelineService struct {
-	WorkDir          string
-	LedgerDir        string
-	registryProvider RegistryProviderFunc
-	store            ledger.OutcomeStore
+	WorkDir           string
+	LedgerDir         string
+	registryProvider  RegistryProviderFunc
+	narrativeProvider NarrativeProviderFunc
+	cycleProvider     CycleProviderFunc
+	store             ledger.OutcomeStore
 }
+
+type NarrativeContextData struct {
+	ActiveThemes   []string
+	PrimaryTheme   string
+	PrimaryHitRate float64
+	DirectionHint  string
+}
+
+type IndustryContextData struct {
+	IndustryID         string
+	BusinessCycle      string
+	CycleConfidence    float64
+	SeasonalMultiplier float64
+	SystemicImportance float64
+}
+
+type NarrativeProviderFunc func(eventIDs []string) *NarrativeContextData
+type CycleProviderFunc func(skill string) *IndustryContextData
 
 type RegistryProviderFunc func() (domain.AgentRegistry, error)
 
@@ -441,6 +461,14 @@ func (s *PipelineService) loadSessionPipelineData(sessionID, sessionsDir string,
 				continue
 			}
 			tags := computePipelineTags(ds, outcome.Symbol, outcome.RecordedAt)
+			var narCtx *NarrativeContextData
+			var indCtx *IndustryContextData
+			if s.narrativeProvider != nil {
+				narCtx = s.narrativeProvider(outcome.SupportingEvents)
+			}
+			if s.cycleProvider != nil {
+				indCtx = s.cycleProvider(outcome.Skill)
+			}
 			items = append(items, PipelineItemData{
 				Symbol:              outcome.Symbol,
 				AgentID:             outcome.AgentID,
@@ -460,6 +488,9 @@ func (s *PipelineService) loadSessionPipelineData(sessionID, sessionsDir string,
 				RecordedAt:          outcome.RecordedAt,
 				FactorScores:        outcome.FactorScores,
 				ConvictionBreakdown: outcome.ConvictionBreakdown,
+				NarrativeEventIDs:   outcome.SupportingEvents,
+				NarrativeContext:    narCtx,
+				IndustryContext:     indCtx,
 			})
 		}
 	} else {
@@ -636,6 +667,9 @@ type PipelineItemData struct {
 	RecordedAt          time.Time
 	FactorScores        domain.FactorScores
 	ConvictionBreakdown *domain.ConvictionBreakdown
+	NarrativeEventIDs   []string
+	NarrativeContext    *NarrativeContextData
+	IndustryContext     *IndustryContextData
 }
 
 // LoadSessions loads all sessions metadata.

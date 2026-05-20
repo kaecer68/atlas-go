@@ -14,12 +14,14 @@ import (
 type FactorType string
 
 const (
-	FactorMomentum  FactorType = "momentum"
-	FactorValue     FactorType = "value"
-	FactorQuality   FactorType = "quality"
-	FactorAgent     FactorType = "agent"
-	FactorInstSent  FactorType = "institutional_sentiment"
-	FactorLiquidity FactorType = "liquidity"
+	FactorMomentum      FactorType = "momentum"
+	FactorValue         FactorType = "value"
+	FactorQuality       FactorType = "quality"
+	FactorAgent         FactorType = "agent"
+	FactorInstSent      FactorType = "institutional_sentiment"
+	FactorLiquidity     FactorType = "liquidity"
+	FactorNarrative     FactorType = "narrative"
+	FactorIndustryCycle FactorType = "industry_cycle"
 )
 
 // FactorScore 因子评分
@@ -68,15 +70,16 @@ func DefaultConstraints() Constraints {
 
 // Optimizer 组合优化器
 type Optimizer struct {
-	runtimeParams *RuntimeParameters
-	constraints   Constraints
-	agentWeights  map[string]float64
-	styleWeights  map[string]float64
-	factorWeights map[FactorType]float64
-	history       *HistoricalPrices
-	fundamentals  *FundamentalProvider
-	factorEngine  *FactorEngine
-	mu            sync.RWMutex
+	runtimeParams      *RuntimeParameters
+	constraints        Constraints
+	agentWeights       map[string]float64
+	styleWeights       map[string]float64
+	factorWeights      map[FactorType]float64
+	history            *HistoricalPrices
+	fundamentals       *FundamentalProvider
+	factorEngine       *FactorEngine
+	mu                 sync.RWMutex
+	factorWeightEngine *FactorWeightEngine
 }
 
 // NewOptimizer 创建优化器
@@ -102,12 +105,13 @@ func newOptimizerWithParams(params *RuntimeParameters) *Optimizer {
 	}
 
 	return &Optimizer{
-		runtimeParams: params,
-		constraints:   constraints,
-		agentWeights:  make(map[string]float64),
-		styleWeights:  make(map[string]float64),
-		factorWeights: factorWeights,
-		factorEngine:  NewFactorEngine(),
+		runtimeParams:      params,
+		constraints:        constraints,
+		agentWeights:       make(map[string]float64),
+		styleWeights:       make(map[string]float64),
+		factorWeights:      factorWeights,
+		factorEngine:       NewFactorEngine(),
+		factorWeightEngine: NewFactorWeightEngine(),
 	}
 }
 
@@ -169,6 +173,13 @@ func (o *Optimizer) SetFactorWeights(weights map[FactorType]float64) {
 	o.factorWeights = weights
 }
 
+func (o *Optimizer) WithFactorWeightEngine(fwe *FactorWeightEngine) *Optimizer {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.factorWeightEngine = fwe
+	return o
+}
+
 // Optimize 执行组合优化
 func (o *Optimizer) Optimize(
 	ctx context.Context,
@@ -183,21 +194,18 @@ func (o *Optimizer) Optimize(
 	o.mu.RLock()
 	constraints := o.constraints
 	factorWeights := o.factorWeights
+	fwe := o.factorWeightEngine
 	o.mu.RUnlock()
 
-	// 1. 聚合相同股票的推荐
-	aggregated := o.aggregateRecommendations(recommendations)
+	if fwe != nil {
+		factorWeights = fwe.GetWeights("")
+	}
 
-	// 2. 计算多因子评分
+	aggregated := o.aggregateRecommendations(recommendations)
 	scores := o.calculateMultiFactorScores(aggregated, quotes, factorWeights)
 
-	// 3. 初始权重分配 (基于评分)
 	weights := o.allocateInitialWeights(scores, totalCapital)
-
-	// 4. 应用约束调整
 	weights = o.applyConstraints(weights, constraints, totalCapital)
-
-	// 5. 生成最终仓位
 	positions := o.buildPositions(weights, scores, aggregated, quotes, totalCapital)
 
 	return positions, nil
@@ -219,14 +227,16 @@ func (o *Optimizer) aggregateRecommendations(
 
 // calculateMultiFactorScores 计算多因子评分
 type symbolScore struct {
-	Symbol   string
-	Side     domain.Side
-	Momentum float64
-	Value    float64
-	Quality  float64
-	Agent    float64
-	Total    float64
-	Agents   []string
+	Symbol        string
+	Side          domain.Side
+	Momentum      float64
+	Value         float64
+	Quality       float64
+	Agent         float64
+	Narrative     float64
+	IndustryCycle float64
+	Total         float64
+	Agents        []string
 }
 
 func (o *Optimizer) calculateMultiFactorScores(
@@ -272,21 +282,50 @@ func (o *Optimizer) calculateMultiFactorScores(
 		valueScore := o.factorEngine.CalculateValueScore(symbol, quotes)
 		qualityScore := o.factorEngine.CalculateQualityScore(symbol, quotes)
 
+		var narrativeScore, industryCycleScore float64
+		o.mu.RLock()
+		fe := o.factorEngine
+		o.mu.RUnlock()
+		if fe != nil {
+			fe.mu.RLock()
+			narProv := fe.narrativeProv
+			iclProv := fe.cycleProv
+			fe.mu.RUnlock()
+			if narProv != nil {
+				if nfs := narProv(symbol); nfs != nil {
+					narrativeScore = nfs.Score
+				}
+			}
+			if iclProv != nil {
+				if ics := iclProv(symbol); ics != nil {
+					industryCycleScore = ics.Score
+				}
+			}
+		}
+
 		// 综合评分
 		totalScore := momentumScore*factorWeights[FactorMomentum] +
 			valueScore*factorWeights[FactorValue] +
 			qualityScore*factorWeights[FactorQuality] +
 			agentScore*factorWeights[FactorAgent]
+		if narrativeScore != 0 {
+			totalScore += narrativeScore * factorWeights[FactorNarrative]
+		}
+		if industryCycleScore != 0 {
+			totalScore += industryCycleScore * factorWeights[FactorIndustryCycle]
+		}
 
 		scores[key] = &symbolScore{
-			Symbol:   symbol,
-			Side:     side,
-			Momentum: momentumScore,
-			Value:    valueScore,
-			Quality:  qualityScore,
-			Agent:    agentScore,
-			Total:    totalScore,
-			Agents:   agents,
+			Symbol:        symbol,
+			Side:          side,
+			Momentum:      momentumScore,
+			Value:         valueScore,
+			Quality:       qualityScore,
+			Agent:         agentScore,
+			Narrative:     narrativeScore,
+			IndustryCycle: industryCycleScore,
+			Total:         totalScore,
+			Agents:        agents,
 		}
 	}
 
@@ -420,19 +459,27 @@ func (o *Optimizer) buildPositions(
 		// 实际目标金额
 		actualValue := float64(shares) * quote.Last
 
+		factors := map[FactorType]float64{
+			FactorMomentum: score.Momentum,
+			FactorValue:    score.Value,
+			FactorQuality:  score.Quality,
+			FactorAgent:    score.Agent,
+		}
+		if score.Narrative != 0 {
+			factors[FactorNarrative] = score.Narrative
+		}
+		if score.IndustryCycle != 0 {
+			factors[FactorIndustryCycle] = score.IndustryCycle
+		}
+
 		positions = append(positions, OptimizedPosition{
 			Symbol:       w.Symbol,
 			Side:         w.Side,
 			TargetValue:  actualValue,
 			TargetWeight: targetWeight,
 			Confidence:   score.Total,
-			Factors: map[FactorType]float64{
-				FactorMomentum: score.Momentum,
-				FactorValue:    score.Value,
-				FactorQuality:  score.Quality,
-				FactorAgent:    score.Agent,
-			},
-			Agents: score.Agents,
+			Factors:      factors,
+			Agents:       score.Agents,
 		})
 	}
 

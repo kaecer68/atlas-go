@@ -199,6 +199,8 @@ export const FIELD = {
     agent: 'agent',
     institutional_sentiment: 'institutional_sentiment',
     liquidity: 'liquidity',
+    narrative: 'narrative',
+    industry_cycle: 'industry_cycle',
     total: 'total',
   },
   FactorScoreItem: {
@@ -240,6 +242,13 @@ export const FIELD = {
     session_id: 'session_id',
     recorded_at: 'recorded_at',
   },
+  IndustryCycleFactorScore: {
+    score: 'score',
+    phase: 'phase',
+    phase_score: 'phase_score',
+    confidence: 'confidence',
+    industry_id: 'industry_id',
+  },
   MetricTrendPoint: {
     id: 'id',
     execution_id: 'execution_id',
@@ -276,6 +285,13 @@ export const FIELD = {
     iteration_guidance: 'iteration_guidance',
     recommended_window: 'recommended_window',
     generated_at: 'generated_at',
+  },
+  NarrativeFactorScore: {
+    score: 'score',
+    theme: 'theme',
+    hit_rate: 'hit_rate',
+    confidence: 'confidence',
+    event_ids: 'event_ids',
   },
   OOSResult: {
     passed: 'passed',
@@ -375,6 +391,7 @@ export const FIELD = {
     recorded_at: 'recorded_at',
     factor_scores: 'factor_scores',
     conviction_breakdown: 'conviction_breakdown',
+    supporting_events: 'supporting_events',
   },
   ReplayDataMetadata: {
     source_path: 'source_path',

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
 )
@@ -12,7 +13,8 @@ import (
 // recommendation conviction based on the current business cycle phase.
 // Expansion → confidence boost; recession → penalty; recovery/mature are neutral.
 type IndustryCycleModulator struct {
-	tracker *industry.CycleTracker
+	tracker         *industry.CycleTracker
+	skillToIndustry map[string]string
 }
 
 var skillToIndustry = map[string]string{
@@ -28,7 +30,11 @@ var skillToIndustry = map[string]string{
 }
 
 func NewIndustryCycleModulator(tracker *industry.CycleTracker) *IndustryCycleModulator {
-	return &IndustryCycleModulator{tracker: tracker}
+	sti := skillToIndustry // hardcoded fallback
+	if cfg := config.GetParametersConfig(); cfg != nil && cfg.Industry.SkillToIndustry.Value != nil {
+		sti = cfg.Industry.SkillToIndustry.Value
+	}
+	return &IndustryCycleModulator{tracker: tracker, skillToIndustry: sti}
 }
 
 func (m *IndustryCycleModulator) IsAvailable() bool {
@@ -36,15 +42,22 @@ func (m *IndustryCycleModulator) IsAvailable() bool {
 }
 
 func phaseDelta(phase industry.CyclePhase) int {
+	var exp, rec, mat, recs float64 = 20, 10, 0, -20 // hardcoded fallbacks
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		exp = cfg.Industry.PhaseScores.Value.ScoreExpansion
+		rec = cfg.Industry.PhaseScores.Value.ScoreRecovery
+		mat = cfg.Industry.PhaseScores.Value.ScoreMature
+		recs = cfg.Industry.PhaseScores.Value.ScoreRecession
+	}
 	switch phase {
 	case industry.CycleExpansion:
-		return 20
+		return int(math.Round(exp))
 	case industry.CycleRecovery:
-		return 10
+		return int(math.Round(rec))
 	case industry.CycleMature:
-		return 0
+		return int(math.Round(mat))
 	case industry.CycleRecession:
-		return -20
+		return int(math.Round(recs))
 	default:
 		return 0
 	}
@@ -65,7 +78,7 @@ func (m *IndustryCycleModulator) ModulateRecommendations(
 
 	for i := range recs {
 		skill := skillLookup[recs[i].Agent]
-		industryID, ok := skillToIndustry[skill]
+		industryID, ok := m.skillToIndustry[skill]
 		if !ok {
 			continue
 		}

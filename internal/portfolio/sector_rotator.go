@@ -97,63 +97,113 @@ func (r *SectorRotator) GeneratePlan(
 	return plan
 }
 
-func (r *SectorRotator) applyMacroAdjustments(allocations map[string]float64, macro *narrative.MacroRiskAssessment) {
-	switch macro.Level {
+func (r *SectorRotator) macroLevelKey(level narrative.MacroRiskLevel) string {
+	switch level {
 	case narrative.MacroRiskGreen:
-		// Maintain base allocations
-
+		return "green"
 	case narrative.MacroRiskYellow:
-		// Slight defensive tilt
-		allocations["defensive"] += 0.05
-		allocations["cash"] += 0.03
-		allocations["ai_supply_chain"] -= 0.04
-		allocations["semiconductor"] -= 0.04
-
+		return "yellow"
 	case narrative.MacroRiskOrange:
-		// Moderate defensive positioning
-		allocations["defensive"] += 0.10
-		allocations["cash"] += 0.08
-		allocations["gold"] = 0.05
-		allocations["ai_supply_chain"] -= 0.08
-		allocations["semiconductor"] -= 0.08
-		allocations["financials"] -= 0.05
-
+		return "orange"
 	case narrative.MacroRiskRed:
-		// Severe risk-off
-		allocations["cash"] += 0.25
-		allocations["defensive"] += 0.15
-		allocations["gold"] = 0.10
-		allocations["ai_supply_chain"] -= 0.15
-		allocations["semiconductor"] -= 0.15
-		allocations["financials"] -= 0.10
-		allocations["shipping"] -= 0.05
+		return "red"
+	default:
+		return "green"
+	}
+}
+
+func defaultMacroAdjustments() map[string]map[string]float64 {
+	return map[string]map[string]float64{
+		"yellow": {
+			"defensive":       0.05,
+			"cash":            0.03,
+			"ai_supply_chain": -0.04,
+			"semiconductor":   -0.04,
+		},
+		"orange": {
+			"defensive":       0.10,
+			"cash":            0.08,
+			"gold":            0.05,
+			"ai_supply_chain": -0.08,
+			"semiconductor":   -0.08,
+			"financials":      -0.05,
+		},
+		"red": {
+			"cash":            0.25,
+			"defensive":       0.15,
+			"gold":            0.10,
+			"ai_supply_chain": -0.15,
+			"semiconductor":   -0.15,
+			"financials":      -0.10,
+			"shipping":        -0.05,
+		},
+	}
+}
+
+func (r *SectorRotator) applyMacroAdjustments(allocations map[string]float64, macro *narrative.MacroRiskAssessment) {
+	adjustments := defaultMacroAdjustments()
+	if cfg := config.GetParametersConfig(); cfg != nil && cfg.Orchestrator.SectorRotationMacroAdjustments.Value != nil {
+		adjustments = cfg.Orchestrator.SectorRotationMacroAdjustments.Value
+	}
+
+	levelKey := r.macroLevelKey(macro.Level)
+	deltas, ok := adjustments[levelKey]
+	if !ok {
+		return
+	}
+	for sector, delta := range deltas {
+		if _, exists := allocations[sector]; exists || delta > 0 {
+			allocations[sector] += delta
+		} else {
+			allocations[sector] = delta
+		}
+	}
+}
+
+func defaultFlowAdjustments() map[string]map[string]float64 {
+	return map[string]map[string]float64{
+		"risk_off": {
+			"gold":            0.10,
+			"utilities":       0.08,
+			"high_dividend":   0.07,
+			"ai_supply_chain": -0.10,
+			"small_cap":       0.0,
+		},
+		"carry_trade_unwind": {
+			"cash":             0.30,
+			"short_term_bonds": 0.15,
+			"jpy":              0.05,
+			"ai_supply_chain":  0.02,
+			"semiconductor":    0.03,
+			"financials":       -0.10,
+		},
+		"sector_rotation": {
+			"energy":              0.15,
+			"oil_services":        0.08,
+			"alternative_energy":  0.05,
+			"shipping":            0.05,
+			"high_valuation_tech": 0.02,
+			"rate_sensitive":      -0.08,
+		},
 	}
 }
 
 func (r *SectorRotator) applyFlowAdjustments(allocations map[string]float64, flow string) {
-	switch flow {
-	case "risk_off":
-		allocations["gold"] += 0.10
-		allocations["utilities"] = 0.08
-		allocations["high_dividend"] = 0.07
-		allocations["ai_supply_chain"] -= 0.10
-		allocations["small_cap"] = 0.0
+	adjustments := defaultFlowAdjustments()
+	if cfg := config.GetParametersConfig(); cfg != nil && cfg.Orchestrator.SectorRotationFlowAdjustments.Value != nil {
+		adjustments = cfg.Orchestrator.SectorRotationFlowAdjustments.Value
+	}
 
-	case "carry_trade_unwind":
-		allocations["cash"] += 0.30
-		allocations["short_term_bonds"] = 0.15
-		allocations["jpy"] = 0.05
-		allocations["ai_supply_chain"] = 0.02
-		allocations["semiconductor"] = 0.03
-		allocations["financials"] -= 0.10
-
-	case "sector_rotation":
-		allocations["energy"] += 0.15
-		allocations["oil_services"] = 0.08
-		allocations["alternative_energy"] = 0.05
-		allocations["shipping"] += 0.05
-		allocations["high_valuation_tech"] = 0.02
-		allocations["rate_sensitive"] -= 0.08
+	deltas, ok := adjustments[flow]
+	if !ok {
+		return
+	}
+	for sector, delta := range deltas {
+		if _, exists := allocations[sector]; exists || delta > 0 {
+			allocations[sector] += delta
+		} else {
+			allocations[sector] = delta
+		}
 	}
 }
 

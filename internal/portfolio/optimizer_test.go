@@ -518,3 +518,79 @@ func TestOptimizeWithAgentWeights(t *testing.T) {
 		t.Errorf("expected A.TW (strong-agent) to have higher weight than B.TW (weak-agent), got a=%f b=%f", aWeight, bWeight)
 	}
 }
+
+func TestOptimizeWithNarrativeAndIndustryCycleFactors(t *testing.T) {
+	o := NewOptimizer()
+	c := DefaultConstraints()
+	c.MaxPositionPct = 1.0
+	c.CashReserve = 0.0
+	o.SetConstraints(c)
+	o.SetFactorWeights(map[FactorType]float64{
+		FactorMomentum:      0.0,
+		FactorValue:         0.0,
+		FactorQuality:       0.0,
+		FactorAgent:         0.0,
+		FactorNarrative:     0.5,
+		FactorIndustryCycle: 0.5,
+	})
+
+	fe := NewFactorEngine()
+	fe.WithNarrativeProvider(func(symbol string) *domain.NarrativeFactorScore {
+		if symbol == "A.TW" {
+			return &domain.NarrativeFactorScore{Score: 0.80, Theme: "AI_capex_surge", HitRate: 0.81, Confidence: 0.90}
+		}
+		if symbol == "B.TW" {
+			return &domain.NarrativeFactorScore{Score: 0.20, Theme: "oil_price_shock", HitRate: 0.58, Confidence: 0.60}
+		}
+		return nil
+	})
+	fe.WithIndustryCycleProvider(func(symbol string) *domain.IndustryCycleFactorScore {
+		if symbol == "A.TW" {
+			return &domain.IndustryCycleFactorScore{Score: 0.70, Phase: "expansion", PhaseScore: 0.80, Confidence: 0.85}
+		}
+		if symbol == "B.TW" {
+			return &domain.IndustryCycleFactorScore{Score: 0.30, Phase: "recession", PhaseScore: -0.60, Confidence: 0.70}
+		}
+		return nil
+	})
+	o.WithFactorEngine(fe)
+
+	recs := []domain.Recommendation{
+		{Agent: "test-agent", Symbol: "A.TW", Side: domain.SideBuy, Conviction: 50},
+		{Agent: "test-agent", Symbol: "B.TW", Side: domain.SideBuy, Conviction: 50},
+	}
+
+	quotes := map[string]domain.Quote{
+		"A.TW": {Symbol: "A.TW", Open: 100, Last: 100, IsTradable: true},
+		"B.TW": {Symbol: "B.TW", Open: 100, Last: 100, IsTradable: true},
+	}
+
+	positions, err := o.Optimize(context.Background(), recs, quotes, 1_000_000)
+	if err != nil {
+		t.Fatalf("optimize failed: %v", err)
+	}
+	if len(positions) != 2 {
+		t.Fatalf("expected 2 positions, got %d", len(positions))
+	}
+
+	var aWeight, bWeight float64
+	for _, p := range positions {
+		if p.Symbol == "A.TW" {
+			aWeight = p.TargetWeight
+		}
+		if p.Symbol == "B.TW" {
+			bWeight = p.TargetWeight
+		}
+		if p.Symbol == "A.TW" || p.Symbol == "B.TW" {
+			if _, ok := p.Factors[FactorNarrative]; !ok {
+				t.Errorf("expected %s to have narrative factor", p.Symbol)
+			}
+			if _, ok := p.Factors[FactorIndustryCycle]; !ok {
+				t.Errorf("expected %s to have industry cycle factor", p.Symbol)
+			}
+		}
+	}
+	if aWeight <= bWeight {
+		t.Errorf("expected A.TW (high narrative + cycle) to have higher weight than B.TW (low), got a=%f b=%f", aWeight, bWeight)
+	}
+}

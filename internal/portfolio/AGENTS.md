@@ -64,20 +64,34 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
 - **主要檔案**：功能已實作於 `factor_engine.go` 的 `CalculateLiquidityScore()`
 
 ### 2.4. FactorWeightEngine (動態權重引擎)
-- **職責**：根據市場事件與 Regime 動態調整因子權重。
-- **基礎權重配置**（6 因子）：
+- **職責**：根據市場事件與 Regime 動態調整因子權重，並確保權重總和為 1.0。
+- **配置化**：所有因子權重、Regime 調整、事件 delta 以及策略調整均已透過 `ParametersConfig.FactorWeight` 進行配置化。`internal/config/parameters.go` 與 `configs/parameters.json` 是唯一的權威來源。
+- **基礎權重配置**（8 因子 - **預設值，可透過 parameters.json 覆蓋**）：
     | 因子 | 基礎權重 |
     |------|----------|
-    | Momentum | 0.20 |
-    | Value | 0.15 |
-    | Quality | 0.15 |
-    | Agent | 0.20 |
-    | InstitutionalSentiment | 0.15 |
-    | Liquidity | 0.15 |
-- **事件驅動調整**：當 NarrativeEvent 觸發時，FactorWeightEngine 根據事件 Theme 調整相關因子權重。
-- **Regime 感知**：不同 Regime 下採用不同的基礎權重配置。
-- **主要檔案**：`factor_weight_engine.go`（**待建立** - 目前因子權重調整尚未實作，現有系統使用固定因子權重）
-- **現況**：FactorWeightEngine 為預計功能，目前 `FactorEngine` 使用固定基礎權重（見 `FactorWeights` 參數）。動態事件驅動的權重調整尚未實作。
+    | Momentum | 0.25 |
+    | Value | 0.20 |
+    | Quality | 0.20 |
+    | Agent | 0.15 |
+    | InstitutionalSentiment | 0.10 |
+    | Liquidity | 0.05 |
+    | Narrative | 0.05 |
+    | IndustryCycle | 0.00 |
+- **事件驅動調整**：當 NarrativeEvent 觸發時，FactorWeightEngine 根據事件 Theme 與 Severity 調整相關因子權重。
+    - `AI_capex_surge`：提升 Quality (+delta) 與 Momentum (+delta)
+    - `US_rates_up`：提升 Value (+delta)，降低 InstitutionalSentiment (-delta)
+    - `oil_price_shock`：降低 Liquidity (-delta) 與 Momentum (-delta)
+    - Severity 對應 delta：`critical=0.10`, `high=0.05`, `medium=0.02`, `low=0.01`
+- **Regime 感知**：不同 Regime 下採用不同的基礎權重偏移
+    - `bull`：Momentum +0.05, Quality -0.03, Value -0.02
+    - `bear`：Quality +0.05, Value +0.03, Momentum -0.05
+    - `high_vol`：Liquidity +0.05, Momentum -0.03, InstitutionalSentiment -0.02
+- **權重保護機制**：
+    - 單一因子權重 clamp 於 [0.02, 0.50]
+    - 自動正規化 (normalize) 確保總和 = 1.0
+    - 過期事件 (faded/expired) 自動從活躍列表移除
+- **主要檔案**：`factor_weight_engine.go`
+- **現況**：已實作。`Optimizer` 在 `Optimize()` 中自動呼叫 `factorWeightEngine.GetWeights(regime)` 取得動態權重，若未附加則回退至靜態 `factorWeights`。
 
 ### 3. Agent Health Management (代理健康狀態管理)
 - **狀態機**：Agent 有四種健康狀態 — `healthy`、`degraded`、`muted`、`recovering`。
@@ -104,11 +118,13 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
 
 ### 6. Sector Rotator (行業輪動管理器)
 - **核心類型**：`SectorAllocation` (目標配置)、`SectorRotationPlan` (輪動計劃)、`RebalancingTrade` (再平衡交易)。
+- **配置化**：宏觀調整 (`SectorRotationMacroAdjustments`) 與流向調整 (`SectorRotationFlowAdjustments`) 偏移值已配置化至 `ParametersConfig.Orchestrator`。
 - **宏觀驅動**：根據 `MacroRiskAssessment.Level` (Green/Yellow/Orange/Red) 調整行業配置。
     - **Green**: 維持基準配置。
     - **Yellow**: 輕度防御 (+defensive +cash, -ai_supply_chain -semiconductor)。
     - **Orange**: 中度防御 (+10% defensive +8% cash +5% gold, -8% ai_supply_chain -8% semiconductor)。
     - **Red**: 極度風險回避 (+25% cash +15% defensive +10% gold)。
+- **註**：上述偏移值為系統預設值；運行時可透過 `parameters.json` 進行動態覆蓋。
 - **Primary Flow**：risk_off / carry_trade_unwind / sector_rotation 三種主流流向。
 - **再平衡觸發**：`RebalanceThreshold` 以下的變動被忽略，大於閾值才生成交易。
 - **Drawdown 整合**：`CanExecuteRotation` 檢查 `MacroAwareDrawdownDecision` — emergency/severe 停止輪動，moderate 以上允許。
@@ -173,6 +189,8 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
 - **Mutable Slice Reuse (切片重用)**：`ApplyDarwinianWeights` 會生成新的 `Recommendation` 切片，切勿直接修改傳入的原切片。
 - **不檢查 AgentHealth 就放行**：若 Agent 處於 `muted` 狀態，其推薦不應進入 pipeline。`IsAgentHealthy()` 會對 unknown agent 預設返回 true，但啞元 agent (從未出現過) 也視為 healthy。
 - **Optimizer 未 Attach FactorEngine**：直接建立 `NewOptimizer()` 而不呼叫 `WithFactorEngine()` 會導致 Momentum/Value/Quality 因子計算失敗，回退至 fallback 值。
+- **FactorWeightEngine 未正規化**：`GetWeights()` 回傳前必須經過 `normalizeWeights()`，否則權重總和不為 1.0 會導致評分偏差。
+- **忽略過期事件**：`Update()` 必須定期呼叫以移除 faded/expired 事件，否則權重調整會永久殘留。
 - **Sizer 的 ATR 預設值為 0**：`getATR` 未快取時返回 0，導致 `adjustForATR` 調整失效，倉位可能過大。
 
 ---
