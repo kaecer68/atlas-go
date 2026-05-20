@@ -104,6 +104,9 @@ export const FIELD = {
     rule: 'rule',
     delta: 'delta',
     reason: 'reason',
+    source: 'source',
+    param_ref: 'param_ref',
+    param_value: 'param_value',
   },
   DailyBar: {
     date: 'date',
@@ -217,6 +220,8 @@ export const FIELD = {
     agent: 'agent',
     institutional_sentiment: 'institutional_sentiment',
     liquidity: 'liquidity',
+    narrative: 'narrative',
+    industry_cycle: 'industry_cycle',
     total: 'total',
     breakdown: 'breakdown',
   },
@@ -305,6 +310,13 @@ export const FIELD = {
     validation_at: 'validation_at',
     reason: 'reason',
   },
+  ParameterSnapshot: {
+    factor_weights: 'factor_weights',
+    narrative_hit_rates: 'narrative_hit_rates',
+    industry_phase_scores: 'industry_phase_scores',
+    config_version: 'config_version',
+    captured_at: 'captured_at',
+  },
   Position: {
     symbol: 'symbol',
     quantity: 'quantity',
@@ -392,6 +404,7 @@ export const FIELD = {
     factor_scores: 'factor_scores',
     conviction_breakdown: 'conviction_breakdown',
     supporting_events: 'supporting_events',
+    parameter_snapshot: 'parameter_snapshot',
   },
   ReplayDataMetadata: {
     source_path: 'source_path',

@@ -115,6 +115,9 @@ export interface ConvictionStep {
   rule: string;
   delta: number;
   reason: string;
+  source?: string;
+  param_ref?: string;
+  param_value?: string;
 }
 
 export interface DailyBar {
@@ -238,6 +241,8 @@ export interface FactorScores {
   agent: number;
   institutional_sentiment: number;
   liquidity: number;
+  narrative?: number;
+  industry_cycle?: number;
   total: number;
   breakdown?: string | null;
 }
@@ -335,6 +340,14 @@ export interface OOSResult {
   reason: string;
 }
 
+export interface ParameterSnapshot {
+  factor_weights?: Record<string, number>;
+  narrative_hit_rates?: Record<string, number>;
+  industry_phase_scores?: Record<string, number>;
+  config_version?: string;
+  captured_at: string;
+}
+
 export interface Position {
   symbol: string;
   quantity: number;
@@ -428,6 +441,7 @@ export interface RecommendationOutcome {
   factor_scores: string;
   conviction_breakdown?: string | null;
   supporting_events?: string[];
+  parameter_snapshot?: string | null;
 }
 
 export interface ReplayDataMetadata {

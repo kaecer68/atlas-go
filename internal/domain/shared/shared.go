@@ -63,6 +63,8 @@ type FactorScores struct {
 	Agent                  float64               `json:"agent"`
 	InstitutionalSentiment float64               `json:"institutional_sentiment"`
 	Liquidity              float64               `json:"liquidity"`
+	Narrative              float64               `json:"narrative,omitempty"`
+	IndustryCycle          float64               `json:"industry_cycle,omitempty"`
 	Total                  float64               `json:"total"`
 	Breakdown              *FactorScoreBreakdown `json:"breakdown,omitempty"`
 }
@@ -84,9 +86,12 @@ type IndustryCycleFactorScore struct {
 }
 
 type ConvictionStep struct {
-	Rule   string `json:"rule"`
-	Delta  int    `json:"delta"`
-	Reason string `json:"reason"`
+	Rule       string `json:"rule"`
+	Delta      int    `json:"delta"`
+	Reason     string `json:"reason"`
+	Source     string `json:"source,omitempty"`
+	ParamRef   string `json:"param_ref,omitempty"`
+	ParamValue string `json:"param_value,omitempty"`
 }
 
 type ConvictionBreakdown struct {
@@ -94,6 +99,14 @@ type ConvictionBreakdown struct {
 	Floor int              `json:"floor"`
 	Final int              `json:"final"`
 	Steps []ConvictionStep `json:"steps"`
+}
+
+type ParameterSnapshot struct {
+	FactorWeights       map[string]float64 `json:"factor_weights,omitempty"`
+	NarrativeHitRates   map[string]float64 `json:"narrative_hit_rates,omitempty"`
+	IndustryPhaseScores map[string]float64 `json:"industry_phase_scores,omitempty"`
+	ConfigVersion       string             `json:"config_version,omitempty"`
+	CapturedAt          time.Time          `json:"captured_at"`
 }
 
 type AgentLayer string

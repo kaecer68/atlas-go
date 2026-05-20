@@ -13,6 +13,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/evolution"
 	"github.com/kaecer68/atlas-go/internal/ledger"
@@ -842,12 +843,45 @@ func syntheticForwardReturn(symbol string, quote domain.Quote) float64 {
 	return (float64(sum%100)/100.0)*0.04 - 0.02
 }
 
+func buildParameterSnapshot() *shared.ParameterSnapshot {
+	cfg := config.GetParametersConfig()
+	if cfg == nil {
+		return nil
+	}
+	snap := &shared.ParameterSnapshot{
+		CapturedAt:    time.Now(),
+		ConfigVersion: cfg.Version,
+	}
+	if cfg.FactorWeight.BaseWeights.Value != nil {
+		snap.FactorWeights = make(map[string]float64, len(cfg.FactorWeight.BaseWeights.Value))
+		for k, v := range cfg.FactorWeight.BaseWeights.Value {
+			snap.FactorWeights[k] = v
+		}
+	}
+	if cfg.NarrativeConviction.ThemeHitRates.Value != nil {
+		snap.NarrativeHitRates = make(map[string]float64, len(cfg.NarrativeConviction.ThemeHitRates.Value))
+		for k, v := range cfg.NarrativeConviction.ThemeHitRates.Value {
+			snap.NarrativeHitRates[k] = v
+		}
+	}
+	if cfg.Industry.PhaseScores.Value.ScoreExpansion != 0 || cfg.Industry.PhaseScores.Value.ScoreRecovery != 0 {
+		snap.IndustryPhaseScores = map[string]float64{
+			"expansion": cfg.Industry.PhaseScores.Value.ScoreExpansion,
+			"recovery":  cfg.Industry.PhaseScores.Value.ScoreRecovery,
+			"mature":    cfg.Industry.PhaseScores.Value.ScoreMature,
+			"recession": cfg.Industry.PhaseScores.Value.ScoreRecession,
+		}
+	}
+	return snap
+}
+
 func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []domain.Quote, asOf time.Time) []domain.RecommendationOutcome {
 	if len(rawRecs) == 0 {
 		return nil
 	}
 	quoteMap := quoteBySymbolMap(quotes)
 	finalKey := buildFinalRecKey(finalRecs)
+	snapshot := buildParameterSnapshot()
 	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
 	for _, rec := range rawRecs {
 		quote := quoteMap[rec.Symbol]
@@ -878,6 +912,7 @@ func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes [
 			FactorScores:        rec.FactorScores,
 			ConvictionBreakdown: rec.ConvictionBreakdown,
 			SupportingEvents:    rec.SupportingEvents,
+			ParameterSnapshot:   snapshot,
 		})
 	}
 	return outcomes
@@ -889,6 +924,7 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 	}
 	quoteMap := quoteBySymbolMap(quotes)
 	finalKey := buildFinalRecKey(finalRecs)
+	snapshot := buildParameterSnapshot()
 	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
 	for _, rec := range rawRecs {
 		quote := quoteMap[rec.Symbol]
@@ -922,6 +958,7 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 			FactorScores:        rec.FactorScores,
 			ConvictionBreakdown: rec.ConvictionBreakdown,
 			SupportingEvents:    rec.SupportingEvents,
+			ParameterSnapshot:   snapshot,
 		})
 	}
 	return outcomes
