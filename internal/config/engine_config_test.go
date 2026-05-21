@@ -3,46 +3,38 @@ package config
 import (
 	"math"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
-// TestEngineConfigLoadValidate validates that engine.json loads and passes Validate().
-// This prevents silent fallback to defaultEngineConfig() when base_allocations drift.
 func TestEngineConfigLoadValidate(t *testing.T) {
+	setProjectRoot(t)
+
 	cfg, err := LoadEngineConfig()
 	if err != nil {
 		t.Fatalf("LoadEngineConfig() failed: %v\nCheck that configs/engine.json is valid.", err)
 	}
 
-	// base_allocations must sum to 1.0 (enforced by Validate)
-	ValidateBaseAllocations(t, cfg.SectorRotation.BaseAllocations)
+	validateBaseAllocations(t, cfg.SectorRotation.BaseAllocations)
 }
 
-// TestDefaultEngineConfigValidate ensures the hardcoded default config passes Validate().
-// This is critical because defaultEngineConfig() is the silent fallback when engine.json
-// fails validation - if the default itself is broken, leo_satellite and other new industries
-// silently disappear from sector rotation.
 func TestDefaultEngineConfigValidate(t *testing.T) {
 	cfg := defaultEngineConfig()
 
 	if err := cfg.Validate(); err != nil {
-		t.Fatalf("defaultEngineConfig().Validate() failed: %v\nThis means the fallback config is also broken.", err)
+		t.Fatalf("defaultEngineConfig().Validate() failed: %v", err)
 	}
 
-	ValidateBaseAllocations(t, cfg.SectorRotation.BaseAllocations)
+	validateBaseAllocations(t, cfg.SectorRotation.BaseAllocations)
 }
 
-// TestDefaultConfigIncludesLEOSatellite ensures leo_satellite exists in the default config.
-// Regression test: without this, SectorRotator silently drops leo_satellite allocations.
 func TestDefaultConfigIncludesLEOSatellite(t *testing.T) {
 	cfg := defaultEngineConfig()
 
-	// Check base_allocations
 	if _, ok := cfg.SectorRotation.BaseAllocations["leo_satellite"]; !ok {
-		t.Error("defaultEngineConfig().SectorRotation.BaseAllocations missing leo_satellite")
+		t.Error("defaultEngineConfig().BaseAllocations missing leo_satellite")
 	}
 
-	// Check top_level_industries
 	found := false
 	for _, id := range cfg.IndustryAnalysis.Classification.TopLevelIndustries {
 		if id == "leo_satellite" {
@@ -51,18 +43,12 @@ func TestDefaultConfigIncludesLEOSatellite(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("defaultEngineConfig().IndustryAnalysis.Classification.TopLevelIndustries missing leo_satellite")
+		t.Error("defaultEngineConfig().TopLevelIndustries missing leo_satellite")
 	}
 }
 
-// TestEngineJSONBaseAllocationsMatchDefault ensures the JSON config and the Go default
-// have identical base_allocations. If they diverge, the system behaves differently
-// depending on whether engine.json loads successfully.
 func TestEngineJSONBaseAllocationsMatchDefault(t *testing.T) {
-	// Only run if engine.json is accessible (not in CI without the file)
-	if _, err := os.Stat("configs/engine.json"); os.IsNotExist(err) {
-		t.Skip("configs/engine.json not found, skipping comparison test")
-	}
+	setProjectRoot(t)
 
 	jsonCfg, err := LoadEngineConfig()
 	if err != nil {
@@ -70,11 +56,9 @@ func TestEngineJSONBaseAllocationsMatchDefault(t *testing.T) {
 	}
 
 	defaultCfg := defaultEngineConfig()
-
 	jsonBA := jsonCfg.SectorRotation.BaseAllocations
 	defaultBA := defaultCfg.SectorRotation.BaseAllocations
 
-	// Both must have the same keys
 	if len(jsonBA) != len(defaultBA) {
 		t.Errorf("base_allocations count mismatch: engine.json=%d, default=%d", len(jsonBA), len(defaultBA))
 	}
@@ -91,7 +75,6 @@ func TestEngineJSONBaseAllocationsMatchDefault(t *testing.T) {
 		}
 	}
 
-	// Check the reverse direction
 	for k := range defaultBA {
 		if _, ok := jsonBA[k]; !ok {
 			t.Errorf("defaultEngineConfig has '%s' but engine.json is missing it", k)
@@ -99,9 +82,27 @@ func TestEngineJSONBaseAllocationsMatchDefault(t *testing.T) {
 	}
 }
 
-// ValidateBaseAllocations is a helper that checks base_allocations sum to 1.0
-// and all values are non-negative.
-func ValidateBaseAllocations(t *testing.T, ba map[string]float64) {
+func setProjectRoot(t *testing.T) {
+	t.Helper()
+
+	if _, err := os.Stat("configs/engine.json"); err == nil {
+		return
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	root := filepath.Clean(filepath.Join(wd, "../.."))
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir to project root (%s): %v", root, err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(wd)
+	})
+}
+
+func validateBaseAllocations(t *testing.T, ba map[string]float64) {
 	t.Helper()
 
 	var total float64
@@ -113,14 +114,6 @@ func ValidateBaseAllocations(t *testing.T, ba map[string]float64) {
 	}
 
 	if math.Abs(total-1.0) > 0.01 {
-		t.Errorf("base_allocations sum = %.2f, want 1.00 (±0.01). Sectors: %v", total, keys(ba))
+		t.Errorf("base_allocations sum = %.2f, want 1.00 (±0.01)", total)
 	}
-}
-
-func keys(m map[string]float64) []string {
-	ks := make([]string, 0, len(m))
-	for k := range m {
-		ks = append(ks, k)
-	}
-	return ks
 }
