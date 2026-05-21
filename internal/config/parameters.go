@@ -628,6 +628,26 @@ type NarrativeConvictionParameters struct {
 	SkillToTheme  ParameterMetadata[map[string]string]  `json:"skill_to_theme,omitempty"`
 }
 
+// SectorExecutorParameters holds tunable conviction and price values
+// for sector-level executors (LEO Satellite, Semiconductor, etc.).
+// Each sub-struct groups parameters for a specific executor, so adding
+// a new executor only requires adding its block of ParameterMetadata fields.
+type SectorExecutorParameters struct {
+	LEOSatellite LEOSatelliteExecutorParameters `json:"leo_satellite,omitempty"`
+}
+
+// LEOSatelliteExecutorParameters holds all tunable values for the
+// LEOSatelliteExecutor (internal/orchestrator/plugin_sector.go).
+type LEOSatelliteExecutorParameters struct {
+	ConvictionBase        ParameterMetadata[int]     `json:"conviction_base"`
+	PricePenaltyDelta     ParameterMetadata[int]     `json:"price_penalty_delta"`
+	LaunchBoostDelta      ParameterMetadata[int]     `json:"launch_boost_delta"`
+	DeploymentBoostDelta  ParameterMetadata[int]     `json:"deployment_boost_delta"`
+	DowngradePenaltyDelta ParameterMetadata[int]     `json:"downgrade_penalty_delta"`
+	TargetPriceMult       ParameterMetadata[float64] `json:"target_price_multiplier"`
+	StopLossMult          ParameterMetadata[float64] `json:"stop_loss_multiplier"`
+}
+
 // ParametersConfig is the top-level configuration for all investment model parameters.
 type ParametersConfig struct {
 	Version             string                        `json:"version"`
@@ -650,6 +670,7 @@ type ParametersConfig struct {
 	Marketdata          MarketdataParameters          `json:"marketdata"`
 	Industry            IndustryParameters            `json:"industry"`
 	Strategy            StrategyParameters            `json:"strategy"`
+	SectorExecutor      SectorExecutorParameters      `json:"sector_executor,omitempty"`
 }
 
 // Validate checks that all parameters are within acceptable ranges.
@@ -1118,6 +1139,17 @@ func (p *ParametersConfig) Validate() error {
 	}
 	if p.Strategy.FallbackStrategy.Value == "" {
 		return fmt.Errorf("strategy.fallback_strategy must not be empty")
+	}
+
+	// Sector executor constraints (only validate when configured, not zero-valued)
+	if p.SectorExecutor.LEOSatellite.ConvictionBase.Value != 0 && p.SectorExecutor.LEOSatellite.ConvictionBase.Value < 0 {
+		return fmt.Errorf("sector_executor.leo_satellite.conviction_base (%d) must be non-negative", p.SectorExecutor.LEOSatellite.ConvictionBase.Value)
+	}
+	if p.SectorExecutor.LEOSatellite.TargetPriceMult.Value != 0 && p.SectorExecutor.LEOSatellite.TargetPriceMult.Value <= 0 {
+		return fmt.Errorf("sector_executor.leo_satellite.target_price_multiplier (%.3f) must be positive", p.SectorExecutor.LEOSatellite.TargetPriceMult.Value)
+	}
+	if p.SectorExecutor.LEOSatellite.StopLossMult.Value != 0 && (p.SectorExecutor.LEOSatellite.StopLossMult.Value <= 0 || p.SectorExecutor.LEOSatellite.StopLossMult.Value >= 1) {
+		return fmt.Errorf("sector_executor.leo_satellite.stop_loss_multiplier (%.3f) must be in (0,1)", p.SectorExecutor.LEOSatellite.StopLossMult.Value)
 	}
 
 	return nil

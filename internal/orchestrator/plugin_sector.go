@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -159,23 +160,47 @@ func (LEOSatelliteExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (LEOSatelliteExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), 60)
+	// Load tunable parameters from ParametersConfig with hardcoded fallback.
+	// This ensures the values are configurable via parameters.json while the
+	// hardcoded defaults remain as the safety net when no config is loaded.
+	leoParams := config.GetParametersConfig()
+	convBase := 60
+	pricePenalty := -5
+	launchBoost := 10
+	deploymentBoost := 8
+	downgradePenalty := -10
+	targetMult := 1.08
+	stopLossMult := 0.95
+	if leoParams != nil {
+		lp := leoParams.SectorExecutor.LEOSatellite
+		if lp.ConvictionBase.Value != 0 {
+			convBase = lp.ConvictionBase.Value
+			pricePenalty = lp.PricePenaltyDelta.Value
+			launchBoost = lp.LaunchBoostDelta.Value
+			deploymentBoost = lp.DeploymentBoostDelta.Value
+			downgradePenalty = lp.DowngradePenaltyDelta.Value
+			targetMult = lp.TargetPriceMult.Value
+			stopLossMult = lp.StopLossMult.Value
+		}
+	}
+
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), convBase)
 	if quote.Last < quote.Open {
-		b.add("price_penalty", -5, "last < open")
+		b.add("price_penalty", pricePenalty, "last < open")
 	}
 	if strings.Contains(prompt, "launch") && quote.Last > quote.Open {
-		b.add("launch_boost", 10, "launch keyword + last > open")
+		b.add("launch_boost", launchBoost, "launch keyword + last > open")
 	}
 	if strings.Contains(prompt, "deployment") && quote.Last > quote.Open {
-		b.add("deployment_boost", 8, "deployment keyword + last > open")
+		b.add("deployment_boost", deploymentBoost, "deployment keyword + last > open")
 	}
 	if strings.Contains(prompt, "downgrade") && quote.Last < quote.High*0.99 {
-		b.add("downgrade_penalty", -10, "downgrade keyword + last < high*0.99")
+		b.add("downgrade_penalty", downgradePenalty, "downgrade keyword + last < high*0.99")
 	}
 	if !b.floorCheck() {
 		return domain.Recommendation{}, false
 	}
-	tp, slp := priceTargets(quote, 1.08, 0.95)
+	tp, slp := priceTargets(quote, targetMult, stopLossMult)
 	conv, cb := b.build()
 	return domain.Recommendation{
 		Agent:               agent.ID,

@@ -233,7 +233,9 @@
         "6285.TW",
         "7717.TW",
         "3105.TW",
-        "2367.TW"
+        "2367.TW",
+        "3022.TW",
+        "3138.TW"
       ],
       "primaryMetrics": [
         "alpha_hit_rate",

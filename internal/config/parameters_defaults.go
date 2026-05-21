@@ -30,6 +30,7 @@ func DefaultParametersConfig() *ParametersConfig {
 		Strategy:            defaultStrategyParameters(),
 		FactorWeight:        defaultFactorWeightParameters(),
 		NarrativeConviction: defaultNarrativeConvictionParameters(),
+		SectorExecutor:      defaultSectorExecutorParameters(),
 	}
 }
 
@@ -2105,6 +2106,55 @@ func defaultNarrativeConvictionParameters() NarrativeConvictionParameters {
 			Rationale: "Maps agent skills to narrative themes; semiconductor/ai_supply_chain/earnings/growth/technical → AI_capex_surge, financials/value_yield → US_rates_up, etf_rotation → JPY_carry_unwind, shipping → oil_price_shock; aligns with narrative_conviction_modulator.go defaultSkillToTheme",
 			Source:    SourceHeuristic,
 			Todo:      "Validate: review agent-narrative alignment with domain experts",
+		},
+	}
+}
+
+func defaultSectorExecutorParameters() SectorExecutorParameters {
+	return SectorExecutorParameters{
+		LEOSatellite: LEOSatelliteExecutorParameters{
+			ConvictionBase: ParameterMetadata[int]{
+				Value:     60,
+				Rationale: "Base conviction for LEOSatelliteExecutor; matches sector consensus used by SemiconductorExecutor and AISupplyChainExecutor",
+				Source:    SourceHeuristic,
+				Todo:      "Calibrate from backtest: compare hit rates at base 50/60/70 across all sector executors",
+			},
+			PricePenaltyDelta: ParameterMetadata[int]{
+				Value:     -5,
+				Rationale: "Intraday weakness penalty: reduces conviction when last < open; mirrors SemiconductorExecutor pattern",
+				Source:    SourceHeuristic,
+				Todo:      "Test asymmetric penalty levels (-3/-5/-8) via cross-executor backtest sweep",
+			},
+			LaunchBoostDelta: ParameterMetadata[int]{
+				Value:     10,
+				Rationale: "Launch keyword signal boost: +10 conviction when prompt mentions launch and price is up; captures LEO satellite launch catalyst events",
+				Source:    SourceHeuristic,
+				Todo:      "Validate with domain expert: verify launch keyword precision/recall against Starlink/Kuiper deployment news",
+			},
+			DeploymentBoostDelta: ParameterMetadata[int]{
+				Value:     8,
+				Rationale: "Deployment keyword signal boost: +8 conviction when prompt mentions deployment and price is up; captures constellation deployment cadence",
+				Source:    SourceHeuristic,
+				Todo:      "Validate: compare deployment boost hit rate vs launch boost hit rate; consider merging if statistically similar",
+			},
+			DowngradePenaltyDelta: ParameterMetadata[int]{
+				Value:     -10,
+				Rationale: "Downgrade signal penalty: -10 conviction when prompt mentions downgrade and last < high*0.99; matches AISupplyChainExecutor pattern",
+				Source:    SourceHeuristic,
+				Todo:      "Calibrate: sweep -8/-10/-12 penalty levels to find optimal precision-recall tradeoff",
+			},
+			TargetPriceMult: ParameterMetadata[float64]{
+				Value:     1.08,
+				Rationale: "8% upside target from entry price; matches AISupplyChainExecutor target multiplier reflecting growth-sector premium",
+				Source:    SourceHeuristic,
+				Todo:      "Validate: compare 1.08 target vs realized-forward-returns for LEO satellite names over 20-day horizon",
+			},
+			StopLossMult: ParameterMetadata[float64]{
+				Value:     0.95,
+				Rationale: "5% stop-loss below entry price; matches SemiconductorExecutor and AISupplyChainExecutor; standard high-volatility sector stop",
+				Source:    SourceHeuristic,
+				Todo:      "Calibrate: test 0.93/0.95/0.97 stop levels for LEO satellite names given sector volatility profile",
+			},
 		},
 	}
 }
