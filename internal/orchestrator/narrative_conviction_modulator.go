@@ -31,6 +31,7 @@ var defaultThemeHitRates = map[string]float64{
 var defaultSkillToTheme = map[string]string{
 	"semiconductor_desk":   "AI_capex_surge",
 	"ai_supply_chain_desk": "AI_capex_surge",
+	"leo_satellite_desk":   "AI_capex_surge",
 	"shipping_desk":        "oil_price_shock",
 	"financials_desk":      "US_rates_up",
 	"etf_rotation_desk":    "JPY_carry_unwind",

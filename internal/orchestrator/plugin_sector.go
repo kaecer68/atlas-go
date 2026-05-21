@@ -152,6 +152,45 @@ func (AISupplyChainExecutor) Recommend(agent domain.AgentSpec, quote domain.Quot
 	}, true
 }
 
+type LEOSatelliteExecutor struct{}
+
+func (LEOSatelliteExecutor) Supports(agent domain.AgentSpec) bool {
+	return agent.Skill == "leo_satellite_desk"
+}
+
+func (LEOSatelliteExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), 60)
+	if quote.Last < quote.Open {
+		b.add("price_penalty", -5, "last < open")
+	}
+	if strings.Contains(prompt, "launch") && quote.Last > quote.Open {
+		b.add("launch_boost", 10, "launch keyword + last > open")
+	}
+	if strings.Contains(prompt, "deployment") && quote.Last > quote.Open {
+		b.add("deployment_boost", 8, "deployment keyword + last > open")
+	}
+	if strings.Contains(prompt, "downgrade") && quote.Last < quote.High*0.99 {
+		b.add("downgrade_penalty", -10, "downgrade keyword + last < high*0.99")
+	}
+	if !b.floorCheck() {
+		return domain.Recommendation{}, false
+	}
+	tp, slp := priceTargets(quote, 1.08, 0.95)
+	conv, cb := b.build()
+	return domain.Recommendation{
+		Agent:               agent.ID,
+		Skill:               agent.Skill,
+		Layer:               agent.Layer,
+		Symbol:              quote.Symbol,
+		Side:                domain.SideBuy,
+		Conviction:          conv,
+		Reason:              "leo satellite infrastructure and deployment cycle",
+		TargetPrice:         tp,
+		StopLossPrice:       slp,
+		ConvictionBreakdown: cb,
+	}, true
+}
+
 type ETFRotationExecutor struct{}
 
 func (ETFRotationExecutor) Supports(agent domain.AgentSpec) bool {

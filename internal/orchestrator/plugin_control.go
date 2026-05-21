@@ -106,6 +106,8 @@ func skillToSector(skill string) string {
 		return "shipping"
 	case "consumer", "tourism":
 		return "consumer"
+	case "leo_satellite":
+		return "technology"
 	default:
 		return "other"
 	}
