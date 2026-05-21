@@ -1,8 +1,0 @@
-{
-  "state": "normal",
-  "state_changed_at": "2026-05-21T12:03:51.832745+08:00",
-  "consecutive_sl": 0,
-  "cooldown_until": "0001-01-01T00:00:00Z",
-  "intraday_peak": 3000000,
-  "day_start_value": 3000000
-}

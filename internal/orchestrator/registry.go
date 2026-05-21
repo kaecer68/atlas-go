@@ -109,7 +109,7 @@ func SeedRegistry() domain.AgentRegistry {
 				Skill:            "leo_satellite_desk",
 				PromptFile:       "prompts/agents/leo_satellite_desk.md",
 				Enabled:          true,
-				Universe:         []string{"3491.TW", "2313.TW", "6285.TW", "7717.TW", "3105.TW", "2367.TW"},
+				Universe:         []string{"3491.TW", "2313.TW", "6285.TW", "7717.TW", "3105.TW", "2367.TW", "3022.TW", "3138.TW"},
 				PrimaryMetrics:   []string{"alpha_hit_rate", "deployment_timing"},
 				RequiredSkills:   []string{"leo_satellite_desk", "growth_momentum"},
 				ForbiddenActions: []string{"launch_hype_chasing", "ignoring_flight_heritage"},
