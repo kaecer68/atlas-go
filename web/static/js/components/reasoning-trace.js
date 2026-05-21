@@ -100,24 +100,46 @@ export function renderReasoningTimeline(data, timelineEl) {
 
   data.traces.forEach(function(trace) {
     var p = phases[trace.phase] || { label: trace.phase, color: '#9ca3af' };
+    var isSystem = trace.phase === 'system_flow';
+
+    // Differentiate CRO vs CIO control filters by component
+    var label = p.label;
+    if (trace.phase === 'control_filter') {
+      if (trace.component === 'cro_filter') label = 'CRO 風險過濾';
+      else if (trace.component === 'cio_aggregator') label = 'CIO 組合聚合';
+    }
+
     var pct = Math.round((trace.confidence || 0) * 100);
     var fb = trace.is_fallback ? '<span style="margin-left:8px;padding:2px 6px;font-size:11px;font-weight:bold;background:#facc15;color:#854d0e;border-radius:4px">備援</span>' : '';
+
+    // Confidence bar — skipped for system traces (confidence=-1)
+    var confBar = '';
+    if (!isSystem && trace.confidence >= 0) {
+      confBar = '<div class="mb-sm" style="display:flex;align-items:center;gap:10px">' +
+            '<span class="text-sm text-muted" style="min-width:60px">信心水準</span>' +
+            '<div style="flex-grow:1;height:6px;background:var(--panel-l3);border-radius:3px;overflow:hidden">' +
+              '<div style="height:100%;width:' + pct + '%;background:' + p.color + '"></div>' +
+            '</div>' +
+            '<span class="text-sm text-muted" style="min-width:40px;text-align:right">' + pct + '%</span>' +
+          '</div>';
+    }
+
+    // Show trace reasoning text prominently
+    var traceReasoning = '';
+    if (trace.reasoning) {
+      traceReasoning = '<div style="margin:6px 0;font-size:13px;color:var(--text)">' + escapeHtml(trace.reasoning) + '</div>';
+    }
 
     html +=
       '<div style="position:relative;margin-bottom:24px">' +
         '<div style="position:absolute;width:12px;height:12px;border-radius:50%;left:-27px;top:4px;background:' + p.color + ';box-shadow:0 0 0 3px var(--bg)"></div>' +
         '<div class="card" style="padding:16px">' +
           '<div class="flex-between mb-sm">' +
-            '<h3 style="margin:0;font-size:15px;color:' + p.color + '">' + escapeHtml(p.label) + ' ' + fb + '</h3>' +
+            '<h3 style="margin:0;font-size:15px;color:' + p.color + '">' + escapeHtml(label) + ' ' + fb + '</h3>' +
             '<span class="text-sm text-muted">' + escapeHtml(trace.component) + ' / ' + escapeHtml(trace.action) + '</span>' +
           '</div>' +
-          '<div class="mb-sm" style="display:flex;align-items:center;gap:10px">' +
-            '<span class="text-sm text-muted" style="min-width:60px">信心水準</span>' +
-            '<div style="flex-grow:1;height:6px;background:var(--panel-l3);border-radius:3px;overflow:hidden">' +
-              '<div style="height:100%;width:' + pct + '%;background:' + p.color + '"></div>' +
-            '</div>' +
-            '<span class="text-sm text-muted" style="min-width:40px;text-align:right">' + pct + '%</span>' +
-          '</div>' +
+          traceReasoning +
+          confBar +
           (trace.explanation ?
             '<div class="mb-md" style="padding:12px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);border-radius:4px;font-size:13px;color:var(--text);white-space:pre-line;line-height:1.5">' + escapeHtml(trace.explanation) + '</div>' : '') +
           '<details>' +

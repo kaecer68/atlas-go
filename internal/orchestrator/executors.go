@@ -110,7 +110,7 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 			Action:     "execute_start",
 			Reasoning:  "Starting registry research execution",
 			Data:       map[string]any{"registry_version": ctx.Registry.Version, "quote_count": len(ctx.Quotes)},
-			Confidence: 1.0,
+			Confidence: -1,
 		})
 	}
 
