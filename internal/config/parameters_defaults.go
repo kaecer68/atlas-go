@@ -22,6 +22,7 @@ func DefaultParametersConfig() *ParametersConfig {
 		Baseline:            defaultBaselineParameters(),
 		Orchestrator:        defaultOrchestratorParameters(),
 		Risk:                defaultRiskParameters(),
+		Drawdown:            defaultDrawdownParameters(),
 		Realtime:            defaultRealtimeParameters(),
 		Narrative:           defaultNarrativeParameters(),
 		Janus:               defaultJanusParameters(),
@@ -31,6 +32,7 @@ func DefaultParametersConfig() *ParametersConfig {
 		FactorWeight:        defaultFactorWeightParameters(),
 		NarrativeConviction: defaultNarrativeConvictionParameters(),
 		SectorExecutor:      defaultSectorExecutorParameters(),
+		Alert:               defaultAlertParameters(),
 	}
 }
 
@@ -777,6 +779,107 @@ func defaultOrchestratorParameters() OrchestratorParameters {
 			Rationale: "Capital flow patterns → sector allocation adjustments; risk_off=defensive, carry_trade_unwind=cash/JPY, sector_rotation=energy/shipping",
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate: derive from flow pattern → sector return regression analysis",
+		},
+	}
+}
+
+func defaultDrawdownParameters() DrawdownParameters {
+	return DrawdownParameters{
+		NonePercentage: ParameterMetadata[float64]{
+			Value:     0.0,
+			Rationale: "No drawdown reduction at green macro risk; full exposure maintained",
+			Source:    SourceHeuristic,
+		},
+		NoneMaxExposure: ParameterMetadata[float64]{
+			Value:     1.0,
+			Rationale: "100% exposure allowed when no macro risk detected",
+			Source:    SourceHeuristic,
+		},
+		LightPercentage: ParameterMetadata[float64]{
+			Value:     0.15,
+			Rationale: "15% reduction for yellow macro risk level (elevated but manageable)",
+			Source:    SourceHeuristic,
+		},
+		LightMaxExposure: ParameterMetadata[float64]{
+			Value:     0.85,
+			Rationale: "85% max exposure for light drawdown; allows most positions intact",
+			Source:    SourceHeuristic,
+		},
+		ModeratePercentage: ParameterMetadata[float64]{
+			Value:     0.35,
+			Rationale: "35% reduction for orange macro risk (significant outflow concerns)",
+			Source:    SourceHeuristic,
+		},
+		ModerateMaxExposure: ParameterMetadata[float64]{
+			Value:     0.65,
+			Rationale: "65% max exposure for moderate drawdown; significant position trimming",
+			Source:    SourceHeuristic,
+		},
+		SeverePercentage: ParameterMetadata[float64]{
+			Value:     0.60,
+			Rationale: "60% reduction for red macro risk (crisis-level threat); most positions liquidated",
+			Source:    SourceHeuristic,
+		},
+		SevereMaxExposure: ParameterMetadata[float64]{
+			Value:     0.40,
+			Rationale: "40% max exposure for severe drawdown; only conviction positions survive",
+			Source:    SourceHeuristic,
+		},
+		EmergencyPercentage: ParameterMetadata[float64]{
+			Value:     0.90,
+			Rationale: "90% reduction for emergency drawdown; near-total liquidation",
+			Source:    SourceHeuristic,
+		},
+		EmergencyMaxExposure: ParameterMetadata[float64]{
+			Value:     0.10,
+			Rationale: "10% max exposure for emergency drawdown; minimum viable positions only",
+			Source:    SourceHeuristic,
+		},
+		OrangeOverrideMinScore: ParameterMetadata[float64]{
+			Value:     0.55,
+			Rationale: "Minimum structural trend override score needed to withstand orange macro risk; 0.55 requires moderately strong structural signal",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.50, 0.65] range against historical orange-regime drawdown outcomes",
+		},
+		RedOverrideMinScore: ParameterMetadata[float64]{
+			Value:     0.75,
+			Rationale: "Minimum structural trend override score needed to withstand red macro risk; 0.75 requires very strong structural signal to justify staying invested",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.70, 0.85] range against historical red-regime drawdown outcomes; higher bar warranted for crisis-level risk",
+		},
+		SectorConstraintsRiskOff: ParameterMetadata[map[string]float64]{
+			Value: map[string]float64{
+				"ai_supply_chain": 0.3,
+				"small_cap":       0.2,
+				"emerging_market": 0.1,
+				"gold":            1.5,
+				"utilities":       1.2,
+			},
+			Rationale: "Risk-off flow: reduce growth/risk assets (AI supply chain 0.3, small cap 0.2, EM 0.1), rotate to defensive (gold 1.5, utilities 1.2)",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: derive multipliers from risk-off regime sector return analysis",
+		},
+		SectorConstraintsCarryTradeUnwind: ParameterMetadata[map[string]float64]{
+			Value: map[string]float64{
+				"all_equities": 0.1,
+				"tech":         0.05,
+				"financials":   0.1,
+				"cash":         2.0,
+			},
+			Rationale: "Carry trade unwind: exit equities (0.1), minimal tech (0.05), minimal financials (0.1), maximum cash (2.0)",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: derive multipliers from carry trade unwind episodes (2024/8, 2008/10, 1998/10)",
+		},
+		SectorConstraintsSectorRotation: ParameterMetadata[map[string]float64]{
+			Value: map[string]float64{
+				"energy":              1.8,
+				"oil_services":        1.5,
+				"high_valuation_tech": 0.3,
+				"rate_sensitive":      0.4,
+			},
+			Rationale: "Sector rotation flow: overweight energy (1.8) and oil services (1.5), reduce high-valuation tech (0.3) and rate-sensitive (0.4)",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: derive multipliers from sector rotation episode return analysis",
 		},
 	}
 }
@@ -2155,6 +2258,71 @@ func defaultSectorExecutorParameters() SectorExecutorParameters {
 				Source:    SourceHeuristic,
 				Todo:      "Calibrate: test 0.93/0.95/0.97 stop levels for LEO satellite names given sector volatility profile",
 			},
+		},
+	}
+}
+
+func defaultAlertParameters() AlertParameters {
+	return AlertParameters{
+		MinCashThreshold: ParameterMetadata[float64]{
+			Value:     100000,
+			Rationale: "Minimum cash reserve before triggering low-cash warning",
+			Source:    SourceHeuristic,
+		},
+		MaxPositionsCount: ParameterMetadata[int]{
+			Value:     20,
+			Rationale: "Maximum number of open positions before concentration warning",
+			Source:    SourceHeuristic,
+		},
+		MaxPositionWeightPct: ParameterMetadata[float64]{
+			Value:     0.15,
+			Rationale: "Maximum single position weight (15%) before error alert",
+			Source:    SourceHeuristic,
+		},
+		MaxUnrealizedLossPct: ParameterMetadata[float64]{
+			Value:     -0.05,
+			Rationale: "Unrealized loss threshold (-5%) before position warning",
+			Source:    SourceHeuristic,
+		},
+		DailyLossWarningPct: ParameterMetadata[float64]{
+			Value:     -0.015,
+			Rationale: "Daily PnL warning threshold (-1.5%)",
+			Source:    SourceHeuristic,
+		},
+		DailyLossCriticalPct: ParameterMetadata[float64]{
+			Value:     -0.02,
+			Rationale: "Daily PnL critical threshold (-2%)",
+			Source:    SourceHeuristic,
+		},
+		RuleEngineIntervalSec: ParameterMetadata[int]{
+			Value:     30,
+			Rationale: "Rule engine evaluation interval (30 seconds)",
+			Source:    SourceHeuristic,
+		},
+		RuleEngineCooldownSec: ParameterMetadata[int]{
+			Value:     300,
+			Rationale: "Default rule cooldown (5 minutes)",
+			Source:    SourceHeuristic,
+		},
+		SystemMetricsIntervalSec: ParameterMetadata[int]{
+			Value:     30,
+			Rationale: "System metrics collection interval (30 seconds)",
+			Source:    SourceHeuristic,
+		},
+		MinScreeningRate: ParameterMetadata[float64]{
+			Value:     0.1,
+			Rationale: "Minimum screening rate (10%) before warning",
+			Source:    SourceHeuristic,
+		},
+		MaxAlertTriggerRate: ParameterMetadata[float64]{
+			Value:     100,
+			Rationale: "Maximum alert trigger rate per hour before critical",
+			Source:    SourceHeuristic,
+		},
+		MaxUnacknowledgedAlerts: ParameterMetadata[int]{
+			Value:     10,
+			Rationale: "Maximum unacknowledged alerts before warning",
+			Source:    SourceHeuristic,
 		},
 	}
 }

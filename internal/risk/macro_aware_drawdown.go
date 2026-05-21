@@ -103,6 +103,27 @@ func NewMacroAwareDrawdownEngineWithConfig(cfg config.DrawdownConfig) *MacroAwar
 	}
 }
 
+// NewMacroAwareDrawdownEngineFromParameters creates a new drawdown engine
+// using the unified ParametersConfig.Drawdown settings. This is the preferred
+// constructor when the unified parameter system is available.
+func NewMacroAwareDrawdownEngineFromParameters() *MacroAwareDrawdownEngine {
+	p := config.GetParametersConfig().Drawdown
+	return NewMacroAwareDrawdownEngineWithConfig(config.DrawdownConfig{
+		Levels: map[string]config.DrawdownLevel{
+			"none":      {Percentage: p.NonePercentage.Value, MaxExposure: p.NoneMaxExposure.Value},
+			"light":     {Percentage: p.LightPercentage.Value, MaxExposure: p.LightMaxExposure.Value},
+			"moderate":  {Percentage: p.ModeratePercentage.Value, MaxExposure: p.ModerateMaxExposure.Value},
+			"severe":    {Percentage: p.SeverePercentage.Value, MaxExposure: p.SevereMaxExposure.Value},
+			"emergency": {Percentage: p.EmergencyPercentage.Value, MaxExposure: p.EmergencyMaxExposure.Value},
+		},
+		OrangeOverrideMinScore:            p.OrangeOverrideMinScore.Value,
+		RedOverrideMinScore:               p.RedOverrideMinScore.Value,
+		SectorConstraintsRiskOff:          p.SectorConstraintsRiskOff.Value,
+		SectorConstraintsCarryTradeUnwind: p.SectorConstraintsCarryTradeUnwind.Value,
+		SectorConstraintsSectorRotation:   p.SectorConstraintsSectorRotation.Value,
+	})
+}
+
 // Evaluate makes a drawdown decision based on macro risk and structural trends
 func (e *MacroAwareDrawdownEngine) Evaluate(
 	macroAssessment *narrative.MacroRiskAssessment,
@@ -258,4 +279,209 @@ func (e *MacroAwareDrawdownEngine) CalculatePortfolioAdjustment(
 	targetExposure = decision.MaxExposure
 	adjustment = targetExposure - currentExposure
 	return
+}
+
+// DrawdownBreakdownStep represents one step in the drawdown decision process.
+type DrawdownBreakdownStep struct {
+	Source     string  `json:"source"`
+	Rule       string  `json:"rule"`
+	Action     string  `json:"action"`
+	Confidence float64 `json:"confidence"`
+}
+
+// DrawdownBreakdown documents the full decision chain for a drawdown evaluation.
+type DrawdownBreakdown struct {
+	Steps            []DrawdownBreakdownStep `json:"steps"`
+	FinalAction      DrawdownAction          `json:"final_action"`
+	FinalPercentage  float64                 `json:"final_percentage"`
+	FinalMaxExposure float64                 `json:"final_max_exposure"`
+	Timestamp        time.Time               `json:"timestamp"`
+}
+
+// EvaluateWithIndustry extends Evaluate with industry cycle risk analysis.
+// The industry assessment may escalate the drawdown action when many industries are in recession.
+func (e *MacroAwareDrawdownEngine) EvaluateWithIndustry(
+	macroAssessment *narrative.MacroRiskAssessment,
+	structuralAssessment *narrative.StructuralTrendAssessment,
+	industryAssessment *IndustryRiskAssessment,
+) (*MacroAwareDrawdownDecision, *DrawdownBreakdown) {
+	decision := e.Evaluate(macroAssessment, structuralAssessment)
+
+	breakdown := &DrawdownBreakdown{
+		Timestamp: time.Now(),
+	}
+
+	// Step 1: macro risk baseline
+	breakdown.Steps = append(breakdown.Steps, DrawdownBreakdownStep{
+		Source:     "macro",
+		Rule:       fmt.Sprintf("MacroRiskLevel=%s, OutflowProb=%.1f%%", macroAssessment.Level.String(), macroAssessment.ForeignOutflowProb),
+		Action:     decision.Action.String(),
+		Confidence: 1.0,
+	})
+
+	// Step 2: structural override
+	if decision.StructuralOverride && structuralAssessment != nil {
+		breakdown.Steps = append(breakdown.Steps, DrawdownBreakdownStep{
+			Source:     "structural",
+			Rule:       fmt.Sprintf("OverrideScore=%.2f >= threshold, DominantTrend=%s", structuralAssessment.OverrideScore, structuralAssessment.DominantTrend.Name),
+			Action:     "override_applied",
+			Confidence: structuralAssessment.OverrideScore,
+		})
+	} else {
+		breakdown.Steps = append(breakdown.Steps, DrawdownBreakdownStep{
+			Source:     "structural",
+			Rule:       "no structural override",
+			Action:     "none",
+			Confidence: 0.0,
+		})
+	}
+
+	// Step 3: industry cycle risk
+	if industryAssessment != nil && industryAssessment.TotalIndustryCount > 0 {
+		recessionRatio := float64(industryAssessment.RecessionIndustryCount) / float64(industryAssessment.TotalIndustryCount)
+		industryStep := e.buildIndustryCycleStep(industryAssessment, recessionRatio)
+
+		if recessionRatio >= 0.25 {
+			originalAction := decision.Action
+			decision.Action = e.escalateAction(decision.Action)
+			level := e.levels[decision.Action]
+			decision.Percentage = level.Percentage
+			decision.MaxExposure = level.MaxExposure
+			decision.Rationale = decision.Rationale + fmt.Sprintf(
+				" Industry cycle escalated from %s to %s (%.0f%% industries in recession, %d/%d).",
+				originalAction.String(), decision.Action.String(),
+				recessionRatio*100,
+				industryAssessment.RecessionIndustryCount,
+				industryAssessment.TotalIndustryCount,
+			)
+		}
+
+		breakdown.Steps = append(breakdown.Steps, industryStep)
+	}
+
+	breakdown.FinalAction = decision.Action
+	breakdown.FinalPercentage = decision.Percentage
+	breakdown.FinalMaxExposure = decision.MaxExposure
+
+	return decision, breakdown
+}
+
+func (e *MacroAwareDrawdownEngine) buildIndustryCycleStep(assessment *IndustryRiskAssessment, recessionRatio float64) DrawdownBreakdownStep {
+	recessionPct := recessionRatio * 100
+	expansionPct := float64(assessment.ExpansionIndustryCount) / float64(assessment.TotalIndustryCount) * 100
+
+	step := DrawdownBreakdownStep{
+		Source:     "industry_cycle",
+		Confidence: 1.0 - recessionRatio,
+	}
+
+	switch {
+	case recessionRatio >= 0.25:
+		step.Rule = fmt.Sprintf(
+			"%.0f%% industries in recession (%d/%d), %.0f%% expansion → escalate drawdown",
+			recessionPct, assessment.RecessionIndustryCount, assessment.TotalIndustryCount, expansionPct,
+		)
+		step.Action = "escalate"
+	case recessionRatio == 0:
+		step.Rule = fmt.Sprintf(
+			"0%% recession, %.0f%% expansion (%d/%d) → no industry cycle risk",
+			expansionPct, assessment.ExpansionIndustryCount, assessment.TotalIndustryCount,
+		)
+		step.Action = "no_change"
+	default:
+		step.Rule = fmt.Sprintf(
+			"%.0f%% industries in recession (%d/%d), %.0f%% expansion → below escalation threshold",
+			recessionPct, assessment.RecessionIndustryCount, assessment.TotalIndustryCount, expansionPct,
+		)
+		step.Action = "no_change"
+	}
+
+	return step
+}
+
+// EvaluateWithPortfolio extends EvaluateWithIndustry with portfolio-level risk analysis.
+// The portfolio risk assessment may escalate the drawdown action when concentration,
+// sector exposure, or factor exposure risks are excessive.
+func (e *MacroAwareDrawdownEngine) EvaluateWithPortfolio(
+	macroAssessment *narrative.MacroRiskAssessment,
+	structuralAssessment *narrative.StructuralTrendAssessment,
+	industryAssessment *IndustryRiskAssessment,
+	portfolioProvider PortfolioRiskProvider,
+) (*MacroAwareDrawdownDecision, *DrawdownBreakdown) {
+	decision, breakdown := e.EvaluateWithIndustry(macroAssessment, structuralAssessment, industryAssessment)
+
+	if portfolioProvider != nil {
+		portfolioRisk := portfolioProvider.Assess()
+		if portfolioRisk != nil {
+			portfolioStep := e.buildPortfolioRiskStep(portfolioRisk)
+			breakdown.Steps = append(breakdown.Steps, portfolioStep)
+
+			if portfolioRisk.TotalRiskScore >= 0.8 {
+				originalAction := decision.Action
+				decision.Action = e.escalateAction(decision.Action)
+				level := e.levels[decision.Action]
+				decision.Percentage = level.Percentage
+				decision.MaxExposure = level.MaxExposure
+				decision.Rationale = decision.Rationale + fmt.Sprintf(
+					" Portfolio risk score %.2f escalated from %s to %s.",
+					portfolioRisk.TotalRiskScore,
+					originalAction.String(), decision.Action.String(),
+				)
+			}
+
+			breakdown.FinalAction = decision.Action
+			breakdown.FinalPercentage = decision.Percentage
+			breakdown.FinalMaxExposure = decision.MaxExposure
+		}
+	}
+
+	return decision, breakdown
+}
+
+// buildPortfolioRiskStep creates a breakdown step based on portfolio risk assessment.
+func (e *MacroAwareDrawdownEngine) buildPortfolioRiskStep(assessment *PortfolioRiskAssessment) DrawdownBreakdownStep {
+	step := DrawdownBreakdownStep{
+		Source: "portfolio_risk",
+	}
+
+	switch {
+	case assessment.TotalRiskScore >= 0.8:
+		step.Rule = fmt.Sprintf(
+			"High portfolio risk: concentration=%.2f, sector exposure=%d, factor exposure=%d → escalate drawdown",
+			assessment.ConcentrationScore, len(assessment.SectorExposure), len(assessment.FactorExposure),
+		)
+		step.Action = "escalate"
+		step.Confidence = assessment.TotalRiskScore
+	case assessment.TotalRiskScore >= 0.5:
+		step.Rule = fmt.Sprintf(
+			"Moderate portfolio risk: concentration=%.2f, sector exposure=%d, factor exposure=%d → no escalation",
+			assessment.ConcentrationScore, len(assessment.SectorExposure), len(assessment.FactorExposure),
+		)
+		step.Action = "no_change"
+		step.Confidence = assessment.TotalRiskScore
+	default:
+		step.Rule = fmt.Sprintf(
+			"Low portfolio risk: concentration=%.2f, sector exposure=%d, factor exposure=%d → no change",
+			assessment.ConcentrationScore, len(assessment.SectorExposure), len(assessment.FactorExposure),
+		)
+		step.Action = "no_change"
+		step.Confidence = 1.0 - assessment.TotalRiskScore
+	}
+
+	return step
+}
+
+func (e *MacroAwareDrawdownEngine) escalateAction(action DrawdownAction) DrawdownAction {
+	switch action {
+	case DrawdownNone:
+		return DrawdownLight
+	case DrawdownLight:
+		return DrawdownModerate
+	case DrawdownModerate:
+		return DrawdownSevere
+	case DrawdownSevere:
+		return DrawdownEmergency
+	default:
+		return DrawdownEmergency
+	}
 }
