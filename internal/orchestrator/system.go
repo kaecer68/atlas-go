@@ -744,6 +744,21 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 
 	// Save per-session position snapshot for portfolio page
 	s.saveSessionPositions(s.Sim().session.ID, result.Positions)
+
+	// Anomaly detection: warn on empty or suspicious sessions
+	if summary.OutcomeCount == 0 {
+		logging.Warn("system", "empty_session",
+			"session_id", summary.SessionID,
+			"orders", summary.OrderCount,
+			"positions", summary.PositionCount,
+		)
+	}
+	if summary.PortfolioValue == 0 && summary.OrderCount > 0 {
+		logging.Warn("system", "zero_portfolio_with_orders",
+			"session_id", summary.SessionID,
+			"orders", summary.OrderCount,
+		)
+	}
 	s.saveSessionTrades(s.Sim().session.ID, result.Trades)
 	return nil
 }

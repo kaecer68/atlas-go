@@ -507,7 +507,7 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 			Action:     "collect_recommendations",
 			Reasoning:  fmt.Sprintf("Collected %d recommendations, %d screening rejects", len(recs), len(rejects)),
 			Data:       map[string]any{"recommendation_count": len(recs), "reject_count": len(rejects), "recommendations": recData},
-			Confidence: 1.0,
+			Confidence: avgConvictionScore(recs),
 		})
 	}
 
@@ -617,7 +617,7 @@ func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *Plugi
 						"z_score_enabled":           policy.EnableConvictionNormalization,
 						"momentum_crash_protection": policy.MomentumCrashProtection,
 					},
-					Confidence: 1.0,
+					Confidence: passRatio(before, after),
 				})
 			}
 			if agent.Skill == "cio_portfolio" {
@@ -651,7 +651,7 @@ func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *Plugi
 						"output_count": len(next),
 						"symbols":      symbolData,
 					},
-					Confidence: 1.0,
+					Confidence: passRatio(before, len(next)),
 				})
 			}
 		}
@@ -872,4 +872,34 @@ func symbolIterator(symbols []string) func(func(string) bool) {
 			}
 		}
 	}
+}
+
+// avgConvictionScore returns the average conviction of recommendations as a
+// 0-1 score. Returns 0 when recs is empty.
+func avgConvictionScore(recs []domain.Recommendation) float64 {
+	if len(recs) == 0 {
+		return 0
+	}
+	var total int
+	for _, r := range recs {
+		total += r.Conviction
+	}
+	avg := float64(total) / float64(len(recs))
+	if avg > 100 {
+		return 1.0
+	}
+	return avg / 100.0
+}
+
+// passRatio returns the ratio of output to input as a 0-1 confidence score.
+// Returns 1 when input is 0 (no recommendations to filter).
+func passRatio(input, output int) float64 {
+	if input <= 0 {
+		return 1.0
+	}
+	ratio := float64(output) / float64(input)
+	if ratio > 1.0 {
+		return 1.0
+	}
+	return ratio
 }
