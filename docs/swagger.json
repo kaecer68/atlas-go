@@ -720,7 +720,7 @@
           "next_experiment_agent_id": {
             "type": "string"
           },
-          "weakest_agent_scorecards": {
+          "scorecards": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Scorecard"

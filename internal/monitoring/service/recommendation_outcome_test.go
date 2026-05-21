@@ -159,7 +159,7 @@ func TestLoadAgentObservatoryReadsFromSessionScope(t *testing.T) {
 	}
 	// Verify the outcome was loaded from the session-scoped file.
 	found := false
-	for _, sc := range data.WeakestAgentScorecards {
+	for _, sc := range data.Scorecards {
 		if sc.AgentID == "agent-session" {
 			found = true
 			break
