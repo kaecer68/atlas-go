@@ -85,15 +85,21 @@ func TestEngineJSONBaseAllocationsMatchDefault(t *testing.T) {
 func setProjectRoot(t *testing.T) {
 	t.Helper()
 
+	// Already at project root
 	if _, err := os.Stat("configs/engine.json"); err == nil {
 		return
 	}
 
+	// Try from package directory
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
 	root := filepath.Clean(filepath.Join(wd, "../.."))
+	if _, err := os.Stat(filepath.Join(root, "configs/engine.json")); err != nil {
+		t.Skipf("cannot find project root from %s: %v", wd, err)
+		return
+	}
 	if err := os.Chdir(root); err != nil {
 		t.Fatalf("chdir to project root (%s): %v", root, err)
 	}
