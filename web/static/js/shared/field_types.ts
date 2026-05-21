@@ -10,6 +10,15 @@ export interface AgentSpec {
   screening_criteria: string;
 }
 
+export interface AlertBreakdown {
+  rule: string;
+  description: string;
+  current: number;
+  threshold: number;
+  delta: number;
+  formula: string;
+}
+
 export interface AlertChannelConfig {
   telegram_bot_token?: string;
   telegram_chat_id?: string;
@@ -30,6 +39,7 @@ export interface AlertRecord {
   message: string;
   value: number;
   threshold: number;
+  breakdown?: string | null;
   acknowledged: boolean;
   acknowledged_at?: string | null;
   acknowledged_by?: string;
