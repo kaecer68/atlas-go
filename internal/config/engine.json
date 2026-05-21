@@ -49,9 +49,28 @@
       }
     },
     "orange_override_min_score": 0.55,
-    "red_override_min_score": 0.75
+    "red_override_min_score": 0.75,
+    "sector_constraints_risk_off": {
+      "ai_supply_chain": 0.3,
+      "small_cap": 0.2,
+      "emerging_market": 0.1,
+      "gold": 1.5,
+      "utilities": 1.2
+    },
+    "sector_constraints_carry_trade_unwind": {
+      "all_equities": 0.1,
+      "tech": 0.05,
+      "financials": 0.1,
+      "cash": 2.0
+    },
+    "sector_constraints_sector_rotation": {
+      "energy": 1.8,
+      "oil_services": 1.5,
+      "high_valuation_tech": 0.3,
+      "rate_sensitive": 0.4
+    }
   },
-  
+
   "sector_rotation": {
     "base_allocations": {
       "semiconductor": 0.19,

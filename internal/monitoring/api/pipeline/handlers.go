@@ -100,22 +100,22 @@ func (h *Handlers) HandleAgentObservatory(r *http.Request) (int, any) {
 	}
 
 	resp := AgentObservatoryResponse{
-		WeakestAgentScorecards: data.WeakestAgentScorecards,
-		SessionID:              data.SessionID,
-		NextExperimentAgentID:  data.NextExperimentAgentID,
-		BrokerRuntime:          data.BrokerRuntime,
-		RecordedAt:             data.RecordedAt,
+		Scorecards:            data.Scorecards,
+		SessionID:             data.SessionID,
+		NextExperimentAgentID: data.NextExperimentAgentID,
+		BrokerRuntime:         data.BrokerRuntime,
+		RecordedAt:            data.RecordedAt,
 	}
 	return http.StatusOK, resp
 }
 
 // AgentObservatoryResponse is the API response for agent observatory.
 type AgentObservatoryResponse struct {
-	SessionID              string                    `json:"session_id"`
-	NextExperimentAgentID  string                    `json:"next_experiment_agent_id"`
-	WeakestAgentScorecards []domain.Scorecard        `json:"weakest_agent_scorecards"`
-	BrokerRuntime          domain.BrokerRuntimeAudit `json:"broker_runtime"`
-	RecordedAt             time.Time                 `json:"recorded_at"`
+	SessionID             string                    `json:"session_id"`
+	NextExperimentAgentID string                    `json:"next_experiment_agent_id"`
+	Scorecards            []domain.Scorecard        `json:"scorecards"`
+	BrokerRuntime         domain.BrokerRuntimeAudit `json:"broker_runtime"`
+	RecordedAt            time.Time                 `json:"recorded_at"`
 }
 
 // HandleForecastVsReality handles GET /api/dashboard/forecast-vs-reality.

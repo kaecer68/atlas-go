@@ -3,7 +3,6 @@ package config
 import (
 	"math"
 	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -12,7 +11,7 @@ func TestEngineConfigLoadValidate(t *testing.T) {
 
 	cfg, err := LoadEngineConfig()
 	if err != nil {
-		t.Fatalf("LoadEngineConfig() failed: %v\nCheck that configs/engine.json is valid.", err)
+		t.Fatalf("LoadEngineConfig() failed: %v\nCheck that internal/config/engine.json is valid.", err)
 	}
 
 	validateBaseAllocations(t, cfg.SectorRotation.BaseAllocations)
@@ -84,28 +83,9 @@ func TestEngineJSONBaseAllocationsMatchDefault(t *testing.T) {
 
 func setProjectRoot(t *testing.T) {
 	t.Helper()
-
-	// Already at project root
-	if _, err := os.Stat("configs/engine.json"); err == nil {
-		return
+	if _, err := os.Stat("engine.json"); err != nil {
+		t.Fatalf("engine.json not found in package directory: %v", err)
 	}
-
-	// Try from package directory
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	root := filepath.Clean(filepath.Join(wd, "../.."))
-	if _, err := os.Stat(filepath.Join(root, "configs/engine.json")); err != nil {
-		t.Skipf("cannot find project root from %s: %v", wd, err)
-		return
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir to project root (%s): %v", root, err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(wd)
-	})
 }
 
 func validateBaseAllocations(t *testing.T, ba map[string]float64) {
