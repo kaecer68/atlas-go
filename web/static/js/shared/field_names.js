@@ -406,6 +406,7 @@ export const FIELD = {
     conviction_breakdown: 'conviction_breakdown',
     supporting_events: 'supporting_events',
     parameter_snapshot: 'parameter_snapshot',
+    is_synthetic: 'is_synthetic',
   },
   ReplayDataMetadata: {
     source_path: 'source_path',

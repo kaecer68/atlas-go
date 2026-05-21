@@ -35,6 +35,15 @@ func (s *Scratchpad) Record(trace ReasoningTrace) {
 	s.traces = append(s.traces, trace)
 }
 
+// MarkAllAsFallback sets IsFallback=true on every recorded trace.
+func (s *Scratchpad) MarkAllAsFallback() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.traces {
+		s.traces[i].IsFallback = true
+	}
+}
+
 // Traces returns a copy of all recorded traces.
 func (s *Scratchpad) Traces() []ReasoningTrace {
 	s.mu.RLock()

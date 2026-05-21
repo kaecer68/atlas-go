@@ -302,6 +302,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	}
 
 	if s.Sim().scratchpad != nil {
+		s.Sim().scratchpad.MarkAllAsFallback()
 		_, _ = s.Sim().scratchpad.ExportJSONL()
 	}
 
@@ -931,6 +932,7 @@ func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes [
 			ConvictionBreakdown: rec.ConvictionBreakdown,
 			SupportingEvents:    rec.SupportingEvents,
 			ParameterSnapshot:   snapshot,
+			IsSynthetic:         true,
 		})
 	}
 	return outcomes
@@ -946,9 +948,11 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
 	for _, rec := range rawRecs {
 		quote := quoteMap[rec.Symbol]
+		synthetic := false
 		forwardReturn, ok := ds.ForwardReturn(rec.Symbol, asOf, 1)
 		if !ok || forwardReturn == 0 {
 			forwardReturn = syntheticForwardReturn(rec.Symbol, quote)
+			synthetic = true
 		}
 		_, passed := finalKey[rec.Symbol+"|"+rec.Agent]
 		guardReason := ""
@@ -977,6 +981,7 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 			ConvictionBreakdown: rec.ConvictionBreakdown,
 			SupportingEvents:    rec.SupportingEvents,
 			ParameterSnapshot:   snapshot,
+			IsSynthetic:         synthetic,
 		})
 	}
 	return outcomes

@@ -331,6 +331,51 @@ func run(args []string, deps appDeps) error {
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"status":"ok","message":"thresholds recalibrated"}`+"\n")
 		}))
+		mux.HandleFunc("/admin/trigger-simulation", adminHandler(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			system, err := orchestrator.NewProductionSystem(cfg)
+			if err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintf(w, `{"error":"create system: %v"}`+"\n", err)
+				return
+			}
+			if collector != nil {
+				system.WithMetricsCollector(collector)
+			}
+			if repo != nil {
+				system.SetRepository(repo)
+			}
+			capitalCfg := domain.DefaultCapitalPhaseConfig()
+			capitalCfg.PhaseStartDate = time.Now().Add(-30 * 24 * time.Hour)
+			controller := risk.NewCapitalPhaseController(capitalCfg)
+			allocator := portfolio.NewCapitalAllocator()
+			workflow, wErr := risk.NewApprovalWorkflow("data/state/approvals")
+			if wErr != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintf(w, `{"error":"approval workflow: %v"}`+"\n", wErr)
+				return
+			}
+			system.WithCapitalManagement(controller, allocator, workflow)
+			result, simErr := system.RunDailySimulation(time.Now())
+			if simErr != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintf(w, `{"error":"simulation: %v"}`+"\n", simErr)
+				return
+			}
+			candidate, _ := system.NextExperimentCandidate()
+			if recErr := system.RecordSessionSummary(result, candidate); recErr != nil {
+				logging.Warn("admin", "record_session_failed", "err", recErr.Error())
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"status":"ok","session":"%s","regime":"%s","orders":%d,"positions":%d}`+"\n",
+				system.Session().ID, result.Regime, len(result.Orders), len(result.Positions))
+		}))
 		mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
 		monitor := monitoring.NewMonitor()
 		if alertStore != nil {

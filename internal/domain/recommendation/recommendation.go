@@ -71,6 +71,7 @@ type RecommendationOutcome struct {
 	ConvictionBreakdown *shared.ConvictionBreakdown `json:"conviction_breakdown,omitempty"`
 	SupportingEvents    []string                    `json:"supporting_events,omitempty"`
 	ParameterSnapshot   *shared.ParameterSnapshot   `json:"parameter_snapshot,omitempty"`
+	IsSynthetic         bool                        `json:"is_synthetic"`
 }
 
 func (r *RecommendationOutcome) Validate() error {

@@ -440,6 +440,7 @@ declare interface RecommendationOutcome {
   conviction_breakdown?: ConvictionBreakdown | null;
   supporting_events?: string[];
   parameter_snapshot?: ParameterSnapshot | null;
+  is_synthetic: boolean;
 }
 
 declare interface ReplayDataMetadata {
