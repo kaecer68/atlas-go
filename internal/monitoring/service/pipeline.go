@@ -670,6 +670,14 @@ type PipelineItemData struct {
 	NarrativeEventIDs   []string
 	NarrativeContext    *NarrativeContextData
 	IndustryContext     *IndustryContextData
+	Metrics             PipelineItemMetrics
+}
+
+type PipelineItemMetrics struct {
+	PriceToEarnings *float64
+	PriceToBook     *float64
+	DividendYield   *float64
+	BacktestReturn  *float64
 }
 
 // LoadSessions loads all sessions metadata.

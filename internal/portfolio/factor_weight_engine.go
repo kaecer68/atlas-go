@@ -16,6 +16,11 @@ type FactorWeightEngine struct {
 	eventWeights map[string]map[FactorType]float64
 	activeEvents map[string]*narrative.NarrativeEvent
 	lifecycle    *narrative.EventLifecycleManager
+	weightSource string
+}
+
+func (e *FactorWeightEngine) WeightSource() string {
+	return e.weightSource
 }
 
 func fwConfig() *config.FactorWeightParameters {
@@ -40,18 +45,21 @@ func defaultBaseWeights() map[FactorType]float64 {
 
 func NewFactorWeightEngine() *FactorWeightEngine {
 	baseWeights := defaultBaseWeights()
+	source := "builtin_defaults"
 	if fw := fwConfig(); fw != nil && fw.BaseWeights.Value != nil {
 		bw := make(map[FactorType]float64, len(fw.BaseWeights.Value))
 		for k, v := range fw.BaseWeights.Value {
 			bw[FactorType(k)] = v
 		}
 		baseWeights = bw
+		source = "config"
 	}
 	return &FactorWeightEngine{
 		baseWeights:  baseWeights,
 		eventWeights: make(map[string]map[FactorType]float64),
 		activeEvents: make(map[string]*narrative.NarrativeEvent),
 		lifecycle:    narrative.NewEventLifecycleManager(),
+		weightSource: source,
 	}
 }
 

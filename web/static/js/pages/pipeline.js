@@ -39,8 +39,9 @@ export function renderConvictionBreakdown(cb) {
   const steps = (cb.steps || []).map(s => {
     const deltaCls = s.delta > 0 ? 'color:var(--up)' : (s.delta < 0 ? 'color:var(--down)' : 'color:var(--muted)');
     const deltaLabel = s.delta > 0 ? '+' + s.delta : String(s.delta);
+    const prov = s.source ? `<span class="badge" style="font-size:9px;padding:1px 4px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.3);color:#3b82f6;margin-left:4px">${s.source}${s.param_ref ? ':' + s.param_ref.split('.').pop() : ''}</span>` : '';
     return `<div style="display:flex;gap:8px;align-items:flex-start;margin:3px 0;padding:3px 6px;background:var(--bg);border-radius:4px">
-      <div class="w-90 text-xs text-muted">${s.rule}</div>
+      <div class="w-90 text-xs text-muted">${s.rule}${prov}</div>
       <div class="w-40 text-xs font-semibold" style="${deltaCls}">${deltaLabel}</div>
       <div style="flex:1;font-size:10px;color:var(--muted)">${s.reason || '-'}</div>
     </div>`;
@@ -405,11 +406,12 @@ export function countFilteredItems(items) {
 
 export function passesFilter(item) {
   if (!isFilterActive) return true;
-  const m = item.metrics || {};
-  const pe = m.price_to_earnings ?? m.pe ?? m.PE ?? null;
-  const pb = m.price_to_book ?? m.pb ?? m.PB ?? null;
-  const dy = m.dividend_yield ?? m.dy ?? m.DY ?? null;
-  const ret = m.backtest_return ?? m.return ?? m.ret ?? null;
+  if (!item.metrics) return true;
+  const m = item.metrics;
+  const pe = m.price_to_earnings ?? null;
+  const pb = m.price_to_book ?? null;
+  const dy = m.dividend_yield ?? null;
+  const ret = m.backtest_return ?? null;
 
   if (filterState.peMin !== null && pe !== null && pe < filterState.peMin) return false;
   if (filterState.peMax !== null && pe !== null && pe > filterState.peMax) return false;

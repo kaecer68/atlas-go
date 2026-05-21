@@ -3,11 +3,24 @@ package orchestrator
 import (
 	"fmt"
 	"math"
+	"strconv"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
 )
+
+func paramSensitivity(paramValue string) *float64 {
+	if paramValue == "" {
+		return nil
+	}
+	pv, err := strconv.ParseFloat(paramValue, 64)
+	if err != nil {
+		return nil
+	}
+	s := math.Abs(pv * 0.1)
+	return &s
+}
 
 // IndustryCycleModulator reads industry cycle positions and adjusts
 // recommendation conviction based on the current business cycle phase.
@@ -63,12 +76,21 @@ func phaseDelta(phase industry.CyclePhase) int {
 	}
 }
 
-func (m *IndustryCycleModulator) ModulateRecommendations(
+// ModulationStep groups provider-produced conviction steps with the index of the
+// recommendation they apply to.
+type ModulationStep struct {
+	RecIndex int
+	Steps    []domain.ConvictionStep
+}
+
+// CollectModulationSteps returns the conviction steps this modulator would produce
+// for the given recommendations, without modifying them in-place.
+func (m *IndustryCycleModulator) CollectModulationSteps(
 	recs []domain.Recommendation,
 	registry domain.AgentRegistry,
-) {
+) []ModulationStep {
 	if !m.IsAvailable() {
-		return
+		return nil
 	}
 
 	skillLookup := make(map[string]string, len(registry.Agents))
@@ -76,6 +98,7 @@ func (m *IndustryCycleModulator) ModulateRecommendations(
 		skillLookup[agent.ID] = agent.Skill
 	}
 
+	var result []ModulationStep
 	for i := range recs {
 		skill := skillLookup[recs[i].Agent]
 		industryID, ok := m.skillToIndustry[skill]
@@ -96,8 +119,6 @@ func (m *IndustryCycleModulator) ModulateRecommendations(
 		confidenceAdjust := math.Round(float64(delta) * pos.Confidence)
 		adj := int(confidenceAdjust)
 
-		recs[i].Conviction += adj
-
 		phaseName := map[industry.CyclePhase]string{
 			industry.CycleExpansion: "擴張",
 			industry.CycleRecovery:  "復甦",
@@ -105,15 +126,65 @@ func (m *IndustryCycleModulator) ModulateRecommendations(
 			industry.CycleRecession: "衰退",
 		}[pos.BusinessCycle]
 
-		step := domain.ConvictionStep{
-			Rule:   "cycle_phase",
-			Delta:  adj,
-			Reason: fmt.Sprintf("產業%s處於%s期(信心度%.0f%%)", industryID, phaseName, pos.Confidence*100),
+		provenanceSource := "hardcoded"
+		provenanceRef := ""
+		provenanceVal := ""
+		if cfg := config.GetParametersConfig(); cfg != nil {
+			var phaseScore float64
+			switch pos.BusinessCycle {
+			case industry.CycleExpansion:
+				phaseScore = cfg.Industry.PhaseScores.Value.ScoreExpansion
+				provenanceRef = "Industry.PhaseScores.ScoreExpansion"
+			case industry.CycleRecovery:
+				phaseScore = cfg.Industry.PhaseScores.Value.ScoreRecovery
+				provenanceRef = "Industry.PhaseScores.ScoreRecovery"
+			case industry.CycleMature:
+				phaseScore = cfg.Industry.PhaseScores.Value.ScoreMature
+				provenanceRef = "Industry.PhaseScores.ScoreMature"
+			case industry.CycleRecession:
+				phaseScore = cfg.Industry.PhaseScores.Value.ScoreRecession
+				provenanceRef = "Industry.PhaseScores.ScoreRecession"
+			}
+			if phaseScore != 0 {
+				provenanceSource = "config"
+				provenanceVal = fmt.Sprintf("%.0f", phaseScore)
+			}
 		}
 
-		if recs[i].ConvictionBreakdown != nil {
-			recs[i].ConvictionBreakdown.Steps = append(recs[i].ConvictionBreakdown.Steps, step)
-			recs[i].ConvictionBreakdown.Final = recs[i].Conviction
+		result = append(result, ModulationStep{
+			RecIndex: i,
+			Steps: []domain.ConvictionStep{{
+				Rule:        "modulator:industry_cycle:cycle_phase",
+				Delta:       adj,
+				Reason:      fmt.Sprintf("產業%s處於%s期(信心度%.0f%%)", industryID, phaseName, pos.Confidence*100),
+				Source:      provenanceSource,
+				ParamRef:    provenanceRef,
+				ParamValue:  provenanceVal,
+				Sensitivity: paramSensitivity(provenanceVal),
+			}},
+		})
+	}
+	return result
+}
+
+// ModulateRecommendations adjusts conviction based on industry cycle phase.
+// Delegates to CollectModulationSteps for provenance logic; preserved for
+// backward compatibility (test callers).
+func (m *IndustryCycleModulator) ModulateRecommendations(
+	recs []domain.Recommendation,
+	registry domain.AgentRegistry,
+) {
+	steps := m.CollectModulationSteps(recs, registry)
+	for _, ms := range steps {
+		if ms.RecIndex >= len(recs) {
+			continue
+		}
+		for _, step := range ms.Steps {
+			recs[ms.RecIndex].Conviction += step.Delta
+			if recs[ms.RecIndex].ConvictionBreakdown != nil {
+				recs[ms.RecIndex].ConvictionBreakdown.Steps = append(recs[ms.RecIndex].ConvictionBreakdown.Steps, step)
+				recs[ms.RecIndex].ConvictionBreakdown.Final = recs[ms.RecIndex].Conviction
+			}
 		}
 	}
 }

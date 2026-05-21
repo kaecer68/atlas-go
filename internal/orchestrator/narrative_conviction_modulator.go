@@ -67,25 +67,22 @@ func (m *NarrativeConvictionModulator) IsAvailable() bool {
 	return m != nil && m.themeHitRates != nil && m.skillToTheme != nil
 }
 
-// ModulateRecommendations adjusts conviction for recommendations whose agent skill
-// matches an active narrative event theme. The boost is proportional to the theme's
-// hit rate. Only events with Status == "active" are considered.
-func (m *NarrativeConvictionModulator) ModulateRecommendations(
+// CollectModulationSteps returns the conviction steps this modulator would produce
+// for the given recommendations, without modifying them in-place.
+func (m *NarrativeConvictionModulator) CollectModulationSteps(
 	recs []domain.Recommendation,
 	registry domain.AgentRegistry,
 	events []narrative.NarrativeEvent,
-) {
+) []ModulationStep {
 	if !m.IsAvailable() || len(events) == 0 {
-		return
+		return nil
 	}
 
-	// activeInfo holds the resolved hit rate and confidence for an active theme.
 	type activeInfo struct {
 		hitRate    float64
 		confidence float64
 	}
 
-	// Build active themes lookup: theme → best matching event info.
 	activeThemes := make(map[string]activeInfo)
 	for _, ev := range events {
 		if ev.Status != "active" {
@@ -99,15 +96,15 @@ func (m *NarrativeConvictionModulator) ModulateRecommendations(
 	}
 
 	if len(activeThemes) == 0 {
-		return
+		return nil
 	}
 
-	// Build agent skill lookup.
 	skillLookup := make(map[string]string, len(registry.Agents))
 	for _, agent := range registry.Agents {
 		skillLookup[agent.ID] = agent.Skill
 	}
 
+	var result []ModulationStep
 	for i := range recs {
 		skill := skillLookup[recs[i].Agent]
 		theme, ok := m.skillToTheme[skill]
@@ -125,17 +122,52 @@ func (m *NarrativeConvictionModulator) ModulateRecommendations(
 			continue
 		}
 
-		recs[i].Conviction += adj
-
-		step := domain.ConvictionStep{
-			Rule:   "narrative_boost",
-			Delta:  adj,
-			Reason: fmt.Sprintf("%s (hit_rate: %.0f%%, confidence: %.0f%%)", theme, info.hitRate*100, info.confidence*100),
+		provenanceSource := "heuristic"
+		provenanceRef := ""
+		provenanceVal := ""
+		if cfg := config.GetParametersConfig(); cfg != nil {
+			if _, ok := cfg.NarrativeConviction.ThemeHitRates.Value[theme]; ok {
+				provenanceSource = "config"
+				provenanceRef = fmt.Sprintf("NarrativeConviction.ThemeHitRates.%s", theme)
+				provenanceVal = fmt.Sprintf("%.2f", info.hitRate)
+			}
 		}
 
-		if recs[i].ConvictionBreakdown != nil {
-			recs[i].ConvictionBreakdown.Steps = append(recs[i].ConvictionBreakdown.Steps, step)
-			recs[i].ConvictionBreakdown.Final = recs[i].Conviction
+		result = append(result, ModulationStep{
+			RecIndex: i,
+			Steps: []domain.ConvictionStep{{
+				Rule:        "modulator:narrative:narrative_boost",
+				Delta:       adj,
+				Reason:      fmt.Sprintf("%s (hit_rate: %.0f%%, confidence: %.0f%%)", theme, info.hitRate*100, info.confidence*100),
+				Source:      provenanceSource,
+				ParamRef:    provenanceRef,
+				ParamValue:  provenanceVal,
+				Sensitivity: paramSensitivity(provenanceVal),
+			}},
+		})
+	}
+	return result
+}
+
+// ModulateRecommendations adjusts conviction for recommendations whose agent skill
+// matches an active narrative event theme. Delegates to CollectModulationSteps
+// for provenance logic; preserved for backward compatibility (test callers).
+func (m *NarrativeConvictionModulator) ModulateRecommendations(
+	recs []domain.Recommendation,
+	registry domain.AgentRegistry,
+	events []narrative.NarrativeEvent,
+) {
+	steps := m.CollectModulationSteps(recs, registry, events)
+	for _, ms := range steps {
+		if ms.RecIndex >= len(recs) {
+			continue
+		}
+		for _, step := range ms.Steps {
+			recs[ms.RecIndex].Conviction += step.Delta
+			if recs[ms.RecIndex].ConvictionBreakdown != nil {
+				recs[ms.RecIndex].ConvictionBreakdown.Steps = append(recs[ms.RecIndex].ConvictionBreakdown.Steps, step)
+				recs[ms.RecIndex].ConvictionBreakdown.Final = recs[ms.RecIndex].Conviction
+			}
 		}
 	}
 }

@@ -793,6 +793,32 @@ func (m *DarwinianWeightManager) ApplyDarwinianWeightsWithEvents(
 			})
 		}
 
+		cb := rec.ConvictionBreakdown
+		if cb != nil && weight != 1.0 {
+			weightAdj := weightedConviction - rawConviction
+			if weightAdj != 0 {
+				cb.Steps = append(cb.Steps, domain.ConvictionStep{
+					Rule:       "modulator:darwinian:weight_adjust",
+					Delta:      weightAdj,
+					Reason:     fmt.Sprintf("Darwinian weight %.2f applied (raw=%d → weighted=%d)", weight, rawConviction, weightedConviction),
+					Source:     "config",
+					ParamRef:   fmt.Sprintf("Darwinian.%s.Weight", rec.Agent),
+					ParamValue: fmt.Sprintf("%.2f", weight),
+				})
+			}
+			if boundary != "" {
+				cb.Steps = append(cb.Steps, domain.ConvictionStep{
+					Rule:       "modulator:darwinian:clamp_" + boundary,
+					Delta:      weightedConviction - rawConviction - weightAdj,
+					Reason:     fmt.Sprintf("Conviction clamped to %s=%d", boundary, weightedConviction),
+					Source:     "config",
+					ParamRef:   fmt.Sprintf("Darwinian.ConvictionClamp%s", boundary),
+					ParamValue: fmt.Sprintf("%d", weightedConviction),
+				})
+			}
+			cb.Final = weightedConviction
+		}
+
 		weighted = append(weighted, domain.Recommendation{
 			Agent:               rec.Agent,
 			Skill:               rec.Skill,

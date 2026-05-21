@@ -316,6 +316,14 @@ type PipelineItem struct {
 	NarrativeEventIDs   []string                    `json:"narrative_event_ids,omitempty"`
 	NarrativeContext    *NarrativeContextItem       `json:"narrative_context,omitempty"`
 	IndustryContext     *IndustryContextItem        `json:"industry_context,omitempty"`
+	Metrics             *PipelineItemMetrics        `json:"metrics,omitempty"`
+}
+
+type PipelineItemMetrics struct {
+	PriceToEarnings *float64 `json:"price_to_earnings,omitempty"`
+	PriceToBook     *float64 `json:"price_to_book,omitempty"`
+	DividendYield   *float64 `json:"dividend_yield,omitempty"`
+	BacktestReturn  *float64 `json:"backtest_return,omitempty"`
 }
 
 // RecommendationPipelineResponse is the API response for recommendation pipeline.

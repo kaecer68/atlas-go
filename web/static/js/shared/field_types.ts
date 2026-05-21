@@ -115,6 +115,10 @@ export interface ConvictionStep {
   rule: string;
   delta: number;
   reason: string;
+  source?: string;
+  param_ref?: string;
+  param_value?: string;
+  sensitivity?: number | null;
 }
 
 export interface DailyBar {
@@ -238,6 +242,8 @@ export interface FactorScores {
   agent: number;
   institutional_sentiment: number;
   liquidity: number;
+  narrative?: number;
+  industry_cycle?: number;
   total: number;
   breakdown?: string | null;
 }
@@ -335,6 +341,14 @@ export interface OOSResult {
   reason: string;
 }
 
+export interface ParameterSnapshot {
+  factor_weights?: Record<string, number>;
+  narrative_hit_rates?: Record<string, number>;
+  industry_phase_scores?: Record<string, number>;
+  config_version?: string;
+  captured_at: string;
+}
+
 export interface Position {
   symbol: string;
   quantity: number;
@@ -402,8 +416,8 @@ export interface RangeFilter {
 export interface Recommendation {
   reasoning_chain?: string[];
   supporting_events?: string[];
-  factor_scores: string;
-  conviction_breakdown?: string | null;
+  factor_scores: FactorScores;
+  conviction_breakdown?: ConvictionBreakdown | null;
 }
 
 export interface RecommendationOutcome {
@@ -425,9 +439,10 @@ export interface RecommendationOutcome {
   passed_guards: boolean;
   guard_reason: string;
   recorded_at: string;
-  factor_scores: string;
-  conviction_breakdown?: string | null;
+  factor_scores: FactorScores;
+  conviction_breakdown?: ConvictionBreakdown | null;
   supporting_events?: string[];
+  parameter_snapshot?: ParameterSnapshot | null;
 }
 
 export interface ReplayDataMetadata {
@@ -495,7 +510,7 @@ export interface ScreeningReject {
   criterion_label: string;
   threshold: string;
   actual_value: string;
-  factor_scores: string;
+  factor_scores: FactorScores;
   recorded_at: string;
 }
 
@@ -517,6 +532,7 @@ export interface SessionSummary {
   tax_snapshots?: string[];
   after_tax_pnl: number;
   total_tax_paid: number;
+  parameters_version?: string;
 }
 
 export interface SimulationConstraints {

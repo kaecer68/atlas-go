@@ -467,11 +467,26 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 		}
 	}
 
+	var modulatorSteps []ModulationStep
 	if plugins.cycleModulator != nil {
-		plugins.cycleModulator.ModulateRecommendations(recs, registry)
+		steps := plugins.cycleModulator.CollectModulationSteps(recs, registry)
+		modulatorSteps = append(modulatorSteps, steps...)
 	}
 	if plugins.narrativeModulator != nil {
-		plugins.narrativeModulator.ModulateRecommendations(recs, registry, narrativeEvents)
+		steps := plugins.narrativeModulator.CollectModulationSteps(recs, registry, narrativeEvents)
+		modulatorSteps = append(modulatorSteps, steps...)
+	}
+	for _, ms := range modulatorSteps {
+		if ms.RecIndex >= len(recs) {
+			continue
+		}
+		for _, step := range ms.Steps {
+			recs[ms.RecIndex].Conviction += step.Delta
+			if recs[ms.RecIndex].ConvictionBreakdown != nil {
+				recs[ms.RecIndex].ConvictionBreakdown.Steps = append(recs[ms.RecIndex].ConvictionBreakdown.Steps, step)
+				recs[ms.RecIndex].ConvictionBreakdown.Final = recs[ms.RecIndex].Conviction
+			}
+		}
 	}
 
 	if scratchpad != nil {
