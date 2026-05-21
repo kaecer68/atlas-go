@@ -90,8 +90,8 @@ func (g *RiskGate) UpdateVaR(value float64) {
 func (g *RiskGate) UpdateDailyLoss(loss float64) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	g.dailyLoss = loss
 	g.maybeResetDaily()
+	g.dailyLoss = loss
 }
 
 // ResetDaily resets the daily loss accumulator to zero.

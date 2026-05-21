@@ -1325,6 +1325,7 @@ func GetParametersConfig() *ParametersConfig {
 		// have valid values even when the saved parameters.json doesn't include them yet.
 		mergeNarrativeDefaults(cfg)
 		mergeDrawdownDefaults(cfg)
+		mergeAlertDefaults(cfg)
 		parametersConfig = cfg
 	}
 	return parametersConfig
@@ -1443,6 +1444,49 @@ func mergeDrawdownDefaults(cfg *ParametersConfig) {
 	}
 	if len(d.SectorConstraintsSectorRotation.Value) == 0 {
 		d.SectorConstraintsSectorRotation = def.SectorConstraintsSectorRotation
+	}
+}
+
+// mergeAlertDefaults fills zero-valued alert fields with defaults.
+func mergeAlertDefaults(cfg *ParametersConfig) {
+	def := DefaultParametersConfig().Alert
+	a := &cfg.Alert
+
+	if a.MinCashThreshold.Value == 0 {
+		a.MinCashThreshold = def.MinCashThreshold
+	}
+	if a.MaxPositionsCount.Value == 0 {
+		a.MaxPositionsCount = def.MaxPositionsCount
+	}
+	if a.MaxPositionWeightPct.Value == 0 {
+		a.MaxPositionWeightPct = def.MaxPositionWeightPct
+	}
+	if a.MaxUnrealizedLossPct.Value == 0 {
+		a.MaxUnrealizedLossPct = def.MaxUnrealizedLossPct
+	}
+	if a.DailyLossWarningPct.Value == 0 {
+		a.DailyLossWarningPct = def.DailyLossWarningPct
+	}
+	if a.DailyLossCriticalPct.Value == 0 {
+		a.DailyLossCriticalPct = def.DailyLossCriticalPct
+	}
+	if a.RuleEngineIntervalSec.Value == 0 {
+		a.RuleEngineIntervalSec = def.RuleEngineIntervalSec
+	}
+	if a.RuleEngineCooldownSec.Value == 0 {
+		a.RuleEngineCooldownSec = def.RuleEngineCooldownSec
+	}
+	if a.SystemMetricsIntervalSec.Value == 0 {
+		a.SystemMetricsIntervalSec = def.SystemMetricsIntervalSec
+	}
+	if a.MinScreeningRate.Value == 0 {
+		a.MinScreeningRate = def.MinScreeningRate
+	}
+	if a.MaxAlertTriggerRate.Value == 0 {
+		a.MaxAlertTriggerRate = def.MaxAlertTriggerRate
+	}
+	if a.MaxUnacknowledgedAlerts.Value == 0 {
+		a.MaxUnacknowledgedAlerts = def.MaxUnacknowledgedAlerts
 	}
 }
 
