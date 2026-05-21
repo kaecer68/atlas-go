@@ -1,8 +1,6 @@
 import { getJSON, escapeHtml } from '../main.js';
 
-function renderSessionBar() {
-  const sessions = window.pipelineSessions || [];
-  const currentId = window._currentSessionId || '';
+function renderSessionBar(sessions, currentId) {
   if (!sessions.length) {
     return '<div class="help-panel">尚無可用場次，請先執行回測或模擬</div>';
   }
@@ -10,8 +8,6 @@ function renderSessionBar() {
     var sel = s.session_id === currentId ? ' selected' : '';
     return '<option value="' + escapeHtml(s.session_id) + '"' + sel + '>' + escapeHtml(s.session_id) + ' \u00B7 ' + escapeHtml(s.regime) + ' \u00B7 ' + new Date(s.recorded_at).toLocaleDateString('zh-TW') + '</option>';
   }).join('');
-
-  // Sync status: compare latest session date with today
   var latest = sessions[0];
   var syncHtml = '';
   if (latest) {
@@ -20,15 +16,14 @@ function renderSessionBar() {
     var diffDays = Math.floor((today - latestDate) / (1000 * 60 * 60 * 24));
     if (diffDays > 1) {
       syncHtml = '<div style="margin:8px 0;padding:8px 12px;border-radius:4px;font-size:12px;background:#fef3cd;border:1px solid #fde68a;color:#854d0e">' +
-        '⚠️ 最新場次為 ' + diffDays + ' 天前（' + latestDate.toLocaleDateString('zh-TW') + '），可能已非當日同步' +
+        '\u26A0\uFE0F 最新場次為 ' + diffDays + ' 天前（' + latestDate.toLocaleDateString('zh-TW') + '），可能已非當日同步' +
         '</div>';
     } else {
       syncHtml = '<div style="margin:8px 0;padding:8px 12px;border-radius:4px;font-size:12px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46">' +
-        '✅ 場次已同步（' + latestDate.toLocaleDateString('zh-TW') + '）' +
+        '\u2705 場次已同步（' + latestDate.toLocaleDateString('zh-TW') + '）' +
         '</div>';
     }
   }
-
   return syncHtml +
     '<div style="margin-bottom:16px;font-size:12px;display:flex;align-items:center;gap:8px">' +
     '<span>場次：</span>' +
@@ -49,11 +44,16 @@ export async function loadReasoningTrace(sessionId) {
   var container = document.getElementById('page-reasoning-trace');
   if (!container) return;
 
-  var sessions = window.pipelineSessions || [];
+  var sessions = window.pipelineSessions;
+  if (!sessions || !sessions.length) {
+    try {
+      var resp = await getJSON('/api/dashboard/sessions');
+      sessions = (resp && resp.sessions) ? resp.sessions : [];
+      window.pipelineSessions = sessions;
+    } catch (e) { sessions = []; }
+  }
 
-  // Auto-select latest valid session when none specified
   if (!sessionId && sessions.length) {
-    // Prefer the most recent session (API returns sorted by date desc)
     sessionId = sessions[0].session_id;
     window._currentSessionId = sessionId;
   }
@@ -63,28 +63,24 @@ export async function loadReasoningTrace(sessionId) {
     return;
   }
 
-  container.innerHTML = renderSessionBar();
-  var timeline = document.getElementById('reasoningTraceTimeline');
-  if (timeline) timeline.innerHTML = '<div class="help-panel loading">載入中…</div>';
+  container.innerHTML = '<div class="loading">載入中\u2026</div>';
 
   try {
     var data = await getJSON('/api/dashboard/reasoning-trace?session_id=' + encodeURIComponent(sessionId));
-    renderReasoningTimeline(data);
+    container.innerHTML = renderSessionBar(sessions, sessionId);
+    var timeline = document.getElementById('reasoningTraceTimeline');
+    if (timeline) renderReasoningTimeline(data, timeline);
   } catch (e) {
     console.error('Failed to load reasoning trace:', e);
-    if (timeline) timeline.innerHTML = '<div class="help-panel text-down">載入失敗: ' + escapeHtml(e.message) + '</div>';
+    container.innerHTML = renderSessionBar(sessions, sessionId);
+    var t2 = document.getElementById('reasoningTraceTimeline');
+    if (t2) t2.innerHTML = '<div class="help-panel text-down">載入失敗: ' + escapeHtml(e.message) + '</div>';
   }
 }
 
-export function renderReasoningTimeline(data) {
-  var timeline = document.getElementById('reasoningTraceTimeline');
-  if (!timeline) {
-    var container = document.getElementById('page-reasoning-trace');
-    if (!container) return;
-    container.innerHTML = renderSessionBar();
-    timeline = document.getElementById('reasoningTraceTimeline');
-    if (!timeline) return;
-  }
+export function renderReasoningTimeline(data, timelineEl) {
+  var timeline = timelineEl || document.getElementById('reasoningTraceTimeline');
+  if (!timeline) return;
 
   if (!data || !data.traces || data.traces.length === 0) {
     timeline.innerHTML = '<div class="help-panel">目前沒有決策追蹤資料</div>';
@@ -92,10 +88,10 @@ export function renderReasoningTimeline(data) {
   }
 
   var phases = {
-    'regime_detection': { label: '盤勢判定', color: '#3b82f6' },
-    'agent_recommendation': { label: '代理推薦', color: '#22c55e' },
-    'control_filter': { label: '控制層過濾', color: '#f97316' },
-    'portfolio_build': { label: '組合構建', color: '#a855f7' }
+    regime_detection: { label: '盤勢判定', color: '#3b82f6' },
+    agent_recommendation: { label: '代理推薦', color: '#22c55e' },
+    control_filter: { label: '控制層過濾', color: '#f97316' },
+    portfolio_build: { label: '組合構建', color: '#a855f7' }
   };
 
   var html = '<div><h2 style="font-size: 18px; margin-bottom: 20px;">決策追蹤 (Session: ' + escapeHtml(data.session_id) + ')</h2>';
@@ -122,9 +118,7 @@ export function renderReasoningTimeline(data) {
             '<span class="text-sm text-muted" style="min-width:40px;text-align:right">' + pct + '%</span>' +
           '</div>' +
           (trace.explanation ?
-            '<div class="mb-md" style="padding:12px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);border-radius:4px;font-size:13px;color:var(--text);white-space:pre-line;line-height:1.5">' +
-              escapeHtml(trace.explanation) +
-            '</div>' : '') +
+            '<div class="mb-md" style="padding:12px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);border-radius:4px;font-size:13px;color:var(--text);white-space:pre-line;line-height:1.5">' + escapeHtml(trace.explanation) + '</div>' : '') +
           '<details>' +
             '<summary style="cursor:pointer;font-size:12px;color:var(--muted);user-select:none">原始資料 (Raw JSON)</summary>' +
             '<pre style="margin-top:8px;padding:10px;background:var(--panel-l2);border-radius:4px;overflow-x:auto;font-size:11px;font-family:var(--font-mono);color:var(--muted)">' + escapeHtml(JSON.stringify(trace.raw_data || {}, null, 2)) + '</pre>' +
