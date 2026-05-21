@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -13,18 +14,24 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/autobacktest"
+	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/bootstrap"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
+	"github.com/kaecer68/atlas-go/internal/evolution"
+	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/live"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -796,6 +803,108 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered auto_daily_simulation background task (24h interval)")
 
+			// Register auto_experiment — weekly strategy evolution cycle.
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "auto_experiment",
+				Interval: 7 * 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					system, err := orchestrator.NewProductionSystem(cfg)
+					if err != nil {
+						return fmt.Errorf("create system: %w", err)
+					}
+					if repo != nil {
+						system.SetRepository(repo)
+					}
+
+					candidate, err := system.NextExperimentCandidate()
+					if err != nil {
+						return fmt.Errorf("identify candidate: %w", err)
+					}
+					if candidate == nil {
+						logging.Info("experiment", "no_candidate", "all agents currently healthy")
+						return nil
+					}
+
+					logging.Info("experiment", "candidate_selected",
+						"agent", candidate.Agent.ID,
+						"skill", candidate.Agent.Skill,
+						"sharpe", fmt.Sprintf("%.3f", candidate.Scorecard.SharpeLike),
+					)
+
+					windowID := "window-" + time.Now().Add(-7*24*time.Hour).Format("20060102") + "-" + time.Now().Format("20060102")
+					brief := evolution.BuildMutationBrief(windowID, candidate)
+
+					briefDir := filepath.Join(cfg.WorkDir, "data", "state", "windows")
+					os.MkdirAll(briefDir, 0755)
+					briefPath := filepath.Join(briefDir, "auto-brief-"+candidate.Agent.ID+".json")
+					briefData, _ := json.MarshalIndent(brief, "", "  ")
+					if err := os.WriteFile(briefPath, briefData, 0644); err != nil {
+						return fmt.Errorf("write brief: %w", err)
+					}
+
+					store := ledger.NewStore(cfg.LedgerDir)
+					executor := experiment.NewExecutor(store.(ledger.FullStore), cfg.BaselinePolicyPath)
+					result, runErr := executor.Run(briefPath, cfg.ReplayDataPath)
+					if runErr != nil {
+						monitor.Alert(monitoring.AlertLevelWarning, "experiment",
+							fmt.Sprintf("實驗失敗: agent=%s, err=%v", candidate.Agent.ID, runErr),
+							map[string]any{"agent": candidate.Agent.ID, "error": runErr.Error()})
+						return fmt.Errorf("run experiment: %w", runErr)
+					}
+
+					expPath := findLatestExperiment(filepath.Join(cfg.WorkDir, "data", "state", "experiments"))
+					if expPath == "" {
+						return fmt.Errorf("experiment result not found for %s", result.Experiment.ID)
+					}
+
+					judge := experiment.NewJudge(store.(ledger.ExperimentStore), cfg.ReplayDataPath, cfg.BaselinePolicyPath)
+					judged, judgeErr := judge.Evaluate(expPath)
+					if judgeErr != nil {
+						return fmt.Errorf("judge experiment: %w", judgeErr)
+					}
+
+					status := judged.Experiment.Status
+					logging.Info("experiment", "judged",
+						"agent", candidate.Agent.ID,
+						"status", status,
+						"baseline", fmt.Sprintf("%.3f", judged.Experiment.BaselineValue),
+						"candidate", fmt.Sprintf("%.3f", judged.Experiment.CandidateValue),
+					)
+
+					if status == domain.ExperimentAccepted {
+						mgr := baseline.NewManager(cfg.BaselinePolicyPath)
+						if _, err := mgr.PromoteResult(expPath); err != nil {
+							monitor.Alert(monitoring.AlertLevelError, "experiment",
+								fmt.Sprintf("晉升失敗: agent=%s, err=%v", candidate.Agent.ID, err),
+								map[string]any{"agent": candidate.Agent.ID, "error": err.Error()})
+							return fmt.Errorf("promote result: %w", err)
+						}
+						monitor.Alert(monitoring.AlertLevelInfo, "experiment",
+							fmt.Sprintf("策略晉升成功: agent=%s (%s), sharpe=%.3f", candidate.Agent.ID, candidate.Agent.Skill, candidate.Scorecard.SharpeLike),
+							map[string]any{
+								"agent":     candidate.Agent.ID,
+								"skill":     candidate.Agent.Skill,
+								"status":    string(status),
+								"baseline":  judged.Experiment.BaselineValue,
+								"candidate": judged.Experiment.CandidateValue,
+							})
+					} else {
+						monitor.Alert(monitoring.AlertLevelInfo, "experiment",
+							fmt.Sprintf("實驗未通過: agent=%s (%s), status=%s", candidate.Agent.ID, candidate.Agent.Skill, status),
+							map[string]any{
+								"agent":     candidate.Agent.ID,
+								"skill":     candidate.Agent.Skill,
+								"status":    string(status),
+								"baseline":  judged.Experiment.BaselineValue,
+								"candidate": judged.Experiment.CandidateValue,
+							})
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered auto_experiment background task (7-day interval)")
+
 			taskMgr.Start(sysCtx)
 			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
 		}
@@ -1090,4 +1199,41 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	}
 	log.Println("live trading orchestrator stopped")
 	return nil
+}
+
+// findLatestExperiment auto-discovers the most recent experiment JSON file
+// by sorting filenames by embedded timestamp (same as judge-experiment CLI).
+func findLatestExperiment(dir string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	var files []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if filepath.Ext(name) == ".json" && name != "test-experiment.json" {
+			files = append(files, name)
+		}
+	}
+	if len(files) == 0 {
+		return ""
+	}
+	sort.Slice(files, func(i, j int) bool {
+		return extractTimestamp(files[i]) > extractTimestamp(files[j])
+	})
+	return filepath.Join(dir, files[0])
+}
+
+func extractTimestamp(filename string) int64 {
+	base := strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))
+	parts := strings.Split(base, "-")
+	if len(parts) > 0 {
+		if ts, err := strconv.ParseInt(parts[len(parts)-1], 10, 64); err == nil {
+			return ts
+		}
+	}
+	return 0
 }
