@@ -699,6 +699,7 @@ func isRecommendationInBannedSector(rec domain.Recommendation, registry domain.A
 		"ai_supply_chain_desk": {"ai_supply_chain", "pcb", "thermal"},
 		"financials_desk":      {"financials"},
 		"shipping_desk":        {"shipping"},
+		"leo_satellite_desk":   {"leo_satellite", "satellite_rf_components", "satellite_pcb"},
 		"etf_rotation_desk":    {"high_dividend", "etf_rotation"},
 	}
 	for _, sector := range mappings[skill] {

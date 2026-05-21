@@ -21,6 +21,7 @@ func (StaticLoader) LoadAgentExecutors() ([]AgentExecutor, error) {
 	return []AgentExecutor{
 		SemiconductorExecutor{},
 		AISupplyChainExecutor{},
+		LEOSatelliteExecutor{},
 		ETFRotationExecutor{},
 		FinancialsExecutor{},
 		ShippingExecutor{},

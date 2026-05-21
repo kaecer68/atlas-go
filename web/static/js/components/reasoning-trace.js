@@ -1,8 +1,6 @@
 import { getJSON, escapeHtml } from '../main.js';
 
-function renderSessionBar() {
-  const sessions = window.pipelineSessions || [];
-  const currentId = window._currentSessionId || '';
+function renderSessionBar(sessions, currentId) {
   if (!sessions.length) {
     return '<div class="help-panel">尚無可用場次，請先執行回測或模擬</div>';
   }
@@ -20,11 +18,11 @@ function renderSessionBar() {
     var diffDays = Math.floor((today - latestDate) / (1000 * 60 * 60 * 24));
     if (diffDays > 1) {
       syncHtml = '<div style="margin:8px 0;padding:8px 12px;border-radius:4px;font-size:12px;background:#fef3cd;border:1px solid #fde68a;color:#854d0e">' +
-        '⚠️ 最新場次為 ' + diffDays + ' 天前（' + latestDate.toLocaleDateString('zh-TW') + '），可能已非當日同步' +
+        '\u26A0\uFE0F 最新場次為 ' + diffDays + ' 天前（' + latestDate.toLocaleDateString('zh-TW') + '），可能已非當日同步' +
         '</div>';
     } else {
       syncHtml = '<div style="margin:8px 0;padding:8px 12px;border-radius:4px;font-size:12px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46">' +
-        '✅ 場次已同步（' + latestDate.toLocaleDateString('zh-TW') + '）' +
+        '\u2705 場次已同步（' + latestDate.toLocaleDateString('zh-TW') + '）' +
         '</div>';
     }
   }
@@ -49,11 +47,21 @@ export async function loadReasoningTrace(sessionId) {
   var container = document.getElementById('page-reasoning-trace');
   if (!container) return;
 
-  var sessions = window.pipelineSessions || [];
+  // Fetch sessions directly from API — no dependency on loadAll() timing
+  var sessions = window.pipelineSessions;
+  if (!sessions || !sessions.length) {
+    try {
+      var resp = await getJSON('/api/dashboard/sessions');
+      sessions = (resp && resp.sessions) ? resp.sessions : [];
+      window.pipelineSessions = sessions;
+    } catch (e) {
+      sessions = [];
+    }
+  }
+  if (!sessions) { sessions = []; }
 
-  // Auto-select latest valid session when none specified
+  // Auto-select latest session when none specified
   if (!sessionId && sessions.length) {
-    // Prefer the most recent session (API returns sorted by date desc)
     sessionId = sessions[0].session_id;
     window._currentSessionId = sessionId;
   }
@@ -63,25 +71,27 @@ export async function loadReasoningTrace(sessionId) {
     return;
   }
 
-  container.innerHTML = renderSessionBar();
-  var timeline = document.getElementById('reasoningTraceTimeline');
-  if (timeline) timeline.innerHTML = '<div class="help-panel loading">載入中…</div>';
+  container.innerHTML = '<div class="loading">載入中\u2026</div>';
+  var timeline;
 
   try {
     var data = await getJSON('/api/dashboard/reasoning-trace?session_id=' + encodeURIComponent(sessionId));
-    renderReasoningTimeline(data);
+    var html = renderSessionBar(sessions, sessionId);
+    container.innerHTML = html;
+    timeline = document.getElementById('reasoningTraceTimeline');
+    if (timeline) renderReasoningTimeline(data, timeline);
   } catch (e) {
     console.error('Failed to load reasoning trace:', e);
+    var html2 = renderSessionBar(sessions, sessionId);
+    container.innerHTML = html2;
+    timeline = document.getElementById('reasoningTraceTimeline');
     if (timeline) timeline.innerHTML = '<div class="help-panel text-down">載入失敗: ' + escapeHtml(e.message) + '</div>';
   }
 }
 
-export function renderReasoningTimeline(data) {
-  var timeline = document.getElementById('reasoningTraceTimeline');
+export function renderReasoningTimeline(data, timelineEl) {
+  var timeline = timelineEl;
   if (!timeline) {
-    var container = document.getElementById('page-reasoning-trace');
-    if (!container) return;
-    container.innerHTML = renderSessionBar();
     timeline = document.getElementById('reasoningTraceTimeline');
     if (!timeline) return;
   }

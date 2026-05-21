@@ -54,15 +54,16 @@
   
   "sector_rotation": {
     "base_allocations": {
-      "semiconductor": 0.25,
-      "ai_supply_chain": 0.20,
-      "robotics": 0.08,
-      "financials": 0.15,
-      "shipping": 0.10,
+      "semiconductor": 0.23,
+      "ai_supply_chain": 0.18,
+      "robotics": 0.07,
+      "financials": 0.14,
+      "shipping": 0.09,
       "energy": 0.05,
-      "electronics": 0.07,
+      "electronics": 0.06,
       "consumer": 0.05,
       "industrial": 0.05,
+      "leo_satellite": 0.06,
       "defensive": 0.10,
       "cash": 0.10
     },
@@ -84,7 +85,8 @@
         "energy",
         "electronics",
         "consumer",
-        "industrial"
+        "industrial",
+        "leo_satellite"
       ]
     },
     "seasonality": {

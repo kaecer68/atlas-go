@@ -206,6 +206,41 @@ func (ct *CycleTracker) initializeDefaultPositions() {
 			InventoryTurnover:   5.5,
 			CapacityUtilization: 0.80,
 		},
+		"leo_satellite": {
+			IndustryID:          "leo_satellite",
+			RevenueGrowthYoY:    0.35,
+			ProfitGrowthYoY:     0.40,
+			InventoryTurnover:   4.5,
+			CapacityUtilization: 0.75,
+		},
+		"satellite_rf_components": {
+			IndustryID:          "satellite_rf_components",
+			RevenueGrowthYoY:    0.45,
+			ProfitGrowthYoY:     0.50,
+			InventoryTurnover:   5.0,
+			CapacityUtilization: 0.80,
+		},
+		"satellite_pcb": {
+			IndustryID:          "satellite_pcb",
+			RevenueGrowthYoY:    0.30,
+			ProfitGrowthYoY:     0.35,
+			InventoryTurnover:   4.0,
+			CapacityUtilization: 0.78,
+		},
+		"ground_equipment": {
+			IndustryID:          "ground_equipment",
+			RevenueGrowthYoY:    0.25,
+			ProfitGrowthYoY:     0.28,
+			InventoryTurnover:   3.5,
+			CapacityUtilization: 0.72,
+		},
+		"laser_communication": {
+			IndustryID:          "laser_communication",
+			RevenueGrowthYoY:    0.50,
+			ProfitGrowthYoY:     0.55,
+			InventoryTurnover:   3.0,
+			CapacityUtilization: 0.70,
+		},
 	}
 
 	for id, metrics := range defaults {

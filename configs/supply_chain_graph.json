@@ -218,6 +218,26 @@
         "food",
         "durable_goods"
       ]
+    },
+    {
+      "industry_id": "leo_satellite",
+      "tier": 1,
+      "upstream_of": [
+        "ai_supply_chain",
+        "consumer"
+      ],
+      "downstream_of": [
+        "semiconductor",
+        "electronics",
+        "financials",
+        "industrial"
+      ],
+      "key_materials": [
+        "rf_components",
+        "satellite_pcb",
+        "laser_modules",
+        "ground_terminals"
+      ]
     }
   ],
   "correlations": {
@@ -247,6 +267,12 @@
     "industrial↔energy": 0.45,
     "industrial↔financials": 0.25,
     "industrial↔shipping": 0.3,
-    "industrial↔robotics": 0.6
+    "industrial↔robotics": 0.6,
+    "leo_satellite↔semiconductor": 0.70,
+    "leo_satellite↔ai_supply_chain": 0.55,
+    "leo_satellite↔electronics": 0.65,
+    "leo_satellite↔financials": 0.15,
+    "leo_satellite↔industrial": 0.35,
+    "leo_satellite↔consumer": 0.25
   }
 }

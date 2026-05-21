@@ -221,7 +221,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "半導體",
 		NameEN:               "Semiconductor",
 		Level:                Level1,
-		Weight:               0.25,
+		Weight:               0.23,
 		GeographicExposure:   ExposureExport,
 		Cyclicality:          CyclicalityHigh,
 		TechnologyIntensity:  TechIntensityHigh,
@@ -236,7 +236,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "AI供應鏈",
 		NameEN:               "AI Supply Chain",
 		Level:                Level1,
-		Weight:               0.20,
+		Weight:               0.18,
 		GeographicExposure:   ExposureExport,
 		Cyclicality:          CyclicalityHigh,
 		TechnologyIntensity:  TechIntensityHigh,
@@ -251,13 +251,13 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "機器人",
 		NameEN:               "Robotics",
 		Level:                Level1,
-		Weight:               0.08,
+		Weight:               0.07,
 		GeographicExposure:   ExposureExport,
 		Cyclicality:          CyclicalityMedium,
 		TechnologyIntensity:  TechIntensityHigh,
 		CapitalIntensity:     CapIntensityMedium,
-		RepresentativeStocks: []string{"2049.TW", "4540.TW", "2395.TW"},
-		Description:          "減速機、伺服馬達、控制器、機器人本體",
+		RepresentativeStocks: []string{"2308.TW", "2395.TW", "6669.TW"},
+		Description:          "工業自動化與智慧製造",
 	})
 
 	// 4. Financials
@@ -266,13 +266,13 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "金融",
 		NameEN:               "Financials",
 		Level:                Level1,
-		Weight:               0.15,
+		Weight:               0.14,
 		GeographicExposure:   ExposureDomestic,
 		Cyclicality:          CyclicalityMedium,
 		TechnologyIntensity:  TechIntensityMedium,
 		CapitalIntensity:     CapIntensityHigh,
 		RepresentativeStocks: []string{"2881.TW", "2882.TW", "2886.TW"},
-		Description:          "銀行、保險、證券、金融科技",
+		Description:          "金融控股與銀行保險",
 	})
 
 	// 5. Shipping
@@ -281,13 +281,13 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "航運",
 		NameEN:               "Shipping",
 		Level:                Level1,
-		Weight:               0.10,
-		GeographicExposure:   ExposureExport,
+		Weight:               0.09,
+		GeographicExposure:   ExposureMixed,
 		Cyclicality:          CyclicalityHigh,
 		TechnologyIntensity:  TechIntensityLow,
 		CapitalIntensity:     CapIntensityHigh,
 		RepresentativeStocks: []string{"2603.TW", "2609.TW", "2615.TW"},
-		Description:          "貨櫃航運、散裝航運、港口物流",
+		Description:          "國際海運與物流",
 	})
 
 	// 6. Energy
@@ -311,7 +311,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "電子零組件",
 		NameEN:               "Electronics Components",
 		Level:                Level1,
-		Weight:               0.07,
+		Weight:               0.06,
 		GeographicExposure:   ExposureExport,
 		Cyclicality:          CyclicalityMedium,
 		TechnologyIntensity:  TechIntensityHigh,
@@ -326,7 +326,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "傳產/消費",
 		NameEN:               "Consumer & Traditional",
 		Level:                Level1,
-		Weight:               0.05,
+		Weight:               0.06,
 		GeographicExposure:   ExposureDomestic,
 		Cyclicality:          CyclicalityLow,
 		TechnologyIntensity:  TechIntensityLow,
@@ -350,6 +350,20 @@ func DefaultClassification() *ClassificationTree {
 		Description:          "鋼鐵、塑化、水泥、工具機",
 	})
 
+	tree.AddSegment(&IndustrySegment{
+		ID:                   "leo_satellite",
+		Name:                 "低軌衛星",
+		NameEN:               "LEO Satellite",
+		Level:                Level1,
+		Weight:               0.06,
+		GeographicExposure:   ExposureExport,
+		Cyclicality:          CyclicalityHigh,
+		TechnologyIntensity:  TechIntensityHigh,
+		CapitalIntensity:     CapIntensityHigh,
+		RepresentativeStocks: []string{"3491.TW", "2313.TW", "6285.TW"},
+		Description:          "低軌道衛星通訊與地面設備",
+	})
+
 	// Level 2 & 3: Semiconductor sub-industries
 	addSemiconductorSubIndustries(tree)
 	addAISupplyChainSubIndustries(tree)
@@ -360,6 +374,7 @@ func DefaultClassification() *ClassificationTree {
 	addElectronicsSubIndustries(tree)
 	addConsumerSubIndustries(tree)
 	addIndustrialSubIndustries(tree)
+	addLEOSatelliteSubIndustries(tree)
 
 	return tree
 }
@@ -788,6 +803,64 @@ func addConsumerSubIndustries(tree *ClassificationTree) {
 		ParentID:             "consumer",
 		Weight:               0.15,
 		RepresentativeStocks: []string{"2731.TW"},
+	})
+}
+
+func addLEOSatelliteSubIndustries(tree *ClassificationTree) {
+	tree.AddSegment(&IndustrySegment{
+		ID:                   "satellite_rf_components",
+		Name:                 "衛星射頻元件",
+		NameEN:               "Satellite RF Components",
+		Level:                Level2,
+		ParentID:             "leo_satellite",
+		Weight:               0.30,
+		GeographicExposure:   ExposureExport,
+		Cyclicality:          CyclicalityHigh,
+		TechnologyIntensity:  TechIntensityHigh,
+		CapitalIntensity:     CapIntensityMedium,
+		RepresentativeStocks: []string{"3491.TW", "3105.TW"},
+	})
+
+	tree.AddSegment(&IndustrySegment{
+		ID:                   "satellite_pcb",
+		Name:                 "衛星PCB",
+		NameEN:               "Satellite PCB",
+		Level:                Level2,
+		ParentID:             "leo_satellite",
+		Weight:               0.25,
+		GeographicExposure:   ExposureExport,
+		Cyclicality:          CyclicalityMedium,
+		TechnologyIntensity:  TechIntensityHigh,
+		CapitalIntensity:     CapIntensityHigh,
+		RepresentativeStocks: []string{"2313.TW", "2367.TW"},
+	})
+
+	tree.AddSegment(&IndustrySegment{
+		ID:                   "ground_equipment",
+		Name:                 "地面設備",
+		NameEN:               "Ground Equipment",
+		Level:                Level2,
+		ParentID:             "leo_satellite",
+		Weight:               0.25,
+		GeographicExposure:   ExposureExport,
+		Cyclicality:          CyclicalityMedium,
+		TechnologyIntensity:  TechIntensityMedium,
+		CapitalIntensity:     CapIntensityMedium,
+		RepresentativeStocks: []string{"6285.TW", "3022.TW"},
+	})
+
+	tree.AddSegment(&IndustrySegment{
+		ID:                   "laser_communication",
+		Name:                 "雷射通訊",
+		NameEN:               "Laser Communication",
+		Level:                Level2,
+		ParentID:             "leo_satellite",
+		Weight:               0.20,
+		GeographicExposure:   ExposureExport,
+		Cyclicality:          CyclicalityHigh,
+		TechnologyIntensity:  TechIntensityHigh,
+		CapitalIntensity:     CapIntensityMedium,
+		RepresentativeStocks: []string{"7717.TW", "3138.TW"},
 	})
 }
 

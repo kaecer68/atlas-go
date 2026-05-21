@@ -221,6 +221,47 @@
       }
     },
     {
+      "id": "leo-satellite-desk-01",
+      "name": "低軌衛星產業桌",
+      "layer": "sector",
+      "skill": "leo_satellite_desk",
+      "promptFile": "prompts/agents/leo_satellite_desk.md",
+      "enabled": true,
+      "universe": [
+        "3491.TW",
+        "2313.TW",
+        "6285.TW",
+        "7717.TW",
+        "3105.TW",
+        "2367.TW",
+        "3022.TW",
+        "3138.TW"
+      ],
+      "primaryMetrics": [
+        "alpha_hit_rate",
+        "deployment_timing"
+      ],
+      "requiredSkills": [
+        "leo_satellite_desk",
+        "growth_momentum"
+      ],
+      "forbiddenActions": [
+        "launch_hype_chasing",
+        "ignoring_flight_heritage"
+      ],
+      "operatingNotes": [
+        "Distinguish between launch-driven hype and durable deployment order flow."
+      ],
+      "screening_criteria": {
+        "volume_intraday": {
+          "min": 500000
+        },
+        "momentum_20d": {
+          "min": -0.1
+        }
+      }
+    },
+    {
       "id": "growth-momentum-01",
       "name": "成長動能",
       "layer": "style",

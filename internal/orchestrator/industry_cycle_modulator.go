@@ -36,6 +36,7 @@ var skillToIndustry = map[string]string{
 	"financials_desk":      "financials",
 	"shipping_desk":        "shipping",
 	"etf_rotation_desk":    "etf_rotation",
+	"leo_satellite_desk":   "leo_satellite",
 	"value_yield":          "financials",
 	"earnings_quality":     "electronics",
 	"growth_momentum":      "electronics",
