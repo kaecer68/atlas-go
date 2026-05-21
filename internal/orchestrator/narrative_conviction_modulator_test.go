@@ -23,7 +23,19 @@ func TestNarrativeConvictionModulator_NoProvenance(t *testing.T) {
 		{Theme: "AI_capex_surge", Status: "active", Confidence: 0.8, HitRate: 0.81},
 	}
 
-	mod.ModulateRecommendations(recs, registry, events)
+	steps := mod.CollectModulationSteps(recs, registry, events)
+	for _, ms := range steps {
+		if ms.RecIndex >= len(recs) {
+			continue
+		}
+		for _, step := range ms.Steps {
+			recs[ms.RecIndex].Conviction += step.Delta
+			if recs[ms.RecIndex].ConvictionBreakdown != nil {
+				recs[ms.RecIndex].ConvictionBreakdown.Steps = append(recs[ms.RecIndex].ConvictionBreakdown.Steps, step)
+				recs[ms.RecIndex].ConvictionBreakdown.Final = recs[ms.RecIndex].Conviction
+			}
+		}
+	}
 
 	if len(recs[0].ConvictionBreakdown.Steps) == 0 {
 		t.Fatal("expected at least one conviction step after modulation")
@@ -100,5 +112,37 @@ func TestNarrativeConvictionModulator_JSONRoundTrip(t *testing.T) {
 	}
 	if raw2["param_ref"] != "NarrativeConviction.ThemeHitRates.AI_capex_surge" {
 		t.Errorf("expected param_ref mismatch, got %v", raw2["param_ref"])
+	}
+}
+
+// TestNarrativeConvictionModulator_SensitivityField verifies that Sensitivity
+// is populated on steps returned by CollectModulationSteps.
+func TestNarrativeConvictionModulator_SensitivityField(t *testing.T) {
+	mod := NewNarrativeConvictionModulator()
+
+	recs := []domain.Recommendation{
+		{Agent: "agent1", Conviction: 50, ConvictionBreakdown: &domain.ConvictionBreakdown{Base: 50, Floor: 40, Final: 50, Steps: []domain.ConvictionStep{}}},
+	}
+	registry := domain.AgentRegistry{
+		Agents: []domain.AgentSpec{{ID: "agent1", Skill: "semiconductor_desk"}},
+	}
+	events := []narrative.NarrativeEvent{
+		{Theme: "AI_capex_surge", Status: "active", Confidence: 0.8, HitRate: 0.81},
+	}
+
+	steps := mod.CollectModulationSteps(recs, registry, events)
+	if len(steps) == 0 {
+		t.Fatal("expected at least one modulation step")
+	}
+	for _, ms := range steps {
+		for _, step := range ms.Steps {
+			if step.Sensitivity == nil {
+				t.Errorf("expected Sensitivity to be non-nil for step rule=%q, ParamValue=%q", step.Rule, step.ParamValue)
+			} else {
+				if *step.Sensitivity <= 0 {
+					t.Errorf("expected positive Sensitivity, got %f", *step.Sensitivity)
+				}
+			}
+		}
 	}
 }

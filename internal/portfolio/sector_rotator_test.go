@@ -154,3 +154,18 @@ func TestSectorRotator_GetRebalancingTrades(t *testing.T) {
 		t.Logf("Trade: %s, Delta: %+.1f%%, Value: $%.0f", trade.Sector, trade.DeltaPct*100, trade.DeltaValue)
 	}
 }
+
+// TestSectorRotator_GeneratePlan_ConfigSource verifies that GeneratePlan()
+// sets ConfigSource on the returned plan.
+func TestSectorRotator_GeneratePlan_ConfigSource(t *testing.T) {
+	rotator := NewSectorRotator()
+	assessment := &narrative.MacroRiskAssessment{
+		Level:       narrative.MacroRiskGreen,
+		PrimaryFlow: "risk_on",
+	}
+	plan := rotator.GeneratePlan(assessment, nil)
+	if plan.ConfigSource == "" {
+		t.Error("expected ConfigSource to be non-empty on generated plan")
+	}
+	t.Logf("ConfigSource: %s", plan.ConfigSource)
+}

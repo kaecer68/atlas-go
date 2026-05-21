@@ -82,3 +82,26 @@ func TestAdjustRegimeFromNarrative_MixedEvents(t *testing.T) {
 		t.Errorf("mixed events: got %v, want RISK_OFF", got)
 	}
 }
+
+// TestBuildParameterSnapshot verifies that buildParameterSnapshot() returns
+// a populated ParameterSnapshot with fields from the current config.
+func TestBuildParameterSnapshot(t *testing.T) {
+	snap := buildParameterSnapshot()
+	if snap == nil {
+		t.Fatal("expected non-nil ParameterSnapshot")
+	}
+	if snap.ConfigVersion == "" {
+		t.Error("expected ConfigVersion to be non-empty")
+	}
+	if len(snap.FactorWeights) == 0 {
+		t.Error("expected FactorWeights to be non-empty")
+	}
+	if len(snap.NarrativeHitRates) == 0 {
+		t.Error("expected NarrativeHitRates to be non-empty")
+	}
+	if snap.CapturedAt.IsZero() {
+		t.Error("expected CapturedAt to be set")
+	}
+	t.Logf("Snapshot: version=%s, weights=%d, hitrates=%d, phases=%d",
+		snap.ConfigVersion, len(snap.FactorWeights), len(snap.NarrativeHitRates), len(snap.IndustryPhaseScores))
+}

@@ -28,7 +28,22 @@ func TestIndustryCycleModulator_NoProvenance(t *testing.T) {
 		Agents: []domain.AgentSpec{{ID: "agent1", Skill: "semiconductor_desk"}},
 	}
 
-	mod.ModulateRecommendations(recs, registry)
+	steps := mod.CollectModulationSteps(recs, registry)
+	if len(steps) == 0 {
+		t.Fatal("expected at least one modulation step")
+	}
+	for _, ms := range steps {
+		if ms.RecIndex >= len(recs) {
+			continue
+		}
+		for _, step := range ms.Steps {
+			recs[ms.RecIndex].Conviction += step.Delta
+			if recs[ms.RecIndex].ConvictionBreakdown != nil {
+				recs[ms.RecIndex].ConvictionBreakdown.Steps = append(recs[ms.RecIndex].ConvictionBreakdown.Steps, step)
+				recs[ms.RecIndex].ConvictionBreakdown.Final = recs[ms.RecIndex].Conviction
+			}
+		}
+	}
 
 	if len(recs[0].ConvictionBreakdown.Steps) == 0 {
 		t.Fatal("expected at least one conviction step after modulation")
