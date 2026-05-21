@@ -164,7 +164,7 @@ var (
 	// engineConfig is the singleton instance
 	engineConfig *EngineConfig
 	// configPath is the path to the engine config file
-	configPath = envOr("ATLAS_ENGINE_CONFIG", "internal/config/engine.json")
+	configPath = envOr("ATLAS_ENGINE_CONFIG", "engine.json")
 )
 
 // LoadEngineConfig loads the engine configuration from file
