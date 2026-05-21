@@ -163,15 +163,10 @@ func TestHybridProvider_hasInvalidQuotes(t *testing.T) {
 // ─── TWSEClient via httptest ──────────────────────────────────────────────────
 
 func TestTWSEClient_GetQuotes_Success(t *testing.T) {
-	payload := []TWSEQuote{
-		{
-			Code:         "2330",
-			Name:         "台積電",
-			ClosingPrice: "785.00",
-			OpeningPrice: "780.00",
-			HighestPrice: "790.00",
-			LowestPrice:  "775.00",
-			TradeVolume:  "15000000",
+	payload := TWSEDailyResponse{
+		Stat: "OK",
+		Data: [][]string{
+			{"2330", "台積電", "15000000", "11700000000", "780.00", "790.00", "775.00", "785.00", "+5.00", "100000"},
 		},
 	}
 	body, err := json.Marshal(payload)
@@ -223,10 +218,13 @@ func TestTWSEClient_GetQuotes_NonOKStatus(t *testing.T) {
 }
 
 func TestTWSEClient_GetQuotesBySymbols(t *testing.T) {
-	payload := []TWSEQuote{
-		{Code: "2330", ClosingPrice: "785.00", OpeningPrice: "780.00", HighestPrice: "790.00", LowestPrice: "775.00", TradeVolume: "1000"},
-		{Code: "2317", ClosingPrice: "162.00", OpeningPrice: "160.00", HighestPrice: "164.00", LowestPrice: "159.00", TradeVolume: "2000"},
-		{Code: "0050", ClosingPrice: "192.00", OpeningPrice: "191.00", HighestPrice: "193.00", LowestPrice: "190.00", TradeVolume: "5000"},
+	payload := TWSEDailyResponse{
+		Stat: "OK",
+		Data: [][]string{
+			{"2330", "台積電", "1000", "785000", "780.00", "790.00", "775.00", "785.00", "+5.00", "500"},
+			{"2317", "鴻海", "2000", "324000", "160.00", "164.00", "159.00", "162.00", "+2.00", "800"},
+			{"0050", "元大台灣50", "5000", "960000", "191.00", "193.00", "190.00", "192.00", "+1.00", "1200"},
+		},
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {

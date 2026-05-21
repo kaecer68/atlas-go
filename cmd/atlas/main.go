@@ -331,6 +331,7 @@ func run(args []string, deps appDeps) error {
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"status":"ok","message":"thresholds recalibrated"}`+"\n")
 		}))
+		var monitor *monitoring.Monitor
 		mux.HandleFunc("/admin/trigger-simulation", adminHandler(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -372,12 +373,23 @@ func run(args []string, deps appDeps) error {
 			if recErr := system.RecordSessionSummary(result, candidate); recErr != nil {
 				logging.Warn("admin", "record_session_failed", "err", recErr.Error())
 			}
+			if len(result.Orders) == 0 && monitor != nil {
+				monitor.Alert(monitoring.AlertLevelWarning, "simulation",
+					fmt.Sprintf("手動觸發場次 %s 產生 0 筆訂單（regime=%s）",
+						system.Session().ID, result.Regime),
+					map[string]any{
+						"session":   system.Session().ID,
+						"regime":    string(result.Regime),
+						"orders":    0,
+						"positions": len(result.Positions),
+					})
+			}
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"status":"ok","session":"%s","regime":"%s","orders":%d,"positions":%d}`+"\n",
 				system.Session().ID, result.Regime, len(result.Orders), len(result.Positions))
 		}))
 		mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
-		monitor := monitoring.NewMonitor()
+		monitor = monitoring.NewMonitor()
 		if alertStore != nil {
 			monitor.SetAlertStore(alertStore)
 		}
@@ -767,6 +779,18 @@ func run(args []string, deps appDeps) error {
 						"orders", len(result.Orders),
 						"positions", len(result.Positions),
 					)
+					// Quality alerts
+					if len(result.Orders) == 0 {
+						monitor.Alert(monitoring.AlertLevelWarning, "simulation",
+							fmt.Sprintf("場次 %s 產生 0 筆訂單（regime=%s, positions=%d）",
+								system.Session().ID, result.Regime, len(result.Positions)),
+							map[string]any{
+								"session":   system.Session().ID,
+								"regime":    string(result.Regime),
+								"orders":    0,
+								"positions": len(result.Positions),
+							})
+					}
 					return nil
 				},
 			})

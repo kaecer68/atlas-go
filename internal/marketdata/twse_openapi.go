@@ -88,9 +88,28 @@ func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
 		return nil, fmt.Errorf("api error: status %d", resp.StatusCode)
 	}
 
-	var twseQuotes []TWSEQuote
-	if err := json.NewDecoder(resp.Body).Decode(&twseQuotes); err != nil {
+	var twseResp TWSEDailyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&twseResp); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	twseQuotes := make([]TWSEQuote, 0, len(twseResp.Data))
+	for _, row := range twseResp.Data {
+		if len(row) < 9 {
+			continue
+		}
+		twseQuotes = append(twseQuotes, TWSEQuote{
+			Code:         row[0],
+			Name:         row[1],
+			TradeVolume:  row[2],
+			TradeValue:   row[3],
+			OpeningPrice: row[4],
+			HighestPrice: row[5],
+			LowestPrice:  row[6],
+			ClosingPrice: row[7],
+			Change:       row[8],
+			Transaction:  rowAt(row, 9, ""),
+		})
 	}
 
 	quotes := make([]domain.Quote, 0, len(twseQuotes))
@@ -285,4 +304,12 @@ func (c *TWSEClient) CheckMarketStatus(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// rowAt returns the element at index if within bounds, otherwise fallback.
+func rowAt(row []string, idx int, fallback string) string {
+	if idx < len(row) {
+		return row[idx]
+	}
+	return fallback
 }

@@ -152,6 +152,8 @@ func getPhaseLabel(phase string) string {
 		return "控制過濾"
 	case orchestrator.PhasePortfolioBuild:
 		return "組合建構"
+	case orchestrator.PhaseSystem:
+		return "系統流程"
 	default:
 		return phase
 	}

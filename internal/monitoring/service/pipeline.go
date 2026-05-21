@@ -382,6 +382,29 @@ type sessionData struct {
 	StatusMessage string
 }
 
+// extractPipelineMetrics extracts P/E, P/B, DividendYield from FactorScores.Breakdown.RawInputs
+// and BacktestReturn from ForwardReturn.
+func extractPipelineMetrics(outcome domain.RecommendationOutcome) PipelineItemMetrics {
+	var metrics PipelineItemMetrics
+	if outcome.FactorScores.Breakdown != nil {
+		// P/E from Value factor RawInputs
+		if pe, ok := outcome.FactorScores.Breakdown.Value.RawInputs["pe"]; ok {
+			metrics.PriceToEarnings = &pe
+		}
+		// P/B from Value factor RawInputs
+		if pb, ok := outcome.FactorScores.Breakdown.Value.RawInputs["pb"]; ok {
+			metrics.PriceToBook = &pb
+		}
+		// DividendYield from Quality factor RawInputs
+		if dy, ok := outcome.FactorScores.Breakdown.Quality.RawInputs["dividend_yield"]; ok {
+			metrics.DividendYield = &dy
+		}
+	}
+	bt := outcome.ForwardReturn
+	metrics.BacktestReturn = &bt
+	return metrics
+}
+
 func (s *PipelineService) loadSessionPipelineData(sessionID, sessionsDir string, showAll bool, ds *replay.Dataset) (*sessionData, error) {
 	var summary *domain.SessionSummary
 	var guards []domain.GuardOutcome
@@ -491,6 +514,7 @@ func (s *PipelineService) loadSessionPipelineData(sessionID, sessionsDir string,
 				NarrativeEventIDs:   outcome.SupportingEvents,
 				NarrativeContext:    narCtx,
 				IndustryContext:     indCtx,
+				Metrics:             extractPipelineMetrics(outcome),
 			})
 		}
 	} else {

@@ -163,6 +163,12 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	if err != nil {
 		return domain.SimulationResult{}, err
 	}
+	if len(quotes) == 0 {
+		logging.Warn("system", "no_quotes_available",
+			"session", s.Sim().session.ID,
+			"as_of", asOf.Format("2006-01-02"),
+			"symbols_requested", len(symbols))
+	}
 
 	events := s.detectNarrativeEvents(quotes)
 	researchResult := ExecuteWithContext(ExecutionContext{
@@ -302,6 +308,36 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	}
 
 	if s.Sim().scratchpad != nil {
+		// Add portfolio summary trace showing current holdings + P&L
+		posData := make([]map[string]any, 0, len(result.Positions))
+		for _, p := range result.Positions {
+			posData = append(posData, map[string]any{
+				"symbol":         p.Symbol,
+				"quantity":       p.Quantity,
+				"market_value":   p.MarketValue,
+				"unrealized_pnl": p.UnrealizedPnL,
+				"average_cost":   p.AverageCost,
+			})
+		}
+		s.Sim().scratchpad.Record(ReasoningTrace{
+			SessionID: s.Sim().session.ID,
+			Timestamp: time.Now().UTC(),
+			Phase:     PhasePortfolioBuild,
+			Step:      5,
+			Component: "portfolio_summary",
+			Action:    "simulation_complete",
+			Reasoning: fmt.Sprintf("組合摘要: %d 持倉, %d 訂單, 價值 %.0f, 現金 %.0f, 稅後盈虧 %.0f",
+				len(result.Positions), len(result.Orders), result.PortfolioValue, result.EndingCash, result.AfterTaxPnL),
+			Data: map[string]any{
+				"order_count":     len(result.Orders),
+				"position_count":  len(result.Positions),
+				"portfolio_value": result.PortfolioValue,
+				"ending_cash":     result.EndingCash,
+				"after_tax_pnl":   result.AfterTaxPnL,
+				"positions":       posData,
+			},
+			Confidence: -1,
+		})
 		s.Sim().scratchpad.MarkAllAsFallback()
 		_, _ = s.Sim().scratchpad.ExportJSONL()
 	}
@@ -447,6 +483,35 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	}
 
 	if s.Sim().scratchpad != nil {
+		posData := make([]map[string]any, 0, len(result.Positions))
+		for _, p := range result.Positions {
+			posData = append(posData, map[string]any{
+				"symbol":         p.Symbol,
+				"quantity":       p.Quantity,
+				"market_value":   p.MarketValue,
+				"unrealized_pnl": p.UnrealizedPnL,
+				"average_cost":   p.AverageCost,
+			})
+		}
+		s.Sim().scratchpad.Record(ReasoningTrace{
+			SessionID: s.Sim().session.ID,
+			Timestamp: time.Now().UTC(),
+			Phase:     PhasePortfolioBuild,
+			Step:      5,
+			Component: "portfolio_summary",
+			Action:    "simulation_complete",
+			Reasoning: fmt.Sprintf("組合摘要: %d 持倉, %d 訂單, 價值 %.0f, 現金 %.0f, 稅後盈虧 %.0f",
+				len(result.Positions), len(result.Orders), result.PortfolioValue, result.EndingCash, result.AfterTaxPnL),
+			Data: map[string]any{
+				"order_count":     len(result.Orders),
+				"position_count":  len(result.Positions),
+				"portfolio_value": result.PortfolioValue,
+				"ending_cash":     result.EndingCash,
+				"after_tax_pnl":   result.AfterTaxPnL,
+				"positions":       posData,
+			},
+			Confidence: -1,
+		})
 		_, _ = s.Sim().scratchpad.ExportJSONL()
 	}
 
@@ -988,14 +1053,19 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 }
 
 func (s *System) resolveReplayDate() (time.Time, bool) {
-	if s.Sim().replay == nil || s.Sim().cfg.ReplaySessionDate == "" {
+	if s.Sim().replay == nil {
 		return time.Time{}, false
 	}
-	date, err := time.Parse("2006-01-02", s.Sim().cfg.ReplaySessionDate)
-	if err != nil {
-		return time.Time{}, false
+	if s.Sim().cfg.ReplaySessionDate != "" {
+		date, err := time.Parse("2006-01-02", s.Sim().cfg.ReplaySessionDate)
+		if err == nil {
+			return date, true
+		}
 	}
-	return date, true
+	if len(s.Sim().replay.Dates) > 0 {
+		return s.Sim().replay.Dates[len(s.Sim().replay.Dates)-1], true
+	}
+	return time.Time{}, false
 }
 
 func newSession(cfg config.Config, ds *replay.Dataset) domain.ReplaySession {
