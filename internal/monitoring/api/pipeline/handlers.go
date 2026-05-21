@@ -1,8 +1,11 @@
 package pipeline
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +35,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/synergy/darwinian-status", shared.Get(h.HandleDarwinianStatus))
 	mux.Handle("GET /api/synergy/darwinian-trend", shared.Get(h.HandleDarwinianTrend))
 	mux.Handle("GET /api/dashboard/regime-history", shared.Get(h.HandleRegimeHistory))
+	mux.Handle("GET /api/dashboard/baseline-info", shared.Get(h.HandleBaselineInfo))
 }
 
 func parseLimit(r *http.Request, defaultValue, maxValue int) (int, error) {
@@ -426,6 +430,27 @@ func (h *Handlers) HandleDarwinianTrend(r *http.Request) (int, any) {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("load darwinian history: %v", err)}
 	}
 	return http.StatusOK, map[string]any{"points": points}
+}
+
+// HandleBaselineInfo returns baseline policy version and promotion history.
+func (h *Handlers) HandleBaselineInfo(r *http.Request) (int, any) {
+	baselineDir := filepath.Join(h.Svc.WorkDir, "data", "state")
+	baselinePath := filepath.Join(baselineDir, "baseline_policy.json")
+	data, err := os.ReadFile(baselinePath)
+	if err != nil {
+		return http.StatusOK, map[string]any{"version": "unknown", "updated_at": "", "history": []any{}}
+	}
+	var policy struct {
+		Version   string `json:"version"`
+		UpdatedAt string `json:"updated_at"`
+		History   []any  `json:"history"`
+	}
+	json.Unmarshal(data, &policy)
+	return http.StatusOK, map[string]any{
+		"version":    policy.Version,
+		"updated_at": policy.UpdatedAt,
+		"history":    policy.History,
+	}
 }
 
 func (h *Handlers) HandleRegimeHistory(r *http.Request) (int, any) {
