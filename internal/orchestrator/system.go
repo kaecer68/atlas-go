@@ -308,6 +308,36 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	}
 
 	if s.Sim().scratchpad != nil {
+		// Add portfolio summary trace showing current holdings + P&L
+		posData := make([]map[string]any, 0, len(result.Positions))
+		for _, p := range result.Positions {
+			posData = append(posData, map[string]any{
+				"symbol":         p.Symbol,
+				"quantity":       p.Quantity,
+				"market_value":   p.MarketValue,
+				"unrealized_pnl": p.UnrealizedPnL,
+				"average_cost":   p.AverageCost,
+			})
+		}
+		s.Sim().scratchpad.Record(ReasoningTrace{
+			SessionID:  s.Sim().session.ID,
+			Timestamp:  time.Now().UTC(),
+			Phase:      PhasePortfolioBuild,
+			Step:       5,
+			Component:  "portfolio_summary",
+			Action:     "simulation_complete",
+			Reasoning:  fmt.Sprintf("組合摘要: %d 持倉, %d 訂單, 價值 %.0f, 現金 %.0f, 稅後盈虧 %.0f",
+				len(result.Positions), len(result.Orders), result.PortfolioValue, result.EndingCash, result.AfterTaxPnL),
+			Data: map[string]any{
+				"order_count":     len(result.Orders),
+				"position_count":  len(result.Positions),
+				"portfolio_value": result.PortfolioValue,
+				"ending_cash":     result.EndingCash,
+				"after_tax_pnl":   result.AfterTaxPnL,
+				"positions":       posData,
+			},
+			Confidence: -1,
+		})
 		s.Sim().scratchpad.MarkAllAsFallback()
 		_, _ = s.Sim().scratchpad.ExportJSONL()
 	}
