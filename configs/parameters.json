@@ -1989,6 +1989,35 @@
     }
   },
   "orchestrator": {
+    "sector_rotation_base_allocations": {
+      "value": {
+        "semiconductor": 0.19,
+        "ai_supply_chain": 0.15,
+        "robotics": 0.06,
+        "financials": 0.11,
+        "shipping": 0.07,
+        "energy": 0.04,
+        "electronics": 0.05,
+        "consumer": 0.04,
+        "industrial": 0.04,
+        "leo_satellite": 0.05,
+        "defensive": 0.10,
+        "cash": 0.10
+      },
+      "rationale": "Baseline sector allocation weights representing Taiwan equity market structure. Derived from economic importance (export share, market cap contribution, GDP linkage) with defensive/cash carve-out for risk management.",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "TWSE sector weights + engine.json historical baseline",
+        "evidence_quality": "medium",
+        "update_policy": "backtest_calibration",
+        "validation_method": "grid_search_sweep",
+        "dependencies": [
+          "engine.json sector_rotation.base_allocations (deprecated)"
+        ],
+        "last_validated": "2026-05-21T00:00:00Z"
+      }
+    },
     "conviction_floor_default": {
       "value": 50,
       "rationale": "Default conviction floor when not set by policy",

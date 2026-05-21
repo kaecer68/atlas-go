@@ -38,9 +38,17 @@ type SectorRotator struct {
 	rebalanceThreshold float64
 }
 
-// NewSectorRotator creates a new sector rotator with default base allocations
+// NewSectorRotator creates a new sector rotator with base allocations from ParametersConfig.
 func NewSectorRotator() *SectorRotator {
-	return NewSectorRotatorWithConfig(config.GetEngineConfig().SectorRotation)
+	params := config.GetParametersConfig()
+	ba := params.Orchestrator.SectorRotationBaseAllocations.Value
+	engineCfg := config.GetEngineConfig().SectorRotation
+	return &SectorRotator{
+		baseAllocations:    ba,
+		minAllocation:      engineCfg.MinAllocation,
+		maxAllocation:      engineCfg.MaxAllocation,
+		rebalanceThreshold: engineCfg.RebalanceThreshold,
+	}
 }
 
 // NewSectorRotatorWithConfig creates a new sector rotator with custom config

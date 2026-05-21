@@ -718,6 +718,25 @@ func defaultOrchestratorParameters() OrchestratorParameters {
 			Rationale: "Hit rate threshold for auto-rejection",
 			Source:    SourceHeuristic,
 		},
+		SectorRotationBaseAllocations: ParameterMetadata[map[string]float64]{
+			Value: map[string]float64{
+				"semiconductor":   0.19,
+				"ai_supply_chain": 0.15,
+				"robotics":        0.06,
+				"financials":      0.11,
+				"shipping":        0.07,
+				"energy":          0.04,
+				"electronics":     0.05,
+				"consumer":        0.04,
+				"industrial":      0.04,
+				"leo_satellite":   0.05,
+				"defensive":       0.10,
+				"cash":            0.10,
+			},
+			Rationale: "Baseline sector allocation weights representing Taiwan equity market structure. Weights derived from economic importance (export share, market cap contribution, GDP linkage) with defensive/cash carve-out for risk management.",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate via backtest: sweep allocation grids (±0.02 per sector) over 2-year replay window to find max-Sharpe combo. Consider dynamic allocation based on macro regime.",
+		},
 		SectorRotationMacroAdjustments: ParameterMetadata[map[string]map[string]float64]{
 			Value: map[string]map[string]float64{
 				"yellow": {
