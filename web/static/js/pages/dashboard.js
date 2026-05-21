@@ -82,6 +82,33 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
     <div class="kpi-card clickable" onclick="switchPage('controls')"><div class="kpi-label">資金階段</div><div class="kpi-value" style="color:${phaseColor};font-size:18px">${capitalPhase ? phaseMap[capitalPhase.phase] || capitalPhase.phase : '-'}</div>${phaseHtml}</div>
     <div class="kpi-card ${health.cycle_stale ? 'alert-err' : ''} clickable" onclick="switchPage('synergy')"><div class="kpi-label">產業週期數據</div><div class="kpi-value text-lg">${health.cycle_stale ? '⚠️ 數據過期' : '正常'}</div><div class="kpi-hint">${health.cycle_stale ? '點擊前往校正 →' : '定時更新中'}</div></div>
   `;
+
+  // Session sync alert — rendered below the KPI cards
+  var sessionSyncEl = document.getElementById('sessionSyncAlert');
+  if (!sessionSyncEl) {
+    sessionSyncEl = document.createElement('div');
+    sessionSyncEl.id = 'sessionSyncAlert';
+    sessionSyncEl.style.margin = '8px 0';
+    document.querySelector('.kpi-grid')?.after(sessionSyncEl);
+  }
+  var sessions = window.pipelineSessions || [];
+  if (sessions.length) {
+    var latest = sessions[0];
+    var latestDate = new Date(latest.recorded_at);
+    var today = new Date();
+    var diffDays = Math.floor((today - latestDate) / (1000 * 60 * 60 * 24));
+    if (diffDays > 1) {
+      sessionSyncEl.innerHTML = '<div style="padding:8px 16px;border-radius:4px;font-size:13px;background:#fef3cd;border:1px solid #fde68a;color:#854d0e;display:flex;align-items:center;gap:8px">' +
+        '⚠️ 最新場次為 ' + diffDays + ' 天前（' + latestDate.toLocaleDateString('zh-TW') + '），可能已非當日同步' +
+        ' · <a href="#" onclick="switchPage(\'reasoning-trace\');return false;" style="color:#854d0e;font-weight:600">查看決策追蹤 →</a>' +
+        '</div>';
+    } else {
+      sessionSyncEl.innerHTML = '<div style="padding:8px 16px;border-radius:4px;font-size:13px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;display:flex;align-items:center;gap:8px">' +
+        '✅ 場次已同步 · 最新：' + latestDate.toLocaleDateString('zh-TW') +
+        ' · <a href="#" onclick="switchPage(\'reasoning-trace\');return false;" style="color:#065f46;font-weight:600">查看決策追蹤 →</a>' +
+        '</div>';
+    }
+  }
 }
 
 

@@ -10,7 +10,27 @@ function renderSessionBar() {
     var sel = s.session_id === currentId ? ' selected' : '';
     return '<option value="' + escapeHtml(s.session_id) + '"' + sel + '>' + escapeHtml(s.session_id) + ' \u00B7 ' + escapeHtml(s.regime) + ' \u00B7 ' + new Date(s.recorded_at).toLocaleDateString('zh-TW') + '</option>';
   }).join('');
-  return '<div style="margin-bottom:16px;font-size:12px;display:flex;align-items:center;gap:8px">' +
+
+  // Sync status: compare latest session date with today
+  var latest = sessions[0];
+  var syncHtml = '';
+  if (latest) {
+    var latestDate = new Date(latest.recorded_at);
+    var today = new Date();
+    var diffDays = Math.floor((today - latestDate) / (1000 * 60 * 60 * 24));
+    if (diffDays > 1) {
+      syncHtml = '<div style="margin:8px 0;padding:8px 12px;border-radius:4px;font-size:12px;background:#fef3cd;border:1px solid #fde68a;color:#854d0e">' +
+        '⚠️ 最新場次為 ' + diffDays + ' 天前（' + latestDate.toLocaleDateString('zh-TW') + '），可能已非當日同步' +
+        '</div>';
+    } else {
+      syncHtml = '<div style="margin:8px 0;padding:8px 12px;border-radius:4px;font-size:12px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46">' +
+        '✅ 場次已同步（' + latestDate.toLocaleDateString('zh-TW') + '）' +
+        '</div>';
+    }
+  }
+
+  return syncHtml +
+    '<div style="margin-bottom:16px;font-size:12px;display:flex;align-items:center;gap:8px">' +
     '<span>場次：</span>' +
     '<select id="reasoningTraceSessionSelect" style="font-size:12px;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--panel);color:var(--text)" onchange="toggleReasoningTraceSession(this)">' +
     opts +
@@ -29,13 +49,17 @@ export async function loadReasoningTrace(sessionId) {
   var container = document.getElementById('page-reasoning-trace');
   if (!container) return;
 
+  var sessions = window.pipelineSessions || [];
+
+  // Auto-select latest valid session when none specified
+  if (!sessionId && sessions.length) {
+    // Prefer the most recent session (API returns sorted by date desc)
+    sessionId = sessions[0].session_id;
+    window._currentSessionId = sessionId;
+  }
+
   if (!sessionId) {
-    var sessions = window.pipelineSessions || [];
-    if (sessions.length) {
-      container.innerHTML = renderSessionBar() + '<div class="help-panel">請先選擇一個 Session</div>';
-    } else {
-      container.innerHTML = '<div class="help-panel">尚無可用場次<br><small class="text-muted">請先執行回測或模擬以產生場次資料</small></div>';
-    }
+    container.innerHTML = '<div class="help-panel">尚無可用場次<br><small class="text-muted">請先執行回測或模擬以產生場次資料</small></div>';
     return;
   }
 
