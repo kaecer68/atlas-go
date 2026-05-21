@@ -718,6 +718,25 @@ func defaultOrchestratorParameters() OrchestratorParameters {
 			Rationale: "Hit rate threshold for auto-rejection",
 			Source:    SourceHeuristic,
 		},
+		SectorRotationBaseAllocations: ParameterMetadata[map[string]float64]{
+			Value: map[string]float64{
+				"semiconductor":   0.19,
+				"ai_supply_chain": 0.15,
+				"robotics":        0.06,
+				"financials":      0.11,
+				"shipping":        0.07,
+				"energy":          0.04,
+				"electronics":     0.05,
+				"consumer":        0.04,
+				"industrial":      0.04,
+				"leo_satellite":   0.05,
+				"defensive":       0.10,
+				"cash":            0.10,
+			},
+			Rationale: "Baseline sector allocation weights representing Taiwan equity market structure. Weights derived from economic importance (export share, market cap contribution, GDP linkage) with defensive/cash carve-out for risk management.",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate via backtest: sweep allocation grids (±0.02 per sector) over 2-year replay window to find max-Sharpe combo. Consider dynamic allocation based on macro regime.",
+		},
 		SectorRotationMacroAdjustments: ParameterMetadata[map[string]map[string]float64]{
 			Value: map[string]map[string]float64{
 				"yellow": {
@@ -1464,19 +1483,20 @@ func defaultIndustryParameters() IndustryParameters {
 	return IndustryParameters{
 		SectorWeights: ParameterMetadata[map[string]float64]{
 			Value: map[string]float64{
-				"semiconductor":    0.45,
-				"ai_supply_chain":  0.15,
-				"electronics":      0.10,
-				"financials":       0.12,
-				"shipping":         0.05,
-				"biotech":          0.03,
-				"traditional":      0.05,
-				"renewable_energy": 0.03,
-				"other":            0.02,
+				"semiconductor":   0.23,
+				"ai_supply_chain": 0.18,
+				"robotics":        0.07,
+				"financials":      0.14,
+				"shipping":        0.09,
+				"energy":          0.05,
+				"electronics":     0.07,
+				"consumer":        0.05,
+				"industrial":      0.05,
+				"leo_satellite":   0.06,
 			},
-			Rationale: "Taiwan market sector weights aligned with TAIEX composition (2024); semiconductor ~45% vs previous 25%",
-			Source:    SourceEmpirical,
-			Todo:      "Recalibrate: update quarterly from TAIEX sector breakdown",
+			Rationale: "Industry classification reference weights representing economic importance in DefaultClassification(). Aligned with Level 1 industry segments for consistent display and weight derivation across the industry ecosystem.",
+			Source:    SourceHeuristic,
+			Todo:      "Recalibrate: consider deriving from sector-level market cap composition or backtest-optimized weight impact on industry recommendation quality.",
 		},
 		CycleThresholds: ParameterMetadata[map[string]CycleThresholdConfig]{
 			Value: map[string]CycleThresholdConfig{
