@@ -18,7 +18,7 @@ import (
 func TestGuardedToHTTPFlowIntegration(t *testing.T) {
 	order := domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 100}
 
-	guardedOnlyMgr := NewOrderManager(NewGuardedLiveBroker(nil), nil, 0, 0)
+	guardedOnlyMgr := NewOrderManager(NewGuardedLiveBroker(nil), nil, 0, 0, nil)
 	err := guardedOnlyMgr.Run(context.Background(), order)
 	if err == nil {
 		t.Fatalf("expected guarded broker rejection")
@@ -72,7 +72,7 @@ func TestGuardedToHTTPFlowIntegration(t *testing.T) {
 		Signer:               "hmac-sha256",
 	})
 
-	httpMgr := NewOrderManager(NewGuardedLiveBroker(adapter), nil, 0, 0)
+	httpMgr := NewOrderManager(NewGuardedLiveBroker(adapter), nil, 0, 0, nil)
 	if err := httpMgr.Run(context.Background(), order); err != nil {
 		t.Fatalf("http manager run failed: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestHTTPFlowIntegrationRejectsClockSkew(t *testing.T) {
 		Client:       server.Client(),
 	})
 
-	mgr := NewOrderManager(NewGuardedLiveBroker(adapter), nil, 0, 0)
+	mgr := NewOrderManager(NewGuardedLiveBroker(adapter), nil, 0, 0, nil)
 	err := mgr.Run(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 100})
 	if err == nil {
 		t.Fatalf("expected clock skew error")

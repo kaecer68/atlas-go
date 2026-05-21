@@ -206,7 +206,7 @@ func TestRuleEngine_EvaluateRules_TriggersAlert(t *testing.T) {
 		Cooldown: 0,
 	})
 
-	engine.evaluateRules(&livestore.State{})
+	engine.EvaluateRules(&livestore.State{})
 
 	time.Sleep(50 * time.Millisecond)
 
@@ -239,8 +239,8 @@ func TestRuleEngine_EvaluateRules_CooldownPreventsRefire(t *testing.T) {
 	})
 
 	// 連續觸發兩次 evaluate
-	engine.evaluateRules(&livestore.State{})
-	engine.evaluateRules(&livestore.State{})
+	engine.EvaluateRules(&livestore.State{})
+	engine.EvaluateRules(&livestore.State{})
 
 	time.Sleep(50 * time.Millisecond)
 
@@ -272,7 +272,7 @@ func TestRuleEngine_EvaluateRules_ConditionFalse(t *testing.T) {
 		Cooldown: 0,
 	})
 
-	engine.evaluateRules(&livestore.State{})
+	engine.EvaluateRules(&livestore.State{})
 	time.Sleep(50 * time.Millisecond)
 
 	mu.Lock()

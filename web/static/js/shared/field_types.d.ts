@@ -7,6 +7,15 @@ declare interface AgentSpec {
   screening_criteria: string;
 }
 
+declare interface AlertBreakdown {
+  rule: string;
+  description: string;
+  current: number;
+  threshold: number;
+  delta: number;
+  formula: string;
+}
+
 declare interface AlertChannelConfig {
   telegram_bot_token?: string;
   telegram_chat_id?: string;
@@ -27,6 +36,7 @@ declare interface AlertRecord {
   message: string;
   value: number;
   threshold: number;
+  breakdown?: string | null;
   acknowledged: boolean;
   acknowledged_at?: string | null;
   acknowledged_by?: string;
