@@ -26,6 +26,20 @@ func (b *convictionBuilder) add(rule string, delta int, reason string) {
 	b.steps = append(b.steps, domain.ConvictionStep{Rule: rule, Delta: delta, Reason: reason})
 }
 
+func (b *convictionBuilder) addWithProvenance(rule string, delta int, reason string, source string, paramRef string, paramValue string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.final += delta
+	b.steps = append(b.steps, domain.ConvictionStep{
+		Rule:       rule,
+		Delta:      delta,
+		Reason:     reason,
+		Source:     source,
+		ParamRef:   paramRef,
+		ParamValue: paramValue,
+	})
+}
+
 func (b *convictionBuilder) cap(max int) {
 	b.mu.Lock()
 	defer b.mu.Unlock()

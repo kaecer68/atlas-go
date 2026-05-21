@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -498,6 +499,30 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 				"conviction": rec.Conviction,
 			})
 		}
+		rejSummary := make([]map[string]string, 0, len(rejects))
+		rejReasons := make(map[string]int)
+		for _, r := range rejects {
+			rejSummary = append(rejSummary, map[string]string{
+				"symbol":  r.Symbol,
+				"agent":   r.AgentID,
+				"reason":  r.Criterion,
+				"label":   r.CriterionLabel,
+				"actual":  r.ActualValue,
+				"threshold": r.Threshold,
+			})
+			rejReasons[r.Criterion]++
+		}
+		reasoning := fmt.Sprintf("Collected %d recommendations, %d screening rejects", len(recs), len(rejects))
+		if len(recs) == 0 && len(rejects) > 0 {
+			var topReasons []string
+			for k, v := range rejReasons {
+				topReasons = append(topReasons, fmt.Sprintf("%d×%s", v, k))
+			}
+			reasoning += " | All rejected: " + strings.Join(topReasons, ", ")
+		}
+		if len(recs) == 0 && len(rejects) == 0 {
+			reasoning += " | WARNING: no quotes available — check replay data or market provider"
+		}
 		scratchpad.Record(ReasoningTrace{
 			SessionID:  sessionID,
 			Timestamp:  now,
@@ -505,8 +530,14 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 			Step:       2,
 			Component:  "recommendation_collector",
 			Action:     "collect_recommendations",
-			Reasoning:  fmt.Sprintf("Collected %d recommendations, %d screening rejects", len(recs), len(rejects)),
-			Data:       map[string]any{"recommendation_count": len(recs), "reject_count": len(rejects), "recommendations": recData},
+			Reasoning:  reasoning,
+			Data:       map[string]any{
+				"recommendation_count": len(recs),
+				"reject_count":         len(rejects),
+				"quote_count":          len(quotes),
+				"recommendations":      recData,
+				"rejects":              rejSummary,
+			},
 			Confidence: avgConvictionScore(recs),
 		})
 	}

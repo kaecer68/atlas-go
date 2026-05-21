@@ -260,6 +260,12 @@ func (h *Handlers) HandleRecommendationPipeline(r *http.Request) (int, any) {
 			NarrativeEventIDs:   item.NarrativeEventIDs,
 			NarrativeContext:    narCtx,
 			IndustryContext:     indCtx,
+			Metrics: &PipelineItemMetrics{
+				PriceToEarnings: item.Metrics.PriceToEarnings,
+				PriceToBook:     item.Metrics.PriceToBook,
+				DividendYield:   item.Metrics.DividendYield,
+				BacktestReturn:  item.Metrics.BacktestReturn,
+			},
 		}
 	}
 
