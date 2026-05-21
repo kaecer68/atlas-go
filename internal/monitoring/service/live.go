@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -17,8 +18,9 @@ import (
 
 // LiveService provides live trading status and portfolio state operations.
 type LiveService struct {
-	WorkDir   string
-	LedgerDir string
+	WorkDir    string
+	LedgerDir  string
+	Classifier *industry.ClassificationTree
 }
 
 // NewLiveService creates a new LiveService.
@@ -96,18 +98,20 @@ func (s *LiveService) LoadLiveStatus() LiveStatusResponse {
 
 // PortfolioStateResponse is the response for portfolio state endpoint.
 type PortfolioStateResponse struct {
-	SnapshotTime     time.Time          `json:"snapshot_time"`
-	Cash             float64            `json:"cash"`
-	StartingCash     float64            `json:"starting_cash,omitempty"`
-	PortfolioValue   float64            `json:"portfolio_value"`
-	RealizedPnL      float64            `json:"realized_pnl,omitempty"`
-	CumulativePnL    float64            `json:"cumulative_pnl"`
-	CumulativePnLPct float64            `json:"cumulative_pnl_pct"`
-	CurrentDrawdown  float64            `json:"current_drawdown"`
-	TradeCount       int                `json:"trade_count,omitempty"`
-	PositionsCount   int                `json:"positions_count"`
-	Positions        []PositionDTO      `json:"positions"`
-	EquityCurve      []EquityCurvePoint `json:"equity_curve"`
+	SnapshotTime       time.Time          `json:"snapshot_time"`
+	Cash               float64            `json:"cash"`
+	StartingCash       float64            `json:"starting_cash,omitempty"`
+	PortfolioValue     float64            `json:"portfolio_value"`
+	RealizedPnL        float64            `json:"realized_pnl,omitempty"`
+	CumulativePnL      float64            `json:"cumulative_pnl"`
+	CumulativePnLPct   float64            `json:"cumulative_pnl_pct"`
+	CurrentDrawdown    float64            `json:"current_drawdown"`
+	UnrealizedPnLTotal float64            `json:"unrealized_pnl_total,omitempty"`
+	ConcentrationRatio float64            `json:"concentration_ratio,omitempty"`
+	TradeCount         int                `json:"trade_count,omitempty"`
+	PositionsCount     int                `json:"positions_count"`
+	Positions          []PositionDTO      `json:"positions"`
+	EquityCurve        []EquityCurvePoint `json:"equity_curve"`
 }
 
 // PositionDTO represents a single position with computed P&L percentage.
@@ -119,6 +123,7 @@ type PositionDTO struct {
 	MarketValue   float64 `json:"market_value"`
 	UnrealizedPnL float64 `json:"unrealized_pnl"`
 	PnlPct        float64 `json:"pnl_pct"`
+	Sector        string  `json:"sector,omitempty"`
 }
 
 // EquityCurvePoint is a single point on the equity curve.
@@ -146,11 +151,13 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 	}
 
 	positions := make([]PositionDTO, 0, len(posMap))
+	var totalUnrealizedPnL float64
 	for _, pos := range posMap {
 		pnlPct := 0.0
 		if cost := float64(pos.Quantity) * pos.AverageCost; cost > 0 {
 			pnlPct = pos.UnrealizedPnL / cost
 		}
+		totalUnrealizedPnL += pos.UnrealizedPnL
 		positions = append(positions, PositionDTO{
 			Symbol:        pos.Symbol,
 			Quantity:      pos.Quantity,
@@ -170,31 +177,50 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 		totalMarketValue += p.MarketValue
 	}
 
+	// Compute HHI (Herfindahl-Hirschman Index) as concentration ratio [0, 1]
+	var hhi float64
+	if totalMarketValue > 0 {
+		for _, p := range positions {
+			weight := p.MarketValue / totalMarketValue
+			hhi += weight * weight
+		}
+	}
+
+	// Fill sector for each position from classifier
+	symSectorMap := s.buildSymbolSectorMap()
+	for i := range positions {
+		positions[i].Sector = getSectorForSymbol(positions[i].Symbol, symSectorMap)
+	}
+
 	equityCurve := s.buildEquityCurve()
 	tradeCount := len(s.LoadTradeHistory())
-	startingCash := 0.0
+	var startingCash = 0.0
 	realizedPnL := 0.0
-	if persistentState, err := sim.LoadPersistentState(s.LedgerDir); err == nil && persistentState != nil {
-		startingCash = persistentState.StartingCash
-		realizedPnL = persistentState.RealizedPnL
+	currentDrawdown := 0.0
+	if ps, err := sim.LoadPersistentState(s.LedgerDir); err == nil && ps != nil {
+		startingCash = ps.StartingCash
+		realizedPnL = ps.RealizedPnL
+		currentDrawdown = ps.CurrentDrawdown
 	}
 
 	resp := PortfolioStateResponse{
-		SnapshotTime:     portfolio.LastUpdated,
-		Cash:             portfolio.Cash,
-		StartingCash:     startingCash,
-		PortfolioValue:   portfolio.Cash + totalMarketValue,
-		RealizedPnL:      realizedPnL,
-		CumulativePnL:    realizedPnL + portfolio.UnrealizedPnL,
-		CumulativePnLPct: 0,
-		CurrentDrawdown:  0,
-		TradeCount:       tradeCount,
-		PositionsCount:   len(positions),
-		Positions:        positions,
-		EquityCurve:      equityCurve,
+		SnapshotTime:       portfolio.LastUpdated,
+		Cash:               portfolio.Cash,
+		StartingCash:       startingCash,
+		PortfolioValue:     portfolio.Cash + totalMarketValue,
+		RealizedPnL:        realizedPnL,
+		CumulativePnL:      realizedPnL + portfolio.UnrealizedPnL,
+		CumulativePnLPct:   0,
+		CurrentDrawdown:    currentDrawdown,
+		UnrealizedPnLTotal: totalUnrealizedPnL,
+		ConcentrationRatio: hhi,
+		TradeCount:         tradeCount,
+		PositionsCount:     len(positions),
+		Positions:          positions,
+		EquityCurve:        equityCurve,
 	}
-	if portfolio.Cash > 0 {
-		resp.CumulativePnLPct = resp.CumulativePnL / portfolio.Cash
+	if startingCash > 0 {
+		resp.CumulativePnLPct = resp.CumulativePnL / startingCash
 	}
 
 	return resp
@@ -292,4 +318,26 @@ func sessionDateFromID(id string) time.Time {
 		return d
 	}
 	return time.Time{}
+}
+
+// buildSymbolSectorMap builds a symbol→sector mapping from the classifier.
+func (s *LiveService) buildSymbolSectorMap() map[string]string {
+	m := make(map[string]string)
+	if s.Classifier == nil {
+		return m
+	}
+	for _, seg := range s.Classifier.GetAllSegments() {
+		for _, sym := range seg.RepresentativeStocks {
+			m[sym] = seg.ID
+		}
+	}
+	return m
+}
+
+// getSectorForSymbol looks up the sector for a symbol from the pre-built map.
+func getSectorForSymbol(symbol string, symMap map[string]string) string {
+	if s, ok := symMap[symbol]; ok {
+		return s
+	}
+	return "other"
 }

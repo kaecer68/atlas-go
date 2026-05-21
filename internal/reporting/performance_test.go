@@ -95,6 +95,8 @@ func TestGenerateMarkdownReport(t *testing.T) {
 		TotalReturn:      0.05,
 		AnnualizedReturn: 0.80,
 		SharpeRatio:      1.2,
+		SortinoRatio:     1.5,
+		CalmarRatio:      26.67,
 		MaxDrawdown:      0.03,
 		StartingValue:    1_000_000,
 		EndingValue:      1_050_000,
@@ -162,6 +164,49 @@ func TestCalculateSharpeRatio(t *testing.T) {
 			got := calculateSharpeRatio(tt.returns)
 			if math.Abs(got-tt.want) > 0.001 {
 				t.Errorf("calculateSharpeRatio() = %f, want %f", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCalculateSortinoRatio(t *testing.T) {
+	tests := []struct {
+		name         string
+		returns      []float64
+		targetReturn float64
+		want         float64
+	}{
+		{"empty", []float64{}, 0, 0},
+		{"zero downside", []float64{0.01, 0.02, 0.03}, 0, 0},
+		{"normal", []float64{0.01, -0.005, 0.02, -0.01, 0.015}, 0, 19.049},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := calculateSortinoRatio(tt.returns, tt.targetReturn)
+			if math.Abs(got-tt.want) > 0.001 {
+				t.Errorf("calculateSortinoRatio() = %f, want %f", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCalculateCalmarRatio(t *testing.T) {
+	tests := []struct {
+		name             string
+		annualizedReturn float64
+		maxDrawdown      float64
+		want             float64
+	}{
+		{"zero maxDD", 0.5, 0, 0},
+		{"normal", 0.5, 0.2, 2.5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := calculateCalmarRatio(tt.annualizedReturn, tt.maxDrawdown)
+			if math.Abs(got-tt.want) > 0.001 {
+				t.Errorf("calculateCalmarRatio() = %f, want %f", got, tt.want)
 			}
 		})
 	}
