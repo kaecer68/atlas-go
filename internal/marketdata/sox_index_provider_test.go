@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -34,7 +35,7 @@ func TestSOXIndexProvider_FetchSnapshot_Success(t *testing.T) {
 		}
 	}`
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v8/finance/chart/^SOX" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
@@ -44,10 +45,9 @@ func TestSOXIndexProvider_FetchSnapshot_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider := &SOXIndexProvider{
-		httpClient: server.Client(),
-		baseURL:    server.URL,
-	}
+	provider := NewSOXIndexProvider()
+	provider.httpClient = server.Client()
+	provider.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
 
 	ctx := context.Background()
 	snap, err := provider.FetchSnapshot(ctx)
@@ -69,74 +69,68 @@ func TestSOXIndexProvider_FetchSnapshot_Success(t *testing.T) {
 }
 
 func TestSOXIndexProvider_FetchSnapshot_APIFailure(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
 
-	provider := &SOXIndexProvider{
-		httpClient: server.Client(),
-		baseURL:    server.URL,
-	}
+	provider := NewSOXIndexProvider()
+	provider.httpClient = server.Client()
+	provider.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
 
 	ctx := context.Background()
-	snap, err := provider.FetchSnapshot(ctx)
-	if err != nil {
-		t.Fatalf("FetchSnapshot() error = %v", err)
+	_, err := provider.FetchSnapshot(ctx)
+	if err == nil {
+		t.Fatal("expected error on API failure")
 	}
-
-	if snap.SOXIndex.Symbol != "" {
-		t.Errorf("SOXIndex.Symbol = %q, want empty string on failure", snap.SOXIndex.Symbol)
+	if !strings.Contains(err.Error(), "http status 500") {
+		t.Errorf("expected status error, got: %v", err)
 	}
 }
 
 func TestSOXIndexProvider_FetchSnapshot_InvalidJSON(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`invalid json`))
 	}))
 	defer server.Close()
 
-	provider := &SOXIndexProvider{
-		httpClient: server.Client(),
-		baseURL:    server.URL,
-	}
+	provider := NewSOXIndexProvider()
+	provider.httpClient = server.Client()
+	provider.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
 
 	ctx := context.Background()
-	snap, err := provider.FetchSnapshot(ctx)
-	if err != nil {
-		t.Fatalf("FetchSnapshot() error = %v", err)
+	_, err := provider.FetchSnapshot(ctx)
+	if err == nil {
+		t.Fatal("expected error on invalid JSON")
 	}
-
-	if snap.SOXIndex.Symbol != "" {
-		t.Errorf("SOXIndex.Symbol = %q, want empty string on invalid JSON", snap.SOXIndex.Symbol)
+	if !strings.Contains(err.Error(), "unmarshal") {
+		t.Errorf("expected unmarshal error, got: %v", err)
 	}
 }
 
 func TestSOXIndexProvider_FetchSnapshot_EmptyResult(t *testing.T) {
 	mockResponse := `{"chart": {"result": []}}`
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(mockResponse))
 	}))
 	defer server.Close()
 
-	provider := &SOXIndexProvider{
-		httpClient: server.Client(),
-		baseURL:    server.URL,
-	}
+	provider := NewSOXIndexProvider()
+	provider.httpClient = server.Client()
+	provider.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
 
 	ctx := context.Background()
-	snap, err := provider.FetchSnapshot(ctx)
-	if err != nil {
-		t.Fatalf("FetchSnapshot() error = %v", err)
+	_, err := provider.FetchSnapshot(ctx)
+	if err == nil {
+		t.Fatal("expected error on empty result")
 	}
-
-	if snap.SOXIndex.Symbol != "" {
-		t.Errorf("SOXIndex.Symbol = %q, want empty string on empty result", snap.SOXIndex.Symbol)
+	if !strings.Contains(err.Error(), "no chart result") {
+		t.Errorf(`expected "no chart result" error, got: %v`, err)
 	}
 }
 
@@ -160,26 +154,76 @@ func TestSOXIndexProvider_FetchSnapshot_NaNPrice(t *testing.T) {
 		}
 	}`
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(mockResponse))
 	}))
 	defer server.Close()
 
-	provider := &SOXIndexProvider{
-		httpClient: server.Client(),
-		baseURL:    server.URL,
+	provider := NewSOXIndexProvider()
+	provider.httpClient = server.Client()
+	provider.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
+
+	ctx := context.Background()
+	_, err := provider.FetchSnapshot(ctx)
+	if err == nil {
+		t.Fatal("expected error on NaN price")
 	}
+	if !strings.Contains(err.Error(), "invalid") {
+		t.Errorf(`expected error containing "invalid", got: %v`, err)
+	}
+}
+
+func TestSOXIndexProvider_FetchSnapshot_HTMLResponse(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`<html><body>Rate Limited</body></html>`))
+	}))
+	defer server.Close()
+
+	provider := NewSOXIndexProvider()
+	provider.httpClient = server.Client()
+	provider.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
+
+	ctx := context.Background()
+	_, err := provider.FetchSnapshot(ctx)
+	if err == nil {
+		t.Fatal("expected error on HTML response")
+	}
+	if !strings.Contains(err.Error(), "HTML response") {
+		t.Errorf(`expected "HTML response" error, got: %v`, err)
+	}
+}
+
+func TestSOXIndexProvider_FetchSnapshot_HostFallback(t *testing.T) {
+	// First host returns 500, second returns valid data.
+	calls := 0
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"chart":{"result":[{"meta":{"regularMarketTime":1234567890},"indicators":{"quote":[{"close":[5000.0,5100.0]}]}}]}}`))
+	}))
+	defer server.Close()
+
+	host := strings.TrimPrefix(server.URL, "https://")
+	provider := NewSOXIndexProvider()
+	provider.httpClient = server.Client()
+	provider.hosts = []string{host, host}
 
 	ctx := context.Background()
 	snap, err := provider.FetchSnapshot(ctx)
 	if err != nil {
-		t.Fatalf("FetchSnapshot() error = %v", err)
+		t.Fatalf("FetchSnapshot() error after fallback = %v", err)
 	}
 
-	if snap.SOXIndex.Symbol != "" {
-		t.Errorf("SOXIndex.Symbol = %q, want empty string on NaN price", snap.SOXIndex.Symbol)
+	if snap.SOXIndex.Value != 5100.0 {
+		t.Errorf("SOXIndex.Value = %v, want %v", snap.SOXIndex.Value, 5100.0)
 	}
 }
 
