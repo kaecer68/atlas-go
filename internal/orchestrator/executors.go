@@ -104,7 +104,7 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 		ctx.Scratchpad.Record(ReasoningTrace{
 			SessionID:  ctx.SessionID,
 			Timestamp:  time.Now().UTC(),
-			Phase:      PhaseRegimeDetection,
+			Phase:      PhaseSystem,
 			Step:       0,
 			Component:  "orchestrator",
 			Action:     "execute_start",
@@ -895,7 +895,7 @@ func avgConvictionScore(recs []domain.Recommendation) float64 {
 // Returns 1 when input is 0 (no recommendations to filter).
 func passRatio(input, output int) float64 {
 	if input <= 0 {
-		return 1.0
+		return 0.0
 	}
 	ratio := float64(output) / float64(input)
 	if ratio > 1.0 {

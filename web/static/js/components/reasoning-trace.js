@@ -91,7 +91,8 @@ export function renderReasoningTimeline(data, timelineEl) {
     regime_detection: { label: '盤勢判定', color: '#3b82f6' },
     agent_recommendation: { label: '代理推薦', color: '#22c55e' },
     control_filter: { label: '控制層過濾', color: '#f97316' },
-    portfolio_build: { label: '組合構建', color: '#a855f7' }
+    portfolio_build: { label: '組合構建', color: '#a855f7' },
+    system_flow: { label: '系統流程', color: '#9ca3af' }
   };
 
   var html = '<div><h2 style="font-size: 18px; margin-bottom: 20px;">決策追蹤 (Session: ' + escapeHtml(data.session_id) + ')</h2>';

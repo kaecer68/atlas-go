@@ -9,6 +9,7 @@ const (
 	PhaseAgentRecommendation = "agent_recommendation"
 	PhaseControlFilter       = "control_filter"
 	PhasePortfolioBuild      = "portfolio_build"
+	PhaseSystem              = "system_flow"
 )
 
 type ReasoningTrace struct {
