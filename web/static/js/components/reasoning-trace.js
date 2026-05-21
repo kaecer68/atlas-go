@@ -130,6 +130,21 @@ export function renderReasoningTimeline(data, timelineEl) {
       traceReasoning = '<div style="margin:6px 0;font-size:13px;color:var(--text)">' + escapeHtml(trace.reasoning) + '</div>';
     }
 
+    // Show reject reasons if present
+    var rejHtml = '';
+    if (trace.raw_data && trace.raw_data.rejects && trace.raw_data.rejects.length) {
+      var rejItems = trace.raw_data.rejects.slice(0, 10).map(function(r) {
+        return '<span style="display:inline-block;margin:2px 4px;padding:2px 6px;font-size:11px;background:#fef2f2;border:1px solid #fecaca;border-radius:3px;color:#991b1b">' +
+          escapeHtml(r.symbol) + ': ' + escapeHtml(r.reason) +
+          (r.actual !== undefined ? ' (' + escapeHtml(r.actual) + ')' : '') +
+          '</span>';
+      }).join('');
+      if (trace.raw_data.rejects.length > 10) {
+        rejItems += '<span style="font-size:11px;color:var(--muted)"> ...+' + (trace.raw_data.rejects.length - 10) + ' more</span>';
+      }
+      rejHtml = '<div style="margin:6px 0"><span style="font-size:11px;color:var(--muted)">篩選拒絕：</span>' + rejItems + '</div>';
+    }
+
     html +=
       '<div style="position:relative;margin-bottom:24px">' +
         '<div style="position:absolute;width:12px;height:12px;border-radius:50%;left:-27px;top:4px;background:' + p.color + ';box-shadow:0 0 0 3px var(--bg)"></div>' +
@@ -140,6 +155,7 @@ export function renderReasoningTimeline(data, timelineEl) {
           '</div>' +
           traceReasoning +
           confBar +
+          rejHtml +
           (trace.explanation ?
             '<div class="mb-md" style="padding:12px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);border-radius:4px;font-size:13px;color:var(--text);white-space:pre-line;line-height:1.5">' + escapeHtml(trace.explanation) + '</div>' : '') +
           '<details>' +

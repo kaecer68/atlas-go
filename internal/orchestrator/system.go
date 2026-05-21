@@ -163,6 +163,12 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	if err != nil {
 		return domain.SimulationResult{}, err
 	}
+	if len(quotes) == 0 {
+		logging.Warn("system", "no_quotes_available",
+			"session", s.Sim().session.ID,
+			"as_of", asOf.Format("2006-01-02"),
+			"symbols_requested", len(symbols))
+	}
 
 	events := s.detectNarrativeEvents(quotes)
 	researchResult := ExecuteWithContext(ExecutionContext{
