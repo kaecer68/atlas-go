@@ -320,13 +320,13 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 			})
 		}
 		s.Sim().scratchpad.Record(ReasoningTrace{
-			SessionID:  s.Sim().session.ID,
-			Timestamp:  time.Now().UTC(),
-			Phase:      PhasePortfolioBuild,
-			Step:       5,
-			Component:  "portfolio_summary",
-			Action:     "simulation_complete",
-			Reasoning:  fmt.Sprintf("組合摘要: %d 持倉, %d 訂單, 價值 %.0f, 現金 %.0f, 稅後盈虧 %.0f",
+			SessionID: s.Sim().session.ID,
+			Timestamp: time.Now().UTC(),
+			Phase:     PhasePortfolioBuild,
+			Step:      5,
+			Component: "portfolio_summary",
+			Action:    "simulation_complete",
+			Reasoning: fmt.Sprintf("組合摘要: %d 持倉, %d 訂單, 價值 %.0f, 現金 %.0f, 稅後盈虧 %.0f",
 				len(result.Positions), len(result.Orders), result.PortfolioValue, result.EndingCash, result.AfterTaxPnL),
 			Data: map[string]any{
 				"order_count":     len(result.Orders),

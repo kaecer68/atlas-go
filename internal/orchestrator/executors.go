@@ -503,11 +503,11 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 		rejReasons := make(map[string]int)
 		for _, r := range rejects {
 			rejSummary = append(rejSummary, map[string]string{
-				"symbol":  r.Symbol,
-				"agent":   r.AgentID,
-				"reason":  r.Criterion,
-				"label":   r.CriterionLabel,
-				"actual":  r.ActualValue,
+				"symbol":    r.Symbol,
+				"agent":     r.AgentID,
+				"reason":    r.Criterion,
+				"label":     r.CriterionLabel,
+				"actual":    r.ActualValue,
 				"threshold": r.Threshold,
 			})
 			rejReasons[r.Criterion]++
@@ -524,14 +524,14 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 			reasoning += " | WARNING: no quotes available — check replay data or market provider"
 		}
 		scratchpad.Record(ReasoningTrace{
-			SessionID:  sessionID,
-			Timestamp:  now,
-			Phase:      PhaseAgentRecommendation,
-			Step:       2,
-			Component:  "recommendation_collector",
-			Action:     "collect_recommendations",
-			Reasoning:  reasoning,
-			Data:       map[string]any{
+			SessionID: sessionID,
+			Timestamp: now,
+			Phase:     PhaseAgentRecommendation,
+			Step:      2,
+			Component: "recommendation_collector",
+			Action:    "collect_recommendations",
+			Reasoning: reasoning,
+			Data: map[string]any{
 				"recommendation_count": len(recs),
 				"reject_count":         len(rejects),
 				"quote_count":          len(quotes),
