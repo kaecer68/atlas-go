@@ -166,25 +166,3 @@ func (m *IndustryCycleModulator) CollectModulationSteps(
 	}
 	return result
 }
-
-// ModulateRecommendations adjusts conviction based on industry cycle phase.
-// Delegates to CollectModulationSteps for provenance logic; preserved for
-// backward compatibility (test callers).
-func (m *IndustryCycleModulator) ModulateRecommendations(
-	recs []domain.Recommendation,
-	registry domain.AgentRegistry,
-) {
-	steps := m.CollectModulationSteps(recs, registry)
-	for _, ms := range steps {
-		if ms.RecIndex >= len(recs) {
-			continue
-		}
-		for _, step := range ms.Steps {
-			recs[ms.RecIndex].Conviction += step.Delta
-			if recs[ms.RecIndex].ConvictionBreakdown != nil {
-				recs[ms.RecIndex].ConvictionBreakdown.Steps = append(recs[ms.RecIndex].ConvictionBreakdown.Steps, step)
-				recs[ms.RecIndex].ConvictionBreakdown.Final = recs[ms.RecIndex].Conviction
-			}
-		}
-	}
-}

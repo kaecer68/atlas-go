@@ -255,3 +255,17 @@ func TestFactorWeightEngine_ApplyStrategy_Aggressive(t *testing.T) {
 		t.Errorf("aggressive strategy should not change quality yet (bug: adjustment not read), got %.10f want %.10f", weights[FactorQuality], baseWeights[FactorQuality])
 	}
 }
+
+// TestFactorWeightEngine_WeightSource verifies that WeightSource()
+// returns the expected source string.
+func TestFactorWeightEngine_WeightSource(t *testing.T) {
+	engine := NewFactorWeightEngine()
+	source := engine.WeightSource()
+	if source == "" {
+		t.Error("expected WeightSource() to return non-empty string")
+	}
+	if source != "builtin_defaults" && source != "config" {
+		t.Errorf("expected WeightSource() to be 'builtin_defaults' or 'config', got %q", source)
+	}
+	t.Logf("WeightSource: %s", source)
+}

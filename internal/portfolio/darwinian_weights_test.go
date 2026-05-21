@@ -554,3 +554,45 @@ func TestDarwinianWeightManager_ResetAgent(t *testing.T) {
 		t.Errorf("expected neutral weight after reset, got %f", w)
 	}
 }
+
+// TestApplyDarwinianWeightsWithEvents_ConvictionSteps verifies that
+// ApplyDarwinianWeightsWithEvents creates ConvictionSteps for weight_adjust
+// and clamping when weight differs from 1.0.
+func TestApplyDarwinianWeightsWithEvents_ConvictionSteps(t *testing.T) {
+	m := NewDarwinianWeightManager("/tmp/test_dw_cs.json")
+
+	input := domain.Recommendation{
+		Agent: "test_agent", Skill: "momentum", Layer: domain.LayerStyle, Symbol: "2330.TW",
+		Side: domain.SideBuy, Conviction: 80,
+		ConvictionBreakdown: &domain.ConvictionBreakdown{Base: 60, Final: 80},
+	}
+	seedAgent(m, "test_agent", "momentum", "style", 0.5)
+
+	weighted, events := m.ApplyDarwinianWeightsWithEvents([]domain.Recommendation{input})
+	if len(weighted) == 0 {
+		t.Fatal("expected weighted recommendations")
+	}
+	out := weighted[0]
+	if out.ConvictionBreakdown == nil {
+		t.Fatal("expected ConvictionBreakdown to be preserved")
+	}
+
+	var hasWeightAdj bool
+	for _, step := range out.ConvictionBreakdown.Steps {
+		if step.Rule == "modulator:darwinian:weight_adjust" {
+			hasWeightAdj = true
+			if step.Source != "config" {
+				t.Errorf("expected weight_adjust source=config, got %q", step.Source)
+			}
+			if step.ParamValue == "" {
+				t.Error("expected weight_adjust ParamValue to be non-empty")
+			}
+		}
+	}
+	if !hasWeightAdj {
+		t.Error("expected at least one 'modulator:darwinian:weight_adjust' ConvictionStep with weight != 1.0")
+	}
+	if len(events) > 0 && len(out.ConvictionBreakdown.Steps) > 0 {
+		t.Logf("created %d clamping events and %d ConvictionSteps with weight=0.5", len(events), len(out.ConvictionBreakdown.Steps))
+	}
+}
