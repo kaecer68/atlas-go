@@ -1,13 +1,13 @@
 {
   "repoPath": "/Users/kaecer/workspace/atlas",
-  "lastCommit": "946f5861a93ffa86cd2882af24c767b9423ca59c",
-  "indexedAt": "2026-05-20T23:44:36.902Z",
+  "lastCommit": "0d5665de6ed62917b1cae4f04896030a7b49e3df",
+  "indexedAt": "2026-05-21T23:15:11.776Z",
   "remoteUrl": "https://github.com/kaecer68/atlas-go",
   "stats": {
-    "files": 853,
-    "nodes": 26037,
-    "edges": 57335,
-    "communities": 632,
+    "files": 876,
+    "nodes": 26843,
+    "edges": 59022,
+    "communities": 633,
     "processes": 300,
     "embeddings": 0
   }
