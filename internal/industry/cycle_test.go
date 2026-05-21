@@ -198,10 +198,10 @@ func TestGetPhaseScore(t *testing.T) {
 		phase    CyclePhase
 		expected float64
 	}{
-		{CycleExpansion, 1.0},
-		{CycleRecovery, 0.5},
+		{CycleExpansion, 20.0},
+		{CycleRecovery, 10.0},
 		{CycleMature, 0.0},
-		{CycleRecession, -1.0},
+		{CycleRecession, -20.0},
 	}
 
 	for _, tt := range tests {
@@ -401,8 +401,8 @@ func TestCycleTracker_GetContinuousPhaseScore_ExistingIndustry(t *testing.T) {
 	ct := NewCycleTracker()
 	// CycleTracker is initialized with default positions, so "semiconductor" exists
 	score := ct.GetContinuousPhaseScore("semiconductor")
-	if score < -1.0 || score > 1.0 {
-		t.Fatalf("expected score in range [-1, 1], got %f", score)
+	if score < -20.0 || score > 20.0 {
+		t.Fatalf("expected score in range [-20, 20], got %f", score)
 	}
 	t.Logf("semiconductor continuous score: %f", score)
 }
@@ -426,8 +426,8 @@ func TestCycleTracker_GetContinuousPhaseScore_HighConfidence(t *testing.T) {
 	ct.positions["test_high"] = pos
 
 	score := ct.GetContinuousPhaseScore("test_high")
-	if score < 0.7 {
-		t.Fatalf("expected score near 1.0 for high confidence expansion, got %f", score)
+	if score < 14.0 {
+		t.Fatalf("expected score near 20.0 for high confidence expansion, got %f", score)
 	}
 }
 
@@ -441,10 +441,10 @@ func TestCycleTracker_GetContinuousPhaseScore_LowConfidence(t *testing.T) {
 	ct.positions["test_low"] = pos
 
 	score := ct.GetContinuousPhaseScore("test_low")
-	// Low confidence Recovery pulls toward next phase (Expansion = 1.0)
+	// Low confidence Recovery pulls toward next phase (Expansion = 20.0)
 	// blend = 1 - 0.15² = 0.9775, transProb = 0.80
-	// Score = 0.5 * (1 - 0.9775 * 0.80) + 1.0 * (0.9775 * 0.80) = 0.891
-	if score < 0.80 || score > 0.95 {
-		t.Fatalf("expected ~0.891 for low confidence recovery, got %f", score)
+	// Score = 10 * (1 - 0.9775 * 0.80) + 20 * (0.9775 * 0.80) = 17.82
+	if score < 16.0 || score > 19.0 {
+		t.Fatalf("expected ~17.82 for low confidence recovery, got %f", score)
 	}
 }
