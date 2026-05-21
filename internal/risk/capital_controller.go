@@ -1,8 +1,11 @@
 package risk
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -10,8 +13,9 @@ import (
 
 // CapitalPhaseController manages capital phase transitions and limits.
 type CapitalPhaseController struct {
-	config   domain.CapitalPhaseConfig
-	snapshot domain.CapitalSnapshot
+	config      domain.CapitalPhaseConfig
+	snapshot    domain.CapitalSnapshot
+	persistPath string
 }
 
 // NewCapitalPhaseController creates a controller with the given config.
@@ -24,6 +28,18 @@ func NewCapitalPhaseController(cfg domain.CapitalPhaseConfig) *CapitalPhaseContr
 			CanAdvance:     false,
 		},
 	}
+}
+
+func NewCapitalPhaseControllerWithPersistence(cfg domain.CapitalPhaseConfig, persistDir string) *CapitalPhaseController {
+	c := NewCapitalPhaseController(cfg)
+	if persistDir != "" {
+		c.persistPath = filepath.Join(persistDir, "capital_phase_state.json")
+		if saved, err := c.LoadState(); err == nil {
+			c.config = saved.Config
+			c.snapshot = saved.Snapshot
+		}
+	}
+	return c
 }
 
 // GetSnapshot returns the current capital snapshot.
@@ -68,8 +84,9 @@ func (c *CapitalPhaseController) AdvancePhase() error {
 	c.snapshot.DaysInPhase = 0
 	c.snapshot.CanAdvance = false
 	c.snapshot.AdvanceReason = ""
+	c.snapshot.ConsecutiveLosses = 0
 
-	return nil
+	return c.SaveState()
 }
 
 // GetCapitalLimit returns the capital limit multiplier for the current phase.
@@ -132,10 +149,56 @@ func (c *CapitalPhaseController) nextPhase() domain.CapitalPhase {
 
 func (c *CapitalPhaseController) RecordLoss() {
 	c.snapshot.ConsecutiveLosses++
+	c.persistIfConfigured()
 }
 
 func (c *CapitalPhaseController) RecordWin() {
 	c.snapshot.ConsecutiveLosses = 0
+	c.persistIfConfigured()
+}
+
+func (c *CapitalPhaseController) persistIfConfigured() {
+	if c.persistPath == "" {
+		return
+	}
+	_ = c.SaveState()
+}
+
+type PersistedState struct {
+	Config   domain.CapitalPhaseConfig `json:"config"`
+	Snapshot domain.CapitalSnapshot    `json:"snapshot"`
+}
+
+func (c *CapitalPhaseController) SaveState() error {
+	if c.persistPath == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(c.persistPath), 0755); err != nil {
+		return fmt.Errorf("create persist dir: %w", err)
+	}
+	data, err := json.MarshalIndent(PersistedState{Config: c.config, Snapshot: c.snapshot}, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal state: %w", err)
+	}
+	if err := os.WriteFile(c.persistPath, data, 0644); err != nil {
+		return fmt.Errorf("write state: %w", err)
+	}
+	return nil
+}
+
+func (c *CapitalPhaseController) LoadState() (*PersistedState, error) {
+	if c.persistPath == "" {
+		return nil, fmt.Errorf("no persist path configured")
+	}
+	data, err := os.ReadFile(c.persistPath)
+	if err != nil {
+		return nil, fmt.Errorf("read state: %w", err)
+	}
+	var state PersistedState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, fmt.Errorf("unmarshal state: %w", err)
+	}
+	return &state, nil
 }
 
 func CalculateSharpeRatio(dailyReturns []float64) float64 {

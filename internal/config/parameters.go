@@ -230,6 +230,26 @@ type RiskParameters struct {
 	MaxTotalExposure                ParameterMetadata[float64]            `json:"max_total_exposure"`
 }
 
+// DrawdownParameters holds tunable values for macro-aware drawdown decision engine,
+// including drawdown levels, structural override thresholds, and sector constraints.
+type DrawdownParameters struct {
+	NonePercentage                    ParameterMetadata[float64]            `json:"none_percentage"`
+	NoneMaxExposure                   ParameterMetadata[float64]            `json:"none_max_exposure"`
+	LightPercentage                   ParameterMetadata[float64]            `json:"light_percentage"`
+	LightMaxExposure                  ParameterMetadata[float64]            `json:"light_max_exposure"`
+	ModeratePercentage                ParameterMetadata[float64]            `json:"moderate_percentage"`
+	ModerateMaxExposure               ParameterMetadata[float64]            `json:"moderate_max_exposure"`
+	SeverePercentage                  ParameterMetadata[float64]            `json:"severe_percentage"`
+	SevereMaxExposure                 ParameterMetadata[float64]            `json:"severe_max_exposure"`
+	EmergencyPercentage               ParameterMetadata[float64]            `json:"emergency_percentage"`
+	EmergencyMaxExposure              ParameterMetadata[float64]            `json:"emergency_max_exposure"`
+	OrangeOverrideMinScore            ParameterMetadata[float64]            `json:"orange_override_min_score"`
+	RedOverrideMinScore               ParameterMetadata[float64]            `json:"red_override_min_score"`
+	SectorConstraintsRiskOff          ParameterMetadata[map[string]float64] `json:"sector_constraints_risk_off"`
+	SectorConstraintsCarryTradeUnwind ParameterMetadata[map[string]float64] `json:"sector_constraints_carry_trade_unwind"`
+	SectorConstraintsSectorRotation   ParameterMetadata[map[string]float64] `json:"sector_constraints_sector_rotation"`
+}
+
 // NarrativeParameters holds tunable values for macro narrative event detection,
 // structural trend assessment, and Taiwan stress index computation.
 type NarrativeParameters struct {
@@ -649,6 +669,21 @@ type LEOSatelliteExecutorParameters struct {
 	StopLossMult          ParameterMetadata[float64] `json:"stop_loss_multiplier"`
 }
 
+type AlertParameters struct {
+	MinCashThreshold         ParameterMetadata[float64] `json:"min_cash_threshold"`
+	MaxPositionsCount        ParameterMetadata[int]     `json:"max_positions_count"`
+	MaxPositionWeightPct     ParameterMetadata[float64] `json:"max_position_weight_pct"`
+	MaxUnrealizedLossPct     ParameterMetadata[float64] `json:"max_unrealized_loss_pct"`
+	DailyLossWarningPct      ParameterMetadata[float64] `json:"daily_loss_warning_pct"`
+	DailyLossCriticalPct     ParameterMetadata[float64] `json:"daily_loss_critical_pct"`
+	RuleEngineIntervalSec    ParameterMetadata[int]     `json:"rule_engine_interval_sec"`
+	RuleEngineCooldownSec    ParameterMetadata[int]     `json:"rule_engine_cooldown_sec"`
+	SystemMetricsIntervalSec ParameterMetadata[int]     `json:"system_metrics_interval_sec"`
+	MinScreeningRate         ParameterMetadata[float64] `json:"min_screening_rate"`
+	MaxAlertTriggerRate      ParameterMetadata[float64] `json:"max_alert_trigger_rate"`
+	MaxUnacknowledgedAlerts  ParameterMetadata[int]     `json:"max_unacknowledged_alerts"`
+}
+
 // ParametersConfig is the top-level configuration for all investment model parameters.
 type ParametersConfig struct {
 	Version             string                        `json:"version"`
@@ -664,6 +699,7 @@ type ParametersConfig struct {
 	Baseline            BaselineParameters            `json:"baseline"`
 	Orchestrator        OrchestratorParameters        `json:"orchestrator"`
 	Risk                RiskParameters                `json:"risk"`
+	Drawdown            DrawdownParameters            `json:"drawdown"`
 	Realtime            RealtimeParameters            `json:"realtime"`
 	Janus               JanusParameters               `json:"janus"`
 	Narrative           NarrativeParameters           `json:"narrative"`
@@ -672,6 +708,47 @@ type ParametersConfig struct {
 	Industry            IndustryParameters            `json:"industry"`
 	Strategy            StrategyParameters            `json:"strategy"`
 	SectorExecutor      SectorExecutorParameters      `json:"sector_executor,omitempty"`
+	Alert               AlertParameters               `json:"alert"`
+}
+
+func (p *ParametersConfig) validateAlert() error {
+	if p.Alert.MinCashThreshold.Value < 0 {
+		return fmt.Errorf("alert.min_cash_threshold (%.2f) must be non-negative", p.Alert.MinCashThreshold.Value)
+	}
+	if p.Alert.MaxPositionsCount.Value < 1 {
+		return fmt.Errorf("alert.max_positions_count (%d) must be >= 1", p.Alert.MaxPositionsCount.Value)
+	}
+	if p.Alert.MaxPositionWeightPct.Value <= 0 || p.Alert.MaxPositionWeightPct.Value > 1 {
+		return fmt.Errorf("alert.max_position_weight_pct (%.3f) must be in (0,1]", p.Alert.MaxPositionWeightPct.Value)
+	}
+	if p.Alert.MaxUnrealizedLossPct.Value >= 0 {
+		return fmt.Errorf("alert.max_unrealized_loss_pct (%.3f) must be negative", p.Alert.MaxUnrealizedLossPct.Value)
+	}
+	if p.Alert.DailyLossWarningPct.Value >= 0 {
+		return fmt.Errorf("alert.daily_loss_warning_pct (%.3f) must be negative", p.Alert.DailyLossWarningPct.Value)
+	}
+	if p.Alert.DailyLossCriticalPct.Value >= p.Alert.DailyLossWarningPct.Value {
+		return fmt.Errorf("alert.daily_loss_critical_pct (%.3f) must be < daily_loss_warning_pct (%.3f)", p.Alert.DailyLossCriticalPct.Value, p.Alert.DailyLossWarningPct.Value)
+	}
+	if p.Alert.RuleEngineIntervalSec.Value < 1 {
+		return fmt.Errorf("alert.rule_engine_interval_sec (%d) must be >= 1", p.Alert.RuleEngineIntervalSec.Value)
+	}
+	if p.Alert.RuleEngineCooldownSec.Value < 1 {
+		return fmt.Errorf("alert.rule_engine_cooldown_sec (%d) must be >= 1", p.Alert.RuleEngineCooldownSec.Value)
+	}
+	if p.Alert.SystemMetricsIntervalSec.Value < 1 {
+		return fmt.Errorf("alert.system_metrics_interval_sec (%d) must be >= 1", p.Alert.SystemMetricsIntervalSec.Value)
+	}
+	if p.Alert.MinScreeningRate.Value < 0 || p.Alert.MinScreeningRate.Value > 1 {
+		return fmt.Errorf("alert.min_screening_rate (%.3f) must be in [0,1]", p.Alert.MinScreeningRate.Value)
+	}
+	if p.Alert.MaxAlertTriggerRate.Value < 1 {
+		return fmt.Errorf("alert.max_alert_trigger_rate (%.0f) must be >= 1", p.Alert.MaxAlertTriggerRate.Value)
+	}
+	if p.Alert.MaxUnacknowledgedAlerts.Value < 1 {
+		return fmt.Errorf("alert.max_unacknowledged_alerts (%d) must be >= 1", p.Alert.MaxUnacknowledgedAlerts.Value)
+	}
+	return nil
 }
 
 // Validate checks that all parameters are within acceptable ranges.
@@ -801,6 +878,56 @@ func (p *ParametersConfig) Validate() error {
 	}
 	if p.Risk.ConsecutiveLossLimit.Value < 1 {
 		return fmt.Errorf("risk.consecutive_loss_limit (%d) must be >= 1", p.Risk.ConsecutiveLossLimit.Value)
+	}
+
+	// Drawdown constraints
+	if p.Drawdown.NonePercentage.Value < 0 || p.Drawdown.NonePercentage.Value > 1 {
+		return fmt.Errorf("drawdown.none_percentage (%.3f) must be in [0,1]", p.Drawdown.NonePercentage.Value)
+	}
+	if p.Drawdown.NoneMaxExposure.Value < 0 || p.Drawdown.NoneMaxExposure.Value > 1 {
+		return fmt.Errorf("drawdown.none_max_exposure (%.3f) must be in [0,1]", p.Drawdown.NoneMaxExposure.Value)
+	}
+	if p.Drawdown.LightPercentage.Value < 0 || p.Drawdown.LightPercentage.Value > 1 {
+		return fmt.Errorf("drawdown.light_percentage (%.3f) must be in [0,1]", p.Drawdown.LightPercentage.Value)
+	}
+	if p.Drawdown.LightMaxExposure.Value < 0 || p.Drawdown.LightMaxExposure.Value > 1 {
+		return fmt.Errorf("drawdown.light_max_exposure (%.3f) must be in [0,1]", p.Drawdown.LightMaxExposure.Value)
+	}
+	if p.Drawdown.ModeratePercentage.Value < 0 || p.Drawdown.ModeratePercentage.Value > 1 {
+		return fmt.Errorf("drawdown.moderate_percentage (%.3f) must be in [0,1]", p.Drawdown.ModeratePercentage.Value)
+	}
+	if p.Drawdown.ModerateMaxExposure.Value < 0 || p.Drawdown.ModerateMaxExposure.Value > 1 {
+		return fmt.Errorf("drawdown.moderate_max_exposure (%.3f) must be in [0,1]", p.Drawdown.ModerateMaxExposure.Value)
+	}
+	if p.Drawdown.SeverePercentage.Value < 0 || p.Drawdown.SeverePercentage.Value > 1 {
+		return fmt.Errorf("drawdown.severe_percentage (%.3f) must be in [0,1]", p.Drawdown.SeverePercentage.Value)
+	}
+	if p.Drawdown.SevereMaxExposure.Value < 0 || p.Drawdown.SevereMaxExposure.Value > 1 {
+		return fmt.Errorf("drawdown.severe_max_exposure (%.3f) must be in [0,1]", p.Drawdown.SevereMaxExposure.Value)
+	}
+	if p.Drawdown.EmergencyPercentage.Value < 0 || p.Drawdown.EmergencyPercentage.Value > 1 {
+		return fmt.Errorf("drawdown.emergency_percentage (%.3f) must be in [0,1]", p.Drawdown.EmergencyPercentage.Value)
+	}
+	if p.Drawdown.EmergencyMaxExposure.Value < 0 || p.Drawdown.EmergencyMaxExposure.Value > 1 {
+		return fmt.Errorf("drawdown.emergency_max_exposure (%.3f) must be in [0,1]", p.Drawdown.EmergencyMaxExposure.Value)
+	}
+	if p.Drawdown.LightPercentage.Value >= p.Drawdown.ModeratePercentage.Value {
+		return fmt.Errorf("drawdown levels must be ordered: light (%.3f) < moderate (%.3f)", p.Drawdown.LightPercentage.Value, p.Drawdown.ModeratePercentage.Value)
+	}
+	if p.Drawdown.ModeratePercentage.Value >= p.Drawdown.SeverePercentage.Value {
+		return fmt.Errorf("drawdown levels must be ordered: moderate (%.3f) < severe (%.3f)", p.Drawdown.ModeratePercentage.Value, p.Drawdown.SeverePercentage.Value)
+	}
+	if p.Drawdown.SeverePercentage.Value >= p.Drawdown.EmergencyPercentage.Value {
+		return fmt.Errorf("drawdown levels must be ordered: severe (%.3f) < emergency (%.3f)", p.Drawdown.SeverePercentage.Value, p.Drawdown.EmergencyPercentage.Value)
+	}
+	if p.Drawdown.OrangeOverrideMinScore.Value < 0 || p.Drawdown.OrangeOverrideMinScore.Value > 1 {
+		return fmt.Errorf("drawdown.orange_override_min_score (%.3f) must be in [0,1]", p.Drawdown.OrangeOverrideMinScore.Value)
+	}
+	if p.Drawdown.RedOverrideMinScore.Value < 0 || p.Drawdown.RedOverrideMinScore.Value > 1 {
+		return fmt.Errorf("drawdown.red_override_min_score (%.3f) must be in [0,1]", p.Drawdown.RedOverrideMinScore.Value)
+	}
+	if p.Drawdown.RedOverrideMinScore.Value < p.Drawdown.OrangeOverrideMinScore.Value {
+		return fmt.Errorf("drawdown.red_override_min_score (%.3f) must be >= orange_override_min_score (%.3f)", p.Drawdown.RedOverrideMinScore.Value, p.Drawdown.OrangeOverrideMinScore.Value)
 	}
 
 	// Realtime constraints
@@ -1166,6 +1293,10 @@ func (p *ParametersConfig) Validate() error {
 		return fmt.Errorf("sector_executor.leo_satellite.stop_loss_multiplier (%.3f) must be in (0,1)", p.SectorExecutor.LEOSatellite.StopLossMult.Value)
 	}
 
+	if err := p.validateAlert(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -1207,6 +1338,8 @@ func GetParametersConfig() *ParametersConfig {
 		// Merge zero-valued fields from defaults to ensure newly added fields
 		// have valid values even when the saved parameters.json doesn't include them yet.
 		mergeNarrativeDefaults(cfg)
+		mergeDrawdownDefaults(cfg)
+		mergeAlertDefaults(cfg)
 		parametersConfig = cfg
 	}
 	return parametersConfig
@@ -1273,6 +1406,101 @@ func mergeNarrativeDefaults(cfg *ParametersConfig) {
 	}
 	if n.SOXIndexDropThreshold.Value == 0 {
 		n.SOXIndexDropThreshold = def.SOXIndexDropThreshold
+	}
+}
+
+// mergeDrawdownDefaults fills zero-valued drawdown fields with defaults.
+func mergeDrawdownDefaults(cfg *ParametersConfig) {
+	def := DefaultParametersConfig().Drawdown
+	d := &cfg.Drawdown
+
+	if d.NonePercentage.Value == 0 && d.NoneMaxExposure.Value == 0 {
+		d.NonePercentage = def.NonePercentage
+	}
+	if d.NoneMaxExposure.Value == 0 {
+		d.NoneMaxExposure = def.NoneMaxExposure
+	}
+	if d.LightPercentage.Value == 0 {
+		d.LightPercentage = def.LightPercentage
+	}
+	if d.LightMaxExposure.Value == 0 {
+		d.LightMaxExposure = def.LightMaxExposure
+	}
+	if d.ModeratePercentage.Value == 0 {
+		d.ModeratePercentage = def.ModeratePercentage
+	}
+	if d.ModerateMaxExposure.Value == 0 {
+		d.ModerateMaxExposure = def.ModerateMaxExposure
+	}
+	if d.SeverePercentage.Value == 0 {
+		d.SeverePercentage = def.SeverePercentage
+	}
+	if d.SevereMaxExposure.Value == 0 {
+		d.SevereMaxExposure = def.SevereMaxExposure
+	}
+	if d.EmergencyPercentage.Value == 0 {
+		d.EmergencyPercentage = def.EmergencyPercentage
+	}
+	if d.EmergencyMaxExposure.Value == 0 {
+		d.EmergencyMaxExposure = def.EmergencyMaxExposure
+	}
+	if d.OrangeOverrideMinScore.Value == 0 {
+		d.OrangeOverrideMinScore = def.OrangeOverrideMinScore
+	}
+	if d.RedOverrideMinScore.Value == 0 {
+		d.RedOverrideMinScore = def.RedOverrideMinScore
+	}
+	if len(d.SectorConstraintsRiskOff.Value) == 0 {
+		d.SectorConstraintsRiskOff = def.SectorConstraintsRiskOff
+	}
+	if len(d.SectorConstraintsCarryTradeUnwind.Value) == 0 {
+		d.SectorConstraintsCarryTradeUnwind = def.SectorConstraintsCarryTradeUnwind
+	}
+	if len(d.SectorConstraintsSectorRotation.Value) == 0 {
+		d.SectorConstraintsSectorRotation = def.SectorConstraintsSectorRotation
+	}
+}
+
+// mergeAlertDefaults fills zero-valued alert fields with defaults.
+func mergeAlertDefaults(cfg *ParametersConfig) {
+	def := DefaultParametersConfig().Alert
+	a := &cfg.Alert
+
+	if a.MinCashThreshold.Value == 0 {
+		a.MinCashThreshold = def.MinCashThreshold
+	}
+	if a.MaxPositionsCount.Value == 0 {
+		a.MaxPositionsCount = def.MaxPositionsCount
+	}
+	if a.MaxPositionWeightPct.Value == 0 {
+		a.MaxPositionWeightPct = def.MaxPositionWeightPct
+	}
+	if a.MaxUnrealizedLossPct.Value == 0 {
+		a.MaxUnrealizedLossPct = def.MaxUnrealizedLossPct
+	}
+	if a.DailyLossWarningPct.Value == 0 {
+		a.DailyLossWarningPct = def.DailyLossWarningPct
+	}
+	if a.DailyLossCriticalPct.Value == 0 {
+		a.DailyLossCriticalPct = def.DailyLossCriticalPct
+	}
+	if a.RuleEngineIntervalSec.Value == 0 {
+		a.RuleEngineIntervalSec = def.RuleEngineIntervalSec
+	}
+	if a.RuleEngineCooldownSec.Value == 0 {
+		a.RuleEngineCooldownSec = def.RuleEngineCooldownSec
+	}
+	if a.SystemMetricsIntervalSec.Value == 0 {
+		a.SystemMetricsIntervalSec = def.SystemMetricsIntervalSec
+	}
+	if a.MinScreeningRate.Value == 0 {
+		a.MinScreeningRate = def.MinScreeningRate
+	}
+	if a.MaxAlertTriggerRate.Value == 0 {
+		a.MaxAlertTriggerRate = def.MaxAlertTriggerRate
+	}
+	if a.MaxUnacknowledgedAlerts.Value == 0 {
+		a.MaxUnacknowledgedAlerts = def.MaxUnacknowledgedAlerts
 	}
 }
 

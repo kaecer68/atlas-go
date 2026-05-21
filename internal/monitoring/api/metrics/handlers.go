@@ -54,7 +54,7 @@ func (h *Handlers) HandleMetricsTrend(r *http.Request) (int, any) {
 }
 
 func (h *Handlers) HandleDataQuality(r *http.Request) (int, any) {
-	return http.StatusOK, h.svc.CheckDataQuality("", "")
+	return http.StatusOK, h.svc.CheckDataQuality(nil)
 }
 
 func (h *Handlers) HandleStorage(r *http.Request) (int, any) {

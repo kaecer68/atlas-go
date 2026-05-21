@@ -112,17 +112,27 @@ type DividendRecord struct {
 	PaymentDate    string  `json:"payment_date"`
 }
 
+type AlertBreakdown struct {
+	Rule        string  `json:"rule"`
+	Description string  `json:"description"`
+	Current     float64 `json:"current"`
+	Threshold   float64 `json:"threshold"`
+	Delta       float64 `json:"delta"`
+	Formula     string  `json:"formula"`
+}
+
 type AlertRecord struct {
-	ID             string     `json:"id"`
-	Timestamp      time.Time  `json:"timestamp"`
-	Rule           string     `json:"rule"`
-	Severity       string     `json:"severity"`
-	Message        string     `json:"message"`
-	Value          float64    `json:"value"`
-	Threshold      float64    `json:"threshold"`
-	Acknowledged   bool       `json:"acknowledged"`
-	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty"`
-	AcknowledgedBy string     `json:"acknowledged_by,omitempty"`
+	ID             string          `json:"id"`
+	Timestamp      time.Time       `json:"timestamp"`
+	Rule           string          `json:"rule"`
+	Severity       string          `json:"severity"`
+	Message        string          `json:"message"`
+	Value          float64         `json:"value"`
+	Threshold      float64         `json:"threshold"`
+	Breakdown      *AlertBreakdown `json:"breakdown,omitempty"`
+	Acknowledged   bool            `json:"acknowledged"`
+	AcknowledgedAt *time.Time      `json:"acknowledged_at,omitempty"`
+	AcknowledgedBy string          `json:"acknowledged_by,omitempty"`
 }
 
 type AlertChannelConfig struct {

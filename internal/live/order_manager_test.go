@@ -54,7 +54,7 @@ func TestOrderManagerRetriesThenPublishesFilled(t *testing.T) {
 		},
 	}
 
-	mgr := NewOrderManager(broker, bus, 1, 0)
+	mgr := NewOrderManager(broker, bus, 1, 0, nil)
 	err := mgr.Run(context.Background(), domain.Order{
 		Symbol:   "2330",
 		Side:     domain.SideBuy,
@@ -93,7 +93,7 @@ func TestOrderManagerPublishSystemErrorAfterRetryExhausted(t *testing.T) {
 		errors: []error{errors.New("timeout"), errors.New("timeout")},
 	}
 
-	mgr := NewOrderManager(broker, bus, 1, 0)
+	mgr := NewOrderManager(broker, bus, 1, 0, nil)
 	err := mgr.Run(context.Background(), domain.Order{
 		Symbol:   "2603",
 		Side:     domain.SideSell,
@@ -139,7 +139,7 @@ func TestOrderManagerPublishesSignerErrorClassification(t *testing.T) {
 		errors: []error{fmt.Errorf("broker rejected request: code=auth.signature_invalid status=401 body=bad signature")},
 	}
 
-	mgr := NewOrderManager(broker, bus, 0, 0)
+	mgr := NewOrderManager(broker, bus, 0, 0, nil)
 	err := mgr.Run(context.Background(), domain.Order{
 		Symbol:   "2330",
 		Side:     domain.SideBuy,

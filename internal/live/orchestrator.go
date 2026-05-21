@@ -19,6 +19,7 @@ type Orchestrator struct {
 	marketData             marketdata.Provider
 	broker                 Broker
 	orderMgr               *OrderManager
+	riskGate               *RiskGate
 	registry               domain.AgentRegistry
 	executionInputProvider interface {
 		Produce(ctx context.Context, symbols []string) (*domain.ExecutionInput, error)
@@ -64,6 +65,7 @@ type OrchestratorConfig struct {
 	PreMarketCheck             bool
 	MaxDailyLossPct            float64
 	MaxPositionLossPct         float64
+	VaRCriticalThreshold       float64
 	StopLossEnabled            bool
 	TakeProfitEnabled          bool
 	BrokerMode                 string
@@ -102,6 +104,7 @@ func DefaultOrchestratorConfig() OrchestratorConfig {
 		PreMarketCheck:             true,
 		MaxDailyLossPct:            2.0,
 		MaxPositionLossPct:         5.0,
+		VaRCriticalThreshold:       5.0,
 		StopLossEnabled:            true,
 		TakeProfitEnabled:          false,
 		BrokerMode:                 "dry-run",
@@ -137,12 +140,18 @@ func NewOrchestrator(
 	requestedMode, effectiveMode, broker, audit := resolveBrokerMode(config)
 	maxRetries := max(config.BrokerMaxRetries, 0)
 
+	riskGate := NewRiskGate(RiskGateConfig{
+		MaxDailyLossPct:      config.MaxDailyLossPct / 100.0, // convert percentage to fraction
+		VaRCriticalThreshold: config.VaRCriticalThreshold / 100.0,
+	})
+
 	o := &Orchestrator{
 		stateStore:             stateStore,
 		eventBus:               eventBus,
 		marketData:             marketData,
 		broker:                 broker,
-		orderMgr:               NewOrderManager(broker, eventBus, maxRetries, 100*time.Millisecond),
+		orderMgr:               NewOrderManager(broker, eventBus, maxRetries, 100*time.Millisecond, riskGate),
+		riskGate:               riskGate,
 		registry:               registry,
 		executionInputProvider: inputProvider,
 		circuitBreaker:         NewCircuitBreaker("", ""),
@@ -204,14 +213,14 @@ func (o *Orchestrator) SetBroker(broker Broker) {
 	retries := max(o.config.BrokerMaxRetries, 0)
 	if broker == nil {
 		o.broker = NewDryRunBroker()
-		o.orderMgr = NewOrderManager(o.broker, o.eventBus, retries, 100*time.Millisecond)
+		o.orderMgr = NewOrderManager(o.broker, o.eventBus, retries, 100*time.Millisecond, o.riskGate)
 		o.requestedBrokerMode = "dry-run"
 		o.effectiveBrokerMode = "dry-run"
 		o.executionAuditMsg = ""
 		return
 	}
 	o.broker = broker
-	o.orderMgr = NewOrderManager(o.broker, o.eventBus, retries, 100*time.Millisecond)
+	o.orderMgr = NewOrderManager(o.broker, o.eventBus, retries, 100*time.Millisecond, o.riskGate)
 	o.requestedBrokerMode = broker.Mode()
 	o.effectiveBrokerMode = broker.Mode()
 	o.executionAuditMsg = ""
@@ -552,7 +561,7 @@ func (o *Orchestrator) executeOrder(ctx context.Context, order domain.Order) err
 		if o.broker == nil {
 			o.broker = NewDryRunBroker()
 		}
-		o.orderMgr = NewOrderManager(o.broker, o.eventBus, retries, 100*time.Millisecond)
+		o.orderMgr = NewOrderManager(o.broker, o.eventBus, retries, 100*time.Millisecond, o.riskGate)
 		if !o.circuitBreaker.CanPlaceOrder(order.Side) {
 			return fmt.Errorf("circuit breaker blocks %s order for %s (state=%s)", order.Side, order.Symbol, o.circuitBreaker.State())
 		}
