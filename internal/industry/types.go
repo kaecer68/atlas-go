@@ -357,20 +357,6 @@ func DefaultClassification() *ClassificationTree {
 		Level:                Level1,
 		Weight:               0.06,
 		GeographicExposure:   ExposureExport,
-		Cyclicality:          CyclicalityMedium,
-		TechnologyIntensity:  TechIntensityHigh,
-		CapitalIntensity:     CapIntensityMedium,
-		RepresentativeStocks: []string{"2308.TW", "2395.TW", "6669.TW"},
-		Description:          "工業自動化與智慧製造",
-	})
-
-	tree.AddSegment(&IndustrySegment{
-		ID:                   "leo_satellite",
-		Name:                 "低軌衛星",
-		NameEN:               "LEO Satellite",
-		Level:                Level1,
-		Weight:               0.06,
-		GeographicExposure:   ExposureExport,
 		Cyclicality:          CyclicalityHigh,
 		TechnologyIntensity:  TechIntensityHigh,
 		CapitalIntensity:     CapIntensityHigh,
