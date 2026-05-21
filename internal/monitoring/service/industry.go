@@ -403,6 +403,13 @@ type IndustryOverview struct {
 	AdjustmentLog      []string                       `json:"adjustment_log"`
 }
 
+func (s *IndustryService) getSectorWeight(segID string, fallback float64) float64 {
+	if w, ok := config.GetParametersConfig().Industry.SectorWeights.Value[segID]; ok {
+		return w
+	}
+	return fallback
+}
+
 func (s *IndustryService) GetIndustryOverview(now time.Time) []IndustryOverview {
 	segments := s.Classifier.GetAllSegments()
 	sectorWeights := config.GetParametersConfig().Industry.SectorWeights.Value
@@ -598,7 +605,7 @@ func (s *IndustryService) GetIndustryDetail(industryID string, now time.Time) (*
 		NameEN:               segment.NameEN,
 		Description:          segment.Description,
 		Level:                int(segment.Level),
-		Weight:               segment.Weight,
+		Weight:               s.getSectorWeight(segment.ID, segment.Weight),
 		WeightDerivation:     weightDerivation,
 		RepresentativeStocks: segment.RepresentativeStocks,
 		CyclePosition:        cyclePosPtr,
@@ -611,8 +618,9 @@ func (s *IndustryService) GetIndustryDetail(industryID string, now time.Time) (*
 }
 
 func (s *IndustryService) calculateWeightDerivation(seg *industry.IndustrySegment) WeightDerivation {
+	baseWeight := s.getSectorWeight(seg.ID, seg.Weight)
 	wd := WeightDerivation{
-		BaseWeight:        seg.Weight,
+		BaseWeight:        baseWeight,
 		DerivationFactors: []WeightFactor{},
 		RiskFactors:       []string{},
 		Opportunities:     []string{},
@@ -719,7 +727,7 @@ func (s *IndustryService) calculateWeightDerivation(seg *industry.IndustrySegmen
 		wd.Opportunities = []string{"半導體廠建設需求", "綠能基礎設施", "前瞻軌道建設"}
 
 	default:
-		wd.Interpretation = fmt.Sprintf("權重 %.1f%% 基於該產業在台灣經濟中的綜合重要性評估", seg.Weight*100)
+		wd.Interpretation = fmt.Sprintf("權重 %.1f%% 基於該產業在台灣經濟中的綜合重要性評估", wd.BaseWeight*100)
 		wd.DerivationFactors = []WeightFactor{
 			{Factor: "綜合評估", Weight: 1.0, Source: "內部分析", Evidence: "結合出口、市值、就業等維度"},
 		}
@@ -729,9 +737,10 @@ func (s *IndustryService) calculateWeightDerivation(seg *industry.IndustrySegmen
 }
 
 func (s *IndustryService) generateRecommendation(seg *industry.IndustrySegment, pos *industry.CyclePosition, wd WeightDerivation) *IndustryRecommendation {
+	baseWeight := s.getSectorWeight(seg.ID, seg.Weight)
 	rec := &IndustryRecommendation{
-		CurrentWeight: seg.Weight,
-		TargetWeight:  seg.Weight,
+		CurrentWeight: baseWeight,
+		TargetWeight:  baseWeight,
 		RiskAdjusted:  false,
 	}
 
@@ -748,35 +757,34 @@ func (s *IndustryService) generateRecommendation(seg *industry.IndustrySegment, 
 	case pos.IsFavorable() && pos.BusinessCycle == industry.CycleExpansion:
 		rec.Action = "增持"
 		rec.Conviction = "高"
-		rec.TargetWeight = seg.Weight * 1.2
+		rec.TargetWeight = baseWeight * 1.2
 		rec.Rationale = fmt.Sprintf("%s處於擴張期，%s庫存週期有利，建議超配", seg.Name, pos.InventoryCycle)
-		rec.TimeHorizon = "3-6個月"
 
 	case pos.IsFavorable() && pos.BusinessCycle == industry.CycleRecovery:
 		rec.Action = "溫和增持"
 		rec.Conviction = "中"
-		rec.TargetWeight = seg.Weight * 1.1
+		rec.TargetWeight = baseWeight * 1.1
 		rec.Rationale = fmt.Sprintf("%s處於復甦初期，资本支出開始擴張，建議適度超配", seg.Name)
 		rec.TimeHorizon = "6-12個月"
 
 	case !pos.IsFavorable() && pos.BusinessCycle == industry.CycleRecession:
 		rec.Action = "減持"
 		rec.Conviction = "高"
-		rec.TargetWeight = seg.Weight * 0.7
+		rec.TargetWeight = baseWeight * 0.7
 		rec.Rationale = fmt.Sprintf("%s處於衰退期，庫存去化中，建議低配", seg.Name)
 		rec.TimeHorizon = "3-6個月"
 
 	case !pos.IsFavorable() && pos.BusinessCycle == industry.CycleMature:
 		rec.Action = "中性"
 		rec.Conviction = "中"
-		rec.TargetWeight = seg.Weight
+		rec.TargetWeight = baseWeight
 		rec.Rationale = fmt.Sprintf("%s處於成熟期，循環方向不明確，建議標配", seg.Name)
 		rec.TimeHorizon = "1-3個月"
 
 	default:
 		rec.Action = "中性"
 		rec.Conviction = "低"
-		rec.TargetWeight = seg.Weight
+		rec.TargetWeight = baseWeight
 		rec.Rationale = fmt.Sprintf("%s目前無明確方向，建議維持基準權重", seg.Name)
 		rec.TimeHorizon = "觀望"
 	}
