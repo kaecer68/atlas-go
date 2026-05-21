@@ -662,6 +662,71 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered metrics_snapshot background task (60s interval)")
 			}
 
+			// Register auto_daily_simulation — runs daily simulation at market close.
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "auto_daily_simulation",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					// Determine next market-close time (Asia/Taipei 13:30 weekdays).
+					now := time.Now()
+					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+						now = now.In(tz)
+					}
+					nextClose := time.Date(now.Year(), now.Month(), now.Day(), 13, 30, 0, 0, now.Location())
+					if now.Before(nextClose) {
+						nextClose = nextClose.Add(-24 * time.Hour)
+					}
+					for nextClose.Weekday() == time.Saturday || nextClose.Weekday() == time.Sunday {
+						nextClose = nextClose.AddDate(0, 0, -1)
+					}
+					log.Printf("[Simulation] auto trigger: %s", nextClose.Format("2006-01-02"))
+
+					system, err := orchestrator.NewProductionSystem(cfg)
+					if err != nil {
+						return fmt.Errorf("create system: %w", err)
+					}
+					if collector != nil {
+						system.WithMetricsCollector(collector)
+					}
+					if repo != nil {
+						system.SetRepository(repo)
+					}
+
+					capitalCfg := domain.DefaultCapitalPhaseConfig()
+					capitalCfg.PhaseStartDate = nextClose.Add(-30 * 24 * time.Hour)
+					controller := risk.NewCapitalPhaseController(capitalCfg)
+					allocator := portfolio.NewCapitalAllocator()
+					workflow, err := risk.NewApprovalWorkflow("data/state/approvals")
+					if err != nil {
+						return fmt.Errorf("create approval workflow: %w", err)
+					}
+					system.WithCapitalManagement(controller, allocator, workflow)
+
+					result, err := system.RunDailySimulation(nextClose)
+					if err != nil {
+						return fmt.Errorf("simulation failed: %w", err)
+					}
+
+					candidate, err := system.NextExperimentCandidate()
+					if err != nil {
+						logging.Warn("simulation", "candidate_failed", "err", err.Error())
+					}
+					if err := system.RecordSessionSummary(result, candidate); err != nil {
+						return fmt.Errorf("record session: %w", err)
+					}
+
+					logging.Info("simulation", "completed",
+						"session", system.Session().ID,
+						"regime", result.Regime,
+						"orders", len(result.Orders),
+						"positions", len(result.Positions),
+					)
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered auto_daily_simulation background task (24h interval)")
+
 			taskMgr.Start(sysCtx)
 			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
 		}
