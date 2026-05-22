@@ -341,7 +341,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "工業/製造",
 		NameEN:               "Industrial & Manufacturing",
 		Level:                Level1,
-		Weight:               0.05,
+		Weight:               0.06,
 		GeographicExposure:   ExposureMixed,
 		Cyclicality:          CyclicalityMedium,
 		TechnologyIntensity:  TechIntensityMedium,
