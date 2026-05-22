@@ -188,7 +188,7 @@ func (p *prismPlugin) PostSimulation(quotes []domain.Quote, regime domain.Regime
 			continue
 		}
 		_ = pm.ScheduleTraining(agent, []prism.TrainingWindow{
-			{Start: windowStart, End: asOf, Regime: pr},
+			{Start: windowStart, End: asOf, Regime: pr, RegimeSet: true},
 		})
 	}
 }

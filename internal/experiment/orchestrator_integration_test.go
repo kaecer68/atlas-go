@@ -110,7 +110,7 @@ func TestScreenedRecommendationsFlowThroughExperimentAndJudge(t *testing.T) {
 
 	pm := prism.NewPRISMManager(prism.DefaultPRISMConfig())
 	windows := []prism.TrainingWindow{
-		{Start: asOf.AddDate(0, 0, -5), End: asOf},
+		{Start: asOf.AddDate(0, 0, -5), End: asOf, RegimeSet: true},
 	}
 	if err := pm.ScheduleTraining(candidate.Agent, windows); err != nil {
 		t.Fatalf("prism schedule training: %v", err)

@@ -33,3 +33,44 @@ JANUS 位於 `internal/prism` 之上，透過監控不同 PRISM regime cohort �
 - **遺漏初始化**：使用 `Engine` 前應呼叫 `EnsureAllRegimes()` 以避免在資料尚未流入前出現權重空缺。
 - **Conviction 夾制**：調整後的 `Conviction` 一律夾制在 `[0, 100]`，超過此範圍會被靜默修正。
 - **RecordedAt 誤區**：snapshot 的 `RecordedAt` 僅代表記錄時間，JANUS 的決策排序應以 tracker 內的隊列順序為準。
+
+---
+
+## Risk Gate 校準連接（2026-05-22 新增）
+
+JANUS 的 regime classification 輸出驅動 Risk Gate 的自主校準：
+
+```
+JANUS Engine (每小時檢測)
+  → GetRegimeClassification() 
+    → NOVEL_REGIME / HISTORICAL_REGIME / MIXED
+      → regime_calibrate background task (main.go)
+        → regime 變化時觸發 RiskGate.SelfCalibrate()
+          → Bayesian optimizer 調整 risk_max_position_size / risk_max_daily_loss_pct
+```
+
+**Regime → Stress Scenario Mapping**（main.go `regime_calibrate` task）：
+| Regime | Stress Scenario |
+|--------|----------------|
+| NOVEL_REGIME | ai_bubble_2024 |
+| HISTORICAL_REGIME | normal_market_2024 |
+| RISK_OFF | covid_crash_2020 |
+| 其他 | fed_hikes_2022 (fallback) |
+
+**關鍵不變量**：
+- JANUS 本身**不直接**調用 RiskGate — 所有校準由 `cmd/atlas/main.go` 中的 `regime_calibrate` background task 協調。
+- JANUS 的 `GetRegimeClassification()` 是唯讀查詢，不觸發副作用。
+- MIXED regime 不觸發校準（僅記錄）。
+
+---
+
+## 系統接線
+
+| 層級 | 檔案 | 用途 |
+|------|------|------|
+| CLI 入口 | `cmd/atlas/main.go` | API mode 初始化、Gateway 注入、Dashboard 注入、regime_calibrate task |
+| Plugin 層 | `internal/orchestrator/plugin_adapters.go` | PostSimulation 收集 outcomes → RecordSnapshot → Update |
+| API 層 | `internal/monitoring/dashboard_api.go` | SetJanusEngine 注入，供前端 dashboard 查詢 |
+| Gateway 層 | `internal/apigateway/channel_adapters.go` | RegisterChannelAdapters 注入，供健康檢查 |
+| Backtest CLI | `cmd/experimental/janus-backtest/main.go` | A/B 對比：Baseline vs JANUS 加權 |
+| Status CLI | `cmd/experimental/janus-status/main.go` | JSON/Markdown 格式輸出當前狀態 |

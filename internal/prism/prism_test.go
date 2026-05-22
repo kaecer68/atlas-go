@@ -1,6 +1,7 @@
 package prism
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -54,9 +55,10 @@ func TestPRISMManager(t *testing.T) {
 
 		windows := []TrainingWindow{
 			{
-				Start:  time.Now().AddDate(0, 0, -90),
-				End:    time.Now(),
-				Regime: RegimeRiskOn,
+				Start:     time.Now().AddDate(0, 0, -90),
+				End:       time.Now(),
+				Regime:    RegimeRiskOn,
+				RegimeSet: true,
 			},
 		}
 
@@ -112,9 +114,10 @@ func TestPRISMManager(t *testing.T) {
 		for range 10 {
 			windows := []TrainingWindow{
 				{
-					Start:  time.Now().AddDate(0, 0, -30),
-					End:    time.Now(),
-					Regime: RegimeRiskOn,
+					Start:     time.Now().AddDate(0, 0, -30),
+					End:       time.Now(),
+					Regime:    RegimeRiskOn,
+					RegimeSet: true,
 				},
 			}
 			manager.ScheduleTraining(agent, windows)
@@ -135,9 +138,10 @@ func TestPRISMManager(t *testing.T) {
 		agent := domain.AgentSpec{ID: "test_agent", Skill: "test", Layer: domain.LayerSector}
 		windows := []TrainingWindow{
 			{
-				Start:  time.Now().AddDate(0, 0, -30),
-				End:    time.Now(),
-				Regime: RegimeRiskOn,
+				Start:     time.Now().AddDate(0, 0, -30),
+				End:       time.Now(),
+				Regime:    RegimeRiskOn,
+				RegimeSet: true,
 			},
 		}
 		manager.ScheduleTraining(agent, windows)
@@ -191,6 +195,173 @@ func TestTrainingTask(t *testing.T) {
 			seen[s] = true
 		}
 	})
+}
+
+func TestPRISMManagerStartStop(t *testing.T) {
+	t.Run("start_twice_is_idempotent", func(t *testing.T) {
+		pm := NewPRISMManager(DefaultPRISMConfig())
+		pm.Start()
+		pm.Start() // must not panic or double-start workers
+		pm.Stop()
+	})
+}
+
+func TestPRISMManagerGetTask(t *testing.T) {
+	pm := NewPRISMManager(DefaultPRISMConfig())
+	agent := domain.AgentSpec{ID: "agt", Skill: "s", Layer: domain.LayerSector}
+	_ = pm.ScheduleTraining(agent, []TrainingWindow{
+		{Start: time.Now(), End: time.Now().Add(time.Hour), Regime: RegimeRiskOn, RegimeSet: true},
+	})
+}
+
+func TestPRISMManagerUpdateTaskStatus(t *testing.T) {
+	pm := NewPRISMManager(DefaultPRISMConfig())
+	queue := pm.queues[int(RegimeRiskOn)]
+
+	// Enqueue a task directly to avoid auto-generated IDs.
+	task := &TrainingTask{
+		ID:      "direct-task-001",
+		AgentID: "agt",
+		Status:  TaskPending,
+	}
+	if err := queue.Enqueue(task); err != nil {
+		t.Fatalf("enqueue failed: %v", err)
+	}
+
+	dequeued, ok := queue.Dequeue()
+	if !ok {
+		t.Fatal("expected task from queue")
+	}
+	dequeued.Result = &TrainingResult{}
+	queue.UpdateTaskStatus(dequeued.ID, TaskFailed, &TrainingResult{Error: "test failure"})
+
+	// After dequeueing, GetTask by the original ID should return false.
+	_, ok = queue.GetTask(dequeued.ID)
+	if ok {
+		t.Error("dequeued task should not be found by GetTask")
+	}
+}
+
+func TestPRISMManagerGetAllTasks(t *testing.T) {
+	pm := NewPRISMManager(DefaultPRISMConfig())
+	agent := domain.AgentSpec{ID: "agt", Skill: "s", Layer: domain.LayerSector}
+	_ = pm.ScheduleTraining(agent, []TrainingWindow{
+		{Start: time.Now(), End: time.Now().Add(time.Hour), Regime: RegimeRiskOn, RegimeSet: true},
+	})
+
+	tasks := pm.queues[int(RegimeRiskOn)].GetAllTasks()
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks))
+	}
+	if tasks[0].AgentID != "agt" {
+		t.Errorf("expected agent agt, got %s", tasks[0].AgentID)
+	}
+}
+
+func TestPRISMManagerWithExecutor(t *testing.T) {
+	pm := NewPRISMManager(DefaultPRISMConfig())
+	mock := &stubExecutor{}
+	pm.WithExecutor(mock)
+	pm.mu.RLock()
+	ex := pm.executor
+	pm.mu.RUnlock()
+	if ex == nil {
+		t.Fatal("expected executor to be attached")
+	}
+}
+
+func TestPRISMManagerCompletedResults(t *testing.T) {
+	pm := NewPRISMManager(DefaultPRISMConfig())
+	if len(pm.GetCompletedResults()) != 0 {
+		t.Error("expected empty results initially")
+	}
+
+	pm.recordCompletedResult(&TrainingTask{ID: "t1", AgentID: "a1", Regime: RegimeRiskOn}, TrainingResult{HitRate: 0.8})
+	results := pm.GetCompletedResults()
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].AgentID != "a1" {
+		t.Errorf("expected agent a1, got %s", results[0].AgentID)
+	}
+
+	pm.ClearCompletedResults()
+	if len(pm.GetCompletedResults()) != 0 {
+		t.Error("expected empty results after clear")
+	}
+}
+
+func TestClassifyRegime(t *testing.T) {
+	pm := NewPRISMManager(DefaultPRISMConfig())
+
+	// With explicit regime override, return it directly.
+	tw := TrainingWindow{Start: time.Now(), End: time.Now(), Regime: RegimeRiskOff, RegimeSet: true}
+	if got := pm.classifyRegime(tw); got != RegimeRiskOff {
+		t.Fatalf("expected RiskOff override, got %v", got)
+	}
+
+	// Without explicit regime, default to Transition.
+	twNoOverride := TrainingWindow{Start: time.Now(), End: time.Now()}
+	if got := pm.classifyRegime(twNoOverride); got != RegimeTransition {
+		t.Fatalf("expected Transition default, got %v", got)
+	}
+}
+
+func TestExecuteTraining(t *testing.T) {
+	t.Run("with_executor_returns_real_result", func(t *testing.T) {
+		pm := NewPRISMManager(DefaultPRISMConfig())
+		pm.WithExecutor(&stubExecutor{sharpe: 1.5})
+		task := &TrainingTask{ID: "t1", AgentID: "a1", Regime: RegimeRiskOn}
+		result := pm.executeTraining(task)
+		if result.Error != "" {
+			t.Fatalf("expected no error, got %s", result.Error)
+		}
+		if result.Synthetic {
+			t.Fatal("expected non-synthetic result with executor")
+		}
+		if result.SharpeRatio != 1.5 {
+			t.Errorf("expected sharpe 1.5, got %f", result.SharpeRatio)
+		}
+	})
+
+	t.Run("with_failing_executor_returns_error", func(t *testing.T) {
+		pm := NewPRISMManager(DefaultPRISMConfig())
+		pm.WithExecutor(&stubExecutor{fail: true})
+		task := &TrainingTask{ID: "t1", AgentID: "a1", Regime: RegimeRiskOn}
+		result := pm.executeTraining(task)
+		if result.Error == "" {
+			t.Fatal("expected error from failing executor")
+		}
+	})
+
+	t.Run("without_executor_returns_synthetic_result", func(t *testing.T) {
+		pm := NewPRISMManager(DefaultPRISMConfig())
+		task := &TrainingTask{ID: "t1", AgentID: "a1", Regime: RegimeRiskOn}
+		result := pm.executeTraining(task)
+		if !result.Synthetic {
+			t.Fatal("expected Synthetic result with no executor")
+		}
+		if result.Error == "" {
+			t.Fatal("expected error message in synthetic result")
+		}
+	})
+}
+
+// stubExecutor implements TrainingExecutor for tests.
+type stubExecutor struct {
+	sharpe float64
+	fail   bool
+}
+
+func (s *stubExecutor) Run(task TrainingTask) (TrainingResult, error) {
+	if s.fail {
+		return TrainingResult{}, fmt.Errorf("stub failure")
+	}
+	return TrainingResult{
+		SharpeRatio:  s.sharpe,
+		HitRate:      0.6,
+		SignalsCount: 10,
+	}, nil
 }
 
 func TestTrainingQueue(t *testing.T) {

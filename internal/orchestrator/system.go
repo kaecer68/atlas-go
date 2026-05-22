@@ -521,23 +521,16 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 func selectProvider(cfg config.Config) marketdata.Provider {
 	switch cfg.MarketDataProvider {
 	case "fugle":
-		// 纯 Fugle 模式（需有效 API key）
 		if cfg.FugleAPIKey != "" {
-			// TODO: Migrate to Gateway for direct Fugle provider instantiation.
 			return marketdata.NewFugleProviderWithAPIKey(cfg.FugleAPIKey)
 		}
 		logging.Warn("system", "Fugle API key not configured, falling back to mock provider. DO NOT USE IN PRODUCTION.")
-		// TODO: Migrate to Gateway for direct mock provider instantiation.
 		return marketdata.NewMockProvider()
 	case "twse":
-		// 纯 TWSE 模式（免费，rate limited）
-		// TODO: Migrate to Gateway for direct TWSE OpenAPI provider instantiation.
 		return marketdata.NewTWSEOpenAPIProvider()
 	case "hybrid", "":
-		// TODO: Migrate to Gateway for direct hybrid provider instantiation.
 		return marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 	default:
-		// TODO: Migrate to Gateway for direct hybrid provider instantiation.
 		return marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 	}
 }
