@@ -75,8 +75,7 @@ type DataChannelService struct {
 	healthStore       *ChannelHealthStoreAdapter
 }
 
-// fugleHealthCacheTTL is how long we reuse the last live API health check.
-const fugleHealthCacheTTL = 60 * time.Second
+
 
 // getHealthFromStore returns channel health status from the Gateway-managed health store.
 // API key availability is checked separately (not tracked in health store).

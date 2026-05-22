@@ -464,7 +464,7 @@ func run(args []string, deps appDeps) error {
 				}
 			})
 
- 			// Register channel_health_sync task (DB sync, not a data fetcher).
+			// Register channel_health_sync task (DB sync, not a data fetcher).
 			if pool != nil {
 				taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "channel_health_sync",
@@ -571,22 +571,22 @@ func run(args []string, deps appDeps) error {
 				Name:      "auto_capital_flow",
 				ChannelID: "twse_capital_flow",
 				Interval:  30 * time.Minute,
-					Enabled:   true,
-					Task: func(ctx context.Context) error {
-						now := time.Now()
-						if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
-							now = now.In(tz)
-						}
-						if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
-							return nil
-						}
-						hour := now.Hour()
-						if hour < 9 || hour >= 16 {
-							return nil
-						}
-						_, err := gateway.Fetch(ctx, "twse_capital_flow")
-						return err
-					},
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					now := time.Now()
+					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+						now = now.In(tz)
+					}
+					if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+						return nil
+					}
+					hour := now.Hour()
+					if hour < 9 || hour >= 16 {
+						return nil
+					}
+					_, err := gateway.Fetch(ctx, "twse_capital_flow")
+					return err
+				},
 			})
 			log.Printf("[Gateway] registered auto_capital_flow background task (30m interval)")
 
@@ -595,22 +595,22 @@ func run(args []string, deps appDeps) error {
 				Name:      "auto_margin",
 				ChannelID: "twse_margin",
 				Interval:  30 * time.Minute,
-					Enabled:   true,
-					Task: func(ctx context.Context) error {
-						now := time.Now()
-						if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
-							now = now.In(tz)
-						}
-						if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
-							return nil
-						}
-						hour := now.Hour()
-						if hour < 9 || hour >= 16 {
-							return nil
-						}
-						_, err := gateway.Fetch(ctx, "twse_margin")
-						return err
-					},
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					now := time.Now()
+					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+						now = now.In(tz)
+					}
+					if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+						return nil
+					}
+					hour := now.Hour()
+					if hour < 9 || hour >= 16 {
+						return nil
+					}
+					_, err := gateway.Fetch(ctx, "twse_margin")
+					return err
+				},
 			})
 			log.Printf("[Gateway] registered auto_margin background task (30m interval)")
 
