@@ -42,6 +42,7 @@ func buildSimEngine(policy baseline.Policy, optimizer *portfolio.Optimizer) *sim
 		WithOptimizer(optimizer).
 		WithThresholdEngine(sim.NewDynamicThresholdEngine()).
 		WithTaxCalculator(tax.NewTaiwanTaxCalculator(domain.DefaultTaiwanTaxConfig())).
+		WithPreTradeGate(risk.NewPreTradeGate()).
 		WithReflexivityRules(
 			reflexivity.PriceToFundamentalsRule{},
 			reflexivity.PnLBehaviorRule{},
