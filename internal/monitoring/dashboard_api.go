@@ -891,6 +891,7 @@ func (a *DashboardAPI) handleRiskCalibration(w http.ResponseWriter, r *http.Requ
 	if r.Method != http.MethodGet {
 		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
+	}
 	if a.riskGate == nil {
 		shared.WriteJSONError(w, http.StatusNotFound, "risk gate not initialized")
 		return
@@ -909,12 +910,6 @@ func (a *DashboardAPI) handleRiskCalibration(w http.ResponseWriter, r *http.Requ
 		"generated": time.Now().Format(time.RFC3339),
 	})
 }
-
-func (a *DashboardAPI) RegisterOrderRoutes(mux *http.ServeMux) {
-	orderSvc := service.NewOrderService(a.orderMgr)
-	handlers := &apiorders.Handlers{
-		Svc: orderSvc,
-	}
 
 func (a *DashboardAPI) GetIndustryService() *service.IndustryService {
 	return a.industryService

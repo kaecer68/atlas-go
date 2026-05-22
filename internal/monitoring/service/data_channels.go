@@ -75,8 +75,6 @@ type DataChannelService struct {
 	healthStore       *ChannelHealthStoreAdapter
 }
 
-
-
 // getHealthFromStore returns channel health status from the Gateway-managed health store.
 // API key availability is checked separately (not tracked in health store).
 func (s *DataChannelService) getHealthFromStore(channelID, apiKey string) (status, updated, lastError string) {

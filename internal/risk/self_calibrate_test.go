@@ -10,8 +10,8 @@ import (
 
 func TestBuildPortfolioState(t *testing.T) {
 	s := SessionOutcome{
-		PortfolioValue: 2_000_000,
-		EndingCash:       500_000,
+		PortfolioValue:  2_000_000,
+		EndingCash:      500_000,
 		SectorExposures: map[string]float64{"semiconductor": 600_000},
 		PositionValues:  map[string]float64{"2330": 200_000},
 	}
@@ -197,8 +197,8 @@ func TestLastCalibrationReportNil(t *testing.T) {
 func TestSetLastCalibration(t *testing.T) {
 	g := NewRiskGate(NewPreTradeGate(), NewInTradeGate(), NewPostTradeGate())
 	report := &CalibrationReport{
-		Verdict: "stable",
-		Summary: "thresholds optimal",
+		Verdict:   "stable",
+		Summary:   "thresholds optimal",
 		Evaluated: 50,
 	}
 	g.SetLastCalibration(report)

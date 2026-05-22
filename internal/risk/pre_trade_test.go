@@ -18,11 +18,11 @@ func defaultPortfolio() PortfolioState {
 
 func defaultOrder() OrderIntent {
 	return OrderIntent{
-		Symbol:    "2330",
-		Side:      "BUY",
-		Notional:  50_000,
-		AgentID:   "semiconductor_desk",
-		Sector:    "semiconductor",
+		Symbol:     "2330",
+		Side:       "BUY",
+		Notional:   50_000,
+		AgentID:    "semiconductor_desk",
+		Sector:     "semiconductor",
 		Conviction: 3,
 	}
 }
@@ -105,7 +105,7 @@ func TestPreTradeGate_CashBufferInsufficient(t *testing.T) {
 	g := NewPreTradeGate()
 	order := defaultOrder()
 	pf := defaultPortfolio()
-	pf.Cash = 10_000  // Post-trade cash = 10k - 50k = -40k (negative!)
+	pf.Cash = 10_000 // Post-trade cash = 10k - 50k = -40k (negative!)
 	order.Notional = 50_000
 
 	dec, err := g.Check(context.Background(), order, pf, "NORMAL")

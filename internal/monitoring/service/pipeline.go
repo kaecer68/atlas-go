@@ -781,8 +781,8 @@ func (s *PipelineService) LoadSessions() ([]SessionMeta, error) {
 
 		// Fall back to session ID date if RecordedAt was not set from summary.
 		if meta.RecordedAt.IsZero() {
-		meta.RecordedAt = domain.SessionDateFromID(sessionID)
-	}
+			meta.RecordedAt = domain.SessionDateFromID(sessionID)
+		}
 
 		sessions = append(sessions, meta)
 	}
