@@ -57,6 +57,8 @@ type PerformanceReport struct {
 	TotalReturn      float64             `json:"total_return"`
 	AnnualizedReturn float64             `json:"annualized_return"`
 	SharpeRatio      float64             `json:"sharpe_ratio"`
+	SortinoRatio     float64             `json:"sortino_ratio"`
+	CalmarRatio      float64             `json:"calmar_ratio"`
 	MaxDrawdown      float64             `json:"max_drawdown"`
 	StartingValue    float64             `json:"starting_value"`
 	EndingValue      float64             `json:"ending_value"`
@@ -132,7 +134,9 @@ func GenerateReport(ledgerPath string, period string) (*PerformanceReport, error
 	}
 
 	sharpeRatio := calculateSharpeRatio(dailyReturns)
+	sortinoRatio := calculateSortinoRatio(dailyReturns, 0.0)
 	maxDD := risk.CalculateMaxDrawdown(portfolioValues)
+	calmarRatio := calculateCalmarRatio(annualizedReturn, maxDD)
 
 	var totalTaxPaid float64
 	for _, s := range filtered {
@@ -154,6 +158,8 @@ func GenerateReport(ledgerPath string, period string) (*PerformanceReport, error
 		TotalReturn:      totalReturn,
 		AnnualizedReturn: annualizedReturn,
 		SharpeRatio:      sharpeRatio,
+		SortinoRatio:     sortinoRatio,
+		CalmarRatio:      calmarRatio,
 		MaxDrawdown:      maxDD,
 		StartingValue:    startingValue,
 		EndingValue:      endingValue,
@@ -191,6 +197,8 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 	sb.WriteString(fmt.Sprintf("| Total Return | %.2f%% |\n", report.TotalReturn*100))
 	sb.WriteString(fmt.Sprintf("| Annualized Return | %.2f%% |\n", report.AnnualizedReturn*100))
 	sb.WriteString(fmt.Sprintf("| Sharpe Ratio | %.3f |\n", report.SharpeRatio))
+	sb.WriteString(fmt.Sprintf("| Sortino Ratio | %.3f |\n", report.SortinoRatio))
+	sb.WriteString(fmt.Sprintf("| Calmar Ratio | %.3f |\n", report.CalmarRatio))
 	sb.WriteString(fmt.Sprintf("| Max Drawdown | %.2f%% |\n", report.MaxDrawdown*100))
 	sb.WriteString(fmt.Sprintf("| Starting Value | %s |\n", domain.FormatNTD(report.StartingValue)))
 	sb.WriteString(fmt.Sprintf("| Ending Value | %s |\n", domain.FormatNTD(report.EndingValue)))
@@ -372,6 +380,36 @@ func calculateSharpeRatio(dailyReturns []float64) float64 {
 		return 0
 	}
 	return (mean / stdDev) * math.Sqrt(252)
+}
+
+func calculateSortinoRatio(dailyReturns []float64, targetReturn float64) float64 {
+	if len(dailyReturns) == 0 {
+		return 0
+	}
+	var excessSum, downsideSum float64
+	for _, r := range dailyReturns {
+		excess := r - targetReturn
+		excessSum += excess
+		if r < targetReturn {
+			downsideSum += (r - targetReturn) * (r - targetReturn)
+		}
+	}
+	meanExcess := excessSum / float64(len(dailyReturns))
+	downsideDev := 0.0
+	if downsideSum > 0 {
+		downsideDev = math.Sqrt(downsideSum / float64(len(dailyReturns)))
+	}
+	if downsideDev == 0 {
+		return 0
+	}
+	return (meanExcess / downsideDev) * math.Sqrt(252)
+}
+
+func calculateCalmarRatio(annualizedReturn, maxDrawdown float64) float64 {
+	if maxDrawdown == 0 {
+		return 0
+	}
+	return annualizedReturn / maxDrawdown
 }
 
 func calculateTradeMetrics(outcomes []domain.RecommendationOutcome) (winRate float64, totalTrades int, avgWin, avgLoss float64) {

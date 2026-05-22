@@ -29,11 +29,46 @@ type Handlers struct {
 	Classifier *industry.ClassificationTree
 }
 
+// sectorLabelMap provides Chinese labels for sector IDs used in PnL attribution.
+// TODO: source dynamically from industry.ClassificationTree once it supports i18n.
+var sectorLabelMap = map[string]string{
+	"semiconductor":   "半導體",
+	"ai_supply_chain": "AI供應鏈",
+	"robotics":        "機器人",
+	"financials":      "金融",
+	"shipping":        "航運",
+	"energy":          "能源",
+	"electronics":     "電子",
+	"consumer":        "消費",
+	"industrial":      "工業",
+	"other":           "其他",
+}
+
+// agentLayerMap maps agent IDs to their execution layer for attribution display.
+// TODO: source dynamically from configs/agents.json layer field.
+var agentLayerMap = map[string]string{
+	"taiwan-macro-01":       "macro",
+	"foreign-flow-01":       "macro",
+	"semi-desk-01":          "sector",
+	"ai-desk-01":            "sector",
+	"growth-momentum-01":    "style",
+	"value-yield-01":        "style",
+	"technical-breakout-01": "style",
+	"earnings-quality-01":   "style",
+	"shipping-desk-01":      "sector",
+	"financials-desk-01":    "sector",
+}
+
 func (h *Handlers) getService() *service.LiveService {
 	if h.Svc != nil {
+		if h.Svc.Classifier == nil {
+			h.Svc.Classifier = h.Classifier
+		}
 		return h.Svc
 	}
-	return service.NewLiveService(h.WorkDir, h.LedgerDir)
+	svc := service.NewLiveService(h.WorkDir, h.LedgerDir)
+	svc.Classifier = h.Classifier
+	return svc
 }
 
 // RegisterRoutes mounts live trading endpoints.
@@ -43,6 +78,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/live-status", shared.Get(h.HandleLiveStatus))
 	mux.Handle("GET /api/dashboard/portfolio-state", shared.Get(h.HandlePortfolioState))
 	mux.Handle("GET /api/dashboard/trade-history", shared.Get(h.HandleTradeHistory))
+	mux.Handle("GET /api/dashboard/benchmark-comparison", shared.Get(h.HandleBenchmarkComparison))
 }
 
 func getSymbolSector(symbol string, symMap map[string]string) string {
@@ -53,18 +89,6 @@ func getSymbolSector(symbol string, symMap map[string]string) string {
 }
 
 func computeSectorFactorExposure(outcomes []domain.RecommendationOutcome, portfolioValue float64, symSectorMap map[string]string) ([]SectorExposure, FactorExposureInline) {
-	sectorLabelMap := map[string]string{
-		"semiconductor":   "半導體",
-		"ai_supply_chain": "AI供應鏈",
-		"robotics":        "機器人",
-		"financials":      "金融",
-		"shipping":        "航運",
-		"energy":          "能源",
-		"electronics":     "電子",
-		"consumer":        "消費",
-		"industrial":      "工業",
-		"other":           "其他",
-	}
 
 	type secAgg struct {
 		count                        int
@@ -281,30 +305,6 @@ func (h *Handlers) HandlePnLAttribution(r *http.Request) (int, any) {
 		fMomentum, fValue, fQuality, fAgent, fTotal float64
 		fCount                                      int
 	)
-	sectorLabelMap := map[string]string{
-		"semiconductor":   "半導體",
-		"ai_supply_chain": "AI供應鏈",
-		"robotics":        "機器人",
-		"financials":      "金融",
-		"shipping":        "航運",
-		"energy":          "能源",
-		"electronics":     "電子",
-		"consumer":        "消費",
-		"industrial":      "工業",
-		"other":           "其他",
-	}
-	agentLayerMap := map[string]string{
-		"taiwan-macro-01":       "macro",
-		"foreign-flow-01":       "macro",
-		"semi-desk-01":          "sector",
-		"ai-desk-01":            "sector",
-		"growth-momentum-01":    "style",
-		"value-yield-01":        "style",
-		"technical-breakout-01": "style",
-		"earnings-quality-01":   "style",
-		"shipping-desk-01":      "sector",
-		"financials-desk-01":    "sector",
-	}
 
 	for _, oc := range outcomes {
 		if !oc.PassedGuards || oc.ForwardReturn == 0 {

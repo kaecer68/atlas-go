@@ -1,4 +1,8 @@
 import { renderDualEquityCurve } from '../components/sparkline.js';
+import { renderPnLAttribution } from '../components/attribution.js';
+import { renderBenchmarkComparison } from '../components/benchmark.js';
+
+import { renderRiskPanel } from '../components/risk-panel.js';
 
 export async function loadPortfolioPage(getJSON, agentNameFn) {
   const kpis = document.getElementById('portfolioKPIs');
@@ -28,6 +32,16 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
     const afterTaxValue = (state.portfolio_value || 0) - totalTaxPaid;
     const realizedPnL = state.realized_pnl || 0;
     const tradeCount = state.trade_count || trades.length;
+    const unrealizedPnLTotal = state.unrealized_pnl_total || 0;
+    const concentrationRatio = state.concentration_ratio || 0;
+    const currentDrawdown = state.current_drawdown || 0;
+
+    const sectorLabels = {
+      'semiconductor': '半導體', 'ai_supply_chain': 'AI供應鏈',
+      'robotics': '機器人', 'financials': '金融', 'shipping': '航運',
+      'energy': '能源', 'electronics': '電子', 'consumer': '消費',
+      'industrial': '工業', 'other': '其他'
+    };
 
     kpis.innerHTML = `
       <div class="kpi-card">
@@ -55,6 +69,21 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
         <div class="kpi-value text-down">${window.fmtNTD ? window.fmtNTD(totalTaxPaid) : totalTaxPaid.toFixed(0)}</div>
         <div class="kpi-hint">持倉檔數: ${positions.length} | 更新: ${state.snapshot_time ? new Date(state.snapshot_time).toLocaleTimeString() : '-'}</div>
       </div>
+      <div class="kpi-card">
+        <div class="kpi-label">未實現損益</div>
+        <div class="kpi-value ${unrealizedPnLTotal > 0 ? 'text-up' : (unrealizedPnLTotal < 0 ? 'text-down' : '')}">${window.fmtNTD ? window.fmtNTD(unrealizedPnLTotal) : unrealizedPnLTotal.toFixed(0)}</div>
+        <div class="kpi-hint">持倉未實現總損益</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">持倉集中度 (HHI)</div>
+        <div class="kpi-value">${window.fmtPct ? window.fmtPct(concentrationRatio) : (concentrationRatio * 100).toFixed(2) + '%'}</div>
+        <div class="kpi-hint">0~1，越高越集中</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">最大回撤</div>
+        <div class="kpi-value text-down">${window.fmtPct ? window.fmtPct(currentDrawdown) : (currentDrawdown * 100).toFixed(2) + '%'}</div>
+        <div class="kpi-hint">歷史最大回撤</div>
+      </div>
     `;
 
     const equityCurve = state.equity_curve || [];
@@ -77,7 +106,7 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
         return `
           <tr>
             <td style="font-weight:600">${pos.symbol}</td>
-            <td>—</td>
+            <td>${sectorLabels[pos.sector] || pos.sector || '—'}</td>
             <td style="text-align:right">${fmtI(pos.quantity)}</td>
             <td style="text-align:right">${fmtF(pos.average_cost)}</td>
             <td style="text-align:right">${fmtF(costBasis)}</td>
@@ -152,6 +181,13 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
         </div>
       `;
     }
+
+    const attrContainer = document.getElementById('pnlAttribution');
+    if (attrContainer) { renderPnLAttribution(attrContainer, getJSON); }
+    const benchContainer = document.getElementById('benchmarkComparison');
+    if (benchContainer) { renderBenchmarkComparison(benchContainer, getJSON); }
+    const riskContainer = document.getElementById('riskPanel');
+    if (riskContainer) { renderRiskPanel(riskContainer, getJSON); }
   } catch (e) {
     console.error(e);
     kpis.innerHTML = '<div style="padding:20px;text-align:center;color:var(--down)">載入失敗</div>';
@@ -159,3 +195,4 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
     historyEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--down)">載入失敗</div>';
   }
 }
+
