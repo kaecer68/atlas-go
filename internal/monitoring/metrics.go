@@ -282,23 +282,9 @@ func NewSystemMetrics(collector *MetricsCollector, monitor *Monitor) *SystemMetr
 	}
 }
 
-// Start 啟動系統指標收集
-
-// Start 啟動系統指標收集
+// Start is deprecated. System metrics are collected by the TaskManager
+// `metrics_snapshot` task (60s interval) which calls GetMetricsSnapshot().
 func (sm *SystemMetrics) Start(ctx context.Context) {
-	// 啟動背景收集任務
-	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				// 定期收集系統指標
-			}
-		}
-	}()
 }
 
 type AlertThreshold struct {

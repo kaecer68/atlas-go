@@ -400,9 +400,7 @@ func run(args []string, deps appDeps) error {
 		if alertStore != nil {
 			monitor.SetAlertStore(alertStore)
 		}
-		sysMetrics := monitoring.NewSystemMetrics(collector, monitor)
 		sysCtx, sysCancel := context.WithCancel(context.Background())
-		go sysMetrics.Start(sysCtx)
 
 		var ruleEngine *monitoring.RuleEngine
 		if monitor != nil {
@@ -454,7 +452,7 @@ func run(args []string, deps appDeps) error {
 				}
 			})
 
-			// Register channel_health_sync task (DB sync, not a data fetcher).
+ 			// Register channel_health_sync task (DB sync, not a data fetcher).
 			if pool != nil {
 				taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "channel_health_sync",
@@ -466,6 +464,20 @@ func run(args []string, deps appDeps) error {
 					},
 				})
 				log.Printf("[Gateway] registered channel_health_sync background task (5m interval)")
+			}
+
+			// Register health_check via HealthChecker.RunOnce (stateStore is nil in API mode).
+			if monitor != nil {
+				healthChecker := monitoring.NewHealthChecker(monitor, nil)
+				taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "health_check",
+					Interval: 30 * time.Second,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						return healthChecker.RunOnce(ctx)
+					},
+				})
+				log.Printf("[Gateway] registered health_check background task (30s interval)")
 			}
 
 			// Register TSMC Revenue task via Gateway.
