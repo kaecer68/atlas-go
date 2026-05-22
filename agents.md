@@ -394,7 +394,8 @@ gh pr create --title "feat(scope): description" \
 **所有 AI 代理在進行任何程式修改前，必須先閱讀以下文件以理解系統架構與設計意圖：**
 
 ### 統一入口
-- `.claude/SKILLS-MAP.md` — **唯一技能地圖入口**，包含所有技能的位置、職責與使用時機
+- `.claude/SKILLS-MAP.md` — 技能地圖入口
+- `docs/GUIDELINES_INDEX.md` — **規範文件總索引**，包含所有規範的權威階層與使用情境路由
 
 ### 核心技能（依任務類型）
 - **架構相關**: `.claude/skills/atlas-core-architecture/SKILL.md`
@@ -412,11 +413,14 @@ gh pr create --title "feat(scope): description" \
 - `docs/roadmap.md` — 開發路線圖
 
 > **文件優先順序**（當內容衝突時）：
-> 1. `.claude/SKILLS-MAP.md`
-> 2. `.claude/skills/atlas-*/SKILL.md`
-> 3. `agents.md`
-> 4. `docs/*.md`
-> 5. 原始碼（最終真理來源）
+> 1. `docs/GUIDELINES_INDEX.md` — **規範索引為最終仲裁者**
+> 2. `internal/apigateway/CONSTITUTION.md` — 憲法（強制規範，CI 檢查）
+> 3. `.github/instructions/*.md` — 領域守則
+> 4. `.claude/SKILLS-MAP.md` / `.claude/skills/atlas-*/SKILL.md` — 技能文件
+> 5. `agents.md` — 倉庫層級邊界
+> 6. `internal/*/AGENTS.md` — 模組特有陷阱
+> 7. `docs/*.md` — 參考文件
+> 8. 原始碼（最終真理來源）
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence

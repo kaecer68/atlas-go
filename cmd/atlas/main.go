@@ -400,9 +400,7 @@ func run(args []string, deps appDeps) error {
 		if alertStore != nil {
 			monitor.SetAlertStore(alertStore)
 		}
-		sysMetrics := monitoring.NewSystemMetrics(collector, monitor)
 		sysCtx, sysCancel := context.WithCancel(context.Background())
-		go sysMetrics.Start(sysCtx)
 
 		var ruleEngine *monitoring.RuleEngine
 		if monitor != nil {
@@ -442,6 +440,18 @@ func run(args []string, deps appDeps) error {
 		} else {
 			log.Printf("[Gateway] initialized with %d channels + adapters", len(gateway.ChannelIDs()))
 
+			// Inject Gateway data fetcher into DashboardAPI (breaks import cycle via func type).
+			if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+				d.SetGateway(func(ctx context.Context, channelID string) ([]byte, error) {
+					result, err := gateway.Fetch(ctx, channelID)
+					if err != nil {
+						return nil, err
+					}
+					return result.Data, nil
+				})
+				log.Printf("[Gateway] data fetcher injected into DashboardAPI")
+			}
+
 			// BackgroundTaskManager for centralized goroutine lifecycle management.
 			taskMgr = apigateway.NewBackgroundTaskManager(gateway)
 
@@ -468,19 +478,29 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered channel_health_sync background task (5m interval)")
 			}
 
+			// Register health_check via HealthChecker.RunOnce (stateStore is nil in API mode).
+			if monitor != nil {
+				healthChecker := monitoring.NewHealthChecker(monitor, nil)
+				taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "health_check",
+					Interval: 30 * time.Second,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						return healthChecker.RunOnce(ctx)
+					},
+				})
+				log.Printf("[Gateway] registered health_check background task (30s interval)")
+			}
+
 			// Register TSMC Revenue task via Gateway.
 			if cfg.FinMindAPIKey != "" {
 				taskMgr.Register(&apigateway.ScheduledTask{
 					Name:      "tsmc_revenue",
-					ChannelID: "finmind",
+					ChannelID: "tsmc_revenue",
 					Interval:  24 * time.Hour,
 					Enabled:   true,
 					Task: func(ctx context.Context) error {
-						provider := marketdata.NewTSMCRevenueProviderWithStorage(
-							cfg.FinMindAPIKey,
-							filepath.Join(cfg.WorkDir, "data/state/tsmc_revenue"),
-						)
-						_, err := provider.FetchSnapshot(ctx)
+						_, err := gateway.Fetch(ctx, "tsmc_revenue")
 						return err
 					},
 				})
@@ -564,8 +584,7 @@ func run(args []string, deps appDeps) error {
 					if hour < 9 || hour >= 16 {
 						return nil
 					}
-					provider := marketdata.NewTWSECapitalFlowProvider(filepath.Join(cfg.WorkDir, "data/state/capital_flow"))
-					_, err := provider.FetchSnapshot(ctx)
+					_, err := gateway.Fetch(ctx, "twse_capital_flow")
 					return err
 				},
 			})
@@ -589,8 +608,7 @@ func run(args []string, deps appDeps) error {
 					if hour < 9 || hour >= 16 {
 						return nil
 					}
-					provider := marketdata.NewTWSEMarginBalanceProvider(filepath.Join(cfg.WorkDir, "data/state/margin"))
-					_, err := provider.FetchSnapshot(ctx)
+					_, err := gateway.Fetch(ctx, "twse_margin")
 					return err
 				},
 			})
@@ -619,8 +637,7 @@ func run(args []string, deps appDeps) error {
 				Interval:  12 * time.Hour,
 				Enabled:   true,
 				Task: func(ctx context.Context) error {
-					provider := marketdata.NewExportStatisticsProvider(filepath.Join(cfg.WorkDir, "data/state/export"))
-					_, err := provider.FetchSnapshot(ctx)
+					_, err := gateway.Fetch(ctx, "export_statistics")
 					return err
 				},
 			})

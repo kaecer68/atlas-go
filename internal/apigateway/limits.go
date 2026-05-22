@@ -80,6 +80,9 @@ func NewRateLimitManager() *RateLimitManager {
 			"tsmc_revenue":        rate.NewLimiter(FinMindFreeRate, FinMindFreeBurst), // inherits FinMind
 			"janus_regime":        rate.NewLimiter(rate.Inf, 0),                       // no limit for compute
 			"tej":                 rate.NewLimiter(TEJRate, TEJBurst),
+			"exchange_rate":       rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+			"sox_index":           rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+			"sector_data":         rate.NewLimiter(rate.Inf, 0),
 		},
 	}
 }

@@ -144,5 +144,8 @@ func channelIDs() []string {
 		"geopolitical_taiwan",
 		"janus_regime",
 		"tej",
+		"exchange_rate",
+		"sox_index",
+		"sector_data",
 	}
 }

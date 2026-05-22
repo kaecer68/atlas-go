@@ -225,10 +225,109 @@ taskMgr.Register(&ScheduledTask{
 ### 4.4 CI 檢查
 
 ```bash
-# 檢查是否有未註冊的 go func()
-grep -r "go func()" --include="*.go" internal/ > /tmp/goroutine_check.txt
-# 與註冊表比對，差異報 warning
+# 完整檢查由 scripts/ci/check_constitution.sh 自動執行
+bash scripts/ci/check_constitution.sh
 ```
+
+### 4.5 操作指引（Operational Guidance）
+
+#### 4.5.1 何時應該使用 BackgroundTaskManager
+
+以下情況**必須**使用 BackgroundTaskManager：
+
+| 情境 | 說明 | 範例 |
+|------|------|------|
+| **定時資料擷取** | 以固定間隔從外部 API 抓取資料 | `auto_capital_flow`（30min）、`macro_ingest`（5min） |
+| **週期運算任務** | 定時執行內部計算或狀態更新 | `auto_daily_simulation`（24h）、`auto_experiment`（7d） |
+| **維護任務** | 定時清理或同步 | `storage_cleanup`（24h）、`channel_health_sync`（5min） |
+
+#### 4.5.2 例外情況（允許不使用 BackgroundTaskManager）
+
+以下 `go func()` 模式**不需**改用 BackgroundTaskManager：
+
+| 情境 | 說明 | 範例 |
+|------|------|------|
+| **HTTP 伺服器** | `http.Server.ListenAndServe` 的標準 goroutine | `cmd/atlas/main.go` 的 HTTP server |
+| **一次性/有限並行** | WaitGroup 協調的平行計算，完成後結束 | `phase3_controller.go` 的平行最佳化 |
+| **事件監聽** | 事件匯流排的訂閱者 goroutine | `eventbus/`、`live/orchestrator.go` 的錯誤通道監聽 |
+| **單次延遲操作** | 使用 `context.WithTimeout` 的有限生命週期 goroutine | `backtest.go` 的 timeout-based 執行 |
+| **協議保持** | WebSocket ping/pong、連線生命週期 | `fugle_ws.go` 的 ping loop |
+| **測試** | 測試環境中的輔助 goroutine | 所有 `_test.go` 檔案 |
+| **專用排程編排器** | 內建 `next13_30()` 時間計算的自包含排程迴圈，與 TaskManager 的固定間隔模式不同 | `autobacktest.StartDailyLoop`（與 `auto_daily_simulation` 目的不同：前者為風險訊號回測，後者為每日投資決策）|
+| **Live-mode 狀態評估器** | 需要即時 `stateStore` 的長期存活評估器，僅在 live mode 使用 | `ruleEngine.Start(ctx, stateStore)`（live mode 專用；api mode 已透過 TaskManager `rule_engine_check` 使用 `EvaluateRules(nil)`）|
+| **元件依賴注入** | Provider 作為內部元件的依賴傳入，而非直接發送 API 請求 | `industry.NewDataAggregator(..., finmindClient)`、`margin_history_loader.go` 的 `MarginHistoryBackfiller`—這些是元件組合，非資料擷取 |
+| **Simulation 路徑** | 不經 Gateway 的離線模擬路徑，直接建立 Provider 進行回測 | `orchestrator/system.go`、`orchestrator/composition.go` 中的 provider 建立（無可用 Gateway）|
+
+**例外原則**：若該 goroutine 在 `Start()` 時啟動、在 `Stop()` 時結束、且有明確的排程間隔 → **不例外，必須使用 TaskManager**。
+
+#### 4.5.3 註冊流程
+
+```go
+// Step 1: 建立 ScheduledTask
+taskMgr.Register(&apigateway.ScheduledTask{
+    Name:     "my_task",
+    ChannelID: "",           // 非資料源任務可留空
+    Interval: 30 * time.Minute,
+    Jitter:   3 * time.Minute, // 自動預設為 Interval 的 10%
+    Enabled:  true,
+    Task: func(ctx context.Context) error {
+        // 你的業務邏輯
+        return nil
+    },
+})
+
+// Step 2: 所有註冊完成後啟動
+taskMgr.Start(ctx)
+
+// 選擇性：設定全域失敗處理器
+taskMgr.SetFailureHandler(func(name string, consecutiveFailures int, err error) {
+    if consecutiveFailures >= 3 {
+        alert(fmt.Sprintf("Task %s failed %d times", name, consecutiveFailures))
+    }
+})
+```
+
+#### 4.5.4 子系統如何取用 TaskManager
+
+建議透過依賴注入（Dependency Injection）傳遞 TaskManager，**禁止使用全域變數或 `init()`**：
+
+```go
+// ✅ 合規：透過建構子注入
+func NewSubSystem(taskMgr *apigateway.BackgroundTaskManager) *SubSystem {
+    taskMgr.Register(&apigateway.ScheduledTask{
+        Name: "subsystem_task",
+        Interval: 1 * time.Hour,
+        Enabled: true,
+        Task: func(ctx context.Context) error {
+            return s.doWork(ctx)
+        },
+    })
+    return s
+}
+
+// ❌ 違規：全域變數 + init()
+var taskMgr *apigateway.BackgroundTaskManager
+func init() {
+    taskMgr = &apigateway.BackgroundTaskManager{} // 違反 DI 原則
+}
+```
+
+#### 4.5.5 命名規範
+
+| 規範 | 說明 | 範例 |
+|------|------|------|
+| 名稱使用 snake_case | 統一命名風格 | `auto_capital_flow`、`channel_health_sync` |
+| 前綴標示類別 | `auto_` = 自動排程、`channel_` = 資料通道 | `auto_backfill`、`channel_health_sync` |
+| 名稱唯一 | 不可與已註冊任務重名 | 註冊時會靜默覆蓋同名任務 |
+
+#### 4.5.6 故障處理
+
+| 行為 | 說明 |
+|------|------|
+| **連續失敗** | TaskManager 會持續記錄，可透過 `SetFailureHandler` 設置告警 |
+| **熔斷互動** | 若任務有 `ChannelID`，TaskManager 會在 Circuit Breaker Open 時自動跳過執行 |
+| **重疊保護** | 若前一輪執行尚未完成，下一輪會被跳過（`task_skipped_overlap`） |
+| **啟動抖動** | 啟動時自動加入隨機 Jitter（預設 Interval 的 10%），防止驚群效應 |
 
 ---
 
@@ -393,6 +492,9 @@ echo "✅ os.Getenv 檢查通過"
 | geopolitical_taiwan | 1/10s | Liveness | ✅ (6h) | ✅ |
 | janus_regime | 不限流 | Computed | 否 | ❌ |
 | tej | Per-sec + daily | Liveness | 否 | ✅ |
+| exchange_rate | 1/5s | Liveness | 否 | ❌ |
+| sox_index | 1/5s | Liveness | 否 | ❌ |
+| sector_data | 不限流 | Readiness | 否 | ❌ |
 
 ## 附錄 B：違規處理流程
 

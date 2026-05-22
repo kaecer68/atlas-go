@@ -48,5 +48,7 @@ go test ./...
 ## 參考文件
 
 - `agents.md`：倉庫層級邊界與預設指令
+- `internal/apigateway/CONSTITUTION.md`：數據源治理規範 — 禁止直接 `os.Getenv`/`&http.Client{}`，強制 Gateway 模式
+- `docs/PARAMETER_SYSTEM.md`：參數管理系統 — 禁止硬編碼 magic number，強制使用 `ParametersConfig`
 - `docs/architecture.md`：分層設計原則
 - `docs/ai_agent_architecture.md`：代理協調細節

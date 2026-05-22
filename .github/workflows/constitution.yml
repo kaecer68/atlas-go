@@ -1,0 +1,23 @@
+name: Constitution Check
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  constitution:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Run Constitution Compliance Check
+        run: bash scripts/ci/check_constitution.sh
+
+      - name: Summary (JSON)
+        if: always()
+        run: bash scripts/ci/check_constitution.sh --json
