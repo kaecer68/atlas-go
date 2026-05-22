@@ -128,43 +128,28 @@ func setChannelEnabled(workDir, channelID string, enabled bool) error {
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
 	loadChannelStates(workDir)
 
+	// Default: create providers directly (legacy path).
+	// When SetGateway() is called later, providers are swapped to Gateway-backed adapters.
 	providers := []marketdata.MacroDataProvider{
-		// TODO: Migrate to Gateway for direct Yahoo Finance macro provider instantiation.
 		marketdata.NewYahooFinanceMacroProvider(),
-		// TODO: Migrate to Gateway for direct Frankfurter FX provider instantiation.
 		marketdata.NewFrankfurterFXProvider(),
-		// ExchangeRate-API provides TWD (not available in ECB/Frankfurter dataset).
 		marketdata.NewExchangeRateProvider(),
-		// TODO: Migrate to Gateway for direct SOX index provider instantiation.
 		marketdata.NewSOXIndexProvider(),
-		// TODO: Migrate to Gateway for direct TWSE capital flow provider instantiation.
 		marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")),
-		// TODO: Migrate to Gateway for direct TWSE margin balance provider instantiation.
 		marketdata.NewTWSEMarginBalanceProvider(filepath.Join(workDir, "data/state/margin")),
-		// TODO: Migrate to Gateway for direct export statistics provider instantiation.
 		marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export")),
 	}
-	// Sector data from local cache (graceful degradation if file missing).
-	// TODO: Migrate to Gateway for direct sector data provider instantiation.
 	providers = append(providers, marketdata.NewSectorDataProvider(filepath.Join(workDir, "data/state/sector_data")))
-	// TSMC Revenue from FinMind (overwrites cached sector data when available).
 	cfg := config.Load()
 	if cfg.FinMindAPIKey != "" {
-		// TODO: Migrate to Gateway for direct TSMC revenue provider instantiation.
 		providers = append(providers, marketdata.NewTSMCRevenueProvider(cfg.FinMindAPIKey))
 	}
-	// TODO: Migrate to Gateway for direct composite macro provider instantiation.
 	provider := marketdata.NewCompositeMacroProvider(providers...)
-	// TODO: Migrate to Gateway for direct geopolitical composite provider instantiation.
 	geoProvider := narrative.NewCompositeGeopoliticalProvider(
-		// TODO: Migrate to Gateway for direct RSS geopolitical provider instantiation.
 		narrative.NewRSSGeopoliticalProvider(),
-		// TODO: Migrate to Gateway for direct GDELT geopolitical provider instantiation.
 		narrative.NewGDELTGeopoliticalProvider(),
 	)
-	// TODO: Migrate to Gateway for direct Taiwan geopolitical composite provider instantiation.
 	taiwanGeoProvider := narrative.NewCompositeTaiwanGeopoliticalProvider(
-		// TODO: Migrate to Gateway for direct Taiwan RSS geopolitical provider instantiation.
 		narrative.NewTaiwanRSSGeopoliticalProvider(),
 	)
 	if metricsCollector == nil {
@@ -778,6 +763,21 @@ func (a *DashboardAPI) SetStorageReporter(r apimetrics.StorageReporter) {
 
 func (a *DashboardAPI) SetGateway(g DataFetcher) {
 	a.dataFetcher = g
+	a.initGatewayProviders()
+}
+
+// initGatewayProviders replaces legacy direct providers with Gateway-backed adapters.
+// Called once when SetGateway() injects the DataFetcher.
+func (a *DashboardAPI) initGatewayProviders() {
+	if a.dataFetcher == nil {
+		return
+	}
+	a.macroProvider = NewMacroDataGatewayAdapter(a.dataFetcher)
+	a.geoProvider = NewGeopoliticalGatewayAdapter(a.dataFetcher)
+	if a.macroIngestor != nil {
+		a.macroIngestor = narrative.NewMacroIngestor(a.macroProvider, filepath.Join(a.workDir, "data/state/macro"))
+	}
+	logging.Info("dashboardapi", "gateway_providers_initialized")
 }
 
 func (a *DashboardAPI) RegisterOrderRoutes(mux *http.ServeMux) {
