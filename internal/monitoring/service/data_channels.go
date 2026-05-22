@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/janus"
-	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
 
@@ -77,247 +75,40 @@ type DataChannelService struct {
 	healthStore       *ChannelHealthStoreAdapter
 }
 
-// cachedFugleHealth holds the last Fugle health check result to avoid
-// hitting the real API on every dashboard poll (frontend polls every 5s).
-type cachedFugleHealth struct {
-	status    string
-	updated   string
-	lastError string
-	checkedAt time.Time
-}
-
-var (
-	fugleHealthCache       cachedFugleHealth
-	fugleHealthMu          sync.RWMutex
-	fubonHealthCache       cachedFugleHealth
-	fubonHealthMu          sync.RWMutex
-	finmindHealthCache     cachedFugleHealth
-	finmindHealthMu        sync.RWMutex
-	frankfurterHealthCache cachedFugleHealth
-	frankfurterHealthMu    sync.RWMutex
-)
-
 // fugleHealthCacheTTL is how long we reuse the last live API health check.
 const fugleHealthCacheTTL = 60 * time.Second
 
-// getCachedFugleHealth returns cached status if fresh, otherwise performs a real check.
+// getHealthFromStore returns channel health status from the Gateway-managed health store.
+// API key availability is checked separately (not tracked in health store).
+func (s *DataChannelService) getHealthFromStore(channelID, apiKey string) (status, updated, lastError string) {
+	if apiKey == "" {
+		return "inactive", "未設定 API Key", ""
+	}
+	rec := s.healthStore.Get(channelID)
+	if rec == nil {
+		return "unknown", "尚未執行健康檢查", ""
+	}
+	return rec.Status, rec.LastFetchAt, rec.LastError
+}
+
+// getCachedFugleHealth returns Fugle health from Gateway health store.
 func (s *DataChannelService) getCachedFugleHealth() (status, updated, lastError string) {
-	fugleHealthMu.RLock()
-	cache := fugleHealthCache
-	fugleHealthMu.RUnlock()
-
-	if time.Since(cache.checkedAt) < fugleHealthCacheTTL {
-		return cache.status, cache.updated, cache.lastError
-	}
-
-	fugleHealthMu.Lock()
-	defer fugleHealthMu.Unlock()
-
-	// Double-check after acquiring write lock
-	if time.Since(fugleHealthCache.checkedAt) < fugleHealthCacheTTL {
-		return fugleHealthCache.status, fugleHealthCache.updated, fugleHealthCache.lastError
-	}
-
-	fugleKey := s.FugleAPIKey
-
-	if fugleKey == "" {
-		fugleHealthCache = cachedFugleHealth{
-			status:    "inactive",
-			updated:   "未設定 API Key",
-			checkedAt: time.Now(),
-		}
-		return fugleHealthCache.status, fugleHealthCache.updated, ""
-	}
-
-	// TODO: Migrate to Gateway for direct Fugle client instantiation.
-	fugleClient := marketdata.NewFugleClient(fugleKey)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	_, err := fugleClient.GetQuote(ctx, "1476")
-	cancel()
-
-	if err != nil {
-		fugleHealthCache = cachedFugleHealth{
-			status:    "error",
-			updated:   "API 連線失敗",
-			lastError: err.Error(),
-			checkedAt: time.Now(),
-		}
-	} else {
-		fugleHealthCache = cachedFugleHealth{
-			status:    "ok",
-			updated:   "API 連線正常",
-			checkedAt: time.Now(),
-		}
-	}
-
-	return fugleHealthCache.status, fugleHealthCache.updated, fugleHealthCache.lastError
+	return s.getHealthFromStore("fugle", s.FugleAPIKey)
 }
 
-// getCachedFubonHealth returns cached status if fresh, otherwise performs a real check.
+// getCachedFubonHealth returns Fubon health from Gateway health store.
 func (s *DataChannelService) getCachedFubonHealth() (status, updated, lastError string) {
-	fubonHealthMu.RLock()
-	cache := fubonHealthCache
-	fubonHealthMu.RUnlock()
-
-	if time.Since(cache.checkedAt) < fugleHealthCacheTTL {
-		return cache.status, cache.updated, cache.lastError
-	}
-
-	fubonHealthMu.Lock()
-	defer fubonHealthMu.Unlock()
-
-	if time.Since(fubonHealthCache.checkedAt) < fugleHealthCacheTTL {
-		return fubonHealthCache.status, fubonHealthCache.updated, fubonHealthCache.lastError
-	}
-
-	fubonKey := s.FubonAPIKey
-
-	if fubonKey == "" {
-		fubonHealthCache = cachedFugleHealth{
-			status:    "inactive",
-			updated:   "未設定 API Key",
-			checkedAt: time.Now(),
-		}
-		return fubonHealthCache.status, fubonHealthCache.updated, ""
-	}
-
-	// TODO: Migrate to Gateway for direct Fubon client instantiation.
-	fubonClient := marketdata.NewFubonClient(fubonKey)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	err := fubonClient.HealthCheck(ctx)
-	cancel()
-
-	if err != nil {
-		fubonHealthCache = cachedFugleHealth{
-			status:    "error",
-			updated:   "API 連線失敗",
-			lastError: err.Error(),
-			checkedAt: time.Now(),
-		}
-	} else {
-		fubonHealthCache = cachedFugleHealth{
-			status:    "ok",
-			updated:   "API 連線正常",
-			checkedAt: time.Now(),
-		}
-	}
-
-	return fubonHealthCache.status, fubonHealthCache.updated, fubonHealthCache.lastError
+	return s.getHealthFromStore("fubon", s.FubonAPIKey)
 }
 
-// getCachedFinMindHealth returns cached status if fresh, otherwise performs a real check.
+// getCachedFinMindHealth returns FinMind health from Gateway health store.
 func (s *DataChannelService) getCachedFinMindHealth() (status, updated, lastError string) {
-	finmindHealthMu.RLock()
-	cache := finmindHealthCache
-	finmindHealthMu.RUnlock()
-
-	if time.Since(cache.checkedAt) < fugleHealthCacheTTL {
-		return cache.status, cache.updated, cache.lastError
-	}
-
-	finmindHealthMu.Lock()
-	defer finmindHealthMu.Unlock()
-
-	if time.Since(finmindHealthCache.checkedAt) < fugleHealthCacheTTL {
-		return finmindHealthCache.status, finmindHealthCache.updated, finmindHealthCache.lastError
-	}
-
-	finmindKey := s.FinMindAPIKey
-
-	if finmindKey == "" {
-		finmindHealthCache = cachedFugleHealth{
-			status:    "inactive",
-			updated:   "未設定 API Key",
-			checkedAt: time.Now(),
-		}
-		return finmindHealthCache.status, finmindHealthCache.updated, ""
-	}
-
-	// TODO: Migrate to Gateway for direct FinMind client instantiation.
-	finmindClient := marketdata.NewFinMindClient(finmindKey)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	_, err := finmindClient.GetStockPrice(ctx, "2330", time.Now().Format("2006-01-02"))
-	cancel()
-
-	if err != nil {
-		finmindHealthCache = cachedFugleHealth{
-			status:    "error",
-			updated:   "API 連線失敗",
-			lastError: err.Error(),
-			checkedAt: time.Now(),
-		}
-	} else {
-		finmindHealthCache = cachedFugleHealth{
-			status:    "ok",
-			updated:   "API 連線正常",
-			checkedAt: time.Now(),
-		}
-	}
-
-	return finmindHealthCache.status, finmindHealthCache.updated, finmindHealthCache.lastError
+	return s.getHealthFromStore("finmind", s.FinMindAPIKey)
 }
 
-// getCachedFrankfurterHealth returns cached status if fresh, otherwise queries the API.
+// getCachedFrankfurterHealth returns Frankfurter FX health from Gateway health store.
 func (s *DataChannelService) getCachedFrankfurterHealth() (status, updated, lastError string) {
-	frankfurterHealthMu.RLock()
-	cache := frankfurterHealthCache
-	frankfurterHealthMu.RUnlock()
-
-	if time.Since(cache.checkedAt) < fugleHealthCacheTTL {
-		return cache.status, cache.updated, cache.lastError
-	}
-
-	frankfurterHealthMu.Lock()
-	defer frankfurterHealthMu.Unlock()
-
-	if time.Since(frankfurterHealthCache.checkedAt) < fugleHealthCacheTTL {
-		return frankfurterHealthCache.status, frankfurterHealthCache.updated, frankfurterHealthCache.lastError
-	}
-
-	// Test the Frankfurter FX API endpoint used for JPY rate data.
-	client := &http.Client{Timeout: 10 * time.Second}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.frankfurter.dev/v2/latest?from=USD&to=JPY", nil)
-	if err != nil {
-		frankfurterHealthCache = cachedFugleHealth{
-			status:    "error",
-			updated:   "請求建立失敗",
-			lastError: err.Error(),
-			checkedAt: time.Now(),
-		}
-		return frankfurterHealthCache.status, frankfurterHealthCache.updated, frankfurterHealthCache.lastError
-	}
-	req.Header.Set("User-Agent", "atlas-go/1.0")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		frankfurterHealthCache = cachedFugleHealth{
-			status:    "error",
-			updated:   "API 連線失敗",
-			lastError: err.Error(),
-			checkedAt: time.Now(),
-		}
-		return frankfurterHealthCache.status, frankfurterHealthCache.updated, frankfurterHealthCache.lastError
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		frankfurterHealthCache = cachedFugleHealth{
-			status:    "error",
-			updated:   "API 回應異常",
-			lastError: fmt.Sprintf("HTTP %d", resp.StatusCode),
-			checkedAt: time.Now(),
-		}
-		return frankfurterHealthCache.status, frankfurterHealthCache.updated, frankfurterHealthCache.lastError
-	}
-
-	frankfurterHealthCache = cachedFugleHealth{
-		status:    "ok",
-		updated:   "API 連線正常",
-		checkedAt: time.Now(),
-	}
-	return frankfurterHealthCache.status, frankfurterHealthCache.updated, ""
+	return s.getHealthFromStore("jpy_yahoo", "enabled")
 }
 
 type ChannelHealthStoreAdapter struct {

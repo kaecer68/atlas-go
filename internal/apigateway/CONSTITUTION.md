@@ -492,6 +492,9 @@ echo "✅ os.Getenv 檢查通過"
 | geopolitical_taiwan | 1/10s | Liveness | ✅ (6h) | ✅ |
 | janus_regime | 不限流 | Computed | 否 | ❌ |
 | tej | Per-sec + daily | Liveness | 否 | ✅ |
+| exchange_rate | 1/5s | Liveness | 否 | ❌ |
+| sox_index | 1/5s | Liveness | 否 | ❌ |
+| sector_data | 不限流 | Readiness | 否 | ❌ |
 
 ## 附錄 B：違規處理流程
 

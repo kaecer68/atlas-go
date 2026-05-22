@@ -440,6 +440,18 @@ func run(args []string, deps appDeps) error {
 		} else {
 			log.Printf("[Gateway] initialized with %d channels + adapters", len(gateway.ChannelIDs()))
 
+			// Inject Gateway data fetcher into DashboardAPI (breaks import cycle via func type).
+			if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+				d.SetGateway(func(ctx context.Context, channelID string) ([]byte, error) {
+					result, err := gateway.Fetch(ctx, channelID)
+					if err != nil {
+						return nil, err
+					}
+					return result.Data, nil
+				})
+				log.Printf("[Gateway] data fetcher injected into DashboardAPI")
+			}
+
 			// BackgroundTaskManager for centralized goroutine lifecycle management.
 			taskMgr = apigateway.NewBackgroundTaskManager(gateway)
 

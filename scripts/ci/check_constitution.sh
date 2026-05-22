@@ -161,7 +161,7 @@ check_rate_limits() {
     return 1
   fi
 
-  local known_channels=("us_yahoo" "jpy_yahoo" "twse_replay" "twse_capital_flow" "fugle" "fubon" "finmind" "geopolitical" "geopolitical_taiwan" "twse_margin" "export_statistics" "tsmc_revenue" "janus_regime" "tej")
+	local known_channels=("us_yahoo" "jpy_yahoo" "twse_replay" "twse_capital_flow" "fugle" "fubon" "finmind" "geopolitical" "geopolitical_taiwan" "twse_margin" "export_statistics" "tsmc_revenue" "janus_regime" "tej" "exchange_rate" "sox_index" "sector_data")
 
   local missing=0
   for ch in "${known_channels[@]}"; do

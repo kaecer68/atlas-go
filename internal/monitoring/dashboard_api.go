@@ -50,6 +50,10 @@ import (
 	"github.com/kaecer68/atlas-go/internal/taskexec"
 )
 
+// DataFetcher is a Gateway-compatible data fetch function injected via SetGateway.
+// It breaks the import cycle between monitoring and apigateway packages.
+type DataFetcher func(ctx context.Context, channelID string) ([]byte, error)
+
 type DashboardAPI struct {
 	workDir            string
 	ledgerDir          string
@@ -76,6 +80,7 @@ type DashboardAPI struct {
 	outcomeStore       *DualWriteOutcomeStoreAdapter
 	orderMgr           *live.OrderManager
 	storageReport      apimetrics.StorageReporter
+	dataFetcher        DataFetcher
 }
 
 // channelState tracks enable/disable status for each channel.
@@ -769,6 +774,10 @@ func (a *DashboardAPI) SetOrderManager(om *live.OrderManager) {
 
 func (a *DashboardAPI) SetStorageReporter(r apimetrics.StorageReporter) {
 	a.storageReport = r
+}
+
+func (a *DashboardAPI) SetGateway(g DataFetcher) {
+	a.dataFetcher = g
 }
 
 func (a *DashboardAPI) RegisterOrderRoutes(mux *http.ServeMux) {
