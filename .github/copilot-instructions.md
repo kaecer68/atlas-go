@@ -21,6 +21,9 @@ Welcome to atlas-go! This is a **simulation-first, audit-driven investment resea
 | File | Purpose |
 |------|---------|
 | [agents.md](agents.md) | **Start here** — Build commands, architecture boundaries, project pitfalls |
+| [docs/GUIDELINES_INDEX.md](docs/GUIDELINES_INDEX.md) | **All specifications index** — Authority hierarchy, use-case routing, discoverability map |
+| [internal/apigateway/CONSTITUTION.md](internal/apigateway/CONSTITUTION.md) | **Data source governance** — Gateway rules, rate limits, circuit breakers, CI enforcement |
+| [docs/PARAMETER_SYSTEM.md](docs/PARAMETER_SYSTEM.md) | Parameter management with provenance tracking, calibration, 228 parameters |
 | [.github/instructions/go-core.instructions.md](.github/instructions/go-core.instructions.md) | Go coding rules, interface design, error handling, import order |
 | [.github/instructions/experiments-guardrails.instructions.md](.github/instructions/experiments-guardrails.instructions.md) | Baseline policy, experiment flow, acceptance logic, mutation safety |
 | [.github/instructions/live-trading.guardrails.instructions.md](.github/instructions/live-trading.guardrails.instructions.md) | Live trading path, replay prioritization, TODO boundaries |
@@ -57,6 +60,19 @@ Welcome to atlas-go! This is a **simulation-first, audit-driven investment resea
 1. ✅ Read: [.github/instructions/live-trading.guardrails.instructions.md](.github/instructions/live-trading.guardrails.instructions.md)
 2. ⚠️ Remember: `internal/live/` has TODO boundaries; replay-first is the safe default
 3. 🔄 Validate: Decision flow vs. `internal/orchestrator/system.go` / `plugin_host.go`
+
+### I want to add a data source or external API call
+1. ✅ Read: [internal/apigateway/CONSTITUTION.md](internal/apigateway/CONSTITUTION.md) — ALL 6 articles
+2. ⛔ Never: `os.Getenv("XXX_API_KEY")` or `&http.Client{}` directly — use `gateway.Fetch(channelID)`
+3. ✅ Must: Register channel in `internal/apigateway/limits.go`, add to `channelIDs()` in `gateway.go`
+4. ✅ Must: Use `BackgroundTaskManager` for scheduled fetches (never bare `go func()`)
+5. 🔍 Check: `bash scripts/ci/check_constitution.sh` before committing
+
+### I want to add or change a tunable parameter
+1. ✅ Read: [docs/PARAMETER_SYSTEM.md](docs/PARAMETER_SYSTEM.md)
+2. ✅ Must: Add to `internal/config/parameters.go` with `ParameterMetadata[T]`
+3. ✅ Must: Include `rationale`, `source`, `citation` with `evidence_quality`
+4. 🔍 Validate: Run `go run ./cmd/parameter-health-check` after changes
 
 ---
 

@@ -37,6 +37,7 @@ go run ./cmd/atlas
 
 ## 參考文件
 
+- `internal/apigateway/CONSTITUTION.md`：Live trading 中所有外部 API 必須透過 Gateway，禁止直接 `os.Getenv`
 - `agents.md`：架構邊界與常見陷阱
 - `docs/operations_playbook.md`：操作流程期待
 - `docs/architecture.md`：執行流程與分層邊界
