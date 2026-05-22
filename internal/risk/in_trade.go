@@ -201,12 +201,21 @@ func (g *InTradeGate) checkCircuitBreaker(dailyLossPct float64) RuleResult {
 }
 
 func severityForDiff(current, threshold float64) string {
+	if current >= threshold {
+		return "INFO"
+	}
 	diff := math.Abs(current - threshold)
-	if current < threshold {
-		if diff > threshold*0.5 {
-			return "CRITICAL"
-		}
+	base := math.Abs(threshold)
+	if base == 0 {
 		return "WARNING"
 	}
-	return "INFO"
+	ratio := diff / base
+	switch {
+	case ratio >= 1.0:
+		return "CRITICAL"
+	case ratio >= 0.5:
+		return "WARNING"
+	default:
+		return "INFO"
+	}
 }

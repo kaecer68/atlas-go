@@ -1382,6 +1382,7 @@ func LoadParametersConfig(path string) (*ParametersConfig, error) {
 	mergeNarrativeDefaults(&cfg)
 	mergeDrawdownDefaults(&cfg)
 	mergeAlertDefaults(&cfg)
+	mergeRiskGateDefaults(&cfg)
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate parameters config: %w", err)
@@ -1592,4 +1593,64 @@ func (p *ParametersConfig) Save(path string) error {
 		return fmt.Errorf("write parameters config: %w", err)
 	}
 	return nil
+}
+
+func mergeRiskGateDefaults(cfg *ParametersConfig) {
+	def := DefaultParametersConfig().RiskGate
+	r := &cfg.RiskGate
+
+	if r.PreTrade.MaxPositionPct.Value == 0 {
+		r.PreTrade.MaxPositionPct = def.PreTrade.MaxPositionPct
+	}
+	if r.PreTrade.MaxSectorExposurePct.Value == 0 {
+		r.PreTrade.MaxSectorExposurePct = def.PreTrade.MaxSectorExposurePct
+	}
+	if r.PreTrade.VaRConfidenceLevel.Value == 0 {
+		r.PreTrade.VaRConfidenceLevel = def.PreTrade.VaRConfidenceLevel
+	}
+	if r.PreTrade.VarLimitPct.Value == 0 {
+		r.PreTrade.VarLimitPct = def.PreTrade.VarLimitPct
+	}
+	if r.PreTrade.MinCashBufferPct.Value == 0 {
+		r.PreTrade.MinCashBufferPct = def.PreTrade.MinCashBufferPct
+	}
+	if r.PreTrade.MaxCorrelation.Value == 0 {
+		r.PreTrade.MaxCorrelation = def.PreTrade.MaxCorrelation
+	}
+	if r.PreTrade.MinADVRatio.Value == 0 {
+		r.PreTrade.MinADVRatio = def.PreTrade.MinADVRatio
+	}
+	if r.InTrade.MonitorIntervalSec.Value == 0 {
+		r.InTrade.MonitorIntervalSec = def.InTrade.MonitorIntervalSec
+	}
+	if r.InTrade.StopLossPct.Value == 0 {
+		r.InTrade.StopLossPct = def.InTrade.StopLossPct
+	}
+	if r.InTrade.TakeProfitPct.Value == 0 {
+		r.InTrade.TakeProfitPct = def.InTrade.TakeProfitPct
+	}
+	if r.InTrade.TrailingStopATRMult.Value == 0 {
+		r.InTrade.TrailingStopATRMult = def.InTrade.TrailingStopATRMult
+	}
+	if r.InTrade.VolatilitySpikeMult.Value == 0 {
+		r.InTrade.VolatilitySpikeMult = def.InTrade.VolatilitySpikeMult
+	}
+	if r.InTrade.CircuitBreakerDailyLossPct.Value == 0 {
+		r.InTrade.CircuitBreakerDailyLossPct = def.InTrade.CircuitBreakerDailyLossPct
+	}
+	if r.PostTrade.MaxDrawdownHaltPct.Value == 0 {
+		r.PostTrade.MaxDrawdownHaltPct = def.PostTrade.MaxDrawdownHaltPct
+	}
+	if r.PostTrade.MaxDrawdownDefensivePct.Value == 0 {
+		r.PostTrade.MaxDrawdownDefensivePct = def.PostTrade.MaxDrawdownDefensivePct
+	}
+	if r.PostTrade.MinRollingSharpe.Value == 0 {
+		r.PostTrade.MinRollingSharpe = def.PostTrade.MinRollingSharpe
+	}
+	if r.PostTrade.ConsecutiveLossDays.Value == 0 {
+		r.PostTrade.ConsecutiveLossDays = def.PostTrade.ConsecutiveLossDays
+	}
+	if r.PostTrade.EvaluationIntervalHours.Value == 0 {
+		r.PostTrade.EvaluationIntervalHours = def.PostTrade.EvaluationIntervalHours
+	}
 }

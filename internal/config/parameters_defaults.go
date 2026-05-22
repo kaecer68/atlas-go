@@ -2399,5 +2399,64 @@ func defaultRiskGateParameters() RiskGateParameters {
 				Source:    SourceLiterature,
 			},
 		},
+		InTrade: InTradeGateParameters{
+			MonitorIntervalSec: ParameterMetadata[int]{
+				Value:     30,
+				Rationale: "每 30 秒檢查一次持倉狀態",
+				Source:    SourceHeuristic,
+			},
+			StopLossPct: ParameterMetadata[float64]{
+				Value:     -0.10,
+				Rationale: "個股虧損達 10% 即止損",
+				Source:    SourceHeuristic,
+			},
+			TakeProfitPct: ParameterMetadata[float64]{
+				Value:     0.30,
+				Rationale: "個股獲利達 30% 考慮部分獲利了結",
+				Source:    SourceHeuristic,
+			},
+			TrailingStopATRMult: ParameterMetadata[float64]{
+				Value:     2.0,
+				Rationale: "2x ATR trailing stop",
+				Source:    SourceLiterature,
+			},
+			VolatilitySpikeMult: ParameterMetadata[float64]{
+				Value:     3.0,
+				Rationale: "波動率超過 3 倍歷史均值 → 減碼",
+				Source:    SourceEmpirical,
+			},
+			CircuitBreakerDailyLossPct: ParameterMetadata[float64]{
+				Value:     -0.05,
+				Rationale: "單日組合虧損 5% → 暫停交易",
+				Source:    SourceHeuristic,
+			},
+		},
+		PostTrade: PostTradeGateParameters{
+			MaxDrawdownHaltPct: ParameterMetadata[float64]{
+				Value:     0.20,
+				Rationale: "最大回撤 20% → SUSPENDED",
+				Source:    SourceHeuristic,
+			},
+			MaxDrawdownDefensivePct: ParameterMetadata[float64]{
+				Value:     0.10,
+				Rationale: "最大回撤 10% → DEFENSIVE（減半倉）",
+				Source:    SourceHeuristic,
+			},
+			MinRollingSharpe: ParameterMetadata[float64]{
+				Value:     0.0,
+				Rationale: "滾動 Sharpe < 0 → CAUTIOUS",
+				Source:    SourceLiterature,
+			},
+			ConsecutiveLossDays: ParameterMetadata[int]{
+				Value:     5,
+				Rationale: "連續虧損 5 天 → mute agent",
+				Source:    SourceHeuristic,
+			},
+			EvaluationIntervalHours: ParameterMetadata[int]{
+				Value:     24,
+				Rationale: "每日盤後評估一次",
+				Source:    SourceHeuristic,
+			},
+		},
 	}
 }
