@@ -255,6 +255,8 @@ bash scripts/ci/check_constitution.sh
 | **測試** | 測試環境中的輔助 goroutine | 所有 `_test.go` 檔案 |
 | **專用排程編排器** | 內建 `next13_30()` 時間計算的自包含排程迴圈，與 TaskManager 的固定間隔模式不同 | `autobacktest.StartDailyLoop`（與 `auto_daily_simulation` 目的不同：前者為風險訊號回測，後者為每日投資決策）|
 | **Live-mode 狀態評估器** | 需要即時 `stateStore` 的長期存活評估器，僅在 live mode 使用 | `ruleEngine.Start(ctx, stateStore)`（live mode 專用；api mode 已透過 TaskManager `rule_engine_check` 使用 `EvaluateRules(nil)`）|
+| **元件依賴注入** | Provider 作為內部元件的依賴傳入，而非直接發送 API 請求 | `industry.NewDataAggregator(..., finmindClient)`、`margin_history_loader.go` 的 `MarginHistoryBackfiller`—這些是元件組合，非資料擷取 |
+| **Simulation 路徑** | 不經 Gateway 的離線模擬路徑，直接建立 Provider 進行回測 | `orchestrator/system.go`、`orchestrator/composition.go` 中的 provider 建立（無可用 Gateway）|
 
 **例外原則**：若該 goroutine 在 `Start()` 時啟動、在 `Stop()` 時結束、且有明確的排程間隔 → **不例外，必須使用 TaskManager**。
 

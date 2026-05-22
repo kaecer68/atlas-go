@@ -484,15 +484,11 @@ func run(args []string, deps appDeps) error {
 			if cfg.FinMindAPIKey != "" {
 				taskMgr.Register(&apigateway.ScheduledTask{
 					Name:      "tsmc_revenue",
-					ChannelID: "finmind",
+					ChannelID: "tsmc_revenue",
 					Interval:  24 * time.Hour,
 					Enabled:   true,
 					Task: func(ctx context.Context) error {
-						provider := marketdata.NewTSMCRevenueProviderWithStorage(
-							cfg.FinMindAPIKey,
-							filepath.Join(cfg.WorkDir, "data/state/tsmc_revenue"),
-						)
-						_, err := provider.FetchSnapshot(ctx)
+						_, err := gateway.Fetch(ctx, "tsmc_revenue")
 						return err
 					},
 				})
@@ -563,23 +559,22 @@ func run(args []string, deps appDeps) error {
 				Name:      "auto_capital_flow",
 				ChannelID: "twse_capital_flow",
 				Interval:  30 * time.Minute,
-				Enabled:   true,
-				Task: func(ctx context.Context) error {
-					now := time.Now()
-					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
-						now = now.In(tz)
-					}
-					if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
-						return nil
-					}
-					hour := now.Hour()
-					if hour < 9 || hour >= 16 {
-						return nil
-					}
-					provider := marketdata.NewTWSECapitalFlowProvider(filepath.Join(cfg.WorkDir, "data/state/capital_flow"))
-					_, err := provider.FetchSnapshot(ctx)
-					return err
-				},
+					Enabled:   true,
+					Task: func(ctx context.Context) error {
+						now := time.Now()
+						if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+							now = now.In(tz)
+						}
+						if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+							return nil
+						}
+						hour := now.Hour()
+						if hour < 9 || hour >= 16 {
+							return nil
+						}
+						_, err := gateway.Fetch(ctx, "twse_capital_flow")
+						return err
+					},
 			})
 			log.Printf("[Gateway] registered auto_capital_flow background task (30m interval)")
 
@@ -588,23 +583,22 @@ func run(args []string, deps appDeps) error {
 				Name:      "auto_margin",
 				ChannelID: "twse_margin",
 				Interval:  30 * time.Minute,
-				Enabled:   true,
-				Task: func(ctx context.Context) error {
-					now := time.Now()
-					if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
-						now = now.In(tz)
-					}
-					if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
-						return nil
-					}
-					hour := now.Hour()
-					if hour < 9 || hour >= 16 {
-						return nil
-					}
-					provider := marketdata.NewTWSEMarginBalanceProvider(filepath.Join(cfg.WorkDir, "data/state/margin"))
-					_, err := provider.FetchSnapshot(ctx)
-					return err
-				},
+					Enabled:   true,
+					Task: func(ctx context.Context) error {
+						now := time.Now()
+						if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+							now = now.In(tz)
+						}
+						if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+							return nil
+						}
+						hour := now.Hour()
+						if hour < 9 || hour >= 16 {
+							return nil
+						}
+						_, err := gateway.Fetch(ctx, "twse_margin")
+						return err
+					},
 			})
 			log.Printf("[Gateway] registered auto_margin background task (30m interval)")
 
@@ -631,8 +625,7 @@ func run(args []string, deps appDeps) error {
 				Interval:  12 * time.Hour,
 				Enabled:   true,
 				Task: func(ctx context.Context) error {
-					provider := marketdata.NewExportStatisticsProvider(filepath.Join(cfg.WorkDir, "data/state/export"))
-					_, err := provider.FetchSnapshot(ctx)
+					_, err := gateway.Fetch(ctx, "export_statistics")
 					return err
 				},
 			})

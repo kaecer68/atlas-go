@@ -69,12 +69,14 @@
 
 ## 剩餘待辦
 
-| 優先級 | 項目 | 說明 |
-|--------|------|------|
-| **中** | 47 處 provider_direct 修復 | 繞過 Gateway 直接建立 Provider，需批次重構（見 `docs/GATEWAY_MIGRATION_TRACKING.md`） |
-| **低** | `internal/narrative/`、`monitoring/notifier.go`、`live/` http_direct | HTTP Client 統一管理 |
-| **低** | P1-P2 違規修復 | 6 個內部子系統排程迴圈尚未決定是否遷移至 TaskManager |
-| **低** | 季度憲法審計流程 | 建立定期審計機制 |
+| 優先級 | 項目 | 說明 | 預估工時 |
+|--------|------|------|---------|
+| **高** | DashboardAPI Gateway 注入 | 新增 `SetGateway()` + 18 處 provider 改為 `gateway.Fetch()` + 3 個新 channel | ~6h |
+| **中** | 47 處 provider_direct 修復（已排除 simulation/DI 路徑） | 實際 4 處 main.go 已完成，simulation 路徑與 DI 路徑標記為例外。餘下 DashboardAPI 為主 | ~6h |
+| **中** | `data_channels.go` health check → 改為讀取 UnifiedHealthStore | 3 處 provider 呼叫已備 TODO 註解 | ~2h |
+| **低** | PRISMManager BTM 遷移 | 需先暴露 System getter | ~2h |
+| **低** | SpawningManager 死碼清理 | `Start()`/`Stop()`/`runLoop()` 從未被呼叫，可刪除 | ~1h |
+| **低** | 季度審計流程 | 與現有 quality.yml/daily-maintenance.yml 整合 | ~1h |
 
 ---
 
