@@ -996,6 +996,11 @@ func run(args []string, deps appDeps) error {
 
 			if janusEngine != nil {
 				var prevRegime string
+				regimeScenario := map[string]string{
+					"NOVEL_REGIME":      "ai_bubble_2024",
+					"HISTORICAL_REGIME": "normal_market_2024",
+					"RISK_OFF":          "covid_crash_2020",
+				}
 				taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "regime_calibrate",
 					Interval: 1 * time.Hour,
@@ -1008,8 +1013,13 @@ func run(args []string, deps appDeps) error {
 							return nil
 						}
 						if current != prevRegime && prevRegime != "" {
+							scenario := regimeScenario[current]
+							if scenario == "" {
+								scenario = "fed_hikes_2022"
+							}
 							logging.Info("regime_calibrate", "regime_change_detected",
-								"from", prevRegime, "to", current)
+								"from", prevRegime, "to", current,
+								"suggested_stress_scenario", scenario)
 							report, err := riskGate.SelfCalibrate(ctx, calProvider, 20)
 							if err != nil {
 								logging.Error("regime_calibrate", "calibrate_after_regime_change_failed", "err", err.Error())

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/storage"
 )
 
@@ -97,5 +98,75 @@ func TestNewWiredIndustryServiceWithReplay(t *testing.T) {
 	svc := newWiredIndustryService(eng, nil)
 	if svc == nil {
 		t.Fatal("expected non-nil industry service")
+	}
+}
+
+func TestHandleRiskCalibration_NoGate(t *testing.T) {
+	d := NewDashboardAPI(".", ".", nil)
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/risk-calibration", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 when no risk gate, got %d", w.Code)
+	}
+}
+
+func TestHandleRiskCalibration_NoReportYet(t *testing.T) {
+	d := NewDashboardAPI(".", ".", nil)
+	gate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
+	d.SetRiskGate(gate)
+
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/risk-calibration", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestHandleRiskCalibration_WithReport(t *testing.T) {
+	d := NewDashboardAPI(".", ".", nil)
+	gate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
+	gate.SetLastCalibration(&risk.CalibrationReport{
+		Verdict:   "stable",
+		Summary:   "thresholds optimal",
+		Evaluated: 50,
+	})
+	d.SetRiskGate(gate)
+
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/risk-calibration", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestHandleRiskCalibration_WrongMethod(t *testing.T) {
+	d := NewDashboardAPI(".", ".", nil)
+	gate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
+	d.SetRiskGate(gate)
+
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/risk-calibration", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
 	}
 }

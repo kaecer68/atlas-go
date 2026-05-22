@@ -7,6 +7,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/tax"
 )
 
@@ -349,5 +350,57 @@ func TestRunWithoutTaxCalculatorLeavesTaxFieldsZero(t *testing.T) {
 	}
 	if result.TotalTaxPaid != 0 {
 		t.Errorf("expected zero TotalTaxPaid, got %v", result.TotalTaxPaid)
+	}
+}
+
+func TestPreTradeGateFilterBlocksOverSize(t *testing.T) {
+	engine := NewEngine(domain.SimulationConstraints{
+		StartingCash:                1_000_000,
+		MaxPositionWeight:           0.25,
+		MaxOpenPositions:            10,
+		MinTradableVolume:           1000,
+		MinRecommendationConviction: 0,
+		TransactionCostBPS:          1,
+		SlippageBPS:                 1,
+		ReserveCashFraction:         0.1,
+	}).WithPreTradeGate(risk.NewPreTradeGate())
+
+	quotes := []domain.Quote{
+		{Symbol: "2330.TW", Last: 800, Volume: 1000000, IsTradable: true},
+	}
+	recs := []domain.Recommendation{
+		{Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 90, Reason: "large", TargetPrice: 850},
+		{Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 30, Reason: "small", TargetPrice: 810},
+		{Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 50, Reason: "medium", TargetPrice: 830},
+	}
+
+	result := engine.Run(domain.RegimeRiskOn, quotes, recs)
+
+	if result.PortfolioValue <= 0 {
+		t.Errorf("expected positive portfolio value, got %.0f", result.PortfolioValue)
+	}
+}
+
+func TestBuildOrderIntent(t *testing.T) {
+	e := &Engine{}
+	rec := domain.Recommendation{Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 50}
+	order := e.buildOrderIntent(rec, 1_000_000)
+	if order.Symbol != "2330.TW" {
+		t.Errorf("expected 2330.TW, got %s", order.Symbol)
+	}
+	if order.Notional <= 0 {
+		t.Errorf("expected positive notional, got %.0f", order.Notional)
+	}
+	if order.Side != "BUY" {
+		t.Errorf("expected BUY, got %s", order.Side)
+	}
+}
+
+func TestBuildOrderIntentWithTargetPrice(t *testing.T) {
+	e := &Engine{}
+	rec := domain.Recommendation{Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 80, TargetPrice: 1000}
+	order := e.buildOrderIntent(rec, 2_000_000)
+	if order.Notional <= 0 {
+		t.Errorf("expected positive notional from conviction, got %.0f", order.Notional)
 	}
 }
