@@ -297,7 +297,7 @@ func (s *LiveService) buildEquityCurve() []EquityCurvePoint {
 		if summary.PortfolioValue == 0 {
 			continue
 		}
-		date := sessionDateFromID(summary.SessionID)
+		date := domain.SessionDateFromID(summary.SessionID)
 		afterTaxValue := summary.PortfolioValue - summary.TotalTaxPaid
 		points = append(points, sessionPoint{
 			date:          date,
@@ -327,23 +327,6 @@ func (s *LiveService) buildEquityCurve() []EquityCurvePoint {
 		}
 	}
 	return curve
-}
-
-// sessionDateFromID extracts the trading date from a session ID.
-func sessionDateFromID(id string) time.Time {
-	const prefix = "session-"
-	if !strings.HasPrefix(id, prefix) {
-		return time.Time{}
-	}
-	trimmed := strings.TrimPrefix(id, prefix)
-	parts := strings.Split(trimmed, "-")
-	if len(parts) < 1 {
-		return time.Time{}
-	}
-	if d, err := time.Parse("20060102", parts[0]); err == nil {
-		return d
-	}
-	return time.Time{}
 }
 
 // buildSymbolSectorMap builds a symbol→sector mapping from the classifier.

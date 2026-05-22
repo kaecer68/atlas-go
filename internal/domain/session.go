@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strings"
 	"time"
 )
 
@@ -49,4 +50,22 @@ type BrokerRuntimeAudit struct {
 	NonceStore       string `json:"nonce_store"`
 	NonceStorePath   string `json:"nonce_store_path"`
 	NonceRedisPrefix string `json:"nonce_redis_prefix"`
+}
+
+// SessionDateFromID extracts the trading date from a session ID string.
+// Format: session-YYYYMMDD-* (e.g. "session-20260413-daily")
+func SessionDateFromID(id string) time.Time {
+	const prefix = "session-"
+	if !strings.HasPrefix(id, prefix) {
+		return time.Time{}
+	}
+	trimmed := strings.TrimPrefix(id, prefix)
+	parts := strings.Split(trimmed, "-")
+	if len(parts) < 1 {
+		return time.Time{}
+	}
+	if d, err := time.Parse("20060102", parts[0]); err == nil {
+		return d
+	}
+	return time.Time{}
 }

@@ -1911,6 +1911,18 @@ func defaultIndustryParameters() IndustryParameters {
 			Source:    SourceHeuristic,
 			Todo:      "Validate: verify mapping aligns with sector coverage mandates",
 		},
+		SkillToIndustries: ParameterMetadata[map[string][]string]{
+			Value: map[string][]string{
+				"semiconductor_desk":   {"semiconductor", "foundry"},
+				"ai_supply_chain_desk": {"ai_supply_chain", "pcb", "thermal"},
+				"financials_desk":      {"financials"},
+				"shipping_desk":        {"shipping"},
+				"leo_satellite_desk":   {"leo_satellite", "satellite_rf_components", "satellite_pcb"},
+				"etf_rotation_desk":    {"high_dividend", "etf_rotation"},
+			},
+			Rationale: "Maps agent skills to one or more industry sectors for sector-ban filtering",
+			Source:    SourceHeuristic,
+		},
 		CycleTransitions: ParameterMetadata[[]CycleTransitionConfig]{
 			Value: []CycleTransitionConfig{
 				{FromPhase: "recession", ToPhase: "recovery", Triggers: []string{"inventory_depletion", "demand_stabilization"}, Probability: 0.70, TypicalDurationDays: 180},

@@ -48,8 +48,8 @@ func loadLatestSessionSummaryFromDisk(ledgerDir string) (*domain.SessionSummary,
 	}
 
 	slices.SortFunc(summaries, func(a, b domain.SessionSummary) int {
-		aDate := sessionDateFromID(a.SessionID)
-		bDate := sessionDateFromID(b.SessionID)
+		aDate := domain.SessionDateFromID(a.SessionID)
+		bDate := domain.SessionDateFromID(b.SessionID)
 		switch {
 		case aDate.After(bDate):
 			return -1
@@ -116,8 +116,8 @@ func FindLatestSessionSummary(store ledger.OutcomeStore, ledgerDir string) (*dom
 		summaries, err := store.LoadSessionSummaries()
 		if err == nil && len(summaries) > 0 {
 			slices.SortFunc(summaries, func(a, b domain.SessionSummary) int {
-				aDate := sessionDateFromID(a.SessionID)
-				bDate := sessionDateFromID(b.SessionID)
+				aDate := domain.SessionDateFromID(a.SessionID)
+				bDate := domain.SessionDateFromID(b.SessionID)
 				switch {
 				case aDate.After(bDate):
 					return -1

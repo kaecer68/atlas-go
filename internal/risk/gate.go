@@ -20,17 +20,21 @@ const (
 // RiskGate is the unified entry point for all pre-, in-, and post-trade risk checks.
 // It delegates to phase-specific gates and maintains the system-wide risk mode.
 type RiskGate struct {
-	mu       sync.RWMutex
-	mode     RiskGateMode
-	preTrade *PreTradeGate
-	subs     []func(RiskDecision)
+	mu        sync.RWMutex
+	mode      RiskGateMode
+	preTrade  *PreTradeGate
+	inTrade   *InTradeGate
+	postTrade *PostTradeGate
+	subs      []func(RiskDecision)
 }
 
 // NewRiskGate creates a RiskGate with the given phase-specific gates.
-func NewRiskGate(preTrade *PreTradeGate) *RiskGate {
+func NewRiskGate(preTrade *PreTradeGate, inTrade *InTradeGate, postTrade *PostTradeGate) *RiskGate {
 	return &RiskGate{
-		mode:     ModeNormal,
-		preTrade: preTrade,
+		mode:      ModeNormal,
+		preTrade:  preTrade,
+		inTrade:   inTrade,
+		postTrade: postTrade,
 	}
 }
 
@@ -70,6 +74,52 @@ func (g *RiskGate) PreTradeCheck(ctx context.Context, order OrderIntent, pf Port
 			Severity: "WARNING",
 			Message:  fmt.Sprintf("DEFENSIVE mode capped target position at 50%%"),
 		})
+	}
+
+	g.publish(*decision)
+	return decision, nil
+}
+
+// InTradeCheck evaluates all open positions for in-trade risk conditions.
+func (g *RiskGate) InTradeCheck(ctx context.Context, positions []InTradePosition, histVol, currentVol float64, dailyLossPct float64) (*RiskDecision, error) {
+	g.mu.RLock()
+	mode := g.mode
+	g.mu.RUnlock()
+
+	if g.inTrade == nil {
+		return nil, fmt.Errorf("in_trade gate not initialized")
+	}
+
+	decision, err := g.inTrade.Evaluate(ctx, positions, histVol, currentVol, dailyLossPct, string(mode))
+	if err != nil {
+		return nil, fmt.Errorf("in_trade check: %w", err)
+	}
+
+	if decision.Verdict == VerdictHalt {
+		g.SetMode(ModeSuspended)
+	}
+
+	g.publish(*decision)
+	return decision, nil
+}
+
+// PostTradeCheck evaluates portfolio-level metrics and recommends mode changes.
+func (g *RiskGate) PostTradeCheck(input PostTradeInput) (*RiskDecision, error) {
+	g.mu.RLock()
+	mode := g.mode
+	g.mu.RUnlock()
+
+	if g.postTrade == nil {
+		return nil, fmt.Errorf("post_trade gate not initialized")
+	}
+
+	decision, err := g.postTrade.Evaluate(input, string(mode))
+	if err != nil {
+		return nil, fmt.Errorf("post_trade check: %w", err)
+	}
+
+	if decision.Mode != string(mode) {
+		g.SetMode(RiskGateMode(decision.Mode))
 	}
 
 	g.publish(*decision)

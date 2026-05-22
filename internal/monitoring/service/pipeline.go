@@ -607,8 +607,8 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 		}
 	} else {
 		slices.SortFunc(sessionDirs, func(a, b string) int {
-			aDate := sessionDateFromID(a)
-			bDate := sessionDateFromID(b)
+			aDate := domain.SessionDateFromID(a)
+			bDate := domain.SessionDateFromID(b)
 			switch {
 			case aDate.After(bDate):
 				return -1
@@ -781,16 +781,16 @@ func (s *PipelineService) LoadSessions() ([]SessionMeta, error) {
 
 		// Fall back to session ID date if RecordedAt was not set from summary.
 		if meta.RecordedAt.IsZero() {
-			meta.RecordedAt = sessionDateFromID(sessionID)
-		}
+		meta.RecordedAt = domain.SessionDateFromID(sessionID)
+	}
 
 		sessions = append(sessions, meta)
 	}
 
 	// Sort by session trading date descending, then RecordedAt tiebreaker.
 	slices.SortFunc(sessions, func(a, b SessionMeta) int {
-		aDate := sessionDateFromID(a.SessionID)
-		bDate := sessionDateFromID(b.SessionID)
+		aDate := domain.SessionDateFromID(a.SessionID)
+		bDate := domain.SessionDateFromID(b.SessionID)
 		switch {
 		case aDate.After(bDate):
 			return -1

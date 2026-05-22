@@ -98,8 +98,8 @@ func GenerateReport(ledgerPath string, period string) (*PerformanceReport, error
 		return emptyReport(period), nil
 	}
 
-	startDate := sessionDateFromID(filtered[0].SessionID)
-	endDate := sessionDateFromID(filtered[len(filtered)-1].SessionID)
+	startDate := domain.SessionDateFromID(filtered[0].SessionID)
+	endDate := domain.SessionDateFromID(filtered[len(filtered)-1].SessionID)
 
 	equityCurve := make([]float64, len(filtered))
 	portfolioValues := make([]float64, len(filtered))
@@ -298,28 +298,12 @@ func filterSummariesByDate(summaries []domain.SessionSummary, cutoff time.Time) 
 	}
 	var filtered []domain.SessionSummary
 	for _, s := range summaries {
-		d := sessionDateFromID(s.SessionID)
+		d := domain.SessionDateFromID(s.SessionID)
 		if !d.IsZero() && !d.Before(cutoff) {
 			filtered = append(filtered, s)
 		}
 	}
 	return filtered
-}
-
-func sessionDateFromID(id string) time.Time {
-	const prefix = "session-"
-	if !strings.HasPrefix(id, prefix) {
-		return time.Time{}
-	}
-	trimmed := strings.TrimPrefix(id, prefix)
-	parts := strings.Split(trimmed, "-")
-	if len(parts) < 1 {
-		return time.Time{}
-	}
-	if d, err := time.Parse("20060102", parts[0]); err == nil {
-		return d
-	}
-	return time.Time{}
 }
 
 func loadAllOutcomes(ledgerPath string, summaries []domain.SessionSummary) []domain.RecommendationOutcome {
@@ -644,7 +628,7 @@ func calculateMonthlyReturns(summaries []domain.SessionSummary, portfolioValues 
 	monthLabels := map[monthKey]string{}
 
 	for i, s := range summaries {
-		d := sessionDateFromID(s.SessionID)
+		d := domain.SessionDateFromID(s.SessionID)
 		if d.IsZero() {
 			continue
 		}

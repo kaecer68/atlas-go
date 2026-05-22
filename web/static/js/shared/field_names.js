@@ -256,6 +256,8 @@ export const FIELD = {
     operator: 'operator',
     session_id: 'session_id',
     recorded_at: 'recorded_at',
+    expires_at: 'expires_at',
+    ttl_hours: 'ttl_hours',
   },
   IndustryCycleFactorScore: {
     score: 'score',

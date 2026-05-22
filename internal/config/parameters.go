@@ -416,7 +416,8 @@ type IndustryParameters struct {
 	NewsLatencyRisk  ParameterMetadata[NewsLatencyConfig]       `json:"news_latency_risk"`
 	FreshnessScores  ParameterMetadata[FreshnessScoresConfig]   `json:"freshness_scores"`
 	PhaseScores      ParameterMetadata[PhaseScoresConfig]       `json:"phase_scores"`
-	SkillToIndustry  ParameterMetadata[map[string]string]       `json:"skill_to_industry,omitempty"`
+	SkillToIndustry   ParameterMetadata[map[string]string]   `json:"skill_to_industry,omitempty"`
+	SkillToIndustries ParameterMetadata[map[string][]string] `json:"skill_to_industries,omitempty"`
 	CycleTransitions ParameterMetadata[[]CycleTransitionConfig] `json:"cycle_transitions"`
 
 	CycleWeightMultipliers ParameterMetadata[CycleWeightMultipliersConfig] `json:"cycle_weight_multipliers"`

@@ -659,6 +659,9 @@ func (s *System) applyHumanOverrides(recs []domain.Recommendation) []domain.Reco
 	approved := make(map[approvedKey]bool)
 	rejected := make(map[approvedKey]bool)
 	for _, iv := range interventions {
+		if iv.IsExpired() {
+			continue
+		}
 		switch iv.Type {
 		case "pause_agent":
 			pausedAgents[iv.TargetAgentID] = true
@@ -709,13 +712,9 @@ func isRecommendationInBannedSector(rec domain.Recommendation, registry domain.A
 			break
 		}
 	}
-	mappings := map[string][]string{
-		"semiconductor_desk":   {"semiconductor", "foundry"},
-		"ai_supply_chain_desk": {"ai_supply_chain", "pcb", "thermal"},
-		"financials_desk":      {"financials"},
-		"shipping_desk":        {"shipping"},
-		"leo_satellite_desk":   {"leo_satellite", "satellite_rf_components", "satellite_pcb"},
-		"etf_rotation_desk":    {"high_dividend", "etf_rotation"},
+	mappings := config.GetParametersConfig().Industry.SkillToIndustries.Value
+	if mappings == nil {
+		return false
 	}
 	for _, sector := range mappings[skill] {
 		if bannedSectors[sector] {

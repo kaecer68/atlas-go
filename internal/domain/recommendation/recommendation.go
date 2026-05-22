@@ -106,6 +106,16 @@ type HumanIntervention struct {
 	Operator      string    `json:"operator"`
 	SessionID     string    `json:"session_id,omitempty"`
 	RecordedAt    time.Time `json:"recorded_at"`
+	ExpiresAt     time.Time `json:"expires_at,omitempty"`
+	TTLHours      int       `json:"ttl_hours,omitempty"`
+}
+
+// IsExpired checks whether this intervention has passed its expiry time.
+func (h HumanIntervention) IsExpired() bool {
+	if h.ExpiresAt.IsZero() {
+		return false
+	}
+	return time.Now().After(h.ExpiresAt)
 }
 
 // Scorecard aggregates an agent's historical performance.
