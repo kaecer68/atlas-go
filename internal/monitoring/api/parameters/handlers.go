@@ -35,6 +35,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/parameters/snapshots", shared.Get(h.HandleSnapshots))
 	mux.Handle("GET /api/parameters/audit-log", shared.Get(h.HandleAuditLog))
 	mux.Handle("POST /api/parameters/rollback", shared.Post(h.HandleRollback))
+	mux.Handle("POST /api/parameters/reload", shared.Post(h.HandleReload))
 }
 
 // HandleGetParameters returns the current parameters.
@@ -113,6 +114,10 @@ func (h *Handlers) HandlePostParameters(r *http.Request) (int, any) {
 		if err := h.params.Save(h.paramsPath); err != nil {
 			return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("save parameters: %v", err)}
 		}
+		if err := config.ReloadParametersConfig(); err != nil {
+			return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("reload after save: %v", err)}
+		}
+		h.params = config.GetParametersConfig()
 	}
 
 	return http.StatusOK, map[string]string{"status": "updated"}
@@ -248,6 +253,10 @@ func (h *Handlers) HandleRollback(r *http.Request) (int, any) {
 	if err := cfg.Save(h.paramsPath); err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("save config: %v", err)}
 	}
+	if err := config.ReloadParametersConfig(); err != nil {
+		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("reload after rollback: %v", err)}
+	}
+	h.params = config.GetParametersConfig()
 
 	return http.StatusOK, map[string]any{
 		"message":      "rollback successful",
@@ -280,4 +289,14 @@ func (h *Handlers) HandleAuditLog(r *http.Request) (int, any) {
 	}
 
 	return http.StatusOK, map[string]any{"changes": changes}
+}
+
+// HandleReload reloads parameters from disk and updates the global singleton.
+func (h *Handlers) HandleReload(r *http.Request) (int, any) {
+	if err := config.ReloadParametersConfig(); err != nil {
+		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("reload failed: %v", err)}
+	}
+	reloaded := config.GetParametersConfig()
+	h.params = reloaded
+	return http.StatusOK, map[string]string{"status": "reloaded", "version": reloaded.Version}
 }

@@ -1569,6 +1569,18 @@ func ResetParametersConfig() {
 	parametersConfig = nil
 }
 
+// ReloadParametersConfig re-reads the parameters JSON file and replaces the
+// singleton configuration. Useful for hot-reload without server restart.
+// Returns any parse or validation error.
+func ReloadParametersConfig() error {
+	cfg, err := LoadParametersConfig(parametersPath)
+	if err != nil {
+		return fmt.Errorf("reload parameters: %w", err)
+	}
+	parametersConfig = cfg
+	return nil
+}
+
 // Save writes the configuration to the given JSON file.
 func (p *ParametersConfig) Save(path string) error {
 	p.UpdatedAt = time.Now()
