@@ -412,13 +412,13 @@ type IndustryParameters struct {
 
 	SeasonalPatterns ParameterMetadata[[]SeasonalPatternConfig] `json:"seasonal_patterns"`
 
-	AsymmetricRisk   ParameterMetadata[AsymmetricRiskConfig]    `json:"asymmetric_risk"`
-	NewsLatencyRisk  ParameterMetadata[NewsLatencyConfig]       `json:"news_latency_risk"`
-	FreshnessScores  ParameterMetadata[FreshnessScoresConfig]   `json:"freshness_scores"`
-	PhaseScores      ParameterMetadata[PhaseScoresConfig]       `json:"phase_scores"`
-	SkillToIndustry   ParameterMetadata[map[string]string]   `json:"skill_to_industry,omitempty"`
-	SkillToIndustries ParameterMetadata[map[string][]string] `json:"skill_to_industries,omitempty"`
-	CycleTransitions ParameterMetadata[[]CycleTransitionConfig] `json:"cycle_transitions"`
+	AsymmetricRisk    ParameterMetadata[AsymmetricRiskConfig]    `json:"asymmetric_risk"`
+	NewsLatencyRisk   ParameterMetadata[NewsLatencyConfig]       `json:"news_latency_risk"`
+	FreshnessScores   ParameterMetadata[FreshnessScoresConfig]   `json:"freshness_scores"`
+	PhaseScores       ParameterMetadata[PhaseScoresConfig]       `json:"phase_scores"`
+	SkillToIndustry   ParameterMetadata[map[string]string]       `json:"skill_to_industry,omitempty"`
+	SkillToIndustries ParameterMetadata[map[string][]string]     `json:"skill_to_industries,omitempty"`
+	CycleTransitions  ParameterMetadata[[]CycleTransitionConfig] `json:"cycle_transitions"`
 
 	CycleWeightMultipliers ParameterMetadata[CycleWeightMultipliersConfig] `json:"cycle_weight_multipliers"`
 	LinkageWeightImpact    ParameterMetadata[float64]                      `json:"linkage_weight_impact"`
@@ -1580,6 +1580,11 @@ func ReloadParametersConfig() error {
 	}
 	parametersConfig = cfg
 	return nil
+}
+
+// GetParametersConfigPath returns the path to the parameters configuration file.
+func GetParametersConfigPath() string {
+	return parametersPath
 }
 
 // Save writes the configuration to the given JSON file.

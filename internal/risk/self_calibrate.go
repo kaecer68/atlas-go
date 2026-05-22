@@ -167,6 +167,14 @@ func (g *RiskGate) SelfCalibrate(ctx context.Context, provider CalibrationProvid
 		ie.SetParameter(name, best)
 	}
 
+	// Persist calibrated parameters to disk so they survive server restarts.
+	if len(report.Changes) > 0 {
+		if err := config.GetParametersConfig().Save(config.GetParametersConfigPath()); err != nil {
+			// Non-fatal: calibration results remain valid in memory.
+			fmt.Printf("self_calibrate: failed to persist parameters: %v\n", err)
+		}
+	}
+
 	if len(report.Changes) == 0 {
 		report.Verdict = "stable"
 		report.Summary = fmt.Sprintf(
