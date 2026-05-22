@@ -14,7 +14,7 @@ type Handlers struct {
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/circuit-breaker", shared.Get(h.HandleGetState))
-	mux.Handle("POST /api/dashboard/circuit-breaker/reset", shared.Post(h.HandleReset))
+	mux.Handle("POST /api/dashboard/circuit-breaker/reset", shared.AdminPost(h.HandleReset))
 }
 
 func (h *Handlers) HandleGetState(r *http.Request) (int, any) {

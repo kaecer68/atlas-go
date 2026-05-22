@@ -54,10 +54,9 @@ type Handlers struct {
 
 // RegisterRoutes mounts experiment lifecycle endpoints.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
-	mux.Handle("POST /api/experiment/promote", shared.Post(h.HandlePromote))
-	mux.Handle("POST /api/experiment/revert", shared.Post(h.HandleRevert))
-	mux.Handle("GET /api/experiment/history", shared.Get(h.HandleHistory))
-	mux.Handle("POST /api/experiment/judge", shared.Post(h.HandleJudge))
+	mux.Handle("POST /api/experiment/promote", shared.AdminPost(h.HandlePromote))
+	mux.Handle("POST /api/experiment/revert", shared.AdminPost(h.HandleRevert))
+	mux.Handle("POST /api/experiment/judge", shared.AdminPost(h.HandleJudge))
 	mux.Handle("GET /api/experiment/diff", shared.Get(h.HandleDiff))
 	mux.Handle("GET /api/dashboard/experiment-inbox", shared.Get(h.HandleInbox))
 }

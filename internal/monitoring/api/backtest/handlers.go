@@ -21,7 +21,7 @@ func NewHandlers(svc *service.BacktestService, ledgerDir string) *Handlers {
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
-	mux.Handle("POST /api/backtest/run", shared.Post(h.HandleBacktestRun))
+	mux.Handle("POST /api/backtest/run", shared.AdminPost(h.HandleBacktestRun))
 	mux.Handle("GET /api/backtest/status", shared.Get(h.HandleBacktestStatus))
 	mux.Handle("GET /api/backtest/snapshots", shared.Get(h.HandleBacktestSnapshots))
 	mux.Handle("GET /api/backtest/signals", shared.Get(h.HandleBacktestSignals))

@@ -105,3 +105,30 @@ func GetRaw(h RawHandler) http.Handler {
 		return h(w, r)
 	})
 }
+
+// RequireAdmin wraps a Handler to require ATLAS_ADMIN_KEY for destructive operations.
+// In non-production environments without an admin key set, it passes through.
+func RequireAdmin(h Handler) Handler {
+	return func(r *http.Request) (int, any) {
+		adminKey := os.Getenv("ATLAS_ADMIN_KEY")
+		if adminKey == "" {
+			return h(r)
+		}
+		provided := r.Header.Get("X-Admin-Key")
+		if provided == "" {
+			auth := r.Header.Get("Authorization")
+			if strings.HasPrefix(auth, "Admin ") {
+				provided = strings.TrimPrefix(auth, "Admin ")
+			}
+		}
+		if provided != adminKey {
+			return http.StatusUnauthorized, map[string]string{"error": "admin access required"}
+		}
+		return h(r)
+	}
+}
+
+// AdminPost is a convenience adapter for POST-only admin-protected endpoints.
+func AdminPost(h Handler) http.Handler {
+	return Post(RequireAdmin(h))
+}

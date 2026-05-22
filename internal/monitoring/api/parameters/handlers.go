@@ -28,14 +28,14 @@ func NewHandlers(paramsPath string) *Handlers {
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/parameters", shared.Get(h.HandleGetParameters))
-	mux.Handle("POST /api/parameters", shared.Post(h.HandlePostParameters))
+	mux.Handle("POST /api/parameters", shared.AdminPost(h.HandlePostParameters))
 	mux.Handle("GET /api/parameters/categories", shared.Get(h.HandleCategories))
 	mux.Handle("POST /api/parameters/infer-garch", shared.Post(h.HandleInferGARCH))
-	mux.Handle("POST /api/parameters/sweep", shared.Post(h.HandleSweep))
+	mux.Handle("POST /api/parameters/sweep", shared.AdminPost(h.HandleSweep))
 	mux.Handle("GET /api/parameters/snapshots", shared.Get(h.HandleSnapshots))
 	mux.Handle("GET /api/parameters/audit-log", shared.Get(h.HandleAuditLog))
-	mux.Handle("POST /api/parameters/rollback", shared.Post(h.HandleRollback))
-	mux.Handle("POST /api/parameters/reload", shared.Post(h.HandleReload))
+	mux.Handle("POST /api/parameters/rollback", shared.AdminPost(h.HandleRollback))
+	mux.Handle("POST /api/parameters/reload", shared.AdminPost(h.HandleReload))
 }
 
 // HandleGetParameters returns the current parameters.
