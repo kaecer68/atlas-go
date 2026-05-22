@@ -1,0 +1,42 @@
+Task 16: Cross-parameter validation for new parameter groups
+=============================================
+Date: Wed May 20 18:49:11 CST 2026
+
+=== go build ./... ===
+PASS
+
+=== go test ./internal/config/... ===
+ok  	github.com/kaecer68/atlas-go/internal/config	0.259s
+PASS
+
+=== go vet ./internal/config/... ===
+PASS
+
+=== gofmt check ===
+PASS: gofmt clean
+
+=== lsp_diagnostics internal/config/parameters.go ===
+No diagnostics found (zero errors)
+
+=== Summary of validation added ===
+
+1. FactorWeightParameters:
+   - BaseWeights map: checks all 8 expected keys (momentum, value, quality, agent, inst_sent, liquidity, narrative, industry_cycle)
+   - ClampMin < ClampMax
+   - Severity cascade: Critical >= High >= Medium >= Low
+   - All 9 regime delta values in [-0.15, 0.15]
+
+2. NarrativeConvictionParameters:
+   - ThemeHitRates map: checks all 5 expected keys (AI_capex_surge, US_rates_up, JPY_carry_unwind, geopolitical_risk_spike, oil_price_shock)
+   - All hit rates in [0.0, 1.0]
+   - SkillToTheme map: non-empty
+
+3. IndustryParameters new fields:
+   - SkillToIndustry: non-empty
+   - PhaseScores: all 4 values non-zero (expansion, recovery, mature, recession)
+
+4. OrchestratorParameters new fields:
+   - SectorRotationMacroAdjustments: non-empty
+   - SectorRotationFlowAdjustments: non-empty
+
+All validations follow existing early-return error pattern.

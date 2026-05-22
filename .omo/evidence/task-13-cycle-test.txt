@@ -1,0 +1,18 @@
+TASK-13: Config-driven cycle modulator parameters
+=================================================
+
+Changes to internal/orchestrator/industry_cycle_modulator.go:
+
+1. Added import: "github.com/kaecer68/atlas-go/internal/config"
+2. Added skillToIndustry map[string]string field to IndustryCycleModulator struct
+3. NewIndustryCycleModulator: reads SkillToIndustry from config with fallback to package-level var
+4. phaseDelta(): reads PhaseScores from config with fallback to hardcoded (20, 10, 0, -20)
+5. ModulateRecommendations: uses m.skillToIndustry instead of package-level var
+
+Verification results:
+- go build ./internal/orchestrator/...  -> OK (no output)
+- go test ./internal/orchestrator/...   -> PASS (0.703s)
+- go vet ./internal/orchestrator/...    -> OK (no output)
+- lsp_diagnostics                      -> No errors
+
+Date: 2026-05-20

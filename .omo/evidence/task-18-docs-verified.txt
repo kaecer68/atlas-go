@@ -1,0 +1,4 @@
+Documentation updated and verified:
+- internal/portfolio/AGENTS.md updated for FactorWeightEngine and SectorRotator
+- internal/orchestrator/AGENTS.md updated for NarrativeConviction and IndustryCycle
+- Source of truth correctly referenced as parameters.go / parameters.json

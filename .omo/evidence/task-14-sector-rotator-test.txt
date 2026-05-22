@@ -1,0 +1,19 @@
+Task 14: Migrate hardcoded allocation adjustments to ParametersConfig
+Date: 2026-05-20
+File: internal/portfolio/sector_rotator.go
+
+Verification Results:
+1. lsp_diagnostics internal/portfolio/sector_rotator.go — zero errors ✓
+2. go build ./internal/portfolio/... — zero errors ✓
+3. go test ./internal/portfolio/... — PASS (0.523s) ✓
+4. go vet ./internal/portfolio/... — zero warnings ✓
+5. go build ./... — zero errors ✓
+
+Changes:
+- Added macroLevelKey() helper that maps MacroRiskLevel → config key string
+- Added defaultMacroAdjustments() fallback with original hardcoded values
+- Replaced applyMacroAdjustments() switch with config-driven read (cfg.Orchestrator.SectorRotationMacroAdjustments.Value)
+- Added defaultFlowAdjustments() fallback with original hardcoded values
+- Replaced applyFlowAdjustments() switch with config-driven read (cfg.Orchestrator.SectorRotationFlowAdjustments.Value)
+- Hardcoded values preserved as fallback defaults
+- No changes to normalizeAllocations, GeneratePlan, SectorRotationPlan, or SectorAllocation types

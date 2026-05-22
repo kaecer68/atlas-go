@@ -1,0 +1,12 @@
+T8: Regime adjustments migrated to config reads
+- GetWeights(): bull/bear/high_vol regime deltas read from config with fallback
+- OnRegimeChange(): RISK_ON/RISK_OFF deltas read from config with fallback
+=== RUN   TestFactorWeightEngine_GetWeights_Default
+--- PASS: TestFactorWeightEngine_GetWeights_Default (0.00s)
+=== RUN   TestFactorWeightEngine_GetWeights_BullRegime
+--- PASS: TestFactorWeightEngine_GetWeights_BullRegime (0.00s)
+=== RUN   TestFactorWeightEngine_GetWeights_BearRegime
+--- PASS: TestFactorWeightEngine_GetWeights_BearRegime (0.00s)
+=== RUN   TestFactorWeightEngine_OnRegimeChange
+--- PASS: TestFactorWeightEngine_OnRegimeChange (0.00s)
+PASS

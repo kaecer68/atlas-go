@@ -1,0 +1,4 @@
+=== RUN   TestEngineJSONBaseAllocationsMatchDefault
+--- PASS: TestEngineJSONBaseAllocationsMatchDefault (0.00s)
+PASS
+ok  	github.com/kaecer68/atlas-go/internal/config	0.214s

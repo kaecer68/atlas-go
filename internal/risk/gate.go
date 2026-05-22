@@ -185,3 +185,4 @@ func (g *RiskGate) LastCalibrationReport() *CalibrationReport {
 	cp := *g.lastCalibration
 	return &cp
 }
+
