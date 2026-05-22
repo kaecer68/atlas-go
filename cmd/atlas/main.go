@@ -960,6 +960,35 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered rule_engine_check background task (%ds interval)", params.RuleEngineIntervalSec.Value)
 			}
 
+			riskGate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
+			calProvider := monitoring.NewSessionCalibrationProvider(filepath.Join(cfg.WorkDir, "data/state"))
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "risk_gate_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					report, err := riskGate.SelfCalibrate(ctx, calProvider, 30)
+					if err != nil {
+						logging.Error("risk_calibrate", "self_calibrate_failed", "err", err.Error())
+						return err
+					}
+					logging.Info("risk_calibrate", "completed",
+						"verdict", report.Verdict,
+						"changes", len(report.Changes),
+						"summary", report.Summary)
+					for _, ch := range report.Changes {
+						logging.Info("risk_calibrate", "parameter_change",
+							"param", ch.Name,
+							"before", ch.Before,
+							"after", ch.After,
+							"rationale", ch.Rationale,
+							"confidence", ch.Confidence)
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered risk_gate_calibrate background task (24h interval)")
+
 			taskMgr.Start(sysCtx)
 			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
 		}

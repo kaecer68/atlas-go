@@ -107,6 +107,7 @@ type BayesianOptimizer struct {
 	gp            *gaussianProcess
 	initialPoints int
 	iterations    int
+	rngState      uint32
 }
 
 type OptimizerConfig struct {
@@ -129,6 +130,7 @@ func DefaultOptimizerConfig() OptimizerConfig {
 
 func (opt *BayesianOptimizer) Optimize() (OptimizeResult, error) {
 	dim := len(opt.bounds)
+	opt.rngState = 42
 	opt.observations = make([]point, 0, opt.initialPoints+opt.iterations)
 	opt.bestY = math.Inf(-1)
 
@@ -205,7 +207,7 @@ func (opt *BayesianOptimizer) proposeNext() []float64 {
 	for i := 0; i < nCandidates; i++ {
 		x := make([]float64, dim)
 		for d := 0; d < dim; d++ {
-			x[d] = opt.bounds[d][0] + lcgRandom()*(opt.bounds[d][1]-opt.bounds[d][0])
+			x[d] = opt.bounds[d][0] + opt.randFloat()*(opt.bounds[d][1]-opt.bounds[d][0])
 		}
 		mean, std := opt.gp.predict(x)
 		ei := expectedImprovement(mean, std, opt.bestY, eiMinExploit)
@@ -237,16 +239,14 @@ func (opt *BayesianOptimizer) randomPoint() []float64 {
 	dim := len(opt.bounds)
 	x := make([]float64, dim)
 	for d := 0; d < dim; d++ {
-		x[d] = opt.bounds[d][0] + lcgRandom()*(opt.bounds[d][1]-opt.bounds[d][0])
+		x[d] = opt.bounds[d][0] + opt.randFloat()*(opt.bounds[d][1]-opt.bounds[d][0])
 	}
 	return x
 }
 
-var lcgState uint32 = 42
-
-func lcgRandom() float64 {
-	lcgState = lcgState*1664525 + 1013904223
-	return float64(lcgState) / float64(math.MaxUint32)
+func (opt *BayesianOptimizer) randFloat() float64 {
+	opt.rngState = opt.rngState*1664525 + 1013904223
+	return float64(opt.rngState) / float64(math.MaxUint32)
 }
 
 type OptimizeResult struct {
