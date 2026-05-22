@@ -642,7 +642,10 @@ export async function togglePipelineShowAll(checkbox) {
   const sessionId = sessionSelect ? sessionSelect.value : '';
   const showScreenedCheckbox = document.getElementById('pipelineShowScreened');
   const showScreened = showScreenedCheckbox ? showScreenedCheckbox.checked : false;
-  const url = (checkbox.checked ? '/api/dashboard/recommendation-pipeline?show_all=true' : '/api/dashboard/recommendation-pipeline') + (sessionId ? '&session_id=' + encodeURIComponent(sessionId) : '');
+  const parts = ['/api/dashboard/recommendation-pipeline'];
+  if (checkbox.checked) parts.push('show_all=true');
+  if (sessionId) parts.push('session_id=' + encodeURIComponent(sessionId));
+  const url = parts[0] + (parts.length > 1 ? '?' + parts.slice(1).join('&') : '');
   const data = await getJSON(url);
   renderPipeline(data, checkbox.checked, sessionId, showScreened);
 }

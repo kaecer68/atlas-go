@@ -53,6 +53,16 @@ func (s *PipelineService) WithRegistryProvider(fn RegistryProviderFunc) *Pipelin
 	return s
 }
 
+func (s *PipelineService) WithNarrativeProvider(fn NarrativeProviderFunc) *PipelineService {
+	s.narrativeProvider = fn
+	return s
+}
+
+func (s *PipelineService) WithCycleProvider(fn CycleProviderFunc) *PipelineService {
+	s.cycleProvider = fn
+	return s
+}
+
 func NewPipelineService(workDir, ledgerDir string, store ledger.OutcomeStore) *PipelineService {
 	return &PipelineService{
 		WorkDir:   workDir,
@@ -452,6 +462,28 @@ func (s *PipelineService) loadSessionPipelineData(sessionID, sessionsDir string,
 			if err := json.Unmarshal([]byte(line), &outcome); err != nil {
 				logging.Warn("pipeline_service", "corrupted_outcome_skipped", logging.Err(err))
 				continue
+			}
+			if outcome.Symbol == "" {
+				var legacy map[string]any
+				if err := json.Unmarshal([]byte(line), &legacy); err == nil {
+					if v, ok := legacy["Symbol"]; ok {
+						outcome.Symbol = fmt.Sprint(v)
+					}
+					if v, ok := legacy["AgentID"]; ok {
+						outcome.AgentID = fmt.Sprint(v)
+					}
+					if v, ok := legacy["Skill"]; ok {
+						outcome.Skill = fmt.Sprint(v)
+					}
+					if v, ok := legacy["Side"]; ok {
+						outcome.Side = domain.Side(fmt.Sprint(v))
+					}
+					if v, ok := legacy["Conviction"]; ok {
+						if n, ok := v.(float64); ok {
+							outcome.Conviction = int(n)
+						}
+					}
+				}
 			}
 			fr := outcome.ForwardReturn
 			price := outcome.Price

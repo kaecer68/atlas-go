@@ -167,6 +167,7 @@ export const SECTOR_NAME_MAP = {
   'ai_supply_chain': 'AI 供應鏈',
   'financials': '金融',
   'shipping': '航運',
+  'leo_satellite': '低軌衛星',
   'high_dividend': '高股息',
   'etf_rotation': 'ETF 輪動',
   'small_cap': '小型股',

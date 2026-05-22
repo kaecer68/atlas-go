@@ -133,7 +133,7 @@ func GenerateReport(ledgerPath string, period string) (*PerformanceReport, error
 		annualizedReturn = math.Pow(1+totalReturn, 365.0/days) - 1
 	}
 
-	sharpeRatio := calculateSharpeRatio(dailyReturns)
+	sharpeRatio := CalculateSharpeRatio(dailyReturns)
 	sortinoRatio := calculateSortinoRatio(dailyReturns, 0.0)
 	maxDD := risk.CalculateMaxDrawdown(portfolioValues)
 	calmarRatio := calculateCalmarRatio(annualizedReturn, maxDD)
@@ -358,7 +358,8 @@ func loadOutcomeFile(path string) ([]domain.RecommendationOutcome, error) {
 	return outcomes, nil
 }
 
-func calculateSharpeRatio(dailyReturns []float64) float64 {
+// CalculateSharpeRatio computes the annualized Sharpe ratio from daily returns.
+func CalculateSharpeRatio(dailyReturns []float64) float64 {
 	if len(dailyReturns) == 0 {
 		return 0
 	}
@@ -525,22 +526,49 @@ func calculateSharpeLike(returns []float64) float64 {
 	if len(returns) == 0 {
 		return 0
 	}
-	mean := 0.0
-	for _, v := range returns {
-		mean += v
+	m := mean(returns)
+	s := stdDev(returns)
+	if s == 0 {
+		return 0
 	}
-	mean /= float64(len(returns))
+	return m / s
+}
 
-	var variance float64
-	for _, v := range returns {
-		diff := v - mean
-		variance += diff * diff
+// CalculateBeta computes the CAPM beta of the portfolio relative to the benchmark.
+// Uses the ratio of portfolio volatility to benchmark return magnitude,
+// consistent with benchmark.go's simplified approach.
+func CalculateBeta(portfolioReturns []float64, benchmarkReturn float64) float64 {
+	if len(portfolioReturns) < 2 || benchmarkReturn == 0 {
+		return 1.0
 	}
-	variance /= float64(len(returns))
-	if variance == 0 {
-		return mean
+	portVol := stdDev(portfolioReturns)
+	benchVol := math.Abs(benchmarkReturn)
+	if benchVol == 0 {
+		return 1.0
 	}
-	return mean / (variance + 1e-9)
+	return portVol / benchVol
+}
+
+// CalculateAlpha computes the risk-adjusted excess return.
+func CalculateAlpha(portfolioReturn, beta, benchmarkReturn float64) float64 {
+	return portfolioReturn - beta*benchmarkReturn
+}
+
+// CalculateTrackingError computes the standard deviation of portfolio returns
+// as a measure of tracking error relative to the benchmark.
+func CalculateTrackingError(portfolioReturns []float64) float64 {
+	if len(portfolioReturns) < 2 {
+		return 0
+	}
+	return stdDev(portfolioReturns)
+}
+
+// CalculateInfoRatio computes the information ratio (outperformance / tracking error).
+func CalculateInfoRatio(outperformance, trackingError float64) float64 {
+	if trackingError == 0 {
+		return 0
+	}
+	return outperformance / trackingError
 }
 
 func calculateRegimeBreakdown(summaries []domain.SessionSummary, outcomes []domain.RecommendationOutcome) RegimeBreakdown {
@@ -652,4 +680,30 @@ func calculateMonthlyReturns(summaries []domain.SessionSummary, portfolioValues 
 	})
 
 	return monthlyReturns
+}
+
+// mean computes the arithmetic mean of a slice.
+func mean(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
+}
+
+// stdDev computes the sample standard deviation of a slice.
+func stdDev(values []float64) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+	m := mean(values)
+	sumSq := 0.0
+	for _, v := range values {
+		d := v - m
+		sumSq += d * d
+	}
+	return math.Sqrt(sumSq / float64(len(values)-1))
 }

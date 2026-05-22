@@ -14,6 +14,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/reporting"
 )
 
 // BenchmarkComparisonResponse is the response for GET /api/dashboard/benchmark-comparison.
@@ -115,29 +116,16 @@ func (h *Handlers) HandleBenchmarkComparison(r *http.Request) (int, any) {
 
 	outperformance := portfolioReturn - taiexReturn
 
-	beta := 1.0
-	portfolioVol := stdDev(dailyReturns)
-	if len(dailyReturns) > 0 && taiexReturn != 0 {
-		benchVol := math.Abs(taiexReturn)
-		if benchVol > 0 {
-			beta = portfolioVol / benchVol
-		}
-	}
-
-	alpha := portfolioReturn - beta*taiexReturn
-
-	trackingError := portfolioVol
+	beta := reporting.CalculateBeta(dailyReturns, taiexReturn)
+	alpha := reporting.CalculateAlpha(portfolioReturn, beta, taiexReturn)
+	trackingError := reporting.CalculateTrackingError(dailyReturns)
 
 	var sharpeRatio float64
-	if len(dailyReturns) > 0 && portfolioVol > 0 {
-		meanDaily := mean(dailyReturns)
-		sharpeRatio = meanDaily / portfolioVol * math.Sqrt(252)
+	if len(dailyReturns) > 0 {
+		sharpeRatio = reporting.CalculateSharpeRatio(dailyReturns)
 	}
 
-	var infoRatio float64
-	if trackingError > 0 {
-		infoRatio = outperformance / trackingError
-	}
+	infoRatio := reporting.CalculateInfoRatio(outperformance, trackingError)
 
 	equityCurve := buildBenchmarkEquityCurve(points, taiexReturn)
 

@@ -419,7 +419,57 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		mux.HandleFunc("/api/events/stream", sseHandler.ServeHTTP)
 	}
 
-	pipelineSvc := service.NewPipelineService(a.workDir, a.ledgerDir, outcomeStore)
+	pipelineSvc := service.NewPipelineService(a.workDir, a.ledgerDir, outcomeStore).
+		WithNarrativeProvider(func(eventIDs []string) *service.NarrativeContextData {
+			if a.narrativeEngine == nil {
+				return nil
+			}
+			events := a.narrativeEngine.DetectEvents(narrative.MarketNarrativeData{})
+			var activeThemes []string
+			var primaryTheme string
+			var primaryHitRate float64
+			var directionHint string
+			for _, event := range events {
+				if event.Status == "active" || event.Status == "confirmed" {
+					activeThemes = append(activeThemes, event.Theme)
+					if primaryTheme == "" {
+						primaryTheme = event.Theme
+						primaryHitRate = event.HitRate
+						if event.Sentiment > 0.3 {
+							directionHint = "positive"
+						} else if event.Sentiment < -0.3 {
+							directionHint = "negative"
+						} else {
+							directionHint = "neutral"
+						}
+					}
+				}
+			}
+			return &service.NarrativeContextData{
+				ActiveThemes:   activeThemes,
+				PrimaryTheme:   primaryTheme,
+				PrimaryHitRate: primaryHitRate,
+				DirectionHint:  directionHint,
+			}
+		}).
+		WithCycleProvider(func(skill string) *service.IndustryContextData {
+			if a.industryService == nil {
+				return nil
+			}
+			tracker := a.industryService.CycleTracker
+			if tracker == nil {
+				return nil
+			}
+			pos, ok := tracker.GetPosition(skill)
+			if !ok {
+				return nil
+			}
+			return &service.IndustryContextData{
+				IndustryID:      skill,
+				BusinessCycle:   string(pos.BusinessCycle),
+				CycleConfidence: pos.Confidence,
+			}
+		})
 	pipelineHandlers := apipipeline.NewHandlers(pipelineSvc)
 	pipelineHandlers.ReasoningHandler = &apipipeline.ReasoningHandler{BaseDir: a.ledgerDir}
 	pipelineHandlers.RegisterRoutes(mux)

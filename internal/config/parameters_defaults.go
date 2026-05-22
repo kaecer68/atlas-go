@@ -33,6 +33,7 @@ func DefaultParametersConfig() *ParametersConfig {
 		NarrativeConviction: defaultNarrativeConvictionParameters(),
 		SectorExecutor:      defaultSectorExecutorParameters(),
 		Alert:               defaultAlertParameters(),
+		RiskGate:            defaultRiskGateParameters(),
 	}
 }
 
@@ -2343,6 +2344,48 @@ func defaultAlertParameters() AlertParameters {
 			Value:     10,
 			Rationale: "Maximum unacknowledged alerts before warning",
 			Source:    SourceHeuristic,
+		},
+	}
+}
+
+func defaultRiskGateParameters() RiskGateParameters {
+	return RiskGateParameters{
+		PreTrade: PreTradeGateParameters{
+			MaxPositionPct: ParameterMetadata[float64]{
+				Value:     0.15,
+				Rationale: "單一持股最大曝險 15%",
+				Source:    SourceLiterature,
+			},
+			MaxSectorExposurePct: ParameterMetadata[float64]{
+				Value:     0.40,
+				Rationale: "單一產業最大曝險 40%",
+				Source:    SourceHeuristic,
+			},
+			VaRConfidenceLevel: ParameterMetadata[float64]{
+				Value:     0.95,
+				Rationale: "VaR 信賴水準 95%",
+				Source:    SourceLiterature,
+			},
+			VarLimitPct: ParameterMetadata[float64]{
+				Value:     0.02,
+				Rationale: "VaR 不得超過組合價值 2%",
+				Source:    SourceHeuristic,
+			},
+			MinCashBufferPct: ParameterMetadata[float64]{
+				Value:     0.05,
+				Rationale: "至少保留 5% 現金緩衝",
+				Source:    SourceHeuristic,
+			},
+			MaxCorrelation: ParameterMetadata[float64]{
+				Value:     0.70,
+				Rationale: "與現有持倉相關性 > 0.7 則降低權重",
+				Source:    SourceHeuristic,
+			},
+			MinADVRatio: ParameterMetadata[float64]{
+				Value:     0.01,
+				Rationale: "下單量不得超過日均量 1%",
+				Source:    SourceLiterature,
+			},
 		},
 	}
 }

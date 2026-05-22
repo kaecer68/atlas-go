@@ -90,7 +90,10 @@ func (h *Handlers) HandleBacktestSnapshots(r *http.Request) (int, any) {
 }
 
 func (h *Handlers) HandleBacktestSignals(r *http.Request) (int, any) {
-	eng := autobacktest.NewSignalEngine(h.LedgerDir)
+	eng, err := autobacktest.NewSignalEngine(h.LedgerDir)
+	if err != nil {
+		return http.StatusInternalServerError, map[string]string{"error": err.Error()}
+	}
 	sigs, err := eng.Evaluate()
 	if err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": err.Error()}

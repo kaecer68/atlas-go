@@ -116,7 +116,7 @@ func (h *Handlers) HandleApproveRecommendation(r *http.Request) (int, any) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return http.StatusBadRequest, map[string]string{"error": "invalid json"}
 	}
-	return h.recordIntervention("approve_rec", req.Symbol, req.Reason, req.Operator)
+	return h.recordIntervention("approve_rec", req.AgentID+":"+req.Symbol, req.Reason, req.Operator)
 }
 
 func (h *Handlers) HandleRejectRecommendation(r *http.Request) (int, any) {
@@ -129,7 +129,7 @@ func (h *Handlers) HandleRejectRecommendation(r *http.Request) (int, any) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return http.StatusBadRequest, map[string]string{"error": "invalid json"}
 	}
-	return h.recordIntervention("reject_rec", req.Symbol, req.Reason, req.Operator)
+	return h.recordIntervention("reject_rec", req.AgentID+":"+req.Symbol, req.Reason, req.Operator)
 }
 
 func (h *Handlers) HandleAgentHealth(r *http.Request) (int, any) {

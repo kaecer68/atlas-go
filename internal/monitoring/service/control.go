@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -135,10 +136,20 @@ func (s *ControlService) CreateIntervention(interventionType, targetID, reason, 
 		targetSector = targetID
 	case "approve_rec":
 		id = fmt.Sprintf("int-approve-%s-%d", targetID, now.UnixNano())
-		targetSymbol = targetID
+		if parts := strings.SplitN(targetID, ":", 2); len(parts) == 2 {
+			targetAgentID = parts[0]
+			targetSymbol = parts[1]
+		} else {
+			targetSymbol = targetID
+		}
 	case "reject_rec":
 		id = fmt.Sprintf("int-reject-%s-%d", targetID, now.UnixNano())
-		targetSymbol = targetID
+		if parts := strings.SplitN(targetID, ":", 2); len(parts) == 2 {
+			targetAgentID = parts[0]
+			targetSymbol = parts[1]
+		} else {
+			targetSymbol = targetID
+		}
 	}
 
 	return domain.HumanIntervention{

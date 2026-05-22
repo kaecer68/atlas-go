@@ -684,6 +684,43 @@ type AlertParameters struct {
 	MaxUnacknowledgedAlerts  ParameterMetadata[int]     `json:"max_unacknowledged_alerts"`
 }
 
+// RiskGateParameters holds all tunable parameters for the unified risk gate system.
+type RiskGateParameters struct {
+	PreTrade  PreTradeGateParameters  `json:"pre_trade"`
+	InTrade   InTradeGateParameters   `json:"in_trade,omitempty"`
+	PostTrade PostTradeGateParameters `json:"post_trade,omitempty"`
+}
+
+// PreTradeGateParameters holds pre-trade risk check parameters.
+type PreTradeGateParameters struct {
+	MaxPositionPct       ParameterMetadata[float64] `json:"max_position_pct"`
+	MaxSectorExposurePct ParameterMetadata[float64] `json:"max_sector_exposure_pct"`
+	VaRConfidenceLevel   ParameterMetadata[float64] `json:"var_confidence_level"`
+	VarLimitPct          ParameterMetadata[float64] `json:"var_limit_pct"`
+	MinCashBufferPct     ParameterMetadata[float64] `json:"min_cash_buffer_pct"`
+	MaxCorrelation       ParameterMetadata[float64] `json:"max_correlation"`
+	MinADVRatio          ParameterMetadata[float64] `json:"min_adv_ratio"`
+}
+
+// InTradeGateParameters holds in-trade monitoring parameters.
+type InTradeGateParameters struct {
+	MonitorIntervalSec         ParameterMetadata[int]     `json:"monitor_interval_sec"`
+	StopLossPct                ParameterMetadata[float64] `json:"stop_loss_pct"`
+	TakeProfitPct              ParameterMetadata[float64] `json:"take_profit_pct"`
+	TrailingStopATRMult        ParameterMetadata[float64] `json:"trailing_stop_atr_mult"`
+	VolatilitySpikeMult        ParameterMetadata[float64] `json:"volatility_spike_mult"`
+	CircuitBreakerDailyLossPct ParameterMetadata[float64] `json:"circuit_breaker_daily_loss_pct"`
+}
+
+// PostTradeGateParameters holds post-trade evaluation parameters.
+type PostTradeGateParameters struct {
+	MaxDrawdownHaltPct      ParameterMetadata[float64] `json:"max_drawdown_halt_pct"`
+	MaxDrawdownDefensivePct ParameterMetadata[float64] `json:"max_drawdown_defensive_pct"`
+	MinRollingSharpe        ParameterMetadata[float64] `json:"min_rolling_sharpe"`
+	ConsecutiveLossDays     ParameterMetadata[int]     `json:"consecutive_loss_days"`
+	EvaluationIntervalHours ParameterMetadata[int]     `json:"evaluation_interval_hours"`
+}
+
 // ParametersConfig is the top-level configuration for all investment model parameters.
 type ParametersConfig struct {
 	Version             string                        `json:"version"`
@@ -709,6 +746,7 @@ type ParametersConfig struct {
 	Strategy            StrategyParameters            `json:"strategy"`
 	SectorExecutor      SectorExecutorParameters      `json:"sector_executor,omitempty"`
 	Alert               AlertParameters               `json:"alert"`
+	RiskGate            RiskGateParameters            `json:"risk_gate,omitempty"`
 }
 
 func (p *ParametersConfig) validateAlert() error {
@@ -878,6 +916,23 @@ func (p *ParametersConfig) Validate() error {
 	}
 	if p.Risk.ConsecutiveLossLimit.Value < 1 {
 		return fmt.Errorf("risk.consecutive_loss_limit (%d) must be >= 1", p.Risk.ConsecutiveLossLimit.Value)
+	}
+
+	// RiskGate validation
+	if p.RiskGate.PreTrade.MaxPositionPct.Value <= 0 || p.RiskGate.PreTrade.MaxPositionPct.Value > 1 {
+		return fmt.Errorf("risk_gate.pre_trade.max_position_pct (%.3f) must be in (0,1]", p.RiskGate.PreTrade.MaxPositionPct.Value)
+	}
+	if p.RiskGate.PreTrade.MaxSectorExposurePct.Value <= 0 || p.RiskGate.PreTrade.MaxSectorExposurePct.Value > 1 {
+		return fmt.Errorf("risk_gate.pre_trade.max_sector_exposure_pct (%.3f) must be in (0,1]", p.RiskGate.PreTrade.MaxSectorExposurePct.Value)
+	}
+	if p.RiskGate.PreTrade.VarLimitPct.Value <= 0 || p.RiskGate.PreTrade.VarLimitPct.Value > 1 {
+		return fmt.Errorf("risk_gate.pre_trade.var_limit_pct (%.3f) must be in (0,1]", p.RiskGate.PreTrade.VarLimitPct.Value)
+	}
+	if p.RiskGate.PreTrade.MinCashBufferPct.Value < 0 || p.RiskGate.PreTrade.MinCashBufferPct.Value > 1 {
+		return fmt.Errorf("risk_gate.pre_trade.min_cash_buffer_pct (%.3f) must be in [0,1]", p.RiskGate.PreTrade.MinCashBufferPct.Value)
+	}
+	if p.RiskGate.PreTrade.VaRConfidenceLevel.Value <= 0 || p.RiskGate.PreTrade.VaRConfidenceLevel.Value > 1 {
+		return fmt.Errorf("risk_gate.pre_trade.var_confidence_level (%.3f) must be in (0,1]", p.RiskGate.PreTrade.VaRConfidenceLevel.Value)
 	}
 
 	// Drawdown constraints
