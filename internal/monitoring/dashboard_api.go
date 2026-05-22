@@ -128,19 +128,31 @@ func setChannelEnabled(workDir, channelID string, enabled bool) error {
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
 	loadChannelStates(workDir)
 
-	// Default: create providers directly (legacy path).
-	// When SetGateway() is called later, providers are swapped to Gateway-backed adapters.
-	providers := []marketdata.MacroDataProvider{
-		marketdata.NewYahooFinanceMacroProvider(),
-		marketdata.NewFrankfurterFXProvider(),
-		marketdata.NewExchangeRateProvider(),
-		marketdata.NewSOXIndexProvider(),
-		marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")),
-		marketdata.NewTWSEMarginBalanceProvider(filepath.Join(workDir, "data/state/margin")),
-		marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export")),
-	}
-	providers = append(providers, marketdata.NewSectorDataProvider(filepath.Join(workDir, "data/state/sector_data")))
 	cfg := config.Load()
+	var providers []marketdata.MacroDataProvider
+
+	// Yahoo Finance-backed providers — only when enabled.
+	if cfg.YahooEnabled {
+		// TODO: Migrate to Gateway for direct Yahoo Finance macro provider instantiation.
+		providers = append(providers, marketdata.NewYahooFinanceMacroProvider())
+		// TODO: Migrate to Gateway for direct SOX index provider instantiation.
+		providers = append(providers, marketdata.NewSOXIndexProvider())
+	}
+
+	// TODO: Migrate to Gateway for direct Frankfurter FX provider instantiation.
+	providers = append(providers, marketdata.NewFrankfurterFXProvider())
+	// ExchangeRate-API provides TWD (not available in ECB/Frankfurter dataset).
+	providers = append(providers, marketdata.NewExchangeRateProvider())
+	// TODO: Migrate to Gateway for direct TWSE capital flow provider instantiation.
+	providers = append(providers, marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")))
+	// TODO: Migrate to Gateway for direct TWSE margin balance provider instantiation.
+	providers = append(providers, marketdata.NewTWSEMarginBalanceProvider(filepath.Join(workDir, "data/state/margin")))
+	// TODO: Migrate to Gateway for direct export statistics provider instantiation.
+	providers = append(providers, marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export")))
+	// Sector data from local cache (graceful degradation if file missing).
+	// TODO: Migrate to Gateway for direct sector data provider instantiation.
+	providers = append(providers, marketdata.NewSectorDataProvider(filepath.Join(workDir, "data/state/sector_data")))
+	// TSMC Revenue from FinMind (overwrites cached sector data when available).
 	if cfg.FinMindAPIKey != "" {
 		providers = append(providers, marketdata.NewTSMCRevenueProvider(cfg.FinMindAPIKey))
 	}
