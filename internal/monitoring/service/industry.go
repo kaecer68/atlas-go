@@ -10,11 +10,12 @@ import (
 )
 
 type IndustryService struct {
-	Classifier      *industry.ClassificationTree
-	SeasonalEngine  *industry.SeasonalEngine
-	CycleTracker    *industry.CycleTracker
-	LinkageAnalyzer *industry.LinkageAnalyzer
-	RiskMonitor     *industry.RiskMonitor
+	Classifier        *industry.ClassificationTree
+	SeasonalEngine    *industry.SeasonalEngine
+	CycleTracker      *industry.CycleTracker
+	LinkageAnalyzer   *industry.LinkageAnalyzer
+	RiskMonitor       *industry.RiskMonitor
+	NarrativeProvider industry.NarrativeLinkageProvider
 }
 
 func NewIndustryService(
@@ -23,16 +24,18 @@ func NewIndustryService(
 	cycleTracker *industry.CycleTracker,
 	linkageAnalyzer *industry.LinkageAnalyzer,
 	riskMonitor *industry.RiskMonitor,
+	narrativeProvider industry.NarrativeLinkageProvider,
 ) *IndustryService {
 	if seasonalEngine != nil && linkageAnalyzer != nil {
 		seasonalEngine.SetLinkageGraph(linkageAnalyzer.GetSupplyChainGraph())
 	}
 	return &IndustryService{
-		Classifier:      classifier,
-		SeasonalEngine:  seasonalEngine,
-		CycleTracker:    cycleTracker,
-		LinkageAnalyzer: linkageAnalyzer,
-		RiskMonitor:     riskMonitor,
+		Classifier:        classifier,
+		SeasonalEngine:    seasonalEngine,
+		CycleTracker:      cycleTracker,
+		LinkageAnalyzer:   linkageAnalyzer,
+		RiskMonitor:       riskMonitor,
+		NarrativeProvider: narrativeProvider,
 	}
 }
 
@@ -102,6 +105,9 @@ func (s *IndustryService) GetAdjustmentBreakdown(industryID string, now time.Tim
 
 // GetActiveNarrativeThemes returns the narrative themes currently active for an industry.
 func (s *IndustryService) GetActiveNarrativeThemes(industryID string) []string {
+	if s.NarrativeProvider != nil {
+		return s.NarrativeProvider.ActiveThemes()
+	}
 	return nil
 }
 

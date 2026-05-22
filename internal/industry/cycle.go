@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 // CyclePhase represents the current phase of an industry business cycle.
@@ -68,14 +69,16 @@ type Indicator struct {
 
 // CycleTracker monitors and tracks cycle positions for industries.
 type CycleTracker struct {
-	positions          map[string]*CyclePosition
-	mu                 sync.RWMutex
-	history            map[string][]CyclePosition
-	seasonalEngine     *SeasonalEngine
-	linkageAnalyzer    *LinkageAnalyzer
-	narrativeHitRate   func() float64
-	narrativeAdjust    func(industryID string) NarrativeAdjustment
-	lastNarrativeTheme map[string]string // active narrative theme per industry (updated during detectBusinessCycle)
+	positions            map[string]*CyclePosition
+	mu                   sync.RWMutex
+	history              map[string][]CyclePosition
+	seasonalEngine       *SeasonalEngine
+	linkageAnalyzer      *LinkageAnalyzer
+	narrativeHitRate     func() float64
+	narrativeAdjust      func(industryID string) NarrativeAdjustment
+	lastNarrativeTheme   map[string]string
+	calibratedThresholds map[string]config.CycleThresholdConfig
+	macroSnapshot        func() marketdata.MacroDataSnapshot
 }
 
 // NewCycleTracker creates a new cycle tracker.
@@ -106,6 +109,28 @@ func (ct *CycleTracker) SetNarrativeAdjuster(fn func(industryID string) Narrativ
 	ct.narrativeAdjust = fn
 }
 
+// SetCalibratedThresholds accepts calibration results from threshold_calibrator
+// and converts P25/P50/P75 percentiles into CycleThresholdConfig thresholds.
+// These override config-file thresholds at runtime without requiring restart.
+func (ct *CycleTracker) SetCalibratedThresholds(results []CalibrationResult) {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+
+	if ct.calibratedThresholds == nil {
+		ct.calibratedThresholds = make(map[string]config.CycleThresholdConfig, len(results))
+	}
+	for _, r := range results {
+		ct.calibratedThresholds[r.IndustryID] = config.CycleThresholdConfig{
+			ExpansionRevenuePct: r.P75,
+			ExpansionProfitPct:  r.P75,
+			RecoveryRevenuePct:  r.P50,
+			RecoveryProfitPct:   r.P50,
+			MatureRevenuePct:    r.P25,
+			MatureProfitPct:     r.P25,
+		}
+	}
+}
+
 func (ct *CycleTracker) HasEmpiricalData(industryID string) bool {
 	return len(ct.history[industryID]) > 1
 }
@@ -115,6 +140,12 @@ func (ct *CycleTracker) NarrativeTheme(industryID string) string {
 		return ""
 	}
 	return ct.lastNarrativeTheme[industryID]
+}
+
+// SetMacroSnapshotProvider sets a function that returns the current macro data snapshot.
+// Enables leading-indicator enrichment (CapexGrowth, SOXIndex) in cycle detection.
+func (ct *CycleTracker) SetMacroSnapshotProvider(fn func() marketdata.MacroDataSnapshot) {
+	ct.macroSnapshot = fn
 }
 
 // initializeDefaultPositions populates the tracker with default cycle positions
@@ -333,16 +364,19 @@ func (ct *CycleTracker) detectCyclePosition(industryID string, metrics IndustryM
 
 // detectBusinessCycle determines the business cycle phase.
 func (ct *CycleTracker) detectBusinessCycle(metrics IndustryMetrics) CyclePhase {
-	params := config.GetParametersConfig().Industry
-	thresholds, ok := params.CycleThresholds.Value[metrics.IndustryID]
+	thresholds, ok := ct.calibratedThresholds[metrics.IndustryID]
 	if !ok {
-		thresholds = config.CycleThresholdConfig{
-			ExpansionRevenuePct: 0.20,
-			ExpansionProfitPct:  0.20,
-			RecoveryRevenuePct:  0.05,
-			RecoveryProfitPct:   0.05,
-			MatureRevenuePct:    -0.05,
-			MatureProfitPct:     -0.05,
+		params := config.GetParametersConfig().Industry
+		thresholds, ok = params.CycleThresholds.Value[metrics.IndustryID]
+		if !ok {
+			thresholds = config.CycleThresholdConfig{
+				ExpansionRevenuePct: 0.20,
+				ExpansionProfitPct:  0.20,
+				RecoveryRevenuePct:  0.05,
+				RecoveryProfitPct:   0.05,
+				MatureRevenuePct:    -0.05,
+				MatureProfitPct:     -0.05,
+			}
 		}
 	}
 
@@ -356,6 +390,14 @@ func (ct *CycleTracker) detectBusinessCycle(metrics IndustryMetrics) CyclePhase 
 		ct.lastNarrativeTheme[metrics.IndustryID] = adj.ActiveTheme
 	} else {
 		delete(ct.lastNarrativeTheme, metrics.IndustryID)
+	}
+
+	if ct.macroSnapshot != nil {
+		snap := ct.macroSnapshot()
+		if snap.CapexGrowth.Value != 0 {
+			bias := snap.CapexGrowth.Value * 0.10
+			revenueGrowth += bias
+		}
 	}
 
 	switch {
@@ -427,12 +469,16 @@ func (ct *CycleTracker) calculateConfidence(industryID string, metrics IndustryM
 	}
 
 	boundary := ct.boundaryConfidence(industryID, metrics)
-	// When revenue or profit is negative, the industry is in contraction.
-	// High boundary confidence (far from positive thresholds) should not boost
-	// overall confidence — it just means the decline is unambiguous, not that
-	// the industry data is strong. Halve boundary contribution in that case.
+	// When revenue or profit is negative and the boundary confidence is
+	// high (>0.7), the decline is unambiguous — this is a strong signal,
+	// not weak data. We preserve boundary confidence in contraction.
+	// Only penalize when boundary is low (metrics near phase transitions),
+	// which indicates genuine ambiguity.
 	if metrics.RevenueGrowthYoY < 0 || metrics.ProfitGrowthYoY < 0 {
-		boundary *= 0.5
+		if boundary < 0.5 {
+			boundary *= 0.8 // Near threshold → penalize ambiguity
+		}
+		// boundary >= 0.5: unambiguous contraction → keep as-is
 	}
 	confidence := signal*cfgSignal.SignalBoundaryMix + boundary*(1.0-cfgSignal.SignalBoundaryMix)
 
@@ -578,7 +624,6 @@ func (ct *CycleTracker) boundaryConfidence(industryID string, metrics IndustryMe
 func (ct *CycleTracker) getLeadingIndicators(industryID string, metrics IndustryMetrics) []Indicator {
 	var indicators []Indicator
 
-	// Common leading indicators
 	if metrics.RevenueGrowthYoY != 0 {
 		indicators = append(indicators, Indicator{
 			Name:      "Revenue Growth YoY",
@@ -599,6 +644,30 @@ func (ct *CycleTracker) getLeadingIndicators(industryID string, metrics Industry
 			IsLeading: true,
 			Weight:    0.25,
 		})
+	}
+
+	if ct.macroSnapshot != nil {
+		snap := ct.macroSnapshot()
+		if snap.CapexGrowth.Value != 0 {
+			indicators = append(indicators, Indicator{
+				Name:      "Capex Growth",
+				Value:     snap.CapexGrowth.Value,
+				Unit:      "%",
+				Trend:     ct.getTrend(snap.CapexGrowth.Value, 0.10),
+				IsLeading: true,
+				Weight:    0.25,
+			})
+		}
+		if snap.SOXIndex.Value != 0 {
+			indicators = append(indicators, Indicator{
+				Name:      "SOX Index",
+				Value:     snap.SOXIndex.Value,
+				Unit:      "pts",
+				Trend:     ct.getTrend(snap.SOXIndex.Value, 3000),
+				IsLeading: true,
+				Weight:    0.20,
+			})
+		}
 	}
 
 	return indicators

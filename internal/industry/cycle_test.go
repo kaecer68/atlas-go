@@ -172,6 +172,60 @@ func TestCalculateConfidence(t *testing.T) {
 	}
 }
 
+func TestCalculateConfidence_NegativeGrowthUnambiguous(t *testing.T) {
+	ct := NewCycleTracker()
+
+	clearContraction := IndustryMetrics{
+		RevenueGrowthYoY:    -0.50,
+		ProfitGrowthYoY:     -0.60,
+		InventoryTurnover:   3.0,
+		CapacityUtilization: 0.50,
+	}
+	confClear := ct.calculateConfidence("test", clearContraction)
+
+	mildPositive := IndustryMetrics{
+		RevenueGrowthYoY:    0.02,
+		ProfitGrowthYoY:     0.01,
+		InventoryTurnover:   3.0,
+		CapacityUtilization: 0.50,
+	}
+	confMild := ct.calculateConfidence("test", mildPositive)
+
+	// Strongly negative growth is unambiguous — confidence should NOT be
+	// lower than a weakly positive case where boundary is near thresholds.
+	if confClear < confMild {
+		t.Errorf("unambiguous contraction (%.4f) should not have lower confidence than near-threshold positive (%.4f)",
+			confClear, confMild)
+	}
+}
+
+func TestCalculateConfidence_NegativeGrowthNearThreshold(t *testing.T) {
+	ct := NewCycleTracker()
+
+	nearThreshold := IndustryMetrics{
+		RevenueGrowthYoY:    -0.02,
+		ProfitGrowthYoY:     -0.01,
+		InventoryTurnover:   4.0,
+		CapacityUtilization: 0.70,
+	}
+	confNear := ct.calculateConfidence("test", nearThreshold)
+
+	farFromThreshold := IndustryMetrics{
+		RevenueGrowthYoY:    -0.40,
+		ProfitGrowthYoY:     -0.50,
+		InventoryTurnover:   4.0,
+		CapacityUtilization: 0.70,
+	}
+	confFar := ct.calculateConfidence("test", farFromThreshold)
+
+	// Both negative, but far-from-threshold is unambiguous while near-threshold
+	// is ambiguous — far should have higher confidence.
+	if confFar < confNear {
+		t.Errorf("unambiguous contraction (%.4f) should have >= confidence than ambiguous (%.4f)",
+			confFar, confNear)
+	}
+}
+
 func TestCyclePositionIsFavorable(t *testing.T) {
 	tests := []struct {
 		phase     CyclePhase
@@ -198,10 +252,10 @@ func TestGetPhaseScore(t *testing.T) {
 		phase    CyclePhase
 		expected float64
 	}{
-		{CycleExpansion, 20.0},
-		{CycleRecovery, 10.0},
+		{CycleExpansion, 1.0},
+		{CycleRecovery, 0.5},
 		{CycleMature, 0.0},
-		{CycleRecession, -20.0},
+		{CycleRecession, -1.0},
 	}
 
 	for _, tt := range tests {
@@ -401,8 +455,8 @@ func TestCycleTracker_GetContinuousPhaseScore_ExistingIndustry(t *testing.T) {
 	ct := NewCycleTracker()
 	// CycleTracker is initialized with default positions, so "semiconductor" exists
 	score := ct.GetContinuousPhaseScore("semiconductor")
-	if score < -20.0 || score > 20.0 {
-		t.Fatalf("expected score in range [-20, 20], got %f", score)
+	if score < -1.0 || score > 1.0 {
+		t.Fatalf("expected score in range [-1, 1], got %f", score)
 	}
 	t.Logf("semiconductor continuous score: %f", score)
 }
@@ -426,8 +480,8 @@ func TestCycleTracker_GetContinuousPhaseScore_HighConfidence(t *testing.T) {
 	ct.positions["test_high"] = pos
 
 	score := ct.GetContinuousPhaseScore("test_high")
-	if score < 14.0 {
-		t.Fatalf("expected score near 20.0 for high confidence expansion, got %f", score)
+	if score < 0.7 {
+		t.Fatalf("expected score near 1.0 for high confidence expansion, got %f", score)
 	}
 }
 
@@ -441,10 +495,47 @@ func TestCycleTracker_GetContinuousPhaseScore_LowConfidence(t *testing.T) {
 	ct.positions["test_low"] = pos
 
 	score := ct.GetContinuousPhaseScore("test_low")
-	// Low confidence Recovery pulls toward next phase (Expansion = 20.0)
-	// blend = 1 - 0.15² = 0.9775, transProb = 0.80
-	// Score = 10 * (1 - 0.9775 * 0.80) + 20 * (0.9775 * 0.80) = 17.82
-	if score < 16.0 || score > 19.0 {
-		t.Fatalf("expected ~17.82 for low confidence recovery, got %f", score)
+	if score < 0.80 || score > 0.95 {
+		t.Fatalf("expected ~0.891 for low confidence recovery, got %f", score)
+	}
+}
+
+func TestSetCalibratedThresholds_OverridesConfig(t *testing.T) {
+	ct := NewCycleTracker()
+
+	results := []CalibrationResult{
+		{IndustryID: "semiconductor", P25: -0.10, P50: 0.08, P75: 0.30, SampleSize: 120},
+	}
+	ct.SetCalibratedThresholds(results)
+
+	metrics := IndustryMetrics{
+		IndustryID:       "semiconductor",
+		RevenueGrowthYoY: 0.35,
+		ProfitGrowthYoY:  0.35,
+	}
+	phase := ct.detectBusinessCycle(metrics)
+	if phase != CycleExpansion {
+		t.Fatalf("expected Expansion for 35%% growth with P75=0.30 threshold, got %s", phase)
+	}
+
+	metrics.RevenueGrowthYoY = 0.01
+	metrics.ProfitGrowthYoY = 0.01
+	phase = ct.detectBusinessCycle(metrics)
+	if phase != CycleMature {
+		t.Fatalf("expected Mature for 1%% growth with P50=0.08 threshold, got %s", phase)
+	}
+}
+
+func TestSetCalibratedThresholds_FallbackToConfig(t *testing.T) {
+	ct := NewCycleTracker()
+
+	metrics := IndustryMetrics{
+		IndustryID:       "nonexistent_industry",
+		RevenueGrowthYoY: 0.10,
+		ProfitGrowthYoY:  0.10,
+	}
+	phase := ct.detectBusinessCycle(metrics)
+	if phase != CycleRecovery {
+		t.Fatalf("expected Recovery for 10%% growth with default thresholds, got %s", phase)
 	}
 }

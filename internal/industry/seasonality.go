@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -568,6 +569,7 @@ func (se *SeasonalEngine) detectThemeDirection(theme string) float64 {
 		case "geopolitical_risk_spike":
 			return 1.0
 		default:
+			logging.Warn("seasonality", "unknown_theme_fallback", "theme", theme)
 			return 1.0
 		}
 	}
@@ -621,6 +623,7 @@ func (se *SeasonalEngine) detectThemeDirection(theme string) float64 {
 		return 1.0
 
 	default:
+		logging.Warn("seasonality", "unknown_theme", "theme", theme)
 		return 1.0
 	}
 }

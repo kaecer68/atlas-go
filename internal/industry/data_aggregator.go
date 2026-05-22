@@ -197,15 +197,18 @@ func extractProfit(data map[string]float64) float64 {
 	return 0
 }
 
-func RecalibrateThresholds(revenuePath, configPath string) error {
+func RecalibrateThresholds(revenuePath, configPath string) ([]CalibrationResult, error) {
 	results, err := CalibrateThresholdsFromFile(revenuePath)
 	if err != nil {
-		return fmt.Errorf("recalibrate: %w", err)
+		return nil, fmt.Errorf("recalibrate: %w", err)
 	}
 	if len(results) == 0 {
-		return fmt.Errorf("recalibrate: no data available")
+		return nil, fmt.Errorf("recalibrate: no data available")
 	}
-	return writeCalibratedConfig(configPath, results)
+	if err := writeCalibratedConfig(configPath, results); err != nil {
+		return results, err
+	}
+	return results, nil
 }
 
 func writeCalibratedConfig(configPath string, results []CalibrationResult) error {

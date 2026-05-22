@@ -376,6 +376,15 @@ func DefaultClassification() *ClassificationTree {
 	addIndustrialSubIndustries(tree)
 	addLEOSatelliteSubIndustries(tree)
 
+	// Override RepresentativeStocks from config file if available
+	if symbols, err := LoadSectorSymbols(""); err == nil {
+		for _, seg := range tree.GetAllSegments() {
+			if stocks, ok := symbols[seg.ID]; ok && len(stocks) > 0 {
+				seg.RepresentativeStocks = stocks
+			}
+		}
+	}
+
 	return tree
 }
 

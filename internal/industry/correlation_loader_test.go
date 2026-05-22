@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestLoadIndustryReturnsFromReplay_ValidData(t *testing.T) {
@@ -24,8 +25,8 @@ func TestLoadIndustryReturnsFromReplay_ValidData(t *testing.T) {
 	}
 	writer := csv.NewWriter(csvFile)
 	writer.Write([]string{"Date", "Code", "Name", "TradeVolume", "Open", "High", "Low", "Close"})
-	for i := 0; i < 20; i++ {
-		date := fmt.Sprintf("2026-01-%02d", 1+i)
+	for i := 0; i < 65; i++ {
+		date := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i).Format("2006-01-02")
 		writer.Write([]string{date, "2330", "TSMC", "10000", "100", "105", "99", "104"})
 		writer.Write([]string{date, "2303", "UMC", "5000", "50", "52", "49", "51"})
 		writer.Write([]string{date, "2881", "Fubon", "3000", "60", "62", "59", "61"})
@@ -163,13 +164,9 @@ func TestIndustryReturnsOrdering(t *testing.T) {
 	}
 	w := csv.NewWriter(csvFile)
 	_ = w.Write([]string{"Date", "Code", "Name", "TradeVolume", "Open", "High", "Low", "Close"})
-	// Write dates out of order to verify sorting
-	dates := []string{"2024-03-15", "2024-01-02", "2024-02-10", "2024-03-16",
-		"2024-01-03", "2024-02-11", "2024-03-17", "2024-01-04",
-		"2024-02-12", "2024-03-18", "2024-01-05", "2024-02-13",
-		"2024-03-19", "2024-01-06", "2024-02-14", "2024-03-20",
-		"2024-01-07"}
-	for i, date := range dates {
+	// Generate 66 dates out of order to verify sorting (need ≥60 returns after filtering)
+	for i := 65; i >= 0; i-- {
+		date := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, 65-i).Format("2006-01-02")
 		price := float64(100 + i)
 		_ = w.Write([]string{
 			date,
@@ -196,8 +193,8 @@ func TestIndustryReturnsOrdering(t *testing.T) {
 	}
 
 	semi := result["semiconductor"]
-	if len(semi) != 16 {
-		t.Errorf("expected 16 returns, got %d", len(semi))
+	if len(semi) != 65 {
+		t.Errorf("expected 65 returns, got %d", len(semi))
 	}
 }
 
@@ -208,11 +205,11 @@ func TestIndustryReturnsFormat(t *testing.T) {
 	csvFile, _ := os.Create(replayPath)
 	w := csv.NewWriter(csvFile)
 	_ = w.Write([]string{"Date", "Code", "Name", "TradeVolume", "Open", "High", "Low", "Close"})
-	for d := 1; d <= 20; d++ {
+	for d := 0; d < 65; d++ {
+		date := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, d).Format("2006-01-02")
 		price := float64(100 + d)
 		_ = w.Write([]string{
-			fmt.Sprintf("2024-01-%02d", d),
-			"2330", "TSMC", "50000",
+			date, "2330", "TSMC", "50000",
 			fmt.Sprintf("%.0f", price),
 			fmt.Sprintf("%.0f", price+2),
 			fmt.Sprintf("%.0f", price-1),
@@ -238,8 +235,8 @@ func TestIndustryReturnsFormat(t *testing.T) {
 		if len(returns) == 0 {
 			t.Errorf("industry %s has empty returns", id)
 		}
-		if len(returns) < 15 {
-			t.Errorf("industry %s has %d returns (need >= 15)", id, len(returns))
+		if len(returns) < 60 {
+			t.Errorf("industry %s has %d returns (need >= 60)", id, len(returns))
 		}
 	}
 }
@@ -270,6 +267,6 @@ func TestIndustryReturnsMinimum(t *testing.T) {
 
 	_, err := LoadIndustryReturnsFromReplay(replayPath, sectorPath)
 	if err == nil {
-		t.Fatal("expected error for industry with < 15 observations")
+		t.Fatal("expected error for industry with < 60 observations")
 	}
 }

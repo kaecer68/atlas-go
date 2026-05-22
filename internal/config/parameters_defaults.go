@@ -1890,11 +1890,10 @@ func defaultIndustryParameters() IndustryParameters {
 		},
 		PhaseScores: ParameterMetadata[PhaseScoresConfig]{
 			Value: PhaseScoresConfig{
-				ScoreExpansion: 20, ScoreRecovery: 10, ScoreMature: 0, ScoreRecession: -20,
+				ScoreExpansion: 1.0, ScoreRecovery: 0.5, ScoreMature: 0.0, ScoreRecession: -1.0,
 			},
-			Rationale: "Cycle phase conviction deltas; expansion (+20) and recovery (+10) boost, recession (-20) penalizes, mature (0) neutral",
+			Rationale: "Cycle phase correlation scores (-1 bearish to 1 bullish)",
 			Source:    SourceHeuristic,
-			Todo:      "Calibrate: derive phase deltas from sector-regime conviction regression",
 		},
 		SkillToIndustry: ParameterMetadata[map[string]string]{
 			Value: map[string]string{

@@ -131,10 +131,10 @@ type PositionDTO struct {
 // CrossFootCheck represents the cross-footing verification between
 // the portfolio-level UnrealizedPnL and the sum of individual position P&Ls.
 type CrossFootCheck struct {
-	IsBalanced    bool    `json:"is_balanced"`
-	Portfolio     float64 `json:"portfolio_unrealized"`
-	SumPositions  float64 `json:"sum_positions_unrealized"`
-	Difference    float64 `json:"difference"`
+	IsBalanced   bool    `json:"is_balanced"`
+	Portfolio    float64 `json:"portfolio_unrealized"`
+	SumPositions float64 `json:"sum_positions_unrealized"`
+	Difference   float64 `json:"difference"`
 }
 
 // EquityCurvePoint is a single point on the equity curve.
