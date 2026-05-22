@@ -209,6 +209,32 @@ func run(args []string, deps appDeps) error {
 	var janusEngine *janus.Engine
 
 	if *apiMode {
+		// Pre-initialize janus engine for Gateway channel adapters.
+		janusEngine = janus.NewEngine()
+		janusEngine.EnsureAllRegimes()
+		janusEngine.Update()
+
+		// Initialize Gateway BEFORE DashboardAPI so data providers use Gateway from the start.
+		var gateway *apigateway.Gateway
+		var gatewayFetcher monitoring.DataFetcher
+		gw, gwErr := apigateway.NewGateway(cfg.WorkDir, pool)
+		if gwErr != nil {
+			log.Printf("[Gateway] initialization failed: %v", gwErr)
+		} else if err := apigateway.RegisterChannelAdapters(gw, cfg.WorkDir, cfg, janusEngine); err != nil {
+			log.Printf("[Gateway] adapter registration failed: %v", err)
+		} else {
+			gateway = gw
+			log.Printf("[Gateway] initialized with %d channels + adapters", len(gateway.ChannelIDs()))
+			gatewayFetcher = func(ctx context.Context, channelID string) ([]byte, error) {
+				result, err := gateway.Fetch(ctx, channelID)
+				if err != nil {
+					return nil, err
+				}
+				return result.Data, nil
+			}
+			log.Printf("[Gateway] data fetcher prepared for DashboardAPI")
+		}
+
 		mux := http.NewServeMux()
 		log.Printf("[Auth] API key authentication %s", map[bool]string{true: "ENABLED", false: "DISABLED (no ATLAS_API_KEY set)"}[os.Getenv("ATLAS_API_KEY") != ""])
 		healthStore, err := portfolio.NewAgentHealthStore(filepath.Join(cfg.WorkDir, "data/state"))
@@ -220,13 +246,15 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[Parameters] failed to load parameters config: %v", err)
 		}
 		runtimeParams := portfolio.ToRuntimeParameters(paramsCfg)
-		dashboard := deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
+		var dashboard routeRegistrar
+		if gatewayFetcher != nil {
+			dashboard = monitoring.NewDashboardAPIWithGateway(cfg.WorkDir, cfg.LedgerDir, collector, gatewayFetcher)
+		} else {
+			dashboard = deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
+		}
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 			d.SetPool(pool)
 			d.SetHealthManager(portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore).WithParameters(runtimeParams))
-			janusEngine = janus.NewEngine()
-			janusEngine.EnsureAllRegimes()
-			janusEngine.Update()
 			d.SetJanusEngine(janusEngine)
 			log.Printf("[JANUS] engine injected into dashboard API")
 		}
@@ -430,29 +458,9 @@ func run(args []string, deps appDeps) error {
 		mux.Handle("/static/", http.StripPrefix("/static/", fs))
 		log.Printf("dashboard api listening on %s", *apiAddr)
 
-		// Initialize API Gateway with channel adapters and background task manager.
-		gateway, err := apigateway.NewGateway(cfg.WorkDir, pool)
+		// Gateway already initialized before DashboardAPI. Create BackgroundTaskManager.
 		var taskMgr *apigateway.BackgroundTaskManager
-		if err != nil {
-			log.Printf("[Gateway] initialization failed: %v", err)
-		} else if err := apigateway.RegisterChannelAdapters(gateway, cfg.WorkDir, cfg, janusEngine); err != nil {
-			log.Printf("[Gateway] adapter registration failed: %v", err)
-		} else {
-			log.Printf("[Gateway] initialized with %d channels + adapters", len(gateway.ChannelIDs()))
-
-			// Inject Gateway data fetcher into DashboardAPI (breaks import cycle via func type).
-			if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-				d.SetGateway(func(ctx context.Context, channelID string) ([]byte, error) {
-					result, err := gateway.Fetch(ctx, channelID)
-					if err != nil {
-						return nil, err
-					}
-					return result.Data, nil
-				})
-				log.Printf("[Gateway] data fetcher injected into DashboardAPI")
-			}
-
-			// BackgroundTaskManager for centralized goroutine lifecycle management.
+		if gateway != nil {
 			taskMgr = apigateway.NewBackgroundTaskManager(gateway)
 
 			// Wire failure alerts for background tasks.

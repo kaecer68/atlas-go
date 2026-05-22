@@ -9,8 +9,8 @@ import (
 
 func TestAllScenariosReturnsFive(t *testing.T) {
 	scenarios := AllScenarios()
-	if len(scenarios) != 5 {
-		t.Errorf("expected 5 scenarios, got %d", len(scenarios))
+	if len(scenarios) != 8 {
+		t.Errorf("expected 8 scenarios, got %d", len(scenarios))
 	}
 }
 
@@ -127,8 +127,8 @@ func TestRunnerRunAll(t *testing.T) {
 
 	report := runner.RunAll(stockQuotes, recs)
 
-	if len(report.ScenarioResults) != 5 {
-		t.Errorf("expected 5 results, got %d", len(report.ScenarioResults))
+	if len(report.ScenarioResults) != 8 {
+		t.Errorf("expected 8 results, got %d", len(report.ScenarioResults))
 	}
 	if report.BaselineResult == nil {
 		t.Error("expected baseline result to be set")

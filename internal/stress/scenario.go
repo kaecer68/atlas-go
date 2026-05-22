@@ -88,6 +88,48 @@ var (
 			{Symbol: "OIL", Last: 72.0, Open: 71.5, IsTradable: true},
 		},
 	}
+
+	ScenarioStagflation = Scenario{
+		ID:          "stagflation_2023",
+		Name:        "Stagflationary Shock",
+		Description: "Oct 2023: Oil spike to $95, US10Y > 5%, growth slows, VIX elevated",
+		Date:        time.Date(2023, 10, 19, 0, 0, 0, 0, time.UTC),
+		Regime:      domain.RegimeRiskOff,
+		Quotes: []domain.Quote{
+			{Symbol: "VIX", Last: 22.0, IsTradable: true},
+			{Symbol: "DXY", Last: 106.5, Open: 106.0, IsTradable: true},
+			{Symbol: "US10Y", Last: 5.1, IsTradable: true},
+			{Symbol: "OIL", Last: 95.0, Open: 92.0, IsTradable: true},
+		},
+	}
+
+	ScenarioEMContagion = Scenario{
+		ID:          "em_contagion_2018",
+		Name:        "EM Contagion & Currency Crisis",
+		Description: "Aug 2018: Turkey/Argentina crisis, DXY surge, EM selloff, carry unwind",
+		Date:        time.Date(2018, 8, 13, 0, 0, 0, 0, time.UTC),
+		Regime:      domain.RegimeRiskOff,
+		Quotes: []domain.Quote{
+			{Symbol: "VIX", Last: 24.0, IsTradable: true},
+			{Symbol: "DXY", Last: 96.5, Open: 95.0, IsTradable: true},
+			{Symbol: "US10Y", Last: 2.9, IsTradable: true},
+			{Symbol: "OIL", Last: 67.0, Open: 70.0, IsTradable: true},
+		},
+	}
+
+	ScenarioLiquidityCrunch = Scenario{
+		ID:          "liquidity_crunch_2008",
+		Name:        "Global Liquidity Crunch",
+		Description: "Oct 2008: Lehman aftermath, VIX 80+, credit freeze, forced liquidation",
+		Date:        time.Date(2008, 10, 10, 0, 0, 0, 0, time.UTC),
+		Regime:      domain.RegimeRiskOff,
+		Quotes: []domain.Quote{
+			{Symbol: "VIX", Last: 69.3, IsTradable: true},
+			{Symbol: "DXY", Last: 83.0, Open: 80.0, IsTradable: true},
+			{Symbol: "US10Y", Last: 3.8, IsTradable: true},
+			{Symbol: "OIL", Last: 36.0, Open: 90.0, IsTradable: true},
+		},
+	}
 )
 
 // AllScenarios returns all built-in stress test scenarios.
@@ -98,6 +140,9 @@ func AllScenarios() []Scenario {
 		ScenarioAIBubble,
 		ScenarioTaiwanTension,
 		ScenarioNormalMarket,
+		ScenarioStagflation,
+		ScenarioEMContagion,
+		ScenarioLiquidityCrunch,
 	}
 }
 

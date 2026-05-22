@@ -193,6 +193,49 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	}
 }
 
+// NewDashboardAPIWithGateway creates a DashboardAPI with Gateway-backed data providers.
+// Unlike the legacy constructor, this skips direct provider creation and uses
+// the Gateway via DataFetcher from the start, complying with the Constitution.
+func NewDashboardAPIWithGateway(workDir, ledgerDir string, metricsCollector *MetricsCollector, fetcher DataFetcher) *DashboardAPI {
+	loadChannelStates(workDir)
+
+	if metricsCollector == nil {
+		metricsCollector = NewMetricsCollector()
+	}
+
+	macroProvider := NewMacroDataGatewayAdapter(fetcher)
+	geoProvider := NewGeopoliticalGatewayAdapter(fetcher)
+	taiwanGeoProvider := narrative.NewCompositeTaiwanGeopoliticalProvider(
+		narrative.NewTaiwanRSSGeopoliticalProvider(),
+	)
+
+	lifecycle := narrative.NewEventLifecycleManager()
+	ingestor := narrative.NewMacroIngestor(macroProvider, filepath.Join(workDir, "data/state/macro"))
+	ingestor.SetLifecycleManager(lifecycle)
+
+	narrativeEng := narrative.NewNarrativeEngine()
+	return &DashboardAPI{
+		workDir:            workDir,
+		ledgerDir:          ledgerDir,
+		storeBackend:       os.Getenv("ATLAS_STORE_BACKEND"),
+		sqlitePath:         os.Getenv("ATLAS_SQLITE_PATH"),
+		baselinePath:       filepath.Join(workDir, "data/state/baseline_policy.json"),
+		narrativeEngine:    narrativeEng,
+		macroIngestor:      ingestor,
+		macroProvider:      macroProvider,
+		geoProvider:        geoProvider,
+		taiwanGeoProvider:  taiwanGeoProvider,
+		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider, workDir),
+		reportGenerator:    narrative.NewReportGenerator(),
+		industryService:    newWiredIndustryService(narrativeEng, macroProvider),
+		metricsCollector:   metricsCollector,
+		metricsHistory:     NewMetricsHistory(1000),
+		healthManager:      portfolio.NewAgentHealthManager(),
+		dataQualityChecker: NewDataQualityChecker(workDir, ledgerDir),
+		dataFetcher:        fetcher,
+	}
+}
+
 func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroProvider marketdata.MacroDataProvider) *service.IndustryService {
 	seasonalEngine := industry.NewSeasonalEngine()
 	cycleTracker := industry.NewCycleTracker()
