@@ -18,7 +18,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
-	"github.com/kaecer68/atlas-go/internal/live"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	apibacktest "github.com/kaecer68/atlas-go/internal/monitoring/api/backtest"
@@ -32,7 +31,6 @@ import (
 	apimacro "github.com/kaecer68/atlas-go/internal/monitoring/api/macro"
 	apimetrics "github.com/kaecer68/atlas-go/internal/monitoring/api/metrics"
 	apinarrative "github.com/kaecer68/atlas-go/internal/monitoring/api/narrative"
-	apiorders "github.com/kaecer68/atlas-go/internal/monitoring/api/orders"
 	apiparameters "github.com/kaecer68/atlas-go/internal/monitoring/api/parameters"
 	apiperformance "github.com/kaecer68/atlas-go/internal/monitoring/api/performance"
 	apipipeline "github.com/kaecer68/atlas-go/internal/monitoring/api/pipeline"
@@ -79,7 +77,6 @@ type DashboardAPI struct {
 	taskManager        *taskexec.Manager
 	eventBus           *eventbus.ChannelEventBus
 	outcomeStore       *DualWriteOutcomeStoreAdapter
-	orderMgr           *live.OrderManager
 	storageReport      apimetrics.StorageReporter
 	dataFetcher        DataFetcher
 	riskGate           *risk.RiskGate
@@ -740,7 +737,6 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		})
 	})
 
-	a.RegisterOrderRoutes(mux)
 	a.RegisterPerformanceRoutes(mux)
 	a.RegisterCircuitBreakerRoutes(mux)
 }
@@ -862,10 +858,6 @@ func (a *DashboardAPI) SetTaskManager(m *taskexec.Manager) {
 	a.taskManager = m
 }
 
-func (a *DashboardAPI) SetOrderManager(om *live.OrderManager) {
-	a.orderMgr = om
-}
-
 func (a *DashboardAPI) SetStorageReporter(r apimetrics.StorageReporter) {
 	a.storageReport = r
 }
@@ -917,14 +909,6 @@ func (a *DashboardAPI) handleRiskCalibration(w http.ResponseWriter, r *http.Requ
 		"report":    report,
 		"generated": time.Now().Format(time.RFC3339),
 	})
-}
-
-func (a *DashboardAPI) RegisterOrderRoutes(mux *http.ServeMux) {
-	orderSvc := service.NewOrderService(a.orderMgr)
-	handlers := &apiorders.Handlers{
-		Svc: orderSvc,
-	}
-	handlers.RegisterRoutes(mux)
 }
 
 func (a *DashboardAPI) GetIndustryService() *service.IndustryService {

@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Atlas-Go 交易與實驗控制塔</title>
   <link rel="stylesheet" href="css/main.css">
-  <link rel="stylesheet" href="/static/css/components/order-manager.css">
   <link rel="stylesheet" href="/static/css/components/performance-report.css">
 
 <link rel="stylesheet" href="/static/css/components/circuit-breaker.css">
@@ -270,8 +269,7 @@
       </div>
       <div class="panel wide"><h2>基準比較</h2><div id="benchmarkComparison" class="loading">載入中…</div></div>
 <div class="panel wide"><h2>風控閘道</h2><div id="riskGatePanel" class="loading">載入中…</div></div>
-<div class="panel wide"><h2>風險分析</h2><div id="riskPanel" class="loading">載入中…</div></div>
-      <div class="panel wide" id="orderManagerContainer"></div>
+      <div class="panel wide"><h2>風險分析</h2><div id="riskPanel" class="loading">載入中…</div></div>
       <details class="help-details">
         <summary><strong>📖 如何解讀本頁</strong></summary>
         <p><strong>投組稅前淨值</strong> = 可用現金 + 所有持倉市值（未扣除稅負）</p>
@@ -732,7 +730,6 @@
 <script type="module">
   import { CircuitBreakerPanel } from './js/components/circuit-breaker.js';
   import { renderPerformanceReport } from './js/components/performance-report.js';
-  import { renderOrderManager } from './js/components/order-manager.js';
   import { eventSource } from './js/services/event-source.js';
 
   document.addEventListener('DOMContentLoaded', () => {
@@ -740,7 +737,6 @@
     eventSource.on('*', (ev) => cbPanel.handleSSE(ev));
 
     renderPerformanceReport('performanceReportContainer');
-    renderOrderManager('orderManagerContainer');
   });
 </script>
 </body>
