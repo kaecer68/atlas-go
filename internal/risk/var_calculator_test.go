@@ -88,6 +88,79 @@ func TestComputeRiskSnapshot(t *testing.T) {
 	}
 }
 
+func TestCalculateComponentVaR(t *testing.T) {
+	returns := map[string][]float64{
+		"2330": {0.01, -0.02, 0.015, 0.005, -0.01, 0.02, -0.015, 0.008, -0.005, 0.012},
+		"2454": {-0.005, 0.01, 0.008, -0.01, 0.015, -0.008, 0.012, -0.02, 0.005, 0.01},
+		"2317": {0.02, -0.01, 0.005, 0.012, -0.008, 0.015, -0.01, 0.008, -0.015, 0.005},
+	}
+	weights := map[string]float64{
+		"2330": 0.5,
+		"2454": 0.3,
+		"2317": 0.2,
+	}
+
+	items := CalculateComponentVaR(returns, weights)
+	if len(items) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(items))
+	}
+
+	for _, item := range items {
+		if item.Weight == 0 {
+			t.Errorf("weight for %s should not be 0", item.Symbol)
+		}
+		if item.PctContribution < 0 || item.PctContribution > 1 {
+			t.Errorf("pct_contribution for %s out of [0,1]: %f", item.Symbol, item.PctContribution)
+		}
+	}
+
+	sumPct := 0.0
+	for _, item := range items {
+		sumPct += item.PctContribution
+	}
+	if math.Abs(sumPct-1.0) > 0.0001 {
+		t.Errorf("pct_contribution should sum to 1.0, got %f", sumPct)
+	}
+}
+
+func TestCalculateComponentVaR_Empty(t *testing.T) {
+	items := CalculateComponentVaR(map[string][]float64{}, map[string]float64{})
+	if len(items) != 0 {
+		t.Errorf("expected 0 items for empty input, got %d", len(items))
+	}
+}
+
+func TestCalculateComponentVaR_EqualWeights(t *testing.T) {
+	returns := map[string][]float64{
+		"A": {0.01, -0.01, 0.02, -0.02, 0.01, -0.01, 0.02, -0.02, 0.01, -0.01},
+		"B": {0.02, -0.02, 0.01, -0.01, 0.02, -0.02, 0.01, -0.01, 0.02, -0.02},
+	}
+	weights := map[string]float64{
+		"A": 0.5,
+		"B": 0.5,
+	}
+
+	items := CalculateComponentVaR(returns, weights)
+	if len(items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(items))
+	}
+	if math.Abs(items[0].PctContribution+items[1].PctContribution-1.0) > 0.0001 {
+		t.Errorf("pct_contribution should sum to 1.0, got %f + %f", items[0].PctContribution, items[1].PctContribution)
+	}
+}
+
+func TestCalculateComponentVaR_ShortSeries(t *testing.T) {
+	returns := map[string][]float64{
+		"A": {0.01},
+	}
+	weights := map[string]float64{"A": 1.0}
+
+	items := CalculateComponentVaR(returns, weights)
+	if len(items) != 0 {
+		t.Errorf("expected 0 items for short series (<2), got %d", len(items))
+	}
+}
+
 func TestVaRPercentileAccuracy(t *testing.T) {
 	returns := make([]float64, 100)
 	for i := range returns {

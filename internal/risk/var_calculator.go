@@ -94,3 +94,104 @@ func ComputeRiskSnapshot(dailyReturns []float64, portfolioValues []float64) doma
 	calculator := NewVaRCalculator()
 	return calculator.ComputeRiskSnapshot(dailyReturns, portfolioValues)
 }
+
+// ComponentVaRItem holds the component VaR breakdown for a single asset.
+type ComponentVaRItem struct {
+	Symbol          string  `json:"symbol"`
+	Weight          float64 `json:"weight"`
+	StandaloneVaR   float64 `json:"standalone_var"`
+	ComponentVaR    float64 `json:"component_var"`
+	PctContribution float64 `json:"pct_contribution"`
+}
+
+// CalculateComponentVaR decomposes portfolio VaR into per-asset contributions
+// via historical simulation: CVaR_i = w_i × E[R_i | R_p ≤ VaR_p].
+//
+// returns maps symbol → daily return series.
+// weights maps symbol → portfolio weight (should sum to ~1.0).
+func CalculateComponentVaR(returns map[string][]float64, weights map[string]float64) []ComponentVaRItem {
+	if len(returns) == 0 || len(weights) == 0 {
+		return nil
+	}
+
+	minLen := -1
+	for _, r := range returns {
+		if minLen == -1 || len(r) < minLen {
+			minLen = len(r)
+		}
+	}
+	if minLen < 2 {
+		return nil
+	}
+
+	symbols := make([]string, 0, len(returns))
+	for sym := range returns {
+		if _, ok := weights[sym]; ok {
+			symbols = append(symbols, sym)
+		}
+	}
+
+	portReturns := make([]float64, minLen)
+	for t := 0; t < minLen; t++ {
+		var rp float64
+		for _, sym := range symbols {
+			rp += weights[sym] * returns[sym][t]
+		}
+		portReturns[t] = rp
+	}
+
+	sorted := make([]float64, len(portReturns))
+	copy(sorted, portReturns)
+	sort.Float64s(sorted)
+
+	confidence := 0.95
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		confidence = cfg.Risk.VaRConfidenceLevel.Value
+	}
+
+	varIndex := max(int(math.Floor((1.0-confidence)*float64(len(sorted)))), 0)
+	if varIndex >= len(sorted) {
+		varIndex = len(sorted) - 1
+	}
+	varThreshold := sorted[varIndex]
+
+	items := make([]ComponentVaRItem, 0, len(symbols))
+	for _, sym := range symbols {
+		w := weights[sym]
+		assetReturns := returns[sym][:minLen]
+		standaloneVaR := CalculateVaR(assetReturns, confidence)
+
+		var marginalSum float64
+		var marginalCount int
+		for t := 0; t < minLen; t++ {
+			if portReturns[t] <= varThreshold {
+				marginalSum += assetReturns[t]
+				marginalCount++
+			}
+		}
+
+		var componentVaR float64
+		if marginalCount > 0 {
+			componentVaR = w * marginalSum / float64(marginalCount)
+		}
+
+		items = append(items, ComponentVaRItem{
+			Symbol:        sym,
+			Weight:        w,
+			StandaloneVaR: standaloneVaR,
+			ComponentVaR:  componentVaR,
+		})
+	}
+
+	absSum := 0.0
+	for _, item := range items {
+		absSum += math.Abs(item.ComponentVaR)
+	}
+	if absSum > 0 {
+		for i := range items {
+			items[i].PctContribution = math.Abs(items[i].ComponentVaR) / absSum
+		}
+	}
+
+	return items
+}

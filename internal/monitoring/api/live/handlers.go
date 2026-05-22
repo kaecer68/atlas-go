@@ -78,6 +78,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/live-status", shared.Get(h.HandleLiveStatus))
 	mux.Handle("GET /api/dashboard/portfolio-state", shared.Get(h.HandlePortfolioState))
 	mux.Handle("GET /api/dashboard/trade-history", shared.Get(h.HandleTradeHistory))
+	mux.Handle("GET /api/dashboard/benchmark-comparison", shared.Get(h.HandleBenchmarkComparison))
 }
 
 func getSymbolSector(symbol string, symMap map[string]string) string {

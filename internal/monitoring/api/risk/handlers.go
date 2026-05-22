@@ -7,24 +7,35 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
 
 type Handlers struct {
-	LedgerDir string
+	LedgerDir         string
+	correlationMatrix *industry.CorrelationMatrix
 }
 
 func NewHandlers(ledgerDir string) *Handlers {
 	return &Handlers{LedgerDir: ledgerDir}
 }
 
+// WithCorrelationMatrix sets an optional correlation matrix provider.
+// When nil, HandleCorrelationMatrix falls back to DefaultCorrelationMatrix().
+func (h *Handlers) WithCorrelationMatrix(cm *industry.CorrelationMatrix) *Handlers {
+	h.correlationMatrix = cm
+	return h
+}
+
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/risk", shared.Get(h.HandleRiskMetrics))
+	mux.Handle("GET /api/dashboard/correlation-matrix", shared.Get(h.HandleCorrelationMatrix))
 }
 
 func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
@@ -100,4 +111,77 @@ func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
 		"risk_snapshot": snap,
 		"session_count": len(portfolioValues),
 	}
+}
+
+// CorrelationMatrixResponse is the response for GET /api/dashboard/correlation-matrix.
+type CorrelationMatrixResponse struct {
+	Symbols []string    `json:"symbols"`
+	Labels  []string    `json:"labels"`
+	Matrix  [][]float64 `json:"matrix"`
+}
+
+// HandleCorrelationMatrix returns the industry correlation matrix.
+func (h *Handlers) HandleCorrelationMatrix(r *http.Request) (int, any) {
+	cm := h.correlationMatrix
+	if cm == nil {
+		cm = industry.DefaultCorrelationMatrix()
+	}
+
+	allCorrs := cm.GetAllCorrelations()
+
+	symbols := make([]string, 0, len(allCorrs))
+	for k := range allCorrs {
+		symbols = append(symbols, k)
+	}
+	sort.Strings(symbols)
+
+	n := len(symbols)
+
+	matrix := make([][]float64, n)
+	for i := range matrix {
+		matrix[i] = make([]float64, n)
+		matrix[i][i] = 1.0
+	}
+
+	for i := 0; i < n; i++ {
+		for j := i + 1; j < n; j++ {
+			corr, ok := cm.GetCorrelation(symbols[i], symbols[j])
+			if ok {
+				matrix[i][j] = corr
+				matrix[j][i] = corr
+			}
+		}
+	}
+
+	labels := make([]string, n)
+	for i, s := range symbols {
+		labels[i] = industryLabel(s)
+	}
+
+	return http.StatusOK, CorrelationMatrixResponse{
+		Symbols: symbols,
+		Labels:  labels,
+		Matrix:  matrix,
+	}
+}
+
+func industryLabel(id string) string {
+	m := map[string]string{
+		"semiconductor":   "半導體",
+		"ai_supply_chain": "AI 供應鏈",
+		"robotics":        "機器人",
+		"foundry":         "晶圓代工",
+		"electronics":     "電子零組件",
+		"shipping":        "航運",
+		"financials":      "金融",
+		"energy":          "能源",
+		"industrial":      "工業",
+		"consumer":        "消費",
+		"cooling":         "散熱",
+		"server_assembly": "伺服器組裝",
+	}
+	if l, ok := m[id]; ok {
+		return l
+	}
+	return id
 }

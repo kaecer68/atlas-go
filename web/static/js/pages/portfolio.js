@@ -1,4 +1,8 @@
 import { renderDualEquityCurve } from '../components/sparkline.js';
+import { renderPnLAttribution } from '../components/attribution.js';
+import { renderBenchmarkComparison } from '../components/benchmark.js';
+
+import { renderRiskPanel } from '../components/risk-panel.js';
 
 export async function loadPortfolioPage(getJSON, agentNameFn) {
   const kpis = document.getElementById('portfolioKPIs');
@@ -177,6 +181,13 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
         </div>
       `;
     }
+
+    const attrContainer = document.getElementById('pnlAttribution');
+    if (attrContainer) { renderPnLAttribution(attrContainer, getJSON); }
+    const benchContainer = document.getElementById('benchmarkComparison');
+    if (benchContainer) { renderBenchmarkComparison(benchContainer, getJSON); }
+    const riskContainer = document.getElementById('riskPanel');
+    if (riskContainer) { renderRiskPanel(riskContainer, getJSON); }
   } catch (e) {
     console.error(e);
     kpis.innerHTML = '<div style="padding:20px;text-align:center;color:var(--down)">載入失敗</div>';
@@ -184,3 +195,4 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
     historyEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--down)">載入失敗</div>';
   }
 }
+

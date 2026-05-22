@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -112,6 +113,7 @@ type PortfolioStateResponse struct {
 	PositionsCount     int                `json:"positions_count"`
 	Positions          []PositionDTO      `json:"positions"`
 	EquityCurve        []EquityCurvePoint `json:"equity_curve"`
+	CrossFootPnL       CrossFootCheck     `json:"cross_foot_pnl"`
 }
 
 // PositionDTO represents a single position with computed P&L percentage.
@@ -124,6 +126,15 @@ type PositionDTO struct {
 	UnrealizedPnL float64 `json:"unrealized_pnl"`
 	PnlPct        float64 `json:"pnl_pct"`
 	Sector        string  `json:"sector,omitempty"`
+}
+
+// CrossFootCheck represents the cross-footing verification between
+// the portfolio-level UnrealizedPnL and the sum of individual position P&Ls.
+type CrossFootCheck struct {
+	IsBalanced    bool    `json:"is_balanced"`
+	Portfolio     float64 `json:"portfolio_unrealized"`
+	SumPositions  float64 `json:"sum_positions_unrealized"`
+	Difference    float64 `json:"difference"`
 }
 
 // EquityCurvePoint is a single point on the equity curve.
@@ -186,6 +197,20 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 		}
 	}
 
+	// Cross-footing verification
+	crossFoot := CrossFootCheck{
+		Portfolio:    portfolio.UnrealizedPnL,
+		SumPositions: totalUnrealizedPnL,
+		Difference:   portfolio.UnrealizedPnL - totalUnrealizedPnL,
+		IsBalanced:   math.Abs(portfolio.UnrealizedPnL-totalUnrealizedPnL) < 0.01,
+	}
+	if !crossFoot.IsBalanced {
+		logging.Warn("liveservice", "cross_footing_mismatch",
+			"portfolio_unrealized", crossFoot.Portfolio,
+			"sum_positions", crossFoot.SumPositions,
+			"difference", crossFoot.Difference)
+	}
+
 	// Fill sector for each position from classifier
 	symSectorMap := s.buildSymbolSectorMap()
 	for i := range positions {
@@ -218,6 +243,7 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 		PositionsCount:     len(positions),
 		Positions:          positions,
 		EquityCurve:        equityCurve,
+		CrossFootPnL:       crossFoot,
 	}
 	if startingCash > 0 {
 		resp.CumulativePnLPct = resp.CumulativePnL / startingCash
