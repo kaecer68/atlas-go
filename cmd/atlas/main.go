@@ -404,6 +404,22 @@ func run(args []string, deps appDeps) error {
 		sysCtx, sysCancel := context.WithCancel(context.Background())
 		go sysMetrics.Start(sysCtx)
 
+		var ruleEngine *monitoring.RuleEngine
+		if monitor != nil {
+			ruleEngine = monitoring.NewRuleEngine(monitor)
+			for _, rule := range monitoring.DefaultRules() {
+				ruleEngine.RegisterRule(rule)
+			}
+			for _, rule := range monitoring.LiveTradingRules() {
+				ruleEngine.RegisterRule(rule)
+			}
+			params := config.GetParametersConfig().Alert
+			ruleEngine.SetCheckInterval(time.Duration(params.RuleEngineIntervalSec.Value) * time.Second)
+			log.Printf("[RuleEngine] initialized with %d rules, interval=%ds",
+				len(monitoring.DefaultRules())+len(monitoring.LiveTradingRules()),
+				params.RuleEngineIntervalSec.Value)
+		}
+
 		registerCommonDashboardRoutes(dashboard, mux, *swaggerMode, true)
 
 		fs := http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static")))
@@ -904,6 +920,20 @@ func run(args []string, deps appDeps) error {
 				},
 			})
 			log.Printf("[Gateway] registered auto_experiment background task (7-day interval)")
+
+			if ruleEngine != nil {
+				params := config.GetParametersConfig().Alert
+				taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "rule_engine_check",
+					Interval: time.Duration(params.RuleEngineIntervalSec.Value) * time.Second,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						ruleEngine.EvaluateRules(nil)
+						return nil
+					},
+				})
+				log.Printf("[Gateway] registered rule_engine_check background task (%ds interval)", params.RuleEngineIntervalSec.Value)
+			}
 
 			taskMgr.Start(sysCtx)
 			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))

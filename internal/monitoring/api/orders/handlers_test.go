@@ -29,7 +29,7 @@ func TestHandleListOrders_Empty(t *testing.T) {
 }
 
 func TestHandleListOrders_WithService_Empty(t *testing.T) {
-	om := live.NewOrderManager(nil, nil, 0, 0)
+	om := live.NewOrderManager(nil, nil, 0, 0, nil)
 	svc := service.NewOrderService(om)
 	h := &Handlers{Svc: svc}
 
@@ -59,7 +59,7 @@ func TestHandleListOrders_WithService_Empty(t *testing.T) {
 }
 
 func TestHandleListOrders_WithOrders(t *testing.T) {
-	om := live.NewOrderManager(nil, nil, 0, 0)
+	om := live.NewOrderManager(nil, nil, 0, 0, nil)
 
 	om.RecordOrder(live.OrderRecord{
 		OrderID:    "order-001",
@@ -107,7 +107,7 @@ func TestHandleListOrders_WithOrders(t *testing.T) {
 }
 
 func TestHandleListOrders_FilterBySymbol(t *testing.T) {
-	om := live.NewOrderManager(nil, nil, 0, 0)
+	om := live.NewOrderManager(nil, nil, 0, 0, nil)
 
 	om.RecordOrder(live.OrderRecord{
 		OrderID:    "order-001",
@@ -161,7 +161,7 @@ func TestHandleListOrders_FilterBySymbol(t *testing.T) {
 }
 
 func TestHandleListOrders_Pagination(t *testing.T) {
-	om := live.NewOrderManager(nil, nil, 0, 0)
+	om := live.NewOrderManager(nil, nil, 0, 0, nil)
 
 	for i := 1; i <= 25; i++ {
 		om.RecordOrder(live.OrderRecord{
@@ -209,7 +209,7 @@ func TestHandleListOrders_Pagination(t *testing.T) {
 }
 
 func TestHandleListOrders_PageBeyondTotal(t *testing.T) {
-	om := live.NewOrderManager(nil, nil, 0, 0)
+	om := live.NewOrderManager(nil, nil, 0, 0, nil)
 
 	om.RecordOrder(live.OrderRecord{
 		OrderID:    "order-001",
@@ -249,7 +249,7 @@ func TestHandleListOrders_PageBeyondTotal(t *testing.T) {
 }
 
 func TestHandleGetOrder_NotFound(t *testing.T) {
-	om := live.NewOrderManager(nil, nil, 0, 0)
+	om := live.NewOrderManager(nil, nil, 0, 0, nil)
 	svc := service.NewOrderService(om)
 	h := &Handlers{Svc: svc}
 
@@ -267,7 +267,7 @@ func TestHandleGetOrder_NotFound(t *testing.T) {
 }
 
 func TestHandleGetOrder_Found(t *testing.T) {
-	om := live.NewOrderManager(nil, nil, 0, 0)
+	om := live.NewOrderManager(nil, nil, 0, 0, nil)
 
 	om.RecordOrder(live.OrderRecord{
 		OrderID:    "order-001",
@@ -318,7 +318,7 @@ func TestHandleGetOrder_Found(t *testing.T) {
 }
 
 func TestHandleGetOrder_MissingID(t *testing.T) {
-	om := live.NewOrderManager(nil, nil, 0, 0)
+	om := live.NewOrderManager(nil, nil, 0, 0, nil)
 	h := &Handlers{Svc: service.NewOrderService(om)}
 
 	w := httptest.NewRecorder()

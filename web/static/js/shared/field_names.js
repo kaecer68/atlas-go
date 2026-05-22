@@ -7,6 +7,14 @@ export const FIELD = {
     darwinian_weight: 'darwinian_weight',
     screening_criteria: 'screening_criteria',
   },
+  AlertBreakdown: {
+    rule: 'rule',
+    description: 'description',
+    current: 'current',
+    threshold: 'threshold',
+    delta: 'delta',
+    formula: 'formula',
+  },
   AlertChannelConfig: {
     telegram_bot_token: 'telegram_bot_token',
     telegram_chat_id: 'telegram_chat_id',
@@ -26,6 +34,7 @@ export const FIELD = {
     message: 'message',
     value: 'value',
     threshold: 'threshold',
+    breakdown: 'breakdown',
     acknowledged: 'acknowledged',
     acknowledged_at: 'acknowledged_at',
     acknowledged_by: 'acknowledged_by',

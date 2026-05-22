@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 )
 
@@ -61,28 +62,25 @@ func (e *RuleEngine) Start(ctx context.Context, stateStore *livestore.StateStore
 		case <-ticker.C:
 			if stateStore != nil {
 				state := stateStore.GetState()
-				e.evaluateRules(state)
+				e.EvaluateRules(state)
 			}
 		}
 	}
 }
 
-// evaluateRules 评估所有规则
-func (e *RuleEngine) evaluateRules(state *livestore.State) {
+func (e *RuleEngine) EvaluateRules(state *livestore.State) {
 	e.mu.RLock()
 	rules := make([]AlertRule, len(e.rules))
 	copy(rules, e.rules)
 	e.mu.RUnlock()
 
 	for _, rule := range rules {
-		// 检查冷却时间
 		if lastFired, ok := e.lastFired[rule.Name]; ok {
 			if time.Since(lastFired) < rule.Cooldown {
 				continue
 			}
 		}
 
-		// 评估条件
 		triggered, message := rule.Condition(state)
 		if triggered {
 			e.monitor.Alert(rule.Level, "rule_engine", fmt.Sprintf("[%s] %s", rule.Name, message), map[string]any{
@@ -94,8 +92,8 @@ func (e *RuleEngine) evaluateRules(state *livestore.State) {
 	}
 }
 
-// DefaultRules 返回默认告警规则
 func DefaultRules() []AlertRule {
+	params := config.GetParametersConfig().Alert
 	return []AlertRule{
 		{
 			Name:        "portfolio_value_drop",
@@ -104,14 +102,13 @@ func DefaultRules() []AlertRule {
 				if state == nil {
 					return false, ""
 				}
-				// 简化的示例：检查现金是否异常低
-				if state.Portfolio.Cash < 100000 {
-					return true, fmt.Sprintf("Cash level low: %.2f", state.Portfolio.Cash)
+				if state.Portfolio.Cash < params.MinCashThreshold.Value {
+					return true, fmt.Sprintf("Cash level low: %.2f (threshold: %.2f)", state.Portfolio.Cash, params.MinCashThreshold.Value)
 				}
 				return false, ""
 			},
 			Level:    AlertLevelWarning,
-			Cooldown: 5 * time.Minute,
+			Cooldown: time.Duration(params.RuleEngineCooldownSec.Value) * time.Second,
 		},
 		{
 			Name:        "position_concentration",
@@ -120,14 +117,13 @@ func DefaultRules() []AlertRule {
 				if state == nil || len(state.Positions) == 0 {
 					return false, ""
 				}
-				// 检查持仓数量异常
-				if len(state.Positions) > 20 {
-					return true, fmt.Sprintf("Too many positions: %d", len(state.Positions))
+				if len(state.Positions) > params.MaxPositionsCount.Value {
+					return true, fmt.Sprintf("Too many positions: %d (threshold: %d)", len(state.Positions), params.MaxPositionsCount.Value)
 				}
 				return false, ""
 			},
 			Level:    AlertLevelWarning,
-			Cooldown: 10 * time.Minute,
+			Cooldown: time.Duration(params.RuleEngineCooldownSec.Value*2) * time.Second,
 		},
 		{
 			Name:        "system_ready",
@@ -145,8 +141,8 @@ func DefaultRules() []AlertRule {
 	}
 }
 
-// LiveTradingRules 返回 production live trading 專用告警規則
 func LiveTradingRules() []AlertRule {
+	params := config.GetParametersConfig().Alert
 	return []AlertRule{
 		{
 			Name:        "circuit_breaker_triggered",
@@ -155,19 +151,17 @@ func LiveTradingRules() []AlertRule {
 				if state == nil {
 					return false, ""
 				}
-				// This rule reads from persisted circuit breaker state.
-				// For simplicity we check portfolio day pnl as proxy when state unavailable inline.
 				dayPnLPct := 0.0
 				if state.Portfolio.Cash > 0 {
 					dayPnLPct = (state.Portfolio.DayPnL / state.Portfolio.Cash) * 100
 				}
-				if dayPnLPct < -2.0 {
-					return true, fmt.Sprintf("Day PnL %.2f%% breached daily loss threshold", dayPnLPct)
+				if dayPnLPct < params.DailyLossCriticalPct.Value*100 {
+					return true, fmt.Sprintf("Day PnL %.2f%% breached daily loss threshold %.2f%%", dayPnLPct, params.DailyLossCriticalPct.Value*100)
 				}
 				return false, ""
 			},
 			Level:    AlertLevelCritical,
-			Cooldown: 1 * time.Minute,
+			Cooldown: time.Duration(params.RuleEngineCooldownSec.Value/5) * time.Second,
 		},
 		{
 			Name:        "daily_loss_warning",
@@ -180,17 +174,17 @@ func LiveTradingRules() []AlertRule {
 				if state.Portfolio.Cash > 0 {
 					dayPnLPct = (state.Portfolio.DayPnL / state.Portfolio.Cash) * 100
 				}
-				if dayPnLPct < -1.5 && dayPnLPct >= -2.0 {
-					return true, fmt.Sprintf("Day PnL warning: %.2f%%", dayPnLPct)
+				if dayPnLPct < params.DailyLossWarningPct.Value*100 && dayPnLPct >= params.DailyLossCriticalPct.Value*100 {
+					return true, fmt.Sprintf("Day PnL warning: %.2f%% (threshold: %.2f%%)", dayPnLPct, params.DailyLossWarningPct.Value*100)
 				}
 				return false, ""
 			},
 			Level:    AlertLevelWarning,
-			Cooldown: 5 * time.Minute,
+			Cooldown: time.Duration(params.RuleEngineCooldownSec.Value) * time.Second,
 		},
 		{
 			Name:        "high_position_concentration",
-			Description: "Single position exceeds 15% of portfolio",
+			Description: "Single position exceeds max weight of portfolio",
 			Condition: func(state *livestore.State) (bool, string) {
 				if state == nil || len(state.Positions) == 0 {
 					return false, ""
@@ -201,18 +195,18 @@ func LiveTradingRules() []AlertRule {
 				}
 				for _, p := range state.Positions {
 					weight := p.MarketValue / totalValue
-					if weight > 0.15 {
-						return true, fmt.Sprintf("Position %s weight %.1f%% exceeds 15%%", p.Symbol, weight*100)
+					if weight > params.MaxPositionWeightPct.Value {
+						return true, fmt.Sprintf("Position %s weight %.1f%% exceeds %.1f%%", p.Symbol, weight*100, params.MaxPositionWeightPct.Value*100)
 					}
 				}
 				return false, ""
 			},
 			Level:    AlertLevelError,
-			Cooldown: 10 * time.Minute,
+			Cooldown: time.Duration(params.RuleEngineCooldownSec.Value*2) * time.Second,
 		},
 		{
 			Name:        "unrealized_loss_position",
-			Description: "Position unrealized loss exceeds 5%",
+			Description: "Position unrealized loss exceeds threshold",
 			Condition: func(state *livestore.State) (bool, string) {
 				if state == nil || len(state.Positions) == 0 {
 					return false, ""
@@ -220,15 +214,15 @@ func LiveTradingRules() []AlertRule {
 				for _, p := range state.Positions {
 					if p.AverageCost > 0 {
 						lossPct := (p.MarketValue/p.AverageCost - 1) * 100
-						if lossPct < -5.0 {
-							return true, fmt.Sprintf("Position %s unrealized loss %.2f%%", p.Symbol, lossPct)
+						if lossPct < params.MaxUnrealizedLossPct.Value*100 {
+							return true, fmt.Sprintf("Position %s unrealized loss %.2f%% (threshold: %.2f%%)", p.Symbol, lossPct, params.MaxUnrealizedLossPct.Value*100)
 						}
 					}
 				}
 				return false, ""
 			},
 			Level:    AlertLevelWarning,
-			Cooldown: 5 * time.Minute,
+			Cooldown: time.Duration(params.RuleEngineCooldownSec.Value) * time.Second,
 		},
 	}
 }

@@ -74,8 +74,15 @@ func (m *Monitor) RegisterHandler(handler AlertHandler) {
 	m.handlers = append(m.handlers, handler)
 }
 
-// Alert 发送告警
 func (m *Monitor) Alert(level AlertLevel, category string, message string, metadata map[string]any) {
+	m.alertWithBreakdown(level, category, message, metadata, nil)
+}
+
+func (m *Monitor) AlertWithBreakdown(level AlertLevel, category string, message string, metadata map[string]any, breakdown *domain.AlertBreakdown) {
+	m.alertWithBreakdown(level, category, message, metadata, breakdown)
+}
+
+func (m *Monitor) alertWithBreakdown(level AlertLevel, category string, message string, metadata map[string]any, breakdown *domain.AlertBreakdown) {
 	alert := Alert{
 		ID:        generateAlertID(),
 		Level:     level,
@@ -85,7 +92,6 @@ func (m *Monitor) Alert(level AlertLevel, category string, message string, metad
 		Metadata:  metadata,
 	}
 
-	// 保存到历史
 	m.mu.Lock()
 	m.history = append(m.history, alert)
 	if len(m.history) > m.maxHistory {
@@ -98,20 +104,19 @@ func (m *Monitor) Alert(level AlertLevel, category string, message string, metad
 	copy(notifiers, m.notifiers)
 	m.mu.Unlock()
 
-	// 异步通知处理器
 	go func() {
 		for _, handler := range handlers {
 			go handler(alert)
 		}
 	}()
 
-	// 持久化並派發通知
 	record := domain.AlertRecord{
 		ID:        alert.ID,
 		Timestamp: alert.Timestamp,
 		Rule:      category,
 		Severity:  level.String(),
 		Message:   message,
+		Breakdown: breakdown,
 	}
 	if store != nil {
 		go func() {

@@ -42,7 +42,7 @@ func (e *ExecutionManager) SimulateExecution() {
 	}
 	if e.orderMgr == nil {
 		retries := max(e.config.BrokerMaxRetries, 0)
-		e.orderMgr = NewOrderManager(e.broker, e.eventBus, retries, 100*time.Millisecond)
+		e.orderMgr = NewOrderManager(e.broker, e.eventBus, retries, 100*time.Millisecond, nil)
 	}
 	logging.Info("trading", "execution_channel_ready", "mode", e.orderMgr.Mode())
 	if e.metrics != nil {
@@ -68,7 +68,7 @@ func (e *ExecutionManager) ExecuteOrder(ctx context.Context, order domain.Order)
 			e.broker = NewDryRunBroker()
 		}
 		retries := max(e.config.BrokerMaxRetries, 0)
-		e.orderMgr = NewOrderManager(e.broker, e.eventBus, retries, 100*time.Millisecond)
+		e.orderMgr = NewOrderManager(e.broker, e.eventBus, retries, 100*time.Millisecond, nil)
 	}
 	if err := e.orderMgr.Run(ctx, order); err != nil {
 		if e.metrics != nil {

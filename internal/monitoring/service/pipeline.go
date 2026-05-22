@@ -148,7 +148,7 @@ func (s *PipelineService) LoadAgentObservatory(sessionID string, limit int) (*Ag
 	}
 
 	data := &AgentObservatoryData{
-		WeakestAgentScorecards: scorecards,
+		Scorecards: scorecards,
 	}
 	if summary != nil {
 		data.SessionID = summary.SessionID
@@ -161,11 +161,11 @@ func (s *PipelineService) LoadAgentObservatory(sessionID string, limit int) (*Ag
 
 // AgentObservatoryData is the internal representation for agent observatory response.
 type AgentObservatoryData struct {
-	SessionID              string
-	NextExperimentAgentID  string
-	WeakestAgentScorecards []domain.Scorecard
-	BrokerRuntime          domain.BrokerRuntimeAudit
-	RecordedAt             time.Time
+	SessionID             string
+	NextExperimentAgentID string
+	Scorecards            []domain.Scorecard
+	BrokerRuntime         domain.BrokerRuntimeAudit
+	RecordedAt            time.Time
 }
 
 // LoadForecastVsReality loads forecast vs reality experiment data.

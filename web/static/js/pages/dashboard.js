@@ -217,7 +217,7 @@ export function renderMacroRadar(data, pipelineData) {
 export function renderAgentObservatory(data, overlapData) {
   const el = document.getElementById('agentObservatory');
   if (!data) { el.innerHTML = renderEmptyState('尚無資料', ''); el.classList.remove('loading'); return; }
-  const cards = data.weakest_agent_scorecards || [];
+  const cards = data.scorecards || [];
   if (!cards.length) { el.innerHTML = renderEmptyState('尚無 Agent 績效資料', ''); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
   const weakest = cards[0] ? cards[0].agent_id : '';

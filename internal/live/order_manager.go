@@ -52,12 +52,13 @@ type OrderManager struct {
 	eventBus     *ChannelEventBus
 	maxRetries   int
 	retryBackoff time.Duration
+	riskGate     *RiskGate
 
 	mu     sync.RWMutex
 	orders map[string]OrderRecord
 }
 
-func NewOrderManager(broker Broker, eventBus *ChannelEventBus, maxRetries int, retryBackoff time.Duration) *OrderManager {
+func NewOrderManager(broker Broker, eventBus *ChannelEventBus, maxRetries int, retryBackoff time.Duration, riskGate *RiskGate) *OrderManager {
 	if broker == nil {
 		broker = NewDryRunBroker()
 	}
@@ -73,6 +74,7 @@ func NewOrderManager(broker Broker, eventBus *ChannelEventBus, maxRetries int, r
 		eventBus:     eventBus,
 		maxRetries:   maxRetries,
 		retryBackoff: retryBackoff,
+		riskGate:     riskGate,
 		orders:       make(map[string]OrderRecord),
 	}
 }
@@ -93,6 +95,26 @@ func (m *OrderManager) RecordOrder(order OrderRecord) {
 func (m *OrderManager) Run(ctx context.Context, order domain.Order) error {
 	if m.broker == nil {
 		m.broker = NewDryRunBroker()
+	}
+
+	// Pre-execution risk gate check
+	if m.riskGate != nil {
+		if err := m.riskGate.Check(ctx, order); err != nil {
+			if m.eventBus != nil {
+				_ = m.eventBus.PublishOrderError(
+					"",
+					order.Symbol,
+					string(order.Side),
+					order.Price,
+					order.Quantity,
+					"risk_gate_blocked",
+					err.Error(),
+					1,
+					"blocked",
+				)
+			}
+			return fmt.Errorf("risk gate blocked order for %s: %w", order.Symbol, err)
+		}
 	}
 
 	attempts := m.maxRetries + 1

@@ -114,43 +114,20 @@ func (s *MetricsService) GetMetricsTrend(metric, period string) map[string]any {
 	}
 }
 
-// DataQualityCheckerInterface defines the interface for data quality checking
 type DataQualityCheckerInterface interface {
 	RunAll(ctx context.Context) *DataQualityReport
 }
 
-// CheckDataQuality runs all data quality checks and returns the report
-func (s *MetricsService) CheckDataQuality(workDir, ledgerDir string) *DataQualityReport {
-	// Create a simple data quality checker based on the workDir and ledgerDir
-	checker := newDataQualityChecker(workDir, ledgerDir)
+func (s *MetricsService) CheckDataQuality(checker DataQualityCheckerInterface) *DataQualityReport {
+	if checker == nil {
+		return &DataQualityReport{
+			Checks:      make([]DataQualityCheck, 0),
+			Overall:     StatusOK,
+			Score:       100.0,
+			GeneratedAt: time.Now(),
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	return checker.RunAll(ctx)
-}
-
-// Internal functions for data quality checking
-type dataQualityChecker struct {
-	workDir   string
-	ledgerDir string
-}
-
-func newDataQualityChecker(workDir, ledgerDir string) *dataQualityChecker {
-	return &dataQualityChecker{
-		workDir:   workDir,
-		ledgerDir: ledgerDir,
-	}
-}
-
-func (dq *dataQualityChecker) RunAll(ctx context.Context) *DataQualityReport {
-	// Simplified implementation - in production this would be more comprehensive
-	report := &DataQualityReport{
-		Checks:      make([]DataQualityCheck, 0),
-		GeneratedAt: time.Now(),
-	}
-
-	// Basic checks - actual implementation would check files, permissions, etc.
-	report.Overall = StatusOK
-	report.Score = 100.0
-
-	return report
 }
