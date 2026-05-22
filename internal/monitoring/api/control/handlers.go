@@ -14,10 +14,10 @@ type Handlers struct {
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
-	mux.Handle("POST /api/control/pause-agent", shared.Post(h.HandlePauseAgent))
-	mux.Handle("POST /api/control/resume-agent", shared.Post(h.HandleResumeAgent))
-	mux.Handle("POST /api/control/set-model-weight", shared.Post(h.HandleSetModelWeight))
-	mux.Handle("POST /api/control/sector-ban", shared.Post(h.HandleSectorBan))
+	mux.Handle("POST /api/control/pause-agent", shared.AdminPost(h.HandlePauseAgent))
+	mux.Handle("POST /api/control/resume-agent", shared.AdminPost(h.HandleResumeAgent))
+	mux.Handle("POST /api/control/set-model-weight", shared.AdminPost(h.HandleSetModelWeight))
+	mux.Handle("POST /api/control/sector-ban", shared.AdminPost(h.HandleSectorBan))
 	mux.Handle("POST /api/control/approve-recommendation", shared.Post(h.HandleApproveRecommendation))
 	mux.Handle("POST /api/control/reject-recommendation", shared.Post(h.HandleRejectRecommendation))
 	mux.Handle("GET /api/control/audit-log", shared.Get(h.HandleAuditLog))
@@ -116,7 +116,7 @@ func (h *Handlers) HandleApproveRecommendation(r *http.Request) (int, any) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return http.StatusBadRequest, map[string]string{"error": "invalid json"}
 	}
-	return h.recordIntervention("approve_rec", req.Symbol, req.Reason, req.Operator)
+	return h.recordIntervention("approve_rec", req.AgentID+":"+req.Symbol, req.Reason, req.Operator)
 }
 
 func (h *Handlers) HandleRejectRecommendation(r *http.Request) (int, any) {
@@ -129,7 +129,7 @@ func (h *Handlers) HandleRejectRecommendation(r *http.Request) (int, any) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return http.StatusBadRequest, map[string]string{"error": "invalid json"}
 	}
-	return h.recordIntervention("reject_rec", req.Symbol, req.Reason, req.Operator)
+	return h.recordIntervention("reject_rec", req.AgentID+":"+req.Symbol, req.Reason, req.Operator)
 }
 
 func (h *Handlers) HandleAgentHealth(r *http.Request) (int, any) {

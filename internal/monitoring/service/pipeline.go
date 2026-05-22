@@ -53,6 +53,16 @@ func (s *PipelineService) WithRegistryProvider(fn RegistryProviderFunc) *Pipelin
 	return s
 }
 
+func (s *PipelineService) WithNarrativeProvider(fn NarrativeProviderFunc) *PipelineService {
+	s.narrativeProvider = fn
+	return s
+}
+
+func (s *PipelineService) WithCycleProvider(fn CycleProviderFunc) *PipelineService {
+	s.cycleProvider = fn
+	return s
+}
+
 func NewPipelineService(workDir, ledgerDir string, store ledger.OutcomeStore) *PipelineService {
 	return &PipelineService{
 		WorkDir:   workDir,
@@ -453,6 +463,28 @@ func (s *PipelineService) loadSessionPipelineData(sessionID, sessionsDir string,
 				logging.Warn("pipeline_service", "corrupted_outcome_skipped", logging.Err(err))
 				continue
 			}
+			if outcome.Symbol == "" {
+				var legacy map[string]any
+				if err := json.Unmarshal([]byte(line), &legacy); err == nil {
+					if v, ok := legacy["Symbol"]; ok {
+						outcome.Symbol = fmt.Sprint(v)
+					}
+					if v, ok := legacy["AgentID"]; ok {
+						outcome.AgentID = fmt.Sprint(v)
+					}
+					if v, ok := legacy["Skill"]; ok {
+						outcome.Skill = fmt.Sprint(v)
+					}
+					if v, ok := legacy["Side"]; ok {
+						outcome.Side = domain.Side(fmt.Sprint(v))
+					}
+					if v, ok := legacy["Conviction"]; ok {
+						if n, ok := v.(float64); ok {
+							outcome.Conviction = int(n)
+						}
+					}
+				}
+			}
 			fr := outcome.ForwardReturn
 			price := outcome.Price
 			side := string(outcome.Side)
@@ -575,8 +607,8 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 		}
 	} else {
 		slices.SortFunc(sessionDirs, func(a, b string) int {
-			aDate := sessionDateFromID(a)
-			bDate := sessionDateFromID(b)
+			aDate := domain.SessionDateFromID(a)
+			bDate := domain.SessionDateFromID(b)
 			switch {
 			case aDate.After(bDate):
 				return -1
@@ -749,16 +781,16 @@ func (s *PipelineService) LoadSessions() ([]SessionMeta, error) {
 
 		// Fall back to session ID date if RecordedAt was not set from summary.
 		if meta.RecordedAt.IsZero() {
-			meta.RecordedAt = sessionDateFromID(sessionID)
-		}
+		meta.RecordedAt = domain.SessionDateFromID(sessionID)
+	}
 
 		sessions = append(sessions, meta)
 	}
 
 	// Sort by session trading date descending, then RecordedAt tiebreaker.
 	slices.SortFunc(sessions, func(a, b SessionMeta) int {
-		aDate := sessionDateFromID(a.SessionID)
-		bDate := sessionDateFromID(b.SessionID)
+		aDate := domain.SessionDateFromID(a.SessionID)
+		bDate := domain.SessionDateFromID(b.SessionID)
 		switch {
 		case aDate.After(bDate):
 			return -1

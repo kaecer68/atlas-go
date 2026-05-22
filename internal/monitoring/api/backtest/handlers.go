@@ -21,7 +21,7 @@ func NewHandlers(svc *service.BacktestService, ledgerDir string) *Handlers {
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
-	mux.Handle("POST /api/backtest/run", shared.Post(h.HandleBacktestRun))
+	mux.Handle("POST /api/backtest/run", shared.AdminPost(h.HandleBacktestRun))
 	mux.Handle("GET /api/backtest/status", shared.Get(h.HandleBacktestStatus))
 	mux.Handle("GET /api/backtest/snapshots", shared.Get(h.HandleBacktestSnapshots))
 	mux.Handle("GET /api/backtest/signals", shared.Get(h.HandleBacktestSignals))
@@ -90,7 +90,10 @@ func (h *Handlers) HandleBacktestSnapshots(r *http.Request) (int, any) {
 }
 
 func (h *Handlers) HandleBacktestSignals(r *http.Request) (int, any) {
-	eng := autobacktest.NewSignalEngine(h.LedgerDir)
+	eng, err := autobacktest.NewSignalEngine(h.LedgerDir)
+	if err != nil {
+		return http.StatusInternalServerError, map[string]string{"error": err.Error()}
+	}
 	sigs, err := eng.Evaluate()
 	if err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": err.Error()}

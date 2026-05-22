@@ -127,7 +127,7 @@ func (s *ReportService) loadNarrativeEventsForDate(date string) []narrative.Narr
 		if !entry.IsDir() {
 			continue
 		}
-		sessionDate := sessionDateFromID(entry.Name())
+		sessionDate := domain.SessionDateFromID(entry.Name())
 		if sessionDate.IsZero() {
 			continue
 		}
@@ -319,7 +319,7 @@ func (s *ReportService) loadRecommendationsForDate(date string) []domain.Recomme
 		if !entry.IsDir() {
 			continue
 		}
-		sessionDate := sessionDateFromID(entry.Name())
+		sessionDate := domain.SessionDateFromID(entry.Name())
 		if sessionDate.IsZero() {
 			continue
 		}

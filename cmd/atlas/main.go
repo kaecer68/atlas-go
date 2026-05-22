@@ -209,6 +209,32 @@ func run(args []string, deps appDeps) error {
 	var janusEngine *janus.Engine
 
 	if *apiMode {
+		// Pre-initialize janus engine for Gateway channel adapters.
+		janusEngine = janus.NewEngine()
+		janusEngine.EnsureAllRegimes()
+		janusEngine.Update()
+
+		// Initialize Gateway BEFORE DashboardAPI so data providers use Gateway from the start.
+		var gateway *apigateway.Gateway
+		var gatewayFetcher monitoring.DataFetcher
+		gw, gwErr := apigateway.NewGateway(cfg.WorkDir, pool)
+		if gwErr != nil {
+			log.Printf("[Gateway] initialization failed: %v", gwErr)
+		} else if err := apigateway.RegisterChannelAdapters(gw, cfg.WorkDir, cfg, janusEngine); err != nil {
+			log.Printf("[Gateway] adapter registration failed: %v", err)
+		} else {
+			gateway = gw
+			log.Printf("[Gateway] initialized with %d channels + adapters", len(gateway.ChannelIDs()))
+			gatewayFetcher = func(ctx context.Context, channelID string) ([]byte, error) {
+				result, err := gateway.Fetch(ctx, channelID)
+				if err != nil {
+					return nil, err
+				}
+				return result.Data, nil
+			}
+			log.Printf("[Gateway] data fetcher prepared for DashboardAPI")
+		}
+
 		mux := http.NewServeMux()
 		log.Printf("[Auth] API key authentication %s", map[bool]string{true: "ENABLED", false: "DISABLED (no ATLAS_API_KEY set)"}[os.Getenv("ATLAS_API_KEY") != ""])
 		healthStore, err := portfolio.NewAgentHealthStore(filepath.Join(cfg.WorkDir, "data/state"))
@@ -220,13 +246,15 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[Parameters] failed to load parameters config: %v", err)
 		}
 		runtimeParams := portfolio.ToRuntimeParameters(paramsCfg)
-		dashboard := deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
+		var dashboard routeRegistrar
+		if gatewayFetcher != nil {
+			dashboard = monitoring.NewDashboardAPIWithGateway(cfg.WorkDir, cfg.LedgerDir, collector, gatewayFetcher)
+		} else {
+			dashboard = deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
+		}
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 			d.SetPool(pool)
 			d.SetHealthManager(portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore).WithParameters(runtimeParams))
-			janusEngine = janus.NewEngine()
-			janusEngine.EnsureAllRegimes()
-			janusEngine.Update()
 			d.SetJanusEngine(janusEngine)
 			log.Printf("[JANUS] engine injected into dashboard API")
 		}
@@ -430,29 +458,9 @@ func run(args []string, deps appDeps) error {
 		mux.Handle("/static/", http.StripPrefix("/static/", fs))
 		log.Printf("dashboard api listening on %s", *apiAddr)
 
-		// Initialize API Gateway with channel adapters and background task manager.
-		gateway, err := apigateway.NewGateway(cfg.WorkDir, pool)
+		// Gateway already initialized before DashboardAPI. Create BackgroundTaskManager.
 		var taskMgr *apigateway.BackgroundTaskManager
-		if err != nil {
-			log.Printf("[Gateway] initialization failed: %v", err)
-		} else if err := apigateway.RegisterChannelAdapters(gateway, cfg.WorkDir, cfg, janusEngine); err != nil {
-			log.Printf("[Gateway] adapter registration failed: %v", err)
-		} else {
-			log.Printf("[Gateway] initialized with %d channels + adapters", len(gateway.ChannelIDs()))
-
-			// Inject Gateway data fetcher into DashboardAPI (breaks import cycle via func type).
-			if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-				d.SetGateway(func(ctx context.Context, channelID string) ([]byte, error) {
-					result, err := gateway.Fetch(ctx, channelID)
-					if err != nil {
-						return nil, err
-					}
-					return result.Data, nil
-				})
-				log.Printf("[Gateway] data fetcher injected into DashboardAPI")
-			}
-
-			// BackgroundTaskManager for centralized goroutine lifecycle management.
+		if gateway != nil {
 			taskMgr = apigateway.NewBackgroundTaskManager(gateway)
 
 			// Wire failure alerts for background tasks.
@@ -950,6 +958,82 @@ func run(args []string, deps appDeps) error {
 					},
 				})
 				log.Printf("[Gateway] registered rule_engine_check background task (%ds interval)", params.RuleEngineIntervalSec.Value)
+			}
+
+			riskGate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
+			if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+				d.SetRiskGate(riskGate)
+				log.Printf("[RiskGate] injected into DashboardAPI for calibration reports")
+			}
+			calProvider := monitoring.NewSessionCalibrationProvider(filepath.Join(cfg.WorkDir, "data/state"))
+			taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "risk_gate_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					report, err := riskGate.SelfCalibrate(ctx, calProvider, 30)
+					if err != nil {
+						logging.Error("risk_calibrate", "self_calibrate_failed", "err", err.Error())
+						return err
+					}
+					riskGate.SetLastCalibration(report)
+					logging.Info("risk_calibrate", "completed",
+						"verdict", report.Verdict,
+						"changes", len(report.Changes),
+						"summary", report.Summary)
+					for _, ch := range report.Changes {
+						logging.Info("risk_calibrate", "parameter_change",
+							"param", ch.Name,
+							"before", ch.Before,
+							"after", ch.After,
+							"rationale", ch.Rationale,
+							"confidence", ch.Confidence)
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered risk_gate_calibrate background task (24h interval)")
+
+			if janusEngine != nil {
+				var prevRegime string
+				regimeScenario := map[string]string{
+					"NOVEL_REGIME":      "ai_bubble_2024",
+					"HISTORICAL_REGIME": "normal_market_2024",
+					"RISK_OFF":          "covid_crash_2020",
+				}
+				taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "regime_calibrate",
+					Interval: 1 * time.Hour,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						class := janusEngine.GetRegimeClassification()
+						current := string(class)
+						if current == "" || current == "MIXED" {
+							prevRegime = current
+							return nil
+						}
+						if current != prevRegime && prevRegime != "" {
+							scenario := regimeScenario[current]
+							if scenario == "" {
+								scenario = "fed_hikes_2022"
+							}
+							logging.Info("regime_calibrate", "regime_change_detected",
+								"from", prevRegime, "to", current,
+								"suggested_stress_scenario", scenario)
+							report, err := riskGate.SelfCalibrate(ctx, calProvider, 20)
+							if err != nil {
+								logging.Error("regime_calibrate", "calibrate_after_regime_change_failed", "err", err.Error())
+								return nil
+							}
+							riskGate.SetLastCalibration(report)
+							logging.Info("regime_calibrate", "calibration_after_regime_change",
+								"verdict", report.Verdict, "changes", len(report.Changes))
+						}
+						prevRegime = current
+						return nil
+					},
+				})
+				log.Printf("[Gateway] registered regime_calibrate background task (1h interval, triggers calibration on regime change)")
 			}
 
 			taskMgr.Start(sysCtx)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -66,6 +67,9 @@ func (s *ControlService) GetActiveOverrides() (pausedAgents, bannedSectors []str
 	weights := make(map[string]float64)
 
 	for _, iv := range interventions {
+		if iv.IsExpired() {
+			continue
+		}
 		switch iv.Type {
 		case "pause_agent":
 			paused[iv.TargetAgentID] = true
@@ -119,29 +123,45 @@ func (s *ControlService) GetAgentHealth() ([]*portfolio.AgentHealth, int, error)
 func (s *ControlService) CreateIntervention(interventionType, targetID, reason, operator string, value float64) domain.HumanIntervention {
 	now := time.Now().UTC()
 	var id, targetAgentID, targetSymbol, targetSector, targetModelID string
+	var ttlHours int
 
 	switch interventionType {
 	case "pause_agent":
 		id = fmt.Sprintf("int-pause-%s-%d", targetID, now.UnixNano())
 		targetAgentID = targetID
+		ttlHours = 24
 	case "resume_agent":
 		id = fmt.Sprintf("int-resume-%s-%d", targetID, now.UnixNano())
 		targetAgentID = targetID
 	case "set_model_weight":
 		id = fmt.Sprintf("int-model-%s-%d", targetID, now.UnixNano())
 		targetModelID = targetID
+		ttlHours = 72
 	case "sector_ban", "sector_unban":
 		id = fmt.Sprintf("int-sector-%s-%d", targetID, now.UnixNano())
 		targetSector = targetID
+		ttlHours = 24
 	case "approve_rec":
 		id = fmt.Sprintf("int-approve-%s-%d", targetID, now.UnixNano())
-		targetSymbol = targetID
+		if parts := strings.SplitN(targetID, ":", 2); len(parts) == 2 {
+			targetAgentID = parts[0]
+			targetSymbol = parts[1]
+		} else {
+			targetSymbol = targetID
+		}
+		ttlHours = 48
 	case "reject_rec":
 		id = fmt.Sprintf("int-reject-%s-%d", targetID, now.UnixNano())
-		targetSymbol = targetID
+		if parts := strings.SplitN(targetID, ":", 2); len(parts) == 2 {
+			targetAgentID = parts[0]
+			targetSymbol = parts[1]
+		} else {
+			targetSymbol = targetID
+		}
+		ttlHours = 48
 	}
 
-	return domain.HumanIntervention{
+	hi := domain.HumanIntervention{
 		ID:            id,
 		Type:          interventionType,
 		TargetAgentID: targetAgentID,
@@ -152,7 +172,12 @@ func (s *ControlService) CreateIntervention(interventionType, targetID, reason, 
 		Reason:        reason,
 		Operator:      operator,
 		RecordedAt:    now,
+		TTLHours:      ttlHours,
 	}
+	if ttlHours > 0 {
+		hi.ExpiresAt = now.Add(time.Duration(ttlHours) * time.Hour)
+	}
+	return hi
 }
 
 func mapKeys(m map[string]bool) []string {

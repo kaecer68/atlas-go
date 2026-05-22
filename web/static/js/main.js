@@ -161,6 +161,7 @@ async function loadAll() {
       safeGetJSON('/api/synergy/darwinian-trend'),
       safeGetJSON('/api/health/data-integrity'),
       safeGetJSON('/api/synergy/darwinian-status'),
+      safeGetJSON('/api/dashboard/risk-calibration'),
     ]);
 
     var health = results[0], macro = results[1], agents = results[2], pipeline = results[3], live = results[4],
@@ -168,7 +169,7 @@ async function loadAll() {
         models = results[11], templates = results[12], snapshot = results[13], dataChannels = results[14],
         sessions = results[15], phase3 = results[16], alerts = results[17], retailSentiment = results[18],
         capitalPhase = results[19], taxSnapshot = results[20], seasonal = results[21], regimeHistory = results[22],
-        darwinianTrend = results[23], dataIntegrity = results[24], darwinianStatus = results[25];
+        darwinianTrend = results[23], dataIntegrity = results[24], darwinianStatus = results[25], riskCalibration = results[26];
 
     var failures = results.filter(function(v) { return v === null; }).length;
     if (failures > results.length * 0.5) {
@@ -197,6 +198,7 @@ async function loadAll() {
 
     if (m.risk.renderLiveStatus) m.risk.renderLiveStatus(live);
     if (m.risk.renderRiskCards) m.risk.renderRiskCards(riskExposure, pipeline, capitalPhase);
+    if (m.risk.renderRiskCalibration) m.risk.renderRiskCalibration(riskCalibration);
 
     if (m.inbox.renderInbox) m.inbox.renderInbox(inbox);
     if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dataChannels);
@@ -331,9 +333,11 @@ async function loadPageData(pageId) {
         safeGetJSON('/api/narrative/chains'),
         safeGetJSON('/api/narrative/models'),
         safeGetJSON('/api/dashboard/capital-phase'),
+        safeGetJSON('/api/dashboard/risk-calibration'),
       ]);
       if (m.risk.renderLiveStatus) m.risk.renderLiveStatus(liveResults[0]);
       if (m.risk.renderRiskCards) m.risk.renderRiskCards(liveResults[2], liveResults[1], liveResults[8]);
+      if (m.risk.renderRiskCalibration) m.risk.renderRiskCalibration(liveResults[9]);
       if (m.dash.renderMacroRadar) m.dash.renderMacroRadar(liveResults[3], liveResults[1]);
       if (m.narr.renderLiveNarrativeStrip) m.narr.renderLiveNarrativeStrip(liveResults[4], liveResults[5], liveResults[7], liveResults[6]);
     } catch(e) { console.error(e); }

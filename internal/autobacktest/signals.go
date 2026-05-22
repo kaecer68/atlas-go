@@ -1,6 +1,7 @@
 package autobacktest
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/kaecer68/atlas-go/internal/ledger"
@@ -33,8 +34,12 @@ type SignalEngine struct {
 	store ledger.FullStore
 }
 
-func NewSignalEngine(ledgerDir string) *SignalEngine {
-	return &SignalEngine{store: ledger.NewStore(ledgerDir).(ledger.FullStore)}
+func NewSignalEngine(ledgerDir string) (*SignalEngine, error) {
+	store, ok := ledger.NewStore(ledgerDir).(ledger.FullStore)
+	if !ok {
+		return nil, fmt.Errorf("ledger store does not implement FullStore: backtest signals require scorecard and summary access")
+	}
+	return &SignalEngine{store: store}, nil
 }
 
 func (se *SignalEngine) Evaluate() (Signals, error) {

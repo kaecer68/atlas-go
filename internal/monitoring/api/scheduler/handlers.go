@@ -56,7 +56,7 @@ func NewHandlers(svc *SchedulerService) *Handlers {
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/scheduler/status", shared.Get(h.HandleStatus))
-	mux.Handle("POST /api/scheduler/toggle", shared.Post(h.HandleToggle))
+	mux.Handle("POST /api/scheduler/toggle", shared.AdminPost(h.HandleToggle))
 }
 
 func (h *Handlers) HandleStatus(r *http.Request) (int, any) {

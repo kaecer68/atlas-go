@@ -277,6 +277,8 @@ declare interface HumanIntervention {
   operator: string;
   session_id?: string;
   recorded_at: string;
+  expires_at?: string;
+  ttl_hours?: number;
 }
 
 declare interface IndustryCycleFactorScore {

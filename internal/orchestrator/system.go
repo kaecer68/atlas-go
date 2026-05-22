@@ -655,7 +655,13 @@ func (s *System) applyHumanOverrides(recs []domain.Recommendation) []domain.Reco
 
 	pausedAgents := make(map[string]bool)
 	bannedSectors := make(map[string]bool)
+	type approvedKey struct{ agentID, symbol string }
+	approved := make(map[approvedKey]bool)
+	rejected := make(map[approvedKey]bool)
 	for _, iv := range interventions {
+		if iv.IsExpired() {
+			continue
+		}
 		switch iv.Type {
 		case "pause_agent":
 			pausedAgents[iv.TargetAgentID] = true
@@ -665,6 +671,14 @@ func (s *System) applyHumanOverrides(recs []domain.Recommendation) []domain.Reco
 			bannedSectors[iv.TargetSector] = true
 		case "sector_unban":
 			delete(bannedSectors, iv.TargetSector)
+		case "approve_rec":
+			approved[approvedKey{iv.TargetAgentID, iv.TargetSymbol}] = true
+		case "reject_rec":
+			rejected[approvedKey{iv.TargetAgentID, iv.TargetSymbol}] = true
+		case "set_model_weight":
+			if s.Port() != nil && s.Port().darwinian != nil && iv.TargetModelID != "" {
+				s.Port().darwinian.SetWeight(iv.TargetModelID, iv.Value)
+			}
 		default:
 			// Ignore unknown intervention types.
 		}
@@ -672,6 +686,10 @@ func (s *System) applyHumanOverrides(recs []domain.Recommendation) []domain.Reco
 
 	filtered := make([]domain.Recommendation, 0, len(recs))
 	for _, rec := range recs {
+		key := approvedKey{rec.Agent, rec.Symbol}
+		if rejected[key] {
+			continue
+		}
 		if pausedAgents[rec.Agent] {
 			continue
 		}
@@ -694,13 +712,9 @@ func isRecommendationInBannedSector(rec domain.Recommendation, registry domain.A
 			break
 		}
 	}
-	mappings := map[string][]string{
-		"semiconductor_desk":   {"semiconductor", "foundry"},
-		"ai_supply_chain_desk": {"ai_supply_chain", "pcb", "thermal"},
-		"financials_desk":      {"financials"},
-		"shipping_desk":        {"shipping"},
-		"leo_satellite_desk":   {"leo_satellite", "satellite_rf_components", "satellite_pcb"},
-		"etf_rotation_desk":    {"high_dividend", "etf_rotation"},
+	mappings := config.GetParametersConfig().Industry.SkillToIndustries.Value
+	if mappings == nil {
+		return false
 	}
 	for _, sector := range mappings[skill] {
 		if bannedSectors[sector] {

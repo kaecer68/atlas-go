@@ -536,6 +536,27 @@ func (m *DarwinianWeightManager) constrainWeight(agentID string, weight float64)
 	return weight, nil
 }
 
+// SetWeight manually sets the Darwinian weight for an agent.
+// The weight is clamped to the configured [WeightMin, WeightMax] range.
+// Returns the final (possibly clamped) weight and any clamping event.
+func (m *DarwinianWeightManager) SetWeight(agentID string, weight float64) (float64, *ClampingEvent) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	finalW, clamp := m.constrainWeight(agentID, weight)
+	if existing, ok := m.weights[agentID]; ok {
+		existing.Weight = finalW
+		existing.LastUpdatedAt = time.Now()
+	} else {
+		m.weights[agentID] = &DarwinianAgentWeight{
+			Weight:        finalW,
+			AgentID:       agentID,
+			LastUpdatedAt: time.Now(),
+		}
+	}
+	return finalW, clamp
+}
+
 // GetWeight gets the Darwinian weight for an agent
 func (m *DarwinianWeightManager) GetWeight(agentID string) float64 {
 	m.mu.RLock()

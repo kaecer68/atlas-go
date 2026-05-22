@@ -1,6 +1,7 @@
 package sim
 
 import (
+	"math"
 	"slices"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -174,4 +175,107 @@ func AdjustPriceForSlippage(price float64, slippageBPS float64, side domain.Side
 		return price * (1 + slippageBPS/10000.0)
 	}
 	return price * (1 - slippageBPS/10000.0)
+}
+
+// --------------------------------------------------------------------------
+// MarketImpactModel — Almgren-Chriss style market impact estimation
+// --------------------------------------------------------------------------
+
+// MarketImpactModel estimates temporary and permanent price impact
+// based on order size relative to average daily volume (ADV).
+// Uses a simplified square-root model: impact ∝ σ * √(size/ADV)
+type MarketImpactModel struct {
+	// TemporaryImpactCoef scales temporary impact (default: 0.5)
+	TemporaryImpactCoef float64
+	// PermanentImpactCoef scales permanent impact (default: 0.1)
+	PermanentImpactCoef float64
+	// DefaultADV used when volume data is unavailable (default: 1,000,000)
+	DefaultADV int64
+}
+
+// ImpactResult holds the estimated market impact for a trade.
+type ImpactResult struct {
+	TemporaryImpactBPS float64 `json:"temporary_impact_bps"`
+	PermanentImpactBPS float64 `json:"permanent_impact_bps"`
+	TotalImpactBPS     float64 `json:"total_impact_bps"`
+	AdvRatio           float64 `json:"adv_ratio"`
+}
+
+// DefaultMarketImpactModel returns a model calibrated for TWSE stocks.
+func DefaultMarketImpactModel() *MarketImpactModel {
+	return &MarketImpactModel{
+		TemporaryImpactCoef: 0.5,
+		PermanentImpactCoef: 0.1,
+		DefaultADV:          1_000_000,
+	}
+}
+
+// Estimate calculates market impact for an order of given notional size.
+// adv: the stock's average daily volume in shares
+// price: current stock price
+// vol_estimate: estimated daily volatility as decimal (e.g. 0.02 for 2%)
+func (m *MarketImpactModel) Estimate(orderNotional float64, adv int64, price float64, volEstimate float64) ImpactResult {
+	if m == nil {
+		return ImpactResult{}
+	}
+	if adv <= 0 {
+		adv = m.DefaultADV
+	}
+	if price <= 0 {
+		price = 100
+	}
+	if volEstimate <= 0 {
+		volEstimate = 0.02
+	}
+
+	shares := orderNotional / price
+	if shares <= 0 {
+		shares = 1
+	}
+
+	advRatio := float64(shares) / float64(adv)
+	sqrtRatio := math.Sqrt(advRatio)
+
+	tempBPS := m.TemporaryImpactCoef * volEstimate * 10000 * sqrtRatio
+	permBPS := m.PermanentImpactCoef * volEstimate * 10000 * sqrtRatio
+
+	return ImpactResult{
+		TemporaryImpactBPS: tempBPS,
+		PermanentImpactBPS: permBPS,
+		TotalImpactBPS:     tempBPS + permBPS,
+		AdvRatio:           advRatio,
+	}
+}
+
+// --------------------------------------------------------------------------
+// CostBreakdown — all-in transaction cost breakdown
+// --------------------------------------------------------------------------
+
+// CostBreakdown decomposes total transaction cost into its components.
+type CostBreakdown struct {
+	SlippageBPS   float64 `json:"slippage_bps"`
+	ImpactBPS     float64 `json:"impact_bps"`
+	CommissionBPS float64 `json:"commission_bps"`
+	TotalBPS      float64 `json:"total_bps"`
+	TotalPct      float64 `json:"total_pct"`
+	TotalCost     float64 `json:"total_cost"`
+}
+
+// DefaultCommissionBPS is the standard TWSE broker commission rate (0.1425%).
+const DefaultCommissionBPS = 14.25
+
+// CalculateCosts computes the all-in transaction cost for an order.
+func CalculateCosts(orderNotional float64, slippageBPS float64, impact ImpactResult, commissionBPS float64) CostBreakdown {
+	if commissionBPS <= 0 {
+		commissionBPS = DefaultCommissionBPS
+	}
+	totalBPS := slippageBPS + impact.TotalImpactBPS + commissionBPS
+	return CostBreakdown{
+		SlippageBPS:   slippageBPS,
+		ImpactBPS:     impact.TotalImpactBPS,
+		CommissionBPS: commissionBPS,
+		TotalBPS:      totalBPS,
+		TotalPct:      totalBPS / 100.0,
+		TotalCost:     orderNotional * totalBPS / 10000.0,
+	}
 }

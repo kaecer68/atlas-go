@@ -33,6 +33,7 @@ func DefaultParametersConfig() *ParametersConfig {
 		NarrativeConviction: defaultNarrativeConvictionParameters(),
 		SectorExecutor:      defaultSectorExecutorParameters(),
 		Alert:               defaultAlertParameters(),
+		RiskGate:            defaultRiskGateParameters(),
 	}
 }
 
@@ -1910,6 +1911,18 @@ func defaultIndustryParameters() IndustryParameters {
 			Source:    SourceHeuristic,
 			Todo:      "Validate: verify mapping aligns with sector coverage mandates",
 		},
+		SkillToIndustries: ParameterMetadata[map[string][]string]{
+			Value: map[string][]string{
+				"semiconductor_desk":   {"semiconductor", "foundry"},
+				"ai_supply_chain_desk": {"ai_supply_chain", "pcb", "thermal"},
+				"financials_desk":      {"financials"},
+				"shipping_desk":        {"shipping"},
+				"leo_satellite_desk":   {"leo_satellite", "satellite_rf_components", "satellite_pcb"},
+				"etf_rotation_desk":    {"high_dividend", "etf_rotation"},
+			},
+			Rationale: "Maps agent skills to one or more industry sectors for sector-ban filtering",
+			Source:    SourceHeuristic,
+		},
 		CycleTransitions: ParameterMetadata[[]CycleTransitionConfig]{
 			Value: []CycleTransitionConfig{
 				{FromPhase: "recession", ToPhase: "recovery", Triggers: []string{"inventory_depletion", "demand_stabilization"}, Probability: 0.70, TypicalDurationDays: 180},
@@ -2343,6 +2356,107 @@ func defaultAlertParameters() AlertParameters {
 			Value:     10,
 			Rationale: "Maximum unacknowledged alerts before warning",
 			Source:    SourceHeuristic,
+		},
+	}
+}
+
+func defaultRiskGateParameters() RiskGateParameters {
+	return RiskGateParameters{
+		PreTrade: PreTradeGateParameters{
+			MaxPositionPct: ParameterMetadata[float64]{
+				Value:     0.15,
+				Rationale: "單一持股最大曝險 15%",
+				Source:    SourceLiterature,
+			},
+			MaxSectorExposurePct: ParameterMetadata[float64]{
+				Value:     0.40,
+				Rationale: "單一產業最大曝險 40%",
+				Source:    SourceHeuristic,
+			},
+			VaRConfidenceLevel: ParameterMetadata[float64]{
+				Value:     0.95,
+				Rationale: "VaR 信賴水準 95%",
+				Source:    SourceLiterature,
+			},
+			VarLimitPct: ParameterMetadata[float64]{
+				Value:     0.02,
+				Rationale: "VaR 不得超過組合價值 2%",
+				Source:    SourceHeuristic,
+			},
+			MinCashBufferPct: ParameterMetadata[float64]{
+				Value:     0.05,
+				Rationale: "至少保留 5% 現金緩衝",
+				Source:    SourceHeuristic,
+			},
+			MaxCorrelation: ParameterMetadata[float64]{
+				Value:     0.70,
+				Rationale: "與現有持倉相關性 > 0.7 則降低權重",
+				Source:    SourceHeuristic,
+			},
+			MinADVRatio: ParameterMetadata[float64]{
+				Value:     0.01,
+				Rationale: "下單量不得超過日均量 1%",
+				Source:    SourceLiterature,
+			},
+		},
+		InTrade: InTradeGateParameters{
+			MonitorIntervalSec: ParameterMetadata[int]{
+				Value:     30,
+				Rationale: "每 30 秒檢查一次持倉狀態",
+				Source:    SourceHeuristic,
+			},
+			StopLossPct: ParameterMetadata[float64]{
+				Value:     -0.10,
+				Rationale: "個股虧損達 10% 即止損",
+				Source:    SourceHeuristic,
+			},
+			TakeProfitPct: ParameterMetadata[float64]{
+				Value:     0.30,
+				Rationale: "個股獲利達 30% 考慮部分獲利了結",
+				Source:    SourceHeuristic,
+			},
+			TrailingStopATRMult: ParameterMetadata[float64]{
+				Value:     2.0,
+				Rationale: "2x ATR trailing stop",
+				Source:    SourceLiterature,
+			},
+			VolatilitySpikeMult: ParameterMetadata[float64]{
+				Value:     3.0,
+				Rationale: "波動率超過 3 倍歷史均值 → 減碼",
+				Source:    SourceEmpirical,
+			},
+			CircuitBreakerDailyLossPct: ParameterMetadata[float64]{
+				Value:     -0.05,
+				Rationale: "單日組合虧損 5% → 暫停交易",
+				Source:    SourceHeuristic,
+			},
+		},
+		PostTrade: PostTradeGateParameters{
+			MaxDrawdownHaltPct: ParameterMetadata[float64]{
+				Value:     0.20,
+				Rationale: "最大回撤 20% → SUSPENDED",
+				Source:    SourceHeuristic,
+			},
+			MaxDrawdownDefensivePct: ParameterMetadata[float64]{
+				Value:     0.10,
+				Rationale: "最大回撤 10% → DEFENSIVE（減半倉）",
+				Source:    SourceHeuristic,
+			},
+			MinRollingSharpe: ParameterMetadata[float64]{
+				Value:     0.0,
+				Rationale: "滾動 Sharpe < 0 → CAUTIOUS",
+				Source:    SourceLiterature,
+			},
+			ConsecutiveLossDays: ParameterMetadata[int]{
+				Value:     5,
+				Rationale: "連續虧損 5 天 → mute agent",
+				Source:    SourceHeuristic,
+			},
+			EvaluationIntervalHours: ParameterMetadata[int]{
+				Value:     24,
+				Rationale: "每日盤後評估一次",
+				Source:    SourceHeuristic,
+			},
 		},
 	}
 }

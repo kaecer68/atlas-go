@@ -203,6 +203,71 @@ export function renderRiskCards(riskExposure, pipelineData, capitalPhase) {
   if (sectorEl) sectorEl.innerHTML = sectorHtml;
 }
 
+export function renderRiskCalibration(data) {
+  var el = document.getElementById('riskCalibration');
+  var panel = document.getElementById('riskCalibrationPanel');
+  if (!el || !panel) return;
+
+  if (!data || data.status === 'not_available' || !data.report) {
+    panel.style.display = '';
+    el.classList.remove('loading');
+    el.innerHTML = '<div class="empty">尚無校準報告</div>';
+    return;
+  }
+
+  panel.style.display = '';
+  el.classList.remove('loading');
+
+  var report = data.report;
+  var generated = data.generated || '';
+  var isCalibrated = report.verdict === 'calibrated';
+  var statusIcon = isCalibrated ? '🔵' : '🟢';
+  var statusLabel = isCalibrated ? '已校準' : '閾值穩定';
+  var statusColor = isCalibrated ? '#3b82f6' : '#10b981';
+
+  var changesHtml = '';
+  if (report.changes && report.changes.length > 0) {
+    var rows = report.changes.map(function(c) {
+      var confidenceColor = c.confidence === 'high' ? 'var(--up)' : (c.confidence === 'medium' ? 'var(--warn)' : 'var(--muted)');
+      return '<tr>' +
+        '<td style="padding:4px 8px;font-size:12px;font-family:monospace">' + escapeHtml(c.name) + '</td>' +
+        '<td style="padding:4px 8px;font-size:12px;text-align:right">' + c.before.toFixed(4) + '</td>' +
+        '<td style="padding:4px 8px;font-size:12px;text-align:right;color:var(--up)">' + c.after.toFixed(4) + '</td>' +
+        '<td style="padding:4px 8px;font-size:12px;color:var(--muted)">' + escapeHtml(c.rationale) + '</td>' +
+        '<td style="padding:4px 8px;font-size:12px;text-align:center"><span style="padding:1px 6px;border-radius:3px;font-size:11px;background:' + confidenceColor + '22;color:' + confidenceColor + '">' + c.confidence + '</span></td>' +
+        '</tr>';
+    }).join('');
+    changesHtml =
+      '<div style="margin-top:12px">' +
+      '<div style="font-size:13px;font-weight:700;margin-bottom:6px">參數調整</div>' +
+      '<table style="width:100%;font-size:12px;border-collapse:collapse">' +
+      '<thead><tr style="border-bottom:1px solid var(--border)">' +
+      '<th style="text-align:left;padding:4px 8px">參數</th>' +
+      '<th style="text-align:right;padding:4px 8px">調整前</th>' +
+      '<th style="text-align:right;padding:4px 8px">調整後</th>' +
+      '<th style="text-align:left;padding:4px 8px">原因</th>' +
+      '<th style="text-align:center;padding:4px 8px">信心</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+
+  el.innerHTML =
+    '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">' +
+    '<span style="font-size:28px">' + statusIcon + '</span>' +
+    '<div>' +
+    '<div style="font-size:14px;font-weight:700;color:' + statusColor + '">' + statusLabel + '</div>' +
+    '<div style="font-size:11px;color:var(--muted)">' + (generated ? '校準時間 ' + new Date(generated).toLocaleString('zh-TW') : '') + '</div>' +
+    '</div>' +
+    '<div style="margin-left:auto;text-align:right;font-size:12px;color:var(--muted)">' +
+    '<div>評估 ' + (report.orders_evaluated || 0) + ' 筆訂單</div>' +
+    '<div>區間 ' + (report.session_span || '—') + '</div>' +
+    '</div>' +
+    '</div>' +
+    '<div style="margin-top:10px;font-size:13px;padding:8px 12px;background:var(--panel-l2);border-radius:6px;color:var(--text);line-height:1.5">' +
+    escapeHtml(report.summary || '') +
+    '</div>' +
+    changesHtml;
+}
+
 export function inferSectorFromAgent(agentID, layer) {
   const agentSectorMap = {
     'semiconductor': 'semiconductor',

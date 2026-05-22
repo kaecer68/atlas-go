@@ -47,6 +47,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/repository"
+	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/taskexec"
 )
 
@@ -81,6 +82,7 @@ type DashboardAPI struct {
 	orderMgr           *live.OrderManager
 	storageReport      apimetrics.StorageReporter
 	dataFetcher        DataFetcher
+	riskGate           *risk.RiskGate
 }
 
 // channelState tracks enable/disable status for each channel.
@@ -190,6 +192,49 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		metricsHistory:     NewMetricsHistory(1000),
 		healthManager:      portfolio.NewAgentHealthManager(),
 		dataQualityChecker: NewDataQualityChecker(workDir, ledgerDir),
+	}
+}
+
+// NewDashboardAPIWithGateway creates a DashboardAPI with Gateway-backed data providers.
+// Unlike the legacy constructor, this skips direct provider creation and uses
+// the Gateway via DataFetcher from the start, complying with the Constitution.
+func NewDashboardAPIWithGateway(workDir, ledgerDir string, metricsCollector *MetricsCollector, fetcher DataFetcher) *DashboardAPI {
+	loadChannelStates(workDir)
+
+	if metricsCollector == nil {
+		metricsCollector = NewMetricsCollector()
+	}
+
+	macroProvider := NewMacroDataGatewayAdapter(fetcher)
+	geoProvider := NewGeopoliticalGatewayAdapter(fetcher)
+	taiwanGeoProvider := narrative.NewCompositeTaiwanGeopoliticalProvider(
+		narrative.NewTaiwanRSSGeopoliticalProvider(),
+	)
+
+	lifecycle := narrative.NewEventLifecycleManager()
+	ingestor := narrative.NewMacroIngestor(macroProvider, filepath.Join(workDir, "data/state/macro"))
+	ingestor.SetLifecycleManager(lifecycle)
+
+	narrativeEng := narrative.NewNarrativeEngine()
+	return &DashboardAPI{
+		workDir:            workDir,
+		ledgerDir:          ledgerDir,
+		storeBackend:       os.Getenv("ATLAS_STORE_BACKEND"),
+		sqlitePath:         os.Getenv("ATLAS_SQLITE_PATH"),
+		baselinePath:       filepath.Join(workDir, "data/state/baseline_policy.json"),
+		narrativeEngine:    narrativeEng,
+		macroIngestor:      ingestor,
+		macroProvider:      macroProvider,
+		geoProvider:        geoProvider,
+		taiwanGeoProvider:  taiwanGeoProvider,
+		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider, workDir),
+		reportGenerator:    narrative.NewReportGenerator(),
+		industryService:    newWiredIndustryService(narrativeEng, macroProvider),
+		metricsCollector:   metricsCollector,
+		metricsHistory:     NewMetricsHistory(1000),
+		healthManager:      portfolio.NewAgentHealthManager(),
+		dataQualityChecker: NewDataQualityChecker(workDir, ledgerDir),
+		dataFetcher:        fetcher,
 	}
 }
 
@@ -419,7 +464,57 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		mux.HandleFunc("/api/events/stream", sseHandler.ServeHTTP)
 	}
 
-	pipelineSvc := service.NewPipelineService(a.workDir, a.ledgerDir, outcomeStore)
+	pipelineSvc := service.NewPipelineService(a.workDir, a.ledgerDir, outcomeStore).
+		WithNarrativeProvider(func(eventIDs []string) *service.NarrativeContextData {
+			if a.narrativeEngine == nil {
+				return nil
+			}
+			events := a.narrativeEngine.DetectEvents(narrative.MarketNarrativeData{})
+			var activeThemes []string
+			var primaryTheme string
+			var primaryHitRate float64
+			var directionHint string
+			for _, event := range events {
+				if event.Status == "active" || event.Status == "confirmed" {
+					activeThemes = append(activeThemes, event.Theme)
+					if primaryTheme == "" {
+						primaryTheme = event.Theme
+						primaryHitRate = event.HitRate
+						if event.Sentiment > 0.3 {
+							directionHint = "positive"
+						} else if event.Sentiment < -0.3 {
+							directionHint = "negative"
+						} else {
+							directionHint = "neutral"
+						}
+					}
+				}
+			}
+			return &service.NarrativeContextData{
+				ActiveThemes:   activeThemes,
+				PrimaryTheme:   primaryTheme,
+				PrimaryHitRate: primaryHitRate,
+				DirectionHint:  directionHint,
+			}
+		}).
+		WithCycleProvider(func(skill string) *service.IndustryContextData {
+			if a.industryService == nil {
+				return nil
+			}
+			tracker := a.industryService.CycleTracker
+			if tracker == nil {
+				return nil
+			}
+			pos, ok := tracker.GetPosition(skill)
+			if !ok {
+				return nil
+			}
+			return &service.IndustryContextData{
+				IndustryID:      skill,
+				BusinessCycle:   string(pos.BusinessCycle),
+				CycleConfidence: pos.Confidence,
+			}
+		})
 	pipelineHandlers := apipipeline.NewHandlers(pipelineSvc)
 	pipelineHandlers.ReasoningHandler = &apipipeline.ReasoningHandler{BaseDir: a.ledgerDir}
 	pipelineHandlers.RegisterRoutes(mux)
@@ -558,6 +653,8 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			"generated": time.Now().Format(time.RFC3339),
 		})
 	})
+
+	mux.HandleFunc("/api/dashboard/risk-calibration", a.handleRiskCalibration)
 
 	// Management center endpoints — channel control and API key management.
 	mux.HandleFunc("/api/dashboard/channels/", func(w http.ResponseWriter, r *http.Request) {
@@ -790,6 +887,36 @@ func (a *DashboardAPI) initGatewayProviders() {
 		a.macroIngestor = narrative.NewMacroIngestor(a.macroProvider, filepath.Join(a.workDir, "data/state/macro"))
 	}
 	logging.Info("dashboardapi", "gateway_providers_initialized")
+}
+
+// SetRiskGate injects a RiskGate instance for serving calibration reports.
+func (a *DashboardAPI) SetRiskGate(g *risk.RiskGate) {
+	a.riskGate = g
+}
+
+// handleRiskCalibration serves the latest risk gate calibration report.
+func (a *DashboardAPI) handleRiskCalibration(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if a.riskGate == nil {
+		shared.WriteJSONError(w, http.StatusNotFound, "risk gate not initialized")
+		return
+	}
+	report := a.riskGate.LastCalibrationReport()
+	if report == nil {
+		shared.WriteJSON(w, http.StatusOK, map[string]any{
+			"status":    "not_available",
+			"message":   "no calibration report available yet",
+			"generated": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+	shared.WriteJSON(w, http.StatusOK, map[string]any{
+		"report":    report,
+		"generated": time.Now().Format(time.RFC3339),
+	})
 }
 
 func (a *DashboardAPI) RegisterOrderRoutes(mux *http.ServeMux) {

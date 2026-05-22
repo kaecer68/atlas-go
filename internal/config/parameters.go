@@ -412,12 +412,13 @@ type IndustryParameters struct {
 
 	SeasonalPatterns ParameterMetadata[[]SeasonalPatternConfig] `json:"seasonal_patterns"`
 
-	AsymmetricRisk   ParameterMetadata[AsymmetricRiskConfig]    `json:"asymmetric_risk"`
-	NewsLatencyRisk  ParameterMetadata[NewsLatencyConfig]       `json:"news_latency_risk"`
-	FreshnessScores  ParameterMetadata[FreshnessScoresConfig]   `json:"freshness_scores"`
-	PhaseScores      ParameterMetadata[PhaseScoresConfig]       `json:"phase_scores"`
-	SkillToIndustry  ParameterMetadata[map[string]string]       `json:"skill_to_industry,omitempty"`
-	CycleTransitions ParameterMetadata[[]CycleTransitionConfig] `json:"cycle_transitions"`
+	AsymmetricRisk    ParameterMetadata[AsymmetricRiskConfig]    `json:"asymmetric_risk"`
+	NewsLatencyRisk   ParameterMetadata[NewsLatencyConfig]       `json:"news_latency_risk"`
+	FreshnessScores   ParameterMetadata[FreshnessScoresConfig]   `json:"freshness_scores"`
+	PhaseScores       ParameterMetadata[PhaseScoresConfig]       `json:"phase_scores"`
+	SkillToIndustry   ParameterMetadata[map[string]string]       `json:"skill_to_industry,omitempty"`
+	SkillToIndustries ParameterMetadata[map[string][]string]     `json:"skill_to_industries,omitempty"`
+	CycleTransitions  ParameterMetadata[[]CycleTransitionConfig] `json:"cycle_transitions"`
 
 	CycleWeightMultipliers ParameterMetadata[CycleWeightMultipliersConfig] `json:"cycle_weight_multipliers"`
 	LinkageWeightImpact    ParameterMetadata[float64]                      `json:"linkage_weight_impact"`
@@ -684,6 +685,43 @@ type AlertParameters struct {
 	MaxUnacknowledgedAlerts  ParameterMetadata[int]     `json:"max_unacknowledged_alerts"`
 }
 
+// RiskGateParameters holds all tunable parameters for the unified risk gate system.
+type RiskGateParameters struct {
+	PreTrade  PreTradeGateParameters  `json:"pre_trade"`
+	InTrade   InTradeGateParameters   `json:"in_trade,omitempty"`
+	PostTrade PostTradeGateParameters `json:"post_trade,omitempty"`
+}
+
+// PreTradeGateParameters holds pre-trade risk check parameters.
+type PreTradeGateParameters struct {
+	MaxPositionPct       ParameterMetadata[float64] `json:"max_position_pct"`
+	MaxSectorExposurePct ParameterMetadata[float64] `json:"max_sector_exposure_pct"`
+	VaRConfidenceLevel   ParameterMetadata[float64] `json:"var_confidence_level"`
+	VarLimitPct          ParameterMetadata[float64] `json:"var_limit_pct"`
+	MinCashBufferPct     ParameterMetadata[float64] `json:"min_cash_buffer_pct"`
+	MaxCorrelation       ParameterMetadata[float64] `json:"max_correlation"`
+	MinADVRatio          ParameterMetadata[float64] `json:"min_adv_ratio"`
+}
+
+// InTradeGateParameters holds in-trade monitoring parameters.
+type InTradeGateParameters struct {
+	MonitorIntervalSec         ParameterMetadata[int]     `json:"monitor_interval_sec"`
+	StopLossPct                ParameterMetadata[float64] `json:"stop_loss_pct"`
+	TakeProfitPct              ParameterMetadata[float64] `json:"take_profit_pct"`
+	TrailingStopATRMult        ParameterMetadata[float64] `json:"trailing_stop_atr_mult"`
+	VolatilitySpikeMult        ParameterMetadata[float64] `json:"volatility_spike_mult"`
+	CircuitBreakerDailyLossPct ParameterMetadata[float64] `json:"circuit_breaker_daily_loss_pct"`
+}
+
+// PostTradeGateParameters holds post-trade evaluation parameters.
+type PostTradeGateParameters struct {
+	MaxDrawdownHaltPct      ParameterMetadata[float64] `json:"max_drawdown_halt_pct"`
+	MaxDrawdownDefensivePct ParameterMetadata[float64] `json:"max_drawdown_defensive_pct"`
+	MinRollingSharpe        ParameterMetadata[float64] `json:"min_rolling_sharpe"`
+	ConsecutiveLossDays     ParameterMetadata[int]     `json:"consecutive_loss_days"`
+	EvaluationIntervalHours ParameterMetadata[int]     `json:"evaluation_interval_hours"`
+}
+
 // ParametersConfig is the top-level configuration for all investment model parameters.
 type ParametersConfig struct {
 	Version             string                        `json:"version"`
@@ -709,6 +747,7 @@ type ParametersConfig struct {
 	Strategy            StrategyParameters            `json:"strategy"`
 	SectorExecutor      SectorExecutorParameters      `json:"sector_executor,omitempty"`
 	Alert               AlertParameters               `json:"alert"`
+	RiskGate            RiskGateParameters            `json:"risk_gate,omitempty"`
 }
 
 func (p *ParametersConfig) validateAlert() error {
@@ -878,6 +917,23 @@ func (p *ParametersConfig) Validate() error {
 	}
 	if p.Risk.ConsecutiveLossLimit.Value < 1 {
 		return fmt.Errorf("risk.consecutive_loss_limit (%d) must be >= 1", p.Risk.ConsecutiveLossLimit.Value)
+	}
+
+	// RiskGate validation
+	if p.RiskGate.PreTrade.MaxPositionPct.Value <= 0 || p.RiskGate.PreTrade.MaxPositionPct.Value > 1 {
+		return fmt.Errorf("risk_gate.pre_trade.max_position_pct (%.3f) must be in (0,1]", p.RiskGate.PreTrade.MaxPositionPct.Value)
+	}
+	if p.RiskGate.PreTrade.MaxSectorExposurePct.Value <= 0 || p.RiskGate.PreTrade.MaxSectorExposurePct.Value > 1 {
+		return fmt.Errorf("risk_gate.pre_trade.max_sector_exposure_pct (%.3f) must be in (0,1]", p.RiskGate.PreTrade.MaxSectorExposurePct.Value)
+	}
+	if p.RiskGate.PreTrade.VarLimitPct.Value <= 0 || p.RiskGate.PreTrade.VarLimitPct.Value > 1 {
+		return fmt.Errorf("risk_gate.pre_trade.var_limit_pct (%.3f) must be in (0,1]", p.RiskGate.PreTrade.VarLimitPct.Value)
+	}
+	if p.RiskGate.PreTrade.MinCashBufferPct.Value < 0 || p.RiskGate.PreTrade.MinCashBufferPct.Value > 1 {
+		return fmt.Errorf("risk_gate.pre_trade.min_cash_buffer_pct (%.3f) must be in [0,1]", p.RiskGate.PreTrade.MinCashBufferPct.Value)
+	}
+	if p.RiskGate.PreTrade.VaRConfidenceLevel.Value <= 0 || p.RiskGate.PreTrade.VaRConfidenceLevel.Value > 1 {
+		return fmt.Errorf("risk_gate.pre_trade.var_confidence_level (%.3f) must be in (0,1]", p.RiskGate.PreTrade.VaRConfidenceLevel.Value)
 	}
 
 	// Drawdown constraints
@@ -1326,6 +1382,7 @@ func LoadParametersConfig(path string) (*ParametersConfig, error) {
 	mergeNarrativeDefaults(&cfg)
 	mergeDrawdownDefaults(&cfg)
 	mergeAlertDefaults(&cfg)
+	mergeRiskGateDefaults(&cfg)
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate parameters config: %w", err)
@@ -1513,6 +1570,23 @@ func ResetParametersConfig() {
 	parametersConfig = nil
 }
 
+// ReloadParametersConfig re-reads the parameters JSON file and replaces the
+// singleton configuration. Useful for hot-reload without server restart.
+// Returns any parse or validation error.
+func ReloadParametersConfig() error {
+	cfg, err := LoadParametersConfig(parametersPath)
+	if err != nil {
+		return fmt.Errorf("reload parameters: %w", err)
+	}
+	parametersConfig = cfg
+	return nil
+}
+
+// GetParametersConfigPath returns the path to the parameters configuration file.
+func GetParametersConfigPath() string {
+	return parametersPath
+}
+
 // Save writes the configuration to the given JSON file.
 func (p *ParametersConfig) Save(path string) error {
 	p.UpdatedAt = time.Now()
@@ -1524,4 +1598,64 @@ func (p *ParametersConfig) Save(path string) error {
 		return fmt.Errorf("write parameters config: %w", err)
 	}
 	return nil
+}
+
+func mergeRiskGateDefaults(cfg *ParametersConfig) {
+	def := DefaultParametersConfig().RiskGate
+	r := &cfg.RiskGate
+
+	if r.PreTrade.MaxPositionPct.Value == 0 {
+		r.PreTrade.MaxPositionPct = def.PreTrade.MaxPositionPct
+	}
+	if r.PreTrade.MaxSectorExposurePct.Value == 0 {
+		r.PreTrade.MaxSectorExposurePct = def.PreTrade.MaxSectorExposurePct
+	}
+	if r.PreTrade.VaRConfidenceLevel.Value == 0 {
+		r.PreTrade.VaRConfidenceLevel = def.PreTrade.VaRConfidenceLevel
+	}
+	if r.PreTrade.VarLimitPct.Value == 0 {
+		r.PreTrade.VarLimitPct = def.PreTrade.VarLimitPct
+	}
+	if r.PreTrade.MinCashBufferPct.Value == 0 {
+		r.PreTrade.MinCashBufferPct = def.PreTrade.MinCashBufferPct
+	}
+	if r.PreTrade.MaxCorrelation.Value == 0 {
+		r.PreTrade.MaxCorrelation = def.PreTrade.MaxCorrelation
+	}
+	if r.PreTrade.MinADVRatio.Value == 0 {
+		r.PreTrade.MinADVRatio = def.PreTrade.MinADVRatio
+	}
+	if r.InTrade.MonitorIntervalSec.Value == 0 {
+		r.InTrade.MonitorIntervalSec = def.InTrade.MonitorIntervalSec
+	}
+	if r.InTrade.StopLossPct.Value == 0 {
+		r.InTrade.StopLossPct = def.InTrade.StopLossPct
+	}
+	if r.InTrade.TakeProfitPct.Value == 0 {
+		r.InTrade.TakeProfitPct = def.InTrade.TakeProfitPct
+	}
+	if r.InTrade.TrailingStopATRMult.Value == 0 {
+		r.InTrade.TrailingStopATRMult = def.InTrade.TrailingStopATRMult
+	}
+	if r.InTrade.VolatilitySpikeMult.Value == 0 {
+		r.InTrade.VolatilitySpikeMult = def.InTrade.VolatilitySpikeMult
+	}
+	if r.InTrade.CircuitBreakerDailyLossPct.Value == 0 {
+		r.InTrade.CircuitBreakerDailyLossPct = def.InTrade.CircuitBreakerDailyLossPct
+	}
+	if r.PostTrade.MaxDrawdownHaltPct.Value == 0 {
+		r.PostTrade.MaxDrawdownHaltPct = def.PostTrade.MaxDrawdownHaltPct
+	}
+	if r.PostTrade.MaxDrawdownDefensivePct.Value == 0 {
+		r.PostTrade.MaxDrawdownDefensivePct = def.PostTrade.MaxDrawdownDefensivePct
+	}
+	if r.PostTrade.MinRollingSharpe.Value == 0 {
+		r.PostTrade.MinRollingSharpe = def.PostTrade.MinRollingSharpe
+	}
+	if r.PostTrade.ConsecutiveLossDays.Value == 0 {
+		r.PostTrade.ConsecutiveLossDays = def.PostTrade.ConsecutiveLossDays
+	}
+	if r.PostTrade.EvaluationIntervalHours.Value == 0 {
+		r.PostTrade.EvaluationIntervalHours = def.PostTrade.EvaluationIntervalHours
+	}
 }

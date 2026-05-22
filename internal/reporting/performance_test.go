@@ -161,9 +161,9 @@ func TestCalculateSharpeRatio(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := calculateSharpeRatio(tt.returns)
+			got := CalculateSharpeRatio(tt.returns)
 			if math.Abs(got-tt.want) > 0.001 {
-				t.Errorf("calculateSharpeRatio() = %f, want %f", got, tt.want)
+				t.Errorf("CalculateSharpeRatio() = %f, want %f", got, tt.want)
 			}
 		})
 	}

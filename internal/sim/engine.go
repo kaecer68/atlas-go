@@ -11,6 +11,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
+	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/tax"
 )
 
@@ -24,6 +25,7 @@ type Engine struct {
 	taxCalc         *tax.TaiwanTaxCalculator
 	dividends       map[string]float64
 	thresholdEngine *DynamicThresholdEngine
+	preTradeGate    *risk.PreTradeGate
 }
 
 type sellDetail struct {
@@ -80,6 +82,79 @@ func (e *Engine) WithDividends(divs map[string]float64) *Engine {
 func (e *Engine) WithThresholdEngine(te *DynamicThresholdEngine) *Engine {
 	e.thresholdEngine = te
 	return e
+}
+
+func (e *Engine) WithPreTradeGate(g *risk.PreTradeGate) *Engine {
+	e.preTradeGate = g
+	return e
+}
+
+func (e *Engine) filterByPreTradeGate(
+	cash float64,
+	positions []domain.Position,
+	recs []domain.Recommendation,
+) []domain.Recommendation {
+	totalValue := cash
+	posMap := make(map[string]float64, len(positions))
+	for _, p := range positions {
+		totalValue += p.MarketValue
+		posMap[p.Symbol] = p.MarketValue
+	}
+	if totalValue <= 0 {
+		totalValue = 3_000_000
+	}
+
+	pf := risk.PortfolioState{
+		TotalValue:     totalValue,
+		Cash:           cash,
+		Var95:          totalValue * 0.02,
+		SectorExposure: make(map[string]float64),
+		Positions:      posMap,
+	}
+
+	var filtered []domain.Recommendation
+	for _, rec := range recs {
+		order := e.buildOrderIntent(rec, totalValue)
+		decision, err := e.preTradeGate.Check(nil, order, pf, "NORMAL")
+		if err != nil {
+			logging.Warn("sim", "pre_trade_check_failed", "symbol", rec.Symbol, "err", err)
+			filtered = append(filtered, rec)
+			continue
+		}
+		if decision.Verdict == risk.VerdictBlock || decision.Verdict == risk.VerdictHalt {
+			logging.Info("sim", "pre_trade_blocked",
+				"symbol", rec.Symbol,
+				"reason", decision.Reason)
+			continue
+		}
+		filtered = append(filtered, rec)
+		pf = applyOrderToState(pf, order)
+	}
+	return filtered
+}
+
+func (e *Engine) buildOrderIntent(rec domain.Recommendation, totalValue float64) risk.OrderIntent {
+	notional := totalValue * 0.05
+	if rec.TargetPrice > 0 {
+		notional = float64(rec.Conviction) / 100.0 * totalValue * 0.1
+	}
+	side := string(rec.Side)
+	if side == "" {
+		side = "buy"
+	}
+	return risk.OrderIntent{
+		Symbol:     rec.Symbol,
+		Side:       side,
+		Notional:   notional,
+		AgentID:    rec.Agent,
+		Conviction: rec.Conviction,
+	}
+}
+
+func applyOrderToState(pf risk.PortfolioState, o risk.OrderIntent) risk.PortfolioState {
+	pf.Cash -= o.Notional
+	pf.Positions[o.Symbol] += o.Notional
+	return pf
 }
 
 // GetThresholdEngine returns the attached dynamic threshold engine.
@@ -345,6 +420,9 @@ func (e *Engine) executeBuys(
 	regime domain.Regime,
 	fallbackEvents *[]string,
 ) ([]domain.Order, []domain.Position) {
+	if e.preTradeGate != nil {
+		recs = e.filterByPreTradeGate(cash, existingPositions, recs)
+	}
 	if e.useOptimizer && e.optimizer != nil {
 		return e.executeOptimizerBuys(cash, existingPositions, quoteBySymbol, recs, regime, fallbackEvents)
 	}

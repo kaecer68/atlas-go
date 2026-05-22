@@ -654,3 +654,34 @@ func (ie *InferenceEngine) CalibrateVaR(returns []float64) error {
 
 	return nil
 }
+
+// SelfLearn runs Bayesian optimization on a set of parameters, applies the best
+// values found, and returns the improvement delta. This is the self-learning
+// loop hook: call it periodically (e.g. from MetaLearner) to continuously
+// optimize parameters against a user-provided backtest evaluator.
+// Parameters:
+//   - paramNames: list of parameter names to optimize (e.g. ["risk_max_position_size"])
+//   - evaluator: backtest scoring function, higher = better
+//   - config: optimizer configuration (use DefaultOptimizerConfig() for default)
+//
+// Returns the absolute improvement in score after optimization.
+func (ie *InferenceEngine) SelfLearn(paramNames []string, evaluator func(cfg *ParametersConfig) (float64, error), config OptimizerConfig) (float64, error) {
+	result, err := ie.OptimizeBayesian(paramNames, evaluator, config)
+	if err != nil {
+		return 0, fmt.Errorf("self-learn: %w", err)
+	}
+
+	currentScore, err := evaluator(ie.params)
+	if err != nil {
+		currentScore = 0
+	}
+
+	bestScore := result.BestScore
+	improvement := bestScore - currentScore
+
+	for name, val := range result.ParamValues {
+		ie.SetParameter(name, val)
+	}
+
+	return improvement, nil
+}

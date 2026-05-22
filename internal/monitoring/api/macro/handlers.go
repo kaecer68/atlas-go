@@ -14,8 +14,8 @@ type Handlers struct {
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
-	mux.Handle("POST /api/macro/ingest", shared.Post(h.HandleMacroIngest))
-	mux.Handle("POST /api/channels/ingest", shared.Post(h.HandleChannelsIngest))
+	mux.Handle("POST /api/macro/ingest", shared.AdminPost(h.HandleMacroIngest))
+	mux.Handle("POST /api/channels/ingest", shared.AdminPost(h.HandleChannelsIngest))
 	mux.Handle("GET /api/macro/capital-flow/latest", shared.Get(h.HandleCapitalFlowLatest))
 	mux.Handle("GET /api/taiwan/stress-index", shared.Get(h.HandleTaiwanStressIndex))
 	mux.Handle("GET /api/macro/snapshot/latest", shared.Get(h.HandleMacroSnapshotLatest))

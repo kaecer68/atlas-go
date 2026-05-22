@@ -8,12 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/reporting"
 )
 
 // BenchmarkComparisonResponse is the response for GET /api/dashboard/benchmark-comparison.
@@ -71,7 +71,7 @@ func (h *Handlers) HandleBenchmarkComparison(r *http.Request) (int, any) {
 		if summary.PortfolioValue == 0 {
 			continue
 		}
-		date := sessionDateFromID(summary.SessionID)
+		date := domain.SessionDateFromID(summary.SessionID)
 		points = append(points, sessionPoint{
 			name:  summary.SessionID,
 			date:  date,
@@ -115,29 +115,16 @@ func (h *Handlers) HandleBenchmarkComparison(r *http.Request) (int, any) {
 
 	outperformance := portfolioReturn - taiexReturn
 
-	beta := 1.0
-	portfolioVol := stdDev(dailyReturns)
-	if len(dailyReturns) > 0 && taiexReturn != 0 {
-		benchVol := math.Abs(taiexReturn)
-		if benchVol > 0 {
-			beta = portfolioVol / benchVol
-		}
-	}
-
-	alpha := portfolioReturn - beta*taiexReturn
-
-	trackingError := portfolioVol
+	beta := reporting.CalculateBeta(dailyReturns, taiexReturn)
+	alpha := reporting.CalculateAlpha(portfolioReturn, beta, taiexReturn)
+	trackingError := reporting.CalculateTrackingError(dailyReturns)
 
 	var sharpeRatio float64
-	if len(dailyReturns) > 0 && portfolioVol > 0 {
-		meanDaily := mean(dailyReturns)
-		sharpeRatio = meanDaily / portfolioVol * math.Sqrt(252)
+	if len(dailyReturns) > 0 {
+		sharpeRatio = reporting.CalculateSharpeRatio(dailyReturns)
 	}
 
-	var infoRatio float64
-	if trackingError > 0 {
-		infoRatio = outperformance / trackingError
-	}
+	infoRatio := reporting.CalculateInfoRatio(outperformance, trackingError)
 
 	equityCurve := buildBenchmarkEquityCurve(points, taiexReturn)
 
@@ -204,48 +191,4 @@ func buildBenchmarkEquityCurve(points []sessionPoint, taiexReturn float64) []Ben
 	}
 
 	return curve
-}
-
-// mean computes the arithmetic mean of a slice of float64.
-func mean(values []float64) float64 {
-	if len(values) == 0 {
-		return 0
-	}
-	sum := 0.0
-	for _, v := range values {
-		sum += v
-	}
-	return sum / float64(len(values))
-}
-
-// stdDev computes the sample standard deviation of a slice of float64.
-func stdDev(values []float64) float64 {
-	if len(values) < 2 {
-		return 0
-	}
-	m := mean(values)
-	sumSq := 0.0
-	for _, v := range values {
-		d := v - m
-		sumSq += d * d
-	}
-	return math.Sqrt(sumSq / float64(len(values)-1))
-}
-
-// sessionDateFromID extracts the trading date from a session ID.
-// This mirrors the function in service/live.go to avoid a service-layer dependency.
-func sessionDateFromID(id string) time.Time {
-	const prefix = "session-"
-	if !strings.HasPrefix(id, prefix) {
-		return time.Time{}
-	}
-	trimmed := strings.TrimPrefix(id, prefix)
-	parts := strings.Split(trimmed, "-")
-	if len(parts) < 1 {
-		return time.Time{}
-	}
-	if d, err := time.Parse("20060102", parts[0]); err == nil {
-		return d
-	}
-	return time.Time{}
 }
