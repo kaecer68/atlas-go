@@ -176,9 +176,10 @@ func TestPhase3Integration(t *testing.T) {
 
 		windows := []prism.TrainingWindow{
 			{
-				Start:  time.Now().AddDate(0, 0, -90),
-				End:    time.Now(),
-				Regime: prism.RegimeRiskOn,
+				Start:     time.Now().AddDate(0, 0, -90),
+				End:       time.Now(),
+				Regime:    prism.RegimeRiskOn,
+				RegimeSet: true,
 			},
 		}
 

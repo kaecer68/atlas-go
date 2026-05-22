@@ -82,6 +82,7 @@ type TrainingResult struct {
 	LossCount    int
 	Error        string
 	Duration     time.Duration
+	Synthetic    bool // true when no TrainingExecutor was available
 }
 
 // TrainingQueue manages a regime-specific training queue
@@ -465,61 +466,25 @@ func (pm *PRISMManager) worker(queue *TrainingQueue, stopCh <-chan struct{}) {
 	}
 }
 
-// executeTraining performs actual training (placeholder - integrate with backtest)
+// executeTraining delegates to the attached TrainingExecutor when available.
+// When no executor is configured, the returned result is marked Synthetic so that
+// callers can distinguish real backtest outcomes from empty placeholders.
 func (pm *PRISMManager) executeTraining(task *TrainingTask) *TrainingResult {
-	// If a real executor is attached, use it.
 	pm.mu.RLock()
 	ex := pm.executor
 	pm.mu.RUnlock()
 	if ex != nil {
 		result, err := ex.Run(*task)
 		if err == nil {
-			return &result
+			cloned := result
+			return &cloned
 		}
-		// Fall back to simulation on executor error
-		return &TrainingResult{
-			HitRate:      0.5,
-			SharpeRatio:  0.0,
-			MaxDrawdown:  0.0,
-			TotalReturn:  0.0,
-			SignalsCount: 0,
-			WinCount:     0,
-			LossCount:    0,
-			Error:        err.Error(),
-		}
+		return &TrainingResult{Error: err.Error()}
 	}
-
-	// Simulate training with realistic results when no executor is present (legacy/tests)
-	time.Sleep(50 * time.Millisecond)
-
-	result := &TrainingResult{
-		HitRate:      0.5 + float64(task.Priority)*0.02,
-		SharpeRatio:  0.6,
-		MaxDrawdown:  -0.12,
-		TotalReturn:  0.08,
-		SignalsCount: 50,
-		WinCount:     25,
-		LossCount:    25,
+	return &TrainingResult{
+		Synthetic: true,
+		Error:     "no training executor configured",
 	}
-
-	switch task.Regime {
-	case RegimeRiskOn:
-		result.SharpeRatio = 0.8
-		result.TotalReturn = 0.15
-	case RegimeRiskOff:
-		result.SharpeRatio = 0.4
-		result.TotalReturn = -0.05
-	case RegimeHighVolatility:
-		result.SharpeRatio = 0.3
-		result.MaxDrawdown = -0.25
-	case RegimeLowVolatility:
-		result.SharpeRatio = 0.9
-		result.MaxDrawdown = -0.05
-	default:
-		// Leave baseline result unchanged for unknown regimes.
-	}
-
-	return result
 }
 
 // autoBalancer periodically rebalances queues
@@ -537,31 +502,16 @@ func (pm *PRISMManager) autoBalancer(stopCh <-chan struct{}) {
 	}
 }
 
-// classifyRegime determines regime type based on market conditions during window
+// classifyRegime resolves the regime for a training window.
+//
+// When the window carries an explicit regime override (set by the orchestrator's
+// regime-detection pipeline), that value is authoritative and returned directly.
+// When no override is present, the function defaults to RegimeTransition so that
+// the caller never relies on synthetic time-based guesses.
 func (pm *PRISMManager) classifyRegime(window TrainingWindow) RegimeType {
-	// This would analyze market data during the window
-	// For now, use time-based classification as a placeholder
-
-	hour := window.Start.Hour()
-	month := int(window.Start.Month())
-
-	// Simple heuristic based on month (seasonal patterns)
-	switch {
-	case month >= 1 && month <= 3:
-		return RegimeTransition // Q1 uncertainty
-	case month >= 4 && month <= 6:
-		return RegimeRiskOn // Q2 typically bullish
-	case month >= 7 && month <= 9:
-		return RegimeLowVolatility // Q3 often range-bound
-	case month >= 10 && month <= 12:
-		return RegimeRiskOff // Q4 often volatile/risk-off
+	if window.RegimeSet {
+		return window.Regime
 	}
-
-	// Time of day heuristic for intraday
-	if hour >= 9 && hour <= 11 {
-		return RegimeHighVolatility // Opening volatility
-	}
-
 	return RegimeTransition
 }
 
@@ -617,9 +567,10 @@ type PRISMStats struct {
 
 // TrainingWindow defines a time period for training
 type TrainingWindow struct {
-	Start  time.Time
-	End    time.Time
-	Regime RegimeType // Optional override
+	Start     time.Time
+	End       time.Time
+	Regime    RegimeType // regime override (only meaningful when RegimeSet is true)
+	RegimeSet bool       // true when Regime was explicitly provided by the caller
 }
 
 // recordCompletedResult appends a completed training result to the internal buffer.

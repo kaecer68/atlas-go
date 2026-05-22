@@ -304,3 +304,104 @@ func TestMapDomainRegimeToPRISM(t *testing.T) {
 		}
 	}
 }
+
+func TestNewEngineWithConfig(t *testing.T) {
+	cfg := JANUSConfig{
+		MinWeight: 0.1, MaxWeight: 0.5, NovelThreshold: 0.2,
+		HistoricalThreshold: 0.2, EpsilonWeight: 0.01,
+	}
+	engine := NewEngineWithConfig(cfg)
+	engine.EnsureAllRegimes()
+	engine.Update()
+	stats := engine.HealthStatus()
+	if !stats.Initialized {
+		t.Fatal("expected initialized engine after Update")
+	}
+	weights := engine.GetCohortWeights()
+	if len(weights) == 0 {
+		t.Fatal("expected non-empty weights after update")
+	}
+}
+
+func TestEngine_RecordTrainingResult(t *testing.T) {
+	engine := NewEngine()
+	engine.EnsureAllRegimes()
+	engine.RecordTrainingResult(prism.RegimeRiskOn, prism.TrainingResult{
+		SharpeRatio: 1.5, HitRate: 0.7, TotalReturn: 0.12, SignalsCount: 30,
+	})
+	engine.Update()
+	weights := engine.GetCohortWeights()
+	if _, ok := weights[prism.RegimeRiskOn]; !ok {
+		t.Fatal("expected RiskOn cohort weight after recording result")
+	}
+}
+
+func TestEngine_HealthStatus(t *testing.T) {
+	t.Run("uninitialized", func(t *testing.T) {
+		engine := NewEngine()
+		hs := engine.HealthStatus()
+		if hs.Initialized {
+			t.Fatal("expected uninitialized before any update")
+		}
+	})
+
+	t.Run("after_update", func(t *testing.T) {
+		engine := NewEngine()
+		engine.EnsureAllRegimes()
+		engine.Update()
+		hs := engine.HealthStatus()
+		if !hs.Initialized {
+			t.Fatal("expected initialized after update")
+		}
+		if hs.CohortCount == 0 {
+			t.Fatal("expected non-zero cohort count")
+		}
+	})
+}
+
+func TestEngine_RecordHealthTo(t *testing.T) {
+	engine := NewEngine()
+	store := &stubHealthStore{}
+	engine.RecordHealthTo(store)
+	if len(store.records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(store.records))
+	}
+	if store.records[0].status != "error" {
+		t.Fatalf("expected error for uninitialized engine, got %s", store.records[0].status)
+	}
+
+	engine.EnsureAllRegimes()
+	engine.Update()
+	store.records = nil
+	engine.RecordHealthTo(store)
+	if len(store.records) != 1 {
+		t.Fatalf("expected 1 record after update, got %d", len(store.records))
+	}
+	if store.records[0].status != "ok" {
+		t.Fatalf("expected ok after update, got %s", store.records[0].status)
+	}
+}
+
+func TestEngine_String(t *testing.T) {
+	engine := NewEngine()
+	engine.EnsureAllRegimes()
+	engine.Update()
+	s := engine.String()
+	if s == "" {
+		t.Fatal("expected non-empty string")
+	}
+}
+
+type stubHealthStore struct {
+	records []stubRecord
+}
+
+type stubRecord struct {
+	channelID string
+	status    string
+	message   string
+}
+
+func (s *stubHealthStore) Record(channelID, status, message string) {
+	s.records = append(s.records, stubRecord{channelID, status, message})
+}
