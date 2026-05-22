@@ -1321,6 +1321,12 @@ func LoadParametersConfig(path string) (*ParametersConfig, error) {
 		return nil, fmt.Errorf("parse parameters config: %w", err)
 	}
 
+	// Merge defaults before validation so newly-added fields (missing from
+	// the saved JSON) receive valid values instead of zero.
+	mergeNarrativeDefaults(&cfg)
+	mergeDrawdownDefaults(&cfg)
+	mergeAlertDefaults(&cfg)
+
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate parameters config: %w", err)
 	}
@@ -1335,11 +1341,7 @@ func GetParametersConfig() *ParametersConfig {
 		if err != nil {
 			return DefaultParametersConfig()
 		}
-		// Merge zero-valued fields from defaults to ensure newly added fields
-		// have valid values even when the saved parameters.json doesn't include them yet.
-		mergeNarrativeDefaults(cfg)
-		mergeDrawdownDefaults(cfg)
-		mergeAlertDefaults(cfg)
+		// Defaults are already merged inside LoadParametersConfig.
 		parametersConfig = cfg
 	}
 	return parametersConfig
