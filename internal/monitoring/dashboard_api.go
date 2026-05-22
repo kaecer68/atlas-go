@@ -47,6 +47,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/repository"
+	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/taskexec"
 )
 
@@ -81,6 +82,7 @@ type DashboardAPI struct {
 	orderMgr           *live.OrderManager
 	storageReport      apimetrics.StorageReporter
 	dataFetcher        DataFetcher
+	riskGate           *risk.RiskGate
 }
 
 // channelState tracks enable/disable status for each channel.
@@ -652,6 +654,8 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		})
 	})
 
+	mux.HandleFunc("/api/dashboard/risk-calibration", a.handleRiskCalibration)
+
 	// Management center endpoints — channel control and API key management.
 	mux.HandleFunc("/api/dashboard/channels/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -883,6 +887,36 @@ func (a *DashboardAPI) initGatewayProviders() {
 		a.macroIngestor = narrative.NewMacroIngestor(a.macroProvider, filepath.Join(a.workDir, "data/state/macro"))
 	}
 	logging.Info("dashboardapi", "gateway_providers_initialized")
+}
+
+// SetRiskGate injects a RiskGate instance for serving calibration reports.
+func (a *DashboardAPI) SetRiskGate(g *risk.RiskGate) {
+	a.riskGate = g
+}
+
+// handleRiskCalibration serves the latest risk gate calibration report.
+func (a *DashboardAPI) handleRiskCalibration(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if a.riskGate == nil {
+		shared.WriteJSONError(w, http.StatusNotFound, "risk gate not initialized")
+		return
+	}
+	report := a.riskGate.LastCalibrationReport()
+	if report == nil {
+		shared.WriteJSON(w, http.StatusOK, map[string]any{
+			"status":    "not_available",
+			"message":   "no calibration report available yet",
+			"generated": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+	shared.WriteJSON(w, http.StatusOK, map[string]any{
+		"report":    report,
+		"generated": time.Now().Format(time.RFC3339),
+	})
 }
 
 func (a *DashboardAPI) RegisterOrderRoutes(mux *http.ServeMux) {

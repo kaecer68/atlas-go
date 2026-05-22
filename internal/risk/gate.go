@@ -20,12 +20,13 @@ const (
 // RiskGate is the unified entry point for all pre-, in-, and post-trade risk checks.
 // It delegates to phase-specific gates and maintains the system-wide risk mode.
 type RiskGate struct {
-	mu        sync.RWMutex
-	mode      RiskGateMode
-	preTrade  *PreTradeGate
-	inTrade   *InTradeGate
-	postTrade *PostTradeGate
-	subs      []func(RiskDecision)
+	mu              sync.RWMutex
+	mode            RiskGateMode
+	preTrade        *PreTradeGate
+	inTrade         *InTradeGate
+	postTrade       *PostTradeGate
+	subs            []func(RiskDecision)
+	lastCalibration *CalibrationReport
 }
 
 // NewRiskGate creates a RiskGate with the given phase-specific gates.
@@ -165,4 +166,22 @@ func (g *RiskGate) Subscribe(fn func(RiskDecision)) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.subs = append(g.subs, fn)
+}
+
+// SetLastCalibration stores the most recent calibration run result.
+func (g *RiskGate) SetLastCalibration(report *CalibrationReport) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.lastCalibration = report
+}
+
+// LastCalibrationReport returns the most recent calibration result, or nil.
+func (g *RiskGate) LastCalibrationReport() *CalibrationReport {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	if g.lastCalibration == nil {
+		return nil
+	}
+	cp := *g.lastCalibration
+	return &cp
 }

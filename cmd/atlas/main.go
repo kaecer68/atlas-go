@@ -961,6 +961,10 @@ func run(args []string, deps appDeps) error {
 			}
 
 			riskGate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
+			if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+				d.SetRiskGate(riskGate)
+				log.Printf("[RiskGate] injected into DashboardAPI for calibration reports")
+			}
 			calProvider := monitoring.NewSessionCalibrationProvider(filepath.Join(cfg.WorkDir, "data/state"))
 			taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "risk_gate_calibrate",
@@ -972,6 +976,7 @@ func run(args []string, deps appDeps) error {
 						logging.Error("risk_calibrate", "self_calibrate_failed", "err", err.Error())
 						return err
 					}
+					riskGate.SetLastCalibration(report)
 					logging.Info("risk_calibrate", "completed",
 						"verdict", report.Verdict,
 						"changes", len(report.Changes),
@@ -988,6 +993,38 @@ func run(args []string, deps appDeps) error {
 				},
 			})
 			log.Printf("[Gateway] registered risk_gate_calibrate background task (24h interval)")
+
+			if janusEngine != nil {
+				var prevRegime string
+				taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "regime_calibrate",
+					Interval: 1 * time.Hour,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						class := janusEngine.GetRegimeClassification()
+						current := string(class)
+						if current == "" || current == "MIXED" {
+							prevRegime = current
+							return nil
+						}
+						if current != prevRegime && prevRegime != "" {
+							logging.Info("regime_calibrate", "regime_change_detected",
+								"from", prevRegime, "to", current)
+							report, err := riskGate.SelfCalibrate(ctx, calProvider, 20)
+							if err != nil {
+								logging.Error("regime_calibrate", "calibrate_after_regime_change_failed", "err", err.Error())
+								return nil
+							}
+							riskGate.SetLastCalibration(report)
+							logging.Info("regime_calibrate", "calibration_after_regime_change",
+								"verdict", report.Verdict, "changes", len(report.Changes))
+						}
+						prevRegime = current
+						return nil
+					},
+				})
+				log.Printf("[Gateway] registered regime_calibrate background task (1h interval, triggers calibration on regime change)")
+			}
 
 			taskMgr.Start(sysCtx)
 			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
