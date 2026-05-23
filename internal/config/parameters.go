@@ -326,6 +326,11 @@ type NarrativeParameters struct {
 	// Model evaluation windows
 	ModelLookbackDays   ParameterMetadata[int] `json:"model_lookback_days"`
 	ModelHoldWindowDays ParameterMetadata[int] `json:"model_hold_window_days"`
+
+	// Retail margin event detection thresholds (ingestor)
+	RetailFrenzyPercentileThreshold    ParameterMetadata[float64] `json:"retail_frenzy_percentile_threshold"`
+	RetailFearPercentileThreshold      ParameterMetadata[float64] `json:"retail_fear_percentile_threshold"`
+	RetailAccelerationWindowDays       ParameterMetadata[int]     `json:"retail_acceleration_window_days"`
 }
 
 // RealtimeParameters holds tunable values for real-time regime detection and adaptation.
@@ -1074,6 +1079,15 @@ func (p *ParametersConfig) Validate() error {
 	}
 	if p.Narrative.ModelHoldWindowDays.Value < 1 {
 		return fmt.Errorf("narrative.model_hold_window_days (%d) must be >= 1", p.Narrative.ModelHoldWindowDays.Value)
+	}
+	if p.Narrative.RetailFrenzyPercentileThreshold.Value < 0 || p.Narrative.RetailFrenzyPercentileThreshold.Value > 100 {
+		return fmt.Errorf("narrative.retail_frenzy_percentile_threshold (%.1f) must be in [0,100]", p.Narrative.RetailFrenzyPercentileThreshold.Value)
+	}
+	if p.Narrative.RetailFearPercentileThreshold.Value < 0 || p.Narrative.RetailFearPercentileThreshold.Value > 100 {
+		return fmt.Errorf("narrative.retail_fear_percentile_threshold (%.1f) must be in [0,100]", p.Narrative.RetailFearPercentileThreshold.Value)
+	}
+	if p.Narrative.RetailAccelerationWindowDays.Value < 1 {
+		return fmt.Errorf("narrative.retail_acceleration_window_days (%d) must be >= 1", p.Narrative.RetailAccelerationWindowDays.Value)
 	}
 
 	if p.Janus.ShortWindowDays.Value < 1 {

@@ -1303,6 +1303,24 @@ func defaultNarrativeParameters() NarrativeParameters {
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate from backtest: test [3, 10] range",
 		},
+		RetailFrenzyPercentileThreshold: ParameterMetadata[float64]{
+			Value:     90.0,
+			Rationale: "Margin balance percentile threshold for retail frenzy event; >=90th percentile indicates extreme retail buying",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from historical margin balance distribution during retail-driven rallies",
+		},
+		RetailFearPercentileThreshold: ParameterMetadata[float64]{
+			Value:     10.0,
+			Rationale: "Margin balance percentile threshold for retail fear event; <=10th percentile indicates extreme retail selling",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from historical margin balance distribution during retail-driven selloffs",
+		},
+		RetailAccelerationWindowDays: ParameterMetadata[int]{
+			Value:     5,
+			Rationale: "Rolling acceleration window in trading days for retail margin velocity confirmation",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from backtest: test [3, 10] range for optimal retail momentum detection",
+		},
 		GoldChangePctThreshold: ParameterMetadata[float64]{
 			Value:     2.0,
 			Rationale: "Gold price change %% threshold for geopolitical risk detection; gold traditionally serves as safe-haven proxy",
