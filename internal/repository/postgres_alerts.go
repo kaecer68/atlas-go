@@ -24,7 +24,10 @@ func (r *PostgresRepository) SaveAlert(ctx context.Context, alert domain.AlertRe
 	`, alert.ID, alert.Timestamp, alert.Rule, alert.Severity, alert.Message,
 		alert.Value, alert.Threshold, alert.Acknowledged, alert.AcknowledgedAt, alert.AcknowledgedBy)
 
-	return fmt.Errorf("save alert: %w", err)
+	if err != nil {
+		return fmt.Errorf("save alert: %w", err)
+	}
+	return nil
 }
 
 func (r *PostgresRepository) LoadAllAlerts(ctx context.Context, limit int) ([]domain.AlertRecord, error) {

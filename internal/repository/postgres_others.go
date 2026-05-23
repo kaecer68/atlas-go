@@ -15,7 +15,10 @@ func (r *PostgresRepository) RecordCapitalFlow(ctx context.Context, channel stri
 		INSERT INTO capital_flow (time, channel, net_buy, total_buy, total_sell)
 		VALUES (NOW(), $1, $2, $3, $4)
 	`, channel, netBuy, totalBuy, totalSell)
-	return fmt.Errorf("insert capital flow: %w", err)
+	if err != nil {
+		return fmt.Errorf("insert capital flow: %w", err)
+	}
+	return nil
 }
 
 func (r *PostgresRepository) QueryLatestCapitalFlow(ctx context.Context, channel string) (*CapitalFlowRecord, error) {
@@ -77,7 +80,10 @@ func (r *PostgresRepository) SaveExportStats(ctx context.Context, year, month in
 			trade_balance = EXCLUDED.trade_balance
 	`, ts, year, month, exportTotal, importTotal, tradeBalance)
 
-	return fmt.Errorf("save export stats: %w", err)
+	if err != nil {
+		return fmt.Errorf("save export stats: %w", err)
+	}
+	return nil
 }
 
 func (r *PostgresRepository) QueryLatestExportStats(ctx context.Context) (*ExportStatsRecord, error) {
