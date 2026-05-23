@@ -385,6 +385,9 @@ func run(args []string, deps appDeps) error {
 				fmt.Fprintf(w, `{"error":"create system: %v"}`+"\n", err)
 				return
 			}
+			if gatewayFetcher != nil {
+				system.Sim().SetProvider(orchestrator.NewGatewayBackedProvider(cfg))
+			}
 			if collector != nil {
 				system.WithMetricsCollector(collector)
 			}
@@ -797,6 +800,9 @@ func run(args []string, deps appDeps) error {
 					if err != nil {
 						return fmt.Errorf("create system: %w", err)
 					}
+					if gatewayFetcher != nil {
+						system.Sim().SetProvider(orchestrator.NewGatewayBackedProvider(cfg))
+					}
 					if collector != nil {
 						system.WithMetricsCollector(collector)
 					}
@@ -859,6 +865,9 @@ func run(args []string, deps appDeps) error {
 					system, err := orchestrator.NewProductionSystem(cfg)
 					if err != nil {
 						return fmt.Errorf("create system: %w", err)
+					}
+					if gatewayFetcher != nil {
+						system.Sim().SetProvider(orchestrator.NewGatewayBackedProvider(cfg))
 					}
 					if repo != nil {
 						system.SetRepository(repo)
