@@ -1,6 +1,7 @@
 package system
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -16,8 +17,12 @@ import (
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
 
+// DayTradingFetcher fetches day trading statistics. Set by the constructor when Gateway is available.
+type DayTradingFetcher func(ctx context.Context) (*marketdata.DayTradingStats, error)
+
 type Handlers struct {
-	Svc *service.SystemService
+	Svc               *service.SystemService
+	DayTradingFetcher DayTradingFetcher
 }
 
 func NewHandlers(svc *service.SystemService) *Handlers {
@@ -147,10 +152,10 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 	marginPercentile := calculateMarginPercentile(h.Svc.WorkDir, snap.RetailMarginBalance.Value)
 
 	dayTradingRatio := 0.0
-	// TODO: Migrate to Gateway for direct day trading provider instantiation.
-	provider := marketdata.NewDayTradingProvider()
-	if stats, err := provider.FetchLatest(r.Context()); err == nil {
-		dayTradingRatio = stats.VolumeRatio
+	if h.DayTradingFetcher != nil {
+		if stats, err := h.DayTradingFetcher(r.Context()); err == nil {
+			dayTradingRatio = stats.VolumeRatio
+		}
 	}
 
 	interpretation := interpretRetailSentiment(input.RetailSentimentScore)

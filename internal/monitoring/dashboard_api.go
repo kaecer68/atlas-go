@@ -63,7 +63,7 @@ type DashboardAPI struct {
 	macroIngestor      *narrative.MacroIngestor
 	macroProvider      marketdata.MacroDataProvider
 	geoProvider        narrative.GeopoliticalRiskProvider
-	taiwanGeoProvider  *narrative.CompositeTaiwanGeopoliticalProvider
+	taiwanGeoProvider  narrative.GeopoliticalRiskProvider
 	taiwanStressCalc   *narrative.TaiwanStressCalculator
 	reportGenerator    *narrative.ReportGenerator
 	pool               *pgxpool.Pool
@@ -204,9 +204,7 @@ func NewDashboardAPIWithGateway(workDir, ledgerDir string, metricsCollector *Met
 
 	macroProvider := NewMacroDataGatewayAdapter(fetcher)
 	geoProvider := NewGeopoliticalGatewayAdapter(fetcher)
-	taiwanGeoProvider := narrative.NewCompositeTaiwanGeopoliticalProvider(
-		narrative.NewTaiwanRSSGeopoliticalProvider(),
-	)
+	taiwanGeoProvider := NewTaiwanGeopoliticalGatewayAdapter(fetcher)
 
 	lifecycle := narrative.NewEventLifecycleManager()
 	ingestor := narrative.NewMacroIngestor(macroProvider, filepath.Join(workDir, "data/state/macro"))
@@ -561,6 +559,11 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		systemSvc.SetCycleTracker(a.industryService.CycleTracker)
 	}
 	systemHandlers := apisystem.NewHandlers(systemSvc)
+	if a.dataFetcher != nil {
+		systemHandlers.DayTradingFetcher = apisystem.DayTradingFetcher(
+			NewDayTradingFetcher(a.dataFetcher),
+		)
+	}
 	systemHandlers.RegisterRoutes(mux)
 
 	handlers := &apihealth.Handlers{}

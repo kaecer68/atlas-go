@@ -218,6 +218,55 @@ func (a *geopoliticalGatewayAdapter) FetchScore(ctx context.Context) (narrative.
 	return score, nil
 }
 
+// ---------------------------------------------------------------------------
+// Taiwan Geopolitical Gateway Adapter
+// ---------------------------------------------------------------------------
+
+// taiwanGeopoliticalGatewayAdapter implements narrative.GeopoliticalRiskProvider
+// using DataFetcher for the geopolitical_taiwan channel.
+type taiwanGeopoliticalGatewayAdapter struct {
+	fetcher DataFetcher
+}
+
+// NewTaiwanGeopoliticalGatewayAdapter creates a GeopoliticalRiskProvider backed by the Gateway.
+func NewTaiwanGeopoliticalGatewayAdapter(fetcher DataFetcher) narrative.GeopoliticalRiskProvider {
+	return &taiwanGeopoliticalGatewayAdapter{fetcher: fetcher}
+}
+
+func (a *taiwanGeopoliticalGatewayAdapter) Name() string {
+	return "gateway_taiwan_geopolitical"
+}
+
+// FetchScore fetches Taiwan-specific geopolitical risk data from the Gateway.
+func (a *taiwanGeopoliticalGatewayAdapter) FetchScore(ctx context.Context) (narrative.GeopoliticalRiskScore, error) {
+	data, err := a.fetcher(ctx, "geopolitical_taiwan")
+	if err != nil {
+		return narrative.GeopoliticalRiskScore{}, err
+	}
+	var score narrative.GeopoliticalRiskScore
+	if err := json.Unmarshal(data, &score); err != nil {
+		return narrative.GeopoliticalRiskScore{}, fmt.Errorf("taiwan geo unmarshal: %w", err)
+	}
+	return score, nil
+}
+
+// NewDayTradingFetcher creates a day trading fetcher backed by the Gateway.
+// Returns a function that fetches DayTradingStats from the day_trading channel.
+func NewDayTradingFetcher(fetcher DataFetcher) func(ctx context.Context) (*marketdata.DayTradingStats, error) {
+	return func(ctx context.Context) (*marketdata.DayTradingStats, error) {
+		data, err := fetcher(ctx, "day_trading")
+		if err != nil {
+			return nil, err
+		}
+		var stats marketdata.DayTradingStats
+		if err := json.Unmarshal(data, &stats); err != nil {
+			return nil, fmt.Errorf("day trading unmarshal: %w", err)
+		}
+		return &stats, nil
+	}
+}
+
 // Ensure adapters implement their interfaces at compile time.
 var _ marketdata.MacroDataProvider = (*macroDataGatewayAdapter)(nil)
 var _ narrative.GeopoliticalRiskProvider = (*geopoliticalGatewayAdapter)(nil)
+var _ narrative.GeopoliticalRiskProvider = (*taiwanGeopoliticalGatewayAdapter)(nil)
