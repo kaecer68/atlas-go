@@ -33,13 +33,13 @@ func NewInTradeGate() *InTradeGate {
 
 // InTradePosition holds the real-time state of a single position for in-trade evaluation.
 type InTradePosition struct {
-	Symbol            string  `json:"symbol"`
-	EntryPrice        float64 `json:"entry_price"`
-	CurrentPrice      float64 `json:"current_price"`
-	Quantity          int     `json:"quantity"`
-	UnrealizedPnLPct  float64 `json:"unrealized_pnl_pct"`
-	ATR               float64 `json:"atr"`
-	HighestPrice      float64 `json:"highest_price"`
+	Symbol           string  `json:"symbol"`
+	EntryPrice       float64 `json:"entry_price"`
+	CurrentPrice     float64 `json:"current_price"`
+	Quantity         int     `json:"quantity"`
+	UnrealizedPnLPct float64 `json:"unrealized_pnl_pct"`
+	ATR              float64 `json:"atr"`
+	HighestPrice     float64 `json:"highest_price"`
 }
 
 // Evaluate checks all open positions for stop-loss, take-profit, trailing-stop,
@@ -101,8 +101,8 @@ func (g *InTradeGate) Evaluate(_ context.Context, positions []InTradePosition, h
 			decision.Action.TargetPct = 0.5
 		} else {
 			decision.Action = RiskAction{
-				Type:      ActionReduce,
-				TargetPct: 0.5,
+				Type:        ActionReduce,
+				TargetPct:   0.5,
 				Description: r.Message,
 			}
 		}

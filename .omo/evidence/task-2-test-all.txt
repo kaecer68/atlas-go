@@ -1,0 +1,132 @@
+=== RUN   TestLoad_Defaults
+--- PASS: TestLoad_Defaults (0.00s)
+=== RUN   TestLoad_BrokerAdapterDefaultFallbackWhenEmpty
+--- PASS: TestLoad_BrokerAdapterDefaultFallbackWhenEmpty (0.00s)
+=== RUN   TestLoad_EnvOverrides
+--- PASS: TestLoad_EnvOverrides (0.00s)
+=== RUN   TestLoad_BrokerMaxRetriesInvalidFallback
+time=2026-05-22T06:31:03.947+08:00 level=WARN msg=parse_int_failed key=ATLAS_BROKER_MAX_RETRIES value=invalid fallback=1 err="strconv.Atoi: parsing \"invalid\": invalid syntax" component=config
+--- PASS: TestLoad_BrokerMaxRetriesInvalidFallback (0.00s)
+=== RUN   TestLoad_FugleAPIKeyPriority
+=== RUN   TestLoad_FugleAPIKeyPriority/FUGLE_API_KEY_takes_priority
+=== RUN   TestLoad_FugleAPIKeyPriority/returns_empty_when_not_set
+--- PASS: TestLoad_FugleAPIKeyPriority (0.00s)
+    --- PASS: TestLoad_FugleAPIKeyPriority/FUGLE_API_KEY_takes_priority (0.00s)
+    --- PASS: TestLoad_FugleAPIKeyPriority/returns_empty_when_not_set (0.00s)
+=== RUN   TestLoad_EnvFile
+--- PASS: TestLoad_EnvFile (0.00s)
+=== RUN   TestLoad_EnvFileSkipsComments
+--- PASS: TestLoad_EnvFileSkipsComments (0.00s)
+=== RUN   TestLoad_EnvFileDoesNotOverrideExisting
+--- PASS: TestLoad_EnvFileDoesNotOverrideExisting (0.00s)
+=== RUN   TestGetReplayDataPath_Default
+--- PASS: TestGetReplayDataPath_Default (0.00s)
+=== RUN   TestGetReplayDataPath_VERSIONFile
+--- PASS: TestGetReplayDataPath_VERSIONFile (0.00s)
+=== RUN   TestGetReplayDataPath_EnvOverride
+--- PASS: TestGetReplayDataPath_EnvOverride (0.00s)
+=== RUN   TestEngineConfigLoadValidate
+--- PASS: TestEngineConfigLoadValidate (0.00s)
+=== RUN   TestDefaultEngineConfigValidate
+--- PASS: TestDefaultEngineConfigValidate (0.00s)
+=== RUN   TestDefaultConfigIncludesLEOSatellite
+--- PASS: TestDefaultConfigIncludesLEOSatellite (0.00s)
+=== RUN   TestEngineJSONBaseAllocationsMatchDefault
+--- PASS: TestEngineJSONBaseAllocationsMatchDefault (0.00s)
+=== RUN   TestInferenceEngineInferGARCH
+--- PASS: TestInferenceEngineInferGARCH (0.00s)
+=== RUN   TestInferenceEngineInferGARCHInsufficientData
+--- PASS: TestInferenceEngineInferGARCHInsufficientData (0.00s)
+=== RUN   TestInferenceEngineEstimateVaR
+--- PASS: TestInferenceEngineEstimateVaR (0.00s)
+=== RUN   TestInferenceEngineEstimateVaRInsufficientData
+--- PASS: TestInferenceEngineEstimateVaRInsufficientData (0.00s)
+=== RUN   TestInferenceEngineSweepParameter
+--- PASS: TestInferenceEngineSweepParameter (0.00s)
+=== RUN   TestInferenceEngineCalibrateGARCH
+--- PASS: TestInferenceEngineCalibrateGARCH (0.00s)
+=== RUN   TestInferenceEngineCalibrateVaR
+--- PASS: TestInferenceEngineCalibrateVaR (0.00s)
+=== RUN   TestInferenceEngineSetGetParameterRoundTrip
+=== RUN   TestInferenceEngineSetGetParameterRoundTrip/darwinian_weight_max
+=== RUN   TestInferenceEngineSetGetParameterRoundTrip/factor_momentum_lookback_days
+=== RUN   TestInferenceEngineSetGetParameterRoundTrip/optimizer_max_position_pct
+=== RUN   TestInferenceEngineSetGetParameterRoundTrip/sizing_kelly_fraction
+=== RUN   TestInferenceEngineSetGetParameterRoundTrip/health_mute_threshold
+=== RUN   TestInferenceEngineSetGetParameterRoundTrip/garch_omega
+=== RUN   TestInferenceEngineSetGetParameterRoundTrip/experiment_improvement_threshold
+=== RUN   TestInferenceEngineSetGetParameterRoundTrip/baseline_starting_cash
+=== RUN   TestInferenceEngineSetGetParameterRoundTrip/orchestrator_cro_zscore_threshold
+=== RUN   TestInferenceEngineSetGetParameterRoundTrip/risk_max_drawdown_pct
+=== RUN   TestInferenceEngineSetGetParameterRoundTrip/realtime_volatility_threshold
+=== RUN   TestInferenceEngineSetGetParameterRoundTrip/janus_short_window_days
+=== RUN   TestInferenceEngineSetGetParameterRoundTrip/narrative_min_confidence
+=== RUN   TestInferenceEngineSetGetParameterRoundTrip/marketdata_twse_api_timeout_sec
+=== RUN   TestInferenceEngineSetGetParameterRoundTrip/strategy_switch_threshold
+--- PASS: TestInferenceEngineSetGetParameterRoundTrip (0.00s)
+    --- PASS: TestInferenceEngineSetGetParameterRoundTrip/darwinian_weight_max (0.00s)
+    --- PASS: TestInferenceEngineSetGetParameterRoundTrip/factor_momentum_lookback_days (0.00s)
+    --- PASS: TestInferenceEngineSetGetParameterRoundTrip/optimizer_max_position_pct (0.00s)
+    --- PASS: TestInferenceEngineSetGetParameterRoundTrip/sizing_kelly_fraction (0.00s)
+    --- PASS: TestInferenceEngineSetGetParameterRoundTrip/health_mute_threshold (0.00s)
+    --- PASS: TestInferenceEngineSetGetParameterRoundTrip/garch_omega (0.00s)
+    --- PASS: TestInferenceEngineSetGetParameterRoundTrip/experiment_improvement_threshold (0.00s)
+    --- PASS: TestInferenceEngineSetGetParameterRoundTrip/baseline_starting_cash (0.00s)
+    --- PASS: TestInferenceEngineSetGetParameterRoundTrip/orchestrator_cro_zscore_threshold (0.00s)
+    --- PASS: TestInferenceEngineSetGetParameterRoundTrip/risk_max_drawdown_pct (0.00s)
+    --- PASS: TestInferenceEngineSetGetParameterRoundTrip/realtime_volatility_threshold (0.00s)
+    --- PASS: TestInferenceEngineSetGetParameterRoundTrip/janus_short_window_days (0.00s)
+    --- PASS: TestInferenceEngineSetGetParameterRoundTrip/narrative_min_confidence (0.00s)
+    --- PASS: TestInferenceEngineSetGetParameterRoundTrip/marketdata_twse_api_timeout_sec (0.00s)
+    --- PASS: TestInferenceEngineSetGetParameterRoundTrip/strategy_switch_threshold (0.00s)
+=== RUN   TestInferenceEngineGetParameterNotFound
+--- PASS: TestInferenceEngineGetParameterNotFound (0.00s)
+=== RUN   TestInferenceEngineSetParameterUnknown
+--- PASS: TestInferenceEngineSetParameterUnknown (0.00s)
+=== RUN   TestInferenceEngineListParameters
+--- PASS: TestInferenceEngineListParameters (0.00s)
+=== RUN   TestInferenceEngineMapParameterRoundTrip
+=== RUN   TestInferenceEngineMapParameterRoundTrip/factor_institutional_sentiment_weights_foreign
+=== RUN   TestInferenceEngineMapParameterRoundTrip/optimizer_factor_weights_momentum
+=== RUN   TestInferenceEngineMapParameterRoundTrip/risk_sector_constraints_risk_off_semiconductor
+=== RUN   TestInferenceEngineMapParameterRoundTrip/narrative_event_ttl_multiplier_bull
+=== RUN   TestInferenceEngineMapParameterRoundTrip/industry_sector_weights_semiconductor
+--- PASS: TestInferenceEngineMapParameterRoundTrip (0.00s)
+    --- PASS: TestInferenceEngineMapParameterRoundTrip/factor_institutional_sentiment_weights_foreign (0.00s)
+    --- PASS: TestInferenceEngineMapParameterRoundTrip/optimizer_factor_weights_momentum (0.00s)
+    --- PASS: TestInferenceEngineMapParameterRoundTrip/risk_sector_constraints_risk_off_semiconductor (0.00s)
+    --- PASS: TestInferenceEngineMapParameterRoundTrip/narrative_event_ttl_multiplier_bull (0.00s)
+    --- PASS: TestInferenceEngineMapParameterRoundTrip/industry_sector_weights_semiconductor (0.00s)
+=== RUN   TestInferenceEngineMapParameterGetNotFound
+--- PASS: TestInferenceEngineMapParameterGetNotFound (0.00s)
+=== RUN   TestInferenceEngineIntParameterConversion
+--- PASS: TestInferenceEngineIntParameterConversion (0.00s)
+=== RUN   TestInferenceEngineSweepParameterWithSetParameter
+--- PASS: TestInferenceEngineSweepParameterWithSetParameter (0.00s)
+=== RUN   TestDefaultParametersConfig
+--- PASS: TestDefaultParametersConfig (0.00s)
+=== RUN   TestLoadParametersConfig_MissingFile
+--- PASS: TestLoadParametersConfig_MissingFile (0.00s)
+=== RUN   TestLoadParametersConfig_ValidFile
+--- PASS: TestLoadParametersConfig_ValidFile (0.00s)
+=== RUN   TestLoadParametersConfig_InvalidJSON
+--- PASS: TestLoadParametersConfig_InvalidJSON (0.00s)
+=== RUN   TestParametersConfig_Validate
+=== RUN   TestParametersConfig_Validate/valid_default
+=== RUN   TestParametersConfig_Validate/weight_min_>=_weight_max
+=== RUN   TestParametersConfig_Validate/ema_alpha_out_of_range
+=== RUN   TestParametersConfig_Validate/kelly_fraction_out_of_range
+=== RUN   TestParametersConfig_Validate/health_weights_don't_sum_to_1.0
+--- PASS: TestParametersConfig_Validate (0.00s)
+    --- PASS: TestParametersConfig_Validate/valid_default (0.00s)
+    --- PASS: TestParametersConfig_Validate/weight_min_>=_weight_max (0.00s)
+    --- PASS: TestParametersConfig_Validate/ema_alpha_out_of_range (0.00s)
+    --- PASS: TestParametersConfig_Validate/kelly_fraction_out_of_range (0.00s)
+    --- PASS: TestParametersConfig_Validate/health_weights_don't_sum_to_1.0 (0.00s)
+=== RUN   TestParametersConfig_SaveAndLoad
+--- PASS: TestParametersConfig_SaveAndLoad (0.00s)
+=== RUN   TestParameterMetadata_RoundTrip
+--- PASS: TestParameterMetadata_RoundTrip (0.00s)
+PASS
+ok  	github.com/kaecer68/atlas-go/internal/config	(cached)
+ALL_TESTS_PASS

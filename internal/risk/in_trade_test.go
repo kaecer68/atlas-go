@@ -144,8 +144,8 @@ func TestInTradeGate_AllNormal(t *testing.T) {
 
 func TestInTradeGate_MultiplePositionsOneStopLoss(t *testing.T) {
 	g := NewInTradeGate()
-	healthy := pos("2330", 100.0, 105.0, 106.0, 0, 1000)   // +5% gain
-	bad := pos("2317", 100.0, 82.0, 100.0, 0, 500)           // -18% loss
+	healthy := pos("2330", 100.0, 105.0, 106.0, 0, 1000) // +5% gain
+	bad := pos("2317", 100.0, 82.0, 100.0, 0, 500)       // -18% loss
 
 	dec, err := g.Evaluate(context.Background(), []InTradePosition{healthy, bad}, 0.2, 0.2, -0.01, "NORMAL")
 	if err != nil {

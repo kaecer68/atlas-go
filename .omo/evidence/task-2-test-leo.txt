@@ -1,0 +1,4 @@
+=== RUN   TestDefaultConfigIncludesLEOSatellite
+--- PASS: TestDefaultConfigIncludesLEOSatellite (0.00s)
+PASS
+ok  	github.com/kaecer68/atlas-go/internal/config	0.405s
