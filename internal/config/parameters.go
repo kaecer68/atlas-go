@@ -292,6 +292,9 @@ type NarrativeParameters struct {
 	ConfidenceBaseTSMCRevenue  ParameterMetadata[float64] `json:"confidence_base_tsmc_revenue"`
 	ConfidenceBaseTaiwanStress ParameterMetadata[float64] `json:"confidence_base_taiwan_stress"`
 
+	// Ceiling cap for deviation-based dynamic confidence; prevents perfect certainty (1.0).
+	ConfidenceDeviationCeiling ParameterMetadata[float64] `json:"confidence_deviation_ceiling"`
+
 	// SOX index drop threshold for semiconductor stress detection
 	SOXIndexDropThreshold ParameterMetadata[float64] `json:"sox_index_drop_threshold"`
 
@@ -1462,6 +1465,9 @@ func mergeNarrativeDefaults(cfg *ParametersConfig) {
 	}
 	if n.ConfidenceBaseTaiwanStress.Value == 0 {
 		n.ConfidenceBaseTaiwanStress = def.ConfidenceBaseTaiwanStress
+	}
+	if n.ConfidenceDeviationCeiling.Value == 0 {
+		n.ConfidenceDeviationCeiling = def.ConfidenceDeviationCeiling
 	}
 	if n.SOXIndexDropThreshold.Value == 0 {
 		n.SOXIndexDropThreshold = def.SOXIndexDropThreshold

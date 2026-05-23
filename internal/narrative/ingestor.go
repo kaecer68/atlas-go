@@ -376,7 +376,7 @@ func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot, div *Dive
 func detectRetailDivergenceEventFromSnapshot(foreignNet marketdata.MacroDataPoint, marginZScore float64, now time.Time) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 	if marginZScore > params.RetailMarginZScoreThreshold.Value && foreignNet.Value < 0 {
-		confidence := computeDeviationConfidence(marginZScore, params.RetailMarginZScoreThreshold.Value, params.ConfidenceBaseTaiwanStress.Value)
+		confidence := computeDeviationConfidence(marginZScore, params.RetailMarginZScoreThreshold.Value, params.ConfidenceBaseTaiwanStress.Value, params.ConfidenceDeviationCeiling.Value)
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-retail-div-%d", now.UnixNano()),
 			Theme:            "retail_institutional_divergence",
@@ -407,8 +407,8 @@ func detectUSRatesEventFromSnapshot(curr, prev marketdata.MacroDataPoint, now ti
 		changeBps = curr.Value - prev.Value
 	}
 	if changeBps > params.US10YChangeBpsThreshold.Value || curr.ChangePct > params.DXYChangePctThreshold.Value {
-		confidenceBps := computeDeviationConfidence(changeBps, params.US10YChangeBpsThreshold.Value, params.ConfidenceBaseUSRates.Value)
-		confidenceDXY := computeDeviationConfidence(curr.ChangePct, params.DXYChangePctThreshold.Value, params.ConfidenceBaseUSRates.Value)
+		confidenceBps := computeDeviationConfidence(changeBps, params.US10YChangeBpsThreshold.Value, params.ConfidenceBaseUSRates.Value, params.ConfidenceDeviationCeiling.Value)
+		confidenceDXY := computeDeviationConfidence(curr.ChangePct, params.DXYChangePctThreshold.Value, params.ConfidenceBaseUSRates.Value, params.ConfidenceDeviationCeiling.Value)
 		confidence := confidenceBps
 		if confidenceDXY > confidence {
 			confidence = confidenceDXY
@@ -447,8 +447,8 @@ func detectJPYCarryUnwindEventFromSnapshot(currJPY, prevJPY, currVIX marketdata.
 		vixLevel = currVIX.Value
 	}
 	if jpyChange > params.JPYChangePctThreshold.Value || vixLevel > params.VIXLevelThreshold.Value {
-		confidenceJPY := computeDeviationConfidence(jpyChange, params.JPYChangePctThreshold.Value, params.ConfidenceBaseJPYCarry.Value)
-		confidenceVIX := computeDeviationConfidence(vixLevel, params.VIXLevelThreshold.Value, params.ConfidenceBaseJPYCarry.Value)
+		confidenceJPY := computeDeviationConfidence(jpyChange, params.JPYChangePctThreshold.Value, params.ConfidenceBaseJPYCarry.Value, params.ConfidenceDeviationCeiling.Value)
+		confidenceVIX := computeDeviationConfidence(vixLevel, params.VIXLevelThreshold.Value, params.ConfidenceBaseJPYCarry.Value, params.ConfidenceDeviationCeiling.Value)
 		confidence := confidenceJPY
 		if confidenceVIX > confidence {
 			confidence = confidenceVIX
@@ -490,9 +490,9 @@ func detectGeopoliticalRiskEventFromSnapshot(currGold, currVIX, currUSDTWD marke
 		taiwanStress = true
 	}
 	if goldChange > params.GoldChangePctThreshold.Value || vixSpike || taiwanStress {
-		confidenceGold := computeDeviationConfidence(goldChange, params.GoldChangePctThreshold.Value, params.ConfidenceBaseGeopolitical.Value)
-		confidenceVIX := computeDeviationConfidence(currVIX.Value, params.VIXLevelThreshold.Value, params.ConfidenceBaseGeopolitical.Value)
-		confidenceTW := computeDeviationConfidence(currUSDTWD.ChangePct, params.TaiwanStressUSDTWDThreshold.Value, params.ConfidenceBaseGeopolitical.Value)
+		confidenceGold := computeDeviationConfidence(goldChange, params.GoldChangePctThreshold.Value, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
+		confidenceVIX := computeDeviationConfidence(currVIX.Value, params.VIXLevelThreshold.Value, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
+		confidenceTW := computeDeviationConfidence(currUSDTWD.ChangePct, params.TaiwanStressUSDTWDThreshold.Value, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
 		confidence := confidenceGold
 		if confidenceVIX > confidence {
 			confidence = confidenceVIX
@@ -543,7 +543,7 @@ func detectUSDTWDEventFromSnapshot(curr, prev marketdata.MacroDataPoint, now tim
 		if changePct > 0 {
 			sentiment = -0.7 // USD strengthening against TWD is negative for Taiwan exports
 		}
-		confidence := computeDeviationConfidence(changePct, params.USDTWDChangePctThreshold.Value, params.ConfidenceBaseTaiwanStress.Value)
+		confidence := computeDeviationConfidence(changePct, params.USDTWDChangePctThreshold.Value, params.ConfidenceBaseTaiwanStress.Value, params.ConfidenceDeviationCeiling.Value)
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-usd-twd-%d", now.UnixNano()),
 			Theme:            "USD_TWD_volatility",
@@ -575,7 +575,7 @@ func detectSemiconductorEventFromSnapshot(curr, prev marketdata.MacroDataPoint, 
 		changePct = (curr.Value - prev.Value) / prev.Value * 100
 	}
 	if changePct < params.SemiconductorExportDropThreshold.Value {
-		confidence := computeDeviationConfidence(math.Abs(changePct), math.Abs(params.SemiconductorExportDropThreshold.Value), params.ConfidenceBaseTSMCRevenue.Value)
+		confidence := computeDeviationConfidence(math.Abs(changePct), math.Abs(params.SemiconductorExportDropThreshold.Value), params.ConfidenceBaseTSMCRevenue.Value, params.ConfidenceDeviationCeiling.Value)
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-semi-%d", now.UnixNano()),
 			Theme:            "semiconductor_downturn",
@@ -603,7 +603,7 @@ func detectOilShockEventFromSnapshot(currOil marketdata.MacroDataPoint, now time
 	params := config.GetParametersConfig().Narrative
 	threshold := params.OilChangePctThreshold.Value
 	if currOil.ChangePct > threshold || currOil.ChangePct < -threshold {
-		confidence := computeDeviationConfidence(currOil.ChangePct, threshold, params.ConfidenceBaseOilShock.Value)
+		confidence := computeDeviationConfidence(currOil.ChangePct, threshold, params.ConfidenceBaseOilShock.Value, params.ConfidenceDeviationCeiling.Value)
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-oil-%d", now.UnixNano()),
 			Theme:            "oil_price_shock",
@@ -725,7 +725,7 @@ func detectAICapexEventFromSnapshot(sentiment float64, prevTSMC marketdata.Macro
 	if sentiment <= params.AICapexSentimentThreshold.Value {
 		return nil
 	}
-	confidence := computeDeviationConfidence(sentiment, params.AICapexSentimentThreshold.Value, params.ConfidenceBaseAICapex.Value)
+	confidence := computeDeviationConfidence(sentiment, params.AICapexSentimentThreshold.Value, params.ConfidenceBaseAICapex.Value, params.ConfidenceDeviationCeiling.Value)
 	if prevTSMC.Symbol != "" && prevTSMC.ChangePct > 0 {
 		boosted := confidence + 0.05
 		if boosted > 0.95 {

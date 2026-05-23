@@ -490,8 +490,8 @@ type MarketNarrativeData struct {
 func detectUSRatesEvent(data MarketNarrativeData) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 	if data.US10YChangeBps > params.US10YChangeBpsThreshold.Value || data.DXYChangePct > params.DXYChangePctThreshold.Value {
-		confidenceUS10Y := computeDeviationConfidence(data.US10YChangeBps, params.US10YChangeBpsThreshold.Value, params.ConfidenceBaseUSRates.Value)
-		confidenceDXY := computeDeviationConfidence(data.DXYChangePct, params.DXYChangePctThreshold.Value, params.ConfidenceBaseUSRates.Value)
+		confidenceUS10Y := computeDeviationConfidence(data.US10YChangeBps, params.US10YChangeBpsThreshold.Value, params.ConfidenceBaseUSRates.Value, params.ConfidenceDeviationCeiling.Value)
+		confidenceDXY := computeDeviationConfidence(data.DXYChangePct, params.DXYChangePctThreshold.Value, params.ConfidenceBaseUSRates.Value, params.ConfidenceDeviationCeiling.Value)
 		confidence := confidenceUS10Y
 		if confidenceDXY > confidence {
 			confidence = confidenceDXY
@@ -519,7 +519,7 @@ func detectUSRatesEvent(data MarketNarrativeData) *NarrativeEvent {
 func detectAICapexEvent(data MarketNarrativeData) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 	if data.AICapexSentiment > params.AICapexSentimentThreshold.Value {
-		confidence := computeDeviationConfidence(data.AICapexSentiment, params.AICapexSentimentThreshold.Value, params.ConfidenceBaseAICapex.Value)
+		confidence := computeDeviationConfidence(data.AICapexSentiment, params.AICapexSentimentThreshold.Value, params.ConfidenceBaseAICapex.Value, params.ConfidenceDeviationCeiling.Value)
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-ai-capex-%d", nowUnix()),
 			Theme:            "AI_capex_surge",
@@ -542,8 +542,8 @@ func detectAICapexEvent(data MarketNarrativeData) *NarrativeEvent {
 func detectGeopoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 	if data.GeopoliticalGPR > params.GeopoliticalGPRThreshold.Value || data.GoldChangePct > params.GoldChangePctThreshold.Value {
-		confidenceGPR := computeDeviationConfidence(data.GeopoliticalGPR, params.GeopoliticalGPRThreshold.Value, params.ConfidenceBaseGeopolitical.Value)
-		confidenceGold := computeDeviationConfidence(data.GoldChangePct, params.GoldChangePctThreshold.Value, params.ConfidenceBaseGeopolitical.Value)
+		confidenceGPR := computeDeviationConfidence(data.GeopoliticalGPR, params.GeopoliticalGPRThreshold.Value, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
+		confidenceGold := computeDeviationConfidence(data.GoldChangePct, params.GoldChangePctThreshold.Value, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
 		confidence := confidenceGPR
 		if confidenceGold > confidence {
 			confidence = confidenceGold
@@ -572,7 +572,7 @@ func detectOilShockEvent(data MarketNarrativeData) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 	threshold := params.OilChangePctThreshold.Value
 	if data.OilChangePct > threshold || data.OilChangePct < -threshold {
-		confidence := computeDeviationConfidence(data.OilChangePct, threshold, params.ConfidenceBaseOilShock.Value)
+		confidence := computeDeviationConfidence(data.OilChangePct, threshold, params.ConfidenceBaseOilShock.Value, params.ConfidenceDeviationCeiling.Value)
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-oil-%d", nowUnix()),
 			Theme:            "oil_price_shock",
@@ -595,8 +595,8 @@ func detectOilShockEvent(data MarketNarrativeData) *NarrativeEvent {
 func detectJPYCarryUnwindEvent(data MarketNarrativeData) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 	if data.JPY_ChangePct > params.JPYChangePctThreshold.Value || data.VIXLevel > params.VIXLevelThreshold.Value {
-		confidenceJPY := computeDeviationConfidence(data.JPY_ChangePct, params.JPYChangePctThreshold.Value, params.ConfidenceBaseJPYCarry.Value)
-		confidenceVIX := computeDeviationConfidence(data.VIXLevel, params.VIXLevelThreshold.Value, params.ConfidenceBaseJPYCarry.Value)
+		confidenceJPY := computeDeviationConfidence(data.JPY_ChangePct, params.JPYChangePctThreshold.Value, params.ConfidenceBaseJPYCarry.Value, params.ConfidenceDeviationCeiling.Value)
+		confidenceVIX := computeDeviationConfidence(data.VIXLevel, params.VIXLevelThreshold.Value, params.ConfidenceBaseJPYCarry.Value, params.ConfidenceDeviationCeiling.Value)
 		confidence := confidenceJPY
 		if confidenceVIX > confidence {
 			confidence = confidenceVIX
@@ -628,7 +628,7 @@ func detectUSDTWDEvent(data MarketNarrativeData) *NarrativeEvent {
 		if data.USD_TWD_ChangePct > 0 {
 			sentiment = -0.7
 		}
-		confidence := computeDeviationConfidence(data.USD_TWD_ChangePct, params.USDTWDChangePctThreshold.Value, params.ConfidenceBaseTaiwanStress.Value)
+		confidence := computeDeviationConfidence(data.USD_TWD_ChangePct, params.USDTWDChangePctThreshold.Value, params.ConfidenceBaseTaiwanStress.Value, params.ConfidenceDeviationCeiling.Value)
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-usd-twd-%d", nowUnix()),
 			Theme:            "USD_TWD_volatility",
@@ -651,7 +651,7 @@ func detectUSDTWDEvent(data MarketNarrativeData) *NarrativeEvent {
 func detectTaiwanPoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 	if data.GeopoliticalGPR > params.GeopoliticalGPRThreshold.Value {
-		confidence := computeDeviationConfidence(data.GeopoliticalGPR, params.GeopoliticalGPRThreshold.Value, params.ConfidenceBaseGeopolitical.Value)
+		confidence := computeDeviationConfidence(data.GeopoliticalGPR, params.GeopoliticalGPRThreshold.Value, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-tw-pol-%d", nowUnix()),
 			Theme:            "taiwan_political_risk",
@@ -674,9 +674,9 @@ func detectTaiwanPoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
 func detectSemiconductorDownturnEvent(data MarketNarrativeData) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 	if data.VIXLevel > params.VIXLevelThreshold.Value && data.DXYChangePct > params.DXYChangePctThreshold.Value && data.AICapexSentiment < params.AICapexNegativeSentimentThreshold.Value {
-		confidenceVIX := computeDeviationConfidence(data.VIXLevel, params.VIXLevelThreshold.Value, params.ConfidenceBaseTSMCRevenue.Value)
-		confidenceDXY := computeDeviationConfidence(data.DXYChangePct, params.DXYChangePctThreshold.Value, params.ConfidenceBaseTSMCRevenue.Value)
-		confidenceAI := computeDeviationConfidence(math.Abs(data.AICapexSentiment), math.Abs(params.AICapexNegativeSentimentThreshold.Value), params.ConfidenceBaseTSMCRevenue.Value)
+		confidenceVIX := computeDeviationConfidence(data.VIXLevel, params.VIXLevelThreshold.Value, params.ConfidenceBaseTSMCRevenue.Value, params.ConfidenceDeviationCeiling.Value)
+		confidenceDXY := computeDeviationConfidence(data.DXYChangePct, params.DXYChangePctThreshold.Value, params.ConfidenceBaseTSMCRevenue.Value, params.ConfidenceDeviationCeiling.Value)
+		confidenceAI := computeDeviationConfidence(math.Abs(data.AICapexSentiment), math.Abs(params.AICapexNegativeSentimentThreshold.Value), params.ConfidenceBaseTSMCRevenue.Value, params.ConfidenceDeviationCeiling.Value)
 		confidence := confidenceVIX
 		if confidenceDXY > confidence {
 			confidence = confidenceDXY
@@ -811,8 +811,8 @@ func detectSeasonalEvent(data MarketNarrativeData) *NarrativeEvent {
 func detectRetailDivergenceEvent(data MarketNarrativeData) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 	if data.MarginZScore > params.RetailMarginZScoreThreshold.Value && data.RetailInstitutionalDivergence > params.RetailInstitutionalDivergenceThreshold.Value {
-		confidenceZScore := computeDeviationConfidence(data.MarginZScore, params.RetailMarginZScoreThreshold.Value, params.ConfidenceBaseTaiwanStress.Value)
-		confidenceDivergence := computeDeviationConfidence(data.RetailInstitutionalDivergence, params.RetailInstitutionalDivergenceThreshold.Value, params.ConfidenceBaseTaiwanStress.Value)
+		confidenceZScore := computeDeviationConfidence(data.MarginZScore, params.RetailMarginZScoreThreshold.Value, params.ConfidenceBaseTaiwanStress.Value, params.ConfidenceDeviationCeiling.Value)
+		confidenceDivergence := computeDeviationConfidence(data.RetailInstitutionalDivergence, params.RetailInstitutionalDivergenceThreshold.Value, params.ConfidenceBaseTaiwanStress.Value, params.ConfidenceDeviationCeiling.Value)
 		confidence := confidenceZScore
 		if confidenceDivergence > confidence {
 			confidence = confidenceDivergence
@@ -838,8 +838,8 @@ func detectRetailDivergenceEvent(data MarketNarrativeData) *NarrativeEvent {
 }
 
 // computeDeviationConfidence calculates event confidence based on how far the observed value deviates from the threshold.
-// Uses a base confidence plus a linear interpolation to 0.95 ceiling.
-func computeDeviationConfidence(observed, threshold, base float64) float64 {
+// Uses a base confidence plus a linear interpolation to ceiling.
+func computeDeviationConfidence(observed, threshold, base, ceiling float64) float64 {
 	if threshold <= 0 {
 		return base
 	}
@@ -847,7 +847,6 @@ func computeDeviationConfidence(observed, threshold, base float64) float64 {
 	if ratio < 1.0 {
 		return base
 	}
-	ceiling := 0.95
 	confidence := base + (ratio-1.0)*(ceiling-base)
 	if confidence > ceiling {
 		confidence = ceiling
