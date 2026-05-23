@@ -1028,6 +1028,9 @@ func (p *ParametersConfig) Validate() error {
 	if p.Narrative.OverrideThreshold.Value < 0 || p.Narrative.OverrideThreshold.Value > 1 {
 		return fmt.Errorf("narrative.override_threshold (%.3f) must be in [0,1]", p.Narrative.OverrideThreshold.Value)
 	}
+	if p.Narrative.ConfidenceDeviationCeiling.Value <= 0 || p.Narrative.ConfidenceDeviationCeiling.Value > 1.0 {
+		return fmt.Errorf("narrative.confidence_deviation_ceiling (%.3f) must be in (0,1]", p.Narrative.ConfidenceDeviationCeiling.Value)
+	}
 	if p.Narrative.AIRevenueGrowthThreshold.Value <= 0 {
 		return fmt.Errorf("narrative.ai_revenue_growth_threshold (%.3f) must be positive", p.Narrative.AIRevenueGrowthThreshold.Value)
 	}
