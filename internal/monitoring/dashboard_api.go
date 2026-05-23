@@ -800,10 +800,11 @@ func (a *DashboardAPI) RegisterMacroRoutes(mux *http.ServeMux) {
 func (a *DashboardAPI) RegisterLiveRoutes(mux *http.ServeMux) {
 	svc := service.NewLiveService(a.workDir, a.ledgerDir)
 	handlers := &apilive.Handlers{
-		LedgerDir:  a.ledgerDir,
-		WorkDir:    a.workDir,
-		Svc:        svc,
-		Classifier: a.industryService.Classifier,
+		LedgerDir:     a.ledgerDir,
+		WorkDir:       a.workDir,
+		Svc:           svc,
+		Classifier:    a.industryService.Classifier,
+		AgentLayerMap: apilive.BuildAgentLayerMap(a.workDir),
 	}
 	handlers.RegisterRoutes(mux)
 }

@@ -1489,6 +1489,15 @@ func mergeNarrativeDefaults(cfg *ParametersConfig) {
 	if n.SOXIndexDropThreshold.Value == 0 {
 		n.SOXIndexDropThreshold = def.SOXIndexDropThreshold
 	}
+	if n.RetailFrenzyPercentileThreshold.Value == 0 {
+		n.RetailFrenzyPercentileThreshold = def.RetailFrenzyPercentileThreshold
+	}
+	if n.RetailFearPercentileThreshold.Value == 0 {
+		n.RetailFearPercentileThreshold = def.RetailFearPercentileThreshold
+	}
+	if n.RetailAccelerationWindowDays.Value == 0 {
+		n.RetailAccelerationWindowDays = def.RetailAccelerationWindowDays
+	}
 }
 
 // mergeDrawdownDefaults fills zero-valued drawdown fields with defaults.

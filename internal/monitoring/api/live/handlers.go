@@ -23,40 +23,62 @@ import (
 
 // Handlers holds the dependencies for live trading handlers.
 type Handlers struct {
-	LedgerDir  string
-	WorkDir    string
-	Svc        *service.LiveService
-	Classifier *industry.ClassificationTree
+	LedgerDir     string
+	WorkDir       string
+	Svc           *service.LiveService
+	Classifier    *industry.ClassificationTree
+	AgentLayerMap map[string]string
 }
 
-// sectorLabelMap provides Chinese labels for sector IDs used in PnL attribution.
-// TODO: source dynamically from industry.ClassificationTree once it supports i18n.
-var sectorLabelMap = map[string]string{
-	"semiconductor":   "半導體",
-	"ai_supply_chain": "AI供應鏈",
-	"robotics":        "機器人",
-	"financials":      "金融",
-	"shipping":        "航運",
-	"energy":          "能源",
-	"electronics":     "電子",
-	"consumer":        "消費",
-	"industrial":      "工業",
-	"other":           "其他",
+// sectorLabel returns the Chinese label for a sector ID, sourced from the
+// industry ClassificationTree when available.
+func (h *Handlers) sectorLabel(sec string) string {
+	if h.Classifier != nil {
+		if seg, ok := h.Classifier.GetSegment(sec); ok {
+			return seg.Name
+		}
+	}
+	switch sec {
+	case "other":
+		return "其他"
+	default:
+		return sec
+	}
 }
 
-// agentLayerMap maps agent IDs to their execution layer for attribution display.
-// TODO: source dynamically from configs/agents.json layer field.
-var agentLayerMap = map[string]string{
-	"taiwan-macro-01":       "macro",
-	"foreign-flow-01":       "macro",
-	"semi-desk-01":          "sector",
-	"ai-desk-01":            "sector",
-	"growth-momentum-01":    "style",
-	"value-yield-01":        "style",
-	"technical-breakout-01": "style",
-	"earnings-quality-01":   "style",
-	"shipping-desk-01":      "sector",
-	"financials-desk-01":    "sector",
+// agentLayer returns the execution layer for a given agent ID, sourced from
+// the AgentLayerMap (built from configs/agents.json).
+func (h *Handlers) agentLayer(agentID string) string {
+	if h.AgentLayerMap != nil {
+		if layer, ok := h.AgentLayerMap[agentID]; ok {
+			return layer
+		}
+	}
+	return ""
+}
+
+// BuildAgentLayerMap loads the agent registry from configs/agents.json and
+// builds a map from agent ID to its execution layer string.
+func BuildAgentLayerMap(workDir string) map[string]string {
+	m := make(map[string]string)
+	path := filepath.Join(workDir, "configs/agents.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return m
+	}
+	var reg struct {
+		Agents []struct {
+			ID    string `json:"id"`
+			Layer string `json:"layer"`
+		} `json:"agents"`
+	}
+	if err := json.Unmarshal(data, &reg); err != nil {
+		return m
+	}
+	for _, a := range reg.Agents {
+		m[a.ID] = a.Layer
+	}
+	return m
 }
 
 func (h *Handlers) getService() *service.LiveService {
@@ -88,7 +110,7 @@ func getSymbolSector(symbol string, symMap map[string]string) string {
 	return "other"
 }
 
-func computeSectorFactorExposure(outcomes []domain.RecommendationOutcome, portfolioValue float64, symSectorMap map[string]string) ([]SectorExposure, FactorExposureInline) {
+func (h *Handlers) computeSectorFactorExposure(outcomes []domain.RecommendationOutcome, portfolioValue float64, symSectorMap map[string]string) ([]SectorExposure, FactorExposureInline) {
 
 	type secAgg struct {
 		count                        int
@@ -135,7 +157,7 @@ func computeSectorFactorExposure(outcomes []domain.RecommendationOutcome, portfo
 		}
 		sectorExp = append(sectorExp, SectorExposure{
 			Sector:      sec,
-			SectorLabel: sectorLabelMap[sec],
+			SectorLabel: h.sectorLabel(sec),
 			Weight:      weight,
 			EstValue:    weight * portfolioValue,
 		})
@@ -315,14 +337,14 @@ func (h *Handlers) HandlePnLAttribution(r *http.Request) (int, any) {
 		}
 
 		if agentMap[oc.AgentID] == nil {
-			agentMap[oc.AgentID] = &AgentAttribution{AgentID: oc.AgentID, Layer: agentLayerMap[oc.AgentID]}
+			agentMap[oc.AgentID] = &AgentAttribution{AgentID: oc.AgentID, Layer: h.agentLayer(oc.AgentID)}
 		}
 		agentMap[oc.AgentID].TotalReturn += oc.ForwardReturn
 		agentMap[oc.AgentID].Count++
 
 		sector := getSymbolSector(oc.Symbol, symSectorMap)
 		if sectorMap[sector] == nil {
-			sectorMap[sector] = &SectorAttribution{Sector: sector, SectorLabel: sectorLabelMap[sector]}
+			sectorMap[sector] = &SectorAttribution{Sector: sector, SectorLabel: h.sectorLabel(sector)}
 		}
 		sectorMap[sector].TotalReturn += oc.ForwardReturn
 		sectorMap[sector].Count++
@@ -476,7 +498,7 @@ func (h *Handlers) HandleRiskExposure(r *http.Request) (int, any) {
 
 	outcomes, _ := loadRecommendationOutcomes(h.LedgerDir, "")
 	symSectorMap := buildSymbolSectorMap(h.Classifier)
-	sectorWeights, factorExp := computeSectorFactorExposure(outcomes, portfolioValue, symSectorMap)
+	sectorWeights, factorExp := h.computeSectorFactorExposure(outcomes, portfolioValue, symSectorMap)
 
 	var concentration []PositionConcentration
 	posList := make([]domain.Position, 0, len(positions))
