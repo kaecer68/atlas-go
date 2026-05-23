@@ -193,13 +193,19 @@ func GetSecret(key string) string {
 }
 
 // resolveEnvFilePath 返回要加载的 .env 文件路径。
-// 优先级：1) ATLAS_ENV_FILE 环境变量 2) 当前目录 .env
+// 优先级：1) ATLAS_ENV_FILE 环境变量 2) 当前目录 .env 3) ~/.config/atlas-go/.env
 func resolveEnvFilePath() string {
 	if p := os.Getenv("ATLAS_ENV_FILE"); p != "" {
 		return p
 	}
-	if _, err := os.Stat(".env"); err == nil {
+	if info, err := os.Stat(".env"); err == nil && info.Mode().IsRegular() {
 		return ".env"
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		userEnv := filepath.Join(home, ".config", "atlas-go", ".env")
+		if _, err := os.Stat(userEnv); err == nil {
+			return userEnv
+		}
 	}
 	return ".env" // fallback: 让 loadEnvFile 静默跳过
 }
