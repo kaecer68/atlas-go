@@ -170,6 +170,12 @@ func run(args []string, deps appDeps) error {
 
 	cfg := deps.loadConfig()
 	logging.Init(*logFormat, slog.LevelInfo)
+
+	// Ensure PostgreSQL is reachable before we try to connect.
+	// If DATABASE_URL is unset or postgres is already running, this is a no-op.
+	// On failure, the app continues without DB (bootstrap handles graceful degradation).
+	ensurePostgres()
+
 	if err := bootstrap.ApplyBrokerConfig(&cfg, bootstrap.BrokerOverrides{
 		Mode:                *brokerMode,
 		Adapter:             *brokerAdapter,
