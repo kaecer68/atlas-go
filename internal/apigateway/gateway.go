@@ -2,6 +2,7 @@ package apigateway
 
 import (
 	"context"
+	"path/filepath"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
@@ -27,7 +28,7 @@ func NewGateway(workDir string, pool *pgxpool.Pool) (*Gateway, error) {
 	// 6. Gateway (needs all)
 
 	cache := NewCacheLayer()
-	health := NewUnifiedHealthStore(workDir, pool)
+	health := NewUnifiedHealthStore(filepath.Join(workDir, "data/state"), pool)
 	limiters := NewRateLimitManager()
 	breakers := NewCircuitBreakerManager(channelIDs())
 	registry := NewChannelRegistry(limiters, breakers)

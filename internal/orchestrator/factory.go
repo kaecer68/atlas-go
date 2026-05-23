@@ -1,6 +1,8 @@
 package orchestrator
 
 import (
+	"path/filepath"
+
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/prism"
@@ -30,7 +32,9 @@ func NewProductionSystem(cfg config.Config) (*System, error) {
 	je := janus.NewEngineWithConfig(janus.DefaultJANUSConfig())
 	system.WithJANUS(je)
 
-	sm := spawning.NewSpawningManager(&system.Sim().registry, spawning.DefaultSpawningConfig())
+	spawnCfg := spawning.DefaultSpawningConfig()
+	spawnCfg.PromptsDir = filepath.Join(cfg.WorkDir, "prompts")
+	sm := spawning.NewSpawningManager(&system.Sim().registry, spawnCfg)
 	system.WithSpawning(sm)
 
 	re := reflexivity.NewReflexivityEngine()
