@@ -258,7 +258,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		logging.Warn("System", "failed to persist simulation state", "session_id", s.Sim().session.ID, "err", err)
 	}
 	s.Sim().lastQuotes = quotes
-	s.updateCapitalMetrics(result)
+	s.updateCapitalMetrics(s.Sim().ctx, result)
 
 	outcomes := buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf)
 	if s.Risk().repo != nil {
@@ -448,7 +448,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		logging.Warn("System", "failed to persist simulation state", "session_id", s.Sim().session.ID, "err", err)
 	}
 	s.Sim().lastQuotes = quotes
-	s.updateCapitalMetrics(result)
+	s.updateCapitalMetrics(s.Sim().ctx, result)
 
 	if s.Port().darwinian != nil {
 		for _, outcome := range outcomes {
@@ -1149,11 +1149,11 @@ func (s *System) assessMacroRisk(quotes []domain.Quote) *narrative.MacroRiskAsse
 	return s.Risk().macroRiskEngine.Assess(macroData)
 }
 
-func (s *System) assessStructuralTrends(macroData narrative.MacroDataSnapshot) (*narrative.StructuralTrendAssessment, narrative.SectorDataSnapshot) {
+func (s *System) assessStructuralTrends(ctx context.Context, macroData narrative.MacroDataSnapshot) (*narrative.StructuralTrendAssessment, narrative.SectorDataSnapshot) {
 	if s.Risk().structuralTrendEngine == nil || s.Risk().sectorDataProvider == nil {
 		return nil, narrative.SectorDataSnapshot{}
 	}
-	sectorSnap, _ := s.Risk().sectorDataProvider.FetchSnapshot(context.Background())
+	sectorSnap, _ := s.Risk().sectorDataProvider.FetchSnapshot(ctx)
 	sectorData := narrative.SectorDataSnapshot{
 		AIRevenueGrowth:    sectorSnap.TSMCRevenue.Value,
 		CoWoSUtilization:   sectorSnap.CoWoSUtilization.Value,
@@ -1197,7 +1197,7 @@ func (s *System) checkCapitalPhase() (bool, string) {
 	return true, "ready to advance"
 }
 
-func (s *System) updateCapitalMetrics(result domain.SimulationResult) {
+func (s *System) updateCapitalMetrics(ctx context.Context, result domain.SimulationResult) {
 	if s.Risk().capitalController == nil {
 		return
 	}
@@ -1220,7 +1220,7 @@ func (s *System) updateCapitalMetrics(result domain.SimulationResult) {
 	// Macro pipeline: assess macro risk, structural trends, and drawdown
 	macroAssessment := s.assessMacroRisk(s.Sim().lastQuotes)
 	if macroAssessment != nil {
-		structuralAssessment, _ := s.assessStructuralTrends(QuotesToMacroDataSnapshot(s.Sim().lastQuotes))
+		structuralAssessment, _ := s.assessStructuralTrends(ctx, QuotesToMacroDataSnapshot(s.Sim().lastQuotes))
 		_ = s.evaluateDrawdown(macroAssessment, structuralAssessment)
 	}
 }

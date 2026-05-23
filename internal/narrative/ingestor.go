@@ -638,13 +638,13 @@ func detectRetailFrenzyEventFromSnapshot(marginBalance marketdata.MacroDataPoint
 	if marginBalance.Symbol == "" {
 		return nil
 	}
-	// TODO: Migrate hardcoded thresholds (90.0 percentile, 5-day acceleration window) to ParametersConfig.
+	params := config.GetParametersConfig().Narrative
 	history, err := LoadMarginHistory(DefaultMarginHistoryDir)
 	if err == nil && marginHistoryAvailable(history) {
 		percentile, ok := ComputeRollingPercentile(history, marginBalance.Value, 60)
-		if ok && percentile >= 90 {
-			accel, accelOK := ComputeRollingAcceleration(history, 5)
-			medianAccel, medianOK := historicalMedianAcceleration(history, 5)
+		if ok && percentile >= params.RetailFrenzyPercentileThreshold.Value {
+			accel, accelOK := ComputeRollingAcceleration(history, params.RetailAccelerationWindowDays.Value)
+			medianAccel, medianOK := historicalMedianAcceleration(history, params.RetailAccelerationWindowDays.Value)
 			confirmed := accelOK && medianOK && marginStage2Confirmed(accel, medianAccel, true)
 			confidence := 0.45
 			if confirmed {
@@ -681,13 +681,13 @@ func detectRetailFearEventFromSnapshot(marginBalance marketdata.MacroDataPoint, 
 	if marginBalance.Symbol == "" {
 		return nil
 	}
-	// TODO: Migrate hardcoded thresholds (10.0 percentile, 5-day acceleration window) to ParametersConfig.
+	params := config.GetParametersConfig().Narrative
 	history, err := LoadMarginHistory(DefaultMarginHistoryDir)
 	if err == nil && marginHistoryAvailable(history) {
 		percentile, ok := ComputeRollingPercentile(history, marginBalance.Value, 60)
-		if ok && percentile <= 10 {
-			accel, accelOK := ComputeRollingAcceleration(history, 5)
-			medianAccel, medianOK := historicalMedianAcceleration(history, 5)
+		if ok && percentile <= params.RetailFearPercentileThreshold.Value {
+			accel, accelOK := ComputeRollingAcceleration(history, params.RetailAccelerationWindowDays.Value)
+			medianAccel, medianOK := historicalMedianAcceleration(history, params.RetailAccelerationWindowDays.Value)
 			confirmed := accelOK && medianOK && marginStage2Confirmed(accel, medianAccel, false)
 			confidence := 0.45
 			if confirmed {

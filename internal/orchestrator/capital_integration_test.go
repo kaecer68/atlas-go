@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -117,7 +118,7 @@ func TestUpdateCapitalMetrics_NilController(t *testing.T) {
 	sys.Sim().portfolioHistory = []float64{100000, 101000, 102000}
 	sys.Sim().returnHistory = []float64{0.01, 0.01}
 
-	sys.updateCapitalMetrics(domain.SimulationResult{})
+	sys.updateCapitalMetrics(context.Background(), domain.SimulationResult{})
 }
 
 func TestUpdateCapitalMetrics_UpdatesController(t *testing.T) {
@@ -130,7 +131,7 @@ func TestUpdateCapitalMetrics_UpdatesController(t *testing.T) {
 	sys.Sim().portfolioHistory = []float64{100000, 101000, 102000, 99000}
 	sys.Sim().returnHistory = []float64{0.01, 0.01, -0.029}
 
-	sys.updateCapitalMetrics(domain.SimulationResult{})
+	sys.updateCapitalMetrics(context.Background(), domain.SimulationResult{})
 
 	snap := controller.GetSnapshot()
 	if snap.RollingSharpe == 0 {
@@ -150,7 +151,7 @@ func TestUpdateCapitalMetrics_ShortHistory(t *testing.T) {
 
 	sys.Sim().returnHistory = []float64{0.01}
 
-	sys.updateCapitalMetrics(domain.SimulationResult{})
+	sys.updateCapitalMetrics(context.Background(), domain.SimulationResult{})
 
 	snap := controller.GetSnapshot()
 	if snap.RollingSharpe != 0 {

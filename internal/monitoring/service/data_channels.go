@@ -66,7 +66,7 @@ type DataChannelService struct {
 	Pool              *pgxpool.Pool
 	MacroIngestor     *narrative.MacroIngestor
 	GeoProvider       narrative.GeopoliticalRiskProvider
-	TaiwanGeoProvider *narrative.CompositeTaiwanGeopoliticalProvider
+	TaiwanGeoProvider narrative.GeopoliticalRiskProvider
 	JanusEngine       *janus.Engine
 	FugleAPIKey       string
 	FubonAPIKey       string
@@ -225,7 +225,7 @@ func (s *channelHealthStore) saveLocked() error {
 	return os.Rename(tmp, s.path)
 }
 
-func NewDataChannelService(workDir string, pool *pgxpool.Pool, macroIngestor *narrative.MacroIngestor, geoProvider narrative.GeopoliticalRiskProvider, taiwanGeoProvider *narrative.CompositeTaiwanGeopoliticalProvider, janusEngine *janus.Engine, fugleAPIKey, fubonAPIKey, finmindAPIKey, tejAPIKey string) *DataChannelService {
+func NewDataChannelService(workDir string, pool *pgxpool.Pool, macroIngestor *narrative.MacroIngestor, geoProvider narrative.GeopoliticalRiskProvider, taiwanGeoProvider narrative.GeopoliticalRiskProvider, janusEngine *janus.Engine, fugleAPIKey, fubonAPIKey, finmindAPIKey, tejAPIKey string) *DataChannelService {
 	return &DataChannelService{
 		WorkDir:           workDir,
 		Pool:              pool,

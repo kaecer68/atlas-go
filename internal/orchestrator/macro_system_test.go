@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -64,7 +65,7 @@ func TestSystem_assessStructuralTrends(t *testing.T) {
 	}
 
 	macroData := narrative.MacroDataSnapshot{}
-	assessment, sectorData := sys.assessStructuralTrends(macroData)
+	assessment, sectorData := sys.assessStructuralTrends(context.Background(), macroData)
 
 	// With nil sectorDataProvider, should return nil gracefully
 	if assessment != nil {
@@ -134,7 +135,7 @@ func TestSystem_MacroPipeline_EndToEnd(t *testing.T) {
 
 	// Phase 2: Structural Trends
 	macroData := QuotesToMacroDataSnapshot(quotes)
-	structuralAssessment, _ := sys.assessStructuralTrends(macroData)
+	structuralAssessment, _ := sys.assessStructuralTrends(context.Background(), macroData)
 	if structuralAssessment == nil {
 		t.Fatal("Phase 2 failed")
 	}
@@ -169,7 +170,7 @@ func TestSystem_MacroPipeline_NilEngines(t *testing.T) {
 	}
 
 	macroData := marketdata.MacroDataSnapshot{}
-	assessment, sector := sys.assessStructuralTrends(narrative.MacroDataSnapshot(macroData))
+	assessment, sector := sys.assessStructuralTrends(context.Background(), narrative.MacroDataSnapshot(macroData))
 	if assessment != nil {
 		t.Error("assessStructuralTrends with nil engine should return nil")
 	}

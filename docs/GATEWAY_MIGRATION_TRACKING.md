@@ -4,62 +4,68 @@
 
 將所有分散在各處的直接 Provider/Client 實例化遷移至統一的 `Gateway` 模式。
 
-## 完整 TODO 清單（共 27 個）
+## ⚠️ 重要說明
 
-### `internal/orchestrator/system.go`（5個）
+- **所有行號已過期**：本文件行號對應當時的程式碼版本（2026-05-16），目前（2026-05-23）多個檔案已大幅改寫，行號可能完全偏離。
+- **NewDashboardAPI()（legacy）屬於 test-only fallback**：16 個 `dashboard_api.go` 項目中有 14 個位於 legacy 建構子，僅供測試使用。生產路徑已使用 `NewDashboardAPIWithGateway()`。
+- **NewDashboardAPIWithGateway()** 生產路徑原有 2 個直接實例化，已全部修正（見 Wave 1a）。
+- **Orchestrator 完全繞過 Gateway**：`selectProvider()` 與 `buildMacroEngines()` 各自建立自己的 provider，為最大的架構缺口。
 
-- [ ] `system.go:459` — Migrate to Gateway for direct Fugle provider instantiation
-- [ ] `system.go:463` — Migrate to Gateway for direct mock provider instantiation
-- [ ] `system.go:467` — Migrate to Gateway for direct TWSE OpenAPI provider instantiation
-- [ ] `system.go:470` — Migrate to Gateway for direct hybrid provider instantiation
-- [ ] `system.go:473` — Migrate to Gateway for direct hybrid provider instantiation
+## 狀態（2026-05-23）
 
-### `internal/orchestrator/composition.go`（1個）
+### ✅ 已完成
 
-- [ ] `composition.go:105` — Migrate to Gateway for direct sector data provider instantiation
+| 項目 | 修正檔 | 備註 |
+|------|--------|------|
+| `handlers.go` day trading provider | Wave 1b | 建立 `DayTradingChannelAdapter` + 透過 Gateway 呼叫 |
+| `dashboard_api.go` TaiwanGeoProvider (Gateway 建構子) | Wave 1a | 建立 `taiwanGeopoliticalGatewayAdapter`，改為 `GeopoliticalRiskProvider` 介面 |
+| `data_channels.go` TaiwanGeoProvider 型別 | Wave 1a | 欄位與參數從具體型別改為 `GeopoliticalRiskProvider` 介面 |
 
-### `internal/monitoring/dashboard_api.go`（16個）
+### 🔲 待處理（24 項，分波次）
 
-- [ ] `dashboard_api.go:127` — Migrate to Gateway for direct Yahoo Finance macro provider instantiation
-- [ ] `dashboard_api.go:129` — Migrate to Gateway for direct Frankfurter FX provider instantiation
-- [ ] `dashboard_api.go:131` — Migrate to Gateway for direct SOX index provider instantiation
-- [ ] `dashboard_api.go:133` — Migrate to Gateway for direct TWSE capital flow provider instantiation
-- [ ] `dashboard_api.go:135` — Migrate to Gateway for direct TWSE margin balance provider instantiation
-- [ ] `dashboard_api.go:137` — Migrate to Gateway for direct export statistics provider instantiation
-- [ ] `dashboard_api.go:141` — Migrate to Gateway for direct sector data provider instantiation
-- [ ] `dashboard_api.go:146` — Migrate to Gateway for direct TSMC revenue provider instantiation
-- [ ] `dashboard_api.go:149` — Migrate to Gateway for direct composite macro provider instantiation
-- [ ] `dashboard_api.go:151` — Migrate to Gateway for direct geopolitical composite provider instantiation
-- [ ] `dashboard_api.go:153` — Migrate to Gateway for direct RSS geopolitical provider instantiation
-- [ ] `dashboard_api.go:155` — Migrate to Gateway for direct GDELT geopolitical provider instantiation
-- [ ] `dashboard_api.go:158` — Migrate to Gateway for direct Taiwan geopolitical composite provider instantiation
-- [ ] `dashboard_api.go:160` — Migrate to Gateway for direct Taiwan RSS geopolitical provider instantiation
-- [ ] `dashboard_api.go:423` — Migrate to Gateway for direct FinMind client instantiation
-- [ ] `dashboard_api.go:426` — Migrate to Gateway for direct FinMind dividend provider instantiation
+#### Wave 2 — Orchestrator ↔ Gateway 橋接（高優先，需要獨立設計）
 
-### `internal/monitoring/service/data_channels.go`（3個）
+- `internal/orchestrator/system.go` — `selectProvider()` 建立 5 個直接 provider 實例（Fugle、Mock、TWSE OpenAPI、Hybrid ×2）
+- `internal/orchestrator/composition.go` — `buildMacroEngines()` 建立 `SectorDataProvider`
 
-- [ ] `data_channels.go:132` — Migrate to Gateway for direct Fugle client instantiation
-- [ ] `data_channels.go:184` — Migrate to Gateway for direct Fubon client instantiation
-- [ ] `data_channels.go:236` — Migrate to Gateway for direct FinMind client instantiation
+#### Wave 1 Legacy — 剩餘 16 項（非生產路徑，低優先）
 
-### `internal/monitoring/api/system/handlers.go`（1個）
+- `internal/monitoring/dashboard_api.go` (legacy `NewDashboardAPI()`) — 14 個直接 provider 實例化
+  - Yahoo Finance macro provider
+  - Frankfurter FX provider
+  - SOX index provider
+  - TWSE capital flow provider
+  - TWSE margin balance provider
+  - Export statistics provider
+  - Sector data provider
+  - TSMC revenue provider
+  - Composite macro provider
+  - Geopolitical providers (global composite, RSS, GDELT)
+  - Taiwan RSS provider
+  - FinMind client
+  - FinMind dividend provider
+- `internal/monitoring/dashboard_api.go` — FinMind client for dividends（行號過期）
+- `internal/monitoring/service/data_channels.go` — Fugle/Fubon/FinMind 直接 client 實例化（3 項）
 
-- [ ] `handlers.go:146` — Migrate to Gateway for direct day trading provider instantiation
+#### 💤 合理例外（不需修改）
 
-### `cmd/experimental/validate-twse-capital-flow/main.go`（1個）
+- `cmd/experimental/validate-twse-capital-flow/main.go` — 實驗性 CLI，接受直接實例化
 
-- [ ] `main.go:23` — Migrate to Gateway for direct TWSE capital flow provider instantiation
+### 📝 追蹤補充
+
+#### 未追蹤項目（不在原始 27 項中）
+
+- `internal/monitoring/dashboard_api.go` — `NewExchangeRateProvider()` 在 legacy 建構子中直接實例化（`exchange_rate` channel 已在 Gateway 註冊但未使用）
 
 ---
 
-## 優先級建議
+## 優先級建議（2026-05-23 更新）
 
-| 優先級 | 範圍 | 數量 |
-|--------|------|------|
-| **High** | `internal/orchestrator/`（核心協調層） | 6 |
-| **Medium** | `internal/monitoring/dashboard_api.go`（監控 API） | 16 |
-| **Low** | `internal/monitoring/service/`, `internal/monitoring/api/system/`, `experimental/` | 5 |
+| 優先級 | 範圍 | 數量 | 說明 |
+|--------|------|------|------|
+| **High** | `internal/orchestrator/`（核心協調層） | 6 | 最大的架構缺口，需要獨立設計（Wave 2） |
+| **Medium** | `internal/monitoring/dashboard_api.go`（legacy 建構子） | 14 | 非生產路徑，可暫時擱置 |
+| **Low** | `internal/monitoring/service/`, `experimental/` | 4 | 合理例外或等待 Wave 2 整體設計 |
 
-> 建立時間: 2026-05-16
-> 來源: 系統孤兒/過時檔案掃描
+> 最後更新: 2026-05-23
+> 來源: AI 輔助掃描 + Wave 1 實作

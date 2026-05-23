@@ -37,6 +37,12 @@ func buildSimulationCore(cfg config.Config, registry domain.AgentRegistry, polic
 	}
 }
 
+// SetProvider replaces the default provider created by selectProvider().
+// Used by main.go to inject a GatewayBackedProvider with independent rate limiting.
+func (sc *SimulationCore) SetProvider(p marketdata.Provider) {
+	sc.provider = p
+}
+
 func buildSimEngine(policy baseline.Policy, optimizer *portfolio.Optimizer) *sim.Engine {
 	return sim.NewEngine(policy.Constraints).
 		WithOptimizer(optimizer).
