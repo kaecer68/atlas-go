@@ -118,6 +118,33 @@ func InitSchema(db *sql.DB) error {
 		timestamp TEXT NOT NULL
 	);
 
+	CREATE TABLE IF NOT EXISTS spawn_records (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		data_json TEXT NOT NULL,
+		created_at TEXT NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS prompt_experiment_results (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		experiment_id TEXT UNIQUE NOT NULL,
+		data_json TEXT NOT NULL,
+		created_at TEXT NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS window_summaries (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		window_id TEXT UNIQUE NOT NULL,
+		data_json TEXT NOT NULL,
+		created_at TEXT NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS mutation_briefs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		window_id TEXT NOT NULL,
+		data_json TEXT NOT NULL,
+		created_at TEXT NOT NULL
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_outcomes_session_id ON outcomes(session_id);
 	CREATE INDEX IF NOT EXISTS idx_outcomes_symbol ON outcomes(symbol);
 	CREATE INDEX IF NOT EXISTS idx_screening_rejects_session_id ON screening_rejects(session_id);
@@ -126,6 +153,9 @@ func InitSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_trades_session_id ON trades(session_id);
 	CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);
 	CREATE INDEX IF NOT EXISTS idx_quotes_symbol_date ON quotes(symbol, date);
+	CREATE INDEX IF NOT EXISTS idx_prompt_experiment_results_experiment_id ON prompt_experiment_results(experiment_id);
+	CREATE INDEX IF NOT EXISTS idx_window_summaries_window_id ON window_summaries(window_id);
+	CREATE INDEX IF NOT EXISTS idx_mutation_briefs_window_id ON mutation_briefs(window_id);
 	`
 
 	if _, err := db.Exec(schema); err != nil {

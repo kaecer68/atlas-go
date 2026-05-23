@@ -2,7 +2,9 @@ package ledger
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -47,32 +49,138 @@ type SQLiteStore struct {
 
 var _ FullStore = (*SQLiteStore)(nil)
 
+// RecordSpawnRecord persists a spawn record as a JSON blob.
 func (s *SQLiteStore) RecordSpawnRecord(record SpawnRecord) error {
-	return fmt.Errorf("not implemented: %s", "RecordSpawnRecord")
+	data, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("marshal spawn record: %w", err)
+	}
+	_, err = s.db.Exec(`
+		INSERT INTO spawn_records (data_json, created_at)
+		VALUES (?, ?)`,
+		string(data), time.Now().UTC().Format(time.RFC3339),
+	)
+	if err != nil {
+		return fmt.Errorf("insert spawn record: %w", err)
+	}
+	return nil
 }
 
+// LoadSpawnRecords reads all spawn records, most recent first.
 func (s *SQLiteStore) LoadSpawnRecords() ([]SpawnRecord, error) {
-	return nil, fmt.Errorf("not implemented: %s", "LoadSpawnRecords")
+	rows, err := s.db.Query(`SELECT data_json FROM spawn_records ORDER BY id DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("query spawn records: %w", err)
+	}
+	defer rows.Close()
+
+	var records []SpawnRecord
+	for rows.Next() {
+		var data string
+		if err := rows.Scan(&data); err != nil {
+			return nil, fmt.Errorf("scan spawn record: %w", err)
+		}
+		var rec SpawnRecord
+		if err := json.Unmarshal([]byte(data), &rec); err != nil {
+			return nil, fmt.Errorf("unmarshal spawn record: %w", err)
+		}
+		records = append(records, rec)
+	}
+	return records, rows.Err()
 }
 
+// LoadExperiments reads all experiment records from the global experiments table.
 func (s *SQLiteStore) LoadExperiments() ([]domain.ExperimentRecord, error) {
-	return nil, fmt.Errorf("not implemented: %s", "LoadExperiments")
+	rows, err := s.db.Query(`SELECT mutation_brief_json FROM experiments ORDER BY id DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("query experiments: %w", err)
+	}
+	defer rows.Close()
+
+	var records []domain.ExperimentRecord
+	for rows.Next() {
+		var data string
+		if err := rows.Scan(&data); err != nil {
+			return nil, fmt.Errorf("scan experiment: %w", err)
+		}
+		var rec domain.ExperimentRecord
+		if err := json.Unmarshal([]byte(data), &rec); err != nil {
+			return nil, fmt.Errorf("unmarshal experiment: %w", err)
+		}
+		records = append(records, rec)
+	}
+	return records, rows.Err()
 }
 
+// RecordPromptExperimentResult persists a prompt experiment result as a JSON blob.
 func (s *SQLiteStore) RecordPromptExperimentResult(experimentID string, result domain.PromptExperimentResult) error {
-	return fmt.Errorf("not implemented: %s", "RecordPromptExperimentResult")
+	data, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("marshal prompt experiment result: %w", err)
+	}
+	_, err = s.db.Exec(`
+		INSERT INTO prompt_experiment_results (experiment_id, data_json, created_at)
+		VALUES (?, ?, ?)`,
+		experimentID, string(data), time.Now().UTC().Format(time.RFC3339),
+	)
+	if err != nil {
+		return fmt.Errorf("insert prompt experiment result: %w", err)
+	}
+	return nil
 }
 
+// UpdatePromptExperimentResult replaces an existing prompt experiment result by experiment_id.
 func (s *SQLiteStore) UpdatePromptExperimentResult(experimentID string, result domain.PromptExperimentResult) error {
-	return fmt.Errorf("not implemented: %s", "UpdatePromptExperimentResult")
+	data, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("marshal prompt experiment result: %w", err)
+	}
+	_, err = s.db.Exec(`
+		INSERT INTO prompt_experiment_results (experiment_id, data_json, created_at)
+		VALUES (?, ?, ?)
+		ON CONFLICT(experiment_id) DO UPDATE SET
+			data_json = excluded.data_json,
+			created_at = excluded.created_at`,
+		experimentID, string(data), time.Now().UTC().Format(time.RFC3339),
+	)
+	if err != nil {
+		return fmt.Errorf("upsert prompt experiment result: %w", err)
+	}
+	return nil
 }
 
+// RecordWindowSummary persists a backtest window summary as a JSON blob.
 func (s *SQLiteStore) RecordWindowSummary(summary domain.BacktestWindowSummary) error {
-	return fmt.Errorf("not implemented: %s", "RecordWindowSummary")
+	data, err := json.Marshal(summary)
+	if err != nil {
+		return fmt.Errorf("marshal window summary: %w", err)
+	}
+	_, err = s.db.Exec(`
+		INSERT INTO window_summaries (window_id, data_json, created_at)
+		VALUES (?, ?, ?)`,
+		summary.WindowID, string(data), time.Now().UTC().Format(time.RFC3339),
+	)
+	if err != nil {
+		return fmt.Errorf("insert window summary: %w", err)
+	}
+	return nil
 }
 
+// RecordMutationBrief persists a mutation brief as a JSON blob.
 func (s *SQLiteStore) RecordMutationBrief(windowID string, brief domain.MutationBrief) error {
-	return fmt.Errorf("not implemented: %s", "RecordMutationBrief")
+	data, err := json.Marshal(brief)
+	if err != nil {
+		return fmt.Errorf("marshal mutation brief: %w", err)
+	}
+	_, err = s.db.Exec(`
+		INSERT INTO mutation_briefs (window_id, data_json, created_at)
+		VALUES (?, ?, ?)`,
+		windowID, string(data), time.Now().UTC().Format(time.RFC3339),
+	)
+	if err != nil {
+		return fmt.Errorf("insert mutation brief: %w", err)
+	}
+	return nil
 }
 
 func NewOutcomeStore(cfg config.Config) (OutcomeStore, error) {
