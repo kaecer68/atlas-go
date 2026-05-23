@@ -26,6 +26,25 @@ func (b *convictionBuilder) add(rule string, delta int, reason string) {
 	b.steps = append(b.steps, domain.ConvictionStep{Rule: rule, Delta: delta, Reason: reason})
 }
 
+// addWithProvenance is a future replacement for add() that includes parameter
+// provenance fields. Not yet called — existing callers use b.add().
+// When migrated, switch to this method for config traceability.
+//
+//lint:ignore U1000 utility for future provenance-aware callers
+func (b *convictionBuilder) addWithProvenance(rule string, delta int, reason string, source string, paramRef string, paramValue string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.final += delta
+	b.steps = append(b.steps, domain.ConvictionStep{
+		Rule:       rule,
+		Delta:      delta,
+		Reason:     reason,
+		Source:     source,
+		ParamRef:   paramRef,
+		ParamValue: paramValue,
+	})
+}
+
 func (b *convictionBuilder) cap(max int) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
