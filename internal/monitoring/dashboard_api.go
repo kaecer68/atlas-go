@@ -131,25 +131,20 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	var providers []marketdata.MacroDataProvider
 
 	// Yahoo Finance-backed providers — only when enabled.
+	// Legacy constructor: production uses NewDashboardAPIWithGateway() instead.
+	// See docs/GATEWAY_MIGRATION_TRACKING.md.
 	if cfg.YahooEnabled {
-		// TODO: Migrate to Gateway for direct Yahoo Finance macro provider instantiation.
 		providers = append(providers, marketdata.NewYahooFinanceMacroProvider())
-		// TODO: Migrate to Gateway for direct SOX index provider instantiation.
 		providers = append(providers, marketdata.NewSOXIndexProvider())
 	}
 
-	// TODO: Migrate to Gateway for direct Frankfurter FX provider instantiation.
 	providers = append(providers, marketdata.NewFrankfurterFXProvider())
 	// ExchangeRate-API provides TWD (not available in ECB/Frankfurter dataset).
 	providers = append(providers, marketdata.NewExchangeRateProvider())
-	// TODO: Migrate to Gateway for direct TWSE capital flow provider instantiation.
 	providers = append(providers, marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")))
-	// TODO: Migrate to Gateway for direct TWSE margin balance provider instantiation.
 	providers = append(providers, marketdata.NewTWSEMarginBalanceProvider(filepath.Join(workDir, "data/state/margin")))
-	// TODO: Migrate to Gateway for direct export statistics provider instantiation.
 	providers = append(providers, marketdata.NewExportStatisticsProvider(filepath.Join(workDir, "data/state/export")))
 	// Sector data from local cache (graceful degradation if file missing).
-	// TODO: Migrate to Gateway for direct sector data provider instantiation.
 	providers = append(providers, marketdata.NewSectorDataProvider(filepath.Join(workDir, "data/state/sector_data")))
 	// TSMC Revenue from FinMind (overwrites cached sector data when available).
 	if cfg.FinMindAPIKey != "" {
@@ -577,10 +572,10 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	var dividendProvider apitax.DividendProvider
 	cfg := config.Load()
 	if cfg.FinMindAPIKey != "" {
-		// TODO: Migrate to Gateway for direct FinMind client instantiation.
+		// FinMind dividend provider is tax-utility, not a data channel.
+		// Gateway migration deferred — see docs/GATEWAY_MIGRATION_TRACKING.md.
 		finMindClient := marketdata.NewFinMindClient(cfg.FinMindAPIKey)
 		cacheDir := filepath.Join(a.workDir, "data", "cache", "dividends")
-		// TODO: Migrate to Gateway for direct FinMind dividend provider instantiation.
 		dividendProvider = marketdata.NewFinMindDividendProvider(finMindClient, cacheDir)
 	}
 	taxHandlers := apitax.NewHandlers(a.ledgerDir, dividendProvider)
