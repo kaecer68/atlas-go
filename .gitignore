@@ -103,6 +103,7 @@ internal/experiment/debug*_test.go
 PR_DESCRIPTION.md
 # Runtime state and cached data
 cmd/atlas/data/state/
+cmd/atlas/channel_health.json
 internal/marketdata/data/state/
 # Migration tool binaries
 /archive-state

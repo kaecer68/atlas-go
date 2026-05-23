@@ -160,5 +160,3 @@ func verdictSeverity(current, threshold float64) string {
 		return "INFO"
 	}
 }
-
-var timeNow = func() time.Time { return time.Now() }
