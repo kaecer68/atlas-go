@@ -1,3 +1,6 @@
+// Package metalearning tests the deprecated meta-learning engine.
+// These tests verify correctness of archived code that is scheduled for
+// re-enablement in Phase 5. They are excluded from coverage gate.
 package metalearning
 
 import (

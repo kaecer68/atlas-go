@@ -1,5 +1,12 @@
 // Package metalearning implements learning-to-learn optimization for agent strategies
 // Based on MiroFish swarm results and training data to optimize learning strategies
+//
+// Deprecated: This package was built and tested but never integrated into the
+// production pipeline. The genetic algorithm and strategy optimization features
+// require swarm data producer and training pipeline infrastructure that was
+// never built. The current evolution system (internal/evolution/) uses a simpler
+// prompt-mutation approach. See DEPRECATED.md for re-enablement conditions
+// (Phase 5 of the system health remediation plan).
 package metalearning
 
 import (

@@ -136,43 +136,49 @@ jobs:
           data/swarm/*.json
       continue-on-error: true
 
-  meta-learning:
-    runs-on: ubuntu-latest
-    needs: [swarm-simulation]
-    steps:
-    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-    - name: Download Swarm Results
-      uses: actions/download-artifact@v4
-      with:
-        name: swarm-results
-        path: ./data/swarm
-      continue-on-error: true
-
-    - name: Set up Go
-      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
-      with:
-        go-version-file: go.mod
-
-    - name: Download dependencies
-      run: go mod download
-
-    - name: Build
-      run: go build -o atlas-go ./cmd/atlas
-
-    - name: Meta-Learning Adaptation
-      env:
-        ATLAS_ENV: production
-      run: |
-        ./atlas-go metalearning evolve || true
-        ./atlas-go metalearning report || true
-
-    - name: Upload Meta-Learning report
-      uses: actions/upload-artifact@v4
-      with:
-        name: metalearning-report
-        path: reports/metalearning_*.json
-      continue-on-error: true
+  # meta-learning 已於 Phase 1 封存（2026-05-23）
+  # 排程於 Phase 5 重新啟用，屆時需：
+  #   1. 建立 cmd/train-metalearner CLI
+  #   2. 重建 dashboard API /api/metalearning/strategies
+  #   3. 註冊 BackgroundTaskManager 排程訓練
+  # 參見 internal/metalearning/DEPRECATED.md
+  # meta-learning:
+  #   runs-on: ubuntu-latest
+  #   needs: [swarm-simulation]
+  #   steps:
+  #   - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+  #
+  #   - name: Download Swarm Results
+  #     uses: actions/download-artifact@v4
+  #     with:
+  #       name: swarm-results
+  #       path: ./data/swarm
+  #     continue-on-error: true
+  #
+  #   - name: Set up Go
+  #     uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+  #     with:
+  #       go-version-file: go.mod
+  #
+  #   - name: Download dependencies
+  #     run: go mod download
+  #
+  #   - name: Build
+  #     run: go build -o atlas-go ./cmd/atlas
+  #
+  #   - name: Meta-Learning Adaptation
+  #     env:
+  #       ATLAS_ENV: production
+  #     run: |
+  #       ./atlas-go metalearning evolve || true
+  #       ./atlas-go metalearning report || true
+  #
+  #   - name: Upload Meta-Learning report
+  #     uses: actions/upload-artifact@v4
+  #     with:
+  #       name: metalearning-report
+  #       path: reports/metalearning_*.json
+  #     continue-on-error: true
 
   cleanup:
     runs-on: ubuntu-latest
@@ -187,5 +193,4 @@ jobs:
           prism-report
           reflexivity-report
           swarm-results
-          metalearning-report
       continue-on-error: true
