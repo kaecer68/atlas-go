@@ -24,6 +24,7 @@ type SpawningManager struct {
 	validationMinSignals int
 	acceptanceThreshold  float64
 	minWeightDays        int
+	promptsDir           string // absolute path for prompt file I/O
 
 	// State
 	mu            sync.RWMutex
@@ -40,7 +41,8 @@ type SpawningConfig struct {
 	ValidationMinSignals int
 	AcceptanceThreshold  float64
 	CheckInterval        time.Duration
-	MinWeightDays        int // days at DarwinianWeightMin before extinction
+	MinWeightDays        int    // days at DarwinianWeightMin before extinction
+	PromptsDir           string // absolute path to prompts/ directory (default "prompts")
 }
 
 // DefaultSpawningConfig returns recommended default configuration
@@ -52,6 +54,7 @@ func DefaultSpawningConfig() SpawningConfig {
 		AcceptanceThreshold:  0.5,            // Sharpe > 0.5 to accept
 		CheckInterval:        24 * time.Hour, // Check daily
 		MinWeightDays:        20,             // 20 days at min weight -> extinct
+		PromptsDir:           "prompts",      // relative to CWD by default
 	}
 }
 
@@ -68,6 +71,7 @@ func NewSpawningManager(registry *domain.AgentRegistry, config SpawningConfig) *
 		acceptanceThreshold:  config.AcceptanceThreshold,
 		checkInterval:        config.CheckInterval,
 		minWeightDays:        config.MinWeightDays,
+		promptsDir:           config.PromptsDir,
 		lastCheck:            time.Time{},
 		weightHistory:        make(map[string]int),
 	}
@@ -221,8 +225,8 @@ func (m *SpawningManager) spawnAgentForGap(gap *KnowledgeGap) (*SpawnedAgent, er
 	// Generate agent spec and prompt
 	spec, promptContent := m.agentFactory.CreateAgentForGap(gap, "")
 
-	// Save prompt file
-	promptPath := filepath.Join("prompts/agents", filepath.Base(spec.PromptFile))
+	// Save prompt file — anchored to PromptsDir for CWD-independence
+	promptPath := filepath.Join(m.promptsDir, "agents", filepath.Base(spec.PromptFile))
 	if err := os.MkdirAll(filepath.Dir(promptPath), 0755); err != nil {
 		return nil, fmt.Errorf("failed to create prompts directory: %w", err)
 	}
@@ -523,8 +527,8 @@ func (m *SpawningManager) Cleanup(retentionPeriod time.Duration) int {
 					}
 				}
 
-				// Remove prompt file
-				promptPath := filepath.Join("prompts/agents", agentID+".md")
+				// Remove prompt file — anchored to PromptsDir
+				promptPath := filepath.Join(m.promptsDir, "agents", agentID+".md")
 				os.Remove(promptPath)
 
 				removed++
