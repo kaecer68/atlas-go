@@ -174,8 +174,19 @@ func (r *PostgresRepository) LoadToday(ctx context.Context) (*MetricsSnapshot, e
 	// Build snapshot from the latest data points
 	snapshot := &MetricsSnapshot{Timestamp: points[0].Time}
 
-	// Query all metrics for today and populate snapshot
-	metrics, err := r.QueryRange(ctx, "", start, end)
+	// Query all metrics for today (no metric_name filter) and populate snapshot
+	rows, err := r.pool.Query(ctx, `
+		SELECT time, metric_name, value, agent_id, session_id, symbol, regime, metadata
+		FROM metrics
+		WHERE time >= $1 AND time <= $2
+		ORDER BY time DESC
+	`, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("query all metrics range: %w", err)
+	}
+	defer rows.Close()
+
+	metrics, err := scanMetricPoints(rows)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +250,18 @@ func (r *PostgresRepository) LoadRecent(ctx context.Context, n int) ([]MetricsSn
 }
 
 func (r *PostgresRepository) loadSnapshotForRange(ctx context.Context, start, end time.Time) (*MetricsSnapshot, error) {
-	points, err := r.QueryRange(ctx, "", start, end)
+	rows, err := r.pool.Query(ctx, `
+		SELECT time, metric_name, value, agent_id, session_id, symbol, regime, metadata
+		FROM metrics
+		WHERE time >= $1 AND time <= $2
+		ORDER BY time DESC
+	`, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("query all metrics for range: %w", err)
+	}
+	defer rows.Close()
+
+	points, err := scanMetricPoints(rows)
 	if err != nil {
 		return nil, err
 	}
