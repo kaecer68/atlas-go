@@ -115,7 +115,7 @@ func (e *Engine) filterByPreTradeGate(
 	var filtered []domain.Recommendation
 	for _, rec := range recs {
 		order := e.buildOrderIntent(rec, totalValue)
-		decision, err := e.preTradeGate.Check(nil, order, pf, "NORMAL")
+		decision, err := e.preTradeGate.Check(context.TODO(), order, pf, "NORMAL")
 		if err != nil {
 			logging.Warn("sim", "pre_trade_check_failed", "symbol", rec.Symbol, "err", err)
 			filtered = append(filtered, rec)

@@ -9,7 +9,7 @@
 - **所有行號已過期**：本文件行號對應當時的程式碼版本（2026-05-16），目前（2026-05-23）多個檔案已大幅改寫，行號可能完全偏離。
 - **NewDashboardAPI()（legacy）屬於 test-only fallback**：16 個 `dashboard_api.go` 項目中有 14 個位於 legacy 建構子，僅供測試使用。生產路徑已使用 `NewDashboardAPIWithGateway()`。
 - **NewDashboardAPIWithGateway()** 生產路徑原有 2 個直接實例化，已全部修正（見 Wave 1a）。
-- **Orchestrator 完全繞過 Gateway**：`selectProvider()` 與 `buildMacroEngines()` 各自建立自己的 provider，為最大的架構缺口。
+- **Wave 2（Orchestrator ↔ Gateway 橋接）已透過 `GatewayBackedProvider` 完成**：`selectProvider()` 仍建立 provider 實例，但 `GatewayBackedProvider` 包裝其上提供獨立 rate limiter；`SectorDataProvider` 為 local file reader（讀取 `sector_data.json`），資料流為 `Gateway channel → 寫入磁碟 → SectorDataProvider 讀取`，架構正確。詳見 Wave 2 說明。
 
 ## 狀態（2026-05-23）
 
@@ -23,12 +23,15 @@
 
 ### 🔲 待處理（24 項，分波次）
 
-#### Wave 2 — Orchestrator ↔ Gateway 橋接（高優先，需要獨立設計）
+#### ✅ Wave 2 — Orchestrator ↔ Gateway 橋接（已完成）
 
-- `internal/orchestrator/system.go` — `selectProvider()` 建立 5 個直接 provider 實例（Fugle、Mock、TWSE OpenAPI、Hybrid ×2）
-- `internal/orchestrator/composition.go` — `buildMacroEngines()` 建立 `SectorDataProvider`
+Wave 2 的 bridge 已透過 `GatewayBackedProvider`（`internal/orchestrator/gateway_provider.go`）完成：
 
-#### Wave 1 Legacy — 剩餘 16 項（非生產路徑，低優先）
+- **`selectProvider()`（system.go）**：`GatewayBackedProvider` 包裝 `selectProvider()` 並加上獨立 rate limiter（50 req/s, burst 10）。`selectProvider()` 仍負責建立底層 provider（Fugle/TWSE/Hybrid），但模擬路徑不再與 DashboardAPI 的 per-channel rate limit 競爭。Gateway 的 channel 系統不涵蓋 `GetQuotes()` 即時行情，不需進一步遷移。
+- **`buildMacroEngines()` SectorDataProvider（composition.go）**：`SectorDataProvider` 為 **local file reader**（讀取 `sector_data.json`），非網路 client。資料流為 `Gateway sector_data channel → 寫入磁碟 → SectorDataProvider 讀取`，一個寫一個讀，架構正確。
+- **已無待辦項目**。
+
+#### Wave 1 Legacy — 剩餘 15 項（非生產路徑，低優先）
 
 - `internal/monitoring/dashboard_api.go` (legacy `NewDashboardAPI()`) — 14 個直接 provider 實例化
   - Yahoo Finance macro provider
@@ -45,7 +48,6 @@
   - FinMind client
   - FinMind dividend provider
 - `internal/monitoring/dashboard_api.go` — FinMind client for dividends（行號過期）
-- `internal/monitoring/service/data_channels.go` — Fugle/Fubon/FinMind 直接 client 實例化（3 項）
 
 #### 💤 合理例外（不需修改）
 
@@ -63,9 +65,9 @@
 
 | 優先級 | 範圍 | 數量 | 說明 |
 |--------|------|------|------|
-| **High** | `internal/orchestrator/`（核心協調層） | 6 | 最大的架構缺口，需要獨立設計（Wave 2） |
-| **Medium** | `internal/monitoring/dashboard_api.go`（legacy 建構子） | 14 | 非生產路徑，可暫時擱置 |
-| **Low** | `internal/monitoring/service/`, `experimental/` | 4 | 合理例外或等待 Wave 2 整體設計 |
+| **N/A** | `internal/orchestrator/`（核心協調層） | 0 | ✅ Wave 2 已完成（GatewayBackedProvider + 架構確認） |
+| **Low** | `internal/monitoring/dashboard_api.go`（legacy 建構子） | 15 | 非生產路徑，可暫時擱置 |
+| **N/A** | `internal/monitoring/service/` | 0 | ❌ data_channels.go 3 項已確認 STALE（無 direct constructors），已移除 |
 
 > 最後更新: 2026-05-23
-> 來源: AI 輔助掃描 + Wave 1 實作
+> 來源: AI 輔助掃描 + Wave 1 實作 + Wave 2 架構審查

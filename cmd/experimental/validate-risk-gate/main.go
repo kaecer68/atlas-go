@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -273,7 +274,7 @@ func validateSessions(sessions []sessionData) []sessionResult {
 			order := buildOrderIntent(o, pf, totalConviction)
 			result.TotalOrders++
 
-			decision, err := preTrade.Check(nil, order, pf, "NORMAL")
+			decision, err := preTrade.Check(context.TODO(), order, pf, "NORMAL")
 			if err != nil {
 				continue
 			}
