@@ -22,6 +22,7 @@
 /internal/monitoring/data/
 /prompts/agents/spawn_*.md
 /internal/orchestrator/prompts/agents/spawn_*.md
+cmd/atlas/prompts/agents/spawn_*.md
 /cmd/run-experiment/prompts/
 /validate-phase3-integration
 /staging-drill
@@ -42,6 +43,7 @@ internal/*/data/
 .worktrees/
 
 # Development artifacts
+.omo/
 .opencode/
 .planning/
 .playwright-mcp/
@@ -102,6 +104,7 @@ internal/experiment/debug*_test.go
 # PR description
 PR_DESCRIPTION.md
 # Runtime state and cached data
+channel_health.json
 cmd/atlas/data/state/
 cmd/atlas/channel_health.json
 internal/marketdata/data/state/
