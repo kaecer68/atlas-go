@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
@@ -202,9 +203,9 @@ func (m *Monitor) GetHistoryByLevel(level AlertLevel, limit int) []Alert {
 	return result
 }
 
-// generateAlertID 生成告警ID
+// generateAlertID 生成告警ID（UUID格式，確保與資料庫UUID欄位相容）
 func generateAlertID() string {
-	return fmt.Sprintf("alert-%d", time.Now().UnixNano())
+	return uuid.New().String()
 }
 
 // ConsoleHandler 控制台输出处理器

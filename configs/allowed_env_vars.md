@@ -45,6 +45,7 @@
 | `ATLAS_API_KEY` | API 認證金鑰（非資料源） | 空（未設定時停用認證） |
 | `ATLAS_ADMIN_KEY` | 管理員認證金鑰（admin-only 操作） | 空（未設定時停用 admin 驗證） |
 | `ATLAS_ENV` | 環境模式（`production`/`development`） | 空 |
+| `ATLAS_SKIP_DOCKER` | 跳過 Docker-based PostgreSQL 啟動 | 空 |
 | `DATABASE_URL` | PostgreSQL 連線字串 | 空（需手動設定） |
 | `HOME` | 使用者家目錄（用於 CLI 工具路徑建構） | 系統預設 |
 

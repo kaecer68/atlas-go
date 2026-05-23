@@ -38,7 +38,10 @@ func (r *PostgresRepository) Record(ctx context.Context, metricName string, valu
 		VALUES (NOW(), $1, $2, $3, $4, $5, $6, $7)
 	`, metricName, value, agentID, sessionID, symbol, regime, metadata)
 
-	return fmt.Errorf("record metric: %w", err)
+	if err != nil {
+		return fmt.Errorf("record metric: %w", err)
+	}
+	return nil
 }
 
 func (r *PostgresRepository) QueryRange(ctx context.Context, metricName string, start, end time.Time) ([]MetricPoint, error) {

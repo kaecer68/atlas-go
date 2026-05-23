@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 const postgresContainerName = "atlas-postgres"
@@ -245,7 +247,7 @@ func startPostgresService() error {
 	// files even when .env is absent from the project root. The value comes from
 	// loadEnvFile() reading ~/.config/atlas-go/.env.
 	cmd.Env = append(os.Environ(),
-		"DB_PASSWORD="+os.Getenv("DB_PASSWORD"),
+		"DB_PASSWORD="+config.GetSecret("DB_PASSWORD"),
 	)
 	return cmd.Run()
 }

@@ -33,7 +33,10 @@ func (r *PostgresRepository) RecordOutcomes(ctx context.Context, outcomes []doma
 	defer br.Close()
 
 	_, err := br.Exec()
-	return fmt.Errorf("insert outcomes: %w", err)
+	if err != nil {
+		return fmt.Errorf("insert outcomes: %w", err)
+	}
+	return nil
 }
 
 func (r *PostgresRepository) QueryOutcomesBySession(ctx context.Context, sessionID string) ([]domain.RecommendationOutcome, error) {

@@ -31,7 +31,10 @@ func (s *TaskExecutionStore) CreateExecution(ctx context.Context, exec domain.Ta
 		exec.BaselineVersionBefore, exec.BaselineVersionAfter, exec.RequiresConfirmation,
 		exec.ConfirmedAt, exec.CancelRequestedAt, exec.SubmittedAt, exec.StartedAt, exec.FinishedAt,
 		exec.ExitCode, exec.ErrorMessage, exec.Summary)
-	return fmt.Errorf("insert task execution: %w", err)
+	if err != nil {
+		return fmt.Errorf("insert task execution: %w", err)
+	}
+	return nil
 }
 
 func (s *TaskExecutionStore) UpdateExecution(ctx context.Context, exec domain.TaskExecution) error {
@@ -46,7 +49,10 @@ func (s *TaskExecutionStore) UpdateExecution(ctx context.Context, exec domain.Ta
 		exec.BaselineVersionBefore, exec.BaselineVersionAfter, exec.RequiresConfirmation,
 		exec.ConfirmedAt, exec.CancelRequestedAt, exec.StartedAt, exec.FinishedAt,
 		exec.ExitCode, exec.ErrorMessage, exec.Summary)
-	return fmt.Errorf("update task execution: %w", err)
+	if err != nil {
+		return fmt.Errorf("update task execution: %w", err)
+	}
+	return nil
 }
 
 func (s *TaskExecutionStore) GetExecution(ctx context.Context, id string) (*domain.TaskExecution, error) {
@@ -154,7 +160,10 @@ func (s *TaskExecutionStore) AppendEvent(ctx context.Context, event domain.TaskE
 		INSERT INTO task_execution_events (execution_id, seq, event_type, stream, level, message, payload, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`, event.ExecutionID, event.Sequence, event.EventType, event.Stream, event.Level, event.Message, event.Payload, event.CreatedAt)
-	return fmt.Errorf("insert task execution event: %w", err)
+	if err != nil {
+		return fmt.Errorf("insert task execution event: %w", err)
+	}
+	return nil
 }
 
 func (s *TaskExecutionStore) ListEventsAfter(ctx context.Context, executionID string, afterSeq int64) ([]domain.TaskExecutionEvent, error) {
@@ -201,7 +210,10 @@ func (s *TaskExecutionStore) UpsertLineage(ctx context.Context, lineage domain.E
 		lineage.TargetAgentID, lineage.TargetSkill, lineage.MutationType, lineage.BriefPath, lineage.CandidatePath, lineage.ResultPath,
 		lineage.Status, lineage.GitCommitID, lineage.ParamsSnapshot, lineage.ResultSnapshot,
 		lineage.BaselineValue, lineage.CandidateValue, lineage.ImprovementValue, lineage.RecordedAt, lineage.JudgedAt)
-	return fmt.Errorf("upsert lineage: %w", err)
+	if err != nil {
+		return fmt.Errorf("upsert lineage: %w", err)
+	}
+	return nil
 }
 
 func (s *TaskExecutionStore) GetLineage(ctx context.Context, experimentID string) (*domain.ExperimentLineageRecord, error) {
@@ -263,7 +275,10 @@ func (s *TaskExecutionStore) InsertBaselineHistory(ctx context.Context, record d
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`, record.ExecutionID, record.ExperimentID, record.VersionBefore, record.VersionAfter, record.PromotedBy, record.PromotedAt,
 		record.BaselinePath, record.DiffSummary, record.DiffPatch, record.Metadata)
-	return fmt.Errorf("insert baseline history: %w", err)
+	if err != nil {
+		return fmt.Errorf("insert baseline history: %w", err)
+	}
+	return nil
 }
 
 func (s *TaskExecutionStore) ListBaselineHistory(ctx context.Context, limit int) ([]domain.BaselineHistoryRecord, error) {

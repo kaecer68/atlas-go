@@ -15,7 +15,10 @@ func (r *PostgresRepository) RecordCapitalFlow(ctx context.Context, channel stri
 		INSERT INTO capital_flow (time, channel, net_buy, total_buy, total_sell)
 		VALUES (NOW(), $1, $2, $3, $4)
 	`, channel, netBuy, totalBuy, totalSell)
-	return fmt.Errorf("insert capital flow: %w", err)
+	if err != nil {
+		return fmt.Errorf("insert capital flow: %w", err)
+	}
+	return nil
 }
 
 func (r *PostgresRepository) QueryLatestCapitalFlow(ctx context.Context, channel string) (*CapitalFlowRecord, error) {
@@ -68,16 +71,22 @@ func (r *PostgresRepository) SaveExportStats(ctx context.Context, year, month in
 	gregorianYear := year + 1911
 	ts := time.Date(gregorianYear, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
 
+	// Use CTE to atomically delete-then-insert, avoiding the need for
+	// a unique index on (year, month) which is incompatible with the
+	// TimescaleDB hypertable (unique indexes must include the partition
+	// key "time" on hypertables).
 	_, err := r.pool.Exec(ctx, `
+		WITH deleted AS (
+			DELETE FROM export_statistics WHERE year = $2 AND month = $3
+		)
 		INSERT INTO export_statistics (time, year, month, export_total, import_total, trade_balance)
 		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (year, month) DO UPDATE SET
-			export_total = EXCLUDED.export_total,
-			import_total = EXCLUDED.import_total,
-			trade_balance = EXCLUDED.trade_balance
 	`, ts, year, month, exportTotal, importTotal, tradeBalance)
 
-	return fmt.Errorf("save export stats: %w", err)
+	if err != nil {
+		return fmt.Errorf("save export stats: %w", err)
+	}
+	return nil
 }
 
 func (r *PostgresRepository) QueryLatestExportStats(ctx context.Context) (*ExportStatsRecord, error) {
