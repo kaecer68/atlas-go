@@ -328,9 +328,9 @@ type NarrativeParameters struct {
 	ModelHoldWindowDays ParameterMetadata[int] `json:"model_hold_window_days"`
 
 	// Retail margin event detection thresholds (ingestor)
-	RetailFrenzyPercentileThreshold    ParameterMetadata[float64] `json:"retail_frenzy_percentile_threshold"`
-	RetailFearPercentileThreshold      ParameterMetadata[float64] `json:"retail_fear_percentile_threshold"`
-	RetailAccelerationWindowDays       ParameterMetadata[int]     `json:"retail_acceleration_window_days"`
+	RetailFrenzyPercentileThreshold ParameterMetadata[float64] `json:"retail_frenzy_percentile_threshold"`
+	RetailFearPercentileThreshold   ParameterMetadata[float64] `json:"retail_fear_percentile_threshold"`
+	RetailAccelerationWindowDays    ParameterMetadata[int]     `json:"retail_acceleration_window_days"`
 }
 
 // RealtimeParameters holds tunable values for real-time regime detection and adaptation.
