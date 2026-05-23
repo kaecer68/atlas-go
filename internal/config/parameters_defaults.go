@@ -1411,6 +1411,12 @@ func defaultNarrativeParameters() NarrativeParameters {
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate from historical Taiwan stress index distribution",
 		},
+		ConfidenceDeviationCeiling: ParameterMetadata[float64]{
+			Value:     0.95,
+			Rationale: "Upper bound for deviation-based dynamic confidence; prevents perfect certainty (1.0) for any single indicator",
+			Source:    SourceHeuristic,
+			Todo:      "Backtest optimal ceiling against forward returns; consider per-theme ceilings",
+		},
 		SOXIndexDropThreshold: ParameterMetadata[float64]{
 			Value:     -5.0,
 			Rationale: "SOX index change %% threshold for semiconductor stress detection; -5%% is significant drawdown",
