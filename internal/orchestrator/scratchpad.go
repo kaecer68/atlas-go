@@ -88,7 +88,7 @@ func LoadScratchpad(sessionID, baseDir string) (*Scratchpad, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	s := &Scratchpad{
 		sessionID: sessionID,

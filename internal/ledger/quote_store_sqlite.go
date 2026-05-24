@@ -44,7 +44,7 @@ func (s *SQLiteQuoteStore) RecordQuotes(quotes []domain.DailyBar) error {
 	if err != nil {
 		return fmt.Errorf("prepare statement: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	for _, q := range quotes {
 		dateStr := q.Date.Format("2006-01-02")
@@ -75,7 +75,7 @@ func (s *SQLiteQuoteStore) LoadQuotes(symbol string, start, end time.Time) ([]do
 	if err != nil {
 		return nil, fmt.Errorf("query quotes: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var quotes []domain.DailyBar
 	for rows.Next() {
@@ -129,7 +129,7 @@ func (s *SQLiteQuoteStore) LoadLatestQuotes(symbols []string) (map[string]domain
 	if err != nil {
 		return nil, fmt.Errorf("query latest quotes: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var q domain.DailyBar

@@ -155,7 +155,7 @@ func (y *YahooFinanceMacroProvider) fetchFromHost(ctx context.Context, host, tic
 	if err != nil {
 		return MacroDataPoint{}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return MacroDataPoint{}, fmt.Errorf("http status %d from %s", resp.StatusCode, host)

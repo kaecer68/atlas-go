@@ -15,7 +15,7 @@ func getLatestReplayDate(csvPath string) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	reader := csv.NewReader(f)
 	var latest time.Time

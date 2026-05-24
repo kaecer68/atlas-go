@@ -97,7 +97,7 @@ func (s *Store) LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOu
 		}
 		return nil, fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	outcomes := make([]domain.RecommendationOutcome, 0)
@@ -120,7 +120,7 @@ func (s *Store) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
 		}
 		return nil, fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	outcomes := make([]domain.RecommendationOutcome, 0)
@@ -159,7 +159,7 @@ func (s *Store) LoadExperiments() ([]domain.ExperimentRecord, error) {
 		}
 		return nil, fmt.Errorf("open experiments file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	records := make([]domain.ExperimentRecord, 0)
@@ -305,7 +305,7 @@ func (s *Store) LoadSpawnRecords() ([]SpawnRecord, error) {
 		}
 		return nil, fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	scanner := bufio.NewScanner(f)
 	records := make([]SpawnRecord, 0)
 	for scanner.Scan() {
@@ -340,7 +340,7 @@ func (s *Store) LoadHumanInterventions() ([]domain.HumanIntervention, error) {
 		}
 		return nil, fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	scanner := bufio.NewScanner(f)
 	records := make([]domain.HumanIntervention, 0)
 	for scanner.Scan() {
@@ -530,7 +530,7 @@ func (s *Store) LoadSessionScreeningRejects(sessionID string) ([]domain.Screenin
 		}
 		return nil, fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	scanner := bufio.NewScanner(f)
 	rejects := make([]domain.ScreeningReject, 0)
 	for scanner.Scan() {
@@ -574,7 +574,7 @@ func (s *Store) LoadSessionTrades(sessionID string) ([]domain.TradeRecord, error
 		}
 		return nil, fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	scanner := bufio.NewScanner(f)
 	trades := make([]domain.TradeRecord, 0)
 	for scanner.Scan() {
@@ -659,7 +659,7 @@ func loadOutcomeFile(path string) ([]domain.RecommendationOutcome, error) {
 		}
 		return nil, fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	outcomes := make([]domain.RecommendationOutcome, 0)

@@ -39,7 +39,7 @@ func loadRevenueFile(path string) ([]revenueRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var records []revenueRecord
 	scanner := bufio.NewScanner(f)

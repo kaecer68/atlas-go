@@ -227,7 +227,7 @@ func loadWithLookupEnv(filename string) {
 	if err != nil {
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -247,7 +247,12 @@ func loadWithLookupEnv(filename string) {
 			}
 		}
 		if _, ok := os.LookupEnv(key); !ok {
-			os.Setenv(key, value)
+			if err := os.Setenv(key, value); err != nil {
+				logging.Warn("config", "setenv_failed",
+					logging.FStr("key", key),
+					logging.FStr("value", value),
+					logging.Err(err))
+			}
 		}
 	}
 }
@@ -258,7 +263,7 @@ func loadEnvFile(filename string) {
 	if err != nil {
 		return // .env 文件不存在时静默跳过
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -286,7 +291,12 @@ func loadEnvFile(filename string) {
 
 		// 如果环境变量未设置，则使用 .env 中的值
 		if os.Getenv(key) == "" {
-			os.Setenv(key, value)
+			if err := os.Setenv(key, value); err != nil {
+				logging.Warn("config", "setenv_failed",
+					logging.FStr("key", key),
+					logging.FStr("value", value),
+					logging.Err(err))
+			}
 		}
 	}
 }

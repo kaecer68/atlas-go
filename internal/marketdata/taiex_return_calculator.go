@@ -71,7 +71,7 @@ func (t *TAIEXReturnCalculator) fetchPriceFromHost(ctx context.Context, host str
 	if err != nil {
 		return 0, fmt.Errorf("http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("http status %d from %s", resp.StatusCode, host)
@@ -137,7 +137,7 @@ func (t *TAIEXReturnCalculator) fetchPastPriceFromHost(ctx context.Context, host
 	if err != nil {
 		return 0, fmt.Errorf("http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("http status %d from %s", resp.StatusCode, host)

@@ -45,7 +45,7 @@ func (s *SQLiteSessionStore) LoadSessionSummaries() ([]domain.SessionSummary, er
 	if err != nil {
 		return nil, fmt.Errorf("load session summaries: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var summaries []domain.SessionSummary
 	for rows.Next() {

@@ -41,7 +41,7 @@ func (f *FrankfurterFXProvider) FetchSnapshot(ctx context.Context) (MacroDataSna
 	if err != nil {
 		return MacroDataSnapshot{}, fmt.Errorf("frankfurter fetch: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return MacroDataSnapshot{}, fmt.Errorf("frankfurter http status %d", resp.StatusCode)

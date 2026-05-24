@@ -23,6 +23,41 @@ description: "適用於 atlas-go 的 Go 程式碼修改。涵蓋 import 分組�
 - 避免跨層洩漏：domain 型別留在 internal/domain；協調邏輯留在 internal/orchestrator。
 - 不要引入全域可變狀態做執行期協調。
 
+## 唯讀 Close 錯誤處理
+
+關於 `defer X.Close()` 的 errcheck 規範：
+
+### 既有程式碼（`_ =` 模式）
+
+唯讀檔案（`os.OpenFile` 不含寫入旗標）或 cleanup-only 的 `Close()`，直接採用 `_ =` 模式：
+
+```go
+// 唯讀：errcheck 要求處理 Close error，但實際風險僅為 fd 延遲釋放
+defer func() { _ = f.Close() }()
+```
+
+**適用範圍**：
+- `resp.Body.Close()` — HTTP response body（always safe）
+- `rows.Close()` — `*sql.Rows`（return `error`，但實際僅釋放連線）
+- `stmt.Close()` — `*sql.Stmt`
+- 唯讀 `f.Close()` — 以 `os.Open` 或 `os.OpenFile` 不含寫入旗標開啟的檔案
+
+**不適用**（保留原始 `defer X.Close()`）：
+- 寫入路徑（`os.O_WRONLY` / `os.O_CREATE` / `os.O_APPEND`）— Close error 可能代表資料未完整寫入磁碟
+- `pgx.Rows.Close()` — 不回傳 error，errcheck 不會檢查
+
+### 新程式碼（closure + logging）
+
+新撰寫的 `defer Close()` 應使用 closure 搭配標準庫 `log/slog`：
+
+```go
+defer func() {
+    if err := f.Close(); err != nil {
+        slog.Warn("close failed", "file", path, "err", err)
+    }
+}()
+```
+
 ## 測試規則
 
 - 新增或更新測試時，使用同目錄同 package 的 *_test.go。

@@ -59,7 +59,7 @@ func (s *AgentHealthStore) LoadAll() (map[string]*AgentHealth, error) {
 		}
 		return nil, fmt.Errorf("open agent health file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	result := make(map[string]*AgentHealth)
 	scanner := bufio.NewScanner(f)

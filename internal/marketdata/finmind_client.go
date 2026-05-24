@@ -82,7 +82,7 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 	if err != nil {
 		return nil, fmt.Errorf("finmind: http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("finmind: status %d", resp.StatusCode)

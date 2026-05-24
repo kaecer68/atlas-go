@@ -279,7 +279,7 @@ func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte, i
 		}
 		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("http request failed: %v", err), code: "transport.request_failed", retryable: retryable}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {

@@ -37,7 +37,7 @@ func (s *SQLiteOutcomeStore) RecordOutcomes(outcomes []domain.RecommendationOutc
 	if err != nil {
 		return fmt.Errorf("prepare statement: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	for _, outcome := range outcomes {
 		action := string(outcome.Side)
@@ -96,7 +96,7 @@ func (s *SQLiteOutcomeStore) RecordSessionOutcomes(session domain.ReplaySession,
 	if err != nil {
 		return fmt.Errorf("prepare statement: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	for _, outcome := range outcomes {
 		action := string(outcome.Side)
@@ -148,7 +148,7 @@ func (s *SQLiteOutcomeStore) LoadOutcomes() ([]domain.RecommendationOutcome, err
 	if err != nil {
 		return nil, fmt.Errorf("query outcomes: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return scanOutcomes(rows)
 }
@@ -162,7 +162,7 @@ func (s *SQLiteOutcomeStore) LoadSessionOutcomes(sessionID string) ([]domain.Rec
 	if err != nil {
 		return nil, fmt.Errorf("query session outcomes: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return scanOutcomes(rows)
 }
@@ -181,7 +181,7 @@ func (s *SQLiteOutcomeStore) RecordSessionScreeningRejects(sessionID string, rej
 	if err != nil {
 		return fmt.Errorf("prepare statement: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	for _, reject := range rejects {
 		factorJSON, err := json.Marshal(reject.FactorScores)
@@ -213,7 +213,7 @@ func (s *SQLiteOutcomeStore) LoadSessionScreeningRejects(sessionID string) ([]do
 	if err != nil {
 		return nil, fmt.Errorf("query screening rejects: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var rejects []domain.ScreeningReject
 	for rows.Next() {
@@ -258,7 +258,7 @@ func (s *SQLiteOutcomeStore) RecordSessionTrades(sessionID string, trades []doma
 	if err != nil {
 		return fmt.Errorf("prepare statement: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	for _, trade := range trades {
 		ts := trade.Timestamp.Format("2006-01-02T15:04:05Z07:00")
@@ -282,7 +282,7 @@ func (s *SQLiteOutcomeStore) LoadSessionTrades(sessionID string) ([]domain.Trade
 	if err != nil {
 		return nil, fmt.Errorf("query session trades: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	trades := make([]domain.TradeRecord, 0)
 	for rows.Next() {
@@ -306,7 +306,7 @@ func (s *SQLiteOutcomeStore) LoadAllSessionTrades() ([]domain.TradeRecord, error
 	if err != nil {
 		return nil, fmt.Errorf("query all trades: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	trades := make([]domain.TradeRecord, 0)
 	for rows.Next() {
@@ -399,7 +399,7 @@ func (s *SQLiteOutcomeStore) LoadSessionSummaries() ([]domain.SessionSummary, er
 	if err != nil {
 		return nil, fmt.Errorf("query session summaries: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var summaries []domain.SessionSummary
 	for rows.Next() {
@@ -434,7 +434,7 @@ func (s *SQLiteOutcomeStore) LoadAllSessionScorecards() ([]domain.Scorecard, []d
 	if err != nil {
 		return nil, nil, fmt.Errorf("query outcomes for scorecards: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	outcomes, err := scanOutcomes(rows)
 	if err != nil {
@@ -471,7 +471,7 @@ func (s *SQLiteOutcomeStore) LoadHumanInterventions() ([]domain.HumanInterventio
 	if err != nil {
 		return nil, fmt.Errorf("query human interventions: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var interventions []domain.HumanIntervention
 	for rows.Next() {

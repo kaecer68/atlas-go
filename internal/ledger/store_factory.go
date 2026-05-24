@@ -72,7 +72,7 @@ func (s *SQLiteStore) LoadSpawnRecords() ([]SpawnRecord, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query spawn records: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var records []SpawnRecord
 	for rows.Next() {
@@ -95,7 +95,7 @@ func (s *SQLiteStore) LoadExperiments() ([]domain.ExperimentRecord, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query experiments: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var records []domain.ExperimentRecord
 	for rows.Next() {

@@ -84,7 +84,7 @@ func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
 	if err != nil {
 		return nil, fmt.Errorf("http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("api error: status %d", resp.StatusCode)
@@ -191,7 +191,7 @@ func (c *TWSEClient) GetDailyQuote(ctx context.Context, date string, symbol stri
 	if err != nil {
 		return domain.Quote{}, fmt.Errorf("http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return domain.Quote{}, fmt.Errorf("api error: status %d", resp.StatusCode)

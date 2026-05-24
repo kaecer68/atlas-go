@@ -61,7 +61,7 @@ func LoadRecommendationOutcomes(ledgerDir, sessionID string) ([]domain.Recommend
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var outcomes []domain.RecommendationOutcome
 	scanner := bufio.NewScanner(f)
