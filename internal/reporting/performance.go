@@ -217,15 +217,15 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 		sb.WriteString("| Agent | Skill | Layer | Trades | Win Rate | Avg Return | Total Return |\n")
 		sb.WriteString("|-------|-------|-------|--------|----------|------------|-------------|\n")
 		for _, a := range report.TopAgents {
-		fmt.Fprintf(&sb, "| %s | %s | %s | %d | %.1f%% | %.2f%% | %.2f%% |\n",
-			truncate(a.AgentID, 20),
-			a.Skill,
-			a.Layer,
-			a.TradeCount,
-			a.WinRate*100,
-			a.AvgReturn*100,
-			a.TotalReturn*100,
-		)
+			fmt.Fprintf(&sb, "| %s | %s | %s | %d | %.1f%% | %.2f%% | %.2f%% |\n",
+				truncate(a.AgentID, 20),
+				a.Skill,
+				a.Layer,
+				a.TradeCount,
+				a.WinRate*100,
+				a.AvgReturn*100,
+				a.TotalReturn*100,
+			)
 		}
 	}
 	sb.WriteString("\n")
@@ -237,13 +237,13 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 		sb.WriteString("| Regime | Sessions | Total Return | Win Rate | Avg Return |\n")
 		sb.WriteString("|--------|----------|--------------|----------|------------|\n")
 		for _, r := range report.RegimeBreakdown.Regimes {
-		fmt.Fprintf(&sb, "| %s | %d | %.2f%% | %.1f%% | %.2f%% |\n",
-			r.Regime,
-			r.SessionCount,
-			r.TotalReturn*100,
-			r.WinRate*100,
-			r.AvgReturn*100,
-		)
+			fmt.Fprintf(&sb, "| %s | %d | %.2f%% | %.1f%% | %.2f%% |\n",
+				r.Regime,
+				r.SessionCount,
+				r.TotalReturn*100,
+				r.WinRate*100,
+				r.AvgReturn*100,
+			)
 		}
 	}
 	sb.WriteString("\n")

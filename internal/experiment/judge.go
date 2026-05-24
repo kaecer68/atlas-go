@@ -434,7 +434,7 @@ func welchTTest(baselineReturns, candidateReturns []float64) (tStat float64, df 
 
 	tStat = (mean2 - mean1) / seDiff
 
-	df = (se1+se2)*(se1+se2) / (se1*se1/(n1-1) + se2*se2/(n2-1))
+	df = (se1 + se2) * (se1 + se2) / (se1*se1/(n1-1) + se2*se2/(n2-1))
 
 	return tStat, df
 }

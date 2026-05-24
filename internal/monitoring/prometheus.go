@@ -29,13 +29,13 @@ func PrometheusHandler(collector *MetricsCollector) http.HandlerFunc {
 			}
 			if group[0].Type == MetricTypeHistogram {
 				continue
-		}
-		sanitized := sanitizeMetricName(name)
-		fmt.Fprintf(&b, "# HELP %s atlas-go metric %s\n", sanitized, name)
-		fmt.Fprintf(&b, "# TYPE %s %s\n", sanitized, string(group[0].Type))
-		for _, m := range group {
-			b.WriteString(formatMetricLine(sanitized, m))
-		}
+			}
+			sanitized := sanitizeMetricName(name)
+			fmt.Fprintf(&b, "# HELP %s atlas-go metric %s\n", sanitized, name)
+			fmt.Fprintf(&b, "# TYPE %s %s\n", sanitized, string(group[0].Type))
+			for _, m := range group {
+				b.WriteString(formatMetricLine(sanitized, m))
+			}
 			b.WriteString("\n")
 		}
 
