@@ -144,3 +144,4 @@ node_modules/
 package.json
 package-lock.json
 
+/gentags
