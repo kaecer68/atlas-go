@@ -106,7 +106,7 @@ func TestEquityCurvePoint_BackwardCompatibility(t *testing.T) {
 func TestBuildEquityCurve_TaxFieldsPopulated(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessionsDir := filepath.Join(tmpDir, "sessions")
-	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
 		t.Fatalf("os.MkdirAll: %v", err)
 	}
 
@@ -124,20 +124,20 @@ func TestBuildEquityCurve_TaxFieldsPopulated(t *testing.T) {
 	}
 
 	summary1Path := filepath.Join(sessionsDir, "session-20260413-daily")
-	if err := os.MkdirAll(summary1Path, 0755); err != nil {
+	if err := os.MkdirAll(summary1Path, 0o755); err != nil {
 		t.Fatalf("os.MkdirAll: %v", err)
 	}
 	bytes1, _ := json.Marshal(session1)
-	if err := os.WriteFile(filepath.Join(summary1Path, "summary.json"), bytes1, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(summary1Path, "summary.json"), bytes1, 0o644); err != nil {
 		t.Fatalf("os.WriteFile: %v", err)
 	}
 
 	summary2Path := filepath.Join(sessionsDir, "session-20260414-daily")
-	if err := os.MkdirAll(summary2Path, 0755); err != nil {
+	if err := os.MkdirAll(summary2Path, 0o755); err != nil {
 		t.Fatalf("os.MkdirAll: %v", err)
 	}
 	bytes2, _ := json.Marshal(session2)
-	if err := os.WriteFile(filepath.Join(summary2Path, "summary.json"), bytes2, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(summary2Path, "summary.json"), bytes2, 0o644); err != nil {
 		t.Fatalf("os.WriteFile: %v", err)
 	}
 
@@ -181,7 +181,7 @@ func TestBuildEquityCurve_TaxFieldsPopulated(t *testing.T) {
 func TestBuildEquityCurve_ZeroTaxPaid(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessionsDir := filepath.Join(tmpDir, "sessions")
-	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
 		t.Fatalf("os.MkdirAll: %v", err)
 	}
 
@@ -193,11 +193,11 @@ func TestBuildEquityCurve_ZeroTaxPaid(t *testing.T) {
 	}
 
 	summaryPath := filepath.Join(sessionsDir, "session-20260415-daily")
-	if err := os.MkdirAll(summaryPath, 0755); err != nil {
+	if err := os.MkdirAll(summaryPath, 0o755); err != nil {
 		t.Fatalf("os.MkdirAll: %v", err)
 	}
 	bytes, _ := json.Marshal(session)
-	if err := os.WriteFile(filepath.Join(summaryPath, "summary.json"), bytes, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(summaryPath, "summary.json"), bytes, 0o644); err != nil {
 		t.Fatalf("os.WriteFile: %v", err)
 	}
 
@@ -218,7 +218,7 @@ func TestBuildEquityCurve_ZeroTaxPaid(t *testing.T) {
 func TestBuildEquityCurve_EmptyDir(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessionsDir := filepath.Join(tmpDir, "sessions")
-	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
 		t.Fatalf("os.MkdirAll: %v", err)
 	}
 

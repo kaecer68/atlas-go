@@ -173,14 +173,14 @@ func (c *CapitalPhaseController) SaveState() error {
 	if c.persistPath == "" {
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(c.persistPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(c.persistPath), 0o755); err != nil {
 		return fmt.Errorf("create persist dir: %w", err)
 	}
 	data, err := json.MarshalIndent(PersistedState{Config: c.config, Snapshot: c.snapshot}, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal state: %w", err)
 	}
-	if err := os.WriteFile(c.persistPath, data, 0644); err != nil {
+	if err := os.WriteFile(c.persistPath, data, 0o644); err != nil {
 		return fmt.Errorf("write state: %w", err)
 	}
 	return nil

@@ -666,7 +666,7 @@ func (ml *MetaLearner) Save(filepath string) error {
 		return err
 	}
 
-	return os.WriteFile(filepath, data, 0644)
+	return os.WriteFile(filepath, data, 0o644)
 }
 
 // Load restores meta-learner state

@@ -58,6 +58,7 @@ func (y *YahooFinanceMacroProvider) SetBDISymbol(ticker string) {
 func (y *YahooFinanceMacroProvider) Name() string {
 	return "yahoo_finance"
 }
+
 func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
 	symbols := map[string]string{
 		"DX-Y.NYB":  "dxy",

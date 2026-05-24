@@ -242,7 +242,7 @@ func writeFieldNames(structs map[string][]structField, out string) {
 	}
 	b.WriteString("};\n")
 
-	if err := os.WriteFile(out, []byte(b.String()), 0644); err != nil {
+	if err := os.WriteFile(out, []byte(b.String()), 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "write %s: %v\n", out, err)
 		os.Exit(1)
 	}
@@ -284,7 +284,7 @@ func writeTypeScriptInterfaces(structs map[string][]structField, out string, amb
 		b.WriteString("}\n\n")
 	}
 
-	if err := os.WriteFile(out, []byte(b.String()), 0644); err != nil {
+	if err := os.WriteFile(out, []byte(b.String()), 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "write %s: %v\n", out, err)
 		os.Exit(1)
 	}

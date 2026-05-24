@@ -43,8 +43,10 @@ type IndustryContextData struct {
 	SystemicImportance float64
 }
 
-type NarrativeProviderFunc func(eventIDs []string) *NarrativeContextData
-type CycleProviderFunc func(skill string) *IndustryContextData
+type (
+	NarrativeProviderFunc func(eventIDs []string) *NarrativeContextData
+	CycleProviderFunc     func(skill string) *IndustryContextData
+)
 
 type RegistryProviderFunc func() (domain.AgentRegistry, error)
 

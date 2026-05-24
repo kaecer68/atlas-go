@@ -38,7 +38,6 @@ func (r *PostgresRepository) Record(ctx context.Context, metricName string, valu
 		INSERT INTO metrics (time, metric_name, value, agent_id, session_id, symbol, regime, metadata)
 		VALUES (NOW(), $1, $2, $3, $4, $5, $6, $7)
 	`, metricName, value, agentID, sessionID, symbol, regime, metadata)
-
 	if err != nil {
 		return fmt.Errorf("record metric: %w", err)
 	}

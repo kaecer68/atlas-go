@@ -289,10 +289,10 @@ func TestRunLiveHTTPFullFlagChainInAPIMode(t *testing.T) {
 func TestStaticFileServerServesIndex(t *testing.T) {
 	tmpDir := t.TempDir()
 	staticDir := filepath.Join(tmpDir, "web", "static")
-	if err := os.MkdirAll(staticDir, 0755); err != nil {
+	if err := os.MkdirAll(staticDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(staticDir, "index.html"), []byte("<h1>Atlas</h1>"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(staticDir, "index.html"), []byte("<h1>Atlas</h1>"), 0o644); err != nil {
 		t.Fatalf("write index.html: %v", err)
 	}
 
@@ -343,7 +343,7 @@ func TestDashboardAPIUsesWorkDirForPaths(t *testing.T) {
 	tmpDir := t.TempDir()
 	ledgerDir := filepath.Join(tmpDir, "data", "state")
 	windowsDir := filepath.Join(ledgerDir, "windows")
-	if err := os.MkdirAll(windowsDir, 0755); err != nil {
+	if err := os.MkdirAll(windowsDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 
@@ -356,7 +356,7 @@ func TestDashboardAPIUsesWorkDirForPaths(t *testing.T) {
 		GeneratedAt:  time.Now(),
 	}
 	summaryBytes, _ := json.Marshal(summary)
-	if err := os.WriteFile(filepath.Join(windowsDir, "window-test.json"), summaryBytes, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(windowsDir, "window-test.json"), summaryBytes, 0o644); err != nil {
 		t.Fatalf("write window summary: %v", err)
 	}
 

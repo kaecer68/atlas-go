@@ -101,12 +101,12 @@ func TestLoadIndustryReturnsEmptyReplay(t *testing.T) {
 	dir := t.TempDir()
 
 	replayPath := filepath.Join(dir, "replay.csv")
-	if err := os.WriteFile(replayPath, []byte("Date,Code,Name,TradeVolume,Open,High,Low,Close\n"), 0644); err != nil {
+	if err := os.WriteFile(replayPath, []byte("Date,Code,Name,TradeVolume,Open,High,Low,Close\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	sectorPath := filepath.Join(dir, "sector_symbols.json")
-	if err := os.WriteFile(sectorPath, []byte(`{"semiconductor":["2330.TW"]}`), 0644); err != nil {
+	if err := os.WriteFile(sectorPath, []byte(`{"semiconductor":["2330.TW"]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -143,7 +143,7 @@ func TestLoadIndustryReturnsMissingSymbols(t *testing.T) {
 	csvFile.Close()
 
 	sectorPath := filepath.Join(dir, "sector_symbols.json")
-	if err := os.WriteFile(sectorPath, []byte(`{"semiconductor":["2330.TW"]}`), 0644); err != nil {
+	if err := os.WriteFile(sectorPath, []byte(`{"semiconductor":["2330.TW"]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -164,11 +164,13 @@ func TestIndustryReturnsOrdering(t *testing.T) {
 	w := csv.NewWriter(csvFile)
 	_ = w.Write([]string{"Date", "Code", "Name", "TradeVolume", "Open", "High", "Low", "Close"})
 	// Write dates out of order to verify sorting
-	dates := []string{"2024-03-15", "2024-01-02", "2024-02-10", "2024-03-16",
+	dates := []string{
+		"2024-03-15", "2024-01-02", "2024-02-10", "2024-03-16",
 		"2024-01-03", "2024-02-11", "2024-03-17", "2024-01-04",
 		"2024-02-12", "2024-03-18", "2024-01-05", "2024-02-13",
 		"2024-03-19", "2024-01-06", "2024-02-14", "2024-03-20",
-		"2024-01-07"}
+		"2024-01-07",
+	}
 	for i, date := range dates {
 		price := float64(100 + i)
 		_ = w.Write([]string{
@@ -186,7 +188,7 @@ func TestIndustryReturnsOrdering(t *testing.T) {
 	csvFile.Close()
 
 	sectorPath := filepath.Join(dir, "sector_symbols.json")
-	if err := os.WriteFile(sectorPath, []byte(`{"semiconductor":["2330.TW"]}`), 0644); err != nil {
+	if err := os.WriteFile(sectorPath, []byte(`{"semiconductor":["2330.TW"]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -223,7 +225,7 @@ func TestIndustryReturnsFormat(t *testing.T) {
 	csvFile.Close()
 
 	sectorPath := filepath.Join(dir, "sector_symbols.json")
-	_ = os.WriteFile(sectorPath, []byte(`{"semiconductor":["2330.TW"]}`), 0644)
+	_ = os.WriteFile(sectorPath, []byte(`{"semiconductor":["2330.TW"]}`), 0o644)
 
 	result, err := LoadIndustryReturnsFromReplay(replayPath, sectorPath)
 	if err != nil {
@@ -266,7 +268,7 @@ func TestIndustryReturnsMinimum(t *testing.T) {
 	csvFile.Close()
 
 	sectorPath := filepath.Join(dir, "sector_symbols.json")
-	_ = os.WriteFile(sectorPath, []byte(`{"semiconductor":["2330.TW"]}`), 0644)
+	_ = os.WriteFile(sectorPath, []byte(`{"semiconductor":["2330.TW"]}`), 0o644)
 
 	_, err := LoadIndustryReturnsFromReplay(replayPath, sectorPath)
 	if err == nil {

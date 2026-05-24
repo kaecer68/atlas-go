@@ -32,25 +32,25 @@ func TestHandlePortfolioState_EquityCurveFields(t *testing.T) {
 	}
 
 	summary1Path := filepath.Join(sessionsDir, "session-20260413-daily")
-	if err := os.MkdirAll(summary1Path, 0755); err != nil {
+	if err := os.MkdirAll(summary1Path, 0o755); err != nil {
 		t.Fatalf("os.MkdirAll: %v", err)
 	}
 	bytes1, _ := json.Marshal(session1)
-	if err := os.WriteFile(filepath.Join(summary1Path, "summary.json"), bytes1, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(summary1Path, "summary.json"), bytes1, 0o644); err != nil {
 		t.Fatalf("os.WriteFile: %v", err)
 	}
 
 	summary2Path := filepath.Join(sessionsDir, "session-20260414-daily")
-	if err := os.MkdirAll(summary2Path, 0755); err != nil {
+	if err := os.MkdirAll(summary2Path, 0o755); err != nil {
 		t.Fatalf("os.MkdirAll: %v", err)
 	}
 	bytes2, _ := json.Marshal(session2)
-	if err := os.WriteFile(filepath.Join(summary2Path, "summary.json"), bytes2, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(summary2Path, "summary.json"), bytes2, 0o644); err != nil {
 		t.Fatalf("os.WriteFile: %v", err)
 	}
 
 	liveStateDir := filepath.Join(tmpDir, "data", "state", "live", "state")
-	if err := os.MkdirAll(liveStateDir, 0755); err != nil {
+	if err := os.MkdirAll(liveStateDir, 0o755); err != nil {
 		t.Fatalf("os.MkdirAll: %v", err)
 	}
 	portfolioState := map[string]any{
@@ -60,7 +60,7 @@ func TestHandlePortfolioState_EquityCurveFields(t *testing.T) {
 		"unrealized_pnl": 0.0,
 	}
 	psBytes, _ := json.Marshal(portfolioState)
-	if err := os.WriteFile(filepath.Join(liveStateDir, "portfolio_state.json"), psBytes, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(liveStateDir, "portfolio_state.json"), psBytes, 0o644); err != nil {
 		t.Fatalf("os.WriteFile portfolio_state: %v", err)
 	}
 

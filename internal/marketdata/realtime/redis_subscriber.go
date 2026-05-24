@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 // RedisSubscriber 訂閱 Redis PubSub 頻道並將收到的報價轉發至回呼

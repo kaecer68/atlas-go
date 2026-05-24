@@ -15,7 +15,7 @@ import (
 func TestHandleReasoningTrace_Success(t *testing.T) {
 	tmpDir := t.TempDir()
 	tracesDir := filepath.Join(tmpDir, "traces")
-	if err := os.MkdirAll(tracesDir, 0755); err != nil {
+	if err := os.MkdirAll(tracesDir, 0o755); err != nil {
 		t.Fatalf("failed to create traces dir: %v", err)
 	}
 

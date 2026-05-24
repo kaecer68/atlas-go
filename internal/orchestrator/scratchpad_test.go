@@ -110,7 +110,7 @@ func TestScratchpad_ExportJSONL_MultipleTraces(t *testing.T) {
 func TestScratchpad_LoadCorruptedFile(t *testing.T) {
 	dir := t.TempDir()
 	tracesDir := filepath.Join(dir, "traces")
-	os.MkdirAll(tracesDir, 0755)
+	os.MkdirAll(tracesDir, 0o755)
 
 	filePath := filepath.Join(tracesDir, "session-003.jsonl")
 	file, err := os.Create(filePath)

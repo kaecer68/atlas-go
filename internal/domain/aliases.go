@@ -23,15 +23,17 @@ const (
 	SideSell = shared.SideSell
 )
 
-type Quote = shared.Quote
-type FactorScoreItem = shared.FactorScoreItem
-type FactorScoreBreakdown = shared.FactorScoreBreakdown
-type FactorScores = shared.FactorScores
-type NarrativeFactorScore = shared.NarrativeFactorScore
-type IndustryCycleFactorScore = shared.IndustryCycleFactorScore
-type ConvictionStep = shared.ConvictionStep
-type ConvictionBreakdown = shared.ConvictionBreakdown
-type AgentLayer = shared.AgentLayer
+type (
+	Quote                    = shared.Quote
+	FactorScoreItem          = shared.FactorScoreItem
+	FactorScoreBreakdown     = shared.FactorScoreBreakdown
+	FactorScores             = shared.FactorScores
+	NarrativeFactorScore     = shared.NarrativeFactorScore
+	IndustryCycleFactorScore = shared.IndustryCycleFactorScore
+	ConvictionStep           = shared.ConvictionStep
+	ConvictionBreakdown      = shared.ConvictionBreakdown
+	AgentLayer               = shared.AgentLayer
+)
 
 const (
 	LayerContext       = shared.LayerContext
@@ -46,26 +48,30 @@ type FlexTime = shared.FlexTime
 
 // ---- recommendation context ----
 
-type Recommendation = recommendation.Recommendation
-type AgentSpec = recommendation.AgentSpec
-type AgentRegistry = recommendation.AgentRegistry
-type RecommendationOutcome = recommendation.RecommendationOutcome
-type HumanIntervention = recommendation.HumanIntervention
-type Scorecard = recommendation.Scorecard
-type ScreeningCriteria = recommendation.ScreeningCriteria
-type RangeFilter = recommendation.RangeFilter
-type MinFilter = recommendation.MinFilter
-type ScreeningReject = recommendation.ScreeningReject
-type GuardSeverity = recommendation.GuardSeverity
+type (
+	Recommendation        = recommendation.Recommendation
+	AgentSpec             = recommendation.AgentSpec
+	AgentRegistry         = recommendation.AgentRegistry
+	RecommendationOutcome = recommendation.RecommendationOutcome
+	HumanIntervention     = recommendation.HumanIntervention
+	Scorecard             = recommendation.Scorecard
+	ScreeningCriteria     = recommendation.ScreeningCriteria
+	RangeFilter           = recommendation.RangeFilter
+	MinFilter             = recommendation.MinFilter
+	ScreeningReject       = recommendation.ScreeningReject
+	GuardSeverity         = recommendation.GuardSeverity
+)
 
 const (
 	GuardSeveritySoft = recommendation.GuardSeveritySoft
 	GuardSeverityHard = recommendation.GuardSeverityHard
 )
 
-type GuardOutcome = recommendation.GuardOutcome
-type ExecutionInput = recommendation.ExecutionInput
-type PromptControl = recommendation.PromptControl
+type (
+	GuardOutcome   = recommendation.GuardOutcome
+	ExecutionInput = recommendation.ExecutionInput
+	PromptControl  = recommendation.PromptControl
+)
 
 // ---- experiment context ----
 
@@ -81,11 +87,13 @@ const (
 	ExperimentExpired  = experiment.ExperimentExpired
 )
 
-type ExperimentRecord = experiment.ExperimentRecord
-type MutationBrief = experiment.MutationBrief
-type OOSResult = experiment.OOSResult
-type PromptExperimentResult = experiment.PromptExperimentResult
-type ReplayDataMetadata = experiment.ReplayDataMetadata
+type (
+	ExperimentRecord       = experiment.ExperimentRecord
+	MutationBrief          = experiment.MutationBrief
+	OOSResult              = experiment.OOSResult
+	PromptExperimentResult = experiment.PromptExperimentResult
+	ReplayDataMetadata     = experiment.ReplayDataMetadata
+)
 
 // Function wrappers — Go does not support function aliases, so we delegate.
 var ControlBlockRe = recommendation.ControlBlockRe

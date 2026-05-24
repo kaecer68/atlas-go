@@ -160,10 +160,10 @@ func (m *DarwinianWeightManager) AppendSnapshot() error {
 		return fmt.Errorf("marshal snapshot: %w", err)
 	}
 	dir := filepath.Dir(m.historyPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create history dir: %w", err)
 	}
-	f, err := os.OpenFile(m.historyPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(m.historyPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return fmt.Errorf("open history file: %w", err)
 	}
@@ -676,7 +676,7 @@ func (m *DarwinianWeightManager) Save() error {
 
 	// Ensure directory exists
 	dir := filepath.Dir(m.configPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create directory: %w", err)
 	}
 
@@ -695,7 +695,7 @@ func (m *DarwinianWeightManager) Save() error {
 		return fmt.Errorf("marshal weights: %w", err)
 	}
 
-	if err := os.WriteFile(m.configPath, jsonData, 0644); err != nil {
+	if err := os.WriteFile(m.configPath, jsonData, 0o644); err != nil {
 		return fmt.Errorf("write weights file: %w", err)
 	}
 
@@ -969,7 +969,7 @@ func (m *DarwinianWeightManager) SaveReport(path string) error {
 		return fmt.Errorf("marshal report: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("write report: %w", err)
 	}
 

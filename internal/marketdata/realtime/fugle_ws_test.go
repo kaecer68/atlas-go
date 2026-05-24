@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 

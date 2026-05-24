@@ -12,8 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/config"
 	"golang.org/x/time/rate"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 const (
@@ -196,7 +197,7 @@ func loadExistingKeys(path string) (map[string]bool, error) {
 }
 
 func appendJSONL(path string, bars []HistoricalBar) error {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}

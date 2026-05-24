@@ -144,7 +144,7 @@ func TestJSONLQuoteStoreLoadQuotesEmptyFile(t *testing.T) {
 
 	// Write empty file
 	path := filepath.Join(tmp, "quotes.jsonl")
-	if err := os.WriteFile(path, nil, 0644); err != nil {
+	if err := os.WriteFile(path, nil, 0o644); err != nil {
 		t.Fatalf("failed to create empty file: %v", err)
 	}
 

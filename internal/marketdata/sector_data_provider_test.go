@@ -22,7 +22,7 @@ func TestSectorDataProvider_FetchSnapshot_ValidFile(t *testing.T) {
 		"semiconductor_index": 4850.0,
 		"updated_at": "2026-05-08T00:00:00Z"
 	}`
-	if err := os.WriteFile(filepath.Join(tmpDir, "sector_data.json"), []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "sector_data.json"), []byte(content), 0o644); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
@@ -87,7 +87,7 @@ func TestSectorDataProvider_FetchSnapshot_MissingFile(t *testing.T) {
 
 func TestSectorDataProvider_FetchSnapshot_InvalidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(tmpDir, "sector_data.json"), []byte("not json"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "sector_data.json"), []byte("not json"), 0o644); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 

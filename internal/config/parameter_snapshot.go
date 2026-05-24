@@ -40,7 +40,7 @@ func NewSnapshotStore(dir string) *SnapshotStore {
 
 // SaveSnapshot persists a parameter snapshot to disk.
 func (s *SnapshotStore) SaveSnapshot(snap *ParameterSnapshot) error {
-	if err := os.MkdirAll(s.dir, 0755); err != nil {
+	if err := os.MkdirAll(s.dir, 0o755); err != nil {
 		return fmt.Errorf("create snapshot dir: %w", err)
 	}
 
@@ -50,7 +50,7 @@ func (s *SnapshotStore) SaveSnapshot(snap *ParameterSnapshot) error {
 		return fmt.Errorf("marshal snapshot: %w", err)
 	}
 
-	if err := os.WriteFile(filename, data, 0644); err != nil {
+	if err := os.WriteFile(filename, data, 0o644); err != nil {
 		return fmt.Errorf("write snapshot: %w", err)
 	}
 

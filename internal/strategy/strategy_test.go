@@ -290,7 +290,6 @@ func TestSelectorSelect(t *testing.T) {
 
 	ctx := context.Background()
 	strat, err := s.Select(ctx, 20.0, domain.RegimeRiskOn)
-
 	if err != nil {
 		t.Errorf("Select failed: %v", err)
 	}
@@ -311,7 +310,6 @@ func TestSelectorSelectFallback(t *testing.T) {
 
 	ctx := context.Background()
 	strat, err := s.Select(ctx, 20.0, domain.RegimeRiskOn)
-
 	if err != nil {
 		t.Errorf("Select failed: %v", err)
 	}

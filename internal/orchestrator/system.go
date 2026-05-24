@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/logging"
-
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -17,6 +15,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/evolution"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -146,7 +145,6 @@ func NewSystem(cfg config.Config) (*System, error) {
 	sys.Sim().scratchpad = NewScratchpad(sys.Sim().session.ID, cfg.LedgerDir)
 
 	return sys, nil
-
 }
 
 func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, error) {

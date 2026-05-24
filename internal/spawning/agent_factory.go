@@ -5,9 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/domain"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 // AgentFactory creates new agent specifications based on knowledge gaps

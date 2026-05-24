@@ -151,7 +151,7 @@ func main() {
 	}
 
 	if outputFile != "" {
-		if err := os.WriteFile(outputFile, out, 0644); err != nil {
+		if err := os.WriteFile(outputFile, out, 0o644); err != nil {
 			fmt.Fprintf(os.Stderr, "write output: %v\n", err)
 			os.Exit(1)
 		}

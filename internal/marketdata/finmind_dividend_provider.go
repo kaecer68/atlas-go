@@ -141,7 +141,7 @@ func (p *FinMindDividendProvider) loadFromCache(symbol, startDate, endDate strin
 }
 
 func (p *FinMindDividendProvider) saveToCache(symbol, startDate, endDate string, records []domain.DividendRecord) error {
-	if err := os.MkdirAll(p.cacheDir, 0755); err != nil {
+	if err := os.MkdirAll(p.cacheDir, 0o755); err != nil {
 		return err
 	}
 
@@ -151,5 +151,5 @@ func (p *FinMindDividendProvider) saveToCache(symbol, startDate, endDate string,
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0o644)
 }

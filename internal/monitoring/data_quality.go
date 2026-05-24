@@ -366,7 +366,6 @@ func (dq *DataQualityChecker) checkDataDirectorySize(ctx context.Context) DataQu
 		}
 		return nil
 	})
-
 	if err != nil {
 		check.Status = StatusCritical
 		check.Message = fmt.Sprintf("無法計算資料目錄大小: %v", err)
@@ -401,7 +400,7 @@ func (dq *DataQualityChecker) checkFilePermissions(ctx context.Context) DataQual
 	writableCount := 0
 	for _, dir := range dirsToCheck {
 		testFile := filepath.Join(dir, ".write_test")
-		if err := os.WriteFile(testFile, []byte{}, 0644); err != nil {
+		if err := os.WriteFile(testFile, []byte{}, 0o644); err != nil {
 			check.Status = StatusCritical
 			check.Message = fmt.Sprintf("目錄不可寫: %s (%v)", dir, err)
 			return check

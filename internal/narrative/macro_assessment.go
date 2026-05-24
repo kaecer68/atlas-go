@@ -304,5 +304,7 @@ func (e *MacroRiskAssessmentEngine) calculateConfidence(factors []RiskFactor) fl
 	return baseConfidence - penalty
 }
 
-type MacroDataSnapshot = marketdata.MacroDataSnapshot
-type MacroDataPoint = marketdata.MacroDataPoint
+type (
+	MacroDataSnapshot = marketdata.MacroDataSnapshot
+	MacroDataPoint    = marketdata.MacroDataPoint
+)

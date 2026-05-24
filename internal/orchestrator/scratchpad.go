@@ -20,7 +20,7 @@ type Scratchpad struct {
 // NewScratchpad creates a new Scratchpad and auto-creates the traces directory.
 func NewScratchpad(sessionID, baseDir string) *Scratchpad {
 	tracesDir := filepath.Join(baseDir, "traces")
-	os.MkdirAll(tracesDir, 0755) //nolint:errcheck
+	os.MkdirAll(tracesDir, 0o755) //nolint:errcheck
 	return &Scratchpad{
 		sessionID: sessionID,
 		baseDir:   baseDir,
@@ -59,7 +59,7 @@ func (s *Scratchpad) ExportJSONL() (string, error) {
 	defer s.mu.RUnlock()
 
 	tracesDir := filepath.Join(s.baseDir, "traces")
-	if err := os.MkdirAll(tracesDir, 0755); err != nil {
+	if err := os.MkdirAll(tracesDir, 0o755); err != nil {
 		return "", fmt.Errorf("create traces directory: %w", err)
 	}
 
