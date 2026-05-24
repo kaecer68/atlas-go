@@ -6,3 +6,4 @@ tmp/
 .gocache/
 node_modules/
 web/node_modules/
+graphify-out/subgraphs/

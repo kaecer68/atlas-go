@@ -425,7 +425,7 @@ gh pr create --title "feat(scope): description" \
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (28217 symbols, 62501 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (28227 symbols, 62500 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -511,3 +511,5 @@ Rules:
 - Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
 - If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
 - After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)
+- **子圖譜更新**：執行 `bash scripts/regenerate-subgraphs.sh`，會依序跑 `graphify update .` + `python3 scripts/slice-graph.py`，將 master graph 切成 4 個子圖譜（core / analysis / research / infra）並產生互動式 HTML，每個子圖譜 < 700 節點
+- 子圖譜導覽入口：`graphify-out/subgraphs/index.html`
