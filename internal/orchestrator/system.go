@@ -105,7 +105,15 @@ type System struct {
 	host *PluginHost
 }
 
+// NewSystem builds a fully-wired System with an internally-created EventBus.
+// For shared EventBus scenarios (e.g. SSE streaming), use NewSystemWithEventBus.
 func NewSystem(cfg config.Config) (*System, error) {
+	return NewSystemWithEventBus(cfg, nil)
+}
+
+// NewSystemWithEventBus builds a fully-wired System using the provided EventBus.
+// If eventBus is nil, a new internal EventBus is created (backward-compatible).
+func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus) (*System, error) {
 	registry, err := LoadRegistry(cfg.AgentRegistryPath)
 	if err != nil {
 		registry = SeedRegistry()
@@ -118,7 +126,9 @@ func NewSystem(cfg config.Config) (*System, error) {
 
 	runtimeParams := loadRuntimeParamsOrDefault(cfg.ParametersConfigPath)
 	factorEngine, hp, fp := buildFactorEngine(runtimeParams)
-	eventBus := eventbus.NewChannelEventBus(256)
+	if eventBus == nil {
+		eventBus = eventbus.NewChannelEventBus(256)
+	}
 	plugins := buildPluginRegistry(factorEngine, fp)
 
 	optimizer := portfolio.NewOptimizer()

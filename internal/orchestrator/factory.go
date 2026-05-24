@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
@@ -11,12 +12,17 @@ import (
 	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
-// NewProductionSystem builds a fully-wired System for dependency-graph visibility.
-// It registers each subsystem as a Plugin on the System's PluginHost so that
-// cross-package boundaries are explicit and the simulation loop delegates to
-// a unified lifecycle interface.
+// NewProductionSystem builds a fully-wired System for dependency-graph visibility
+// with an internally-created EventBus.
 func NewProductionSystem(cfg config.Config) (*System, error) {
-	system, err := NewSystem(cfg)
+	return NewProductionSystemWithEventBus(cfg, nil)
+}
+
+// NewProductionSystemWithEventBus builds a fully-wired System, passing the
+// provided EventBus to NewSystemWithEventBus. If eventBus is nil, an internal
+// EventBus is created (backward-compatible).
+func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus) (*System, error) {
+	system, err := NewSystemWithEventBus(cfg, eventBus)
 	if err != nil {
 		return nil, err
 	}

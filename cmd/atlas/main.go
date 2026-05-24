@@ -271,13 +271,18 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Repository] injected into dashboard API")
 			}
 		}
+		// Create shared EventBus for SSE streaming AND simulation orchestration.
+		// Both the Dashboard API and all simulation-triggered Systems use the SAME bus,
+		// so simulation events (start, regime change, recommendations, guard outcomes)
+		// flow to SSE clients in real time.
+		dashEventBus := eventbus.NewChannelEventBus(256)
+
 		// Inject EventBus for SSE streaming endpoint
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-			eventBus := eventbus.NewChannelEventBus(256)
-			d.SetEventBus(eventBus)
+			d.SetEventBus(dashEventBus)
 			d.SetContext(context.Background())
 			log.Printf("[EventBus] injected into dashboard API for SSE streaming")
-			eventBus.Subscribe(eventbus.EventNarrative, func(ctx context.Context, event eventbus.BusEvent) error {
+			dashEventBus.Subscribe(eventbus.EventNarrative, func(ctx context.Context, event eventbus.BusEvent) error {
 				apievents.BufferNarrativeEvent(event)
 				return nil
 			})
@@ -306,6 +311,23 @@ func run(args []string, deps appDeps) error {
 		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
 			d.SetStorageReporter(lifecycleMgr)
 			log.Printf("[Storage] reporter injected into dashboard API")
+		}
+
+		// Startup health check: verify critical data files exist and warn if missing.
+		replayPath := config.GetReplayDataPath(cfg.WorkDir)
+		if _, err := os.Stat(replayPath); os.IsNotExist(err) {
+			log.Printf("[Startup] ⚠️  replay data NOT FOUND at: %s", replayPath)
+			log.Printf("[Startup]    Dashboard will show degraded data. To fix:")
+			log.Printf("[Startup]    go run ./cmd/import-replay -source <csv> -target <jsonl>")
+		} else {
+			log.Printf("[Startup] replay data found at: %s", replayPath)
+		}
+		baselinePath := cfg.BaselinePolicyPath
+		if baselinePath == "" {
+			baselinePath = filepath.Join(cfg.WorkDir, "data", "state", "baseline_policy.json")
+		}
+		if _, err := os.Stat(baselinePath); os.IsNotExist(err) {
+			log.Printf("[Startup] ⚠️  baseline policy NOT FOUND at: %s", baselinePath)
 		}
 
 		dashboard.RegisterRoutes(mux)
@@ -383,7 +405,7 @@ func run(args []string, deps appDeps) error {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			system, err := orchestrator.NewProductionSystem(cfg)
+			system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus)
 			if err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -805,7 +827,7 @@ func run(args []string, deps appDeps) error {
 					}
 					log.Printf("[Simulation] auto trigger: %s", nextClose.Format("2006-01-02"))
 
-					system, err := orchestrator.NewProductionSystem(cfg)
+					system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus)
 					if err != nil {
 						return fmt.Errorf("create system: %w", err)
 					}
@@ -871,7 +893,7 @@ func run(args []string, deps appDeps) error {
 				Interval: 7 * 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					system, err := orchestrator.NewProductionSystem(cfg)
+					system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus)
 					if err != nil {
 						return fmt.Errorf("create system: %w", err)
 					}
@@ -1230,7 +1252,8 @@ func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, re
 }
 
 func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
-	system, err := orchestrator.NewProductionSystem(cfg)
+	eventBus := live.NewChannelEventBus(64)
+	system, err := orchestrator.NewProductionSystemWithEventBus(cfg, eventBus)
 	if err != nil {
 		return fmt.Errorf("create system: %w", err)
 	}
@@ -1243,7 +1266,6 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	}
 
 	stateStore := livestore.NewStateStore("data/state/live")
-	eventBus := live.NewChannelEventBus(64)
 	provider := marketdata.NewMockProvider()
 
 	liveCfg := live.DefaultOrchestratorConfig()

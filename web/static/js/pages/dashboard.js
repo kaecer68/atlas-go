@@ -11,7 +11,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   [gridMarket, gridRisk, gridSystem].forEach(g => g.classList.remove('loading'));
   const health = data || {};
   const cards = agentsData || {};
-  const scorecards = cards.weakest_agent_scorecards || [];
+  const scorecards = cards.scorecards || [];
   const weakestEntry = scorecards[0];
   const weakest = weakestEntry ? weakestEntry.agent_id : '-';
   const weakSharpe = weakestEntry && weakestEntry.sharpe != null ? weakestEntry.sharpe.toFixed(3) : '-';
@@ -76,8 +76,8 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
     <div class="kpi-card ${totalAlerts > 0 ? 'alert-err' : ''} clickable" onclick="switchPage('datachannels')"><div class="kpi-label">信息通道預警</div><div class="kpi-value text-lg">${errorChannels.length > 0 ? errorChannels.length + ' 筆異常' : (warnChannels.length > 0 ? warnChannels.length + ' 筆延遲' : '正常')}</div>${alertHtml}</div>
   `;
   gridSystem.innerHTML = `
-    <div class="kpi-card"><div class="kpi-label">資料時間</div><div class="kpi-value text-lg">${health.replay_data_latest_date || '?'}</div><div class="kpi-hint">最新回放數據${health.replay_data_path_ok ? '' : ' ⚠️'}<br>最後模擬：${health.last_window_id || '?'} / ${formatDate(health.last_window_generated_at)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">基線版本</div><div class="kpi-value">${health.baseline_version || '?'}</div><div class="kpi-hint">目前生效的政策</div></div>
+    <div class="kpi-card ${!health.replay_data_path_ok ? 'alert-err' : ''} clickable" onclick="${!health.replay_data_path_ok ? "openKpiHelp('replay-missing')" : "switchPage('datachannels')"}"><div class="kpi-label">資料時間</div><div class="kpi-value text-lg">${health.replay_data_latest_date || '未匯入'}</div><div class="kpi-hint">${health.replay_data_path_ok ? `最新回放數據<br>最後模擬：${health.last_window_id || '?'} / ${formatDate(health.last_window_generated_at)}` : '⚠️ 回放資料尚未匯入<br><small style="color:var(--down)">點此查看匯入方式 →</small>'}</div></div>
+    <div class="kpi-card ${health.baseline_version === '未知' ? 'alert-err' : ''}"><div class="kpi-label">基線版本</div><div class="kpi-value">${health.baseline_version || '?'}</div><div class="kpi-hint">${health.baseline_version === '未知' ? '⚠️ 基線策略未載入<br><small style="color:var(--muted)">確認 baseline_policy.json 存在</small>' : '目前生效的政策'}</div></div>
     <div class="kpi-card clickable" onclick="openKpiHelp('experiment')"><div class="kpi-label">實驗狀態</div><div class="kpi-value text-lg">${experimentText}</div><div class="kpi-hint">待處理項目</div></div>
     <div class="kpi-card clickable" onclick="switchPage('controls')"><div class="kpi-label">資金階段</div><div class="kpi-value" style="color:${phaseColor};font-size:18px">${capitalPhase ? phaseMap[capitalPhase.phase] || capitalPhase.phase : '-'}</div>${phaseHtml}</div>
     <div class="kpi-card ${health.cycle_stale ? 'alert-err' : ''} clickable" onclick="switchPage('synergy')"><div class="kpi-label">產業週期數據</div><div class="kpi-value text-lg">${health.cycle_stale ? '⚠️ 數據過期' : '正常'}</div><div class="kpi-hint">${health.cycle_stale ? '點擊前往校正 →' : '定時更新中'}</div></div>
@@ -383,7 +383,7 @@ export function renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend
   const stressLabel = stressVal >= 70 ? '危機' : (stressVal >= 50 ? '高壓' : (stressVal >= 30 ? '警戒' : '低壓'));
   const stressColor = stressVal >= 70 ? 'var(--down)' : (stressVal >= 50 ? 'var(--warn)' : 'var(--up)');
 
-  const scorecards = (agents && agents.weakest_agent_scorecards) ? agents.weakest_agent_scorecards : [];
+  const scorecards = (agents && agents.scorecards) ? agents.scorecards : [];
   const healthyCount = scorecards.filter(a => (a.sharpe || 0) > 0.5 && (a.hit_rate || 0) > 0.3).length;
   const healthPct = scorecards.length > 0 ? Math.round(healthyCount / scorecards.length * 100) : 0;
   const healthColor = healthPct > 70 ? 'var(--up)' : (healthPct > 40 ? 'var(--warn)' : 'var(--down)');

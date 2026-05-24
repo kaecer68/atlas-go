@@ -62,7 +62,7 @@ export function renderDecisionChain(pipeline, macro, agentsData, stress, events,
   const items = (pipeline && pipeline.items) ? pipeline.items : [];
   const screened = (pipeline && pipeline.screened_items) ? pipeline.screened_items : [];
   const guards = (pipeline && pipeline.guard_outcomes) ? pipeline.guard_outcomes : [];
-  const agentCards = (agentsData && agentsData.weakest_agent_scorecards) ? agentsData.weakest_agent_scorecards : [];
+  const agentCards = (agentsData && agentsData.scorecards) ? agentsData.scorecards : [];
 
   const layerCard = (num, title, content, color) => `
     <div style="display:flex;gap:12px;margin-bottom:14px;align-items:flex-start">
