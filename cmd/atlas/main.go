@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -1086,7 +1087,7 @@ func run(args []string, deps appDeps) error {
 		}
 		srvErr := make(chan error, 1)
 		go func() {
-			if err := deps.listenAndServe(srv); err != nil && err != http.ErrServerClosed {
+			if err := deps.listenAndServe(srv); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				srvErr <- fmt.Errorf("dashboard api server failed: %w", err)
 			}
 		}()

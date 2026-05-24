@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -120,7 +121,7 @@ func (r *PostgresRepository) LoadSessionSummary(ctx context.Context, sessionID s
 		&summary.ApprovalID, &guardOutcomes,
 	)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("load session summary: %w", err)

@@ -80,5 +80,5 @@ func generateFromDistribution(symbol string, regime domain.Regime, fallback Forw
 func hashString(s string) int64 {
 	h := fnv.New64a()
 	h.Write([]byte(s))
-	return int64(h.Sum64())
+	return int64(h.Sum64()) //nolint:gosec // hash to int64 is deterministic for seeding, not crypto
 }

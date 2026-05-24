@@ -139,7 +139,7 @@ func (s *redisNonceReplayStore) Register(nonce string, requestTime time.Time, tt
 		Mode: "NX",
 		TTL:  ttl,
 	}).Result()
-	if err == redis.Nil || ok == "" {
+	if errors.Is(err, redis.Nil) || ok == "" {
 		return fmt.Errorf("%w: nonce=%s", ErrNonceReplayDetected, nonce)
 	}
 	if err != nil {

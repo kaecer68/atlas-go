@@ -58,7 +58,7 @@ func main() {
 			return
 		}
 
-		if r.Header.Get("X-API-Key") != apiKey {
+		if r.Header.Get("X-Api-Key") != apiKey {
 			http.Error(w, "invalid api key", http.StatusUnauthorized)
 			return
 		}

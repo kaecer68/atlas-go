@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -23,7 +24,7 @@ func run(args []string, stdout io.Writer) error {
 	src := fl.String("src", "data/state", "source state directory")
 	dstBase := fl.String("dst-base", "data/state-archive", "archive base directory")
 	if err := fl.Parse(args); err != nil {
-		if err == flag.ErrHelp {
+		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
 		return err

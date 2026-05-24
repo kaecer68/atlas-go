@@ -185,7 +185,7 @@ func (a *TWSEBrokerAdapter) SubmitOrder(ctx context.Context, order domain.Order)
 		return BrokerResult{}, fmt.Errorf("twse_adapter: build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-Key", a.apiKey)
+	req.Header.Set("X-Api-Key", a.apiKey)
 	req.Header.Set("X-Signature", signature)
 	req.Header.Set("X-Signature-Method", "hmac-sha256")
 	req.Header.Set("X-Signature-Version", "v1")
@@ -249,7 +249,7 @@ func (a *TWSEBrokerAdapter) QueryOrderStatus(ctx context.Context, orderID string
 	if err != nil {
 		return nil, fmt.Errorf("twse_adapter: build status request: %w", err)
 	}
-	req.Header.Set("X-API-Key", a.apiKey)
+	req.Header.Set("X-Api-Key", a.apiKey)
 	req.Header.Set("X-Signature", signature)
 	req.Header.Set("X-Signature-Method", "hmac-sha256")
 	req.Header.Set("X-Signature-Version", "v1")
@@ -300,7 +300,7 @@ func (a *TWSEBrokerAdapter) CancelOrder(ctx context.Context, orderID string) err
 	if err != nil {
 		return fmt.Errorf("twse_adapter: build cancel request: %w", err)
 	}
-	req.Header.Set("X-API-Key", a.apiKey)
+	req.Header.Set("X-Api-Key", a.apiKey)
 	req.Header.Set("X-Signature", signature)
 	req.Header.Set("X-Signature-Method", "hmac-sha256")
 	req.Header.Set("X-Signature-Version", "v1")

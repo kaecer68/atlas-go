@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -23,7 +24,7 @@ func run(args []string, stdout io.Writer) error {
 	fs.SetOutput(stdout)
 	stateDir := fs.String("state-dir", "data/state", "state directory containing baseline_policy.json")
 	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
+		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
 		return err
