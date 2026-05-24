@@ -130,7 +130,7 @@ export function switchView(mode) {
 function getData() {
   const d = evolutionData || {};
   return {
-    scorecards: (d.agents && d.agents.weakest_agent_scorecards) || [],
+    scorecards: (d.agents && d.agents.scorecards) || [],
     sessions: (d.regime && d.regime.sessions) || [],
     judges: (d.inbox && d.inbox.pending_judges) || [],
     promotes: (d.inbox && d.inbox.pending_promotes) || [],

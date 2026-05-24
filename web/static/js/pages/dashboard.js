@@ -11,7 +11,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   [gridMarket, gridRisk, gridSystem].forEach(g => g.classList.remove('loading'));
   const health = data || {};
   const cards = agentsData || {};
-  const scorecards = cards.weakest_agent_scorecards || [];
+  const scorecards = cards.scorecards || [];
   const weakestEntry = scorecards[0];
   const weakest = weakestEntry ? weakestEntry.agent_id : '-';
   const weakSharpe = weakestEntry && weakestEntry.sharpe != null ? weakestEntry.sharpe.toFixed(3) : '-';
@@ -383,7 +383,7 @@ export function renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend
   const stressLabel = stressVal >= 70 ? '危機' : (stressVal >= 50 ? '高壓' : (stressVal >= 30 ? '警戒' : '低壓'));
   const stressColor = stressVal >= 70 ? 'var(--down)' : (stressVal >= 50 ? 'var(--warn)' : 'var(--up)');
 
-  const scorecards = (agents && agents.weakest_agent_scorecards) ? agents.weakest_agent_scorecards : [];
+  const scorecards = (agents && agents.scorecards) ? agents.scorecards : [];
   const healthyCount = scorecards.filter(a => (a.sharpe || 0) > 0.5 && (a.hit_rate || 0) > 0.3).length;
   const healthPct = scorecards.length > 0 ? Math.round(healthyCount / scorecards.length * 100) : 0;
   const healthColor = healthPct > 70 ? 'var(--up)' : (healthPct > 40 ? 'var(--warn)' : 'var(--down)');

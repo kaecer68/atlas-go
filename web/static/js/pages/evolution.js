@@ -40,7 +40,7 @@ export function switchView(mode) {
 
 function renderEquityFromData() {
   let d = evolutionData;
-  let scorecards = (d.agents && d.agents.weakest_agent_scorecards) || [];
+  let scorecards = (d.agents && d.agents.scorecards) || [];
   if (scorecards.length < 2) return;
 
   let sorted = scorecards.slice().sort(function(a, b) { return (a.last_updated_at || '').localeCompare(b.last_updated_at || ''); });
@@ -131,7 +131,7 @@ function renderCompact() {
   if (!el) return;
   let d = evolutionData;
 
-  let scorecards = (d.agents && d.agents.weakest_agent_scorecards) || [];
+  let scorecards = (d.agents && d.agents.scorecards) || [];
   let sessions = (d.regime && d.regime.sessions) || [];
   let judges = (d.inbox && d.inbox.pending_judges) || [];
   let promotes = (d.inbox && d.inbox.pending_promotes) || [];
@@ -204,7 +204,7 @@ function renderDetailed() {
   if (catEl) catEl.style.display = 'none';
   if (!el) return;
   let d = evolutionData;
-  let scorecards = (d.agents && d.agents.weakest_agent_scorecards) || [];
+  let scorecards = (d.agents && d.agents.scorecards) || [];
   let sessions = (d.regime && d.regime.sessions) || [];
   let judges = (d.inbox && d.inbox.pending_judges) || [];
   let promotes = (d.inbox && d.inbox.pending_promotes) || [];
@@ -302,7 +302,7 @@ function renderCategorical() {
     '</div>';
 
   let d = evolutionData;
-  let scorecards = (d.agents && d.agents.weakest_agent_scorecards) || [];
+  let scorecards = (d.agents && d.agents.scorecards) || [];
   let sessions = (d.regime && d.regime.sessions) || [];
   let judges = (d.inbox && d.inbox.pending_judges) || [];
   let promotes = (d.inbox && d.inbox.pending_promotes) || [];
@@ -457,7 +457,7 @@ window._evSwitch = switchView;
 // 分類 Tab 切換
 window._evCatTab = function(tab) {
   let d = evolutionData;
-  let scorecards = (d.agents && d.agents.weakest_agent_scorecards) || [];
+  let scorecards = (d.agents && d.agents.scorecards) || [];
   let sessions = (d.regime && d.regime.sessions) || [];
   let judges = (d.inbox && d.inbox.pending_judges) || [];
   let promotes = (d.inbox && d.inbox.pending_promotes) || [];
