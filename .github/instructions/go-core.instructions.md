@@ -48,12 +48,14 @@ defer func() { _ = f.Close() }()
 
 ### 新程式碼（closure + logging）
 
-新撰寫的 `defer Close()` 應使用 closure 搭配標準庫 `log/slog`：
+新撰寫的 `defer Close()` 應使用 closure 搭配專案 `logging` 套件：
 
 ```go
 defer func() {
     if err := f.Close(); err != nil {
-        slog.Warn("close failed", "file", path, "err", err)
+        logging.Warn("io", "close_failed",
+            logging.FStr("path", path),
+            logging.Err(err))
     }
 }()
 ```

@@ -250,7 +250,6 @@ func loadWithLookupEnv(filename string) {
 			if err := os.Setenv(key, value); err != nil {
 				logging.Warn("config", "setenv_failed",
 					logging.FStr("key", key),
-					logging.FStr("value", value),
 					logging.Err(err))
 			}
 		}
@@ -294,7 +293,6 @@ func loadEnvFile(filename string) {
 			if err := os.Setenv(key, value); err != nil {
 				logging.Warn("config", "setenv_failed",
 					logging.FStr("key", key),
-					logging.FStr("value", value),
 					logging.Err(err))
 			}
 		}
