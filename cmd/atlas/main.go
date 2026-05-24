@@ -313,6 +313,23 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[Storage] reporter injected into dashboard API")
 		}
 
+		// Startup health check: verify critical data files exist and warn if missing.
+		replayPath := config.GetReplayDataPath(cfg.WorkDir)
+		if _, err := os.Stat(replayPath); os.IsNotExist(err) {
+			log.Printf("[Startup] ⚠️  replay data NOT FOUND at: %s", replayPath)
+			log.Printf("[Startup]    Dashboard will show degraded data. To fix:")
+			log.Printf("[Startup]    go run ./cmd/import-replay -source <csv> -target <jsonl>")
+		} else {
+			log.Printf("[Startup] replay data found at: %s", replayPath)
+		}
+		baselinePath := cfg.BaselinePolicyPath
+		if baselinePath == "" {
+			baselinePath = filepath.Join(cfg.WorkDir, "data", "state", "baseline_policy.json")
+		}
+		if _, err := os.Stat(baselinePath); os.IsNotExist(err) {
+			log.Printf("[Startup] ⚠️  baseline policy NOT FOUND at: %s", baselinePath)
+		}
+
 		dashboard.RegisterRoutes(mux)
 
 		if alertStore != nil {
