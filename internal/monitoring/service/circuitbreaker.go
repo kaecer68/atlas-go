@@ -33,6 +33,7 @@ type CircuitBreakerStateResponse struct {
 	IntradayPeak   float64                    `json:"intraday_peak"`
 	DayStartValue  float64                    `json:"day_start_value"`
 	Events         []live.CircuitBreakerEvent `json:"events"`
+	Initialized    bool                       `json:"initialized"`
 }
 
 func (s *CircuitBreakerService) GetCircuitBreakerState() (*CircuitBreakerStateResponse, error) {
@@ -49,6 +50,8 @@ func (s *CircuitBreakerService) GetCircuitBreakerState() (*CircuitBreakerStateRe
 		return nil, err
 	}
 
+	initialized := err == nil
+
 	var cbState struct {
 		State          string    `json:"state"`
 		StateChangedAt time.Time `json:"state_changed_at"`
@@ -57,16 +60,24 @@ func (s *CircuitBreakerService) GetCircuitBreakerState() (*CircuitBreakerStateRe
 		IntradayPeak   float64   `json:"intraday_peak"`
 		DayStartValue  float64   `json:"day_start_value"`
 	}
-	if err := json.Unmarshal(stateData, &cbState); err != nil && len(stateData) > 0 {
-		return nil, err
+	if initialized {
+		if err := json.Unmarshal(stateData, &cbState); err != nil && len(stateData) > 0 {
+			initialized = false
+		}
 	}
 
 	resp := &CircuitBreakerStateResponse{
+		Initialized:   initialized,
 		State:         string(s.cb.State()),
 		ConsecutiveSL: cbState.ConsecutiveSL,
 		IntradayPeak:  cbState.IntradayPeak,
 		DayStartValue: cbState.DayStartValue,
 		Events:        events,
+	}
+	if !initialized {
+		resp.State = "uninitialized"
+		resp.StateChangedAt = ""
+		resp.CooldownUntil = ""
 	}
 	if !cbState.StateChangedAt.IsZero() {
 		resp.StateChangedAt = cbState.StateChangedAt.Format(time.RFC3339)

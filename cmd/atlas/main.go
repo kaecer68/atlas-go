@@ -49,8 +49,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/storage"
 )
 
-
-
 type appDeps struct {
 	loadConfig      func() config.Config
 	newDashboardAPI func(string, string, *monitoring.MetricsCollector) *monitoring.DashboardAPI
@@ -100,6 +98,44 @@ func getLatestReplayDate(csvPath string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("no valid dates found")
 	}
 	return latest, nil
+}
+
+func publishBootstrapEvents(bus eventbus.EventBus, replayPath, baselinePath string) {
+	now := time.Now()
+
+	// Check data status
+	replayStatus := "已載入"
+	replayDate := ""
+	if _, err := os.Stat(replayPath); os.IsNotExist(err) {
+		replayStatus = "未找到"
+	} else if d, err := getLatestReplayDate(replayPath); err == nil {
+		replayDate = d.Format("2006-01-02")
+	} else {
+		replayStatus = "載入失敗"
+	}
+
+	baselineStatus := "已載入"
+	if _, err := os.Stat(baselinePath); os.IsNotExist(err) {
+		baselineStatus = "未找到"
+	}
+
+	bus.Publish(eventbus.BusEvent{
+		ID:        "bootstrap-" + now.Format("150405"),
+		Type:      eventbus.EventSystemStart,
+		Timestamp: now,
+		Description: "Atlas 系統啟動完成 · replay 資料 " + replayStatus + (func() string {
+			if replayDate != "" {
+				return "（" + replayDate + "）"
+			}
+			return ""
+		}()) + " · 基線策略 " + baselineStatus,
+		Severity: "info",
+		Payload: map[string]any{
+			"replay_status":   replayStatus,
+			"replay_date":     replayDate,
+			"baseline_status": baselineStatus,
+		},
+	})
 }
 
 func main() {
@@ -452,6 +488,9 @@ func run(args []string, deps appDeps) error {
 		}))
 		mux.Handle("/static/", http.StripPrefix("/static/", fs))
 		log.Printf("dashboard api listening on %s", *apiAddr)
+
+		// Publish bootstrap events so the dashboard SSE stream shows system status immediately.
+		publishBootstrapEvents(dashEventBus, replayPath, baselinePath)
 
 		// Gateway already initialized before DashboardAPI. Create BackgroundTaskManager.
 		var taskMgr *apigateway.BackgroundTaskManager
@@ -1036,6 +1075,13 @@ func run(args []string, deps appDeps) error {
 
 			taskMgr.Start(sysCtx)
 			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
+			dashEventBus.Publish(eventbus.BusEvent{
+				ID:          "schedule-" + time.Now().Format("150405"),
+				Type:        eventbus.EventSystemStart,
+				Timestamp:   time.Now(),
+				Description: fmt.Sprintf("排程已就緒 · %d 個背景任務已註冊（含每日模擬、實驗、風控校準）", len(taskMgr.List())),
+				Severity:    "info",
+			})
 		}
 
 		if taskMgr != nil {

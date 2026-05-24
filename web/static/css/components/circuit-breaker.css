@@ -54,6 +54,16 @@
     animation: pulse-down 1s infinite;
 }
 
+.cb-status-dot.uninitialized {
+    background-color: var(--muted);
+    box-shadow: none;
+}
+
+.cb-status-dot.unknown {
+    background-color: var(--muted);
+    box-shadow: none;
+}
+
 @keyframes pulse-warn {
     0% { opacity: 1; }
     50% { opacity: 0.5; }
