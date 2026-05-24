@@ -126,7 +126,7 @@ func (c *FugleClient) GetQuote(ctx context.Context, symbol string) (domain.Quote
 	if err != nil {
 		return domain.Quote{}, fmt.Errorf("http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -195,7 +195,7 @@ func (c *FugleClient) GetMeta(ctx context.Context, symbol string) (*FugleMetaRes
 	if err != nil {
 		return nil, fmt.Errorf("http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

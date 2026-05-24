@@ -27,7 +27,7 @@ func LoadTWSEOpenDataCSV(path string) (*Dataset, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", ErrReplayDataMissing, path)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	reader := csv.NewReader(f)
 	reader.FieldsPerRecord = -1

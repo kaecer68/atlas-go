@@ -47,7 +47,7 @@ func (fp *FundamentalProvider) LoadFromJSON(path string) error {
 	if err != nil {
 		return fmt.Errorf("open fundamentals: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var raw map[string]FundamentalData
 	if err := json.NewDecoder(f).Decode(&raw); err != nil {

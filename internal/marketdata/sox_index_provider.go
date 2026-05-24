@@ -65,7 +65,7 @@ func (p *SOXIndexProvider) fetchFromHost(ctx context.Context, host string) (Macr
 	if err != nil {
 		return MacroDataSnapshot{}, fmt.Errorf("http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return MacroDataSnapshot{}, fmt.Errorf("http status %d from %s", resp.StatusCode, host)

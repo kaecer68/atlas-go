@@ -105,7 +105,7 @@ func (e *ExportStatisticsProvider) fetchLatestTwoMonths(ctx context.Context) (Cu
 	if err != nil {
 		return CustomsExportImport{}, CustomsExportImport{}, fmt.Errorf("export statistics HTTP request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return CustomsExportImport{}, CustomsExportImport{}, fmt.Errorf("export statistics HTTP %d", resp.StatusCode)

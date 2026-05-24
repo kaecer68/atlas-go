@@ -303,7 +303,7 @@ func checkReplayHealth(path string, now time.Time) (string, string) {
 	if err != nil {
 		return "error", "檔案不存在"
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var lastLine string
 	scanner := bufio.NewScanner(f)
@@ -689,7 +689,7 @@ func (s *SystemService) LoadClampingEvents(limit int) ([]eventbus.ClampingEventP
 		}
 		return nil, fmt.Errorf("open clamping events: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var events []eventbus.ClampingEventPayload
 	scanner := bufio.NewScanner(f)
@@ -720,7 +720,7 @@ func (s *SystemService) LoadConvictionClampingEvents(limit int) ([]portfolio.Con
 		}
 		return nil, fmt.Errorf("open clamping events: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var events []portfolio.ConvictionClampingEvent
 	scanner := bufio.NewScanner(f)

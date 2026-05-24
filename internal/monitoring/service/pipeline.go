@@ -225,7 +225,7 @@ func readOutcomeFile(path string) ([]rawOutcome, error) {
 		}
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var results []rawOutcome
 	var dropped int

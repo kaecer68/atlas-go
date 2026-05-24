@@ -328,7 +328,7 @@ func loadOutcomeFile(path string) ([]domain.RecommendationOutcome, error) {
 		}
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var outcomes []domain.RecommendationOutcome
 	decoder := json.NewDecoder(f)

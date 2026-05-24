@@ -130,7 +130,7 @@ func (c *TEJClient) GetStockPriceDaily(ctx context.Context, stockID, startDate, 
 	if err != nil {
 		return nil, fmt.Errorf("tej http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -202,7 +202,7 @@ func (c *TEJClient) GetFinancialStatements(ctx context.Context, stockID, tableCo
 	if err != nil {
 		return nil, fmt.Errorf("tej http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

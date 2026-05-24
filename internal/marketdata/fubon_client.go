@@ -93,7 +93,7 @@ func (c *FubonClient) GetQuote(ctx context.Context, symbol string) (domain.Quote
 	if err != nil {
 		return domain.Quote{}, fmt.Errorf("fubon proxy: http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return domain.Quote{}, fmt.Errorf("fubon proxy: status %d", resp.StatusCode)
@@ -157,7 +157,7 @@ func (c *FubonClient) GetQuotes(ctx context.Context, symbols []string) ([]domain
 	if err != nil {
 		return nil, fmt.Errorf("fubon proxy: http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("fubon proxy: status %d", resp.StatusCode)
@@ -201,7 +201,7 @@ func (c *FubonClient) CheckMarketStatus(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("fubon proxy: http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return false, fmt.Errorf("fubon proxy: status %d", resp.StatusCode)
@@ -227,7 +227,7 @@ func (c *FubonClient) HealthCheck(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("fubon proxy: health check failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("fubon proxy: health check status %d", resp.StatusCode)

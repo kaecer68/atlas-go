@@ -44,7 +44,7 @@ func (e *ExchangeRateProvider) FetchSnapshot(ctx context.Context) (MacroDataSnap
 	if err != nil {
 		return MacroDataSnapshot{}, fmt.Errorf("exchangerate fetch: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return MacroDataSnapshot{}, fmt.Errorf("exchangerate http status %d", resp.StatusCode)

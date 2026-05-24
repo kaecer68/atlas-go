@@ -72,7 +72,7 @@ func (n *WebhookNotifier) Notify(alert domain.AlertRecord) error {
 	if err != nil {
 		return fmt.Errorf("send webhook request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
@@ -137,7 +137,7 @@ func (n *TelegramNotifier) Notify(alert domain.AlertRecord) error {
 	if err != nil {
 		return fmt.Errorf("send telegram request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("telegram returned status %d", resp.StatusCode)

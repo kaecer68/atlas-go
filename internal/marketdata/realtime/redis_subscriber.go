@@ -46,7 +46,7 @@ func (s *RedisSubscriber) Start(ctx context.Context) error {
 	pubsub := s.client.Subscribe(subCtx, s.channel)
 
 	go func() {
-		defer pubsub.Close()
+		defer func() { _ = pubsub.Close() }()
 		ch := pubsub.Channel()
 		for {
 			select {

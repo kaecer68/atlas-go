@@ -54,7 +54,7 @@ func (s *JSONLQuoteStore) LoadQuotes(symbol string, start, end time.Time) ([]dom
 		}
 		return nil, fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	var result []domain.DailyBar
@@ -83,7 +83,7 @@ func (s *JSONLQuoteStore) LoadLatestQuotes(symbols []string) (map[string]domain.
 		}
 		return nil, fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	latest := make(map[string]domain.DailyBar)
 	scanner := bufio.NewScanner(f)

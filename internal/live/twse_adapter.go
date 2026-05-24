@@ -196,7 +196,7 @@ func (a *TWSEBrokerAdapter) SubmitOrder(ctx context.Context, order domain.Order)
 	if err != nil {
 		return BrokerResult{}, fmt.Errorf("twse_adapter: http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -260,7 +260,7 @@ func (a *TWSEBrokerAdapter) QueryOrderStatus(ctx context.Context, orderID string
 	if err != nil {
 		return nil, fmt.Errorf("twse_adapter: http status request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -311,7 +311,7 @@ func (a *TWSEBrokerAdapter) CancelOrder(ctx context.Context, orderID string) err
 	if err != nil {
 		return fmt.Errorf("twse_adapter: http cancel request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
