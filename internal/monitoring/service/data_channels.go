@@ -261,9 +261,9 @@ func (s *DataChannelService) GetAllChannelStatuses(ctx context.Context) ([]DataC
 	channels = append(channels, s.buildUSYahooChannel(now))
 	channels = append(channels, s.buildTWSEReplayChannel(now))
 	channels = append(channels, s.buildTWSECapitalFlowChannel(now))
-	channels = append(channels, s.buildFugleChannel(now))
-	channels = append(channels, s.buildFubonChannel(now))
-	channels = append(channels, s.buildFinMindChannel(now))
+	channels = append(channels, s.buildFugleChannel())
+	channels = append(channels, s.buildFubonChannel())
+	channels = append(channels, s.buildFinMindChannel())
 	channels = append(channels, s.buildJPYYahooChannel(now))
 	channels = append(channels, s.buildGeopoliticalChannel(now))
 	channels = append(channels, s.buildTWSEMarginChannel(now))
@@ -271,7 +271,7 @@ func (s *DataChannelService) GetAllChannelStatuses(ctx context.Context) ([]DataC
 	channels = append(channels, s.buildTSMCRevenueChannel(now))
 	channels = append(channels, s.buildTaiwanGeopoliticalChannel(now))
 	channels = append(channels, s.buildJanusRegimeChannel(now))
-	channels = append(channels, s.buildTEJChannel(now))
+	channels = append(channels, s.buildTEJChannel())
 
 	return channels, nil
 }
@@ -338,7 +338,7 @@ func (s *DataChannelService) buildTWSECapitalFlowChannel(now time.Time) DataChan
 	}
 }
 
-func (s *DataChannelService) buildFugleChannel(now time.Time) DataChannel {
+func (s *DataChannelService) buildFugleChannel() DataChannel {
 	status, updated, lastError := s.getCachedFugleHealth()
 	return DataChannel{
 		ChannelID:  "fugle",
@@ -354,7 +354,7 @@ func (s *DataChannelService) buildFugleChannel(now time.Time) DataChannel {
 	}
 }
 
-func (s *DataChannelService) buildFubonChannel(now time.Time) DataChannel {
+func (s *DataChannelService) buildFubonChannel() DataChannel {
 	status, updated, lastError := s.getCachedFubonHealth()
 	return DataChannel{
 		ChannelID:  "fubon",
@@ -370,7 +370,7 @@ func (s *DataChannelService) buildFubonChannel(now time.Time) DataChannel {
 	}
 }
 
-func (s *DataChannelService) buildFinMindChannel(now time.Time) DataChannel {
+func (s *DataChannelService) buildFinMindChannel() DataChannel {
 	status, updated, lastError := s.getCachedFinMindHealth()
 	return DataChannel{
 		ChannelID:  "finmind",
@@ -563,7 +563,7 @@ func (s *DataChannelService) buildJanusRegimeChannel(now time.Time) DataChannel 
 	}
 }
 
-func (s *DataChannelService) buildTEJChannel(now time.Time) DataChannel {
+func (s *DataChannelService) buildTEJChannel() DataChannel {
 	status := "inactive"
 	updated := "TEJ_API_KEY not configured"
 	tejKey := s.TejAPIKey

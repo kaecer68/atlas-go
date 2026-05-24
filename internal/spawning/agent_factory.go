@@ -44,7 +44,7 @@ func (f *AgentFactory) CreateAgentForGap(
 	promptFile := fmt.Sprintf("prompts/agents/%s.md", agentID)
 
 	// Create prompt content based on gap
-	promptContent := f.generatePromptContent(gap, agentID, skill)
+	promptContent := f.generatePromptContent(gap, agentID)
 
 	// Determine universe based on gap
 	universe := f.determineUniverse(gap)
@@ -179,7 +179,7 @@ func (f *AgentFactory) determineMetrics(gap *KnowledgeGap) []string {
 }
 
 // generatePromptContent creates prompt template for the new agent
-func (f *AgentFactory) generatePromptContent(gap *KnowledgeGap, agentID, skill string) string {
+func (f *AgentFactory) generatePromptContent(gap *KnowledgeGap, agentID string) string {
 	// Base template
 	base := f.defaultPromptTemplate
 

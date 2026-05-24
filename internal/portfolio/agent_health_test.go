@@ -135,7 +135,7 @@ func TestCompositeScoreCalculation(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			score := m.calculateCompositeScore(tc.sharpe, tc.hitRate, tc.wins, tc.losses)
+			score := m.calculateCompositeScore(tc.sharpe, tc.hitRate, tc.wins)
 			if score < tc.wantMin || score > tc.wantMax {
 				t.Errorf("calculateCompositeScore(sharpe=%.1f, hitRate=%.1f, wins=%d, losses=%d) = %.2f; want [%.1f, %.1f]",
 					tc.sharpe, tc.hitRate, tc.wins, tc.losses, score, tc.wantMin, tc.wantMax)

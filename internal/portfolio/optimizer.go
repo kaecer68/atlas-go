@@ -204,9 +204,9 @@ func (o *Optimizer) Optimize(
 	aggregated := o.aggregateRecommendations(recommendations)
 	scores := o.calculateMultiFactorScores(aggregated, quotes, factorWeights)
 
-	weights := o.allocateInitialWeights(scores, totalCapital)
+	weights := o.allocateInitialWeights(scores)
 	weights = o.applyConstraints(weights, constraints, totalCapital)
-	positions := o.buildPositions(weights, scores, aggregated, quotes, totalCapital)
+	positions := o.buildPositions(weights, scores, quotes, totalCapital)
 
 	return positions, nil
 }
@@ -342,7 +342,6 @@ type weightInfo struct {
 
 func (o *Optimizer) allocateInitialWeights(
 	scores map[string]*symbolScore,
-	totalCapital float64,
 ) []weightInfo {
 	// 归一化评分
 	var totalScore float64
@@ -429,7 +428,6 @@ func (o *Optimizer) applyConstraints(
 func (o *Optimizer) buildPositions(
 	weights []weightInfo,
 	scores map[string]*symbolScore,
-	aggregated map[string][]domain.Recommendation,
 	quotes map[string]domain.Quote,
 	totalCapital float64,
 ) []OptimizedPosition {

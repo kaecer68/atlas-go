@@ -255,11 +255,11 @@ func (fe *FactorEngine) calculateValueDetail(symbol string, quotes map[string]do
 // CalculateQualityScore computes quality based on dividend yield and price stability.
 // Falls back to a mild positive constant when no data is available.
 func (fe *FactorEngine) CalculateQualityScore(symbol string, quotes map[string]domain.Quote) float64 {
-	return fe.calculateQualityDetail(symbol, quotes).Score
+	return fe.calculateQualityDetail(symbol).Score
 }
 
 // calculateQualityDetail returns the full breakdown for quality calculation.
-func (fe *FactorEngine) calculateQualityDetail(symbol string, quotes map[string]domain.Quote) domain.FactorScoreItem {
+func (fe *FactorEngine) calculateQualityDetail(symbol string) domain.FactorScoreItem {
 	fe.mu.RLock()
 	fp := fe.fundamentals
 	hp := fe.history
@@ -455,7 +455,7 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 ) (*domain.FactorScoreBreakdown, map[FactorType]float64) {
 	mom := fe.calculateMomentumDetail(symbol, quotes)
 	val := fe.calculateValueDetail(symbol, quotes)
-	qly := fe.calculateQualityDetail(symbol, quotes)
+	qly := fe.calculateQualityDetail(symbol)
 
 	var agentScore float64
 	var totalWeight float64
@@ -545,47 +545,47 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 		total := 0.0
 		rawTotal := map[string]float64{}
 
-		getEffectiveWeight := func(ft FactorType, item domain.FactorScoreItem, defaultWeight float64) float64 {
+		getEffectiveWeight := func(item domain.FactorScoreItem, defaultWeight float64) float64 {
 			if item.IsFallback {
 				return defaultWeight * fe.params.Factor.FallbackWeightReduction
 			}
 			return defaultWeight
 		}
 
-		momWeight := getEffectiveWeight(FactorMomentum, mom, factorWeights[FactorMomentum])
+		momWeight := getEffectiveWeight(mom, factorWeights[FactorMomentum])
 		total += mom.Score * momWeight
 		rawTotal[string(FactorMomentum)] = mom.Score * momWeight
 
-		valWeight := getEffectiveWeight(FactorValue, val, factorWeights[FactorValue])
+		valWeight := getEffectiveWeight(val, factorWeights[FactorValue])
 		total += val.Score * valWeight
 		rawTotal[string(FactorValue)] = val.Score * valWeight
 
-		qlyWeight := getEffectiveWeight(FactorQuality, qly, factorWeights[FactorQuality])
+		qlyWeight := getEffectiveWeight(qly, factorWeights[FactorQuality])
 		total += qly.Score * qlyWeight
 		rawTotal[string(FactorQuality)] = qly.Score * qlyWeight
 
-		agentWeight := getEffectiveWeight(FactorAgent, agent, factorWeights[FactorAgent])
+		agentWeight := getEffectiveWeight(agent, factorWeights[FactorAgent])
 		total += agent.Score * agentWeight
 		rawTotal[string(FactorAgent)] = agent.Score * agentWeight
 
 		if len(bridgeInputs) > 0 {
-			instWeight := getEffectiveWeight(FactorInstSent, instSent, factorWeights[FactorInstSent])
+			instWeight := getEffectiveWeight(instSent, factorWeights[FactorInstSent])
 			total += instSent.Score * instWeight
 			rawTotal[string(FactorInstSent)] = instSent.Score * instWeight
 
-			liqWeight := getEffectiveWeight(FactorLiquidity, liq, factorWeights[FactorLiquidity])
+			liqWeight := getEffectiveWeight(liq, factorWeights[FactorLiquidity])
 			total += liq.Score * liqWeight
 			rawTotal[string(FactorLiquidity)] = liq.Score * liqWeight
 		}
 
 		if nar.Score != 0 || nar.Formula != "" {
-			narWeight := getEffectiveWeight(FactorNarrative, nar, factorWeights[FactorNarrative])
+			narWeight := getEffectiveWeight(nar, factorWeights[FactorNarrative])
 			total += nar.Score * narWeight
 			rawTotal[string(FactorNarrative)] = nar.Score * narWeight
 			breakdown.Narrative.Weight = factorWeights[FactorNarrative]
 		}
 		if icl.Score != 0 || icl.Formula != "" {
-			iclWeight := getEffectiveWeight(FactorIndustryCycle, icl, factorWeights[FactorIndustryCycle])
+			iclWeight := getEffectiveWeight(icl, factorWeights[FactorIndustryCycle])
 			total += icl.Score * iclWeight
 			rawTotal[string(FactorIndustryCycle)] = icl.Score * iclWeight
 			breakdown.IndustryCycle.Weight = factorWeights[FactorIndustryCycle]

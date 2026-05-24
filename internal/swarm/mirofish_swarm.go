@@ -309,7 +309,7 @@ func (sw *MiroFishSwarm) simulateFish(fish *MiroFish) {
 		fish.Predictions = append(fish.Predictions, pred)
 
 		// Update performance
-		sw.updatePerformance(fish, pred, newState)
+		sw.updatePerformance(fish, pred)
 	}
 }
 
@@ -386,7 +386,7 @@ func (sw *MiroFishSwarm) generatePrediction(fish *MiroFish, state MarketState) P
 }
 
 // updatePerformance tracks fish prediction accuracy
-func (sw *MiroFishSwarm) updatePerformance(fish *MiroFish, pred Prediction, state MarketState) {
+func (sw *MiroFishSwarm) updatePerformance(fish *MiroFish, pred Prediction) {
 	// Check if prediction was correct (would need future state in real implementation)
 	// For now, increment counters
 	fish.Performance.TotalPredictions++

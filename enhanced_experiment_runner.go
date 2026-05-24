@@ -38,11 +38,10 @@ func main() {
 	fmt.Println("🧪 Atlas-Go 增強架構實驗測試開始")
 	fmt.Println(strings.Repeat("=", 60))
 
-	cfg := config.Load()
 	results := make([]ExperimentResult, 0, 10)
 
 	for round := 1; round <= 10; round++ {
-		result := runEnhancedExperiment(round, cfg)
+		result := runEnhancedExperiment(round)
 		results = append(results, result)
 
 		fmt.Printf("\n📊 輪次 %d 結果:\n", round)
@@ -65,7 +64,7 @@ func main() {
 	printEnhancedSummary(results)
 }
 
-func runEnhancedExperiment(round int, cfg config.Config) ExperimentResult {
+func runEnhancedExperiment(round int) ExperimentResult {
 	start := time.Now()
 	result := ExperimentResult{
 		Round:     round,

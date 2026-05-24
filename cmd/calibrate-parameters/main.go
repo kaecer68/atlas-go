@@ -83,13 +83,13 @@ func run(args []string) error {
 	case "var":
 		results = append(results, calibrateVaR(inference, returns, n, paramsCfg))
 	case "darwinian":
-		results = append(results, calibrateDarwinian(inference, returns, n, paramsCfg))
+		results = append(results, calibrateDarwinian(inference, n, paramsCfg))
 	case "factor":
 		results = append(results, calibrateFactor(inference, returns, n, paramsCfg))
 	case "all":
 		results = append(results, calibrateGARCH(inference, returns, n, paramsCfg))
 		results = append(results, calibrateVaR(inference, returns, n, paramsCfg))
-		results = append(results, calibrateDarwinian(inference, returns, n, paramsCfg))
+		results = append(results, calibrateDarwinian(inference, n, paramsCfg))
 		results = append(results, calibrateFactor(inference, returns, n, paramsCfg))
 	default:
 		return fmt.Errorf("unknown module: %s (valid: garch, var, darwinian, factor, all)", *module)
@@ -337,7 +337,7 @@ func calibrateVaR(ie *config.InferenceEngine, returns []float64, n int, cfg *con
 	return res
 }
 
-func calibrateDarwinian(ie *config.InferenceEngine, returns []float64, n int, cfg *config.ParametersConfig) CalibrationResult {
+func calibrateDarwinian(ie *config.InferenceEngine, n int, cfg *config.ParametersConfig) CalibrationResult {
 	res := CalibrationResult{Module: "darwinian"}
 
 	workDir, _ := os.Getwd()

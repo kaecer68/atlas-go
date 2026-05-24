@@ -146,7 +146,7 @@ func (m *AgentHealthManager) RecordOutcome(agentID string, isWin bool, sharpe fl
 
 	h.AnnualizedSharpe = sharpe
 	h.HitRate = hitRate
-	h.CompositeScore = m.calculateCompositeScore(sharpe, hitRate, h.ConsecutiveWins, h.ConsecutiveLosses)
+	h.CompositeScore = m.calculateCompositeScore(sharpe, hitRate, h.ConsecutiveWins)
 
 	m.evaluateInterventions(h)
 
@@ -155,7 +155,7 @@ func (m *AgentHealthManager) RecordOutcome(agentID string, isWin bool, sharpe fl
 	}
 }
 
-func (m *AgentHealthManager) calculateCompositeScore(sharpe, hitRate float64, consecutiveWins, consecutiveLosses int) float64 {
+func (m *AgentHealthManager) calculateCompositeScore(sharpe, hitRate float64, consecutiveWins int) float64 {
 	sharpeWeight := m.runtimeParams.Health.SharpeWeight
 	hitRateWeight := m.runtimeParams.Health.HitRateWeight
 	streakWeight := m.runtimeParams.Health.StreakWeight

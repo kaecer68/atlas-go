@@ -169,7 +169,7 @@ func (m *SpawningManager) PerformSpawningCycle() {
 	}
 
 	// 4. Update training agents
-	m.updateTrainingAgents(scorecards)
+	m.updateTrainingAgents()
 
 	// 5. Validate completed agents
 	m.validateCompletedAgents()
@@ -254,7 +254,7 @@ func (m *SpawningManager) spawnAgentForGap(gap *KnowledgeGap) (*SpawnedAgent, er
 }
 
 // updateTrainingAgents updates agents in training phase
-func (m *SpawningManager) updateTrainingAgents(scorecards map[string]*domain.Scorecard) {
+func (m *SpawningManager) updateTrainingAgents() {
 	for agentID, spawned := range m.spawnedAgents {
 		if spawned.Status != SpawnStatusTraining {
 			continue

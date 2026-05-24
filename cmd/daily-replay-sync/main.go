@@ -81,7 +81,7 @@ func main() {
 	}
 
 	if *backfillStart != "" && *backfillEnd != "" {
-		if err := runBackfill(*csvPath, *backfillStart, *backfillEnd, pool); err != nil {
+		if err := runBackfill(*csvPath, *backfillStart, *backfillEnd); err != nil {
 			log.Fatalf("backfill failed: %v", err)
 		}
 		return
@@ -138,7 +138,7 @@ func runDailySync(csvPath string, pool *pgxpool.Pool) error {
 	return nil
 }
 
-func runBackfill(csvPath, startStr, endStr string, pool *pgxpool.Pool) error {
+func runBackfill(csvPath, startStr, endStr string) error {
 	start, err := time.Parse("2006-01-02", startStr)
 	if err != nil {
 		return fmt.Errorf("parse start date: %w", err)

@@ -230,7 +230,7 @@ func TestValueFallbackFlag(t *testing.T) {
 func TestQualityFallbackFlag(t *testing.T) {
 	fe := NewFactorEngine()
 
-	qlyDetail := fe.calculateQualityDetail("TEST.TW", nil)
+	qlyDetail := fe.calculateQualityDetail("TEST.TW")
 
 	if !qlyDetail.IsFallback {
 		t.Error("expected quality to be fallback")

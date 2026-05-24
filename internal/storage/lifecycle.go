@@ -106,7 +106,7 @@ func (lm *LifecycleManager) Run(ctx context.Context, dryRun bool) (CleanupReport
 
 	for _, policy := range lm.policies {
 		if err := ctx.Err(); err != nil {
-			return report, fmt.Errorf("lifecycle run cancelled: %w", err)
+			return report, fmt.Errorf("lifecycle run canceled: %w", err)
 		}
 
 		pr, err := lm.applyPolicy(policy, dryRun)

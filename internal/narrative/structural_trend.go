@@ -51,7 +51,7 @@ func (e *StructuralTrendEngine) Assess(data MacroDataSnapshot, sectorData Sector
 	}
 
 	// Detect all active structural trends
-	assessment.Trends = e.detectTrends(data, sectorData)
+	assessment.Trends = e.detectTrends(sectorData)
 
 	// Find dominant trend (highest strength * confidence * hit_rate)
 	assessment.DominantTrend = e.findDominantTrend(assessment.Trends)
@@ -76,7 +76,7 @@ type SectorDataSnapshot struct {
 	SemiconductorIndex float64 // Philadelphia Semiconductor Index level
 }
 
-func (e *StructuralTrendEngine) detectTrends(data MacroDataSnapshot, sector SectorDataSnapshot) []StructuralTrend {
+func (e *StructuralTrendEngine) detectTrends(sector SectorDataSnapshot) []StructuralTrend {
 	var trends []StructuralTrend
 
 	// AI Capex Surge Detection (Theme: AI_capex_surge, HitRate: 0.81)

@@ -578,7 +578,7 @@ func (s *IndustryService) GetIndustryDetail(industryID string, now time.Time) (*
 	weightDerivation := s.calculateWeightDerivation(segment)
 
 	// Generate recommendation
-	recommendation := s.generateRecommendation(segment, cyclePos, weightDerivation)
+	recommendation := s.generateRecommendation(segment, cyclePos)
 
 	// Determine regime context
 	regimeContext := s.getRegimeContext(segment, cyclePos)
@@ -736,7 +736,7 @@ func (s *IndustryService) calculateWeightDerivation(seg *industry.IndustrySegmen
 	return wd
 }
 
-func (s *IndustryService) generateRecommendation(seg *industry.IndustrySegment, pos *industry.CyclePosition, wd WeightDerivation) *IndustryRecommendation {
+func (s *IndustryService) generateRecommendation(seg *industry.IndustrySegment, pos *industry.CyclePosition) *IndustryRecommendation {
 	baseWeight := s.getSectorWeight(seg.ID, seg.Weight)
 	rec := &IndustryRecommendation{
 		CurrentWeight: baseWeight,

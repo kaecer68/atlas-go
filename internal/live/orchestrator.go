@@ -339,7 +339,7 @@ func (o *Orchestrator) setupEventHandlers() {
 
 	o.eventBus.Subscribe(EventPositionUpdate, func(ctx context.Context, event BusEvent) error {
 		if payload, ok := event.Payload.(PositionEventPayload); ok {
-			logging.Info("position", string(payload.ChangeType),
+			logging.Info("position", payload.ChangeType,
 				"symbol", payload.Symbol,
 				"quantity", payload.Position.Quantity,
 				"average_cost", payload.Position.AverageCost)
