@@ -234,9 +234,9 @@ func writeFieldNames(structs map[string][]structField, out string) {
 
 	for _, structName := range names {
 		fields := structs[structName]
-		b.WriteString(fmt.Sprintf("  %s: {\n", structName))
+		fmt.Fprintf(&b, "  %s: {\n", structName)
 		for _, f := range fields {
-			b.WriteString(fmt.Sprintf("    %s: '%s',\n", f.JSONName, f.JSONName))
+			fmt.Fprintf(&b, "    %s: '%s',\n", f.JSONName, f.JSONName)
 		}
 		b.WriteString("  },\n")
 	}
@@ -273,13 +273,13 @@ func writeTypeScriptInterfaces(structs map[string][]structField, out string, amb
 		if ambient {
 			prefix = "declare "
 		}
-		b.WriteString(fmt.Sprintf("%sinterface %s {\n", prefix, structName))
+		fmt.Fprintf(&b, "%sinterface %s {\n", prefix, structName)
 		for _, f := range fields {
 			optionalMark := ""
 			if f.Optional {
 				optionalMark = "?"
 			}
-			b.WriteString(fmt.Sprintf("  %s%s: %s;\n", f.JSONName, optionalMark, f.TSType))
+			fmt.Fprintf(&b, "  %s%s: %s;\n", f.JSONName, optionalMark, f.TSType)
 		}
 		b.WriteString("}\n\n")
 	}

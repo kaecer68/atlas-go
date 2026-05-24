@@ -364,10 +364,11 @@ func Promote(policy Policy, result domain.PromptExperimentResult, candidate stri
 		Status:        string(result.Experiment.Status),
 		VersionAfter:  next.Version,
 	}
-	if result.Experiment.MutationType == "risk_rule_change" || result.Experiment.MutationType == "portfolio_constraint_revision" {
+	switch result.Experiment.MutationType {
+	case "risk_rule_change", "portfolio_constraint_revision":
 		snapshot := next.Constraints
 		record.ConstraintsSnapshot = &snapshot
-	} else if result.Experiment.MutationType == "prompt_tightening" || result.Experiment.MutationType == "" {
+	case "prompt_tightening", "":
 		record.PromptSnapshot = candidate
 	}
 	next.Promotions = append(next.Promotions, record)

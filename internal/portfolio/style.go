@@ -110,7 +110,7 @@ func (d *StyleRotationDetector) DetectRotation() *RotationSignal {
 
 	// 找出最强风格
 	var strongest Style
-	var maxStrength float64 = -math.MaxFloat64
+	maxStrength := -math.MaxFloat64
 
 	for style, mom := range momentums {
 		// 综合 20 日和 60 日收益

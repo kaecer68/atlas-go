@@ -264,8 +264,7 @@ func (h *Handlers) HandleInbox(r *http.Request) (int, any) {
 	}
 
 	experimentsDir := filepath.Join(h.LedgerDir, "experiments")
-	if _, err := experiment.ExpireOldExperiments(experimentsDir, experiment.DefaultExperimentTTL); err != nil {
-		// Silently continue
+	if _, err := experiment.ExpireOldExperiments(experimentsDir, experiment.DefaultExperimentTTL); err != nil { //nolint:staticcheck // 過期清理失敗不影響 inbox 回應
 	}
 
 	entries, err := os.ReadDir(experimentsDir)

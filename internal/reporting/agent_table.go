@@ -31,7 +31,7 @@ func RenderAgentPerformanceTable(rows []AgentPerformanceRow) string {
 	sb.WriteString("|-------|-------|---------|----------|--------|--------|--------|\n")
 
 	for _, r := range rows {
-		sb.WriteString(fmt.Sprintf("| %s | %s | %d | %.1f%% | %.3f | %.2f%% | %.2f |\n",
+		fmt.Fprintf(&sb, "| %s | %s | %d | %.1f%% | %.3f | %.2f%% | %.2f |\n",
 			truncate(r.AgentID, 20),
 			r.Layer,
 			r.WindowCount,
@@ -39,7 +39,7 @@ func RenderAgentPerformanceTable(rows []AgentPerformanceRow) string {
 			r.SharpeLike,
 			r.MaxDrawdown*100,
 			r.Weight,
-		))
+		)
 	}
 	return sb.String()
 }

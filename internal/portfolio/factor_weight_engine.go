@@ -72,17 +72,17 @@ func (e *FactorWeightEngine) GetWeights(regime string) map[FactorType]float64 {
 	// Read regime deltas and clamp bounds from config with hardcoded fallback
 	fw := fwConfig()
 	var (
-		bullMomentum float64 = 0.05
-		bullQuality  float64 = -0.03
-		bullValue    float64 = -0.02
-		bearQuality  float64 = 0.05
-		bearValue    float64 = 0.03
-		bearMomentum float64 = -0.05
-		highVolLiq   float64 = 0.05
-		highVolMom   float64 = -0.03
-		highVolInst  float64 = -0.02
-		clampMin     float64 = 0.02
-		clampMax     float64 = 0.50
+		bullMomentum = 0.05
+		bullQuality  = -0.03
+		bullValue    = -0.02
+		bearQuality  = 0.05
+		bearValue    = 0.03
+		bearMomentum = -0.05
+		highVolLiq   = 0.05
+		highVolMom   = -0.03
+		highVolInst  = -0.02
+		clampMin     = 0.02
+		clampMax     = 0.50
 	)
 	if fw != nil {
 		bullMomentum = fw.RegimeBullMomentum.Value
@@ -173,11 +173,11 @@ func (e *FactorWeightEngine) OnRegimeChange(oldRegime, newRegime string, confide
 
 	fw := fwConfig()
 	var (
-		riskOnMom  float64 = 0.05
-		riskOnQual float64 = -0.03
-		riskOffMom float64 = -0.05
-		riskOffQ   float64 = 0.05
-		riskOffLiq float64 = 0.03
+		riskOnMom  = 0.05
+		riskOnQual = -0.03
+		riskOffMom = -0.05
+		riskOffQ   = 0.05
+		riskOffLiq = 0.03
 	)
 	if fw != nil {
 		riskOnMom = fw.RiskOnMomentum.Value
@@ -187,18 +187,19 @@ func (e *FactorWeightEngine) OnRegimeChange(oldRegime, newRegime string, confide
 		riskOffLiq = fw.RiskOffLiquidity.Value
 	}
 
-	if newRegime == "RISK_ON" {
+	switch newRegime {
+	case "RISK_ON":
 		e.eventWeights["regime_risk_on"] = map[FactorType]float64{
 			FactorMomentum: riskOnMom,
 			FactorQuality:  riskOnQual,
 		}
-	} else if newRegime == "RISK_OFF" {
+	case "RISK_OFF":
 		e.eventWeights["regime_risk_off"] = map[FactorType]float64{
 			FactorMomentum:  riskOffMom,
 			FactorQuality:   riskOffQ,
 			FactorLiquidity: riskOffLiq,
 		}
-	} else {
+	default:
 		delete(e.eventWeights, "regime_risk_on")
 		delete(e.eventWeights, "regime_risk_off")
 	}
@@ -215,10 +216,10 @@ func (e *FactorWeightEngine) AddEvent(event *narrative.NarrativeEvent) {
 func (e *FactorWeightEngine) applyEventAdjustment(event *narrative.NarrativeEvent) {
 	fw := fwConfig()
 	var (
-		sevCritical float64 = 0.10
-		sevHigh     float64 = 0.05
-		sevMedium   float64 = 0.02
-		sevLow      float64 = 0.01
+		sevCritical = 0.10
+		sevHigh     = 0.05
+		sevMedium   = 0.02
+		sevLow      = 0.01
 	)
 	if fw != nil {
 		sevCritical = fw.SeverityCritical.Value
@@ -292,13 +293,13 @@ func (e *FactorWeightEngine) ApplyStrategy(s *strategy.Strategy) {
 
 	fw := fwConfig()
 	var (
-		consValue    float64 = 0.05
-		consQuality  float64 = 0.05
-		consMomentum float64 = -0.05
-		aggMomentum  float64 = 0.05
-		aggInstSent  float64 = 0.03
-		aggValue     float64 = -0.03
-		aggQuality   float64 = -0.03
+		consValue    = 0.05
+		consQuality  = 0.05
+		consMomentum = -0.05
+		aggMomentum  = 0.05
+		aggInstSent  = 0.03
+		aggValue     = -0.03
+		aggQuality   = -0.03
 	)
 	if fw != nil {
 		consValue = fw.ConservativeValue.Value

@@ -163,14 +163,16 @@ func (f *AgentFactory) determineMetrics(gap *KnowledgeGap) []string {
 	case GapTypeSector:
 		return []string{"sector_momentum", "relative_strength", "earnings_growth"}
 	case GapTypeStyle:
-		if gap.Style == "value" {
+		switch gap.Style {
+		case "value":
 			return []string{"pe_ratio", "pb_ratio", "dividend_yield"}
-		} else if gap.Style == "growth" {
+		case "growth":
 			return []string{"revenue_growth", "earnings_growth", "peg_ratio"}
-		} else if gap.Style == "momentum" {
+		case "momentum":
 			return []string{"rsi", "macd", "price_momentum"}
+		default:
+			return []string{"sharpe_ratio", "win_rate"}
 		}
-		return []string{"sharpe_ratio", "win_rate"}
 	case GapTypeRegime:
 		return []string{"regime_indicator", "volatility", "correlation"}
 	default:

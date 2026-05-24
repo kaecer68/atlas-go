@@ -224,11 +224,12 @@ func runMarketCrash(stCfg StressTestConfig) StressTestResult {
 	result.Results.VaRBreach = varBreached
 
 	macroLevel := narrative.MacroRiskRed
-	if cfg.MacroRiskLevel == "orange" {
+	switch cfg.MacroRiskLevel {
+	case "orange":
 		macroLevel = narrative.MacroRiskOrange
-	} else if cfg.MacroRiskLevel == "yellow" {
+	case "yellow":
 		macroLevel = narrative.MacroRiskYellow
-	} else if cfg.MacroRiskLevel == "green" {
+	case "green":
 		macroLevel = narrative.MacroRiskGreen
 	}
 
@@ -299,16 +300,7 @@ func runMarketCrash(stCfg StressTestConfig) StressTestResult {
 	halted := err != nil
 	result.Results.RiskGateHalt = halted
 
-	passed := true
-	if decision.Action < risk.DrawdownSevere {
-		passed = false
-	}
-	if !varBreached {
-		passed = false
-	}
-	if !halted {
-		passed = false
-	}
+	passed := decision.Action >= risk.DrawdownSevere && varBreached && halted
 	result.Passed = passed
 
 	return result
@@ -429,11 +421,7 @@ func runSectorRotation(stCfg StressTestConfig) StressTestResult {
 		}
 	}
 
-	passed := true
-
-	if decision.Action < risk.DrawdownModerate {
-		passed = false
-	}
+	passed := decision.Action >= risk.DrawdownModerate
 
 	for _, sym := range cyclicalSymbols {
 		if after, ok := adjustedWeights[sym]; ok {
@@ -571,19 +559,7 @@ func runLiquidityCrisis(stCfg StressTestConfig) StressTestResult {
 	err := gate.Check(context.Background(), dummyOrder)
 	result.Results.RiskGateHalt = err != nil
 
-	passed := true
-
-	if decision.Action < risk.DrawdownSevere {
-		passed = false
-	}
-
-	if !varBreached {
-		passed = false
-	}
-
-	if err == nil {
-		passed = false
-	}
+	passed := decision.Action >= risk.DrawdownSevere && varBreached && err != nil
 
 	if snapshot.MaxDrawdownPct < 0.15 {
 		passed = false

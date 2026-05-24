@@ -65,12 +65,12 @@ func main() {
 
 func formatSingleResult(r stress.ScenarioResult) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("Scenario: %s (%s)\n", r.ScenarioName, r.ScenarioID))
-	b.WriteString(fmt.Sprintf("  Return:     %.2f%%\n", r.TotalReturn*100))
-	b.WriteString(fmt.Sprintf("  Drawdown:   %.2f%%\n", r.MaxDrawdown*100))
-	b.WriteString(fmt.Sprintf("  VaR95:      %.2f%%\n", r.VaR95*100))
-	b.WriteString(fmt.Sprintf("  Trades:     %d\n", r.TradeCount))
-	b.WriteString(fmt.Sprintf("  Regime:     %s\n", r.FinalRegime))
+	fmt.Fprintf(&b, "Scenario: %s (%s)\n", r.ScenarioName, r.ScenarioID)
+	fmt.Fprintf(&b, "  Return:     %.2f%%\n", r.TotalReturn*100)
+	fmt.Fprintf(&b, "  Drawdown:   %.2f%%\n", r.MaxDrawdown*100)
+	fmt.Fprintf(&b, "  VaR95:      %.2f%%\n", r.VaR95*100)
+	fmt.Fprintf(&b, "  Trades:     %d\n", r.TradeCount)
+	fmt.Fprintf(&b, "  Regime:     %s\n", r.FinalRegime)
 	if r.MomentumDisabled {
 		b.WriteString("  Momentum:   DISABLED\n")
 	}

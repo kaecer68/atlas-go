@@ -130,8 +130,7 @@ func (a *FubonDMAAdapter) Connect(ctx context.Context) error {
 	if initLine != "" {
 		var initResp fubonDMAResponse
 		if jsonErr := json.Unmarshal([]byte(initLine), &initResp); jsonErr == nil {
-			if initResp.Status == "warn" {
-				// SDK 未安裝的警告，可繼續
+			if initResp.Status == "warn" { //nolint:staticcheck // SDK 未安裝的警告，可繼續
 			}
 		}
 	}

@@ -581,7 +581,7 @@ func (o *Orchestrator) publishEvent(event BusEvent) {
 	if o.eventBus == nil {
 		return
 	}
-	if err := o.eventBus.Publish(event); err != nil {
+	if err := o.eventBus.Publish(event); err != nil { //nolint:staticcheck // 非關鍵錯誤，publish 失敗不影響交易執行
 	}
 }
 

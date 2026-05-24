@@ -159,19 +159,19 @@ func FormatReport(report Report) string {
 	var output strings.Builder
 	output.WriteString("=== Stress Test Report ===\n\n")
 	for _, r := range report.ScenarioResults {
-		output.WriteString(fmt.Sprintf("Scenario: %s\n", r.ScenarioName))
-		output.WriteString(fmt.Sprintf("  Return:     %.2f%%\n", r.TotalReturn*100))
-		output.WriteString(fmt.Sprintf("  Drawdown:   %.2f%%\n", r.MaxDrawdown*100))
-		output.WriteString(fmt.Sprintf("  VaR95:      %.2f%%\n", r.VaR95*100))
-		output.WriteString(fmt.Sprintf("  Trades:     %d\n", r.TradeCount))
-		output.WriteString(fmt.Sprintf("  Regime:     %s\n", r.FinalRegime))
+		fmt.Fprintf(&output, "Scenario: %s\n", r.ScenarioName)
+		fmt.Fprintf(&output, "  Return:     %.2f%%\n", r.TotalReturn*100)
+		fmt.Fprintf(&output, "  Drawdown:   %.2f%%\n", r.MaxDrawdown*100)
+		fmt.Fprintf(&output, "  VaR95:      %.2f%%\n", r.VaR95*100)
+		fmt.Fprintf(&output, "  Trades:     %d\n", r.TradeCount)
+		fmt.Fprintf(&output, "  Regime:     %s\n", r.FinalRegime)
 		if r.MomentumDisabled {
 			output.WriteString("  Momentum:   DISABLED (VIX > 30)\n")
 		}
 		output.WriteString("\n")
 	}
-	output.WriteString(fmt.Sprintf("Worst Drawdown: %.2f%%\n", report.WorstDrawdown*100))
-	output.WriteString(fmt.Sprintf("Worst VaR95:    %.2f%%\n", report.WorstVaR*100))
-	output.WriteString(fmt.Sprintf("Avg Return:     %.2f%%\n", report.AvgReturn*100))
+	fmt.Fprintf(&output, "Worst Drawdown: %.2f%%\n", report.WorstDrawdown*100)
+	fmt.Fprintf(&output, "Worst VaR95:    %.2f%%\n", report.WorstVaR*100)
+	fmt.Fprintf(&output, "Avg Return:     %.2f%%\n", report.AvgReturn*100)
 	return output.String()
 }
