@@ -65,8 +65,8 @@ func (e *MacroRiskAssessmentEngine) Assess(data MacroDataSnapshot) *MacroRiskAss
 
 	assessment.Level = e.determineRiskLevel(riskFactors)
 	assessment.ForeignOutflowProb = e.calculateOutflowProbability(riskFactors)
-	assessment.PrimaryFlow = e.determinePrimaryFlow(riskFactors, data)
-	assessment.FavoredSectors, assessment.AvoidedSectors = e.determineSectorRotation(riskFactors, data)
+	assessment.PrimaryFlow = e.determinePrimaryFlow(riskFactors)
+	assessment.FavoredSectors, assessment.AvoidedSectors = e.determineSectorRotation(riskFactors)
 	assessment.Rationale = e.buildRationale(riskFactors, assessment.Level)
 	assessment.Confidence = e.calculateConfidence(riskFactors)
 
@@ -201,7 +201,7 @@ func (e *MacroRiskAssessmentEngine) calculateOutflowProbability(factors []RiskFa
 	return prob
 }
 
-func (e *MacroRiskAssessmentEngine) determinePrimaryFlow(factors []RiskFactor, data MacroDataSnapshot) string {
+func (e *MacroRiskAssessmentEngine) determinePrimaryFlow(factors []RiskFactor) string {
 	// Priority: energy_crisis > geopolitical > carry_trade > market_stress
 	// Energy crisis takes precedence because it signals sector rotation opportunity
 	// Geopolitical takes precedence over carry_trade because it's more systemic
@@ -232,7 +232,7 @@ func (e *MacroRiskAssessmentEngine) determinePrimaryFlow(factors []RiskFactor, d
 	return "mixed"
 }
 
-func (e *MacroRiskAssessmentEngine) determineSectorRotation(factors []RiskFactor, data MacroDataSnapshot) (favored, avoided []string) {
+func (e *MacroRiskAssessmentEngine) determineSectorRotation(factors []RiskFactor) (favored, avoided []string) {
 	// Priority: energy_crisis > geopolitical > carry_trade > market_stress
 	for _, f := range factors {
 		if f.Type == "energy_crisis" {

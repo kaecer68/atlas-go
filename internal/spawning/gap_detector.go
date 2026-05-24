@@ -129,11 +129,11 @@ func (d *GapDetector) DetectGaps(
 	newGaps := make([]*KnowledgeGap, 0)
 
 	// 1. Detect sector coverage gaps
-	sectorGaps := d.detectSectorGaps(registry, scorecards, universe)
+	sectorGaps := d.detectSectorGaps(registry, scorecards)
 	newGaps = append(newGaps, sectorGaps...)
 
 	// 2. Detect style coverage gaps
-	styleGaps := d.detectStyleGaps(registry, scorecards)
+	styleGaps := d.detectStyleGaps(registry)
 	newGaps = append(newGaps, styleGaps...)
 
 	// 3. Detect market cap coverage gaps
@@ -145,7 +145,7 @@ func (d *GapDetector) DetectGaps(
 	newGaps = append(newGaps, regimeGaps...)
 
 	// 5. Detect high-correlation agent pairs
-	correlationGaps := d.detectCorrelationGaps(registry, scorecards)
+	correlationGaps := d.detectCorrelationGaps(registry)
 	newGaps = append(newGaps, correlationGaps...)
 
 	// Store new gaps
@@ -162,7 +162,6 @@ func (d *GapDetector) DetectGaps(
 func (d *GapDetector) detectSectorGaps(
 	registry domain.AgentRegistry,
 	scorecards map[string]*domain.Scorecard,
-	universe []string,
 ) []*KnowledgeGap {
 	gaps := make([]*KnowledgeGap, 0)
 
@@ -244,7 +243,6 @@ func (d *GapDetector) detectSectorGaps(
 // detectStyleGaps identifies missing investment style coverage
 func (d *GapDetector) detectStyleGaps(
 	registry domain.AgentRegistry,
-	scorecards map[string]*domain.Scorecard,
 ) []*KnowledgeGap {
 	gaps := make([]*KnowledgeGap, 0)
 
@@ -333,7 +331,6 @@ func (d *GapDetector) detectRegimeGaps(
 // detectCorrelationGaps identifies agents that are too correlated
 func (d *GapDetector) detectCorrelationGaps(
 	registry domain.AgentRegistry,
-	scorecards map[string]*domain.Scorecard,
 ) []*KnowledgeGap {
 	gaps := make([]*KnowledgeGap, 0)
 

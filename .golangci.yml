@@ -23,6 +23,9 @@ linters:
         - G204     # allow os/exec for broker/staging CLI tools
     misspell:
       locale: US
+      ignore-rules:
+        - strat       # intentional abbreviation for "strategy layer"
+        - cancelled   # domain enum values (would break JSON serialization)
     errcheck:
       # check-blank: false — `_ = f.Close()` 是專案約定的唯讀資源釋放慣例
       # 參見 .github/instructions/go-core.instructions.md「唯讀 Close 錯誤處理」

@@ -310,7 +310,7 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, st
 				baselineObs,
 				candidateObs,
 				minObs,
-				string(result.Brief.MaturityLevel),
+				result.Brief.MaturityLevel,
 				result.UsedFallbackWindow,
 			)
 		}
@@ -323,7 +323,7 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, st
 		return false, "rejected: candidate did not improve over baseline"
 	}
 
-	requiredImprovement := j.requiredImprovementForProfile(result.Brief.MaturityLevel, result.Experiment.MutationType)
+	requiredImprovement := j.requiredImprovementForProfile(result.Experiment.MutationType)
 	if candidate-baseline < requiredImprovement {
 		return false, "rejected: improvement below mutation profile threshold"
 	}
@@ -492,7 +492,7 @@ func calculateVolatility(returns []float64) float64 {
 	return math.Sqrt(variance)
 }
 
-func (j *Judge) requiredImprovementForProfile(maturity, mutationType string) float64 {
+func (j *Judge) requiredImprovementForProfile(mutationType string) float64 {
 	base := j.params.Experiment.ImprovementThreshold.Value
 	switch mutationType {
 	case "risk_rule_change", "portfolio_constraint_revision":

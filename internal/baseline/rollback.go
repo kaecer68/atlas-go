@@ -64,10 +64,7 @@ func (m *Manager) Revert(target RevertTarget, reason string, dryRun bool) (Rever
 		return result, nil
 	}
 
-	revertedPolicy, err := m.reconstructPolicyAtVersion(current, targetVersion)
-	if err != nil {
-		return RevertResult{}, fmt.Errorf("reconstruct policy: %w", err)
-	}
+	revertedPolicy := m.reconstructPolicyAtVersion(current, targetVersion)
 
 	revertedPolicy.RevertHistory = append(revertedPolicy.RevertHistory, RevertRecord{
 		FromVersion:         current.Version,
@@ -137,7 +134,7 @@ func (m *Manager) findRevertedExperiments(current Policy, targetVersion int) []s
 	return reverted
 }
 
-func (m *Manager) reconstructPolicyAtVersion(current Policy, targetVersion int) (Policy, error) {
+func (m *Manager) reconstructPolicyAtVersion(current Policy, targetVersion int) Policy {
 	reconstructed := DefaultPolicy()
 	reconstructed.Version = targetVersion
 
@@ -189,7 +186,7 @@ func (m *Manager) reconstructPolicyAtVersion(current Policy, targetVersion int) 
 		reconstructed.Promotions = append(reconstructed.Promotions, promo)
 	}
 
-	return reconstructed, nil
+	return reconstructed
 }
 
 func (m *Manager) GetPromotionHistory() ([]PromotionRecordWithVersion, error) {

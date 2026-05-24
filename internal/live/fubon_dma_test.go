@@ -344,9 +344,7 @@ func TestFubonDMAAdapterSendRequestNotRunning(t *testing.T) {
 
 func TestFubonDMAAdapterKillProcessNil(t *testing.T) {
 	adapter := &FubonDMAAdapter{}
-	if err := adapter.killProcess(); err != nil {
-		t.Errorf("killProcess on nil process should not error: %v", err)
-	}
+	adapter.killProcess() // should not panic on nil process
 }
 
 func TestFubonDMAAdapterCloseNotConnected(t *testing.T) {

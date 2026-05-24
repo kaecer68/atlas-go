@@ -26,7 +26,7 @@ func (r *PostgresRepository) RecordScreeningRejects(ctx context.Context, session
 	}
 
 	br := r.pool.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() { _ = br.Close() }()
 
 	_, err := br.Exec()
 	if err != nil {

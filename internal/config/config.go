@@ -77,9 +77,9 @@ func Load() Config {
 		SQLitePath:                 envOr("ATLAS_SQLITE_PATH", "data/state/atlas.db"),
 		ReplayDataPath:             envOr("ATLAS_REPLAY_DATA_PATH", "samples/replay/twse_stock_day_all_sample.csv"),
 		ReplaySessionDate:          envOr("ATLAS_REPLAY_SESSION_DATE", ""),
-		FubonAPIKey:                envOrKeychain("FUBON_API_KEY", ""),
-		FugleAPIKey:                envOrKeychain("FUGLE_API_KEY", ""),
-		FinMindAPIKey:              envOrKeychain("FINMIND_API_KEY", ""),
+		FubonAPIKey:                envOrKeychain("FUBON_API_KEY"),
+		FugleAPIKey:                envOrKeychain("FUGLE_API_KEY"),
+		FinMindAPIKey:              envOrKeychain("FINMIND_API_KEY"),
 		YahooEnabled:               os.Getenv("ATLAS_YAHOO_ENABLED") == "true",
 		BrokerMode:                 envOr("ATLAS_BROKER_MODE", "dry-run"),
 		BrokerMaxRetries:           envOrInt("ATLAS_BROKER_MAX_RETRIES", 1),
@@ -146,8 +146,8 @@ func envOr(key, fallback string) string {
 // envOrKeychain reads from environment variable first,
 // falling back to the system keychain. Currently delegates to envOr
 // since keychain integration is not yet implemented.
-func envOrKeychain(key, fallback string) string {
-	return envOr(key, fallback)
+func envOrKeychain(key string) string {
+	return envOr(key, "")
 }
 
 func envOrInt(key string, fallback int) int {
@@ -190,7 +190,7 @@ func envOrIntCSV(key string, fallback []int) []int {
 // GetSecret retrieves a secret from the environment or macOS Keychain.
 // Use this for secrets not covered by the Config struct fields.
 func GetSecret(key string) string {
-	return envOrKeychain(key, "")
+	return envOrKeychain(key)
 }
 
 // resolveEnvFilePath finds the .env file to load.

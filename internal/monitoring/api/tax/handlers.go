@@ -3,7 +3,6 @@ package tax
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -31,7 +30,7 @@ func NewHandlers(ledgerDir string, dividendProvider DividendProvider) *Handlers 
 	}
 }
 
-func (h *Handlers) loadPositions() ([]domain.Position, error) {
+func (h *Handlers) loadPositions() []domain.Position {
 	ledgerDir := h.LedgerDir
 	if !filepath.IsAbs(ledgerDir) {
 		if wd, err := os.Getwd(); err == nil {
@@ -43,7 +42,7 @@ func (h *Handlers) loadPositions() ([]domain.Position, error) {
 	if err == nil && len(data) > 2 {
 		var positions []domain.Position
 		if err := json.Unmarshal(data, &positions); err == nil && len(positions) > 0 {
-			return positions, nil
+			return positions
 		}
 	} else if err != nil {
 		logging.Warn("tax_handler", "read_live_positions_failed", "path", livePath, logging.Err(err))
@@ -54,7 +53,7 @@ func (h *Handlers) loadPositions() ([]domain.Position, error) {
 	if err == nil && len(data) > 2 {
 		var positions []domain.Position
 		if err := json.Unmarshal(data, &positions); err == nil && len(positions) > 0 {
-			return positions, nil
+			return positions
 		}
 	}
 
@@ -62,7 +61,7 @@ func (h *Handlers) loadPositions() ([]domain.Position, error) {
 	entries, err := os.ReadDir(sessionsDir)
 	if err != nil {
 		logging.Warn("tax_handler", "read_sessions_dir_failed", logging.Err(err))
-		return nil, nil
+		return nil
 	}
 
 	var latest string
@@ -72,41 +71,41 @@ func (h *Handlers) loadPositions() ([]domain.Position, error) {
 		}
 	}
 	if latest == "" {
-		return nil, nil
+		return nil
 	}
 
 	summaryPath := filepath.Join(sessionsDir, latest, "summary.json")
 	summaryData, err := os.ReadFile(summaryPath)
 	if err != nil {
 		logging.Warn("tax_handler", "read_summary_failed", logging.Err(err))
-		return nil, nil
+		return nil
 	}
 	var summary struct {
 		PositionCount int `json:"position_count"`
 	}
 	if err := json.Unmarshal(summaryData, &summary); err != nil {
-		return nil, nil
+		return nil
 	}
 	if summary.PositionCount == 0 {
-		return nil, nil
+		return nil
 	}
 
 	positionsPath := filepath.Join(sessionsDir, latest, "positions.json")
 	positionsData, err := os.ReadFile(positionsPath)
 	if err != nil {
 		logging.Warn("tax_handler", "read_positions_failed", logging.Err(err))
-		return nil, nil
+		return nil
 	}
 	var positions []domain.Position
 	if err := json.Unmarshal(positionsData, &positions); err != nil {
 		logging.Warn("tax_handler", "parse_positions_failed", logging.Err(err))
-		return nil, nil
+		return nil
 	}
 	if len(positions) > 0 {
-		return positions, nil
+		return positions
 	}
 
-	return nil, nil
+	return nil
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
@@ -114,10 +113,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (h *Handlers) HandleTaxSnapshot(r *http.Request) (int, any) {
-	positions, err := h.loadPositions()
-	if err != nil {
-		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("load positions: %v", err)}
-	}
+	positions := h.loadPositions()
 
 	if len(positions) == 0 {
 		return http.StatusOK, map[string]any{

@@ -249,7 +249,7 @@ func (ne *NarrativeEngine) DetectEvents(data MarketNarrativeData) []NarrativeEve
 	if evt := detectSemiconductorDownturnEvent(data); evt != nil {
 		events = append(events, *evt)
 	}
-	if evt := detectSeasonalEvent(data); evt != nil {
+	if evt := detectSeasonalEvent(); evt != nil {
 		events = append(events, *evt)
 	}
 	if evt := detectRetailDivergenceEvent(data); evt != nil {
@@ -706,7 +706,7 @@ func detectSemiconductorDownturnEvent(data MarketNarrativeData) *NarrativeEvent 
 	return nil
 }
 
-func detectSeasonalEvent(data MarketNarrativeData) *NarrativeEvent {
+func detectSeasonalEvent() *NarrativeEvent {
 	now := time.Now().UTC()
 	month := now.Month()
 	day := now.Day()

@@ -191,11 +191,7 @@ func (s *PipelineService) LoadForecastVsReality(agentID string, limit int) (*For
 		summary = nil
 	}
 
-	predictions, err := s.loadSymbolPredictions(limit, summary)
-	if err != nil {
-		logging.Warn("pipeline_service", "load_symbol_predictions", logging.Err(err))
-		predictions = nil
-	}
+	predictions := s.loadSymbolPredictions(limit, summary)
 
 	data := &ForecastVsRealityData{Items: items, SymbolPredictions: predictions}
 	if summary != nil {
@@ -244,7 +240,7 @@ func readOutcomeFile(path string) ([]rawOutcome, error) {
 	return results, scanner.Err()
 }
 
-func (s *PipelineService) loadSymbolPredictions(limit int, summary *domain.SessionSummary) ([]SymbolPredictionItem, error) {
+func (s *PipelineService) loadSymbolPredictions(limit int, summary *domain.SessionSummary) []SymbolPredictionItem {
 	var rawOutcomes []rawOutcome
 	if summary != nil {
 		path := filepath.Join(s.LedgerDir, "sessions", summary.SessionID, "recommendation_outcomes.jsonl")
@@ -263,7 +259,7 @@ func (s *PipelineService) loadSymbolPredictions(limit int, summary *domain.Sessi
 		}
 	}
 	if rawOutcomes == nil {
-		return nil, nil
+		return nil
 	}
 
 	slices.SortFunc(rawOutcomes, func(a, b rawOutcome) int {
@@ -284,7 +280,7 @@ func (s *PipelineService) loadSymbolPredictions(limit int, summary *domain.Sessi
 	for i, o := range rawOutcomes {
 		result[i] = SymbolPredictionItem(o)
 	}
-	return result, nil
+	return result
 }
 
 // ForecastVsRealityData is the internal representation for forecast vs reality response.
@@ -415,7 +411,7 @@ func extractPipelineMetrics(outcome domain.RecommendationOutcome) PipelineItemMe
 	return metrics
 }
 
-func (s *PipelineService) loadSessionPipelineData(sessionID, sessionsDir string, showAll bool, ds *replay.Dataset) (*sessionData, error) {
+func (s *PipelineService) loadSessionPipelineData(sessionID, sessionsDir string, showAll bool, ds *replay.Dataset) *sessionData {
 	var summary *domain.SessionSummary
 	var guards []domain.GuardOutcome
 	var regime domain.Regime
@@ -565,7 +561,7 @@ func (s *PipelineService) loadSessionPipelineData(sessionID, sessionsDir string,
 		GuardOutcomes: guards,
 		Status:        status,
 		StatusMessage: statusMessage,
-	}, nil
+	}
 }
 
 // LoadRecommendationPipeline loads the recommendation pipeline for a session.
@@ -641,10 +637,7 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 		logging.Warn("pipeline_service", "load_replay_csv_failed", logging.Err(err))
 	}
 
-	sd, err := s.loadSessionPipelineData(targetSession, sessionsDir, showAll, ds)
-	if err != nil {
-		return nil, err
-	}
+	sd := s.loadSessionPipelineData(targetSession, sessionsDir, showAll, ds)
 
 	var fallbackMsg string
 	if len(sd.Items) == 0 && sessionID == "" {
@@ -654,8 +647,8 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 			}
 			fallbackPath := filepath.Join(sessionsDir, dir, "recommendation_outcomes.jsonl")
 			if info, err := os.Stat(fallbackPath); err == nil && info.Size() > 0 {
-				fallbackData, err := s.loadSessionPipelineData(dir, sessionsDir, showAll, ds)
-				if err == nil && len(fallbackData.Items) > 0 {
+				fallbackData := s.loadSessionPipelineData(dir, sessionsDir, showAll, ds)
+				if len(fallbackData.Items) > 0 {
 					targetSession = dir
 					sd = fallbackData
 					fallbackMsg = fmt.Sprintf("最新場次 %s 尚無數據，已自動切換至 %s", sessionDirs[0], dir)

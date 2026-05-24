@@ -96,15 +96,15 @@ func loadSessions(stateDir string) []sessionData {
 		if statErr != nil || !info.IsDir() {
 			continue
 		}
-		sd, loadErr := loadSessionDir(d)
-		if loadErr == nil && sd.Summary.PortfolioValue > 0 {
+		sd := loadSessionDir(d)
+		if sd.Summary.PortfolioValue > 0 {
 			sessions = append(sessions, sd)
 		}
 	}
 	return sessions
 }
 
-func loadSessionDir(dir string) (sessionData, error) {
+func loadSessionDir(dir string) sessionData {
 	sd := sessionData{}
 	data, err := os.ReadFile(filepath.Join(dir, "summary.json"))
 	if err == nil {
@@ -114,7 +114,7 @@ func loadSessionDir(dir string) (sessionData, error) {
 	if err == nil {
 		sd.Outcomes = parseOutcomes(data)
 	}
-	return sd, nil
+	return sd
 }
 
 func parseOutcomes(data []byte) []outcome {

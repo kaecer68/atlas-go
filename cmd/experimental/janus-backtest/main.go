@@ -99,7 +99,7 @@ func main() {
 		printMarkdown(report)
 		// Additionally, print a direct conviction scaling proof using the first date.
 		fmt.Println()
-		printConvictionProof(cfg, baselineRegime, engine)
+		printConvictionProof(baselineRegime, engine)
 	default:
 		log.Fatalf("unknown format: %s", *format)
 	}
@@ -196,7 +196,7 @@ func mapDomainRegimeToPRISM(r domain.Regime) prism.RegimeType {
 	}
 }
 
-func printConvictionProof(cfg config.Config, regime domain.Regime, engine *janus.Engine) {
+func printConvictionProof(regime domain.Regime, engine *janus.Engine) {
 	fmt.Println("## JANUS Conviction Scaling Proof")
 	fmt.Println()
 

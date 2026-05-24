@@ -249,7 +249,8 @@ func (a *FubonDMAAdapter) Close() error {
 
 	_, _ = a.sendRequest(fubonDMARequest{Cmd: "logout"})
 	a.connected = false
-	return a.killProcess()
+	a.killProcess()
+	return nil
 }
 
 // sendRequest 傳送 JSONL 指令至 Python subprocess 並讀取回應。
@@ -287,9 +288,9 @@ func (a *FubonDMAAdapter) sendRequest(req fubonDMARequest) (fubonDMAResponse, er
 }
 
 // killProcess 強制終止 Python subprocess。
-func (a *FubonDMAAdapter) killProcess() error {
+func (a *FubonDMAAdapter) killProcess() {
 	if a.proc == nil || a.proc.Process == nil {
-		return nil
+		return
 	}
 	if a.stdin != nil {
 		a.stdin.Close()
@@ -304,5 +305,4 @@ func (a *FubonDMAAdapter) killProcess() error {
 	case <-time.After(3 * time.Second):
 		a.proc.Process.Kill()
 	}
-	return nil
 }

@@ -315,8 +315,8 @@ func (ct *CycleTracker) detectCyclePosition(industryID string, metrics IndustryM
 	position.ContinuousPhaseScore = ct.GetContinuousPhaseScore(industryID)
 
 	// Set leading and lagging indicators
-	position.LeadingIndicators = ct.getLeadingIndicators(industryID, metrics)
-	position.LaggingIndicators = ct.getLaggingIndicators(industryID, metrics)
+	position.LeadingIndicators = ct.getLeadingIndicators(metrics)
+	position.LaggingIndicators = ct.getLaggingIndicators(metrics)
 
 	// Calculate cycle duration
 	if history := ct.history[industryID]; len(history) > 0 {
@@ -575,7 +575,7 @@ func (ct *CycleTracker) boundaryConfidence(industryID string, metrics IndustryMe
 }
 
 // getLeadingIndicators returns leading indicators for an industry.
-func (ct *CycleTracker) getLeadingIndicators(industryID string, metrics IndustryMetrics) []Indicator {
+func (ct *CycleTracker) getLeadingIndicators(metrics IndustryMetrics) []Indicator {
 	var indicators []Indicator
 
 	// Common leading indicators
@@ -605,7 +605,7 @@ func (ct *CycleTracker) getLeadingIndicators(industryID string, metrics Industry
 }
 
 // getLaggingIndicators returns lagging indicators for an industry.
-func (ct *CycleTracker) getLaggingIndicators(industryID string, metrics IndustryMetrics) []Indicator {
+func (ct *CycleTracker) getLaggingIndicators(metrics IndustryMetrics) []Indicator {
 	var indicators []Indicator
 
 	if metrics.ProfitGrowthYoY != 0 {
