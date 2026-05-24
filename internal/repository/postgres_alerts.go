@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -23,7 +24,6 @@ func (r *PostgresRepository) SaveAlert(ctx context.Context, alert domain.AlertRe
 			acknowledged_by = EXCLUDED.acknowledged_by
 	`, alert.ID, alert.Timestamp, alert.Rule, alert.Severity, alert.Message,
 		alert.Value, alert.Threshold, alert.Acknowledged, alert.AcknowledgedAt, alert.AcknowledgedBy)
-
 	if err != nil {
 		return fmt.Errorf("save alert: %w", err)
 	}
@@ -70,7 +70,6 @@ func (r *PostgresRepository) AcknowledgeAlert(ctx context.Context, alertID strin
 		SET acknowledged = TRUE, acknowledged_at = NOW(), acknowledged_by = $2
 		WHERE id = $1 AND NOT acknowledged
 	`, alertID, user)
-
 	if err != nil {
 		return fmt.Errorf("acknowledge alert: %w", err)
 	}

@@ -244,7 +244,7 @@ func appendRecords(csvPath string, records []csvRecord) error {
 	prevCloseByCode := buildPrevCloseByCode(existing)
 
 	// Append new records, skipping duplicates
-	f, err := os.OpenFile(csvPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(csvPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return fmt.Errorf("open csv: %w", err)
 	}

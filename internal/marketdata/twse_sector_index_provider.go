@@ -11,10 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/logging"
-	"golang.org/x/time/rate"
 )
 
 // SectorIndexData holds a single day's index value for an industry.
@@ -240,7 +241,7 @@ func (p *TWSESectorIndexProvider) loadFromCache(startDate, endDate time.Time) (m
 
 // saveToCache saves sector index data to disk cache.
 func (p *TWSESectorIndexProvider) saveToCache(data map[string][]SectorIndexData, startDate, endDate time.Time) error {
-	if err := os.MkdirAll(p.cacheDir, 0755); err != nil {
+	if err := os.MkdirAll(p.cacheDir, 0o755); err != nil {
 		return fmt.Errorf("create cache dir: %w", err)
 	}
 
@@ -250,7 +251,7 @@ func (p *TWSESectorIndexProvider) saveToCache(data map[string][]SectorIndexData,
 		return fmt.Errorf("encode cache: %w", err)
 	}
 
-	if err := os.WriteFile(path, encoded, 0644); err != nil {
+	if err := os.WriteFile(path, encoded, 0o644); err != nil {
 		return fmt.Errorf("write cache: %w", err)
 	}
 

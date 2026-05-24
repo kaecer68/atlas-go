@@ -123,7 +123,7 @@ func (s *StateStore) Save() error {
 
 	// 确保目录存在
 	stateDir := filepath.Join(s.basePath, "state")
-	if err := os.MkdirAll(stateDir, 0755); err != nil {
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		return fmt.Errorf("create state dir: %w", err)
 	}
 
@@ -250,7 +250,7 @@ func (s *StateStore) RecordEvent(eventType string, payload any) {
 // persistEvent 持久化事件
 func (s *StateStore) persistEvent(event Event) {
 	eventsDir := filepath.Join(s.basePath, "events")
-	if err := os.MkdirAll(eventsDir, 0755); err != nil {
+	if err := os.MkdirAll(eventsDir, 0o755); err != nil {
 		return
 	}
 
@@ -352,7 +352,7 @@ type State struct {
 // Helper functions
 
 func appendToFile(path, content string) error {
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}

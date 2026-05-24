@@ -42,7 +42,7 @@ func main() {
 	flag.Parse()
 
 	stateDir := filepath.Join(os.Getenv("HOME"), "workspace", "atlas", "data", "state")
-	if err := os.MkdirAll(stateDir, 0755); err != nil {
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create state dir: %v\n", err)
 		os.Exit(1)
 	}

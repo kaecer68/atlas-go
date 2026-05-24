@@ -619,7 +619,7 @@ func (gmm *GlobalMarketManager) Save(filepath string) error {
 		return fmt.Errorf("marshal state: %w", err)
 	}
 
-	return os.WriteFile(filepath, data, 0644)
+	return os.WriteFile(filepath, data, 0o644)
 }
 
 // Load restores global market configuration

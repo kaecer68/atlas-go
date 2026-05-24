@@ -57,10 +57,15 @@ linters:
       - "internal/industry/linkage.go"
 
 formatters:
+  enable:
+    - gofumpt
+    - gci
   settings:
-    goimports:
-      local-prefixes:
-        - github.com/kaecer68/atlas-go
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/kaecer68/atlas-go)
 
 issues:
   max-issues-per-linter: 0

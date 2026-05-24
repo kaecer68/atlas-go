@@ -128,6 +128,6 @@ func (t *DailyQuotaTracker) save() {
 		return
 	}
 
-	_ = os.MkdirAll(filepath.Dir(t.stateFile), 0755)
-	_ = os.WriteFile(t.stateFile, data, 0644)
+	_ = os.MkdirAll(filepath.Dir(t.stateFile), 0o755)
+	_ = os.WriteFile(t.stateFile, data, 0o644)
 }

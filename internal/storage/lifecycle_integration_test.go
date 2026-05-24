@@ -161,10 +161,10 @@ func TestStorageCleanupIntegration(t *testing.T) {
 func makeTestFile(t *testing.T, base, rel string, mtime time.Time) {
 	t.Helper()
 	path := filepath.Join(base, rel)
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
 	}
-	if err := os.WriteFile(path, []byte("{}"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("{}"), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
 	if err := os.Chtimes(path, mtime, mtime); err != nil {

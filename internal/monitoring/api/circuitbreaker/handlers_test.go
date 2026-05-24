@@ -45,14 +45,14 @@ func TestHandleReset(t *testing.T) {
 
 	statePath := filepath.Join(tmpDir, "data/state/circuit_breaker_state.json")
 	stateDir := filepath.Dir(statePath)
-	os.MkdirAll(stateDir, 0755)
+	os.MkdirAll(stateDir, 0o755)
 	initialState := `{"state":"paused","state_changed_at":"2026-01-01T00:00:00Z","consecutive_sl":3,"cooldown_until":"2026-01-01T00:15:00Z","intraday_peak":100000,"day_start_value":100000}`
-	os.WriteFile(statePath, []byte(initialState), 0644)
+	os.WriteFile(statePath, []byte(initialState), 0o644)
 
 	logPath := filepath.Join(tmpDir, "data/state/circuit_breaker_log.jsonl")
 	logDir := filepath.Dir(logPath)
-	os.MkdirAll(logDir, 0755)
-	os.WriteFile(logPath, []byte(`{"timestamp":"2026-01-01T00:00:00Z","from_state":"normal","to_state":"paused","reason":"consecutive stop losses: 3","day_pnl_pct":-2.5,"drawdown_pct":3.1}`+"\n"), 0644)
+	os.MkdirAll(logDir, 0o755)
+	os.WriteFile(logPath, []byte(`{"timestamp":"2026-01-01T00:00:00Z","from_state":"normal","to_state":"paused","reason":"consecutive stop losses: 3","day_pnl_pct":-2.5,"drawdown_pct":3.1}`+"\n"), 0o644)
 
 	cbSvc := service.NewCircuitBreakerService(tmpDir)
 	h := &Handlers{Svc: cbSvc}

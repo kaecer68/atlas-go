@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"golang.org/x/time/rate"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 

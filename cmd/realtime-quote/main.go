@@ -9,9 +9,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/marketdata/realtime"
-	"github.com/redis/go-redis/v9"
 )
 
 var (

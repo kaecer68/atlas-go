@@ -267,6 +267,8 @@ func NewDayTradingFetcher(fetcher DataFetcher) func(ctx context.Context) (*marke
 }
 
 // Ensure adapters implement their interfaces at compile time.
-var _ marketdata.MacroDataProvider = (*macroDataGatewayAdapter)(nil)
-var _ narrative.GeopoliticalRiskProvider = (*geopoliticalGatewayAdapter)(nil)
-var _ narrative.GeopoliticalRiskProvider = (*taiwanGeopoliticalGatewayAdapter)(nil)
+var (
+	_ marketdata.MacroDataProvider       = (*macroDataGatewayAdapter)(nil)
+	_ narrative.GeopoliticalRiskProvider = (*geopoliticalGatewayAdapter)(nil)
+	_ narrative.GeopoliticalRiskProvider = (*taiwanGeopoliticalGatewayAdapter)(nil)
+)

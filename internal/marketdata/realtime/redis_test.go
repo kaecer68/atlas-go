@@ -8,8 +8,9 @@ import (
 	"time"
 
 	miniredis "github.com/alicebob/miniredis/v2"
-	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 func setupMiniredis(t *testing.T) (*miniredis.Miniredis, *redis.Client) {

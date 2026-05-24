@@ -219,7 +219,7 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 
 	equityCurve := s.buildEquityCurve()
 	tradeCount := len(s.LoadTradeHistory())
-	var startingCash = 0.0
+	startingCash := 0.0
 	realizedPnL := 0.0
 	currentDrawdown := 0.0
 	if ps, err := sim.LoadPersistentState(s.LedgerDir); err == nil && ps != nil {

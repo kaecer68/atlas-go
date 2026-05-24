@@ -69,7 +69,7 @@ func TestMergeDedup(t *testing.T) {
 	}
 	for _, bar := range existingBars {
 		data, _ := json.Marshal(bar)
-		f, _ := os.OpenFile(existingPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		f, _ := os.OpenFile(existingPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 		fmt.Fprintln(f, string(data))
 		f.Close()
 	}

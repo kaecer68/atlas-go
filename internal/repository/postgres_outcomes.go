@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -109,7 +110,6 @@ func (r *PostgresRepository) QueryPassRate(ctx context.Context, agentID string, 
 		FROM recommendation_outcomes
 		WHERE agent_id = $1 AND time >= $2
 	`, agentID, start).Scan(&total, &passed)
-
 	if err != nil {
 		return 0, fmt.Errorf("query pass rate: %w", err)
 	}

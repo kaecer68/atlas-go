@@ -182,7 +182,7 @@ func main() {
 	}
 
 	// Append to CSV
-	fout, err := os.OpenFile(*csvPath, os.O_APPEND|os.O_WRONLY, 0644)
+	fout, err := os.OpenFile(*csvPath, os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay", "error", err.Error(), pool)
 		fmt.Fprintf(os.Stderr, "open csv for append: %v\n", err)

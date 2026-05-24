@@ -227,11 +227,11 @@ func (m *SpawningManager) spawnAgentForGap(gap *KnowledgeGap) (*SpawnedAgent, er
 
 	// Save prompt file — anchored to PromptsDir for CWD-independence
 	promptPath := filepath.Join(m.promptsDir, "agents", filepath.Base(spec.PromptFile))
-	if err := os.MkdirAll(filepath.Dir(promptPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(promptPath), 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create prompts directory: %w", err)
 	}
 
-	if err := os.WriteFile(promptPath, []byte(promptContent), 0644); err != nil {
+	if err := os.WriteFile(promptPath, []byte(promptContent), 0o644); err != nil {
 		return nil, fmt.Errorf("failed to write prompt file: %w", err)
 	}
 

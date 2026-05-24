@@ -179,7 +179,7 @@ for line in sys.stdin:
 	if _, err := tmpFile.WriteString(script); err != nil {
 		t.Fatalf("write temp script: %v", err)
 	}
-	if err := tmpFile.Chmod(0755); err != nil {
+	if err := tmpFile.Chmod(0o755); err != nil {
 		t.Fatalf("chmod temp script: %v", err)
 	}
 	if err := tmpFile.Close(); err != nil {
@@ -280,7 +280,7 @@ for line in sys.stdin:
 	if _, err := tmpFile.WriteString(script); err != nil {
 		t.Fatalf("write temp script: %v", err)
 	}
-	if err := tmpFile.Chmod(0755); err != nil {
+	if err := tmpFile.Chmod(0o755); err != nil {
 		t.Fatalf("chmod temp script: %v", err)
 	}
 	tmpFile.Close()

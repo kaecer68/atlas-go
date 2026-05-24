@@ -19,7 +19,7 @@ func TestCheckTSMCRevenueHealth(t *testing.T) {
 
 	// Test 2: recent data (ROC 11504 = 2026-04) → ok (within 45 days)
 	recentFile := filepath.Join(tmpDir, "11504_revenue.json")
-	os.WriteFile(recentFile, []byte(`{"date":"11504","revenue":500}`), 0644)
+	os.WriteFile(recentFile, []byte(`{"date":"11504","revenue":500}`), 0o644)
 	status, updated = checkTSMCRevenueHealth(tmpDir, now)
 	if status != "ok" {
 		t.Errorf("recent data: expected ok, got %s (updated=%s)", status, updated)
@@ -28,7 +28,7 @@ func TestCheckTSMCRevenueHealth(t *testing.T) {
 	// Test 3: old data (ROC 11502 = 2026-02) → error (> 90 days from 2026-05-12)
 	os.Remove(recentFile)
 	oldFile := filepath.Join(tmpDir, "11502_revenue.json")
-	os.WriteFile(oldFile, []byte(`{"date":"11502","revenue":400}`), 0644)
+	os.WriteFile(oldFile, []byte(`{"date":"11502","revenue":400}`), 0o644)
 	status, updated = checkTSMCRevenueHealth(tmpDir, now)
 	if status != "error" {
 		t.Errorf("old data: expected error, got %s (updated=%s)", status, updated)
@@ -37,7 +37,7 @@ func TestCheckTSMCRevenueHealth(t *testing.T) {
 	// Test 4: warn data (ROC 11503 = 2026-03, ~42 days from 2026-05-12)
 	os.Remove(oldFile)
 	warnFile := filepath.Join(tmpDir, "11503_revenue.json")
-	os.WriteFile(warnFile, []byte(`{"date":"11503","revenue":450}`), 0644)
+	os.WriteFile(warnFile, []byte(`{"date":"11503","revenue":450}`), 0o644)
 	status, updated = checkTSMCRevenueHealth(tmpDir, now)
 	if status != "warn" {
 		t.Errorf("warn data: expected warn, got %s (updated=%s)", status, updated)

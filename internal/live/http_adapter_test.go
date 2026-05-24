@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -16,6 +15,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 )
 
 func TestHTTPBrokerAdapterSubmitOrderSuccess(t *testing.T) {

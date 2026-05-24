@@ -111,7 +111,6 @@ func getSymbolSector(symbol string, symMap map[string]string) string {
 }
 
 func (h *Handlers) computeSectorFactorExposure(outcomes []domain.RecommendationOutcome, portfolioValue float64, symSectorMap map[string]string) ([]SectorExposure, FactorExposureInline) {
-
 	type secAgg struct {
 		count                        int
 		absReturn                    float64

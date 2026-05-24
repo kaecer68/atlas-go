@@ -1,12 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"encoding/json"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 

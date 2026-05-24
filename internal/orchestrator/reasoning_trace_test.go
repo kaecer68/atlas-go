@@ -30,16 +30,20 @@ func TestReasoningTrace_JSONRoundTrip(t *testing.T) {
 		t.Fatalf("failed to unmarshal to map: %v", err)
 	}
 
-	expectedFields := []string{"session_id", "timestamp", "phase", "step", "component",
-		"action", "reasoning", "data", "confidence", "is_fallback"}
+	expectedFields := []string{
+		"session_id", "timestamp", "phase", "step", "component",
+		"action", "reasoning", "data", "confidence", "is_fallback",
+	}
 	for _, field := range expectedFields {
 		if _, ok := m[field]; !ok {
 			t.Errorf("expected snake_case field %q in JSON output", field)
 		}
 	}
 
-	pascalFields := []string{"SessionID", "Timestamp", "Phase", "Step",
-		"Component", "Action", "Reasoning", "Data", "Confidence", "IsFallback"}
+	pascalFields := []string{
+		"SessionID", "Timestamp", "Phase", "Step",
+		"Component", "Action", "Reasoning", "Data", "Confidence", "IsFallback",
+	}
 	for _, field := range pascalFields {
 		if _, ok := m[field]; ok {
 			t.Errorf("found PascalCase field %q in JSON output, expected snake_case", field)

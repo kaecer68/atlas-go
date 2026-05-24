@@ -148,7 +148,7 @@ func TestParseStatusCodeCSV(t *testing.T) {
 func TestGetLatestReplayDate(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "test.csv")
 	content := "date,open,close\n2024-01-01,100,110\n2024-01-03,105,115\n2024-01-02,102,112\n"
-	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte(content), 0o644); err != nil {
 		t.Fatalf("write test csv: %v", err)
 	}
 

@@ -8,8 +8,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 // RedisConfig Redis PubSub 設定

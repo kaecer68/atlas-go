@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 )
@@ -98,7 +99,6 @@ func (r *PostgresRepository) SaveSessionSummary(ctx context.Context, summary dom
 		summary.PositionCount, summary.EndingCash, summary.PortfolioValue, summary.OutcomeCount,
 		brokerRuntime, summary.NextExperimentAgentID, summary.ProposalID, summary.CommitID,
 		summary.ApprovalID, guardOutcomes)
-
 	if err != nil {
 		return fmt.Errorf("save session summary: %w", err)
 	}
@@ -192,7 +192,6 @@ func (r *PostgresRepository) RecordHumanIntervention(ctx context.Context, interv
 	`, intervention.RecordedAt, intervention.ID, intervention.Type, intervention.TargetAgentID,
 		intervention.TargetModelID, intervention.TargetSector, intervention.TargetSymbol,
 		intervention.Value, intervention.Reason, intervention.Operator, intervention.SessionID)
-
 	if err != nil {
 		return fmt.Errorf("record human intervention: %w", err)
 	}

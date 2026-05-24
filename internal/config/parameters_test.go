@@ -101,7 +101,7 @@ func TestLoadParametersConfig_ValidFile(t *testing.T) {
 func TestLoadParametersConfig_InvalidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "parameters.json")
-	if err := os.WriteFile(path, []byte("not json"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("not json"), 0o644); err != nil {
 		t.Fatalf("write bad file: %v", err)
 	}
 

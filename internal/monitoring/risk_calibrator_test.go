@@ -11,10 +11,10 @@ import (
 func TestSessionCalibrationProvider_LoadsSessions(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessionsDir := filepath.Join(tmpDir, "sessions")
-	os.MkdirAll(sessionsDir, 0755)
+	os.MkdirAll(sessionsDir, 0o755)
 
 	sessionDir := filepath.Join(sessionsDir, "session-20260501-daily")
-	os.MkdirAll(sessionDir, 0755)
+	os.MkdirAll(sessionDir, 0o755)
 
 	summary := map[string]any{
 		"session_id":      "session-20260501-daily",
@@ -23,7 +23,7 @@ func TestSessionCalibrationProvider_LoadsSessions(t *testing.T) {
 		"recorded_at":     "2026-05-01T14:30:00+08:00",
 	}
 	summaryData, _ := json.Marshal(summary)
-	os.WriteFile(filepath.Join(sessionDir, "summary.json"), summaryData, 0644)
+	os.WriteFile(filepath.Join(sessionDir, "summary.json"), summaryData, 0o644)
 
 	var outcomesLines string
 	for _, sym := range []string{"2330", "2303", "2317"} {
@@ -38,7 +38,7 @@ func TestSessionCalibrationProvider_LoadsSessions(t *testing.T) {
 		data, _ := json.Marshal(o)
 		outcomesLines += string(data) + "\n"
 	}
-	os.WriteFile(filepath.Join(sessionDir, "recommendation_outcomes.jsonl"), []byte(outcomesLines), 0644)
+	os.WriteFile(filepath.Join(sessionDir, "recommendation_outcomes.jsonl"), []byte(outcomesLines), 0o644)
 
 	provider := NewSessionCalibrationProvider(tmpDir)
 	sessions, err := provider.RecentSessions(context.Background(), 10)
@@ -74,11 +74,11 @@ func TestSessionCalibrationProvider_EmptyDir(t *testing.T) {
 func TestSessionCalibrationProvider_Limit(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessionsDir := filepath.Join(tmpDir, "sessions")
-	os.MkdirAll(sessionsDir, 0755)
+	os.MkdirAll(sessionsDir, 0o755)
 
 	for i := 1; i <= 5; i++ {
 		day := filepath.Join(sessionsDir, "session-2026050"+string(rune('0'+i))+"-daily")
-		os.MkdirAll(day, 0755)
+		os.MkdirAll(day, 0o755)
 		summary := map[string]any{
 			"session_id":      "session-2026050" + string(rune('0'+i)) + "-daily",
 			"portfolio_value": 1_000_000.0,
@@ -86,7 +86,7 @@ func TestSessionCalibrationProvider_Limit(t *testing.T) {
 			"recorded_at":     "2026-05-0" + string(rune('0'+i)) + "T14:30:00+08:00",
 		}
 		data, _ := json.Marshal(summary)
-		os.WriteFile(filepath.Join(day, "summary.json"), data, 0644)
+		os.WriteFile(filepath.Join(day, "summary.json"), data, 0o644)
 	}
 
 	provider := NewSessionCalibrationProvider(tmpDir)

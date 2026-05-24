@@ -36,11 +36,11 @@ func TestHandleBenchmarkComparison_SessionsWithData(t *testing.T) {
 
 	for _, s := range []domain.SessionSummary{session1, session2, session3} {
 		dir := filepath.Join(sessionsDir, s.SessionID)
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("os.MkdirAll: %v", err)
 		}
 		b, _ := json.Marshal(s)
-		if err := os.WriteFile(filepath.Join(dir, "summary.json"), b, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "summary.json"), b, 0o644); err != nil {
 			t.Fatalf("os.WriteFile: %v", err)
 		}
 	}
@@ -105,7 +105,7 @@ func TestHandleBenchmarkComparison_SessionsWithData(t *testing.T) {
 func TestHandleBenchmarkComparison_EmptySessions(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessionsDir := filepath.Join(tmpDir, "sessions")
-	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
 		t.Fatalf("os.MkdirAll: %v", err)
 	}
 
@@ -245,6 +245,7 @@ func TestBenchmarkComparisonResponse_JSONSerialization(t *testing.T) {
 		}
 	}
 }
+
 func TestBuildBenchmarkEquityCurve(t *testing.T) {
 	tests := []struct {
 		name        string

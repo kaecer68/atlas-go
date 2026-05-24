@@ -60,7 +60,8 @@ func NewScheduler(
 func (s *Scheduler) SetSystem(system interface {
 	Registry() domain.AgentRegistry
 	GetPlugins() any
-}) {
+},
+) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.system = system

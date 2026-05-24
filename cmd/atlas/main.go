@@ -901,10 +901,10 @@ func run(args []string, deps appDeps) error {
 					brief := evolution.BuildMutationBrief(windowID, candidate)
 
 					briefDir := filepath.Join(cfg.WorkDir, "data", "state", "windows")
-					_ = os.MkdirAll(briefDir, 0755)
+					_ = os.MkdirAll(briefDir, 0o755)
 					briefPath := filepath.Join(briefDir, "auto-brief-"+candidate.Agent.ID+".json")
 					briefData, _ := json.MarshalIndent(brief, "", "  ")
-					if err := os.WriteFile(briefPath, briefData, 0644); err != nil {
+					if err := os.WriteFile(briefPath, briefData, 0o644); err != nil {
 						return fmt.Errorf("write brief: %w", err)
 					}
 
