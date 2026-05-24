@@ -60,6 +60,7 @@ func Load() Config {
 	// 加载 .env 文件 — 优先使用 ATLAS_ENV_FILE 指定的路径，
 	// 然后依次尝试 .env、~/.config/atlas-go/.env
 	loadEnvFile(resolveEnvFilePath())
+	loadUserEnvFile()
 
 	return Config{
 		WorkDir:                    envOr("ATLAS_WORK_DIR", "."),
@@ -192,8 +193,9 @@ func GetSecret(key string) string {
 	return envOrKeychain(key, "")
 }
 
-// resolveEnvFilePath 返回要加载的 .env 文件路径。
-// 优先级：1) ATLAS_ENV_FILE 环境变量 2) 当前目录 .env 3) ~/.config/atlas-go/.env
+// resolveEnvFilePath finds the .env file to load.
+// Priority: 1) ATLAS_ENV_FILE env var 2) local .env
+// Note: ~/.config/atlas-go/.env is handled separately by loadUserEnvFile()
 func resolveEnvFilePath() string {
 	if p := os.Getenv("ATLAS_ENV_FILE"); p != "" {
 		return p
@@ -201,13 +203,53 @@ func resolveEnvFilePath() string {
 	if info, err := os.Stat(".env"); err == nil && info.Mode().IsRegular() {
 		return ".env"
 	}
-	if home, err := os.UserHomeDir(); err == nil {
-		userEnv := filepath.Join(home, ".config", "atlas-go", ".env")
-		if _, err := os.Stat(userEnv); err == nil {
-			return userEnv
+	return ".env" // fallback: let loadEnvFile skip silently
+}
+
+// loadUserEnvFile loads ~/.config/atlas-go/.env with LookupEnv semantics
+// so that t.Setenv always takes priority over user config files.
+func loadUserEnvFile() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	path := filepath.Join(home, ".config", "atlas-go", ".env")
+	if info, err := os.Stat(path); err != nil || !info.Mode().IsRegular() {
+		return
+	}
+	loadWithLookupEnv(path)
+}
+
+// loadWithLookupEnv loads a .env file but never overrides an already-set env var.
+// It uses os.LookupEnv so that t.Setenv always wins.
+func loadWithLookupEnv(filename string) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if len(value) >= 2 {
+			if (value[0] == '"' && value[len(value)-1] == '"') || (value[0] == '\'' && value[len(value)-1] == '\'') {
+				value = value[1 : len(value)-1]
+			}
+		}
+		if _, ok := os.LookupEnv(key); !ok {
+			os.Setenv(key, value)
 		}
 	}
-	return ".env" // fallback: 让 loadEnvFile 静默跳过
 }
 
 // loadEnvFile 从 .env 文件加载环境变量
