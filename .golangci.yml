@@ -15,6 +15,7 @@ linters:
     - misspell      # spelling in comments
     - unconvert     # unnecessary type conversions
     - unparam       # unused function parameters
+    - bodyclose     # HTTP response body is closed (resource leak prevention)
 
   settings:
     gosec:
