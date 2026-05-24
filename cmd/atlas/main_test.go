@@ -27,7 +27,7 @@ func TestRunAPIModeStartsServerAndRegistersRoutes(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: ledgerDir}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			if dir != ledgerDir {
 				t.Fatalf("ledger dir = %q, want %q", dir, ledgerDir)
 			}
@@ -72,7 +72,7 @@ func TestRunAPIModeReturnsListenError(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir()}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -97,7 +97,7 @@ func TestRunRejectsLiveBrokerWithoutExplicitAllow(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -124,7 +124,7 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			if dir != ledgerDir {
 				t.Fatalf("ledger dir = %q, want %q", dir, ledgerDir)
 			}
@@ -158,7 +158,7 @@ func TestRunRejectsUnsupportedBrokerAdapter(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -180,7 +180,7 @@ func TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -203,7 +203,7 @@ func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -228,7 +228,7 @@ func TestRunRejectsRealSignerWithoutKeyID(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -251,7 +251,7 @@ func TestRunLiveHTTPFullFlagChainInAPIMode(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -303,7 +303,7 @@ func TestStaticFileServerServesIndex(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{WorkDir: tmpDir, LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -386,7 +386,7 @@ func TestAPIModeRegistersAdminReloadConfigRoute(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{WorkDir: t.TempDir(), LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -428,7 +428,7 @@ func TestAPIModeRegistersMetricsRoute(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{WorkDir: t.TempDir(), LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -470,7 +470,7 @@ func TestAPIModeAdminReloadConfigRejectsGet(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{WorkDir: t.TempDir(), LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -513,7 +513,7 @@ func TestConfigLoadingBehavior(t *testing.T) {
 			configCalled = true
 			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -549,7 +549,7 @@ func TestConfigLoadingWithBrokerModeOverride(t *testing.T) {
 			loadedConfig = config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 			return loadedConfig
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -580,7 +580,7 @@ func TestFlagParsingEmptyArgs(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -603,7 +603,7 @@ func TestFlagParsingInvalidFlag(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -628,7 +628,7 @@ func TestFlagParsingMultipleBrokerOverrides(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -669,7 +669,7 @@ func TestFlagParsingLogFormatOverride(t *testing.T) {
 			loadConfig: func() config.Config {
 				return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 			},
-			newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+			newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 				return monitoring.NewDashboardAPI(workDir, dir, collector)
 			},
 			listenAndServe: func(srv *http.Server) error {
@@ -702,7 +702,7 @@ func TestAPIModeRegistersNarrativeRoutes(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{WorkDir: t.TempDir(), LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {

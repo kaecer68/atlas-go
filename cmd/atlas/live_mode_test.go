@@ -22,7 +22,7 @@ func TestLiveModeBrokerGuardrails(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -55,7 +55,7 @@ func TestLiveModeDashboardAPIWiring(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			mu.Lock()
 			dashboardAPICalled = true
 			capturedLedgerDir = dir
@@ -112,7 +112,7 @@ func TestLiveModeRejectsUnsupportedBrokerAdapter(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -140,7 +140,7 @@ func TestLiveModeValidatesBrokerBeforeStarting(t *testing.T) {
 				BrokerSigner:     "placeholder",
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -170,7 +170,7 @@ func TestLiveModeAcceptsDryRunBroker(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			dashboardAPICalled.Store(true)
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
@@ -208,7 +208,7 @@ func TestLiveModePropagatesBrokerConfig(t *testing.T) {
 				BrokerSigner:     "placeholder",
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -250,7 +250,7 @@ func TestLiveModeDoesNotStartAPIServerViaDeps(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -286,7 +286,7 @@ func TestLiveModeWithSwaggerEnabled(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			dashboardAPICalled.Store(true)
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
@@ -322,7 +322,7 @@ func TestLiveModeRejectsNegativeMaxRetries(t *testing.T) {
 				BrokerMaxRetries: -1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -351,7 +351,7 @@ func TestLiveModeWithAllValidBrokerFlags(t *testing.T) {
 				BrokerSigner:     "placeholder",
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -394,7 +394,7 @@ func TestLiveModeWithFileNonceStore(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -430,7 +430,7 @@ func TestLiveModeRejectsInvalidRetryStatusCodes(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -458,7 +458,7 @@ func TestLiveModeRejectsRedisNonceStoreWithoutURL(t *testing.T) {
 				BrokerNonceStore: "redis",
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -486,7 +486,7 @@ func TestLiveModeWithRedisNonceStoreAndURL(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
