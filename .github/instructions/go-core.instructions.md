@@ -60,6 +60,18 @@ defer func() {
 }()
 ```
 
+## 常見 Go 反模式（atlas-go 特有）
+
+以下為此 codebase 高頻踩踏區。修改或新增 Go 程式碼時請檢查：
+
+1. **mutable `[]domain.Recommendation` slice 共享** — 多次 simulation run、executor 之間不可共用同一個 slice。每次需要時請 `make` 新的並 `copy` 資料，否則會導致資料競爭。
+
+2. **Session 日期從 `RecordedAt` 推斷** — `RecordedAt` 是計算完成時間，不是交易日。排序/比較請從 `SessionID` 提取（格式 `session-YYYYMMDD-daily` → `2006-01-02`）。
+
+3. **Darwinian 權重超界靜默夾制** — 權重範圍 `[0.3, 2.5]`。超界不報錯，而是靜態正規化。撰寫權重邏輯時請驗證邊界。
+
+4. **JSON tag 大小寫不一致** — Go struct 的 JSON tag 一律用 snake_case（如 `factor_scores`）。若 API parsing struct 用了 PascalCase（如 `FactorScores`），unmarshal 會無聲失敗，該欄位永遠為零值。變更 JSON tag 後 `go generate .` 會自動同步前端型別。
+
 ## 測試規則
 
 - 新增或更新測試時，使用同目錄同 package 的 *_test.go。

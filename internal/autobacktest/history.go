@@ -60,7 +60,7 @@ func (h *History) LatestN(n int) ([]AutoSnapshot, error) {
 	if err != nil {
 		return nil, nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var snapshots []AutoSnapshot
 	scanner := bufio.NewScanner(f)
