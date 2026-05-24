@@ -7,24 +7,8 @@ import (
 )
 
 func TestLoad_Defaults(t *testing.T) {
-	// 清除可能影響預設值的環境變數
-	envKeys := []string{
-		"ATLAS_MARKET_DATA_PROVIDER", "ATLAS_PRIMARY_MARKET", "ATLAS_REPLAY_MODE",
-		"ATLAS_AGENT_REGISTRY_PATH", "ATLAS_BASELINE_POLICY_PATH", "ATLAS_LEDGER_DIR",
-		"ATLAS_REPLAY_DATA_PATH", "ATLAS_REPLAY_SESSION_DATE",
-		"FUGLE_API_KEY", "ATLAS_FUGLE_API_KEY", "ATLAS_YAHOO_ENABLED",
-		"ATLAS_BROKER_MODE", "ATLAS_BROKER_MAX_RETRIES", "ATLAS_BROKER_ADAPTER",
-		"ATLAS_BROKER_API_BASE_URL", "ATLAS_BROKER_API_KEY", "ATLAS_BROKER_API_SECRET",
-		"ATLAS_BROKER_HTTP_TIMEOUT_SEC", "ATLAS_BROKER_HTTP_ATTEMPTS", "ATLAS_BROKER_HTTP_RETRY_STATUS_CODES", "ATLAS_BROKER_MAX_CLOCK_SKEW_SEC", "ATLAS_BROKER_NONCE_TTL_SEC", "ATLAS_BROKER_NONCE_STORE", "ATLAS_BROKER_NONCE_STORE_PATH", "ATLAS_BROKER_NONCE_REDIS_URL", "ATLAS_BROKER_NONCE_REDIS_KEY_PREFIX", "ATLAS_BROKER_SIGNER", "ATLAS_BROKER_KEY_ID",
-	}
-	for _, k := range envKeys {
-		t.Setenv(k, "")
-	}
-
-	// 執行測試時隔離 .env 檔案
-	t.Chdir(t.TempDir())
-
-	cfg := Load()
+	env := newMapEnvSource()
+	cfg := loadWithSource(env)
 
 	checks := map[string]string{
 		"MarketDataProvider": cfg.MarketDataProvider,
@@ -93,40 +77,40 @@ func TestLoad_Defaults(t *testing.T) {
 }
 
 func TestLoad_BrokerAdapterDefaultFallbackWhenEmpty(t *testing.T) {
-	t.Chdir(t.TempDir())
-	t.Setenv("ATLAS_BROKER_ADAPTER", "")
+	env := newMapEnvSource()
+	env.Setenv("ATLAS_BROKER_ADAPTER", "")
 
-	cfg := Load()
+	cfg := loadWithSource(env)
 	if cfg.BrokerAdapter != "guarded" {
 		t.Errorf("BrokerAdapter = %q, want guarded when env empty", cfg.BrokerAdapter)
 	}
 }
 
 func TestLoad_EnvOverrides(t *testing.T) {
-	t.Chdir(t.TempDir())
-	t.Setenv("ATLAS_MARKET_DATA_PROVIDER", "fugle")
-	t.Setenv("ATLAS_PRIMARY_MARKET", "US")
-	t.Setenv("ATLAS_REPLAY_MODE", "tick")
-	t.Setenv("ATLAS_YAHOO_ENABLED", "true")
-	t.Setenv("ATLAS_BROKER_MODE", "dry-run")
-	t.Setenv("ATLAS_BROKER_MAX_RETRIES", "3")
-	t.Setenv("ATLAS_BROKER_ADAPTER", "mock")
-	t.Setenv("ATLAS_BROKER_API_BASE_URL", "https://broker.example")
-	t.Setenv("ATLAS_BROKER_API_KEY", "key-1")
-	t.Setenv("ATLAS_BROKER_API_SECRET", "sec-1")
-	t.Setenv("ATLAS_BROKER_HTTP_TIMEOUT_SEC", "9")
-	t.Setenv("ATLAS_BROKER_HTTP_ATTEMPTS", "4")
-	t.Setenv("ATLAS_BROKER_HTTP_RETRY_STATUS_CODES", "408,429,503")
-	t.Setenv("ATLAS_BROKER_MAX_CLOCK_SKEW_SEC", "120")
-	t.Setenv("ATLAS_BROKER_NONCE_TTL_SEC", "180")
-	t.Setenv("ATLAS_BROKER_NONCE_STORE", "file")
-	t.Setenv("ATLAS_BROKER_NONCE_STORE_PATH", "data/state/nonces.json")
-	t.Setenv("ATLAS_BROKER_NONCE_REDIS_URL", "redis://localhost:6379/0")
-	t.Setenv("ATLAS_BROKER_NONCE_REDIS_KEY_PREFIX", "atlas:test:")
-	t.Setenv("ATLAS_BROKER_SIGNER", "hmac-sha256")
-	t.Setenv("ATLAS_BROKER_KEY_ID", "kid-01")
+	env := newMapEnvSource()
+	env.Setenv("ATLAS_MARKET_DATA_PROVIDER", "fugle")
+	env.Setenv("ATLAS_PRIMARY_MARKET", "US")
+	env.Setenv("ATLAS_REPLAY_MODE", "tick")
+	env.Setenv("ATLAS_YAHOO_ENABLED", "true")
+	env.Setenv("ATLAS_BROKER_MODE", "dry-run")
+	env.Setenv("ATLAS_BROKER_MAX_RETRIES", "3")
+	env.Setenv("ATLAS_BROKER_ADAPTER", "mock")
+	env.Setenv("ATLAS_BROKER_API_BASE_URL", "https://broker.example")
+	env.Setenv("ATLAS_BROKER_API_KEY", "key-1")
+	env.Setenv("ATLAS_BROKER_API_SECRET", "sec-1")
+	env.Setenv("ATLAS_BROKER_HTTP_TIMEOUT_SEC", "9")
+	env.Setenv("ATLAS_BROKER_HTTP_ATTEMPTS", "4")
+	env.Setenv("ATLAS_BROKER_HTTP_RETRY_STATUS_CODES", "408,429,503")
+	env.Setenv("ATLAS_BROKER_MAX_CLOCK_SKEW_SEC", "120")
+	env.Setenv("ATLAS_BROKER_NONCE_TTL_SEC", "180")
+	env.Setenv("ATLAS_BROKER_NONCE_STORE", "file")
+	env.Setenv("ATLAS_BROKER_NONCE_STORE_PATH", "data/state/nonces.json")
+	env.Setenv("ATLAS_BROKER_NONCE_REDIS_URL", "redis://localhost:6379/0")
+	env.Setenv("ATLAS_BROKER_NONCE_REDIS_KEY_PREFIX", "atlas:test:")
+	env.Setenv("ATLAS_BROKER_SIGNER", "hmac-sha256")
+	env.Setenv("ATLAS_BROKER_KEY_ID", "kid-01")
 
-	cfg := Load()
+	cfg := loadWithSource(env)
 
 	if cfg.MarketDataProvider != "fugle" {
 		t.Errorf("MarketDataProvider = %q, want fugle", cfg.MarketDataProvider)
@@ -194,30 +178,30 @@ func TestLoad_EnvOverrides(t *testing.T) {
 }
 
 func TestLoad_BrokerMaxRetriesInvalidFallback(t *testing.T) {
-	t.Chdir(t.TempDir())
-	t.Setenv("ATLAS_BROKER_MAX_RETRIES", "invalid")
+	env := newMapEnvSource()
+	env.Setenv("ATLAS_BROKER_MAX_RETRIES", "invalid")
 
-	cfg := Load()
+	cfg := loadWithSource(env)
 	if cfg.BrokerMaxRetries != 1 {
 		t.Errorf("BrokerMaxRetries = %d, want 1 when invalid", cfg.BrokerMaxRetries)
 	}
 }
 
 func TestLoad_FugleAPIKeyPriority(t *testing.T) {
-	t.Chdir(t.TempDir())
-
 	t.Run("FUGLE_API_KEY takes priority", func(t *testing.T) {
-		t.Setenv("FUGLE_API_KEY", "primary-key")
-		t.Setenv("ATLAS_FUGLE_API_KEY", "secondary-key")
-		cfg := Load()
+		env := newMapEnvSource()
+		env.Setenv("FUGLE_API_KEY", "primary-key")
+		env.Setenv("ATLAS_FUGLE_API_KEY", "secondary-key")
+		cfg := loadWithSource(env)
 		if cfg.FugleAPIKey != "primary-key" {
 			t.Errorf("FugleAPIKey = %q, want primary-key", cfg.FugleAPIKey)
 		}
 	})
 
 	t.Run("returns empty when not set", func(t *testing.T) {
-		t.Setenv("FUGLE_API_KEY", "")
-		cfg := Load()
+		env := newMapEnvSource()
+		env.Setenv("FUGLE_API_KEY", "")
+		cfg := loadWithSource(env)
 		if cfg.FugleAPIKey != "" {
 			t.Errorf("FugleAPIKey = %q, want empty (falls back to Keychain at runtime)", cfg.FugleAPIKey)
 		}
@@ -226,16 +210,19 @@ func TestLoad_FugleAPIKeyPriority(t *testing.T) {
 
 func TestLoad_EnvFile(t *testing.T) {
 	dir := t.TempDir()
-	t.Chdir(dir)
 
-	// 清除對應環境變數，確保由 .env 檔填入
-	t.Setenv("ATLAS_MARKET_DATA_PROVIDER", "")
-	t.Setenv("ATLAS_REPLAY_MODE", "")
+	for _, k := range []string{"ATLAS_MARKET_DATA_PROVIDER", "ATLAS_REPLAY_MODE", "ATLAS_ENV_FILE"} {
+		os.Unsetenv(k)
+	}
 
 	envContent := "ATLAS_MARKET_DATA_PROVIDER=from-env-file\nATLAS_REPLAY_MODE=weekly\n"
 	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(envContent), 0o644); err != nil {
 		t.Fatalf("write .env: %v", err)
 	}
+
+	origDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(origDir)
 
 	cfg := Load()
 
@@ -249,15 +236,18 @@ func TestLoad_EnvFile(t *testing.T) {
 
 func TestLoad_EnvFileSkipsComments(t *testing.T) {
 	dir := t.TempDir()
-	t.Chdir(dir)
 
-	t.Setenv("ATLAS_PRIMARY_MARKET", "")
+	os.Unsetenv("ATLAS_PRIMARY_MARKET")
+	os.Unsetenv("ATLAS_ENV_FILE")
 
-	// 確保帶 # 的行不被當作設定值解析
 	envContent := "# This is a comment\nATLAS_PRIMARY_MARKET=JP\n"
 	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(envContent), 0o644); err != nil {
 		t.Fatalf("write .env: %v", err)
 	}
+
+	origDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(origDir)
 
 	cfg := Load()
 	if cfg.PrimaryMarket != "JP" {
@@ -267,14 +257,19 @@ func TestLoad_EnvFileSkipsComments(t *testing.T) {
 
 func TestLoad_EnvFileDoesNotOverrideExisting(t *testing.T) {
 	dir := t.TempDir()
-	t.Chdir(dir)
-
-	t.Setenv("ATLAS_REPLAY_MODE", "process-env-value")
 
 	envContent := "ATLAS_REPLAY_MODE=env-file-value\n"
 	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(envContent), 0o644); err != nil {
 		t.Fatalf("write .env: %v", err)
 	}
+
+	origDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(origDir)
+
+	os.Setenv("ATLAS_REPLAY_MODE", "process-env-value")
+	os.Unsetenv("ATLAS_ENV_FILE")
+	defer os.Unsetenv("ATLAS_REPLAY_MODE")
 
 	cfg := Load()
 	if cfg.ReplayMode != "process-env-value" {
@@ -284,7 +279,8 @@ func TestLoad_EnvFileDoesNotOverrideExisting(t *testing.T) {
 
 func TestGetReplayDataPath_Default(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("ATLAS_REPLAY_DATA_PATH", "")
+	os.Setenv("ATLAS_REPLAY_DATA_PATH", "")
+	defer os.Unsetenv("ATLAS_REPLAY_DATA_PATH")
 
 	got := GetReplayDataPath(tmpDir)
 	want := filepath.Join(tmpDir, "data", "replay", "tw_extended_90days.csv")
@@ -302,7 +298,9 @@ func TestGetReplayDataPath_VERSIONFile(t *testing.T) {
 		t.Fatalf("write VERSION: %v", err)
 	}
 
-	t.Setenv("ATLAS_REPLAY_DATA_PATH", "")
+	os.Setenv("ATLAS_REPLAY_DATA_PATH", "")
+	defer os.Unsetenv("ATLAS_REPLAY_DATA_PATH")
+
 	got := GetReplayDataPath(tmpDir)
 	want := filepath.Join(tmpDir, "data", "replay", "merged.csv")
 	if got != want {
@@ -319,7 +317,9 @@ func TestGetReplayDataPath_EnvOverride(t *testing.T) {
 		t.Fatalf("write VERSION: %v", err)
 	}
 
-	t.Setenv("ATLAS_REPLAY_DATA_PATH", "/custom/path/replay.csv")
+	os.Setenv("ATLAS_REPLAY_DATA_PATH", "/custom/path/replay.csv")
+	defer os.Unsetenv("ATLAS_REPLAY_DATA_PATH")
+
 	got := GetReplayDataPath(tmpDir)
 	want := "/custom/path/replay.csv"
 	if got != want {
