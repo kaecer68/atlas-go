@@ -166,7 +166,7 @@ func (w *ApprovalWorkflow) appendRequest(req *ApprovalRequest) error {
 	if err != nil {
 		return fmt.Errorf("open approvals file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	enc := json.NewEncoder(f)
 	return enc.Encode(req)
@@ -180,7 +180,7 @@ func (w *ApprovalWorkflow) loadAll() ([]ApprovalRequest, error) {
 		}
 		return nil, fmt.Errorf("open approvals file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var reqs []ApprovalRequest
 	scanner := bufio.NewScanner(f)
@@ -208,7 +208,7 @@ func (w *ApprovalWorkflow) rewriteAll(reqs []ApprovalRequest) error {
 	if err != nil {
 		return fmt.Errorf("open approvals file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	enc := json.NewEncoder(f)
 	for _, r := range reqs {

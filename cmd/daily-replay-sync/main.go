@@ -248,12 +248,12 @@ func appendRecords(csvPath string, records []csvRecord) error {
 	if err != nil {
 		return fmt.Errorf("open csv: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	writer := csv.NewWriter(f)
 	// Write header if new file
 	if stat, _ := f.Stat(); stat.Size() == 0 {
-		writer.Write([]string{"Date", "Code", "Name", "TradeVolume", "Open", "High", "Low", "Close"})
+		_ = writer.Write([]string{"Date", "Code", "Name", "TradeVolume", "Open", "High", "Low", "Close"})
 	}
 
 	for _, r := range records {
@@ -262,7 +262,7 @@ func appendRecords(csvPath string, records []csvRecord) error {
 			continue
 		}
 		validateRecord(r, prevCloseByCode)
-		writer.Write([]string{
+		_ = writer.Write([]string{
 			r.Date,
 			r.Code,
 			r.Name,
@@ -284,7 +284,7 @@ func loadCSV(path string) ([]csvRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	reader := csv.NewReader(f)
 	lines, err := reader.ReadAll()

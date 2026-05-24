@@ -406,7 +406,7 @@ func (dq *DataQualityChecker) checkFilePermissions(ctx context.Context) DataQual
 			check.Message = fmt.Sprintf("目錄不可寫: %s (%v)", dir, err)
 			return check
 		}
-		os.Remove(testFile)
+		_ = os.Remove(testFile)
 		writableCount++
 	}
 

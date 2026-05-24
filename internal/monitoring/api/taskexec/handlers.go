@@ -186,6 +186,7 @@ func (h *Handlers) HandleTaskEvents(w http.ResponseWriter, r *http.Request) (int
 				return 0, nil
 			}
 			data, _ := json.Marshal(event)
+			//nolint:errcheck
 			fmt.Fprintf(w, "data: %s\n\n", data)
 			flusher.Flush()
 		case <-ctx.Done():

@@ -42,7 +42,7 @@ func (s *SeasonalPerformanceStore) Record(perf SeasonalPerformance) error {
 	if err != nil {
 		return fmt.Errorf("open seasonal performance file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if err := json.NewEncoder(f).Encode(perf); err != nil {
 		return fmt.Errorf("encode seasonal performance: %w", err)

@@ -107,7 +107,7 @@ func runLogin(args []string) error {
 	if err := adapter.Connect(ctx); err != nil {
 		return fmt.Errorf("登入失敗: %w", err)
 	}
-	defer adapter.Close()
+	defer func() { _ = adapter.Close() }()
 
 	fmt.Println("登入成功")
 	return nil
@@ -158,7 +158,7 @@ func runSubmit(args []string) error {
 	if err := adapter.Connect(ctx); err != nil {
 		return fmt.Errorf("登入失敗: %w", err)
 	}
-	defer adapter.Close()
+	defer func() { _ = adapter.Close() }()
 
 	domainSide := domain.SideBuy
 	if strings.ToUpper(*side) == "SELL" {
@@ -216,7 +216,7 @@ func runPing(args []string) error {
 	if err := adapter.Connect(ctx); err != nil {
 		return fmt.Errorf("連線失敗: %w", err)
 	}
-	defer adapter.Close()
+	defer func() { _ = adapter.Close() }()
 
 	if err := adapter.Ping(ctx); err != nil {
 		return fmt.Errorf("ping 失敗: %w", err)

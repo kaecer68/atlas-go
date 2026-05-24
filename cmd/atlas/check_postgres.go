@@ -133,7 +133,7 @@ func tryAuthPostgres(dsn string, timeout time.Duration) bool {
 	if err != nil {
 		return false
 	}
-	conn.Close(ctx)
+	_ = conn.Close(ctx)
 	return true
 }
 
@@ -166,7 +166,7 @@ func tryConnectPostgres(dsn string, timeout time.Duration) bool {
 	for time.Now().Before(deadline) {
 		conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), 2*time.Second) //nolint:gosec // dev diagnostic tool, host comes from DSN
 		if err == nil {
-			conn.Close()
+			_ = conn.Close()
 			return true
 		}
 		time.Sleep(500 * time.Millisecond)

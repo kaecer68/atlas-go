@@ -38,7 +38,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	liveStateDir := filepath.Join(tempDir, "live")
 	circuitLogPath := filepath.Join(tempDir, "circuit_breaker_log.jsonl")

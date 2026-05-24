@@ -42,7 +42,7 @@ func (h *History) Append(snapshot AutoSnapshot) error {
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	data, err := json.Marshal(snapshot)
 	if err != nil {

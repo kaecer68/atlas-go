@@ -529,7 +529,7 @@ func (m *SpawningManager) Cleanup(retentionPeriod time.Duration) int {
 
 				// Remove prompt file — anchored to PromptsDir
 				promptPath := filepath.Join(m.promptsDir, "agents", agentID+".md")
-				os.Remove(promptPath)
+				_ = os.Remove(promptPath)
 
 				removed++
 			}

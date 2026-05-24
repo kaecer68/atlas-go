@@ -87,7 +87,7 @@ func run(args []string) error {
 				Close:       b.Close,
 			})
 		}
-		f.Close()
+		_ = f.Close()
 		if err := scanner.Err(); err != nil {
 			return fmt.Errorf("read %s: %w", input, err)
 		}
@@ -104,13 +104,13 @@ func run(args []string) error {
 	if err != nil {
 		return fmt.Errorf("create %s: %w", *output, err)
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	w := csv.NewWriter(out)
-	w.Write([]string{"Date", "Code", "Name", "TradeVolume", "Open", "High", "Low", "Close"})
+	_ = w.Write([]string{"Date", "Code", "Name", "TradeVolume", "Open", "High", "Low", "Close"})
 
 	for _, r := range bars {
-		w.Write([]string{
+		_ = w.Write([]string{
 			r.Date,
 			r.Code,
 			r.Name,

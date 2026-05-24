@@ -150,7 +150,7 @@ func loadReturnsFromJSONL(path string) ([]float64, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	type Outcome struct {
 		Return float64 `json:"return"`
@@ -275,9 +275,9 @@ func calibrateGARCH(ie *config.InferenceEngine, returns []float64, n int, cfg *c
 		SampleSize:  n,
 	})
 
-	ie.SetParameter("garch_omega", garch.Omega)
-	ie.SetParameter("garch_alpha", garch.Alpha)
-	ie.SetParameter("garch_beta", garch.Beta)
+	_ = ie.SetParameter("garch_omega", garch.Omega)
+	_ = ie.SetParameter("garch_alpha", garch.Alpha)
+	_ = ie.SetParameter("garch_beta", garch.Beta)
 
 	return res
 }
@@ -328,10 +328,10 @@ func calibrateVaR(ie *config.InferenceEngine, returns []float64, n int, cfg *con
 	})
 
 	if empiricalVol > 0 && empiricalVol < 0.30 {
-		ie.SetParameter("sizing_target_volatility", math.Min(empiricalVol, 0.30))
+		_ = ie.SetParameter("sizing_target_volatility", math.Min(empiricalVol, 0.30))
 	}
 	if empiricalMaxDD > 0 && empiricalMaxDD < 0.20 {
-		ie.SetParameter("sizing_max_drawdown_limit", math.Max(0.05, math.Min(empiricalMaxDD, 0.20)))
+		_ = ie.SetParameter("sizing_max_drawdown_limit", math.Max(0.05, math.Min(empiricalMaxDD, 0.20)))
 	}
 
 	return res
@@ -404,10 +404,10 @@ func calibrateDarwinian(ie *config.InferenceEngine, n int, cfg *config.Parameter
 	})
 
 	if sigHighHR {
-		ie.SetParameter("darwinian_hit_rate_high_threshold", highHitRate)
+		_ = ie.SetParameter("darwinian_hit_rate_high_threshold", highHitRate)
 	}
 	if sigLowHR {
-		ie.SetParameter("darwinian_hit_rate_low_threshold", lowHitRate)
+		_ = ie.SetParameter("darwinian_hit_rate_low_threshold", lowHitRate)
 	}
 
 	return res
@@ -457,9 +457,9 @@ func calibrateFactor(ie *config.InferenceEngine, returns []float64, n int, cfg *
 	})
 
 	if p90 > 0.05 {
-		ie.SetParameter("factor_momentum_stddev_divisor", math.Max(p90*0.5, 0.05))
+		_ = ie.SetParameter("factor_momentum_stddev_divisor", math.Max(p90*0.5, 0.05))
 	}
-	ie.SetParameter("factor_momentum_lookback_days", float64(momentumLookback))
+	_ = ie.SetParameter("factor_momentum_lookback_days", float64(momentumLookback))
 
 	return res
 }

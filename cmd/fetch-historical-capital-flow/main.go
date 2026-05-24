@@ -127,7 +127,7 @@ func fetchHistoricalData(start, end time.Time, outputDir string, limiter *rate.L
 			continue
 		}
 
-		limiter.Wait(context.Background())
+		_ = limiter.Wait(context.Background())
 
 		data, err := fetchCapitalFlowData(dateStr)
 		if err != nil {
@@ -182,7 +182,7 @@ func fetchCapitalFlowData(dateStr string) (*CapitalFlowData, error) {
 			}
 			continue
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode == http.StatusTooManyRequests {
 			fmt.Printf("Rate limited (429), waiting 60 seconds...\n")

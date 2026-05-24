@@ -68,7 +68,7 @@ func (s *Scratchpad) ExportJSONL() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("create file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	enc := json.NewEncoder(file)
 	for _, trace := range s.traces {

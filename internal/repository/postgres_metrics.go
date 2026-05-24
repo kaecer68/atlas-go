@@ -104,7 +104,7 @@ func (r *PostgresRepository) QueryLatest(ctx context.Context, metricName string,
 	}
 
 	if len(metadata) > 0 {
-		json.Unmarshal(metadata, &point.Metadata)
+		_ = json.Unmarshal(metadata, &point.Metadata)
 	}
 
 	return &point, nil
@@ -303,7 +303,7 @@ func scanMetricPoints(rows pgx.Rows) ([]MetricPoint, error) {
 			continue
 		}
 		if len(metadata) > 0 {
-			json.Unmarshal(metadata, &point.Metadata)
+			_ = json.Unmarshal(metadata, &point.Metadata)
 		}
 		points = append(points, point)
 	}

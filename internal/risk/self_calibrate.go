@@ -164,7 +164,7 @@ func (g *RiskGate) SelfCalibrate(ctx context.Context, provider CalibrationProvid
 		change.Confidence = classifyDelta(delta, len(sessions))
 
 		report.Changes = append(report.Changes, change)
-		ie.SetParameter(name, best)
+		_ = ie.SetParameter(name, best)
 	}
 
 	// Persist calibrated parameters to disk so they survive server restarts.

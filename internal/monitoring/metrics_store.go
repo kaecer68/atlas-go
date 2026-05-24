@@ -32,7 +32,7 @@ func (s *MetricsStore) SaveSnapshot(snapshot MetricsSnapshot) error {
 	if err != nil {
 		return fmt.Errorf("open metrics file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if err := json.NewEncoder(f).Encode(snapshot); err != nil {
 		return fmt.Errorf("encode metrics snapshot: %w", err)

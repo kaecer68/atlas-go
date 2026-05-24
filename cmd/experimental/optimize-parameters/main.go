@@ -108,7 +108,7 @@ func loadSessionDir(dir string) sessionData {
 	sd := sessionData{}
 	data, err := os.ReadFile(filepath.Join(dir, "summary.json"))
 	if err == nil {
-		json.Unmarshal(data, &sd.Summary)
+		_ = json.Unmarshal(data, &sd.Summary)
 	}
 	data, err = os.ReadFile(filepath.Join(dir, "recommendation_outcomes.jsonl"))
 	if err == nil {

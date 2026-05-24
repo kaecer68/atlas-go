@@ -33,7 +33,7 @@ func run(args []string, stdout io.Writer) error {
 	policyPath := filepath.Join(*stateDir, "baseline_policy.json")
 	if _, err := os.Stat(policyPath); err != nil {
 		if os.IsNotExist(err) {
-			fmt.Fprintf(stdout, "No file: %s not found\n", policyPath)
+			_, _ = fmt.Fprintf(stdout, "No file: %s not found\n", policyPath)
 			return nil
 		}
 		return fmt.Errorf("stat %s: %w", policyPath, err)
@@ -59,10 +59,10 @@ func run(args []string, stdout io.Writer) error {
 		return fmt.Errorf("create temp for %s: %w", policyPath, err)
 	}
 	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	if _, err := tmpFile.Write(canonical); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return fmt.Errorf("write temp %s: %w", tmpPath, err)
 	}
 	if err := tmpFile.Close(); err != nil {

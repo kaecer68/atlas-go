@@ -30,7 +30,7 @@ func newSQLiteFullStore(path string) (*SQLiteStore, error) {
 	}
 
 	if err := InitSchema(db); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
 
@@ -191,7 +191,7 @@ func NewOutcomeStore(cfg config.Config) (OutcomeStore, error) {
 			return nil, fmt.Errorf("open sqlite db: %w", err)
 		}
 		if err := InitSchema(db); err != nil {
-			db.Close()
+			_ = db.Close()
 			return nil, fmt.Errorf("init schema: %w", err)
 		}
 		return NewSQLiteOutcomeStore(db), nil
@@ -208,7 +208,7 @@ func NewSessionStore(cfg config.Config) (SessionStore, error) {
 			return nil, fmt.Errorf("open sqlite db: %w", err)
 		}
 		if err := InitSchema(db); err != nil {
-			db.Close()
+			_ = db.Close()
 			return nil, fmt.Errorf("init schema: %w", err)
 		}
 		return NewSQLiteSessionStore(db), nil
@@ -225,7 +225,7 @@ func NewQuoteStore(cfg config.Config) (QuoteStore, error) {
 			return nil, fmt.Errorf("open sqlite db: %w", err)
 		}
 		if err := InitSchema(db); err != nil {
-			db.Close()
+			_ = db.Close()
 			return nil, fmt.Errorf("init schema: %w", err)
 		}
 		return NewSQLiteQuoteStore(db), nil

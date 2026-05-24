@@ -43,7 +43,7 @@ func (s *LinkageHistoryStore) Record(record LinkageHistoryRecord) error {
 	if err != nil {
 		return fmt.Errorf("open linkage history file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if err := json.NewEncoder(f).Encode(record); err != nil {
 		return fmt.Errorf("encode linkage history: %w", err)

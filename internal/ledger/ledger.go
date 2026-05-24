@@ -42,13 +42,13 @@ func (s *Store) RecordOutcomes(outcomes []domain.RecommendationOutcome) error {
 			)
 		}
 		if err := enc.Encode(outcome); err != nil {
-			f.Close()
-			os.Remove(tmp)
+			_ = f.Close()
+			_ = os.Remove(tmp)
 			return fmt.Errorf("encode outcome: %w", err)
 		}
 	}
 	if err := f.Close(); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return fmt.Errorf("close file: %w", err)
 	}
 	return os.Rename(tmp, path)
@@ -75,13 +75,13 @@ func (s *Store) RecordSessionOutcomes(session domain.ReplaySession, outcomes []d
 			)
 		}
 		if err := enc.Encode(outcome); err != nil {
-			f.Close()
-			os.Remove(tmp)
+			_ = f.Close()
+			_ = os.Remove(tmp)
 			return fmt.Errorf("encode outcome: %w", err)
 		}
 	}
 	if err := f.Close(); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return fmt.Errorf("close file: %w", err)
 	}
 	return os.Rename(tmp, path)
@@ -144,7 +144,7 @@ func (s *Store) RecordExperiment(record domain.ExperimentRecord) error {
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	return json.NewEncoder(f).Encode(record)
 }
@@ -183,7 +183,7 @@ func (s *Store) RecordSessionExperiment(session domain.ReplaySession, record dom
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	return json.NewEncoder(f).Encode(record)
 }
@@ -291,7 +291,7 @@ func (s *Store) RecordSpawnRecord(record SpawnRecord) error {
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	record.UpdatedAt = time.Now()
 	return json.NewEncoder(f).Encode(record)
 }
@@ -327,7 +327,7 @@ func (s *Store) RecordHumanIntervention(intervention domain.HumanIntervention) e
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return json.NewEncoder(f).Encode(intervention)
 }
 
@@ -511,7 +511,7 @@ func (s *Store) RecordSessionScreeningRejects(sessionID string, rejects []domain
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	enc := json.NewEncoder(f)
 	for _, r := range rejects {
 		if err := enc.Encode(r); err != nil {
@@ -555,7 +555,7 @@ func (s *Store) RecordSessionTrades(sessionID string, trades []domain.TradeRecor
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	enc := json.NewEncoder(f)
 	for _, trade := range trades {
 		if err := enc.Encode(trade); err != nil {

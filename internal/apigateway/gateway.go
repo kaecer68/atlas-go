@@ -74,7 +74,7 @@ func (g *Gateway) Fetch(ctx context.Context, channelID string) (*FetchResult, er
 		g.cache.Set(channelID, result)
 
 		// 5. Record health
-		g.health.Record(channelID, "ok", "", monitoring.WithLatencyMs(result.Meta.LatencyMs))
+		_ = g.health.Record(channelID, "ok", "", monitoring.WithLatencyMs(result.Meta.LatencyMs))
 
 		return nil
 	})
@@ -87,7 +87,7 @@ func (g *Gateway) Fetch(ctx context.Context, channelID string) (*FetchResult, er
 				return stale, nil
 			}
 		}
-		g.health.Record(channelID, "error", callErr.Error())
+		_ = g.health.Record(channelID, "error", callErr.Error())
 		return nil, callErr
 	}
 

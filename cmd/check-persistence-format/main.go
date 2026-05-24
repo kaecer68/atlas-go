@@ -41,20 +41,20 @@ func run(args []string, stdout io.Writer) error {
 
 	items := inventoryArtifacts(*dir)
 	if len(items) == 0 {
-		fmt.Fprintln(stdout, "No artifacts found.")
+		_, _ = fmt.Fprintln(stdout, "No artifacts found.")
 		return nil
 	}
 
-	fmt.Fprintf(stdout, "Scanned: %s\n\n", *dir)
-	fmt.Fprintln(stdout, "Artifact Inventory:")
-	fmt.Fprintln(stdout, "-------------------")
+	_, _ = fmt.Fprintf(stdout, "Scanned: %s\n\n", *dir)
+	_, _ = fmt.Fprintln(stdout, "Artifact Inventory:")
+	_, _ = fmt.Fprintln(stdout, "-------------------")
 
 	for _, item := range items {
-		fmt.Fprintf(stdout, "%-60s %s\n", item.Path, item.Classification)
+		_, _ = fmt.Fprintf(stdout, "%-60s %s\n", item.Path, item.Classification)
 	}
 
-	fmt.Fprintln(stdout, "\nWriter Consistency Checks:")
-	fmt.Fprintln(stdout, "--------------------------")
+	_, _ = fmt.Fprintln(stdout, "\nWriter Consistency Checks:")
+	_, _ = fmt.Fprintln(stdout, "--------------------------")
 
 	checked := 0
 	for _, item := range items {
@@ -64,17 +64,17 @@ func run(args []string, stdout io.Writer) error {
 		checked++
 		issues := checkWriterConsistency(item.Path)
 		if len(issues) == 0 {
-			fmt.Fprintf(stdout, "OK   %s\n", item.Path)
+			_, _ = fmt.Fprintf(stdout, "OK   %s\n", item.Path)
 		} else {
-			fmt.Fprintf(stdout, "FAIL %s\n", item.Path)
+			_, _ = fmt.Fprintf(stdout, "FAIL %s\n", item.Path)
 			for _, issue := range issues {
-				fmt.Fprintf(stdout, "     - %s\n", issue)
+				_, _ = fmt.Fprintf(stdout, "     - %s\n", issue)
 			}
 		}
 	}
 
 	if checked == 0 {
-		fmt.Fprintln(stdout, "No recommendation_outcomes.jsonl files found.")
+		_, _ = fmt.Fprintln(stdout, "No recommendation_outcomes.jsonl files found.")
 	}
 
 	return nil
@@ -241,7 +241,7 @@ func checkWriterConsistency(path string) []string {
 	if err != nil {
 		return []string{fmt.Sprintf("open error: %v", err)}
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	lineNum := 0

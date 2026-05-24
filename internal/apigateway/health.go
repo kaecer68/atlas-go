@@ -56,7 +56,7 @@ type Alert struct {
 // RecordChannelFetch is a convenience function for background tasks.
 func RecordChannelFetch(store *UnifiedHealthStore, channelID string, result *FetchResult, err error) {
 	if err != nil {
-		store.Record(channelID, "error", err.Error())
+		_ = store.Record(channelID, "error", err.Error())
 		return
 	}
 
@@ -67,7 +67,7 @@ func RecordChannelFetch(store *UnifiedHealthStore, channelID string, result *Fet
 		opts = append(opts, monitoring.WithRateLimitRemaining(result.Meta.RateLimitRemaining))
 	}
 
-	store.Record(channelID, "ok", "", opts...)
+	_ = store.Record(channelID, "ok", "", opts...)
 }
 
 // StatusSummary returns a summary of all channel health statuses.
@@ -130,7 +130,7 @@ func (u *UnifiedHealthStore) CheckHealth(ctx context.Context, registry *ChannelR
 		}
 
 		results[id] = status
-		u.Record(id, status.Status, status.LastError)
+		_ = u.Record(id, status.Status, status.LastError)
 	}
 
 	return results

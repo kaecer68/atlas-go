@@ -112,7 +112,7 @@ func loadSessions(stateDir string) []sessionData {
 
 		summaryData, err := os.ReadFile(filepath.Join(d, "summary.json"))
 		if err == nil {
-			json.Unmarshal(summaryData, &sd.Summary)
+			_ = json.Unmarshal(summaryData, &sd.Summary)
 		}
 
 		outcomesData, err := os.ReadFile(filepath.Join(d, "recommendation_outcomes.jsonl"))

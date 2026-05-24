@@ -75,7 +75,7 @@ func main() {
 	}
 	reader := csv.NewReader(f)
 	rows, err := reader.ReadAll()
-	f.Close()
+	_ = f.Close()
 	if err != nil {
 		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay", "error", err.Error(), pool)
 		fmt.Fprintf(os.Stderr, "read csv: %v\n", err)
@@ -188,7 +188,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "open csv for append: %v\n", err)
 		os.Exit(1)
 	}
-	defer fout.Close()
+	defer func() { _ = fout.Close() }()
 
 	writer := csv.NewWriter(fout)
 	for _, r := range newRows {
@@ -256,7 +256,7 @@ func fetchFinMindWithRetry(client *http.Client, code, start, end string) (*finmi
 			continue
 		}
 		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if err != nil {
 			lastErr = err
 			continue

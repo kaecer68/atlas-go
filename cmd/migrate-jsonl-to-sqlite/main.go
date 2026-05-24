@@ -45,7 +45,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "open sqlite db:", err)
 			os.Exit(1)
 		}
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if err := ledger.InitSchema(db); err != nil {
 			fmt.Fprintln(os.Stderr, "init schema:", err)

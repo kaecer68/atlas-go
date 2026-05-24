@@ -148,7 +148,7 @@ func loadExistingRecords(path string) map[string]struct{} {
 	if err != nil {
 		return existing
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	br := io.LimitReader(f, 100<<20)
 	dec := json.NewDecoder(br)

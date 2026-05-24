@@ -151,6 +151,7 @@ func NewSystem(cfg config.Config) (*System, error) {
 
 func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, error) {
 	if s.Risk().eventBus != nil {
+		//nolint:errcheck // fire-and-forget goroutine
 		go s.Risk().eventBus.PublishSimulationStart(s.Sim().session.ID, asOf)
 	}
 
@@ -199,6 +200,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	oldRegime := regime
 	regime = AdjustRegimeFromNarrative(regime, events)
 	if s.Risk().eventBus != nil {
+		//nolint:errcheck // fire-and-forget goroutine
 		go s.Risk().eventBus.PublishRegimeChange(oldRegime, regime, 0.0, "orchestrator")
 	}
 
@@ -226,6 +228,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	finalRecs = append(finalRecs, alphaRecs...)
 	finalRecs = s.host.ProcessRecommendations(regime, finalRecs)
 	if s.Risk().eventBus != nil {
+		//nolint:errcheck // fire-and-forget goroutine
 		go s.Risk().eventBus.PublishRecommendation("orchestrator", finalRecs)
 	}
 	if err := s.ensurePersistentStateLoaded(); err != nil {
@@ -239,6 +242,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	}
 	result.GuardOutcomes = guardOutcomes
 	if s.Risk().eventBus != nil {
+		//nolint:errcheck // fire-and-forget goroutine
 		go s.Risk().eventBus.PublishGuardOutcomes(s.Sim().session.ID, guardOutcomes)
 	}
 
@@ -292,6 +296,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 					Timestamp:   e.Timestamp,
 				}
 			}
+			//nolint:errcheck // fire-and-forget goroutine
 			go s.Risk().eventBus.PublishDarwinianClamping(payloads)
 			if s.Risk().clampingLogger != nil {
 				for _, p := range payloads {
@@ -304,6 +309,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	s.host.PostSimulation(quotes, regime, asOf)
 
 	if s.Risk().eventBus != nil {
+		//nolint:errcheck // fire-and-forget goroutine
 		go s.Risk().eventBus.PublishSimulationComplete(s.Sim().session.ID, result.PortfolioValue, len(result.Orders), len(result.Positions))
 	}
 
@@ -347,6 +353,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 
 func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationResult, error) {
 	if s.Risk().eventBus != nil {
+		//nolint:errcheck // fire-and-forget goroutine
 		go s.Risk().eventBus.PublishSimulationStart(s.Sim().session.ID, sessionDate)
 	}
 
@@ -381,6 +388,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	oldRegime := regime
 	regime = AdjustRegimeFromNarrative(regime, events)
 	if s.Risk().eventBus != nil {
+		//nolint:errcheck // fire-and-forget goroutine
 		go s.Risk().eventBus.PublishRegimeChange(oldRegime, regime, 0.0, "orchestrator")
 	}
 
@@ -408,6 +416,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	finalRecs = append(finalRecs, alphaRecs...)
 	finalRecs = s.host.ProcessRecommendations(regime, finalRecs)
 	if s.Risk().eventBus != nil {
+		//nolint:errcheck // fire-and-forget goroutine
 		go s.Risk().eventBus.PublishRecommendation("orchestrator", finalRecs)
 	}
 	if err := s.ensurePersistentStateLoaded(); err != nil {
@@ -421,6 +430,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	}
 	result.GuardOutcomes = guardOutcomes
 	if s.Risk().eventBus != nil {
+		//nolint:errcheck // fire-and-forget goroutine
 		go s.Risk().eventBus.PublishGuardOutcomes(s.Sim().session.ID, guardOutcomes)
 	}
 	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, sessionDate, s.Sim().replay)
@@ -467,6 +477,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 					Timestamp:   e.Timestamp,
 				}
 			}
+			//nolint:errcheck // fire-and-forget goroutine
 			go s.Risk().eventBus.PublishDarwinianClamping(payloads)
 			if s.Risk().clampingLogger != nil {
 				for _, p := range payloads {
@@ -479,6 +490,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	s.host.PostSimulation(quotes, regime, sessionDate)
 
 	if s.Risk().eventBus != nil {
+		//nolint:errcheck // fire-and-forget goroutine
 		go s.Risk().eventBus.PublishSimulationComplete(s.Sim().session.ID, result.PortfolioValue, len(result.Orders), len(result.Positions))
 	}
 
