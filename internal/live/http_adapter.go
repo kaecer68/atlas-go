@@ -262,7 +262,7 @@ func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte, i
 		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("build request: %v", err), code: "request.build_error", retryable: false}
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-Key", a.apiKey)
+	req.Header.Set("X-Api-Key", a.apiKey)
 	req.Header.Set("X-Signature", a.signer.Sign(body, a.apiSecret, timestamp, nonce))
 	req.Header.Set("X-Signature-Method", a.signerName)
 	req.Header.Set("X-Signature-Version", a.signerVer)

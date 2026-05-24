@@ -21,6 +21,12 @@ linters:
       excludes:
         - G104     # allow unchecked errors in defer Close() — project convention
         - G204     # allow os/exec for broker/staging CLI tools
+        - G301     # directory permissions: MkdirAll(0755) is standard for data dirs
+        - G302     # file permissions: OpenFile(0644) is standard for data files
+        - G304     # file inclusion via variable: CLI tools read paths from args/config
+        - G306     # WriteFile permissions: 0644 is standard for data files
+        - G404     # math/rand is appropriate for simulations, not security-sensitive
+        - G703     # path traversal taint: same as G304 but via taint analysis
     misspell:
       locale: US
       ignore-rules:

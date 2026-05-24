@@ -346,7 +346,7 @@ func (c *TaiwanStressCalculator) CalculateFromSnapshotWithStore(ctx context.Cont
 			if loadErr == nil {
 				geoScore = fallback
 			} else {
-				return TaiwanStressIndex{}, fmt.Errorf("fetch geopolitical score: %w (fallback load also failed: %v)", err, loadErr)
+				return TaiwanStressIndex{}, fmt.Errorf("fetch geopolitical score: %w (fallback load also failed: %w)", err, loadErr)
 			}
 		} else {
 			return TaiwanStressIndex{}, fmt.Errorf("fetch geopolitical score: %w", err)

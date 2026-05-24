@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -121,7 +122,7 @@ func (a *FubonDMAAdapter) Connect(ctx context.Context) error {
 
 	// 等待初始化訊息（mock 模式會送出 warn）
 	initLine, err := a.stdout.ReadString('\n')
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		a.killProcess()
 		return fmt.Errorf("fubon dma: read init message: %w", err)
 	}
@@ -260,7 +261,7 @@ func (a *FubonDMAAdapter) sendRequest(req fubonDMARequest) (fubonDMAResponse, er
 		return fubonDMAResponse{}, fmt.Errorf("fubon dma: subprocess not running")
 	}
 
-	payload, err := json.Marshal(req)
+	payload, err := json.Marshal(req) //nolint:gosec // APIKey must be serialized for the Python proxy
 	if err != nil {
 		return fubonDMAResponse{}, fmt.Errorf("fubon dma: marshal request: %w", err)
 	}

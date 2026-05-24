@@ -142,7 +142,7 @@ func tryAuthPostgres(dsn string, timeout time.Duration) bool {
 // This repairs credential mismatches from configuration drift or container rebuilds.
 func fixPostgresPassword(containerName, user, password string) bool {
 	sql := fmt.Sprintf("ALTER USER %s WITH PASSWORD '%s';", user, password)
-	cmd := exec.Command("docker", "exec", containerName, "psql", "-U", user, "-c", sql)
+	cmd := exec.Command("docker", "exec", containerName, "psql", "-U", user, "-c", sql) //nolint:gosec // dev diagnostic tool, not prod
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run() == nil
@@ -164,7 +164,7 @@ func tryConnectPostgres(dsn string, timeout time.Duration) bool {
 	host, port := parsePostgresHostPort(dsn)
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), 2*time.Second)
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), 2*time.Second) //nolint:gosec // dev diagnostic tool, host comes from DSN
 		if err == nil {
 			conn.Close()
 			return true

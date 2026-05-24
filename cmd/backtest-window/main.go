@@ -72,7 +72,14 @@ func run(args []string) error {
 		dashboard.RegisterBacktestRoutes(mux)
 		fmt.Printf("\nDashboard ready at http://localhost%s\n", *addr)
 		fmt.Printf("Latest report: http://localhost%s/api/report/latest\n", *addr)
-		if err := http.ListenAndServe(*addr, mux); err != nil {
+		srv := &http.Server{
+			Addr:         *addr,
+			Handler:      mux,
+			ReadTimeout:  15 * time.Second,
+			WriteTimeout: 30 * time.Second,
+			IdleTimeout:  60 * time.Second,
+		}
+		if err := srv.ListenAndServe(); err != nil {
 			return fmt.Errorf("dashboard api server failed: %w", err)
 		}
 	}
