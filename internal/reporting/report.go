@@ -28,9 +28,9 @@ type BacktestReportData struct {
 func RenderMarkdown(data BacktestReportData) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("# Backtest Report: %s\n\n", data.WindowID))
-	sb.WriteString(fmt.Sprintf("**Period:** %s to %s  \n", data.StartDate.Format("2006-01-02"), data.EndDate.Format("2006-01-02")))
-	sb.WriteString(fmt.Sprintf("**Sessions:** %d | **Outcomes:** %d\n\n", data.SessionCount, data.OutcomeCount))
+	fmt.Fprintf(&sb, "# Backtest Report: %s\n\n", data.WindowID)
+	fmt.Fprintf(&sb, "**Period:** %s to %s  \n", data.StartDate.Format("2006-01-02"), data.EndDate.Format("2006-01-02"))
+	fmt.Fprintf(&sb, "**Sessions:** %d | **Outcomes:** %d\n\n", data.SessionCount, data.OutcomeCount)
 
 	if len(data.EquityCurve) > 0 {
 		startVal := data.EquityCurve[0]
@@ -39,8 +39,8 @@ func RenderMarkdown(data BacktestReportData) string {
 		if startVal > 0 {
 			ret = (endVal - startVal) / startVal
 		}
-		sb.WriteString(fmt.Sprintf("**Portfolio Return:** %.2f%%  \n", ret*100))
-		sb.WriteString(fmt.Sprintf("**Starting Value:** %.0f | **Ending Value:** %.0f\n\n", startVal, endVal))
+		fmt.Fprintf(&sb, "**Portfolio Return:** %.2f%%  \n", ret*100)
+		fmt.Fprintf(&sb, "**Starting Value:** %.0f | **Ending Value:** %.0f\n\n", startVal, endVal)
 	}
 
 	sb.WriteString("## Equity Curve\n\n")
@@ -63,28 +63,28 @@ func RenderMarkdown(data BacktestReportData) string {
 		sb.WriteString("| Regime | Sessions |\n")
 		sb.WriteString("|--------|----------|\n")
 		for regime, count := range data.RegimeCounts {
-			sb.WriteString(fmt.Sprintf("| %s | %d |\n", regime, count))
+			fmt.Fprintf(&sb, "| %s | %d |\n", regime, count)
 		}
 	}
 	sb.WriteString("\n")
 
 	sb.WriteString("## Experiment Candidate\n\n")
 	if data.WorstAgentID != "" {
-		sb.WriteString(fmt.Sprintf("- **Weakest Agent:** `%s` (%s)\n", data.WorstAgentID, data.WorstAgentSkill))
+		fmt.Fprintf(&sb, "- **Weakest Agent:** `%s` (%s)\n", data.WorstAgentID, data.WorstAgentSkill)
 		if data.WorstAgentLayer != "" {
-			sb.WriteString(fmt.Sprintf("- **Layer:** %s\n", data.WorstAgentLayer))
+			fmt.Fprintf(&sb, "- **Layer:** %s\n", data.WorstAgentLayer)
 		}
 		if data.WorstAgentWindowCount > 0 {
-			sb.WriteString(fmt.Sprintf("- **Window Count:** %d\n", data.WorstAgentWindowCount))
+			fmt.Fprintf(&sb, "- **Window Count:** %d\n", data.WorstAgentWindowCount)
 		}
-		sb.WriteString(fmt.Sprintf("- **Sharpe-like Score:** %.4f\n", data.WorstSharpeLike))
+		fmt.Fprintf(&sb, "- **Sharpe-like Score:** %.4f\n", data.WorstSharpeLike)
 	} else {
 		sb.WriteString("_No experiment candidate identified._\n")
 	}
 	sb.WriteString("\n")
 
 	sb.WriteString("---\n")
-	sb.WriteString(fmt.Sprintf("*Generated at %s*\n", time.Now().Format(time.RFC3339)))
+	fmt.Fprintf(&sb, "*Generated at %s*\n", time.Now().Format(time.RFC3339))
 
 	return sb.String()
 }

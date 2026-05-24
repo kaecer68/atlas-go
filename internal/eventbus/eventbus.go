@@ -420,11 +420,14 @@ func (b *ChannelEventBus) PublishOrderEvent(order domain.Order, orderID, status 
 		payload.FillTime = time.Now()
 	}
 
-	eventType := EventOrderPlaced
-	if status == "filled" {
+	var eventType EventType
+	switch status {
+	case "filled":
 		eventType = EventOrderFilled
-	} else if status == "rejected" {
+	case "rejected":
 		eventType = EventOrderRejected
+	default:
+		eventType = EventOrderPlaced
 	}
 
 	return b.Publish(BusEvent{

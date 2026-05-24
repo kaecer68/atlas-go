@@ -172,12 +172,13 @@ func seedAllCohortsExtreme(engine *janus.Engine, suppressRegime domain.Regime, b
 	suppress := mapDomainRegimeToPRISM(suppressRegime)
 	for i := range int(prism.RegimeCount) {
 		regime := prism.RegimeType(i)
-		if regime == suppress {
+		switch regime {
+		case suppress:
 			seedCohort(engine, regime, -0.8, 0.40, -0.15, baseTime)
-		} else if regime == prism.RegimeRiskOn {
+		case prism.RegimeRiskOn:
 			// Give RiskOn a very high Sharpe so it dominates the weight pool.
 			seedCohort(engine, regime, 2.0, 0.70, 0.25, baseTime)
-		} else {
+		default:
 			seedCohort(engine, regime, 0.1, 0.50, 0.01, baseTime)
 		}
 	}

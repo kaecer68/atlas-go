@@ -185,29 +185,29 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 	var sb strings.Builder
 
 	sb.WriteString("# Performance Report\n\n")
-	sb.WriteString(fmt.Sprintf("**Period:** %s (%s to %s)\n\n",
+	fmt.Fprintf(&sb, "**Period:** %s (%s to %s)\n\n",
 		report.Period,
 		report.StartDate.Format("2006-01-02"),
 		report.EndDate.Format("2006-01-02"),
-	))
+	)
 
 	sb.WriteString("## Key Metrics\n\n")
 	sb.WriteString("| Metric | Value |\n")
 	sb.WriteString("|--------|-------|\n")
-	sb.WriteString(fmt.Sprintf("| Total Return | %.2f%% |\n", report.TotalReturn*100))
-	sb.WriteString(fmt.Sprintf("| Annualized Return | %.2f%% |\n", report.AnnualizedReturn*100))
-	sb.WriteString(fmt.Sprintf("| Sharpe Ratio | %.3f |\n", report.SharpeRatio))
-	sb.WriteString(fmt.Sprintf("| Sortino Ratio | %.3f |\n", report.SortinoRatio))
-	sb.WriteString(fmt.Sprintf("| Calmar Ratio | %.3f |\n", report.CalmarRatio))
-	sb.WriteString(fmt.Sprintf("| Max Drawdown | %.2f%% |\n", report.MaxDrawdown*100))
-	sb.WriteString(fmt.Sprintf("| Starting Value | %s |\n", domain.FormatNTD(report.StartingValue)))
-	sb.WriteString(fmt.Sprintf("| Ending Value | %s |\n", domain.FormatNTD(report.EndingValue)))
-	sb.WriteString(fmt.Sprintf("| After-Tax Value | %s |\n", domain.FormatNTD(report.AfterTaxValue)))
-	sb.WriteString(fmt.Sprintf("| Total Tax Paid | %s |\n", domain.FormatNTD(report.TotalTaxPaid)))
-	sb.WriteString(fmt.Sprintf("| Win Rate | %.1f%% |\n", report.WinRate*100))
-	sb.WriteString(fmt.Sprintf("| Total Trades | %d |\n", report.TotalTrades))
-	sb.WriteString(fmt.Sprintf("| Avg Win | %.2f%% |\n", report.AvgWin*100))
-	sb.WriteString(fmt.Sprintf("| Avg Loss | %.2f%% |\n", report.AvgLoss*100))
+	fmt.Fprintf(&sb, "| Total Return | %.2f%% |\n", report.TotalReturn*100)
+	fmt.Fprintf(&sb, "| Annualized Return | %.2f%% |\n", report.AnnualizedReturn*100)
+	fmt.Fprintf(&sb, "| Sharpe Ratio | %.3f |\n", report.SharpeRatio)
+	fmt.Fprintf(&sb, "| Sortino Ratio | %.3f |\n", report.SortinoRatio)
+	fmt.Fprintf(&sb, "| Calmar Ratio | %.3f |\n", report.CalmarRatio)
+	fmt.Fprintf(&sb, "| Max Drawdown | %.2f%% |\n", report.MaxDrawdown*100)
+	fmt.Fprintf(&sb, "| Starting Value | %s |\n", domain.FormatNTD(report.StartingValue))
+	fmt.Fprintf(&sb, "| Ending Value | %s |\n", domain.FormatNTD(report.EndingValue))
+	fmt.Fprintf(&sb, "| After-Tax Value | %s |\n", domain.FormatNTD(report.AfterTaxValue))
+	fmt.Fprintf(&sb, "| Total Tax Paid | %s |\n", domain.FormatNTD(report.TotalTaxPaid))
+	fmt.Fprintf(&sb, "| Win Rate | %.1f%% |\n", report.WinRate*100)
+	fmt.Fprintf(&sb, "| Total Trades | %d |\n", report.TotalTrades)
+	fmt.Fprintf(&sb, "| Avg Win | %.2f%% |\n", report.AvgWin*100)
+	fmt.Fprintf(&sb, "| Avg Loss | %.2f%% |\n", report.AvgLoss*100)
 	sb.WriteString("\n")
 
 	sb.WriteString("## Top Agent Contributions\n\n")
@@ -217,15 +217,15 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 		sb.WriteString("| Agent | Skill | Layer | Trades | Win Rate | Avg Return | Total Return |\n")
 		sb.WriteString("|-------|-------|-------|--------|----------|------------|-------------|\n")
 		for _, a := range report.TopAgents {
-			sb.WriteString(fmt.Sprintf("| %s | %s | %s | %d | %.1f%% | %.2f%% | %.2f%% |\n",
-				truncate(a.AgentID, 20),
-				a.Skill,
-				a.Layer,
-				a.TradeCount,
-				a.WinRate*100,
-				a.AvgReturn*100,
-				a.TotalReturn*100,
-			))
+		fmt.Fprintf(&sb, "| %s | %s | %s | %d | %.1f%% | %.2f%% | %.2f%% |\n",
+			truncate(a.AgentID, 20),
+			a.Skill,
+			a.Layer,
+			a.TradeCount,
+			a.WinRate*100,
+			a.AvgReturn*100,
+			a.TotalReturn*100,
+		)
 		}
 	}
 	sb.WriteString("\n")
@@ -237,13 +237,13 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 		sb.WriteString("| Regime | Sessions | Total Return | Win Rate | Avg Return |\n")
 		sb.WriteString("|--------|----------|--------------|----------|------------|\n")
 		for _, r := range report.RegimeBreakdown.Regimes {
-			sb.WriteString(fmt.Sprintf("| %s | %d | %.2f%% | %.1f%% | %.2f%% |\n",
-				r.Regime,
-				r.SessionCount,
-				r.TotalReturn*100,
-				r.WinRate*100,
-				r.AvgReturn*100,
-			))
+		fmt.Fprintf(&sb, "| %s | %d | %.2f%% | %.1f%% | %.2f%% |\n",
+			r.Regime,
+			r.SessionCount,
+			r.TotalReturn*100,
+			r.WinRate*100,
+			r.AvgReturn*100,
+		)
 		}
 	}
 	sb.WriteString("\n")
@@ -255,13 +255,13 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 		sb.WriteString("| Month | Return |\n")
 		sb.WriteString("|-------|--------|\n")
 		for _, m := range report.MonthlyReturns {
-			sb.WriteString(fmt.Sprintf("| %s | %.2f%% |\n", m.Label, m.Return*100))
+			fmt.Fprintf(&sb, "| %s | %.2f%% |\n", m.Label, m.Return*100)
 		}
 	}
 	sb.WriteString("\n")
 
 	sb.WriteString("---\n")
-	sb.WriteString(fmt.Sprintf("*Generated at %s*\n", report.GeneratedAt.Format(time.RFC3339)))
+	fmt.Fprintf(&sb, "*Generated at %s*\n", report.GeneratedAt.Format(time.RFC3339))
 
 	return sb.String()
 }

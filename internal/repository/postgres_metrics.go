@@ -73,15 +73,15 @@ func (r *PostgresRepository) QueryLatest(ctx context.Context, metricName string,
 	for key, value := range labels {
 		switch key {
 		case "agent_id":
-			query.WriteString(fmt.Sprintf(" AND agent_id = $%d", argIdx))
+			fmt.Fprintf(&query, " AND agent_id = $%d", argIdx)
 			args = append(args, value)
 			argIdx++
 		case "session_id":
-			query.WriteString(fmt.Sprintf(" AND session_id = $%d", argIdx))
+			fmt.Fprintf(&query, " AND session_id = $%d", argIdx)
 			args = append(args, value)
 			argIdx++
 		case "symbol":
-			query.WriteString(fmt.Sprintf(" AND symbol = $%d", argIdx))
+			fmt.Fprintf(&query, " AND symbol = $%d", argIdx)
 			args = append(args, value)
 			argIdx++
 		}

@@ -498,7 +498,8 @@ func (at *AdversarialTrainer) recordResult(result *BattleResult) {
 func (at *AdversarialTrainer) adaptStrategies(red, blue *AdversarialAgent, result *BattleResult) {
 	learningRate := 0.1
 
-	if result.Winner == TeamRed {
+	switch result.Winner {
+	case TeamRed:
 		// Red won - boost successful strategies
 		for i := range red.Strategies {
 			red.Strategies[i].SuccessRate = math.Min(1.0,
@@ -511,7 +512,7 @@ func (at *AdversarialTrainer) adaptStrategies(red, blue *AdversarialAgent, resul
 		}
 		red.Effectiveness = math.Min(1.0, red.Effectiveness+0.02)
 		blue.Adaptability = math.Min(1.0, blue.Adaptability+0.03) // Blue learns from loss
-	} else if result.Winner == TeamBlue {
+	case TeamBlue:
 		// Blue won - boost successful strategies
 		for i := range blue.Strategies {
 			blue.Strategies[i].SuccessRate = math.Min(1.0,
@@ -524,9 +525,8 @@ func (at *AdversarialTrainer) adaptStrategies(red, blue *AdversarialAgent, resul
 		}
 		blue.Effectiveness = math.Min(1.0, blue.Effectiveness+0.02)
 		red.Adaptability = math.Min(1.0, red.Adaptability+0.03)
-	}
-	// Draws - both learn slightly
-	if result.Winner != TeamRed && result.Winner != TeamBlue {
+	default:
+		// Draws - both learn slightly
 		red.Adaptability = math.Min(1.0, red.Adaptability+0.01)
 		blue.Adaptability = math.Min(1.0, blue.Adaptability+0.01)
 	}

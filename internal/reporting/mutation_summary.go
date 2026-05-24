@@ -20,10 +20,10 @@ func RenderMutationSummary(stats MutationStats) string {
 		return "_No mutation experiments recorded in this window._\n"
 	}
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("- **Total Experiments:** %d\n", stats.Total))
-	sb.WriteString(fmt.Sprintf("- **Kept / Promoted:** %d\n", stats.Kept))
-	sb.WriteString(fmt.Sprintf("- **Reverted:** %d\n", stats.Reverted))
-	sb.WriteString(fmt.Sprintf("- **Pending / In-Flight:** %d\n", stats.Pending))
-	sb.WriteString(fmt.Sprintf("- **Survival Rate:** %.1f%%\n", stats.SurvivalRate*100))
+	fmt.Fprintf(&sb, "- **Total Experiments:** %d\n", stats.Total)
+	fmt.Fprintf(&sb, "- **Kept / Promoted:** %d\n", stats.Kept)
+	fmt.Fprintf(&sb, "- **Reverted:** %d\n", stats.Reverted)
+	fmt.Fprintf(&sb, "- **Pending / In-Flight:** %d\n", stats.Pending)
+	fmt.Fprintf(&sb, "- **Survival Rate:** %.1f%%\n", stats.SurvivalRate*100)
 	return sb.String()
 }

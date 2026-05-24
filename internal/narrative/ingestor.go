@@ -480,15 +480,9 @@ func detectGeopoliticalRiskEventFromSnapshot(currGold, currVIX, currUSDTWD marke
 		goldChange = currGold.ChangePct
 	}
 	// Use VIX spike as proxy for geopolitical risk if no GPR index.
-	vixSpike := false
-	if currVIX.Symbol != "" && currVIX.Value > params.VIXLevelThreshold.Value {
-		vixSpike = true
-	}
+	vixSpike := currVIX.Symbol != "" && currVIX.Value > params.VIXLevelThreshold.Value
 	// NARR-05: Taiwan Stress Index proxy via USD/TWD depreciation
-	taiwanStress := false
-	if currUSDTWD.Symbol != "" && currUSDTWD.ChangePct > params.TaiwanStressUSDTWDThreshold.Value {
-		taiwanStress = true
-	}
+	taiwanStress := currUSDTWD.Symbol != "" && currUSDTWD.ChangePct > params.TaiwanStressUSDTWDThreshold.Value
 	if goldChange > params.GoldChangePctThreshold.Value || vixSpike || taiwanStress {
 		confidenceGold := computeDeviationConfidence(goldChange, params.GoldChangePctThreshold.Value, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
 		confidenceVIX := computeDeviationConfidence(currVIX.Value, params.VIXLevelThreshold.Value, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)

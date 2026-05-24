@@ -792,10 +792,11 @@ func (s *IndustryService) generateRecommendation(seg *industry.IndustrySegment, 
 	rec.Delta = rec.TargetWeight - rec.CurrentWeight
 
 	// Risk adjustment based on capex cycle
-	if pos.CapexCycle == industry.CapexExpansion {
+	switch pos.CapexCycle {
+	case industry.CapexExpansion:
 		rec.RiskAdjusted = true
 		rec.Rationale += "。資本支出擴張中，景氣有撐。"
-	} else if pos.CapexCycle == industry.CapexContraction {
+	case industry.CapexContraction:
 		rec.RiskAdjusted = true
 		rec.Rationale += "。資本支出收縮中，需留意下行風險。"
 	}
