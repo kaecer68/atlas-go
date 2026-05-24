@@ -923,3 +923,30 @@ func (a *DashboardAPI) RegisterTaskExecRoutes(mux *http.ServeMux) {
 	handlers := apitaskexec.NewHandlers(a.taskManager)
 	handlers.RegisterRoutes(mux)
 }
+
+// RouteOptions controls which optional route groups are registered.
+type RouteOptions struct {
+	IncludeBacktest bool // backtest and experiment routes
+	IncludeSwagger  bool // Swagger API documentation
+}
+
+// RegisterAllRoutes registers all DashboardAPI routes in one call.
+// This replaces the scattered registration pattern in cmd/atlas/main.go
+// with a single options-driven entry point, ensuring route consistency
+// across API, simulation, and live trading modes.
+func (a *DashboardAPI) RegisterAllRoutes(mux *http.ServeMux, opts RouteOptions) {
+	a.RegisterRoutes(mux)
+	a.RegisterNarrativeRoutes(mux)
+	a.RegisterControlRoutes(mux)
+	a.RegisterMacroRoutes(mux)
+	a.RegisterExperimentRoutes(mux)
+	a.RegisterIndustryRoutes(mux)
+	a.RegisterLiveRoutes(mux)
+
+	if opts.IncludeBacktest {
+		a.RegisterBacktestRoutes(mux)
+	}
+	if opts.IncludeSwagger {
+		a.RegisterSwaggerRoutes(mux)
+	}
+}

@@ -21,7 +21,7 @@ func TestSimulationModeDefaultPath(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -50,7 +50,7 @@ func TestSimulationModeBrokerGuardrails(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -80,7 +80,7 @@ func TestSimulationModeSystemCoreInitialization(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			capturedCollector = collector
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
@@ -111,7 +111,7 @@ func TestSimulationModeDoesNotStartHTTPServer(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -137,7 +137,7 @@ func TestSimulationModeWithExplicitDryRunBroker(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -163,7 +163,7 @@ func TestSimulationModeRejectsUnsupportedBrokerMode(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -192,7 +192,7 @@ func TestSimulationModeFlagOverridesConfig(t *testing.T) {
 				BrokerSigner:     "placeholder",
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -219,7 +219,7 @@ func TestSimulationModeWithMetricsCollector(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -246,7 +246,7 @@ func TestRunSimulationWithPaperBrokerMode(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -273,7 +273,7 @@ func TestRunSimulationBrokerRetryConfigPropagation(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -308,7 +308,7 @@ func TestRunSimulationNonceStoreConfig(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -335,7 +335,7 @@ func TestRunSimulationReturnsMeaningfulError(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -364,7 +364,7 @@ func TestSimulationModeShutdownBehavior(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -397,7 +397,7 @@ func TestSimulationModeWithRepositoryInjection(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -425,7 +425,7 @@ func TestRunSimulationWithAllBrokerFlags(t *testing.T) {
 				BrokerSigner:     "placeholder",
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -461,7 +461,7 @@ func TestSimulationModeNoDepsShutdownSignal(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -485,7 +485,7 @@ func TestRunSimulationModeWithAPIFlagFalse(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {
@@ -511,7 +511,7 @@ func TestSimulationModeCapitalManagementSetup(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, dir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error {

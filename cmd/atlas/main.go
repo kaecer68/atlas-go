@@ -49,44 +49,11 @@ import (
 	"github.com/kaecer68/atlas-go/internal/storage"
 )
 
-type routeRegistrar interface {
-	RegisterRoutes(mux *http.ServeMux)
-	RegisterSwaggerRoutes(mux *http.ServeMux)
-	RegisterNarrativeRoutes(mux *http.ServeMux)
-	RegisterControlRoutes(mux *http.ServeMux)
-	RegisterMacroRoutes(mux *http.ServeMux)
-	RegisterExperimentRoutes(mux *http.ServeMux)
-	RegisterLiveRoutes(mux *http.ServeMux)
-}
 
-// registerCommonDashboardRoutes registers the shared set of dashboard API routes
-// that are common between apiMode and liveMode. Backtest routes are only registered
-// in apiMode, and swagger routes are conditional on the swaggerMode flag.
-func registerCommonDashboardRoutes(
-	dashboard routeRegistrar,
-	mux *http.ServeMux,
-	swaggerMode bool,
-	includeBacktest bool,
-) {
-	dashboard.RegisterNarrativeRoutes(mux)
-	dashboard.RegisterControlRoutes(mux)
-	dashboard.RegisterMacroRoutes(mux)
-	dashboard.RegisterExperimentRoutes(mux)
-	if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-		if includeBacktest {
-			d.RegisterBacktestRoutes(mux)
-		}
-		if swaggerMode {
-			d.RegisterSwaggerRoutes(mux)
-		}
-		d.RegisterIndustryRoutes(mux)
-		d.RegisterLiveRoutes(mux)
-	}
-}
 
 type appDeps struct {
 	loadConfig      func() config.Config
-	newDashboardAPI func(string, string, *monitoring.MetricsCollector) routeRegistrar
+	newDashboardAPI func(string, string, *monitoring.MetricsCollector) *monitoring.DashboardAPI
 	listenAndServe  func(*http.Server) error
 	shutdown        chan struct{}
 }
@@ -94,7 +61,7 @@ type appDeps struct {
 func defaultAppDeps() appDeps {
 	return appDeps{
 		loadConfig: config.Load,
-		newDashboardAPI: func(workDir, ledgerDir string, collector *monitoring.MetricsCollector) routeRegistrar {
+		newDashboardAPI: func(workDir, ledgerDir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			return monitoring.NewDashboardAPI(workDir, ledgerDir, collector)
 		},
 		listenAndServe: func(srv *http.Server) error { return srv.ListenAndServe() },
@@ -253,23 +220,19 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[Parameters] failed to load parameters config: %v", err)
 		}
 		runtimeParams := portfolio.ToRuntimeParameters(paramsCfg)
-		var dashboard routeRegistrar
+		var dashboard *monitoring.DashboardAPI
 		if gatewayFetcher != nil {
 			dashboard = monitoring.NewDashboardAPIWithGateway(cfg.WorkDir, cfg.LedgerDir, collector, gatewayFetcher)
 		} else {
 			dashboard = deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
 		}
-		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-			d.SetPool(pool)
-			d.SetHealthManager(portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore).WithParameters(runtimeParams))
-			d.SetJanusEngine(janusEngine)
-			log.Printf("[JANUS] engine injected into dashboard API")
-		}
+		dashboard.SetPool(pool)
+		dashboard.SetHealthManager(portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore).WithParameters(runtimeParams))
+		dashboard.SetJanusEngine(janusEngine)
+		log.Printf("[JANUS] engine injected into dashboard API")
 		if repo != nil {
-			if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-				d.SetRepository(repo)
-				log.Printf("[Repository] injected into dashboard API")
-			}
+			dashboard.SetRepository(repo)
+			log.Printf("[Repository] injected into dashboard API")
 		}
 		// Create shared EventBus for SSE streaming AND simulation orchestration.
 		// Both the Dashboard API and all simulation-triggered Systems use the SAME bus,
@@ -278,40 +241,36 @@ func run(args []string, deps appDeps) error {
 		dashEventBus := eventbus.NewChannelEventBus(256)
 
 		// Inject EventBus for SSE streaming endpoint
-		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-			d.SetEventBus(dashEventBus)
-			d.SetContext(context.Background())
-			log.Printf("[EventBus] injected into dashboard API for SSE streaming")
-			dashEventBus.Subscribe(eventbus.EventNarrative, func(ctx context.Context, event eventbus.BusEvent) error {
-				apievents.BufferNarrativeEvent(event)
-				return nil
-			})
-			// Initial macro ingestion on startup to populate snapshot and publish events.
-			ingestCtx, ingestCancel := context.WithTimeout(context.Background(), 60*time.Second)
-			// Cancel ingest early if shutdown is signaled to avoid blocking
-			// tests that send shutdown after 100ms (otherwise ingest would wait
-			// up to 60s for Yahoo/Frankfurter geo timeouts).
-			go func() {
-				select {
-				case <-deps.shutdown:
-					ingestCancel()
-				case <-ingestCtx.Done():
-				}
-			}()
-			_, _, err := d.IngestAndUpdateMacro(ingestCtx)
-			ingestCancel()
-			if err != nil {
-				logging.Warn("main", "initial_macro_ingest_failed", "err", err)
-			} else {
-				logging.Info("main", "initial_macro_ingest_ok")
+		dashboard.SetEventBus(dashEventBus)
+		dashboard.SetContext(context.Background())
+		log.Printf("[EventBus] injected into dashboard API for SSE streaming")
+		dashEventBus.Subscribe(eventbus.EventNarrative, func(ctx context.Context, event eventbus.BusEvent) error {
+			apievents.BufferNarrativeEvent(event)
+			return nil
+		})
+		// Initial macro ingestion on startup to populate snapshot and publish events.
+		ingestCtx, ingestCancel := context.WithTimeout(context.Background(), 60*time.Second)
+		// Cancel ingest early if shutdown is signaled to avoid blocking
+		// tests that send shutdown after 100ms (otherwise ingest would wait
+		// up to 60s for Yahoo/Frankfurter geo timeouts).
+		go func() {
+			select {
+			case <-deps.shutdown:
+				ingestCancel()
+			case <-ingestCtx.Done():
 			}
+		}()
+		_, _, err = dashboard.IngestAndUpdateMacro(ingestCtx)
+		ingestCancel()
+		if err != nil {
+			logging.Warn("main", "initial_macro_ingest_failed", "err", err)
+		} else {
+			logging.Info("main", "initial_macro_ingest_ok")
 		}
 
 		lifecycleMgr := storage.NewLifecycleManager(filepath.Join(cfg.WorkDir, "data/state"))
-		if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-			d.SetStorageReporter(lifecycleMgr)
-			log.Printf("[Storage] reporter injected into dashboard API")
-		}
+		dashboard.SetStorageReporter(lifecycleMgr)
+		log.Printf("[Storage] reporter injected into dashboard API")
 
 		// Startup health check: verify critical data files exist and warn if missing.
 		replayPath := config.GetReplayDataPath(cfg.WorkDir)
@@ -330,7 +289,7 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[Startup] ⚠️  baseline policy NOT FOUND at: %s", baselinePath)
 		}
 
-		dashboard.RegisterRoutes(mux)
+		dashboard.RegisterAllRoutes(mux, monitoring.RouteOptions{IncludeBacktest: true, IncludeSwagger: *swaggerMode})
 
 		if alertStore != nil {
 			alertAPI := monitoring.NewAlertAPI(alertStore)
@@ -338,11 +297,9 @@ func run(args []string, deps appDeps) error {
 		}
 
 		if taskManager != nil {
-			if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-				d.SetTaskManager(taskManager)
-				d.RegisterTaskExecRoutes(mux)
-				log.Printf("[TaskExec] injected into dashboard API")
-			}
+			dashboard.SetTaskManager(taskManager)
+			dashboard.RegisterTaskExecRoutes(mux)
+			log.Printf("[TaskExec] injected into dashboard API")
 		}
 
 		adminHandler := func(h http.HandlerFunc) http.HandlerFunc {
@@ -485,8 +442,6 @@ func run(args []string, deps appDeps) error {
 				len(monitoring.DefaultRules())+len(monitoring.LiveTradingRules()),
 				params.RuleEngineIntervalSec.Value)
 		}
-
-		registerCommonDashboardRoutes(dashboard, mux, *swaggerMode, true)
 
 		fs := http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static")))
 		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -722,25 +677,23 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered storage_cleanup background task (24h interval)")
 
-			if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-				if svc := d.GetIndustryService(); svc != nil {
-					var finmindClient *marketdata.FinMindClient
-					if cfg.FinMindAPIKey != "" {
-						finmindClient = marketdata.NewFinMindClient(cfg.FinMindAPIKey)
-					}
-					cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient)
-					_ = taskMgr.Register(&apigateway.ScheduledTask{
-						Name:     "auto_cycle_update",
-						Interval: 6 * time.Hour,
-						Enabled:  true,
-						Task: func(ctx context.Context) error {
-							bgCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-							defer cancel()
-							return cycleAggregator.AggregateAllIndustries(bgCtx)
-						},
-					})
-					log.Printf("[Gateway] registered auto_cycle_update background task (6h interval)")
+			if svc := dashboard.GetIndustryService(); svc != nil {
+				var finmindClient *marketdata.FinMindClient
+				if cfg.FinMindAPIKey != "" {
+					finmindClient = marketdata.NewFinMindClient(cfg.FinMindAPIKey)
 				}
+				cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient)
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "auto_cycle_update",
+					Interval: 6 * time.Hour,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						bgCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+						defer cancel()
+						return cycleAggregator.AggregateAllIndustries(bgCtx)
+					},
+				})
+				log.Printf("[Gateway] registered auto_cycle_update background task (6h interval)")
 			}
 
 			{
@@ -767,7 +720,8 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered auto_threshold_calibrate background task (24h interval, checks 1st of month)")
 			}
 
-			if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
+			{
+				dashRef := dashboard
 				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "macro_ingest",
 					Interval: 5 * time.Minute,
@@ -775,7 +729,7 @@ func run(args []string, deps appDeps) error {
 					Task: func(ctx context.Context) error {
 						ingestCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 						defer cancel()
-						_, _, err := d.IngestAndUpdateMacro(ingestCtx)
+						_, _, err := dashRef.IngestAndUpdateMacro(ingestCtx)
 						if err != nil {
 							logging.Warn("main", "macro_ingest_failed", "err", err)
 						}
@@ -1007,10 +961,8 @@ func run(args []string, deps appDeps) error {
 			}
 
 			riskGate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
-			if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-				d.SetRiskGate(riskGate)
-				log.Printf("[RiskGate] injected into DashboardAPI for calibration reports")
-			}
+			dashboard.SetRiskGate(riskGate)
+			log.Printf("[RiskGate] injected into DashboardAPI for calibration reports")
 			calProvider := monitoring.NewSessionCalibrationProvider(filepath.Join(cfg.WorkDir, "data/state"))
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "risk_gate_calibrate",
@@ -1092,8 +1044,8 @@ func run(args []string, deps appDeps) error {
 		}
 
 		var btRunner *autobacktest.Runner
-		if d, ok := dashboard.(*monitoring.DashboardAPI); ok && d.GetEventBus() != nil {
-			btRunner = autobacktest.NewRunnerWithEventBus(cfg, d.GetEventBus())
+		if dashboard.GetEventBus() != nil {
+			btRunner = autobacktest.NewRunnerWithEventBus(cfg, dashboard.GetEventBus())
 			log.Printf("[AutoBacktest] connected to Dashboard EventBus for SSE streaming")
 		} else {
 			btRunner = autobacktest.NewRunner(cfg)
@@ -1318,17 +1270,15 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 	// Start dashboard API server for live status endpoint
 	mux := http.NewServeMux()
 	dashboard := deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
-	if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-		if repo != nil {
-			d.SetRepository(repo)
-			log.Printf("[Repository] injected into live trading dashboard API")
-		}
-		d.SetEventBus(eventBus)
-		d.SetContext(ctx)
-		logging.SetLogContext(ctx)
-		log.Printf("[EventBus] injected into live trading dashboard API for SSE streaming")
+	if repo != nil {
+		dashboard.SetRepository(repo)
+		log.Printf("[Repository] injected into live trading dashboard API")
 	}
-	dashboard.RegisterRoutes(mux)
+	dashboard.SetEventBus(eventBus)
+	dashboard.SetContext(ctx)
+	logging.SetLogContext(ctx)
+	log.Printf("[EventBus] injected into live trading dashboard API for SSE streaming")
+	dashboard.RegisterAllRoutes(mux, monitoring.RouteOptions{IncludeBacktest: false, IncludeSwagger: true})
 	alertStore, err := monitoring.NewAlertStore(filepath.Join(cfg.WorkDir, "data/state/alerts"))
 	if err != nil {
 		log.Printf("[Alerts] failed to create alert store: %v", err)
@@ -1337,7 +1287,6 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		alertAPI.RegisterRoutes(mux)
 		monitor.SetAlertStore(alertStore)
 	}
-	registerCommonDashboardRoutes(dashboard, mux, true, false)
 
 	mux.Handle("/", http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static"))))
 	apiAddr := ":8080"
