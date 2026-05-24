@@ -680,7 +680,7 @@ func (ie *InferenceEngine) SelfLearn(paramNames []string, evaluator func(cfg *Pa
 	improvement := bestScore - currentScore
 
 	for name, val := range result.ParamValues {
-		ie.SetParameter(name, val)
+		_ = ie.SetParameter(name, val)
 	}
 
 	return improvement, nil

@@ -145,7 +145,7 @@ func preScanStructNames(domainDir string) map[string]bool {
 	structNames := make(map[string]bool)
 	fset := token.NewFileSet()
 
-	filepath.Walk(domainDir, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(domainDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}

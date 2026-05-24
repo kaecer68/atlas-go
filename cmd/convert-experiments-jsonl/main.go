@@ -34,7 +34,7 @@ func run(args []string, stdout io.Writer) error {
 
 	files := discoverFiles(*dir)
 	if len(files) == 0 {
-		fmt.Fprintln(stdout, "No files found.")
+		_, _ = fmt.Fprintln(stdout, "No files found.")
 		return nil
 	}
 
@@ -75,7 +75,7 @@ func convertFile(path string) error {
 	if err != nil {
 		return fmt.Errorf("open %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	dir := filepath.Dir(path)
 	tmpFile, err := os.CreateTemp(dir, ".convert-experiments-jsonl-*.tmp")
@@ -83,7 +83,7 @@ func convertFile(path string) error {
 		return fmt.Errorf("create temp for %s: %w", path, err)
 	}
 	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	scanner := bufio.NewScanner(f)
 	lineNum := 0
@@ -92,7 +92,7 @@ func convertFile(path string) error {
 		line := scanner.Text()
 		if strings.TrimSpace(line) == "" {
 			if _, err := tmpFile.WriteString("\n"); err != nil {
-				tmpFile.Close()
+				_ = tmpFile.Close()
 				return fmt.Errorf("write blank line %d in %s: %w", lineNum, path, err)
 			}
 			continue
@@ -100,28 +100,28 @@ func convertFile(path string) error {
 
 		var record domain.ExperimentRecord
 		if err := json.Unmarshal([]byte(line), &record); err != nil {
-			tmpFile.Close()
+			_ = tmpFile.Close()
 			return fmt.Errorf("%s line %d: decode error: %w", path, lineNum, err)
 		}
 
 		canonical, err := json.Marshal(record)
 		if err != nil {
-			tmpFile.Close()
+			_ = tmpFile.Close()
 			return fmt.Errorf("%s line %d: encode error: %w", path, lineNum, err)
 		}
 
 		if _, err := tmpFile.Write(canonical); err != nil {
-			tmpFile.Close()
+			_ = tmpFile.Close()
 			return fmt.Errorf("write line %d in %s: %w", lineNum, path, err)
 		}
 		if _, err := tmpFile.WriteString("\n"); err != nil {
-			tmpFile.Close()
+			_ = tmpFile.Close()
 			return fmt.Errorf("write newline line %d in %s: %w", lineNum, path, err)
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return fmt.Errorf("scan %s: %w", path, err)
 	}
 

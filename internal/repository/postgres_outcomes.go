@@ -194,7 +194,7 @@ func scanRecommendationOutcomes(rows pgx.Rows) ([]domain.RecommendationOutcome, 
 		o.Window = sessionID
 		o.Layer = domain.AgentLayer(agentLayer)
 		if len(metadata) > 0 {
-			json.Unmarshal(metadata, &o)
+			_ = json.Unmarshal(metadata, &o)
 		}
 		outcomes = append(outcomes, o)
 	}

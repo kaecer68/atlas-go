@@ -109,10 +109,10 @@ func (a *Archiver) compressFile(src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("create archive: %w", err)
 	}
-	defer dstFile.Close()
+	defer func() { _ = dstFile.Close() }()
 
 	gzWriter := gzip.NewWriter(dstFile)
-	defer gzWriter.Close()
+	defer func() { _ = gzWriter.Close() }()
 
 	if _, err := io.Copy(gzWriter, srcFile); err != nil {
 		return fmt.Errorf("compress data: %w", err)

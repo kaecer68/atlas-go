@@ -54,7 +54,7 @@ func (w *SessionWriter) WriteSession(ctx context.Context, req SessionWriteReques
 	tmpDir := sessionDir + ".tmp"
 
 	// Cleanup function for failures
-	cleanup := func() { os.RemoveAll(tmpDir) }
+	cleanup := func() { _ = os.RemoveAll(tmpDir) }
 
 	// Create directories
 	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
@@ -102,7 +102,7 @@ func writeOutcomesToFile(path string, outcomes []domain.RecommendationOutcome) e
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	enc := json.NewEncoder(f)
 	for _, o := range outcomes {
 		if err := enc.Encode(o); err != nil {
@@ -117,7 +117,7 @@ func writeRejectsToFile(path string, rejects []domain.ScreeningReject) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	enc := json.NewEncoder(f)
 	for _, r := range rejects {
 		if err := enc.Encode(r); err != nil {

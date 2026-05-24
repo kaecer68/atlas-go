@@ -68,7 +68,7 @@ func run(args []string, stdout io.Writer) error {
 		return fmt.Errorf("archive copy: %w", err)
 	}
 
-	fmt.Fprintln(stdout, archiveDir)
+	_, _ = fmt.Fprintln(stdout, archiveDir)
 	return nil
 }
 

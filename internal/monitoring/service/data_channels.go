@@ -149,7 +149,7 @@ type channelHealthStore struct {
 }
 
 func (s *channelHealthStore) Get(channelID string) *ChannelHealthRecord {
-	s.load()
+	_ = s.load()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if rec, ok := s.data[channelID]; ok {
@@ -160,7 +160,7 @@ func (s *channelHealthStore) Get(channelID string) *ChannelHealthRecord {
 }
 
 func (s *channelHealthStore) Record(channelID, status, errMsg string, opts ...RecordOption) error {
-	s.load()
+	_ = s.load()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	rec := s.data[channelID]

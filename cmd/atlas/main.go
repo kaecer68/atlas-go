@@ -108,7 +108,7 @@ func getLatestReplayDate(csvPath string) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	reader := csv.NewReader(f)
 	var latest time.Time
@@ -337,6 +337,7 @@ func run(args []string, deps appDeps) error {
 					if provided != apiKey {
 						w.Header().Set("Content-Type", "application/json")
 						w.WriteHeader(http.StatusUnauthorized)
+						//nolint:errcheck
 						fmt.Fprintf(w, `{"error":"unauthorized"}`+"\n")
 						return
 					}
@@ -355,6 +356,7 @@ func run(args []string, deps appDeps) error {
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
+			//nolint:errcheck
 			fmt.Fprintf(w, `{"status":"ok","version":"%s"}`+"\n", cfg.Version)
 		}))
 		mux.HandleFunc("/api/admin/calibrate-thresholds", adminHandler(func(w http.ResponseWriter, r *http.Request) {
@@ -367,10 +369,12 @@ func run(args []string, deps appDeps) error {
 			if err := industry.RecalibrateThresholds(revenuePath, configPath); err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
+				//nolint:errcheck
 				fmt.Fprintf(w, `{"error":"%s"}`+"\n", err.Error())
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
+			//nolint:errcheck
 			fmt.Fprintf(w, `{"status":"ok","message":"thresholds recalibrated"}`+"\n")
 		}))
 		var monitor *monitoring.Monitor
@@ -383,6 +387,7 @@ func run(args []string, deps appDeps) error {
 			if err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
+				//nolint:errcheck
 				fmt.Fprintf(w, `{"error":"create system: %v"}`+"\n", err)
 				return
 			}
@@ -403,6 +408,7 @@ func run(args []string, deps appDeps) error {
 			if wErr != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
+				//nolint:errcheck
 				fmt.Fprintf(w, `{"error":"approval workflow: %v"}`+"\n", wErr)
 				return
 			}
@@ -411,6 +417,7 @@ func run(args []string, deps appDeps) error {
 			if simErr != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
+				//nolint:errcheck
 				fmt.Fprintf(w, `{"error":"simulation: %v"}`+"\n", simErr)
 				return
 			}
@@ -430,6 +437,7 @@ func run(args []string, deps appDeps) error {
 					})
 			}
 			w.Header().Set("Content-Type", "application/json")
+			//nolint:errcheck
 			fmt.Fprintf(w, `{"status":"ok","session":"%s","regime":"%s","orders":%d,"positions":%d}`+"\n",
 				system.Session().ID, result.Regime, len(result.Orders), len(result.Positions))
 		}))
@@ -484,7 +492,7 @@ func run(args []string, deps appDeps) error {
 
 			// Register channel_health_sync task (DB sync, not a data fetcher).
 			if pool != nil {
-				taskMgr.Register(&apigateway.ScheduledTask{
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "channel_health_sync",
 					Interval: 5 * time.Minute,
 					Enabled:  true,
@@ -499,7 +507,7 @@ func run(args []string, deps appDeps) error {
 			// Register health_check via HealthChecker.RunOnce (stateStore is nil in API mode).
 			if monitor != nil {
 				healthChecker := monitoring.NewHealthChecker(monitor, nil)
-				taskMgr.Register(&apigateway.ScheduledTask{
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "health_check",
 					Interval: 30 * time.Second,
 					Enabled:  true,
@@ -512,7 +520,7 @@ func run(args []string, deps appDeps) error {
 
 			// Register TSMC Revenue task via Gateway.
 			if cfg.FinMindAPIKey != "" {
-				taskMgr.Register(&apigateway.ScheduledTask{
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:      "tsmc_revenue",
 					ChannelID: "tsmc_revenue",
 					Interval:  24 * time.Hour,
@@ -526,7 +534,7 @@ func run(args []string, deps appDeps) error {
 			}
 
 			// Register auto_backfill via Gateway.
-			taskMgr.Register(&apigateway.ScheduledTask{
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:      "auto_backfill",
 				ChannelID: "twse_replay",
 				Interval:  24 * time.Hour,
@@ -585,7 +593,7 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[Gateway] registered auto_backfill background task (24h interval)")
 
 			// Register auto_capital_flow via Gateway.
-			taskMgr.Register(&apigateway.ScheduledTask{
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:      "auto_capital_flow",
 				ChannelID: "twse_capital_flow",
 				Interval:  30 * time.Minute,
@@ -609,7 +617,7 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[Gateway] registered auto_capital_flow background task (30m interval)")
 
 			// Register auto_margin via Gateway.
-			taskMgr.Register(&apigateway.ScheduledTask{
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:      "auto_margin",
 				ChannelID: "twse_margin",
 				Interval:  30 * time.Minute,
@@ -649,7 +657,7 @@ func run(args []string, deps appDeps) error {
 			}
 
 			// Register auto_export via Gateway.
-			taskMgr.Register(&apigateway.ScheduledTask{
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:      "auto_export",
 				ChannelID: "export_statistics",
 				Interval:  12 * time.Hour,
@@ -662,7 +670,7 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[Gateway] registered auto_export background task (12h interval)")
 
 			// Register auto_geopolitical via Gateway.
-			taskMgr.Register(&apigateway.ScheduledTask{
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:      "auto_geopolitical",
 				ChannelID: "geopolitical",
 				Interval:  6 * time.Hour,
@@ -676,7 +684,7 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[Gateway] registered auto_geopolitical background task (6h interval)")
 
 			// Register storage_cleanup via LifecycleManager.
-			taskMgr.Register(&apigateway.ScheduledTask{
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "storage_cleanup",
 				Interval: 24 * time.Hour,
 				Enabled:  true,
@@ -699,7 +707,7 @@ func run(args []string, deps appDeps) error {
 						finmindClient = marketdata.NewFinMindClient(cfg.FinMindAPIKey)
 					}
 					cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient)
-					taskMgr.Register(&apigateway.ScheduledTask{
+					_ = taskMgr.Register(&apigateway.ScheduledTask{
 						Name:     "auto_cycle_update",
 						Interval: 6 * time.Hour,
 						Enabled:  true,
@@ -716,7 +724,7 @@ func run(args []string, deps appDeps) error {
 			{
 				revenuePath := filepath.Join(cfg.WorkDir, "data", "replay", "month_revenue.jsonl")
 				configPath := filepath.Join(cfg.WorkDir, "configs", "parameters.json")
-				taskMgr.Register(&apigateway.ScheduledTask{
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "auto_threshold_calibrate",
 					Interval: 24 * time.Hour,
 					Enabled:  true,
@@ -738,7 +746,7 @@ func run(args []string, deps appDeps) error {
 			}
 
 			if d, ok := dashboard.(*monitoring.DashboardAPI); ok {
-				taskMgr.Register(&apigateway.ScheduledTask{
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "macro_ingest",
 					Interval: 5 * time.Minute,
 					Enabled:  true,
@@ -756,7 +764,7 @@ func run(args []string, deps appDeps) error {
 			}
 
 			if repo != nil {
-				taskMgr.Register(&apigateway.ScheduledTask{
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "metrics_snapshot",
 					Interval: 60 * time.Second,
 					Enabled:  true,
@@ -778,7 +786,7 @@ func run(args []string, deps appDeps) error {
 			}
 
 			// Register auto_daily_simulation — runs daily simulation at market close.
-			taskMgr.Register(&apigateway.ScheduledTask{
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "auto_daily_simulation",
 				Interval: 24 * time.Hour,
 				Enabled:  true,
@@ -858,7 +866,7 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[Gateway] registered auto_daily_simulation background task (24h interval)")
 
 			// Register auto_experiment — weekly strategy evolution cycle.
-			taskMgr.Register(&apigateway.ScheduledTask{
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "auto_experiment",
 				Interval: 7 * 24 * time.Hour,
 				Enabled:  true,
@@ -893,7 +901,7 @@ func run(args []string, deps appDeps) error {
 					brief := evolution.BuildMutationBrief(windowID, candidate)
 
 					briefDir := filepath.Join(cfg.WorkDir, "data", "state", "windows")
-					os.MkdirAll(briefDir, 0755)
+					_ = os.MkdirAll(briefDir, 0755)
 					briefPath := filepath.Join(briefDir, "auto-brief-"+candidate.Agent.ID+".json")
 					briefData, _ := json.MarshalIndent(brief, "", "  ")
 					if err := os.WriteFile(briefPath, briefData, 0644); err != nil {
@@ -964,7 +972,7 @@ func run(args []string, deps appDeps) error {
 
 			if ruleEngine != nil {
 				params := config.GetParametersConfig().Alert
-				taskMgr.Register(&apigateway.ScheduledTask{
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "rule_engine_check",
 					Interval: time.Duration(params.RuleEngineIntervalSec.Value) * time.Second,
 					Enabled:  true,
@@ -982,7 +990,7 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[RiskGate] injected into DashboardAPI for calibration reports")
 			}
 			calProvider := monitoring.NewSessionCalibrationProvider(filepath.Join(cfg.WorkDir, "data/state"))
-			taskMgr.Register(&apigateway.ScheduledTask{
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "risk_gate_calibrate",
 				Interval: 24 * time.Hour,
 				Enabled:  true,
@@ -1017,7 +1025,7 @@ func run(args []string, deps appDeps) error {
 					"HISTORICAL_REGIME": "normal_market_2024",
 					"RISK_OFF":          "covid_crash_2020",
 				}
-				taskMgr.Register(&apigateway.ScheduledTask{
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "regime_calibrate",
 					Interval: 1 * time.Hour,
 					Enabled:  true,

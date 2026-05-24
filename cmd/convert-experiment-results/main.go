@@ -32,7 +32,7 @@ func run(args []string, stdout io.Writer) error {
 
 	files := discoverFiles(*dir)
 	if len(files) == 0 {
-		fmt.Fprintln(stdout, "No files found.")
+		_, _ = fmt.Fprintln(stdout, "No files found.")
 		return nil
 	}
 
@@ -85,10 +85,10 @@ func convertFile(path string) error {
 		return fmt.Errorf("create temp for %s: %w", path, err)
 	}
 	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	if _, err := tmpFile.Write(canonical); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	if err := tmpFile.Close(); err != nil {

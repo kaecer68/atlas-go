@@ -445,7 +445,7 @@ func (h *Handlers) HandleBaselineInfo(r *http.Request) (int, any) {
 		UpdatedAt string `json:"updated_at"`
 		History   []any  `json:"history"`
 	}
-	json.Unmarshal(data, &policy)
+	_ = json.Unmarshal(data, &policy)
 	return http.StatusOK, map[string]any{
 		"version":    policy.Version,
 		"updated_at": policy.UpdatedAt,

@@ -728,7 +728,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			return
 		}
 		key := strings.ToUpper(req.Provider) + "_API_KEY"
-		os.Setenv(key, req.APIKey)
+		_ = os.Setenv(key, req.APIKey)
 		shared.WriteJSON(w, http.StatusOK, map[string]any{
 			"provider": req.Provider,
 			"status":   "ok",

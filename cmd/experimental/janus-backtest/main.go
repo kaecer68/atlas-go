@@ -41,7 +41,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("create baseline temp dir: %v", err)
 	}
-	defer os.RemoveAll(baselineDir)
+	defer func() { _ = os.RemoveAll(baselineDir) }()
 
 	baselineCfg := cfg
 	baselineCfg.LedgerDir = baselineDir
@@ -57,7 +57,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("create janus temp dir: %v", err)
 	}
-	defer os.RemoveAll(janusDir)
+	defer func() { _ = os.RemoveAll(janusDir) }()
 
 	janusCfg := cfg
 	janusCfg.LedgerDir = janusDir

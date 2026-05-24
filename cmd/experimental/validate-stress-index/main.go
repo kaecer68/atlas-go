@@ -30,7 +30,7 @@ func main() {
 		fmt.Println("Error opening CSV:", err)
 		os.Exit(1)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	reader := csv.NewReader(f)
 	header, err := reader.Read()

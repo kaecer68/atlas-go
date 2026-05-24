@@ -36,7 +36,7 @@ func main() {
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: *redisAddr,
 	})
-	defer redisClient.Close()
+	defer func() { _ = redisClient.Close() }()
 
 	// Test Redis connection
 	if err := redisClient.Ping(context.Background()).Err(); err != nil {

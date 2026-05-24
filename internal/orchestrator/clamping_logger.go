@@ -31,7 +31,7 @@ func (l *clampingLogger) Append(payload eventbus.ClampingEventPayload) {
 		logging.Error("clampingLogger", "failed to open file", "err", err)
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	enc := json.NewEncoder(f)
 	if err := enc.Encode(payload); err != nil {
@@ -51,7 +51,7 @@ func (l *clampingLogger) AppendConvictionEvents(events []portfolio.ConvictionCla
 		logging.Error("clampingLogger", "failed to open file", "err", err)
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	enc := json.NewEncoder(f)
 	for _, e := range events {

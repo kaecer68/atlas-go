@@ -167,7 +167,7 @@ func (m *DarwinianWeightManager) AppendSnapshot() error {
 	if err != nil {
 		return fmt.Errorf("open history file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if _, err := f.Write(append(data, '\n')); err != nil {
 		return fmt.Errorf("append snapshot: %w", err)
 	}

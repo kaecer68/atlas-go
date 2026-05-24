@@ -37,7 +37,7 @@ func (s *AgentHealthStore) Save(h *AgentHealth) error {
 	if err != nil {
 		return fmt.Errorf("open agent health file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if err := json.NewEncoder(f).Encode(h); err != nil {
 		return fmt.Errorf("encode agent health record: %w", err)
