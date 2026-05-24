@@ -58,14 +58,20 @@ func newTestDualWrite(t *testing.T) *DualWriteRepository {
 	// Clean up all test data after the test completes.
 	t.Cleanup(func() {
 		ctx := context.Background()
-		pool.Exec(ctx, "DELETE FROM metrics")
-		pool.Exec(ctx, "DELETE FROM alerts")
-		pool.Exec(ctx, "DELETE FROM recommendation_outcomes")
-		pool.Exec(ctx, "DELETE FROM capital_flow")
-		pool.Exec(ctx, "DELETE FROM export_statistics")
-		pool.Exec(ctx, "DELETE FROM screening_rejects")
-		pool.Exec(ctx, "DELETE FROM session_summaries")
-		pool.Exec(ctx, "DELETE FROM human_interventions")
+		for _, table := range []string{
+			"metrics",
+			"alerts",
+			"recommendation_outcomes",
+			"capital_flow",
+			"export_statistics",
+			"screening_rejects",
+			"session_summaries",
+			"human_interventions",
+		} {
+			if _, err := pool.Exec(ctx, "DELETE FROM "+table); err != nil {
+				t.Errorf("cleanup delete from %s: %v", table, err)
+			}
+		}
 	})
 
 	return repo
