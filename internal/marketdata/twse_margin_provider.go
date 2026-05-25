@@ -48,8 +48,13 @@ func (t *TWSEMarginBalanceProvider) FetchSnapshot(ctx context.Context) (MacroDat
 
 // FetchSnapshotForDate retrieves margin balance data for a specific date.
 func (t *TWSEMarginBalanceProvider) FetchSnapshotForDate(ctx context.Context, date time.Time) (MacroDataSnapshot, error) {
-	for i := range 7 {
-		dateStr := date.AddDate(0, 0, -i).Format("20060102")
+	for i, attempts := 0, 0; attempts < 7; i++ {
+		d := date.AddDate(0, 0, -i)
+		if d.Weekday() == time.Saturday || d.Weekday() == time.Sunday {
+			continue
+		}
+		attempts++
+		dateStr := d.Format("20060102")
 		balance, shortBalance, changePct, shortChangePct, err := t.fetchDateExpanded(ctx, dateStr)
 		if err == nil {
 			if err := t.saveMargin(dateStr, balance, shortBalance, changePct, shortChangePct); err != nil {
