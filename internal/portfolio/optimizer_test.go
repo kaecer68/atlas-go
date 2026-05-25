@@ -805,3 +805,84 @@ func TestCovarianceOptimizer_EfficientFrontierWithData(t *testing.T) {
 		}
 	}
 }
+
+// TestCovarianceOptimizer_HighVolatilityStress verifies that Ledoit-Wolf
+// shrinkage remains stable under extreme daily amplitudes (±20%).
+// Falsification: if shrinkage produces NaN, Inf, or concentrates >80% weight
+// into a single asset, the model is wrong.
+func TestCovarianceOptimizer_HighVolatilityStress(t *testing.T) {
+	assets := []string{"HV1.TW", "HV2.TW", "HV3.TW", "HV4.TW", "HV5.TW"}
+	hp := makeTestHistory(assets, 65, func(sym string, day int) float64 {
+		base := 100.0
+		amp := 0.05
+		switch sym {
+		case "HV1.TW":
+			amp = 0.18
+		case "HV2.TW":
+			amp = 0.22
+		case "HV3.TW":
+			amp = 0.08
+		case "HV4.TW":
+			amp = 0.15
+		case "HV5.TW":
+			amp = 0.20
+		}
+		return base * (1 + amp*math.Sin(float64(day)*float64(len(sym))))
+	})
+
+	o := NewOptimizer()
+	o.WithHistoricalPrices(hp)
+	o.SetConstraints(Constraints{
+		MaxPositionPct:   0.4,
+		CashReserve:      0.0,
+		MaxSectorPct:     1.0,
+		MaxTurnoverDaily: 1.0,
+	})
+	o.SetFactorWeights(map[FactorType]float64{
+		FactorMomentum: 0.0, FactorValue: 0.0, FactorQuality: 0.0, FactorAgent: 1.0,
+	})
+
+	quotes := make(map[string]domain.Quote)
+	recs := make([]domain.Recommendation, 0, len(assets))
+	for _, sym := range assets {
+		quotes[sym] = domain.Quote{Symbol: sym, Open: 100, Last: 100, IsTradable: true}
+		recs = append(recs, domain.Recommendation{Agent: "a", Symbol: sym, Side: domain.SideBuy, Conviction: 50})
+	}
+
+	positions, err := o.Optimize(context.Background(), recs, quotes, 1_000_000)
+	if err != nil {
+		t.Fatalf("optimize failed under stress: %v", err)
+	}
+	if len(positions) == 0 {
+		t.Fatal("expected positions under stress")
+	}
+
+	var sumW, hhi float64
+	maxW := 0.0
+	for _, p := range positions {
+		if p.TargetWeight < 0 {
+			t.Errorf("stress fail: %s weight = %f < 0", p.Symbol, p.TargetWeight)
+		}
+		if p.TargetWeight > maxW {
+			maxW = p.TargetWeight
+		}
+		if math.IsNaN(p.TargetWeight) {
+			t.Errorf("stress fail: %s weight is NaN", p.Symbol)
+		}
+		if math.IsInf(p.TargetWeight, 0) {
+			t.Errorf("stress fail: %s weight is Inf", p.Symbol)
+		}
+		sumW += p.TargetWeight
+		hhi += p.TargetWeight * p.TargetWeight
+	}
+
+	if math.Abs(sumW-1.0) > 0.001 {
+		t.Errorf("stress fail: Σw = %f, expected 1.0 ± 0.001", sumW)
+	}
+	if maxW > 0.8 {
+		t.Errorf("stress fail: max weight = %f > 0.8 — over-concentrated", maxW)
+	}
+	if hhi > 0.5 {
+		t.Errorf("stress fail: HHI = %f > 0.5 — insufficient diversification", hhi)
+	}
+}

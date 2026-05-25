@@ -557,6 +557,65 @@ func (o *Optimizer) buildPositions(
 }
 
 // ── Covariance-Based Portfolio Optimization ──
+//
+// Mathematical Model (Ledoit & Wolf, 2004; active-set QP)
+// =========================================================
+// Given N assets with daily return series rᵢ(t), i=1..N, t=1..T:
+//
+//    Sample covariance:  S_{ij} = (1/T) Σₜ (rᵢ(t)-μᵢ)(rⱼ(t)-μⱼ)
+//    Average variance:   ν = (1/N) Σᵢ S_{ii}
+//
+//    Shrinkage target:   F = ν·I  (scaled identity)
+//    Shrinkage estimator: Σ = (1-δ)·S + δ·F
+//
+//    Shrinkage intensity δ computed via:
+//      π  = Σᵢⱼ π_{ij},   π_{ij} = (1/T) Σₜ ((r̃ᵢ(t)r̃ⱼ(t) - S_{ij})²)
+//      ρ  = Σᵢ ρ_{ii},   ρ_{ii} = π_{ii}
+//      γ  = Σᵢⱼ (S_{ij} - F_{ij})²
+//      δ  = clamp₍₀,₁₎( (π - ρ) / (T·γ) ),  δ=0 if γ=0 or T=0
+//
+//    Portfolio optimization (min-variance, active-set QP):
+//      minimize    (1/2) w'Σw
+//      subject to  Σwᵢ = 1,  0 ≤ wᵢ ≤ w_max  (∀i)
+//
+//    KKT system per active-set iteration:
+//      [2·Σ_FF   A']  [w_F]    [ -2·Σ_FA·w_A ]
+//      [A        0 ]  [ λ ]  = [ b - A·w_A    ]
+//
+//    Fallback (singular KKT): gradient projection with re-normalization.
+//    Fallback (no history, <2 assets): linear normalization by factor scores.
+//
+// Falsification Conditions
+// =========================================================
+// Scenario A (edge): N=2 assets, one high-volatility — low-volatility asset
+//   must receive higher weight than equal-weight baseline.
+//   Test: TestCovarianceOptimizer_N2EdgeCase
+//
+// Scenario B (stress): ±20% daily amplitude, 5 assets — shrinkage must
+//   remain stable (no NaN), weights must be diversified (Herfindahl ≤ 0.5).
+//   Test: TestCovarianceOptimizer_HighVolatilityStress
+//
+// Scenario C (correctness): N=4 assets, w_max=0.3 — every weight must
+//   satisfy 0 ≤ wᵢ ≤ w_max, sum of weights = 1.0 ± 0.001.
+//   Test: TestCovarianceOptimizer_CorrectnessCheck
+//
+// Data Dependencies
+// =========================================================
+// | Data               | Source                         | Computation          |
+// |--------------------|--------------------------------|----------------------|
+// | Daily price series | HistoricalPrices.GetCloseSeries | (Pₜ-Pₜ₋₁)/Pₜ₋₁     |
+// | Factor scores      | FactorEngine                   | Momentum/Value/Quality|
+// | Constraints        | configs/parameters.json         | w_max, cash_reserve  |
+//
+// Parameter Provenance
+// =========================================================
+// | Parameter    | Value  | Source                                        |
+// |-------------|--------|-----------------------------------------------|
+// | lookbackDays | 60     | Academic consensus (60-120 days for covariance)|
+// | riskFreeRate | 0.015  | Taiwan 1Y government bond (≈1.5% p.a.)        |
+// | w_max        | 0.15   | Constraints.MaxPositionPct (config-driven)     |
+// | QP maxIter   | 100    | Standard active-set convergence bound          |
+// | QP tol       | 1e-10  | Numerical stability for KKT optimality check   |
 
 type returnMatrix struct {
 	assets  []string
