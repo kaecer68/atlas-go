@@ -987,3 +987,98 @@ func TestCrossAssetIntegration(t *testing.T) {
 		t.Errorf("cross-asset fail: SLV (silver) missing PreciousMetals factor")
 	}
 }
+
+// ── Multi-Day Drawdown Simulation Tests (P1, Gate 3.2) ──
+
+func TestDrawdownSimulation_COVIDCrash(t *testing.T) {
+	hp := makeTestHistory([]string{"A.TW", "B.TW", "C.TW", "D.TW"}, 65, func(sym string, day int) float64 {
+		return 100 * (1 + 0.01*math.Sin(float64(day)*0.5))
+	})
+
+	o := NewOptimizer()
+	o.WithHistoricalPrices(hp)
+
+	weights := []weightInfo{
+		{Symbol: "A.TW", Weight: 0.25},
+		{Symbol: "B.TW", Weight: 0.25},
+		{Symbol: "C.TW", Weight: 0.25},
+		{Symbol: "D.TW", Weight: 0.25},
+	}
+
+	result := o.SimulateDrawdown(weights, 4.0, 21, 200)
+
+	if result.MaxDrawdown < 0.15 {
+		t.Errorf("COVID crash: max dd = %.2f%%, expected > 15%% (VIX=80, scale=4x)",
+			result.MaxDrawdown*100)
+	}
+	if result.VaR95 < 0.10 {
+		t.Errorf("COVID crash: VaR95 = %.2f%%, expected > 10%%",
+			result.VaR95*100)
+	}
+	if len(result.WorstPath) != 22 {
+		t.Errorf("expected 22 path points (21 days + start), got %d", len(result.WorstPath))
+	}
+}
+
+func TestDrawdownSimulation_FedHiking(t *testing.T) {
+	hp := makeTestHistory([]string{"A.TW", "B.TW", "C.TW", "D.TW"}, 65, func(sym string, day int) float64 {
+		return 100 * (1 + 0.01*math.Sin(float64(day)*0.5))
+	})
+
+	o := NewOptimizer()
+	o.WithHistoricalPrices(hp)
+
+	weights := []weightInfo{
+		{Symbol: "A.TW", Weight: 0.25},
+		{Symbol: "B.TW", Weight: 0.25},
+		{Symbol: "C.TW", Weight: 0.25},
+		{Symbol: "D.TW", Weight: 0.25},
+	}
+
+	result := o.SimulateDrawdown(weights, 1.6, 21, 200)
+
+	if result.MaxDrawdown < 0.05 {
+		t.Errorf("Fed hikes: max dd = %.2f%%, expected > 5%% (VIX=32, scale=1.6x)",
+			result.MaxDrawdown*100)
+	}
+	if result.MaxDrawdown > 0.40 {
+		t.Errorf("Fed hikes: max dd = %.2f%%, expected < 40%% (VIX=32 not as extreme as VIX=80)",
+			result.MaxDrawdown*100)
+	}
+}
+
+func TestDrawdownSimulation_NormalMarket(t *testing.T) {
+	hp := makeTestHistory([]string{"A.TW", "B.TW", "C.TW", "D.TW"}, 65, func(sym string, day int) float64 {
+		return 100 * (1 + 0.01*math.Sin(float64(day)*0.5))
+	})
+
+	o := NewOptimizer()
+	o.WithHistoricalPrices(hp)
+
+	weights := []weightInfo{
+		{Symbol: "A.TW", Weight: 0.25},
+		{Symbol: "B.TW", Weight: 0.25},
+		{Symbol: "C.TW", Weight: 0.25},
+		{Symbol: "D.TW", Weight: 0.25},
+	}
+
+	result := o.SimulateDrawdown(weights, 1.0, 21, 200)
+
+	if result.MaxDrawdown > 0.15 {
+		t.Errorf("Normal market: max dd = %.2f%%, expected < 15%% (VIX~20, scale=1x)",
+			result.MaxDrawdown*100)
+	}
+	if result.VaR95 < 0 {
+		t.Errorf("Normal market: VaR95 should be non-negative, got %.2f%%",
+			result.VaR95*100)
+	}
+}
+
+func TestDrawdownSimulation_NotEnoughAssets(t *testing.T) {
+	o := NewOptimizer()
+	result := o.SimulateDrawdown([]weightInfo{{Symbol: "ONLY.TW", Weight: 1.0}}, 2.0, 10, 100)
+
+	if result.MaxDrawdown != 0 {
+		t.Error("expected zero drawdown for single-asset portfolio (no covariance)")
+	}
+}
