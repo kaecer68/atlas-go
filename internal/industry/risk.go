@@ -215,6 +215,7 @@ func (rm *RiskMonitor) CalculateNewsLatencyRisk(symbol string, industryID string
 		"electronics":     true,
 		"robotics":        true,
 		"shipping":        true,
+		"mining":          true,
 	}
 
 	if !exportIndustries[industryID] {

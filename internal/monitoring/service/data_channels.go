@@ -368,8 +368,11 @@ func (s *DataChannelService) buildFubonChannel() DataChannel {
 		UpdatedAt:  updated,
 		LastError:  lastError,
 	}
+}
 
-	return buildChannelInfo{
+func (s *DataChannelService) buildFinMindChannel() DataChannel {
+	status, updated, lastError := s.getCachedFinMindHealth()
+	return DataChannel{
 		ChannelID:  "finmind",
 		Country:    "台灣",
 		Platform:   "FinMind",

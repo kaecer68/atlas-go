@@ -76,7 +76,7 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           15,
 			EndMonth:           2,
 			EndDay:             15,
-			FavoredIndustries:  []string{"financials", "high_dividend", "small_cap"},
+			FavoredIndustries:  []string{"financials", "high_dividend", "small_cap", "mining"},
 			AvoidedIndustries:  []string{"semiconductor", "ai_supply_chain"},
 			AdjustmentFactor:   1.15,
 			HistoricalAccuracy: 0.70,
