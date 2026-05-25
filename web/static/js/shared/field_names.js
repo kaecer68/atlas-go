@@ -169,6 +169,7 @@ export const FIELD = {
     intraday_peak: 'intraday_peak',
     day_start_value: 'day_start_value',
     events: 'events',
+    initialized: 'initialized',
   },
   CircuitBreakerStatus: {
     state: 'state',

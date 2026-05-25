@@ -119,7 +119,7 @@ func publishBootstrapEvents(bus eventbus.EventBus, replayPath, baselinePath stri
 		baselineStatus = "未找到"
 	}
 
-	bus.Publish(eventbus.BusEvent{
+	_ = bus.Publish(eventbus.BusEvent{
 		ID:        "bootstrap-" + now.Format("150405"),
 		Type:      eventbus.EventSystemStart,
 		Timestamp: now,
@@ -1075,7 +1075,7 @@ func run(args []string, deps appDeps) error {
 
 			taskMgr.Start(sysCtx)
 			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
-			dashEventBus.Publish(eventbus.BusEvent{
+			_ = dashEventBus.Publish(eventbus.BusEvent{
 				ID:          "schedule-" + time.Now().Format("150405"),
 				Type:        eventbus.EventSystemStart,
 				Timestamp:   time.Now(),
