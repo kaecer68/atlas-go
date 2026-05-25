@@ -106,6 +106,8 @@ func NewFinMindChannelAdapter(client *marketdata.FinMindClient) *FinMindChannelA
 func yesterday() string {
 	t := time.Now().AddDate(0, 0, -1)
 	switch t.Weekday() {
+	case time.Saturday:
+		t = t.AddDate(0, 0, -1) // Friday
 	case time.Sunday:
 		t = t.AddDate(0, 0, -2) // Friday
 	case time.Monday:
