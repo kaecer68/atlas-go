@@ -11,12 +11,13 @@ import (
 )
 
 type FactorWeightEngine struct {
-	mu           sync.RWMutex
-	baseWeights  map[FactorType]float64
-	eventWeights map[string]map[FactorType]float64
-	activeEvents map[string]*narrative.NarrativeEvent
-	lifecycle    *narrative.EventLifecycleManager
-	weightSource string
+	mu                 sync.RWMutex
+	baseWeights        map[FactorType]float64
+	eventWeights       map[string]map[FactorType]float64
+	activeEvents       map[string]*narrative.NarrativeEvent
+	lifecycle          *narrative.EventLifecycleManager
+	strategyAdjustment map[FactorType]float64
+	weightSource       string
 }
 
 func (e *FactorWeightEngine) WeightSource() string {
@@ -56,11 +57,12 @@ func NewFactorWeightEngine() *FactorWeightEngine {
 		source = "config"
 	}
 	return &FactorWeightEngine{
-		baseWeights:  baseWeights,
-		eventWeights: make(map[string]map[FactorType]float64),
-		activeEvents: make(map[string]*narrative.NarrativeEvent),
-		lifecycle:    narrative.NewEventLifecycleManager(),
-		weightSource: source,
+		baseWeights:        baseWeights,
+		eventWeights:       make(map[string]map[FactorType]float64),
+		activeEvents:       make(map[string]*narrative.NarrativeEvent),
+		lifecycle:          narrative.NewEventLifecycleManager(),
+		strategyAdjustment: make(map[FactorType]float64),
+		weightSource:       source,
 	}
 }
 
@@ -120,6 +122,10 @@ func (e *FactorWeightEngine) GetWeights(regime string) map[FactorType]float64 {
 				weights[ft] += delta
 			}
 		}
+	}
+
+	for ft, delta := range e.strategyAdjustment {
+		weights[ft] += delta
 	}
 
 	for ft := range weights {
@@ -303,10 +309,11 @@ func (e *FactorWeightEngine) Update() {
 	}
 }
 
-func (e *FactorWeightEngine) ApplyStrategy(s *strategy.Strategy) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
+// strategyDeltas returns the factor adjustment map for a given risk appetite.
+// Conservative: +Value, +Quality, −Momentum
+// Aggressive:   +Momentum, +InstSent, −Value, −Quality
+// Balanced:     no adjustment (empty map).
+func (e *FactorWeightEngine) strategyDeltas(ra strategy.RiskAppetite) map[FactorType]float64 {
 	fw := fwConfig()
 	var (
 		consValue    = 0.05
@@ -327,23 +334,81 @@ func (e *FactorWeightEngine) ApplyStrategy(s *strategy.Strategy) {
 		aggQuality = fw.AggressiveQuality.Value
 	}
 
-	strategyKey := "strategy_adjustment"
-	delete(e.eventWeights, strategyKey)
-
-	switch s.RiskAppetite {
+	switch ra {
 	case strategy.RiskAppetiteConservative:
-		e.eventWeights[strategyKey] = map[FactorType]float64{
+		return map[FactorType]float64{
 			FactorValue:    consValue,
 			FactorQuality:  consQuality,
 			FactorMomentum: consMomentum,
 		}
 	case strategy.RiskAppetiteAggressive:
-		e.eventWeights[strategyKey] = map[FactorType]float64{
+		return map[FactorType]float64{
 			FactorMomentum: aggMomentum,
 			FactorInstSent: aggInstSent,
 			FactorValue:    aggValue,
 			FactorQuality:  aggQuality,
 		}
 	default:
+		return nil
+	}
+}
+
+func (e *FactorWeightEngine) ApplyStrategy(s *strategy.Strategy) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	deltas := e.strategyDeltas(s.RiskAppetite)
+	e.strategyAdjustment = make(map[FactorType]float64)
+	if deltas == nil {
+		return
+	}
+	for ft, d := range deltas {
+		e.strategyAdjustment[ft] = d
+	}
+}
+
+// ApplyStrategyMix computes a weighted-average factor adjustment from multiple
+// strategies and stores the result. It uses the strategy registry to look up
+// each strategy's RiskAppetite, then blends their per-factor deltas according
+// to the mix weights.
+//
+//	blendedDelta[f] = Σ (mix[s] × delta(s, f)) / Σ mix[s]
+func (e *FactorWeightEngine) ApplyStrategyMix(mix strategy.StrategyMix, registry *strategy.Registry) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if len(mix) == 0 {
+		e.strategyAdjustment = make(map[FactorType]float64)
+		return
+	}
+
+	// Sum weights for normalization (StrategyMix should sum to ~1.0,
+	// but normalize defensively in case it doesn't).
+	var totalWeight float64
+	for _, w := range mix {
+		totalWeight += w
+	}
+	if totalWeight <= 0 {
+		e.strategyAdjustment = make(map[FactorType]float64)
+		return
+	}
+
+	// Accumulate weighted deltas across all strategies.
+	acc := make(map[FactorType]float64)
+	for strategyID, weight := range mix {
+		s, ok := registry.Get(strategyID)
+		if !ok {
+			continue
+		}
+		deltas := e.strategyDeltas(s.RiskAppetite)
+		for ft, d := range deltas {
+			acc[ft] += weight * d
+		}
+	}
+
+	// Normalize by total weight.
+	e.strategyAdjustment = make(map[FactorType]float64)
+	for ft, d := range acc {
+		e.strategyAdjustment[ft] = d / totalWeight
 	}
 }

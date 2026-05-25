@@ -80,6 +80,8 @@ type DashboardAPI struct {
 	storageReport      apimetrics.StorageReporter
 	dataFetcher        DataFetcher
 	riskGate           *risk.RiskGate
+	latestDrawdown     *portfolio.DrawdownResult
+	drawdownMu         sync.RWMutex
 }
 
 // channelState tracks enable/disable status for each channel.
@@ -649,6 +651,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	})
 
 	mux.HandleFunc("/api/dashboard/risk-calibration", a.handleRiskCalibration)
+	mux.HandleFunc("/api/dashboard/drawdown", a.handleDrawdown)
 
 	// Management center endpoints — channel control and API key management.
 	mux.HandleFunc("/api/dashboard/channels/", func(w http.ResponseWriter, r *http.Request) {
@@ -882,6 +885,42 @@ func (a *DashboardAPI) initGatewayProviders() {
 // SetRiskGate injects a RiskGate instance for serving calibration reports.
 func (a *DashboardAPI) SetRiskGate(g *risk.RiskGate) {
 	a.riskGate = g
+}
+
+// SetLatestDrawdown stores the latest drawdown result.
+func (a *DashboardAPI) SetLatestDrawdown(d *portfolio.DrawdownResult) {
+	a.drawdownMu.Lock()
+	defer a.drawdownMu.Unlock()
+	a.latestDrawdown = d
+}
+
+// GetLatestDrawdown returns the latest drawdown result, or nil.
+func (a *DashboardAPI) GetLatestDrawdown() *portfolio.DrawdownResult {
+	a.drawdownMu.RLock()
+	defer a.drawdownMu.RUnlock()
+	return a.latestDrawdown
+}
+
+func (a *DashboardAPI) handleDrawdown(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	result := a.GetLatestDrawdown()
+	if result == nil {
+		shared.WriteJSON(w, http.StatusOK, map[string]any{
+			"status":    "not_available",
+			"message":   "no drawdown simulation available yet",
+			"generated": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+	shared.WriteJSON(w, http.StatusOK, map[string]any{
+		"max_drawdown": result.MaxDrawdown,
+		"var_95":       result.VaR95,
+		"worst_path":   result.WorstPath,
+		"generated":    time.Now().Format(time.RFC3339),
+	})
 }
 
 // handleRiskCalibration serves the latest risk gate calibration report.

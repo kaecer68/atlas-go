@@ -331,6 +331,7 @@ type NarrativeParameters struct {
 	RetailFrenzyPercentileThreshold ParameterMetadata[float64] `json:"retail_frenzy_percentile_threshold"`
 	RetailFearPercentileThreshold   ParameterMetadata[float64] `json:"retail_fear_percentile_threshold"`
 	RetailAccelerationWindowDays    ParameterMetadata[int]     `json:"retail_acceleration_window_days"`
+	InflationEstimate               ParameterMetadata[float64] `json:"inflation_estimate,omitempty"`
 }
 
 // RealtimeParameters holds tunable values for real-time regime detection and adaptation.

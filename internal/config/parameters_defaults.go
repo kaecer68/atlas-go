@@ -1321,6 +1321,12 @@ func defaultNarrativeParameters() NarrativeParameters {
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate from backtest: test [3, 10] range for optimal retail momentum detection",
 		},
+		InflationEstimate: ParameterMetadata[float64]{
+			Value:     2.5,
+			Rationale: "long-run US inflation target used as fallback when live CPI data is unavailable",
+			Source:    "heuristic",
+			Todo:      "replace with live CPI from FRED API when available",
+		},
 		GoldChangePctThreshold: ParameterMetadata[float64]{
 			Value:     2.0,
 			Rationale: "Gold price change %% threshold for geopolitical risk detection; gold traditionally serves as safe-haven proxy",
