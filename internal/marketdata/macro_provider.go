@@ -34,6 +34,7 @@ type MacroDataSnapshot struct {
 	CoWoSUtilization    MacroDataPoint `json:"cowos_utilization"`
 	CapexGrowth         MacroDataPoint `json:"capex_growth"`
 	CPIYoY              MacroDataPoint `json:"cpi_yoy"`
+	Bdi                 MacroDataPoint `json:"bdi"`
 	RecordedAt          int64          `json:"recorded_at"`
 }
 
@@ -121,6 +122,9 @@ func (c *CompositeMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSn
 		}
 		if snap.CPIYoY.Symbol != "" {
 			merged.CPIYoY = snap.CPIYoY
+		}
+		if snap.Bdi.Symbol != "" {
+			merged.Bdi = snap.Bdi
 		}
 		if snap.RecordedAt > merged.RecordedAt {
 			merged.RecordedAt = snap.RecordedAt

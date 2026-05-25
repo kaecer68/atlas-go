@@ -65,13 +65,16 @@ func (dem *DynamicEnvModulator) UpdateRollingBaseline() {
 
 	oilValues := make([]float64, len(windowData))
 	dxyValues := make([]float64, len(windowData))
+	bdiValues := make([]float64, len(windowData))
 	for i, snap := range windowData {
 		oilValues[i] = snap.Oil.Value
 		dxyValues[i] = snap.DXY.Value
+		bdiValues[i] = snap.Bdi.Value
 	}
 
 	dem.baseline.Oil.Value = median(oilValues)
 	dem.baseline.DXY.Value = median(dxyValues)
+	dem.baseline.Bdi.Value = median(bdiValues)
 }
 
 // RecordSnapshot appends a macro data snapshot to the rolling history.
@@ -118,7 +121,14 @@ func (dem *DynamicEnvModulator) DXYDeviation() float64 {
 // BDIDeviation returns the percentage deviation of BDI from baseline.
 // Positive = shipping demand is strong relative to history.
 func (dem *DynamicEnvModulator) BDIDeviation() float64 {
-	return 0
+	dem.mu.RLock()
+	baselineBdi := dem.baseline.Bdi.Value
+	currentBdi := dem.current.Bdi.Value
+	dem.mu.RUnlock()
+	if baselineBdi <= 0 {
+		return 0
+	}
+	return (currentBdi - baselineBdi) / baselineBdi
 }
 
 // SeasonalModulation computes a multiplicative adjustment for seasonal patterns
@@ -150,6 +160,13 @@ func (dem *DynamicEnvModulator) SeasonalModulation(industryID string) float64 {
 		}
 		if oilDev < -cfg.OilLowThreshold {
 			mod *= 1.0 + cfg.OilShippingBenefit
+		}
+		bdiDev := dem.BDIDeviation()
+		if bdiDev > cfg.BDIHighThreshold {
+			mod *= 1.0 + cfg.BDIShippingBoost
+		}
+		if bdiDev < -cfg.BDILowThreshold {
+			mod *= 1.0 - cfg.BDICostPenalty
 		}
 		return mod
 
