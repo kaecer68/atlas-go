@@ -7,6 +7,8 @@ import (
 	"sort"
 	"sync"
 
+	"gonum.org/v1/gonum/mat"
+
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -80,6 +82,8 @@ type Optimizer struct {
 	factorEngine       *FactorEngine
 	mu                 sync.RWMutex
 	factorWeightEngine *FactorWeightEngine
+	lookbackDays       int     // covariance estimation window
+	riskFreeRate       float64 // annualized risk-free rate
 }
 
 // NewOptimizer 创建优化器
@@ -112,6 +116,8 @@ func newOptimizerWithParams(params *RuntimeParameters) *Optimizer {
 		factorWeights:      factorWeights,
 		factorEngine:       NewFactorEngine(),
 		factorWeightEngine: NewFactorWeightEngine(),
+		lookbackDays:       60,
+		riskFreeRate:       0.015,
 	}
 }
 
@@ -277,7 +283,6 @@ func (o *Optimizer) calculateMultiFactorScores(
 			agentScore /= totalWeight
 		}
 
-		// 其他因子 (简化版，实际需要历史数据)
 		momentumScore := o.factorEngine.CalculateMomentumScore(symbol, quotes)
 		valueScore := o.factorEngine.CalculateValueScore(symbol, quotes)
 		qualityScore := o.factorEngine.CalculateQualityScore(symbol, quotes)
@@ -303,7 +308,6 @@ func (o *Optimizer) calculateMultiFactorScores(
 			}
 		}
 
-		// 综合评分
 		totalScore := momentumScore*factorWeights[FactorMomentum] +
 			valueScore*factorWeights[FactorValue] +
 			qualityScore*factorWeights[FactorQuality] +
@@ -340,10 +344,85 @@ type weightInfo struct {
 	Score  float64
 }
 
+// allocateInitialWeights uses covariance optimization when history is available,
+// falling back to linear score normalization otherwise.
 func (o *Optimizer) allocateInitialWeights(
 	scores map[string]*symbolScore,
 ) []weightInfo {
-	// 归一化评分
+	if len(scores) == 0 {
+		return nil
+	}
+
+	o.mu.RLock()
+	wMax := o.constraints.MaxPositionPct
+	o.mu.RUnlock()
+
+	symbols := make([]string, 0, len(scores))
+	for _, s := range scores {
+		symbols = append(symbols, s.Symbol)
+	}
+
+	rm := o.extractReturnMatrix(symbols)
+	if rm == nil || len(rm.assets) < 2 {
+		return o.linearWeights(scores)
+	}
+
+	sample := o.sampleCov(rm)
+	if sample == nil {
+		return o.linearWeights(scores)
+	}
+	sigma := o.ledoitWolfShrink(rm, sample)
+
+	scoreBySymbol := make(map[string]*symbolScore, len(scores))
+	for _, s := range scores {
+		scoreBySymbol[s.Symbol] = s
+	}
+
+	N := len(rm.assets)
+	lb := make([]float64, N)
+	ub := make([]float64, N)
+	wInit := make([]float64, N)
+	assetScores := make([]*symbolScore, N)
+
+	for i, sym := range rm.assets {
+		assetScores[i] = scoreBySymbol[sym]
+		if assetScores[i] == nil {
+			assetScores[i] = &symbolScore{Symbol: sym}
+		}
+		wInit[i] = 1.0 / float64(N)
+		lb[i] = 0
+		ub[i] = wMax
+	}
+
+	Aeq := mat.NewDense(1, N, nil)
+	for j := 0; j < N; j++ {
+		Aeq.Set(0, j, 1.0)
+	}
+	beq := []float64{1.0}
+
+	wOpt, _ := o.activeSetQP(sigma, Aeq, beq, lb, ub, wInit)
+
+	var weights []weightInfo
+	for i := 0; i < N; i++ {
+		if wOpt[i] < 1e-10 {
+			continue
+		}
+		weights = append(weights, weightInfo{
+			Symbol: rm.assets[i],
+			Side:   assetScores[i].Side,
+			Weight: wOpt[i],
+			Score:  assetScores[i].Total,
+		})
+	}
+
+	sort.Slice(weights, func(i, j int) bool {
+		return weights[i].Weight > weights[j].Weight
+	})
+	return weights
+}
+
+// linearWeights is the fallback linear normalization (no-history case).
+func (o *Optimizer) linearWeights(scores map[string]*symbolScore) []weightInfo {
 	var totalScore float64
 	for _, s := range scores {
 		totalScore += math.Abs(s.Total)
@@ -354,7 +433,7 @@ func (o *Optimizer) allocateInitialWeights(
 	}
 
 	var weights []weightInfo
-	for key, s := range scores {
+	for _, s := range scores {
 		weight := math.Abs(s.Total) / totalScore
 		weights = append(weights, weightInfo{
 			Symbol: s.Symbol,
@@ -362,12 +441,8 @@ func (o *Optimizer) allocateInitialWeights(
 			Weight: weight,
 			Score:  s.Total,
 		})
-
-		// 更新 scores 中的 key 引用
-		_ = key
 	}
 
-	// 按权重排序
 	sort.Slice(weights, func(i, j int) bool {
 		return weights[i].Weight > weights[j].Weight
 	})
@@ -375,7 +450,8 @@ func (o *Optimizer) allocateInitialWeights(
 	return weights
 }
 
-// applyConstraints 应用约束
+// applyConstraints applies post-optimization constraints.
+// Position caps are enforced by the QP solver; only cash reserve remains.
 func (o *Optimizer) applyConstraints(
 	weights []weightInfo,
 	constraints Constraints,
@@ -385,39 +461,18 @@ func (o *Optimizer) applyConstraints(
 		return nil
 	}
 
-	// 1. 应用单票最大权重约束
-	maxValue := totalCapital * constraints.MaxPositionPct
-	for i := range weights {
-		value := weights[i].Weight * totalCapital
-		if value > maxValue {
-			weights[i].Weight = constraints.MaxPositionPct
+	if constraints.CashReserve > 0 {
+		investableCapital := totalCapital * (1 - constraints.CashReserve)
+		currentExposure := 0.0
+		for _, w := range weights {
+			currentExposure += w.Weight * totalCapital
 		}
-	}
 
-	// 2. 重新归一化
-	var totalWeight float64
-	for _, w := range weights {
-		totalWeight += w.Weight
-	}
-
-	if totalWeight > 0 && totalWeight != 1.0 {
-		scale := 1.0 / totalWeight
-		for i := range weights {
-			weights[i].Weight *= scale
-		}
-	}
-
-	// 3. 应用现金储备约束
-	investableCapital := totalCapital * (1 - constraints.CashReserve)
-	currentExposure := 0.0
-	for _, w := range weights {
-		currentExposure += w.Weight * totalCapital
-	}
-
-	if currentExposure > investableCapital {
-		scale := investableCapital / currentExposure
-		for i := range weights {
-			weights[i].Weight *= scale
+		if currentExposure > investableCapital {
+			scale := investableCapital / currentExposure
+			for i := range weights {
+				weights[i].Weight *= scale
+			}
 		}
 	}
 
@@ -448,13 +503,11 @@ func (o *Optimizer) buildPositions(
 		targetValue := w.Weight * totalCapital
 		targetWeight := w.Weight
 
-		// 计算股数
 		shares := int(targetValue / quote.Last)
 		if shares == 0 {
 			continue
 		}
 
-		// 实际目标金额
 		actualValue := float64(shares) * quote.Last
 
 		factors := map[FactorType]float64{
@@ -484,16 +537,495 @@ func (o *Optimizer) buildPositions(
 	return positions
 }
 
-// GetEfficientFrontier 获取有效前沿 (简化版)
-func (o *Optimizer) GetEfficientFrontier() []struct{ Return, Risk float64 } {
-	// 实际实现需要协方差矩阵和优化算法
-	// 这里返回占位数据
-	return []struct{ Return, Risk float64 }{
-		{0.05, 0.10},
-		{0.08, 0.12},
-		{0.10, 0.15},
-		{0.12, 0.20},
+// ── Covariance-Based Portfolio Optimization ──
+
+type returnMatrix struct {
+	assets  []string
+	returns [][]float64 // returns[t][i], T rows × N cols
+	means   []float64
+}
+
+func (o *Optimizer) extractReturnMatrix(symbols []string) *returnMatrix {
+	const minDays = 20
+	o.mu.RLock()
+	hp := o.history
+	lookback := o.lookbackDays
+	o.mu.RUnlock()
+
+	if hp == nil {
+		return nil
 	}
+
+	series := make([][]float64, 0, len(symbols))
+	valid := make([]string, 0, len(symbols))
+	for _, sym := range symbols {
+		prices := hp.GetCloseSeries(sym)
+		if len(prices) < minDays+1 {
+			continue
+		}
+		n := len(prices)
+		start := n - lookback - 1
+		if start < 0 {
+			start = 0
+		}
+		window := prices[start:]
+		if len(window) < minDays+1 {
+			continue
+		}
+		series = append(series, window)
+		valid = append(valid, sym)
+	}
+
+	N := len(valid)
+	if N < 2 {
+		return nil
+	}
+
+	T := len(series[0])
+	for _, s := range series {
+		if len(s) < T {
+			T = len(s)
+		}
+	}
+	if T < minDays+1 {
+		return nil
+	}
+
+	Tret := T - 1
+	ret := make([][]float64, Tret)
+	for t := 0; t < Tret; t++ {
+		ret[t] = make([]float64, N)
+	}
+	means := make([]float64, N)
+
+	for i := 0; i < N; i++ {
+		s := series[i]
+		offset := len(s) - T
+		sum := 0.0
+		for t := 0; t < Tret; t++ {
+			prev := s[offset+t]
+			curr := s[offset+t+1]
+			if prev == 0 {
+				continue
+			}
+			r := curr/prev - 1
+			ret[t][i] = r
+			sum += r
+		}
+		means[i] = sum / float64(Tret)
+	}
+
+	return &returnMatrix{assets: valid, returns: ret, means: means}
+}
+
+func (o *Optimizer) sampleCov(rm *returnMatrix) *mat.SymDense {
+	T := float64(len(rm.returns))
+	N := len(rm.assets)
+	if N == 0 || T == 0 {
+		return nil
+	}
+
+	cov := mat.NewSymDense(N, nil)
+	for i := 0; i < N; i++ {
+		for j := i; j < N; j++ {
+			var sum float64
+			for t := 0; t < len(rm.returns); t++ {
+				dx := rm.returns[t][i] - rm.means[i]
+				dy := rm.returns[t][j] - rm.means[j]
+				sum += dx * dy
+			}
+			cov.SetSym(i, j, sum/T)
+		}
+	}
+	return cov
+}
+
+// ledoitWolfShrink: Σ_shrink = (1-δ)·S + δ·ν·I  (Ledoit & Wolf, 2004)
+func (o *Optimizer) ledoitWolfShrink(rm *returnMatrix, sample *mat.SymDense) *mat.SymDense {
+	N := len(rm.assets)
+	T := float64(len(rm.returns))
+	S := sample
+
+	nu := 0.0
+	for i := 0; i < N; i++ {
+		nu += S.At(i, i)
+	}
+	nu /= float64(N)
+
+	var pi, rho float64
+	demeaned := make([][]float64, len(rm.returns))
+	for t := 0; t < len(rm.returns); t++ {
+		demeaned[t] = make([]float64, N)
+		for i := 0; i < N; i++ {
+			demeaned[t][i] = rm.returns[t][i] - rm.means[i]
+		}
+	}
+
+	for i := 0; i < N; i++ {
+		for j := 0; j < N; j++ {
+			sij := S.At(i, j)
+			var ssq float64
+			for t := 0; t < len(demeaned); t++ {
+				d := demeaned[t][i]*demeaned[t][j] - sij
+				ssq += d * d
+			}
+			pij := ssq / T
+			pi += pij
+			if i == j {
+				rho += pij
+			}
+		}
+	}
+
+	var gamma float64
+	for i := 0; i < N; i++ {
+		for j := 0; j < N; j++ {
+			target := 0.0
+			if i == j {
+				target = nu
+			}
+			d := S.At(i, j) - target
+			gamma += d * d
+		}
+	}
+
+	delta := (pi - rho) / (T * gamma)
+	if delta < 0 {
+		delta = 0
+	}
+	if delta > 1 {
+		delta = 1
+	}
+	if gamma == 0 || T == 0 {
+		delta = 0
+	}
+
+	shrunk := mat.NewSymDense(N, nil)
+	for i := 0; i < N; i++ {
+		for j := i; j < N; j++ {
+			val := (1 - delta) * S.At(i, j)
+			if i == j {
+				val += delta * nu
+			}
+			shrunk.SetSym(i, j, val)
+		}
+	}
+	return shrunk
+}
+
+// activeSetQP solves: minimize ½ w' Σ w  s.t. A_eq' w = b_eq, lb ≤ w ≤ ub.
+func (o *Optimizer) activeSetQP(sigma *mat.SymDense, Aeq *mat.Dense, beq []float64,
+	lb, ub []float64, wInit []float64) ([]float64, int) {
+
+	N := sigma.SymmetricDim()
+	if N == 0 {
+		return nil, 0
+	}
+	mEq := len(beq)
+
+	w := make([]float64, N)
+	copy(w, wInit)
+
+	const maxIter = 100
+	const tol = 1e-10
+
+	active := make([]bool, N)
+
+	for iter := 0; iter < maxIter; iter++ {
+		isActive := make([]bool, N)
+		for i := 0; i < N; i++ {
+			isActive[i] = active[i] || w[i] <= lb[i]+tol || w[i] >= ub[i]-tol
+		}
+
+		freeIdx := make([]int, 0, N)
+		for i := 0; i < N; i++ {
+			if !isActive[i] {
+				freeIdx = append(freeIdx, i)
+			}
+		}
+		nFree := len(freeIdx)
+
+		if nFree == 0 {
+			if o.isOptimal(sigma, w, isActive, lb, ub) {
+				return w, iter + 1
+			}
+			o.releaseConstraint(sigma, w, &active, isActive, lb, ub)
+			continue
+		}
+
+		// KKT system: [2·Σ_FF  A_eq_F'] [w_F] = [-2·Σ_FA·w_A]
+		//             [A_eq_F    0   ] [ λ ]   [b_eq - A_eq_A·w_A]
+		kktDim := nFree + mEq
+		kkt := mat.NewDense(kktDim, kktDim, nil)
+
+		for p := 0; p < nFree; p++ {
+			for q := p; q < nFree; q++ {
+				val := 2 * sigma.At(freeIdx[p], freeIdx[q])
+				kkt.Set(p, q, val)
+				if p != q {
+					kkt.Set(q, p, val)
+				}
+			}
+		}
+
+		for p := 0; p < nFree; p++ {
+			for k := 0; k < mEq; k++ {
+				kkt.Set(p, nFree+k, Aeq.At(k, freeIdx[p]))
+				kkt.Set(nFree+k, p, Aeq.At(k, freeIdx[p]))
+			}
+		}
+
+		rhs := make([]float64, kktDim)
+		for p := 0; p < nFree; p++ {
+			var sum float64
+			for j := 0; j < N; j++ {
+				if isActive[j] {
+					sum += sigma.At(freeIdx[p], j) * w[j]
+				}
+			}
+			rhs[p] = -2 * sum
+		}
+		for k := 0; k < mEq; k++ {
+			Aw := 0.0
+			for j := 0; j < N; j++ {
+				if isActive[j] {
+					Aw += Aeq.At(k, j) * w[j]
+				}
+			}
+			rhs[nFree+k] = beq[k] - Aw
+		}
+
+		rhsVec := mat.NewVecDense(kktDim, rhs)
+		var soln mat.VecDense
+		if err := soln.SolveVec(kkt, rhsVec); err != nil {
+			return o.gradientProjection(sigma, w, lb, ub), iter + 1
+		}
+
+		wFree := make([]float64, nFree)
+		for p := 0; p < nFree; p++ {
+			wFree[p] = soln.AtVec(p)
+		}
+
+		d := make([]float64, N)
+		for p, fi := range freeIdx {
+			d[fi] = wFree[p] - w[fi]
+		}
+
+		normD := 0.0
+		for _, dv := range d {
+			normD += dv * dv
+		}
+		if normD < tol*tol {
+			if o.isOptimal(sigma, w, isActive, lb, ub) {
+				return w, iter + 1
+			}
+			o.releaseConstraint(sigma, w, &active, isActive, lb, ub)
+			continue
+		}
+
+		alpha := 1.0
+		blockingIdx := -1
+		for i := 0; i < N; i++ {
+			if d[i] > tol {
+				a := (ub[i] - w[i]) / d[i]
+				if a < alpha {
+					alpha = a
+					blockingIdx = i
+				}
+			} else if d[i] < -tol {
+				a := (lb[i] - w[i]) / d[i]
+				if a < alpha {
+					alpha = a
+					blockingIdx = i
+				}
+			}
+		}
+
+		for i := 0; i < N; i++ {
+			w[i] += alpha * d[i]
+		}
+
+		if blockingIdx >= 0 {
+			active[blockingIdx] = true
+		} else {
+			if o.isOptimal(sigma, w, isActive, lb, ub) {
+				return w, iter + 1
+			}
+			o.releaseConstraint(sigma, w, &active, isActive, lb, ub)
+		}
+	}
+
+	return w, maxIter
+}
+
+func (o *Optimizer) isOptimal(sigma *mat.SymDense, w []float64, active []bool, lb, ub []float64) bool {
+	const tol = 1e-10
+	N := sigma.SymmetricDim()
+
+	for i := 0; i < N; i++ {
+		g := 0.0
+		for j := 0; j < N; j++ {
+			g += sigma.At(i, j) * w[j]
+		}
+		if active[i] && w[i] <= lb[i]+tol && g < -tol {
+			return false
+		}
+		if active[i] && w[i] >= ub[i]-tol && g > tol {
+			return false
+		}
+	}
+	return true
+}
+
+func (o *Optimizer) releaseConstraint(sigma *mat.SymDense, w []float64,
+	active *[]bool, isActive []bool, lb, ub []float64) {
+
+	const tol = 1e-10
+	N := sigma.SymmetricDim()
+
+	worstIdx := -1
+	worstViolation := 0.0
+
+	for i := 0; i < N; i++ {
+		if !isActive[i] {
+			continue
+		}
+		g := 0.0
+		for j := 0; j < N; j++ {
+			g += sigma.At(i, j) * w[j]
+		}
+		if w[i] <= lb[i]+tol && g < -worstViolation {
+			worstViolation = -g
+			worstIdx = i
+		}
+		if w[i] >= ub[i]-tol && g > worstViolation {
+			worstViolation = g
+			worstIdx = i
+		}
+	}
+
+	if worstIdx >= 0 {
+		(*active)[worstIdx] = false
+	}
+}
+
+func (o *Optimizer) gradientProjection(sigma *mat.SymDense, w, lb, ub []float64) []float64 {
+	N := len(w)
+	grad := make([]float64, N)
+	for i := 0; i < N; i++ {
+		for j := 0; j < N; j++ {
+			grad[i] += sigma.At(i, j) * w[j]
+		}
+	}
+
+	wNew := make([]float64, N)
+	for i := 0; i < N; i++ {
+		wNew[i] = w[i] - 0.5*grad[i]
+		if wNew[i] < lb[i] {
+			wNew[i] = lb[i]
+		}
+		if wNew[i] > ub[i] {
+			wNew[i] = ub[i]
+		}
+	}
+
+	sum := 0.0
+	for _, wi := range wNew {
+		sum += wi
+	}
+	if sum > 1e-15 {
+		for i := range wNew {
+			wNew[i] /= sum
+		}
+	} else {
+		for i := range wNew {
+			wNew[i] = 1.0 / float64(N)
+		}
+	}
+	return wNew
+}
+
+// GetEfficientFrontier computes the mean-variance efficient frontier (20 points).
+func (o *Optimizer) GetEfficientFrontier() []struct{ Return, Risk float64 } {
+	o.mu.RLock()
+	hp := o.history
+	wMax := o.constraints.MaxPositionPct
+	o.mu.RUnlock()
+
+	if hp == nil {
+		return nil
+	}
+
+	symbols := []string{
+		"2330.TW", "2317.TW", "2454.TW", "2308.TW", "2881.TW",
+		"2882.TW", "1301.TW", "1303.TW", "2412.TW", "2002.TW",
+	}
+	rm := o.extractReturnMatrix(symbols)
+	if rm == nil || len(rm.assets) < 2 {
+		return nil
+	}
+
+	sample := o.sampleCov(rm)
+	if sample == nil {
+		return nil
+	}
+	sigma := o.ledoitWolfShrink(rm, sample)
+
+	N := len(rm.assets)
+	lb := make([]float64, N)
+	ub := make([]float64, N)
+	for i := 0; i < N; i++ {
+		ub[i] = wMax
+	}
+
+	minRet := rm.means[0]
+	maxRet := rm.means[0]
+	for _, m := range rm.means {
+		if m < minRet {
+			minRet = m
+		}
+		if m > maxRet {
+			maxRet = m
+		}
+	}
+
+	daysPerYear := 252.0
+	const numPoints = 20
+
+	Aeq := mat.NewDense(2, N, nil)
+	for j := 0; j < N; j++ {
+		Aeq.Set(0, j, 1.0)
+	}
+
+	frontier := make([]struct{ Return, Risk float64 }, numPoints)
+	for k := 0; k < numPoints; k++ {
+		frac := float64(k) / float64(numPoints-1)
+		rTarget := minRet + frac*(maxRet-minRet)
+		for j := 0; j < N; j++ {
+			Aeq.Set(1, j, rm.means[j])
+		}
+		beq := []float64{1.0, rTarget}
+
+		wInit := make([]float64, N)
+		for i := 0; i < N; i++ {
+			wInit[i] = 1.0 / float64(N)
+		}
+
+		wOpt, _ := o.activeSetQP(sigma, Aeq, beq, lb, ub, wInit)
+
+		var portVar float64
+		for i := 0; i < N; i++ {
+			for j := 0; j < N; j++ {
+				portVar += wOpt[i] * sigma.At(i, j) * wOpt[j]
+			}
+		}
+		portRisk := math.Sqrt(portVar) * math.Sqrt(daysPerYear)
+		annRet := rTarget * daysPerYear
+
+		frontier[k] = struct{ Return, Risk float64 }{Return: annRet, Risk: portRisk}
+	}
+
+	return frontier
 }
 
 // OptimizeToOrders 将优化结果转换为订单

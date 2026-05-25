@@ -215,6 +215,7 @@ gh pr create --title "feat(scope): description" \
 | **前端欄位命名不一致 → 已自動解決** | 修改 `internal/domain/*.go` 中的 struct JSON tag 後，**git pre-commit hook 會自動執行 `go generate .`** 並將產生的 `field_names.js`、`field_types.ts`、`field_types.d.ts` 自動 staged。不需手動執行任何命令。AI 提交代碼時自動觸發，前端類型定義永遠與後端同步。 |
 | **Go → 前端類型自動生成** | `cmd/gentags` 從 Go struct 的 JSON tag 自動生成前端類型定義（`field_names.js` + `field_types.ts` + `field_types.d.ts`，48 個 struct）。`go generate .` 由 pre-commit hook 自動觸發。CI（`quality.yml` 的 `generate` job）也會檢查。 |
 | **Live 交易風險** | `cmd/atlas` 有 `-allow-live-broker`、`-allow-real-signor` 等旗標，本地測試時切勿意外啟用。 |
+| **繞過共變異數優化回到線性加權** | `optimizer.go` 已升級為 Ledoit-Wolf 共變異數矩陣 + Active-set QP（見 `internal/portfolio/AGENTS.md` §4.1）。當 `o.history` 非 nil 時必須走共變異數路徑，不可降級為線性歸一化。修改 optimizer 前必須先閱讀 `.omo/CONSTITUTION.md`（深度憲法）和 `.omo/ITERATION_GATE.md`（迭代閘門），任何純線性加權視為違反憲法第一條。 |
 | **繞過 BackgroundTaskManager 建立獨立排程** | 所有定時自動執行的後台任務**必須且只能**透過 `BackgroundTaskManager` 註冊（`cmd/atlas/main.go`）。禁止在 goroutine 中直接啟動 `time.Ticker`、禁止在 `init()` 中啟動後台工作、禁止繞過統一架構直接呼叫業務邏輯的定時執行。參見 `internal/apigateway/CONSTITUTION.md` 第四條。 |
 | **繞過 ParametersConfig 硬編碼參數** | 所有可調整的參數必須透過 `internal/config/parameters.go` 的 `ParametersConfig` 管理，禁止在業務邏輯中硬編碼 magic number。參數必須包含 `Rationale`、`Source`、`Todo` 欄位說明權威性溯源。 |
 | **建立獨立資料抓取通道** | 所有外部資料抓取必須通過已註冊的 `marketdata.Provider`，禁止為了「方便」而繞過 Gateway 直接建立 HTTP client。參見 `internal/apigateway/CONSTITUTION.md` 第一條。 |
