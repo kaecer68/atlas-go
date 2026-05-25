@@ -3533,16 +3533,17 @@
   "industry": {
     "sector_weights": {
       "value": {
-        "semiconductor": 0.23,
-        "ai_supply_chain": 0.18,
-        "robotics": 0.07,
+        "semiconductor": 0.22,
+        "ai_supply_chain": 0.17,
+        "robotics": 0.06,
         "financials": 0.14,
-        "shipping": 0.09,
+        "shipping": 0.08,
         "energy": 0.05,
-        "electronics": 0.07,
-        "consumer": 0.05,
-        "industrial": 0.05,
-        "leo_satellite": 0.06
+        "electronics": 0.06,
+        "mining": 0.05,
+        "consumer": 0.06,
+        "industrial": 0.06,
+        "leo_satellite": 0.05
       },
       "rationale": "Industry classification reference weights aligned with DefaultClassification() Level 1 segments. Used for display and weight derivation across the industry ecosystem.",
       "source": "heuristic",
@@ -3631,9 +3632,17 @@
           "recovery_profit_pct": 0.2,
           "mature_revenue_pct": 0.05,
           "mature_profit_pct": 0.1
+        },
+        "mining": {
+          "expansion_revenue_pct": 0.12,
+          "expansion_profit_pct": 0.15,
+          "recovery_revenue_pct": 0.06,
+          "recovery_profit_pct": 0.08,
+          "mature_revenue_pct": 0.02,
+          "mature_profit_pct": 0.04
         }
       },
-      "rationale": "Per-industry business cycle thresholds; all 9 Level-1 industries configured. AI supply chain highest growth, consumer most defensive, shipping most cyclical",
+      "rationale": "Per-industry business cycle thresholds; all 10 Level-1 industries configured. AI supply chain highest growth, consumer most defensive, shipping most cyclical, mining commodity-driven",
       "source": "heuristic",
       "citation": {
         "source_type": "heuristic",

@@ -241,6 +241,41 @@ func (ct *CycleTracker) initializeDefaultPositions() {
 			InventoryTurnover:   3.0,
 			CapacityUtilization: 0.70,
 		},
+		"mining": {
+			IndustryID:          "mining",
+			RevenueGrowthYoY:    0.10,
+			ProfitGrowthYoY:     0.12,
+			InventoryTurnover:   4.5,
+			CapacityUtilization: 0.75,
+		},
+		"precious_metals_recycling": {
+			IndustryID:          "precious_metals_recycling",
+			RevenueGrowthYoY:    0.15,
+			ProfitGrowthYoY:     0.18,
+			InventoryTurnover:   5.0,
+			CapacityUtilization: 0.80,
+		},
+		"copper_industry": {
+			IndustryID:          "copper_industry",
+			RevenueGrowthYoY:    0.08,
+			ProfitGrowthYoY:     0.10,
+			InventoryTurnover:   4.0,
+			CapacityUtilization: 0.72,
+		},
+		"rare_earth_specialty": {
+			IndustryID:          "rare_earth_specialty",
+			RevenueGrowthYoY:    0.05,
+			ProfitGrowthYoY:     0.06,
+			InventoryTurnover:   3.5,
+			CapacityUtilization: 0.70,
+		},
+		"metal_processing": {
+			IndustryID:          "metal_processing",
+			RevenueGrowthYoY:    0.06,
+			ProfitGrowthYoY:     0.08,
+			InventoryTurnover:   4.5,
+			CapacityUtilization: 0.73,
+		},
 	}
 
 	for id, metrics := range defaults {
