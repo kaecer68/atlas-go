@@ -302,7 +302,6 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 	baseline := marketdata.MacroDataSnapshot{
 		Oil: marketdata.MacroDataPoint{Value: 75.0},   // Historical WTI average
 		DXY: marketdata.MacroDataPoint{Value: 103.0},  // Historical DXY average
-		BDI: marketdata.MacroDataPoint{Value: 1500.0}, // Historical BDI average
 	}
 	modulator := industry.NewDynamicEnvModulator(baseline, baseline)
 	modulator.RecordSnapshot(baseline) // seed history for rolling baseline

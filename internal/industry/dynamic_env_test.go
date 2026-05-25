@@ -18,7 +18,6 @@ func TestDynamicEnvModulator_UpdateRollingBaseline(t *testing.T) {
 		dem.RecordSnapshot(marketdata.MacroDataSnapshot{
 			Oil: marketdata.MacroDataPoint{Value: float64(70 + i)}, // 70-99
 			DXY: marketdata.MacroDataPoint{Value: float64(100 + i)},
-			BDI: marketdata.MacroDataPoint{Value: float64(1400 + i*10)},
 		})
 	}
 

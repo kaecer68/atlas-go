@@ -184,9 +184,6 @@ func mergeWithPrev(curr, prev marketdata.MacroDataSnapshot) marketdata.MacroData
 	if curr.RetailShortBalance.Symbol == "" {
 		curr.RetailShortBalance = prev.RetailShortBalance
 	}
-	if curr.BDI.Symbol == "" {
-		curr.BDI = prev.BDI
-	}
 	return curr
 }
 
