@@ -14,6 +14,17 @@ export interface AgentAttribution {
   avg_return: number;
 }
 
+export interface AgentContribution {
+  agent_id: string;
+  skill: string;
+  layer: string;
+  total_return: number;
+  win_rate: number;
+  trade_count: number;
+  avg_return: number;
+  sharpe_like: number;
+}
+
 export interface AgentObservatoryResponse {
   session_id: string;
   next_experiment_agent_id: string;
@@ -674,6 +685,13 @@ export interface MinFilter {
   min?: number | null;
 }
 
+export interface MonthlyReturn {
+  year: number;
+  month: number;
+  return: number;
+  label: string;
+}
+
 export interface MutationBrief {
   contract_version?: number;
   proposal_id?: string;
@@ -730,6 +748,30 @@ export interface ParameterSnapshot {
   industry_phase_scores?: Record<string, number>;
   config_version?: string;
   captured_at: string;
+}
+
+export interface PerformanceReport {
+  period: string;
+  start_date: string;
+  end_date: string;
+  total_return: number;
+  annualized_return: number;
+  sharpe_ratio: number;
+  sortino_ratio: number;
+  calmar_ratio: number;
+  max_drawdown: number;
+  starting_value: number;
+  ending_value: number;
+  after_tax_value: number;
+  total_tax_paid: number;
+  win_rate: number;
+  total_trades: number;
+  avg_win: number;
+  avg_loss: number;
+  top_agents: string[];
+  regime_breakdown: string;
+  monthly_returns: string[];
+  generated_at: string;
 }
 
 export interface PipelineItem {
@@ -960,10 +1002,22 @@ export interface RecommendationPipelineResponse {
   fallback_message: string;
 }
 
+export interface RegimeBreakdown {
+  regimes: Record<string, string>;
+}
+
 export interface RegimeHistoryData {
   sessions: string[];
   transitions: string[];
   current_regime: string;
+}
+
+export interface RegimePerformance {
+  regime: string;
+  session_count: number;
+  total_return: number;
+  win_rate: number;
+  avg_return: number;
 }
 
 export interface RegimeSessionEntry {

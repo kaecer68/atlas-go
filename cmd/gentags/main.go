@@ -7,6 +7,7 @@
 //	internal/domain/**/*.go             — domain types (Scorecard, GuardOutcome, Regime, ...)
 //	internal/monitoring/api/**/*.go     — API response types (AgentObservatoryResponse, ...)
 //	internal/monitoring/service/**/*.go — service response types (SystemHealthResponse, ...)
+//	internal/reporting/**/*.go          — performance report types (PerformanceReport, AgentPerformance, ...)
 //
 // Writes:
 //
@@ -52,7 +53,8 @@ func main() {
 	structs := parseStructs(domainDir)
 	apiDir := findMonitoringAPIDir(rootDir)
 	svcDir := findMonitoringServiceDir(rootDir)
-	if apiDir != "" || svcDir != "" {
+	reportDir := findReportingDir(rootDir)
+	if apiDir != "" || svcDir != "" || reportDir != "" {
 		// Build merged struct names from all directories so cross-package
 		// type references resolve correctly.
 		allNames := preScanStructNames(domainDir)
@@ -80,6 +82,16 @@ func main() {
 			for k, v := range svcStructs {
 				if _, exists := structs[k]; exists {
 					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and service; using service version\n", k)
+				}
+				structs[k] = v
+			}
+		}
+		// Merge reporting structs (e.g. PerformanceReport, AgentPerformance).
+		if reportDir != "" {
+			reportStructs := parseStructsWithNames(reportDir, allNames)
+			for k, v := range reportStructs {
+				if _, exists := structs[k]; exists {
+					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and reporting; using reporting version\n", k)
 				}
 				structs[k] = v
 			}
@@ -121,6 +133,14 @@ func findMonitoringAPIDir(rootDir string) string {
 
 func findMonitoringServiceDir(rootDir string) string {
 	candidate := filepath.Join(rootDir, "internal", "monitoring", "service")
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
+	return ""
+}
+
+func findReportingDir(rootDir string) string {
+	candidate := filepath.Join(rootDir, "internal", "reporting")
 	if _, err := os.Stat(candidate); err == nil {
 		return candidate
 	}
