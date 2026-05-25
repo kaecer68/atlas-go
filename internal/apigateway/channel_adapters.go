@@ -104,7 +104,16 @@ func NewFinMindChannelAdapter(client *marketdata.FinMindClient) *FinMindChannelA
 
 // yesterday returns a date string for yesterday in YYYY-MM-DD format.
 func yesterday() string {
-	return time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	t := time.Now().AddDate(0, 0, -1)
+	switch t.Weekday() {
+	case time.Saturday:
+		t = t.AddDate(0, 0, -1) // Friday
+	case time.Sunday:
+		t = t.AddDate(0, 0, -2) // Friday
+	case time.Monday:
+		t = t.AddDate(0, 0, -3) // Friday
+	}
+	return t.Format("2006-01-02")
 }
 
 // Fetch retrieves a quote for 2330 (台積電) from yesterday as a sample.

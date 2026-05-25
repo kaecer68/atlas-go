@@ -3,6 +3,8 @@ Fubon MarketData Proxy Service
 使用富邦新一代 API Python SDK 提供行情数据 REST API
 """
 import os
+import sys
+import glob
 import time
 import json
 import logging
@@ -55,52 +57,87 @@ class MarketStatusResponse(BaseModel):
     timestamp: int
 
 
+def _find_cert():
+    """Auto-detect newest .p12 certificate, preferring the new one."""
+    # 1) env var if it exists
+    cert_path = os.getenv("FUBON_CERT_PATH")
+    if cert_path and os.path.exists(cert_path):
+        return cert_path
+
+    # 2) search known locations, newest first
+    search_dirs = [
+        os.path.expanduser("~/.config/atlas-go/.fubon-env"),
+        os.path.expanduser("~/.local/share/atlas-go/fubon_neo"),
+    ]
+    candidates = []
+    for d in search_dirs:
+        if os.path.isdir(d):
+            candidates.extend(glob.glob(os.path.join(d, "*.p12")))
+    if candidates:
+        candidates.sort(key=os.path.getmtime, reverse=True)
+        logger.info(f"Auto-detected cert: {candidates[0]}")
+        return candidates[0]
+
+    return cert_path  # may be None
+
+
 def get_sdk():
-    """获取或创建SDK实例"""
+    """Get or create SDK instance; first login uses password+cert, subsequent calls reuse token."""
     global sdk, rest_client, login_time
-    
-    # 检查是否需要重新登录
+
+    # Reuse existing session
     if sdk is not None and login_time is not None:
         if time.time() - login_time < SESSION_TIMEOUT:
             return sdk, rest_client
-        else:
-            logger.info("Session expired, re-logging in...")
-    
-    # 创建新SDK实例
+        logger.info("Session expired, re-logging in...")
+
     from fubon_neo.sdk import FubonSDK
-    
+
     personal_id = os.getenv("FUBON_PERSONAL_ID")
-    api_key = os.getenv("FUBON_API_KEY")
-    
-    if not personal_id or not api_key:
-        raise ValueError("FUBON_PERSONAL_ID and FUBON_API_KEY must be set")
-    
+    password = os.getenv("FUBON_PASSWORD")
+    cert_path = _find_cert()
+    cert_password = os.getenv("FUBON_CERT_PASSWORD")
+
+    if not personal_id or not password:
+        raise ValueError("FUBON_PERSONAL_ID and FUBON_PASSWORD must be set")
+    if not cert_path:
+        raise ValueError("Certificate not found – set FUBON_CERT_PATH or place .p12 under ~/.config/atlas-go/.fubon-env/")
+
     try:
         sdk = FubonSDK()
-        
-        # 使用 DMA 模式登录（无需凭证文件）
-        result = sdk.apikey_dma_login(personal_id, api_key)
-        
+
+        if cert_password:
+            result = sdk.login(personal_id, password, cert_path, cert_password)
+        else:
+            result = sdk.login(personal_id, password, cert_path)
+
         if not result.is_success:
             raise Exception(f"Login failed: {result.message}")
-        
+
         logger.info(f"Login successful: {result.data}")
-        
-        # 初始化实时行情
+
         sdk.init_realtime()
-        
-        # 获取 REST client
         rest_client = sdk.marketdata.rest_client.stock
-        
         login_time = time.time()
-        
+
         return sdk, rest_client
-        
+
     except Exception as e:
         logger.error(f"SDK initialization failed: {e}")
         sdk = None
         rest_client = None
         raise
+
+
+def _unwrap(result):
+    """Handle both SDK CustomReturnType (has .data) and plain dict returns."""
+    if result is None:
+        return None
+    if hasattr(result, "data"):
+        return result.data
+    if isinstance(result, dict):
+        return result
+    return None
 
 
 def convert_quote(symbol: str, data: dict) -> QuoteResponse:
@@ -177,21 +214,13 @@ async def health_check():
 
 @app.get("/quote/{symbol}", response_model=QuoteResponse)
 async def get_quote(symbol: str):
-    """
-    获取个股实时行情
-    
-    - symbol: 股票代码，例如 2330, 0050
-    """
     try:
         _, client = get_sdk()
         result = client.intraday.quote(symbol=symbol)
-        
-        if not result or not result.data:
+        data = _unwrap(result)
+        if data is None:
             raise HTTPException(status_code=404, detail=f"No data for symbol {symbol}")
-        
-        data = result.data
         return convert_quote(symbol, data)
-        
     except HTTPException:
         raise
     except Exception as e:
@@ -201,28 +230,19 @@ async def get_quote(symbol: str):
 
 @app.get("/quotes", response_model=List[QuoteResponse])
 async def get_quotes(symbols: str = Query(..., description="股票代码，逗号分隔，例如: 2330,2317,0050")):
-    """
-    批量获取个股实时行情
-    
-    - symbols: 逗号分隔的股票代码列表
-    """
     symbol_list = [s.strip() for s in symbols.split(",")]
-    
     try:
         _, client = get_sdk()
         quotes = []
-        
         for symbol in symbol_list:
             try:
                 result = client.intraday.quote(symbol=symbol)
-                if result and result.data:
-                    quotes.append(convert_quote(symbol, result.data))
+                data = _unwrap(result)
+                if data:
+                    quotes.append(convert_quote(symbol, data))
             except Exception as e:
                 logger.error(f"Error getting quote for {symbol}: {e}")
-                # 继续获取其他股票
-        
         return quotes
-        
     except Exception as e:
         logger.error(f"Error getting quotes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -230,32 +250,25 @@ async def get_quotes(symbols: str = Query(..., description="股票代码，逗�
 
 @app.get("/market-status", response_model=MarketStatusResponse)
 async def get_market_status():
-    """获取市场状态"""
     try:
         _, client = get_sdk()
-        # 使用 0050 作为市场状态指示器
         result = client.intraday.quote(symbol="0050")
-        
-        if not result or not result.data:
+        data = _unwrap(result)
+        if data is None:
             raise HTTPException(status_code=503, detail="Market data unavailable")
-        
-        data = result.data
         is_open = data.get("isOpen", False)
         is_close = data.get("isClose", False)
-        
         if is_close:
             status = "closed"
         elif is_open:
             status = "open"
         else:
             status = "unknown"
-        
         return MarketStatusResponse(
             status=status,
             is_open=is_open and not is_close,
             timestamp=int(time.time())
         )
-        
     except HTTPException:
         raise
     except Exception as e:
