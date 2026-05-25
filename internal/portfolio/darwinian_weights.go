@@ -488,7 +488,7 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 				Timestamp:   e.Timestamp,
 			}
 		}
-		_ = m.eventBus.PublishDarwinianClamping(payloads)
+		m.eventBus.PublishDarwinianClamping(payloads)
 	}
 
 	return adjustments, clampingEvents

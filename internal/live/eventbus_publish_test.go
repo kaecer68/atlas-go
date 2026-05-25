@@ -21,9 +21,7 @@ func TestPublishMarketSnapshot(t *testing.T) {
 	defer sub.Cancel()
 
 	quote := domain.Quote{Symbol: "2330", Open: 500, High: 510, Low: 495, Last: 505}
-	if err := bus.PublishMarketSnapshot(quote); err != nil {
-		t.Fatalf("publish market snapshot: %v", err)
-	}
+	bus.PublishMarketSnapshot(quote)
 
 	time.Sleep(100 * time.Millisecond)
 	if received.Load() != 1 {
@@ -45,9 +43,7 @@ func TestPublishRegimeChange(t *testing.T) {
 		return nil
 	})
 
-	if err := bus.PublishRegimeChange(domain.RegimeNeutral, domain.RegimeRiskOn, 0.85, "prism"); err != nil {
-		t.Fatalf("publish regime change: %v", err)
-	}
+	bus.PublishRegimeChange(domain.RegimeNeutral, domain.RegimeRiskOn, 0.85, "prism")
 
 	time.Sleep(100 * time.Millisecond)
 	if received.Load() != 1 {
@@ -66,9 +62,7 @@ func TestPublishPositionUpdate(t *testing.T) {
 	})
 
 	position := domain.Position{Symbol: "2330", Quantity: 100, AverageCost: 500}
-	if err := bus.PublishPositionUpdate("2330", position, "added"); err != nil {
-		t.Fatalf("publish position update: %v", err)
-	}
+	bus.PublishPositionUpdate("2330", position, "added")
 
 	time.Sleep(100 * time.Millisecond)
 	if received.Load() != 1 {
@@ -87,9 +81,7 @@ func TestPublishRecommendation(t *testing.T) {
 	})
 
 	recs := []domain.Recommendation{{Symbol: "2330", Conviction: 80, Side: "buy"}}
-	if err := bus.PublishRecommendation("growth-momentum-01", recs); err != nil {
-		t.Fatalf("publish recommendation: %v", err)
-	}
+	bus.PublishRecommendation("growth-momentum-01", recs)
 
 	time.Sleep(100 * time.Millisecond)
 	if received.Load() != 1 {
@@ -107,9 +99,7 @@ func TestSubscribeAndUnsubscribe(t *testing.T) {
 		return nil
 	})
 
-	if err := bus.Publish(BusEvent{ID: "1", Type: EventMarketTick, Timestamp: time.Now()}); err != nil {
-		t.Fatalf("publish: %v", err)
-	}
+	bus.Publish(BusEvent{ID: "1", Type: EventMarketTick, Timestamp: time.Now()})
 	time.Sleep(50 * time.Millisecond)
 	if received.Load() != 1 {
 		t.Fatalf("expected 1 event before unsubscribe, got %d", received.Load())
@@ -117,9 +107,7 @@ func TestSubscribeAndUnsubscribe(t *testing.T) {
 
 	sub.Cancel()
 
-	if err := bus.Publish(BusEvent{ID: "2", Type: EventMarketTick, Timestamp: time.Now()}); err != nil {
-		t.Fatalf("publish after unsubscribe: %v", err)
-	}
+	bus.Publish(BusEvent{ID: "2", Type: EventMarketTick, Timestamp: time.Now()})
 	time.Sleep(50 * time.Millisecond)
 	if received.Load() != 1 {
 		t.Fatalf("expected no additional events after unsubscribe, got %d", received.Load())
@@ -137,12 +125,8 @@ func TestSubscribeAll(t *testing.T) {
 	})
 	defer sub.Cancel()
 
-	if err := bus.Publish(BusEvent{ID: "1", Type: EventSystemStart, Timestamp: time.Now()}); err != nil {
-		t.Fatalf("publish: %v", err)
-	}
-	if err := bus.Publish(BusEvent{ID: "2", Type: EventSystemError, Timestamp: time.Now()}); err != nil {
-		t.Fatalf("publish: %v", err)
-	}
+	bus.Publish(BusEvent{ID: "1", Type: EventSystemStart, Timestamp: time.Now()})
+	bus.Publish(BusEvent{ID: "2", Type: EventSystemError, Timestamp: time.Now()})
 
 	time.Sleep(100 * time.Millisecond)
 	if received.Load() != 2 {

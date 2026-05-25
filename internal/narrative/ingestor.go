@@ -27,7 +27,7 @@ type MacroIngestor struct {
 
 // eventbusPublisher abstracts the event bus for testing.
 type eventbusPublisher interface {
-	PublishNarrativeEvent(eventID, theme, region string, sentiment, confidence float64, confidenceSource, hitRate, capitalFlow, timeWindow string) error
+	PublishNarrativeEvent(eventID, theme, region string, sentiment, confidence float64, confidenceSource, hitRate, capitalFlow, timeWindow string)
 }
 
 // NewMacroIngestor creates an ingestor with a given provider and snapshot directory.
@@ -111,7 +111,7 @@ func (m *MacroIngestor) publishEvents(events []NarrativeEvent) {
 			}
 			m.lifecycle.AddEvent(e)
 		}
-		m.eventBus.PublishNarrativeEvent( //nolint:errcheck
+		m.eventBus.PublishNarrativeEvent(
 			e.ID, e.Theme, e.Region,
 			e.Sentiment, e.Confidence,
 			e.ConfidenceSource, fmt.Sprintf("%.2f", e.HitRate),
