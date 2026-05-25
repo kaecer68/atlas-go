@@ -44,7 +44,24 @@ while IFS= read -r file; do
       agent_name|stock_name|event_name|stress_label|sector_name|regime_label|\
       fmt_ntd|num_results|pass_guards|target_price|stop_loss|forward_return|\
       show_all|session_id|agent_id|channel_id|recorded_at|updated_at|created_at|\
-      class_name|on_click|data_page|data_theme|key_id) continue ;;
+      class_name|on_click|data_page|data_theme|key_id|\
+      active_patterns|adjustment_breakdown|all_patterns|\
+      affected_sectors|avoided_sectors|favored_sectors|banned_sectors|\
+      annualized_return|baseline_prompt|\
+      calibration_evidence|capital_flow|changed_at|\
+      concentration_score|confidence_source|consecutive_failures|\
+      data_source|dealer_net|domestic_fund_net|event_id|\
+      fetch_at|foreign_investor_net|geo_error|geo_ok|\
+      historical_hit_rate|impact_count|impact_estimate|last_run|\
+      macro_error|macro_ok|market_close_time|market_hours_only|\
+      market_open_time|max_age_days|monthly_returns|narrative_themes|\
+      new_value|old_value|oldest_kept|orders_evaluated|\
+      paused_agents|prism_completed_results|recent_error|regime_since|\
+      retail_margin_balance|retail_short_balance|session_span|\
+      sharpe_like|shock_propagation_speed|signal_count|\
+      source_references|swarm_running|template_id|time_window|\
+      top_agents|total_assets|total_deleted|total_kept|\
+      trigger_theme|usd_twd) continue ;;
     esac
 
     echo "$field" >> "$FOUND_FIELDS"
