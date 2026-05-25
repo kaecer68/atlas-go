@@ -9,6 +9,15 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  commitlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - name: Check semantic commit messages
+        run: bash ./scripts/ci/check_commit_messages.sh "origin/${{ github.base_ref }}" "HEAD"
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -34,6 +43,37 @@ jobs:
           go-version-file: go.mod
       - name: Verify Governance Gates
         run: bash ./scripts/openclaw/verify_governance_gates.sh --require-scenario-diversity
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - name: Run tests with coverage
+        run: go test -coverprofile=coverage.out ./...
+      - name: Check coverage threshold (>= 40%)
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '\r' | sed 's/%//')
+          echo "Total coverage: $COVERAGE%"
+          if echo "$COVERAGE 40" | awk '{exit !($1 < $2)}'; then
+            echo "Coverage is below 40% threshold"
+            exit 1
+          fi
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8
+        with:
+          version: v2.12.2
+          args: --timeout=5m
 
   operations:
     runs-on: ubuntu-latest

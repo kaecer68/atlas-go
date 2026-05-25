@@ -130,7 +130,7 @@ go run ./cmd/import-replay -source <csv> -target <jsonl>
 
 ## 測試須知
 
-- **整合測試**：CI 使用 `go test -v -tags=integration ./...`，但**目前 repo 內沒有任何 `//go:build integration` 標籤**；根目錄的 `integration_test.go` 屬於 `package main`，會隨 `go test ./...` 常規執行。
+- **整合測試**：CI 使用 `go test -v -tags=integration ./...`（需要 Redis + PostgreSQL 服務）。根目錄的 `integration_test.go` 與 `internal/repository/*_test.go` 皆有 `//go:build integration` 標籤，因此 `go test ./...`（不含 `-tags=integration`）會正確略過這些檔案，不會常規執行。
 - **Race detector**：`ci-cd.yml` 對 unit test 啟用 `-race`。
 - **Coverage 門檻**：總覆蓋率不得低於 **40%**。
 - **治理與操作 gate**：
