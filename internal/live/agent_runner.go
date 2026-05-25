@@ -268,5 +268,5 @@ func (r *AgentRunner) publishEvent(event BusEvent) {
 	if r.eventBus == nil {
 		return
 	}
-	_ = r.eventBus.Publish(event)
+	r.eventBus.Publish(event)
 }

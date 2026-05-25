@@ -243,7 +243,6 @@ func (m *AgentHealthManager) evaluateInterventions(h *AgentHealth) {
 
 func (m *AgentHealthManager) publishHealthChange(agentID string, oldStatus, newStatus AgentHealthStatus, reason string) {
 	if m.eventBus != nil {
-		//nolint:errcheck
 		go m.eventBus.PublishAgentHealthChange(agentID, string(oldStatus), string(newStatus), reason)
 	}
 }

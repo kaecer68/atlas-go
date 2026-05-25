@@ -101,18 +101,18 @@ func (m *OrderManager) Run(ctx context.Context, order domain.Order) error {
 	if m.riskGate != nil {
 		if err := m.riskGate.Check(ctx, order); err != nil {
 			if m.eventBus != nil {
-				_ = m.eventBus.PublishOrderError(
-					"",
-					order.Symbol,
-					string(order.Side),
-					order.Price,
-					order.Quantity,
-					"risk_gate_blocked",
-					err.Error(),
-					1,
-					"blocked",
-				)
-			}
+			m.eventBus.PublishOrderError(
+				"",
+				order.Symbol,
+				string(order.Side),
+				order.Price,
+				order.Quantity,
+				"risk_gate_blocked",
+				err.Error(),
+				1,
+				"blocked",
+			)
+		}
 			return fmt.Errorf("risk gate blocked order for %s: %w", order.Symbol, err)
 		}
 	}
@@ -140,9 +140,7 @@ func (m *OrderManager) Run(ctx context.Context, order domain.Order) error {
 		}
 
 		if m.eventBus != nil {
-			if err := m.eventBus.PublishOrderEvent(eventOrder, result.OrderID, status, result.FillPrice); err != nil {
-				return fmt.Errorf("publish order event: %w", err)
-			}
+			m.eventBus.PublishOrderEvent(eventOrder, result.OrderID, status, result.FillPrice)
 		}
 
 		if status == "rejected" {
@@ -150,7 +148,7 @@ func (m *OrderManager) Run(ctx context.Context, order domain.Order) error {
 				result.Reason = "broker rejected order"
 			}
 			if m.eventBus != nil {
-				_ = m.eventBus.PublishOrderError(
+				m.eventBus.PublishOrderError(
 					result.OrderID,
 					order.Symbol,
 					string(order.Side),
@@ -169,7 +167,7 @@ func (m *OrderManager) Run(ctx context.Context, order domain.Order) error {
 	}
 
 	if m.eventBus != nil {
-		_ = m.eventBus.PublishOrderError(
+		m.eventBus.PublishOrderError(
 			"",
 			order.Symbol,
 			string(order.Side),

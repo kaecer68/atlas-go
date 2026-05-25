@@ -581,22 +581,21 @@ func (o *Orchestrator) publishEvent(event BusEvent) {
 	if o.eventBus == nil {
 		return
 	}
-	if err := o.eventBus.Publish(event); err != nil { //nolint:staticcheck // 非關鍵錯誤，publish 失敗不影響交易執行
-	}
+	o.eventBus.Publish(event)
 }
 
 func (o *Orchestrator) publishMarketSnapshot(quote domain.Quote) {
 	if o.eventBus == nil {
 		return
 	}
-	_ = o.eventBus.PublishMarketSnapshot(quote)
+	o.eventBus.PublishMarketSnapshot(quote)
 }
 
 func (o *Orchestrator) publishRiskEvent(eventType EventType, symbol string, position domain.Position, triggerType string, triggerPrice float64) {
 	if o.eventBus == nil {
 		return
 	}
-	_ = o.eventBus.PublishRiskEvent(eventType, symbol, position, triggerType, triggerPrice)
+	o.eventBus.PublishRiskEvent(eventType, symbol, position, triggerType, triggerPrice)
 }
 
 func resolveBrokerMode(cfg OrchestratorConfig) (requested string, effective string, broker Broker, auditMsg string) {

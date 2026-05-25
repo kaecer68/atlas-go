@@ -305,7 +305,7 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, st
 	minObs := j.requiredObservationCountForProfile(result.Brief.MaturityLevel, result.Experiment.MutationType)
 	if baselineObs < minObs || candidateObs < minObs {
 		if j.eventBus != nil {
-			_ = j.eventBus.PublishExperimentInsufficientData(
+			j.eventBus.PublishExperimentInsufficientData(
 				result.Experiment.ID,
 				baselineObs,
 				candidateObs,

@@ -18,11 +18,10 @@ type trackEventBus struct {
 	published []string
 }
 
-func (t *trackEventBus) PublishNarrativeEvent(eventID, theme, region string, sentiment, confidence float64, confidenceSource, hitRate, capitalFlow, timeWindow string) error {
+func (t *trackEventBus) PublishNarrativeEvent(eventID, theme, region string, sentiment, confidence float64, confidenceSource, hitRate, capitalFlow, timeWindow string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.published = append(t.published, theme)
-	return nil
 }
 
 func TestMacroIngestorLifecycleGatesDuplicateTheme(t *testing.T) {
