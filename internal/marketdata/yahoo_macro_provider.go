@@ -38,21 +38,13 @@ type YahooFinanceMacroProvider struct {
 	client    *http.Client
 	baseURL   string
 	limiter   *rate.Limiter
-	bdiSymbol string // Yahoo Finance symbol for BDI (default: ^BDI, alternative: BDI, BALTIC)
 }
 
 func NewYahooFinanceMacroProvider() *YahooFinanceMacroProvider {
 	return &YahooFinanceMacroProvider{
 		client:    httpclient.NewFactory().NewClient(15 * time.Second),
 		limiter:   yahooSharedLimiter,
-		bdiSymbol: "BDI",
 	}
-}
-
-// SetBDISymbol overrides the default BDI symbol (^BDI). Use if Yahoo Finance
-// does not serve ^BDI; common alternatives include "BDI" or "BALTT".
-func (y *YahooFinanceMacroProvider) SetBDISymbol(ticker string) {
-	y.bdiSymbol = ticker
 }
 
 func (y *YahooFinanceMacroProvider) Name() string {
@@ -60,16 +52,15 @@ func (y *YahooFinanceMacroProvider) Name() string {
 }
 
 func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
-	symbols := map[string]string{
-		"DX-Y.NYB":  "dxy",
-		"^TNX":      "us10y",
-		"^VIX":      "vix",
-		"CL=F":      "oil",
-		"GC=F":      "gold",
-		"JPY=X":     "jpy",
-		"USDTWD=X":  "usd_twd",
-		y.bdiSymbol: "bdi",
-	}
+		symbols := map[string]string{
+			"DX-Y.NYB":  "dxy",
+			"^TNX":      "us10y",
+			"^VIX":      "vix",
+			"CL=F":      "oil",
+			"GC=F":      "gold",
+			"JPY=X":     "jpy",
+			"USDTWD=X":  "usd_twd",
+		}
 
 	snap := MacroDataSnapshot{RecordedAt: time.Now().Unix()}
 	var mu sync.Mutex
@@ -101,10 +92,6 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 				snap.Gold = point
 			case "jpy":
 				snap.JPY = point
-			case "usd_twd":
-				snap.USD_TWD = point
-			case "bdi":
-				snap.BDI = point
 			}
 			mu.Unlock()
 		}(ticker, key)

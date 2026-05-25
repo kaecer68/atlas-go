@@ -184,17 +184,3 @@ func TestYahooFetchFromHost_InvalidJSON(t *testing.T) {
 		t.Errorf("expected unmarshal error, got: %v", err)
 	}
 }
-
-func TestYahooBDISymbol(t *testing.T) {
-	p := NewYahooFinanceMacroProvider()
-
-	if !strings.Contains(p.bdiSymbol, "BDI") && !strings.Contains(p.bdiSymbol, "BALTT") {
-		t.Errorf("expected bdiSymbol to contain BDI or BALTT, got %s", p.bdiSymbol)
-	}
-
-	// Override
-	p.SetBDISymbol("BALTT")
-	if p.bdiSymbol != "BALTT" {
-		t.Errorf("expected bdiSymbol to be BALTT after SetBDISymbol, got %s", p.bdiSymbol)
-	}
-}

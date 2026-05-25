@@ -65,16 +65,13 @@ func (dem *DynamicEnvModulator) UpdateRollingBaseline() {
 
 	oilValues := make([]float64, len(windowData))
 	dxyValues := make([]float64, len(windowData))
-	bdiValues := make([]float64, len(windowData))
 	for i, snap := range windowData {
 		oilValues[i] = snap.Oil.Value
 		dxyValues[i] = snap.DXY.Value
-		bdiValues[i] = snap.BDI.Value
 	}
 
 	dem.baseline.Oil.Value = median(oilValues)
 	dem.baseline.DXY.Value = median(dxyValues)
-	dem.baseline.BDI.Value = median(bdiValues)
 }
 
 // RecordSnapshot appends a macro data snapshot to the rolling history.
@@ -121,14 +118,7 @@ func (dem *DynamicEnvModulator) DXYDeviation() float64 {
 // BDIDeviation returns the percentage deviation of BDI from baseline.
 // Positive = shipping demand is strong relative to history.
 func (dem *DynamicEnvModulator) BDIDeviation() float64 {
-	dem.mu.RLock()
-	baselineBDI := dem.baseline.BDI.Value
-	currentBDI := dem.current.BDI.Value
-	dem.mu.RUnlock()
-	if baselineBDI <= 0 {
-		return 0
-	}
-	return (currentBDI - baselineBDI) / baselineBDI
+	return 0
 }
 
 // SeasonalModulation computes a multiplicative adjustment for seasonal patterns
@@ -142,7 +132,6 @@ func (dem *DynamicEnvModulator) SeasonalModulation(industryID string) float64 {
 	cfg := config.GetParametersConfig().Industry.DynamicEnv.Value
 	oilDev := dem.OilDeviation()
 	dxyDev := dem.DXYDeviation()
-	bdiDev := dem.BDIDeviation()
 
 	switch industryID {
 	case "energy":
@@ -162,12 +151,6 @@ func (dem *DynamicEnvModulator) SeasonalModulation(industryID string) float64 {
 		if oilDev < -cfg.OilLowThreshold {
 			mod *= 1.0 + cfg.OilShippingBenefit
 		}
-		if bdiDev > cfg.BDIHighThreshold {
-			mod *= 1.0 + bdiDev*cfg.BDIShippingBoost
-		}
-		if bdiDev < -cfg.BDIHighThreshold {
-			mod *= 1.0 + bdiDev*cfg.BDIShippingBoost*0.5
-		}
 		return mod
 
 	case "industrial", "petrochemicals", "steel":
@@ -178,9 +161,6 @@ func (dem *DynamicEnvModulator) SeasonalModulation(industryID string) float64 {
 		if oilDev < -cfg.OilLowThreshold {
 			mod *= 1.0 + cfg.OilIndustrialBenefit
 		}
-		if bdiDev > cfg.BDIHighThreshold {
-			mod *= 1.0 - cfg.BDICostPenalty
-		}
 		return mod
 
 	case "semiconductor", "ai_supply_chain", "electronics":
@@ -190,9 +170,6 @@ func (dem *DynamicEnvModulator) SeasonalModulation(industryID string) float64 {
 		}
 		if dxyDev < -cfg.DXYLowThreshold {
 			mod *= 1.0 + dxyDev*cfg.DXYExportBenefit
-		}
-		if bdiDev > cfg.BDIHighThreshold*2 {
-			mod *= 1.0 - cfg.BDICostPenalty*0.5
 		}
 		return mod
 

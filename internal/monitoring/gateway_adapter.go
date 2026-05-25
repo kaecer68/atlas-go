@@ -102,9 +102,6 @@ func (a *macroDataGatewayAdapter) applyJPYYahoo(snap *marketdata.MacroDataSnapsh
 	if s.JPY.Symbol != "" {
 		snap.JPY = s.JPY
 	}
-	if s.BDI.Symbol != "" {
-		snap.BDI = s.BDI
-	}
 }
 
 func (a *macroDataGatewayAdapter) applyExchangeRate(snap *marketdata.MacroDataSnapshot, data []byte) {
