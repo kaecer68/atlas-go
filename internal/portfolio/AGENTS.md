@@ -101,13 +101,33 @@ portfolio 不拆分程式碼（Direction C）：`FactorEngine` 被 11 個 consum
 - **持久化**：`AgentHealthStore` 自動儲存健康狀態，重啟後可恢復。
 - **主要檔案**：`agent_health.go`、`agent_health_store.go`
 
-### 4. Optimizer (多因子組合優化器)
+### 4. Optimizer (多因子組合優化器) — P0-1 Covariance Upgrade
 - **核心類型**：`FactorScore` (單因子評分)、`OptimizedPosition` (優化後倉位)、`Constraints` (組合約束)。
 - **優化流程**：`aggregateRecommendations` → `calculateMultiFactorScores` → `allocateInitialWeights` → `applyConstraints` → `buildPositions`。
-- **因子評分**：`symbolScore` 結構彙總 Momentum/Value/Quality/Agent 四因子，計算加權總分。
+- **因子評分**：`symbolScore` 結構彙總 Momentum/Value/Quality/Agent 等因子，計算加權總分。
 - **約束條件**：`MaxPositionPct=0.15`、`MaxSectorPct=0.40`、`CashReserve=0.05`、Beta range `[0.8, 1.2]`。
 - **訂單轉換**：`OptimizeToOrders` 將優化倉位轉換為 `domain.Order` 陣列。
 - **主要檔案**：`optimizer.go`
+
+#### 4.1. 共變異數優化（P0-1 新增 — 2026-05）
+- **權重分配已從單純線性歸一化升級為馬可維茲均值-變異數優化。**
+- **兩路徑設計**：
+  1. **有歷史資料** → 共變異數矩陣 + Ledoit-Wolf shrinkage + Active-set QP 求解最小變異數組合
+  2. **無歷史資料** → Fallback 至 `linearWeights()`（保留原有線性歸一化行為）
+- **共變異數估計**（Ledoit & Wolf, 2004）：
+  - `sampleCov()` 計算樣本共變異數矩陣 S (N×N)
+  - `ledoitWolfShrink()` 計算 shrunken estimator: Σ = (1-δ)·S + δ·ν·I
+  - Shrinkage intensity δ 由 pi, rho, gamma 動態計算，非硬編碼
+- **QP 求解器**（active-set method）：
+  - `activeSetQP()` 求解 minimize w'Σw s.t. Σw=1, 0 ≤ wᵢ ≤ w_max
+  - KKT 系統：`[2Σ_FF, A'; A, 0][w_F; λ] = [ -2Σ_FA·w_A; b - A·w_A ]`
+  - 使用 `gonum.org/v1/gonum/mat.SolveVec` 解線性系統
+  - `isOptimal()` 檢查 KKT 條件（∇f ≥ 0 at lb, ∇f ≤ 0 at ub）
+  - `gradientProjection()` 為 fallback（KKT 系統 singular 時）
+- **有效前沿**：`GetEfficientFrontier()` 計算 20 點均值-變異數前沿，使用雙等式約束（Σw=1, μ'w=r_target）
+- **參數**: `lookbackDays=60`, `riskFreeRate=0.015`（年化）
+- **⚠️ 公約**：不可改 `Optimize()`, `OptimizeToOrders()`, `GetEfficientFrontier()` 的公開簽章
+- **⚠️ 陷阱**：`activeSetQP` 的 KKT 檢查對上界：需 ∇f ≤ 0 才 optimal（非 ≥ 0）。N=2 且 w_max = 1/N 時初始點命中兩邊界，需確保 w_init 不全部撞邊界
 
 ### 5. Capital Allocator (資本配置器)
 - **核心類型**：`CapitalAllocation` — `TotalCapital`、`TotalDeployable`、`ReserveCash`、`PositionSizes`。

@@ -35,15 +35,15 @@ var yahooSharedLimiter = rate.NewLimiter(rate.Every(500*time.Millisecond), 2)
 
 // YahooFinanceMacroProvider fetches macro indicators from Yahoo Finance.
 type YahooFinanceMacroProvider struct {
-	client    *http.Client
-	baseURL   string
-	limiter   *rate.Limiter
+	client  *http.Client
+	baseURL string
+	limiter *rate.Limiter
 }
 
 func NewYahooFinanceMacroProvider() *YahooFinanceMacroProvider {
 	return &YahooFinanceMacroProvider{
-		client:    httpclient.NewFactory().NewClient(15 * time.Second),
-		limiter:   yahooSharedLimiter,
+		client:  httpclient.NewFactory().NewClient(15 * time.Second),
+		limiter: yahooSharedLimiter,
 	}
 }
 
@@ -52,15 +52,15 @@ func (y *YahooFinanceMacroProvider) Name() string {
 }
 
 func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
-		symbols := map[string]string{
-			"DX-Y.NYB":  "dxy",
-			"^TNX":      "us10y",
-			"^VIX":      "vix",
-			"CL=F":      "oil",
-			"GC=F":      "gold",
-			"JPY=X":     "jpy",
-			"USDTWD=X":  "usd_twd",
-		}
+	symbols := map[string]string{
+		"DX-Y.NYB": "dxy",
+		"^TNX":     "us10y",
+		"^VIX":     "vix",
+		"CL=F":     "oil",
+		"GC=F":     "gold",
+		"JPY=X":    "jpy",
+		"USDTWD=X": "usd_twd",
+	}
 
 	snap := MacroDataSnapshot{RecordedAt: time.Now().Unix()}
 	var mu sync.Mutex
