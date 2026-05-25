@@ -269,3 +269,87 @@ func TestFactorWeightEngine_WeightSource(t *testing.T) {
 	}
 	t.Logf("WeightSource: %s", source)
 }
+
+// TestFactorWeightEngine_PM_GoldRally verifies gold_rally event
+// boosts PreciousMetals and reduces Value by severity delta.
+func TestFactorWeightEngine_PM_GoldRally(t *testing.T) {
+	engine := NewFactorWeightEngine()
+	base := engine.GetWeights("")
+
+	event := &narrative.NarrativeEvent{
+		ID:       "gold-rally-1",
+		Theme:    "gold_rally",
+		Severity: "high",
+		Status:   "active",
+	}
+	engine.AddEvent(event)
+	weights := engine.GetWeights("")
+
+	if weights[FactorPreciousMetals] <= base[FactorPreciousMetals] {
+		t.Errorf("gold_rally should boost PreciousMetals above baseline %.4f, got %.4f",
+			base[FactorPreciousMetals], weights[FactorPreciousMetals])
+	}
+	if weights[FactorValue] >= base[FactorValue] {
+		t.Errorf("gold_rally should reduce Value below baseline %.4f, got %.4f",
+			base[FactorValue], weights[FactorValue])
+	}
+}
+
+// TestFactorWeightEngine_PM_DollarSurge verifies dollar_surge event
+// reduces PreciousMetals (clamped to minimum) and boosts Liquidity.
+func TestFactorWeightEngine_PM_DollarSurge(t *testing.T) {
+	engine := NewFactorWeightEngine()
+	base := engine.GetWeights("")
+
+	event := &narrative.NarrativeEvent{
+		ID:       "dollar-surge-1",
+		Theme:    "dollar_surge",
+		Severity: "high",
+		Status:   "active",
+	}
+	engine.AddEvent(event)
+	weights := engine.GetWeights("")
+
+	// Negative delta on a zero-baseline factor is clamped to clampMin (~0.02).
+	// PM baseline = 0, final ≈ clampMin after normalization.
+	if weights[FactorPreciousMetals] < 0.01 || weights[FactorPreciousMetals] > 0.03 {
+		t.Errorf("dollar_surge: PM should be near clamp minimum, got %.4f", weights[FactorPreciousMetals])
+	}
+	if weights[FactorLiquidity] <= base[FactorLiquidity] {
+		t.Errorf("dollar_surge should boost Liquidity above baseline %.4f, got %.4f",
+			base[FactorLiquidity], weights[FactorLiquidity])
+	}
+}
+
+// TestFactorWeightEngine_PM_InflationSpike verifies inflation_spike boosts PM,
+// reduces Momentum, and weights stay normalized.
+func TestFactorWeightEngine_PM_InflationSpike(t *testing.T) {
+	engine := NewFactorWeightEngine()
+	base := engine.GetWeights("")
+
+	event := &narrative.NarrativeEvent{
+		ID:       "inf-spike-1",
+		Theme:    "inflation_spike",
+		Severity: "high",
+		Status:   "active",
+	}
+	engine.AddEvent(event)
+	weights := engine.GetWeights("")
+
+	if weights[FactorPreciousMetals] <= base[FactorPreciousMetals] {
+		t.Errorf("inflation_spike should boost PM above baseline %.4f, got %.4f",
+			base[FactorPreciousMetals], weights[FactorPreciousMetals])
+	}
+	if weights[FactorMomentum] >= base[FactorMomentum] {
+		t.Errorf("inflation_spike should reduce Momentum below baseline %.4f, got %.4f",
+			base[FactorMomentum], weights[FactorMomentum])
+	}
+
+	var total float64
+	for _, w := range weights {
+		total += w
+	}
+	if total < 0.99 || total > 1.01 {
+		t.Errorf("weights should normalize to ~1.0 after PM event, got %f", total)
+	}
+}

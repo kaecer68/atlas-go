@@ -32,14 +32,15 @@ func fwConfig() *config.FactorWeightParameters {
 
 func defaultBaseWeights() map[FactorType]float64 {
 	return map[FactorType]float64{
-		FactorMomentum:      0.25,
-		FactorValue:         0.20,
-		FactorQuality:       0.20,
-		FactorAgent:         0.15,
-		FactorInstSent:      0.10,
-		FactorLiquidity:     0.05,
-		FactorNarrative:     0.05,
-		FactorIndustryCycle: 0.00,
+		FactorMomentum:       0.25,
+		FactorValue:          0.20,
+		FactorQuality:        0.20,
+		FactorAgent:          0.15,
+		FactorInstSent:       0.10,
+		FactorLiquidity:      0.05,
+		FactorNarrative:      0.05,
+		FactorIndustryCycle:  0.00,
+		FactorPreciousMetals: 0.00,
 	}
 }
 
@@ -256,6 +257,21 @@ func (e *FactorWeightEngine) applyEventAdjustment(event *narrative.NarrativeEven
 		e.eventWeights[event.ID] = map[FactorType]float64{
 			FactorLiquidity: -delta,
 			FactorMomentum:  -delta,
+		}
+	case "gold_rally":
+		e.eventWeights[event.ID] = map[FactorType]float64{
+			FactorPreciousMetals: delta,
+			FactorValue:          -delta,
+		}
+	case "dollar_surge":
+		e.eventWeights[event.ID] = map[FactorType]float64{
+			FactorPreciousMetals: -delta,
+			FactorLiquidity:      delta,
+		}
+	case "inflation_spike":
+		e.eventWeights[event.ID] = map[FactorType]float64{
+			FactorPreciousMetals: delta,
+			FactorMomentum:       -delta,
 		}
 	default:
 		e.eventWeights[event.ID] = map[FactorType]float64{
