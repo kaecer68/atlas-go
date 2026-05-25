@@ -54,10 +54,11 @@ type PortfolioManager struct {
 }
 
 type StrategyLayer struct {
-	strategyRegistry *strategy.Registry
-	strategySelector *strategy.Selector
-	comparisonEngine *strategy.ComparisonEngine
-	thresholdEngine  *sim.DynamicThresholdEngine
+	strategyRegistry  *strategy.Registry
+	strategySelector  *strategy.Selector
+	comparisonEngine  *strategy.ComparisonEngine
+	thresholdEngine   *sim.DynamicThresholdEngine
+	strategyAllocator *strategy.StrategyAllocator // P2: nil-safe multi-strategy allocator
 }
 
 type RiskOps struct {
@@ -564,6 +565,19 @@ func (s *System) GetCurrentStrategy() *strategy.Strategy {
 
 func (s *System) GetStrategySelector() *strategy.Selector {
 	return s.strat.strategySelector
+}
+
+// GetStrategyAllocator returns the multi-strategy allocator (nil if not attached).
+func (s *System) GetStrategyAllocator() *strategy.StrategyAllocator {
+	return s.strat.strategyAllocator
+}
+
+// WithStrategyAllocator attaches a risk-parity strategy allocator (P2).
+// When attached, sessions can use multi-strategy allocation instead of single-strategy selection.
+// nil-safe: if nil, Selector path is used (backward compatible).
+func (s *System) WithStrategyAllocator(sa *strategy.StrategyAllocator) *System {
+	s.strat.strategyAllocator = sa
+	return s
 }
 
 func (s *System) GetThresholdEngine() *sim.DynamicThresholdEngine {
