@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -42,6 +43,7 @@ func (a *FugleChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 		return nil, fmt.Errorf("fugle marshal: %w", err)
 	}
 	limiter := a.RateLimit()
+	saveSnapshot("fugle", data)
 	return &FetchResult{
 		Data: data,
 		Meta: FetchMetadata{
@@ -127,6 +129,7 @@ func (a *FinMindChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error)
 		return nil, fmt.Errorf("finmind marshal: %w", err)
 	}
 	limiter := a.RateLimit()
+	saveSnapshot("finmind", data)
 	return &FetchResult{
 		Data: data,
 		Meta: FetchMetadata{
@@ -576,6 +579,7 @@ func (a *FubonChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fubon marshal: %w", err)
 	}
+	saveSnapshot("fubon", data)
 	return &FetchResult{
 		Data: data,
 		Meta: FetchMetadata{
@@ -1439,4 +1443,12 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	}
 
 	return nil
+}
+
+func saveSnapshot(channelID string, data []byte) {
+	dir := filepath.Join("data", "state", channelID)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return
+	}
+	_ = os.WriteFile(filepath.Join(dir, "latest.json"), data, 0644)
 }
