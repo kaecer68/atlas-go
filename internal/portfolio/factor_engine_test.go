@@ -438,3 +438,113 @@ func abs(f float64) float64 {
 	}
 	return f
 }
+
+// ── Precious Metals Factor Tests (P0-2 Falsification) ──
+
+// Scenario A: stock factors must not pollute precious metals.
+// 00635U (gold ETF) → Value=0, Quality=0, PreciousMetals≠0.
+func TestPreciousMetals_ScenarioA_NoStockPollution(t *testing.T) {
+	fe := NewFactorEngine()
+	fe.WithPreciousMetalsProvider(func(symbol string) *PreciousMetalsContext {
+		return &PreciousMetalsContext{
+			RealRate: 0.01,
+			VIX:      18,
+			DXY:      102,
+			CPIYoY:   0.025,
+		}
+	})
+
+	quotes := map[string]domain.Quote{
+		"00635U": {Symbol: "00635U", Open: 30, Last: 30.5, IsTradable: true},
+	}
+
+	val := fe.CalculateValueScore("00635U", quotes)
+	qly := fe.CalculateQualityScore("00635U", quotes)
+	pm := fe.CalculatePreciousMetalsScore("00635U", quotes)
+
+	if val != 0 {
+		t.Errorf("Scenario A fail: Value for 00635U = %f, expected 0 (P/E not applicable)", val)
+	}
+	if qly != 0 {
+		t.Errorf("Scenario A fail: Quality for 00635U = %f, expected 0 (ROE not applicable)", qly)
+	}
+	if abs(pm.Score) < 0.01 {
+		t.Errorf("Scenario A fail: PM score = %f, expected non-zero for gold ETF", pm.Score)
+	}
+
+	// Verify non-PM symbols are unaffected.
+	val2330 := fe.CalculateValueScore("2330.TW", quotes)
+	if val2330 == 0 {
+		t.Log("Warning: 2330.TW Value = 0 (no fundamental data — expected in test)")
+	}
+}
+
+// Scenario B: Fed hiking cycle → precious metals score must be negative.
+// Real rate high (2%), DXY strong (105), VIX normal (22).
+func TestPreciousMetals_ScenarioB_FedHiking(t *testing.T) {
+	fe := NewFactorEngine()
+	fe.WithPreciousMetalsProvider(func(symbol string) *PreciousMetalsContext {
+		return &PreciousMetalsContext{
+			RealRate: 0.02,
+			VIX:      22,
+			DXY:      105,
+			CPIYoY:   0.02,
+		}
+	})
+
+	pm := fe.CalculatePreciousMetalsScore("00635U", nil)
+
+	if pm.Score >= -0.05 {
+		t.Errorf("Scenario B fail: PM = %f, expected negative (hiking cycle)", pm.Score)
+	}
+
+	// RealRate must pull negative.
+	if pm.RawInputs["real_rate"] >= 0 {
+		t.Errorf("Scenario B fail: real_rate = %f, expected negative", pm.RawInputs["real_rate"])
+	}
+
+	// RiskOff must not dominate (VIX 22 is moderate).
+	if pm.RawInputs["risk_off"] > 0.5 {
+		t.Errorf("Scenario B fail: risk_off = %f dominating composite", pm.RawInputs["risk_off"])
+	}
+}
+
+// Scenario C: extreme risk-off (COVID crash) → precious metals score must be strongly positive.
+// VIX 60+, real rate 0.5%, DXY neutral (99).
+func TestPreciousMetals_ScenarioC_RiskOff(t *testing.T) {
+	fe := NewFactorEngine()
+	fe.WithPreciousMetalsProvider(func(symbol string) *PreciousMetalsContext {
+		return &PreciousMetalsContext{
+			RealRate: 0.005,
+			VIX:      60,
+			DXY:      99,
+			CPIYoY:   0.02,
+		}
+	})
+
+	pm := fe.CalculatePreciousMetalsScore("GLD", nil)
+
+	if pm.Score < 0.5 {
+		t.Errorf("Scenario C fail: PM = %f, expected > 0.5 (risk-off surge)", pm.Score)
+	}
+
+	// RiskOff must be at maximum (VIX > 35 → 1.0).
+	if pm.RawInputs["risk_off"] < 0.95 {
+		t.Errorf("Scenario C fail: risk_off = %f, expected ≥ 0.95 with VIX=60", pm.RawInputs["risk_off"])
+	}
+
+	// Silver subtype also tested.
+	pmSilver := fe.CalculatePreciousMetalsScore("SLV", nil)
+	if pmSilver.Score <= 0 {
+		t.Errorf("Scenario C fail: silver PM = %f, expected positive", pmSilver.Score)
+	}
+}
+
+// TestPreciousMetals_UnknownSymbol returns zero for non-PM symbols.
+func TestPreciousMetals_UnknownSymbol(t *testing.T) {
+	fe := NewFactorEngine()
+	pm := fe.CalculatePreciousMetalsScore("2330.TW", nil)
+	if pm.Score != 0 {
+		t.Errorf("expected 0 for non-PM symbol, got %f", pm.Score)
+	}
+}
