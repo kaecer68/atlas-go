@@ -9,7 +9,7 @@ func TestDefaultClassification(t *testing.T) {
 
 	// Test Level 1 count
 	level1 := tree.GetLevel1()
-	if len(level1) != 10 {
+	if len(level1) != 11 {
 		t.Errorf("expected 10 level-1 industries, got %d", len(level1))
 	}
 

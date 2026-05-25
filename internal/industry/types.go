@@ -221,7 +221,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "半導體",
 		NameEN:               "Semiconductor",
 		Level:                Level1,
-		Weight:               0.23,
+		Weight:               0.22,
 		GeographicExposure:   ExposureExport,
 		Cyclicality:          CyclicalityHigh,
 		TechnologyIntensity:  TechIntensityHigh,
