@@ -49,8 +49,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/storage"
 )
 
-
-
 type appDeps struct {
 	loadConfig      func() config.Config
 	newDashboardAPI func(string, string, *monitoring.MetricsCollector) *monitoring.DashboardAPI
@@ -484,6 +482,9 @@ func run(args []string, deps appDeps) error {
 			// Register health_check via HealthChecker.RunOnce (stateStore is nil in API mode).
 			if monitor != nil {
 				healthChecker := monitoring.NewHealthChecker(monitor, nil)
+				if gateway != nil {
+					healthChecker.SetGateway(gateway)
+				}
 				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "health_check",
 					Interval: 30 * time.Second,
@@ -493,6 +494,51 @@ func run(args []string, deps appDeps) error {
 					},
 				})
 				log.Printf("[Gateway] registered health_check background task (30s interval)")
+			}
+
+			// Register channel health checks for third-party data providers.
+			// These tasks populate the Gateway health store so the frontend
+			// "信息通道" page can show actual status instead of "未知".
+			if cfg.FugleAPIKey != "" {
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:      "channel_health_fugle",
+					ChannelID: "fugle",
+					Interval:  1 * time.Hour,
+					Enabled:   true,
+					Task: func(ctx context.Context) error {
+						_, err := gateway.Fetch(ctx, "fugle")
+						return err
+					},
+				})
+				log.Printf("[Gateway] registered channel_health_fugle background task (1h interval)")
+			}
+
+			if cfg.FubonAPIKey != "" {
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:      "channel_health_fubon",
+					ChannelID: "fubon",
+					Interval:  1 * time.Hour,
+					Enabled:   true,
+					Task: func(ctx context.Context) error {
+						_, err := gateway.Fetch(ctx, "fubon")
+						return err
+					},
+				})
+				log.Printf("[Gateway] registered channel_health_fubon background task (1h interval)")
+			}
+
+			if cfg.FinMindAPIKey != "" {
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:      "channel_health_finmind",
+					ChannelID: "finmind",
+					Interval:  1 * time.Hour,
+					Enabled:   true,
+					Task: func(ctx context.Context) error {
+						_, err := gateway.Fetch(ctx, "finmind")
+						return err
+					},
+				})
+				log.Printf("[Gateway] registered channel_health_finmind background task (1h interval)")
 			}
 
 			// Register TSMC Revenue task via Gateway.
