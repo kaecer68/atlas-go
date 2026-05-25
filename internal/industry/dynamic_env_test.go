@@ -190,6 +190,6 @@ func TestDynamicEnvModulator_SeasonalModulation_Industrial_NoBDI(t *testing.T) {
 	// BDI is not used for industrial sector.
 	// Expected: 1.0 × (1 - 0.06) = 0.94
 	if math.Abs(mod-0.94) > 0.01 {
-		t.Fatalf("industrial with +60%% oil: expected mod ~0.90, got %.4f", mod)
+		t.Fatalf("industrial with +60%% oil: expected mod ~0.94, got %.4f", mod)
 	}
 }
