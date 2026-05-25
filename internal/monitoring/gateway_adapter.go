@@ -89,6 +89,9 @@ func (a *macroDataGatewayAdapter) applyUSYahoo(snap *marketdata.MacroDataSnapsho
 	if s.Gold.Symbol != "" {
 		snap.Gold = s.Gold
 	}
+	if s.Bdi.Symbol != "" {
+		snap.Bdi = s.Bdi
+	}
 	if s.RecordedAt > snap.RecordedAt {
 		snap.RecordedAt = s.RecordedAt
 	}
