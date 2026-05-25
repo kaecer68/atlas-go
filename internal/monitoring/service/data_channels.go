@@ -346,7 +346,7 @@ func (s *DataChannelService) buildFugleChannel() DataChannel {
 		Platform:   "Fugle 富果",
 		APIFormat:  "REST JSON",
 		Path:       "api.fugle.tw",
-		Storage:    "(live cache / memory)",
+		Storage:    "data/state/fugle/latest.json",
 		Status:     status,
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
@@ -362,23 +362,20 @@ func (s *DataChannelService) buildFubonChannel() DataChannel {
 		Platform:   "富邦證券",
 		APIFormat:  "REST JSON",
 		Path:       "api.fubon.com.tw",
-		Storage:    "(live cache / memory)",
+		Storage:    "data/state/fubon/latest.json",
 		Status:     status,
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
 		LastError:  lastError,
 	}
-}
 
-func (s *DataChannelService) buildFinMindChannel() DataChannel {
-	status, updated, lastError := s.getCachedFinMindHealth()
-	return DataChannel{
+	return buildChannelInfo{
 		ChannelID:  "finmind",
 		Country:    "台灣",
 		Platform:   "FinMind",
 		APIFormat:  "REST JSON",
 		Path:       "api.finmindtrade.com",
-		Storage:    "(live cache / memory)",
+		Storage:    "data/state/finmind/latest.json",
 		Status:     status,
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
