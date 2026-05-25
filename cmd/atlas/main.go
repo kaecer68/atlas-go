@@ -582,6 +582,21 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered channel_health_finmind background task (1h interval)")
 			}
 
+			// Register TWSE replay health check (always available, reads from local CSV).
+			{
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:      "channel_health_twse_replay",
+					ChannelID: "twse_replay",
+					Interval:  1 * time.Hour,
+					Enabled:   true,
+					Task: func(ctx context.Context) error {
+						_, err := gateway.Fetch(ctx, "twse_replay")
+						return err
+					},
+				})
+				log.Printf("[Gateway] registered channel_health_twse_replay background task (1h interval)")
+			}
+
 			// Register TSMC Revenue task via Gateway.
 			if cfg.FinMindAPIKey != "" {
 				_ = taskMgr.Register(&apigateway.ScheduledTask{
