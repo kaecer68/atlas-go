@@ -463,9 +463,6 @@ func TestOptimizerGetEfficientFrontier(t *testing.T) {
 		t.Skip("no historical prices attached — frontier requires real return data")
 	}
 	for i, point := range frontier {
-		if point.Return <= 0 && point.Return >= 0 {
-			// allow negative returns in high-volatility periods
-		}
 		if point.Risk < 0 {
 			t.Errorf("point %d: expected non-negative risk, got %f", i, point.Risk)
 		}

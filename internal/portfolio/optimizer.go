@@ -451,7 +451,9 @@ func (o *Optimizer) linearWeights(scores map[string]*symbolScore) []weightInfo {
 }
 
 // applyConstraints applies post-optimization constraints.
-// Position caps are enforced by the QP solver; only cash reserve remains.
+// This function serves both the QP path (where caps are already enforced by the solver)
+// and the linear fallback path (where they must be applied here).
+// All operations are idempotent — they are no-ops when constraints are already satisfied.
 func (o *Optimizer) applyConstraints(
 	weights []weightInfo,
 	constraints Constraints,
@@ -459,6 +461,23 @@ func (o *Optimizer) applyConstraints(
 ) []weightInfo {
 	if len(weights) == 0 {
 		return nil
+	}
+
+	for i := range weights {
+		if weights[i].Weight > constraints.MaxPositionPct {
+			weights[i].Weight = constraints.MaxPositionPct
+		}
+	}
+
+	var totalWeight float64
+	for _, w := range weights {
+		totalWeight += w.Weight
+	}
+	if totalWeight > 0 && totalWeight != 1.0 {
+		scale := 1.0 / totalWeight
+		for i := range weights {
+			weights[i].Weight *= scale
+		}
 	}
 
 	if constraints.CashReserve > 0 {
@@ -689,15 +708,17 @@ func (o *Optimizer) ledoitWolfShrink(rm *returnMatrix, sample *mat.SymDense) *ma
 		}
 	}
 
-	delta := (pi - rho) / (T * gamma)
-	if delta < 0 {
-		delta = 0
-	}
-	if delta > 1 {
-		delta = 1
-	}
+	var delta float64
 	if gamma == 0 || T == 0 {
 		delta = 0
+	} else {
+		delta = (pi - rho) / (T * gamma)
+		if delta < 0 {
+			delta = 0
+		}
+		if delta > 1 {
+			delta = 1
+		}
 	}
 
 	shrunk := mat.NewSymDense(N, nil)
