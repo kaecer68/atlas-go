@@ -45,7 +45,7 @@ func NewYahooFinanceMacroProvider() *YahooFinanceMacroProvider {
 	return &YahooFinanceMacroProvider{
 		client:    httpclient.NewFactory().NewClient(15 * time.Second),
 		limiter:   yahooSharedLimiter,
-		bdiSymbol: "^BDI",
+		bdiSymbol: "BDI",
 	}
 }
 
@@ -67,7 +67,7 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 		"CL=F":      "oil",
 		"GC=F":      "gold",
 		"JPY=X":     "jpy",
-		"USD/TWD=X": "usd_twd",
+		"USDTWD=X":  "usd_twd",
 		y.bdiSymbol: "bdi",
 	}
 

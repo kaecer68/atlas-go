@@ -125,6 +125,16 @@ func (g *Gateway) HasChannel(channelID string) bool {
 	return err == nil
 }
 
+// Summary returns a concise channelID→status map for monitoring purposes.
+func (g *Gateway) Summary() map[string]string {
+	statuses := g.health.StatusSummary()
+	result := make(map[string]string, len(statuses))
+	for id, s := range statuses {
+		result[id] = s.Status
+	}
+	return result
+}
+
 // ChannelIDs returns all registered channel IDs.
 func (g *Gateway) ChannelIDs() []string {
 	return channelIDs()

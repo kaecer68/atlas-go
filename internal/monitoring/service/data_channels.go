@@ -83,7 +83,7 @@ func (s *DataChannelService) getHealthFromStore(channelID, apiKey string) (statu
 	}
 	rec := s.healthStore.Get(channelID)
 	if rec == nil {
-		return "unknown", "尚未執行健康檢查", ""
+		return "warn", "API Key 已設定，等待首次健康檢查", ""
 	}
 	return rec.Status, rec.LastFetchAt, rec.LastError
 }

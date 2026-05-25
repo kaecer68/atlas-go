@@ -30,9 +30,10 @@ func NewFugleChannelAdapter(client *marketdata.FugleClient) *FugleChannelAdapter
 	return &FugleChannelAdapter{client: client}
 }
 
-// Fetch retrieves a quote for 0050 (元大台灣50) as a representative sample.
+// Fetch retrieves a quote for 1476 (聚亨, Fugle test symbol) as a health check sample.
+// Uses the same symbol as HealthCheck() for API key compatibility.
 func (a *FugleChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
-	quote, err := a.client.GetQuote(ctx, "0050")
+	quote, err := a.client.GetQuote(ctx, "1476")
 	if err != nil {
 		return nil, fmt.Errorf("fugle fetch: %w", err)
 	}
