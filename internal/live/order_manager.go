@@ -101,18 +101,18 @@ func (m *OrderManager) Run(ctx context.Context, order domain.Order) error {
 	if m.riskGate != nil {
 		if err := m.riskGate.Check(ctx, order); err != nil {
 			if m.eventBus != nil {
-				m.eventBus.PublishOrderError(
-					"",
-					order.Symbol,
-					string(order.Side),
-					order.Price,
-					order.Quantity,
-					"risk_gate_blocked",
-					err.Error(),
-					1,
-					"blocked",
-				)
-			}
+			m.eventBus.PublishOrderError(
+				"",
+				order.Symbol,
+				string(order.Side),
+				order.Price,
+				order.Quantity,
+				"risk_gate_blocked",
+				err.Error(),
+				1,
+				"blocked",
+			)
+		}
 			return fmt.Errorf("risk gate blocked order for %s: %w", order.Symbol, err)
 		}
 	}
