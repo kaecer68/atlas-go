@@ -415,6 +415,11 @@ func run(args []string, deps appDeps) error {
 			if repo != nil {
 				system.SetRepository(repo)
 			}
+			if dashboard != nil {
+				system.SetDrawdownReporter(func(d portfolio.DrawdownResult) {
+					dashboard.SetLatestDrawdown(&d)
+				})
+			}
 			capitalCfg := domain.DefaultCapitalPhaseConfig()
 			capitalCfg.PhaseStartDate = time.Now().Add(-30 * 24 * time.Hour)
 			controller := risk.NewCapitalPhaseController(capitalCfg)
@@ -896,6 +901,11 @@ func run(args []string, deps appDeps) error {
 					if repo != nil {
 						system.SetRepository(repo)
 					}
+					if dashboard != nil {
+						system.SetDrawdownReporter(func(d portfolio.DrawdownResult) {
+							dashboard.SetLatestDrawdown(&d)
+						})
+					}
 
 					capitalCfg := domain.DefaultCapitalPhaseConfig()
 					capitalCfg.PhaseStartDate = nextClose.Add(-30 * 24 * time.Hour)
@@ -959,6 +969,11 @@ func run(args []string, deps appDeps) error {
 					if repo != nil {
 						system.SetRepository(repo)
 					}
+					if dashboard != nil {
+						system.SetDrawdownReporter(func(d portfolio.DrawdownResult) {
+							dashboard.SetLatestDrawdown(&d)
+						})
+					}
 					capitalCfg := domain.DefaultCapitalPhaseConfig()
 					capitalCfg.PhaseStartDate = time.Now().Add(-30 * 24 * time.Hour)
 					ctrl := risk.NewCapitalPhaseController(capitalCfg)
@@ -988,6 +1003,11 @@ func run(args []string, deps appDeps) error {
 					}
 					if repo != nil {
 						system.SetRepository(repo)
+					}
+					if dashboard != nil {
+						system.SetDrawdownReporter(func(d portfolio.DrawdownResult) {
+							dashboard.SetLatestDrawdown(&d)
+						})
 					}
 
 					candidate, err := system.NextExperimentCandidate()
