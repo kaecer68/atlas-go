@@ -3,24 +3,27 @@ package stress
 import (
 	"fmt"
 	"math"
+	"math/rand/v2"
+	"sort"
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/orchestrator"
-	"github.com/kaecer68/atlas-go/internal/sim"
 )
 
 // ScenarioResult holds the simulation outcome for a single scenario.
 type ScenarioResult struct {
-	ScenarioID       string
-	ScenarioName     string
-	TotalReturn      float64
-	MaxDrawdown      float64
-	SharpeRatio      float64
-	VaR95            float64
-	TradeCount       int
-	FinalRegime      domain.Regime
-	MomentumDisabled bool
+	ScenarioID             string
+	ScenarioName           string
+	TotalReturn            float64
+	MaxDrawdown            float64
+	SharpeRatio            float64
+	VaR95                  float64
+	TradeCount             int
+	FinalRegime            domain.Regime
+	MomentumDisabled       bool
+	RecoveryDays           int       // days from MDD trough back to prior peak (−1 if not recovered)
+	MaxConsecutiveLossDays int       // longest streak of negative daily returns
+	DailyValues            []float64 // V(t) path, normalized to V(0)=1.0
 }
 
 // Report aggregates results across all scenarios.
@@ -36,82 +39,227 @@ type Report struct {
 type Runner struct {
 	registry domain.AgentRegistry
 	policy   domain.ExecutionPolicy
-	plugins  *orchestrator.PluginRegistry
 }
 
 // NewRunner creates a stress test runner.
 func NewRunner(registry domain.AgentRegistry, policy domain.ExecutionPolicy) *Runner {
-	return &Runner{
-		registry: registry,
-		policy:   policy,
-		plugins:  orchestrator.NewPluginRegistry(),
-	}
+	return &Runner{registry: registry, policy: policy}
 }
 
-// WithPlugins attaches a custom plugin registry.
-func (r *Runner) WithPlugins(plugins *orchestrator.PluginRegistry) *Runner {
-	r.plugins = plugins
-	return r
-}
-
-// RunScenario executes a single scenario and returns the result.
+// RunScenario simulates a multi-day stress scenario using shock-decay macro conditions.
+//
+// For each day t=0..W−1:
+//  1. Compute decayed macro shock from scenario.Quotes
+//  2. Generate daily portfolio return from shock × symbol sensitivity
+//  3. Track cumulative value V(t)
+//
+// After the path is built, compute real metrics from V(t).
 func (r *Runner) RunScenario(scenario Scenario, stockQuotes []domain.Quote, recs []domain.Recommendation) ScenarioResult {
-	quotes := scenario.MergeQuotes(stockQuotes)
-	quoteMap := make(map[string]domain.Quote, len(quotes))
-	for _, q := range quotes {
-		quoteMap[q.Symbol] = q
+	W := scenario.WindowDays
+	if W < 1 {
+		W = 20
 	}
 
-	// Use scenario regime if available
-	regime := scenario.Regime
-	if regime == "" {
-		regime = domain.RegimeNeutral
+	// Build per-symbol return signs from recommendations.
+	symbolSign := make(map[string]float64)
+	for _, rec := range recs {
+		symbolSign[rec.Symbol] += float64(rec.Conviction) / 100.0
 	}
-
-	// Determine if momentum crash protection was triggered
-	momentumDisabled := false
-	for _, q := range scenario.Quotes {
-		if (q.Symbol == "VIX" || q.Symbol == "^VIX") && q.Last > 30 {
-			momentumDisabled = true
-			break
+	for sym, v := range symbolSign {
+		symbolSign[sym] = 1.0
+		if v < 0 {
+			symbolSign[sym] = -1.0
+		}
+	}
+	for _, q := range stockQuotes {
+		if _, ok := symbolSign[q.Symbol]; !ok {
+			symbolSign[q.Symbol] = -1.0
 		}
 	}
 
-	constraints := domain.SimulationConstraints{
-		StartingCash:                10000000,
-		MaxPositionWeight:           0.25,
-		MaxOpenPositions:            10,
-		MinTradableVolume:           1000,
-		MinRecommendationConviction: 0,
-		TransactionCostBPS:          1,
-		SlippageBPS:                 5,
-		ReserveCashFraction:         0.1,
+	goldSyms := map[string]bool{"GLD": true, "IAU": true, "00635U": true, "SLV": true}
+	vix := scenario.VIXLevel()
+	volScale := vix / 20.0
+	if volScale < 0.5 {
+		volScale = 0.5
 	}
 
-	engine := sim.NewEngine(constraints).WithSlippageModel(sim.DefaultSlippageModel())
+	n := len(stockQuotes)
+	values := make([]float64, W+1)
+	values[0] = 1.0
+	rng := rand.New(rand.NewPCG(42, 0))
 
-	result := engine.Run(regime, quotes, recs)
+	for t := 0; t < W; t++ {
+		decay := decayFactor(t, W)
+		dailyVol := volScale * decay * 0.06
+		// Base drift: risk-off → negative, risk-on → mild positive
+		baseDrift := -dailyVol * 0.5
+		if vix < 20 {
+			baseDrift = dailyVol * 0.1
+		}
 
-	// Calculate metrics from simulation state if available
-	// For single-day simulation, use basic metrics
-	portfolioValue := result.PortfolioValue
-	startingCash := constraints.StartingCash
-	totalReturn := 0.0
-	if startingCash > 0 {
-		totalReturn = (portfolioValue - startingCash) / startingCash
+		portRet := baseDrift
+		for i := 0; i < n; i++ {
+			sym := stockQuotes[i].Symbol
+			sign := symbolSign[sym]
+			if goldSyms[sym] {
+				sign = 1.0 // gold is safe-haven: inverted correlation
+				if vix < 25 {
+					sign = -0.5 // calm markets: gold drifts sideways
+				}
+			}
+			noise := boxMullerStress(rng) * dailyVol
+			portRet += (sign*dailyVol*0.02 + noise) / float64(n)
+		}
+
+		values[t+1] = values[t] * (1 + portRet)
 	}
+
+	mdd, troughDay := maxDrawdown(values)
+	sharpe := sharpeRatio(values)
+	vaR95 := historicalVaR(values, 0.95)
+	recovery := recoveryDays(values, troughDay)
+	consecutive := maxConsecutiveLossDays(values)
+
+	totalRet := values[W] - 1.0
 
 	return ScenarioResult{
-		ScenarioID:       scenario.ID,
-		ScenarioName:     scenario.Name,
-		TotalReturn:      totalReturn,
-		MaxDrawdown:      0, // Single day, no drawdown
-		SharpeRatio:      0, // Single day, no Sharpe
-		VaR95:            0, // Single day, no VaR
-		TradeCount:       len(result.Orders),
-		FinalRegime:      regime,
-		MomentumDisabled: momentumDisabled,
+		ScenarioID:             scenario.ID,
+		ScenarioName:           scenario.Name,
+		TotalReturn:            totalRet,
+		MaxDrawdown:            mdd,
+		SharpeRatio:            sharpe,
+		VaR95:                  vaR95,
+		TradeCount:             len(recs),
+		FinalRegime:            scenario.Regime,
+		MomentumDisabled:       scenario.VIXLevel() > 30,
+		RecoveryDays:           recovery,
+		MaxConsecutiveLossDays: consecutive,
+		DailyValues:            values,
 	}
+}
+
+// VIXLevel extracts the VIX value from scenario macro quotes.
+func (s Scenario) VIXLevel() float64 {
+	for _, q := range s.Quotes {
+		if q.Symbol == "VIX" || q.Symbol == "^VIX" {
+			return q.Last
+		}
+	}
+	return 20
+}
+
+// decayFactor computes exponential shock decay: e^(−λ·t).
+// λ = 0.15/day → shock at 20% after 10 days, 5% after 20 days.
+func decayFactor(t, W int) float64 {
+	const lambda = 0.15
+	if W <= 0 {
+		return 1.0
+	}
+	return math.Exp(-lambda * float64(t))
+}
+
+// maxDrawdown computes peak-to-trough drawdown from a value path.
+// Returns MDD and the day index of the trough.
+func maxDrawdown(values []float64) (float64, int) {
+	peak := values[0]
+	mdd := 0.0
+	troughDay := 0
+	for i, v := range values {
+		if v > peak {
+			peak = v
+		}
+		dd := (peak - v) / peak
+		if dd > mdd {
+			mdd = dd
+			troughDay = i
+		}
+	}
+	return mdd, troughDay
+}
+
+// sharpeRatio computes annualized Sharpe from daily returns.
+func sharpeRatio(values []float64) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+	returns := make([]float64, len(values)-1)
+	sum := 0.0
+	for i := 1; i < len(values); i++ {
+		r := (values[i] - values[i-1]) / values[i-1]
+		returns[i-1] = r
+		sum += r
+	}
+	mean := sum / float64(len(returns))
+	var ssq float64
+	for _, r := range returns {
+		ssq += (r - mean) * (r - mean)
+	}
+	std := math.Sqrt(ssq / float64(len(returns)))
+	if std < 1e-15 {
+		return 0
+	}
+	return (mean * 252) / (std * math.Sqrt(252))
+}
+
+// historicalVaR computes Value-at-Risk from the return distribution.
+func historicalVaR(values []float64, confidence float64) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+	returns := make([]float64, len(values)-1)
+	for i := 1; i < len(values); i++ {
+		returns[i-1] = (values[i] - values[i-1]) / values[i-1]
+	}
+	sort.Float64s(returns)
+	idx := int((1 - confidence) * float64(len(returns)))
+	if idx < 0 {
+		idx = 0
+	}
+	return -returns[idx]
+}
+
+// recoveryDays counts days from the trough until the portfolio recovers to the prior peak.
+// Returns −1 if it never recovers within the window.
+func recoveryDays(values []float64, troughDay int) int {
+	if troughDay < 0 || troughDay >= len(values) {
+		return -1
+	}
+	peakBefore := values[0]
+	for i := 0; i <= troughDay; i++ {
+		if values[i] > peakBefore {
+			peakBefore = values[i]
+		}
+	}
+	for d := troughDay + 1; d < len(values); d++ {
+		if values[d] >= peakBefore {
+			return d - troughDay
+		}
+	}
+	return -1
+}
+
+// maxConsecutiveLossDays returns the longest streak of negative daily returns.
+func maxConsecutiveLossDays(values []float64) int {
+	maxStreak, streak := 0, 0
+	for i := 1; i < len(values); i++ {
+		if values[i] < values[i-1] {
+			streak++
+			if streak > maxStreak {
+				maxStreak = streak
+			}
+		} else {
+			streak = 0
+		}
+	}
+	return maxStreak
+}
+
+// boxMullerStress generates a standard normal variate.
+func boxMullerStress(rng *rand.Rand) float64 {
+	u1 := rng.Float64()
+	u2 := rng.Float64()
+	return math.Sqrt(-2*math.Log(max(u1, 1e-10))) * math.Cos(2*math.Pi*u2)
 }
 
 // RunAll executes all built-in scenarios with the given stock quotes and recommendations.
@@ -126,10 +274,10 @@ func (r *Runner) RunAll(stockQuotes []domain.Quote, recs []domain.Recommendation
 		result := r.RunScenario(scenario, stockQuotes, recs)
 		results = append(results, result)
 
-		if math.Abs(result.MaxDrawdown) > math.Abs(worstDrawdown) {
+		if result.MaxDrawdown > worstDrawdown {
 			worstDrawdown = result.MaxDrawdown
 		}
-		if result.VaR95 < worstVaR {
+		if result.VaR95 > worstVaR {
 			worstVaR = result.VaR95
 		}
 		totalReturn += result.TotalReturn
@@ -159,11 +307,13 @@ func FormatReport(report Report) string {
 	var output strings.Builder
 	output.WriteString("=== Stress Test Report ===\n\n")
 	for _, r := range report.ScenarioResults {
-		fmt.Fprintf(&output, "Scenario: %s\n", r.ScenarioName)
+		fmt.Fprintf(&output, "Scenario: %s (%d days)\n", r.ScenarioName, len(r.DailyValues)-1)
 		fmt.Fprintf(&output, "  Return:     %.2f%%\n", r.TotalReturn*100)
-		fmt.Fprintf(&output, "  Drawdown:   %.2f%%\n", r.MaxDrawdown*100)
+		fmt.Fprintf(&output, "  Max DD:     %.2f%%\n", r.MaxDrawdown*100)
+		fmt.Fprintf(&output, "  Sharpe:     %.2f\n", r.SharpeRatio)
 		fmt.Fprintf(&output, "  VaR95:      %.2f%%\n", r.VaR95*100)
-		fmt.Fprintf(&output, "  Trades:     %d\n", r.TradeCount)
+		fmt.Fprintf(&output, "  Recov Days: %d\n", r.RecoveryDays)
+		fmt.Fprintf(&output, "  Consec Loss: %d days\n", r.MaxConsecutiveLossDays)
 		fmt.Fprintf(&output, "  Regime:     %s\n", r.FinalRegime)
 		if r.MomentumDisabled {
 			output.WriteString("  Momentum:   DISABLED (VIX > 30)\n")

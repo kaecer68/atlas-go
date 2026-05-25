@@ -13,8 +13,9 @@ type Scenario struct {
 	Name        string
 	Description string
 	Date        time.Time
-	Quotes      []domain.Quote // Key macro quotes (VIX, DXY, US10Y, etc.)
+	Quotes      []domain.Quote
 	Regime      domain.Regime
+	WindowDays  int // trading days to simulate (after scenario.Date)
 }
 
 // Built-in historical scenarios for Taiwan equity stress testing.
@@ -25,6 +26,7 @@ var (
 		Description: "March 2020: VIX spike to 80+, global market crash, liquidity freeze",
 		Date:        time.Date(2020, 3, 16, 0, 0, 0, 0, time.UTC),
 		Regime:      domain.RegimeRiskOff,
+		WindowDays:  40,
 		Quotes: []domain.Quote{
 			{Symbol: "VIX", Last: 82.7, IsTradable: true},
 			{Symbol: "DXY", Last: 99.0, Open: 96.0, IsTradable: true},
@@ -39,6 +41,7 @@ var (
 		Description: "June 2022: US10Y > 3%, tech selloff, QT begins",
 		Date:        time.Date(2022, 6, 15, 0, 0, 0, 0, time.UTC),
 		Regime:      domain.RegimeRiskOff,
+		WindowDays:  30,
 		Quotes: []domain.Quote{
 			{Symbol: "VIX", Last: 32.0, IsTradable: true},
 			{Symbol: "DXY", Last: 105.0, Open: 102.0, IsTradable: true},
@@ -53,6 +56,7 @@ var (
 		Description: "March 2024: AI capex surge, semiconductor euphoria, VIX complacent",
 		Date:        time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC),
 		Regime:      domain.RegimeRiskOn,
+		WindowDays:  20,
 		Quotes: []domain.Quote{
 			{Symbol: "VIX", Last: 14.0, IsTradable: true},
 			{Symbol: "DXY", Last: 104.0, Open: 103.5, IsTradable: true},
@@ -67,6 +71,7 @@ var (
 		Description: "August 2022: Pelosi visit, cross-strait tension, regional risk premium spike",
 		Date:        time.Date(2022, 8, 2, 0, 0, 0, 0, time.UTC),
 		Regime:      domain.RegimeRiskOff,
+		WindowDays:  15,
 		Quotes: []domain.Quote{
 			{Symbol: "VIX", Last: 26.0, IsTradable: true},
 			{Symbol: "DXY", Last: 106.0, Open: 105.0, IsTradable: true},
@@ -81,6 +86,7 @@ var (
 		Description: "January 2024: Balanced regime, VIX moderate, no extreme events",
 		Date:        time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
 		Regime:      domain.RegimeNeutral,
+		WindowDays:  20,
 		Quotes: []domain.Quote{
 			{Symbol: "VIX", Last: 18.0, IsTradable: true},
 			{Symbol: "DXY", Last: 103.0, Open: 102.8, IsTradable: true},
@@ -90,11 +96,9 @@ var (
 	}
 
 	ScenarioStagflation = Scenario{
-		ID:          "stagflation_2023",
-		Name:        "Stagflationary Shock",
-		Description: "Oct 2023: Oil spike to $95, US10Y > 5%, growth slows, VIX elevated",
-		Date:        time.Date(2023, 10, 19, 0, 0, 0, 0, time.UTC),
-		Regime:      domain.RegimeRiskOff,
+		ID:         "stagflation_2023",
+		Regime:     domain.RegimeRiskOff,
+		WindowDays: 20,
 		Quotes: []domain.Quote{
 			{Symbol: "VIX", Last: 22.0, IsTradable: true},
 			{Symbol: "DXY", Last: 106.5, Open: 106.0, IsTradable: true},
@@ -104,11 +108,9 @@ var (
 	}
 
 	ScenarioEMContagion = Scenario{
-		ID:          "em_contagion_2018",
-		Name:        "EM Contagion & Currency Crisis",
-		Description: "Aug 2018: Turkey/Argentina crisis, DXY surge, EM selloff, carry unwind",
-		Date:        time.Date(2018, 8, 13, 0, 0, 0, 0, time.UTC),
-		Regime:      domain.RegimeRiskOff,
+		ID:         "em_contagion_2018",
+		Regime:     domain.RegimeRiskOff,
+		WindowDays: 20,
 		Quotes: []domain.Quote{
 			{Symbol: "VIX", Last: 24.0, IsTradable: true},
 			{Symbol: "DXY", Last: 96.5, Open: 95.0, IsTradable: true},
@@ -118,11 +120,9 @@ var (
 	}
 
 	ScenarioLiquidityCrunch = Scenario{
-		ID:          "liquidity_crunch_2008",
-		Name:        "Global Liquidity Crunch",
-		Description: "Oct 2008: Lehman aftermath, VIX 80+, credit freeze, forced liquidation",
-		Date:        time.Date(2008, 10, 10, 0, 0, 0, 0, time.UTC),
-		Regime:      domain.RegimeRiskOff,
+		ID:         "liquidity_crunch_2008",
+		Regime:     domain.RegimeRiskOff,
+		WindowDays: 20,
 		Quotes: []domain.Quote{
 			{Symbol: "VIX", Last: 69.3, IsTradable: true},
 			{Symbol: "DXY", Last: 83.0, Open: 80.0, IsTradable: true},

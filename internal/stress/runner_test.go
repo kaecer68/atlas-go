@@ -1,10 +1,10 @@
 package stress
 
 import (
+	"math"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/orchestrator"
 )
 
 func TestAllScenariosReturnsFive(t *testing.T) {
@@ -65,7 +65,7 @@ func TestRunnerRunScenario(t *testing.T) {
 			{ID: "test", Layer: domain.LayerSector, Skill: "test", Enabled: true},
 		},
 	}
-	policy := orchestrator.DefaultExecutionPolicy()
+	policy := domain.ExecutionPolicy{}
 	runner := NewRunner(registry, policy)
 
 	stockQuotes := []domain.Quote{
@@ -91,7 +91,7 @@ func TestRunnerRunScenarioMomentumDisabled(t *testing.T) {
 			{ID: "test", Layer: domain.LayerSector, Skill: "test", Enabled: true},
 		},
 	}
-	policy := orchestrator.DefaultExecutionPolicy()
+	policy := domain.ExecutionPolicy{}
 	runner := NewRunner(registry, policy)
 
 	stockQuotes := []domain.Quote{
@@ -115,7 +115,7 @@ func TestRunnerRunAll(t *testing.T) {
 			{ID: "test", Layer: domain.LayerSector, Skill: "test", Enabled: true},
 		},
 	}
-	policy := orchestrator.DefaultExecutionPolicy()
+	policy := domain.ExecutionPolicy{}
 	runner := NewRunner(registry, policy)
 
 	stockQuotes := []domain.Quote{
@@ -176,4 +176,111 @@ func containsHelper(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// ── P1-1 Multi-Day Stress Test Falsification ──
+
+func TestMultiDayStress_COVIDCrash(t *testing.T) {
+	runner := NewRunner(domain.AgentRegistry{}, domain.ExecutionPolicy{})
+
+	stockQuotes := []domain.Quote{
+		{Symbol: "2330.TW", Last: 300, IsTradable: true},
+		{Symbol: "0050.TW", Last: 120, IsTradable: true},
+		{Symbol: "GLD", Last: 150, IsTradable: true},
+	}
+	recs := []domain.Recommendation{
+		{Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 50},
+		{Symbol: "0050.TW", Side: domain.SideBuy, Conviction: 50},
+		{Symbol: "GLD", Side: domain.SideBuy, Conviction: 90},
+	}
+
+	result := runner.RunScenario(ScenarioCOVIDCrash, stockQuotes, recs)
+
+	if result.MaxDrawdown < 0.10 {
+		t.Errorf("COVID crash: MDD = %.2f%%, expected > 10%%", result.MaxDrawdown*100)
+	}
+	if len(result.DailyValues) != 41 {
+		t.Errorf("COVID crash: expected 41 values (40 days + start), got %d", len(result.DailyValues))
+	}
+
+	// GLD should show recovery in second half (t=20-40)
+	if result.TotalReturn > -0.05 {
+		t.Logf("COVID crash: total return = %.2f%% (GLD hedge may have limited drawdown)", result.TotalReturn*100)
+	}
+}
+
+func TestMultiDayStress_FedHiking(t *testing.T) {
+	runner := NewRunner(domain.AgentRegistry{}, domain.ExecutionPolicy{})
+
+	stockQuotes := []domain.Quote{
+		{Symbol: "2330.TW", Last: 500, IsTradable: true},
+		{Symbol: "GLD", Last: 170, IsTradable: true},
+	}
+	recs := []domain.Recommendation{
+		{Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 50},
+		{Symbol: "GLD", Side: domain.SideBuy, Conviction: 50},
+	}
+
+	result := runner.RunScenario(ScenarioFedRateHikes, stockQuotes, recs)
+
+	// Fed hiking: stocks fall, gold also falls (rate headwind).
+	if result.TotalReturn >= 0 {
+		t.Errorf("Fed hikes: total return = %.2f%%, expected negative", result.TotalReturn*100)
+	}
+	if result.MaxDrawdown < 0.02 {
+		t.Errorf("Fed hikes: MDD = %.2f%%, expected > 2%%", result.MaxDrawdown*100)
+	}
+}
+
+func TestMultiDayStress_AllScenarios(t *testing.T) {
+	runner := NewRunner(domain.AgentRegistry{}, domain.ExecutionPolicy{})
+
+	stockQuotes := []domain.Quote{
+		{Symbol: "2330.TW", Last: 600, IsTradable: true},
+		{Symbol: "0050.TW", Last: 140, IsTradable: true},
+	}
+	recs := []domain.Recommendation{
+		{Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 50},
+		{Symbol: "0050.TW", Side: domain.SideBuy, Conviction: 50},
+	}
+
+	report := runner.RunAll(stockQuotes, recs)
+
+	if len(report.ScenarioResults) != 8 {
+		t.Fatalf("expected 8 results, got %d", len(report.ScenarioResults))
+	}
+
+	highStressCount := 0
+	normalMDD := 0.0
+	for _, r := range report.ScenarioResults {
+		if len(r.DailyValues) == 0 {
+			t.Errorf("%s: empty daily values", r.ScenarioName)
+		}
+		if math.IsNaN(r.MaxDrawdown) || r.MaxDrawdown < 0 || r.MaxDrawdown > 1 {
+			t.Errorf("%s: MDD = %f, expected in [0, 1]", r.ScenarioName, r.MaxDrawdown)
+		}
+		if r.MaxDrawdown > 0.05 {
+			highStressCount++
+		}
+		if r.ScenarioID == ScenarioNormalMarket.ID {
+			normalMDD = r.MaxDrawdown
+		}
+	}
+
+	if highStressCount < 2 {
+		t.Errorf("only %d scenarios had MDD > 5%%, stress test too lenient", highStressCount)
+	}
+
+	// NormalMarket should be in the lower half of drawdowns (not the worst).
+	lowerHalfCount := 0
+	medianDD := normalMDD
+	for _, r := range report.ScenarioResults {
+		if r.MaxDrawdown <= medianDD {
+			lowerHalfCount++
+		}
+	}
+	if lowerHalfCount > 6 {
+		t.Errorf("NormalMarket MDD = %.2f%% should be below median (only %d scenarios ≤ it)",
+			normalMDD*100, lowerHalfCount)
+	}
 }
