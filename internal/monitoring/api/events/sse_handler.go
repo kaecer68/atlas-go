@@ -108,6 +108,19 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "event: connected\ndata: %s\n\n", `{"client_id":"`+clientID+`"}`)
 	flusher.Flush()
 
+	// Send system status catchup so new clients know the current state immediately.
+	statusEvt := eventbus.BusEvent{
+		ID:          "status-" + clientID,
+		Type:        eventbus.EventSystemStart,
+		Timestamp:   time.Now(),
+		Description: "儀表板已連線 · 系統運行中 · 排程模擬將於每個交易日 13:30 自動執行",
+		Severity:    "info",
+	}
+	eventbus.EnrichEvent(&statusEvt)
+	data, _ := json.Marshal(statusEvt)
+	fmt.Fprintf(w, "event: %s\ndata: %s\n\n", statusEvt.Type, data)
+	flusher.Flush()
+
 	// Send any buffered narrative events for catchup.
 	lastNarrativeMutex.RLock()
 	buffered := narrativeBuffer
@@ -147,6 +160,7 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case event := <-client.events:
+			eventbus.EnrichEvent(&event)
 			data, err := json.Marshal(event)
 			if err != nil {
 				continue

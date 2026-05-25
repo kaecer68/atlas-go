@@ -85,13 +85,10 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 
 	replayPath := config.GetReplayDataPath(s.WorkDir)
 	replayOK := true
-	latestReplayDate := ""
-	ds, err := replay.LoadTWSEOpenDataCSV(replayPath)
+	latestReplayDate, err := replay.GetLatestDate(replayPath)
 	if err != nil {
 		replayOK = false
 		warnings = append(warnings, "replay 資料無法讀取："+err.Error())
-	} else if len(ds.Dates) > 0 {
-		latestReplayDate = ds.Dates[len(ds.Dates)-1].Format("2006-01-02")
 	}
 
 	lastWindow := ""
@@ -311,11 +308,40 @@ func checkReplayHealth(path string, now time.Time) (string, string) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		lines = append(lines, line)
-		lastLine = line
+		if strings.TrimSpace(line) != "" {
+			lastLine = line
+		}
 	}
 	if lastLine == "" {
 		return "error", "空檔案"
 	}
+
+	trimmed := strings.TrimSpace(lastLine)
+	if strings.HasPrefix(trimmed, "{") {
+		var row struct {
+			Date string `json:"date"`
+		}
+		if err := json.Unmarshal([]byte(lastLine), &row); err != nil {
+			return "error", "JSON 解析失敗"
+		}
+		if row.Date == "" {
+			return "error", "JSON 缺少 date 欄位"
+		}
+		t, err := time.Parse("2006-01-02", row.Date)
+		if err != nil {
+			return "error", "日期解析失敗"
+		}
+		age := now.Sub(t)
+		if age < 3*24*time.Hour {
+			return "ok", row.Date
+		}
+		if age < 14*24*time.Hour {
+			return "warn", row.Date
+		}
+		return "error", row.Date
+	}
+
+	// CSV format: date,col2,col3,...
 	parts := strings.Split(lastLine, ",")
 	if len(parts) == 0 {
 		return "error", "格式錯誤"

@@ -32,8 +32,8 @@ func TestHandleGetState(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if resp.State != "normal" {
-		t.Errorf("expected state 'normal', got %q", resp.State)
+	if resp.State != "uninitialized" {
+		t.Errorf("expected state 'uninitialized', got %q", resp.State)
 	}
 	if resp.Events == nil {
 		t.Error("expected events to be empty slice, got nil")

@@ -195,10 +195,101 @@ type NarrativeEventPayload struct {
 
 // BusEvent 总线事件
 type BusEvent struct {
-	ID        string    `json:"id"`
-	Type      EventType `json:"type"`
-	Timestamp time.Time `json:"timestamp"`
-	Payload   any       `json:"payload"`
+	ID          string    `json:"id"`
+	Type        EventType `json:"type"`
+	Timestamp   time.Time `json:"timestamp"`
+	Payload     any       `json:"payload"`
+	Description string    `json:"description,omitempty"`
+	Severity    string    `json:"severity,omitempty"` // "info", "warning", "error"
+}
+
+// EnrichEvent populates Description and Severity on an event that lacks them,
+// using the event type and payload to produce human-readable text suitable for
+// the dashboard "即時事件流".
+func EnrichEvent(ev *BusEvent) {
+	if ev.Description != "" {
+		return
+	}
+	ev.Description, ev.Severity = describeEvent(ev.Type, ev.Payload)
+}
+
+type eventDesc struct{ desc, severity string }
+
+var eventDescriptions = map[EventType]eventDesc{
+	EventSimulationStart:            {"模擬開始執行，系統正在調用 AI Agent 生成投資推薦", "info"},
+	EventSimulationComplete:         {"模擬執行完成，推薦已生成並通過風控審查", "info"},
+	EventSystemStart:                {"Atlas 系統啟動，開始監控市場與執行回測", "info"},
+	EventSystemError:                {"系統發生錯誤，請檢查日誌", "error"},
+	EventRegimeChange:               {"市場體制轉變，策略權重將自動調整", "warning"},
+	EventAgentRecommendation:        {"AI Agent 生成新的投資推薦", "info"},
+	EventAgentEvaluation:            {"AI Agent 績效評估完成", "info"},
+	EventAgentHealthChange:          {"AI Agent 健康狀態改變", "warning"},
+	EventGuardOutcome:               {"風控層（Guard）審查結果出爐", "info"},
+	EventDarwinianClamping:          {"Darwinian 權重夾制觸發，部分 Agent 權重被限制", "warning"},
+	EventConvictionClamping:         {"Conviction 信念夾制觸發，極端推薦被抑制", "warning"},
+	EventOrderPlaced:                {"訂單已提交至券商", "info"},
+	EventOrderFilled:                {"訂單成交", "info"},
+	EventOrderRejected:              {"訂單被拒絕", "error"},
+	EventOrderError:                 {"訂單處理發生錯誤", "error"},
+	EventStopLossTriggered:          {"停損觸發！部位已強制平倉", "error"},
+	EventTakeProfitTriggered:        {"停利觸發，部位已獲利了結", "info"},
+	EventRiskAlert:                  {"風險警報！請注意市場異常", "warning"},
+	EventPositionUpdate:             {"投資組合部位已更新", "info"},
+	EventPortfolioPnL:               {"投資組合損益更新", "info"},
+	EventMarketSnapshot:             {"市場快照已擷取", "info"},
+	EventMarketTick:                 {"市場即時報價更新", "info"},
+	EventMarketOpen:                 {"市場開盤，開始接收即時報價", "info"},
+	EventMarketClose:                {"市場收盤，停止即時交易", "info"},
+	EventExperimentInsufficientData: {"實驗數據不足，無法進行統計比較", "warning"},
+	EventNarrative:                  {"偵測到宏觀敘事事件", "warning"},
+}
+
+var narrativeThemeLabels = map[string]string{
+	"US_rates_up":                     "美國公債殖利率上升，資金可能回流美元資產，台股面臨外資流出壓力",
+	"JPY_carry_unwind":                "日圓套利平倉潮，全球風險偏好下降，注意高槓桿部位",
+	"geopolitical_risk_spike":         "地緣政治風險升溫，市場避險情緒上升，防禦型資產受青睞",
+	"oil_price_shock":                 "油價劇烈波動，影響通膨預期與運輸成本，注意相關產業衝擊",
+	"USD_TWD_volatility":              "台幣匯率波動加劇，反映出口競爭力變化與外資動向",
+	"semiconductor_downturn":          "半導體產業景氣放緩訊號，注意科技股風險",
+	"AI_capex_surge":                  "AI 資本支出持續強勁，科技供應鏈展望正面",
+	"retail_frenzy":                   "散戶融資餘額飆升，市場過熱風險升高，注意回檔風險",
+	"retail_fear":                     "散戶融資餘額低迷，市場情緒悲觀，可能是逢低佈局時機",
+	"retail_institutional_divergence": "散戶與法人方向分歧，市場可能即將轉向",
+}
+
+func describeEvent(t EventType, payload any) (string, string) {
+	if d, ok := eventDescriptions[t]; ok {
+		desc := enrichWithPayload(d.desc, t, payload)
+		return desc, d.severity
+	}
+	return string(t), "info"
+}
+
+func enrichWithPayload(base string, t EventType, payload any) string {
+	m, ok := payload.(map[string]any)
+	if !ok {
+		return base
+	}
+	switch t {
+	case EventRegimeChange:
+		if from, _ := m["from"].(string); from != "" {
+			if to, _ := m["to"].(string); to != "" {
+				return "市場體制轉變：" + from + " → " + to + "，策略權重將自動調整"
+			}
+		}
+	case EventNarrative:
+		if theme, _ := m["theme"].(string); theme != "" {
+			if label, ok := narrativeThemeLabels[theme]; ok {
+				return label
+			}
+		}
+		if theme, _ := m["Theme"].(string); theme != "" {
+			if label, ok := narrativeThemeLabels[theme]; ok {
+				return label
+			}
+		}
+	}
+	return base
 }
 
 // EventHandler 事件处理器函数类型
