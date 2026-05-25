@@ -886,3 +886,104 @@ func TestCovarianceOptimizer_HighVolatilityStress(t *testing.T) {
 		t.Errorf("stress fail: HHI = %f > 0.5 — insufficient diversification", hhi)
 	}
 }
+
+// TestCrossAssetIntegration verifies the full pipeline (FactorEngine → Optimizer)
+// handles a mixed portfolio of stocks, gold, and silver correctly.
+// Each asset class takes a different computation path:
+//
+//	2330.TW: stock factors (Momentum, Value, Quality) + no PM
+//	00635U: stock Value/Quality→0, IndustryCycle skipped, PM active
+//	SLV:    same as gold + IndustrialDemand/GoldSilver in silver formula
+//
+// Falsification: if a stock gets PM>0 or gold gets Value>0, the model is wrong.
+func TestCrossAssetIntegration(t *testing.T) {
+	symbols := []string{"2330.TW", "00635U", "SLV"}
+	hp := makeTestHistory(symbols, 65, func(sym string, day int) float64 {
+		base := 100.0
+		return base * (1 + 0.01*math.Sin(float64(day)*0.5))
+	})
+
+	o := NewOptimizer()
+	o.WithHistoricalPrices(hp)
+	o.SetConstraints(Constraints{
+		MaxPositionPct:   0.4,
+		CashReserve:      0.0,
+		MaxSectorPct:     1.0,
+		MaxTurnoverDaily: 1.0,
+	})
+	o.SetFactorWeights(map[FactorType]float64{
+		FactorMomentum: 0.0, FactorValue: 0.0, FactorQuality: 0.0,
+		FactorAgent: 1.0, FactorPreciousMetals: 1.0,
+	})
+
+	o.factorEngine.WithPreciousMetalsProvider(func(symbol string) *PreciousMetalsContext {
+		return &PreciousMetalsContext{
+			RealRate: 0.01,
+			VIX:      18,
+			DXY:      100,
+			CPIYoY:   0.02,
+		}
+	})
+
+	quotes := map[string]domain.Quote{
+		"2330.TW": {Symbol: "2330.TW", Open: 100, Last: 101, IsTradable: true},
+		"00635U":  {Symbol: "00635U", Open: 30, Last: 30.3, IsTradable: true},
+		"SLV":     {Symbol: "SLV", Open: 25, Last: 25.5, IsTradable: true},
+	}
+
+	recs := []domain.Recommendation{
+		{Agent: "a", Symbol: "2330.TW", Side: domain.SideBuy, Conviction: 50},
+		{Agent: "a", Symbol: "00635U", Side: domain.SideBuy, Conviction: 50},
+		{Agent: "a", Symbol: "SLV", Side: domain.SideBuy, Conviction: 50},
+	}
+
+	positions, err := o.Optimize(context.Background(), recs, quotes, 1_000_000)
+	if err != nil {
+		t.Fatalf("cross-asset optimize failed: %v", err)
+	}
+	if len(positions) != 3 {
+		t.Fatalf("expected 3 positions, got %d", len(positions))
+	}
+
+	var sumW float64
+	factorBySymbol := make(map[string]map[FactorType]float64)
+	for _, p := range positions {
+		sumW += p.TargetWeight
+		factorBySymbol[p.Symbol] = p.Factors
+	}
+
+	if math.Abs(sumW-1.0) > 0.001 {
+		t.Errorf("cross-asset fail: Σw = %f, expected 1.0", sumW)
+	}
+
+	// 2330.TW is a stock: must NOT have PreciousMetals factor.
+	f2330 := factorBySymbol["2330.TW"]
+	if _, hasPM := f2330[FactorPreciousMetals]; hasPM {
+		t.Errorf("cross-asset fail: 2330.TW (stock) has PreciousMetals = %f", f2330[FactorPreciousMetals])
+	}
+	// Stock should retain its Value/Quality path (0 when no fundamental data).
+	if f2330[FactorValue] != 0 {
+		t.Logf("2330.TW Value = %f (non-zero — good, fundamental data available)", f2330[FactorValue])
+	}
+	if f2330[FactorQuality] != 0 {
+		t.Logf("2330.TW Quality = %f (non-zero — good, fundamental data available)", f2330[FactorQuality])
+	}
+
+	// 00635U is gold: PreciousMetals active, stock Value/Quality must be zero.
+	fGold := factorBySymbol["00635U"]
+	if fGold[FactorValue] != 0 {
+		t.Errorf("cross-asset fail: 00635U (gold) Value = %f, expected 0", fGold[FactorValue])
+	}
+	if fGold[FactorQuality] != 0 {
+		t.Errorf("cross-asset fail: 00635U (gold) Quality = %f, expected 0", fGold[FactorQuality])
+	}
+	if _, hasPM := fGold[FactorPreciousMetals]; !hasPM {
+		t.Errorf("cross-asset fail: 00635U (gold) missing PreciousMetals factor")
+	}
+
+	// SLV is silver: should have PreciousMetals.
+	fSilver := factorBySymbol["SLV"]
+	if _, hasPM := fSilver[FactorPreciousMetals]; !hasPM {
+		t.Errorf("cross-asset fail: SLV (silver) missing PreciousMetals factor")
+	}
+}
