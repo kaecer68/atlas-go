@@ -16,14 +16,15 @@ import (
 type FactorType string
 
 const (
-	FactorMomentum      FactorType = "momentum"
-	FactorValue         FactorType = "value"
-	FactorQuality       FactorType = "quality"
-	FactorAgent         FactorType = "agent"
-	FactorInstSent      FactorType = "institutional_sentiment"
-	FactorLiquidity     FactorType = "liquidity"
-	FactorNarrative     FactorType = "narrative"
-	FactorIndustryCycle FactorType = "industry_cycle"
+	FactorMomentum       FactorType = "momentum"
+	FactorValue          FactorType = "value"
+	FactorQuality        FactorType = "quality"
+	FactorAgent          FactorType = "agent"
+	FactorInstSent       FactorType = "institutional_sentiment"
+	FactorLiquidity      FactorType = "liquidity"
+	FactorNarrative      FactorType = "narrative"
+	FactorIndustryCycle  FactorType = "industry_cycle"
+	FactorPreciousMetals FactorType = "precious_metals"
 )
 
 // FactorScore 因子评分
@@ -233,16 +234,17 @@ func (o *Optimizer) aggregateRecommendations(
 
 // calculateMultiFactorScores 计算多因子评分
 type symbolScore struct {
-	Symbol        string
-	Side          domain.Side
-	Momentum      float64
-	Value         float64
-	Quality       float64
-	Agent         float64
-	Narrative     float64
-	IndustryCycle float64
-	Total         float64
-	Agents        []string
+	Symbol         string
+	Side           domain.Side
+	Momentum       float64
+	Value          float64
+	Quality        float64
+	Agent          float64
+	Narrative      float64
+	IndustryCycle  float64
+	PreciousMetals float64
+	Total          float64
+	Agents         []string
 }
 
 func (o *Optimizer) calculateMultiFactorScores(
@@ -286,6 +288,7 @@ func (o *Optimizer) calculateMultiFactorScores(
 		momentumScore := o.factorEngine.CalculateMomentumScore(symbol, quotes)
 		valueScore := o.factorEngine.CalculateValueScore(symbol, quotes)
 		qualityScore := o.factorEngine.CalculateQualityScore(symbol, quotes)
+		pmScore := o.factorEngine.CalculatePreciousMetalsScore(symbol, quotes).Score
 
 		var narrativeScore, industryCycleScore float64
 		o.mu.RLock()
@@ -301,9 +304,12 @@ func (o *Optimizer) calculateMultiFactorScores(
 					narrativeScore = nfs.Score
 				}
 			}
-			if iclProv != nil {
-				if ics := iclProv(symbol); ics != nil {
-					industryCycleScore = ics.Score
+			// Industry cycle does not apply to precious metals.
+			if isPM := fe.IsPreciousMetal(symbol); !isPM {
+				if iclProv != nil {
+					if ics := iclProv(symbol); ics != nil {
+						industryCycleScore = ics.Score
+					}
 				}
 			}
 		}
@@ -318,18 +324,22 @@ func (o *Optimizer) calculateMultiFactorScores(
 		if industryCycleScore != 0 {
 			totalScore += industryCycleScore * factorWeights[FactorIndustryCycle]
 		}
+		if pmScore != 0 {
+			totalScore += pmScore * factorWeights[FactorPreciousMetals]
+		}
 
 		scores[key] = &symbolScore{
-			Symbol:        symbol,
-			Side:          side,
-			Momentum:      momentumScore,
-			Value:         valueScore,
-			Quality:       qualityScore,
-			Agent:         agentScore,
-			Narrative:     narrativeScore,
-			IndustryCycle: industryCycleScore,
-			Total:         totalScore,
-			Agents:        agents,
+			Symbol:         symbol,
+			Side:           side,
+			Momentum:       momentumScore,
+			Value:          valueScore,
+			Quality:        qualityScore,
+			Agent:          agentScore,
+			Narrative:      narrativeScore,
+			IndustryCycle:  industryCycleScore,
+			PreciousMetals: pmScore,
+			Total:          totalScore,
+			Agents:         agents,
 		}
 	}
 
