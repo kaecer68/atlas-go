@@ -551,6 +551,9 @@ func (o *Optimizer) buildPositions(
 		if score.IndustryCycle != 0 {
 			factors[FactorIndustryCycle] = score.IndustryCycle
 		}
+		if score.PreciousMetals != 0 {
+			factors[FactorPreciousMetals] = score.PreciousMetals
+		}
 
 		positions = append(positions, OptimizedPosition{
 			Symbol:       w.Symbol,
