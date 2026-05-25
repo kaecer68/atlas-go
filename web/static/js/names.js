@@ -168,6 +168,7 @@ export const SECTOR_NAME_MAP = {
   'financials': '金融',
   'shipping': '航運',
   'leo_satellite': '低軌衛星',
+  'mining': '礦業/貴金屬',
   'high_dividend': '高股息',
   'etf_rotation': 'ETF 輪動',
   'small_cap': '小型股',

@@ -221,7 +221,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "半導體",
 		NameEN:               "Semiconductor",
 		Level:                Level1,
-		Weight:               0.23,
+		Weight:               0.22,
 		GeographicExposure:   ExposureExport,
 		Cyclicality:          CyclicalityHigh,
 		TechnologyIntensity:  TechIntensityHigh,
@@ -236,7 +236,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "AI供應鏈",
 		NameEN:               "AI Supply Chain",
 		Level:                Level1,
-		Weight:               0.18,
+		Weight:               0.17,
 		GeographicExposure:   ExposureExport,
 		Cyclicality:          CyclicalityHigh,
 		TechnologyIntensity:  TechIntensityHigh,
@@ -251,7 +251,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "機器人",
 		NameEN:               "Robotics",
 		Level:                Level1,
-		Weight:               0.07,
+		Weight:               0.06,
 		GeographicExposure:   ExposureExport,
 		Cyclicality:          CyclicalityMedium,
 		TechnologyIntensity:  TechIntensityHigh,
@@ -281,7 +281,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "航運",
 		NameEN:               "Shipping",
 		Level:                Level1,
-		Weight:               0.09,
+		Weight:               0.08,
 		GeographicExposure:   ExposureMixed,
 		Cyclicality:          CyclicalityHigh,
 		TechnologyIntensity:  TechIntensityLow,
@@ -335,7 +335,22 @@ func DefaultClassification() *ClassificationTree {
 		Description:          "食品飲料、紡織成衣、百貨零售、觀光旅遊",
 	})
 
-	// 9. Industrial
+	// 9. Mining & Precious Metals
+	tree.AddSegment(&IndustrySegment{
+		ID:                   "mining",
+		Name:                 "礦業/貴金屬",
+		NameEN:               "Mining & Precious Metals",
+		Level:                Level1,
+		Weight:               0.05,
+		GeographicExposure:   ExposureMixed,
+		Cyclicality:          CyclicalityHigh,
+		TechnologyIntensity:  TechIntensityMedium,
+		CapitalIntensity:     CapIntensityHigh,
+		RepresentativeStocks: []string{"2009.TW", "8390.TW", "9955.TW", "1608.TW"},
+		Description:          "貴金屬回收、銅工業、稀土與特殊金屬，半導體與電子工業上游關鍵材料，地緣政治避險資產",
+	})
+
+	// 10. Industrial
 	tree.AddSegment(&IndustrySegment{
 		ID:                   "industrial",
 		Name:                 "工業/製造",
@@ -355,7 +370,7 @@ func DefaultClassification() *ClassificationTree {
 		Name:                 "低軌衛星",
 		NameEN:               "LEO Satellite",
 		Level:                Level1,
-		Weight:               0.06,
+		Weight:               0.05,
 		GeographicExposure:   ExposureExport,
 		Cyclicality:          CyclicalityHigh,
 		TechnologyIntensity:  TechIntensityHigh,
@@ -373,6 +388,7 @@ func DefaultClassification() *ClassificationTree {
 	addEnergySubIndustries(tree)
 	addElectronicsSubIndustries(tree)
 	addConsumerSubIndustries(tree)
+	addMiningSubIndustries(tree)
 	addIndustrialSubIndustries(tree)
 	addLEOSatelliteSubIndustries(tree)
 
@@ -861,6 +877,64 @@ func addLEOSatelliteSubIndustries(tree *ClassificationTree) {
 		TechnologyIntensity:  TechIntensityHigh,
 		CapitalIntensity:     CapIntensityMedium,
 		RepresentativeStocks: []string{"7717.TW", "3138.TW"},
+	})
+}
+
+func addMiningSubIndustries(tree *ClassificationTree) {
+	tree.AddSegment(&IndustrySegment{
+		ID:                   "precious_metals_recycling",
+		Name:                 "貴金屬回收",
+		NameEN:               "Precious Metals Recycling",
+		Level:                Level2,
+		ParentID:             "mining",
+		Weight:               0.30,
+		GeographicExposure:   ExposureMixed,
+		Cyclicality:          CyclicalityHigh,
+		TechnologyIntensity:  TechIntensityMedium,
+		CapitalIntensity:     CapIntensityMedium,
+		RepresentativeStocks: []string{"8390.TW", "9955.TW"},
+	})
+
+	tree.AddSegment(&IndustrySegment{
+		ID:                   "copper_industry",
+		Name:                 "銅工業",
+		NameEN:               "Copper Industry",
+		Level:                Level2,
+		ParentID:             "mining",
+		Weight:               0.30,
+		GeographicExposure:   ExposureMixed,
+		Cyclicality:          CyclicalityHigh,
+		TechnologyIntensity:  TechIntensityMedium,
+		CapitalIntensity:     CapIntensityHigh,
+		RepresentativeStocks: []string{"2009.TW", "1608.TW"},
+	})
+
+	tree.AddSegment(&IndustrySegment{
+		ID:                   "rare_earth_specialty",
+		Name:                 "稀土/特殊金屬",
+		NameEN:               "Rare Earth & Specialty Metals",
+		Level:                Level2,
+		ParentID:             "mining",
+		Weight:               0.20,
+		GeographicExposure:   ExposureMixed,
+		Cyclicality:          CyclicalityHigh,
+		TechnologyIntensity:  TechIntensityHigh,
+		CapitalIntensity:     CapIntensityHigh,
+		RepresentativeStocks: []string{},
+	})
+
+	tree.AddSegment(&IndustrySegment{
+		ID:                   "metal_processing",
+		Name:                 "金屬加工",
+		NameEN:               "Metal Processing",
+		Level:                Level2,
+		ParentID:             "mining",
+		Weight:               0.20,
+		GeographicExposure:   ExposureExport,
+		Cyclicality:          CyclicalityMedium,
+		TechnologyIntensity:  TechIntensityMedium,
+		CapitalIntensity:     CapIntensityHigh,
+		RepresentativeStocks: []string{},
 	})
 }
 

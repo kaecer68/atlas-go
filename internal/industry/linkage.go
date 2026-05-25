@@ -524,7 +524,7 @@ func DefaultSupplyChainGraph() *SupplyChainGraph {
 		IndustryID:   "cooling",
 		Tier:         2,
 		UpstreamOf:   []string{"ai_supply_chain", "server_assembly"},
-		DownstreamOf: []string{"electronics", "metals"},
+		DownstreamOf: []string{"electronics", "mining"},
 		KeyMaterials: []string{"copper", "aluminum", "coolant"},
 	})
 
@@ -532,7 +532,7 @@ func DefaultSupplyChainGraph() *SupplyChainGraph {
 		IndustryID:   "electronics",
 		Tier:         2,
 		UpstreamOf:   []string{"ai_supply_chain", "consumer", "industrial"},
-		DownstreamOf: []string{"semiconductor", "metals", "chemicals", "financials"},
+		DownstreamOf: []string{"semiconductor", "mining", "chemicals", "financials"},
 		KeyMaterials: []string{"chips", "passive_components", "connectors"},
 	})
 
@@ -540,7 +540,7 @@ func DefaultSupplyChainGraph() *SupplyChainGraph {
 		IndustryID:   "robotics",
 		Tier:         1,
 		UpstreamOf:   []string{"industrial", "consumer"},
-		DownstreamOf: []string{"electronics", "metals", "software", "financials"},
+		DownstreamOf: []string{"electronics", "mining", "software", "financials"},
 		KeyMaterials: []string{"servo_motors", "reducers", "controllers", "sensors"},
 	})
 
@@ -584,6 +584,14 @@ func DefaultSupplyChainGraph() *SupplyChainGraph {
 		KeyMaterials: []string{"retail", "food", "durable_goods"},
 	})
 
+	graph.AddNode(&SupplyChainNode{
+		IndustryID:   "mining",
+		Tier:         2,
+		UpstreamOf:   []string{"semiconductor", "electronics", "ai_supply_chain", "cooling", "robotics", "industrial"},
+		DownstreamOf: []string{"energy", "shipping", "financials"},
+		KeyMaterials: []string{"gold", "silver", "copper", "rare_earth", "platinum"},
+	})
+
 	return graph
 }
 
@@ -622,6 +630,16 @@ func DefaultCorrelationMatrix() *CorrelationMatrix {
 	// Consumer correlations
 	cm.UpdateCorrelation("consumer", "industrial", 0.20)
 	cm.UpdateCorrelation("consumer", "energy", 0.15)
+
+	cm.UpdateCorrelation("mining", "semiconductor", 0.55)
+	cm.UpdateCorrelation("mining", "ai_supply_chain", 0.50)
+	cm.UpdateCorrelation("mining", "electronics", 0.60)
+	cm.UpdateCorrelation("mining", "robotics", 0.45)
+	cm.UpdateCorrelation("mining", "industrial", 0.40)
+	cm.UpdateCorrelation("mining", "energy", 0.35)
+	cm.UpdateCorrelation("mining", "financials", 0.30)
+	cm.UpdateCorrelation("mining", "shipping", 0.25)
+	cm.UpdateCorrelation("mining", "consumer", 0.10)
 
 	return cm
 }
