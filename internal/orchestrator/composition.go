@@ -72,19 +72,21 @@ func buildFactorEngine(runtimeParams *portfolio.RuntimeParameters, macroSnap *ma
 	}
 
 	// P3-1: Wire precious metals macro context provider using live snapshot data.
-	// The closure captures macroSnap by pointer so it reads the latest values at scoring time.
-	// CPIYoY is estimated at 2.5% (long-run inflation target) until a live CPI source is added.
+	// CPIYoY uses live snapshot data when available; falls back to config parameter.
 	pmProvider := func(symbol string) *portfolio.PreciousMetalsContext {
 		if macroSnap == nil || macroSnap.RecordedAt == 0 {
 			return nil
 		}
-		// Real rate = US10Y nominal yield − estimated inflation expectation
-		realRate := macroSnap.US10Y.Value - 2.5
+		cpiYoY := config.GetParametersConfig().Narrative.InflationEstimate.Value
+		if macroSnap.CPIYoY.Symbol != "" && macroSnap.CPIYoY.Value != 0 {
+			cpiYoY = macroSnap.CPIYoY.Value
+		}
+		realRate := macroSnap.US10Y.Value - cpiYoY
 		return &portfolio.PreciousMetalsContext{
 			RealRate: realRate,
 			VIX:      macroSnap.VIX.Value,
 			DXY:      macroSnap.DXY.Value,
-			CPIYoY:   2.5,
+			CPIYoY:   cpiYoY,
 		}
 	}
 

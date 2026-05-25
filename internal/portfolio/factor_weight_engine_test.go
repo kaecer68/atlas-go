@@ -1,7 +1,6 @@
 package portfolio
 
 import (
-	"math"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -218,20 +217,15 @@ func TestFactorWeightEngine_ApplyStrategy_Conservative(t *testing.T) {
 
 	weights := engine.GetWeights("")
 
-	// Current behavior: ApplyStrategy stores in eventWeights but GetWeights
-	// only reads eventWeights for entries in activeEvents (which has no
-	// "strategy_adjustment" entry), so weights are unchanged.
-	// Use epsilon comparison because maps.Copy iteration order is non-deterministic
-	// and can produce ~5e-17 floating-point drift between successive calls.
-	eps := 1e-10
-	if math.Abs(weights[FactorMomentum]-baseWeights[FactorMomentum]) > eps {
-		t.Errorf("conservative strategy should not change momentum yet (bug: adjustment not read), got %.10f want %.10f", weights[FactorMomentum], baseWeights[FactorMomentum])
+	// Conservative: +Value, +Quality, -Momentum
+	if weights[FactorValue] <= baseWeights[FactorValue] {
+		t.Errorf("conservative strategy should boost value, got %.4f (baseline %.4f)", weights[FactorValue], baseWeights[FactorValue])
 	}
-	if math.Abs(weights[FactorQuality]-baseWeights[FactorQuality]) > eps {
-		t.Errorf("conservative strategy should not change quality yet (bug: adjustment not read), got %.10f want %.10f", weights[FactorQuality], baseWeights[FactorQuality])
+	if weights[FactorQuality] <= baseWeights[FactorQuality] {
+		t.Errorf("conservative strategy should boost quality, got %.4f (baseline %.4f)", weights[FactorQuality], baseWeights[FactorQuality])
 	}
-	if math.Abs(weights[FactorValue]-baseWeights[FactorValue]) > eps {
-		t.Errorf("conservative strategy should not change value yet (bug: adjustment not read), got %.10f want %.10f", weights[FactorValue], baseWeights[FactorValue])
+	if weights[FactorMomentum] >= baseWeights[FactorMomentum] {
+		t.Errorf("conservative strategy should reduce momentum, got %.4f (baseline %.4f)", weights[FactorMomentum], baseWeights[FactorMomentum])
 	}
 }
 
@@ -245,14 +239,18 @@ func TestFactorWeightEngine_ApplyStrategy_Aggressive(t *testing.T) {
 
 	weights := engine.GetWeights("")
 
-	// Current behavior: ApplyStrategy stores in eventWeights but GetWeights
-	// only reads eventWeights for entries in activeEvents, so weights unchanged.
-	eps := 1e-10
-	if math.Abs(weights[FactorMomentum]-baseWeights[FactorMomentum]) > eps {
-		t.Errorf("aggressive strategy should not change momentum yet (bug: adjustment not read), got %.10f want %.10f", weights[FactorMomentum], baseWeights[FactorMomentum])
+	// Aggressive: +Momentum, +InstSent, -Value, -Quality
+	if weights[FactorMomentum] <= baseWeights[FactorMomentum] {
+		t.Errorf("aggressive strategy should boost momentum, got %.4f (baseline %.4f)", weights[FactorMomentum], baseWeights[FactorMomentum])
 	}
-	if math.Abs(weights[FactorQuality]-baseWeights[FactorQuality]) > eps {
-		t.Errorf("aggressive strategy should not change quality yet (bug: adjustment not read), got %.10f want %.10f", weights[FactorQuality], baseWeights[FactorQuality])
+	if weights[FactorInstSent] <= baseWeights[FactorInstSent] {
+		t.Errorf("aggressive strategy should boost institutional sentiment, got %.4f (baseline %.4f)", weights[FactorInstSent], baseWeights[FactorInstSent])
+	}
+	if weights[FactorValue] >= baseWeights[FactorValue] {
+		t.Errorf("aggressive strategy should reduce value, got %.4f (baseline %.4f)", weights[FactorValue], baseWeights[FactorValue])
+	}
+	if weights[FactorQuality] >= baseWeights[FactorQuality] {
+		t.Errorf("aggressive strategy should reduce quality, got %.4f (baseline %.4f)", weights[FactorQuality], baseWeights[FactorQuality])
 	}
 }
 

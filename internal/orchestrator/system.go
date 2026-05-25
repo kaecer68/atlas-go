@@ -101,11 +101,17 @@ func (s *System) SetEventBus(eventBus *eventbus.ChannelEventBus) {
 	s.Risk().eventBus = eventBus
 }
 
+// SetDrawdownReporter registers a callback for drawdown simulation results.
+func (s *System) SetDrawdownReporter(fn func(portfolio.DrawdownResult)) {
+	s.drawdownReporter = fn
+}
+
 // System orchestrates the full simulation loop via a SystemCore and a PluginHost.
 type System struct {
 	*SystemCore
-	host          *PluginHost
-	macroSnapshot *marketdata.MacroDataSnapshot
+	host             *PluginHost
+	macroSnapshot    *marketdata.MacroDataSnapshot
+	drawdownReporter func(portfolio.DrawdownResult)
 }
 
 // NewSystem builds a fully-wired System with an internally-created EventBus.
@@ -222,6 +228,9 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	vix := vixFromQuotes(quotes)
 	if s.strat.strategyAllocator != nil {
 		mix := s.strat.strategyAllocator.Allocate(regime, vix)
+		if s.Port().factorWeightEngine != nil {
+			s.Port().factorWeightEngine.ApplyStrategyMix(mix, s.strat.strategyRegistry)
+		}
 		var topStrategy *strategy.Strategy
 		var topWeight float64
 		for name, w := range mix {
@@ -232,13 +241,8 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 				}
 			}
 		}
-		if topStrategy != nil {
-			if s.Port().factorWeightEngine != nil {
-				s.Port().factorWeightEngine.ApplyStrategy(topStrategy)
-			}
-			if s.strat.thresholdEngine != nil {
-				s.strat.thresholdEngine.SetRiskAppetite(sim.RiskAppetite(topStrategy.RiskAppetite))
-			}
+		if topStrategy != nil && s.strat.thresholdEngine != nil {
+			s.strat.thresholdEngine.SetRiskAppetite(sim.RiskAppetite(topStrategy.RiskAppetite))
 		}
 	} else if s.strat.strategySelector != nil {
 		selectedStrategy, err := s.strat.strategySelector.Select(
@@ -282,6 +286,9 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 			logging.FFloat64("max_drawdown", ddResult.MaxDrawdown),
 			logging.FFloat64("var_95", ddResult.VaR95),
 			logging.FStr("session", s.Sim().session.ID))
+		if s.drawdownReporter != nil {
+			s.drawdownReporter(ddResult)
+		}
 	}
 	result.GuardOutcomes = guardOutcomes
 	if s.Risk().eventBus != nil {
@@ -438,6 +445,9 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	vix := vixFromQuotes(quotes)
 	if s.strat.strategyAllocator != nil {
 		mix := s.strat.strategyAllocator.Allocate(regime, vix)
+		if s.Port().factorWeightEngine != nil {
+			s.Port().factorWeightEngine.ApplyStrategyMix(mix, s.strat.strategyRegistry)
+		}
 		var topStrategy *strategy.Strategy
 		var topWeight float64
 		for name, w := range mix {
@@ -448,13 +458,8 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 				}
 			}
 		}
-		if topStrategy != nil {
-			if s.Port().factorWeightEngine != nil {
-				s.Port().factorWeightEngine.ApplyStrategy(topStrategy)
-			}
-			if s.strat.thresholdEngine != nil {
-				s.strat.thresholdEngine.SetRiskAppetite(sim.RiskAppetite(topStrategy.RiskAppetite))
-			}
+		if topStrategy != nil && s.strat.thresholdEngine != nil {
+			s.strat.thresholdEngine.SetRiskAppetite(sim.RiskAppetite(topStrategy.RiskAppetite))
 		}
 	} else if s.strat.strategySelector != nil {
 		selectedStrategy, err := s.strat.strategySelector.Select(
