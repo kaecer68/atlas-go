@@ -300,7 +300,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 					Timestamp:   e.Timestamp,
 				}
 			}
-		go s.Risk().eventBus.PublishDarwinianClamping(payloads)
+			go s.Risk().eventBus.PublishDarwinianClamping(payloads)
 			if s.Risk().clampingLogger != nil {
 				for _, p := range payloads {
 					s.Risk().clampingLogger.Append(p)
@@ -475,7 +475,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 					Timestamp:   e.Timestamp,
 				}
 			}
-		go s.Risk().eventBus.PublishDarwinianClamping(payloads)
+			go s.Risk().eventBus.PublishDarwinianClamping(payloads)
 			if s.Risk().clampingLogger != nil {
 				for _, p := range payloads {
 					s.Risk().clampingLogger.Append(p)

@@ -372,137 +372,137 @@ func (b *ChannelEventBus) Publish(event BusEvent) {
 
 // PublishMarketSnapshot 发布市场快照事件（便捷方法）
 func (b *ChannelEventBus) PublishMarketSnapshot(quote domain.Quote) {
-    b.Publish(BusEvent{
-    		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-    		Type:      EventMarketSnapshot,
-    		Timestamp: time.Now(),
-    		Payload: MarketEventPayload{
-    			Symbol:    quote.Symbol,
-    			Quote:     quote,
-    			Timestamp: time.Now(),
-    		},
-    	})
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventMarketSnapshot,
+		Timestamp: time.Now(),
+		Payload: MarketEventPayload{
+			Symbol:    quote.Symbol,
+			Quote:     quote,
+			Timestamp: time.Now(),
+		},
+	})
 }
 
 // PublishSimulationStart 发布模擬開始事件
 func (b *ChannelEventBus) PublishSimulationStart(sessionID string, asOf time.Time) {
-    b.Publish(BusEvent{
-    		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-    		Type:      EventSimulationStart,
-    		Timestamp: time.Now(),
-    		Payload: map[string]any{
-    			"session_id": sessionID,
-    			"as_of":      asOf.Format("2006-01-02"),
-    		},
-    	})
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventSimulationStart,
+		Timestamp: time.Now(),
+		Payload: map[string]any{
+			"session_id": sessionID,
+			"as_of":      asOf.Format("2006-01-02"),
+		},
+	})
 }
 
 // PublishSimulationComplete 发布模擬完成事件
 func (b *ChannelEventBus) PublishSimulationComplete(sessionID string, portfolioValue float64, orderCount, positionCount int) {
-    b.Publish(BusEvent{
-    		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-    		Type:      EventSimulationComplete,
-    		Timestamp: time.Now(),
-    		Payload: map[string]any{
-    			"session_id":      sessionID,
-    			"portfolio_value": portfolioValue,
-    			"order_count":     orderCount,
-    			"position_count":  positionCount,
-    		},
-    	})
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventSimulationComplete,
+		Timestamp: time.Now(),
+		Payload: map[string]any{
+			"session_id":      sessionID,
+			"portfolio_value": portfolioValue,
+			"order_count":     orderCount,
+			"position_count":  positionCount,
+		},
+	})
 }
 
 // PublishRegimeChange 发布市场状态变更事件
 func (b *ChannelEventBus) PublishRegimeChange(oldRegime, newRegime domain.Regime, confidence float64, determinedBy string) {
-    b.Publish(BusEvent{
-    		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-    		Type:      EventRegimeChange,
-    		Timestamp: time.Now(),
-    		Payload: RegimeEventPayload{
-    			OldRegime:    oldRegime,
-    			NewRegime:    newRegime,
-    			Confidence:   confidence,
-    			DeterminedBy: determinedBy,
-    		},
-    	})
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventRegimeChange,
+		Timestamp: time.Now(),
+		Payload: RegimeEventPayload{
+			OldRegime:    oldRegime,
+			NewRegime:    newRegime,
+			Confidence:   confidence,
+			DeterminedBy: determinedBy,
+		},
+	})
 }
 
 // PublishPositionUpdate 发布持仓更新事件
 func (b *ChannelEventBus) PublishPositionUpdate(symbol string, position domain.Position, changeType string) {
-    b.Publish(BusEvent{
-    		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-    		Type:      EventPositionUpdate,
-    		Timestamp: time.Now(),
-    		Payload: PositionEventPayload{
-    			Symbol:     symbol,
-    			Position:   position,
-    			ChangeType: changeType,
-    		},
-    	})
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventPositionUpdate,
+		Timestamp: time.Now(),
+		Payload: PositionEventPayload{
+			Symbol:     symbol,
+			Position:   position,
+			ChangeType: changeType,
+		},
+	})
 }
 
 // PublishRecommendation 发布 Agent 推荐事件
 func (b *ChannelEventBus) PublishRecommendation(agent string, recommendations []domain.Recommendation) {
-    b.Publish(BusEvent{
-    		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-    		Type:      EventAgentRecommendation,
-    		Timestamp: time.Now(),
-    		Payload: RecommendationEventPayload{
-    			Agent:           agent,
-    			Recommendations: recommendations,
-    		},
-    	})
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventAgentRecommendation,
+		Timestamp: time.Now(),
+		Payload: RecommendationEventPayload{
+			Agent:           agent,
+			Recommendations: recommendations,
+		},
+	})
 }
 
 // PublishGuardOutcomes 发布控制层过滤结果事件
 func (b *ChannelEventBus) PublishGuardOutcomes(sessionID string, outcomes []domain.GuardOutcome) {
-    b.Publish(BusEvent{
-    		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-    		Type:      EventGuardOutcome,
-    		Timestamp: time.Now(),
-    		Payload: GuardOutcomeEventPayload{
-    			SessionID: sessionID,
-    			Outcomes:  outcomes,
-    		},
-    	})
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventGuardOutcome,
+		Timestamp: time.Now(),
+		Payload: GuardOutcomeEventPayload{
+			SessionID: sessionID,
+			Outcomes:  outcomes,
+		},
+	})
 }
 
 // PublishDarwinianClamping 发布演化权重夹制事件
 func (b *ChannelEventBus) PublishDarwinianClamping(events []ClampingEventPayload) {
-    b.Publish(BusEvent{
-    		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-    		Type:      EventDarwinianClamping,
-    		Timestamp: time.Now(),
-    		Payload: DarwinianClampingEventPayload{
-    			ClampingEvents: events,
-    		},
-    	})
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventDarwinianClamping,
+		Timestamp: time.Now(),
+		Payload: DarwinianClampingEventPayload{
+			ClampingEvents: events,
+		},
+	})
 }
 
 // PublishAgentHealthChange 发布 Agent 健康状态变更事件
 func (b *ChannelEventBus) PublishAgentHealthChange(agentID, oldStatus, newStatus, reason string) {
-    b.Publish(BusEvent{
-    		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-    		Type:      EventAgentHealthChange,
-    		Timestamp: time.Now(),
-    		Payload: AgentHealthChangeEventPayload{
-    			AgentID:   agentID,
-    			OldStatus: oldStatus,
-    			NewStatus: newStatus,
-    			Reason:    reason,
-    			Timestamp: time.Now(),
-    		},
-    	})
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventAgentHealthChange,
+		Timestamp: time.Now(),
+		Payload: AgentHealthChangeEventPayload{
+			AgentID:   agentID,
+			OldStatus: oldStatus,
+			NewStatus: newStatus,
+			Reason:    reason,
+			Timestamp: time.Now(),
+		},
+	})
 }
 
 // PublishConvictionClamping 发布 Conviction 夹制事件
 func (b *ChannelEventBus) PublishConvictionClamping(events []ConvictionClampingEventPayload) {
-    b.Publish(BusEvent{
-    		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-    		Type:      EventConvictionClamping,
-    		Timestamp: time.Now(),
-    		Payload:   events,
-    	})
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventConvictionClamping,
+		Timestamp: time.Now(),
+		Payload:   events,
+	})
 }
 
 func (b *ChannelEventBus) PublishOrderEvent(order domain.Order, orderID, status string, fillPrice float64) {
@@ -536,55 +536,55 @@ func (b *ChannelEventBus) PublishOrderEvent(order domain.Order, orderID, status 
 
 // PublishRiskEvent 发布风险事件
 func (b *ChannelEventBus) PublishRiskEvent(eventType EventType, symbol string, position domain.Position, triggerType string, triggerPrice float64) {
-    b.Publish(BusEvent{
-    		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-    		Type:      eventType,
-    		Timestamp: time.Now(),
-    		Payload: RiskEventPayload{
-    			Symbol:       symbol,
-    			Position:     position,
-    			TriggerType:  triggerType,
-    			TriggerPrice: triggerPrice,
-    		},
-    	})
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      eventType,
+		Timestamp: time.Now(),
+		Payload: RiskEventPayload{
+			Symbol:       symbol,
+			Position:     position,
+			TriggerType:  triggerType,
+			TriggerPrice: triggerPrice,
+		},
+	})
 }
 
 // PublishExperimentInsufficientData 发布实验数据不足事件
 func (b *ChannelEventBus) PublishExperimentInsufficientData(experimentID string, baselineObs, candidateObs, requiredObs int, maturityLevel string, usedFallback bool) {
-    b.Publish(BusEvent{
-    		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-    		Type:      EventExperimentInsufficientData,
-    		Timestamp: time.Now(),
-    		Payload: ExperimentInsufficientDataEventPayload{
-    			ExperimentID:  experimentID,
-    			BaselineObs:   baselineObs,
-    			CandidateObs:  candidateObs,
-    			RequiredObs:   requiredObs,
-    			MaturityLevel: maturityLevel,
-    			UsedFallback:  usedFallback,
-    		},
-    	})
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventExperimentInsufficientData,
+		Timestamp: time.Now(),
+		Payload: ExperimentInsufficientDataEventPayload{
+			ExperimentID:  experimentID,
+			BaselineObs:   baselineObs,
+			CandidateObs:  candidateObs,
+			RequiredObs:   requiredObs,
+			MaturityLevel: maturityLevel,
+			UsedFallback:  usedFallback,
+		},
+	})
 }
 
 // PublishOrderError 发布订单错误事件
 func (b *ChannelEventBus) PublishOrderError(orderID, symbol, side string, price float64, quantity int, errorCode, errorMessage string, attempts int, lastStatus string) {
-    b.Publish(BusEvent{
-    		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-    		Type:      EventOrderError,
-    		Timestamp: time.Now(),
-    		Payload: OrderErrorEventPayload{
-    			OrderID:      orderID,
-    			Symbol:       symbol,
-    			Side:         side,
-    			Price:        price,
-    			Quantity:     quantity,
-    			ErrorCode:    errorCode,
-    			ErrorMessage: errorMessage,
-    			Attempts:     attempts,
-    			LastStatus:   lastStatus,
-    			Timestamp:    time.Now(),
-    		},
-    	})
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventOrderError,
+		Timestamp: time.Now(),
+		Payload: OrderErrorEventPayload{
+			OrderID:      orderID,
+			Symbol:       symbol,
+			Side:         side,
+			Price:        price,
+			Quantity:     quantity,
+			ErrorCode:    errorCode,
+			ErrorMessage: errorMessage,
+			Attempts:     attempts,
+			LastStatus:   lastStatus,
+			Timestamp:    time.Now(),
+		},
+	})
 }
 
 // PublishNarrativeEvent 发布叙事事件 (MacroIngestor 生成)
