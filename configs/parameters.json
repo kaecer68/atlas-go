@@ -3642,7 +3642,7 @@
           "mature_profit_pct": 0.04
         }
       },
-      "rationale": "Per-industry business cycle thresholds; all 10 Level-1 industries configured. AI supply chain highest growth, consumer most defensive, shipping most cyclical, mining commodity-driven",
+      "rationale": "Per-industry business cycle thresholds; all 11 Level-1 industries configured. AI supply chain highest growth, consumer most defensive, shipping most cyclical, mining commodity-driven",
       "source": "heuristic",
       "citation": {
         "source_type": "heuristic",
@@ -4016,7 +4016,8 @@
           "end_month": 2,
           "end_day": 15,
           "favored_industries": [
-            "financials"
+            "financials",
+            "mining"
           ],
           "avoided_industries": [
             "semiconductor",
