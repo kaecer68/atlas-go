@@ -1447,8 +1447,8 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 
 func saveSnapshot(channelID string, data []byte) {
 	dir := filepath.Join("data", "state", channelID)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return
 	}
-	_ = os.WriteFile(filepath.Join(dir, "latest.json"), data, 0644)
+	_ = os.WriteFile(filepath.Join(dir, "latest.json"), data, 0o644)
 }

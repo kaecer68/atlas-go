@@ -194,7 +194,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	}
 
 	if s.macroSnapshot != nil {
-		*s.macroSnapshot = marketdata.MacroDataSnapshot(QuotesToMacroDataSnapshot(quotes))
+		*s.macroSnapshot = QuotesToMacroDataSnapshot(quotes)
 	}
 
 	events := s.detectNarrativeEvents(quotes)
@@ -414,7 +414,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 
 	// P3-1: Update macro snapshot for PM factor scoring.
 	if s.macroSnapshot != nil {
-		*s.macroSnapshot = marketdata.MacroDataSnapshot(QuotesToMacroDataSnapshot(quotes))
+		*s.macroSnapshot = QuotesToMacroDataSnapshot(quotes)
 	}
 	events := s.detectNarrativeEvents(quotes)
 	researchResult := ExecuteWithContext(ExecutionContext{

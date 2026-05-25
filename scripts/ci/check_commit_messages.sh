@@ -36,7 +36,7 @@ while IFS= read -r commit; do
     echo "   Allowed types: ${VALID_TYPES//|/, }"
     HAS_ERRORS=true
   fi
-done < <(git log --format="%H %s" "$BASE..$HEAD" 2>/dev/null || true)
+done < <(git log --no-merges --format="%H %s" "$BASE..$HEAD" 2>/dev/null || true)
 
 if $HAS_ERRORS; then
   echo ""
