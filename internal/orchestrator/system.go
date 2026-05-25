@@ -24,6 +24,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/sim"
 	"github.com/kaecer68/atlas-go/internal/strategy"
+	"github.com/kaecer68/atlas-go/internal/stress"
 )
 
 // SystemCore holds the essential simulation state and services.
@@ -103,7 +104,8 @@ func (s *System) SetEventBus(eventBus *eventbus.ChannelEventBus) {
 // System orchestrates the full simulation loop via a SystemCore and a PluginHost.
 type System struct {
 	*SystemCore
-	host *PluginHost
+	host          *PluginHost
+	macroSnapshot *marketdata.MacroDataSnapshot
 }
 
 // NewSystem builds a fully-wired System with an internally-created EventBus.
@@ -126,7 +128,8 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 	ds, _ := replay.LoadTWSEOpenDataCSV(cfg.ReplayDataPath)
 
 	runtimeParams := loadRuntimeParamsOrDefault(cfg.ParametersConfigPath)
-	factorEngine, hp, fp := buildFactorEngine(runtimeParams)
+	macroSnapshot := &marketdata.MacroDataSnapshot{}
+	factorEngine, hp, fp := buildFactorEngine(runtimeParams, macroSnapshot)
 	if eventBus == nil {
 		eventBus = eventbus.NewChannelEventBus(256)
 	}
@@ -151,6 +154,7 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 			plugins:         plugins,
 			narrativeEngine: narrative.NewNarrativeEngine(),
 		},
+		macroSnapshot: macroSnapshot,
 	}
 
 	sys.Sim().scratchpad = NewScratchpad(sys.Sim().session.ID, cfg.LedgerDir)
@@ -177,6 +181,10 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 			"session", s.Sim().session.ID,
 			"as_of", asOf.Format("2006-01-02"),
 			"symbols_requested", len(symbols))
+	}
+
+	if s.macroSnapshot != nil {
+		*s.macroSnapshot = marketdata.MacroDataSnapshot(QuotesToMacroDataSnapshot(quotes))
 	}
 
 	events := s.detectNarrativeEvents(quotes)
@@ -211,10 +219,31 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		go s.Risk().eventBus.PublishRegimeChange(oldRegime, regime, 0.0, "orchestrator")
 	}
 
-	if s.strat.strategySelector != nil {
+	vix := vixFromQuotes(quotes)
+	if s.strat.strategyAllocator != nil {
+		mix := s.strat.strategyAllocator.Allocate(regime, vix)
+		var topStrategy *strategy.Strategy
+		var topWeight float64
+		for name, w := range mix {
+			if w > topWeight {
+				if st, ok := s.strat.strategyRegistry.Get(name); ok {
+					topStrategy = st
+					topWeight = w
+				}
+			}
+		}
+		if topStrategy != nil {
+			if s.Port().factorWeightEngine != nil {
+				s.Port().factorWeightEngine.ApplyStrategy(topStrategy)
+			}
+			if s.strat.thresholdEngine != nil {
+				s.strat.thresholdEngine.SetRiskAppetite(sim.RiskAppetite(topStrategy.RiskAppetite))
+			}
+		}
+	} else if s.strat.strategySelector != nil {
 		selectedStrategy, err := s.strat.strategySelector.Select(
 			s.Sim().ctx,
-			vixFromQuotes(quotes),
+			vix,
 			regime,
 		)
 		if err == nil && selectedStrategy != nil {
@@ -245,6 +274,14 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		result = s.Sim().engine.RunWithState(s.Sim().persistentState, regime, quotes, finalRecs)
 	} else {
 		result = s.Sim().engine.Run(regime, quotes, finalRecs)
+	}
+	// P3-4: Monte Carlo drawdown simulation for monitoring dashboard.
+	if opt := s.Sim().engine.Optimizer(); opt != nil {
+		ddResult := opt.SimulateDrawdownForMonitoring(result.Positions, result.PortfolioValue)
+		logging.Info("system", "drawdown_simulation",
+			logging.FFloat64("max_drawdown", ddResult.MaxDrawdown),
+			logging.FFloat64("var_95", ddResult.VaR95),
+			logging.FStr("session", s.Sim().session.ID))
 	}
 	result.GuardOutcomes = guardOutcomes
 	if s.Risk().eventBus != nil {
@@ -361,6 +398,11 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 
 	symbols := RegistrySymbols(s.Sim().registry)
 	quotes := s.Sim().replay.QuotesForDate(sessionDate, symbols)
+
+	// P3-1: Update macro snapshot for PM factor scoring.
+	if s.macroSnapshot != nil {
+		*s.macroSnapshot = marketdata.MacroDataSnapshot(QuotesToMacroDataSnapshot(quotes))
+	}
 	events := s.detectNarrativeEvents(quotes)
 	researchResult := ExecuteWithContext(ExecutionContext{
 		Registry:        s.Sim().registry,
@@ -393,10 +435,31 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		go s.Risk().eventBus.PublishRegimeChange(oldRegime, regime, 0.0, "orchestrator")
 	}
 
-	if s.strat.strategySelector != nil {
+	vix := vixFromQuotes(quotes)
+	if s.strat.strategyAllocator != nil {
+		mix := s.strat.strategyAllocator.Allocate(regime, vix)
+		var topStrategy *strategy.Strategy
+		var topWeight float64
+		for name, w := range mix {
+			if w > topWeight {
+				if st, ok := s.strat.strategyRegistry.Get(name); ok {
+					topStrategy = st
+					topWeight = w
+				}
+			}
+		}
+		if topStrategy != nil {
+			if s.Port().factorWeightEngine != nil {
+				s.Port().factorWeightEngine.ApplyStrategy(topStrategy)
+			}
+			if s.strat.thresholdEngine != nil {
+				s.strat.thresholdEngine.SetRiskAppetite(sim.RiskAppetite(topStrategy.RiskAppetite))
+			}
+		}
+	} else if s.strat.strategySelector != nil {
 		selectedStrategy, err := s.strat.strategySelector.Select(
 			s.Sim().ctx,
-			vixFromQuotes(quotes),
+			vix,
 			regime,
 		)
 		if err == nil && selectedStrategy != nil {
@@ -1254,4 +1317,40 @@ func vixFromQuotes(quotes []domain.Quote) float64 {
 		}
 	}
 	return 20.0
+}
+
+// RunDailyStressTests executes all built-in stress scenarios against the current
+// portfolio and logs a summary report. Designed for the stress_test_daily background
+// task (P3-5). Requires lastQuotes from a prior simulation run.
+func (s *System) RunDailyStressTests() error {
+	quotes := s.Sim().lastQuotes
+	if len(quotes) == 0 {
+		return fmt.Errorf("stress_test: no quotes available — run a simulation first")
+	}
+	runner := stress.NewRunner(s.Sim().registry, s.Sim().policy.ExecutionPolicy)
+	scenarios := stress.AllScenarios()
+	report := stress.Report{ScenarioResults: make([]stress.ScenarioResult, 0, len(scenarios))}
+
+	for _, sc := range scenarios {
+		result := runner.RunScenario(sc, quotes, nil)
+		report.ScenarioResults = append(report.ScenarioResults, result)
+		if result.MaxDrawdown > report.WorstDrawdown {
+			report.WorstDrawdown = result.MaxDrawdown
+		}
+		if result.VaR95 < report.WorstVaR {
+			report.WorstVaR = result.VaR95
+		}
+		report.AvgReturn += result.TotalReturn
+	}
+	if n := len(report.ScenarioResults); n > 0 {
+		report.AvgReturn /= float64(n)
+	}
+
+	logging.Info("system", "stress_test_daily_completed",
+		logging.FInt("scenarios", len(report.ScenarioResults)),
+		logging.FFloat64("worst_drawdown", report.WorstDrawdown),
+		logging.FFloat64("worst_var95", report.WorstVaR),
+		logging.FFloat64("avg_return", report.AvgReturn))
+
+	return nil
 }

@@ -53,6 +53,11 @@ func (e *Engine) WithOptimizer(o *portfolio.Optimizer) *Engine {
 	return e
 }
 
+// Optimizer returns the attached portfolio optimizer, or nil.
+func (e *Engine) Optimizer() *portfolio.Optimizer {
+	return e.optimizer
+}
+
 // WithReflexivityRules attaches reflexivity feedback rules to the engine.
 func (e *Engine) WithReflexivityRules(rules ...reflexivity.Rule) *Engine {
 	e.reflexRules = append(e.reflexRules, rules...)

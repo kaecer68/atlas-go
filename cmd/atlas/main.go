@@ -943,6 +943,36 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered auto_daily_simulation background task (24h interval)")
 
+			// Register stress_test_daily — run multi-day stress scenarios after market close (P3-5).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "stress_test_daily",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus)
+					if err != nil {
+						return fmt.Errorf("create system for stress test: %w", err)
+					}
+					if gatewayFetcher != nil {
+						system.Sim().SetProvider(orchestrator.NewGatewayBackedProvider(cfg))
+					}
+					if repo != nil {
+						system.SetRepository(repo)
+					}
+					capitalCfg := domain.DefaultCapitalPhaseConfig()
+					capitalCfg.PhaseStartDate = time.Now().Add(-30 * 24 * time.Hour)
+					ctrl := risk.NewCapitalPhaseController(capitalCfg)
+					alloc := portfolio.NewCapitalAllocator()
+					wf, _ := risk.NewApprovalWorkflow("data/state/approvals")
+					system.WithCapitalManagement(ctrl, alloc, wf)
+					if _, simErr := system.RunDailySimulation(time.Now()); simErr != nil {
+						logging.Warn("stress_test_daily", "simulation_failed", "err", simErr.Error())
+					}
+					return system.RunDailyStressTests()
+				},
+			})
+			log.Printf("[Gateway] registered stress_test_daily background task (24h interval)")
+
 			// Register auto_experiment — weekly strategy evolution cycle.
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "auto_experiment",

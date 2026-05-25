@@ -278,5 +278,70 @@ func DefaultTemplates() []CausalTemplate {
 • 【迴避】高Beta、主題型中小股：杠桿化程度最高，回調時殺最慘
 • 【押注】高股息、金融：較不受散戶情緒邊際影響`,
 		},
+		{
+			ID:             "黃金避險行情",
+			Name:           "黃金避險行情",
+			TriggerTheme:   "gold_rally",
+			RequiredRegion: "Global",
+			Steps: []CausalStep{
+				{Description: "黃金價格突破關鍵閾值 → 避險需求急升", Affected: []string{"黃金", "VIX", "避險資產"}, Impact: 0.8},
+				{Description: "風險資產資金流向避險資產 → 貴金屬相對強勢", Affected: []string{"貴金屬", "黃金ETF"}, Impact: 0.7},
+				{Description: "新興市場貨幣承壓 → 台幣貶值，外資流出台股", Affected: []string{"台股大盤", "新興市場"}, Impact: -0.5},
+				{Description: "貴金屬板塊受惠於避險需求與通膨預期", Affected: []string{"貴金屬ETF", "原物料"}, Impact: 0.6},
+			},
+			HistoricalHitRate: 0.65,
+			SourceReferences:  []string{"World Gold Council", "BIS Gold and FX Reserves"},
+			Rationale: `黃金作為全球最老牌的避險資產，在市場恐慌、地緣政治緊張或通膨預期升溫時，往往出現急升行情。這種「flight to safety」的資金流動對台股有兩層影響：
+1. 外資為降低新興市場曝險，會從台股抽離資金
+2. 貴金屬相關標的（如黃金ETF 00635U）反而受惠
+
+配置建議：
+• 【押注】貴金屬ETF、原物料板塊：避險資金直接受益
+• 【迴避】高Beta科技股：外資撤離首當其衝`,
+		},
+		{
+			ID:             "美元強勢",
+			Name:           "美元強勢",
+			TriggerTheme:   "dollar_surge",
+			RequiredRegion: "US",
+			Steps: []CausalStep{
+				{Description: "DXY 美元指數急升突破門檻 → 美元走強", Affected: []string{"DXY", "美元"}, Impact: 0.7},
+				{Description: "美元走強壓抑新興市場貨幣 → 台幣貶值壓力", Affected: []string{"台幣", "USD/TWD"}, Impact: -0.6},
+				{Description: "台幣貶值引發外資回流美元資產 → 台股資金流出", Affected: []string{"外資流向", "台股大盤"}, Impact: -0.6},
+				{Description: "出口導向企業受惠台幣貶值 → 但資金流出抵消利多", Affected: []string{"出口股", "電子股"}, Impact: 0.2},
+			},
+			HistoricalHitRate: 0.70,
+			SourceReferences:  []string{"Federal Reserve DXY Index", "BIS Triennial Survey"},
+			Rationale: `美元走強（DXY飆升）是全球資金流動最重要的訊號之一。當美元急升時：
+1. 新興市場貨幣全面承壓，台幣跟貶
+2. 外資為鎖定美元匯兌收益，會加速從台股撤離
+3. 貴金屬因美元定價關係，短期承壓（美元強 = 黃金弱）
+
+配置建議：
+• 【迴避】貴金屬ETF：美元強勢直接打壓金價
+• 【押注】現金/美元部位：提高現金比例等待回調`,
+		},
+		{
+			ID:             "通膨升溫",
+			Name:           "通膨升溫",
+			TriggerTheme:   "inflation_spike",
+			RequiredRegion: "US",
+			Steps: []CausalStep{
+				{Description: "VIX 急升 + DXY 走強 → 通膨預期重新定價", Affected: []string{"通膨預期", "實質利率"}, Impact: 0.7},
+				{Description: "通膨升溫侵蝕企業利潤率 → 本益比壓縮", Affected: []string{"台股大盤", "高估值股"}, Impact: -0.6},
+				{Description: "實質資產（貴金屬）受惠通膨避險需求", Affected: []string{"貴金屬", "黃金"}, Impact: 0.6},
+				{Description: "央行可能被迫升息 → 成長股估值進一步承壓", Affected: []string{"AI供應鏈", "中小型股"}, Impact: -0.5},
+			},
+			HistoricalHitRate: 0.62,
+			SourceReferences:  []string{"Caldara-Iacoviello GPR Index", "Federal Reserve Economic Data (FRED)"},
+			Rationale: `通膨預期升溫是資產配置最重要的宏觀訊號之一。當市場開始重新定價通膨風險時：
+1. 實質利率下降 → 貴金屬（黃金）吸引力上升
+2. 企業成本端壓力 → 利潤率受壓縮，尤其對低毛利產業
+3. 央行可能進入升息循環 → 成長股估值面臨下修
+
+配置建議：
+• 【押注】貴金屬ETF：通膨避險 + 實質利率下降雙重利多
+• 【迴避】高估值成長股：對利率最敏感，首當其衝`,
+		},
 	}
 }
