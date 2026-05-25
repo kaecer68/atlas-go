@@ -187,6 +187,7 @@ export interface CircuitBreakerStateResponse {
   intraday_peak: number;
   day_start_value: number;
   events: string[];
+  initialized: boolean;
 }
 
 export interface CircuitBreakerStatus {

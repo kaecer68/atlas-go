@@ -732,12 +732,11 @@
   import { renderPerformanceReport } from './js/components/performance-report.js';
   import { eventSource } from './js/services/event-source.js';
 
-  document.addEventListener('DOMContentLoaded', () => {
-    const cbPanel = new CircuitBreakerPanel('circuitBreakerPanel');
-    eventSource.on('*', (ev) => cbPanel.handleSSE(ev));
+  // Module scripts are deferred; DOM is already ready.
+  const cbPanel = new CircuitBreakerPanel('circuitBreakerPanel');
+  eventSource.on('*', (ev) => cbPanel.handleSSE(ev));
 
-    renderPerformanceReport('performanceReportContainer');
-  });
+  renderPerformanceReport('performanceReportContainer');
 </script>
 </body>
 </html>

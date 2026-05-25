@@ -2,6 +2,7 @@ package replay
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -178,4 +179,91 @@ func parseInt(v string) int64 {
 	}
 	i, _ := strconv.ParseInt(v, 10, 64)
 	return i
+}
+
+// jsonlRow is the expected JSON shape of each line in a FinMind-style JSONL replay file.
+type jsonlRow struct {
+	Date   string  `json:"date"`
+	Symbol string  `json:"symbol"`
+	Open   float64 `json:"open"`
+	High   float64 `json:"high"`
+	Low    float64 `json:"low"`
+	Close  float64 `json:"close"`
+	Volume float64 `json:"volume"`
+}
+
+// GetLatestDate detects the file format by extension and returns the latest
+// date present in the replay data file without loading the entire dataset.
+//
+//   - .jsonl  → reads the last non-empty line, parses the "date" field.
+//   - .csv    → delegates to LoadTWSEOpenDataCSV and returns Dates[len-1].
+func GetLatestDate(path string) (string, error) {
+	if strings.HasSuffix(path, ".jsonl") {
+		return latestDateJSONL(path)
+	}
+	ds, err := LoadTWSEOpenDataCSV(path)
+	if err != nil {
+		return "", err
+	}
+	if len(ds.Dates) == 0 {
+		return "", fmt.Errorf("no dates found in %s", path)
+	}
+	return ds.Dates[len(ds.Dates)-1].Format("2006-01-02"), nil
+}
+
+func latestDateJSONL(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("%w: %s", ErrReplayDataMissing, path)
+	}
+	defer func() { _ = f.Close() }()
+
+	const chunkSize = 4096
+	stat, err := f.Stat()
+	if err != nil {
+		return "", err
+	}
+	fileSize := stat.Size()
+	if fileSize == 0 {
+		return "", fmt.Errorf("file is empty: %s", path)
+	}
+
+	var lastNonEmptyLine string
+	pos := fileSize
+	buf := make([]byte, chunkSize)
+	for pos > 0 {
+		readSize := int64(chunkSize)
+		if pos < readSize {
+			readSize = pos
+		}
+		pos -= readSize
+		_, err := f.ReadAt(buf[:readSize], pos)
+		if err != nil && err != io.EOF {
+			return "", err
+		}
+
+		chunk := string(buf[:readSize])
+		lines := strings.Split(chunk, "\n")
+
+		for i := len(lines) - 1; i >= 0; i-- {
+			if strings.TrimSpace(lines[i]) != "" {
+				lastNonEmptyLine = lines[i]
+				goto parse
+			}
+		}
+	}
+
+parse:
+	if lastNonEmptyLine == "" {
+		return "", fmt.Errorf("no data found in %s", path)
+	}
+
+	var row jsonlRow
+	if err := json.Unmarshal([]byte(lastNonEmptyLine), &row); err != nil {
+		return "", fmt.Errorf("parse jsonl last line: %w", err)
+	}
+	if row.Date == "" {
+		return "", fmt.Errorf("missing date field in last line of %s", path)
+	}
+	return row.Date, nil
 }

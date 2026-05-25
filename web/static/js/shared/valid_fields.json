@@ -241,6 +241,7 @@
   "industry_id",
   "industry_phase_scores",
   "info_ratio",
+  "initialized",
   "input_count",
   "institutional_sentiment",
   "insufficient_data",

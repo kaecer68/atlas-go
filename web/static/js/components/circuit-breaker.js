@@ -56,9 +56,32 @@ export class CircuitBreakerPanel {
         }
     }
 
+    showUninitializedState() {
+        if (this.statusText) this.statusText.textContent = '未初始化';
+        if (this.statusDot) {
+            this.statusDot.className = 'cb-status-dot';
+            this.statusDot.classList.add('uninitialized');
+        }
+        if (this.intradayPeak) this.intradayPeak.textContent = '無數據';
+        if (this.consecutiveSL) this.consecutiveSL.textContent = '無數據';
+        if (this.cooldown) this.cooldown.textContent = '無數據';
+        if (this.eventList) {
+            this.eventList.innerHTML = '<li class="cb-event-item empty text-center" style="text-align: center;">尚無實盤交易紀錄</li>';
+        }
+        if (this.resetBtn) {
+            this.resetBtn.disabled = true;
+            this.resetBtn.textContent = '未啟用';
+        }
+    }
+
     updateUI(data) {
         if (!data || typeof data !== 'object') {
             this.showEmptyState();
+            return;
+        }
+
+        if (data.initialized === false) {
+            this.showUninitializedState();
             return;
         }
 
@@ -67,6 +90,7 @@ export class CircuitBreakerPanel {
             'normal': '正常',
             'paused': '暫停',
             'halted': '停止',
+            'uninitialized': '未初始化',
             'unknown': '未知'
         };
         

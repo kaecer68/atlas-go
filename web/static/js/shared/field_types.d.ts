@@ -184,6 +184,7 @@ declare interface CircuitBreakerStateResponse {
   intraday_peak: number;
   day_start_value: number;
   events: string[];
+  initialized: boolean;
 }
 
 declare interface CircuitBreakerStatus {
