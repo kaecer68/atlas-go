@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
@@ -103,6 +104,8 @@ func (s *System) SetEventBus(eventBus *eventbus.ChannelEventBus) {
 
 // SetDrawdownReporter registers a callback for drawdown simulation results.
 func (s *System) SetDrawdownReporter(fn func(portfolio.DrawdownResult)) {
+	s.drawdownMu.Lock()
+	defer s.drawdownMu.Unlock()
 	s.drawdownReporter = fn
 }
 
@@ -111,6 +114,7 @@ type System struct {
 	*SystemCore
 	host             *PluginHost
 	macroSnapshot    *marketdata.MacroDataSnapshot
+	drawdownMu       sync.RWMutex
 	drawdownReporter func(portfolio.DrawdownResult)
 }
 
@@ -190,7 +194,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	}
 
 	if s.macroSnapshot != nil {
-		*s.macroSnapshot = marketdata.MacroDataSnapshot(QuotesToMacroDataSnapshot(quotes))
+		*s.macroSnapshot = QuotesToMacroDataSnapshot(quotes)
 	}
 
 	events := s.detectNarrativeEvents(quotes)
@@ -286,9 +290,11 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 			logging.FFloat64("max_drawdown", ddResult.MaxDrawdown),
 			logging.FFloat64("var_95", ddResult.VaR95),
 			logging.FStr("session", s.Sim().session.ID))
+		s.drawdownMu.RLock()
 		if s.drawdownReporter != nil {
 			s.drawdownReporter(ddResult)
 		}
+		s.drawdownMu.RUnlock()
 	}
 	result.GuardOutcomes = guardOutcomes
 	if s.Risk().eventBus != nil {
@@ -408,7 +414,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 
 	// P3-1: Update macro snapshot for PM factor scoring.
 	if s.macroSnapshot != nil {
-		*s.macroSnapshot = marketdata.MacroDataSnapshot(QuotesToMacroDataSnapshot(quotes))
+		*s.macroSnapshot = QuotesToMacroDataSnapshot(quotes)
 	}
 	events := s.detectNarrativeEvents(quotes)
 	researchResult := ExecuteWithContext(ExecutionContext{

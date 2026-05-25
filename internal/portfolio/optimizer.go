@@ -411,7 +411,7 @@ func (o *Optimizer) allocateInitialWeights(
 	}
 	beq := []float64{1.0}
 
-	wOpt, _ := o.activeSetQP(sigma, Aeq, beq, lb, ub, wInit)
+	wOpt := o.activeSetQP(sigma, Aeq, beq, lb, ub, wInit)
 
 	var weights []weightInfo
 	for i := 0; i < N; i++ {
@@ -809,11 +809,11 @@ func (o *Optimizer) ledoitWolfShrink(rm *returnMatrix, sample *mat.SymDense) *ma
 
 // activeSetQP solves: minimize ½ w' Σ w  s.t. A_eq' w = b_eq, lb ≤ w ≤ ub.
 func (o *Optimizer) activeSetQP(sigma *mat.SymDense, Aeq *mat.Dense, beq []float64,
-	lb, ub []float64, wInit []float64) ([]float64, int) {
-
+	lb, ub []float64, wInit []float64,
+) []float64 {
 	N := sigma.SymmetricDim()
 	if N == 0 {
-		return nil, 0
+		return nil
 	}
 	mEq := len(beq)
 
@@ -841,7 +841,7 @@ func (o *Optimizer) activeSetQP(sigma *mat.SymDense, Aeq *mat.Dense, beq []float
 
 		if nFree == 0 {
 			if o.isOptimal(sigma, w, isActive, lb, ub) {
-				return w, iter + 1
+				return w
 			}
 			o.releaseConstraint(sigma, w, &active, isActive, lb, ub)
 			continue
@@ -892,7 +892,7 @@ func (o *Optimizer) activeSetQP(sigma *mat.SymDense, Aeq *mat.Dense, beq []float
 		rhsVec := mat.NewVecDense(kktDim, rhs)
 		var soln mat.VecDense
 		if err := soln.SolveVec(kkt, rhsVec); err != nil {
-			return o.gradientProjection(sigma, w, lb, ub), iter + 1
+			return o.gradientProjection(sigma, w, lb, ub)
 		}
 
 		wFree := make([]float64, nFree)
@@ -911,7 +911,7 @@ func (o *Optimizer) activeSetQP(sigma *mat.SymDense, Aeq *mat.Dense, beq []float
 		}
 		if normD < tol*tol {
 			if o.isOptimal(sigma, w, isActive, lb, ub) {
-				return w, iter + 1
+				return w
 			}
 			o.releaseConstraint(sigma, w, &active, isActive, lb, ub)
 			continue
@@ -943,13 +943,13 @@ func (o *Optimizer) activeSetQP(sigma *mat.SymDense, Aeq *mat.Dense, beq []float
 			active[blockingIdx] = true
 		} else {
 			if o.isOptimal(sigma, w, isActive, lb, ub) {
-				return w, iter + 1
+				return w
 			}
 			o.releaseConstraint(sigma, w, &active, isActive, lb, ub)
 		}
 	}
 
-	return w, maxIter
+	return w
 }
 
 func (o *Optimizer) isOptimal(sigma *mat.SymDense, w []float64, active []bool, lb, ub []float64) bool {
@@ -972,8 +972,8 @@ func (o *Optimizer) isOptimal(sigma *mat.SymDense, w []float64, active []bool, l
 }
 
 func (o *Optimizer) releaseConstraint(sigma *mat.SymDense, w []float64,
-	active *[]bool, isActive []bool, lb, ub []float64) {
-
+	active *[]bool, isActive []bool, lb, ub []float64,
+) {
 	const tol = 1e-10
 	N := sigma.SymmetricDim()
 
@@ -1105,7 +1105,7 @@ func (o *Optimizer) GetEfficientFrontier() []struct{ Return, Risk float64 } {
 			wInit[i] = 1.0 / float64(N)
 		}
 
-		wOpt, _ := o.activeSetQP(sigma, Aeq, beq, lb, ub, wInit)
+		wOpt := o.activeSetQP(sigma, Aeq, beq, lb, ub, wInit)
 
 		var portVar float64
 		for i := 0; i < N; i++ {

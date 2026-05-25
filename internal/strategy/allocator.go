@@ -129,11 +129,11 @@ func (sa *StrategyAllocator) computeRiskParity(candidates []*Strategy, vols map[
 		mix[id] = rw / totalRaw
 	}
 
-	mix = sa.applyCaps(mix, candidates, vols)
+	mix = sa.applyCaps(mix, candidates)
 	return mix
 }
 
-func (sa *StrategyAllocator) applyCaps(mix StrategyMix, candidates []*Strategy, vols map[string]float64) StrategyMix {
+func (sa *StrategyAllocator) applyCaps(mix StrategyMix, candidates []*Strategy) StrategyMix {
 	maxIter := 10
 	for iter := 0; iter < maxIter; iter++ {
 		var excess float64
