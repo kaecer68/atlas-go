@@ -367,6 +367,17 @@ func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot, div *Dive
 		}
 	}
 
+	// P3-2: PM event detectors — trigger gold_rally/dollar_surge/inflation_spike for factor weight adjustment.
+	if event := detectGoldRallyEventFromSnapshot(curr.Gold, now); event != nil {
+		events = append(events, *event)
+	}
+	if event := detectDollarSurgeEventFromSnapshot(curr.DXY, now); event != nil {
+		events = append(events, *event)
+	}
+	if event := detectInflationSpikeEventFromSnapshot(curr.VIX, curr.DXY, now); event != nil {
+		events = append(events, *event)
+	}
+
 	return events
 }
 
@@ -739,4 +750,110 @@ func detectAICapexEventFromSnapshot(sentiment float64, prevTSMC marketdata.Macro
 			"ai_capex_sentiment": sentiment,
 		},
 	}
+}
+
+// detectGoldRallyEventFromSnapshot triggers gold_rally when gold price surges above threshold.
+// Used by P3-2 to feed FactorWeightEngine's PM event weight adjustments.
+func detectGoldRallyEventFromSnapshot(currGold marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+	if currGold.Symbol == "" {
+		return nil
+	}
+	params := config.GetParametersConfig().Narrative
+	if currGold.ChangePct <= params.GoldChangePctThreshold.Value {
+		return nil
+	}
+	confidence := computeDeviationConfidence(currGold.ChangePct, params.GoldChangePctThreshold.Value, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-gold-rally-%d", now.UnixNano()),
+		Theme:            "gold_rally",
+		Region:           "Global",
+		Sentiment:        0.7,
+		Confidence:       confidence,
+		ConfidenceSource: "deviation_based_v1",
+		HitRate:          hitRateForTheme("gold_rally"),
+		CapitalFlow:      "flight_to_gold",
+		TimeWindow:       "1_week",
+		Timestamp:        now,
+		Severity:         "high",
+		SourceData: map[string]float64{
+			"gold_change_pct": currGold.ChangePct,
+			"gold_price":      currGold.Value,
+		},
+	}
+}
+
+// detectDollarSurgeEventFromSnapshot triggers dollar_surge when DXY strengthens beyond threshold.
+// Used by P3-2 to feed FactorWeightEngine's PM event weight adjustments.
+func detectDollarSurgeEventFromSnapshot(currDXY marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+	if currDXY.Symbol == "" {
+		return nil
+	}
+	params := config.GetParametersConfig().Narrative
+	if currDXY.ChangePct <= params.DXYChangePctThreshold.Value {
+		return nil
+	}
+	confidence := computeDeviationConfidence(currDXY.ChangePct, params.DXYChangePctThreshold.Value, params.ConfidenceBaseUSRates.Value, params.ConfidenceDeviationCeiling.Value)
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-dollar-surge-%d", now.UnixNano()),
+		Theme:            "dollar_surge",
+		Region:           "US",
+		Sentiment:        -0.5,
+		Confidence:       confidence,
+		ConfidenceSource: "deviation_based_v1",
+		HitRate:          hitRateForTheme("dollar_surge"),
+		CapitalFlow:      "flight_to_USD",
+		TimeWindow:       "1_week",
+		Timestamp:        now,
+		Severity:         "high",
+		SourceData: map[string]float64{
+			"dxy_change_pct": currDXY.ChangePct,
+			"dxy_level":      currDXY.Value,
+		},
+	}
+}
+
+// detectInflationSpikeEventFromSnapshot triggers inflation_spike when VIX and DXY both signal
+// inflation repricing. Uses VIX as a volatility proxy for inflation uncertainty and DXY
+// strengthening as confirmation. CPI data source is pending; this is a proxy-based v1 detector.
+func detectInflationSpikeEventFromSnapshot(currVIX, currDXY marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+	if currVIX.Symbol == "" {
+		return nil
+	}
+	params := config.GetParametersConfig().Narrative
+	if currVIX.Value <= params.VIXLevelThreshold.Value {
+		return nil
+	}
+	dxySignal := 0.0
+	if currDXY.Symbol != "" && currDXY.ChangePct > 0 {
+		dxySignal = 1.0
+	}
+	confidence := computeDeviationConfidence(currVIX.Value, params.VIXLevelThreshold.Value, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
+	if dxySignal > 0 {
+		confidence = clampConfidence(confidence + 0.05)
+	}
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-inflation-spike-%d", now.UnixNano()),
+		Theme:            "inflation_spike",
+		Region:           "US",
+		Sentiment:        -0.6,
+		Confidence:       confidence,
+		ConfidenceSource: "deviation_based_v1",
+		HitRate:          hitRateForTheme("inflation_spike"),
+		CapitalFlow:      "inflation_reprice",
+		TimeWindow:       "1_week",
+		Timestamp:        now,
+		Severity:         "high",
+		SourceData: map[string]float64{
+			"vix_level":      currVIX.Value,
+			"dxy_change_pct": currDXY.ChangePct,
+			"dxy_confirming": dxySignal,
+		},
+	}
+}
+
+func clampConfidence(c float64) float64 {
+	if c > 0.95 {
+		return 0.95
+	}
+	return c
 }

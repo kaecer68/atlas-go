@@ -1299,3 +1299,27 @@ func boxMuller(rng *rand.Rand) float64 {
 	u2 := rng.Float64()
 	return math.Sqrt(-2*math.Log(max(u1, 1e-10))) * math.Cos(2*math.Pi*u2)
 }
+
+// SimulateDrawdownForMonitoring converts domain.Position to weightInfo and runs
+// a standard 21-day, 1000-path Monte Carlo drawdown simulation. Used by the
+// orchestrator's session-end hook for monitoring (P3-4).
+func (o *Optimizer) SimulateDrawdownForMonitoring(positions []domain.Position, portfolioValue float64) DrawdownResult {
+	if portfolioValue <= 0 {
+		return DrawdownResult{}
+	}
+	weights := make([]weightInfo, 0, len(positions))
+	for _, p := range positions {
+		w := p.MarketValue / portfolioValue
+		if w <= 0 {
+			continue
+		}
+		weights = append(weights, weightInfo{
+			Symbol: p.Symbol,
+			Weight: w,
+		})
+	}
+	if len(weights) == 0 {
+		return DrawdownResult{}
+	}
+	return o.SimulateDrawdown(weights, 1.0, 21, 1000)
+}

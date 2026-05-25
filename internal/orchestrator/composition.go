@@ -59,7 +59,9 @@ func buildSimEngine(policy baseline.Policy, optimizer *portfolio.Optimizer) *sim
 }
 
 // buildFactorEngine constructs the factor computation pipeline.
-func buildFactorEngine(runtimeParams *portfolio.RuntimeParameters) (*portfolio.FactorEngine, *portfolio.HistoricalPrices, *portfolio.FundamentalProvider) {
+// macroSnap is a pointer to a MacroDataSnapshot that gets updated before each simulation
+// run; the PM provider closure reads from it at scoring time. nil is safe (PM scores = 0).
+func buildFactorEngine(runtimeParams *portfolio.RuntimeParameters, macroSnap *marketdata.MacroDataSnapshot) (*portfolio.FactorEngine, *portfolio.HistoricalPrices, *portfolio.FundamentalProvider) {
 	hp := portfolio.NewHistoricalPrices()
 	if err := hp.LoadFromExtendedJSONL("data/replay/tw_extended_90days.jsonl"); err != nil {
 		logging.Warn("composition", "failed to load historical prices", "err", err)
@@ -68,10 +70,29 @@ func buildFactorEngine(runtimeParams *portfolio.RuntimeParameters) (*portfolio.F
 	if err := fp.LoadFromJSON("data/fundamentals.json"); err != nil {
 		logging.Warn("composition", "failed to load fundamentals", "err", err)
 	}
+
+	// P3-1: Wire precious metals macro context provider using live snapshot data.
+	// The closure captures macroSnap by pointer so it reads the latest values at scoring time.
+	// CPIYoY is estimated at 2.5% (long-run inflation target) until a live CPI source is added.
+	pmProvider := func(symbol string) *portfolio.PreciousMetalsContext {
+		if macroSnap == nil || macroSnap.RecordedAt == 0 {
+			return nil
+		}
+		// Real rate = US10Y nominal yield − estimated inflation expectation
+		realRate := macroSnap.US10Y.Value - 2.5
+		return &portfolio.PreciousMetalsContext{
+			RealRate: realRate,
+			VIX:      macroSnap.VIX.Value,
+			DXY:      macroSnap.DXY.Value,
+			CPIYoY:   2.5,
+		}
+	}
+
 	fe := portfolio.NewFactorEngine().
 		WithParameters(runtimeParams).
 		WithHistoricalPrices(hp).
-		WithFundamentalProvider(fp)
+		WithFundamentalProvider(fp).
+		WithPreciousMetalsProvider(pmProvider)
 	return fe, hp, fp
 }
 
@@ -98,12 +119,14 @@ func buildStrategyLayer(thresholdEngine *sim.DynamicThresholdEngine) StrategyLay
 	strategyRegistry := strategy.NewRegistryWithDefaults()
 	comparisonEngine := strategy.NewComparisonEngine(20)
 	strategySelector := strategy.NewSelector(strategyRegistry, comparisonEngine)
+	strategyAllocator := strategy.NewStrategyAllocator(strategyRegistry)
 
 	return StrategyLayer{
-		strategyRegistry: strategyRegistry,
-		strategySelector: strategySelector,
-		comparisonEngine: comparisonEngine,
-		thresholdEngine:  thresholdEngine,
+		strategyRegistry:  strategyRegistry,
+		strategySelector:  strategySelector,
+		comparisonEngine:  comparisonEngine,
+		thresholdEngine:   thresholdEngine,
+		strategyAllocator: strategyAllocator,
 	}
 }
 
