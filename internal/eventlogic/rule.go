@@ -26,9 +26,10 @@ const (
 // Condition represents a single programmable condition within an event rule.
 // Conditions are ANDed together when evaluating whether a rule fires.
 type Condition struct {
-	Field    string  `json:"field"`
-	Operator string  `json:"operator"` // "gt", "lt", "gte", "lte", "eq"
-	Value    float64 `json:"value"`
+	Field       string  `json:"field"`
+	Operator    string  `json:"operator"`
+	Value       float64 `json:"value,omitempty"`
+	StringValue string  `json:"string_value,omitempty"`
 }
 
 // EventRule represents a self-improving event-cause-effect prediction rule.
