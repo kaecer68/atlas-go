@@ -29,7 +29,6 @@ import (
 	apieventlogic "github.com/kaecer68/atlas-go/internal/monitoring/api/eventlogic"
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 	apiexperiment "github.com/kaecer68/atlas-go/internal/monitoring/api/experiment"
-	apihealth "github.com/kaecer68/atlas-go/internal/monitoring/api/health"
 	apiindustry "github.com/kaecer68/atlas-go/internal/monitoring/api/industry"
 	apilive "github.com/kaecer68/atlas-go/internal/monitoring/api/live"
 	apimacro "github.com/kaecer68/atlas-go/internal/monitoring/api/macro"
@@ -38,10 +37,8 @@ import (
 	apiparameters "github.com/kaecer68/atlas-go/internal/monitoring/api/parameters"
 	apiperformance "github.com/kaecer68/atlas-go/internal/monitoring/api/performance"
 	apipipeline "github.com/kaecer68/atlas-go/internal/monitoring/api/pipeline"
-	apireport "github.com/kaecer68/atlas-go/internal/monitoring/api/report"
 	apirisk "github.com/kaecer68/atlas-go/internal/monitoring/api/risk"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
-	apiswagger "github.com/kaecer68/atlas-go/internal/monitoring/api/swagger"
 	apisystem "github.com/kaecer68/atlas-go/internal/monitoring/api/system"
 	apitaskexec "github.com/kaecer68/atlas-go/internal/monitoring/api/taskexec"
 	apitax "github.com/kaecer68/atlas-go/internal/monitoring/api/tax"
@@ -532,7 +529,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	decisionHandlers.RegisterRoutes(mux)
 
 	reportSvc := service.NewReportService(a.workDir, a.ledgerDir, outcomeStore)
-	reportHandlers := apireport.NewHandlers(reportSvc)
+	reportHandlers := apipipeline.NewReportHandlers(reportSvc)
 	reportHandlers.RegisterRoutes(mux)
 
 	metricsSvc := service.NewMetricsService(
@@ -583,10 +580,10 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	}
 	systemHandlers.RegisterRoutes(mux)
 
-	handlers := &apihealth.Handlers{}
+	handlers := &apisystem.HealthHandlers{}
 	handlers.RegisterRoutes(mux)
 
-	mux.HandleFunc("/api/health/data-integrity", apihealth.HandleDataIntegrity(a.workDir, a.ledgerDir))
+	mux.HandleFunc("/api/health/data-integrity", apisystem.HandleDataIntegrity(a.workDir, a.ledgerDir))
 
 	riskHandlers := apirisk.NewHandlers(a.ledgerDir)
 	riskHandlers.RegisterRoutes(mux)
@@ -778,7 +775,7 @@ func (a *DashboardAPI) RegisterIndustryRoutes(mux *http.ServeMux) {
 }
 
 func (a *DashboardAPI) RegisterSwaggerRoutes(mux *http.ServeMux) {
-	swaggerHandlers := apiswagger.NewHandlers(a.workDir)
+	swaggerHandlers := apisystem.NewSwaggerHandlers(a.workDir)
 	swaggerHandlers.RegisterRoutes(mux)
 }
 

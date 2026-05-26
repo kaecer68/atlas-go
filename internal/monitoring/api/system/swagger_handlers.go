@@ -1,4 +1,4 @@
-package swagger
+package system
 
 import (
 	"net/http"
@@ -8,20 +8,22 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 )
 
-type Handlers struct {
+// SwaggerHandlers serves the Swagger UI and swagger.json spec.
+type SwaggerHandlers struct {
 	WorkDir string
 }
 
-func NewHandlers(workDir string) *Handlers {
-	return &Handlers{WorkDir: workDir}
+// NewSwaggerHandlers creates a SwaggerHandlers with the given working directory.
+func NewSwaggerHandlers(workDir string) *SwaggerHandlers {
+	return &SwaggerHandlers{WorkDir: workDir}
 }
 
-func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
+func (h *SwaggerHandlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/docs", shared.GetRaw(h.HandleSwaggerUI))
 	mux.Handle("GET /api/docs/swagger.json", shared.GetRaw(h.HandleSwaggerJSON))
 }
 
-func (h *Handlers) HandleSwaggerUI(w http.ResponseWriter, r *http.Request) (int, any) {
+func (h *SwaggerHandlers) HandleSwaggerUI(w http.ResponseWriter, r *http.Request) (int, any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(`<!DOCTYPE html>
 <html lang="en">
@@ -45,7 +47,7 @@ SwaggerUIBundle({
 	return 0, nil
 }
 
-func (h *Handlers) HandleSwaggerJSON(w http.ResponseWriter, r *http.Request) (int, any) {
+func (h *SwaggerHandlers) HandleSwaggerJSON(w http.ResponseWriter, r *http.Request) (int, any) {
 	data, err := os.ReadFile(filepath.Join(h.WorkDir, "docs/swagger.json"))
 	if err != nil {
 		return http.StatusNotFound, map[string]string{"error": "swagger spec not found"}
