@@ -77,64 +77,18 @@ func NewFactorWeightEngine() *FactorWeightEngine {
 func (e *FactorWeightEngine) GetWeights(regime string) map[FactorType]float64 {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	// Fall back to stored regime when caller passes empty string (backward compat).
-	if regime == "" && e.currentRegime != "" {
-		regime = e.currentRegime
-	}
-	// Map domain.Regime constants to internal regime names.
-	switch regime {
-	case "RISK_ON":
-		regime = "bull"
-	case "RISK_OFF":
-		regime = "bear"
-	}
 	weights := make(map[FactorType]float64)
 	maps.Copy(weights, e.baseWeights)
 
-	// Read regime deltas and clamp bounds from config with hardcoded fallback
+	// Read clamp bounds from config with hardcoded fallback
 	fw := fwConfig()
 	var (
-		bullMomentum = 0.05
-		bullQuality  = -0.03
-		bullValue    = -0.02
-		bearQuality  = 0.05
-		bearValue    = 0.03
-		bearMomentum = -0.05
-		highVolLiq   = 0.05
-		highVolMom   = -0.03
-		highVolInst  = -0.02
-		clampMin     = 0.02
-		clampMax     = 0.50
+		clampMin = 0.02
+		clampMax = 0.50
 	)
 	if fw != nil {
-		bullMomentum = fw.RegimeBullMomentum.Value
-		bullQuality = fw.RegimeBullQuality.Value
-		bullValue = fw.RegimeBullValue.Value
-		bearQuality = fw.RegimeBearQuality.Value
-		bearValue = fw.RegimeBearValue.Value
-		bearMomentum = fw.RegimeBearMomentum.Value
-		highVolLiq = fw.RegimeHighVolLiquidity.Value
-		highVolMom = fw.RegimeHighVolMomentum.Value
-		highVolInst = fw.RegimeHighVolInstSent.Value
 		clampMin = fw.ClampMin.Value
 		clampMax = fw.ClampMax.Value
-	}
-
-	switch regime {
-	case "bull":
-		weights[FactorMomentum] += bullMomentum
-		weights[FactorQuality] += bullQuality
-		weights[FactorValue] += bullValue
-	case "bear":
-		weights[FactorQuality] += bearQuality
-		weights[FactorValue] += bearValue
-		weights[FactorMomentum] += bearMomentum
-		weights[FactorIndustryCycle] += 0.04
-	case "high_vol":
-		weights[FactorLiquidity] += highVolLiq
-		weights[FactorMomentum] += highVolMom
-		weights[FactorInstSent] += highVolInst
-		weights[FactorIndustryCycle] += 0.03
 	}
 
 	// Scale Narrative factor weight by active event intensity.
@@ -152,6 +106,16 @@ func (e *FactorWeightEngine) GetWeights(regime string) map[FactorType]float64 {
 				weights[ft] += delta
 			}
 		}
+	}
+	// Apply regime event weights (keyed by "regime_*", not activeEvent IDs).
+	for ft, delta := range e.eventWeights["regime_risk_on"] {
+		weights[ft] += delta
+	}
+	for ft, delta := range e.eventWeights["regime_risk_off"] {
+		weights[ft] += delta
+	}
+	for ft, delta := range e.eventWeights["regime_high_vol"] {
+		weights[ft] += delta
 	}
 
 	for ft, delta := range e.strategyAdjustment {
@@ -212,10 +176,17 @@ func (e *FactorWeightEngine) OnRegimeChange(oldRegime, newRegime string, confide
 	var (
 		riskOnMom  = 0.05
 		riskOnQual = -0.03
+		riskOnVal  = -0.02
 		riskOffMom = -0.05
 		riskOffQ   = 0.05
+		riskOffVal = 0.03
 		riskOffLiq = 0.03
 		riskOffETF = 0.04
+		riskOffIC  = 0.04
+		highVolLiq = 0.05
+		highVolMom = -0.03
+		highVolInst = -0.02
+		highVolIC  = 0.03
 	)
 	if fw != nil {
 		riskOnMom = fw.RiskOnMomentum.Value
@@ -230,17 +201,28 @@ func (e *FactorWeightEngine) OnRegimeChange(oldRegime, newRegime string, confide
 		e.eventWeights["regime_risk_on"] = map[FactorType]float64{
 			FactorMomentum: riskOnMom,
 			FactorQuality:  riskOnQual,
+			FactorValue:    riskOnVal,
 		}
 	case "RISK_OFF":
 		e.eventWeights["regime_risk_off"] = map[FactorType]float64{
-			FactorMomentum:  riskOffMom,
-			FactorQuality:   riskOffQ,
-			FactorLiquidity: riskOffLiq,
-			FactorETF:       riskOffETF,
+			FactorMomentum:      riskOffMom,
+			FactorQuality:       riskOffQ,
+			FactorValue:         riskOffVal,
+			FactorLiquidity:     riskOffLiq,
+			FactorETF:           riskOffETF,
+			FactorIndustryCycle: riskOffIC,
+		}
+	case "high_vol":
+		e.eventWeights["regime_high_vol"] = map[FactorType]float64{
+			FactorMomentum:       highVolMom,
+			FactorLiquidity:      highVolLiq,
+			FactorInstSent:       highVolInst,
+			FactorIndustryCycle:  highVolIC,
 		}
 	default:
 		delete(e.eventWeights, "regime_risk_on")
 		delete(e.eventWeights, "regime_risk_off")
+		delete(e.eventWeights, "regime_high_vol")
 	}
 }
 

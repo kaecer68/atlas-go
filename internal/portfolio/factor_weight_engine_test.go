@@ -27,19 +27,21 @@ func TestFactorWeightEngine_GetWeights_Default(t *testing.T) {
 
 func TestFactorWeightEngine_GetWeights_BullRegime(t *testing.T) {
 	engine := NewFactorWeightEngine()
-	weights := engine.GetWeights("bull")
+	engine.OnRegimeChange("", "RISK_ON", 0.8)
+	weights := engine.GetWeights("")
 
 	if weights[FactorMomentum] <= weights[FactorQuality] {
-		t.Error("bull regime should boost momentum above quality")
+		t.Error("RISK_ON regime should boost momentum above quality")
 	}
 }
 
 func TestFactorWeightEngine_GetWeights_BearRegime(t *testing.T) {
 	engine := NewFactorWeightEngine()
-	weights := engine.GetWeights("bear")
+	engine.OnRegimeChange("", "RISK_OFF", 0.8)
+	weights := engine.GetWeights("")
 
 	if weights[FactorQuality] <= weights[FactorMomentum] {
-		t.Error("bear regime should boost quality above momentum")
+		t.Error("RISK_OFF regime should boost quality above momentum")
 	}
 }
 

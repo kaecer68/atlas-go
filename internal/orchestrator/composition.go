@@ -8,6 +8,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
+	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -132,6 +133,27 @@ func buildFactorEngine(runtimeParams *portfolio.RuntimeParameters, macroSnap *ma
 		WithFundamentalProvider(fp).
 		WithPreciousMetalsProvider(pmProvider).
 		WithETFAnalyzer(ea)
+
+	// Wire industry cycle provider from CycleTracker with default positions.
+	cycleTracker := industry.NewCycleTracker()
+	fe.WithIndustryCycleProvider(func(symbol string) *domain.IndustryCycleFactorScore {
+		industryID := symbolToIndustryID(symbol)
+		if industryID == "" {
+			return nil
+		}
+		pos, ok := cycleTracker.GetPosition(industryID)
+		if !ok {
+			return nil
+		}
+		return &domain.IndustryCycleFactorScore{
+			Score:      pos.GetPhaseScore(),
+			Phase:      string(pos.BusinessCycle),
+			PhaseScore: pos.GetPhaseScore(),
+			Confidence: pos.Confidence,
+			IndustryID: industryID,
+		}
+	})
+
 	return fe, hp, fp
 }
 
@@ -241,4 +263,20 @@ func loadRuntimeParamsOrDefault(parametersConfigPath string) *portfolio.RuntimeP
 		paramsCfg = config.DefaultParametersConfig()
 	}
 	return portfolio.ToRuntimeParameters(paramsCfg)
+}
+
+// symbolToIndustryID maps a stock symbol to an industry ID using Taiwan market conventions.
+func symbolToIndustryID(symbol string) string {
+	switch {
+	case symbol == "2330.TW" || symbol == "2454.TW" || symbol == "2303.TW":
+		return "semiconductor"
+	case symbol == "2317.TW" || symbol == "2382.TW":
+		return "electronics"
+	case symbol == "2881.TW" || symbol == "2882.TW" || symbol == "2891.TW":
+		return "financials"
+	case symbol == "2603.TW" || symbol == "2609.TW" || symbol == "2615.TW":
+		return "shipping"
+	default:
+		return ""
+	}
 }
