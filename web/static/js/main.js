@@ -143,11 +143,6 @@ function adaptEventsFromDecisionChain(dc) {
   return { events: merged };
 }
 
-function adaptSectorHeatmapFromDecisionChain(dc) {
-  if (!dc || !dc.sector_heatmap) return null;
-  return { sector_heatmap: dc.sector_heatmap };
-}
-
 // --- Main Data Loader ---
 async function loadAll() {
   var loadingBar = document.getElementById('loadingBar');
@@ -159,12 +154,14 @@ async function loadAll() {
       safeGetJSON('/api/dashboard/system-health'),
       safeGetJSON('/api/dashboard/macro-radar'),
       safeGetJSON('/api/dashboard/agent-observatory'),
+      safeGetJSON('/api/dashboard/recommendation-pipeline'),
       safeGetJSON('/api/dashboard/decision-chain'),
       safeGetJSON('/api/dashboard/live-status'),
       safeGetJSON('/api/dashboard/risk-exposure'),
       safeGetJSON('/api/dashboard/experiment-inbox'),
       safeGetJSON('/api/dashboard/universe-overlap'),
       safeGetJSON('/api/taiwan/stress-index'),
+      safeGetJSON('/api/narrative/events'),
       safeGetJSON('/api/narrative/chains'),
       safeGetJSON('/api/narrative/models'),
       safeGetJSON('/api/narrative/templates'),
@@ -184,15 +181,16 @@ async function loadAll() {
       safeGetJSON('/api/dashboard/risk-calibration'),
     ]);
 
-    var health = results[0], macro = results[1], agents = results[2], decisionChain = results[3], live = results[4],
-        riskExposure = results[5], inbox = results[6], overlap = results[7], stress = results[8], chains = results[9],
-        models = results[10], templates = results[11], snapshot = results[12], dataChannels = results[13],
-        sessions = results[14], phase3 = results[15], alerts = results[16], retailSentiment = results[17],
-        capitalPhase = results[18], taxSnapshot = results[19], seasonal = results[20], regimeHistory = results[21],
-        darwinianTrend = results[22], dataIntegrity = results[23], darwinianStatus = results[24], riskCalibration = results[25];
+    var health = results[0], macro = results[1], agents = results[2], pipeline = results[3], decisionChain = results[4], live = results[5],
+        riskExposure = results[6], inbox = results[7], overlap = results[8], stress = results[9], events = results[10], chains = results[11],
+        models = results[12], templates = results[13], snapshot = results[14], dataChannels = results[15],
+        sessions = results[16], phase3 = results[17], alerts = results[18], retailSentiment = results[19],
+        capitalPhase = results[20], taxSnapshot = results[21], seasonal = results[22], regimeHistory = results[23],
+        darwinianTrend = results[24], dataIntegrity = results[25], darwinianStatus = results[26], riskCalibration = results[27];
 
-    var pipeline = decisionChain && decisionChain.recommendations ? decisionChain.recommendations : null;
-    var events = adaptEventsFromDecisionChain(decisionChain);
+    // Use decision-chain for narrative events when available.
+    var dcEvents = adaptEventsFromDecisionChain(decisionChain);
+    if (dcEvents) events = dcEvents;
 
     var failures = results.filter(function(v) { return v === null; }).length;
     if (failures > results.length * 0.5) {
@@ -214,7 +212,6 @@ async function loadAll() {
     if (m.dash.renderAIEvolution) m.dash.renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend, agents, macro, stress);
 
     if (m.pipe.renderPipeline) m.pipe.renderPipeline(pipeline, false, '');
-    if (m.pipe.renderDecisionChain) m.pipe.renderDecisionChain(pipeline, macro, agents, stress, events, chains, models, inbox, phase3, taxSnapshot, regimeHistory);
 
     if (m.narr.renderLiveNarrativeStrip) m.narr.renderLiveNarrativeStrip(events, stress, models, chains);
     if (m.narr.renderNarrativePage) m.narr.renderNarrativePage(snapshot, stress, events, chains, models, templates, retailSentiment, seasonal);
