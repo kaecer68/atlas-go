@@ -1,346 +1,206 @@
-# Real-Time Quote Architecture Specification
+# Real-Time Regime Detection & Agent Adaptation — Architecture Specification
 
 ## 1. Overview
 
-本規格定義 `atlas-go` 即時報價基礎設施的設計目標、介面契約與實作約束。
+本規格定義 `atlas-go` 即時市場狀態偵測（regime detection）與代理權重動態調整（agent weight adaptation）模組的設計目標、介面契約與實作約束。
 
-**目標**：新增基於 WebSocket 的即時報價能力，作為現有 `HybridProvider`（FinMind/Fugle/TWSE）的補充層。
+**模組位置**: `internal/realtime/`
 
----
-
-## 2. 現有基礎設施分析
-
-### 2.1 現有 Provider 堆疊
-
-| Provider | 類型 | 用途 |
-|----------|------|------|
-| `FinMindProvider` | HTTP REST (日線) | 每日收盤報價 |
-| `FugleProvider` | HTTP REST (日內) | 盤中快照報價 |
-| `TWSEClient` | HTTP REST | 最後備援 |
-| `PollingAdapter` | 輪詢 | 將任何 `Provider` 包裝為 `StreamingProvider` |
-
-### 2.2 現有 `Quote` 結構 (`internal/domain/types.go`)
-
-```go
-type Quote struct {
-    Symbol     string
-    Last       float64   // 最新成交價
-    Open       float64   // 開盤價
-    High       float64   // 最高價
-    Low        float64   // 最低價
-    Volume     int64     // 成交量
-    Market     string    // "TW"
-    AsOf       time.Time // 報價時間
-    IsTradable bool
-    Source     string    // "finmind", "fugle", "twse"
-}
-```
-
-### 2.3 現有 `StreamingProvider` 介面 (`internal/marketdata/streaming.go`)
-
-```go
-type QuoteHandler func(quote domain.Quote)
-
-type StreamingProvider interface {
-    Subscribe(ctx context.Context, symbols []string, handler QuoteHandler) error
-    Unsubscribe(ctx context.Context, symbols []string) error
-}
-```
-
-**問題**：`PollingAdapter` 依賴 `time.Ticker`，在多訂閱者情境下會重複輪詢，效率低落。
+**核心能力**:
+- 亞秒級市場狀態分類（7 種 regime type）
+- 基於即時數據窗口的自動 regime 偵測
+- 偵測到 regime 變化時動態調整 agent 權重
+- 可配置的靈敏度與權重變動限制
 
 ---
 
-## 3. 新增元件設計
+## 2. Regime 分類體系
 
-### 3.1 `RealtimeProvider` 介面
-
-```go
-// QuoteCallback 是接收即時報價的回調函式。
-type QuoteCallback func(quote domain.Quote)
-
-// RealtimeProvider 為即時報價來源的最高層級介面。
-type RealtimeProvider interface {
-    // Connect 建立 WebSocket 連線。
-    Connect(ctx context.Context) error
-
-    // Disconnect 關閉 WebSocket 連線。
-    Disconnect(ctx context.Context) error
-
-    // Subscribe 訂閱指定 symbols 的即時報價。
-    Subscribe(symbols []string) error
-
-    // Unsubscribe 取消訂閱指定 symbols。
-    Unsubscribe(symbols []string) error
-
-    // OnQuote 設定報價回調。
-    OnQuote(callback QuoteCallback)
-
-    // IsConnected 查詢連線狀態。
-    IsConnected() bool
-
-    // Name 回傳 provider 名稱。
-    Name() string
-}
-```
-
-### 3.2 `FugleWebSocketProvider` 實作
-
-Fugle 富果行情 WebSocket API：
-
-- **端點**：`wss://api.fugle.tw/marketdata/v1.0/stock/streaming`
-- **驗證**：`auth` 事件攜帶 `apikey`
-- **訂閱**：`subscribe` 事件指定 `channel` 與 `symbol`
-- **頻道**：`trades`（最新成交）、`candles`（分鐘 K）、`books`（五檔）、`aggregates`（聚合）
-- **心跳**：Server 每 30 秒發送 heartbeat
-
-#### 3.2.1 連線生命週期
-
-```
-Connect()
-  ├─ 建立 WebSocket 連線
-  ├─ 發送 auth 事件 {event: "auth", data: {apikey: "..."}}
-  └─ 等待 authenticated 事件確認
-
-Subscribe(symbols)
-  ├─ 發送 subscribe 事件 {event: "subscribe", data: {channel: "trades", symbol: "2330"}}
-  └─ 啟動訊息讀取 goroutine
-
-Disconnect()
-  ├─ 發送 unsubscribe 事件（可選）
-  └─ 關閉 WebSocket 連線
-```
-
-#### 3.2.2 重連機制（指數退避）
+### 2.1 RegimeType
 
 ```go
+type RegimeType string
+
 const (
-    initialBackoff = 1 * time.Second
-    maxBackoff     = 60 * time.Second
-    backoffFactor  = 2.0
+    RegimeCalm         RegimeType = "calm"          // 平穩盤
+    RegimeVolatile     RegimeType = "volatile"      // 高波動
+    RegimeTrendingUp   RegimeType = "trending_up"   // 上升趨勢
+    RegimeTrendingDown RegimeType = "trending_down" // 下降趨勢
+    RegimeReversing    RegimeType = "reversing"     // 反轉訊號
+    RegimeBreakout     RegimeType = "breakout"      // 突破（價量齊揚）
+    RegimeBreakdown    RegimeType = "breakdown"     // 破底（價量齊跌）
 )
-
-func (p *FugleWebSocketProvider) reconnect() error {
-    p.mu.Lock()
-    p.backoff = p.backoff * backoffFactor
-    if p.backoff > maxBackoff {
-        p.backoff = maxBackoff
-    }
-    p.mu.Unlock()
-
-    time.Sleep(p.backoff)
-    return p.Connect(context.Background())
-}
 ```
 
-觸發條件：
-- WebSocket 連線斷開
-- 收到錯誤訊息
-- 認證失敗
+### 2.2 偵測邏輯（優先序）
 
-### 3.3 `RealtimeRouter`（多 Provider 路由）
+| 優先序 | 條件 | Regime |
+|--------|------|--------|
+| 1 | 偵測到反轉型態 | `reversing` |
+| 2 | 成交量飆升 + 價格變動 > 2× 門檻 | `breakout` / `breakdown` |
+| 3 | 波動率 > 門檻 | `volatile` |
+| 4 | 價格趨勢 > 門檻 | `trending_up` / `trending_down` |
+| 5 | 以上皆非 | `calm` |
+
+---
+
+## 3. 核心元件
+
+### 3.1 MarketDataPoint
 
 ```go
-// RealtimeRouter 整合多個即時 Provider，支援備援切換。
-type RealtimeRouter struct {
-    providers []RealtimeProvider
-    primary   int // 目前主動 provider 索引
-    mu        sync.RWMutex
-}
-
-// Subscribe 將符號訂閱請求路由到目前 primary provider。
-func (r *RealtimeRouter) Subscribe(symbols []string) error
-
-// SwitchToNext 若 primary provider 失敗，自動切換到下一個。
-func (r *RealtimeRouter) SwitchToNext() error
-```
-
----
-
-## 4. Fugle WebSocket 訊息格式
-
-### 4.1 認證
-
-```json
-// 發送
-{"event": "auth", "data": {"apikey": "YOUR_API_KEY"}}
-
-// 接收
-{"event": "authenticated", "data": {"apikey": "YOUR_API_KEY"}}
-```
-
-### 4.2 訂閱 (`trades` 頻道)
-
-```json
-// 發送
-{"event": "subscribe", "data": {"channel": "trades", "symbol": "2330"}}
-
-// 接收
-{
-  "event": "data",
-  "data": {
-    "symbol": "2330",
-    "type": "EQUITY",
-    "exchange": "TWSE",
-    "date": "2026-04-30T14:30:00.000+08:00",
-    "price": 1050.0,
-    "unit": 1000,
-    "volume": 4778,
-    "bid": 1045.0,
-    "ask": 1050.0
-  },
-  "channel": "trades"
+type MarketDataPoint struct {
+    Symbol    string    `json:"symbol"`
+    Price     float64   `json:"price"`
+    Volume    float64   `json:"volume"`
+    Bid       float64   `json:"bid"`
+    Ask       float64   `json:"ask"`
+    Spread    float64   `json:"spread"`
+    Timestamp time.Time `json:"timestamp"`
 }
 ```
 
-### 4.3 轉換為 `domain.Quote`
+### 3.2 RegimeDetector
 
 ```go
-func parseFugleTrade(data map[string]interface{}) (domain.Quote, error) {
-    quote := domain.Quote{
-        Symbol: data["symbol"].(string),
-        Last:   data["price"].(float64),
-        Volume: int64(data["volume"].(float64)),
-        Market: "TW",
-        AsOf:   parseTime(data["date"].(string)),
-        Source: "fugle-ws",
-    }
-    return quote, nil
+type RegimeDetector struct {
+    windowSize           int
+    volatilityThreshold  float64
+    volumeSpikeThreshold float64
+    priceChangeThreshold float64
 }
+
+func NewRegimeDetector(params *config.RealtimeParameters) *RegimeDetector
+func (rd *RegimeDetector) DetectRegime(data []MarketDataPoint) RegimeType
 ```
 
----
+偵測演算法:
+1. `calculateVolatility()` — 報酬率標準差
+2. `detectVolumeSpike()` — 最新成交量 vs 前 N-1 筆平均
+3. `calculatePriceTrend()` — 價格動能
+4. `detectReversal()` — 反轉型態辨識
 
-## 5. 與現有系統整合
-
-### 5.1 整合 `HybridProvider`
-
-`RealtimeProvider` 為獨立擴展，不修改現有 `HybridProvider` 結構。建議使用方式：
+### 3.3 RealTimeAdapter
 
 ```go
-// 場景 1：純輪詢（現有）
-hybrid := NewHybridProvider(finmindKey, fugleKey)
-polling := &PollingAdapter{Base: hybrid, Interval: 30}
-polling.Subscribe(ctx, symbols, handler)
-
-// 場景 2：即時優先（新建）
-realtime := NewFugleWebSocketProvider(fugleKey)
-realtime.OnQuote(func(q domain.Quote) { ... })
-realtime.Connect(ctx)
-realtime.Subscribe(symbols)
-```
-
-### 5.2 整合 `StreamingProvider`
-
-擴展 `StreamingProvider` 介面以支援 WebSocket：
-
-```go
-// ConnectiveStreamingProvider 為支援主動連線的 StreamingProvider。
-type ConnectiveStreamingProvider interface {
-    StreamingProvider
-    Connect(ctx context.Context) error
-    Disconnect(ctx context.Context) error
-    IsConnected() bool
+type RealTimeAdapter struct {
+    detector     *RegimeDetector
+    dataWindows  map[string][]MarketDataPoint
+    agentWeights map[string]map[string]float64
+    config       *RealTimeConfig
+    mu           sync.RWMutex
 }
+
+func NewRealTimeAdapter(params *config.RealtimeParameters) *RealTimeAdapter
+func (rta *RealTimeAdapter) IngestData(point MarketDataPoint)
+func (rta *RealTimeAdapter) RegisterAgent(agentID string, symbols []string, initialWeight float64)
+func (rta *RealTimeAdapter) GetAgentWeight(agentID, symbol string) float64
+func (rta *RealTimeAdapter) Start(ctx context.Context) error
+func (rta *RealTimeAdapter) Stop()
+```
+
+**資料流**:
+```
+MarketDataPoint → IngestData() → dataWindows[symbol]
+    → 每 N ms 檢查: DetectRegime(window) → regime change?
+    → 若 regime 變化: AdjustWeights(regime) → agentWeights 更新
+    → 發送 RegimeChangeEvent 至 eventbus
 ```
 
 ---
 
-## 6. 錯誤處理
+## 4. 參數配置
 
-| 錯誤情境 | 處理策略 |
-|----------|----------|
-| WebSocket 連線失敗 | 指數退避重連（1s → 2s → 4s → ... → 60s 上限） |
-| 認證失敗 | 記錄錯誤，不重連（API Key 問題需人工修復） |
-| 訂閱失敗 | 記錄錯誤，返回錯誤給呼叫者 |
-| 訊息解析失敗 | 記錄錯誤訊息，繼續處理下一條 |
-| Provider 斷線 | 觸發 `SwitchToNext()` 切換備援 |
+所有參數由 `internal/config/parameters.go` 的 `RealtimeParameters` 管理：
 
----
-
-## 7. 速率限制
-
-Fugle 富果行情 WebSocket API 目前**無明確速率限制**，但需遵守：
-
-- 每個連線同時訂閱 symbols 有限制（建議 ≤ 50）
-- 若有新 symbols 需求，先 `Unsubscribe` 不再需要的，再 `Subscribe` 新的
+| 參數 | 預設值 | 說明 |
+|------|--------|------|
+| `VolatilityThreshold` | 0.02 | 波動率門檻（2%） |
+| `VolumeSpikeThreshold` | 2.0 | 成交量飆升倍數 |
+| `PriceChangeThreshold` | 0.01 | 價格變動門檻（1%） |
+| `MinConfidence` | 0.7 | 最小信心度（70%） |
+| `WeightAdjustmentRate` | 0.10 | 權重調整速率 |
+| `MaxWeightChange` | 0.50 | 單次最大權重變動 |
+| `MinWeight` | 0.10 | 最低權重下限 |
+| `UpdateIntervalMs` | 100 | 檢查間隔（毫秒） |
 
 ---
 
-## 8. 設定檔結構
+## 5. 與 Orchestrator 整合
 
-```yaml
-# configs/realtime.yaml
-realtime:
-  enabled: true
-  provider: fugle  # 目前僅支援 fugle
+`RealTimeAdapter` 透過以下方式與系統其他模組互動：
 
-  fugle:
-    api_key: ${FUGLE_API_KEY}
-    endpoint: "wss://api.fugle.tw/marketdata/v1.0/stock/streaming"
+1. **EventBus**: regime 變化時發布 `RegimeChangeEvent`
+2. **JANUS**: 接收 regime 變化通知，用於跨 cohort regime 偵測
+3. **PRISM**: regime-specific 訓練佇列可根據即時 regime 調整優先序
+4. **Portfolio**: agent 權重由 `GetAgentWeight()` 提供給 Darwinian 權重管理
 
-  reconnection:
-    initial_backoff: "1s"
-    max_backoff: "60s"
-    backoff_factor: 2.0
-
-  channels:
-    - trades      # 即時成交（主要使用）
-    # - candles    # 分鐘K（可選）
-    # - books       # 五檔（可選）
-
-  symbols:
-    max_per_connection: 50
+```
+RealtimeAdapter
+    ├─ IngestData()        ← marketdata.Provider
+    ├─ DetectRegime()      → EventBus (RegimeChangeEvent)
+    │   ├─ → JANUS 跨 cohort 偵測
+    │   └─ → PRISM 訓練佇列調整
+    └─ GetAgentWeight()    → Portfolio Darwinian 權重
 ```
 
 ---
 
-## 9. 測試策略
+## 6. 測試策略
 
-### 9.1 單元測試
+### 6.1 單元測試（`realtime_test.go`）
 
-- `FugleWebSocketProvider` 狀態機測試（Connect → Subscribe → Disconnect）
-- 訊息解析測試（Fugle JSON → `domain.Quote`）
-- 重連邏輯測試（計數器、倍數、上限）
+- `NewRealTimeAdapter` — 初始化驗證
+- `DefaultConfig` — 參數預設值驗證
+- `IngestData` — 數據注入與窗口管理
+- `RegisterAgent` / `GetAgentWeight` — 權重註冊與查詢
+- `DetectRegime` — 各 regime 型態偵測正確性
 
-### 9.2 整合測試
+### 6.2 整合測試
 
-- Mock WebSocket Server（`net/http/httptest` + `golang.org/x/net/websocket`）
-- 端對端訂閱流程測試
+- 多 symbol 併發 `IngestData` → regime 偵測正確性
+- `Start()` / `Stop()` 生命週期管理
+- Regime 變化 → EventBus 事件發布驗證
 
 ---
 
-## 10. 預定產出檔案
+## 7. 檔案結構
 
 ```
-internal/marketdata/
-  ├─ realtime/
-  │   ├─ provider.go        # RealtimeProvider 介面
-  │   ├─ fugle_ws.go        # FugleWebSocketProvider 實作
-  │   ├─ router.go          # RealtimeRouter 多路器
-  │   ├─ fugle_ws_test.go   # 單元測試
-  │   └─ fugle_ws_mock_test.go  # Mock WebSocket 整合測試
-
-configs/
-  └─ realtime.yaml          # 設定檔
+internal/realtime/
+├─ regime_adapter.go    # RealTimeAdapter + RegimeDetector 實作
+└─ realtime_test.go     # 單元測試
 ```
 
 ---
 
-## 11. 約束
+## 8. 未來擴展
 
-1. **不修改現有 Provider**：新實作位於 `internal/marketdata/realtime/` 子目錄
-2. **不引入全域狀態**：使用依賴注入，由 caller 持有 `RealtimeRouter` 實例
-3. **符合 Go 程式碼慣例**：介面小而聚焦，錯誤包裝，`gofmt` 格式化
-4. **支援 `context.Context`**：所有連線操作支援取消
+| 項目 | 狀態 | 說明 |
+|------|------|------|
+| WebSocket 即時報價 provider | 未實作 | 見 `internal/marketdata/` 現有 provider 架構 |
+| 多 symbol 批次 regime 偵測 | 已實作 | `dataWindows` 支援多 symbol |
+| 歷史 regime 回測驗證 | 規劃中 | 需與 JANUS 歷史 cohort 數據整合 |
+| Fugle WebSocket 串接 | 未實作 | Fugle 為付費 API，circuit breaker 保護 |
 
 ---
 
-## 12. Status
+## 9. 約束
 
-**NEEDS_CONTEXT** - 需要以下資訊才能實作：
+1. **不修改現有 Provider**: realtime 模組獨立於 `marketdata.Provider` 體系
+2. **不引入全域狀態**: `RealTimeAdapter` 由 caller 持有實例，依賴注入
+3. **符合 Go 慣例**: 介面小而聚焦，錯誤包裝，`gofmt` 格式化
+4. **支援 context.Context**: `Start()` / `Stop()` 支援 graceful shutdown
 
-1. **WebSocket 函式庫選擇**：目前無 WebSocket 依賴，需確認是否使用 `gorilla/websocket` 或標準庫 `net/http` + `golang.org/x/net/websocket`
-2. **長期報價擴展**：`candles`（分鐘K）是否需要與 `domain.Quote` 不同的結構？
-3. **與 Orchestrator 整合點**：`RealtimeRouter` 的輸出如何傳遞給現有 Orchestrator？
+---
 
+## 10. Status
+
+**IMPLEMENTED** — `internal/realtime/` 已實作核心 regime 偵測與權重調整邏輯。
+
+- ✅ RegimeDetector（7 種 regime 分類）
+- ✅ RealTimeAdapter（數據窗口 + agent 權重管理）
+- ✅ 參數化配置（經由 `config.RealtimeParameters`）
+- ✅ 單元測試覆蓋
+- 🔄 EventBus 整合（部分完成）
+- 🔄 Orchestrator pipeline 整合（進行中）
