@@ -542,6 +542,31 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 		})
 	}
 
+	// Emit WARN trace when all agents muted (zero recommendations)
+	if len(recs) == 0 && scratchpad != nil {
+		activeAgents := 0
+		for _, agent := range registry.Agents {
+			if agent.Enabled && (agent.Layer == domain.LayerSector || agent.Layer == domain.LayerStyle || agent.Layer == domain.LayerSuperinvestor) {
+				activeAgents++
+			}
+		}
+		scratchpad.Record(ReasoningTrace{
+			SessionID: sessionID,
+			Timestamp: time.Now().UTC(),
+			Phase:     PhaseAgentRecommendation,
+			Step:      3,
+			Component: "recommendation_collector",
+			Action:    "zero_recommendations_warning",
+			Reasoning: "All agents muted: no recommendations generated",
+			Data: map[string]any{
+				"agents_total":  len(registry.Agents),
+				"agents_active": activeAgents,
+				"regime":        string(regime),
+			},
+			Confidence: 0.0,
+		})
+	}
+
 	return recs, rejects
 }
 
