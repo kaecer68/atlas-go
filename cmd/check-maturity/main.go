@@ -248,7 +248,7 @@ func parseMaturityMD(path string) map[string]string {
 	if err != nil {
 		return result
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	tierMap := map[string]string{
 		"S · Stable":       "stable",

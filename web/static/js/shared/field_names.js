@@ -336,11 +336,23 @@ export const FIELD = {
     after_tax_value: 'after_tax_value',
     tax_paid: 'tax_paid',
   },
+  EventBlock: {
+    today: 'today',
+    recent: 'recent',
+    premarket: 'premarket',
+  },
   ExecutionPolicy: {
     conviction_floor: 'conviction_floor',
     require_cro_pass: 'require_cro_pass',
     momentum_crash_protection: 'momentum_crash_protection',
     enable_conviction_normalization: 'enable_conviction_normalization',
+  },
+  ExitAlert: {
+    symbol: 'symbol',
+    name: 'name',
+    days_held: 'days_held',
+    pnl_pct: 'pnl_pct',
+    suggestion: 'suggestion',
   },
   ExperimentInboxItem: {
     experiment_id: 'experiment_id',
@@ -495,6 +507,11 @@ export const FIELD = {
     input_count: 'input_count',
     output_count: 'output_count',
     severity: 'severity',
+  },
+  HeatmapEntry: {
+    sector: 'sector',
+    confidence: 'confidence',
+    reasons: 'reasons',
   },
   HumanIntervention: {
     id: 'id',
@@ -799,6 +816,14 @@ export const FIELD = {
     pnl_pct: 'pnl_pct',
     sector: 'sector',
   },
+  PremarketData: {
+    us_market: 'us_market',
+    foreign_flow: 'foreign_flow',
+    fx: 'fx',
+    bdi: 'bdi',
+    vix: 'vix',
+    stress_index: 'stress_index',
+  },
   PromptControl: {
     volume_floor: 'volume_floor',
     volume_downgrade: 'volume_downgrade',
@@ -867,6 +892,14 @@ export const FIELD = {
   ReasoningTraceResponse: {
     session_id: 'session_id',
     traces: 'traces',
+  },
+  RecEntry: {
+    symbol: 'symbol',
+    name: 'name',
+    action: 'action',
+    shares: 'shares',
+    confidence: 'confidence',
+    reasons: 'reasons',
   },
   Recommendation: {
     reasoning_chain: 'reasoning_chain',
@@ -1000,6 +1033,14 @@ export const FIELD = {
     var_99: 'var_99',
     cvar_95: 'cvar_95',
     max_drawdown_pct: 'max_drawdown_pct',
+  },
+  RuleSummary: {
+    id: 'id',
+    pattern: 'pattern',
+    hit_rate: 'hit_rate',
+    affected_sectors: 'affected_sectors',
+    direction: 'direction',
+    status: 'status',
   },
   Scorecard: {
     agent_id: 'agent_id',
