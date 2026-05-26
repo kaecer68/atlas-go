@@ -116,7 +116,11 @@ type System struct {
 	macroSnapshot    *marketdata.MacroDataSnapshot
 	drawdownMu       sync.RWMutex
 	drawdownReporter func(portfolio.DrawdownResult)
+	traceVerbose     bool // when true, SimTraceWriter emits color-coded terminal output
 }
+
+// SetVerboseTrace enables or disables color-coded verbose trace output.
+func (s *System) SetVerboseTrace(v bool) { s.traceVerbose = v }
 
 // NewSystem builds a fully-wired System with an internally-created EventBus.
 // For shared EventBus scenarios (e.g. SSE streaming), use NewSystemWithEventBus.
@@ -177,13 +181,13 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		go s.Risk().eventBus.PublishSimulationStart(s.Sim().session.ID, asOf)
 	}
 
-	// SimTraceWriter for pipeline layer transparency audit trail.
-	tw := NewSimTraceWriter(s.Sim().cfg.WorkDir, asOf.Format("20060102"), false)
-	defer func() { _, _ = tw.ExportJSONL() }()
-
 	if sessionDate, ok := s.resolveReplayDate(); ok && s.Sim().replay != nil {
 		return s.runReplaySimulation(sessionDate)
 	}
+
+	// SimTraceWriter for pipeline layer transparency audit trail.
+	tw := NewSimTraceWriter(s.Sim().cfg.WorkDir, asOf.Format("20060102"), s.traceVerbose)
+	defer func() { _, _ = tw.ExportJSONL() }()
 
 	symbols := RegistrySymbols(s.Sim().registry)
 	tw.Record(1, "data_fetch", "START", nil)
@@ -450,7 +454,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		go s.Risk().eventBus.PublishSimulationStart(s.Sim().session.ID, sessionDate)
 	}
 
-	tw := NewSimTraceWriter(s.Sim().cfg.WorkDir, sessionDate.Format("20060102"), false)
+	tw := NewSimTraceWriter(s.Sim().cfg.WorkDir, sessionDate.Format("20060102"), s.traceVerbose)
 	defer func() { _, _ = tw.ExportJSONL() }()
 
 	symbols := RegistrySymbols(s.Sim().registry)

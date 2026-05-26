@@ -27,11 +27,11 @@ fi
 SRC_PATTERNS='^(internal/|web/|cmd/mapgen/)'
 if echo "$STAGED" | grep -qE "$SRC_PATTERNS"; then
     echo "🗺️  Source changed → regenerating system maps"
-    if go run ./cmd/mapgen -gen-all 2>/dev/null; then
-        git add .omo/maps/ 2>/dev/null || true
+    if go run ./cmd/mapgen -gen-all 2>&1; then
+        git add -f .omo/maps/ 2>/dev/null || true
         echo "  ✅ .omo/maps/ synced"
     else
-        echo "  ⚠️  mapgen failed — .omo/maps/ may be stale"
+        echo "  ⚠️  mapgen failed — .omo/maps/ may be stale (commit not blocked)"
     fi
     echo ""
 fi

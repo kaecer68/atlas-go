@@ -29,7 +29,7 @@ func main() {
 func run(args []string) error {
 	fs := flag.NewFlagSet("mapgen", flag.ContinueOnError)
 	genAll := fs.Bool("gen-all", false, "generate all maps")
-	mapType := fs.String("map", "", "specific map to generate (arch|routes|completeness|fe-be)")
+	mapType := fs.String("map", "", "specific map to generate (arch|routes|completeness|fe-be) — fast mode, skips coverage; full report via -gen-all")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}

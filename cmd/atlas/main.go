@@ -1267,14 +1267,15 @@ func run(args []string, deps appDeps) error {
 	if *liveMode {
 		return runLiveTrading(cfg, deps, collector, repo)
 	}
-	return runSimulation(cfg, collector, repo)
+	return runSimulation(cfg, false, collector, repo)
 }
 
-func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
+func runSimulation(cfg config.Config, verbose bool, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
 	system, err := orchestrator.NewProductionSystem(cfg)
 	if err != nil {
 		return fmt.Errorf("create system: %w", err)
 	}
+	system.SetVerboseTrace(verbose)
 	if collector != nil {
 		system.WithMetricsCollector(collector)
 	}
@@ -1505,6 +1506,8 @@ func runSimulationMode(rt *bootstrap.Runtime, cfg config.Config, verbose bool, d
 			return fmt.Errorf("invalid date format (expected 2006-01-02): %w", err)
 		}
 		sessionDate = dateOverride
+		// Thread date override through config so ReplaySessionDate resolves correctly.
+		cfg.ReplaySessionDate = dateOverride
 		if verbose {
 			log.Printf("[SIMULATE] date override: %s", sessionDate)
 		}
@@ -1517,7 +1520,7 @@ func runSimulationMode(rt *bootstrap.Runtime, cfg config.Config, verbose bool, d
 	collector := rt.MetricsCollector
 	repo := rt.Repository
 
-	if err := runSimulation(cfg, collector, repo); err != nil {
+	if err := runSimulation(cfg, verbose, collector, repo); err != nil {
 		return fmt.Errorf("simulation failed: %w", err)
 	}
 
