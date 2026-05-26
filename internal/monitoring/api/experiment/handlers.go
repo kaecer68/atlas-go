@@ -59,6 +59,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/experiment/judge", shared.AdminPost(h.HandleJudge))
 	mux.Handle("GET /api/experiment/diff", shared.Get(h.HandleDiff))
 	mux.Handle("GET /api/dashboard/experiment-inbox", shared.Get(h.HandleInbox))
+	mux.Handle("GET /api/experiment/history", shared.Get(h.HandleHistory))
 }
 
 func buildMutationSummary(policy baseline.Policy, result domain.PromptExperimentResult) string {
