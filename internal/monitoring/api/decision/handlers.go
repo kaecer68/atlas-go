@@ -42,6 +42,8 @@ type PremarketData struct {
 	ForeignFlow map[string]any `json:"foreign_flow"`
 	FX          map[string]any `json:"fx"`
 	BDI         map[string]any `json:"bdi"`
+	VIX         map[string]any `json:"vix,omitempty"`
+	StressIndex map[string]any `json:"stress_index,omitempty"`
 }
 
 // EventBlock groups narrative events by time window.
@@ -168,6 +170,17 @@ func (h *Handlers) HandleDecisionChain(r *http.Request) (int, any) {
 				BDI: map[string]any{
 					"value":         snap.Bdi.Value,
 					"deviation_pct": snap.Bdi.ChangePct,
+				},
+				VIX: map[string]any{
+					"value":      snap.VIX.Value,
+					"change_pct": snap.VIX.ChangePct,
+				},
+				StressIndex: map[string]any{
+					"dxy":       snap.DXY.Value,
+					"dxy_pct":   snap.DXY.ChangePct,
+					"oil":       snap.Oil.Value,
+					"oil_pct":   snap.Oil.ChangePct,
+					"vix_level": snap.VIX.Value,
 				},
 			}
 			return nil
