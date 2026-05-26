@@ -127,22 +127,6 @@ async function loadModules() {
   }
   return modules;
 }
-
-// --- Decision-chain adapter ---
-function adaptEventsFromDecisionChain(dc) {
-  if (!dc || !dc.events) return null;
-  var today = dc.events.today || [];
-  var recent = dc.events.recent || [];
-  var seen = {};
-  var merged = today.concat(recent).filter(function(e) {
-    var key = (e.theme || '') + '|' + (e.timestamp || '');
-    if (seen[key]) return false;
-    seen[key] = true;
-    return true;
-  });
-  return { events: merged };
-}
-
 // --- Main Data Loader ---
 async function loadAll() {
   var loadingBar = document.getElementById('loadingBar');
@@ -155,7 +139,6 @@ async function loadAll() {
       safeGetJSON('/api/dashboard/macro-radar'),
       safeGetJSON('/api/dashboard/agent-observatory'),
       safeGetJSON('/api/dashboard/recommendation-pipeline'),
-      safeGetJSON('/api/dashboard/decision-chain'),
       safeGetJSON('/api/dashboard/live-status'),
       safeGetJSON('/api/dashboard/risk-exposure'),
       safeGetJSON('/api/dashboard/experiment-inbox'),
@@ -176,12 +159,12 @@ async function loadAll() {
       safeGetJSON('/api/dashboard/risk-calibration'),
     ]);
 
-    var health = results[0], macro = results[1], agents = results[2], pipeline = results[3], decisionChain = results[4], live = results[5],
-        riskExposure = results[6], inbox = results[7], overlap = results[8], stress = results[9], bundle = results[10],
-        snapshot = results[11], dataChannels = results[12],
-        sessions = results[13], phase3 = results[14], alerts = results[15], retailSentiment = results[16],
-        capitalPhase = results[17], taxSnapshot = results[18], regimeHistory = results[19],
-        darwinianTrend = results[20], darwinianStatus = results[21], riskCalibration = results[22];
+    var health = results[0], macro = results[1], agents = results[2], pipeline = results[3], live = results[4],
+        riskExposure = results[5], inbox = results[6], overlap = results[7], stress = results[8], bundle = results[9],
+        snapshot = results[10], dataChannels = results[11],
+        sessions = results[12], phase3 = results[13], alerts = results[14], retailSentiment = results[15],
+        capitalPhase = results[16], taxSnapshot = results[17], regimeHistory = results[18],
+        darwinianTrend = results[19], darwinianStatus = results[20], riskCalibration = results[21];
 
     // Unwrap narrative bundle into backwards-compatible shapes.
     var events = bundle && bundle.events ? { events: bundle.events } : null;
@@ -189,10 +172,6 @@ async function loadAll() {
     var models = bundle && bundle.models ? { models: bundle.models } : null;
     var templates = bundle && bundle.templates ? { templates: bundle.templates } : null;
     var seasonal = bundle && bundle.seasonal ? bundle.seasonal : null;
-
-    // Use decision-chain for narrative events when available.
-    var dcEvents = adaptEventsFromDecisionChain(decisionChain);
-    if (dcEvents) events = dcEvents;
 
     var failures = results.filter(function(v) { return v === null; }).length;
     if (failures > results.length * 0.5) {
