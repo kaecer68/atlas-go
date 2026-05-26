@@ -42,6 +42,7 @@ func defaultBaseWeights() map[FactorType]float64 {
 		FactorNarrative:      0.05,
 		FactorIndustryCycle:  0.00,
 		FactorPreciousMetals: 0.00,
+		FactorETF:            0.00,
 	}
 }
 
@@ -185,6 +186,7 @@ func (e *FactorWeightEngine) OnRegimeChange(oldRegime, newRegime string, confide
 		riskOffMom = -0.05
 		riskOffQ   = 0.05
 		riskOffLiq = 0.03
+		riskOffETF = 0.04
 	)
 	if fw != nil {
 		riskOnMom = fw.RiskOnMomentum.Value
@@ -205,6 +207,7 @@ func (e *FactorWeightEngine) OnRegimeChange(oldRegime, newRegime string, confide
 			FactorMomentum:  riskOffMom,
 			FactorQuality:   riskOffQ,
 			FactorLiquidity: riskOffLiq,
+			FactorETF:       riskOffETF,
 		}
 	default:
 		delete(e.eventWeights, "regime_risk_on")
@@ -253,16 +256,25 @@ func (e *FactorWeightEngine) applyEventAdjustment(event *narrative.NarrativeEven
 		e.eventWeights[event.ID] = map[FactorType]float64{
 			FactorQuality:  delta,
 			FactorMomentum: delta,
+			FactorETF:      delta,
 		}
 	case "US_rates_up":
 		e.eventWeights[event.ID] = map[FactorType]float64{
 			FactorValue:    delta,
 			FactorInstSent: -delta,
+			FactorETF:      delta,
 		}
 	case "oil_price_shock":
 		e.eventWeights[event.ID] = map[FactorType]float64{
 			FactorLiquidity: -delta,
 			FactorMomentum:  -delta,
+			FactorETF:       delta,
+		}
+	case "JPY_carry_unwind":
+		e.eventWeights[event.ID] = map[FactorType]float64{
+			FactorLiquidity: -delta,
+			FactorAgent:     -delta,
+			FactorETF:       delta,
 		}
 	case "gold_rally":
 		e.eventWeights[event.ID] = map[FactorType]float64{

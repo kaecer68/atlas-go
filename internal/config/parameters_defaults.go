@@ -29,6 +29,7 @@ func DefaultParametersConfig() *ParametersConfig {
 		Marketdata:          defaultMarketdataParameters(),
 		Industry:            defaultIndustryParameters(),
 		Strategy:            defaultStrategyParameters(),
+		PreciousMetals:      defaultPreciousMetalsParameters(),
 		FactorWeight:        defaultFactorWeightParameters(),
 		NarrativeConviction: defaultNarrativeConvictionParameters(),
 		SectorExecutor:      defaultSectorExecutorParameters(),
@@ -2487,6 +2488,48 @@ func defaultRiskGateParameters() RiskGateParameters {
 				Rationale: "每日盤後評估一次",
 				Source:    SourceHeuristic,
 			},
+		},
+	}
+}
+
+func defaultPreciousMetalsParameters() PreciousMetalsParameters {
+	return PreciousMetalsParameters{
+		CentralBankBuyingTrend: ParameterMetadata[string]{
+			Value:     "stable",
+			Rationale: "WGC quarterly CB gold buying trend: accelerating, stable, or decelerating",
+			Source:    SourceLiterature,
+			Todo:      "Update quarterly from WGC Gold Demand Trends report",
+			Citation: &ParameterCitation{
+				SourceType:      "report",
+				SourceReference: "World Gold Council, Gold Demand Trends Q1 2026",
+				EvidenceQuality: "medium",
+				UpdatePolicy:    "quarterly",
+				LastValidated:   "2026-05-01",
+			},
+		},
+		CentralBankNetBuy: ParameterMetadata[float64]{
+			Value:     800.0,
+			Rationale: "Annualized central bank net gold purchases in tonnes (~800t in 2025)",
+			Source:    SourceLiterature,
+			Todo:      "Update from WGC quarterly report",
+		},
+		IndiaGoldImportsYoY: ParameterMetadata[float64]{
+			Value:     0.0,
+			Rationale: "India gold imports YoY % change; 0 means no change from prior year",
+			Source:    SourceLiterature,
+			Todo:      "Update monthly from India Ministry of Commerce data",
+		},
+		ChinaGoldImportsYoY: ParameterMetadata[float64]{
+			Value:     0.0,
+			Rationale: "China SGE withdrawal YoY % change; 0 means no change from prior year",
+			Source:    SourceLiterature,
+			Todo:      "Update monthly from Shanghai Gold Exchange data",
+		},
+		COMEXDefaultNetLong: ParameterMetadata[float64]{
+			Value:     150000,
+			Rationale: "CFTC COT managed money net long default (typical mid-cycle level)",
+			Source:    SourceEmpirical,
+			Todo:      "Update weekly from CFTC Commitment of Traders report",
 		},
 	}
 }

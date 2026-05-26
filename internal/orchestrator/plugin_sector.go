@@ -223,55 +223,99 @@ func (ETFRotationExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (ETFRotationExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), 55)
+	etfType := classifyETFType(quote.Symbol)
 
-	ctrl, ok := domain.ExtractPromptControl(prompt)
-	if ok {
-		if quote.Last < quote.Open {
-			b.add("price_penalty", -3, "last < open")
+	// Base conviction varies by macro regime and ETF type
+	base := 55
+	reason := "balanced ETF allocation"
+
+	switch {
+	case regime == domain.RegimeRiskOff:
+		// Risk-Off: prefer gold/precious metals, penalize equity
+		if etfType == "gold" {
+			base = 65
+			reason = "safe-haven gold ETF in risk-off regime"
+		} else if etfType == "dividend" || etfType == "defensive" {
+			base = 60
+			reason = "defensive dividend ETF in risk-off regime"
+		} else {
+			base = 45
+			reason = "equity ETF penalized in risk-off regime"
 		}
-		if ctrl.CloseStrengthBoost > 0 && quote.Last > quote.Open {
-			b.add("close_strength_boost", ctrl.CloseStrengthBoost, "last > open")
+	case regime == domain.RegimeRiskOn:
+		// Bull: prefer equity broad market
+		if etfType == "broad_market" {
+			base = 68
+			reason = "broad market ETF in risk-on regime"
+		} else if etfType == "dividend" {
+			base = 62
+			reason = "dividend ETF in risk-on regime"
+		} else if etfType == "gold" {
+			base = 50
+			reason = "gold ETF penalized in risk-on regime"
+		} else {
+			base = 58
+			reason = "diversified ETF in risk-on regime"
 		}
-		if ctrl.VolumeBoost > 0 && quote.Last > quote.Open {
-			b.add("volume_boost", ctrl.VolumeBoost, "last > open")
+	default:
+		// Neutral: balanced allocation with momentum tilt
+		if quote.Last > quote.Open {
+			reason = "balanced ETF allocation with positive momentum in neutral regime"
+		} else {
+			reason = "balanced ETF allocation in neutral regime"
 		}
-		if ctrl.ConvictionFloor > 0 {
-			b.floor = ctrl.ConvictionFloor
-		}
-		if !b.floorCheck() {
-			return domain.Recommendation{}, false
-		}
-		tp, slp := priceTargets(quote, 1.04, 0.97)
-		conv, cb := b.build()
-		return domain.Recommendation{
-			Agent:               agent.ID,
-			Skill:               agent.Skill,
-			Layer:               agent.Layer,
-			Symbol:              quote.Symbol,
-			Side:                domain.SideBuy,
-			Conviction:          conv,
-			Reason:              "broad ETF fallback under controlled risk",
-			TargetPrice:         tp,
-			StopLossPrice:       slp,
-			ConvictionBreakdown: cb,
-		}, true
 	}
 
-	if quote.Last < quote.Open {
-		b.add("price_penalty", -3, "last < open")
+	b := newConvictionBuilder(base, 40)
+
+	// Price-based adjustments
+	if quote.Last > quote.Open {
+		b.add("momentum_up", 5, "last > open")
+	} else if quote.Last < quote.Open {
+		b.add("momentum_down", -5, "last < open")
+	}
+
+	// Volume confirmation
+	if quote.Volume > 500000 {
+		b.add("volume_confirm", 3, "volume > 500k")
+	}
+
+	// Narrative / prompt-based signals
+	if strings.Contains(prompt, "risk_off") || strings.Contains(prompt, "defensive") {
+		if etfType == "gold" || etfType == "defensive" {
+			b.add("narrative_defensive", 8, "risk_off/defensive narrative + defensive ETF")
+		} else {
+			b.add("narrative_defensive_mismatch", -5, "risk_off/defensive narrative but non-defensive ETF")
+		}
 	}
 	if strings.Contains(prompt, "rotation") && quote.Last > quote.Open {
 		b.add("rotation_boost", 6, "rotation keyword + last > open")
 	}
-	if strings.Contains(prompt, "sector leadership") {
-		b.add("sector_leadership_boost", 5, "sector leadership keyword")
+	if strings.Contains(prompt, "sector_leadership") {
+		b.add("sector_leadership", 5, "sector leadership keyword")
 	}
+	if strings.Contains(prompt, "JPY_carry") || strings.Contains(prompt, "carry_trade") {
+		if etfType == "dividend" || etfType == "defensive" {
+			b.add("carry_defensive", 7, "JPY carry unwind → defensive ETF")
+		} else {
+			b.add("carry_risk", -4, "JPY carry unwind → penalize beta")
+		}
+	}
+
 	if !b.floorCheck() {
 		return domain.Recommendation{}, false
 	}
-	tp, slp := priceTargets(quote, 1.04, 0.97)
+
+	tpMult := 1.04
+	slpMult := 0.97
+	if etfType == "gold" {
+		tpMult = 1.06
+		slpMult = 0.95
+	}
+
+	tp, slp := priceTargets(quote, tpMult, slpMult)
 	conv, cb := b.build()
+
 	return domain.Recommendation{
 		Agent:               agent.ID,
 		Skill:               agent.Skill,
@@ -279,9 +323,25 @@ func (ETFRotationExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote,
 		Symbol:              quote.Symbol,
 		Side:                domain.SideBuy,
 		Conviction:          conv,
-		Reason:              "broad ETF fallback under controlled risk",
+		Reason:              reason,
 		TargetPrice:         tp,
 		StopLossPrice:       slp,
 		ConvictionBreakdown: cb,
 	}, true
+}
+
+// classifyETFType maps symbol to ETF category for macro-aware routing logic.
+func classifyETFType(symbol string) string {
+	switch symbol {
+	case "0050.TW":
+		return "broad_market"
+	case "0056.TW":
+		return "dividend"
+	case "00878.TW":
+		return "defensive"
+	case "00635U", "00693U", "00708L", "GLD", "IAU", "SGOL", "BAR":
+		return "gold"
+	default:
+		return "equity"
+	}
 }

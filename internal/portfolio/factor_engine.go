@@ -47,16 +47,23 @@ type FactorEngine struct {
 	narrativeProv func(symbol string) *domain.NarrativeFactorScore
 	cycleProv     func(symbol string) *domain.IndustryCycleFactorScore
 	pmCtxProv     PMContextProvider
+	etfAnalyzer   *ETFAnalyzer
 	mu            sync.RWMutex
 }
 
 // PreciousMetalsContext provides macro inputs for precious metals factor scoring.
 // All fields float64; NaN means "data unavailable" → corresponding sub-factor returns 0.
 type PreciousMetalsContext struct {
-	RealRate float64 // real interest rate (nominal − inflation expectation)
-	VIX      float64
-	DXY      float64
-	CPIYoY   float64
+	RealRate            float64 // real interest rate (nominal − inflation expectation)
+	VIX                 float64
+	DXY                 float64
+	CPIYoY              float64
+	CentralBankNetBuy   float64 // quarterly annualized tonnes (WGC)
+	CBReserveTrend      float64 // [-1, 1] signal from CB buying trend direction
+	IndiaGoldImportsYoY float64 // India gold imports YoY % change
+	ChinaGoldImportsYoY float64 // China SGE withdrawal YoY % change
+	COMEXNetLong        float64 // CFTC COT managed money net long contracts
+	GoldSilverRatioZ    float64 // z-score vs 5y mean of gold/silver ratio
 }
 
 // PMContextProvider supplies PreciousMetalsContext for a given symbol.
@@ -110,6 +117,14 @@ func (fe *FactorEngine) WithPreciousMetalsProvider(fn PMContextProvider) *Factor
 	fe.mu.Lock()
 	defer fe.mu.Unlock()
 	fe.pmCtxProv = fn
+	return fe
+}
+
+// WithETFAnalyzer attaches an ETF analyzer for ETF-specific factor scoring.
+func (fe *FactorEngine) WithETFAnalyzer(ea *ETFAnalyzer) *FactorEngine {
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
+	fe.etfAnalyzer = ea
 	return fe
 }
 
@@ -496,6 +511,23 @@ func (fe *FactorEngine) CalculateAllScores(
 		result[FactorLiquidity] = liqScore.Score
 	}
 
+	// Precious Metals factor
+	if isPM, _ := isPreciousMetal(symbol); isPM {
+		pmScore := fe.CalculatePreciousMetalsScore(symbol, quotes)
+		result[FactorPreciousMetals] = pmScore.Score
+	}
+
+	// ETF factor
+	fe.mu.RLock()
+	ea := fe.etfAnalyzer
+	fe.mu.RUnlock()
+	if ea != nil && ea.IsETF(symbol) {
+		if quote, ok := quotes[symbol]; ok {
+			etfScore := fe.CalculateETFScore(symbol, quote)
+			result[FactorETF] = etfScore.Score
+		}
+	}
+
 	// Compute weighted total if factorWeights provided
 	if len(factorWeights) > 0 {
 		total := 0.0
@@ -603,6 +635,27 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 		IndustryCycle:          icl,
 	}
 
+	// Precious Metals: compute PM score when symbol is a known PM instrument.
+	var pm domain.FactorScoreItem
+	if isPM, _ := isPreciousMetal(symbol); isPM {
+		pm = fe.CalculatePreciousMetalsScore(symbol, quotes)
+		result[FactorPreciousMetals] = pm.Score
+		breakdown.PreciousMetals = pm
+	}
+
+	// ETF: compute ETF factor score when ETF analyzer data is available.
+	var etf domain.FactorScoreItem
+	fe.mu.RLock()
+	ea := fe.etfAnalyzer
+	fe.mu.RUnlock()
+	if ea != nil && ea.IsETF(symbol) {
+		if quote, ok := quotes[symbol]; ok {
+			etf = fe.CalculateETFScore(symbol, quote)
+			result[FactorETF] = etf.Score
+			breakdown.ETF = etf
+		}
+	}
+
 	if len(bridgeInputs) > 0 {
 		result[FactorInstSent] = instSent.Score
 		result[FactorLiquidity] = liq.Score
@@ -658,6 +711,18 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 			rawTotal[string(FactorIndustryCycle)] = icl.Score * iclWeight
 			breakdown.IndustryCycle.Weight = factorWeights[FactorIndustryCycle]
 		}
+		if pm.Score != 0 || pm.Formula != "" {
+			pmWeight := getEffectiveWeight(pm, factorWeights[FactorPreciousMetals])
+			total += pm.Score * pmWeight
+			rawTotal[string(FactorPreciousMetals)] = pm.Score * pmWeight
+			breakdown.PreciousMetals.Weight = factorWeights[FactorPreciousMetals]
+		}
+		if etf.Score != 0 || etf.Formula != "" {
+			etfWeight := getEffectiveWeight(etf, factorWeights[FactorETF])
+			total += etf.Score * etfWeight
+			rawTotal[string(FactorETF)] = etf.Score * etfWeight
+			breakdown.ETF.Weight = factorWeights[FactorETF]
+		}
 
 		result["total"] = total
 		breakdown.Total = domain.FactorScoreItem{
@@ -678,13 +743,29 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 	return breakdown, result
 }
 
+// CalculateETFScore returns an ETF-specific composite factor score.
+// Delegates to the attached ETFAnalyzer. Returns a zero-score fallback if no analyzer is attached.
+func (fe *FactorEngine) CalculateETFScore(symbol string, quote domain.Quote) domain.FactorScoreItem {
+	fe.mu.RLock()
+	defer fe.mu.RUnlock()
+	if fe.etfAnalyzer == nil {
+		return domain.FactorScoreItem{
+			Score:      0.0,
+			Formula:    "etf_score: no analyzer attached",
+			RawInputs:  map[string]float64{},
+			IsFallback: true,
+		}
+	}
+	return fe.etfAnalyzer.CalculateETFScore(symbol, quote)
+}
+
 // ── Precious Metals Factor (P0-2) ──
 // SOURCE: Erb & Harvey (2013), World Gold Council, P0-2 task brief
 //
 // Composite precious metals score for gold:
-//   PM_gold = 0.20·RealRate + 0.15·DXY + 0.15·InflExp + 0.15·CB + 0.10·Flow + 0.25·RiskOff
+//   PM_gold = 0.16·RealRate + 0.10·DXY + 0.10·InflExp + 0.12·CB + 0.08·Flow + 0.06·PhyDem + 0.10·COMEX + 0.28·RiskOff
 // For silver:
-//   PM_silver = 0.70·PM_gold + 0.15·Industrial + 0.15·GoldSilver
+//   PM_silver = 0.60·PM_gold + 0.15·Industrial + 0.10·GoldSilver + 0.15·COMEX
 
 // CalculatePreciousMetalsScore returns the composite precious metals factor score.
 // Returns 0 if symbol is not a known precious metal instrument.
@@ -702,34 +783,38 @@ func (fe *FactorEngine) CalculatePreciousMetalsScore(symbol string, quotes map[s
 	cbBuy := fe.pmCentralBankScore(ctx)
 	etfFlow := fe.pmETFFlowScore(ctx)
 	riskOff := fe.pmRiskOffScore(ctx)
+	physDemand := fe.pmPhysicalDemandScore(ctx)
+	comex := fe.pmCOMEXScore(ctx)
 
-	goldScore := 0.20*realRate + 0.15*dxy + 0.15*inflExp + 0.15*cbBuy + 0.10*etfFlow + 0.25*riskOff
+	goldScore := 0.16*realRate + 0.10*dxy + 0.10*inflExp + 0.12*cbBuy + 0.08*etfFlow + 0.06*physDemand + 0.10*comex + 0.28*riskOff
 
 	if riskOff >= 1.0 && goldScore < 0.5 {
 		goldScore = 0.5
 	}
 
 	score := goldScore
-	formula := "gold: 0.20*RR + 0.15*DXY + 0.15*Inf + 0.15*CB + 0.10*Flow + 0.25*RiskOff"
+	formula := "gold: 0.16*RR + 0.10*DXY + 0.10*Inf + 0.12*CB + 0.08*Flow + 0.06*PhyDem + 0.10*COMEX + 0.28*RiskOff"
 
 	if subtype == "silver" {
 		indDemand := fe.pmIndustrialDemandScore(ctx)
 		gsRatio := fe.pmGoldSilverRatioScore(ctx)
-		score = 0.70*goldScore + 0.15*indDemand + 0.15*gsRatio
-		formula = "silver: 0.70*PM_gold + 0.15*Ind + 0.15*GS"
+		score = 0.60*goldScore + 0.15*indDemand + 0.10*gsRatio + 0.15*comex
+		formula = "silver: 0.60*PM_gold + 0.15*Ind + 0.10*GS + 0.15*COMEX"
 	}
 
 	return domain.FactorScoreItem{
 		Score:   score,
 		Formula: formula,
 		RawInputs: map[string]float64{
-			"real_rate":      realRate,
-			"dxy":            dxy,
-			"inflation":      inflExp,
-			"cb_buy":         cbBuy,
-			"etf_flow":       etfFlow,
-			"risk_off":       riskOff,
-			"gold_composite": goldScore,
+			"real_rate":       realRate,
+			"dxy":             dxy,
+			"inflation":       inflExp,
+			"cb_buy":          cbBuy,
+			"etf_flow":        etfFlow,
+			"risk_off":        riskOff,
+			"physical_demand": physDemand,
+			"comex":           comex,
+			"gold_composite":  goldScore,
 		},
 	}
 }
@@ -799,17 +884,47 @@ func (fe *FactorEngine) pmInflationExpectScore(ctx *PreciousMetalsContext) float
 	return score
 }
 
-// pmCentralBankScore: v1 returns 0 (no live data feed).
-// SOURCE: World Gold Council quarterly report — manual update in future version.
+// pmCentralBankScore: heuristic based on CBReserveTrend from context.
+// ReserveTrend > 0.3 → +0.7, > 0 → +0.3, > −0.3 → 0, > −1 → −0.2.
+// SOURCE: World Gold Council quarterly report, central bank gold reserve trend.
 func (fe *FactorEngine) pmCentralBankScore(ctx *PreciousMetalsContext) float64 {
-	_ = ctx
-	return 0
+	if ctx == nil || math.IsNaN(ctx.CBReserveTrend) {
+		return 0
+	}
+	switch {
+	case ctx.CBReserveTrend > 0.3:
+		return 0.7
+	case ctx.CBReserveTrend > 0:
+		return 0.3
+	case ctx.CBReserveTrend > -0.3:
+		return 0
+	case ctx.CBReserveTrend > -1:
+		return -0.2
+	default:
+		return -0.2
+	}
 }
 
-// pmETFFlowScore: v1 returns 0 (no live data feed).
+// pmETFFlowScore: uses GLD 20d momentum as ETF flow proxy.
+// GLD > 5% → +0.5 (strong inflows), > 0 → +0.2, < −5% → −0.3, else 0.
+// Falls back to 0 if GLD price history unavailable.
 func (fe *FactorEngine) pmETFFlowScore(ctx *PreciousMetalsContext) float64 {
-	_ = ctx
-	return 0
+	fe.mu.RLock()
+	defer fe.mu.RUnlock()
+	if fe.history == nil {
+		return 0
+	}
+	ret20d := fe.history.MomentumReturn("GLD", 20)
+	switch {
+	case ret20d > 0.05:
+		return 0.5
+	case ret20d > 0:
+		return 0.2
+	case ret20d < -0.05:
+		return -0.3
+	default:
+		return 0
+	}
 }
 
 // pmRiskOffScore: normalize(VIX). Higher VIX → higher gold.
@@ -837,14 +952,84 @@ func (fe *FactorEngine) pmRiskOffScore(ctx *PreciousMetalsContext) float64 {
 	return score
 }
 
-// pmIndustrialDemandScore: v1 returns 0 (silver only, PMI data needed).
-func (fe *FactorEngine) pmIndustrialDemandScore(ctx *PreciousMetalsContext) float64 {
-	_ = ctx
-	return 0
+// pmPhysicalDemandScore: composite of India and China gold import trends.
+// Normalizes imports to [-1, 1]: 10% YoY → +1.0, −10% → −1.0, linear between.
+// 0.5 * India score + 0.5 * China score.
+func (fe *FactorEngine) pmPhysicalDemandScore(ctx *PreciousMetalsContext) float64 {
+	if ctx == nil {
+		return 0
+	}
+	indiaScore := fe.normalizeImportYoY(ctx.IndiaGoldImportsYoY)
+	chinaScore := fe.normalizeImportYoY(ctx.ChinaGoldImportsYoY)
+	return 0.5*indiaScore + 0.5*chinaScore
 }
 
-// pmGoldSilverRatioScore: v1 returns 0 (needs gold/silver price history).
+func (fe *FactorEngine) normalizeImportYoY(yoy float64) float64 {
+	if math.IsNaN(yoy) {
+		return 0
+	}
+	score := yoy / 10.0
+	if score > 1.0 {
+		score = 1.0
+	}
+	if score < -1.0 {
+		score = -1.0
+	}
+	return score
+}
+
+// pmCOMEXScore: contrarian COT signal. COMEX net long > 200k → −0.5 (too bullish),
+// < 50k → +0.5 (too bearish), between → 0.
+func (fe *FactorEngine) pmCOMEXScore(ctx *PreciousMetalsContext) float64 {
+	if ctx == nil || math.IsNaN(ctx.COMEXNetLong) {
+		return 0
+	}
+	switch {
+	case ctx.COMEXNetLong > 200000:
+		return -0.5
+	case ctx.COMEXNetLong < 50000:
+		return 0.5
+	default:
+		return 0
+	}
+}
+
+// pmIndustrialDemandScore: VIX as PMI proxy. VIX < 15 → +0.5 (strong PMI),
+// VIX < 20 → +0.2, VIX > 25 → −0.3, VIX > 30 → −0.5.
+func (fe *FactorEngine) pmIndustrialDemandScore(ctx *PreciousMetalsContext) float64 {
+	if ctx == nil || math.IsNaN(ctx.VIX) {
+		return 0
+	}
+	switch {
+	case ctx.VIX < 15:
+		return 0.5
+	case ctx.VIX < 20:
+		return 0.2
+	case ctx.VIX > 30:
+		return -0.5
+	case ctx.VIX > 25:
+		return -0.3
+	default:
+		return 0
+	}
+}
+
+// pmGoldSilverRatioScore: mean-reversion signal. GoldSilverRatioZ > 1.5 → +0.5
+// (gold overvalued, bullish silver mean reversion). Z < −1.5 → −0.3.
+// Linear interpolation between.
 func (fe *FactorEngine) pmGoldSilverRatioScore(ctx *PreciousMetalsContext) float64 {
-	_ = ctx
-	return 0
+	if ctx == nil || math.IsNaN(ctx.GoldSilverRatioZ) {
+		return 0
+	}
+	z := ctx.GoldSilverRatioZ
+	if z > 1.5 {
+		return 0.5
+	}
+	if z < -1.5 {
+		return -0.3
+	}
+	if z > 0 {
+		return z / 1.5 * 0.5
+	}
+	return z / 1.5 * 0.3
 }

@@ -26,6 +26,7 @@ const (
 	FactorNarrative      FactorType = "narrative"
 	FactorIndustryCycle  FactorType = "industry_cycle"
 	FactorPreciousMetals FactorType = "precious_metals"
+	FactorETF            FactorType = "etf"
 )
 
 // FactorScore 因子评分
@@ -244,6 +245,7 @@ type symbolScore struct {
 	Narrative      float64
 	IndustryCycle  float64
 	PreciousMetals float64
+	ETF            float64
 	Total          float64
 	Agents         []string
 }
@@ -290,6 +292,10 @@ func (o *Optimizer) calculateMultiFactorScores(
 		valueScore := o.factorEngine.CalculateValueScore(symbol, quotes)
 		qualityScore := o.factorEngine.CalculateQualityScore(symbol, quotes)
 		pmScore := o.factorEngine.CalculatePreciousMetalsScore(symbol, quotes).Score
+		etfScore := 0.0
+		if quote, ok := quotes[symbol]; ok {
+			etfScore = o.factorEngine.CalculateETFScore(symbol, quote).Score
+		}
 
 		var narrativeScore, industryCycleScore float64
 		o.mu.RLock()
@@ -328,6 +334,9 @@ func (o *Optimizer) calculateMultiFactorScores(
 		if pmScore != 0 {
 			totalScore += pmScore * factorWeights[FactorPreciousMetals]
 		}
+		if etfScore != 0 {
+			totalScore += etfScore * factorWeights[FactorETF]
+		}
 
 		scores[key] = &symbolScore{
 			Symbol:         symbol,
@@ -339,6 +348,7 @@ func (o *Optimizer) calculateMultiFactorScores(
 			Narrative:      narrativeScore,
 			IndustryCycle:  industryCycleScore,
 			PreciousMetals: pmScore,
+			ETF:            etfScore,
 			Total:          totalScore,
 			Agents:         agents,
 		}
@@ -554,6 +564,9 @@ func (o *Optimizer) buildPositions(
 		}
 		if score.PreciousMetals != 0 {
 			factors[FactorPreciousMetals] = score.PreciousMetals
+		}
+		if score.ETF != 0 {
+			factors[FactorETF] = score.ETF
 		}
 
 		positions = append(positions, OptimizedPosition{

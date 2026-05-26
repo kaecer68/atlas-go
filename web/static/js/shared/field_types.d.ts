@@ -494,6 +494,8 @@ declare interface FactorScoreBreakdown {
   liquidity: string;
   narrative?: string;
   industry_cycle?: string;
+  precious_metals?: string;
+  etf?: string;
   total: string;
 }
 
@@ -514,6 +516,8 @@ declare interface FactorScores {
   liquidity: number;
   narrative?: number;
   industry_cycle?: number;
+  precious_metals?: number;
+  etf?: number;
   total: number;
   breakdown?: string | null;
 }
