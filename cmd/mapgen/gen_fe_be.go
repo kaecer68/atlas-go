@@ -154,9 +154,9 @@ func generateFrontendBackend() error {
 	beRouteCount := len(allRoutes)
 
 	sb.WriteString("# Frontend-Backend Mapping\n")
-	sb.WriteString(fmt.Sprintf("> Generated: %s | Frontend pages: %d | API calls: %d | Backend routes: %d\n\n",
+	fmt.Fprintf(&sb, "> Generated: %s | Frontend pages: %d | API calls: %d | Backend routes: %d\n\n",
 		time.Now().UTC().Format("2006-01-02 15:04 MST"),
-		uniquePageCount, feCallCount, beRouteCount))
+		uniquePageCount, feCallCount, beRouteCount)
 
 	// --- Frontend Pages section ---
 	sb.WriteString("## Frontend Pages\n\n")
@@ -168,8 +168,8 @@ func generateFrontendBackend() error {
 			continue
 		}
 		calls := listToInline(pg.APICalls, 3)
-		sb.WriteString(fmt.Sprintf("| %s | %s | %d | %s |\n",
-			pg.Name, pg.RelFile, pg.LOC, calls))
+		fmt.Fprintf(&sb, "| %s | %s | %d | %s |\n",
+			pg.Name, pg.RelFile, pg.LOC, calls)
 	}
 	sb.WriteString("\n")
 
@@ -179,8 +179,8 @@ func generateFrontendBackend() error {
 	sb.WriteString("|-----------|---------|-----------------|--------|\n")
 	for _, mr := range matched {
 		pages := strings.Join(mr.Pages, ", ")
-		sb.WriteString(fmt.Sprintf("| %s | %s | %s | ✅ matched |\n",
-			mr.Route.Pattern, mr.Route.HandlerName, pages))
+		fmt.Fprintf(&sb, "| %s | %s | %s | ✅ matched |\n",
+			mr.Route.Pattern, mr.Route.HandlerName, pages)
 	}
 	sb.WriteString("\n")
 
@@ -192,8 +192,8 @@ func generateFrontendBackend() error {
 		sb.WriteString("| Route | Handler | Group |\n")
 		sb.WriteString("|-------|---------|-------|\n")
 		for _, o := range orphans {
-			sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n",
-				o.Route.Pattern, o.Route.HandlerName, o.Route.Group))
+			fmt.Fprintf(&sb, "| %s | %s | %s |\n",
+				o.Route.Pattern, o.Route.HandlerName, o.Route.Group)
 		}
 		sb.WriteString("\n")
 	}
@@ -206,8 +206,8 @@ func generateFrontendBackend() error {
 		sb.WriteString("| URL Called | Frontend File | Line |\n")
 		sb.WriteString("|-----------|--------------|------|\n")
 		for _, b := range broken {
-			sb.WriteString(fmt.Sprintf("| %s | %s | %d |\n",
-				b.URL, b.File, b.Line))
+			fmt.Fprintf(&sb, "| %s | %s | %d |\n",
+				b.URL, b.File, b.Line)
 		}
 		sb.WriteString("\n")
 	}
