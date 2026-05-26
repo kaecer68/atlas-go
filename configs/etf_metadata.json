@@ -1,0 +1,5 @@
+{
+    "0050.TW": {"name": "元大台灣50", "nav": 195.50, "expense_ratio": 0.0032, "benchmark": "TW50"},
+    "0056.TW": {"name": "元大高股息", "nav": 42.80, "expense_ratio": 0.0043, "benchmark": "TWHDividend"},
+    "00878.TW": {"name": "國泰永續高股息", "nav": 25.30, "expense_ratio": 0.0045, "benchmark": "MSCITWESG"}
+}

@@ -679,6 +679,15 @@ type LEOSatelliteExecutorParameters struct {
 	StopLossMult          ParameterMetadata[float64] `json:"stop_loss_multiplier"`
 }
 
+// PreciousMetalsParameters holds tunable values for precious metals factor scoring.
+type PreciousMetalsParameters struct {
+	CentralBankBuyingTrend ParameterMetadata[string]  `json:"central_bank_buying_trend"`
+	CentralBankNetBuy      ParameterMetadata[float64] `json:"central_bank_net_buy"`
+	IndiaGoldImportsYoY    ParameterMetadata[float64] `json:"india_gold_imports_yoy"`
+	ChinaGoldImportsYoY    ParameterMetadata[float64] `json:"china_gold_imports_yoy"`
+	COMEXDefaultNetLong    ParameterMetadata[float64] `json:"comex_default_net_long"`
+}
+
 type AlertParameters struct {
 	MinCashThreshold         ParameterMetadata[float64] `json:"min_cash_threshold"`
 	MaxPositionsCount        ParameterMetadata[int]     `json:"max_positions_count"`
@@ -754,6 +763,7 @@ type ParametersConfig struct {
 	Marketdata          MarketdataParameters          `json:"marketdata"`
 	Industry            IndustryParameters            `json:"industry"`
 	Strategy            StrategyParameters            `json:"strategy"`
+	PreciousMetals      PreciousMetalsParameters      `json:"precious_metals"`
 	SectorExecutor      SectorExecutorParameters      `json:"sector_executor,omitempty"`
 	Alert               AlertParameters               `json:"alert"`
 	RiskGate            RiskGateParameters            `json:"risk_gate,omitempty"`

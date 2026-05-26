@@ -448,6 +448,8 @@ export const FIELD = {
     liquidity: 'liquidity',
     narrative: 'narrative',
     industry_cycle: 'industry_cycle',
+    precious_metals: 'precious_metals',
+    etf: 'etf',
     total: 'total',
   },
   FactorScoreItem: {
@@ -466,6 +468,8 @@ export const FIELD = {
     liquidity: 'liquidity',
     narrative: 'narrative',
     industry_cycle: 'industry_cycle',
+    precious_metals: 'precious_metals',
+    etf: 'etf',
     total: 'total',
     breakdown: 'breakdown',
   },

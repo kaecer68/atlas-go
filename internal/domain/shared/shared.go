@@ -53,6 +53,8 @@ type FactorScoreBreakdown struct {
 	Liquidity              FactorScoreItem `json:"liquidity"`
 	Narrative              FactorScoreItem `json:"narrative,omitempty"`
 	IndustryCycle          FactorScoreItem `json:"industry_cycle,omitempty"`
+	PreciousMetals         FactorScoreItem `json:"precious_metals,omitempty"`
+	ETF                    FactorScoreItem `json:"etf,omitempty"`
 	Total                  FactorScoreItem `json:"total"`
 }
 
@@ -65,6 +67,8 @@ type FactorScores struct {
 	Liquidity              float64               `json:"liquidity"`
 	Narrative              float64               `json:"narrative,omitempty"`
 	IndustryCycle          float64               `json:"industry_cycle,omitempty"`
+	PreciousMetals         float64               `json:"precious_metals,omitempty"`
+	ETF                    float64               `json:"etf,omitempty"`
 	Total                  float64               `json:"total"`
 	Breakdown              *FactorScoreBreakdown `json:"breakdown,omitempty"`
 }

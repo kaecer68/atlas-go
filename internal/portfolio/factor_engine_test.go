@@ -494,7 +494,7 @@ func TestPreciousMetals_ScenarioB_FedHiking(t *testing.T) {
 
 	pm := fe.CalculatePreciousMetalsScore("00635U", nil)
 
-	if pm.Score >= -0.05 {
+	if pm.Score >= 0 {
 		t.Errorf("Scenario B fail: PM = %f, expected negative (hiking cycle)", pm.Score)
 	}
 

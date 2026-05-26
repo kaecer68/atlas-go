@@ -117,11 +117,21 @@ func buildFactorEngine(runtimeParams *portfolio.RuntimeParameters, macroSnap *ma
 		}
 	}
 
+	// Wire ETF analyzer with metadata for Taiwan ETF universe.
+	ea := portfolio.NewETFAnalyzer()
+	ea.LoadMetadata(map[string]portfolio.ETFMetadata{
+		"0050.TW":  {Name: "元大台灣50", NAV: 195.50, ExpenseRatio: 0.0032, Benchmark: "TW50"},
+		"0056.TW":  {Name: "元大高股息", NAV: 42.80, ExpenseRatio: 0.0043, Benchmark: "TWHDividend"},
+		"00878.TW": {Name: "國泰永續高股息", NAV: 25.30, ExpenseRatio: 0.0045, Benchmark: "MSCITWESG"},
+	})
+	ea.WithHistoricalPrices(hp)
+
 	fe := portfolio.NewFactorEngine().
 		WithParameters(runtimeParams).
 		WithHistoricalPrices(hp).
 		WithFundamentalProvider(fp).
-		WithPreciousMetalsProvider(pmProvider)
+		WithPreciousMetalsProvider(pmProvider).
+		WithETFAnalyzer(ea)
 	return fe, hp, fp
 }
 
@@ -175,6 +185,14 @@ func buildRiskOps(cfg config.Config, eventBus *eventbus.ChannelEventBus, macroRi
 		macroDrawdownEngine:   macroDrawdownEngine,
 		sectorDataProvider:    sectorDataProvider,
 	}
+}
+
+// computeGoldSilverRatioZ returns the z-score of the gold/silver ratio.
+// Phase 1 default: returns 0 (no signal) since silver price is not yet tracked
+// in MacroDataSnapshot. A future phase will add Silver to the snapshot.
+func computeGoldSilverRatioZ(snap *marketdata.MacroDataSnapshot) float64 {
+	_ = snap
+	return 0
 }
 
 // buildPluginRegistry constructs the plugin registry with screener and factor engine.
