@@ -170,33 +170,45 @@ func derivePageName(relFile string) string {
 // ---------------------------------------------------------------------------
 
 // funcCall: getJSON('X') / silentGetJSON("X") / postJSON(`X`, ...)
-var funcCallSQ = regexp.MustCompile(`(?:getJSON|silentGetJSON|safeGetJSON|postJSON)\s*\(\s*'([^']*)'`)
-var funcCallDQ = regexp.MustCompile(`(?:getJSON|silentGetJSON|safeGetJSON|postJSON)\s*\(\s*"([^"]*)"`)
-var funcCallBT = regexp.MustCompile("(?:getJSON|silentGetJSON|safeGetJSON|postJSON)\\s*\\(\\s*`([^`]*)`")
+var (
+	funcCallSQ = regexp.MustCompile(`(?:getJSON|silentGetJSON|safeGetJSON|postJSON)\s*\(\s*'([^']*)'`)
+	funcCallDQ = regexp.MustCompile(`(?:getJSON|silentGetJSON|safeGetJSON|postJSON)\s*\(\s*"([^"]*)"`)
+	funcCallBT = regexp.MustCompile("(?:getJSON|silentGetJSON|safeGetJSON|postJSON)\\s*\\(\\s*`([^`]*)`")
+)
 
 // fetch: fetch('X') / fetch("X") / fetch(`X`)
-var fetchSQ = regexp.MustCompile(`fetch\s*\(\s*'([^']*)'`)
-var fetchDQ = regexp.MustCompile(`fetch\s*\(\s*"([^"]*)"`)
-var fetchBT = regexp.MustCompile("fetch\\s*\\(\\s*`([^`]*)`")
+var (
+	fetchSQ = regexp.MustCompile(`fetch\s*\(\s*'([^']*)'`)
+	fetchDQ = regexp.MustCompile(`fetch\s*\(\s*"([^"]*)"`)
+	fetchBT = regexp.MustCompile("fetch\\s*\\(\\s*`([^`]*)`")
+)
 
 // concat: '/api/.../' + expr
-var concatSQ = regexp.MustCompile(`'((?:/(?:\w+/)*api/[^']*))'\s*\+`)
-var concatDQ = regexp.MustCompile(`"((?:/(?:\w+/)*api/[^"]*))"\s*\+`)
+var (
+	concatSQ = regexp.MustCompile(`'((?:/(?:\w+/)*api/[^']*))'\s*\+`)
+	concatDQ = regexp.MustCompile(`"((?:/(?:\w+/)*api/[^"]*))"\s*\+`)
+)
 
 // direct string literals with /api/
-var directSQ = regexp.MustCompile(`'((?:/(?:\w+/)*api/[^']*))'`)
-var directDQ = regexp.MustCompile(`"((?:/(?:\w+/)*api/[^"]*))"`)
+var (
+	directSQ = regexp.MustCompile(`'((?:/(?:\w+/)*api/[^']*))'`)
+	directDQ = regexp.MustCompile(`"((?:/(?:\w+/)*api/[^"]*))"`)
+)
 
 // template literal: `.../api/...`
 var tplLit = regexp.MustCompile("`([^`]*)/api/([^`]*)`")
 
 // jQuery $.get
-var jqGetSQ = regexp.MustCompile(`\$\s*\.\s*get\s*\(\s*'([^']*)'`)
-var jqGetDQ = regexp.MustCompile(`\$\s*\.\s*get\s*\(\s*"([^"]*)"`)
+var (
+	jqGetSQ = regexp.MustCompile(`\$\s*\.\s*get\s*\(\s*'([^']*)'`)
+	jqGetDQ = regexp.MustCompile(`\$\s*\.\s*get\s*\(\s*"([^"]*)"`)
+)
 
 // jQuery $.ajax({url: '...'})
-var jqAjaxSQ = regexp.MustCompile(`\$\s*\.\s*ajax\s*\(\s*\{[^}]*url\s*:\s*'([^']*)'`)
-var jqAjaxDQ = regexp.MustCompile(`\$\s*\.\s*ajax\s*\(\s*\{[^}]*url\s*:\s*"([^"]*)"`)
+var (
+	jqAjaxSQ = regexp.MustCompile(`\$\s*\.\s*ajax\s*\(\s*\{[^}]*url\s*:\s*'([^']*)'`)
+	jqAjaxDQ = regexp.MustCompile(`\$\s*\.\s*ajax\s*\(\s*\{[^}]*url\s*:\s*"([^"]*)"`)
+)
 
 // extractURLsFromLine applies all patterns to a single line.
 func extractURLsFromLine(line string) []string {
