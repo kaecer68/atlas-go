@@ -25,6 +25,7 @@ import (
 	apibacktest "github.com/kaecer68/atlas-go/internal/monitoring/api/backtest"
 	apicircuitbreaker "github.com/kaecer68/atlas-go/internal/monitoring/api/circuitbreaker"
 	apicontrol "github.com/kaecer68/atlas-go/internal/monitoring/api/control"
+	apieventlogic "github.com/kaecer68/atlas-go/internal/monitoring/api/eventlogic"
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 	apiexperiment "github.com/kaecer68/atlas-go/internal/monitoring/api/experiment"
 	apihealth "github.com/kaecer68/atlas-go/internal/monitoring/api/health"
@@ -85,6 +86,7 @@ type DashboardAPI struct {
 	riskGate           *risk.RiskGate
 	latestDrawdown     *portfolio.DrawdownResult
 	drawdownMu         sync.RWMutex
+	eventLogicHandlers *apieventlogic.Handlers
 }
 
 // channelState tracks enable/disable status for each channel.
@@ -745,6 +747,13 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	a.RegisterCircuitBreakerRoutes(mux)
 }
 
+func (a *DashboardAPI) SetEventLogicHandlers(h *apieventlogic.Handlers) { a.eventLogicHandlers = h }
+func (a *DashboardAPI) RegisterEventLogicRoutes(mux *http.ServeMux) {
+	if a.eventLogicHandlers != nil {
+		a.eventLogicHandlers.RegisterRoutes(mux)
+	}
+}
+
 func (a *DashboardAPI) RegisterIndustryRoutes(mux *http.ServeMux) {
 	handlers := &apiindustry.Handlers{
 		Svc: a.industryService,
@@ -1041,6 +1050,7 @@ func (a *DashboardAPI) RegisterAllRoutes(mux *http.ServeMux, opts RouteOptions) 
 	a.RegisterMacroRoutes(mux)
 	a.RegisterExperimentRoutes(mux)
 	a.RegisterIndustryRoutes(mux)
+	a.RegisterEventLogicRoutes(mux)
 	a.RegisterLiveRoutes(mux)
 
 	if opts.IncludeBacktest {

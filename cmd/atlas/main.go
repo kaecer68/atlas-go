@@ -28,6 +28,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
+	"github.com/kaecer68/atlas-go/internal/eventlogic"
 	"github.com/kaecer68/atlas-go/internal/evolution"
 	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/industry"
@@ -38,6 +39,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
+	apieventlogic "github.com/kaecer68/atlas-go/internal/monitoring/api/eventlogic"
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 	apischeduler "github.com/kaecer68/atlas-go/internal/monitoring/api/scheduler"
 	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
@@ -1122,6 +1124,39 @@ func run(args []string, deps appDeps) error {
 
 			riskGate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
 			dashboard.SetRiskGate(riskGate)
+
+			elRegistry := eventlogic.NewRegistry()
+			elValidator := eventlogic.NewValidator(elRegistry)
+			elDetector := eventlogic.NewDetector(elRegistry)
+			elHandlers := apieventlogic.NewHandlers(elRegistry, elValidator, elDetector)
+			dashboard.SetEventLogicHandlers(elHandlers)
+			log.Printf("[EventLogic] initialized with %d seed rules", elRegistry.Count())
+
+			if dashEventBus != nil {
+				dashEventBus.Subscribe(eventbus.EventSimulationComplete, func(ctx context.Context, ev eventbus.BusEvent) error {
+					log.Printf("[EventLogic] simulation complete: %s", ev.ID)
+					return nil
+				})
+				log.Printf("[EventLogic] subscribed to EventSimulationComplete")
+			}
+
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "eventlogic_auto_discover",
+				Interval: 168 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					candidates := elDetector.DiscoverPatterns(nil)
+					logging.Info("eventlogic_discover", "completed", "candidates", len(candidates))
+					for _, c := range candidates {
+						if rule, err := elDetector.PromoteCandidate(&c); err == nil {
+							logging.Info("eventlogic_discover", "promoted", "rule_id", rule.ID)
+						}
+					}
+					return nil
+				},
+			})
+			log.Printf("[EventLogic] weekly auto-discover background task registered")
+
 			log.Printf("[RiskGate] injected into DashboardAPI for calibration reports")
 			calProvider := monitoring.NewSessionCalibrationProvider(filepath.Join(cfg.WorkDir, "data/state"))
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
