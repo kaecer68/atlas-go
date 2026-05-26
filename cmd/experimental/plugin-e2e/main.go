@@ -57,13 +57,13 @@ func (customMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quo
 	stopLoss := quote.Last * 0.95
 
 	return domain.Recommendation{
-		Agent:      agent.ID,
-		Skill:      agent.Skill,
-		Layer:      agent.Layer,
-		Symbol:     quote.Symbol,
-		Side:       domain.SideBuy,
-		Conviction: conviction,
-		Reason:     fmt.Sprintf("momentum signal (last=%.1f open=%.1f vol=%d)", quote.Last, quote.Open, quote.Volume),
+		Agent:         agent.ID,
+		Skill:         agent.Skill,
+		Layer:         agent.Layer,
+		Symbol:        quote.Symbol,
+		Side:          domain.SideBuy,
+		Conviction:    conviction,
+		Reason:        fmt.Sprintf("momentum signal (last=%.1f open=%.1f vol=%d)", quote.Last, quote.Open, quote.Volume),
 		TargetPrice:   targetPrice,
 		StopLossPrice: stopLoss,
 	}, true

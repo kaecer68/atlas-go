@@ -199,7 +199,7 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 	sys.Sim().scratchpad = NewScratchpad(sys.Sim().session.ID, cfg.LedgerDir)
 
 	// Wire factor weight engine to event bus for self-evolution.
-	if port := sys.SystemCore.port; port.factorWeightEngine != nil && eventBus != nil {
+	if port := sys.port; port.factorWeightEngine != nil && eventBus != nil {
 		eventBus.Subscribe(eventbus.EventRegimeChange, func(_ context.Context, e eventbus.BusEvent) error {
 			if p, ok := e.Payload.(eventbus.RegimeEventPayload); ok {
 				port.factorWeightEngine.SetRegime(string(p.NewRegime))

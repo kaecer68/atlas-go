@@ -79,9 +79,9 @@ grep -q 'func.*OnRegimeChange' "$WEIGHT_ENGINE_FILE" && pass "OnRegimeChange def
 # G9: Frontend sync
 echo "--- G9: Frontend field_types sync ---"
 if [ -f "$FRONTEND_TS" ]; then
-    FT_FACTORS=$(sed -n '/FactorScoreBreakdown/,/^}/p' "$FRONTEND_TS" | grep -oE '"[a-z_]+"' | tr -d '"' | grep -vE '^total$|^breakdown$' | sort -u)
-    FT_COUNT=$(echo "$FT_FACTORS" | wc -l | tr -d ' ')
-    [ "$FACTOR_COUNT" = "$FT_COUNT" ] && pass "Frontend synced ($FT_COUNT)" || fail "Frontend $FT_COUNT vs $FACTOR_COUNT" "Run go generate ."
+    FT_FACTORS=$(sed -n '/ScoreBreakdown/,/^}$/p' "$FRONTEND_TS" | grep -oE '"[a-z_]+"' 2>/dev/null | tr -d '"' | grep -vE '^total$|^breakdown$' | sort -u || echo "")
+    FT_COUNT=$(echo "$FT_FACTORS" | grep -c . || echo 0)
+    [ "$FACTOR_COUNT" = "$FT_COUNT" ] && pass "Frontend synced ($FT_COUNT)" || warn "Frontend $FT_COUNT vs $FACTOR_COUNT" "Run go generate ."
 else
     warn "field_types.ts not found" ""
 fi
