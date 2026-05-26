@@ -161,10 +161,7 @@ async function loadAll() {
       safeGetJSON('/api/dashboard/experiment-inbox'),
       safeGetJSON('/api/dashboard/universe-overlap'),
       safeGetJSON('/api/taiwan/stress-index'),
-      safeGetJSON('/api/narrative/events'),
-      safeGetJSON('/api/narrative/chains'),
-      safeGetJSON('/api/narrative/models'),
-      safeGetJSON('/api/narrative/templates'),
+      safeGetJSON('/api/narrative/bundle'),
       safeGetJSON('/api/macro/snapshot/latest'),
       safeGetJSON('/api/dashboard/data-channels'),
       safeGetJSON('/api/dashboard/sessions'),
@@ -173,20 +170,25 @@ async function loadAll() {
       safeGetJSON('/api/dashboard/retail-sentiment'),
       safeGetJSON('/api/dashboard/capital-phase'),
       safeGetJSON('/api/dashboard/tax-snapshot'),
-      safeGetJSON('/api/narrative/seasonal'),
       safeGetJSON('/api/dashboard/regime-history'),
       safeGetJSON('/api/synergy/darwinian-trend'),
-      safeGetJSON('/api/health/data-integrity'),
       safeGetJSON('/api/synergy/darwinian-status'),
       safeGetJSON('/api/dashboard/risk-calibration'),
     ]);
 
     var health = results[0], macro = results[1], agents = results[2], pipeline = results[3], decisionChain = results[4], live = results[5],
-        riskExposure = results[6], inbox = results[7], overlap = results[8], stress = results[9], events = results[10], chains = results[11],
-        models = results[12], templates = results[13], snapshot = results[14], dataChannels = results[15],
-        sessions = results[16], phase3 = results[17], alerts = results[18], retailSentiment = results[19],
-        capitalPhase = results[20], taxSnapshot = results[21], seasonal = results[22], regimeHistory = results[23],
-        darwinianTrend = results[24], dataIntegrity = results[25], darwinianStatus = results[26], riskCalibration = results[27];
+        riskExposure = results[6], inbox = results[7], overlap = results[8], stress = results[9], bundle = results[10],
+        snapshot = results[11], dataChannels = results[12],
+        sessions = results[13], phase3 = results[14], alerts = results[15], retailSentiment = results[16],
+        capitalPhase = results[17], taxSnapshot = results[18], regimeHistory = results[19],
+        darwinianTrend = results[20], darwinianStatus = results[21], riskCalibration = results[22];
+
+    // Unwrap narrative bundle into backwards-compatible shapes.
+    var events = bundle && bundle.events ? { events: bundle.events } : null;
+    var chains = bundle && bundle.chains ? { chains: bundle.chains } : null;
+    var models = bundle && bundle.models ? { models: bundle.models } : null;
+    var templates = bundle && bundle.templates ? { templates: bundle.templates } : null;
+    var seasonal = bundle && bundle.seasonal ? bundle.seasonal : null;
 
     // Use decision-chain for narrative events when available.
     var dcEvents = adaptEventsFromDecisionChain(decisionChain);
