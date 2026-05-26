@@ -201,7 +201,7 @@ gh pr create --title "feat(scope): description" \
 
 | 陷阱 | 說明與預防 |
 |------|-----------|
-| **Enabled agent 缺少 prompt** | `configs/agents.json` 中每個 `enabled: true` 都需對應 `prompts/agents/<name>.md`。 |
+| **Enabled agent 缺少 prompt** | `configs/agents.json` 中每個 `enabled: true` 都需對應 `prompts/agents/<name>.md`。CI（`quality.yml` 的 `agent-prompts` job）會強制檢查，缺少 prompt 檔案的 PR 會被拒絕。 |
 | **Darwinian 權重靜默夾制** | 權重限制在 `[0.3, 2.5]`，超界會靜默正規化，不報錯。 |
 | **重複使用 mutable `[]Recommendation`** | 多次 simulation run 之間不可共用同一個 slice。 |
 | **Baseline 未載入** | 實驗執行/評估前必須確認 `data/state/baseline_policy.json` 存在且有效。 |

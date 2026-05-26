@@ -132,6 +132,16 @@ jobs:
     - name: Check maturity label consistency
       run: bash scripts/ci/check_maturity.sh
 
+  # Agent prompt files — ensures every enabled agent in agents.json
+  # has a corresponding prompt file under prompts/agents/.
+  agent-prompts:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check agent prompt file integrity
+      run: bash scripts/ci/check_agent_prompts.sh
+
   # Markdown link check — ensures internal documentation links are valid
   markdown-links:
     runs-on: ubuntu-latest
