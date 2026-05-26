@@ -1,75 +1,102 @@
-# OpenClaw 快速入門 (開箱文)
+# Atlas-Go 快速入門
 
-> 讀取本文件後，即可開始執行 atlas-go 策略優化。
+> 5 分鐘內啟動 atlas-go 投資研究系統。
+
+## 環境需求
+
+- **Go** 1.25+
+- **PostgreSQL** 15（持久化）
+- **Redis** 7（快取 / nonce store）
 
 ## 第一步：確認環境
 
 ```bash
-cd /Users/kaecer/.openclaw/workspace/agents/finance/atlas
-ls scripts/openclaw/  # 應該有 6 個腳本
+go version          # 需 ≥ 1.25
+go build ./...      # 確認全部編譯通過
+go test ./...       # 確認測試通過
 ```
 
-## 第二步：檢查狀態
+## 第二步：啟動系統
 
 ```bash
-./scripts/openclaw/status.sh
+# 啟動 HTTP server（預設 port 8080）
+go run ./cmd/atlas
+
+# 檢查健康狀態
+curl http://localhost:8080/health
 ```
 
-**看懂輸出**：
-- `Baseline Policy` - 當前策略版本
-- `Running` - 進行中的實驗 (優先處理)
-- `Planned` - 計劃中的實驗
-- `Recommended Next Action` - 系統建議
+開啟瀏覽器：`http://localhost:8080` — Atlas 儀表板（含產業生態系、決策鏈、即時監控）。
 
-## 第三步：執行工作
+## 第三步：執行實驗
 
-### 場景 A：系統建議 "judge-latest"
 ```bash
-./scripts/openclaw/judge_latest.sh --auto --json
-# 分析結果 → 如果 accepted → promote
-#                rejected → 跳過
+# 1. 執行實驗
+go run ./cmd/run-experiment -brief <brief-file>
+
+# 2. 評判結果（自動尋找最新實驗）
+go run ./cmd/judge-experiment
+
+# 3. 若 accepted → 晉升 baseline
+go run ./cmd/promote-baseline
 ```
 
-### 場景 B：系統建議 "execute-next"
+## 第四步：執行回測
+
 ```bash
-./scripts/openclaw/execute_next.sh --auto
-./scripts/openclaw/judge_latest.sh --auto --json
-# 然後 promote 或 skip
+# 指定日期範圍的回測
+go run ./cmd/backtest-window -start 2026-03-26 -end 2026-03-27
 ```
 
-### 場景 C：系統建議 "propose-mutation"
+## 第五步：資料匯入
+
 ```bash
-./scripts/openclaw/propose_mutation.sh --auto
-# 審查生成的 brief → 確認 → execute
+# CSV → JSONL（供 replay 使用）
+go run ./cmd/import-replay -source <csv> -target <jsonl>
 ```
 
-## 第四步：Promote (需確認)
+## 常用命令一覽
+
+| 命令 | 用途 |
+|------|------|
+| `go run ./cmd/atlas` | 啟動 HTTP server |
+| `go run ./cmd/run-experiment -brief <file>` | 執行實驗 |
+| `go run ./cmd/judge-experiment` | 評判最新實驗 |
+| `go run ./cmd/promote-baseline` | 晉升 baseline |
+| `go run ./cmd/revert-baseline --list` | 查看可回滾版本 |
+| `go run ./cmd/backtest-window -start -end` | 回測指定區間 |
+| `go run ./cmd/import-replay` | CSV → JSONL 匯入 |
+| `go run ./cmd/mapgen -map arch` | 生成系統架構圖 |
+| `go run ./cmd/calibrate-seasonal` | 校準季節性模式 |
+
+## 驗證檢查
 
 ```bash
-# 只有在改善時才執行
-./scripts/openclaw/decide.sh --promote EXP-ID --reason "改善了X%"
+# 格式檢查（CI blocker）
+test -z "$(gofmt -l .)"
+
+# 完整 CI 檢查
+go build ./...
+go test ./...
+go vet ./...
+staticcheck ./...
+golangci-lint run ./...
 ```
 
 ## 關鍵檔案
 
-- `docs/openclaw-protocol.md` - 完整協議
-- `docs/script_usage_guide.md` - 詳細教學
-- `docs/skills-map.md` - 技能定義
-
-## 安全規則
-
-1. **必須確認** - Promote/Revert 前暫停等待
-2. **必須理由** - 每次決策都要 --reason
-3. **不要修改** - configs/ 和 internal/ 不要動
-
-## 故障排除
-
-| 問題 | 解決 |
+| 檔案 | 用途 |
 |------|------|
-| "No experiments" | 執行 propose_mutation.sh |
-| "Cannot find file" | 稍等後重試 |
-| BaselineValue=0 | 先執行 backtest-window |
+| `AGENTS.md` | 開發代理工作守則 |
+| `ai_productivity_guide.md` | 常見陷阱與除錯指南 |
+| `configs/agents.json` | 代理註冊表 |
+| `.env` | 環境變數（`ATLAS_*` 前綴） |
+| `docs/architecture.md` | 系統架構說明 |
+| `docs/operations_playbook.md` | 操作手冊 |
+| `docs/iteration_playbook.md` | 迭代指南 |
 
-## 開始
+## 安全提醒
 
-執行：`./scripts/openclaw/status.sh`
+1. **Live trading**: 本地測試時切勿啟用 `-allow-live-broker`、`-allow-real-signor` 旗標
+2. **API Key**: 所有外部 API key 透過 `.env` 管理，不提交至 git
+3. **Baseline**: 實驗執行/評估前確認 `data/state/baseline_policy.json` 存在
