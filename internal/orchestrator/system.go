@@ -151,6 +151,12 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 	}
 	registry, err := LoadRegistry(cfg.AgentRegistryPath)
 	if err != nil {
+		if len(cfg.AgentRegistryExtraPaths) > 0 {
+			allPaths := append([]string{cfg.AgentRegistryPath}, cfg.AgentRegistryExtraPaths...)
+			registry, err = LoadRegistryMulti(allPaths...)
+		}
+	}
+	if err != nil {
 		registry = SeedRegistry()
 	}
 	policy, err := baseline.Load(cfg.BaselinePolicyPath)

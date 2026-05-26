@@ -18,6 +18,7 @@ type Config struct {
 	PrimaryMarket              string
 	ReplayMode                 string
 	AgentRegistryPath          string
+	AgentRegistryExtraPaths    []string // merged with AgentRegistryPath via LoadRegistryMulti
 	BaselinePolicyPath         string
 	ParametersConfigPath       string
 	LedgerDir                  string
@@ -70,6 +71,7 @@ func Load() Config {
 		PrimaryMarket:              envOr("ATLAS_PRIMARY_MARKET", "TW"),
 		ReplayMode:                 envOr("ATLAS_REPLAY_MODE", "daily"),
 		AgentRegistryPath:          envOr("ATLAS_AGENT_REGISTRY_PATH", "configs/agents.json"),
+		AgentRegistryExtraPaths:    parseExtraPaths(envOr("ATLAS_AGENT_REGISTRY_EXTRA_PATHS", "")),
 		BaselinePolicyPath:         envOr("ATLAS_BASELINE_POLICY_PATH", "data/state/baseline_policy.json"),
 		ParametersConfigPath:       envOr("ATLAS_PARAMETERS_CONFIG_PATH", "configs/parameters.json"),
 		LedgerDir:                  envOr("ATLAS_LEDGER_DIR", "data/state"),
@@ -297,4 +299,19 @@ func loadEnvFile(filename string) {
 			}
 		}
 	}
+}
+
+func parseExtraPaths(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	var paths []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			paths = append(paths, p)
+		}
+	}
+	return paths
 }
