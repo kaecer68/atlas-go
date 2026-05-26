@@ -16,10 +16,12 @@ import (
 //
 // Theme hit rates and skill-to-theme mappings are loaded from ParametersConfig
 // (NarrativeConviction.ThemeHitRates + NarrativeConviction.SkillToTheme).
-// When config is missing, the modulator operates without mappings (no-op).
+// When config is missing, both maps are nil and the modulator is a no-op —
+// this is deliberate: mappings are strategy IP that should live in config,
+// not hardcoded in the engine.
 type NarrativeConvictionModulator struct {
-	themeHitRates map[string]float64 // Theme → built-in hit rate
-	skillToTheme  map[string]string  // Agent skill → NarrativeTheme
+	themeHitRates map[string]float64 // nil = no-op (config not loaded); not a bug
+	skillToTheme  map[string]string  // nil = no-op (config not loaded); not a bug
 }
 
 func NewNarrativeConvictionModulator() *NarrativeConvictionModulator {

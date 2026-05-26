@@ -9,6 +9,14 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
+// SeedRegistry returns a hardcoded development-seed agent registry.
+// This is a FALLBACK only — when no config sources are available. In production,
+// the canonical agent definitions come from configs/agents.json (and optional
+// extra paths via ATLAS_AGENT_REGISTRY_EXTRA_PATHS).
+//
+// When adding new built-in agents, add them to configs/agents.json, NOT here.
+// SeedRegistry exists so the system can start without any config files for
+// development and testing.
 func SeedRegistry() domain.AgentRegistry {
 	return domain.AgentRegistry{
 		Version: 1,
@@ -242,8 +250,15 @@ func LoadRegistry(path string) (domain.AgentRegistry, error) {
 
 // LoadRegistryMulti merges agent registries from multiple JSON sources.
 // Sources are loaded in order; duplicate agent IDs skip with a warning
-// (first-write-wins). This enables proprietary modules to layer their own
-// agent definitions on top of the open-source core registry.
+// (first-write-wins).
+//
+// This is the plugin boundary entry point for proprietary agent definitions:
+// the open-source core provides its agents via configs/agents.json, and
+// proprietary modules layer additional agent specs via extra paths configured
+// through ATLAS_AGENT_REGISTRY_EXTRA_PATHS. No core file modification needed.
+//
+// DO NOT REMOVE — appears unused in open-source core when no extra paths
+// are configured, but is the multi-source merging contract for private repos.
 func LoadRegistryMulti(paths ...string) (domain.AgentRegistry, error) {
 	if len(paths) == 0 {
 		reg := SeedRegistry()
