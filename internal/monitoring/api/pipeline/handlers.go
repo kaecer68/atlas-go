@@ -286,7 +286,88 @@ func (h *Handlers) HandleRecommendationPipeline(r *http.Request) (int, any) {
 	return http.StatusOK, resp
 }
 
-// NarrativeContextItem provides the narrative context for a recommendation.
+func (h *Handlers) HandleDecisionChain(r *http.Request) (int, any) {
+	showAll := r.URL.Query().Get("show_all") == "true"
+	sessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
+
+	pipelineData, err := h.Svc.LoadRecommendationPipeline(sessionID, showAll)
+	if err != nil {
+		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("load recommendation pipeline: %v", err)}
+	}
+
+	var recommendations any
+	if pipelineData != nil {
+		items := make([]PipelineItem, len(pipelineData.Items))
+		for i, item := range pipelineData.Items {
+			var narCtx *NarrativeContextItem
+			var indCtx *IndustryContextItem
+			if item.NarrativeContext != nil {
+				narCtx = &NarrativeContextItem{
+					ActiveThemes:   item.NarrativeContext.ActiveThemes,
+					PrimaryTheme:   item.NarrativeContext.PrimaryTheme,
+					PrimaryHitRate: item.NarrativeContext.PrimaryHitRate,
+					DirectionHint:  item.NarrativeContext.DirectionHint,
+				}
+			}
+			if item.IndustryContext != nil {
+				indCtx = &IndustryContextItem{
+					IndustryID:         item.IndustryContext.IndustryID,
+					BusinessCycle:      item.IndustryContext.BusinessCycle,
+					CycleConfidence:    item.IndustryContext.CycleConfidence,
+					SeasonalMultiplier: item.IndustryContext.SeasonalMultiplier,
+					SystemicImportance: item.IndustryContext.SystemicImportance,
+				}
+			}
+			items[i] = PipelineItem{
+				Symbol:              item.Symbol,
+				AgentID:             item.AgentID,
+				Skill:               item.Skill,
+				Layer:               item.Layer,
+				Side:                item.Side,
+				Conviction:          item.Conviction,
+				TargetPrice:         item.TargetPrice,
+				StopLossPrice:       item.StopLossPrice,
+				ForwardReturn:       item.ForwardReturn,
+				Hit:                 item.Hit,
+				Reason:              item.Reason,
+				Price:               item.Price,
+				PassedGuards:        item.PassedGuards,
+				GuardReason:         item.GuardReason,
+				Tags:                item.Tags,
+				RecordedAt:          item.RecordedAt,
+				FactorScores:        item.FactorScores,
+				ConvictionBreakdown: item.ConvictionBreakdown,
+				NarrativeEventIDs:   item.NarrativeEventIDs,
+				NarrativeContext:    narCtx,
+				IndustryContext:     indCtx,
+				Metrics: &PipelineItemMetrics{
+					PriceToEarnings: item.Metrics.PriceToEarnings,
+					PriceToBook:     item.Metrics.PriceToBook,
+					DividendYield:   item.Metrics.DividendYield,
+					BacktestReturn:  item.Metrics.BacktestReturn,
+				},
+			}
+		}
+		recommendations = RecommendationPipelineResponse{
+			SessionID:         pipelineData.SessionID,
+			Regime:            pipelineData.Regime,
+			Items:             items,
+			GuardOutcomes:     pipelineData.GuardOutcomes,
+			ScreenedItems:     pipelineData.ScreenedItems,
+			RecordedAt:        pipelineData.RecordedAt,
+			IsFallbackSession: pipelineData.IsFallbackSession,
+			FallbackMessage:   pipelineData.FallbackMessage,
+		}
+	}
+
+	return http.StatusOK, DecisionChainResponse{
+		Events:          nil,
+		SectorHeatmap:   nil,
+		Recommendations: recommendations,
+		RecordedAt:      time.Now(),
+	}
+}
+
 type NarrativeContextItem struct {
 	ActiveThemes   []string `json:"active_themes"`
 	PrimaryTheme   string   `json:"primary_theme,omitempty"`
@@ -294,7 +375,6 @@ type NarrativeContextItem struct {
 	DirectionHint  string   `json:"direction_hint,omitempty"` // "positive" / "negative" / "neutral"
 }
 
-// IndustryContextItem provides the industry context for a recommendation.
 type IndustryContextItem struct {
 	IndustryID         string  `json:"industry_id"`
 	BusinessCycle      string  `json:"business_cycle"`
@@ -303,7 +383,6 @@ type IndustryContextItem struct {
 	SystemicImportance float64 `json:"systemic_importance"`
 }
 
-// PipelineItem is the API response item for recommendation pipeline.
 type PipelineItem struct {
 	Symbol              string                      `json:"symbol"`
 	AgentID             string                      `json:"agent_id"`
@@ -336,7 +415,6 @@ type PipelineItemMetrics struct {
 	BacktestReturn  *float64 `json:"backtest_return,omitempty"`
 }
 
-// RecommendationPipelineResponse is the API response for recommendation pipeline.
 type RecommendationPipelineResponse struct {
 	SessionID         string                   `json:"session_id"`
 	Regime            domain.Regime            `json:"regime"`
@@ -346,6 +424,14 @@ type RecommendationPipelineResponse struct {
 	RecordedAt        time.Time                `json:"recorded_at"`
 	IsFallbackSession bool                     `json:"is_fallback_session"`
 	FallbackMessage   string                   `json:"fallback_message"`
+}
+
+// DecisionChainResponse is the aggregate response for the decision-chain page.
+type DecisionChainResponse struct {
+	Events          any       `json:"events"`
+	SectorHeatmap   any       `json:"sector_heatmap"`
+	Recommendations any       `json:"recommendations"`
+	RecordedAt      time.Time `json:"recorded_at"`
 }
 
 // HandleSessions handles GET /api/dashboard/sessions.
@@ -370,7 +456,6 @@ func (h *Handlers) HandleSessions(r *http.Request) (int, any) {
 	return http.StatusOK, map[string]any{"sessions": result}
 }
 
-// HandleUniverseOverlap handles GET /api/dashboard/universe-overlap.
 func (h *Handlers) HandleUniverseOverlap(r *http.Request) (int, any) {
 	data, err := h.Svc.LoadUniverseOverlap()
 	if err != nil {
@@ -396,7 +481,6 @@ func (h *Handlers) HandleUniverseOverlap(r *http.Request) (int, any) {
 	return http.StatusOK, resp
 }
 
-// AgentUniverseView is the API response for agent universe view.
 type AgentUniverseView struct {
 	AgentID           string                   `json:"agent_id"`
 	Name              string                   `json:"name"`
