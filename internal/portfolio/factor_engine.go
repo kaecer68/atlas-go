@@ -781,7 +781,7 @@ func (fe *FactorEngine) CalculatePreciousMetalsScore(symbol string, quotes map[s
 	dxy := fe.pmDXYScore(ctx)
 	inflExp := fe.pmInflationExpectScore(ctx)
 	cbBuy := fe.pmCentralBankScore(ctx)
-	etfFlow := fe.pmETFFlowScore(ctx)
+	etfFlow := fe.pmETFFlowScore()
 	riskOff := fe.pmRiskOffScore(ctx)
 	physDemand := fe.pmPhysicalDemandScore(ctx)
 	comex := fe.pmCOMEXScore(ctx)
@@ -908,7 +908,7 @@ func (fe *FactorEngine) pmCentralBankScore(ctx *PreciousMetalsContext) float64 {
 // pmETFFlowScore: uses GLD 20d momentum as ETF flow proxy.
 // GLD > 5% → +0.5 (strong inflows), > 0 → +0.2, < −5% → −0.3, else 0.
 // Falls back to 0 if GLD price history unavailable.
-func (fe *FactorEngine) pmETFFlowScore(ctx *PreciousMetalsContext) float64 {
+func (fe *FactorEngine) pmETFFlowScore() float64 {
 	fe.mu.RLock()
 	defer fe.mu.RUnlock()
 	if fe.history == nil {

@@ -227,38 +227,37 @@ func (ETFRotationExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote,
 
 	// Base conviction varies by macro regime and ETF type
 	base := 55
-	reason := "balanced ETF allocation"
+	var reason string
 
-	switch {
-	case regime == domain.RegimeRiskOff:
-		// Risk-Off: prefer gold/precious metals, penalize equity
-		if etfType == "gold" {
+	switch regime {
+	case domain.RegimeRiskOff:
+		switch etfType {
+		case "gold":
 			base = 65
 			reason = "safe-haven gold ETF in risk-off regime"
-		} else if etfType == "dividend" || etfType == "defensive" {
+		case "dividend", "defensive":
 			base = 60
 			reason = "defensive dividend ETF in risk-off regime"
-		} else {
+		default:
 			base = 45
 			reason = "equity ETF penalized in risk-off regime"
 		}
-	case regime == domain.RegimeRiskOn:
-		// Bull: prefer equity broad market
-		if etfType == "broad_market" {
+	case domain.RegimeRiskOn:
+		switch etfType {
+		case "broad_market":
 			base = 68
 			reason = "broad market ETF in risk-on regime"
-		} else if etfType == "dividend" {
+		case "dividend":
 			base = 62
 			reason = "dividend ETF in risk-on regime"
-		} else if etfType == "gold" {
+		case "gold":
 			base = 50
 			reason = "gold ETF penalized in risk-on regime"
-		} else {
+		default:
 			base = 58
 			reason = "diversified ETF in risk-on regime"
 		}
 	default:
-		// Neutral: balanced allocation with momentum tilt
 		if quote.Last > quote.Open {
 			reason = "balanced ETF allocation with positive momentum in neutral regime"
 		} else {
