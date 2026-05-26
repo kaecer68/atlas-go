@@ -2,7 +2,9 @@ package orchestrator
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -20,6 +22,53 @@ type RegimeExecutor interface {
 	Score(agent domain.AgentSpec, quotes map[string]domain.Quote, prompt string) int
 }
 
+// ── PLUGIN BOUNDARY: DO NOT REMOVE ──────────────────────────────────
+//
+// PromptResolver decouples prompt loading from PluginRegistry. It appears
+// unused in the open-source core (the ResolvePrompt method falls back to
+// os.ReadFile when promptResolver is nil), but proprietary modules inject
+// a PromptResolver via WithPromptResolver to load prompts from an external
+// directory (e.g., atlas-strategies-tw/prompts/) without modifying core.
+//
+// FileSystemPromptResolver is the reference implementation.
+// promptResolver field on PluginRegistry is the injection point.
+// WithPromptResolver is the setter.
+//
+// When refactoring: keep the interface, the implementation, the field,
+// and the setter. They are NOT dead code — they are the prompt-loading
+// boundary between open-source engine and private strategy IP.
+// ─────────────────────────────────────────────────────────────────────
+
+// PromptResolver resolves prompt content for an agent. This abstraction
+// allows prompts to be loaded from the filesystem, embedded in a binary,
+// or fetched from an external service — without changing PluginRegistry.
+type PromptResolver interface {
+	Resolve(agent domain.AgentSpec) (string, error)
+}
+
+// FileSystemPromptResolver loads prompt files from a configurable base directory.
+// The base directory typically points to a separate repo containing proprietary
+// strategy prompts (e.g., atlas-strategies-tw/prompts/agents/).
+type FileSystemPromptResolver struct {
+	baseDir string
+}
+
+func NewFileSystemPromptResolver(baseDir string) *FileSystemPromptResolver {
+	return &FileSystemPromptResolver{baseDir: baseDir}
+}
+
+func (r *FileSystemPromptResolver) Resolve(agent domain.AgentSpec) (string, error) {
+	path := agent.PromptFile
+	if !filepath.IsAbs(path) && r.baseDir != "" {
+		path = filepath.Join(r.baseDir, agent.PromptFile)
+	}
+	bytes, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve prompt %s: %w", agent.PromptFile, err)
+	}
+	return strings.ToLower(string(bytes)), nil
+}
+
 type PluginRegistry struct {
 	regimeExecutors    []RegimeExecutor
 	agentExecutors     []AgentExecutor
@@ -29,6 +78,7 @@ type PluginRegistry struct {
 	healthManager      *portfolio.AgentHealthManager
 	cycleModulator     *IndustryCycleModulator
 	narrativeModulator *NarrativeConvictionModulator
+	promptResolver     PromptResolver // plugin boundary — injected via WithPromptResolver; nil = fallback to os.ReadFile
 }
 
 func NewPluginRegistry(loaders ...ExecutorLoader) *PluginRegistry {
@@ -68,6 +118,14 @@ func (r *PluginRegistry) WithCycleModulator(m *IndustryCycleModulator) *PluginRe
 
 func (r *PluginRegistry) WithNarrativeModulator(m *NarrativeConvictionModulator) *PluginRegistry {
 	r.narrativeModulator = m
+	return r
+}
+
+// WithPromptResolver injects a PromptResolver for loading prompts from
+// external directories. When nil (default), ResolvePrompt falls back to
+// os.ReadFile on agent.PromptFile. DO NOT REMOVE — plugin boundary setter.
+func (r *PluginRegistry) WithPromptResolver(pr PromptResolver) *PluginRegistry {
+	r.promptResolver = pr
 	return r
 }
 
@@ -136,6 +194,14 @@ func (r *PluginRegistry) ResolvePrompt(agent domain.AgentSpec, overrides map[str
 	if override, ok := overrides[agent.Skill]; ok && override != "" {
 		return override
 	}
+	// Plugin boundary: use injected PromptResolver if available (enables
+	// proprietary prompt repos); otherwise fall back to direct filesystem read.
+	if r.promptResolver != nil {
+		if resolved, err := r.promptResolver.Resolve(agent); err == nil {
+			return resolved
+		}
+	}
+	// Fallback for open-source core when no PromptResolver is injected.
 	bytes, err := os.ReadFile(agent.PromptFile)
 	if err != nil {
 		return ""
