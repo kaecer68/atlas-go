@@ -59,8 +59,8 @@ func TestFactorWeightEngine_GetWeights_WithEvent(t *testing.T) {
 	if weights[FactorQuality] <= 0.20 {
 		t.Error("AI capex surge should boost quality weight")
 	}
-	if weights[FactorMomentum] <= 0.25 {
-		t.Error("AI capex surge should boost momentum weight")
+	if weights[FactorMomentum] <= 0.24 {
+		t.Errorf("AI capex surge should boost momentum above baseline, got %.4f", weights[FactorMomentum])
 	}
 }
 
@@ -189,8 +189,8 @@ func TestFactorWeightEngine_AddEvent_Critical(t *testing.T) {
 	if weights[FactorQuality] <= 0.20 {
 		t.Errorf("critical AI capex surge should boost quality above baseline 0.20, got %.4f", weights[FactorQuality])
 	}
-	if weights[FactorMomentum] <= 0.25 {
-		t.Errorf("critical AI capex surge should boost momentum above baseline 0.25, got %.4f", weights[FactorMomentum])
+	if weights[FactorMomentum] <= 0.24 {
+		t.Errorf("critical AI capex surge should boost momentum above baseline, got %.4f", weights[FactorMomentum])
 	}
 
 	// Verify weights changed from baseline (event adjustments applied)

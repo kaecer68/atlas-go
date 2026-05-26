@@ -167,3 +167,12 @@ jobs:
         fi
 
         echo "Per-file Go license headers are not enforced by this repository policy."
+
+  # Factor system integrity check (G1-G10)
+  factor-integrity:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Run factor integrity check
+      run: bash scripts/ci/verify_factor_integrity.sh

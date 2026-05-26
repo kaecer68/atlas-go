@@ -146,6 +146,35 @@ func buildPortfolioManager(runtimeParams *portfolio.RuntimeParameters, registry 
 
 	factorWeightEngine := portfolio.NewFactorWeightEngine()
 
+	// Wire narrative factor provider from active events.
+	factorEngine.WithNarrativeProvider(func(symbol string) *domain.NarrativeFactorScore {
+		events := factorWeightEngine.GetActiveEvents()
+		if len(events) == 0 {
+			return nil
+		}
+		var totalConf, totalHit float64
+		themes := make([]string, 0, len(events))
+		eventIDs := make([]string, 0, len(events))
+		for _, ev := range events {
+			totalConf += ev.Confidence
+			totalHit += ev.HitRate
+			themes = append(themes, ev.Theme)
+			eventIDs = append(eventIDs, ev.ID)
+		}
+		n := float64(len(events))
+		score := n * (totalConf / n) * (totalHit / n)
+		if score > 1.0 {
+			score = 1.0
+		}
+		return &domain.NarrativeFactorScore{
+			Score:      score,
+			Theme:      themes[0],
+			HitRate:    totalHit / n,
+			Confidence: totalConf / n,
+			EventIDs:   eventIDs,
+		}
+	})
+
 	return PortfolioManager{
 		darwinian:          darwinian,
 		alphaDiscovery:     NewAlphaDiscoveryEngine(factorEngine),

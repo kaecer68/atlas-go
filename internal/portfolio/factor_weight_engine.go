@@ -18,10 +18,17 @@ type FactorWeightEngine struct {
 	lifecycle          *narrative.EventLifecycleManager
 	strategyAdjustment map[FactorType]float64
 	weightSource       string
+	currentRegime      string
 }
 
 func (e *FactorWeightEngine) WeightSource() string {
 	return e.weightSource
+}
+
+func (e *FactorWeightEngine) SetRegime(r string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.currentRegime = r
 }
 
 func fwConfig() *config.FactorWeightParameters {
@@ -70,6 +77,17 @@ func NewFactorWeightEngine() *FactorWeightEngine {
 func (e *FactorWeightEngine) GetWeights(regime string) map[FactorType]float64 {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
+	// Fall back to stored regime when caller passes empty string (backward compat).
+	if regime == "" && e.currentRegime != "" {
+		regime = e.currentRegime
+	}
+	// Map domain.Regime constants to internal regime names.
+	switch regime {
+	case "RISK_ON":
+		regime = "bull"
+	case "RISK_OFF":
+		regime = "bear"
+	}
 	weights := make(map[FactorType]float64)
 	maps.Copy(weights, e.baseWeights)
 
@@ -111,10 +129,21 @@ func (e *FactorWeightEngine) GetWeights(regime string) map[FactorType]float64 {
 		weights[FactorQuality] += bearQuality
 		weights[FactorValue] += bearValue
 		weights[FactorMomentum] += bearMomentum
+		weights[FactorIndustryCycle] += 0.04
 	case "high_vol":
 		weights[FactorLiquidity] += highVolLiq
 		weights[FactorMomentum] += highVolMom
 		weights[FactorInstSent] += highVolInst
+		weights[FactorIndustryCycle] += 0.03
+	}
+
+	// Scale Narrative factor weight by active event intensity.
+	if intensity := e.narrativeIntensity(); intensity > 0 {
+		delta := intensity * 0.05
+		if delta > 0.1 {
+			delta = 0.1
+		}
+		weights[FactorNarrative] += delta
 	}
 
 	for _, event := range e.activeEvents {
@@ -254,46 +283,67 @@ func (e *FactorWeightEngine) applyEventAdjustment(event *narrative.NarrativeEven
 	switch event.Theme {
 	case "AI_capex_surge":
 		e.eventWeights[event.ID] = map[FactorType]float64{
-			FactorQuality:  delta,
-			FactorMomentum: delta,
-			FactorETF:      delta,
+			FactorQuality:    delta,
+			FactorMomentum:   delta,
+			FactorETF:        delta,
+			FactorNarrative:  delta,
 		}
 	case "US_rates_up":
 		e.eventWeights[event.ID] = map[FactorType]float64{
-			FactorValue:    delta,
-			FactorInstSent: -delta,
-			FactorETF:      delta,
+			FactorValue:      delta,
+			FactorInstSent:   -delta,
+			FactorETF:        delta,
+			FactorNarrative:  delta,
 		}
 	case "oil_price_shock":
 		e.eventWeights[event.ID] = map[FactorType]float64{
-			FactorLiquidity: -delta,
-			FactorMomentum:  -delta,
-			FactorETF:       delta,
+			FactorLiquidity:  -delta,
+			FactorMomentum:   -delta,
+			FactorETF:        delta,
+			FactorNarrative:  delta,
+			FactorIndustryCycle: delta,
 		}
 	case "JPY_carry_unwind":
 		e.eventWeights[event.ID] = map[FactorType]float64{
-			FactorLiquidity: -delta,
-			FactorAgent:     -delta,
-			FactorETF:       delta,
+			FactorLiquidity:  -delta,
+			FactorAgent:      -delta,
+			FactorETF:        delta,
+			FactorNarrative:  delta,
 		}
 	case "gold_rally":
 		e.eventWeights[event.ID] = map[FactorType]float64{
 			FactorPreciousMetals: delta,
 			FactorValue:          -delta,
+			FactorNarrative:      delta,
 		}
 	case "dollar_surge":
 		e.eventWeights[event.ID] = map[FactorType]float64{
 			FactorPreciousMetals: -delta,
 			FactorLiquidity:      delta,
+			FactorNarrative:      delta,
 		}
 	case "inflation_spike":
 		e.eventWeights[event.ID] = map[FactorType]float64{
 			FactorPreciousMetals: delta,
 			FactorMomentum:       -delta,
+			FactorNarrative:      delta,
+		}
+	case "geopolitical_risk_spike":
+		e.eventWeights[event.ID] = map[FactorType]float64{
+			FactorAgent:      -delta,
+			FactorNarrative:   delta * 1.5,
+			FactorLiquidity:   -delta,
+		}
+	case "retail_institutional_divergence":
+		e.eventWeights[event.ID] = map[FactorType]float64{
+			FactorInstSent:   delta,
+			FactorAgent:      -delta,
+			FactorNarrative:  delta,
 		}
 	default:
 		e.eventWeights[event.ID] = map[FactorType]float64{
-			FactorInstSent: delta,
+			FactorInstSent:   delta,
+			FactorNarrative:  delta * 0.5,
 		}
 	}
 }
@@ -308,6 +358,22 @@ func (e *FactorWeightEngine) RemoveEvent(id string) {
 
 func (e *FactorWeightEngine) GetActiveEvents() []*narrative.NarrativeEvent {
 	return e.lifecycle.GetActiveEvents()
+}
+
+// narrativeIntensity returns a composite intensity score from active events.
+// Formula: event_count × avg_confidence × avg_hit_rate, capped at 1.0.
+func (e *FactorWeightEngine) narrativeIntensity() float64 {
+	events := e.lifecycle.GetActiveEvents()
+	if len(events) == 0 {
+		return 0
+	}
+	var totalConf, totalHit float64
+	for _, ev := range events {
+		totalConf += ev.Confidence
+		totalHit += ev.HitRate
+	}
+	n := float64(len(events))
+	return n * (totalConf / n) * (totalHit / n)
 }
 
 func (e *FactorWeightEngine) Update() {
