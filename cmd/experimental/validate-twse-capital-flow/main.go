@@ -20,7 +20,9 @@ func main() {
 		os.Exit(0)
 	}
 
-	// TODO: Migrate to Gateway for direct TWSE capital flow provider instantiation.
+	// TODO(low): Migrate to Gateway when experimental tooling is unified.
+	// TWSECapitalFlowProvider is a local file reader (data/state/capital_flow),
+	// not a network client. Non-production path — see docs/GATEWAY_MIGRATION_TRACKING.md.
 	provider := marketdata.NewTWSECapitalFlowProvider("data/state/capital_flow")
 	ctx := context.Background()
 
