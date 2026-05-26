@@ -203,7 +203,7 @@ func SeedRegistry() domain.AgentRegistry {
 	}
 }
 
-func ValidateRegistry(reg domain.AgentRegistry, configDir string) error {
+func ValidateRegistry(reg domain.AgentRegistry, workDir string) error {
 	if reg.Version <= 0 {
 		return fmt.Errorf("registry version must be positive")
 	}
@@ -224,10 +224,10 @@ func ValidateRegistry(reg domain.AgentRegistry, configDir string) error {
 		}
 		seen[agent.ID] = struct{}{}
 
-		if configDir != "" && agent.PromptFile != "" {
+		if workDir != "" && agent.PromptFile != "" {
 			promptPath := agent.PromptFile
 			if !filepath.IsAbs(promptPath) {
-				promptPath = filepath.Join(configDir, promptPath)
+				promptPath = filepath.Join(workDir, agent.PromptFile)
 			}
 			if _, err := os.Stat(promptPath); err != nil {
 				return fmt.Errorf("agent %s prompt file not found: %s", agent.ID, promptPath)
@@ -245,7 +245,11 @@ func LoadRegistry(path string) (domain.AgentRegistry, error) {
 		reg := SeedRegistry()
 		return reg, ValidateRegistry(reg, "")
 	}
-	return LoadRegistryMulti(path)
+	reg, err := loadRegistryFile(path)
+	if err != nil {
+		return domain.AgentRegistry{}, err
+	}
+	return reg, ValidateRegistry(reg, "")
 }
 
 // LoadRegistryMulti merges agent registries from multiple JSON sources.
@@ -273,6 +277,9 @@ func LoadRegistryMulti(paths ...string) (domain.AgentRegistry, error) {
 		if err != nil {
 			return domain.AgentRegistry{}, fmt.Errorf("load %s: %w", path, err)
 		}
+		if err := ValidateRegistry(reg, ""); err != nil {
+			return domain.AgentRegistry{}, fmt.Errorf("validate %s: %w", path, err)
+		}
 		for _, agent := range reg.Agents {
 			if _, exists := seen[agent.ID]; exists {
 				fmt.Fprintf(os.Stderr, "[registry] agent %q from %s skipped (duplicate ID — first source wins)\n", agent.ID, path)
@@ -286,8 +293,7 @@ func LoadRegistryMulti(paths ...string) (domain.AgentRegistry, error) {
 		}
 	}
 
-	configDir := filepath.Dir(paths[0])
-	return merged, ValidateRegistry(merged, configDir)
+	return merged, nil
 }
 
 func loadRegistryFile(path string) (domain.AgentRegistry, error) {
