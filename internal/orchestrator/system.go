@@ -149,12 +149,13 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 	for _, opt := range opts {
 		opt(&o)
 	}
-	registry, err := LoadRegistry(cfg.AgentRegistryPath)
-	if err != nil {
-		if len(cfg.AgentRegistryExtraPaths) > 0 {
-			allPaths := append([]string{cfg.AgentRegistryPath}, cfg.AgentRegistryExtraPaths...)
-			registry, err = LoadRegistryMulti(allPaths...)
-		}
+	var registry domain.AgentRegistry
+	var err error
+	if len(cfg.AgentRegistryExtraPaths) > 0 {
+		allPaths := append([]string{cfg.AgentRegistryPath}, cfg.AgentRegistryExtraPaths...)
+		registry, err = LoadRegistryMulti(allPaths...)
+	} else {
+		registry, err = LoadRegistry(cfg.AgentRegistryPath)
 	}
 	if err != nil {
 		registry = SeedRegistry()

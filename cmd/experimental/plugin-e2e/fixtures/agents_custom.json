@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "agents": [
+    {
+      "id": "custom-momentum-01",
+      "name": "Custom Momentum",
+      "layer": "style",
+      "skill": "custom_momentum",
+      "promptFile": "cmd/experimental/plugin-e2e/fixtures/custom_momentum.md",
+      "enabled": true,
+      "universe": ["2330.TW", "2317.TW", "2454.TW", "3034.TW", "2303.TW"],
+      "primaryMetrics": ["alpha_hit_rate", "momentum_followthrough"],
+      "requiredSkills": ["custom_momentum"],
+      "forbiddenActions": ["illiquid_selection"],
+      "operatingNotes": ["Custom momentum strategy loaded via plugin boundary."]
+    }
+  ]
+}
