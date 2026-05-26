@@ -64,46 +64,46 @@ func TestSeedRules(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		pattern        string
-		wantConds      int
-		wantDir        string
+		name            string
+		pattern         string
+		wantConds       int
+		wantDir         string
 		wantFirstSector string
 	}{
 		{
-			name:           "sox-foreignflow-semiconductor",
-			wantConds:      2,
-			wantDir:        DirUp,
+			name:            "sox-foreignflow-semiconductor",
+			wantConds:       2,
+			wantDir:         DirUp,
 			wantFirstSector: "semiconductor",
 		},
 		{
-			name:           "usmarket-taiwan-lag",
-			wantConds:      1,
-			wantDir:        DirUp,
+			name:            "usmarket-taiwan-lag",
+			wantConds:       1,
+			wantDir:         DirUp,
 			wantFirstSector: "semiconductor",
 		},
 		{
-			name:           "dxy-strong-export-boost",
-			wantConds:      2,
-			wantDir:        DirUp,
+			name:            "dxy-strong-export-boost",
+			wantConds:       2,
+			wantDir:         DirUp,
 			wantFirstSector: "shipping",
 		},
 		{
-			name:           "foreign-outflow-bearish",
-			wantConds:      2,
-			wantDir:        DirDown,
+			name:            "foreign-outflow-bearish",
+			wantConds:       2,
+			wantDir:         DirDown,
 			wantFirstSector: "*",
 		},
 		{
-			name:           "nvidia-earnings-ai-chain",
-			wantConds:      1,
-			wantDir:        DirUp,
+			name:            "nvidia-earnings-ai-chain",
+			wantConds:       1,
+			wantDir:         DirUp,
 			wantFirstSector: "ai_supply_chain",
 		},
 		{
-			name:           "usd-twd-managed-float",
-			wantConds:      1,
-			wantDir:        DirUp,
+			name:            "usd-twd-managed-float",
+			wantConds:       1,
+			wantDir:         DirUp,
 			wantFirstSector: "electronics",
 		},
 	}
