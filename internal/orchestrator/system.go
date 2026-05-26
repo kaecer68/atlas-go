@@ -188,6 +188,11 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	// SimTraceWriter for pipeline layer transparency audit trail.
 	tw := NewSimTraceWriter(s.Sim().cfg.WorkDir, asOf.Format("20060102"), s.traceVerbose)
 	defer func() { _, _ = tw.ExportJSONL() }()
+	// Wire trace writer to engine and screener for internal trace events.
+	s.Sim().engine.WithTraceWriter(tw)
+	if s.plugins != nil {
+		s.plugins.WireScreenerTraceWriter(tw)
+	}
 
 	symbols := RegistrySymbols(s.Sim().registry)
 	tw.Record(1, "data_fetch", "START", nil)
@@ -456,6 +461,10 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 
 	tw := NewSimTraceWriter(s.Sim().cfg.WorkDir, sessionDate.Format("20060102"), s.traceVerbose)
 	defer func() { _, _ = tw.ExportJSONL() }()
+	s.Sim().engine.WithTraceWriter(tw)
+	if s.plugins != nil {
+		s.plugins.WireScreenerTraceWriter(tw)
+	}
 
 	symbols := RegistrySymbols(s.Sim().registry)
 	tw.Record(1, "data_fetch", "START", nil)

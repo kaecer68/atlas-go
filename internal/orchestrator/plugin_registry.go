@@ -71,6 +71,17 @@ func (r *PluginRegistry) WithNarrativeModulator(m *NarrativeConvictionModulator)
 	return r
 }
 
+// WireScreenerTraceWriter attaches a trace writer to the underlying screener
+// engine. No-op if the screener is nil or not a *screener.Engine.
+func (r *PluginRegistry) WireScreenerTraceWriter(tw *SimTraceWriter) {
+	if r.screener == nil {
+		return
+	}
+	if eng, ok := r.screener.(*screener.Engine); ok {
+		eng.WithTraceWriter(tw)
+	}
+}
+
 func (r *PluginRegistry) IsAgentHealthy(agentID string) bool {
 	if r.healthManager == nil {
 		return true

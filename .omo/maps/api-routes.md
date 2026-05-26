@@ -1,5 +1,5 @@
 # API Routes Map
-> Generated: 2026-05-26 01:56 UTC | Total routes: 119 | Stubs: 0
+> Generated: 2026-05-26 03:08 UTC | Total routes: 119 | Stubs: 0
 
 ## Summary by Group
 | Group | Count | Stubs | Active |
