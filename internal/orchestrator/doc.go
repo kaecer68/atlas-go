@@ -18,4 +18,6 @@
 // Each executor implements a small, focused interface: Supports() check + one
 // operation method. The registry iterates executors in order; first match wins
 // for Regime & Agent, all matches run sequentially for Control.
+//
+// Maturity: stable
 package orchestrator

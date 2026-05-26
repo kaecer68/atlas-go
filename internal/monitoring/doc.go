@@ -1,6 +1,8 @@
 // Package monitoring provides system observability: dashboard HTTP API,
 // metrics collection, alerting, health checks, and monitoring rules.
 //
+// Maturity: stable
+//
 // Package structure:
 //
 //	monitoring/         — top-level: dashboard API router, metrics, alerting,

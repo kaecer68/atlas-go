@@ -18,4 +18,6 @@
 //   - Value: P/E, P/B, dividend yield
 //   - Quality: earnings stability, ROE consistency
 //   - Agent: conviction-weighted agent consensus
+//
+// Maturity: stable
 package portfolio
