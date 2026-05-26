@@ -25,6 +25,7 @@ import (
 	apibacktest "github.com/kaecer68/atlas-go/internal/monitoring/api/backtest"
 	apicircuitbreaker "github.com/kaecer68/atlas-go/internal/monitoring/api/circuitbreaker"
 	apicontrol "github.com/kaecer68/atlas-go/internal/monitoring/api/control"
+	apidecision "github.com/kaecer68/atlas-go/internal/monitoring/api/decision"
 	apieventlogic "github.com/kaecer68/atlas-go/internal/monitoring/api/eventlogic"
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 	apiexperiment "github.com/kaecer68/atlas-go/internal/monitoring/api/experiment"
@@ -514,6 +515,21 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	pipelineHandlers := apipipeline.NewHandlers(pipelineSvc)
 	pipelineHandlers.ReasoningHandler = &apipipeline.ReasoningHandler{BaseDir: a.ledgerDir}
 	pipelineHandlers.RegisterRoutes(mux)
+
+	// Decision-chain aggregate endpoint: combines narrative events, event logic
+	// rules, sector heatmap, recommendations, and exit alerts.
+	decisionHandlers := &apidecision.Handlers{
+		NarrativeEng:  a.narrativeEngine,
+		IndustrySvc:   a.industryService,
+		PipelineSvc:   pipelineSvc,
+		MacroProvider: a.macroProvider,
+		WorkDir:       a.workDir,
+		LedgerDir:     a.ledgerDir,
+	}
+	if a.eventLogicHandlers != nil {
+		decisionHandlers.Registry = a.eventLogicHandlers.Registry()
+	}
+	decisionHandlers.RegisterRoutes(mux)
 
 	reportSvc := service.NewReportService(a.workDir, a.ledgerDir, outcomeStore)
 	reportHandlers := apireport.NewHandlers(reportSvc)

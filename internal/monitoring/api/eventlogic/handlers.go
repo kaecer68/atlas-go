@@ -18,6 +18,11 @@ func NewHandlers(r *eventlogic.RuleRegistry, v *eventlogic.RuleValidator, d *eve
 	return &Handlers{registry: r, validator: v, detector: d}
 }
 
+// Registry returns the underlying event logic rule registry.
+func (h *Handlers) Registry() *eventlogic.RuleRegistry {
+	return h.registry
+}
+
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/eventlogic/rules", shared.Get(h.ListRules))
 	mux.Handle("GET /api/eventlogic/rules/active", shared.Get(h.ListActive))

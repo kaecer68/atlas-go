@@ -112,9 +112,10 @@ async function loadModules() {
     import('./pages/parameters.js?v=' + APP_VERSION),
     import('./pages/synergy.js?v=' + APP_VERSION),
     import('./pages/evolution_panel.js?v=' + APP_VERSION),
+    import('./pages/decision-chain.js?v=' + APP_VERSION),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'synergy', 'evolution_panel'];
+  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'synergy', 'evolution_panel', 'decision'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -191,7 +192,6 @@ async function loadAll() {
     if (m.dash.renderAIEvolution) m.dash.renderAIEvolution(inbox, phase3, darwinianStatus, darwinianTrend, agents, macro, stress);
 
     if (m.pipe.renderPipeline) m.pipe.renderPipeline(pipeline, false, '');
-    if (m.pipe.renderDecisionChain) m.pipe.renderDecisionChain(pipeline, macro, agents, stress, events, chains, models, inbox, phase3, taxSnapshot, regimeHistory);
 
     if (m.narr.renderLiveNarrativeStrip) m.narr.renderLiveNarrativeStrip(events, stress, models, chains);
     if (m.narr.renderNarrativePage) m.narr.renderNarrativePage(snapshot, stress, events, chains, models, templates, retailSentiment, seasonal);
@@ -252,20 +252,7 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'decision') {
     try {
-      var d = await Promise.all([
-        safeGetJSON('/api/dashboard/recommendation-pipeline'),
-        safeGetJSON('/api/dashboard/macro-radar'),
-        safeGetJSON('/api/dashboard/agent-observatory'),
-        safeGetJSON('/api/taiwan/stress-index'),
-        safeGetJSON('/api/narrative/events'),
-        safeGetJSON('/api/narrative/chains'),
-        safeGetJSON('/api/narrative/models'),
-        safeGetJSON('/api/dashboard/experiment-inbox'),
-        safeGetJSON('/api/dashboard/phase3-status'),
-        safeGetJSON('/api/dashboard/tax-snapshot'),
-        safeGetJSON('/api/dashboard/regime-history'),
-      ]);
-      if (m.pipe.renderDecisionChain) m.pipe.renderDecisionChain(d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9], d[10]);
+      if (m.decision && m.decision.loadDecisionChain) m.decision.loadDecisionChain();
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'reasoning-trace') {
