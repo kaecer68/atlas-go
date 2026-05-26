@@ -78,7 +78,7 @@ We follow standard Go conventions:
 
 ## Questions?
 
-- Read [agents.md](agents.md) for architecture overview
+- Read [AGENTS.md](AGENTS.md) for architecture overview
 - Check [docs/architecture.md](docs/architecture.md) for detailed design
 - Review [ai_productivity_guide.md](ai_productivity_guide.md) for common pitfalls
 

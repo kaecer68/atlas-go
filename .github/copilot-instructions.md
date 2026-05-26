@@ -20,7 +20,7 @@ Welcome to atlas-go! This is a **simulation-first, audit-driven investment resea
 
 | File | Purpose |
 |------|---------|
-| [agents.md](agents.md) | **Start here** — Build commands, architecture boundaries, project pitfalls |
+| [AGENTS.md](AGENTS.md) | **Start here** — Build commands, architecture boundaries, project pitfalls |
 | [docs/GUIDELINES_INDEX.md](docs/GUIDELINES_INDEX.md) | **All specifications index** — Authority hierarchy, use-case routing, discoverability map |
 | [internal/apigateway/CONSTITUTION.md](internal/apigateway/CONSTITUTION.md) | **Data source governance** — Gateway rules, rate limits, circuit breakers, CI enforcement |
 | [docs/PARAMETER_SYSTEM.md](docs/PARAMETER_SYSTEM.md) | Parameter management with provenance tracking, calibration, 228 parameters |
@@ -33,13 +33,13 @@ Welcome to atlas-go! This is a **simulation-first, audit-driven investment resea
 ## 🎯 Common Workflows by Task
 
 ### I want to modify Go code (internal/ or cmd/)
-1. ✅ Read: [agents.md](agents.md) (§架構邊界) + [.github/instructions/go-core.instructions.md](.github/instructions/go-core.instructions.md)
+1. ✅ Read: [AGENTS.md](AGENTS.md) (§架構邊界) + [.github/instructions/go-core.instructions.md](.github/instructions/go-core.instructions.md)
 2. 🔍 Check: `gofmt -w .` before editing
 3. 🧪 Test: Focus on relevant package (e.g., `go test ./internal/orchestrator/...`)
 4. ✔️ Verify: `test -z "$(gofmt -l .)"` && `go build ./...`
 
 ### I want to add/modify prompts or agents
-1. ✅ Read: [agents.md](agents.md) (§重要陷阱 near configs/agents.json)
+1. ✅ Read: [AGENTS.md](AGENTS.md) (§重要陷阱 near configs/agents.json)
 2. 🔍 Check: `configs/agents.json` for enabled agents, `prompts/agents/` for corresponding prompt files
 3. ⚠️ Remember: Every enabled agent needs a valid prompt file
 4. 📋 Validate: Run experiments with small replay window first
@@ -51,7 +51,7 @@ Welcome to atlas-go! This is a **simulation-first, audit-driven investment resea
 4. 🔄 Flow: propose mutation → execute → judge → accept/revert (explicit gates)
 
 ### I want to understand/fix a bug
-1. ✅ Read: [agents.md](agents.md) (§重要陷阱) + [ai_productivity_guide.md](ai_productivity_guide.md)
+1. ✅ Read: [AGENTS.md](AGENTS.md) (§重要陷阱) + [ai_productivity_guide.md](ai_productivity_guide.md)
 2. 🔍 Search gotchas: Sparse replay? Reused slices? Silent Darwinian clipping? Missing baseline?
 3. 🧪 Run focused tests on the relevant package
 4. 📖 Check: [docs/architecture.md](docs/architecture.md) for component flow
@@ -186,7 +186,7 @@ internal/orchestrator/
 ### Architecture & Design
 - [docs/architecture.md](docs/architecture.md) — Layered architecture, component responsibilities
 - [docs/ai_agent_architecture.md](docs/ai_agent_architecture.md) — Agent coordination, decision flow
-- [agents.md](agents.md) — Repository boundaries and conventions
+- [AGENTS.md](AGENTS.md) — Repository boundaries and conventions
 
 ### Operations & Experimentation
 - [docs/operations_playbook.md](docs/operations_playbook.md) — Day-to-day workflows
@@ -233,7 +233,7 @@ A: **Replay**: deterministic run-through of historical data with current config.
 A: Run `go test ./...` (full suite) + spot-check key packages. Check `go vet ./...` for common issues. Review git diff for unintended side effects.
 
 **Q: When should I read each instruction file?**  
-A: Start with [agents.md](agents.md) for orientation. Then pick the domain-specific instruction matching your task (go-core, experiments-guardrails, or live-trading).
+A: Start with [AGENTS.md](AGENTS.md) for orientation. Then pick the domain-specific instruction matching your task (go-core, experiments-guardrails, or live-trading).
 
 ---
 
