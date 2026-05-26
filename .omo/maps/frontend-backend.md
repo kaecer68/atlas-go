@@ -1,5 +1,5 @@
 # Frontend-Backend Mapping
-> Generated: 2026-05-26 01:51 UTC | Frontend pages: 22 | API calls: 86 | Backend routes: 119
+> Generated: 2026-05-26 04:11 UTC | Frontend pages: 22 | API calls: 86 | Backend routes: 119
 
 ## Frontend Pages
 
