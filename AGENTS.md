@@ -201,7 +201,7 @@ gh pr create --title "feat(scope): description" \
 
 | 陷阱 | 說明與預防 |
 |------|-----------|
-| **Enabled agent 缺少 prompt** | `configs/agents.json` 中每個 `enabled: true` 都需對應 `prompts/agents/<name>.md`。 |
+| **Enabled agent 缺少 prompt** | `configs/agents.json` 中每個 `enabled: true` 都需對應 `prompts/agents/<name>.md`。CI（`quality.yml` 的 `agent-prompts` job）會強制檢查，缺少 prompt 檔案的 PR 會被拒絕。 |
 | **Darwinian 權重靜默夾制** | 權重限制在 `[0.3, 2.5]`，超界會靜默正規化，不報錯。 |
 | **重複使用 mutable `[]Recommendation`** | 多次 simulation run 之間不可共用同一個 slice。 |
 | **Baseline 未載入** | 實驗執行/評估前必須確認 `data/state/baseline_policy.json` 存在且有效。 |
@@ -219,6 +219,7 @@ gh pr create --title "feat(scope): description" \
 | **繞過 BackgroundTaskManager 建立獨立排程** | 所有定時自動執行的後台任務**必須且只能**透過 `BackgroundTaskManager` 註冊（`cmd/atlas/main.go`）。禁止在 goroutine 中直接啟動 `time.Ticker`、禁止在 `init()` 中啟動後台工作、禁止繞過統一架構直接呼叫業務邏輯的定時執行。參見 `internal/apigateway/CONSTITUTION.md` 第四條。 |
 | **繞過 ParametersConfig 硬編碼參數** | 所有可調整的參數必須透過 `internal/config/parameters.go` 的 `ParametersConfig` 管理，禁止在業務邏輯中硬編碼 magic number。參數必須包含 `Rationale`、`Source`、`Todo` 欄位說明權威性溯源。 |
 | **建立獨立資料抓取通道** | 所有外部資料抓取必須通過已註冊的 `marketdata.Provider`，禁止為了「方便」而繞過 Gateway 直接建立 HTTP client。參見 `internal/apigateway/CONSTITUTION.md` 第一條。 |
+| **新增 internal/ 模組未標記成熟度** | 每個 `internal/*/` Go package **必須**有 `doc.go`，內含 `// Maturity: <tier>` 標記（`stable`/`evolving`/`experimental`/`utility`）。同時必須更新 `internal/MATURITY.md` 參考表。CI 會強制檢查一致性。違反此規則的 PR 會被 `quality.yml` 的 `maturity` job 拒絕。 |
 
 ---
 
@@ -268,6 +269,42 @@ gh pr create --title "feat(scope): description" \
 - 禁止直接 `os.Getenv` 建立 HTTP client
 - 禁止繞過 Gateway 直接呼叫外部 API
 - 禁止為單一功能建立獨立資料抓取邏輯
+
+### 模組成熟度標記
+
+所有 `internal/*/` Go package 必須透過 `doc.go` 標記成熟度，並與 `internal/MATURITY.md` 保持一致。
+
+**成熟度層級**：
+
+| Tier | 標記 | 含義 |
+|------|------|------|
+| S | `stable` | 穩定生產 — API 穩定，breaking change 需 migration plan |
+| E | `evolving` | 演進中 — API 可能調整，可能晉升為 stable |
+| X | `experimental` | 實驗中 — 研究性質，不應被其他模組依賴 |
+| U | `utility` | 輔助工具 — CLI 工具/資料轉換，非 runtime |
+
+**AI agent 工作流程**：
+
+1. **新建 `internal/` 模組**：
+   - 建立 `doc.go`，加入 `// Maturity: <tier>` 標記
+   - 更新 `internal/MATURITY.md`，將新模組加入對應層級的表格
+   - 執行 `bash scripts/ci/check_maturity.sh` 確認通過
+
+2. **變更成熟度**：
+   - 修改 `doc.go` 中的 Maturity 標記
+   - 同步更新 `internal/MATURITY.md`
+   - X→E 或 E→S 視為晉升，需 PR review
+   - S→E 或任何降級需 migration plan
+
+3. **本地驗證**：
+   ```bash
+   # 快速檢查
+   bash scripts/ci/check_maturity.sh
+   # Go 工具（更詳細的輸出）
+   go run ./cmd/check-maturity
+   ```
+
+**CI 強制**：`quality.yml` 的 `maturity` job 會在每個 PR 自動執行檢查，不一致會導致 CI 失敗。
 
 ---
 
@@ -426,7 +463,7 @@ gh pr create --title "feat(scope): description" \
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (28831 symbols, 63609 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (29568 symbols, 65418 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

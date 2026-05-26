@@ -18,4 +18,6 @@
 //   - Minimum observation threshold (n≥10) before promotion
 //   - Baseline must be loaded before experiment
 //   - Each experiment is isolated; no cross-session contamination
+//
+// Maturity: stable
 package experiment

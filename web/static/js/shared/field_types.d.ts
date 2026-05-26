@@ -372,11 +372,25 @@ declare interface EquityCurvePoint {
   tax_paid?: number;
 }
 
+declare interface EventBlock {
+  today: string[];
+  recent: string[];
+  premarket?: string | null;
+}
+
 declare interface ExecutionPolicy {
   conviction_floor: number;
   require_cro_pass: boolean;
   momentum_crash_protection: boolean;
   enable_conviction_normalization: boolean;
+}
+
+declare interface ExitAlert {
+  symbol: string;
+  name: string;
+  days_held: number;
+  pnl_pct: number;
+  suggestion: string;
 }
 
 declare interface ExperimentInboxItem {
@@ -546,6 +560,12 @@ declare interface GuardOutcome {
   input_count: number;
   output_count: number;
   severity: string;
+}
+
+declare interface HeatmapEntry {
+  sector: string;
+  confidence: string;
+  reasons: string[];
 }
 
 declare interface HumanIntervention {
@@ -880,6 +900,15 @@ declare interface PositionDTO {
   sector?: string;
 }
 
+declare interface PremarketData {
+  us_market: Record<string, string>;
+  foreign_flow: Record<string, string>;
+  fx: Record<string, string>;
+  bdi: Record<string, string>;
+  vix?: Record<string, string>;
+  stress_index?: Record<string, string>;
+}
+
 declare interface PromptControl {
   volume_floor?: number;
   volume_downgrade?: number;
@@ -953,6 +982,15 @@ declare interface ReasoningTraceItem {
 declare interface ReasoningTraceResponse {
   session_id: string;
   traces: string[];
+}
+
+declare interface RecEntry {
+  symbol: string;
+  name: string;
+  action: string;
+  shares?: number;
+  confidence: number;
+  reasons: string[];
 }
 
 declare interface Recommendation {
@@ -1102,6 +1140,15 @@ declare interface RiskSnapshot {
   var_99: number;
   cvar_95: number;
   max_drawdown_pct: number;
+}
+
+declare interface RuleSummary {
+  id: string;
+  pattern: string;
+  hit_rate: number;
+  affected_sectors: string[];
+  direction: string;
+  status: string;
 }
 
 declare interface Scorecard {

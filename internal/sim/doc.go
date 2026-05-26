@@ -12,4 +12,6 @@
 // The engine is deterministic: same input (quotes + recommendations + policy)
 // always produces the same output, making it suitable for backtesting and
 // experiment evaluation.
+//
+// Maturity: evolving
 package sim

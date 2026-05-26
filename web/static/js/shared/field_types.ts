@@ -375,11 +375,25 @@ export interface EquityCurvePoint {
   tax_paid?: number;
 }
 
+export interface EventBlock {
+  today: string[];
+  recent: string[];
+  premarket?: string | null;
+}
+
 export interface ExecutionPolicy {
   conviction_floor: number;
   require_cro_pass: boolean;
   momentum_crash_protection: boolean;
   enable_conviction_normalization: boolean;
+}
+
+export interface ExitAlert {
+  symbol: string;
+  name: string;
+  days_held: number;
+  pnl_pct: number;
+  suggestion: string;
 }
 
 export interface ExperimentInboxItem {
@@ -549,6 +563,12 @@ export interface GuardOutcome {
   input_count: number;
   output_count: number;
   severity: string;
+}
+
+export interface HeatmapEntry {
+  sector: string;
+  confidence: string;
+  reasons: string[];
 }
 
 export interface HumanIntervention {
@@ -883,6 +903,15 @@ export interface PositionDTO {
   sector?: string;
 }
 
+export interface PremarketData {
+  us_market: Record<string, string>;
+  foreign_flow: Record<string, string>;
+  fx: Record<string, string>;
+  bdi: Record<string, string>;
+  vix?: Record<string, string>;
+  stress_index?: Record<string, string>;
+}
+
 export interface PromptControl {
   volume_floor?: number;
   volume_downgrade?: number;
@@ -956,6 +985,15 @@ export interface ReasoningTraceItem {
 export interface ReasoningTraceResponse {
   session_id: string;
   traces: string[];
+}
+
+export interface RecEntry {
+  symbol: string;
+  name: string;
+  action: string;
+  shares?: number;
+  confidence: number;
+  reasons: string[];
 }
 
 export interface Recommendation {
@@ -1105,6 +1143,15 @@ export interface RiskSnapshot {
   var_99: number;
   cvar_95: number;
   max_drawdown_pct: number;
+}
+
+export interface RuleSummary {
+  id: string;
+  pattern: string;
+  hit_rate: number;
+  affected_sectors: string[];
+  direction: string;
+  status: string;
 }
 
 export interface Scorecard {
