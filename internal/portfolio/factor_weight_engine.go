@@ -283,32 +283,32 @@ func (e *FactorWeightEngine) applyEventAdjustment(event *narrative.NarrativeEven
 	switch event.Theme {
 	case "AI_capex_surge":
 		e.eventWeights[event.ID] = map[FactorType]float64{
-			FactorQuality:    delta,
-			FactorMomentum:   delta,
-			FactorETF:        delta,
-			FactorNarrative:  delta,
+			FactorQuality:   delta,
+			FactorMomentum:  delta,
+			FactorETF:       delta,
+			FactorNarrative: delta,
 		}
 	case "US_rates_up":
 		e.eventWeights[event.ID] = map[FactorType]float64{
-			FactorValue:      delta,
-			FactorInstSent:   -delta,
-			FactorETF:        delta,
-			FactorNarrative:  delta,
+			FactorValue:     delta,
+			FactorInstSent:  -delta,
+			FactorETF:       delta,
+			FactorNarrative: delta,
 		}
 	case "oil_price_shock":
 		e.eventWeights[event.ID] = map[FactorType]float64{
-			FactorLiquidity:  -delta,
-			FactorMomentum:   -delta,
-			FactorETF:        delta,
-			FactorNarrative:  delta,
+			FactorLiquidity:     -delta,
+			FactorMomentum:      -delta,
+			FactorETF:           delta,
+			FactorNarrative:     delta,
 			FactorIndustryCycle: delta,
 		}
 	case "JPY_carry_unwind":
 		e.eventWeights[event.ID] = map[FactorType]float64{
-			FactorLiquidity:  -delta,
-			FactorAgent:      -delta,
-			FactorETF:        delta,
-			FactorNarrative:  delta,
+			FactorLiquidity: -delta,
+			FactorAgent:     -delta,
+			FactorETF:       delta,
+			FactorNarrative: delta,
 		}
 	case "gold_rally":
 		e.eventWeights[event.ID] = map[FactorType]float64{
@@ -330,20 +330,20 @@ func (e *FactorWeightEngine) applyEventAdjustment(event *narrative.NarrativeEven
 		}
 	case "geopolitical_risk_spike":
 		e.eventWeights[event.ID] = map[FactorType]float64{
-			FactorAgent:      -delta,
-			FactorNarrative:   delta * 1.5,
-			FactorLiquidity:   -delta,
+			FactorAgent:     -delta,
+			FactorNarrative: delta * 1.5,
+			FactorLiquidity: -delta,
 		}
 	case "retail_institutional_divergence":
 		e.eventWeights[event.ID] = map[FactorType]float64{
-			FactorInstSent:   delta,
-			FactorAgent:      -delta,
-			FactorNarrative:  delta,
+			FactorInstSent:  delta,
+			FactorAgent:     -delta,
+			FactorNarrative: delta,
 		}
 	default:
 		e.eventWeights[event.ID] = map[FactorType]float64{
-			FactorInstSent:   delta,
-			FactorNarrative:  delta * 0.5,
+			FactorInstSent:  delta,
+			FactorNarrative: delta * 0.5,
 		}
 	}
 }

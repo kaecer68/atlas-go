@@ -236,20 +236,20 @@ func (o *Optimizer) aggregateRecommendations(
 
 // calculateMultiFactorScores 计算多因子评分
 type symbolScore struct {
-	Symbol         string
-	Side           domain.Side
-	Momentum       float64
-	Value          float64
-	Quality        float64
-	Agent          float64
+	Symbol                 string
+	Side                   domain.Side
+	Momentum               float64
+	Value                  float64
+	Quality                float64
+	Agent                  float64
 	InstitutionalSentiment float64
-	Liquidity      float64
-	Narrative      float64
-	IndustryCycle  float64
-	PreciousMetals float64
-	ETF            float64
-	Total          float64
-	Agents         []string
+	Liquidity              float64
+	Narrative              float64
+	IndustryCycle          float64
+	PreciousMetals         float64
+	ETF                    float64
+	Total                  float64
+	Agents                 []string
 }
 
 func (o *Optimizer) calculateMultiFactorScores(
@@ -349,20 +349,20 @@ func (o *Optimizer) calculateMultiFactorScores(
 		}
 
 		scores[key] = &symbolScore{
-			Symbol:                  symbol,
-			Side:                    side,
-			Momentum:                momentumScore,
-			Value:                   valueScore,
-			Quality:                 qualityScore,
-			Agent:                   agentScore,
-			InstitutionalSentiment:  instSentScore,
-			Liquidity:               liqScore,
-			Narrative:               narrativeScore,
-			IndustryCycle:           industryCycleScore,
-			PreciousMetals:          pmScore,
-			ETF:                     etfScore,
-			Total:                   totalScore,
-			Agents:                  agents,
+			Symbol:                 symbol,
+			Side:                   side,
+			Momentum:               momentumScore,
+			Value:                  valueScore,
+			Quality:                qualityScore,
+			Agent:                  agentScore,
+			InstitutionalSentiment: instSentScore,
+			Liquidity:              liqScore,
+			Narrative:              narrativeScore,
+			IndustryCycle:          industryCycleScore,
+			PreciousMetals:         pmScore,
+			ETF:                    etfScore,
+			Total:                  totalScore,
+			Agents:                 agents,
 		}
 	}
 
