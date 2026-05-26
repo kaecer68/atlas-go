@@ -122,15 +122,33 @@ type System struct {
 // SetVerboseTrace enables or disables color-coded verbose trace output.
 func (s *System) SetVerboseTrace(v bool) { s.traceVerbose = v }
 
+// SystemOption configures optional subsystems during System construction.
+// Use the With* functions to create options.
+type SystemOption func(*systemOptions)
+
+type systemOptions struct {
+	executorLoader ExecutorLoader
+}
+
+// WithExecutorLoader injects a custom ExecutorLoader for loading executor
+// implementations. When nil (default), NewPluginRegistry uses StaticLoader{}
+// for full backward compatibility.
+func WithExecutorLoader(loader ExecutorLoader) SystemOption {
+	return func(o *systemOptions) { o.executorLoader = loader }
+}
+
 // NewSystem builds a fully-wired System with an internally-created EventBus.
-// For shared EventBus scenarios (e.g. SSE streaming), use NewSystemWithEventBus.
-func NewSystem(cfg config.Config) (*System, error) {
-	return NewSystemWithEventBus(cfg, nil)
+func NewSystem(cfg config.Config, opts ...SystemOption) (*System, error) {
+	return NewSystemWithEventBus(cfg, nil, opts...)
 }
 
 // NewSystemWithEventBus builds a fully-wired System using the provided EventBus.
 // If eventBus is nil, a new internal EventBus is created (backward-compatible).
-func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus) (*System, error) {
+func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus, opts ...SystemOption) (*System, error) {
+	var o systemOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
 	registry, err := LoadRegistry(cfg.AgentRegistryPath)
 	if err != nil {
 		registry = SeedRegistry()
@@ -147,7 +165,7 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 	if eventBus == nil {
 		eventBus = eventbus.NewChannelEventBus(256)
 	}
-	plugins := buildPluginRegistry(factorEngine, fp)
+	plugins := buildPluginRegistry(factorEngine, fp, o.executorLoader)
 
 	optimizer := portfolio.NewOptimizer()
 	optimizer.WithHistoricalPrices(hp).WithFundamentalProvider(fp).WithFactorEngine(factorEngine)

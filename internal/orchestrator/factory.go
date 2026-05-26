@@ -14,15 +14,15 @@ import (
 
 // NewProductionSystem builds a fully-wired System for dependency-graph visibility
 // with an internally-created EventBus.
-func NewProductionSystem(cfg config.Config) (*System, error) {
-	return NewProductionSystemWithEventBus(cfg, nil)
+func NewProductionSystem(cfg config.Config, opts ...SystemOption) (*System, error) {
+	return NewProductionSystemWithEventBus(cfg, nil, opts...)
 }
 
 // NewProductionSystemWithEventBus builds a fully-wired System, passing the
 // provided EventBus to NewSystemWithEventBus. If eventBus is nil, an internal
 // EventBus is created (backward-compatible).
-func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus) (*System, error) {
-	system, err := NewSystemWithEventBus(cfg, eventBus)
+func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus, opts ...SystemOption) (*System, error) {
+	system, err := NewSystemWithEventBus(cfg, eventBus, opts...)
 	if err != nil {
 		return nil, err
 	}
