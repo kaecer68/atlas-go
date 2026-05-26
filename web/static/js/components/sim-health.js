@@ -146,8 +146,8 @@ export class SimHealthPanel {
     const rows = this.traces.map(trace => {
       const status = (trace.status || 'UNKNOWN').toUpperCase();
       const statusConfig = STATUS_COLORS[status] || { class: 'badge', label: status, color: 'var(--muted)' };
-      const timestamp = trace.timestamp
-        ? new Date(trace.timestamp).toLocaleString('zh-TW')
+      const timestamp = trace.ts
+        ? new Date(trace.ts).toLocaleString('zh-TW')
         : '-';
       const metadata = this.formatMetadata(trace.metadata);
 
