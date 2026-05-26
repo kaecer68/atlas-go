@@ -25,30 +25,20 @@ func paramSensitivity(paramValue string) *float64 {
 // IndustryCycleModulator reads industry cycle positions and adjusts
 // recommendation conviction based on the current business cycle phase.
 // Expansion → confidence boost; recession → penalty; recovery/mature are neutral.
+//
+// Skill-to-industry mapping is loaded from ParametersConfig. When config is
+// missing, the modulator operates without industry assignments (no-op).
 type IndustryCycleModulator struct {
 	tracker         *industry.CycleTracker
 	skillToIndustry map[string]string
 }
 
-var skillToIndustry = map[string]string{
-	"semiconductor_desk":   "semiconductor",
-	"ai_supply_chain_desk": "ai_supply_chain",
-	"financials_desk":      "financials",
-	"shipping_desk":        "shipping",
-	"etf_rotation_desk":    "etf_rotation",
-	"leo_satellite_desk":   "leo_satellite",
-	"value_yield":          "financials",
-	"earnings_quality":     "electronics",
-	"growth_momentum":      "electronics",
-	"technical_breakout":   "electronics",
-}
-
 func NewIndustryCycleModulator(tracker *industry.CycleTracker) *IndustryCycleModulator {
-	sti := skillToIndustry // hardcoded fallback
+	m := &IndustryCycleModulator{tracker: tracker}
 	if cfg := config.GetParametersConfig(); cfg != nil && cfg.Industry.SkillToIndustry.Value != nil {
-		sti = cfg.Industry.SkillToIndustry.Value
+		m.skillToIndustry = cfg.Industry.SkillToIndustry.Value
 	}
-	return &IndustryCycleModulator{tracker: tracker, skillToIndustry: sti}
+	return m
 }
 
 func (m *IndustryCycleModulator) IsAvailable() bool {

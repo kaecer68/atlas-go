@@ -13,54 +13,28 @@ import (
 // recommendation conviction based on which agents correlate with active themes.
 // Agents whose skill maps to a currently-active event theme get a boost
 // proportional to that theme's historical hit rate.
+//
+// Theme hit rates and skill-to-theme mappings are loaded from ParametersConfig
+// (NarrativeConviction.ThemeHitRates + NarrativeConviction.SkillToTheme).
+// When config is missing, the modulator operates without mappings (no-op).
 type NarrativeConvictionModulator struct {
 	themeHitRates map[string]float64 // Theme → built-in hit rate
 	skillToTheme  map[string]string  // Agent skill → NarrativeTheme
 }
 
-// defaultThemeHitRates are built-in hit rates documented in narrative/types.go.
-var defaultThemeHitRates = map[string]float64{
-	"AI_capex_surge":          0.81,
-	"US_rates_up":             0.72,
-	"JPY_carry_unwind":        0.68,
-	"geopolitical_risk_spike": 0.65,
-	"oil_price_shock":         0.58,
-}
-
-// defaultSkillToTheme maps agent skills to the narrative theme they correlate with.
-var defaultSkillToTheme = map[string]string{
-	"semiconductor_desk":   "AI_capex_surge",
-	"ai_supply_chain_desk": "AI_capex_surge",
-	"leo_satellite_desk":   "AI_capex_surge",
-	"shipping_desk":        "oil_price_shock",
-	"financials_desk":      "US_rates_up",
-	"etf_rotation_desk":    "JPY_carry_unwind",
-	"value_yield":          "US_rates_up",
-	"earnings_quality":     "AI_capex_surge",
-	"growth_momentum":      "AI_capex_surge",
-	"technical_breakout":   "AI_capex_surge",
-}
-
-// NewNarrativeConvictionModulator creates a modulator with theme hit rates and
-// skill-to-theme mappings. It reads from ParametersConfig first and falls back
-// to hardcoded defaults when the configuration is nil or missing.
 func NewNarrativeConvictionModulator() *NarrativeConvictionModulator {
-	hitRates := defaultThemeHitRates
-	skillToTheme := defaultSkillToTheme
+	m := &NarrativeConvictionModulator{}
 
 	if cfg := config.GetParametersConfig(); cfg != nil {
 		if cfg.NarrativeConviction.ThemeHitRates.Value != nil {
-			hitRates = cfg.NarrativeConviction.ThemeHitRates.Value
+			m.themeHitRates = cfg.NarrativeConviction.ThemeHitRates.Value
 		}
 		if cfg.NarrativeConviction.SkillToTheme.Value != nil {
-			skillToTheme = cfg.NarrativeConviction.SkillToTheme.Value
+			m.skillToTheme = cfg.NarrativeConviction.SkillToTheme.Value
 		}
 	}
 
-	return &NarrativeConvictionModulator{
-		themeHitRates: hitRates,
-		skillToTheme:  skillToTheme,
-	}
+	return m
 }
 
 // IsAvailable returns true when the modulator has its internal maps populated.
