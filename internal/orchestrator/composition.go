@@ -73,20 +73,47 @@ func buildFactorEngine(runtimeParams *portfolio.RuntimeParameters, macroSnap *ma
 
 	// P3-1: Wire precious metals macro context provider using live snapshot data.
 	// CPIYoY uses live snapshot data when available; falls back to config parameter.
+	// New PM fields populated from ParametersConfig.PreciousMetals and macro snapshot.
 	pmProvider := func(symbol string) *portfolio.PreciousMetalsContext {
 		if macroSnap == nil || macroSnap.RecordedAt == 0 {
 			return nil
 		}
-		cpiYoY := config.GetParametersConfig().Narrative.InflationEstimate.Value
+		pc := config.GetParametersConfig()
+		cpiYoY := pc.Narrative.InflationEstimate.Value
 		if macroSnap.CPIYoY.Symbol != "" && macroSnap.CPIYoY.Value != 0 {
 			cpiYoY = macroSnap.CPIYoY.Value
 		}
 		realRate := macroSnap.US10Y.Value - cpiYoY
+
+		cbTrend := pc.PreciousMetals.CentralBankBuyingTrend.Value
+		var cbReserveTrend float64
+		switch cbTrend {
+		case "accelerating":
+			cbReserveTrend = 0.5
+		case "decelerating":
+			cbReserveTrend = -0.3
+		default:
+			cbReserveTrend = 0.0
+		}
+
+		comexNetLong := pc.PreciousMetals.COMEXDefaultNetLong.Value
+		if macroSnap.Gold.Symbol != "" {
+			comexNetLong = macroSnap.Gold.Value
+		}
+
+		gsRatioZ := computeGoldSilverRatioZ(macroSnap)
+
 		return &portfolio.PreciousMetalsContext{
-			RealRate: realRate,
-			VIX:      macroSnap.VIX.Value,
-			DXY:      macroSnap.DXY.Value,
-			CPIYoY:   cpiYoY,
+			RealRate:            realRate,
+			VIX:                 macroSnap.VIX.Value,
+			DXY:                 macroSnap.DXY.Value,
+			CPIYoY:              cpiYoY,
+			CentralBankNetBuy:   pc.PreciousMetals.CentralBankNetBuy.Value,
+			CBReserveTrend:      cbReserveTrend,
+			IndiaGoldImportsYoY: pc.PreciousMetals.IndiaGoldImportsYoY.Value,
+			ChinaGoldImportsYoY: pc.PreciousMetals.ChinaGoldImportsYoY.Value,
+			COMEXNetLong:        comexNetLong,
+			GoldSilverRatioZ:    gsRatioZ,
 		}
 	}
 
@@ -151,9 +178,14 @@ func buildRiskOps(cfg config.Config, eventBus *eventbus.ChannelEventBus, macroRi
 }
 
 // buildPluginRegistry constructs the plugin registry with screener and factor engine.
-func buildPluginRegistry(factorEngine *portfolio.FactorEngine, fp *portfolio.FundamentalProvider) *PluginRegistry {
+// If loader is non-nil, it is passed to NewPluginRegistry; otherwise StaticLoader{} is used.
+func buildPluginRegistry(factorEngine *portfolio.FactorEngine, fp *portfolio.FundamentalProvider, loader ExecutorLoader) *PluginRegistry {
 	screenerEngine := screener.NewEngine(factorEngine, fp)
-	return NewPluginRegistry().WithScreener(screenerEngine).WithFactorEngine(factorEngine)
+	reg := NewPluginRegistry()
+	if loader != nil {
+		reg = NewPluginRegistry(loader)
+	}
+	return reg.WithScreener(screenerEngine).WithFactorEngine(factorEngine)
 }
 
 func loadRuntimeParamsOrDefault(parametersConfigPath string) *portfolio.RuntimeParameters {
