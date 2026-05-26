@@ -529,6 +529,9 @@
           注意：篩選統計與警報計數為記憶體內累計值，系統重啟後歸零。當系統持續運行並處理資料時，指標將自動累積。
         </span>
       </details>
+      <div class="panel wide" id="simHealthPanel">
+        <div id="simHealthContainer"></div>
+      </div>
       <div class="grid cols-3" id="metricsKPI">
         <div class="panel">
           <h3>篩選率</h3>
@@ -731,12 +734,19 @@
   import { CircuitBreakerPanel } from './js/components/circuit-breaker.js';
   import { renderPerformanceReport } from './js/components/performance-report.js';
   import { eventSource } from './js/services/event-source.js';
+  import { SimHealthPanel } from './js/components/sim-health.js';
 
   // Module scripts are deferred; DOM is already ready.
   const cbPanel = new CircuitBreakerPanel('circuitBreakerPanel');
   eventSource.on('*', (ev) => cbPanel.handleSSE(ev));
 
   renderPerformanceReport('performanceReportContainer');
+
+  // Initialize Simulation Health Panel on the metrics page
+  const simHealthContainer = document.getElementById('simHealthContainer');
+  if (simHealthContainer) {
+    window.simHealthPanel = new SimHealthPanel('simHealthContainer');
+  }
 </script>
 </body>
 </html>
