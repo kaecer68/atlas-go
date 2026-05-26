@@ -32,7 +32,11 @@ echo "[1/2] Updating master graph (graphify update .)..."
 if $DRY_RUN; then
   echo "  SKIP: graphify update \"$PROJECT_DIR\""
 else
+  # graphify may warn "too large for HTML viz" but graph.json is still valid.
+  # Ignore non-zero exit — the slicing step generates its own HTML per subgraph.
+  set +e
   graphify update "$PROJECT_DIR"
+  set -e
   echo "  Done."
 fi
 echo ""
