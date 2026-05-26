@@ -230,21 +230,59 @@ func ValidateRegistry(reg domain.AgentRegistry, configDir string) error {
 	return nil
 }
 
+// LoadRegistry loads agent registry from a single JSON file.
+// If path is empty, falls back to SeedRegistry().
 func LoadRegistry(path string) (domain.AgentRegistry, error) {
 	if path == "" {
 		reg := SeedRegistry()
 		return reg, ValidateRegistry(reg, "")
 	}
+	return LoadRegistryMulti(path)
+}
 
-	bytes, err := os.ReadFile(path)
+// LoadRegistryMulti merges agent registries from multiple JSON sources.
+// Sources are loaded in order; duplicate agent IDs skip with a warning
+// (first-write-wins). This enables proprietary modules to layer their own
+// agent definitions on top of the open-source core registry.
+func LoadRegistryMulti(paths ...string) (domain.AgentRegistry, error) {
+	if len(paths) == 0 {
+		reg := SeedRegistry()
+		return reg, ValidateRegistry(reg, "")
+	}
+
+	merged := domain.AgentRegistry{Version: 1}
+	seen := make(map[string]struct{}, 64)
+
+	for _, path := range paths {
+		reg, err := loadRegistryFile(path)
+		if err != nil {
+			return domain.AgentRegistry{}, fmt.Errorf("load %s: %w", path, err)
+		}
+		for _, agent := range reg.Agents {
+			if _, exists := seen[agent.ID]; exists {
+				fmt.Fprintf(os.Stderr, "[registry] agent %q from %s skipped (duplicate ID — first source wins)\n", agent.ID, path)
+				continue
+			}
+			seen[agent.ID] = struct{}{}
+			merged.Agents = append(merged.Agents, agent)
+		}
+		if reg.Version > merged.Version {
+			merged.Version = reg.Version
+		}
+	}
+
+	configDir := filepath.Dir(paths[0])
+	return merged, ValidateRegistry(merged, configDir)
+}
+
+func loadRegistryFile(path string) (domain.AgentRegistry, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return domain.AgentRegistry{}, err
 	}
-
 	var reg domain.AgentRegistry
-	if err := json.Unmarshal(bytes, &reg); err != nil {
+	if err := json.Unmarshal(data, &reg); err != nil {
 		return domain.AgentRegistry{}, err
 	}
-	configDir := filepath.Dir(path)
-	return reg, ValidateRegistry(reg, configDir)
+	return reg, nil
 }
