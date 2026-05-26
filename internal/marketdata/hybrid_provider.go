@@ -11,6 +11,12 @@ import (
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
+// TraceWriter is a nil-safe interface for recording execution traces.
+// It avoids circular imports by being defined locally in marketdata.
+type TraceWriter interface {
+	Record(step int, layer, status string, meta map[string]any)
+}
+
 type ProviderCircuitState string
 
 const (
@@ -49,6 +55,8 @@ type HybridProvider struct {
 	fallbackCount    int
 	lastFallbackAt   time.Time
 	recoveryAttempts int
+
+	traceWriter TraceWriter
 }
 
 func NewHybridProvider(finmindAPIKey, fugleAPIKey string) *HybridProvider {
@@ -98,6 +106,13 @@ func (p *HybridProvider) GetQuotes(ctx context.Context, asOf time.Time, symbols 
 			return quotes, nil
 		}
 		logging.Warn("hybrid_provider", "fubon_failed_fallback", logging.Err(err))
+		if p.traceWriter != nil {
+			p.traceWriter.Record(0, "marketdata", "WARN", map[string]any{
+				"primary":         "fubon",
+				"fallback_reason": fmt.Sprintf("fubon failed: %v", err),
+				"symbols":         len(symbols),
+			})
+		}
 	}
 
 	if p.finmindProvider != nil {
@@ -106,6 +121,13 @@ func (p *HybridProvider) GetQuotes(ctx context.Context, asOf time.Time, symbols 
 			return quotes, nil
 		}
 		logging.Warn("hybrid_provider", "finmind_failed_fallback", logging.Err(err))
+		if p.traceWriter != nil {
+			p.traceWriter.Record(0, "marketdata", "WARN", map[string]any{
+				"primary":         "finmind",
+				"fallback_reason": fmt.Sprintf("finmind failed: %v", err),
+				"symbols":         len(symbols),
+			})
+		}
 	}
 
 	return p.getQuotesFromFugleOrTWSE(ctx, asOf, symbols)
@@ -120,6 +142,13 @@ func (p *HybridProvider) getQuotesFromFugleOrTWSE(ctx context.Context, asOf time
 		}
 		if err != nil {
 			logging.Warn("hybrid_provider", "fugle_failed_fallback", logging.Err(err))
+			if p.traceWriter != nil {
+				p.traceWriter.Record(0, "marketdata", "WARN", map[string]any{
+					"primary":         "fugle",
+					"fallback_reason": fmt.Sprintf("fugle failed: %v", err),
+					"symbols":         len(symbols),
+				})
+			}
 		}
 	}
 	return p.getQuotesFromTWSE(ctx, symbols)
@@ -234,6 +263,10 @@ func (p *HybridProvider) GetFubonClient() *FubonClient {
 		return nil
 	}
 	return p.fubonProvider.GetClient()
+}
+
+func (p *HybridProvider) SetTraceWriter(tw TraceWriter) {
+	p.traceWriter = tw
 }
 
 func (p *HybridProvider) IsUsingTWSE() bool {
