@@ -236,18 +236,20 @@ func (o *Optimizer) aggregateRecommendations(
 
 // calculateMultiFactorScores 计算多因子评分
 type symbolScore struct {
-	Symbol         string
-	Side           domain.Side
-	Momentum       float64
-	Value          float64
-	Quality        float64
-	Agent          float64
-	Narrative      float64
-	IndustryCycle  float64
-	PreciousMetals float64
-	ETF            float64
-	Total          float64
-	Agents         []string
+	Symbol                 string
+	Side                   domain.Side
+	Momentum               float64
+	Value                  float64
+	Quality                float64
+	Agent                  float64
+	InstitutionalSentiment float64
+	Liquidity              float64
+	Narrative              float64
+	IndustryCycle          float64
+	PreciousMetals         float64
+	ETF                    float64
+	Total                  float64
+	Agents                 []string
 }
 
 func (o *Optimizer) calculateMultiFactorScores(
@@ -293,11 +295,13 @@ func (o *Optimizer) calculateMultiFactorScores(
 		qualityScore := o.factorEngine.CalculateQualityScore(symbol, quotes)
 		pmScore := o.factorEngine.CalculatePreciousMetalsScore(symbol, quotes).Score
 		etfScore := 0.0
+		liqScore := 0.0
 		if quote, ok := quotes[symbol]; ok {
 			etfScore = o.factorEngine.CalculateETFScore(symbol, quote).Score
+			liqScore = o.factorEngine.CalculateLiquidityScore(symbol, quotes).Score
 		}
 
-		var narrativeScore, industryCycleScore float64
+		var narrativeScore, industryCycleScore, instSentScore float64
 		o.mu.RLock()
 		fe := o.factorEngine
 		o.mu.RUnlock()
@@ -325,6 +329,12 @@ func (o *Optimizer) calculateMultiFactorScores(
 			valueScore*factorWeights[FactorValue] +
 			qualityScore*factorWeights[FactorQuality] +
 			agentScore*factorWeights[FactorAgent]
+		if instSentScore != 0 {
+			totalScore += instSentScore * factorWeights[FactorInstSent]
+		}
+		if liqScore != 0 {
+			totalScore += liqScore * factorWeights[FactorLiquidity]
+		}
 		if narrativeScore != 0 {
 			totalScore += narrativeScore * factorWeights[FactorNarrative]
 		}
@@ -339,18 +349,20 @@ func (o *Optimizer) calculateMultiFactorScores(
 		}
 
 		scores[key] = &symbolScore{
-			Symbol:         symbol,
-			Side:           side,
-			Momentum:       momentumScore,
-			Value:          valueScore,
-			Quality:        qualityScore,
-			Agent:          agentScore,
-			Narrative:      narrativeScore,
-			IndustryCycle:  industryCycleScore,
-			PreciousMetals: pmScore,
-			ETF:            etfScore,
-			Total:          totalScore,
-			Agents:         agents,
+			Symbol:                 symbol,
+			Side:                   side,
+			Momentum:               momentumScore,
+			Value:                  valueScore,
+			Quality:                qualityScore,
+			Agent:                  agentScore,
+			InstitutionalSentiment: instSentScore,
+			Liquidity:              liqScore,
+			Narrative:              narrativeScore,
+			IndustryCycle:          industryCycleScore,
+			PreciousMetals:         pmScore,
+			ETF:                    etfScore,
+			Total:                  totalScore,
+			Agents:                 agents,
 		}
 	}
 

@@ -266,6 +266,33 @@ MacroRiskAssessment → SectorRotator.GeneratePlan() → CapitalAllocator 的 se
 
 ---
 
+## 12. Factor Change Protocol (因子變更協議)
+
+新增、刪除或改名任何 `FactorType` 時，**必須順序更新以下 8 個位置**：
+
+| Step | 位置 | 變更內容 |
+|------|------|---------|
+| 1 | `optimizer.go:19-29` | FactorType 常數宣告 |
+| 2 | `factor_weight_engine.go:34-46` | `defaultBaseWeights` map |
+| 3 | `shared/shared.go:47-57` | `FactorScoreBreakdown` struct（含 json tag） |
+| 4 | `shared/shared.go:61-73` | `FactorScores` struct |
+| 5 | `optimizer.go:238-251` | `symbolScore` struct |
+| 6 | `optimizer.go:328-343` | `calculateMultiFactorScores` totalScore 計算 |
+| 7 | `factor_engine.go:610-619` | `CalculateAllScoresWithBreakdown` breakdown 建構 |
+| 8 | `factor_weight_engine.go` | `applyEventAdjustment` / `strategyDeltas` / `GetWeights` 中的因子引用 |
+
+**完成後必須執行**：
+
+```bash
+go generate .                                    # 同步前端型別
+bash scripts/ci/verify_factor_integrity.sh        # G1-G10 完整性驗證
+go build ./... && go test ./internal/portfolio/... # 編譯 + 測試
+```
+
+**CI 強制**：`quality.yml` 的 `factor-integrity` job 會在每個 PR 自動執行 `verify_factor_integrity.sh`，違反者 CI 失敗。
+
+---
+
 ## VERIFICATION
 
 ```bash

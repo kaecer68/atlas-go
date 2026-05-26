@@ -220,6 +220,7 @@ gh pr create --title "feat(scope): description" \
 | **繞過 ParametersConfig 硬編碼參數** | 所有可調整的參數必須透過 `internal/config/parameters.go` 的 `ParametersConfig` 管理，禁止在業務邏輯中硬編碼 magic number。參數必須包含 `Rationale`、`Source`、`Todo` 欄位說明權威性溯源。 |
 | **建立獨立資料抓取通道** | 所有外部資料抓取必須通過已註冊的 `marketdata.Provider`，禁止為了「方便」而繞過 Gateway 直接建立 HTTP client。參見 `internal/apigateway/CONSTITUTION.md` 第一條。 |
 | **新增 internal/ 模組未標記成熟度** | 每個 `internal/*/` Go package **必須**有 `doc.go`，內含 `// Maturity: <tier>` 標記（`stable`/`evolving`/`experimental`/`utility`）。同時必須更新 `internal/MATURITY.md` 參考表。CI 會強制檢查一致性。違反此規則的 PR 會被 `quality.yml` 的 `maturity` job 拒絕。 |
+| **新增/刪除/改名 FactorType** | 因子變更必須同步更新 **7 個位置**：`optimizer.go` FactorType 常數 → `factor_weight_engine.go` defaultBaseWeights → `shared.go` FactorScoreBreakdown + FactorScores → `optimizer.go` symbolScore + totalScore + buildPositions → `factor_engine.go` CalculateAllScoresWithBreakdown → `factor_weight_engine.go` applyEventAdjustment + strategyDeltas + GetWeights → 跑 `go generate .` 同步前端型別 → 跑 `bash scripts/ci/verify_factor_integrity.sh` 驗證 G1-G10。違反此規則的 PR 會被 `quality.yml` 的 `factor-integrity` job 拒絕。 |
 
 ---
 
@@ -463,7 +464,7 @@ gh pr create --title "feat(scope): description" \
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (29568 symbols, 65418 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (29844 symbols, 66765 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

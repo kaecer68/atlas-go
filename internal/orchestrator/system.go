@@ -198,6 +198,32 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 
 	sys.Sim().scratchpad = NewScratchpad(sys.Sim().session.ID, cfg.LedgerDir)
 
+	// Wire factor weight engine to event bus for self-evolution.
+	if port := sys.port; port.factorWeightEngine != nil && eventBus != nil {
+		eventBus.Subscribe(eventbus.EventRegimeChange, func(_ context.Context, e eventbus.BusEvent) error {
+			if p, ok := e.Payload.(eventbus.RegimeEventPayload); ok {
+				port.factorWeightEngine.SetRegime(string(p.NewRegime))
+				port.factorWeightEngine.OnRegimeChange(string(p.OldRegime), string(p.NewRegime), p.Confidence)
+			}
+			return nil
+		})
+		eventBus.Subscribe(eventbus.EventNarrative, func(_ context.Context, e eventbus.BusEvent) error {
+			if p, ok := e.Payload.(eventbus.NarrativeEventPayload); ok {
+				ev := &narrative.NarrativeEvent{
+					ID:         p.EventID,
+					Theme:      p.Theme,
+					Confidence: p.Confidence,
+					HitRate:    p.HitRate,
+					Timestamp:  time.Now(),
+					Status:     "active",
+					Duration:   7 * 24 * time.Hour,
+				}
+				port.factorWeightEngine.AddEvent(ev)
+			}
+			return nil
+		})
+	}
+
 	return sys, nil
 }
 
@@ -298,6 +324,11 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	regime = AdjustRegimeFromNarrative(regime, events)
 	if s.Risk().eventBus != nil {
 		go s.Risk().eventBus.PublishRegimeChange(oldRegime, regime, 0.0, "orchestrator")
+		// Sync regime to factor weight engine (event subscriber handles async path).
+		if s.Port().factorWeightEngine != nil {
+			s.Port().factorWeightEngine.SetRegime(string(regime))
+			s.Port().factorWeightEngine.OnRegimeChange(string(oldRegime), string(regime), 0.0)
+		}
 	}
 
 	vix := vixFromQuotes(quotes)
@@ -561,6 +592,11 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	regime = AdjustRegimeFromNarrative(regime, events)
 	if s.Risk().eventBus != nil {
 		go s.Risk().eventBus.PublishRegimeChange(oldRegime, regime, 0.0, "orchestrator")
+		// Sync regime to factor weight engine (event subscriber handles async path).
+		if s.Port().factorWeightEngine != nil {
+			s.Port().factorWeightEngine.SetRegime(string(regime))
+			s.Port().factorWeightEngine.OnRegimeChange(string(oldRegime), string(regime), 0.0)
+		}
 	}
 
 	vix := vixFromQuotes(quotes)
