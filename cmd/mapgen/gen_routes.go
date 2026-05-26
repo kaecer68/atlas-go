@@ -84,9 +84,9 @@ func buildRoutesMarkdown(routes []maps.RouteInfo, groups map[string][]maps.Route
 
 	// Header with metadata.
 	sb.WriteString("# API Routes Map\n")
-	sb.WriteString(fmt.Sprintf("> Generated: %s | Total routes: %d | Stubs: %d\n\n",
+	fmt.Fprintf(&sb, "> Generated: %s | Total routes: %d | Stubs: %d\n\n",
 		time.Now().UTC().Format("2006-01-02 15:04 UTC"),
-		len(routes), totalStubs))
+		len(routes), totalStubs)
 
 	// Summary table by group.
 	sb.WriteString("## Summary by Group\n")
@@ -101,8 +101,8 @@ func buildRoutesMarkdown(routes []maps.RouteInfo, groups map[string][]maps.Route
 		}
 		stubCount := countStubs(gr)
 		active := len(gr) - stubCount
-		sb.WriteString(fmt.Sprintf("| %s | %d | %d | %d |\n",
-			groupName, len(gr), stubCount, active))
+		fmt.Fprintf(&sb, "| %s | %d | %d | %d |\n",
+			groupName, len(gr), stubCount, active)
 	}
 	// Include any groups not in the canonical order.
 	for groupName, gr := range groups {
@@ -111,8 +111,8 @@ func buildRoutesMarkdown(routes []maps.RouteInfo, groups map[string][]maps.Route
 		}
 		stubCount := countStubs(gr)
 		active := len(gr) - stubCount
-		sb.WriteString(fmt.Sprintf("| %s | %d | %d | %d |\n",
-			groupName, len(gr), stubCount, active))
+		fmt.Fprintf(&sb, "| %s | %d | %d | %d |\n",
+			groupName, len(gr), stubCount, active)
 	}
 	sb.WriteString("\n")
 
@@ -143,8 +143,8 @@ func writeGroupSection(sb *strings.Builder, groupName string, gr []maps.RouteInf
 		return gr[i].Pattern < gr[j].Pattern
 	})
 
-	sb.WriteString(fmt.Sprintf("## %s Routes (%d routes)\n\n",
-		capitalizeGroup(groupName), len(gr)))
+	fmt.Fprintf(sb, "## %s Routes (%d routes)\n\n",
+		capitalizeGroup(groupName), len(gr))
 	sb.WriteString("| Pattern | Handler | File:Line | Status |\n")
 	sb.WriteString("|---------|---------|-----------|--------|\n")
 
@@ -154,8 +154,8 @@ func writeGroupSection(sb *strings.Builder, groupName string, gr []maps.RouteInf
 			status = "⚠️ stub"
 		}
 		fileLine := fmt.Sprintf("%s:%d", r.RelFile, r.Line)
-		sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n",
-			r.Pattern, r.HandlerName, fileLine, status))
+		fmt.Fprintf(sb, "| %s | %s | %s | %s |\n",
+			r.Pattern, r.HandlerName, fileLine, status)
 	}
 	sb.WriteString("\n")
 }
