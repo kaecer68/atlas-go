@@ -5,6 +5,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -413,9 +414,31 @@ func renderArchitectureMap(modules []maps.ModuleInfo, importGraph map[string][]s
 // Helpers
 // ---------------------------------------------------------------------------
 
-// timestampUTC returns the current time in UTC as "2006-01-02 15:04 MST".
+// timestampUTC returns the HEAD commit time in UTC as "2006-01-02 15:04 MST".
+// Using git timestamp ensures deterministic output regardless of when go generate runs.
 func timestampUTC() string {
-	return time.Now().UTC().Format("2006-01-02 15:04 MST")
+	//nolint:wrapcheck
+	ts, err := gitTimestamp()
+	if err != nil {
+		return time.Now().UTC().Format("2006-01-02 15:04 MST")
+	}
+	return ts
+}
+
+// gitTimestamp returns the HEAD commit date formatted as "2006-01-02 15:04 MST".
+func gitTimestamp() (string, error) {
+	// git log -1 --format=%cI gives committer date in strict ISO 8601 (e.g., 2026-05-26T09:50:00+08:00)
+	// We parse and re-format to match the expected display.
+	cmd := exec.Command("git", "log", "-1", "--format=%cI")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git log: %w", err)
+	}
+	t, err := time.Parse(time.RFC3339, strings.TrimSpace(string(out)))
+	if err != nil {
+		return "", fmt.Errorf("parse git timestamp: %w", err)
+	}
+	return t.UTC().Format("2006-01-02 15:04 MST"), nil
 }
 
 // formatNum inserts commas for readability (e.g., 123456 → "123,456").
