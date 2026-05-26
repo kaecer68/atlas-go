@@ -14,6 +14,7 @@ func TestDEmpty(t *testing.T) {
 		t.Error("empty")
 	}
 }
+
 func TestDCorr(t *testing.T) {
 	d := NewDetector(NewRegistry())
 	now := time.Now()
@@ -35,6 +36,7 @@ func TestDCorr(t *testing.T) {
 		t.Error("OIL->petro down")
 	}
 }
+
 func TestPromote(t *testing.T) {
 	reg := NewRegistry()
 	d := NewDetector(reg)

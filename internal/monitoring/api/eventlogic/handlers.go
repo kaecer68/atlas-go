@@ -1,10 +1,11 @@
 package eventlogic
 
 import (
-	"github.com/kaecer68/atlas-go/internal/eventlogic"
-	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"net/http"
 	"strings"
+
+	"github.com/kaecer68/atlas-go/internal/eventlogic"
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 )
 
 type Handlers struct {
@@ -16,6 +17,7 @@ type Handlers struct {
 func NewHandlers(r *eventlogic.RuleRegistry, v *eventlogic.RuleValidator, d *eventlogic.PatternDetector) *Handlers {
 	return &Handlers{registry: r, validator: v, detector: d}
 }
+
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/eventlogic/rules", shared.Get(h.ListRules))
 	mux.Handle("GET /api/eventlogic/rules/active", shared.Get(h.ListActive))
@@ -25,18 +27,22 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/eventlogic/stats", shared.Get(h.Stats))
 	mux.Handle("POST /api/eventlogic/discover", shared.Post(h.Discover))
 }
+
 func (h *Handlers) ListRules(r *http.Request) (int, any) {
 	rl := h.registry.List()
 	return http.StatusOK, map[string]any{"rules": rl, "total": len(rl)}
 }
+
 func (h *Handlers) ListActive(r *http.Request) (int, any) {
 	rl := h.registry.ListActive()
 	return http.StatusOK, map[string]any{"rules": rl, "total": len(rl)}
 }
+
 func (h *Handlers) ListExpired(r *http.Request) (int, any) {
 	rl := h.registry.ListExpired()
 	return http.StatusOK, map[string]any{"rules": rl, "total": len(rl)}
 }
+
 func (h *Handlers) GetRule(r *http.Request) (int, any) {
 	id := r.PathValue("id")
 	if id == "" {
@@ -48,6 +54,7 @@ func (h *Handlers) GetRule(r *http.Request) (int, any) {
 	}
 	return http.StatusOK, ru
 }
+
 func (h *Handlers) ValidateRule(r *http.Request) (int, any) {
 	id := strings.TrimSuffix(r.PathValue("id"), "/validate")
 	if id == "" {
@@ -59,6 +66,7 @@ func (h *Handlers) ValidateRule(r *http.Request) (int, any) {
 	}
 	return http.StatusAccepted, map[string]any{"message": "validation queued", "rule_id": id, "hit_rate": ru.HitRate, "total_tests": ru.TotalTests, "total_hits": ru.TotalHits, "status": ru.Status}
 }
+
 func (h *Handlers) Stats(r *http.Request) (int, any) {
 	all := h.registry.List()
 	total := len(all)
@@ -74,6 +82,7 @@ func (h *Handlers) Stats(r *http.Request) (int, any) {
 	}
 	return http.StatusOK, map[string]any{"total_rules": total, "active_rules": active, "degraded_rules": total - active - exp, "expired_rules": exp, "average_hit_rate": avg}
 }
+
 func (h *Handlers) Discover(r *http.Request) (int, any) {
 	return http.StatusAccepted, map[string]any{"message": "discovery triggered"}
 }

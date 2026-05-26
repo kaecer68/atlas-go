@@ -67,9 +67,11 @@ func (d *PatternDetector) DiscoverPatterns(in *DiscoveryInput) []DiscoverCandida
 	}
 	return out
 }
+
 func (d *PatternDetector) build(th, se, dir string, hh, tt int, rr float64) DiscoverCandidate {
 	return DiscoverCandidate{Pattern: th + " → " + se, Sectors: []string{se}, Direction: dir, Conditions: []Condition{{Field: "NarrativeTheme", Operator: "eq", StringValue: th}}, HitCount: hh, TotalCount: tt, HitRate: rr}
 }
+
 func (d *PatternDetector) PromoteCandidate(c *DiscoverCandidate) (*EventRule, error) {
 	r := &EventRule{ID: c.Conditions[0].StringValue + "-" + c.Sectors[0], Pattern: c.Pattern, Conditions: c.Conditions, AffectedSectors: c.Sectors, Direction: c.Direction, HitRate: c.HitRate, TotalTests: c.TotalCount, TotalHits: c.HitCount, ConfidenceSource: SourceAutoDiscovered, Status: StatusActive, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	return r, d.registry.Add(r)

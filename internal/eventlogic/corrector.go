@@ -12,6 +12,7 @@ type SelfCorrector struct {
 func NewCorrector(r *RuleRegistry) *SelfCorrector {
 	return &SelfCorrector{registry: r, fails: make(map[string]int), hits: make(map[string]int)}
 }
+
 func (c *SelfCorrector) Evaluate(id string, hit bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -39,6 +40,7 @@ func (c *SelfCorrector) Evaluate(id string, hit bool) {
 	}
 	_ = c.registry.Update(r)
 }
+
 func (c *SelfCorrector) Run(rs []ValidationResult) {
 	for _, r := range rs {
 		if r.Fired && r.Error == "" {
@@ -46,6 +48,7 @@ func (c *SelfCorrector) Run(rs []ValidationResult) {
 		}
 	}
 }
+
 func (c *SelfCorrector) GetStreak(id string) (int, int) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

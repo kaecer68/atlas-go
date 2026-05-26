@@ -47,6 +47,7 @@ func (v *RuleValidator) EvaluateCondition(c Condition, ctx *ValidationContext) b
 		return false
 	}
 }
+
 func (v *RuleValidator) EvaluateRule(r *EventRule, ctx *ValidationContext) bool {
 	if len(r.Conditions) == 0 {
 		return false
@@ -58,6 +59,7 @@ func (v *RuleValidator) EvaluateRule(r *EventRule, ctx *ValidationContext) bool 
 	}
 	return true
 }
+
 func (v *RuleValidator) RecordOutcome(id string, hit bool) error {
 	r, ok := v.registry.GetByID(id)
 	if !ok {
@@ -74,6 +76,7 @@ func (v *RuleValidator) RecordOutcome(id string, hit bool) error {
 	v.mu.Unlock()
 	return v.registry.Update(r)
 }
+
 func (v *RuleValidator) ValidateAll(ctx *ValidationContext, dir string) []ValidationResult {
 	rules := v.registry.ListActive()
 	rs := make([]ValidationResult, 0, len(rules))
@@ -82,7 +85,7 @@ func (v *RuleValidator) ValidateAll(ctx *ValidationContext, dir string) []Valida
 			continue
 		}
 		hit := r.Direction == dir
-		v.RecordOutcome(r.ID, hit)
+		_ = v.RecordOutcome(r.ID, hit)
 		rs = append(rs, ValidationResult{RuleID: r.ID, Fired: true, WasHit: hit})
 	}
 	return rs

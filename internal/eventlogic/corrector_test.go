@@ -19,6 +19,7 @@ func TestDegrade(t *testing.T) {
 		t.Errorf("10:%q", u.Status)
 	}
 }
+
 func TestExpire(t *testing.T) {
 	reg := NewRegistry()
 	c := NewCorrector(reg)
@@ -31,6 +32,7 @@ func TestExpire(t *testing.T) {
 		t.Errorf("20:%q", u.Status)
 	}
 }
+
 func TestRecover(t *testing.T) {
 	reg := NewRegistry()
 	c := NewCorrector(reg)
@@ -46,6 +48,7 @@ func TestRecover(t *testing.T) {
 		t.Errorf("5h:%q", u.Status)
 	}
 }
+
 func TestExpImmune(t *testing.T) {
 	reg := NewRegistry()
 	c := NewCorrector(reg)
@@ -60,6 +63,7 @@ func TestExpImmune(t *testing.T) {
 		t.Errorf("%q", u.Status)
 	}
 }
+
 func TestCRun(t *testing.T) {
 	reg := NewRegistry()
 	c := NewCorrector(reg)

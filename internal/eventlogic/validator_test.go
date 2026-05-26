@@ -21,6 +21,7 @@ func TestEvalCond(t *testing.T) {
 		})
 	}
 }
+
 func TestRecOut(t *testing.T) {
 	reg := NewRegistry()
 	v := NewValidator(reg)
@@ -33,6 +34,7 @@ func TestRecOut(t *testing.T) {
 		t.Errorf("t=%d h=%d r=%f", u.TotalTests, u.TotalHits, u.HitRate)
 	}
 }
+
 func TestRecConc(t *testing.T) {
 	reg := NewRegistry()
 	v := NewValidator(reg)
