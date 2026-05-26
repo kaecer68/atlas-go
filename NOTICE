@@ -1,0 +1,101 @@
+atlas-go
+Copyright (C) 2025 kaecer68 <kaecer68@gmail.com>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published
+by the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+========================================================================
+Third-Party Dependencies & Licenses
+========================================================================
+
+This project includes or links to the following third-party software.
+Each component is used under its respective license terms.
+
+Go Dependencies (Direct)
+------------------------
+
+  golang.org/x/time - BSD 3-Clause License
+    Copyright (c) The Go Authors. All rights reserved.
+
+  golang.org/x/sync - BSD 3-Clause License
+    Copyright (c) The Go Authors. All rights reserved.
+
+  golang.org/x/text - BSD 3-Clause License
+    Copyright (c) The Go Authors. All rights reserved.
+
+  gonum.org/v1/gonum - BSD 3-Clause License
+    Copyright (c) The Gonum Authors. All rights reserved.
+
+  modernc.org/sqlite - BSD 3-Clause License
+    Copyright (c) The ModernC Authors. All rights reserved.
+
+  github.com/google/uuid - BSD 3-Clause License
+    Copyright (c) Google Inc. All rights reserved.
+
+  github.com/gorilla/websocket - BSD 2-Clause License
+    Copyright (c) Gorilla WebSocket Authors. All rights reserved.
+
+  github.com/redis/go-redis/v9 - BSD 2-Clause License
+    Copyright (c) Redis Authors. All rights reserved.
+
+  github.com/jackc/pgx/v5 - MIT License
+    Copyright (c) Jack Christensen. All rights reserved.
+
+  github.com/redis/go-redis/v9 - BSD 2-Clause
+    Copyright (c) 2013 The github.com/go-redis/redis Authors.
+
+  github.com/alicebob/miniredis/v2 - MIT License
+    Copyright (c) 2013-2024 Alice Bob. All rights reserved.
+
+  github.com/golang-migrate/migrate/v4 - MIT License
+    Copyright (c) 2014-2024 golang-migrate Authors.
+
+  github.com/cespare/xxhash/v2 - MIT License
+    Copyright (c) 2016 Caleb Spare
+
+  github.com/dgryski/go-rendezvous - MIT License
+    Copyright (c) 2017 Damian Gryski
+
+  github.com/dustin/go-humanize - MIT License
+    Copyright (c) 2005-2020 Dustin Sallings
+
+  github.com/mattn/go-isatty - MIT License
+    Copyright (c) Yasuhiro Matsumoto
+
+  github.com/ncruces/go-strftime - MIT License
+    Copyright (c) 2024 ncruces
+
+  github.com/yuin/gopher-lua - MIT License
+    Copyright (c) 2015 Yusuke Inuzuka
+
+  go.uber.org/atomic - MIT License
+    Copyright (c) 2016 Uber Technologies, Inc.
+
+Python Dependencies (Fubon Proxy - separate microservice)
+----------------------------------------------------------
+
+  fastapi - MIT License
+    Copyright (c) 2018 Sebastián Ramírez
+
+  uvicorn - BSD 3-Clause License
+    Copyright (c) 2017, Encode OSS Ltd. All rights reserved.
+
+  pydantic - MIT License
+    Copyright (c) 2017 Samuel Colvin
+
+  fubon-neo - Proprietary License
+    Copyright (c) Fubon Financial Holding Co., Ltd.
+    This component is the property of Fubon and is subject to
+    its own terms and conditions. See https://www.fubon.com/
+    for more information.
+
+========================================================================
+Full License Texts
+========================================================================
+
+The full GNU AGPL v3 license is in the LICENSE file at the project root.
+
+For MIT and BSD licenses of the dependencies above, please refer to
+each package's source repository or the vendor directory if vendored.
