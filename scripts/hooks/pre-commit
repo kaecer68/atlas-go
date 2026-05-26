@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# scripts/hooks/pre-commit — Auto-go-generate + binary detection
+# scripts/hooks/pre-commit — Auto-go-generate + map generation + binary detection
 #
 # Install: cp scripts/hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 #
 # 1. If domain/*.go changed → runs "go generate ." and auto-stages generated files
+# 1.5 If internal/|web/|cmd/mapgen/ changed → regenerates .omo/maps/ system maps
 # 2. Detects Mach-O/ELF/PE binaries in staging area → blocks commit
 
 set -euo pipefail
@@ -19,6 +20,19 @@ if echo "$STAGED" | grep -q '^internal/domain/.*\.go$'; then
     # Always stage generated files (no-op if unchanged)
     git add web/static/js/shared/field_names.js web/static/js/shared/field_types.ts web/static/js/shared/field_types.d.ts 2>/dev/null || true
     echo "  ✅ generated files auto-synced"
+    echo ""
+fi
+
+# ---- Phase 1.5: Auto map generation ----
+SRC_PATTERNS='^(internal/|web/|cmd/mapgen/)'
+if echo "$STAGED" | grep -qE "$SRC_PATTERNS"; then
+    echo "🗺️  Source changed → regenerating system maps"
+    if go run ./cmd/mapgen -gen-all 2>&1; then
+        git add -f .omo/maps/ 2>/dev/null || true
+        echo "  ✅ .omo/maps/ synced"
+    else
+        echo "  ⚠️  mapgen failed — .omo/maps/ may be stale (commit not blocked)"
+    fi
     echo ""
 fi
 

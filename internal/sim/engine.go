@@ -15,6 +15,12 @@ import (
 	"github.com/kaecer68/atlas-go/internal/tax"
 )
 
+// TraceWriter records simulation pipeline trace events.
+// SimTraceWriter in internal/orchestrator satisfies this interface.
+type TraceWriter interface {
+	Record(step int, layer, status string, meta map[string]any)
+}
+
 type Engine struct {
 	constraints     domain.SimulationConstraints
 	optimizer       *portfolio.Optimizer
@@ -26,6 +32,7 @@ type Engine struct {
 	dividends       map[string]float64
 	thresholdEngine *DynamicThresholdEngine
 	preTradeGate    *risk.PreTradeGate
+	traceWriter     TraceWriter
 }
 
 type sellDetail struct {
@@ -94,6 +101,13 @@ func (e *Engine) WithPreTradeGate(g *risk.PreTradeGate) *Engine {
 	return e
 }
 
+// WithTraceWriter attaches a trace writer for recording pre-trade gate and
+// optimizer fallback events during simulation.
+func (e *Engine) WithTraceWriter(tw TraceWriter) *Engine {
+	e.traceWriter = tw
+	return e
+}
+
 func (e *Engine) filterByPreTradeGate(
 	cash float64,
 	positions []domain.Position,
@@ -118,6 +132,7 @@ func (e *Engine) filterByPreTradeGate(
 	}
 
 	var filtered []domain.Recommendation
+	var blocked int
 	for _, rec := range recs {
 		order := e.buildOrderIntent(rec, totalValue)
 		decision, err := e.preTradeGate.Check(context.TODO(), order, pf, "NORMAL")
@@ -130,11 +145,26 @@ func (e *Engine) filterByPreTradeGate(
 			logging.Info("sim", "pre_trade_blocked",
 				"symbol", rec.Symbol,
 				"reason", decision.Reason)
+			blocked++
 			continue
 		}
 		filtered = append(filtered, rec)
 		pf = applyOrderToState(pf, order)
 	}
+
+	if e.traceWriter != nil {
+		passed := len(filtered)
+		status := "OK"
+		if blocked > 0 && passed == 0 {
+			status = "WARN"
+		}
+		e.traceWriter.Record(6, "pre_trade_gate", status, map[string]any{
+			"passed":  passed,
+			"blocked": blocked,
+			"total":   len(recs),
+		})
+	}
+
 	return filtered
 }
 
@@ -447,6 +477,13 @@ func (e *Engine) executeOptimizerBuys(
 		logging.Warn("sim", "optimizer_fallback", "reason", "optimizer_failed", logging.Err(err))
 		if fallbackEvents != nil {
 			*fallbackEvents = append(*fallbackEvents, "optimizer: fallback to legacy buys")
+		}
+		if e.traceWriter != nil {
+			e.traceWriter.Record(6, "optimizer", "WARN", map[string]any{
+				"event":   "fallback_to_legacy",
+				"reason":  err.Error(),
+				"rec_cnt": len(recs),
+			})
 		}
 		return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs, regime, fallbackEvents)
 	}

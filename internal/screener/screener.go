@@ -8,6 +8,12 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
+// TraceWriter is an optional interface for recording screening events.
+// Implementations should be nil-safe and non-blocking.
+type TraceWriter interface {
+	Record(step int, layer, status string, meta map[string]any)
+}
+
 // Screener evaluates whether a symbol passes an agent's ScreeningCriteria.
 type Screener interface {
 	Screen(ctx context.Context, symbol string, criteria domain.ScreeningCriteria, quotes map[string]domain.Quote) (bool, error)
@@ -19,6 +25,7 @@ type Screener interface {
 type Engine struct {
 	factorEngine *portfolio.FactorEngine
 	fundamentals *portfolio.FundamentalProvider
+	traceWriter  TraceWriter
 }
 
 // NewEngine creates a screener with the required data sources.
@@ -27,6 +34,12 @@ func NewEngine(fe *portfolio.FactorEngine, fp *portfolio.FundamentalProvider) *E
 		factorEngine: fe,
 		fundamentals: fp,
 	}
+}
+
+// WithTraceWriter sets an optional trace writer for recording screening events.
+func (e *Engine) WithTraceWriter(tw TraceWriter) *Engine {
+	e.traceWriter = tw
+	return e
 }
 
 // ScreenResult carries the outcome of a single screening evaluation.
@@ -164,5 +177,19 @@ func (e *Engine) ScreenUniverse(ctx context.Context, symbols []string, criteria 
 			passed = append(passed, symbol)
 		}
 	}
+
+	// Emit WARN trace if all symbols were rejected.
+	if len(passed) == 0 && len(symbols) > 0 && e.traceWriter != nil {
+		criteriaDesc := "no filters"
+		if criteria.HasFilters() {
+			criteriaDesc = "active filters"
+		}
+		e.traceWriter.Record(0, "screener", "WARN", map[string]any{
+			"candidates": len(symbols),
+			"rejected":   len(symbols),
+			"criteria":   criteriaDesc,
+		})
+	}
+
 	return passed, nil
 }

@@ -116,7 +116,11 @@ type System struct {
 	macroSnapshot    *marketdata.MacroDataSnapshot
 	drawdownMu       sync.RWMutex
 	drawdownReporter func(portfolio.DrawdownResult)
+	traceVerbose     bool // when true, SimTraceWriter emits color-coded terminal output
 }
+
+// SetVerboseTrace enables or disables color-coded verbose trace output.
+func (s *System) SetVerboseTrace(v bool) { s.traceVerbose = v }
 
 // NewSystem builds a fully-wired System with an internally-created EventBus.
 // For shared EventBus scenarios (e.g. SSE streaming), use NewSystemWithEventBus.
@@ -181,21 +185,36 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		return s.runReplaySimulation(sessionDate)
 	}
 
+	// SimTraceWriter for pipeline layer transparency audit trail.
+	tw := NewSimTraceWriter(s.Sim().cfg.WorkDir, asOf.Format("20060102"), s.traceVerbose)
+	defer func() { _, _ = tw.ExportJSONL() }()
+
 	symbols := RegistrySymbols(s.Sim().registry)
+	tw.Record(1, "data_fetch", "START", nil)
 	quotes, err := s.Sim().provider.GetQuotes(s.Sim().ctx, asOf, symbols)
 	if err != nil {
+		tw.Record(1, "data_fetch", "FAIL", map[string]any{"error": err.Error()})
 		return domain.SimulationResult{}, err
 	}
 	if len(quotes) == 0 {
+		tw.Record(1, "data_fetch", "WARN", map[string]any{"symbols": 0})
 		logging.Warn("system", "no_quotes_available",
 			"session", s.Sim().session.ID,
 			"as_of", asOf.Format("2006-01-02"),
 			"symbols_requested", len(symbols))
+	} else {
+		tw.Record(1, "data_fetch", "OK", map[string]any{"symbols": len(quotes)})
 	}
 
 	if s.macroSnapshot != nil {
 		*s.macroSnapshot = QuotesToMacroDataSnapshot(quotes)
 	}
+
+	// Pipeline trace: START for layers inside ExecuteWithContext.
+	tw.Record(2, "regime_detect", "START", nil)
+	tw.Record(3, "screening", "START", nil)
+	tw.Record(4, "recommend", "START", nil)
+	tw.Record(5, "guard_filter", "START", nil)
 
 	events := s.detectNarrativeEvents(quotes)
 	researchResult := ExecuteWithContext(ExecutionContext{
@@ -220,6 +239,28 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	finalRecs := researchResult.FinalRecommendations
 	guardOutcomes := researchResult.GuardOutcomes
 	rejects := researchResult.ScreeningRejects
+
+	// Pipeline trace: OK/WARN for regime_detect, screening, recommend, guard_filter.
+	tw.Record(2, "regime_detect", "OK", map[string]any{"regime": string(regime), "narrative_events": len(events)})
+	totalScreened := len(rawRecs) + len(rejects)
+	if totalScreened == 0 {
+		tw.Record(3, "screening", "WARN", map[string]any{"candidates": 0})
+	} else {
+		tw.Record(3, "screening", "OK", map[string]any{"candidates": totalScreened, "rejected": len(rejects)})
+	}
+	if len(rawRecs) == 0 {
+		tw.Record(4, "recommend", "WARN", map[string]any{"raw_recs": 0})
+	} else {
+		tw.Record(4, "recommend", "OK", map[string]any{"raw_recs": len(rawRecs), "final_recs": len(finalRecs)})
+	}
+	passedCnt := 0
+	blockedCnt := 0
+	for _, g := range guardOutcomes {
+		passedCnt += g.OutputCount
+		blockedCnt += g.InputCount - g.OutputCount
+	}
+	tw.Record(5, "guard_filter", "OK", map[string]any{"passed": passedCnt, "blocked": blockedCnt})
+
 	// Preserve original recs for outcome building so GuardOutcomes align with outcomes.
 	outcomeRawRecs := append([]domain.Recommendation(nil), rawRecs...)
 	outcomeFinalRecs := append([]domain.Recommendation(nil), finalRecs...)
@@ -277,12 +318,14 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	if err := s.ensurePersistentStateLoaded(); err != nil {
 		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
 	}
+	tw.Record(6, "sim_exec", "START", nil)
 	var result domain.SimulationResult
 	if s.Sim().persistentState != nil {
 		result = s.Sim().engine.RunWithState(s.Sim().persistentState, regime, quotes, finalRecs)
 	} else {
 		result = s.Sim().engine.Run(regime, quotes, finalRecs)
 	}
+	tw.Record(6, "sim_exec", "OK", map[string]any{"orders": len(result.Orders), "positions": len(result.Positions)})
 	// P3-4: Monte Carlo drawdown simulation for monitoring dashboard.
 	if opt := s.Sim().engine.Optimizer(); opt != nil {
 		ddResult := opt.SimulateDrawdownForMonitoring(result.Positions, result.PortfolioValue)
@@ -319,6 +362,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	s.Sim().lastQuotes = quotes
 	s.updateCapitalMetrics(s.Sim().ctx, result)
 
+	tw.Record(7, "ledger_write", "START", nil)
 	outcomes := buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf)
 	if s.Risk().repo != nil {
 		_ = s.Risk().repo.RecordOutcomes(s.Sim().ctx, outcomes)
@@ -331,6 +375,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		s.Risk().metricsCollector.RecordScreening(int64(len(rawRecs)), int64(len(rejects)))
 	}
 	s.Sim().lastOutcomes = outcomes
+	tw.Record(7, "ledger_write", "OK", map[string]any{"outcomes": len(outcomes)})
 
 	if s.Port().darwinian != nil {
 		for _, outcome := range outcomes {
@@ -409,13 +454,28 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		go s.Risk().eventBus.PublishSimulationStart(s.Sim().session.ID, sessionDate)
 	}
 
+	tw := NewSimTraceWriter(s.Sim().cfg.WorkDir, sessionDate.Format("20060102"), s.traceVerbose)
+	defer func() { _, _ = tw.ExportJSONL() }()
+
 	symbols := RegistrySymbols(s.Sim().registry)
+	tw.Record(1, "data_fetch", "START", nil)
 	quotes := s.Sim().replay.QuotesForDate(sessionDate, symbols)
+	if len(quotes) == 0 {
+		tw.Record(1, "data_fetch", "WARN", map[string]any{"symbols": 0})
+	} else {
+		tw.Record(1, "data_fetch", "OK", map[string]any{"symbols": len(quotes)})
+	}
 
 	// P3-1: Update macro snapshot for PM factor scoring.
 	if s.macroSnapshot != nil {
 		*s.macroSnapshot = QuotesToMacroDataSnapshot(quotes)
 	}
+
+	tw.Record(2, "regime_detect", "START", nil)
+	tw.Record(3, "screening", "START", nil)
+	tw.Record(4, "recommend", "START", nil)
+	tw.Record(5, "guard_filter", "START", nil)
+
 	events := s.detectNarrativeEvents(quotes)
 	researchResult := ExecuteWithContext(ExecutionContext{
 		Registry:        s.Sim().registry,
@@ -439,6 +499,27 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	finalRecs := researchResult.FinalRecommendations
 	guardOutcomes := researchResult.GuardOutcomes
 	rejects := researchResult.ScreeningRejects
+
+	tw.Record(2, "regime_detect", "OK", map[string]any{"regime": string(regime), "narrative_events": len(events)})
+	totalScreened := len(rawRecs) + len(rejects)
+	if totalScreened == 0 {
+		tw.Record(3, "screening", "WARN", map[string]any{"candidates": 0})
+	} else {
+		tw.Record(3, "screening", "OK", map[string]any{"candidates": totalScreened, "rejected": len(rejects)})
+	}
+	if len(rawRecs) == 0 {
+		tw.Record(4, "recommend", "WARN", map[string]any{"raw_recs": 0})
+	} else {
+		tw.Record(4, "recommend", "OK", map[string]any{"raw_recs": len(rawRecs), "final_recs": len(finalRecs)})
+	}
+	passedCnt := 0
+	blockedCnt := 0
+	for _, g := range guardOutcomes {
+		passedCnt += g.OutputCount
+		blockedCnt += g.InputCount - g.OutputCount
+	}
+	tw.Record(5, "guard_filter", "OK", map[string]any{"passed": passedCnt, "blocked": blockedCnt})
+
 	// Preserve original recs for outcome building so GuardOutcomes align with outcomes.
 	outcomeRawRecs := append([]domain.Recommendation(nil), rawRecs...)
 	outcomeFinalRecs := append([]domain.Recommendation(nil), finalRecs...)
@@ -496,16 +577,19 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	if err := s.ensurePersistentStateLoaded(); err != nil {
 		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
 	}
+	tw.Record(6, "sim_exec", "START", nil)
 	var result domain.SimulationResult
 	if s.Sim().persistentState != nil {
 		result = s.Sim().engine.RunWithState(s.Sim().persistentState, regime, quotes, finalRecs)
 	} else {
 		result = s.Sim().engine.Run(regime, quotes, finalRecs)
 	}
+	tw.Record(6, "sim_exec", "OK", map[string]any{"orders": len(result.Orders), "positions": len(result.Positions)})
 	result.GuardOutcomes = guardOutcomes
 	if s.Risk().eventBus != nil {
 		go s.Risk().eventBus.PublishGuardOutcomes(s.Sim().session.ID, guardOutcomes)
 	}
+	tw.Record(7, "ledger_write", "START", nil)
 	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, sessionDate, s.Sim().replay)
 	if s.Risk().repo != nil {
 		_ = s.Risk().repo.RecordOutcomes(s.Sim().ctx, outcomes)
@@ -518,6 +602,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		s.Risk().metricsCollector.RecordScreening(int64(len(rawRecs)), int64(len(rejects)))
 	}
 	s.Sim().lastOutcomes = outcomes
+	tw.Record(7, "ledger_write", "OK", map[string]any{"outcomes": len(outcomes)})
 
 	s.Sim().portfolioHistory = append(s.Sim().portfolioHistory, result.PortfolioValue)
 	if len(s.Sim().portfolioHistory) > 1 {

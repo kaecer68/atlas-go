@@ -1,12 +1,14 @@
 package monitoring
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +45,7 @@ import (
 	apitax "github.com/kaecer68/atlas-go/internal/monitoring/api/tax"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
@@ -652,6 +655,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 
 	mux.HandleFunc("/api/dashboard/risk-calibration", a.handleRiskCalibration)
 	mux.HandleFunc("/api/dashboard/drawdown", a.handleDrawdown)
+	mux.HandleFunc("/api/traces/sim-latest", a.handleSimLatest)
 
 	// Management center endpoints — channel control and API key management.
 	mux.HandleFunc("/api/dashboard/channels/", func(w http.ResponseWriter, r *http.Request) {
@@ -946,6 +950,64 @@ func (a *DashboardAPI) handleRiskCalibration(w http.ResponseWriter, r *http.Requ
 		"report":    report,
 		"generated": time.Now().Format(time.RFC3339),
 	})
+}
+
+// handleSimLatest serves the latest simulation trace records from .omo/traces/sim-*.jsonl.
+func (a *DashboardAPI) handleSimLatest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	pattern := filepath.Join(a.workDir, ".omo", "traces", "sim-*.jsonl")
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		logging.Error("dashboardapi", "sim_trace_glob_failed",
+			"pattern", pattern, "err", err)
+		shared.WriteJSONError(w, http.StatusInternalServerError, "failed to list trace files")
+		return
+	}
+
+	if len(matches) == 0 {
+		shared.WriteJSONError(w, http.StatusNotFound, "no simulation trace files found")
+		return
+	}
+
+	// Sort by filename descending (YYYYMMDD in sim-YYYYMMDD.jsonl).
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i] > matches[j]
+	})
+
+	latestFile := matches[0]
+	f, err := os.Open(latestFile)
+	if err != nil {
+		logging.Error("dashboardapi", "sim_trace_open_failed",
+			"file", latestFile, "err", err)
+		shared.WriteJSONError(w, http.StatusInternalServerError, "failed to open trace file")
+		return
+	}
+	defer func() { _ = f.Close() }()
+
+	var records []orchestrator.SimTraceRecord
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var record orchestrator.SimTraceRecord
+		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
+			logging.Error("dashboardapi", "sim_trace_parse_failed",
+				"file", latestFile, "err", err)
+			shared.WriteJSONError(w, http.StatusInternalServerError, "failed to parse trace record")
+			return
+		}
+		records = append(records, record)
+	}
+	if err := scanner.Err(); err != nil {
+		logging.Error("dashboardapi", "sim_trace_scan_failed",
+			"file", latestFile, "err", err)
+		shared.WriteJSONError(w, http.StatusInternalServerError, "failed to read trace file")
+		return
+	}
+
+	shared.WriteJSON(w, http.StatusOK, records)
 }
 
 func (a *DashboardAPI) GetIndustryService() *service.IndustryService {

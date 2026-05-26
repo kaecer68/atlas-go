@@ -168,6 +168,9 @@ func run(args []string, deps appDeps) error {
 	allowRealSigner := flags.Bool("allow-real-signer", false, "allow non-placeholder signer for http broker adapter")
 	liveMode := flags.Bool("live", false, "start live trading orchestrator")
 	logFormat := flags.String("log-format", "text", "log format: text or json")
+	simulateMode := flags.Bool("simulate", false, "run one-shot daily simulation and exit (skip api server)")
+	verboseMode := flags.Bool("verbose", false, "enable color-coded terminal trace output during simulation")
+	dateOverride := flags.String("date", "", "override simulation session date (format: 2006-01-02)")
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("parse flags: %w", err)
 	}
@@ -217,6 +220,11 @@ func run(args []string, deps appDeps) error {
 	taskManager := rt.TaskManager
 
 	var janusEngine *janus.Engine
+
+	// Handle --simulate mode: run one-shot daily simulation and exit
+	if *simulateMode {
+		return runSimulationMode(rt, cfg, *verboseMode, *dateOverride)
+	}
 
 	if *apiMode {
 		// Pre-initialize janus engine for Gateway channel adapters.
@@ -1259,14 +1267,15 @@ func run(args []string, deps appDeps) error {
 	if *liveMode {
 		return runLiveTrading(cfg, deps, collector, repo)
 	}
-	return runSimulation(cfg, collector, repo)
+	return runSimulation(cfg, false, collector, repo)
 }
 
-func runSimulation(cfg config.Config, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
+func runSimulation(cfg config.Config, verbose bool, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
 	system, err := orchestrator.NewProductionSystem(cfg)
 	if err != nil {
 		return fmt.Errorf("create system: %w", err)
 	}
+	system.SetVerboseTrace(verbose)
 	if collector != nil {
 		system.WithMetricsCollector(collector)
 	}
@@ -1483,6 +1492,42 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		return fmt.Errorf("stop live orchestrator: %w", err)
 	}
 	log.Println("live trading orchestrator stopped")
+	return nil
+}
+
+func runSimulationMode(rt *bootstrap.Runtime, cfg config.Config, verbose bool, dateOverride string) error {
+	if verbose {
+		log.Println("[SIMULATE] verbose mode enabled")
+	}
+
+	sessionDate := time.Now().Format("2006-01-02")
+	if dateOverride != "" {
+		if _, err := time.Parse("2006-01-02", dateOverride); err != nil {
+			return fmt.Errorf("invalid date format (expected 2006-01-02): %w", err)
+		}
+		sessionDate = dateOverride
+		// Thread date override through config so ReplaySessionDate resolves correctly.
+		cfg.ReplaySessionDate = dateOverride
+		if verbose {
+			log.Printf("[SIMULATE] date override: %s", sessionDate)
+		}
+	}
+
+	if verbose {
+		log.Printf("[SIMULATE] running one-shot daily simulation for %s", sessionDate)
+	}
+
+	collector := rt.MetricsCollector
+	repo := rt.Repository
+
+	if err := runSimulation(cfg, verbose, collector, repo); err != nil {
+		return fmt.Errorf("simulation failed: %w", err)
+	}
+
+	if verbose {
+		log.Printf("[SIMULATE] simulation completed for %s", sessionDate)
+	}
+
 	return nil
 }
 
