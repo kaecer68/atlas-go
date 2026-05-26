@@ -26,11 +26,13 @@ func paramSensitivity(paramValue string) *float64 {
 // recommendation conviction based on the current business cycle phase.
 // Expansion → confidence boost; recession → penalty; recovery/mature are neutral.
 //
-// Skill-to-industry mapping is loaded from ParametersConfig. When config is
-// missing, the modulator operates without industry assignments (no-op).
+// Skill-to-industry mapping is loaded from ParametersConfig (Industry.SkillToIndustry).
+// When config is missing, skillToIndustry is nil and the modulator is a no-op —
+// this is deliberate: mappings are strategy IP that should live in config,
+// not hardcoded in the engine.
 type IndustryCycleModulator struct {
 	tracker         *industry.CycleTracker
-	skillToIndustry map[string]string
+	skillToIndustry map[string]string // nil = no-op (config not loaded); not a bug
 }
 
 func NewIndustryCycleModulator(tracker *industry.CycleTracker) *IndustryCycleModulator {
