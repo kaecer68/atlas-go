@@ -9,6 +9,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"golang.org/x/sync/errgroup"
 )
 
 type Handlers struct {
@@ -22,6 +23,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/narrative/models", shared.Get(h.HandleNarrativeModels))
 	mux.Handle("GET /api/narrative/templates", shared.Get(h.HandleNarrativeTemplates))
 	mux.Handle("GET /api/narrative/seasonal", shared.Get(h.HandleSeasonalAnalysis))
+	mux.Handle("GET /api/narrative/bundle", shared.Get(h.HandleNarrativeBundle))
 	mux.Handle("GET /api/narrative/stress-index/current", shared.Get(h.HandleStressIndexCurrent))
 	mux.Handle("GET /api/narrative/stress-index/history", shared.Get(h.HandleStressIndexHistory))
 	mux.Handle("GET /api/narrative/stress-index/thresholds", shared.Get(h.HandleStressIndexThresholds))
@@ -136,6 +138,109 @@ func (h *Handlers) HandleSeasonalAnalysis(r *http.Request) (int, any) {
 	return http.StatusOK, map[string]any{
 		"month": now.Month().String(),
 		"note":  "seasonal patterns are embedded in narrative engine",
+	}
+}
+
+// HandleNarrativeBundle aggregates events, chains, models, templates, and
+// seasonal analysis into a single response. Events are computed first (needed
+// by chains/models), then the dependent calls run in parallel via errgroup.
+func (h *Handlers) HandleNarrativeBundle(r *http.Request) (int, any) {
+	data := narrative.MarketNarrativeData{
+		US10YChangeBps:                15,
+		DXYChangePct:                  2.0,
+		VIXLevel:                      30,
+		USD_TWD_ChangePct:             0,
+		OilChangePct:                  6.0,
+		GoldChangePct:                 2.5,
+		JPY_ChangePct:                 3.0,
+		AICapexSentiment:              0.8,
+		GeopoliticalGPR:               160,
+		RetailInstitutionalDivergence: 0,
+		MarginZScore:                  0,
+	}
+
+	// Compute events first — needed by chains and models.
+	events := h.Svc.DetectEvents(data)
+	themes := make([]string, len(events))
+	for i, e := range events {
+		themes[i] = e.Theme
+	}
+
+	var (
+		chains    []narrative.CausalChain
+		models    []narrative.InvestmentModel
+		templates []narrative.CausalTemplate
+		seasonal  map[string]any
+	)
+
+	g, ctx := errgroup.WithContext(r.Context())
+
+	// Chains: depends on events.
+	g.Go(func() error {
+		_ = ctx
+		chains = h.Svc.MatchChains(events)
+		return nil
+	})
+
+	// Models: depends on themes derived from events.
+	g.Go(func() error {
+		_ = ctx
+		models = h.Svc.GetActiveModels(themes)
+		return nil
+	})
+
+	// Templates: no dependency on events.
+	g.Go(func() error {
+		_ = ctx
+		templates = h.Svc.GetTemplates()
+		return nil
+	})
+
+	// Seasonal: independent computation.
+	g.Go(func() error {
+		now := time.Now()
+		currentReturn := 0.0
+		calc := marketdata.NewTAIEXReturnCalculator()
+		if ret, err := calc.Get1MonthReturn(ctx); err == nil {
+			currentReturn = ret
+		}
+		if h.IndustryService != nil {
+			active, historical, adjustment := h.IndustryService.GetSeasonalPatterns("", now)
+			expectations := make([]SeasonalExpectation, len(active))
+			for i, p := range active {
+				gap := currentReturn - p.TypicalReturn
+				expectations[i] = SeasonalExpectation{
+					Theme:               p.Name,
+					HistoricalAvgReturn: p.TypicalReturn,
+					CurrentReturn:       currentReturn,
+					ExpectationGap:      gap,
+					AlreadyPricedIn:     currentReturn > p.TypicalReturn,
+				}
+			}
+			seasonal = map[string]any{
+				"month":               now.Month().String(),
+				"active_patterns":     active,
+				"all_patterns":        historical,
+				"combined_adjustment": adjustment,
+				"expectations":        expectations,
+			}
+		} else {
+			seasonal = map[string]any{
+				"month": now.Month().String(),
+				"note":  "seasonal patterns are embedded in narrative engine",
+			}
+		}
+		return nil
+	})
+
+	_ = g.Wait()
+
+	return http.StatusOK, map[string]any{
+		"events":    events,
+		"chains":    chains,
+		"models":    models,
+		"templates": templates,
+		"seasonal":  seasonal,
 	}
 }
 
