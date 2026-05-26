@@ -719,6 +719,17 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	return result, nil
 }
 
+// selectProvider picks a marketdata.Provider based on ATLAS_MARKET_DATA_PROVIDER
+// (env var → cfg.MarketDataProvider). This is a config-driven selector, not a
+// hardcoded registry — the marketdata.Provider interface serves only stock quotes
+// (GetQuotes), and all three implementations (fugle, twse, hybrid) are built into
+// the open-source core.
+//
+// DO NOT refactor into a registry pattern — the Gateway already has a full
+// registry for 15 non-quote data channels (fubon, finmind, twse_capital_flow, etc.).
+// Adding a second provider registry would duplicate the Gateway's pattern without
+// benefit. A Provider registry should only be added when a concrete third-party
+// Provider implementation exists outside the core.
 func selectProvider(cfg config.Config) marketdata.Provider {
 	switch cfg.MarketDataProvider {
 	case "fugle":
