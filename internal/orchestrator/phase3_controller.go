@@ -31,6 +31,7 @@ type Phase3Controller struct {
 	advRunner       *AdversarialScenarioRunner
 	lastAdvResult   *adversarial.StressTestResult
 	trainingStore   *swarm.TrainingStore
+	snapshotPath    string
 
 	mu               sync.RWMutex
 	prismWeightCache map[string]float64 // agentID -> weight multiplier
@@ -67,6 +68,11 @@ func (c *Phase3Controller) SetTrainingStore(ts *swarm.TrainingStore) {
 	c.trainingStore = ts
 }
 
+// SetSnapshotPath sets the file path where swarm snapshots are persisted.
+func (c *Phase3Controller) SetSnapshotPath(path string) {
+	c.snapshotPath = path
+}
+
 // RunSwarmCycle runs one complete swarm simulation cycle synchronously:
 //  1. Apply reflexivity mutations to scenarios
 //  2. Initialize and run swarm simulation
@@ -96,6 +102,13 @@ func (c *Phase3Controller) RunSwarmCycle(baseState swarm.MarketState) {
 	}
 
 	logging.Info("phase3_controller", "swarm_cycle_completed")
+
+	// Save snapshot for dashboard API consumption
+	if c.snapshotPath != "" {
+		if err := c.swarm.SaveSnapshot(c.snapshotPath); err != nil {
+			logging.Warn("phase3_controller", "snapshot_save_failed", "err", err)
+		}
+	}
 }
 
 // ApplyPRISMWeights adjusts recommendations based on regime-specific training results.
