@@ -22,7 +22,6 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/evolution"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 )
 
@@ -164,7 +163,7 @@ func main() {
 	printSummary(totalAgents, customAgent, result, candidate)
 }
 
-func printSummary(totalAgents int, customAgent *domain.AgentSpec, result domain.SimulationResult, candidate *evolution.Candidate) {
+func printSummary(totalAgents int, customAgent *domain.AgentSpec, result domain.SimulationResult, candidate *domain.Candidate) {
 	fmt.Println()
 	fmt.Println("═══════════════════════════════════════════")
 	fmt.Println("  PLUGIN BOUNDARY E2E — RESULTS")

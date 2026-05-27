@@ -68,6 +68,10 @@ const (
 
 	// 订单错误事件
 	EventOrderError EventType = "order.error"
+
+	// 自动监控事件
+	EventSharpeDegradation EventType = "monitor.sharpe.degradation"
+	EventDrawdownBreach    EventType = "monitor.drawdown.breach"
 )
 
 // MarketEventPayload 市场事件载荷

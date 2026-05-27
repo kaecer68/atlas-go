@@ -14,7 +14,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/domain/shared"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
-	"github.com/kaecer68/atlas-go/internal/evolution"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -1013,13 +1012,13 @@ func (s *System) applyAlphaDiscovery(quotes []domain.Quote, recs []domain.Recomm
 	return s.Port().alphaDiscovery.Discover(s.Sim().ctx, symbols, quoteMap, recs)
 }
 
-func (s *System) NextExperimentCandidate() (*evolution.Candidate, error) {
+func (s *System) NextExperimentCandidate() (*domain.Candidate, error) {
 	outcomes, err := s.Sim().ledger.LoadOutcomes()
 	if err != nil {
 		return nil, err
 	}
 	scorecards := ledger.BuildScorecards(outcomes)
-	candidate := evolution.SelectWeakestAgent(s.Sim().registry, scorecards)
+	candidate := domain.SelectWeakestAgent(s.Sim().registry, scorecards)
 	if candidate != nil {
 		_ = s.Sim().ledger.RecordExperiment(candidate.Experiment)
 		_ = s.Sim().ledger.RecordSessionExperiment(s.Sim().session, candidate.Experiment)
@@ -1031,7 +1030,7 @@ func (s *System) Session() domain.ReplaySession {
 	return s.Sim().session
 }
 
-func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate *evolution.Candidate) error {
+func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate *domain.Candidate) error {
 	summary := domain.SessionSummary{
 		SessionID:      s.Sim().session.ID,
 		Regime:         result.Regime,

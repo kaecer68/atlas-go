@@ -23,13 +23,13 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/autobacktest"
+	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/bootstrap"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/eventlogic"
-	"github.com/kaecer68/atlas-go/internal/evolution"
 	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/importer"
 	"github.com/kaecer68/atlas-go/internal/industry"
@@ -1093,7 +1093,7 @@ func run(args []string, deps appDeps) error {
 					)
 
 					windowID := "window-" + time.Now().Add(-7*24*time.Hour).Format("20060102") + "-" + time.Now().Format("20060102")
-					brief := evolution.BuildMutationBrief(windowID, candidate)
+					brief := domain.BuildMutationBrief(windowID, candidate)
 
 					briefDir := filepath.Join(cfg.WorkDir, "data", "state", "windows")
 					_ = os.MkdirAll(briefDir, 0o755)
@@ -1164,6 +1164,33 @@ func run(args []string, deps appDeps) error {
 				},
 			})
 			log.Printf("[Gateway] registered auto_experiment background task (7-day interval)")
+
+			// Register window_backtest — periodic 20-day scoring window (7-day interval, offset 3d).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "window_backtest",
+				Interval: 7 * 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					store := ledger.NewStore(cfg.LedgerDir)
+					btRunner := backtest.NewRunner(cfg, store)
+					endDate := time.Now().AddDate(0, 0, -3)
+					startDate := endDate.AddDate(0, 0, -20)
+					logging.Info("window_backtest", "running", "start", startDate.Format("2006-01-02"), "end", endDate.Format("2006-01-02"))
+					summary, err := btRunner.Run(startDate, endDate)
+					if err != nil {
+						return fmt.Errorf("window backtest: %w", err)
+					}
+					if _, err := btRunner.GenerateReport(summary); err != nil {
+						logging.Warn("window_backtest", "report_failed", "err", err.Error())
+					}
+					logging.Info("window_backtest", "completed",
+						"sessions", summary.SessionCount,
+						"outcomes", summary.OutcomeCount,
+						"worst_agent", summary.WorstAgentID)
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered window_backtest background task (7-day interval)")
 
 			if ruleEngine != nil {
 				params := config.GetParametersConfig().Alert
@@ -1388,7 +1415,6 @@ func run(args []string, deps appDeps) error {
 			btRunner = autobacktest.NewRunner(cfg)
 			log.Printf("[AutoBacktest] running without EventBus (no SSE events)")
 		}
-		autobacktest.StartDailyLoop(sysCtx, btRunner)
 
 		authWrappedMux := apishared.AuthMiddleware(mux)
 		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

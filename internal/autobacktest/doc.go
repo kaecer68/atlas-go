@@ -1,4 +1,4 @@
 // Package autobacktest provides automated backtesting: scheduled background backtest tasks.
 //
-// Maturity: stable
+// Maturity: evolving
 package autobacktest
