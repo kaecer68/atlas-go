@@ -1170,15 +1170,25 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[EventLogic] subscribed to EventSimulationComplete")
 
 				dashEventBus.Subscribe(eventbus.EventRegimeChange, func(ctx context.Context, ev eventbus.BusEvent) error {
-					logging.Info("monitor", "regime_change_event", "id", ev.ID, "payload", fmt.Sprintf("%+v", ev.Payload))
+					if p, ok := ev.Payload.(eventbus.RegimeEventPayload); ok {
+						logging.Info("monitor", "regime_change",
+							"old", string(p.OldRegime), "new", string(p.NewRegime),
+							"confidence", fmt.Sprintf("%.2f", p.Confidence), "by", p.DeterminedBy)
+					} else {
+						logging.Info("monitor", "regime_change_event", "id", ev.ID, "payload", fmt.Sprintf("%+v", ev.Payload))
+					}
 					return nil
 				})
 				dashEventBus.Subscribe(eventbus.EventSharpeDegradation, func(ctx context.Context, ev eventbus.BusEvent) error {
-					logging.Warn("monitor", "sharpe_degradation", "id", ev.ID, "payload", fmt.Sprintf("%+v", ev.Payload))
+					logging.Warn("monitor", "sharpe_degradation",
+						"id", ev.ID, "payload", fmt.Sprintf("%+v", ev.Payload),
+						"description", ev.Description)
 					return nil
 				})
 				dashEventBus.Subscribe(eventbus.EventDrawdownBreach, func(ctx context.Context, ev eventbus.BusEvent) error {
-					logging.Error("monitor", "drawdown_breach", "id", ev.ID, "payload", fmt.Sprintf("%+v", ev.Payload))
+					logging.Error("monitor", "drawdown_breach",
+						"id", ev.ID, "payload", fmt.Sprintf("%+v", ev.Payload),
+						"description", ev.Description)
 					return nil
 				})
 				log.Printf("[Monitor] subscribed to regime/sharpe/drawdown events")
