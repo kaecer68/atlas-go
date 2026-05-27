@@ -2385,6 +2385,32 @@ func defaultSectorExecutorParameters() SectorExecutorParameters {
 			ExploratoryOpenPenalty:   ParameterMetadata[int]{Value: 4, Rationale: "Exploratory open penalty (reduced)", Source: SourceHeuristic, Todo: "Monitor performance"},
 			DowngradeThreshold:       ParameterMetadata[float64]{Value: 0.995, Rationale: "Downgrade: last < high*threshold", Source: SourceHeuristic, Todo: "Calibrate 0.990/0.995/0.998"},
 		},
+		FactorConviction: FactorConvictionParams{
+			// --- Momentum factor ---
+			MomentumHighThreshold: ParameterMetadata[float64]{Value: 0.4, Rationale: "Momentum high threshold used by TechnicalBreakout (+8)", Source: SourceHeuristic, Todo: "Calibrate 0.3/0.4/0.5"},
+			MomentumHighDelta:     ParameterMetadata[int]{Value: 8, Rationale: "Conviction delta when momentum > high threshold", Source: SourceHeuristic, Todo: "Calibrate 6/8/10"},
+			MomentumModThreshold:  ParameterMetadata[float64]{Value: 0.15, Rationale: "Momentum moderate threshold used by TechnicalBreakout (+4), Shipping (+3)", Source: SourceHeuristic, Todo: "Calibrate 0.10/0.15/0.20"},
+			MomentumModDelta:      ParameterMetadata[int]{Value: 4, Rationale: "Conviction delta when momentum > moderate threshold", Source: SourceHeuristic, Todo: "Calibrate 3/4/5"},
+			MomentumWeakThreshold: ParameterMetadata[float64]{Value: -0.1, Rationale: "Momentum weak threshold — scores below trigger penalty (-4 to -6)", Source: SourceHeuristic, Todo: "Calibrate -0.15/-0.10/-0.05"},
+			MomentumWeakDelta:     ParameterMetadata[int]{Value: -4, Rationale: "Conviction penalty when momentum < weak threshold", Source: SourceHeuristic, Todo: "Calibrate -5/-4/-3"},
+			// --- Value factor ---
+			ValueHighThreshold: ParameterMetadata[float64]{Value: 0.3, Rationale: "Value high threshold used by ValueYield (+8)", Source: SourceHeuristic, Todo: "Calibrate 0.25/0.30/0.40"},
+			ValueHighDelta:     ParameterMetadata[int]{Value: 8, Rationale: "Conviction delta when value > high threshold", Source: SourceHeuristic, Todo: "Calibrate 6/8/10"},
+			ValueModThreshold:  ParameterMetadata[float64]{Value: 0.1, Rationale: "Value moderate threshold used by Financials (+3), ValueYield (+4)", Source: SourceHeuristic, Todo: "Calibrate 0.05/0.10/0.15"},
+			ValueModDelta:      ParameterMetadata[int]{Value: 4, Rationale: "Conviction delta when value > moderate threshold", Source: SourceHeuristic, Todo: "Calibrate 3/4/5"},
+			ValueWeakThreshold: ParameterMetadata[float64]{Value: -0.2, Rationale: "Value weak threshold — scores below trigger penalty (-5)", Source: SourceHeuristic, Todo: "Calibrate -0.25/-0.20/-0.15"},
+			ValueWeakDelta:     ParameterMetadata[int]{Value: -5, Rationale: "Conviction penalty when value < weak threshold", Source: SourceHeuristic, Todo: "Calibrate -6/-5/-4"},
+			// --- Quality factor ---
+			QualityThreshold: ParameterMetadata[float64]{Value: 0.2, Rationale: "Quality threshold used by ValueYield (+4), EarningsQuality (+5), Financials (+4)", Source: SourceHeuristic, Todo: "Calibrate 0.15/0.20/0.30"},
+			QualityDelta:     ParameterMetadata[int]{Value: 4, Rationale: "Conviction delta when quality > threshold", Source: SourceHeuristic, Todo: "Calibrate 3/4/5"},
+			// --- Liquidity factor ---
+			LiquidityHighThreshold: ParameterMetadata[float64]{Value: 0.5, Rationale: "Liquidity high threshold used by TechnicalBreakout (+5)", Source: SourceHeuristic, Todo: "Calibrate 0.4/0.5/0.6"},
+			LiquidityHighDelta:     ParameterMetadata[int]{Value: 5, Rationale: "Conviction delta when liquidity > high threshold", Source: SourceHeuristic, Todo: "Calibrate 4/5/6"},
+			LiquidityGoodThreshold: ParameterMetadata[float64]{Value: 0.2, Rationale: "Liquidity good threshold used by TechnicalBreakout (+3), ETFRotation (+3)", Source: SourceHeuristic, Todo: "Calibrate 0.15/0.20/0.30"},
+			LiquidityGoodDelta:     ParameterMetadata[int]{Value: 3, Rationale: "Conviction delta when liquidity > good threshold", Source: SourceHeuristic, Todo: "Calibrate 2/3/4"},
+			LiquidityLowThreshold:  ParameterMetadata[float64]{Value: -0.3, Rationale: "Liquidity low threshold — scores below trigger penalty (-5)", Source: SourceHeuristic, Todo: "Calibrate -0.35/-0.30/-0.20"},
+			LiquidityLowDelta:      ParameterMetadata[int]{Value: -5, Rationale: "Conviction penalty when liquidity < low threshold", Source: SourceHeuristic, Todo: "Calibrate -6/-5/-4"},
+		},
 	}
 }
 
