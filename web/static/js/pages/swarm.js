@@ -31,6 +31,7 @@ function renderStatus(status) {
   const anomalyColor = anomalyCount === 0 ? 'var(--color-success)' : anomalyCount <= 3 ? 'var(--color-warning)' : 'var(--color-danger)';
   const lastRun = status.recorded_at ? new Date(status.recorded_at).toLocaleString() : '—';
   const generations = status.generations_evolved != null ? status.generations_evolved : '—';
+  const trainingCount = status.training_scenarios != null ? status.training_scenarios : '—';
 
   el.innerHTML = `
     <div class="kpi-card"><div class="kpi-label">魚群數量</div><div class="kpi-value">${totalFish}</div></div>
@@ -39,6 +40,7 @@ function renderStatus(status) {
     <div class="kpi-card" style="border-left:3px solid ${anomalyColor}"><div class="kpi-label">異常偵測</div><div class="kpi-value" style="color:${anomalyColor}">${anomalyCount}</div></div>
     <div class="kpi-card"><div class="kpi-label">最近執行</div><div class="kpi-value" style="font-size:14px">${escapeHtml(lastRun)}</div></div>
     <div class="kpi-card"><div class="kpi-label">演化世代</div><div class="kpi-value">${generations}</div></div>
+    <div class="kpi-card"><div class="kpi-label">訓練資料筆數</div><div class="kpi-value">${trainingCount}</div></div>
   `;
 }
 
