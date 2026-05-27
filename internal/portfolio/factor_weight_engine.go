@@ -340,7 +340,12 @@ func (e *FactorWeightEngine) applyEventAdjustment(event *narrative.NarrativeEven
 		}
 	case "spring_festival_season":
 		e.eventWeights[event.ID] = map[FactorType]float64{
-			FactorLiquidity: delta * 0.5, FactorValue: delta * 0.3, FactorETF: delta * 0.3, FactorNarrative: delta * 0.3,
+			FactorLiquidity: delta * 0.5, FactorValue: delta * 0.3,
+			FactorETF: delta * 0.3, FactorNarrative: delta * 0.3,
+		}
+	case "USD_TWD_volatility":
+		e.eventWeights[event.ID] = map[FactorType]float64{
+			FactorMomentum: delta, FactorLiquidity: delta, FactorNarrative: delta,
 		}
 	default:
 		e.eventWeights[event.ID] = map[FactorType]float64{
