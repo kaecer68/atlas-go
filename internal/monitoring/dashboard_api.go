@@ -39,6 +39,7 @@ import (
 	apipipeline "github.com/kaecer68/atlas-go/internal/monitoring/api/pipeline"
 	apirisk "github.com/kaecer68/atlas-go/internal/monitoring/api/risk"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
+	apiswarm "github.com/kaecer68/atlas-go/internal/monitoring/api/swarm"
 	apisystem "github.com/kaecer68/atlas-go/internal/monitoring/api/system"
 	apitaskexec "github.com/kaecer68/atlas-go/internal/monitoring/api/taskexec"
 	apitax "github.com/kaecer68/atlas-go/internal/monitoring/api/tax"
@@ -584,6 +585,10 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	handlers.RegisterRoutes(mux)
 
 	mux.HandleFunc("/api/health/data-integrity", apisystem.HandleDataIntegrity(a.workDir, a.ledgerDir))
+
+	swarmSvc := service.NewSwarmService(filepath.Join(a.workDir, "data/state/swarm_latest.json"))
+	swarmHandlers := apiswarm.NewHandlers(swarmSvc)
+	swarmHandlers.RegisterRoutes(mux)
 
 	riskHandlers := apirisk.NewHandlers(a.ledgerDir)
 	riskHandlers.RegisterRoutes(mux)

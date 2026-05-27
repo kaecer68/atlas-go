@@ -42,6 +42,7 @@
     <a data-page="metrics" onclick="switchPage('metrics')" tabindex="0" title="指標監控">📉 指標監控</a>
     <a data-page="parameters" onclick="switchPage('parameters')" tabindex="0" title="參數管理">🎛️ 參數管理</a>
     <a data-page="eventlogic-rules" onclick="switchPage('eventlogic-rules')" tabindex="0" title="事件邏輯規則">🧠 事件邏輯</a>
+    <a data-page="swarm" onclick="switchPage('swarm')" tabindex="0" title="Swarm 模擬">🐟 Swarm 模擬</a>
   </nav>
   <div class="foot">
     <span class="text-muted">v8 · 統一介面</span>
@@ -585,6 +586,26 @@
         事件邏輯規則是系統自動發現或人工定義的「事件→價格」因果規則。系統會根據實際命中率自動升降級，你也可以手動新增、編輯或刪除規則。
       </details>
       <div id="eventlogicRulesContent" class="empty loading">載入中…</div>
+    </div>
+
+    <div class="page" id="page-swarm">
+      <div class="page-header">
+        <h1>🐟 Swarm 模擬</h1>
+        <p class="page-desc">MiroFish 平行市場模擬引擎 — 情境探索與共識分析</p>
+      </div>
+      <div class="kpi-grid" id="swarm-status"></div>
+      <div class="section" style="margin-top:16px">
+        <h3>📊 共識分析</h3>
+        <div class="panel" id="swarm-consensus"></div>
+      </div>
+      <div class="section" style="margin-top:16px">
+        <h3>⚠️ 異常偵測</h3>
+        <div class="panel" id="swarm-anomalies"></div>
+      </div>
+      <div class="section" style="margin-top:16px">
+        <h3>📈 情境參數</h3>
+        <div class="panel" id="swarm-scenarios"></div>
+      </div>
     </div>
   </div>
 </div>
