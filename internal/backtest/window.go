@@ -8,7 +8,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
-	"github.com/kaecer68/atlas-go/internal/evolution"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
@@ -104,7 +103,7 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 	if err != nil {
 		registry = orchestrator.SeedRegistry()
 	}
-	candidate := evolution.SelectWeakestAgent(registry, scorecards)
+	candidate := domain.SelectWeakestAgent(registry, scorecards)
 
 	summary := domain.BacktestWindowSummary{
 		WindowID:     "window-" + startDate.Format("20060102") + "-" + endDate.Format("20060102"),
@@ -129,7 +128,7 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 	if err := bt.RecordWindowSummary(summary); err != nil {
 		return domain.BacktestWindowSummary{}, err
 	}
-	if brief := evolution.BuildMutationBrief(summary.WindowID, candidate); brief != nil {
+	if brief := domain.BuildMutationBrief(summary.WindowID, candidate); brief != nil {
 		if err := bt.RecordMutationBrief(summary.WindowID, *brief); err != nil {
 			return domain.BacktestWindowSummary{}, err
 		}
