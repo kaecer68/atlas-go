@@ -6,7 +6,6 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
 type SemiconductorExecutor struct{}
@@ -15,10 +14,11 @@ func (SemiconductorExecutor) Supports(agent domain.AgentSpec) bool {
 	return agent.Skill == "semiconductor_desk"
 }
 
-func (SemiconductorExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, _ FactorQuery) (domain.Recommendation, bool) {
+func (SemiconductorExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
 	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), 60)
 
 	ctrl, ok := domain.ExtractPromptControl(prompt)
+	fc := loadFactorConfig()
 	if !ok {
 		if strings.Contains(prompt, "close strength confirms leadership") && quote.Last > quote.Open {
 			b.add("prompt_boost", 10, "close strength confirms leadership")
@@ -26,6 +26,8 @@ func (SemiconductorExecutor) Recommend(agent domain.AgentSpec, quote domain.Quot
 		if strings.Contains(prompt, "weak volume") {
 			b.add("prompt_penalty", -15, "weak volume")
 		}
+		addMomentumAdjustment(b, fq, quote.Symbol, fc)
+		addLiquidityAdjustment(b, fq, quote.Symbol, fc)
 		if !b.floorCheck() {
 			return domain.Recommendation{}, false
 		}
@@ -58,6 +60,8 @@ func (SemiconductorExecutor) Recommend(agent domain.AgentSpec, quote domain.Quot
 		b.floor = ctrl.ConvictionFloor
 		minConviction = ctrl.ConvictionFloor
 	}
+	addMomentumAdjustment(b, fq, quote.Symbol, fc)
+	addLiquidityAdjustment(b, fq, quote.Symbol, fc)
 	if b.final < minConviction {
 		b.add("floor", minConviction-b.final, fmt.Sprintf("below floor %d", minConviction))
 		b.final = minConviction
@@ -124,7 +128,7 @@ func (AISupplyChainExecutor) Supports(agent domain.AgentSpec) bool {
 	return agent.Skill == "ai_supply_chain_desk"
 }
 
-func (AISupplyChainExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, _ FactorQuery) (domain.Recommendation, bool) {
+func (AISupplyChainExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
 	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), 60)
 	if quote.Last < quote.Open {
 		b.add("price_penalty", -5, "last < open")
@@ -135,6 +139,7 @@ func (AISupplyChainExecutor) Recommend(agent domain.AgentSpec, quote domain.Quot
 	if strings.Contains(prompt, "downgrade") && quote.Last < quote.High*0.99 {
 		b.add("downgrade_penalty", -10, "downgrade keyword + last < high*0.99")
 	}
+	addMomentumAdjustment(b, fq, quote.Symbol, loadFactorConfig())
 	if !b.floorCheck() {
 		return domain.Recommendation{}, false
 	}
@@ -160,10 +165,8 @@ func (LEOSatelliteExecutor) Supports(agent domain.AgentSpec) bool {
 	return agent.Skill == "leo_satellite_desk"
 }
 
-func (LEOSatelliteExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, _ FactorQuery) (domain.Recommendation, bool) {
+func (LEOSatelliteExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
 	// Load tunable parameters from ParametersConfig with hardcoded fallback.
-	// This ensures the values are configurable via parameters.json while the
-	// hardcoded defaults remain as the safety net when no config is loaded.
 	leoParams := config.GetParametersConfig()
 	convBase := 60
 	pricePenalty := -5
@@ -198,6 +201,7 @@ func (LEOSatelliteExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote
 	if strings.Contains(prompt, "downgrade") && quote.Last < quote.High*0.99 {
 		b.add("downgrade_penalty", downgradePenalty, "downgrade keyword + last < high*0.99")
 	}
+	addMomentumAdjustment(b, fq, quote.Symbol, loadFactorConfig())
 	if !b.floorCheck() {
 		return domain.Recommendation{}, false
 	}
@@ -223,7 +227,7 @@ func (ETFRotationExecutor) Supports(agent domain.AgentSpec) bool {
 	return agent.Skill == "etf_rotation_desk"
 }
 
-func (ETFRotationExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, _ FactorQuery) (domain.Recommendation, bool) {
+func (ETFRotationExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
 	etfType := classifyETFType(quote.Symbol)
 
 	// Base conviction varies by macro regime and ETF type
@@ -301,6 +305,10 @@ func (ETFRotationExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote,
 			b.add("carry_risk", -4, "JPY carry unwind → penalize beta")
 		}
 	}
+
+	fc := loadFactorConfig()
+	addMomentumAdjustment(b, fq, quote.Symbol, fc)
+	addLiquidityAdjustment(b, fq, quote.Symbol, fc)
 
 	if !b.floorCheck() {
 		return domain.Recommendation{}, false
@@ -410,8 +418,8 @@ func (FinancialsExecutor) Supports(agent domain.AgentSpec) bool {
 	return agent.Skill == "financials_desk"
 }
 
-func (FinancialsExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, _ FactorQuery) (domain.Recommendation, bool) {
-	conviction, cb := finConviction(agent, prompt, quote)
+func (FinancialsExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
+	conviction, cb := finConviction(agent, prompt, quote, fq)
 	if conviction < 50 {
 		return domain.Recommendation{}, false
 	}
@@ -430,7 +438,7 @@ func (FinancialsExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, 
 	}, true
 }
 
-func finConviction(agent domain.AgentSpec, prompt string, quote domain.Quote) (int, *domain.ConvictionBreakdown) {
+func finConviction(agent domain.AgentSpec, prompt string, quote domain.Quote, fq FactorQuery) (int, *domain.ConvictionBreakdown) {
 	db, bp, cqb, cqp, ssb, ssp, cab := finDividendBoost, finBalanceSheetPenalty, finCreditQualityBoost, finCreditQualityPenalty, finSpreadSensitivityBoost, finSpreadSensitivityPenalty, finCapitalAdequacyBoost
 	pto, pth := finPriceToOpenThreshold, finPriceToHighThreshold
 	if cfg := config.GetParametersConfig(); cfg != nil {
@@ -463,6 +471,9 @@ func finConviction(agent domain.AgentSpec, prompt string, quote domain.Quote) (i
 	if strings.Contains(prompt, "capital adequacy premium") && quote.Last >= quote.Open && quote.Last >= quote.High*pth {
 		b.add("capital_adequacy_boost", cab, "capital adequacy premium + last >= open & high*threshold")
 	}
+	fc := loadFactorConfig()
+	addValueAdjustment(b, fq, quote.Symbol, fc)
+	addQualityAdjustment(b, fq, quote.Symbol, fc)
 	return b.build()
 }
 
@@ -486,20 +497,9 @@ func (ShippingExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, pr
 	if strings.Contains(prompt, "avoid weak closes") && quote.Last < quote.High*wct {
 		b.add("weak_close_penalty", -wcp, "avoid weak closes + last < high*threshold")
 	}
-	// Factor-driven adjustments (Wave 2): use factor scores as independent signals
-	if mom, ok := fq.GetScore(quote.Symbol, portfolio.FactorMomentum); ok {
-		switch {
-		case mom > 0.3:
-			b.add("factor_momentum_high", 6, "momentum > 0.3")
-		case mom > 0.1:
-			b.add("factor_momentum_moderate", 3, "momentum > 0.1")
-		case mom < -0.1:
-			b.add("factor_momentum_weak", -4, "momentum < -0.1")
-		}
-	}
-	if liq, ok := fq.GetScore(quote.Symbol, portfolio.FactorLiquidity); ok && liq < -0.2 {
-		b.add("factor_liquidity_penalty", -4, "liquidity < -0.2")
-	}
+	fc := loadFactorConfig()
+	addMomentumAdjustment(b, fq, quote.Symbol, fc)
+	addLiquidityAdjustment(b, fq, quote.Symbol, fc)
 	if !b.floorCheck() {
 		return domain.Recommendation{}, false
 	}

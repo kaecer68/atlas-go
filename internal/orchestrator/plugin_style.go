@@ -6,7 +6,6 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
 type GrowthMomentumExecutor struct{}
@@ -15,7 +14,7 @@ func (GrowthMomentumExecutor) Supports(agent domain.AgentSpec) bool {
 	return agent.Skill == "growth_momentum"
 }
 
-func (GrowthMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, _ FactorQuery) (domain.Recommendation, bool) {
+func (GrowthMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
 	cbVal, pp := 45, 8
 	if cfg := config.GetParametersConfig(); cfg != nil {
 		if gm := cfg.SectorExecutor.GrowthMomentum; gm.ConvictionBase.Value != 0 {
@@ -59,6 +58,7 @@ func (GrowthMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quo
 		if ctrl.ConvictionFloor > 0 {
 			b.floor = ctrl.ConvictionFloor
 		}
+		addMomentumAdjustment(b, fq, quote.Symbol, loadFactorConfig())
 		if !b.floorCheck() {
 			return domain.Recommendation{}, false
 		}
@@ -103,6 +103,7 @@ func (GrowthMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quo
 	if quote.Last < quote.Open {
 		b.add("downgrade_open_penalty", -op, "last < open")
 	}
+	addMomentumAdjustment(b, fq, quote.Symbol, loadFactorConfig())
 	if !b.floorCheck() {
 		return domain.Recommendation{}, false
 	}
@@ -142,20 +143,9 @@ func (ValueYieldExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, 
 	if strings.Contains(prompt, "yield trap") && quote.Last < quote.Open {
 		b.add("yield_trap_penalty", -ytp, "yield trap keyword + last < open")
 	}
-	// Factor-driven adjustments (Wave 2): use value/quality as independent signals
-	if val, ok := fq.GetScore(quote.Symbol, portfolio.FactorValue); ok {
-		switch {
-		case val > 0.3:
-			b.add("factor_value_boost", 8, "value > 0.3")
-		case val > 0.1:
-			b.add("factor_value_moderate", 4, "value > 0.1")
-		case val < -0.2:
-			b.add("factor_value_penalty", -5, "value < -0.2")
-		}
-	}
-	if qly, ok := fq.GetScore(quote.Symbol, portfolio.FactorQuality); ok && qly > 0.2 {
-		b.add("factor_quality_boost", 4, "quality > 0.2")
-	}
+	fc := loadFactorConfig()
+	addValueAdjustment(b, fq, quote.Symbol, fc)
+	addQualityAdjustment(b, fq, quote.Symbol, fc)
 	if !b.floorCheck() {
 		return domain.Recommendation{}, false
 	}
@@ -181,7 +171,7 @@ func (EarningsQualityExecutor) Supports(agent domain.AgentSpec) bool {
 	return agent.Skill == "earnings_quality"
 }
 
-func (EarningsQualityExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, _ FactorQuery) (domain.Recommendation, bool) {
+func (EarningsQualityExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
 	rb, gp, gt := eqRepeatableBoost, eqGuidancePenalty, eqGuidanceThreshold
 	if cfg := config.GetParametersConfig(); cfg != nil {
 		if ep := cfg.SectorExecutor.EarningsQuality; ep.RepeatableBoost.Value != 0 {
@@ -195,6 +185,7 @@ func (EarningsQualityExecutor) Recommend(agent domain.AgentSpec, quote domain.Qu
 	if strings.Contains(prompt, "guidance") && quote.Last < quote.High*gt {
 		b.add("guidance_penalty", -gp, "guidance keyword + last < high*threshold")
 	}
+	addQualityAdjustment(b, fq, quote.Symbol, loadFactorConfig())
 	if !b.floorCheck() {
 		return domain.Recommendation{}, false
 	}
@@ -288,27 +279,9 @@ func tbConviction(agent domain.AgentSpec, prompt string, quote domain.Quote, vol
 	if strings.Contains(prompt, "volume participation acceptance") && quote.Volume >= tbLowVolumeFloor && quote.Volume < tbDefaultVolumeFloor {
 		b.add("low_volume_boost", tbLowVolumeBoost, "3M <= vol < 5M")
 	}
-	// Factor-driven adjustments (Wave 2): use momentum + liquidity as independent signals
-	if mom, ok := fq.GetScore(quote.Symbol, portfolio.FactorMomentum); ok {
-		switch {
-		case mom > 0.4:
-			b.add("factor_momentum_strong", 8, "momentum > 0.4")
-		case mom > 0.15:
-			b.add("factor_momentum_positive", 4, "momentum > 0.15")
-		case mom < -0.1:
-			b.add("factor_momentum_negative", -6, "momentum < -0.1")
-		}
-	}
-	if liq, ok := fq.GetScore(quote.Symbol, portfolio.FactorLiquidity); ok {
-		switch {
-		case liq > 0.5:
-			b.add("factor_liquidity_high", 5, "liquidity > 0.5")
-		case liq > 0.2:
-			b.add("factor_liquidity_good", 3, "liquidity > 0.2")
-		case liq < -0.3:
-			b.add("factor_liquidity_low", -5, "liquidity < -0.3")
-		}
-	}
+	fc := loadFactorConfig()
+	addMomentumAdjustment(b, fq, quote.Symbol, fc)
+	addLiquidityAdjustment(b, fq, quote.Symbol, fc)
 	return b.build()
 }
 

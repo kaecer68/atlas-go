@@ -219,7 +219,7 @@ func (r *PluginRegistry) RegimeScore(agent domain.AgentSpec, quotes map[string]d
 }
 
 func (r *PluginRegistry) Recommendation(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq ...FactorQuery) (domain.Recommendation, bool) {
-	var resolved FactorQuery
+	var resolved FactorQuery = &FactorSnapshot{} // empty snapshot: all GetScore calls return (0, false)
 	if len(fq) > 0 && fq[0] != nil {
 		resolved = fq[0]
 	}

@@ -672,6 +672,45 @@ type SectorExecutorParameters struct {
 	EarningsQuality   EarningsQualityExecutorParameters   `json:"earnings_quality,omitempty"`
 	TechnicalBreakout TechnicalBreakoutExecutorParameters `json:"technical_breakout,omitempty"`
 	GrowthMomentum    GrowthMomentumExecutorParameters    `json:"growth_momentum,omitempty"`
+	FactorConviction  FactorConvictionParams              `json:"factor_conviction,omitempty"`
+}
+
+// FactorConvictionParams holds all factor-score thresholds and conviction deltas
+// used by layer-sector and layer-style executors for factor-driven conviction
+// adjustments (Waves 2-3 of the factor-driven conviction migration).
+// All executors share this single struct to avoid duplicating 15+ parameters
+// across each executor's parameter block.
+// Zero-default behavior: when no config file is loaded, the ParameterMetadata
+// zero-value (Value=0) causes executors to look up the globally defined
+// hard-coded constants instead (see internal/orchestrator/plugin_sector.go).
+type FactorConvictionParams struct {
+	// --- Momentum factor ---
+	MomentumHighThreshold  ParameterMetadata[float64] `json:"momentum_high_threshold"`
+	MomentumHighDelta      ParameterMetadata[int]     `json:"momentum_high_delta"`
+	MomentumModThreshold   ParameterMetadata[float64] `json:"momentum_mod_threshold"`
+	MomentumModDelta       ParameterMetadata[int]     `json:"momentum_mod_delta"`
+	MomentumWeakThreshold  ParameterMetadata[float64] `json:"momentum_weak_threshold"`
+	MomentumWeakDelta      ParameterMetadata[int]     `json:"momentum_weak_delta"`
+
+	// --- Value factor ---
+	ValueHighThreshold     ParameterMetadata[float64] `json:"value_high_threshold"`
+	ValueHighDelta         ParameterMetadata[int]     `json:"value_high_delta"`
+	ValueModThreshold      ParameterMetadata[float64] `json:"value_mod_threshold"`
+	ValueModDelta          ParameterMetadata[int]     `json:"value_mod_delta"`
+	ValueWeakThreshold     ParameterMetadata[float64] `json:"value_weak_threshold"`
+	ValueWeakDelta         ParameterMetadata[int]     `json:"value_weak_delta"`
+
+	// --- Quality factor ---
+	QualityThreshold       ParameterMetadata[float64] `json:"quality_threshold"`
+	QualityDelta           ParameterMetadata[int]     `json:"quality_delta"`
+
+	// --- Liquidity factor ---
+	LiquidityHighThreshold ParameterMetadata[float64] `json:"liquidity_high_threshold"`
+	LiquidityHighDelta     ParameterMetadata[int]     `json:"liquidity_high_delta"`
+	LiquidityGoodThreshold ParameterMetadata[float64] `json:"liquidity_good_threshold"`
+	LiquidityGoodDelta     ParameterMetadata[int]     `json:"liquidity_good_delta"`
+	LiquidityLowThreshold  ParameterMetadata[float64] `json:"liquidity_low_threshold"`
+	LiquidityLowDelta      ParameterMetadata[int]     `json:"liquidity_low_delta"`
 }
 
 // LEOSatelliteExecutorParameters holds all tunable values for the
