@@ -52,7 +52,8 @@ func (gp *gaussianProcess) fit(x [][]float64, y []float64) {
 	for i := 0; i < n; i++ {
 		k[i] = make([]float64, n)
 		for j := 0; j < n; j++ {
-			k[i][j] = gp.kernelMatrix(x[i], x[j])
+			// gosec G602: false positive — kernelMatrix iterates over len(x[i]) (feature dim), not n.
+			k[i][j] = gp.kernelMatrix(x[i], x[j]) //nolint:gosec
 			if i == j {
 				k[i][j] += gp.noise*gp.noise + gpJitter
 			}
@@ -221,7 +222,7 @@ func (opt *BayesianOptimizer) proposeNext() []float64 {
 			x[d] = opt.bounds[d][0] + opt.randFloat()*(opt.bounds[d][1]-opt.bounds[d][0])
 		}
 		mean, std := opt.gp.predict(x)
-		ei := expectedImprovement(mean, std, opt.bestY, eiMinExploit)
+		ei := expectedImprovement(mean, std, opt.bestY)
 		if ei > bestEI {
 			bestEI = ei
 			copy(bestX, x)
@@ -230,12 +231,12 @@ func (opt *BayesianOptimizer) proposeNext() []float64 {
 	return bestX
 }
 
-func expectedImprovement(mu, sigma, bestF, xi float64) float64 {
+func expectedImprovement(mu, sigma, bestF float64) float64 {
 	if sigma < gpJitter {
 		return 0
 	}
-	z := (mu - bestF - xi) / sigma
-	return (mu-bestF-xi)*normCDF(z) + sigma*normPDF(z)
+	z := (mu - bestF - eiMinExploit) / sigma
+	return (mu-bestF-eiMinExploit)*normCDF(z) + sigma*normPDF(z)
 }
 
 func normCDF(x float64) float64 {

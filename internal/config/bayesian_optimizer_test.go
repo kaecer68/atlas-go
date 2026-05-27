@@ -80,7 +80,7 @@ func TestNormPDF_Symmetric(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestExpectedImprovement_ZeroSigma(t *testing.T) {
-	ei := expectedImprovement(0.5, 0.0, 0.0, eiMinExploit)
+	ei := expectedImprovement(0.5, 0.0, 0.0)
 	if ei != 0 {
 		t.Errorf("expectedImprovement with zero sigma = %v; want 0", ei)
 	}
@@ -88,7 +88,7 @@ func TestExpectedImprovement_ZeroSigma(t *testing.T) {
 
 func TestExpectedImprovement_BelowBest(t *testing.T) {
 	// mu < bestF → z negative → small improvement
-	ei := expectedImprovement(0.3, 0.2, 0.5, eiMinExploit)
+	ei := expectedImprovement(0.3, 0.2, 0.5)
 	if ei <= 0 || ei > 1.0 {
 		// It can be slightly positive due to exploration term
 		// but should not be huge
@@ -101,7 +101,7 @@ func TestExpectedImprovement_BelowBest(t *testing.T) {
 
 func TestExpectedImprovement_AboveBest(t *testing.T) {
 	// mu > bestF → should return positive EI
-	ei := expectedImprovement(0.8, 0.2, 0.5, eiMinExploit)
+	ei := expectedImprovement(0.8, 0.2, 0.5)
 	if ei <= 0 {
 		t.Errorf("expectedImprovement above best = %v; want >0", ei)
 	}
@@ -112,7 +112,7 @@ func TestExpectedImprovement_AboveBest(t *testing.T) {
 
 func TestExpectedImprovement_Positive(t *testing.T) {
 	// Strong improvement case
-	ei := expectedImprovement(1.0, 0.5, 0.0, eiMinExploit)
+	ei := expectedImprovement(1.0, 0.5, 0.0)
 	if ei <= 0 {
 		t.Errorf("expectedImprovement with strong signal = %v; want >0", ei)
 	}
@@ -120,7 +120,7 @@ func TestExpectedImprovement_Positive(t *testing.T) {
 
 func TestExpectedImprovement_VerySmallSigma(t *testing.T) {
 	// sigma < gpJitter should return 0
-	ei := expectedImprovement(10.0, gpJitter*0.5, 0.0, eiMinExploit)
+	ei := expectedImprovement(10.0, gpJitter*0.5, 0.0)
 	if ei != 0 {
 		t.Errorf("expectedImprovement with sigma < gpJitter = %v; want 0", ei)
 	}
@@ -1025,7 +1025,7 @@ func TestBayesianOptimizer_RandFloat_NoOverflow(t *testing.T) {
 
 func TestExpectedImprovement_LargeSigma(t *testing.T) {
 	// Very large sigma with high mean → large EI
-	ei := expectedImprovement(100.0, 50.0, 0.0, eiMinExploit)
+	ei := expectedImprovement(100.0, 50.0, 0.0)
 	if ei <= 0 {
 		t.Errorf("expectedImprovement with large values should be positive, got %v", ei)
 	}
@@ -1036,7 +1036,7 @@ func TestExpectedImprovement_LargeSigma(t *testing.T) {
 
 func TestExpectedImprovement_MeanFarBelow(t *testing.T) {
 	// mu way below bestF → negligible but should not be NaN
-	ei := expectedImprovement(-10.0, 0.1, 5.0, eiMinExploit)
+	ei := expectedImprovement(-10.0, 0.1, 5.0)
 	if math.IsNaN(ei) || math.IsInf(ei, 0) {
 		t.Errorf("expectedImprovement returned non-finite: %v", ei)
 	}
