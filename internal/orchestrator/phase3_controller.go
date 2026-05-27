@@ -110,6 +110,9 @@ func (c *Phase3Controller) RunSwarmCycle(baseState swarm.MarketState) {
 	c.swarm.InitializeScenarios(baseState)
 	c.swarm.Start()
 
+	// Evolve fish strategies after each simulation cycle
+	c.swarm.EvolveGeneration()
+
 	// Export training data for downstream consumption
 	if c.trainingStore != nil {
 		trainingData := c.swarm.ExportTrainingData()

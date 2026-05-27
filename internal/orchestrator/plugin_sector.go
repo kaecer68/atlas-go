@@ -344,3 +344,124 @@ func classifyETFType(symbol string) string {
 		return "equity"
 	}
 }
+
+const defaultConvictionFloor = 50
+
+func priceTargets(quote domain.Quote, targetMult, stopLossMult float64) (float64, float64) {
+	return quote.Last * targetMult, quote.Last * stopLossMult
+}
+
+const (
+	finDividendBoost            = 8
+	finBalanceSheetPenalty      = 6
+	finCreditQualityBoost       = 2
+	finCreditQualityPenalty     = 6
+	finSpreadSensitivityBoost   = 2
+	finSpreadSensitivityPenalty = 4
+	finCapitalAdequacyBoost     = 3
+	finPriceToOpenThreshold     = 0.985
+	finPriceToHighThreshold     = 0.995
+)
+
+type FinancialsExecutor struct{}
+
+func (FinancialsExecutor) Supports(agent domain.AgentSpec) bool {
+	return agent.Skill == "financials_desk"
+}
+
+func (FinancialsExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
+	conviction, cb := finConviction(agent, prompt, quote)
+	if conviction < 50 {
+		return domain.Recommendation{}, false
+	}
+	tp, slp := priceTargets(quote, 1.05, 0.96)
+	return domain.Recommendation{Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: quote.Symbol, Side: domain.SideBuy, Conviction: conviction, Reason: "financial carry with resilient balance-sheet posture", TargetPrice: tp, StopLossPrice: slp, ConvictionBreakdown: cb}, true
+}
+
+func finConviction(agent domain.AgentSpec, prompt string, quote domain.Quote) (int, *domain.ConvictionBreakdown) {
+	dividendBoost := finDividendBoost
+	balanceSheetPenalty := finBalanceSheetPenalty
+	creditQualityBoost := finCreditQualityBoost
+	creditQualityPenalty := finCreditQualityPenalty
+	spreadSensitivityBoost := finSpreadSensitivityBoost
+	spreadSensitivityPenalty := finSpreadSensitivityPenalty
+	capitalAdequacyBoost := finCapitalAdequacyBoost
+	priceToOpenThreshold := finPriceToOpenThreshold
+	priceToHighThreshold := finPriceToHighThreshold
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		fp := cfg.SectorExecutor.Financials
+		if fp.DividendBoost.Value != 0 {
+			dividendBoost = fp.DividendBoost.Value
+			balanceSheetPenalty = fp.BalanceSheetPenalty.Value
+			creditQualityBoost = fp.CreditQualityBoost.Value
+			creditQualityPenalty = fp.CreditQualityPenalty.Value
+			spreadSensitivityBoost = fp.SpreadSensitivityBoost.Value
+			spreadSensitivityPenalty = fp.SpreadSensitivityPenalty.Value
+			capitalAdequacyBoost = fp.CapitalAdequacyBoost.Value
+			priceToOpenThreshold = fp.PriceToOpenThreshold.Value
+			priceToHighThreshold = fp.PriceToHighThreshold.Value
+		}
+	}
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), 50)
+	if strings.Contains(prompt, "dividend") && quote.Last >= quote.Open {
+		b.add("dividend_boost", dividendBoost, "dividend keyword + last >= open")
+	}
+	if strings.Contains(prompt, "balance-sheet") && quote.Low < quote.Open*priceToOpenThreshold {
+		b.add("balance_sheet_penalty", -balanceSheetPenalty, "balance-sheet keyword + low < open*threshold")
+	}
+	if strings.Contains(prompt, "credit quality gate") {
+		if quote.Last >= quote.Open {
+			b.add("credit_quality_boost", creditQualityBoost, "credit quality gate + last >= open")
+		} else {
+			b.add("credit_quality_penalty", -creditQualityPenalty, "credit quality gate + last < open")
+		}
+	}
+	if strings.Contains(prompt, "spread sensitivity downgrade") {
+		if quote.Last >= quote.High*priceToHighThreshold {
+			b.add("spread_sensitivity_boost", spreadSensitivityBoost, "last >= high*threshold")
+		} else {
+			b.add("spread_sensitivity_penalty", -spreadSensitivityPenalty, "last < high*threshold")
+		}
+	}
+	if strings.Contains(prompt, "capital adequacy premium") && quote.Last >= quote.Open && quote.Last >= quote.High*priceToHighThreshold {
+		b.add("capital_adequacy_boost", capitalAdequacyBoost, "capital adequacy premium + last >= open & high*threshold")
+	}
+	return b.build()
+}
+
+const (
+	shipTacticalBoost      = 10
+	shipWeakClosePenalty   = 12
+	shipWeakCloseThreshold = 0.992
+)
+
+type ShippingExecutor struct{}
+
+func (ShippingExecutor) Supports(agent domain.AgentSpec) bool { return agent.Skill == "shipping_desk" }
+
+func (ShippingExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
+	tacticalBoost := shipTacticalBoost
+	weakClosePenalty := shipWeakClosePenalty
+	weakCloseThreshold := shipWeakCloseThreshold
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		sp := cfg.SectorExecutor.Shipping
+		if sp.TacticalBoost.Value != 0 {
+			tacticalBoost = sp.TacticalBoost.Value
+			weakClosePenalty = sp.WeakClosePenalty.Value
+			weakCloseThreshold = sp.WeakCloseThreshold.Value
+		}
+	}
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), defaultConvictionFloor)
+	if strings.Contains(prompt, "tactical") && quote.Last > quote.Open {
+		b.add("tactical_boost", tacticalBoost, "tactical keyword + last > open")
+	}
+	if strings.Contains(prompt, "avoid weak closes") && quote.Last < quote.High*weakCloseThreshold {
+		b.add("weak_close_penalty", -weakClosePenalty, "avoid weak closes + last < high*threshold")
+	}
+	if !b.floorCheck() {
+		return domain.Recommendation{}, false
+	}
+	tp, slp := priceTargets(quote, 1.07, 0.94)
+	conv, cb := b.build()
+	return domain.Recommendation{Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: quote.Symbol, Side: domain.SideBuy, Conviction: conv, Reason: "shipping beta used as tactical cycle exposure", TargetPrice: tp, StopLossPrice: slp, ConvictionBreakdown: cb}, true
+}

@@ -189,6 +189,14 @@ export const FIELD = {
     intraday_peak: 'intraday_peak',
     day_start_value: 'day_start_value',
   },
+  ConsensusEntry: {
+    symbol: 'symbol',
+    bullish_count: 'bullish_count',
+    bearish_count: 'bearish_count',
+    neutral_count: 'neutral_count',
+    consensus_direction: 'consensus_direction',
+    average_confidence: 'average_confidence',
+  },
   ConvictionBreakdown: {
     base: 'base',
     floor: 'floor',
@@ -1184,6 +1192,16 @@ export const FIELD = {
     previous_values: 'previous_values',
     max_equity: 'max_equity',
     current_drawdown: 'current_drawdown',
+  },
+  SwarmStatusResponse: {
+    recorded_at: 'recorded_at',
+    total_fish: 'total_fish',
+    consensus_symbols: 'consensus_symbols',
+    consensus_confidence: 'consensus_confidence',
+    top_accuracy: 'top_accuracy',
+    anomaly_count: 'anomaly_count',
+    scenario_count: 'scenario_count',
+    generations_evolved: 'generations_evolved',
   },
   SymbolAttribution: {
     symbol: 'symbol',
