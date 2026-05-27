@@ -24,6 +24,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/swarm-consensus", shared.Get(h.HandleConsensus))
 	mux.Handle("GET /api/dashboard/swarm-anomalies", shared.Get(h.HandleAnomalies))
 	mux.Handle("GET /api/dashboard/swarm-scenarios", shared.Get(h.HandleScenarios))
+	mux.Handle("GET /api/dashboard/swarm-strategies", shared.Get(h.HandleStrategies))
 }
 
 // HandleStatus returns a summary of the latest swarm simulation.
