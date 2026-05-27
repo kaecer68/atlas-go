@@ -1,6 +1,7 @@
 package swarm
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -291,4 +292,121 @@ func TestAnomaly(t *testing.T) {
 			t.Errorf("Severity should be between 0 and 1, got %.2f", anomaly.Severity)
 		}
 	})
+}
+
+func TestPredictionRuleRandom(t *testing.T) {
+	rule := RandomPredictionRule()
+
+	if rule.LookbackWindow < 3 || rule.LookbackWindow > 20 {
+		t.Errorf("LookbackWindow out of range: %d", rule.LookbackWindow)
+	}
+	if rule.TrendUpThreshold < 1.005 || rule.TrendUpThreshold > 1.10 {
+		t.Errorf("TrendUpThreshold out of range: %.4f", rule.TrendUpThreshold)
+	}
+	if rule.TrendDownThreshold < 0.90 || rule.TrendDownThreshold > 0.995 {
+		t.Errorf("TrendDownThreshold out of range: %.4f", rule.TrendDownThreshold)
+	}
+	if rule.ContrarianBias < -1.0 || rule.ContrarianBias > 1.0 {
+		t.Errorf("ContrarianBias out of range: %.2f", rule.ContrarianBias)
+	}
+}
+
+func TestPredictionRuleDefault(t *testing.T) {
+	rule := DefaultPredictionRule()
+
+	if rule.LookbackWindow != 5 {
+		t.Errorf("expected LookbackWindow=5, got %d", rule.LookbackWindow)
+	}
+	if rule.TrendUpThreshold != 1.02 {
+		t.Errorf("expected TrendUpThreshold=1.02, got %.4f", rule.TrendUpThreshold)
+	}
+	if rule.TrendDownThreshold != 0.98 {
+		t.Errorf("expected TrendDownThreshold=0.98, got %.4f", rule.TrendDownThreshold)
+	}
+	if rule.UseSentiment {
+		t.Error("expected UseSentiment=false in default rule")
+	}
+	if rule.ContrarianBias != 0.0 {
+		t.Errorf("expected ContrarianBias=0, got %.2f", rule.ContrarianBias)
+	}
+}
+
+func TestMutateRule(t *testing.T) {
+	parent := DefaultPredictionRule()
+	for i := range 100 {
+		child := MutateRule(parent, 0.3)
+		if i == 0 {
+			continue
+		}
+		if child.LookbackWindow < 3 || child.LookbackWindow > 20 {
+			t.Errorf("iteration %d: LookbackWindow out of range: %d", i, child.LookbackWindow)
+		}
+		if child.TrendUpThreshold < 1.005 || child.TrendUpThreshold > 1.10 {
+			t.Errorf("iteration %d: TrendUpThreshold out of range: %.4f", i, child.TrendUpThreshold)
+		}
+		if child.TrendDownThreshold < 0.90 || child.TrendDownThreshold > 0.995 {
+			t.Errorf("iteration %d: TrendDownThreshold out of range: %.4f", i, child.TrendDownThreshold)
+		}
+		if child.ContrarianBias < -1.0 || child.ContrarianBias > 1.0 {
+			t.Errorf("iteration %d: ContrarianBias out of range: %.2f", i, child.ContrarianBias)
+		}
+	}
+}
+
+func TestCrossoverRules(t *testing.T) {
+	p1 := PredictionRule{LookbackWindow: 5, TrendUpThreshold: 1.02, TrendDownThreshold: 0.98, UseSentiment: true, ContrarianBias: 0.5}
+	p2 := PredictionRule{LookbackWindow: 15, TrendUpThreshold: 1.08, TrendDownThreshold: 0.92, UseSentiment: false, ContrarianBias: -0.5}
+
+	child := CrossoverRules(p1, p2)
+
+	if child.LookbackWindow != 5 && child.LookbackWindow != 15 {
+		t.Errorf("Crossover LookbackWindow should be from parent: got %d", child.LookbackWindow)
+	}
+	if child.ContrarianBias <= -1.0 || child.ContrarianBias >= 1.0 {
+		t.Errorf("ContrarianBias blend out of range: %.2f", child.ContrarianBias)
+	}
+}
+
+func TestGARCHProcess(t *testing.T) {
+	omega, alpha, beta := GARCHParamsForRegime("risk_on")
+	g := NewGARCHProcess(omega, alpha, beta, 0.15)
+
+	initialSigma := g.CurrentSigma()
+	if initialSigma <= 0 {
+		t.Error("expected positive initial sigma")
+	}
+
+	// Advance with many zero shocks — variance should converge toward unconditional mean
+	for range 200 {
+		g.Advance(0)
+	}
+	convergedSigma := g.CurrentSigma()
+	uncondMean := g.Omega / (1 - g.Beta) // unconditional variance from GARCH(1,1)
+	expectedSigma := math.Sqrt(uncondMean)
+	// sigma should be within ~10% of the unconditional mean after 200 periods
+	ratio := convergedSigma / expectedSigma
+	if ratio < 0.9 || ratio > 1.1 {
+		t.Errorf("sigma=%.6f not converged to unconditional mean %.6f (ratio=%.2f)", convergedSigma, expectedSigma, ratio)
+	}
+
+	// Advance with large shock — variance should spike
+	g2 := NewGARCHProcess(omega, alpha, beta, 0.15)
+	g2.Advance(0.05)
+	spikedSigma := g2.CurrentSigma()
+	if spikedSigma <= initialSigma {
+		t.Errorf("expected sigma spike after large shock: %.6f <= %.6f", spikedSigma, initialSigma)
+	}
+}
+
+func TestGARCHParamsPerRegime(t *testing.T) {
+	regimes := []string{"risk_on", "risk_off", "crisis", "complacent", "transition"}
+	for _, r := range regimes {
+		omega, alpha, beta := GARCHParamsForRegime(r)
+		if omega <= 0 || alpha <= 0 || beta <= 0 {
+			t.Errorf("regime %s: got zero params omega=%.6f alpha=%.2f beta=%.2f", r, omega, alpha, beta)
+		}
+		if alpha+beta >= 1.0 {
+			t.Errorf("regime %s: alpha+beta=%.2f >= 1.0 (non-stationary)", r, alpha+beta)
+		}
+	}
 }

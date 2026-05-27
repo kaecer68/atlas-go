@@ -31,6 +31,8 @@ type MiroFish struct {
 	History      []MarketState
 	Predictions  []Prediction
 	Performance  FishPerformance
+	Rule         PredictionRule
+	GARCH        *GARCHProcess
 	isAlive      bool
 	spawnedAt    time.Time
 }
@@ -160,6 +162,8 @@ func (sw *MiroFishSwarm) InitializeScenarios(baseState MarketState) {
 	sw.mu.Lock()
 	defer sw.mu.Unlock()
 
+	baseTime := baseState.Timestamp
+
 	// Generate diverse scenarios
 	sw.scenarios = []MarketScenario{
 		{
@@ -167,18 +171,18 @@ func (sw *MiroFishSwarm) InitializeScenarios(baseState MarketState) {
 			Name:       "Bull Market Trend",
 			Regime:     "risk_on",
 			Volatility: 0.15,
-			Trend:      0.001, // Positive drift
+			Trend:      0.001,
 			Duration:   sw.config.SimulationHorizon,
-			Events:     sw.generateBullEvents(),
+			Events:     sw.generateBullEvents(baseTime),
 		},
 		{
 			ID:         "bear_trend",
 			Name:       "Bear Market Trend",
 			Regime:     "risk_off",
 			Volatility: 0.25,
-			Trend:      -0.002, // Negative drift
+			Trend:      -0.002,
 			Duration:   sw.config.SimulationHorizon,
-			Events:     sw.generateBearEvents(),
+			Events:     sw.generateBearEvents(baseTime),
 		},
 		{
 			ID:         "high_vol",
@@ -187,7 +191,7 @@ func (sw *MiroFishSwarm) InitializeScenarios(baseState MarketState) {
 			Volatility: 0.40,
 			Trend:      0.0,
 			Duration:   sw.config.SimulationHorizon,
-			Events:     sw.generateVolatilityEvents(),
+			Events:     sw.generateVolatilityEvents(baseTime),
 		},
 		{
 			ID:         "low_vol",
@@ -196,7 +200,7 @@ func (sw *MiroFishSwarm) InitializeScenarios(baseState MarketState) {
 			Volatility: 0.08,
 			Trend:      0.0001,
 			Duration:   sw.config.SimulationHorizon,
-			Events:     sw.generateQuietEvents(),
+			Events:     sw.generateQuietEvents(baseTime),
 		},
 		{
 			ID:         "transition",
@@ -205,13 +209,14 @@ func (sw *MiroFishSwarm) InitializeScenarios(baseState MarketState) {
 			Volatility: 0.20,
 			Trend:      0.0,
 			Duration:   sw.config.SimulationHorizon,
-			Events:     sw.generateTransitionEvents(),
+			Events:     sw.generateTransitionEvents(baseTime),
 		},
 	}
 
 	// Spawn fish for each scenario
 	fishPerScenario := sw.config.FishCount / len(sw.scenarios)
 	for _, scenario := range sw.scenarios {
+		omega, alpha, beta := GARCHParamsForRegime(scenario.Regime)
 		for i := range fishPerScenario {
 			fish := &MiroFish{
 				ID:           fmt.Sprintf("fish_%s_%d", scenario.ID, i),
@@ -219,6 +224,8 @@ func (sw *MiroFishSwarm) InitializeScenarios(baseState MarketState) {
 				CurrentState: baseState,
 				History:      make([]MarketState, 0),
 				Predictions:  make([]Prediction, 0),
+				Rule:         RandomPredictionRule(),
+				GARCH:        NewGARCHProcess(omega, alpha, beta, scenario.Volatility),
 				isAlive:      true,
 				spawnedAt:    time.Now(),
 			}
@@ -276,7 +283,7 @@ func (sw *MiroFishSwarm) simulateFish(fish *MiroFish) {
 	steps := int(fish.Scenario.Duration / sw.config.TimeStep)
 
 	for i := 0; i < steps && fish.isAlive; i++ {
-		newState := sw.evolveState(fish.CurrentState, fish.Scenario, i)
+		newState := sw.evolveState(fish, fish.CurrentState, fish.Scenario, i)
 		fish.History = append(fish.History, newState)
 		fish.CurrentState = newState
 
@@ -287,8 +294,8 @@ func (sw *MiroFishSwarm) simulateFish(fish *MiroFish) {
 	}
 }
 
-// evolveState advances market state according to scenario dynamics
-func (sw *MiroFishSwarm) evolveState(current MarketState, scenario MarketScenario, step int) MarketState {
+// evolveState advances market state according to scenario dynamics and fish's GARCH process.
+func (sw *MiroFishSwarm) evolveState(fish *MiroFish, current MarketState, scenario MarketScenario, step int) MarketState {
 	newState := MarketState{
 		Timestamp: current.Timestamp.Add(sw.config.TimeStep),
 		Prices:    make(map[string]float64),
@@ -297,10 +304,14 @@ func (sw *MiroFishSwarm) evolveState(current MarketState, scenario MarketScenari
 
 	for symbol, price := range current.Prices {
 		drift := scenario.Trend * float64(sw.config.TimeStep.Hours()) / 24.0
-		shock := rand.NormFloat64() * scenario.Volatility / math.Sqrt(252.0)
+		sigma := fish.GARCH.CurrentSigma()
+		shock := rand.NormFloat64() * sigma
 		newPrice := price * (1 + drift + shock)
 		newState.Prices[symbol] = newPrice
 		newState.Volumes[symbol] = current.Volumes[symbol] * (1 + rand.Float64()*0.2)
+
+		// Advance GARCH process with realized shock
+		fish.GARCH.Advance(shock)
 	}
 
 	for _, event := range scenario.Events {
@@ -317,7 +328,8 @@ func (sw *MiroFishSwarm) evolveState(current MarketState, scenario MarketScenari
 	return newState
 }
 
-// generatePrediction creates prediction based on fish's view of market
+// generatePrediction creates prediction based on fish's view of market.
+// Uses the fish's PredictionRule for strategy parameters.
 func (sw *MiroFishSwarm) generatePrediction(fish *MiroFish, state MarketState) Prediction {
 	var targetSymbol string
 	var targetPrice float64
@@ -328,14 +340,34 @@ func (sw *MiroFishSwarm) generatePrediction(fish *MiroFish, state MarketState) P
 		break
 	}
 
+	rule := fish.Rule
 	direction := "neutral"
-	if len(fish.History) > 5 {
-		oldPrice := fish.History[len(fish.History)-5].Prices[targetSymbol]
-		if targetPrice > oldPrice*1.02 {
+	if len(fish.History) > rule.LookbackWindow {
+		oldPrice := fish.History[len(fish.History)-rule.LookbackWindow].Prices[targetSymbol]
+		ratio := targetPrice / oldPrice
+		if ratio > rule.TrendUpThreshold {
 			direction = "up"
-		} else if targetPrice < oldPrice*0.98 {
+		} else if ratio < rule.TrendDownThreshold {
 			direction = "down"
 		}
+	}
+
+	// Apply contrarian bias
+	if rule.ContrarianBias < 0 && direction == "up" {
+		if rand.Float64() < -rule.ContrarianBias {
+			direction = "down"
+		}
+	} else if rule.ContrarianBias < 0 && direction == "down" {
+		if rand.Float64() < -rule.ContrarianBias {
+			direction = "up"
+		}
+	}
+
+	// Apply sentiment if enabled
+	if rule.UseSentiment && state.Sentiment > 0.3 && direction != "up" {
+		direction = "up"
+	} else if rule.UseSentiment && state.Sentiment < -0.3 && direction != "down" {
+		direction = "down"
 	}
 
 	confidence := 1.0 - state.Volatility
@@ -349,7 +381,7 @@ func (sw *MiroFishSwarm) generatePrediction(fish *MiroFish, state MarketState) P
 		Direction:  direction,
 		Confidence: confidence,
 		Conviction: int(confidence * 100),
-		Rationale:  fmt.Sprintf("Based on %s regime with %.1f%% vol", fish.Scenario.Regime, state.Volatility*100),
+		Rationale:  fmt.Sprintf("Rule:%s regime=%s vol=%.1f%%", rule.RuleSummary(), fish.Scenario.Regime, state.Volatility*100),
 	}
 }
 
@@ -502,7 +534,11 @@ func (sw *MiroFishSwarm) GetAllResults() []SimulationResult {
 func (sw *MiroFishSwarm) GetTopFish(n int) []*MiroFish {
 	sw.mu.RLock()
 	defer sw.mu.RUnlock()
+	return sw.getTopFishUnsafe(n)
+}
 
+// getTopFishUnsafe is like GetTopFish but without locking (caller must hold lock).
+func (sw *MiroFishSwarm) getTopFishUnsafe(n int) []*MiroFish {
 	sorted := make([]*MiroFish, len(sw.fish))
 	copy(sorted, sw.fish)
 
@@ -518,6 +554,51 @@ func (sw *MiroFishSwarm) GetTopFish(n int) []*MiroFish {
 		n = len(sorted)
 	}
 	return sorted[:n]
+}
+
+// EvolveGeneration selects top-performing fish and uses their rules to
+// create replacement fish via crossover and mutation. Bottom 40% of fish
+// are replaced. This implements the selection mechanism for strategy diversity.
+// Call after Start() completes for meaningful accuracy-based selection.
+func (sw *MiroFishSwarm) EvolveGeneration() {
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
+
+	totalFish := len(sw.fish)
+	if totalFish == 0 {
+		return
+	}
+
+	eliteCount := max(1, totalFish*3/10)
+	elite := sw.getTopFishUnsafe(eliteCount)
+	if len(elite) < 2 {
+		return
+	}
+
+	replaceCount := totalFish * 4 / 10
+	for i := 0; i < replaceCount; i++ {
+		bottomIdx := totalFish - 1 - i
+		if bottomIdx < eliteCount {
+			break
+		}
+
+		p1 := elite[rand.Intn(len(elite))]
+		p2 := elite[rand.Intn(len(elite))]
+
+		childRule := CrossoverRules(p1.Rule, p2.Rule)
+		childRule = MutateRule(childRule, 0.15)
+
+		oldFish := sw.fish[bottomIdx]
+		oldFish.Rule = childRule
+		omega, alpha, beta := GARCHParamsForRegime(oldFish.Scenario.Regime)
+		oldFish.GARCH = NewGARCHProcess(omega, alpha, beta, oldFish.Scenario.Volatility)
+		oldFish.Performance = FishPerformance{}
+		oldFish.Predictions = oldFish.Predictions[:0]
+		oldFish.History = oldFish.History[:0]
+	}
+
+	logging.Info("mirofish_swarm", "generation_evolved",
+		"elite", eliteCount, "replaced", replaceCount, "total", totalFish)
 }
 
 // ExportTrainingData exports simulation results for agent training
@@ -538,6 +619,7 @@ func (sw *MiroFishSwarm) ExportTrainingData() []TrainingScenario {
 			States:      fish.History,
 			Predictions: fish.Predictions,
 			Performance: fish.Performance,
+			Rule:        fish.Rule,
 		}
 		scenarios = append(scenarios, scenario)
 	}
@@ -552,45 +634,46 @@ type TrainingScenario struct {
 	States      []MarketState
 	Predictions []Prediction
 	Performance FishPerformance
+	Rule        PredictionRule
 }
 
 // Scenario generators
 
-func (sw *MiroFishSwarm) generateBullEvents() []MarketEvent {
+func (sw *MiroFishSwarm) generateBullEvents(baseTime time.Time) []MarketEvent {
 	return []MarketEvent{
-		{Time: time.Now().Add(24 * time.Hour), Type: "rally", Magnitude: 0.03, Description: "Earnings beat"},
-		{Time: time.Now().Add(72 * time.Hour), Type: "rally", Magnitude: 0.02, Description: "Fed dovish"},
+		{Time: baseTime.Add(24 * time.Hour), Type: "rally", Magnitude: 0.03, Description: "Earnings beat"},
+		{Time: baseTime.Add(72 * time.Hour), Type: "rally", Magnitude: 0.02, Description: "Fed dovish"},
 	}
 }
 
-func (sw *MiroFishSwarm) generateBearEvents() []MarketEvent {
+func (sw *MiroFishSwarm) generateBearEvents(baseTime time.Time) []MarketEvent {
 	return []MarketEvent{
-		{Time: time.Now().Add(48 * time.Hour), Type: "flash_crash", Magnitude: 0.05, Description: "Margin call cascade"},
-		{Time: time.Now().Add(120 * time.Hour), Type: "flash_crash", Magnitude: 0.03, Description: "Recession fears"},
+		{Time: baseTime.Add(48 * time.Hour), Type: "flash_crash", Magnitude: 0.05, Description: "Margin call cascade"},
+		{Time: baseTime.Add(120 * time.Hour), Type: "flash_crash", Magnitude: 0.03, Description: "Recession fears"},
 	}
 }
 
-func (sw *MiroFishSwarm) generateVolatilityEvents() []MarketEvent {
+func (sw *MiroFishSwarm) generateVolatilityEvents(baseTime time.Time) []MarketEvent {
 	return []MarketEvent{
-		{Time: time.Now().Add(12 * time.Hour), Type: "flash_crash", Magnitude: 0.04, Description: "VIX spike"},
-		{Time: time.Now().Add(36 * time.Hour), Type: "rally", Magnitude: 0.04, Description: "Short squeeze"},
-		{Time: time.Now().Add(60 * time.Hour), Type: "flash_crash", Magnitude: 0.03, Description: "Profit taking"},
+		{Time: baseTime.Add(12 * time.Hour), Type: "flash_crash", Magnitude: 0.04, Description: "VIX spike"},
+		{Time: baseTime.Add(36 * time.Hour), Type: "rally", Magnitude: 0.04, Description: "Short squeeze"},
+		{Time: baseTime.Add(60 * time.Hour), Type: "flash_crash", Magnitude: 0.03, Description: "Profit taking"},
 	}
 }
 
-func (sw *MiroFishSwarm) generateQuietEvents() []MarketEvent {
+func (sw *MiroFishSwarm) generateQuietEvents(baseTime time.Time) []MarketEvent {
 	if rand.Float64() < 0.3 {
 		return []MarketEvent{
-			{Time: time.Now().Add(168 * time.Hour), Type: "earnings_surprise", Magnitude: 0.02, Description: "Unexpected earnings"},
+			{Time: baseTime.Add(168 * time.Hour), Type: "earnings_surprise", Magnitude: 0.02, Description: "Unexpected earnings"},
 		}
 	}
 	return []MarketEvent{}
 }
 
-func (sw *MiroFishSwarm) generateTransitionEvents() []MarketEvent {
+func (sw *MiroFishSwarm) generateTransitionEvents(baseTime time.Time) []MarketEvent {
 	return []MarketEvent{
-		{Time: time.Now().Add(24 * time.Hour), Type: "flash_crash", Magnitude: 0.02, Description: "Regime shift start"},
-		{Time: time.Now().Add(96 * time.Hour), Type: "rally", Magnitude: 0.03, Description: "New trend emerges"},
+		{Time: baseTime.Add(24 * time.Hour), Type: "flash_crash", Magnitude: 0.02, Description: "Regime shift start"},
+		{Time: baseTime.Add(96 * time.Hour), Type: "rally", Magnitude: 0.03, Description: "New trend emerges"},
 	}
 }
 
