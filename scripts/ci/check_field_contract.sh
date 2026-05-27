@@ -61,7 +61,9 @@ while IFS= read -r file; do
       sharpe_like|shock_propagation_speed|signal_count|\
       source_references|swarm_running|template_id|time_window|\
       top_agents|total_assets|total_deleted|total_kept|\
-      trigger_theme|usd_twd) continue ;;
+      trigger_theme|usd_twd|\
+      sox_pct|net_buy_twd|deviation_pct|change_pct|\
+      exit_alerts|logic_rules|sector_heatmap) continue ;;
     esac
 
     echo "$field" >> "$FOUND_FIELDS"

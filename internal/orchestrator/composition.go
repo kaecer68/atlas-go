@@ -267,14 +267,14 @@ func loadRuntimeParamsOrDefault(parametersConfigPath string) *portfolio.RuntimeP
 
 // symbolToIndustryID maps a stock symbol to an industry ID using Taiwan market conventions.
 func symbolToIndustryID(symbol string) string {
-	switch {
-	case symbol == "2330.TW" || symbol == "2454.TW" || symbol == "2303.TW":
+	switch symbol {
+	case "2330.TW", "2454.TW", "2303.TW":
 		return "semiconductor"
-	case symbol == "2317.TW" || symbol == "2382.TW":
+	case "2317.TW", "2382.TW":
 		return "electronics"
-	case symbol == "2881.TW" || symbol == "2882.TW" || symbol == "2891.TW":
+	case "2881.TW", "2882.TW", "2891.TW":
 		return "financials"
-	case symbol == "2603.TW" || symbol == "2609.TW" || symbol == "2615.TW":
+	case "2603.TW", "2609.TW", "2615.TW":
 		return "shipping"
 	default:
 		return ""

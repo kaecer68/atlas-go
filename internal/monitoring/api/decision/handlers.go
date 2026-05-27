@@ -8,12 +8,13 @@ import (
 	"net/http"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/kaecer68/atlas-go/internal/eventlogic"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
-	"golang.org/x/sync/errgroup"
 )
 
 // Handlers provides HTTP handlers for the decision-chain aggregation API.
@@ -88,7 +89,6 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 // HandleDecisionChain aggregates narrative events, event logic rules, sector
 // heatmap, pipeline recommendations, and exit alerts into a single response.
 func (h *Handlers) HandleDecisionChain(r *http.Request) (int, any) {
-
 	var (
 		events       []narrative.NarrativeEvent
 		rules        []*eventlogic.EventRule
