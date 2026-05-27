@@ -2,12 +2,14 @@ package orchestrator
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
+	"github.com/kaecer68/atlas-go/internal/importer"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -62,9 +64,24 @@ func buildSimEngine(policy baseline.Policy, optimizer *portfolio.Optimizer) *sim
 // buildFactorEngine constructs the factor computation pipeline.
 // macroSnap is a pointer to a MacroDataSnapshot that gets updated before each simulation
 // run; the PM provider closure reads from it at scoring time. nil is safe (PM scores = 0).
-func buildFactorEngine(runtimeParams *portfolio.RuntimeParameters, macroSnap *marketdata.MacroDataSnapshot) (*portfolio.FactorEngine, *portfolio.HistoricalPrices, *portfolio.FundamentalProvider) {
+func buildFactorEngine(runtimeParams *portfolio.RuntimeParameters, macroSnap *marketdata.MacroDataSnapshot, replayCSVPath string) (*portfolio.FactorEngine, *portfolio.HistoricalPrices, *portfolio.FundamentalProvider) {
+	// Derive JSONL path from CSV path to match conversion target (P2).
+	ext := filepath.Ext(replayCSVPath)
+	jsonlPath := replayCSVPath[:len(replayCSVPath)-len(ext)] + ".jsonl"
+
 	hp := portfolio.NewHistoricalPrices()
-	if err := hp.LoadFromExtendedJSONL("data/replay/tw_extended_90days.jsonl"); err != nil {
+
+	// Auto-convert CSV→JSONL if JSONL is missing but CSV exists (P1).
+	if _, err := os.Stat(jsonlPath); os.IsNotExist(err) {
+		if _, csvErr := os.Stat(replayCSVPath); csvErr == nil {
+			logging.Info("composition", "replay JSONL missing, converting from CSV", "csv", replayCSVPath, "jsonl", jsonlPath)
+			if convertErr := importer.ImportTWOpenDataCSVToJSONL(replayCSVPath, jsonlPath); convertErr != nil {
+				logging.Warn("composition", "auto-convert CSV→JSONL failed", "err", convertErr)
+			}
+		}
+	}
+
+	if err := hp.LoadFromExtendedJSONL(jsonlPath); err != nil {
 		logging.Warn("composition", "failed to load historical prices", "err", err)
 	}
 	fp := portfolio.NewFundamentalProvider()
