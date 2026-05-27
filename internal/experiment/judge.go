@@ -133,6 +133,15 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 		result.JudgeChecks = checks
 	}
 
+	// Compute factor weight deviation between experiment snapshot and current config.
+	weightDrift := computeWeightDrift(result)
+	if weightDrift > 0.05 {
+		checks = append(checks, fmt.Sprintf("WARNING: factor weight drift %.1f%% (results may be regime-confounded)", weightDrift*100))
+	} else if weightDrift > 0 {
+		checks = append(checks, fmt.Sprintf("factor weight drift %.1f%% (acceptable)", weightDrift*100))
+	}
+	result.JudgeChecks = checks
+
 	accepted, acceptanceNote := j.passesAcceptance(result)
 	result.JudgeChecks = append(result.JudgeChecks, acceptanceNote)
 	if result.Experiment.ApprovalID == "" {
@@ -405,6 +414,12 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, st
 					return false, fmt.Sprintf("rejected: candidate fallback ratio %.1f%% exceeds threshold %.1f%%", candidateRatio*100, maxRatio*100)
 				}
 			}
+		case "factor_weight_stability":
+			drift := computeWeightDrift(result)
+			maxDrift := j.params.Experiment.FactorWeightDriftThreshold.Value
+			if drift > maxDrift {
+				return false, fmt.Sprintf("rejected: factor weight drift %.1f%% exceeds threshold %.1f%% (regime-confounded)", drift*100, maxDrift*100)
+			}
 		case "reduce_false_positive_rate", "maintain_cro_authority", "reduce_sector_blindspots", "maintain_industry_coverage", "reduce_style_drift", "maintain_momentum_catch":
 			return false, fmt.Sprintf("rejected: gate %q requires outcome data not yet collected", gate)
 		default:
@@ -587,4 +602,38 @@ func testJudge() *Judge {
 	return &Judge{
 		params: config.DefaultParametersConfig(),
 	}
+}
+
+// computeWeightDrift calculates the average absolute deviation of factor weights
+// between experiment snapshot and current config. Returns 0 if no drift detected.
+func computeWeightDrift(result domain.PromptExperimentResult) float64 {
+	if result.ParameterSnapshotID == "" {
+		return 0
+	}
+	snapStore := config.NewSnapshotStore("data/state/parameter-snapshots")
+	snap, err := snapStore.LoadSnapshot(result.ParameterSnapshotID)
+	if err != nil || snap.Params == nil {
+		return 0
+	}
+	expWeights := snap.Params.FactorWeight.BaseWeights.Value
+	curParams := config.GetParametersConfig()
+	if curParams == nil || curParams.FactorWeight.BaseWeights.Value == nil {
+		return 0
+	}
+	curWeights := curParams.FactorWeight.BaseWeights.Value
+	if len(expWeights) == 0 || len(curWeights) == 0 {
+		return 0
+	}
+	var totalDrift float64
+	var count int
+	for k, v := range curWeights {
+		if old, ok := expWeights[k]; ok && old > 0 {
+			totalDrift += math.Abs(v-old) / old
+			count++
+		}
+	}
+	if count == 0 {
+		return 0
+	}
+	return totalDrift / float64(count)
 }
