@@ -15,8 +15,7 @@
 | `staging-drill` | 12 秒 live trading 煙霧測試（dry-run） | 部署前驗證 live 管線 |
 | `test-hybrid` | HybridProvider 資料回退邏輯驗證 | 修改 provider 後 |
 | `validate-broker` | Broker adapter HMAC-SHA256 簽名格式驗證 | 整合新券商 API 前 |
-| `validate-narrative-shock` | 敘事事件衝擊場景驗證 | 新增 narrative detector 後 |
-| `validate-phase3-integration` | Phase 3 整合測試 | 大版本發布前 |
+| `validate-narrative-shock` | **(DEPRECATED)** 敘事事件衝擊場景驗證 — 改用 `go test -tags=integration -run TestNarrativeShockIntegration ./internal/orchestrator/` | 已棄用，由整合測試取代 |
 | `validate-stress-index` | 台灣壓力指數計算驗證 | 修改 stress 邏輯後 |
 | `validate-twse-capital-flow` | TWSE 法人買賣超資料解析驗證 | 修改 importer 後 |
 
