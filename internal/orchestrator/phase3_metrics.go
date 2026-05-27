@@ -34,11 +34,9 @@ func (c *Phase3Controller) CollectMetrics() Phase3Metrics {
 	m := Phase3Metrics{RecordedAt: time.Now()}
 
 	// Track A: Swarm
-	c.mu.RLock()
-	m.SwarmRunning = c.swarmRunning
-	c.mu.RUnlock()
 	if c.swarm != nil {
 		if result, ok := c.swarm.GetLatestResult(); ok {
+			m.SwarmRunning = true
 			m.SwarmConsensusSymbols = len(result.Consensus)
 		}
 	}

@@ -72,6 +72,7 @@ func (s *System) WithPhase3Controller(ctrl *Phase3Controller) *System {
 		}
 	}
 	s.host.Register(&phase3Plugin{controller: ctrl}, s.SystemCore)
+	s.phase3Ctrl = ctrl
 	return s
 }
 

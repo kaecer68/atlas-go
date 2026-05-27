@@ -8,7 +8,8 @@ import (
 func TestMiroFishSwarmLifecycle(t *testing.T) {
 	config := DefaultSwarmConfig()
 	config.FishCount = 10
-	config.SimulationHorizon = 100 * time.Millisecond
+	config.SimulationHorizon = 2 * time.Hour // Enough for 2 steps at default hourly timestep
+	config.TimeStep = time.Hour
 	config.Parallelism = 2
 
 	swarm := NewMiroFishSwarm(config)
@@ -19,20 +20,19 @@ func TestMiroFishSwarmLifecycle(t *testing.T) {
 	}
 	swarm.InitializeScenarios(baseState)
 
-	if swarm.IsRunning() {
-		t.Fatal("expected swarm not running before Start")
-	}
-
+	// Start() is now synchronous — it runs simulation and returns.
 	swarm.Start()
-	if !swarm.IsRunning() {
-		t.Fatal("expected swarm running after Start")
+
+	// After Start(), consensus result should be available.
+	result, ok := swarm.GetLatestResult()
+	if !ok {
+		t.Fatal("expected consensus result after Start")
 	}
-
-	time.Sleep(50 * time.Millisecond)
-
-	swarm.Stop()
-	if swarm.IsRunning() {
-		t.Fatal("expected swarm not running after Stop")
+	if len(result.Consensus) == 0 {
+		t.Fatal("expected non-empty consensus")
+	}
+	if result.Confidence <= 0 {
+		t.Fatal("expected positive confidence")
 	}
 }
 

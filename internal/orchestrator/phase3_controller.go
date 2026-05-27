@@ -5,7 +5,6 @@ import (
 	"maps"
 	"math"
 	"sync"
-	"time"
 
 	"github.com/kaecer68/atlas-go/internal/adversarial"
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -20,6 +19,8 @@ import (
 
 // Phase3Controller coordinates PRISM, Swarm, Spawning, and Reflexivity
 // using a swarm-style parallel optimization approach.
+// No background goroutines or tickers are managed here — the caller
+// (e.g., BackgroundTaskManager in main.go) owns the scheduling.
 type Phase3Controller struct {
 	registry        *domain.AgentRegistry
 	prismManager    *prism.PRISMManager
@@ -29,11 +30,9 @@ type Phase3Controller struct {
 	ledger          ledger.OutcomeStore
 	advRunner       *AdversarialScenarioRunner
 	lastAdvResult   *adversarial.StressTestResult
+	trainingStore   *swarm.TrainingStore
 
 	mu               sync.RWMutex
-	swarmRunning     bool
-	swarmStopCh      chan struct{}
-	lastSwarmState   swarm.MarketState
 	prismWeightCache map[string]float64 // agentID -> weight multiplier
 }
 
@@ -53,7 +52,6 @@ func NewPhase3Controller(
 		spawningManager:  spawningMgr,
 		reflexEngine:     reflexEng,
 		ledger:           ledgerStore,
-		swarmStopCh:      make(chan struct{}),
 		prismWeightCache: make(map[string]float64),
 	}
 }
@@ -64,70 +62,40 @@ func (c *Phase3Controller) WithAdversarialRunner(r *AdversarialScenarioRunner) *
 	return c
 }
 
-// StartBackgroundSwarm initializes and continuously updates the swarm simulator.
-func (c *Phase3Controller) StartBackgroundSwarm(baseState swarm.MarketState) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// SetTrainingStore attaches a training data store for swarm output persistence.
+func (c *Phase3Controller) SetTrainingStore(ts *swarm.TrainingStore) {
+	c.trainingStore = ts
+}
 
-	if c.swarmRunning || c.swarm == nil {
+// RunSwarmCycle runs one complete swarm simulation cycle synchronously:
+//  1. Apply reflexivity mutations to scenarios
+//  2. Initialize and run swarm simulation
+//  3. Export training data for downstream consumption
+//
+// No goroutines or tickers. The caller is responsible for scheduling.
+func (c *Phase3Controller) RunSwarmCycle(baseState swarm.MarketState) {
+	if c.swarm == nil {
 		return
 	}
 
-	c.lastSwarmState = baseState
+	c.mu.Lock()
+	c.syncReflexivityToSwarmUnsafe()
+	c.mu.Unlock()
+
 	c.swarm.InitializeScenarios(baseState)
 	c.swarm.Start()
-	c.swarmRunning = true
 
-	stopCh := c.swarmStopCh
-	go c.swarmUpdateLoop(stopCh)
-	logging.Info("phase3_controller", "background_swarm_started")
-}
-
-// StopBackgroundSwarm halts the continuous swarm updates.
-func (c *Phase3Controller) StopBackgroundSwarm() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if !c.swarmRunning || c.swarm == nil {
-		return
-	}
-
-	close(c.swarmStopCh)
-	c.swarm.Stop()
-	c.swarmRunning = false
-	c.swarmStopCh = make(chan struct{})
-	logging.Info("phase3_controller", "background_swarm_stopped")
-}
-
-// UpdateSwarmState feeds the latest market state into the running swarm.
-func (c *Phase3Controller) UpdateSwarmState(state swarm.MarketState) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.lastSwarmState = state
-}
-
-func (c *Phase3Controller) swarmUpdateLoop(stopCh <-chan struct{}) {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-stopCh:
-			return
-		case <-ticker.C:
-			c.mu.RLock()
-			state := c.lastSwarmState
-			c.mu.RUnlock()
-
-			if c.swarm != nil && len(state.Prices) > 0 {
-				// Re-initialize with fresh state to keep consensus current
-				c.swarm.Stop()
-				c.syncReflexivityToSwarmUnsafe()
-				c.swarm.InitializeScenarios(state)
-				c.swarm.Start()
-			}
+	// Export training data for downstream consumption
+	if c.trainingStore != nil {
+		trainingData := c.swarm.ExportTrainingData()
+		if err := c.trainingStore.Store(trainingData); err != nil {
+			logging.Warn("phase3_controller", "training_store_failed", "err", err)
+		} else {
+			logging.Info("phase3_controller", "training_data_stored", "scenarios", len(trainingData))
 		}
 	}
+
+	logging.Info("phase3_controller", "swarm_cycle_completed")
 }
 
 // ApplyPRISMWeights adjusts recommendations based on regime-specific training results.
@@ -233,7 +201,7 @@ func (c *Phase3Controller) AutoPromoteSpawnedAgents() {
 	}
 }
 
-// SyncReflexivityToSwarmUnsafe reads active reflexivity loops and mutates swarm scenarios.
+// syncReflexivityToSwarmUnsafe reads active reflexivity loops and mutates swarm scenarios.
 // Must be called under lock or when swarm is stopped.
 func (c *Phase3Controller) syncReflexivityToSwarmUnsafe() {
 	if c.reflexEngine == nil || c.swarm == nil {
@@ -269,7 +237,6 @@ func (c *Phase3Controller) syncReflexivityToSwarmUnsafe() {
 		}
 	}
 
-	// Apply deltas proportional to aggregated loop strengths
 	if bubbleStrength > 0 {
 		c.swarm.UpdateScenario("bull_trend", bubbleStrength*0.05, bubbleStrength*0.001)
 	}
@@ -280,20 +247,16 @@ func (c *Phase3Controller) syncReflexivityToSwarmUnsafe() {
 		c.swarm.UpdateScenario("transition", meanRevStrength*0.04, 0)
 	}
 	if bullStrength+bearStrength > 0.7 {
-		// High overall directional conviction → crisis scenario becomes more volatile
 		c.swarm.UpdateScenario("high_vol", 0.05, 0)
 	}
 	if bubbleStrength > 0.8 || crashStrength > 0.8 {
-		// Extreme reflexivity → even low-vol scenario gets a volatility bump (tail risk)
 		c.swarm.UpdateScenario("low_vol", 0.02, 0)
 	}
 }
 
-// GetSwarmConsensus returns the latest swarm consensus if background swarm is running.
+// GetSwarmConsensus returns the latest swarm consensus.
 func (c *Phase3Controller) GetSwarmConsensus() (swarm.SimulationResult, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	if !c.swarmRunning || c.swarm == nil {
+	if c.swarm == nil {
 		return swarm.SimulationResult{}, false
 	}
 	return c.swarm.GetLatestResult()
@@ -306,11 +269,7 @@ func (c *Phase3Controller) RunParallelOptimization(baseState swarm.MarketState, 
 
 	go func() {
 		defer wg.Done()
-		if !c.IsSwarmRunning() {
-			c.StartBackgroundSwarm(baseState)
-		} else {
-			c.UpdateSwarmState(baseState)
-		}
+		c.RunSwarmCycle(baseState)
 	}()
 
 	go func() {
@@ -348,7 +307,6 @@ func (c *Phase3Controller) runAdversarialStressTests() {
 	if c.advRunner == nil || c.registry == nil {
 		return
 	}
-	// Find agent with lowest PRISM Sharpe as stress-test target
 	weakestAgent := ""
 	worstSharpe := 999.0
 	c.mu.RLock()
@@ -386,11 +344,4 @@ func (c *Phase3Controller) GetLastAdversarialResult() *adversarial.StressTestRes
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.lastAdvResult
-}
-
-// IsSwarmRunning reports whether the background swarm is active.
-func (c *Phase3Controller) IsSwarmRunning() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.swarmRunning
 }
