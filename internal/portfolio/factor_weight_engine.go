@@ -78,7 +78,13 @@ func (e *FactorWeightEngine) GetWeights(regime string) map[FactorType]float64 {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	weights := make(map[FactorType]float64)
+	// Merge stored weights with latest config (enables real-time sync from calibrator).
 	maps.Copy(weights, e.baseWeights)
+	if fw := fwConfig(); fw != nil && fw.BaseWeights.Value != nil {
+		for k, v := range fw.BaseWeights.Value {
+			weights[FactorType(k)] = v
+		}
+	}
 
 	// Read clamp bounds from config with hardcoded fallback
 	fw := fwConfig()
