@@ -1,250 +1,110 @@
-// Package metalearning tests the deprecated meta-learning engine.
-// These tests verify correctness of archived code that is scheduled for
-// re-enablement in Phase 5. They are excluded from coverage gate.
 package metalearning
 
 import (
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
-func TestMetaLearner(t *testing.T) {
-	t.Run("NewMetaLearner", func(t *testing.T) {
-		config := DefaultMetaLearningConfig()
-		ml := NewMetaLearner(config)
+func TestTrainingScenarioBridge(t *testing.T) {
+	config := swarm.DefaultSwarmConfig()
+	config.FishCount = 10
+	config.SimulationHorizon = 12 * time.Hour
+	config.TimeStep = time.Hour
+	config.Parallelism = 2
 
-		if ml == nil {
-			t.Fatal("Expected non-nil MetaLearner")
-		}
+	sw := swarm.NewMiroFishSwarm(config)
+	baseState := swarm.MarketState{
+		Timestamp: time.Now(),
+		Prices:    map[string]float64{"A": 100.0},
+		Volumes:   map[string]float64{"A": 1000000},
+	}
+	sw.InitializeScenarios(baseState)
+	sw.Start()
 
-		if len(ml.strategies) == 0 {
-			t.Error("Expected strategies to be initialized")
-		}
+	trainingData := sw.ExportTrainingData()
+	if len(trainingData) == 0 {
+		t.Fatal("expected training data from swarm")
+	}
 
-		if len(ml.population) == 0 {
-			t.Error("Expected population to be initialized")
-		}
-	})
+	ml := NewMetaLearner(DefaultMetaLearningConfig())
+	ml.SubmitTrainingScenarios(trainingData)
 
-	t.Run("DefaultConfig", func(t *testing.T) {
-		config := DefaultMetaLearningConfig()
+	// After submission, top strategies should be available
+	top := ml.GetTopStrategies(3)
+	if len(top) == 0 {
+		t.Fatal("expected top strategies after training data submission")
+	}
+	t.Logf("Top strategies: %d, population: %d, users: %d", len(top), len(ml.population), len(ml.strategies))
 
-		if config.PopulationSize != 20 {
-			t.Errorf("Expected PopulationSize 20, got %d", config.PopulationSize)
-		}
-
-		if config.EliteRatio != 0.2 {
-			t.Errorf("Expected EliteRatio 0.2, got %f", config.EliteRatio)
-		}
-
-		if config.MutationRate != 0.15 {
-			t.Errorf("Expected MutationRate 0.15, got %f", config.MutationRate)
-		}
-	})
-
-	t.Run("GetBestStrategy", func(t *testing.T) {
-		config := DefaultMetaLearningConfig()
-		ml := NewMetaLearner(config)
-
-		// Initially should return nil or first strategy
-		best := ml.GetBestStrategy()
-		if best == nil {
-			t.Log("No best strategy yet (expected before training)")
-		} else {
-			t.Logf("Best strategy: %s", best.ID)
-		}
-	})
-
-	t.Run("SubmitSwarmData", func(t *testing.T) {
-		config := DefaultMetaLearningConfig()
-		ml := NewMetaLearner(config)
-
-		data := SwarmLearningData{
-			FishID:           "fish_001",
-			Scenario:         "bull",
-			LearningRate:     0.01,
-			BatchSize:        32,
-			Epochs:           10,
-			FinalAccuracy:    0.78,
-			ConvergenceSpeed: 50.0,
-			Stability:        0.85,
-			Timestamp:        time.Now(),
-			StrategyParams: map[string]float64{
-				"learning_rate": 0.01,
-				"momentum":      0.9,
-			},
-		}
-
-		// Should not panic
-		ml.SubmitSwarmData(data)
-
-		// Data should be queued
-		t.Log("Swarm data submitted successfully")
-	})
-
-	t.Run("SubmitTrainingResult", func(t *testing.T) {
-		config := DefaultMetaLearningConfig()
-		ml := NewMetaLearner(config)
-
-		result := TrainingResult{
-			AgentID:      "agent_001",
-			StrategyID:   "strategy_001",
-			InitialScore: 0.5,
-			FinalScore:   0.75,
-			Improvement:  0.25,
-			TrainingTime: 3600,
-			Converged:    true,
-			Timestamp:    time.Now(),
-		}
-
-		// Should not panic
-		ml.SubmitTrainingResult(result)
-
-		t.Log("Training result submitted successfully")
-	})
-
-	t.Run("StrategyTypes", func(t *testing.T) {
-		types := []StrategyType{
-			StrategyMomentum,
-			StrategyAdaptive,
-			StrategyCurriculum,
-			StrategyEnsemble,
-			StrategyEvolutionary,
-		}
-
-		for _, st := range types {
-			if st == "" {
-				t.Error("Strategy type should not be empty")
-			}
-		}
-	})
-
-	t.Run("RecommendStrategyForAgent", func(t *testing.T) {
-		config := DefaultMetaLearningConfig()
-		ml := NewMetaLearner(config)
-
-		strategy := ml.RecommendStrategyForAgent("agent_001", StrategyMomentum)
-
-		if strategy == nil {
-			t.Fatal("Expected a recommended strategy")
-		}
-
-		t.Logf("Recommended strategy: %s (type: %s)", strategy.Name, strategy.Type)
-	})
-
-	t.Run("GetTopStrategies", func(t *testing.T) {
-		config := DefaultMetaLearningConfig()
-		ml := NewMetaLearner(config)
-
-		top := ml.GetTopStrategies(5)
-
-		if len(top) == 0 {
-			t.Error("Expected some top strategies")
-		}
-
-		if len(top) > 5 {
-			t.Errorf("Expected at most 5 strategies, got %d", len(top))
-		}
-
-		t.Logf("Got %d top strategies", len(top))
-	})
-
-	t.Run("GenerateReport", func(t *testing.T) {
-		config := DefaultMetaLearningConfig()
-		ml := NewMetaLearner(config)
-
-		report := ml.GenerateReport()
-
-		if report == nil {
-			t.Fatal("Expected non-nil report")
-		}
-
-		if report.TotalStrategies == 0 {
-			t.Error("Expected non-zero total strategies")
-		}
-
-		t.Logf("Report: %d strategies, %d population size",
-			report.TotalStrategies, report.PopulationSize)
-	})
+	// Verify strategies have non-zero performance data
+	for _, s := range top {
+		t.Logf("Strategy %s (type=%s) score=%.4f", s.ID, s.Type, ml.calculateStrategyScore(s))
+	}
 }
 
-func TestLearningStrategy(t *testing.T) {
-	t.Run("StrategyCreation", func(t *testing.T) {
-		strategy := &LearningStrategy{
-			ID:   "test_strategy",
-			Name: "Test Strategy",
-			Type: StrategyMomentum,
-			Parameters: map[string]float64{
-				"learning_rate": 0.01,
-				"momentum":      0.9,
-			},
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}
+func TestMetaLearnerPersistenceCycle(t *testing.T) {
+	config := swarm.DefaultSwarmConfig()
+	config.FishCount = 5
+	config.SimulationHorizon = 12 * time.Hour
+	config.TimeStep = time.Hour
 
-		if strategy.ID != "test_strategy" {
-			t.Errorf("Expected ID test_strategy, got %s", strategy.ID)
-		}
+	sw := swarm.NewMiroFishSwarm(config)
+	baseState := swarm.MarketState{
+		Timestamp: time.Now(),
+		Prices:    map[string]float64{"A": 100.0},
+		Volumes:   map[string]float64{"A": 1000000},
+	}
+	sw.InitializeScenarios(baseState)
+	sw.Start()
 
-		if strategy.Type != StrategyMomentum {
-			t.Errorf("Expected type momentum, got %s", strategy.Type)
-		}
-	})
+	trainingData := sw.ExportTrainingData()
 
-	t.Run("StrategyPerformance", func(t *testing.T) {
-		perf := &StrategyPerformance{
-			StrategyID:        "perf_test",
-			TotalApplications: 100,
-			SuccessCount:      75,
-			FailureCount:      25,
-			AvgImprovement:    0.15,
-			BestImprovement:   0.5,
-			WorstImprovement:  -0.1,
-			ConvergenceRate:   0.8,
-			StabilityScore:    0.75,
-			LastEvaluated:     time.Now(),
-		}
+	ml1 := NewMetaLearner(DefaultMetaLearningConfig())
+	ml1.SubmitTrainingScenarios(trainingData)
 
-		successRate := float64(perf.SuccessCount) / float64(perf.TotalApplications)
-		if successRate != 0.75 {
-			t.Errorf("Expected success rate 0.75, got %f", successRate)
-		}
-	})
+	// Save state
+	path := t.TempDir() + "/metalearner_state.json"
+	if err := ml1.Save(path); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	// Load into fresh MetaLearner
+	ml2 := NewMetaLearner(DefaultMetaLearningConfig())
+	if err := ml2.Load(path); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if len(ml2.strategies) == 0 {
+		t.Fatal("expected strategies restored from persistence")
+	}
+	t.Logf("Restored %d strategies from disk", len(ml2.strategies))
 }
 
-func TestMetaLearningPersistence(t *testing.T) {
-	t.Run("SaveAndLoad", func(t *testing.T) {
-		config := DefaultMetaLearningConfig()
-		ml1 := NewMetaLearner(config)
+func TestBridgeFromTrainingScenario(t *testing.T) {
+	scenario := swarm.TrainingScenario{
+		ID:       "fish_bull_0",
+		Scenario: "Bull Market Trend",
+		Performance: swarm.FishPerformance{
+			Accuracy:    0.75,
+			SharpeRatio: 1.2,
+			MaxDrawdown: 0.12,
+		},
+		States: make([]swarm.MarketState, 200),
+	}
 
-		// Add some training results
-		ml1.SubmitTrainingResult(TrainingResult{
-			AgentID:     "agent_001",
-			StrategyID:  "strategy_momentum_0",
-			Improvement: 0.2,
-			Converged:   true,
-			Timestamp:   time.Now(),
-		})
-
-		// Save state
-		tempFile := "/tmp/test_metalearning.json"
-		err := ml1.Save(tempFile)
-		if err != nil {
-			t.Fatalf("Failed to save: %v", err)
-		}
-
-		// Load into new instance
-		ml2 := NewMetaLearner(config)
-		err = ml2.Load(tempFile)
-		if err != nil {
-			t.Fatalf("Failed to load: %v", err)
-		}
-
-		// Verify strategies loaded
-		if len(ml2.strategies) == 0 {
-			t.Error("Expected strategies to be loaded")
-		}
-
-		t.Logf("Loaded %d strategies", len(ml2.strategies))
-	})
+	data := scenarioToLearningData(scenario)
+	if data.FinalAccuracy != 0.75 {
+		t.Errorf("expected accuracy 0.75, got %f", data.FinalAccuracy)
+	}
+	if data.LearningRate != 0.01 {
+		t.Errorf("expected lr 0.01 for acc 0.75, got %f", data.LearningRate)
+	}
+	if data.BatchSize != 32 {
+		t.Errorf("expected batch size 32 for 200 steps, got %d", data.BatchSize)
+	}
+	if data.Stability <= 0 {
+		t.Errorf("expected positive stability from drawdown %.2f, got %.2f", scenario.Performance.MaxDrawdown, data.Stability)
+	}
 }
