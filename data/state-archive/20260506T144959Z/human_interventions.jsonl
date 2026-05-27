@@ -1,4 +1,0 @@
-{"id":"int-pause-semi-desk-01-1776037377561259000","type":"pause_agent","target_agent_id":"semi-desk-01","reason":"validation test","operator":"human","recorded_at":"2026-04-12T23:42:57.561261Z"}
-{"id":"int-approve-2382.TW-1776209628149951000","type":"approve_rec","target_agent_id":"ai-desk-01","target_symbol":"2382.TW","reason":"儀表板人工批准","operator":"human","recorded_at":"2026-04-14T23:33:48.149965Z"}
-{"id":"int-reject-0056.TW-1776209653114211000","type":"reject_rec","target_agent_id":"value-yield-01","target_symbol":"0056.TW","reason":"儀表板人工拒絕","operator":"human","recorded_at":"2026-04-14T23:34:13.114235Z"}
-{"id":"int-approve-2382.TW-1776209960781779000","type":"approve_rec","target_agent_id":"ai-desk-01","target_symbol":"2382.TW","reason":"儀表板人工批准","operator":"human","recorded_at":"2026-04-14T23:39:20.781803Z"}

@@ -9,12 +9,12 @@
 /.gocache/
 /data/cache/
 /data/state/
-# Data files: only ignore generated CSVs in replay;
-# tw_extended_90days.jsonl is required for CI governance gates (factor engine)
-# and fundamentals.json is required for fundamental analysis.
+# Data files: generated CSVs/JSONLs are runtime artifacts.
+# CSV is the canonical replay source (auto_backfill appends to it daily).
+# JSONL is auto-converted from CSV by the auto_backfill background task.
+# fundamentals.json is reference/seed data (manually maintained).
 /data/replay/*.csv
 /data/replay/*.jsonl
-!/data/replay/tw_extended_90days.jsonl
 /prompts/experiments/
 /internal/experiment/prompts/
 /janus-backtest

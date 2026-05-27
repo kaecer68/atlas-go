@@ -31,6 +31,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/eventlogic"
 	"github.com/kaecer68/atlas-go/internal/evolution"
 	"github.com/kaecer68/atlas-go/internal/experiment"
+	"github.com/kaecer68/atlas-go/internal/importer"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
@@ -681,10 +682,54 @@ func run(args []string, deps appDeps) error {
 						return fmt.Errorf("backfill failed: %w, output: %s", err, string(out))
 					}
 					log.Printf("[Gateway] backfill success: %s", string(out))
+
+					// Auto-convert CSV to JSONL so the system's replay pipeline
+					// (tw_extended_90days.jsonl) stays in sync with the CSV that
+					// daily-replay-sync appends to.  JSONL is the canonical format
+					// consumed by FactorEngine (composition.go:67).
+					absCSV := cfg.ReplayDataPath
+					absJSONL := strings.TrimSuffix(cfg.ReplayDataPath, ".csv") + ".jsonl"
+					if !filepath.IsAbs(absCSV) {
+						absCSV = filepath.Join(absWorkDir, absCSV)
+						absJSONL = filepath.Join(absWorkDir, absJSONL)
+					}
+					if convErr := importer.ImportTWOpenDataCSVToJSONL(absCSV, absJSONL); convErr != nil {
+						log.Printf("[Gateway] backfill CSV→JSONL conversion warning (non-fatal): %v", convErr)
+					} else {
+						log.Printf("[Gateway] backfill CSV→JSONL conversion: %s", absJSONL)
+					}
 					return nil
 				},
 			})
 			log.Printf("[Gateway] registered auto_backfill background task (24h interval)")
+
+			// Register fundamentals_staleness_check: fundamentals.json is reference
+			// data (PE/PB/DividendYield for 1070 stocks) loaded by FactorEngine at
+			// startup.  It does not change daily—quarterly refresh is appropriate.
+			// This task alerts when the file exceeds 90 days without an update.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "fundamentals_staleness_check",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					path := filepath.Join(cfg.WorkDir, "data", "fundamentals.json")
+					info, err := os.Stat(path)
+					if err != nil {
+						monitor.Alert(monitoring.AlertLevelWarning, "data_staleness",
+							fmt.Sprintf("fundamentals.json not accessible: %v", err),
+							map[string]any{"file": path})
+						return nil
+					}
+					ageDays := int(time.Since(info.ModTime()).Hours() / 24)
+					if ageDays > 90 {
+						monitor.Alert(monitoring.AlertLevelWarning, "data_staleness",
+							fmt.Sprintf("fundamentals.json is %d days old — run: go run ./cmd/backfill-financial-statements", ageDays),
+							map[string]any{"file": path, "age_days": ageDays})
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered fundamentals_staleness_check background task (24h interval)")
 
 			// Register auto_capital_flow via Gateway.
 			_ = taskMgr.Register(&apigateway.ScheduledTask{

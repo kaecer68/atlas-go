@@ -228,6 +228,203 @@ func TestManager_Retry(t *testing.T) {
 	}
 }
 
+// --- InMemoryStore lineage ---
+
+func TestInMemoryStore_Lineage_UpsertAndGet(t *testing.T) {
+	store := NewInMemoryStore()
+	rec := domain.ExperimentLineageRecord{
+		ExperimentID:       "exp-001",
+		ExecutionID:        "exec-001",
+		RootExperimentID:   "exp-root",
+		LineageDepth:       1,
+		TargetAgentID:      "agent-1",
+		TargetSkill:        "momentum",
+		Status:             "accepted",
+		RecordedAt:         time.Now(),
+		ParentExperimentID: "exp-root",
+	}
+	if err := store.UpsertLineage(context.Background(), rec); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	got, err := store.GetLineage(context.Background(), "exp-001")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.ExperimentID != "exp-001" || got.TargetAgentID != "agent-1" {
+		t.Errorf("got %+v", got)
+	}
+}
+
+func TestInMemoryStore_Lineage_GetNotFound(t *testing.T) {
+	store := NewInMemoryStore()
+	_, err := store.GetLineage(context.Background(), "nonexistent")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestInMemoryStore_Lineage_Children(t *testing.T) {
+	store := NewInMemoryStore()
+	now := time.Now()
+	store.UpsertLineage(context.Background(), domain.ExperimentLineageRecord{
+		ExperimentID: "child-1", RootExperimentID: "root", ParentExperimentID: "root",
+		Status: "accepted", RecordedAt: now,
+	})
+	store.UpsertLineage(context.Background(), domain.ExperimentLineageRecord{
+		ExperimentID: "child-2", RootExperimentID: "root", ParentExperimentID: "root",
+		Status: "rejected", RecordedAt: now,
+	})
+	store.UpsertLineage(context.Background(), domain.ExperimentLineageRecord{
+		ExperimentID: "orphan", RootExperimentID: "orphan", ParentExperimentID: "other",
+		Status: "accepted", RecordedAt: now,
+	})
+	children, err := store.GetLineageChildren(context.Background(), "root")
+	if err != nil {
+		t.Fatalf("children: %v", err)
+	}
+	if len(children) != 2 {
+		t.Errorf("expected 2 children, got %d", len(children))
+	}
+}
+
+func TestInMemoryStore_Lineage_ChildrenNone(t *testing.T) {
+	store := NewInMemoryStore()
+	children, err := store.GetLineageChildren(context.Background(), "no-children")
+	if err != nil {
+		t.Fatalf("children: %v", err)
+	}
+	if len(children) != 0 {
+		t.Errorf("expected 0, got %d", len(children))
+	}
+}
+
+// --- InMemoryStore baseline history ---
+
+func TestInMemoryStore_BaselineHistory_InsertAndList(t *testing.T) {
+	store := NewInMemoryStore()
+	now := time.Now()
+	r1 := domain.BaselineHistoryRecord{ID: "bh-1", VersionBefore: 1, VersionAfter: 2, PromotedBy: "test", PromotedAt: now}
+	r2 := domain.BaselineHistoryRecord{ID: "bh-2", VersionBefore: 2, VersionAfter: 3, PromotedBy: "test", PromotedAt: now.Add(time.Hour)}
+	if err := store.InsertBaselineHistory(context.Background(), r1); err != nil {
+		t.Fatalf("insert 1: %v", err)
+	}
+	if err := store.InsertBaselineHistory(context.Background(), r2); err != nil {
+		t.Fatalf("insert 2: %v", err)
+	}
+	all, err := store.ListBaselineHistory(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("expected 2, got %d", len(all))
+	}
+}
+
+func TestInMemoryStore_BaselineHistory_ListWithLimit(t *testing.T) {
+	store := NewInMemoryStore()
+	now := time.Now()
+	for i := range 5 {
+		store.InsertBaselineHistory(context.Background(), domain.BaselineHistoryRecord{
+			ID: "bh-" + string(rune('0'+i)), VersionBefore: i, VersionAfter: i + 1,
+			PromotedBy: "test", PromotedAt: now.Add(time.Duration(i) * time.Hour),
+		})
+	}
+	limited, err := store.ListBaselineHistory(context.Background(), 2)
+	if err != nil {
+		t.Fatalf("list limit: %v", err)
+	}
+	if len(limited) != 2 {
+		t.Errorf("expected 2, got %d", len(limited))
+	}
+}
+
+// --- InMemoryStore metrics ---
+
+func TestInMemoryStore_Metrics_InsertAndQuery(t *testing.T) {
+	store := NewInMemoryStore()
+	now := time.Now()
+	points := []domain.MetricTrendPoint{
+		{ID: "m1", ExecutionID: "exec-1", ExperimentID: "exp-a", SeriesKey: "sharpe", MetricName: "sharpe_ratio", MetricValue: 1.5, SampledAt: now},
+		{ID: "m2", ExecutionID: "exec-1", ExperimentID: "exp-a", SeriesKey: "sharpe", MetricName: "sharpe_ratio", MetricValue: 1.7, SampledAt: now.Add(time.Hour)},
+		{ID: "m3", ExecutionID: "exec-2", ExperimentID: "exp-b", SeriesKey: "drawdown", MetricName: "max_drawdown", MetricValue: -0.05, SampledAt: now},
+	}
+	if err := store.InsertMetricPoints(context.Background(), points); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	all, err := store.QueryMetricTrends(context.Background(), domain.MetricTrendFilter{})
+	if err != nil {
+		t.Fatalf("query all: %v", err)
+	}
+	if len(all) != 3 {
+		t.Errorf("expected 3, got %d", len(all))
+	}
+}
+
+func TestInMemoryStore_Metrics_QueryFilterByExperiment(t *testing.T) {
+	store := NewInMemoryStore()
+	now := time.Now()
+	store.InsertMetricPoints(context.Background(), []domain.MetricTrendPoint{
+		{ID: "m1", ExecutionID: "e1", ExperimentID: "exp-a", SeriesKey: "s1", MetricName: "n1", MetricValue: 1.0, SampledAt: now},
+		{ID: "m2", ExecutionID: "e2", ExperimentID: "exp-b", SeriesKey: "s1", MetricName: "n1", MetricValue: 2.0, SampledAt: now},
+	})
+	result, err := store.QueryMetricTrends(context.Background(), domain.MetricTrendFilter{ExperimentID: "exp-a"})
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if len(result) != 1 || result[0].ID != "m1" {
+		t.Errorf("expected [m1], got %d results", len(result))
+	}
+}
+
+func TestInMemoryStore_Metrics_QueryFilterByTime(t *testing.T) {
+	store := NewInMemoryStore()
+	base := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+	store.InsertMetricPoints(context.Background(), []domain.MetricTrendPoint{
+		{ID: "early", ExecutionID: "e1", SeriesKey: "s1", MetricName: "n1", MetricValue: 1.0, SampledAt: base},
+		{ID: "mid", ExecutionID: "e1", SeriesKey: "s1", MetricName: "n1", MetricValue: 2.0, SampledAt: base.Add(48 * time.Hour)},
+		{ID: "late", ExecutionID: "e1", SeriesKey: "s1", MetricName: "n1", MetricValue: 3.0, SampledAt: base.Add(96 * time.Hour)},
+	})
+	result, err := store.QueryMetricTrends(context.Background(), domain.MetricTrendFilter{
+		Start: base.Add(24 * time.Hour),
+		End:   base.Add(72 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if len(result) != 1 || result[0].ID != "mid" {
+		t.Errorf("expected [mid], got %d results", len(result))
+	}
+}
+
+func TestInMemoryStore_Metrics_QueryFilterBySeriesKey(t *testing.T) {
+	store := NewInMemoryStore()
+	now := time.Now()
+	store.InsertMetricPoints(context.Background(), []domain.MetricTrendPoint{
+		{ID: "m1", ExecutionID: "e1", SeriesKey: "sharpe", MetricName: "sharpe", MetricValue: 1.0, SampledAt: now},
+		{ID: "m2", ExecutionID: "e1", SeriesKey: "drawdown", MetricName: "drawdown", MetricValue: -0.1, SampledAt: now},
+	})
+	result, err := store.QueryMetricTrends(context.Background(), domain.MetricTrendFilter{SeriesKey: "drawdown"})
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if len(result) != 1 || result[0].ID != "m2" {
+		t.Errorf("expected [m2], got %d results", len(result))
+	}
+}
+
+// --- Manager: SetContext + localSink ---
+
+func TestManager_SetContext(t *testing.T) {
+	mgr := NewManager(NewInMemoryStore())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	mgr.SetContext(ctx)
+	if mgr.ctx != ctx {
+		t.Error("expected context to be set")
+	}
+}
+
 // --- generateID ---
 
 func TestGenerateID_Format(t *testing.T) {

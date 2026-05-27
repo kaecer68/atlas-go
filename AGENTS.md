@@ -195,6 +195,31 @@ gh pr create --title "feat(scope): description" \
 - [ ] commit message 是否符合 `type(scope): description` 格式？
 - [ ] 是否 push 到 `origin/<branch>` 而非 `origin/main`？
 
+### Solo 開發者 AI Code Review 流程
+
+本專案為 solo 開發，main 分支保護規則要求 1 個 approving review。
+以下流程用 AI 做第二人審查，滿足四人原則精神：
+
+```bash
+# 1. 建立 feature branch 並開發
+git checkout -b feat/<name>
+# ... 開發、測試、提交 ...
+
+# 2. 推送並建立 PR
+git push -u origin feat/<name>
+gh pr create --title "feat(scope): description" --body "..." --base main
+
+# 3. AI Code Review（二選一或兩者都跑）
+/codex review        # OpenAI Codex — 對抗式審查（找漏洞、邊界條件）
+/claude review       # Claude — 獨立 diff review（找盲點）
+
+# 4. 確認 CI 通過 + AI review 無 critical issue 後合併
+gh pr merge --admin  # admin 權限繞過 required review
+```
+
+**原理**：Branch protection 保留但不阻擋開發。`enforce_admins: false` 允許 admin bypass。
+AI review 提供第二雙眼睛。CI 閘門（governance、operations、coverage、lint、commitlint）確保自動化品質。
+
 ## 高危陷阱
 
 調整行為前請先確認：
@@ -464,7 +489,7 @@ gh pr create --title "feat(scope): description" \
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (30685 symbols, 69497 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (30724 symbols, 69548 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
