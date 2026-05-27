@@ -671,6 +671,7 @@ type SectorExecutorParameters struct {
 	ValueYield        ValueYieldExecutorParameters        `json:"value_yield,omitempty"`
 	EarningsQuality   EarningsQualityExecutorParameters   `json:"earnings_quality,omitempty"`
 	TechnicalBreakout TechnicalBreakoutExecutorParameters `json:"technical_breakout,omitempty"`
+	GrowthMomentum    GrowthMomentumExecutorParameters    `json:"growth_momentum,omitempty"`
 }
 
 // LEOSatelliteExecutorParameters holds all tunable values for the
@@ -730,6 +731,16 @@ type TechnicalBreakoutExecutorParameters struct {
 	CatchUpBoost           ParameterMetadata[int]     `json:"catch_up_boost"`
 	CatchUpLowerThreshold  ParameterMetadata[float64] `json:"catch_up_lower_threshold"`
 	CatchUpUpperThreshold  ParameterMetadata[float64] `json:"catch_up_upper_threshold"`
+}
+type GrowthMomentumExecutorParameters struct {
+	ConvictionBase           ParameterMetadata[int]     `json:"conviction_base"`
+	PricePenalty             ParameterMetadata[int]     `json:"price_penalty"`
+	TrendConfirmationPenalty ParameterMetadata[int]     `json:"trend_confirmation_penalty"`
+	DowngradePricePenalty    ParameterMetadata[int]     `json:"downgrade_price_penalty"`
+	DowngradeOpenPenalty     ParameterMetadata[int]     `json:"downgrade_open_penalty"`
+	ExploratoryPricePenalty  ParameterMetadata[int]     `json:"exploratory_price_penalty"`
+	ExploratoryOpenPenalty   ParameterMetadata[int]     `json:"exploratory_open_penalty"`
+	DowngradeThreshold       ParameterMetadata[float64] `json:"downgrade_threshold"`
 }
 
 // PreciousMetalsParameters holds tunable values for precious metals factor scoring.
@@ -1440,6 +1451,10 @@ func (p *ParametersConfig) Validate() error {
 	}
 	if tp := p.SectorExecutor.TechnicalBreakout; tp.DefaultVolumeFloor.Value != 0 && tp.DefaultVolumeFloor.Value < 0 {
 		return fmt.Errorf("sector_executor.technical_breakout.default_volume_floor (%d) must be non-negative", tp.DefaultVolumeFloor.Value)
+	}
+
+	if gm := p.SectorExecutor.GrowthMomentum; gm.DowngradeThreshold.Value != 0 && (gm.DowngradeThreshold.Value <= 0 || gm.DowngradeThreshold.Value >= 1) {
+		return fmt.Errorf("sector_executor.growth_momentum.downgrade_threshold (%.3f) must be in (0,1)", gm.DowngradeThreshold.Value)
 	}
 
 	if err := p.validateAlert(); err != nil {

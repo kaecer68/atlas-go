@@ -430,29 +430,37 @@ func (FinancialsExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, 
 }
 
 func finConviction(agent domain.AgentSpec, prompt string, quote domain.Quote) (int, *domain.ConvictionBreakdown) {
+	db, bp, cqb, cqp, ssb, ssp, cab := finDividendBoost, finBalanceSheetPenalty, finCreditQualityBoost, finCreditQualityPenalty, finSpreadSensitivityBoost, finSpreadSensitivityPenalty, finCapitalAdequacyBoost
+	pto, pth := finPriceToOpenThreshold, finPriceToHighThreshold
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		if fp := cfg.SectorExecutor.Financials; fp.DividendBoost.Value != 0 {
+			db, bp, cqb, cqp, ssb, ssp, cab = fp.DividendBoost.Value, fp.BalanceSheetPenalty.Value, fp.CreditQualityBoost.Value, fp.CreditQualityPenalty.Value, fp.SpreadSensitivityBoost.Value, fp.SpreadSensitivityPenalty.Value, fp.CapitalAdequacyBoost.Value
+			pto, pth = fp.PriceToOpenThreshold.Value, fp.PriceToHighThreshold.Value
+		}
+	}
 	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), 50)
 	if strings.Contains(prompt, "dividend") && quote.Last >= quote.Open {
-		b.add("dividend_boost", finDividendBoost, "dividend keyword + last >= open")
+		b.add("dividend_boost", db, "dividend keyword + last >= open")
 	}
-	if strings.Contains(prompt, "balance-sheet") && quote.Low < quote.Open*finPriceToOpenThreshold {
-		b.add("balance_sheet_penalty", -finBalanceSheetPenalty, "balance-sheet keyword + low < open*0.985")
+	if strings.Contains(prompt, "balance-sheet") && quote.Low < quote.Open*pto {
+		b.add("balance_sheet_penalty", -bp, "balance-sheet keyword + low < open*threshold")
 	}
 	if strings.Contains(prompt, "credit quality gate") {
 		if quote.Last >= quote.Open {
-			b.add("credit_quality_boost", finCreditQualityBoost, "credit quality gate + last >= open")
+			b.add("credit_quality_boost", cqb, "credit quality gate + last >= open")
 		} else {
-			b.add("credit_quality_penalty", -finCreditQualityPenalty, "credit quality gate + last < open")
+			b.add("credit_quality_penalty", -cqp, "credit quality gate + last < open")
 		}
 	}
 	if strings.Contains(prompt, "spread sensitivity downgrade") {
-		if quote.Last >= quote.High*finPriceToHighThreshold {
-			b.add("spread_sensitivity_boost", finSpreadSensitivityBoost, "last >= high*0.995")
+		if quote.Last >= quote.High*pth {
+			b.add("spread_sensitivity_boost", ssb, "last >= high*threshold")
 		} else {
-			b.add("spread_sensitivity_penalty", -finSpreadSensitivityPenalty, "last < high*0.995")
+			b.add("spread_sensitivity_penalty", -ssp, "last < high*threshold")
 		}
 	}
-	if strings.Contains(prompt, "capital adequacy premium") && quote.Last >= quote.Open && quote.Last >= quote.High*finPriceToHighThreshold {
-		b.add("capital_adequacy_boost", finCapitalAdequacyBoost, "capital adequacy premium + last >= open & high*0.995")
+	if strings.Contains(prompt, "capital adequacy premium") && quote.Last >= quote.Open && quote.Last >= quote.High*pth {
+		b.add("capital_adequacy_boost", cab, "capital adequacy premium + last >= open & high*threshold")
 	}
 	return b.build()
 }
@@ -464,12 +472,18 @@ func (ShippingExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (ShippingExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
+	tb, wcp, wct := shipTacticalBoost, shipWeakClosePenalty, shipWeakCloseThreshold
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		if sp := cfg.SectorExecutor.Shipping; sp.TacticalBoost.Value != 0 {
+			tb, wcp, wct = sp.TacticalBoost.Value, sp.WeakClosePenalty.Value, sp.WeakCloseThreshold.Value
+		}
+	}
 	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), defaultConvictionFloor)
 	if strings.Contains(prompt, "tactical") && quote.Last > quote.Open {
-		b.add("tactical_boost", shipTacticalBoost, "tactical keyword + last > open")
+		b.add("tactical_boost", tb, "tactical keyword + last > open")
 	}
-	if strings.Contains(prompt, "avoid weak closes") && quote.Last < quote.High*shipWeakCloseThreshold {
-		b.add("weak_close_penalty", -shipWeakClosePenalty, "avoid weak closes + last < high*0.992")
+	if strings.Contains(prompt, "avoid weak closes") && quote.Last < quote.High*wct {
+		b.add("weak_close_penalty", -wcp, "avoid weak closes + last < high*threshold")
 	}
 	if !b.floorCheck() {
 		return domain.Recommendation{}, false
