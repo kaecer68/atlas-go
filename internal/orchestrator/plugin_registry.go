@@ -14,7 +14,7 @@ import (
 
 type AgentExecutor interface {
 	Supports(agent domain.AgentSpec) bool
-	Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool)
+	Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool)
 }
 
 type RegimeExecutor interface {
@@ -218,10 +218,14 @@ func (r *PluginRegistry) RegimeScore(agent domain.AgentSpec, quotes map[string]d
 	return 0
 }
 
-func (r *PluginRegistry) Recommendation(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
+func (r *PluginRegistry) Recommendation(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq ...FactorQuery) (domain.Recommendation, bool) {
+	var resolved FactorQuery
+	if len(fq) > 0 && fq[0] != nil {
+		resolved = fq[0]
+	}
 	for _, exec := range r.agentExecutors {
 		if exec.Supports(agent) {
-			return exec.Recommend(agent, quote, prompt, regime)
+			return exec.Recommend(agent, quote, prompt, regime, resolved)
 		}
 	}
 	return domain.Recommendation{}, false
