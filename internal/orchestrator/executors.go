@@ -76,7 +76,8 @@ type ExecutionContext struct {
 	Context                    context.Context            // request-level context for cancellation propagation
 	NarrativeEvents            []narrative.NarrativeEvent // narrative events for regime evidence fusion
 	ConvictionClampingCallback func([]portfolio.ConvictionClampingEvent)
-	Scratchpad                 *Scratchpad // optional reasoning trace recorder
+	Scratchpad                 *Scratchpad     // optional reasoning trace recorder
+	FactorSnapshot             *FactorSnapshot // pre-computed factor scores for executor consumption
 }
 
 // ResearchResult holds all outputs from executing registry research.
@@ -378,6 +379,15 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 	recs := make([]domain.Recommendation, 0)
 	rejects := make([]domain.ScreeningReject, 0)
 	now := time.Now().UTC()
+
+	// Pre-compute factor scores once for all symbols before the agent loop.
+	// Executors can access these via plugins.factorEngine (consumed indirectly
+	// through ExecutionContext.FactorSnapshot once passed through the pipeline).
+	var _ *FactorSnapshot // pre-computed infra — consumed in Wave 2 via ExecutionContext.FactorSnapshot
+	if plugins != nil && plugins.factorEngine != nil {
+		_ = NewFactorSnapshot(quotes, plugins.factorEngine)
+	}
+
 	for _, agent := range registry.Agents {
 		if !agent.Enabled {
 			continue
