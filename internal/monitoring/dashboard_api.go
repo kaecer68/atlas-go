@@ -587,6 +587,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/health/data-integrity", apisystem.HandleDataIntegrity(a.workDir, a.ledgerDir))
 
 	swarmSvc := service.NewSwarmService(filepath.Join(a.workDir, "data/state/swarm_latest.json"))
+	swarmSvc.SetTrainingDir(filepath.Join(a.workDir, "data/state/swarm_training"))
 	swarmHandlers := apiswarm.NewHandlers(swarmSvc)
 	swarmHandlers.RegisterRoutes(mux)
 

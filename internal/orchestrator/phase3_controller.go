@@ -109,6 +109,7 @@ func (c *Phase3Controller) RunSwarmCycle(baseState swarm.MarketState) {
 
 	c.swarm.InitializeScenarios(baseState)
 	c.swarm.Start()
+	c.swarm.EvolveGeneration()
 
 	// Export training data for downstream consumption
 	if c.trainingStore != nil {

@@ -1,9 +1,12 @@
 package service
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/swarm"
@@ -19,6 +22,7 @@ type SwarmStatusResponse struct {
 	AnomalyCount        int        `json:"anomaly_count"`
 	ScenarioCount       int        `json:"scenario_count"`
 	GenerationsEvolved  int        `json:"generations_evolved"`
+	TrainingScenarios   int        `json:"training_scenarios"`
 }
 
 // ConsensusEntry is a per-symbol consensus breakdown.
@@ -34,11 +38,17 @@ type ConsensusEntry struct {
 // SwarmService provides access to persisted swarm simulation state.
 type SwarmService struct {
 	snapshotPath string
+	trainingDir  string
 }
 
 // NewSwarmService creates a SwarmService reading from the given snapshot path.
 func NewSwarmService(snapshotPath string) *SwarmService {
 	return &SwarmService{snapshotPath: snapshotPath}
+}
+
+// SetTrainingDir attaches a training data directory for summary reporting.
+func (s *SwarmService) SetTrainingDir(dir string) {
+	s.trainingDir = dir
 }
 
 // loadSnapshot reads the persisted swarm snapshot from disk.
@@ -69,6 +79,7 @@ func (s *SwarmService) LoadStatus() (*SwarmStatusResponse, error) {
 		AnomalyCount:        len(snap.Anomalies),
 		ScenarioCount:       len(snap.Scenarios),
 		GenerationsEvolved:  snap.GenerationsEvolved,
+		TrainingScenarios:   s.countTrainingScenarios(),
 	}, nil
 }
 
@@ -108,4 +119,32 @@ func (s *SwarmService) LoadScenarios() ([]swarm.ScenarioSnapshot, error) {
 		return nil, err
 	}
 	return snap.Scenarios, nil
+}
+
+// countTrainingScenarios counts total persisted training entries across all scenario files.
+func (s *SwarmService) countTrainingScenarios() int {
+	if s.trainingDir == "" {
+		return 0
+	}
+	entries, err := os.ReadDir(s.trainingDir)
+	if err != nil {
+		return 0
+	}
+	total := 0
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".jsonl") {
+			f, err := os.Open(filepath.Join(s.trainingDir, entry.Name()))
+			if err != nil {
+				continue
+			}
+			scanner := bufio.NewScanner(f)
+			for scanner.Scan() {
+				if strings.TrimSpace(scanner.Text()) != "" {
+					total++
+				}
+			}
+			f.Close()
+		}
+	}
+	return total
 }
