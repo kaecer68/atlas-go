@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/eventlogic"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/prism"
@@ -71,5 +72,21 @@ func (s *System) WithPhase3Controller(ctrl *Phase3Controller) *System {
 		}
 	}
 	s.host.Register(&phase3Plugin{controller: ctrl}, s.SystemCore)
+	return s
+}
+
+func (s *System) WithEventLogic(
+	detector *eventlogic.PatternDetector,
+	corrector *eventlogic.SelfCorrector,
+	saveRulesPath string,
+	historyRecorder *eventlogic.HistoryRecorder,
+) *System {
+	if s.host == nil {
+		s.host = &PluginHost{}
+	}
+	s.host.Register(&eventlogicPlugin{
+		detector: detector, corrector: corrector,
+		saveRulesPath: saveRulesPath, historyRecorder: historyRecorder,
+	}, s.SystemCore)
 	return s
 }
