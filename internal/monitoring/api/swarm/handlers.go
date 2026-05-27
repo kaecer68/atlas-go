@@ -71,3 +71,15 @@ func (h *Handlers) HandleScenarios(r *http.Request) (int, any) {
 	}
 	return http.StatusOK, scenarios
 }
+
+// HandleStrategies returns top learning strategies from the MetaLearner.
+func (h *Handlers) HandleStrategies(r *http.Request) (int, any) {
+	strategies, err := h.Svc.LoadRecommendedStrategies()
+	if err != nil {
+		return http.StatusNotFound, map[string]string{"error": "no strategy data available"}
+	}
+	if len(strategies) == 0 {
+		return http.StatusOK, []service.StrategySummary{}
+	}
+	return http.StatusOK, strategies
+}

@@ -121,6 +121,62 @@ func (s *SwarmService) LoadScenarios() ([]swarm.ScenarioSnapshot, error) {
 	return snap.Scenarios, nil
 }
 
+// StrategySummary represents a single learning strategy for the dashboard.
+type StrategySummary struct {
+	ID    string  `json:"id"`
+	Name  string  `json:"name"`
+	Type  string  `json:"type"`
+	Score float64 `json:"score"`
+}
+
+// LoadRecommendedStrategies returns top strategies from the MetaLearner state file.
+func (s *SwarmService) LoadRecommendedStrategies() ([]StrategySummary, error) {
+	mlPath := filepath.Join(filepath.Dir(s.snapshotPath), "metalearner_state.json")
+	data, err := os.ReadFile(mlPath)
+	if err != nil {
+		return nil, fmt.Errorf("read metalearner state: %w", err)
+	}
+	var state struct {
+		Strategies map[string]struct {
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			Type        string `json:"type"`
+			Performance *struct {
+				SuccessCount      int `json:"success_count"`
+				TotalApplications int `json:"total_applications"`
+			} `json:"performance,omitempty"`
+		} `json:"strategies"`
+		Population []string `json:"population"`
+	}
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, fmt.Errorf("unmarshal metalearner: %w", err)
+	}
+	results := make([]StrategySummary, 0, 5)
+	for _, id := range state.Population {
+		s, ok := state.Strategies[id]
+		if !ok {
+			continue
+		}
+		score := 0.0
+		if s.Performance != nil && s.Performance.TotalApplications > 0 {
+			score = float64(s.Performance.SuccessCount) / float64(s.Performance.TotalApplications)
+		}
+		results = append(results, StrategySummary{
+			ID:    s.ID,
+			Name:  s.Name,
+			Type:  s.Type,
+			Score: score,
+		})
+		if len(results) >= 5 {
+			break
+		}
+	}
+	if results == nil {
+		return []StrategySummary{}, nil
+	}
+	return results, nil
+}
+
 // countTrainingScenarios counts total persisted training entries across all scenario files.
 func (s *SwarmService) countTrainingScenarios() int {
 	if s.trainingDir == "" {
