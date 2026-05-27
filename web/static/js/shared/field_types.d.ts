@@ -207,6 +207,15 @@ declare interface CircuitBreakerStatus {
   day_start_value: number;
 }
 
+declare interface ConsensusEntry {
+  symbol: string;
+  bullish_count: number;
+  bearish_count: number;
+  neutral_count: number;
+  consensus_direction: string;
+  average_confidence: number;
+}
+
 declare interface ConvictionBreakdown {
   base: number;
   floor: number;
@@ -1305,6 +1314,18 @@ declare interface SimulationState {
   previous_values: Record<string, number>;
   max_equity: number;
   current_drawdown: number;
+}
+
+declare interface SwarmStatusResponse {
+  recorded_at: string | null;
+  total_fish: number;
+  consensus_symbols: number;
+  consensus_confidence: number;
+  top_accuracy: number;
+  anomaly_count: number;
+  scenario_count: number;
+  generations_evolved: number;
+  training_scenarios: number;
 }
 
 declare interface SymbolAttribution {

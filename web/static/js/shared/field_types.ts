@@ -210,6 +210,15 @@ export interface CircuitBreakerStatus {
   day_start_value: number;
 }
 
+export interface ConsensusEntry {
+  symbol: string;
+  bullish_count: number;
+  bearish_count: number;
+  neutral_count: number;
+  consensus_direction: string;
+  average_confidence: number;
+}
+
 export interface ConvictionBreakdown {
   base: number;
   floor: number;
@@ -1308,6 +1317,18 @@ export interface SimulationState {
   previous_values: Record<string, number>;
   max_equity: number;
   current_drawdown: number;
+}
+
+export interface SwarmStatusResponse {
+  recorded_at: string | null;
+  total_fish: number;
+  consensus_symbols: number;
+  consensus_confidence: number;
+  top_accuracy: number;
+  anomaly_count: number;
+  scenario_count: number;
+  generations_evolved: number;
+  training_scenarios: number;
 }
 
 export interface SymbolAttribution {
