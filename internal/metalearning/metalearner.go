@@ -1,12 +1,10 @@
 // Package metalearning implements learning-to-learn optimization for agent strategies
-// Based on MiroFish swarm results and training data to optimize learning strategies
+// Based on MiroFish swarm results and training data to optimize learning strategies.
 //
-// Deprecated: This package was built and tested but never integrated into the
-// production pipeline. The genetic algorithm and strategy optimization features
-// require swarm data producer and training pipeline infrastructure that was
-// never built. The current evolution system (internal/evolution/) uses a simpler
-// prompt-mutation approach. See DEPRECATED.md for re-enablement conditions
-// (Phase 5 of the system health remediation plan).
+// The MetaLearner ingests swarm simulation data via SubmitSwarmData() and evolves
+// LearningStrategy configurations via a genetic algorithm (population, elite selection,
+// crossover, mutation). Top strategies are available via GetTopStrategies() and
+// RecommendStrategyForAgent(). Results persist via Save()/Load().
 package metalearning
 
 import (
@@ -555,6 +553,17 @@ func (ml *MetaLearner) processTrainingResult(result TrainingResult) {
 
 	perf.LastEvaluated = time.Now()
 	strategy.UpdatedAt = time.Now()
+}
+
+// Strategies returns all registered learning strategies.
+func (ml *MetaLearner) Strategies() []*LearningStrategy {
+	ml.mu.RLock()
+	defer ml.mu.RUnlock()
+	result := make([]*LearningStrategy, 0, len(ml.strategies))
+	for _, s := range ml.strategies {
+		result = append(result, s)
+	}
+	return result
 }
 
 // GetBestStrategy returns the current best learning strategy

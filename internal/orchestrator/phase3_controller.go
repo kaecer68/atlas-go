@@ -11,6 +11,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/metalearning"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
 	"github.com/kaecer68/atlas-go/internal/spawning"
@@ -32,6 +33,8 @@ type Phase3Controller struct {
 	lastAdvResult   *adversarial.StressTestResult
 	trainingStore   *swarm.TrainingStore
 	snapshotPath    string
+	metaLearner     *metalearning.MetaLearner
+	metaLearnPath   string
 
 	mu               sync.RWMutex
 	prismWeightCache map[string]float64 // agentID -> weight multiplier
@@ -73,6 +76,22 @@ func (c *Phase3Controller) SetSnapshotPath(path string) {
 	c.snapshotPath = path
 }
 
+// SetMetaLearner attaches a MetaLearner for swarm-driven strategy optimization.
+// metaLearnPath is the file path for persisting/restoring MetaLearner state.
+func (c *Phase3Controller) SetMetaLearner(ml *metalearning.MetaLearner, persistPath string) {
+	c.metaLearner = ml
+	c.metaLearnPath = persistPath
+
+	// Restore previous state if available
+	if persistPath != "" {
+		if err := ml.Load(persistPath); err != nil {
+			logging.Debug("phase3_controller", "metalearner_load_skipped", "path", persistPath, "err", err)
+		} else {
+			logging.Info("phase3_controller", "metalearner_restored", "strategies", len(ml.Strategies()), "path", persistPath)
+		}
+	}
+}
+
 // RunSwarmCycle runs one complete swarm simulation cycle synchronously:
 //  1. Apply reflexivity mutations to scenarios
 //  2. Initialize and run swarm simulation
@@ -107,6 +126,22 @@ func (c *Phase3Controller) RunSwarmCycle(baseState swarm.MarketState) {
 	if c.snapshotPath != "" {
 		if err := c.swarm.SaveSnapshot(c.snapshotPath); err != nil {
 			logging.Warn("phase3_controller", "snapshot_save_failed", "err", err)
+		}
+	}
+
+	// Feed training data into MetaLearner for strategy evolution
+	if c.metaLearner != nil {
+		trainingData := c.swarm.ExportTrainingData()
+		if len(trainingData) > 0 {
+			c.metaLearner.SubmitTrainingScenarios(trainingData)
+			logging.Info("phase3_controller", "metalearner_updated", "scenarios", len(trainingData))
+
+			// Persist MetaLearner state
+			if c.metaLearnPath != "" {
+				if err := c.metaLearner.Save(c.metaLearnPath); err != nil {
+					logging.Warn("phase3_controller", "metalearner_save_failed", "err", err)
+				}
+			}
 		}
 	}
 }
@@ -273,6 +308,15 @@ func (c *Phase3Controller) GetSwarmConsensus() (swarm.SimulationResult, bool) {
 		return swarm.SimulationResult{}, false
 	}
 	return c.swarm.GetLatestResult()
+}
+
+// GetRecommendedStrategies returns the MetaLearner's top learning strategies,
+// which can inform the evolution pipeline's mutation selection.
+func (c *Phase3Controller) GetRecommendedStrategies() []*metalearning.LearningStrategy {
+	if c.metaLearner == nil {
+		return nil
+	}
+	return c.metaLearner.GetTopStrategies(5)
 }
 
 // RunParallelOptimization executes all five Phase 3 optimization tracks.
