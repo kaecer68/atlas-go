@@ -575,10 +575,12 @@ func (o *Optimizer) buildPositions(
 		actualValue := float64(shares) * quote.Last
 
 		factors := map[FactorType]float64{
-			FactorMomentum: score.Momentum,
-			FactorValue:    score.Value,
-			FactorQuality:  score.Quality,
-			FactorAgent:    score.Agent,
+			FactorMomentum:  score.Momentum,
+			FactorValue:     score.Value,
+			FactorQuality:   score.Quality,
+			FactorAgent:     score.Agent,
+			FactorInstSent:  score.InstitutionalSentiment,
+			FactorLiquidity: score.Liquidity,
 		}
 		if score.Narrative != 0 {
 			factors[FactorNarrative] = score.Narrative

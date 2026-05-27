@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/industry"
 )
 
 func isFinite(f float64) bool {
@@ -110,6 +111,29 @@ func (fe *FactorEngine) WithIndustryCycleProvider(fn func(symbol string) *domain
 	defer fe.mu.Unlock()
 	fe.cycleProv = fn
 	return fe
+}
+
+// SetCycleTracker replaces the industry cycle provider to use a shared CycleTracker.
+func (fe *FactorEngine) SetCycleTracker(ct *industry.CycleTracker) {
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
+	fe.cycleProv = func(symbol string) *domain.IndustryCycleFactorScore {
+		id := classifyIndustry(symbol)
+		if id == "" {
+			return nil
+		}
+		pos, ok := ct.GetPosition(id)
+		if !ok {
+			return nil
+		}
+		return &domain.IndustryCycleFactorScore{
+			Score:      pos.GetPhaseScore(),
+			Phase:      string(pos.BusinessCycle),
+			PhaseScore: pos.GetPhaseScore(),
+			Confidence: pos.Confidence,
+			IndustryID: id,
+		}
+	}
 }
 
 // WithPreciousMetalsProvider attaches a macro data provider for precious metals factor scoring.
@@ -1032,4 +1056,19 @@ func (fe *FactorEngine) pmGoldSilverRatioScore(ctx *PreciousMetalsContext) float
 		return z / 1.5 * 0.5
 	}
 	return z / 1.5 * 0.3
+}
+
+func classifyIndustry(symbol string) string {
+	switch symbol {
+	case "2330.TW", "2454.TW", "2303.TW":
+		return "semiconductor"
+	case "2317.TW", "2382.TW":
+		return "electronics"
+	case "2881.TW", "2882.TW", "2891.TW":
+		return "financials"
+	case "2603.TW", "2609.TW", "2615.TW":
+		return "shipping"
+	default:
+		return ""
+	}
 }
