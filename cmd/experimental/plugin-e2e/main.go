@@ -71,6 +71,10 @@ func (customMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quo
 
 func main() {
 	cfg := config.Load()
+	// Explicitly resolve replay data path via VERSION file chain
+	// (Load() defaults to samples/replay/twse_stock_day_all_sample.csv; GetReplayDataPath
+	// resolves through VERSION → data/replay/tw_extended_90days.csv for production data)
+	cfg.ReplayDataPath = config.GetReplayDataPath(cfg.WorkDir)
 
 	// ── Step 1: External agent spec (JSON) ──────────────────────────
 	fixtureDir := filepath.Join(cfg.WorkDir, "cmd/experimental/plugin-e2e/fixtures")
