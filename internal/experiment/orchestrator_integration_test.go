@@ -10,7 +10,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/experiment"
-	"github.com/kaecer68/atlas-go/internal/experiment/candidate"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -92,7 +91,7 @@ func TestScreenedRecommendationsFlowThroughExperimentAndJudge(t *testing.T) {
 		t.Fatal("expected scorecards from screened recommendation outcomes")
 	}
 
-	candidate := evolution.SelectWeakestAgent(registry, scorecards)
+	candidate := domain.SelectWeakestAgent(registry, scorecards)
 	if candidate == nil {
 		t.Fatal("expected evolution candidate from screened recommendations")
 	}
@@ -100,7 +99,7 @@ func TestScreenedRecommendationsFlowThroughExperimentAndJudge(t *testing.T) {
 		t.Errorf("expected candidate agent growth-momentum-test, got %s", candidate.Agent.ID)
 	}
 
-	brief := evolution.BuildMutationBrief("window-20260325-20260327", candidate)
+	brief := domain.BuildMutationBrief("window-20260325-20260327", candidate)
 	if brief == nil {
 		t.Fatal("expected mutation brief")
 	}
