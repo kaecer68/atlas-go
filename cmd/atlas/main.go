@@ -50,6 +50,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/storage"
+	"github.com/kaecer68/atlas-go/internal/swarm"
 )
 
 type appDeps struct {
@@ -1319,6 +1320,45 @@ func run(args []string, deps appDeps) error {
 				},
 			})
 			log.Printf("[Gateway] registered factor_weight_calibrate background task (24h interval)")
+
+			// Register auto_swarm_simulation — periodic swarm simulation
+			// for training data generation and scenario monitoring.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "auto_swarm_simulation",
+				Interval: 30 * time.Minute,
+				Jitter:   3 * time.Minute,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					sys, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus)
+					if err != nil {
+						return fmt.Errorf("create system for swarm: %w", err)
+					}
+					if gatewayFetcher != nil {
+						sys.Sim().SetProvider(orchestrator.NewGatewayBackedProvider(cfg))
+					}
+					ctrl := sys.Phase3Controller()
+					if ctrl == nil {
+						return nil
+					}
+					trainingDir := filepath.Join(cfg.WorkDir, "data/state/swarm_training")
+					ctrl.SetTrainingStore(swarm.NewTrainingStore(trainingDir))
+
+					baseState := swarm.MarketState{
+						Timestamp: time.Now(),
+						Prices:    make(map[string]float64),
+						Volumes:   make(map[string]float64),
+					}
+					// Seed with common TWSE symbols and placeholder prices.
+					for _, sym := range []string{"2330.TW", "2317.TW", "2454.TW", "2412.TW", "2308.TW"} {
+						baseState.Prices[sym] = 100.0
+						baseState.Volumes[sym] = 5000000
+					}
+					ctrl.RunSwarmCycle(baseState)
+					logging.Info("swarm_btm", "cycle_completed", "symbols", len(baseState.Prices))
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered auto_swarm_simulation background task (30m interval)")
 
 			taskMgr.Start(sysCtx)
 			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))

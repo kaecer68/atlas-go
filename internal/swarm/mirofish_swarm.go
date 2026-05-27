@@ -12,15 +12,15 @@ import (
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
-// MiroFishSwarm manages parallel market simulations
+// MiroFishSwarm manages parallel market simulations.
+// Start() is synchronous — it runs all simulations to completion and
+// stores a consensus result. No background goroutines or tickers.
 type MiroFishSwarm struct {
 	config    SwarmConfig
 	fish      []*MiroFish
 	scenarios []MarketScenario
 	results   []SimulationResult
 	mu        sync.RWMutex
-	isRunning bool
-	stopCh    chan struct{}
 }
 
 // MiroFish represents a single simulation unit
@@ -139,7 +139,6 @@ func NewMiroFishSwarm(config SwarmConfig) *MiroFishSwarm {
 		fish:      make([]*MiroFish, 0, config.FishCount),
 		scenarios: make([]MarketScenario, 0),
 		results:   make([]SimulationResult, 0),
-		stopCh:    make(chan struct{}),
 	}
 }
 
@@ -230,66 +229,44 @@ func (sw *MiroFishSwarm) InitializeScenarios(baseState MarketState) {
 	logging.Info("mirofish_swarm", "initialized", "fish_count", len(sw.fish), "scenario_count", len(sw.scenarios))
 }
 
-// Start begins the swarm simulation
+// Start runs the swarm simulation synchronously.
+// All fish are simulated to completion, then a consensus result is computed
+// and stored. No background goroutines or tickers.
 func (sw *MiroFishSwarm) Start() {
 	sw.mu.Lock()
-	defer sw.mu.Unlock()
 
-	if sw.isRunning {
-		return
-	}
-
-	sw.isRunning = true
-	sw.stopCh = make(chan struct{})
-
-	// Run simulation in parallel batches
-	batchSize := len(sw.fish) / sw.config.Parallelism
-	for i := 0; i < sw.config.Parallelism; i++ {
+	var wg sync.WaitGroup
+	batchSize := max(1, len(sw.fish)/sw.config.Parallelism)
+	for i := 0; i < sw.config.Parallelism && i*batchSize < len(sw.fish); i++ {
 		start := i * batchSize
 		end := start + batchSize
-		if i == sw.config.Parallelism-1 {
+		if i == sw.config.Parallelism-1 || end > len(sw.fish) {
 			end = len(sw.fish)
 		}
-		go sw.runBatch(sw.fish[start:end], sw.stopCh)
+		wg.Add(1)
+		go func(batch []*MiroFish) {
+			defer wg.Done()
+			sw.runBatch(batch)
+		}(sw.fish[start:end])
 	}
+	sw.mu.Unlock()
 
-	// Start result aggregator
-	go sw.aggregateResults(sw.stopCh)
+	wg.Wait()
 
-	logging.Info("mirofish_swarm", "swarm_started")
-}
-
-// IsRunning reports whether the swarm simulation is active.
-func (sw *MiroFishSwarm) IsRunning() bool {
-	sw.mu.RLock()
-	defer sw.mu.RUnlock()
-	return sw.isRunning
-}
-
-// Stop halts the simulation
-func (sw *MiroFishSwarm) Stop() {
 	sw.mu.Lock()
-	defer sw.mu.Unlock()
+	result := sw.computeConsensus()
+	sw.results = append(sw.results, result)
+	sw.mu.Unlock()
 
-	if !sw.isRunning {
-		return
-	}
-
-	sw.isRunning = false
-	close(sw.stopCh)
-
-	logging.Info("mirofish_swarm", "swarm_stopped")
+	logging.Info("mirofish_swarm", "swarm_completed", "fish_count", len(sw.fish))
 }
+
+// Stop is a no-op kept for backward compatibility. Start() is now synchronous.
+func (sw *MiroFishSwarm) Stop() {}
 
 // runBatch simulates a batch of fish
-func (sw *MiroFishSwarm) runBatch(fish []*MiroFish, stopCh <-chan struct{}) {
+func (sw *MiroFishSwarm) runBatch(fish []*MiroFish) {
 	for _, f := range fish {
-		select {
-		case <-stopCh:
-			return
-		default:
-		}
-
 		sw.simulateFish(f)
 	}
 }
@@ -299,16 +276,13 @@ func (sw *MiroFishSwarm) simulateFish(fish *MiroFish) {
 	steps := int(fish.Scenario.Duration / sw.config.TimeStep)
 
 	for i := 0; i < steps && fish.isAlive; i++ {
-		// Update market state based on scenario
 		newState := sw.evolveState(fish.CurrentState, fish.Scenario, i)
 		fish.History = append(fish.History, newState)
 		fish.CurrentState = newState
 
-		// Generate predictions
 		pred := sw.generatePrediction(fish, newState)
 		fish.Predictions = append(fish.Predictions, pred)
 
-		// Update performance
 		sw.updatePerformance(fish, pred)
 	}
 }
@@ -321,16 +295,14 @@ func (sw *MiroFishSwarm) evolveState(current MarketState, scenario MarketScenari
 		Volumes:   make(map[string]float64),
 	}
 
-	// Apply random walk with drift
 	for symbol, price := range current.Prices {
 		drift := scenario.Trend * float64(sw.config.TimeStep.Hours()) / 24.0
-		shock := rand.NormFloat64() * scenario.Volatility / math.Sqrt(252.0) // Daily vol
+		shock := rand.NormFloat64() * scenario.Volatility / math.Sqrt(252.0)
 		newPrice := price * (1 + drift + shock)
 		newState.Prices[symbol] = newPrice
 		newState.Volumes[symbol] = current.Volumes[symbol] * (1 + rand.Float64()*0.2)
 	}
 
-	// Apply scenario events
 	for _, event := range scenario.Events {
 		eventStep := int(event.Time.Sub(current.Timestamp) / sw.config.TimeStep)
 		if eventStep == step {
@@ -338,7 +310,6 @@ func (sw *MiroFishSwarm) evolveState(current MarketState, scenario MarketScenari
 		}
 	}
 
-	// Update aggregated metrics
 	newState.Volatility = scenario.Volatility * (1 + rand.Float64()*0.3)
 	newState.Sentiment = calculateSentiment(newState, scenario)
 	newState.Correlation = 0.5 + rand.Float64()*0.3
@@ -348,7 +319,6 @@ func (sw *MiroFishSwarm) evolveState(current MarketState, scenario MarketScenari
 
 // generatePrediction creates prediction based on fish's view of market
 func (sw *MiroFishSwarm) generatePrediction(fish *MiroFish, state MarketState) Prediction {
-	// Simple trend-following prediction for demonstration
 	var targetSymbol string
 	var targetPrice float64
 
@@ -358,7 +328,6 @@ func (sw *MiroFishSwarm) generatePrediction(fish *MiroFish, state MarketState) P
 		break
 	}
 
-	// Determine direction based on recent trend
 	direction := "neutral"
 	if len(fish.History) > 5 {
 		oldPrice := fish.History[len(fish.History)-5].Prices[targetSymbol]
@@ -369,7 +338,6 @@ func (sw *MiroFishSwarm) generatePrediction(fish *MiroFish, state MarketState) P
 		}
 	}
 
-	// Confidence based on volatility
 	confidence := 1.0 - state.Volatility
 	if confidence < 0.3 {
 		confidence = 0.3
@@ -387,16 +355,12 @@ func (sw *MiroFishSwarm) generatePrediction(fish *MiroFish, state MarketState) P
 
 // updatePerformance tracks fish prediction accuracy
 func (sw *MiroFishSwarm) updatePerformance(fish *MiroFish, pred Prediction) {
-	// Check if prediction was correct (would need future state in real implementation)
-	// For now, increment counters
 	fish.Performance.TotalPredictions++
 
-	// Simulate accuracy based on confidence
 	if rand.Float64() < pred.Confidence {
 		fish.Performance.CorrectPredictions++
 	}
 
-	// Update accuracy
 	if fish.Performance.TotalPredictions > 0 {
 		fish.Performance.Accuracy = float64(fish.Performance.CorrectPredictions) / float64(fish.Performance.TotalPredictions)
 	}
@@ -417,31 +381,11 @@ func (sw *MiroFishSwarm) applyEvent(state *MarketState, event MarketEvent) {
 		}
 		state.Sentiment = 0.8
 	case "earnings_surprise":
-		// Random symbol gets earnings surprise
 		for sym := range state.Prices {
 			state.Prices[sym] *= (1 + event.Magnitude*(rand.Float64()-0.5))
-			break // Only affect one symbol
+			break
 		}
 	default:
-		// Ignore unknown event types.
-	}
-}
-
-// aggregateResults combines predictions from all fish
-func (sw *MiroFishSwarm) aggregateResults(stopCh <-chan struct{}) {
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-stopCh:
-			return
-		case <-ticker.C:
-			sw.mu.Lock()
-			result := sw.computeConsensus()
-			sw.results = append(sw.results, result)
-			sw.mu.Unlock()
-		}
 	}
 }
 
@@ -450,7 +394,6 @@ func (sw *MiroFishSwarm) computeConsensus() SimulationResult {
 	consensus := make(map[string]ConsensusPrediction)
 	anomalies := make([]Anomaly, 0)
 
-	// Aggregate predictions by symbol
 	for _, fish := range sw.fish {
 		if !fish.isAlive {
 			continue
@@ -474,14 +417,12 @@ func (sw *MiroFishSwarm) computeConsensus() SimulationResult {
 		}
 	}
 
-	// Calculate consensus direction and average confidence
 	for sym, cp := range consensus {
 		total := cp.BullishCount + cp.BearishCount + cp.NeutralCount
 		if total > 0 {
 			cp.AverageConfidence /= float64(total)
 		}
 
-		// Determine consensus direction
 		if cp.BullishCount > cp.BearishCount && cp.BullishCount > cp.NeutralCount {
 			cp.ConsensusDirection = "bullish"
 		} else if cp.BearishCount > cp.BullishCount && cp.BearishCount > cp.NeutralCount {
@@ -492,7 +433,6 @@ func (sw *MiroFishSwarm) computeConsensus() SimulationResult {
 
 		consensus[sym] = cp
 
-		// Check for anomalies (high disagreement)
 		if cp.BullishCount > 0 && cp.BearishCount > 0 {
 			disagreement := float64(min(cp.BullishCount, cp.BearishCount)) / float64(max(cp.BullishCount, cp.BearishCount))
 			if disagreement > 0.3 {
@@ -553,7 +493,6 @@ func (sw *MiroFishSwarm) GetAllResults() []SimulationResult {
 	sw.mu.RLock()
 	defer sw.mu.RUnlock()
 
-	// Return copy
 	results := make([]SimulationResult, len(sw.results))
 	copy(results, sw.results)
 	return results
@@ -564,7 +503,6 @@ func (sw *MiroFishSwarm) GetTopFish(n int) []*MiroFish {
 	sw.mu.RLock()
 	defer sw.mu.RUnlock()
 
-	// Sort by accuracy
 	sorted := make([]*MiroFish, len(sw.fish))
 	copy(sorted, sw.fish)
 
@@ -641,7 +579,6 @@ func (sw *MiroFishSwarm) generateVolatilityEvents() []MarketEvent {
 }
 
 func (sw *MiroFishSwarm) generateQuietEvents() []MarketEvent {
-	// Fewer events in quiet periods
 	if rand.Float64() < 0.3 {
 		return []MarketEvent{
 			{Time: time.Now().Add(168 * time.Hour), Type: "earnings_surprise", Magnitude: 0.02, Description: "Unexpected earnings"},
@@ -660,7 +597,6 @@ func (sw *MiroFishSwarm) generateTransitionEvents() []MarketEvent {
 // Utility functions
 
 func calculateSentiment(state MarketState, scenario MarketScenario) float64 {
-	// Simplified sentiment calculation
 	base := 0.0
 	if scenario.Trend > 0 {
 		base = 0.3
@@ -668,9 +604,8 @@ func calculateSentiment(state MarketState, scenario MarketScenario) float64 {
 		base = -0.3
 	}
 
-	// Adjust for volatility
 	if state.Volatility > 0.3 {
-		base *= 0.5 // Fear reduces sentiment impact
+		base *= 0.5
 	}
 
 	return base + rand.Float64()*0.2 - 0.1
