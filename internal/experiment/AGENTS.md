@@ -43,3 +43,11 @@
 - **Mutation 漂移**：產生的變異必須保留 `RequiredSkills` 關鍵字，否則 Policy Check 會失敗。
 - **重用 Slice**：在多次模擬 run 之間絕對不可重用 `[]Recommendation`。
 - **遺漏 Replay**：Judge 依賴 `ATLAS_REPLAY_DATA_PATH`，若該路徑下無對應日期之 JSONL，評判將無法進行。
+
+## 因子權重穩定性閘門 (factor_weight_stability Gate)
+
+`factor_weight_stability` 閘門會在實驗評判時比較實驗快照中的因子權重與當前運行權重。若偏離超過 `factor_weight_drift_threshold`（預設 15%），實驗將被拒絕 — 因為績效差異可能來自權重漂移而非策略改進。
+
+此閘門依賴實驗執行時產生的 `ParameterSnapshotID`。`computeWeightDrift()` 比較快照中的 `FactorWeight.BaseWeights` 與當前 `ParametersConfig`。
+
+**所有實驗 brief 的 `acceptance_gates` 均已包含此閘門。**

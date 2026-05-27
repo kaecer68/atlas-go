@@ -13,7 +13,8 @@
   "acceptance_gates": [
     "maintain_sharpe_like",
     "improve_hit_rate",
-    "control_false_positive_rate"
+    "control_false_positive_rate",
+    "factor_weight_stability"
   ],
   "forbidden_actions": [
     "remove required skill boundaries",

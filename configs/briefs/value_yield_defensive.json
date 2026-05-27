@@ -13,7 +13,8 @@
   "acceptance_gates": [
     "maintain_sharpe_like",
     "improve_defensive_capture",
-    "preserve_yield_quality"
+    "preserve_yield_quality",
+    "factor_weight_stability"
   ],
   "forbidden_actions": [
     "remove required skill boundaries",

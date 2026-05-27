@@ -301,3 +301,19 @@ go test ./internal/portfolio/...
 go vet ./internal/portfolio/...
 test -z "$(gofmt -l internal/portfolio/)"
 ```
+## 13. 因子權重校準器 (FactorWeightCalibrator)
+
+`CalibrateWeights(ctx, orders)` 提供全自動的因子權重校準：
+- 從 session ledger 載入歷史推薦資料（含因子分數與 forward return）
+- 使用 Bayesian optimizer (Gaussian Process + RBF kernel) 搜尋最優權重
+- 自審計（train/validation split）：改善 >3% 則自動套用，退化則自動拒絕
+- 結果寫入 `parameters.json` → `GetWeights()` 即時讀取（hot-reload）
+- 背景任務 `factor_weight_calibrate` 每 24h 自動執行
+
+### 校準結果即時同步
+
+`GetWeights()` 會合併 `baseWeights` 與 `config.FactorWeight.BaseWeights`。校準器寫入 config 後，**無需重啟**即可生效。
+
+## 14. CycleTracker 橋接
+
+`FactorEngine.SetCycleTracker(ct)` 接受來自 monitoring 服務的共用 CycleTracker。當即時數據（FinMind/Fubon）更新 CycleTracker 時，`cycleProv` 自動反映最新產業週期位置。
