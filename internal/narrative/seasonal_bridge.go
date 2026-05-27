@@ -122,6 +122,33 @@ func (sb *SeasonalBridge) SeasonalMultiplier(theme string, industryID string, di
 		default:
 			return 1.0
 		}
+	case "taiwan_political_risk":
+		switch industryID {
+		case "semiconductor", "ai_supply_chain", "electronics":
+			return 0.92
+		case "financials", "consumer":
+			return 1.08
+		default:
+			return 1.0
+		}
+	case "election_cycle":
+		switch industryID {
+		case "semiconductor", "ai_supply_chain":
+			return 0.97
+		case "consumer":
+			return 1.03
+		default:
+			return 1.0
+		}
+	case "spring_festival_season":
+		switch industryID {
+		case "consumer":
+			return 1.05
+		case "semiconductor", "ai_supply_chain":
+			return 0.95
+		default:
+			return 1.0
+		}
 	default:
 		return 1.0
 	}
@@ -184,6 +211,34 @@ func (sb *SeasonalBridge) CorrelationMultiplier(theme string, industryA, industr
 		}
 		if match("consumer", "financials") {
 			return 1.08
+		}
+		return 1.0
+
+	case "taiwan_political_risk":
+		if match("semiconductor", "shipping") ||
+			match("electronics", "shipping") {
+			return 1.10
+		}
+		if match("semiconductor", "ai_supply_chain") {
+			return 1.12
+		}
+		if match("consumer", "financials") {
+			return 1.10
+		}
+		return 1.0
+
+	case "election_cycle":
+		if match("financials", "consumer") {
+			return 1.05
+		}
+		if match("semiconductor", "ai_supply_chain") {
+			return 0.95
+		}
+		return 1.0
+
+	case "spring_festival_season":
+		if match("consumer", "financials") {
+			return 1.05
 		}
 		return 1.0
 
