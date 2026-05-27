@@ -9,9 +9,12 @@
 /.gocache/
 /data/cache/
 /data/state/
-/data/replay/*.jsonl
+# Data files: only ignore generated CSVs in replay;
+# tw_extended_90days.jsonl is required for CI governance gates (factor engine)
+# and fundamentals.json is required for fundamental analysis.
 /data/replay/*.csv
-/data/fundamentals.json
+/data/replay/*.jsonl
+!/data/replay/tw_extended_90days.jsonl
 /prompts/experiments/
 /internal/experiment/prompts/
 /janus-backtest

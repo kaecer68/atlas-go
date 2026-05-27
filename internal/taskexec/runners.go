@@ -352,6 +352,10 @@ func (r *marginBackfillRunner) Name() string {
 }
 
 func (r *marginBackfillRunner) Run(ctx context.Context, req SubmitRequest, sink EventSink) error {
+	if r.workDir == "" {
+		return fmt.Errorf("margin backfill: workDir is required")
+	}
+
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
