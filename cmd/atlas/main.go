@@ -235,6 +235,11 @@ func run(args []string, deps appDeps) error {
 		janusEngine.EnsureAllRegimes()
 		janusEngine.Update()
 
+		var elDetector *eventlogic.PatternDetector
+		var elCorrector *eventlogic.SelfCorrector
+		var elRulesPath string
+		var elHistoryRecorder *eventlogic.HistoryRecorder
+
 		// Initialize Gateway BEFORE DashboardAPI so data providers use Gateway from the start.
 		var gateway *apigateway.Gateway
 		var gatewayFetcher monitoring.DataFetcher
@@ -295,6 +300,8 @@ func run(args []string, deps appDeps) error {
 			apievents.BufferNarrativeEvent(event)
 			return nil
 		})
+		risk.NewAuditSubscriber(dashEventBus)
+		log.Printf("[Risk] audit subscriber registered on shared event bus")
 		// Initial macro ingestion on startup to populate snapshot and publish events.
 		ingestCtx, ingestCancel := context.WithTimeout(context.Background(), 60*time.Second)
 		// Cancel ingest early if shutdown is signaled to avoid blocking
@@ -425,6 +432,9 @@ func run(args []string, deps appDeps) error {
 			}
 			if repo != nil {
 				system.SetRepository(repo)
+			}
+			if elDetector != nil && elCorrector != nil {
+				system.WithEventLogic(elDetector, elCorrector, elRulesPath, elHistoryRecorder)
 			}
 			if dashboard != nil {
 				system.SetDrawdownReporter(func(d portfolio.DrawdownResult) {
@@ -1170,12 +1180,17 @@ func run(args []string, deps appDeps) error {
 			riskGate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
 			dashboard.SetRiskGate(riskGate)
 
-			elRegistry := eventlogic.NewRegistry()
+			elRulesPath = filepath.Join(cfg.WorkDir, "data/state/eventlogic", "rules.json")
+			elHistoryRecorder = eventlogic.NewHistoryRecorder(filepath.Join(cfg.WorkDir, "data/state/eventlogic", "history.jsonl"))
+			elRegistry := eventlogic.LoadOrDefault(elRulesPath)
 			elValidator := eventlogic.NewValidator(elRegistry)
-			elDetector := eventlogic.NewDetector(elRegistry)
+			elDetector = eventlogic.NewDetector(elRegistry)
+			elCorrector = eventlogic.NewCorrector(elRegistry)
 			elHandlers := apieventlogic.NewHandlers(elRegistry, elValidator, elDetector)
 			dashboard.SetEventLogicHandlers(elHandlers)
-			log.Printf("[EventLogic] initialized with %d seed rules", elRegistry.Count())
+			elRegistry.MustSave(elRulesPath)
+			elHistoryRecorder.SnapshotAll(elRegistry)
+			log.Printf("[EventLogic] loaded %d rules from %s", elRegistry.Count(), elRulesPath)
 
 			if dashEventBus != nil {
 				dashEventBus.Subscribe(eventbus.EventSimulationComplete, func(ctx context.Context, ev eventbus.BusEvent) error {

@@ -16,9 +16,9 @@ type PriceChangeSnapshot struct {
 	ChangePct  float64
 	RecordedAt time.Time
 }
-type PatternDetector struct{ registry *RuleRegistry }
+type PatternDetector struct{ Registry *RuleRegistry }
 
-func NewDetector(r *RuleRegistry) *PatternDetector { return &PatternDetector{registry: r} }
+func NewDetector(r *RuleRegistry) *PatternDetector { return &PatternDetector{Registry: r} }
 
 type DiscoverCandidate struct {
 	Pattern    string
@@ -74,5 +74,5 @@ func (d *PatternDetector) build(th, se, dir string, hh, tt int, rr float64) Disc
 
 func (d *PatternDetector) PromoteCandidate(c *DiscoverCandidate) (*EventRule, error) {
 	r := &EventRule{ID: c.Conditions[0].StringValue + "-" + c.Sectors[0], Pattern: c.Pattern, Conditions: c.Conditions, AffectedSectors: c.Sectors, Direction: c.Direction, HitRate: c.HitRate, TotalTests: c.TotalCount, TotalHits: c.HitCount, ConfidenceSource: SourceAutoDiscovered, Status: StatusActive, CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	return r, d.registry.Add(r)
+	return r, d.Registry.Add(r)
 }
