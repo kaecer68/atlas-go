@@ -1,0 +1,784 @@
+package apigateway
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"testing"
+	"time"
+)
+
+// =========================================================================
+// ScheduledTask Tests — IsEnabled
+// =========================================================================
+
+func TestScheduledTask_IsEnabled_InitiallyFalse(t *testing.T) {
+	task := &ScheduledTask{}
+	if task.IsEnabled() {
+		t.Error("IsEnabled should return false for a fresh ScheduledTask")
+	}
+}
+
+func TestScheduledTask_IsEnabled_AfterSetEnabledTrue(t *testing.T) {
+	task := &ScheduledTask{}
+	task.SetEnabled(true)
+	if !task.IsEnabled() {
+		t.Error("IsEnabled should return true after SetEnabled(true)")
+	}
+}
+
+func TestScheduledTask_IsEnabled_AfterSetEnabledFalse(t *testing.T) {
+	task := &ScheduledTask{}
+	task.SetEnabled(true)
+	task.SetEnabled(false)
+	if task.IsEnabled() {
+		t.Error("IsEnabled should return false after SetEnabled(false)")
+	}
+}
+
+func TestScheduledTask_IsEnabled_ToggleBackAndForth(t *testing.T) {
+	task := &ScheduledTask{}
+
+	task.SetEnabled(true)
+	if !task.IsEnabled() {
+		t.Error("expected true after first SetEnabled(true)")
+	}
+
+	task.SetEnabled(false)
+	if task.IsEnabled() {
+		t.Error("expected false after SetEnabled(false)")
+	}
+
+	task.SetEnabled(true)
+	if !task.IsEnabled() {
+		t.Error("expected true after second SetEnabled(true)")
+	}
+}
+
+// =========================================================================
+// ScheduledTask Tests — SetEnabled
+// =========================================================================
+
+func TestScheduledTask_SetEnabled_True(t *testing.T) {
+	task := &ScheduledTask{}
+	task.SetEnabled(true)
+	if !task.Enabled {
+		t.Error("Enabled field should be true after SetEnabled(true)")
+	}
+}
+
+func TestScheduledTask_SetEnabled_False(t *testing.T) {
+	task := &ScheduledTask{Enabled: true}
+	task.SetEnabled(false)
+	if task.Enabled {
+		t.Error("Enabled field should be false after SetEnabled(false)")
+	}
+}
+
+// =========================================================================
+// ScheduledTask Tests — LastRun / SetLastRun
+// =========================================================================
+
+func TestScheduledTask_LastRun_InitiallyZeroTime(t *testing.T) {
+	task := &ScheduledTask{}
+	if !task.LastRun().IsZero() {
+		t.Error("LastRun should return zero time for a fresh ScheduledTask")
+	}
+}
+
+func TestScheduledTask_SetLastRun_ReturnsSetValue(t *testing.T) {
+	task := &ScheduledTask{}
+	now := time.Date(2026, 5, 27, 10, 0, 0, 0, time.UTC)
+	task.SetLastRun(now)
+
+	got := task.LastRun()
+	if !got.Equal(now) {
+		t.Errorf("LastRun = %v, want %v", got, now)
+	}
+}
+
+func TestScheduledTask_SetLastRun_MultipleUpdates(t *testing.T) {
+	task := &ScheduledTask{}
+
+	t1 := time.Date(2026, 5, 27, 10, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 5, 27, 11, 0, 0, 0, time.UTC)
+	t3 := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
+
+	task.SetLastRun(t1)
+	if !task.LastRun().Equal(t1) {
+		t.Error("first SetLastRun not reflected")
+	}
+
+	task.SetLastRun(t2)
+	if !task.LastRun().Equal(t2) {
+		t.Error("second SetLastRun not reflected")
+	}
+
+	task.SetLastRun(t3)
+	if !task.LastRun().Equal(t3) {
+		t.Error("third SetLastRun not reflected")
+	}
+}
+
+func TestScheduledTask_LastRun_ThreadSafe(t *testing.T) {
+	task := &ScheduledTask{}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = task.LastRun()
+		}()
+	}
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			task.SetLastRun(time.Date(2026, 5, 27, 10, i%60, 0, 0, time.UTC))
+		}(i)
+	}
+	wg.Wait()
+
+	// After concurrent r/w, LastRun should not panic and return a valid time
+	got := task.LastRun()
+	if got.IsZero() {
+		t.Error("LastRun should not be zero after concurrent writes")
+	}
+}
+
+// =========================================================================
+// ScheduledTask Tests — Failures / RecordFailure / RecordSuccess
+// =========================================================================
+
+func TestScheduledTask_Failures_InitiallyZero(t *testing.T) {
+	task := &ScheduledTask{}
+	if task.Failures() != 0 {
+		t.Errorf("Failures = %d, want 0", task.Failures())
+	}
+}
+
+func TestScheduledTask_RecordFailure_IncrementsCount(t *testing.T) {
+	task := &ScheduledTask{}
+
+	for i := 1; i <= 5; i++ {
+		task.RecordFailure()
+		if got := task.Failures(); got != i {
+			t.Errorf("after %d RecordFailure calls: Failures = %d, want %d", i, got, i)
+		}
+	}
+}
+
+func TestScheduledTask_RecordFailure_ThenRecordSuccess(t *testing.T) {
+	task := &ScheduledTask{}
+
+	// Three failures
+	task.RecordFailure()
+	task.RecordFailure()
+	task.RecordFailure()
+
+	if got := task.Failures(); got != 3 {
+		t.Errorf("after 3 failures: Failures = %d, want 3", got)
+	}
+
+	// RecordSuccess resets to zero
+	task.RecordSuccess()
+	if got := task.Failures(); got != 0 {
+		t.Errorf("after RecordSuccess: Failures = %d, want 0", got)
+	}
+}
+
+func TestScheduledTask_RecordSuccess_OnCleanTask(t *testing.T) {
+	task := &ScheduledTask{}
+
+	// RecordSuccess on a task with zero failures should stay zero
+	task.RecordSuccess()
+	if got := task.Failures(); got != 0 {
+		t.Errorf("after RecordSuccess on clean task: Failures = %d, want 0", got)
+	}
+}
+
+func TestScheduledTask_RecordFailure_RecordSuccess_MultipleCycles(t *testing.T) {
+	task := &ScheduledTask{}
+
+	for cycle := 0; cycle < 3; cycle++ {
+		// Build up failures
+		for i := 0; i < cycle+1; i++ {
+			task.RecordFailure()
+		}
+		if got := task.Failures(); got != cycle+1 {
+			t.Errorf("cycle %d after failures: Failures = %d, want %d", cycle, got, cycle+1)
+		}
+
+		// Reset
+		task.RecordSuccess()
+		if got := task.Failures(); got != 0 {
+			t.Errorf("cycle %d after RecordSuccess: Failures = %d, want 0", cycle, got)
+		}
+	}
+}
+
+// =========================================================================
+// BackgroundTaskManager Tests — NewBackgroundTaskManager
+// =========================================================================
+
+func TestBackgroundTaskManager_NewWithNilGateway(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	if m == nil {
+		t.Fatal("NewBackgroundTaskManager(nil) returned nil")
+	}
+	if m.gateway != nil {
+		t.Error("gateway should be nil when passed nil")
+	}
+	if m.registry == nil {
+		t.Error("registry should be initialized (non-nil map)")
+	}
+	if len(m.registry) != 0 {
+		t.Errorf("registry should be empty, got %d entries", len(m.registry))
+	}
+}
+
+func TestBackgroundTaskManager_NewWithNilGateway_ListReturnsEmpty(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	names := m.List()
+	if len(names) != 0 {
+		t.Errorf("List should return empty slice, got %v", names)
+	}
+}
+
+// =========================================================================
+// BackgroundTaskManager Tests — Register / Get
+// =========================================================================
+
+func TestBackgroundTaskManager_Register_EmptyChannelID(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	task := &ScheduledTask{
+		Name:      "test-task",
+		ChannelID: "", // empty → skips gateway check
+		Interval:  1 * time.Hour,
+		Task:      func(ctx context.Context) error { return nil },
+	}
+
+	err := m.Register(task)
+	if err != nil {
+		t.Fatalf("Register with empty ChannelID should succeed, got: %v", err)
+	}
+}
+
+func TestBackgroundTaskManager_Register_AutoJitter(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	task := &ScheduledTask{
+		Name:     "jitter-task",
+		Interval: 1 * time.Hour,
+		Jitter:   0, // should be auto-set
+		Task:     func(ctx context.Context) error { return nil },
+	}
+
+	err := m.Register(task)
+	if err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+	if task.Jitter == 0 {
+		t.Error("Jitter should be auto-computed when Interval > 0 and Jitter == 0")
+	}
+}
+
+func TestBackgroundTaskManager_Register_NoAutoJitterWhenZeroInterval(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	task := &ScheduledTask{
+		Name:     "no-jitter-task",
+		Interval: 0,
+		Jitter:   0,
+		Task:     func(ctx context.Context) error { return nil },
+	}
+
+	err := m.Register(task)
+	if err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+	// Jitter should remain 0 because Interval is 0 (guard: task.Jitter == 0 && task.Interval > 0)
+	if task.Jitter != 0 {
+		t.Errorf("Jitter should remain 0 when Interval is 0, got %v", task.Jitter)
+	}
+}
+
+func TestBackgroundTaskManager_Register_ExistingJitterPreserved(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	existingJitter := 30 * time.Second
+	task := &ScheduledTask{
+		Name:     "preset-jitter-task",
+		Interval: 1 * time.Hour,
+		Jitter:   existingJitter,
+		Task:     func(ctx context.Context) error { return nil },
+	}
+
+	err := m.Register(task)
+	if err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+	if task.Jitter != existingJitter {
+		t.Errorf("Jitter should be preserved, got %v, want %v", task.Jitter, existingJitter)
+	}
+}
+
+func TestBackgroundTaskManager_Get_ExistingTask(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	task := &ScheduledTask{
+		Name:     "get-test-task",
+		Interval: 1 * time.Hour,
+		Task:     func(ctx context.Context) error { return nil },
+	}
+
+	_ = m.Register(task)
+
+	got, ok := m.Get("get-test-task")
+	if !ok {
+		t.Fatal("Get should return true for registered task")
+	}
+	if got != task {
+		t.Error("Get should return the same task pointer that was registered")
+	}
+	if got.Name != "get-test-task" {
+		t.Errorf("returned task Name = %s, want get-test-task", got.Name)
+	}
+}
+
+func TestBackgroundTaskManager_Get_NonExistingTask(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+
+	got, ok := m.Get("nonexistent")
+	if ok {
+		t.Error("Get should return false for non-existing task")
+	}
+	if got != nil {
+		t.Errorf("Get should return nil for non-existing task, got %v", got)
+	}
+}
+
+// =========================================================================
+// BackgroundTaskManager Tests — List
+// =========================================================================
+
+func TestBackgroundTaskManager_List_SingleTask(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	task := &ScheduledTask{
+		Name:     "list-task-1",
+		Interval: 1 * time.Hour,
+		Task:     func(ctx context.Context) error { return nil },
+	}
+	_ = m.Register(task)
+
+	names := m.List()
+	if len(names) != 1 {
+		t.Fatalf("List should return 1 name, got %d", len(names))
+	}
+	if names[0] != "list-task-1" {
+		t.Errorf("List[0] = %s, want list-task-1", names[0])
+	}
+}
+
+func TestBackgroundTaskManager_List_MultipleTasks(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+
+	taskNames := []string{"task-alpha", "task-beta", "task-gamma"}
+	for _, name := range taskNames {
+		_ = m.Register(&ScheduledTask{
+			Name:     name,
+			Interval: 1 * time.Hour,
+			Task:     func(ctx context.Context) error { return nil },
+		})
+	}
+
+	names := m.List()
+	if len(names) != len(taskNames) {
+		t.Fatalf("List should return %d names, got %d", len(taskNames), len(names))
+	}
+
+	nameSet := make(map[string]bool, len(names))
+	for _, n := range names {
+		nameSet[n] = true
+	}
+	for _, want := range taskNames {
+		if !nameSet[want] {
+			t.Errorf("List missing expected task name: %s", want)
+		}
+	}
+}
+
+func TestBackgroundTaskManager_List_ReturnsFreshSlice(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	_ = m.Register(&ScheduledTask{
+		Name:     "mutate-test",
+		Interval: 1 * time.Hour,
+		Task:     func(ctx context.Context) error { return nil },
+	})
+
+	names1 := m.List()
+	if len(names1) != 1 {
+		t.Fatal("expected 1 task")
+	}
+	names1[0] = "mutated" // mutate the returned slice
+
+	names2 := m.List()
+	if len(names2) != 1 {
+		t.Fatal("expected 1 task on second call")
+	}
+	if names2[0] == "mutated" {
+		t.Error("List should return a fresh copy, mutations should not affect subsequent calls")
+	}
+}
+
+// =========================================================================
+// BackgroundTaskManager Tests — Status
+// =========================================================================
+
+func TestBackgroundTaskManager_Status_Empty(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	statuses := m.Status()
+	if len(statuses) != 0 {
+		t.Errorf("Status should return empty slice for empty registry, got %d entries", len(statuses))
+	}
+}
+
+func TestBackgroundTaskManager_Status_SingleTask(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	task := &ScheduledTask{
+		Name:     "status-task",
+		Interval: 30 * time.Minute,
+		Task:     func(ctx context.Context) error { return nil },
+	}
+	task.SetEnabled(true)
+	task.SetLastRun(time.Date(2026, 5, 27, 10, 0, 0, 0, time.UTC))
+	task.RecordFailure()
+	task.RecordFailure()
+	_ = m.Register(task)
+
+	statuses := m.Status()
+	if len(statuses) != 1 {
+		t.Fatalf("Status should return 1 entry, got %d", len(statuses))
+	}
+
+	s := statuses[0]
+	if s.Name != "status-task" {
+		t.Errorf("Status.Name = %s, want status-task", s.Name)
+	}
+	if s.ChannelID != "" {
+		t.Errorf("Status.ChannelID = %s, want empty", s.ChannelID)
+	}
+	if !s.Enabled {
+		t.Error("Status.Enabled should be true")
+	}
+	if s.Interval != 30*time.Minute {
+		t.Errorf("Status.Interval = %v, want 30m", s.Interval)
+	}
+	if !s.LastRun.Equal(time.Date(2026, 5, 27, 10, 0, 0, 0, time.UTC)) {
+		t.Errorf("Status.LastRun = %v, want 2026-05-27T10:00:00Z", s.LastRun)
+	}
+	if s.ConsecutiveFailures != 2 {
+		t.Errorf("Status.ConsecutiveFailures = %d, want 2", s.ConsecutiveFailures)
+	}
+}
+
+func TestBackgroundTaskManager_Status_MultipleTasks(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+
+	for i := 0; i < 5; i++ {
+		name := string(rune('A' + i))
+		_ = m.Register(&ScheduledTask{
+			Name:     string(name),
+			Interval: time.Duration(i+1) * time.Hour,
+			Task:     func(ctx context.Context) error { return nil },
+		})
+	}
+
+	statuses := m.Status()
+	if len(statuses) != 5 {
+		t.Fatalf("Status should return 5 entries, got %d", len(statuses))
+	}
+
+	seen := make(map[string]bool)
+	for _, s := range statuses {
+		if s.Name == "" {
+			t.Error("Status entry has empty Name")
+		}
+		if s.Interval <= 0 {
+			t.Errorf("Status entry %s has non-positive Interval", s.Name)
+		}
+		if seen[s.Name] {
+			t.Errorf("duplicate Status entry for %s", s.Name)
+		}
+		seen[s.Name] = true
+	}
+}
+
+func TestBackgroundTaskManager_Status_ReturnsFreshSlice(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	_ = m.Register(&ScheduledTask{
+		Name:     "fresh-slice-task",
+		Interval: 1 * time.Hour,
+		Task:     func(ctx context.Context) error { return nil },
+	})
+
+	s1 := m.Status()
+	s2 := m.Status()
+
+	if len(s1) != 1 || len(s2) != 1 {
+		t.Fatal("expected 1 entry in Status results")
+	}
+
+	// Mutate s1, verify s2 is unaffected
+	s1[0] = TaskStatus{Name: "corrupted"}
+	if s2[0].Name == "corrupted" {
+		t.Error("Status should return a fresh copy, mutations should not affect later calls")
+	}
+}
+
+// =========================================================================
+// BackgroundTaskManager Tests — SetFailureHandler
+// =========================================================================
+
+func TestBackgroundTaskManager_SetFailureHandler_VerifyCallback(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+
+	handlerCalled := false
+	m.SetFailureHandler(func(taskName string, consecutiveFailures int, err error) {
+		handlerCalled = true
+	})
+
+	m.failureHandler("test-task", 1, errors.New("test error"))
+	if !handlerCalled {
+		t.Error("SetFailureHandler should store and use the handler callback")
+	}
+}
+
+func TestBackgroundTaskManager_SetFailureHandler_NilHandler(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+
+	// Set a handler first
+	m.SetFailureHandler(func(taskName string, consecutiveFailures int, err error) {})
+
+	// Set nil — this should NOT panic (just stores nil)
+	m.SetFailureHandler(nil)
+
+	// Verify no panic when calling nil handler via executeTask path would happen,
+	// but we can't call that without goroutines. Just verify the field is nil.
+	if m.failureHandler != nil {
+		t.Error("failureHandler should be nil after SetFailureHandler(nil)")
+	}
+}
+
+// =========================================================================
+// TaskStatus Tests — Struct Fields
+// =========================================================================
+
+func TestTaskStatus_StructFields(t *testing.T) {
+	now := time.Date(2026, 5, 27, 14, 30, 0, 0, time.UTC)
+	ts := TaskStatus{
+		Name:                "test-task",
+		ChannelID:           "channel-1",
+		Enabled:             true,
+		Interval:            15 * time.Minute,
+		LastRun:             now,
+		ConsecutiveFailures: 3,
+	}
+
+	if ts.Name != "test-task" {
+		t.Errorf("Name = %s, want test-task", ts.Name)
+	}
+	if ts.ChannelID != "channel-1" {
+		t.Errorf("ChannelID = %s, want channel-1", ts.ChannelID)
+	}
+	if !ts.Enabled {
+		t.Error("Enabled should be true")
+	}
+	if ts.Interval != 15*time.Minute {
+		t.Errorf("Interval = %v, want 15m", ts.Interval)
+	}
+	if !ts.LastRun.Equal(now) {
+		t.Errorf("LastRun = %v, want %v", ts.LastRun, now)
+	}
+	if ts.ConsecutiveFailures != 3 {
+		t.Errorf("ConsecutiveFailures = %d, want 3", ts.ConsecutiveFailures)
+	}
+}
+
+func TestTaskStatus_ZeroValue(t *testing.T) {
+	var ts TaskStatus
+
+	if ts.Name != "" {
+		t.Errorf("zero Name should be empty, got %s", ts.Name)
+	}
+	if ts.ChannelID != "" {
+		t.Errorf("zero ChannelID should be empty, got %s", ts.ChannelID)
+	}
+	if ts.Enabled {
+		t.Error("zero Enabled should be false")
+	}
+	if ts.Interval != 0 {
+		t.Errorf("zero Interval should be 0, got %v", ts.Interval)
+	}
+	if !ts.LastRun.IsZero() {
+		t.Errorf("zero LastRun should be zero time, got %v", ts.LastRun)
+	}
+	if ts.ConsecutiveFailures != 0 {
+		t.Errorf("zero ConsecutiveFailures should be 0, got %d", ts.ConsecutiveFailures)
+	}
+}
+
+// =========================================================================
+// Concurrent Access Tests
+// =========================================================================
+
+func TestScheduledTask_ConcurrentIsEnabled(t *testing.T) {
+	task := &ScheduledTask{}
+	var wg sync.WaitGroup
+
+	// 50 goroutines reading IsEnabled
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				_ = task.IsEnabled()
+			}
+		}()
+	}
+
+	// 50 goroutines writing SetEnabled
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				task.SetEnabled(j%2 == 0)
+			}
+		}()
+	}
+
+	wg.Wait()
+	// If we get here without a panic/race, the test passes.
+}
+
+func TestScheduledTask_ConcurrentFailures(t *testing.T) {
+	task := &ScheduledTask{}
+	var wg sync.WaitGroup
+
+	// 100 goroutines recording failures concurrently
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 50; j++ {
+				task.RecordFailure()
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// After 100 × 50 = 5000 RecordFailure calls, failures should be exactly 5000
+	if task.Failures() != 5000 {
+		t.Errorf("after 5000 concurrent RecordFailure calls: Failures = %d, want 5000", task.Failures())
+	}
+}
+
+func TestScheduledTask_ConcurrentMixedOperations(t *testing.T) {
+	task := &ScheduledTask{}
+	var wg sync.WaitGroup
+
+	// Readers
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				_ = task.IsEnabled()
+				_ = task.LastRun()
+				_ = task.Failures()
+			}
+		}()
+	}
+
+	// Writers
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			now := time.Now()
+			for j := 0; j < 100; j++ {
+				task.SetEnabled(j%2 == 0)
+				task.SetLastRun(now)
+				task.RecordFailure()
+				if j%10 == 0 {
+					task.RecordSuccess()
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
+	// If we get here without a panic/race, the test passes.
+}
+
+func TestBackgroundTaskManager_ConcurrentRegisterAndGet(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	var wg sync.WaitGroup
+
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			name := "concurrent-task-" + string(rune('0'+i%10))
+			_ = m.Register(&ScheduledTask{
+				Name:     name,
+				Interval: 1 * time.Hour,
+				Task:     func(ctx context.Context) error { return nil },
+			})
+		}(i)
+	}
+
+	wg.Wait()
+
+	// After concurrent registration, registry should have some tasks
+	names := m.List()
+	if len(names) == 0 {
+		t.Error("expected some tasks after concurrent Register calls")
+	}
+}
+
+func TestBackgroundTaskManager_ConcurrentListAndRegister(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	var wg sync.WaitGroup
+
+	// Register some initial tasks
+	for i := 0; i < 5; i++ {
+		_ = m.Register(&ScheduledTask{
+			Name:     "initial-task-" + string(rune('A'+i)),
+			Interval: 1 * time.Hour,
+			Task:     func(ctx context.Context) error { return nil },
+		})
+	}
+
+	// Concurrent List and Register
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = m.List()
+		}()
+	}
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_ = m.Register(&ScheduledTask{
+				Name:     "parallel-task-" + string(rune('0'+i)),
+				Interval: 1 * time.Hour,
+				Task:     func(ctx context.Context) error { return nil },
+			})
+		}(i)
+	}
+
+	wg.Wait()
+	// If we get here without a panic/race, the test passes.
+}
