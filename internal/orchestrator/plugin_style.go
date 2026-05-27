@@ -14,17 +14,24 @@ func (GrowthMomentumExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (GrowthMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), 45)
+	cb, pp := 45, 8
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		if gm := cfg.SectorExecutor.GrowthMomentum; gm.ConvictionBase.Value != 0 {
+			cb = gm.ConvictionBase.Value
+			pp = gm.PricePenalty.Value
+		}
+	}
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), cb)
 
 	ctrl, ok := domain.ExtractPromptControl(prompt)
 	if ok {
 		if quote.Last < quote.Open {
-			b.add("price_penalty", -8, "last < open")
+			b.add("price_penalty", -pp, "last < open")
 		}
 		penalty := 0
 		if ctrl.RequireTrend {
 			if quote.Last < quote.Open {
-				penalty += 8
+				penalty += pp
 			}
 		}
 		if ctrl.VolumeDowngrade > 0 {
