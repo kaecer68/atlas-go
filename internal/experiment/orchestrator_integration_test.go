@@ -9,8 +9,8 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/evolution"
 	"github.com/kaecer68/atlas-go/internal/experiment"
+	"github.com/kaecer68/atlas-go/internal/experiment/candidate"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
