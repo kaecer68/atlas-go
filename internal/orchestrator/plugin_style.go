@@ -299,3 +299,45 @@ func tbReject(prompt string, quote domain.Quote, volumeFloor int64, conviction i
 	}
 	return conviction < defaultConvictionFloor
 }
+
+// ─── StrategyMeta implementations ──────────────────────────────
+
+func (GrowthMomentumExecutor) StrategyMeta() StrategyMeta {
+	fc := loadFactorConfig()
+	return StrategyMeta{
+		ID: "growth_momentum", Skill: "growth_momentum",
+		Description: "Price persistence detector with volume-confirmation and trend-following overlay",
+		Factors:     []string{"momentum"},
+		Parameters:  momentumParams(fc),
+	}
+}
+
+func (ValueYieldExecutor) StrategyMeta() StrategyMeta {
+	fc := loadFactorConfig()
+	return StrategyMeta{
+		ID: "value_yield", Skill: "value_yield",
+		Description: "Defensive yield lens with valuation discipline and yield-trap avoidance",
+		Factors:     []string{"value", "quality"},
+		Parameters:  append(valueParams(fc), qualityParams(fc)...),
+	}
+}
+
+func (EarningsQualityExecutor) StrategyMeta() StrategyMeta {
+	fc := loadFactorConfig()
+	return StrategyMeta{
+		ID: "earnings_quality", Skill: "earnings_quality",
+		Description: "Earnings quality detector with repeatable-profit and guidance analysis",
+		Factors:     []string{"quality"},
+		Parameters:  qualityParams(fc),
+	}
+}
+
+func (TechnicalBreakoutExecutor) StrategyMeta() StrategyMeta {
+	fc := loadFactorConfig()
+	return StrategyMeta{
+		ID: "technical_breakout", Skill: "technical_breakout",
+		Description: "Breakout structure detector with volume confirmation, close-strength, and catch-up momentum",
+		Factors:     []string{"momentum", "liquidity"},
+		Parameters:  append(momentumParams(fc), liquidityParams(fc)...),
+	}
+}

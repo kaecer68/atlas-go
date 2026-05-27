@@ -354,6 +354,70 @@ func classifyETFType(symbol string) string {
 	}
 }
 
+// ─── StrategyMeta implementations ──────────────────────────────
+
+var _ StrategyProvider = SemiconductorExecutor{}
+
+func (SemiconductorExecutor) StrategyMeta() StrategyMeta {
+	fc := loadFactorConfig()
+	return StrategyMeta{
+		ID: "semiconductor", Skill: "semiconductor_desk",
+		Description: "Semiconductor supply-chain leadership and capital-expenditure cycle detector",
+		Factors:     []string{"momentum", "liquidity"},
+		Parameters:  append(momentumParams(fc), liquidityParams(fc)...),
+	}
+}
+
+func (AISupplyChainExecutor) StrategyMeta() StrategyMeta {
+	fc := loadFactorConfig()
+	return StrategyMeta{
+		ID: "ai_supply_chain", Skill: "ai_supply_chain_desk",
+		Description: "AI infrastructure order-flow sensitivity and capex cycle exposure",
+		Factors:     []string{"momentum"},
+		Parameters:  momentumParams(fc),
+	}
+}
+
+func (LEOSatelliteExecutor) StrategyMeta() StrategyMeta {
+	fc := loadFactorConfig()
+	return StrategyMeta{
+		ID: "leo_satellite", Skill: "leo_satellite_desk",
+		Description: "LEO satellite deployment cycle and infrastructure build-out detector",
+		Factors:     []string{"momentum"},
+		Parameters:  momentumParams(fc),
+	}
+}
+
+func (ETFRotationExecutor) StrategyMeta() StrategyMeta {
+	fc := loadFactorConfig()
+	return StrategyMeta{
+		ID: "etf_rotation", Skill: "etf_rotation_desk",
+		Description: "Macro-aware ETF rotation with defensive/gold bias in risk-off regimes",
+		Factors:     []string{"momentum", "liquidity"},
+		Parameters:  append(momentumParams(fc), liquidityParams(fc)...),
+	}
+}
+
+func (FinancialsExecutor) StrategyMeta() StrategyMeta {
+	fc := loadFactorConfig()
+	return StrategyMeta{
+		ID: "financials", Skill: "financials_desk",
+		Description: "Financial carry trade with balance-sheet resilience and credit quality gates",
+		Factors:     []string{"value", "quality"},
+		Parameters:  append(valueParams(fc), qualityParams(fc)...),
+	}
+}
+
+func (ShippingExecutor) StrategyMeta() StrategyMeta {
+	fc := loadFactorConfig()
+	return StrategyMeta{
+		ID: "shipping", Skill: "shipping_desk",
+		Description: "Shipping cycle exposure using tactical momentum and weak-close avoidance",
+		Factors:     []string{"momentum", "liquidity"},
+		Parameters:  append(momentumParams(fc), liquidityParams(fc)...),
+	}
+}
+
 const defaultConvictionFloor = 50
 
 func priceTargets(quote domain.Quote, targetMult, stopLossMult float64) (float64, float64) {
