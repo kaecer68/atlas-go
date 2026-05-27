@@ -62,7 +62,7 @@ func CalibrateWeights(ctx context.Context, orders []CalibratedOrder) (*WeightCal
 
 	if err != nil {
 		summary = "optimization failed"
-	} else if valid != nil && len(valid) >= 2 {
+	} else if len(valid) >= 2 {
 		baseV := evalWeights(valid, current)
 		optV := evalWeights(valid, optimal)
 		vDelta := (optV - baseV) / math.Abs(baseV+1e-10) * 100
