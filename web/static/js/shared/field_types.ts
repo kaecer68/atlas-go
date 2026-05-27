@@ -1328,7 +1328,6 @@ export interface SwarmStatusResponse {
   anomaly_count: number;
   scenario_count: number;
   generations_evolved: number;
-  training_scenarios: number;
 }
 
 export interface SymbolAttribution {

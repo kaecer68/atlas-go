@@ -1202,7 +1202,6 @@ export const FIELD = {
     anomaly_count: 'anomaly_count',
     scenario_count: 'scenario_count',
     generations_evolved: 'generations_evolved',
-    training_scenarios: 'training_scenarios',
   },
   SymbolAttribution: {
     symbol: 'symbol',

@@ -584,7 +584,6 @@
   "trade_count",
   "trade_id",
   "trades",
-  "training_scenarios",
   "transaction_cost_bps",
   "transaction_tax",
   "transaction_tax_rate",
