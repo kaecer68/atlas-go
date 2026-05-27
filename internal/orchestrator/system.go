@@ -172,7 +172,7 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 
 	runtimeParams := loadRuntimeParamsOrDefault(cfg.ParametersConfigPath)
 	macroSnapshot := &marketdata.MacroDataSnapshot{}
-	factorEngine, hp, fp := buildFactorEngine(runtimeParams, macroSnapshot)
+	factorEngine, hp, fp := buildFactorEngine(runtimeParams, macroSnapshot, cfg.ReplayDataPath)
 	if eventBus == nil {
 		eventBus = eventbus.NewChannelEventBus(256)
 	}
