@@ -665,7 +665,12 @@ type NarrativeConvictionParameters struct {
 // Each sub-struct groups parameters for a specific executor, so adding
 // a new executor only requires adding its block of ParameterMetadata fields.
 type SectorExecutorParameters struct {
-	LEOSatellite LEOSatelliteExecutorParameters `json:"leo_satellite,omitempty"`
+	LEOSatellite      LEOSatelliteExecutorParameters       `json:"leo_satellite,omitempty"\`
+	Financials        FinancialsExecutorParameters          `json:"financials,omitempty"\`
+	Shipping          ShippingExecutorParameters            `json:"shipping,omitempty"\`
+	ValueYield        ValueYieldExecutorParameters          `json:"value_yield,omitempty"\`
+	EarningsQuality   EarningsQualityExecutorParameters     `json:"earnings_quality,omitempty"\`
+	TechnicalBreakout TechnicalBreakoutExecutorParameters   `json:"technical_breakout,omitempty"\`
 }
 
 // LEOSatelliteExecutorParameters holds all tunable values for the
@@ -678,6 +683,53 @@ type LEOSatelliteExecutorParameters struct {
 	DowngradePenaltyDelta ParameterMetadata[int]     `json:"downgrade_penalty_delta"`
 	TargetPriceMult       ParameterMetadata[float64] `json:"target_price_multiplier"`
 	StopLossMult          ParameterMetadata[float64] `json:"stop_loss_multiplier"`
+}
+type FinancialsExecutorParameters struct {
+	DividendBoost            ParameterMetadata[int]     `json:"dividend_boost"`
+	BalanceSheetPenalty      ParameterMetadata[int]     `json:"balance_sheet_penalty"`
+	CreditQualityBoost       ParameterMetadata[int]     `json:"credit_quality_boost"`
+	CreditQualityPenalty     ParameterMetadata[int]     `json:"credit_quality_penalty"`
+	SpreadSensitivityBoost   ParameterMetadata[int]     `json:"spread_sensitivity_boost"`
+	SpreadSensitivityPenalty ParameterMetadata[int]     `json:"spread_sensitivity_penalty"`
+	CapitalAdequacyBoost     ParameterMetadata[int]     `json:"capital_adequacy_boost"`
+	PriceToOpenThreshold     ParameterMetadata[float64] `json:"price_to_open_threshold"`
+	PriceToHighThreshold     ParameterMetadata[float64] `json:"price_to_high_threshold"`
+}
+type ShippingExecutorParameters struct {
+	TacticalBoost      ParameterMetadata[int]     `json:"tactical_boost"`
+	WeakClosePenalty   ParameterMetadata[int]     `json:"weak_close_penalty"`
+	WeakCloseThreshold ParameterMetadata[float64] `json:"weak_close_threshold"`
+}
+type ValueYieldExecutorParameters struct {
+	CashFlowBoost    ParameterMetadata[int] `json:"cash_flow_boost"`
+	YieldTrapPenalty ParameterMetadata[int] `json:"yield_trap_penalty"`
+}
+type EarningsQualityExecutorParameters struct {
+	RepeatableBoost   ParameterMetadata[int]     `json:"repeatable_boost"`
+	GuidancePenalty   ParameterMetadata[int]     `json:"guidance_penalty"`
+	GuidanceThreshold ParameterMetadata[float64] `json:"guidance_threshold"`
+}
+type TechnicalBreakoutExecutorParameters struct {
+	DefaultVolumeFloor     ParameterMetadata[int64]   `json:"default_volume_floor"`
+	StrictVolumeFloor      ParameterMetadata[int64]   `json:"strict_volume_floor"`
+	RelaxedVolumeFloor     ParameterMetadata[int64]   `json:"relaxed_volume_floor"`
+	LowVolumeFloor         ParameterMetadata[int64]   `json:"low_volume_floor"`
+	LowVolumeBoost         ParameterMetadata[int]     `json:"low_volume_boost"`
+	RejectLowVolumeFloor   ParameterMetadata[int64]   `json:"reject_low_volume_floor"`
+	VolumeBoost            ParameterMetadata[int]     `json:"volume_boost"`
+	CloseStrengthPenalty   ParameterMetadata[int]     `json:"close_strength_penalty"`
+	CloseStrengthThreshold ParameterMetadata[float64] `json:"close_strength_threshold"`
+	CloseStrengthTolerance ParameterMetadata[float64] `json:"close_strength_tolerance"`
+	SurgeBoost             ParameterMetadata[int]     `json:"surge_boost"`
+	SurgePenalty           ParameterMetadata[int]     `json:"surge_penalty"`
+	OpenRejectionPenalty   ParameterMetadata[int]     `json:"open_rejection_penalty"`
+	LateBreakoutPenalty    ParameterMetadata[int]     `json:"late_breakout_penalty"`
+	LateBreakoutThreshold  ParameterMetadata[float64] `json:"late_breakout_threshold"`
+	ConfirmationBoost      ParameterMetadata[int]     `json:"confirmation_boost"`
+	ConfirmationThreshold  ParameterMetadata[float64] `json:"confirmation_threshold"`
+	CatchUpBoost           ParameterMetadata[int]     `json:"catch_up_boost"`
+	CatchUpLowerThreshold  ParameterMetadata[float64] `json:"catch_up_lower_threshold"`
+	CatchUpUpperThreshold  ParameterMetadata[float64] `json:"catch_up_upper_threshold"`
 }
 
 // PreciousMetalsParameters holds tunable values for precious metals factor scoring.
@@ -1379,6 +1431,15 @@ func (p *ParametersConfig) Validate() error {
 	}
 	if p.SectorExecutor.LEOSatellite.StopLossMult.Value != 0 && (p.SectorExecutor.LEOSatellite.StopLossMult.Value <= 0 || p.SectorExecutor.LEOSatellite.StopLossMult.Value >= 1) {
 		return fmt.Errorf("sector_executor.leo_satellite.stop_loss_multiplier (%.3f) must be in (0,1)", p.SectorExecutor.LEOSatellite.StopLossMult.Value)
+	}
+	if fp := p.SectorExecutor.Financials; fp.PriceToOpenThreshold.Value != 0 && (fp.PriceToOpenThreshold.Value <= 0 || fp.PriceToOpenThreshold.Value >= 1) {
+		return fmt.Errorf("sector_executor.financials.price_to_open_threshold (%.3f) must be in (0,1)", fp.PriceToOpenThreshold.Value)
+	}
+	if eq := p.SectorExecutor.EarningsQuality; eq.GuidanceThreshold.Value != 0 && (eq.GuidanceThreshold.Value <= 0 || eq.GuidanceThreshold.Value >= 1) {
+		return fmt.Errorf("sector_executor.earnings_quality.guidance_threshold (%.3f) must be in (0,1)", eq.GuidanceThreshold.Value)
+	}
+	if tp := p.SectorExecutor.TechnicalBreakout; tp.DefaultVolumeFloor.Value != 0 && tp.DefaultVolumeFloor.Value < 0 {
+		return fmt.Errorf("sector_executor.technical_breakout.default_volume_floor (%d) must be non-negative", tp.DefaultVolumeFloor.Value)
 	}
 
 	if err := p.validateAlert(); err != nil {
