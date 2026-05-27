@@ -20,14 +20,14 @@ type CalibratedOrder struct {
 }
 
 type WeightCalibrationReport struct {
-	Timestamp       time.Time       `json:"timestamp"`
-	OrdersEvaluated int             `json:"orders_evaluated"`
-	BaselineScore   float64         `json:"baseline_score"`
-	OptimizedScore  float64         `json:"optimized_score"`
-	ImprovementPct  float64         `json:"improvement_pct"`
-	Verdict         string          `json:"verdict"`
-	Changes         []WeightChange  `json:"changes"`
-	Summary         string          `json:"summary"`
+	Timestamp       time.Time      `json:"timestamp"`
+	OrdersEvaluated int            `json:"orders_evaluated"`
+	BaselineScore   float64        `json:"baseline_score"`
+	OptimizedScore  float64        `json:"optimized_score"`
+	ImprovementPct  float64        `json:"improvement_pct"`
+	Verdict         string         `json:"verdict"`
+	Changes         []WeightChange `json:"changes"`
+	Summary         string         `json:"summary"`
 }
 
 type WeightChange struct {

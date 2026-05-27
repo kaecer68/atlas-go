@@ -180,19 +180,19 @@ func (e *FactorWeightEngine) OnRegimeChange(oldRegime, newRegime string, confide
 
 	fw := fwConfig()
 	var (
-		riskOnMom  = 0.05
-		riskOnQual = -0.03
-		riskOnVal  = -0.02
-		riskOffMom = -0.05
-		riskOffQ   = 0.05
-		riskOffVal = 0.03
-		riskOffLiq = 0.03
-		riskOffETF = 0.04
-		riskOffIC  = 0.04
-		highVolLiq = 0.05
-		highVolMom = -0.03
+		riskOnMom   = 0.05
+		riskOnQual  = -0.03
+		riskOnVal   = -0.02
+		riskOffMom  = -0.05
+		riskOffQ    = 0.05
+		riskOffVal  = 0.03
+		riskOffLiq  = 0.03
+		riskOffETF  = 0.04
+		riskOffIC   = 0.04
+		highVolLiq  = 0.05
+		highVolMom  = -0.03
 		highVolInst = -0.02
-		highVolIC  = 0.03
+		highVolIC   = 0.03
 	)
 	if fw != nil {
 		riskOnMom = fw.RiskOnMomentum.Value
@@ -220,10 +220,10 @@ func (e *FactorWeightEngine) OnRegimeChange(oldRegime, newRegime string, confide
 		}
 	case "high_vol":
 		e.eventWeights["regime_high_vol"] = map[FactorType]float64{
-			FactorMomentum:       highVolMom,
-			FactorLiquidity:      highVolLiq,
-			FactorInstSent:       highVolInst,
-			FactorIndustryCycle:  highVolIC,
+			FactorMomentum:      highVolMom,
+			FactorLiquidity:     highVolLiq,
+			FactorInstSent:      highVolInst,
+			FactorIndustryCycle: highVolIC,
 		}
 	default:
 		delete(e.eventWeights, "regime_risk_on")

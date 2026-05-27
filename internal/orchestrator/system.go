@@ -55,7 +55,9 @@ type PortfolioManager struct {
 	factorWeightEngine *portfolio.FactorWeightEngine
 }
 
-func (pm *PortfolioManager) FactorWeightEngine() *portfolio.FactorWeightEngine { return pm.factorWeightEngine }
+func (pm *PortfolioManager) FactorWeightEngine() *portfolio.FactorWeightEngine {
+	return pm.factorWeightEngine
+}
 
 type StrategyLayer struct {
 	strategyRegistry  *strategy.Registry
