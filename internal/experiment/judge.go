@@ -420,8 +420,52 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, st
 			if drift > maxDrift {
 				return false, fmt.Sprintf("rejected: factor weight drift %.1f%% exceeds threshold %.1f%% (regime-confounded)", drift*100, maxDrift*100)
 			}
-		case "reduce_false_positive_rate", "maintain_cro_authority", "reduce_sector_blindspots", "maintain_industry_coverage", "reduce_style_drift", "maintain_momentum_catch":
-			return false, fmt.Sprintf("rejected: gate %q requires outcome data not yet collected", gate)
+		case "reduce_false_positive_rate":
+			baselineFPR := negativeReturnRatio(result.BaselineReturns)
+			candidateFPR := negativeReturnRatio(result.CandidateReturns)
+			ratio := j.params.Experiment.VolatilityToleranceRatio.Value
+			if candidateFPR > baselineFPR*ratio {
+				return false, fmt.Sprintf("rejected: candidate false positive rate %.1f%% exceeds %.1fx baseline %.1f%%", candidateFPR*100, ratio, baselineFPR*100)
+			}
+		case "maintain_cro_authority":
+			if result.CandidateObservations > 0 && result.BaselineObservations > 0 {
+				ratio := float64(result.CandidateObservations) / float64(result.BaselineObservations)
+				maxGrowth := j.params.Experiment.VolatilityToleranceRatio.Value
+				if ratio > maxGrowth {
+					return false, fmt.Sprintf("rejected: candidate observation growth %.1fx exceeds authority threshold %.1fx", ratio, maxGrowth)
+				}
+			}
+		case "reduce_sector_blindspots":
+			if result.CandidateObservations < result.BaselineObservations {
+				ratio := float64(result.CandidateObservations) / float64(result.BaselineObservations)
+				minCoverage := 0.5
+				if ratio < minCoverage {
+					return false, fmt.Sprintf("rejected: candidate sector coverage %.0f%% below %.0f%% of baseline", ratio*100, minCoverage*100)
+				}
+			}
+		case "maintain_industry_coverage":
+			if result.CandidateObservations < result.BaselineObservations {
+				ratio := float64(result.CandidateObservations) / float64(result.BaselineObservations)
+				minCoverage := 0.5
+				if ratio < minCoverage {
+					return false, fmt.Sprintf("rejected: candidate industry coverage %.0f%% below %.0f%% of baseline", ratio*100, minCoverage*100)
+				}
+			}
+		case "reduce_style_drift":
+			if result.CandidateFactorCount > 0 && result.BaselineFactorCount > 0 {
+				candidateRatio := float64(result.CandidateFallbackCount) / float64(result.CandidateFactorCount)
+				baselineRatio := float64(result.BaselineFallbackCount) / float64(result.BaselineFactorCount)
+				maxDrift := j.params.Experiment.FactorWeightDriftThreshold.Value
+				if candidateRatio > baselineRatio+maxDrift {
+					return false, fmt.Sprintf("rejected: candidate style drift %.1f%% exceeds baseline %.1f%% by > %.1f%%", candidateRatio*100, baselineRatio*100, maxDrift*100)
+				}
+			}
+		case "maintain_momentum_catch":
+			baselineMCR := positiveReturnRatio(result.BaselineReturns)
+			candidateMCR := positiveReturnRatio(result.CandidateReturns)
+			if candidateMCR < baselineMCR-0.1 {
+				return false, fmt.Sprintf("rejected: candidate momentum catch rate %.1f%% below baseline %.1f%%", candidateMCR*100, baselineMCR*100)
+			}
 		default:
 			return false, fmt.Sprintf("rejected: unknown gate %q", gate)
 		}
@@ -505,6 +549,32 @@ func calculateVolatility(returns []float64) float64 {
 	}
 	_, variance := meanAndVariance(returns)
 	return math.Sqrt(variance)
+}
+
+func positiveReturnRatio(returns []float64) float64 {
+	if len(returns) == 0 {
+		return 0
+	}
+	var n int
+	for _, r := range returns {
+		if r > 0 {
+			n++
+		}
+	}
+	return float64(n) / float64(len(returns))
+}
+
+func negativeReturnRatio(returns []float64) float64 {
+	if len(returns) == 0 {
+		return 0
+	}
+	var n int
+	for _, r := range returns {
+		if r < 0 {
+			n++
+		}
+	}
+	return float64(n) / float64(len(returns))
 }
 
 func (j *Judge) requiredImprovementForProfile(mutationType string) float64 {
