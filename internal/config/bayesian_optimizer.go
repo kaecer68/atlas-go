@@ -128,6 +128,17 @@ func DefaultOptimizerConfig() OptimizerConfig {
 	}
 }
 
+// NewBayesianOptimizer creates a standalone optimizer for multi-dimensional search.
+func NewBayesianOptimizer(bounds [][2]float64, evaluator func(x []float64) (float64, error), cfg OptimizerConfig) *BayesianOptimizer {
+	return &BayesianOptimizer{
+		bounds:        bounds,
+		evaluator:     evaluator,
+		gp:            newGP(cfg.LengthScale, cfg.OutputScale, cfg.Noise),
+		initialPoints: cfg.InitialPoints,
+		iterations:    cfg.Iterations,
+	}
+}
+
 func (opt *BayesianOptimizer) Optimize() (OptimizeResult, error) {
 	dim := len(opt.bounds)
 	opt.rngState = 42

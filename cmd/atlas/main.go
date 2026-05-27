@@ -1226,10 +1226,41 @@ func run(args []string, deps appDeps) error {
 						return nil
 					},
 				})
-				log.Printf("[Gateway] registered regime_calibrate background task (1h interval, triggers calibration on regime change)")
-			}
+			log.Printf("[Gateway] registered regime_calibrate background task (1h interval, triggers calibration on regime change)")
+		}
 
-			taskMgr.Start(sysCtx)
+		_ = taskMgr.Register(&apigateway.ScheduledTask{
+			Name:     "factor_weight_calibrate",
+			Interval: 24 * time.Hour,
+			Enabled:  true,
+			Task: func(ctx context.Context) error {
+				orders, err := loadCalibrationOrders(cfg.WorkDir)
+				if err != nil {
+					return nil
+				}
+				report, err := portfolio.CalibrateWeights(ctx, orders)
+				if err != nil {
+					return nil
+				}
+				logging.Info("fw_calibrate", "completed",
+					"verdict", report.Verdict,
+					"improvement", report.ImprovementPct,
+					"changes", len(report.Changes),
+					"orders", report.OrdersEvaluated)
+				for _, ch := range report.Changes {
+					logging.Info("fw_calibrate", "weight_change",
+						"factor", string(ch.Factor),
+						"before", ch.Before,
+						"after", ch.After,
+						"delta", ch.DeltaPct,
+						"confidence", ch.Confidence)
+				}
+				return nil
+			},
+		})
+		log.Printf("[Gateway] registered factor_weight_calibrate background task (24h interval)")
+
+		taskMgr.Start(sysCtx)
 			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
 			dashEventBus.Publish(eventbus.BusEvent{
 				ID:          "schedule-" + time.Now().Format("150405"),
@@ -1601,4 +1632,24 @@ func extractTimestamp(filename string) int64 {
 		}
 	}
 	return 0
+}
+
+func loadCalibrationOrders(workDir string) ([]portfolio.CalibratedOrder, error) {
+	sessionsDir := filepath.Join(workDir, "data", "state", "sessions")
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		return nil, err
+	}
+	var all []portfolio.CalibratedOrder
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		orders, err := portfolio.LoadOrdersFromJSONL(filepath.Join(sessionsDir, e.Name(), "recommendation_outcomes.jsonl"))
+		if err != nil {
+			continue
+		}
+		all = append(all, orders...)
+	}
+	return all, nil
 }
