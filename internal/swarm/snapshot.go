@@ -81,7 +81,7 @@ func (sw *MiroFishSwarm) Snapshot() SwarmSnapshot {
 		TotalFish:           len(sw.fish),
 		ConsensusConfidence: confidence,
 		TopFishAccuracy:     topAccuracy,
-		GenerationsEvolved:  0, // Updated externally by Phase3Controller
+		GenerationsEvolved:  sw.generations,
 	}
 }
 

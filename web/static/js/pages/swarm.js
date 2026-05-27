@@ -17,7 +17,11 @@ function renderStatus(status) {
   const el = document.getElementById('swarm-status');
   if (!el) return;
   if (!status || status.error) {
-    el.innerHTML = '<div class="empty" style="padding:20px;text-align:center;color:var(--muted)">尚無模擬資料 — 等待背景排程執行</div>';
+    el.innerHTML = '<div class="empty" style="padding:24px;text-align:center;background:var(--panel-l2);border-radius:8px">' +
+      '<div style="font-size:32px;margin-bottom:8px">🐟</div>' +
+      '<div style="color:var(--text);font-weight:600;margin-bottom:4px">等待 Swarm 模擬資料</div>' +
+      '<div style="color:var(--muted);font-size:13px">MiroFish Swarm 每 30 分鐘自動執行一次背景模擬。<br>首次啟動後請稍待，或手動觸發模擬。</div>' +
+      '</div>';
     return;
   }
   const totalFish = status.total_fish != null ? status.total_fish : '—';

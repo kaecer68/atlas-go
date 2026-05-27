@@ -16,11 +16,12 @@ import (
 // Start() is synchronous — it runs all simulations to completion and
 // stores a consensus result. No background goroutines or tickers.
 type MiroFishSwarm struct {
-	config    SwarmConfig
-	fish      []*MiroFish
-	scenarios []MarketScenario
-	results   []SimulationResult
-	mu        sync.RWMutex
+	config      SwarmConfig
+	fish        []*MiroFish
+	scenarios   []MarketScenario
+	results     []SimulationResult
+	generations int
+	mu          sync.RWMutex
 }
 
 // MiroFish represents a single simulation unit
@@ -294,7 +295,8 @@ func (sw *MiroFishSwarm) simulateFish(fish *MiroFish) {
 	}
 }
 
-// evolveState advances market state according to scenario dynamics and fish's GARCH process.
+// evolveState advances market state according to scenario dynamics,
+// fish's GARCH process, cross-asset correlation, and jump-diffusion.
 func (sw *MiroFishSwarm) evolveState(fish *MiroFish, current MarketState, scenario MarketScenario, step int) MarketState {
 	newState := MarketState{
 		Timestamp: current.Timestamp.Add(sw.config.TimeStep),
@@ -302,15 +304,33 @@ func (sw *MiroFishSwarm) evolveState(fish *MiroFish, current MarketState, scenar
 		Volumes:   make(map[string]float64),
 	}
 
-	for symbol, price := range current.Prices {
+	// Collect symbols for correlated shock generation
+	symbols := make([]string, 0, len(current.Prices))
+	for sym := range current.Prices {
+		symbols = append(symbols, sym)
+	}
+
+	// Generate correlated shocks across all symbols
+	corrShocks := CorrelatedShocks(symbols, scenario.Regime)
+
+	// Jump process (systemic, applied once per step)
+	jumpProcess := JumpParamsForRegime(scenario.Regime)
+	var jumpMagnitude float64
+	if jumpProcess.ShouldJump() {
+		jumpMagnitude = jumpProcess.Magnitude()
+	}
+
+	for _, symbol := range symbols {
+		price := current.Prices[symbol]
 		drift := scenario.Trend * float64(sw.config.TimeStep.Hours()) / 24.0
 		sigma := fish.GARCH.CurrentSigma()
-		shock := rand.NormFloat64() * sigma
+		corrShock := corrShocks[symbol]
+		shock := corrShock * sigma + jumpMagnitude
+
 		newPrice := price * (1 + drift + shock)
 		newState.Prices[symbol] = newPrice
 		newState.Volumes[symbol] = current.Volumes[symbol] * (1 + rand.Float64()*0.2)
 
-		// Advance GARCH process with realized shock
 		fish.GARCH.Advance(shock)
 	}
 
@@ -323,7 +343,7 @@ func (sw *MiroFishSwarm) evolveState(fish *MiroFish, current MarketState, scenar
 
 	newState.Volatility = scenario.Volatility * (1 + rand.Float64()*0.3)
 	newState.Sentiment = calculateSentiment(newState, scenario)
-	newState.Correlation = 0.5 + rand.Float64()*0.3
+	newState.Correlation = correlationForRegime(scenario.Regime)
 
 	return newState
 }
@@ -597,8 +617,17 @@ func (sw *MiroFishSwarm) EvolveGeneration() {
 		oldFish.History = oldFish.History[:0]
 	}
 
+	sw.generations++
+
 	logging.Info("mirofish_swarm", "generation_evolved",
-		"elite", eliteCount, "replaced", replaceCount, "total", totalFish)
+		"elite", eliteCount, "replaced", replaceCount, "total", totalFish, "gen", sw.generations)
+}
+
+// Generations returns the number of evolution cycles completed.
+func (sw *MiroFishSwarm) Generations() int {
+	sw.mu.RLock()
+	defer sw.mu.RUnlock()
+	return sw.generations
 }
 
 // ExportTrainingData exports simulation results for agent training

@@ -410,3 +410,70 @@ func TestGARCHParamsPerRegime(t *testing.T) {
 		}
 	}
 }
+
+func TestCorrelatedShocks(t *testing.T) {
+	symbols := []string{"A", "B", "C"}
+	shocks := CorrelatedShocks(symbols, "crisis")
+	if len(shocks) != 3 {
+		t.Fatalf("expected 3 shocks, got %d", len(shocks))
+	}
+	for _, sym := range symbols {
+		if _, ok := shocks[sym]; !ok {
+			t.Errorf("missing shock for %s", sym)
+		}
+	}
+	// Check that high-correlation regimes produce non-zero values
+	for _, regime := range []string{"crisis", "risk_off", "risk_on", "complacent", "transition"} {
+		s := CorrelatedShocks(symbols, regime)
+		if len(s) == 0 {
+			t.Errorf("regime %s: empty shocks", regime)
+		}
+	}
+}
+
+func TestJumpProcess(t *testing.T) {
+	for _, regime := range []string{"risk_on", "risk_off", "crisis", "complacent", "transition"} {
+		jp := JumpParamsForRegime(regime)
+		if jp.Lambda < 0 || jp.SigmaJ < 0 {
+			t.Errorf("regime %s: invalid params lambda=%.3f sigma=%.3f", regime, jp.Lambda, jp.SigmaJ)
+		}
+		// Jump magnitude should be in a reasonable range
+		for range 100 {
+			mag := jp.Magnitude()
+			if mag < -1.0 || mag > 1.0 {
+				t.Errorf("regime %s: extreme jump magnitude %.3f", regime, mag)
+			}
+		}
+	}
+}
+
+func TestGenerationsCounter(t *testing.T) {
+	config := DefaultSwarmConfig()
+	config.FishCount = 10
+	config.SimulationHorizon = 12 * time.Hour
+	config.TimeStep = time.Hour
+
+	sw := NewMiroFishSwarm(config)
+	baseState := MarketState{
+		Timestamp: time.Now(),
+		Prices:    map[string]float64{"A": 100.0},
+		Volumes:   map[string]float64{"A": 1000000},
+	}
+	sw.InitializeScenarios(baseState)
+
+	if sw.Generations() != 0 {
+		t.Errorf("expected 0 generations before evolution, got %d", sw.Generations())
+	}
+
+	sw.Start()
+	sw.EvolveGeneration()
+
+	if sw.Generations() != 1 {
+		t.Errorf("expected 1 generation after EvolveGeneration, got %d", sw.Generations())
+	}
+
+	sw.EvolveGeneration()
+	if sw.Generations() != 2 {
+		t.Errorf("expected 2 generations, got %d", sw.Generations())
+	}
+}
