@@ -325,7 +325,7 @@ func (sw *MiroFishSwarm) evolveState(fish *MiroFish, current MarketState, scenar
 		drift := scenario.Trend * float64(sw.config.TimeStep.Hours()) / 24.0
 		sigma := fish.GARCH.CurrentSigma()
 		corrShock := corrShocks[symbol]
-		shock := corrShock * sigma + jumpMagnitude
+		shock := corrShock*sigma + jumpMagnitude
 
 		newPrice := price * (1 + drift + shock)
 		newState.Prices[symbol] = newPrice
