@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/csv"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -24,7 +23,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/autobacktest"
 	"github.com/kaecer68/atlas-go/internal/backtest"
-	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/bootstrap"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -53,6 +51,26 @@ import (
 	"github.com/kaecer68/atlas-go/internal/storage"
 	"github.com/kaecer68/atlas-go/internal/swarm"
 )
+
+// experimentMonitorAdapter wraps *monitoring.Monitor to match experiment.AutoExperimentMonitor interface.
+type experimentMonitorAdapter struct {
+	m *monitoring.Monitor
+}
+
+func (a *experimentMonitorAdapter) Alert(level string, category, message string, details map[string]any) {
+	if a.m != nil {
+		var al monitoring.AlertLevel
+		switch level {
+		case "error":
+			al = monitoring.AlertLevelError
+		case "warning":
+			al = monitoring.AlertLevelWarning
+		default:
+			al = monitoring.AlertLevelInfo
+		}
+		a.m.Alert(al, category, message, details)
+	}
+}
 
 type appDeps struct {
 	loadConfig      func() config.Config
@@ -1055,6 +1073,9 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered stress_test_daily background task (24h interval)")
 
+			// monitorAdapter wraps *monitoring.Monitor to match AutoExperimentMonitor interface.
+			monitorAdapter := &experimentMonitorAdapter{m: monitor}
+
 			// Register auto_experiment — weekly strategy evolution cycle.
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "auto_experiment",
@@ -1076,91 +1097,11 @@ func run(args []string, deps appDeps) error {
 							dashboard.SetLatestDrawdown(&d)
 						})
 					}
-
-					candidate, err := system.NextExperimentCandidate()
-					if err != nil {
-						return fmt.Errorf("identify candidate: %w", err)
-					}
-					if candidate == nil {
-						logging.Info("experiment", "no_candidate", "all agents currently healthy")
-						return nil
-					}
-
-					logging.Info("experiment", "candidate_selected",
-						"agent", candidate.Agent.ID,
-						"skill", candidate.Agent.Skill,
-						"sharpe", fmt.Sprintf("%.3f", candidate.Scorecard.SharpeLike),
-					)
-
-					windowID := "window-" + time.Now().Add(-7*24*time.Hour).Format("20060102") + "-" + time.Now().Format("20060102")
-					brief := domain.BuildMutationBrief(windowID, candidate)
-
-					briefDir := filepath.Join(cfg.WorkDir, "data", "state", "windows")
-					_ = os.MkdirAll(briefDir, 0o755)
-					briefPath := filepath.Join(briefDir, "auto-brief-"+candidate.Agent.ID+".json")
-					briefData, _ := json.MarshalIndent(brief, "", "  ")
-					if err := os.WriteFile(briefPath, briefData, 0o644); err != nil {
-						return fmt.Errorf("write brief: %w", err)
-					}
-
-					store := ledger.NewStore(cfg.LedgerDir)
-					executor := experiment.NewExecutor(store.(ledger.FullStore), cfg.BaselinePolicyPath)
-					result, runErr := executor.Run(briefPath, cfg.ReplayDataPath)
-					if runErr != nil {
-						monitor.Alert(monitoring.AlertLevelWarning, "experiment",
-							fmt.Sprintf("實驗失敗: agent=%s, err=%v", candidate.Agent.ID, runErr),
-							map[string]any{"agent": candidate.Agent.ID, "error": runErr.Error()})
-						return fmt.Errorf("run experiment: %w", runErr)
-					}
-
-					expPath := findLatestExperiment(filepath.Join(cfg.WorkDir, "data", "state", "experiments"))
-					if expPath == "" {
-						return fmt.Errorf("experiment result not found for %s", result.Experiment.ID)
-					}
-
-					judge := experiment.NewJudge(store.(ledger.ExperimentStore), cfg.ReplayDataPath, cfg.BaselinePolicyPath)
-					judged, judgeErr := judge.Evaluate(expPath)
-					if judgeErr != nil {
-						return fmt.Errorf("judge experiment: %w", judgeErr)
-					}
-
-					status := judged.Experiment.Status
-					logging.Info("experiment", "judged",
-						"agent", candidate.Agent.ID,
-						"status", status,
-						"baseline", fmt.Sprintf("%.3f", judged.Experiment.BaselineValue),
-						"candidate", fmt.Sprintf("%.3f", judged.Experiment.CandidateValue),
-					)
-
-					if status == domain.ExperimentAccepted {
-						mgr := baseline.NewManager(cfg.BaselinePolicyPath)
-						if _, err := mgr.PromoteResult(expPath); err != nil {
-							monitor.Alert(monitoring.AlertLevelError, "experiment",
-								fmt.Sprintf("晉升失敗: agent=%s, err=%v", candidate.Agent.ID, err),
-								map[string]any{"agent": candidate.Agent.ID, "error": err.Error()})
-							return fmt.Errorf("promote result: %w", err)
-						}
-						monitor.Alert(monitoring.AlertLevelInfo, "experiment",
-							fmt.Sprintf("策略晉升成功: agent=%s (%s), sharpe=%.3f", candidate.Agent.ID, candidate.Agent.Skill, candidate.Scorecard.SharpeLike),
-							map[string]any{
-								"agent":     candidate.Agent.ID,
-								"skill":     candidate.Agent.Skill,
-								"status":    string(status),
-								"baseline":  judged.Experiment.BaselineValue,
-								"candidate": judged.Experiment.CandidateValue,
-							})
-					} else {
-						monitor.Alert(monitoring.AlertLevelInfo, "experiment",
-							fmt.Sprintf("實驗未通過: agent=%s (%s), status=%s", candidate.Agent.ID, candidate.Agent.Skill, status),
-							map[string]any{
-								"agent":     candidate.Agent.ID,
-								"skill":     candidate.Agent.Skill,
-								"status":    string(status),
-								"baseline":  judged.Experiment.BaselineValue,
-								"candidate": judged.Experiment.CandidateValue,
-							})
-					}
-					return nil
+					return experiment.AutoExperiment(ctx, experiment.AutoExperimentConfig{
+						System:  system,
+						Config:  cfg,
+						Monitor: monitorAdapter,
+					})
 				},
 			})
 			log.Printf("[Gateway] registered auto_experiment background task (7-day interval)")
@@ -1227,6 +1168,20 @@ func run(args []string, deps appDeps) error {
 					return nil
 				})
 				log.Printf("[EventLogic] subscribed to EventSimulationComplete")
+
+				dashEventBus.Subscribe(eventbus.EventRegimeChange, func(ctx context.Context, ev eventbus.BusEvent) error {
+					logging.Info("monitor", "regime_change_event", "id", ev.ID, "payload", fmt.Sprintf("%+v", ev.Payload))
+					return nil
+				})
+				dashEventBus.Subscribe(eventbus.EventSharpeDegradation, func(ctx context.Context, ev eventbus.BusEvent) error {
+					logging.Warn("monitor", "sharpe_degradation", "id", ev.ID, "payload", fmt.Sprintf("%+v", ev.Payload))
+					return nil
+				})
+				dashEventBus.Subscribe(eventbus.EventDrawdownBreach, func(ctx context.Context, ev eventbus.BusEvent) error {
+					logging.Error("monitor", "drawdown_breach", "id", ev.ID, "payload", fmt.Sprintf("%+v", ev.Payload))
+					return nil
+				})
+				log.Printf("[Monitor] subscribed to regime/sharpe/drawdown events")
 			}
 
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
@@ -1415,6 +1370,15 @@ func run(args []string, deps appDeps) error {
 			btRunner = autobacktest.NewRunner(cfg)
 			log.Printf("[AutoBacktest] running without EventBus (no SSE events)")
 		}
+		_ = taskMgr.Register(&apigateway.ScheduledTask{
+			Name:     "autobacktest_daily",
+			Interval: 1 * time.Hour,
+			Enabled:  true,
+			Task: func(ctx context.Context) error {
+				return autobacktest.RunScheduledBacktest(ctx, btRunner)
+			},
+		})
+		log.Printf("[Gateway] registered autobacktest_daily background task (1h interval)")
 
 		authWrappedMux := apishared.AuthMiddleware(mux)
 		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
