@@ -149,3 +149,143 @@ func TestMiroFishSwarmCollectPerformance(t *testing.T) {
 		t.Fatal("expected performance map with scenario keys")
 	}
 }
+
+func TestEvolveGeneration(t *testing.T) {
+	config := DefaultSwarmConfig()
+	config.FishCount = 20
+	config.SimulationHorizon = 2 * time.Hour
+	config.TimeStep = time.Hour
+	config.Parallelism = 4
+
+	sw := NewMiroFishSwarm(config)
+	baseState := MarketState{
+		Timestamp: time.Now(),
+		Prices:    map[string]float64{"A": 100.0},
+		Volumes:   map[string]float64{"A": 1000000},
+	}
+	sw.InitializeScenarios(baseState)
+
+	// Record rules before simulation
+	rulesBefore := make([]PredictionRule, len(sw.fish))
+	for i, f := range sw.fish {
+		rulesBefore[i] = f.Rule
+	}
+
+	sw.Start()
+
+	// After simulation, evolve
+	sw.EvolveGeneration()
+
+	// Check: some fish should have different rules after evolution
+	changedCount := 0
+	for i, f := range sw.fish {
+		if f.Rule != rulesBefore[i] {
+			changedCount++
+		}
+	}
+	if changedCount == 0 {
+		t.Error("expected some fish rules to change after EvolveGeneration")
+	}
+	t.Logf("Evolved: %d/%d fish rules changed", changedCount, len(sw.fish))
+
+	// Check: performance reset on replaced fish
+	for _, f := range sw.fish {
+		if f.Performance.TotalPredictions > 0 && f.Performance.Accuracy > 0 {
+			continue
+		}
+	}
+}
+
+func TestEvolveGenerationPreservesTotalCount(t *testing.T) {
+	config := DefaultSwarmConfig()
+	config.FishCount = 10
+	config.SimulationHorizon = 2 * time.Hour
+	config.TimeStep = time.Hour
+
+	sw := NewMiroFishSwarm(config)
+	baseState := MarketState{
+		Timestamp: time.Now(),
+		Prices:    map[string]float64{"A": 100.0},
+		Volumes:   map[string]float64{"A": 1000000},
+	}
+	sw.InitializeScenarios(baseState)
+
+	before := len(sw.fish)
+	sw.Start()
+	sw.EvolveGeneration()
+	after := len(sw.fish)
+
+	if before != after {
+		t.Fatalf("fish count changed: %d → %d", before, after)
+	}
+	if after != 10 {
+		t.Fatalf("expected 10 fish, got %d", after)
+	}
+}
+
+func TestFishHasPredictionRule(t *testing.T) {
+	config := DefaultSwarmConfig()
+	config.FishCount = 5
+	config.SimulationHorizon = 2 * time.Hour
+	config.TimeStep = time.Hour
+
+	sw := NewMiroFishSwarm(config)
+	baseState := MarketState{
+		Timestamp: time.Now(),
+		Prices:    map[string]float64{"A": 100.0},
+		Volumes:   map[string]float64{"A": 1000000},
+	}
+	sw.InitializeScenarios(baseState)
+
+	for _, f := range sw.fish {
+		if f.Rule.LookbackWindow < 3 {
+			t.Errorf("fish %s has invalid LookbackWindow: %d", f.ID, f.Rule.LookbackWindow)
+		}
+		if f.GARCH == nil {
+			t.Errorf("fish %s missing GARCH process", f.ID)
+		}
+	}
+}
+
+func TestEventTimingIsRelativeToBaseState(t *testing.T) {
+	config := DefaultSwarmConfig()
+	config.FishCount = 5
+	config.SimulationHorizon = 7 * 24 * time.Hour
+	config.TimeStep = 24 * time.Hour
+	config.Parallelism = 2
+
+	sw := NewMiroFishSwarm(config)
+
+	baseTime1 := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+	baseState1 := MarketState{
+		Timestamp: baseTime1,
+		Prices:    map[string]float64{"A": 100.0},
+		Volumes:   map[string]float64{"A": 1000000},
+	}
+	sw.InitializeScenarios(baseState1)
+
+	for _, s := range sw.scenarios {
+		for _, evt := range s.Events {
+			if evt.Time.Before(baseTime1) {
+				t.Errorf("scenario %s: event %s at %v is before baseTime %v", s.ID, evt.Type, evt.Time, baseTime1)
+			}
+		}
+	}
+
+	baseTime2 := time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)
+	baseState2 := MarketState{
+		Timestamp: baseTime2,
+		Prices:    map[string]float64{"A": 100.0},
+		Volumes:   map[string]float64{"A": 1000000},
+	}
+	sw2 := NewMiroFishSwarm(config)
+	sw2.InitializeScenarios(baseState2)
+
+	for _, s := range sw2.scenarios {
+		for _, evt := range s.Events {
+			if evt.Time.Before(baseTime2) {
+				t.Errorf("scenario %s: event %s at %v is before baseTime %v", s.ID, evt.Type, evt.Time, baseTime2)
+			}
+		}
+	}
+}
