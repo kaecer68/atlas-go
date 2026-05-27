@@ -3,7 +3,6 @@ package taskexec
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
@@ -32,14 +31,16 @@ func TestMarginBackfillRunner_Run_ContextCancellation(t *testing.T) {
 func TestMarginBackfillRunner_Run_EmptyWorkDir(t *testing.T) {
 	r := NewMarginBackfillRunner("")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
+	// Runner validates workDir before any async operations,
+	// so no timing dependency — error is returned immediately.
 	sink := &mockEventSink{}
-	err := r.Run(ctx, SubmitRequest{}, sink)
+	err := r.Run(context.Background(), SubmitRequest{}, sink)
 
 	if err == nil {
 		t.Fatal("expected error for empty workDir, got nil")
+	}
+	if err.Error() != "margin backfill: workDir is required" {
+		t.Fatalf("expected 'margin backfill: workDir is required', got %q", err.Error())
 	}
 }
 
