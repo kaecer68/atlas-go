@@ -74,7 +74,7 @@
 | `adversarial` | 對抗性訓練 — `AdversarialTrainer`、`BattleResult`、`StressTest` | `AdversarialTrainer` | 探索性研究 |
 | `reflexivity` | 自反性價格動態引擎 | `Engine` | 探索性研究 |
 | `stress` | 壓力測試場景 — `RunScenario()` | — | 情境模擬 |
-| `swarm` | MiroFish swarm 模擬 | `Swarm` | 探索性研究 |
+| `swarm` | MiroFish swarm 模擬 + GARCH 波動率 + 策略進化 + API + Agent Skill | `Swarm` | 演進中 |
 
 ---
 

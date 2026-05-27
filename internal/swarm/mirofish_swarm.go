@@ -16,11 +16,12 @@ import (
 // Start() is synchronous — it runs all simulations to completion and
 // stores a consensus result. No background goroutines or tickers.
 type MiroFishSwarm struct {
-	config    SwarmConfig
-	fish      []*MiroFish
-	scenarios []MarketScenario
-	results   []SimulationResult
-	mu        sync.RWMutex
+	config      SwarmConfig
+	fish        []*MiroFish
+	scenarios   []MarketScenario
+	results     []SimulationResult
+	generations int
+	mu          sync.RWMutex
 }
 
 // MiroFish represents a single simulation unit
@@ -597,8 +598,17 @@ func (sw *MiroFishSwarm) EvolveGeneration() {
 		oldFish.History = oldFish.History[:0]
 	}
 
+	sw.generations++
+
 	logging.Info("mirofish_swarm", "generation_evolved",
-		"elite", eliteCount, "replaced", replaceCount, "total", totalFish)
+		"elite", eliteCount, "replaced", replaceCount, "total", totalFish, "gen", sw.generations)
+}
+
+// Generations returns the number of evolution cycles completed.
+func (sw *MiroFishSwarm) Generations() int {
+	sw.mu.RLock()
+	defer sw.mu.RUnlock()
+	return sw.generations
 }
 
 // ExportTrainingData exports simulation results for agent training
