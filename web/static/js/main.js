@@ -29,7 +29,7 @@ export function switchPage(id, silent) {
     experiments: '模擬交易', reports: '最新回測', controls: '控制與稽核',
     datachannels: '信息通道', synergy: '人機協同', alerts: '系統警報',
     metrics: '指標監控', industry: '產業生態系', portfolio: '組合持倉', parameters: '參數管理',
-    evolution_panel: '演化透視'
+    evolution_panel: '演化透視', 'eventlogic-rules': '事件邏輯'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
@@ -113,9 +113,10 @@ async function loadModules() {
     import('./pages/synergy.js?v=' + APP_VERSION),
     import('./pages/evolution_panel.js?v=' + APP_VERSION),
     import('./pages/decision-chain.js?v=' + APP_VERSION),
+    import('./pages/eventlogic-rules.js?v=' + APP_VERSION),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'synergy', 'evolution_panel', 'decision'];
+  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'synergy', 'evolution_panel', 'decision', 'eventlogic'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -350,6 +351,9 @@ async function loadPageData(pageId) {
         m.parameters.renderParametersPage(pData[0], pData[1], pData[2]);
       }
     } catch(e) { console.error(e); }
+  }
+  else if (pageId === 'eventlogic-rules') {
+    try { if (m.eventlogic && m.eventlogic.renderEventLogicPage) m.eventlogic.renderEventLogicPage(); } catch(e) { console.error(e); }
   }
   else if (pageId === 'evolution_panel') {
     try {

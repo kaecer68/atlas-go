@@ -147,47 +147,6 @@ func DefaultTemplates() []CausalTemplate {
 • 【迴避】高Beta科技股：選前波動大，外資減持首當其衝`,
 		},
 		{
-			ID:             "選後 relief 反彈",
-			Name:           "選後 relief 反彈",
-			TriggerTheme:   "post_election_relief",
-			RequiredRegion: "TW",
-			Steps: []CausalStep{
-				{Description: "選舉不確定性消除，政策明朗化", Affected: []string{"台股大盤", "外資流向"}, Impact: 0.5},
-				{Description: "避險資金回流，補漲行情展開", Affected: []string{"台股大盤"}, Impact: 0.4},
-				{Description: "政策受惠股（綠能、基建、國防）獲資金青睞", Affected: []string{"綠能", "基建", "國防"}, Impact: 0.4},
-			},
-			HistoricalHitRate: 0.68,
-			SourceReferences:  []string{"Taiwan Election and Stock Market Historical Analysis"},
-			Rationale:         `選後1個月，政策不確定性消除，外資與避險資金回流，台股上漲機率約68%。應布局政策受惠股（綠能、基建、國防），這些板塊在新政府施政方向明確後常獲資金青睞。`,
-		},
-		{
-			ID:             "中東衝突升級",
-			Name:           "中東衝突升級",
-			TriggerTheme:   "middle_east_escalation",
-			RequiredRegion: "Middle East",
-			Steps: []CausalStep{
-				{Description: "衝突升級威脅石油供給與紅海航運通道", Affected: []string{"原油", "航運"}, Impact: -0.8},
-				{Description: "油價飆升推升全球通膨預期", Affected: []string{"通膨預期", "美國利率"}, Impact: -0.6},
-				{Description: "聯準會被迫維持鷹派立場以對抗供給型通膨", Affected: []string{"聯準會基金期貨", "DXY"}, Impact: 0.5},
-				{Description: "避險資金流入黃金與美元，推升美元走強", Affected: []string{"黃金", "DXY"}, Impact: 0.7},
-				{Description: "新興市場因風險偏好下降面臨資金外流", Affected: []string{"新興市場貨幣", "外資流向_台股"}, Impact: -0.7},
-				{Description: "台灣高Beta科技與出口導向個股面臨本益比下修", Affected: []string{"AI供應鏈", "半導體", "中小型股"}, Impact: -0.6},
-				{Description: "防禦型板塊（金融、高股息、航運避險）相對抗跌", Affected: []string{"金融", "高股息", "航運"}, Impact: 0.3},
-			},
-			HistoricalHitRate: 0.68,
-			SourceReferences:  []string{"Caldara-Iacoviello GPR Dataset", "BIS Quarterly Review Dec 2023 - Geopolitical risk and commodity prices", "Goldman Sachs Global Macro Research 2024"},
-			Rationale: `中東衝突升級是一種「複合式供給衝擊」：它同時打擊能源供給（推升油價）、打擊全球貿易通道（紅海航運），並引發避險情緒（資金流向美元與黃金）。這三股力量會形成惡性循環，對新興市場股市造成「三重打擊」。
-
-對台股的傳導路徑非常清晰：
-1. 油價飆升 → 通膨預期上升 → 聯準會維持高利率 → 科技股估值受壓
-2. 避險情緒升溫 → 美元走強 → 外資從台股撤出 → 流動性緊縮
-3. 紅海航運受阻 → 運價飆升 + 供應鏈不確定性 → 出口導向企業成本上升
-
-因此，此時的投資配置必須極度防禦：
-• 【押注】金融、高股息：在低成長、高不確定性環境中，「現金為王」——能穩定配息、財務槓桿低的企業會獲得資金青睞。
-• 【迴避】AI供應鏈、半導體、小盤股：這些板塊同時承受「利率估值壓縮」、「外資賣壓」、「終端需求延後」三重風險。歷史數據顯示，當地緣政治風險指數（GPR）突破150時，台灣電子股的相對報酬在隨後一個月平均落後大盤 3~5 個百分點。`,
-		},
-		{
 			ID:             "台灣地緣政治風險",
 			Name:           "台灣地緣政治風險",
 			TriggerTheme:   "taiwan_political_risk",
