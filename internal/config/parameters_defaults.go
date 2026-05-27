@@ -622,6 +622,11 @@ func defaultExperimentParameters() ExperimentParameters {
 			Rationale: "Maximum fraction of factors allowed to be IsFallback (60%) before degrading experiment confidence",
 			Source:    SourceHeuristic,
 		},
+		FactorWeightDriftThreshold: ParameterMetadata[float64]{
+			Value:     0.15,
+			Rationale: "Maximum allowed factor weight drift (15%) before rejecting experiment as regime-confounded",
+			Source:    SourceHeuristic,
+		},
 	}
 }
 
