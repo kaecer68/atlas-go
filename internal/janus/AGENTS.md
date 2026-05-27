@@ -71,6 +71,6 @@ JANUS Engine (每小時檢測)
 | CLI 入口 | `cmd/atlas/main.go` | API mode 初始化、Gateway 注入、Dashboard 注入、regime_calibrate task |
 | Plugin 層 | `internal/orchestrator/plugin_adapters.go` | PostSimulation 收集 outcomes → RecordSnapshot → Update |
 | API 層 | `internal/monitoring/dashboard_api.go` | SetJanusEngine 注入，供前端 dashboard 查詢 |
-| Gateway 層 | `internal/apigateway/channel_adapters.go` | RegisterChannelAdapters 注入，供健康檢查 |
+| Gateway 層 | `internal/apigateway/register_adapters.go` | RegisterChannelAdapters 注入，供健康檢查 |
 | Backtest CLI | `cmd/experimental/janus-backtest/main.go` | A/B 對比：Baseline vs JANUS 加權 |
 | Status CLI | `cmd/experimental/janus-status/main.go` | JSON/Markdown 格式輸出當前狀態 |
