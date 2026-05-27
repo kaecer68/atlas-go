@@ -328,6 +328,20 @@ func (e *FactorWeightEngine) applyEventAdjustment(event *narrative.NarrativeEven
 			FactorAgent:     -delta,
 			FactorNarrative: delta,
 		}
+	case "taiwan_political_risk":
+		e.eventWeights[event.ID] = map[FactorType]float64{
+			FactorETF: -delta, FactorValue: delta, FactorQuality: delta * 0.5, FactorAgent: -delta,
+			FactorNarrative: delta * 1.5, FactorInstSent: delta, FactorLiquidity: -delta * 0.5,
+		}
+	case "election_cycle":
+		e.eventWeights[event.ID] = map[FactorType]float64{
+			FactorMomentum: -delta * 0.5, FactorETF: -delta * 0.5, FactorInstSent: delta * 0.5,
+			FactorNarrative: delta * 0.5, FactorIndustryCycle: delta * 0.5,
+		}
+	case "spring_festival_season":
+		e.eventWeights[event.ID] = map[FactorType]float64{
+			FactorLiquidity: delta * 0.5, FactorValue: delta * 0.3, FactorETF: delta * 0.3, FactorNarrative: delta * 0.3,
+		}
 	default:
 		e.eventWeights[event.ID] = map[FactorType]float64{
 			FactorInstSent:  delta,
