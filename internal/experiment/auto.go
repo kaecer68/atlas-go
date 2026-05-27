@@ -27,6 +27,9 @@ type AutoExperimentConfig struct {
 }
 
 func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
+	if cfg.System == nil {
+		return fmt.Errorf("AutoExperiment: System must not be nil")
+	}
 	candidate, err := cfg.System.NextExperimentCandidate()
 	if err != nil {
 		return fmt.Errorf("identify candidate: %w", err)
