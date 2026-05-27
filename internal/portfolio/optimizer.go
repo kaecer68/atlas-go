@@ -87,6 +87,7 @@ type Optimizer struct {
 	factorWeightEngine *FactorWeightEngine
 	lookbackDays       int     // covariance estimation window
 	riskFreeRate       float64 // annualized risk-free rate
+	bridgeInput        FactorBridgeInput
 }
 
 // NewOptimizer 创建优化器
@@ -186,6 +187,13 @@ func (o *Optimizer) WithFactorWeightEngine(fwe *FactorWeightEngine) *Optimizer {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.factorWeightEngine = fwe
+	return o
+}
+
+func (o *Optimizer) WithBridgeInput(input FactorBridgeInput) *Optimizer {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.bridgeInput = input
 	return o
 }
 
@@ -304,8 +312,12 @@ func (o *Optimizer) calculateMultiFactorScores(
 		var narrativeScore, industryCycleScore, instSentScore float64
 		o.mu.RLock()
 		fe := o.factorEngine
+		bridge := o.bridgeInput
 		o.mu.RUnlock()
 		if fe != nil {
+			if bridge.ForeignFlowScore != 0 || bridge.MarginBalanceScore != 0 {
+				instSentScore = fe.CalculateInstitutionalSentimentScore(bridge).Score
+			}
 			fe.mu.RLock()
 			narProv := fe.narrativeProv
 			iclProv := fe.cycleProv

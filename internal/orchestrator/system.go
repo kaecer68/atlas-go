@@ -266,6 +266,10 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 
 	if s.macroSnapshot != nil {
 		*s.macroSnapshot = QuotesToMacroDataSnapshot(quotes)
+		if opt := s.Sim().engine.Optimizer(); opt != nil {
+			fb := portfolio.NewFactorBridge()
+			opt.WithBridgeInput(fb.Convert(*s.macroSnapshot))
+		}
 	}
 
 	// Pipeline trace: START for layers inside ExecuteWithContext.
