@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -14,14 +15,14 @@ func (GrowthMomentumExecutor) Supports(agent domain.AgentSpec) bool {
 }
 
 func (GrowthMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
-	cb, pp := 45, 8
+	cbVal, pp := 45, 8
 	if cfg := config.GetParametersConfig(); cfg != nil {
 		if gm := cfg.SectorExecutor.GrowthMomentum; gm.ConvictionBase.Value != 0 {
-			cb = gm.ConvictionBase.Value
+			cbVal = gm.ConvictionBase.Value
 			pp = gm.PricePenalty.Value
 		}
 	}
-	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), cb)
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), cbVal)
 
 	ctrl, ok := domain.ExtractPromptControl(prompt)
 	if ok {
