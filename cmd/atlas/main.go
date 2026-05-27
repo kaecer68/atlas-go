@@ -39,6 +39,7 @@ import (
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/metalearning"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	apieventlogic "github.com/kaecer68/atlas-go/internal/monitoring/api/eventlogic"
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
@@ -1342,6 +1343,9 @@ func run(args []string, deps appDeps) error {
 					}
 					trainingDir := filepath.Join(cfg.WorkDir, "data/state/swarm_training")
 					ctrl.SetTrainingStore(swarm.NewTrainingStore(trainingDir))
+					ctrl.SetSnapshotPath(filepath.Join(cfg.WorkDir, "data/state/swarm_latest.json"))
+					ctrl.SetMetaLearner(metalearning.NewMetaLearner(metalearning.DefaultMetaLearningConfig()),
+						filepath.Join(cfg.WorkDir, "data/state/metalearner_state.json"))
 
 					baseState := swarm.MarketState{
 						Timestamp: time.Now(),
