@@ -1,3 +1,10 @@
+// DEPRECATED: This standalone CLI is superseded by the formal integration test
+//
+//	go test -v -tags=integration -run TestNarrativeShockIntegration ./internal/orchestrator/
+//
+// The integration test covers the same "baseline vs US10Y shock" scenario
+// with proper testing.T assertions, and runs as part of the integration suite.
+// This CLI is retained temporarily for backward compatibility during migration.
 package main
 
 import (
@@ -20,7 +27,10 @@ func main() {
 	flag.Parse()
 	if help {
 		fmt.Println("Usage: validate-narrative-shock [--help]")
-		fmt.Println("Validates narrative shock detection against replay data for 2026-03-26.")
+		fmt.Println("DEPRECATED: Use the integration test instead:")
+		fmt.Println("  go test -v -tags=integration -run TestNarrativeShockIntegration ./internal/orchestrator/")
+		fmt.Println()
+		fmt.Println("Original purpose: validates narrative shock detection against replay data for 2026-03-26.")
 		os.Exit(0)
 	}
 

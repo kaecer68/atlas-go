@@ -80,8 +80,24 @@ func main() {
 	var results []result
 
 	for _, d := range days {
-		// Construct a synthetic macro snapshot that varies by date
-		// to generate a spread of stress index values.
+		// Generate synthetic macro data that varies by day-of-month to
+		// produce a broad spread of stress index outputs, so we can
+		// validate that the calculator correctly bins days into
+		// low/alert/high/crisis regimes.
+		//
+		// Design rationale for each synthetic factor:
+		//   DXY: V-shape peaking at day 15 (range 0-30% change)
+		//        -> low stress early/late month, peaks mid-month
+		//        math.Abs(dayOffset-15) * 2.0
+		//   US10Y: Sinusoidal oscillation around 6% (range 5-7%)
+		//          -> moderate baseline with smooth variation
+		//          6.0 + math.Sin(dayOffset*0.5)
+		//   VIX: V-shape peaking at day 15 (range 10-60+)
+		//        -> drives alert/high regime classification mid-month
+		//        10.0 + math.Abs(dayOffset-15)*3.5
+		//   ForeignInvestorNet: Negative linear trend offset
+		//                       -> foreign selling accelerates through month
+		//                       -(dayOffset - 5) * 1.5
 		dayOffset := float64(d.date.Day())
 		snap := marketdata.MacroDataSnapshot{
 			DXY:                marketdata.MacroDataPoint{ChangePct: math.Abs(dayOffset-15) * 2.0},
