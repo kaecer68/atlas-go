@@ -834,6 +834,86 @@ type InTradeGateParameters struct {
 	CircuitBreakerDailyLossPct ParameterMetadata[float64] `json:"circuit_breaker_daily_loss_pct"`
 }
 
+// EngineConfig type definitions — migrated from engine_config.go, retained as
+// output types for EngineParameters.ToConfig() conversion methods.
+
+type MacroRiskConfig struct {
+	CarryTradeUnwindThreshold float64 `json:"carry_trade_unwind_threshold"`
+	VIXThreshold              float64 `json:"vix_threshold"`
+	US10YThreshold            float64 `json:"us10y_threshold"`
+	OilShockThresholdPct      float64 `json:"oil_shock_threshold_pct"`
+	GoldSurgeThresholdPct     float64 `json:"gold_surge_threshold_pct"`
+	DXYSurgeThresholdPct      float64 `json:"dxy_surge_threshold_pct"`
+	TWDStressThresholdPct     float64 `json:"twd_stress_threshold_pct"`
+	OutflowProbBase           float64 `json:"outflow_prob_base"`
+	OutflowProbMax            float64 `json:"outflow_prob_max"`
+}
+
+type StructuralTrendConfig struct {
+	MinTrendStrength            float64 `json:"min_trend_strength"`
+	MinConfidence               float64 `json:"min_confidence"`
+	MinHitRate                  float64 `json:"min_hit_rate"`
+	OverrideThreshold           float64 `json:"override_threshold"`
+	AIRevenueGrowthThreshold    float64 `json:"ai_revenue_growth_threshold"`
+	CoWoSUtilizationThreshold   float64 `json:"cowos_utilization_threshold"`
+	CapexGrowthThreshold        float64 `json:"capex_growth_threshold"`
+	SemiconductorIndexThreshold float64 `json:"semiconductor_index_threshold"`
+}
+
+type DrawdownLevel struct {
+	Percentage  float64 `json:"percentage"`
+	MaxExposure float64 `json:"max_exposure"`
+}
+
+type DrawdownConfig struct {
+	Levels                            map[string]DrawdownLevel `json:"levels"`
+	OrangeOverrideMinScore            float64                  `json:"orange_override_min_score"`
+	RedOverrideMinScore               float64                  `json:"red_override_min_score"`
+	SectorConstraintsRiskOff          map[string]float64       `json:"sector_constraints_risk_off"`
+	SectorConstraintsCarryTradeUnwind map[string]float64       `json:"sector_constraints_carry_trade_unwind"`
+	SectorConstraintsSectorRotation   map[string]float64       `json:"sector_constraints_sector_rotation"`
+}
+
+type SectorRotationConfig struct {
+	BaseAllocations    map[string]float64 `json:"base_allocations"`
+	MinAllocation      float64            `json:"min_allocation"`
+	MaxAllocation      float64            `json:"max_allocation"`
+	RebalanceThreshold float64            `json:"rebalance_threshold"`
+}
+
+type StrategyStateConfig struct {
+	MaxPositionSize    float64 `json:"max_position_size"`
+	MaxSectorExposure  float64 `json:"max_sector_exposure"`
+	MinCashReserve     float64 `json:"min_cash_reserve"`
+	HedgeRatio         float64 `json:"hedge_ratio"`
+	AllowNewPositions  bool    `json:"allow_new_positions"`
+	AllowConcentration bool    `json:"allow_concentration"`
+}
+
+type StrategyEvolutionConfig struct {
+	CooldownPeriodHours int                            `json:"cooldown_period_hours"`
+	Configs             map[string]StrategyStateConfig `json:"configs"`
+}
+
+func (c StrategyEvolutionConfig) GetCooldownDuration() time.Duration {
+	return time.Duration(c.CooldownPeriodHours) * time.Hour
+}
+
+type ExecutorsConfig struct {
+	VIXMomentumCrashThreshold float64 `json:"vix_momentum_crash_threshold"`
+	CrowdingPenaltyAgents3    float64 `json:"crowding_penalty_agents_3"`
+	CrowdingPenaltyAgents4    float64 `json:"crowding_penalty_agents_4"`
+	MinTradeAmount            float64 `json:"min_trade_amount"`
+	MaxStocksDefault          int     `json:"max_stocks_default"`
+	MaxStocksMin              int     `json:"max_stocks_min"`
+	MaxStocksMax              int     `json:"max_stocks_max"`
+	ConvictionFloorDefault    int     `json:"conviction_floor_default"`
+}
+
+type SimulationConfig struct {
+	NeutralRegimeSizingFactor float64 `json:"neutral_regime_sizing_factor"`
+}
+
 // PostTradeGateParameters holds post-trade evaluation parameters.
 type PostTradeGateParameters struct {
 	MaxDrawdownHaltPct      ParameterMetadata[float64] `json:"max_drawdown_halt_pct"`
@@ -870,6 +950,150 @@ type ParametersConfig struct {
 	SectorExecutor      SectorExecutorParameters      `json:"sector_executor,omitempty"`
 	Alert               AlertParameters               `json:"alert"`
 	RiskGate            RiskGateParameters            `json:"risk_gate,omitempty"`
+	Engine              EngineParameters              `json:"engine,omitempty"`
+}
+
+// EngineParameters holds parameters migrated from EngineConfig with full ParameterMetadata wrapping.
+type EngineParameters struct {
+	MacroRisk         EngineMacroRiskParameters         `json:"macro_risk"`
+	StructuralTrend   EngineStructuralTrendParameters   `json:"structural_trend"`
+	Drawdown          EngineDrawdownParameters          `json:"drawdown"`
+	SectorRotation    EngineSectorRotationParameters    `json:"sector_rotation"`
+	StrategyEvolution EngineStrategyEvolutionParameters `json:"strategy_evolution"`
+	Executors         EngineExecutorsParameters         `json:"executors"`
+	Simulation        EngineSimulationParameters        `json:"simulation"`
+}
+
+type EngineMacroRiskParameters struct {
+	CarryTradeUnwindThreshold ParameterMetadata[float64] `json:"carry_trade_unwind_threshold"`
+	VIXThreshold              ParameterMetadata[float64] `json:"vix_threshold"`
+	US10YThreshold            ParameterMetadata[float64] `json:"us10y_threshold"`
+	OilShockThresholdPct      ParameterMetadata[float64] `json:"oil_shock_threshold_pct"`
+	GoldSurgeThresholdPct     ParameterMetadata[float64] `json:"gold_surge_threshold_pct"`
+	DXYSurgeThresholdPct      ParameterMetadata[float64] `json:"dxy_surge_threshold_pct"`
+	TWDStressThresholdPct     ParameterMetadata[float64] `json:"twd_stress_threshold_pct"`
+	OutflowProbBase           ParameterMetadata[float64] `json:"outflow_prob_base"`
+	OutflowProbMax            ParameterMetadata[float64] `json:"outflow_prob_max"`
+}
+
+func (p EngineMacroRiskParameters) ToConfig() MacroRiskConfig {
+	return MacroRiskConfig{
+		CarryTradeUnwindThreshold: p.CarryTradeUnwindThreshold.Value,
+		VIXThreshold:              p.VIXThreshold.Value,
+		US10YThreshold:            p.US10YThreshold.Value,
+		OilShockThresholdPct:      p.OilShockThresholdPct.Value,
+		GoldSurgeThresholdPct:     p.GoldSurgeThresholdPct.Value,
+		DXYSurgeThresholdPct:      p.DXYSurgeThresholdPct.Value,
+		TWDStressThresholdPct:     p.TWDStressThresholdPct.Value,
+		OutflowProbBase:           p.OutflowProbBase.Value,
+		OutflowProbMax:            p.OutflowProbMax.Value,
+	}
+}
+
+type EngineStructuralTrendParameters struct {
+	MinTrendStrength            ParameterMetadata[float64] `json:"min_trend_strength"`
+	MinConfidence               ParameterMetadata[float64] `json:"min_confidence"`
+	MinHitRate                  ParameterMetadata[float64] `json:"min_hit_rate"`
+	OverrideThreshold           ParameterMetadata[float64] `json:"override_threshold"`
+	AIRevenueGrowthThreshold    ParameterMetadata[float64] `json:"ai_revenue_growth_threshold"`
+	CoWoSUtilizationThreshold   ParameterMetadata[float64] `json:"cowos_utilization_threshold"`
+	CapexGrowthThreshold        ParameterMetadata[float64] `json:"capex_growth_threshold"`
+	SemiconductorIndexThreshold ParameterMetadata[float64] `json:"semiconductor_index_threshold"`
+}
+
+func (p EngineStructuralTrendParameters) ToConfig() StructuralTrendConfig {
+	return StructuralTrendConfig{
+		MinTrendStrength:            p.MinTrendStrength.Value,
+		MinConfidence:               p.MinConfidence.Value,
+		MinHitRate:                  p.MinHitRate.Value,
+		OverrideThreshold:           p.OverrideThreshold.Value,
+		AIRevenueGrowthThreshold:    p.AIRevenueGrowthThreshold.Value,
+		CoWoSUtilizationThreshold:   p.CoWoSUtilizationThreshold.Value,
+		CapexGrowthThreshold:        p.CapexGrowthThreshold.Value,
+		SemiconductorIndexThreshold: p.SemiconductorIndexThreshold.Value,
+	}
+}
+
+type EngineDrawdownParameters struct {
+	Levels                        ParameterMetadata[map[string]DrawdownLevel] `json:"levels"`
+	OrangeOverrideMinScore        ParameterMetadata[float64]                  `json:"orange_override_min_score"`
+	RedOverrideMinScore           ParameterMetadata[float64]                  `json:"red_override_min_score"`
+	SectorConstraintsRiskOff      ParameterMetadata[map[string]float64]       `json:"sector_constraints_risk_off"`
+	SectorConstraintsCarryUnwind  ParameterMetadata[map[string]float64]       `json:"sector_constraints_carry_trade_unwind"`
+	SectorConstraintsSectorRotate ParameterMetadata[map[string]float64]       `json:"sector_constraints_sector_rotation"`
+}
+
+func (p EngineDrawdownParameters) ToConfig() DrawdownConfig {
+	return DrawdownConfig{
+		Levels:                            p.Levels.Value,
+		OrangeOverrideMinScore:            p.OrangeOverrideMinScore.Value,
+		RedOverrideMinScore:               p.RedOverrideMinScore.Value,
+		SectorConstraintsRiskOff:          p.SectorConstraintsRiskOff.Value,
+		SectorConstraintsCarryTradeUnwind: p.SectorConstraintsCarryUnwind.Value,
+		SectorConstraintsSectorRotation:   p.SectorConstraintsSectorRotate.Value,
+	}
+}
+
+type EngineSectorRotationParameters struct {
+	BaseAllocations    ParameterMetadata[map[string]float64] `json:"base_allocations"`
+	MinAllocation      ParameterMetadata[float64]            `json:"min_allocation"`
+	MaxAllocation      ParameterMetadata[float64]            `json:"max_allocation"`
+	RebalanceThreshold ParameterMetadata[float64]            `json:"rebalance_threshold"`
+}
+
+func (p EngineSectorRotationParameters) ToConfig() SectorRotationConfig {
+	return SectorRotationConfig{
+		BaseAllocations:    p.BaseAllocations.Value,
+		MinAllocation:      p.MinAllocation.Value,
+		MaxAllocation:      p.MaxAllocation.Value,
+		RebalanceThreshold: p.RebalanceThreshold.Value,
+	}
+}
+
+type EngineStrategyEvolutionParameters struct {
+	CooldownPeriodHours ParameterMetadata[int]                            `json:"cooldown_period_hours"`
+	Configs             ParameterMetadata[map[string]StrategyStateConfig] `json:"configs"`
+}
+
+func (p EngineStrategyEvolutionParameters) ToConfig() StrategyEvolutionConfig {
+	return StrategyEvolutionConfig{
+		CooldownPeriodHours: p.CooldownPeriodHours.Value,
+		Configs:             p.Configs.Value,
+	}
+}
+
+type EngineExecutorsParameters struct {
+	VIXMomentumCrashThreshold ParameterMetadata[float64] `json:"vix_momentum_crash_threshold"`
+	CrowdingPenaltyAgents3    ParameterMetadata[float64] `json:"crowding_penalty_agents_3"`
+	CrowdingPenaltyAgents4    ParameterMetadata[float64] `json:"crowding_penalty_agents_4"`
+	MinTradeAmount            ParameterMetadata[float64] `json:"min_trade_amount"`
+	MaxStocksDefault          ParameterMetadata[int]     `json:"max_stocks_default"`
+	MaxStocksMin              ParameterMetadata[int]     `json:"max_stocks_min"`
+	MaxStocksMax              ParameterMetadata[int]     `json:"max_stocks_max"`
+	ConvictionFloorDefault    ParameterMetadata[int]     `json:"conviction_floor_default"`
+}
+
+func (p EngineExecutorsParameters) ToConfig() ExecutorsConfig {
+	return ExecutorsConfig{
+		VIXMomentumCrashThreshold: p.VIXMomentumCrashThreshold.Value,
+		CrowdingPenaltyAgents3:    p.CrowdingPenaltyAgents3.Value,
+		CrowdingPenaltyAgents4:    p.CrowdingPenaltyAgents4.Value,
+		MinTradeAmount:            p.MinTradeAmount.Value,
+		MaxStocksDefault:          p.MaxStocksDefault.Value,
+		MaxStocksMin:              p.MaxStocksMin.Value,
+		MaxStocksMax:              p.MaxStocksMax.Value,
+		ConvictionFloorDefault:    p.ConvictionFloorDefault.Value,
+	}
+}
+
+type EngineSimulationParameters struct {
+	NeutralRegimeSizingFactor ParameterMetadata[float64] `json:"neutral_regime_sizing_factor"`
+}
+
+func (p EngineSimulationParameters) ToConfig() SimulationConfig {
+	return SimulationConfig{
+		NeutralRegimeSizingFactor: p.NeutralRegimeSizingFactor.Value,
+	}
 }
 
 func (p *ParametersConfig) validateAlert() error {
@@ -1500,6 +1724,91 @@ func (p *ParametersConfig) Validate() error {
 		return err
 	}
 
+	if err := p.validateEngine(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (p *ParametersConfig) validateEngine() error {
+	e := p.Engine
+	if e.MacroRisk.VIXThreshold.Value <= 0 {
+		return fmt.Errorf("engine.macro_risk.vix_threshold (%.1f) must be positive", e.MacroRisk.VIXThreshold.Value)
+	}
+	if e.MacroRisk.CarryTradeUnwindThreshold.Value <= 0 {
+		return fmt.Errorf("engine.macro_risk.carry_trade_unwind_threshold (%.1f) must be positive", e.MacroRisk.CarryTradeUnwindThreshold.Value)
+	}
+	if e.MacroRisk.US10YThreshold.Value < 0 {
+		return fmt.Errorf("engine.macro_risk.us10y_threshold (%.1f) must be non-negative", e.MacroRisk.US10YThreshold.Value)
+	}
+	if e.MacroRisk.OutflowProbBase.Value < 0 || e.MacroRisk.OutflowProbBase.Value > 100 {
+		return fmt.Errorf("engine.macro_risk.outflow_prob_base (%.1f) must be in [0,100]", e.MacroRisk.OutflowProbBase.Value)
+	}
+	if e.MacroRisk.OutflowProbMax.Value < 0 || e.MacroRisk.OutflowProbMax.Value > 100 {
+		return fmt.Errorf("engine.macro_risk.outflow_prob_max (%.1f) must be in [0,100]", e.MacroRisk.OutflowProbMax.Value)
+	}
+
+	for name, level := range e.Drawdown.Levels.Value {
+		if level.Percentage < 0 || level.Percentage > 1 {
+			return fmt.Errorf("engine.drawdown.levels.%s.percentage (%.3f) must be in [0,1]", name, level.Percentage)
+		}
+		if level.MaxExposure < 0 || level.MaxExposure > 1 {
+			return fmt.Errorf("engine.drawdown.levels.%s.max_exposure (%.3f) must be in [0,1]", name, level.MaxExposure)
+		}
+	}
+	if e.Drawdown.OrangeOverrideMinScore.Value >= e.Drawdown.RedOverrideMinScore.Value {
+		return fmt.Errorf("engine.drawdown.orange_override_min_score (%.3f) must be < red_override_min_score (%.3f)", e.Drawdown.OrangeOverrideMinScore.Value, e.Drawdown.RedOverrideMinScore.Value)
+	}
+
+	total := 0.0
+	for _, alloc := range e.SectorRotation.BaseAllocations.Value {
+		total += alloc
+	}
+	if total < 0.99 || total > 1.01 {
+		return fmt.Errorf("engine.sector_rotation.base_allocations sum (%.4f) must be 1.0±0.01", total)
+	}
+	if e.SectorRotation.MinAllocation.Value >= e.SectorRotation.MaxAllocation.Value {
+		return fmt.Errorf("engine.sector_rotation.min_allocation (%.3f) must be < max_allocation (%.3f)", e.SectorRotation.MinAllocation.Value, e.SectorRotation.MaxAllocation.Value)
+	}
+
+	if e.Executors.MaxStocksMin.Value > e.Executors.MaxStocksDefault.Value {
+		return fmt.Errorf("engine.executors.max_stocks_min (%d) must be <= max_stocks_default (%d)", e.Executors.MaxStocksMin.Value, e.Executors.MaxStocksDefault.Value)
+	}
+	if e.Executors.MaxStocksDefault.Value > e.Executors.MaxStocksMax.Value {
+		return fmt.Errorf("engine.executors.max_stocks_default (%d) must be <= max_stocks_max (%d)", e.Executors.MaxStocksDefault.Value, e.Executors.MaxStocksMax.Value)
+	}
+	if e.Executors.ConvictionFloorDefault.Value < 0 || e.Executors.ConvictionFloorDefault.Value > 100 {
+		return fmt.Errorf("engine.executors.conviction_floor_default (%d) must be in [0,100]", e.Executors.ConvictionFloorDefault.Value)
+	}
+	if e.Executors.MinTradeAmount.Value <= 0 {
+		return fmt.Errorf("engine.executors.min_trade_amount (%.0f) must be positive", e.Executors.MinTradeAmount.Value)
+	}
+	if e.Executors.CrowdingPenaltyAgents3.Value <= 0 || e.Executors.CrowdingPenaltyAgents3.Value > 1 {
+		return fmt.Errorf("engine.executors.crowding_penalty_agents_3 (%.3f) must be in (0,1]", e.Executors.CrowdingPenaltyAgents3.Value)
+	}
+	if e.Executors.CrowdingPenaltyAgents4.Value <= 0 || e.Executors.CrowdingPenaltyAgents4.Value > 1 {
+		return fmt.Errorf("engine.executors.crowding_penalty_agents_4 (%.3f) must be in (0,1]", e.Executors.CrowdingPenaltyAgents4.Value)
+	}
+
+	if e.Simulation.NeutralRegimeSizingFactor.Value <= 0 || e.Simulation.NeutralRegimeSizingFactor.Value > 1 {
+		return fmt.Errorf("engine.simulation.neutral_regime_sizing_factor (%.3f) must be in (0,1]", e.Simulation.NeutralRegimeSizingFactor.Value)
+	}
+
+	if e.StrategyEvolution.CooldownPeriodHours.Value <= 0 {
+		return fmt.Errorf("engine.strategy_evolution.cooldown_period_hours (%d) must be positive", e.StrategyEvolution.CooldownPeriodHours.Value)
+	}
+
+	if e.StructuralTrend.MinConfidence.Value < 0 || e.StructuralTrend.MinConfidence.Value > 1 {
+		return fmt.Errorf("engine.structural_trend.min_confidence (%.3f) must be in [0,1]", e.StructuralTrend.MinConfidence.Value)
+	}
+	if e.StructuralTrend.MinHitRate.Value < 0 || e.StructuralTrend.MinHitRate.Value > 1 {
+		return fmt.Errorf("engine.structural_trend.min_hit_rate (%.3f) must be in [0,1]", e.StructuralTrend.MinHitRate.Value)
+	}
+	if e.StructuralTrend.MinTrendStrength.Value < 0 || e.StructuralTrend.MinTrendStrength.Value > 1 {
+		return fmt.Errorf("engine.structural_trend.min_trend_strength (%.3f) must be in [0,1]", e.StructuralTrend.MinTrendStrength.Value)
+	}
+
 	return nil
 }
 
@@ -1530,6 +1839,8 @@ func LoadParametersConfig(path string) (*ParametersConfig, error) {
 	mergeDrawdownDefaults(&cfg)
 	mergeAlertDefaults(&cfg)
 	mergeRiskGateDefaults(&cfg)
+	mergeEngineDefaults(&cfg)
+	mergeSectorExecutorDefaults(&cfg)
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate parameters config: %w", err)
@@ -1624,6 +1935,39 @@ func mergeNarrativeDefaults(cfg *ParametersConfig) {
 	}
 	if n.RetailAccelerationWindowDays.Value == 0 {
 		n.RetailAccelerationWindowDays = def.RetailAccelerationWindowDays
+	}
+	if n.TaiwanStressDXYScale.Value == 0 {
+		n.TaiwanStressDXYScale = def.TaiwanStressDXYScale
+	}
+	if n.TaiwanStressUS10YScale.Value == 0 {
+		n.TaiwanStressUS10YScale = def.TaiwanStressUS10YScale
+	}
+	if n.TaiwanStressForeignScale.Value == 0 {
+		n.TaiwanStressForeignScale = def.TaiwanStressForeignScale
+	}
+	if n.TaiwanStressVIXScale.Value == 0 {
+		n.TaiwanStressVIXScale = def.TaiwanStressVIXScale
+	}
+	if n.TaiwanStressJPYScale.Value == 0 {
+		n.TaiwanStressJPYScale = def.TaiwanStressJPYScale
+	}
+	if n.TaiwanStressGeoScale.Value == 0 {
+		n.TaiwanStressGeoScale = def.TaiwanStressGeoScale
+	}
+	if n.TaiwanStressOilScale.Value == 0 {
+		n.TaiwanStressOilScale = def.TaiwanStressOilScale
+	}
+	if n.TaiwanStressGoldScale.Value == 0 {
+		n.TaiwanStressGoldScale = def.TaiwanStressGoldScale
+	}
+	if n.TaiwanStressAlertThreshold.Value == 0 {
+		n.TaiwanStressAlertThreshold = def.TaiwanStressAlertThreshold
+	}
+	if n.TaiwanStressHighThreshold.Value == 0 {
+		n.TaiwanStressHighThreshold = def.TaiwanStressHighThreshold
+	}
+	if n.TaiwanStressCrisisThreshold.Value == 0 {
+		n.TaiwanStressCrisisThreshold = def.TaiwanStressCrisisThreshold
 	}
 }
 
@@ -1816,5 +2160,62 @@ func mergeRiskGateDefaults(cfg *ParametersConfig) {
 	}
 	if r.PostTrade.EvaluationIntervalHours.Value == 0 {
 		r.PostTrade.EvaluationIntervalHours = def.PostTrade.EvaluationIntervalHours
+	}
+}
+
+func mergeEngineDefaults(cfg *ParametersConfig) {
+	def := DefaultParametersConfig().Engine
+	e := &cfg.Engine
+
+	if e.MacroRisk.VIXThreshold.Value == 0 {
+		e.MacroRisk = def.MacroRisk
+	}
+	if e.StructuralTrend.MinConfidence.Value == 0 {
+		e.StructuralTrend = def.StructuralTrend
+	}
+	if len(e.Drawdown.Levels.Value) == 0 {
+		e.Drawdown = def.Drawdown
+	}
+	if len(e.SectorRotation.BaseAllocations.Value) == 0 {
+		e.SectorRotation = def.SectorRotation
+	}
+	if e.StrategyEvolution.CooldownPeriodHours.Value == 0 {
+		e.StrategyEvolution = def.StrategyEvolution
+	}
+	if e.Executors.VIXMomentumCrashThreshold.Value == 0 {
+		e.Executors = def.Executors
+	}
+	if e.Simulation.NeutralRegimeSizingFactor.Value == 0 {
+		e.Simulation = def.Simulation
+	}
+}
+
+func mergeSectorExecutorDefaults(cfg *ParametersConfig) {
+	def := DefaultParametersConfig().SectorExecutor
+	s := &cfg.SectorExecutor
+
+	if s.LEOSatellite.ConvictionBase.Value == 0 {
+		s.LEOSatellite = def.LEOSatellite
+	}
+	if s.Financials.DividendBoost.Value == 0 {
+		s.Financials = def.Financials
+	}
+	if s.Shipping.TacticalBoost.Value == 0 {
+		s.Shipping = def.Shipping
+	}
+	if s.ValueYield.CashFlowBoost.Value == 0 {
+		s.ValueYield = def.ValueYield
+	}
+	if s.EarningsQuality.RepeatableBoost.Value == 0 {
+		s.EarningsQuality = def.EarningsQuality
+	}
+	if s.TechnicalBreakout.DefaultVolumeFloor.Value == 0 {
+		s.TechnicalBreakout = def.TechnicalBreakout
+	}
+	if s.GrowthMomentum.ConvictionBase.Value == 0 {
+		s.GrowthMomentum = def.GrowthMomentum
+	}
+	if s.FactorConviction.MomentumHighThreshold.Value == 0 {
+		s.FactorConviction = def.FactorConviction
 	}
 }

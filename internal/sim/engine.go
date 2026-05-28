@@ -500,7 +500,7 @@ func (e *Engine) executeOptimizerBuys(
 	maxDeployableCash := cash * (1 - e.constraints.ReserveCashFraction)
 	maxPositionWeight := e.constraints.MaxPositionWeight
 	if regime == domain.RegimeNeutral {
-		maxPositionWeight = maxPositionWeight * config.GetEngineConfig().Simulation.NeutralRegimeSizingFactor
+		maxPositionWeight = maxPositionWeight * config.GetParametersConfig().Engine.Simulation.NeutralRegimeSizingFactor.Value
 	}
 	maxPerPosition := maxDeployableCash * maxPositionWeight
 
@@ -586,7 +586,7 @@ func (e *Engine) executeLegacyBuys(
 	maxDeployableCash := cash * (1 - e.constraints.ReserveCashFraction)
 	maxPositionWeight := e.constraints.MaxPositionWeight
 	if regime == domain.RegimeNeutral {
-		maxPositionWeight = maxPositionWeight * config.GetEngineConfig().Simulation.NeutralRegimeSizingFactor
+		maxPositionWeight = maxPositionWeight * config.GetParametersConfig().Engine.Simulation.NeutralRegimeSizingFactor.Value
 	}
 	maxPerPosition := maxDeployableCash * maxPositionWeight
 

@@ -36,6 +36,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/parameters/audit-log", shared.Get(h.HandleAuditLog))
 	mux.Handle("POST /api/parameters/rollback", shared.AdminPost(h.HandleRollback))
 	mux.Handle("POST /api/parameters/reload", shared.AdminPost(h.HandleReload))
+	mux.Handle("GET /api/parameters/metadata", shared.Get(h.HandleGetMetadata))
 }
 
 // HandleGetParameters returns the current parameters.
@@ -45,6 +46,47 @@ func (h *Handlers) HandleGetParameters(r *http.Request) (int, any) {
 		return http.StatusOK, h.params
 	}
 	return http.StatusOK, result
+}
+
+// HandleGetMetadata returns parameters with full provenance metadata (rationale, source, citation, todo, last_calibrated).
+func (h *Handlers) HandleGetMetadata(r *http.Request) (int, any) {
+	result, err := h.paramsToMetadataMap()
+	if err != nil {
+		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("marshal parameters: %v", err)}
+	}
+	return http.StatusOK, result
+}
+
+func (h *Handlers) paramsToMetadataMap() (map[string]any, error) {
+	raw, err := json.Marshal(h.params)
+	if err != nil {
+		return nil, fmt.Errorf("marshal: %w", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, fmt.Errorf("unmarshal: %w", err)
+	}
+	result := make(map[string]any)
+	flattenWithMetadata(m, "", result)
+	return result, nil
+}
+
+func flattenWithMetadata(src map[string]any, prefix string, dst map[string]any) {
+	for k, v := range src {
+		key := k
+		if prefix != "" {
+			key = prefix + "." + k
+		}
+		if sub, ok := v.(map[string]any); ok {
+			if _, exists := sub["value"]; exists {
+				dst[key] = sub
+			} else {
+				flattenWithMetadata(sub, key, dst)
+			}
+		} else {
+			dst[key] = v
+		}
+	}
 }
 
 func (h *Handlers) paramsToFlatMap() (map[string]any, error) {
@@ -137,6 +179,7 @@ func (h *Handlers) HandleCategories(r *http.Request) (int, any) {
 		{"id": "cycle", "name": "Industry Cycle Thresholds", "description": "Per-industry business cycle detection thresholds"},
 		{"id": "industry", "name": "Industry Analysis", "description": "Sector weights, cycle thresholds, inventory/capex, and risk scoring"},
 		{"id": "strategy", "name": "Strategy Selection", "description": "Strategy switching and evaluation parameters"},
+		{"id": "engine", "name": "Engine Configuration", "description": "Macro risk, drawdown, executors, simulation parameters (migrated from EngineConfig)"},
 	}
 
 	flatParams, _ := h.paramsToFlatMap()

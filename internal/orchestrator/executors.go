@@ -592,8 +592,8 @@ func applyMomentumCrashProtection(recs []domain.Recommendation, quotes map[strin
 		logging.Warn("executors", "vix_not_found", "event", "momentum_crash_protection_disabled")
 		return recs
 	}
-	cfg := config.GetEngineConfig().Executors
-	if vix <= cfg.VIXMomentumCrashThreshold {
+	cfg := config.GetParametersConfig().Engine.Executors
+	if vix <= cfg.VIXMomentumCrashThreshold.Value {
 		return recs
 	}
 
@@ -752,15 +752,15 @@ func applyCrowdingPenalty(recs []domain.Recommendation) []domain.Recommendation 
 		symbolAgents[rec.Symbol][rec.Agent] = struct{}{}
 	}
 
-	cfg := config.GetEngineConfig().Executors
+	cfg := config.GetParametersConfig().Engine.Executors
 	out := make([]domain.Recommendation, len(recs))
 	for i, rec := range recs {
 		agents := symbolAgents[rec.Symbol]
 		penalty := 1.0
 		if len(agents) >= 4 {
-			penalty = cfg.CrowdingPenaltyAgents4
+			penalty = cfg.CrowdingPenaltyAgents4.Value
 		} else if len(agents) >= 3 {
-			penalty = cfg.CrowdingPenaltyAgents3
+			penalty = cfg.CrowdingPenaltyAgents3.Value
 		}
 		rec.Conviction = int(float64(rec.Conviction) * penalty)
 		out[i] = rec
@@ -797,11 +797,11 @@ func applyAntiCorrelationLayer(recs []domain.Recommendation, availableCash float
 		})
 	}
 
-	cfg := config.GetEngineConfig().Executors
-	minTrade := cfg.MinTradeAmount
-	maxStocks := cfg.MaxStocksDefault
+	cfg := config.GetParametersConfig().Engine.Executors
+	minTrade := cfg.MinTradeAmount.Value
+	maxStocks := cfg.MaxStocksDefault.Value
 	if availableCash > 0 {
-		calculated := min(max(int(availableCash/minTrade), cfg.MaxStocksMin), cfg.MaxStocksMax)
+		calculated := min(max(int(availableCash/minTrade), cfg.MaxStocksMin.Value), cfg.MaxStocksMax.Value)
 		maxStocks = calculated
 	}
 
@@ -851,9 +851,9 @@ func severityForControlAgent(agent domain.AgentSpec) domain.GuardSeverity {
 }
 
 func DefaultExecutionPolicy() domain.ExecutionPolicy {
-	cfg := config.GetEngineConfig().Executors
+	cfg := config.GetParametersConfig().Engine.Executors
 	return domain.ExecutionPolicy{
-		ConvictionFloor:         cfg.ConvictionFloorDefault,
+		ConvictionFloor:         cfg.ConvictionFloorDefault.Value,
 		RequireCROPass:          true,
 		MomentumCrashProtection: true,
 	}

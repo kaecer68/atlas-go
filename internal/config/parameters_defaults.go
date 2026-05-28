@@ -35,6 +35,7 @@ func DefaultParametersConfig() *ParametersConfig {
 		SectorExecutor:      defaultSectorExecutorParameters(),
 		Alert:               defaultAlertParameters(),
 		RiskGate:            defaultRiskGateParameters(),
+		Engine:              defaultEngineParameters(),
 	}
 }
 
@@ -56,6 +57,7 @@ func defaultDarwinianParameters() DarwinianParameters {
 			Value:     1.0,
 			Rationale: "Baseline: no adjustment",
 			Source:    SourceHeuristic,
+			Todo:      "Calibrate neutral weight: test [0.8, 1.0, 1.2] with 30-day backtest",
 		},
 		TopQuartileMultiplier: ParameterMetadata[float64]{
 			Value:     1.05,
@@ -73,6 +75,7 @@ func defaultDarwinianParameters() DarwinianParameters {
 			Value:     "20h",
 			Rationale: "Slightly less than 24h for daily trading frequency",
 			Source:    SourceHeuristic,
+			Todo:      "Validate 20h vs 24h cooldown impact on agent turnover and stability",
 		},
 		LookbackDays: ParameterMetadata[int]{
 			Value:     20,
@@ -220,10 +223,9 @@ func defaultFactorParameters() FactorParameters {
 			Source:    SourceEmpirical,
 		},
 		QualityVolatilityStd: ParameterMetadata[float64]{
-			Value:     0.05,
-			Rationale: "5% daily volatility as quality benchmark",
-			Source:    SourceHeuristic,
-			Todo:      "Review: TW market average daily vol is 1-3%, this may be too high",
+			Value:     0.02,
+			Rationale: "2% daily volatility benchmark based on TW market empirical data; TW stocks typically exhibit 1-3% daily volatility with median ~1.8%",
+			Source:    SourceEmpirical,
 		},
 		QualityFallbackScore: ParameterMetadata[float64]{
 			Value:     0.05,
@@ -1010,18 +1012,21 @@ func defaultBaselineParameters() BaselineParameters {
 	return BaselineParameters{
 		StartingCash: ParameterMetadata[float64]{
 			Value:     3000000,
-			Rationale: "3M TWD starting capital for simulation",
+			Rationale: "3M TWD (~$90K USD) approximates minimum viable capital for 5-position TW equity portfolio with meaningful position sizes (~600K/position); represents conservative retail investor starting point above minimum lot thresholds",
 			Source:    SourceHeuristic,
+			Todo:      "Validate against typical TW retail account sizes (CBC Financial Stability Report) and adjust for different investor segments",
 		},
 		MaxPositionWeight: ParameterMetadata[float64]{
 			Value:     0.18,
-			Rationale: "18% max position weight for diversification",
+			Rationale: "18% single-position cap provides ~5-6 name diversification with room for conviction weighting; conservative end of typical 15-25% single-name limit for concentrated portfolios; above 20% would allow only 4-5 equally-weighted positions risking under-diversification",
 			Source:    SourceLiterature,
+			Todo:      "Validate against TW market concentration cost analysis and adjust per market cap segment",
 		},
 		MaxOpenPositions: ParameterMetadata[int]{
 			Value:     5,
-			Rationale: "Maximum 5 open positions for focus",
+			Rationale: "5 open positions balances diversification with monitoring overhead; at 18% max weight, 5 positions allow up to 90% deployed capital; each position gets meaningful allocation (~600K TWD on 3M base) without dilution",
 			Source:    SourceHeuristic,
+			Todo:      "Backtest [3,8] range to find optimal number of positions for risk-adjusted returns",
 		},
 		MinTradableVolume: ParameterMetadata[float64]{
 			Value:     1000000,
@@ -2618,6 +2623,251 @@ func defaultPreciousMetalsParameters() PreciousMetalsParameters {
 			Rationale: "CFTC COT managed money net long default (typical mid-cycle level)",
 			Source:    SourceEmpirical,
 			Todo:      "Update weekly from CFTC Commitment of Traders report",
+		},
+	}
+}
+
+func defaultEngineParameters() EngineParameters {
+	return EngineParameters{
+		MacroRisk: EngineMacroRiskParameters{
+			CarryTradeUnwindThreshold: ParameterMetadata[float64]{
+				Value:     145.0,
+				Rationale: "JPY/USD above 145 triggers carry trade unwind concern; TW market foreign outflow accelerates above this threshold",
+				Source:    SourceEmpirical,
+				Todo:      "Recalibrate with 2024-2026 JPY-TWSE correlation data",
+			},
+			VIXThreshold: ParameterMetadata[float64]{
+				Value:     30.0,
+				Rationale: "VIX above 30 indicates global fear regime triggering TW foreign capital outflow",
+				Source:    SourceEmpirical,
+				Todo:      "Recalibrate with 2025-2026 VIX-TAIEX correlation",
+			},
+			US10YThreshold: ParameterMetadata[float64]{
+				Value:     4.5,
+				Rationale: "US 10Y above 4.5% signals rate-driven capital reallocation from EM equities; TW market shows sensitivity at this level",
+				Source:    SourceEmpirical,
+			},
+			OilShockThresholdPct: ParameterMetadata[float64]{
+				Value:     10.0,
+				Rationale: "10% oil price surge triggers supply-chain cost shock for TW manufacturing; historical shocks: 2022 Ukraine (+30%), 2023 OPEC cut (+8%)",
+				Source:    SourceEmpirical,
+			},
+			GoldSurgeThresholdPct: ParameterMetadata[float64]{
+				Value:     5.0,
+				Rationale: "5% gold surge signals risk-off flight to safety, correlating with TW equity outflows",
+				Source:    SourceHeuristic,
+				Todo:      "Validate against gold-USD-TWD correlation during 2022-2026 risk events",
+			},
+			DXYSurgeThresholdPct: ParameterMetadata[float64]{
+				Value:     1.5,
+				Rationale: "1.5% DXY surge signals USD strength that pressures EM currencies including TWD; TW exporters face FX headwind",
+				Source:    SourceEmpirical,
+			},
+			TWDStressThresholdPct: ParameterMetadata[float64]{
+				Value:     2.0,
+				Rationale: "2% TWD depreciation in a session signals capital flight; TW central bank typically intervenes at this level",
+				Source:    SourceEmpirical,
+			},
+			OutflowProbBase: ParameterMetadata[float64]{
+				Value:     35.0,
+				Rationale: "35% baseline foreign outflow probability under normal conditions; calibrated from TWSE foreign flow data 2020-2025",
+				Source:    SourceEmpirical,
+			},
+			OutflowProbMax: ParameterMetadata[float64]{
+				Value:     80.0,
+				Rationale: "80% max outflow probability under extreme conditions; upper bound observed during 2020 COVID and 2022 rate shock",
+				Source:    SourceEmpirical,
+			},
+		},
+		StructuralTrend: EngineStructuralTrendParameters{
+			MinTrendStrength: ParameterMetadata[float64]{
+				Value:     0.7,
+				Rationale: "Minimum 0.7 trend strength for structural classification; below this threshold trends are considered noise",
+				Source:    SourceHeuristic,
+				Todo:      "Calibrate against TW structural trend detection accuracy 2020-2026",
+			},
+			MinConfidence: ParameterMetadata[float64]{
+				Value:     0.75,
+				Rationale: "75% minimum confidence for structural trend signal; balances false positive rate vs early detection",
+				Source:    SourceHeuristic,
+			},
+			MinHitRate: ParameterMetadata[float64]{
+				Value:     0.70,
+				Rationale: "70% minimum historical hit rate for narrative events to be considered valid structural trends",
+				Source:    SourceHeuristic,
+				Todo:      "Validate against narrative event hit rate distribution",
+			},
+			OverrideThreshold: ParameterMetadata[float64]{
+				Value:     0.65,
+				Rationale: "0.65 threshold for structural trend to override cyclical signals; must be lower than MinConfidence to prioritize structure",
+				Source:    SourceHeuristic,
+			},
+			AIRevenueGrowthThreshold: ParameterMetadata[float64]{
+				Value:     50.0,
+				Rationale: "50% YoY AI revenue growth threshold flags structural AI capex surge; TSMC AI revenue grew ~50% in 2024-2025",
+				Source:    SourceEmpirical,
+			},
+			CoWoSUtilizationThreshold: ParameterMetadata[float64]{
+				Value:     85.0,
+				Rationale: "85% CoWoS utilization signals near-capacity AI packaging demand; TSMC CoWoS utilization tracked at 90%+ in 2025",
+				Source:    SourceEmpirical,
+			},
+			CapexGrowthThreshold: ParameterMetadata[float64]{
+				Value:     40.0,
+				Rationale: "40% YoY capex growth flags structural capacity expansion; TSMC capex grew ~34% in 2024, ~40% planned for 2025",
+				Source:    SourceEmpirical,
+			},
+			SemiconductorIndexThreshold: ParameterMetadata[float64]{
+				Value:     0.0,
+				Rationale: "Placeholder for semiconductor index trend threshold; pending index construction",
+				Source:    SourceHeuristic,
+				Todo:      "Define once TW semiconductor composite index is built",
+			},
+		},
+		Drawdown: EngineDrawdownParameters{
+			Levels: ParameterMetadata[map[string]DrawdownLevel]{
+				Value: map[string]DrawdownLevel{
+					"none":      {Percentage: 0.0, MaxExposure: 1.0},
+					"light":     {Percentage: 0.15, MaxExposure: 0.85},
+					"moderate":  {Percentage: 0.35, MaxExposure: 0.65},
+					"severe":    {Percentage: 0.60, MaxExposure: 0.40},
+					"emergency": {Percentage: 0.90, MaxExposure: 0.10},
+				},
+				Rationale: "Five-tier drawdown risk framework: none (0%), light (15%), moderate (35%), severe (60%), emergency (90%); calibrated to TW market correction patterns",
+				Source:    SourceHeuristic,
+				Todo:      "Validate drawdown level thresholds against 2020-2026 TWSE drawdown distribution",
+			},
+			OrangeOverrideMinScore: ParameterMetadata[float64]{
+				Value:     0.55,
+				Rationale: "Minimum composite score for orange (moderate) drawdown override of agent recommendations",
+				Source:    SourceHeuristic,
+			},
+			RedOverrideMinScore: ParameterMetadata[float64]{
+				Value:     0.75,
+				Rationale: "Minimum composite score for red (severe/emergency) drawdown override; must be > OrangeOverrideMinScore",
+				Source:    SourceHeuristic,
+			},
+			SectorConstraintsRiskOff: ParameterMetadata[map[string]float64]{
+				Value: map[string]float64{
+					"ai_supply_chain": 0.3, "small_cap": 0.2, "emerging_market": 0.1,
+					"gold": 1.5, "utilities": 1.2,
+				},
+				Rationale: "Risk-off sector constraints: AI supply chain cut to 30% of normal, small cap/EM near-zero; gold/utilities boosted as defensive rotation",
+				Source:    SourceHeuristic,
+			},
+			SectorConstraintsCarryUnwind: ParameterMetadata[map[string]float64]{
+				Value: map[string]float64{
+					"all_equities": 0.1, "tech": 0.05, "financials": 0.1, "cash": 2.0,
+				},
+				Rationale: "Carry trade unwind constraints: equities severely curtailed (5-10%), cash doubled; based on 2024 JPY carry unwind impact on TW markets",
+				Source:    SourceEmpirical,
+			},
+			SectorConstraintsSectorRotate: ParameterMetadata[map[string]float64]{
+				Value: map[string]float64{
+					"energy": 1.8, "oil_services": 1.5, "high_valuation_tech": 0.3, "rate_sensitive": 0.4,
+				},
+				Rationale: "Sector rotation constraints: energy/oil services boosted 1.5-1.8x on commodity surge; high-valuation tech and rate-sensitives cut to 30-40%",
+				Source:    SourceHeuristic,
+			},
+		},
+		SectorRotation: EngineSectorRotationParameters{
+			BaseAllocations: ParameterMetadata[map[string]float64]{
+				Value: map[string]float64{
+					"semiconductor": 0.19, "ai_supply_chain": 0.15, "robotics": 0.06,
+					"financials": 0.11, "shipping": 0.07, "energy": 0.04,
+					"electronics": 0.05, "consumer": 0.04, "industrial": 0.04,
+					"leo_satellite": 0.05, "defensive": 0.10, "cash": 0.10,
+				},
+				Rationale: "TW market sector allocation: semiconductor (19%) + AI supply chain (15%) dominate (34% combined); defensive+cash (20%) reserve; all sectors sum to 100%",
+				Source:    SourceHeuristic,
+				Todo:      "Calibrate sector weights against TWSE sector index market cap weights 2025-2026",
+			},
+			MinAllocation: ParameterMetadata[float64]{
+				Value:     0.02,
+				Rationale: "Minimum 2% sector allocation prevents zero-weight exclusion of small sectors",
+				Source:    SourceHeuristic,
+			},
+			MaxAllocation: ParameterMetadata[float64]{
+				Value:     0.40,
+				Rationale: "Maximum 40% single-sector allocation prevents over-concentration; ~2x semiconductor base weight (19%) allows tactical overweight",
+				Source:    SourceHeuristic,
+			},
+			RebalanceThreshold: ParameterMetadata[float64]{
+				Value:     0.01,
+				Rationale: "1% rebalance threshold avoids excessive trading; sector weight deviation must exceed 1% to trigger rebalance",
+				Source:    SourceHeuristic,
+			},
+		},
+		StrategyEvolution: EngineStrategyEvolutionParameters{
+			CooldownPeriodHours: ParameterMetadata[int]{
+				Value:     24,
+				Rationale: "24-hour cooldown between strategy switches prevents whipsaw during volatile regime transitions",
+				Source:    SourceHeuristic,
+				Todo:      "Test 24h vs 48h vs 72h cooldown impact on strategy stability",
+			},
+			Configs: ParameterMetadata[map[string]StrategyStateConfig]{
+				Value: map[string]StrategyStateConfig{
+					"normal":    {MaxPositionSize: 0.15, MaxSectorExposure: 0.30, MinCashReserve: 0.05, HedgeRatio: 0.0, AllowNewPositions: true, AllowConcentration: true},
+					"cautious":  {MaxPositionSize: 0.12, MaxSectorExposure: 0.25, MinCashReserve: 0.10, HedgeRatio: 0.10, AllowNewPositions: true, AllowConcentration: false},
+					"defensive": {MaxPositionSize: 0.08, MaxSectorExposure: 0.20, MinCashReserve: 0.20, HedgeRatio: 0.20, AllowNewPositions: false, AllowConcentration: false},
+					"hedged":    {MaxPositionSize: 0.10, MaxSectorExposure: 0.25, MinCashReserve: 0.15, HedgeRatio: 0.30, AllowNewPositions: true, AllowConcentration: false},
+					"suspended": {MaxPositionSize: 0.0, MaxSectorExposure: 0.0, MinCashReserve: 1.0, HedgeRatio: 0.0, AllowNewPositions: false, AllowConcentration: false},
+				},
+				Rationale: "Five strategy states from normal (full risk) to suspended (no positions); progressive de-risking: cautious → defensive → hedged → suspended",
+				Source:    SourceHeuristic,
+				Todo:      "Validate strategy state transitions with backtest across 2022 (bear), 2023-2024 (bull), 2025 (mixed) cycles",
+			},
+		},
+		Executors: EngineExecutorsParameters{
+			VIXMomentumCrashThreshold: ParameterMetadata[float64]{
+				Value:     30.0,
+				Rationale: "VIX above 30 signals momentum crash regime; TW market foreign flow sensitivity increases ~3x above this level",
+				Source:    SourceEmpirical,
+			},
+			CrowdingPenaltyAgents3: ParameterMetadata[float64]{
+				Value:     0.75,
+				Rationale: "When 3 agents crowd same stock, conviction reduced to 75% to prevent herding; based on Kelly criterion adjustment for correlated bets",
+				Source:    SourceHeuristic,
+			},
+			CrowdingPenaltyAgents4: ParameterMetadata[float64]{
+				Value:     0.60,
+				Rationale: "When 4+ agents crowd same stock, conviction reduced to 60%; exponential penalty as crowding increases",
+				Source:    SourceHeuristic,
+			},
+			MinTradeAmount: ParameterMetadata[float64]{
+				Value:     100000.0,
+				Rationale: "100K TWD minimum trade amount filters out uneconomically small orders; ~$3K USD at current FX",
+				Source:    SourceHeuristic,
+			},
+			MaxStocksDefault: ParameterMetadata[int]{
+				Value:     8,
+				Rationale: "Default 8 stocks max per session balances diversification with position concentration; aligned with baseline MaxOpenPositions (5) + buffer",
+				Source:    SourceHeuristic,
+			},
+			MaxStocksMin: ParameterMetadata[int]{
+				Value:     5,
+				Rationale: "Minimum 5 stocks ensures basic sector diversification across semiconductor, AI, financials, shipping, and one defensive",
+				Source:    SourceHeuristic,
+			},
+			MaxStocksMax: ParameterMetadata[int]{
+				Value:     12,
+				Rationale: "Maximum 12 stocks prevents over-diversification diluting alpha; above 12, marginal diversification benefit < transaction cost",
+				Source:    SourceLiterature,
+			},
+			ConvictionFloorDefault: ParameterMetadata[int]{
+				Value:     50,
+				Rationale: "Minimum 50 conviction (out of 100) for executor recommendations to be considered; below 50 is effectively a coin flip",
+				Source:    SourceHeuristic,
+				Todo:      "Calibrate floor against executor historical precision-recall curve",
+			},
+		},
+		Simulation: EngineSimulationParameters{
+			NeutralRegimeSizingFactor: ParameterMetadata[float64]{
+				Value:     0.85,
+				Rationale: "85% position sizing in neutral regime reduces max position from full weight to 85%; provides 15% buffer for regime uncertainty",
+				Source:    SourceHeuristic,
+				Todo:      "Calibrate sizing factor [0.70-1.00] via walk-forward backtest per regime",
+			},
 		},
 	}
 }

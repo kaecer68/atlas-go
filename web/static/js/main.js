@@ -347,10 +347,11 @@ async function loadPageData(pageId) {
       var pData = await Promise.all([
         safeGetJSON('/api/parameters'),
         safeGetJSON('/api/parameters/categories'),
-        safeGetJSON('/api/parameters/audit-log')
+        safeGetJSON('/api/parameters/audit-log'),
+        safeGetJSON('/api/parameters/metadata')
       ]);
       if (m.parameters && m.parameters.renderParametersPage) {
-        m.parameters.renderParametersPage(pData[0], pData[1], pData[2]);
+        m.parameters.renderParametersPage(pData[0], pData[1], pData[2], pData[3]);
       }
     } catch(e) { console.error(e); }
   }

@@ -123,6 +123,9 @@ func applyFactorWeights(w map[FactorType]float64) {
 	for ft, v := range w {
 		params.FactorWeight.BaseWeights.Value[string(ft)] = v
 	}
+	now := time.Now()
+	params.FactorWeight.BaseWeights.LastCalibrated = &now
+	params.FactorWeight.BaseWeights.CalibrationMethod = "bayesian_search"
 	if p := config.GetParametersConfigPath(); p != "" {
 		_ = params.Save(p)
 	}
