@@ -103,5 +103,6 @@ func builtinControlExecutors() []ControlExecutor {
 	return []ControlExecutor{
 		NewCRORiskExecutor(),
 		CIOPortfolioExecutor{},
+		SuperinvestorExecutor{},
 	}
 }

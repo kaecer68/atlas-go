@@ -638,7 +638,7 @@ func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *Plugi
 	current := recs
 	outcomes := make([]domain.GuardOutcome, 0)
 	for _, agent := range registry.Agents {
-		if !agent.Enabled || agent.Layer != domain.LayerControl {
+		if !agent.Enabled || (agent.Layer != domain.LayerControl && agent.Layer != domain.LayerSuperinvestor) {
 			continue
 		}
 		before := len(current)
