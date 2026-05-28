@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -103,6 +104,37 @@ func (s *Store) LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOu
 		outcomes = append(outcomes, outcome)
 	}
 	return outcomes, scanner.Err()
+}
+
+// LoadOutcomesFromSessions aggregates outcomes from all session directories.
+// This is the richest data source with per-agent, per-symbol forward returns.
+// Prefer this over LoadOutcomes() which reads from the sparse global file.
+func (s *Store) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
+	entries, err := os.ReadDir(s.baseDir)
+	if err != nil {
+		return nil, fmt.Errorf("read sessions dir: %w", err)
+	}
+	var allOutcomes []domain.RecommendationOutcome
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), "session-") {
+			continue
+		}
+		outcomePath := filepath.Join(s.baseDir, entry.Name(), "recommendation_outcomes.jsonl")
+		f, err := os.Open(outcomePath)
+		if err != nil {
+			continue
+		}
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			var outcome domain.RecommendationOutcome
+			if err := json.Unmarshal(scanner.Bytes(), &outcome); err != nil {
+				continue
+			}
+			allOutcomes = append(allOutcomes, outcome)
+		}
+		_ = f.Close()
+	}
+	return allOutcomes, nil
 }
 
 func (s *Store) LoadOutcomes() ([]domain.RecommendationOutcome, error) {

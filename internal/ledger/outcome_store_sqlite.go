@@ -140,6 +140,10 @@ func (s *SQLiteOutcomeStore) RecordSessionOutcomes(session domain.ReplaySession,
 }
 
 // LoadOutcomes reads all global outcomes (session_id = "").
+func (s *SQLiteOutcomeStore) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
+	return s.LoadOutcomes()
+}
+
 func (s *SQLiteOutcomeStore) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
 	rows, err := s.db.Query(`
 		SELECT symbol, agent_id, action, target_price, stop_loss, conviction,
