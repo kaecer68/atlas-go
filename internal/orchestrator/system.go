@@ -437,11 +437,12 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 
 	tw.Record(7, "ledger_write", "START", nil)
 	outcomes := buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf)
+	// Write outcomes to ALL stores: PostgreSQL (if available), global file, and per-session file.
+	// The XOR pattern was removed because DualWriteRepository already handles DB ↔ file sync.
 	if s.Risk().repo != nil {
 		_ = s.Risk().repo.RecordOutcomes(s.Sim().ctx, outcomes)
-	} else {
-		_ = s.Sim().ledger.RecordOutcomes(outcomes)
 	}
+	_ = s.Sim().ledger.RecordOutcomes(outcomes)
 	_ = s.Sim().ledger.RecordSessionOutcomes(s.Sim().session, outcomes)
 	_ = s.Sim().ledger.RecordSessionScreeningRejects(s.Sim().session.ID, rejects)
 	if s.Risk().metricsCollector != nil {
@@ -675,9 +676,8 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, sessionDate, s.Sim().replay)
 	if s.Risk().repo != nil {
 		_ = s.Risk().repo.RecordOutcomes(s.Sim().ctx, outcomes)
-	} else {
-		_ = s.Sim().ledger.RecordOutcomes(outcomes)
 	}
+	_ = s.Sim().ledger.RecordOutcomes(outcomes)
 	_ = s.Sim().ledger.RecordSessionOutcomes(s.Sim().session, outcomes)
 	_ = s.Sim().ledger.RecordSessionScreeningRejects(s.Sim().session.ID, rejects)
 	if s.Risk().metricsCollector != nil {
