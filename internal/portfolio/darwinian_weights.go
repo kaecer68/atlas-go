@@ -322,8 +322,9 @@ func (m *DarwinianWeightManager) updateRollingMetrics(w *DarwinianAgentWeight) {
 }
 
 // calculateSharpe calculates Sharpe ratio for a series of returns.
-// Returns 0 if the series has insufficient data, near-zero variance (IEEE 754
-// precision edge case), or negative mean (upside-down risk profile).
+// Returns 0 if the series has insufficient data or near-zero variance (IEEE 754
+// precision edge case). Negative Sharpe is valid and indicates below-risk-free-rate
+// returns.
 func (m *DarwinianWeightManager) calculateSharpe(returns []float64) float64 {
 	if len(returns) < m.params.Darwinian.SharpeMinSampleSize {
 		return 0.0
@@ -336,11 +337,6 @@ func (m *DarwinianWeightManager) calculateSharpe(returns []float64) float64 {
 	}
 	mean := sum / float64(len(returns))
 
-	// Guard: negative mean means upside-down risk profile, not a good signal
-	if mean <= 0 {
-		return 0.0
-	}
-
 	// Calculate standard deviation
 	var variance float64
 	for _, r := range returns {
@@ -351,8 +347,8 @@ func (m *DarwinianWeightManager) calculateSharpe(returns []float64) float64 {
 
 	// Guard: near-zero stdDev catches IEEE 754 precision edge case where
 	// identical values produce non-zero variance (e.g. all 0.02 returns).
-	// Use relative threshold: stdDev/mean < 0.001 means effectively zero variance.
-	if stdDev == 0 || stdDev/mean < m.params.Darwinian.StdDevMeanRatioThreshold {
+	// Use relative threshold: |stdDev/mean| < 0.001 means effectively zero variance.
+	if stdDev == 0 || (mean != 0 && math.Abs(stdDev/mean) < m.params.Darwinian.StdDevMeanRatioThreshold) {
 		return 0.0
 	}
 
