@@ -177,15 +177,13 @@ func (LEOSatelliteExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote
 	stopLossMult := 0.95
 	if leoParams != nil {
 		lp := leoParams.SectorExecutor.LEOSatellite
-		if lp.ConvictionBase.Value != 0 {
-			convBase = lp.ConvictionBase.Value
-			pricePenalty = lp.PricePenaltyDelta.Value
-			launchBoost = lp.LaunchBoostDelta.Value
-			deploymentBoost = lp.DeploymentBoostDelta.Value
-			downgradePenalty = lp.DowngradePenaltyDelta.Value
-			targetMult = lp.TargetPriceMult.Value
-			stopLossMult = lp.StopLossMult.Value
-		}
+		convBase = lp.ConvictionBase.Value
+		pricePenalty = lp.PricePenaltyDelta.Value
+		launchBoost = lp.LaunchBoostDelta.Value
+		deploymentBoost = lp.DeploymentBoostDelta.Value
+		downgradePenalty = lp.DowngradePenaltyDelta.Value
+		targetMult = lp.TargetPriceMult.Value
+		stopLossMult = lp.StopLossMult.Value
 	}
 
 	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), convBase)
@@ -506,10 +504,9 @@ func finConviction(agent domain.AgentSpec, prompt string, quote domain.Quote, fq
 	db, bp, cqb, cqp, ssb, ssp, cab := finDividendBoost, finBalanceSheetPenalty, finCreditQualityBoost, finCreditQualityPenalty, finSpreadSensitivityBoost, finSpreadSensitivityPenalty, finCapitalAdequacyBoost
 	pto, pth := finPriceToOpenThreshold, finPriceToHighThreshold
 	if cfg := config.GetParametersConfig(); cfg != nil {
-		if fp := cfg.SectorExecutor.Financials; fp.DividendBoost.Value != 0 {
-			db, bp, cqb, cqp, ssb, ssp, cab = fp.DividendBoost.Value, fp.BalanceSheetPenalty.Value, fp.CreditQualityBoost.Value, fp.CreditQualityPenalty.Value, fp.SpreadSensitivityBoost.Value, fp.SpreadSensitivityPenalty.Value, fp.CapitalAdequacyBoost.Value
-			pto, pth = fp.PriceToOpenThreshold.Value, fp.PriceToHighThreshold.Value
-		}
+		fp := cfg.SectorExecutor.Financials
+		db, bp, cqb, cqp, ssb, ssp, cab = fp.DividendBoost.Value, fp.BalanceSheetPenalty.Value, fp.CreditQualityBoost.Value, fp.CreditQualityPenalty.Value, fp.SpreadSensitivityBoost.Value, fp.SpreadSensitivityPenalty.Value, fp.CapitalAdequacyBoost.Value
+		pto, pth = fp.PriceToOpenThreshold.Value, fp.PriceToHighThreshold.Value
 	}
 	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), 50)
 	if strings.Contains(prompt, "dividend") && quote.Last >= quote.Open {
