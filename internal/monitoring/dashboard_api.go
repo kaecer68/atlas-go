@@ -542,6 +542,9 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 
 	riskHandlers := apirisk.NewHandlers(a.ledgerDir)
 	riskHandlers.WithRiskGate(a.riskGate)
+	if a.industryService != nil && a.industryService.LinkageAnalyzer != nil {
+		riskHandlers.WithCorrelationMatrix(a.industryService.LinkageAnalyzer.GetCorrelationMatrix())
+	}
 	riskHandlers.RegisterRoutes(mux)
 
 	var dividendProvider apitax.DividendProvider
