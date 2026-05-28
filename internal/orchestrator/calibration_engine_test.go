@@ -78,3 +78,94 @@ func TestCalibrationEngine_Calibrate_NoParams(t *testing.T) {
 		t.Error("expected empty parameters after for executor with no params")
 	}
 }
+
+// ── CalibrateAll tests ──────────────────────────────────────
+
+type mockStrategyProvider struct {
+	meta StrategyMeta
+}
+
+func (m mockStrategyProvider) StrategyMeta() StrategyMeta { return m.meta }
+
+func TestCalibrationEngine_CalibrateAll_WithData(t *testing.T) {
+	fc := loadFactorConfig()
+	providers := []StrategyProvider{
+		mockStrategyProvider{StrategyMeta{
+			ID: "test1", Skill: "skill1", Factors: []string{"momentum"},
+			Parameters: momentumParams(fc),
+		}},
+	}
+	provider := mockCalibrationProvider{recs: map[string][]CalibRecommendation{
+		"skill1": {
+			{Symbol: "A", ForwardRet: 0.05, FactorScores: map[string]float64{"momentum": 0.5}},
+			{Symbol: "B", ForwardRet: 0.03, FactorScores: map[string]float64{"momentum": 0.3}},
+			{Symbol: "C", ForwardRet: -0.04, FactorScores: map[string]float64{"momentum": -0.2}},
+			{Symbol: "D", ForwardRet: -0.02, FactorScores: map[string]float64{"momentum": -0.05}},
+			{Symbol: "E", ForwardRet: 0.01, FactorScores: map[string]float64{"momentum": 0.1}},
+			{Symbol: "F", ForwardRet: 0.04, FactorScores: map[string]float64{"momentum": 0.4}},
+			{Symbol: "G", ForwardRet: -0.03, FactorScores: map[string]float64{"momentum": -0.3}},
+			{Symbol: "H", ForwardRet: 0.02, FactorScores: map[string]float64{"momentum": 0.15}},
+			{Symbol: "I", ForwardRet: -0.01, FactorScores: map[string]float64{"momentum": -0.1}},
+			{Symbol: "J", ForwardRet: 0.06, FactorScores: map[string]float64{"momentum": 0.55}},
+		},
+	}}
+	engine := &CalibrationEngine{}
+	reports, err := engine.CalibrateAll(providers, provider, 5)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(reports) != 1 {
+		t.Fatalf("expected 1 report, got %d", len(reports))
+	}
+	if reports[0].BaselineScore == 0 {
+		t.Error("expected non-zero baseline score")
+	}
+	t.Logf("CalibrateAll: executor=%s baseline=%.4f optimized=%.4f improvement=%.1f%% verdict=%s",
+		reports[0].ExecutorID, reports[0].BaselineScore, reports[0].OptimizedScore, reports[0].ImprovementPct, reports[0].Verdict)
+}
+
+func TestCalibrationEngine_CalibrateAll_InsufficientData(t *testing.T) {
+	fc := loadFactorConfig()
+	providers := []StrategyProvider{
+		mockStrategyProvider{StrategyMeta{
+			ID: "low_data", Skill: "low", Factors: []string{"momentum"},
+			Parameters: momentumParams(fc),
+		}},
+	}
+	// Only 3 samples — below minimum threshold
+	provider := mockCalibrationProvider{recs: map[string][]CalibRecommendation{
+		"low": {
+			{Symbol: "A", ForwardRet: 0.01, FactorScores: map[string]float64{"momentum": 0.5}},
+			{Symbol: "B", ForwardRet: 0.02, FactorScores: map[string]float64{"momentum": 0.3}},
+			{Symbol: "C", ForwardRet: -0.01, FactorScores: map[string]float64{"momentum": -0.2}},
+		},
+	}}
+	engine := &CalibrationEngine{}
+	reports, err := engine.CalibrateAll(providers, provider, 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(reports) != 0 {
+		t.Errorf("expected 0 reports for insufficient data, got %d", len(reports))
+	}
+}
+
+func TestCalibrationEngine_CalibrateAll_NoParamsExecutor(t *testing.T) {
+	providers := []StrategyProvider{
+		mockStrategyProvider{StrategyMeta{
+			ID: "no_params", Skill: "no_params", Factors: []string{"momentum"},
+			// No Parameters — should be skipped
+		}},
+	}
+	provider := mockCalibrationProvider{recs: map[string][]CalibRecommendation{
+		"no_params": {{Symbol: "A", ForwardRet: 0.01, FactorScores: map[string]float64{"momentum": 0.5}}},
+	}}
+	engine := &CalibrationEngine{}
+	reports, err := engine.CalibrateAll(providers, provider, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(reports) != 0 {
+		t.Errorf("expected 0 reports for executor with no params, got %d", len(reports))
+	}
+}
