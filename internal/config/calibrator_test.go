@@ -47,10 +47,10 @@ func TestComputeImprovementPct(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := computeImprovementPct(tt.baseline, tt.opt)
 			tol := 1e-9
-		if tt.baseline != 0 && math.Abs(tt.baseline) < 1e-9 {
-			tol = 1e-6 // near-epsilon division yields larger float drift
-		}
-		if math.Abs(got-tt.want) > tol {
+			if tt.baseline != 0 && math.Abs(tt.baseline) < 1e-9 {
+				tol = 1e-6 // near-epsilon division yields larger float drift
+			}
+			if math.Abs(got-tt.want) > tol {
 				t.Errorf("computeImprovementPct(%v, %v) = %v, want %v", tt.baseline, tt.opt, got, tt.want)
 			}
 		})
@@ -111,7 +111,9 @@ func TestMarkCalibrated(t *testing.T) {
 	}{
 		// MacroRisk
 		{"macro risk - carry trade", "engine_macro_risk_carry_trade_unwind_threshold",
-			func(c *ParametersConfig) *time.Time { return c.Engine.MacroRisk.CarryTradeUnwindThreshold.LastCalibrated }},
+			func(c *ParametersConfig) *time.Time {
+				return c.Engine.MacroRisk.CarryTradeUnwindThreshold.LastCalibrated
+			}},
 		{"macro risk - VIX", "engine_macro_risk_vix_threshold",
 			func(c *ParametersConfig) *time.Time { return c.Engine.MacroRisk.VIXThreshold.LastCalibrated }},
 
@@ -125,11 +127,15 @@ func TestMarkCalibrated(t *testing.T) {
 
 		// Executors
 		{"executors - VIX crash", "engine_executors_vix_momentum_crash_threshold",
-			func(c *ParametersConfig) *time.Time { return c.Engine.Executors.VIXMomentumCrashThreshold.LastCalibrated }},
+			func(c *ParametersConfig) *time.Time {
+				return c.Engine.Executors.VIXMomentumCrashThreshold.LastCalibrated
+			}},
 
 		// Simulation
 		{"simulation - neutral regime", "engine_simulation_neutral_regime_sizing_factor",
-			func(c *ParametersConfig) *time.Time { return c.Engine.Simulation.NeutralRegimeSizingFactor.LastCalibrated }},
+			func(c *ParametersConfig) *time.Time {
+				return c.Engine.Simulation.NeutralRegimeSizingFactor.LastCalibrated
+			}},
 
 		// Narrative
 		{"narrative - AI revenue", "narrative_ai_revenue_growth_threshold",
@@ -170,7 +176,7 @@ func TestMarkCalibrated_UnknownName(t *testing.T) {
 func TestMarkCalibrated_EmptyList(t *testing.T) {
 	cfg := DefaultParametersConfig()
 	ts := time.Now()
-	markCalibrated(cfg, nil, "test", &ts)         // nil slice
-	markCalibrated(cfg, []string{}, "test", &ts)   // empty slice
+	markCalibrated(cfg, nil, "test", &ts)        // nil slice
+	markCalibrated(cfg, []string{}, "test", &ts) // empty slice
 	// No assertion needed — if it doesn't panic, the test passes.
 }
