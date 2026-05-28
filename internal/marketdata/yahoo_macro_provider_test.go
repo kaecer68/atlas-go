@@ -22,10 +22,9 @@ func TestYahooFinanceMacroProvider_UserAgent(t *testing.T) {
 	origHosts := yahooHosts
 	yahooHosts = []string{strings.TrimPrefix(ts.URL, "https://")}
 	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(ts.Client())
 
 	provider := NewYahooFinanceMacroProvider()
-	provider.client = ts.Client()
-
 	_, err := provider.FetchSnapshot(context.Background())
 	if err != nil {
 		t.Fatalf("FetchSnapshot failed: %v", err)
@@ -67,10 +66,10 @@ func TestYahooFinanceMacroProvider_HTMLFallback(t *testing.T) {
 	origHosts := yahooHosts
 	yahooHosts = []string{hostHTML, hostJSON}
 	defer func() { yahooHosts = origHosts }()
+	// Use the JSON server's client (both are TLS, same client works)
+	SetYahooSessionClient(tsJSON.Client())
 
 	provider := NewYahooFinanceMacroProvider()
-	provider.client = tsHTML.Client()
-
 	snap, err := provider.FetchSnapshot(context.Background())
 	if err != nil {
 		t.Logf("FetchSnapshot returned errors (expected partial): %v", err)
@@ -91,10 +90,9 @@ func TestYahooFinanceMacroProvider_AllHostsFail(t *testing.T) {
 	origHosts := yahooHosts
 	yahooHosts = []string{host, host}
 	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(ts.Client())
 
 	provider := NewYahooFinanceMacroProvider()
-	provider.client = ts.Client()
-
 	_, err := provider.FetchSnapshot(context.Background())
 	if err == nil {
 		t.Fatal("expected error when all hosts fail")
@@ -109,19 +107,25 @@ func TestYahooFetchFromHost_Success(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	provider := NewYahooFinanceMacroProvider()
-	provider.client = ts.Client()
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(ts.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(ts.Client())
 
-	host := strings.TrimPrefix(ts.URL, "https://")
-	point, err := provider.fetchFromHost(context.Background(), host, "TEST")
+	// Test session.fetchFromHost directly
+	ctx := context.Background()
+	s := getYahooSession()
+	body, err := s.fetchFromHost(ctx, yahooHosts[0], "TEST", map[string]string{"interval": "1d", "range": "2d"})
 	if err != nil {
 		t.Fatalf("fetchFromHost failed: %v", err)
 	}
-	if point.Value != 150.0 {
-		t.Errorf("expected value 150.0, got %v", point.Value)
+
+	chartResp, err := UnmarshalYahooChart(body)
+	if err != nil {
+		t.Fatalf("UnmarshalYahooChart failed: %v", err)
 	}
-	if point.ChangePct < 0.67 || point.ChangePct > 0.68 {
-		t.Errorf("expected pct change ~0.671, got %v", point.ChangePct)
+	if chartResp.Chart.Result[0].Meta.RegularMarketPrice != 150.0 {
+		t.Errorf("expected price 150.0, got %v", chartResp.Chart.Result[0].Meta.RegularMarketPrice)
 	}
 }
 
@@ -132,11 +136,14 @@ func TestYahooFetchFromHost_HTMLResponse(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	provider := NewYahooFinanceMacroProvider()
-	provider.client = ts.Client()
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(ts.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(ts.Client())
 
-	host := strings.TrimPrefix(ts.URL, "https://")
-	_, err := provider.fetchFromHost(context.Background(), host, "TEST")
+	ctx := context.Background()
+	s := getYahooSession()
+	_, err := s.fetchFromHost(ctx, yahooHosts[0], "TEST", nil)
 	if err == nil {
 		t.Fatal("expected error for HTML response")
 	}
@@ -151,15 +158,18 @@ func TestYahooFetchFromHost_NonOKStatus(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	provider := NewYahooFinanceMacroProvider()
-	provider.client = ts.Client()
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(ts.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(ts.Client())
 
-	host := strings.TrimPrefix(ts.URL, "https://")
-	_, err := provider.fetchFromHost(context.Background(), host, "TEST")
+	ctx := context.Background()
+	s := getYahooSession()
+	_, err := s.fetchFromHost(ctx, yahooHosts[0], "TEST", nil)
 	if err == nil {
 		t.Fatal("expected error for non-OK status")
 	}
-	if !strings.Contains(err.Error(), "http status 429") {
+	if !strings.Contains(err.Error(), "http 429") {
 		t.Errorf("expected status error, got: %v", err)
 	}
 }
@@ -172,13 +182,21 @@ func TestYahooFetchFromHost_InvalidJSON(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	provider := NewYahooFinanceMacroProvider()
-	provider.client = ts.Client()
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(ts.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(ts.Client())
 
-	host := strings.TrimPrefix(ts.URL, "https://")
-	_, err := provider.fetchFromHost(context.Background(), host, "TEST")
+	ctx := context.Background()
+	s := getYahooSession()
+	body, err := s.fetchFromHost(ctx, yahooHosts[0], "TEST", nil)
+	if err != nil {
+		t.Fatalf("fetchFromHost should succeed on HTTP level: %v", err)
+	}
+
+	_, err = UnmarshalYahooChart(body)
 	if err == nil {
-		t.Fatal("expected error for invalid JSON")
+		t.Fatal("expected unmarshal error for invalid JSON")
 	}
 	if !strings.Contains(err.Error(), "unmarshal") {
 		t.Errorf("expected unmarshal error, got: %v", err)
