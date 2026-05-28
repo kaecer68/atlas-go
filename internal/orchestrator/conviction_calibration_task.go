@@ -101,6 +101,17 @@ func RunConvictionCalibration(workDir string) error {
 					"after", r.ParametersAfter[name])
 			}
 		}
+		if r.Verdict == "applied" {
+			if err := engine.ApplyToConfig(r); err != nil {
+				logging.Error("conviction_calibrate", "apply_failed",
+					"executor", r.ExecutorID,
+					"err", err.Error())
+			} else {
+				logging.Info("conviction_calibrate", "parameters_applied",
+					"executor", r.ExecutorID,
+					"improvement_pct", r.ImprovementPct)
+			}
+		}
 	}
 	return nil
 }

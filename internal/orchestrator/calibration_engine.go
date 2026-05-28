@@ -5,6 +5,8 @@ import (
 	"math"
 	"sort"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 // CalibrationEngine optimizes factor conviction thresholds and deltas for each
@@ -294,4 +296,80 @@ func cloneMap(m map[string]float64) map[string]float64 {
 		c[k] = v
 	}
 	return c
+}
+
+// ApplyToConfig writes the optimized parameters from a calibration report
+// back to ParametersConfig and persists to parameters.json. Returns an error
+// if the config is unavailable or if the parameter name doesn't match any
+// known FactorConvictionParams field.
+func (e *CalibrationEngine) ApplyToConfig(report ConvictionCalibrationReport) error {
+	params := config.GetParametersConfig()
+	if params == nil {
+		return fmt.Errorf("ApplyToConfig: ParametersConfig is nil")
+	}
+	fc := &params.SectorExecutor.FactorConviction
+	for name, v := range report.ParametersAfter {
+		if err := applyParamField(fc, name, v); err != nil {
+			return fmt.Errorf("ApplyToConfig: %w", err)
+		}
+	}
+	path := config.GetParametersConfigPath()
+	if path == "" {
+		return fmt.Errorf("ApplyToConfig: no parameters config path configured")
+	}
+	return params.Save(path)
+}
+
+// applyParamField maps a ParameterMeta.Name string to the corresponding
+// FactorConvictionParams field and assigns the value.
+func applyParamField(fc *config.FactorConvictionParams, name string, v float64) error {
+	switch name {
+	// Momentum
+	case "momentum_high_threshold":
+		fc.MomentumHighThreshold.Value = v
+	case "momentum_high_delta":
+		fc.MomentumHighDelta.Value = int(v)
+	case "momentum_mod_threshold":
+		fc.MomentumModThreshold.Value = v
+	case "momentum_mod_delta":
+		fc.MomentumModDelta.Value = int(v)
+	case "momentum_weak_threshold":
+		fc.MomentumWeakThreshold.Value = v
+	case "momentum_weak_delta":
+		fc.MomentumWeakDelta.Value = int(v)
+	// Value
+	case "value_high_threshold":
+		fc.ValueHighThreshold.Value = v
+	case "value_high_delta":
+		fc.ValueHighDelta.Value = int(v)
+	case "value_mod_threshold":
+		fc.ValueModThreshold.Value = v
+	case "value_mod_delta":
+		fc.ValueModDelta.Value = int(v)
+	case "value_weak_threshold":
+		fc.ValueWeakThreshold.Value = v
+	case "value_weak_delta":
+		fc.ValueWeakDelta.Value = int(v)
+	// Quality
+	case "quality_threshold":
+		fc.QualityThreshold.Value = v
+	case "quality_delta":
+		fc.QualityDelta.Value = int(v)
+	// Liquidity
+	case "liquidity_high_threshold":
+		fc.LiquidityHighThreshold.Value = v
+	case "liquidity_high_delta":
+		fc.LiquidityHighDelta.Value = int(v)
+	case "liquidity_good_threshold":
+		fc.LiquidityGoodThreshold.Value = v
+	case "liquidity_good_delta":
+		fc.LiquidityGoodDelta.Value = int(v)
+	case "liquidity_low_threshold":
+		fc.LiquidityLowThreshold.Value = v
+	case "liquidity_low_delta":
+		fc.LiquidityLowDelta.Value = int(v)
+	default:
+		return fmt.Errorf("unknown parameter: %s", name)
+	}
+	return nil
 }
