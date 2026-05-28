@@ -41,6 +41,7 @@
     <a data-page="alerts" onclick="switchPage('alerts')" tabindex="0" title="系統警報">🚨 系統警報</a>
     <a data-page="metrics" onclick="switchPage('metrics')" tabindex="0" title="指標監控">📉 指標監控</a>
     <a data-page="parameters" onclick="switchPage('parameters')" tabindex="0" title="參數管理">🎛️ 參數管理</a>
+   <a data-page="config" onclick="switchPage('config')" tabindex="0" title="部署配置">⚙️ 部署配置</a>
     <a data-page="eventlogic-rules" onclick="switchPage('eventlogic-rules')" tabindex="0" title="事件邏輯規則">🧠 事件邏輯</a>
     <a data-page="swarm" onclick="switchPage('swarm')" tabindex="0" title="Swarm 模擬">🐟 Swarm 模擬</a>
   </nav>
@@ -579,6 +580,13 @@
         <h2>變更紀錄 (Audit Log)</h2>
         <div id="parametersAuditLog" class="empty loading">載入中…</div>
       </div>
+    </div>
+
+    <div class="page" id="page-config">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        部署配置來自環境變數（.env 檔），在服務啟動時載入，無法經由本頁修改。請直接編輯 .env 後重啟服務。
+      </details>
+      <div id="configContent" class="empty loading">載入中…</div>
     </div>
 
     <div class="page" id="page-eventlogic-rules">

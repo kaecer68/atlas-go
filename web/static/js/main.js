@@ -28,7 +28,7 @@ export function switchPage(id, silent) {
     'reasoning-trace': '決策追蹤',
     experiments: '模擬交易', reports: '最新回測', controls: '控制與稽核',
     datachannels: '信息通道', synergy: '人機協同', alerts: '系統警報',
-    metrics: '指標監控', industry: '產業生態系', portfolio: '組合持倉', parameters: '參數管理',
+    metrics: '指標監控', industry: '產業生態系', portfolio: '組合持倉', parameters: '參數管理', config: '部署配置',
     evolution_panel: '演化透視', 'eventlogic-rules': '事件邏輯',
   swarm: 'Swarm 模擬'
   };
@@ -111,6 +111,7 @@ async function loadModules() {
     import('./pages/industry.js?v=' + APP_VERSION),
     import('./pages/datachannels.js?v=' + APP_VERSION),
     import('./pages/parameters.js?v=' + APP_VERSION),
+    import('./pages/deploy-config.js?v=' + APP_VERSION),
     import('./pages/synergy.js?v=' + APP_VERSION),
     import('./pages/evolution_panel.js?v=' + APP_VERSION),
     import('./pages/decision-chain.js?v=' + APP_VERSION),
@@ -118,7 +119,7 @@ async function loadModules() {
   import('./pages/swarm.js?v=' + APP_VERSION),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'synergy', 'evolution_panel', 'decision', 'eventlogic', 'swarm'];
+  var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'deployConfig', 'synergy', 'evolution_panel', 'decision', 'eventlogic', 'swarm'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -353,6 +354,12 @@ async function loadPageData(pageId) {
       if (m.parameters && m.parameters.renderParametersPage) {
         m.parameters.renderParametersPage(pData[0], pData[1], pData[2], pData[3]);
       }
+    } catch(e) { console.error(e); }
+  }
+  else if (pageId === 'config') {
+    try {
+      var cfg = await safeGetJSON('/api/config');
+      if (m.deployConfig && m.deployConfig.renderConfigPage) m.deployConfig.renderConfigPage(cfg);
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'eventlogic-rules') {
