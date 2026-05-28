@@ -236,6 +236,18 @@ func (ie *InferenceEngine) setStringParameterOnConfig(cfg *ParametersConfig, nam
 	return fmt.Errorf("unknown string parameter: %s", name)
 }
 
+// SetMapParameter performs a bulk replacement of a map[string]float64 parameter
+// using the mapParamPrefixes table. Each key in the map is set as a sub-key.
+func (ie *InferenceEngine) SetMapParameter(prefix string, value map[string]float64) error {
+	for _, mp := range mapParamPrefixes {
+		if mp.prefix == prefix {
+			mp.setMap(ie.params, value)
+			return nil
+		}
+	}
+	return fmt.Errorf("unknown map parameter prefix: %s", prefix)
+}
+
 func (ie *InferenceEngine) SetBoolParameter(name string, value bool) error {
 	if accessor, ok := boolParameterTable[name]; ok {
 		accessor.set(ie.params, value)
@@ -328,6 +340,36 @@ func (ie *InferenceEngine) handleMapGetParameter(cfg *ParametersConfig, name str
 		key := strings.TrimPrefix(name, "industry_sector_weights_")
 		if cfg.Industry.SectorWeights.Value != nil {
 			if v, ok := cfg.Industry.SectorWeights.Value[key]; ok {
+				return &v
+			}
+		}
+		return nil
+	}
+	// Drawdown.SectorConstraintsRiskOff
+	if strings.HasPrefix(name, "drawdown_sector_constraints_risk_off_") {
+		key := strings.TrimPrefix(name, "drawdown_sector_constraints_risk_off_")
+		if cfg.Drawdown.SectorConstraintsRiskOff.Value != nil {
+			if v, ok := cfg.Drawdown.SectorConstraintsRiskOff.Value[key]; ok {
+				return &v
+			}
+		}
+		return nil
+	}
+	// Drawdown.SectorConstraintsCarryTradeUnwind
+	if strings.HasPrefix(name, "drawdown_sector_constraints_carry_trade_unwind_") {
+		key := strings.TrimPrefix(name, "drawdown_sector_constraints_carry_trade_unwind_")
+		if cfg.Drawdown.SectorConstraintsCarryTradeUnwind.Value != nil {
+			if v, ok := cfg.Drawdown.SectorConstraintsCarryTradeUnwind.Value[key]; ok {
+				return &v
+			}
+		}
+		return nil
+	}
+	// Drawdown.SectorConstraintsSectorRotation
+	if strings.HasPrefix(name, "drawdown_sector_constraints_sector_rotation_") {
+		key := strings.TrimPrefix(name, "drawdown_sector_constraints_sector_rotation_")
+		if cfg.Drawdown.SectorConstraintsSectorRotation.Value != nil {
+			if v, ok := cfg.Drawdown.SectorConstraintsSectorRotation.Value[key]; ok {
 				return &v
 			}
 		}
@@ -629,6 +671,33 @@ func (ie *InferenceEngine) handleMapSetParameter(cfg *ParametersConfig, name str
 			cfg.Industry.SectorWeights.Value = make(map[string]float64)
 		}
 		cfg.Industry.SectorWeights.Value[key] = value
+		return true
+	}
+	// Drawdown.SectorConstraintsRiskOff
+	if strings.HasPrefix(name, "drawdown_sector_constraints_risk_off_") {
+		key := strings.TrimPrefix(name, "drawdown_sector_constraints_risk_off_")
+		if cfg.Drawdown.SectorConstraintsRiskOff.Value == nil {
+			cfg.Drawdown.SectorConstraintsRiskOff.Value = make(map[string]float64)
+		}
+		cfg.Drawdown.SectorConstraintsRiskOff.Value[key] = value
+		return true
+	}
+	// Drawdown.SectorConstraintsCarryTradeUnwind
+	if strings.HasPrefix(name, "drawdown_sector_constraints_carry_trade_unwind_") {
+		key := strings.TrimPrefix(name, "drawdown_sector_constraints_carry_trade_unwind_")
+		if cfg.Drawdown.SectorConstraintsCarryTradeUnwind.Value == nil {
+			cfg.Drawdown.SectorConstraintsCarryTradeUnwind.Value = make(map[string]float64)
+		}
+		cfg.Drawdown.SectorConstraintsCarryTradeUnwind.Value[key] = value
+		return true
+	}
+	// Drawdown.SectorConstraintsSectorRotation
+	if strings.HasPrefix(name, "drawdown_sector_constraints_sector_rotation_") {
+		key := strings.TrimPrefix(name, "drawdown_sector_constraints_sector_rotation_")
+		if cfg.Drawdown.SectorConstraintsSectorRotation.Value == nil {
+			cfg.Drawdown.SectorConstraintsSectorRotation.Value = make(map[string]float64)
+		}
+		cfg.Drawdown.SectorConstraintsSectorRotation.Value[key] = value
 		return true
 	}
 	return false

@@ -1,14 +1,11 @@
 import { escapeHtml } from '../shared/app-utils.js';
 
 function isEditable(val) {
-  // Numbers: always editable
   if (typeof val === 'number') return true;
-  // Boolean: editable
   if (typeof val === 'boolean') return true;
-  // Strings that look like numbers: editable as numeric
   if (typeof val === 'string' && !isNaN(val) && val.trim() !== '') return true;
-  // Non-empty strings: editable as string (e.g. "stable", "accelerating")
   if (typeof val === 'string' && val.trim() !== '') return true;
+  if (typeof val === 'object' && val !== null && !Array.isArray(val)) return true;
   return false;
 }
 
@@ -26,6 +23,12 @@ function detectParamType(val) {
 
 function formatValue(key, val, maxLen) {
   if (val === undefined || val === null) return '-';
+  if (typeof val === 'object' && !Array.isArray(val)) {
+    const entries = Object.entries(val);
+    const count = entries.length;
+    const preview = entries.slice(0, 2).map(([k, v]) => `${k}: ${typeof v === 'number' ? v.toFixed(2) : v}`).join(', ');
+    return `<span class="param-map-collapsed" onclick="window._paramMapExpand(this)" data-key="${escapeHtml(key)}" data-val="${escapeHtml(JSON.stringify(val))}" title="點擊展開">${count} entries{${preview}…}</span>`;
+  }
   let s = val;
   if (typeof s === 'object') s = JSON.stringify(s);
   else s = String(s);
@@ -134,6 +137,81 @@ async function submitEdit(td, key, oldVal, bodyVal) {
     td.classList.add('param-val-editable');
   }
 }
+
+window._paramMapExpand = function(span) {
+  const key = span.dataset.key;
+  let map;
+  try { map = JSON.parse(span.dataset.val); } catch(e) { return; }
+  const entries = Object.entries(map);
+  let html = '<table class="params-table map-sub-table"><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody>';
+  for (const [k, v] of entries) {
+    const subKey = key + '.' + k;
+    html += `<tr>
+      <td class="param-key">${escapeHtml(k)}</td>
+      <td class="param-val-editable" title="點擊編輯" data-key="${escapeHtml(subKey)}" data-val="${escapeHtml(String(v))}" onclick="window._paramEdit(this)">${escapeHtml(typeof v === 'number' ? v.toFixed(4) : String(v))}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  html += `<button class="btn-sm" onclick="window._paramMapEdit(this)" data-key="${escapeHtml(key)}" data-val="${escapeHtml(span.dataset.val)}" style="margin-top:4px">JSON 批量編輯</button>`;
+  span.parentElement.innerHTML = html;
+};
+
+window._paramMapEdit = function(btn) {
+  const key = btn.dataset.key;
+  const oldVal = btn.dataset.val;
+  const td = btn.parentElement;
+  const ta = document.createElement('textarea');
+  ta.style.cssText = 'width:100%;min-height:80px;background:var(--panel-l2);color:var(--text);border:1px solid var(--accent);padding:4px;font-size:11px;border-radius:3px;font-family:monospace;';
+  ta.value = JSON.stringify(JSON.parse(oldVal), null, 2);
+  td.innerHTML = '';
+  td.appendChild(ta);
+  ta.focus();
+
+  const save = document.createElement('button');
+  save.textContent = '儲存';
+  save.className = 'btn-sm';
+  save.style.cssText = 'margin-top:4px;margin-right:4px';
+  save.onclick = async function() {
+    let newMap;
+    try { newMap = JSON.parse(ta.value); } catch(e) {
+      td.innerHTML = '<span style="color:var(--down)">JSON 格式錯誤</span>';
+      return;
+    }
+    if (typeof newMap !== 'object' || Array.isArray(newMap)) {
+      td.innerHTML = '<span style="color:var(--down)">必須是物件格式</span>';
+      return;
+    }
+    td.innerHTML = ' <span style="color:var(--warn);font-size:10px">儲存中…</span>';
+    try {
+      const body = {}; body[key] = newMap;
+      const resp = await fetch('/api/parameters', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      if (resp.ok) {
+        const newVal = JSON.stringify(newMap);
+        const entries = Object.entries(newMap);
+        let html = `<span class="param-map-collapsed" onclick="window._paramMapExpand(this)" data-key="${escapeHtml(key)}" data-val="${escapeHtml(newVal)}" title="點擊展開">${entries.length} entries — 已儲存</span>`;
+        td.innerHTML = html;
+      } else {
+        const err = await resp.json().catch(() => ({}));
+        td.innerHTML = '<span style="color:var(--down)">' + escapeHtml(err.error || '儲存失敗') + '</span>';
+      }
+    } catch {
+      td.innerHTML = '<span style="color:var(--down)">網路錯誤</span>';
+    }
+  };
+
+  const cancel = document.createElement('button');
+  cancel.textContent = '取消';
+  cancel.className = 'btn-sm';
+  cancel.style.cssText = 'margin-top:4px';
+  cancel.onclick = function() {
+    const entries = Object.entries(JSON.parse(oldVal));
+    let html = `<span class="param-map-collapsed" onclick="window._paramMapExpand(this)" data-key="${escapeHtml(key)}" data-val="${escapeHtml(oldVal)}">${entries.length} entries</span>`;
+    td.innerHTML = html;
+  };
+
+  td.appendChild(save);
+  td.appendChild(cancel);
+};
 
 export function renderParametersPage(params, categoriesResp, auditLog, metadata) {
   const contentDiv = document.getElementById('parametersContent');
