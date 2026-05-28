@@ -182,6 +182,10 @@ func (a *DualWriteOutcomeStoreAdapter) LoadOutcomes() ([]domain.RecommendationOu
 	return a.repo.QueryAllOutcomes(a.ctx)
 }
 
+func (a *DualWriteOutcomeStoreAdapter) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
+	return a.repo.QueryAllOutcomes(a.ctx)
+}
+
 func (a *DualWriteOutcomeStoreAdapter) RecordSessionOutcomes(session domain.ReplaySession, outcomes []domain.RecommendationOutcome) error {
 	return a.repo.RecordSessionOutcomes(a.ctx, session, outcomes)
 }
