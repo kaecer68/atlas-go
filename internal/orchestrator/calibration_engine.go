@@ -304,23 +304,30 @@ func cloneMap(m map[string]float64) map[string]float64 {
 }
 
 // ApplyToConfig writes the optimized parameters from a calibration report
-// back to ParametersConfig and persists to parameters.json. Returns an error
-// if the config is unavailable or if the parameter name doesn't match any
-// known FactorConvictionParams field.
+// back to the global ParametersConfig and persists to parameters.json. Returns
+// an error if the config is unavailable or if the parameter name doesn't match
+// any known FactorConvictionParams field. Delegates to ApplyToConfigPath.
 func (e *CalibrationEngine) ApplyToConfig(report ConvictionCalibrationReport) error {
 	params := config.GetParametersConfig()
 	if params == nil {
 		return fmt.Errorf("ApplyToConfig: ParametersConfig is nil")
 	}
+	path := config.GetParametersConfigPath()
+	if path == "" {
+		return fmt.Errorf("ApplyToConfig: no parameters config path configured")
+	}
+	return e.ApplyToConfigPath(report, params, path)
+}
+
+// ApplyToConfigPath applies calibration results to a specific ParametersConfig
+// instance and persists to the given path. This is the testable variant;
+// ApplyToConfig is the production wrapper that reads global config.
+func (e *CalibrationEngine) ApplyToConfigPath(report ConvictionCalibrationReport, params *config.ParametersConfig, path string) error {
 	fc := &params.SectorExecutor.FactorConviction
 	for name, v := range report.ParametersAfter {
 		if err := applyParamField(fc, name, v); err != nil {
 			return fmt.Errorf("ApplyToConfig: %w", err)
 		}
-	}
-	path := config.GetParametersConfigPath()
-	if path == "" {
-		return fmt.Errorf("ApplyToConfig: no parameters config path configured")
 	}
 	return params.Save(path)
 }
