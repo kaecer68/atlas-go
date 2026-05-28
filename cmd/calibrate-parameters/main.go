@@ -410,6 +410,129 @@ func calibrateDarwinian(ie *config.InferenceEngine, n int, cfg *config.Parameter
 		_ = ie.SetParameter("darwinian_hit_rate_low_threshold", lowHitRate)
 	}
 
+	// Extended calibration: compute agent-level Sharpe and volatility from forward returns
+	agentReturns := make(map[string][]float64)
+	for _, o := range outcomes {
+		agentReturns[o.AgentID] = append(agentReturns[o.AgentID], o.ForwardReturn)
+	}
+
+	agentSharpes := make([]float64, 0, len(agentReturns))
+	agentVols := make([]float64, 0, len(agentReturns))
+	for _, returns := range agentReturns {
+		if len(returns) < int(cfg.Darwinian.SharpeMinSampleSize.Value) {
+			continue
+		}
+		mean := 0.0
+		for _, r := range returns {
+			mean += r
+		}
+		mean /= float64(len(returns))
+		if mean <= 0 {
+			continue
+		}
+		variance := 0.0
+		for _, r := range returns {
+			diff := r - mean
+			variance += diff * diff
+		}
+		stdDev := math.Sqrt(variance / float64(len(returns)-1))
+		if stdDev > 0 {
+			sharpe := (mean / stdDev) * math.Sqrt(252)
+			agentSharpes = append(agentSharpes, sharpe)
+			agentVols = append(agentVols, stdDev*math.Sqrt(252))
+		}
+	}
+
+	if len(agentSharpes) >= 3 {
+		sort.Float64s(agentSharpes)
+		sort.Float64s(agentVols)
+
+		topSharpe := agentSharpes[int(float64(len(agentSharpes))*0.67)]
+		midSharpe := agentSharpes[int(float64(len(agentSharpes))*0.5)]
+
+		// Tier multipliers: how much better are top agents vs median?
+		if midSharpe > 0 {
+			observedTopBoost := topSharpe / midSharpe
+			topMult := math.Max(1.02, math.Min(1.15, observedTopBoost))
+			beforeTop := cfg.Darwinian.TopQuartileMultiplier.Value
+			if math.Abs(topMult-beforeTop) > 0.01 {
+				_ = ie.SetParameter("darwinian_top_quartile_multiplier", topMult)
+				res.Parameters = append(res.Parameters, CalibratedParameter{
+					Path:        "darwinian.top_quartile_multiplier",
+					Before:      beforeTop,
+					After:       topMult,
+					Method:      "sharpe_ratio_based",
+					Confidence:  0.80,
+					SampleSize:  len(agentSharpes),
+				})
+			}
+		}
+
+		// Volatility penalty threshold: median annualized volatility
+		medianVol := agentVols[len(agentVols)/2]
+		volThreshold := math.Max(0.05, math.Min(0.30, medianVol))
+		beforeVol := cfg.Darwinian.VolatilityPenaltyThreshold.Value
+		if math.Abs(volThreshold-beforeVol) > 0.01 {
+			_ = ie.SetParameter("darwinian_volatility_penalty_threshold", volThreshold)
+			res.Parameters = append(res.Parameters, CalibratedParameter{
+				Path:        "darwinian.volatility_penalty_threshold",
+				Before:      beforeVol,
+				After:       volThreshold,
+				Method:      "median_volatility",
+				Confidence:  0.75,
+				SampleSize:  len(agentVols),
+			})
+		}
+
+		// LookbackDays: validate against return autocorrelation
+		// If returns have low autocorrelation, shorter lookback is more responsive
+		avgLag1Corr := 0.0
+		count := 0
+		for _, returns := range agentReturns {
+			if len(returns) >= 20 {
+				mean := 0.0
+				for _, r := range returns {
+					mean += r
+				}
+				mean /= float64(len(returns))
+				cov := 0.0
+				var1, var2 := 0.0, 0.0
+				for i := 0; i < len(returns)-1; i++ {
+					d1 := returns[i] - mean
+					d2 := returns[i+1] - mean
+					cov += d1 * d2
+					var1 += d1 * d1
+					var2 += d2 * d2
+				}
+				if var1 > 0 && var2 > 0 {
+					avgLag1Corr += cov / math.Sqrt(var1*var2)
+					count++
+				}
+			}
+		}
+		if count > 0 {
+			avgLag1Corr /= float64(count)
+			// Low autocorrelation → shorter lookback is OK
+			optimalLookback := 20
+			if avgLag1Corr < 0.1 {
+				optimalLookback = 15
+			} else if avgLag1Corr > 0.3 {
+				optimalLookback = 30
+			}
+			beforeLookback := float64(cfg.Darwinian.LookbackDays.Value)
+			if float64(optimalLookback) != beforeLookback {
+				res.Parameters = append(res.Parameters, CalibratedParameter{
+					Path:        "darwinian.lookback_days",
+					Before:      beforeLookback,
+					After:       float64(optimalLookback),
+					Method:      "autocorrelation_based",
+					Confidence:  0.70,
+					SampleSize:  count,
+				})
+			}
+		}
+	}
+
 	return res
 }
 
