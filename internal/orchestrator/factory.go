@@ -47,5 +47,7 @@ func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.Chann
 	ctrl := NewPhase3Controller(&system.Sim().registry, pm, sw, sm, re, system.Sim().ledger)
 	system.WithPhase3Controller(ctrl)
 
+	system.WithStrategyEvolver(NewStrategyEvolver())
+
 	return system, nil
 }
