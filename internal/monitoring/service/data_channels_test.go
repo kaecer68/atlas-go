@@ -250,7 +250,8 @@ func TestStatusText_AllStatuses(t *testing.T) {
 		expected string
 	}{
 		{"ok", "正常"},
-		{"warn", "延遲"},
+		{"warn", "待更新"},
+		{"expected_delay", "正常延遲"},
 		{"error", "異常"},
 		{"partial", "部分異常"},
 		{"inactive", "未啟用"},

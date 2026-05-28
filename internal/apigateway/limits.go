@@ -10,7 +10,7 @@ import (
 // Rate-limiting configuration for all 14 channels.
 // These are hardcoded as required by the Constitution.
 var (
-	// YahooFinanceRate is shared between us_yahoo and jpy_yahoo.
+	// YahooFinanceRate is shared between providers hitting Yahoo Finance v8 chart API.
 	YahooFinanceRate  = rate.Every(1 * time.Second)
 	YahooFinanceBurst = 1
 
@@ -53,7 +53,7 @@ var (
 
 // Shared limiters (same API endpoint)
 var (
-	// yahooSharedLimiter is used by both us_yahoo and jpy_yahoo
+	// yahooSharedLimiter is used by providers that hit Yahoo Finance API.
 	yahooSharedLimiter = rate.NewLimiter(YahooFinanceRate, YahooFinanceBurst)
 )
 

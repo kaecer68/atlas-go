@@ -11,8 +11,8 @@ func TestJPYYahooChannelAdapter_Metadata(t *testing.T) {
 	if m.Country != "日本" {
 		t.Errorf("Country = %q, want 日本", m.Country)
 	}
-	if m.Platform != "Yahoo Finance (JPY) / Frankfurter" {
-		t.Errorf("Platform = %q, want Yahoo Finance (JPY) / Frankfurter", m.Platform)
+	if m.Platform != "Frankfurter (USD/JPY)" {
+		t.Errorf("Platform = %q, want Frankfurter (USD/JPY)", m.Platform)
 	}
 	if m.APIFormat != "REST JSON" {
 		t.Errorf("APIFormat = %q, want REST JSON", m.APIFormat)

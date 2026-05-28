@@ -382,8 +382,9 @@
     <!-- 信息通道 -->
     <div class="page" id="page-datachannels">
       <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
-        本頁呈現 Atlas 所有<strong>外部資料來源的健康狀態</strong>，按國家與平台分類。你可以看到每個通道的 API 格式、本地儲存路徑，以及最後更新時間。
-        若某個通道顯示 <span class="text-warn">🟡 延遲</span> 或 <span class="text-down">🔴 異常</span>，表示該資料可能影響總經判斷與回測結果，建議檢查網路連線或資料供應商狀態。
+        本頁呈現 Atlas 所有<strong>外部資料來源的健康狀態</strong>，按國家與平台分類。
+        若某個通道顯示 <span class="text-down">🔴 異常</span>，表示連線失敗或資料缺失，需立即檢查。
+        <span class="text-warn">🟡 待更新</span> 表示資料超過 24 小時未刷新，<span class="text-muted">🔵 正常延遲</span> 則表示因週末／非交易日，延遲屬正常現象。
       </details>
       <div class="panel wide">
         <div class="flex-between">

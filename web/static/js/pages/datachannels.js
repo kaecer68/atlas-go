@@ -214,7 +214,7 @@ export function renderDataChannels(data) {
       <div class="value" style="color:var(--down)">${errorCount}</div>
     </div>
     <div class="metric" style="background:var(--panel);padding:10px 16px;border-radius:8px;border:1px solid var(--border)">
-      <div class="label">延遲</div>
+      <div class="label">待更新</div>
       <div class="value" style="color:var(--warn)">${warnCount}</div>
     </div>
     <div class="metric" style="background:var(--panel);padding:10px 16px;border-radius:8px;border:1px solid var(--border)">
@@ -245,9 +245,11 @@ export function renderDataChannels(data) {
   });
 
   if (data.alerts && data.alerts.length) {
+    const statusLabel = s => s === 'error' ? '異常' : (s === 'warn' ? '待更新' : '異常');
+    const statusColor = s => s === 'error' ? 'var(--down)' : 'var(--warn)';
     html += `<div style="margin-top:14px;padding:10px 12px;background:rgba(239,68,68,0.08);border-left:3px solid var(--down);border-radius:6px">
       <div style="font-size:13px;font-weight:700;color:var(--down);margin-bottom:6px">需要關注的通道</div>
-      ${data.alerts.map(a => `<div style="font-size:12px;margin:3px 0"><strong>${escapeHtml(a.channel_id)}</strong>：${escapeHtml(a.error || '狀態異常')} <span class="text-muted">（${a.fetch_at ? new Date(a.fetch_at).toLocaleString('zh-TW') : '-'}）</span></div>`).join('')}
+      ${data.alerts.map(a => `<div style="font-size:12px;margin:3px 0"><strong>${escapeHtml(a.channel_id)}</strong>：<span style="color:${statusColor(a.status)}">${a.error || statusLabel(a.status)}</span></div>`).join('')}
     </div>`;
   }
 

@@ -38,14 +38,15 @@ func newYahooSession() *yahooSession {
 }
 
 // buildChartURL constructs a properly encoded URL for the v8 chart endpoint.
+// NOTE: url.PathEscape is NOT used here because it would pre-encode the symbol,
+// then url.URL.String() would re-encode it causing double encoding
+// (e.g. ^VIX → %5EVIX → %255EVIX). Instead, url.URL.String() handles
+// single encoding naturally from the raw Path field.
 func (s *yahooSession) buildChartURL(host, symbol string, params map[string]string) string {
-	// URL-encode the symbol (especially for ^ prefixes like ^TNX, ^VIX, ^SOX)
-	encodedSymbol := url.PathEscape(symbol)
-
 	u := &url.URL{
 		Scheme: "https",
 		Host:   host,
-		Path:   fmt.Sprintf("/v8/finance/chart/%s", encodedSymbol),
+		Path:   fmt.Sprintf("/v8/finance/chart/%s", symbol),
 	}
 
 	q := u.Query()

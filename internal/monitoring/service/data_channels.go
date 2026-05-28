@@ -413,13 +413,13 @@ func (s *DataChannelService) buildJPYYahooChannel(now time.Time) DataChannel {
 		return DataChannel{
 			ChannelID:  "jpy_yahoo",
 			Country:    "日本",
-			Platform:   "Yahoo Finance (JPY)",
+			Platform:   "Frankfurter (USD/JPY)",
 			APIFormat:  "REST JSON",
-			Path:       "query1.finance.yahoo.com/v8/finance/chart",
+			Path:       "api.frankfurter.app/latest?from=USD&to=JPY",
 			Storage:    "data/state/macro/latest.json",
 			Status:     status,
 			StatusText: statusText(status),
-			UpdatedAt:  fmt.Sprintf("Yahoo API 連線失敗 · Frankfurter API 連線失敗: %s", lastError),
+			UpdatedAt:  fmt.Sprintf("Frankfurter API 連線失敗: %s", lastError),
 			LastError:  lastError,
 		}
 	}
@@ -427,9 +427,9 @@ func (s *DataChannelService) buildJPYYahooChannel(now time.Time) DataChannel {
 	return DataChannel{
 		ChannelID:  "jpy_yahoo",
 		Country:    "日本",
-		Platform:   "Yahoo Finance (JPY)",
+		Platform:   "Frankfurter (USD/JPY)",
 		APIFormat:  "REST JSON",
-		Path:       "query1.finance.yahoo.com/v8/finance/chart",
+		Path:       "api.frankfurter.app/latest?from=USD&to=JPY",
 		Storage:    "data/state/macro/latest.json",
 		Status:     status,
 		StatusText: statusText(status),

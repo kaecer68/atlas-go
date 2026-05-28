@@ -1316,6 +1316,13 @@ declare interface SimulationState {
   current_drawdown: number;
 }
 
+declare interface StrategySummary {
+  id: string;
+  name: string;
+  type: string;
+  score: number;
+}
+
 declare interface SwarmStatusResponse {
   recorded_at: string | null;
   total_fish: number;
@@ -1453,6 +1460,11 @@ declare interface WeightFactor {
   contribution: number;
   source: string;
   evidence: string;
+}
+
+declare interface channelState {
+  enabled: boolean;
+  updated_at: string;
 }
 
 declare interface rawOutcome {

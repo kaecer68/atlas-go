@@ -1319,6 +1319,13 @@ export interface SimulationState {
   current_drawdown: number;
 }
 
+export interface StrategySummary {
+  id: string;
+  name: string;
+  type: string;
+  score: number;
+}
+
 export interface SwarmStatusResponse {
   recorded_at: string | null;
   total_fish: number;
@@ -1456,6 +1463,11 @@ export interface WeightFactor {
   contribution: number;
   source: string;
   evidence: string;
+}
+
+export interface channelState {
+  enabled: boolean;
+  updated_at: string;
 }
 
 export interface rawOutcome {

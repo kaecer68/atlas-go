@@ -1193,6 +1193,12 @@ export const FIELD = {
     max_equity: 'max_equity',
     current_drawdown: 'current_drawdown',
   },
+  StrategySummary: {
+    id: 'id',
+    name: 'name',
+    type: 'type',
+    score: 'score',
+  },
   SwarmStatusResponse: {
     recorded_at: 'recorded_at',
     total_fish: 'total_fish',
@@ -1318,6 +1324,10 @@ export const FIELD = {
     contribution: 'contribution',
     source: 'source',
     evidence: 'evidence',
+  },
+  channelState: {
+    enabled: 'enabled',
+    updated_at: 'updated_at',
   },
   rawOutcome: {
     agent_id: 'agent_id',
