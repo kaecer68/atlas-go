@@ -190,6 +190,7 @@ type BaselineParameters struct {
 type OrchestratorParameters struct {
 	ConvictionFloorDefault           ParameterMetadata[int]                           `json:"conviction_floor_default"`
 	SuperinvestorMinConviction       ParameterMetadata[int]                           `json:"superinvestor_min_conviction"`
+	SuperinvestorConvictionBase      ParameterMetadata[int]                           `json:"superinvestor_conviction_base"`
 	CROZScoreThreshold               ParameterMetadata[float64]                       `json:"cro_zscore_threshold"`
 	SectorConcentrationThreshold     ParameterMetadata[float64]                       `json:"sector_concentration_threshold"`
 	SectorConcentrationThresholdHigh ParameterMetadata[float64]                       `json:"sector_concentration_threshold_high"`

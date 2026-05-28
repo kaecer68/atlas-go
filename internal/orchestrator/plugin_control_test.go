@@ -205,3 +205,81 @@ func TestSeverityForSuperinvestorIsSoft(t *testing.T) {
 		t.Fatalf("expected soft severity for superinvestor, got %s", severity)
 	}
 }
+
+func TestSuperinvestorRecommendDruckenmiller(t *testing.T) {
+	exec := SuperinvestorExecutor{}
+	agent := domain.AgentSpec{ID: "super-dru-01", Skill: "druckenmiller_macro", Layer: domain.LayerSuperinvestor}
+	quote := domain.Quote{Symbol: "2330.TW", Last: 600, Open: 590, High: 610, Volume: 15_000_000, IsTradable: true}
+
+	rec, ok := exec.Recommend(agent, quote, "momentum macro asymmetric", "risk_on", &FactorSnapshot{})
+	if !ok {
+		t.Fatal("expected recommendation for Druckenmiller")
+	}
+	if rec.Agent != "super-dru-01" {
+		t.Fatalf("expected agent super-dru-01, got %s", rec.Agent)
+	}
+	if rec.Conviction < 65 {
+		t.Fatalf("expected conviction >= 65 (SuperinvestorMinConviction), got %d", rec.Conviction)
+	}
+	if rec.ConvictionBreakdown == nil {
+		t.Fatal("expected conviction breakdown for transparency")
+	}
+}
+
+func TestSuperinvestorRecommendAschenbrenner(t *testing.T) {
+	exec := SuperinvestorExecutor{}
+	agent := domain.AgentSpec{ID: "super-asc-01", Skill: "aschenbrenner_ai_compute", Layer: domain.LayerSuperinvestor}
+	quote := domain.Quote{Symbol: "2382.TW", Last: 700, Open: 690, High: 710, Volume: 12_000_000, IsTradable: true}
+
+	rec, ok := exec.Recommend(agent, quote, "ai_capex compute datacenter", "risk_on", &FactorSnapshot{})
+	if !ok {
+		t.Fatal("expected recommendation for Aschenbrenner")
+	}
+	if rec.Conviction < 65 {
+		t.Fatalf("expected conviction >= 65, got %d", rec.Conviction)
+	}
+}
+
+func TestSuperinvestorRecommendBaker(t *testing.T) {
+	exec := SuperinvestorExecutor{}
+	agent := domain.AgentSpec{ID: "super-bak-01", Skill: "baker_deep_tech", Layer: domain.LayerSuperinvestor}
+	quote := domain.Quote{Symbol: "2454.TW", Last: 500, Open: 495, High: 505, Volume: 8_000_000, IsTradable: true}
+
+	rec, ok := exec.Recommend(agent, quote, "ip_moat patent differentiation", "risk_on", &FactorSnapshot{})
+	if !ok {
+		t.Fatal("expected recommendation for Baker")
+	}
+	if rec.Conviction < 65 {
+		t.Fatalf("expected conviction >= 65, got %d", rec.Conviction)
+	}
+}
+
+func TestSuperinvestorRecommendAckman(t *testing.T) {
+	exec := SuperinvestorExecutor{}
+	agent := domain.AgentSpec{ID: "super-ack-01", Skill: "ackman_quality", Layer: domain.LayerSuperinvestor}
+	quote := domain.Quote{Symbol: "2881.TW", Last: 80, Open: 79, High: 81, Volume: 10_000_000, IsTradable: true}
+
+	rec, ok := exec.Recommend(agent, quote, "quality catalyst compounder", "risk_on", &FactorSnapshot{})
+	if !ok {
+		t.Fatal("expected recommendation for Ackman")
+	}
+	if rec.Conviction < 65 {
+		t.Fatalf("expected conviction >= 65, got %d", rec.Conviction)
+	}
+}
+
+func TestSuperinvestorRecommendRejectsWeakSignal(t *testing.T) {
+	exec := SuperinvestorExecutor{}
+	agent := domain.AgentSpec{ID: "super-dru-01", Skill: "druckenmiller_macro", Layer: domain.LayerSuperinvestor}
+	quote := domain.Quote{Symbol: "2330.TW", Last: 580, Open: 590, High: 595, Volume: 100_000, IsTradable: true}
+
+	_, ok := exec.Recommend(agent, quote, "", "risk_off", &FactorSnapshot{})
+	if ok {
+		t.Fatal("expected rejection for weak signal on down day with no keywords")
+	}
+}
+
+func TestSuperinvestorDualRole(t *testing.T) {
+	var _ AgentExecutor = SuperinvestorExecutor{}
+	var _ ControlExecutor = SuperinvestorExecutor{}
+}

@@ -644,6 +644,12 @@ func defaultOrchestratorParameters() OrchestratorParameters {
 			Rationale: "Higher bar for superinvestor recommendations",
 			Source:    SourceHeuristic,
 		},
+		SuperinvestorConvictionBase: ParameterMetadata[int]{
+			Value:     70,
+			Rationale: "Base conviction for superinvestor Recommend() — PMs start with strong conviction reflecting concentrated portfolio thesis",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from backtest comparing superinvestor hit rate vs sector agents",
+		},
 		CROZScoreThreshold: ParameterMetadata[float64]{
 			Value:     -1.5,
 			Rationale: "Z-score threshold for CRO conviction normalization filter",

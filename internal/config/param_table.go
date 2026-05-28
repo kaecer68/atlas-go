@@ -465,6 +465,10 @@ var parameterTable = map[string]paramAccessor{
 		get: func(cfg *ParametersConfig) float64 { return float64(cfg.Orchestrator.SuperinvestorMinConviction.Value) },
 		set: func(cfg *ParametersConfig, v float64) { cfg.Orchestrator.SuperinvestorMinConviction.Value = int(v) },
 	},
+	"orchestrator_superinvestor_conviction_base": {
+		get: func(cfg *ParametersConfig) float64 { return float64(cfg.Orchestrator.SuperinvestorConvictionBase.Value) },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Orchestrator.SuperinvestorConvictionBase.Value = int(v) },
+	},
 	"orchestrator_cro_zscore_threshold": {
 		get: func(cfg *ParametersConfig) float64 { return cfg.Orchestrator.CROZScoreThreshold.Value },
 		set: func(cfg *ParametersConfig, v float64) { cfg.Orchestrator.CROZScoreThreshold.Value = v },
