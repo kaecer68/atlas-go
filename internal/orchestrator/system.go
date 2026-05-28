@@ -1505,6 +1505,15 @@ func (s *System) updateCapitalMetrics(ctx context.Context, result domain.Simulat
 					logging.FStr("to", fmt.Sprintf("%d", ev.ToState)),
 					logging.FStr("reason", ev.Reason))
 			}
+
+			rotator := portfolio.NewSectorRotator()
+			currentAllocs := s.currentSectorAllocations()
+			plan := rotator.GeneratePlan(macroAssessment, currentAllocs)
+			if modified, rationale := s.strat.strategyEvolver.ApplySectorRotation(plan); modified {
+				logging.Info("sector_rotation", "applied",
+					logging.FStr("primary_flow", plan.PrimaryFlow),
+					logging.FStr("rationale", rationale))
+			}
 		}
 	}
 }
@@ -1516,6 +1525,10 @@ func vixFromQuotes(quotes []domain.Quote) float64 {
 		}
 	}
 	return 20.0
+}
+
+func (s *System) currentSectorAllocations() map[string]float64 {
+	return nil
 }
 
 // RunDailyStressTests executes all built-in stress scenarios against the current
