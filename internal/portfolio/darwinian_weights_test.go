@@ -51,8 +51,8 @@ func TestDarwinianWeightManager(t *testing.T) {
 			Agents: []domain.AgentSpec{
 				{ID: "agent_001", Skill: "tech", Layer: domain.LayerSector, Enabled: true},
 				{ID: "agent_002", Skill: "growth", Layer: domain.LayerStyle, Enabled: true},
-				{ID: "agent_003", Skill: "risk", Layer: domain.LayerControl, Enabled: true},      // should be skipped
-				{ID: "agent_004", Skill: "macro", Layer: domain.LayerContext, Enabled: false},     // disabled
+				{ID: "agent_003", Skill: "risk", Layer: domain.LayerControl, Enabled: true},   // should be skipped
+				{ID: "agent_004", Skill: "macro", Layer: domain.LayerContext, Enabled: false}, // disabled
 				{ID: "agent_005", Skill: "macro_momentum", Layer: domain.LayerSuperinvestor, Enabled: true},
 			},
 		}
