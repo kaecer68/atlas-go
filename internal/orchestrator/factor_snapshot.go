@@ -51,6 +51,9 @@ func loadFactorConfig() factorConfig {
 
 // addMomentumAdjustment checks factor momentum score and adds conviction delta.
 func addMomentumAdjustment(b *convictionBuilder, fq FactorQuery, symbol string, fc factorConfig) {
+	if fq == nil {
+		return
+	}
 	if mom, ok := fq.GetScore(symbol, portfolio.FactorMomentum); ok {
 		switch {
 		case mom > fc.momHigh:
@@ -65,6 +68,9 @@ func addMomentumAdjustment(b *convictionBuilder, fq FactorQuery, symbol string, 
 
 // addValueAdjustment checks factor value score and adds conviction delta.
 func addValueAdjustment(b *convictionBuilder, fq FactorQuery, symbol string, fc factorConfig) {
+	if fq == nil {
+		return
+	}
 	if val, ok := fq.GetScore(symbol, portfolio.FactorValue); ok {
 		switch {
 		case val > fc.valHigh:
@@ -79,6 +85,9 @@ func addValueAdjustment(b *convictionBuilder, fq FactorQuery, symbol string, fc 
 
 // addQualityAdjustment checks factor quality score and adds conviction delta.
 func addQualityAdjustment(b *convictionBuilder, fq FactorQuery, symbol string, fc factorConfig) {
+	if fq == nil {
+		return
+	}
 	if qly, ok := fq.GetScore(symbol, portfolio.FactorQuality); ok && qly > fc.qualThresh {
 		b.add("factor_quality_boost", fc.qualDelta, fmt.Sprintf("quality > %.2f", fc.qualThresh))
 	}
@@ -86,6 +95,9 @@ func addQualityAdjustment(b *convictionBuilder, fq FactorQuery, symbol string, f
 
 // addLiquidityAdjustment checks factor liquidity score and adds conviction delta.
 func addLiquidityAdjustment(b *convictionBuilder, fq FactorQuery, symbol string, fc factorConfig) {
+	if fq == nil {
+		return
+	}
 	if liq, ok := fq.GetScore(symbol, portfolio.FactorLiquidity); ok {
 		switch {
 		case liq > fc.liqHigh:
