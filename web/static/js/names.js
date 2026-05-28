@@ -12,6 +12,7 @@ export const AGENT_NAME_MAP = {
   'technical-breakout-01': '技術突破',
   'financials-desk-01': '金融產業桌',
   'shipping-desk-01': '航運產業桌',
+  'leo-satellite-desk-01': '低軌衛星',
   'etf-rotation-01': 'ETF 輪動',
   'cro-01': '風控長',
   'cio-01': '投資長',
