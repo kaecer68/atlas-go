@@ -64,7 +64,7 @@ type StrategyLayer struct {
 	comparisonEngine  *strategy.ComparisonEngine
 	thresholdEngine   *sim.DynamicThresholdEngine
 	strategyAllocator *strategy.StrategyAllocator // P2: nil-safe multi-strategy allocator
-	strategyEvolver   *StrategyEvolver            // nil-safe: no evolution when nil
+	strategyEvolver   *StrategyEvolver           // nil-safe: no evolution when nil
 }
 
 type RiskOps struct {
@@ -821,10 +821,14 @@ func (s *System) WithStrategyAllocator(sa *strategy.StrategyAllocator) *System {
 	return s
 }
 
+// GetStrategyEvolver returns the strategy evolver (nil if not attached).
 func (s *System) GetStrategyEvolver() *StrategyEvolver {
 	return s.strat.strategyEvolver
 }
 
+// WithStrategyEvolver attaches a strategy evolver for macro-driven state transitions.
+// When attached, the macro pipeline evaluates strategy evolution after drawdown assessment.
+// nil-safe: if nil, no strategy evolution occurs (backward compatible).
 func (s *System) WithStrategyEvolver(ev *StrategyEvolver) *System {
 	s.strat.strategyEvolver = ev
 	return s
@@ -1184,7 +1188,7 @@ func buildFinalRecKey(finalRecs []domain.Recommendation) map[string]struct{} {
 	return keys
 }
 
-func syntheticForwardReturn(symbol string, quote domain.Quote, asOf time.Time) float64 {
+func syntheticForwardReturn(symbol string, quote domain.Quote) float64 {
 	if quote.Open > 0 {
 		intraday := (quote.Last - quote.Open) / quote.Open
 		fr := intraday * 0.8
@@ -1194,6 +1198,7 @@ func syntheticForwardReturn(symbol string, quote domain.Quote, asOf time.Time) f
 		if fr < -0.05 {
 			fr = -0.05
 		}
+		// Neutral fallback: no artificial bias introduced
 		if fr == 0 {
 			fr = 0.0
 		}
@@ -1203,11 +1208,7 @@ func syntheticForwardReturn(symbol string, quote domain.Quote, asOf time.Time) f
 	for _, r := range symbol {
 		sum += int64(r)
 	}
-	// Incorporate session day-of-year to avoid identical returns
-	// across sessions for the same symbol, while remaining
-	// deterministic for replay (same date = same output).
-	daySeed := int64(asOf.YearDay())
-	return (float64((sum+daySeed)%10000)/10000.0)*0.04 - 0.02
+	return (float64(sum%100)/100.0)*0.04 - 0.02
 }
 
 func buildParameterSnapshot() *shared.ParameterSnapshot {
@@ -1252,7 +1253,7 @@ func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes [
 	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
 	for _, rec := range rawRecs {
 		quote := quoteMap[rec.Symbol]
-		forwardReturn := syntheticForwardReturn(rec.Symbol, quote, asOf)
+		forwardReturn := syntheticForwardReturn(rec.Symbol, quote)
 		_, passed := finalKey[rec.Symbol+"|"+rec.Agent]
 		guardReason := ""
 		if !passed {
@@ -1299,7 +1300,7 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 		synthetic := false
 		forwardReturn, ok := ds.ForwardReturn(rec.Symbol, asOf, 1)
 		if !ok || forwardReturn == 0 {
-			forwardReturn = syntheticForwardReturn(rec.Symbol, quote, asOf)
+			forwardReturn = syntheticForwardReturn(rec.Symbol, quote)
 			synthetic = true
 		}
 		_, passed := finalKey[rec.Symbol+"|"+rec.Agent]
@@ -1500,8 +1501,8 @@ func (s *System) updateCapitalMetrics(ctx context.Context, result domain.Simulat
 		if s.strat.strategyEvolver != nil {
 			if ev := s.strat.strategyEvolver.Evaluate(macroAssessment, structuralAssessment, drawdownDecision); ev != nil {
 				logging.Info("strategy", "evolved",
-					logging.FStr("from", ev.FromState.String()),
-					logging.FStr("to", ev.ToState.String()),
+					logging.FStr("from", string(ev.FromState)),
+					logging.FStr("to", string(ev.ToState)),
 					logging.FStr("reason", ev.Reason))
 			}
 		}

@@ -92,7 +92,8 @@ type DarwinianAgentWeight struct {
 	AvgReturn         float64   `json:"avg_return"`
 	LastAdjustedAt    time.Time `json:"last_adjusted_at"`
 	LastUpdatedAt     time.Time `json:"last_updated_at"`
-	DailyReturns      []float64 `json:"daily_returns"` // Last 20 days returns for Sharpe calc
+	DailyReturns      []float64 `json:"daily_returns"`        // Last 20 days returns for Sharpe calc
+	ConsecutiveAtMin  int       `json:"consecutive_at_min"`  // Days stuck at weight minimum
 }
 
 // DarwinianWeightManager implements Atlas-GIC style Darwinian weight system
@@ -378,6 +379,28 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 
 	if len(eligible) < 2 {
 		return adjustments, clampingEvents
+	}
+
+	// Auto-reset stuck agents: agents at minimum weight for consecutive cycles
+	// get a fresh start. This prevents agents from being permanently trapped at
+	// the floor when market regimes shift and their strategy becomes relevant again.
+	const autoResetThreshold = 5
+	for _, w := range m.weights {
+		if math.Abs(w.Weight-m.params.Darwinian.WeightMin) < 0.001 {
+			w.ConsecutiveAtMin++
+			if w.ConsecutiveAtMin >= autoResetThreshold && w.TotalSignals > 10 {
+				w.Weight = m.params.Darwinian.WeightNeutral
+				w.RollingSharpe = 0
+				w.DailyReturns = w.DailyReturns[:0]
+				w.ConsecutiveAtMin = 0
+				w.LastAdjustedAt = now
+				logging.Info("darwinian_weights", "auto_reset_stuck_agent",
+					logging.AgentID(w.AgentID),
+					logging.FFloat64("reset_to", m.params.Darwinian.WeightNeutral))
+			}
+		} else {
+			w.ConsecutiveAtMin = 0
+		}
 	}
 
 	// Calculate performance metrics for all eligible agents
