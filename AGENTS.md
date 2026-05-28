@@ -472,6 +472,7 @@ AI review 提供第二雙眼睛。CI 閘門（governance、operations、coverage
 ### 補充文件（詳細規格）
 - `docs/architecture.md` — 架構詳細說明
 - `docs/ai_agent_architecture.md` — AI 代理架構
+- `docs/DATA_ARCHITECTURE.md` — **資料架構權威文件**（資料儲存層、讀寫路徑、AI 代理常見錯誤）
 - `docs/operations_playbook.md` — 操作手冊
 - `docs/iteration_playbook.md` — 迭代指南
 - `docs/evolution_loop.md` — 演化循環
