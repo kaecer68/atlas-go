@@ -181,6 +181,7 @@ func buildPortfolioManager(runtimeParams *portfolio.RuntimeParameters, registry 
 		WithParameters(runtimeParams)
 	_ = darwinian.Load()
 	darwinian.InitializeFromRegistry(registry)
+	_ = darwinian.Save()
 	darwinian.WithEventBus(eventBus)
 
 	factorWeightEngine := portfolio.NewFactorWeightEngine()
