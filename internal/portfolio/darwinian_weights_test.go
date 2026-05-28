@@ -51,14 +51,15 @@ func TestDarwinianWeightManager(t *testing.T) {
 			Agents: []domain.AgentSpec{
 				{ID: "agent_001", Skill: "tech", Layer: domain.LayerSector, Enabled: true},
 				{ID: "agent_002", Skill: "growth", Layer: domain.LayerStyle, Enabled: true},
-				{ID: "agent_003", Skill: "risk", Layer: domain.LayerControl, Enabled: true},   // should be skipped
-				{ID: "agent_004", Skill: "macro", Layer: domain.LayerContext, Enabled: false}, // disabled
+				{ID: "agent_003", Skill: "risk", Layer: domain.LayerControl, Enabled: true},      // should be skipped
+				{ID: "agent_004", Skill: "macro", Layer: domain.LayerContext, Enabled: false},     // disabled
+				{ID: "agent_005", Skill: "macro_momentum", Layer: domain.LayerSuperinvestor, Enabled: true},
 			},
 		}
 
 		m.InitializeFromRegistry(registry)
 
-		// Only sector and style agents should be initialized
+		// Sector, style, and superinvestor agents should be initialized
 		w1 := m.GetWeight("agent_001")
 		if w1 != DarwinianNeutralWeight {
 			t.Errorf("Expected neutral weight for agent_001, got %f", w1)
@@ -67,6 +68,19 @@ func TestDarwinianWeightManager(t *testing.T) {
 		w2 := m.GetWeight("agent_002")
 		if w2 != DarwinianNeutralWeight {
 			t.Errorf("Expected neutral weight for agent_002, got %f", w2)
+		}
+
+		// Superinvestor layer should be tracked
+		w5 := m.GetWeight("agent_005")
+		if w5 != DarwinianNeutralWeight {
+			t.Errorf("Expected neutral weight for superinvestor agent_005, got %f", w5)
+		}
+
+		data, ok := m.GetAgentWeightData("agent_005")
+		if !ok {
+			t.Error("Expected superinvestor agent_005 to have weight data after InitializeFromRegistry")
+		} else if data.Layer != "superinvestor" {
+			t.Errorf("Expected layer=superinvestor for agent_005, got %s", data.Layer)
 		}
 
 		// Control layer should not be tracked

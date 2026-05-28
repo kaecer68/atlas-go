@@ -226,9 +226,8 @@ func (m *DarwinianWeightManager) InitializeFromRegistry(registry domain.AgentReg
 		if !agent.Enabled {
 			continue
 		}
-		// Only initialize for Sector, Style, and Superinvestor layers
-		if agent.Layer != domain.LayerSector && agent.Layer != domain.LayerStyle {
-			// Will add LayerSuperinvestor later
+		// Initialize for Sector, Style, and Superinvestor layers
+		if agent.Layer != domain.LayerSector && agent.Layer != domain.LayerStyle && agent.Layer != domain.LayerSuperinvestor {
 			continue
 		}
 
