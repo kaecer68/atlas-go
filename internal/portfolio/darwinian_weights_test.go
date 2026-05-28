@@ -141,10 +141,32 @@ func TestDarwinianWeightManager(t *testing.T) {
 			t.Fatal("Expected agent data")
 		}
 
-		// With 8 returns (>5 threshold), Sharpe should be calculated
-		if data.RollingSharpe == 0 && len(returns) >= 5 {
-			t.Log("Sharpe is zero, may need more data points")
+		// With 8 returns (>5 threshold), Sharpe should be calculated and positive
+		if data.RollingSharpe <= 0 {
+			t.Errorf("Expected positive Sharpe for positive-mean returns, got %f", data.RollingSharpe)
 		}
+	})
+
+	t.Run("RollingSharpeCalculationNegative", func(t *testing.T) {
+		m := NewDarwinianWeightManager("/tmp/test_dw.json")
+		seedAgent(m, "agent_neg", "financials", "sector", 1.0)
+
+		// Add returns with known negative mean
+		negReturns := []float64{-0.01, -0.02, 0.005, -0.015, -0.005, -0.01}
+		for _, r := range negReturns {
+			m.RecordOutcome("agent_neg", r, r > 0)
+		}
+
+		data, ok := m.GetAgentWeightData("agent_neg")
+		if !ok {
+			t.Fatal("Expected agent data")
+		}
+
+		// With 6 negative-mean returns, Sharpe should be negative (not zero)
+		if data.RollingSharpe >= 0 {
+			t.Errorf("Expected negative Sharpe for negative-mean returns, got %f", data.RollingSharpe)
+		}
+		t.Logf("Negative Sharpe: %.4f (avg_return=%.4f)", data.RollingSharpe, data.AvgReturn)
 	})
 
 	t.Run("PerformDailyAdjustment", func(t *testing.T) {
