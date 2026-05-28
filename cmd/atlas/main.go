@@ -1336,6 +1336,128 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered conviction_calibrate background task (24h interval)")
 
+			// Register macro_risk_calibrate — calibrates Engine MacroRisk thresholds
+			// (carry_trade, VIX, US10Y, oil, gold, DXY, TWD, outflow probabilities).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "macro_risk_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					cal := config.NewMacroRiskCalibrator()
+					evaluator := cal.BuildEvaluator()
+					result, err := config.CalibrateParameters(ctx, cal, evaluator, config.DefaultCalibrateConfig())
+					if err != nil {
+						logging.Error("macro_risk_calibrate", "failed", "err", err.Error())
+						return err
+					}
+					logging.Info("macro_risk_calibrate", "completed",
+						"verdict", result.Verdict,
+						"changes", len(result.Changes),
+						"summary", result.Summary)
+					for _, ch := range result.Changes {
+						logging.Info("macro_risk_calibrate", "param_change",
+							"param", ch.ParamName,
+							"before", ch.Before,
+							"after", ch.After,
+							"delta", ch.DeltaPct,
+							"confidence", ch.Confidence)
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered macro_risk_calibrate background task (24h interval)")
+
+			// Register structural_trend_calibrate — calibrates Engine StructuralTrend
+			// thresholds (trend strength, confidence, override, AI/capex/utilization).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "structural_trend_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					cal := &config.StructuralTrendCalibrator{}
+					evaluator := cal.BuildEvaluator()
+					result, err := config.CalibrateParameters(ctx, cal, evaluator, config.DefaultCalibrateConfig())
+					if err != nil {
+						logging.Error("structural_trend_calibrate", "failed", "err", err.Error())
+						return err
+					}
+					logging.Info("structural_trend_calibrate", "completed",
+						"verdict", result.Verdict,
+						"changes", len(result.Changes),
+						"summary", result.Summary)
+					for _, ch := range result.Changes {
+						logging.Info("structural_trend_calibrate", "param_change",
+							"param", ch.ParamName,
+							"before", ch.Before,
+							"after", ch.After,
+							"delta", ch.DeltaPct,
+							"confidence", ch.Confidence)
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered structural_trend_calibrate background task (24h interval)")
+
+			// Register narrative_calibrate — calibrates Narrative event detection
+			// thresholds (AI revenue, CoWoS, capex, US10Y, DXY, GPR, oil, JPY, VIX).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "narrative_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					nc := &config.NarrativeCalibrator{}
+					evaluator := config.NewNarrativeEvaluator()
+					result, err := config.CalibrateParameters(ctx, nc, evaluator, config.DefaultCalibrateConfig())
+					if err != nil {
+						logging.Error("narrative_calibrate", "failed", "err", err.Error())
+						return err
+					}
+					logging.Info("narrative_calibrate", "completed",
+						"verdict", result.Verdict,
+						"changes", len(result.Changes),
+						"summary", result.Summary)
+					for _, ch := range result.Changes {
+						logging.Info("narrative_calibrate", "param_change",
+							"param", ch.ParamName,
+							"before", ch.Before,
+							"after", ch.After,
+							"delta", ch.DeltaPct,
+							"confidence", ch.Confidence)
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered narrative_calibrate background task (24h interval)")
+
+			// Register factor_weight_strategy_calibrate — calibrates FactorWeight
+			// strategy deltas (conservative/aggressive/risk-on/risk-off adjustments).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "factor_weight_strategy_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					result, err := config.CalibrateStrategyDeltas(ctx, config.DefaultCalibrateConfig())
+					if err != nil {
+						logging.Error("fw_strategy_calibrate", "failed", "err", err.Error())
+						return err
+					}
+					logging.Info("fw_strategy_calibrate", "completed",
+						"verdict", result.Verdict,
+						"changes", len(result.Changes),
+						"summary", result.Summary)
+					for _, ch := range result.Changes {
+						logging.Info("fw_strategy_calibrate", "delta_change",
+							"param", ch.ParamName,
+							"before", ch.Before,
+							"after", ch.After,
+							"delta", ch.DeltaPct,
+							"confidence", ch.Confidence)
+					}
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered factor_weight_strategy_calibrate background task (24h interval)")
+
 			// Register auto_swarm_simulation — periodic swarm simulation
 			// for training data generation and scenario monitoring.
 			_ = taskMgr.Register(&apigateway.ScheduledTask{

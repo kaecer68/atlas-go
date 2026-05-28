@@ -825,6 +825,170 @@ var parameterTable = map[string]paramAccessor{
 		get: func(cfg *ParametersConfig) float64 { return float64(cfg.Strategy.ScoreLookbackDays.Value) },
 		set: func(cfg *ParametersConfig, v float64) { cfg.Strategy.ScoreLookbackDays.Value = int(v) },
 	},
+
+	// ===== Engine — MacroRisk parameters =====
+	"engine_macro_risk_carry_trade_unwind_threshold": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.MacroRisk.CarryTradeUnwindThreshold.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.MacroRisk.CarryTradeUnwindThreshold.Value = v },
+	},
+	"engine_macro_risk_vix_threshold": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.MacroRisk.VIXThreshold.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.MacroRisk.VIXThreshold.Value = v },
+	},
+	"engine_macro_risk_us10y_threshold": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.MacroRisk.US10YThreshold.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.MacroRisk.US10YThreshold.Value = v },
+	},
+	"engine_macro_risk_oil_shock_threshold_pct": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.MacroRisk.OilShockThresholdPct.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.MacroRisk.OilShockThresholdPct.Value = v },
+	},
+	"engine_macro_risk_gold_surge_threshold_pct": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.MacroRisk.GoldSurgeThresholdPct.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.MacroRisk.GoldSurgeThresholdPct.Value = v },
+	},
+	"engine_macro_risk_dxy_surge_threshold_pct": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.MacroRisk.DXYSurgeThresholdPct.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.MacroRisk.DXYSurgeThresholdPct.Value = v },
+	},
+	"engine_macro_risk_twd_stress_threshold_pct": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.MacroRisk.TWDStressThresholdPct.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.MacroRisk.TWDStressThresholdPct.Value = v },
+	},
+	"engine_macro_risk_outflow_prob_base": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.MacroRisk.OutflowProbBase.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.MacroRisk.OutflowProbBase.Value = v },
+	},
+	"engine_macro_risk_outflow_prob_max": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.MacroRisk.OutflowProbMax.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.MacroRisk.OutflowProbMax.Value = v },
+	},
+
+	// ===== Engine — StructuralTrend parameters =====
+	"engine_structural_trend_min_trend_strength": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.StructuralTrend.MinTrendStrength.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.StructuralTrend.MinTrendStrength.Value = v },
+	},
+	"engine_structural_trend_min_confidence": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.StructuralTrend.MinConfidence.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.StructuralTrend.MinConfidence.Value = v },
+	},
+	"engine_structural_trend_min_hit_rate": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.StructuralTrend.MinHitRate.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.StructuralTrend.MinHitRate.Value = v },
+	},
+	"engine_structural_trend_override_threshold": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.StructuralTrend.OverrideThreshold.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.StructuralTrend.OverrideThreshold.Value = v },
+	},
+	"engine_structural_trend_ai_revenue_growth_threshold": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.StructuralTrend.AIRevenueGrowthThreshold.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.StructuralTrend.AIRevenueGrowthThreshold.Value = v },
+	},
+	"engine_structural_trend_cowos_utilization_threshold": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.StructuralTrend.CoWoSUtilizationThreshold.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.StructuralTrend.CoWoSUtilizationThreshold.Value = v },
+	},
+	"engine_structural_trend_capex_growth_threshold": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.StructuralTrend.CapexGrowthThreshold.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.StructuralTrend.CapexGrowthThreshold.Value = v },
+	},
+	"engine_structural_trend_semiconductor_index_threshold": {
+		get: func(cfg *ParametersConfig) float64 {
+			return cfg.Engine.StructuralTrend.SemiconductorIndexThreshold.Value
+		},
+		set: func(cfg *ParametersConfig, v float64) {
+			cfg.Engine.StructuralTrend.SemiconductorIndexThreshold.Value = v
+		},
+	},
+
+	// ===== Engine — Drawdown parameters =====
+	"engine_drawdown_orange_override_min_score": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.Drawdown.OrangeOverrideMinScore.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.Drawdown.OrangeOverrideMinScore.Value = v },
+	},
+	"engine_drawdown_red_override_min_score": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.Drawdown.RedOverrideMinScore.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.Drawdown.RedOverrideMinScore.Value = v },
+	},
+
+	// ===== Engine — Executors parameters =====
+	"engine_executors_vix_momentum_crash_threshold": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.Executors.VIXMomentumCrashThreshold.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.Executors.VIXMomentumCrashThreshold.Value = v },
+	},
+	"engine_executors_crowding_penalty_agents_3": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.Executors.CrowdingPenaltyAgents3.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.Executors.CrowdingPenaltyAgents3.Value = v },
+	},
+	"engine_executors_crowding_penalty_agents_4": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.Executors.CrowdingPenaltyAgents4.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.Executors.CrowdingPenaltyAgents4.Value = v },
+	},
+	"engine_executors_min_trade_amount": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.Executors.MinTradeAmount.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.Executors.MinTradeAmount.Value = v },
+	},
+	"engine_executors_conviction_floor_default": {
+		get: func(cfg *ParametersConfig) float64 { return float64(cfg.Engine.Executors.ConvictionFloorDefault.Value) },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.Executors.ConvictionFloorDefault.Value = int(v) },
+	},
+
+	// ===== Engine — Simulation parameters =====
+	"engine_simulation_neutral_regime_sizing_factor": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Engine.Simulation.NeutralRegimeSizingFactor.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Engine.Simulation.NeutralRegimeSizingFactor.Value = v },
+	},
+
+	// ===== FactorWeight strategy delta parameters =====
+	"factor_weight_conservative_value": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.FactorWeight.ConservativeValue.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.FactorWeight.ConservativeValue.Value = v },
+	},
+	"factor_weight_conservative_quality": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.FactorWeight.ConservativeQuality.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.FactorWeight.ConservativeQuality.Value = v },
+	},
+	"factor_weight_conservative_momentum": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.FactorWeight.ConservativeMomentum.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.FactorWeight.ConservativeMomentum.Value = v },
+	},
+	"factor_weight_aggressive_momentum": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.FactorWeight.AggressiveMomentum.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.FactorWeight.AggressiveMomentum.Value = v },
+	},
+	"factor_weight_aggressive_inst_sent": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.FactorWeight.AggressiveInstSent.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.FactorWeight.AggressiveInstSent.Value = v },
+	},
+	"factor_weight_aggressive_value": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.FactorWeight.AggressiveValue.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.FactorWeight.AggressiveValue.Value = v },
+	},
+	"factor_weight_aggressive_quality": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.FactorWeight.AggressiveQuality.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.FactorWeight.AggressiveQuality.Value = v },
+	},
+	"factor_weight_risk_on_momentum": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.FactorWeight.RiskOnMomentum.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.FactorWeight.RiskOnMomentum.Value = v },
+	},
+	"factor_weight_risk_on_quality": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.FactorWeight.RiskOnQuality.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.FactorWeight.RiskOnQuality.Value = v },
+	},
+	"factor_weight_risk_off_momentum": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.FactorWeight.RiskOffMomentum.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.FactorWeight.RiskOffMomentum.Value = v },
+	},
+	"factor_weight_risk_off_quality": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.FactorWeight.RiskOffQuality.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.FactorWeight.RiskOffQuality.Value = v },
+	},
+	"factor_weight_risk_off_liquidity": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.FactorWeight.RiskOffLiquidity.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.FactorWeight.RiskOffLiquidity.Value = v },
+	},
 }
 
 // stringParamAccessor provides get/set accessors for string-type parameters.
