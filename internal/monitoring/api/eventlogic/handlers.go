@@ -16,6 +16,23 @@ type Handlers struct {
 	detector  *eventlogic.PatternDetector
 }
 
+type statsResponse struct {
+	TotalRules     int     `json:"total_rules"`
+	ActiveRules    int     `json:"active_rules"`
+	DegradedRules  int     `json:"degraded_rules"`
+	ExpiredRules   int     `json:"expired_rules"`
+	AverageHitRate float64 `json:"average_hit_rate"`
+}
+
+type validateRuleResponse struct {
+	Message    string  `json:"message"`
+	RuleID     string  `json:"rule_id"`
+	HitRate    float64 `json:"hit_rate"`
+	TotalTests int     `json:"total_tests"`
+	TotalHits  int     `json:"total_hits"`
+	Status     string  `json:"status"`
+}
+
 func NewHandlers(r *eventlogic.RuleRegistry, v *eventlogic.RuleValidator, d *eventlogic.PatternDetector) *Handlers {
 	return &Handlers{registry: r, validator: v, detector: d}
 }
@@ -74,7 +91,14 @@ func (h *Handlers) ValidateRule(r *http.Request) (int, any) {
 	if !ok {
 		return http.StatusNotFound, map[string]string{"error": "not found"}
 	}
-	return http.StatusAccepted, map[string]any{"message": "validation queued", "rule_id": id, "hit_rate": ru.HitRate, "total_tests": ru.TotalTests, "total_hits": ru.TotalHits, "status": ru.Status}
+	return http.StatusAccepted, validateRuleResponse{
+		Message:    "validation queued",
+		RuleID:     id,
+		HitRate:    ru.HitRate,
+		TotalTests: ru.TotalTests,
+		TotalHits:  ru.TotalHits,
+		Status:     ru.Status,
+	}
 }
 
 func (h *Handlers) Stats(r *http.Request) (int, any) {
@@ -90,7 +114,13 @@ func (h *Handlers) Stats(r *http.Request) (int, any) {
 	if total > 0 {
 		avg = s / float64(total)
 	}
-	return http.StatusOK, map[string]any{"total_rules": total, "active_rules": active, "degraded_rules": total - active - exp, "expired_rules": exp, "average_hit_rate": avg}
+	return http.StatusOK, statsResponse{
+		TotalRules:     total,
+		ActiveRules:    active,
+		DegradedRules:  total - active - exp,
+		ExpiredRules:   exp,
+		AverageHitRate: avg,
+	}
 }
 
 func (h *Handlers) Discover(r *http.Request) (int, any) {

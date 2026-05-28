@@ -26,9 +26,5 @@ func TestAutoExperimentMonitorInterface(t *testing.T) {
 	m := &testMonitor{}
 	cfg := AutoExperimentConfig{Monitor: m}
 	_ = cfg
-	// Verify the interface is satisfied
-	var iface AutoExperimentMonitor = m
-	if iface == nil {
-		t.Fatal("testMonitor should satisfy AutoExperimentMonitor")
-	}
+	var _ AutoExperimentMonitor = m // compile-time interface check
 }

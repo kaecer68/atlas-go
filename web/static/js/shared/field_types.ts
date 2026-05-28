@@ -67,6 +67,21 @@ export interface AlertChannelConfig {
   webhook_headers?: Record<string, string>;
 }
 
+export interface AlertParameters {
+  min_cash_threshold: string;
+  max_positions_count: string;
+  max_position_weight_pct: string;
+  max_unrealized_loss_pct: string;
+  daily_loss_warning_pct: string;
+  daily_loss_critical_pct: string;
+  rule_engine_interval_sec: string;
+  rule_engine_cooldown_sec: string;
+  system_metrics_interval_sec: string;
+  min_screening_rate: string;
+  max_alert_trigger_rate: string;
+  max_unacknowledged_alerts: string;
+}
+
 export interface AlertRecord {
   id: string;
   timestamp: string;
@@ -79,6 +94,13 @@ export interface AlertRecord {
   acknowledged: boolean;
   acknowledged_at?: string | null;
   acknowledged_by?: string;
+}
+
+export interface AsymmetricRiskConfig {
+  bad_news_threshold: number;
+  good_news_threshold: number;
+  reaction_time_minutes: number;
+  volume_spike_multiplier: number;
 }
 
 export interface BacktestWindowSummary {
@@ -107,6 +129,18 @@ export interface BaselineHistoryRecord {
   diff_summary?: string[];
   diff_patch?: string;
   metadata?: string[];
+}
+
+export interface BaselineParameters {
+  starting_cash: string;
+  max_position_weight: string;
+  max_open_positions: string;
+  min_tradable_volume: string;
+  min_recommendation_conviction: string;
+  require_cro_pass: string;
+  transaction_cost_bps: string;
+  slippage_bps: string;
+  reserve_cash_fraction: string;
 }
 
 export interface BenchmarkComparisonResponse {
@@ -145,6 +179,31 @@ export interface BrokerRuntimeAudit {
   nonce_store: string;
   nonce_store_path: string;
   nonce_redis_prefix: string;
+}
+
+export interface CalibratorChange {
+  param_name: string;
+  before: number;
+  after: number;
+  delta_pct: number;
+  confidence: string;
+}
+
+export interface CalibratorResult {
+  timestamp: string;
+  param_count: number;
+  changes: string[];
+  baseline_score: number;
+  optimized_score: number;
+  verdict: string;
+  summary: string;
+}
+
+export interface CapexCycleThresholdConfig {
+  expansion_capacity_min: number;
+  expansion_revenue_min: number;
+  maintenance_capacity_min: number;
+  maintenance_revenue_min: number;
 }
 
 export interface CapitalPhaseConfig {
@@ -210,6 +269,41 @@ export interface CircuitBreakerStatus {
   day_start_value: number;
 }
 
+export interface ConfidenceMixConfig {
+  weight_boundary: number;
+  weight_freshness: number;
+  weight_seasonal: number;
+  weight_linkage: number;
+  weight_narrative: number;
+  favorable_confidence_min: number;
+}
+
+export interface ConfidenceSignalConfig {
+  signal_base: number;
+  revenue_norm_denom: number;
+  revenue_weight: number;
+  profit_norm_denom: number;
+  profit_weight: number;
+  inventory_norm_denom: number;
+  inventory_weight: number;
+  utilization_weight: number;
+  signal_boundary_mix: number;
+  boundary_denom_factor: number;
+  confidence_floor: number;
+  confidence_ceiling: number;
+  revenue_trend_threshold: number;
+  revenue_indicator_weight: number;
+  inventory_trend_threshold: number;
+  inventory_indicator_weight: number;
+  profit_trend_threshold: number;
+  profit_indicator_weight: number;
+  capacity_trend_threshold: number;
+  capacity_indicator_weight: number;
+  trend_up_multiplier: number;
+  trend_down_multiplier: number;
+  threshold_range_fallback: number;
+}
+
 export interface ConsensusEntry {
   symbol: string;
   bullish_count: number;
@@ -266,6 +360,30 @@ export interface CyclePosition {
   evidence: string;
 }
 
+export interface CycleThresholdConfig {
+  expansion_revenue_pct: number;
+  expansion_profit_pct: number;
+  recovery_revenue_pct: number;
+  recovery_profit_pct: number;
+  mature_revenue_pct: number;
+  mature_profit_pct: number;
+}
+
+export interface CycleTransitionConfig {
+  from_phase: string;
+  to_phase: string;
+  triggers: string[];
+  probability: number;
+  typical_duration_days: number;
+}
+
+export interface CycleWeightMultipliersConfig {
+  expansion_multiplier: number;
+  recovery_multiplier: number;
+  mature_multiplier: number;
+  recession_multiplier: number;
+}
+
 export interface DailyBar {
   date: string;
   symbol: string;
@@ -303,6 +421,31 @@ export interface DarwinianHistoryPoint {
   weight: number;
   rolling_sharpe: number;
   hit_rate: number;
+}
+
+export interface DarwinianParameters {
+  weight_min: string;
+  weight_max: string;
+  weight_neutral: string;
+  top_quartile_multiplier: string;
+  bottom_quartile_multiplier: string;
+  daily_adjustment_cooldown: string;
+  lookback_days: string;
+  ema_alpha: string;
+  sharpe_normalize_denom: string;
+  max_performance_bonus_pct: string;
+  volatility_penalty_threshold: string;
+  volatility_penalty_multiplier: string;
+  risk_volatility_threshold: string;
+  risk_multiplier: string;
+  hit_rate_high_threshold: string;
+  hit_rate_low_threshold: string;
+  middle_tier_boost_multiplier: string;
+  middle_tier_cut_multiplier: string;
+  sharpe_min_sample_size: string;
+  stddev_mean_ratio_threshold: string;
+  conviction_clamp_min: string;
+  conviction_clamp_max: string;
 }
 
 export interface DarwinianStatusData {
@@ -376,6 +519,131 @@ export interface DividendRecord {
   payment_date: string;
 }
 
+export interface DrawdownConfig {
+  levels: Record<string, string>;
+  orange_override_min_score: number;
+  red_override_min_score: number;
+  sector_constraints_risk_off: Record<string, number>;
+  sector_constraints_carry_trade_unwind: Record<string, number>;
+  sector_constraints_sector_rotation: Record<string, number>;
+}
+
+export interface DrawdownLevel {
+  percentage: number;
+  max_exposure: number;
+}
+
+export interface DrawdownParameters {
+  none_percentage: string;
+  none_max_exposure: string;
+  light_percentage: string;
+  light_max_exposure: string;
+  moderate_percentage: string;
+  moderate_max_exposure: string;
+  severe_percentage: string;
+  severe_max_exposure: string;
+  emergency_percentage: string;
+  emergency_max_exposure: string;
+  orange_override_min_score: string;
+  red_override_min_score: string;
+  sector_constraints_risk_off: string;
+  sector_constraints_carry_trade_unwind: string;
+  sector_constraints_sector_rotation: string;
+}
+
+export interface DynamicEnvConfig {
+  oil_high_threshold: number;
+  oil_low_threshold: number;
+  oil_energy_mult: number;
+  oil_shipping_penalty: number;
+  oil_shipping_benefit: number;
+  oil_industrial_penalty: number;
+  oil_industrial_benefit: number;
+  bdi_high_threshold: number;
+  bdi_low_threshold: number;
+  bdi_shipping_boost: number;
+  bdi_cost_penalty: number;
+  dxy_high_threshold: number;
+  dxy_low_threshold: number;
+  dxy_export_penalty: number;
+  dxy_export_benefit: number;
+}
+
+export interface EarningsQualityExecutorParameters {
+  repeatable_boost: string;
+  guidance_penalty: string;
+  guidance_threshold: string;
+}
+
+export interface EngineDrawdownParameters {
+  levels: string;
+  orange_override_min_score: string;
+  red_override_min_score: string;
+  sector_constraints_risk_off: string;
+  sector_constraints_carry_trade_unwind: string;
+  sector_constraints_sector_rotation: string;
+}
+
+export interface EngineExecutorsParameters {
+  vix_momentum_crash_threshold: string;
+  crowding_penalty_agents_3: string;
+  crowding_penalty_agents_4: string;
+  min_trade_amount: string;
+  max_stocks_default: string;
+  max_stocks_min: string;
+  max_stocks_max: string;
+  conviction_floor_default: string;
+}
+
+export interface EngineMacroRiskParameters {
+  carry_trade_unwind_threshold: string;
+  vix_threshold: string;
+  us10y_threshold: string;
+  oil_shock_threshold_pct: string;
+  gold_surge_threshold_pct: string;
+  dxy_surge_threshold_pct: string;
+  twd_stress_threshold_pct: string;
+  outflow_prob_base: string;
+  outflow_prob_max: string;
+}
+
+export interface EngineParameters {
+  macro_risk: string;
+  structural_trend: string;
+  drawdown: string;
+  sector_rotation: string;
+  strategy_evolution: string;
+  executors: string;
+  simulation: string;
+}
+
+export interface EngineSectorRotationParameters {
+  base_allocations: string;
+  min_allocation: string;
+  max_allocation: string;
+  rebalance_threshold: string;
+}
+
+export interface EngineSimulationParameters {
+  neutral_regime_sizing_factor: string;
+}
+
+export interface EngineStrategyEvolutionParameters {
+  cooldown_period_hours: string;
+  configs: string;
+}
+
+export interface EngineStructuralTrendParameters {
+  min_trend_strength: string;
+  min_confidence: string;
+  min_hit_rate: string;
+  override_threshold: string;
+  ai_revenue_growth_threshold: string;
+  cowos_utilization_threshold: string;
+  capex_growth_threshold: string;
+  semiconductor_index_threshold: string;
+}
+
 export interface EquityCurvePoint {
   label: string;
   value: number;
@@ -395,6 +663,17 @@ export interface ExecutionPolicy {
   require_cro_pass: boolean;
   momentum_crash_protection: boolean;
   enable_conviction_normalization: boolean;
+}
+
+export interface ExecutorsConfig {
+  vix_momentum_crash_threshold: number;
+  crowding_penalty_agents_3: number;
+  crowding_penalty_agents_4: number;
+  min_trade_amount: number;
+  max_stocks_default: number;
+  max_stocks_min: number;
+  max_stocks_max: number;
+  conviction_floor_default: number;
 }
 
 export interface ExitAlert {
@@ -452,6 +731,20 @@ export interface ExperimentLineageRecord {
   judged_at?: string | null;
 }
 
+export interface ExperimentParameters {
+  maturity_level1_observations: string;
+  maturity_level2_observations: string;
+  maturity_level3_observations: string;
+  improvement_threshold: string;
+  welch_t_test_threshold: string;
+  drawdown_protection_ratio: string;
+  volatility_tolerance_ratio: string;
+  oos_window_days: string;
+  sharpe_stability_threshold: string;
+  max_fallback_ratio: string;
+  factor_weight_drift_threshold: string;
+}
+
 export interface ExperimentRecord {
   id: string;
   proposal_id: string;
@@ -483,6 +776,29 @@ export interface FactorAttribution {
   total: string;
 }
 
+export interface FactorConvictionParams {
+  momentum_high_threshold: string;
+  momentum_high_delta: string;
+  momentum_mod_threshold: string;
+  momentum_mod_delta: string;
+  momentum_weak_threshold: string;
+  momentum_weak_delta: string;
+  value_high_threshold: string;
+  value_high_delta: string;
+  value_mod_threshold: string;
+  value_mod_delta: string;
+  value_weak_threshold: string;
+  value_weak_delta: string;
+  quality_threshold: string;
+  quality_delta: string;
+  liquidity_high_threshold: string;
+  liquidity_high_delta: string;
+  liquidity_good_threshold: string;
+  liquidity_good_delta: string;
+  liquidity_low_threshold: string;
+  liquidity_low_delta: string;
+}
+
 export interface FactorDetail {
   avg_score: number;
   avg_return: number;
@@ -495,6 +811,25 @@ export interface FactorExposureInline {
   quality: number;
   agent: number;
   total: number;
+}
+
+export interface FactorParameters {
+  momentum_lookback_days: string;
+  momentum_stddev_divisor: string;
+  momentum_intraday_discount: string;
+  momentum_intraday_threshold: string;
+  value_pe_range_center: string;
+  value_pe_range_width: string;
+  value_pb_range_center: string;
+  value_pb_range_width: string;
+  value_ps_range_center: string;
+  value_ps_range_width: string;
+  quality_dividend_yield_cap: string;
+  quality_volatility_std: string;
+  quality_fallback_score: string;
+  value_fallback_score: string;
+  institutional_sentiment_weights: string;
+  fallback_weight_reduction: string;
 }
 
 export interface FactorScoreBreakdown {
@@ -534,6 +869,49 @@ export interface FactorScores {
   breakdown?: string | null;
 }
 
+export interface FactorWeightParameters {
+  base_weights?: string;
+  regime_bull_momentum?: string;
+  regime_bull_quality?: string;
+  regime_bull_value?: string;
+  regime_bear_quality?: string;
+  regime_bear_value?: string;
+  regime_bear_momentum?: string;
+  regime_high_vol_liquidity?: string;
+  regime_high_vol_momentum?: string;
+  regime_high_vol_inst_sent?: string;
+  severity_critical?: string;
+  severity_high?: string;
+  severity_medium?: string;
+  severity_low?: string;
+  clamp_min?: string;
+  clamp_max?: string;
+  risk_on_momentum?: string;
+  risk_on_quality?: string;
+  risk_off_momentum?: string;
+  risk_off_quality?: string;
+  risk_off_liquidity?: string;
+  conservative_value?: string;
+  conservative_quality?: string;
+  conservative_momentum?: string;
+  aggressive_momentum?: string;
+  aggressive_inst_sent?: string;
+  aggressive_value?: string;
+  aggressive_quality?: string;
+}
+
+export interface FinancialsExecutorParameters {
+  dividend_boost: string;
+  balance_sheet_penalty: string;
+  credit_quality_boost: string;
+  credit_quality_penalty: string;
+  spread_sensitivity_boost: string;
+  spread_sensitivity_penalty: string;
+  capital_adequacy_boost: string;
+  price_to_open_threshold: string;
+  price_to_high_threshold: string;
+}
+
 export interface ForecastVsRealityItem {
   experiment_id: string;
   proposal_id: string;
@@ -554,6 +932,31 @@ export interface ForecastVsRealityResponse {
   broker_runtime: BrokerRuntimeAudit;
 }
 
+export interface FreshnessScoresConfig {
+  score_live: number;
+  score_recent: number;
+  score_stale: number;
+  score_fallback: number;
+  score_default: number;
+}
+
+export interface GARCHParameters {
+  omega: string;
+  alpha: string;
+  beta: string;
+  max_history: string;
+  correlation_min_days: string;
+  smoothing_factor: string;
+  rebalance_threshold: string;
+  min_forecast_days: string;
+  max_history_points: string;
+  high_vol_threshold: string;
+  low_vol_threshold: string;
+  reduce_magnitude: string;
+  increase_magnitude: string;
+  weekly_rebalance_days: string;
+}
+
 export interface GraphEdge {
   source: string;
   target: string;
@@ -568,6 +971,17 @@ export interface GraphNode {
   downstream_count: number;
 }
 
+export interface GrowthMomentumExecutorParameters {
+  conviction_base: string;
+  price_penalty: string;
+  trend_confirmation_penalty: string;
+  downgrade_price_penalty: string;
+  downgrade_open_penalty: string;
+  exploratory_price_penalty: string;
+  exploratory_open_penalty: string;
+  downgrade_threshold: string;
+}
+
 export interface GuardOutcome {
   guard_id: string;
   guard_skill: string;
@@ -576,6 +990,20 @@ export interface GuardOutcome {
   input_count: number;
   output_count: number;
   severity: string;
+}
+
+export interface HealthParameters {
+  mute_threshold: string;
+  unmute_threshold: string;
+  auto_recover_days: string;
+  min_sample_size: string;
+  negative_sharpe_threshold: string;
+  sharpe_weight: string;
+  hit_rate_weight: string;
+  streak_weight: string;
+  max_sharpe: string;
+  min_sharpe: string;
+  streak_max: string;
 }
 
 export interface HeatmapEntry {
@@ -598,6 +1026,15 @@ export interface HumanIntervention {
   recorded_at: string;
   expires_at?: string;
   ttl_hours?: number;
+}
+
+export interface InTradeGateParameters {
+  monitor_interval_sec: string;
+  stop_loss_pct: string;
+  take_profit_pct: string;
+  trailing_stop_atr_mult: string;
+  volatility_spike_mult: string;
+  circuit_breaker_daily_loss_pct: string;
 }
 
 export interface IndustryContextItem {
@@ -651,6 +1088,48 @@ export interface IndustryOverview {
   adjustment_log: string[];
 }
 
+export interface IndustryParameters {
+  sector_weights: string;
+  cycle_thresholds: string;
+  inventory_cycle_thresholds: string;
+  capex_cycle_thresholds: string;
+  concentration_risk_enabled: string;
+  news_latency_risk_enabled: string;
+  asymmetric_risk_enabled: string;
+  customer_concentration_limit: string;
+  geographic_exposure_limit: string;
+  customer_share_threshold_1: string;
+  customer_share_threshold_2: string;
+  us_exposure_threshold_1: string;
+  us_exposure_threshold_2: string;
+  risk_score_weight_1: string;
+  risk_score_weight_2: string;
+  risk_score_weight_3: string;
+  risk_score_weight_4: string;
+  severity_threshold_medium: string;
+  severity_threshold_high: string;
+  severity_threshold_critical: string;
+  impact_multiplier: string;
+  risk_confidence: string;
+  confidence_signal: string;
+  confidence_mix: string;
+  seasonal_patterns: string;
+  asymmetric_risk: string;
+  news_latency_risk: string;
+  freshness_scores: string;
+  phase_scores: string;
+  skill_to_industry?: string;
+  skill_to_industries?: string;
+  cycle_transitions: string;
+  cycle_weight_multipliers: string;
+  linkage_weight_impact: string;
+  weight_floor: string;
+  max_daily_weight_change: string;
+  linkage_params: string;
+  dynamic_env: string;
+  history_retention_days: string;
+}
+
 export interface IndustryRecommendation {
   action: string;
   conviction: string;
@@ -666,6 +1145,54 @@ export interface IntegrityCheck {
   name: string;
   status: string;
   message: string;
+}
+
+export interface InventoryCycleThresholdConfig {
+  active_restocking_inventory_min: number;
+  active_restocking_capacity_min: number;
+  passive_restocking_inventory_min: number;
+  passive_restocking_capacity_min: number;
+  active_destocking_inventory_max: number;
+  active_destocking_capacity_max: number;
+}
+
+export interface JanusParameters {
+  short_window_days: string;
+  medium_window_days: string;
+  long_window_days: string;
+  max_history_days: string;
+  min_weight: string;
+  max_weight: string;
+  novel_threshold: string;
+  historical_threshold: string;
+  epsilon_weight: string;
+  short_window_blend: string;
+  medium_window_blend: string;
+  long_window_blend: string;
+  health_stale_hours: string;
+  health_warn_hours: string;
+}
+
+export interface LEOSatelliteExecutorParameters {
+  conviction_base: string;
+  price_penalty_delta: string;
+  launch_boost_delta: string;
+  deployment_boost_delta: string;
+  downgrade_penalty_delta: string;
+  target_price_multiplier: string;
+  stop_loss_multiplier: string;
+}
+
+export interface LinkageConfig {
+  downstream_decay_factor: number;
+  upstream_decay_factor: number;
+  seasonal_decay_factor: number;
+  default_correlation: number;
+  systemic_importance_divisor: number;
+  min_correlation_threshold: number;
+  correlation_window_days: number;
+  correlation_matrix: Record<string, number>;
+  recession_correlation_boost: number;
 }
 
 export interface LinkageInfo {
@@ -688,6 +1215,33 @@ export interface MacroRadarResponse {
   guard_outcomes: GuardOutcome[];
   broker_runtime: BrokerRuntimeAudit;
   recorded_at: string;
+}
+
+export interface MacroRiskConfig {
+  carry_trade_unwind_threshold: number;
+  vix_threshold: number;
+  us10y_threshold: number;
+  oil_shock_threshold_pct: number;
+  gold_surge_threshold_pct: number;
+  dxy_surge_threshold_pct: number;
+  twd_stress_threshold_pct: number;
+  outflow_prob_base: number;
+  outflow_prob_max: number;
+}
+
+export interface MarketdataParameters {
+  twse_api_rate_limit: string;
+  twse_api_rate_burst: string;
+  twse_api_timeout_sec: string;
+  fubon_intraday_limit: string;
+  fubon_historical_limit: string;
+  fubon_api_timeout_sec: string;
+  tej_calls_per_second: string;
+  tej_api_timeout_sec: string;
+  fugle_rate_limit: string;
+  fugle_api_timeout_sec: string;
+  max_retry_attempts: string;
+  retry_backoff_ms: string;
 }
 
 export interface MetricTrendPoint {
@@ -754,12 +1308,90 @@ export interface NarrativeContextItem {
   direction_hint?: string;
 }
 
+export interface NarrativeConvictionParameters {
+  theme_hit_rates?: string;
+  skill_to_theme?: string;
+}
+
 export interface NarrativeFactorScore {
   score: number;
   theme?: string;
   hit_rate?: number;
   confidence?: number;
   event_ids?: string[];
+}
+
+export interface NarrativeParameters {
+  min_trend_strength: string;
+  min_confidence: string;
+  min_hit_rate: string;
+  override_threshold: string;
+  ai_revenue_growth_threshold: string;
+  cowos_utilization_threshold: string;
+  capex_growth_threshold: string;
+  us10y_change_bps_threshold: string;
+  dxy_change_pct_threshold: string;
+  geopolitical_gpr_threshold: string;
+  oil_change_pct_threshold: string;
+  jpy_change_pct_threshold: string;
+  vix_level_threshold: string;
+  gold_change_pct_threshold: string;
+  usdtwd_change_pct_threshold: string;
+  semiconductor_export_drop_threshold: string;
+  retail_margin_zscore_threshold: string;
+  ai_capex_sentiment_threshold: string;
+  tsmc_revenue_yoy_threshold: string;
+  taiwan_stress_usdtwd_threshold: string;
+  retail_institutional_divergence_threshold: string;
+  ai_capex_negative_sentiment_threshold: string;
+  ai_capex_fallback_sentiment: string;
+  tsmc_revenue_positive_threshold: string;
+  confidence_base_us_rates: string;
+  confidence_base_jpy_carry: string;
+  confidence_base_geopolitical: string;
+  confidence_base_oil_shock: string;
+  confidence_base_ai_capex: string;
+  confidence_base_tsmc_revenue: string;
+  confidence_base_taiwan_stress: string;
+  confidence_deviation_ceiling: string;
+  sox_index_drop_threshold: string;
+  taiwan_stress_dxy_weight: string;
+  taiwan_stress_us10y_weight: string;
+  taiwan_stress_foreign_weight: string;
+  taiwan_stress_vix_weight: string;
+  taiwan_stress_jpy_weight: string;
+  taiwan_stress_geo_weight: string;
+  taiwan_stress_oil_weight: string;
+  taiwan_stress_gold_weight: string;
+  taiwan_stress_dxy_scale: string;
+  taiwan_stress_us10y_scale: string;
+  taiwan_stress_foreign_scale: string;
+  taiwan_stress_vix_scale: string;
+  taiwan_stress_jpy_scale: string;
+  taiwan_stress_geo_scale: string;
+  taiwan_stress_oil_scale: string;
+  taiwan_stress_gold_scale: string;
+  taiwan_stress_crisis_threshold: string;
+  taiwan_stress_high_threshold: string;
+  taiwan_stress_alert_threshold: string;
+  event_ttl_multiplier: string;
+  model_lookback_days: string;
+  model_hold_window_days: string;
+  retail_frenzy_percentile_threshold: string;
+  retail_fear_percentile_threshold: string;
+  retail_acceleration_window_days: string;
+  inflation_estimate?: string;
+}
+
+export interface NewsLatencyConfig {
+  max_latency_hours: number;
+  severity_critical_min: number;
+  severity_high_min: number;
+  impact_multiplier: number;
+  drop_critical_threshold: number;
+  drop_high_threshold: number;
+  drop_medium_threshold: number;
+  confidence_divisor: number;
 }
 
 export interface OOSResult {
@@ -775,12 +1407,107 @@ export interface OOSResult {
   reason: string;
 }
 
+export interface OptimizerParameters {
+  max_position_pct: string;
+  max_sector_pct: string;
+  max_turnover_daily: string;
+  target_beta: string;
+  beta_range_min: string;
+  beta_range_max: string;
+  min_trade_size: string;
+  cash_reserve: string;
+  factor_weights: string;
+}
+
+export interface OrchestratorParameters {
+  conviction_floor_default: string;
+  superinvestor_min_conviction: string;
+  cro_zscore_threshold: string;
+  sector_concentration_threshold: string;
+  sector_concentration_threshold_high: string;
+  sector_conviction_multiplier: string;
+  crowded_conviction_multiplier: string;
+  factor_weight_momentum: string;
+  factor_weight_value: string;
+  factor_weight_quality: string;
+  factor_weight_agent: string;
+  prism_boost_multiplier: string;
+  prism_boost_min: string;
+  prism_boost_max: string;
+  promotion_min_observations: string;
+  promotion_sharpe_threshold: string;
+  promotion_hitrate_threshold: string;
+  rejection_sharpe_threshold: string;
+  rejection_hitrate_threshold: string;
+  sector_rotation_base_allocations: string;
+  sector_rotation_macro_adjustments?: string;
+  sector_rotation_flow_adjustments?: string;
+}
+
+export interface ParameterChange {
+  parameter: string;
+  old_value: string;
+  new_value: string;
+  reason?: string;
+  timestamp: string;
+}
+
+export interface ParameterCitation {
+  source_type: string;
+  source_reference: string;
+  evidence_quality: string;
+  update_policy: string;
+  validation_method: string;
+  dependencies: string[];
+  last_validated: string;
+}
+
+export interface ParameterMetadata {
+  value: string;
+  rationale: string;
+  source: string;
+  last_calibrated?: string | null;
+  calibration_method?: string;
+  todo?: string;
+  citation?: string | null;
+}
+
 export interface ParameterSnapshot {
-  factor_weights?: Record<string, number>;
-  narrative_hit_rates?: Record<string, number>;
-  industry_phase_scores?: Record<string, number>;
-  config_version?: string;
-  captured_at: string;
+  id: string;
+  timestamp: string;
+  reason?: string;
+  user?: string;
+  params: string | null;
+  changes?: string[];
+}
+
+export interface ParametersConfig {
+  version: string;
+  updated_at: string;
+  darwinian: string;
+  factor: string;
+  factor_weight?: string;
+  optimizer: string;
+  sizing: string;
+  health: string;
+  garch: string;
+  experiment: string;
+  baseline: string;
+  orchestrator: string;
+  risk: string;
+  drawdown: string;
+  realtime: string;
+  janus: string;
+  narrative: string;
+  narrative_conviction?: string;
+  marketdata: string;
+  industry: string;
+  strategy: string;
+  precious_metals: string;
+  sector_executor?: string;
+  alert: string;
+  risk_gate?: string;
+  engine?: string;
 }
 
 export interface PerformanceReport {
@@ -805,6 +1532,13 @@ export interface PerformanceReport {
   regime_breakdown: string;
   monthly_returns: string[];
   generated_at: string;
+}
+
+export interface PhaseScoresConfig {
+  score_expansion: number;
+  score_recovery: number;
+  score_mature: number;
+  score_recession: number;
 }
 
 export interface PipelineItem {
@@ -916,6 +1650,32 @@ export interface PositionDTO {
   sector?: string;
 }
 
+export interface PostTradeGateParameters {
+  max_drawdown_halt_pct: string;
+  max_drawdown_defensive_pct: string;
+  min_rolling_sharpe: string;
+  consecutive_loss_days: string;
+  evaluation_interval_hours: string;
+}
+
+export interface PreTradeGateParameters {
+  max_position_pct: string;
+  max_sector_exposure_pct: string;
+  var_confidence_level: string;
+  var_limit_pct: string;
+  min_cash_buffer_pct: string;
+  max_correlation: string;
+  min_adv_ratio: string;
+}
+
+export interface PreciousMetalsParameters {
+  central_bank_buying_trend: string;
+  central_bank_net_buy: string;
+  india_gold_imports_yoy: string;
+  china_gold_imports_yoy: string;
+  comex_default_net_long: string;
+}
+
 export interface PremarketData {
   us_market: Record<string, string>;
   foreign_flow: Record<string, string>;
@@ -978,6 +1738,17 @@ export interface Quote {
 export interface RangeFilter {
   min?: number | null;
   max?: number | null;
+}
+
+export interface RealtimeParameters {
+  volatility_threshold: string;
+  volume_spike_threshold: string;
+  price_change_threshold: string;
+  min_confidence: string;
+  weight_adjustment_rate: string;
+  max_weight_change: string;
+  min_weight: string;
+  update_interval_ms: string;
 }
 
 export interface ReasoningTraceItem {
@@ -1143,12 +1914,36 @@ export interface RiskExposureResponse {
   insufficient_data: boolean;
 }
 
+export interface RiskGateParameters {
+  pre_trade: string;
+  in_trade?: string;
+  post_trade?: string;
+}
+
 export interface RiskInfo {
   symbol: string;
   industry: string;
   risk_count: number;
   risks: Record<string, string>[];
   highest_risk: Record<string, string>;
+}
+
+export interface RiskParameters {
+  var_confidence_level: string;
+  var_secondary_confidence: string;
+  var_alert_threshold: string;
+  var_critical_threshold: string;
+  consecutive_loss_limit: string;
+  sector_constraints_risk_off: string;
+  sector_constraints_carry_trade_unwind: string;
+  sector_constraints_sector_rotation: string;
+  max_drawdown_pct: string;
+  max_position_size: string;
+  max_daily_loss_pct: string;
+  stop_loss: string;
+  take_profit: string;
+  max_loss_per_trade: string;
+  max_total_exposure: string;
 }
 
 export interface RiskSnapshot {
@@ -1231,6 +2026,23 @@ export interface SeasonalPattern {
   impact?: string;
 }
 
+export interface SeasonalPatternConfig {
+  id: string;
+  name: string;
+  name_en: string;
+  start_month: number;
+  start_day: number;
+  end_month: number;
+  end_day: number;
+  favored_industries: string[];
+  avoided_industries: string[];
+  style_tags?: string[];
+  adjustment_factor: number;
+  historical_accuracy: number;
+  avg_market_return: number;
+  description: string;
+}
+
 export interface SectorAttribution {
   sector: string;
   sector_label: string;
@@ -1239,11 +2051,29 @@ export interface SectorAttribution {
   avg_return: number;
 }
 
+export interface SectorExecutorParameters {
+  leo_satellite?: string;
+  financials?: string;
+  shipping?: string;
+  value_yield?: string;
+  earnings_quality?: string;
+  technical_breakout?: string;
+  growth_momentum?: string;
+  factor_conviction?: string;
+}
+
 export interface SectorExposure {
   sector: string;
   sector_label: string;
   weight: number;
   est_value: number;
+}
+
+export interface SectorRotationConfig {
+  base_allocations: Record<string, number>;
+  min_allocation: number;
+  max_allocation: number;
+  rebalance_threshold: number;
 }
 
 export interface SessionSummary {
@@ -1267,9 +2097,19 @@ export interface SessionSummary {
   parameters_version?: string;
 }
 
+export interface ShippingExecutorParameters {
+  tactical_boost: string;
+  weak_close_penalty: string;
+  weak_close_threshold: string;
+}
+
 export interface ShockImpact {
   industry: string;
   impact: number;
+}
+
+export interface SimulationConfig {
+  neutral_regime_sizing_factor: number;
 }
 
 export interface SimulationConstraints {
@@ -1319,11 +2159,66 @@ export interface SimulationState {
   current_drawdown: number;
 }
 
+export interface SizingParameters {
+  kelly_fraction: string;
+  vol_lookback_days: string;
+  max_position_by_adv: string;
+  max_drawdown_limit: string;
+  atr_multiplier: string;
+  correlation_penalty: string;
+  correlation_threshold: string;
+  default_win_rate: string;
+  default_payoff_ratio: string;
+  target_volatility: string;
+  vol_adjustment_min: string;
+  vol_adjustment_max: string;
+  atr_target_risk: string;
+  atr_adjustment_min: string;
+  atr_adjustment_max: string;
+  correlation_penalty_factor: string;
+  max_correlation_penalty: string;
+  default_volatility: string;
+  default_adv: string;
+  default_atr: string;
+}
+
+export interface StrategyEvolutionConfig {
+  cooldown_period_hours: number;
+  configs: Record<string, string>;
+}
+
+export interface StrategyParameters {
+  min_switch_interval_days: string;
+  switch_threshold: string;
+  score_lookback_days: string;
+  fallback_strategy: string;
+}
+
+export interface StrategyStateConfig {
+  max_position_size: number;
+  max_sector_exposure: number;
+  min_cash_reserve: number;
+  hedge_ratio: number;
+  allow_new_positions: boolean;
+  allow_concentration: boolean;
+}
+
 export interface StrategySummary {
   id: string;
   name: string;
   type: string;
   score: number;
+}
+
+export interface StructuralTrendConfig {
+  min_trend_strength: number;
+  min_confidence: number;
+  min_hit_rate: number;
+  override_threshold: number;
+  ai_revenue_growth_threshold: number;
+  cowos_utilization_threshold: number;
+  capex_growth_threshold: number;
+  semiconductor_index_threshold: number;
 }
 
 export interface SwarmStatusResponse {
@@ -1427,6 +2322,29 @@ export interface TaxSnapshot {
   after_tax_pnl: number;
 }
 
+export interface TechnicalBreakoutExecutorParameters {
+  default_volume_floor: string;
+  strict_volume_floor: string;
+  relaxed_volume_floor: string;
+  low_volume_floor: string;
+  low_volume_boost: string;
+  reject_low_volume_floor: string;
+  volume_boost: string;
+  close_strength_penalty: string;
+  close_strength_threshold: string;
+  close_strength_tolerance: string;
+  surge_boost: string;
+  surge_penalty: string;
+  open_rejection_penalty: string;
+  late_breakout_penalty: string;
+  late_breakout_threshold: string;
+  confirmation_boost: string;
+  confirmation_threshold: string;
+  catch_up_boost: string;
+  catch_up_lower_threshold: string;
+  catch_up_upper_threshold: string;
+}
+
 export interface TradeRecord {
   trade_id: string;
   session_id: string;
@@ -1448,6 +2366,11 @@ export interface UniverseOverlapResponse {
   agents: string[];
   matrix: Record<string, Record<string, number>>;
   warnings: string[];
+}
+
+export interface ValueYieldExecutorParameters {
+  cash_flow_boost: string;
+  yield_trap_penalty: string;
 }
 
 export interface WeightDerivation {
@@ -1483,6 +2406,14 @@ export interface rawOutcome {
   session_id: string;
 }
 
+export interface statsResponse {
+  total_rules: number;
+  active_rules: number;
+  degraded_rules: number;
+  expired_rules: number;
+  average_hit_rate: number;
+}
+
 export interface submitTaskRequest {
   task_type: string;
   payload?: Record<string, string>;
@@ -1492,6 +2423,15 @@ export interface submitTaskRequest {
 
 export interface submitTaskResponse {
   id: string;
+  status: string;
+}
+
+export interface validateRuleResponse {
+  message: string;
+  rule_id: string;
+  hit_rate: number;
+  total_tests: number;
+  total_hits: number;
   status: string;
 }
 

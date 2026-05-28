@@ -54,11 +54,12 @@ func main() {
 	apiDir := findMonitoringAPIDir(rootDir)
 	svcDir := findMonitoringServiceDir(rootDir)
 	reportDir := findReportingDir(rootDir)
-	if apiDir != "" || svcDir != "" || reportDir != "" {
+	configDir := findConfigDir(rootDir)
+	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" {
 		// Build merged struct names from all directories so cross-package
 		// type references resolve correctly.
 		allNames := preScanStructNames(domainDir)
-		for _, d := range []string{apiDir, svcDir} {
+		for _, d := range []string{apiDir, svcDir, configDir} {
 			if d == "" {
 				continue
 			}
@@ -93,6 +94,13 @@ func main() {
 				if _, exists := structs[k]; exists {
 					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and reporting; using reporting version\n", k)
 				}
+				structs[k] = v
+			}
+		}
+		// Merge config structs (e.g. ParametersConfig, CalibrationEvidence).
+		if configDir != "" {
+			configStructs := parseStructsWithNames(configDir, allNames)
+			for k, v := range configStructs {
 				structs[k] = v
 			}
 		}
@@ -141,6 +149,14 @@ func findMonitoringServiceDir(rootDir string) string {
 
 func findReportingDir(rootDir string) string {
 	candidate := filepath.Join(rootDir, "internal", "reporting")
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
+	return ""
+}
+
+func findConfigDir(rootDir string) string {
+	candidate := filepath.Join(rootDir, "internal", "config")
 	if _, err := os.Stat(candidate); err == nil {
 		return candidate
 	}

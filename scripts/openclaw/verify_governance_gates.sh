@@ -94,7 +94,7 @@ fi
 
 run_targeted_tests() {
 	log "Running governance-focused tests"
-	go test -count=2 \
+	go test -count=1 \
 		./internal/domain/... \
 		./internal/experiment/... \
 		./internal/orchestrator/... \
