@@ -19,13 +19,13 @@ import (
 // crumb token tied to a session cookie. This manager performs the handshake
 // once and reuses the credentials for subsequent requests.
 type yahooSession struct {
-	mu         sync.RWMutex
-	client     *http.Client
-	cookie     string
-	crumb      string
-	lastFetch  time.Time
-	ttl        time.Duration
-	hosts      []string
+	mu        sync.RWMutex
+	client    *http.Client
+	cookie    string
+	crumb     string
+	lastFetch time.Time
+	ttl       time.Duration
+	hosts     []string
 }
 
 // newYahooSession creates a session manager for Yahoo Finance API access.
@@ -172,7 +172,6 @@ func (s *yahooSession) fetchFromHost(ctx context.Context, host, symbol string, p
 	if hasCrumb {
 		s.mu.RLock()
 		crumb := s.crumb
-		cookie := s.cookie
 		s.mu.RUnlock()
 
 		parsedURL, err := url.Parse(u)
@@ -181,7 +180,6 @@ func (s *yahooSession) fetchFromHost(ctx context.Context, host, symbol string, p
 			q.Set("crumb", crumb)
 			parsedURL.RawQuery = q.Encode()
 			u = parsedURL.String()
-			_ = cookie // store cookie for future use
 		}
 	}
 
