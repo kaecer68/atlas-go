@@ -1027,9 +1027,14 @@ func (s *System) applyAlphaDiscovery(quotes []domain.Quote, recs []domain.Recomm
 }
 
 func (s *System) NextExperimentCandidate() (*domain.Candidate, error) {
-	outcomes, err := s.Sim().ledger.LoadOutcomes()
-	if err != nil {
-		return nil, err
+	// Use session-dir outcomes (richest data source) instead of sparse global file.
+	// This ensures new agents with any outcomes are visible to SelectWeakestAgent.
+	outcomes, err := s.Sim().ledger.LoadOutcomesFromSessions()
+	if err != nil || len(outcomes) == 0 {
+		outcomes, err = s.Sim().ledger.LoadOutcomes()
+		if err != nil {
+			return nil, err
+		}
 	}
 	scorecards := ledger.BuildScorecards(outcomes)
 	candidate := domain.SelectWeakestAgent(s.Sim().registry, scorecards)
