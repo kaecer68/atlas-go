@@ -23,6 +23,7 @@ export const AGENT_NAME_MAP = {
   'ai-desk-01': 'AI 供應鏈',
   'shipping-desk-01': '航運產業',
   'earnings-quality-01': '盈餘品質',
+  'leo-satellite-desk-01': '低軌衛星',
   'etf_rotation_desk': 'ETF 輪動',
   'value_yield': '價值收益',
   'growth_momentum': '成長動能',

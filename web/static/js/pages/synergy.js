@@ -124,16 +124,17 @@ function renderLeaderboard(status, trend) {
     if (trendDir === 'down') trendHtml = '<span class="text-down">↓</span>';
 
     const sharpe = agent.rolling_sharpe || 0;
+    const avgReturn = agent.avg_return || 0;
+    const totalSignals = agent.total_signals || 0;
     const sharpeHtml = sharpe > 0
       ? `<span style="color:var(--up)">${sharpe.toFixed(2)}</span>`
-      : (sharpe === 0 ? '<span class="text-muted">N/A</span>' : `<span style="color:var(--down)">${sharpe.toFixed(2)}</span>`);
+      : (sharpe === 0 ? (totalSignals > 0 && avgReturn < 0 ? '<span style="color:var(--down)">負報酬</span>' : '<span class="text-muted">N/A</span>') : `<span style="color:var(--down)">${sharpe.toFixed(2)}</span>`);
 
     const hitRate = agent.hit_rate || 0;
     const hitRateHtml = hitRate >= 0.6
       ? `<span style="color:var(--up)">${fmtPct(hitRate)}</span>`
       : (hitRate >= 0.4 ? fmtPct(hitRate) : `<span style="color:var(--down)">${fmtPct(hitRate)}</span>`);
 
-    const avgReturn = agent.avg_return || 0;
     const avgReturnHtml = avgReturn > 0
       ? `<span style="color:var(--up)">${fmtVal(avgReturn)}</span>`
       : (avgReturn < 0 ? `<span style="color:var(--down)">${fmtVal(avgReturn)}</span>` : fmtVal(avgReturn));

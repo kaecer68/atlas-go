@@ -179,8 +179,8 @@ func buildPortfolioManager(runtimeParams *portfolio.RuntimeParameters, registry 
 	darwinian := portfolio.NewDarwinianWeightManager("data/state/darwinian_weights.json").
 		WithHistoryPath("data/state/darwinian_history.jsonl").
 		WithParameters(runtimeParams)
-	darwinian.InitializeFromRegistry(registry)
 	_ = darwinian.Load()
+	darwinian.InitializeFromRegistry(registry)
 	darwinian.WithEventBus(eventBus)
 
 	factorWeightEngine := portfolio.NewFactorWeightEngine()

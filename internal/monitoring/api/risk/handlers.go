@@ -206,6 +206,7 @@ func industryLabel(id string) string {
 		"consumer":        "消費",
 		"cooling":         "散熱",
 		"server_assembly": "伺服器組裝",
+		"mining":          "礦業/貴金屬",
 	}
 	if l, ok := m[id]; ok {
 		return l
