@@ -104,6 +104,16 @@ func (sb *SeasonalBridge) SeasonalMultiplier(theme string, industryID string, di
 				return 1.05 // domestic benefits from repatriation
 			}
 			return 1.0
+		case "leo_satellite":
+			if direction > 0 {
+				return 0.95 // export-oriented, risk-off dampening
+			}
+			return 1.02
+		case "mining":
+			if direction > 0 {
+				return 1.03 // commodity safe-haven flow
+			}
+			return 1.0
 		default:
 			return 1.0
 		}
@@ -187,6 +197,9 @@ func (sb *SeasonalBridge) CorrelationMultiplier(theme string, industryA, industr
 		if match("shipping", "industrial") {
 			return 0.92
 		}
+		if match("mining", "energy") {
+			return 1.08 // energy cost pass-through
+		}
 		return 1.0
 
 	case "AI_capex_surge":
@@ -194,6 +207,12 @@ func (sb *SeasonalBridge) CorrelationMultiplier(theme string, industryA, industr
 			match("semiconductor", "electronics") ||
 			match("ai_supply_chain", "electronics") {
 			return 1.12
+		}
+		if match("leo_satellite", "semiconductor") {
+			return 1.10 // satellite chip demand from AI infrastructure
+		}
+		if match("leo_satellite", "ai_supply_chain") {
+			return 1.08 // space-based AI data processing
 		}
 		return 1.0
 
@@ -211,6 +230,12 @@ func (sb *SeasonalBridge) CorrelationMultiplier(theme string, industryA, industr
 			match("ai_supply_chain", "shipping") {
 			return 0.90
 		}
+		if match("leo_satellite", "electronics") {
+			return 0.92 // export-oriented risk-off dampening
+		}
+		if match("mining", "financials") {
+			return 1.05 // commodity safe-haven during yen volatility
+		}
 		return 1.0
 
 	case "geopolitical_risk_spike":
@@ -220,6 +245,21 @@ func (sb *SeasonalBridge) CorrelationMultiplier(theme string, industryA, industr
 		}
 		if match("consumer", "financials") {
 			return 1.08
+		}
+		if match("leo_satellite", "semiconductor") {
+			return 1.15 // dual-use defense supply chain disruption
+		}
+		if match("leo_satellite", "ai_supply_chain") {
+			return 1.12 // space-based AI infrastructure risk
+		}
+		if match("mining", "semiconductor") {
+			return 1.12 // rare earth supply disruption
+		}
+		if match("mining", "electronics") {
+			return 1.10 // critical mineral supply chains
+		}
+		if match("mining", "energy") {
+			return 1.08 // energy-commodity linkage
 		}
 		return 1.0
 
@@ -233,6 +273,12 @@ func (sb *SeasonalBridge) CorrelationMultiplier(theme string, industryA, industr
 		}
 		if match("consumer", "financials") {
 			return 1.10
+		}
+		if match("leo_satellite", "semiconductor") {
+			return 1.12 // Taiwan semiconductor dependency
+		}
+		if match("leo_satellite", "ai_supply_chain") {
+			return 1.10 // Taiwan space-AI infrastructure
 		}
 		return 1.0
 
