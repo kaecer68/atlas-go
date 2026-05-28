@@ -227,6 +227,9 @@ func markCalibrated(params *ParametersConfig, names []string, method string, ts 
 		case "engine_executors_crowding_penalty_agents_4":
 			params.Engine.Executors.CrowdingPenaltyAgents4.LastCalibrated = ts
 			params.Engine.Executors.CrowdingPenaltyAgents4.CalibrationMethod = method
+		case "engine_executors_min_trade_amount":
+			params.Engine.Executors.MinTradeAmount.LastCalibrated = ts
+			params.Engine.Executors.MinTradeAmount.CalibrationMethod = method
 		case "engine_executors_conviction_floor_default":
 			params.Engine.Executors.ConvictionFloorDefault.LastCalibrated = ts
 			params.Engine.Executors.ConvictionFloorDefault.CalibrationMethod = method
@@ -262,6 +265,43 @@ func markCalibrated(params *ParametersConfig, names []string, method string, ts 
 		case "narrative_vix_level_threshold":
 			params.Narrative.VIXLevelThreshold.LastCalibrated = ts
 			params.Narrative.VIXLevelThreshold.CalibrationMethod = method
+		// FactorWeight — Strategy Deltas
+		case "factor_weight_conservative_value":
+			params.FactorWeight.ConservativeValue.LastCalibrated = ts
+			params.FactorWeight.ConservativeValue.CalibrationMethod = method
+		case "factor_weight_conservative_quality":
+			params.FactorWeight.ConservativeQuality.LastCalibrated = ts
+			params.FactorWeight.ConservativeQuality.CalibrationMethod = method
+		case "factor_weight_conservative_momentum":
+			params.FactorWeight.ConservativeMomentum.LastCalibrated = ts
+			params.FactorWeight.ConservativeMomentum.CalibrationMethod = method
+		case "factor_weight_aggressive_momentum":
+			params.FactorWeight.AggressiveMomentum.LastCalibrated = ts
+			params.FactorWeight.AggressiveMomentum.CalibrationMethod = method
+		case "factor_weight_aggressive_inst_sent":
+			params.FactorWeight.AggressiveInstSent.LastCalibrated = ts
+			params.FactorWeight.AggressiveInstSent.CalibrationMethod = method
+		case "factor_weight_aggressive_value":
+			params.FactorWeight.AggressiveValue.LastCalibrated = ts
+			params.FactorWeight.AggressiveValue.CalibrationMethod = method
+		case "factor_weight_aggressive_quality":
+			params.FactorWeight.AggressiveQuality.LastCalibrated = ts
+			params.FactorWeight.AggressiveQuality.CalibrationMethod = method
+		case "factor_weight_risk_on_momentum":
+			params.FactorWeight.RiskOnMomentum.LastCalibrated = ts
+			params.FactorWeight.RiskOnMomentum.CalibrationMethod = method
+		case "factor_weight_risk_on_quality":
+			params.FactorWeight.RiskOnQuality.LastCalibrated = ts
+			params.FactorWeight.RiskOnQuality.CalibrationMethod = method
+		case "factor_weight_risk_off_momentum":
+			params.FactorWeight.RiskOffMomentum.LastCalibrated = ts
+			params.FactorWeight.RiskOffMomentum.CalibrationMethod = method
+		case "factor_weight_risk_off_quality":
+			params.FactorWeight.RiskOffQuality.LastCalibrated = ts
+			params.FactorWeight.RiskOffQuality.CalibrationMethod = method
+		case "factor_weight_risk_off_liquidity":
+			params.FactorWeight.RiskOffLiquidity.LastCalibrated = ts
+			params.FactorWeight.RiskOffLiquidity.CalibrationMethod = method
 		}
 	}
 }
