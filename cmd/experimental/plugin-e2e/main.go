@@ -33,7 +33,7 @@ func (customMomentumExecutor) Supports(agent domain.AgentSpec) bool {
 	return agent.Skill == "custom_momentum"
 }
 
-func (customMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime) (domain.Recommendation, bool) {
+func (customMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq orchestrator.FactorQuery) (domain.Recommendation, bool) {
 	conviction := 50
 
 	if quote.Last > quote.Open {
