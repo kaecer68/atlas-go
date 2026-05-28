@@ -375,6 +375,16 @@ func (ie *InferenceEngine) handleMapGetParameter(cfg *ParametersConfig, name str
 		}
 		return nil
 	}
+	// Orchestrator.SectorRotationBaseAllocations
+	if strings.HasPrefix(name, "orchestrator_sector_rotation_base_allocations_") {
+		key := strings.TrimPrefix(name, "orchestrator_sector_rotation_base_allocations_")
+		if cfg.Orchestrator.SectorRotationBaseAllocations.Value != nil {
+			if v, ok := cfg.Orchestrator.SectorRotationBaseAllocations.Value[key]; ok {
+				return &v
+			}
+		}
+		return nil
+	}
 	return nil
 }
 
@@ -698,6 +708,15 @@ func (ie *InferenceEngine) handleMapSetParameter(cfg *ParametersConfig, name str
 			cfg.Drawdown.SectorConstraintsSectorRotation.Value = make(map[string]float64)
 		}
 		cfg.Drawdown.SectorConstraintsSectorRotation.Value[key] = value
+		return true
+	}
+	// Orchestrator.SectorRotationBaseAllocations
+	if strings.HasPrefix(name, "orchestrator_sector_rotation_base_allocations_") {
+		key := strings.TrimPrefix(name, "orchestrator_sector_rotation_base_allocations_")
+		if cfg.Orchestrator.SectorRotationBaseAllocations.Value == nil {
+			cfg.Orchestrator.SectorRotationBaseAllocations.Value = make(map[string]float64)
+		}
+		cfg.Orchestrator.SectorRotationBaseAllocations.Value[key] = value
 		return true
 	}
 	return false

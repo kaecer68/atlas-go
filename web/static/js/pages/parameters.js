@@ -234,7 +234,7 @@ export function renderParametersPage(params, categoriesResp, auditLog, metadata)
   for (const cat of cats) {
     html += `<div class="panel"><h3>${escapeHtml(cat.name)}</h3>
       <table class="params-table"><thead><tr>
-        <th style="width:33%">參數</th><th style="width:33%">值</th><th style="width:12%">來源</th><th style="width:8%">進化</th><th style="width:10%">校準</th><th style="width:4%"></th>
+        <th style="width:40%">參數</th><th style="width:22%">值</th><th style="width:12%">來源</th><th style="width:10%">進化</th><th style="width:10%">校準</th><th style="width:6%"></th>
       </tr></thead><tbody>`;
     let hasKeys = false;
     const keys = catKeys[cat.id] || [];
@@ -253,7 +253,7 @@ export function renderParametersPage(params, categoriesResp, auditLog, metadata)
 
   if (uncategorized.size > 0) {
     html += `<div class="panel"><h3>其他參數</h3><table class="params-table"><thead><tr>
-      <th style="width:33%">參數</th><th style="width:33%">值</th><th style="width:12%">來源</th><th style="width:8%">進化</th><th style="width:10%">校準</th><th style="width:4%"></th>
+      <th style="width:40%">參數</th><th style="width:22%">值</th><th style="width:12%">來源</th><th style="width:10%">進化</th><th style="width:10%">校準</th><th style="width:6%"></th>
     </tr></thead><tbody>`;
     for (const key of uncategorized) {
       const meta = (metadata && metadata[key]) ? metadata[key] : {};

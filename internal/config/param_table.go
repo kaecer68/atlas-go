@@ -904,6 +904,11 @@ var mapParamPrefixes = []mapParamPrefix{
 	}, setMap: func(cfg *ParametersConfig, m map[string]float64) {
 		cfg.Drawdown.SectorConstraintsSectorRotation.Value = m
 	}},
+	{prefix: "orchestrator_sector_rotation_base_allocations_", getMap: func(cfg *ParametersConfig) map[string]float64 {
+		return cfg.Orchestrator.SectorRotationBaseAllocations.Value
+	}, setMap: func(cfg *ParametersConfig, m map[string]float64) {
+		cfg.Orchestrator.SectorRotationBaseAllocations.Value = m
+	}},
 }
 
 // mapParamPrefix describes a dot-notation map parameter prefix and its accessors.
