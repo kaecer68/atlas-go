@@ -562,6 +562,155 @@ func calibrateDarwinian(ie *config.InferenceEngine, n int, cfg *config.Parameter
 				})
 			}
 		}
+
+		// Bottom quartile multiplier: how much worse are bottom vs median?
+		botSharpe := agentSharpes[int(float64(len(agentSharpes))*0.25)]
+		if midSharpe > 0 {
+			observedBotRatio := botSharpe / midSharpe
+			botMult := math.Max(0.85, math.Min(0.98, observedBotRatio))
+			beforeBot := cfg.Darwinian.BottomQuartileMultiplier.Value
+			if math.Abs(botMult-beforeBot) > 0.01 {
+				_ = ie.SetParameter("darwinian_bottom_quartile_multiplier", botMult)
+				res.Parameters = append(res.Parameters, CalibratedParameter{
+					Path: "darwinian.bottom_quartile_multiplier", Before: beforeBot, After: botMult,
+					Method: "sharpe_ratio_based", Confidence: 0.80, SampleSize: len(agentSharpes),
+				})
+			}
+		}
+
+		// EMA alpha: from return persistence (higher autocorrelation → lower alpha)
+		optimalAlpha := 0.3
+		if avgLag1Corr > 0.2 {
+			optimalAlpha = 0.2
+		} else if avgLag1Corr < 0.05 {
+			optimalAlpha = 0.4
+		}
+		beforeAlpha := cfg.Darwinian.EMAAlpha.Value
+		if math.Abs(optimalAlpha-beforeAlpha) > 0.01 {
+			_ = ie.SetParameter("darwinian_ema_alpha", optimalAlpha)
+			res.Parameters = append(res.Parameters, CalibratedParameter{
+				Path: "darwinian.ema_alpha", Before: beforeAlpha, After: optimalAlpha,
+				Method: "autocorrelation_based", Confidence: 0.65, SampleSize: count,
+			})
+		}
+
+		// Volatility penalty multiplier: high-vol agents vs low-vol agents performance
+		if len(agentVols) >= 4 {
+			highVolIdx := int(float64(len(agentVols)) * 0.75)
+			highVolAgents := make(map[string]bool)
+			for aid, returns := range agentReturns {
+				if len(returns) >= 5 {
+					m := 0.0
+					for _, r := range returns {
+						m += r
+					}
+					m /= float64(len(returns))
+					v := 0.0
+					for _, r := range returns {
+						d := r - m
+						v += d * d
+					}
+					av := math.Sqrt(v/float64(len(returns)-1)) * math.Sqrt(252)
+					if av > agentVols[highVolIdx] {
+						highVolAgents[aid] = true
+					}
+				}
+			}
+			if len(highVolAgents) > 0 {
+				highVolSharpeSum := 0.0
+				highVolCount := 0
+				for aid := range highVolAgents {
+					returns := agentReturns[aid]
+					if len(returns) >= 5 {
+						m := 0.0
+						for _, r := range returns {
+							m += r
+						}
+						m /= float64(len(returns))
+						v := 0.0
+						for _, r := range returns {
+							d := r - m
+							v += d * d
+						}
+						sd := math.Sqrt(v / float64(len(returns)-1))
+						if sd > 0 {
+							highVolSharpeSum += (m / sd) * math.Sqrt(252)
+							highVolCount++
+						}
+					}
+				}
+				if highVolCount > 0 {
+					avgHighVolSharpe := highVolSharpeSum / float64(highVolCount)
+					avgAllSharpe := 0.0
+					for _, s := range agentSharpes {
+						avgAllSharpe += s
+					}
+					avgAllSharpe /= float64(len(agentSharpes))
+					if avgAllSharpe > 0 {
+						volPenalty := math.Max(0.7, math.Min(0.95, avgHighVolSharpe/avgAllSharpe))
+						beforeVolPen := cfg.Darwinian.VolatilityPenaltyMultiplier.Value
+						if math.Abs(volPenalty-beforeVolPen) > 0.02 {
+							_ = ie.SetParameter("darwinian_volatility_penalty_multiplier", volPenalty)
+							res.Parameters = append(res.Parameters, CalibratedParameter{
+								Path: "darwinian.volatility_penalty_multiplier", Before: beforeVolPen, After: volPenalty,
+								Method: "volatility_weighted_sharpe", Confidence: 0.70, SampleSize: highVolCount,
+							})
+						}
+					}
+				}
+			}
+		}
+
+		// Risk volatility threshold: top quartile of agent volatility (daily, not annualized)
+		// RollingVolatility in the code is daily std dev, so calibrate daily value
+		dailyRiskVol := agentVols[int(float64(len(agentVols))*0.75)] / math.Sqrt(252)
+		beforeRiskVol := cfg.Darwinian.RiskVolatilityThreshold.Value
+		if math.Abs(dailyRiskVol-beforeRiskVol) > 0.001 {
+			_ = ie.SetParameter("darwinian_risk_volatility_threshold", dailyRiskVol)
+			res.Parameters = append(res.Parameters, CalibratedParameter{
+				Path: "darwinian.risk_volatility_threshold", Before: beforeRiskVol, After: dailyRiskVol,
+				Method: "percentile_based", Confidence: 0.75, SampleSize: len(agentVols),
+			})
+		}
+
+		// Max performance bonus: from max observed Sharpe (cap at 30%)
+		maxSharpe := agentSharpes[len(agentSharpes)-1]
+		maxBonus := math.Min(0.30, maxSharpe*0.02)
+		beforeMaxBonus := cfg.Darwinian.MaxPerformanceBonusPct.Value
+		if math.Abs(maxBonus-beforeMaxBonus) > 0.01 {
+			_ = ie.SetParameter("darwinian_max_performance_bonus_pct", maxBonus)
+			res.Parameters = append(res.Parameters, CalibratedParameter{
+				Path: "darwinian.max_performance_bonus_pct", Before: beforeMaxBonus, After: maxBonus,
+				Method: "sharpe_capped", Confidence: 0.65, SampleSize: len(agentSharpes),
+			})
+		}
+
+		// Middle tier multipliers: from agent hit-rate distribution
+		if len(hitRates) >= 6 {
+			midHighHR := hitRates[int(float64(len(hitRates))*0.6)]
+			midLowHR := hitRates[int(float64(len(hitRates))*0.4)]
+			midBoost := 1.0 + (midHighHR-highHitRate)*0.1
+			midCut := 1.0 - (lowHitRate-midLowHR)*0.1
+			midBoost = math.Max(1.005, math.Min(1.03, midBoost))
+			midCut = math.Max(0.97, math.Min(0.995, midCut))
+
+			beforeMidBoost := cfg.Darwinian.MiddleTierBoostMultiplier.Value
+			if math.Abs(midBoost-beforeMidBoost) > 0.002 {
+				_ = ie.SetParameter("darwinian_middle_tier_boost_multiplier", midBoost)
+				res.Parameters = append(res.Parameters, CalibratedParameter{
+					Path: "darwinian.middle_tier_boost_multiplier", Before: beforeMidBoost, After: midBoost,
+					Method: "hit_rate_based", Confidence: 0.60, SampleSize: len(hitRates),
+				})
+			}
+			beforeMidCut := cfg.Darwinian.MiddleTierCutMultiplier.Value
+			if math.Abs(midCut-beforeMidCut) > 0.002 {
+				_ = ie.SetParameter("darwinian_middle_tier_cut_multiplier", midCut)
+				res.Parameters = append(res.Parameters, CalibratedParameter{
+					Path: "darwinian.middle_tier_cut_multiplier", Before: beforeMidCut, After: midCut,
+					Method: "hit_rate_based", Confidence: 0.60, SampleSize: len(hitRates),
+				})
+			}
+		}
 	}
 
 	return res
