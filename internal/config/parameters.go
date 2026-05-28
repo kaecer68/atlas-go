@@ -685,24 +685,24 @@ type SectorExecutorParameters struct {
 // hard-coded constants instead (see internal/orchestrator/plugin_sector.go).
 type FactorConvictionParams struct {
 	// --- Momentum factor ---
-	MomentumHighThreshold  ParameterMetadata[float64] `json:"momentum_high_threshold"`
-	MomentumHighDelta      ParameterMetadata[int]     `json:"momentum_high_delta"`
-	MomentumModThreshold   ParameterMetadata[float64] `json:"momentum_mod_threshold"`
-	MomentumModDelta       ParameterMetadata[int]     `json:"momentum_mod_delta"`
-	MomentumWeakThreshold  ParameterMetadata[float64] `json:"momentum_weak_threshold"`
-	MomentumWeakDelta      ParameterMetadata[int]     `json:"momentum_weak_delta"`
+	MomentumHighThreshold ParameterMetadata[float64] `json:"momentum_high_threshold"`
+	MomentumHighDelta     ParameterMetadata[int]     `json:"momentum_high_delta"`
+	MomentumModThreshold  ParameterMetadata[float64] `json:"momentum_mod_threshold"`
+	MomentumModDelta      ParameterMetadata[int]     `json:"momentum_mod_delta"`
+	MomentumWeakThreshold ParameterMetadata[float64] `json:"momentum_weak_threshold"`
+	MomentumWeakDelta     ParameterMetadata[int]     `json:"momentum_weak_delta"`
 
 	// --- Value factor ---
-	ValueHighThreshold     ParameterMetadata[float64] `json:"value_high_threshold"`
-	ValueHighDelta         ParameterMetadata[int]     `json:"value_high_delta"`
-	ValueModThreshold      ParameterMetadata[float64] `json:"value_mod_threshold"`
-	ValueModDelta          ParameterMetadata[int]     `json:"value_mod_delta"`
-	ValueWeakThreshold     ParameterMetadata[float64] `json:"value_weak_threshold"`
-	ValueWeakDelta         ParameterMetadata[int]     `json:"value_weak_delta"`
+	ValueHighThreshold ParameterMetadata[float64] `json:"value_high_threshold"`
+	ValueHighDelta     ParameterMetadata[int]     `json:"value_high_delta"`
+	ValueModThreshold  ParameterMetadata[float64] `json:"value_mod_threshold"`
+	ValueModDelta      ParameterMetadata[int]     `json:"value_mod_delta"`
+	ValueWeakThreshold ParameterMetadata[float64] `json:"value_weak_threshold"`
+	ValueWeakDelta     ParameterMetadata[int]     `json:"value_weak_delta"`
 
 	// --- Quality factor ---
-	QualityThreshold       ParameterMetadata[float64] `json:"quality_threshold"`
-	QualityDelta           ParameterMetadata[int]     `json:"quality_delta"`
+	QualityThreshold ParameterMetadata[float64] `json:"quality_threshold"`
+	QualityDelta     ParameterMetadata[int]     `json:"quality_delta"`
 
 	// --- Liquidity factor ---
 	LiquidityHighThreshold ParameterMetadata[float64] `json:"liquidity_high_threshold"`

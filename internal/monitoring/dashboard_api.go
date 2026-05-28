@@ -559,6 +559,8 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	paramHandlers := apiparameters.NewHandlers(filepath.Join(a.workDir, "configs/parameters.json"))
 	paramHandlers.RegisterRoutes(mux)
 
+	mux.Handle("GET /api/config", configHandler())
+
 	// Dashboard management center handlers (data-channels, data-pipeline,
 	// drawdown, sim-trace, channel toggle, api-keys, etc.)
 	dashboardHandlers := apidashboard.NewHandlers(a.workDir, a.ledgerDir)
@@ -791,4 +793,12 @@ func (a *DashboardAPI) RegisterAllRoutes(mux *http.ServeMux, opts RouteOptions) 
 	if opts.IncludeSwagger {
 		a.RegisterSwaggerRoutes(mux)
 	}
+}
+
+func configHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cfg := config.Load()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(cfg)
+	})
 }
