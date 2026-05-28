@@ -46,19 +46,24 @@ type ConvictionCalibrationReport struct {
 	Timestamp        time.Time          `json:"timestamp"`
 }
 
-// CalibrateAll runs calibration for every executor that exposes StrategyMeta
-// and has sufficient historical data (>= minimumSamples).
+// CalibrateAll runs calibration for every executor that implements
+// StrategyProvider and has sufficient historical data (>= minimumSamples).
 // Returns reports for executors that were successfully calibrated.
-func (e *CalibrationEngine) CalibrateAll(meta []StrategyMeta, provider CalibrationDataProvider, minimumSamples int) ([]ConvictionCalibrationReport, error) {
+func (e *CalibrationEngine) CalibrateAll(providers []StrategyProvider, dataProvider CalibrationDataProvider, minimumSamples int) ([]ConvictionCalibrationReport, error) {
 	if minimumSamples <= 0 {
 		minimumSamples = 10
 	}
-	reports := make([]ConvictionCalibrationReport, 0, len(meta))
-	for _, m := range meta {
+	// Collect StrategyMeta from each provider via the StrategyProvider interface.
+	metas := make([]StrategyMeta, 0, len(providers))
+	for _, p := range providers {
+		metas = append(metas, p.StrategyMeta())
+	}
+	reports := make([]ConvictionCalibrationReport, 0, len(metas))
+	for _, m := range metas {
 		if len(m.Parameters) == 0 {
 			continue
 		}
-		recs, err := provider.Recommendations(m.Skill)
+		recs, err := dataProvider.Recommendations(m.Skill)
 		if err != nil {
 			return reports, fmt.Errorf("load %s: %w", m.Skill, err)
 		}

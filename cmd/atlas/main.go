@@ -1322,19 +1322,18 @@ func run(args []string, deps appDeps) error {
 				Interval: 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					metas := []orchestrator.StrategyMeta{
-						orchestrator.SemiconductorExecutor{}.StrategyMeta(),
-						orchestrator.AISupplyChainExecutor{}.StrategyMeta(),
-						orchestrator.LEOSatelliteExecutor{}.StrategyMeta(),
-						orchestrator.ETFRotationExecutor{}.StrategyMeta(),
-						orchestrator.FinancialsExecutor{}.StrategyMeta(),
-						orchestrator.ShippingExecutor{}.StrategyMeta(),
-						orchestrator.ValueYieldExecutor{}.StrategyMeta(),
-						orchestrator.EarningsQualityExecutor{}.StrategyMeta(),
-						orchestrator.TechnicalBreakoutExecutor{}.StrategyMeta(),
-						orchestrator.GrowthMomentumExecutor{}.StrategyMeta(),
-					}
-					return orchestrator.RunConvictionCalibration(cfg.WorkDir, metas...)
+					return orchestrator.RunConvictionCalibration(cfg.WorkDir,
+						orchestrator.SemiconductorExecutor{},
+						orchestrator.AISupplyChainExecutor{},
+						orchestrator.LEOSatelliteExecutor{},
+						orchestrator.ETFRotationExecutor{},
+						orchestrator.FinancialsExecutor{},
+						orchestrator.ShippingExecutor{},
+						orchestrator.ValueYieldExecutor{},
+						orchestrator.EarningsQualityExecutor{},
+						orchestrator.TechnicalBreakoutExecutor{},
+						orchestrator.GrowthMomentumExecutor{},
+					)
 				},
 			})
 			log.Printf("[Gateway] registered conviction_calibrate background task (24h interval)")
