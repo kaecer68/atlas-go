@@ -67,7 +67,7 @@ func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
 		return fmt.Errorf("run experiment: %w", runErr)
 	}
 
-	expPath := findLatestExperiment(filepath.Join(cfg.Config.WorkDir, "data", "state", "experiments"))
+	expPath := FindLatestExperiment(filepath.Join(cfg.Config.WorkDir, "data", "state", "experiments"))
 	if expPath == "" {
 		return fmt.Errorf("experiment result not found for %s", result.Experiment.ID)
 	}
@@ -99,10 +99,10 @@ func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
 			cfg.Monitor.Alert("info", "experiment",
 				fmt.Sprintf("strategy promoted: agent=%s (%s)", candidate.Agent.ID, candidate.Agent.Skill),
 				map[string]any{
-					"agent":    candidate.Agent.ID,
-					"skill":    candidate.Agent.Skill,
-					"status":   string(status),
-					"baseline": judged.Experiment.BaselineValue,
+					"agent":     candidate.Agent.ID,
+					"skill":     candidate.Agent.Skill,
+					"status":    string(status),
+					"baseline":  judged.Experiment.BaselineValue,
 					"candidate": judged.Experiment.CandidateValue,
 				})
 		}
@@ -111,40 +111,13 @@ func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
 			cfg.Monitor.Alert("info", "experiment",
 				fmt.Sprintf("experiment rejected: agent=%s (%s)", candidate.Agent.ID, candidate.Agent.Skill),
 				map[string]any{
-					"agent":    candidate.Agent.ID,
-					"skill":    candidate.Agent.Skill,
-					"status":   string(status),
-					"baseline": judged.Experiment.BaselineValue,
+					"agent":     candidate.Agent.ID,
+					"skill":     candidate.Agent.Skill,
+					"status":    string(status),
+					"baseline":  judged.Experiment.BaselineValue,
 					"candidate": judged.Experiment.CandidateValue,
 				})
 		}
 	}
 	return nil
-}
-
-func findLatestExperiment(dir string) string {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return ""
-	}
-	var newest string
-	var newestTime time.Time
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if filepath.Ext(name) != ".json" || name == "test-experiment.json" {
-			continue
-		}
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-		if info.ModTime().After(newestTime) {
-			newestTime = info.ModTime()
-			newest = filepath.Join(dir, name)
-		}
-	}
-	return newest
 }
