@@ -194,6 +194,7 @@ gh pr create --title "feat(scope): description" \
 - [ ] 是否運行了 `gofmt` 和 `staticcheck`？
 - [ ] commit message 是否符合 `type(scope): description` 格式？
 - [ ] 是否 push 到 `origin/<branch>` 而非 `origin/main`？
+- [ ] commit 前確認 staging area：`git diff --cached --stat`（pre-commit hook 可能變更 staged files）
 
 ### Solo 開發者 AI Code Review 流程
 
