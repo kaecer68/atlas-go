@@ -402,7 +402,12 @@ func (sp *ShockPropagation) PropagateShock(sourceIndustry string, shockMagnitude
 		correlation := sp.getNarrativeAdjustedCorrelation(sourceIndustry, industry)
 		decay := sp.downstreamDecay
 		if decay == 0 {
-			decay = 0.8
+			if cfg := config.GetParametersConfig(); cfg != nil {
+				decay = cfg.Industry.LinkageParams.Value.DownstreamDecayFactor
+			}
+			if decay == 0 {
+				decay = 0.80
+			}
 		}
 		impacts[industry] = shockMagnitude * correlation * decay
 	}
@@ -413,7 +418,12 @@ func (sp *ShockPropagation) PropagateShock(sourceIndustry string, shockMagnitude
 		correlation := sp.getNarrativeAdjustedCorrelation(sourceIndustry, industry)
 		decay := sp.upstreamDecay
 		if decay == 0 {
-			decay = 0.6
+			if cfg := config.GetParametersConfig(); cfg != nil {
+				decay = cfg.Industry.LinkageParams.Value.UpstreamDecayFactor
+			}
+			if decay == 0 {
+				decay = 0.60
+			}
 		}
 		impacts[industry] = shockMagnitude * correlation * decay
 	}
