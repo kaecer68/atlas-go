@@ -1,15 +1,11 @@
 package monitoring
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +21,7 @@ import (
 	apibacktest "github.com/kaecer68/atlas-go/internal/monitoring/api/backtest"
 	apicircuitbreaker "github.com/kaecer68/atlas-go/internal/monitoring/api/circuitbreaker"
 	apicontrol "github.com/kaecer68/atlas-go/internal/monitoring/api/control"
+	apidashboard "github.com/kaecer68/atlas-go/internal/monitoring/api/dashboard"
 	apidecision "github.com/kaecer68/atlas-go/internal/monitoring/api/decision"
 	apieventlogic "github.com/kaecer68/atlas-go/internal/monitoring/api/eventlogic"
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
@@ -38,14 +35,12 @@ import (
 	apiperformance "github.com/kaecer68/atlas-go/internal/monitoring/api/performance"
 	apipipeline "github.com/kaecer68/atlas-go/internal/monitoring/api/pipeline"
 	apirisk "github.com/kaecer68/atlas-go/internal/monitoring/api/risk"
-	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	apiswarm "github.com/kaecer68/atlas-go/internal/monitoring/api/swarm"
 	apisystem "github.com/kaecer68/atlas-go/internal/monitoring/api/system"
 	apitaskexec "github.com/kaecer68/atlas-go/internal/monitoring/api/taskexec"
 	apitax "github.com/kaecer68/atlas-go/internal/monitoring/api/tax"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
-	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
@@ -88,51 +83,7 @@ type DashboardAPI struct {
 	eventLogicHandlers *apieventlogic.Handlers
 }
 
-// channelState tracks enable/disable status for each channel.
-type channelState struct {
-	Enabled   bool      `json:"enabled"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-var (
-	channelStates   = make(map[string]channelState)
-	channelStatesMu sync.RWMutex
-)
-
-func loadChannelStates(workDir string) {
-	channelStatesMu.Lock()
-	defer channelStatesMu.Unlock()
-
-	path := filepath.Join(workDir, "data/state/channel_states.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return // file may not exist yet
-	}
-	_ = json.Unmarshal(data, &channelStates)
-}
-
-func saveChannelStates(workDir string) error {
-	channelStatesMu.RLock()
-	defer channelStatesMu.RUnlock()
-
-	path := filepath.Join(workDir, "data/state/channel_states.json")
-	data, err := json.MarshalIndent(channelStates, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o644)
-}
-
-func setChannelEnabled(workDir, channelID string, enabled bool) error {
-	channelStatesMu.Lock()
-	channelStates[channelID] = channelState{Enabled: enabled, UpdatedAt: time.Now()}
-	channelStatesMu.Unlock()
-	return saveChannelStates(workDir)
-}
-
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
-	loadChannelStates(workDir)
-
 	cfg := config.Load()
 	var providers []marketdata.MacroDataProvider
 
@@ -197,8 +148,6 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 // Unlike the legacy constructor, this skips direct provider creation and uses
 // the Gateway via DataFetcher from the start, complying with the Constitution.
 func NewDashboardAPIWithGateway(workDir, ledgerDir string, metricsCollector *MetricsCollector, fetcher DataFetcher) *DashboardAPI {
-	loadChannelStates(workDir)
-
 	if metricsCollector == nil {
 		metricsCollector = NewMetricsCollector()
 	}
@@ -592,6 +541,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	swarmHandlers.RegisterRoutes(mux)
 
 	riskHandlers := apirisk.NewHandlers(a.ledgerDir)
+	riskHandlers.WithRiskGate(a.riskGate)
 	riskHandlers.RegisterRoutes(mux)
 
 	var dividendProvider apitax.DividendProvider
@@ -609,158 +559,26 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	paramHandlers := apiparameters.NewHandlers(filepath.Join(a.workDir, "configs/parameters.json"))
 	paramHandlers.RegisterRoutes(mux)
 
-	// Data channels endpoint — uses DataChannelService for full channel metadata.
-	mux.HandleFunc("/api/dashboard/data-channels", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-			return
-		}
-		fugleKey := config.GetSecret("FUGLE_API_KEY")
-		if fugleKey == "" {
-			fugleKey = config.GetSecret("ATLAS_FUGLE_API_KEY")
-		}
-		fubonKey := config.GetSecret("FUBON_API_KEY")
-		if fubonKey == "" {
-			fubonKey = config.GetSecret("ATLAS_FUBON_API_KEY")
-		}
-		finmindKey := config.GetSecret("FINMIND_API_KEY")
-		if finmindKey == "" {
-			finmindKey = config.GetSecret("ATLAS_FINMIND_API_KEY")
-		}
-		tejKey := config.GetSecret("TEJ_API_KEY")
-		channelSvc := service.NewDataChannelService(
-			a.workDir,
-			a.pool,
-			a.macroIngestor,
-			a.geoProvider,
-			a.taiwanGeoProvider,
-			a.janusEngine,
-			fugleKey,
-			fubonKey,
-			finmindKey,
-			tejKey,
-		)
-		channels, err := channelSvc.GetAllChannelStatuses(r.Context())
-		if err != nil {
-			shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load data channels: %v", err))
-			return
-		}
-		alerts, err := channelSvc.GetAlerts(r.Context())
-		if err != nil {
-			alerts = []service.ChannelAlert{}
-		}
-		shared.WriteJSON(w, http.StatusOK, map[string]any{
-			"channels":  channels,
-			"alerts":    alerts,
-			"generated": time.Now().Format(time.RFC3339),
-		})
-	})
-
-	// Data pipeline endpoint — tracks producer/consumer freshness for all data sources.
-	mux.HandleFunc("/api/dashboard/data-pipeline", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-			return
-		}
-		pipelineSvc := service.NewDataPipelineService(a.workDir, a.ledgerDir)
-		sources, err := pipelineSvc.GetPipelineStatus()
-		if err != nil {
-			shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load data pipeline: %v", err))
-			return
-		}
-		shared.WriteJSON(w, http.StatusOK, map[string]any{
-			"sources":   sources,
-			"generated": time.Now().Format(time.RFC3339),
-		})
-	})
-
-	mux.HandleFunc("/api/dashboard/risk-calibration", a.handleRiskCalibration)
-	mux.HandleFunc("/api/dashboard/drawdown", a.handleDrawdown)
-	mux.HandleFunc("/api/traces/sim-latest", a.handleSimLatest)
-
-	// Management center endpoints — channel control and API key management.
-	mux.HandleFunc("/api/dashboard/channels/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-			return
-		}
-		path := strings.TrimPrefix(r.URL.Path, "/api/dashboard/channels/")
-		parts := strings.Split(path, "/")
-		if len(parts) < 2 {
-			shared.WriteJSONError(w, http.StatusBadRequest, "invalid path")
-			return
-		}
-		channelID := parts[0]
-		action := parts[1]
-
-		switch action {
-		case "trigger":
-			shared.WriteJSON(w, http.StatusOK, map[string]any{
-				"channel_id": channelID,
-				"action":     "trigger",
-				"status":     "ok",
-				"note":       "next poll will reflect fresh status",
-			})
-		case "toggle":
-			var req struct {
-				Enabled bool `json:"enabled"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				shared.WriteJSONError(w, http.StatusBadRequest, "invalid body")
-				return
-			}
-			if err := setChannelEnabled(a.workDir, channelID, req.Enabled); err != nil {
-				shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("save state: %v", err))
-				return
-			}
-			shared.WriteJSON(w, http.StatusOK, map[string]any{
-				"channel_id": channelID,
-				"enabled":    req.Enabled,
-				"status":     "ok",
-			})
-		default:
-			shared.WriteJSONError(w, http.StatusBadRequest, "unknown action")
-		}
-	})
-
-	mux.HandleFunc("/api/dashboard/api-keys/update", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-			return
-		}
-		var req struct {
-			Provider string `json:"provider"`
-			APIKey   string `json:"api_key"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			shared.WriteJSONError(w, http.StatusBadRequest, "invalid body")
-			return
-		}
-		if req.Provider == "" || req.APIKey == "" {
-			shared.WriteJSONError(w, http.StatusBadRequest, "provider and api_key required")
-			return
-		}
-		allowedProviders := map[string]bool{
-			"finmind": true,
-			"fugle":   true,
-			"tej":     true,
-			"fubon":   true,
-		}
-		if !allowedProviders[strings.ToLower(req.Provider)] {
-			shared.WriteJSONError(w, http.StatusBadRequest, "invalid provider")
-			return
-		}
-		if len(req.APIKey) < 8 || len(req.APIKey) > 512 {
-			shared.WriteJSONError(w, http.StatusBadRequest, "api_key length invalid")
-			return
-		}
-		key := strings.ToUpper(req.Provider) + "_API_KEY"
-		_ = os.Setenv(key, req.APIKey)
-		shared.WriteJSON(w, http.StatusOK, map[string]any{
-			"provider": req.Provider,
-			"status":   "ok",
-		})
-	})
+	// Dashboard management center handlers (data-channels, data-pipeline,
+	// drawdown, sim-trace, channel toggle, api-keys, etc.)
+	dashboardHandlers := apidashboard.NewHandlers(a.workDir, a.ledgerDir)
+	if a.pool != nil {
+		dashboardHandlers.Pool = a.pool
+	}
+	if a.macroIngestor != nil {
+		dashboardHandlers.MacroIngestor = a.macroIngestor
+	}
+	if a.geoProvider != nil {
+		dashboardHandlers.GeoProvider = a.geoProvider
+	}
+	if a.taiwanGeoProvider != nil {
+		dashboardHandlers.TaiwanGeoProvider = a.taiwanGeoProvider
+	}
+	if a.janusEngine != nil {
+		dashboardHandlers.JanusEngine = a.janusEngine
+	}
+	dashboardHandlers.DrawdownProvider = a // DashboardAPI satisfies DrawdownProvider
+	dashboardHandlers.RegisterRoutes(mux)
 
 	a.RegisterPerformanceRoutes(mux)
 	a.RegisterCircuitBreakerRoutes(mux)
@@ -931,111 +749,6 @@ func (a *DashboardAPI) GetLatestDrawdown() *portfolio.DrawdownResult {
 	a.drawdownMu.RLock()
 	defer a.drawdownMu.RUnlock()
 	return a.latestDrawdown
-}
-
-func (a *DashboardAPI) handleDrawdown(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	result := a.GetLatestDrawdown()
-	if result == nil {
-		shared.WriteJSON(w, http.StatusOK, map[string]any{
-			"status":    "not_available",
-			"message":   "no drawdown simulation available yet",
-			"generated": time.Now().Format(time.RFC3339),
-		})
-		return
-	}
-	shared.WriteJSON(w, http.StatusOK, map[string]any{
-		"max_drawdown": result.MaxDrawdown,
-		"var_95":       result.VaR95,
-		"worst_path":   result.WorstPath,
-		"generated":    time.Now().Format(time.RFC3339),
-	})
-}
-
-// handleRiskCalibration serves the latest risk gate calibration report.
-func (a *DashboardAPI) handleRiskCalibration(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	if a.riskGate == nil {
-		shared.WriteJSONError(w, http.StatusNotFound, "risk gate not initialized")
-		return
-	}
-	report := a.riskGate.LastCalibrationReport()
-	if report == nil {
-		shared.WriteJSON(w, http.StatusOK, map[string]any{
-			"status":    "not_available",
-			"message":   "no calibration report available yet",
-			"generated": time.Now().Format(time.RFC3339),
-		})
-		return
-	}
-	shared.WriteJSON(w, http.StatusOK, map[string]any{
-		"report":    report,
-		"generated": time.Now().Format(time.RFC3339),
-	})
-}
-
-// handleSimLatest serves the latest simulation trace records from .omo/traces/sim-*.jsonl.
-func (a *DashboardAPI) handleSimLatest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	pattern := filepath.Join(a.workDir, ".omo", "traces", "sim-*.jsonl")
-	matches, err := filepath.Glob(pattern)
-	if err != nil {
-		logging.Error("dashboardapi", "sim_trace_glob_failed",
-			"pattern", pattern, "err", err)
-		shared.WriteJSONError(w, http.StatusInternalServerError, "failed to list trace files")
-		return
-	}
-
-	if len(matches) == 0 {
-		shared.WriteJSONError(w, http.StatusNotFound, "no simulation trace files found")
-		return
-	}
-
-	// Sort by filename descending (YYYYMMDD in sim-YYYYMMDD.jsonl).
-	sort.Slice(matches, func(i, j int) bool {
-		return matches[i] > matches[j]
-	})
-
-	latestFile := matches[0]
-	f, err := os.Open(latestFile)
-	if err != nil {
-		logging.Error("dashboardapi", "sim_trace_open_failed",
-			"file", latestFile, "err", err)
-		shared.WriteJSONError(w, http.StatusInternalServerError, "failed to open trace file")
-		return
-	}
-	defer func() { _ = f.Close() }()
-
-	var records []orchestrator.SimTraceRecord
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		var record orchestrator.SimTraceRecord
-		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
-			logging.Error("dashboardapi", "sim_trace_parse_failed",
-				"file", latestFile, "err", err)
-			shared.WriteJSONError(w, http.StatusInternalServerError, "failed to parse trace record")
-			return
-		}
-		records = append(records, record)
-	}
-	if err := scanner.Err(); err != nil {
-		logging.Error("dashboardapi", "sim_trace_scan_failed",
-			"file", latestFile, "err", err)
-		shared.WriteJSONError(w, http.StatusInternalServerError, "failed to read trace file")
-		return
-	}
-
-	shared.WriteJSON(w, http.StatusOK, records)
 }
 
 func (a *DashboardAPI) GetIndustryService() *service.IndustryService {

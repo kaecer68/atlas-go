@@ -44,7 +44,7 @@
 
 ---
 
-## E · Evolving（演進中）— 12 packages
+## E · Evolving（演進中）— 13 packages
 
 核心模組，由 stable 模組間接使用，API 可能仍在調整。
 
@@ -62,6 +62,7 @@
 | `spawning` | Agent 生成管理 — `SpawningManager`、`PerformSpawningCycle()` | `SpawningManager` | 核心模組，indirect import |
 | `strategy` | 策略選擇器與登錄 | `Selector` | 由 orchestrator 使用 |
 | `tax` | 台灣稅務計算 — `TaiwanTaxCalculator` | `TaiwanTaxCalculator` | 由 sim 使用 |
+| `monitoring/api/dashboard` | Dashboard management center handlers — 資料通道、管線、通道控制、API 金鑰管理 | `Handlers` | 由 monitoring 使用 |
 
 ---
 
