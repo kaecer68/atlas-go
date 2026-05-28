@@ -214,6 +214,26 @@ func buildAPIKeyChannel(id, label, primaryKey, fallbackKey string) DataChannelIn
 
 // Health check functions
 
+// isWeekendGap returns true if the data age is primarily explained by weekend,
+// meaning the last trading day was Friday and markets are closed Sat+Sun.
+// For US macro data, the gap from Friday close to Monday open is ~52 hours.
+func isWeekendGap(dataTime, now time.Time, maxWeekendHours int) bool {
+	if maxWeekendHours <= 0 {
+		maxWeekendHours = 72
+	}
+	age := now.Sub(dataTime)
+	if age <= 24*time.Hour {
+		return false
+	}
+	dataWeekday := dataTime.Weekday()
+	nowWeekday := now.Weekday()
+	if (dataWeekday == time.Friday || dataWeekday == time.Saturday) &&
+		(nowWeekday == time.Monday || nowWeekday == time.Tuesday || nowWeekday == time.Sunday) {
+		return age < time.Duration(maxWeekendHours)*time.Hour
+	}
+	return false
+}
+
 func checkMacroHealth(path string, now time.Time) (string, string) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -258,6 +278,9 @@ func checkMacroHealth(path string, now time.Time) (string, string) {
 		return "ok", latest.Format("2006-01-02 15:04:05")
 	}
 	if age < 7*24*time.Hour {
+		if isWeekendGap(latest, now, 72) {
+			return "expected_delay", latest.Format("2006-01-02 15:04:05")
+		}
 		return "warn", latest.Format("2006-01-02 15:04:05")
 	}
 	return "error", latest.Format("2006-01-02 15:04:05")
@@ -540,7 +563,7 @@ func checkJPYHealth(path string, now time.Time) (string, string) {
 		logging.Warn("system_service", "parse_jpy_health", logging.Err(err))
 	}
 	if snap.JPY.Timestamp == 0 {
-		return "error", "無 JPY 資料 — Yahoo Finance JPY=X 尚未成功獲取，或 Frankfurter API 未提供 JPY 匯率"
+		return "error", "無 JPY 資料 — Frankfurter API (USD/JPY) 尚未成功獲取"
 	}
 	t := time.Unix(snap.JPY.Timestamp, 0)
 	age := now.Sub(t)
@@ -548,9 +571,12 @@ func checkJPYHealth(path string, now time.Time) (string, string) {
 		return "ok", t.Format("2006-01-02 15:04:05")
 	}
 	if age < 7*24*time.Hour {
+		if isWeekendGap(t, now, 72) {
+			return "expected_delay", fmt.Sprintf("%s（%d 天前，週末非交易日）", t.Format("2006-01-02 15:04:05"), int(age.Hours()/24))
+		}
 		return "warn", fmt.Sprintf("%s（%d 天前）", t.Format("2006-01-02 15:04:05"), int(age.Hours()/24))
 	}
-	return "error", fmt.Sprintf("%s（%d 天前，已超過 7 天閾值）— Yahoo Finance API 連線失敗", t.Format("2006-01-02 15:04:05"), int(age.Hours()/24))
+	return "error", fmt.Sprintf("%s（%d 天前，已超過 7 天閾值）— Frankfurter API 連線失敗", t.Format("2006-01-02 15:04:05"), int(age.Hours()/24))
 }
 
 func checkJanusHealth(engine *janus.Engine, now time.Time) (string, string) {

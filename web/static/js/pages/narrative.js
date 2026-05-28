@@ -165,9 +165,9 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       const allPresent = validRows.length === rows.length;
       const channelStatus = hasData
         ? (isFresh && allPresent ? {color:'var(--up)',text:'🟢 資料通道正常'} 
-           : isFresh ? {color:'var(--warn)',text:'🟡 部分指標延遲'} 
-           : allPresent ? {color:'var(--warn)',text:'🟡 資料略有延遲'}
-           : {color:'var(--warn)',text:'🟡 部分資料延遲'})
+           : isFresh ? {color:'var(--warn)',text:'🟡 部分指標待更新'} 
+           : allPresent ? {color:'var(--warn)',text:'🟡 資料待更新'}
+           : {color:'var(--warn)',text:'🟡 部分資料待更新'})
         : {color:'var(--down)',text:'🔴 資料通道異常'};
       let html = `<div style="margin-bottom:8px;display:flex;align-items:center;gap:10px">
         <span style="font-size:12px;color:${channelStatus.color};font-weight:700">${channelStatus.text}</span>
@@ -187,7 +187,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       const capitalIsFresh = capitalLatestTs && (Date.now()/1000 - capitalLatestTs) < 86400;
       const capitalAllPresent = capitalValidRows.length === capitalRows.length;
       const capitalStatus = capitalHasData
-        ? (capitalIsFresh && capitalAllPresent ? {color:'var(--up)',text:'🟢 正常'} : {color:'var(--warn)',text:'🟡 延遲'})
+        ? (capitalIsFresh && capitalAllPresent ? {color:'var(--up)',text:'🟢 正常'} : {color:'var(--warn)',text:'🟡 待更新'})
         : {color:'var(--down)',text:'🔴 缺失'};
       const capitalTimeStr = capitalLatestTs ? new Date(capitalLatestTs * 1000).toLocaleString('zh-TW') : '-';
       if (capitalRows.some(([_, pt]) => pt && typeof pt.value === 'number')) {
@@ -380,7 +380,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       const changeClass = (retailSentiment.margin_change_pct || 0) >= 0 ? 'up' : 'down';
       const dataStatusBadge = hasValidData
         ? '<span class="badge ok">🟢 資料正常</span>'
-        : '<span class="badge">🟡 資料延遲</span>';
+        : '<span class="badge">🟡 資料待更新</span>';
 
       const sentimentScore = retailSentiment.sentiment_score || 0;
       const marginChange = retailSentiment.margin_change_pct || 0;

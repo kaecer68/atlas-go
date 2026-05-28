@@ -28,8 +28,9 @@ type CalibratorChange struct {
 }
 
 // ParameterCalibrator defines the interface for any parameter-domain calibrator.
-// Implementations provide parameter names + an evaluation function that scores
-// a given parameter configuration against historical data.
+// Implementations provide parameter names and may optionally supply tight search
+// bounds via BoundedCalibrator to prevent the Bayesian optimizer from exploring
+// regions outside the evaluator's sensitive range.
 //
 // Usage mirrors RiskGate.SelfCalibrate and FactorWeightCalibrator.CalibrateWeights:
 //
@@ -37,6 +38,15 @@ type CalibratorChange struct {
 //	result, err := CalibrateParameters(ctx, calibrator, evaluator)
 type ParameterCalibrator interface {
 	ParamNames() []string
+}
+
+// BoundedCalibrator is an optional extension of ParameterCalibrator that
+// supplies per-parameter search bounds to the Bayesian optimizer.
+// CalibrateParameters checks for this interface via type assertion and
+// uses the supplied bounds instead of auto-derived [val*0.3, val*3.0].
+type BoundedCalibrator interface {
+	ParameterCalibrator
+	ParamBounds() map[string][2]float64
 }
 
 // CalibrateConfig controls the Bayesian optimization behavior.
@@ -77,9 +87,48 @@ func CalibrateParameters(ctx context.Context, calibrator ParameterCalibrator, ev
 	optCfg.InitialPoints = cfg.InitialPoints
 	optCfg.Iterations = cfg.Iterations
 
-	result, err := ie.OptimizeBayesian(paramNames, evaluator, optCfg)
-	if err != nil {
-		return nil, fmt.Errorf("calibrate: optimize: %w", err)
+	var result OptimizeResult
+	if bc, ok := calibrator.(BoundedCalibrator); ok {
+		boundsMap := bc.ParamBounds()
+		bounds := make([][2]float64, len(paramNames))
+		for i, name := range paramNames {
+			if b, hasBounds := boundsMap[name]; hasBounds {
+				bounds[i] = b
+			} else {
+				val, _ := ie.GetParameter(name)
+				if val == 0 {
+					bounds[i] = [2]float64{0.01, 1.0}
+				} else {
+					bounds[i] = [2]float64{val * 0.3, val * 3.0}
+				}
+			}
+		}
+		wrapped := func(x []float64) (float64, error) {
+			testCfg := ie.cloneParams()
+			for i, name := range paramNames {
+				if err := ie.setParameterOnConfig(testCfg, name, x[i]); err != nil {
+					return 0, err
+				}
+			}
+			return evaluator(testCfg)
+		}
+		opt := NewBayesianOptimizer(bounds, wrapped, optCfg)
+		optResult, optErr := opt.Optimize()
+		if optErr != nil {
+			return nil, fmt.Errorf("calibrate: optimize: %w", optErr)
+		}
+		optResult.ParamValues = make(map[string]float64)
+		for i, name := range paramNames {
+			if i < len(optResult.BestX) {
+				optResult.ParamValues[name] = optResult.BestX[i]
+			}
+		}
+		result = optResult
+	} else {
+		result, err = ie.OptimizeBayesian(paramNames, evaluator, optCfg)
+		if err != nil {
+			return nil, fmt.Errorf("calibrate: optimize: %w", err)
+		}
 	}
 
 	optScore := result.BestScore

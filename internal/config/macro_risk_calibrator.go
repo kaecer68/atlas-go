@@ -32,6 +32,22 @@ func (c *MacroRiskCalibrator) ParamNames() []string {
 	}
 }
 
+// ParamBounds returns tight search ranges matching the evaluator's sensitive region,
+// preventing the Bayesian optimizer from wasting evaluations on flat plateaus.
+func (c *MacroRiskCalibrator) ParamBounds() map[string][2]float64 {
+	return map[string][2]float64{
+		"engine_macro_risk_carry_trade_unwind_threshold": {130, 160},
+		"engine_macro_risk_vix_threshold":                {20, 40},
+		"engine_macro_risk_us10y_threshold":              {3.5, 5.5},
+		"engine_macro_risk_oil_shock_threshold_pct":      {6, 18},
+		"engine_macro_risk_gold_surge_threshold_pct":     {2, 10},
+		"engine_macro_risk_dxy_surge_threshold_pct":      {0.5, 3.0},
+		"engine_macro_risk_twd_stress_threshold_pct":     {1.0, 4.0},
+		"engine_macro_risk_outflow_prob_base":            {20, 60},
+		"engine_macro_risk_outflow_prob_max":             {60, 95},
+	}
+}
+
 // BuildEvaluator returns a scoring function for MacroRisk parameter calibration.
 // The evaluator computes a composite score from three categories:
 //

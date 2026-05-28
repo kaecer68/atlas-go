@@ -27,6 +27,19 @@ func (c *StructuralTrendCalibrator) ParamNames() []string {
 	}
 }
 
+func (c *StructuralTrendCalibrator) ParamBounds() map[string][2]float64 {
+	return map[string][2]float64{
+		"engine_structural_trend_min_trend_strength":            {0.4, 0.9},
+		"engine_structural_trend_min_confidence":                {0.5, 0.95},
+		"engine_structural_trend_min_hit_rate":                  {0.5, 0.9},
+		"engine_structural_trend_override_threshold":            {0.4, 0.85},
+		"engine_structural_trend_ai_revenue_growth_threshold":   {25, 75},
+		"engine_structural_trend_cowos_utilization_threshold":   {70, 98},
+		"engine_structural_trend_capex_growth_threshold":        {20, 60},
+		"engine_structural_trend_semiconductor_index_threshold": {0.0, 0.0},
+	}
+}
+
 // BuildEvaluator returns a scoring function for StructuralTrend parameter calibration.
 // The evaluator computes a composite score from three categories:
 //

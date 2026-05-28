@@ -93,7 +93,9 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	g.registry.Register("geopolitical", geoAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "geopolitical")
 
-	// --- JPY Yahoo (FrankfurterFXProvider for USD/JPY rate) ---
+	// --- JPY (Frankfurter API for USD/JPY rate) ---
+	// Despite the "jpy_yahoo" channel ID, this uses Frankfurter FX API (api.frankfurter.app),
+	// not Yahoo Finance. The channel name is historical.
 	jpyProvider := marketdata.NewFrankfurterFXProvider()
 	jpyAdapter := NewJPYYahooChannelAdapter(jpyProvider)
 	g.registry.Register("jpy_yahoo", jpyAdapter)

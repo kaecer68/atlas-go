@@ -47,6 +47,8 @@ func (y *YahooFinanceMacroProvider) Name() string {
 }
 
 func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
+	// ^BDIY (Baltic Dry Index) is not available on Yahoo Finance.
+	// See https://github.com/ranaroussi/yfinance/issues/1667
 	symbols := map[string]string{
 		"DX-Y.NYB": "dxy",
 		"^TNX":     "us10y",
@@ -55,7 +57,6 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 		"GC=F":     "gold",
 		"JPY=X":    "jpy",
 		"USDTWD=X": "usd_twd",
-		"^BDIY":    "bdi",
 	}
 
 	snap := MacroDataSnapshot{RecordedAt: time.Now().Unix()}
@@ -96,8 +97,6 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 				snap.JPY = point
 			case "usd_twd":
 				snap.USD_TWD = point
-			case "bdi":
-				snap.Bdi = point
 			}
 			mu.Unlock()
 		}(ticker, key)

@@ -36,7 +36,7 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 
 	channels := []channelMapping{
 		{channelID: "us_yahoo", apply: a.applyUSYahoo},
-		{channelID: "jpy_yahoo", apply: a.applyJPYYahoo},
+		{channelID: "jpy_yahoo", apply: a.applyJPYFrankfurter},
 		{channelID: "exchange_rate", apply: a.applyExchangeRate},
 		{channelID: "sox_index", apply: a.applySOXIndex},
 		{channelID: "twse_capital_flow", apply: a.applyCapitalFlow},
@@ -97,13 +97,13 @@ func (a *macroDataGatewayAdapter) applyUSYahoo(snap *marketdata.MacroDataSnapsho
 	}
 }
 
-func (a *macroDataGatewayAdapter) applyJPYYahoo(snap *marketdata.MacroDataSnapshot, data []byte) {
-	var s marketdata.MacroDataSnapshot
-	if err := json.Unmarshal(data, &s); err != nil {
+func (a *macroDataGatewayAdapter) applyJPYFrankfurter(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var jpy marketdata.MacroDataPoint
+	if err := json.Unmarshal(data, &jpy); err != nil {
 		return
 	}
-	if s.JPY.Symbol != "" {
-		snap.JPY = s.JPY
+	if jpy.Symbol != "" {
+		snap.JPY = jpy
 	}
 }
 

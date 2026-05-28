@@ -11,7 +11,9 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
-// JPYYahooChannelAdapter adapts FrankfurterFXProvider to the DataProvider.
+// JPYYahooChannelAdapter fetches USD/JPY exchange rate via Frankfurter API.
+// Note: Despite the historical channel name "jpy_yahoo", this adapter uses
+// the Frankfurter foreign exchange API (api.frankfurter.app), not Yahoo Finance.
 type JPYYahooChannelAdapter struct {
 	provider *marketdata.FrankfurterFXProvider
 	limiter  *rate.Limiter
@@ -73,7 +75,7 @@ func (a *JPYYahooChannelAdapter) Metadata() ChannelMetadata {
 	return ChannelMetadata{
 		ChannelID:  "jpy_yahoo",
 		Country:    "日本",
-		Platform:   "Yahoo Finance (JPY) / Frankfurter",
+		Platform:   "Frankfurter (USD/JPY)",
 		APIFormat:  "REST JSON",
 		Path:       "api.frankfurter.app/latest?from=USD&to=JPY",
 		HasLimiter: true,

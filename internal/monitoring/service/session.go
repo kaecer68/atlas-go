@@ -149,7 +149,9 @@ func StatusText(status string) string {
 	case "ok":
 		return "正常"
 	case "warn":
-		return "延遲"
+		return "待更新"
+	case "expected_delay":
+		return "正常延遲"
 	case "error":
 		return "異常"
 	case "partial":

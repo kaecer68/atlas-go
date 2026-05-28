@@ -82,7 +82,7 @@ package apigateway
 import "golang.org/x/time/rate"
 
 const (
-    // Yahoo Finance: 共享 limiter（us_yahoo + jpy_yahoo 共用同一端點）
+		// Yahoo Finance: 共享 limiter（us_yahoo 共用同一端點）
     YahooFinanceRate = rate.Every(1 * time.Second)
     
     // TWSE OpenAPI: 5 req/sec per IP
@@ -111,7 +111,7 @@ const (
 共享同一 API 端點的通道必須使用同一個 `rate.Limiter` 實例：
 
 ```go
-// ✅ 合規：us_yahoo 和 jpy_yahoo 共用 limiter
+		// ✅ 合規：us_yahoo 使用共用 limiter
 yahooLimiter := rate.NewLimiter(YahooFinanceRate, 1)
 
 registry.Register("us_yahoo", provider, yahooLimiter)
