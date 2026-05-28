@@ -64,7 +64,7 @@ type StrategyLayer struct {
 	comparisonEngine  *strategy.ComparisonEngine
 	thresholdEngine   *sim.DynamicThresholdEngine
 	strategyAllocator *strategy.StrategyAllocator // P2: nil-safe multi-strategy allocator
-	strategyEvolver   *StrategyEvolver           // nil-safe: no evolution when nil
+	strategyEvolver   *StrategyEvolver            // nil-safe: no evolution when nil
 }
 
 type RiskOps struct {
@@ -1501,8 +1501,8 @@ func (s *System) updateCapitalMetrics(ctx context.Context, result domain.Simulat
 		if s.strat.strategyEvolver != nil {
 			if ev := s.strat.strategyEvolver.Evaluate(macroAssessment, structuralAssessment, drawdownDecision); ev != nil {
 				logging.Info("strategy", "evolved",
-					logging.FStr("from", string(ev.FromState)),
-					logging.FStr("to", string(ev.ToState)),
+					logging.FStr("from", fmt.Sprintf("%d", ev.FromState)),
+					logging.FStr("to", fmt.Sprintf("%d", ev.ToState)),
 					logging.FStr("reason", ev.Reason))
 			}
 		}

@@ -47,6 +47,7 @@ type FactorEngine struct {
 	params        *RuntimeParameters
 	narrativeProv func(symbol string) *domain.NarrativeFactorScore
 	cycleProv     func(symbol string) *domain.IndustryCycleFactorScore
+	linkageProv   func(symbol string) *domain.LinkageFactorScore
 	pmCtxProv     PMContextProvider
 	etfAnalyzer   *ETFAnalyzer
 	mu            sync.RWMutex
@@ -110,6 +111,13 @@ func (fe *FactorEngine) WithIndustryCycleProvider(fn func(symbol string) *domain
 	fe.mu.Lock()
 	defer fe.mu.Unlock()
 	fe.cycleProv = fn
+	return fe
+}
+
+func (fe *FactorEngine) WithLinkageProvider(fn func(symbol string) *domain.LinkageFactorScore) *FactorEngine {
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
+	fe.linkageProv = fn
 	return fe
 }
 
@@ -621,10 +629,11 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 		FactorAgent:    agent.Score,
 	}
 
-	var nar, icl domain.FactorScoreItem
+	var nar, icl, link domain.FactorScoreItem
 	fe.mu.RLock()
 	narProv := fe.narrativeProv
 	iclProv := fe.cycleProv
+	linkProv := fe.linkageProv
 	fe.mu.RUnlock()
 
 	if narProv != nil {
@@ -647,6 +656,16 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 			result[FactorIndustryCycle] = icl.Score
 		}
 	}
+	if linkProv != nil {
+		if lfs := linkProv(symbol); lfs != nil {
+			link = domain.FactorScoreItem{
+				Score:     lfs.Score,
+				Formula:   fmt.Sprintf("linkage(systemic=%.2f, propagation=%.2f)", lfs.SystemicImportance, lfs.ShockPropagation),
+				RawInputs: map[string]float64{"systemic_importance": lfs.SystemicImportance, "shock_propagation_speed": lfs.ShockPropagation, "avg_correlation": lfs.AvgCorrelation},
+			}
+			result[FactorLinkage] = link.Score
+		}
+	}
 
 	breakdown := &domain.FactorScoreBreakdown{
 		Momentum:               mom,
@@ -657,6 +676,7 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 		Liquidity:              liq,
 		Narrative:              nar,
 		IndustryCycle:          icl,
+		Linkage:                link,
 	}
 
 	// Precious Metals: compute PM score when symbol is a known PM instrument.

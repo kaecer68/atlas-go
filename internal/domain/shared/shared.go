@@ -55,6 +55,7 @@ type FactorScoreBreakdown struct {
 	IndustryCycle          FactorScoreItem `json:"industry_cycle,omitempty"`
 	PreciousMetals         FactorScoreItem `json:"precious_metals,omitempty"`
 	ETF                    FactorScoreItem `json:"etf,omitempty"`
+	Linkage                FactorScoreItem `json:"linkage,omitempty"`
 	Total                  FactorScoreItem `json:"total"`
 }
 
@@ -69,6 +70,7 @@ type FactorScores struct {
 	IndustryCycle          float64               `json:"industry_cycle,omitempty"`
 	PreciousMetals         float64               `json:"precious_metals,omitempty"`
 	ETF                    float64               `json:"etf,omitempty"`
+	Linkage                float64               `json:"linkage,omitempty"`
 	Total                  float64               `json:"total"`
 	Breakdown              *FactorScoreBreakdown `json:"breakdown,omitempty"`
 }
@@ -87,6 +89,14 @@ type IndustryCycleFactorScore struct {
 	PhaseScore float64 `json:"phase_score,omitempty"`
 	Confidence float64 `json:"confidence,omitempty"`
 	IndustryID string  `json:"industry_id,omitempty"`
+}
+
+type LinkageFactorScore struct {
+	Score              float64 `json:"score"`
+	SystemicImportance float64 `json:"systemic_importance,omitempty"`
+	ShockPropagation   float64 `json:"shock_propagation_speed,omitempty"`
+	AvgCorrelation     float64 `json:"avg_correlation,omitempty"`
+	IndustryID         string  `json:"industry_id,omitempty"`
 }
 
 type ConvictionStep struct {
