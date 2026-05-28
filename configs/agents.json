@@ -560,7 +560,7 @@
       "skill": "druckenmiller_macro",
       "promptFile": "prompts/agents/super_druckenmiller.md",
       "enabled": true,
-      "universe": [],
+      "universe": ["2330.TW", "2317.TW", "2382.TW", "2454.TW", "2603.TW", "2609.TW", "3008.TW", "3034.TW", "6669.TW", "2881.TW"],
       "darwinian_weight": 1.0,
       "primaryMetrics": [
         "macro_asymmetric_hits",
@@ -590,7 +590,7 @@
       "skill": "aschenbrenner_ai_compute",
       "promptFile": "prompts/agents/super_aschenbrenner.md",
       "enabled": true,
-      "universe": [],
+      "universe": ["2330.TW", "2382.TW", "2317.TW", "2454.TW", "3034.TW", "6669.TW", "3017.TW", "3037.TW", "2308.TW", "3231.TW"],
       "darwinian_weight": 1.0,
       "primaryMetrics": [
         "ai_capex_alpha",
@@ -620,7 +620,7 @@
       "skill": "baker_deep_tech",
       "promptFile": "prompts/agents/super_baker.md",
       "enabled": true,
-      "universe": [],
+      "universe": ["2330.TW", "2308.TW", "2454.TW", "3008.TW", "3034.TW", "1301.TW", "1303.TW", "1326.TW", "6669.TW", "3324.TW"],
       "darwinian_weight": 1.0,
       "primaryMetrics": [
         "ip_moat_identification",
@@ -650,7 +650,7 @@
       "skill": "ackman_quality",
       "promptFile": "prompts/agents/super_ackman.md",
       "enabled": true,
-      "universe": [],
+      "universe": ["2330.TW", "2881.TW", "2882.TW", "2891.TW", "1216.TW", "0056.TW", "00878.TW", "1476.TW", "2903.TW", "1301.TW"],
       "darwinian_weight": 1.0,
       "primaryMetrics": [
         "quality_compounder_alpha",

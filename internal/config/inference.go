@@ -509,6 +509,7 @@ func (ie *InferenceEngine) ListParameters() []string {
 		// Orchestrator parameters
 		"orchestrator_conviction_floor_default",
 		"orchestrator_superinvestor_min_conviction",
+		"orchestrator_superinvestor_conviction_base",
 		"orchestrator_cro_zscore_threshold",
 		"orchestrator_sector_concentration_threshold",
 		"orchestrator_sector_concentration_threshold_high",
