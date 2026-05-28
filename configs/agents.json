@@ -228,14 +228,11 @@
       "promptFile": "prompts/agents/leo_satellite_desk.md",
       "enabled": true,
       "universe": [
-        "3491.TW",
-        "2313.TW",
-        "6285.TW",
-        "7717.TW",
-        "3105.TW",
-        "2367.TW",
-        "3022.TW",
-        "3138.TW"
+        "2454.TW",
+        "2317.TW",
+        "2382.TW",
+        "3034.TW",
+        "2308.TW"
       ],
       "primaryMetrics": [
         "alpha_hit_rate",
@@ -268,12 +265,33 @@
       "skill": "robotics_desk",
       "promptFile": "prompts/agents/robotics_desk.md",
       "enabled": true,
-      "universe": ["1590.TW", "2049.TW", "4551.TW"],
-      "primaryMetrics": ["alpha_hit_rate", "cycle_timing"],
-      "requiredSkills": ["robotics_desk", "technical_breakout"],
-      "forbiddenActions": ["hype_chasing", "illiquid_preference"],
-      "operatingNotes": ["Focus on automation capex cycle and servo/component demand."],
-      "screening_criteria": { "volume_intraday": { "min": 500000 } }
+      "universe": [
+        "2317.TW",
+        "2308.TW",
+        "2454.TW",
+        "3034.TW",
+        "2382.TW"
+      ],
+      "primaryMetrics": [
+        "alpha_hit_rate",
+        "cycle_timing"
+      ],
+      "requiredSkills": [
+        "robotics_desk",
+        "technical_breakout"
+      ],
+      "forbiddenActions": [
+        "hype_chasing",
+        "illiquid_preference"
+      ],
+      "operatingNotes": [
+        "Focus on automation capex cycle and servo/component demand."
+      ],
+      "screening_criteria": {
+        "volume_intraday": {
+          "min": 500000
+        }
+      }
     },
     {
       "id": "mining-desk-01",
@@ -282,12 +300,33 @@
       "skill": "mining_desk",
       "promptFile": "prompts/agents/mining_desk.md",
       "enabled": true,
-      "universe": ["2009.TW", "8390.TW", "9955.TW", "1608.TW"],
-      "primaryMetrics": ["safe_haven_capture", "cycle_timing"],
-      "requiredSkills": ["mining_desk", "value_yield"],
-      "forbiddenActions": ["commodity_bull_trap", "illiquid_preference"],
-      "operatingNotes": ["Track precious metals bid, copper demand, and safe-haven flows."],
-      "screening_criteria": { "volume_intraday": { "min": 500000 } }
+      "universe": [
+        "1301.TW",
+        "1303.TW",
+        "1326.TW",
+        "2881.TW",
+        "2882.TW"
+      ],
+      "primaryMetrics": [
+        "safe_haven_capture",
+        "cycle_timing"
+      ],
+      "requiredSkills": [
+        "mining_desk",
+        "value_yield"
+      ],
+      "forbiddenActions": [
+        "commodity_bull_trap",
+        "illiquid_preference"
+      ],
+      "operatingNotes": [
+        "Track precious metals bid, copper demand, and safe-haven flows."
+      ],
+      "screening_criteria": {
+        "volume_intraday": {
+          "min": 500000
+        }
+      }
     },
     {
       "id": "energy-desk-01",
@@ -296,12 +335,33 @@
       "skill": "energy_desk",
       "promptFile": "prompts/agents/energy_desk.md",
       "enabled": true,
-      "universe": ["6505.TW", "8926.TW", "9918.TW"],
-      "primaryMetrics": ["cycle_timing", "drawdown_control"],
-      "requiredSkills": ["energy_desk", "globalmarket"],
-      "forbiddenActions": ["oil_price_extrapolation", "single_commodity_bias"],
-      "operatingNotes": ["Monitor crude oil, renewable policy, and grid infrastructure."],
-      "screening_criteria": { "volume_intraday": { "min": 500000 } }
+      "universe": [
+        "1301.TW",
+        "1303.TW",
+        "1326.TW",
+        "2603.TW",
+        "2609.TW"
+      ],
+      "primaryMetrics": [
+        "cycle_timing",
+        "drawdown_control"
+      ],
+      "requiredSkills": [
+        "energy_desk",
+        "globalmarket"
+      ],
+      "forbiddenActions": [
+        "oil_price_extrapolation",
+        "single_commodity_bias"
+      ],
+      "operatingNotes": [
+        "Monitor crude oil, renewable policy, and grid infrastructure."
+      ],
+      "screening_criteria": {
+        "volume_intraday": {
+          "min": 500000
+        }
+      }
     },
     {
       "id": "electronics-desk-01",
@@ -310,12 +370,33 @@
       "skill": "electronics_desk",
       "promptFile": "prompts/agents/electronics_desk.md",
       "enabled": true,
-      "universe": ["2327.TW", "3533.TW", "3324.TW"],
-      "primaryMetrics": ["alpha_hit_rate", "supply_chain_timing"],
-      "requiredSkills": ["electronics_desk", "earnings_quality"],
-      "forbiddenActions": ["component_glut_ignoring", "single_customer_bias"],
-      "operatingNotes": ["Track passive component cycles, connector demand, and thermal solutions."],
-      "screening_criteria": { "volume_intraday": { "min": 500000 } }
+      "universe": [
+        "2308.TW",
+        "3037.TW",
+        "2357.TW",
+        "2317.TW",
+        "3231.TW"
+      ],
+      "primaryMetrics": [
+        "alpha_hit_rate",
+        "supply_chain_timing"
+      ],
+      "requiredSkills": [
+        "electronics_desk",
+        "earnings_quality"
+      ],
+      "forbiddenActions": [
+        "component_glut_ignoring",
+        "single_customer_bias"
+      ],
+      "operatingNotes": [
+        "Track passive component cycles, connector demand, and thermal solutions."
+      ],
+      "screening_criteria": {
+        "volume_intraday": {
+          "min": 500000
+        }
+      }
     },
     {
       "id": "consumer-desk-01",
@@ -324,12 +405,33 @@
       "skill": "consumer_desk",
       "promptFile": "prompts/agents/consumer_desk.md",
       "enabled": true,
-      "universe": ["1216.TW", "1476.TW", "2903.TW"],
-      "primaryMetrics": ["drawdown_control", "carry_efficiency"],
-      "requiredSkills": ["consumer_desk", "value_yield"],
-      "forbiddenActions": ["cyclical_misclassification", "yield_trap_selection"],
-      "operatingNotes": ["Focus on staples resilience, dividend support, and retail cycle."],
-      "screening_criteria": { "volume_intraday": { "min": 500000 } }
+      "universe": [
+        "1216.TW",
+        "1301.TW",
+        "1303.TW",
+        "1326.TW",
+        "2881.TW"
+      ],
+      "primaryMetrics": [
+        "drawdown_control",
+        "carry_efficiency"
+      ],
+      "requiredSkills": [
+        "consumer_desk",
+        "value_yield"
+      ],
+      "forbiddenActions": [
+        "cyclical_misclassification",
+        "yield_trap_selection"
+      ],
+      "operatingNotes": [
+        "Focus on staples resilience, dividend support, and retail cycle."
+      ],
+      "screening_criteria": {
+        "volume_intraday": {
+          "min": 500000
+        }
+      }
     },
     {
       "id": "industrial-desk-01",
@@ -338,27 +440,47 @@
       "skill": "industrial_desk",
       "promptFile": "prompts/agents/industrial_desk.md",
       "enabled": true,
-      "universe": ["2002.TW", "1301.TW", "1101.TW"],
-      "primaryMetrics": ["capex_cycle_timing", "alpha_hit_rate"],
-      "requiredSkills": ["industrial_desk", "earnings_quality"],
-      "forbiddenActions": ["infrastructure_hype", "raw_material_blindness"],
-      "operatingNotes": ["Track steel, cement, and infrastructure capex cycles."],
-      "screening_criteria": { "volume_intraday": { "min": 500000 } }
+      "universe": [
+        "1301.TW",
+        "1303.TW",
+        "1326.TW",
+        "2317.TW",
+        "2603.TW"
+      ],
+      "primaryMetrics": [
+        "capex_cycle_timing",
+        "alpha_hit_rate"
+      ],
+      "requiredSkills": [
+        "industrial_desk",
+        "earnings_quality"
+      ],
+      "forbiddenActions": [
+        "infrastructure_hype",
+        "raw_material_blindness"
+      ],
+      "operatingNotes": [
+        "Track steel, cement, and infrastructure capex cycles."
+      ],
+      "screening_criteria": {
+        "volume_intraday": {
+          "min": 500000
+        }
+      }
     },
     {
-      "id": "growth-momentum-01",
-      "name": "成長動能",
-      "layer": "style",
-      "skill": "growth_momentum",
-      "promptFile": "prompts/agents/growth_momentum.md",
+      "id": "robotics-desk-01",
+      "name": "機器人產業桌",
+      "layer": "sector",
+      "skill": "robotics_desk",
+      "promptFile": "prompts/agents/robotics_desk.md",
       "enabled": true,
       "universe": [
         "2317.TW",
-        "2382.TW",
+        "2308.TW",
         "2454.TW",
         "3034.TW",
-        "3037.TW",
-        "6669.TW"
+        "2382.TW"
       ],
       "primaryMetrics": [
         "alpha_hit_rate",
@@ -560,7 +682,18 @@
       "skill": "druckenmiller_macro",
       "promptFile": "prompts/agents/super_druckenmiller.md",
       "enabled": true,
-      "universe": ["2330.TW", "2317.TW", "2382.TW", "2454.TW", "2603.TW", "2609.TW", "3008.TW", "3034.TW", "6669.TW", "2881.TW"],
+      "universe": [
+        "2330.TW",
+        "2317.TW",
+        "2382.TW",
+        "2454.TW",
+        "2603.TW",
+        "2609.TW",
+        "3008.TW",
+        "3034.TW",
+        "6669.TW",
+        "2881.TW"
+      ],
       "darwinian_weight": 1.0,
       "primaryMetrics": [
         "macro_asymmetric_hits",
@@ -590,7 +723,17 @@
       "skill": "aschenbrenner_ai_compute",
       "promptFile": "prompts/agents/super_aschenbrenner.md",
       "enabled": true,
-      "universe": ["2330.TW", "2382.TW", "2317.TW", "2454.TW", "3034.TW", "6669.TW", "3017.TW", "3037.TW", "2308.TW", "3231.TW"],
+      "universe": [
+        "2330.TW",
+        "2382.TW",
+        "2317.TW",
+        "2454.TW",
+        "3034.TW",
+        "6669.TW",
+        "3037.TW",
+        "2308.TW",
+        "3231.TW"
+      ],
       "darwinian_weight": 1.0,
       "primaryMetrics": [
         "ai_capex_alpha",
@@ -620,7 +763,17 @@
       "skill": "baker_deep_tech",
       "promptFile": "prompts/agents/super_baker.md",
       "enabled": true,
-      "universe": ["2330.TW", "2308.TW", "2454.TW", "3008.TW", "3034.TW", "1301.TW", "1303.TW", "1326.TW", "6669.TW", "3324.TW"],
+      "universe": [
+        "2330.TW",
+        "2308.TW",
+        "2454.TW",
+        "3008.TW",
+        "3034.TW",
+        "1301.TW",
+        "1303.TW",
+        "1326.TW",
+        "6669.TW"
+      ],
       "darwinian_weight": 1.0,
       "primaryMetrics": [
         "ip_moat_identification",
@@ -650,7 +803,16 @@
       "skill": "ackman_quality",
       "promptFile": "prompts/agents/super_ackman.md",
       "enabled": true,
-      "universe": ["2330.TW", "2881.TW", "2882.TW", "2891.TW", "1216.TW", "0056.TW", "00878.TW", "1476.TW", "2903.TW", "1301.TW"],
+      "universe": [
+        "2330.TW",
+        "2881.TW",
+        "2882.TW",
+        "2891.TW",
+        "1216.TW",
+        "0056.TW",
+        "00878.TW",
+        "1301.TW"
+      ],
       "darwinian_weight": 1.0,
       "primaryMetrics": [
         "quality_compounder_alpha",
@@ -668,9 +830,6 @@
         "Pricing power + FCF + catalyst. Quality compounders only."
       ],
       "screening_criteria": {
-        "pe": {
-          "max": 25
-        },
         "volume_intraday": {
           "min": 800000
         }
