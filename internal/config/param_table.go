@@ -827,6 +827,27 @@ var parameterTable = map[string]paramAccessor{
 	},
 }
 
+// stringParamAccessor provides get/set accessors for string-type parameters.
+type stringParamAccessor struct {
+	get func(*ParametersConfig) string
+	set func(*ParametersConfig, string)
+}
+
+var stringParameterTable = map[string]stringParamAccessor{
+	"precious_metals_central_bank_buying_trend": {
+		get: func(cfg *ParametersConfig) string { return cfg.PreciousMetals.CentralBankBuyingTrend.Value },
+		set: func(cfg *ParametersConfig, v string) { cfg.PreciousMetals.CentralBankBuyingTrend.Value = v },
+	},
+}
+
+// boolParamAccessor provides get/set accessors for bool-type parameters.
+type boolParamAccessor struct {
+	get func(*ParametersConfig) bool
+	set func(*ParametersConfig, bool)
+}
+
+var boolParameterTable = map[string]boolParamAccessor{}
+
 var _ = func() int {
 	_ = len(mapParamPrefixes)
 	return len(mapParamPrefixes)

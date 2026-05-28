@@ -224,6 +224,26 @@ func (ie *InferenceEngine) SetParameter(name string, value float64) error {
 	return ie.setParameterOnConfig(ie.params, name, value)
 }
 
+func (ie *InferenceEngine) SetStringParameter(name string, value string) error {
+	return ie.setStringParameterOnConfig(ie.params, name, value)
+}
+
+func (ie *InferenceEngine) setStringParameterOnConfig(cfg *ParametersConfig, name string, value string) error {
+	if accessor, ok := stringParameterTable[name]; ok {
+		accessor.set(cfg, value)
+		return nil
+	}
+	return fmt.Errorf("unknown string parameter: %s", name)
+}
+
+func (ie *InferenceEngine) SetBoolParameter(name string, value bool) error {
+	if accessor, ok := boolParameterTable[name]; ok {
+		accessor.set(ie.params, value)
+		return nil
+	}
+	return fmt.Errorf("unknown bool parameter: %s", name)
+}
+
 // GetParameter retrieves the current value of a parameter by name.
 // Returns the value and true if found, or 0 and false if not found.
 func (ie *InferenceEngine) GetParameter(name string) (float64, bool) {
