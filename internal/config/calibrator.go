@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // CalibratorResult records the outcome of a single parameter calibration run.
@@ -75,6 +77,13 @@ func CalibrateParameters(ctx context.Context, calibrator ParameterCalibrator, ev
 		return nil, fmt.Errorf("calibrate: no parameter names provided")
 	}
 
+	// Check context before starting computation-intensive optimization.
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	params := GetParametersConfig()
 	ie := NewInferenceEngine(params)
 
@@ -131,8 +140,15 @@ func CalibrateParameters(ctx context.Context, calibrator ParameterCalibrator, ev
 		}
 	}
 
+	// Check context again after potentially long optimization.
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	optScore := result.BestScore
-	improvement := (optScore - baseline) / math.Abs(baseline+1e-10)
+	improvement := computeImprovementPct(baseline, optScore)
 
 	report := &CalibratorResult{
 		Timestamp:      time.Now(),
@@ -164,7 +180,10 @@ func CalibrateParameters(ctx context.Context, calibrator ParameterCalibrator, ev
 			ParamName: name, Before: current, After: best,
 			DeltaPct: deltaPct, Confidence: conf,
 		})
-		_ = ie.SetParameter(name, best)
+		if err := ie.SetParameter(name, best); err != nil {
+			logging.Error("calibrator", "set_parameter_failed",
+				logging.FStr("param", name), logging.Err(err))
+		}
 		appliedCount++
 	}
 
@@ -172,14 +191,17 @@ func CalibrateParameters(ctx context.Context, calibrator ParameterCalibrator, ev
 		now := time.Now()
 		markCalibrated(params, paramNames, "bayesian_optimization", &now)
 		if p := GetParametersConfigPath(); p != "" {
-			_ = params.Save(p)
+			if err := params.Save(p); err != nil {
+				logging.Error("calibrator", "save_failed",
+					logging.FStr("path", p), logging.Err(err))
+			}
 		}
 		report.Verdict = "calibrated"
-		report.Summary = fmt.Sprintf("applied %d/%d parameter changes (baseline=%.4f → optimized=%.4f, +%.1f%%)",
-			appliedCount, len(paramNames), baseline, optScore, improvement*100)
+		report.Summary = fmt.Sprintf("applied %d/%d parameter changes (baseline=%.4f → optimized=%.4f, %+.1f%%)",
+			appliedCount, len(paramNames), baseline, optScore, improvement)
 	} else if improvement > 0 {
 		report.Verdict = "stable"
-		report.Summary = fmt.Sprintf("no significant changes (improvement=%.1f%% below threshold)", improvement*100)
+		report.Summary = fmt.Sprintf("no significant changes (improvement=%+.1f%% below threshold)", improvement)
 	} else {
 		report.Verdict = "unchanged"
 		report.Summary = fmt.Sprintf("current values optimal (baseline=%.4f)", baseline)
@@ -187,6 +209,23 @@ func CalibrateParameters(ctx context.Context, calibrator ParameterCalibrator, ev
 
 	report.Changes = changes
 	return report, nil
+}
+
+// computeImprovementPct returns the signed improvement percentage from baseline
+// to optimized score. Handles negative/zero baselines gracefully:
+//   - baseline > 0: (opt - baseline) / baseline * 100
+//   - baseline < 0: (opt - baseline) / (-baseline) * 100 (relative to |baseline|)
+//   - baseline ≈ 0: returns (opt - baseline) * 100 (absolute change as pseudo-%)
+func computeImprovementPct(baseline, opt float64) float64 {
+	const epsilon = 1e-10
+	switch {
+	case baseline > epsilon:
+		return (opt - baseline) / baseline * 100
+	case baseline < -epsilon:
+		return (opt - baseline) / (-baseline) * 100
+	default:
+		return (opt - baseline) * 100
+	}
 }
 
 func calibrationConfidence(deltaPct float64, observations int) string {
