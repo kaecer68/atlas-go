@@ -86,7 +86,7 @@ func (e *CalibrationEngine) Calibrate(meta StrategyMeta, data []CalibRecommendat
 	current := extractValueMap(params)
 	baseline := scoreParameters(params, meta.Factors, data)
 
-	best := current
+	best := cloneMap(current)
 	bestScore := baseline
 	samples := 0
 
