@@ -1314,6 +1314,19 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered factor_weight_calibrate background task (24h interval)")
 
+			// Register conviction_calibrate — optimizes factor-driven conviction
+			// thresholds and deltas (FactorConvictionParams) using historical
+			// recommendation outcomes with forward returns.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "conviction_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					return orchestrator.RunConvictionCalibration(cfg.WorkDir)
+				},
+			})
+			log.Printf("[Gateway] registered conviction_calibrate background task (24h interval)")
+
 			// Register auto_swarm_simulation — periodic swarm simulation
 			// for training data generation and scenario monitoring.
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
