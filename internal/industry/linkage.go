@@ -6,6 +6,7 @@ import (
 	"maps"
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -705,10 +706,31 @@ func NewLinkageAnalyzer() *LinkageAnalyzer {
 // when running from a package directory in tests), it falls back to the hardcoded
 // DefaultSupplyChainGraph and DefaultCorrelationMatrix.
 func loadGraphWithFallback() (*SupplyChainGraph, *CorrelationMatrix) {
-	if g, c, err := LoadSupplyChainGraph("configs/supply_chain_graph.json"); err == nil {
-		return g, c
+	// Try multiple paths to handle different working directories:
+	//   project root: configs/supply_chain_graph.json
+	//   cmd/ subdir:  ../configs/supply_chain_graph.json
+	//   go test:      ../../configs/supply_chain_graph.json (from internal/industry/)
+	for _, p := range supplyChainGraphCandidates() {
+		if g, c, err := LoadSupplyChainGraph(p); err == nil {
+			return g, c
+		}
+	}
+	// If ATLAS_WORK_DIR is set, also try that.
+	if wd := os.Getenv("ATLAS_WORK_DIR"); wd != "" {
+		p := filepath.Join(wd, "configs", "supply_chain_graph.json")
+		if g, c, err := LoadSupplyChainGraph(p); err == nil {
+			return g, c
+		}
 	}
 	return DefaultSupplyChainGraph(), loadCorrelationMatrixWithFallback()
+}
+
+func supplyChainGraphCandidates() []string {
+	return []string{
+		"configs/supply_chain_graph.json",
+		"../configs/supply_chain_graph.json",
+		"../../configs/supply_chain_graph.json",
+	}
 }
 
 func loadCorrelationMatrixWithFallback() *CorrelationMatrix {
