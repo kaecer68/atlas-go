@@ -579,3 +579,237 @@ func (ShippingExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, pr
 		ConvictionBreakdown: cb,
 	}, true
 }
+
+type RoboticsDeskExecutor struct{}
+
+func (RoboticsDeskExecutor) Supports(agent domain.AgentSpec) bool {
+	return agent.Skill == "robotics_desk"
+}
+
+func (RoboticsDeskExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), defaultConvictionFloor)
+	if strings.Contains(prompt, "automation") {
+		b.add("automation_boost", 5, "automation keyword")
+	}
+	if strings.Contains(prompt, "servo") {
+		b.add("servo_boost", 5, "servo keyword")
+	}
+	if strings.Contains(prompt, "ai_robot") {
+		b.add("ai_robot_boost", 8, "ai_robot keyword")
+	}
+	fc := loadFactorConfig()
+	addMomentumAdjustment(b, fq, quote.Symbol, fc)
+	addLiquidityAdjustment(b, fq, quote.Symbol, fc)
+	if !b.floorCheck() {
+		return domain.Recommendation{}, false
+	}
+	tp, slp := priceTargets(quote, 1.07, 0.94)
+	conv, cb := b.build()
+	return domain.Recommendation{
+		Agent:               agent.ID,
+		Skill:               agent.Skill,
+		Layer:               agent.Layer,
+		Symbol:              quote.Symbol,
+		Side:                domain.SideBuy,
+		Conviction:          conv,
+		Reason:              "robotics automation capex cycle",
+		TargetPrice:         tp,
+		StopLossPrice:       slp,
+		ConvictionBreakdown: cb,
+	}, true
+}
+
+type MiningDeskExecutor struct{}
+
+func (MiningDeskExecutor) Supports(agent domain.AgentSpec) bool {
+	return agent.Skill == "mining_desk"
+}
+
+func (MiningDeskExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), defaultConvictionFloor)
+	if strings.Contains(prompt, "precious_metals") && regime == domain.RegimeRiskOff {
+		b.add("precious_metals_boost", 8, "precious_metals keyword in risk-off regime")
+	}
+	if strings.Contains(prompt, "copper") {
+		b.add("copper_boost", 4, "copper keyword")
+	}
+	if strings.Contains(prompt, "safe_haven") {
+		b.add("safe_haven_boost", 6, "safe_haven keyword")
+	}
+	fc := loadFactorConfig()
+	addMomentumAdjustment(b, fq, quote.Symbol, fc)
+	addLiquidityAdjustment(b, fq, quote.Symbol, fc)
+	if !b.floorCheck() {
+		return domain.Recommendation{}, false
+	}
+	tp, slp := priceTargets(quote, 1.07, 0.94)
+	conv, cb := b.build()
+	return domain.Recommendation{
+		Agent:               agent.ID,
+		Skill:               agent.Skill,
+		Layer:               agent.Layer,
+		Symbol:              quote.Symbol,
+		Side:                domain.SideBuy,
+		Conviction:          conv,
+		Reason:              "mining and precious metals cycle",
+		TargetPrice:         tp,
+		StopLossPrice:       slp,
+		ConvictionBreakdown: cb,
+	}, true
+}
+
+type EnergyDeskExecutor struct{}
+
+func (EnergyDeskExecutor) Supports(agent domain.AgentSpec) bool {
+	return agent.Skill == "energy_desk"
+}
+
+func (EnergyDeskExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), defaultConvictionFloor)
+	if strings.Contains(prompt, "oil_surge") {
+		b.add("oil_surge_boost", 6, "oil_surge keyword")
+	}
+	if strings.Contains(prompt, "renewable") {
+		b.add("renewable_boost", 5, "renewable keyword")
+	}
+	if strings.Contains(prompt, "grid") {
+		b.add("grid_boost", 4, "grid keyword")
+	}
+	fc := loadFactorConfig()
+	addMomentumAdjustment(b, fq, quote.Symbol, fc)
+	addLiquidityAdjustment(b, fq, quote.Symbol, fc)
+	if !b.floorCheck() {
+		return domain.Recommendation{}, false
+	}
+	tp, slp := priceTargets(quote, 1.07, 0.94)
+	conv, cb := b.build()
+	return domain.Recommendation{
+		Agent:               agent.ID,
+		Skill:               agent.Skill,
+		Layer:               agent.Layer,
+		Symbol:              quote.Symbol,
+		Side:                domain.SideBuy,
+		Conviction:          conv,
+		Reason:              "energy commodity cycle",
+		TargetPrice:         tp,
+		StopLossPrice:       slp,
+		ConvictionBreakdown: cb,
+	}, true
+}
+
+type ElectronicsDeskExecutor struct{}
+
+func (ElectronicsDeskExecutor) Supports(agent domain.AgentSpec) bool {
+	return agent.Skill == "electronics_desk"
+}
+
+func (ElectronicsDeskExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), defaultConvictionFloor)
+	if strings.Contains(prompt, "passive_components") {
+		b.add("passive_components_boost", 5, "passive_components keyword")
+	}
+	if strings.Contains(prompt, "connectors") {
+		b.add("connectors_boost", 5, "connectors keyword")
+	}
+	if strings.Contains(prompt, "thermal") {
+		b.add("thermal_boost", 6, "thermal keyword")
+	}
+	fc := loadFactorConfig()
+	addMomentumAdjustment(b, fq, quote.Symbol, fc)
+	addLiquidityAdjustment(b, fq, quote.Symbol, fc)
+	if !b.floorCheck() {
+		return domain.Recommendation{}, false
+	}
+	tp, slp := priceTargets(quote, 1.07, 0.94)
+	conv, cb := b.build()
+	return domain.Recommendation{
+		Agent:               agent.ID,
+		Skill:               agent.Skill,
+		Layer:               agent.Layer,
+		Symbol:              quote.Symbol,
+		Side:                domain.SideBuy,
+		Conviction:          conv,
+		Reason:              "electronics component demand cycle",
+		TargetPrice:         tp,
+		StopLossPrice:       slp,
+		ConvictionBreakdown: cb,
+	}, true
+}
+
+type ConsumerDeskExecutor struct{}
+
+func (ConsumerDeskExecutor) Supports(agent domain.AgentSpec) bool {
+	return agent.Skill == "consumer_desk"
+}
+
+func (ConsumerDeskExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), defaultConvictionFloor)
+	if strings.Contains(prompt, "dividend") {
+		b.add("dividend_boost", 5, "dividend keyword")
+	}
+	if strings.Contains(prompt, "staples") {
+		b.add("staples_boost", 6, "staples keyword")
+	}
+	if strings.Contains(prompt, "retail") {
+		b.add("retail_boost", 4, "retail keyword")
+	}
+	fc := loadFactorConfig()
+	addMomentumAdjustment(b, fq, quote.Symbol, fc)
+	addLiquidityAdjustment(b, fq, quote.Symbol, fc)
+	if !b.floorCheck() {
+		return domain.Recommendation{}, false
+	}
+	tp, slp := priceTargets(quote, 1.07, 0.94)
+	conv, cb := b.build()
+	return domain.Recommendation{
+		Agent:               agent.ID,
+		Skill:               agent.Skill,
+		Layer:               agent.Layer,
+		Symbol:              quote.Symbol,
+		Side:                domain.SideBuy,
+		Conviction:          conv,
+		Reason:              "consumer staples and retail cycle",
+		TargetPrice:         tp,
+		StopLossPrice:       slp,
+		ConvictionBreakdown: cb,
+	}, true
+}
+
+type IndustrialDeskExecutor struct{}
+
+func (IndustrialDeskExecutor) Supports(agent domain.AgentSpec) bool {
+	return agent.Skill == "industrial_desk"
+}
+
+func (IndustrialDeskExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent)), defaultConvictionFloor)
+	if strings.Contains(prompt, "steel") {
+		b.add("steel_boost", 5, "steel keyword")
+	}
+	if strings.Contains(prompt, "cement") {
+		b.add("cement_boost", 4, "cement keyword")
+	}
+	if strings.Contains(prompt, "infrastructure") {
+		b.add("infrastructure_boost", 7, "infrastructure keyword")
+	}
+	fc := loadFactorConfig()
+	addMomentumAdjustment(b, fq, quote.Symbol, fc)
+	addLiquidityAdjustment(b, fq, quote.Symbol, fc)
+	if !b.floorCheck() {
+		return domain.Recommendation{}, false
+	}
+	tp, slp := priceTargets(quote, 1.07, 0.94)
+	conv, cb := b.build()
+	return domain.Recommendation{
+		Agent:               agent.ID,
+		Skill:               agent.Skill,
+		Layer:               agent.Layer,
+		Symbol:              quote.Symbol,
+		Side:                domain.SideBuy,
+		Conviction:          conv,
+		Reason:              "industrial manufacturing and infrastructure cycle",
+		TargetPrice:         tp,
+		StopLossPrice:       slp,
+		ConvictionBreakdown: cb,
+	}, true
+}
