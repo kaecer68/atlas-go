@@ -545,13 +545,13 @@
     "base_weights": {
       "value": {
         "momentum": 0.25,
-        "value": 0.20,
-        "quality": 0.20,
+        "value": 0.2,
+        "quality": 0.2,
         "agent": 0.15,
-        "inst_sent": 0.10,
+        "inst_sent": 0.1,
         "liquidity": 0.05,
         "narrative": 0.05,
-        "industry_cycle": 0.00
+        "industry_cycle": 0.0
       },
       "rationale": "Eight-factor weight distribution; momentum, value, quality as primary factors (65% combined), agent/inst_sent as secondary, liquidity/narrative as tertiary, industry_cycle as placeholder",
       "source": "heuristic",
@@ -692,7 +692,7 @@
       }
     },
     "severity_critical": {
-      "value": 0.10,
+      "value": 0.1,
       "rationale": "Critical event: ±10% delta for severe market-moving events",
       "source": "heuristic",
       "citation": {
@@ -762,7 +762,7 @@
       }
     },
     "clamp_max": {
-      "value": 0.50,
+      "value": 0.5,
       "rationale": "Maximum factor weight ceiling (50%) prevents single-factor dominance",
       "source": "heuristic",
       "citation": {
@@ -2001,8 +2001,8 @@
         "consumer": 0.04,
         "industrial": 0.04,
         "leo_satellite": 0.05,
-        "defensive": 0.10,
-        "cash": 0.10
+        "defensive": 0.1,
+        "cash": 0.1
       },
       "rationale": "Baseline sector allocation weights representing Taiwan equity market structure. Derived from economic importance (export share, market cap contribution, GDP linkage) with defensive/cash carve-out for risk management.",
       "source": "heuristic",
@@ -2288,7 +2288,7 @@
       "value": {
         "high_risk": {
           "gold": 0.05,
-          "cash": 0.10,
+          "cash": 0.1,
           "defensive": 0.08,
           "value": 0.03
         },
@@ -2318,12 +2318,12 @@
     "sector_rotation_flow_adjustments": {
       "value": {
         "gold_surge": {
-          "gold": 0.10,
+          "gold": 0.1,
           "mining": 0.05,
           "defensive": 0.03
         },
         "cash_surge": {
-          "cash": 0.30,
+          "cash": 0.3,
           "short_term": 0.15
         },
         "tech_exodus": {
@@ -4579,6 +4579,354 @@
         "dependencies": [],
         "last_validated": "2026-05-14T23:51:04.342284"
       }
+    }
+  },
+  "precious_metals": {
+    "central_bank_buying_trend": {
+      "value": "stable",
+      "rationale": "WGC quarterly CB gold buying trend: accelerating, stable, or decelerating",
+      "source": "literature",
+      "todo": "Update quarterly from WGC Gold Demand Trends report",
+      "citation": {
+        "source_type": "report",
+        "source_reference": "World Gold Council, Gold Demand Trends Q1 2026",
+        "evidence_quality": "medium",
+        "update_policy": "quarterly",
+        "validation_method": "code_review",
+        "dependencies": [],
+        "last_validated": "2026-05-01T00:00:00Z"
+      }
+    },
+    "central_bank_net_buy": {
+      "value": 800.0,
+      "rationale": "Annualized central bank net gold purchases in tonnes (~800t in 2025)",
+      "source": "literature",
+      "todo": "Update from WGC quarterly report",
+      "citation": null
+    },
+    "india_gold_imports_yoy": {
+      "value": 0.0,
+      "rationale": "India gold imports YoY % change; 0 means no change from prior year",
+      "source": "literature",
+      "todo": "Update monthly from India Ministry of Commerce data",
+      "citation": null
+    },
+    "china_gold_imports_yoy": {
+      "value": 0.0,
+      "rationale": "China SGE withdrawal YoY % change; 0 means no change from prior year",
+      "source": "literature",
+      "todo": "Update monthly from Shanghai Gold Exchange data",
+      "citation": null
+    },
+    "comex_default_net_long": {
+      "value": 150000,
+      "rationale": "CFTC COT managed money net long default (typical mid-cycle level)",
+      "source": "empirical",
+      "todo": "Update weekly from CFTC Commitment of Traders report",
+      "citation": null
+    }
+  },
+  "alert": {
+    "min_cash_threshold": {
+      "value": 100000,
+      "rationale": "Minimum cash reserve before triggering low-cash warning",
+      "source": "heuristic",
+      "citation": null
+    },
+    "max_positions_count": {
+      "value": 20,
+      "rationale": "Maximum number of open positions before concentration warning",
+      "source": "heuristic",
+      "citation": null
+    },
+    "max_position_weight_pct": {
+      "value": 0.15,
+      "rationale": "Maximum single position weight (15%) before error alert",
+      "source": "heuristic",
+      "citation": null
+    },
+    "max_unrealized_loss_pct": {
+      "value": -0.05,
+      "rationale": "Unrealized loss threshold (-5%) before position warning",
+      "source": "heuristic",
+      "citation": null
+    },
+    "daily_loss_warning_pct": {
+      "value": -0.015,
+      "rationale": "Daily PnL warning threshold (-1.5%)",
+      "source": "heuristic",
+      "citation": null
+    },
+    "daily_loss_critical_pct": {
+      "value": -0.02,
+      "rationale": "Daily PnL critical threshold (-2%)",
+      "source": "heuristic",
+      "citation": null
+    },
+    "rule_engine_interval_sec": {
+      "value": 30,
+      "rationale": "Rule engine evaluation interval (30 seconds)",
+      "source": "heuristic",
+      "citation": null
+    },
+    "rule_engine_cooldown_sec": {
+      "value": 300,
+      "rationale": "Default rule cooldown (5 minutes)",
+      "source": "heuristic",
+      "citation": null
+    },
+    "system_metrics_interval_sec": {
+      "value": 30,
+      "rationale": "System metrics collection interval (30 seconds)",
+      "source": "heuristic",
+      "citation": null
+    },
+    "min_screening_rate": {
+      "value": 0.1,
+      "rationale": "Minimum screening rate (10%) before warning",
+      "source": "heuristic",
+      "citation": null
+    },
+    "max_alert_trigger_rate": {
+      "value": 100,
+      "rationale": "Maximum alert trigger rate per hour before critical",
+      "source": "heuristic",
+      "citation": null
+    },
+    "max_unacknowledged_alerts": {
+      "value": 10,
+      "rationale": "Maximum unacknowledged alerts before warning",
+      "source": "heuristic",
+      "citation": null
+    }
+  },
+  "risk_gate": {
+    "pre_trade": {
+      "max_position_pct": {
+        "value": 0.15,
+        "rationale": "單一持股最大曝險 15%",
+        "source": "literature",
+        "citation": null
+      },
+      "max_sector_exposure_pct": {
+        "value": 0.4,
+        "rationale": "單一產業最大曝險 40%",
+        "source": "heuristic",
+        "citation": null
+      },
+      "var_confidence_level": {
+        "value": 0.95,
+        "rationale": "VaR 信賴水準 95%",
+        "source": "literature",
+        "citation": null
+      },
+      "var_limit_pct": {
+        "value": 0.02,
+        "rationale": "VaR 不得超過組合價值 2%",
+        "source": "heuristic",
+        "citation": null
+      },
+      "min_cash_buffer_pct": {
+        "value": 0.05,
+        "rationale": "至少保留 5% 現金緩衝",
+        "source": "heuristic",
+        "citation": null
+      },
+      "max_correlation": {
+        "value": 0.7,
+        "rationale": "與現有持倉相關性 > 0.7 則降低權重",
+        "source": "heuristic",
+        "citation": null
+      },
+      "min_adv_ratio": {
+        "value": 0.01,
+        "rationale": "下單量不得超過日均量 1%",
+        "source": "literature",
+        "citation": null
+      }
+    },
+    "in_trade": {
+      "monitor_interval_sec": {
+        "value": 30,
+        "rationale": "每 30 秒檢查一次持倉狀態",
+        "source": "heuristic",
+        "citation": null
+      },
+      "stop_loss_pct": {
+        "value": -0.1,
+        "rationale": "個股虧損達 10% 即止損",
+        "source": "heuristic",
+        "citation": null
+      },
+      "take_profit_pct": {
+        "value": 0.3,
+        "rationale": "個股獲利達 30% 考慮部分獲利了結",
+        "source": "heuristic",
+        "citation": null
+      },
+      "trailing_stop_atr_mult": {
+        "value": 2.0,
+        "rationale": "2x ATR trailing stop",
+        "source": "literature",
+        "citation": null
+      },
+      "volatility_spike_mult": {
+        "value": 3.0,
+        "rationale": "波動率超過 3 倍歷史均值 → 減碼",
+        "source": "empirical",
+        "citation": null
+      },
+      "circuit_breaker_daily_loss_pct": {
+        "value": -0.05,
+        "rationale": "單日組合虧損 5% → 暫停交易",
+        "source": "heuristic",
+        "citation": null
+      }
+    },
+    "post_trade": {
+      "max_drawdown_halt_pct": {
+        "value": 0.2,
+        "rationale": "最大回撤 20% → SUSPENDED",
+        "source": "heuristic",
+        "citation": null
+      },
+      "max_drawdown_defensive_pct": {
+        "value": 0.1,
+        "rationale": "最大回撤 10% → DEFENSIVE（減半倉）",
+        "source": "heuristic",
+        "citation": null
+      },
+      "min_rolling_sharpe": {
+        "value": 0.0,
+        "rationale": "滾動 Sharpe < 0 → CAUTIOUS",
+        "source": "literature",
+        "citation": null
+      },
+      "consecutive_loss_days": {
+        "value": 5,
+        "rationale": "連續虧損 5 天 → mute agent",
+        "source": "heuristic",
+        "citation": null
+      },
+      "evaluation_interval_hours": {
+        "value": 24,
+        "rationale": "每日盤後評估一次",
+        "source": "heuristic",
+        "citation": null
+      }
+    }
+  },
+  "drawdown": {
+    "none_percentage": {
+      "value": 0.0,
+      "rationale": "No drawdown reduction at green macro risk; full exposure maintained (intentional zero)",
+      "source": "heuristic",
+      "citation": null
+    },
+    "none_max_exposure": {
+      "value": 1.0,
+      "rationale": "100% exposure allowed when no macro risk detected",
+      "source": "heuristic",
+      "citation": null
+    },
+    "light_percentage": {
+      "value": 0.15,
+      "rationale": "15% reduction for yellow macro risk level (elevated but manageable)",
+      "source": "heuristic",
+      "citation": null
+    },
+    "light_max_exposure": {
+      "value": 0.85,
+      "rationale": "85% max exposure for light drawdown; allows most positions intact",
+      "source": "heuristic",
+      "citation": null
+    },
+    "moderate_percentage": {
+      "value": 0.35,
+      "rationale": "35% reduction for orange macro risk (significant outflow concerns)",
+      "source": "heuristic",
+      "citation": null
+    },
+    "moderate_max_exposure": {
+      "value": 0.65,
+      "rationale": "65% max exposure for moderate drawdown; significant position trimming",
+      "source": "heuristic",
+      "citation": null
+    },
+    "severe_percentage": {
+      "value": 0.6,
+      "rationale": "60% reduction for red macro risk (crisis-level threat)",
+      "source": "heuristic",
+      "citation": null
+    },
+    "severe_max_exposure": {
+      "value": 0.4,
+      "rationale": "40% max exposure for severe drawdown; only conviction positions survive",
+      "source": "heuristic",
+      "citation": null
+    },
+    "emergency_percentage": {
+      "value": 0.9,
+      "rationale": "90% reduction for emergency drawdown; near-total liquidation",
+      "source": "heuristic",
+      "citation": null
+    },
+    "emergency_max_exposure": {
+      "value": 0.1,
+      "rationale": "10% max exposure for emergency drawdown; minimum viable positions only",
+      "source": "heuristic",
+      "citation": null
+    },
+    "orange_override_min_score": {
+      "value": 0.55,
+      "rationale": "Minimum structural trend override score needed to withstand orange macro risk",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.50, 0.65] range against historical orange-regime drawdown outcomes",
+      "citation": null
+    },
+    "red_override_min_score": {
+      "value": 0.75,
+      "rationale": "Minimum structural trend override score needed to withstand red macro risk",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.70, 0.85] range against historical red-regime drawdown outcomes",
+      "citation": null
+    },
+    "sector_constraints_risk_off": {
+      "value": {
+        "ai_supply_chain": 0.3,
+        "small_cap": 0.2,
+        "emerging_market": 0.1,
+        "gold": 1.5,
+        "utilities": 1.2
+      },
+      "rationale": "Risk-off flow: reduce growth/risk assets, rotate to defensive",
+      "source": "heuristic",
+      "todo": "Calibrate: derive multipliers from risk-off regime sector return analysis",
+      "citation": null
+    },
+    "sector_constraints_carry_trade_unwind": {
+      "value": {
+        "all_equities": 0.1,
+        "tech": 0.05,
+        "financials": 0.1,
+        "cash": 2.0
+      },
+      "rationale": "Carry trade unwind: exit equities, minimal tech/financials, maximum cash",
+      "source": "heuristic",
+      "todo": "Calibrate: derive multipliers from carry trade unwind episodes (2024/8, 2008/10, 1998/10)",
+      "citation": null
+    },
+    "sector_constraints_sector_rotation": {
+      "value": {
+        "energy": 1.8,
+        "oil_services": 1.5,
+        "high_valuation_tech": 0.3,
+        "rate_sensitive": 0.4
+      },
+      "rationale": "Sector rotation flow: overweight energy and oil services, reduce high-valuation tech and rate-sensitive",
+      "source": "heuristic",
+      "todo": "Calibrate: derive multipliers from sector rotation episode return analysis",
+      "citation": null
     }
   }
 }

@@ -77,7 +77,7 @@ func TestSelectBestSpawnedAgentIgnoresBelowBaseline(t *testing.T) {
 
 func TestBuildMutationBriefCarriesLayerAndEvidence(t *testing.T) {
 	candidate := &Candidate{
-		Agent: AgentSpec{ID: "style-1", Skill: "growth_momentum", Layer: LayerStyle, PromptFile: "prompts/agents/growth_momentum.md"},
+		Agent:     AgentSpec{ID: "style-1", Skill: "growth_momentum", Layer: LayerStyle, PromptFile: "prompts/agents/growth_momentum.md"},
 		Scorecard: Scorecard{AgentID: "style-1", Skill: "growth_momentum", Layer: LayerStyle, WindowCount: 2, SharpeLike: -0.3},
 		Experiment: ExperimentRecord{
 			ID: "exp-style-1", ProposalID: "proposal-exp-style-1", MutationType: "prompt_tightening",
