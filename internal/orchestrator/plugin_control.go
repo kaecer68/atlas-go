@@ -363,7 +363,7 @@ func (SuperinvestorExecutor) Recommend(agent domain.AgentSpec, quote domain.Quot
 		if strings.Contains(prompt, "momentum") && quote.Last > quote.Open {
 			b.add("macro_momentum_boost", 8, "momentum keyword + uptrend matches Druckenmiller thesis")
 		}
-		if strings.Contains(prompt, "asymmetric") && quote.Volume > quote.Volume*2 {
+		if strings.Contains(prompt, "asymmetric") && quote.Volume > 10_000_000 {
 			b.add("asymmetric_volume", 5, "asymmetric keyword + high volume")
 		}
 		if strings.Contains(prompt, "macro") && quote.Last > quote.High*0.98 {
