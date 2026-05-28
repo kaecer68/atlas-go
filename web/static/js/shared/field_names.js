@@ -764,6 +764,7 @@ export const FIELD = {
     industry_cycle: 'industry_cycle',
     precious_metals: 'precious_metals',
     etf: 'etf',
+    linkage: 'linkage',
     total: 'total',
   },
   FactorScoreItem: {
@@ -784,6 +785,7 @@ export const FIELD = {
     industry_cycle: 'industry_cycle',
     precious_metals: 'precious_metals',
     etf: 'etf',
+    linkage: 'linkage',
     total: 'total',
     breakdown: 'breakdown',
   },
@@ -1088,6 +1090,13 @@ export const FIELD = {
     correlation_matrix: 'correlation_matrix',
     recession_correlation_boost: 'recession_correlation_boost',
   },
+  LinkageFactorScore: {
+    score: 'score',
+    systemic_importance: 'systemic_importance',
+    shock_propagation_speed: 'shock_propagation_speed',
+    avg_correlation: 'avg_correlation',
+    industry_id: 'industry_id',
+  },
   LinkageInfo: {
     industry: 'industry',
     upstream: 'upstream',
@@ -1298,6 +1307,7 @@ export const FIELD = {
   OrchestratorParameters: {
     conviction_floor_default: 'conviction_floor_default',
     superinvestor_min_conviction: 'superinvestor_min_conviction',
+    superinvestor_conviction_base: 'superinvestor_conviction_base',
     cro_zscore_threshold: 'cro_zscore_threshold',
     sector_concentration_threshold: 'sector_concentration_threshold',
     sector_concentration_threshold_high: 'sector_concentration_threshold_high',

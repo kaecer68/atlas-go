@@ -30,6 +30,7 @@ type (
 	FactorScores             = shared.FactorScores
 	NarrativeFactorScore     = shared.NarrativeFactorScore
 	IndustryCycleFactorScore = shared.IndustryCycleFactorScore
+	LinkageFactorScore       = shared.LinkageFactorScore
 	ConvictionStep           = shared.ConvictionStep
 	ConvictionBreakdown      = shared.ConvictionBreakdown
 	AgentLayer               = shared.AgentLayer

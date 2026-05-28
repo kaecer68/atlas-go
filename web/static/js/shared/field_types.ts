@@ -843,6 +843,7 @@ export interface FactorScoreBreakdown {
   industry_cycle?: string;
   precious_metals?: string;
   etf?: string;
+  linkage?: string;
   total: string;
 }
 
@@ -865,6 +866,7 @@ export interface FactorScores {
   industry_cycle?: number;
   precious_metals?: number;
   etf?: number;
+  linkage?: number;
   total: number;
   breakdown?: string | null;
 }
@@ -1195,6 +1197,14 @@ export interface LinkageConfig {
   recession_correlation_boost: number;
 }
 
+export interface LinkageFactorScore {
+  score: number;
+  systemic_importance?: number;
+  shock_propagation_speed?: number;
+  avg_correlation?: number;
+  industry_id?: string;
+}
+
 export interface LinkageInfo {
   industry: string;
   upstream: string[];
@@ -1422,6 +1432,7 @@ export interface OptimizerParameters {
 export interface OrchestratorParameters {
   conviction_floor_default: string;
   superinvestor_min_conviction: string;
+  superinvestor_conviction_base: string;
   cro_zscore_threshold: string;
   sector_concentration_threshold: string;
   sector_concentration_threshold_high: string;

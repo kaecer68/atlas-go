@@ -171,6 +171,22 @@ func buildFactorEngine(runtimeParams *portfolio.RuntimeParameters, macroSnap *ma
 		}
 	})
 
+	linkageAnalyzer := industry.NewLinkageAnalyzer()
+	fe.WithLinkageProvider(func(symbol string) *domain.LinkageFactorScore {
+		industryID := symbolToIndustryID(symbol)
+		if industryID == "" {
+			return nil
+		}
+		score := linkageAnalyzer.CalculateLinkageScore(industryID)
+		return &domain.LinkageFactorScore{
+			Score:              score.SystemicImportance * score.AvgCorrelation,
+			SystemicImportance: score.SystemicImportance,
+			ShockPropagation:   score.ShockPropagationSpeed,
+			AvgCorrelation:     score.AvgCorrelation,
+			IndustryID:         industryID,
+		}
+	})
+
 	return fe, hp, fp
 }
 

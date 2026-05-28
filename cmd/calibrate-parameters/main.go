@@ -489,12 +489,12 @@ func calibrateDarwinian(ie *config.InferenceEngine, n int, cfg *config.Parameter
 			if math.Abs(topMult-beforeTop) > 0.01 {
 				_ = ie.SetParameter("darwinian_top_quartile_multiplier", topMult)
 				res.Parameters = append(res.Parameters, CalibratedParameter{
-					Path:        "darwinian.top_quartile_multiplier",
-					Before:      beforeTop,
-					After:       topMult,
-					Method:      "sharpe_ratio_based",
-					Confidence:  0.80,
-					SampleSize:  len(agentSharpes),
+					Path:       "darwinian.top_quartile_multiplier",
+					Before:     beforeTop,
+					After:      topMult,
+					Method:     "sharpe_ratio_based",
+					Confidence: 0.80,
+					SampleSize: len(agentSharpes),
 				})
 			}
 		}
@@ -506,12 +506,12 @@ func calibrateDarwinian(ie *config.InferenceEngine, n int, cfg *config.Parameter
 		if math.Abs(volThreshold-beforeVol) > 0.01 {
 			_ = ie.SetParameter("darwinian_volatility_penalty_threshold", volThreshold)
 			res.Parameters = append(res.Parameters, CalibratedParameter{
-				Path:        "darwinian.volatility_penalty_threshold",
-				Before:      beforeVol,
-				After:       volThreshold,
-				Method:      "median_volatility",
-				Confidence:  0.75,
-				SampleSize:  len(agentVols),
+				Path:       "darwinian.volatility_penalty_threshold",
+				Before:     beforeVol,
+				After:      volThreshold,
+				Method:     "median_volatility",
+				Confidence: 0.75,
+				SampleSize: len(agentVols),
 			})
 		}
 
@@ -553,12 +553,12 @@ func calibrateDarwinian(ie *config.InferenceEngine, n int, cfg *config.Parameter
 			beforeLookback := float64(cfg.Darwinian.LookbackDays.Value)
 			if float64(optimalLookback) != beforeLookback {
 				res.Parameters = append(res.Parameters, CalibratedParameter{
-					Path:        "darwinian.lookback_days",
-					Before:      beforeLookback,
-					After:       float64(optimalLookback),
-					Method:      "autocorrelation_based",
-					Confidence:  0.70,
-					SampleSize:  count,
+					Path:       "darwinian.lookback_days",
+					Before:     beforeLookback,
+					After:      float64(optimalLookback),
+					Method:     "autocorrelation_based",
+					Confidence: 0.70,
+					SampleSize: count,
 				})
 			}
 		}

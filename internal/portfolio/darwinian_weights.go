@@ -92,8 +92,8 @@ type DarwinianAgentWeight struct {
 	AvgReturn         float64   `json:"avg_return"`
 	LastAdjustedAt    time.Time `json:"last_adjusted_at"`
 	LastUpdatedAt     time.Time `json:"last_updated_at"`
-	DailyReturns      []float64 `json:"daily_returns"`        // Last 20 days returns for Sharpe calc
-	ConsecutiveAtMin  int       `json:"consecutive_at_min"`  // Days stuck at weight minimum
+	DailyReturns      []float64 `json:"daily_returns"`      // Last 20 days returns for Sharpe calc
+	ConsecutiveAtMin  int       `json:"consecutive_at_min"` // Days stuck at weight minimum
 }
 
 // DarwinianWeightManager implements Atlas-GIC style Darwinian weight system

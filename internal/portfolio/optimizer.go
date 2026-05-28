@@ -27,6 +27,7 @@ const (
 	FactorIndustryCycle  FactorType = "industry_cycle"
 	FactorPreciousMetals FactorType = "precious_metals"
 	FactorETF            FactorType = "etf"
+	FactorLinkage        FactorType = "linkage"
 )
 
 // FactorScore 因子评分
@@ -256,6 +257,7 @@ type symbolScore struct {
 	IndustryCycle          float64
 	PreciousMetals         float64
 	ETF                    float64
+	Linkage                float64
 	Total                  float64
 	Agents                 []string
 }
@@ -309,7 +311,7 @@ func (o *Optimizer) calculateMultiFactorScores(
 			liqScore = o.factorEngine.CalculateLiquidityScore(symbol, quotes).Score
 		}
 
-		var narrativeScore, industryCycleScore, instSentScore float64
+		var narrativeScore, industryCycleScore, linkageScore, instSentScore float64
 		o.mu.RLock()
 		fe := o.factorEngine
 		bridge := o.bridgeInput
@@ -321,6 +323,7 @@ func (o *Optimizer) calculateMultiFactorScores(
 			fe.mu.RLock()
 			narProv := fe.narrativeProv
 			iclProv := fe.cycleProv
+			linkProv := fe.linkageProv
 			fe.mu.RUnlock()
 			if narProv != nil {
 				if nfs := narProv(symbol); nfs != nil {
@@ -332,6 +335,13 @@ func (o *Optimizer) calculateMultiFactorScores(
 				if iclProv != nil {
 					if ics := iclProv(symbol); ics != nil {
 						industryCycleScore = ics.Score
+					}
+				}
+			}
+			if isPM := fe.IsPreciousMetal(symbol); !isPM {
+				if linkProv != nil {
+					if lfs := linkProv(symbol); lfs != nil {
+						linkageScore = lfs.Score
 					}
 				}
 			}
@@ -359,6 +369,9 @@ func (o *Optimizer) calculateMultiFactorScores(
 		if etfScore != 0 {
 			totalScore += etfScore * factorWeights[FactorETF]
 		}
+		if linkageScore != 0 {
+			totalScore += linkageScore * factorWeights[FactorLinkage]
+		}
 
 		scores[key] = &symbolScore{
 			Symbol:                 symbol,
@@ -373,6 +386,7 @@ func (o *Optimizer) calculateMultiFactorScores(
 			IndustryCycle:          industryCycleScore,
 			PreciousMetals:         pmScore,
 			ETF:                    etfScore,
+			Linkage:                linkageScore,
 			Total:                  totalScore,
 			Agents:                 agents,
 		}
