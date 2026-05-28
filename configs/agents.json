@@ -259,41 +259,6 @@
       }
     },
     {
-      "id": "robotics-desk-01",
-      "name": "機器人產業桌",
-      "layer": "sector",
-      "skill": "robotics_desk",
-      "promptFile": "prompts/agents/robotics_desk.md",
-      "enabled": true,
-      "universe": [
-        "2317.TW",
-        "2308.TW",
-        "2454.TW",
-        "3034.TW",
-        "2382.TW"
-      ],
-      "primaryMetrics": [
-        "alpha_hit_rate",
-        "cycle_timing"
-      ],
-      "requiredSkills": [
-        "robotics_desk",
-        "technical_breakout"
-      ],
-      "forbiddenActions": [
-        "hype_chasing",
-        "illiquid_preference"
-      ],
-      "operatingNotes": [
-        "Focus on automation capex cycle and servo/component demand."
-      ],
-      "screening_criteria": {
-        "volume_intraday": {
-          "min": 500000
-        }
-      }
-    },
-    {
       "id": "mining-desk-01",
       "name": "礦業/貴金屬產業桌",
       "layer": "sector",
