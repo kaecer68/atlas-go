@@ -14,8 +14,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"sort"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -403,11 +401,11 @@ func run(args []string, deps appDeps) error {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			cfg, err := config.ReloadEngineConfig()
-			if err != nil {
+			if err := config.ReloadParametersConfig(); err != nil {
 				http.Error(w, fmt.Sprintf("Failed to reload config: %v", err), http.StatusInternalServerError)
 				return
 			}
+			cfg := config.GetParametersConfig()
 			w.Header().Set("Content-Type", "application/json")
 			//nolint:errcheck
 			fmt.Fprintf(w, `{"status":"ok","version":"%s"}`+"\n", cfg.Version)
@@ -1723,43 +1721,6 @@ func runSimulationMode(rt *bootstrap.Runtime, cfg config.Config, verbose bool, d
 	}
 
 	return nil
-}
-
-// findLatestExperiment auto-discovers the most recent experiment JSON file
-// by sorting filenames by embedded timestamp (same as judge-experiment CLI).
-func findLatestExperiment(dir string) string {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return ""
-	}
-	var files []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		if filepath.Ext(name) == ".json" && name != "test-experiment.json" {
-			files = append(files, name)
-		}
-	}
-	if len(files) == 0 {
-		return ""
-	}
-	sort.Slice(files, func(i, j int) bool {
-		return extractTimestamp(files[i]) > extractTimestamp(files[j])
-	})
-	return filepath.Join(dir, files[0])
-}
-
-func extractTimestamp(filename string) int64 {
-	base := strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))
-	parts := strings.Split(base, "-")
-	if len(parts) > 0 {
-		if ts, err := strconv.ParseInt(parts[len(parts)-1], 10, 64); err == nil {
-			return ts
-		}
-	}
-	return 0
 }
 
 func loadCalibrationOrders(workDir string) ([]portfolio.CalibratedOrder, error) {

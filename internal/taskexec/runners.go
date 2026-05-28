@@ -3,11 +3,6 @@ package taskexec
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
-	"sort"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/backtest"
@@ -114,7 +109,7 @@ func (r *judgeExperimentRunner) Name() string {
 func (r *judgeExperimentRunner) Run(ctx context.Context, req SubmitRequest, sink EventSink) error {
 	resultPath, _ := req.Payload["result_path"].(string)
 	if resultPath == "" {
-		resultPath = findLatestExperiment("data/state/experiments")
+		resultPath = experiment.FindLatestExperiment("data/state/experiments")
 		if resultPath == "" {
 			resultPath = "data/state/experiments/exec-value-yield-01-1776084503.json"
 		}
@@ -187,7 +182,7 @@ func (r *promoteBaselineRunner) Name() string {
 func (r *promoteBaselineRunner) Run(ctx context.Context, req SubmitRequest, sink EventSink) error {
 	resultPath, _ := req.Payload["result_path"].(string)
 	if resultPath == "" {
-		resultPath = findLatestExperiment("data/state/experiments")
+		resultPath = experiment.FindLatestExperiment("data/state/experiments")
 		if resultPath == "" {
 			resultPath = "data/state/experiments/exec-value-yield-01-1776084503.json"
 		}
@@ -385,39 +380,4 @@ func (r *marginBackfillRunner) Run(ctx context.Context, req SubmitRequest, sink 
 		Message:   "margin history backfill completed",
 	})
 	return nil
-}
-
-func findLatestExperiment(dir string) string {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return ""
-	}
-	var files []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		if filepath.Ext(name) == ".json" && name != "test-experiment.json" {
-			files = append(files, name)
-		}
-	}
-	if len(files) == 0 {
-		return ""
-	}
-	sort.Slice(files, func(i, j int) bool {
-		return extractTimestamp(files[i]) > extractTimestamp(files[j])
-	})
-	return filepath.Join(dir, files[0])
-}
-
-func extractTimestamp(filename string) int64 {
-	base := strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))
-	parts := strings.Split(base, "-")
-	if len(parts) > 0 {
-		if ts, err := strconv.ParseInt(parts[len(parts)-1], 10, 64); err == nil {
-			return ts
-		}
-	}
-	return 0
 }
