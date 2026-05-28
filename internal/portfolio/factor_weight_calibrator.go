@@ -17,6 +17,8 @@ type CalibratedOrder struct {
 	Side          string
 	ForwardReturn float64
 	FactorScores  map[FactorType]float64
+	AgentID       string // executor/agent that produced this recommendation
+	Skill         string // executor skill name (e.g. "momentum", "value")
 }
 
 type WeightCalibrationReport struct {
@@ -239,6 +241,8 @@ func LoadOrdersFromJSONL(path string) ([]CalibratedOrder, error) {
 			Side          string             `json:"side"`
 			ForwardReturn float64            `json:"forward_return"`
 			FactorScores  map[string]float64 `json:"factor_scores"`
+			AgentID       string             `json:"agent_id"`
+			Skill         string             `json:"skill"`
 		}
 		if json.Unmarshal([]byte(line), &raw) != nil || raw.Symbol == "" {
 			continue
@@ -250,6 +254,7 @@ func LoadOrdersFromJSONL(path string) ([]CalibratedOrder, error) {
 		orders = append(orders, CalibratedOrder{
 			Symbol: raw.Symbol, Side: raw.Side,
 			ForwardReturn: raw.ForwardReturn, FactorScores: scores,
+			AgentID: raw.AgentID, Skill: raw.Skill,
 		})
 	}
 	return orders, nil

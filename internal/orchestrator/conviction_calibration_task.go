@@ -11,8 +11,6 @@ import (
 
 // ConvictionCalibrationProvider reads CalibratedOrder JSONL from session
 // directories and converts them to CalibRecommendation for the engine.
-// Executor attribution is not in the raw JSONL yet, so calibration runs
-// on aggregate data across all executors using a global meta.
 type ConvictionCalibrationProvider struct {
 	workDir string
 }
@@ -21,9 +19,9 @@ func NewConvictionCalibrationProvider(workDir string) *ConvictionCalibrationProv
 	return &ConvictionCalibrationProvider{workDir: workDir}
 }
 
-// Recommendations loads all recommendation outcomes from session directories.
-// Since executor_id/skill is not yet in the JSONL format, all recommendations
-// are returned under the single key "all" for aggregate calibration.
+// Recommendations loads recommendation outcomes from session directories and
+// filters by executor skill. When executorSkill is empty or "all", returns
+// all recommendations without filtering.
 func (p *ConvictionCalibrationProvider) Recommendations(executorSkill string) ([]CalibRecommendation, error) {
 	sessionsDir := filepath.Join(p.workDir, "data", "state", "sessions")
 	entries, err := os.ReadDir(sessionsDir)
@@ -40,6 +38,10 @@ func (p *ConvictionCalibrationProvider) Recommendations(executorSkill string) ([
 			continue
 		}
 		for _, o := range orders {
+			// Filter by executor skill if specified
+			if executorSkill != "" && executorSkill != "all" && o.Skill != executorSkill {
+				continue
+			}
 			fs := make(map[string]float64, len(o.FactorScores))
 			for k, v := range o.FactorScores {
 				fs[string(k)] = v
@@ -54,28 +56,24 @@ func (p *ConvictionCalibrationProvider) Recommendations(executorSkill string) ([
 	return all, nil
 }
 
-// GlobalConvictionMeta returns a synthetic StrategyMeta covering all four
-// factors. Used for aggregate calibration when executor-level attribution
-// is not available in the data.
-func GlobalConvictionMeta() StrategyMeta {
-	fc := loadFactorConfig()
-	return StrategyMeta{
-		ID: "all", Skill: "all",
-		Description: "Aggregate factor-driven conviction across all executors",
-		Factors:     []string{"momentum", "value", "quality", "liquidity"},
-		Parameters: append(append(momentumParams(fc), valueParams(fc)...),
-			append(qualityParams(fc), liquidityParams(fc)...)...),
-	}
-}
-
-// RunConvictionCalibration loads historical data, runs calibration on aggregate
-// parameters, and logs the results. Designed to be called from
-// BackgroundTaskManager task functions.
-func RunConvictionCalibration(workDir string) error {
+// RunConvictionCalibration loads historical data, runs calibration on the
+// specified executors' parameters, logs the results, and auto-applies when
+// improvement exceeds 5%. When no metas are provided, defaults to aggregate
+// calibration across all four factors.
+func RunConvictionCalibration(workDir string, metas ...StrategyMeta) error {
 	provider := NewConvictionCalibrationProvider(workDir)
 	engine := &CalibrationEngine{}
 
-	metas := []StrategyMeta{GlobalConvictionMeta()}
+	if len(metas) == 0 {
+		fc := loadFactorConfig()
+		metas = []StrategyMeta{{
+			ID: "all", Skill: "all",
+			Description: "Aggregate factor-driven conviction across all executors",
+			Factors:     []string{"momentum", "value", "quality", "liquidity"},
+			Parameters: append(append(momentumParams(fc), valueParams(fc)...),
+				append(qualityParams(fc), liquidityParams(fc)...)...),
+		}}
+	}
 	reports, err := engine.CalibrateAll(metas, provider, 10)
 	if err != nil {
 		return fmt.Errorf("conviction calibration: %w", err)
