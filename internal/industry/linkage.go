@@ -682,8 +682,7 @@ type LinkageAnalyzer struct {
 }
 
 func NewLinkageAnalyzer() *LinkageAnalyzer {
-	graph := DefaultSupplyChainGraph()
-	cm := loadCorrelationMatrixWithFallback()
+	graph, cm := loadGraphWithFallback()
 	propagation := NewShockPropagation(graph, cm)
 
 	cfg := config.GetParametersConfig()
@@ -699,6 +698,17 @@ func NewLinkageAnalyzer() *LinkageAnalyzer {
 		correlation: cm,
 		propagation: propagation,
 	}
+}
+
+// loadGraphWithFallback attempts to load the supply chain graph and correlation
+// matrix from configs/supply_chain_graph.json. If the file cannot be read (e.g.
+// when running from a package directory in tests), it falls back to the hardcoded
+// DefaultSupplyChainGraph and DefaultCorrelationMatrix.
+func loadGraphWithFallback() (*SupplyChainGraph, *CorrelationMatrix) {
+	if g, c, err := LoadSupplyChainGraph("configs/supply_chain_graph.json"); err == nil {
+		return g, c
+	}
+	return DefaultSupplyChainGraph(), loadCorrelationMatrixWithFallback()
 }
 
 func loadCorrelationMatrixWithFallback() *CorrelationMatrix {
