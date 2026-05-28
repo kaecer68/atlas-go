@@ -889,6 +889,21 @@ var mapParamPrefixes = []mapParamPrefix{
 	}, setMap: func(cfg *ParametersConfig, m map[string]float64) {
 		cfg.Industry.SectorWeights.Value = m
 	}},
+	{prefix: "drawdown_sector_constraints_risk_off_", getMap: func(cfg *ParametersConfig) map[string]float64 {
+		return cfg.Drawdown.SectorConstraintsRiskOff.Value
+	}, setMap: func(cfg *ParametersConfig, m map[string]float64) {
+		cfg.Drawdown.SectorConstraintsRiskOff.Value = m
+	}},
+	{prefix: "drawdown_sector_constraints_carry_trade_unwind_", getMap: func(cfg *ParametersConfig) map[string]float64 {
+		return cfg.Drawdown.SectorConstraintsCarryTradeUnwind.Value
+	}, setMap: func(cfg *ParametersConfig, m map[string]float64) {
+		cfg.Drawdown.SectorConstraintsCarryTradeUnwind.Value = m
+	}},
+	{prefix: "drawdown_sector_constraints_sector_rotation_", getMap: func(cfg *ParametersConfig) map[string]float64 {
+		return cfg.Drawdown.SectorConstraintsSectorRotation.Value
+	}, setMap: func(cfg *ParametersConfig, m map[string]float64) {
+		cfg.Drawdown.SectorConstraintsSectorRotation.Value = m
+	}},
 }
 
 // mapParamPrefix describes a dot-notation map parameter prefix and its accessors.

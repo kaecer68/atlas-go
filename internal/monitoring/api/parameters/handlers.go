@@ -151,6 +151,21 @@ func (h *Handlers) HandlePostParameters(r *http.Request) (int, any) {
 			if err := engine.SetBoolParameter(name, v); err != nil {
 				return http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("set %s: %v", name, err)}
 			}
+		} else if v, ok := value.(map[string]any); ok {
+			fmap := make(map[string]float64, len(v))
+			for sk, sv := range v {
+				switch nv := sv.(type) {
+				case float64:
+					fmap[sk] = nv
+				case int:
+					fmap[sk] = float64(nv)
+				default:
+					return http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("map sub-key %s.%s has non-numeric value", name, sk)}
+				}
+			}
+			if err := engine.SetMapParameter(name, fmap); err != nil {
+				return http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("set map %s: %v", name, err)}
+			}
 		} else {
 			return http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("parameter %s has unsupported type", name)}
 		}
