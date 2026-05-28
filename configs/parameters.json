@@ -1,6 +1,6 @@
 {
   "version": "1.2",
-  "updated_at": "2026-05-28T18:46:30.98844+08:00",
+  "updated_at": "2026-05-28T23:17:14.735187+08:00",
   "darwinian": {
     "weight_min": {
       "value": 0.3,
@@ -2523,10 +2523,10 @@
       }
     },
     "max_position_size": {
-      "value": 0.09,
+      "value": 0.054,
       "rationale": "15% max single position size",
       "source": "literature",
-      "last_calibrated": "2026-05-28T17:59:51.656912+08:00",
+      "last_calibrated": "2026-05-28T22:28:21.473401+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "literature",
@@ -2539,10 +2539,10 @@
       }
     },
     "max_daily_loss_pct": {
-      "value": 0.018,
+      "value": 0.010799999999999999,
       "rationale": "3% max daily loss",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T17:59:51.656912+08:00",
+      "last_calibrated": "2026-05-28T22:28:21.473401+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
@@ -3079,10 +3079,10 @@
       }
     },
     "ai_revenue_growth_threshold": {
-      "value": 53.57142857142857,
+      "value": 39.285714285714285,
       "rationale": "AI revenue YoY growth % threshold to detect AI capex surge (TSMC revenue proxy)",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T18:15:11.725866+08:00",
+      "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
@@ -3095,10 +3095,10 @@
       }
     },
     "cowos_utilization_threshold": {
-      "value": 91.07142857142857,
+      "value": 78,
       "rationale": "CoWoS capacity utilization % threshold indicating structural AI demand",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T18:15:11.725866+08:00",
+      "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
@@ -3111,10 +3111,10 @@
       }
     },
     "capex_growth_threshold": {
-      "value": 26.785714285714285,
+      "value": 21.428571428571427,
       "rationale": "25% YoY capex growth threshold for AI infrastructure expansion detection (captures early-cycle signals; 40% only in peak buildout phases)",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T18:15:11.725866+08:00",
+      "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
@@ -3127,10 +3127,10 @@
       }
     },
     "us10y_change_bps_threshold": {
-      "value": 10.714285714285714,
+      "value": 9.285714285714285,
       "rationale": "US 10Y yield change in basis points to trigger US_rates_up event",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T18:15:11.725866+08:00",
+      "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
@@ -3143,10 +3143,10 @@
       }
     },
     "dxy_change_pct_threshold": {
-      "value": 1.607142857142857,
+      "value": 1.5,
       "rationale": "DXY change % threshold to trigger US_rates_up event alongside yield move",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T18:15:11.725866+08:00",
+      "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
@@ -3159,10 +3159,10 @@
       }
     },
     "geopolitical_gpr_threshold": {
-      "value": 160.7142857142857,
+      "value": 120,
       "rationale": "Geopolitical risk index (GPR) threshold to trigger geopolitical_risk_spike event",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T18:15:11.725866+08:00",
+      "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
@@ -3175,10 +3175,10 @@
       }
     },
     "oil_change_pct_threshold": {
-      "value": 5.357142857142857,
+      "value": 4.857142857142857,
       "rationale": "Oil price change % threshold (absolute) to trigger oil_price_shock event",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T18:15:11.725866+08:00",
+      "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
@@ -3191,10 +3191,10 @@
       }
     },
     "jpy_change_pct_threshold": {
-      "value": 2.142857142857143,
+      "value": 1.7857142857142856,
       "rationale": "JPY change % threshold to trigger JPY_carry_unwind event",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T18:15:11.725866+08:00",
+      "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
@@ -3207,10 +3207,10 @@
       }
     },
     "vix_level_threshold": {
-      "value": 26.785714285714285,
+      "value": 22.142857142857142,
       "rationale": "VIX level threshold to trigger JPY_carry_unwind and geopolitical events",
       "source": "heuristic",
-      "last_calibrated": "2026-05-28T18:15:11.725866+08:00",
+      "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
       "calibration_method": "bayesian_optimization",
       "citation": {
         "source_type": "heuristic",
@@ -5550,61 +5550,61 @@
     },
     "structural_trend": {
       "min_trend_strength": {
-        "value": 0.4799999999999999,
+        "value": 0.5152523114847142,
         "rationale": "Minimum 0.7 trend strength for structural classification; below this threshold trends are considered noise",
         "source": "heuristic",
-        "last_calibrated": "2026-05-28T18:30:04.441983+08:00",
+        "last_calibrated": "2026-05-28T23:17:14.735186+08:00",
         "calibration_method": "bayesian_optimization",
         "todo": "Calibrate against TW structural trend detection accuracy 2020-2026"
       },
       "min_confidence": {
-        "value": 0.5142857142857142,
+        "value": 0.9245870725774641,
         "rationale": "75% minimum confidence for structural trend signal; balances false positive rate vs early detection",
         "source": "heuristic",
-        "last_calibrated": "2026-05-28T18:30:04.441983+08:00",
+        "last_calibrated": "2026-05-28T23:17:14.735186+08:00",
         "calibration_method": "bayesian_optimization"
       },
       "min_hit_rate": {
-        "value": 0.4799999999999999,
+        "value": 0.591598259213287,
         "rationale": "70% minimum historical hit rate for narrative events to be considered valid structural trends",
         "source": "heuristic",
-        "last_calibrated": "2026-05-28T18:30:04.441983+08:00",
+        "last_calibrated": "2026-05-28T23:17:14.735186+08:00",
         "calibration_method": "bayesian_optimization",
         "todo": "Validate against narrative event hit rate distribution"
       },
       "override_threshold": {
-        "value": 0.44571428571428573,
+        "value": 0.4976597723545646,
         "rationale": "0.65 threshold for structural trend to override cyclical signals; must be lower than MinConfidence to prioritize structure",
         "source": "heuristic",
-        "last_calibrated": "2026-05-28T18:30:04.441983+08:00",
+        "last_calibrated": "2026-05-28T23:17:14.735186+08:00",
         "calibration_method": "bayesian_optimization"
       },
       "ai_revenue_growth_threshold": {
-        "value": 34.285714285714285,
+        "value": 40.41902457024414,
         "rationale": "50% YoY AI revenue growth threshold flags structural AI capex surge; TSMC AI revenue grew ~50% in 2024-2025",
         "source": "empirical",
-        "last_calibrated": "2026-05-28T18:30:04.441983+08:00",
+        "last_calibrated": "2026-05-28T23:17:14.735186+08:00",
         "calibration_method": "bayesian_optimization"
       },
       "cowos_utilization_threshold": {
-        "value": 58.285714285714285,
+        "value": 77.65531680911205,
         "rationale": "85% CoWoS utilization signals near-capacity AI packaging demand; TSMC CoWoS utilization tracked at 90%+ in 2025",
         "source": "empirical",
-        "last_calibrated": "2026-05-28T18:30:04.441983+08:00",
+        "last_calibrated": "2026-05-28T23:17:14.735186+08:00",
         "calibration_method": "bayesian_optimization"
       },
       "capex_growth_threshold": {
-        "value": 27.428571428571427,
+        "value": 32.598033764538826,
         "rationale": "40% YoY capex growth flags structural capacity expansion; TSMC capex grew ~34% in 2024, ~40% planned for 2025",
         "source": "empirical",
-        "last_calibrated": "2026-05-28T18:30:04.441983+08:00",
+        "last_calibrated": "2026-05-28T23:17:14.735186+08:00",
         "calibration_method": "bayesian_optimization"
       },
       "semiconductor_index_threshold": {
-        "value": 0.1514285714285714,
+        "value": 0,
         "rationale": "Placeholder for semiconductor index trend threshold; pending index construction",
         "source": "heuristic",
-        "last_calibrated": "2026-05-28T18:30:04.441983+08:00",
+        "last_calibrated": "2026-05-28T23:17:14.735186+08:00",
         "calibration_method": "bayesian_optimization",
         "todo": "Define once TW semiconductor composite index is built"
       }

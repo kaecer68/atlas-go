@@ -318,7 +318,6 @@ var x = 1
 	}
 	for _, decl := range f.Decls {
 		if _, ok := decl.(*ast.GenDecl); ok {
-			// Should not panic on non-func decls
 			continue
 		}
 	}

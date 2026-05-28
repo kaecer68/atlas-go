@@ -1184,7 +1184,7 @@ func buildFinalRecKey(finalRecs []domain.Recommendation) map[string]struct{} {
 	return keys
 }
 
-func syntheticForwardReturn(symbol string, quote domain.Quote) float64 {
+func syntheticForwardReturn(symbol string, quote domain.Quote, asOf time.Time) float64 {
 	if quote.Open > 0 {
 		intraday := (quote.Last - quote.Open) / quote.Open
 		fr := intraday * 0.8
@@ -1194,7 +1194,6 @@ func syntheticForwardReturn(symbol string, quote domain.Quote) float64 {
 		if fr < -0.05 {
 			fr = -0.05
 		}
-		// Neutral fallback: no artificial bias introduced
 		if fr == 0 {
 			fr = 0.0
 		}
@@ -1204,7 +1203,11 @@ func syntheticForwardReturn(symbol string, quote domain.Quote) float64 {
 	for _, r := range symbol {
 		sum += int64(r)
 	}
-	return (float64(sum%100)/100.0)*0.04 - 0.02
+	// Incorporate session day-of-year to avoid identical returns
+	// across sessions for the same symbol, while remaining
+	// deterministic for replay (same date = same output).
+	daySeed := int64(asOf.YearDay())
+	return (float64((sum+daySeed)%10000)/10000.0)*0.04 - 0.02
 }
 
 func buildParameterSnapshot() *shared.ParameterSnapshot {
@@ -1249,7 +1252,7 @@ func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes [
 	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
 	for _, rec := range rawRecs {
 		quote := quoteMap[rec.Symbol]
-		forwardReturn := syntheticForwardReturn(rec.Symbol, quote)
+		forwardReturn := syntheticForwardReturn(rec.Symbol, quote, asOf)
 		_, passed := finalKey[rec.Symbol+"|"+rec.Agent]
 		guardReason := ""
 		if !passed {
@@ -1296,7 +1299,7 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 		synthetic := false
 		forwardReturn, ok := ds.ForwardReturn(rec.Symbol, asOf, 1)
 		if !ok || forwardReturn == 0 {
-			forwardReturn = syntheticForwardReturn(rec.Symbol, quote)
+			forwardReturn = syntheticForwardReturn(rec.Symbol, quote, asOf)
 			synthetic = true
 		}
 		_, passed := finalKey[rec.Symbol+"|"+rec.Agent]

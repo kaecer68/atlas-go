@@ -2,7 +2,6 @@ package orchestrator
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -97,7 +96,7 @@ func TestSimTrace_ExportJSONL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
-	if fmt.Sprintf("%s", raw) == "" {
+	if len(raw) == 0 {
 		t.Fatal("exported file should not be empty")
 	}
 

@@ -1005,11 +1005,16 @@ var stringParameterTable = map[string]stringParamAccessor{
 }
 
 // boolParamAccessor provides get/set accessors for bool-type parameters.
+// The table is intentionally empty — bool parameter registration is planned
+// but not yet implemented. See SetBoolParameter in inference.go.
+//
+//nolint:unused // scaffolding for planned bool parameter support
 type boolParamAccessor struct {
 	get func(*ParametersConfig) bool
 	set func(*ParametersConfig, bool)
 }
 
+//nolint:unused // scaffolding, populated when bool params are registered
 var boolParameterTable = map[string]boolParamAccessor{}
 
 var _ = func() int {
