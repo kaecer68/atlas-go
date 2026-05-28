@@ -143,8 +143,16 @@ func (h *Handlers) HandlePostParameters(r *http.Request) (int, any) {
 			if err := engine.SetParameter(name, float64(v)); err != nil {
 				return http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("set %s: %v", name, err)}
 			}
+		} else if v, ok := value.(string); ok {
+			if err := engine.SetStringParameter(name, v); err != nil {
+				return http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("set %s: %v", name, err)}
+			}
+		} else if v, ok := value.(bool); ok {
+			if err := engine.SetBoolParameter(name, v); err != nil {
+				return http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("set %s: %v", name, err)}
+			}
 		} else {
-			return http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("parameter %s must be numeric", name)}
+			return http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("parameter %s has unsupported type", name)}
 		}
 	}
 

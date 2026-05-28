@@ -1,7 +1,27 @@
 import { escapeHtml } from '../shared/app-utils.js';
 
 function isEditable(val) {
-  return typeof val === 'number' || (typeof val === 'string' && !isNaN(val) && val.trim() !== '');
+  // Numbers: always editable
+  if (typeof val === 'number') return true;
+  // Boolean: editable
+  if (typeof val === 'boolean') return true;
+  // Strings that look like numbers: editable as numeric
+  if (typeof val === 'string' && !isNaN(val) && val.trim() !== '') return true;
+  // Non-empty strings: editable as string (e.g. "stable", "accelerating")
+  if (typeof val === 'string' && val.trim() !== '') return true;
+  return false;
+}
+
+function detectParamType(val) {
+  if (typeof val === 'boolean') return 'bool';
+  if (typeof val === 'number') return 'number';
+  if (typeof val === 'string') {
+    if (val === 'true' || val === 'false') return 'bool';
+    if (!isNaN(val) && val.trim() !== '') return 'number';
+    return 'string';
+  }
+  if (typeof val === 'object') return 'object';
+  return 'unknown';
 }
 
 function formatValue(key, val, maxLen) {
@@ -33,9 +53,33 @@ function renderRow(key, val, meta, maxLen, isUncategorized) {
 }
 
 window._paramEdit = function(td) {
-  if (td.querySelector('input')) return;
+  if (td.querySelector('input, select')) return;
   const key = td.dataset.key;
   const oldVal = td.dataset.val;
+
+  let typedOldVal;
+  try { typedOldVal = JSON.parse(oldVal); } catch(e) { typedOldVal = oldVal; }
+  const pType = detectParamType(typedOldVal);
+
+  if (pType === 'bool') {
+    const sel = document.createElement('select');
+    sel.style.cssText = 'width:100%;background:var(--panel-l2);color:var(--text);border:1px solid var(--accent);padding:2px 4px;font-size:12px;border-radius:3px;';
+    sel.innerHTML = '<option value="true"' + (oldVal === 'true' ? ' selected' : '') + '>true</option>' +
+      '<option value="false"' + (oldVal === 'false' ? ' selected' : '') + '>false</option>';
+    sel.onchange = function() { sel.blur(); };
+    sel.onblur = async function() {
+      const newStr = sel.value;
+      if (newStr === oldVal) { td.innerHTML = escapeHtml(oldVal); td.classList.add('param-val-editable'); return; }
+      td.innerHTML = escapeHtml(newStr) + ' <span style="color:var(--warn);font-size:10px">儲存中…</span>';
+      await submitEdit(td, key, oldVal, newStr === 'true');
+    };
+    td.innerHTML = '';
+    td.classList.remove('param-val-editable');
+    td.appendChild(sel);
+    sel.focus();
+    return;
+  }
+
   const input = document.createElement('input');
   input.type = 'text';
   input.value = oldVal;
@@ -45,28 +89,25 @@ window._paramEdit = function(td) {
     if (e.key === 'Escape') { td.innerHTML = escapeHtml(oldVal); td.classList.add('param-val-editable'); }
   };
   input.onblur = async function() {
-    const newVal = parseFloat(input.value);
+    const raw = input.value.trim();
+    if (raw === oldVal) {
+      td.innerHTML = escapeHtml(oldVal);
+      td.classList.add('param-val-editable');
+      return;
+    }
+    if (pType === 'string') {
+      td.innerHTML = escapeHtml(raw) + ' <span style="color:var(--warn);font-size:10px">儲存中…</span>';
+      await submitEdit(td, key, oldVal, raw);
+      return;
+    }
+    const newVal = parseFloat(raw);
     if (isNaN(newVal) || newVal === parseFloat(oldVal)) {
       td.innerHTML = escapeHtml(oldVal);
       td.classList.add('param-val-editable');
       return;
     }
     td.innerHTML = escapeHtml(String(newVal)) + ' <span style="color:var(--warn);font-size:10px">儲存中…</span>';
-    try {
-      const body = {}; body[key] = newVal;
-      const resp = await fetch('/api/parameters', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-      if (resp.ok) {
-        td.innerHTML = escapeHtml(String(newVal));
-        td.classList.add('param-val-editable');
-        td.dataset.val = String(newVal);
-      } else {
-        td.innerHTML = escapeHtml(oldVal) + ' <span style="color:var(--down);font-size:10px">失敗</span>';
-        td.classList.add('param-val-editable');
-      }
-    } catch {
-      td.innerHTML = escapeHtml(oldVal) + ' <span style="color:var(--down);font-size:10px">錯誤</span>';
-      td.classList.add('param-val-editable');
-    }
+    await submitEdit(td, key, oldVal, newVal);
   };
   td.innerHTML = '';
   td.classList.remove('param-val-editable');
@@ -74,6 +115,25 @@ window._paramEdit = function(td) {
   input.focus();
   input.select();
 };
+
+async function submitEdit(td, key, oldVal, bodyVal) {
+  try {
+    const body = {}; body[key] = bodyVal;
+    const resp = await fetch('/api/parameters', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (resp.ok) {
+      td.innerHTML = escapeHtml(String(bodyVal));
+      td.classList.add('param-val-editable');
+      td.dataset.val = String(bodyVal);
+    } else {
+      const err = await resp.json().catch(() => ({}));
+      td.innerHTML = escapeHtml(oldVal) + ' <span style="color:var(--down);font-size:10px">' + escapeHtml(err.error || '失敗') + '</span>';
+      td.classList.add('param-val-editable');
+    }
+  } catch {
+    td.innerHTML = escapeHtml(oldVal) + ' <span style="color:var(--down);font-size:10px">錯誤</span>';
+    td.classList.add('param-val-editable');
+  }
+}
 
 export function renderParametersPage(params, categoriesResp, auditLog, metadata) {
   const contentDiv = document.getElementById('parametersContent');
