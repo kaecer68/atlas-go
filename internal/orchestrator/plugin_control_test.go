@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -143,5 +144,64 @@ func TestCIOPortfolioExecutorDeterministicTieBreak(t *testing.T) {
 	}
 	if out[0].Symbol != "2317.TW" || out[1].Symbol != "2330.TW" {
 		t.Fatalf("expected deterministic symbol ordering for tie conviction, got %s then %s", out[0].Symbol, out[1].Symbol)
+	}
+}
+
+func TestSuperinvestorExecutorApply(t *testing.T) {
+	executor := SuperinvestorExecutor{}
+	agent := domain.AgentSpec{ID: "si-01", Skill: "superinvestor_quality", Layer: domain.LayerSuperinvestor}
+
+	recs := []domain.Recommendation{
+		{Agent: "a", Skill: "growth_momentum", Symbol: "2330.TW", Conviction: 80, Side: domain.SideBuy, Reason: "strong"},
+		{Agent: "b", Skill: "semiconductor", Symbol: "2317.TW", Conviction: 60, Side: domain.SideBuy, Reason: "medium"},
+		{Agent: "c", Skill: "value_yield", Symbol: "2884.TW", Conviction: 40, Side: domain.SideBuy, Reason: "weak"},
+	}
+
+	out := executor.Apply(agent, recs, DefaultExecutionPolicy())
+	if len(out) != 1 {
+		t.Fatalf("expected 1 recommendation above SuperinvestorMinConviction(65), got %d", len(out))
+	}
+	if out[0].Symbol != "2330.TW" {
+		t.Fatalf("expected 2330.TW to survive, got %s", out[0].Symbol)
+	}
+	if !strings.Contains(out[0].Reason, "[Superinvestor:") {
+		t.Fatalf("expected reason to be tagged with [Superinvestor:...], got %q", out[0].Reason)
+	}
+}
+
+func TestSuperinvestorExecutorIntegrationInControlLayer(t *testing.T) {
+	registry := domain.AgentRegistry{
+		Version: 1,
+		Agents: []domain.AgentSpec{
+			{ID: "si-01", Name: "Superinvestor", Layer: domain.LayerSuperinvestor, Skill: "superinvestor_quality", Enabled: true},
+			{ID: "cro-01", Name: "CRO", Layer: domain.LayerControl, Skill: "cro_risk", Enabled: true},
+		},
+	}
+	plugins := NewPluginRegistry()
+
+	recs := []domain.Recommendation{
+		{Agent: "a", Skill: "growth_momentum", Symbol: "2330.TW", Conviction: 80, Side: domain.SideBuy, Reason: "strong"},
+		{Agent: "b", Skill: "semiconductor", Symbol: "2317.TW", Conviction: 60, Side: domain.SideBuy, Reason: "medium"},
+	}
+
+	_, outcomes := applyControlLayerWithOutcomes(registry, plugins, recs, DefaultExecutionPolicy(), nil, "")
+
+	found := false
+	for _, o := range outcomes {
+		if o.GuardSkill == "superinvestor_quality" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected guard outcome for superinvestor agent, got %d outcomes", len(outcomes))
+	}
+}
+
+func TestSeverityForSuperinvestorIsSoft(t *testing.T) {
+	agent := domain.AgentSpec{ID: "si-01", Skill: "superinvestor_quality", Layer: domain.LayerSuperinvestor}
+	severity := severityForControlAgent(agent)
+	if severity != domain.GuardSeveritySoft {
+		t.Fatalf("expected soft severity for superinvestor, got %s", severity)
 	}
 }
