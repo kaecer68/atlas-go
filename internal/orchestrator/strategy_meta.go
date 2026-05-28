@@ -1,9 +1,5 @@
 package orchestrator
 
-import (
-	"time"
-)
-
 // StrategyMeta describes an executor's factor usage and calibratable parameters.
 // Each executor exposes this metadata so a calibration engine can understand
 // which factors drive its decisions and what parameter ranges are searchable.
@@ -49,19 +45,6 @@ var (
 	_ StrategyProvider = TechnicalBreakoutExecutor{}
 	_ StrategyProvider = GrowthMomentumExecutor{}
 )
-
-// CalibrationRecord records an executor's decision for a symbol in a session.
-// Persisted alongside ledger outcomes, these records enable the calibration
-// engine to correlate factor scores with forward returns and optimize thresholds.
-type CalibrationRecord struct {
-	SessionID  string             `json:"session_id"`
-	ExecutorID string             `json:"executor_id"`
-	Skill      string             `json:"skill"`
-	Symbol     string             `json:"symbol"`
-	Conviction int                `json:"conviction"`
-	Factors    map[string]float64 `json:"factors"`
-	RecordedAt time.Time          `json:"recorded_at"`
-}
 
 // momentumParams returns the ParamMeta entries for momentum factor thresholds and deltas.
 func momentumParams(fc factorConfig) []ParamMeta {

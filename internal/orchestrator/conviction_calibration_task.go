@@ -58,23 +58,17 @@ func (p *ConvictionCalibrationProvider) Recommendations(executorSkill string) ([
 
 // RunConvictionCalibration loads historical data, runs calibration on the
 // specified executors' parameters, logs the results, and auto-applies when
-// improvement exceeds 5%. When no metas are provided, defaults to aggregate
-// calibration across all four factors.
-func RunConvictionCalibration(workDir string, metas ...StrategyMeta) error {
+// improvement exceeds 5%. When no providers are given, uses an aggregate
+// meta covering all four factors with the executor's defaults.
+func RunConvictionCalibration(workDir string, providers ...StrategyProvider) error {
 	provider := NewConvictionCalibrationProvider(workDir)
 	engine := &CalibrationEngine{}
 
-	if len(metas) == 0 {
+	if len(providers) == 0 {
 		fc := loadFactorConfig()
-		metas = []StrategyMeta{{
-			ID: "all", Skill: "all",
-			Description: "Aggregate factor-driven conviction across all executors",
-			Factors:     []string{"momentum", "value", "quality", "liquidity"},
-			Parameters: append(append(momentumParams(fc), valueParams(fc)...),
-				append(qualityParams(fc), liquidityParams(fc)...)...),
-		}}
+		providers = []StrategyProvider{aggregateMeta{factorConfig: fc}}
 	}
-	reports, err := engine.CalibrateAll(metas, provider, 10)
+	reports, err := engine.CalibrateAll(providers, provider, 10)
 	if err != nil {
 		return fmt.Errorf("conviction calibration: %w", err)
 	}
@@ -112,4 +106,20 @@ func RunConvictionCalibration(workDir string, metas ...StrategyMeta) error {
 		}
 	}
 	return nil
+}
+
+// aggregateMeta implements StrategyProvider for fallback aggregate calibration
+// when no executor-specific providers are provided.
+type aggregateMeta struct {
+	factorConfig
+}
+
+func (a aggregateMeta) StrategyMeta() StrategyMeta {
+	return StrategyMeta{
+		ID: "all", Skill: "all",
+		Description: "Aggregate factor-driven conviction across all executors",
+		Factors:     []string{"momentum", "value", "quality", "liquidity"},
+		Parameters: append(append(momentumParams(a.factorConfig), valueParams(a.factorConfig)...),
+			append(qualityParams(a.factorConfig), liquidityParams(a.factorConfig)...)...),
+	}
 }
