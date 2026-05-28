@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
-	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
@@ -337,13 +337,44 @@ func calibrateVaR(ie *config.InferenceEngine, returns []float64, n int, cfg *con
 	return res
 }
 
+// loadOutcomesFromSessions reads recommendation outcomes from all session directories.
+// This aggregates per-session outcome data (which is rich: per-agent, per-symbol, with
+// forward returns) rather than the sparse global outcome file.
+func loadOutcomesFromSessions(sessionsDir string) []domain.RecommendationOutcome {
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		return nil
+	}
+	var allOutcomes []domain.RecommendationOutcome
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		outcomePath := filepath.Join(sessionsDir, entry.Name(), "recommendation_outcomes.jsonl")
+		f, err := os.Open(outcomePath)
+		if err != nil {
+			continue
+		}
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			var outcome domain.RecommendationOutcome
+			if err := json.Unmarshal(scanner.Bytes(), &outcome); err != nil {
+				continue
+			}
+			allOutcomes = append(allOutcomes, outcome)
+		}
+		_ = f.Close()
+	}
+	return allOutcomes
+}
+
 func calibrateDarwinian(ie *config.InferenceEngine, n int, cfg *config.ParametersConfig) CalibrationResult {
 	res := CalibrationResult{Module: "darwinian"}
 
 	workDir, _ := os.Getwd()
-	ledgerStore := ledger.NewStore(filepath.Join(workDir, "data", "state"))
-	outcomes, err := ledgerStore.LoadOutcomes()
-	if err != nil || len(outcomes) < 10 {
+	sessionsDir := filepath.Join(workDir, "data", "state", "sessions")
+	outcomes := loadOutcomesFromSessions(sessionsDir)
+	if len(outcomes) < 10 {
 		res.Errors = append(res.Errors, "insufficient outcome data for darwinian calibration, using defaults")
 		res.Parameters = darwinianHeuristicDefaults(n, cfg)
 		return res
