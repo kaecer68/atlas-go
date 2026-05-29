@@ -54,6 +54,7 @@
 | `backtest` | 視窗回測 — `Window.Run()` | `Runner` | 由 autobacktest 使用 |
 | `db` | PostgreSQL 連線管理 | `DB` | 基礎設施，穩定但未直接出現於 main.go |
 | `eval` | 模型評估指標與可解釋性工具（SK-12~15） — OOS R²、Sharpe、PermutationImportance、PDP | `EvalResult`, `Predictor` | 由 robustness 使用，Fin-Skills 驅動 |
+| `feature` | 命名特徵萃取（close, volume, return_1d/5d, hl_ratio, ma_ratio, volume_ratio） — 由 `cmd/backtest-pipeline` 和 `internal/experiment` 共用 | `Registry`, `MakeExtractor`, `ForwardReturnLabel` | 由 backtest-pipeline CLI 和 Judge 重要性運算使用 |
 | `globalmarket` | 全球總經資料管理 | `Manager` | 由 narrative/industry 使用 |
 | `metalearning` | 元學習協調器 — `MetaLearner`、策略選擇優化 | `MetaLearner` | 研究階段，可能晉升 |
 | `prism` | Regime-specific 訓練佇列（5 種 regime） | `Queue` | 核心模組，indirect import |

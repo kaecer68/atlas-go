@@ -12,6 +12,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/feature"
 	"github.com/kaecer68/atlas-go/internal/ml"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
@@ -82,17 +83,17 @@ func run(args []string) error {
 	}
 	fmt.Fprintln(os.Stderr)
 
-	featureNames := parseFeatureNames(*featuresStr)
+	featureNames := feature.ParseNames(*featuresStr)
 	if len(featureNames) == 0 {
 		return fmt.Errorf("no features; use -features")
 	}
-	unknown := validateFeatures(featureNames)
+	unknown := feature.Validate(featureNames)
 	if len(unknown) > 0 {
 		return fmt.Errorf("unknown feature(s): %s", strings.Join(unknown, ", "))
 	}
 
-	fe := makeFeatureExtractor(featureNames)
-	le := makeForwardReturnLabel()
+	fe := feature.MakeExtractor(featureNames)
+	le := feature.ForwardReturnLabel()
 
 	model, err := newModel(*modelStr)
 	if err != nil {
@@ -180,124 +181,6 @@ func uniqueSymbols(bars []domain.DailyBar) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-type featureFunc func(bar domain.DailyBar, idx int, bars []domain.DailyBar) float64
-
-var featureRegistry = map[string]featureFunc{
-	"close": func(b domain.DailyBar, _ int, _ []domain.DailyBar) float64 {
-		return b.Close
-	},
-	"volume": func(b domain.DailyBar, _ int, _ []domain.DailyBar) float64 {
-		if b.Volume <= 0 {
-			return 0
-		}
-		return math.Log(float64(b.Volume))
-	},
-	"return_1d": func(b domain.DailyBar, idx int, bars []domain.DailyBar) float64 {
-		if idx > 0 && bars[idx-1].Close > 0 {
-			return (b.Close - bars[idx-1].Close) / bars[idx-1].Close
-		}
-		return 0
-	},
-	"return_5d": func(b domain.DailyBar, idx int, bars []domain.DailyBar) float64 {
-		if idx >= 5 && bars[idx-5].Close > 0 {
-			return (b.Close - bars[idx-5].Close) / bars[idx-5].Close
-		}
-		return 0
-	},
-	"hl_ratio": func(b domain.DailyBar, _ int, _ []domain.DailyBar) float64 {
-		if b.Close > 0 {
-			return (b.High - b.Low) / b.Close
-		}
-		return 0
-	},
-	"ma_ratio": func(b domain.DailyBar, idx int, bars []domain.DailyBar) float64 {
-		if idx < 19 {
-			return 1.0
-		}
-		sum := 0.0
-		for j := idx - 19; j <= idx; j++ {
-			sum += bars[j].Close
-		}
-		if sum > 0 {
-			return b.Close / (sum / 20.0)
-		}
-		return 1.0
-	},
-	"volume_ratio": func(b domain.DailyBar, idx int, bars []domain.DailyBar) float64 {
-		if idx < 19 || b.Volume <= 0 {
-			return 1.0
-		}
-		sum := 0.0
-		for j := idx - 19; j <= idx; j++ {
-			sum += float64(bars[j].Volume)
-		}
-		avg := sum / 20.0
-		if avg > 0 {
-			return float64(b.Volume) / avg
-		}
-		return 1.0
-	},
-}
-
-func availableFeatures() []string {
-	n := make([]string, 0, len(featureRegistry))
-	for k := range featureRegistry {
-		n = append(n, k)
-	}
-	sort.Strings(n)
-	return n
-}
-
-func validateFeatures(names []string) []string {
-	var u []string
-	for _, n := range names {
-		if _, ok := featureRegistry[n]; !ok {
-			u = append(u, n)
-		}
-	}
-	return u
-}
-
-func parseFeatureNames(r string) []string {
-	parts := strings.Split(r, ",")
-	names := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if p = strings.TrimSpace(p); p != "" {
-			names = append(names, p)
-		}
-	}
-	return names
-}
-
-func makeFeatureExtractor(names []string) backtest.FeatureExtractor {
-	return func(bars []domain.DailyBar) [][]float64 {
-		f := make([][]float64, len(bars))
-		for i, bar := range bars {
-			row := make([]float64, len(names))
-			for j, n := range names {
-				row[j] = featureRegistry[n](bar, i, bars)
-			}
-			f[i] = row
-		}
-		return f
-	}
-}
-
-func makeForwardReturnLabel() backtest.LabelExtractor {
-	return func(bars []domain.DailyBar) []float64 {
-		l := make([]float64, len(bars))
-		for i := 0; i < len(bars)-1; i++ {
-			if bars[i].Close > 0 {
-				l[i] = (bars[i+1].Close - bars[i].Close) / bars[i].Close
-			}
-		}
-		if len(bars) > 0 {
-			l[len(bars)-1] = 0
-		}
-		return l
-	}
 }
 
 func newModel(name string) (backtest.Model, error) {
