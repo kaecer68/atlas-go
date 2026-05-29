@@ -1402,8 +1402,20 @@ func (s *System) resolveReplayDate() (time.Time, bool) {
 		}
 	}
 	if len(s.Sim().replay.Dates) > 1 {
-		// Use second-to-last date so ForwardReturn has a "next day" to compute against.
-		// The last date has no next-day data, which forces synthetic fallback.
+		// Walk backward from last date to find one with measurable forward returns.
+		// The last dates may be flat (data generation gap), so skip to dates with
+		// actual price movement.
+		for i := len(s.Sim().replay.Dates) - 2; i >= 0; i-- {
+			date := s.Sim().replay.Dates[i]
+			// Check if at least one stock has non-zero ForwardReturn on this date
+			testSymbols := []string{"2330.TW", "2317.TW", "2881.TW"}
+			for _, sym := range testSymbols {
+				if fr, ok := s.Sim().replay.ForwardReturn(sym, date, 1); ok && fr != 0 {
+					return date, true
+				}
+			}
+		}
+		// Fallback: use second-to-last date even if flat
 		return s.Sim().replay.Dates[len(s.Sim().replay.Dates)-2], true
 	}
 	if len(s.Sim().replay.Dates) > 0 {
