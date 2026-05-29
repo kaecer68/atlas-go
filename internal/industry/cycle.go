@@ -297,7 +297,13 @@ func (ct *CycleTracker) UpdatePosition(industryID string, metrics IndustryMetric
 
 	// Store historical data
 	ct.history[industryID] = append(ct.history[industryID], *position)
-	if len(ct.history[industryID]) > 90 { // Keep 90 days of history
+	retention := 90
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		if r := cfg.Industry.HistoryRetentionDays.Value; r > 0 {
+			retention = r
+		}
+	}
+	if len(ct.history[industryID]) > retention {
 		ct.history[industryID] = ct.history[industryID][1:]
 	}
 
@@ -387,10 +393,11 @@ func defaultCycleThresholds() config.CycleThresholdConfig {
 
 // detectBusinessCycle determines the business cycle phase.
 func (ct *CycleTracker) detectBusinessCycle(metrics IndustryMetrics) CyclePhase {
-	params := config.GetParametersConfig().Industry
-	thresholds, ok := params.CycleThresholds.Value[metrics.IndustryID]
-	if !ok {
-		thresholds = defaultCycleThresholds()
+	thresholds := defaultCycleThresholds()
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		if t, ok := cfg.Industry.CycleThresholds.Value[metrics.IndustryID]; ok {
+			thresholds = t
+		}
 	}
 
 	revenueGrowth := metrics.RevenueGrowthYoY
@@ -436,8 +443,15 @@ func (ct *CycleTracker) detectInventoryCycle(metrics IndustryMetrics) InventoryC
 
 // detectCapexCycle determines the capex cycle state.
 func (ct *CycleTracker) detectCapexCycle(metrics IndustryMetrics) CapexCycle {
-	params := config.GetParametersConfig().Industry
-	t := params.CapexCycleThresholds.Value
+	t := config.CapexCycleThresholdConfig{
+		ExpansionCapacityMin:   0.85,
+		ExpansionRevenueMin:    0.15,
+		MaintenanceCapacityMin: 0.70,
+		MaintenanceRevenueMin:  0.05,
+	}
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		t = cfg.Industry.CapexCycleThresholds.Value
+	}
 
 	switch {
 	case metrics.CapacityUtilization > t.ExpansionCapacityMin && metrics.RevenueGrowthYoY > t.ExpansionRevenueMin:

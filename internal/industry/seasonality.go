@@ -62,7 +62,11 @@ type NarrativeSeasonalProvider interface {
 
 // NewSeasonalEngine creates a seasonal engine using the parameter-managed seasonal patterns.
 func NewSeasonalEngine() *SeasonalEngine {
-	return NewSeasonalEngineFromConfig(config.GetParametersConfig())
+	cfg := config.GetParametersConfig()
+	if cfg == nil {
+		return NewSeasonalEngineFromConfig(nil)
+	}
+	return NewSeasonalEngineFromConfig(cfg)
 }
 
 // Deprecated: use cfg.Industry.SeasonalPatterns from parameters.json instead.
@@ -515,6 +519,9 @@ func seasonalPatternsFromConfig(cfgs []config.SeasonalPatternConfig) []SeasonalP
 }
 
 func NewSeasonalEngineFromConfig(cfg *config.ParametersConfig) *SeasonalEngine {
+	if cfg == nil {
+		return &SeasonalEngine{patterns: DefaultSeasonalPatterns()}
+	}
 	patterns := seasonalPatternsFromConfig(cfg.Industry.SeasonalPatterns.Value)
 	return &SeasonalEngine{patterns: patterns}
 }
@@ -571,13 +578,29 @@ func (se *SeasonalEngine) detectThemeDirection(theme string) float64 {
 		}
 	}
 
+	oilThreshold := 0.05
+	usRatesThreshold := 0.03
+	jpyCarryThreshold := 0.03
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		de := cfg.Industry.DynamicEnv.Value
+		if t := de.OilPriceShockThreshold; t > 0 {
+			oilThreshold = t
+		}
+		if t := de.UsRatesDxyThreshold; t > 0 {
+			usRatesThreshold = t
+		}
+		if t := de.JpyCarryDxyThreshold; t > 0 {
+			jpyCarryThreshold = t
+		}
+	}
+
 	switch theme {
 	case "oil_price_shock":
 		// Use actual oil price deviation
 		dev := se.dynamicEnv.OilDeviation()
-		if dev > 0.05 {
+		if dev > oilThreshold {
 			return 1.0 // oil rising
-		} else if dev < -0.05 {
+		} else if dev < -oilThreshold {
 			return -1.0 // oil falling
 		}
 		// Near neutral, use small positive bias (shocks are typically supply disruptions = price up)
@@ -587,9 +610,9 @@ func (se *SeasonalEngine) detectThemeDirection(theme string) float64 {
 		// Use US 10Y yield deviation as proxy for rate direction
 		// DXY deviation is positively correlated with rates
 		dxyDev := se.dynamicEnv.DXYDeviation()
-		if dxyDev > 0.03 {
+		if dxyDev > usRatesThreshold {
 			return 1.0 // dollar strong = rates likely rising
-		} else if dxyDev < -0.03 {
+		} else if dxyDev < -usRatesThreshold {
 			return -1.0 // dollar weak = rates likely falling
 		}
 		return 1.0
@@ -609,7 +632,7 @@ func (se *SeasonalEngine) detectThemeDirection(theme string) float64 {
 		// JPY carry unwind is inherently a negative event for exporters
 		// Direction is determined by JPY strength (not directly tracked, use DXY inverse)
 		dxyDev := se.dynamicEnv.DXYDeviation()
-		if dxyDev < -0.03 {
+		if dxyDev < -jpyCarryThreshold {
 			return -1.0 // dollar weak = JPY likely strong = unwind pressure
 		}
 		return -1.0 // Default negative

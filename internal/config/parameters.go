@@ -606,21 +606,26 @@ type CycleTransitionConfig struct {
 }
 
 type DynamicEnvConfig struct {
-	OilHighThreshold     float64 `json:"oil_high_threshold"`
-	OilLowThreshold      float64 `json:"oil_low_threshold"`
-	OilEnergyMult        float64 `json:"oil_energy_mult"`
-	OilShippingPenalty   float64 `json:"oil_shipping_penalty"`
-	OilShippingBenefit   float64 `json:"oil_shipping_benefit"`
-	OilIndustrialPenalty float64 `json:"oil_industrial_penalty"`
-	OilIndustrialBenefit float64 `json:"oil_industrial_benefit"`
-	BDIHighThreshold     float64 `json:"bdi_high_threshold"`
-	BDILowThreshold      float64 `json:"bdi_low_threshold"`
-	BDIShippingBoost     float64 `json:"bdi_shipping_boost"`
-	BDICostPenalty       float64 `json:"bdi_cost_penalty"`
-	DXYHighThreshold     float64 `json:"dxy_high_threshold"`
-	DXYLowThreshold      float64 `json:"dxy_low_threshold"`
-	DXYExportPenalty     float64 `json:"dxy_export_penalty"`
-	DXYExportBenefit     float64 `json:"dxy_export_benefit"`
+	OilHighThreshold       float64 `json:"oil_high_threshold"`
+	OilLowThreshold        float64 `json:"oil_low_threshold"`
+	OilEnergyMult          float64 `json:"oil_energy_mult"`
+	OilShippingPenalty     float64 `json:"oil_shipping_penalty"`
+	OilShippingBenefit     float64 `json:"oil_shipping_benefit"`
+	OilIndustrialPenalty   float64 `json:"oil_industrial_penalty"`
+	OilIndustrialBenefit   float64 `json:"oil_industrial_benefit"`
+	BDIHighThreshold       float64 `json:"bdi_high_threshold"`
+	BDILowThreshold        float64 `json:"bdi_low_threshold"`
+	BDIShippingBoost       float64 `json:"bdi_shipping_boost"`
+	BDICostPenalty         float64 `json:"bdi_cost_penalty"`
+	DXYHighThreshold       float64 `json:"dxy_high_threshold"`
+	DXYLowThreshold        float64 `json:"dxy_low_threshold"`
+	DXYExportPenalty       float64 `json:"dxy_export_penalty"`
+	DXYExportBenefit       float64 `json:"dxy_export_benefit"`
+	HistoryWindowDays      int     `json:"history_window_days"`
+	HistoryCapMultiplier   int     `json:"history_cap_multiplier"`
+	OilPriceShockThreshold float64 `json:"oil_price_shock_threshold"`
+	UsRatesDxyThreshold    float64 `json:"us_rates_dxy_threshold"`
+	JpyCarryDxyThreshold   float64 `json:"jpy_carry_dxy_threshold"`
 }
 
 // StrategyParameters holds tunable values for strategy selection and switching.
@@ -1607,6 +1612,23 @@ func (p *ParametersConfig) Validate() error {
 		return fmt.Errorf("industry.linkage_params.recession_shock_amplifier (%.3f) must be in [0.5, 5.0]", lp.RecessionShockAmplifier)
 	}
 
+	de := p.Industry.DynamicEnv.Value
+	if de.HistoryWindowDays < 7 || de.HistoryWindowDays > 365 {
+		return fmt.Errorf("industry.dynamic_env.history_window_days (%d) must be in [7, 365]", de.HistoryWindowDays)
+	}
+	if de.HistoryCapMultiplier < 1 || de.HistoryCapMultiplier > 10 {
+		return fmt.Errorf("industry.dynamic_env.history_cap_multiplier (%d) must be in [1, 10]", de.HistoryCapMultiplier)
+	}
+	if de.OilPriceShockThreshold < 0 || de.OilPriceShockThreshold > 1 {
+		return fmt.Errorf("industry.dynamic_env.oil_price_shock_threshold (%.3f) must be in [0, 1]", de.OilPriceShockThreshold)
+	}
+	if de.UsRatesDxyThreshold < 0 || de.UsRatesDxyThreshold > 1 {
+		return fmt.Errorf("industry.dynamic_env.us_rates_dxy_threshold (%.3f) must be in [0, 1]", de.UsRatesDxyThreshold)
+	}
+	if de.JpyCarryDxyThreshold < 0 || de.JpyCarryDxyThreshold > 1 {
+		return fmt.Errorf("industry.dynamic_env.jpy_carry_dxy_threshold (%.3f) must be in [0, 1]", de.JpyCarryDxyThreshold)
+	}
+
 	// New asymmetric risk parameterized thresholds
 	if p.Industry.AsymmetricDropCritical.Value <= 0 || p.Industry.AsymmetricDropCritical.Value > 1 {
 		return fmt.Errorf("industry.asymmetric_drop_critical (%.3f) must be in (0,1]", p.Industry.AsymmetricDropCritical.Value)
@@ -2282,5 +2304,11 @@ func mergeIndustryDefaults(cfg *ParametersConfig) {
 	}
 	if i.AdjustmentFloor.Value == 0 {
 		i.AdjustmentFloor = def.AdjustmentFloor
+	}
+	if i.DynamicEnv.Value.HistoryWindowDays == 0 {
+		i.DynamicEnv = def.DynamicEnv
+	}
+	if i.HistoryRetentionDays.Value == 0 {
+		i.HistoryRetentionDays = def.HistoryRetentionDays
 	}
 }
