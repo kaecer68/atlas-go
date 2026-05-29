@@ -15,6 +15,7 @@ const MUTATION_TYPE_MAP = {
   'conviction_adjustment': '信念調整',
   'parameter_sweep': '參數掃描',
   'promote_spawned': '晉升候選',
+  'onboarding': '新手上路',
 };
 
 function mutationName(type) {
@@ -37,6 +38,7 @@ function mutationDescription(type, skill) {
     'promote_spawned': `${skillName} 新生成代理表現優異，已被晉升。`,
     'constraint_tightening': `${skillName} 的限制條件已被收緊。`,
     'constraint_relaxation': `${skillName} 的限制條件已被放寬。`,
+    'onboarding': `${skillName} 為系統新加入的代理，正在進行首次策略評估。`,
   };
   return m[type] || `系統已對 ${skillName} 進行自動優化調整。`;
 }

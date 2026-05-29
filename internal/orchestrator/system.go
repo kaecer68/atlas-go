@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -1028,7 +1029,6 @@ func (s *System) applyAlphaDiscovery(quotes []domain.Quote, recs []domain.Recomm
 
 func (s *System) NextExperimentCandidate() (*domain.Candidate, error) {
 	// Use session-dir outcomes (richest data source) instead of sparse global file.
-	// This ensures new agents with any outcomes are visible to SelectWeakestAgent.
 	outcomes, err := s.Sim().ledger.LoadOutcomesFromSessions()
 	if err != nil || len(outcomes) == 0 {
 		outcomes, err = s.Sim().ledger.LoadOutcomes()
@@ -1042,6 +1042,50 @@ func (s *System) NextExperimentCandidate() (*domain.Candidate, error) {
 		_ = s.Sim().ledger.RecordExperiment(candidate.Experiment)
 		_ = s.Sim().ledger.RecordSessionExperiment(s.Sim().session, candidate.Experiment)
 	}
+
+	// New agent onboarding: create experiments for agents with outcomes but no
+	// prior experiment records. Reads experiments.jsonl directly to check.
+	existingIDs := make(map[string]bool)
+	if expData, err := os.ReadFile(filepath.Join(s.Sim().cfg.LedgerDir, "experiments.jsonl")); err == nil {
+		for _, line := range strings.Split(string(expData), "\n") {
+			if line == "" {
+				continue
+			}
+			var rec domain.ExperimentRecord
+			if json.Unmarshal([]byte(line), &rec) == nil {
+				existingIDs[rec.TargetAgentID] = true
+			}
+		}
+	}
+	for _, sc := range scorecards {
+		if sc.WindowCount == 0 || existingIDs[sc.AgentID] {
+			continue
+		}
+		// Find agent spec from registry
+		var ag domain.AgentSpec
+		for _, a := range s.Sim().registry.Agents {
+			if a.ID == sc.AgentID {
+				ag = a
+				break
+			}
+		}
+		if ag.ID == "" || !ag.Enabled {
+			continue
+		}
+		eid := fmt.Sprintf("onboard-%s-%d", ag.ID, time.Now().Unix())
+		_ = s.Sim().ledger.RecordExperiment(domain.ExperimentRecord{
+			ID:               eid,
+			TargetAgentID:    ag.ID,
+			Skill:            ag.Skill,
+			MutationType:     "onboarding",
+			Status:           domain.ExperimentPlanned,
+			BaselineValue:    sc.SharpeLike,
+			AcceptanceMetric: "sharpe_like",
+		})
+		logging.Info("experiment", "onboarding_created",
+			"agent", ag.ID, "skill", ag.Skill)
+	}
+
 	return candidate, nil
 }
 
