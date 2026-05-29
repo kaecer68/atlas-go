@@ -1429,6 +1429,25 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered narrative_calibrate background task (24h interval)")
 
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "seasonal_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					cmd := exec.CommandContext(ctx, "go", "run", "./cmd/calibrate-seasonal",
+						"--replay", "data/replay/finmind_2020_2024.jsonl",
+						"--start", "2020", "--end", "2024", "--update", "--update-threshold", "1")
+					output, err := cmd.CombinedOutput()
+					if err != nil {
+						logging.Error("seasonal_calibrate", "failed", "err", err.Error(), "output", string(output))
+						return err
+					}
+					logging.Info("seasonal_calibrate", "completed", "output", string(output))
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered seasonal_calibrate background task (24h interval)")
+
 			// Register factor_weight_strategy_calibrate — calibrates FactorWeight
 			// strategy deltas (conservative/aggressive/risk-on/risk-off adjustments).
 			_ = taskMgr.Register(&apigateway.ScheduledTask{

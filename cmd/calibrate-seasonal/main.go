@@ -166,6 +166,25 @@ func updateParametersFile(results []industry.SeasonalCalibration, threshold int,
 	} else {
 		seasonalPatterns["calibration_data_source"] = "synthetic"
 	}
+	// Update citation evidence_quality based on observation counts
+	avgObs := 0
+	for _, r := range results {
+		avgObs += r.ObservationCount
+	}
+	if len(results) > 0 {
+		avgObs /= len(results)
+	}
+	cite, ok := seasonalPatterns["citation"].(map[string]interface{})
+	if !ok {
+		cite = make(map[string]interface{})
+	}
+	if avgObs >= 5 {
+		cite["evidence_quality"] = "high"
+	} else if avgObs >= 3 {
+		cite["evidence_quality"] = "medium"
+	}
+	cite["calibration_method"] = "backtest_empirical"
+	seasonalPatterns["citation"] = cite
 
 	out, err := json.MarshalIndent(params, "", "  ")
 	if err != nil {
