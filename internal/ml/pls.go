@@ -186,7 +186,9 @@ func (m *PLS) Fit(X [][]float64, y []float64) error {
 	}
 
 	// 5. Compute regression coefficients B_pls = W * (PᵀW)⁻¹ * C.
-	m.computeCoefficients(p)
+	if err := m.computeCoefficients(p); err != nil {
+		return fmt.Errorf("ml/pls: compute coefficients: %w", err)
+	}
 
 	m.fitted = true
 	return nil
@@ -195,7 +197,7 @@ func (m *PLS) Fit(X [][]float64, y []float64) error {
 // computeCoefficients calculates B_pls mapping standardized X to centered y:
 //
 //	B_pls = W * (PᵀW)⁻¹ * C   (p × 1)
-func (m *PLS) computeCoefficients(p int) {
+func (m *PLS) computeCoefficients(p int) error {
 	// PtW = Pᵀ * W  → k × k
 	var PtW mat.Dense
 	PtW.Mul(m.p.T(), m.w)
@@ -203,9 +205,7 @@ func (m *PLS) computeCoefficients(p int) {
 	// invert PtW (k × k is small in practice).
 	var PtWInv mat.Dense
 	if err := PtWInv.Inverse(&PtW); err != nil {
-		// On failure, fall back to identity-scaled result by using PtW as-is.
-		// This should be rare for k ≪ min(n, p).
-		PtWInv.CloneFrom(&PtW)
+		return fmt.Errorf("PᵀW singular, cannot compute PLS coefficients: %w", err)
 	}
 
 	// W * PtWInv → p × k
@@ -215,6 +215,7 @@ func (m *PLS) computeCoefficients(p int) {
 	// WPtWInv * C → p × 1
 	m.bPLS = mat.NewVecDense(p, nil)
 	m.bPLS.MulVec(&WPtWInv, m.c)
+	return nil
 }
 
 // colDataAt extracts column j from m as a contiguous []float64 suitable for SetCol.

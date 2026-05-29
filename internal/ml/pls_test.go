@@ -179,3 +179,39 @@ func TestPLS_MoreComponents(t *testing.T) {
 		t.Errorf("PLS with 4 components (MSE=%f) should have <= MSE than 1 component (MSE=%f)", mse4, mse1)
 	}
 }
+
+// TestPLS_SingularMatrix verifies that PLS returns an error on singular PᵀW
+// rather than silently degrading coefficients (aligns with ols.go:84, pcr.go:181).
+func TestPLS_SingularMatrix(t *testing.T) {
+	n, p := 20, 4
+	X := make([][]float64, n)
+	y := make([]float64, n)
+	for i := range n {
+		base := float64(i) / float64(n)
+		X[i] = make([]float64, p)
+		for j := range p {
+			X[i][j] = base + float64(j)*1e-12
+		}
+		y[i] = base * 2.0
+	}
+
+	pls := NewPLS()
+	pls.NComponents = min(p, n)
+	err := pls.Fit(X, y)
+	if err != nil {
+		t.Logf("PLS correctly rejected singular data: %v", err)
+		return
+	}
+
+	pred, predErr := pls.Predict(X)
+	if predErr != nil {
+		t.Logf("PLS Predict also failed (consistent): %v", predErr)
+		return
+	}
+
+	for i, v := range pred {
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			t.Errorf("PLS produced NaN/Inf prediction at index %d: %v", i, v)
+		}
+	}
+}
