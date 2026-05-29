@@ -1048,7 +1048,6 @@ func run(args []string, deps appDeps) error {
 				Interval:  24 * time.Hour,
 				Enabled:   true,
 				Task: func(ctx context.Context) error {
-					etfSymbols := orchestrator.DefaultSymbols()
 					_, err := gateway.Fetch(ctx, "twse_replay")
 					if err != nil {
 						monitor.Alert(monitoring.AlertLevelWarning, "etf_nav",
@@ -1057,7 +1056,7 @@ func run(args []string, deps appDeps) error {
 						return fmt.Errorf("etf_nav_refresh fetch: %w", err)
 					}
 					logging.Info("etf_nav_refresh", "completed",
-						"etf_symbols", len(etfSymbols),
+						"etf_symbols", len(orchestrator.DefaultSymbols()),
 						"hint", "ETF NAV is calibrated at next system startup from replay close prices")
 					return nil
 				},

@@ -28,6 +28,9 @@ import (
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 )
 
+// twseBaseURL is overridden in tests to point at mock servers.
+var twseBaseURL = "https://www.twse.com.tw"
+
 func main() {
 	symbolsFlag := flag.String("symbols", "", "comma-separated ETF symbols (e.g. 0050,0056,00878)")
 	startFlag := flag.String("start", "", "start date YYYY-MM-DD")
@@ -139,7 +142,7 @@ type HistoricalBar struct {
 // Returns (bar, found, error). found=false means no trading on that date.
 func fetchStockDay(ctx context.Context, client *http.Client, symbol string, date time.Time) (HistoricalBar, bool, error) {
 	dateStr := date.Format("20060102")
-	url := fmt.Sprintf("https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=%s&stockNo=%s", dateStr, symbol)
+	url := fmt.Sprintf("%s/exchangeReport/STOCK_DAY?response=json&date=%s&stockNo=%s", twseBaseURL, dateStr, symbol)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
