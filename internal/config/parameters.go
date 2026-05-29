@@ -1566,8 +1566,8 @@ func (p *ParametersConfig) Validate() error {
 		if sp.StartMonth < 1 || sp.StartMonth > 12 || sp.EndMonth < 1 || sp.EndMonth > 12 {
 			return fmt.Errorf("industry.seasonal_patterns[%d] invalid month: start=%d end=%d", i, sp.StartMonth, sp.EndMonth)
 		}
-		if sp.AdjustmentFactor <= 0 {
-			return fmt.Errorf("industry.seasonal_patterns[%d].adjustment_factor (%.3f) must be > 0", i, sp.AdjustmentFactor)
+		if sp.AdjustmentFactor == 0 {
+			return fmt.Errorf("industry.seasonal_patterns[%d].adjustment_factor (%.3f) must not be zero", i, sp.AdjustmentFactor)
 		}
 		if sp.HistoricalAccuracy < 0 || sp.HistoricalAccuracy > 1 {
 			return fmt.Errorf("industry.seasonal_patterns[%d].historical_accuracy (%.3f) must be in [0,1]", i, sp.HistoricalAccuracy)
