@@ -2,20 +2,43 @@ import { escapeHtml } from '../main.js';
 import { agentName as getAgentName } from '../shared/constants.js';
 
 const MUTATION_TYPE_MAP = {
-  'prompt_tightening': '提示詞收緊',
-  'prompt_relaxation': '提示詞放寬',
-  'constraint_tightening': '約束收緊',
-  'constraint_relaxation': '約束放寬',
-  'risk_rule_update': '風控規則更新',
-  'portfolio_constraint': '投組約束調整',
-  'governance_routing': '治理路由調整',
-  'volume_filter': '成交量篩選調整',
-  'conviction_adjustment': '信念值調整',
+  'prompt_tightening': '策略收緊',
+  'prompt_relaxation': '策略放寬',
+  'constraint_tightening': '限制收緊',
+  'constraint_relaxation': '限制放寬',
+  'risk_rule_update': '風控更新',
+  'risk_rule_change': '風控調整',
+  'portfolio_constraint_revision': '投組治理',
+  'portfolio_constraint': '投組約束',
+  'governance_routing': '治理路由',
+  'volume_filter': '成交量篩選',
+  'conviction_adjustment': '信念調整',
   'parameter_sweep': '參數掃描',
+  'promote_spawned': '晉升候選',
 };
 
 function mutationName(type) {
-  return MUTATION_TYPE_MAP[type] || type || '未知';
+  return MUTATION_TYPE_MAP[type] || type || '';
+}
+
+function mutationDescription(type, skill) {
+  const skillName = getAgentName(skill) || skill || '';
+  const m = {
+    'prompt_tightening': `${skillName} 的選股條件已被系統自動收緊，以提高推薦品質。`,
+    'prompt_relaxation': `${skillName} 的選股條件已被系統自動放寬，以增加機會覆蓋。`,
+    'risk_rule_change': `${skillName} 的風險閾值已被系統自動調整，以優化風險回報。`,
+    'risk_rule_update': `${skillName} 的風控規則已被系統更新。`,
+    'portfolio_constraint_revision': `${skillName} 的投組治理限制已被重新審視。`,
+    'portfolio_constraint': `${skillName} 的投組部位限制已被調整。`,
+    'governance_routing': `${skillName} 的執行路由已被調整。`,
+    'volume_filter': `${skillName} 的成交量篩選門檻已被調整。`,
+    'conviction_adjustment': `${skillName} 的信念值計算參數已被調整。`,
+    'parameter_sweep': `${skillName} 的參數已被系統掃描優化。`,
+    'promote_spawned': `${skillName} 新生成代理表現優異，已被晉升。`,
+    'constraint_tightening': `${skillName} 的限制條件已被收緊。`,
+    'constraint_relaxation': `${skillName} 的限制條件已被放寬。`,
+  };
+  return m[type] || `系統已對 ${skillName} 進行自動優化調整。`;
 }
 
 function fmtPct(v) {
@@ -213,7 +236,8 @@ function renderCandidates(inbox) {
       <div class="inbox-card">
         <div class="title">${escapeHtml(item.experiment_id)}</div>
         <div class="meta">${escapeHtml(getAgentName(agentId))} ${statusBadge(status)}</div>
-        <div class="meta">突變：${escapeHtml(mutationName(mutation))}</div>
+        <div class="meta"><strong>${escapeHtml(mutationName(mutation))}</strong></div>
+        <div style="font-size:11px; color:var(--muted); margin:4px 0; line-height:1.5">${escapeHtml(mutationDescription(mutation, item.skill))}</div>
         ${compareHtml}
         ${moneyHtml}
         ${summary ? `<div style="font-size:10px; color:var(--muted); margin-top:4px; word-break:break-all;">${escapeHtml(summary)}</div>` : ''}
