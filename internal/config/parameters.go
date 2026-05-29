@@ -423,13 +423,20 @@ type IndustryParameters struct {
 
 	SeasonalPatterns ParameterMetadata[[]SeasonalPatternConfig] `json:"seasonal_patterns"`
 
-	AsymmetricRisk    ParameterMetadata[AsymmetricRiskConfig]    `json:"asymmetric_risk"`
-	NewsLatencyRisk   ParameterMetadata[NewsLatencyConfig]       `json:"news_latency_risk"`
-	FreshnessScores   ParameterMetadata[FreshnessScoresConfig]   `json:"freshness_scores"`
-	PhaseScores       ParameterMetadata[PhaseScoresConfig]       `json:"phase_scores"`
-	SkillToIndustry   ParameterMetadata[map[string]string]       `json:"skill_to_industry,omitempty"`
-	SkillToIndustries ParameterMetadata[map[string][]string]     `json:"skill_to_industries,omitempty"`
-	CycleTransitions  ParameterMetadata[[]CycleTransitionConfig] `json:"cycle_transitions"`
+	AsymmetricRisk  ParameterMetadata[AsymmetricRiskConfig] `json:"asymmetric_risk"`
+	NewsLatencyRisk ParameterMetadata[NewsLatencyConfig]    `json:"news_latency_risk"`
+
+	AsymmetricDropCritical ParameterMetadata[float64]                 `json:"asymmetric_drop_critical"` // was 0.10 in risk.go:298
+	AsymmetricDropHigh     ParameterMetadata[float64]                 `json:"asymmetric_drop_high"`     // was 0.07 in risk.go:300
+	AsymmetricDropMedium   ParameterMetadata[float64]                 `json:"asymmetric_drop_medium"`   // was 0.05 in risk.go:302
+	NewsImpactMultiplier   ParameterMetadata[float64]                 `json:"news_impact_multiplier"`   // was 0.05 in risk.go:275
+	BoundaryFallback       ParameterMetadata[float64]                 `json:"boundary_fallback"`        // was 0.25 in cycle.go:602
+	AdjustmentFloor        ParameterMetadata[float64]                 `json:"adjustment_floor"`         // was 0.01 in seasonality.go:270
+	FreshnessScores        ParameterMetadata[FreshnessScoresConfig]   `json:"freshness_scores"`
+	PhaseScores            ParameterMetadata[PhaseScoresConfig]       `json:"phase_scores"`
+	SkillToIndustry        ParameterMetadata[map[string]string]       `json:"skill_to_industry,omitempty"`
+	SkillToIndustries      ParameterMetadata[map[string][]string]     `json:"skill_to_industries,omitempty"`
+	CycleTransitions       ParameterMetadata[[]CycleTransitionConfig] `json:"cycle_transitions"`
 
 	CycleWeightMultipliers ParameterMetadata[CycleWeightMultipliersConfig] `json:"cycle_weight_multipliers"`
 	LinkageWeightImpact    ParameterMetadata[float64]                      `json:"linkage_weight_impact"`
@@ -540,6 +547,7 @@ type LinkageConfig struct {
 	CorrelationWindowDays     int                `json:"correlation_window_days"`
 	CorrelationMatrix         map[string]float64 `json:"correlation_matrix"`
 	RecessionCorrelationBoost float64            `json:"recession_correlation_boost"`
+	RecessionShockAmplifier   float64            `json:"recession_shock_amplifier"`
 }
 
 // AsymmetricRiskConfig holds thresholds for asymmetric (bad news) risk detection.
@@ -1593,6 +1601,35 @@ func (p *ParametersConfig) Validate() error {
 	if lp.MinCorrelationThreshold < 0 || lp.MinCorrelationThreshold > 1 {
 		return fmt.Errorf("industry.linkage_params.min_correlation_threshold (%.3f) must be in [0,1]", lp.MinCorrelationThreshold)
 	}
+	if lp.RecessionShockAmplifier < 0.5 || lp.RecessionShockAmplifier > 5.0 {
+		return fmt.Errorf("industry.linkage_params.recession_shock_amplifier (%.3f) must be in [0.5, 5.0]", lp.RecessionShockAmplifier)
+	}
+
+	// New asymmetric risk parameterized thresholds
+	if p.Industry.AsymmetricDropCritical.Value <= 0 || p.Industry.AsymmetricDropCritical.Value > 1 {
+		return fmt.Errorf("industry.asymmetric_drop_critical (%.3f) must be in (0,1]", p.Industry.AsymmetricDropCritical.Value)
+	}
+	if p.Industry.AsymmetricDropHigh.Value <= 0 || p.Industry.AsymmetricDropHigh.Value > 1 {
+		return fmt.Errorf("industry.asymmetric_drop_high (%.3f) must be in (0,1]", p.Industry.AsymmetricDropHigh.Value)
+	}
+	if p.Industry.AsymmetricDropMedium.Value <= 0 || p.Industry.AsymmetricDropMedium.Value > 1 {
+		return fmt.Errorf("industry.asymmetric_drop_medium (%.3f) must be in (0,1]", p.Industry.AsymmetricDropMedium.Value)
+	}
+	if p.Industry.AsymmetricDropMedium.Value >= p.Industry.AsymmetricDropHigh.Value {
+		return fmt.Errorf("industry.asymmetric_drop_medium (%.3f) must be < asymmetric_drop_high (%.3f)", p.Industry.AsymmetricDropMedium.Value, p.Industry.AsymmetricDropHigh.Value)
+	}
+	if p.Industry.AsymmetricDropHigh.Value >= p.Industry.AsymmetricDropCritical.Value {
+		return fmt.Errorf("industry.asymmetric_drop_high (%.3f) must be < asymmetric_drop_critical (%.3f)", p.Industry.AsymmetricDropHigh.Value, p.Industry.AsymmetricDropCritical.Value)
+	}
+	if p.Industry.NewsImpactMultiplier.Value < 0 || p.Industry.NewsImpactMultiplier.Value > 1 {
+		return fmt.Errorf("industry.news_impact_multiplier (%.3f) must be in [0,1]", p.Industry.NewsImpactMultiplier.Value)
+	}
+	if p.Industry.BoundaryFallback.Value <= 0 {
+		return fmt.Errorf("industry.boundary_fallback (%.3f) must be positive", p.Industry.BoundaryFallback.Value)
+	}
+	if p.Industry.AdjustmentFloor.Value < 0 || p.Industry.AdjustmentFloor.Value > 1 {
+		return fmt.Errorf("industry.adjustment_floor (%.3f) must be in [0,1]", p.Industry.AdjustmentFloor.Value)
+	}
 
 	// FactorWeight constraints
 	if p.FactorWeight.BaseWeights.Value != nil {
@@ -1842,6 +1879,7 @@ func LoadParametersConfig(path string) (*ParametersConfig, error) {
 	mergeRiskGateDefaults(&cfg)
 	mergeEngineDefaults(&cfg)
 	mergeSectorExecutorDefaults(&cfg)
+	mergeIndustryDefaults(&cfg)
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate parameters config: %w", err)
@@ -2218,5 +2256,29 @@ func mergeSectorExecutorDefaults(cfg *ParametersConfig) {
 	}
 	if s.FactorConviction.MomentumHighThreshold.Value == 0 {
 		s.FactorConviction = def.FactorConviction
+	}
+}
+
+func mergeIndustryDefaults(cfg *ParametersConfig) {
+	def := DefaultParametersConfig().Industry
+	i := &cfg.Industry
+
+	if i.AsymmetricDropCritical.Value == 0 {
+		i.AsymmetricDropCritical = def.AsymmetricDropCritical
+	}
+	if i.AsymmetricDropHigh.Value == 0 {
+		i.AsymmetricDropHigh = def.AsymmetricDropHigh
+	}
+	if i.AsymmetricDropMedium.Value == 0 {
+		i.AsymmetricDropMedium = def.AsymmetricDropMedium
+	}
+	if i.NewsImpactMultiplier.Value == 0 {
+		i.NewsImpactMultiplier = def.NewsImpactMultiplier
+	}
+	if i.BoundaryFallback.Value == 0 {
+		i.BoundaryFallback = def.BoundaryFallback
+	}
+	if i.AdjustmentFloor.Value == 0 {
+		i.AdjustmentFloor = def.AdjustmentFloor
 	}
 }

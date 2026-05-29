@@ -1928,6 +1928,42 @@ func defaultIndustryParameters() IndustryParameters {
 			Rationale: "24h max latency gap; severity bands at 0.5/0.8; drop thresholds at 5%/7%/10%",
 			Source:    SourceHeuristic,
 		},
+		AsymmetricDropCritical: ParameterMetadata[float64]{
+			Value:     0.10,
+			Rationale: "10% price drop triggers critical asymmetric risk severity; aligns with historical TW stock tail-event thresholds where >10% single-day drops correlate with structural deterioration",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: derive from TWSE historical single-day drawdown distribution (99th percentile)",
+		},
+		AsymmetricDropHigh: ParameterMetadata[float64]{
+			Value:     0.07,
+			Rationale: "7% price drop triggers high asymmetric risk severity; captures significant but non-extreme downside moves (e.g., sector-wide selloffs, geopolitical events)",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: derive from TWSE historical single-day drawdown distribution (95th percentile)",
+		},
+		AsymmetricDropMedium: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "5% price drop triggers medium asymmetric risk severity; captures moderate downside moves that still warrant stop-loss monitoring",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: derive from TWSE historical single-day drawdown distribution (90th percentile)",
+		},
+		NewsImpactMultiplier: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "5% estimated price impact multiplier for news latency risk scoring; represents conservative estimate of information disadvantage cost for TW investors vs US Tier-1 sources",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: derive from TW stock price response to delayed news versus US peers (event study methodology)",
+		},
+		BoundaryFallback: ParameterMetadata[float64]{
+			Value:     0.25,
+			Rationale: "Fallback threshold range width (25%) when cycle phase thresholds (expansion - mature) produce a non-positive range; prevents division-by-zero in boundary confidence calculation",
+			Source:    SourceHeuristic,
+			Todo:      "Audit: verify this fallback is rarely triggered once per-industry thresholds are properly calibrated",
+		},
+		AdjustmentFloor: ParameterMetadata[float64]{
+			Value:     0.01,
+			Rationale: "Minimum seasonal adjustment floor (1% of baseline); prevents complete elimination of industry weighting when combined adjustments drop below zero",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [0.005, 0.02] range for floor impact on portfolio stability",
+		},
 		FreshnessScores: ParameterMetadata[FreshnessScoresConfig]{
 			Value: FreshnessScoresConfig{
 				ScoreLive: 1.0, ScoreRecent: 0.8, ScoreStale: 0.4,
@@ -2015,6 +2051,7 @@ func defaultIndustryParameters() IndustryParameters {
 				MinCorrelationThreshold:   0.30,
 				CorrelationWindowDays:     30,
 				RecessionCorrelationBoost: 0.30,
+				RecessionShockAmplifier:   1.30,
 			},
 			Rationale: "Downstream decay (0.80) > upstream (0.60); seasonal decay (0.30) for supply-chain propagation; default correlation (0.50); window 30 days; narrative-aware via SeasonalBridge.CorrelationMultiplier() for dynamic macro event modulation",
 			Source:    SourceHeuristic,

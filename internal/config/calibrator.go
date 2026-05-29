@@ -393,3 +393,17 @@ func markCalibrated(params *ParametersConfig, names []string, method string, ts 
 		}
 	}
 }
+
+// LinkageAmplifierCalibrator calibrates the RecessionShockAmplifier parameter
+// that controls shock magnitude amplification during recession regimes.
+type LinkageAmplifierCalibrator struct{}
+
+func (c *LinkageAmplifierCalibrator) ParamNames() []string {
+	return []string{"industry_linkage_recession_shock_amplifier"}
+}
+
+func (c *LinkageAmplifierCalibrator) ParamBounds() map[string][2]float64 {
+	return map[string][2]float64{
+		"industry_linkage_recession_shock_amplifier": {0.8, 2.5},
+	}
+}
