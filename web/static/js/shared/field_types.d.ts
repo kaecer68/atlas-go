@@ -137,6 +137,7 @@ declare interface BaselineParameters {
   require_cro_pass: string;
   transaction_cost_bps: string;
   slippage_bps: string;
+  avg_trading_cost: string;
   reserve_cash_fraction: string;
 }
 
@@ -564,6 +565,11 @@ declare interface DynamicEnvConfig {
   dxy_low_threshold: number;
   dxy_export_penalty: number;
   dxy_export_benefit: number;
+  history_window_days: number;
+  history_cap_multiplier: number;
+  oil_price_shock_threshold: number;
+  us_rates_dxy_threshold: number;
+  jpy_carry_dxy_threshold: number;
 }
 
 declare interface EarningsQualityExecutorParameters {

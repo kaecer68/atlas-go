@@ -126,6 +126,7 @@ export const FIELD = {
     require_cro_pass: 'require_cro_pass',
     transaction_cost_bps: 'transaction_cost_bps',
     slippage_bps: 'slippage_bps',
+    avg_trading_cost: 'avg_trading_cost',
     reserve_cash_fraction: 'reserve_cash_fraction',
   },
   BenchmarkComparisonResponse: {
@@ -513,6 +514,11 @@ export const FIELD = {
     dxy_low_threshold: 'dxy_low_threshold',
     dxy_export_penalty: 'dxy_export_penalty',
     dxy_export_benefit: 'dxy_export_benefit',
+    history_window_days: 'history_window_days',
+    history_cap_multiplier: 'history_cap_multiplier',
+    oil_price_shock_threshold: 'oil_price_shock_threshold',
+    us_rates_dxy_threshold: 'us_rates_dxy_threshold',
+    jpy_carry_dxy_threshold: 'jpy_carry_dxy_threshold',
   },
   EarningsQualityExecutorParameters: {
     repeatable_boost: 'repeatable_boost',
