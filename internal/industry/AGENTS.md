@@ -72,3 +72,4 @@ Replay Data (cmd/calibrate-seasonal --replay)
 | **敘事感知需求** | `ShockPropagation` 若未呼叫 `SetNarrativeProvider()`，相關調整會回退到純相關矩陣查詢 |
 | **衰減因子回退** | `PropagateShock` 在 `downstreamDecay`/`upstreamDecay` 為 0 時使用硬編碼的 0.8/0.6。`NewLinkageAnalyzer()` 會從 config 設定，但若直接使用 `NewShockPropagation()` 則不會 |
 | **校準 CLI** | `cmd/calibrate-seasonal` 的 `--replay` 與 `--update` 旗標可自動寫回 `configs/parameters.json`，須確保該檔案正確 |
+| **ETF 是金融工具而非經濟產業** | etf_rotation 在供應鏈圖譜中僅 downstream_of: financials。ETF 不生產實體商品，衝擊傳導僅反應資本流動。`PropagateShock` 對 etf_rotation 作為來源節點的衰減應為 0（不傳導至其他產業）。|

@@ -26,6 +26,7 @@
 | `TWSECapitalFlowProvider` | 獲取三大法人買賣超數據。 | 爬取 T86 報表。 |
 | `YahooMacroProvider` | 透過 Yahoo Finance 獲取美債、DXY、VIX 等指標。 | |
 | `CompositeMacroProvider` | 組合多個總經提供者的數據快照。 | 採 Last-write-wins 合併策略。 |
+| `BDIProvider` | 透過 CNBC JSON API 獲取波羅的海乾散貨指數 (`.BADI`) | 5s rate limit，回退至前一快照值 |
 
 ---
 
@@ -46,3 +47,21 @@
 - **TWSE OpenAPI 只提供批量接口**：`GetQuote` (單支) 實際上是抓取全市場數據後過濾，頻繁呼叫會極速消耗 Rate Limit。
 - **Fugle 符號格式**：Fugle 盤中 API 符號通常為純數字 (如 `2330`)，不帶 `.TW`。
 - **Yahoo Macro 符號映射**：美債 10 年期請使用 `^TNX`，匯率請確認 `USD/TWD` 的載入正確性。
+- **ETF NAV 資料來源**：目前無任何 API channel 提供即時 ETF 淨值。`ETFNAVProvider` 使用市價收盤價作為 NAV 代理（台股 ETF 追蹤誤差通常 <0.5%）。系統啟動時會從 replay data（CSV 格式）校準 ETF NAV：`orchestrator/system.go` 中用 `Dataset.QuotesForDate` 提取 ETF 收盤價，經 `ETFAnalyzer.UpdateNAVFromQuotes` 寫入 metadata。Replay CSV 符號為純數字（如 `0050`），ETFAnalyzer 使用 `.TW` 後綴（如 `0050.TW`）。
+
+## ETF NAV 數據流
+
+```
+啟動時 (system.go):
+  replay.Dataset.QuotesForDate(latestDate, ["0050","0056",...])
+    → domain.Quote{Close}
+      → ETFAnalyzer.UpdateNAVFromQuotes(quotes)
+        → metadata[symbol].NAV = quote.Last
+
+運行時:
+  ETFNAVProvider.FetchNAV(symbol) → QuoteFetcher.GetQuotes() → 市價收盤價
+  或
+  ETFAnalyzer.RefreshNAVFromFetcher(ctx, fetcher)
+```
+
+**已知限制**：replay data 目前僅包含 0050.TW，其餘 10 檔 ETF 需擴展 replay data 生成範圍後才能校準 NAV。長期方案需引入 FinMind `TaiwanStockETF` 或 TWSE ETF NAV 端點。

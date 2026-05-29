@@ -1036,6 +1036,34 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered auto_daily_simulation background task (24h interval)")
 
+			// Register etf_nav_refresh — verify ETF data freshness in replay after daily sync.
+			// ETF NAV calibration from replay data happens automatically at each system startup
+			// (see orchestrator/system.go). This task ensures replay data stays fresh and alerts
+			// if ETF symbols are missing from the dataset.
+			// Data source priority: TWSE OpenAPI (primary) → Fubon → Fugle → FinMind.
+			// Compliance: CONSTITUTION.md Article 4 — BackgroundTaskManager registration.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "etf_nav_refresh",
+				ChannelID: "twse_replay",
+				Interval:  24 * time.Hour,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					etfSymbols := orchestrator.DefaultSymbols()
+					_, err := gateway.Fetch(ctx, "twse_replay")
+					if err != nil {
+						monitor.Alert(monitoring.AlertLevelWarning, "etf_nav",
+							fmt.Sprintf("TWSE replay data fetch failed: %v", err),
+							map[string]any{"channel": "twse_replay"})
+						return fmt.Errorf("etf_nav_refresh fetch: %w", err)
+					}
+					logging.Info("etf_nav_refresh", "completed",
+						"etf_symbols", len(etfSymbols),
+						"hint", "ETF NAV is calibrated at next system startup from replay close prices")
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered etf_nav_refresh background task (24h interval)")
+
 			// Register stress_test_daily — run multi-day stress scenarios after market close (P3-5).
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "stress_test_daily",

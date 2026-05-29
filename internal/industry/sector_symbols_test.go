@@ -105,6 +105,7 @@ func TestSupplyChainGraphCoverage(t *testing.T) {
 	graphIndustries := []string{
 		"semiconductor", "foundry", "ai_supply_chain", "server_assembly",
 		"cooling", "robotics", "shipping", "financials", "energy",
+		"etf_rotation",
 	}
 	for _, id := range graphIndustries {
 		if _, ok := sectors[id]; !ok {
