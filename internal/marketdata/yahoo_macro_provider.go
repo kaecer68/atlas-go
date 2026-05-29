@@ -57,6 +57,8 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 		"GC=F":     "gold",
 		"JPY=X":    "jpy",
 		"USDTWD=X": "usd_twd",
+		"SI=F":     "silver",
+		"HG=F":     "copper",
 	}
 
 	snap := MacroDataSnapshot{RecordedAt: time.Now().Unix()}
@@ -95,8 +97,12 @@ func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDat
 				snap.Gold = point
 			case "jpy":
 				snap.JPY = point
-			case "usd_twd":
-				snap.USD_TWD = point
+		case "usd_twd":
+			snap.USD_TWD = point
+		case "silver":
+			snap.Silver = point
+		case "copper":
+			snap.Copper = point
 			}
 			mu.Unlock()
 		}(ticker, key)
