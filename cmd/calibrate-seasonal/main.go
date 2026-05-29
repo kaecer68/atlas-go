@@ -155,6 +155,7 @@ func updateParametersFile(results []industry.SeasonalCalibration, threshold int,
 
 		pattern["historical_accuracy"] = result.ObservedAccuracy
 		pattern["avg_market_return"] = result.ObservedAvgReturn
+		pattern["adjustment_factor"] = result.ObservedAdjustment
 		patternsArray[i] = pattern
 		updated = append(updated, patternID)
 	}

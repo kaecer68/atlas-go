@@ -2793,7 +2793,7 @@
     },
     "seasonal_patterns": {
       "calibration_data_source": "data/replay/finmind_2020_2024.jsonl",
-      "calibration_timestamp": "2026-05-29T01:36:41Z",
+      "calibration_timestamp": "2026-05-29T01:58:15Z",
       "citation": {
         "dependencies": [
           "data/replay/finmind_2020_2024.jsonl",
@@ -2810,18 +2810,19 @@
       "source": "empirical_calibration",
       "value": [
         {
-          "adjustment_factor": 1.15,
-          "avg_market_return": -0.0002968617571399319,
+          "adjustment_factor": -0.727293417015948,
+          "avg_market_return": -0.0008906518974233699,
           "avoided_industries": [
             "semiconductor",
-            "ai_supply_chain"
+            "electronics"
           ],
           "description": "年前資金回籠，高股息與金融股受追捧；電子股進入淡季",
           "end_day": 15,
           "end_month": 2,
           "favored_industries": [
             "financials",
-            "mining"
+            "consumer",
+            "defensive"
           ],
           "historical_accuracy": 0.4,
           "id": "spring_festival",
@@ -2831,8 +2832,8 @@
           "start_month": 1
         },
         {
-          "adjustment_factor": 1.1,
-          "avg_market_return": 0.0009444284842021119,
+          "adjustment_factor": 1.0125613452649147,
+          "avg_market_return": 0.000944428484202112,
           "avoided_industries": [
             "consumer",
             "shipping"
@@ -2852,8 +2853,8 @@
           "start_month": 3
         },
         {
-          "adjustment_factor": 1.2,
-          "avg_market_return": -0.00038265778063341545,
+          "adjustment_factor": -0.26343762895199596,
+          "avg_market_return": -0.0003826577806334153,
           "avoided_industries": [
             "semiconductor",
             "ai_supply_chain"
@@ -2873,8 +2874,8 @@
           "start_month": 5
         },
         {
-          "adjustment_factor": 1.25,
-          "avg_market_return": 0.0005628465432415169,
+          "adjustment_factor": 2.4249017107858584,
+          "avg_market_return": 0.0005628465432415172,
           "avoided_industries": [
             "consumer"
           ],
@@ -2893,8 +2894,8 @@
           "start_month": 7
         },
         {
-          "adjustment_factor": 1.1,
-          "avg_market_return": -0.0004677540997886479,
+          "adjustment_factor": 0.7088700217117745,
+          "avg_market_return": -0.0004677540997886483,
           "avoided_industries": [
             "consumer",
             "shipping",
@@ -2916,12 +2917,12 @@
           "start_month": 9
         },
         {
-          "adjustment_factor": 1.12,
-          "avg_market_return": 0.002077920896210497,
+          "adjustment_factor": 0.5247393920394349,
+          "avg_market_return": 0.0020779208962104965,
           "avoided_industries": [
             "small_cap"
           ],
-          "description": "法人年底作帳，大型權值股與金融股相對強勢",
+          "description": "[已棄用] 由年底法人作帳取代",
           "end_day": 31,
           "end_month": 12,
           "favored_industries": [
@@ -2938,8 +2939,8 @@
           "start_month": 11
         },
         {
-          "adjustment_factor": 1.08,
-          "avg_market_return": -0.000795142392082031,
+          "adjustment_factor": -0.28830153954778703,
+          "avg_market_return": -0.0007951423920820308,
           "avoided_industries": [
             "semiconductor"
           ],
@@ -2955,6 +2956,108 @@
           "name_en": "Summer Electricity Peak",
           "start_day": 1,
           "start_month": 6
+        },
+        {
+          "adjustment_factor": 2.233896169628453,
+          "affected_industries": [
+            "electronics",
+            "ai_supply_chain"
+          ],
+          "avg_market_return": 0.0014494034888542682,
+          "avoided_industries": [
+            "consumer",
+            "shipping"
+          ],
+          "description": "Q3-Q4為半導體傳統旺季",
+          "end_day": 30,
+          "end_month": 11,
+          "favored_industries": [
+            "semiconductor",
+            "foundry"
+          ],
+          "historical_accuracy": 0.8,
+          "id": "semiconductor_peak",
+          "name": "半導體旺季",
+          "start_day": 1,
+          "start_month": 7,
+          "typical_return": 0.004
+        },
+        {
+          "adjustment_factor": 2.555461115152645,
+          "affected_industries": [
+            "semiconductor",
+            "electronics",
+            "pcb"
+          ],
+          "avg_market_return": 0.0017225752557071118,
+          "avoided_industries": [
+            "consumer",
+            "financials"
+          ],
+          "description": "Q1-Q2 CSP資本支出公告期",
+          "end_day": 30,
+          "end_month": 6,
+          "favored_industries": [
+            "ai_supply_chain",
+            "server_assembly",
+            "cooling"
+          ],
+          "historical_accuracy": 0.6,
+          "id": "ai_infrastructure_buildout",
+          "name": "AI基礎建設佈建期",
+          "start_day": 1,
+          "start_month": 1,
+          "typical_return": 0.003
+        },
+        {
+          "adjustment_factor": 1.1171741715842134,
+          "affected_industries": [
+            "semiconductor",
+            "ai_supply_chain"
+          ],
+          "avg_market_return": 0.0012142382037542588,
+          "avoided_industries": [
+            "shipping",
+            "consumer"
+          ],
+          "description": "Q3被動元件與PCB旺季",
+          "end_day": 30,
+          "end_month": 11,
+          "favored_industries": [
+            "electronics",
+            "pcb"
+          ],
+          "historical_accuracy": 0.6,
+          "id": "electronics_peak",
+          "name": "電子零組件旺季",
+          "start_day": 1,
+          "start_month": 8,
+          "typical_return": 0.003
+        },
+        {
+          "adjustment_factor": 0.5658929214514106,
+          "affected_industries": [
+            "ai_supply_chain",
+            "consumer"
+          ],
+          "avg_market_return": 0.0015044319710645672,
+          "avoided_industries": [
+            "small_cap"
+          ],
+          "description": "11-12月法人作帳與基金調整期",
+          "end_day": 31,
+          "end_month": 12,
+          "favored_industries": [
+            "semiconductor",
+            "financials",
+            "etf_rotation"
+          ],
+          "historical_accuracy": 0.2,
+          "id": "year_end_positioning",
+          "name": "年底法人作帳",
+          "start_day": 15,
+          "start_month": 11,
+          "typical_return": 0.002
         }
       ]
     },
