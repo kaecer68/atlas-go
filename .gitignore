@@ -110,6 +110,9 @@ opencode.json
 # Debug test files
 internal/experiment/debug*_test.go
 
+# Test artifacts
+/test-results/
+
 # PR description
 /PR_DESCRIPTION.md
 # Runtime state and cached data
