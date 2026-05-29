@@ -242,7 +242,7 @@ export function renderSeasonalityList(allPatterns, activePatterns, data) {
       ? '<span class="badge ok">進行中</span>'
       : '<span class="badge info">非活躍</span>';
     const accuracy = Math.round((p.historical_accuracy || 0) * 100);
-    const returnPct = ((p.typical_return || 0) * 100).toFixed(1);
+    const returnPct = ((p.typical_return || 0) * 100 * 12).toFixed(1);
     const adjustment = (p.adjustment_factor || 1.0).toFixed(2);
     const returnColor = returnPct < 0 ? 'var(--down)' : returnPct > 0 ? 'var(--up)' : '';
     const adjColor = adjustment < 0 ? 'var(--down)' : adjustment > 0 ? 'var(--up)' : '';
@@ -336,7 +336,7 @@ export function renderSeasonalityCalendar(data) {
     if (hasPatterns) {
       m.patterns.forEach((p) => {
         const accuracy = Math.round((p.historical_accuracy || 0) * 100);
-        const returnPct = ((p.typical_return || 0) * 100).toFixed(1);
+    const returnPct = ((p.typical_return || 0) * 100 * 12).toFixed(1);
         html += `<div style="font-size:11px;padding:3px 0;border-bottom:1px solid var(--border)">`;
         html +=
           `<div style="font-weight:600">${p.name}</div>`;
@@ -531,7 +531,7 @@ function renderSeasonalityTab(detail) {
     '</div>';
   patterns.forEach((p) => {
     const accuracy = Math.round((p.historical_accuracy || 0) * 100);
-    const returnPct = ((p.typical_return || 0) * 100).toFixed(1);
+    const returnPct = ((p.typical_return || 0) * 100 * 12).toFixed(1);
     const period = `${p.start_month}/${p.start_day} ~ ${p.end_month}/${p.end_day}`;
     const impactColor =
       p.impact === "positive"
