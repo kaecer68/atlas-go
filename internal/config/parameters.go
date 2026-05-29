@@ -182,6 +182,7 @@ type BaselineParameters struct {
 	RequireCROPass              ParameterMetadata[bool]    `json:"require_cro_pass"`
 	TransactionCostBPS          ParameterMetadata[float64] `json:"transaction_cost_bps"`
 	SlippageBPS                 ParameterMetadata[float64] `json:"slippage_bps"`
+	AvgTradingCost              ParameterMetadata[float64] `json:"avg_trading_cost"`
 	ReserveCashFraction         ParameterMetadata[float64] `json:"reserve_cash_fraction"`
 }
 
