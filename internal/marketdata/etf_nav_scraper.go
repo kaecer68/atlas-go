@@ -43,6 +43,31 @@ func (s Source) String() string {
 //
 // If Tier 1 fails for any reason, the scraper silently falls back to Tier 2
 // so that callers always receive a best-effort NAV value.
+// TWSEETFNAVScraper attempts to fetch real ETF NAV from available data sources,
+// falling back to a close-price proxy when no real NAV is available.
+//
+// Data source investigation (2026-05-29):
+//
+//   Priority 1 — Fubon (富邦證券): sdk.marketdata.rest_client.stock only provides
+//     intraday OHLCV via client.intraday.quote(). No ETF NAV/fund API in the proxy.
+//     Confirmed: 4 endpoints (/health, /quote, /quotes, /market-status), all OHLCV.
+//
+//   Priority 2 — TWSE OpenAPI: openapi.twse.com.tw/v1/ETFReport/ETFNAV → 302 HTML.
+//     www.twse.com.tw/fund/BFIBMS → 302 redirect. mis.twse.com.tw/stock/api/
+//     getETFNetValue.jsp → HTML only. No free REST API for ETF NAV exists.
+//
+//   Priority 3 — Fugle: fugle_client.go provides intraday quote/meta only. No NAV.
+//
+//   Priority 4 — TEJ (台灣經濟新報): tej_provider.go only implements TRAIL/TAPRCD
+//     (stock OHLCV) and TWN/AFINA (financial statements). No ETF NAV dataset.
+//
+//   Priority 5 — FinMind: finmind_client.go uses TaiwanStockPrice (OHLCV), no
+//     TaiwanStockETF dataset is implemented. TaiwanStockETF exists in FinMind's
+//     catalog but requires a paid token refreshed every 7 days.
+//
+// Current strategy: Tier 1 (TWSE scrape) is a documented stub. Tier 2 (close-price
+// proxy) uses the configured QuoteFetcher and is the only working path today.
+// Taiwan ETFs trade within 0.1–0.5% of NAV, making close prices a reliable proxy.
 type TWSEETFNAVScraper struct {
 	client    *http.Client
 	limiter   *rate.Limiter
