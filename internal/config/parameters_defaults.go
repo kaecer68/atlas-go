@@ -1059,6 +1059,12 @@ func defaultBaselineParameters() BaselineParameters {
 			Rationale: "4 bps estimated slippage for market orders",
 			Source:    SourceEmpirical,
 		},
+		AvgTradingCost: ParameterMetadata[float64]{
+			Value:     0.00654,
+			Rationale: "Aggregate round-trip trading cost for Taiwan equities: commission (0.1425% × broker discount ~0.6 × 2 sides) + slippage (0.1% × 2 sides) + market impact. Calibrated from TWSE empirical data.",
+			Source:    SourceEmpirical,
+			Todo:      "Recalibrate against rolling 12-month TWSE trading cost distribution",
+		},
 		ReserveCashFraction: ParameterMetadata[float64]{
 			Value:     0.1,
 			Rationale: "10% cash reserve for liquidity and opportunities",
