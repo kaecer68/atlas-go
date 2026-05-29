@@ -1400,6 +1400,11 @@ func (s *System) resolveReplayDate() (time.Time, bool) {
 			return date, true
 		}
 	}
+	if len(s.Sim().replay.Dates) > 1 {
+		// Use second-to-last date so ForwardReturn has a "next day" to compute against.
+		// The last date has no next-day data, which forces synthetic fallback.
+		return s.Sim().replay.Dates[len(s.Sim().replay.Dates)-2], true
+	}
 	if len(s.Sim().replay.Dates) > 0 {
 		return s.Sim().replay.Dates[len(s.Sim().replay.Dates)-1], true
 	}
