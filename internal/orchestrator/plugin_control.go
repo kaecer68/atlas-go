@@ -352,10 +352,11 @@ func (SuperinvestorExecutor) Supports(agent domain.AgentSpec) bool {
 //     meets the quality bar
 func (SuperinvestorExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
 	params := config.GetParametersConfig().Orchestrator
-	convBase := params.SuperinvestorConvictionBase.Value
 	minConv := params.SuperinvestorMinConviction.Value
 
-	b := newConvictionBuilder(convBase, minConv)
+	// Use dynamicSignalStrength as base (55-75 range) to match sector agent behavior.
+	// Add superinvestor conviction premium (+5) to maintain PM quality bar.
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent))+5, minConv)
 
 	// Theme-specific conviction adjustments based on agent skill
 	switch agent.Skill {
