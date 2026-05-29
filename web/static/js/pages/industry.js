@@ -255,7 +255,6 @@ export function renderSeasonalityList(allPatterns, activePatterns, data) {
       ? `<span style="font-size:10px;color:var(--ok);background:rgba(79,193,255,0.1);padding:1px 4px;border-radius:3px" title="已透過回測校準">已校準</span>`
       : `<span style="font-size:10px;color:var(--warn);background:rgba(245,158,11,0.1);padding:1px 4px;border-radius:3px" title="evidence_quality: low — 尚未經過回測校準">待驗證</span>`;
     html += `<td>${accuracy}% ${evidenceBadge}</td>`;
-    html += `<td>${returnPct}%</td>`;
     html += `<td style="color:${returnColor}">${returnPct}%</td>`;
     html += `<td style="color:${adjColor}">${adjustment}x</td>`;
     html += `<td>${statusBadge}</td>`;
