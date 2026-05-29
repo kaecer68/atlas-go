@@ -43,6 +43,7 @@ internal/*/data/
 !internal/marketdata/data/
 !internal/config/data/
 .gitnexus/lbug
+.gitnexus/meta.json
 /.worktrees/
 
 # Development artifacts
