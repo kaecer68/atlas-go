@@ -158,11 +158,14 @@ func TestSuperinvestorExecutorApply(t *testing.T) {
 	}
 
 	out := executor.Apply(agent, recs, DefaultExecutionPolicy())
-	if len(out) != 1 {
-		t.Fatalf("expected 1 recommendation above SuperinvestorMinConviction(65), got %d", len(out))
+	if len(out) != 2 {
+		t.Fatalf("expected 2 recommendations above SuperinvestorMinConviction(50), got %d", len(out))
 	}
 	if out[0].Symbol != "2330.TW" {
 		t.Fatalf("expected 2330.TW to survive, got %s", out[0].Symbol)
+	}
+	if out[1].Symbol != "2317.TW" {
+		t.Fatalf("expected 2317.TW to survive, got %s", out[1].Symbol)
 	}
 	if !strings.Contains(out[0].Reason, "[Superinvestor:") {
 		t.Fatalf("expected reason to be tagged with [Superinvestor:...], got %q", out[0].Reason)
@@ -271,7 +274,9 @@ func TestSuperinvestorRecommendAckman(t *testing.T) {
 func TestSuperinvestorRecommendRejectsWeakSignal(t *testing.T) {
 	exec := SuperinvestorExecutor{}
 	agent := domain.AgentSpec{ID: "super-dru-01", Skill: "druckenmiller_macro", Layer: domain.LayerSuperinvestor}
-	quote := domain.Quote{Symbol: "2330.TW", Last: 580, Open: 590, High: 595, Volume: 100_000, IsTradable: true}
+	// Weak signal: down day, far from high, low volume, no keywords, risk_off.
+	// With floor=50: dynamicSignalStrength(60) + premium(5) - weak_close(-10) - far_from_high(-8) = 47 < 50 = REJECTED.
+	quote := domain.Quote{Symbol: "2330.TW", Last: 560, Open: 590, High: 595, Volume: 100_000, IsTradable: true}
 
 	_, ok := exec.Recommend(agent, quote, "", "risk_off", &FactorSnapshot{})
 	if ok {

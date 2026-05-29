@@ -84,6 +84,7 @@ func NewRateLimitManager() *RateLimitManager {
 			"sox_index":           rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"sector_data":         rate.NewLimiter(rate.Inf, 0),
 			"day_trading":         rate.NewLimiter(TWSEMarginRate, TWSEMarginBurst), // same tier as TWSE margin
+			"bdi":                 rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 		},
 	}
 }

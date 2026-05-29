@@ -32,6 +32,7 @@ import (
 type SimulationCore struct {
 	cfg             config.Config
 	provider        marketdata.Provider
+	factorEngine    *portfolio.FactorEngine
 	engine          *sim.Engine
 	registry        domain.AgentRegistry
 	policy          baseline.Policy
@@ -193,9 +194,12 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 
 	macroRiskEngine, structuralTrendEngine, macroDrawdownEngine, sectorDataProvider := buildMacroEngines(cfg.LedgerDir)
 
+	simCore := buildSimulationCore(cfg, registry, policy, ds, optimizer, store)
+	simCore.factorEngine = factorEngine
+
 	sys := &System{
 		SystemCore: &SystemCore{
-			sim:             buildSimulationCore(cfg, registry, policy, ds, optimizer, store),
+			sim:             simCore,
 			port:            buildPortfolioManager(runtimeParams, registry, eventBus, factorEngine),
 			strat:           buildStrategyLayer(thresholdEngine),
 			risk:            buildRiskOps(cfg, eventBus, macroRiskEngine, structuralTrendEngine, macroDrawdownEngine, sectorDataProvider),

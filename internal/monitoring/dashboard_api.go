@@ -96,6 +96,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	}
 
 	providers = append(providers, marketdata.NewFrankfurterFXProvider())
+	providers = append(providers, marketdata.NewBDIProvider())
 	// ExchangeRate-API provides TWD (not available in ECB/Frankfurter dataset).
 	providers = append(providers, marketdata.NewExchangeRateProvider())
 	providers = append(providers, marketdata.NewTWSECapitalFlowProvider(filepath.Join(workDir, "data/state/capital_flow")))

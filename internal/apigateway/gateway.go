@@ -9,7 +9,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
-// Gateway is the unified entry point for all 14 data channels.
+// Gateway is the unified entry point for all data channels.
 type Gateway struct {
 	registry *ChannelRegistry
 	limiters *RateLimitManager
@@ -160,5 +160,6 @@ func channelIDs() []string {
 		"sox_index",
 		"sector_data",
 		"day_trading",
+		"bdi",
 	}
 }

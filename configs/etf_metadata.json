@@ -1,5 +1,13 @@
 {
-    "0050.TW": {"name": "元大台灣50", "nav": 195.50, "expense_ratio": 0.0032, "benchmark": "TW50"},
-    "0056.TW": {"name": "元大高股息", "nav": 42.80, "expense_ratio": 0.0043, "benchmark": "TWHDividend"},
-    "00878.TW": {"name": "國泰永續高股息", "nav": 25.30, "expense_ratio": 0.0045, "benchmark": "MSCITWESG"}
+    "0050.TW":  {"name": "元大台灣50", "nav": 195.50, "expense_ratio": 0.0032, "benchmark": "TW50"},
+    "0056.TW":  {"name": "元大高股息", "nav": 42.80, "expense_ratio": 0.0043, "benchmark": "TWHDividend"},
+    "00878.TW": {"name": "國泰永續高股息", "nav": 25.30, "expense_ratio": 0.0045, "benchmark": "MSCITWESG"},
+    "006208.TW": {"name": "富邦台50", "nav": 0, "expense_ratio": 0.0032, "benchmark": "TW50"},
+    "00692.TW":  {"name": "富邦公司治理", "nav": 0, "expense_ratio": 0.0035, "benchmark": "TWCG"},
+    "00713.TW":  {"name": "元大高股息低波動", "nav": 0, "expense_ratio": 0.0035, "benchmark": "TWHDivLowVol"},
+    "00881.TW":  {"name": "國泰台灣5G+", "nav": 0, "expense_ratio": 0.0045, "benchmark": "TW5G"},
+    "00891.TW":  {"name": "中信關鍵半導體", "nav": 0, "expense_ratio": 0.0045, "benchmark": "TWSemi"},
+    "00919.TW":  {"name": "群益台灣精選高息", "nav": 0, "expense_ratio": 0.0040, "benchmark": "TWHDivSelect"},
+    "00929.TW":  {"name": "復華台灣科技優息", "nav": 0, "expense_ratio": 0.0040, "benchmark": "TWTechDiv"},
+    "00940.TW":  {"name": "元大台灣價值高息", "nav": 0, "expense_ratio": 0.0043, "benchmark": "TWValDiv"}
 }

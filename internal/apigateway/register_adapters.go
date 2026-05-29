@@ -124,6 +124,12 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	g.registry.Register("sox_index", soxAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "sox_index")
 
+	// --- BDI (Baltic Dry Index from CNBC) ---
+	bdiProvider := marketdata.NewBDIProvider()
+	bdiAdapter := NewBDIChannelAdapter(bdiProvider)
+	g.registry.Register("bdi", bdiAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "bdi")
+
 	// --- Sector Data (TWSE sector classification) ---
 	sectorProvider := marketdata.NewSectorDataProvider(filepath.Join(workDir, "data/state/sector_data"))
 	sectorAdapter := NewSectorDataChannelAdapter(sectorProvider)
