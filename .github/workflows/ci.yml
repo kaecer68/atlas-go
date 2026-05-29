@@ -74,6 +74,7 @@ jobs:
         with:
           version: v2.12.2
           args: --timeout=5m
+          only-new-issues: true
 
   operations:
     runs-on: ubuntu-latest
