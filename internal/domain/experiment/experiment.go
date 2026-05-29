@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain/shared"
+	"github.com/kaecer68/atlas-go/internal/eval"
 )
 
 // MutationBriefContractVersion is the current contract version for mutation briefs.
@@ -116,4 +117,5 @@ type PromptExperimentResult struct {
 	CandidateFactorCount   int                 `json:"candidate_factor_count,omitempty"`
 	BaselineMonetaryNTD    float64             `json:"baseline_monetary_ntd,omitempty"`
 	CandidateMonetaryNTD   float64             `json:"candidate_monetary_ntd,omitempty"`
+	EvalMetrics            *eval.EvalResult    `json:"eval_metrics,omitempty"`
 }

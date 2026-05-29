@@ -4,10 +4,10 @@ import "math"
 
 // EvalResult bundles key out-of-sample evaluation metrics.
 type EvalResult struct {
-	R2OOS     float64
-	Sharpe    float64
-	CumReturn float64
-	MaxDD     float64
+	R2OOS     float64 `json:"r2_oos"`
+	Sharpe    float64 `json:"sharpe"`
+	CumReturn float64 `json:"cum_return"`
+	MaxDD     float64 `json:"max_dd"`
 }
 
 // OOSR2 computes the out-of-sample R-squared: 1 - Σ(y-ŷ)² / Σy².
