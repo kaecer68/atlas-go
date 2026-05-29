@@ -50,7 +50,12 @@ func run(args []string) error {
 		return fmt.Errorf("no bars loaded from %s", *dataPath)
 	}
 
-	// ── 2. Filter by symbol (optional) ───────────────────────────────────────
+	// ── 2. Detect multi-symbol or filter by symbol ──────────────────────────
+	symbols := uniqueSymbols(bars)
+	if *symbolFilter == "" && len(symbols) > 1 {
+		return fmt.Errorf("data contains %d symbols; use -symbol to select one (e.g. -symbol %s)",
+			len(symbols), symbols[0])
+	}
 	if *symbolFilter != "" {
 		bars = filterBySymbol(bars, *symbolFilter)
 		if len(bars) == 0 {
@@ -148,6 +153,20 @@ func filterByStart(bars []domain.DailyBar, start time.Time) []domain.DailyBar {
 			out = append(out, b)
 		}
 	}
+	return out
+}
+
+// uniqueSymbols returns the sorted unique symbol values in bars.
+func uniqueSymbols(bars []domain.DailyBar) []string {
+	seen := make(map[string]struct{}, 10)
+	for _, b := range bars {
+		seen[b.Symbol] = struct{}{}
+	}
+	out := make([]string, 0, len(seen))
+	for s := range seen {
+		out = append(out, s)
+	}
+	sort.Strings(out)
 	return out
 }
 
@@ -323,7 +342,7 @@ func annualizedSharpe(predictions, actuals []float64) float64 {
 	variance /= float64(n - 1)
 
 	if variance <= 0 {
-		return 0
+		return math.NaN()
 	}
 	std := math.Sqrt(variance)
 	return mean / std * math.Sqrt(float64(tradingDaysPerYear)) // annualize
@@ -339,8 +358,13 @@ func printResults(results []backtest.BacktestResult, featureNames []string) {
 	fmt.Println(strings.Repeat("-", 100))
 
 	for _, r := range results {
-		trainN := int(r.Metrics["train_samples"])
-		testN := int(r.Metrics["test_samples"])
+		trainN, testN := 0, 0
+		if v, ok := r.Metrics["train_samples"]; ok {
+			trainN = int(v)
+		}
+		if v, ok := r.Metrics["test_samples"]; ok {
+			testN = int(v)
+		}
 		r2 := oosR2(r.Predictions, r.Actuals)
 		sharpe := annualizedSharpe(r.Predictions, r.Actuals)
 
@@ -354,8 +378,16 @@ func printResults(results []backtest.BacktestResult, featureNames []string) {
 			sharpeStr = fmt.Sprintf("%+7.4f", sharpe)
 		}
 
-		fmt.Printf("%-45s %8d %8d %8s %8s %8d\n",
-			r.WindowID, trainN, testN, r2Str, sharpeStr, len(featureNames))
+		trainStr, testStr := "   N/A", "   N/A"
+		if _, ok := r.Metrics["train_samples"]; ok {
+			trainStr = fmt.Sprintf("%8d", trainN)
+		}
+		if _, ok := r.Metrics["test_samples"]; ok {
+			testStr = fmt.Sprintf("%8d", testN)
+		}
+
+		fmt.Printf("%-45s %8s %8s %8s %8s %8d\n",
+			r.WindowID, trainStr, testStr, r2Str, sharpeStr, len(featureNames))
 	}
 
 	// ── Summary across all windows ───────────────────────────────────────────
@@ -374,8 +406,12 @@ func printSummary(results []backtest.BacktestResult) {
 	)
 
 	for _, r := range results {
-		totalTrain += int(r.Metrics["train_samples"])
-		totalTest += int(r.Metrics["test_samples"])
+		if v, ok := r.Metrics["train_samples"]; ok {
+			totalTrain += int(v)
+		}
+		if v, ok := r.Metrics["test_samples"]; ok {
+			totalTest += int(v)
+		}
 		r2 := oosR2(r.Predictions, r.Actuals)
 		if !math.IsNaN(r2) {
 			totalR2 += r2
