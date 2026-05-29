@@ -458,16 +458,23 @@ AI review 提供第二雙眼睛。CI 閘門（governance、operations、coverage
 
 **所有 AI 代理在進行任何程式修改前，必須先閱讀以下文件以理解系統架構與設計意圖：**
 
+### 🔴 修改前必讀（Pre-Change Protocol）
+
+**任何程式碼修改前，必須執行此技能的檢查清單，禁止跳過：**
+- `.claude/skills/atlas-pre-change-protocol/SKILL.md` — **強制 7 步驟檢查：blast radius → 模組陷阱 → 數據源溯源 → 憲法檢查 → 模式匹配 → graphify 架構 → 代碼意圖**
+
 ### 統一入口
-- `.claude/SKILLS-MAP.md` — 技能地圖入口
+- `.claude/SKILLS-MAP.md` — 技能地圖入口（v2.0，含全部 39 技能）
 - `docs/GUIDELINES_INDEX.md` — **規範文件總索引**，包含所有規範的權威階層與使用情境路由
 
 ### 核心技能（依任務類型）
+- **修改前必讀**: `.claude/skills/atlas-pre-change-protocol/SKILL.md`
 - **架構相關**: `.claude/skills/atlas-core-architecture/SKILL.md`
 - **宏觀敘事**: `.claude/skills/atlas-macro-narrative/SKILL.md`
 - **風險管理**: `.claude/skills/atlas-risk-management/SKILL.md`
 - **策略進化**: `.claude/skills/atlas-strategy-evolution/SKILL.md`
 - **操作指南**: `.claude/skills/atlas-operations-guide/SKILL.md`
+- **GitNexus 工具**: `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md`, `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md`, `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md`
 
 ### 補充文件（詳細規格）
 - `docs/architecture.md` — 架構詳細說明
@@ -481,17 +488,19 @@ AI review 提供第二雙眼睛。CI 閘門（governance、operations、coverage
 > **文件優先順序**（當內容衝突時）：
 > 1. `docs/GUIDELINES_INDEX.md` — **規範索引為最終仲裁者**
 > 2. `internal/apigateway/CONSTITUTION.md` — 憲法（強制規範，CI 檢查）
-> 3. `.github/instructions/*.md` — 領域守則
-> 4. `.claude/SKILLS-MAP.md` / `.claude/skills/atlas-*/SKILL.md` — 技能文件
-> 5. `agents.md` — 倉庫層級邊界
-> 6. `internal/*/AGENTS.md` — 模組特有陷阱
-> 7. `docs/*.md` — 參考文件
-> 8. 原始碼（最終真理來源）
+> 3. `.omo/CONSTITUTION.md` — 深度憲法（矩陣運算、真實數據、證偽要求，適用於 optimizer/portfolio/risk）
+> 4. `.github/instructions/*.md` — 領域守則
+> 5. `.claude/skills/atlas-pre-change-protocol/SKILL.md` — **修改前強制檢查清單**
+> 6. `.claude/SKILLS-MAP.md` / `.claude/skills/atlas-*/SKILL.md` — 技能文件
+> 7. `agents.md` — 倉庫層級邊界
+> 8. `internal/*/AGENTS.md` — 模組特有陷阱
+> 9. `docs/*.md` — 參考文件
+> 10. 原始碼（最終真理來源）
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (32240 symbols, 74129 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (32997 symbols, 75867 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
