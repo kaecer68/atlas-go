@@ -85,6 +85,24 @@ func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
 		"baseline", fmt.Sprintf("%.3f", judged.Experiment.BaselineValue),
 		"candidate", fmt.Sprintf("%.3f", judged.Experiment.CandidateValue))
 
+	// Close the planned→tested feedback loop: append the actual experiment result
+	// to the ledger so the inbox shows real values instead of "待測試".
+	resultRec := domain.ExperimentRecord{
+		ID:                   candidate.Experiment.ID,
+		TargetAgentID:        candidate.Agent.ID,
+		Skill:                candidate.Agent.Skill,
+		MutationType:         candidate.Experiment.MutationType,
+		Status:               status,
+		BaselineValue:        judged.Experiment.BaselineValue,
+		CandidateValue:       judged.Experiment.CandidateValue,
+		BaselineMonetaryNTD:  judged.Experiment.BaselineMonetaryNTD,
+		CandidateMonetaryNTD: judged.Experiment.CandidateMonetaryNTD,
+		AcceptanceMetric:     candidate.Experiment.AcceptanceMetric,
+	}
+	if err := store.RecordExperiment(resultRec); err != nil {
+		logging.Warn("experiment", "ledger_update_failed", logging.Err(err))
+	}
+
 	if status == domain.ExperimentAccepted {
 		mgr := baseline.NewManager(cfg.Config.BaselinePolicyPath)
 		if _, err := mgr.PromoteResult(expPath); err != nil {

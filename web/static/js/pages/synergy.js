@@ -204,10 +204,29 @@ function renderCandidates(inbox) {
   }
 
   const versionHtml = inbox.baseline_version ? `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">基線版本：v${inbox.baseline_version}</div>` : '';
-  const explainHtml = '<div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.4">系統每日自動選出表現最弱的 Agent 作為實驗候選（status=planned）。每 7 天由 auto_experiment 執行測試後更新為實際結果。本頁面去重顯示每個 Agent 的最新候選。</div>';
+  const explainHtml = '<div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.4">系統每日自動選出表現最弱的 Agent 作為實驗候選(planned)。每 7 天執行測試後更新結果。下方為每個 Agent 的最新候選。</div>';
+
+  // Sort items into sections: planned, tested (accepted/rejected), history
+  const planned = [], tested = [], history = [];
+  inbox.items.forEach(item => {
+    const s = item.status || '';
+    if (s === 'planned' || s === 'running') planned.push(item);
+    else if (s === 'accepted' || s === 'rejected') tested.push(item);
+    else history.push(item);
+  });
 
   let html = versionHtml + explainHtml;
-  inbox.items.forEach(item => {
+
+  function renderSection(title, items, color) {
+    if (!items.length) return '';
+    let h = `<div style="margin-bottom:12px"><div style="font-weight:700;color:${color};margin-bottom:6px;font-size:13px">${title}（${items.length}）</div>`;
+    items.forEach(item => renderCard(item));
+    h += '</div>';
+    return h;
+  }
+
+  let cardHtml = '';
+  function renderCard(item) {
     const agentId = item.target_agent_id || '';
     const mutation = item.mutation_type || '';
     const summary = item.mutation_summary || '';
@@ -235,19 +254,23 @@ function renderCandidates(inbox) {
       rejectHtml = `<div style="font-size:10px;color:var(--down);margin-top:2px">拒絕原因：${escapeHtml(item.reject_reason)}</div>`;
     }
 
-    html += `
+    cardHtml += `
       <div class="inbox-card">
         <div class="title">${escapeHtml(item.experiment_id)}</div>
         <div class="meta">${escapeHtml(getAgentName(agentId))} ${statusBadge(status)}</div>
         <div class="meta"><strong>${escapeHtml(mutationName(mutation))}</strong></div>
-        <div style="font-size:11px; color:var(--muted); margin:4px 0; line-height:1.5">${escapeHtml(mutationDescription(mutation, item.skill))}</div>
+        <div style="font-size:11px;color:var(--muted);margin:4px 0;line-height:1.5">${escapeHtml(mutationDescription(mutation, item.skill))}</div>
         ${compareHtml}
         ${moneyHtml}
-        ${summary ? `<div style="font-size:10px; color:var(--muted); margin-top:4px; word-break:break-all;">${escapeHtml(summary)}</div>` : ''}
+        ${summary ? `<div style="font-size:10px;color:var(--muted);margin-top:4px;word-break:break-all">${escapeHtml(summary)}</div>` : ''}
         ${rejectHtml}
       </div>
     `;
-  });
+  }
+
+  html += renderSection('📋 待測試（系統已選出，等待 auto_experiment 執行）', planned, 'var(--warn)');
+  html += renderSection('✅ 已測試（含結果比較）', tested, 'var(--up)');
+  html += renderSection('📁 歷史記錄', history, 'var(--muted)');
 
   container.innerHTML = html;
 }
