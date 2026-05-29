@@ -1118,6 +1118,12 @@ export interface IndustryParameters {
   seasonal_patterns: string;
   asymmetric_risk: string;
   news_latency_risk: string;
+  asymmetric_drop_critical: string;
+  asymmetric_drop_high: string;
+  asymmetric_drop_medium: string;
+  news_impact_multiplier: string;
+  boundary_fallback: string;
+  adjustment_floor: string;
   freshness_scores: string;
   phase_scores: string;
   skill_to_industry?: string;
@@ -1195,6 +1201,7 @@ export interface LinkageConfig {
   correlation_window_days: number;
   correlation_matrix: Record<string, number>;
   recession_correlation_boost: number;
+  recession_shock_amplifier: number;
 }
 
 export interface LinkageFactorScore {
@@ -1250,6 +1257,8 @@ export interface MarketdataParameters {
   tej_api_timeout_sec: string;
   fugle_rate_limit: string;
   fugle_api_timeout_sec: string;
+  bdi_api_timeout_sec: string;
+  bdi_endpoint: string;
   max_retry_attempts: string;
   retry_backoff_ms: string;
 }
