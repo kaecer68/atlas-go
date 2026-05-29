@@ -11,6 +11,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/eval"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 )
@@ -103,6 +104,21 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 	result.EvaluationMode = "prompt_aware_replay_judged"
 	result.JudgeChecks = checks
 	result.RecordedAt = time.Now()
+
+	// Attach formal eval metrics (R²_OOS, Sharpe, CumReturn, MaxDD) using the
+	// canonical eval package. Uses candidate returns for strategy evaluation.
+	if len(result.CandidateReturns) > 0 {
+		var r2OOS float64
+		if len(result.BaselineReturns) == len(result.CandidateReturns) && len(result.BaselineReturns) > 0 {
+			r2OOS = eval.OOSR2(result.BaselineReturns, result.CandidateReturns)
+		}
+		result.EvalMetrics = &eval.EvalResult{
+			R2OOS:     r2OOS,
+			Sharpe:    eval.SharpeRatio(result.CandidateReturns, 0),
+			CumReturn: eval.CumulativeReturn(result.CandidateReturns),
+			MaxDD:     eval.MaxDrawdown(result.CandidateReturns),
+		}
+	}
 
 	// Load parameter snapshot and perform sensitivity analysis
 	if result.ParameterSnapshotID != "" {
@@ -387,11 +403,11 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, st
 				return false, fmt.Sprintf("rejected: OOS validation failed: %s", result.OOSResult.Reason)
 			}
 		case "preserve_downside_protection":
-			baselineDD := maxDrawdown(result.BaselineReturns)
-			candidateDD := maxDrawdown(result.CandidateReturns)
+			baselineDD := eval.MaxDrawdown(result.BaselineReturns)
+			candidateDD := eval.MaxDrawdown(result.CandidateReturns)
 			ratio := j.params.Experiment.DrawdownProtectionRatio.Value
-			if candidateDD < baselineDD*ratio {
-				return false, fmt.Sprintf("rejected: candidate drawdown %.2f exceeds %.0f%% of baseline %.2f", candidateDD, ratio*100, baselineDD)
+			if candidateDD > baselineDD*ratio {
+				return false, fmt.Sprintf("rejected: candidate drawdown %.4f exceeds %.0f%% of baseline %.4f", candidateDD, ratio*100, baselineDD)
 			}
 		case "reduce_concentration_risk":
 			baselineVol := calculateVolatility(result.BaselineReturns)
@@ -521,26 +537,6 @@ func meanAndVariance(data []float64) (mean, variance float64) {
 	variance = sqDiffSum / float64(len(data)-1)
 
 	return mean, variance
-}
-
-func maxDrawdown(returns []float64) float64 {
-	if len(returns) == 0 {
-		return 0
-	}
-	peak := 1.0
-	maxDD := 0.0
-	cum := 1.0
-	for _, r := range returns {
-		cum *= 1 + r
-		if cum > peak {
-			peak = cum
-		}
-		dd := (peak - cum) / peak
-		if dd > maxDD {
-			maxDD = dd
-		}
-	}
-	return -maxDD
 }
 
 func calculateVolatility(returns []float64) float64 {
