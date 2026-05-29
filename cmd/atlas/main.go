@@ -46,6 +46,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
+	"github.com/kaecer68/atlas-go/internal/scheduler"
 	"github.com/kaecer68/atlas-go/internal/storage"
 	"github.com/kaecer68/atlas-go/internal/swarm"
 )
@@ -1169,10 +1170,24 @@ func run(args []string, deps appDeps) error {
 						return nil
 					},
 				})
-				log.Printf("[Gateway] registered rule_engine_check background task (%ds interval)", params.RuleEngineIntervalSec.Value)
-			}
+			log.Printf("[Gateway] registered rule_engine_check background task (%ds interval)", params.RuleEngineIntervalSec.Value)
+		}
 
-			riskGate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
+		{
+			mlScheduler := scheduler.NewMLRetrainScheduler(cfg.ReplayDataPath)
+			mlScheduler.SetWorkDir(cfg.WorkDir)
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "ml_retrain",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					return mlScheduler.RetrainAll(ctx)
+				},
+			})
+			log.Printf("[Gateway] registered ml_retrain background task (24h interval)")
+		}
+
+		riskGate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
 			dashboard.SetRiskGate(riskGate)
 
 			elRulesPath = filepath.Join(cfg.WorkDir, "data/state/eventlogic", "rules.json")
