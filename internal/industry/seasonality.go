@@ -76,7 +76,7 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           15,
 			EndMonth:           2,
 			EndDay:             15,
-			FavoredIndustries:  []string{"financials", "high_dividend", "small_cap", "mining"},
+			FavoredIndustries:  []string{"financials", "mining"},
 			AvoidedIndustries:  []string{"semiconductor", "ai_supply_chain"},
 			AdjustmentFactor:   1.15,
 			HistoricalAccuracy: 0.70,
@@ -91,8 +91,7 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           1,
 			EndMonth:           4,
 			EndDay:             15,
-			FavoredIndustries:  []string{"ai_supply_chain", "growth_momentum"},
-			AvoidedIndustries:  []string{"traditional", "commodity"},
+			FavoredIndustries:  []string{"ai_supply_chain"},
 			AdjustmentFactor:   1.10,
 			HistoricalAccuracy: 0.55,
 			AvgMarketReturn:    0.015,
@@ -106,8 +105,8 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           1,
 			EndMonth:           6,
 			EndDay:             30,
-			FavoredIndustries:  []string{"financials", "high_dividend", "consumer"},
-			AvoidedIndustries:  []string{"semiconductor", "ai_supply_chain", "technology"},
+			FavoredIndustries:  []string{"financials", "consumer"},
+			AvoidedIndustries:  []string{"semiconductor", "ai_supply_chain"},
 			AdjustmentFactor:   1.20,
 			HistoricalAccuracy: 0.65,
 			AvgMarketReturn:    0.025,
@@ -121,8 +120,8 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           1,
 			EndMonth:           9,
 			EndDay:             15,
-			FavoredIndustries:  []string{"semiconductor", "ai_supply_chain", "pcb", "electronics"},
-			AvoidedIndustries:  []string{"consumer", "tourism", "traditional"},
+			FavoredIndustries:  []string{"semiconductor", "ai_supply_chain", "electronics"},
+			AvoidedIndustries:  []string{"consumer"},
 			AdjustmentFactor:   1.25,
 			HistoricalAccuracy: 0.75,
 			AvgMarketReturn:    0.085,
@@ -136,7 +135,7 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           15,
 			EndMonth:           10,
 			EndDay:             31,
-			FavoredIndustries:  []string{"earnings_beaters"},
+			FavoredIndustries:  []string{},
 			AvoidedIndustries:  []string{"earnings_missers"},
 			AdjustmentFactor:   1.10,
 			HistoricalAccuracy: 0.60,
@@ -151,8 +150,8 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           1,
 			EndMonth:           12,
 			EndDay:             31,
-			FavoredIndustries:  []string{"large_cap", "financials", "index_heavyweights"},
-			AvoidedIndustries:  []string{"small_cap", "speculative"},
+			FavoredIndustries:  []string{"financials"},
+			AvoidedIndustries:  []string{},
 			AdjustmentFactor:   1.12,
 			HistoricalAccuracy: 0.58,
 			AvgMarketReturn:    0.018,
@@ -166,8 +165,8 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           1,
 			EndMonth:           8,
 			EndDay:             31,
-			FavoredIndustries:  []string{"energy", "utilities", "power_equipment"},
-			AvoidedIndustries:  []string{"high_power_consumption", "steel", "petrochemicals"},
+			FavoredIndustries:  []string{"energy"},
+			AvoidedIndustries:  []string{},
 			AdjustmentFactor:   1.08,
 			HistoricalAccuracy: 0.62,
 			AvgMarketReturn:    0.012,
@@ -267,7 +266,7 @@ func (se *SeasonalEngine) GetPatternAdjustment(industryID string, t time.Time) f
 	}
 
 	if adjustment <= 0 {
-		adjustment = 0.01
+		adjustment = config.GetParametersConfig().Industry.AdjustmentFloor.Value
 	}
 	return adjustment
 }
@@ -489,7 +488,7 @@ func (se *SeasonalEngine) GetAdjustmentBreakdown(industryID string, t time.Time)
 	}
 	ab.DynamicEnv = env
 
-	ab.Composite = math.Max(direct*sc*narr*env, 0.01)
+	ab.Composite = math.Max(direct*sc*narr*env, config.GetParametersConfig().Industry.AdjustmentFloor.Value)
 	return ab
 }
 

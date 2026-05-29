@@ -367,18 +367,23 @@ func (ct *CycleTracker) detectCyclePosition(industryID string, metrics IndustryM
 }
 
 // detectBusinessCycle determines the business cycle phase.
+func defaultCycleThresholds() config.CycleThresholdConfig {
+	return config.CycleThresholdConfig{
+		ExpansionRevenuePct: 0.20,
+		ExpansionProfitPct:  0.20,
+		RecoveryRevenuePct:  0.05,
+		RecoveryProfitPct:   0.05,
+		MatureRevenuePct:    -0.05,
+		MatureProfitPct:     -0.05,
+	}
+}
+
+// detectBusinessCycle determines the business cycle phase.
 func (ct *CycleTracker) detectBusinessCycle(metrics IndustryMetrics) CyclePhase {
 	params := config.GetParametersConfig().Industry
 	thresholds, ok := params.CycleThresholds.Value[metrics.IndustryID]
 	if !ok {
-		thresholds = config.CycleThresholdConfig{
-			ExpansionRevenuePct: 0.20,
-			ExpansionProfitPct:  0.20,
-			RecoveryRevenuePct:  0.05,
-			RecoveryProfitPct:   0.05,
-			MatureRevenuePct:    -0.05,
-			MatureProfitPct:     -0.05,
-		}
+		thresholds = defaultCycleThresholds()
 	}
 
 	revenueGrowth := metrics.RevenueGrowthYoY
@@ -573,14 +578,7 @@ func (ct *CycleTracker) boundaryConfidence(industryID string, metrics IndustryMe
 	params := config.GetParametersConfig().Industry
 	thresholds, ok := params.CycleThresholds.Value[industryID]
 	if !ok {
-		thresholds = config.CycleThresholdConfig{
-			ExpansionRevenuePct: 0.20,
-			ExpansionProfitPct:  0.20,
-			RecoveryRevenuePct:  0.05,
-			RecoveryProfitPct:   0.05,
-			MatureRevenuePct:    -0.05,
-			MatureProfitPct:     -0.05,
-		}
+		thresholds = defaultCycleThresholds()
 	}
 
 	revMinDist := math.Abs(metrics.RevenueGrowthYoY - thresholds.ExpansionRevenuePct)
@@ -599,7 +597,7 @@ func (ct *CycleTracker) boundaryConfidence(industryID string, metrics IndustryMe
 
 	tr := thresholds.ExpansionRevenuePct - thresholds.MatureRevenuePct
 	if tr <= 0 {
-		tr = 0.25
+		tr = config.GetParametersConfig().Industry.BoundaryFallback.Value
 	}
 	denom := tr * config.GetParametersConfig().Industry.ConfidenceSignal.Value.BoundaryDenomFactor
 

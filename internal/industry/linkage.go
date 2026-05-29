@@ -373,6 +373,30 @@ func (sp *ShockPropagation) SetDecayFactors(downstream, upstream float64) {
 	sp.upstreamDecay = upstream
 }
 
+// regimeAmplifiedMagnitude returns amplified shock magnitude when the source
+// industry is in recession. The amplification factor is read from
+// Industry.LinkageParams.RecessionShockAmplifier config (default 1.30).
+// This is orthogonal to RegimeAdjustedCorrelation which boosts correlation
+// during recession — both effects compound.
+func (sp *ShockPropagation) regimeAmplifiedMagnitude(sourceIndustry string, magnitude float64) float64 {
+	if sp.correlation == nil || sp.correlation.cycleProvider == nil {
+		return magnitude
+	}
+
+	phase, ok := sp.correlation.cycleProvider.GetPhase(sourceIndustry)
+	if !ok || phase != CycleRecession {
+		return magnitude
+	}
+
+	amplifier := 1.0
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		if a := cfg.Industry.LinkageParams.Value.RecessionShockAmplifier; a > 0 {
+			amplifier = a
+		}
+	}
+	return magnitude * amplifier
+}
+
 // getNarrativeAdjustedCorrelation returns the correlation between two industries,
 // adjusted by any active narrative themes.
 func (sp *ShockPropagation) getNarrativeAdjustedCorrelation(industryA, industryB string) float64 {
@@ -394,6 +418,7 @@ func (sp *ShockPropagation) getNarrativeAdjustedCorrelation(industryA, industryB
 // narrative-aware correlation when a narrative provider is set.
 func (sp *ShockPropagation) PropagateShock(sourceIndustry string, shockMagnitude float64, maxDepth int) map[string]float64 {
 	impacts := make(map[string]float64)
+	amplified := sp.regimeAmplifiedMagnitude(sourceIndustry, shockMagnitude)
 	impacts[sourceIndustry] = shockMagnitude
 
 	// Propagate downstream (customers affected)
@@ -409,7 +434,7 @@ func (sp *ShockPropagation) PropagateShock(sourceIndustry string, shockMagnitude
 				decay = 0.80
 			}
 		}
-		impacts[industry] = shockMagnitude * correlation * decay
+		impacts[industry] = amplified * correlation * decay
 	}
 
 	// Propagate upstream (suppliers affected)
@@ -425,7 +450,7 @@ func (sp *ShockPropagation) PropagateShock(sourceIndustry string, shockMagnitude
 				decay = 0.60
 			}
 		}
-		impacts[industry] = shockMagnitude * correlation * decay
+		impacts[industry] = amplified * correlation * decay
 	}
 
 	return impacts
