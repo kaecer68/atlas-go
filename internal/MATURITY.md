@@ -44,7 +44,7 @@
 
 ---
 
-## E · Evolving（演進中）— 13 packages
+## E · Evolving（演進中）— 14 packages
 
 核心模組，由 stable 模組間接使用，API 可能仍在調整。
 
@@ -53,6 +53,7 @@
 | `autobacktest` | 自動回測 — 定時背景回測任務 | `Runner` | 由 daily monitor pipeline 使用 |
 | `backtest` | 視窗回測 — `Window.Run()` | `Runner` | 由 autobacktest 使用 |
 | `db` | PostgreSQL 連線管理 | `DB` | 基礎設施，穩定但未直接出現於 main.go |
+| `eval` | 模型評估指標與可解釋性工具（SK-12~15） — OOS R²、Sharpe、PermutationImportance、PDP | `EvalResult`, `Predictor` | 由 robustness 使用，Fin-Skills 驅動 |
 | `globalmarket` | 全球總經資料管理 | `Manager` | 由 narrative/industry 使用 |
 | `metalearning` | 元學習協調器 — `MetaLearner`、策略選擇優化 | `MetaLearner` | 研究階段，可能晉升 |
 | `prism` | Regime-specific 訓練佇列（5 種 regime） | `Queue` | 核心模組，indirect import |
@@ -67,7 +68,7 @@
 
 ---
 
-## X · Experimental（實驗中）— 4 packages
+## X · Experimental（實驗中）— 5 packages
 
 研究性質模組，API 不穩定，不應被 stable/evolving 模組依賴。
 
@@ -75,6 +76,7 @@
 |---------|------|--------------|------|
 | `adversarial` | 對抗性訓練 — `AdversarialTrainer`、`BattleResult`、`StressTest` | `AdversarialTrainer` | 探索性研究 |
 | `reflexivity` | 自反性價格動態引擎 | `Engine` | 探索性研究 |
+| `robustness` | 穩健性與敏感度測試（SK-20~22） — SizeGroup、PennyExclusion、Ablation | `Model`, `SizeGroupReport` | Fin-Skills 驅動，實驗中 |
 | `stress` | 壓力測試場景 — `RunScenario()` | — | 情境模擬 |
 | `swarm` | MiroFish swarm 模擬 + GARCH 波動率 + 策略進化 + API + Agent Skill | `Swarm` | 演進中 |
 

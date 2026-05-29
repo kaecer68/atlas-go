@@ -939,7 +939,7 @@ func addMiningSubIndustries(tree *ClassificationTree) {
 		Cyclicality:          CyclicalityHigh,
 		TechnologyIntensity:  TechIntensityHigh,
 		CapitalIntensity:     CapIntensityHigh,
-		RepresentativeStocks: []string{},
+		RepresentativeStocks: []string{}, // No pure-play rare earth specialty companies listed on TWSE; tracked via mining parent
 	})
 
 	tree.AddSegment(&IndustrySegment{
@@ -953,7 +953,7 @@ func addMiningSubIndustries(tree *ClassificationTree) {
 		Cyclicality:          CyclicalityMedium,
 		TechnologyIntensity:  TechIntensityMedium,
 		CapitalIntensity:     CapIntensityHigh,
-		RepresentativeStocks: []string{},
+		RepresentativeStocks: []string{}, // No pure-play metal processing companies listed on TWSE; tracked via mining parent
 	})
 }
 
