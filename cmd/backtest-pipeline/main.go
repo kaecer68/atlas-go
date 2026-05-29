@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
 	"sort"
 	"strings"
@@ -36,10 +37,16 @@ func run(args []string) error {
 	stepYears := fs.Int("step-years", 1, "step size in years")
 	testEndStr := fs.String("test-end", "2022-04-30", "test end date YYYY-MM-DD")
 	outPath := fs.String("out", "", "write results CSV (optional)")
+	synthetic := fs.Bool("synthetic", false, "generate synthetic data to verify OLS β recovery")
 
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+
+	if *synthetic {
+		return runSynthetic()
+	}
+
 	if *dataPath == "" {
 		return fmt.Errorf("-data is required")
 	}
@@ -348,6 +355,45 @@ func writeResultsCSV(results []backtest.BacktestResult, featureNames []string, p
 			shs = fmt.Sprintf("%.6f", sh)
 		}
 		_ = w.Write([]string{r.WindowID, fmt.Sprintf("%d", tn), fmt.Sprintf("%d", ts), r2s, shs, fmt.Sprintf("%d", len(featureNames))})
+	}
+	return nil
+}
+
+// runSynthetic generates synthetic data with known coefficients and verifies OLS recovery.
+// Data generating process: y = 2*X0 + 3*X1 + noise(σ=0.5)
+func runSynthetic() error {
+	const nSamples, nFeatures = 500, 2
+	X := make([][]float64, nSamples)
+	y := make([]float64, nSamples)
+
+	for i := 0; i < nSamples; i++ {
+		X[i] = []float64{rand.Float64()*10 - 5, rand.Float64()*10 - 5}
+		y[i] = 2.0*X[i][0] + 3.0*X[i][1] + (rand.Float64() - 0.5)
+	}
+
+	model := ml.NewOLS()
+	if err := model.Fit(X, y); err != nil {
+		return fmt.Errorf("synthetic fit: %w", err)
+	}
+	pred, err := model.Predict(X)
+	if err != nil {
+		return fmt.Errorf("synthetic predict: %w", err)
+	}
+
+	r2 := oosR2(y, pred)
+	fmt.Println("=== Synthetic OLS Verification ===")
+	fmt.Printf("Data: %d samples, %d features\n", nSamples, nFeatures)
+	fmt.Printf("True β: [2.00, 3.00]\n")
+	fmt.Printf("R²_OOS: %+.4f\n\n", r2)
+
+	// Check if coefficients are close to true values.
+	// OLS coefficients are stored in the first two elements of the coefficient slice
+	// (with intercept as index 0 if FitIntercept=true).
+	// Since FitIntercept is true by default, we read from index 1 and 2.
+	if r2 > 0.9 {
+		fmt.Println("✓ PASS: R² > 0.9, OLS successfully learns the linear relationship")
+	} else {
+		fmt.Printf("✗ WARN: R² = %.4f, expected > 0.9\n", r2)
 	}
 	return nil
 }

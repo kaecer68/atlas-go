@@ -13,10 +13,10 @@ type Predictor interface {
 
 // ImportanceResult holds permutation-based feature importance results.
 type ImportanceResult struct {
-	FeatureNames []string
-	Importances  []float64
+	FeatureNames []string  `json:"feature_names"`
+	Importances  []float64 `json:"importances"`
 	// Ranks is 1-indexed: rank 1 = most important feature.
-	Ranks []int
+	Ranks []int `json:"ranks"`
 }
 
 // PermutationImportance computes feature importance via permutation.

@@ -197,50 +197,39 @@ func (en *ElasticNet) searchAlpha(Xs [][]float64, yc []float64) float64 {
 	bestAlpha := candidates[0]
 	bestMSE := math.MaxFloat64
 
-	// 3-fold split.
+	splitter := &KFoldSplitter{K: 3, Seed: 42}
 	n := len(Xs)
-	foldSize := n / 3
+	folds := splitter.Split(n)
 
 	for _, alpha := range candidates {
 		var totalMSE float64
 		var foldCount int
 
-		for fold := 0; fold < 3; fold++ {
-			start := fold * foldSize
-			end := start + foldSize
-			if fold == 2 {
-				end = n
-			}
-			if end-start == 0 {
+		for _, fold := range folds {
+			trainIdx := fold[0]
+			valIdx := fold[1]
+			if len(trainIdx) == 0 || len(valIdx) == 0 {
 				continue
 			}
 
-			// Build train fold.
-			trainN := n - (end - start)
-			trainXs := make([][]float64, 0, trainN)
-			trainYc := make([]float64, 0, trainN)
-			for i := 0; i < n; i++ {
-				if i >= start && i < end {
-					continue
-				}
-				trainXs = append(trainXs, Xs[i])
-				trainYc = append(trainYc, yc[i])
+			trainXs := make([][]float64, len(trainIdx))
+			trainYc := make([]float64, len(trainIdx))
+			for i, idx := range trainIdx {
+				trainXs[i] = Xs[idx]
+				trainYc[i] = yc[idx]
 			}
 
-			// Build validation fold.
-			valXs := make([][]float64, end-start)
-			valYc := make([]float64, end-start)
-			for i := start; i < end; i++ {
-				valXs[i-start] = Xs[i]
-				valYc[i-start] = yc[i]
+			valXs := make([][]float64, len(valIdx))
+			valYc := make([]float64, len(valIdx))
+			for i, idx := range valIdx {
+				valXs[i] = Xs[idx]
+				valYc[i] = yc[idx]
 			}
 
-			// Fit on train fold.
 			p := len(Xs[0])
 			beta := make([]float64, p)
 			en.fitCD(trainXs, trainYc, alpha, beta)
 
-			// Predict on validation fold.
 			var foldMSE float64
 			for i := range valXs {
 				var pred float64
