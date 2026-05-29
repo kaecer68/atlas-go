@@ -10,6 +10,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/ml"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
@@ -94,6 +95,16 @@ type ResearchResult struct {
 func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 	if ctx.Plugins == nil {
 		ctx.Plugins = NewPluginRegistry()
+	}
+
+	// When use_ml_scoring is enabled and no ML scorer is already wired,
+	// create a default ML scorer with OLS. The caller is responsible for
+	// training via MLScorer.Train() before execution — typically done at
+	// system initialization with historical replay data.
+	if cfg := config.GetParametersConfig(); cfg != nil && cfg.Orchestrator.UseMLScoring.Value {
+		if ctx.Plugins.mlScorer == nil {
+			ctx.Plugins.WithMLScorer(NewMLScorer(ml.NewOLS()))
+		}
 	}
 	if ctx.Policy == (domain.ExecutionPolicy{}) {
 		ctx.Policy = DefaultExecutionPolicy()
