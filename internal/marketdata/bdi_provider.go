@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
@@ -18,7 +17,6 @@ var bdiSharedLimiter = rate.NewLimiter(rate.Every(5*time.Second), 1)
 
 // BDIProvider fetches the Baltic Dry Index from CNBC.
 type BDIProvider struct {
-	mu       sync.Mutex
 	client   *http.Client
 	endpoint string
 }
