@@ -1,6 +1,6 @@
 ---
 name: atlas-pre-change-protocol
-description: "MUST use before ANY code modification in atlas-go. Mandates blast radius analysis via GitNexus, data source tracing via graphify/constitutions, and design intent verification. Triggers: any edit, refactor, fix, add, delete, or code change request. Prevents shallow patch fixes and dead code misidentification."
+description: "MUST use before ANY code modification OR investigation in atlas-go. Mandates GitNexus blast radius for changes, graphify architecture check for both changes and investigations, data source tracing, and design intent verification. Triggers: any edit, refactor, fix, add, delete, investigate, check, find, audit, research, review, look into, or code change request. Prevents shallow patch fixes, dead code misidentification, and uninformed investigations."
 ---
 
 # Atlas Pre-Change Protocol
@@ -19,8 +19,14 @@ Load this skill when the user requests ANY of these:
 | Code modification | "fix X", "add Y", "change Z", "refactor W" |
 | Code removal | "delete this", "remove dead code", "clean up" |
 | Bug reports | "this is broken", "X returns wrong result" |
+| Investigation | "check X", "find Y", "investigate Z", "look into W", "audit", "research", "review" |
+| Architecture questions | "how does X work", "what calls Y", "what depends on Z" |
 | File changes | Any edit in `internal/` or `cmd/` |
 | "Simple" fixes | "just add a field", "quick rename", "one-line change" |
+
+**Two modes based on task type:**
+- **Write mode** (modifications): Full 7-step protocol → Steps 1-7
+- **Investigation mode** (read-only inquiries): Lightweight protocol → Steps 1, 2, 3, 6
 
 **If the request involves `internal/` or `cmd/` directories, this protocol is MANDATORY.**
 
@@ -99,12 +105,13 @@ Verify alignment with existing conventions BEFORE coding:
 3. Verify: "同一件事不可有三種算法" — single source of truth for filtering/counting
 ```
 
-### Step 6: GRAPHIFY ARCHITECTURE CHECK
+### Step 6: GRAPHIFY ARCHITECTURE CHECK (DO NOT SKIP)
 
-Understand the system landscape before editing:
+The knowledge graph sees connections that grep and IDE search miss. Use it:
 
 ```
 1. Read graphify-out/GRAPH_REPORT.md for community structure (151 communities, 8972 nodes)
+   → Which community does your target belong to? What are its neighbors?
 2. Use gitnexus_query({query: "your topic"}) to find relevant execution flows
 3. Use gitnexus_context({name: "symbol"}) for 360° view (callers + callees + processes)
 4. Check which community your target belongs to — cross-community changes amplify risk
@@ -189,3 +196,42 @@ Before modifying or removing code, understand WHY it exists:
 | `gitnexus_detect_changes` | Pre-commit change impact check |
 | `explore` agent | Contextual codebase pattern search |
 | `librarian` agent | External docs/libraries research |
+
+---
+
+## Investigation Mode (read-only inquiries)
+
+For research, investigation, and audit tasks (no code modification expected), use this lighter protocol:
+
+### Step I-1: Graphify First
+```
+Read graphify-out/GRAPH_REPORT.md → identify which community your topic belongs to
+This is the FASTEST way to understand system structure before diving into code.
+→ Map the topic to a community (e.g., "market data providers" → marketdata community)
+→ Check connected communities for cross-cutting concerns
+```
+
+### Step I-2: GitNexus Concept Search
+```
+gitnexus_query({query: "<concept>"}) → find related execution flows
+→ Empty results are STRONG SIGNAL (concept may not exist in codebase)
+→ Non-empty results → read process traces for data flow understanding
+```
+
+### Step I-3: Data Source Tracing
+```
+For ANY question about data availability:
+→ Check all providers in priority order: TWSE → FinMind → Fubon → Fugle
+→ Check if the data type exists in MacroDataSnapshot or domain types
+→ Check if a provider fills the field (trace from interface to implementation)
+→ NEVER claim "data insufficient" without checking ALL providers
+```
+
+### Step I-4: Module Pitfalls
+```
+Read relevant internal/<module>/AGENTS.md for module-specific traps
+→ Check internal/MATURITY.md for stability tier
+→ Note any pitfalls that match your investigation area
+```
+
+**Investigation mode is EXEMPT from Steps 4, 5, 7 (constitution check, pattern matching, code intent) — these only apply to code modifications.**
