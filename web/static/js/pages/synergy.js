@@ -220,12 +220,11 @@ function renderCandidates(inbox) {
   function renderSection(title, items, color) {
     if (!items.length) return '';
     let h = `<div style="margin-bottom:12px"><div style="font-weight:700;color:${color};margin-bottom:6px;font-size:13px">${title}（${items.length}）</div>`;
-    items.forEach(item => renderCard(item));
+    items.forEach(item => { h += renderCard(item); });
     h += '</div>';
     return h;
   }
 
-  let cardHtml = '';
   function renderCard(item) {
     const agentId = item.target_agent_id || '';
     const mutation = item.mutation_type || '';
@@ -254,7 +253,7 @@ function renderCandidates(inbox) {
       rejectHtml = `<div style="font-size:10px;color:var(--down);margin-top:2px">拒絕原因：${escapeHtml(item.reject_reason)}</div>`;
     }
 
-    cardHtml += `
+    return `
       <div class="inbox-card">
         <div class="title">${escapeHtml(item.experiment_id)}</div>
         <div class="meta">${escapeHtml(getAgentName(agentId))} ${statusBadge(status)}</div>
