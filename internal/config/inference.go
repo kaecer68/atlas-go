@@ -603,6 +603,8 @@ func (ie *InferenceEngine) ListParameters() []string {
 		"strategy_min_switch_interval_days",
 		"strategy_switch_threshold",
 		"strategy_score_lookback_days",
+		// Industry Linkage parameters
+		"industry_linkage_recession_shock_amplifier",
 	}
 }
 

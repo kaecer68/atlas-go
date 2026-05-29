@@ -56,33 +56,23 @@ type RiskEvent struct {
 	RecommendedAction string    `json:"recommended_action,omitempty"`
 }
 
+// AsymmetricRiskConfig is a type alias for backward compatibility with tests.
+type AsymmetricRiskConfig = config.AsymmetricRiskConfig
+
 // RiskMonitor monitors industry-specific risks.
 type RiskMonitor struct {
 	mu               sync.RWMutex
 	customerData     map[string][]CustomerConcentration // symbol -> customers
 	newsSources      []NewsSource
-	asymmetricConfig AsymmetricRiskConfig
-}
-
-// AsymmetricRiskConfig configures asymmetric risk detection.
-type AsymmetricRiskConfig struct {
-	BadNewsThreshold      float64 `json:"bad_news_threshold"`      // Price drop threshold
-	GoodNewsThreshold     float64 `json:"good_news_threshold"`     // Price rise threshold
-	ReactionTimeMinutes   int     `json:"reaction_time_minutes"`   // Time to react
-	VolumeSpikeMultiplier float64 `json:"volume_spike_multiplier"` // Volume increase threshold
+	asymmetricConfig config.AsymmetricRiskConfig
 }
 
 // NewRiskMonitor creates a new risk monitor with default customer concentration data loaded.
 func NewRiskMonitor() *RiskMonitor {
 	rm := &RiskMonitor{
-		customerData: make(map[string][]CustomerConcentration),
-		newsSources:  DefaultNewsSources(),
-		asymmetricConfig: AsymmetricRiskConfig{
-			BadNewsThreshold:      -0.03, // 3% drop
-			GoodNewsThreshold:     0.05,  // 5% rise
-			ReactionTimeMinutes:   30,    // 30 minutes
-			VolumeSpikeMultiplier: 2.0,   // 2x average volume
-		},
+		customerData:     make(map[string][]CustomerConcentration),
+		newsSources:      DefaultNewsSources(),
+		asymmetricConfig: config.GetParametersConfig().Industry.AsymmetricRisk.Value,
 	}
 
 	// Load default customer concentration data during initialization
@@ -272,7 +262,7 @@ func (rm *RiskMonitor) CalculateNewsLatencyRisk(symbol string, industryID string
 		IndustryID:        industryID,
 		Symbol:            symbol,
 		Description:       fmt.Sprintf("台灣新聞延遲 %.0f 小時，美國Tier 1消息先到", latencyGap),
-		ImpactEstimate:    -riskScore * 0.05,
+		ImpactEstimate:    -riskScore * config.GetParametersConfig().Industry.NewsImpactMultiplier.Value,
 		Confidence:        0.80,
 		DetectedAt:        time.Now(),
 		Source:            "news_source_analysis",
@@ -295,11 +285,12 @@ func (rm *RiskMonitor) CalculateAsymmetricRisk(symbol string, priceChangePct flo
 	// Calculate severity based on price drop
 	severity := RiskLevelLow
 	dropPct := math.Abs(priceChangePct)
-	if dropPct > 0.10 {
+	params := config.GetParametersConfig().Industry
+	if dropPct > params.AsymmetricDropCritical.Value {
 		severity = RiskLevelCritical
-	} else if dropPct > 0.07 {
+	} else if dropPct > params.AsymmetricDropHigh.Value {
 		severity = RiskLevelHigh
-	} else if dropPct > 0.05 {
+	} else if dropPct > params.AsymmetricDropMedium.Value {
 		severity = RiskLevelMedium
 	}
 
@@ -319,12 +310,13 @@ func (rm *RiskMonitor) CalculateAsymmetricRisk(symbol string, priceChangePct flo
 }
 
 func (rm *RiskMonitor) getAsymmetricAction(dropPct float64) string {
+	params := config.GetParametersConfig().Industry
 	switch {
-	case dropPct > 0.10:
+	case dropPct > params.AsymmetricDropCritical.Value:
 		return "立即停損，評估基本面是否惡化"
-	case dropPct > 0.07:
+	case dropPct > params.AsymmetricDropHigh.Value:
 		return "減碼避險，等待市場穩定"
-	case dropPct > 0.05:
+	case dropPct > params.AsymmetricDropMedium.Value:
 		return "觀察支撐，設定緊密停損"
 	default:
 		return "正常監控"

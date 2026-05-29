@@ -102,7 +102,15 @@ func (s *IndustryService) GetAdjustmentBreakdown(industryID string, now time.Tim
 
 // GetActiveNarrativeThemes returns the narrative themes currently active for an industry.
 func (s *IndustryService) GetActiveNarrativeThemes(industryID string) []string {
-	return nil
+	if s.SeasonalEngine == nil {
+		return []string{}
+	}
+
+	patterns := s.SeasonalEngine.GetActivePatternNames(time.Now())
+	if patterns == nil {
+		return []string{}
+	}
+	return patterns
 }
 
 // UpdateDynamicEnv pushes a fresh macro snapshot into the seasonal engine's environment modulator.

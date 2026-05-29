@@ -1448,6 +1448,34 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered seasonal_calibrate background task (24h interval)")
 
+			// Register linkage_calibrate — calibrates RecessionShockAmplifier
+			// for shock propagation amplification during recession regimes.
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "linkage_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					calibrator := &config.LinkageAmplifierCalibrator{}
+					evaluator := func(cfg *config.ParametersConfig) (float64, error) {
+						// TODO: Implement proper recession shock accuracy scoring
+						// using historical session data. For now, return a
+						// neutral score so the calibration infrastructure runs
+						// end-to-end without changing the amplifier value.
+						return 0.0, nil
+					}
+					result, err := config.CalibrateParameters(ctx, calibrator, evaluator, config.DefaultCalibrateConfig())
+					if err != nil {
+						logging.Error("linkage_calibrate", "calibration_failed", "err", err.Error())
+						return err
+					}
+					logging.Info("linkage_calibrate", "completed",
+						"baseline", fmt.Sprintf("%.3f", result.BaselineScore),
+						"optimized", fmt.Sprintf("%.3f", result.OptimizedScore))
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered linkage_calibrate background task (24h interval)")
+
 			// Register factor_weight_strategy_calibrate — calibrates FactorWeight
 			// strategy deltas (conservative/aggressive/risk-on/risk-off adjustments).
 			_ = taskMgr.Register(&apigateway.ScheduledTask{

@@ -67,7 +67,7 @@ Replay Data (cmd/calibrate-seasonal --replay)
 
 | 陷阱 | 說明 |
 |------|------|
-| **financials 節點孤立** | `configs/supply_chain_graph.json` 中 financials 節點需有 `upstream_of`（提供資本），否則 `CalculateLinkageScore` 中該節點系統重要性為 0 |
+| **financials 純上游資本供給** | `configs/supply_chain_graph.json` 中 financials 目前已連接 6 個 `upstream_of` 節點（`semiconductor`、`ai_supply_chain`、`electronics`、`robotics`、`shipping`、`energy`），且 `downstream_of` 為空；`CalculateLinkageScore` 只反映單向度數，系統重要性約為 `(0 + 6) / max(MaxDegree, 10) = 0.6`，並非 0。若要提高分數，可擴大 `upstream_of` 涵蓋的資本密集產業，或調整 `systemic_importance_divisor` 預設值（10.0）。 |
 | **雙向邊不一致** | 圖中部分節點（如 `foundry↔ai_supply_chain`、`server_assembly↔semiconductor`）的 upstream/downstream 邊不對稱，這是預期行爲（表達單向依賴），但 `CalculateLinkageScore` 和 `PropagateShock` 假設雙向索引 |
 | **敘事感知需求** | `ShockPropagation` 若未呼叫 `SetNarrativeProvider()`，相關調整會回退到純相關矩陣查詢 |
 | **衰減因子回退** | `PropagateShock` 在 `downstreamDecay`/`upstreamDecay` 為 0 時使用硬編碼的 0.8/0.6。`NewLinkageAnalyzer()` 會從 config 設定，但若直接使用 `NewShockPropagation()` 則不會 |

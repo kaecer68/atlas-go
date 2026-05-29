@@ -9,12 +9,13 @@ import {
 
 export async function loadIndustryData() {
   try {
-    const [classification, overview, seasonality, calendar] = await Promise.all(
+    const [classification, overview, seasonality, calendar, graph] = await Promise.all(
       [
         silentGetJSON("/api/dashboard/industry-classification"),
         silentGetJSON("/api/dashboard/industry-overview"),
         silentGetJSON("/api/dashboard/industry-seasonality"),
         silentGetJSON("/api/dashboard/industry-seasonality-calendar"),
+        silentGetJSON("/api/dashboard/industry-graph"),
       ],
     );
     renderIndustryMap(classification);
@@ -25,6 +26,7 @@ export async function loadIndustryData() {
       seasonality.calendar = calendar;
     }
     renderIndustrySeasonality(seasonality);
+    renderIndustryGraph(graph);
   } catch (e) {
     console.error("loadIndustryData error:", e);
   }
@@ -178,6 +180,140 @@ export function renderIndustryLinkage(data) {
   });
   html += "</tbody></table>";
   el.innerHTML = html;
+}
+
+export function renderIndustryGraph(data) {
+  const el = document.getElementById("industryGraph");
+  if (!el) return;
+  if (!data || !data.nodes || data.nodes.length === 0) {
+    el.innerHTML = renderEmptyState("尚無網路圖資料", "");
+    el.classList.remove("loading");
+    return;
+  }
+  el.classList.remove("loading");
+
+  const rect = el.getBoundingClientRect();
+  const width = rect.width || 800;
+  const height = rect.height || 400;
+
+  const dpr = window.devicePixelRatio || 1;
+  el.innerHTML = `<canvas width="${width * dpr}" height="${height * dpr}" style="width:${width}px;height:${height}px;display:block;"></canvas>`;
+  const canvas = el.querySelector("canvas");
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+
+  const nodes = data.nodes.map(n => ({
+    ...n,
+    x: width / 2 + (Math.random() - 0.5) * width * 0.5,
+    y: height / 2 + (Math.random() - 0.5) * height * 0.5,
+    vx: 0,
+    vy: 0,
+    radius: 8 + (n.systemic_importance || 0) * 15
+  }));
+
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+
+  const edges = (data.edges || []).map(e => ({
+    ...e,
+    sourceNode: nodeMap.get(e.source),
+    targetNode: nodeMap.get(e.target)
+  })).filter(e => e.sourceNode && e.targetNode);
+
+  const iterations = 150;
+  const k = Math.sqrt((width * height) / nodes.length);
+  const attraction = 0.05;
+  const repulsion = k * k * 0.8;
+
+  for (let i = 0; i < iterations; i++) {
+    for (let j = 0; j < nodes.length; j++) {
+      for (let l = j + 1; l < nodes.length; l++) {
+        const n1 = nodes[j];
+        const n2 = nodes[l];
+        const dx = n1.x - n2.x;
+        const dy = n1.y - n2.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const force = repulsion / dist;
+        const fx = (dx / dist) * force;
+        const fy = (dy / dist) * force;
+        n1.vx += fx;
+        n1.vy += fy;
+        n2.vx -= fx;
+        n2.vy -= fy;
+      }
+    }
+
+    for (const edge of edges) {
+      const n1 = edge.sourceNode;
+      const n2 = edge.targetNode;
+      const dx = n1.x - n2.x;
+      const dy = n1.y - n2.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const corr = Math.abs(edge.correlation || 0.5);
+      const force = (dist * dist) / k * attraction * (0.5 + corr);
+      const fx = (dx / dist) * force;
+      const fy = (dy / dist) * force;
+      n1.vx -= fx;
+      n1.vy -= fy;
+      n2.vx += fx;
+      n2.vy += fy;
+    }
+
+    for (const n of nodes) {
+      const dx = width / 2 - n.x;
+      const dy = height / 2 - n.y;
+      n.vx += dx * 0.02;
+      n.vy += dy * 0.02;
+    }
+
+    for (const n of nodes) {
+      const speed = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
+      const maxSpeed = 15;
+      if (speed > maxSpeed) {
+        n.vx = (n.vx / speed) * maxSpeed;
+        n.vy = (n.vy / speed) * maxSpeed;
+      }
+      n.x += n.vx;
+      n.y += n.vy;
+      n.vx *= 0.85;
+      n.vy *= 0.85;
+
+      n.x = Math.max(n.radius + 20, Math.min(width - n.radius - 20, n.x));
+      n.y = Math.max(n.radius + 20, Math.min(height - n.radius - 20, n.y));
+    }
+  }
+
+  ctx.clearRect(0, 0, width, height);
+
+  for (const edge of edges) {
+    const corr = edge.correlation || 0;
+    ctx.beginPath();
+    ctx.moveTo(edge.sourceNode.x, edge.sourceNode.y);
+    ctx.lineTo(edge.targetNode.x, edge.targetNode.y);
+    ctx.lineWidth = 1 + Math.abs(corr) * 3;
+    ctx.strokeStyle = corr > 0 ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)";
+    ctx.stroke();
+  }
+
+  ctx.font = "11px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  for (const n of nodes) {
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+    
+    const upCount = n.upstream_count || 0;
+    const hue = Math.max(0, 220 - upCount * 30);
+    ctx.fillStyle = `hsla(${hue}, 80%, 60%, 0.8)`;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.3)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = "var(--text, #e2e8f0)";
+    const name = sectorName(n.id) || n.id;
+    ctx.fillText(name, n.x, n.y + n.radius + 12);
+  }
 }
 
 export let seasonalityViewMode = "list"; // 'list' or 'calendar'

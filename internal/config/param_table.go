@@ -995,6 +995,10 @@ var parameterTable = map[string]paramAccessor{
 		get: func(cfg *ParametersConfig) float64 { return cfg.FactorWeight.RiskOffLiquidity.Value },
 		set: func(cfg *ParametersConfig, v float64) { cfg.FactorWeight.RiskOffLiquidity.Value = v },
 	},
+	"industry_linkage_recession_shock_amplifier": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Industry.LinkageParams.Value.RecessionShockAmplifier },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Industry.LinkageParams.Value.RecessionShockAmplifier = v },
+	},
 }
 
 // stringParamAccessor provides get/set accessors for string-type parameters.
