@@ -628,6 +628,14 @@ func DefaultSupplyChainGraph() *SupplyChainGraph {
 		KeyMaterials: []string{"gold", "silver", "copper", "rare_earth", "platinum"},
 	})
 
+	graph.AddNode(&SupplyChainNode{
+		IndustryID:   "etf_rotation",
+		Tier:         0,
+		UpstreamOf:   []string{},
+		DownstreamOf: []string{"financials"},
+		KeyMaterials: []string{"capital_flow", "liquidity", "market_sentiment"},
+	})
+
 	return graph
 }
 
@@ -676,6 +684,11 @@ func DefaultCorrelationMatrix() *CorrelationMatrix {
 	cm.UpdateCorrelation("mining", "financials", 0.30)
 	cm.UpdateCorrelation("mining", "shipping", 0.25)
 	cm.UpdateCorrelation("mining", "consumer", 0.10)
+
+	// ETF Rotation correlations
+	cm.UpdateCorrelation("etf_rotation", "financials", 0.45)
+	cm.UpdateCorrelation("etf_rotation", "semiconductor", 0.30)
+	cm.UpdateCorrelation("etf_rotation", "shipping", 0.05)
 
 	return cm
 }

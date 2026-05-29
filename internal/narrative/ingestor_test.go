@@ -245,6 +245,25 @@ func TestLoadFallbackDatedSnapshotPicksNewest(t *testing.T) {
 	}
 }
 
+func TestMergeWithPrev_BDI(t *testing.T) {
+	// Test 1: prev BDI propagates when curr empty
+	prev := marketdata.MacroDataSnapshot{
+		Bdi: marketdata.MacroDataPoint{Symbol: ".BADI", Value: 1500.0},
+	}
+	curr := marketdata.MacroDataSnapshot{}
+	result := mergeWithPrev(curr, prev)
+	if result.Bdi.Symbol != ".BADI" || result.Bdi.Value != 1500.0 {
+		t.Errorf("mergeWithPrev: expected BDI 1500 from prev, got %+v", result.Bdi)
+	}
+
+	// Test 2: curr BDI takes precedence over prev
+	curr.Bdi = marketdata.MacroDataPoint{Symbol: ".BADI", Value: 1600.0}
+	result = mergeWithPrev(curr, prev)
+	if result.Bdi.Value != 1600.0 {
+		t.Errorf("mergeWithPrev: expected curr BDI 1600 to override, got %+v", result.Bdi)
+	}
+}
+
 func TestSnapshotDirAccessor(t *testing.T) {
 	dir := t.TempDir()
 	ingestor := NewMacroIngestor(&marketdata.MockMacroProvider{}, dir)

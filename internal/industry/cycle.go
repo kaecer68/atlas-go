@@ -276,6 +276,13 @@ func (ct *CycleTracker) initializeDefaultPositions() {
 			InventoryTurnover:   4.5,
 			CapacityUtilization: 0.73,
 		},
+		"etf_rotation": {
+			IndustryID:          "etf_rotation",
+			RevenueGrowthYoY:    0.05,
+			ProfitGrowthYoY:     0.05,
+			InventoryTurnover:   0.0, // ETF has no physical inventory
+			CapacityUtilization: 0.0, // ETF has no physical capacity
+		},
 	}
 
 	for id, metrics := range defaults {

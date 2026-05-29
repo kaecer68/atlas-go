@@ -44,6 +44,7 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 		{channelID: "export_statistics", apply: a.applyExport},
 		{channelID: "tsmc_revenue", apply: a.applyTSMCRevenue},
 		{channelID: "sector_data", apply: a.applySectorData},
+		{channelID: "bdi", apply: a.applyBDI},
 	}
 
 	var merged marketdata.MacroDataSnapshot
@@ -185,6 +186,16 @@ func (a *macroDataGatewayAdapter) applyTSMCRevenue(snap *marketdata.MacroDataSna
 func (a *macroDataGatewayAdapter) applySectorData(snap *marketdata.MacroDataSnapshot, data []byte) {
 	// Sector data doesn't directly map to MacroDataSnapshot fields.
 	// It's used separately by the industry service.
+}
+
+func (a *macroDataGatewayAdapter) applyBDI(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var s marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(data, &s); err != nil {
+		return
+	}
+	if s.Bdi.Symbol != "" {
+		snap.Bdi = s.Bdi
+	}
 }
 
 // ---------------------------------------------------------------------------

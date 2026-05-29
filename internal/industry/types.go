@@ -379,6 +379,25 @@ func DefaultClassification() *ClassificationTree {
 		Description:          "低軌道衛星通訊與地面設備",
 	})
 
+	tree.AddSegment(&IndustrySegment{
+		ID:                   "etf_rotation",
+		Name:                 "ETF輪動",
+		NameEN:               "ETF Rotation",
+		Description:          "台灣ETF輪動策略，涵蓋台灣50、高股息、ESG、5G、半導體等主題型ETF",
+		Level:                Level1,
+		ParentID:             "",
+		Weight:               0.05,
+		GeographicExposure:   ExposureDomestic,
+		Cyclicality:          CyclicalityMedium,
+		TechnologyIntensity:  TechIntensityLow,
+		CapitalIntensity:     CapIntensityLow,
+		RepresentativeStocks: []string{
+			"0050.TW", "0056.TW", "00878.TW", "006208.TW",
+			"00692.TW", "00713.TW", "00881.TW", "00891.TW",
+			"00919.TW", "00929.TW", "00940.TW",
+		},
+	})
+
 	// Level 2 & 3: Semiconductor sub-industries
 	addSemiconductorSubIndustries(tree)
 	addAISupplyChainSubIndustries(tree)
