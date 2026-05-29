@@ -213,6 +213,23 @@ func (dem *DynamicEnvModulator) SeasonalModulation(industryID string) float64 {
 		}
 		return mod
 
+	case "mining", "precious_metals_recycling", "copper_industry", "rare_earth_specialty", "metal_processing":
+		mod := 1.0
+		if oilDev > cfg.OilHighThreshold {
+			mod *= 1.0 - cfg.OilIndustrialPenalty // mining costs rise with fuel
+		}
+		if oilDev < -cfg.OilLowThreshold {
+			mod *= 1.0 + cfg.OilIndustrialBenefit // mining benefits from low energy
+		}
+		bdiDev := dem.BDIDeviation()
+		if bdiDev > cfg.BDIHighThreshold {
+			mod *= 1.0 + cfg.BDIShippingBoost // shipping demand proxies mining demand
+		}
+		if bdiDev < -cfg.BDILowThreshold {
+			mod *= 1.0 - cfg.BDICostPenalty
+		}
+		return mod
+
 	case "semiconductor", "ai_supply_chain", "electronics":
 		mod := 1.0
 		if dxyDev > cfg.DXYHighThreshold {
