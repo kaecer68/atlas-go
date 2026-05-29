@@ -32,8 +32,9 @@ type KFoldSplitter struct {
 // Split partitions nSamples into k folds. Each fold uses (k-1) folds for
 // training and the remaining fold for validation.
 func (s *KFoldSplitter) Split(nSamples int) [][2][]int {
-	if s.K <= 1 || s.K > nSamples {
-		s.K = min(5, nSamples)
+	k := s.K
+	if k <= 1 || k > nSamples {
+		k = min(5, nSamples)
 	}
 
 	// Create shuffled indices.
@@ -46,13 +47,13 @@ func (s *KFoldSplitter) Split(nSamples int) [][2][]int {
 		indices[i], indices[j] = indices[j], indices[i]
 	})
 
-	foldSize := nSamples / s.K
-	folds := make([][2][]int, s.K)
+	foldSize := nSamples / k
+	folds := make([][2][]int, k)
 
-	for fold := 0; fold < s.K; fold++ {
+	for fold := 0; fold < k; fold++ {
 		start := fold * foldSize
 		end := start + foldSize
-		if fold == s.K-1 {
+		if fold == k-1 {
 			end = nSamples
 		}
 

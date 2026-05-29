@@ -52,20 +52,20 @@ func NewPLS() *PLS {
 func (m *PLS) Fit(X [][]float64, y []float64) error {
 	n := len(X)
 	if n == 0 {
-		return fmt.Errorf("pls: empty X")
+		return fmt.Errorf("ml/pls: empty X")
 	}
 	if len(y) == 0 {
-		return fmt.Errorf("pls: empty y")
+		return fmt.Errorf("ml/pls: empty y")
 	}
 	if n != len(y) {
-		return fmt.Errorf("pls: X and y length mismatch: %d vs %d", n, len(y))
+		return fmt.Errorf("ml/pls: X and y length mismatch: %d vs %d", n, len(y))
 	}
 
 	p := len(X[0])
 	m.nFeatures = p
 	for i, row := range X {
 		if len(row) != p {
-			return fmt.Errorf("pls: row %d has %d features, expected %d", i, len(row), p)
+			return fmt.Errorf("ml/pls: row %d has %d features, expected %d", i, len(row), p)
 		}
 	}
 
@@ -172,7 +172,7 @@ func (m *PLS) Fit(X [][]float64, y []float64) error {
 	}
 
 	if extracted == 0 {
-		return fmt.Errorf("pls: failed to extract any components")
+		return fmt.Errorf("ml/pls: failed to extract any components")
 	}
 
 	// Build final matrices at the actual extracted dimension.
@@ -232,16 +232,16 @@ func colDataAt(m *mat.Dense, j int) []float64 {
 // X must have the same number of features as the training data.
 func (m *PLS) Predict(X [][]float64) ([]float64, error) {
 	if !m.fitted {
-		return nil, fmt.Errorf("pls: model not fitted")
+		return nil, fmt.Errorf("ml/pls: model not fitted")
 	}
 	n := len(X)
 	if n == 0 {
-		return nil, fmt.Errorf("pls: empty X")
+		return nil, fmt.Errorf("ml/pls: empty X")
 	}
 	p := m.nFeatures
 	for i, row := range X {
 		if len(row) != p {
-			return nil, fmt.Errorf("pls: row %d has %d features, expected %d", i, len(row), p)
+			return nil, fmt.Errorf("ml/pls: row %d has %d features, expected %d", i, len(row), p)
 		}
 	}
 

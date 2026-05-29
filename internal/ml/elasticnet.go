@@ -100,7 +100,7 @@ func (en *ElasticNet) Fit(X [][]float64, y []float64) error {
 		return err
 	}
 
-	// Compute intercept in original space.
+	// Intercept is implicitly stored as yMean; Predict adds it back.
 	en.fitted = true
 	return nil
 }
@@ -111,7 +111,7 @@ func (en *ElasticNet) Predict(X [][]float64) ([]float64, error) {
 		return nil, fmt.Errorf("ml: model must be fitted before Predict")
 	}
 	if len(X) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("ml: Predict called with empty X")
 	}
 
 	p := len(en.coef)
