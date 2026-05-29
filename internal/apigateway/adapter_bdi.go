@@ -26,11 +26,9 @@ func NewBDIChannelAdapter(p *marketdata.BDIProvider) *BDIChannelAdapter {
 }
 
 // Fetch retrieves BDI data from the provider.
+// Rate limiting is handled by the provider's bdiSharedLimiter (follows SOX/Yahoo pattern).
 func (a *BDIChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 	start := time.Now()
-	if err := a.limiter.Wait(ctx); err != nil {
-		return nil, fmt.Errorf("rate limit: %w", err)
-	}
 	snap, err := a.provider.FetchSnapshot(ctx)
 	if err != nil {
 		return nil, err

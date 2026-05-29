@@ -379,6 +379,8 @@ type MarketdataParameters struct {
 	TEJAPITimeoutSec     ParameterMetadata[int]     `json:"tej_api_timeout_sec"`
 	FugleRateLimit       ParameterMetadata[int]     `json:"fugle_rate_limit"`
 	FugleAPITimeoutSec   ParameterMetadata[int]     `json:"fugle_api_timeout_sec"`
+	BDIAPITimeoutSec     ParameterMetadata[int]     `json:"bdi_api_timeout_sec"`
+	BDIEndpoint          ParameterMetadata[string]  `json:"bdi_endpoint"`
 	MaxRetryAttempts     ParameterMetadata[int]     `json:"max_retry_attempts"`
 	RetryBackoffMs       ParameterMetadata[int]     `json:"retry_backoff_ms"`
 }

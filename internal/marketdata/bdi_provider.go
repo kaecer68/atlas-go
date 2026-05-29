@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
+	"github.com/kaecer68/atlas-go/internal/config"
 	"golang.org/x/time/rate"
 )
 
@@ -22,10 +23,22 @@ type BDIProvider struct {
 }
 
 // NewBDIProvider creates a new BDI provider.
+// Timeout and endpoint are sourced from ParametersConfig (bdi_api_timeout_sec, bdi_endpoint).
 func NewBDIProvider() *BDIProvider {
+	timeout := 10 // default fallback
+	endpoint := "https://quote.cnbc.com/quote-html-webservice/quote.htm?symbols=.BADI&output=json"
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		timeout = cfg.Marketdata.BDIAPITimeoutSec.Value
+		if timeout < 1 {
+			timeout = 10
+		}
+		if cfg.Marketdata.BDIEndpoint.Value != "" {
+			endpoint = cfg.Marketdata.BDIEndpoint.Value
+		}
+	}
 	return &BDIProvider{
-		client:   httpclient.NewFactory().NewClient(10 * time.Second),
-		endpoint: "https://quote.cnbc.com/quote-html-webservice/quote.htm?symbols=.BADI&output=json",
+		client:   httpclient.NewFactory().NewClient(time.Duration(timeout) * time.Second),
+		endpoint: endpoint,
 	}
 }
 

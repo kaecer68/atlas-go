@@ -1615,6 +1615,18 @@ func defaultMarketdataParameters() MarketdataParameters {
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate: test [5, 15] range",
 		},
+		BDIAPITimeoutSec: ParameterMetadata[int]{
+			Value:     10,
+			Rationale: "HTTP timeout for CNBC BDI API; public free endpoint, accept slower response",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: test [5, 15] range based on observed CNBC latency",
+		},
+		BDIEndpoint: ParameterMetadata[string]{
+			Value:     "https://quote.cnbc.com/quote-html-webservice/quote.htm?symbols=.BADI&output=json",
+			Rationale: "CNBC free REST JSON API for Baltic Dry Index; no API key required, /BADI symbol includes change_pct and last_time_msec",
+			Source:    SourceEmpirical,
+			Todo:      "",
+		},
 		MaxRetryAttempts: ParameterMetadata[int]{
 			Value:     3,
 			Rationale: "Maximum retry attempts for transient failures; exponential backoff",
