@@ -1477,6 +1477,30 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered factor_weight_strategy_calibrate background task (24h interval)")
 
+			// Register auto_calibrate — runs Darwinian parameter calibration from
+			// historical session outcome data (7-day interval).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "auto_calibrate",
+				Interval: 7 * 24 * time.Hour,
+				Jitter:   4 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					cmd := exec.CommandContext(ctx, "go", "run", "./cmd/calibrate-parameters",
+						"--module=darwinian")
+					cmd.Dir = cfg.WorkDir
+					out, err := cmd.CombinedOutput()
+					if err != nil {
+						logging.Warn("auto_calibrate", "failed",
+							logging.Err(err),
+							logging.FStr("output", string(out)))
+						return nil
+					}
+					logging.Info("auto_calibrate", "completed")
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered auto_calibrate background task (7-day interval)")
+
 			// Register auto_swarm_simulation — periodic swarm simulation
 			// for training data generation and scenario monitoring.
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
