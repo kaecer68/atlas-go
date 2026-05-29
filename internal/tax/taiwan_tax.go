@@ -90,3 +90,55 @@ func (c *TaiwanTaxCalculator) CalculatePortfolioTax(
 	}
 	return snapshots
 }
+
+// TaiwanCostModel computes round-trip trading costs for Taiwan equities.
+//
+// Based on Taiwan empirical data:
+//   - AvgTradingCost: 0.00654 (~0.654%) — aggregate of commission
+//     (0.1425% × broker_discount ~0.6) + slippage
+//   - TaxRate: 0.003 (0.3%) — securities transaction tax (sell side only)
+type TaiwanCostModel struct {
+	AvgTradingCost float64
+	TaxRate        float64
+}
+
+// NewTaiwanCostModel creates a cost model with the given rates.
+//
+// avgTradingCost should be sourced from ParametersConfig.Baseline.AvgTradingCost
+// (default 0.00654). taxRate should be the securities transaction tax rate
+// (typically domain.DefaultTaiwanTaxConfig().TransactionTaxRate = 0.003).
+func NewTaiwanCostModel(avgTradingCost, taxRate float64) *TaiwanCostModel {
+	return &TaiwanCostModel{
+		AvgTradingCost: avgTradingCost,
+		TaxRate:        taxRate,
+	}
+}
+
+// RoundTripCost returns the total round-trip cost as a fraction of turnover.
+// RoundTripCost = turnover * (AvgTradingCost + TaxRate)
+func (cm *TaiwanCostModel) RoundTripCost(turnover float64) float64 {
+	if turnover <= 0 {
+		return 0
+	}
+	return turnover * (cm.AvgTradingCost + cm.TaxRate)
+}
+
+// NetReturn returns the net return after deducting round-trip trading costs.
+func (cm *TaiwanCostModel) NetReturn(rawReturn, turnover float64) float64 {
+	return rawReturn - cm.RoundTripCost(turnover)
+}
+
+// ApplyToSeries applies round-trip cost adjustments to a series of raw returns
+// paired with corresponding turnover rates.
+// Returns a new slice; does not mutate the input.
+func (cm *TaiwanCostModel) ApplyToSeries(rawReturns, turnovers []float64) []float64 {
+	n := len(rawReturns)
+	if len(turnovers) < n {
+		n = len(turnovers)
+	}
+	result := make([]float64, n)
+	for i := 0; i < n; i++ {
+		result[i] = cm.NetReturn(rawReturns[i], turnovers[i])
+	}
+	return result
+}
