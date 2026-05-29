@@ -46,14 +46,28 @@ func (sc *SimulationCore) SetProvider(p marketdata.Provider) {
 	sc.provider = p
 }
 
-// RefreshETFNAV refreshes ETF NAV for all tracked symbols using the
-// currently configured market data provider. Returns the number of
-// symbols whose NAV was updated from quotes.
+// RefreshETFNAV refreshes ETF NAV for all tracked symbols.
+//
+// Uses a tiered strategy via TWSEETFNAVScraper:
+//  1. Attempts TWSE NAV scraping (Tier 1 — deferred until a working endpoint exists).
+//  2. Falls back to close-price proxy via the market data provider (Tier 2).
+//
+// Returns the number of symbols whose NAV was updated.
 func (sc *SimulationCore) RefreshETFNAV(ctx context.Context) int {
 	if sc.factorEngine == nil || sc.provider == nil {
 		return 0
 	}
-	return sc.factorEngine.RefreshETFNAV(ctx, sc.provider)
+
+	etfAnalyzer := sc.factorEngine.GetETFAnalyzer()
+	if etfAnalyzer == nil {
+		return 0
+	}
+
+	// Build scraper wrapping the current provider as Tier-2 fallback.
+	scraper := marketdata.NewTWSEETFNAVScraper(sc.provider)
+	navProv := marketdata.NewETFNAVProvider(sc.provider).WithScraper(scraper)
+
+	return etfAnalyzer.RefreshNAVFromFetcher(ctx, navProv, false)
 }
 
 func buildSimEngine(policy baseline.Policy, optimizer *portfolio.Optimizer) *sim.Engine {
