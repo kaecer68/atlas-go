@@ -7,6 +7,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/feature"
 	"github.com/kaecer68/atlas-go/internal/ml"
 )
 
@@ -77,7 +78,7 @@ func TestAnnualizedSharpe(t *testing.T) {
 
 func TestFeatureRegistry_AllDefined(t *testing.T) {
 	for _, n := range []string{"close", "volume", "return_1d", "return_5d", "hl_ratio", "ma_ratio", "volume_ratio"} {
-		if _, ok := featureRegistry[n]; !ok {
+		if _, ok := feature.Registry[n]; !ok {
 			t.Errorf("%q missing", n)
 		}
 	}
