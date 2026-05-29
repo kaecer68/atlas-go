@@ -1242,7 +1242,7 @@ func buildFinalRecKey(finalRecs []domain.Recommendation) map[string]struct{} {
 	return keys
 }
 
-func syntheticForwardReturn(symbol string, quote domain.Quote) float64 {
+func syntheticForwardReturn(symbol string, quote domain.Quote, asOf time.Time) float64 {
 	if quote.Open > 0 {
 		intraday := (quote.Last - quote.Open) / quote.Open
 		fr := intraday * 0.8
@@ -1262,7 +1262,8 @@ func syntheticForwardReturn(symbol string, quote domain.Quote) float64 {
 	for _, r := range symbol {
 		sum += int64(r)
 	}
-	return (float64(sum%100)/100.0)*0.04 - 0.02
+	daySeed := int64(asOf.YearDay())
+	return (float64((sum+daySeed)%10000)/10000.0)*0.04 - 0.02
 }
 
 func buildParameterSnapshot() *shared.ParameterSnapshot {
@@ -1307,7 +1308,7 @@ func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes [
 	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
 	for _, rec := range rawRecs {
 		quote := quoteMap[rec.Symbol]
-		forwardReturn := syntheticForwardReturn(rec.Symbol, quote)
+		forwardReturn := syntheticForwardReturn(rec.Symbol, quote, asOf)
 		_, passed := finalKey[rec.Symbol+"|"+rec.Agent]
 		guardReason := ""
 		if !passed {
@@ -1353,8 +1354,8 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 		quote := quoteMap[rec.Symbol]
 		synthetic := false
 		forwardReturn, ok := ds.ForwardReturn(rec.Symbol, asOf, 1)
-		if !ok || forwardReturn == 0 {
-			forwardReturn = syntheticForwardReturn(rec.Symbol, quote)
+		if !ok {
+			forwardReturn = syntheticForwardReturn(rec.Symbol, quote, asOf)
 			synthetic = true
 		}
 		_, passed := finalKey[rec.Symbol+"|"+rec.Agent]
