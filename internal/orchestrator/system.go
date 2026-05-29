@@ -437,7 +437,12 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	s.updateCapitalMetrics(s.Sim().ctx, result)
 
 	tw.Record(7, "ledger_write", "START", nil)
-	outcomes := buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf)
+	// Use replay-based forward returns when dataset is available (real data).
+	// Falls back to synthetic when replay is nil.
+	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, s.Sim().replay)
+	if len(outcomes) == 0 {
+		outcomes = buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf)
+	}
 	// Write outcomes to ALL stores: PostgreSQL (if available), global file, and per-session file.
 	// The XOR pattern was removed because DualWriteRepository already handles DB ↔ file sync.
 	if s.Risk().repo != nil {
