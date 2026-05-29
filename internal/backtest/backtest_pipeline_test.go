@@ -1,11 +1,16 @@
 package backtest
 
 import (
+	"math"
 	"testing"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/ml"
 )
+
+// Compile-time verification that ml models satisfy the backtest.Model interface.
+var _ Model = (*ml.OLS)(nil)
 
 // dummyModel predicts the mean of training labels for all test inputs.
 type dummyModel struct {
@@ -354,4 +359,79 @@ func TestExistingRunnerBackwardCompatible(t *testing.T) {
 	// (Full integration test requires real data — covered by window_test.go.)
 	var r Runner
 	_ = r // compiler-check only: Runner still exists
+}
+
+func TestBacktestPipeline_WithOLS(t *testing.T) {
+	dataStart := time.Date(2005, 1, 1, 0, 0, 0, 0, time.UTC)
+	dataEnd := time.Date(2022, 4, 30, 0, 0, 0, 0, time.UTC)
+	bars := makeSyntheticBars(dataStart, dataEnd)
+
+	pipeline := NewBacktestPipeline(bars)
+	pipeline.ExtractFeatures = makeCloseFeature
+	pipeline.ExtractLabels = makeCloseLabel
+
+	model := &ml.OLS{FitIntercept: true}
+	results, err := pipeline.Run(model)
+	if err != nil {
+		t.Fatalf("OLS Run: %v", err)
+	}
+
+	if len(results) == 0 {
+		t.Fatal("expected at least one result window")
+	}
+
+	for i, r := range results {
+		if len(r.Predictions) == 0 {
+			t.Errorf("result[%d]: predictions empty", i)
+		}
+		if len(r.Actuals) == 0 {
+			t.Errorf("result[%d]: actuals empty", i)
+		}
+		if len(r.Predictions) != len(r.Actuals) {
+			t.Errorf("result[%d]: predictions %d != actuals %d",
+				i, len(r.Predictions), len(r.Actuals))
+		}
+		for j, p := range r.Predictions {
+			if math.IsNaN(p) || math.IsInf(p, 0) {
+				t.Errorf("result[%d].predictions[%d]: invalid value %f", i, j, p)
+			}
+		}
+		if samples, ok := r.Metrics["train_samples"]; !ok || samples <= 0 {
+			t.Errorf("result[%d]: train_samples missing or zero", i)
+		}
+	}
+}
+
+func TestBacktestPipeline_WithPCR(t *testing.T) {
+	dataStart := time.Date(2005, 1, 1, 0, 0, 0, 0, time.UTC)
+	dataEnd := time.Date(2022, 4, 30, 0, 0, 0, 0, time.UTC)
+	bars := makeSyntheticBars(dataStart, dataEnd)
+
+	pipeline := NewBacktestPipeline(bars)
+	pipeline.ExtractFeatures = makeCloseFeature
+	pipeline.ExtractLabels = makeCloseLabel
+
+	model := &ml.PCR{NComponents: 3, VarianceThreshold: 0.95}
+	results, err := pipeline.Run(model)
+	if err != nil {
+		t.Fatalf("PCR Run: %v", err)
+	}
+
+	if len(results) == 0 {
+		t.Fatal("expected at least one result window")
+	}
+
+	for i, r := range results {
+		if len(r.Predictions) == 0 {
+			t.Errorf("result[%d]: predictions empty", i)
+		}
+		if len(r.Actuals) == 0 {
+			t.Errorf("result[%d]: actuals empty", i)
+		}
+		for j, p := range r.Predictions {
+			if math.IsNaN(p) || math.IsInf(p, 0) {
+				t.Errorf("result[%d].predictions[%d]: invalid value %f", i, j, p)
+			}
+		}
+	}
 }
