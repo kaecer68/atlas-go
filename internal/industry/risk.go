@@ -246,12 +246,27 @@ func (rm *RiskMonitor) CalculateNewsLatencyRisk(symbol string, industryID string
 	}
 
 	// Risk increases with latency gap
-	riskScore := math.Min(1.0, latencyGap/24.0) // Max risk at 24h gap
+	divisor := 24.0
+	criticalMin := 0.8
+	highMin := 0.5
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		nlr := cfg.Industry.NewsLatencyRisk.Value
+		if d := nlr.MaxLatencyHours; d > 0 {
+			divisor = d
+		}
+		if cm := nlr.SeverityCriticalMin; cm > 0 {
+			criticalMin = cm
+		}
+		if hm := nlr.SeverityHighMin; hm > 0 {
+			highMin = hm
+		}
+	}
+	riskScore := math.Min(1.0, latencyGap/divisor)
 
 	severity := RiskLevelLow
-	if riskScore > 0.8 {
+	if riskScore > criticalMin {
 		severity = RiskLevelHigh
-	} else if riskScore > 0.5 {
+	} else if riskScore > highMin {
 		severity = RiskLevelMedium
 	}
 
