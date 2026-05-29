@@ -1,3 +1,0 @@
-go build ./... - PASSED (zero errors)
-
-exit code: 0

@@ -1,7 +1,0 @@
-T10: Clamp bounds migrated to config reads
-- 0.02 replaced with ClampMin (config or fallback 0.02)
-- 0.50 replaced with ClampMax (config or fallback 0.50)
-All 12 tests pass with identical output.
-go build ./... => OK
-go vet ./... => OK
-lsp_diagnostics => 0 errors (only preexisting linter hints)

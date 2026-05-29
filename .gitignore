@@ -54,6 +54,7 @@ internal/*/data/
 .graphify_uncached.txt
 .graphify_ast.json
 .graphify_detect.json
+.graphify_semantic_new.json
 .sisyphus/
 
 # Temporary files
@@ -80,6 +81,8 @@ macro-ingest
 migrate-data
 promote-baseline
 revert-baseline
+enhanced_experiment_runner
+realtime-quote
 
 # Log files
 *.log
@@ -110,6 +113,7 @@ PR_DESCRIPTION.md
 channel_health.json
 cmd/atlas/data/state/
 cmd/atlas/channel_health.json
+staging.pid
 internal/marketdata/data/state/
 # Migration tool binaries
 /archive-state
