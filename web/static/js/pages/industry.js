@@ -244,6 +244,8 @@ export function renderSeasonalityList(allPatterns, activePatterns, data) {
     const accuracy = Math.round((p.historical_accuracy || 0) * 100);
     const returnPct = ((p.typical_return || 0) * 100).toFixed(1);
     const adjustment = (p.adjustment_factor || 1.0).toFixed(2);
+    const returnColor = returnPct < 0 ? 'var(--down)' : returnPct > 0 ? 'var(--up)' : '';
+    const adjColor = adjustment < 0 ? 'var(--down)' : adjustment > 0 ? 'var(--up)' : '';
     const period = `${p.start_month}/${p.start_day} ~ ${p.end_month}/${p.end_day}`;
 
     html += `<tr style="${isActive ? "background:rgba(79,193,255,0.05)" : ""}">`;
@@ -254,7 +256,8 @@ export function renderSeasonalityList(allPatterns, activePatterns, data) {
       : `<span style="font-size:10px;color:var(--warn);background:rgba(245,158,11,0.1);padding:1px 4px;border-radius:3px" title="evidence_quality: low — 尚未經過回測校準">待驗證</span>`;
     html += `<td>${accuracy}% ${evidenceBadge}</td>`;
     html += `<td>${returnPct}%</td>`;
-    html += `<td>${adjustment}x</td>`;
+    html += `<td style="color:${returnColor}">${returnPct}%</td>`;
+    html += `<td style="color:${adjColor}">${adjustment}x</td>`;
     html += `<td>${statusBadge}</td>`;
     html += "</tr>";
   });
