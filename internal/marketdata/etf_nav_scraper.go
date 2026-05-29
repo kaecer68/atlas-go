@@ -65,6 +65,14 @@ func (s Source) String() string {
 //     TaiwanStockETF dataset is implemented. TaiwanStockETF exists in FinMind's
 //     catalog but requires a paid token refreshed every 7 days.
 //
+// Future iteration: When FinMind paid registration is completed, implement
+//   finmind_client.GetETFNAV() → TWSEETFNAVScraper → SourceFinMind path.
+//   The ETFNAVFetcher interface and TWSEETFNAVScraper are designed for this:
+//   1. Add TaiwanStockETF dataset to FinMindClient
+//   2. Implement attemptFinMindFetch() in this file
+//   3. Add SourceFinMind to the Source enum
+//   4. Update priority in FetchNAV() to try FinMind before close-price proxy
+//
 // Current strategy: Tier 1 (TWSE scrape) is a documented stub. Tier 2 (close-price
 // proxy) uses the configured QuoteFetcher and is the only working path today.
 // Taiwan ETFs trade within 0.1–0.5% of NAV, making close prices a reliable proxy.
@@ -120,6 +128,11 @@ func (s *TWSEETFNAVScraper) FetchNAV(ctx context.Context, symbol string) (float6
 // Currently a stub — TWSE does not expose ETF NAV through a free REST API.
 // When a working endpoint is discovered, this function should be updated
 // to perform HTML scraping or API calls against that endpoint.
+//
+// TODO(FINMIND): When FinMind paid registration is completed, add
+//   attemptFinMindFetch() using TaiwanStockETF dataset, and wire it as
+//   a new tier between TWSE and the close-price proxy. See the type-level
+//   doc comment for the 4-step iteration plan.
 func (s *TWSEETFNAVScraper) attemptTWSEFetch(ctx context.Context, symbol string) (float64, error) {
 	// Strip .TW suffix for TWSE API calls (TWSE uses numeric-only symbols).
 	twseSymbol := strings.TrimSuffix(symbol, ".TW")
