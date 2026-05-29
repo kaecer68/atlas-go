@@ -1,13 +1,21 @@
 package portfolio
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sync"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
+
+// QuoteProvider fetches quotes for a set of symbols.
+type QuoteProvider interface {
+	GetQuotes(ctx context.Context, asOf time.Time, symbols []string) ([]domain.Quote, error)
+}
 
 func isFinite(f float64) bool {
 	return !math.IsInf(f, 0) && !math.IsNaN(f)
@@ -158,6 +166,39 @@ func (fe *FactorEngine) WithETFAnalyzer(ea *ETFAnalyzer) *FactorEngine {
 	defer fe.mu.Unlock()
 	fe.etfAnalyzer = ea
 	return fe
+}
+
+// GetETFAnalyzer returns the attached ETF analyzer, or nil.
+func (fe *FactorEngine) GetETFAnalyzer() *ETFAnalyzer {
+	fe.mu.RLock()
+	defer fe.mu.RUnlock()
+	return fe.etfAnalyzer
+}
+
+// RefreshETFNAV refreshes ETF NAV values for all tracked ETFs using
+// the given QuoteProvider to fetch market quotes. Returns the number of
+// symbols whose NAV was updated. If the provider is nil or no
+// ETFAnalyzer is attached, returns 0.
+func (fe *FactorEngine) RefreshETFNAV(ctx context.Context, provider QuoteProvider) int {
+	fe.mu.RLock()
+	ea := fe.etfAnalyzer
+	fe.mu.RUnlock()
+	if ea == nil || provider == nil {
+		return 0
+	}
+
+	symbols := ea.AllSymbols()
+	if len(symbols) == 0 {
+		return 0
+	}
+
+	quotes, err := provider.GetQuotes(ctx, time.Now(), symbols)
+	if err != nil {
+		logging.Warn("factor_engine", "refresh_etf_nav_failed", logging.Err(err))
+		return 0
+	}
+
+	return ea.UpdateNAVFromQuotes(quotes)
 }
 
 // CalculateMomentumScore computes momentum based on price change over the configured lookback period.

@@ -46,6 +46,16 @@ func (sc *SimulationCore) SetProvider(p marketdata.Provider) {
 	sc.provider = p
 }
 
+// RefreshETFNAV refreshes ETF NAV for all tracked symbols using the
+// currently configured market data provider. Returns the number of
+// symbols whose NAV was updated from quotes.
+func (sc *SimulationCore) RefreshETFNAV(ctx context.Context) int {
+	if sc.factorEngine == nil || sc.provider == nil {
+		return 0
+	}
+	return sc.factorEngine.RefreshETFNAV(ctx, sc.provider)
+}
+
 func buildSimEngine(policy baseline.Policy, optimizer *portfolio.Optimizer) *sim.Engine {
 	return sim.NewEngine(policy.Constraints).
 		WithOptimizer(optimizer).
