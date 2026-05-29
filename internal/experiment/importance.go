@@ -3,7 +3,9 @@ package experiment
 import (
 	"fmt"
 
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eval"
+	"github.com/kaecer68/atlas-go/internal/feature"
 	"github.com/kaecer68/atlas-go/internal/ml"
 )
 
@@ -44,4 +46,33 @@ func (p *FactorPredictor) ComputeImportance(X [][]float64, y []float64, featureN
 	}
 	imp.FeatureNames = featureNames
 	return imp, nil
+}
+
+// ComputeImportanceFromBars extracts features from market bars, trains an OLS
+// model on forward returns, and computes permutation-based feature importance.
+//
+// bars are sorted by date ascending. featureNames selects which named features
+// from the feature.Registry to extract as columns of X. nRepeats controls how
+// many permutation repeats per feature (5–10 recommended).
+func (p *FactorPredictor) ComputeImportanceFromBars(bars []domain.DailyBar, featureNames []string, nRepeats int) (eval.ImportanceResult, error) {
+	if len(bars) == 0 {
+		return eval.ImportanceResult{}, fmt.Errorf("compute importance: bars is empty")
+	}
+	if len(featureNames) == 0 {
+		return eval.ImportanceResult{}, fmt.Errorf("compute importance: featureNames is empty")
+	}
+
+	extract := feature.MakeExtractor(featureNames)
+	X := extract(bars)
+	y := feature.ForwardReturnLabel()(bars)
+
+	if len(X) != len(y) || len(X) == 0 {
+		return eval.ImportanceResult{}, fmt.Errorf("compute importance: feature/label mismatch (%d vs %d)", len(X), len(y))
+	}
+
+	if err := p.Fit(X, y); err != nil {
+		return eval.ImportanceResult{}, fmt.Errorf("compute importance: fit: %w", err)
+	}
+
+	return p.ComputeImportance(X, y, featureNames, nRepeats)
 }
