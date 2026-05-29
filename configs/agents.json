@@ -677,7 +677,7 @@
       ],
       "screening_criteria": {
         "volume_intraday": {
-          "min": 1000000
+          "min": 500000
         }
       }
     },
@@ -717,7 +717,7 @@
       ],
       "screening_criteria": {
         "volume_intraday": {
-          "min": 1000000
+          "min": 500000
         }
       }
     },
@@ -757,7 +757,7 @@
       ],
       "screening_criteria": {
         "volume_intraday": {
-          "min": 800000
+          "min": 500000
         }
       }
     },
@@ -796,7 +796,7 @@
       ],
       "screening_criteria": {
         "volume_intraday": {
-          "min": 800000
+          "min": 500000
         }
       }
     }

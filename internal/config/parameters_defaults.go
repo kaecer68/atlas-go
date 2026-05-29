@@ -640,13 +640,13 @@ func defaultOrchestratorParameters() OrchestratorParameters {
 			Source:    SourceHeuristic,
 		},
 		SuperinvestorMinConviction: ParameterMetadata[int]{
-			Value:     65,
-			Rationale: "Higher bar for superinvestor recommendations",
+			Value:     50,
+			Rationale: "Floor for superinvestor recommendations — lowered from 65 to match sector default",
 			Source:    SourceHeuristic,
 		},
 		SuperinvestorConvictionBase: ParameterMetadata[int]{
-			Value:     70,
-			Rationale: "Base conviction for superinvestor Recommend() — PMs start with strong conviction reflecting concentrated portfolio thesis",
+			Value:     60,
+			Rationale: "Base conviction for superinvestor Recommend() — above sector default (~55), allows keyword boosts of +8 to reach ~68",
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate from backtest comparing superinvestor hit rate vs sector agents",
 		},
