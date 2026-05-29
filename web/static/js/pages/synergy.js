@@ -217,12 +217,9 @@ function renderCandidates(inbox) {
 
   let html = versionHtml + explainHtml;
 
-  function renderSection(title, items, color) {
-    if (!items.length) return '';
-    let h = `<div style="margin-bottom:12px"><div style="font-weight:700;color:${color};margin-bottom:6px;font-size:13px">${title}（${items.length}）</div>`;
-    items.forEach(item => { h += renderCard(item); });
-    h += '</div>';
-    return h;
+  // Section headers — full-width separators in the grid
+  function sectionHeader(title, color) {
+    return `<div style="grid-column:1/-1;font-weight:700;color:${color};margin-top:12px;font-size:13px;padding-bottom:4px;border-bottom:1px solid var(--border)">${title}</div>`;
   }
 
   function renderCard(item) {
@@ -253,7 +250,7 @@ function renderCandidates(inbox) {
       rejectHtml = `<div style="font-size:10px;color:var(--down);margin-top:2px">拒絕原因：${escapeHtml(item.reject_reason)}</div>`;
     }
 
-    return `
+    html += `
       <div class="inbox-card">
         <div class="title">${escapeHtml(item.experiment_id)}</div>
         <div class="meta">${escapeHtml(getAgentName(agentId))} ${statusBadge(status)}</div>
@@ -267,9 +264,18 @@ function renderCandidates(inbox) {
     `;
   }
 
-  html += renderSection('📋 待測試（系統已選出，等待 auto_experiment 執行）', planned, 'var(--warn)');
-  html += renderSection('✅ 已測試（含結果比較）', tested, 'var(--up)');
-  html += renderSection('📁 歷史記錄', history, 'var(--muted)');
+  if (planned.length) {
+    html += sectionHeader(`📋 待測試（${planned.length}）`, 'var(--warn)');
+    planned.forEach(renderCard);
+  }
+  if (tested.length) {
+    html += sectionHeader(`✅ 已測試（${tested.length}）`, 'var(--up)');
+    tested.forEach(renderCard);
+  }
+  if (history.length) {
+    html += sectionHeader(`📁 歷史記錄（${history.length}）`, 'var(--muted)');
+    history.forEach(renderCard);
+  }
 
   container.innerHTML = html;
 }
