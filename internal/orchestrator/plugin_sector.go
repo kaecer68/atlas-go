@@ -339,12 +339,19 @@ func (ETFRotationExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote,
 // classifyETFType maps symbol to ETF category for macro-aware routing logic.
 func classifyETFType(symbol string) string {
 	switch symbol {
-	case "0050.TW":
+	// Broad market ETFs
+	case "0050.TW", "006208.TW", "00692.TW":
 		return "broad_market"
-	case "0056.TW":
+	// Dividend ETFs
+	case "0056.TW", "00919.TW", "00929.TW", "00940.TW":
 		return "dividend"
-	case "00878.TW":
+	// Defensive / low-vol ETFs
+	case "00878.TW", "00713.TW":
 		return "defensive"
+	// Sector equity ETFs
+	case "00881.TW", "00891.TW":
+		return "equity"
+	// Gold ETFs
 	case "00635U", "00693U", "00708L", "GLD", "IAU", "SGOL", "BAR":
 		return "gold"
 	default:

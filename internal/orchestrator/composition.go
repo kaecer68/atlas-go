@@ -138,9 +138,22 @@ func buildFactorEngine(runtimeParams *portfolio.RuntimeParameters, macroSnap *ma
 	// Wire ETF analyzer with metadata for Taiwan ETF universe.
 	ea := portfolio.NewETFAnalyzer()
 	ea.LoadMetadata(map[string]portfolio.ETFMetadata{
+		// Existing
 		"0050.TW":  {Name: "元大台灣50", NAV: 195.50, ExpenseRatio: 0.0032, Benchmark: "TW50"},
 		"0056.TW":  {Name: "元大高股息", NAV: 42.80, ExpenseRatio: 0.0043, Benchmark: "TWHDividend"},
 		"00878.TW": {Name: "國泰永續高股息", NAV: 25.30, ExpenseRatio: 0.0045, Benchmark: "MSCITWESG"},
+		// New — broad market
+		"006208.TW": {Name: "富邦台50", NAV: 0, ExpenseRatio: 0.0032, Benchmark: "TW50"},
+		"00692.TW":  {Name: "富邦公司治理", NAV: 0, ExpenseRatio: 0.0035, Benchmark: "TWCG"},
+		// New — defensive
+		"00713.TW": {Name: "元大高股息低波動", NAV: 0, ExpenseRatio: 0.0035, Benchmark: "TWHDivLowVol"},
+		// New — sector
+		"00881.TW": {Name: "國泰台灣5G+", NAV: 0, ExpenseRatio: 0.0045, Benchmark: "TW5G"},
+		"00891.TW": {Name: "中信關鍵半導體", NAV: 0, ExpenseRatio: 0.0045, Benchmark: "TWSemi"},
+		// New — dividend
+		"00919.TW": {Name: "群益台灣精選高息", NAV: 0, ExpenseRatio: 0.0040, Benchmark: "TWHDivSelect"},
+		"00929.TW": {Name: "復華台灣科技優息", NAV: 0, ExpenseRatio: 0.0040, Benchmark: "TWTechDiv"},
+		"00940.TW": {Name: "元大台灣價值高息", NAV: 0, ExpenseRatio: 0.0043, Benchmark: "TWValDiv"},
 	})
 	ea.WithHistoricalPrices(hp)
 
