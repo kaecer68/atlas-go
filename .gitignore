@@ -44,6 +44,7 @@ internal/*/data/
 !internal/config/data/
 .gitnexus/lbug
 .gitnexus/meta.json
+/.codegraph/
 /.worktrees/
 
 # Development artifacts
