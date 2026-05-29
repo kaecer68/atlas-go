@@ -814,6 +814,12 @@ func defaultOrchestratorParameters() OrchestratorParameters {
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate: derive from flow pattern → sector return regression analysis",
 		},
+		UseMLScoring: ParameterMetadata[bool]{
+			Value:     false,
+			Rationale: "Enable ML-based factor scoring from internal/ml models",
+			Source:    SourceExperimental,
+			Todo:      "Validate with A/B backtest before enabling",
+		},
 	}
 }
 

@@ -12,11 +12,12 @@ import (
 type ParameterSource string
 
 const (
-	SourceLiterature ParameterSource = "literature" // from academic/practitioner literature
-	SourceEmpirical  ParameterSource = "empirical"  // from historical data analysis
-	SourceHeuristic  ParameterSource = "heuristic"  // from domain expert judgment
-	SourceInferred   ParameterSource = "inferred"   // from automated inference/calibration
-	SourceCalibrated ParameterSource = "calibrated" // from backtest optimization
+	SourceLiterature   ParameterSource = "literature"   // from academic/practitioner literature
+	SourceEmpirical    ParameterSource = "empirical"    // from historical data analysis
+	SourceHeuristic    ParameterSource = "heuristic"    // from domain expert judgment
+	SourceInferred     ParameterSource = "inferred"     // from automated inference/calibration
+	SourceCalibrated   ParameterSource = "calibrated"   // from backtest optimization
+	SourceExperimental ParameterSource = "experimental" // from ML experiment / not yet validated
 )
 
 // ParameterMetadata holds the value and provenance of a tunable parameter.
@@ -212,6 +213,7 @@ type OrchestratorParameters struct {
 	SectorRotationBaseAllocations    ParameterMetadata[map[string]float64]            `json:"sector_rotation_base_allocations"`
 	SectorRotationMacroAdjustments   ParameterMetadata[map[string]map[string]float64] `json:"sector_rotation_macro_adjustments,omitempty"`
 	SectorRotationFlowAdjustments    ParameterMetadata[map[string]map[string]float64] `json:"sector_rotation_flow_adjustments,omitempty"`
+	UseMLScoring                     ParameterMetadata[bool]                          `json:"use_ml_scoring"`
 }
 
 // RiskParameters holds tunable values for risk management.

@@ -78,6 +78,7 @@ type PluginRegistry struct {
 	healthManager      *portfolio.AgentHealthManager
 	cycleModulator     *IndustryCycleModulator
 	narrativeModulator *NarrativeConvictionModulator
+	mlScorer           *MLScorer
 	promptResolver     PromptResolver // plugin boundary — injected via WithPromptResolver; nil = fallback to os.ReadFile
 }
 
@@ -118,6 +119,14 @@ func (r *PluginRegistry) WithCycleModulator(m *IndustryCycleModulator) *PluginRe
 
 func (r *PluginRegistry) WithNarrativeModulator(m *NarrativeConvictionModulator) *PluginRegistry {
 	r.narrativeModulator = m
+	return r
+}
+
+// WithMLScorer injects an MLScorer for ML-based factor scoring.
+// When set and trained, CalculateFactorScoresWithBreakdown will use it
+// to produce an ML-adjusted total score.
+func (r *PluginRegistry) WithMLScorer(s *MLScorer) *PluginRegistry {
+	r.mlScorer = s
 	return r
 }
 
@@ -170,7 +179,23 @@ func (r *PluginRegistry) CalculateFactorScoresWithBreakdown(symbol string, quote
 		portfolio.FactorQuality:  0.25,
 		portfolio.FactorAgent:    0.20,
 	}
-	return r.factorEngine.CalculateAllScoresWithBreakdown(symbol, quotes, agentRecs, agentWeights, defaultWeights)
+	breakdown, scores := r.factorEngine.CalculateAllScoresWithBreakdown(symbol, quotes, agentRecs, agentWeights, defaultWeights)
+
+	// When ML scorer is attached and trained, override the total score
+	// with an ML-predicted value while preserving heuristic per-factor breakdowns.
+	if r.mlScorer != nil && r.mlScorer.IsTrained() && scores != nil {
+		quote, ok := quotes[symbol]
+		if ok {
+			if mlTotal, err := r.mlScorer.Score(quote, scores); err == nil {
+				scores["total"] = mlTotal
+				if breakdown != nil {
+					breakdown.Total.Score = mlTotal
+				}
+			}
+		}
+	}
+
+	return breakdown, scores
 }
 
 func (r *PluginRegistry) Screen(ctx context.Context, agent domain.AgentSpec, symbol string, quotes map[string]domain.Quote) (bool, error) {
