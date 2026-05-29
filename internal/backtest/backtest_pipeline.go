@@ -33,9 +33,6 @@ type BacktestResult struct {
 	// TrainRange is the date range used for training.
 	TrainRange WindowRange
 
-	// ValidRange is the date range used for validation (not used in prediction).
-	ValidRange WindowRange
-
 	// TestRange is the date range used for out-of-sample testing.
 	TestRange WindowRange
 
@@ -149,10 +146,9 @@ func (p *BacktestPipeline) Run(model Model) ([]BacktestResult, error) {
 		}
 
 		results = append(results, BacktestResult{
-			WindowID:    windowID(w),
-			TrainRange:  w,
-			ValidRange:  w, // valid range same WindowRange struct
-			TestRange:   w,
+			WindowID:   windowID(w),
+			TrainRange: w,
+			TestRange:  w,
 			Predictions: predictions,
 			Actuals:     actuals,
 			Metrics: map[string]float64{
