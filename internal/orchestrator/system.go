@@ -179,6 +179,44 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 	runtimeParams := loadRuntimeParamsOrDefault(cfg.ParametersConfigPath)
 	macroSnapshot := &marketdata.MacroDataSnapshot{}
 	factorEngine, hp, fp := buildFactorEngine(runtimeParams, macroSnapshot, cfg.ReplayDataPath)
+
+	// Calibrate ETF NAV from replay data — use latest close prices as NAV proxy.
+	// ETF market prices tightly track NAV (typically <0.5% tracking error), making
+	// close prices a reliable fallback when no real-time NAV API is available.
+	// Replay CSV uses symbol format "0050" (no .TW suffix); strip suffix for lookup.
+	if ds != nil && len(ds.Dates) > 0 {
+		etfSymbols := factorEngine.GetETFAnalyzer().AllSymbols()
+		if len(etfSymbols) > 0 {
+			// Map ETFAnalyzer symbols (0050.TW) to replay symbols (0050)
+			replaySymbols := make([]string, 0, len(etfSymbols))
+			lookup := make(map[string]string, len(etfSymbols))
+			for _, sym := range etfSymbols {
+				replaySym := strings.TrimSuffix(sym, ".TW")
+				replaySymbols = append(replaySymbols, replaySym)
+				lookup[replaySym] = sym
+			}
+			latestDate := ds.Dates[len(ds.Dates)-1]
+			quotes := ds.QuotesForDate(latestDate, replaySymbols)
+			// Restore .TW suffix on returned quotes so UpdateNAVFromQuotes matches
+			for i := range quotes {
+				if orig, ok := lookup[quotes[i].Symbol]; ok {
+					quotes[i].Symbol = orig
+				}
+			}
+			if updated := factorEngine.GetETFAnalyzer().UpdateNAVFromQuotes(quotes); updated > 0 {
+				logging.Info("orchestrator", "etf_nav_calibrated",
+					"date", latestDate.Format("2006-01-02"),
+					"updated", updated,
+					"total", len(etfSymbols))
+			} else {
+				logging.Warn("orchestrator", "etf_nav_calibrate_no_data",
+					"date", latestDate.Format("2006-01-02"),
+					"symbols", len(etfSymbols),
+					"hint", "replay data may not contain ETF symbols — extend replay data to include ETFs")
+			}
+		}
+	}
+
 	if eventBus == nil {
 		eventBus = eventbus.NewChannelEventBus(256)
 	}
