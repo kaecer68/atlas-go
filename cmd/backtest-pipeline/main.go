@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"math"
@@ -25,19 +26,23 @@ func main() {
 func run(args []string) error {
 	fs := flag.NewFlagSet("backtest-pipeline", flag.ContinueOnError)
 	dataPath := fs.String("data", "", "CSV replay data path (required, TWSE format)")
-	startStr := fs.String("start", "", "training start date YYYY-MM-DD (optional; earliest data date if unset)")
-	symbolFilter := fs.String("symbol", "", "filter to single symbol (e.g. '2330.TW'; optional)")
-	featuresStr := fs.String("features", "close,volume,return_1d", "comma-separated feature names: close, volume, return_1d, return_5d, hl_ratio")
+	startStr := fs.String("start", "", "training start date YYYY-MM-DD (optional)")
+	symbolFilter := fs.String("symbol", "", "filter to single symbol (e.g. 2330.TW)")
+	featuresStr := fs.String("features", "close,volume,return_1d", "comma-separated feature names")
+	modelStr := fs.String("model", "ols", "ML model: ols, pcr, pls, elasticnet")
+	firstTrainEndStr := fs.String("first-train-end", "2007-12-31", "first train end date YYYY-MM-DD")
+	validYears := fs.Int("valid-years", 2, "validation window years")
+	stepYears := fs.Int("step-years", 1, "step size in years")
+	testEndStr := fs.String("test-end", "2022-04-30", "test end date YYYY-MM-DD")
+	outPath := fs.String("out", "", "write results CSV (optional)")
 
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-
 	if *dataPath == "" {
 		return fmt.Errorf("-data is required")
 	}
 
-	// ── 1. Load CSV replay data ──────────────────────────────────────────────
 	ds, err := replay.LoadTWSEOpenDataCSV(*dataPath)
 	if err != nil {
 		return fmt.Errorf("load CSV: %w", err)
@@ -45,102 +50,115 @@ func run(args []string) error {
 
 	bars := flattenDataset(ds)
 	sort.Slice(bars, func(i, j int) bool { return bars[i].Date.Before(bars[j].Date) })
-
 	if len(bars) == 0 {
 		return fmt.Errorf("no bars loaded from %s", *dataPath)
 	}
 
-	// ── 2. Filter by symbol (optional) ───────────────────────────────────────
+	symbols := uniqueSymbols(bars)
+	if *symbolFilter == "" && len(symbols) > 1 {
+		return fmt.Errorf("data contains %d symbols; use -symbol (e.g. -symbol %s)", len(symbols), symbols[0])
+	}
 	if *symbolFilter != "" {
 		bars = filterBySymbol(bars, *symbolFilter)
 		if len(bars) == 0 {
 			return fmt.Errorf("no bars for symbol %s", *symbolFilter)
 		}
 	}
-
-	// ── 3. Filter by start date (optional) ───────────────────────────────────
 	if *startStr != "" {
-		startDate, err := time.Parse("2006-01-02", *startStr)
+		d, err := time.Parse("2006-01-02", *startStr)
 		if err != nil {
 			return fmt.Errorf("parse -start: %w", err)
 		}
-		bars = filterByStart(bars, startDate)
+		bars = filterByStart(bars, d)
 		if len(bars) == 0 {
 			return fmt.Errorf("no bars on or after %s", *startStr)
 		}
 	}
 
 	fmt.Fprintf(os.Stderr, "loaded %d bars from %s to %s",
-		len(bars),
-		bars[0].Date.Format("2006-01-02"),
-		bars[len(bars)-1].Date.Format("2006-01-02"),
-	)
+		len(bars), bars[0].Date.Format("2006-01-02"), bars[len(bars)-1].Date.Format("2006-01-02"))
 	if *symbolFilter != "" {
 		fmt.Fprintf(os.Stderr, " (symbol=%s)", *symbolFilter)
 	}
 	fmt.Fprintln(os.Stderr)
 
-	// ── 4. Parse feature selection ───────────────────────────────────────────
 	featureNames := parseFeatureNames(*featuresStr)
 	if len(featureNames) == 0 {
-		return fmt.Errorf("no features selected; use -features to specify at least one")
+		return fmt.Errorf("no features; use -features")
 	}
-
 	unknown := validateFeatures(featureNames)
 	if len(unknown) > 0 {
-		return fmt.Errorf("unknown feature(s): %s (available: %s)",
-			strings.Join(unknown, ", "), strings.Join(availableFeatures(), ", "))
+		return fmt.Errorf("unknown feature(s): %s", strings.Join(unknown, ", "))
 	}
 
-	// ── 5. Build extractors ──────────────────────────────────────────────────
 	fe := makeFeatureExtractor(featureNames)
 	le := makeForwardReturnLabel()
 
-	// ── 6. Create pipeline and model ─────────────────────────────────────────
+	model, err := newModel(*modelStr)
+	if err != nil {
+		return err
+	}
+
 	pipeline := backtest.NewBacktestPipeline(bars)
 	pipeline.ExtractFeatures = fe
 	pipeline.ExtractLabels = le
 
-	model := ml.NewOLS()
+	if ft, err := time.Parse("2006-01-02", *firstTrainEndStr); err != nil {
+		return fmt.Errorf("parse -first-train-end: %w", err)
+	} else {
+		pipeline.Split.FirstTrainEnd = ft
+	}
+	if *validYears < 1 {
+		return fmt.Errorf("-valid-years must be >= 1")
+	}
+	pipeline.Split.ValidLengthYears = *validYears
+	if *stepYears < 1 {
+		return fmt.Errorf("-step-years must be >= 1")
+	}
+	pipeline.Split.StepYears = *stepYears
+	if te, err := time.Parse("2006-01-02", *testEndStr); err != nil {
+		return fmt.Errorf("parse -test-end: %w", err)
+	} else {
+		pipeline.Split.TestEnd = te
+	}
 
-	// ── 7. Run ───────────────────────────────────────────────────────────────
 	results, err := pipeline.Run(model)
 	if err != nil {
 		return fmt.Errorf("pipeline run: %w", err)
 	}
 
-	// ── 8. Print results ─────────────────────────────────────────────────────
 	printResults(results, featureNames)
+
+	if *outPath != "" {
+		if err := writeResultsCSV(results, featureNames, *outPath); err != nil {
+			return fmt.Errorf("write CSV: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "results written to %s\n", *outPath)
+	}
 
 	return nil
 }
 
-// ── Dataset helpers ────────────────────────────────────────────────────────────
-
-// flattenDataset converts a replay.Dataset into a flat, unsorted slice of DailyBar.
 func flattenDataset(ds *replay.Dataset) []domain.DailyBar {
 	var out []domain.DailyBar
 	for _, date := range ds.Dates {
-		day := ds.ByDate[date.Format("2006-01-02")]
-		for _, bar := range day {
+		for _, bar := range ds.ByDate[date.Format("2006-01-02")] {
 			out = append(out, bar)
 		}
 	}
 	return out
 }
 
-// filterBySymbol keeps only bars matching the given symbol.
-func filterBySymbol(bars []domain.DailyBar, symbol string) []domain.DailyBar {
+func filterBySymbol(bars []domain.DailyBar, sym string) []domain.DailyBar {
 	out := make([]domain.DailyBar, 0, len(bars))
 	for _, b := range bars {
-		if b.Symbol == symbol {
+		if b.Symbol == sym {
 			out = append(out, b)
 		}
 	}
 	return out
 }
 
-// filterByStart keeps only bars on or after the given start date.
 func filterByStart(bars []domain.DailyBar, start time.Time) []domain.DailyBar {
 	out := make([]domain.DailyBar, 0, len(bars))
 	for _, b := range bars {
@@ -151,12 +169,21 @@ func filterByStart(bars []domain.DailyBar, start time.Time) []domain.DailyBar {
 	return out
 }
 
-// ── Feature extraction ─────────────────────────────────────────────────────────
+func uniqueSymbols(bars []domain.DailyBar) []string {
+	seen := map[string]struct{}{}
+	for _, b := range bars {
+		seen[b.Symbol] = struct{}{}
+	}
+	out := make([]string, 0, len(seen))
+	for s := range seen {
+		out = append(out, s)
+	}
+	sort.Strings(out)
+	return out
+}
 
-// featureFunc computes one feature value from a bar at position idx in a sorted bar slice.
 type featureFunc func(bar domain.DailyBar, idx int, bars []domain.DailyBar) float64
 
-// featureRegistry maps feature names to their computation functions.
 var featureRegistry = map[string]featureFunc{
 	"close": func(b domain.DailyBar, _ int, _ []domain.DailyBar) float64 {
 		return b.Close
@@ -185,220 +212,259 @@ var featureRegistry = map[string]featureFunc{
 		}
 		return 0
 	},
+	"ma_ratio": func(b domain.DailyBar, idx int, bars []domain.DailyBar) float64 {
+		if idx < 19 {
+			return 1.0
+		}
+		sum := 0.0
+		for j := idx - 19; j <= idx; j++ {
+			sum += bars[j].Close
+		}
+		if sum > 0 {
+			return b.Close / (sum / 20.0)
+		}
+		return 1.0
+	},
+	"volume_ratio": func(b domain.DailyBar, idx int, bars []domain.DailyBar) float64 {
+		if idx < 19 || b.Volume <= 0 {
+			return 1.0
+		}
+		sum := 0.0
+		for j := idx - 19; j <= idx; j++ {
+			sum += float64(bars[j].Volume)
+		}
+		avg := sum / 20.0
+		if avg > 0 {
+			return float64(b.Volume) / avg
+		}
+		return 1.0
+	},
 }
 
-// availableFeatures returns all registered feature names in sorted order.
 func availableFeatures() []string {
-	names := make([]string, 0, len(featureRegistry))
+	n := make([]string, 0, len(featureRegistry))
 	for k := range featureRegistry {
-		names = append(names, k)
+		n = append(n, k)
 	}
-	sort.Strings(names)
-	return names
+	sort.Strings(n)
+	return n
 }
 
-// validateFeatures returns any feature names not in the registry.
 func validateFeatures(names []string) []string {
-	var unknown []string
+	var u []string
 	for _, n := range names {
 		if _, ok := featureRegistry[n]; !ok {
-			unknown = append(unknown, n)
+			u = append(u, n)
 		}
 	}
-	return unknown
+	return u
 }
 
-// parseFeatureNames splits a comma-separated string, trimming whitespace.
-func parseFeatureNames(raw string) []string {
-	parts := strings.Split(raw, ",")
+func parseFeatureNames(r string) []string {
+	parts := strings.Split(r, ",")
 	names := make([]string, 0, len(parts))
 	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
+		if p = strings.TrimSpace(p); p != "" {
 			names = append(names, p)
 		}
 	}
 	return names
 }
 
-// makeFeatureExtractor returns a backtest.FeatureExtractor that computes
-// the selected features for each bar.
 func makeFeatureExtractor(names []string) backtest.FeatureExtractor {
 	return func(bars []domain.DailyBar) [][]float64 {
-		features := make([][]float64, len(bars))
+		f := make([][]float64, len(bars))
 		for i, bar := range bars {
 			row := make([]float64, len(names))
-			for j, name := range names {
-				row[j] = featureRegistry[name](bar, i, bars)
+			for j, n := range names {
+				row[j] = featureRegistry[n](bar, i, bars)
 			}
-			features[i] = row
+			f[i] = row
 		}
-		return features
+		return f
 	}
 }
 
-// ── Label extraction ───────────────────────────────────────────────────────────
-
-// makeForwardReturnLabel returns a backtest.LabelExtractor that uses the
-// forward 1-day return as the label. For the last bar (unknown forward
-// return), the label is 0.
 func makeForwardReturnLabel() backtest.LabelExtractor {
 	return func(bars []domain.DailyBar) []float64 {
-		labels := make([]float64, len(bars))
+		l := make([]float64, len(bars))
 		for i := 0; i < len(bars)-1; i++ {
 			if bars[i].Close > 0 {
-				labels[i] = (bars[i+1].Close - bars[i].Close) / bars[i].Close
+				l[i] = (bars[i+1].Close - bars[i].Close) / bars[i].Close
 			}
 		}
-		// Last bar: forward return unknown, set to 0.
 		if len(bars) > 0 {
-			labels[len(bars)-1] = 0
+			l[len(bars)-1] = 0
 		}
-		return labels
+		return l
 	}
 }
 
-// ── Metrics ────────────────────────────────────────────────────────────────────
+func newModel(name string) (backtest.Model, error) {
+	switch name {
+	case "ols":
+		return ml.NewOLS(), nil
+	case "pcr":
+		return &ml.PCR{NComponents: 5, VarianceThreshold: 0.95}, nil
+	case "pls":
+		return &ml.PLS{NComponents: 3}, nil
+	case "elasticnet":
+		return &ml.ElasticNet{L1Ratio: 0.5, Alpha: 1.0, AlphaAuto: false, MaxIter: 1000, Tol: 1e-4}, nil
+	default:
+		return nil, fmt.Errorf("unknown model %q; choose: ols, pcr, pls, elasticnet", name)
+	}
+}
 
-// oosR2 computes out-of-sample R² = 1 - SSE / SST.
-// Returns NaN if SST is zero or if n ≤ 1.
-func oosR2(predictions, actuals []float64) float64 {
-	n := len(predictions)
+func oosR2(pred, act []float64) float64 {
+	n := len(pred)
 	if n <= 1 {
 		return math.NaN()
 	}
-
 	mean := 0.0
-	for _, a := range actuals {
+	for _, a := range act {
 		mean += a
 	}
 	mean /= float64(n)
-
 	sst, sse := 0.0, 0.0
 	for i := 0; i < n; i++ {
-		diffA := actuals[i] - mean
-		sst += diffA * diffA
-		diffE := actuals[i] - predictions[i]
-		sse += diffE * diffE
+		dA := act[i] - mean
+		sst += dA * dA
+		dE := act[i] - pred[i]
+		sse += dE * dE
 	}
-
 	if sst == 0 {
 		return math.NaN()
 	}
 	return 1.0 - sse/sst
 }
 
-// annualizedSharpe computes an annualized Sharpe ratio from prediction-signed
-// returns. A positive prediction is treated as a long position (uses actual
-// return directly); a negative prediction is treated as a short position
-// (inverts the actual return). This assumes actuals are forward returns.
-//
-// Returns NaN if n ≤ 1 or if variance is zero.
-func annualizedSharpe(predictions, actuals []float64) float64 {
-	n := len(predictions)
+func annualizedSharpe(pred, act []float64) float64 {
+	n := len(pred)
 	if n <= 1 {
 		return math.NaN()
 	}
-
-	strat := make([]float64, n)
+	s := make([]float64, n)
 	for i := 0; i < n; i++ {
-		if predictions[i] >= 0 {
-			strat[i] = actuals[i]
+		if pred[i] >= 0 {
+			s[i] = act[i]
 		} else {
-			strat[i] = -actuals[i]
+			s[i] = -act[i]
 		}
 	}
-
 	mean := 0.0
-	for _, r := range strat {
+	for _, r := range s {
 		mean += r
 	}
 	mean /= float64(n)
-
-	variance := 0.0
-	for _, r := range strat {
-		diff := r - mean
-		variance += diff * diff
+	v := 0.0
+	for _, r := range s {
+		d := r - mean
+		v += d * d
 	}
-	variance /= float64(n - 1)
-
-	if variance <= 0 {
-		return 0
+	v /= float64(n - 1)
+	if v <= 0 {
+		return math.NaN()
 	}
-	std := math.Sqrt(variance)
-	return mean / std * math.Sqrt(float64(tradingDaysPerYear)) // annualize
+	return mean / math.Sqrt(v) * math.Sqrt(252)
 }
 
-const tradingDaysPerYear = 252
-
-// ── Output ─────────────────────────────────────────────────────────────────────
-
 func printResults(results []backtest.BacktestResult, featureNames []string) {
-	fmt.Printf("%-45s %8s %8s %8s %8s %8s\n",
-		"Window ID", "Train", "Test", "OOS R²", "Sharpe", "Features")
+	fmt.Printf("%-45s %8s %8s %8s %8s %8s\n", "Window ID", "Train", "Test", "OOS R2", "Sharpe", "Features")
 	fmt.Println(strings.Repeat("-", 100))
-
 	for _, r := range results {
-		trainN := int(r.Metrics["train_samples"])
-		testN := int(r.Metrics["test_samples"])
+		tn, ts := 0, 0
+		if v, ok := r.Metrics["train_samples"]; ok {
+			tn = int(v)
+		}
+		if v, ok := r.Metrics["test_samples"]; ok {
+			ts = int(v)
+		}
 		r2 := oosR2(r.Predictions, r.Actuals)
-		sharpe := annualizedSharpe(r.Predictions, r.Actuals)
-
-		r2Str := "   N/A"
+		sh := annualizedSharpe(r.Predictions, r.Actuals)
+		r2s := "   N/A"
 		if !math.IsNaN(r2) {
-			r2Str = fmt.Sprintf("%+7.4f", r2)
+			r2s = fmt.Sprintf("%+7.4f", r2)
 		}
-
-		sharpeStr := "   N/A"
-		if !math.IsNaN(sharpe) {
-			sharpeStr = fmt.Sprintf("%+7.4f", sharpe)
+		shs := "   N/A"
+		if !math.IsNaN(sh) {
+			shs = fmt.Sprintf("%+7.4f", sh)
 		}
-
-		fmt.Printf("%-45s %8d %8d %8s %8s %8d\n",
-			r.WindowID, trainN, testN, r2Str, sharpeStr, len(featureNames))
+		tns := "   N/A"
+		if _, ok := r.Metrics["train_samples"]; ok {
+			tns = fmt.Sprintf("%8d", tn)
+		}
+		tsts := "   N/A"
+		if _, ok := r.Metrics["test_samples"]; ok {
+			tsts = fmt.Sprintf("%8d", ts)
+		}
+		fmt.Printf("%-45s %8s %8s %8s %8s %8d\n", r.WindowID, tns, tsts, r2s, shs, len(featureNames))
 	}
-
-	// ── Summary across all windows ───────────────────────────────────────────
 	fmt.Println(strings.Repeat("-", 100))
 	printSummary(results)
 }
 
 func printSummary(results []backtest.BacktestResult) {
-	var (
-		totalR2     float64
-		totalSharpe float64
-		r2Count     int
-		sharpeCount int
-		totalTrain  int
-		totalTest   int
-	)
-
+	var tR2, tSh float64
+	var rc, sc, tt, tst int
 	for _, r := range results {
-		totalTrain += int(r.Metrics["train_samples"])
-		totalTest += int(r.Metrics["test_samples"])
-		r2 := oosR2(r.Predictions, r.Actuals)
-		if !math.IsNaN(r2) {
-			totalR2 += r2
-			r2Count++
+		if v, ok := r.Metrics["train_samples"]; ok {
+			tt += int(v)
 		}
-		sharpe := annualizedSharpe(r.Predictions, r.Actuals)
-		if !math.IsNaN(sharpe) {
-			totalSharpe += sharpe
-			sharpeCount++
+		if v, ok := r.Metrics["test_samples"]; ok {
+			tst += int(v)
+		}
+		if r2 := oosR2(r.Predictions, r.Actuals); !math.IsNaN(r2) {
+			tR2 += r2
+			rc++
+		}
+		if sh := annualizedSharpe(r.Predictions, r.Actuals); !math.IsNaN(sh) {
+			tSh += sh
+			sc++
 		}
 	}
-
-	fmt.Printf("%-45s %8d %8d", "SUMMARY", totalTrain, totalTest)
-	if r2Count > 0 {
-		fmt.Printf(" %+7.4f", totalR2/float64(r2Count))
+	fmt.Printf("%-45s %8d %8d", "SUMMARY", tt, tst)
+	if rc > 0 {
+		fmt.Printf(" %+7.4f", tR2/float64(rc))
 	} else {
 		fmt.Printf(" %8s", "N/A")
 	}
-	if sharpeCount > 0 {
-		fmt.Printf(" %+7.4f", totalSharpe/float64(sharpeCount))
+	if sc > 0 {
+		fmt.Printf(" %+7.4f", tSh/float64(sc))
 	} else {
 		fmt.Printf(" %8s", "N/A")
 	}
 	fmt.Printf(" %8s", fmt.Sprintf("%d windows", len(results)))
 	fmt.Println()
+}
+
+func writeResultsCSV(results []backtest.BacktestResult, featureNames []string, path string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	w := csv.NewWriter(f)
+	defer w.Flush()
+	_ = w.Write([]string{"WindowID", "TrainSamples", "TestSamples", "OOS_R2", "Sharpe", "FeaturesCount"})
+	for _, r := range results {
+		tn, ts := 0, 0
+		if v, ok := r.Metrics["train_samples"]; ok {
+			tn = int(v)
+		}
+		if v, ok := r.Metrics["test_samples"]; ok {
+			ts = int(v)
+		}
+		r2 := oosR2(r.Predictions, r.Actuals)
+		sh := annualizedSharpe(r.Predictions, r.Actuals)
+		r2s := ""
+		if !math.IsNaN(r2) {
+			r2s = fmt.Sprintf("%.6f", r2)
+		}
+		shs := ""
+		if !math.IsNaN(sh) {
+			shs = fmt.Sprintf("%.6f", sh)
+		}
+		_ = w.Write([]string{r.WindowID, fmt.Sprintf("%d", tn), fmt.Sprintf("%d", ts), r2s, shs, fmt.Sprintf("%d", len(featureNames))})
+	}
+	return nil
 }
