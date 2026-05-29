@@ -176,3 +176,46 @@ jobs:
 
     - name: Run factor integrity check
       run: bash scripts/ci/verify_factor_integrity.sh
+
+  # Orphan artifact detection — ensures no compiled binaries, PID files,
+  # coverage reports, or graphify cache artifacts have been committed.
+  check-orphan-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check for orphan artifacts in git index
+      run: |
+        orphans=""
+        # Compiled Go binaries (Mach-O/ELF)
+        for f in $(git ls-files); do
+          if [ -f "$f" ]; then
+            ft=$(file "$f" 2>/dev/null)
+            case "$ft" in
+              *"Mach-O"*|*"ELF"*)
+                orphans="$orphans  [BINARY] $f ($(echo "$ft" | head -1))"
+                ;;
+            esac
+          fi
+        done
+        # PID files
+        for f in $(git ls-files '*.pid'); do
+          orphans="$orphans  [PID] $f"
+        done
+        # Coverage output
+        for f in $(git ls-files '*.out'); do
+          orphans="$orphans  [COVERAGE] $f"
+        done
+        # Graphify cache at root
+        for f in $(git ls-files '.graphify_*.json'); do
+          orphans="$orphans  [GRAPHFIY] $f"
+        done
+        if [ -n "$orphans" ]; then
+          echo "❌ Found orphan artifacts in git index:"
+          echo "$orphans"
+          echo ""
+          echo "These files should be in .gitignore and removed from tracking."
+          echo "Run: git rm --cached <file>  (keeps file on disk)"
+          exit 1
+        fi
+        echo "✅ No orphan artifacts found"

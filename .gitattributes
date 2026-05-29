@@ -40,3 +40,23 @@
 # Markdown/docs — always LF
 *.md text eol=lf
 *.txt text eol=lf
+
+# Compiled Go binaries — prevent text diff attempts
+/atlas binary
+/atlas-staging binary
+/atlas.test binary
+/*.test binary
+
+# Go build cache — not git content
+.gocache/** binary
+
+# Runtime state
+*.pid text eol=lf
+
+# AI agent generated files — exclude from GitHub language stats
+.omo/** linguist-generated=true
+.sisyphus/** linguist-generated=true
+
+# Auto-generated graph artifacts
+/graphify-out/** linguist-generated=true
+.graphify_*.json linguist-generated=true
