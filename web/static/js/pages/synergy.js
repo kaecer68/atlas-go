@@ -203,9 +203,10 @@ function renderCandidates(inbox) {
     return;
   }
 
-  const versionHtml = inbox.baseline_version ? `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">基線版本：v${inbox.baseline_version}</div>` : '';
+  const versionHtml = inbox.baseline_version ? `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">基線版本：v${inbox.baseline_version}</div>` : '';
+  const explainHtml = '<div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.4">系統每日自動選出表現最弱的 Agent 作為實驗候選（status=planned）。每 7 天由 auto_experiment 執行測試後更新為實際結果。本頁面去重顯示每個 Agent 的最新候選。</div>';
 
-  let html = versionHtml;
+  let html = versionHtml + explainHtml;
   inbox.items.forEach(item => {
     const agentId = item.target_agent_id || '';
     const mutation = item.mutation_type || '';
@@ -215,7 +216,9 @@ function renderCandidates(inbox) {
     const bv = item.baseline_value;
     const cv = item.candidate_value;
     let compareHtml = '';
-    if (bv != null && cv != null && (bv !== 0 || cv !== 0)) {
+    if (status === 'planned') {
+      compareHtml = `<div class="meta" style="font-size:11px">基線 SharpeLike ${fmtVal(bv)} → 候選 <span style="color:var(--warn)">待測試</span></div>`;
+    } else if (bv != null && cv != null && (bv !== 0 || cv !== 0)) {
       const better = cv > bv;
       compareHtml = `<div class="meta" style="font-size:11px">基線 ${fmtVal(bv)} → 候選 <span style="color:${better ? 'var(--up)' : 'var(--down)'}">${fmtVal(cv)}</span></div>`;
     }
