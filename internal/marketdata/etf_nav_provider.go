@@ -14,15 +14,17 @@ import (
 
 // ETFNAVProvider fetches ETF Net Asset Value data for Taiwan-listed ETFs.
 //
-// Primary strategy: Uses ETF market closing prices as NAV proxy since
-// Taiwanese ETFs trade within 0.1-0.5% of their NAV under normal conditions.
-// This is acceptable for a simulation-first research system.
+// When a TWSEETFNAVScraper is attached (via WithScraper), FetchNAV delegates
+// to the scraper's tiered strategy: Tier 1 attempts a real TWSE NAV scrape,
+// falling back to Tier 2 (close-price proxy). Without a scraper, the provider
+// falls back to the configured QuoteFetcher directly.
 //
-// When a real-time NAV data source becomes available (e.g., TWSE OpenAPI
-// ETF NAV endpoint, FinMind TaiwanStockETF dataset, or fund company APIs),
-// swap the fetcher implementation without changing the call sites.
+// Taiwanese ETFs trade within 0.1-0.5% of their NAV under normal conditions,
+// making the close-price proxy acceptable for simulation-first research when
+// real NAV data is unavailable.
 type ETFNAVProvider struct {
 	quoteFetcher QuoteFetcher
+	scraper      *TWSEETFNAVScraper
 	cache        map[string]cachedNAV
 	mu           sync.RWMutex
 	cacheTTL     time.Duration
@@ -51,13 +53,25 @@ func NewETFNAVProvider(fetcher QuoteFetcher) *ETFNAVProvider {
 	}
 }
 
+// WithScraper attaches a TWSEETFNAVScraper for tiered NAV fetching.
+// When set, FetchNAV delegates to the scraper (Tier 1: TWSE scrape,
+// Tier 2: close-price proxy) instead of using the raw quote fetcher.
+// Without a scraper, the provider falls back to the quote fetcher directly.
+func (p *ETFNAVProvider) WithScraper(s *TWSEETFNAVScraper) *ETFNAVProvider {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.scraper = s
+	return p
+}
+
 // Name returns the provider name.
 func (p *ETFNAVProvider) Name() string {
 	return "etf_nav"
 }
 
 // FetchNAV fetches the NAV for a single ETF symbol.
-// Uses cached value if fresh, otherwise fetches via the quote provider.
+// Uses cached value if fresh, otherwise delegates to the scraper (if attached)
+// or falls back to the quote fetcher.
 func (p *ETFNAVProvider) FetchNAV(ctx context.Context, symbol string) (float64, error) {
 	if cached, ok := p.getCached(symbol); ok {
 		return cached, nil
@@ -65,6 +79,21 @@ func (p *ETFNAVProvider) FetchNAV(ctx context.Context, symbol string) (float64, 
 
 	if err := p.limiter.Wait(ctx); err != nil {
 		return 0, fmt.Errorf("etf_nav: rate limit wait: %w", err)
+	}
+
+	// Prefer scraper when available — it attempts TWSE NAV first,
+	// then silently falls back to close-price proxy.
+	p.mu.RLock()
+	scraper := p.scraper
+	p.mu.RUnlock()
+
+	if scraper != nil {
+		nav, source, err := scraper.FetchNAV(ctx, symbol)
+		if err != nil {
+			return 0, fmt.Errorf("etf_nav: scraper fetch for %s (%s): %w", symbol, source, err)
+		}
+		p.setCached(symbol, nav)
+		return nav, nil
 	}
 
 	quotes, err := p.quoteFetcher.GetQuotes(ctx, time.Now(), []string{symbol})
@@ -155,4 +184,12 @@ func (p *ETFNAVProvider) SetQuoteFetcher(f QuoteFetcher) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.quoteFetcher = f
+}
+
+// SetScraper replaces the TWSE ETF NAV scraper at runtime.
+// Pass nil to disable tiered scraping and fall back to the quote fetcher.
+func (p *ETFNAVProvider) SetScraper(s *TWSEETFNAVScraper) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.scraper = s
 }
