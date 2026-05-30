@@ -1,10 +1,14 @@
 package orchestrator
 
 import (
+	"math"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/janus"
@@ -30,6 +34,71 @@ func (m *mockServiceRegistry) GetPolicy() baseline.Policy                      {
 func (m *mockServiceRegistry) GetLastOutcomes() []domain.RecommendationOutcome { return m.lastOutcomes }
 func (m *mockServiceRegistry) Ledger() ledger.OutcomeStore                     { return m.ledger }
 func (m *mockServiceRegistry) EventBus() *eventbus.ChannelEventBus             { return m.eventBus }
+
+type prismTrainingExecutorStub struct {
+	result prism.TrainingResult
+	err    error
+}
+
+func (s *prismTrainingExecutorStub) Run(task prism.TrainingTask) (prism.TrainingResult, error) {
+	if s.err != nil {
+		return prism.TrainingResult{}, s.err
+	}
+	return s.result, nil
+}
+
+func productionSystemConfig(t *testing.T) config.Config {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve test file path")
+	}
+	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	cfg := config.Normalize(config.Load())
+	cfg.WorkDir = root
+	cfg.AgentRegistryPath = filepath.Join(root, "configs", "agents.json")
+	cfg.BaselinePolicyPath = filepath.Join(root, "data", "state", "baseline_policy.json")
+	cfg.ParametersConfigPath = filepath.Join(root, "configs", "parameters.json")
+	cfg.ReplayDataPath = config.GetReplayDataPath(root)
+	cfg.LedgerDir = t.TempDir()
+	return cfg
+}
+
+func productionPRISMAndJANUSPlugins(t *testing.T, sys *System) (*prismPlugin, *janusPlugin) {
+	t.Helper()
+	if sys == nil || sys.host == nil {
+		t.Fatal("expected production system with plugin host")
+	}
+	var pp *prismPlugin
+	var jp *janusPlugin
+	for _, plugin := range sys.host.plugins {
+		switch p := plugin.(type) {
+		case *prismPlugin:
+			pp = p
+		case *janusPlugin:
+			jp = p
+		}
+	}
+	if pp == nil {
+		t.Fatal("expected PRISM plugin in production system")
+	}
+	if jp == nil {
+		t.Fatal("expected JANUS plugin in production system")
+	}
+	return pp, jp
+}
+
+func waitForCondition(t *testing.T, timeout time.Duration, message string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal(message)
+}
 
 func TestSwarmPlugin_ProcessRecommendations_EmptyRecs(t *testing.T) {
 	p := &swarmPlugin{}
@@ -308,6 +377,94 @@ func TestJanusPlugin_PostSimulation_EmptyOutcomes(t *testing.T) {
 	mock := &mockServiceRegistry{lastOutcomes: []domain.RecommendationOutcome{}}
 	p := &janusPlugin{engine: eng, core: mock}
 	p.PostSimulation(nil, domain.RegimeRiskOn, time.Now())
+}
+
+func TestNewProductionSystem_StartsPRISMWorkers(t *testing.T) {
+	sys, err := NewProductionSystem(productionSystemConfig(t))
+	if err != nil {
+		t.Fatalf("NewProductionSystem() error = %v", err)
+	}
+
+	pp, _ := productionPRISMAndJANUSPlugins(t, sys)
+	defer pp.manager.Stop()
+
+	pp.manager.WithExecutor(&prismTrainingExecutorStub{result: prism.TrainingResult{
+		HitRate:      0.75,
+		SharpeRatio:  1.8,
+		TotalReturn:  0.14,
+		SignalsCount: 12,
+	}})
+
+	err = pp.manager.ScheduleTraining(domain.AgentSpec{
+		ID:      "test-agent",
+		Skill:   "test-skill",
+		Layer:   domain.LayerSector,
+		Enabled: true,
+	}, []prism.TrainingWindow{{
+		Start:     time.Now().Add(-time.Hour),
+		End:       time.Now(),
+		Regime:    prism.RegimeRiskOn,
+		RegimeSet: true,
+	}})
+	if err != nil {
+		t.Fatalf("ScheduleTraining() error = %v", err)
+	}
+
+	waitForCondition(t, 2*time.Second, "expected production PRISM workers to process scheduled task", func() bool {
+		return len(pp.manager.GetCompletedResults()) == 1
+	})
+}
+
+func TestNewProductionSystem_JANUSConsumesCompletedPRISMResults(t *testing.T) {
+	sys, err := NewProductionSystem(productionSystemConfig(t))
+	if err != nil {
+		t.Fatalf("NewProductionSystem() error = %v", err)
+	}
+
+	pp, jp := productionPRISMAndJANUSPlugins(t, sys)
+	defer pp.manager.Stop()
+
+	jp.engine.EnsureAllRegimes()
+	jp.engine.Update()
+	before := jp.engine.GetCohortWeights()[prism.RegimeRiskOn].Weight
+
+	pp.manager.WithExecutor(&prismTrainingExecutorStub{result: prism.TrainingResult{
+		HitRate:      0.8,
+		SharpeRatio:  2.2,
+		TotalReturn:  0.19,
+		SignalsCount: 16,
+	}})
+
+	err = pp.manager.ScheduleTraining(domain.AgentSpec{
+		ID:      "test-agent",
+		Skill:   "test-skill",
+		Layer:   domain.LayerSector,
+		Enabled: true,
+	}, []prism.TrainingWindow{{
+		Start:     time.Now().Add(-time.Hour),
+		End:       time.Now(),
+		Regime:    prism.RegimeRiskOn,
+		RegimeSet: true,
+	}})
+	if err != nil {
+		t.Fatalf("ScheduleTraining() error = %v", err)
+	}
+
+	waitForCondition(t, 2*time.Second, "expected completed PRISM result before JANUS update", func() bool {
+		return len(pp.manager.GetCompletedResults()) == 1
+	})
+
+	jp.PostSimulation(nil, domain.RegimeRiskOn, time.Now())
+
+	after := jp.engine.GetCohortWeights()[prism.RegimeRiskOn].Weight
+	if after <= before {
+		t.Fatalf("expected JANUS to incorporate completed PRISM results, before=%.4f after=%.4f", before, after)
+	}
+	jp.PostSimulation(nil, domain.RegimeRiskOn, time.Now())
+	again := jp.engine.GetCohortWeights()[prism.RegimeRiskOn].Weight
+	if math.Abs(again-after) > 1e-9 {
+		t.Fatalf("expected JANUS bridge to avoid double-counting PRISM results, after=%.4f again=%.4f", after, again)
+	}
 }
 
 func TestPrismPlugin_PostSimulation_WithManager(t *testing.T) {

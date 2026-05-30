@@ -15,13 +15,25 @@ import (
 // NewProductionSystem builds a fully-wired System for dependency-graph visibility
 // with an internally-created EventBus.
 func NewProductionSystem(cfg config.Config, opts ...SystemOption) (*System, error) {
-	return NewProductionSystemWithEventBus(cfg, nil, opts...)
+	return NewProductionSystemWithJANUS(cfg, nil, nil, opts...)
+}
+
+// NewProductionSystemWithJANUS builds a fully-wired System using the provided
+// EventBus and JANUS engine. If janusEngine is nil, a new internal engine is
+// created for backward compatibility.
+func NewProductionSystemWithJANUS(
+	cfg config.Config,
+	eventBus *eventbus.ChannelEventBus,
+	janusEngine *janus.Engine,
+	opts ...SystemOption,
+) (*System, error) {
+	return NewProductionSystemWithEventBus(cfg, eventBus, janusEngine, opts...)
 }
 
 // NewProductionSystemWithEventBus builds a fully-wired System, passing the
 // provided EventBus to NewSystemWithEventBus. If eventBus is nil, an internal
 // EventBus is created (backward-compatible).
-func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus, opts ...SystemOption) (*System, error) {
+func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus, janusEngine *janus.Engine, opts ...SystemOption) (*System, error) {
 	system, err := NewSystemWithEventBus(cfg, eventBus, opts...)
 	if err != nil {
 		return nil, err
@@ -35,8 +47,10 @@ func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.Chann
 	sw := swarm.NewMiroFishSwarm(swarm.DefaultSwarmConfig())
 	system.WithSwarm(sw)
 
-	je := janus.NewEngineWithConfig(janus.DefaultJANUSConfig())
-	system.WithJANUS(je)
+	if janusEngine == nil {
+		janusEngine = janus.NewEngineWithConfig(janus.DefaultJANUSConfig())
+	}
+	system.WithJANUS(janusEngine, pm)
 
 	spawnCfg := spawning.DefaultSpawningConfig()
 	spawnCfg.PromptsDir = filepath.Join(cfg.WorkDir, "prompts")
@@ -48,6 +62,7 @@ func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.Chann
 	system.WithPhase3Controller(ctrl)
 
 	system.WithStrategyEvolver(NewStrategyEvolver())
+	pm.Start()
 
 	return system, nil
 }
