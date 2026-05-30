@@ -36,6 +36,7 @@ func TestPRISMTrainingExecutorRunUsesLedgerMaxDrawdown(t *testing.T) {
 			AgentID:     agent.ID,
 			WindowStart: start,
 			WindowEnd:   end,
+			Regime:      prism.RegimeRiskOn,
 		})
 		if err != nil {
 			t.Fatalf("Run(%s): %v", agent.ID, err)
