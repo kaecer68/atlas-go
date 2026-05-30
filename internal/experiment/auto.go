@@ -34,9 +34,9 @@ func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
 
 	// First, check if there are pending experiments from the daily pipeline that
 	// haven't been tested yet. Process the oldest one to close the feedback loop.
-		if pending := loadOldestPendingExperiment(cfg.Config.LedgerDir); pending != nil {
-			candidate := pending.toCandidate(cfg.System.GetRegistry())
-			if candidate != nil {
+	if pending := loadOldestPendingExperiment(cfg.Config.LedgerDir); pending != nil {
+		candidate := pending.toCandidate(cfg.System.GetRegistry())
+		if candidate != nil {
 			logging.Info("experiment", "processing_pending",
 				"agent", candidate.Agent.ID, "experiment_id", pending.ID)
 			return runExperimentForCandidate(ctx, cfg, candidate)
@@ -175,17 +175,17 @@ func (p *pendingExperiment) toCandidate(registry domain.AgentRegistry) *domain.C
 			return &domain.Candidate{
 				Agent: a,
 				Scorecard: domain.Scorecard{
-					AgentID:      a.ID,
-					SharpeLike:   p.BaselineValue,
-					WindowCount:  1,
+					AgentID:     a.ID,
+					SharpeLike:  p.BaselineValue,
+					WindowCount: 1,
 				},
 				Experiment: domain.ExperimentRecord{
-					ID:              p.ID,
-					TargetAgentID:   a.ID,
-					Skill:           a.Skill,
-					MutationType:    p.MutationType,
-					Status:          domain.ExperimentPlanned,
-					BaselineValue:   p.BaselineValue,
+					ID:               p.ID,
+					TargetAgentID:    a.ID,
+					Skill:            a.Skill,
+					MutationType:     p.MutationType,
+					Status:           domain.ExperimentPlanned,
+					BaselineValue:    p.BaselineValue,
 					AcceptanceMetric: "sharpe_like",
 				},
 			}

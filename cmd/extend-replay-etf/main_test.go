@@ -106,7 +106,7 @@ func TestFetchStockDay_DateNotInMonth(t *testing.T) {
 
 func TestTradingDates_WeekdayOnly(t *testing.T) {
 	start := time.Date(2026, 5, 29, 0, 0, 0, 0, time.UTC) // Friday
-	end := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)     // Monday
+	end := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)    // Monday
 	dates := tradingDates(start, end)
 	if len(dates) != 2 { // Friday + Monday, skip Saturday+Sunday
 		t.Fatalf("expected 2 trading days, got %d", len(dates))

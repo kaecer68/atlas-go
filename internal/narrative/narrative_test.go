@@ -422,11 +422,11 @@ func TestNarrativeCalibrationReport_Structure(t *testing.T) {
 	models := ne.ListModels()
 
 	report := &NarrativeCalibrationReport{
-		Timestamp:    time.Now(),
+		Timestamp:     time.Now(),
 		ModelsUpdated: len(models),
-		Models:       models,
-		Verdict:      "calibrated",
-		Summary:      "all models updated",
+		Models:        models,
+		Verdict:       "calibrated",
+		Summary:       "all models updated",
 	}
 
 	if report.ModelsUpdated != len(models) {

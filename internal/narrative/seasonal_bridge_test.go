@@ -461,9 +461,9 @@ func TestActiveThemes(t *testing.T) {
 			t.Fatalf("ActiveThemes length = %d, want 3", len(got))
 		}
 		exp := map[string]bool{
-			"US_rates_up":      false,
-			"AI_capex_surge":   false,
-			"oil_price_shock":  false,
+			"US_rates_up":     false,
+			"AI_capex_surge":  false,
+			"oil_price_shock": false,
 		}
 		for _, theme := range got {
 			if _, ok := exp[theme]; ok {
@@ -528,7 +528,7 @@ func TestSetActiveEvents(t *testing.T) {
 		t.Fatalf("ActiveThemes length = %d, want 2", len(themes))
 	}
 	exp := map[string]bool{
-		"JPY_carry_unwind":       false,
+		"JPY_carry_unwind":        false,
 		"geopolitical_risk_spike": false,
 	}
 	for _, theme := range themes {

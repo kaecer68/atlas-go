@@ -500,31 +500,31 @@ func TestDetectAICapexEventFromSnapshot(t *testing.T) {
 	prevEmpty := marketdata.MacroDataPoint{}
 
 	tests := []struct {
-		name              string
-		sentiment         float64
-		prevTSMC          marketdata.MacroDataPoint
-		wantNil           bool
+		name               string
+		sentiment          float64
+		prevTSMC           marketdata.MacroDataPoint
+		wantNil            bool
 		expectedConfidence float64
 	}{
 		{
-			name:              "sentiment above threshold (0.8) with positive prevTSMC boosts confidence",
-			sentiment:         0.8,
-			prevTSMC:          prevWithPositiveChg,
-			wantNil:           false,
+			name:               "sentiment above threshold (0.8) with positive prevTSMC boosts confidence",
+			sentiment:          0.8,
+			prevTSMC:           prevWithPositiveChg,
+			wantNil:            false,
 			expectedConfidence: 0.90,
 		},
 		{
-			name:              "sentiment above threshold (0.8) without prevTSMC returns base confidence",
-			sentiment:         0.8,
-			prevTSMC:          prevEmpty,
-			wantNil:           false,
+			name:               "sentiment above threshold (0.8) without prevTSMC returns base confidence",
+			sentiment:          0.8,
+			prevTSMC:           prevEmpty,
+			wantNil:            false,
 			expectedConfidence: 0.85,
 		},
 		{
-			name:              "sentiment above threshold (0.8) with negative prevTSMC no boost",
-			sentiment:         0.8,
-			prevTSMC:          prevWithNegativeChg,
-			wantNil:           false,
+			name:               "sentiment above threshold (0.8) with negative prevTSMC no boost",
+			sentiment:          0.8,
+			prevTSMC:           prevWithNegativeChg,
+			wantNil:            false,
 			expectedConfidence: 0.85,
 		},
 		{
@@ -595,7 +595,7 @@ func TestDetectAICapexEventFromSnapshot(t *testing.T) {
 
 func writeMarginHistory(dir string, entries []MarginHistoryEntry) error {
 	for _, e := range entries {
-		file := marginHistoryFile{Date: e.Date, MarginBalance: e.MarginBalance, ChangePct: e.ChangePct}
+		file := marginHistoryFile(e)
 		data, err := json.Marshal(file)
 		if err != nil {
 			return err

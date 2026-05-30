@@ -121,10 +121,10 @@ func main() {
 
 // STOCK_DAY response types
 type stockDayResponse struct {
-	Stat string   `json:"stat"`
-	Data [][]string `json:"data"`
-	Date string   `json:"date"`
-	Title string  `json:"title"`
+	Stat  string     `json:"stat"`
+	Data  [][]string `json:"data"`
+	Date  string     `json:"date"`
+	Title string     `json:"title"`
 }
 
 type HistoricalBar struct {

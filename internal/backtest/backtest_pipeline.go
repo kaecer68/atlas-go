@@ -146,9 +146,9 @@ func (p *BacktestPipeline) Run(model Model) ([]BacktestResult, error) {
 		}
 
 		results = append(results, BacktestResult{
-			WindowID:   windowID(w),
-			TrainRange: w,
-			TestRange:  w,
+			WindowID:    windowID(w),
+			TrainRange:  w,
+			TestRange:   w,
 			Predictions: predictions,
 			Actuals:     actuals,
 			Metrics: map[string]float64{

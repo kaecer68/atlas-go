@@ -938,8 +938,8 @@ func run(args []string, deps appDeps) error {
 					Name:     "narrative_calibrate",
 					Interval: 24 * time.Hour,
 					Enabled:  true,
-				Task: func(ctx context.Context) error {
-					report, err := dashRef.CalibrateNarrative(replayCSV)
+					Task: func(ctx context.Context) error {
+						report, err := dashRef.CalibrateNarrative(replayCSV)
 						if err != nil {
 							logging.Warn("main", "narrative_calibrate_failed", "err", err)
 							return nil
@@ -1195,24 +1195,24 @@ func run(args []string, deps appDeps) error {
 						return nil
 					},
 				})
-			log.Printf("[Gateway] registered rule_engine_check background task (%ds interval)", params.RuleEngineIntervalSec.Value)
-		}
+				log.Printf("[Gateway] registered rule_engine_check background task (%ds interval)", params.RuleEngineIntervalSec.Value)
+			}
 
-		{
-			mlScheduler := scheduler.NewMLRetrainScheduler(cfg.ReplayDataPath)
-			mlScheduler.SetWorkDir(cfg.WorkDir)
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "ml_retrain",
-				Interval: 24 * time.Hour,
-				Enabled:  true,
-				Task: func(ctx context.Context) error {
-					return mlScheduler.RetrainAll(ctx)
-				},
-			})
-			log.Printf("[Gateway] registered ml_retrain background task (24h interval)")
-		}
+			{
+				mlScheduler := scheduler.NewMLRetrainScheduler(cfg.ReplayDataPath)
+				mlScheduler.SetWorkDir(cfg.WorkDir)
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "ml_retrain",
+					Interval: 24 * time.Hour,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						return mlScheduler.RetrainAll(ctx)
+					},
+				})
+				log.Printf("[Gateway] registered ml_retrain background task (24h interval)")
+			}
 
-		riskGate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
+			riskGate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
 			dashboard.SetRiskGate(riskGate)
 
 			elRulesPath = filepath.Join(cfg.WorkDir, "data/state/eventlogic", "rules.json")

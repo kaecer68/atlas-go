@@ -344,7 +344,9 @@ func calibrateDarwinian(ie *config.InferenceEngine, n int, cfg *config.Parameter
 	sessionsDir := filepath.Join(workDir, "data", "state", "sessions")
 	ledgerStore := ledger.NewStore(sessionsDir)
 	outcomes, err := ledgerStore.LoadOutcomesFromSessions()
-	if err != nil { outcomes = nil }
+	if err != nil {
+		outcomes = nil
+	}
 	if len(outcomes) < 10 {
 		res.Errors = append(res.Errors, "insufficient outcome data for darwinian calibration, using defaults")
 		res.Parameters = darwinianHeuristicDefaults(n, cfg)

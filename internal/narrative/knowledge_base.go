@@ -920,12 +920,12 @@ var nowUnix = func() int64 {
 
 // NarrativeCalibrationReport summarizes the result of a self-calibration run.
 type NarrativeCalibrationReport struct {
-	Timestamp    time.Time         `json:"timestamp"`
-	ModelsUpdated int              `json:"models_updated"`
-	TemplatesUpdated int           `json:"templates_updated"`
-	Models       []InvestmentModel `json:"models"`
-	Verdict      string            `json:"verdict"`
-	Summary      string            `json:"summary"`
+	Timestamp        time.Time         `json:"timestamp"`
+	ModelsUpdated    int               `json:"models_updated"`
+	TemplatesUpdated int               `json:"templates_updated"`
+	Models           []InvestmentModel `json:"models"`
+	Verdict          string            `json:"verdict"`
+	Summary          string            `json:"summary"`
 }
 
 // SelfCalibrate evaluates model performance against replay data and updates
@@ -956,12 +956,12 @@ func (ne *NarrativeEngine) SelfCalibrate(replayPath string) (*NarrativeCalibrati
 	}
 
 	report := &NarrativeCalibrationReport{
-		Timestamp:       time.Now(),
-		ModelsUpdated:   updated,
+		Timestamp:        time.Now(),
+		ModelsUpdated:    updated,
 		TemplatesUpdated: templatesUpdated,
-		Models:          ne.ListModels(),
-		Verdict:         "calibrated",
-		Summary:         fmt.Sprintf("evaluated %d models, updated %d weights, %d template hit rates", len(ne.models), updated, templatesUpdated),
+		Models:           ne.ListModels(),
+		Verdict:          "calibrated",
+		Summary:          fmt.Sprintf("evaluated %d models, updated %d weights, %d template hit rates", len(ne.models), updated, templatesUpdated),
 	}
 
 	logging.Info("narrative", "self_calibrate",
