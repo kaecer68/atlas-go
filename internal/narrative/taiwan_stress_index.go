@@ -163,11 +163,10 @@ func (c *StressIndexWeightsConfig) isValid() bool {
 }
 
 // NewTaiwanStressCalculator creates a calculator with an optional geopolitical provider.
+// When geoProvider is nil, stress index geo component will be zero (caller should inject
+// a proper provider via the apigateway GeopoliticalChannelAdapter).
 // Loads runtime weights from the centralized parameters system (config.GetParametersConfig).
 func NewTaiwanStressCalculator(geoProvider GeopoliticalRiskProvider, workDir string) *TaiwanStressCalculator {
-	if geoProvider == nil {
-		geoProvider = NewRSSGeopoliticalProvider()
-	}
 	cfg := loadWeightsFromParameters()
 	return &TaiwanStressCalculator{
 		geoProvider:   geoProvider,
@@ -308,6 +307,9 @@ func (c *TaiwanStressCalculator) CalculateFromSnapshot(ctx context.Context, snap
 	}
 	c.mu.RUnlock()
 
+	if c.geoProvider == nil {
+		return TaiwanStressIndex{}, fmt.Errorf("geopolitical provider not configured")
+	}
 	geoScore, err := c.geoProvider.FetchScore(ctx)
 	if err != nil {
 		return TaiwanStressIndex{}, fmt.Errorf("fetch geopolitical score: %w", err)
@@ -332,6 +334,20 @@ func (c *TaiwanStressCalculator) CalculateFromSnapshotWithStore(ctx context.Cont
 	}
 	c.mu.RUnlock()
 
+	if c.geoProvider == nil {
+		if store != nil {
+			fallback, loadErr := store.Load()
+			if loadErr == nil {
+				idx := c.Calculate(snap, prev, fallback)
+				c.mu.Lock()
+				c.cache = &idx
+				c.cachedAt = time.Now()
+				c.mu.Unlock()
+				return idx, nil
+			}
+		}
+		return TaiwanStressIndex{}, fmt.Errorf("geopolitical provider not configured")
+	}
 	geoScore, err := c.geoProvider.FetchScore(ctx)
 	if err != nil {
 		if store != nil {
