@@ -15,6 +15,9 @@ type IndustryService struct {
 	CycleTracker    *industry.CycleTracker
 	LinkageAnalyzer *industry.LinkageAnalyzer
 	RiskMonitor     *industry.RiskMonitor
+	SiliconTracker  *industry.SiliconCycleTracker
+	EventCalendar   *industry.EventCalendar
+	CardBuilder     *industry.CycleStatusCardBuilder
 }
 
 func NewIndustryService(
@@ -23,16 +26,24 @@ func NewIndustryService(
 	cycleTracker *industry.CycleTracker,
 	linkageAnalyzer *industry.LinkageAnalyzer,
 	riskMonitor *industry.RiskMonitor,
+	siliconTracker *industry.SiliconCycleTracker,
+	eventCalendar *industry.EventCalendar,
 ) *IndustryService {
 	if seasonalEngine != nil && linkageAnalyzer != nil {
 		seasonalEngine.SetLinkageGraph(linkageAnalyzer.GetSupplyChainGraph())
 	}
+	cardBuilder := industry.NewCycleStatusCardBuilder(
+		siliconTracker, cycleTracker, seasonalEngine, eventCalendar, linkageAnalyzer,
+	)
 	return &IndustryService{
 		Classifier:      classifier,
 		SeasonalEngine:  seasonalEngine,
 		CycleTracker:    cycleTracker,
 		LinkageAnalyzer: linkageAnalyzer,
 		RiskMonitor:     riskMonitor,
+		SiliconTracker:  siliconTracker,
+		EventCalendar:   eventCalendar,
+		CardBuilder:     cardBuilder,
 	}
 }
 
@@ -920,4 +931,20 @@ func (s *IndustryService) GetIndustryGraph() ([]GraphNode, []GraphEdge) {
 		}
 	}
 	return nodes, edges
+}
+
+// BuildCycleStatusCard produces a market-wide composite cycle status card.
+func (s *IndustryService) BuildCycleStatusCard(now time.Time) (*industry.CycleStatusCard, error) {
+	if s.CardBuilder == nil {
+		return nil, fmt.Errorf("card builder not initialized")
+	}
+	return s.CardBuilder.BuildCompositeCard(now)
+}
+
+// BuildIndustryCycleStatusCard produces a single-industry cycle status card.
+func (s *IndustryService) BuildIndustryCycleStatusCard(now time.Time, industryID string) (*industry.CycleStatusCard, error) {
+	if s.CardBuilder == nil {
+		return nil, fmt.Errorf("card builder not initialized")
+	}
+	return s.CardBuilder.BuildCard(now, industryID)
 }

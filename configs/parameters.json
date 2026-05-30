@@ -3385,6 +3385,39 @@
       "rationale": "Minimum 3% weight per industry after normalization to prevent elimination",
       "source": "heuristic",
       "value": 0.03
+    },
+    "silicon_cycle": {
+      "rationale": "半導體矽週期相位偵測參數：基於台積電營收年增率、全球半導體出貨、DRAM現貨價格趨勢、台灣半導體指數偏離季線、台積電資本支出指引、費城半導體指數等六項指標，判定四階段矽週期（谷底復甦 → 擴張確認 → 過熱期 → 收縮期），為半導體產業鏈（含 AI 供應鏈）的配置權重提供週期定位參考",
+      "source": "heuristic",
+      "todo": "校準：對 2015-2026 年 TSMC/費城 SOX 歷史週期數據進行回測，優化各指標閾值及複合信號權重",
+      "value": {
+        "phase_thresholds": {
+          "phase_0_to_1": 0.60,
+          "phase_1_to_2": 0.50,
+          "phase_2_to_3": 0.50,
+          "phase_3_to_0": 0.50
+        },
+        "indicator_weights": {
+          "tsmc_monthly_revenue_yoy": 1.0,
+          "global_semiconductor_billings_yoy": 0.9,
+          "dram_spot_price_trend": 0.7,
+          "taiwan_semiconductor_index_ma": 0.8,
+          "tsmc_capex_guidance": 1.2,
+          "philadelphia_sox_index_yoy": 0.9
+        },
+        "min_confidence": 0.60,
+        "history_window_days": 60
+      }
+    },
+    "event_calendar": {
+      "rationale": "台股事件日曆引擎配置：管理台灣市場特有日曆事件（除權息旺季、股東會、MSCI 季度調整、財報公佈截止日、月營收公佈、節慶長假效應、選舉行情、期貨結算日等）的情緒衰減曲線、顯示數量上限及噪音過濾閾值。事件影響透過 sentiment_decay_days 控制衰減週期，低於 min_event_weight 的事件自動過濾",
+      "source": "heuristic",
+      "todo": "校準：透過 2018-2026 年歷史事件實際市場反應驗證 sentiment_decay 衰減曲線；觀察不同事件類型的前置/後置影響天數",
+      "value": {
+        "sentiment_decay_days": 7,
+        "max_events_displayed": 20,
+        "min_event_weight": 0.05
+      }
     }
   },
   "janus": {

@@ -286,6 +286,8 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 		cycleTracker,
 		linkageAnalyzer,
 		industry.NewRiskMonitor(),
+		nil, // siliconTracker
+		nil, // eventCalendar
 	)
 
 	replayPath := config.Load().ReplayDataPath
