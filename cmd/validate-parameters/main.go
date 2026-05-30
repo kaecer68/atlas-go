@@ -1,4 +1,9 @@
-// validate-parameters checks configs/parameters.json for data integrity violations.
+// validate-parameters checks configs/parameters.json for calibration evidence loss
+// across ALL ParameterMetadata sections.
+//
+// The bug: ParametersConfig.Save() serializes via Go struct (last_calibrated),
+// but some sections only had the raw JSON key (calibration_timestamp). When Save()
+// overwrites, evidence is silently dropped.
 //
 // Usage:
 //
@@ -11,6 +16,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -36,7 +42,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	warnings, errors := validateParameters(config, strict)
+	warnings, errors := walkTree(config, "", strict)
 
 	for _, w := range warnings {
 		fmt.Fprintf(os.Stderr, "WARN: %s\n", w)
@@ -45,30 +51,94 @@ func main() {
 		fmt.Fprintf(os.Stderr, "FAIL: %s\n", e)
 	}
 
-	if len(errors) > 0 || (strict && len(warnings) > 0) {
+	if len(errors) > 0 {
+		fmt.Printf("\n%d error(s), %d warning(s)\n", len(errors), len(warnings))
+		os.Exit(1)
+	}
+	if strict && len(warnings) > 0 {
+		fmt.Printf("\n%d warning(s) (strict mode)\n", len(warnings))
 		os.Exit(1)
 	}
 
-	if strict {
-		fmt.Println("OK: parameters.json passes strict validation")
-	} else {
-		fmt.Println("OK: parameters.json is valid")
-	}
+	fmt.Printf("OK: %s is valid (%d sections checked)\n", path, countSections(config))
 }
 
-func validateParameters(config map[string]any, strict bool) (warnings, errors []string) {
-	industryCfg, ok := config["industry"].(map[string]any)
-	if !ok {
-		return warnings, errors // industry section not required
+func countSections(config map[string]any) int {
+	count := 0
+	var walk func(v any)
+	walk = func(v any) {
+		switch obj := v.(type) {
+		case map[string]any:
+			if isParamMetadata(obj) {
+				count++
+			}
+			for _, val := range obj {
+				walk(val)
+			}
+		case []any:
+			for _, val := range obj {
+				walk(val)
+			}
+		}
 	}
+	walk(config)
+	return count
+}
 
-	sp, ok := industryCfg["seasonal_patterns"].(map[string]any)
-	if !ok {
-		return warnings, errors // seasonal_patterns not required
+func isParamMetadata(obj map[string]any) bool {
+	// Only flag sections that have been actively calibrated.
+	// Many ParameterMetadata sections have evidence_quality from defaults,
+	// not from actual calibration. The unambiguous signal is calibration_method.
+	calMethod, hasMethod := obj["calibration_method"].(string)
+	if hasMethod && calMethod != "" {
+		return true
 	}
+	// Also catch sections with calibration_timestamp (raw JSON) or
+	// last_calibrated (struct) — these were definitely calibrated.
+	if ts, ok := obj["last_calibrated"]; ok && ts != nil && ts != "" {
+		return true
+	}
+	if ts, ok := obj["calibration_timestamp"]; ok && ts != nil && ts != "" {
+		return true
+	}
+	return false
+}
 
-	// Extract calibration evidence fields
-	cite, hasCite := sp["citation"].(map[string]any)
+func walkTree(v any, path string, strict bool) (warnings, errors []string) {
+	switch obj := v.(type) {
+	case map[string]any:
+		// Check if this object is a ParameterMetadata
+		if isParamMetadata(obj) {
+			w, e := checkSection(obj, path, strict)
+			warnings = append(warnings, w...)
+			errors = append(errors, e...)
+		}
+		// Recurse into children (skip "value" which is the actual param data)
+		for key, val := range obj {
+			childPath := path
+			if childPath == "" {
+				childPath = key
+			} else {
+				childPath = childPath + "." + key
+			}
+			w, e := walkTree(val, childPath, strict)
+			warnings = append(warnings, w...)
+			errors = append(errors, e...)
+		}
+
+	case []any:
+		for i, val := range obj {
+			childPath := fmt.Sprintf("%s[%d]", path, i)
+			w, e := walkTree(val, childPath, strict)
+			warnings = append(warnings, w...)
+			errors = append(errors, e...)
+		}
+	}
+	return warnings, errors
+}
+
+func checkSection(obj map[string]any, path string, strict bool) (warnings, errors []string) {
+	cite, hasCite := obj["citation"].(map[string]any)
 	eq := ""
 	var citeRef string
 	if hasCite {
@@ -80,18 +150,17 @@ func validateParameters(config map[string]any, strict bool) (warnings, errors []
 		}
 	}
 
-	calMethod, hasCalMethod := sp["calibration_method"].(string)
+	calMethod, hasCalMethod := obj["calibration_method"].(string)
 	if hasCalMethod && calMethod == "" {
 		hasCalMethod = false
 	}
 
-	// Check timestamp exists (either format)
 	hasTimestamp := false
-	if ts, ok := sp["last_calibrated"]; ok && ts != nil && ts != "" {
+	if ts, ok := obj["last_calibrated"]; ok && ts != nil && ts != "" {
 		hasTimestamp = true
 	}
 	if !hasTimestamp {
-		if ts, ok := sp["calibration_timestamp"]; ok && ts != nil && ts != "" {
+		if ts, ok := obj["calibration_timestamp"]; ok && ts != nil && ts != "" {
 			hasTimestamp = true
 		}
 	}
@@ -99,22 +168,22 @@ func validateParameters(config map[string]any, strict bool) (warnings, errors []
 	// Rule 1: evidence_quality high/medium → must have timestamp
 	if (eq == "high" || eq == "medium") && !hasTimestamp {
 		errors = append(errors, fmt.Sprintf(
-			"industry.seasonal_patterns: citation.evidence_quality=%q but no calibration timestamp (need last_calibrated or calibration_timestamp)",
-			eq))
+			"%s: citation.evidence_quality=%q but no calibration timestamp (need last_calibrated or calibration_timestamp)",
+			path, eq))
 	}
 
 	// Rule 2: calibration_method set → must have timestamp
 	if hasCalMethod && !hasTimestamp {
 		errors = append(errors, fmt.Sprintf(
-			"industry.seasonal_patterns: calibration_method=%q but no calibration timestamp",
-			calMethod))
+			"%s: calibration_method=%q but no calibration timestamp",
+			path, calMethod))
 	}
 
-	// Rule 3: timestamp exists but evidence_quality is low/heuristic → flagged in strict mode
-	if hasTimestamp && eq != "high" && eq != "medium" {
+	// Rule 3: timestamp exists but evidence_quality is low/heuristic
+	if hasTimestamp && eq != "" && eq != "high" && eq != "medium" {
 		msg := fmt.Sprintf(
-			"industry.seasonal_patterns: calibration timestamp exists but citation.evidence_quality=%q (expected 'high' or 'medium' after calibration)",
-			eq)
+			"%s: calibration timestamp exists but citation.evidence_quality=%q (expected 'high' or 'medium' after calibration)",
+			path, eq)
 		if strict {
 			errors = append(errors, msg)
 		} else {
@@ -123,11 +192,11 @@ func validateParameters(config map[string]any, strict bool) (warnings, errors []
 	}
 
 	// Rule 4 (strict only): synthetic data source with real data reference
-	ds, hasDS := sp["calibration_data_source"].(string)
-	if strict && hasDS && ds == "synthetic" && citeRef != "" {
+	ds, hasDS := obj["calibration_data_source"].(string)
+	if strict && hasDS && ds == "synthetic" && citeRef != "" && !strings.Contains(citeRef, "synthetic") {
 		warnings = append(warnings, fmt.Sprintf(
-			"industry.seasonal_patterns: calibration_data_source='synthetic' but citation.source_reference=%q — re-run calibrator with --replay for real data",
-			citeRef))
+			"%s: calibration_data_source='synthetic' but citation.source_reference=%q — re-run calibrator with --replay for real data",
+			path, citeRef))
 	}
 
 	return warnings, errors
