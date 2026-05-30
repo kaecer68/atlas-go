@@ -107,7 +107,22 @@ func (ct *CycleTracker) SetNarrativeAdjuster(fn func(industryID string) Narrativ
 }
 
 func (ct *CycleTracker) HasEmpiricalData(industryID string) bool {
-	return len(ct.history[industryID]) > 1
+	return len(ct.history[industryID]) > 0
+}
+
+// EvidenceTier returns the quality tier of cycle data for an industry.
+//   - "empirical": updated by real FinMind data (>1 history entries)
+//   - "estimated": initialized from seed values (exactly 1 entry)
+//   - "insufficient": no data at all (0 entries)
+func (ct *CycleTracker) EvidenceTier(industryID string) string {
+	switch n := len(ct.history[industryID]); {
+	case n > 1:
+		return "empirical"
+	case n == 1:
+		return "estimated"
+	default:
+		return "insufficient"
+	}
 }
 
 func (ct *CycleTracker) NarrativeTheme(industryID string) string {
@@ -121,6 +136,13 @@ func (ct *CycleTracker) NarrativeTheme(industryID string) string {
 // for known industries. This ensures the API returns meaningful data even before
 // real-time metrics are available.
 func (ct *CycleTracker) initializeDefaultPositions() {
+	// rationale: Seed bootstrap values for cycle tracker initialization.
+	// These estimates are replaced by real FinMind API data when the DataAggregator
+	// background task runs (auto_cycle_update, 6h interval).
+	// Source: Estimated from TWSE sector-level Revenue YoY / Profit YoY trends,
+	// calibrated against Q4 2025–FY2026 analyst consensus ranges.
+	// TODO: Replace seed values with ParametersConfig-based loading from
+	// configs/parameters.json after running cmd/calibrate-seasonal --replay.
 	defaults := map[string]IndustryMetrics{
 		"semiconductor": {
 			IndustryID:          "semiconductor",

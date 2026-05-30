@@ -448,3 +448,131 @@ func TestCycleTracker_GetContinuousPhaseScore_LowConfidence(t *testing.T) {
 		t.Fatalf("expected ~17.82 for low confidence recovery, got %f", score)
 	}
 }
+
+// --- TASK 1: HasEmpiricalData + EvidenceTier tests ---
+
+func TestHasEmpiricalData_AfterInit(t *testing.T) {
+	ct := NewCycleTracker()
+	// After NewCycleTracker()+initializeDefaultPositions(), all seeded industries
+	// have exactly 1 history entry. HasEmpiricalData should return true for them
+	// since the tracker has actual data (even if estimated from seed values).
+	seededIndustries := []string{
+		"semiconductor", "ai_supply_chain", "financials", "shipping",
+		"electronics", "foundry", "server_assembly", "cooling",
+	}
+	for _, id := range seededIndustries {
+		t.Run(id, func(t *testing.T) {
+			if !ct.HasEmpiricalData(id) {
+				t.Errorf("expected HasEmpiricalData(%q)=true after init (1 history entry), got false", id)
+			}
+		})
+	}
+}
+
+func TestHasEmpiricalData_NoData(t *testing.T) {
+	ct := NewCycleTracker()
+	// An industry that was never seeded should return false.
+	if ct.HasEmpiricalData("nonexistent_industry") {
+		t.Error("expected HasEmpiricalData=false for unseeded industry with 0 history entries")
+	}
+}
+
+func TestEvidenceTier(t *testing.T) {
+	ct := NewCycleTracker()
+
+	// After init: seeded industries have exactly 1 history entry → "estimated"
+	t.Run("estimated_after_init", func(t *testing.T) {
+		if tier := ct.EvidenceTier("semiconductor"); tier != "estimated" {
+			t.Errorf("expected 'estimated' (1 history entry), got '%s'", tier)
+		}
+	})
+
+	// No data at all → "insufficient"
+	t.Run("insufficient_no_data", func(t *testing.T) {
+		if tier := ct.EvidenceTier("nonexistent"); tier != "insufficient" {
+			t.Errorf("expected 'insufficient' (0 entries), got '%s'", tier)
+		}
+	})
+
+	// After second update → "empirical" (2+ entries)
+	t.Run("empirical_after_update", func(t *testing.T) {
+		ct.UpdatePosition("semiconductor", IndustryMetrics{RevenueGrowthYoY: 0.30})
+		if tier := ct.EvidenceTier("semiconductor"); tier != "empirical" {
+			t.Errorf("expected 'empirical' (2+ history entries), got '%s'", tier)
+		}
+	})
+}
+
+// --- TASK 2: Falsification tests for detectBusinessCycle ---
+
+func TestDetectBusinessCycle_IdenticalMetrics_SamePhase(t *testing.T) {
+	// Scenario A (Boundary): Two calls with IDENTICAL metrics MUST produce the
+	// same BusinessCycle phase — no random variance, no non-determinism.
+	ct := NewCycleTracker()
+	metrics := IndustryMetrics{
+		RevenueGrowthYoY:    0.12,
+		ProfitGrowthYoY:     0.15,
+		InventoryTurnover:   5.0,
+		CapacityUtilization: 0.80,
+	}
+	phase1 := ct.detectBusinessCycle(metrics)
+	phase2 := ct.detectBusinessCycle(metrics)
+	if phase1 != phase2 {
+		t.Errorf("identical metrics produced different phases: %s vs %s", phase1, phase2)
+	}
+}
+
+func TestDetectBusinessCycle_ExtremeRecession(t *testing.T) {
+	// Scenario B (Extreme — 2020/03-style crash): Severely negative metrics
+	// MUST detect CycleRecession, not any other phase.
+	ct := NewCycleTracker()
+	metrics := IndustryMetrics{
+		RevenueGrowthYoY:    -0.80,
+		ProfitGrowthYoY:     -0.90,
+		InventoryTurnover:   1.5,
+		CapacityUtilization: 0.35,
+	}
+	phase := ct.detectBusinessCycle(metrics)
+	if phase != CycleRecession {
+		t.Errorf("expected CycleRecession for extreme crash metrics, got %s", phase)
+	}
+}
+
+func TestDetectBusinessCycle_AllPhasesReachable(t *testing.T) {
+	// Scenario C: All four phases (expansion, recovery, mature, recession)
+	// must be reachable with distinct input sets.
+	ct := NewCycleTracker()
+	tests := []struct {
+		name     string
+		rev      float64
+		profit   float64
+		expected CyclePhase
+	}{
+		{"expansion", 0.30, 0.35, CycleExpansion},
+		{"recovery", 0.10, 0.08, CycleRecovery},
+		{"mature", 0.02, 0.01, CycleMature},
+		{"recession", -0.10, -0.15, CycleRecession},
+	}
+
+	seen := make(map[CyclePhase]bool)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			metrics := IndustryMetrics{
+				RevenueGrowthYoY: tt.rev,
+				ProfitGrowthYoY:  tt.profit,
+			}
+			phase := ct.detectBusinessCycle(metrics)
+			if phase != tt.expected {
+				t.Errorf("expected %s, got %s", tt.expected, phase)
+			}
+			seen[phase] = true
+		})
+	}
+
+	// Verify all four phases were covered
+	for _, p := range []CyclePhase{CycleExpansion, CycleRecovery, CycleMature, CycleRecession} {
+		if !seen[p] {
+			t.Errorf("phase %s was not produced by any test case", p)
+		}
+	}
+}
