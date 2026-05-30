@@ -160,7 +160,9 @@ func updateParametersFile(results []industry.SeasonalCalibration, threshold int,
 		updated = append(updated, patternID)
 	}
 
-	seasonalPatterns["calibration_timestamp"] = time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
+	seasonalPatterns["calibration_timestamp"] = now.Format(time.RFC3339)
+	seasonalPatterns["last_calibrated"] = now.Format(time.RFC3339)
 	if dataSource != "" {
 		seasonalPatterns["calibration_data_source"] = dataSource
 	} else {

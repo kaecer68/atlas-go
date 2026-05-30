@@ -3,6 +3,12 @@ import { silentGetJSON, notify } from '../shared/app-utils.js';
 export async function loadDataChannels() {
   const data = await silentGetJSON('/api/dashboard/data-channels');
   renderDataChannels(data);
+  loadMacroDataHealth();
+}
+
+export async function loadMacroDataHealth() {
+  const data = await silentGetJSON('/api/dashboard/macro-data-health');
+  renderMacroDataHealth(data);
 }
 
 export async function triggerChannelsIngest() {
@@ -259,6 +265,58 @@ export function renderDataChannels(data) {
 
 function renderEmptyState(title, subtitle) {
   return `<div class="empty">${title}${subtitle ? `<div class="text-muted">${subtitle}</div>` : ''}</div>`;
+}
+
+export function renderMacroDataHealth(data) {
+  const el = document.getElementById('macroDataHealth');
+  if (!el) return;
+  if (!data || !data.indicators) { el.innerHTML = ''; return; }
+  el.classList.remove('loading');
+
+  const statusLight = s => {
+    const color = s === 'ok' ? 'var(--status-ok)' : (s === 'warn' ? 'var(--status-warn)' : (s === 'error' ? 'var(--status-err)' : 'var(--status-unknown)'));
+    return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};box-shadow:0 0 4px ${color};margin-right:6px;vertical-align:middle"></span>`;
+  };
+
+  const indicators = data.indicators;
+  const okCount = indicators.filter(i => i.status === 'ok').length;
+  const warnCount = indicators.filter(i => i.status === 'warn').length;
+  const errCount = indicators.filter(i => i.status === 'error').length;
+
+  const headerColor = errCount > 0 ? 'var(--down)' : (warnCount > 0 ? 'var(--warn)' : 'var(--up)');
+  const headerText = errCount > 0 ? '有資料異常需處理' : (warnCount > 0 ? '部分指標待更新' : '全部指標正常');
+
+  let html = `<div style="margin:16px 0;padding:12px 16px;background:var(--panel);border-radius:8px;border:1px solid var(--border)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div>
+        <span style="font-size:14px;font-weight:700;color:${headerColor}">📊 總經指標資料品質</span>
+        <span style="font-size:12px;color:var(--muted);margin-left:8px">${headerText}</span>
+      </div>
+      <div style="display:flex;gap:12px;font-size:12px">
+        <span style="color:var(--up)">🟢 ${okCount} 正常</span>
+        <span style="color:var(--warn)">🟡 ${warnCount} 待更新</span>
+        <span style="color:var(--down)">🔴 ${errCount} 異常</span>
+      </div>
+    </div>
+    <table class="text-sm"><thead><tr>
+      <th>指標</th><th>數值</th><th>日變動%</th><th>狀態</th>
+    </tr></thead><tbody>`;
+
+  indicators.forEach(ind => {
+    const valStr = typeof ind.value === 'number' ? ind.value.toFixed(3) : '-';
+    const chgStr = typeof ind.change_pct === 'number' ? ind.change_pct.toFixed(4) + '%' : '-';
+    const statusColor = ind.status === 'ok' ? 'var(--up)' : (ind.status === 'warn' ? 'var(--warn)' : 'var(--down)');
+    const symbolHint = ind.symbol ? '' : ' <span class="text-muted text-xs">(無來源)</span>';
+    html += `<tr>
+      <td>${ind.name}${symbolHint}</td>
+      <td>${valStr}</td>
+      <td>${chgStr}</td>
+      <td><span style="color:${statusColor};font-weight:600;font-size:12px">${statusLight(ind.status)}${ind.status_text}</span></td>
+    </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
 }
 
 function escapeHtml(text) {

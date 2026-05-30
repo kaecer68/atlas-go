@@ -177,6 +177,39 @@ jobs:
     - name: Run factor integrity check
       run: bash scripts/ci/verify_factor_integrity.sh
 
+  # Gate 1: Parameter data integrity — catches Save() silently dropping
+  # calibration timestamps by checking evidence_quality vs timestamp consistency.
+  validate-parameters:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Set up Go
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      with:
+        go-version-file: go.mod
+
+    - name: Validate parameters.json integrity
+      run: go run ./cmd/validate-parameters
+
+  # Gate 2: Calibration evidence smoke — verifies the real parameters.json
+  # has valid calibration timestamps when evidence_quality claims calibration.
+  calibration-smoke:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Set up Go
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      with:
+        go-version-file: go.mod
+
+    - name: Smoke test calibration evidence
+      run: go test ./internal/config/ -run TestCalibrationEvidence_Smoke -v -count=1
+
+  # Gate 3: LoadCalibrationEvidence unit tests — covered by the existing
+  # coverage job (go test ./... includes ./internal/industry/...).
+
   # Orphan artifact detection — ensures no compiled binaries, PID files,
   # coverage reports, or graphify cache artifacts have been committed.
   check-orphan-artifacts:
