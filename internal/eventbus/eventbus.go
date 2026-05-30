@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -331,6 +332,10 @@ type ChannelEventBus struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
 	wg             sync.WaitGroup
+
+	// Observable counters (atomic)
+	publishDropped  int64
+	handlerTimeouts int64
 }
 
 type subscriber struct {
@@ -362,11 +367,13 @@ func (b *ChannelEventBus) Publish(event BusEvent) {
 	case b.eventChan <- event:
 		return
 	case <-b.ctx.Done():
+		atomic.AddInt64(&b.publishDropped, 1)
 		logging.Warn("eventbus", "publish_dropped",
 			logging.FStr("event_id", event.ID),
 			logging.FStr("event_type", string(event.Type)),
 			logging.FStr("reason", "bus_closed"))
 	default:
+		atomic.AddInt64(&b.publishDropped, 1)
 		logging.Warn("eventbus", "publish_dropped",
 			logging.FStr("event_id", event.ID),
 			logging.FStr("event_type", string(event.Type)),
@@ -750,21 +757,31 @@ func (b *ChannelEventBus) handleEvent(sub *subscriber, event BusEvent) {
 
 	ctx, cancel := context.WithTimeout(b.ctx, 30*time.Second)
 	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if err := sub.handler(ctx, event); err != nil {
+			logging.Error("eventbus", "handler_error", "subscriber_id", sub.id, logging.Err(err))
 
-	if err := sub.handler(ctx, event); err != nil {
-		logging.Error("eventbus", "handler_error", "subscriber_id", sub.id, logging.Err(err))
-
-		if sub.critical {
-			select {
-			case b.criticalErrCh <- HandlerError{
-				EventType:    event.Type,
-				SubscriberID: sub.id,
-				Err:          err,
-			}:
-			default:
-				logging.Error("eventbus", "critical_err_ch_full", "subscriber_id", sub.id)
+			if sub.critical {
+				select {
+				case b.criticalErrCh <- HandlerError{
+					EventType:    event.Type,
+					SubscriberID: sub.id,
+					Err:          err,
+				}:
+				default:
+					logging.Error("eventbus", "critical_err_ch_full", "subscriber_id", sub.id)
+				}
 			}
 		}
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		atomic.AddInt64(&b.handlerTimeouts, 1)
+		logging.Error("eventbus", "handler_timeout", "subscriber_id", sub.id)
 	}
 }
 
@@ -822,6 +839,8 @@ func (b *ChannelEventBus) Stats() map[string]any {
 	stats["subscribers_by_type"] = len(b.subscribers)
 	stats["channel_capacity"] = cap(b.eventChan)
 	stats["channel_length"] = len(b.eventChan)
+	stats["publish_dropped"] = atomic.LoadInt64(&b.publishDropped)
+	stats["handler_timeouts"] = atomic.LoadInt64(&b.handlerTimeouts)
 
 	return stats
 }
