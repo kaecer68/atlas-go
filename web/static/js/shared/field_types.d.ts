@@ -137,6 +137,7 @@ declare interface BaselineParameters {
   require_cro_pass: string;
   transaction_cost_bps: string;
   slippage_bps: string;
+  avg_trading_cost: string;
   reserve_cash_fraction: string;
 }
 
@@ -564,6 +565,11 @@ declare interface DynamicEnvConfig {
   dxy_low_threshold: number;
   dxy_export_penalty: number;
   dxy_export_benefit: number;
+  history_window_days: number;
+  history_cap_multiplier: number;
+  oil_price_shock_threshold: number;
+  us_rates_dxy_threshold: number;
+  jpy_carry_dxy_threshold: number;
 }
 
 declare interface EarningsQualityExecutorParameters {
@@ -1052,6 +1058,13 @@ declare interface IndustryCycleFactorScore {
   industry_id?: string;
 }
 
+declare interface IndustryDefaultMetrics {
+  revenue_growth_yoy: number;
+  profit_growth_yoy: number;
+  inventory_turnover: number;
+  capacity_utilization: number;
+}
+
 declare interface IndustryDetail {
   id: string;
   name: string;
@@ -1133,6 +1146,7 @@ declare interface IndustryParameters {
   linkage_params: string;
   dynamic_env: string;
   history_retention_days: string;
+  default_metrics: string;
 }
 
 declare interface IndustryRecommendation {
@@ -1221,6 +1235,22 @@ declare interface LiveStatusResponse {
   circuit_breaker: string;
   portfolio: string;
   timestamp: string;
+}
+
+declare interface MacroDataHealthResponse {
+  recorded_at: number;
+  generated_at: string;
+  indicators: string[];
+}
+
+declare interface MacroIndicatorHealth {
+  name: string;
+  symbol: string;
+  value: number;
+  change_pct: number;
+  timestamp: number;
+  status: string;
+  status_text: string;
 }
 
 declare interface MacroRadarResponse {
@@ -1397,6 +1427,13 @@ declare interface NarrativeParameters {
   retail_fear_percentile_threshold: string;
   retail_acceleration_window_days: string;
   inflation_estimate?: string;
+  spring_festival_confidence: string;
+  election_cycle_confidence: string;
+  earnings_blackout_confidence: string;
+  tech_peak_season_confidence: string;
+  year_end_window_dressing_confidence: string;
+  earnings_surprise_confidence: string;
+  earnings_surprise_threshold: string;
 }
 
 declare interface NewsLatencyConfig {
@@ -1459,6 +1496,7 @@ declare interface OrchestratorParameters {
   sector_rotation_base_allocations: string;
   sector_rotation_macro_adjustments?: string;
   sector_rotation_flow_adjustments?: string;
+  use_ml_scoring: string;
 }
 
 declare interface ParameterChange {
@@ -1737,6 +1775,8 @@ declare interface PromptExperimentResult {
   candidate_factor_count?: number;
   baseline_monetary_ntd?: number;
   candidate_monetary_ntd?: number;
+  eval_metrics?: string | null;
+  importance_result?: string | null;
 }
 
 declare interface Quote {

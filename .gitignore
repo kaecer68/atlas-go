@@ -69,6 +69,7 @@ internal/*/data/
 # Build artifacts
 /run-stress
 /coverage_all.out
+/backtest-pipeline
 
 # Compiled binaries (root level)
 /atlas-staging
