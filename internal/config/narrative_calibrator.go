@@ -3,6 +3,12 @@ package config
 // NarrativeCalibrator calibrates 9 narrative event detection threshold parameters.
 // The evaluator uses linear range penalties (same style as MacroRiskCalibrator)
 // rather than Gaussian+diversity, providing a clean gradient for Bayesian optimization.
+//
+// NOTE: Seasonal event confidence parameters (spring_festival_confidence, election_cycle_confidence,
+// earnings_blackout_confidence, tech_peak_season_confidence, year_end_window_dressing_confidence,
+// earnings_surprise_confidence) are NOT calibrated here. They represent calendar-based probability
+// estimates and should be calibrated through backtest hit-rate validation (compare seasonal event
+// predictions against actual forward returns), not through Bayesian threshold optimization.
 type NarrativeCalibrator struct{}
 
 func (nc *NarrativeCalibrator) ParamNames() []string {

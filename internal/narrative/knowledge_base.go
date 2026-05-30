@@ -710,6 +710,7 @@ func detectSeasonalEvent() *NarrativeEvent {
 	now := time.Now().UTC()
 	month := now.Month()
 	day := now.Day()
+	params := config.GetParametersConfig().Narrative
 
 	if (month == 1 && day >= 15) || (month == 2 && day <= 15) {
 		return &NarrativeEvent{
@@ -717,7 +718,7 @@ func detectSeasonalEvent() *NarrativeEvent {
 			Theme:            "spring_festival_season",
 			Region:           "TW",
 			Sentiment:        0.3,
-			Confidence:       0.65,
+			Confidence:       params.SpringFestivalConfidence.Value,
 			ConfidenceSource: "calendar_seasonal",
 			HitRate:          hitRateForTheme("spring_festival_season"),
 			CapitalFlow:      "seasonal_rotation",
@@ -736,7 +737,7 @@ func detectSeasonalEvent() *NarrativeEvent {
 			Theme:            "election_cycle",
 			Region:           "TW",
 			Sentiment:        -0.2,
-			Confidence:       0.60,
+			Confidence:       params.ElectionCycleConfidence.Value,
 			ConfidenceSource: "calendar_political",
 			HitRate:          hitRateForTheme("election_cycle"),
 			CapitalFlow:      "policy_uncertainty",
@@ -750,14 +751,15 @@ func detectSeasonalEvent() *NarrativeEvent {
 	}
 
 	if (month == 3 && day >= 1) || (month == 4 && day <= 15) {
+		hitRate := params.EarningsBlackoutConfidence.Value
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-blackout-%d", nowUnix()),
 			Theme:            "earnings_blackout",
 			Region:           "TW",
 			Sentiment:        0.1,
-			Confidence:       0.55,
+			Confidence:       hitRate,
 			ConfidenceSource: "calendar_seasonal",
-			HitRate:          0.55,
+			HitRate:          hitRate,
 			CapitalFlow:      "pre_earnings_positioning",
 			TimeWindow:       "1_month",
 			Timestamp:        now,
@@ -769,14 +771,15 @@ func detectSeasonalEvent() *NarrativeEvent {
 	}
 
 	if (month == 7 && day >= 1) || (month == 8) || (month == 9 && day <= 15) {
+		hitRate := params.TechPeakSeasonConfidence.Value
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-tech-peak-%d", nowUnix()),
 			Theme:            "tech_peak_season",
 			Region:           "TW",
 			Sentiment:        0.5,
-			Confidence:       0.75,
+			Confidence:       hitRate,
 			ConfidenceSource: "calendar_seasonal",
-			HitRate:          0.75,
+			HitRate:          hitRate,
 			CapitalFlow:      "tech_capex_inflow",
 			TimeWindow:       "2_months",
 			Timestamp:        now,
@@ -788,14 +791,15 @@ func detectSeasonalEvent() *NarrativeEvent {
 	}
 
 	if month == 11 || month == 12 {
+		hitRate := params.YearEndWindowDressingConfidence.Value
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-yearend-%d", nowUnix()),
 			Theme:            "year_end_window_dressing",
 			Region:           "TW",
 			Sentiment:        0.2,
-			Confidence:       0.58,
+			Confidence:       hitRate,
 			ConfidenceSource: "calendar_seasonal",
-			HitRate:          0.58,
+			HitRate:          hitRate,
 			CapitalFlow:      "institutional_rebalancing",
 			TimeWindow:       "2_months",
 			Timestamp:        now,

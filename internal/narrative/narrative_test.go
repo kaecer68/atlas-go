@@ -290,3 +290,70 @@ func TestDetectEventsNoTrigger(t *testing.T) {
 		t.Fatalf("expected 0 events, got %d", len(events))
 	}
 }
+
+func TestSeasonalEventUsesParametersConfig(t *testing.T) {
+	config.ResetParametersConfig()
+	params := config.GetParametersConfig().Narrative
+
+	if params.SpringFestivalConfidence.Value == 0 {
+		t.Fatalf("expected non-zero SpringFestivalConfidence default")
+	}
+	if params.ElectionCycleConfidence.Value == 0 {
+		t.Fatalf("expected non-zero ElectionCycleConfidence default")
+	}
+	if params.EarningsBlackoutConfidence.Value == 0 {
+		t.Fatalf("expected non-zero EarningsBlackoutConfidence default")
+	}
+	if params.TechPeakSeasonConfidence.Value == 0 {
+		t.Fatalf("expected non-zero TechPeakSeasonConfidence default")
+	}
+	if params.YearEndWindowDressingConfidence.Value == 0 {
+		t.Fatalf("expected non-zero YearEndWindowDressingConfidence default")
+	}
+
+	event := detectSeasonalEvent()
+	if event == nil {
+		t.Log("no seasonal event matched current date — parameter defaults verified above")
+		return
+	}
+
+	if event.ConfidenceSource == "" {
+		t.Fatalf("expected non-empty ConfidenceSource, got %q", event.ConfidenceSource)
+	}
+	if event.Theme == "" {
+		t.Fatalf("expected non-empty Theme")
+	}
+	if event.Region != "TW" {
+		t.Fatalf("expected Region=TW, got %q", event.Region)
+	}
+
+	switch event.Theme {
+	case "spring_festival_season":
+		if event.Confidence != params.SpringFestivalConfidence.Value {
+			t.Fatalf("spring_festival_season: expected confidence %f from ParametersConfig, got %f",
+				params.SpringFestivalConfidence.Value, event.Confidence)
+		}
+	case "election_cycle":
+		if event.Confidence != params.ElectionCycleConfidence.Value {
+			t.Fatalf("election_cycle: expected confidence %f from ParametersConfig, got %f",
+				params.ElectionCycleConfidence.Value, event.Confidence)
+		}
+	case "earnings_blackout":
+		if event.Confidence != params.EarningsBlackoutConfidence.Value {
+			t.Fatalf("earnings_blackout: expected confidence %f from ParametersConfig, got %f",
+				params.EarningsBlackoutConfidence.Value, event.Confidence)
+		}
+	case "tech_peak_season":
+		if event.Confidence != params.TechPeakSeasonConfidence.Value {
+			t.Fatalf("tech_peak_season: expected confidence %f from ParametersConfig, got %f",
+				params.TechPeakSeasonConfidence.Value, event.Confidence)
+		}
+	case "year_end_window_dressing":
+		if event.Confidence != params.YearEndWindowDressingConfidence.Value {
+			t.Fatalf("year_end_window_dressing: expected confidence %f from ParametersConfig, got %f",
+				params.YearEndWindowDressingConfidence.Value, event.Confidence)
+		}
+	default:
+		t.Fatalf("unexpected seasonal event theme: %s", event.Theme)
+	}
+}

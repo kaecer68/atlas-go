@@ -1356,6 +1356,42 @@ func defaultNarrativeParameters() NarrativeParameters {
 			Source:    "heuristic",
 			Todo:      "replace with live CPI from FRED API when available",
 		},
+		SpringFestivalConfidence: ParameterMetadata[float64]{
+			Value:     0.65,
+			Rationale: "Confidence for spring festival seasonal event (Jan 15 - Feb 15); based on historical TWSE pre/post-CNY rally probability ~70%",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from TWSE historical CNY window returns and hit rate",
+		},
+		ElectionCycleConfidence: ParameterMetadata[float64]{
+			Value:     0.60,
+			Rationale: "Confidence for election cycle seasonal event (late Dec - mid Jan); based on pre-election uncertainty premium",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from TWSE historical election cycle returns",
+		},
+		EarningsBlackoutConfidence: ParameterMetadata[float64]{
+			Value:     0.55,
+			Rationale: "Confidence for earnings blackout seasonal event (Mar 1 - Apr 15); moderate pre-earnings positioning signal",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from TWSE historical blackout period returns",
+		},
+		TechPeakSeasonConfidence: ParameterMetadata[float64]{
+			Value:     0.75,
+			Rationale: "Confidence for tech peak season event (Jul 1 - Sep 15); strong historical signal driven by back-to-school and holiday demand",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from TWSE historical Q3 tech sector returns",
+		},
+		YearEndWindowDressingConfidence: ParameterMetadata[float64]{
+			Value:     0.58,
+			Rationale: "Confidence for year-end window dressing event (Nov - Dec); institutional rebalancing effect",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from TWSE historical year-end returns and institutional flow patterns",
+		},
+		EarningsSurpriseConfidence: ParameterMetadata[float64]{
+			Value:     0.65,
+			Rationale: "Confidence for earnings surprise event (triggered externally); default before empirical calibration",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from earnings surprise frequency and market reaction data",
+		},
 		GoldChangePctThreshold: ParameterMetadata[float64]{
 			Value:     2.0,
 			Rationale: "Gold price change %% threshold for geopolitical risk detection; gold traditionally serves as safe-haven proxy",

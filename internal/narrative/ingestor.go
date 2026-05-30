@@ -362,10 +362,10 @@ func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot, div *Dive
 	}
 
 	if curr.RetailMarginBalance.Symbol != "" {
-		if event := detectRetailFrenzyEventFromSnapshot(curr.RetailMarginBalance, now); event != nil {
+		if event := detectRetailFrenzyEventFromSnapshot(curr.RetailMarginBalance, DefaultMarginHistoryDir, now); event != nil {
 			events = append(events, *event)
 		}
-		if event := detectRetailFearEventFromSnapshot(curr.RetailMarginBalance, now); event != nil {
+		if event := detectRetailFearEventFromSnapshot(curr.RetailMarginBalance, DefaultMarginHistoryDir, now); event != nil {
 			events = append(events, *event)
 		}
 	}
@@ -630,21 +630,29 @@ func detectOilShockEventFromSnapshot(currOil marketdata.MacroDataPoint, now time
 
 func computeAICapexSentiment(tsmcYoYChangePct float64) float64 {
 	params := config.GetParametersConfig().Narrative
-	if tsmcYoYChangePct > params.TSMCRevenueYoYThreshold.Value {
-		return 0.8
+	yoyThreshold := params.TSMCRevenueYoYThreshold.Value
+	posThreshold := params.TSMCRevenuePositiveThreshold.Value
+	fallback := params.AICapexFallbackSentiment.Value
+
+	if tsmcYoYChangePct >= yoyThreshold {
+		// Above YoY threshold: scale from 0.8 toward 1.0, capped at 1.0
+		extra := min((tsmcYoYChangePct-yoyThreshold)/yoyThreshold, 1.0)
+		return 0.8 + (0.2 * extra)
 	}
-	if tsmcYoYChangePct > params.TSMCRevenuePositiveThreshold.Value {
-		return 0.5
+	if tsmcYoYChangePct >= posThreshold {
+		// Between thresholds: linear interpolation from 0.5 to 0.8
+		ratio := (tsmcYoYChangePct - posThreshold) / (yoyThreshold - posThreshold)
+		return 0.5 + (0.3 * ratio)
 	}
-	return params.AICapexFallbackSentiment.Value
+	return fallback
 }
 
-func detectRetailFrenzyEventFromSnapshot(marginBalance marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+func detectRetailFrenzyEventFromSnapshot(marginBalance marketdata.MacroDataPoint, marginDir string, now time.Time) *NarrativeEvent {
 	if marginBalance.Symbol == "" {
 		return nil
 	}
 	params := config.GetParametersConfig().Narrative
-	history, err := LoadMarginHistory(DefaultMarginHistoryDir)
+	history, err := LoadMarginHistory(marginDir)
 	if err == nil && marginHistoryAvailable(history) {
 		percentile, ok := ComputeRollingPercentile(history, marginBalance.Value, 60)
 		if ok && percentile >= params.RetailFrenzyPercentileThreshold.Value {
@@ -682,12 +690,12 @@ func detectRetailFrenzyEventFromSnapshot(marginBalance marketdata.MacroDataPoint
 	return nil
 }
 
-func detectRetailFearEventFromSnapshot(marginBalance marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+func detectRetailFearEventFromSnapshot(marginBalance marketdata.MacroDataPoint, marginDir string, now time.Time) *NarrativeEvent {
 	if marginBalance.Symbol == "" {
 		return nil
 	}
 	params := config.GetParametersConfig().Narrative
-	history, err := LoadMarginHistory(DefaultMarginHistoryDir)
+	history, err := LoadMarginHistory(marginDir)
 	if err == nil && marginHistoryAvailable(history) {
 		percentile, ok := ComputeRollingPercentile(history, marginBalance.Value, 60)
 		if ok && percentile <= params.RetailFearPercentileThreshold.Value {
