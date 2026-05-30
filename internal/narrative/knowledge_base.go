@@ -517,12 +517,14 @@ func detectUSRatesEvent(data MarketNarrativeData) *NarrativeEvent {
 	return nil
 }
 
-func detectAICapexEvent(data MarketNarrativeData) *NarrativeEvent {
+// buildAICapexSurgeEvent creates an AI_capex_surge NarrativeEvent from a sentiment score.
+// Shared by both the KB pipeline (via MarketNarrativeData) and the ingestor pipeline.
+func buildAICapexSurgeEvent(sentiment float64, ts time.Time) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
-	if data.AICapexSentiment > params.AICapexSentimentThreshold.Value {
-		confidence := computeDeviationConfidence(data.AICapexSentiment, params.AICapexSentimentThreshold.Value, params.ConfidenceBaseAICapex.Value, params.ConfidenceDeviationCeiling.Value)
+	if sentiment > params.AICapexSentimentThreshold.Value {
+		confidence := computeDeviationConfidence(sentiment, params.AICapexSentimentThreshold.Value, params.ConfidenceBaseAICapex.Value, params.ConfidenceDeviationCeiling.Value)
 		return &NarrativeEvent{
-			ID:               fmt.Sprintf("evt-ai-capex-%d", nowUnix()),
+			ID:               fmt.Sprintf("evt-ai-capex-%d", ts.UnixNano()),
 			Theme:            "AI_capex_surge",
 			Region:           "US",
 			Sentiment:        0.8,
@@ -531,13 +533,17 @@ func detectAICapexEvent(data MarketNarrativeData) *NarrativeEvent {
 			HitRate:          hitRateForTheme("AI_capex_surge"),
 			CapitalFlow:      "tech_capex_inflow",
 			TimeWindow:       "1_month",
-			Timestamp:        time.Now().UTC(),
+			Timestamp:        ts,
 			SourceData: map[string]float64{
-				"ai_capex_sentiment": data.AICapexSentiment,
+				"ai_capex_sentiment": sentiment,
 			},
 		}
 	}
 	return nil
+}
+
+func detectAICapexEvent(data MarketNarrativeData) *NarrativeEvent {
+	return buildAICapexSurgeEvent(data.AICapexSentiment, time.Now().UTC())
 }
 
 func detectGeopoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
@@ -569,13 +575,15 @@ func detectGeopoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
 	return nil
 }
 
-func detectOilShockEvent(data MarketNarrativeData) *NarrativeEvent {
+// buildOilShockEvent creates an oil_price_shock NarrativeEvent from a change percentage.
+// Shared by both the KB pipeline (via MarketNarrativeData) and the ingestor pipeline (via MacroDataPoint).
+func buildOilShockEvent(changePct float64, ts time.Time) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 	threshold := params.OilChangePctThreshold.Value
-	if data.OilChangePct > threshold || data.OilChangePct < -threshold {
-		confidence := computeDeviationConfidence(data.OilChangePct, threshold, params.ConfidenceBaseOilShock.Value, params.ConfidenceDeviationCeiling.Value)
+	if changePct > threshold || changePct < -threshold {
+		confidence := computeDeviationConfidence(changePct, threshold, params.ConfidenceBaseOilShock.Value, params.ConfidenceDeviationCeiling.Value)
 		return &NarrativeEvent{
-			ID:               fmt.Sprintf("evt-oil-%d", nowUnix()),
+			ID:               fmt.Sprintf("evt-oil-%d", ts.UnixNano()),
 			Theme:            "oil_price_shock",
 			Region:           "Global",
 			Sentiment:        -0.5,
@@ -584,26 +592,32 @@ func detectOilShockEvent(data MarketNarrativeData) *NarrativeEvent {
 			HitRate:          hitRateForTheme("oil_price_shock"),
 			CapitalFlow:      "inflation_reprice",
 			TimeWindow:       "1_week",
-			Timestamp:        time.Now().UTC(),
+			Timestamp:        ts,
 			SourceData: map[string]float64{
-				"oil_change_pct": data.OilChangePct,
+				"oil_change_pct": changePct,
 			},
 		}
 	}
 	return nil
 }
 
-func detectJPYCarryUnwindEvent(data MarketNarrativeData) *NarrativeEvent {
+func detectOilShockEvent(data MarketNarrativeData) *NarrativeEvent {
+	return buildOilShockEvent(data.OilChangePct, time.Now().UTC())
+}
+
+// buildJPYCarryUnwindEvent creates a JPY_carry_unwind NarrativeEvent from JPY change and VIX level.
+// Shared by both the KB pipeline (via MarketNarrativeData) and the ingestor pipeline (via MacroDataPoint).
+func buildJPYCarryUnwindEvent(jpyChangePct, vixLevel float64, ts time.Time) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
-	if data.JPY_ChangePct > params.JPYChangePctThreshold.Value || data.VIXLevel > params.VIXLevelThreshold.Value {
-		confidenceJPY := computeDeviationConfidence(data.JPY_ChangePct, params.JPYChangePctThreshold.Value, params.ConfidenceBaseJPYCarry.Value, params.ConfidenceDeviationCeiling.Value)
-		confidenceVIX := computeDeviationConfidence(data.VIXLevel, params.VIXLevelThreshold.Value, params.ConfidenceBaseJPYCarry.Value, params.ConfidenceDeviationCeiling.Value)
+	if jpyChangePct > params.JPYChangePctThreshold.Value || vixLevel > params.VIXLevelThreshold.Value {
+		confidenceJPY := computeDeviationConfidence(jpyChangePct, params.JPYChangePctThreshold.Value, params.ConfidenceBaseJPYCarry.Value, params.ConfidenceDeviationCeiling.Value)
+		confidenceVIX := computeDeviationConfidence(vixLevel, params.VIXLevelThreshold.Value, params.ConfidenceBaseJPYCarry.Value, params.ConfidenceDeviationCeiling.Value)
 		confidence := confidenceJPY
 		if confidenceVIX > confidence {
 			confidence = confidenceVIX
 		}
 		return &NarrativeEvent{
-			ID:               fmt.Sprintf("evt-jpy-%d", nowUnix()),
+			ID:               fmt.Sprintf("evt-jpy-%d", ts.UnixNano()),
 			Theme:            "JPY_carry_unwind",
 			Region:           "JP",
 			Sentiment:        -0.6,
@@ -612,26 +626,32 @@ func detectJPYCarryUnwindEvent(data MarketNarrativeData) *NarrativeEvent {
 			HitRate:          hitRateForTheme("JPY_carry_unwind"),
 			CapitalFlow:      "global_liquidity_drain",
 			TimeWindow:       "immediate",
-			Timestamp:        time.Now().UTC(),
+			Timestamp:        ts,
 			SourceData: map[string]float64{
-				"jpy_change_pct": data.JPY_ChangePct,
-				"vix_level":      data.VIXLevel,
+				"jpy_change_pct": jpyChangePct,
+				"vix_level":      vixLevel,
 			},
 		}
 	}
 	return nil
 }
 
-func detectUSDTWDEvent(data MarketNarrativeData) *NarrativeEvent {
+func detectJPYCarryUnwindEvent(data MarketNarrativeData) *NarrativeEvent {
+	return buildJPYCarryUnwindEvent(data.JPY_ChangePct, data.VIXLevel, time.Now().UTC())
+}
+
+// buildUSDTWDVolatilityEvent creates a USD_TWD_volatility NarrativeEvent from a change percentage.
+// Shared by both the KB pipeline (via MarketNarrativeData) and the ingestor pipeline (via MacroDataPoint).
+func buildUSDTWDVolatilityEvent(changePct float64, ts time.Time) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
-	if math.Abs(data.USD_TWD_ChangePct) > params.USDTWDChangePctThreshold.Value {
+	if math.Abs(changePct) > params.USDTWDChangePctThreshold.Value {
 		sentiment := -0.5
-		if data.USD_TWD_ChangePct > 0 {
+		if changePct > 0 {
 			sentiment = -0.7
 		}
-		confidence := computeDeviationConfidence(data.USD_TWD_ChangePct, params.USDTWDChangePctThreshold.Value, params.ConfidenceBaseTaiwanStress.Value, params.ConfidenceDeviationCeiling.Value)
+		confidence := computeDeviationConfidence(changePct, params.USDTWDChangePctThreshold.Value, params.ConfidenceBaseTaiwanStress.Value, params.ConfidenceDeviationCeiling.Value)
 		return &NarrativeEvent{
-			ID:               fmt.Sprintf("evt-usd-twd-%d", nowUnix()),
+			ID:               fmt.Sprintf("evt-usd-twd-%d", ts.UnixNano()),
 			Theme:            "USD_TWD_volatility",
 			Region:           "TW",
 			Sentiment:        sentiment,
@@ -640,13 +660,17 @@ func detectUSDTWDEvent(data MarketNarrativeData) *NarrativeEvent {
 			HitRate:          hitRateForTheme("USD_TWD_volatility"),
 			CapitalFlow:      "fx_driven_outflow",
 			TimeWindow:       "1_week",
-			Timestamp:        time.Now().UTC(),
+			Timestamp:        ts,
 			SourceData: map[string]float64{
-				"usd_twd_change_pct": data.USD_TWD_ChangePct,
+				"usd_twd_change_pct": changePct,
 			},
 		}
 	}
 	return nil
+}
+
+func detectUSDTWDEvent(data MarketNarrativeData) *NarrativeEvent {
+	return buildUSDTWDVolatilityEvent(data.USD_TWD_ChangePct, time.Now().UTC())
 }
 
 func detectTaiwanPoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
