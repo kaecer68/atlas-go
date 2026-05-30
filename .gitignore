@@ -162,3 +162,10 @@ prompts/archive/
 /stress-test
 /validate-risk-gate
 /samples/replay/*.jsonl
+
+# graphify temp files (extraction artifacts)
+/.graphify_*.json
+/.graphify_chunk_*_files.txt
+
+# compiled go binaries in repo root
+/validate-parameters
