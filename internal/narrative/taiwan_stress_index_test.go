@@ -282,3 +282,50 @@ func TestGetStressIndexThresholds(t *testing.T) {
 		}
 	})
 }
+
+func TestCalculateFromSnapshotWithStore_FallbackToPersistedGeo(t *testing.T) {
+	calc := NewTaiwanStressCalculator(nil, "")
+
+	dir := t.TempDir()
+	store := NewGeopoliticalStore(dir)
+	if err := store.Save(GeopoliticalRiskScore{
+		Region:    "Global",
+		Intensity: 30,
+		Timestamp: time.Now(),
+	}); err != nil {
+		t.Fatalf("save geo score: %v", err)
+	}
+
+	snap := marketdata.MacroDataSnapshot{
+		DXY:                marketdata.MacroDataPoint{Value: 104, ChangePct: 0.5},
+		US10Y:              marketdata.MacroDataPoint{Value: 4.5},
+		VIX:                marketdata.MacroDataPoint{Value: 20},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: -5},
+		RecordedAt:         time.Now().Unix(),
+	}
+	ctx := context.Background()
+	idx, err := calc.CalculateFromSnapshotWithStore(ctx, snap, marketdata.MacroDataSnapshot{}, store)
+	if err != nil {
+		t.Fatalf("CalculateFromSnapshotWithStore: %v", err)
+	}
+	if idx.Score < 0 || idx.Score > 100 {
+		t.Fatalf("score out of range: %v", idx.Score)
+	}
+	if idx.Regime == "" {
+		t.Fatal("expected non-empty regime")
+	}
+	if _, ok := idx.Components["geopolitical"]; !ok {
+		t.Fatal("expected geopolitical component from persisted store")
+	}
+}
+
+func TestCalculateFromSnapshotWithStore_ErrorWhenNoProviderAndNoStore(t *testing.T) {
+	calc := NewTaiwanStressCalculator(nil, "")
+	snap := marketdata.MacroDataSnapshot{
+		RecordedAt: time.Now().Unix(),
+	}
+	_, err := calc.CalculateFromSnapshotWithStore(context.Background(), snap, marketdata.MacroDataSnapshot{}, nil)
+	if err == nil {
+		t.Fatal("expected error when geo provider and store are both nil")
+	}
+}
