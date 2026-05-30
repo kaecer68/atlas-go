@@ -439,3 +439,61 @@ func TestNarrativeCalibrationReport_Structure(t *testing.T) {
 		t.Fatal("expected non-empty models list")
 	}
 }
+
+func TestNewEarningsSurpriseEvent_Positive(t *testing.T) {
+	config.ResetParametersConfig()
+	event := NewEarningsSurpriseEvent(15.0)
+	if event == nil {
+		t.Fatal("expected non-nil event for positive surprise")
+	}
+	if event.Theme != "earnings_surprise" {
+		t.Fatalf("expected theme earnings_surprise, got %s", event.Theme)
+	}
+	if event.Sentiment != 0.7 {
+		t.Fatalf("expected sentiment 0.7, got %f", event.Sentiment)
+	}
+	if event.CapitalFlow != "earnings_beat" {
+		t.Fatalf("expected earnings_beat, got %s", event.CapitalFlow)
+	}
+	if event.Severity != "high" {
+		t.Fatalf("expected severity high, got %s", event.Severity)
+	}
+	if event.Duration != 10*24*time.Hour {
+		t.Fatalf("expected 10-day duration, got %v", event.Duration)
+	}
+	if event.Region != "TW" {
+		t.Fatalf("expected region TW, got %s", event.Region)
+	}
+	if event.SourceData["surprise_pct"] != 15.0 {
+		t.Fatalf("expected source surprise_pct=15.0, got %f", event.SourceData["surprise_pct"])
+	}
+	if event.ConfidenceSource != "deviation_based_v1" {
+		t.Fatalf("expected deviation_based_v1, got %s", event.ConfidenceSource)
+	}
+}
+
+func TestNewEarningsSurpriseEvent_Negative(t *testing.T) {
+	config.ResetParametersConfig()
+	event := NewEarningsSurpriseEvent(-8.0)
+	if event == nil {
+		t.Fatal("expected non-nil event for negative surprise")
+	}
+	if event.Sentiment != -0.7 {
+		t.Fatalf("expected sentiment -0.7, got %f", event.Sentiment)
+	}
+	if event.CapitalFlow != "earnings_miss" {
+		t.Fatalf("expected earnings_miss, got %s", event.CapitalFlow)
+	}
+}
+
+func TestNewEarningsSurpriseEvent_UsesParametersConfig(t *testing.T) {
+	config.ResetParametersConfig()
+	params := config.GetParametersConfig().Narrative
+	if params.EarningsSurpriseConfidence.Value <= 0 {
+		t.Fatalf("expected non-zero EarningsSurpriseConfidence, got %f", params.EarningsSurpriseConfidence.Value)
+	}
+	event := NewEarningsSurpriseEvent(20.0)
+	if event.Confidence <= 0 {
+		t.Fatalf("expected confidence > 0, got %f", event.Confidence)
+	}
+}

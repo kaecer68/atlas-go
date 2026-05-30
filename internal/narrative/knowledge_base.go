@@ -576,6 +576,39 @@ func detectAICapexEvent(data MarketNarrativeData) *NarrativeEvent {
 	return buildAICapexSurgeEvent(data.AICapexSentiment, time.Now().UTC())
 }
 
+func NewEarningsSurpriseEvent(surprisePct float64) *NarrativeEvent {
+	params := config.GetParametersConfig().Narrative
+	confidence := computeDeviationConfidence(math.Abs(surprisePct), 5.0, params.EarningsSurpriseConfidence.Value, params.ConfidenceDeviationCeiling.Value)
+
+	sentiment := 0.0
+	capitalFlow := ""
+	if surprisePct > 0 {
+		sentiment = 0.7
+		capitalFlow = "earnings_beat"
+	} else {
+		sentiment = -0.7
+		capitalFlow = "earnings_miss"
+	}
+
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-earn-%d", nowUnix()),
+		Theme:            "earnings_surprise",
+		Region:           "TW",
+		Sentiment:        sentiment,
+		Confidence:       confidence,
+		ConfidenceSource: "deviation_based_v1",
+		HitRate:          hitRateForTheme("earnings_surprise"),
+		CapitalFlow:      capitalFlow,
+		TimeWindow:       "1_week",
+		Duration:         10 * 24 * time.Hour,
+		Timestamp:        time.Now().UTC(),
+		Severity:         "high",
+		SourceData: map[string]float64{
+			"surprise_pct": surprisePct,
+		},
+	}
+}
+
 func detectGeopoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 	if data.GeopoliticalGPR > params.GeopoliticalGPRThreshold.Value || data.GoldChangePct > params.GoldChangePctThreshold.Value {
