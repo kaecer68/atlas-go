@@ -263,9 +263,284 @@ func TestCorrelationMultiplier(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := sb.CorrelationMultiplier(tt.theme, tt.industryA, tt.industryB)
 			if got != tt.want {
-				t.Errorf("CorrelationMultiplier(%q, %q, %q) = %f, want %f",
+				t.Fatalf("CorrelationMultiplier(%q, %q, %q) = %f, want %f",
 					tt.theme, tt.industryA, tt.industryB, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestSeasonalMultiplier(t *testing.T) {
+	sb := NewSeasonalBridge(nil)
+
+	tests := []struct {
+		name       string
+		theme      string
+		industryID string
+		direction  float64
+		want       float64
+	}{
+		{
+			name:       "oil_price_shock energy +1.0",
+			theme:      "oil_price_shock",
+			industryID: "energy",
+			direction:  1.0,
+			want:       1.12,
+		},
+		{
+			name:       "oil_price_shock energy -1.0",
+			theme:      "oil_price_shock",
+			industryID: "energy",
+			direction:  -1.0,
+			want:       0.88,
+		},
+		{
+			name:       "oil_price_shock shipping +1.0",
+			theme:      "oil_price_shock",
+			industryID: "shipping",
+			direction:  1.0,
+			want:       0.92,
+		},
+		{
+			name:       "oil_price_shock shipping -1.0",
+			theme:      "oil_price_shock",
+			industryID: "shipping",
+			direction:  -1.0,
+			want:       1.08,
+		},
+		{
+			name:       "oil_price_shock semiconductor default",
+			theme:      "oil_price_shock",
+			industryID: "semiconductor",
+			direction:  1.0,
+			want:       1.0,
+		},
+		{
+			name:       "AI_capex_surge semiconductor +1.0",
+			theme:      "AI_capex_surge",
+			industryID: "semiconductor",
+			direction:  1.0,
+			want:       1.15,
+		},
+		{
+			name:       "AI_capex_surge financials default",
+			theme:      "AI_capex_surge",
+			industryID: "financials",
+			direction:  1.0,
+			want:       1.0,
+		},
+		{
+			name:       "US_rates_up financials +1.0",
+			theme:      "US_rates_up",
+			industryID: "financials",
+			direction:  1.0,
+			want:       1.08,
+		},
+		{
+			name:       "US_rates_up consumer +1.0",
+			theme:      "US_rates_up",
+			industryID: "consumer",
+			direction:  1.0,
+			want:       0.95,
+		},
+		{
+			name:       "JPY_carry_unwind semiconductor +1.0",
+			theme:      "JPY_carry_unwind",
+			industryID: "semiconductor",
+			direction:  1.0,
+			want:       0.90,
+		},
+		{
+			name:       "JPY_carry_unwind financials +1.0",
+			theme:      "JPY_carry_unwind",
+			industryID: "financials",
+			direction:  1.0,
+			want:       1.05,
+		},
+		{
+			name:       "geopolitical_risk_spike consumer +1.0",
+			theme:      "geopolitical_risk_spike",
+			industryID: "consumer",
+			direction:  1.0,
+			want:       1.06,
+		},
+		{
+			name:       "geopolitical_risk_spike semiconductor +1.0",
+			theme:      "geopolitical_risk_spike",
+			industryID: "semiconductor",
+			direction:  1.0,
+			want:       0.94,
+		},
+		{
+			name:       "taiwan_political_risk semiconductor",
+			theme:      "taiwan_political_risk",
+			industryID: "semiconductor",
+			direction:  0,
+			want:       0.92,
+		},
+		{
+			name:       "taiwan_political_risk financials",
+			theme:      "taiwan_political_risk",
+			industryID: "financials",
+			direction:  0,
+			want:       1.08,
+		},
+		{
+			name:       "election_cycle semiconductor",
+			theme:      "election_cycle",
+			industryID: "semiconductor",
+			direction:  0,
+			want:       0.97,
+		},
+		{
+			name:       "election_cycle consumer",
+			theme:      "election_cycle",
+			industryID: "consumer",
+			direction:  0,
+			want:       1.03,
+		},
+		{
+			name:       "spring_festival_season consumer",
+			theme:      "spring_festival_season",
+			industryID: "consumer",
+			direction:  0,
+			want:       1.05,
+		},
+		{
+			name:       "spring_festival_season semiconductor",
+			theme:      "spring_festival_season",
+			industryID: "semiconductor",
+			direction:  0,
+			want:       0.95,
+		},
+		{
+			name:       "USD_TWD_volatility semiconductor",
+			theme:      "USD_TWD_volatility",
+			industryID: "semiconductor",
+			direction:  0,
+			want:       1.05,
+		},
+		{
+			name:       "USD_TWD_volatility consumer",
+			theme:      "USD_TWD_volatility",
+			industryID: "consumer",
+			direction:  0,
+			want:       0.97,
+		},
+		{
+			name:       "unknown_theme semiconductor default",
+			theme:      "unknown_theme",
+			industryID: "semiconductor",
+			direction:  0,
+			want:       1.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sb.SeasonalMultiplier(tt.theme, tt.industryID, tt.direction)
+			if got != tt.want {
+				t.Fatalf("SeasonalMultiplier(%q, %q, %f) = %f, want %f",
+					tt.theme, tt.industryID, tt.direction, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestActiveThemes(t *testing.T) {
+	t.Run("returns themes from SetActiveEvents", func(t *testing.T) {
+		sb := NewSeasonalBridge(nil)
+		sb.SetActiveEvents([]NarrativeEvent{
+			{Theme: "US_rates_up"},
+			{Theme: "AI_capex_surge"},
+			{Theme: "oil_price_shock"},
+		})
+
+		got := sb.ActiveThemes()
+		if len(got) != 3 {
+			t.Fatalf("ActiveThemes length = %d, want 3", len(got))
+		}
+		exp := map[string]bool{
+			"US_rates_up":      false,
+			"AI_capex_surge":   false,
+			"oil_price_shock":  false,
+		}
+		for _, theme := range got {
+			if _, ok := exp[theme]; ok {
+				exp[theme] = true
+			} else {
+				t.Fatalf("unexpected theme %q in ActiveThemes", theme)
+			}
+		}
+		for theme, found := range exp {
+			if !found {
+				t.Fatalf("expected theme %q not found in ActiveThemes", theme)
+			}
+		}
+	})
+
+	t.Run("returns empty list when no events set and engine is nil", func(t *testing.T) {
+		sb := NewSeasonalBridge(nil)
+		got := sb.ActiveThemes()
+		if len(got) != 0 {
+			t.Fatalf("ActiveThemes length = %d, want 0", len(got))
+		}
+	})
+
+	t.Run("deduplicates themes across multiple events", func(t *testing.T) {
+		sb := NewSeasonalBridge(nil)
+		sb.SetActiveEvents([]NarrativeEvent{
+			{Theme: "US_rates_up"},
+			{Theme: "AI_capex_surge"},
+			{Theme: "US_rates_up"},
+		})
+
+		got := sb.ActiveThemes()
+		if len(got) != 2 {
+			t.Fatalf("ActiveThemes length = %d, want 2 (deduplicated)", len(got))
+		}
+		exp := map[string]bool{"US_rates_up": false, "AI_capex_surge": false}
+		for _, theme := range got {
+			if _, ok := exp[theme]; ok {
+				exp[theme] = true
+			} else {
+				t.Fatalf("unexpected theme %q in ActiveThemes", theme)
+			}
+		}
+		for theme, found := range exp {
+			if !found {
+				t.Fatalf("expected theme %q not found in ActiveThemes", theme)
+			}
+		}
+	})
+}
+
+func TestSetActiveEvents(t *testing.T) {
+	sb := NewSeasonalBridge(nil)
+	events := []NarrativeEvent{
+		{Theme: "JPY_carry_unwind"},
+		{Theme: "geopolitical_risk_spike"},
+	}
+	sb.SetActiveEvents(events)
+
+	themes := sb.ActiveThemes()
+	if len(themes) != 2 {
+		t.Fatalf("ActiveThemes length = %d, want 2", len(themes))
+	}
+	exp := map[string]bool{
+		"JPY_carry_unwind":       false,
+		"geopolitical_risk_spike": false,
+	}
+	for _, theme := range themes {
+		if _, ok := exp[theme]; ok {
+			exp[theme] = true
+		} else {
+			t.Fatalf("unexpected theme %q in ActiveThemes", theme)
+		}
+	}
+	for theme, found := range exp {
+		if !found {
+			t.Fatalf("expected theme %q not found in ActiveThemes", theme)
+		}
 	}
 }

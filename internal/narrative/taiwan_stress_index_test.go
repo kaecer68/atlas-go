@@ -167,3 +167,118 @@ func TestLoadWeightsConfigIntegratesWithCalculator(t *testing.T) {
 		t.Fatal("expected positive score with parameters config")
 	}
 }
+
+func TestGetCurrentStressIndex(t *testing.T) {
+	eng := NewNarrativeEngine()
+
+	snap := marketdata.MacroDataSnapshot{
+		DXY:                marketdata.MacroDataPoint{Value: 104, ChangePct: 0.5},
+		US10Y:              marketdata.MacroDataPoint{Value: 4.5},
+		VIX:                marketdata.MacroDataPoint{Value: 20},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: -5},
+		Oil:                marketdata.MacroDataPoint{ChangePct: 1.5},
+		Gold:               marketdata.MacroDataPoint{ChangePct: 0.8},
+		JPY:                marketdata.MacroDataPoint{ChangePct: -0.3},
+		RecordedAt:         time.Now().Unix(),
+	}
+	geo := GeopoliticalRiskScore{Intensity: 30}
+	eng.UpdateMacro(snap, geo)
+
+	idx := eng.GetCurrentStressIndex()
+
+	if idx.Score < 0 || idx.Score > 100 {
+		t.Fatalf("score out of range [0,100]: got %v", idx.Score)
+	}
+	if idx.Regime == "" {
+		t.Fatal("expected non-empty regime")
+	}
+	expectedKeys := []string{"dxy", "us10y", "foreign_flow", "vix", "jpy", "geopolitical", "oil", "gold"}
+	for _, k := range expectedKeys {
+		if _, ok := idx.Components[k]; !ok {
+			t.Fatalf("missing component %s", k)
+		}
+	}
+	if idx.Timestamp == 0 {
+		t.Fatal("expected non-zero timestamp")
+	}
+}
+
+func TestGetStressIndexHistory(t *testing.T) {
+	eng := NewNarrativeEngine()
+	baseTime := time.Now().Unix()
+
+	for i := range int64(3) {
+		snap := marketdata.MacroDataSnapshot{
+			DXY:                marketdata.MacroDataPoint{Value: 104, ChangePct: float64(i) * 0.5},
+			US10Y:              marketdata.MacroDataPoint{Value: 4.5 + float64(i)*0.1},
+			VIX:                marketdata.MacroDataPoint{Value: 20 + float64(i)*2},
+			ForeignInvestorNet: marketdata.MacroDataPoint{Value: -5 - float64(i)},
+			RecordedAt:         baseTime + i,
+		}
+		eng.UpdateMacro(snap, GeopoliticalRiskScore{Intensity: 30})
+		eng.GetCurrentStressIndex()
+	}
+
+	t.Run("returns exact limit", func(t *testing.T) {
+		hist := eng.GetStressIndexHistory(2)
+		if len(hist) != 2 {
+			t.Fatalf("expected 2 entries, got %d", len(hist))
+		}
+	})
+
+	t.Run("returns min of history and limit", func(t *testing.T) {
+		hist := eng.GetStressIndexHistory(10)
+		if len(hist) != 3 {
+			t.Fatalf("expected 3 entries (history has 3), got %d", len(hist))
+		}
+	})
+
+	t.Run("limit zero defaults to 30", func(t *testing.T) {
+		hist := eng.GetStressIndexHistory(0)
+		if len(hist) != 3 {
+			t.Fatalf("expected 3 entries (default 30, history has 3), got %d", len(hist))
+		}
+	})
+
+	t.Run("negative limit defaults to 30", func(t *testing.T) {
+		hist := eng.GetStressIndexHistory(-1)
+		if len(hist) != 3 {
+			t.Fatalf("expected 3 entries (default 30 for negative, history has 3), got %d", len(hist))
+		}
+	})
+
+	t.Run("empty history returns empty slice", func(t *testing.T) {
+		eng2 := NewNarrativeEngine()
+		hist := eng2.GetStressIndexHistory(10)
+		if len(hist) != 0 {
+			t.Fatalf("expected 0 entries for empty history, got %d", len(hist))
+		}
+	})
+}
+
+func TestGetStressIndexThresholds(t *testing.T) {
+	eng := NewNarrativeEngine()
+	th := eng.GetStressIndexThresholds()
+
+	if th.Crisis <= th.High {
+		t.Fatalf("expected Crisis > High, got Crisis=%v High=%v", th.Crisis, th.High)
+	}
+	if th.High <= th.Alert {
+		t.Fatalf("expected High > Alert, got High=%v Alert=%v", th.High, th.Alert)
+	}
+	if th.Alert <= 0 {
+		t.Fatalf("expected Alert > 0, got Alert=%v", th.Alert)
+	}
+	if th.Crisis == 0 || th.High == 0 || th.Alert == 0 {
+		t.Fatal("expected non-zero threshold values")
+	}
+
+	t.Run("nil stressCalc returns empty struct", func(t *testing.T) {
+		eng2 := NewNarrativeEngine()
+		eng2.stressCalc = nil
+		th := eng2.GetStressIndexThresholds()
+		if th.Crisis != 0 || th.High != 0 || th.Alert != 0 {
+			t.Fatalf("expected zero thresholds for nil stressCalc, got %+v", th)
+		}
+	})
+}

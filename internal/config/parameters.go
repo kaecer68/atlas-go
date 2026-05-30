@@ -337,6 +337,14 @@ type NarrativeParameters struct {
 	RetailFearPercentileThreshold   ParameterMetadata[float64] `json:"retail_fear_percentile_threshold"`
 	RetailAccelerationWindowDays    ParameterMetadata[int]     `json:"retail_acceleration_window_days"`
 	InflationEstimate               ParameterMetadata[float64] `json:"inflation_estimate,omitempty"`
+
+	// Seasonal event detection confidence values (calendar-based events)
+	SpringFestivalConfidence        ParameterMetadata[float64] `json:"spring_festival_confidence"`
+	ElectionCycleConfidence         ParameterMetadata[float64] `json:"election_cycle_confidence"`
+	EarningsBlackoutConfidence      ParameterMetadata[float64] `json:"earnings_blackout_confidence"`
+	TechPeakSeasonConfidence        ParameterMetadata[float64] `json:"tech_peak_season_confidence"`
+	YearEndWindowDressingConfidence ParameterMetadata[float64] `json:"year_end_window_dressing_confidence"`
+	EarningsSurpriseConfidence      ParameterMetadata[float64] `json:"earnings_surprise_confidence"`
 }
 
 // RealtimeParameters holds tunable values for real-time regime detection and adaptation.
@@ -1446,6 +1454,24 @@ func (p *ParametersConfig) Validate() error {
 	if p.Narrative.RetailAccelerationWindowDays.Value < 1 {
 		return fmt.Errorf("narrative.retail_acceleration_window_days (%d) must be >= 1", p.Narrative.RetailAccelerationWindowDays.Value)
 	}
+	if p.Narrative.SpringFestivalConfidence.Value < 0 || p.Narrative.SpringFestivalConfidence.Value > 1 {
+		return fmt.Errorf("narrative.spring_festival_confidence (%.3f) must be in [0,1]", p.Narrative.SpringFestivalConfidence.Value)
+	}
+	if p.Narrative.ElectionCycleConfidence.Value < 0 || p.Narrative.ElectionCycleConfidence.Value > 1 {
+		return fmt.Errorf("narrative.election_cycle_confidence (%.3f) must be in [0,1]", p.Narrative.ElectionCycleConfidence.Value)
+	}
+	if p.Narrative.EarningsBlackoutConfidence.Value < 0 || p.Narrative.EarningsBlackoutConfidence.Value > 1 {
+		return fmt.Errorf("narrative.earnings_blackout_confidence (%.3f) must be in [0,1]", p.Narrative.EarningsBlackoutConfidence.Value)
+	}
+	if p.Narrative.TechPeakSeasonConfidence.Value < 0 || p.Narrative.TechPeakSeasonConfidence.Value > 1 {
+		return fmt.Errorf("narrative.tech_peak_season_confidence (%.3f) must be in [0,1]", p.Narrative.TechPeakSeasonConfidence.Value)
+	}
+	if p.Narrative.YearEndWindowDressingConfidence.Value < 0 || p.Narrative.YearEndWindowDressingConfidence.Value > 1 {
+		return fmt.Errorf("narrative.year_end_window_dressing_confidence (%.3f) must be in [0,1]", p.Narrative.YearEndWindowDressingConfidence.Value)
+	}
+	if p.Narrative.EarningsSurpriseConfidence.Value < 0 || p.Narrative.EarningsSurpriseConfidence.Value > 1 {
+		return fmt.Errorf("narrative.earnings_surprise_confidence (%.3f) must be in [0,1]", p.Narrative.EarningsSurpriseConfidence.Value)
+	}
 
 	if p.Janus.ShortWindowDays.Value < 1 {
 		return fmt.Errorf("janus.short_window_days (%d) must be >= 1", p.Janus.ShortWindowDays.Value)
@@ -2001,6 +2027,24 @@ func mergeNarrativeDefaults(cfg *ParametersConfig) {
 	}
 	if n.RetailAccelerationWindowDays.Value == 0 {
 		n.RetailAccelerationWindowDays = def.RetailAccelerationWindowDays
+	}
+	if n.SpringFestivalConfidence.Value == 0 {
+		n.SpringFestivalConfidence = def.SpringFestivalConfidence
+	}
+	if n.ElectionCycleConfidence.Value == 0 {
+		n.ElectionCycleConfidence = def.ElectionCycleConfidence
+	}
+	if n.EarningsBlackoutConfidence.Value == 0 {
+		n.EarningsBlackoutConfidence = def.EarningsBlackoutConfidence
+	}
+	if n.TechPeakSeasonConfidence.Value == 0 {
+		n.TechPeakSeasonConfidence = def.TechPeakSeasonConfidence
+	}
+	if n.YearEndWindowDressingConfidence.Value == 0 {
+		n.YearEndWindowDressingConfidence = def.YearEndWindowDressingConfidence
+	}
+	if n.EarningsSurpriseConfidence.Value == 0 {
+		n.EarningsSurpriseConfidence = def.EarningsSurpriseConfidence
 	}
 	if n.TaiwanStressDXYScale.Value == 0 {
 		n.TaiwanStressDXYScale = def.TaiwanStressDXYScale
