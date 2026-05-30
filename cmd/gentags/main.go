@@ -8,6 +8,7 @@
 //	internal/monitoring/api/**/*.go     — API response types (AgentObservatoryResponse, ...)
 //	internal/monitoring/service/**/*.go — service response types (SystemHealthResponse, ...)
 //	internal/reporting/**/*.go          — performance report types (PerformanceReport, AgentPerformance, ...)
+//	internal/industry/**/*.go           — industry types (CycleStatusCard, CalendarEvent, SupplyChainGraph, ...)
 //
 // Writes:
 //
@@ -55,11 +56,12 @@ func main() {
 	svcDir := findMonitoringServiceDir(rootDir)
 	reportDir := findReportingDir(rootDir)
 	configDir := findConfigDir(rootDir)
-	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" {
+	industryDir := findIndustryDir(rootDir)
+	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" {
 		// Build merged struct names from all directories so cross-package
 		// type references resolve correctly.
 		allNames := preScanStructNames(domainDir)
-		for _, d := range []string{apiDir, svcDir, configDir} {
+		for _, d := range []string{apiDir, svcDir, configDir, industryDir} {
 			if d == "" {
 				continue
 			}
@@ -101,6 +103,16 @@ func main() {
 		if configDir != "" {
 			configStructs := parseStructsWithNames(configDir, allNames)
 			for k, v := range configStructs {
+				structs[k] = v
+			}
+		}
+		// Merge industry structs (e.g. CycleStatusCard, CalendarEvent, SupplyChainGraph).
+		if industryDir != "" {
+			industryStructs := parseStructsWithNames(industryDir, allNames)
+			for k, v := range industryStructs {
+				if _, exists := structs[k]; exists {
+					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and industry; using industry version\n", k)
+				}
 				structs[k] = v
 			}
 		}
@@ -149,6 +161,14 @@ func findMonitoringServiceDir(rootDir string) string {
 
 func findReportingDir(rootDir string) string {
 	candidate := filepath.Join(rootDir, "internal", "reporting")
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
+	return ""
+}
+
+func findIndustryDir(rootDir string) string {
+	candidate := filepath.Join(rootDir, "internal", "industry")
 	if _, err := os.Stat(candidate); err == nil {
 		return candidate
 	}
