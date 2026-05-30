@@ -2,6 +2,14 @@
 // Run: go generate ./...  or  go run ./cmd/gentags
 // Source: internal/domain/**/*.go, internal/monitoring/api/**/*.go, internal/monitoring/service/**/*.go
 
+declare interface AdjustmentBreakdown {
+  direct_match: number;
+  supply_chain: number;
+  narrative: number;
+  dynamic_env: number;
+  composite: number;
+}
+
 declare interface AgentAttribution {
   agent_id: string;
   agent_name: string;
@@ -179,6 +187,23 @@ declare interface BrokerRuntimeAudit {
   nonce_redis_prefix: string;
 }
 
+declare interface CalendarEvent {
+  id: string;
+  name: string;
+  name_en: string;
+  event_type: string;
+  description: string;
+  direction: string;
+  base_weight: number;
+  active: boolean;
+  start_date: string;
+  end_date: string;
+  peak_date: string;
+  decay_days: number;
+  affected_industries: string[];
+  sentiment_adjustment: number;
+}
+
 declare interface CalibratorChange {
   param_name: string;
   before: number;
@@ -226,6 +251,13 @@ declare interface CapitalSnapshot {
   consecutive_losses: number;
   can_advance: boolean;
   advance_reason?: string;
+}
+
+declare interface CardConfig {
+  layer_weights: Record<string, number>;
+  sentiment_thresholds: Record<string, string>;
+  clamp_min: number;
+  clamp_max: number;
 }
 
 declare interface ChannelAlert {
@@ -341,21 +373,58 @@ declare interface CrossFootCheck {
   difference: number;
 }
 
+declare interface CustomerConcentration {
+  customer_name: string;
+  customer_ticker?: string;
+  revenue_share_pct: number;
+  geographic_region: string;
+  risk_score: number;
+  last_order_date?: string | null;
+  order_visibility_months: number;
+}
+
+declare interface CyclePhaseTransition {
+  from_phase: string;
+  to_phase: string;
+  probability: number;
+  triggers: string[];
+  typical_duration_days: number;
+}
+
 declare interface CyclePosition {
-  industry: string;
-  name: string;
+  industry_id: string;
   business_cycle: string;
   inventory_cycle: string;
   capex_cycle: string;
   confidence: number;
+  continuous_phase_score: number;
+  leading_indicators: string[];
+  lagging_indicators: string[];
+  cycle_duration_days: number;
+  expected_phase_change?: string | null;
   updated_at: string;
+}
+
+declare interface CycleStatusCard {
+  date: string;
+  generated_at: string;
+  silicon_phase: number;
+  silicon_phase_name: string;
+  silicon_score: number;
+  silicon_indicators: string | null;
+  business_cycle: string;
+  inventory_cycle: string;
+  capex_cycle: string;
+  cycle_confidence: number;
   is_favorable: boolean;
-  phase_score: number;
-  trend: string;
-  confidence_breakdown?: Record<string, number>;
-  narrative_theme?: string;
-  threshold_evidence?: Record<string, string>;
-  evidence: string;
+  active_patterns: string[];
+  seasonal_adjustment: number;
+  active_events: string[];
+  event_sentiment: number;
+  supply_chain_signal: number;
+  composite_coefficient: number;
+  sentiment_label: string;
+  breakdown: string[];
 }
 
 declare interface CycleThresholdConfig {
@@ -1042,6 +1111,25 @@ declare interface InTradeGateParameters {
   circuit_breaker_daily_loss_pct: string;
 }
 
+declare interface Indicator {
+  name: string;
+  value: number;
+  unit: string;
+  trend: string;
+  threshold: number;
+  is_leading: boolean;
+  weight: number;
+  last_updated: string;
+}
+
+declare interface IndustryClassification {
+  symbol: string;
+  level1: string;
+  level2: string;
+  level3: string;
+  updated_at: string;
+}
+
 declare interface IndustryContextItem {
   industry_id: string;
   business_cycle: string;
@@ -1082,6 +1170,28 @@ declare interface IndustryDetail {
   regime_context: string;
 }
 
+declare interface IndustryLinkageScore {
+  industry_id: string;
+  upstream_count: number;
+  downstream_count: number;
+  avg_correlation: number;
+  systemic_importance: number;
+  shock_propagation_speed: number;
+  timestamp: string;
+}
+
+declare interface IndustryMetrics {
+  industry_id: string;
+  pe: number;
+  pb: number;
+  dividend_yield: number;
+  revenue_growth_yoy: number;
+  profit_growth_yoy: number;
+  inventory_turnover: number;
+  capacity_utilization: number;
+  timestamp: string;
+}
+
 declare interface IndustryOverview {
   id: string;
   name: string;
@@ -1093,7 +1203,7 @@ declare interface IndustryOverview {
   cycle_confidence: number;
   is_favorable: boolean;
   seasonal_patterns: string[];
-  linkage_score: string | null;
+  linkage_score: IndustryLinkageScore | null;
   cycle_multiplier: number;
   seasonal_multiplier: number;
   linkage_multiplier: number;
@@ -1160,6 +1270,21 @@ declare interface IndustryRecommendation {
   risk_adjusted: boolean;
 }
 
+declare interface IndustrySegment {
+  id: string;
+  name: string;
+  name_en: string;
+  level: string;
+  parent_id?: string;
+  weight?: number;
+  geographic_exposure: string;
+  cyclicality: string;
+  technology_intensity: string;
+  capital_intensity: string;
+  representative_stocks?: string[];
+  description?: string;
+}
+
 declare interface IntegrityCheck {
   name: string;
   status: string;
@@ -1202,6 +1327,14 @@ declare interface LEOSatelliteExecutorParameters {
   stop_loss_multiplier: string;
 }
 
+declare interface LayerAdjustment {
+  layer: string;
+  raw_value: number;
+  weight: number;
+  contribution: number;
+  reason: string;
+}
+
 declare interface LinkageConfig {
   downstream_decay_factor: number;
   upstream_decay_factor: number;
@@ -1223,12 +1356,23 @@ declare interface LinkageFactorScore {
   industry_id?: string;
 }
 
+declare interface LinkageHistoryRecord {
+  date: string;
+  industry_id: string;
+  systemic_importance: number;
+  shock_propagation_speed: number;
+  avg_correlation: number;
+  upstream_count: number;
+  downstream_count: number;
+  recorded_at: string;
+}
+
 declare interface LinkageInfo {
   industry: string;
   upstream: string[];
   downstream: string[];
   correlations: Record<string, string>[];
-  linkage_score: string | null;
+  linkage_score: IndustryLinkageScore | null;
 }
 
 declare interface LiveStatusResponse {
@@ -1347,6 +1491,13 @@ declare interface MutationBrief {
   generated_at: string;
 }
 
+declare interface NarrativeAdjustment {
+  revenue_bias: number;
+  profit_bias: number;
+  confidence: number;
+  active_theme?: string;
+}
+
 declare interface NarrativeContextItem {
   active_themes: string[];
   primary_theme?: string;
@@ -1445,6 +1596,15 @@ declare interface NewsLatencyConfig {
   drop_high_threshold: number;
   drop_medium_threshold: number;
   confidence_divisor: number;
+}
+
+declare interface NewsSource {
+  name: string;
+  region: string;
+  tier: number;
+  latency_hours: number;
+  reliability: number;
+  url?: string;
 }
 
 declare interface OOSResult {
@@ -1594,6 +1754,13 @@ declare interface PhaseScoresConfig {
   score_recovery: number;
   score_mature: number;
   score_recession: number;
+}
+
+declare interface PhaseTransition {
+  from_phase: string;
+  to_phase: string;
+  timestamp: string;
+  indicators: string;
 }
 
 declare interface PipelineItem {
@@ -1955,6 +2122,20 @@ declare interface RetailSentimentSnapshot {
   timestamp: string;
 }
 
+declare interface RiskEvent {
+  id: string;
+  type: string;
+  severity: string;
+  industry_id: string;
+  symbol?: string;
+  description: string;
+  impact_estimate: number;
+  confidence: number;
+  detected_at: string;
+  source: string;
+  recommended_action?: string;
+}
+
 declare interface RiskExposureResponse {
   snapshot_time: string;
   var_95: number;
@@ -2001,6 +2182,14 @@ declare interface RiskParameters {
   take_profit: string;
   max_loss_per_trade: string;
   max_total_exposure: string;
+}
+
+declare interface RiskProfile {
+  customer_concentration: number;
+  news_latency_risk: number;
+  asymmetric_risk: number;
+  supply_chain_depth: number;
+  key_customers?: string[];
 }
 
 declare interface RiskSnapshot {
@@ -2057,6 +2246,25 @@ declare interface ScreeningReject {
   recorded_at: string;
 }
 
+declare interface SeasonalCalendar {
+  year: number;
+  patterns: string[];
+  by_month: Record<number, string[]>;
+}
+
+declare interface SeasonalCalibration {
+  pattern_id: string;
+  pattern_name: string;
+  observed_accuracy: number;
+  observed_avg_return: number;
+  observed_adjustment: number;
+  declared_accuracy: number;
+  declared_return: number;
+  declared_adjustment: number;
+  observation_count: number;
+  verdict: string;
+}
+
 declare interface SeasonalExpectation {
   theme: string;
   historical_avg_return: number;
@@ -2068,19 +2276,17 @@ declare interface SeasonalExpectation {
 declare interface SeasonalPattern {
   id: string;
   name: string;
-  name_en?: string;
-  description: string;
+  name_en: string;
   start_month: number;
   start_day: number;
   end_month: number;
   end_day: number;
-  historical_accuracy: number;
-  typical_return: number;
+  favored_industries: string[];
+  avoided_industries: string[];
   adjustment_factor: number;
-  favored_industries?: string[];
-  avoided_industries?: string[];
-  affected_industries?: string[];
-  impact?: string;
+  historical_accuracy: number;
+  avg_market_return: number;
+  description: string;
 }
 
 declare interface SeasonalPatternConfig {
@@ -2098,6 +2304,22 @@ declare interface SeasonalPatternConfig {
   historical_accuracy: number;
   avg_market_return: number;
   description: string;
+}
+
+declare interface SeasonalPatternSnapshot {
+  id: string;
+  name: string;
+  adjustment_factor: number;
+}
+
+declare interface SeasonalPerformance {
+  pattern_id: string;
+  year: number;
+  actual_return: number;
+  predicted_return: number;
+  accuracy: number;
+  favored_industries: string[];
+  recorded_at: string;
 }
 
 declare interface SectorAttribution {
@@ -2133,6 +2355,11 @@ declare interface SectorRotationConfig {
   rebalance_threshold: number;
 }
 
+declare interface SentimentBounds {
+  min: number;
+  max: number;
+}
+
 declare interface SessionSummary {
   session_id: string;
   regime: string;
@@ -2163,6 +2390,15 @@ declare interface ShippingExecutorParameters {
 declare interface ShockImpact {
   industry: string;
   impact: number;
+}
+
+declare interface SiliconIndicatorSnapshot {
+  tsmc_monthly_revenue_yoy: number;
+  global_semiconductor_billings_yoy: number;
+  dram_spot_price_trend: number;
+  taiwan_semiconductor_index_ma: number;
+  tsmc_capex_guidance: number;
+  philadelphia_sox_index_yoy: number;
 }
 
 declare interface SimulationConfig {
@@ -2276,6 +2512,14 @@ declare interface StructuralTrendConfig {
   cowos_utilization_threshold: number;
   capex_growth_threshold: number;
   semiconductor_index_threshold: number;
+}
+
+declare interface SupplyChainNode {
+  industry_id: string;
+  tier: number;
+  upstream_of?: string[];
+  downstream_of?: string[];
+  key_materials?: string[];
 }
 
 declare interface SwarmStatusResponse {
@@ -2463,6 +2707,14 @@ declare interface rawOutcome {
   session_id: string;
 }
 
+declare interface revenueRecord {
+  date: string;
+  stock_id: string;
+  revenue: number;
+  revenue_month: number;
+  revenue_year: number;
+}
+
 declare interface statsResponse {
   total_rules: number;
   active_rules: number;
@@ -2481,6 +2733,11 @@ declare interface submitTaskRequest {
 declare interface submitTaskResponse {
   id: string;
   status: string;
+}
+
+declare interface supplyChainGraphJSON {
+  nodes: string[];
+  correlations: Record<string, number>;
 }
 
 declare interface validateRuleResponse {
