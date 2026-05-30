@@ -308,7 +308,12 @@ func (c *TaiwanStressCalculator) CalculateFromSnapshot(ctx context.Context, snap
 	c.mu.RUnlock()
 
 	if c.geoProvider == nil {
-		return TaiwanStressIndex{}, fmt.Errorf("geopolitical provider not configured")
+		idx := c.Calculate(snap, prev, GeopoliticalRiskScore{})
+		c.mu.Lock()
+		c.cache = &idx
+		c.cachedAt = time.Now()
+		c.mu.Unlock()
+		return idx, nil
 	}
 	geoScore, err := c.geoProvider.FetchScore(ctx)
 	if err != nil {
@@ -346,7 +351,12 @@ func (c *TaiwanStressCalculator) CalculateFromSnapshotWithStore(ctx context.Cont
 				return idx, nil
 			}
 		}
-		return TaiwanStressIndex{}, fmt.Errorf("geopolitical provider not configured")
+		idx := c.Calculate(snap, prev, GeopoliticalRiskScore{})
+		c.mu.Lock()
+		c.cache = &idx
+		c.cachedAt = time.Now()
+		c.mu.Unlock()
+		return idx, nil
 	}
 	geoScore, err := c.geoProvider.FetchScore(ctx)
 	if err != nil {

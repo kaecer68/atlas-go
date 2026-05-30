@@ -251,9 +251,27 @@ func checkMacroHealth(path string, now time.Time) (string, string) {
 		Oil struct {
 			Timestamp int64 `json:"timestamp"`
 		} `json:"oil"`
+		USD_TWD struct {
+			Symbol    string  `json:"symbol"`
+			ChangePct float64 `json:"change_pct"`
+		} `json:"usd_twd"`
+		JPY struct {
+			Symbol    string  `json:"symbol"`
+			ChangePct float64 `json:"change_pct"`
+		} `json:"jpy"`
 	}
 	if err := json.Unmarshal(data, &snap); err != nil {
 		logging.Warn("system_service", "parse_macro_health", logging.Err(err))
+	}
+
+	// Check data validity: forex pairs with symbol but zero change_pct
+	// indicate a data pipeline issue (e.g., Yahoo returning only 1 data point).
+	var staleIndicators []string
+	if snap.USD_TWD.Symbol != "" && snap.USD_TWD.ChangePct == 0 {
+		staleIndicators = append(staleIndicators, "USD/TWD")
+	}
+	if snap.JPY.Symbol != "" && snap.JPY.ChangePct == 0 {
+		staleIndicators = append(staleIndicators, "JPY")
 	}
 
 	latest := info.ModTime()
@@ -272,18 +290,24 @@ func checkMacroHealth(path string, now time.Time) (string, string) {
 			latest = oilTime
 		}
 	}
+	detail := latest.Format("2006-01-02 15:04:05")
+
+	// Data validity check overrides timestamp-only status when indicators are stale.
+	if len(staleIndicators) > 0 {
+		return "warn", detail + " | 資料異常: " + strings.Join(staleIndicators, ", ") + " 日變動率為0"
+	}
 
 	age := now.Sub(latest)
 	if age < 24*time.Hour {
-		return "ok", latest.Format("2006-01-02 15:04:05")
+		return "ok", detail
 	}
 	if age < 7*24*time.Hour {
 		if isWeekendGap(latest, now, 72) {
-			return "expected_delay", latest.Format("2006-01-02 15:04:05")
+			return "expected_delay", detail
 		}
-		return "warn", latest.Format("2006-01-02 15:04:05")
+		return "warn", detail
 	}
-	return "error", latest.Format("2006-01-02 15:04:05")
+	return "error", detail
 }
 
 func checkGeopoliticalHealth(path string, now time.Time) (string, string) {

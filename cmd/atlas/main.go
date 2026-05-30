@@ -923,6 +923,7 @@ func run(args []string, deps appDeps) error {
 						_, _, err := dashRef.IngestAndUpdateMacro(ingestCtx)
 						if err != nil {
 							logging.Warn("main", "macro_ingest_failed", "err", err)
+							return err
 						}
 						return nil
 					},
