@@ -248,9 +248,12 @@ func LoadCalibrationEvidence(path string) map[string]any {
 	//   - Raw JSON:  calibration_timestamp (from cmd/calibrate-seasonal --update)
 	ts, hasTs := sp["last_calibrated"]
 	if !hasTs || ts == nil {
-		ts, hasTs = sp["calibration_timestamp"]
+		if v, ok := sp["calibration_timestamp"]; ok && v != nil && v != "" {
+			ts = v
+			hasTs = true
+		}
 	}
-	if !hasTs || ts == nil {
+	if !hasTs || ts == nil || ts == "" {
 		return nil
 	}
 
