@@ -245,6 +245,67 @@ func TestLoadFallbackDatedSnapshotPicksNewest(t *testing.T) {
 	}
 }
 
+func TestMacroIngestor_LoadPreviousSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	ingestor := NewMacroIngestor(nil, dir) // nil provider — only testing file I/O
+
+	may1 := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC).Unix()
+	may2 := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC).Unix()
+	may3 := time.Date(2026, 5, 3, 0, 0, 0, 0, time.UTC).Unix()
+
+	// Write May 1 snapshot
+	snap1 := marketdata.MacroDataSnapshot{
+		RecordedAt: may1,
+		US10Y:      marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.5},
+	}
+	data1, _ := json.Marshal(snap1)
+	os.WriteFile(filepath.Join(dir, "2026-05-01.json"), data1, 0o644)
+
+	// Write May 2 snapshot
+	snap2 := marketdata.MacroDataSnapshot{
+		RecordedAt: may2,
+		US10Y:      marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.7},
+	}
+	data2, _ := json.Marshal(snap2)
+	os.WriteFile(filepath.Join(dir, "2026-05-02.json"), data2, 0o644)
+
+	// Write latest.json (should be skipped by loadPreviousSnapshot)
+	latestData, _ := json.Marshal(marketdata.MacroDataSnapshot{RecordedAt: may2})
+	os.WriteFile(filepath.Join(dir, "latest.json"), latestData, 0o644)
+
+	// curr has May 3 timestamp — should return May 2 (latest with RecordedAt < curr)
+	curr := marketdata.MacroDataSnapshot{RecordedAt: may3}
+
+	prev, err := ingestor.loadPreviousSnapshot(curr)
+	if err != nil {
+		t.Fatalf("loadPreviousSnapshot: %v", err)
+	}
+	if prev.RecordedAt != may2 {
+		t.Fatalf("expected May 2 snapshot (RecordedAt=%d), got RecordedAt=%d", may2, prev.RecordedAt)
+	}
+	if prev.US10Y.Value != 4.7 {
+		t.Fatalf("expected US10Y.Value=4.7, got %f", prev.US10Y.Value)
+	}
+
+	// Empty directory: should return error
+	emptyIngestor := NewMacroIngestor(nil, t.TempDir())
+	_, err = emptyIngestor.loadPreviousSnapshot(curr)
+	if err == nil {
+		t.Fatal("expected error for empty directory")
+	}
+
+	// No snapshots with RecordedAt < curr: should return error
+	noMatchDir := t.TempDir()
+	noMatchIngestor := NewMacroIngestor(nil, noMatchDir)
+	futureSnap := marketdata.MacroDataSnapshot{RecordedAt: may3 + 86400} // May 4
+	futureData, _ := json.Marshal(futureSnap)
+	os.WriteFile(filepath.Join(noMatchDir, "2026-05-04.json"), futureData, 0o644)
+	_, err = noMatchIngestor.loadPreviousSnapshot(curr)
+	if err == nil {
+		t.Fatal("expected error when no previous snapshot found (all candidates RecordedAt >= curr)")
+	}
+}
+
 func TestMergeWithPrev_BDI(t *testing.T) {
 	// Test 1: prev BDI propagates when curr empty
 	prev := marketdata.MacroDataSnapshot{
@@ -296,5 +357,238 @@ func TestHasValidYahooDataAndIngestChain(t *testing.T) {
 	}
 	if snap.US10Y.Symbol != "^TNX" {
 		t.Fatalf("expected fallback US10Y ^TNX, got %s", snap.US10Y.Symbol)
+	}
+}
+
+func TestComputeAICapexSentiment(t *testing.T) {
+	config.ResetParametersConfig()
+
+	tests := []struct {
+		name              string
+		tsmcYoYChangePct  float64
+		expectedSentiment float64
+	}{
+		{
+			name:              "below positive threshold (default 0.0) returns fallback -0.3",
+			tsmcYoYChangePct:  -5.0,
+			expectedSentiment: -0.3,
+		},
+		{
+			name:              "at positive threshold (0.0) returns 0.5 (ratio=0, start of linear zone)",
+			tsmcYoYChangePct:  0.0,
+			expectedSentiment: 0.5,
+		},
+		{
+			name:              "between thresholds (5.0) returns 0.65 (linear interpolation 0.5→0.8)",
+			tsmcYoYChangePct:  5.0,
+			expectedSentiment: 0.65,
+		},
+		{
+			name:              "at YoY threshold (10.0) returns 0.8 (extra=0, start of upper zone)",
+			tsmcYoYChangePct:  10.0,
+			expectedSentiment: 0.8,
+		},
+		{
+			name:              "above YoY threshold (35.0) returns 1.0 (extra=1.0, capped)",
+			tsmcYoYChangePct:  35.0,
+			expectedSentiment: 1.0,
+		},
+		{
+			name:              "far above YoY threshold (100.0) returns 1.0 (extra capped at 1.0)",
+			tsmcYoYChangePct:  100.0,
+			expectedSentiment: 1.0,
+		},
+		{
+			name:              "1.5x YoY threshold (15.0) returns 0.9 (extra=0.5)",
+			tsmcYoYChangePct:  15.0,
+			expectedSentiment: 0.9,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := computeAICapexSentiment(tt.tsmcYoYChangePct)
+			if got != tt.expectedSentiment {
+				t.Fatalf("computeAICapexSentiment(%f) = %f, want %f", tt.tsmcYoYChangePct, got, tt.expectedSentiment)
+			}
+		})
+	}
+}
+
+func TestComputeAICapexSentiment_ContinuousInterpolation(t *testing.T) {
+	config.ResetParametersConfig()
+	params := config.GetParametersConfig()
+	params.Narrative.TSMCRevenuePositiveThreshold.Value = 10.0
+	params.Narrative.TSMCRevenueYoYThreshold.Value = 30.0
+	params.Narrative.AICapexFallbackSentiment.Value = -0.3
+
+	tests := []struct {
+		name              string
+		tsmcYoYChangePct  float64
+		expectedSentiment float64
+	}{
+		{
+			name:              "0 returns fallback -0.3 (below positive threshold 10)",
+			tsmcYoYChangePct:  0.0,
+			expectedSentiment: -0.3,
+		},
+		{
+			name:              "10 returns 0.5 (at lower bound, ratio=0)",
+			tsmcYoYChangePct:  10.0,
+			expectedSentiment: 0.5,
+		},
+		{
+			name:              "20 returns 0.65 (midpoint: ratio=0.5, 0.5+0.3*0.5=0.65)",
+			tsmcYoYChangePct:  20.0,
+			expectedSentiment: 0.65,
+		},
+		{
+			name:              "30 returns 0.8 (at YoY threshold, extra=0)",
+			tsmcYoYChangePct:  30.0,
+			expectedSentiment: 0.8,
+		},
+		{
+			name:              "60 returns 1.0 (2x YoY, extra=1.0, capped)",
+			tsmcYoYChangePct:  60.0,
+			expectedSentiment: 1.0,
+		},
+		{
+			name:              "45 returns 0.9 (1.5x YoY, extra=0.5)",
+			tsmcYoYChangePct:  45.0,
+			expectedSentiment: 0.9,
+		},
+		{
+			name:              "90 returns 1.0 (3x YoY, extra=2.0 capped at 1.0)",
+			tsmcYoYChangePct:  90.0,
+			expectedSentiment: 1.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := computeAICapexSentiment(tt.tsmcYoYChangePct)
+			if got != tt.expectedSentiment {
+				t.Fatalf("computeAICapexSentiment(%f) = %f, want %f", tt.tsmcYoYChangePct, got, tt.expectedSentiment)
+			}
+		})
+	}
+}
+
+func TestDetectAICapexEventFromSnapshot(t *testing.T) {
+	config.ResetParametersConfig()
+	now := time.Date(2026, 5, 30, 12, 0, 0, 0, time.UTC)
+
+	// Default config values:
+	//   AICapexSentimentThreshold = 0.5
+	//   ConfidenceBaseAICapex     = 0.70
+	//   ConfidenceDeviationCeiling = 0.95
+	//
+	// computeDeviationConfidence(0.8, 0.5, 0.70, 0.95):
+	//   ratio = 0.8/0.5 = 1.6 → 0.70 + (0.6)*(0.25) = 0.85
+	// With prevTSMC positive ChangePct: 0.85 + 0.05 = 0.90
+
+	prevWithPositiveChg := marketdata.MacroDataPoint{
+		Symbol:    "TSMC",
+		Value:     600.0,
+		ChangePct: 5.0,
+	}
+	prevWithNegativeChg := marketdata.MacroDataPoint{
+		Symbol:    "TSMC",
+		Value:     600.0,
+		ChangePct: -2.0,
+	}
+	prevEmpty := marketdata.MacroDataPoint{}
+
+	tests := []struct {
+		name              string
+		sentiment         float64
+		prevTSMC          marketdata.MacroDataPoint
+		wantNil           bool
+		expectedConfidence float64
+	}{
+		{
+			name:              "sentiment above threshold (0.8) with positive prevTSMC boosts confidence",
+			sentiment:         0.8,
+			prevTSMC:          prevWithPositiveChg,
+			wantNil:           false,
+			expectedConfidence: 0.90,
+		},
+		{
+			name:              "sentiment above threshold (0.8) without prevTSMC returns base confidence",
+			sentiment:         0.8,
+			prevTSMC:          prevEmpty,
+			wantNil:           false,
+			expectedConfidence: 0.85,
+		},
+		{
+			name:              "sentiment above threshold (0.8) with negative prevTSMC no boost",
+			sentiment:         0.8,
+			prevTSMC:          prevWithNegativeChg,
+			wantNil:           false,
+			expectedConfidence: 0.85,
+		},
+		{
+			name:      "sentiment at threshold (0.5) returns nil",
+			sentiment: 0.5,
+			prevTSMC:  prevWithPositiveChg,
+			wantNil:   true,
+		},
+		{
+			name:      "sentiment below threshold (0.3) returns nil",
+			sentiment: 0.3,
+			prevTSMC:  prevWithPositiveChg,
+			wantNil:   true,
+		},
+		{
+			name:      "sentiment strongly negative (-0.5) returns nil",
+			sentiment: -0.5,
+			prevTSMC:  prevWithPositiveChg,
+			wantNil:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			event := detectAICapexEventFromSnapshot(tt.sentiment, tt.prevTSMC, now)
+
+			if tt.wantNil {
+				if event != nil {
+					t.Fatalf("expected nil event, got %+v", event)
+				}
+				return
+			}
+
+			if event == nil {
+				t.Fatal("expected non-nil event")
+			}
+
+			if event.Theme != "AI_capex_surge" {
+				t.Fatalf("expected theme AI_capex_surge, got %s", event.Theme)
+			}
+			if event.Region != "US" {
+				t.Fatalf("expected region US, got %s", event.Region)
+			}
+			if event.Sentiment != 0.8 {
+				t.Fatalf("expected sentiment 0.8, got %f", event.Sentiment)
+			}
+			if event.Confidence != tt.expectedConfidence {
+				t.Fatalf("expected confidence %f, got %f", tt.expectedConfidence, event.Confidence)
+			}
+			if event.ConfidenceSource != "deviation_based_v1" {
+				t.Fatalf("expected confidence_source deviation_based_v1, got %s", event.ConfidenceSource)
+			}
+			if event.CapitalFlow != "tech_capex_inflow" {
+				t.Fatalf("expected capital_flow tech_capex_inflow, got %s", event.CapitalFlow)
+			}
+			if event.TimeWindow != "1_month" {
+				t.Fatalf("expected time_window 1_month, got %s", event.TimeWindow)
+			}
+			if event.SourceData == nil {
+				t.Fatal("expected non-nil SourceData")
+			}
+			if sent, ok := event.SourceData["ai_capex_sentiment"]; !ok || sent != tt.sentiment {
+				t.Fatalf("expected SourceData[ai_capex_sentiment] = %f, got %v", tt.sentiment, event.SourceData["ai_capex_sentiment"])
+			}
+		})
 	}
 }
