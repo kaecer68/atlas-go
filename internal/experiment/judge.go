@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -13,7 +14,9 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eval"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
+	"github.com/kaecer68/atlas-go/internal/feature"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
 type Judge struct {
@@ -188,6 +191,9 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 				return domain.PromptExperimentResult{}, fmt.Errorf("transition experiment status: %w", err)
 			}
 			result.Notes = append(result.Notes, "Replay judge accepted the candidate for the next baseline promotion step.")
+
+			// Compute factor importance if replay data is available.
+			j.computeAndAttachImportance(&result)
 		}
 	} else {
 		if err := domain.TransitionExperimentStatus(&result.Experiment, domain.ExperimentRejected); err != nil {
@@ -702,4 +708,49 @@ func computeWeightDrift(result domain.PromptExperimentResult) float64 {
 		return 0
 	}
 	return totalDrift / float64(count)
+}
+
+// computeAndAttachImportance loads replay data, extracts features, and runs
+// permutation importance. Results are attached to result.ImportanceResult.
+// Failures are non-fatal — they are logged as notes.
+func (j *Judge) computeAndAttachImportance(result *domain.PromptExperimentResult) {
+	if j.replayDataPath == "" {
+		return
+	}
+
+	ds, err := replay.LoadTWSEOpenDataCSV(j.replayDataPath)
+	if err != nil {
+		result.Notes = append(result.Notes, fmt.Sprintf("importance: failed to load replay data: %v", err))
+		return
+	}
+
+	// Flatten dataset into sorted bars.
+	var bars []domain.DailyBar
+	for _, date := range ds.Dates {
+		for _, bar := range ds.ByDate[date.Format("2006-01-02")] {
+			bars = append(bars, bar)
+		}
+	}
+	sort.Slice(bars, func(i, j int) bool { return bars[i].Date.Before(bars[j].Date) })
+
+	if len(bars) < 200 {
+		result.Notes = append(result.Notes, fmt.Sprintf("importance: %d bars insufficient for reliable importance", len(bars)))
+		return
+	}
+
+	defaultFeatures := []string{"close", "volume", "return_1d"}
+	unknown := feature.Validate(defaultFeatures)
+	if len(unknown) > 0 {
+		result.Notes = append(result.Notes, fmt.Sprintf("importance: unknown features: %v", unknown))
+		return
+	}
+
+	p := NewFactorPredictor()
+	imp, err := p.ComputeImportanceFromBars(bars, defaultFeatures, 5)
+	if err != nil {
+		result.Notes = append(result.Notes, fmt.Sprintf("importance: computation failed: %v", err))
+		return
+	}
+
+	result.ImportanceResult = &imp
 }
