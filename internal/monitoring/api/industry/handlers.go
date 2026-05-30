@@ -24,6 +24,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/dashboard/industry-shock-simulation", shared.Post(h.HandleShockSimulation))
 	mux.Handle("GET /api/dashboard/industry-graph", shared.Get(h.HandleIndustryGraph))
 	mux.Handle("GET /api/dashboard/industry-detail", shared.Get(h.HandleIndustryDetail))
+	mux.Handle("GET /api/dashboard/cycle-status-card", shared.Get(h.HandleCycleStatusCard))
 }
 
 func (h *Handlers) HandleIndustryClassification(r *http.Request) (int, any) {
@@ -324,5 +325,26 @@ func (h *Handlers) HandleIndustryGraph(r *http.Request) (int, any) {
 	return http.StatusOK, map[string]any{
 		"nodes": nodeList,
 		"edges": edgeList,
+	}
+}
+
+func (h *Handlers) HandleCycleStatusCard(r *http.Request) (int, any) {
+	industryID := r.URL.Query().Get("industry")
+	now := time.Now()
+
+	var card any
+	var err error
+	if industryID != "" {
+		card, err = h.Svc.BuildIndustryCycleStatusCard(now, industryID)
+	} else {
+		card, err = h.Svc.BuildCycleStatusCard(now)
+	}
+	if err != nil {
+		return http.StatusInternalServerError, map[string]any{
+			"error": err.Error(),
+		}
+	}
+	return http.StatusOK, map[string]any{
+		"card": card,
 	}
 }
