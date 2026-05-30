@@ -319,13 +319,28 @@ func TestCalculateFromSnapshotWithStore_FallbackToPersistedGeo(t *testing.T) {
 	}
 }
 
-func TestCalculateFromSnapshotWithStore_ErrorWhenNoProviderAndNoStore(t *testing.T) {
+func TestCalculateFromSnapshotWithStore_NoProviderNoStoreFallsBack(t *testing.T) {
 	calc := NewTaiwanStressCalculator(nil, "")
 	snap := marketdata.MacroDataSnapshot{
-		RecordedAt: time.Now().Unix(),
+		DXY:                marketdata.MacroDataPoint{Value: 104, ChangePct: 0.5},
+		US10Y:              marketdata.MacroDataPoint{Value: 4.5},
+		VIX:                marketdata.MacroDataPoint{Value: 20},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: -5},
+		RecordedAt:         time.Now().Unix(),
 	}
-	_, err := calc.CalculateFromSnapshotWithStore(context.Background(), snap, marketdata.MacroDataSnapshot{}, nil)
-	if err == nil {
-		t.Fatal("expected error when geo provider and store are both nil")
+	idx, err := calc.CalculateFromSnapshotWithStore(context.Background(), snap, marketdata.MacroDataSnapshot{}, nil)
+	if err != nil {
+		t.Fatalf("expected partial index when geo provider and store are both nil, got error: %v", err)
+	}
+	if idx.Score < 0 || idx.Score > 100 {
+		t.Fatalf("score out of range: %v", idx.Score)
+	}
+	if idx.Regime == "" {
+		t.Fatal("expected non-empty regime")
+	}
+	if v, ok := idx.Components["geopolitical"]; !ok {
+		t.Fatal("expected geopolitical component (set to 0)")
+	} else if v != 0 {
+		t.Fatalf("expected geopolitical=0, got %v", v)
 	}
 }
