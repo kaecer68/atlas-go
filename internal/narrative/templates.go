@@ -320,5 +320,46 @@ func DefaultTemplates() []CausalTemplate {
 • 【押注】AI供應鏈、半導體、中小型股：財報優於預期時，這些板塊的Beta最高、彈性最大
 • 【迴避】防禦型板塊（金融、高股息）：在樂觀情緒主導的市場中，防禦型資產的相對報酬落後`,
 		},
+		{
+			ID:               "earnings_blackout",
+			Name:             "財報空窗期",
+			TriggerTheme:     "earnings_blackout",
+			RequiredRegion:   "TW",
+			Steps: []CausalStep{
+				{Description: "台股進入財報空窗期，資訊不對稱升高 → 資金轉向防禦型標的", Affected: []string{"technology", "semiconductor"}, Impact: -0.4},
+				{Description: "散戶缺乏基本面參考，交易量下滑 → 成交量萎縮，波動性降低", Affected: []string{"retail_services"}, Impact: -0.3},
+			},
+			HistoricalHitRate: 0.65,
+			SourceReferences:  []string{"TWSE calendar", "historical seasonality data"},
+			Rationale:         "每年1-3月、4月中-5月中、7月中-8月中、10月中-11月中為財報空窗期，市場缺乏基本面資訊，法人減少交易",
+		},
+		{
+			ID:               "tech_peak_season",
+			Name:             "科技旺季效應",
+			TriggerTheme:     "tech_peak_season",
+			RequiredRegion:   "TW",
+			Steps: []CausalStep{
+				{Description: "進入科技產品出貨旺季，供應鏈備貨需求增加 → 營收成長預期升溫，本益比擴張", Affected: []string{"semiconductor", "ai_supply_chain"}, Impact: 0.7},
+				{Description: "外資資金流入科技股，推升指數 → 加權指數受惠，中小型科技股跟漲", Affected: []string{"technology", "electronics"}, Impact: 0.6},
+				{Description: "年底消費電子產品需求帶動零組件拉貨 → 上游廠商優先受惠", Affected: []string{"electronic_components"}, Impact: 0.5},
+			},
+			HistoricalHitRate: 0.70,
+			SourceReferences:  []string{"semiconductor shipment data", "historical Q3-Q4 performance"},
+			Rationale:         "每年Q3-Q4為科技產品出貨旺季（新iPhone、年終購物季），台灣科技供應鏈顯著受惠",
+		},
+		{
+			ID:               "year_end_window_dressing",
+			Name:             "年底作帳行情",
+			TriggerTheme:     "year_end_window_dressing",
+			RequiredRegion:   "TW",
+			Steps: []CausalStep{
+				{Description: "投信法人年底作帳，拉抬持股標的 → 中小型股出現短期超額報酬", Affected: []string{"small_cap", "mid_cap"}, Impact: 0.6},
+				{Description: "集團股年底作帳行情，交叉持股拉抬 → 集團股輪動上漲", Affected: []string{"conglomerate"}, Impact: 0.5},
+				{Description: "年終獎金發放帶動零售消費與散戶進場 → 消費類股與證券股受益", Affected: []string{"retail", "financial"}, Impact: 0.4},
+			},
+			HistoricalHitRate: 0.68,
+			SourceReferences:  []string{"TWSE historical December data", "fund manager behavior studies"},
+			Rationale:         "每年12月投信與集團作帳行情為台股傳統，配合年終獎金效應，資金流入股市",
+		},
 	}
 }

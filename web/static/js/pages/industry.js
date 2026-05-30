@@ -9,18 +9,19 @@ import {
 
 export async function loadIndustryData() {
   try {
-    const [classification, overview, seasonality, calendar, graph] = await Promise.all(
+    const [classification, overview, seasonality, calendar, graph, cycleStatus] = await Promise.all(
       [
         silentGetJSON("/api/dashboard/industry-classification"),
         silentGetJSON("/api/dashboard/industry-overview"),
         silentGetJSON("/api/dashboard/industry-seasonality"),
         silentGetJSON("/api/dashboard/industry-seasonality-calendar"),
         silentGetJSON("/api/dashboard/industry-graph"),
+        silentGetJSON("/api/dashboard/cycle-status-card"),
       ],
     );
     renderIndustryMap(classification);
     populateShockSourceDropdown(classification);
-    renderIndustryCycle(overview);
+    renderCycleStatusCard(cycleStatus && cycleStatus.card);
     renderIndustryLinkage(overview);
     if (seasonality && calendar) {
       seasonality.calendar = calendar;
@@ -64,43 +65,184 @@ function confidenceColor(hex, confidence) {
   return "rgba(" + r + "," + g + "," + b + "," + alpha.toFixed(2) + ")";
 }
 
-export function renderIndustryCycle(data) {
+function cycleStatusText(value) {
+  if (value == null || value === "") return "-";
+  return String(value)
+    .replace("recovery", "復甦")
+    .replace("expansion", "擴張")
+    .replace("mature", "成熟")
+    .replace("recession", "衰退");
+}
+
+function cycleNumber(value, digits) {
+  return typeof value === "number" && isFinite(value) ? value.toFixed(digits) : "-";
+}
+
+function cycleDelta(value) {
+  if (typeof value !== "number" || !isFinite(value)) {
+    return { text: "-", color: "var(--muted)" };
+  }
+  return {
+    text: (value > 0 ? "+" : "") + value.toFixed(3),
+    color: value > 0 ? "var(--up)" : value < 0 ? "var(--down)" : "var(--muted)",
+  };
+}
+
+function cycleEventStyle(direction) {
+  if (direction === "up") return { icon: "↑", label: "上行", color: "var(--up)" };
+  if (direction === "down") return { icon: "↓", label: "下行", color: "var(--down)" };
+  return { icon: "→", label: "中性", color: "var(--muted)" };
+}
+
+function cyclePhaseBadge(value) {
+  const phase = String(value || "").toLowerCase();
+  const color = phase === "expansion" || phase === "recovery" ? "var(--up)" : phase === "mature" ? "var(--warn)" : phase === "recession" ? "var(--down)" : "var(--muted)";
+  return `<span style="color:${color};border:1px solid ${color};border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;background:var(--bg)">${cycleStatusText(value)}</span>`;
+}
+
+export async function loadCycleStatusCard() {
   const el = document.getElementById("industryCycle");
-  if (!data || !data.industries) {
+  if (el) {
+    el.classList.add("loading");
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">載入週期邏輯中…</div>';
+  }
+  const data = await silentGetJSON("/api/dashboard/cycle-status-card");
+  renderCycleStatusCard(data && data.card);
+}
+
+export function renderIndustryCycle(data) {
+  loadCycleStatusCard();
+}
+
+export function renderCycleStatusCard(card) {
+  const el = document.getElementById("industryCycle");
+  if (!el) return;
+  if (!card) {
     el.innerHTML = renderEmptyState("尚無週期資料", "");
     el.classList.remove("loading");
     return;
   }
   el.classList.remove("loading");
-  const industries = data.industries;
-  const cycleColors = {
-    recovery: "#10b981",
-    expansion: "#3b82f6",
-    mature: "#f59e0b",
-    recession: "#ef4444",
+
+  const breakdown = card.breakdown || [];
+  const breakdownByLayer = new Map(breakdown.map((item) => [item.layer, item]));
+  const layerDefs = [
+    { key: "silicon", label: "矽循環" },
+    { key: "business_cycle", label: "商業週期" },
+    { key: "seasonal", label: "季節性" },
+    { key: "events", label: "日曆事件" },
+    { key: "supply_chain", label: "供應鏈" },
+  ];
+  const sentimentColors = {
+    強烈看多: "#10b981",
+    偏多: "#34d399",
+    中性: "#6b7280",
+    偏空: "#f59e0b",
+    強烈看空: "#ef4444",
   };
-  const cycleNames = {
-    recovery: "復甦",
-    expansion: "擴張",
-    mature: "成熟",
-    recession: "衰退",
-  };
-  let html = '<div style="display:flex;flex-wrap:wrap;gap:10px">';
-  industries.forEach((ind) => {
-    const confidence = ind.cycle_confidence || 0;
-    const baseColor = cycleColors[ind.cycle_phase] || "#666";
-    const color = confidenceColor(baseColor, confidence);
-    const name = cycleNames[ind.cycle_phase] || ind.cycle_phase;
-    html += `<div style="flex:1;min-width:140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px">`;
-    html += `<div style="font-weight:700;font-size:14px;margin-bottom:4px">${ind.name}</div>`;
-    html += `<div style="display:flex;align-items:center;gap:6px;margin:4px 0">`;
-    html += `<span style="width:10px;height:10px;border-radius:50%;background:${color};display:inline-block"></span>`;
-    html += `<span style="font-size:12px">${name}</span>`;
-    html += `</div>`;
-    html += `<div style="font-size:11px;color:var(--muted)">信心度 ${Math.round(confidence * 100)}%</div>`;
+  const sentiment = card.sentiment_label || "中性";
+  const sentimentColor = sentimentColors[sentiment] || sentimentColors["中性"];
+  const generatedAt = card.generated_at ? new Date(card.generated_at).toLocaleString("zh-TW") : "-";
+  const confidence = card.cycle_confidence || 0;
+  const phaseIndex = Math.max(0, Math.min(3, Number(card.silicon_phase || 0)));
+  const activeEvents = card.active_events || [];
+  const activePatterns = card.active_patterns || [];
+
+  let html = `<div style="display:flex;flex-direction:column;gap:12px">`;
+
+  html += `<div style="position:relative;overflow:hidden;background:linear-gradient(135deg,${sentimentColor},rgba(255,255,255,0.04));border:1px solid ${sentimentColor};border-radius:14px;padding:18px;color:#fff;box-shadow:0 12px 32px rgba(0,0,0,0.18)">`;
+  html += `<div style="position:absolute;right:-42px;top:-52px;width:160px;height:160px;border-radius:50%;background:rgba(255,255,255,0.14)"></div>`;
+  html += `<div style="position:relative;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">`;
+  html += `<div><div style="font-size:12px;opacity:0.86;margin-bottom:6px">Composite Sentiment Gauge</div><div style="font-size:46px;line-height:1;font-weight:800;letter-spacing:-1px">${cycleNumber(card.composite_coefficient, 3)}x</div><div style="font-size:20px;font-weight:800;margin-top:6px">${sentiment}</div></div>`;
+  html += `<div style="min-width:190px;background:rgba(0,0,0,0.16);border:1px solid rgba(255,255,255,0.26);border-radius:12px;padding:12px"><div style="font-size:11px;opacity:0.8;margin-bottom:4px">生成時間</div><div style="font-size:12px;font-weight:700">${generatedAt}</div><div style="margin-top:10px;font-size:11px;opacity:0.8">有利狀態</div><div style="font-size:13px;font-weight:800">${card.is_favorable ? "✅ 有利" : "⚠️ 保守"}</div></div>`;
+  html += `</div></div>`;
+
+  html += `<div style="display:flex;gap:8px;flex-wrap:wrap">`;
+  layerDefs.forEach((layer) => {
+    const item = breakdownByLayer.get(layer.key) || {};
+    const delta = cycleDelta(item.contribution);
+    const weight = typeof item.weight === "number" ? `${(item.weight * 100).toFixed(0)}%` : "-";
+    html += `<div style="flex:1;min-width:132px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px">`;
+    html += `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">${layer.label}</div>`;
+    html += `<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:6px"><span style="font-size:18px;font-weight:800">${cycleNumber(item.raw_value, 3)}</span><span style="font-size:13px;font-weight:800;color:${delta.color}">${delta.text}</span></div>`;
+    html += `<div style="font-size:10px;color:var(--muted);margin-top:4px">權重 ${weight}</div>`;
+    html += `<div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.35;min-height:28px">${item.reason || "尚無原因說明"}</div>`;
     html += `</div>`;
   });
-  html += "</div>";
+  html += `</div>`;
+
+  html += `<div style="display:grid;grid-template-columns:minmax(240px,1.1fr) minmax(240px,1fr);gap:12px">`;
+  html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px">`;
+  html += `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px"><div><div style="font-weight:800;font-size:14px">矽循環時鐘</div><div style="font-size:11px;color:var(--muted);margin-top:2px">Phase ${phaseIndex} · ${card.silicon_phase_name || "-"}</div></div><div style="text-align:right"><div style="font-size:11px;color:var(--muted)">Score</div><div style="font-size:18px;font-weight:800;color:var(--accent)">${cycleNumber(card.silicon_score, 3)}</div></div></div>`;
+  html += `<div style="display:flex;gap:5px;margin:8px 0 12px">`;
+  [0, 1, 2, 3].forEach((idx) => {
+    const active = idx <= phaseIndex;
+    const color = active ? confidenceColor("#10b981", 0.55 + idx * 0.1) : "var(--border)";
+    html += `<div style="flex:1;height:12px;border-radius:999px;background:${color};border:1px solid var(--border)"></div>`;
+  });
+  html += `</div>`;
+  const indicators = card.silicon_indicators || {};
+  const indicatorEntries = Object.entries(indicators);
+  if (indicatorEntries.length > 0) {
+    html += `<table style="font-size:11px"><thead><tr><th>指標</th><th>值</th><th>趨勢</th></tr></thead><tbody>`;
+    indicatorEntries.forEach(([key, raw]) => {
+      const value = raw && typeof raw === "object" ? raw.value : raw;
+      const trend = raw && typeof raw === "object" ? raw.trend : value;
+      const arrow = trend === "down" || trend < 0 ? "↓" : trend === "neutral" || trend === 0 ? "→" : "↑";
+      const color = arrow === "↑" ? "var(--up)" : arrow === "↓" ? "var(--down)" : "var(--muted)";
+      html += `<tr><td>${key}</td><td>${typeof value === "number" ? value.toFixed(2) : value}</td><td style="color:${color};font-weight:800">${arrow}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+  } else {
+    html += `<div style="font-size:11px;color:var(--muted);padding:8px;border:1px dashed var(--border);border-radius:8px">尚無矽循環指標明細</div>`;
+  }
+  html += `</div>`;
+
+  html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px">`;
+  html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-weight:800;font-size:14px">活躍台股日曆事件</div><span style="font-size:11px;background:var(--accent);color:#fff;border-radius:999px;padding:2px 8px">${activeEvents.length} 件</span></div>`;
+  if (activeEvents.length > 0) {
+    activeEvents.forEach((event) => {
+      const style = cycleEventStyle(event.direction);
+      html += `<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--border)">`;
+      html += `<div style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:${style.color};border:1px solid ${style.color};font-weight:800">${style.icon}</div>`;
+      html += `<div style="flex:1"><div style="font-size:12px;font-weight:800">${event.name || event.event_type || "未命名事件"}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${event.event_type || "-"} · ${style.label} · 權重 ${cycleNumber(event.weight, 2)} · 情緒 ${cycleNumber(event.sentiment_multiplier, 3)}x</div></div>`;
+      html += `</div>`;
+    });
+  } else {
+    html += `<div style="font-size:11px;color:var(--muted);padding:8px;border:1px dashed var(--border);border-radius:8px">目前無活躍日曆事件</div>`;
+  }
+  html += `</div></div>`;
+
+  html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px">`;
+  html += `<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px"><div style="font-weight:800;font-size:14px">商業週期與季節性</div><div style="font-size:11px;color:var(--muted)">季節調整 ${cycleNumber(card.seasonal_adjustment, 3)}x · 事件情緒 ${cycleNumber(card.event_sentiment, 3)}x · 供應鏈 ${cycleNumber(card.supply_chain_signal, 3)}</div></div>`;
+  html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><div style="font-size:12px">商業 ${cyclePhaseBadge(card.business_cycle)}</div><div style="font-size:12px">庫存 ${cyclePhaseBadge(card.inventory_cycle)}</div><div style="font-size:12px">資本支出 ${cyclePhaseBadge(card.capex_cycle)}</div></div>`;
+  html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:11px;color:var(--muted);width:70px">信心度</span><div style="flex:1;height:10px;background:var(--border);border-radius:999px;overflow:hidden"><div style="width:${Math.min(100, Math.max(0, confidence * 100))}%;height:100%;background:var(--accent)"></div></div><span style="font-size:12px;font-weight:800">${Math.round(confidence * 100)}%</span></div>`;
+  if (activePatterns.length > 0) {
+    html += `<div style="display:flex;flex-wrap:wrap;gap:6px">`;
+    activePatterns.forEach((pattern) => {
+      html += `<span style="font-size:11px;background:rgba(79,193,255,0.08);border:1px solid rgba(79,193,255,0.24);color:var(--accent);border-radius:999px;padding:3px 8px">${pattern.name || pattern.id || "季節模式"} ${(pattern.adjustment_factor || 1).toFixed(2)}x</span>`;
+    });
+    html += `</div>`;
+  } else {
+    html += `<div style="font-size:11px;color:var(--muted)">目前無活躍季節性模式</div>`;
+  }
+  html += `</div>`;
+
+  html += `<details style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px">`;
+  html += `<summary style="cursor:pointer;font-weight:800;font-size:14px">決策鏈分解 (Decision Chain Breakdown)</summary>`;
+  if (breakdown.length > 0) {
+    html += `<table style="font-size:11px;margin-top:10px"><thead><tr><th>Layer</th><th>Raw</th><th>Weight</th><th>Contribution</th><th>Reason</th></tr></thead><tbody>`;
+    breakdown.forEach((item) => {
+      const delta = cycleDelta(item.contribution);
+      html += `<tr><td>${item.layer || "-"}</td><td>${cycleNumber(item.raw_value, 3)}</td><td>${typeof item.weight === "number" ? (item.weight * 100).toFixed(0) + "%" : "-"}</td><td style="color:${delta.color};font-weight:800">${delta.text}</td><td>${item.reason || "-"}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+  } else {
+    html += `<div style="font-size:11px;color:var(--muted);margin-top:10px">尚無決策鏈分解資料</div>`;
+  }
+  html += `</details>`;
+
+  html += `</div>`;
   el.innerHTML = html;
 }
 
