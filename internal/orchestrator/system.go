@@ -278,6 +278,30 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 	return sys, nil
 }
 
+// ResolveReplayContext loads the core replay execution context: agent registry,
+// baseline policy, and replay dataset. Falls back to seeds/defaults when files
+// are missing. This provides a single authority for replay context resolution,
+// used by both NewSystem and backtest.Runner.
+func ResolveReplayContext(cfg config.Config) (domain.AgentRegistry, baseline.Policy, *replay.Dataset) {
+	var registry domain.AgentRegistry
+	var err error
+	if len(cfg.AgentRegistryExtraPaths) > 0 {
+		allPaths := append([]string{cfg.AgentRegistryPath}, cfg.AgentRegistryExtraPaths...)
+		registry, err = LoadRegistryMulti(allPaths...)
+	} else {
+		registry, err = LoadRegistry(cfg.AgentRegistryPath)
+	}
+	if err != nil {
+		registry = SeedRegistry()
+	}
+	policy, err := baseline.Load(cfg.BaselinePolicyPath)
+	if err != nil {
+		policy = baseline.DefaultPolicy()
+	}
+	ds, _ := replay.LoadTWSEOpenDataCSV(cfg.ReplayDataPath)
+	return registry, policy, ds
+}
+
 func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, error) {
 	if s.Risk().eventBus != nil {
 		go s.Risk().eventBus.PublishSimulationStart(s.Sim().session.ID, asOf)
