@@ -352,6 +352,11 @@ func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.Na
 		}
 		a.narrativeEngine.UpdateMacro(snap, geoScore)
 	}
+	// Also update the industry seasonal engine's dynamic environment (oil, DXY, BDI)
+	// so that seasonal adjustments reflect real-time macro conditions.
+	if a.industryService != nil && a.industryService.SeasonalEngine != nil {
+		a.industryService.SeasonalEngine.UpdateDynamicEnv(snap)
+	}
 	return events, snap, err
 }
 
