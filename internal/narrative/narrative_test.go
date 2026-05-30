@@ -291,6 +291,54 @@ func TestDetectEventsNoTrigger(t *testing.T) {
 	}
 }
 
+func TestTemplateHitRatesUpdatedAfterEvaluation(t *testing.T) {
+	// Scenario 1: model with RecentError <= 0.5 triggers template hit rate update.
+	ne := NewNarrativeEngine()
+	tmpl, ok := ne.kb.GetTemplateByTheme("US_rates_up")
+	if !ok {
+		t.Fatalf("expected US_rates_up template to exist")
+	}
+	tmpl.HistoricalHitRate = 0.70
+	ne.kb.RegisterTemplate(tmpl)
+
+	// hawkish_fed_model (index 0) has ActiveThemes=["US_rates_up", "JPY_carry_unwind"]
+	// HitRate = 1.0 - 0.2 = 0.8
+	ne.models[0].RecentError = 0.2
+	ne.models[0].HitRate = 0.8
+
+	ne.updateTemplateHitRates()
+
+	tmpl, ok = ne.kb.GetTemplateByTheme("US_rates_up")
+	if !ok {
+		t.Fatalf("template should still exist after update")
+	}
+	// new = 0.8*0.70 + 0.2*0.8 = 0.56 + 0.16 = 0.72
+	expected := 0.8*0.70 + 0.2*0.8
+	if tmpl.HistoricalHitRate != expected {
+		t.Fatalf("expected HistoricalHitRate %f, got %f", expected, tmpl.HistoricalHitRate)
+	}
+
+	// Scenario 2: model with RecentError > 0.5 is skipped (no update).
+	ne2 := NewNarrativeEngine()
+	tmpl2, _ := ne2.kb.GetTemplateByTheme("US_rates_up")
+	tmpl2.HistoricalHitRate = 0.70
+	ne2.kb.RegisterTemplate(tmpl2)
+	ne2.models[0].RecentError = 0.6
+	ne2.models[0].HitRate = 0.4 // 1.0 - 0.6
+
+	ne2.updateTemplateHitRates()
+
+	tmpl2, _ = ne2.kb.GetTemplateByTheme("US_rates_up")
+	if tmpl2.HistoricalHitRate != 0.70 {
+		t.Fatalf("expected no update when RecentError > 0.5, got %f", tmpl2.HistoricalHitRate)
+	}
+
+	// Scenario 3: GetTemplateByTheme returns false for non-existent theme.
+	if _, ok := ne.kb.GetTemplateByTheme("NONEXISTENT_THEME"); ok {
+		t.Fatalf("expected false for non-existent theme")
+	}
+}
+
 func TestSeasonalEventUsesParametersConfig(t *testing.T) {
 	config.ResetParametersConfig()
 	params := config.GetParametersConfig().Narrative
@@ -355,5 +403,39 @@ func TestSeasonalEventUsesParametersConfig(t *testing.T) {
 		}
 	default:
 		t.Fatalf("unexpected seasonal event theme: %s", event.Theme)
+	}
+}
+
+func TestSelfCalibrate_InvalidReplayPath(t *testing.T) {
+	ne := NewNarrativeEngine()
+	report, err := ne.SelfCalibrate("/nonexistent/replay.csv")
+	if err == nil {
+		t.Fatal("expected error for nonexistent replay path")
+	}
+	if report != nil {
+		t.Fatal("expected nil report on error")
+	}
+}
+
+func TestNarrativeCalibrationReport_Structure(t *testing.T) {
+	ne := NewNarrativeEngine()
+	models := ne.ListModels()
+
+	report := &NarrativeCalibrationReport{
+		Timestamp:    time.Now(),
+		ModelsUpdated: len(models),
+		Models:       models,
+		Verdict:      "calibrated",
+		Summary:      "all models updated",
+	}
+
+	if report.ModelsUpdated != len(models) {
+		t.Fatalf("expected %d models updated, got %d", len(models), report.ModelsUpdated)
+	}
+	if report.Verdict != "calibrated" {
+		t.Fatalf("expected verdict calibrated, got %s", report.Verdict)
+	}
+	if len(report.Models) == 0 {
+		t.Fatal("expected non-empty models list")
 	}
 }

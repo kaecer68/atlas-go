@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -352,6 +353,15 @@ func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.Na
 		a.narrativeEngine.UpdateMacro(snap, geoScore)
 	}
 	return events, snap, err
+}
+
+// CalibrateNarrative evaluates model performance against replay data and updates
+// model weights and template hit rates. Returns the calibration report or error.
+func (a *DashboardAPI) CalibrateNarrative(replayPath string) (*narrative.NarrativeCalibrationReport, error) {
+	if a.narrativeEngine == nil {
+		return nil, fmt.Errorf("narrative calibrate: no narrative engine")
+	}
+	return a.narrativeEngine.SelfCalibrate(replayPath)
 }
 
 // loadSnapshotIntoNarrativeEngine loads the latest snapshot from disk into the narrative engine.

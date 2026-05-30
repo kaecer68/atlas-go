@@ -930,6 +930,31 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered macro_ingest background task (5m interval)")
 			}
 
+			// Narrative model + template hit-rate self-calibration (24h).
+			{
+				dashRef := dashboard
+				replayCSV := cfg.ReplayDataPath
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "narrative_calibrate",
+					Interval: 24 * time.Hour,
+					Enabled:  true,
+				Task: func(ctx context.Context) error {
+					report, err := dashRef.CalibrateNarrative(replayCSV)
+						if err != nil {
+							logging.Warn("main", "narrative_calibrate_failed", "err", err)
+							return nil
+						}
+						logging.Info("main", "narrative_calibrate_ok",
+							"verdict", report.Verdict,
+							"models_updated", report.ModelsUpdated,
+							"templates_updated", report.TemplatesUpdated,
+						)
+						return nil
+					},
+				})
+				log.Printf("[Gateway] registered narrative_calibrate background task (24h interval)")
+			}
+
 			if repo != nil {
 				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "metrics_snapshot",

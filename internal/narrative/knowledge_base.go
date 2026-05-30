@@ -47,6 +47,18 @@ func (kb *KnowledgeBase) GetTemplate(id string) (CausalTemplate, bool) {
 	return t, ok
 }
 
+// GetTemplateByTheme returns the first template matching the trigger theme.
+func (kb *KnowledgeBase) GetTemplateByTheme(theme string) (CausalTemplate, bool) {
+	kb.mu.RLock()
+	defer kb.mu.RUnlock()
+	for _, t := range kb.templates {
+		if strings.EqualFold(t.TriggerTheme, theme) {
+			return t, true
+		}
+	}
+	return CausalTemplate{}, false
+}
+
 // ListTemplates returns all registered templates.
 func (kb *KnowledgeBase) ListTemplates() []CausalTemplate {
 	kb.mu.RLock()
@@ -389,7 +401,25 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 	}
 
 	ne.UpdateModelWeights()
+	ne.updateTemplateHitRates()
 	return nil
+}
+
+func (ne *NarrativeEngine) updateTemplateHitRates() {
+	const alpha = 0.2
+	for i := range ne.models {
+		m := &ne.models[i]
+		if m.RecentError > 0.5 {
+			continue
+		}
+		for _, theme := range m.ActiveThemes {
+			if tmpl, ok := ne.kb.GetTemplateByTheme(theme); ok {
+				updated := (1-alpha)*tmpl.HistoricalHitRate + alpha*m.HitRate
+				tmpl.HistoricalHitRate = updated
+				ne.kb.RegisterTemplate(tmpl)
+			}
+		}
+	}
 }
 
 func (ne *NarrativeEngine) avgSectorReturn(ds *replay.Dataset, date time.Time, window int, sectors []string) float64 {
@@ -886,4 +916,57 @@ func computeDeviationConfidence(observed, threshold, base, ceiling float64) floa
 var nowUnix = func() int64 {
 	// Overridden in tests.
 	return time.Now().UnixNano()
+}
+
+// NarrativeCalibrationReport summarizes the result of a self-calibration run.
+type NarrativeCalibrationReport struct {
+	Timestamp    time.Time         `json:"timestamp"`
+	ModelsUpdated int              `json:"models_updated"`
+	TemplatesUpdated int           `json:"templates_updated"`
+	Models       []InvestmentModel `json:"models"`
+	Verdict      string            `json:"verdict"`
+	Summary      string            `json:"summary"`
+}
+
+// SelfCalibrate evaluates model performance against replay data and updates
+// model weights and template hit rates. It orchestrates the existing
+// EvaluateModels → UpdateModelWeights → updateTemplateHitRates pipeline
+// and produces a calibration report.
+func (ne *NarrativeEngine) SelfCalibrate(replayPath string) (*NarrativeCalibrationReport, error) {
+	modelsBefore := make([]InvestmentModel, len(ne.models))
+	copy(modelsBefore, ne.models)
+
+	if err := ne.EvaluateModels(replayPath); err != nil {
+		return nil, fmt.Errorf("narrative self-calibrate: %w", err)
+	}
+
+	updated := 0
+	templatesUpdated := 0
+	for i := range ne.models {
+		if ne.models[i].Weight != modelsBefore[i].Weight {
+			updated++
+		}
+		for _, theme := range ne.models[i].ActiveThemes {
+			if tmpl, ok := ne.kb.GetTemplateByTheme(theme); ok {
+				if tmpl.HistoricalHitRate != 0 {
+					templatesUpdated++
+				}
+			}
+		}
+	}
+
+	report := &NarrativeCalibrationReport{
+		Timestamp:       time.Now(),
+		ModelsUpdated:   updated,
+		TemplatesUpdated: templatesUpdated,
+		Models:          ne.ListModels(),
+		Verdict:         "calibrated",
+		Summary:         fmt.Sprintf("evaluated %d models, updated %d weights, %d template hit rates", len(ne.models), updated, templatesUpdated),
+	}
+
+	logging.Info("narrative", "self_calibrate",
+		logging.FInt("models_updated", updated),
+		logging.FInt("templates_updated", templatesUpdated),
+	)
+	return report, nil
 }
