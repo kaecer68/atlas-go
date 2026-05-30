@@ -86,15 +86,22 @@ func countSections(config map[string]any) int {
 }
 
 func isParamMetadata(obj map[string]any) bool {
-	// Only flag sections that have been actively calibrated.
-	// Many ParameterMetadata sections have evidence_quality from defaults,
-	// not from actual calibration. The unambiguous signal is calibration_method.
+	// Skip citation sub-objects — they're part of ParameterMetadata,
+	// not standalone sections. Citations can have calibration_method
+	// (set by calibrators) but the timestamp belongs to the parent.
+	if _, hasValue := obj["value"]; !hasValue {
+		// ParameterMetadata always wraps a "value" field.
+		// Objects without "value" that have calibration_method
+		// are citation sub-objects, not ParameterMetadata sections.
+		if _, hasCM := obj["calibration_method"].(string); hasCM {
+			return false
+		}
+	}
+
 	calMethod, hasMethod := obj["calibration_method"].(string)
 	if hasMethod && calMethod != "" {
 		return true
 	}
-	// Also catch sections with calibration_timestamp (raw JSON) or
-	// last_calibrated (struct) — these were definitely calibrated.
 	if ts, ok := obj["last_calibrated"]; ok && ts != nil && ts != "" {
 		return true
 	}
