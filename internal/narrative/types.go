@@ -42,10 +42,12 @@ type CausalTemplate struct {
 
 // CausalChain is an instantiated causal chain from a specific event.
 type CausalChain struct {
-	EventID    string       `json:"event_id"`
-	TemplateID string       `json:"template_id"`
-	Steps      []CausalStep `json:"steps"`
-	Score      float64      `json:"score"` // combined confidence * historical hit rate
+	EventID         string       `json:"event_id"`
+	TemplateID      string       `json:"template_id"`
+	TriggerTheme    string       `json:"trigger_theme"`    // the event theme that triggered this chain
+	AffectedSectors []string     `json:"affected_sectors"` // aggregated sectors from all steps
+	Steps           []CausalStep `json:"steps"`
+	Score           float64      `json:"score"` // combined confidence * historical hit rate
 }
 
 // InvestmentModel represents a narrative-driven investment hypothesis.
