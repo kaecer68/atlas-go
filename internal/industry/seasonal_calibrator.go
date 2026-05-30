@@ -222,6 +222,9 @@ func ValidateIndustryIDs(patterns []SeasonalPattern, industryReturns map[string]
 
 // LoadCalibrationEvidence reads calibration metadata from parameters.json.
 // Returns nil if no calibration has been performed.
+// Compatible with both the raw JSON format (calibration_timestamp) written
+// by cmd/calibrate-seasonal and the Go struct format (last_calibrated) written
+// by ParametersConfig.Save().
 func LoadCalibrationEvidence(path string) map[string]any {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -239,11 +242,30 @@ func LoadCalibrationEvidence(path string) map[string]any {
 	if !ok {
 		return nil
 	}
-	ts, hasTs := sp["calibration_timestamp"]
-	src := sp["calibration_data_source"]
-	if !hasTs {
+
+	// Check for timestamp in either format:
+	//   - Go struct: last_calibrated (from ParameterMetadata.LastCalibrated)
+	//   - Raw JSON:  calibration_timestamp (from cmd/calibrate-seasonal --update)
+	ts, hasTs := sp["last_calibrated"]
+	if !hasTs || ts == nil {
+		ts, hasTs = sp["calibration_timestamp"]
+	}
+	if !hasTs || ts == nil {
 		return nil
 	}
+
+	// Determine data source:
+	//   - calibration_data_source (preferred, from cmd/calibrate-seasonal --update)
+	//   - citation.source_reference (fallback, from ParameterMetadata.Citation)
+	var src any
+	if s, ok := sp["calibration_data_source"]; ok && s != nil {
+		src = s
+	} else if cite, ok := sp["citation"].(map[string]any); ok {
+		if sr, ok := cite["source_reference"]; ok && sr != nil {
+			src = sr
+		}
+	}
+
 	result := map[string]any{"calibrated": true}
 	if ts != nil {
 		result["timestamp"] = ts

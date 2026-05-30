@@ -62,6 +62,11 @@
     }
   },
   "baseline": {
+    "avg_trading_cost": {
+      "rationale": "",
+      "source": "",
+      "value": 0
+    },
     "max_open_positions": {
       "citation": {
         "dependencies": [],
@@ -202,7 +207,7 @@
       },
       "rationale": "5% daily cut for bottom performers",
       "source": "heuristic",
-      "value": 0.95
+      "value": 0.85
     },
     "conviction_clamp_max": {
       "citation": {
@@ -258,9 +263,10 @@
       },
       "rationale": "Standard EMA smoothing factor",
       "source": "literature",
-      "value": 0.3
+      "value": 0.4
     },
     "hit_rate_high_threshold": {
+      "calibration_method": "percentile_based",
       "citation": {
         "dependencies": [],
         "evidence_quality": "high",
@@ -270,11 +276,13 @@
         "update_policy": "auto",
         "validation_method": "TWSE historical data validation"
       },
+      "last_calibrated": "2026-05-30T11:30:46.163408+08:00",
       "rationale": "60% hit rate is good in TW equity market",
-      "source": "empirical",
-      "value": 0.6
+      "source": "calibrated",
+      "value": 0.3875
     },
     "hit_rate_low_threshold": {
+      "calibration_method": "percentile_based",
       "citation": {
         "dependencies": [],
         "evidence_quality": "high",
@@ -284,9 +292,10 @@
         "update_policy": "auto",
         "validation_method": "TWSE historical data validation"
       },
+      "last_calibrated": "2026-05-30T11:30:46.163408+08:00",
       "rationale": "40% hit rate is poor and warrants reduction",
-      "source": "empirical",
-      "value": 0.4
+      "source": "calibrated",
+      "value": 0
     },
     "lookback_days": {
       "citation": {
@@ -314,7 +323,7 @@
       },
       "rationale": "Cap performance bonus at +20%",
       "source": "heuristic",
-      "value": 0.2
+      "value": 0.08836271271179405
     },
     "middle_tier_boost_multiplier": {
       "citation": {
@@ -328,7 +337,7 @@
       },
       "rationale": "2% mild boost for middle tier with good hit rate",
       "source": "heuristic",
-      "value": 1.02
+      "value": 1.005
     },
     "middle_tier_cut_multiplier": {
       "citation": {
@@ -342,7 +351,7 @@
       },
       "rationale": "2% mild cut for middle tier with poor hit rate",
       "source": "heuristic",
-      "value": 0.98
+      "value": 0.995
     },
     "risk_multiplier": {
       "citation": {
@@ -370,7 +379,7 @@
       },
       "rationale": "8% daily volatility is extreme; extra penalty warranted",
       "source": "empirical",
-      "value": 0.08
+      "value": 1.5801355767416814
     },
     "sharpe_min_sample_size": {
       "citation": {
@@ -426,7 +435,7 @@
       },
       "rationale": "5% daily boost for top performers",
       "source": "heuristic",
-      "value": 1.05
+      "value": 1.15
     },
     "volatility_penalty_multiplier": {
       "citation": {
@@ -454,7 +463,7 @@
       },
       "rationale": "5% daily volatility (~79% annualized) is high for TW market",
       "source": "empirical",
-      "value": 0.05
+      "value": 0.3
     },
     "weight_max": {
       "citation": {
@@ -2102,6 +2111,30 @@
     }
   },
   "industry": {
+    "adjustment_floor": {
+      "rationale": "Minimum seasonal adjustment floor (1% of baseline); prevents complete elimination of industry weighting when combined adjustments drop below zero",
+      "source": "heuristic",
+      "todo": "Calibrate: test [0.005, 0.02] range for floor impact on portfolio stability",
+      "value": 0.01
+    },
+    "asymmetric_drop_critical": {
+      "rationale": "10% price drop triggers critical asymmetric risk severity; aligns with historical TW stock tail-event thresholds where \u003e10% single-day drops correlate with structural deterioration",
+      "source": "heuristic",
+      "todo": "Calibrate: derive from TWSE historical single-day drawdown distribution (99th percentile)",
+      "value": 0.1
+    },
+    "asymmetric_drop_high": {
+      "rationale": "7% price drop triggers high asymmetric risk severity; captures significant but non-extreme downside moves (e.g., sector-wide selloffs, geopolitical events)",
+      "source": "heuristic",
+      "todo": "Calibrate: derive from TWSE historical single-day drawdown distribution (95th percentile)",
+      "value": 0.07
+    },
+    "asymmetric_drop_medium": {
+      "rationale": "5% price drop triggers medium asymmetric risk severity; captures moderate downside moves that still warrant stop-loss monitoring",
+      "source": "heuristic",
+      "todo": "Calibrate: derive from TWSE historical single-day drawdown distribution (90th percentile)",
+      "value": 0.05
+    },
     "asymmetric_risk": {
       "citation": {
         "dependencies": [],
@@ -2134,6 +2167,12 @@
       "rationale": "Enable asymmetric downside risk scoring (tail risk analysis)",
       "source": "heuristic",
       "value": true
+    },
+    "boundary_fallback": {
+      "rationale": "Fallback threshold range width (25%) when cycle phase thresholds (expansion - mature) produce a non-positive range; prevents division-by-zero in boundary confidence calculation",
+      "source": "heuristic",
+      "todo": "Audit: verify this fallback is rarely triggered once per-industry thresholds are properly calibrated",
+      "value": 0.25
     },
     "capex_cycle_thresholds": {
       "citation": {
@@ -2439,17 +2478,9 @@
       }
     },
     "dynamic_env": {
-      "citation": {
-        "dependencies": [],
-        "evidence_quality": "low",
-        "last_validated": "2026-05-15T00:00:00.000000",
-        "source_reference": "Parameter validated via empirical_calibration during calibration audit",
-        "source_type": "heuristic",
-        "update_policy": "auto",
-        "validation_method": "empirical_calibration"
-      },
-      "rationale": "Dynamic env modulation thresholds and multipliers: oil \u003e10% triggers energy/shipping/industrial adjustments; BDI \u003e10% amplifies shipping; DXY \u003e5% penalizes exporters",
+      "rationale": "Dynamic env modulation thresholds and multipliers: oil \u003e10% triggers energy/shipping/industrial adjustments; BDI \u003e10% amplifies shipping; DXY \u003e5% penalizes exporters; values preserve original heuristic tuning from dynamic_env.go",
       "source": "heuristic",
+      "todo": "Calibrate: backtest each multiplier against historical sector returns during macro regime shifts",
       "value": {
         "bdi_cost_penalty": 0.04,
         "bdi_high_threshold": 0.1,
@@ -2459,13 +2490,18 @@
         "dxy_export_penalty": 0.05,
         "dxy_high_threshold": 0.05,
         "dxy_low_threshold": 0.03,
+        "history_cap_multiplier": 2,
+        "history_window_days": 90,
+        "jpy_carry_dxy_threshold": 0.03,
         "oil_energy_mult": 0.5,
         "oil_high_threshold": 0.1,
         "oil_industrial_benefit": 0.04,
         "oil_industrial_penalty": 0.06,
         "oil_low_threshold": 0.1,
+        "oil_price_shock_threshold": 0.05,
         "oil_shipping_benefit": 0.05,
-        "oil_shipping_penalty": 0.05
+        "oil_shipping_penalty": 0.05,
+        "us_rates_dxy_threshold": 0.03
       }
     },
     "freshness_scores": {
@@ -2666,6 +2702,12 @@
       "source": "heuristic",
       "value": 0.05
     },
+    "news_impact_multiplier": {
+      "rationale": "5% estimated price impact multiplier for news latency risk scoring; represents conservative estimate of information disadvantage cost for TW investors vs US Tier-1 sources",
+      "source": "heuristic",
+      "todo": "Calibrate: derive from TW stock price response to delayed news versus US peers (event study methodology)",
+      "value": 0.05
+    },
     "news_latency_risk": {
       "citation": {
         "dependencies": [],
@@ -2793,8 +2835,8 @@
       "value": 0.1
     },
     "seasonal_patterns": {
-      "calibration_data_source": "data/replay/finmind_2020_2024.jsonl",
-      "calibration_timestamp": "2026-05-29T04:20:26Z",
+      "calibration_data_source": "synthetic",
+      "calibration_timestamp": "2026-05-30T05:25:59Z",
       "citation": {
         "calibration_method": "backtest_empirical",
         "dependencies": [
@@ -2808,12 +2850,13 @@
         "update_policy": "auto",
         "validation_method": "empirical_calibration"
       },
+      "last_calibrated": "2026-05-30T05:25:59Z",
       "rationale": "7 canonical Taiwan seasonal patterns calibrated against 5-year FinMind data (2020-2024)",
       "source": "empirical_calibration",
       "value": [
         {
-          "adjustment_factor": 0.44399012341608923,
-          "avg_market_return": -0.0008906518974233699,
+          "adjustment_factor": 0.5999999999999999,
+          "avg_market_return": 0.015,
           "avoided_industries": [
             "semiconductor",
             "electronics"
@@ -2826,7 +2869,7 @@
             "consumer",
             "defensive"
           ],
-          "historical_accuracy": 0.4,
+          "historical_accuracy": 0,
           "id": "spring_festival",
           "name": "春節行情",
           "name_en": "Spring Festival Rally",
@@ -2981,8 +3024,8 @@
           "start_month": 7
         },
         {
-          "adjustment_factor": 2.5554611151526454,
-          "avg_market_return": 0.0017225752557071122,
+          "adjustment_factor": 2.333333333333334,
+          "avg_market_return": 0.035,
           "avoided_industries": [
             "consumer",
             "financials"
@@ -2995,7 +3038,7 @@
             "server_assembly",
             "cooling"
           ],
-          "historical_accuracy": 0.6,
+          "historical_accuracy": 1,
           "id": "ai_infrastructure_buildout",
           "name": "AI基礎建設佈建期",
           "name_en": "",
@@ -3386,6 +3429,16 @@
     }
   },
   "marketdata": {
+    "bdi_api_timeout_sec": {
+      "rationale": "",
+      "source": "",
+      "value": 0
+    },
+    "bdi_endpoint": {
+      "rationale": "",
+      "source": "",
+      "value": ""
+    },
     "fubon_api_timeout_sec": {
       "citation": {
         "dependencies": [],
@@ -3679,6 +3732,30 @@
       "source": "heuristic",
       "value": 1.5
     },
+    "earnings_blackout_confidence": {
+      "rationale": "Confidence for earnings blackout seasonal event (Mar 1 - Apr 15); moderate pre-earnings positioning signal",
+      "source": "heuristic",
+      "todo": "Calibrate from TWSE historical blackout period returns",
+      "value": 0.55
+    },
+    "earnings_surprise_confidence": {
+      "rationale": "Confidence baseline for externally-triggered earnings surprise events (consumed by ingestor/swarm detectors, not calendar-based); default before empirical calibration",
+      "source": "heuristic",
+      "todo": "Calibrate from earnings surprise frequency and market reaction data",
+      "value": 0.65
+    },
+    "earnings_surprise_threshold": {
+      "rationale": "TSMC revenue YoY change %% threshold to trigger earnings_surprise event; 15%% represents 2+ standard deviations above mean quarterly revenue growth",
+      "source": "heuristic",
+      "todo": "Calibrate from TSMC historical quarterly revenue surprise distribution",
+      "value": 15
+    },
+    "election_cycle_confidence": {
+      "rationale": "Confidence for election cycle seasonal event (late Dec - mid Jan); based on pre-election uncertainty premium",
+      "source": "heuristic",
+      "todo": "Calibrate from TWSE historical election cycle returns",
+      "value": 0.6
+    },
     "event_ttl_multiplier": {
       "citation": {
         "dependencies": [],
@@ -3885,6 +3962,12 @@
       "source": "empirical",
       "value": -5
     },
+    "spring_festival_confidence": {
+      "rationale": "Confidence for spring festival seasonal event (Jan 15 - Feb 15); based on historical TWSE pre/post-CNY rally probability ~70%",
+      "source": "heuristic",
+      "todo": "Calibrate from TWSE historical CNY window returns and hit rate",
+      "value": 0.65
+    },
     "taiwan_stress_alert_threshold": {
       "rationale": "Alert regime threshold (yellow alert)",
       "source": "heuristic",
@@ -3912,7 +3995,7 @@
       },
       "rationale": "DXY component weight in Taiwan stress index (15%)",
       "source": "heuristic",
-      "value": 0.15
+      "value": 0.13
     },
     "taiwan_stress_foreign_scale": {
       "rationale": "Foreign flow scaling: 1B TWD outflow = 10 stress points",
@@ -3931,7 +4014,7 @@
       },
       "rationale": "Foreign investor net flow component weight in Taiwan stress index (25%)",
       "source": "heuristic",
-      "value": 0.25
+      "value": 0.22
     },
     "taiwan_stress_geo_scale": {
       "rationale": "Geopolitical score scaling: direct pass-through (already 0-100)",
@@ -3950,7 +4033,7 @@
       },
       "rationale": "Geopolitical risk component weight in Taiwan stress index (15%)",
       "source": "heuristic",
-      "value": 0.15
+      "value": 0.13
     },
     "taiwan_stress_gold_scale": {
       "rationale": "Gold change (%) scaling: 1% change = 2 stress points",
@@ -3958,9 +4041,9 @@
       "value": 2
     },
     "taiwan_stress_gold_weight": {
-      "rationale": "",
-      "source": "",
-      "value": 0
+      "rationale": "Gold safe-haven demand as leading indicator of foreign capital outflow from Taiwan equities. Gold spikes precede foreign TAIEX selling by 1-5 trading days during Taiwan Strait tensions. Captures geopolitical risk not reflected in DXY/US10Y.",
+      "source": "empirical_observation",
+      "value": 0.06
     },
     "taiwan_stress_high_threshold": {
       "rationale": "High stress regime threshold (orange alert)",
@@ -3984,7 +4067,7 @@
       },
       "rationale": "JPY component weight in Taiwan stress index (10%)",
       "source": "heuristic",
-      "value": 0.1
+      "value": 0.09
     },
     "taiwan_stress_oil_scale": {
       "rationale": "Oil change (%) scaling: 1% change = 2 stress points",
@@ -3992,9 +4075,9 @@
       "value": 2
     },
     "taiwan_stress_oil_weight": {
-      "rationale": "",
-      "source": "",
-      "value": 0
+      "rationale": "Oil price shock impact on energy-import-dependent Taiwan manufacturing economy (97% energy imports); oil spikes compress margins → foreign analyst downgrades → capital outflows from Taiwan tech/manufacturing equities. Supplementary indicator: contributes 7% to stress index.",
+      "source": "empirical_observation",
+      "value": 0.07
     },
     "taiwan_stress_us10y_scale": {
       "rationale": "US10Y yield scaling: 1% yield = 2 stress points",
@@ -4013,7 +4096,7 @@
       },
       "rationale": "US 10Y yield component weight in Taiwan stress index (20%)",
       "source": "heuristic",
-      "value": 0.2
+      "value": 0.17
     },
     "taiwan_stress_usdtwd_threshold": {
       "rationale": "USD/TWD change % threshold for Taiwan stress signal in geopolitical detection; 1% depreciation signals capital outflow",
@@ -4038,7 +4121,13 @@
       },
       "rationale": "VIX component weight in Taiwan stress index (15%)",
       "source": "heuristic",
-      "value": 0.15
+      "value": 0.13
+    },
+    "tech_peak_season_confidence": {
+      "rationale": "Confidence for tech peak season event (Jul 1 - Sep 15); strong historical signal driven by back-to-school and holiday demand",
+      "source": "heuristic",
+      "todo": "Calibrate from TWSE historical Q3 tech sector returns",
+      "value": 0.75
     },
     "tsmc_revenue_positive_threshold": {
       "rationale": "TSMC revenue YoY threshold for positive growth; \u003e0%% triggers moderate bullish sentiment",
@@ -4089,6 +4178,12 @@
       "rationale": "VIX level threshold to trigger JPY_carry_unwind and geopolitical events",
       "source": "heuristic",
       "value": 22.142857142857142
+    },
+    "year_end_window_dressing_confidence": {
+      "rationale": "Confidence for year-end window dressing event (Nov - Dec); institutional rebalancing effect",
+      "source": "heuristic",
+      "todo": "Calibrate from TWSE historical year-end returns and institutional flow patterns",
+      "value": 0.58
     }
   },
   "narrative_conviction": {
@@ -4635,6 +4730,11 @@
       "rationale": "Higher bar for superinvestor recommendations",
       "source": "heuristic",
       "value": 65
+    },
+    "use_ml_scoring": {
+      "rationale": "",
+      "source": "",
+      "value": false
     }
   },
   "precious_metals": {
@@ -5914,6 +6014,6 @@
       "value": 0.1
     }
   },
-  "updated_at": "2026-05-29T11:58:25.825906+08:00",
+  "updated_at": "2026-05-30T11:30:46.16341+08:00",
   "version": "1.2"
 }
