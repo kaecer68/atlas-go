@@ -326,6 +326,7 @@ func hitRateForTheme(theme string) float64 {
 func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot, div *DivergenceDetector) []NarrativeEvent {
 	var events []NarrativeEvent
 	now := time.Now().UTC()
+	params := config.GetParametersConfig().Narrative
 
 	if event := detectUSRatesEventFromSnapshot(curr.US10Y, prev.US10Y, now); event != nil {
 		events = append(events, *event)
@@ -358,6 +359,11 @@ func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot, div *Dive
 		sentiment := computeAICapexSentiment(curr.TSMCRevenue.ChangePct)
 		if event := detectAICapexEventFromSnapshot(sentiment, prev.TSMCRevenue, now); event != nil {
 			events = append(events, *event)
+		}
+		if math.Abs(curr.TSMCRevenue.ChangePct) > params.EarningsSurpriseThreshold.Value {
+			if event := NewEarningsSurpriseEvent(curr.TSMCRevenue.ChangePct); event != nil {
+				events = append(events, *event)
+			}
 		}
 	}
 

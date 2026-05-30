@@ -1392,6 +1392,12 @@ func defaultNarrativeParameters() NarrativeParameters {
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate from earnings surprise frequency and market reaction data",
 		},
+		EarningsSurpriseThreshold: ParameterMetadata[float64]{
+			Value:     15.0,
+			Rationale: "TSMC revenue YoY change %% threshold to trigger earnings_surprise event; 15%% represents 2+ standard deviations above mean quarterly revenue growth",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from TSMC historical quarterly revenue surprise distribution",
+		},
 		GoldChangePctThreshold: ParameterMetadata[float64]{
 			Value:     2.0,
 			Rationale: "Gold price change %% threshold for geopolitical risk detection; gold traditionally serves as safe-haven proxy",

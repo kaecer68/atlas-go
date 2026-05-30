@@ -346,7 +346,8 @@ type NarrativeParameters struct {
 	YearEndWindowDressingConfidence ParameterMetadata[float64] `json:"year_end_window_dressing_confidence"`
 
 	// Externally-triggered event confidence baselines (not calendar-based; consumed by ingestor/swarm detectors)
-	EarningsSurpriseConfidence ParameterMetadata[float64] `json:"earnings_surprise_confidence"`
+	EarningsSurpriseConfidence  ParameterMetadata[float64] `json:"earnings_surprise_confidence"`
+	EarningsSurpriseThreshold   ParameterMetadata[float64] `json:"earnings_surprise_threshold"`
 }
 
 // RealtimeParameters holds tunable values for real-time regime detection and adaptation.
@@ -1474,6 +1475,9 @@ func (p *ParametersConfig) Validate() error {
 	if !(p.Narrative.EarningsSurpriseConfidence.Value >= 0 && p.Narrative.EarningsSurpriseConfidence.Value <= 1) {
 		return fmt.Errorf("narrative.earnings_surprise_confidence (%.3f) must be in [0,1]", p.Narrative.EarningsSurpriseConfidence.Value)
 	}
+	if p.Narrative.EarningsSurpriseThreshold.Value <= 0 {
+		return fmt.Errorf("narrative.earnings_surprise_threshold (%.3f) must be > 0", p.Narrative.EarningsSurpriseThreshold.Value)
+	}
 
 	if p.Janus.ShortWindowDays.Value < 1 {
 		return fmt.Errorf("janus.short_window_days (%d) must be >= 1", p.Janus.ShortWindowDays.Value)
@@ -2047,6 +2051,9 @@ func mergeNarrativeDefaults(cfg *ParametersConfig) {
 	}
 	if n.EarningsSurpriseConfidence.Value == 0 {
 		n.EarningsSurpriseConfidence = def.EarningsSurpriseConfidence
+	}
+	if n.EarningsSurpriseThreshold.Value == 0 {
+		n.EarningsSurpriseThreshold = def.EarningsSurpriseThreshold
 	}
 	if n.TaiwanStressDXYScale.Value == 0 {
 		n.TaiwanStressDXYScale = def.TaiwanStressDXYScale
