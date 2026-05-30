@@ -35,19 +35,14 @@ func (e *PRISMTrainingExecutor) Run(task prism.TrainingTask) (prism.TrainingResu
 	symbols := RegistrySymbols(e.registry)
 	outcomes := make([]domain.RecommendationOutcome, 0)
 
-	for _, date := range e.dataset.Dates {
-		if date.Before(task.WindowStart) || date.After(task.WindowEnd) {
-			continue
-		}
-		nextDate, ok := e.dataset.NextDate(date, 1)
-		if !ok {
-			continue
-		}
-
+	for _, date := range e.dataset.WindowDates(task.WindowStart, task.WindowEnd, 1) {
 		quotes := e.dataset.QuotesForDate(date, symbols)
-		_, rawRecs, _, _ := ExecuteRegistryResearchDetailedWithPolicyAndGuards(
+		regime, rawRecs, _, _ := ExecuteRegistryResearchDetailedWithPolicyAndGuards(
 			e.registry, quotes, e.policy.PromptOverrides, e.policy.ExecutionPolicy,
 		)
+		if mapDomainRegimeToPRISMTrainingRegime(regime) != task.Regime {
+			continue
+		}
 
 		for _, rec := range rawRecs {
 			if rec.Agent != task.AgentID {
@@ -71,7 +66,6 @@ func (e *PRISMTrainingExecutor) Run(task prism.TrainingTask) (prism.TrainingResu
 				ConvictionBreakdown: rec.ConvictionBreakdown,
 			})
 		}
-		_ = nextDate
 	}
 
 	if len(outcomes) == 0 {
@@ -99,7 +93,7 @@ func (e *PRISMTrainingExecutor) Run(task prism.TrainingTask) (prism.TrainingResu
 	return prism.TrainingResult{
 		HitRate:      sc.HitRate,
 		SharpeRatio:  sc.SharpeLike,
-		MaxDrawdown:  calculateMaxDrawdown(returns),
+		MaxDrawdown:  sc.MaxDrawdown,
 		TotalReturn:  sumReturns(returns),
 		SignalsCount: sc.Observations,
 		WinCount:     winCount,
@@ -107,10 +101,26 @@ func (e *PRISMTrainingExecutor) Run(task prism.TrainingTask) (prism.TrainingResu
 	}, nil
 }
 
+func mapDomainRegimeToPRISMTrainingRegime(r domain.Regime) prism.RegimeType {
+	switch r {
+	case domain.RegimeRiskOn:
+		return prism.RegimeRiskOn
+	case domain.RegimeRiskOff:
+		return prism.RegimeRiskOff
+	case domain.RegimeNeutral:
+		return prism.RegimeLowVolatility
+	default:
+		return prism.RegimeTransition
+	}
+}
+
+// calculateMaxDrawdown is kept for compatibility with adversarial_executor.go.
+// For PRISM training results, use ledger.BuildScorecards().MaxDrawdown instead.
 func calculateMaxDrawdown(returns []float64) float64 {
 	if len(returns) == 0 {
 		return 0
 	}
+
 	peak := 1.0
 	maxDD := 0.0
 	cum := 1.0
@@ -124,6 +134,7 @@ func calculateMaxDrawdown(returns []float64) float64 {
 			maxDD = dd
 		}
 	}
+
 	return -maxDD
 }
 

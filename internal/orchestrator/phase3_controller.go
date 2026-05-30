@@ -169,6 +169,15 @@ func (c *Phase3Controller) ApplyPRISMWeights(recs []domain.Recommendation, regim
 		if r.Regime != pr {
 			continue
 		}
+		if r.Result.Synthetic {
+			continue
+		}
+		if r.Result.Error != "" {
+			continue
+		}
+		if r.Result.SignalsCount == 0 {
+			continue
+		}
 		if r.Result.SharpeRatio > agentSharpe[r.AgentID] {
 			agentSharpe[r.AgentID] = r.Result.SharpeRatio
 		}

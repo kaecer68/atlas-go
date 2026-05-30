@@ -435,7 +435,7 @@ func run(args []string, deps appDeps) error {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus)
+			system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
 			if err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -998,7 +998,7 @@ func run(args []string, deps appDeps) error {
 					}
 					log.Printf("[Simulation] auto trigger: %s", nextClose.Format("2006-01-02"))
 
-					system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus)
+					system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
 					if err != nil {
 						return fmt.Errorf("create system: %w", err)
 					}
@@ -1096,7 +1096,7 @@ func run(args []string, deps appDeps) error {
 				Interval: 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus)
+					system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
 					if err != nil {
 						return fmt.Errorf("create system for stress test: %w", err)
 					}
@@ -1134,7 +1134,7 @@ func run(args []string, deps appDeps) error {
 				Interval: 7 * 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus)
+					system, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
 					if err != nil {
 						return fmt.Errorf("create system: %w", err)
 					}
@@ -1605,7 +1605,7 @@ func run(args []string, deps appDeps) error {
 				Jitter:   3 * time.Minute,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					sys, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus)
+					sys, err := orchestrator.NewProductionSystemWithEventBus(cfg, dashEventBus, janusEngine)
 					if err != nil {
 						return fmt.Errorf("create system for swarm: %w", err)
 					}
@@ -1826,7 +1826,7 @@ func runSimulation(cfg config.Config, verbose bool, collector *monitoring.Metric
 
 func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
 	eventBus := live.NewChannelEventBus(64)
-	system, err := orchestrator.NewProductionSystemWithEventBus(cfg, eventBus)
+	system, err := orchestrator.NewProductionSystemWithEventBus(cfg, eventBus, nil)
 	if err != nil {
 		return fmt.Errorf("create system: %w", err)
 	}
