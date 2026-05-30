@@ -90,6 +90,12 @@ func (a *macroDataGatewayAdapter) applyUSYahoo(snap *marketdata.MacroDataSnapsho
 	if s.Gold.Symbol != "" {
 		snap.Gold = s.Gold
 	}
+	if s.JPY.Symbol != "" {
+		snap.JPY = s.JPY
+	}
+	if s.USD_TWD.Symbol != "" {
+		snap.USD_TWD = s.USD_TWD
+	}
 	if s.Bdi.Symbol != "" {
 		snap.Bdi = s.Bdi
 	}
@@ -105,6 +111,10 @@ func (a *macroDataGatewayAdapter) applyUSYahoo(snap *marketdata.MacroDataSnapsho
 }
 
 func (a *macroDataGatewayAdapter) applyJPYFrankfurter(snap *marketdata.MacroDataSnapshot, data []byte) {
+	// Only use Frankfurter as fallback when Yahoo didn't provide JPY data.
+	if snap.JPY.Symbol != "" {
+		return
+	}
 	var jpy marketdata.MacroDataPoint
 	if err := json.Unmarshal(data, &jpy); err != nil {
 		return
@@ -115,6 +125,10 @@ func (a *macroDataGatewayAdapter) applyJPYFrankfurter(snap *marketdata.MacroData
 }
 
 func (a *macroDataGatewayAdapter) applyExchangeRate(snap *marketdata.MacroDataSnapshot, data []byte) {
+	// Only use ExchangeRate-API as fallback when Yahoo didn't provide USD/TWD data.
+	if snap.USD_TWD.Symbol != "" {
+		return
+	}
 	var s marketdata.MacroDataSnapshot
 	if err := json.Unmarshal(data, &s); err != nil {
 		return
@@ -224,15 +238,25 @@ func (a *geopoliticalGatewayAdapter) Name() string {
 
 // FetchScore fetches geopolitical risk data from the Gateway.
 func (a *geopoliticalGatewayAdapter) FetchScore(ctx context.Context) (narrative.GeopoliticalRiskScore, error) {
-	data, err := a.fetcher(ctx, "geopolitical")
+	// Use a short timeout — store fallback preferred over slow live fetch.
+	fastCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	data, err := a.fetcher(fastCtx, "geopolitical")
 	if err != nil {
 		return narrative.GeopoliticalRiskScore{}, err
 	}
-	var score narrative.GeopoliticalRiskScore
-	if err := json.Unmarshal(data, &score); err != nil {
+	// The Gateway geopolitical channel wraps scores in {global, taiwan} envelope.
+	var wrapper struct {
+		Global *narrative.GeopoliticalRiskScore `json:"global"`
+		Taiwan *narrative.GeopoliticalRiskScore `json:"taiwan"`
+	}
+	if err := json.Unmarshal(data, &wrapper); err != nil {
 		return narrative.GeopoliticalRiskScore{}, fmt.Errorf("geo unmarshal: %w", err)
 	}
-	return score, nil
+	if wrapper.Global == nil || wrapper.Global.Intensity == 0 {
+		return narrative.GeopoliticalRiskScore{}, fmt.Errorf("geopolitical score unavailable (global=nil or intensity=0)")
+	}
+	return *wrapper.Global, nil
 }
 
 // ---------------------------------------------------------------------------

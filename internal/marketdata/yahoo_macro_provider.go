@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strings"
 	"sync"
 	"time"
 
@@ -128,7 +127,7 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 
 	params := map[string]string{
 		"interval": "1d",
-		"range":    "2d",
+		"range":    "5d",
 	}
 
 	body, err := y.session.fetchWithFallback(ctx, ticker, params)
@@ -178,11 +177,6 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 		Value:     latest,
 		ChangePct: changePct,
 		Timestamp: result[0].Meta.RegularMarketTime,
-	}
-
-	if strings.Contains(ticker, "TNX") {
-		// ^TNX is yield in percent; treat change as bps proxy.
-		point.Value = changePct * 10 // rough proxy: 1% move = 100bps
 	}
 
 	return point, nil
