@@ -213,15 +213,15 @@ func TestNarrativeEngineDetectEvents(t *testing.T) {
 		VIXLevel:         30,
 	}
 	events := ne.DetectEvents(data)
-	if len(events) != 6 {
-		t.Fatalf("expected 6 events, got %d", len(events))
+	if len(events) != 9 {
+		t.Fatalf("expected 9 events, got %d", len(events))
 	}
 
 	themeCount := make(map[string]int)
 	for _, e := range events {
 		themeCount[e.Theme]++
 	}
-	expected := []string{"US_rates_up", "AI_capex_surge", "geopolitical_risk_spike", "oil_price_shock", "JPY_carry_unwind", "taiwan_political_risk"}
+	expected := []string{"US_rates_up", "AI_capex_surge", "geopolitical_risk_spike", "oil_price_shock", "JPY_carry_unwind", "taiwan_political_risk", "dollar_surge", "earnings_surprise", "inflation_spike"}
 	for _, theme := range expected {
 		if themeCount[theme] != 1 {
 			t.Fatalf("expected 1 event for theme %s, got %d", theme, themeCount[theme])

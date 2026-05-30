@@ -88,14 +88,33 @@ func (kb *KnowledgeBase) MatchChains(event NarrativeEvent) []CausalChain {
 		steps := make([]CausalStep, len(tmpl.Steps))
 		copy(steps, tmpl.Steps)
 
+		affected := collectAffectedSectors(tmpl.Steps)
+
 		chains = append(chains, CausalChain{
-			EventID:    event.ID,
-			TemplateID: tmpl.ID,
-			Steps:      steps,
-			Score:      score,
+			EventID:         event.ID,
+			TemplateID:      tmpl.ID,
+			TriggerTheme:    tmpl.TriggerTheme,
+			AffectedSectors: affected,
+			Steps:           steps,
+			Score:           score,
 		})
 	}
 	return chains
+}
+
+// collectAffectedSectors aggregates unique affected sectors from all causal steps.
+func collectAffectedSectors(steps []CausalStep) []string {
+	seen := make(map[string]struct{})
+	for _, step := range steps {
+		for _, s := range step.Affected {
+			seen[s] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for s := range seen {
+		out = append(out, s)
+	}
+	return out
 }
 
 // NarrativeEngine orchestrates event detection and causal chain matching.
@@ -230,6 +249,26 @@ func NewNarrativeEngine() *NarrativeEngine {
 				AvoidedSectors: []string{"ai_supply_chain", "small_cap"},
 				Weight:         1.0,
 			},
+			{
+				ID:             "retail_divergence_model",
+				Name:           "散戶與法人背離",
+				Description:    "當散戶情緒與法人籌碼出現明顯背離時，通常預示市場轉折點",
+				Rationale:      "散戶傾向追高殺低，法人具有資訊優勢。散戶增加槓桿但法人持續賣出時，暗示市場即將修正",
+				ActiveThemes:   []string{"retail_institutional_divergence"},
+				FavoredSectors: []string{"defensive"},
+				AvoidedSectors: []string{"technology", "semiconductor"},
+				Weight:         0.60,
+			},
+			{
+				ID:             "earnings_surprise_model",
+				Name:           "財報驚喜驅動",
+				Description:    "台灣科技股財報超出預期時，資金重分配至半導體與AI供應鏈",
+				Rationale:      "台灣股市以科技股為核心，財報驚喜直接影響法人評等調整與資金流向",
+				ActiveThemes:   []string{"earnings_surprise"},
+				FavoredSectors: []string{"semiconductor", "ai_supply_chain"},
+				AvoidedSectors: []string{"traditional"},
+				Weight:         0.75,
+			},
 		},
 	}
 }
@@ -265,6 +304,18 @@ func (ne *NarrativeEngine) DetectEvents(data MarketNarrativeData) []NarrativeEve
 		events = append(events, *evt)
 	}
 	if evt := detectRetailDivergenceEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
+	if evt := detectGoldRallyKBEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
+	if evt := detectDollarSurgeKBEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
+	if evt := detectEarningsSurpriseKBEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
+	if evt := detectInflationSpikeKBEvent(data); evt != nil {
 		events = append(events, *evt)
 	}
 	return events
@@ -953,6 +1004,142 @@ func detectRetailDivergenceEvent(data MarketNarrativeData) *NarrativeEvent {
 	return nil
 }
 
+// detectGoldRallyKBEvent is the KB-pipeline detector for gold_rally (GoldChangePct input).
+// INTENTIONALLY NOT MERGED with detectGoldRallyEventFromSnapshot in ingestor.go.
+// Reason: The KB version uses GoldChangePct from MarketNarrativeData directly, while the
+// ingestor version uses a MacroDataPoint with ChangePct. Different input shapes, same theme.
+func detectGoldRallyKBEvent(data MarketNarrativeData) *NarrativeEvent {
+	if data.GoldChangePct > 3.0 {
+		confidence := data.GoldChangePct / 5.0
+		if confidence > 1.0 {
+			confidence = 1.0
+		}
+		now := time.Now().UTC()
+		dur := getThemeDuration("gold_rally")
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-gold-rally-%d", nowUnix()),
+			Theme:            "gold_rally",
+			Region:           "COM",
+			Sentiment:        0.6,
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
+			HitRate:          hitRateForTheme("gold_rally"),
+			CapitalFlow:      "flight_to_gold",
+			TimeWindow:       "1_week",
+			Timestamp:        now,
+			Duration:         dur,
+			ExpiresAt:        now.Add(dur),
+			Severity:         "medium",
+			Status:           "active",
+			SourceData: map[string]float64{
+				"gold_change_pct": data.GoldChangePct,
+			},
+		}
+	}
+	return nil
+}
+
+// detectDollarSurgeKBEvent is the KB-pipeline detector for dollar_surge (DXYChangePct input).
+// INTENTIONALLY NOT MERGED with detectDollarSurgeEventFromSnapshot in ingestor.go.
+// Reason: The KB version uses DXYChangePct from MarketNarrativeData directly, while the
+// ingestor version uses a MacroDataPoint with ChangePct. Different input shapes, same theme.
+func detectDollarSurgeKBEvent(data MarketNarrativeData) *NarrativeEvent {
+	if data.DXYChangePct > 1.5 {
+		confidence := data.DXYChangePct / 3.0
+		if confidence > 1.0 {
+			confidence = 1.0
+		}
+		now := time.Now().UTC()
+		dur := getThemeDuration("dollar_surge")
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-dollar-surge-%d", nowUnix()),
+			Theme:            "dollar_surge",
+			Region:           "US",
+			Sentiment:        -0.5,
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
+			HitRate:          hitRateForTheme("dollar_surge"),
+			CapitalFlow:      "flight_to_USD",
+			TimeWindow:       "1_week",
+			Timestamp:        now,
+			Duration:         dur,
+			ExpiresAt:        now.Add(dur),
+			Severity:         "medium",
+			Status:           "active",
+			SourceData: map[string]float64{
+				"dxy_change_pct": data.DXYChangePct,
+			},
+		}
+	}
+	return nil
+}
+
+// detectEarningsSurpriseKBEvent is the KB-pipeline detector for earnings_surprise.
+// Uses AICapexSentiment as a proxy: strong AI capex sentiment correlates with earnings strength.
+// INTENTIONALLY NOT MERGED with NewEarningsSurpriseEvent (which takes surprisePct).
+// Reason: The KB version uses AICapexSentiment (sentiment proxy) while
+// NewEarningsSurpriseEvent uses actual earnings surprise percentage. Different signal sources.
+func detectEarningsSurpriseKBEvent(data MarketNarrativeData) *NarrativeEvent {
+	if data.AICapexSentiment > 0.7 {
+		now := time.Now().UTC()
+		dur := getThemeDuration("earnings_surprise")
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-earn-%d", nowUnix()),
+			Theme:            "earnings_surprise",
+			Region:           "TW",
+			Sentiment:        0.7,
+			Confidence:       data.AICapexSentiment,
+			ConfidenceSource: "deviation_based_v1",
+			HitRate:          hitRateForTheme("earnings_surprise"),
+			CapitalFlow:      "earnings_beat",
+			TimeWindow:       "1_week",
+			Timestamp:        now,
+			Duration:         dur,
+			ExpiresAt:        now.Add(dur),
+			Severity:         "high",
+			Status:           "active",
+			SourceData: map[string]float64{
+				"ai_capex_sentiment": data.AICapexSentiment,
+			},
+		}
+	}
+	return nil
+}
+
+// detectInflationSpikeKBEvent is the KB-pipeline detector for inflation_spike.
+// Triggers when VIX and DXY both signal inflation repricing (VIX > 25 proxy for
+// inflation uncertainty, DXY strengthening as confirmation).
+// INTENTIONALLY NOT MERGED with detectInflationSpikeEventFromSnapshot in ingestor.go.
+// Reason: The KB version uses VIXLevel + DXYChangePct from MarketNarrativeData directly,
+// while the ingestor version uses MacroDataPoint structs. Different input shapes, same theme.
+func detectInflationSpikeKBEvent(data MarketNarrativeData) *NarrativeEvent {
+	if data.VIXLevel > 25 && data.DXYChangePct > 1.0 {
+		now := time.Now().UTC()
+		dur := getThemeDuration("inflation_spike")
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-inflation-spike-%d", nowUnix()),
+			Theme:            "inflation_spike",
+			Region:           "US",
+			Sentiment:        -0.6,
+			Confidence:       (data.VIXLevel-25)/15.0 + 0.5, // scales 25→0.5, 40→1.0
+			ConfidenceSource: "deviation_based_v1",
+			HitRate:          hitRateForTheme("inflation_spike"),
+			CapitalFlow:      "inflation_reprice",
+			TimeWindow:       "1_week",
+			Timestamp:        now,
+			Duration:         dur,
+			ExpiresAt:        now.Add(dur),
+			Severity:         "medium",
+			Status:           "active",
+			SourceData: map[string]float64{
+				"vix_level":      data.VIXLevel,
+				"dxy_change_pct": data.DXYChangePct,
+			},
+		}
+	}
+	return nil
+}
+
 // computeDeviationConfidence calculates event confidence based on how far the observed value deviates from the threshold.
 // Uses a base confidence plus a linear interpolation to ceiling.
 func computeDeviationConfidence(observed, threshold, base, ceiling float64) float64 {
@@ -968,6 +1155,23 @@ func computeDeviationConfidence(observed, threshold, base, ceiling float64) floa
 		confidence = ceiling
 	}
 	return confidence
+}
+
+// getThemeDuration returns the typical duration for a narrative event theme.
+// Uses the same durations as EventLifecycleManager.defaultDurations().
+func getThemeDuration(theme string) time.Duration {
+	switch theme {
+	case "gold_rally":
+		return 7 * 24 * time.Hour
+	case "dollar_surge":
+		return 7 * 24 * time.Hour
+	case "earnings_surprise":
+		return 10 * 24 * time.Hour
+	case "inflation_spike":
+		return 15 * 24 * time.Hour
+	default:
+		return 7 * 24 * time.Hour
+	}
 }
 
 var nowUnix = func() int64 {
