@@ -346,8 +346,8 @@ type NarrativeParameters struct {
 	YearEndWindowDressingConfidence ParameterMetadata[float64] `json:"year_end_window_dressing_confidence"`
 
 	// Externally-triggered event confidence baselines (not calendar-based; consumed by ingestor/swarm detectors)
-	EarningsSurpriseConfidence  ParameterMetadata[float64] `json:"earnings_surprise_confidence"`
-	EarningsSurpriseThreshold   ParameterMetadata[float64] `json:"earnings_surprise_threshold"`
+	EarningsSurpriseConfidence ParameterMetadata[float64] `json:"earnings_surprise_confidence"`
+	EarningsSurpriseThreshold  ParameterMetadata[float64] `json:"earnings_surprise_threshold"`
 }
 
 // RealtimeParameters holds tunable values for real-time regime detection and adaptation.
