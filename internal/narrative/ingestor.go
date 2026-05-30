@@ -362,10 +362,10 @@ func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot, div *Dive
 	}
 
 	if curr.RetailMarginBalance.Symbol != "" {
-		if event := detectRetailFrenzyEventFromSnapshot(curr.RetailMarginBalance, now); event != nil {
+		if event := detectRetailFrenzyEventFromSnapshot(curr.RetailMarginBalance, DefaultMarginHistoryDir, now); event != nil {
 			events = append(events, *event)
 		}
-		if event := detectRetailFearEventFromSnapshot(curr.RetailMarginBalance, now); event != nil {
+		if event := detectRetailFearEventFromSnapshot(curr.RetailMarginBalance, DefaultMarginHistoryDir, now); event != nil {
 			events = append(events, *event)
 		}
 	}
@@ -647,12 +647,12 @@ func computeAICapexSentiment(tsmcYoYChangePct float64) float64 {
 	return fallback
 }
 
-func detectRetailFrenzyEventFromSnapshot(marginBalance marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+func detectRetailFrenzyEventFromSnapshot(marginBalance marketdata.MacroDataPoint, marginDir string, now time.Time) *NarrativeEvent {
 	if marginBalance.Symbol == "" {
 		return nil
 	}
 	params := config.GetParametersConfig().Narrative
-	history, err := LoadMarginHistory(DefaultMarginHistoryDir)
+	history, err := LoadMarginHistory(marginDir)
 	if err == nil && marginHistoryAvailable(history) {
 		percentile, ok := ComputeRollingPercentile(history, marginBalance.Value, 60)
 		if ok && percentile >= params.RetailFrenzyPercentileThreshold.Value {
@@ -690,12 +690,12 @@ func detectRetailFrenzyEventFromSnapshot(marginBalance marketdata.MacroDataPoint
 	return nil
 }
 
-func detectRetailFearEventFromSnapshot(marginBalance marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+func detectRetailFearEventFromSnapshot(marginBalance marketdata.MacroDataPoint, marginDir string, now time.Time) *NarrativeEvent {
 	if marginBalance.Symbol == "" {
 		return nil
 	}
 	params := config.GetParametersConfig().Narrative
-	history, err := LoadMarginHistory(DefaultMarginHistoryDir)
+	history, err := LoadMarginHistory(marginDir)
 	if err == nil && marginHistoryAvailable(history) {
 		percentile, ok := ComputeRollingPercentile(history, marginBalance.Value, 60)
 		if ok && percentile <= params.RetailFearPercentileThreshold.Value {

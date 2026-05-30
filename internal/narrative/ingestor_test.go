@@ -592,3 +592,154 @@ func TestDetectAICapexEventFromSnapshot(t *testing.T) {
 		})
 	}
 }
+
+func writeMarginHistory(dir string, entries []MarginHistoryEntry) error {
+	for _, e := range entries {
+		file := marginHistoryFile{Date: e.Date, MarginBalance: e.MarginBalance, ChangePct: e.ChangePct}
+		data, err := json.Marshal(file)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dir, e.Date+"_margin.json"), data, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func makeRisingHistory(n int, startBalance, endBalance float64) []MarginHistoryEntry {
+	entries := make([]MarginHistoryEntry, n)
+	step := (endBalance - startBalance) / float64(n-1)
+	for i := 0; i < n; i++ {
+		entries[i] = MarginHistoryEntry{
+			Date:          time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i).Format("20060102"),
+			MarginBalance: startBalance + step*float64(i),
+			ChangePct:     1.0,
+		}
+	}
+	return entries
+}
+
+func TestDetectRetailFrenzyEventFromSnapshot(t *testing.T) {
+	config.ResetParametersConfig()
+	now := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+
+	t.Run("triggers frenzy when margin at high percentile with rising acceleration", func(t *testing.T) {
+		dir := t.TempDir()
+		history := makeRisingHistory(61, 500_000_000, 800_000_000)
+		if err := writeMarginHistory(dir, history); err != nil {
+			t.Fatalf("write fixtures: %v", err)
+		}
+
+		currentValue := 810_000_000.0
+		marginPt := marketdata.MacroDataPoint{Symbol: "TWSEMARGIN", Value: currentValue}
+		event := detectRetailFrenzyEventFromSnapshot(marginPt, dir, now)
+
+		if event == nil {
+			t.Fatal("expected non-nil frenzy event")
+		}
+		if event.Theme != "retail_frenzy" {
+			t.Fatalf("expected retail_frenzy theme, got %s", event.Theme)
+		}
+		if event.Region != "TW" {
+			t.Fatalf("expected TW region, got %s", event.Region)
+		}
+		if event.Sentiment != 1.0 {
+			t.Fatalf("expected sentiment 1.0, got %f", event.Sentiment)
+		}
+		if event.Confidence < 0.45 || event.Confidence > 0.9 {
+			t.Fatalf("expected confidence in [0.45, 0.9], got %f", event.Confidence)
+		}
+		if event.ConfidenceSource != "margin_history_percentile" {
+			t.Fatalf("expected confidence_source margin_history_percentile, got %s", event.ConfidenceSource)
+		}
+		if event.SourceData == nil {
+			t.Fatal("expected non-nil SourceData")
+		}
+	})
+
+	t.Run("returns nil when margin balance is empty symbol", func(t *testing.T) {
+		marginPt := marketdata.MacroDataPoint{Symbol: "", Value: 1_000_000_000}
+		event := detectRetailFrenzyEventFromSnapshot(marginPt, "", now)
+		if event != nil {
+			t.Fatal("expected nil event for empty symbol")
+		}
+	})
+
+	t.Run("returns nil when margin history is insufficient", func(t *testing.T) {
+		dir := t.TempDir()
+		history := makeRisingHistory(20, 500_000_000, 550_000_000)
+		if err := writeMarginHistory(dir, history); err != nil {
+			t.Fatalf("write fixtures: %v", err)
+		}
+
+		marginPt := marketdata.MacroDataPoint{Symbol: "TWSEMARGIN", Value: 560_000_000}
+		event := detectRetailFrenzyEventFromSnapshot(marginPt, dir, now)
+		if event != nil {
+			t.Fatal("expected nil event when history < 30 entries")
+		}
+	})
+
+	t.Run("returns nil when margin history directory does not exist", func(t *testing.T) {
+		marginPt := marketdata.MacroDataPoint{Symbol: "TWSEMARGIN", Value: 1_000_000_000}
+		event := detectRetailFrenzyEventFromSnapshot(marginPt, "/nonexistent/dir", now)
+		if event != nil {
+			t.Fatal("expected nil event when history dir doesn't exist")
+		}
+	})
+}
+
+func TestDetectRetailFearEventFromSnapshot(t *testing.T) {
+	config.ResetParametersConfig()
+	now := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+
+	t.Run("triggers fear when margin at low percentile with falling acceleration", func(t *testing.T) {
+		dir := t.TempDir()
+		history := makeRisingHistory(61, 500_000_000, 800_000_000)
+		if err := writeMarginHistory(dir, history); err != nil {
+			t.Fatalf("write fixtures: %v", err)
+		}
+
+		currentValue := 490_000_000.0
+		marginPt := marketdata.MacroDataPoint{Symbol: "TWSEMARGIN", Value: currentValue}
+		event := detectRetailFearEventFromSnapshot(marginPt, dir, now)
+
+		if event == nil {
+			t.Fatal("expected non-nil fear event")
+		}
+		if event.Theme != "retail_fear" {
+			t.Fatalf("expected retail_fear theme, got %s", event.Theme)
+		}
+		if event.Region != "TW" {
+			t.Fatalf("expected TW region, got %s", event.Region)
+		}
+		if event.Sentiment != -1.0 {
+			t.Fatalf("expected sentiment -1.0, got %f", event.Sentiment)
+		}
+		if event.ConfidenceSource != "margin_history_percentile" {
+			t.Fatalf("expected confidence_source margin_history_percentile, got %s", event.ConfidenceSource)
+		}
+	})
+
+	t.Run("returns nil when margin balance is empty symbol", func(t *testing.T) {
+		marginPt := marketdata.MacroDataPoint{Symbol: "", Value: 100_000_000}
+		event := detectRetailFearEventFromSnapshot(marginPt, "", now)
+		if event != nil {
+			t.Fatal("expected nil event for empty symbol")
+		}
+	})
+
+	t.Run("returns nil when margin history is insufficient", func(t *testing.T) {
+		dir := t.TempDir()
+		history := makeRisingHistory(20, 500_000_000, 550_000_000)
+		if err := writeMarginHistory(dir, history); err != nil {
+			t.Fatalf("write fixtures: %v", err)
+		}
+
+		marginPt := marketdata.MacroDataPoint{Symbol: "TWSEMARGIN", Value: 300_000_000}
+		event := detectRetailFearEventFromSnapshot(marginPt, dir, now)
+		if event != nil {
+			t.Fatal("expected nil event when history < 30 entries")
+		}
+	})
+}
