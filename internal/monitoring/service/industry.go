@@ -232,14 +232,6 @@ type CyclePosition struct {
 }
 
 func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition, bool) {
-	mix := config.GetParametersConfig().Industry.ConfidenceMix.Value
-	breakdown := map[string]float64{
-		"boundary":  mix.WeightBoundary,
-		"freshness": mix.WeightFreshness,
-		"seasonal":  mix.WeightSeasonal,
-		"linkage":   mix.WeightLinkage,
-		"narrative": mix.WeightNarrative,
-	}
 	ev := map[string]string{
 		"source_type":       "heuristic",
 		"evidence_quality":  "low",
@@ -261,7 +253,7 @@ func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition,
 			IsFavorable:         pos.IsFavorable(),
 			PhaseScore:          pos.GetPhaseScore(),
 			Trend:               pos.GetTrend(),
-			ConfidenceBreakdown: breakdown,
+			ConfidenceBreakdown: s.CycleTracker.BuildConfidenceBreakdown(pos.IndustryID),
 			NarrativeTheme:      narrativeTheme,
 			ThresholdEvidence:   ev,
 			Evidence:            evidence,
