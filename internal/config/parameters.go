@@ -465,6 +465,21 @@ type IndustryParameters struct {
 
 	// Cycle tracking operational parameters
 	HistoryRetentionDays ParameterMetadata[int] `json:"history_retention_days"`
+
+	// Bootstrap seed values for CycleTracker initialization, used before
+	// real FinMind data becomes available (replaced within 6h by auto_cycle_update).
+	DefaultMetrics ParameterMetadata[map[string]IndustryDefaultMetrics] `json:"default_metrics"`
+}
+
+// IndustryDefaultMetrics holds bootstrap seed values for CycleTracker initialization.
+// These replace the previously hardcoded defaults in initializeDefaultPositions(),
+// allowing operators to tune seed values without recompiling. Replaced by real
+// FinMind data within 6h (auto_cycle_update background task).
+type IndustryDefaultMetrics struct {
+	RevenueGrowthYoY    float64 `json:"revenue_growth_yoy"`
+	ProfitGrowthYoY     float64 `json:"profit_growth_yoy"`
+	InventoryTurnover   float64 `json:"inventory_turnover"`
+	CapacityUtilization float64 `json:"capacity_utilization"`
 }
 
 // CycleThresholdConfig holds business cycle thresholds for a specific industry.

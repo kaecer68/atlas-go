@@ -2555,6 +2555,160 @@
       "source": "heuristic",
       "value": 90
     },
+    "default_metrics": {
+      "citation": {
+        "dependencies": [],
+        "evidence_quality": "medium",
+        "last_validated": "2026-05-30T00:00:00.000000",
+        "source_reference": "Migrated from hardcoded defaults in initializeDefaultPositions() in cycle.go; replaces legacy V1 seed map",
+        "source_type": "heuristic",
+        "update_policy": "manual",
+        "validation_method": "heuristic"
+      },
+      "rationale": "Seed bootstrap values for CycleTracker initialization; replaced by real FinMind data within 6h (auto_cycle_update). Only four seed fields are configurable — RevenueGrowthYoY, ProfitGrowthYoY, InventoryTurnover, CapacityUtilization — the remaining IndustryMetrics fields (MarketCap, PE, PB, DivYield, Volatility) are set to zero and filled from market data.",
+      "source": "heuristic",
+      "todo": "Calibrate: run cmd/calibrate-seasonal --replay after accumulating 90+ days of FinMind data to replace heuristic seeds with empirically derived values",
+      "value": {
+        "semiconductor": {
+          "revenue_growth_yoy": 0.25,
+          "profit_growth_yoy": 0.3,
+          "inventory_turnover": 5.5,
+          "capacity_utilization": 0.85
+        },
+        "ai_supply_chain": {
+          "revenue_growth_yoy": 0.45,
+          "profit_growth_yoy": 0.5,
+          "inventory_turnover": 6.0,
+          "capacity_utilization": 0.9
+        },
+        "robotics": {
+          "revenue_growth_yoy": 0.15,
+          "profit_growth_yoy": 0.12,
+          "inventory_turnover": 4.0,
+          "capacity_utilization": 0.7
+        },
+        "financials": {
+          "revenue_growth_yoy": 0.08,
+          "profit_growth_yoy": 0.1,
+          "inventory_turnover": 0.0,
+          "capacity_utilization": 0.75
+        },
+        "shipping": {
+          "revenue_growth_yoy": -0.05,
+          "profit_growth_yoy": -0.1,
+          "inventory_turnover": 3.0,
+          "capacity_utilization": 0.65
+        },
+        "energy": {
+          "revenue_growth_yoy": 0.05,
+          "profit_growth_yoy": 0.03,
+          "inventory_turnover": 4.5,
+          "capacity_utilization": 0.7
+        },
+        "electronics": {
+          "revenue_growth_yoy": 0.12,
+          "profit_growth_yoy": 0.15,
+          "inventory_turnover": 5.0,
+          "capacity_utilization": 0.75
+        },
+        "consumer": {
+          "revenue_growth_yoy": 0.03,
+          "profit_growth_yoy": 0.05,
+          "inventory_turnover": 6.0,
+          "capacity_utilization": 0.7
+        },
+        "industrial": {
+          "revenue_growth_yoy": 0.06,
+          "profit_growth_yoy": 0.08,
+          "inventory_turnover": 4.0,
+          "capacity_utilization": 0.68
+        },
+        "foundry": {
+          "revenue_growth_yoy": 0.22,
+          "profit_growth_yoy": 0.28,
+          "inventory_turnover": 5.0,
+          "capacity_utilization": 0.88
+        },
+        "server_assembly": {
+          "revenue_growth_yoy": 0.4,
+          "profit_growth_yoy": 0.45,
+          "inventory_turnover": 6.5,
+          "capacity_utilization": 0.85
+        },
+        "cooling": {
+          "revenue_growth_yoy": 0.2,
+          "profit_growth_yoy": 0.22,
+          "inventory_turnover": 5.5,
+          "capacity_utilization": 0.8
+        },
+        "leo_satellite": {
+          "revenue_growth_yoy": 0.35,
+          "profit_growth_yoy": 0.4,
+          "inventory_turnover": 4.5,
+          "capacity_utilization": 0.75
+        },
+        "satellite_rf_components": {
+          "revenue_growth_yoy": 0.45,
+          "profit_growth_yoy": 0.5,
+          "inventory_turnover": 5.0,
+          "capacity_utilization": 0.8
+        },
+        "satellite_pcb": {
+          "revenue_growth_yoy": 0.3,
+          "profit_growth_yoy": 0.35,
+          "inventory_turnover": 4.0,
+          "capacity_utilization": 0.78
+        },
+        "ground_equipment": {
+          "revenue_growth_yoy": 0.25,
+          "profit_growth_yoy": 0.28,
+          "inventory_turnover": 3.5,
+          "capacity_utilization": 0.72
+        },
+        "laser_communication": {
+          "revenue_growth_yoy": 0.5,
+          "profit_growth_yoy": 0.55,
+          "inventory_turnover": 3.0,
+          "capacity_utilization": 0.7
+        },
+        "mining": {
+          "revenue_growth_yoy": 0.1,
+          "profit_growth_yoy": 0.12,
+          "inventory_turnover": 4.5,
+          "capacity_utilization": 0.75
+        },
+        "precious_metals_recycling": {
+          "revenue_growth_yoy": 0.15,
+          "profit_growth_yoy": 0.18,
+          "inventory_turnover": 5.0,
+          "capacity_utilization": 0.8
+        },
+        "copper_industry": {
+          "revenue_growth_yoy": 0.08,
+          "profit_growth_yoy": 0.1,
+          "inventory_turnover": 4.0,
+          "capacity_utilization": 0.72
+        },
+        "rare_earth_specialty": {
+          "revenue_growth_yoy": 0.05,
+          "profit_growth_yoy": 0.06,
+          "inventory_turnover": 3.5,
+          "capacity_utilization": 0.7
+        },
+        "metal_processing": {
+          "revenue_growth_yoy": 0.06,
+          "profit_growth_yoy": 0.08,
+          "inventory_turnover": 4.5,
+          "capacity_utilization": 0.73
+        },
+        "etf_rotation": {
+          "revenue_growth_yoy": 0.05,
+          "profit_growth_yoy": 0.05,
+          "inventory_turnover": 0.0,
+          "capacity_utilization": 0.0
+        }
+      }
+    },
     "impact_multiplier": {
       "citation": {
         "dependencies": [],
