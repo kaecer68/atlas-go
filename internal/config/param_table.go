@@ -1020,12 +1020,17 @@ var stringParameterTable = map[string]stringParamAccessor{
 //
 //nolint:unused // scaffolding for planned bool parameter support
 type boolParamAccessor struct {
+	//nolint:unused
 	get func(*ParametersConfig) bool
+	//nolint:unused
 	set func(*ParametersConfig, bool)
 }
 
 //nolint:unused // scaffolding, populated when bool params are registered
 var boolParameterTable = map[string]boolParamAccessor{}
+
+var _ = boolParamAccessor{}.get // prevent unused-field warning on scaffolding
+var _ = boolParamAccessor{}.set // prevent unused-field warning on scaffolding
 
 var _ = func() int {
 	_ = len(mapParamPrefixes)
