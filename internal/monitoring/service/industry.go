@@ -248,10 +248,7 @@ func (s *IndustryService) GetCyclePositions(industryID string) ([]CyclePosition,
 	}
 
 	buildCyclePosition := func(pos *industry.CyclePosition, name string) CyclePosition {
-		evidence := "insufficient"
-		if s.CycleTracker.HasEmpiricalData(pos.IndustryID) {
-			evidence = "empirical"
-		}
+		evidence := s.CycleTracker.EvidenceTier(pos.IndustryID)
 		narrativeTheme := s.CycleTracker.NarrativeTheme(pos.IndustryID)
 		return CyclePosition{
 			Industry:            pos.IndustryID,
