@@ -470,6 +470,9 @@ func TestNewEarningsSurpriseEvent_Positive(t *testing.T) {
 	if event.ConfidenceSource != "deviation_based_v1" {
 		t.Fatalf("expected deviation_based_v1, got %s", event.ConfidenceSource)
 	}
+	if event.HitRate == 0 {
+		t.Fatalf("expected non-zero HitRate from template, got %f", event.HitRate)
+	}
 }
 
 func TestNewEarningsSurpriseEvent_Negative(t *testing.T) {
@@ -495,5 +498,20 @@ func TestNewEarningsSurpriseEvent_UsesParametersConfig(t *testing.T) {
 	event := NewEarningsSurpriseEvent(20.0)
 	if event.Confidence <= 0 {
 		t.Fatalf("expected confidence > 0, got %f", event.Confidence)
+	}
+}
+
+func TestEarningsSurpriseEvent_MatchesCausalChains(t *testing.T) {
+	config.ResetParametersConfig()
+	ne := NewNarrativeEngine()
+
+	event := NewEarningsSurpriseEvent(15.0)
+	chains := ne.kb.MatchChains(*event)
+
+	if len(chains) == 0 {
+		t.Fatal("expected at least one causal chain for earnings_surprise")
+	}
+	if chains[0].Score <= 0 {
+		t.Fatalf("expected positive score, got %f", chains[0].Score)
 	}
 }

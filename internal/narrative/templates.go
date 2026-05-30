@@ -302,5 +302,23 @@ func DefaultTemplates() []CausalTemplate {
 • 【押注】貴金屬ETF：通膨避險 + 實質利率下降雙重利多
 • 【迴避】高估值成長股：對利率最敏感，首當其衝`,
 		},
+		{
+			ID:             "財報驚喜",
+			Name:           "財報驚喜",
+			TriggerTheme:   "earnings_surprise",
+			RequiredRegion: "TW",
+			Steps: []CausalStep{
+				{Description: "台積電或重點權值股財報大幅優於預期", Affected: []string{"半導體", "AI供應鏈"}, Impact: 0.7},
+				{Description: "外資重新上調台股目標價，資金流入", Affected: []string{"外資流向_台股", "台股大盤"}, Impact: 0.6},
+				{Description: "科技股與高Beta板塊短期受惠", Affected: []string{"AI供應鏈", "半導體", "中小型股"}, Impact: 0.5},
+			},
+			HistoricalHitRate: 0.60,
+			SourceReferences:  []string{"Ball & Brown (1968) JAR", "Taiwan Stock Exchange Earnings Announcement Studies"},
+			Rationale: `財報驚喜是短線最強的事件驅動因子之一。當台積電或其他重點權值股公布的營收或獲利大幅超越市場預期時，會引發兩層連鎖反應：第一，分析師集體上調目標價與獲利預估，形成「預期修正循環」；第二，外資因看到基本面支撐而重新流入台股，推升大盤與高Beta個股。
+
+配置建議：
+• 【押注】AI供應鏈、半導體、中小型股：財報優於預期時，這些板塊的Beta最高、彈性最大
+• 【迴避】防禦型板塊（金融、高股息）：在樂觀情緒主導的市場中，防禦型資產的相對報酬落後`,
+		},
 	}
 }
