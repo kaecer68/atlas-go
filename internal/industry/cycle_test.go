@@ -538,6 +538,91 @@ func TestDetectBusinessCycle_ExtremeRecession(t *testing.T) {
 	}
 }
 
+// --- BuildConfidenceBreakdown tests ---
+
+func TestConfidenceBreakdown_EmpiricalIndustry(t *testing.T) {
+	ct := NewCycleTracker()
+	// Update twice → empirical (2+ history entries), quality=1.0, time≈1.0
+	ct.UpdatePosition("semiconductor", IndustryMetrics{RevenueGrowthYoY: 0.25})
+	ct.UpdatePosition("semiconductor", IndustryMetrics{RevenueGrowthYoY: 0.30})
+
+	breakdown := ct.BuildConfidenceBreakdown("semiconductor")
+	if breakdown == nil {
+		t.Fatal("expected non-nil breakdown")
+	}
+
+	mix := config.GetParametersConfig().Industry.ConfidenceMix.Value
+
+	// boundary is static — always config weight
+	if breakdown["boundary"] != mix.WeightBoundary {
+		t.Errorf("expected boundary=%f, got %f", mix.WeightBoundary, breakdown["boundary"])
+	}
+
+	// freshness should be near config weight (quality=1.0, time≈1.0)
+	if breakdown["freshness"] < mix.WeightFreshness*0.95 {
+		t.Errorf("expected freshness near %f, got %f", mix.WeightFreshness, breakdown["freshness"])
+	}
+}
+
+func TestConfidenceBreakdown_EstimatedIndustry(t *testing.T) {
+	ct := NewCycleTracker()
+	// Only seed data from init → estimated, quality=0.4
+	breakdown := ct.BuildConfidenceBreakdown("semiconductor")
+	if breakdown == nil {
+		t.Fatal("expected non-nil breakdown")
+	}
+
+	mix := config.GetParametersConfig().Industry.ConfidenceMix.Value
+
+	// freshness ≈ 0.4 * config weight (estimated quality)
+	expectedFreshness := mix.WeightFreshness * 0.4
+	if breakdown["freshness"] < expectedFreshness*0.95 || breakdown["freshness"] > expectedFreshness*1.05 {
+		t.Errorf("expected freshness ≈ %f (0.4×), got %f", expectedFreshness, breakdown["freshness"])
+	}
+
+	// boundary is static
+	if breakdown["boundary"] != mix.WeightBoundary {
+		t.Errorf("expected boundary=%f, got %f", mix.WeightBoundary, breakdown["boundary"])
+	}
+}
+
+func TestConfidenceBreakdown_NonExistentIndustry(t *testing.T) {
+	ct := NewCycleTracker()
+	breakdown := ct.BuildConfidenceBreakdown("nonexistent")
+	if breakdown == nil {
+		t.Fatal("expected non-nil breakdown even for unknown industry")
+	}
+
+	mix := config.GetParametersConfig().Industry.ConfidenceMix.Value
+
+	// freshness = 0 (insufficient)
+	if breakdown["freshness"] != 0.0 {
+		t.Errorf("expected freshness=0 for insufficient data, got %f", breakdown["freshness"])
+	}
+
+	// boundary is static regardless of data
+	if breakdown["boundary"] != mix.WeightBoundary {
+		t.Errorf("expected boundary=%f, got %f", mix.WeightBoundary, breakdown["boundary"])
+	}
+
+	// seasonal = 0 (no SeasonalEngine set)
+	if breakdown["seasonal"] != 0.0 {
+		t.Errorf("expected seasonal=0 (no engine), got %f", breakdown["seasonal"])
+	}
+
+	// linkage = 0.3 * config weight (no LinkageAnalyzer set → fallback 0.3)
+	expectedLinkage := mix.WeightLinkage * 0.3
+	if breakdown["linkage"] != expectedLinkage {
+		t.Errorf("expected linkage=%f (0.3×), got %f", expectedLinkage, breakdown["linkage"])
+	}
+
+	// narrative = 0.5 * config weight (no active theme)
+	expectedNarrative := mix.WeightNarrative * 0.5
+	if breakdown["narrative"] != expectedNarrative {
+		t.Errorf("expected narrative=%f (0.5×), got %f", expectedNarrative, breakdown["narrative"])
+	}
+}
+
 func TestDetectBusinessCycle_AllPhasesReachable(t *testing.T) {
 	// Scenario C: All four phases (expansion, recovery, mature, recession)
 	// must be reachable with distinct input sets.

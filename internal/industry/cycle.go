@@ -650,6 +650,66 @@ func (ct *CycleTracker) boundaryConfidence(industryID string, metrics IndustryMe
 	return (revScore + profitScore) / 2.0
 }
 
+// BuildConfidenceBreakdown returns per-industry confidence dimension weights.
+// Each dimension is modulated by actual data quality signals:
+//   - boundary: config-driven threshold quality (static)
+//   - freshness: scaled by EvidenceTier and update recency
+//   - seasonal:  full weight if SeasonalEngine has patterns, else 0
+//   - linkage:   full weight if industry is in supply chain graph, else 0.3x
+//   - narrative: full weight if NarrativeTheme is non-empty, else 0.5x
+func (ct *CycleTracker) BuildConfidenceBreakdown(industryID string) map[string]float64 {
+	mix := config.GetParametersConfig().Industry.ConfidenceMix.Value
+
+	boundary := mix.WeightBoundary
+
+	var qualityMultiplier float64
+	switch ct.EvidenceTier(industryID) {
+	case "empirical":
+		qualityMultiplier = 1.0
+	case "estimated":
+		qualityMultiplier = 0.4
+	default:
+		qualityMultiplier = 0.0
+	}
+
+	timeMultiplier := 1.0
+	if pos, ok := ct.positions[industryID]; ok {
+		daysSinceUpdate := time.Since(pos.UpdatedAt).Hours() / 24.0
+		timeMultiplier = math.Max(0.3, 1.0-daysSinceUpdate/90.0)
+	}
+
+	freshness := mix.WeightFreshness * qualityMultiplier * timeMultiplier
+
+	seasonal := 0.0
+	if ct.seasonalEngine != nil && len(ct.seasonalEngine.GetPatternsForIndustry(industryID)) > 0 {
+		seasonal = mix.WeightSeasonal
+	}
+
+	var linkage float64
+	if ct.linkageAnalyzer != nil {
+		if _, ok := ct.linkageAnalyzer.GetSupplyChainGraph().GetNode(industryID); ok {
+			linkage = mix.WeightLinkage
+		} else {
+			linkage = mix.WeightLinkage * 0.3
+		}
+	} else {
+		linkage = mix.WeightLinkage * 0.3
+	}
+
+	narrative := mix.WeightNarrative * 0.5
+	if ct.NarrativeTheme(industryID) != "" {
+		narrative = mix.WeightNarrative
+	}
+
+	return map[string]float64{
+		"boundary":  boundary,
+		"freshness": freshness,
+		"seasonal":  seasonal,
+		"linkage":   linkage,
+		"narrative": narrative,
+	}
+}
+
 // getLeadingIndicators returns leading indicators for an industry.
 func (ct *CycleTracker) getLeadingIndicators(metrics IndustryMetrics) []Indicator {
 	var indicators []Indicator
