@@ -89,8 +89,8 @@ function cycleDelta(value) {
 }
 
 function cycleEventStyle(direction) {
-  if (direction === "up") return { icon: "↑", label: "上行", color: "var(--up)" };
-  if (direction === "down") return { icon: "↓", label: "下行", color: "var(--down)" };
+  if (direction === "up" || direction === "bullish") return { icon: "↑", label: "上行", color: "var(--up)" };
+  if (direction === "down" || direction === "bearish") return { icon: "↓", label: "下行", color: "var(--down)" };
   return { icon: "→", label: "中性", color: "var(--muted)" };
 }
 
@@ -205,7 +205,7 @@ export function renderCycleStatusCard(card) {
       const style = cycleEventStyle(event.direction);
       html += `<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--border)">`;
       html += `<div style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:${style.color};border:1px solid ${style.color};font-weight:800">${style.icon}</div>`;
-      html += `<div style="flex:1"><div style="font-size:12px;font-weight:800">${event.name || event.event_type || "未命名事件"}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${event.event_type || "-"} · ${style.label} · 權重 ${cycleNumber(event.weight, 2)} · 情緒 ${cycleNumber(event.sentiment_multiplier, 3)}x</div></div>`;
+      html += `<div style="flex:1"><div style="font-size:12px;font-weight:800">${event.name || event.event_type || "未命名事件"}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${event.event_type || "-"} · ${style.label} · 權重 ${cycleNumber(event.base_weight, 2)} · 情緒 ${cycleNumber(event.sentiment_adjustment, 3)}x</div></div>`;
       html += `</div>`;
     });
   } else {

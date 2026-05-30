@@ -34,6 +34,7 @@ type CalendarEvent struct {
 	ID                  string    `json:"id"`
 	Name                string    `json:"name"`
 	NameEN              string    `json:"name_en"`
+	EventType           string    `json:"event_type"`
 	Description         string    `json:"description"`
 	Direction           string    `json:"direction"` // "bullish" | "bearish" | "mixed" | "neutral"
 	BaseWeight          float64   `json:"base_weight"`
@@ -771,6 +772,7 @@ func (tec *EventCalendar) buildEventFromRule(rule EventRule, year int, month tim
 		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
 		Name:                rule.Name,
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         fmt.Sprintf("季底作帳 - %s", month.String()),
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -797,6 +799,7 @@ func (tec *EventCalendar) buildMonthlyEvent(rule EventRule, year int, month time
 		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
 		Name:                rule.Name,
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         fmt.Sprintf("%s - %s", rule.Name, month.String()),
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -825,6 +828,7 @@ func (tec *EventCalendar) buildHolidayEvent(rule EventRule, h taiwanHoliday, yea
 		ID:                  fmt.Sprintf("%s_%s_%d", rule.EventType, h.Name, year),
 		Name:                fmt.Sprintf("連假 - %s", h.Name),
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         fmt.Sprintf("%s前後交易淡季", h.Name),
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -846,6 +850,7 @@ func (tec *EventCalendar) buildPositionBuildingEvent(rule EventRule, year int, m
 		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
 		Name:                rule.Name,
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         fmt.Sprintf("卡位行情 - %s", month.String()),
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -878,6 +883,7 @@ func (tec *EventCalendar) buildElectionEvent(rule EventRule, year int) CalendarE
 		ID:                  id,
 		Name:                rule.Name,
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         desc,
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -898,6 +904,7 @@ func (tec *EventCalendar) buildMSCIEvent(rule EventRule, year int, month time.Mo
 		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
 		Name:                rule.Name,
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         fmt.Sprintf("MSCI季度調整 - %s", month.String()),
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -916,6 +923,7 @@ func (tec *EventCalendar) buildReportEvent(rule EventRule, deadline time.Time, l
 		ID:                  fmt.Sprintf("%s_%s", rule.EventType, deadline.Format("2006-01-02")),
 		Name:                fmt.Sprintf("%s - %s", rule.Name, label),
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         fmt.Sprintf("%s deadline %s", label, deadline.Format("2006-01-02")),
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -936,6 +944,7 @@ func (tec *EventCalendar) buildTW50Event(rule EventRule, year int, month time.Mo
 		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
 		Name:                rule.Name,
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         fmt.Sprintf("台灣50季度調整 - %s", month.String()),
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -956,6 +965,7 @@ func (tec *EventCalendar) buildRevenueEvent(rule EventRule, year int, month time
 		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
 		Name:                rule.Name,
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         fmt.Sprintf("%s monthly revenue", month.String()),
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
@@ -974,6 +984,7 @@ func (tec *EventCalendar) buildSingleEvent(rule EventRule, year int) CalendarEve
 		ID:                  fmt.Sprintf("%s_%d", rule.EventType, year),
 		Name:                rule.Name,
 		NameEN:              "",
+		EventType:           rule.EventType,
 		Description:         rule.Name,
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
