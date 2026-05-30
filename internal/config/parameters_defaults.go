@@ -1388,7 +1388,7 @@ func defaultNarrativeParameters() NarrativeParameters {
 		},
 		EarningsSurpriseConfidence: ParameterMetadata[float64]{
 			Value:     0.65,
-			Rationale: "Confidence for earnings surprise event (triggered externally); default before empirical calibration",
+			Rationale: "Confidence baseline for externally-triggered earnings surprise events (consumed by ingestor/swarm detectors, not calendar-based); default before empirical calibration",
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate from earnings surprise frequency and market reaction data",
 		},

@@ -344,7 +344,9 @@ type NarrativeParameters struct {
 	EarningsBlackoutConfidence      ParameterMetadata[float64] `json:"earnings_blackout_confidence"`
 	TechPeakSeasonConfidence        ParameterMetadata[float64] `json:"tech_peak_season_confidence"`
 	YearEndWindowDressingConfidence ParameterMetadata[float64] `json:"year_end_window_dressing_confidence"`
-	EarningsSurpriseConfidence      ParameterMetadata[float64] `json:"earnings_surprise_confidence"`
+
+	// Externally-triggered event confidence baselines (not calendar-based; consumed by ingestor/swarm detectors)
+	EarningsSurpriseConfidence ParameterMetadata[float64] `json:"earnings_surprise_confidence"`
 }
 
 // RealtimeParameters holds tunable values for real-time regime detection and adaptation.
@@ -1469,7 +1471,7 @@ func (p *ParametersConfig) Validate() error {
 	if p.Narrative.YearEndWindowDressingConfidence.Value < 0 || p.Narrative.YearEndWindowDressingConfidence.Value > 1 {
 		return fmt.Errorf("narrative.year_end_window_dressing_confidence (%.3f) must be in [0,1]", p.Narrative.YearEndWindowDressingConfidence.Value)
 	}
-	if p.Narrative.EarningsSurpriseConfidence.Value < 0 || p.Narrative.EarningsSurpriseConfidence.Value > 1 {
+	if !(p.Narrative.EarningsSurpriseConfidence.Value >= 0 && p.Narrative.EarningsSurpriseConfidence.Value <= 1) {
 		return fmt.Errorf("narrative.earnings_surprise_confidence (%.3f) must be in [0,1]", p.Narrative.EarningsSurpriseConfidence.Value)
 	}
 
