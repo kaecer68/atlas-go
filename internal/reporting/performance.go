@@ -185,7 +185,8 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 	var sb strings.Builder
 
 	sb.WriteString("# Performance Report\n\n")
-	fmt.Fprintf(&sb, "**Period:** %s (%s to %s)\n\n",
+	fmt.Fprintf(
+		&sb, "**Period:** %s (%s to %s)\n\n",
 		report.Period,
 		report.StartDate.Format("2006-01-02"),
 		report.EndDate.Format("2006-01-02"),
@@ -217,7 +218,8 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 		sb.WriteString("| Agent | Skill | Layer | Trades | Win Rate | Avg Return | Total Return |\n")
 		sb.WriteString("|-------|-------|-------|--------|----------|------------|-------------|\n")
 		for _, a := range report.TopAgents {
-			fmt.Fprintf(&sb, "| %s | %s | %s | %d | %.1f%% | %.2f%% | %.2f%% |\n",
+			fmt.Fprintf(
+				&sb, "| %s | %s | %s | %d | %.1f%% | %.2f%% | %.2f%% |\n",
 				truncate(a.AgentID, 20),
 				a.Skill,
 				a.Layer,
@@ -237,7 +239,8 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 		sb.WriteString("| Regime | Sessions | Total Return | Win Rate | Avg Return |\n")
 		sb.WriteString("|--------|----------|--------------|----------|------------|\n")
 		for _, r := range report.RegimeBreakdown.Regimes {
-			fmt.Fprintf(&sb, "| %s | %d | %.2f%% | %.1f%% | %.2f%% |\n",
+			fmt.Fprintf(
+				&sb, "| %s | %d | %.2f%% | %.1f%% | %.2f%% |\n",
 				r.Regime,
 				r.SessionCount,
 				r.TotalReturn*100,

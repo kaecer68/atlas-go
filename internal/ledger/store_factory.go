@@ -55,7 +55,8 @@ func (s *SQLiteStore) RecordSpawnRecord(record SpawnRecord) error {
 	if err != nil {
 		return fmt.Errorf("marshal spawn record: %w", err)
 	}
-	_, err = s.db.Exec(`
+	_, err = s.db.Exec(
+		`
 		INSERT INTO spawn_records (data_json, created_at)
 		VALUES (?, ?)`,
 		string(data), time.Now().UTC().Format(time.RFC3339),
@@ -118,7 +119,8 @@ func (s *SQLiteStore) RecordPromptExperimentResult(experimentID string, result d
 	if err != nil {
 		return fmt.Errorf("marshal prompt experiment result: %w", err)
 	}
-	_, err = s.db.Exec(`
+	_, err = s.db.Exec(
+		`
 		INSERT INTO prompt_experiment_results (experiment_id, data_json, created_at)
 		VALUES (?, ?, ?)`,
 		experimentID, string(data), time.Now().UTC().Format(time.RFC3339),
@@ -135,7 +137,8 @@ func (s *SQLiteStore) UpdatePromptExperimentResult(experimentID string, result d
 	if err != nil {
 		return fmt.Errorf("marshal prompt experiment result: %w", err)
 	}
-	_, err = s.db.Exec(`
+	_, err = s.db.Exec(
+		`
 		INSERT INTO prompt_experiment_results (experiment_id, data_json, created_at)
 		VALUES (?, ?, ?)
 		ON CONFLICT(experiment_id) DO UPDATE SET
@@ -155,7 +158,8 @@ func (s *SQLiteStore) RecordWindowSummary(summary domain.BacktestWindowSummary) 
 	if err != nil {
 		return fmt.Errorf("marshal window summary: %w", err)
 	}
-	_, err = s.db.Exec(`
+	_, err = s.db.Exec(
+		`
 		INSERT INTO window_summaries (window_id, data_json, created_at)
 		VALUES (?, ?, ?)`,
 		summary.WindowID, string(data), time.Now().UTC().Format(time.RFC3339),
@@ -172,7 +176,8 @@ func (s *SQLiteStore) RecordMutationBrief(windowID string, brief domain.Mutation
 	if err != nil {
 		return fmt.Errorf("marshal mutation brief: %w", err)
 	}
-	_, err = s.db.Exec(`
+	_, err = s.db.Exec(
+		`
 		INSERT INTO mutation_briefs (window_id, data_json, created_at)
 		VALUES (?, ?, ?)`,
 		windowID, string(data), time.Now().UTC().Format(time.RFC3339),

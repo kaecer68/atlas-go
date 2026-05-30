@@ -176,21 +176,24 @@ func checkSection(obj map[string]any, path string, strict bool) (warnings, error
 	if (eq == "high" || eq == "medium") && !hasTimestamp {
 		errors = append(errors, fmt.Sprintf(
 			"%s: citation.evidence_quality=%q but no calibration timestamp (need last_calibrated or calibration_timestamp)",
-			path, eq))
+			path, eq,
+		))
 	}
 
 	// Rule 2: calibration_method set → must have timestamp
 	if hasCalMethod && !hasTimestamp {
 		errors = append(errors, fmt.Sprintf(
 			"%s: calibration_method=%q but no calibration timestamp",
-			path, calMethod))
+			path, calMethod,
+		))
 	}
 
 	// Rule 3: timestamp exists but evidence_quality is low/heuristic
 	if hasTimestamp && eq != "" && eq != "high" && eq != "medium" {
 		msg := fmt.Sprintf(
 			"%s: calibration timestamp exists but citation.evidence_quality=%q (expected 'high' or 'medium' after calibration)",
-			path, eq)
+			path, eq,
+		)
 		if strict {
 			errors = append(errors, msg)
 		} else {
@@ -203,7 +206,8 @@ func checkSection(obj map[string]any, path string, strict bool) (warnings, error
 	if strict && hasDS && ds == "synthetic" && citeRef != "" && !strings.Contains(citeRef, "synthetic") {
 		warnings = append(warnings, fmt.Sprintf(
 			"%s: calibration_data_source='synthetic' but citation.source_reference=%q — re-run calibrator with --replay for real data",
-			path, citeRef))
+			path, citeRef,
+		))
 	}
 
 	return warnings, errors

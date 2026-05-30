@@ -190,7 +190,8 @@ func (f *AgentFactory) generatePromptContent(gap *KnowledgeGap, agentID string) 
 	specialization := f.generateSpecialization(gap)
 
 	// Combine
-	content := fmt.Sprintf(`# Auto-Spawned Agent: %s
+	content := fmt.Sprintf(
+		`# Auto-Spawned Agent: %s
 
 ## Identity
 You are an adaptive investment specialist auto-generated to address a specific knowledge gap in the system.
@@ -313,7 +314,8 @@ func (f *AgentFactory) generateCollaborationNotes(gap *KnowledgeGap) string {
 		notes = append(notes, fmt.Sprintf("- Validate against %s specialists", gap.Style))
 	}
 
-	notes = append(notes,
+	notes = append(
+		notes,
 		"- Report conflicts with high-weight agents to system",
 		"- Respect CIO portfolio synthesis final decisions",
 	)
@@ -382,7 +384,8 @@ func (f *AgentFactory) CloneAgentWithVariation(
 		PrimaryMetrics:   parent.PrimaryMetrics,
 		RequiredSkills:   parent.RequiredSkills,
 		ForbiddenActions: parent.ForbiddenActions,
-		OperatingNotes: append(parent.OperatingNotes,
+		OperatingNotes: append(
+			parent.OperatingNotes,
 			fmt.Sprintf("Cloned from %s with %s variation", parent.ID, variationType),
 			fmt.Sprintf("Created: %s", time.Now().Format("2006-01-02")),
 		),
@@ -409,7 +412,8 @@ func (f *AgentFactory) generateVariationPrompt(parent domain.AgentSpec, variatio
 		guidelines = "- Variant-specific behavior\n- Test alternative approach\n- Compare against parent agent"
 	}
 
-	return fmt.Sprintf(`# Agent Variant: %s
+	return fmt.Sprintf(
+		`# Agent Variant: %s
 
 ## Parent Agent
 **Base**: %s

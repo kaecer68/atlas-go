@@ -1217,14 +1217,16 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 
 	// Anomaly detection: warn on empty or suspicious sessions
 	if summary.OutcomeCount == 0 {
-		logging.Warn("system", "empty_session",
+		logging.Warn(
+			"system", "empty_session",
 			"session_id", summary.SessionID,
 			"orders", summary.OrderCount,
 			"positions", summary.PositionCount,
 		)
 	}
 	if summary.PortfolioValue == 0 && summary.OrderCount > 0 {
-		logging.Warn("system", "zero_portfolio_with_orders",
+		logging.Warn(
+			"system", "zero_portfolio_with_orders",
 			"session_id", summary.SessionID,
 			"orders", summary.OrderCount,
 		)

@@ -225,7 +225,8 @@ func writeTestCSV(t *testing.T, path string, bars []domain.DailyBar) {
 		if len(code) > 3 && code[len(code)-3:] == ".TW" {
 			code = code[:len(code)-3]
 		}
-		line := fmt.Sprintf("%s,%s,%s,%d,%s,%s,%s,%s\n",
+		line := fmt.Sprintf(
+			"%s,%s,%s,%d,%s,%s,%s,%s\n",
 			dateStr,
 			code,
 			b.Name,

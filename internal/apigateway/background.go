@@ -219,7 +219,8 @@ func (m *BackgroundTaskManager) executeTask(ctx context.Context, task *Scheduled
 	err := task.Task(ctx)
 	if err != nil {
 		task.RecordFailure()
-		logging.Error("background_task", "task_failed",
+		logging.Error(
+			"background_task", "task_failed",
 			"name", task.Name,
 			"err", err.Error(),
 			"consecutive_failures", task.Failures(),

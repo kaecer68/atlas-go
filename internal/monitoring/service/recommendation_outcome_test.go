@@ -132,7 +132,8 @@ func TestLoadAgentObservatoryReadsFromSessionScope(t *testing.T) {
 	sessionID := "session-20260422-daily"
 
 	// Write only the session-scoped outcome file.
-	writeTestSessionArtifacts(t, baseDir, sessionID,
+	writeTestSessionArtifacts(
+		t, baseDir, sessionID,
 		domain.SessionSummary{SessionID: sessionID, Regime: domain.RegimeRiskOn, RecordedAt: recordedAt, OutcomeCount: 1},
 		domain.RecommendationOutcome{
 			AgentID:             "agent-session",
@@ -180,7 +181,8 @@ func TestLoadForecastVsRealityReadsPredictionsFromSelectedSession(t *testing.T) 
 	sessionID := "session-20260422-daily"
 
 	// Write a session-scoped outcome with a ForwardReturn so Hit can be determined.
-	writeTestSessionArtifacts(t, baseDir, sessionID,
+	writeTestSessionArtifacts(
+		t, baseDir, sessionID,
 		domain.SessionSummary{SessionID: sessionID, Regime: domain.RegimeRiskOn, RecordedAt: recordedAt, OutcomeCount: 1},
 		domain.RecommendationOutcome{
 			AgentID:       "agent-fvr",
@@ -226,7 +228,8 @@ func TestReportServiceLoadRecommendationsForDateSupportsCanonicalOutcomeJSON(t *
 	baseDir := t.TempDir()
 	recordedAt := time.Date(2026, time.April, 22, 4, 2, 30, 0, time.UTC)
 	sessionID := "session-20260422-daily"
-	writeTestSessionArtifacts(t, baseDir, sessionID,
+	writeTestSessionArtifacts(
+		t, baseDir, sessionID,
 		domain.SessionSummary{SessionID: sessionID, Regime: domain.RegimeRiskOn, RecordedAt: recordedAt},
 		domain.RecommendationOutcome{
 			AgentID:             "agent-1",
@@ -263,7 +266,8 @@ func TestPipelineServiceLoadRecommendationPipelineSupportsCanonicalOutcomeJSON(t
 	baseDir := t.TempDir()
 	recordedAt := time.Date(2026, time.April, 22, 4, 2, 30, 0, time.UTC)
 	sessionID := "session-20260422-daily"
-	writeTestSessionArtifacts(t, baseDir, sessionID,
+	writeTestSessionArtifacts(
+		t, baseDir, sessionID,
 		domain.SessionSummary{SessionID: sessionID, Regime: domain.RegimeRiskOn, RecordedAt: recordedAt},
 		domain.RecommendationOutcome{
 			AgentID:             "agent-2",

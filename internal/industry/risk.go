@@ -410,7 +410,8 @@ func DefaultCustomerConcentrations() map[string][]CustomerConcentration {
 
 // String returns a human-readable summary of the risk event.
 func (re *RiskEvent) String() string {
-	return fmt.Sprintf("[%s] %s: %s (Impact: %.1f%%, Confidence: %.0f%%)",
+	return fmt.Sprintf(
+		"[%s] %s: %s (Impact: %.1f%%, Confidence: %.0f%%)",
 		re.Severity,
 		re.Type,
 		re.Description,

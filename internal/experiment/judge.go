@@ -79,7 +79,8 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 		return domain.PromptExperimentResult{}, err
 	}
 	checks := judgeReplayChecks(string(promptBytes), result)
-	checks = append(checks,
+	checks = append(
+		checks,
 		fmt.Sprintf("baseline observations: %d", summary.BaselineObservations),
 		fmt.Sprintf("candidate observations: %d", summary.CandidateObservations),
 	)

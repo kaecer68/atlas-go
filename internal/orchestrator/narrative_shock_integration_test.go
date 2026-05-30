@@ -86,7 +86,8 @@ func TestNarrativeShockIntegration(t *testing.T) {
 
 	// --- Baseline run ---
 	baseRegimeBase, baseRaw, _, _ := ExecuteRegistryResearchDetailedWithPolicyAndGuards(
-		registry, baseQuotes, policy.PromptOverrides, policy.ExecutionPolicy)
+		registry, baseQuotes, policy.PromptOverrides, policy.ExecutionPolicy,
+	)
 	baseEvents := nEngine.DetectEvents(quotesToMarketData(baseQuotes))
 	baseRegime := AdjustRegimeFromNarrative(baseRegimeBase, baseEvents)
 
@@ -105,7 +106,8 @@ func TestNarrativeShockIntegration(t *testing.T) {
 		Source:     "mock",
 	})
 	shockRegimeBase, shockRaw, _, _ := ExecuteRegistryResearchDetailedWithPolicyAndGuards(
-		registry, shockQuotes, policy.PromptOverrides, policy.ExecutionPolicy)
+		registry, shockQuotes, policy.PromptOverrides, policy.ExecutionPolicy,
+	)
 	shockEvents := nEngine.DetectEvents(quotesToMarketData(shockQuotes))
 	shockRegime := AdjustRegimeFromNarrative(shockRegimeBase, shockEvents)
 

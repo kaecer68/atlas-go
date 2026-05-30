@@ -1225,7 +1225,8 @@ func (ne *NarrativeEngine) SelfCalibrate(replayPath string) (*NarrativeCalibrati
 		Summary:          fmt.Sprintf("evaluated %d models, updated %d weights, %d template hit rates", len(ne.models), updated, templatesUpdated),
 	}
 
-	logging.Info("narrative", "self_calibrate",
+	logging.Info(
+		"narrative", "self_calibrate",
 		logging.FInt("models_updated", updated),
 		logging.FInt("templates_updated", templatesUpdated),
 	)
