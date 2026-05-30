@@ -2835,28 +2835,28 @@
       "value": 0.1
     },
     "seasonal_patterns": {
-      "calibration_data_source": "synthetic",
-      "calibration_timestamp": "2026-05-30T05:25:59Z",
+      "calibration_data_source": "data/replay/finmind_2020_2024.jsonl",
+      "calibration_timestamp": "2026-05-30T06:01:23Z",
       "citation": {
         "calibration_method": "backtest_empirical",
         "dependencies": [
           "data/replay/finmind_2020_2024.jsonl",
           "configs/sector_symbols.json"
         ],
-        "evidence_quality": "high",
+        "evidence_quality": "medium",
         "last_validated": "2026-05-16T00:00:00Z",
         "source_reference": "FinMind TaiwanStockPrice 5-year (2020-2024), data/replay/finmind_2020_2024.jsonl",
         "source_type": "empirical",
         "update_policy": "auto",
         "validation_method": "empirical_calibration"
       },
-      "last_calibrated": "2026-05-30T05:25:59Z",
+      "last_calibrated": "2026-05-30T06:01:23Z",
       "rationale": "7 canonical Taiwan seasonal patterns calibrated against 5-year FinMind data (2020-2024)",
       "source": "empirical_calibration",
       "value": [
         {
-          "adjustment_factor": 0.5999999999999999,
-          "avg_market_return": 0.015,
+          "adjustment_factor": 0.1628974494877331,
+          "avg_market_return": -0.0008774446049495236,
           "avoided_industries": [
             "semiconductor",
             "electronics"
@@ -2869,7 +2869,7 @@
             "consumer",
             "defensive"
           ],
-          "historical_accuracy": 0,
+          "historical_accuracy": 0.25,
           "id": "spring_festival",
           "name": "春節行情",
           "name_en": "Spring Festival Rally",
@@ -2877,8 +2877,8 @@
           "start_month": 1
         },
         {
-          "adjustment_factor": 1.012561345264916,
-          "avg_market_return": 0.0009444284842021122,
+          "adjustment_factor": 0.6332987190001754,
+          "avg_market_return": 0.0012770395751886083,
           "avoided_industries": [
             "consumer",
             "shipping"
@@ -2890,7 +2890,7 @@
             "ai_supply_chain",
             "semiconductor"
           ],
-          "historical_accuracy": 0.6,
+          "historical_accuracy": 0.5,
           "id": "earnings_window",
           "name": "季報空窗期",
           "name_en": "Earnings Report Window",
@@ -2898,8 +2898,8 @@
           "start_month": 3
         },
         {
-          "adjustment_factor": -0.2634376289519962,
-          "avg_market_return": -0.0003826577806334155,
+          "adjustment_factor": -0.5299072129324105,
+          "avg_market_return": -0.0005787452598021619,
           "avoided_industries": [
             "semiconductor",
             "ai_supply_chain"
@@ -2911,7 +2911,7 @@
             "financials",
             "consumer"
           ],
-          "historical_accuracy": 0.4,
+          "historical_accuracy": 0.5,
           "id": "dividend_season",
           "name": "除權除息季",
           "name_en": "Dividend Season",
@@ -2919,8 +2919,8 @@
           "start_month": 5
         },
         {
-          "adjustment_factor": 2.424901710785858,
-          "avg_market_return": 0.0005628465432415165,
+          "adjustment_factor": 2.0321456367494317,
+          "avg_market_return": 0.000041309281239469817,
           "avoided_industries": [
             "consumer"
           ],
@@ -2931,7 +2931,7 @@
             "semiconductor",
             "ai_supply_chain"
           ],
-          "historical_accuracy": 0.8,
+          "historical_accuracy": 0.75,
           "id": "tech_peak_season",
           "name": "科技旺季",
           "name_en": "Technology Peak Season",
@@ -2939,8 +2939,8 @@
           "start_month": 7
         },
         {
-          "adjustment_factor": 0.7088700217117749,
-          "avg_market_return": -0.0004677540997886479,
+          "adjustment_factor": 0.8840318717600238,
+          "avg_market_return": -0.0006701583540841852,
           "avoided_industries": [
             "consumer",
             "shipping",
@@ -2954,7 +2954,7 @@
             "ai_supply_chain",
             "tech"
           ],
-          "historical_accuracy": 0.6,
+          "historical_accuracy": 0.75,
           "id": "earnings_verification",
           "name": "季報驗證期",
           "name_en": "Earnings Verification",
@@ -2962,8 +2962,8 @@
           "start_month": 9
         },
         {
-          "adjustment_factor": 0.5247393920394349,
-          "avg_market_return": 0.002077920896210497,
+          "adjustment_factor": 0.40485951798689246,
+          "avg_market_return": 0.0016415319179946945,
           "avoided_industries": [
             "small_cap"
           ],
@@ -2976,7 +2976,7 @@
             "financials",
             "etf_rotation"
           ],
-          "historical_accuracy": 0.2,
+          "historical_accuracy": 0,
           "id": "year_end_rally",
           "name": "年底作帳",
           "name_en": "Year-End Window Dressing",
@@ -2984,8 +2984,8 @@
           "start_month": 11
         },
         {
-          "adjustment_factor": -0.28830153954778703,
-          "avg_market_return": -0.000795142392082031,
+          "adjustment_factor": 0.5957646985468618,
+          "avg_market_return": -0.0009363882710981446,
           "avoided_industries": [
             "semiconductor"
           ],
@@ -2995,7 +2995,7 @@
           "favored_industries": [
             "energy"
           ],
-          "historical_accuracy": 0.4,
+          "historical_accuracy": 0.5,
           "id": "summer_electricity",
           "name": "夏季用電高峰",
           "name_en": "Summer Electricity Peak",
@@ -3003,8 +3003,8 @@
           "start_month": 6
         },
         {
-          "adjustment_factor": 2.233896169628453,
-          "avg_market_return": 0.0014494034888542684,
+          "adjustment_factor": 2.1862159409382054,
+          "avg_market_return": 0.0004150894596139557,
           "avoided_industries": [
             "consumer",
             "shipping"
@@ -3016,7 +3016,7 @@
             "semiconductor",
             "foundry"
           ],
-          "historical_accuracy": 0.8,
+          "historical_accuracy": 0.75,
           "id": "semiconductor_peak",
           "name": "半導體旺季",
           "name_en": "",
@@ -3024,8 +3024,8 @@
           "start_month": 7
         },
         {
-          "adjustment_factor": 2.333333333333334,
-          "avg_market_return": 0.035,
+          "adjustment_factor": 2.5262034803064957,
+          "avg_market_return": 0.0018588618640050887,
           "avoided_industries": [
             "consumer",
             "financials"
@@ -3038,7 +3038,7 @@
             "server_assembly",
             "cooling"
           ],
-          "historical_accuracy": 1,
+          "historical_accuracy": 0.5,
           "id": "ai_infrastructure_buildout",
           "name": "AI基礎建設佈建期",
           "name_en": "",
@@ -3046,8 +3046,8 @@
           "start_month": 1
         },
         {
-          "adjustment_factor": 0.5598339559661001,
-          "avg_market_return": 0.0006084743045294049,
+          "adjustment_factor": 1.385071450007612,
+          "avg_market_return": 0.00034059886641266894,
           "avoided_industries": [
             "shipping",
             "consumer"
@@ -3059,7 +3059,7 @@
             "electronics",
             "pcb"
           ],
-          "historical_accuracy": 0.6,
+          "historical_accuracy": 0.75,
           "id": "electronics_peak",
           "name": "電子零組件旺季",
           "name_en": "",
@@ -3067,8 +3067,8 @@
           "start_month": 8
         },
         {
-          "adjustment_factor": 3.44143401207912,
-          "avg_market_return": 0.0022324430826447224,
+          "adjustment_factor": 3.4006408295063935,
+          "avg_market_return": 0.001622181469589023,
           "avoided_industries": [
             "consumer",
             "defensive"
