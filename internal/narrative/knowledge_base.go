@@ -518,6 +518,12 @@ type MarketNarrativeData struct {
 	MarginZScore                  float64 // how extreme current margin balance is (reverse indicator)
 }
 
+// detectUSRatesEvent is the KB-pipeline detector (MarketNarrativeData input).
+// INTENTIONALLY NOT MERGED with detectUSRatesEventFromSnapshot in ingestor.go.
+// Reason: The KB version uses actual DXY input from MarketNarrativeData,
+// while the ingestor version uses a single MacroDataPoint with ChangePct as
+// a proxy. They are semantically different — KB is the authoritative signal,
+// ingestor is a degraded-mode proxy when the full narrative data isn't available.
 func detectUSRatesEvent(data MarketNarrativeData) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 	if data.US10YChangeBps > params.US10YChangeBpsThreshold.Value || data.DXYChangePct > params.DXYChangePctThreshold.Value {
@@ -609,6 +615,12 @@ func NewEarningsSurpriseEvent(surprisePct float64) *NarrativeEvent {
 	}
 }
 
+// detectGeopoliticalRiskEvent is the KB-pipeline detector (GPR + Gold input).
+// INTENTIONALLY NOT MERGED with detectGeopoliticalRiskEventFromSnapshot in ingestor.go.
+// Reason: The KB version uses the GeopoliticalGPR index and GoldChangePct directly
+// from MarketNarrativeData, while the ingestor version is a proxy-based v1 detector
+// that substitutes gold/VIX/USDTWD for the missing GPR data. Different signal
+// quality — KB is authoritative when GPR is available, ingestor is fallback.
 func detectGeopoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 	if data.GeopoliticalGPR > params.GeopoliticalGPRThreshold.Value || data.GoldChangePct > params.GoldChangePctThreshold.Value {
@@ -759,6 +771,12 @@ func detectTaiwanPoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
 	return nil
 }
 
+// detectSemiconductorDownturnEvent is the KB-pipeline detector (multi-factor).
+// INTENTIONALLY NOT MERGED with detectSemiconductorEventFromSnapshot in ingestor.go.
+// Reason: These are COMPLETELY DIFFERENT detectors. The KB version uses VIX + DXY +
+// AICapexSentiment as a multi-factor macro signal of semiconductor stress, while
+// the ingestor version uses ExportElectronics ChangePct as a single export-data
+// indicator. They detect different aspects of the semiconductor cycle.
 func detectSemiconductorDownturnEvent(data MarketNarrativeData) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 	if data.VIXLevel > params.VIXLevelThreshold.Value && data.DXYChangePct > params.DXYChangePctThreshold.Value && data.AICapexSentiment < params.AICapexNegativeSentimentThreshold.Value {
@@ -900,6 +918,12 @@ func detectSeasonalEvent() *NarrativeEvent {
 	return nil
 }
 
+// detectRetailDivergenceEvent is the KB-pipeline detector (divergence quantification).
+// INTENTIONALLY NOT MERGED with detectRetailDivergenceEventFromSnapshot in ingestor.go.
+// Reason: The KB version uses MarginZScore + RetailInstitutionalDivergence from
+// MarketNarrativeData (true divergence quantification), while the ingestor version
+// uses a simpler heuristic (marginZScore > threshold && foreignNet < 0). The KB
+// version provides more precise divergence measurement.
 func detectRetailDivergenceEvent(data MarketNarrativeData) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 	if data.MarginZScore > params.RetailMarginZScoreThreshold.Value && data.RetailInstitutionalDivergence > params.RetailInstitutionalDivergenceThreshold.Value {
