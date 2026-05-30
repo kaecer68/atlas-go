@@ -963,6 +963,12 @@ export const FIELD = {
     confidence: 'confidence',
     industry_id: 'industry_id',
   },
+  IndustryDefaultMetrics: {
+    revenue_growth_yoy: 'revenue_growth_yoy',
+    profit_growth_yoy: 'profit_growth_yoy',
+    inventory_turnover: 'inventory_turnover',
+    capacity_utilization: 'capacity_utilization',
+  },
   IndustryDetail: {
     id: 'id',
     name: 'name',
@@ -1042,6 +1048,7 @@ export const FIELD = {
     linkage_params: 'linkage_params',
     dynamic_env: 'dynamic_env',
     history_retention_days: 'history_retention_days',
+    default_metrics: 'default_metrics',
   },
   IndustryRecommendation: {
     action: 'action',
@@ -1121,6 +1128,20 @@ export const FIELD = {
     circuit_breaker: 'circuit_breaker',
     portfolio: 'portfolio',
     timestamp: 'timestamp',
+  },
+  MacroDataHealthResponse: {
+    recorded_at: 'recorded_at',
+    generated_at: 'generated_at',
+    indicators: 'indicators',
+  },
+  MacroIndicatorHealth: {
+    name: 'name',
+    symbol: 'symbol',
+    value: 'value',
+    change_pct: 'change_pct',
+    timestamp: 'timestamp',
+    status: 'status',
+    status_text: 'status_text',
   },
   MacroRadarResponse: {
     session_id: 'session_id',
@@ -1285,6 +1306,13 @@ export const FIELD = {
     retail_fear_percentile_threshold: 'retail_fear_percentile_threshold',
     retail_acceleration_window_days: 'retail_acceleration_window_days',
     inflation_estimate: 'inflation_estimate',
+    spring_festival_confidence: 'spring_festival_confidence',
+    election_cycle_confidence: 'election_cycle_confidence',
+    earnings_blackout_confidence: 'earnings_blackout_confidence',
+    tech_peak_season_confidence: 'tech_peak_season_confidence',
+    year_end_window_dressing_confidence: 'year_end_window_dressing_confidence',
+    earnings_surprise_confidence: 'earnings_surprise_confidence',
+    earnings_surprise_threshold: 'earnings_surprise_threshold',
   },
   NewsLatencyConfig: {
     max_latency_hours: 'max_latency_hours',
@@ -1343,6 +1371,7 @@ export const FIELD = {
     sector_rotation_base_allocations: 'sector_rotation_base_allocations',
     sector_rotation_macro_adjustments: 'sector_rotation_macro_adjustments',
     sector_rotation_flow_adjustments: 'sector_rotation_flow_adjustments',
+    use_ml_scoring: 'use_ml_scoring',
   },
   ParameterChange: {
     parameter: 'parameter',
@@ -1599,6 +1628,8 @@ export const FIELD = {
     candidate_factor_count: 'candidate_factor_count',
     baseline_monetary_ntd: 'baseline_monetary_ntd',
     candidate_monetary_ntd: 'candidate_monetary_ntd',
+    eval_metrics: 'eval_metrics',
+    importance_result: 'importance_result',
   },
   Quote: {
     symbol: 'symbol',
