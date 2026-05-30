@@ -132,181 +132,58 @@ func (ct *CycleTracker) NarrativeTheme(industryID string) string {
 	return ct.lastNarrativeTheme[industryID]
 }
 
+// defaultSeedMetrics returns the hardcoded fallback seed values for CycleTracker.
+// These match the ParametersConfig default values shipped in parameters_defaults.go.
+// If config is unavailable or unpopulated, these ensure the tracker still starts
+// with sensible bootstrap values.
+func defaultSeedMetrics() map[string]IndustryMetrics {
+	return map[string]IndustryMetrics{
+		"semiconductor":             {IndustryID: "semiconductor", RevenueGrowthYoY: 0.25, ProfitGrowthYoY: 0.30, InventoryTurnover: 5.5, CapacityUtilization: 0.85},
+		"ai_supply_chain":           {IndustryID: "ai_supply_chain", RevenueGrowthYoY: 0.45, ProfitGrowthYoY: 0.50, InventoryTurnover: 6.0, CapacityUtilization: 0.90},
+		"robotics":                  {IndustryID: "robotics", RevenueGrowthYoY: 0.15, ProfitGrowthYoY: 0.12, InventoryTurnover: 4.0, CapacityUtilization: 0.70},
+		"financials":                {IndustryID: "financials", RevenueGrowthYoY: 0.08, ProfitGrowthYoY: 0.10, InventoryTurnover: 0.0, CapacityUtilization: 0.75},
+		"shipping":                  {IndustryID: "shipping", RevenueGrowthYoY: -0.05, ProfitGrowthYoY: -0.10, InventoryTurnover: 3.0, CapacityUtilization: 0.65},
+		"energy":                    {IndustryID: "energy", RevenueGrowthYoY: 0.05, ProfitGrowthYoY: 0.03, InventoryTurnover: 4.5, CapacityUtilization: 0.70},
+		"electronics":               {IndustryID: "electronics", RevenueGrowthYoY: 0.12, ProfitGrowthYoY: 0.15, InventoryTurnover: 5.0, CapacityUtilization: 0.75},
+		"consumer":                  {IndustryID: "consumer", RevenueGrowthYoY: 0.03, ProfitGrowthYoY: 0.05, InventoryTurnover: 6.0, CapacityUtilization: 0.70},
+		"industrial":                {IndustryID: "industrial", RevenueGrowthYoY: 0.06, ProfitGrowthYoY: 0.08, InventoryTurnover: 4.0, CapacityUtilization: 0.68},
+		"foundry":                   {IndustryID: "foundry", RevenueGrowthYoY: 0.22, ProfitGrowthYoY: 0.28, InventoryTurnover: 5.0, CapacityUtilization: 0.88},
+		"server_assembly":           {IndustryID: "server_assembly", RevenueGrowthYoY: 0.40, ProfitGrowthYoY: 0.45, InventoryTurnover: 6.5, CapacityUtilization: 0.85},
+		"cooling":                   {IndustryID: "cooling", RevenueGrowthYoY: 0.20, ProfitGrowthYoY: 0.22, InventoryTurnover: 5.5, CapacityUtilization: 0.80},
+		"leo_satellite":             {IndustryID: "leo_satellite", RevenueGrowthYoY: 0.35, ProfitGrowthYoY: 0.40, InventoryTurnover: 4.5, CapacityUtilization: 0.75},
+		"satellite_rf_components":   {IndustryID: "satellite_rf_components", RevenueGrowthYoY: 0.45, ProfitGrowthYoY: 0.50, InventoryTurnover: 5.0, CapacityUtilization: 0.80},
+		"satellite_pcb":             {IndustryID: "satellite_pcb", RevenueGrowthYoY: 0.30, ProfitGrowthYoY: 0.35, InventoryTurnover: 4.0, CapacityUtilization: 0.78},
+		"ground_equipment":          {IndustryID: "ground_equipment", RevenueGrowthYoY: 0.25, ProfitGrowthYoY: 0.28, InventoryTurnover: 3.5, CapacityUtilization: 0.72},
+		"laser_communication":       {IndustryID: "laser_communication", RevenueGrowthYoY: 0.50, ProfitGrowthYoY: 0.55, InventoryTurnover: 3.0, CapacityUtilization: 0.70},
+		"mining":                    {IndustryID: "mining", RevenueGrowthYoY: 0.10, ProfitGrowthYoY: 0.12, InventoryTurnover: 4.5, CapacityUtilization: 0.75},
+		"precious_metals_recycling": {IndustryID: "precious_metals_recycling", RevenueGrowthYoY: 0.15, ProfitGrowthYoY: 0.18, InventoryTurnover: 5.0, CapacityUtilization: 0.80},
+		"copper_industry":           {IndustryID: "copper_industry", RevenueGrowthYoY: 0.08, ProfitGrowthYoY: 0.10, InventoryTurnover: 4.0, CapacityUtilization: 0.72},
+		"rare_earth_specialty":      {IndustryID: "rare_earth_specialty", RevenueGrowthYoY: 0.05, ProfitGrowthYoY: 0.06, InventoryTurnover: 3.5, CapacityUtilization: 0.70},
+		"metal_processing":          {IndustryID: "metal_processing", RevenueGrowthYoY: 0.06, ProfitGrowthYoY: 0.08, InventoryTurnover: 4.5, CapacityUtilization: 0.73},
+		"etf_rotation":              {IndustryID: "etf_rotation", RevenueGrowthYoY: 0.05, ProfitGrowthYoY: 0.05, InventoryTurnover: 0.0, CapacityUtilization: 0.0},
+	}
+}
+
 // initializeDefaultPositions populates the tracker with default cycle positions
-// for known industries. This ensures the API returns meaningful data even before
-// real-time metrics are available.
+// for known industries. It first attempts to load seed values from ParametersConfig;
+// if config is unavailable or unpopulated it falls back to hardcoded defaults.
 func (ct *CycleTracker) initializeDefaultPositions() {
-	// rationale: Seed bootstrap values for cycle tracker initialization.
-	// These estimates are replaced by real FinMind API data when the DataAggregator
-	// background task runs (auto_cycle_update, 6h interval).
-	// Source: Estimated from TWSE sector-level Revenue YoY / Profit YoY trends,
-	// calibrated against Q4 2025–FY2026 analyst consensus ranges.
-	// TODO: Replace seed values with ParametersConfig-based loading from
-	// configs/parameters.json after running cmd/calibrate-seasonal --replay.
-	defaults := map[string]IndustryMetrics{
-		"semiconductor": {
-			IndustryID:          "semiconductor",
-			RevenueGrowthYoY:    0.25,
-			ProfitGrowthYoY:     0.30,
-			InventoryTurnover:   5.5,
-			CapacityUtilization: 0.85,
-		},
-		"ai_supply_chain": {
-			IndustryID:          "ai_supply_chain",
-			RevenueGrowthYoY:    0.45,
-			ProfitGrowthYoY:     0.50,
-			InventoryTurnover:   6.0,
-			CapacityUtilization: 0.90,
-		},
-		"robotics": {
-			IndustryID:          "robotics",
-			RevenueGrowthYoY:    0.15,
-			ProfitGrowthYoY:     0.12,
-			InventoryTurnover:   4.0,
-			CapacityUtilization: 0.70,
-		},
-		"financials": {
-			IndustryID:          "financials",
-			RevenueGrowthYoY:    0.08,
-			ProfitGrowthYoY:     0.10,
-			InventoryTurnover:   0.0,
-			CapacityUtilization: 0.75,
-		},
-		"shipping": {
-			IndustryID:          "shipping",
-			RevenueGrowthYoY:    -0.05,
-			ProfitGrowthYoY:     -0.10,
-			InventoryTurnover:   3.0,
-			CapacityUtilization: 0.65,
-		},
-		"energy": {
-			IndustryID:          "energy",
-			RevenueGrowthYoY:    0.05,
-			ProfitGrowthYoY:     0.03,
-			InventoryTurnover:   4.5,
-			CapacityUtilization: 0.70,
-		},
-		"electronics": {
-			IndustryID:          "electronics",
-			RevenueGrowthYoY:    0.12,
-			ProfitGrowthYoY:     0.15,
-			InventoryTurnover:   5.0,
-			CapacityUtilization: 0.75,
-		},
-		"consumer": {
-			IndustryID:          "consumer",
-			RevenueGrowthYoY:    0.03,
-			ProfitGrowthYoY:     0.05,
-			InventoryTurnover:   6.0,
-			CapacityUtilization: 0.70,
-		},
-		"industrial": {
-			IndustryID:          "industrial",
-			RevenueGrowthYoY:    0.06,
-			ProfitGrowthYoY:     0.08,
-			InventoryTurnover:   4.0,
-			CapacityUtilization: 0.68,
-		},
-		"foundry": {
-			IndustryID:          "foundry",
-			RevenueGrowthYoY:    0.22,
-			ProfitGrowthYoY:     0.28,
-			InventoryTurnover:   5.0,
-			CapacityUtilization: 0.88,
-		},
-		"server_assembly": {
-			IndustryID:          "server_assembly",
-			RevenueGrowthYoY:    0.40,
-			ProfitGrowthYoY:     0.45,
-			InventoryTurnover:   6.5,
-			CapacityUtilization: 0.85,
-		},
-		"cooling": {
-			IndustryID:          "cooling",
-			RevenueGrowthYoY:    0.20,
-			ProfitGrowthYoY:     0.22,
-			InventoryTurnover:   5.5,
-			CapacityUtilization: 0.80,
-		},
-		"leo_satellite": {
-			IndustryID:          "leo_satellite",
-			RevenueGrowthYoY:    0.35,
-			ProfitGrowthYoY:     0.40,
-			InventoryTurnover:   4.5,
-			CapacityUtilization: 0.75,
-		},
-		"satellite_rf_components": {
-			IndustryID:          "satellite_rf_components",
-			RevenueGrowthYoY:    0.45,
-			ProfitGrowthYoY:     0.50,
-			InventoryTurnover:   5.0,
-			CapacityUtilization: 0.80,
-		},
-		"satellite_pcb": {
-			IndustryID:          "satellite_pcb",
-			RevenueGrowthYoY:    0.30,
-			ProfitGrowthYoY:     0.35,
-			InventoryTurnover:   4.0,
-			CapacityUtilization: 0.78,
-		},
-		"ground_equipment": {
-			IndustryID:          "ground_equipment",
-			RevenueGrowthYoY:    0.25,
-			ProfitGrowthYoY:     0.28,
-			InventoryTurnover:   3.5,
-			CapacityUtilization: 0.72,
-		},
-		"laser_communication": {
-			IndustryID:          "laser_communication",
-			RevenueGrowthYoY:    0.50,
-			ProfitGrowthYoY:     0.55,
-			InventoryTurnover:   3.0,
-			CapacityUtilization: 0.70,
-		},
-		"mining": {
-			IndustryID:          "mining",
-			RevenueGrowthYoY:    0.10,
-			ProfitGrowthYoY:     0.12,
-			InventoryTurnover:   4.5,
-			CapacityUtilization: 0.75,
-		},
-		"precious_metals_recycling": {
-			IndustryID:          "precious_metals_recycling",
-			RevenueGrowthYoY:    0.15,
-			ProfitGrowthYoY:     0.18,
-			InventoryTurnover:   5.0,
-			CapacityUtilization: 0.80,
-		},
-		"copper_industry": {
-			IndustryID:          "copper_industry",
-			RevenueGrowthYoY:    0.08,
-			ProfitGrowthYoY:     0.10,
-			InventoryTurnover:   4.0,
-			CapacityUtilization: 0.72,
-		},
-		"rare_earth_specialty": {
-			IndustryID:          "rare_earth_specialty",
-			RevenueGrowthYoY:    0.05,
-			ProfitGrowthYoY:     0.06,
-			InventoryTurnover:   3.5,
-			CapacityUtilization: 0.70,
-		},
-		"metal_processing": {
-			IndustryID:          "metal_processing",
-			RevenueGrowthYoY:    0.06,
-			ProfitGrowthYoY:     0.08,
-			InventoryTurnover:   4.5,
-			CapacityUtilization: 0.73,
-		},
-		"etf_rotation": {
-			IndustryID:          "etf_rotation",
-			RevenueGrowthYoY:    0.05,
-			ProfitGrowthYoY:     0.05,
-			InventoryTurnover:   0.0, // ETF has no physical inventory
-			CapacityUtilization: 0.0, // ETF has no physical capacity
-		},
+	cfg := config.GetParametersConfig()
+	if cfg != nil && cfg.Industry.DefaultMetrics.Value != nil && len(cfg.Industry.DefaultMetrics.Value) > 0 {
+		cfgSeeds := cfg.Industry.DefaultMetrics.Value
+		for id, seed := range cfgSeeds {
+			ct.UpdatePosition(id, IndustryMetrics{
+				IndustryID:          id,
+				RevenueGrowthYoY:    seed.RevenueGrowthYoY,
+				ProfitGrowthYoY:     seed.ProfitGrowthYoY,
+				InventoryTurnover:   seed.InventoryTurnover,
+				CapacityUtilization: seed.CapacityUtilization,
+			})
+		}
+		return
 	}
 
+	defaults := defaultSeedMetrics()
 	for id, metrics := range defaults {
 		ct.UpdatePosition(id, metrics)
 	}
