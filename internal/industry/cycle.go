@@ -727,7 +727,8 @@ func (cp *CyclePosition) GetPhaseScore() float64 {
 
 // String returns a human-readable summary of the cycle position.
 func (cp *CyclePosition) String() string {
-	return fmt.Sprintf("%s: Business=%s, Inventory=%s, Capex=%s, Confidence=%.0f%%",
+	return fmt.Sprintf(
+		"%s: Business=%s, Inventory=%s, Capex=%s, Confidence=%.0f%%",
 		cp.IndustryID,
 		cp.BusinessCycle,
 		cp.InventoryCycle,

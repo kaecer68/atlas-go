@@ -35,7 +35,8 @@ func (s *Store) RecordOutcomes(outcomes []domain.RecommendationOutcome) error {
 	enc := json.NewEncoder(f)
 	for _, outcome := range outcomes {
 		if err := outcome.Validate(); err != nil {
-			logging.Warn("ledger", "outcome_validation_failed",
+			logging.Warn(
+				"ledger", "outcome_validation_failed",
 				logging.AgentID(outcome.AgentID),
 				"symbol", outcome.Symbol,
 				"error", err.Error(),
@@ -63,7 +64,8 @@ func (s *Store) RecordSessionOutcomes(session domain.ReplaySession, outcomes []d
 	enc := json.NewEncoder(f)
 	for _, outcome := range outcomes {
 		if err := outcome.Validate(); err != nil {
-			logging.Warn("ledger", "outcome_validation_failed",
+			logging.Warn(
+				"ledger", "outcome_validation_failed",
 				logging.AgentID(outcome.AgentID),
 				"symbol", outcome.Symbol,
 				"error", err.Error(),

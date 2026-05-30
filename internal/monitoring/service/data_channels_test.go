@@ -90,7 +90,8 @@ func TestChannelHealthStore_Record_UpdateClearsErrorOnOk(t *testing.T) {
 func TestChannelHealthStore_Record_WithOptions(t *testing.T) {
 	store := newChannelHealthStore(t.TempDir(), nil)
 	stamp := time.Date(2026, 5, 27, 14, 30, 0, 0, time.UTC)
-	err := store.Record("ch-opts", "ok", "",
+	err := store.Record(
+		"ch-opts", "ok", "",
 		WithLastDataAt(stamp),
 		WithLatencyMs(789),
 	)

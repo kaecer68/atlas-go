@@ -31,7 +31,8 @@ func RenderAgentPerformanceTable(rows []AgentPerformanceRow) string {
 	sb.WriteString("|-------|-------|---------|----------|--------|--------|--------|\n")
 
 	for _, r := range rows {
-		fmt.Fprintf(&sb, "| %s | %s | %d | %.1f%% | %.3f | %.2f%% | %.2f |\n",
+		fmt.Fprintf(
+			&sb, "| %s | %s | %d | %.1f%% | %.3f | %.2f%% | %.2f |\n",
 			truncate(r.AgentID, 20),
 			r.Layer,
 			r.WindowCount,

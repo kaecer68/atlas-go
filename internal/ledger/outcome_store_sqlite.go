@@ -334,7 +334,8 @@ func (s *SQLiteOutcomeStore) RecordExperiment(record domain.ExperimentRecord) er
 		return fmt.Errorf("marshal mutation brief: %w", err)
 	}
 
-	_, err = s.db.Exec(`
+	_, err = s.db.Exec(
+		`
 		INSERT INTO experiments (experiment_id, mutation_brief_json, accepted, timestamp)
 		VALUES (?, ?, ?, ?)`,
 		record.ID,
@@ -356,7 +357,8 @@ func (s *SQLiteOutcomeStore) RecordSessionExperiment(session domain.ReplaySessio
 		return fmt.Errorf("marshal mutation brief: %w", err)
 	}
 
-	_, err = s.db.Exec(`
+	_, err = s.db.Exec(
+		`
 		INSERT INTO experiments (experiment_id, session_id, mutation_brief_json, accepted, timestamp)
 		VALUES (?, ?, ?, ?, ?)`,
 		record.ID,
@@ -374,7 +376,8 @@ func (s *SQLiteOutcomeStore) RecordSessionExperiment(session domain.ReplaySessio
 
 // RecordSessionSummary persists a session summary.
 func (s *SQLiteOutcomeStore) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
-	_, err := s.db.Exec(`
+	_, err := s.db.Exec(
+		`
 		INSERT INTO session_summaries (session_id, total_recs, passed_guards, rejected, timestamp)
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(session_id) DO UPDATE SET
@@ -451,7 +454,8 @@ func (s *SQLiteOutcomeStore) LoadAllSessionScorecards() ([]domain.Scorecard, []d
 // RecordHumanIntervention persists a human intervention record.
 func (s *SQLiteOutcomeStore) RecordHumanIntervention(intervention domain.HumanIntervention) error {
 	ts := intervention.RecordedAt.Format("2006-01-02T15:04:05Z07:00")
-	_, err := s.db.Exec(`
+	_, err := s.db.Exec(
+		`
 		INSERT INTO human_interventions (session_id, symbol, agent_id, action, timestamp)
 		VALUES (?, ?, ?, ?, ?)`,
 		intervention.SessionID,

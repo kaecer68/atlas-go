@@ -395,7 +395,8 @@ func (se *SeasonalEngine) patternSpansMonth(p SeasonalPattern, month int) bool {
 
 // String returns a human-readable summary of the seasonal pattern.
 func (p SeasonalPattern) String() string {
-	return fmt.Sprintf("%s (%s): %02d/%02d-%02d/%02d, Accuracy: %.0f%%, Avg Return: %.1f%%",
+	return fmt.Sprintf(
+		"%s (%s): %02d/%02d-%02d/%02d, Accuracy: %.0f%%, Avg Return: %.1f%%",
 		p.Name, p.NameEN,
 		p.StartMonth, p.StartDay,
 		p.EndMonth, p.EndDay,

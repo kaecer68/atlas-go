@@ -145,12 +145,12 @@ func publishBootstrapEvents(bus eventbus.EventBus, replayPath, baselinePath stri
 		ID:        "bootstrap-" + now.Format("150405"),
 		Type:      eventbus.EventSystemStart,
 		Timestamp: now,
-		Description: "Atlas 系統啟動完成 · replay 資料 " + replayStatus + (func() string {
+		Description: "Atlas 系統啟動完成 · replay 資料 " + replayStatus + func() string {
 			if replayDate != "" {
 				return "（" + replayDate + "）"
 			}
 			return ""
-		}()) + " · 基線策略 " + baselineStatus,
+		}() + " · 基線策略 " + baselineStatus,
 		Severity: "info",
 		Payload: map[string]any{
 			"replay_status":   replayStatus,
@@ -945,7 +945,8 @@ func run(args []string, deps appDeps) error {
 							logging.Warn("main", "narrative_calibrate_failed", "err", err)
 							return nil
 						}
-						logging.Info("main", "narrative_calibrate_ok",
+						logging.Info(
+							"main", "narrative_calibrate_ok",
 							"verdict", report.Verdict,
 							"models_updated", report.ModelsUpdated,
 							"templates_updated", report.TemplatesUpdated,
@@ -1040,7 +1041,8 @@ func run(args []string, deps appDeps) error {
 						return fmt.Errorf("record session: %w", err)
 					}
 
-					logging.Info("simulation", "completed",
+					logging.Info(
+						"simulation", "completed",
 						"session", system.Session().ID,
 						"regime", result.Regime,
 						"orders", len(result.Orders),
@@ -1388,7 +1390,8 @@ func run(args []string, deps appDeps) error {
 				Interval: 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					return orchestrator.RunConvictionCalibration(cfg.WorkDir,
+					return orchestrator.RunConvictionCalibration(
+						cfg.WorkDir,
 						orchestrator.SemiconductorExecutor{},
 						orchestrator.AISupplyChainExecutor{},
 						orchestrator.LEOSatelliteExecutor{},

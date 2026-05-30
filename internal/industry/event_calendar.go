@@ -49,7 +49,8 @@ type CalendarEvent struct {
 
 // String returns a human-readable summary of the event.
 func (e CalendarEvent) String() string {
-	return fmt.Sprintf("%s (%s): %s, Direction=%s, Weight=%.2f, Active=%v",
+	return fmt.Sprintf(
+		"%s (%s): %s, Direction=%s, Weight=%.2f, Active=%v",
 		e.Name, e.NameEN,
 		e.PeakDate.Format("2006-01-02"),
 		e.Direction, e.BaseWeight, e.Active,

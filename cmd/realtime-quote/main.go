@@ -64,7 +64,8 @@ func main() {
 	router.OnQuote(func(quote domain.Quote) {
 		quoteCount++
 		elapsed := time.Since(startTime)
-		fmt.Printf("[%s] #%d %s @ %.2f (vol: %d) [source: %s]\n",
+		fmt.Printf(
+			"[%s] #%d %s @ %.2f (vol: %d) [source: %s]\n",
 			elapsed.Round(time.Second),
 			quoteCount,
 			quote.Symbol,

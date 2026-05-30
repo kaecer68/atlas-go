@@ -715,7 +715,8 @@ func LoadCorrelationMatrixFromConfig(cfg *config.LinkageConfig) *CorrelationMatr
 }
 
 func (ls *IndustryLinkageScore) String() string {
-	return fmt.Sprintf("%s: Upstream=%d, Downstream=%d, AvgCorr=%.2f, Systemic=%.0f%%",
+	return fmt.Sprintf(
+		"%s: Upstream=%d, Downstream=%d, AvgCorr=%.2f, Systemic=%.0f%%",
 		ls.IndustryID,
 		ls.UpstreamCount,
 		ls.DownstreamCount,
