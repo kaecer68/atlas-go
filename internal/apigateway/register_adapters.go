@@ -148,13 +148,13 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 
 	// --- TWSE Odd-Lot Trading (no API key required) ---
 	oddlotAdapter := NewTWSEOddLotChannelAdapter()
-	g.registry.Register("twse_oddlot", oddlotAdapter)
-	logging.Info("apigateway", "adapter_registered", "channel", "twse_oddlot")
+	g.registry.Register("twse-oddlot", oddlotAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "twse-oddlot")
 
 	// --- TWSE ETF Net Subscription (no API key required) ---
 	etfAdapter := NewTWSEETFChannelAdapter()
-	g.registry.Register("twse_etf", etfAdapter)
-	logging.Info("apigateway", "adapter_registered", "channel", "twse_etf")
+	g.registry.Register("twse-etf", etfAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "twse-etf")
 
 	// --- JANUS Regime (internal computed engine, optional) ---
 	if janusEngine != nil {
