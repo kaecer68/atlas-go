@@ -1726,6 +1726,7 @@ export interface ParametersConfig {
   alert: string;
   risk_gate?: string;
   engine?: string;
+  rsi_tw?: string;
 }
 
 export interface PerformanceReport {
@@ -1970,6 +1971,7 @@ export interface RSITwCategoryA {
   weekly_pcr: number;
   odd_lot_imbalance: number;
   a_score: number;
+  is_fallback: boolean;
 }
 
 export interface RSITwCategoryC {
@@ -1977,12 +1979,31 @@ export interface RSITwCategoryC {
   broker_flow_score: number;
   etf_subscription_score: number;
   c_score: number;
+  is_fallback: boolean;
 }
 
 export interface RSITwCategoryD {
   adjustment_factor: number;
   active_events: string[];
   d_multiplier: number;
+  is_fallback: boolean;
+}
+
+export interface RSITwParameters {
+  c1_very_bullish_threshold: string;
+  c1_bullish_threshold: string;
+  c1_bearish_threshold: string;
+  c1_very_bearish_threshold: string;
+  c2_neutral_midpoint: string;
+  c2_netflow_scaling_factor: string;
+  c3_very_bullish_threshold: string;
+  c3_bullish_threshold: string;
+  c3_bearish_threshold: string;
+  d_geopolitical_risk_threshold: string;
+  d_geopolitical_risk_multiplier: string;
+  d_vix_spike_threshold: string;
+  d_vix_spike_multiplier: string;
+  d_credit_tightening_multiplier: string;
 }
 
 export interface RSITwSubIndicators {

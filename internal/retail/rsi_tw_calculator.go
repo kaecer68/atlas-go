@@ -90,7 +90,7 @@ func GetCalculator() *Calculator {
 	return calcInstance
 }
 
-// NewCalculator returns an initialised Calculator with empty histories.
+// NewCalculator returns an initialized Calculator with empty histories.
 // Deprecated: use GetCalculator() for the singleton; this is kept for tests.
 func NewCalculator() *Calculator {
 	return &Calculator{
