@@ -24,7 +24,7 @@ type MLRetrainScheduler struct {
 	workDir  string
 }
 
-// NewMLRetrainScheduler creates a scheduler with all four models initialised.
+// NewMLRetrainScheduler creates a scheduler with all four models initialized.
 func NewMLRetrainScheduler(dataPath string) *MLRetrainScheduler {
 	return &MLRetrainScheduler{
 		models: map[string]ml.Model{

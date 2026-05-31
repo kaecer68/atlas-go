@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
@@ -191,7 +192,8 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 		etfData, _ = h.ETFFetcher(r.Context())
 	}
 
-	calc := retail.NewCalculator()
+	calc := retail.GetCalculator()
+	calc.SetParams(config.GetParametersConfig().RSITw)
 	rsiInput := retail.RSITwInput{
 		MarginBalance:      snap.RetailMarginBalance.Value,
 		MarginPercentile:   marginPercentile,
@@ -207,6 +209,7 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 	}
 
 	rsiResult := calc.ComputeFinal(rsiInput)
+	calc.UpdateHistory(rsiInput)
 
 	interpretation := interpretRetailSentiment(rsiResult.Score)
 	return http.StatusOK, RetailSentimentResponse{
@@ -237,37 +240,73 @@ func convertRSITwSubIndicators(result retail.RSITwSnapshot) *domain.RSITwSubIndi
 	catA := &domain.RSITwCategoryA{AScore: result.PartAScore}
 	if v, ok := subs["a3_margin_maint"]; ok {
 		catA.MarginMaintenanceZ = v.ZScore
+		if v.IsFallback {
+			catA.IsFallback = true
+		}
 	}
 	if v, ok := subs["a2_day_trading"]; ok {
 		catA.DayTradingZ = v.ZScore
+		if v.IsFallback {
+			catA.IsFallback = true
+		}
 	}
 	if v, ok := subs["a1_margin_z"]; ok {
 		catA.MarginBalanceZ = v.ZScore
+		if v.IsFallback {
+			catA.IsFallback = true
+		}
 	}
 	if v, ok := subs["a4_vix_map"]; ok {
 		catA.VIXRiskScore = v.ZScore
+		if v.IsFallback {
+			catA.IsFallback = true
+		}
 	}
 	if v, ok := subs["a5_pcr_proxy"]; ok {
 		catA.WeeklyPCR = v.ZScore
+		if v.IsFallback {
+			catA.IsFallback = true
+		}
 	}
 	if v, ok := subs["a6_odd_lot"]; ok {
 		catA.OddLotImbalance = v.ZScore
+		if v.IsFallback {
+			catA.IsFallback = true
+		}
 	}
 
 	catC := &domain.RSITwCategoryC{CScore: result.PartCScore}
 	if v, ok := subs["c1_futures_oi"]; ok {
 		catC.FuturesRetailOI = v.ZScore
+		if v.IsFallback {
+			catC.IsFallback = true
+		}
 	}
 	if v, ok := subs["c2_inst_flow"]; ok {
 		catC.BrokerFlowScore = v.ZScore
+		if v.IsFallback {
+			catC.IsFallback = true
+		}
 	}
 	if v, ok := subs["c3_etf_sub"]; ok {
 		catC.ETFSubscriptionScore = v.ZScore
+		if v.IsFallback {
+			catC.IsFallback = true
+		}
 	}
 
 	catD := &domain.RSITwCategoryD{
 		AdjustmentFactor: result.AdjustmentFactor,
 		DMultiplier:      result.AdjustmentFactor,
+	}
+	if v, ok := subs["d1_geopolitical"]; ok && v.IsFallback {
+		catD.IsFallback = true
+	}
+	if v, ok := subs["d3_credit_control"]; ok && v.IsFallback {
+		catD.IsFallback = true
+	}
+	if v, ok := subs["d4_flash_crash"]; ok && v.IsFallback {
+		catD.IsFallback = true
 	}
 
 	return &domain.RSITwSubIndicators{

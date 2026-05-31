@@ -153,9 +153,9 @@ func parseTWSEFloat(s string) float64 {
 }
 
 type twseOddLotResponse struct {
-	Stat   string             `json:"stat"`
-	Date   string             `json:"date"`
-	Tables []twseOddLotTable  `json:"tables"`
+	Stat   string            `json:"stat"`
+	Date   string            `json:"date"`
+	Tables []twseOddLotTable `json:"tables"`
 }
 
 type twseOddLotTable struct {

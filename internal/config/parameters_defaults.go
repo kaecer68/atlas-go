@@ -36,6 +36,7 @@ func DefaultParametersConfig() *ParametersConfig {
 		Alert:               defaultAlertParameters(),
 		RiskGate:            defaultRiskGateParameters(),
 		Engine:              defaultEngineParameters(),
+		RSITw:               defaultRSITwParameters(),
 	}
 }
 
@@ -3012,6 +3013,90 @@ func defaultEngineParameters() EngineParameters {
 				Source:    SourceHeuristic,
 				Todo:      "Calibrate sizing factor [0.70-1.00] via walk-forward backtest per regime",
 			},
+		},
+	}
+}
+
+func defaultRSITwParameters() RSITwParameters {
+	return RSITwParameters{
+		// Part C — Institutional / Derivative Flow
+		C1VeryBullishThreshold: ParameterMetadata[float64]{
+			Value:     20,
+			Rationale: "Small TAIEX futures OI pct above 20 → retail heavily long (0.9 bearish score)",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from 2Y historical futures OI distribution",
+		},
+		C1BullishThreshold: ParameterMetadata[float64]{
+			Value:     10,
+			Rationale: "Small TAIEX futures OI pct above 10 → retail moderately long (0.7)",
+			Source:    SourceHeuristic,
+		},
+		C1BearishThreshold: ParameterMetadata[float64]{
+			Value:     -10,
+			Rationale: "Small TAIEX futures OI pct below -10 → retail moderately short (0.5 neutral)",
+			Source:    SourceHeuristic,
+		},
+		C1VeryBearishThreshold: ParameterMetadata[float64]{
+			Value:     -20,
+			Rationale: "Small TAIEX futures OI pct below -20 → retail heavily short (0.25 bullish)",
+			Source:    SourceHeuristic,
+		},
+		C2NeutralMidpoint: ParameterMetadata[float64]{
+			Value:     0.5,
+			Rationale: "Institutional net flow ≈ 0 → neutral midpoint 0.5",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from 2Y foreign/domestic fund net flow distribution",
+		},
+		C2NetflowScalingFactor: ParameterMetadata[float64]{
+			Value:     1e9,
+			Rationale: "Net flow divided by 1B TWD to get deviation from neutral; score clamped [0.1, 0.9]",
+			Source:    SourceHeuristic,
+			Todo:      "Learn optimal scaling factor from historical flow distributions",
+		},
+		C3VeryBullishThreshold: ParameterMetadata[float64]{
+			Value:     1_000_000_000,
+			Rationale: "ETF net subscription above 1B TWD → heavy retail inflow (0.9 bearish)",
+			Source:    SourceHeuristic,
+		},
+		C3BullishThreshold: ParameterMetadata[float64]{
+			Value:     100_000_000,
+			Rationale: "ETF net subscription above 100M TWD → moderate inflow (0.7)",
+			Source:    SourceHeuristic,
+		},
+		C3BearishThreshold: ParameterMetadata[float64]{
+			Value:     -100_000_000,
+			Rationale: "ETF net subscription below -100M TWD → outflow (0.45)",
+			Source:    SourceHeuristic,
+		},
+
+		// Part D — Event-Driven Adjustment Factors
+		DGeoPoliticalRiskThreshold: ParameterMetadata[float64]{
+			Value:     0.5,
+			Rationale: "Geopolitical risk index above 0.5 → apply 0.85x multiplier",
+			Source:    SourceHeuristic,
+		},
+		DGeoPoliticalRiskMultiplier: ParameterMetadata[float64]{
+			Value:     0.85,
+			Rationale: "15% sentiment reduction during elevated geopolitical risk",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate against actual market drawdowns during geopolitical events",
+		},
+		DVIXSpikeThreshold: ParameterMetadata[float64]{
+			Value:     30,
+			Rationale: "VIX above 30 → spike regime, apply 0.90x multiplier",
+			Source:    SourceLiterature,
+			Todo:      "Validate with Taiwan VIX equivalent (TVIX or VIX futures)",
+		},
+		DVIXSpikeMultiplier: ParameterMetadata[float64]{
+			Value:     0.90,
+			Rationale: "10% sentiment reduction during VIX spike >30",
+			Source:    SourceHeuristic,
+		},
+		DCreditTighteningMultiplier: ParameterMetadata[float64]{
+			Value:     0.80,
+			Rationale: "20% sentiment reduction when credit tightening signal active",
+			Source:    SourceHeuristic,
+			Todo:      "Wire credit tightening signal to actual central bank / margin rate data",
 		},
 	}
 }

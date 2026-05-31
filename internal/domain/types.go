@@ -225,6 +225,7 @@ type RSITwCategoryA struct {
 	WeeklyPCR          float64 `json:"weekly_pcr"`           // 週選擇權 PCR
 	OddLotImbalance    float64 `json:"odd_lot_imbalance"`    // 零股交易失衡
 	AScore             float64 `json:"a_score"`              // Part A 綜合分數
+	IsFallback         bool    `json:"is_fallback"`          // true if any sub-indicator is fallback
 }
 
 // RSITwCategoryC covers institutional / futures / ETF flow proxies (25% weight).
@@ -233,6 +234,7 @@ type RSITwCategoryC struct {
 	BrokerFlowScore      float64 `json:"broker_flow_score"`      // 券商分點流向
 	ETFSubscriptionScore float64 `json:"etf_subscription_score"` // ETF 申購分數
 	CScore               float64 `json:"c_score"`                // Part C 綜合分數
+	IsFallback           bool    `json:"is_fallback"`            // true if any sub-indicator is fallback
 }
 
 // RSITwCategoryD captures the event-driven adjustment multiplier.
@@ -240,6 +242,7 @@ type RSITwCategoryD struct {
 	AdjustmentFactor float64  `json:"adjustment_factor"` // 事件調整倍數 0.8-1.2
 	ActiveEvents     []string `json:"active_events"`     // 目前觸發的事件
 	DMultiplier      float64  `json:"d_multiplier"`      // 最終乘數
+	IsFallback       bool     `json:"is_fallback"`       // true if any sub-factor is fallback
 }
 
 func (s RetailSentimentSnapshot) CalculateSentimentScore() float64 {

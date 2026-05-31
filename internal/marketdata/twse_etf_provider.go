@@ -15,10 +15,10 @@ import (
 
 // ETFStats holds daily ETF net subscription statistics from TWSE.
 type ETFStats struct {
-	Date             string  `json:"date"`
-	NetSubscription  int64   `json:"net_subscription"`
-	TotalNAV         int64   `json:"total_nav"`
-	SubscriberCount  int64   `json:"subscriber_count"`
+	Date            string `json:"date"`
+	NetSubscription int64  `json:"net_subscription"`
+	TotalNAV        int64  `json:"total_nav"`
+	SubscriberCount int64  `json:"subscriber_count"`
 }
 
 // TWSEETFProvider fetches Taiwan ETF net subscription data from TWSE.
@@ -125,9 +125,9 @@ func (p *TWSEETFProvider) fetchDate(ctx context.Context, dateStr string) (*ETFSt
 }
 
 type twseETFResponse struct {
-	Stat   string           `json:"stat"`
-	Date   string           `json:"date"`
-	Tables []twseETFTable   `json:"tables"`
+	Stat   string         `json:"stat"`
+	Date   string         `json:"date"`
+	Tables []twseETFTable `json:"tables"`
 }
 
 type twseETFTable struct {
@@ -137,5 +137,3 @@ type twseETFTable struct {
 	Notes  []string   `json:"notes"`
 	Total  int        `json:"total"`
 }
-
-
