@@ -1,4 +1,3 @@
-// Maturity: experimental
 package marketdata
 
 import (
@@ -14,28 +13,27 @@ import (
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 )
 
-// TWSEETFStats holds aggregated TWSE ETF net subscription data.
-type TWSEETFStats struct {
-	NetSubscription float64 `json:"net_subscription"`
-	NetRedemption   float64 `json:"net_redemption"`
-	NetFlow         float64 `json:"net_flow"`
-	ETFCount        int     `json:"etf_count"`
-	Date            string  `json:"date"`
+// ETFStats holds daily ETF net subscription statistics from TWSE.
+type ETFStats struct {
+	Date             string  `json:"date"`
+	NetSubscription  int64   `json:"net_subscription"`
+	TotalNAV         int64   `json:"total_nav"`
+	SubscriberCount  int64   `json:"subscriber_count"`
 }
 
-// TWSEETFProvider fetches Taiwan ETF net subscription/redemption flow from TWSE.
+// TWSEETFProvider fetches Taiwan ETF net subscription data from TWSE.
 type TWSEETFProvider struct {
 	client      *http.Client
 	baseURL     string
 	rateLimiter *rate.Limiter
 }
 
-// NewTWSEETFProvider creates a new TWSE ETF subscription provider.
+// NewTWSEETFProvider creates a new TWSE ETF provider.
 func NewTWSEETFProvider() *TWSEETFProvider {
 	return &TWSEETFProvider{
 		client:      httpclient.NewFactory().NewClient(20 * time.Second),
 		baseURL:     "https://www.twse.com.tw",
-		rateLimiter: rate.NewLimiter(rate.Every(2*time.Second), 1),
+		rateLimiter: rate.NewLimiter(rate.Every(1*time.Second), 1),
 	}
 }
 
@@ -44,13 +42,25 @@ func (p *TWSEETFProvider) Name() string {
 	return "twse_etf"
 }
 
-// FetchNetSubscription retrieves ETF net subscription data for a given date.
-func (p *TWSEETFProvider) FetchNetSubscription(ctx context.Context, date string) (*TWSEETFStats, error) {
+// FetchLatest retrieves the most recent ETF net subscription statistics.
+func (p *TWSEETFProvider) FetchLatest(ctx context.Context) (*ETFStats, error) {
+	now := time.Now().UTC()
+	for i := range 7 {
+		dateStr := now.AddDate(0, 0, -i).Format("20060102")
+		stats, err := p.fetchDate(ctx, dateStr)
+		if err == nil {
+			return stats, nil
+		}
+	}
+	return nil, fmt.Errorf("no TWSE ETF data available in the last 7 days")
+}
+
+func (p *TWSEETFProvider) fetchDate(ctx context.Context, dateStr string) (*ETFStats, error) {
 	if err := p.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("rate limit wait: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/rwd/zh/ETF/etfDailyNetFlow?response=json&date=%s", p.baseURL, date)
+	url := fmt.Sprintf("%s/exchangeReport/TWT44U?response=json&date=%s", p.baseURL, dateStr)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
@@ -74,43 +84,50 @@ func (p *TWSEETFProvider) FetchNetSubscription(ctx context.Context, date string)
 	}
 
 	if apiResp.Stat != "OK" || len(apiResp.Tables) == 0 {
-		return nil, fmt.Errorf("TWSE ETF API returned no data: stat=%s tables=%d", apiResp.Stat, len(apiResp.Tables))
+		return nil, fmt.Errorf("TWSE API returned no data: stat=%s tables=%d", apiResp.Stat, len(apiResp.Tables))
 	}
 
-	mainTable := apiResp.Tables[0]
-	if len(mainTable.Data) == 0 {
-		return nil, fmt.Errorf("TWSE ETF API returned empty data")
+	// ETF net subscription data is typically in the summary row of the first table.
+	marketTable := apiResp.Tables[0]
+	if len(marketTable.Data) == 0 {
+		return nil, fmt.Errorf("TWSE API returned empty ETF data")
 	}
 
-	stats := &TWSEETFStats{
-		Date: date,
-	}
+	// Aggregate across all ETF rows to compute totals.
+	var netSubTotal int64
+	var navTotal int64
+	var subscriberTotal int64
 
-	var totalSub, totalRed float64
-	for _, row := range mainTable.Data {
-		// Typical TWSE ETF flow row: [code, name, net_subscription, net_redemption, net_flow]
-		// Columns may vary; try to parse what's available
-		if len(row) >= 5 {
-			totalSub += parseTWSEFloat(row[2])
-			totalRed += parseTWSEFloat(row[3])
-		} else if len(row) >= 3 {
-			totalSub += parseTWSEFloat(row[1])
-			totalRed += parseTWSEFloat(row[2])
+	for _, row := range marketTable.Data {
+		if len(row) < 4 {
+			continue
+		}
+		// Typical TWSE TWT44U columns:
+		// [0] ETF name, [1] Net Subscription (units),
+		// [2] Total NAV, [3] Subscriber Count
+		netSubTotal += parseTWSEInt(row[1])
+		navTotal += parseTWSEInt(row[2])
+
+		// Subscriber count from a later column if available
+		if len(row) > 3 {
+			subscriberTotal += parseTWSEInt(row[3])
 		}
 	}
 
-	stats.NetSubscription = totalSub
-	stats.NetRedemption = totalRed
-	stats.NetFlow = totalSub - totalRed
-	stats.ETFCount = len(mainTable.Data)
+	stats := &ETFStats{
+		Date:            dateStr,
+		NetSubscription: netSubTotal,
+		TotalNAV:        navTotal,
+		SubscriberCount: subscriberTotal,
+	}
 
 	return stats, nil
 }
 
 type twseETFResponse struct {
-	Stat   string         `json:"stat"`
-	Date   string         `json:"date"`
-	Tables []twseETFTable `json:"tables"`
+	Stat   string           `json:"stat"`
+	Date   string           `json:"date"`
+	Tables []twseETFTable   `json:"tables"`
 }
 
 type twseETFTable struct {
@@ -120,3 +137,5 @@ type twseETFTable struct {
 	Notes  []string   `json:"notes"`
 	Total  int        `json:"total"`
 }
+
+
