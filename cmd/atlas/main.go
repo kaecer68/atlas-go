@@ -1723,10 +1723,10 @@ func run(args []string, deps appDeps) error {
 	if *liveMode {
 		return runLiveTrading(cfg, deps, collector, repo)
 	}
-	return runSimulation(cfg, false, collector, repo)
+	return runSimulation(cfg, false, collector, repo, deps.shutdown)
 }
 
-func runSimulation(cfg config.Config, verbose bool, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
+func runSimulation(cfg config.Config, verbose bool, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, shutdown <-chan struct{}) error {
 	system, err := orchestrator.NewProductionSystem(cfg)
 	if err != nil {
 		return fmt.Errorf("create system: %w", err)
@@ -1750,81 +1750,95 @@ func runSimulation(cfg config.Config, verbose bool, collector *monitoring.Metric
 	}
 	system.WithCapitalManagement(controller, allocator, workflow)
 
-	result, err := system.RunDailySimulation(time.Now())
-	if err != nil {
-		return fmt.Errorf("simulation failed: %w", err)
-	}
+	// Run simulation in a goroutine so we can listen for shutdown signals.
+	done := make(chan error, 1)
+	go func() {
+		result, simErr := system.RunDailySimulation(time.Now())
+		if simErr != nil {
+			done <- fmt.Errorf("simulation failed: %w", simErr)
+			return
+		}
 
-	registry := system.Registry()
-	session := system.Session()
+		registry := system.Registry()
+		session := system.Session()
 
-	fmt.Printf("atlas-go daily simulation\n")
-	fmt.Printf("provider: %s\n", cfg.MarketDataProvider)
-	fmt.Printf("broker_mode: %s\n", cfg.BrokerMode)
-	fmt.Printf("broker_adapter: %s\n", cfg.BrokerAdapter)
-	fmt.Printf("broker_signer: %s\n", cfg.BrokerSigner)
-	fmt.Printf("broker_key_id: %s\n", cfg.BrokerKeyID)
-	fmt.Printf("broker_retry_status_codes: %v\n", cfg.BrokerHTTPRetryStatusCodes)
-	fmt.Printf("broker_max_clock_skew_sec: %d\n", cfg.BrokerMaxClockSkewS)
-	fmt.Printf("broker_nonce_ttl_sec: %d\n", cfg.BrokerNonceTTLS)
-	fmt.Printf("broker_nonce_store: %s\n", cfg.BrokerNonceStore)
-	fmt.Printf("broker_nonce_store_path: %s\n", cfg.BrokerNonceStorePath)
-	fmt.Printf("broker_nonce_redis_url: %s\n", cfg.BrokerNonceRedisURL)
-	fmt.Printf("broker_nonce_redis_key_prefix: %s\n", cfg.BrokerNonceRedisKeyPrefix)
-	fmt.Printf("broker_max_retries: %d\n", cfg.BrokerMaxRetries)
-	fmt.Printf("session: %s\n", session.ID)
-	fmt.Printf("agents: %d\n", len(registry.Agents))
-	fmt.Printf("regime: %s\n", result.Regime)
-	fmt.Printf("orders: %d\n", len(result.Orders))
-	fmt.Printf("cash: %.2f\n", result.EndingCash)
-	fmt.Printf("positions: %d\n", len(result.Positions))
+		fmt.Printf("atlas-go daily simulation\n")
+		fmt.Printf("provider: %s\n", cfg.MarketDataProvider)
+		fmt.Printf("broker_mode: %s\n", cfg.BrokerMode)
+		fmt.Printf("broker_adapter: %s\n", cfg.BrokerAdapter)
+		fmt.Printf("broker_signer: %s\n", cfg.BrokerSigner)
+		fmt.Printf("broker_key_id: %s\n", cfg.BrokerKeyID)
+		fmt.Printf("broker_retry_status_codes: %v\n", cfg.BrokerHTTPRetryStatusCodes)
+		fmt.Printf("broker_max_clock_skew_sec: %d\n", cfg.BrokerMaxClockSkewS)
+		fmt.Printf("broker_nonce_ttl_sec: %d\n", cfg.BrokerNonceTTLS)
+		fmt.Printf("broker_nonce_store: %s\n", cfg.BrokerNonceStore)
+		fmt.Printf("broker_nonce_store_path: %s\n", cfg.BrokerNonceStorePath)
+		fmt.Printf("broker_nonce_redis_url: %s\n", cfg.BrokerNonceRedisURL)
+		fmt.Printf("broker_nonce_redis_key_prefix: %s\n", cfg.BrokerNonceRedisKeyPrefix)
+		fmt.Printf("broker_max_retries: %d\n", cfg.BrokerMaxRetries)
+		fmt.Printf("session: %s\n", session.ID)
+		fmt.Printf("agents: %d\n", len(registry.Agents))
+		fmt.Printf("regime: %s\n", result.Regime)
+		fmt.Printf("orders: %d\n", len(result.Orders))
+		fmt.Printf("cash: %.2f\n", result.EndingCash)
+		fmt.Printf("positions: %d\n", len(result.Positions))
 
-	candidate, err := system.NextExperimentCandidate()
-	if err != nil {
-		return fmt.Errorf("candidate selection failed: %w", err)
-	}
-	if candidate != nil {
-		fmt.Printf("next_experiment_agent: %s\n", candidate.Agent.ID)
-		fmt.Printf("next_experiment_skill: %s\n", candidate.Agent.Skill)
-		fmt.Printf("baseline_sharpe_like: %.6f\n", candidate.Scorecard.SharpeLike)
-	}
+		candidate, err := system.NextExperimentCandidate()
+		if err != nil {
+			done <- fmt.Errorf("candidate selection failed: %w", err)
+			return
+		}
+		if candidate != nil {
+			fmt.Printf("next_experiment_agent: %s\n", candidate.Agent.ID)
+			fmt.Printf("next_experiment_skill: %s\n", candidate.Agent.Skill)
+			fmt.Printf("baseline_sharpe_like: %.6f\n", candidate.Scorecard.SharpeLike)
+		}
 
-	if err := system.RecordSessionSummary(result, candidate); err != nil {
-		return fmt.Errorf("record session summary failed: %w", err)
-	}
+		if err := system.RecordSessionSummary(result, candidate); err != nil {
+			done <- fmt.Errorf("record session summary failed: %w", err)
+			return
+		}
 
-	stateStore := livestore.NewStateStore(livestore.DefaultLiveStateBasePath)
-	if err := stateStore.Load(); err != nil {
-		logging.Warn("main", "load_live_state_failed", "err", err.Error())
-	}
-	for symbol := range stateStore.GetPositions() {
-		stateStore.RemovePosition(symbol)
-	}
-	var totalExposure, totalUnrealizedPnL float64
-	for _, pos := range result.Positions {
-		totalExposure += pos.MarketValue
-		totalUnrealizedPnL += pos.UnrealizedPnL
-		stateStore.UpdatePosition(pos)
-	}
-	stateStore.UpdatePortfolio(livestore.PortfolioState{
-		Cash:          result.EndingCash,
-		TotalExposure: totalExposure,
-		AvailableCash: result.EndingCash,
-		DayPnL:        result.BeforeTaxPnL,
-		UnrealizedPnL: totalUnrealizedPnL,
-		LastUpdated:   time.Now(),
-	})
-	stateStore.UpdateRegime(result.Regime, 0.5, "simulation")
-	if err := stateStore.Save(); err != nil {
-		logging.Warn("main", "sync_live_state_failed", "err", err.Error())
-	} else {
-		logging.Info("main", "synced_simulation_to_live_store",
-			"positions", len(result.Positions),
-			"exposure", totalExposure,
-			"cash", result.EndingCash)
-	}
+		stateStore := livestore.NewStateStore(livestore.DefaultLiveStateBasePath)
+		if err := stateStore.Load(); err != nil {
+			logging.Warn("main", "load_live_state_failed", "err", err.Error())
+		}
+		for symbol := range stateStore.GetPositions() {
+			stateStore.RemovePosition(symbol)
+		}
+		var totalExposure, totalUnrealizedPnL float64
+		for _, pos := range result.Positions {
+			totalExposure += pos.MarketValue
+			totalUnrealizedPnL += pos.UnrealizedPnL
+			stateStore.UpdatePosition(pos)
+		}
+		stateStore.UpdatePortfolio(livestore.PortfolioState{
+			Cash:          result.EndingCash,
+			TotalExposure: totalExposure,
+			AvailableCash: result.EndingCash,
+			DayPnL:        result.BeforeTaxPnL,
+			UnrealizedPnL: totalUnrealizedPnL,
+			LastUpdated:   time.Now(),
+		})
+		stateStore.UpdateRegime(result.Regime, 0.5, "simulation")
+		if err := stateStore.Save(); err != nil {
+			logging.Warn("main", "sync_live_state_failed", "err", err.Error())
+		} else {
+			logging.Info("main", "synced_simulation_to_live_store",
+				"positions", len(result.Positions),
+				"exposure", totalExposure,
+				"cash", result.EndingCash)
+		}
 
-	return nil
+		done <- nil
+	}()
+
+	select {
+	case <-shutdown:
+		return fmt.Errorf("simulation shutdown")
+	case err := <-done:
+		return err
+	}
 }
 
 func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository) error {
@@ -1976,7 +1990,7 @@ func runSimulationMode(rt *bootstrap.Runtime, cfg config.Config, verbose bool, d
 	collector := rt.MetricsCollector
 	repo := rt.Repository
 
-	if err := runSimulation(cfg, verbose, collector, repo); err != nil {
+	if err := runSimulation(cfg, verbose, collector, repo, nil); err != nil {
 		return fmt.Errorf("simulation failed: %w", err)
 	}
 
