@@ -1,6 +1,7 @@
 package config
 
 import (
+	"math"
 	"time"
 )
 
@@ -2184,6 +2185,25 @@ func defaultIndustryParameters() IndustryParameters {
 			Rationale: "Seed bootstrap values for CycleTracker initialization; replaced by real FinMind data within 6h (auto_cycle_update). Values match the previously hardcoded defaults in initializeDefaultPositions(). Only four seed fields are configurable — RevenueGrowthYoY, ProfitGrowthYoY, InventoryTurnover, CapacityUtilization — the remaining IndustryMetrics fields (MarketCap, PE, PB, DivYield, Volatility) are set to zero and filled from market data.",
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate: run cmd/calibrate-seasonal --replay after accumulating 90+ days of FinMind data to replace heuristic seeds with empirically derived values",
+		},
+		CompositeCard: ParameterMetadata[CompositeCardConfig]{
+			Value: CompositeCardConfig{
+				LayerWeights: map[string]float64{
+					"silicon": 0.25, "business_cycle": 0.20, "seasonal": 0.15,
+					"events": 0.15, "supply_chain": 0.10,
+				},
+				SentimentThresholds: map[string]SentimentBounds{
+					"強烈看多": {Min: 1.10, Max: math.Inf(1)},
+					"偏多":   {Min: 1.05, Max: 1.10},
+					"中性":   {Min: 0.95, Max: 1.05},
+					"偏空":   {Min: 0.90, Max: 0.95},
+					"強烈看空": {Min: 0.00, Max: 0.90},
+				},
+				ClampMin: 0.80, ClampMax: 1.20,
+			},
+			Rationale: "Si-dominant Taiwan market. Clamp [0.80,1.20] prevents extreme daily swings.",
+			Source:    SourceHeuristic,
+			Todo:      "Backtest against forward returns from ledger; calibrate via historical composite distribution",
 		},
 	}
 }
