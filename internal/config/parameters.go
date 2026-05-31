@@ -472,6 +472,83 @@ type IndustryParameters struct {
 	// Bootstrap seed values for CycleTracker initialization, used before
 	// real FinMind data becomes available (replaced within 6h by auto_cycle_update).
 	DefaultMetrics ParameterMetadata[map[string]IndustryDefaultMetrics] `json:"default_metrics"`
+
+	SiliconCycle       ParameterMetadata[SiliconCycleParameters] `json:"silicon_cycle"`
+	EventCalendarRules ParameterMetadata[[]EventCalendarRule]    `json:"event_calendar_rules"`
+
+	// CompositeCard holds tunable parameters for building the CycleStatusCard composite sentiment gauge.
+	CompositeCard ParameterMetadata[CompositeCardConfig] `json:"composite_card"`
+
+	// SeasonalMultipliers holds theme→industry multiplier maps for seasonal bridge narrative adjustments.
+	SeasonalMultipliers ParameterMetadata[SeasonalMultiplierConfig] `json:"seasonal_multipliers"`
+}
+
+// CompositeCardConfig holds tunable parameters for building the CycleStatusCard composite sentiment gauge.
+type CompositeCardConfig struct {
+	LayerWeights        map[string]float64         `json:"layer_weights"`
+	SentimentThresholds map[string]SentimentBounds `json:"sentiment_thresholds"`
+	ClampMin            float64                    `json:"clamp_min"`
+	ClampMax            float64                    `json:"clamp_max"`
+}
+
+// SentimentBounds defines the value range for a sentiment label.
+type SentimentBounds struct {
+	Min float64 `json:"min"`
+	Max float64 `json:"max"`
+}
+
+// SeasonalMultiplierConfig holds theme→industry multiplier maps for seasonal bridge narrative adjustments.
+type SeasonalMultiplierConfig struct {
+	ThemeMultipliers  map[string]IndustryMultiplierMap `json:"theme_multipliers"`
+	ThemeCorrelations map[string]map[string]float64    `json:"theme_correlations"`
+}
+
+// IndustryMultiplierMap holds bull/bear multipliers per industry for a theme.
+type IndustryMultiplierMap struct {
+	BullMultiplier map[string]float64 `json:"bull_multiplier"`
+	BearMultiplier map[string]float64 `json:"bear_multiplier"`
+}
+
+// MarshalJSON implements json.Marshaler. When Max is +Inf, it serializes as the
+// string "+Inf"; otherwise it uses the standard numeric representation.
+func (s SentimentBounds) MarshalJSON() ([]byte, error) {
+	enc := struct {
+		Min float64 `json:"min"`
+		Max any     `json:"max"`
+	}{Min: s.Min}
+	if math.IsInf(s.Max, 1) {
+		enc.Max = "+Inf"
+	} else {
+		enc.Max = s.Max
+	}
+	return json.Marshal(enc)
+}
+
+// UnmarshalJSON implements json.Unmarshaler, accepting "+Inf" string for Max
+// in addition to standard numeric values.
+func (s *SentimentBounds) UnmarshalJSON(data []byte) error {
+	var num struct {
+		Min float64 `json:"min"`
+		Max float64 `json:"max"`
+	}
+	if err := json.Unmarshal(data, &num); err == nil {
+		s.Min = num.Min
+		s.Max = num.Max
+		return nil
+	}
+	var str struct {
+		Min float64 `json:"min"`
+		Max string  `json:"max"`
+	}
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	s.Min = str.Min
+	if str.Max == "+Inf" {
+		s.Max = math.Inf(1)
+		return nil
+	}
+	return fmt.Errorf("unknown max value: %q (expected \"+Inf\" or number)", str.Max)
 }
 
 // IndustryDefaultMetrics holds bootstrap seed values for CycleTracker initialization.
@@ -671,6 +748,27 @@ type DynamicEnvConfig struct {
 	OilPriceShockThreshold float64 `json:"oil_price_shock_threshold"`
 	UsRatesDxyThreshold    float64 `json:"us_rates_dxy_threshold"`
 	JpyCarryDxyThreshold   float64 `json:"jpy_carry_dxy_threshold"`
+}
+
+// SiliconCycleParameters holds thresholds for semiconductor silicon cycle phase detection.
+type SiliconCycleParameters struct {
+	RevenueYoYThreshold     float64 `json:"revenue_yoy_threshold"`
+	BillingsYoYThreshold    float64 `json:"billings_yoy_threshold"`
+	InventoryDaysThreshold  float64 `json:"inventory_days_threshold"`
+	UtilizationThreshold    float64 `json:"utilization_threshold"`
+	IndexMAPercentThreshold float64 `json:"index_ma_percent_threshold"`
+	SOXExtremeThreshold     float64 `json:"sox_extreme_threshold"`
+	CapexCutThreshold       float64 `json:"capex_cut_threshold"`
+	MinConfidence           float64 `json:"min_confidence"`
+}
+
+// EventCalendarRule defines a Taiwan market calendar event rule
+// configurable via ParametersConfig.Industry.EventCalendarRules.
+type EventCalendarRule struct {
+	Name       string  `json:"name"`
+	BaseWeight float64 `json:"base_weight"`
+	DecayDays  int     `json:"decay_days"`
+	Direction  string  `json:"direction"`
 }
 
 // StrategyParameters holds tunable values for strategy selection and switching.
