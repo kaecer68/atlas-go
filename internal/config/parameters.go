@@ -2415,7 +2415,7 @@ func GetParametersConfigPath() string {
 	return parametersPath
 }
 
-// Save writes the configuration to the given JSON file.
+// Save writes the configuration to the given JSON file (non-atomic).
 func (p *ParametersConfig) Save(path string) error {
 	p.UpdatedAt = time.Now()
 	data, err := json.MarshalIndent(p, "", "  ")
@@ -2425,6 +2425,49 @@ func (p *ParametersConfig) Save(path string) error {
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("write parameters config: %w", err)
 	}
+	return nil
+}
+
+// SaveWithRollback atomically writes the configuration with automatic rollback.
+// Write pattern: .tmp → fsync → rename existing → .bak → rename .tmp → target.
+// If any step after the .bak fails, the original file is restored from .bak.
+func (p *ParametersConfig) SaveWithRollback(path string) error {
+	tmpPath := path + ".tmp"
+	bakPath := path + ".bak"
+
+	p.UpdatedAt = time.Now()
+	data, err := json.MarshalIndent(p, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal parameters config: %w", err)
+	}
+
+	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+		return fmt.Errorf("write temp parameters config: %w", err)
+	}
+
+	f, err := os.OpenFile(tmpPath, os.O_RDONLY, 0)
+	if err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("open temp file for sync: %w", err)
+	}
+	_ = f.Sync()
+	f.Close()
+
+	if _, statErr := os.Stat(path); statErr == nil {
+		if err := os.Rename(path, bakPath); err != nil {
+			os.Remove(tmpPath)
+			return fmt.Errorf("backup existing config: %w", err)
+		}
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		if _, bakErr := os.Stat(bakPath); bakErr == nil {
+			_ = os.Rename(bakPath, path)
+		}
+		return fmt.Errorf("promote temp config: %w", err)
+	}
+
+	os.Remove(bakPath)
 	return nil
 }
 

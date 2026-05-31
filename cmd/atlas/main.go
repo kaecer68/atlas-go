@@ -1690,6 +1690,25 @@ func run(args []string, deps appDeps) error {
 			})
 			log.Printf("[Gateway] registered auto_swarm_simulation background task (30m interval)")
 
+			// RSI-tw autonomous calibration — runs every 24h at market close
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "rsi_tw_calibrate",
+				Interval: 24 * time.Hour,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					report, err := retail.CalibrateRSITw(cfg.WorkDir)
+					if err != nil {
+						log.Printf("[RSITw] calibration failed: %v", err)
+						return err
+					}
+					riskGate.SetPreTradeRSITwScore(report.Score)
+					log.Printf("[RSITw] calibration complete: %s (score=%.4f, samples=%d, changes=%d)",
+						report.Verdict, report.Score, report.SampleCount, len(report.Changes))
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered rsi_tw_calibrate background task (24h interval)")
+
 			taskMgr.Start(sysCtx)
 			log.Printf("[Gateway] BackgroundTaskManager started with %d tasks", len(taskMgr.List()))
 			dashEventBus.Publish(eventbus.BusEvent{
@@ -1723,24 +1742,6 @@ func run(args []string, deps appDeps) error {
 			},
 		})
 		log.Printf("[Gateway] registered autobacktest_daily background task (1h interval)")
-
-		// RSI-tw autonomous calibration — runs every 24h at market close
-		_ = taskMgr.Register(&apigateway.ScheduledTask{
-			Name:     "rsi_tw_calibrate",
-			Interval: 24 * time.Hour,
-			Enabled:  true,
-			Task: func(ctx context.Context) error {
-				report, err := retail.CalibrateRSITw(cfg.WorkDir)
-				if err != nil {
-					log.Printf("[RSITw] calibration failed: %v", err)
-					return err
-				}
-				log.Printf("[RSITw] calibration complete: %s (samples=%d, changes=%d)",
-					report.Verdict, report.SampleCount, len(report.Changes))
-				return nil
-			},
-		})
-		log.Printf("[Gateway] registered rsi_tw_calibrate background task (24h interval)")
 
 		authWrappedMux := apishared.AuthMiddleware(mux)
 		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

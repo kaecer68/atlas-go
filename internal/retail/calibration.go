@@ -29,6 +29,7 @@ type CalibrationMetadata struct {
 type CalibrationReport struct {
 	Timestamp   time.Time             `json:"timestamp"`
 	SampleCount int                   `json:"sample_count"`
+	Score       float64               `json:"score"`
 	Changes     []CalibrationMetadata `json:"changes"`
 	Verdict     string                `json:"verdict"`
 	Summary     string                `json:"summary"`
@@ -139,6 +140,7 @@ func CalibrateRSITw(workDir string) (*CalibrationReport, error) {
 	report := &CalibrationReport{
 		Timestamp:   time.Now(),
 		SampleCount: len(calData),
+		Score:       baselineScore,
 		Changes:     bestChanges,
 	}
 
@@ -147,6 +149,7 @@ func CalibrateRSITw(workDir string) (*CalibrationReport, error) {
 		report.Summary = fmt.Sprintf("grid search yielded no improvement over baseline score %.4f", baselineScore)
 	} else {
 		report.Verdict = "calibrated"
+		report.Score = bestScore
 		report.Summary = fmt.Sprintf("%d parameter(s) adjusted, best score %.4f (baseline %.4f)", len(bestChanges), bestScore, baselineScore)
 
 		// Apply changes to the global parameter config
@@ -159,7 +162,7 @@ func CalibrateRSITw(workDir string) (*CalibrationReport, error) {
 				"after", ch.After,
 				"improvement", fmt.Sprintf("%.2f%%", ch.ImprovementPct*100))
 		}
-		if err := config.GetParametersConfig().Save(filepath.Join(workDir, "configs", "parameters.json")); err != nil {
+		if err := config.GetParametersConfig().SaveWithRollback(filepath.Join(workDir, "configs", "parameters.json")); err != nil {
 			logging.Error("rsi_tw_calibrate", "save_params_failed", "err", err.Error())
 			return report, fmt.Errorf("save calibrated params: %w", err)
 		}
