@@ -45,6 +45,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/repository"
+	"github.com/kaecer68/atlas-go/internal/retail"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/scheduler"
 	"github.com/kaecer68/atlas-go/internal/storage"
@@ -1722,6 +1723,24 @@ func run(args []string, deps appDeps) error {
 			},
 		})
 		log.Printf("[Gateway] registered autobacktest_daily background task (1h interval)")
+
+		// RSI-tw autonomous calibration — runs every 24h at market close
+		_ = taskMgr.Register(&apigateway.ScheduledTask{
+			Name:     "rsi_tw_calibrate",
+			Interval: 24 * time.Hour,
+			Enabled:  true,
+			Task: func(ctx context.Context) error {
+				report, err := retail.CalibrateRSITw(cfg.WorkDir)
+				if err != nil {
+					log.Printf("[RSITw] calibration failed: %v", err)
+					return err
+				}
+				log.Printf("[RSITw] calibration complete: %s (samples=%d, changes=%d)",
+					report.Verdict, report.SampleCount, len(report.Changes))
+				return nil
+			},
+		})
+		log.Printf("[Gateway] registered rsi_tw_calibrate background task (24h interval)")
 
 		authWrappedMux := apishared.AuthMiddleware(mux)
 		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
