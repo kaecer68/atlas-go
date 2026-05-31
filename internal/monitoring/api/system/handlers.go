@@ -13,7 +13,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
-	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/retail"
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
 
@@ -104,17 +104,21 @@ func (h *Handlers) HandleCapitalPhase(r *http.Request) (int, any) {
 }
 
 type RetailSentimentResponse struct {
-	SentimentScore   float64 `json:"sentiment_score"`
-	MarginChangePct  float64 `json:"margin_change_pct"`
-	MarginBalance    float64 `json:"margin_balance"`
-	ShortBalance     float64 `json:"short_balance"`
-	ShortChangePct   float64 `json:"short_change_pct"`
-	DayTradingRatio  float64 `json:"day_trading_ratio"`
-	MarginPercentile float64 `json:"margin_percentile"`
-	ExtremeReading   string  `json:"extreme_reading"`
-	Score            float64 `json:"score"`
-	ChangePct        float64 `json:"change_pct"`
-	Interpretation   string  `json:"interpretation"`
+	SentimentScore         float64                    `json:"sentiment_score"`
+	MarginChangePct        float64                    `json:"margin_change_pct"`
+	MarginBalance          float64                    `json:"margin_balance"`
+	ShortBalance           float64                    `json:"short_balance"`
+	ShortChangePct         float64                    `json:"short_change_pct"`
+	DayTradingRatio        float64                    `json:"day_trading_ratio"`
+	MarginPercentile       float64                    `json:"margin_percentile"`
+	ExtremeReading         string                     `json:"extreme_reading"`
+	Score                  float64                    `json:"score"`
+	ChangePct              float64                    `json:"change_pct"`
+	Interpretation         string                     `json:"interpretation"`
+	CompositeSentiment     float64                    `json:"composite_sentiment"`
+	RetailFuturesOI        float64                    `json:"retail_futures_oi,omitempty"`
+	ETFNetSubscription     float64                    `json:"etf_net_subscription,omitempty"`
+	SentimentSubIndicators *domain.RSITwSubIndicators `json:"sentiment_sub_indicators,omitempty"`
 }
 
 func extremeReadingFromScore(score float64) string {
@@ -146,31 +150,99 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 		}
 	}
 
-	fb := portfolio.NewFactorBridge()
-	input := fb.Convert(snap)
-
 	marginPercentile := calculateMarginPercentile(h.Svc.WorkDir, snap.RetailMarginBalance.Value)
 
 	dayTradingRatio := 0.0
+	var dtStats *retail.DayTradingStats
 	if h.DayTradingFetcher != nil {
 		if stats, err := h.DayTradingFetcher(r.Context()); err == nil {
 			dayTradingRatio = stats.VolumeRatio
+			dtStats = &retail.DayTradingStats{
+				Volume:      float64(stats.DayTradingVolume),
+				VolumeRatio: stats.VolumeRatio,
+			}
 		}
 	}
 
-	interpretation := interpretRetailSentiment(input.RetailSentimentScore)
+	calc := retail.NewCalculator()
+	rsiInput := retail.RSITwInput{
+		MarginBalance:      snap.RetailMarginBalance.Value,
+		MarginPercentile:   marginPercentile,
+		DayTrading:         dtStats,
+		VIXLevel:           snap.VIX.Value,
+		ForeignInvestorNet: snap.ForeignInvestorNet.Value,
+		DomesticFundNet:    snap.DomesticFundNet.Value,
+		GeopoliticalRisk:   0,
+	}
+
+	rsiResult := calc.ComputeFinal(rsiInput)
+
+	interpretation := interpretRetailSentiment(rsiResult.Score)
 	return http.StatusOK, RetailSentimentResponse{
-		SentimentScore:   input.RetailSentimentScore,
-		MarginChangePct:  snap.RetailMarginBalance.ChangePct / 100,
-		MarginBalance:    snap.RetailMarginBalance.Value,
-		ShortBalance:     snap.RetailShortBalance.Value,
-		ShortChangePct:   snap.RetailShortBalance.ChangePct,
-		DayTradingRatio:  dayTradingRatio,
-		MarginPercentile: marginPercentile,
-		ExtremeReading:   extremeReadingFromScore(input.RetailSentimentScore),
-		Score:            input.RetailSentimentScore,
-		ChangePct:        snap.RetailMarginBalance.ChangePct,
-		Interpretation:   interpretation,
+		SentimentScore:         rsiResult.Score,
+		MarginChangePct:        snap.RetailMarginBalance.ChangePct / 100,
+		MarginBalance:          snap.RetailMarginBalance.Value,
+		ShortBalance:           snap.RetailShortBalance.Value,
+		ShortChangePct:         snap.RetailShortBalance.ChangePct,
+		DayTradingRatio:        dayTradingRatio,
+		MarginPercentile:       marginPercentile,
+		ExtremeReading:         extremeReadingFromScore(rsiResult.Score),
+		Score:                  rsiResult.Score,
+		ChangePct:              snap.RetailMarginBalance.ChangePct,
+		Interpretation:         interpretation,
+		CompositeSentiment:     rsiResult.Score,
+		SentimentSubIndicators: convertRSITwSubIndicators(rsiResult),
+	}
+}
+
+// convertRSITwSubIndicators maps the retail calculator's flat sub-indicator map
+// into the structured domain types for the API response.
+func convertRSITwSubIndicators(result retail.RSITwSnapshot) *domain.RSITwSubIndicators {
+	subs := result.SubIndicators
+	if len(subs) == 0 {
+		return nil
+	}
+
+	catA := &domain.RSITwCategoryA{AScore: result.PartAScore}
+	if v, ok := subs["a3_margin_maint"]; ok {
+		catA.MarginMaintenanceZ = v.ZScore
+	}
+	if v, ok := subs["a2_day_trading"]; ok {
+		catA.DayTradingZ = v.ZScore
+	}
+	if v, ok := subs["a1_margin_z"]; ok {
+		catA.MarginBalanceZ = v.ZScore
+	}
+	if v, ok := subs["a4_vix_map"]; ok {
+		catA.VIXRiskScore = v.ZScore
+	}
+	if v, ok := subs["a5_pcr_proxy"]; ok {
+		catA.WeeklyPCR = v.ZScore
+	}
+	if v, ok := subs["a6_odd_lot"]; ok {
+		catA.OddLotImbalance = v.ZScore
+	}
+
+	catC := &domain.RSITwCategoryC{CScore: result.PartCScore}
+	if v, ok := subs["c1_futures_oi"]; ok {
+		catC.FuturesRetailOI = v.ZScore
+	}
+	if v, ok := subs["c2_inst_flow"]; ok {
+		catC.BrokerFlowScore = v.ZScore
+	}
+	if v, ok := subs["c3_etf_sub"]; ok {
+		catC.ETFSubscriptionScore = v.ZScore
+	}
+
+	catD := &domain.RSITwCategoryD{
+		AdjustmentFactor: result.AdjustmentFactor,
+		DMultiplier:      result.AdjustmentFactor,
+	}
+
+	return &domain.RSITwSubIndicators{
+		CategoryA: catA,
+		CategoryC: catC,
+		CategoryD: catD,
 	}
 }
 
