@@ -129,8 +129,8 @@ func TestPreTradeGate_AllRulesPass(t *testing.T) {
 	if dec.Verdict != VerdictAllow {
 		t.Errorf("expected ALLOW for valid order, got %s (reason: %s)", dec.Verdict, dec.Reason)
 	}
-	if len(dec.Details) != 4 {
-		t.Errorf("expected 4 rule results, got %d", len(dec.Details))
+	if len(dec.Details) != 5 {
+		t.Errorf("expected 5 rule results, got %d", len(dec.Details))
 	}
 }
 

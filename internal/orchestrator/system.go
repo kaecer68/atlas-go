@@ -22,6 +22,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/replay"
 	"github.com/kaecer68/atlas-go/internal/repository"
+	"github.com/kaecer68/atlas-go/internal/retail"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/sim"
 	"github.com/kaecer68/atlas-go/internal/strategy"
@@ -341,6 +342,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		*s.macroSnapshot = QuotesToMacroDataSnapshot(quotes)
 		if opt := s.Sim().engine.Optimizer(); opt != nil {
 			fb := portfolio.NewFactorBridge()
+			fb.SetCalculator(retail.GetCalculator())
 			opt.WithBridgeInput(fb.Convert(*s.macroSnapshot))
 		}
 	}

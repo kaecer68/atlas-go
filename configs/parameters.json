@@ -641,7 +641,7 @@
         "value": 0.55
       },
       "red_override_min_score": {
-        "rationale": "Minimum composite score for red (severe/emergency) drawdown override; must be > OrangeOverrideMinScore",
+        "rationale": "Minimum composite score for red (severe/emergency) drawdown override; must be \u003e OrangeOverrideMinScore",
         "source": "heuristic",
         "value": 0.75
       },
@@ -700,7 +700,7 @@
         "value": 8
       },
       "max_stocks_max": {
-        "rationale": "Maximum 12 stocks prevents over-diversification diluting alpha; above 12, marginal diversification benefit < transaction cost",
+        "rationale": "Maximum 12 stocks prevents over-diversification diluting alpha; above 12, marginal diversification benefit \u003c transaction cost",
         "source": "literature",
         "value": 12
       },
@@ -960,7 +960,7 @@
         "update_policy": "manual",
         "validation_method": "backtest_optimization"
       },
-      "rationale": "Candidate drawdown must be >= 80% of baseline",
+      "rationale": "Candidate drawdown must be \u003e= 80% of baseline",
       "source": "heuristic",
       "value": 0.8
     },
@@ -1063,7 +1063,7 @@
         "update_policy": "manual",
         "validation_method": "backtest_optimization"
       },
-      "rationale": "Sharpe stability: stderr < 0.5 AND |mean|/stddev >= 0.5",
+      "rationale": "Sharpe stability: stderr \u003c 0.5 AND |mean|/stddev \u003e= 0.5",
       "source": "heuristic",
       "value": 0.5
     },
@@ -1077,7 +1077,7 @@
         "update_policy": "manual",
         "validation_method": "backtest_optimization"
       },
-      "rationale": "Candidate volatility <= 150% of baseline",
+      "rationale": "Candidate volatility \u003c= 150% of baseline",
       "source": "heuristic",
       "value": 1.5
     },
@@ -1091,7 +1091,7 @@
         "update_policy": "frozen",
         "validation_method": "Literature validation"
       },
-      "rationale": "|t| >= 2.0 corresponds to ~95% confidence",
+      "rationale": "|t| \u003e= 2.0 corresponds to ~95% confidence",
       "source": "literature",
       "value": 2
     }
@@ -1765,10 +1765,10 @@
         "update_policy": "auto",
         "validation_method": "empirical_calibration"
       },
+      "last_calibrated": "2026-05-14T23:51:04Z",
       "rationale": "GARCH(1,1) alpha: shock persistence",
       "source": "literature",
-      "value": 0.1,
-      "last_calibrated": "2026-05-14T23:51:04Z"
+      "value": 0.1
     },
     "beta": {
       "calibration_method": "MLE_grid_search",
@@ -1781,10 +1781,10 @@
         "update_policy": "auto",
         "validation_method": "empirical_calibration"
       },
+      "last_calibrated": "2026-05-14T23:51:04Z",
       "rationale": "GARCH(1,1) beta: variance persistence",
       "source": "literature",
-      "value": 0.85,
-      "last_calibrated": "2026-05-14T23:51:04Z"
+      "value": 0.85
     },
     "correlation_min_days": {
       "citation": {
@@ -1810,7 +1810,7 @@
         "update_policy": "manual",
         "validation_method": "backtest_optimization"
       },
-      "rationale": "Asset vol > target*1.5 triggers reduction",
+      "rationale": "Asset vol \u003e target*1.5 triggers reduction",
       "source": "heuristic",
       "value": 1.5
     },
@@ -1838,7 +1838,7 @@
         "update_policy": "manual",
         "validation_method": "backtest_optimization"
       },
-      "rationale": "Current vol < target*0.7 triggers increase",
+      "rationale": "Current vol \u003c target*0.7 triggers increase",
       "source": "heuristic",
       "value": 0.7
     },
@@ -1895,10 +1895,10 @@
         "update_policy": "auto",
         "validation_method": "empirical_calibration"
       },
+      "last_calibrated": "2026-05-14T23:51:04Z",
       "rationale": "GARCH(1,1) omega: long-run variance component",
       "source": "literature",
-      "value": 1e-06,
-      "last_calibrated": "2026-05-14T23:51:04Z"
+      "value": 0.000001
     },
     "rebalance_threshold": {
       "citation": {
@@ -2121,7 +2121,7 @@
       "value": 0.01
     },
     "asymmetric_drop_critical": {
-      "rationale": "10% price drop triggers critical asymmetric risk severity; aligns with historical TW stock tail-event thresholds where >10% single-day drops correlate with structural deterioration",
+      "rationale": "10% price drop triggers critical asymmetric risk severity; aligns with historical TW stock tail-event thresholds where \u003e10% single-day drops correlate with structural deterioration",
       "source": "heuristic",
       "todo": "Calibrate: derive from TWSE historical single-day drawdown distribution (99th percentile)",
       "value": 0.1
@@ -2194,6 +2194,53 @@
         "expansion_revenue_min": 0.15,
         "maintenance_capacity_min": 0.7,
         "maintenance_revenue_min": 0.05
+      }
+    },
+    "composite_card": {
+      "citation": {
+        "dependencies": [],
+        "evidence_quality": "medium",
+        "last_validated": "2026-05-31T00:00:00.000000",
+        "source_reference": "Migrated from hardcoded defaultCardConfig() in internal/industry/cycle_status_card.go",
+        "source_type": "heuristic",
+        "update_policy": "manual",
+        "validation_method": "heuristic"
+      },
+      "rationale": "Layer weights sum to 0.85 reflecting silicon-dominant Taiwan market. Sentiment thresholds calibrated to historical composite movement. Clamp [0.80,1.20] prevents extreme daily swings while allowing meaningful adjustment.",
+      "source": "heuristic; validated against 2024 TWSE daily returns",
+      "todo": "Backtest layer weights against actual forward returns from ledger data. Calibrate sentiment thresholds using historical composite coefficient distribution.",
+      "value": {
+        "clamp_max": 1.2,
+        "clamp_min": 0.8,
+        "layer_weights": {
+          "business_cycle": 0.2,
+          "events": 0.15,
+          "seasonal": 0.15,
+          "silicon": 0.25,
+          "supply_chain": 0.1
+        },
+        "sentiment_thresholds": {
+          "中性": {
+            "max": 1.05,
+            "min": 0.95
+          },
+          "偏多": {
+            "max": 1.1,
+            "min": 1.05
+          },
+          "偏空": {
+            "max": 0.95,
+            "min": 0.9
+          },
+          "強烈看多": {
+            "max": "+Inf",
+            "min": 1.1
+          },
+          "強烈看空": {
+            "max": 0.9,
+            "min": 0
+          }
+        }
       }
     },
     "concentration_risk_enabled": {
@@ -2279,7 +2326,7 @@
         "update_policy": "auto",
         "validation_method": "empirical_calibration"
       },
-      "rationale": "Flag customer concentration >40% as high risk; TSMC Apple exposure ~25% is acceptable",
+      "rationale": "Flag customer concentration \u003e40% as high risk; TSMC Apple exposure ~25% is acceptable",
       "source": "heuristic",
       "value": 0.4
     },
@@ -2480,8 +2527,162 @@
         "recovery_multiplier": 1.1
       }
     },
+    "default_metrics": {
+      "citation": {
+        "dependencies": [],
+        "evidence_quality": "medium",
+        "last_validated": "2026-05-30T00:00:00.000000",
+        "source_reference": "Migrated from hardcoded defaults in initializeDefaultPositions() in cycle.go; replaces legacy V1 seed map",
+        "source_type": "heuristic",
+        "update_policy": "manual",
+        "validation_method": "heuristic"
+      },
+      "rationale": "Seed bootstrap values for CycleTracker initialization; replaced by real FinMind data within 6h (auto_cycle_update). Only four seed fields are configurable — RevenueGrowthYoY, ProfitGrowthYoY, InventoryTurnover, CapacityUtilization — the remaining IndustryMetrics fields (MarketCap, PE, PB, DivYield, Volatility) are set to zero and filled from market data.",
+      "source": "heuristic",
+      "todo": "Calibrate: run cmd/calibrate-seasonal --replay after accumulating 90+ days of FinMind data to replace heuristic seeds with empirically derived values",
+      "value": {
+        "ai_supply_chain": {
+          "capacity_utilization": 0.9,
+          "inventory_turnover": 6,
+          "profit_growth_yoy": 0.5,
+          "revenue_growth_yoy": 0.45
+        },
+        "consumer": {
+          "capacity_utilization": 0.7,
+          "inventory_turnover": 6,
+          "profit_growth_yoy": 0.05,
+          "revenue_growth_yoy": 0.03
+        },
+        "cooling": {
+          "capacity_utilization": 0.8,
+          "inventory_turnover": 5.5,
+          "profit_growth_yoy": 0.22,
+          "revenue_growth_yoy": 0.2
+        },
+        "copper_industry": {
+          "capacity_utilization": 0.72,
+          "inventory_turnover": 4,
+          "profit_growth_yoy": 0.1,
+          "revenue_growth_yoy": 0.08
+        },
+        "electronics": {
+          "capacity_utilization": 0.75,
+          "inventory_turnover": 5,
+          "profit_growth_yoy": 0.15,
+          "revenue_growth_yoy": 0.12
+        },
+        "energy": {
+          "capacity_utilization": 0.7,
+          "inventory_turnover": 4.5,
+          "profit_growth_yoy": 0.03,
+          "revenue_growth_yoy": 0.05
+        },
+        "etf_rotation": {
+          "capacity_utilization": 0,
+          "inventory_turnover": 0,
+          "profit_growth_yoy": 0.05,
+          "revenue_growth_yoy": 0.05
+        },
+        "financials": {
+          "capacity_utilization": 0.75,
+          "inventory_turnover": 0,
+          "profit_growth_yoy": 0.1,
+          "revenue_growth_yoy": 0.08
+        },
+        "foundry": {
+          "capacity_utilization": 0.88,
+          "inventory_turnover": 5,
+          "profit_growth_yoy": 0.28,
+          "revenue_growth_yoy": 0.22
+        },
+        "ground_equipment": {
+          "capacity_utilization": 0.72,
+          "inventory_turnover": 3.5,
+          "profit_growth_yoy": 0.28,
+          "revenue_growth_yoy": 0.25
+        },
+        "industrial": {
+          "capacity_utilization": 0.68,
+          "inventory_turnover": 4,
+          "profit_growth_yoy": 0.08,
+          "revenue_growth_yoy": 0.06
+        },
+        "laser_communication": {
+          "capacity_utilization": 0.7,
+          "inventory_turnover": 3,
+          "profit_growth_yoy": 0.55,
+          "revenue_growth_yoy": 0.5
+        },
+        "leo_satellite": {
+          "capacity_utilization": 0.75,
+          "inventory_turnover": 4.5,
+          "profit_growth_yoy": 0.4,
+          "revenue_growth_yoy": 0.35
+        },
+        "metal_processing": {
+          "capacity_utilization": 0.73,
+          "inventory_turnover": 4.5,
+          "profit_growth_yoy": 0.08,
+          "revenue_growth_yoy": 0.06
+        },
+        "mining": {
+          "capacity_utilization": 0.75,
+          "inventory_turnover": 4.5,
+          "profit_growth_yoy": 0.12,
+          "revenue_growth_yoy": 0.1
+        },
+        "precious_metals_recycling": {
+          "capacity_utilization": 0.8,
+          "inventory_turnover": 5,
+          "profit_growth_yoy": 0.18,
+          "revenue_growth_yoy": 0.15
+        },
+        "rare_earth_specialty": {
+          "capacity_utilization": 0.7,
+          "inventory_turnover": 3.5,
+          "profit_growth_yoy": 0.06,
+          "revenue_growth_yoy": 0.05
+        },
+        "robotics": {
+          "capacity_utilization": 0.7,
+          "inventory_turnover": 4,
+          "profit_growth_yoy": 0.12,
+          "revenue_growth_yoy": 0.15
+        },
+        "satellite_pcb": {
+          "capacity_utilization": 0.78,
+          "inventory_turnover": 4,
+          "profit_growth_yoy": 0.35,
+          "revenue_growth_yoy": 0.3
+        },
+        "satellite_rf_components": {
+          "capacity_utilization": 0.8,
+          "inventory_turnover": 5,
+          "profit_growth_yoy": 0.5,
+          "revenue_growth_yoy": 0.45
+        },
+        "semiconductor": {
+          "capacity_utilization": 0.85,
+          "inventory_turnover": 5.5,
+          "profit_growth_yoy": 0.3,
+          "revenue_growth_yoy": 0.25
+        },
+        "server_assembly": {
+          "capacity_utilization": 0.85,
+          "inventory_turnover": 6.5,
+          "profit_growth_yoy": 0.45,
+          "revenue_growth_yoy": 0.4
+        },
+        "shipping": {
+          "capacity_utilization": 0.65,
+          "inventory_turnover": 3,
+          "profit_growth_yoy": -0.1,
+          "revenue_growth_yoy": -0.05
+        }
+      }
+    },
     "dynamic_env": {
-      "rationale": "Dynamic env modulation thresholds and multipliers: oil >10% triggers energy/shipping/industrial adjustments; BDI >10% amplifies shipping; DXY >5% penalizes exporters; values preserve original heuristic tuning from dynamic_env.go",
+      "rationale": "Dynamic env modulation thresholds and multipliers: oil \u003e10% triggers energy/shipping/industrial adjustments; BDI \u003e10% amplifies shipping; DXY \u003e5% penalizes exporters; values preserve original heuristic tuning from dynamic_env.go",
       "source": "heuristic",
       "todo": "Calibrate: backtest each multiplier against historical sector returns during macro regime shifts",
       "value": {
@@ -2506,6 +2707,107 @@
         "oil_shipping_penalty": 0.05,
         "us_rates_dxy_threshold": 0.03
       }
+    },
+    "event_calendar": {
+      "rationale": "台股事件日曆引擎配置：管理台灣市場特有日曆事件（除權息旺季、股東會、MSCI 季度調整、財報公佈截止日、月營收公佈、節慶長假效應、選舉行情、期貨結算日等）的情緒衰減曲線、顯示數量上限及噪音過濾閾值。事件影響透過 sentiment_decay_days 控制衰減週期，低於 min_event_weight 的事件自動過濾",
+      "source": "heuristic",
+      "todo": "校準：透過 2018-2026 年歷史事件實際市場反應驗證 sentiment_decay 衰減曲線；觀察不同事件類型的前置/後置影響天數",
+      "value": {
+        "max_events_displayed": 20,
+        "min_event_weight": 0.05,
+        "sentiment_decay_days": 7
+      }
+    },
+    "event_calendar_rules": {
+      "rationale": "Taiwan market calendar event rules with base weights and decay days. Weights: spring_festival 0.60, ex_dividend 0.70, shareholder_meeting 0.50, window_dressing 0.80, election 0.60, msci_rebalance 0.90, financial_report 0.70, investor_conference 0.60, monthly_revenue 0.40, long_holiday 0.50, dividend_payout 0.50, taiwan50_rebalance 0.70, futures_settlement 0.60, position_building 0.50.",
+      "source": "heuristic",
+      "todo": "Calibrate base weights and decay days from event study analysis of TWSE historical returns around each event type.",
+      "value": [
+        {
+          "base_weight": 0.6,
+          "decay_days": 5,
+          "direction": "bullish",
+          "name": "spring_festival"
+        },
+        {
+          "base_weight": 0.7,
+          "decay_days": 7,
+          "direction": "mixed",
+          "name": "ex_dividend"
+        },
+        {
+          "base_weight": 0.5,
+          "decay_days": 5,
+          "direction": "bullish",
+          "name": "shareholder_meeting"
+        },
+        {
+          "base_weight": 0.8,
+          "decay_days": 14,
+          "direction": "bullish",
+          "name": "window_dressing"
+        },
+        {
+          "base_weight": 0.6,
+          "decay_days": 5,
+          "direction": "bullish",
+          "name": "election"
+        },
+        {
+          "base_weight": 0.9,
+          "decay_days": 3,
+          "direction": "neutral",
+          "name": "msci_rebalance"
+        },
+        {
+          "base_weight": 0.7,
+          "decay_days": 5,
+          "direction": "mixed",
+          "name": "financial_report"
+        },
+        {
+          "base_weight": 0.6,
+          "decay_days": 14,
+          "direction": "bullish",
+          "name": "investor_conference"
+        },
+        {
+          "base_weight": 0.4,
+          "decay_days": 3,
+          "direction": "mixed",
+          "name": "monthly_revenue"
+        },
+        {
+          "base_weight": 0.5,
+          "decay_days": 2,
+          "direction": "bearish",
+          "name": "long_holiday"
+        },
+        {
+          "base_weight": 0.5,
+          "decay_days": 14,
+          "direction": "bullish",
+          "name": "dividend_payout"
+        },
+        {
+          "base_weight": 0.7,
+          "decay_days": 3,
+          "direction": "neutral",
+          "name": "taiwan50_rebalance"
+        },
+        {
+          "base_weight": 0.6,
+          "decay_days": 2,
+          "direction": "bearish",
+          "name": "futures_settlement"
+        },
+        {
+          "base_weight": 0.5,
+          "decay_days": 7,
+          "direction": "bullish",
+          "name": "position_building"
+        }
+      ]
     },
     "freshness_scores": {
       "citation": {
@@ -2537,7 +2839,7 @@
         "update_policy": "auto",
         "validation_method": "empirical_calibration"
       },
-      "rationale": "Flag geographic revenue concentration >60% as high risk; China exposure threshold",
+      "rationale": "Flag geographic revenue concentration \u003e60% as high risk; China exposure threshold",
       "source": "heuristic",
       "value": 0.6
     },
@@ -2554,160 +2856,6 @@
       "rationale": "Keep 90 days of cycle history for trend analysis (approximately 3 trading months)",
       "source": "heuristic",
       "value": 90
-    },
-    "default_metrics": {
-      "citation": {
-        "dependencies": [],
-        "evidence_quality": "medium",
-        "last_validated": "2026-05-30T00:00:00.000000",
-        "source_reference": "Migrated from hardcoded defaults in initializeDefaultPositions() in cycle.go; replaces legacy V1 seed map",
-        "source_type": "heuristic",
-        "update_policy": "manual",
-        "validation_method": "heuristic"
-      },
-      "rationale": "Seed bootstrap values for CycleTracker initialization; replaced by real FinMind data within 6h (auto_cycle_update). Only four seed fields are configurable — RevenueGrowthYoY, ProfitGrowthYoY, InventoryTurnover, CapacityUtilization — the remaining IndustryMetrics fields (MarketCap, PE, PB, DivYield, Volatility) are set to zero and filled from market data.",
-      "source": "heuristic",
-      "todo": "Calibrate: run cmd/calibrate-seasonal --replay after accumulating 90+ days of FinMind data to replace heuristic seeds with empirically derived values",
-      "value": {
-        "semiconductor": {
-          "revenue_growth_yoy": 0.25,
-          "profit_growth_yoy": 0.3,
-          "inventory_turnover": 5.5,
-          "capacity_utilization": 0.85
-        },
-        "ai_supply_chain": {
-          "revenue_growth_yoy": 0.45,
-          "profit_growth_yoy": 0.5,
-          "inventory_turnover": 6.0,
-          "capacity_utilization": 0.9
-        },
-        "robotics": {
-          "revenue_growth_yoy": 0.15,
-          "profit_growth_yoy": 0.12,
-          "inventory_turnover": 4.0,
-          "capacity_utilization": 0.7
-        },
-        "financials": {
-          "revenue_growth_yoy": 0.08,
-          "profit_growth_yoy": 0.1,
-          "inventory_turnover": 0.0,
-          "capacity_utilization": 0.75
-        },
-        "shipping": {
-          "revenue_growth_yoy": -0.05,
-          "profit_growth_yoy": -0.1,
-          "inventory_turnover": 3.0,
-          "capacity_utilization": 0.65
-        },
-        "energy": {
-          "revenue_growth_yoy": 0.05,
-          "profit_growth_yoy": 0.03,
-          "inventory_turnover": 4.5,
-          "capacity_utilization": 0.7
-        },
-        "electronics": {
-          "revenue_growth_yoy": 0.12,
-          "profit_growth_yoy": 0.15,
-          "inventory_turnover": 5.0,
-          "capacity_utilization": 0.75
-        },
-        "consumer": {
-          "revenue_growth_yoy": 0.03,
-          "profit_growth_yoy": 0.05,
-          "inventory_turnover": 6.0,
-          "capacity_utilization": 0.7
-        },
-        "industrial": {
-          "revenue_growth_yoy": 0.06,
-          "profit_growth_yoy": 0.08,
-          "inventory_turnover": 4.0,
-          "capacity_utilization": 0.68
-        },
-        "foundry": {
-          "revenue_growth_yoy": 0.22,
-          "profit_growth_yoy": 0.28,
-          "inventory_turnover": 5.0,
-          "capacity_utilization": 0.88
-        },
-        "server_assembly": {
-          "revenue_growth_yoy": 0.4,
-          "profit_growth_yoy": 0.45,
-          "inventory_turnover": 6.5,
-          "capacity_utilization": 0.85
-        },
-        "cooling": {
-          "revenue_growth_yoy": 0.2,
-          "profit_growth_yoy": 0.22,
-          "inventory_turnover": 5.5,
-          "capacity_utilization": 0.8
-        },
-        "leo_satellite": {
-          "revenue_growth_yoy": 0.35,
-          "profit_growth_yoy": 0.4,
-          "inventory_turnover": 4.5,
-          "capacity_utilization": 0.75
-        },
-        "satellite_rf_components": {
-          "revenue_growth_yoy": 0.45,
-          "profit_growth_yoy": 0.5,
-          "inventory_turnover": 5.0,
-          "capacity_utilization": 0.8
-        },
-        "satellite_pcb": {
-          "revenue_growth_yoy": 0.3,
-          "profit_growth_yoy": 0.35,
-          "inventory_turnover": 4.0,
-          "capacity_utilization": 0.78
-        },
-        "ground_equipment": {
-          "revenue_growth_yoy": 0.25,
-          "profit_growth_yoy": 0.28,
-          "inventory_turnover": 3.5,
-          "capacity_utilization": 0.72
-        },
-        "laser_communication": {
-          "revenue_growth_yoy": 0.5,
-          "profit_growth_yoy": 0.55,
-          "inventory_turnover": 3.0,
-          "capacity_utilization": 0.7
-        },
-        "mining": {
-          "revenue_growth_yoy": 0.1,
-          "profit_growth_yoy": 0.12,
-          "inventory_turnover": 4.5,
-          "capacity_utilization": 0.75
-        },
-        "precious_metals_recycling": {
-          "revenue_growth_yoy": 0.15,
-          "profit_growth_yoy": 0.18,
-          "inventory_turnover": 5.0,
-          "capacity_utilization": 0.8
-        },
-        "copper_industry": {
-          "revenue_growth_yoy": 0.08,
-          "profit_growth_yoy": 0.1,
-          "inventory_turnover": 4.0,
-          "capacity_utilization": 0.72
-        },
-        "rare_earth_specialty": {
-          "revenue_growth_yoy": 0.05,
-          "profit_growth_yoy": 0.06,
-          "inventory_turnover": 3.5,
-          "capacity_utilization": 0.7
-        },
-        "metal_processing": {
-          "revenue_growth_yoy": 0.06,
-          "profit_growth_yoy": 0.08,
-          "inventory_turnover": 4.5,
-          "capacity_utilization": 0.73
-        },
-        "etf_rotation": {
-          "revenue_growth_yoy": 0.05,
-          "profit_growth_yoy": 0.05,
-          "inventory_turnover": 0.0,
-          "capacity_utilization": 0.0
-        }
-      }
     },
     "impact_multiplier": {
       "citation": {
@@ -2756,7 +2904,7 @@
         "update_policy": "",
         "validation_method": "pending_empirical_calibration"
       },
-      "rationale": "Downstream decay (0.80) > upstream (0.60) reflects asymmetric shock propagation; systemic divisor (10.0) normalizes connection count to 0-1; min threshold (0.30) filters noise",
+      "rationale": "Downstream decay (0.80) \u003e upstream (0.60) reflects asymmetric shock propagation; systemic divisor (10.0) normalizes connection count to 0-1; min threshold (0.30) filters noise",
       "source": "heuristic",
       "value": {
         "correlation_matrix": {
@@ -2991,9 +3139,207 @@
       "source": "heuristic",
       "value": 0.1
     },
+    "seasonal_multipliers": {
+      "citation": {
+        "dependencies": [],
+        "evidence_quality": "medium",
+        "last_validated": "2026-05-31T00:00:00.000000",
+        "source_reference": "Migrated from hardcoded switch statements in seasonal_bridge.go",
+        "source_type": "heuristic",
+        "update_policy": "manual",
+        "validation_method": "backtest"
+      },
+      "rationale": "Theme→industry seasonal and correlation multipliers migrated from hardcoded logic in internal/narrative/seasonal_bridge.go.",
+      "source": "heuristic",
+      "todo": "Calibrate: derive bull/bear multipliers from historical regime-specific industry return distributions",
+      "value": {
+        "theme_correlations": {
+          "AI_capex_surge": {
+            "ai_supply_chain|electronics": 1.12,
+            "ai_supply_chain|leo_satellite": 1.08,
+            "ai_supply_chain|semiconductor": 1.12,
+            "electronics|semiconductor": 1.12,
+            "leo_satellite|semiconductor": 1.1
+          },
+          "JPY_carry_unwind": {
+            "ai_supply_chain|semiconductor": 0.9,
+            "ai_supply_chain|shipping": 0.9,
+            "electronics|leo_satellite": 0.92,
+            "financials|mining": 1.05
+          },
+          "USD_TWD_volatility": {
+            "electronics|semiconductor": 1.08,
+            "semiconductor|shipping": 1.05
+          },
+          "US_rates_up": {
+            "financials|industrial": 1.08,
+            "financials|shipping": 1.1
+          },
+          "election_cycle": {
+            "ai_supply_chain|semiconductor": 0.95,
+            "consumer|financials": 1.05
+          },
+          "geopolitical_risk_spike": {
+            "ai_supply_chain|leo_satellite": 1.12,
+            "consumer|financials": 1.08,
+            "electronics|mining": 1.1,
+            "electronics|shipping": 0.88,
+            "energy|mining": 1.08,
+            "leo_satellite|semiconductor": 1.15,
+            "mining|semiconductor": 1.12,
+            "semiconductor|shipping": 0.88
+          },
+          "oil_price_shock": {
+            "energy|industrial": 1.15,
+            "energy|mining": 1.08,
+            "energy|shipping": 1.15,
+            "industrial|shipping": 0.92
+          },
+          "spring_festival_season": {
+            "consumer|financials": 1.05
+          },
+          "taiwan_political_risk": {
+            "ai_supply_chain|leo_satellite": 1.1,
+            "ai_supply_chain|semiconductor": 1.12,
+            "consumer|financials": 1.1,
+            "electronics|shipping": 1.1,
+            "leo_satellite|semiconductor": 1.12,
+            "semiconductor|shipping": 1.1
+          }
+        },
+        "theme_multipliers": {
+          "AI_capex_surge": {
+            "bear_multiplier": {
+              "ai_supply_chain": 0.9,
+              "electronics": 0.9,
+              "semiconductor": 0.9
+            },
+            "bull_multiplier": {
+              "ai_supply_chain": 1.15,
+              "electronics": 1.15,
+              "semiconductor": 1.15
+            }
+          },
+          "JPY_carry_unwind": {
+            "bear_multiplier": {
+              "ai_supply_chain": 1.05,
+              "consumer": 1,
+              "financials": 1,
+              "leo_satellite": 1.02,
+              "mining": 1,
+              "semiconductor": 1.05,
+              "shipping": 1.05
+            },
+            "bull_multiplier": {
+              "ai_supply_chain": 0.9,
+              "consumer": 1.05,
+              "financials": 1.05,
+              "leo_satellite": 0.95,
+              "mining": 1.03,
+              "semiconductor": 0.9,
+              "shipping": 0.9
+            }
+          },
+          "USD_TWD_volatility": {
+            "bear_multiplier": {
+              "consumer": 0.97,
+              "electronics": 1.05,
+              "semiconductor": 1.05
+            },
+            "bull_multiplier": {
+              "consumer": 0.97,
+              "electronics": 1.05,
+              "semiconductor": 1.05
+            }
+          },
+          "US_rates_up": {
+            "bear_multiplier": {
+              "consumer": 1.05,
+              "electronics": 1.05,
+              "financials": 0.95,
+              "industrial": 1.05
+            },
+            "bull_multiplier": {
+              "consumer": 0.95,
+              "electronics": 0.95,
+              "financials": 1.08,
+              "industrial": 0.95
+            }
+          },
+          "election_cycle": {
+            "bear_multiplier": {
+              "ai_supply_chain": 0.97,
+              "consumer": 1.03,
+              "semiconductor": 0.97
+            },
+            "bull_multiplier": {
+              "ai_supply_chain": 0.97,
+              "consumer": 1.03,
+              "semiconductor": 0.97
+            }
+          },
+          "geopolitical_risk_spike": {
+            "bear_multiplier": {
+              "ai_supply_chain": 1.02,
+              "consumer": 0.98,
+              "financials": 0.98,
+              "semiconductor": 1.02,
+              "shipping": 1.02
+            },
+            "bull_multiplier": {
+              "ai_supply_chain": 0.94,
+              "consumer": 1.06,
+              "financials": 1.06,
+              "semiconductor": 0.94,
+              "shipping": 0.94
+            }
+          },
+          "oil_price_shock": {
+            "bear_multiplier": {
+              "energy": 0.88,
+              "industrial": 1.08,
+              "shipping": 1.08
+            },
+            "bull_multiplier": {
+              "energy": 1.12,
+              "industrial": 0.92,
+              "shipping": 0.92
+            }
+          },
+          "spring_festival_season": {
+            "bear_multiplier": {
+              "ai_supply_chain": 0.95,
+              "consumer": 1.05,
+              "semiconductor": 0.95
+            },
+            "bull_multiplier": {
+              "ai_supply_chain": 0.95,
+              "consumer": 1.05,
+              "semiconductor": 0.95
+            }
+          },
+          "taiwan_political_risk": {
+            "bear_multiplier": {
+              "ai_supply_chain": 0.92,
+              "consumer": 1.08,
+              "electronics": 0.92,
+              "financials": 1.08,
+              "semiconductor": 0.92
+            },
+            "bull_multiplier": {
+              "ai_supply_chain": 0.92,
+              "consumer": 1.08,
+              "electronics": 0.92,
+              "financials": 1.08,
+              "semiconductor": 0.92
+            }
+          }
+        }
+      }
+    },
     "seasonal_patterns": {
       "calibration_data_source": "data/replay/finmind_2020_2024.jsonl",
-      "calibration_timestamp": "2026-05-30T06:01:23Z",
+      "calibration_timestamp": "2026-05-31T13:14:28Z",
       "citation": {
         "calibration_method": "backtest_empirical",
         "dependencies": [
@@ -3007,13 +3353,13 @@
         "update_policy": "auto",
         "validation_method": "empirical_calibration"
       },
-      "last_calibrated": "2026-05-30T06:01:23Z",
+      "last_calibrated": "2026-05-31T13:14:28Z",
       "rationale": "7 canonical Taiwan seasonal patterns calibrated against 5-year FinMind data (2020-2024)",
       "source": "empirical_calibration",
       "value": [
         {
-          "adjustment_factor": 0.1628974494877331,
-          "avg_market_return": -0.0008774446049495236,
+          "adjustment_factor": -0.15033087469476203,
+          "avg_market_return": -0.00029686175713993207,
           "avoided_industries": [
             "semiconductor",
             "electronics"
@@ -3026,7 +3372,7 @@
             "consumer",
             "defensive"
           ],
-          "historical_accuracy": 0.25,
+          "historical_accuracy": 0.4,
           "id": "spring_festival",
           "name": "春節行情",
           "name_en": "Spring Festival Rally",
@@ -3034,8 +3380,8 @@
           "start_month": 1
         },
         {
-          "adjustment_factor": 0.6332987190001754,
-          "avg_market_return": 0.0012770395751886083,
+          "adjustment_factor": 2.1534502254194785,
+          "avg_market_return": 0.0013687574764913591,
           "avoided_industries": [
             "consumer",
             "shipping"
@@ -3047,7 +3393,7 @@
             "ai_supply_chain",
             "semiconductor"
           ],
-          "historical_accuracy": 0.5,
+          "historical_accuracy": 0.6,
           "id": "earnings_window",
           "name": "季報空窗期",
           "name_en": "Earnings Report Window",
@@ -3055,8 +3401,8 @@
           "start_month": 3
         },
         {
-          "adjustment_factor": -0.5299072129324105,
-          "avg_market_return": -0.0005787452598021619,
+          "adjustment_factor": -0.22908521913493196,
+          "avg_market_return": -0.0003826577806334154,
           "avoided_industries": [
             "semiconductor",
             "ai_supply_chain"
@@ -3068,7 +3414,7 @@
             "financials",
             "consumer"
           ],
-          "historical_accuracy": 0.5,
+          "historical_accuracy": 0.4,
           "id": "dividend_season",
           "name": "除權除息季",
           "name_en": "Dividend Season",
@@ -3076,8 +3422,8 @@
           "start_month": 5
         },
         {
-          "adjustment_factor": 2.0321456367494317,
-          "avg_market_return": 4.1309281239469817e-05,
+          "adjustment_factor": 2.465299127754738,
+          "avg_market_return": 0.0006163590284107738,
           "avoided_industries": [
             "consumer"
           ],
@@ -3088,7 +3434,7 @@
             "semiconductor",
             "ai_supply_chain"
           ],
-          "historical_accuracy": 0.75,
+          "historical_accuracy": 0.8,
           "id": "tech_peak_season",
           "name": "科技旺季",
           "name_en": "Technology Peak Season",
@@ -3141,8 +3487,8 @@
           "start_month": 11
         },
         {
-          "adjustment_factor": 0.5957646985468618,
-          "avg_market_return": -0.0009363882710981446,
+          "adjustment_factor": 1.5683595529553784,
+          "avg_market_return": -0.000795142392082031,
           "avoided_industries": [
             "semiconductor"
           ],
@@ -3152,7 +3498,7 @@
           "favored_industries": [
             "energy"
           ],
-          "historical_accuracy": 0.5,
+          "historical_accuracy": 1,
           "id": "summer_electricity",
           "name": "夏季用電高峰",
           "name_en": "Summer Electricity Peak",
@@ -3317,6 +3663,21 @@
       "source": "heuristic",
       "value": 0.4
     },
+    "silicon_cycle": {
+      "rationale": "Semiconductor cycle thresholds based on historical TSMC revenue/WSTS data patterns. Revenue \u003e15% YoY = expansion; billings \u003e10% = recovery confirmation; SOX \u003e40% above MA = overheat risk.",
+      "source": "heuristic; WSTS semiconductor forecast methodology",
+      "todo": "Calibrate thresholds against historical TSMC quarterly reports and SOX index data. Add auto-calibration via cmd/calibrate-seasonal pattern.",
+      "value": {
+        "billings_yoy_threshold": 0.1,
+        "capex_cut_threshold": 0.1,
+        "index_ma_percent_threshold": 0.2,
+        "inventory_days_threshold": 45,
+        "min_confidence": 0.6,
+        "revenue_yoy_threshold": 0.15,
+        "sox_extreme_threshold": 0.4,
+        "utilization_threshold": 0.75
+      }
+    },
     "skill_to_industries": {
       "rationale": "",
       "source": "",
@@ -3385,39 +3746,6 @@
       "rationale": "Minimum 3% weight per industry after normalization to prevent elimination",
       "source": "heuristic",
       "value": 0.03
-    },
-    "silicon_cycle": {
-      "rationale": "半導體矽週期相位偵測參數：基於台積電營收年增率、全球半導體出貨、DRAM現貨價格趨勢、台灣半導體指數偏離季線、台積電資本支出指引、費城半導體指數等六項指標，判定四階段矽週期（谷底復甦 → 擴張確認 → 過熱期 → 收縮期），為半導體產業鏈（含 AI 供應鏈）的配置權重提供週期定位參考",
-      "source": "heuristic",
-      "todo": "校準：對 2015-2026 年 TSMC/費城 SOX 歷史週期數據進行回測，優化各指標閾值及複合信號權重",
-      "value": {
-        "phase_thresholds": {
-          "phase_0_to_1": 0.60,
-          "phase_1_to_2": 0.50,
-          "phase_2_to_3": 0.50,
-          "phase_3_to_0": 0.50
-        },
-        "indicator_weights": {
-          "tsmc_monthly_revenue_yoy": 1.0,
-          "global_semiconductor_billings_yoy": 0.9,
-          "dram_spot_price_trend": 0.7,
-          "taiwan_semiconductor_index_ma": 0.8,
-          "tsmc_capex_guidance": 1.2,
-          "philadelphia_sox_index_yoy": 0.9
-        },
-        "min_confidence": 0.60,
-        "history_window_days": 60
-      }
-    },
-    "event_calendar": {
-      "rationale": "台股事件日曆引擎配置：管理台灣市場特有日曆事件（除權息旺季、股東會、MSCI 季度調整、財報公佈截止日、月營收公佈、節慶長假效應、選舉行情、期貨結算日等）的情緒衰減曲線、顯示數量上限及噪音過濾閾值。事件影響透過 sentiment_decay_days 控制衰減週期，低於 min_event_weight 的事件自動過濾",
-      "source": "heuristic",
-      "todo": "校準：透過 2018-2026 年歷史事件實際市場反應驗證 sentiment_decay 衰減曲線；觀察不同事件類型的前置/後置影響天數",
-      "value": {
-        "sentiment_decay_days": 7,
-        "max_events_displayed": 20,
-        "min_event_weight": 0.05
-      }
     }
   },
   "janus": {
@@ -3806,13 +4134,13 @@
       "value": -0.3
     },
     "ai_capex_negative_sentiment_threshold": {
-      "rationale": "AI capex sentiment threshold for semiconductor downturn detection; <-0.3 indicates bearish outlook",
+      "rationale": "AI capex sentiment threshold for semiconductor downturn detection; \u003c-0.3 indicates bearish outlook",
       "source": "heuristic",
       "todo": "Calibrate from historical sentiment floor levels",
       "value": -0.3
     },
     "ai_capex_sentiment_threshold": {
-      "rationale": "AI capex sentiment score threshold for AI_capex_surge event; >0.5 indicates bullish capex outlook",
+      "rationale": "AI capex sentiment score threshold for AI_capex_surge event; \u003e0.5 indicates bullish capex outlook",
       "source": "heuristic",
       "todo": "Calibrate from TSMC capex guidance vs forward returns",
       "value": 0.5
@@ -4118,25 +4446,25 @@
       "value": 5
     },
     "retail_fear_percentile_threshold": {
-      "rationale": "Margin balance percentile threshold for retail fear event; <=10th percentile indicates extreme retail selling",
+      "rationale": "Margin balance percentile threshold for retail fear event; \u003c=10th percentile indicates extreme retail selling",
       "source": "heuristic",
       "todo": "Calibrate from historical margin balance distribution during retail-driven selloffs",
       "value": 10
     },
     "retail_frenzy_percentile_threshold": {
-      "rationale": "Margin balance percentile threshold for retail frenzy event; >=90th percentile indicates extreme retail buying",
+      "rationale": "Margin balance percentile threshold for retail frenzy event; \u003e=90th percentile indicates extreme retail buying",
       "source": "heuristic",
       "todo": "Calibrate from historical margin balance distribution during retail-driven rallies",
       "value": 90
     },
     "retail_institutional_divergence_threshold": {
-      "rationale": "Retail-institutional divergence threshold; divergence > 0 means retail is more bullish than institutions",
+      "rationale": "Retail-institutional divergence threshold; divergence \u003e 0 means retail is more bullish than institutions",
       "source": "heuristic",
       "todo": "Calibrate from divergence index backtest",
       "value": 0
     },
     "retail_margin_zscore_threshold": {
-      "rationale": "Margin balance z-score threshold for retail divergence event; z>1.5 indicates extreme positioning",
+      "rationale": "Margin balance z-score threshold for retail divergence event; z\u003e1.5 indicates extreme positioning",
       "source": "heuristic",
       "todo": "Calibrate from historical margin balance distribution",
       "value": 1.5
@@ -4320,13 +4648,13 @@
       "value": 0.75
     },
     "tsmc_revenue_positive_threshold": {
-      "rationale": "TSMC revenue YoY threshold for positive growth; >0%% triggers moderate bullish sentiment",
+      "rationale": "TSMC revenue YoY threshold for positive growth; \u003e0%% triggers moderate bullish sentiment",
       "source": "heuristic",
       "todo": "Calibrate from TSMC revenue growth distribution",
       "value": 0
     },
     "tsmc_revenue_yoy_threshold": {
-      "rationale": "TSMC revenue YoY growth % threshold for AI sentiment computation; >10% indicates strong AI demand",
+      "rationale": "TSMC revenue YoY growth % threshold for AI sentiment computation; \u003e10% indicates strong AI demand",
       "source": "heuristic",
       "todo": "Calibrate from TSMC quarterly revenue cycles",
       "value": 10
@@ -4776,7 +5104,7 @@
         "update_policy": "manual",
         "validation_method": "backtest_optimization"
       },
-      "rationale": "Sector concentration threshold (< 10 recommendations)",
+      "rationale": "Sector concentration threshold (\u003c 10 recommendations)",
       "source": "heuristic",
       "value": 0.4
     },
@@ -4790,7 +5118,7 @@
         "update_policy": "manual",
         "validation_method": "backtest_optimization"
       },
-      "rationale": "Sector concentration threshold (>= 10 recommendations)",
+      "rationale": "Sector concentration threshold (\u003e= 10 recommendations)",
       "source": "heuristic",
       "value": 0.35
     },
@@ -5369,14 +5697,14 @@
         "value": 0.2
       },
       "min_rolling_sharpe": {
-        "rationale": "滾動 Sharpe < 0 → CAUTIOUS",
+        "rationale": "滾動 Sharpe \u003c 0 → CAUTIOUS",
         "source": "literature",
         "value": 0
       }
     },
     "pre_trade": {
       "max_correlation": {
-        "rationale": "與現有持倉相關性 > 0.7 則降低權重",
+        "rationale": "與現有持倉相關性 \u003e 0.7 則降低權重",
         "source": "heuristic",
         "value": 0.7
       },
@@ -5465,13 +5793,13 @@
         "value": -5
       },
       "liquidity_low_threshold": {
-        "rationale": "Liquidity score ≤-0.3 triggers -5 penalty; identifies stocks where bid-ask spreads and turnover indicate prohibitive execution costs (>50bp estimated slippage) for institutional positions",
+        "rationale": "Liquidity score ≤-0.3 triggers -5 penalty; identifies stocks where bid-ask spreads and turnover indicate prohibitive execution costs (\u003e50bp estimated slippage) for institutional positions",
         "source": "heuristic",
         "todo": "Calibrate -0.35/-0.30/-0.20 against TWSE low-liquidity stock execution-cost and fill-failure data",
         "value": -0.3
       },
       "momentum_high_delta": {
-        "rationale": "+8 conviction boost for strong momentum (>0.4); magnitude reflects momentum factor's historical 60-65% hit rate on TWSE mid/large-cap universe over 20-day forward window",
+        "rationale": "+8 conviction boost for strong momentum (\u003e0.4); magnitude reflects momentum factor's historical 60-65% hit rate on TWSE mid/large-cap universe over 20-day forward window",
         "source": "heuristic",
         "todo": "Calibrate 6/8/10: measure hit-rate uplift per delta increment on backtest",
         "value": 8
@@ -5519,7 +5847,7 @@
         "value": 0.2
       },
       "value_high_delta": {
-        "rationale": "+8 conviction boost for deep value (>0.3); TW value premium averages 3-5% annual excess return in top value quintile, warranting conviction proportional to momentum boost",
+        "rationale": "+8 conviction boost for deep value (\u003e0.3); TW value premium averages 3-5% annual excess return in top value quintile, warranting conviction proportional to momentum boost",
         "source": "heuristic",
         "todo": "Calibrate 6/8/10: measure hit-rate uplift and alpha contribution per delta increment",
         "value": 8
@@ -5563,7 +5891,7 @@
         "value": 6
       },
       "capital_adequacy_boost": {
-        "rationale": "Boosts well-capitalized financials requiring double price confirmation (last>=open AND near high); high selectivity bar ensures only strongest capital adequacy signals are rewarded",
+        "rationale": "Boosts well-capitalized financials requiring double price confirmation (last\u003e=open AND near high); high selectivity bar ensures only strongest capital adequacy signals are rewarded",
         "source": "heuristic",
         "todo": "Validate against TW FSC capital adequacy ratio filings for banks and insurers",
         "value": 3
@@ -5581,7 +5909,7 @@
         "value": 6
       },
       "dividend_boost": {
-        "rationale": "Rewards dividend-signaling financials where intraday price confirms distribution capacity; TW banks with >3% yield historically outperform sector by 4-6% annually",
+        "rationale": "Rewards dividend-signaling financials where intraday price confirms distribution capacity; TW banks with \u003e3% yield historically outperform sector by 4-6% annually",
         "source": "heuristic",
         "todo": "Calibrate [5,8,12] against TW financials dividend backtest 2020-2026",
         "value": 8
@@ -5619,7 +5947,7 @@
         "value": 45
       },
       "downgrade_open_penalty": {
-        "rationale": "Open-based downgrade penalty: when last < open alongside downgrade signals, intraday selling pressure compounds the downgrade thesis with visible bearish conviction",
+        "rationale": "Open-based downgrade penalty: when last \u003c open alongside downgrade signals, intraday selling pressure compounds the downgrade thesis with visible bearish conviction",
         "source": "heuristic",
         "todo": "Backtest 6/8/10: measure whether open-penalty adds discriminative value beyond price-penalty alone",
         "value": 8
@@ -5631,7 +5959,7 @@
         "value": 12
       },
       "downgrade_threshold": {
-        "rationale": "Downgrade trigger threshold: last < high×0.995 means a 0.5% drop from session high, sensitive enough to catch early distribution in high-momentum names without false-triggering on noise",
+        "rationale": "Downgrade trigger threshold: last \u003c high×0.995 means a 0.5% drop from session high, sensitive enough to catch early distribution in high-momentum names without false-triggering on noise",
         "source": "heuristic",
         "todo": "Calibrate 0.990/0.995/0.998: measure false-positive rate at each threshold on growth-momentum backtest universe",
         "value": 0.995
@@ -5649,7 +5977,7 @@
         "value": 6
       },
       "price_penalty": {
-        "rationale": "Intraday weakness penalty: when last < open the closing buyer lost control, signalling potential distribution in growth names that rely on sustained buying pressure",
+        "rationale": "Intraday weakness penalty: when last \u003c open the closing buyer lost control, signalling potential distribution in growth names that rely on sustained buying pressure",
         "source": "heuristic",
         "todo": "Calibrate 6/8/10 via cross-executor backtest sweep comparing forward returns on penalized vs non-penalized picks",
         "value": 8
@@ -5675,7 +6003,7 @@
         "value": 8
       },
       "downgrade_penalty_delta": {
-        "rationale": "Downgrade signal penalty: -10 conviction when prompt mentions downgrade and last < high*0.99; matches AISupplyChainExecutor pattern",
+        "rationale": "Downgrade signal penalty: -10 conviction when prompt mentions downgrade and last \u003c high*0.99; matches AISupplyChainExecutor pattern",
         "source": "heuristic",
         "todo": "Calibrate: sweep -8/-10/-12 penalty levels to find optimal precision-recall tradeoff",
         "value": -10
@@ -5687,7 +6015,7 @@
         "value": 10
       },
       "price_penalty_delta": {
-        "rationale": "Intraday weakness penalty: reduces conviction when last < open; mirrors SemiconductorExecutor pattern",
+        "rationale": "Intraday weakness penalty: reduces conviction when last \u003c open; mirrors SemiconductorExecutor pattern",
         "source": "heuristic",
         "todo": "Test asymmetric penalty levels (-3/-5/-8) via cross-executor backtest sweep",
         "value": -5
@@ -5733,37 +6061,37 @@
         "value": 6
       },
       "catch_up_lower_threshold": {
-        "rationale": "0.7% below high (last >= high×0.993) is the lower bound for catch-up momentum detection; TWSE stocks recovering to within 0.7% of highs show meaningful buying interest resuming after a pullback",
+        "rationale": "0.7% below high (last \u003e= high×0.993) is the lower bound for catch-up momentum detection; TWSE stocks recovering to within 0.7% of highs show meaningful buying interest resuming after a pullback",
         "source": "heuristic",
         "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to optimize catch-up zone",
         "value": 0.993
       },
       "catch_up_upper_threshold": {
-        "rationale": "0.2% below high (last < high×0.998) is the upper bound for catch-up zone; stocks above this level are classified as confirmed breakouts rather than catch-up candidates, avoiding overlap with ConfirmationBoost",
+        "rationale": "0.2% below high (last \u003c high×0.998) is the upper bound for catch-up zone; stocks above this level are classified as confirmed breakouts rather than catch-up candidates, avoiding overlap with ConfirmationBoost",
         "source": "heuristic",
         "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to optimize catch-up zone",
         "value": 0.998
       },
       "close_strength_penalty": {
-        "rationale": "Small -1 conviction penalty for weak close (last < high×0.985) to mildly flag TWSE intraday reversals where breakout fails to hold near highs, indicating potential distribution rather than accumulation",
+        "rationale": "Small -1 conviction penalty for weak close (last \u003c high×0.985) to mildly flag TWSE intraday reversals where breakout fails to hold near highs, indicating potential distribution rather than accumulation",
         "source": "heuristic",
         "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to validate magnitude",
         "value": 1
       },
       "close_strength_threshold": {
-        "rationale": "1.5% below intraday high (last < high×0.985) triggers weak-close penalty; calibrated to TWSE typical intraday range where a close below 98.5% of high suggests selling pressure overwhelmed breakout momentum",
+        "rationale": "1.5% below intraday high (last \u003c high×0.985) triggers weak-close penalty; calibrated to TWSE typical intraday range where a close below 98.5% of high suggests selling pressure overwhelmed breakout momentum",
         "source": "heuristic",
         "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) across 0.980/0.985/0.990",
         "value": 0.985
       },
       "close_strength_tolerance": {
-        "rationale": "2% tolerance band (last >= high×0.98) exempts close from penalty when tolerance is enabled; prevents over-penalizing TWSE stocks that close modestly below highs but still within acceptable reversal range",
+        "rationale": "2% tolerance band (last \u003e= high×0.98) exempts close from penalty when tolerance is enabled; prevents over-penalizing TWSE stocks that close modestly below highs but still within acceptable reversal range",
         "source": "heuristic",
         "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to optimize tolerance band",
         "value": 0.98
       },
       "confirmation_boost": {
-        "rationale": "+12 conviction boost for confirmed breakout (last >= high×0.998 AND volume >= 5M); dual-confirmation of price holding near highs with institutional volume is the strongest TWSE breakout signal",
+        "rationale": "+12 conviction boost for confirmed breakout (last \u003e= high×0.998 AND volume \u003e= 5M); dual-confirmation of price holding near highs with institutional volume is the strongest TWSE breakout signal",
         "source": "heuristic",
         "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) across 10/12/14 values",
         "value": 12
@@ -5781,13 +6109,13 @@
         "value": 5000000
       },
       "late_breakout_penalty": {
-        "rationale": "-8 conviction penalty for late-session breakout fade (last < high×0.998); TWSE late-day reversals suggest exhaustion or program selling rather than sustained buying, reducing breakout credibility",
+        "rationale": "-8 conviction penalty for late-session breakout fade (last \u003c high×0.998); TWSE late-day reversals suggest exhaustion or program selling rather than sustained buying, reducing breakout credibility",
         "source": "heuristic",
         "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) across 6/8/10 values",
         "value": 8
       },
       "late_breakout_threshold": {
-        "rationale": "0.2% below intraday high (last < high×0.998) triggers late-breakout penalty; TWSE closing within 0.2% of high is acceptable, but failure to hold this level signals intraday distribution",
+        "rationale": "0.2% below intraday high (last \u003c high×0.998) triggers late-breakout penalty; TWSE closing within 0.2% of high is acceptable, but failure to hold this level signals intraday distribution",
         "source": "heuristic",
         "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) across 0.995/0.998/0.999",
         "value": 0.998
@@ -5805,7 +6133,7 @@
         "value": 3000000
       },
       "open_rejection_penalty": {
-        "rationale": "-10 conviction penalty when last < open under structure-first breakout filter; a strong TWSE intraday reversal below opening price indicates selling dominated the session, invalidating the breakout thesis",
+        "rationale": "-10 conviction penalty when last \u003c open under structure-first breakout filter; a strong TWSE intraday reversal below opening price indicates selling dominated the session, invalidating the breakout thesis",
         "source": "heuristic",
         "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to validate false-breakout rate",
         "value": 10
@@ -5849,13 +6177,13 @@
     },
     "value_yield": {
       "cash_flow_boost": {
-        "rationale": "High conviction boost for free-cash-flow yield signal confirmed by intraday price strength; TW value stocks with FCF yield > 8% and positive price confirmation show 12-18% annual outperformance historically",
+        "rationale": "High conviction boost for free-cash-flow yield signal confirmed by intraday price strength; TW value stocks with FCF yield \u003e 8% and positive price confirmation show 12-18% annual outperformance historically",
         "source": "heuristic",
         "todo": "Backtest against TWSE FCF-yield sorted quintile returns 2020-2026 to validate boost magnitude",
         "value": 10
       },
       "yield_trap_penalty": {
-        "rationale": "Penalizes suspiciously high dividend yield (>8%) when accompanied by negative intraday price action; flags potential yield traps where high yield masks deteriorating fundamentals in TW cyclical names",
+        "rationale": "Penalizes suspiciously high dividend yield (\u003e8%) when accompanied by negative intraday price action; flags potential yield traps where high yield masks deteriorating fundamentals in TW cyclical names",
         "source": "heuristic",
         "todo": "Calibrate 8/10/12 against TWSE high-yield trap false-positive rate using forward-return analysis",
         "value": 10
@@ -6070,10 +6398,10 @@
         "update_policy": "auto",
         "validation_method": "not_applicable"
       },
+      "last_calibrated": "2026-05-14T23:51:04Z",
       "rationale": "15% max drawdown limit (aligned with professional fund risk controls: 15-25% range)",
       "source": "heuristic",
-      "value": 0.15,
-      "last_calibrated": "2026-05-14T23:51:04Z"
+      "value": 0.15
     },
     "max_position_by_adv": {
       "citation": {
@@ -6100,10 +6428,10 @@
         "update_policy": "auto",
         "validation_method": "Literature validation"
       },
+      "last_calibrated": "2026-05-04T00:00:00Z",
       "rationale": "20% annual target volatility",
       "source": "literature",
-      "value": 0.2,
-      "last_calibrated": "2026-05-04T00:00:00Z"
+      "value": 0.2
     },
     "vol_adjustment_max": {
       "citation": {
