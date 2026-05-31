@@ -362,3 +362,22 @@ func NewETFFetcher(fetcher DataFetcher) apisystem.ETFFetcher {
 		return &result, nil
 	}
 }
+
+// newGeopoliticalRiskFetcher creates a GeopoliticalRiskFetcher that normalizes
+// the narrative GeopoliticalRiskProvider output to [0, 1].
+// Prefers Taiwan-specific provider; falls back to global; returns 0 on any error.
+func newGeopoliticalRiskFetcher(global, taiwan narrative.GeopoliticalRiskProvider) apisystem.GeopoliticalRiskFetcher {
+	return func(ctx context.Context) float64 {
+		if taiwan != nil {
+			if score, err := taiwan.FetchScore(ctx); err == nil && score.Intensity > 0 {
+				return score.Intensity / 100.0
+			}
+		}
+		if global != nil {
+			if score, err := global.FetchScore(ctx); err == nil && score.Intensity > 0 {
+				return score.Intensity / 100.0
+			}
+		}
+		return 0
+	}
+}
