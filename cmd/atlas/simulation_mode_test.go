@@ -378,9 +378,19 @@ func TestSimulationModeShutdownBehavior(t *testing.T) {
 		done <- run([]string{}, deps)
 	}()
 
+	// Give the simulation goroutine time to start, then signal shutdown.
+	time.Sleep(100 * time.Millisecond)
+	close(shutdown)
+
 	select {
-	case <-done:
-		// Simulation may succeed with empty data (graceful degradation) or fail.
+	case err := <-done:
+		// Expected: shutdown error or simulation completion (either is ok
+		// as long as it doesn't block).
+		if err != nil && !strings.Contains(err.Error(), "shutdown") {
+			// Non-shutdown errors (e.g., missing data) are also fine
+			// as long as they don't block indefinitely.
+			_ = err
+		}
 	case <-time.After(5 * time.Second):
 		t.Fatalf("simulation mode should not block indefinitely")
 	}
