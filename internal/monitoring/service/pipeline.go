@@ -12,6 +12,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
@@ -25,6 +26,7 @@ type PipelineService struct {
 	registryProvider  RegistryProviderFunc
 	narrativeProvider NarrativeProviderFunc
 	cycleProvider     CycleProviderFunc
+	cardProvider      CycleCardProviderFunc
 	store             ledger.OutcomeStore
 }
 
@@ -46,6 +48,7 @@ type IndustryContextData struct {
 type (
 	NarrativeProviderFunc func(eventIDs []string) *NarrativeContextData
 	CycleProviderFunc     func(skill string) *IndustryContextData
+	CycleCardProviderFunc func() *industry.CycleStatusCard
 )
 
 type RegistryProviderFunc func() (domain.AgentRegistry, error)
@@ -62,6 +65,11 @@ func (s *PipelineService) WithNarrativeProvider(fn NarrativeProviderFunc) *Pipel
 
 func (s *PipelineService) WithCycleProvider(fn CycleProviderFunc) *PipelineService {
 	s.cycleProvider = fn
+	return s
+}
+
+func (s *PipelineService) WithCycleCardProvider(fn CycleCardProviderFunc) *PipelineService {
+	s.cardProvider = fn
 	return s
 }
 
@@ -680,7 +688,28 @@ func (s *PipelineService) LoadRecommendationPipeline(sessionID string, showAll b
 		AvailableSessions: availableSessions,
 		IsFallbackSession: fallbackMsg != "",
 		FallbackMessage:   fallbackMsg,
+		CycleStatus:       s.buildCycleStatus(),
 	}, nil
+}
+
+func (s *PipelineService) buildCycleStatus() *CycleStatusResponse {
+	if s.cardProvider == nil {
+		return nil
+	}
+	card := s.cardProvider()
+	if card == nil {
+		return nil
+	}
+	return &CycleStatusResponse{
+		SentimentLabel:       card.SentimentLabel,
+		CompositeCoefficient: card.CompositeCoefficient,
+		CycleConfidence:      card.CycleConfidence,
+		BusinessCycle:        card.BusinessCycle,
+		SiliconPhaseName:     card.SiliconPhaseName,
+		IsFavorable:          card.IsFavorable,
+		ActivePatterns:       len(card.ActivePatterns),
+		ActiveEvents:         len(card.ActiveEvents),
+	}
 }
 
 // RecommendationPipelineData is the internal representation for recommendation pipeline response.
@@ -696,6 +725,19 @@ type RecommendationPipelineData struct {
 	AvailableSessions []string
 	IsFallbackSession bool
 	FallbackMessage   string
+	CycleStatus       *CycleStatusResponse
+}
+
+// CycleStatusResponse carries the composite cycle sentiment card data.
+type CycleStatusResponse struct {
+	SentimentLabel       string  `json:"sentiment_label"`
+	CompositeCoefficient float64 `json:"composite_coefficient"`
+	CycleConfidence      float64 `json:"cycle_confidence"`
+	BusinessCycle        string  `json:"business_cycle"`
+	SiliconPhaseName     string  `json:"silicon_phase_name"`
+	IsFavorable          bool    `json:"is_favorable"`
+	ActivePatterns       int     `json:"active_patterns"`
+	ActiveEvents         int     `json:"active_events"`
 }
 
 // PipelineItemData represents a single recommendation in the pipeline.

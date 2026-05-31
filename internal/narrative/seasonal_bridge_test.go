@@ -1,6 +1,10 @@
 package narrative
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/kaecer68/atlas-go/internal/industry"
+)
 
 func TestCorrelationMultiplier(t *testing.T) {
 	sb := NewSeasonalBridge(nil)
@@ -542,5 +546,57 @@ func TestSetActiveEvents(t *testing.T) {
 		if !found {
 			t.Fatalf("expected theme %q not found in ActiveThemes", theme)
 		}
+	}
+}
+
+func TestCycleAmplifiedMultiplier_ExpansionWithPatterns(t *testing.T) {
+	sb := NewSeasonalBridge(nil)
+	card := &industry.CycleStatusCard{
+		BusinessCycle:        "expansion",
+		CompositeCoefficient: 1.10,
+		ActivePatterns:       []industry.SeasonalPatternSnapshot{{ID: "q1_rally", Name: "Q1 Rally"}},
+	}
+	sb.SetCycleCard(card)
+	result := sb.CycleAmplifiedMultiplier(1.0, "AI_capex_surge", "semiconductor", 1.0)
+	expected := 1.15 * (1.0 + (1.10-1.0)*0.5)
+	if result != expected {
+		t.Fatalf("expected amplified multiplier %.4f, got %.4f", expected, result)
+	}
+}
+
+func TestCycleAmplifiedMultiplier_NilCard(t *testing.T) {
+	sb := NewSeasonalBridge(nil)
+	sb.SetCycleCard(nil)
+	result := sb.CycleAmplifiedMultiplier(1.0, "AI_capex_surge", "semiconductor", 1.0)
+	if result != 1.15 {
+		t.Fatalf("expected base multiplier 1.15 when no card, got %.4f", result)
+	}
+}
+
+func TestCycleAmplifiedMultiplier_NotExpansion(t *testing.T) {
+	sb := NewSeasonalBridge(nil)
+	card := &industry.CycleStatusCard{
+		BusinessCycle:        "recession",
+		CompositeCoefficient: 0.90,
+		ActivePatterns:       []industry.SeasonalPatternSnapshot{{ID: "x"}},
+	}
+	sb.SetCycleCard(card)
+	result := sb.CycleAmplifiedMultiplier(1.0, "AI_capex_surge", "semiconductor", 1.0)
+	if result != 1.15 {
+		t.Fatalf("expected base multiplier 1.15 when not expansion, got %.4f", result)
+	}
+}
+
+func TestCycleAmplifiedMultiplier_NoActivePatterns(t *testing.T) {
+	sb := NewSeasonalBridge(nil)
+	card := &industry.CycleStatusCard{
+		BusinessCycle:        "expansion",
+		CompositeCoefficient: 1.10,
+		ActivePatterns:       []industry.SeasonalPatternSnapshot{},
+	}
+	sb.SetCycleCard(card)
+	result := sb.CycleAmplifiedMultiplier(1.0, "AI_capex_surge", "semiconductor", 1.0)
+	if result != 1.15 {
+		t.Fatalf("expected base multiplier when no active patterns, got %.4f", result)
 	}
 }

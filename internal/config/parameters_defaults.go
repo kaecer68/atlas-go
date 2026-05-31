@@ -2150,6 +2150,20 @@ func defaultIndustryParameters() IndustryParameters {
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate: backtest each multiplier against historical sector returns during macro regime shifts",
 		},
+		CycleCalibration: ParameterMetadata[CycleCalibrationConfig]{
+			Value: CycleCalibrationConfig{
+				MinSamples:     10,
+				LearningRate:   0.05,
+				HitRateHigh:    0.55,
+				HitRateLow:     0.45,
+				WeightClampMin: 0.05,
+				WeightClampMax: 0.40,
+				WindowSize:     30,
+			},
+			Rationale: "Cycle compass self-calibration: min 10 outcome samples before calibration, 5% learning rate for weight adjustments, hit rate >0.55 upweights and <0.45 downweights, weights clamped to [0.05, 0.40] range, 30-session rolling window",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: backtest optimal hit_rate thresholds and learning_rate across multiple TW market regimes",
+		},
 		HistoryRetentionDays: ParameterMetadata[int]{
 			Value:     90,
 			Rationale: "Keep 90 days of cycle history for trend analysis",

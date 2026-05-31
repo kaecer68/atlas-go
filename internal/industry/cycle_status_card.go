@@ -74,8 +74,31 @@ func defaultCardConfig() CardConfig {
 	}
 }
 
+// globalCycleCalibration holds the active calibration tracker, set by the
+// application bootstrap. If nil, resolveCardConfig returns defaults.
+var globalCycleCalibration *CycleCalibration
+
+// SetGlobalCycleCalibration injects the calibration tracker into the
+// cycle status card builder. Thread-safe: the calibration instance
+// itself handles internal synchronization.
+func SetGlobalCycleCalibration(cal *CycleCalibration) {
+	globalCycleCalibration = cal
+}
+
+// GetGlobalCycleCalibration returns the current calibration tracker or nil.
+func GetGlobalCycleCalibration() *CycleCalibration {
+	return globalCycleCalibration
+}
+
 func resolveCardConfig() CardConfig {
-	return defaultCardConfig()
+	cfg := defaultCardConfig()
+
+	if globalCycleCalibration != nil && globalCycleCalibration.GetOutcomeCount() > 0 {
+		calibrated := globalCycleCalibration.CalibrateWeights(cfg.LayerWeights)
+		cfg.LayerWeights = calibrated
+	}
+
+	return cfg
 }
 
 // CycleStatusCard is the daily composite sentiment card that combines all

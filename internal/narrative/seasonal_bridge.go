@@ -1,11 +1,14 @@
 package narrative
 
+import "github.com/kaecer68/atlas-go/internal/industry"
+
 // SeasonalBridge implements industry.NarrativeSeasonalProvider, bridging
 // the macro-narrative event system into seasonal pattern adjustment calculations.
 // It maps active narrative themes to industry-specific seasonal multipliers.
 type SeasonalBridge struct {
 	engine       *NarrativeEngine
 	activeEvents []NarrativeEvent
+	cycleCard    *industry.CycleStatusCard
 }
 
 // NewSeasonalBridge creates a bridge from a NarrativeEngine.
@@ -17,6 +20,30 @@ func NewSeasonalBridge(engine *NarrativeEngine) *SeasonalBridge {
 // seasonal adjustments to reflect the latest narrative state.
 func (sb *SeasonalBridge) SetActiveEvents(events []NarrativeEvent) {
 	sb.activeEvents = events
+}
+
+func (sb *SeasonalBridge) SetCycleCard(card *industry.CycleStatusCard) {
+	sb.cycleCard = card
+}
+
+// CycleAmplifiedMultiplier computes a cycle-aware seasonal multiplier. When the
+// cycle phase is expansion and at least one seasonal pattern is active, the base
+// multiplier is amplified by the composite coefficient. Returns the base multiplier
+// unchanged when no card is cached or when the cycle is not expansion.
+func (sb *SeasonalBridge) CycleAmplifiedMultiplier(base float64, theme string, industryID string, direction float64) float64 {
+	baseMultiplier := sb.SeasonalMultiplier(theme, industryID, direction)
+	card := sb.cycleCard
+	if card == nil {
+		return baseMultiplier
+	}
+	if card.BusinessCycle != "expansion" {
+		return baseMultiplier
+	}
+	if len(card.ActivePatterns) == 0 {
+		return baseMultiplier
+	}
+	amplification := 1.0 + (card.CompositeCoefficient-1.0)*0.5
+	return baseMultiplier * amplification
 }
 
 // ActiveThemes returns all active narrative theme identifiers.

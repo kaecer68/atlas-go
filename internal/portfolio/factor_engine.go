@@ -152,6 +152,53 @@ func (fe *FactorEngine) SetCycleTracker(ct *industry.CycleTracker) {
 	}
 }
 
+// SetCycleCardBuilder enhances the cycle provider to use composite cycle sentiment
+// from CycleStatusCardBuilder, producing more accurate FactorIndustryCycle scores.
+// Falls back to CycleTracker when the card builder returns no card.
+func (fe *FactorEngine) SetCycleCardBuilder(cb *industry.CycleStatusCardBuilder, ct *industry.CycleTracker) {
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
+	fe.cycleProv = func(symbol string) *domain.IndustryCycleFactorScore {
+		id := classifyIndustry(symbol)
+		if id == "" {
+			return nil
+		}
+		var phase string
+		var phaseScore, confidence float64
+		if cb != nil {
+			card, err := cb.BuildCard(time.Now(), id)
+			if err == nil && card != nil {
+				phase = card.BusinessCycle
+				phaseScore = 1.0 + (card.CompositeCoefficient-1.0)*2.0
+				confidence = card.CycleConfidence
+				if phase == "" {
+					phase = "unknown"
+				}
+				return &domain.IndustryCycleFactorScore{
+					Score:      math.Max(0, math.Min(2.0, phaseScore)),
+					Phase:      phase,
+					PhaseScore: phaseScore,
+					Confidence: confidence,
+					IndustryID: id,
+				}
+			}
+		}
+		if ct != nil {
+			pos, ok := ct.GetPosition(id)
+			if ok {
+				return &domain.IndustryCycleFactorScore{
+					Score:      pos.GetPhaseScore(),
+					Phase:      string(pos.BusinessCycle),
+					PhaseScore: pos.GetPhaseScore(),
+					Confidence: pos.Confidence,
+					IndustryID: id,
+				}
+			}
+		}
+		return nil
+	}
+}
+
 // WithPreciousMetalsProvider attaches a macro data provider for precious metals factor scoring.
 func (fe *FactorEngine) WithPreciousMetalsProvider(fn PMContextProvider) *FactorEngine {
 	fe.mu.Lock()
