@@ -228,7 +228,7 @@ func (en *ElasticNet) searchAlpha(Xs [][]float64, yc []float64) float64 {
 
 			p := len(Xs[0])
 			beta := make([]float64, p)
-			en.fitCD(trainXs, trainYc, alpha, beta)
+			_ = en.fitCD(trainXs, trainYc, alpha, beta)
 
 			var foldMSE float64
 			for i := range valXs {
