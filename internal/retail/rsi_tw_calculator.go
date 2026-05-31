@@ -5,6 +5,8 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 // ---------------------------------------------------------------------------
@@ -68,14 +70,40 @@ type Calculator struct {
 	mu            sync.RWMutex
 	marginHistory []float64
 	vixHistory    []float64
+	params        config.RSITwParameters
+}
+
+var (
+	calcOnce     sync.Once
+	calcInstance *Calculator
+)
+
+// GetCalculator returns the singleton Calculator instance.
+func GetCalculator() *Calculator {
+	calcOnce.Do(func() {
+		calcInstance = &Calculator{
+			marginHistory: make([]float64, 0, 90),
+			vixHistory:    make([]float64, 0, 90),
+			params:        config.DefaultParametersConfig().RSITw,
+		}
+	})
+	return calcInstance
 }
 
 // NewCalculator returns an initialised Calculator with empty histories.
+// Deprecated: use GetCalculator() for the singleton; this is kept for tests.
 func NewCalculator() *Calculator {
 	return &Calculator{
 		marginHistory: make([]float64, 0, 90),
 		vixHistory:    make([]float64, 0, 90),
 	}
+}
+
+// SetParams updates the calculator's parameter set at runtime.
+func (c *Calculator) SetParams(p config.RSITwParameters) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.params = p
 }
 
 // ---------------------------------------------------------------------------
@@ -300,13 +328,13 @@ func (c *Calculator) subC1(data RSITwInput, subs map[string]RSISubIndicator) flo
 	var score float64
 	if pct == 0 {
 		score = 0.5
-	} else if pct > 20 {
+	} else if pct > c.params.C1VeryBullishThreshold.Value {
 		score = 0.9
-	} else if pct > 10 {
+	} else if pct > c.params.C1BullishThreshold.Value {
 		score = 0.7
-	} else if pct > -10 {
+	} else if pct > c.params.C1BearishThreshold.Value {
 		score = 0.5
-	} else if pct > -20 {
+	} else if pct > c.params.C1VeryBearishThreshold.Value {
 		score = 0.25
 	} else {
 		score = 0.1
@@ -323,17 +351,15 @@ func (c *Calculator) subC2(data RSITwInput, subs map[string]RSISubIndicator) flo
 	ind := RSISubIndicator{Weight: weight, Value: netFlow}
 
 	if netFlow == 0 {
+		ind.IsFallback = true
 		subs["c2_inst_flow"] = ind
 		return 0
 	}
 
-	// Positive net → bullish [0.3, 0.7]; negative net → bearish [−0.7, −0.3].
-	// Use the centre of each range until a more precise scaling is available.
-	if netFlow > 0 {
-		ind.ZScore = 0.5
-	} else {
-		ind.ZScore = -0.5
-	}
+	scaling := c.params.C2NetflowScalingFactor.Value
+	mid := c.params.C2NeutralMidpoint.Value
+	score := mid + (netFlow / scaling)
+	ind.ZScore = clamp(score, 0.1, 0.9)
 	subs["c2_inst_flow"] = ind
 	return ind.ZScore * weight
 }
@@ -345,13 +371,13 @@ func (c *Calculator) subC3(data RSITwInput, subs map[string]RSISubIndicator) flo
 	var score float64
 	if netSub == 0 {
 		score = 0.5
-	} else if netSub > 1_000_000_000 {
+	} else if netSub > c.params.C3VeryBullishThreshold.Value {
 		score = 0.9
-	} else if netSub > 100_000_000 {
+	} else if netSub > c.params.C3BullishThreshold.Value {
 		score = 0.7
 	} else if netSub > 0 {
 		score = 0.55
-	} else if netSub > -100_000_000 {
+	} else if netSub > c.params.C3BearishThreshold.Value {
 		score = 0.45
 	} else {
 		score = 0.2
@@ -385,9 +411,10 @@ func (c *Calculator) computeAdjustmentFactor(data RSITwInput, subs map[string]RS
 
 func (c *Calculator) factorD1(data RSITwInput, subs map[string]RSISubIndicator) float64 {
 	const key = "d1_geopolitical"
-	if data.GeopoliticalRisk > 0.5 {
-		subs[key] = RSISubIndicator{Value: data.GeopoliticalRisk, ZScore: 0.85}
-		return 0.85
+	if data.GeopoliticalRisk > c.params.DGeoPoliticalRiskThreshold.Value {
+		mult := c.params.DGeoPoliticalRiskMultiplier.Value
+		subs[key] = RSISubIndicator{Value: data.GeopoliticalRisk, ZScore: mult}
+		return mult
 	}
 	subs[key] = RSISubIndicator{Value: data.GeopoliticalRisk, ZScore: 1.0}
 	return 1.0
@@ -395,9 +422,10 @@ func (c *Calculator) factorD1(data RSITwInput, subs map[string]RSISubIndicator) 
 
 func (c *Calculator) factorD2(data RSITwInput, subs map[string]RSISubIndicator) float64 {
 	const key = "d2_vix_spike"
-	if data.VIXLevel > 30 {
-		subs[key] = RSISubIndicator{Value: data.VIXLevel, ZScore: 0.90}
-		return 0.90
+	if data.VIXLevel > c.params.DVIXSpikeThreshold.Value {
+		mult := c.params.DVIXSpikeMultiplier.Value
+		subs[key] = RSISubIndicator{Value: data.VIXLevel, ZScore: mult}
+		return mult
 	}
 	subs[key] = RSISubIndicator{Value: data.VIXLevel, ZScore: 1.0}
 	return 1.0
@@ -406,8 +434,9 @@ func (c *Calculator) factorD2(data RSITwInput, subs map[string]RSISubIndicator) 
 func (c *Calculator) factorD3(data RSITwInput, subs map[string]RSISubIndicator) float64 {
 	const key = "d3_credit_control"
 	if data.CreditTightening {
-		subs[key] = RSISubIndicator{Value: 1, ZScore: 0.80, IsFallback: true}
-		return 0.80
+		mult := c.params.DCreditTighteningMultiplier.Value
+		subs[key] = RSISubIndicator{Value: 1, ZScore: mult, IsFallback: true}
+		return mult
 	}
 	subs[key] = RSISubIndicator{ZScore: 1.0}
 	return 1.0

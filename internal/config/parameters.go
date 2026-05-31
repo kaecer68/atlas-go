@@ -969,6 +969,27 @@ type PostTradeGateParameters struct {
 }
 
 // ParametersConfig is the top-level configuration for all investment model parameters.
+// RSITwParameters holds tunable values for the RSI-tw retail sentiment calculator.
+type RSITwParameters struct {
+	// Part C — Institutional / Derivative Flow (25% weight)
+	C1VeryBullishThreshold ParameterMetadata[float64] `json:"c1_very_bullish_threshold"` // futures OI pct above this → 0.9
+	C1BullishThreshold     ParameterMetadata[float64] `json:"c1_bullish_threshold"`      // futures OI pct above this → 0.7
+	C1BearishThreshold     ParameterMetadata[float64] `json:"c1_bearish_threshold"`      // futures OI pct below this → 0.5
+	C1VeryBearishThreshold ParameterMetadata[float64] `json:"c1_very_bearish_threshold"` // futures OI pct below this → 0.25
+	C2NeutralMidpoint      ParameterMetadata[float64] `json:"c2_neutral_midpoint"`       // base score when netFlow ≈ 0 (0.5)
+	C2NetflowScalingFactor ParameterMetadata[float64] `json:"c2_netflow_scaling_factor"` // divisor for continuous scoring
+	C3VeryBullishThreshold ParameterMetadata[float64] `json:"c3_very_bullish_threshold"` // ETF net sub above this → 0.9
+	C3BullishThreshold     ParameterMetadata[float64] `json:"c3_bullish_threshold"`      // ETF net sub above this → 0.7
+	C3BearishThreshold     ParameterMetadata[float64] `json:"c3_bearish_threshold"`      // ETF net sub below this → 0.45
+
+	// Part D — Event-Driven Adjustment Factors
+	DGeoPoliticalRiskThreshold  ParameterMetadata[float64] `json:"d_geopolitical_risk_threshold"`  // geopolitical risk above this → 0.85
+	DGeoPoliticalRiskMultiplier ParameterMetadata[float64] `json:"d_geopolitical_risk_multiplier"` // 0.85
+	DVIXSpikeThreshold          ParameterMetadata[float64] `json:"d_vix_spike_threshold"`          // VIX above this → 0.90
+	DVIXSpikeMultiplier         ParameterMetadata[float64] `json:"d_vix_spike_multiplier"`         // 0.90
+	DCreditTighteningMultiplier ParameterMetadata[float64] `json:"d_credit_tightening_multiplier"` // 0.80
+}
+
 type ParametersConfig struct {
 	Version             string                        `json:"version"`
 	UpdatedAt           time.Time                     `json:"updated_at"`
@@ -996,6 +1017,7 @@ type ParametersConfig struct {
 	Alert               AlertParameters               `json:"alert"`
 	RiskGate            RiskGateParameters            `json:"risk_gate,omitempty"`
 	Engine              EngineParameters              `json:"engine,omitempty"`
+	RSITw               RSITwParameters               `json:"rsi_tw,omitempty"`
 }
 
 // EngineParameters holds parameters migrated from EngineConfig with full ParameterMetadata wrapping.
