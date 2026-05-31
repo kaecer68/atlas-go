@@ -86,8 +86,8 @@ func NewRateLimitManager() *RateLimitManager {
 			"day_trading":         rate.NewLimiter(TWSEMarginRate, TWSEMarginBurst), // same tier as TWSE margin
 			"bdi":                 rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"taifex-daily":        rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
-			"twse_oddlot":         rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
-			"twse_etf":            rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+	"twse-oddlot":         rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+	"twse-etf":            rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 		},
 	}
 }

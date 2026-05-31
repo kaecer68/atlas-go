@@ -545,6 +545,9 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		systemHandlers.DayTradingFetcher = apisystem.DayTradingFetcher(
 			NewDayTradingFetcher(a.dataFetcher),
 		)
+		systemHandlers.TaifexFetcher = apisystem.TaifexFetcher(NewTaifexFetcher(a.dataFetcher))
+		systemHandlers.OddLotFetcher = apisystem.OddLotFetcher(NewOddLotFetcher(a.dataFetcher))
+		systemHandlers.ETFFetcher = apisystem.ETFFetcher(NewETFFetcher(a.dataFetcher))
 	}
 	systemHandlers.RegisterRoutes(mux)
 

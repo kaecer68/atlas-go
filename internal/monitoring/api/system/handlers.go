@@ -20,9 +20,21 @@ import (
 // DayTradingFetcher fetches day trading statistics. Set by the constructor when Gateway is available.
 type DayTradingFetcher func(ctx context.Context) (*marketdata.DayTradingStats, error)
 
+// TaifexFetcher fetches TAIFEX PCR and retail futures OI data in a single call.
+type TaifexFetcher func(ctx context.Context) (pcr *marketdata.PCRStats, futuresOI *marketdata.RetailFuturesOI, err error)
+
+// OddLotFetcher fetches TWSE odd-lot trading statistics.
+type OddLotFetcher func(ctx context.Context) (*marketdata.OddLotStats, error)
+
+// ETFFetcher fetches TWSE ETF subscription/redemption data.
+type ETFFetcher func(ctx context.Context) (*marketdata.ETFStats, error)
+
 type Handlers struct {
 	Svc               *service.SystemService
 	DayTradingFetcher DayTradingFetcher
+	TaifexFetcher     TaifexFetcher
+	OddLotFetcher     OddLotFetcher
+	ETFFetcher        ETFFetcher
 }
 
 func NewHandlers(svc *service.SystemService) *Handlers {
@@ -164,6 +176,21 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 		}
 	}
 
+	var pcrData *marketdata.PCRStats
+	var futuresOIData *marketdata.RetailFuturesOI
+	var oddLotData *marketdata.OddLotStats
+	var etfData *marketdata.ETFStats
+
+	if h.TaifexFetcher != nil {
+		pcrData, futuresOIData, _ = h.TaifexFetcher(r.Context())
+	}
+	if h.OddLotFetcher != nil {
+		oddLotData, _ = h.OddLotFetcher(r.Context())
+	}
+	if h.ETFFetcher != nil {
+		etfData, _ = h.ETFFetcher(r.Context())
+	}
+
 	calc := retail.NewCalculator()
 	rsiInput := retail.RSITwInput{
 		MarginBalance:      snap.RetailMarginBalance.Value,
@@ -173,6 +200,10 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 		ForeignInvestorNet: snap.ForeignInvestorNet.Value,
 		DomesticFundNet:    snap.DomesticFundNet.Value,
 		GeopoliticalRisk:   0,
+		PutCallRatio:       getFloatOrZero(pcrData, func(p *marketdata.PCRStats) float64 { return p.PutCallVolumeRatio }),
+		OddLotImbalance:    getFloatOrZero(oddLotData, func(o *marketdata.OddLotStats) float64 { return o.ImbalanceRatio }),
+		RetailFuturesPct:   getFloatOrZero(futuresOIData, func(f *marketdata.RetailFuturesOI) float64 { return f.RetailLongPct - f.RetailShortPct }),
+		ETFNetSubscription: getFloatOrZero(etfData, func(e *marketdata.ETFStats) float64 { return float64(e.NetSubscription) }),
 	}
 
 	rsiResult := calc.ComputeFinal(rsiInput)
@@ -319,4 +350,11 @@ func interpretRetailSentiment(score float64) string {
 	default:
 		return "extremely bearish retail sentiment"
 	}
+}
+
+func getFloatOrZero[T any](data *T, fn func(*T) float64) float64 {
+	if data == nil {
+		return 0
+	}
+	return fn(data)
 }
