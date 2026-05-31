@@ -201,7 +201,7 @@ func loadOldestPendingExperiment(ledgerDir string) *pendingExperiment {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var oldest *pendingExperiment
 	scanner := bufio.NewScanner(f)

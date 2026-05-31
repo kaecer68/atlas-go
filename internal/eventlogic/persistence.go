@@ -26,7 +26,7 @@ func (r *RuleRegistry) SaveToFile(path string) error {
 	if err != nil {
 		return fmt.Errorf("eventlogic: marshal: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := _ = os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("eventlogic: mkdir: %w", err)
 	}
 	tmp := path + ".tmp"
@@ -88,7 +88,7 @@ type RuleSnapshot struct {
 type HistoryRecorder struct{ path string }
 
 func NewHistoryRecorder(path string) *HistoryRecorder {
-	os.MkdirAll(filepath.Dir(path), 0o755)
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
 	return &HistoryRecorder{path: path}
 }
 

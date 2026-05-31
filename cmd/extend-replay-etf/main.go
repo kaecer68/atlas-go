@@ -97,9 +97,9 @@ func main() {
 	defer f.Close()
 
 	w := csv.NewWriter(f)
-	w.Write([]string{"Date", "Code", "Name", "TradeVolume", "TradeValue", "Open", "High", "Low", "Close", "Change", "Transaction"})
+	_ = w.Write([]string{"Date", "Code", "Name", "TradeVolume", "TradeValue", "Open", "High", "Low", "Close", "Change", "Transaction"})
 	for _, bar := range allBars {
-		w.Write([]string{
+		_ = w.Write([]string{
 			bar.Date,
 			bar.Symbol,
 			bar.Name,
@@ -154,7 +154,7 @@ func fetchStockDay(ctx context.Context, client *http.Client, symbol string, date
 	if err != nil {
 		return HistoricalBar{}, false, fmt.Errorf("http: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return HistoricalBar{}, false, fmt.Errorf("status %d", resp.StatusCode)

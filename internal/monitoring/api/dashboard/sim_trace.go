@@ -43,7 +43,7 @@ func (h *Handlers) HandleSimLatest(r *http.Request) (int, any) {
 			"error": "failed to open trace file",
 		}
 	}
-	defer func() { _ = f.Close() }()
+	defer func() { _ = _ = f.Close() }()
 
 	var records []orchestrator.SimTraceRecord
 	scanner := bufio.NewScanner(f)
@@ -52,7 +52,7 @@ func (h *Handlers) HandleSimLatest(r *http.Request) (int, any) {
 		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
 			logging.Error("dashboardapi", "sim_trace_parse_failed",
 				"file", latestFile, "err", err)
-			f.Close()
+			_ = f.Close()
 			return http.StatusInternalServerError, map[string]string{
 				"error": "failed to parse trace record",
 			}

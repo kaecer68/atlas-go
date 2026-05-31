@@ -76,16 +76,16 @@ func (ts *TrainingStore) Store(scenarios []TrainingScenario) error {
 		for _, entry := range entries {
 			line, err := json.Marshal(entry)
 			if err != nil {
-				f.Close()
+				_ = f.Close()
 				return fmt.Errorf("marshal scenario: %w", err)
 			}
 			if _, err := fmt.Fprintln(f, string(line)); err != nil {
-				f.Close()
+				_ = f.Close()
 				return fmt.Errorf("write scenario: %w", err)
 			}
 		}
 
-		if err := f.Close(); err != nil {
+		if err := _ = f.Close(); err != nil {
 			return fmt.Errorf("close %s: %w", filePath, err)
 		}
 	}

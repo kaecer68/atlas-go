@@ -849,6 +849,6 @@ func configHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg := config.Load()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(cfg)
+		_ = json.NewEncoder(w).Encode(cfg)
 	})
 }
