@@ -3033,7 +3033,107 @@ func defaultEngineParameters() EngineParameters {
 
 func defaultRSITwParameters() RSITwParameters {
 	return RSITwParameters{
+		// Part A — Retail Sentiment (40% overall weight)
+		A1Weight: ParameterMetadata[float64]{
+			Value: 0.25, Rationale: "Margin Balance Δ Z-score contributes 25% to Part A score",
+			Source: SourceHeuristic, Todo: "Calibrate from historical margin balance vs. forward return IC",
+		},
+		A2Weight: ParameterMetadata[float64]{
+			Value: 0.20, Rationale: "Day Trading Ratio contributes 20% to Part A score",
+			Source: SourceHeuristic,
+		},
+		A3Weight: ParameterMetadata[float64]{
+			Value: 0.20, Rationale: "Margin Maintenance Proxy contributes 20% to Part A score",
+			Source: SourceHeuristic,
+		},
+		A4Weight: ParameterMetadata[float64]{
+			Value: 0.15, Rationale: "VIX Nonlinear Mapping contributes 15% to Part A score",
+			Source: SourceLiterature,
+		},
+		A5Weight: ParameterMetadata[float64]{
+			Value: 0.10, Rationale: "Weekly PCR Proxy contributes 10% to Part A score",
+			Source: SourceHeuristic,
+		},
+		A6Weight: ParameterMetadata[float64]{
+			Value: 0.10, Rationale: "Odd-Lot Trading contributes 10% to Part A score",
+			Source: SourceHeuristic,
+		},
+		APartWeight: ParameterMetadata[float64]{
+			Value: 0.40, Rationale: "Part A contributes 40% to final RSI-tw score",
+			Source: SourceHeuristic, Todo: "Calibrate optimal A/C split via walk-forward",
+		},
+		CPartWeight: ParameterMetadata[float64]{
+			Value: 0.25, Rationale: "Part C contributes 25% to final RSI-tw score",
+			Source: SourceHeuristic, Todo: "Calibrate optimal A/C split via walk-forward",
+		},
+
+		// A3: Margin Maintenance formula
+		A3Midpoint: ParameterMetadata[float64]{
+			Value: 0.5, Rationale: "50th percentile is the neutral midpoint for maintenance ratio",
+			Source: SourceHeuristic,
+		},
+		A3Scale: ParameterMetadata[float64]{
+			Value: 2.0, Rationale: "Scale factor transforms percentile deviation to Z-score in [-1, 1]",
+			Source: SourceHeuristic,
+		},
+
+		// A4: VIX piecewise mapping
+		A4VixThresholds: ParameterMetadata[[]float64]{
+			Value:     []float64{15, 20, 25, 30, 35},
+			Rationale: "Standard VIX ranges: calm (<15), low (15-20), moderate (20-25), elevated (25-30), high (30-35), extreme (>35)",
+			Source:    SourceLiterature, Todo: "Validate thresholds against Taiwan VIX equivalent (TVIX) distribution",
+		},
+		A4VixScores: ParameterMetadata[[]float64]{
+			Value:     []float64{0.1, 0.3, 0.5, 0.7, 0.85, 1.0},
+			Rationale: "Monotonic mapping: lower VIX → bullish sentiment, higher VIX → bearish (1.0 = max fear)",
+			Source:    SourceHeuristic, Todo: "Calibrate scores from historical VIX vs. TWSE forward return",
+		},
+
+		// A5: PCR piecewise mapping
+		A5PcrThresholds: ParameterMetadata[[]float64]{
+			Value:     []float64{1.5, 1.0, 0.8},
+			Rationale: "Standard PCR interpretation: >1.5 very bearish, >1.0 bearish, >0.8 neutral, <0.8 bullish",
+			Source:    SourceHeuristic, Todo: "Calibrate against TAIFEX PCR historical distribution",
+		},
+		A5PcrScores: ParameterMetadata[[]float64]{
+			Value:     []float64{0.9, 0.7, 0.5, 0.1},
+			Rationale: "Score mapping for PCR: very bearish (0.9) → bearish (0.7) → neutral (0.5) → bullish (0.1)",
+			Source:    SourceHeuristic,
+		},
+		A5PcrFallback: ParameterMetadata[float64]{
+			Value: 0.5, Rationale: "Neutral score when PCR data is unavailable (0)",
+			Source: SourceHeuristic,
+		},
+
+		// A6: Odd-lot imbalance mapping
+		A6OddLotThresholds: ParameterMetadata[[]float64]{
+			Value:     []float64{0.2, 0.1, -0.1, -0.2},
+			Rationale: "Odd-lot imbalance ranges: heavy retail buying (>0.2), moderate (>0.1), neutral (-0.1 to 0.1), selling (<-0.1), heavy selling (<-0.2)",
+			Source:    SourceHeuristic, Todo: "Calibrate thresholds from TWSE odd-lot historical distribution",
+		},
+		A6OddLotScores: ParameterMetadata[[]float64]{
+			Value:     []float64{0.85, 0.65, 0.5, 0.35, 0.15},
+			Rationale: "Score mapping: heavy buying (0.85 bearish) → heavy selling (0.15 bullish)",
+			Source:    SourceHeuristic,
+		},
+		A6OddLotFallback: ParameterMetadata[float64]{
+			Value: 0.5, Rationale: "Neutral score when odd-lot data is unavailable (0)",
+			Source: SourceHeuristic,
+		},
+
 		// Part C — Institutional / Derivative Flow
+		C1Weight: ParameterMetadata[float64]{
+			Value: 0.40, Rationale: "Small TAIEX Futures OI contributes 40% to Part C score",
+			Source: SourceHeuristic, Todo: "Calibrate from historical futures OI vs. forward return IC",
+		},
+		C2Weight: ParameterMetadata[float64]{
+			Value: 0.35, Rationale: "Foreign/Inst Net Flow contributes 35% to Part C score",
+			Source: SourceHeuristic, Todo: "Calibrate from historical institutional flow vs. forward return IC",
+		},
+		C3Weight: ParameterMetadata[float64]{
+			Value: 0.25, Rationale: "ETF Net Subscription contributes 25% to Part C score",
+			Source: SourceHeuristic, Todo: "Calibrate from historical ETF flow vs. forward return IC",
+		},
 		C1VeryBullishThreshold: ParameterMetadata[float64]{
 			Value:     20,
 			Rationale: "Small TAIEX futures OI pct above 20 → retail heavily long (0.9 bearish score)",

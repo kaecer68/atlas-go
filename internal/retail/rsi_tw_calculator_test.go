@@ -120,11 +120,13 @@ func TestComputeFinal_FallbackPath(t *testing.T) {
 
 func TestSubA1_WithHistory(t *testing.T) {
 	c := NewCalculator()
+	params := config.DefaultParametersConfig().RSITw
+	c.SetParams(params)
 	history := []float64{5000, 5100, 5200, 5300, 5400}
 	subs := make(map[string]RSISubIndicator)
 
 	data := RSITwInput{MarginBalance: 5500}
-	score := c.subA1(data, history, subs)
+	score := c.subA1(data, history, subs, &params)
 
 	if score < -0.5 || score > 0.5 {
 		t.Errorf("subA1 score %f out of expected range [-0.5, 0.5]", score)
@@ -137,10 +139,12 @@ func TestSubA1_WithHistory(t *testing.T) {
 
 func TestSubA1_InsufficientHistory(t *testing.T) {
 	c := NewCalculator()
+	params := config.DefaultParametersConfig().RSITw
+	c.SetParams(params)
 	subs := make(map[string]RSISubIndicator)
 
 	data := RSITwInput{MarginBalance: 5500}
-	score := c.subA1(data, []float64{5000}, subs) // only 1 entry
+	score := c.subA1(data, []float64{5000}, subs, &params) // only 1 entry
 
 	if score != 0 {
 		t.Errorf("subA1 with insufficient history should return 0, got %f", score)
@@ -153,10 +157,12 @@ func TestSubA1_InsufficientHistory(t *testing.T) {
 
 func TestSubA2_NilDayTrading(t *testing.T) {
 	c := NewCalculator()
+	params := config.DefaultParametersConfig().RSITw
+	c.SetParams(params)
 	subs := make(map[string]RSISubIndicator)
 
 	data := RSITwInput{DayTrading: nil}
-	score := c.subA2(data, subs)
+	score := c.subA2(data, subs, &params)
 
 	if score != 0 {
 		t.Errorf("subA2 with nil DayTrading should return 0, got %f", score)
@@ -169,6 +175,8 @@ func TestSubA2_NilDayTrading(t *testing.T) {
 
 func TestSubA3_MarginPercentile(t *testing.T) {
 	c := NewCalculator()
+	params := config.DefaultParametersConfig().RSITw
+	c.SetParams(params)
 	tests := []struct {
 		name       string
 		percentile float64
@@ -183,7 +191,7 @@ func TestSubA3_MarginPercentile(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			subs := make(map[string]RSISubIndicator)
 			data := RSITwInput{MarginPercentile: tt.percentile}
-			score := c.subA3(data, subs)
+			score := c.subA3(data, subs, &params)
 
 			if tt.wantSign > 0 && score <= 0 {
 				t.Errorf("expected positive score for percentile %f, got %f", tt.percentile, score)
@@ -220,10 +228,12 @@ func TestVixMap(t *testing.T) {
 
 func TestSubA4_Fallback(t *testing.T) {
 	c := NewCalculator()
+	params := config.DefaultParametersConfig().RSITw
+	c.SetParams(params)
 	subs := make(map[string]RSISubIndicator)
 
 	data := RSITwInput{VIXLevel: 0}
-	score := c.subA4(data, subs)
+	score := c.subA4(data, subs, &params)
 
 	if score != 0.5*0.15 { // fallback score * weight
 		t.Errorf("subA4 fallback expected %f, got %f", 0.5*0.15, score)
@@ -236,6 +246,8 @@ func TestSubA4_Fallback(t *testing.T) {
 
 func TestSubA5_PCRThresholds(t *testing.T) {
 	c := NewCalculator()
+	params := config.DefaultParametersConfig().RSITw
+	c.SetParams(params)
 	tests := []struct {
 		pcr  float64
 		want float64
@@ -249,7 +261,7 @@ func TestSubA5_PCRThresholds(t *testing.T) {
 	for _, tt := range tests {
 		subs := make(map[string]RSISubIndicator)
 		data := RSITwInput{PutCallRatio: tt.pcr}
-		score := c.subA5(data, subs)
+		score := c.subA5(data, subs, &params)
 
 		expectedScore := tt.want * 0.10 // weight
 		if math.Abs(score-expectedScore) > 0.001 {
@@ -260,6 +272,8 @@ func TestSubA5_PCRThresholds(t *testing.T) {
 
 func TestSubA6_OddLotThresholds(t *testing.T) {
 	c := NewCalculator()
+	params := config.DefaultParametersConfig().RSITw
+	c.SetParams(params)
 	tests := []struct {
 		imb  float64
 		want float64
@@ -275,7 +289,7 @@ func TestSubA6_OddLotThresholds(t *testing.T) {
 	for _, tt := range tests {
 		subs := make(map[string]RSISubIndicator)
 		data := RSITwInput{OddLotImbalance: tt.imb}
-		score := c.subA6(data, subs)
+		score := c.subA6(data, subs, &params)
 
 		expectedScore := tt.want * 0.10
 		if math.Abs(score-expectedScore) > 0.001 {
