@@ -53,6 +53,10 @@ type RSITwInput struct {
 	DomesticFundNet    float64          `json:"domestic_fund_net"`
 	GeopoliticalRisk   float64          `json:"geopolitical_risk"`
 	CreditTightening   bool             `json:"credit_tightening"`
+	PutCallRatio       float64          `json:"put_call_ratio"`
+	OddLotImbalance    float64          `json:"odd_lot_imbalance"`
+	RetailFuturesPct   float64          `json:"retail_futures_pct"`
+	ETFNetSubscription float64          `json:"etf_net_subscription"`
 	// Phase 2 placeholders
 	FuturesOI float64 `json:"futures_oi"`
 	PCR       float64 `json:"pcr"`
@@ -138,11 +142,11 @@ func (c *Calculator) computePartA(data RSITwInput, marginHistory []float64, subs
 	// A4: VIX Nonlinear Mapping (weight 0.15)
 	total += c.subA4(data, subs)
 
-	// A5: Weekly PCR Proxy (weight 0.10, placeholder)
-	total += c.subA5(subs)
+	// A5: Weekly PCR Proxy (weight 0.10)
+	total += c.subA5(data, subs)
 
-	// A6: Odd-Lot Trading (weight 0.10, placeholder)
-	total += c.subA6(subs)
+	// A6: Odd-Lot Trading (weight 0.10)
+	total += c.subA6(data, subs)
 
 	return clamp(total, -1.0, 1.0)
 }
@@ -226,28 +230,48 @@ func (c *Calculator) subA4(data RSITwInput, subs map[string]RSISubIndicator) flo
 	return ind.ZScore * weight
 }
 
-// A5: Weekly PCR Proxy (weight 0.10, placeholder for Phase 2)
-func (c *Calculator) subA5(subs map[string]RSISubIndicator) float64 {
+// A5: Weekly PCR (weight 0.10)
+func (c *Calculator) subA5(data RSITwInput, subs map[string]RSISubIndicator) float64 {
 	const weight = 0.10
-	ind := RSISubIndicator{
-		Weight:     weight,
-		ZScore:     0.5,
-		IsFallback: true,
+	pcr := data.PutCallRatio
+	var score float64
+	if pcr == 0 {
+		score = 0.5
+	} else if pcr > 1.5 {
+		score = 0.9
+	} else if pcr > 1.0 {
+		score = 0.7
+	} else if pcr > 0.8 {
+		score = 0.5
+	} else {
+		score = 0.1
 	}
+	ind := RSISubIndicator{Value: pcr, Weight: weight, ZScore: score, IsFallback: pcr == 0}
 	subs["a5_pcr_proxy"] = ind
-	return ind.ZScore * weight
+	return score * weight
 }
 
-// A6: Odd-Lot Trading (weight 0.10, placeholder for Phase 2)
-func (c *Calculator) subA6(subs map[string]RSISubIndicator) float64 {
+// A6: Odd-Lot Trading (weight 0.10)
+func (c *Calculator) subA6(data RSITwInput, subs map[string]RSISubIndicator) float64 {
 	const weight = 0.10
-	ind := RSISubIndicator{
-		Weight:     weight,
-		ZScore:     0,
-		IsFallback: true,
+	imb := data.OddLotImbalance
+	var score float64
+	if imb == 0 {
+		score = 0.5
+	} else if imb > 0.2 {
+		score = 0.85
+	} else if imb > 0.1 {
+		score = 0.65
+	} else if imb > -0.1 {
+		score = 0.5
+	} else if imb > -0.2 {
+		score = 0.35
+	} else {
+		score = 0.15
 	}
+	ind := RSISubIndicator{Value: imb, Weight: weight, ZScore: score, IsFallback: imb == 0}
 	subs["a6_odd_lot"] = ind
-	return 0
+	return score * weight
 }
 
 // ---------------------------------------------------------------------------
@@ -257,28 +281,39 @@ func (c *Calculator) subA6(subs map[string]RSISubIndicator) float64 {
 func (c *Calculator) computePartC(data RSITwInput, subs map[string]RSISubIndicator) float64 {
 	var total float64
 
-	// C1: Small TAIEX Futures OI (weight 0.40, placeholder)
-	total += c.subC1(subs)
+	// C1: Small TAIEX Futures OI (weight 0.40)
+	total += c.subC1(data, subs)
 
 	// C2: Foreign / Institutional Net Flow Proxy (weight 0.35)
 	total += c.subC2(data, subs)
 
-	// C3: ETF Net Subscription (weight 0.25, placeholder)
-	total += c.subC3(subs)
+	// C3: ETF Net Subscription (weight 0.25)
+	total += c.subC3(data, subs)
 
 	return clamp(total, -1.0, 1.0)
 }
 
-// C1: Small TAIEX Futures OI (weight 0.40, placeholder for Phase 2)
-func (c *Calculator) subC1(subs map[string]RSISubIndicator) float64 {
+// C1: Small TAIEX Futures OI (weight 0.40)
+func (c *Calculator) subC1(data RSITwInput, subs map[string]RSISubIndicator) float64 {
 	const weight = 0.40
-	ind := RSISubIndicator{
-		Weight:     weight,
-		ZScore:     0,
-		IsFallback: true,
+	pct := data.RetailFuturesPct
+	var score float64
+	if pct == 0 {
+		score = 0.5
+	} else if pct > 20 {
+		score = 0.9
+	} else if pct > 10 {
+		score = 0.7
+	} else if pct > -10 {
+		score = 0.5
+	} else if pct > -20 {
+		score = 0.25
+	} else {
+		score = 0.1
 	}
+	ind := RSISubIndicator{Value: pct, Weight: weight, ZScore: score, IsFallback: pct == 0}
 	subs["c1_futures_oi"] = ind
-	return 0
+	return score * weight
 }
 
 // C2: Foreign / Institutional Net Flow Proxy (weight 0.35)
@@ -303,16 +338,27 @@ func (c *Calculator) subC2(data RSITwInput, subs map[string]RSISubIndicator) flo
 	return ind.ZScore * weight
 }
 
-// C3: ETF Net Subscription (weight 0.25, placeholder for Phase 2)
-func (c *Calculator) subC3(subs map[string]RSISubIndicator) float64 {
+// C3: ETF Net Subscription (weight 0.25)
+func (c *Calculator) subC3(data RSITwInput, subs map[string]RSISubIndicator) float64 {
 	const weight = 0.25
-	ind := RSISubIndicator{
-		Weight:     weight,
-		ZScore:     0,
-		IsFallback: true,
+	netSub := data.ETFNetSubscription
+	var score float64
+	if netSub == 0 {
+		score = 0.5
+	} else if netSub > 1_000_000_000 {
+		score = 0.9
+	} else if netSub > 100_000_000 {
+		score = 0.7
+	} else if netSub > 0 {
+		score = 0.55
+	} else if netSub > -100_000_000 {
+		score = 0.45
+	} else {
+		score = 0.2
 	}
+	ind := RSISubIndicator{Value: netSub, Weight: weight, ZScore: score, IsFallback: netSub == 0}
 	subs["c3_etf_sub"] = ind
-	return 0
+	return score * weight
 }
 
 // ---------------------------------------------------------------------------

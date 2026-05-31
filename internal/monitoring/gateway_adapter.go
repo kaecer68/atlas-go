@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	apisystem "github.com/kaecer68/atlas-go/internal/monitoring/api/system"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
 
@@ -313,3 +314,51 @@ var (
 	_ narrative.GeopoliticalRiskProvider = (*geopoliticalGatewayAdapter)(nil)
 	_ narrative.GeopoliticalRiskProvider = (*taiwanGeopoliticalGatewayAdapter)(nil)
 )
+
+// NewTaifexFetcher creates a fetcher for TAIFEX PCR and retail futures OI data.
+func NewTaifexFetcher(fetcher DataFetcher) apisystem.TaifexFetcher {
+	return func(ctx context.Context) (*marketdata.PCRStats, *marketdata.RetailFuturesOI, error) {
+		data, err := fetcher(ctx, "taifex-daily")
+		if err != nil {
+			return nil, nil, err
+		}
+		var result struct {
+			PCR             *marketdata.PCRStats        `json:"pcr"`
+			RetailFuturesOI *marketdata.RetailFuturesOI `json:"retail_futures_oi"`
+		}
+		if err := json.Unmarshal(data, &result); err != nil {
+			return nil, nil, fmt.Errorf("taifex unmarshal: %w", err)
+		}
+		return result.PCR, result.RetailFuturesOI, nil
+	}
+}
+
+// NewOddLotFetcher creates a fetcher for TWSE odd-lot trading data.
+func NewOddLotFetcher(fetcher DataFetcher) apisystem.OddLotFetcher {
+	return func(ctx context.Context) (*marketdata.OddLotStats, error) {
+		data, err := fetcher(ctx, "twse-oddlot")
+		if err != nil {
+			return nil, err
+		}
+		var result marketdata.OddLotStats
+		if err := json.Unmarshal(data, &result); err != nil {
+			return nil, fmt.Errorf("oddlot unmarshal: %w", err)
+		}
+		return &result, nil
+	}
+}
+
+// NewETFFetcher creates a fetcher for TWSE ETF subscription data.
+func NewETFFetcher(fetcher DataFetcher) apisystem.ETFFetcher {
+	return func(ctx context.Context) (*marketdata.ETFStats, error) {
+		data, err := fetcher(ctx, "twse-etf")
+		if err != nil {
+			return nil, err
+		}
+		var result marketdata.ETFStats
+		if err := json.Unmarshal(data, &result); err != nil {
+			return nil, fmt.Errorf("etf unmarshal: %w", err)
+		}
+		return &result, nil
+	}
+}
