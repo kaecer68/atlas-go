@@ -383,6 +383,23 @@ declare interface CustomerConcentration {
   order_visibility_months: number;
 }
 
+declare interface CycleCalibrationConfig {
+  min_samples: number;
+  learning_rate: number;
+  hit_rate_high: number;
+  hit_rate_low: number;
+  weight_clamp_min: number;
+  weight_clamp_max: number;
+  window_size: number;
+}
+
+declare interface CycleOutcome {
+  session_id: string;
+  date: string;
+  layer_signals: Record<string, number>;
+  actual_return: number;
+}
+
 declare interface CyclePhaseTransition {
   from_phase: string;
   to_phase: string;
@@ -425,6 +442,17 @@ declare interface CycleStatusCard {
   composite_coefficient: number;
   sentiment_label: string;
   breakdown: string[];
+}
+
+declare interface CycleStatusResponse {
+  sentiment_label: string;
+  composite_coefficient: number;
+  cycle_confidence: number;
+  business_cycle: string;
+  silicon_phase_name: string;
+  is_favorable: boolean;
+  active_patterns: number;
+  active_events: number;
 }
 
 declare interface CycleThresholdConfig {
@@ -1255,6 +1283,7 @@ declare interface IndustryParameters {
   max_daily_weight_change: string;
   linkage_params: string;
   dynamic_env: string;
+  cycle_calibration: string;
   history_retention_days: string;
   default_metrics: string;
 }
@@ -1333,6 +1362,13 @@ declare interface LayerAdjustment {
   weight: number;
   contribution: number;
   reason: string;
+}
+
+declare interface LayerMetrics {
+  total_signals: number;
+  correct_signals: number;
+  accuracy: number;
+  last_updated: string;
 }
 
 declare interface LinkageConfig {
@@ -2096,6 +2132,7 @@ declare interface RecommendationPipelineResponse {
   recorded_at: string;
   is_fallback_session: boolean;
   fallback_message: string;
+  cycle_status?: CycleStatusResponse | null;
 }
 
 declare interface RegimeBreakdown {
