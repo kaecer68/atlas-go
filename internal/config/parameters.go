@@ -968,7 +968,6 @@ type PostTradeGateParameters struct {
 	EvaluationIntervalHours ParameterMetadata[int]     `json:"evaluation_interval_hours"`
 }
 
-// ParametersConfig is the top-level configuration for all investment model parameters.
 // RSITwParameters holds tunable values for the RSI-tw retail sentiment calculator.
 type RSITwParameters struct {
 	// Part C — Institutional / Derivative Flow (25% weight)
@@ -1943,6 +1942,25 @@ func (p *ParametersConfig) validateEngine() error {
 		return fmt.Errorf("engine.structural_trend.min_trend_strength (%.3f) must be in [0,1]", e.StructuralTrend.MinTrendStrength.Value)
 	}
 
+	// RSITw threshold ordering — C1 (futures OI) thresholds must be monotonically non-decreasing
+	if p.RSITw.C1VeryBullishThreshold.Value < p.RSITw.C1BullishThreshold.Value {
+		return fmt.Errorf("rsi_tw.c1_very_bullish_threshold (%.0f) must be >= c1_bullish_threshold (%.0f)", p.RSITw.C1VeryBullishThreshold.Value, p.RSITw.C1BullishThreshold.Value)
+	}
+	if p.RSITw.C1BullishThreshold.Value < p.RSITw.C1BearishThreshold.Value {
+		return fmt.Errorf("rsi_tw.c1_bullish_threshold (%.0f) must be >= c1_bearish_threshold (%.0f)", p.RSITw.C1BullishThreshold.Value, p.RSITw.C1BearishThreshold.Value)
+	}
+	if p.RSITw.C1BearishThreshold.Value < p.RSITw.C1VeryBearishThreshold.Value {
+		return fmt.Errorf("rsi_tw.c1_bearish_threshold (%.0f) must be >= c1_very_bearish_threshold (%.0f)", p.RSITw.C1BearishThreshold.Value, p.RSITw.C1VeryBearishThreshold.Value)
+	}
+
+	// C3 (ETF net subscription) thresholds must be monotonically non-decreasing
+	if p.RSITw.C3VeryBullishThreshold.Value < p.RSITw.C3BullishThreshold.Value {
+		return fmt.Errorf("rsi_tw.c3_very_bullish_threshold (%.0f) must be >= c3_bullish_threshold (%.0f)", p.RSITw.C3VeryBullishThreshold.Value, p.RSITw.C3BullishThreshold.Value)
+	}
+	if p.RSITw.C3BullishThreshold.Value < p.RSITw.C3BearishThreshold.Value {
+		return fmt.Errorf("rsi_tw.c3_bullish_threshold (%.0f) must be >= c3_bearish_threshold (%.0f)", p.RSITw.C3BullishThreshold.Value, p.RSITw.C3BearishThreshold.Value)
+	}
+
 	return nil
 }
 
@@ -1976,6 +1994,7 @@ func LoadParametersConfig(path string) (*ParametersConfig, error) {
 	mergeEngineDefaults(&cfg)
 	mergeSectorExecutorDefaults(&cfg)
 	mergeIndustryDefaults(&cfg)
+	mergeRSITwDefaults(&cfg)
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate parameters config: %w", err)
@@ -2403,5 +2422,54 @@ func mergeIndustryDefaults(cfg *ParametersConfig) {
 	}
 	if i.HistoryRetentionDays.Value == 0 {
 		i.HistoryRetentionDays = def.HistoryRetentionDays
+	}
+}
+
+// mergeRSITwDefaults fills zero-valued RSITwParameters fields with defaults.
+func mergeRSITwDefaults(cfg *ParametersConfig) {
+	def := DefaultParametersConfig().RSITw
+	r := &cfg.RSITw
+
+	if r.C1VeryBullishThreshold.Value == 0 {
+		r.C1VeryBullishThreshold = def.C1VeryBullishThreshold
+	}
+	if r.C1BullishThreshold.Value == 0 {
+		r.C1BullishThreshold = def.C1BullishThreshold
+	}
+	if r.C1BearishThreshold.Value == 0 {
+		r.C1BearishThreshold = def.C1BearishThreshold
+	}
+	if r.C1VeryBearishThreshold.Value == 0 {
+		r.C1VeryBearishThreshold = def.C1VeryBearishThreshold
+	}
+	if r.C2NeutralMidpoint.Value == 0 {
+		r.C2NeutralMidpoint = def.C2NeutralMidpoint
+	}
+	if r.C2NetflowScalingFactor.Value == 0 {
+		r.C2NetflowScalingFactor = def.C2NetflowScalingFactor
+	}
+	if r.C3VeryBullishThreshold.Value == 0 {
+		r.C3VeryBullishThreshold = def.C3VeryBullishThreshold
+	}
+	if r.C3BullishThreshold.Value == 0 {
+		r.C3BullishThreshold = def.C3BullishThreshold
+	}
+	if r.C3BearishThreshold.Value == 0 {
+		r.C3BearishThreshold = def.C3BearishThreshold
+	}
+	if r.DGeoPoliticalRiskThreshold.Value == 0 {
+		r.DGeoPoliticalRiskThreshold = def.DGeoPoliticalRiskThreshold
+	}
+	if r.DGeoPoliticalRiskMultiplier.Value == 0 {
+		r.DGeoPoliticalRiskMultiplier = def.DGeoPoliticalRiskMultiplier
+	}
+	if r.DVIXSpikeThreshold.Value == 0 {
+		r.DVIXSpikeThreshold = def.DVIXSpikeThreshold
+	}
+	if r.DVIXSpikeMultiplier.Value == 0 {
+		r.DVIXSpikeMultiplier = def.DVIXSpikeMultiplier
+	}
+	if r.DCreditTighteningMultiplier.Value == 0 {
+		r.DCreditTighteningMultiplier = def.DCreditTighteningMultiplier
 	}
 }

@@ -96,6 +96,7 @@ func NewCalculator() *Calculator {
 	return &Calculator{
 		marginHistory: make([]float64, 0, 90),
 		vixHistory:    make([]float64, 0, 90),
+		params:        config.DefaultParametersConfig().RSITw,
 	}
 }
 
@@ -115,12 +116,13 @@ func (c *Calculator) ComputeFinal(data RSITwInput) RSITwSnapshot {
 	c.mu.RLock()
 	marginSnap := make([]float64, len(c.marginHistory))
 	copy(marginSnap, c.marginHistory)
+	params := c.params // snapshot params under lock to avoid data race with SetParams
 	c.mu.RUnlock()
 
 	subs := make(map[string]RSISubIndicator, 9)
 	partA := c.computePartA(data, marginSnap, subs)
-	partC := c.computePartC(data, subs)
-	adj := c.computeAdjustmentFactor(data, subs)
+	partC := c.computePartC(data, subs, &params)
+	adj := c.computeAdjustmentFactor(data, subs, &params)
 	final := (partA*0.40 + partC*0.25) * adj
 	final = clamp(final, -1.0, 1.0)
 
@@ -306,35 +308,35 @@ func (c *Calculator) subA6(data RSITwInput, subs map[string]RSISubIndicator) flo
 // Part C — Institutional / Derivative Flow (25 % weight)
 // ---------------------------------------------------------------------------
 
-func (c *Calculator) computePartC(data RSITwInput, subs map[string]RSISubIndicator) float64 {
+func (c *Calculator) computePartC(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
 	var total float64
 
 	// C1: Small TAIEX Futures OI (weight 0.40)
-	total += c.subC1(data, subs)
+	total += c.subC1(data, subs, params)
 
 	// C2: Foreign / Institutional Net Flow Proxy (weight 0.35)
-	total += c.subC2(data, subs)
+	total += c.subC2(data, subs, params)
 
 	// C3: ETF Net Subscription (weight 0.25)
-	total += c.subC3(data, subs)
+	total += c.subC3(data, subs, params)
 
 	return clamp(total, -1.0, 1.0)
 }
 
 // C1: Small TAIEX Futures OI (weight 0.40)
-func (c *Calculator) subC1(data RSITwInput, subs map[string]RSISubIndicator) float64 {
+func (c *Calculator) subC1(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
 	const weight = 0.40
 	pct := data.RetailFuturesPct
 	var score float64
 	if pct == 0 {
 		score = 0.5
-	} else if pct > c.params.C1VeryBullishThreshold.Value {
+	} else if pct > params.C1VeryBullishThreshold.Value {
 		score = 0.9
-	} else if pct > c.params.C1BullishThreshold.Value {
+	} else if pct > params.C1BullishThreshold.Value {
 		score = 0.7
-	} else if pct > c.params.C1BearishThreshold.Value {
+	} else if pct > params.C1BearishThreshold.Value {
 		score = 0.5
-	} else if pct > c.params.C1VeryBearishThreshold.Value {
+	} else if pct > params.C1VeryBearishThreshold.Value {
 		score = 0.25
 	} else {
 		score = 0.1
@@ -345,7 +347,7 @@ func (c *Calculator) subC1(data RSITwInput, subs map[string]RSISubIndicator) flo
 }
 
 // C2: Foreign / Institutional Net Flow Proxy (weight 0.35)
-func (c *Calculator) subC2(data RSITwInput, subs map[string]RSISubIndicator) float64 {
+func (c *Calculator) subC2(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
 	const weight = 0.35
 	netFlow := data.ForeignInvestorNet + data.DomesticFundNet
 	ind := RSISubIndicator{Weight: weight, Value: netFlow}
@@ -356,8 +358,8 @@ func (c *Calculator) subC2(data RSITwInput, subs map[string]RSISubIndicator) flo
 		return 0
 	}
 
-	scaling := c.params.C2NetflowScalingFactor.Value
-	mid := c.params.C2NeutralMidpoint.Value
+	scaling := params.C2NetflowScalingFactor.Value
+	mid := params.C2NeutralMidpoint.Value
 	score := mid + (netFlow / scaling)
 	ind.ZScore = clamp(score, 0.1, 0.9)
 	subs["c2_inst_flow"] = ind
@@ -365,19 +367,19 @@ func (c *Calculator) subC2(data RSITwInput, subs map[string]RSISubIndicator) flo
 }
 
 // C3: ETF Net Subscription (weight 0.25)
-func (c *Calculator) subC3(data RSITwInput, subs map[string]RSISubIndicator) float64 {
+func (c *Calculator) subC3(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
 	const weight = 0.25
 	netSub := data.ETFNetSubscription
 	var score float64
 	if netSub == 0 {
 		score = 0.5
-	} else if netSub > c.params.C3VeryBullishThreshold.Value {
+	} else if netSub > params.C3VeryBullishThreshold.Value {
 		score = 0.9
-	} else if netSub > c.params.C3BullishThreshold.Value {
+	} else if netSub > params.C3BullishThreshold.Value {
 		score = 0.7
 	} else if netSub > 0 {
 		score = 0.55
-	} else if netSub > c.params.C3BearishThreshold.Value {
+	} else if netSub > params.C3BearishThreshold.Value {
 		score = 0.45
 	} else {
 		score = 0.2
@@ -391,17 +393,17 @@ func (c *Calculator) subC3(data RSITwInput, subs map[string]RSISubIndicator) flo
 // Part D — Adjustment Factor (0.8 – 1.2)
 // ---------------------------------------------------------------------------
 
-func (c *Calculator) computeAdjustmentFactor(data RSITwInput, subs map[string]RSISubIndicator) float64 {
+func (c *Calculator) computeAdjustmentFactor(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
 	factor := 1.0
 
 	// D1: Geopolitical Risk (multiplier 0.85)
-	factor *= c.factorD1(data, subs)
+	factor *= c.factorD1(data, subs, params)
 
 	// D2: VIX Spike Override (multiplier 0.90)
-	factor *= c.factorD2(data, subs)
+	factor *= c.factorD2(data, subs, params)
 
 	// D3: Credit Control Signal (multiplier 0.80)
-	factor *= c.factorD3(data, subs)
+	factor *= c.factorD3(data, subs, params)
 
 	// D4: Military / Flash Crash (multiplier 1.15, placeholder)
 	factor *= c.factorD4(subs)
@@ -409,10 +411,10 @@ func (c *Calculator) computeAdjustmentFactor(data RSITwInput, subs map[string]RS
 	return clamp(factor, 0.8, 1.2)
 }
 
-func (c *Calculator) factorD1(data RSITwInput, subs map[string]RSISubIndicator) float64 {
+func (c *Calculator) factorD1(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
 	const key = "d1_geopolitical"
-	if data.GeopoliticalRisk > c.params.DGeoPoliticalRiskThreshold.Value {
-		mult := c.params.DGeoPoliticalRiskMultiplier.Value
+	if data.GeopoliticalRisk > params.DGeoPoliticalRiskThreshold.Value {
+		mult := params.DGeoPoliticalRiskMultiplier.Value
 		subs[key] = RSISubIndicator{Value: data.GeopoliticalRisk, ZScore: mult}
 		return mult
 	}
@@ -420,10 +422,10 @@ func (c *Calculator) factorD1(data RSITwInput, subs map[string]RSISubIndicator) 
 	return 1.0
 }
 
-func (c *Calculator) factorD2(data RSITwInput, subs map[string]RSISubIndicator) float64 {
+func (c *Calculator) factorD2(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
 	const key = "d2_vix_spike"
-	if data.VIXLevel > c.params.DVIXSpikeThreshold.Value {
-		mult := c.params.DVIXSpikeMultiplier.Value
+	if data.VIXLevel > params.DVIXSpikeThreshold.Value {
+		mult := params.DVIXSpikeMultiplier.Value
 		subs[key] = RSISubIndicator{Value: data.VIXLevel, ZScore: mult}
 		return mult
 	}
@@ -431,10 +433,10 @@ func (c *Calculator) factorD2(data RSITwInput, subs map[string]RSISubIndicator) 
 	return 1.0
 }
 
-func (c *Calculator) factorD3(data RSITwInput, subs map[string]RSISubIndicator) float64 {
+func (c *Calculator) factorD3(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
 	const key = "d3_credit_control"
 	if data.CreditTightening {
-		mult := c.params.DCreditTighteningMultiplier.Value
+		mult := params.DCreditTighteningMultiplier.Value
 		subs[key] = RSISubIndicator{Value: 1, ZScore: mult, IsFallback: true}
 		return mult
 	}
