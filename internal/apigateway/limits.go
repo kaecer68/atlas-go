@@ -49,6 +49,10 @@ var (
 	// TEJRate: per-second + daily quota.
 	TEJRate  = rate.Every(time.Second)
 	TEJBurst = 1
+
+	// TWSEOddLotRate: 30 RPM (1 per 2 seconds).
+	TWSEOddLotRate  = rate.Every(2 * time.Second)
+	TWSEOddLotBurst = 5
 )
 
 // Shared limiters (same API endpoint)
@@ -84,6 +88,9 @@ func NewRateLimitManager() *RateLimitManager {
 			"sox_index":           rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"sector_data":         rate.NewLimiter(rate.Inf, 0),
 			"day_trading":         rate.NewLimiter(TWSEMarginRate, TWSEMarginBurst), // same tier as TWSE margin
+			"taifex-daily":        rate.NewLimiter(rate.Every(3*time.Second), 5),
+			"twse-etf":            rate.NewLimiter(rate.Every(2*time.Second), 5), // 30 RPM, TWSE ETF net subscription
+			"twse-oddlot":         rate.NewLimiter(TWSEOddLotRate, TWSEOddLotBurst),
 			"bdi":                 rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 		},
 	}

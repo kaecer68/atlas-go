@@ -160,6 +160,9 @@ func channelIDs() []string {
 		"sox_index",
 		"sector_data",
 		"day_trading",
+		"taifex-daily",
+		"twse-etf",
+		"twse-oddlot",
 		"bdi",
 	}
 }
