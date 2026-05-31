@@ -5,6 +5,8 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 // SiliconIndicatorSnapshot captures key silicon cycle indicators at a point in time,
@@ -75,6 +77,19 @@ func defaultCardConfig() CardConfig {
 }
 
 func resolveCardConfig() CardConfig {
+	if params := config.GetParametersConfig(); params != nil {
+		cc := params.Industry.CompositeCard.Value
+		thresholds := make(map[string]SentimentBounds, len(cc.SentimentThresholds))
+		for k, v := range cc.SentimentThresholds {
+			thresholds[k] = SentimentBounds{Min: v.Min, Max: v.Max}
+		}
+		return CardConfig{
+			LayerWeights:        cc.LayerWeights,
+			SentimentThresholds: thresholds,
+			ClampMin:            cc.ClampMin,
+			ClampMax:            cc.ClampMax,
+		}
+	}
 	return defaultCardConfig()
 }
 

@@ -1,5 +1,9 @@
 package narrative
 
+import (
+	"github.com/kaecer68/atlas-go/internal/config"
+)
+
 // SeasonalBridge implements industry.NarrativeSeasonalProvider, bridging
 // the macro-narrative event system into seasonal pattern adjustment calculations.
 // It maps active narrative themes to industry-specific seasonal multipliers.
@@ -51,6 +55,23 @@ func (sb *SeasonalBridge) ActiveThemes() []string {
 //	JPY_carry_unwind → dampens risk-on sectors (ai_supply_chain, growth)
 //	geopolitical_risk_spike → amplifies defensive (consumer, financials), dampens export
 func (sb *SeasonalBridge) SeasonalMultiplier(theme string, industryID string, direction float64) float64 {
+	// Config-first lookup: if ParametersConfig has seasonal multipliers, use them.
+	if params := config.GetParametersConfig(); params != nil {
+		sm := params.Industry.SeasonalMultipliers.Value
+		if tm, ok := sm.ThemeMultipliers[theme]; ok {
+			if direction > 0 {
+				if m, found := tm.BullMultiplier[industryID]; found {
+					return m
+				}
+			} else {
+				if m, found := tm.BearMultiplier[industryID]; found {
+					return m
+				}
+			}
+		}
+		// Fall through to hardcoded logic if config has no match for this theme+industry.
+	}
+
 	switch theme {
 	case "oil_price_shock":
 		switch industryID {
@@ -173,6 +194,15 @@ func (sb *SeasonalBridge) SeasonalMultiplier(theme string, industryID string, di
 	}
 }
 
+// correlationPairKey returns a canonical key for an unordered industry pair,
+// ensuring a|b and b|a produce the same map lookup key.
+func correlationPairKey(a, b string) string {
+	if a < b {
+		return a + "|" + b
+	}
+	return b + "|" + a
+}
+
 // CorrelationMultiplier returns the correlation adjustment multiplier for a
 // given narrative theme and industry pair. This enables dynamic supply chain
 // linkage correlation modulation based on active macro events:
@@ -185,6 +215,20 @@ func (sb *SeasonalBridge) SeasonalMultiplier(theme string, industryID string, di
 //
 // Returns 1.0 when the theme has no effect on the given pair.
 func (sb *SeasonalBridge) CorrelationMultiplier(theme string, industryA, industryB string) float64 {
+	// Config-first lookup: if ParametersConfig has correlation multipliers, use them.
+	if params := config.GetParametersConfig(); params != nil {
+		sm := params.Industry.SeasonalMultipliers.Value
+		corrs, ok := sm.ThemeCorrelations[theme]
+		if ok {
+			// Check both orderings since the caller may pass industries in any order.
+			key := correlationPairKey(industryA, industryB)
+			if m, found := corrs[key]; found {
+				return m
+			}
+		}
+		// Fall through to hardcoded logic if config has no match.
+	}
+
 	match := func(x, y string) bool {
 		return (industryA == x && industryB == y) || (industryA == y && industryB == x)
 	}
