@@ -45,35 +45,6 @@ func (b *convictionBuilder) addWithProvenance(rule string, delta int, reason str
 	})
 }
 
-func (b *convictionBuilder) cycleAdjustment(modulator *IndustryCycleModulator, industryID string) {
-	if modulator == nil {
-		return
-	}
-	card := modulator.GetCycleCard()
-	if card == nil {
-		return
-	}
-	conf := modulator.CycleConfidenceFromCard(industryID)
-	if conf <= 0.5 {
-		return
-	}
-	delta := int((conf - 0.5) * 20)
-	if delta > 10 {
-		delta = 10
-	}
-	if delta > 0 {
-		b.addWithProvenance(
-			"modulator:cycle_status_card:cycle_adjustment",
-			delta,
-			fmt.Sprintf("週期綜合情緒 %s (%.3f) - %s 產業信心%.0f%%",
-				card.SentimentLabel, card.CompositeCoefficient, industryID, conf*100),
-			"CycleStatusCard",
-			"industry.CycleStatusCard.CompositeCoefficient",
-			fmt.Sprintf("%.3f", card.CompositeCoefficient),
-		)
-	}
-}
-
 func (b *convictionBuilder) cap(max int) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
