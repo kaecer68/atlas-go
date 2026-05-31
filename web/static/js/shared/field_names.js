@@ -1794,6 +1794,31 @@ export const FIELD = {
     is_tradable: 'is_tradable',
     source: 'source',
   },
+  RSITwCategoryA: {
+    margin_maintenance_z: 'margin_maintenance_z',
+    day_trading_z: 'day_trading_z',
+    margin_balance_z: 'margin_balance_z',
+    vix_risk_score: 'vix_risk_score',
+    weekly_pcr: 'weekly_pcr',
+    odd_lot_imbalance: 'odd_lot_imbalance',
+    a_score: 'a_score',
+  },
+  RSITwCategoryC: {
+    futures_retail_oi: 'futures_retail_oi',
+    broker_flow_score: 'broker_flow_score',
+    etf_subscription_score: 'etf_subscription_score',
+    c_score: 'c_score',
+  },
+  RSITwCategoryD: {
+    adjustment_factor: 'adjustment_factor',
+    active_events: 'active_events',
+    d_multiplier: 'd_multiplier',
+  },
+  RSITwSubIndicators: {
+    category_a: 'category_a',
+    category_c: 'category_c',
+    category_d: 'category_d',
+  },
   RangeFilter: {
     min: 'min',
     max: 'max',
@@ -1931,6 +1956,10 @@ export const FIELD = {
     score: 'score',
     change_pct: 'change_pct',
     interpretation: 'interpretation',
+    composite_sentiment: 'composite_sentiment',
+    retail_futures_oi: 'retail_futures_oi',
+    etf_net_subscription: 'etf_net_subscription',
+    sentiment_sub_indicators: 'sentiment_sub_indicators',
   },
   RetailSentimentSnapshot: {
     margin_balance: 'margin_balance',
@@ -1938,6 +1967,10 @@ export const FIELD = {
     day_trading_ratio: 'day_trading_ratio',
     margin_percentile: 'margin_percentile',
     timestamp: 'timestamp',
+    retail_futures_oi: 'retail_futures_oi',
+    etf_net_subscription: 'etf_net_subscription',
+    composite_sentiment: 'composite_sentiment',
+    sentiment_sub_indicators: 'sentiment_sub_indicators',
   },
   RiskEvent: {
     id: 'id',

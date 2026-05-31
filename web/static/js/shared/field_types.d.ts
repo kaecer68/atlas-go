@@ -1959,6 +1959,35 @@ declare interface Quote {
   source: string;
 }
 
+declare interface RSITwCategoryA {
+  margin_maintenance_z: number;
+  day_trading_z: number;
+  margin_balance_z: number;
+  vix_risk_score: number;
+  weekly_pcr: number;
+  odd_lot_imbalance: number;
+  a_score: number;
+}
+
+declare interface RSITwCategoryC {
+  futures_retail_oi: number;
+  broker_flow_score: number;
+  etf_subscription_score: number;
+  c_score: number;
+}
+
+declare interface RSITwCategoryD {
+  adjustment_factor: number;
+  active_events: string[];
+  d_multiplier: number;
+}
+
+declare interface RSITwSubIndicators {
+  category_a?: string | null;
+  category_c?: string | null;
+  category_d?: string | null;
+}
+
 declare interface RangeFilter {
   min?: number | null;
   max?: number | null;
@@ -2112,6 +2141,10 @@ declare interface RetailSentimentResponse {
   score: number;
   change_pct: number;
   interpretation: string;
+  composite_sentiment: number;
+  retail_futures_oi?: number;
+  etf_net_subscription?: number;
+  sentiment_sub_indicators?: RSITwSubIndicators | null;
 }
 
 declare interface RetailSentimentSnapshot {
@@ -2120,6 +2153,10 @@ declare interface RetailSentimentSnapshot {
   day_trading_ratio: number;
   margin_percentile: number;
   timestamp: string;
+  retail_futures_oi?: number;
+  etf_net_subscription?: number;
+  composite_sentiment: number;
+  sentiment_sub_indicators?: string | null;
 }
 
 declare interface RiskEvent {
