@@ -141,6 +141,21 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	g.registry.Register("day_trading", dayTradingAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "day_trading")
 
+	// --- TAIFEX Daily (PCR, retail futures OI — no API key required) ---
+	taifexAdapter := NewTaifexChannelAdapter()
+	g.registry.Register("taifex-daily", taifexAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "taifex-daily")
+
+	// --- TWSE Odd-Lot Trading (no API key required) ---
+	oddlotAdapter := NewTWSEOddLotChannelAdapter()
+	g.registry.Register("twse_oddlot", oddlotAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "twse_oddlot")
+
+	// --- TWSE ETF Net Subscription (no API key required) ---
+	etfAdapter := NewTWSEETFChannelAdapter()
+	g.registry.Register("twse_etf", etfAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "twse_etf")
+
 	// --- JANUS Regime (internal computed engine, optional) ---
 	if janusEngine != nil {
 		janusAdapter := NewJANUSRegimeChannelAdapter(janusEngine)
