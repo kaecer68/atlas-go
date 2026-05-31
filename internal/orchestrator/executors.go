@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -505,6 +506,48 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 			if recs[ms.RecIndex].ConvictionBreakdown != nil {
 				recs[ms.RecIndex].ConvictionBreakdown.Steps = append(recs[ms.RecIndex].ConvictionBreakdown.Steps, step)
 				recs[ms.RecIndex].ConvictionBreakdown.Final = recs[ms.RecIndex].Conviction
+			}
+		}
+	}
+
+	// Wave 4: Apply CycleStatusCard composite sentiment as an additional
+	// conviction layer for recommendations with known industry mappings.
+	if plugins.cycleModulator != nil && plugins.cycleModulator.skillToIndustry != nil {
+		card := plugins.cycleModulator.GetCycleCard()
+		if card != nil {
+			skillLookup := make(map[string]string, len(registry.Agents))
+			for _, agent := range registry.Agents {
+				skillLookup[agent.ID] = agent.Skill
+			}
+			for i := range recs {
+				if recs[i].ConvictionBreakdown == nil {
+					continue
+				}
+				skill := skillLookup[recs[i].Agent]
+				industryID, ok := plugins.cycleModulator.skillToIndustry[skill]
+				if !ok {
+					continue
+				}
+				cycleConf := plugins.cycleModulator.CycleConfidenceFromCard(industryID)
+				delta := 0
+				switch {
+				case card.CompositeCoefficient > 1.05:
+					delta = int(math.Round(10 * (card.CompositeCoefficient - 1.0)))
+				case card.CompositeCoefficient < 0.95:
+					delta = int(math.Round(10 * (card.CompositeCoefficient - 1.0)))
+				}
+				cycleStep := domain.ConvictionStep{
+					Rule:        "modulator:cycle_status_card",
+					Delta:       delta,
+					Reason:      fmt.Sprintf("週期綜合情緒: %s (%.3f, 週期信心:%.0f%%)", card.SentimentLabel, card.CompositeCoefficient, cycleConf*100),
+					Source:      "CycleStatusCard",
+					ParamRef:    "industry.CycleStatusCard.CompositeCoefficient",
+					ParamValue:  fmt.Sprintf("%.3f", card.CompositeCoefficient),
+					Sensitivity: paramSensitivity(fmt.Sprintf("%.3f", card.CompositeCoefficient)),
+				}
+				recs[i].Conviction += delta
+				recs[i].ConvictionBreakdown.Steps = append(recs[i].ConvictionBreakdown.Steps, cycleStep)
+				recs[i].ConvictionBreakdown.Final = recs[i].Conviction
 			}
 		}
 	}

@@ -348,6 +348,21 @@ export const FIELD = {
     last_order_date: 'last_order_date',
     order_visibility_months: 'order_visibility_months',
   },
+  CycleCalibrationConfig: {
+    min_samples: 'min_samples',
+    learning_rate: 'learning_rate',
+    hit_rate_high: 'hit_rate_high',
+    hit_rate_low: 'hit_rate_low',
+    weight_clamp_min: 'weight_clamp_min',
+    weight_clamp_max: 'weight_clamp_max',
+    window_size: 'window_size',
+  },
+  CycleOutcome: {
+    session_id: 'session_id',
+    date: 'date',
+    layer_signals: 'layer_signals',
+    actual_return: 'actual_return',
+  },
   CyclePhaseTransition: {
     from_phase: 'from_phase',
     to_phase: 'to_phase',
@@ -388,6 +403,16 @@ export const FIELD = {
     composite_coefficient: 'composite_coefficient',
     sentiment_label: 'sentiment_label',
     breakdown: 'breakdown',
+  },
+  CycleStatusResponse: {
+    sentiment_label: 'sentiment_label',
+    composite_coefficient: 'composite_coefficient',
+    cycle_confidence: 'cycle_confidence',
+    business_cycle: 'business_cycle',
+    silicon_phase_name: 'silicon_phase_name',
+    is_favorable: 'is_favorable',
+    active_patterns: 'active_patterns',
+    active_events: 'active_events',
   },
   CycleThresholdConfig: {
     expansion_revenue_pct: 'expansion_revenue_pct',
@@ -1147,6 +1172,7 @@ export const FIELD = {
     max_daily_weight_change: 'max_daily_weight_change',
     linkage_params: 'linkage_params',
     dynamic_env: 'dynamic_env',
+    cycle_calibration: 'cycle_calibration',
     history_retention_days: 'history_retention_days',
     default_metrics: 'default_metrics',
   },
@@ -1218,6 +1244,12 @@ export const FIELD = {
     weight: 'weight',
     contribution: 'contribution',
     reason: 'reason',
+  },
+  LayerMetrics: {
+    total_signals: 'total_signals',
+    correct_signals: 'correct_signals',
+    accuracy: 'accuracy',
+    last_updated: 'last_updated',
   },
   LinkageConfig: {
     downstream_decay_factor: 'downstream_decay_factor',
@@ -1919,6 +1951,7 @@ export const FIELD = {
     recorded_at: 'recorded_at',
     is_fallback_session: 'is_fallback_session',
     fallback_message: 'fallback_message',
+    cycle_status: 'cycle_status',
   },
   RegimeBreakdown: {
     regimes: 'regimes',

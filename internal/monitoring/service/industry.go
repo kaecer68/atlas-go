@@ -10,14 +10,15 @@ import (
 )
 
 type IndustryService struct {
-	Classifier      *industry.ClassificationTree
-	SeasonalEngine  *industry.SeasonalEngine
-	CycleTracker    *industry.CycleTracker
-	LinkageAnalyzer *industry.LinkageAnalyzer
-	RiskMonitor     *industry.RiskMonitor
-	SiliconTracker  *industry.SiliconCycleTracker
-	EventCalendar   *industry.EventCalendar
-	CardBuilder     *industry.CycleStatusCardBuilder
+	Classifier       *industry.ClassificationTree
+	SeasonalEngine   *industry.SeasonalEngine
+	CycleTracker     *industry.CycleTracker
+	LinkageAnalyzer  *industry.LinkageAnalyzer
+	RiskMonitor      *industry.RiskMonitor
+	SiliconTracker   *industry.SiliconCycleTracker
+	EventCalendar    *industry.EventCalendar
+	CardBuilder      *industry.CycleStatusCardBuilder
+	CycleCalibration *industry.CycleCalibration
 }
 
 func NewIndustryService(
@@ -947,4 +948,31 @@ func (s *IndustryService) BuildIndustryCycleStatusCard(now time.Time, industryID
 		return nil, fmt.Errorf("card builder not initialized")
 	}
 	return s.CardBuilder.BuildCard(now, industryID)
+}
+
+// SetCycleCalibration injects the calibration tracker and wires it into
+// the global card builder state so resolveCardConfig picks up calibrated weights.
+func (s *IndustryService) SetCycleCalibration(cal *industry.CycleCalibration) {
+	s.CycleCalibration = cal
+	industry.SetGlobalCycleCalibration(cal)
+}
+
+// GetCalibrationMetrics returns per-layer accuracy metrics from the
+// cycle calibration tracker, or nil if no calibration is active.
+func (s *IndustryService) GetCalibrationMetrics() map[string]industry.LayerMetrics {
+	if s.CycleCalibration == nil {
+		return nil
+	}
+	return s.CycleCalibration.GetMetrics()
+}
+
+// RecordCycleCalibrationOutcome stores one calibration data point.
+// layerSignals should map the layer name to its raw signal value from the
+// CycleStatusCard (e.g., silicon score, business_cycle confidence, etc.).
+func (s *IndustryService) RecordCycleCalibrationOutcome(
+	sessionID string, date time.Time, layerSignals map[string]float64, actualReturn float64,
+) {
+	if s.CycleCalibration != nil {
+		s.CycleCalibration.RecordOutcome(sessionID, date, layerSignals, actualReturn)
+	}
 }

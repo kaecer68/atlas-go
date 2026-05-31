@@ -1,12 +1,15 @@
 package industry
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 // TaiwanEventType is a canonical string enum for Taiwan market event types.
@@ -88,6 +91,81 @@ func NewEventCalendar() *EventCalendar {
 		annualRules: defaultEventRules(),
 	}
 	return tec
+}
+
+// UpdateFromProvider fetches calendar events from an external provider and merges
+// them into the existing event list. Provider events are additive — they do not
+// replace existing events of different types. Deduplication is by (EventType, Date).
+//
+// This method is safe for concurrent use via the EventCalendar's internal mutex.
+func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marketdata.CalendarEventProvider) {
+	if provider == nil {
+		return
+	}
+
+	now := time.Now()
+	year := now.Year()
+	providerEvents, err := provider.FetchEvents(ctx, year)
+	if err != nil {
+		logging.Warn("event_calendar", "provider_fetch_failed",
+			logging.FStr("provider", provider.Name()),
+			logging.Err(err),
+		)
+		return
+	}
+
+	if len(providerEvents) == 0 {
+		return
+	}
+
+	tec.mu.Lock()
+	defer tec.mu.Unlock()
+
+	seen := make(map[string]bool)
+	for _, evt := range tec.events {
+		key := evt.EventType + "|" + evt.PeakDate.Format("2006-01-02")
+		seen[key] = true
+	}
+
+	for _, pe := range providerEvents {
+		key := pe.EventType + "|" + pe.Date
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+
+		eventDate, parseErr := time.Parse("2006-01-02", pe.Date)
+		if parseErr != nil {
+			logging.Warn("event_calendar", "parse_date_failed",
+				logging.FStr("date", pe.Date),
+				logging.Err(parseErr),
+			)
+			continue
+		}
+
+		evt := CalendarEvent{
+			ID:                  fmt.Sprintf("%s_%s_%s", pe.EventType, pe.Date, pe.Symbol),
+			Name:                pe.Name,
+			NameEN:              "",
+			EventType:           pe.EventType,
+			Description:         pe.Description,
+			Direction:           pe.Direction,
+			BaseWeight:          pe.Weight,
+			Active:              false,
+			StartDate:           eventDate.AddDate(0, 0, -3),
+			EndDate:             eventDate.AddDate(0, 0, 3),
+			PeakDate:            eventDate,
+			DecayDays:           3,
+			SentimentAdjustment: 0.0,
+		}
+
+		tec.events = append(tec.events, evt)
+	}
+
+	logging.Info("event_calendar", "provider_merged",
+		logging.FStr("provider", provider.Name()),
+		logging.FInt("added", len(providerEvents)),
+	)
 }
 
 // ---------------------------------------------------------------------------

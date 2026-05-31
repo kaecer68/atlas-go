@@ -463,6 +463,9 @@ type IndustryParameters struct {
 
 	DynamicEnv ParameterMetadata[DynamicEnvConfig] `json:"dynamic_env"`
 
+	// Cycle compass calibration parameters for per-layer accuracy tracking.
+	CycleCalibration ParameterMetadata[CycleCalibrationConfig] `json:"cycle_calibration"`
+
 	// Cycle tracking operational parameters
 	HistoryRetentionDays ParameterMetadata[int] `json:"history_retention_days"`
 
@@ -480,6 +483,19 @@ type IndustryDefaultMetrics struct {
 	ProfitGrowthYoY     float64 `json:"profit_growth_yoy"`
 	InventoryTurnover   float64 `json:"inventory_turnover"`
 	CapacityUtilization float64 `json:"capacity_utilization"`
+}
+
+// CycleCalibrationConfig holds calibration parameters for the cycle compass
+// layer weight self-calibration loop. Each layer's hit rate is tracked over
+// a rolling window and weights are adjusted up/down based on accuracy.
+type CycleCalibrationConfig struct {
+	MinSamples     int     `json:"min_samples"`
+	LearningRate   float64 `json:"learning_rate"`
+	HitRateHigh    float64 `json:"hit_rate_high"`
+	HitRateLow     float64 `json:"hit_rate_low"`
+	WeightClampMin float64 `json:"weight_clamp_min"`
+	WeightClampMax float64 `json:"weight_clamp_max"`
+	WindowSize     int     `json:"window_size"`
 }
 
 // CycleThresholdConfig holds business cycle thresholds for a specific industry.

@@ -287,7 +287,7 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 		linkageAnalyzer,
 		industry.NewRiskMonitor(),
 		nil, // siliconTracker
-		nil, // eventCalendar
+		newWiredEventCalendar(marketdata.NewTWSECalendarProvider()), // eventCalendar with TWSE provider
 	)
 
 	replayPath := config.Load().ReplayDataPath
@@ -300,7 +300,23 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 		}
 	}
 
+	params := config.GetParametersConfig()
+	calCfg := params.Industry.CycleCalibration.Value
+	cal := industry.NewCycleCalibration(calCfg)
+	svc.SetCycleCalibration(cal)
+
 	return svc
+}
+
+func newWiredEventCalendar(provider marketdata.CalendarEventProvider) *industry.EventCalendar {
+	ec := industry.NewEventCalendar()
+	if provider == nil {
+		return ec
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	ec.UpdateFromProvider(ctx, provider)
+	return ec
 }
 
 func (a *DashboardAPI) SetEventBus(eventBus *eventbus.ChannelEventBus) {
@@ -476,6 +492,16 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 				BusinessCycle:   string(pos.BusinessCycle),
 				CycleConfidence: pos.Confidence,
 			}
+		}).
+		WithCycleCardProvider(func() *industry.CycleStatusCard {
+			if a.industryService == nil || a.industryService.CardBuilder == nil {
+				return nil
+			}
+			card, err := a.industryService.CardBuilder.BuildCompositeCard(time.Now())
+			if err != nil {
+				return nil
+			}
+			return card
 		})
 	pipelineHandlers := apipipeline.NewHandlers(pipelineSvc)
 	pipelineHandlers.ReasoningHandler = &apipipeline.ReasoningHandler{BaseDir: a.ledgerDir}

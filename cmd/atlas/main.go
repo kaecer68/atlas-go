@@ -885,6 +885,20 @@ func run(args []string, deps appDeps) error {
 					},
 				})
 				log.Printf("[Gateway] registered auto_cycle_update background task (6h interval)")
+
+				calendarProvider := marketdata.NewTWSECalendarProvider()
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "auto_calendar_refresh",
+					Interval: 24 * time.Hour,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						bgCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+						defer cancel()
+						svc.EventCalendar.UpdateFromProvider(bgCtx, calendarProvider)
+						return nil
+					},
+				})
+				log.Printf("[Gateway] registered auto_calendar_refresh background task (24h interval)")
 			}
 
 			{
@@ -1308,6 +1322,39 @@ func run(args []string, deps appDeps) error {
 				},
 			})
 			log.Printf("[Gateway] registered risk_gate_calibrate background task (24h interval)")
+
+			if svc := dashboard.GetIndustryService(); svc != nil && svc.CycleCalibration != nil {
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "cycle_calibrate",
+					Interval: 24 * time.Hour,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						defaultCfg := industry.CardConfig{
+							LayerWeights: map[string]float64{
+								"silicon":        0.25,
+								"business_cycle": 0.20,
+								"seasonal":       0.15,
+								"events":         0.15,
+								"supply_chain":   0.10,
+							},
+						}
+						calibrated := svc.CycleCalibration.CalibrateWeights(defaultCfg.LayerWeights)
+						metrics := svc.CycleCalibration.GetMetrics()
+
+						logging.Info("cycle_calibrate", "completed",
+							"outcomes", svc.CycleCalibration.GetOutcomeCount(),
+							"layers", len(calibrated))
+						for layer, m := range metrics {
+							logging.Info("cycle_calibrate", "layer_accuracy",
+								"layer", layer,
+								"accuracy", m.Accuracy,
+								"signals", m.TotalSignals)
+						}
+						return nil
+					},
+				})
+				log.Printf("[Gateway] registered cycle_calibrate background task (24h interval)")
+			}
 
 			if janusEngine != nil {
 				var prevRegime string
