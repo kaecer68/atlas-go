@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"log"
 	"net/http"
 	"sync"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/retail"
 )
 
 // DrawdownProvider is an interface for retrieving the latest drawdown result.
@@ -46,6 +48,21 @@ func NewHandlers(workDir, ledgerDir string) *Handlers {
 	return h
 }
 
+// HandleRSITwCalibration serves the latest RSI-tw calibration report.
+func (h *Handlers) HandleRSITwCalibration(r *http.Request) (int, any) {
+	report, err := retail.LoadLastCalibrationReport(h.WorkDir)
+	if err != nil {
+		log.Printf("[dashboard] rsi-tw calibration report unavailable: %v", err)
+		return http.StatusOK, map[string]any{
+			"status":  "not_available",
+			"message": "no calibration report available yet. The first calibration runs on system startup and every 24h thereafter.",
+		}
+	}
+	return http.StatusOK, map[string]any{
+		"report": report,
+	}
+}
+
 // RegisterRoutes registers all dashboard management center routes.
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/data-channels", shared.Get(h.HandleDataChannels))
@@ -54,4 +71,5 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/traces/sim-latest", shared.Get(h.HandleSimLatest))
 	mux.Handle("POST /api/dashboard/channels/", shared.Adapt(h.HandleChannelAction))
 	mux.Handle("POST /api/dashboard/api-keys/update", shared.Post(h.HandleAPIKeyUpdate))
+	mux.Handle("GET /api/dashboard/rsi-tw-calibration", shared.Get(h.HandleRSITwCalibration))
 }
