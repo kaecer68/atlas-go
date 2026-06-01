@@ -136,12 +136,23 @@ func (r *PortfolioRotator) RotatePortfolio(
 		return nil
 	}
 
-	// Score each held position using the best-matching evaluator
+	// Score each held position using the best-matching evaluator.
+	// Apply a concentration penalty: positions exceeding the max limit (15%)
+	// get their conviction reduced, making them more likely to be rotated out.
 	type positionScore struct {
 		pos        domain.Position
 		conviction int
 	}
 	var positionScores []positionScore
+
+	// Compute total portfolio value for concentration calculations
+	totalValue := 0.0
+	for _, pos := range positions {
+		totalValue += pos.MarketValue
+	}
+
+	const maxPositionPct = 0.15
+	const concentrationPenalty = 30 // conviction reduction per 1% over limit
 
 	for _, pos := range positions {
 		quote, ok := quotes[pos.Symbol]
@@ -170,6 +181,20 @@ func (r *PortfolioRotator) RotatePortfolio(
 		if bestConviction == 0 {
 			bestConviction = 50
 		}
+
+		// Concentration penalty: positions over 15% get scored lower
+		if totalValue > 0 {
+			pct := pos.MarketValue / totalValue
+			if pct > maxPositionPct {
+				overPct := (pct - maxPositionPct) * 100
+				penalty := int(overPct * concentrationPenalty)
+				if penalty > bestConviction-10 {
+					penalty = bestConviction - 10
+				}
+				bestConviction -= penalty
+			}
+		}
+
 		positionScores = append(positionScores, positionScore{
 			pos: pos, conviction: bestConviction,
 		})

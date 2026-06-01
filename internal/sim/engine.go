@@ -1,6 +1,7 @@
 package sim
 
 import (
+	"strings"
 	"context"
 	"math"
 	"sort"
@@ -152,6 +153,24 @@ func (e *Engine) filterByPreTradeGate(
 			continue
 		}
 		if decision.Verdict == risk.VerdictBlock || decision.Verdict == risk.VerdictHalt {
+			// Auto-size: when blocked by position concentration, reduce order
+			// to fit within the limit instead of rejecting entirely.
+			if strings.Contains(decision.Reason, "position") && strings.Contains(decision.Reason, "would be") {
+				currentPct := posMap[rec.Symbol] / totalValue
+				limit := e.preTradeGate.MaxPositionPct()
+				if currentPct < limit {
+					maxNotional := (limit - currentPct) * totalValue
+					if maxNotional > totalValue*0.01 {
+						order.Notional = maxNotional
+						decision2, err2 := e.preTradeGate.Check(context.TODO(), order, pf, "NORMAL")
+						if err2 == nil && decision2.Verdict != risk.VerdictBlock && decision2.Verdict != risk.VerdictHalt {
+							filtered = append(filtered, rec)
+							pf = applyOrderToState(pf, order)
+							continue
+						}
+					}
+				}
+			}
 			logging.Info("sim", "pre_trade_blocked",
 				"symbol", rec.Symbol,
 				"reason", decision.Reason)

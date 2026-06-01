@@ -131,13 +131,26 @@ func (g *PreTradeGate) Check(_ context.Context, order OrderIntent, pf PortfolioS
 func (g *PreTradeGate) ruleMaxPosition(order OrderIntent, pf PortfolioState) RuleResult {
 	newNotional := pf.Positions[order.Symbol] + order.Notional
 	pct := newNotional / pf.TotalValue
+
+	// Dynamic position limit: higher conviction → higher limit.
+	// Base 15%, scales linearly from conviction 35→100 up to 22%.
+	// This rewards high-conviction picks with more allocation room.
+	limit := g.maxPositionPct
+	if order.Conviction > 50 {
+		bonus := float64(order.Conviction-50) / 100.0 * 0.07
+		limit = g.maxPositionPct + bonus
+		if limit > 0.22 {
+			limit = 0.22
+		}
+	}
+
 	return RuleResult{
 		RuleName:     "max_position_pct",
-		Passed:       pct <= g.maxPositionPct,
+		Passed:       pct <= limit,
 		CurrentValue: pct,
-		Threshold:    g.maxPositionPct,
-		Severity:     verdictSeverity(pct, g.maxPositionPct),
-		Message:      fmt.Sprintf("%s position %s would be %.1f%% of portfolio (limit %.0f%%)", order.Side, order.Symbol, pct*100, g.maxPositionPct*100),
+		Threshold:    limit,
+		Severity:     verdictSeverity(pct, limit),
+		Message:      fmt.Sprintf("%s position %s would be %.1f%% of portfolio (limit %.0f%%, conviction %d)", order.Side, order.Symbol, pct*100, limit*100, order.Conviction),
 	}
 }
 
