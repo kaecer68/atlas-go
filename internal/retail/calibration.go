@@ -152,7 +152,6 @@ func CalibrateRSITw(workDir string) (*CalibrationReport, error) {
 		report.Score = bestScore
 		report.Summary = fmt.Sprintf("%d parameter(s) adjusted, best score %.4f (baseline %.4f)", len(bestChanges), bestScore, baselineScore)
 
-		// Apply changes to the global parameter config
 		cfg := config.GetParametersConfig()
 		for _, ch := range bestChanges {
 			applyChange(&cfg.RSITw, ch)
@@ -162,13 +161,19 @@ func CalibrateRSITw(workDir string) (*CalibrationReport, error) {
 				"after", ch.After,
 				"improvement", fmt.Sprintf("%.2f%%", ch.ImprovementPct*100))
 		}
-		if err := config.GetParametersConfig().SaveWithRollback(filepath.Join(workDir, "configs", "parameters.json")); err != nil {
-			logging.Error("rsi_tw_calibrate", "save_params_failed", "err", err.Error())
-			return report, fmt.Errorf("save calibrated params: %w", err)
-		}
 
 		// Update calculator instance with new params
 		GetCalculator().SetParams(cfg.RSITw)
+	}
+
+	// Persist last calibrated score so PreTradeGate is non-zero after restart.
+	cfg := config.GetParametersConfig()
+	cfg.RSITw.LastCalibratedScore.Value = report.Score
+	cfg.RSITw.LastCalibratedScore.Source = config.SourceCalibrated
+	cfg.RSITw.LastCalibratedScore.LastCalibrated = &report.Timestamp
+	if err := cfg.SaveWithRollback(filepath.Join(workDir, "configs", "parameters.json")); err != nil {
+		logging.Error("rsi_tw_calibrate", "save_params_failed", "err", err.Error())
+		return report, fmt.Errorf("save calibrated params: %w", err)
 	}
 
 	// Persist calibration report for API/history
