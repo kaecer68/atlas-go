@@ -1,10 +1,10 @@
 package sim
 
 import (
-	"strings"
 	"context"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"

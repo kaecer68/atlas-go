@@ -15,17 +15,17 @@ import (
 // to automatically revert degraded changes or disable failing agents.
 //
 // Trigger conditions:
-//   1. Promoted experiment's rolling Sharpe drops >20% from pre-promotion baseline
-//   2. Agent Sharpe < -1.0 for 30 consecutive days
-//   3. System-wide composite score drops >15% after a calibration application
+//  1. Promoted experiment's rolling Sharpe drops >20% from pre-promotion baseline
+//  2. Agent Sharpe < -1.0 for 30 consecutive days
+//  3. System-wide composite score drops >15% after a calibration application
 //
 // Auto-rollback is the FIRST-CLASS safety mechanism: the machine corrects
 // its own mistakes without human intervention.
 type AutoRollback struct {
-	baselineMgr  *baseline.Manager
-	dwManager    *portfolio.DarwinianWeightManager
-	healthMgr    *portfolio.AgentHealthManager
-	tracker      *domain.MaturityTracker
+	baselineMgr *baseline.Manager
+	dwManager   *portfolio.DarwinianWeightManager
+	healthMgr   *portfolio.AgentHealthManager
+	tracker     *domain.MaturityTracker
 
 	// promotedSnapshot holds Sharpe before promotion, keyed by experimentID
 	promotedSnapshot map[string]float64
@@ -75,12 +75,12 @@ func (r *AutoRollback) RecordCalibration(currentCompositeScore float64) {
 
 // RollbackResult summarises a single auto-correction action.
 type RollbackResult struct {
-	Action        string    // "revert_baseline", "disable_agent", "revert_calibration"
-	TargetID      string
-	Reason        string
-	PreValue      float64
-	PostValue     float64
-	Timestamp     time.Time
+	Action    string // "revert_baseline", "disable_agent", "revert_calibration"
+	TargetID  string
+	Reason    string
+	PreValue  float64
+	PostValue float64
+	Timestamp time.Time
 }
 
 // RunDaily is the entry point for the background task.

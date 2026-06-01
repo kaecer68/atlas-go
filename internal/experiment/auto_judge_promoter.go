@@ -36,7 +36,7 @@ func NewAutoJudgePromoter(judge *Judge, baselineMgr *baseline.Manager) *AutoJudg
 	return &AutoJudgePromoter{
 		judge:           judge,
 		baselineMgr:     baselineMgr,
-		minObservations: 63,               // Welch t-test statistical threshold
+		minObservations: 63,                 // Welch t-test statistical threshold
 		promoteCooldown: 7 * 24 * time.Hour, // max 1 auto-promote per week
 	}
 }

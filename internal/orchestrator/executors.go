@@ -79,8 +79,8 @@ type ExecutionContext struct {
 	Context                    context.Context            // request-level context for cancellation propagation
 	NarrativeEvents            []narrative.NarrativeEvent // narrative events for regime evidence fusion
 	ConvictionClampingCallback func([]portfolio.ConvictionClampingEvent)
-	Scratchpad                 *Scratchpad       // optional reasoning trace recorder
-	FactorSnapshot             *FactorSnapshot   // pre-computed factor scores for executor consumption
+	Scratchpad                 *Scratchpad     // optional reasoning trace recorder
+	FactorSnapshot             *FactorSnapshot // pre-computed factor scores for executor consumption
 }
 
 // ResearchResult holds all outputs from executing registry research.

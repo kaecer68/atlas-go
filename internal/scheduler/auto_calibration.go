@@ -12,11 +12,11 @@ import (
 
 // CalibrationTask is a single background calibration job.
 type CalibrationTask struct {
-	Name         string
-	MinMaturity  domain.SystemMaturity // minimum maturity to run
-	Interval     time.Duration         // how often to run
-	LastRun      time.Time
-	Run          func(ctx context.Context) error
+	Name        string
+	MinMaturity domain.SystemMaturity // minimum maturity to run
+	Interval    time.Duration         // how often to run
+	LastRun     time.Time
+	Run         func(ctx context.Context) error
 }
 
 // BackgroundCalibrationScheduler coordinates periodic calibration tasks

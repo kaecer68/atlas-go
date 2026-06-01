@@ -13,34 +13,34 @@ import (
 
 // HealthAlert represents a single health check finding.
 type HealthAlert struct {
-	Severity    string    `json:"severity"`    // CRITICAL, WARNING, INFO
-	Category    string    `json:"category"`    // sharpe, drawdown, factor_decay, data_latency
-	Message     string    `json:"message"`
-	Value       float64   `json:"value"`
-	Threshold   float64   `json:"threshold"`
-	Timestamp   time.Time `json:"timestamp"`
-	SuggestedAction string `json:"suggested_action,omitempty"`
+	Severity        string    `json:"severity"` // CRITICAL, WARNING, INFO
+	Category        string    `json:"category"` // sharpe, drawdown, factor_decay, data_latency
+	Message         string    `json:"message"`
+	Value           float64   `json:"value"`
+	Threshold       float64   `json:"threshold"`
+	Timestamp       time.Time `json:"timestamp"`
+	SuggestedAction string    `json:"suggested_action,omitempty"`
 }
 
 // SystemHealthMonitor continuously checks system-wide health metrics
 // and publishes alerts when thresholds are breached.
 //
 // Checks performed daily:
-//   1. System Sharpe trend: declining for 10+ days → WARNING
-//   2. Max drawdown: >15% → CRITICAL, >10% → WARNING
-//   3. Factor decay: any factor IC < 0.05 for 20 days → WARNING
-//   4. Data latency: no new data in 3 days → CRITICAL
-//   5. Agent health: >30% agents muted → CRITICAL
+//  1. System Sharpe trend: declining for 10+ days → WARNING
+//  2. Max drawdown: >15% → CRITICAL, >10% → WARNING
+//  3. Factor decay: any factor IC < 0.05 for 20 days → WARNING
+//  4. Data latency: no new data in 3 days → CRITICAL
+//  5. Agent health: >30% agents muted → CRITICAL
 //
 // All checks run regardless of maturity phase. Alerts are published
 // to the event bus for downstream action (AutoRollback, notifications).
 type SystemHealthMonitor struct {
-	dwManager       *portfolio.DarwinianWeightManager
-	healthMgr       *portfolio.AgentHealthManager
-	tracker         *domain.MaturityTracker
-	sharpeHistory   []float64 // rolling system Sharpe history
-	maxHistoryLen   int
-	eventBus        *eventbus.ChannelEventBus
+	dwManager     *portfolio.DarwinianWeightManager
+	healthMgr     *portfolio.AgentHealthManager
+	tracker       *domain.MaturityTracker
+	sharpeHistory []float64 // rolling system Sharpe history
+	maxHistoryLen int
+	eventBus      *eventbus.ChannelEventBus
 }
 
 // NewSystemHealthMonitor creates a health monitor.

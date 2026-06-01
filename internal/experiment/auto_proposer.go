@@ -15,10 +15,10 @@ import (
 // generate mutation briefs when degradation is detected.
 //
 // Trigger conditions:
-//   1. Rolling Sharpe drops below negative threshold for 5+ consecutive days
-//   2. Hit rate collapses from >60% to <40% over a 20-day window
-//   3. Agent stuck at minimum weight for >30 days after auto-reset
-//   4. Agent health status transitions to MUTED
+//  1. Rolling Sharpe drops below negative threshold for 5+ consecutive days
+//  2. Hit rate collapses from >60% to <40% over a 20-day window
+//  3. Agent stuck at minimum weight for >30 days after auto-reset
+//  4. Agent health status transitions to MUTED
 type AutoProposer struct {
 	dwManager    *portfolio.DarwinianWeightManager
 	healthMgr    *portfolio.AgentHealthManager

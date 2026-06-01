@@ -98,14 +98,14 @@ type DarwinianAgentWeight struct {
 
 // DarwinianWeightManager implements Atlas-GIC style Darwinian weight system
 type DarwinianWeightManager struct {
-	weights          map[string]*DarwinianAgentWeight
-	configPath       string
-	historyPath      string
-	lookbackDays     int
-	params           *RuntimeParameters
-	mu               sync.RWMutex
-	eventBus         *eventbus.ChannelEventBus
-	maturityTracker  *domain.MaturityTracker
+	weights         map[string]*DarwinianAgentWeight
+	configPath      string
+	historyPath     string
+	lookbackDays    int
+	params          *RuntimeParameters
+	mu              sync.RWMutex
+	eventBus        *eventbus.ChannelEventBus
+	maturityTracker *domain.MaturityTracker
 }
 
 // NewDarwinianWeightManager creates a new Darwinian weight manager

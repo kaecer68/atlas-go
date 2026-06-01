@@ -385,7 +385,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 				s.Risk().clampingLogger.AppendConvictionEvents(evts)
 			}
 		},
-		Scratchpad:       s.Sim().scratchpad,
+		Scratchpad: s.Sim().scratchpad,
 	})
 	regime := researchResult.Regime
 	rawRecs := researchResult.RawRecommendations
@@ -662,7 +662,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 				s.Risk().clampingLogger.AppendConvictionEvents(evts)
 			}
 		},
-		Scratchpad:       s.Sim().scratchpad,
+		Scratchpad: s.Sim().scratchpad,
 	})
 	regime := researchResult.Regime
 	rawRecs := researchResult.RawRecommendations
