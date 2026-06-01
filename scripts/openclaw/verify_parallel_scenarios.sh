@@ -207,7 +207,7 @@ extract_scenario_signal() {
 		exit 1
 	fi
 
-	jq -S 'del(.recorded_at, .proposal_id, .commit_id, .approval_id)' "$session_summary" > "$session_normalized"
+	jq -S 'del(.recorded_at, .proposal_id, .commit_id, .approval_id, .next_experiment_agent_id)' "$session_summary" > "$session_normalized"
 	jq -s '{
 		total: length,
 		hit_count: (map(select(.hit == true)) | length),
