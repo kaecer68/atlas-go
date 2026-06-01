@@ -1,13 +1,15 @@
 package dashboard
 
 import (
-	"log"
+	"errors"
 	"net/http"
+	"os"
 	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kaecer68/atlas-go/internal/janus"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -52,10 +54,17 @@ func NewHandlers(workDir, ledgerDir string) *Handlers {
 func (h *Handlers) HandleRSITwCalibration(r *http.Request) (int, any) {
 	report, err := retail.LoadLastCalibrationReport(h.WorkDir)
 	if err != nil {
-		log.Printf("[dashboard] rsi-tw calibration report unavailable: %v", err)
-		return http.StatusOK, map[string]any{
-			"status":  "not_available",
-			"message": "no calibration report available yet. The first calibration runs on system startup and every 24h thereafter.",
+		// File not found is expected on fresh systems — keep 200 with not_available.
+		if errors.Is(err, os.ErrNotExist) {
+			return http.StatusOK, map[string]any{
+				"status":  "not_available",
+				"message": "no calibration report available yet. The first calibration runs on system startup and every 24h thereafter.",
+			}
+		}
+		logging.Error("dashboard", "rsi_tw_calibration_report_load_failed", "err", err)
+		return http.StatusInternalServerError, map[string]any{
+			"status": "error",
+			"error":  "failed to load calibration report",
 		}
 	}
 	return http.StatusOK, map[string]any{
