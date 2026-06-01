@@ -14,6 +14,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/ml"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/retail"
 )
 
 // LayerRouter encapsulates layer-based agent routing logic.
@@ -549,6 +550,32 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 				recs[i].ConvictionBreakdown.Steps = append(recs[i].ConvictionBreakdown.Steps, cycleStep)
 				recs[i].ConvictionBreakdown.Final = recs[i].Conviction
 			}
+		}
+	}
+
+	if calc := retail.GetCalculator(); calc != nil {
+		score := calc.LastScore()
+		if absScore := math.Abs(score); absScore >= 0.5 {
+			convictionDelta := int(math.Round(-15.0 * absScore / 1.0))
+			for i := range recs {
+				if recs[i].ConvictionBreakdown == nil {
+					continue
+				}
+				rsiTwStep := domain.ConvictionStep{
+					Rule:        "modulator:rsi_tw_sentiment",
+					Delta:       convictionDelta,
+					Reason:      fmt.Sprintf("散戶情緒極端 (%.2f)，降低信心", score),
+					Source:      "RSITwCalculator",
+					ParamRef:    "retail.RSITw.Score",
+					ParamValue:  fmt.Sprintf("%.4f", score),
+					Sensitivity: paramSensitivity(fmt.Sprintf("%.4f", score)),
+				}
+				recs[i].Conviction += convictionDelta
+				recs[i].ConvictionBreakdown.Steps = append(recs[i].ConvictionBreakdown.Steps, rsiTwStep)
+				recs[i].ConvictionBreakdown.Final = recs[i].Conviction
+			}
+			logging.Info("orchestrator", "rsi_tw conviction adjustment applied",
+				"score", score, "delta", convictionDelta, "recs", len(recs))
 		}
 	}
 
