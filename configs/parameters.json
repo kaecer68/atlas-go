@@ -5723,6 +5723,11 @@
         "source": "literature",
         "value": 0.01
       },
+      "max_open_positions": {
+        "rationale": "最多同時持有 5 檔標的，控制集中度風險",
+        "source": "heuristic",
+        "value": 5
+      },
       "min_cash_buffer_pct": {
         "rationale": "至少保留 5% 現金緩衝",
         "source": "heuristic",

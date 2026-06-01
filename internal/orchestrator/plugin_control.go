@@ -130,6 +130,7 @@ func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommen
 		targetPrice    float64
 		stopLossPrice  float64
 		bestAgent      string
+		bestSide       domain.Side
 	}
 
 	params := config.GetParametersConfig().Orchestrator
@@ -147,6 +148,7 @@ func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommen
 			entry.targetPrice = rec.TargetPrice
 			entry.stopLossPrice = rec.StopLossPrice
 			entry.bestAgent = rec.Agent
+				entry.bestSide = rec.Side
 		}
 	}
 
@@ -172,7 +174,7 @@ func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommen
 			Skill:         agent.Skill,
 			Layer:         agent.Layer,
 			Symbol:        symbol,
-			Side:          domain.SideBuy,
+			Side:          entry.bestSide,
 			Conviction:    avgConviction,
 			Reason:        reason,
 			TargetPrice:   entry.targetPrice,
@@ -225,6 +227,7 @@ func (e CIOPortfolioExecutorWithWeights) Apply(agent domain.AgentSpec, recs []do
 		stopLossPrice      float64
 		bestScore          float64
 		bestAgent          string
+		bestSide       domain.Side
 	}
 
 	bySymbol := map[string]*agg{}
@@ -252,6 +255,7 @@ func (e CIOPortfolioExecutorWithWeights) Apply(agent domain.AgentSpec, recs []do
 			entry.targetPrice = rec.TargetPrice
 			entry.stopLossPrice = rec.StopLossPrice
 			entry.bestAgent = rec.Agent
+				entry.bestSide = rec.Side
 		}
 	}
 

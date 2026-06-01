@@ -325,6 +325,16 @@ func buildPluginRegistry(factorEngine *portfolio.FactorEngine, fp *portfolio.Fun
 	if loader != nil {
 		reg = NewPluginRegistry(loader)
 	}
+	// Register all agent executors that also implement PositionEvaluator.
+	// This wires position rotation into the recommendation pipeline. Executors
+	// that do not implement PositionEvaluator are silently skipped.
+	// Uses reg.agentExecutors (already loaded by NewPluginRegistry) so it
+	// works with both the default StaticLoader and custom loaders.
+	for _, exec := range reg.agentExecutors {
+		if pe, ok := exec.(PositionEvaluator); ok {
+			reg.RegisterPositionEvaluators(pe)
+		}
+	}
 	return reg.WithScreener(screenerEngine).WithFactorEngine(factorEngine)
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -13,11 +14,12 @@ import (
 // VaR constraints, cash buffers, correlation thresholds, and RSI-tw retail
 // sentiment extremes before execution.
 type PreTradeGate struct {
-	maxPositionPct float64
-	maxSectorPct   float64
-	varLimitPct    float64
-	minCashBuffer  float64
-	maxCorrelation float64
+	maxPositionPct   float64
+	maxSectorPct     float64
+	varLimitPct      float64
+	minCashBuffer    float64
+	maxCorrelation   float64
+	maxOpenPositions int
 
 	rsiTwScore float64 // RSI-tw extreme reading score; set via SetRSITwScore
 }
@@ -26,11 +28,12 @@ type PreTradeGate struct {
 func NewPreTradeGate() *PreTradeGate {
 	cfg := config.GetParametersConfig()
 	return &PreTradeGate{
-		maxPositionPct: cfg.RiskGate.PreTrade.MaxPositionPct.Value,
-		maxSectorPct:   cfg.RiskGate.PreTrade.MaxSectorExposurePct.Value,
-		varLimitPct:    cfg.RiskGate.PreTrade.VarLimitPct.Value,
-		minCashBuffer:  cfg.RiskGate.PreTrade.MinCashBufferPct.Value,
-		maxCorrelation: cfg.RiskGate.PreTrade.MaxCorrelation.Value,
+		maxPositionPct:   cfg.RiskGate.PreTrade.MaxPositionPct.Value,
+		maxSectorPct:     cfg.RiskGate.PreTrade.MaxSectorExposurePct.Value,
+		varLimitPct:      cfg.RiskGate.PreTrade.VarLimitPct.Value,
+		minCashBuffer:    cfg.RiskGate.PreTrade.MinCashBufferPct.Value,
+		maxCorrelation:   cfg.RiskGate.PreTrade.MaxCorrelation.Value,
+		maxOpenPositions: cfg.RiskGate.PreTrade.MaxOpenPositions.Value,
 	}
 }
 
@@ -42,6 +45,8 @@ func (g *PreTradeGate) MaxCorrelation() float64 { return g.maxCorrelation }
 
 // SetRSITwScore updates the RSI-tw extreme reading score used by the
 // ruleRetailSentiment check.
+func (g *PreTradeGate) MaxOpenPositions() int { return g.maxOpenPositions }
+
 func (g *PreTradeGate) SetRSITwScore(score float64) {
 	g.rsiTwScore = score
 }
@@ -86,6 +91,13 @@ func (g *PreTradeGate) Check(_ context.Context, order OrderIntent, pf PortfolioS
 	}
 
 	r = g.ruleCashBuffer(order, pf)
+	details = append(details, r)
+	if !r.Passed && decision.Verdict < VerdictBlock {
+		decision.Verdict = VerdictBlock
+		decision.Reason = r.Message
+	}
+
+	r = g.ruleMaxOpenPositions(order, pf)
 	details = append(details, r)
 	if !r.Passed && decision.Verdict < VerdictBlock {
 		decision.Verdict = VerdictBlock
@@ -199,6 +211,42 @@ func (g *PreTradeGate) ruleRetailSentiment(_ OrderIntent, _ PortfolioState) Rule
 		Passed:       passed,
 		CurrentValue: score,
 		Threshold:    0.5,
+		Severity:     severity,
+		Message:      message,
+	}
+}
+
+func (g *PreTradeGate) ruleMaxOpenPositions(order OrderIntent, pf PortfolioState) RuleResult {
+	currentCount := 0
+	for _, notional := range pf.Positions {
+		if notional > 0 {
+			currentCount++
+		}
+	}
+	newPosition := strings.EqualFold(order.Side, "buy") && pf.Positions[order.Symbol] <= 0
+	projectedCount := currentCount
+	if newPosition {
+		projectedCount++
+	}
+
+	passed := projectedCount <= g.maxOpenPositions
+	var message string
+	if passed {
+		message = fmt.Sprintf("projected positions %d/%d (current=%d)", projectedCount, g.maxOpenPositions, currentCount)
+	} else {
+		message = fmt.Sprintf("max open positions exceeded: projected %d > limit %d (current=%d)", projectedCount, g.maxOpenPositions, currentCount)
+	}
+
+	severity := "INFO"
+	if !passed {
+		severity = "WARNING"
+	}
+
+	return RuleResult{
+		RuleName:     "max_open_positions",
+		Passed:       passed,
+		CurrentValue: float64(projectedCount),
+		Threshold:    float64(g.maxOpenPositions),
 		Severity:     severity,
 		Message:      message,
 	}

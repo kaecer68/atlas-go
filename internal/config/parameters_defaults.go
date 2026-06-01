@@ -2706,6 +2706,11 @@ func defaultRiskGateParameters() RiskGateParameters {
 				Rationale: "下單量不得超過日均量 1%",
 				Source:    SourceLiterature,
 			},
+			MaxOpenPositions: ParameterMetadata[int]{
+				Value:     5,
+				Rationale: "最多同時持有 5 檔標的，控制集中度風險",
+				Source:    SourceHeuristic,
+			},
 		},
 		InTrade: InTradeGateParameters{
 			MonitorIntervalSec: ParameterMetadata[int]{
