@@ -83,8 +83,12 @@ func (m *SystemHealthMonitor) RunDaily(ctx context.Context) ([]HealthAlert, erro
 			"critical", countBySeverity(alerts, "CRITICAL"),
 			"warning", countBySeverity(alerts, "WARNING"))
 	} else {
+		maturity := "unknown"
+		if m.tracker != nil {
+			maturity = string(m.tracker.Current())
+		}
 		logging.Info("health_monitor", "all_clear",
-			"maturity", m.tracker.Current())
+			"maturity", maturity)
 	}
 
 	return alerts, nil
