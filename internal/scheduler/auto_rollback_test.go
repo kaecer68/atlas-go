@@ -33,6 +33,15 @@ func TestAutoRollback_AgentDisable(t *testing.T) {
 		},
 	})
 
+	// Inject negative returns so RollingSharpe < -1.0 (prevents count reset).
+	for i := 0; i < 60; i++ {
+		if i%2 == 0 {
+			dw.RecordOutcome("sick_agent", -0.03, false)
+		} else {
+			dw.RecordOutcome("sick_agent", -0.01, false)
+		}
+	}
+
 	ar := NewAutoRollback(nil, dw, nil).WithMaturityTracker(tr)
 
 	// Simulate 30 days of catastrophic Sharpe
@@ -69,18 +78,22 @@ func TestAutoRollback_PromotionDegradation(t *testing.T) {
 			{ID: "agent_1", Enabled: true, Layer: domain.LayerSector, Skill: "tech"},
 		},
 	})
-	// Seed with positive Sharpe so pre-promotion baseline is higher
+	// Seed with positive returns to get a moderate pre-promotion Sharpe.
+	// Use varied returns to ensure stddev > 0.
 	for i := 0; i < 60; i++ {
-		dw.RecordOutcome("agent_1", 0.02, true)
+		ret := 0.005 + float64(i%5)*0.002 // 0.005 ~ 0.013
+		dw.RecordOutcome("agent_1", ret, true)
 	}
 
 	ar := NewAutoRollback(nil, dw, nil).WithMaturityTracker(tr)
 
-	// Record pre-promotion Sharpe
 	preSharpe := ar.computeSystemSharpe()
+	if preSharpe <= 0 {
+		t.Fatalf("pre-promotion sharpe should be > 0, got %f", preSharpe)
+	}
 	ar.RecordPromotion("exp-001", preSharpe)
 
-	// Now degrade performance
+	// Now degrade performance: negative returns to drop Sharpe > 20%.
 	dw.Reset()
 	dw.InitializeFromRegistry(domain.AgentRegistry{
 		Agents: []domain.AgentSpec{
@@ -88,7 +101,8 @@ func TestAutoRollback_PromotionDegradation(t *testing.T) {
 		},
 	})
 	for i := 0; i < 60; i++ {
-		dw.RecordOutcome("agent_1", -0.03, false)
+		ret := -0.03 - float64(i%5)*0.001 // -0.03 ~ -0.034
+		dw.RecordOutcome("agent_1", ret, false)
 	}
 
 	results, err := ar.RunDaily(context.Background())
@@ -142,6 +156,15 @@ func TestAutoRollback_History(t *testing.T) {
 			{ID: "sick_agent", Enabled: true, Layer: domain.LayerSector, Skill: "tech"},
 		},
 	})
+
+	// Inject negative returns so RollingSharpe < -1.0.
+	for i := 0; i < 60; i++ {
+		if i%2 == 0 {
+			dw.RecordOutcome("sick_agent", -0.03, false)
+		} else {
+			dw.RecordOutcome("sick_agent", -0.01, false)
+		}
+	}
 
 	ar := NewAutoRollback(nil, dw, nil).WithMaturityTracker(tr)
 	ar.agentFailCount["sick_agent"] = 30

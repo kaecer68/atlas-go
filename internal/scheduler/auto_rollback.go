@@ -94,10 +94,9 @@ func (r *AutoRollback) RunDaily(ctx context.Context) ([]RollbackResult, error) {
 	now := time.Now()
 
 	// Check 1: Revert promoted experiments that degraded
-	if r.baselineMgr != nil {
-		rev := r.checkPromotedDegradation()
-		results = append(results, rev...)
-	}
+	// baselineMgr is only needed for executeRollback, not for detection.
+	rev := r.checkPromotedDegradation()
+	results = append(results, rev...)
 
 	// Check 2: Disable agents with sustained catastrophic Sharpe
 	if r.dwManager != nil {
