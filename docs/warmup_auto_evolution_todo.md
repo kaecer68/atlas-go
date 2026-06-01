@@ -16,7 +16,7 @@
 | 2 | 🔴 P0 | 修復 `auto_rollback_test.go` 3 個失敗測試 | ✅ 完成 | 30 min |
 | 3 | 🟡 P1 | 補上 `system_health_test.go` | ✅ 完成 | 45 min |
 | 4 | 🟡 P1 | AutoRollback `revert_baseline` / `revert_calibration` stub 處理 | ✅ 完成 | 30 min |
-| 5 | 🟡 P1 | 在 `cmd/atlas/main.go`（或 bootstrap）接入 MaturityTracker | 🟡 部分完成 | 45 min |
+| 5 | 🟡 P1 | 在 `cmd/atlas/main.go`（或 bootstrap）接入 MaturityTracker | ✅ 完成 | 45 min |
 | 6 | 🟢 P2 | SystemHealthMonitor 增加 event bus 整合 | ⬜ 待做 | 30 min |
 | 7 | 🟢 P2 | 設計文檔中規劃但未實現的組件（API、plugin、backfill） | ⬜ 待做 | 可延後 |
 
