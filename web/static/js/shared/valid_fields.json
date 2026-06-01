@@ -581,6 +581,7 @@
   "lagging_indicators",
   "last",
   "last_calibrated",
+  "last_calibrated_score",
   "last_computed",
   "last_consumed",
   "last_data_at",

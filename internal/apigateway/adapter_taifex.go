@@ -11,7 +11,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
-// taifexDailyData is the combined payload marshalled by the adapter.
+// taifexDailyData is the combined payload marshaled by the adapter.
 type taifexDailyData struct {
 	PCR             *marketdata.PCRStats        `json:"pcr"`
 	RetailFuturesOI *marketdata.RetailFuturesOI `json:"retail_futures_oi"`

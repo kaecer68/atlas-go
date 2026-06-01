@@ -199,7 +199,7 @@ func (s *SwarmService) countTrainingScenarios() int {
 					total++
 				}
 			}
-			f.Close()
+			_ = f.Close()
 		}
 	}
 	return total

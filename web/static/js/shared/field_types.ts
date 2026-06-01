@@ -2040,6 +2040,7 @@ export interface RSITwParameters {
   d_vix_spike_threshold: string;
   d_vix_spike_multiplier: string;
   d_credit_tightening_multiplier: string;
+  last_calibrated_score?: string;
 }
 
 export interface RSITwSubIndicators {

@@ -1865,6 +1865,7 @@ export const FIELD = {
     d_vix_spike_threshold: 'd_vix_spike_threshold',
     d_vix_spike_multiplier: 'd_vix_spike_multiplier',
     d_credit_tightening_multiplier: 'd_credit_tightening_multiplier',
+    last_calibrated_score: 'last_calibrated_score',
   },
   RSITwSubIndicators: {
     category_a: 'category_a',

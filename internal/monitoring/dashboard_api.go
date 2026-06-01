@@ -571,9 +571,9 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		systemHandlers.DayTradingFetcher = apisystem.DayTradingFetcher(
 			NewDayTradingFetcher(a.dataFetcher),
 		)
-		systemHandlers.TaifexFetcher = apisystem.TaifexFetcher(NewTaifexFetcher(a.dataFetcher))
-		systemHandlers.OddLotFetcher = apisystem.OddLotFetcher(NewOddLotFetcher(a.dataFetcher))
-		systemHandlers.ETFFetcher = apisystem.ETFFetcher(NewETFFetcher(a.dataFetcher))
+		systemHandlers.TaifexFetcher = NewTaifexFetcher(a.dataFetcher)
+		systemHandlers.OddLotFetcher = NewOddLotFetcher(a.dataFetcher)
+		systemHandlers.ETFFetcher = NewETFFetcher(a.dataFetcher)
 	}
 	systemHandlers.RegisterRoutes(mux)
 
@@ -849,6 +849,6 @@ func configHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg := config.Load()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(cfg)
+		_ = json.NewEncoder(w).Encode(cfg)
 	})
 }

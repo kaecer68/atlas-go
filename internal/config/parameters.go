@@ -1003,6 +1003,10 @@ type RSITwParameters struct {
 	DVIXSpikeThreshold          ParameterMetadata[float64] `json:"d_vix_spike_threshold"`          // VIX above this → 0.90
 	DVIXSpikeMultiplier         ParameterMetadata[float64] `json:"d_vix_spike_multiplier"`         // 0.90
 	DCreditTighteningMultiplier ParameterMetadata[float64] `json:"d_credit_tightening_multiplier"` // 0.80
+
+	// LastCalibratedScore records the most recent autonomous calibration score,
+	// loaded at startup so PreTradeGate does not start with a blind 0.0.
+	LastCalibratedScore ParameterMetadata[float64] `json:"last_calibrated_score,omitempty"`
 }
 
 type ParametersConfig struct {

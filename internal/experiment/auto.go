@@ -62,7 +62,7 @@ func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
 
 // runExperimentForCandidate executes the full experiment pipeline for a candidate:
 // build brief → run executor → judge → update ledger → promote if accepted.
-func runExperimentForCandidate(ctx context.Context, cfg AutoExperimentConfig, candidate *domain.Candidate) error {
+func runExperimentForCandidate(_ context.Context, cfg AutoExperimentConfig, candidate *domain.Candidate) error {
 	windowID := "window-" + time.Now().Add(-7*24*time.Hour).Format("20060102") + "-" + time.Now().Format("20060102")
 	brief := domain.BuildMutationBrief(windowID, candidate)
 
@@ -201,7 +201,7 @@ func loadOldestPendingExperiment(ledgerDir string) *pendingExperiment {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var oldest *pendingExperiment
 	scanner := bufio.NewScanner(f)
