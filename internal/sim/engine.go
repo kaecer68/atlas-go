@@ -21,6 +21,15 @@ type TraceWriter interface {
 	Record(step int, layer, status string, meta map[string]any)
 }
 
+// RotationFunc evaluates held positions against BUY candidates and returns SELL
+// recommendations for the weakest holding(s) to make room for new entries.
+type RotationFunc func(
+	positions []domain.Position,
+	recs []domain.Recommendation,
+	quotes map[string]domain.Quote,
+	maxOpenPositions int,
+) []domain.Recommendation
+
 type Engine struct {
 	constraints     domain.SimulationConstraints
 	optimizer       *portfolio.Optimizer
@@ -33,6 +42,7 @@ type Engine struct {
 	thresholdEngine *DynamicThresholdEngine
 	preTradeGate    *risk.PreTradeGate
 	traceWriter     TraceWriter
+	rotationFunc    RotationFunc
 }
 
 type sellDetail struct {
@@ -253,6 +263,13 @@ func (e *Engine) RunDay(
 			state.Positions[i].MarketValue = float64(state.Positions[i].Quantity) * q.Last
 			state.Positions[i].UnrealizedPnL = float64(state.Positions[i].Quantity) * (q.Last - state.Positions[i].AverageCost)
 		}
+	}
+
+	// 1.5. Rotation: evaluate held positions and generate SELL signals to
+	// make room for BUY candidates. Uses live in-simulation portfolio state.
+	if e.rotationFunc != nil && len(state.Positions) > 0 && len(recs) > 0 && e.constraints.MaxOpenPositions > 0 {
+		sellRecs := e.rotationFunc(state.Positions, recs, quoteBySymbol, e.constraints.MaxOpenPositions)
+		recs = append(recs, sellRecs...)
 	}
 
 	// 2. Sell logic

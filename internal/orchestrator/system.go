@@ -357,11 +357,8 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
 	}
 	events := s.detectNarrativeEvents(quotes)
-	var currentPositions []domain.Position
 	if s.Sim().persistentState != nil {
-		currentPositions = s.Sim().persistentState.Positions
 	}
-	maxOpenPos := s.Sim().policy.Constraints.MaxOpenPositions
 	researchResult := ExecuteWithContext(ExecutionContext{
 		Registry:        s.Sim().registry,
 		Quotes:          quotes,
@@ -378,8 +375,6 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 			}
 		},
 		Scratchpad:       s.Sim().scratchpad,
-		Positions:        currentPositions,
-		MaxOpenPositions: maxOpenPos,
 	})
 	regime := researchResult.Regime
 	rawRecs := researchResult.RawRecommendations
@@ -639,11 +634,8 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
 	}
 	events := s.detectNarrativeEvents(quotes)
-	var currentPositions []domain.Position
 	if s.Sim().persistentState != nil {
-		currentPositions = s.Sim().persistentState.Positions
 	}
-	maxOpenPos := s.Sim().policy.Constraints.MaxOpenPositions
 	researchResult := ExecuteWithContext(ExecutionContext{
 		Registry:        s.Sim().registry,
 		Quotes:          quotes,
@@ -660,8 +652,6 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 			}
 		},
 		Scratchpad:       s.Sim().scratchpad,
-		Positions:        currentPositions,
-		MaxOpenPositions: maxOpenPos,
 	})
 	regime := researchResult.Regime
 	rawRecs := researchResult.RawRecommendations

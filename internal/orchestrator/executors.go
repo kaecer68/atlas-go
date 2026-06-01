@@ -81,8 +81,6 @@ type ExecutionContext struct {
 	ConvictionClampingCallback func([]portfolio.ConvictionClampingEvent)
 	Scratchpad                 *Scratchpad       // optional reasoning trace recorder
 	FactorSnapshot             *FactorSnapshot   // pre-computed factor scores for executor consumption
-	Positions                  []domain.Position // current portfolio positions for rotation evaluation
-	MaxOpenPositions           int               // max open positions constraint for rotation trigger
 }
 
 // ResearchResult holds all outputs from executing registry research.
@@ -139,7 +137,7 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 	registry := filterMutedAgents(ctx.Registry, ctx.Plugins)
 
 	regime := inferRegime(registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, ctx.NarrativeEvents, ctx.Scratchpad, ctx.SessionID)
-	raw, rejects := collectRecommendations(ctx.Context, registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, regime, ctx.NarrativeEvents, ctx.SessionID, ctx.Scratchpad, ctx.Positions, ctx.MaxOpenPositions)
+	raw, rejects := collectRecommendations(ctx.Context, registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, regime, ctx.NarrativeEvents, ctx.SessionID, ctx.Scratchpad)
 
 	if ctx.Policy.MomentumCrashProtection {
 		raw = applyMomentumCrashProtection(raw, quoteBySymbol)
@@ -157,15 +155,6 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 	}
 
 	final, guardOutcomes := applyControlLayerWithOutcomes(registry, ctx.Plugins, controlInput, ctx.Policy, ctx.Scratchpad, ctx.SessionID)
-
-	// Post-control rotation: when portfolio is near max capacity, generate SELL
-	// signals for the weakest holding(s) to make room for BUY candidates.
-	// Trigger at maxOpenPositions-1 to proactively free capacity before hitting
-	// the hard limit. Backward-compatible: no-op when positions is nil or rotator is nil.
-	if len(ctx.Positions) >= ctx.MaxOpenPositions-1 && ctx.MaxOpenPositions > 1 && ctx.Plugins.Rotator() != nil {
-		sellRecs := ctx.Plugins.Rotator().RotatePortfolio(ctx.Positions, final, quoteBySymbol, registry, ctx.Plugins, ctx.Overrides, regime, &FactorSnapshot{})
-		final = append(final, sellRecs...)
-	}
 
 	return ResearchResult{
 		Regime:               regime,
@@ -399,7 +388,7 @@ func inferRegime(registry domain.AgentRegistry, quotes map[string]domain.Quote, 
 	return regime
 }
 
-func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string, regime domain.Regime, narrativeEvents []narrative.NarrativeEvent, sessionID string, scratchpad *Scratchpad, positions []domain.Position, maxOpenPositions int) ([]domain.Recommendation, []domain.ScreeningReject) {
+func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string, regime domain.Regime, narrativeEvents []narrative.NarrativeEvent, sessionID string, scratchpad *Scratchpad) ([]domain.Recommendation, []domain.ScreeningReject) {
 	recs := make([]domain.Recommendation, 0)
 	rejects := make([]domain.ScreeningReject, 0)
 	now := time.Now().UTC()
