@@ -981,6 +981,7 @@ type PreTradeGateParameters struct {
 	MinCashBufferPct     ParameterMetadata[float64] `json:"min_cash_buffer_pct"`
 	MaxCorrelation       ParameterMetadata[float64] `json:"max_correlation"`
 	MinADVRatio          ParameterMetadata[float64] `json:"min_adv_ratio"`
+	MaxOpenPositions     ParameterMetadata[int]     `json:"max_open_positions"`
 }
 
 // InTradeGateParameters holds in-trade monitoring parameters.
@@ -1496,6 +1497,9 @@ func (p *ParametersConfig) Validate() error {
 	}
 	if p.RiskGate.PreTrade.VaRConfidenceLevel.Value <= 0 || p.RiskGate.PreTrade.VaRConfidenceLevel.Value > 1 {
 		return fmt.Errorf("risk_gate.pre_trade.var_confidence_level (%.3f) must be in (0,1]", p.RiskGate.PreTrade.VaRConfidenceLevel.Value)
+	}
+	if p.RiskGate.PreTrade.MaxOpenPositions.Value < 1 {
+		return fmt.Errorf("risk_gate.pre_trade.max_open_positions (%d) must be >= 1", p.RiskGate.PreTrade.MaxOpenPositions.Value)
 	}
 
 	// Drawdown constraints
@@ -2495,6 +2499,9 @@ func mergeRiskGateDefaults(cfg *ParametersConfig) {
 	}
 	if r.PreTrade.MinADVRatio.Value == 0 {
 		r.PreTrade.MinADVRatio = def.PreTrade.MinADVRatio
+	}
+	if r.PreTrade.MaxOpenPositions.Value == 0 {
+		r.PreTrade.MaxOpenPositions = def.PreTrade.MaxOpenPositions
 	}
 	if r.InTrade.MonitorIntervalSec.Value == 0 {
 		r.InTrade.MonitorIntervalSec = def.InTrade.MonitorIntervalSec

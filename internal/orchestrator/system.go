@@ -353,7 +353,15 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	tw.Record(4, "recommend", "START", nil)
 	tw.Record(5, "guard_filter", "START", nil)
 
+	if err := s.ensurePersistentStateLoaded(); err != nil {
+		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
+	}
 	events := s.detectNarrativeEvents(quotes)
+	var currentPositions []domain.Position
+	if s.Sim().persistentState != nil {
+		currentPositions = s.Sim().persistentState.Positions
+	}
+	maxOpenPos := s.Sim().policy.Constraints.MaxOpenPositions
 	researchResult := ExecuteWithContext(ExecutionContext{
 		Registry:        s.Sim().registry,
 		Quotes:          quotes,
@@ -369,7 +377,9 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 				s.Risk().clampingLogger.AppendConvictionEvents(evts)
 			}
 		},
-		Scratchpad: s.Sim().scratchpad,
+		Scratchpad:       s.Sim().scratchpad,
+		Positions:        currentPositions,
+		MaxOpenPositions: maxOpenPos,
 	})
 	regime := researchResult.Regime
 	rawRecs := researchResult.RawRecommendations
@@ -456,9 +466,6 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	finalRecs = s.host.ProcessRecommendations(regime, finalRecs)
 	if s.Risk().eventBus != nil {
 		go s.Risk().eventBus.PublishRecommendation("orchestrator", finalRecs)
-	}
-	if err := s.ensurePersistentStateLoaded(); err != nil {
-		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
 	}
 	tw.Record(6, "sim_exec", "START", nil)
 	var result domain.SimulationResult
@@ -628,7 +635,15 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	tw.Record(4, "recommend", "START", nil)
 	tw.Record(5, "guard_filter", "START", nil)
 
+	if err := s.ensurePersistentStateLoaded(); err != nil {
+		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
+	}
 	events := s.detectNarrativeEvents(quotes)
+	var currentPositions []domain.Position
+	if s.Sim().persistentState != nil {
+		currentPositions = s.Sim().persistentState.Positions
+	}
+	maxOpenPos := s.Sim().policy.Constraints.MaxOpenPositions
 	researchResult := ExecuteWithContext(ExecutionContext{
 		Registry:        s.Sim().registry,
 		Quotes:          quotes,
@@ -644,7 +659,9 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 				s.Risk().clampingLogger.AppendConvictionEvents(evts)
 			}
 		},
-		Scratchpad: s.Sim().scratchpad,
+		Scratchpad:       s.Sim().scratchpad,
+		Positions:        currentPositions,
+		MaxOpenPositions: maxOpenPos,
 	})
 	regime := researchResult.Regime
 	rawRecs := researchResult.RawRecommendations
@@ -730,9 +747,6 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	finalRecs = s.host.ProcessRecommendations(regime, finalRecs)
 	if s.Risk().eventBus != nil {
 		go s.Risk().eventBus.PublishRecommendation("orchestrator", finalRecs)
-	}
-	if err := s.ensurePersistentStateLoaded(); err != nil {
-		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
 	}
 	tw.Record(6, "sim_exec", "START", nil)
 	var result domain.SimulationResult

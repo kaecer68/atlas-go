@@ -19,8 +19,9 @@ const (
 type Side = shared.Side
 
 const (
-	SideBuy  = shared.SideBuy
-	SideSell = shared.SideSell
+	SideBuy    = shared.SideBuy
+	SideSell   = shared.SideSell
+	SideReduce = shared.SideReduce
 )
 
 type (
