@@ -302,6 +302,13 @@ export interface CircuitBreakerStatus {
   day_start_value: number;
 }
 
+export interface CompositeCardConfig {
+  layer_weights: Record<string, number>;
+  sentiment_thresholds: Record<string, string>;
+  clamp_min: number;
+  clamp_max: number;
+}
+
 export interface ConfidenceMixConfig {
   weight_boundary: number;
   weight_freshness: number;
@@ -761,6 +768,13 @@ export interface EventBlock {
   premarket?: string | null;
 }
 
+export interface EventCalendarRule {
+  name: string;
+  base_weight: number;
+  decay_days: number;
+  direction: string;
+}
+
 export interface ExecutionPolicy {
   conviction_floor: number;
   require_cro_pass: boolean;
@@ -1005,6 +1019,14 @@ export interface FactorWeightParameters {
   aggressive_quality?: string;
 }
 
+export interface FetcherStatus {
+  day_trading: string;
+  taifex: string;
+  odd_lot: string;
+  etf: string;
+  geopolitical_risk: string;
+}
+
 export interface FinancialsExecutorParameters {
   dividend_boost: string;
   balance_sheet_penalty: string;
@@ -1223,6 +1245,11 @@ export interface IndustryMetrics {
   timestamp: string;
 }
 
+export interface IndustryMultiplierMap {
+  bull_multiplier: Record<string, number>;
+  bear_multiplier: Record<string, number>;
+}
+
 export interface IndustryOverview {
   id: string;
   name: string;
@@ -1289,6 +1316,10 @@ export interface IndustryParameters {
   cycle_calibration: string;
   history_retention_days: string;
   default_metrics: string;
+  silicon_cycle: string;
+  event_calendar_rules: string;
+  composite_card: string;
+  seasonal_multipliers: string;
 }
 
 export interface IndustryRecommendation {
@@ -2026,6 +2057,27 @@ export interface RSITwCategoryD {
 }
 
 export interface RSITwParameters {
+  a1_weight: string;
+  a2_weight: string;
+  a3_weight: string;
+  a4_weight: string;
+  a5_weight: string;
+  a6_weight: string;
+  a_part_weight: string;
+  c_part_weight: string;
+  a3_midpoint: string;
+  a3_scale: string;
+  a4_vix_thresholds: string;
+  a4_vix_scores: string;
+  a5_pcr_thresholds: string;
+  a5_pcr_scores: string;
+  a5_pcr_fallback: string;
+  a6_oddlot_thresholds: string;
+  a6_oddlot_scores: string;
+  a6_oddlot_fallback: string;
+  c1_weight: string;
+  c2_weight: string;
+  c3_weight: string;
   c1_very_bullish_threshold: string;
   c1_bullish_threshold: string;
   c1_bearish_threshold: string;
@@ -2207,6 +2259,7 @@ export interface RetailSentimentResponse {
   retail_futures_oi?: number;
   etf_net_subscription?: number;
   sentiment_sub_indicators?: RSITwSubIndicators | null;
+  fetcher_status: string;
 }
 
 export interface RetailSentimentSnapshot {
@@ -2372,6 +2425,11 @@ export interface SeasonalExpectation {
   already_priced_in: boolean;
 }
 
+export interface SeasonalMultiplierConfig {
+  theme_multipliers: Record<string, string>;
+  theme_correlations: Record<string, Record<string, number>>;
+}
+
 export interface SeasonalPattern {
   id: string;
   name: string;
@@ -2489,6 +2547,17 @@ export interface ShippingExecutorParameters {
 export interface ShockImpact {
   industry: string;
   impact: number;
+}
+
+export interface SiliconCycleParameters {
+  revenue_yoy_threshold: number;
+  billings_yoy_threshold: number;
+  inventory_days_threshold: number;
+  utilization_threshold: number;
+  index_ma_percent_threshold: number;
+  sox_extreme_threshold: number;
+  capex_cut_threshold: number;
+  min_confidence: number;
 }
 
 export interface SiliconIndicatorSnapshot {

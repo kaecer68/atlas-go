@@ -600,29 +600,6 @@ func defaultEventRules() map[string]EventRule {
 	return rules
 }
 
-// configEventRules merges EventCalendarRule config values with default date computation
-// functions. Config values override BaseWeight, DecayDays, and Direction while
-// date-computation lambdas remain from defaultEventRules().
-func configEventRules(cfgRules []config.EventCalendarRule) map[string]EventRule {
-	defaults := defaultEventRules()
-	merged := make(map[string]EventRule, len(defaults))
-
-	for name, def := range defaults {
-		r := def // copy with default values
-		// Try to find matching config rule by name
-		for _, cr := range cfgRules {
-			if cr.Name == name {
-				r.BaseWeight = cr.BaseWeight
-				r.DecayDays = cr.DecayDays
-				r.Direction = cr.Direction
-				break
-			}
-		}
-		merged[name] = r
-	}
-	return merged
-}
-
 // ---------------------------------------------------------------------------
 // EventCalendar methods
 // ---------------------------------------------------------------------------
