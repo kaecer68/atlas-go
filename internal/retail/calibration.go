@@ -253,7 +253,7 @@ func loadCalibrationData(workDir string) ([]RSITwInput, error) {
 		if filepath.Base(path) == "latest.json" {
 			continue
 		}
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304 — path from system-controlled glob match
 		if err != nil {
 			continue
 		}
@@ -315,8 +315,11 @@ func saveCalibrationReport(workDir string, report *CalibrationReport) {
 	path := filepath.Join(workDir, "data", "state", calibrationHistoryFile)
 	// Load existing reports
 	var reports []*CalibrationReport
-	if data, err := os.ReadFile(path); err == nil {
-		json.Unmarshal(data, &reports)
+	if data, err := os.ReadFile(path); err == nil { // #nosec G304 — path from trusted workDir
+		if err := json.Unmarshal(data, &reports); err != nil {
+			logging.Warn("rsi_tw_calibrate", "unmarshal_existing_reports_failed", "err", err.Error())
+			// Continue with empty reports
+		}
 	}
 	reports = append([]*CalibrationReport{report}, reports...)
 	if len(reports) > maxCalibrationHistory {
@@ -327,7 +330,7 @@ func saveCalibrationReport(workDir string, report *CalibrationReport) {
 		logging.Error("rsi_tw_calibrate", "marshal_report_failed", "err", err.Error())
 		return
 	}
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0600); err != nil { //nolint:gosec // path constructed from trusted workDir
 		logging.Error("rsi_tw_calibrate", "write_report_failed", "err", err.Error())
 	}
 }
@@ -335,7 +338,7 @@ func saveCalibrationReport(workDir string, report *CalibrationReport) {
 // LoadLastCalibrationReport reads the most recent calibration report from disk.
 func LoadLastCalibrationReport(workDir string) (*CalibrationReport, error) {
 	path := filepath.Join(workDir, "data", "state", calibrationHistoryFile)
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 — path from trusted workDir
 	if err != nil {
 		return nil, err
 	}
