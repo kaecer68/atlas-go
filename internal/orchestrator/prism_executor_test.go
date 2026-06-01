@@ -56,10 +56,7 @@ func prismScorecardForAgent(ds *replay.Dataset, registry domain.AgentRegistry, p
 	symbols := RegistrySymbols(registry)
 	outcomes := make([]domain.RecommendationOutcome, 0)
 
-	for _, date := range ds.Dates {
-		if date.Before(start) || date.After(end) {
-			continue
-		}
+	for _, date := range ds.WindowDates(start, end, 1) {
 		if _, ok := ds.NextDate(date, 1); !ok {
 			continue
 		}

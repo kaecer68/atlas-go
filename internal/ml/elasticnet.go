@@ -74,6 +74,8 @@ func (en *ElasticNet) Fit(X [][]float64, y []float64) error {
 		return err
 	}
 
+	//nolint:gosec // validated by validateFitInputs
+	//nolint:gosec // validated by validateFitInputs
 	n, p := len(X), len(X[0])
 
 	// Standardize X and center y.
@@ -155,6 +157,7 @@ func (en *ElasticNet) validateFitInputs(X [][]float64, y []float64) error {
 // standardized copy of X where each column has mean 0 and std 1.
 // Features with zero variance get std = 1 (no scaling).
 func (en *ElasticNet) standardizeX(X [][]float64) [][]float64 {
+	//nolint:gosec // validated by validateFitInputs
 	n, p := len(X), len(X[0])
 	en.xMean = make([]float64, p)
 	en.xStd = make([]float64, p)
