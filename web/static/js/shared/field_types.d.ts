@@ -1555,6 +1555,7 @@ declare interface MutationBrief {
   maturity_level: string;
   iteration_guidance: string[];
   recommended_window: string;
+  rsi_tw_score?: number;
   generated_at: string;
 }
 
@@ -1956,6 +1957,7 @@ declare interface PreTradeGateParameters {
   min_cash_buffer_pct: string;
   max_correlation: string;
   min_adv_ratio: string;
+  max_open_positions: string;
 }
 
 declare interface PreciousMetalsParameters {
@@ -2857,6 +2859,11 @@ declare interface WeightFactor {
 declare interface channelState {
   enabled: boolean;
   updated_at: string;
+}
+
+declare interface maturityTrackerState {
+  first_start_date: string;
+  last_checked: string;
 }
 
 declare interface rawOutcome {

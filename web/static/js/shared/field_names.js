@@ -1417,6 +1417,7 @@ export const FIELD = {
     maturity_level: 'maturity_level',
     iteration_guidance: 'iteration_guidance',
     recommended_window: 'recommended_window',
+    rsi_tw_score: 'rsi_tw_score',
     generated_at: 'generated_at',
   },
   NarrativeAdjustment: {
@@ -1789,6 +1790,7 @@ export const FIELD = {
     min_cash_buffer_pct: 'min_cash_buffer_pct',
     max_correlation: 'max_correlation',
     min_adv_ratio: 'min_adv_ratio',
+    max_open_positions: 'max_open_positions',
   },
   PreciousMetalsParameters: {
     central_bank_buying_trend: 'central_bank_buying_trend',
@@ -2605,6 +2607,10 @@ export const FIELD = {
   channelState: {
     enabled: 'enabled',
     updated_at: 'updated_at',
+  },
+  maturityTrackerState: {
+    first_start_date: 'first_start_date',
+    last_checked: 'last_checked',
   },
   rawOutcome: {
     agent_id: 'agent_id',
