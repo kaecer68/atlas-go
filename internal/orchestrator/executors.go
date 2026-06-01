@@ -158,10 +158,11 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 
 	final, guardOutcomes := applyControlLayerWithOutcomes(registry, ctx.Plugins, controlInput, ctx.Policy, ctx.Scratchpad, ctx.SessionID)
 
-	// Post-control rotation: when portfolio is at max capacity, generate SELL
+	// Post-control rotation: when portfolio is near max capacity, generate SELL
 	// signals for the weakest holding(s) to make room for BUY candidates.
-	// This runs after the control layer so SELL signals bypass CIO aggregation.
-	if len(ctx.Positions) >= ctx.MaxOpenPositions && ctx.MaxOpenPositions > 0 && ctx.Plugins.Rotator() != nil {
+	// Trigger at maxOpenPositions-1 to proactively free capacity before hitting
+	// the hard limit. Backward-compatible: no-op when positions is nil or rotator is nil.
+	if len(ctx.Positions) >= ctx.MaxOpenPositions-1 && ctx.MaxOpenPositions > 1 && ctx.Plugins.Rotator() != nil {
 		sellRecs := ctx.Plugins.Rotator().RotatePortfolio(ctx.Positions, final, quoteBySymbol, registry, ctx.Plugins, ctx.Overrides, regime, &FactorSnapshot{})
 		final = append(final, sellRecs...)
 	}
