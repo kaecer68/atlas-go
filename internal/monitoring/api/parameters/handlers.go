@@ -176,7 +176,7 @@ func (h *Handlers) HandlePostParameters(r *http.Request) (int, any) {
 	}
 
 	if h.paramsPath != "" {
-		if err := h.params.Save(h.paramsPath); err != nil {
+		if err := h.params.SaveWithRollback(h.paramsPath); err != nil {
 			return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("save parameters: %v", err)}
 		}
 		if err := config.ReloadParametersConfig(); err != nil {
@@ -316,7 +316,7 @@ func (h *Handlers) HandleRollback(r *http.Request) (int, any) {
 	}
 
 	cfg := config.GetParametersConfig()
-	if err := cfg.Save(h.paramsPath); err != nil {
+	if err := cfg.SaveWithRollback(h.paramsPath); err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("save config: %v", err)}
 	}
 	if err := config.ReloadParametersConfig(); err != nil {

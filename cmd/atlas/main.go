@@ -1233,6 +1233,11 @@ func run(args []string, deps appDeps) error {
 			riskGate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
 			dashboard.SetRiskGate(riskGate)
 
+			if params := config.GetParametersConfig(); params != nil && params.RSITw.LastCalibratedScore.Value > 0 {
+				riskGate.SetPreTradeRSITwScore(params.RSITw.LastCalibratedScore.Value)
+				log.Printf("[RiskGate] restored RSI-tw calibration score: %.4f", params.RSITw.LastCalibratedScore.Value)
+			}
+
 			elRulesPath = filepath.Join(cfg.WorkDir, "data/state/eventlogic", "rules.json")
 			elHistoryRecorder = eventlogic.NewHistoryRecorder(filepath.Join(cfg.WorkDir, "data/state/eventlogic", "history.jsonl"))
 			elRegistry := eventlogic.LoadOrDefault(elRulesPath)

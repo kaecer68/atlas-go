@@ -113,7 +113,7 @@ func run(args []string) error {
 		}
 	}
 
-	if err := paramsCfg.Save(paramsPath); err != nil {
+	if err := paramsCfg.SaveWithRollback(paramsPath); err != nil {
 		return fmt.Errorf("save parameters: %w", err)
 	}
 
