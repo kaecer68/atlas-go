@@ -411,7 +411,7 @@ func (sp *ShockPropagation) getNarrativeAdjustedCorrelation(industryA, industryB
 		multiplier := sp.narrativeProvider.CorrelationMultiplier(theme, industryA, industryB)
 		adjusted *= multiplier
 	}
-	return math.Max(0, math.Min(1.0, adjusted))
+	return math.Max(-1.0, math.Min(1.0, adjusted))
 }
 
 // PropagateShock calculates the impact of a shock on an industry, with
