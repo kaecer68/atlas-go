@@ -10,13 +10,16 @@ import (
 )
 
 // PreTradeGate evaluates proposed orders against position limits, sector caps,
-// VaR constraints, cash buffers, and correlation thresholds before execution.
+// VaR constraints, cash buffers, correlation thresholds, and RSI-tw retail
+// sentiment extremes before execution.
 type PreTradeGate struct {
 	maxPositionPct float64
 	maxSectorPct   float64
 	varLimitPct    float64
 	minCashBuffer  float64
 	maxCorrelation float64
+
+	rsiTwScore float64 // RSI-tw extreme reading score; set via SetRSITwScore
 }
 
 // NewPreTradeGate creates a PreTradeGate using values from the centralized parameter config.
@@ -36,6 +39,12 @@ func (g *PreTradeGate) MaxSectorPct() float64   { return g.maxSectorPct }
 func (g *PreTradeGate) VarLimitPct() float64    { return g.varLimitPct }
 func (g *PreTradeGate) MinCashBuffer() float64  { return g.minCashBuffer }
 func (g *PreTradeGate) MaxCorrelation() float64 { return g.maxCorrelation }
+
+// SetRSITwScore updates the RSI-tw extreme reading score used by the
+// ruleRetailSentiment check.
+func (g *PreTradeGate) SetRSITwScore(score float64) {
+	g.rsiTwScore = score
+}
 
 // Check evaluates a proposed order against all pre-trade risk rules and returns
 // a unified RiskDecision. It stops at the first BLOCK/HALT rule; subsequent
@@ -77,6 +86,13 @@ func (g *PreTradeGate) Check(_ context.Context, order OrderIntent, pf PortfolioS
 	}
 
 	r = g.ruleCashBuffer(order, pf)
+	details = append(details, r)
+	if !r.Passed && decision.Verdict < VerdictBlock {
+		decision.Verdict = VerdictBlock
+		decision.Reason = r.Message
+	}
+
+	r = g.ruleRetailSentiment(order, pf)
 	details = append(details, r)
 	if !r.Passed && decision.Verdict < VerdictBlock {
 		decision.Verdict = VerdictBlock
@@ -146,6 +162,39 @@ func (g *PreTradeGate) ruleCashBuffer(order OrderIntent, pf PortfolioState) Rule
 		Threshold:    g.minCashBuffer,
 		Severity:     verdictSeverity(g.minCashBuffer-pct, g.minCashBuffer),
 		Message:      fmt.Sprintf("post-trade cash would be %.1f%% of portfolio (minimum %.0f%%)", pct*100, g.minCashBuffer*100),
+	}
+}
+
+func (g *PreTradeGate) ruleRetailSentiment(_ OrderIntent, _ PortfolioState) RuleResult {
+	score := g.rsiTwScore
+	passed := score > -0.7 && score < 0.7
+
+	var severity, message string
+	switch {
+	case score >= 0.7:
+		severity = "CRITICAL"
+		message = fmt.Sprintf("extreme retail frenzy detected (RSI-tw=%.2f ≥0.7)", score)
+	case score >= 0.5:
+		severity = "WARNING"
+		message = fmt.Sprintf("retail frenzy detected (RSI-tw=%.2f ≥0.5)", score)
+	case score <= -0.7:
+		severity = "CRITICAL"
+		message = fmt.Sprintf("extreme retail fear detected (RSI-tw=%.2f ≤-0.7)", score)
+	case score <= -0.5:
+		severity = "WARNING"
+		message = fmt.Sprintf("retail fear detected (RSI-tw=%.2f ≤-0.5)", score)
+	default:
+		severity = "INFO"
+		message = fmt.Sprintf("RSI-tw score %.2f within normal range", score)
+	}
+
+	return RuleResult{
+		RuleName:     "retail_sentiment",
+		Passed:       passed,
+		CurrentValue: score,
+		Threshold:    0.5,
+		Severity:     severity,
+		Message:      message,
 	}
 }
 

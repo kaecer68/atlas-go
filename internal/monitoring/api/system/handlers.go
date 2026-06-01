@@ -30,12 +30,17 @@ type OddLotFetcher func(ctx context.Context) (*marketdata.OddLotStats, error)
 // ETFFetcher fetches TWSE ETF subscription/redemption data.
 type ETFFetcher func(ctx context.Context) (*marketdata.ETFStats, error)
 
+// GeopoliticalRiskFetcher fetches the current geopolitical risk reading
+// normalized to [0, 1]. Returns 0 on error (defense-first).
+type GeopoliticalRiskFetcher func(ctx context.Context) float64
+
 type Handlers struct {
-	Svc               *service.SystemService
-	DayTradingFetcher DayTradingFetcher
-	TaifexFetcher     TaifexFetcher
-	OddLotFetcher     OddLotFetcher
-	ETFFetcher        ETFFetcher
+	Svc                     *service.SystemService
+	DayTradingFetcher       DayTradingFetcher
+	TaifexFetcher           TaifexFetcher
+	OddLotFetcher           OddLotFetcher
+	ETFFetcher              ETFFetcher
+	GeopoliticalRiskFetcher GeopoliticalRiskFetcher
 }
 
 func NewHandlers(svc *service.SystemService) *Handlers {
@@ -132,6 +137,15 @@ type RetailSentimentResponse struct {
 	RetailFuturesOI        float64                    `json:"retail_futures_oi,omitempty"`
 	ETFNetSubscription     float64                    `json:"etf_net_subscription,omitempty"`
 	SentimentSubIndicators *domain.RSITwSubIndicators `json:"sentiment_sub_indicators,omitempty"`
+	FetcherStatus          FetcherStatus              `json:"fetcher_status"`
+}
+
+type FetcherStatus struct {
+	DayTrading       string `json:"day_trading"`
+	Taifex           string `json:"taifex"`
+	OddLot           string `json:"odd_lot"`
+	ETF              string `json:"etf"`
+	GeopoliticalRisk string `json:"geopolitical_risk"`
 }
 
 func extremeReadingFromScore(score float64) string {
@@ -160,6 +174,7 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 			Score:            0,
 			ChangePct:        0,
 			Interpretation:   "no macro snapshot available",
+			FetcherStatus:    FetcherStatus{DayTrading: "no_data", Taifex: "no_data", OddLot: "no_data", ETF: "no_data", GeopoliticalRisk: "no_data"},
 		}
 	}
 
@@ -167,6 +182,7 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 
 	dayTradingRatio := 0.0
 	var dtStats *retail.DayTradingStats
+	fetcherStatus := FetcherStatus{DayTrading: "not_available", Taifex: "not_available", OddLot: "not_available", ETF: "not_available", GeopoliticalRisk: "not_available"}
 	if h.DayTradingFetcher != nil {
 		if stats, err := h.DayTradingFetcher(r.Context()); err == nil {
 			dayTradingRatio = stats.VolumeRatio
@@ -174,6 +190,9 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 				Volume:      float64(stats.DayTradingVolume),
 				VolumeRatio: stats.VolumeRatio,
 			}
+			fetcherStatus.DayTrading = "ok"
+		} else {
+			fetcherStatus.DayTrading = "error"
 		}
 	}
 
@@ -183,17 +202,47 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 	var etfData *marketdata.ETFStats
 
 	if h.TaifexFetcher != nil {
-		pcrData, futuresOIData, _ = h.TaifexFetcher(r.Context())
+		if pcr, futures, err := h.TaifexFetcher(r.Context()); err == nil {
+			pcrData = pcr
+			futuresOIData = futures
+			fetcherStatus.Taifex = "ok"
+		} else {
+			fetcherStatus.Taifex = "error"
+		}
 	}
 	if h.OddLotFetcher != nil {
-		oddLotData, _ = h.OddLotFetcher(r.Context())
+		if data, err := h.OddLotFetcher(r.Context()); err == nil {
+			oddLotData = data
+			fetcherStatus.OddLot = "ok"
+		} else {
+			fetcherStatus.OddLot = "error"
+		}
 	}
 	if h.ETFFetcher != nil {
-		etfData, _ = h.ETFFetcher(r.Context())
+		if data, err := h.ETFFetcher(r.Context()); err == nil {
+			etfData = data
+			fetcherStatus.ETF = "ok"
+		} else {
+			fetcherStatus.ETF = "error"
+		}
 	}
 
 	calc := retail.GetCalculator()
 	calc.SetParams(config.GetParametersConfig().RSITw)
+
+	// Geopolitical risk: use live provider if available, fallback to 0 (defense-first).
+	geoRisk := 0.0
+	if h.GeopoliticalRiskFetcher != nil {
+		geoRisk = h.GeopoliticalRiskFetcher(r.Context())
+		if geoRisk > 0 {
+			fetcherStatus.GeopoliticalRisk = "ok"
+		} else {
+			fetcherStatus.GeopoliticalRisk = "no_data"
+		}
+	} else {
+		fetcherStatus.GeopoliticalRisk = "not_available"
+	}
+
 	rsiInput := retail.RSITwInput{
 		MarginBalance:      snap.RetailMarginBalance.Value,
 		MarginPercentile:   marginPercentile,
@@ -201,7 +250,7 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 		VIXLevel:           snap.VIX.Value,
 		ForeignInvestorNet: snap.ForeignInvestorNet.Value,
 		DomesticFundNet:    snap.DomesticFundNet.Value,
-		GeopoliticalRisk:   0,
+		GeopoliticalRisk:   geoRisk,
 		PutCallRatio:       getFloatOrZero(pcrData, func(p *marketdata.PCRStats) float64 { return p.PutCallVolumeRatio }),
 		OddLotImbalance:    getFloatOrZero(oddLotData, func(o *marketdata.OddLotStats) float64 { return o.ImbalanceRatio }),
 		RetailFuturesPct:   getFloatOrZero(futuresOIData, func(f *marketdata.RetailFuturesOI) float64 { return f.RetailLongPct - f.RetailShortPct }),
@@ -226,6 +275,7 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 		Interpretation:         interpretation,
 		CompositeSentiment:     rsiResult.Score,
 		SentimentSubIndicators: convertRSITwSubIndicators(rsiResult),
+		FetcherStatus:          fetcherStatus,
 	}
 }
 

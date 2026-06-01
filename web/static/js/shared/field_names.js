@@ -272,6 +272,12 @@ export const FIELD = {
     intraday_peak: 'intraday_peak',
     day_start_value: 'day_start_value',
   },
+  CompositeCardConfig: {
+    layer_weights: 'layer_weights',
+    sentiment_thresholds: 'sentiment_thresholds',
+    clamp_min: 'clamp_min',
+    clamp_max: 'clamp_max',
+  },
   ConfidenceMixConfig: {
     weight_boundary: 'weight_boundary',
     weight_freshness: 'weight_freshness',
@@ -686,6 +692,12 @@ export const FIELD = {
     recent: 'recent',
     premarket: 'premarket',
   },
+  EventCalendarRule: {
+    name: 'name',
+    base_weight: 'base_weight',
+    decay_days: 'decay_days',
+    direction: 'direction',
+  },
   ExecutionPolicy: {
     conviction_floor: 'conviction_floor',
     require_cro_pass: 'require_cro_pass',
@@ -913,6 +925,13 @@ export const FIELD = {
     aggressive_value: 'aggressive_value',
     aggressive_quality: 'aggressive_quality',
   },
+  FetcherStatus: {
+    day_trading: 'day_trading',
+    taifex: 'taifex',
+    odd_lot: 'odd_lot',
+    etf: 'etf',
+    geopolitical_risk: 'geopolitical_risk',
+  },
   FinancialsExecutorParameters: {
     dividend_boost: 'dividend_boost',
     balance_sheet_penalty: 'balance_sheet_penalty',
@@ -1110,6 +1129,10 @@ export const FIELD = {
     capacity_utilization: 'capacity_utilization',
     timestamp: 'timestamp',
   },
+  IndustryMultiplierMap: {
+    bull_multiplier: 'bull_multiplier',
+    bear_multiplier: 'bear_multiplier',
+  },
   IndustryOverview: {
     id: 'id',
     name: 'name',
@@ -1175,6 +1198,10 @@ export const FIELD = {
     cycle_calibration: 'cycle_calibration',
     history_retention_days: 'history_retention_days',
     default_metrics: 'default_metrics',
+    silicon_cycle: 'silicon_cycle',
+    event_calendar_rules: 'event_calendar_rules',
+    composite_card: 'composite_card',
+    seasonal_multipliers: 'seasonal_multipliers',
   },
   IndustryRecommendation: {
     action: 'action',
@@ -1851,6 +1878,27 @@ export const FIELD = {
     is_fallback: 'is_fallback',
   },
   RSITwParameters: {
+    a1_weight: 'a1_weight',
+    a2_weight: 'a2_weight',
+    a3_weight: 'a3_weight',
+    a4_weight: 'a4_weight',
+    a5_weight: 'a5_weight',
+    a6_weight: 'a6_weight',
+    a_part_weight: 'a_part_weight',
+    c_part_weight: 'c_part_weight',
+    a3_midpoint: 'a3_midpoint',
+    a3_scale: 'a3_scale',
+    a4_vix_thresholds: 'a4_vix_thresholds',
+    a4_vix_scores: 'a4_vix_scores',
+    a5_pcr_thresholds: 'a5_pcr_thresholds',
+    a5_pcr_scores: 'a5_pcr_scores',
+    a5_pcr_fallback: 'a5_pcr_fallback',
+    a6_oddlot_thresholds: 'a6_oddlot_thresholds',
+    a6_oddlot_scores: 'a6_oddlot_scores',
+    a6_oddlot_fallback: 'a6_oddlot_fallback',
+    c1_weight: 'c1_weight',
+    c2_weight: 'c2_weight',
+    c3_weight: 'c3_weight',
     c1_very_bullish_threshold: 'c1_very_bullish_threshold',
     c1_bullish_threshold: 'c1_bullish_threshold',
     c1_bearish_threshold: 'c1_bearish_threshold',
@@ -2014,6 +2062,7 @@ export const FIELD = {
     retail_futures_oi: 'retail_futures_oi',
     etf_net_subscription: 'etf_net_subscription',
     sentiment_sub_indicators: 'sentiment_sub_indicators',
+    fetcher_status: 'fetcher_status',
   },
   RetailSentimentSnapshot: {
     margin_balance: 'margin_balance',
@@ -2163,6 +2212,10 @@ export const FIELD = {
     expectation_gap: 'expectation_gap',
     already_priced_in: 'already_priced_in',
   },
+  SeasonalMultiplierConfig: {
+    theme_multipliers: 'theme_multipliers',
+    theme_correlations: 'theme_correlations',
+  },
   SeasonalPattern: {
     id: 'id',
     name: 'name',
@@ -2269,6 +2322,16 @@ export const FIELD = {
   ShockImpact: {
     industry: 'industry',
     impact: 'impact',
+  },
+  SiliconCycleParameters: {
+    revenue_yoy_threshold: 'revenue_yoy_threshold',
+    billings_yoy_threshold: 'billings_yoy_threshold',
+    inventory_days_threshold: 'inventory_days_threshold',
+    utilization_threshold: 'utilization_threshold',
+    index_ma_percent_threshold: 'index_ma_percent_threshold',
+    sox_extreme_threshold: 'sox_extreme_threshold',
+    capex_cut_threshold: 'capex_cut_threshold',
+    min_confidence: 'min_confidence',
   },
   SiliconIndicatorSnapshot: {
     tsmc_monthly_revenue_yoy: 'tsmc_monthly_revenue_yoy',

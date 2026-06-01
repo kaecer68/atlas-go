@@ -472,6 +472,83 @@ type IndustryParameters struct {
 	// Bootstrap seed values for CycleTracker initialization, used before
 	// real FinMind data becomes available (replaced within 6h by auto_cycle_update).
 	DefaultMetrics ParameterMetadata[map[string]IndustryDefaultMetrics] `json:"default_metrics"`
+
+	SiliconCycle       ParameterMetadata[SiliconCycleParameters] `json:"silicon_cycle"`
+	EventCalendarRules ParameterMetadata[[]EventCalendarRule]    `json:"event_calendar_rules"`
+
+	// CompositeCard holds tunable parameters for building the CycleStatusCard composite sentiment gauge.
+	CompositeCard ParameterMetadata[CompositeCardConfig] `json:"composite_card"`
+
+	// SeasonalMultipliers holds theme→industry multiplier maps for seasonal bridge narrative adjustments.
+	SeasonalMultipliers ParameterMetadata[SeasonalMultiplierConfig] `json:"seasonal_multipliers"`
+}
+
+// CompositeCardConfig holds tunable parameters for building the CycleStatusCard composite sentiment gauge.
+type CompositeCardConfig struct {
+	LayerWeights        map[string]float64         `json:"layer_weights"`
+	SentimentThresholds map[string]SentimentBounds `json:"sentiment_thresholds"`
+	ClampMin            float64                    `json:"clamp_min"`
+	ClampMax            float64                    `json:"clamp_max"`
+}
+
+// SentimentBounds defines the value range for a sentiment label.
+type SentimentBounds struct {
+	Min float64 `json:"min"`
+	Max float64 `json:"max"`
+}
+
+// SeasonalMultiplierConfig holds theme→industry multiplier maps for seasonal bridge narrative adjustments.
+type SeasonalMultiplierConfig struct {
+	ThemeMultipliers  map[string]IndustryMultiplierMap `json:"theme_multipliers"`
+	ThemeCorrelations map[string]map[string]float64    `json:"theme_correlations"`
+}
+
+// IndustryMultiplierMap holds bull/bear multipliers per industry for a theme.
+type IndustryMultiplierMap struct {
+	BullMultiplier map[string]float64 `json:"bull_multiplier"`
+	BearMultiplier map[string]float64 `json:"bear_multiplier"`
+}
+
+// MarshalJSON implements json.Marshaler. When Max is +Inf, it serializes as the
+// string "+Inf"; otherwise it uses the standard numeric representation.
+func (s SentimentBounds) MarshalJSON() ([]byte, error) {
+	enc := struct {
+		Min float64 `json:"min"`
+		Max any     `json:"max"`
+	}{Min: s.Min}
+	if math.IsInf(s.Max, 1) {
+		enc.Max = "+Inf"
+	} else {
+		enc.Max = s.Max
+	}
+	return json.Marshal(enc)
+}
+
+// UnmarshalJSON implements json.Unmarshaler, accepting "+Inf" string for Max
+// in addition to standard numeric values.
+func (s *SentimentBounds) UnmarshalJSON(data []byte) error {
+	var num struct {
+		Min float64 `json:"min"`
+		Max float64 `json:"max"`
+	}
+	if err := json.Unmarshal(data, &num); err == nil {
+		s.Min = num.Min
+		s.Max = num.Max
+		return nil
+	}
+	var str struct {
+		Min float64 `json:"min"`
+		Max string  `json:"max"`
+	}
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	s.Min = str.Min
+	if str.Max == "+Inf" {
+		s.Max = math.Inf(1)
+		return nil
+	}
+	return fmt.Errorf("unknown max value: %q (expected \"+Inf\" or number)", str.Max)
 }
 
 // IndustryDefaultMetrics holds bootstrap seed values for CycleTracker initialization.
@@ -671,6 +748,27 @@ type DynamicEnvConfig struct {
 	OilPriceShockThreshold float64 `json:"oil_price_shock_threshold"`
 	UsRatesDxyThreshold    float64 `json:"us_rates_dxy_threshold"`
 	JpyCarryDxyThreshold   float64 `json:"jpy_carry_dxy_threshold"`
+}
+
+// SiliconCycleParameters holds thresholds for semiconductor silicon cycle phase detection.
+type SiliconCycleParameters struct {
+	RevenueYoYThreshold     float64 `json:"revenue_yoy_threshold"`
+	BillingsYoYThreshold    float64 `json:"billings_yoy_threshold"`
+	InventoryDaysThreshold  float64 `json:"inventory_days_threshold"`
+	UtilizationThreshold    float64 `json:"utilization_threshold"`
+	IndexMAPercentThreshold float64 `json:"index_ma_percent_threshold"`
+	SOXExtremeThreshold     float64 `json:"sox_extreme_threshold"`
+	CapexCutThreshold       float64 `json:"capex_cut_threshold"`
+	MinConfidence           float64 `json:"min_confidence"`
+}
+
+// EventCalendarRule defines a Taiwan market calendar event rule
+// configurable via ParametersConfig.Industry.EventCalendarRules.
+type EventCalendarRule struct {
+	Name       string  `json:"name"`
+	BaseWeight float64 `json:"base_weight"`
+	DecayDays  int     `json:"decay_days"`
+	Direction  string  `json:"direction"`
 }
 
 // StrategyParameters holds tunable values for strategy selection and switching.
@@ -986,7 +1084,39 @@ type PostTradeGateParameters struct {
 
 // RSITwParameters holds tunable values for the RSI-tw retail sentiment calculator.
 type RSITwParameters struct {
+	// Part A — Retail Sentiment (40% overall weight)
+	A1Weight    ParameterMetadata[float64] `json:"a1_weight"`     // Margin Balance Δ Z-score (default 0.25)
+	A2Weight    ParameterMetadata[float64] `json:"a2_weight"`     // Day Trading Ratio (default 0.20)
+	A3Weight    ParameterMetadata[float64] `json:"a3_weight"`     // Margin Maintenance Proxy (default 0.20)
+	A4Weight    ParameterMetadata[float64] `json:"a4_weight"`     // VIX Nonlinear Mapping (default 0.15)
+	A5Weight    ParameterMetadata[float64] `json:"a5_weight"`     // Weekly PCR Proxy (default 0.10)
+	A6Weight    ParameterMetadata[float64] `json:"a6_weight"`     // Odd-Lot Trading (default 0.10)
+	APartWeight ParameterMetadata[float64] `json:"a_part_weight"` // Part A overall weight (default 0.40)
+	CPartWeight ParameterMetadata[float64] `json:"c_part_weight"` // Part C overall weight (default 0.25)
+
+	// A3: Margin Maintenance formula (z = (p - midpoint) * scale)
+	A3Midpoint ParameterMetadata[float64] `json:"a3_midpoint"` // neutral midpoint (default 0.5)
+	A3Scale    ParameterMetadata[float64] `json:"a3_scale"`    // Z-score scaling factor (default 2.0)
+
+	// A4: VIX piecewise mapping — thresholds are lower bounds (exclusive), scores are the mapping result.
+	// thresholds[0]=15, thresholds[1]=20, ...; scores[0]=0.1 (vix<15), scores[5]=1.0 (vix>=35)
+	A4VixThresholds ParameterMetadata[[]float64] `json:"a4_vix_thresholds"` // [15, 20, 25, 30, 35]
+	A4VixScores     ParameterMetadata[[]float64] `json:"a4_vix_scores"`     // [0.1, 0.3, 0.5, 0.7, 0.85, 1.0]
+
+	// A5: PCR piecewise mapping — thresholds are compared with > (strict), scores in order
+	A5PcrThresholds ParameterMetadata[[]float64] `json:"a5_pcr_thresholds"` // [1.5, 1.0, 0.8]
+	A5PcrScores     ParameterMetadata[[]float64] `json:"a5_pcr_scores"`     // [0.9, 0.7, 0.5, 0.1]
+	A5PcrFallback   ParameterMetadata[float64]   `json:"a5_pcr_fallback"`   // score when pcr==0 (default 0.5)
+
+	// A6: Odd-lot imbalance mapping — thresholds with > (strict), scores in order
+	A6OddLotThresholds ParameterMetadata[[]float64] `json:"a6_oddlot_thresholds"` // [0.2, 0.1, -0.1, -0.2]
+	A6OddLotScores     ParameterMetadata[[]float64] `json:"a6_oddlot_scores"`     // [0.85, 0.65, 0.5, 0.35, 0.15]
+	A6OddLotFallback   ParameterMetadata[float64]   `json:"a6_oddlot_fallback"`   // score when imb==0 (default 0.5)
+
 	// Part C — Institutional / Derivative Flow (25% weight)
+	C1Weight               ParameterMetadata[float64] `json:"c1_weight"`                 // Small TAIEX Futures OI (default 0.40)
+	C2Weight               ParameterMetadata[float64] `json:"c2_weight"`                 // Foreign/Inst Net Flow (default 0.35)
+	C3Weight               ParameterMetadata[float64] `json:"c3_weight"`                 // ETF Net Subscription (default 0.25)
 	C1VeryBullishThreshold ParameterMetadata[float64] `json:"c1_very_bullish_threshold"` // futures OI pct above this → 0.9
 	C1BullishThreshold     ParameterMetadata[float64] `json:"c1_bullish_threshold"`      // futures OI pct above this → 0.7
 	C1BearishThreshold     ParameterMetadata[float64] `json:"c1_bearish_threshold"`      // futures OI pct below this → 0.5
@@ -2285,7 +2415,7 @@ func GetParametersConfigPath() string {
 	return parametersPath
 }
 
-// Save writes the configuration to the given JSON file.
+// Save writes the configuration to the given JSON file (non-atomic).
 func (p *ParametersConfig) Save(path string) error {
 	p.UpdatedAt = time.Now()
 	data, err := json.MarshalIndent(p, "", "  ")
@@ -2295,6 +2425,49 @@ func (p *ParametersConfig) Save(path string) error {
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("write parameters config: %w", err)
 	}
+	return nil
+}
+
+// SaveWithRollback atomically writes the configuration with automatic rollback.
+// Write pattern: .tmp → fsync → rename existing → .bak → rename .tmp → target.
+// If any step after the .bak fails, the original file is restored from .bak.
+func (p *ParametersConfig) SaveWithRollback(path string) error {
+	tmpPath := path + ".tmp"
+	bakPath := path + ".bak"
+
+	p.UpdatedAt = time.Now()
+	data, err := json.MarshalIndent(p, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal parameters config: %w", err)
+	}
+
+	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+		return fmt.Errorf("write temp parameters config: %w", err)
+	}
+
+	f, err := os.OpenFile(tmpPath, os.O_RDONLY, 0)
+	if err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("open temp file for sync: %w", err)
+	}
+	_ = f.Sync()
+	f.Close()
+
+	if _, statErr := os.Stat(path); statErr == nil {
+		if err := os.Rename(path, bakPath); err != nil {
+			os.Remove(tmpPath)
+			return fmt.Errorf("backup existing config: %w", err)
+		}
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		if _, bakErr := os.Stat(bakPath); bakErr == nil {
+			_ = os.Rename(bakPath, path)
+		}
+		return fmt.Errorf("promote temp config: %w", err)
+	}
+
+	os.Remove(bakPath)
 	return nil
 }
 
@@ -2450,6 +2623,82 @@ func mergeRSITwDefaults(cfg *ParametersConfig) {
 	def := DefaultParametersConfig().RSITw
 	r := &cfg.RSITw
 
+	// Part A weights
+	if r.A1Weight.Value == 0 {
+		r.A1Weight = def.A1Weight
+	}
+	if r.A2Weight.Value == 0 {
+		r.A2Weight = def.A2Weight
+	}
+	if r.A3Weight.Value == 0 {
+		r.A3Weight = def.A3Weight
+	}
+	if r.A4Weight.Value == 0 {
+		r.A4Weight = def.A4Weight
+	}
+	if r.A5Weight.Value == 0 {
+		r.A5Weight = def.A5Weight
+	}
+	if r.A6Weight.Value == 0 {
+		r.A6Weight = def.A6Weight
+	}
+	if r.APartWeight.Value == 0 {
+		r.APartWeight = def.APartWeight
+	}
+	if r.CPartWeight.Value == 0 {
+		r.CPartWeight = def.CPartWeight
+	}
+
+	// A3 formula
+	if r.A3Midpoint.Value == 0 {
+		r.A3Midpoint = def.A3Midpoint
+	}
+	if r.A3Scale.Value == 0 {
+		r.A3Scale = def.A3Scale
+	}
+
+	// A4 VIX mapping
+	if len(r.A4VixThresholds.Value) == 0 {
+		r.A4VixThresholds = def.A4VixThresholds
+	}
+	if len(r.A4VixScores.Value) == 0 {
+		r.A4VixScores = def.A4VixScores
+	}
+
+	// A5 PCR mapping
+	if len(r.A5PcrThresholds.Value) == 0 {
+		r.A5PcrThresholds = def.A5PcrThresholds
+	}
+	if len(r.A5PcrScores.Value) == 0 {
+		r.A5PcrScores = def.A5PcrScores
+	}
+	if r.A5PcrFallback.Value == 0 {
+		r.A5PcrFallback = def.A5PcrFallback
+	}
+
+	// A6 Odd-lot mapping
+	if len(r.A6OddLotThresholds.Value) == 0 {
+		r.A6OddLotThresholds = def.A6OddLotThresholds
+	}
+	if len(r.A6OddLotScores.Value) == 0 {
+		r.A6OddLotScores = def.A6OddLotScores
+	}
+	if r.A6OddLotFallback.Value == 0 {
+		r.A6OddLotFallback = def.A6OddLotFallback
+	}
+
+	// Part C sub-weights
+	if r.C1Weight.Value == 0 {
+		r.C1Weight = def.C1Weight
+	}
+	if r.C2Weight.Value == 0 {
+		r.C2Weight = def.C2Weight
+	}
+	if r.C3Weight.Value == 0 {
+		r.C3Weight = def.C3Weight
+	}
+
+	// Part C thresholds (existing)
 	if r.C1VeryBullishThreshold.Value == 0 {
 		r.C1VeryBullishThreshold = def.C1VeryBullishThreshold
 	}

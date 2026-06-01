@@ -523,9 +523,11 @@ func (fe *FactorEngine) CalculateInstitutionalSentimentScore(input FactorBridgeI
 	foreignWeight := weights["foreign"]
 	domesticWeight := weights["domestic"]
 	marginWeight := weights["margin"]
+	retailWeight := weights["retail"]
 	score := foreignWeight*input.ForeignFlowScore +
 		domesticWeight*input.DomesticFlowScore +
-		marginWeight*input.MarginBalanceScore
+		marginWeight*input.MarginBalanceScore +
+		retailWeight*input.RetailSentimentScore
 	if score > 1.0 {
 		score = 1.0
 	}
@@ -534,14 +536,16 @@ func (fe *FactorEngine) CalculateInstitutionalSentimentScore(input FactorBridgeI
 	}
 	return domain.FactorScoreItem{
 		Score:   score,
-		Formula: fmt.Sprintf("%.2f*ForeignFlowScore + %.2f*DomesticFlowScore + %.2f*MarginBalanceScore", foreignWeight, domesticWeight, marginWeight),
+		Formula: fmt.Sprintf("%.2f*ForeignFlowScore + %.2f*DomesticFlowScore + %.2f*MarginBalanceScore + %.2f*RetailSentimentScore", foreignWeight, domesticWeight, marginWeight, retailWeight),
 		RawInputs: map[string]float64{
 			"foreign_score":   input.ForeignFlowScore,
 			"domestic_score":  input.DomesticFlowScore,
 			"margin_score":    input.MarginBalanceScore,
+			"retail_score":    input.RetailSentimentScore,
 			"foreign_weight":  foreignWeight,
 			"domestic_weight": domesticWeight,
 			"margin_weight":   marginWeight,
+			"retail_weight":   retailWeight,
 		},
 	}
 }

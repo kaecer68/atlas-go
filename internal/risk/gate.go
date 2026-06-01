@@ -168,6 +168,15 @@ func (g *RiskGate) Subscribe(fn func(RiskDecision)) {
 	g.subs = append(g.subs, fn)
 }
 
+// SetPreTradeRSITwScore pushes the RSI-tw retail sentiment score to the
+// underlying PreTradeGate. Scores near ±0.7 or beyond trigger the
+// ruleRetailSentiment check.
+func (g *RiskGate) SetPreTradeRSITwScore(score float64) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.preTrade.SetRSITwScore(score)
+}
+
 // SetLastCalibration stores the most recent calibration run result.
 func (g *RiskGate) SetLastCalibration(report *CalibrationReport) {
 	g.mu.Lock()

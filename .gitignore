@@ -170,3 +170,4 @@ prompts/archive/
 # compiled go binaries in repo root
 /validate-parameters
 .gstack/
+calibrate-rsi-tw

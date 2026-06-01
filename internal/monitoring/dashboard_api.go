@@ -575,6 +575,9 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		systemHandlers.OddLotFetcher = NewOddLotFetcher(a.dataFetcher)
 		systemHandlers.ETFFetcher = NewETFFetcher(a.dataFetcher)
 	}
+	if a.geoProvider != nil || a.taiwanGeoProvider != nil {
+		systemHandlers.GeopoliticalRiskFetcher = newGeopoliticalRiskFetcher(a.geoProvider, a.taiwanGeoProvider)
+	}
 	systemHandlers.RegisterRoutes(mux)
 
 	handlers := &apisystem.HealthHandlers{}

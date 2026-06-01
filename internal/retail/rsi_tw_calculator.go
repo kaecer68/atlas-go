@@ -120,10 +120,10 @@ func (c *Calculator) ComputeFinal(data RSITwInput) RSITwSnapshot {
 	c.mu.RUnlock()
 
 	subs := make(map[string]RSISubIndicator, 9)
-	partA := c.computePartA(data, marginSnap, subs)
+	partA := c.computePartA(data, marginSnap, subs, &params)
 	partC := c.computePartC(data, subs, &params)
 	adj := c.computeAdjustmentFactor(data, subs, &params)
-	final := (partA*0.40 + partC*0.25) * adj
+	final := (partA*params.APartWeight.Value + partC*params.CPartWeight.Value) * adj
 	final = clamp(final, -1.0, 1.0)
 
 	return RSITwSnapshot{
@@ -157,34 +157,23 @@ func (c *Calculator) UpdateHistory(data RSITwInput) {
 // Part A — Retail Sentiment (40 % weight)
 // ---------------------------------------------------------------------------
 
-func (c *Calculator) computePartA(data RSITwInput, marginHistory []float64, subs map[string]RSISubIndicator) float64 {
+func (c *Calculator) computePartA(data RSITwInput, marginHistory []float64, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
 	var total float64
 
-	// A1: Margin Balance Δ Z-score (weight 0.25)
-	total += c.subA1(data, marginHistory, subs)
-
-	// A2: Day Trading Ratio (weight 0.20)
-	total += c.subA2(data, subs)
-
-	// A3: Margin Maintenance Proxy (weight 0.20)
-	total += c.subA3(data, subs)
-
-	// A4: VIX Nonlinear Mapping (weight 0.15)
-	total += c.subA4(data, subs)
-
-	// A5: Weekly PCR Proxy (weight 0.10)
-	total += c.subA5(data, subs)
-
-	// A6: Odd-Lot Trading (weight 0.10)
-	total += c.subA6(data, subs)
+	total += c.subA1(data, marginHistory, subs, params)
+	total += c.subA2(data, subs, params)
+	total += c.subA3(data, subs, params)
+	total += c.subA4(data, subs, params)
+	total += c.subA5(data, subs, params)
+	total += c.subA6(data, subs, params)
 
 	return clamp(total, -1.0, 1.0)
 }
 
-// A1: Margin Balance Δ Z-score (weight 0.25)
-func (c *Calculator) subA1(data RSITwInput, history []float64, subs map[string]RSISubIndicator) float64 {
-	const weight = 0.25
-	ind := RSISubIndicator{Weight: weight, Value: data.MarginBalance}
+// A1: Margin Balance Δ Z-score (weight from params)
+func (c *Calculator) subA1(data RSITwInput, history []float64, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
+	w := params.A1Weight.Value
+	ind := RSISubIndicator{Weight: w, Value: data.MarginBalance}
 
 	if len(history) < 2 {
 		ind.ZScore = 0
@@ -210,13 +199,13 @@ func (c *Calculator) subA1(data RSITwInput, history []float64, subs map[string]R
 
 	ind.ZScore = clamp((data.MarginBalance-mean)/std, -2.0, 2.0)
 	subs["a1_margin_z"] = ind
-	return ind.ZScore * weight
+	return ind.ZScore * w
 }
 
 // A2: Day Trading Ratio (weight 0.20)
-func (c *Calculator) subA2(data RSITwInput, subs map[string]RSISubIndicator) float64 {
-	const weight = 0.20
-	ind := RSISubIndicator{Weight: weight}
+func (c *Calculator) subA2(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
+	w := params.A2Weight.Value
+	ind := RSISubIndicator{Weight: w}
 
 	if data.DayTrading == nil {
 		ind.IsFallback = true
@@ -227,81 +216,78 @@ func (c *Calculator) subA2(data RSITwInput, subs map[string]RSISubIndicator) flo
 	ind.Value = data.DayTrading.Volume
 	ind.ZScore = data.DayTrading.VolumeRatio
 	subs["a2_day_trading"] = ind
-	return ind.ZScore * weight
+	return ind.ZScore * w
 }
 
-// A3: Margin Maintenance Proxy (weight 0.20)
-func (c *Calculator) subA3(data RSITwInput, subs map[string]RSISubIndicator) float64 {
-	const weight = 0.20
+func (c *Calculator) subA3(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
+	w := params.A3Weight.Value
 	ind := RSISubIndicator{
-		Weight: weight,
+		Weight: w,
 		Value:  data.MarginPercentile,
 	}
-	// Higher percentile → more strain → bearish sentiment
-	ind.ZScore = clamp((data.MarginPercentile-0.5)*2, -1.0, 1.0)
+	ind.ZScore = clamp((data.MarginPercentile-params.A3Midpoint.Value)*params.A3Scale.Value, -1.0, 1.0)
 	subs["a3_margin_maint"] = ind
-	return ind.ZScore * weight
+	return ind.ZScore * w
 }
 
-// A4: VIX Nonlinear Mapping (weight 0.15)
-func (c *Calculator) subA4(data RSITwInput, subs map[string]RSISubIndicator) float64 {
-	const weight = 0.15
-	ind := RSISubIndicator{Weight: weight, Value: data.VIXLevel}
+func (c *Calculator) subA4(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
+	w := params.A4Weight.Value
+	ind := RSISubIndicator{Weight: w, Value: data.VIXLevel}
 
 	if data.VIXLevel <= 0 {
 		ind.ZScore = 0.5
 		ind.IsFallback = true
 		subs["a4_vix_map"] = ind
-		return ind.ZScore * weight
+		return ind.ZScore * w
 	}
 
-	ind.ZScore = vixMap(data.VIXLevel)
+	ind.ZScore = vixMapParam(data.VIXLevel, params)
 	subs["a4_vix_map"] = ind
-	return ind.ZScore * weight
+	return ind.ZScore * w
 }
 
-// A5: Weekly PCR (weight 0.10)
-func (c *Calculator) subA5(data RSITwInput, subs map[string]RSISubIndicator) float64 {
-	const weight = 0.10
+func (c *Calculator) subA5(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
+	w := params.A5Weight.Value
 	pcr := data.PutCallRatio
 	var score float64
 	if pcr == 0 {
-		score = 0.5
-	} else if pcr > 1.5 {
-		score = 0.9
-	} else if pcr > 1.0 {
-		score = 0.7
-	} else if pcr > 0.8 {
-		score = 0.5
+		score = params.A5PcrFallback.Value
 	} else {
-		score = 0.1
+		ts := params.A5PcrThresholds.Value
+		ss := params.A5PcrScores.Value
+		score = ss[len(ss)-1] // default
+		for i, t := range ts {
+			if pcr > t {
+				score = ss[i]
+				break
+			}
+		}
 	}
-	ind := RSISubIndicator{Value: pcr, Weight: weight, ZScore: score, IsFallback: pcr == 0}
+	ind := RSISubIndicator{Value: pcr, Weight: w, ZScore: score, IsFallback: pcr == 0}
 	subs["a5_pcr_proxy"] = ind
-	return score * weight
+	return score * w
 }
 
-// A6: Odd-Lot Trading (weight 0.10)
-func (c *Calculator) subA6(data RSITwInput, subs map[string]RSISubIndicator) float64 {
-	const weight = 0.10
+func (c *Calculator) subA6(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
+	w := params.A6Weight.Value
 	imb := data.OddLotImbalance
 	var score float64
 	if imb == 0 {
-		score = 0.5
-	} else if imb > 0.2 {
-		score = 0.85
-	} else if imb > 0.1 {
-		score = 0.65
-	} else if imb > -0.1 {
-		score = 0.5
-	} else if imb > -0.2 {
-		score = 0.35
+		score = params.A6OddLotFallback.Value
 	} else {
-		score = 0.15
+		ts := params.A6OddLotThresholds.Value
+		ss := params.A6OddLotScores.Value
+		score = ss[len(ss)-1]
+		for i, t := range ts {
+			if imb > t {
+				score = ss[i]
+				break
+			}
+		}
 	}
-	ind := RSISubIndicator{Value: imb, Weight: weight, ZScore: score, IsFallback: imb == 0}
+	ind := RSISubIndicator{Value: imb, Weight: w, ZScore: score, IsFallback: imb == 0}
 	subs["a6_odd_lot"] = ind
-	return score * weight
+	return score * w
 }
 
 // ---------------------------------------------------------------------------
@@ -311,13 +297,8 @@ func (c *Calculator) subA6(data RSITwInput, subs map[string]RSISubIndicator) flo
 func (c *Calculator) computePartC(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
 	var total float64
 
-	// C1: Small TAIEX Futures OI (weight 0.40)
 	total += c.subC1(data, subs, params)
-
-	// C2: Foreign / Institutional Net Flow Proxy (weight 0.35)
 	total += c.subC2(data, subs, params)
-
-	// C3: ETF Net Subscription (weight 0.25)
 	total += c.subC3(data, subs, params)
 
 	return clamp(total, -1.0, 1.0)
@@ -325,7 +306,7 @@ func (c *Calculator) computePartC(data RSITwInput, subs map[string]RSISubIndicat
 
 // C1: Small TAIEX Futures OI (weight 0.40)
 func (c *Calculator) subC1(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
-	const weight = 0.40
+	w := params.C1Weight.Value
 	pct := data.RetailFuturesPct
 	var score float64
 	if pct == 0 {
@@ -341,17 +322,15 @@ func (c *Calculator) subC1(data RSITwInput, subs map[string]RSISubIndicator, par
 	} else {
 		score = 0.1
 	}
-	ind := RSISubIndicator{Value: pct, Weight: weight, ZScore: score, IsFallback: pct == 0}
+	ind := RSISubIndicator{Value: pct, Weight: w, ZScore: score, IsFallback: pct == 0}
 	subs["c1_futures_oi"] = ind
-	return score * weight
+	return score * w
 }
 
-// C2: Foreign / Institutional Net Flow Proxy (weight 0.35)
 func (c *Calculator) subC2(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
-	const weight = 0.35
+	w := params.C2Weight.Value
 	netFlow := data.ForeignInvestorNet + data.DomesticFundNet
-	ind := RSISubIndicator{Weight: weight, Value: netFlow}
-
+	ind := RSISubIndicator{Weight: w, Value: netFlow}
 	if netFlow == 0 {
 		ind.IsFallback = true
 		subs["c2_inst_flow"] = ind
@@ -363,12 +342,11 @@ func (c *Calculator) subC2(data RSITwInput, subs map[string]RSISubIndicator, par
 	score := mid + (netFlow / scaling)
 	ind.ZScore = clamp(score, 0.1, 0.9)
 	subs["c2_inst_flow"] = ind
-	return ind.ZScore * weight
+	return ind.ZScore * w
 }
 
-// C3: ETF Net Subscription (weight 0.25)
 func (c *Calculator) subC3(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
-	const weight = 0.25
+	w := params.C3Weight.Value
 	netSub := data.ETFNetSubscription
 	var score float64
 	if netSub == 0 {
@@ -384,9 +362,9 @@ func (c *Calculator) subC3(data RSITwInput, subs map[string]RSISubIndicator, par
 	} else {
 		score = 0.2
 	}
-	ind := RSISubIndicator{Value: netSub, Weight: weight, ZScore: score, IsFallback: netSub == 0}
+	ind := RSISubIndicator{Value: netSub, Weight: w, ZScore: score, IsFallback: netSub == 0}
 	subs["c3_etf_sub"] = ind
-	return score * weight
+	return score * w
 }
 
 // ---------------------------------------------------------------------------
@@ -454,7 +432,19 @@ func (c *Calculator) factorD4(subs map[string]RSISubIndicator) float64 {
 // Helpers
 // ---------------------------------------------------------------------------
 
-// vixMap applies the piecewise VIX → sentiment mapping.
+// vixMapParam applies the piecewise VIX → sentiment mapping using parameterized thresholds/scores.
+func vixMapParam(v float64, params *config.RSITwParameters) float64 {
+	ts := params.A4VixThresholds.Value
+	ss := params.A4VixScores.Value
+	for i, t := range ts {
+		if v < t {
+			return ss[i]
+		}
+	}
+	return ss[len(ss)-1]
+}
+
+// vixMap applies the piecewise VIX → sentiment mapping. Kept for backward compatibility.
 func vixMap(v float64) float64 {
 	switch {
 	case v < 15:

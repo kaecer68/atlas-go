@@ -5,6 +5,8 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 // SiliconIndicatorSnapshot captures key silicon cycle indicators at a point in time,
@@ -91,8 +93,23 @@ func GetGlobalCycleCalibration() *CycleCalibration {
 }
 
 func resolveCardConfig() CardConfig {
+	// Prefer ParametersConfig when available; fall back to hardcoded defaults.
 	cfg := defaultCardConfig()
+	if params := config.GetParametersConfig(); params != nil {
+		cc := params.Industry.CompositeCard.Value
+		thresholds := make(map[string]SentimentBounds, len(cc.SentimentThresholds))
+		for k, v := range cc.SentimentThresholds {
+			thresholds[k] = SentimentBounds{Min: v.Min, Max: v.Max}
+		}
+		cfg = CardConfig{
+			LayerWeights:        cc.LayerWeights,
+			SentimentThresholds: thresholds,
+			ClampMin:            cc.ClampMin,
+			ClampMax:            cc.ClampMax,
+		}
+	}
 
+	// Overlay runtime calibration on top of the base config (from whichever source).
 	if globalCycleCalibration != nil && globalCycleCalibration.GetOutcomeCount() > 0 {
 		calibrated := globalCycleCalibration.CalibrateWeights(cfg.LayerWeights)
 		cfg.LayerWeights = calibrated

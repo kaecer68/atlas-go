@@ -53,6 +53,7 @@ function toggleModelAccordion(idx) {
 
 window.toggleTemplateAccordion = toggleTemplateAccordion;
 window.toggleModelAccordion = toggleModelAccordion;
+window.toggleSubIndicators = toggleSubIndicators;
 
 export function renderLiveNarrativeStrip(events, stress, models, chains) {
   const el = document.getElementById('liveNarrativeStrip');
