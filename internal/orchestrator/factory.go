@@ -10,6 +10,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
+	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/spawning"
 	"github.com/kaecer68/atlas-go/internal/swarm"
 )
@@ -53,6 +54,11 @@ func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.Chann
 	// Inject maturity tracker into DarwinianWeightManager.
 	if system.Port().darwinian != nil {
 		system.Port().darwinian.WithMaturityTracker(maturityTracker)
+	}
+
+	// Inject maturity tracker into sim engine's PreTradeGate.
+	if system.Sim().engine != nil && maturityTracker != nil {
+		system.Sim().engine.WithPreTradeGate(risk.NewPreTradeGate().WithMaturityTracker(maturityTracker))
 	}
 
 	system.WithDarwinian(system.Port().darwinian)
