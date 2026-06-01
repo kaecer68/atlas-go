@@ -2,8 +2,10 @@ package orchestrator
 
 import (
 	"path/filepath"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/prism"
@@ -37,6 +39,20 @@ func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.Chann
 	system, err := NewSystemWithEventBus(cfg, eventBus, opts...)
 	if err != nil {
 		return nil, err
+	}
+
+	// Create and wire MaturityTracker.
+	maturityTracker, err := domain.NewMaturityTracker(filepath.Join(cfg.WorkDir, "data/state/maturity_tracker.json"))
+	if err != nil {
+		// Non-fatal: system can run without maturity tracking.
+		// Log and continue.
+		maturityTracker = domain.NewMaturityTrackerWithStart(time.Now().UTC())
+	}
+	system.WithMaturityTracker(maturityTracker)
+
+	// Inject maturity tracker into DarwinianWeightManager.
+	if system.Port().darwinian != nil {
+		system.Port().darwinian.WithMaturityTracker(maturityTracker)
 	}
 
 	system.WithDarwinian(system.Port().darwinian)

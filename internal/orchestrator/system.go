@@ -125,6 +125,8 @@ type System struct {
 	drawdownReporter func(portfolio.DrawdownResult)
 	traceVerbose     bool // when true, SimTraceWriter emits color-coded terminal output
 	phase3Ctrl       *Phase3Controller
+
+	maturityTracker *domain.MaturityTracker
 }
 
 // Phase3Controller returns the Phase 3 optimization controller, if attached.
@@ -132,6 +134,15 @@ func (s *System) Phase3Controller() *Phase3Controller { return s.phase3Ctrl }
 
 // SetVerboseTrace enables or disables color-coded verbose trace output.
 func (s *System) SetVerboseTrace(v bool) { s.traceVerbose = v }
+
+// MaturityTracker returns the system's maturity tracker (nil if not attached).
+func (s *System) MaturityTracker() *domain.MaturityTracker { return s.maturityTracker }
+
+// WithMaturityTracker attaches a maturity tracker to the system.
+func (s *System) WithMaturityTracker(mt *domain.MaturityTracker) *System {
+	s.maturityTracker = mt
+	return s
+}
 
 // SystemOption configures optional subsystems during System construction.
 // Use the With* functions to create options.
