@@ -556,7 +556,7 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 	if calc := retail.GetCalculator(); calc != nil {
 		score := calc.LastScore()
 		if absScore := math.Abs(score); absScore >= 0.5 {
-			convictionDelta := int(math.Round(-15.0 * absScore / 1.0))
+			convictionDelta := int(math.Round(-15.0 * absScore))
 			for i := range recs {
 				if recs[i].ConvictionBreakdown == nil {
 					continue
