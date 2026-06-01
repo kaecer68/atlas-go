@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
@@ -39,6 +40,7 @@ type SystemHealthMonitor struct {
 	tracker         *domain.MaturityTracker
 	sharpeHistory   []float64 // rolling system Sharpe history
 	maxHistoryLen   int
+	eventBus        *eventbus.ChannelEventBus
 }
 
 // NewSystemHealthMonitor creates a health monitor.
@@ -54,6 +56,12 @@ func NewSystemHealthMonitor(dw *portfolio.DarwinianWeightManager, health *portfo
 // WithMaturityTracker attaches a maturity tracker.
 func (m *SystemHealthMonitor) WithMaturityTracker(mt *domain.MaturityTracker) *SystemHealthMonitor {
 	m.tracker = mt
+	return m
+}
+
+// WithEventBus attaches an event bus for publishing health alerts.
+func (m *SystemHealthMonitor) WithEventBus(eb *eventbus.ChannelEventBus) *SystemHealthMonitor {
+	m.eventBus = eb
 	return m
 }
 
@@ -82,6 +90,20 @@ func (m *SystemHealthMonitor) RunDaily(ctx context.Context) ([]HealthAlert, erro
 			"count", len(alerts),
 			"critical", countBySeverity(alerts, "CRITICAL"),
 			"warning", countBySeverity(alerts, "WARNING"))
+		// Publish alerts to event bus for downstream consumers.
+		for _, alert := range alerts {
+			if m.eventBus != nil {
+				m.eventBus.PublishHealthAlert(eventbus.HealthAlertPayload{
+					Severity:        alert.Severity,
+					Category:        alert.Category,
+					Message:         alert.Message,
+					Value:           alert.Value,
+					Threshold:       alert.Threshold,
+					SuggestedAction: alert.SuggestedAction,
+					Timestamp:       alert.Timestamp,
+				})
+			}
+		}
 	} else {
 		maturity := "unknown"
 		if m.tracker != nil {

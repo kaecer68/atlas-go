@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
@@ -270,5 +271,48 @@ func TestSystemHealthMonitor_BurnInStillRuns(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected health checks to run during burn-in, got: %+v", alerts)
+	}
+}
+
+func TestSystemHealthMonitor_EventBusPublish(t *testing.T) {
+	dw := portfolio.NewDarwinianWeightManager("/tmp/test_health_eventbus.json")
+	dw.InitializeFromRegistry(domain.AgentRegistry{
+		Agents: []domain.AgentSpec{
+			{ID: "a1", Enabled: true, Layer: domain.LayerSector, Skill: "tech"},
+		},
+	})
+
+	// Set agent to min weight to trigger a weight_distribution alert.
+	dw.SetWeight("a1", 0.3)
+
+	hm := portfolio.NewAgentHealthManager()
+	eb := eventbus.NewChannelEventBus(16)
+	monitor := NewSystemHealthMonitor(dw, hm).WithEventBus(eb)
+
+	// Subscribe to health alert events.
+	var received []eventbus.HealthAlertPayload
+	eb.Subscribe(eventbus.EventHealthAlert, func(_ context.Context, ev eventbus.BusEvent) error {
+		if payload, ok := ev.Payload.(eventbus.HealthAlertPayload); ok {
+			received = append(received, payload)
+		}
+		return nil
+	})
+
+	_, err := monitor.RunDaily(context.Background())
+	if err != nil {
+		t.Fatalf("RunDaily: %v", err)
+	}
+
+	// Allow event bus to process.
+	time.Sleep(50 * time.Millisecond)
+
+	if len(received) != 1 {
+		t.Fatalf("expected 1 health alert event, got %d", len(received))
+	}
+	if received[0].Category != "weight_distribution" {
+		t.Errorf("expected category=weight_distribution, got %s", received[0].Category)
+	}
+	if received[0].Severity != "WARNING" {
+		t.Errorf("expected severity=WARNING, got %s", received[0].Severity)
 	}
 }
