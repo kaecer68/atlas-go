@@ -120,6 +120,15 @@ func TestAutoRollback_PromotionDegradation(t *testing.T) {
 	if results[0].TargetID != "exp-001" {
 		t.Errorf("expected target=exp-001, got %s", results[0].TargetID)
 	}
+
+	// Verify alert-only rollback is recorded in history.
+	history := ar.History()
+	if len(history) != 1 {
+		t.Fatalf("expected 1 history entry, got %d", len(history))
+	}
+	if history[0].Action != "revert_baseline" {
+		t.Errorf("expected history action=revert_baseline, got %s", history[0].Action)
+	}
 }
 
 func TestAutoRollback_CalibrationDegradation(t *testing.T) {
@@ -144,6 +153,15 @@ func TestAutoRollback_CalibrationDegradation(t *testing.T) {
 	}
 	if results[0].Action != "revert_calibration" {
 		t.Errorf("expected action=revert_calibration, got %s", results[0].Action)
+	}
+
+	// Verify alert-only rollback is recorded in history.
+	history := ar.History()
+	if len(history) != 1 {
+		t.Fatalf("expected 1 history entry, got %d", len(history))
+	}
+	if history[0].Action != "revert_calibration" {
+		t.Errorf("expected history action=revert_calibration, got %s", history[0].Action)
 	}
 }
 

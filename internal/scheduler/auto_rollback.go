@@ -238,19 +238,23 @@ func (r *AutoRollback) executeRollback(result *RollbackResult) error {
 	case "revert_baseline":
 		// TODO: Requires baseline backup infrastructure.
 		// When baseline.Manager supports Revert(snapshotPath), replace this stub.
-		logging.Warn("auto_rollback", "baseline_revert_todo",
+		// For now: alert-only mode — record the intent in history but do not error.
+		logging.Warn("auto_rollback", "baseline_revert_alert_only",
 			"experiment_id", result.TargetID,
 			"reason", result.Reason,
 			"note", "baseline revert requires backup infrastructure; manual intervention needed")
-		return fmt.Errorf("baseline revert not yet implemented: %s", result.TargetID)
+		r.rollbackHistory = append(r.rollbackHistory, *result)
+		return nil
 
 	case "revert_calibration":
 		// TODO: Requires parameter backup infrastructure.
 		// When ParametersConfig supports SaveWithRollback from backup, replace this stub.
-		logging.Warn("auto_rollback", "calibration_revert_todo",
+		// For now: alert-only mode — record the intent in history but do not error.
+		logging.Warn("auto_rollback", "calibration_revert_alert_only",
 			"reason", result.Reason,
 			"note", "calibration revert requires parameter backup infrastructure; manual intervention needed")
-		return fmt.Errorf("calibration revert not yet implemented")
+		r.rollbackHistory = append(r.rollbackHistory, *result)
+		return nil
 
 	default:
 		return fmt.Errorf("unknown rollback action: %s", result.Action)
