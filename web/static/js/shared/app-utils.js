@@ -1,3 +1,5 @@
+import { escapeHtml } from './utils.js';
+
 export async function getJSON(url) {
   var res = await fetch(url);
   if (!res.ok) throw new Error(url + ': ' + res.status);
@@ -21,10 +23,7 @@ export async function postJSON(url, body) {
 
 export function notify(msg, type) { console.log('[' + (type || 'info') + '] ' + msg); }
 
-export function escapeHtml(text) {
-  if (!text) return '';
-  return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+export { escapeHtml };
 
 export function formatDate(d) { return d ? new Date(d).toLocaleString('zh-TW') : '-'; }
 

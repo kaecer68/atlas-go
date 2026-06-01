@@ -43,11 +43,6 @@ function mutationDescription(type, skill) {
   return m[type] || `系統已對 ${skillName} 進行自動優化調整。`;
 }
 
-function fmtPct(v) {
-  if (v == null || isNaN(v)) return '-';
-  return (v * 100).toFixed(1) + '%';
-}
-
 function fmtVal(v) {
   if (v == null || isNaN(v)) return '-';
   if (Math.abs(v) < 0.001) return v.toExponential(2);
