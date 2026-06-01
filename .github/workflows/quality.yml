@@ -100,9 +100,9 @@ jobs:
       with:
         go-version-file: go.mod
 
-    - name: Run tests with coverage
+    - name: Run tests with coverage (exclude cmd/atlas — heavy integration, see ci-cd.yml:test-cmd-atlas)
       run: |
-        go test -coverprofile=coverage.out ./...
+        go test -coverprofile=coverage.out $(go list ./... | grep -v '/cmd/atlas$')
         go tool cover -func=coverage.out | tail -n 1
 
     - name: Check coverage threshold
