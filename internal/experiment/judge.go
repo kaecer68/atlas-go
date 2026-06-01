@@ -489,6 +489,10 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, st
 			if candidateMCR < baselineMCR-0.1 {
 				return false, fmt.Sprintf("rejected: candidate momentum catch rate %.1f%% below baseline %.1f%%", candidateMCR*100, baselineMCR*100)
 			}
+		case "retail_sentiment_filter":
+			if math.Abs(result.Brief.RSITwScore) >= 0.7 {
+				return false, fmt.Sprintf("rejected: extreme retail sentiment (%.2f) — noisy environment", result.Brief.RSITwScore)
+			}
 		default:
 			return false, fmt.Sprintf("rejected: unknown gate %q", gate)
 		}

@@ -71,6 +71,7 @@ type Calculator struct {
 	marginHistory []float64
 	vixHistory    []float64
 	params        config.RSITwParameters
+	lastScore     float64
 }
 
 var (
@@ -88,6 +89,13 @@ func GetCalculator() *Calculator {
 		}
 	})
 	return calcInstance
+}
+
+// LastScore returns the most recent RSI-tw score, or 0 if none computed yet.
+func (c *Calculator) LastScore() float64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.lastScore
 }
 
 // NewCalculator returns an initialized Calculator with empty histories.
@@ -125,6 +133,10 @@ func (c *Calculator) ComputeFinal(data RSITwInput) RSITwSnapshot {
 	adj := c.computeAdjustmentFactor(data, subs, &params)
 	final := (partA*params.APartWeight.Value + partC*params.CPartWeight.Value) * adj
 	final = clamp(final, -1.0, 1.0)
+
+	c.mu.Lock()
+	c.lastScore = final
+	c.mu.Unlock()
 
 	return RSITwSnapshot{
 		Score:            round4(final),

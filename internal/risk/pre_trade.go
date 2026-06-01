@@ -94,9 +94,15 @@ func (g *PreTradeGate) Check(_ context.Context, order OrderIntent, pf PortfolioS
 
 	r = g.ruleRetailSentiment(order, pf)
 	details = append(details, r)
-	if !r.Passed && decision.Verdict < VerdictBlock {
-		decision.Verdict = VerdictBlock
-		decision.Reason = r.Message
+	if !r.Passed {
+		switch {
+		case r.Severity == "REDUCE" && decision.Verdict < VerdictReduce:
+			decision.Verdict = VerdictReduce
+			decision.Reason = r.Message
+		case decision.Verdict < VerdictBlock:
+			decision.Verdict = VerdictBlock
+			decision.Reason = r.Message
+		}
 	}
 
 	if decision.Verdict == VerdictBlock {
@@ -167,7 +173,7 @@ func (g *PreTradeGate) ruleCashBuffer(order OrderIntent, pf PortfolioState) Rule
 
 func (g *PreTradeGate) ruleRetailSentiment(_ OrderIntent, _ PortfolioState) RuleResult {
 	score := g.rsiTwScore
-	passed := score > -0.7 && score < 0.7
+	passed := score > -0.5 && score < 0.5
 
 	var severity, message string
 	switch {
@@ -175,14 +181,14 @@ func (g *PreTradeGate) ruleRetailSentiment(_ OrderIntent, _ PortfolioState) Rule
 		severity = "CRITICAL"
 		message = fmt.Sprintf("extreme retail frenzy detected (RSI-tw=%.2f ≥0.7)", score)
 	case score >= 0.5:
-		severity = "WARNING"
-		message = fmt.Sprintf("retail frenzy detected (RSI-tw=%.2f ≥0.5)", score)
+		severity = "REDUCE"
+		message = fmt.Sprintf("retail frenzy detected (RSI-tw=%.2f ≥0.5) — position reduction recommended", score)
 	case score <= -0.7:
 		severity = "CRITICAL"
 		message = fmt.Sprintf("extreme retail fear detected (RSI-tw=%.2f ≤-0.7)", score)
 	case score <= -0.5:
-		severity = "WARNING"
-		message = fmt.Sprintf("retail fear detected (RSI-tw=%.2f ≤-0.5)", score)
+		severity = "REDUCE"
+		message = fmt.Sprintf("retail fear detected (RSI-tw=%.2f ≤-0.5) — position reduction recommended", score)
 	default:
 		severity = "INFO"
 		message = fmt.Sprintf("RSI-tw score %.2f within normal range", score)
