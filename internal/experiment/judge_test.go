@@ -401,8 +401,13 @@ func TestPassesAcceptanceReportsNoConstraintDeltaWhenEqual(t *testing.T) {
 }
 
 func TestWelchTTest(t *testing.T) {
-	baseline := []float64{0.01, 0.02, 0.015, 0.01, 0.02, 0.01, 0.015, 0.01, 0.02, 0.01}
-	candidate := []float64{0.02, 0.03, 0.025, 0.02, 0.03, 0.02, 0.025, 0.02, 0.03, 0.02}
+	// 63 samples required per group for statistical significance
+	baseline := make([]float64, 63)
+	candidate := make([]float64, 63)
+	for i := 0; i < 63; i++ {
+		baseline[i] = []float64{0.01, 0.02, 0.015, 0.01, 0.02}[i%5]
+		candidate[i] = []float64{0.02, 0.03, 0.025, 0.02, 0.03}[i%5]
+	}
 
 	tStat, df := welchTTest(baseline, candidate)
 	if tStat <= 0 {
@@ -447,7 +452,12 @@ func TestCalculateVolatility(t *testing.T) {
 	if v := calculateVolatility([]float64{0.01}); v != 0 {
 		t.Errorf("single return: got %f, want 0", v)
 	}
-	v := calculateVolatility([]float64{0.01, -0.02, 0.03, -0.01, 0.005})
+	// 30 samples required for volatility calculation
+	returns := make([]float64, 30)
+	for i := range returns {
+		returns[i] = []float64{0.01, -0.02, 0.03, -0.01, 0.005}[i%5]
+	}
+	v := calculateVolatility(returns)
 	if v <= 0 {
 		t.Errorf("expected positive volatility, got %f", v)
 	}
@@ -645,8 +655,13 @@ func TestMaxDrawdownEmptyInput(t *testing.T) {
 }
 
 func TestPreserveDownsideProtectionGate_AcceptableDrawdown(t *testing.T) {
-	baseline := []float64{0.01, -0.01, 0.02, -0.005, 0.015, -0.01}
-	candidate := []float64{0.06, 0.04, 0.07, 0.045, 0.065, 0.04}
+	// 63 samples required for Welch t-test statistical significance
+	baseline := make([]float64, 63)
+	candidate := make([]float64, 63)
+	for i := 0; i < 63; i++ {
+		baseline[i] = []float64{0.01, -0.01, 0.02, -0.005, 0.015, -0.01}[i%6]
+		candidate[i] = []float64{0.06, 0.04, 0.07, 0.045, 0.065, 0.04}[i%6]
+	}
 
 	result := domain.PromptExperimentResult{
 		Experiment: domain.ExperimentRecord{
@@ -658,8 +673,8 @@ func TestPreserveDownsideProtectionGate_AcceptableDrawdown(t *testing.T) {
 		Brief: domain.MutationBrief{
 			MaturityLevel: "level_1_exploratory",
 		},
-		BaselineObservations:  6,
-		CandidateObservations: 6,
+		BaselineObservations:  63,
+		CandidateObservations: 63,
 		BaselineReturns:       baseline,
 		CandidateReturns:      candidate,
 		JudgeChecks:           []string{"a", "b"},

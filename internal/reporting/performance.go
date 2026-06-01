@@ -510,7 +510,7 @@ func calculateTopAgents(outcomes []domain.RecommendationOutcome) []AgentContribu
 }
 
 func calculateSharpeLike(returns []float64) float64 {
-	if len(returns) == 0 {
+	if len(returns) < 60 {
 		return 0
 	}
 	m := mean(returns)
@@ -525,7 +525,7 @@ func calculateSharpeLike(returns []float64) float64 {
 // Uses the ratio of portfolio volatility to benchmark return magnitude,
 // consistent with benchmark.go's simplified approach.
 func CalculateBeta(portfolioReturns []float64, benchmarkReturn float64) float64 {
-	if len(portfolioReturns) < 2 || benchmarkReturn == 0 {
+	if len(portfolioReturns) < 60 || benchmarkReturn == 0 {
 		return 1.0
 	}
 	portVol := stdDev(portfolioReturns)

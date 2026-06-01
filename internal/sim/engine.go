@@ -708,7 +708,7 @@ func totalCost(orders []domain.Order) float64 {
 }
 
 func calculateSharpe(returns []float64) float64 {
-	if len(returns) < 2 {
+	if len(returns) < 60 {
 		return 0
 	}
 	mean := 0.0

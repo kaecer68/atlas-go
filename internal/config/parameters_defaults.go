@@ -80,10 +80,9 @@ func defaultDarwinianParameters() DarwinianParameters {
 			Todo:      "Validate 20h vs 24h cooldown impact on agent turnover and stability",
 		},
 		LookbackDays: ParameterMetadata[int]{
-			Value:     20,
-			Rationale: "One trading month (approx 20 business days)",
-			Source:    SourceHeuristic,
-			Todo:      "Literature: 20-day Sharpe has low statistical power; consider 60-day",
+			Value:     60,
+			Rationale: "60 trading days (~3 months) for statistically stable rolling Sharpe; matches SharpeMinSampleSize",
+			Source:    SourceLiterature,
 		},
 		EMAAlpha: ParameterMetadata[float64]{
 			Value:     0.3,
@@ -142,10 +141,10 @@ func defaultDarwinianParameters() DarwinianParameters {
 			Source:    SourceHeuristic,
 		},
 		SharpeMinSampleSize: ParameterMetadata[int]{
-			Value:     5,
-			Rationale: "Minimum observations for Sharpe calculation",
+			Value:     60,
+			Rationale: "60 trading days (~3 months) for statistically stable Sharpe estimation; matches academic standard for daily returns",
 			Source:    SourceLiterature,
-			Todo:      "Literature: 5 is insufficient for stable Sharpe; recommend 20+",
+			Todo:      "Calibrate: test 60 vs 90 vs 126 for TW market agent population",
 		},
 		StdDevMeanRatioThreshold: ParameterMetadata[float64]{
 			Value:     0.001,
@@ -450,8 +449,8 @@ func defaultHealthParameters() HealthParameters {
 			Source:    SourceHeuristic,
 		},
 		MinSampleSize: ParameterMetadata[int]{
-			Value:     10,
-			Rationale: "Minimum 10 observations for health assessment",
+			Value:     30,
+			Rationale: "Minimum 30 observations for health assessment; 30 is the standard rule-of-thumb for CLT applicability",
 			Source:    SourceLiterature,
 			Todo:      "Currently defined but unused; implement in evaluateInterventions",
 		},
