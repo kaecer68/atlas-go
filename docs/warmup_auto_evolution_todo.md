@@ -16,7 +16,7 @@
 | 2 | 🔴 P0 | 修復 `auto_rollback_test.go` 3 個失敗測試 | ✅ 完成 | 30 min |
 | 3 | 🟡 P1 | 補上 `system_health_test.go` | ✅ 完成 | 45 min |
 | 4 | 🟡 P1 | AutoRollback `revert_baseline` / `revert_calibration` stub 處理 | ✅ 完成 | 30 min |
-| 5 | 🟡 P1 | 在 `cmd/atlas/main.go`（或 bootstrap）接入 MaturityTracker | ⬜ 待做 | 45 min |
+| 5 | 🟡 P1 | 在 `cmd/atlas/main.go`（或 bootstrap）接入 MaturityTracker | 🟡 部分完成 | 45 min |
 | 6 | 🟢 P2 | SystemHealthMonitor 增加 event bus 整合 | ⬜ 待做 | 30 min |
 | 7 | 🟢 P2 | 設計文檔中規劃但未實現的組件（API、plugin、backfill） | ⬜ 待做 | 可延後 |
 
@@ -366,70 +366,42 @@ go test -v ./internal/scheduler -run "TestAutoRollback_CalibrationDegradation"
 
 ### 任務 5：在 `cmd/atlas/main.go`（或 bootstrap）接入 MaturityTracker
 
-**問題描述**：整個 MaturityTracker 基礎設施已實現，但未被 main.go 使用。系統啟動時不會創建 tracker、不會注入到各組件、不會註冊 background tasks。
+**狀態**：🟡 部分完成 — 基礎設施已就緒，main.go 注入待補
 
-**涉及的啟動流程**：
+**已完成**：
 
-```
-cmd/atlas/main.go
-  └── bootstrap/bootstrap.go 或 bootstrap/background.go
-```
-
-**需要注入 tracker 的組件**：
-
-| 組件 | 方法 | 文件 |
+| 修改 | 文件 | 說明 |
 |------|------|------|
-| DarwinianWeightManager | `WithMaturityTracker(mt)` | `internal/portfolio/darwinian_weights.go` |
-| PreTradeGate | `WithMaturityTracker(mt)` | `internal/risk/pre_trade.go` |
-| Judge | `WithMaturityTracker(mt)` | `internal/experiment/judge.go` |
-| CalibrationEngine | `WithMaturityTracker(mt)` | `internal/orchestrator/calibration_engine.go` |
-| AutoRollback | `WithMaturityTracker(mt)` | `internal/scheduler/auto_rollback.go` |
-| AutoProposer | `WithMaturityTracker(mt)` | `internal/experiment/auto_proposer.go` |
-| AutoJudgePromoter | `WithMaturityTracker(mt)` | `internal/experiment/auto_judge_promoter.go` |
-| SystemHealthMonitor | `WithMaturityTracker(mt)` | `internal/scheduler/system_health.go` |
+| System 增加 maturityTracker 字段 | `internal/orchestrator/system.go` | `MaturityTracker()` getter + `WithMaturityTracker()` setter |
+| factory 自動創建並注入 | `internal/orchestrator/factory.go` | `NewProductionSystemWithEventBus` 創建 tracker 並注入 DarwinianWeightManager |
+| RiskGate 轉發方法 | `internal/risk/gate.go` | `WithMaturityTracker()` 轉發到底層 PreTradeGate |
 
-**需要註冊的 background tasks**：
+**剩余工作（在 main.go 中）**：
 
+main.go 中有 4-5 處創建 `risk.NewRiskGate(...)`，每處需要添加：
 ```go
-// 在 bootstrap 中：
-
-// 1. 創建 tracker
-maturityTracker, err := domain.NewMaturityTracker("data/state/maturity_tracker.json")
-if err != nil {
-    log.Fatal("failed to create maturity tracker:", err)
+if mt := system.MaturityTracker(); mt != nil {
+    riskGate.WithMaturityTracker(mt)
 }
-
-// 2. 注入到各組件（按創建順序）
-dwManager.WithMaturityTracker(maturityTracker)
-preTradeGate.WithMaturityTracker(maturityTracker)
-judge.WithMaturityTracker(maturityTracker)
-calibrationEngine.WithMaturityTracker(maturityTracker)
-
-// 3. 創建 background 組件
-autoRollback := scheduler.NewAutoRollback(baselineMgr, dwManager, healthMgr).WithMaturityTracker(maturityTracker)
-autoProposer := experiment.NewAutoProposer(dwManager, healthMgr).WithMaturityTracker(maturityTracker)
-autoJudge := experiment.NewAutoJudgePromoter(judge, baselineMgr).WithMaturityTracker(maturityTracker)
-healthMonitor := scheduler.NewSystemHealthMonitor(dwManager, healthMgr).WithMaturityTracker(maturityTracker)
-
-// 4. 創建 calibration scheduler
-calibScheduler := scheduler.NewBackgroundCalibrationScheduler(maturityTracker)
-// 註冊具體的 calibration tasks...
-
-// 5. 註冊到 BackgroundTaskManager
-bgManager.Register(/* auto calibration daily */)
-bgManager.Register(/* auto judge daily */)
-bgManager.Register(/* auto rollback daily */)
-bgManager.Register(/* health monitor daily */)
 ```
 
-**驗證**：
-```bash
-go build ./cmd/atlas
-# 編譯通過即初步成功
+創建位置：
+1. Line ~1233: API server 初始化區域
+2. Line ~1664: simulate mode
+3. Line ~1802: backtest runner
+4. Line ~1918: live trading
 
-# 運行並檢查日誌中是否有 maturity 相關輸出
-go run ./cmd/atlas
-# 期望看到類似："maturity=buring_in, days_until_calibrating=..."
+**Background tasks 註冊**（在 `taskMgr` 創建後）：
+```go
+if mt := system.MaturityTracker(); mt != nil {
+    healthMonitor := scheduler.NewSystemHealthMonitor(dwManager, healthMgr).WithMaturityTracker(mt)
+    _ = taskMgr.Register(&apigateway.ScheduledTask{
+        Name:     "system_health_monitor",
+        Interval: 24 * time.Hour,
+        Enabled:  true,
+        Task:     healthMonitor.RunDaily,
+    })
+}
 ```
 
 ---
