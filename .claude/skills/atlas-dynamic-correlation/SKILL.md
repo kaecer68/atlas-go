@@ -1,5 +1,11 @@
 # Skill: atlas-dynamic-correlation
 
+> ⚠️ **此技能描述的功能尚未實作（純藍圖／設計提案）**  
+> **實作狀態**：❌ 未實作 — 核心檔案（`dynamic_threshold.go`、`vix_provider.go`）均未建立  
+> **現有基礎**：`internal/portfolio/regime.go` 已實作（RegimeConfig、Style），可作為此功能的基礎  
+> **最後審計**：2026-06-02  
+> **計畫狀態**：保留為未來計畫，設計意圖仍然有效
+
 ## 描述
 
 **動態相關性閾值系統** - 將靜態相關性閾值 0.7 改為 VIX × Regime 混合計算的動態閾值。
@@ -42,7 +48,7 @@ DynamicThreshold = clamp(DynamicThreshold, 0.40, 0.85)
 ### 4. 閾值範圍
 
 - **最小閾值**：0.40（高相關性市場，如 2020 COVID 崩盤）
-- **最大閾值**：0.85（低相關性市場，如 2017 牛 市）
+- **最大閾值**：0.85（低相關性市場，如 2017 牛市）
 
 ### 5. 閾值計算範例
 
@@ -57,8 +63,9 @@ DynamicThreshold = clamp(DynamicThreshold, 0.40, 0.85)
 
 | 元件 | 檔案 | 狀態 |
 |------|------|------|
-| DynamicThresholdEngine | `internal/portfolio/dynamic_threshold.go` | 待建立 |
-| VIXProvider | `internal/marketdata/vix_provider.go` | 待建立 |
+| DynamicThresholdEngine | `internal/portfolio/dynamic_threshold.go` | ❌ 未實作 |
+| VIXProvider | `internal/marketdata/vix_provider.go` | ❌ 未實作 |
+| Regime 定義（現有基礎） | `internal/portfolio/regime.go` | ✅ 已實作（RegimeConfig、Style） |
 
 ## 驗證頻率
 
@@ -72,7 +79,7 @@ DynamicThreshold = clamp(DynamicThreshold, 0.40, 0.85)
 
 ## 數據來源
 
-- VIX 指數：從市場數據提供者取得
+- VIX 指數：從市場數據提供者取得（需實作 `VIXProvider`，並透過 `internal/apigateway/gateway.go` 統一管理 HTTP 請求）
 - Regime 狀態：來自 `internal/portfolio/regime.go`
 
 ## 設計原則
@@ -85,6 +92,7 @@ DynamicThreshold = clamp(DynamicThreshold, 0.40, 0.85)
 
 ```bash
 go test ./internal/portfolio/...      # 閾值計算測試
+go test ./internal/marketdata/...     # VIX 提供者測試
 go test -coverprofile=coverage.out ./...
 go tool cover -func=coverage.out | grep total  # ≥ 40%
 ```
@@ -93,15 +101,21 @@ go tool cover -func=coverage.out | grep total  # ≥ 40%
 
 ```go
 type ThresholdValidation struct {
-    Date           time.Time
-    VIX            float64
-    Regime         string
+    Date             time.Time
+    VIX              float64
+    Regime           string
     DynamicThreshold float64
     ActualCorrelation float64  // 實際觀察到的因子相關性
-    WasEffective   bool       // 閾值是否有效篩選
+    WasEffective     bool      // 閾值是否有效篩選
 }
 ```
 
 驗證成功標準：
 - DynamicThreshold 版本的報酬率勝過固定閾值版本
 - 或 DynamicThreshold 版本的最大回撤較小
+
+---
+
+*技能版本: 0.1（藍圖）*
+*最後更新: 2026-06-02*
+*狀態: 計畫階段 — 等待實作*

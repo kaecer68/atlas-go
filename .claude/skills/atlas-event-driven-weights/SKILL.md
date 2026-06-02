@@ -1,8 +1,12 @@
 # Skill: atlas-event-driven-weights
 
+> **實作狀態**：⚠️ 部分實作 — 核心元件已實作，部分功能已整合至現有模組  
+> **最後審計**：2026-06-02  
+> **實際檔案結構**：`factor_bridge.go`（已實作）、`factor_weight_engine.go`（已實作，8 因子），其餘因子計算已內建於 `factor_engine.go`
+
 ## 描述
 
-**事件驅動動態因子權重系統** - 將巨集觀敘事事件（narrative）與因子計算（portfolio）連接，實現真正的數據交叉點。
+**事件驅動動態因子權重系統** — 將巨集觀敘事事件（narrative）與因子計算（portfolio）連接，實現真正的數據交叉點。
 
 ## 任務觸發
 
@@ -25,7 +29,7 @@ FactorBridge
          ↓
 ForeignFlowScore, MarginBalanceScore, RetailSentimentScore, StressLevel
          ↓
-FactorEngine (6因子)
+FactorEngine (8因子)
 ```
 
 **輸入來源**：
@@ -33,16 +37,18 @@ FactorEngine (6因子)
 - TWSECapitalFlowProvider → 外資/法人數據
 - TaiwanStressIndex → 市場壓力指數
 
-### 2. 六因子系統
+### 2. 八因子系統（已擴充為 8 因子）
 
-| 因子 | 基礎權重 | 說明 |
-|------|----------|------|
-| Momentum | 0.20 | 動能因子 |
-| Value | 0.15 | 價值因子 |
-| Quality | 0.15 | 品質因子 |
-| Agent | 0.20 | 代理人因子 |
-| InstitutionalSentiment | 0.15 | 機構情緒因子 |
-| Liquidity | 0.15 | 流動性因子 |
+| 因子 | 基礎權重 | 說明 | 狀態 |
+|------|----------|------|------|
+| Momentum | 0.25 | 動能因子 | ✅ 已實作（factor_engine.go） |
+| Value | 0.20 | 價值因子 | ✅ 已實作（factor_engine.go） |
+| Quality | 0.20 | 品質因子 | ✅ 已實作（factor_engine.go） |
+| Agent | 0.15 | 代理人因子 | ✅ 已實作（factor_engine.go） |
+| InstitutionalSentiment | 0.10 | 機構情緒因子 | ✅ 已實作（factor_engine.go `CalculateInstitutionalSentimentScore()`） |
+| Liquidity | 0.05 | 流動性因子 | ✅ 已實作（factor_engine.go `CalculateLiquidityScore()`） |
+| Narrative | 0.05 | 敘事因子 | ✅ 已實作 |
+| IndustryCycle | 0.00 | 產業週期因子 | ✅ 已實作 |
 
 ### 3. InstitutionalSentiment 因子
 
@@ -52,6 +58,7 @@ InstitutionalSentiment = 0.50 × ForeignFlowScore
                         + 0.30 × DomesticFlowScore
                         + 0.20 × MarginBalanceScore
 ```
+已實作於 `factor_engine.go` 的 `CalculateInstitutionalSentimentScore()` 方法。
 
 ### 4. Liquidity 因子
 
@@ -59,23 +66,30 @@ InstitutionalSentiment = 0.50 × ForeignFlowScore
 ```
 Liquidity = -log( |Return| / Volume )  // 標準化後
 ```
+已實作於 `factor_engine.go` 的 `CalculateLiquidityScore()` 方法。
 
 ### 5. FactorWeightEngine（動態權重引擎）
 
 根據事件動態調整因子權重：
 
 ```go
-type FactorWeightConfig struct {
-    BaseWeights      map[string]float64  // 基礎權重
-    EventAdjustments map[string]EventWeightAdjustment
-}
-
-type EventWeightAdjustment struct {
-    ThemePattern string
-    WeightDelta  map[string]float64  // 因子 → 權重變化
-    RegimeFilter string             // 僅在特定 regime 生效
+type FactorWeightEngine struct {
+    mu                 sync.RWMutex
+    baseWeights        map[FactorType]float64
+    eventWeights       map[string]map[FactorType]float64
+    activeEvents       map[string]*narrative.NarrativeEvent
+    lifecycle          *narrative.EventLifecycleManager
+    strategyAdjustment map[FactorType]float64
+    weightSource       string
+    currentRegime      string
 }
 ```
+
+**事件驅動調整**：
+- `AI_capex_surge`：提升 Quality + Momentum
+- `US_rates_up`：提升 Value，降低 InstitutionalSentiment
+- `oil_price_shock`：降低 Liquidity + Momentum
+- Severity 對應 delta：`critical=0.10`, `high=0.05`, `medium=0.02`, `low=0.01`
 
 ### 6. RegimeChange 機制
 
@@ -96,27 +110,20 @@ type EventWeightAdjustment struct {
 
 | 元件 | 檔案 | 狀態 |
 |------|------|------|
-| FactorBridge | `internal/portfolio/factor_bridge.go` | 待建立 |
-| InstitutionalSentiment | `internal/portfolio/factor_institutional_sentiment.go` | 待建立 |
-| Liquidity | `internal/portfolio/factor_liquidity.go` | 待建立 |
-| FactorWeightEngine | `internal/portfolio/factor_weight_engine.go` | 待建立 |
-| RegimeChange | `internal/portfolio/regime_change.go` | 待建立 |
+| FactorBridge | `internal/portfolio/factor_bridge.go` | ✅ 已實作（含 RSI-tw 計算器整合） |
+| InstitutionalSentiment | `internal/portfolio/factor_institutional_sentiment.go` | ⚠️ 未建立獨立檔案 — 功能已內建於 `factor_engine.go` |
+| Liquidity | `internal/portfolio/factor_liquidity.go` | ⚠️ 未建立獨立檔案 — 功能已內建於 `factor_engine.go` |
+| FactorWeightEngine | `internal/portfolio/factor_weight_engine.go` | ✅ 已實作（8 因子，配置化，含策略調整） |
+| RegimeChange | `internal/portfolio/regime_change.go` | ⚠️ 未建立獨立檔案 — 功能由 `factor_weight_engine.go` + `regime.go` 覆蓋 |
+| Regime/Style 定義 | `internal/portfolio/regime.go` | ✅ 已實作（RegimeConfig、StyleAllocation） |
 
 ## 擴展現有程式碼
 
-### 修改 factor_engine.go
+### 已實作：factor_engine.go
 
-1. 新增 `CalculateInstitutionalSentiment()` 方法
-2. 新增 `CalculateLiquidity()` 方法
-3. 擴展 `CalculateAllScoresWithBreakdown()` 支援 6 因子
-
-### 修改 NarrativeEvent (internal/narrative/types.go)
-
-新增欄位：
-- `Duration time.Duration`
-- `ExpiresAt *time.Time`
-- `Severity string`
-- `Status string`
+1. ✅ `CalculateInstitutionalSentiment()` — 已整合於 `factor_engine.go`
+2. ✅ `CalculateLiquidity()` — 已整合於 `factor_engine.go`
+3. ✅ `CalculateAllScoresWithBreakdown()` — 已擴展支援 8 因子
 
 ## 驗證要求
 

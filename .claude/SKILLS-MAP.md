@@ -1,7 +1,7 @@
 # Atlas Skills Map
 
-**版本**: 2.0  
-**日期**: 2026-05-29  
+**版本**: 2.1  
+**日期**: 2026-06-02  
 **用途**: 統一管理 Atlas-Go 應用的所有 AI 技能與設計文件  
 
 ---
@@ -43,8 +43,20 @@
 ├── atlas-data-management/            # 資料管理技能
 │   └── SKILL.md                      # 資料治理、讀寫規範、保存路徑
 │
-└── atlas-dynamic-correlation/        # 動態相關性技能
-    └── SKILL.md                      # 關聯矩陣、聯動調整、共振分析
+├── atlas-dynamic-correlation/        # 動態相關性技能 [計畫階段]
+│   └── SKILL.md                      # 關聯矩陣、聯動調整、共振分析
+│
+├── atlas-fin-model-eval/             # Fin-Skills: 模型評估框架
+│   └── SKILL.md                      # OOS R²、Sharpe、Permutation Importance、PDP
+│
+├── atlas-fin-ml-pipeline/            # Fin-Skills: ML/DL 模型訓練管線
+│   └── SKILL.md                      # OLS、ElasticNet、PCR、PLS、訓練器
+│
+├── atlas-fin-robustness/             # Fin-Skills: 穩健性檢驗套件 [部分實作]
+│   └── SKILL.md                      # Ablation、Size Group、Penny Exclusion、對抗性訓練
+│
+└── atlas-fin-backtest-engine/        # Fin-Skills: 完整回測引擎 [部分實作]
+    └── SKILL.md                      # Window、Pipeline、Rolling Split、FF5、Decile
 ```
 
 ---
@@ -64,10 +76,14 @@
 - `atlas-operations-guide`：日常運維、緊急應變、標準作業流程
 - `atlas-swarm-analyst`：群體模擬、協同觀察、結果分析
 - `atlas-multi-strategy`：多策略協調、路由與組合選擇
-- `atlas-news-sentiment`：新聞情緒分析、事件分類、影響判讀
+- `atlas-news-sentiment`：新聞情緒分析、事件分類、影響判讀（⚠️ 計畫階段 — 尚未實作）
 - `atlas-event-driven-weights`：事件驅動權重調整與回饋
 - `atlas-data-management`：資料治理、保存、讀寫與一致性管理
-- `atlas-dynamic-correlation`：動態相關矩陣、產業聯動、共振分析
+- `atlas-dynamic-correlation`：動態相關矩陣、產業聯動、共振分析（⚠️ 計畫階段 — 尚未實作）
+- `atlas-fin-model-eval`：Fin-Skills 模型評估框架 — OOS R²、Sharpe、Permutation Importance、PDP
+- `atlas-fin-ml-pipeline`：Fin-Skills ML/DL 訓練管線 — OLS、ElasticNet、PCR、PLS
+- `atlas-fin-robustness`：Fin-Skills 穩健性檢驗套件 — Ablation、Size Group、Penny Exclusion（⚠️ 部分實作）
+- `atlas-fin-backtest-engine`：Fin-Skills 完整回測引擎 — Window、Pipeline、Rolling Split（⚠️ 部分實作）
 
 ### 2. GitNexus 技能
 
@@ -283,6 +299,8 @@
 
 **職責**: 新聞情緒分析、事件分類與市場影響判讀
 
+**⚠️ 計畫階段 — 所有引用檔案尚未實作**
+
 **涵蓋內容**:
 - 新聞標題與內容解讀
 - 情緒分類與強度判斷
@@ -340,6 +358,8 @@
 
 **職責**: 動態相關矩陣、產業聯動與共振分析
 
+**⚠️ 計畫階段 — 核心檔案尚未實作（`dynamic_threshold.go`、`vix_provider.go`）**
+
 **涵蓋內容**:
 - 相關性矩陣調整
 - 產業聯動觀察
@@ -355,7 +375,109 @@
 
 ---
 
-### 12. gitnexus-cli（GitNexus CLI）
+### 12. atlas-fin-model-eval（Fin-Skills 模型評估）
+
+**職責**: Fin-Skills 模型評估框架 — OOS R²、Sharpe、Permutation Importance、PDP
+
+**實作狀態**: ⚠️ 部分實作（`internal/eval/` — metrics/existing/evaluation/pdp 已實作，interaction/reward consistency 未實作）
+
+**涵蓋內容**:
+- SK-12: OOS R²、Sharpe Ratio、MaxDD（已實作）
+- SK-13: Permutation Importance（已實作）
+- SK-14: Partial Dependence Plot（已實作）
+- SK-15: Interaction Effects（未實作）
+- SK-28: Reward Mismatch（未實作）
+
+**使用時機**:
+- ML 模型訓練後評估
+- 因子重要性分析
+- 模型診斷與解釋
+
+**對應文件**:
+- `.claude/skills/atlas-fin-model-eval/SKILL.md`
+- `internal/eval/` 相關程式碼
+
+---
+
+### 13. atlas-fin-ml-pipeline（Fin-Skills ML 管線）
+
+**職責**: Fin-Skills ML/DL 模型訓練管線 — 從監督學習模型到 Go 實作
+
+**實作狀態**: ✅ 核心模型已實作（`internal/ml/` — OLS、ElasticNet、PCR、PLS、Trainer）
+
+**涵蓋內容**:
+- SK-03: Rolling Split（已實作）
+- SK-05: OLS 線性回歸（已實作）
+- SK-06: ElasticNet（已實作）
+- SK-08: PCR（已實作）
+- SK-09: PLS（已實作）
+- SK-07: GLM with Spline（未實作）
+- SK-10: RandomForest（未實作）
+- SK-11: NeuralNet（未實作）
+
+**使用時機**:
+- 訓練新 ML 模型時
+- 整合 FactorEngine 輸出時
+- 執行 cross-validation 時
+
+**對應文件**:
+- `.claude/skills/atlas-fin-ml-pipeline/SKILL.md`
+- `internal/ml/` 相關程式碼
+
+---
+
+### 14. atlas-fin-robustness（Fin-Skills 穩健性檢驗）
+
+**職責**: Fin-Skills 穩健性檢驗套件 — Ablation、Size Group、Penny Exclusion、對抗性訓練
+
+**實作狀態**: ⚠️ 部分實作（`internal/robustness/` — ablation/penny/size_group 已實作，bridge/SL-RL 未實作）
+
+**涵蓋內容**:
+- SK-20: Size Group Analysis（已實作）
+- SK-21: Penny Stock Exclusion（已實作）
+- SK-22: Ablation Study（已實作）
+- SK-31: SL vs RL Comparison（未實作）
+- SK-32: Reward Sensitivity（未實作）
+
+**使用時機**:
+- 模型穩健性驗證
+- 因子移除測試
+- 規模群體分析
+- 對抗性訓練前置
+
+**對應文件**:
+- `.claude/skills/atlas-fin-robustness/SKILL.md`
+- `internal/robustness/` 相關程式碼
+- `internal/adversarial/adversarial_trainer.go`
+
+---
+
+### 15. atlas-fin-backtest-engine（Fin-Skills 回測引擎）
+
+**職責**: Fin-Skills 完整回測引擎 — Window、Pipeline、Rolling Split、Decile、FF5、交易成本
+
+**實作狀態**: ⚠️ 部分實作（Window/Pipeline/RollingSplit 已實作，Decile/FF5/CostModel 未實作）
+
+**涵蓋內容**:
+- SK-03/SK-29: Rolling Window（已實作 — rolling_split.go + backtest_pipeline.go）
+- SK-16: Decile Portfolio（未實作）
+- SK-17: Equal/Value Weighting（部分 — optimizer 有等權邏輯）
+- SK-18: FF5+MOM Alpha（未實作）
+- SK-19: Taiwan Tax/Cost（已實作基礎 — `internal/tax/taiwan_tax.go`）
+
+**使用時機**:
+- 完整因子回測
+- Rolling window 評估
+- Decile 投資組合分析
+
+**對應文件**:
+- `.claude/skills/atlas-fin-backtest-engine/SKILL.md`
+- `internal/backtest/` 相關程式碼
+- `internal/tax/taiwan_tax.go`
+
+---
+
+### 16. gitnexus-cli（GitNexus CLI）
 
 **職責**: GitNexus 索引、狀態、清理與維護操作
 
@@ -373,7 +495,7 @@
 
 ---
 
-### 13. gitnexus-guide（GitNexus 指南）
+### 17. gitnexus-guide（GitNexus 指南）
 
 **職責**: GitNexus 工具、資源、schema 與工作流說明
 
@@ -391,7 +513,7 @@
 
 ---
 
-### 14. gitnexus-exploring（GitNexus 探索）
+### 18. gitnexus-exploring（GitNexus 探索）
 
 **職責**: 理解程式碼結構、執行流程與架構脈絡
 
@@ -409,7 +531,7 @@
 
 ---
 
-### 15. gitnexus-impact-analysis（GitNexus 影響分析）
+### 19. gitnexus-impact-analysis（GitNexus 影響分析）
 
 **職責**: 變更前爆炸半徑、風險與下游影響分析
 
@@ -427,7 +549,7 @@
 
 ---
 
-### 16. gitnexus-debugging（GitNexus 除錯）
+### 20. gitnexus-debugging（GitNexus 除錯）
 
 **職責**: 錯誤追蹤、根因分析、故障定位
 
@@ -445,7 +567,7 @@
 
 ---
 
-### 17. gitnexus-refactoring（GitNexus 重構）
+### 21. gitnexus-refactoring（GitNexus 重構）
 
 **職責**: 安全地改名、抽取、拆分、搬移與結構重整
 
@@ -600,6 +722,6 @@
 
 ---
 
-*技能地圖版本: 2.0*  
-*最後更新: 2026-05-29*  
+*技能地圖版本: 2.1*  
+*最後更新: 2026-06-02*  
 *維護者: Atlas-Go AI Agent*
