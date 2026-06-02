@@ -2451,15 +2451,15 @@ func (p *ParametersConfig) SaveWithRollback(path string) error {
 
 	f, err := os.OpenFile(tmpPath, os.O_RDONLY, 0)
 	if err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return fmt.Errorf("open temp file for sync: %w", err)
 	}
 	_ = f.Sync()
-	f.Close()
+	_ = f.Close()
 
 	if _, statErr := os.Stat(path); statErr == nil {
 		if err := os.Rename(path, bakPath); err != nil {
-			os.Remove(tmpPath)
+			_ = os.Remove(tmpPath)
 			return fmt.Errorf("backup existing config: %w", err)
 		}
 	}
@@ -2471,7 +2471,7 @@ func (p *ParametersConfig) SaveWithRollback(path string) error {
 		return fmt.Errorf("promote temp config: %w", err)
 	}
 
-	os.Remove(bakPath)
+	_ = os.Remove(bakPath)
 	return nil
 }
 

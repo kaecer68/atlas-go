@@ -330,7 +330,7 @@ func saveCalibrationReport(workDir string, report *CalibrationReport) {
 		logging.Error("rsi_tw_calibrate", "marshal_report_failed", "err", err.Error())
 		return
 	}
-	if err := os.WriteFile(path, data, 0600); err != nil { // #nosec G306 — path constructed from trusted workDir
+	if err := os.WriteFile(path, data, 0o600); err != nil { // #nosec G306 — path constructed from trusted workDir
 		logging.Error("rsi_tw_calibrate", "write_report_failed", "err", err.Error())
 	}
 }

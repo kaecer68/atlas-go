@@ -368,8 +368,6 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
 	}
 	events := s.detectNarrativeEvents(quotes)
-	if s.Sim().persistentState != nil {
-	}
 	researchResult := ExecuteWithContext(ExecutionContext{
 		Registry:        s.Sim().registry,
 		Quotes:          quotes,
@@ -645,8 +643,6 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
 	}
 	events := s.detectNarrativeEvents(quotes)
-	if s.Sim().persistentState != nil {
-	}
 	researchResult := ExecuteWithContext(ExecutionContext{
 		Registry:        s.Sim().registry,
 		Quotes:          quotes,
