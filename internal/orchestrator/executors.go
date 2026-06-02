@@ -459,30 +459,30 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 				continue
 			}
 			// Factor quality gate: skip symbols with low pre-computed factor scores
-		if factorSnapshot != nil {
-			var preTotal float64
-			var preCount int
-			if s, ok := factorSnapshot.GetScore(symbol, portfolio.FactorMomentum); ok {
-				preTotal += s
-				preCount++
+			if factorSnapshot != nil {
+				var preTotal float64
+				var preCount int
+				if s, ok := factorSnapshot.GetScore(symbol, portfolio.FactorMomentum); ok {
+					preTotal += s
+					preCount++
+				}
+				if s, ok := factorSnapshot.GetScore(symbol, portfolio.FactorValue); ok {
+					preTotal += s
+					preCount++
+				}
+				if s, ok := factorSnapshot.GetScore(symbol, portfolio.FactorQuality); ok {
+					preTotal += s
+					preCount++
+				}
+				if s, ok := factorSnapshot.GetScore(symbol, portfolio.FactorLiquidity); ok {
+					preTotal += s
+					preCount++
+				}
+				if preCount > 0 && preTotal/float64(preCount) < 40 {
+					continue
+				}
 			}
-			if s, ok := factorSnapshot.GetScore(symbol, portfolio.FactorValue); ok {
-				preTotal += s
-				preCount++
-			}
-			if s, ok := factorSnapshot.GetScore(symbol, portfolio.FactorQuality); ok {
-				preTotal += s
-				preCount++
-			}
-			if s, ok := factorSnapshot.GetScore(symbol, portfolio.FactorLiquidity); ok {
-				preTotal += s
-				preCount++
-			}
-			if preCount > 0 && preTotal/float64(preCount) < 40 {
-				continue
-			}
-		}
-		rec, ok := plugins.Recommendation(agent, quote, prompt, regime, factorSnapshot)
+			rec, ok := plugins.Recommendation(agent, quote, prompt, regime, factorSnapshot)
 			if !ok {
 				continue
 			}

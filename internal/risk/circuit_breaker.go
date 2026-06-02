@@ -18,7 +18,7 @@ import (
 type CircuitBreaker struct {
 	mu sync.RWMutex
 
-	maxDailyLossPct       float64
+	maxDailyLossPct        float64
 	maxConsecutiveLossDays int
 
 	consecutiveLosses int
@@ -33,9 +33,9 @@ type CircuitBreaker struct {
 // Default auto-reset is 24 hours.
 func NewCircuitBreaker(maxDailyLossPct float64, maxConsecutiveLossDays int) *CircuitBreaker {
 	return &CircuitBreaker{
-		maxDailyLossPct:       maxDailyLossPct,
+		maxDailyLossPct:        maxDailyLossPct,
 		maxConsecutiveLossDays: maxConsecutiveLossDays,
-		autoResetAfter:        24 * time.Hour,
+		autoResetAfter:         24 * time.Hour,
 	}
 }
 

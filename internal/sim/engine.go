@@ -1,8 +1,8 @@
 package sim
 
 import (
-	"fmt"
 	"context"
+	"fmt"
 	"math"
 	"sort"
 	"strings"
