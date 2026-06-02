@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -290,10 +291,13 @@ func TestSystemHealthMonitor_EventBusPublish(t *testing.T) {
 	monitor := NewSystemHealthMonitor(dw, hm).WithEventBus(eb)
 
 	// Subscribe to health alert events.
+	var mu sync.Mutex
 	var received []eventbus.HealthAlertPayload
 	eb.Subscribe(eventbus.EventHealthAlert, func(_ context.Context, ev eventbus.BusEvent) error {
 		if payload, ok := ev.Payload.(eventbus.HealthAlertPayload); ok {
+			mu.Lock()
 			received = append(received, payload)
+			mu.Unlock()
 		}
 		return nil
 	})
@@ -306,13 +310,23 @@ func TestSystemHealthMonitor_EventBusPublish(t *testing.T) {
 	// Allow event bus to process.
 	time.Sleep(50 * time.Millisecond)
 
-	if len(received) != 1 {
-		t.Fatalf("expected 1 health alert event, got %d", len(received))
+	mu.Lock()
+	n := len(received)
+	cat := ""
+	sev := ""
+	if n > 0 {
+		cat = received[0].Category
+		sev = received[0].Severity
 	}
-	if received[0].Category != "weight_distribution" {
-		t.Errorf("expected category=weight_distribution, got %s", received[0].Category)
+	mu.Unlock()
+
+	if n != 1 {
+		t.Fatalf("expected 1 health alert event, got %d", n)
 	}
-	if received[0].Severity != "WARNING" {
-		t.Errorf("expected severity=WARNING, got %s", received[0].Severity)
+	if cat != "weight_distribution" {
+		t.Errorf("expected category=weight_distribution, got %s", cat)
+	}
+	if sev != "WARNING" {
+		t.Errorf("expected severity=WARNING, got %s", sev)
 	}
 }

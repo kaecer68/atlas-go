@@ -35,8 +35,6 @@ type AutoRollback struct {
 	lastCalibSnapshot float64
 	// rollbackHistory records executed rollbacks for audit
 	rollbackHistory []RollbackResult
-	// baselineSnapshotPath holds the path to the pre-promotion baseline backup
-	baselineSnapshotPath string
 }
 
 // NewAutoRollback creates the auto-correction engine.
@@ -73,7 +71,7 @@ func (r *AutoRollback) RecordCalibration(currentCompositeScore float64) {
 		"composite_score", currentCompositeScore)
 }
 
-// RollbackResult summarises a single auto-correction action.
+// RollbackResult summarizes a single auto-correction action.
 type RollbackResult struct {
 	Action    string // "revert_baseline", "disable_agent", "revert_calibration"
 	TargetID  string

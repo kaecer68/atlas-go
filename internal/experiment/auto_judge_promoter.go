@@ -53,7 +53,7 @@ func (p *AutoJudgePromoter) WithMinObservations(n int) *AutoJudgePromoter {
 	return p
 }
 
-// EvaluationResult summarises the outcome of a single auto-evaluation.
+// EvaluationResult summarizes the outcome of a single auto-evaluation.
 type EvaluationResult struct {
 	ExperimentID string
 	Accepted     bool
@@ -89,7 +89,7 @@ func (p *AutoJudgePromoter) RunDaily(ctx context.Context, pending []experiment.P
 			"baseline_obs", exp.BaselineObservations,
 			"candidate_obs", exp.CandidateObservations)
 
-		accepted, note := p.judge.passesAcceptance(domain.PromptExperimentResult(exp))
+		accepted, note := p.judge.passesAcceptance(exp)
 		res := EvaluationResult{
 			ExperimentID: exp.Experiment.ID,
 			Accepted:     accepted,
