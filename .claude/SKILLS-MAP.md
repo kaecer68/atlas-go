@@ -52,6 +52,17 @@
 ├── atlas-fin-ml-pipeline/            # Fin-Skills: ML/DL 模型訓練管線
 │   └── SKILL.md                      # OLS、ElasticNet、PCR、PLS、訓練器
 │
+├── atlas-investor-ui/                 # 🆕 投資人 UI — 核心架構與設計原則
+│   └── SKILL.md                      # 信任金字塔、目錄分離、API 路由、設計原則、高危陷阱
+├── atlas-investor-pages/             # 🆕 投資人 UI — 頁面結構與 Wireframe
+│   └── SKILL.md                      # 6 頁面設計（儀表板/績效/推薦/洞察/風險/摘要）
+├── atlas-investor-nlg/               # 🆕 投資人 UI — NLG 推薦解釋層
+│   └── SKILL.md                      # FactorScoreBreakdown → 繁體中文投資建議
+├── atlas-investor-trustscore/        # 🆕 投資人 UI — TrustScore 信任分數系統
+│   └── SKILL.md                      # 五維度加權信任分數（校準/命中率/Sharpe/品質/回撤）
+├── atlas-investor-roadmap/           # 🆕 投資人 UI — 實作路線圖
+│   └── SKILL.md                      # Phase A/B、BenchmarkProvider、歷史情境匹配、驗證
+│
 ├── atlas-fin-robustness/             # Fin-Skills: 穩健性檢驗套件 [部分實作]
 │   └── SKILL.md                      # Ablation、Size Group、Penny Exclusion、對抗性訓練
 │
@@ -79,6 +90,11 @@
 - `atlas-news-sentiment`：新聞情緒分析、事件分類、影響判讀（⚠️ 計畫階段 — 尚未實作）
 - `atlas-event-driven-weights`：事件驅動權重調整與回饋
 - `atlas-data-management`：資料治理、保存、讀寫與一致性管理
+- `atlas-investor-ui`：🆕 投資人 UI — 核心架構、信任金字塔、目錄分離、API 路由、設計原則（父技能）
+- `atlas-investor-pages`：🆕 投資人 UI — 6 頁面結構與 wireframe 規格
+- `atlas-investor-nlg`：🆕 投資人 UI — NLG 推薦解釋層，將 FactorScoreBreakdown → 繁體中文
+- `atlas-investor-trustscore`：🆕 投資人 UI — TrustScore 信任分數系統，五維度加權計算
+- `atlas-investor-roadmap`：🆕 投資人 UI — Phase A/B 實作路線圖、BenchmarkProvider、歷史情境匹配
 - `atlas-dynamic-correlation`：動態相關矩陣、產業聯動、共振分析（⚠️ 計畫階段 — 尚未實作）
 - `atlas-fin-model-eval`：Fin-Skills 模型評估框架 — OOS R²、Sharpe、Permutation Importance、PDP
 - `atlas-fin-ml-pipeline`：Fin-Skills ML/DL 訓練管線 — OLS、ElasticNet、PCR、PLS
@@ -477,7 +493,115 @@
 
 ---
 
-### 16. gitnexus-cli（GitNexus CLI）
+### 16. atlas-investor-ui（投資人 UI — 核心架構）
+
+**職責**: 投資人面向 Web UI 的架構、信任金字塔、目錄佈局、API 路由、設計原則與高危陷阱
+
+**涵蓋內容**:
+- 信任金字塔五層模型與現狀評分
+- 目錄分離策略（`./admin_web/` vs `./client_web/`）
+- 投資人 API 路由設計（`/api/client/*`）
+- 六項核心設計原則（投資人語言、一頁一答案、基準對比、圖表優先、信任時間、不過度承諾）
+- 與其他技能的整合地圖
+
+**使用時機**:
+- 設計投資人 UI 架構時
+- 決定 API 路由與目錄結構時
+- 審查前端實作是否符合設計原則時
+
+**對應文件**:
+- `.claude/skills/atlas-investor-ui/SKILL.md`
+- 子技能：`atlas-investor-pages`、`atlas-investor-nlg`、`atlas-investor-trustscore`、`atlas-investor-roadmap`
+
+---
+
+### 17. atlas-investor-pages（投資人 UI — 頁面結構）
+
+**職責**: 6 個投資人頁面的詳細 wireframe、資料來源、API 需求與導航結構
+
+**涵蓋內容**:
+- 頁面 0：投資人儀表板（單頁總覽，無 tabs）
+- 頁面 1：績效分析（累積報酬曲線、Sharpe 時間序列、月報酬熱力圖）
+- 頁面 2：推薦詳情（NLG 解釋、因子長條圖、信心度分解）
+- 頁面 3：市場洞察（宏觀環境、產業輪動、散戶情緒）
+- 頁面 4：風險報告（VaR、壓力測試、回撤保護）
+- 頁面 5：每日摘要（盤前 Morning Brief + 盤後 Evening Brief）
+- 頁面導航結構與圖表渲染規範
+
+**使用時機**:
+- 實作投資人 UI 頁面時
+- 決定每個頁面的 API 端點與資料結構時
+
+**對應文件**:
+- `.claude/skills/atlas-investor-pages/SKILL.md`
+- 父技能：`atlas-investor-ui`
+
+---
+
+### 18. atlas-investor-nlg（投資人 UI — NLG 推薦解釋）
+
+**職責**: 將 Atlas 的 Audit Trail 數據（FactorScoreBreakdown、ConvictionBreakdown）轉化為繁體中文投資人語言
+
+**涵蓋內容**:
+- 模板設計（Score > 0.5 正向 / < -0.3 負向 / 中性）
+- 投資人語言因子對照表（momentum → 技術面動能等 11 因子）
+- Fallback 處理（`IsFallback` 數據需標記 `⚠️`）
+- 三層輸出層級（一句話摘要 / 段落解釋 / 完整報告）
+- 基於既有 `narrative/nlg_templates.go` 擴展，不新建模組
+
+**使用時機**:
+- 實作推薦解釋功能時
+- 需要將技術數據轉換為投資人語言時
+
+**對應文件**:
+- `.claude/skills/atlas-investor-nlg/SKILL.md`
+- 父技能：`atlas-investor-ui`
+- 依賴：`atlas-macro-narrative`
+
+---
+
+### 19. atlas-investor-trustscore（投資人 UI — TrustScore 信任分數）
+
+**職責**: 設計 TrustScore 信任分數系統，彙總分散在多模組的信任指標為 0-100 分數
+
+**涵蓋內容**:
+- 五維度加權計算（校準 25%、命中率 30%、Sharpe 穩定性 20%、數據品質 15%、回撤保護 10%）
+- API 設計（`GET /api/client/trust-score`）
+- 前端呈現（儀表板刻度 + 五維度進度條 + 趨勢箭頭）
+- 計算時機（每日盤後 BackgroundTaskManager 排程）
+- 信任分數的實務限制（非精確科學，是溝通工具）
+
+**使用時機**:
+- 實作 TrustScore 模組時
+- 設計信任分數計算邏輯與 API 時
+
+**對應文件**:
+- `.claude/skills/atlas-investor-trustscore/SKILL.md`
+- 父技能：`atlas-investor-ui`
+- 依賴：`atlas-risk-management`
+
+---
+
+### 20. atlas-investor-roadmap（投資人 UI — 實作路線圖）
+
+**職責**: Phase A/B 實作階段、基準比較系統（BenchmarkProvider）、歷史情境匹配層（Layer 1.5）、驗證要求
+
+**涵蓋內容**:
+- Phase A（P0-P1）：儀表板、績效追蹤、盤前摘要、命中率、NLG
+- Phase B（P1-P2）：TrustScore、基準比較、ETF 分析、情境模擬、歷史情境匹配、紙上交易
+- BenchmarkProvider 設計（TAIEX/0050/0056/台灣 50）
+- 歷史情境匹配層（Layer 1.5：宏觀情境 → 歷史相似度 → 個股行為模式）
+- 實作驗證清單與 GitNexus 變更確認
+
+**使用時機**:
+- 規劃實作順序與依賴關係時
+- 實作基準比較或歷史情境匹配時
+
+**對應文件**:
+- `.claude/skills/atlas-investor-roadmap/SKILL.md`
+- 父技能：`atlas-investor-ui`
+
+### 21. gitnexus-cli（GitNexus CLI）
 
 **職責**: GitNexus 索引、狀態、清理與維護操作
 
@@ -495,7 +619,7 @@
 
 ---
 
-### 17. gitnexus-guide（GitNexus 指南）
+### 22. gitnexus-guide（GitNexus 指南）
 
 **職責**: GitNexus 工具、資源、schema 與工作流說明
 
@@ -513,7 +637,7 @@
 
 ---
 
-### 18. gitnexus-exploring（GitNexus 探索）
+### 23. gitnexus-exploring（GitNexus 探索）
 
 **職責**: 理解程式碼結構、執行流程與架構脈絡
 
@@ -531,7 +655,7 @@
 
 ---
 
-### 19. gitnexus-impact-analysis（GitNexus 影響分析）
+### 24. gitnexus-impact-analysis（GitNexus 影響分析）
 
 **職責**: 變更前爆炸半徑、風險與下游影響分析
 
@@ -549,7 +673,7 @@
 
 ---
 
-### 20. gitnexus-debugging（GitNexus 除錯）
+### 25. gitnexus-debugging（GitNexus 除錯）
 
 **職責**: 錯誤追蹤、根因分析、故障定位
 
@@ -567,7 +691,7 @@
 
 ---
 
-### 21. gitnexus-refactoring（GitNexus 重構）
+### 26. gitnexus-refactoring（GitNexus 重構）
 
 **職責**: 安全地改名、抽取、拆分、搬移與結構重整
 
@@ -722,6 +846,6 @@
 
 ---
 
-*技能地圖版本: 2.1*  
+*技能地圖版本: 2.2*  
 *最後更新: 2026-06-02*  
 *維護者: Atlas-Go AI Agent*
