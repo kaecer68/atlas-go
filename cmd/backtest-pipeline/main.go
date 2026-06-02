@@ -31,7 +31,7 @@ func run(args []string) error {
 	startStr := fs.String("start", "", "training start date YYYY-MM-DD (optional)")
 	symbolFilter := fs.String("symbol", "", "filter to single symbol (e.g. 2330.TW)")
 	featuresStr := fs.String("features", "close,volume,return_1d", "comma-separated feature names")
-	modelStr := fs.String("model", "ols", "ML model: ols, pcr, pls, elasticnet")
+	modelStr := fs.String("model", "ols", "ML model: ols, pcr, pls, elasticnet, glm, rf")
 	firstTrainEndStr := fs.String("first-train-end", "2007-12-31", "first train end date YYYY-MM-DD")
 	validYears := fs.Int("valid-years", 2, "validation window years")
 	stepYears := fs.Int("step-years", 1, "step size in years")
@@ -200,8 +200,12 @@ func newModel(name string) (backtest.Model, error) {
 		return &ml.PLS{NComponents: 3}, nil
 	case "elasticnet":
 		return &ml.ElasticNet{L1Ratio: 0.5, Alpha: 1.0, AlphaAuto: false, MaxIter: 1000, Tol: 1e-4}, nil
+	case "glm":
+		return ml.NewGLMSpline(), nil
+	case "rf":
+		return ml.NewRandomForest(), nil
 	default:
-		return nil, fmt.Errorf("unknown model %q; choose: ols, pcr, pls, elasticnet", name)
+		return nil, fmt.Errorf("unknown model %q; choose: ols, pcr, pls, elasticnet, glm, rf", name)
 	}
 }
 
