@@ -414,6 +414,21 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 		symbols := agent.Universe
 		if len(symbols) == 0 {
 			symbols = slices.Collect(symbolIterator(DefaultSymbols()))
+		} else {
+			// Auto-expand agent universe from CSV data
+			expanded := ExpandUniverse("data/replay/tw_extended_90days.csv", nil)
+			if len(expanded) > 0 {
+				seen := make(map[string]bool)
+				for _, s := range symbols {
+					seen[s] = true
+				}
+				for _, s := range expanded {
+					if !seen[s] {
+						symbols = append(symbols, s)
+						seen[s] = true
+					}
+				}
+			}
 		}
 
 		for _, symbol := range symbols {
@@ -471,6 +486,25 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 			if !ok {
 				continue
 			}
+
+			// Multi-timeframe adjustment: use intraday OHLC position as a
+			// lightweight proxy for short-to-medium-term momentum.  Stocks
+			// trading near the day high suggest strength across timeframes;
+			// stocks near the day low suggest weakening momentum.
+			if quote.High > 0 && quote.Low > 0 && quote.Last > 0 {
+				dayRange := quote.High - quote.Low
+				if dayRange > 0 {
+					position := (quote.Last - quote.Low) / dayRange // 0=at low, 1=at high
+					if position < 0.3 {
+						// Near day low: weaker across all timeframes
+						rec.Conviction -= 5
+					} else if position > 0.7 {
+						// Near day high: stronger across all timeframes
+						rec.Conviction += 3
+					}
+				}
+			}
+
 			recs = append(recs, rec)
 		}
 	}
@@ -482,6 +516,31 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 			eventIDs[j] = e.ID
 		}
 		recs[i].SupportingEvents = eventIDs
+	}
+
+	// Diversity metrics: track recommendation concentration
+	if len(recs) > 0 {
+		symbolCounts := make(map[string]int)
+		for _, rec := range recs {
+			symbolCounts[rec.Symbol]++
+		}
+		var hhi float64
+		var topSymbol string
+		var topCount int
+		for sym, count := range symbolCounts {
+			share := float64(count) / float64(len(recs)) * 100
+			hhi += share * share
+			if count > topCount {
+				topSymbol = sym
+				topCount = count
+			}
+		}
+		logging.Info("diversity", "metrics",
+			"total_recs", len(recs),
+			"unique_symbols", len(symbolCounts),
+			"hhi", int(hhi),
+			"top_symbol", topSymbol,
+			"top_count", topCount)
 	}
 
 	agentWeights := make(map[string]float64)
@@ -1069,6 +1128,30 @@ func loadSymbolsFromCSV(path string) []string {
 		result = append(result, s)
 	}
 	sort.Strings(result)
+	return result
+}
+
+// ExpandUniverse reads the replay CSV and returns all symbols matching
+// the given prefix patterns. When prefixes is nil or empty, all CSV symbols
+// are returned. This allows agent universes to auto-expand as new symbols
+// are added to the replay data.
+func ExpandUniverse(csvPath string, prefixes []string) []string {
+	csvSymbols := loadSymbolsFromCSV(csvPath)
+	if len(csvSymbols) == 0 {
+		return nil
+	}
+	if len(prefixes) == 0 {
+		return csvSymbols
+	}
+	var result []string
+	for _, sym := range csvSymbols {
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(sym, prefix) {
+				result = append(result, sym)
+				break
+			}
+		}
+	}
 	return result
 }
 

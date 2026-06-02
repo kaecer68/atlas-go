@@ -1285,7 +1285,8 @@ func (s *System) saveSessionTrades(sessionID string, trades []domain.TradeRecord
 }
 
 func (s *System) ensurePersistentStateLoaded() error {
-	if s.Sim().session.Mode != "daily" || s.Sim().persistentState != nil {
+	mode := s.Sim().session.Mode
+	if (mode != "daily" && mode != "replay") || s.Sim().persistentState != nil {
 		return nil
 	}
 	loaded, err := sim.LoadPersistentState(s.Sim().cfg.LedgerDir)
@@ -1301,7 +1302,8 @@ func (s *System) ensurePersistentStateLoaded() error {
 }
 
 func (s *System) persistPersistentState() error {
-	if s.Sim().session.Mode != "daily" || s.Sim().persistentState == nil {
+	mode := s.Sim().session.Mode
+	if (mode != "daily" && mode != "replay") || s.Sim().persistentState == nil {
 		return nil
 	}
 	return sim.SavePersistentState(s.Sim().cfg.LedgerDir, s.Sim().persistentState)
