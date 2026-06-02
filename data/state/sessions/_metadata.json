@@ -1,0 +1,29 @@
+{
+  "$schema": "../../../../schemas/data_metadata.schema.json",
+  "name": "sessions",
+  "description": "每個交易日 session 的完整記錄。包含 per-agent、per-symbol forward return，為系統最完整的 outcome 資料來源。",
+  "maturity": "stable",
+  "data_type": "directory",
+  "format": "session-YYYYMMDD-daily/ 子目錄",
+  "producer_module": "internal/ledger",
+  "producer_function": "RecordSessionOutcomes",
+  "consumer_modules": [
+    "internal/monitoring",
+    "internal/risk",
+    "internal/orchestrator",
+    "cmd/calibrate-parameters",
+    "cmd/backtest-window"
+  ],
+  "schema_ref": null,
+  "catalog_ref": "docs/DATA_CATALOG.md#sessions",
+  "created_date": "2026-03-30",
+  "last_modified": "continuous",
+  "estimated_size": {
+    "directories": 100,
+    "growth_rate": "~1 dir/day"
+  },
+  "retention_policy": "indefinite",
+  "backup_policy": "gitignored, PostgreSQL dual-write as secondary",
+  "tags": ["outcomes", "sessions", "forward-return", "core"],
+  "notes": "每個 session 目錄含 summary.json、recommendation_outcomes.jsonl、screened_symbols.jsonl、positions.json、experiments.jsonl。AI agent 應優先從此目錄讀取（DATA_ARCHITECTURE.md 層級 1）。"
+}

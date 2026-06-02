@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/kaecer68/atlas-go/schemas/human_interventions.schema.json",
+  "title": "Human Intervention Record",
+  "description": "人工干預稽核軌跡。每行為獨立 JSON 物件，記錄操作者對推薦的核准、否決或補追決策。",
+  "type": "object",
+  "required": ["id", "type", "operator", "target_agent_id", "recorded_at"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "干預記錄唯一識別碼"
+    },
+    "type": {
+      "type": "string",
+      "description": "干預類型",
+      "enum": ["approve", "reject", "補追"]
+    },
+    "operator": {
+      "type": "string",
+      "description": "操作者識別"
+    },
+    "target_agent_id": {
+      "type": "string",
+      "description": "干預目標的 agent 識別碼"
+    },
+    "reason": {
+      "type": "string",
+      "description": "干預理由"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "記錄時間（ISO 8601/RFC 3339）"
+    }
+  },
+  "additionalProperties": true
+}

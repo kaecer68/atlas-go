@@ -131,28 +131,32 @@ find_data_files() {
 # Helper: validate a single JSON line against schema using Python jsonschema
 # =============================================================================
 validate_line_python() {
-  local line="$1" schema_file="$2" line_num="$3" data_file="$4"
+  local schema_file="$1" line_num="$2"
 
+  # JSON line via stdin, file paths via sys.argv — avoids shell injection
   python3 -c "
 import json, sys
 from jsonschema import validate, ValidationError
 
+schema_file = sys.argv[1]
+line_num = int(sys.argv[2])
+
 try:
-    instance = json.loads('''${line}''')
-    with open('${schema_file}') as f:
+    instance = json.loads(sys.stdin.read())
+    with open(schema_file) as f:
         schema = json.load(f)
     validate(instance=instance, schema=schema)
     sys.exit(0)
 except ValidationError as e:
-    print(f'Line ${line_num}: Schema validation failed — {e.message}', file=sys.stderr)
+    print(f'Line {line_num}: Schema validation failed — {e.message}', file=sys.stderr)
     sys.exit(1)
 except json.JSONDecodeError as e:
-    print(f'Line ${line_num}: Invalid JSON — {e}', file=sys.stderr)
+    print(f'Line {line_num}: Invalid JSON — {e}', file=sys.stderr)
     sys.exit(2)
 except Exception as e:
-    print(f'Line ${line_num}: Error — {e}', file=sys.stderr)
+    print(f'Line {line_num}: Error — {e}', file=sys.stderr)
     sys.exit(3)
-" 2>&1
+" "$schema_file" "$line_num" 2>&1
 }
 
 # =============================================================================
@@ -274,7 +278,7 @@ check_schema_validation() {
 
         local result
         if $HAS_JSONSCHEMA; then
-          result=$(validate_line_python "$line" "$schema" "$line_num" "$datafile" 2>&1) || {
+          result=$(echo "$line" | validate_line_python "$schema" "$line_num" 2>&1) || {
             log_fail "$datafile:$line_num — $result"
             add_json_violation "validation_failed" "$datafile" "line $line_num: $result"
             file_failed=$((file_failed + 1))
