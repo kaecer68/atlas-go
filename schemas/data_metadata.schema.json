@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/kaecer68/atlas-go/schemas/data_metadata.schema.json",
+  "title": "Data Directory Metadata",
+  "description": "每個 data/state/ 子目錄的自我描述中繼資料格式。對齊 Go 程式碼的 maturity 層級系統（internal/MATURITY.md）。AI agent 可透過讀取此檔案了解資料的成熟度、維護者與用途。",
+  "type": "object",
+  "required": ["name", "description", "maturity", "data_type", "producer_module", "consumer_modules"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "資產唯一識別名稱（snake_case）",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "description": {
+      "type": "string",
+      "description": "此資料的用途與內容描述",
+      "minLength": 10
+    },
+    "maturity": {
+      "type": "string",
+      "description": "成熟度層級，對齊 internal/MATURITY.md",
+      "enum": ["stable", "evolving", "experimental", "utility"]
+    },
+    "data_type": {
+      "type": "string",
+      "description": "資料格式類型",
+      "enum": ["json", "jsonl", "csv", "sqlite", "yaml", "directory"]
+    },
+    "format": {
+      "type": "string",
+      "description": "額外格式資訊：append_only、daily_snapshot、key_value 等"
+    },
+    "producer_module": {
+      "type": "string",
+      "description": "寫入此資料的主要 Go module，如 'internal/ledger'"
+    },
+    "producer_function": {
+      "type": "string",
+      "description": "寫入函數名稱，如 'RecordOutcomes'"
+    },
+    "consumer_modules": {
+      "type": "array",
+      "description": "讀取此資料的 Go module 列表",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "schema_ref": {
+      "type": "string",
+      "description": "JSON Schema 檔案路徑，如 'schemas/recommendation_outcomes.schema.json'"
+    },
+    "catalog_ref": {
+      "type": "string",
+      "description": "指向 DATA_CATALOG.md 中的對應條目"
+    },
+    "created_date": {
+      "type": "string",
+      "description": "建立日期（ISO 8601）",
+      "format": "date"
+    },
+    "last_modified": {
+      "type": "string",
+      "description": "最後修改日期（ISO 8601）",
+      "format": "date"
+    },
+    "estimated_size": {
+      "type": "object",
+      "description": "檔案大小估計",
+      "properties": {
+        "lines": { "type": "integer" },
+        "bytes": { "type": "integer" },
+        "growth_rate": { "type": "string" }
+      }
+    },
+    "retention_policy": {
+      "type": "string",
+      "description": "保留策略：indefinite、30_days、manual 等"
+    },
+    "backup_policy": {
+      "type": "string",
+      "description": "備份策略描述"
+    },
+    "tags": {
+      "type": "array",
+      "description": "用於分類與搜尋的標籤",
+      "items": { "type": "string" }
+    },
+    "notes": {
+      "type": "string",
+      "description": "任何需要注意的事項（如已知問題）"
+    }
+  },
+  "additionalProperties": false
+}
