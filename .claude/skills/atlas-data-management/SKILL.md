@@ -77,7 +77,7 @@ case "hybrid", "":
 
 **API**: `GET /api/dashboard/data-channels`
 
-**實作檔案**: `internal/monitoring/api/data/handlers.go`
+**實作檔案**: `internal/monitoring/api/dashboard/data_channels.go`
 
 ### 3.2 各通道檢查方式
 
@@ -204,7 +204,7 @@ tail -f logs/atlas.log | grep -E "HybridProvider|marketdata|error"
 | FinMind 實作 | `internal/marketdata/finmind_client.go` |
 | Fubon 實作 | `internal/marketdata/fubon_client.go` |
 | Fugle 實作 | `internal/marketdata/fugle_client.go` |
-| 健康檢查 API | `internal/monitoring/api/data/handlers.go` |
+| 健康檢查 API | `internal/monitoring/api/dashboard/data_channels.go` |
 | 環境變數配置 | `internal/config/config.go` |
 | Provider 初始化 | `internal/orchestrator/system.go` |
 
