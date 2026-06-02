@@ -210,6 +210,38 @@ jobs:
   # Gate 3: LoadCalibrationEvidence unit tests — covered by the existing
   # coverage job (go test ./... includes ./internal/industry/...).
 
+  # Data naming convention check — validates data/ files follow
+  # docs/DATA_NAMING_CONVENTION.md (R1-R10). Blocking for R1/R2 violations,
+  # warning for flat files pending P3.0 restructure.
+  data-naming:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check data file naming conventions
+      run: bash scripts/ci/check_data_naming.sh
+
+  # JSON Schema validation — validates JSONL files against their schemas.
+  # Graceful: skips if schemas/ doesn't exist yet, non-blocking warnings
+  # for files without schemas.
+  json-schema-validate:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check JSON Schema validation
+      run: bash scripts/ci/validate_json_schemas.sh --json
+
+  # Data catalog freshness — ensures docs/DATA_CATALOG.md accurately reflects
+  # data/ directory content. Graceful until catalog population (P1.3).
+  data-catalog:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check data catalog freshness
+      run: bash scripts/ci/check_data_catalog.sh --warn-only
+
   # Orphan artifact detection — ensures no compiled binaries, PID files,
   # coverage reports, or graphify cache artifacts have been committed.
   check-orphan-artifacts:
