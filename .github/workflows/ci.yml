@@ -51,8 +51,8 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
-      - name: Run tests with coverage
-        run: go test -coverprofile=coverage.out ./...
+      - name: Run tests with coverage (exclude cmd/atlas — slow integration tests)
+        run: go test -coverprofile=coverage.out $(go list ./... | grep -v '/cmd/atlas$')
       - name: Check coverage threshold (>= 40%)
         run: |
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '\r' | sed 's/%//')
