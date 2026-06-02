@@ -74,6 +74,8 @@ Portfolio (Darwinian weights) → Dashboard
 | `internal/prism/` | 分層訓練 | `regime.go` |
 | `internal/ledger/` | 持久化 | `store.go` |
 
+**架構探索輔助**：`graphify-out/GRAPH_REPORT.md`（10K+ nodes, 150+ communities）— 用 `gitnexus_query` 或 `codegraph_context` 執行概念搜尋，`gitnexus_context` 做 360° 符號檢視。
+
 ---
 
 ## 設計原則
