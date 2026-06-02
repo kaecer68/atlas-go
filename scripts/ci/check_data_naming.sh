@@ -93,10 +93,10 @@ is_exception() {
 
 # =============================================================================
 # 檢查 1: 目錄命名必須是 snake_case（禁止 kebab-case）
-# R1: snake_case, R2: 禁止 kebab-case. See DATA_NAMING_CONVENTION.md §2.
+# R1: snake_case, R8: 禁止 kebab-case. See DATA_NAMING_CONVENTION.md §2.
 # =============================================================================
 check_dir_naming() {
-  printf "\n═══ 檢查 1/5: 目錄命名 (R1 + R2) ═══\n"
+  printf "\n═══ 檢查 1/5: 目錄命名 (R1 + R8) ═══\n"
   local found_any=0
 
   while IFS= read -r dir; do
@@ -112,9 +112,9 @@ check_dir_naming() {
       continue
     fi
 
-    # R2: kebab-case violation
+    # R8: kebab-case violation
     if echo "$dirname" | grep -q '-'; then
-      log_fail "$dir — 目錄名稱包含連字號 (kebab-case)，應使用 snake_case (R2)"
+      log_fail "$dir — 目錄名稱包含連字號 (kebab-case)，應使用 snake_case (R8)"
       add_json_violation "kebab_case_dir" "$dir" "directory name '$dirname' contains hyphen, use snake_case"
       found_any=1
     fi
@@ -125,18 +125,18 @@ check_dir_naming() {
   if [ "$found_any" -eq 0 ]; then
     local count
     count=$(find data/ -type d 2>/dev/null | wc -l | tr -d ' ')
-    log_pass "所有 ${count} 個目錄命名符合 snake_case (R1, R2)"
+    log_pass "所有 ${count} 個目錄命名符合 snake_case (R1, R8)"
   fi
   return $found_any
 }
 
 # =============================================================================
-# 檢查 2: 每日數據檔案格式 (R5)
-# R5: 每日快照必須使用 YYYYMMDD_descriptor.json 格式
+# 檢查 2: 每日數據檔案格式 (R2)
+# R2: 每日快照必須使用 YYYYMMDD_descriptor.json 格式
 # 應用範圍: macro/, margin/, capital_flow/
 # =============================================================================
 check_daily_file_format() {
-  printf "\n═══ 檢查 2/5: 每日數據檔案格式 (R5) ═══\n"
+  printf "\n═══ 檢查 2/5: 每日數據檔案格式 (R2) ═══\n"
   local found_any=0
 
   local daily_dirs=("data/state/macro" "data/state/margin" "data/state/capital_flow")
@@ -155,17 +155,17 @@ check_daily_file_format() {
       [[ "$fname" == "README.md" ]] && continue
       [[ "$fname" == "latest.json" ]] && continue
 
-      # R5: YYYYMMDD_descriptor.json (8 digits + underscore + descriptor + .json)
+      # R2: YYYYMMDD_descriptor.json (8 digits + underscore + descriptor + .json)
       # Accept both YYYYMMDD_descriptor.json AND YYYYMMDD.json (legacy)
       # Report YYYYMMDD.json as a warning (needs descriptor per convention)
       if echo "$fname" | grep -qE '^[0-9]{8}\.json$'; then
-        log_warn "$file — 日期後缺少描述符，格式應為 YYYYMMDD_descriptor.json (R5)"
+        log_warn "$file — 日期後缺少描述符，格式應為 YYYYMMDD_descriptor.json (R2)"
         add_json_violation "daily_no_descriptor" "$file" "date-only filename, should be YYYYMMDD_descriptor.json"
         found_any=1
       elif echo "$fname" | grep -qE '^[0-9]{8}_[a-z][a-z_]*\.json$'; then
         : # Valid format, pass
       else
-        log_warn "$file — 不標準的每日數據命名: '$fname' (R5)"
+        log_warn "$file — 不標準的每日數據命名: '$fname' (R2)"
         add_json_violation "daily_nonstandard" "$file" "non-standard daily file name: '$fname'"
         found_any=1
       fi
@@ -173,17 +173,17 @@ check_daily_file_format() {
   done
 
   if [ "$found_any" -eq 0 ]; then
-    log_pass "每日數據檔案命名符合 R5 規範"
+    log_pass "每日數據檔案命名符合 R2 規範"
   fi
   return 0  # Warnings only, never block
 }
 
 # =============================================================================
-# 檢查 3: JSONL 檔案副檔名正確 (R7)
-# R7: append-only 日誌必須使用 .jsonl，不可使用 .json
+# 檢查 3: JSONL 檔案副檔名正確 (R4)
+# R4: append-only 日誌必須使用 .jsonl，不可使用 .json
 # =============================================================================
 check_jsonl_extension() {
-  printf "\n═══ 檢查 3/5: JSONL 副檔名 (R7) ═══\n"
+  printf "\n═══ 檢查 3/5: JSONL 副檔名 (R4) ═══\n"
   local found_any=0
 
   # Check: all JSONL content uses .jsonl extension
@@ -203,7 +203,7 @@ check_jsonl_extension() {
         local line_count
         line_count=$(wc -l < "$file" 2>/dev/null | tr -d ' ')
         if [ "$line_count" -gt 1 ]; then
-          log_warn "$file — 可能是 JSONL 內容但使用非 .jsonl 副檔名 (R7)"
+          log_warn "$file — 可能是 JSONL 內容但使用非 .jsonl 副檔名 (R4)"
           add_json_violation "jsonl_extension" "$file" "multi-line JSON file, should use .jsonl extension"
           found_any=1
         fi
