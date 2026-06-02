@@ -1,8 +1,12 @@
-# Atlas Risk Management Skill
+# Skill: atlas-risk-management
 
-**版本**: 1.0  
-**日期**: 2026-04-23  
-**職責**: 動態調整投資組合風險暴露，基於宏觀環境與結構性趨勢保護資本  
+> **實作狀態**：✅ 核心已實作 — 四層風險架構（pre-trade／in-trade／post-trade／portfolio）全數完工，含宏觀感知回撤與自主校準  
+> **最後審計**：2026-06-02  
+> **實際檔案結構**：`macro_aware_drawdown.go`（回撤核心）、`gate.go`（風險閘門）、`self_calibrate.go`（自主校準）、`pre_trade.go`／`post_trade.go`（交易前後檢查）、`var_calculator.go`（VaR）、`portfolio_risk.go`（投組風險）
+
+## 描述
+
+**動態風險管理系統** — 基於宏觀環境與結構性趨勢動態調整投資組合風險暴露，保護資本。  
 
 ---
 
@@ -100,12 +104,21 @@ IF MacroRiskLevel = Yellow/Orange
 
 ## 關鍵檔案
 
-- `internal/risk/macro_aware_drawdown.go` - 回撤防護核心
-- `internal/risk/macro_aware_drawdown.go` - 宏觀感知回撤決策器
-- `internal/portfolio/sector_rotator.go` - 產業輪動執行器
-- `internal/portfolio/sizing.go` - 動態倉位調整
+| 檔案 | 職責 |
+|------|------|
+| `internal/risk/macro_aware_drawdown.go` | 回撤防護核心 + 宏觀感知回撤決策器 |
+| `internal/risk/gate.go` | 風險閘門（RiskGate）— 交易前校準與擋單 |
+| `internal/risk/self_calibrate.go` | 自主校準（Bayesian threshold tuning） |
+| `internal/risk/pre_trade.go` | 交易前檢查（倉位上限、現金緩衝） |
+| `internal/risk/post_trade.go` | 交易後風險核驗 |
+| `internal/risk/var_calculator.go` | VaR 計算（歷史模擬法） |
+| `internal/risk/portfolio_risk.go` | 投資組合層級風險聚合 |
+| `internal/risk/capital_controller.go` | 資金控管與曝險上限 |
+| `internal/risk/industry_risk.go` | 產業集中度風險 |
+| `internal/portfolio/sector_rotator.go` | 產業輪動執行器 |
+| `internal/portfolio/sizing.go` | 動態倉位調整（Kelly-based） |
 
 ---
 
-*技能版本: 1.0*  
-*最後更新: 2026-04-23*
+*技能版本: 2.0*  
+*最後更新: 2026-06-02*
