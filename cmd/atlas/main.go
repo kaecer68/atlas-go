@@ -255,6 +255,14 @@ func run(args []string, deps appDeps) error {
 		janusEngine.EnsureAllRegimes()
 		janusEngine.Update()
 
+		// Initialize MaturityTracker for burn-in / calibrating / full-auto gating.
+		maturityTracker, _ := domain.NewMaturityTracker(filepath.Join(cfg.WorkDir, "data/state/maturity_tracker.json"))
+		if maturityTracker != nil {
+			logging.Info("bootstrap", "maturity_tracker_ready",
+				"maturity", string(maturityTracker.Current()),
+				"days_since_start", maturityTracker.DaysSinceStart())
+		}
+
 		var elDetector *eventlogic.PatternDetector
 		var elCorrector *eventlogic.SelfCorrector
 		var elRulesPath string
@@ -892,14 +900,14 @@ func run(args []string, deps appDeps) error {
 					Name:     "auto_calendar_refresh",
 					Interval: 24 * time.Hour,
 					Enabled:  true,
-				Task: func(ctx context.Context) error {
-					bgCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
-					defer cancel()
-					svc.EventCalendar.UpdateFromProvider(bgCtx, calendarProvider)
-					svc.EventCalendar.RefreshEvents(time.Now())
-					logging.Info("calendar", "auto_calendar_refresh completed")
-					return nil
-				},
+					Task: func(ctx context.Context) error {
+						bgCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
+						defer cancel()
+						svc.EventCalendar.UpdateFromProvider(bgCtx, calendarProvider)
+						svc.EventCalendar.RefreshEvents(time.Now())
+						logging.Info("calendar", "auto_calendar_refresh completed")
+						return nil
+					},
 				})
 				log.Printf("[Gateway] registered auto_calendar_refresh background task (24h interval)")
 			}
@@ -1233,6 +1241,9 @@ func run(args []string, deps appDeps) error {
 			}
 
 			riskGate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
+			if maturityTracker != nil {
+				riskGate.WithMaturityTracker(maturityTracker)
+			}
 			dashboard.SetRiskGate(riskGate)
 
 			if params := config.GetParametersConfig(); params != nil && params.RSITw.LastCalibratedScore.Value > 0 {

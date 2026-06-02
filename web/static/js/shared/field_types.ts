@@ -1558,6 +1558,7 @@ export interface MutationBrief {
   maturity_level: string;
   iteration_guidance: string[];
   recommended_window: string;
+  rsi_tw_score?: number;
   generated_at: string;
 }
 
@@ -1959,6 +1960,7 @@ export interface PreTradeGateParameters {
   min_cash_buffer_pct: string;
   max_correlation: string;
   min_adv_ratio: string;
+  max_open_positions: string;
 }
 
 export interface PreciousMetalsParameters {
@@ -2860,6 +2862,11 @@ export interface WeightFactor {
 export interface channelState {
   enabled: boolean;
   updated_at: string;
+}
+
+export interface maturityTrackerState {
+  first_start_date: string;
+  last_checked: string;
 }
 
 export interface rawOutcome {

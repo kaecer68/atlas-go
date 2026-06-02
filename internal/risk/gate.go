@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 // RiskGateMode represents the current operational mode of the risk gate.
@@ -175,6 +177,17 @@ func (g *RiskGate) SetPreTradeRSITwScore(score float64) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.preTrade.SetRSITwScore(score)
+}
+
+// WithMaturityTracker injects a maturity tracker into the pre-trade gate
+// for burn-in / calibrating phase gating of VaR checks.
+func (g *RiskGate) WithMaturityTracker(mt *domain.MaturityTracker) *RiskGate {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.preTrade != nil {
+		g.preTrade.WithMaturityTracker(mt)
+	}
+	return g
 }
 
 // SetLastCalibration stores the most recent calibration run result.

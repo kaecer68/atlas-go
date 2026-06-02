@@ -89,7 +89,7 @@ func run(args []string) error {
 	}
 
 	if *outputPath != "" {
-		if err := os.WriteFile(*outputPath, data, 0644); err != nil {
+		if err := os.WriteFile(*outputPath, data, 0o644); err != nil {
 			return err
 		}
 		fmt.Fprintf(os.Stderr, "Calibration report written to %s\n", *outputPath)
@@ -186,7 +186,8 @@ func calibrate(snapshots []marketdata.MacroDataSnapshot) calibrationResult {
 		}
 	}
 
-	result.Notes = append(result.Notes,
+	result.Notes = append(
+		result.Notes,
 		"VIX thresholds derived from historical percentile distribution — replaces heuristic [15,20,25,30,35]",
 		"Scores are evenly spaced 0.1→1.0 across 6 VIX buckets for monotonic mapping",
 		"Margin stats provided for A1 Z-score calibration evidence",

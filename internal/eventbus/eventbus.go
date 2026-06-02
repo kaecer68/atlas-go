@@ -73,6 +73,7 @@ const (
 	// 自动监控事件
 	EventSharpeDegradation EventType = "monitor.sharpe.degradation"
 	EventDrawdownBreach    EventType = "monitor.drawdown.breach"
+	EventHealthAlert       EventType = "monitor.health.alert"
 )
 
 // MarketEventPayload 市场事件载荷
@@ -198,6 +199,18 @@ type NarrativeEventPayload struct {
 	Description      string  `json:"description"`
 }
 
+// HealthAlertPayload carries a single system health alert for downstream
+// consumers (dashboard, Telegram, email, etc.).
+type HealthAlertPayload struct {
+	Severity        string    `json:"severity"`
+	Category        string    `json:"category"`
+	Message         string    `json:"message"`
+	Value           float64   `json:"value"`
+	Threshold       float64   `json:"threshold"`
+	SuggestedAction string    `json:"suggested_action"`
+	Timestamp       time.Time `json:"timestamp"`
+}
+
 // BusEvent 总线事件
 type BusEvent struct {
 	ID          string    `json:"id"`
@@ -247,6 +260,7 @@ var eventDescriptions = map[EventType]eventDesc{
 	EventMarketClose:                {"市場收盤，停止即時交易", "info"},
 	EventExperimentInsufficientData: {"實驗數據不足，無法進行統計比較", "warning"},
 	EventNarrative:                  {"偵測到宏觀敘事事件", "warning"},
+	EventHealthAlert:                {"系統健康監控警報觸發", "warning"},
 }
 
 var narrativeThemeLabels = map[string]string{
@@ -648,6 +662,17 @@ func (b *ChannelEventBus) PublishNarrativeEvent(eventID, theme, region string, s
 func parseFloat(s string) float64 {
 	v, _ := strconv.ParseFloat(s, 64)
 	return v
+}
+
+// PublishHealthAlert publishes a system health alert to the event bus.
+func (b *ChannelEventBus) PublishHealthAlert(alert HealthAlertPayload) {
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventHealthAlert,
+		Timestamp: time.Now(),
+		Payload:   alert,
+		Severity:  alert.Severity,
+	})
 }
 
 // Subscribe 订阅特定类型事件

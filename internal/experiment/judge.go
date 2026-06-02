@@ -20,12 +20,13 @@ import (
 )
 
 type Judge struct {
-	store          ledger.ExperimentStore
-	replayDataPath string
-	baselinePath   string
-	oosValidator   *OOSValidator
-	params         *config.ParametersConfig
-	eventBus       *eventbus.ChannelEventBus
+	store           ledger.ExperimentStore
+	replayDataPath  string
+	baselinePath    string
+	oosValidator    *OOSValidator
+	params          *config.ParametersConfig
+	eventBus        *eventbus.ChannelEventBus
+	maturityTracker *domain.MaturityTracker
 }
 
 func NewJudge(store ledger.ExperimentStore, replayDataPath, baselinePath string) *Judge {
@@ -41,6 +42,12 @@ func NewJudge(store ledger.ExperimentStore, replayDataPath, baselinePath string)
 // WithEventBus sets the Judge's event bus for publishing insufficient data events.
 func (j *Judge) WithEventBus(bus *eventbus.ChannelEventBus) *Judge {
 	j.eventBus = bus
+	return j
+}
+
+// WithMaturityTracker attaches a maturity tracker for burn-in gating.
+func (j *Judge) WithMaturityTracker(mt *domain.MaturityTracker) *Judge {
+	j.maturityTracker = mt
 	return j
 }
 
@@ -324,6 +331,12 @@ func promptTighteningJudgeChecks(lower string, result domain.PromptExperimentRes
 }
 
 func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, string) {
+	// Burn-in gate: do not judge experiments until statistical engines are reliable.
+	if j.maturityTracker != nil && j.maturityTracker.Current() == domain.MaturityBurnIn {
+		return false, fmt.Sprintf("rejected: burn_in mode (%d days until calibrating)",
+			j.maturityTracker.DaysUntil(domain.MaturityCalibrating))
+	}
+
 	gates := result.Experiment.AcceptanceGates
 	baseline := result.Experiment.BaselineValue
 	candidate := result.Experiment.CandidateValue
@@ -501,7 +514,7 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, st
 }
 
 func welchTTest(baselineReturns, candidateReturns []float64) (tStat float64, df float64) {
-	if len(baselineReturns) < 2 || len(candidateReturns) < 2 {
+	if len(baselineReturns) < 63 || len(candidateReturns) < 63 {
 		return 0, 0
 	}
 
@@ -551,7 +564,7 @@ func meanAndVariance(data []float64) (mean, variance float64) {
 }
 
 func calculateVolatility(returns []float64) float64 {
-	if len(returns) < 2 {
+	if len(returns) < 30 {
 		return 0
 	}
 	_, variance := meanAndVariance(returns)

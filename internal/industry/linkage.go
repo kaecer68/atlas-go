@@ -288,7 +288,7 @@ func (cm *CorrelationMatrix) RecalculateFromReturns(industryReturns map[string][
 			if len(returnsB) < n {
 				n = len(returnsB)
 			}
-			if n < 15 {
+			if n < 30 {
 				continue
 			}
 			corr := pearsonCorrelation(returnsA[:n], returnsB[:n])

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // PreTradeGate evaluates proposed orders against position limits, sector caps,
@@ -20,6 +22,7 @@ type PreTradeGate struct {
 	minCashBuffer    float64
 	maxCorrelation   float64
 	maxOpenPositions int
+	maturityTracker  *domain.MaturityTracker
 
 	rsiTwScore float64 // RSI-tw extreme reading score; set via SetRSITwScore
 }
@@ -49,6 +52,12 @@ func (g *PreTradeGate) MaxOpenPositions() int { return g.maxOpenPositions }
 
 func (g *PreTradeGate) SetRSITwScore(score float64) {
 	g.rsiTwScore = score
+}
+
+// WithMaturityTracker attaches a maturity tracker for burn-in gating.
+func (g *PreTradeGate) WithMaturityTracker(mt *domain.MaturityTracker) *PreTradeGate {
+	g.maturityTracker = mt
+	return g
 }
 
 // Check evaluates a proposed order against all pre-trade risk rules and returns
@@ -171,6 +180,28 @@ func (g *PreTradeGate) ruleSectorExposure(order OrderIntent, pf PortfolioState) 
 }
 
 func (g *PreTradeGate) ruleVaRLimit(_ OrderIntent, pf PortfolioState) RuleResult {
+	// Burn-in / calibrating gate: VaR requires 252 days of history.
+	// Before FULL_AUTO, pass the check but log a warning so operators
+	// know the portfolio is running with static risk thresholds.
+	if g.maturityTracker != nil {
+		m := g.maturityTracker.Current()
+		if m == domain.MaturityBurnIn || m == domain.MaturityCalibrating {
+			daysUntilFull := g.maturityTracker.DaysUntil(domain.MaturityFullAuto)
+			logging.Info("risk_gate", "var_warming",
+				"maturity", string(m),
+				"days_until_full_auto", daysUntilFull,
+				"action", "var_check_passed_static_mode")
+			return RuleResult{
+				RuleName:     "var_limit",
+				Passed:       true,
+				CurrentValue: 0,
+				Threshold:    g.varLimitPct,
+				Severity:     "INFO",
+				Message:      fmt.Sprintf("VaR warming: %d days until full_auto; using static threshold", daysUntilFull),
+			}
+		}
+	}
+
 	absVaR := math.Abs(pf.Var95)
 	pct := absVaR / pf.TotalValue
 	return RuleResult{

@@ -276,4 +276,3 @@ func TestPreTradeGate_MaxOpenPositionsSellOnExistingPosition(t *testing.T) {
 	// SELL on existing position should pass max_open_positions
 	assertRulePassed(t, dec, "max_open_positions", true)
 }
-
