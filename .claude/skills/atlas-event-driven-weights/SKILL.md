@@ -85,11 +85,13 @@ type FactorWeightEngine struct {
 }
 ```
 
-**事件驅動調整**：
-- `AI_capex_surge`：提升 Quality + Momentum
-- `US_rates_up`：提升 Value，降低 InstitutionalSentiment
-- `oil_price_shock`：降低 Liquidity + Momentum
-- Severity 對應 delta：`critical=0.10`, `high=0.05`, `medium=0.02`, `low=0.01`
+**事件驅動調整**（實作於 `factor_weight_engine.go:244` `applyEventAdjustment()`）：
+- `AI_capex_surge`：提升 Quality + Momentum + ETF + Narrative
+- `US_rates_up`：提升 Value，降低 InstSent，拉 ETF + Narrative
+- `oil_price_shock`：降低 Liquidity + Momentum，拉 IndustryCycle + ETF + Narrative
+- `JPY_carry_unwind`：降低 Liquidity + Agent，拉 ETF + Narrative
+- `gold_rally`：拉 PreciousMetals + ETF + Narrative
+- Severity 對應 delta：`critical=0.10`, `high=0.05`, `medium=0.02`, `low=0.01`（可透過 `ParametersConfig.FactorWeight` 校準）
 
 ### 6. RegimeChange 機制
 

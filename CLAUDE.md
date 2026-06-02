@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+> **語言**: 所有回覆、總結、分析與建議請使用繁體中文。
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
