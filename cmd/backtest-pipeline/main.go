@@ -44,7 +44,7 @@ func run(args []string) error {
 	}
 
 	if *synthetic {
-		return runSynthetic()
+		return runSynthetic(*modelStr)
 	}
 
 	if *dataPath == "" {
@@ -363,9 +363,9 @@ func writeResultsCSV(results []backtest.BacktestResult, featureNames []string, p
 	return nil
 }
 
-// runSynthetic generates synthetic data with known coefficients and verifies OLS recovery.
+// runSynthetic generates synthetic data with known coefficients and verifies model recovery.
 // Data generating process: y = 2*X0 + 3*X1 + noise(σ=0.5)
-func runSynthetic() error {
+func runSynthetic(modelName string) error {
 	const nSamples, nFeatures = 500, 2
 	X := make([][]float64, nSamples)
 	y := make([]float64, nSamples)
@@ -375,7 +375,10 @@ func runSynthetic() error {
 		y[i] = 2.0*X[i][0] + 3.0*X[i][1] + (rand.Float64() - 0.5)
 	}
 
-	model := ml.NewOLS()
+	model, err := newModel(modelName)
+	if err != nil {
+		return fmt.Errorf("synthetic model: %w", err)
+	}
 	if err := model.Fit(X, y); err != nil {
 		return fmt.Errorf("synthetic fit: %w", err)
 	}
@@ -385,17 +388,13 @@ func runSynthetic() error {
 	}
 
 	r2 := oosR2(y, pred)
-	fmt.Println("=== Synthetic OLS Verification ===")
+	fmt.Printf("=== Synthetic %s Verification ===\n", modelName)
 	fmt.Printf("Data: %d samples, %d features\n", nSamples, nFeatures)
 	fmt.Printf("True β: [2.00, 3.00]\n")
 	fmt.Printf("R²_OOS: %+.4f\n\n", r2)
 
-	// Check if coefficients are close to true values.
-	// OLS coefficients are stored in the first two elements of the coefficient slice
-	// (with intercept as index 0 if FitIntercept=true).
-	// Since FitIntercept is true by default, we read from index 1 and 2.
 	if r2 > 0.9 {
-		fmt.Println("✓ PASS: R² > 0.9, OLS successfully learns the linear relationship")
+		fmt.Println("✓ PASS: R² > 0.9, model successfully learns the linear relationship")
 	} else {
 		fmt.Printf("✗ WARN: R² = %.4f, expected > 0.9\n", r2)
 	}
