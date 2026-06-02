@@ -103,7 +103,7 @@ IF MacroRiskLevel = Yellow/Orange
 - `internal/risk/macro_aware_drawdown.go` - 回撤防護核心
 - `internal/risk/macro_aware_drawdown.go` - 宏觀感知回撤決策器
 - `internal/portfolio/sector_rotator.go` - 產業輪動執行器
-- `internal/portfolio/dynamic_position_sizer.go` - 動態倉位調整
+- `internal/portfolio/sizing.go` - 動態倉位調整
 
 ---
 
