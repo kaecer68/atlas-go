@@ -64,7 +64,7 @@ Portfolio (Darwinian weights) → Dashboard
 
 | 目錄 | 職責 | 關鍵檔案 |
 |------|------|---------|
-| `internal/domain/` | 領域型別 | `types.go`, `simulation.go` |
+| `internal/domain/` | 領域型別 | `types.go`, `sim.go` |
 | `internal/orchestrator/` | 流程協調 | `system.go`, `plugin_host.go`, `executors.go` |
 | `internal/sim/` | 模擬引擎 | `engine.go` |
 | `internal/experiment/` | 實驗生命週期 | `executor.go`, `judge.go`, `replay_compare.go` |

@@ -183,7 +183,7 @@ IF 宏觀風險 = 橙色
    - 計算外資出逃機率
    - 輸出 `MacroRiskLevel`（綠/黃/橙/紅）
 
-2. **DrawdownGuard** (`internal/risk/drawdown_guard.go`)
+2. **DrawdownGuard** (`internal/risk/macro_aware_drawdown.go`)
    - 接收 `MacroRiskLevel`
    - 調整回撤閾值（風險高時提前觸發）
    - 結構性機會豁免邏輯
