@@ -64,11 +64,13 @@
     },
     "estimated_size": {
       "type": "object",
-      "description": "檔案大小估計",
+      "description": "資料規模估計（檔案用 lines/bytes，目錄用 files/directories）",
       "properties": {
-        "lines": { "type": "integer" },
-        "bytes": { "type": "integer" },
-        "growth_rate": { "type": "string" }
+        "lines": { "type": "integer", "description": "JSONL/CSV 行數（檔案型資料）" },
+        "bytes": { "type": "integer", "description": "檔案大小 byte（檔案型資料）" },
+        "files": { "type": "integer", "description": "目錄內檔案數（目錄型資料）" },
+        "directories": { "type": "integer", "description": "子目錄數（目錄型資料）" },
+        "growth_rate": { "type": "string", "description": "預估成長速率，如 '~1/day'" }
       }
     },
     "retention_policy": {

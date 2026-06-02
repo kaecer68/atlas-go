@@ -62,7 +62,7 @@
       "description": "Baseline 的評判指標值"
     },
     "candidate_value": {
-      "type": "integer",
+      "type": "number",
       "description": "Candidate 的評判指標值"
     },
     "acceptance_metric": {

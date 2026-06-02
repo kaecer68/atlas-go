@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/kaecer68/atlas-go/schemas/clamping_events.schema.json",
   "title": "Clamping Event Record",
-  "description": "Darwinian 權重夾制事件記錄。每行為獨立 JSON 物件。當 agent 權重超出 [0.3, 2.5] 範圍被強制正規化時記錄。",
+  "description": "Darwinian 權重夾制事件記錄。每行為獨立 JSON 物件。當 agent 權重超出設定邊界被強制正規化時記錄。",
   "type": "object",
   "required": ["agent_id", "boundary", "timestamp"],
   "properties": {
@@ -21,7 +21,7 @@
     },
     "final_weight": {
       "type": "number",
-      "description": "夾制後的最終權重值（必定在 0.3 或 2.5）"
+      "description": "夾制後的最終權重值（必定在邊界值）"
     },
     "timestamp": {
       "type": "string",

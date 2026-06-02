@@ -16,7 +16,7 @@
       "description": "所有 agent 的權重快照（agent_id → 權重值）",
       "additionalProperties": {
         "type": "number",
-        "description": "該 agent 的 Darwinian 權重（範圍 [0.3, 2.5]）"
+        "description": "該 agent 的 Darwinian 權重（範圍由配置決定）"
       }
     }
   },

@@ -20,8 +20,8 @@
       "description": "篩選通過的標的數"
     },
     "screening_rate": {
-      "type": "integer",
-      "description": "篩選通過率（百分比整數）"
+      "type": "number",
+      "description": "篩選通過率（百分比）"
     },
     "alerts_triggered": {
       "type": "integer",
