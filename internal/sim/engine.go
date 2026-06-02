@@ -1,6 +1,7 @@
 package sim
 
 import (
+	"fmt"
 	"context"
 	"math"
 	"sort"
@@ -305,6 +306,52 @@ func (e *Engine) RunDay(
 				Amount:   float64(sd.Quantity) * sd.ExecPrice,
 				Reason:   sd.Reason,
 			})
+		}
+	}
+
+	// 2.5. Rebalancing: trim positions exceeding the pre-trade max position limit.
+	// This runs after sell logic (stop-loss/take-profit) and before buy logic,
+	// freeing capital and enforcing diversification proactively.
+	if e.preTradeGate != nil && e.preTradeGate.MaxPositionPct() > 0 {
+		totalValue := state.PortfolioValue()
+		limit := e.preTradeGate.MaxPositionPct()
+		for i := range state.Positions {
+			if state.Positions[i].Quantity <= 0 {
+				continue
+			}
+			q, ok := quoteBySymbol[state.Positions[i].Symbol]
+			if !ok || !q.IsTradable {
+				continue
+			}
+			pct := state.Positions[i].MarketValue / totalValue
+			if pct > limit {
+				excessValue := state.Positions[i].MarketValue - totalValue*limit
+				reduceQty := int(excessValue / q.Last)
+				if reduceQty > 0 && reduceQty < state.Positions[i].Quantity {
+					slippageBPS := e.getSlippageBPS(state.Positions[i].Symbol, quoteBySymbol, &fallbackEvents)
+					price := applyBPS(q.Last, -(slippageBPS + e.constraints.TransactionCostBPS))
+					proceeds := float64(reduceQty) * price
+					state.Cash += proceeds
+					state.Positions[i].Quantity -= reduceQty
+					state.Positions[i].MarketValue = float64(state.Positions[i].Quantity) * q.Last
+					state.RealizedPnL += float64(reduceQty) * (price - state.Positions[i].AverageCost)
+					orders = append(orders, domain.Order{
+						Symbol:   state.Positions[i].Symbol,
+						Side:     domain.SideSell,
+						Quantity: reduceQty,
+						Price:    price,
+						Reason:   fmt.Sprintf("rebalance: %.1f%% > %.0f%%", pct*100, limit*100),
+					})
+					trades = append(trades, domain.TradeRecord{
+						Symbol:   state.Positions[i].Symbol,
+						Side:     domain.SideSell,
+						Quantity: reduceQty,
+						Price:    price,
+						Amount:   proceeds,
+						Reason:   "rebalance_trim",
+					})
+				}
+			}
 		}
 	}
 
