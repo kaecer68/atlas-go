@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/kaecer68/atlas-go/schemas/experiments.schema.json",
+  "title": "Experiment Record",
+  "description": "實驗生命週期記錄。每行為獨立 JSON 物件，以 O_APPEND 模式寫入。包含突變提案、執行狀態、評判結果與 promotion/revert 決策。",
+  "type": "object",
+  "required": ["id", "status", "mutation_type", "target_agent_id"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "實驗唯一識別碼"
+    },
+    "proposal_id": {
+      "type": "string",
+      "description": "對應的突變提案 ID"
+    },
+    "approval_id": {
+      "type": "string",
+      "description": "核准 ID"
+    },
+    "status": {
+      "type": "string",
+      "description": "實驗狀態",
+      "enum": ["proposed", "running", "completed", "accepted", "rejected", "reverted"]
+    },
+    "mutation_type": {
+      "type": "string",
+      "description": "突變類型，如 'prompt'、'risk'、'constraint'"
+    },
+    "target_agent_id": {
+      "type": "string",
+      "description": "目標 agent 識別碼"
+    },
+    "skill": {
+      "type": "string",
+      "description": "agent 的 skill 標籤"
+    },
+    "hypothesis": {
+      "type": "string",
+      "description": "實驗假設描述"
+    },
+    "prompt_version_from": {
+      "type": "string",
+      "description": "變更前的 prompt 版本"
+    },
+    "prompt_version_to": {
+      "type": "string",
+      "description": "變更後的 prompt 版本"
+    },
+    "window_start": {
+      "type": "string",
+      "description": "回測視窗開始日期",
+      "format": "date"
+    },
+    "window_end": {
+      "type": "string",
+      "description": "回測視窗結束日期",
+      "format": "date"
+    },
+    "baseline_value": {
+      "type": "number",
+      "description": "Baseline 的評判指標值"
+    },
+    "candidate_value": {
+      "type": "integer",
+      "description": "Candidate 的評判指標值"
+    },
+    "acceptance_metric": {
+      "type": "string",
+      "description": "驗收指標名稱"
+    },
+    "acceptance_gates": {
+      "type": ["object", "null"],
+      "description": "驗收閘門結果（可能為 null 表示未評判）"
+    },
+    "revert_reason": {
+      "type": "string",
+      "description": "回退原因（若 status 為 reverted）"
+    },
+    "commit_id": {
+      "type": "string",
+      "description": "對應的 git commit ID"
+    }
+  },
+  "additionalProperties": true
+}
