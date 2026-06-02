@@ -292,10 +292,10 @@ func (ETFRotationExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote,
 			base = 65
 			reason = "safe-haven gold ETF in risk-off regime"
 		case "dividend", "defensive":
-			base = 60
+			base = 50
 			reason = "defensive dividend ETF in risk-off regime"
 		default:
-			base = 45
+			base = 50
 			reason = "equity ETF penalized in risk-off regime"
 		}
 	case domain.RegimeRiskOn:
@@ -314,6 +314,10 @@ func (ETFRotationExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote,
 			reason = "diversified ETF in risk-on regime"
 		}
 	default:
+		switch etfType {
+		case "dividend", "defensive":
+			base = 50
+		}
 		if quote.Last > quote.Open {
 			reason = "balanced ETF allocation with positive momentum in neutral regime"
 		} else {

@@ -2,9 +2,12 @@ package orchestrator
 
 import (
 	"context"
+	"encoding/csv"
 	"fmt"
 	"math"
+	"os"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -440,7 +443,31 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 				}
 				continue
 			}
-			rec, ok := plugins.Recommendation(agent, quote, prompt, regime, factorSnapshot)
+			// Factor quality gate: skip symbols with low pre-computed factor scores
+		if factorSnapshot != nil {
+			var preTotal float64
+			var preCount int
+			if s, ok := factorSnapshot.GetScore(symbol, portfolio.FactorMomentum); ok {
+				preTotal += s
+				preCount++
+			}
+			if s, ok := factorSnapshot.GetScore(symbol, portfolio.FactorValue); ok {
+				preTotal += s
+				preCount++
+			}
+			if s, ok := factorSnapshot.GetScore(symbol, portfolio.FactorQuality); ok {
+				preTotal += s
+				preCount++
+			}
+			if s, ok := factorSnapshot.GetScore(symbol, portfolio.FactorLiquidity); ok {
+				preTotal += s
+				preCount++
+			}
+			if preCount > 0 && preTotal/float64(preCount) < 40 {
+				continue
+			}
+		}
+		rec, ok := plugins.Recommendation(agent, quote, prompt, regime, factorSnapshot)
 			if !ok {
 				continue
 			}
@@ -941,29 +968,38 @@ func DefaultExecutionPolicy() domain.ExecutionPolicy {
 }
 
 func DefaultSymbols() []string {
-	return []string{
+	base := []string{
 		"2330.TW",
 		"2317.TW",
 		"2382.TW",
+		"2345.TW",
+		"2412.TW",
 		"2454.TW",
 		"2303.TW",
 		"2308.TW",
 		"3008.TW",
 		"3034.TW",
 		"3037.TW",
+		"3711.TW",
 		"6669.TW",
 		"2603.TW",
 		"2609.TW",
 		"2615.TW",
 		"2881.TW",
 		"2882.TW",
+		"2884.TW",
+		"2885.TW",
 		"2886.TW",
+		"2887.TW",
 		"2891.TW",
 		"2892.TW",
 		"1301.TW",
 		"1303.TW",
 		"1326.TW",
 		"0050.TW",
+		"0051.TW",
+		"0052.TW",
+		"0053.TW",
 		"0056.TW",
 		"00878.TW",
 		"006208.TW",
@@ -975,6 +1011,65 @@ func DefaultSymbols() []string {
 		"00929.TW",
 		"00940.TW",
 	}
+
+	// Auto-sync: merge symbols from replay CSV if available
+	csvSymbols := loadSymbolsFromCSV("data/replay/tw_extended_90days.csv")
+	if len(csvSymbols) > 0 {
+		seen := make(map[string]bool)
+		for _, s := range base {
+			seen[s] = true
+		}
+		for _, s := range csvSymbols {
+			if !seen[s] {
+				base = append(base, s)
+				seen[s] = true
+			}
+		}
+	}
+	return base
+}
+
+func loadSymbolsFromCSV(path string) []string {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	r := csv.NewReader(f)
+	header, err := r.Read()
+	if err != nil {
+		return nil
+	}
+	// Find "symbol" column
+	symIdx := -1
+	for i, col := range header {
+		if strings.EqualFold(strings.TrimSpace(col), "symbol") {
+			symIdx = i
+			break
+		}
+	}
+	if symIdx < 0 {
+		return nil
+	}
+	seen := make(map[string]bool)
+	for {
+		record, err := r.Read()
+		if err != nil {
+			break
+		}
+		if symIdx < len(record) {
+			sym := strings.TrimSpace(record[symIdx])
+			if sym != "" {
+				seen[sym] = true
+			}
+		}
+	}
+	result := make([]string, 0, len(seen))
+	for s := range seen {
+		result = append(result, s)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func RegistrySymbols(registry domain.AgentRegistry) []string {
