@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 // SiliconCyclePhase represents the phase of the semiconductor industry cycle.
@@ -113,18 +114,42 @@ func defaultSiliconCycleParams() SiliconCycleParams {
 }
 
 // getSiliconParams returns silicon cycle parameters from config or defaults.
-// Follows the same pattern as defaultCycleThresholds() in cycle.go.
+// Overlays ParametersConfig.Industry.SiliconCycle values on top of
+// defaultSiliconCycleParams() — any non-zero config value overrides the default.
 func getSiliconParams() SiliconCycleParams {
 	params := defaultSiliconCycleParams()
 	cfg := config.GetParametersConfig()
 	if cfg == nil {
 		return params
 	}
-	// Override with config-driven values if available.
-	// In a future integration, SiliconCycle thresholds would be added to
-	// ParametersConfig.Industry as a ParameterMetadata[SiliconCycleParams] field.
-	// For now, use the defaults as the authoritative source.
-	_ = cfg // config is available but silicon-specific fields pending integration
+	sc := cfg.Industry.SiliconCycle.Value
+	if sc.RevenueYoYThreshold != 0 {
+		params.RevenueYoYThreshold = sc.RevenueYoYThreshold
+	}
+	if sc.BillingsYoYThreshold != 0 {
+		params.BillingsYoYThreshold = sc.BillingsYoYThreshold
+	}
+	if sc.DRAMStabilizationThreshold != 0 {
+		params.DRAMStabilizationThreshold = sc.DRAMStabilizationThreshold
+	}
+	if sc.BillingsStabilizationThreshold != 0 {
+		params.BillingsStabilizationThreshold = sc.BillingsStabilizationThreshold
+	}
+	if sc.IndexMAPercentThreshold != 0 {
+		params.IndexMAPercentThreshold = sc.IndexMAPercentThreshold
+	}
+	if sc.SOXExtremeThreshold != 0 {
+		params.SOXExtremeThreshold = sc.SOXExtremeThreshold
+	}
+	if sc.CapexCutThreshold != 0 {
+		params.CapexCutThreshold = sc.CapexCutThreshold
+	}
+	if sc.MinConfidence != 0 {
+		params.MinConfidence = sc.MinConfidence
+	}
+	if sc.HistoryWindowSize != 0 {
+		params.HistoryWindowSize = sc.HistoryWindowSize
+	}
 	return params
 }
 
@@ -259,6 +284,14 @@ func GetPhaseDescription(phase SiliconCyclePhase) string {
 
 // GetPhaseScore returns a normalized score from 0.0 to 1.0 for each phase.
 // Higher scores indicate more favorable conditions for semiconductor investment.
+//
+// Parameter convention: these scores are derivation values — they encode the
+// semantic meaning of each phase, not tunable calibration targets. Changing
+// them would change what "expansion" / "recovery" / "overheat" / "contraction"
+// mean for the entire system. If a calibration exercise suggests the scores need
+// adjustment, the first question is whether the phase detection thresholds
+// (SiliconCycleParameters) or the state transition rules (evaluateTransition)
+// should be recalibrated instead.
 func GetPhaseScore(phase SiliconCyclePhase) float64 {
 	switch phase {
 	case PhaseExpansionConfirmed:
@@ -275,6 +308,14 @@ func GetPhaseScore(phase SiliconCyclePhase) float64 {
 }
 
 // GetTypicalDuration returns the typical duration in days for each phase.
+// Durations are drawn from historical semiconductor cycle analysis (1995-2024):
+// recovery ~3 months, expansion ~12 months, overheat ~4 months, contraction ~6 months.
+//
+// Parameter convention: these are descriptive statistics, not predictive tuning knobs.
+// The actual phase duration is determined by the state machine transition rules
+// (evaluateTransition), which react to indicator data. Changing duration estimates
+// does not change the state machine behavior. These values serve only as informational
+// guidance in the UI (e.g., "典型持續時間：360 天").
 func GetTypicalDuration(phase SiliconCyclePhase) int {
 	switch phase {
 	case PhaseBottomRecovery:
@@ -295,6 +336,13 @@ func GetTypicalDuration(phase SiliconCyclePhase) int {
 // Phase 1 (expansion): 1.10 — strongest allocation
 // Phase 2 (overheat):  0.90 — reduce exposure
 // Phase 3 (contraction): 0.85 — defensive underweight
+//
+// Parameter convention: these multipliers form a fixed coefficient curve derived
+// from the phase semantics. They are not independently tunable via ParametersConfig
+// because the ±15% band around 1.0 is structurally coupled to the Darwinian weight
+// clamping range [0.3, 2.5]. Widening the multipliers would risk saturating the
+// Darwinian bounds; narrowing would make cycle-based allocation meaningless.
+// Recalibration should target phase detection accuracy rather than multiplier values.
 func GetPhaseWeightMultiplier(phase SiliconCyclePhase) float64 {
 	switch phase {
 	case PhaseBottomRecovery:
@@ -361,4 +409,28 @@ func (e *SiliconCycleTracker) String() string {
 	defer e.mu.RUnlock()
 	return fmt.Sprintf("SiliconCycle: Phase=%s(%d), Transitions=%d",
 		e.currentPhase.String(), e.currentPhase, len(e.history))
+}
+
+// ExtractSiliconIndicators maps a MacroDataSnapshot to SiliconIndicators for
+// phase detection. TSMC revenue and SOX index data are sourced from the macro
+// snapshot (ChangePct is a percentage like 15.5 → divided by 100 to yield 0.155).
+//
+// Four indicators are pending dedicated data providers and default to 0.0 (neutral):
+//   - GlobalSemiconductorBillingsYoY: requires WSTS billings API (not yet available)
+//   - DRAMSpotPriceTrend: requires DRAMeXchange / InSpectrum API (not yet available)
+//   - TaiwanSemiconductorIndexMA: requires TWSE semiconductor sub-index (TAISEMI)
+//   - TSMCCapexGuidance: requires TSMC quarterly capex guidance data (not yet available)
+//
+// Neutral values (0.0) for these fields mean they will not trigger state transitions
+// on their own; the state machine relies on the two available indicators plus the
+// hysteresis built into the 4-phase structure.
+func ExtractSiliconIndicators(snap marketdata.MacroDataSnapshot) SiliconIndicators {
+	return SiliconIndicators{
+		TSMCMonthlyRevenueYoY:          snap.TSMCRevenue.ChangePct / 100.0,
+		GlobalSemiconductorBillingsYoY: 0.0, // TODO: WSTS billings provider (pending API integration)
+		DRAMSpotPriceTrend:             0.0, // TODO: DRAM price provider (pending API integration)
+		TaiwanSemiconductorIndexMA:     0.0, // TODO: TWSE semiconductor sub-index provider (pending integration)
+		TSMCCapexGuidance:              0.0, // TODO: TSMC quarterly capex guidance provider (pending integration)
+		PhiladelphiaSOXIndexYoY:        snap.SOXIndex.ChangePct / 100.0,
+	}
 }

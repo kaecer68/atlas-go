@@ -476,6 +476,10 @@ type IndustryParameters struct {
 	SiliconCycle       ParameterMetadata[SiliconCycleParameters] `json:"silicon_cycle"`
 	EventCalendarRules ParameterMetadata[[]EventCalendarRule]    `json:"event_calendar_rules"`
 
+	// EventSentimentCap limits the per-event sentiment adjustment to prevent
+	// any single calendar event from dominating the composite signal.
+	EventSentimentCap ParameterMetadata[float64] `json:"event_sentiment_cap"`
+
 	// CompositeCard holds tunable parameters for building the CycleStatusCard composite sentiment gauge.
 	CompositeCard ParameterMetadata[CompositeCardConfig] `json:"composite_card"`
 
@@ -751,15 +755,21 @@ type DynamicEnvConfig struct {
 }
 
 // SiliconCycleParameters holds thresholds for semiconductor silicon cycle phase detection.
+// Field names correspond 1:1 with SiliconCycleParams in internal/industry/silicon_cycle.go,
+// plus two forward-looking fields (InventoryDaysThreshold, UtilizationThreshold) reserved
+// for future inventory-based and capacity-utilization-based cycle detection layers.
 type SiliconCycleParameters struct {
-	RevenueYoYThreshold     float64 `json:"revenue_yoy_threshold"`
-	BillingsYoYThreshold    float64 `json:"billings_yoy_threshold"`
-	InventoryDaysThreshold  float64 `json:"inventory_days_threshold"`
-	UtilizationThreshold    float64 `json:"utilization_threshold"`
-	IndexMAPercentThreshold float64 `json:"index_ma_percent_threshold"`
-	SOXExtremeThreshold     float64 `json:"sox_extreme_threshold"`
-	CapexCutThreshold       float64 `json:"capex_cut_threshold"`
-	MinConfidence           float64 `json:"min_confidence"`
+	RevenueYoYThreshold            float64 `json:"revenue_yoy_threshold"`
+	BillingsYoYThreshold           float64 `json:"billings_yoy_threshold"`
+	DRAMStabilizationThreshold     float64 `json:"dram_stabilization_threshold"`
+	BillingsStabilizationThreshold float64 `json:"billings_stabilization_threshold"`
+	InventoryDaysThreshold         float64 `json:"inventory_days_threshold"`
+	UtilizationThreshold           float64 `json:"utilization_threshold"`
+	IndexMAPercentThreshold        float64 `json:"index_ma_percent_threshold"`
+	SOXExtremeThreshold            float64 `json:"sox_extreme_threshold"`
+	CapexCutThreshold              float64 `json:"capex_cut_threshold"`
+	MinConfidence                  float64 `json:"min_confidence"`
+	HistoryWindowSize              int     `json:"history_window_size"`
 }
 
 // EventCalendarRule defines a Taiwan market calendar event rule
@@ -2622,6 +2632,14 @@ func mergeIndustryDefaults(cfg *ParametersConfig) {
 	}
 	if i.HistoryRetentionDays.Value == 0 {
 		i.HistoryRetentionDays = def.HistoryRetentionDays
+	}
+	if i.SiliconCycle.Value.RevenueYoYThreshold == 0 &&
+		i.SiliconCycle.Value.BillingsYoYThreshold == 0 &&
+		i.SiliconCycle.Value.IndexMAPercentThreshold == 0 {
+		i.SiliconCycle = def.SiliconCycle
+	}
+	if i.EventSentimentCap.Value == 0 {
+		i.EventSentimentCap = def.EventSentimentCap
 	}
 }
 

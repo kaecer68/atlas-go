@@ -377,6 +377,7 @@ body { display: flex; margin: 0; min-height: 100vh; }
   .text-up { color: var(--up); }
   .text-warn { color: var(--warn); }
   .text-accent { color: var(--accent); }
+.cursor-pointer { cursor: pointer; }
   .live-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 1fr); gap: var(--space-md); align-items: start; }
   @media (max-width: 900px) { .live-grid { grid-template-columns: 1fr; } }
   .panel--compact { padding: 10px var(--space-md); }

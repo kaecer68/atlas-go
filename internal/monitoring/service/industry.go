@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -10,15 +11,16 @@ import (
 )
 
 type IndustryService struct {
-	Classifier       *industry.ClassificationTree
-	SeasonalEngine   *industry.SeasonalEngine
-	CycleTracker     *industry.CycleTracker
-	LinkageAnalyzer  *industry.LinkageAnalyzer
-	RiskMonitor      *industry.RiskMonitor
-	SiliconTracker   *industry.SiliconCycleTracker
-	EventCalendar    *industry.EventCalendar
-	CardBuilder      *industry.CycleStatusCardBuilder
-	CycleCalibration *industry.CycleCalibration
+	Classifier        *industry.ClassificationTree
+	SeasonalEngine    *industry.SeasonalEngine
+	CycleTracker      *industry.CycleTracker
+	LinkageAnalyzer   *industry.LinkageAnalyzer
+	RiskMonitor       *industry.RiskMonitor
+	SiliconTracker    *industry.SiliconCycleTracker
+	EventCalendar     *industry.EventCalendar
+	CardBuilder       *industry.CycleStatusCardBuilder
+	CycleCalibration  *industry.CycleCalibration
+	siliconAggregator *industry.SiliconDataAggregator
 }
 
 func NewIndustryService(
@@ -948,6 +950,26 @@ func (s *IndustryService) BuildIndustryCycleStatusCard(now time.Time, industryID
 		return nil, fmt.Errorf("card builder not initialized")
 	}
 	return s.CardBuilder.BuildCard(now, industryID)
+}
+
+// SetMacroProvider wires a MacroDataProvider into the silicon cycle aggregator
+// so that scheduled silicon indicator updates can pull real TSMC/SOX data.
+// Safe to call multiple times; each call rebuilds the aggregator with the
+// latest provider.
+func (s *IndustryService) SetMacroProvider(mp marketdata.MacroDataProvider) {
+	if s.SiliconTracker != nil {
+		s.siliconAggregator = industry.NewSiliconDataAggregator(s.SiliconTracker, mp)
+	}
+}
+
+// UpdateSiliconIndicators triggers a refresh of silicon cycle indicators
+// from the configured macro provider. When no aggregator is initialized
+// (SetMacroProvider not yet called), it returns nil (no-op).
+func (s *IndustryService) UpdateSiliconIndicators(ctx context.Context) error {
+	if s.siliconAggregator == nil {
+		return nil // no-op: aggregator not wired
+	}
+	return s.siliconAggregator.AggregateSiliconIndicators(ctx)
 }
 
 // SetCycleCalibration injects the calibration tracker and wires it into

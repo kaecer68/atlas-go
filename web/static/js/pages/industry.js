@@ -185,7 +185,7 @@ export function renderCycleStatusCard(card) {
   const indicators = card.silicon_indicators || {};
   const indicatorEntries = Object.entries(indicators);
   if (indicatorEntries.length > 0) {
-    html += `<table style="font-size:11px"><thead><tr><th>指標</th><th>值</th><th>趨勢</th></tr></thead><tbody>`;
+    html += `<div class="table-wrapper"><table style="font-size:11px"><thead><tr><th>指標</th><th>值</th><th>趨勢</th></tr></thead><tbody>`;
     indicatorEntries.forEach(([key, raw]) => {
       const value = raw && typeof raw === "object" ? raw.value : raw;
       const trend = raw && typeof raw === "object" ? raw.trend : value;
@@ -193,7 +193,7 @@ export function renderCycleStatusCard(card) {
       const color = arrow === "↑" ? "var(--up)" : arrow === "↓" ? "var(--down)" : "var(--muted)";
       html += `<tr><td>${key}</td><td>${typeof value === "number" ? value.toFixed(2) : value}</td><td style="color:${color};font-weight:800">${arrow}</td></tr>`;
     });
-    html += `</tbody></table>`;
+    html += `</tbody></table></div>`;
   } else {
     html += `<div style="font-size:11px;color:var(--muted);padding:8px;border:1px dashed var(--border);border-radius:8px">尚無矽循環指標明細</div>`;
   }

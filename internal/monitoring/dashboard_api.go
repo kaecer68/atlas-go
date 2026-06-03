@@ -280,15 +280,35 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 	// During recession, correlations rise (Ang & Chen 2002)
 	linkageAnalyzer.SetCycleProvider(cycleTracker)
 
+	siliconTracker := industry.NewSiliconCycleTracker()
+
 	svc := service.NewIndustryService(
 		industry.DefaultClassification(),
 		seasonalEngine,
 		cycleTracker,
 		linkageAnalyzer,
 		industry.NewRiskMonitor(),
-		nil, // siliconTracker
+		siliconTracker,
 		newWiredEventCalendar(marketdata.NewTWSECalendarProvider()), // eventCalendar with TWSE provider
 	)
+
+	// Wire the macro provider into the silicon cycle aggregator so that
+	// scheduled silicon_cycle_update tasks can pull real TSMC/SOX data.
+	svc.SetMacroProvider(macroProvider)
+
+	// Bootstrap silicon tracker with the initial macro snapshot so the
+	// cycle status card has non-zero indicators from the first request.
+	if macroProvider != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if snap, err := macroProvider.FetchSnapshot(ctx); err == nil {
+			indicators := industry.ExtractSiliconIndicators(snap)
+			siliconTracker.DetectPhase(time.Now(), indicators)
+			cancel()
+		} else {
+			cancel()
+			logging.Warn("monitoring", "silicon_bootstrap_failed", "err", err)
+		}
+	}
 
 	replayPath := config.Load().ReplayDataPath
 	if replayPath != "" {
@@ -374,6 +394,13 @@ func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.Na
 	// so that seasonal adjustments reflect real-time macro conditions.
 	if a.industryService != nil && a.industryService.SeasonalEngine != nil {
 		a.industryService.SeasonalEngine.UpdateDynamicEnv(snap)
+	}
+
+	// Update silicon cycle tracker with fresh TSMC revenue and SOX index data
+	// so the cycle status card reflects the latest macro snapshot.
+	if a.industryService != nil && a.industryService.SiliconTracker != nil {
+		indicators := industry.ExtractSiliconIndicators(snap)
+		a.industryService.SiliconTracker.DetectPhase(time.Now(), indicators)
 	}
 	return events, snap, err
 }
@@ -808,6 +835,18 @@ func (a *DashboardAPI) GetLatestDrawdown() *portfolio.DrawdownResult {
 
 func (a *DashboardAPI) GetIndustryService() *service.IndustryService {
 	return a.industryService
+}
+
+// RecordCycleCalibrationOutcome stores a calibration data point for the
+// cycle layer accuracy tracker. Called by the backtest pipeline after
+// daily returns are computed. Safe when industryService or CycleCalibration
+// is nil — the call is silently dropped.
+func (a *DashboardAPI) RecordCycleCalibrationOutcome(
+	sessionID string, date time.Time, layerSignals map[string]float64, actualReturn float64,
+) {
+	if a.industryService != nil {
+		a.industryService.RecordCycleCalibrationOutcome(sessionID, date, layerSignals, actualReturn)
+	}
 }
 
 func (a *DashboardAPI) RegisterTaskExecRoutes(mux *http.ServeMux) {
