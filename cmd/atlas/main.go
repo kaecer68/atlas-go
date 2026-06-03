@@ -1084,7 +1084,7 @@ func run(args []string, deps appDeps) error {
 					// Record cycle calibration outcome for layer accuracy tracking.
 					// Uses the composite card sentiment signals against the actual
 					// portfolio return to measure which layers were directionally correct.
-					if dashboard != nil {
+					if dashboard != nil && dashboard.GetIndustryService() != nil {
 						card, cardErr := dashboard.GetIndustryService().BuildCycleStatusCard(nextClose)
 						if cardErr == nil && card != nil {
 							signals := map[string]float64{
