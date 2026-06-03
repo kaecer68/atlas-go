@@ -102,7 +102,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	logging.Info("apigateway", "adapter_registered", "channel", "jpy_yahoo")
 
 	// --- TSMC Revenue (FinMind, requires API key) ---
-	tsmcProvider := marketdata.NewTSMCRevenueProvider(cfg.FinMindAPIKey)
+	tsmcProvider := marketdata.NewTSMCRevenueProviderWithStorage(cfg.FinMindAPIKey, filepath.Join(workDir, "data/state/tsmc_revenue"))
 	tsmcAdapter := NewTSMCRevenueChannelAdapter(tsmcProvider)
 	g.registry.Register("tsmc_revenue", tsmcAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "tsmc_revenue")

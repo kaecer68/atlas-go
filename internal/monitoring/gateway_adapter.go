@@ -191,18 +191,14 @@ func (a *macroDataGatewayAdapter) applyExport(snap *marketdata.MacroDataSnapshot
 }
 
 func (a *macroDataGatewayAdapter) applyTSMCRevenue(snap *marketdata.MacroDataSnapshot, data []byte) {
-	var s marketdata.MacroDataSnapshot
-	if err := json.Unmarshal(data, &s); err != nil {
+	// The TSMC revenue adapter marshals a single MacroDataPoint (not a full
+	// MacroDataSnapshot), so we must unmarshal into MacroDataPoint.
+	var point marketdata.MacroDataPoint
+	if err := json.Unmarshal(data, &point); err != nil {
 		return
 	}
-	if s.TSMCRevenue.Symbol != "" {
-		snap.TSMCRevenue = s.TSMCRevenue
-	}
-	if s.CoWoSUtilization.Symbol != "" {
-		snap.CoWoSUtilization = s.CoWoSUtilization
-	}
-	if s.CapexGrowth.Symbol != "" {
-		snap.CapexGrowth = s.CapexGrowth
+	if point.Symbol != "" {
+		snap.TSMCRevenue = point
 	}
 }
 
