@@ -34,7 +34,7 @@ Caller → gateway.Fetch(channelID)
 | **禁止裸 http.Client** | 所有外部資料抓取必須經 `gateway.Fetch(channelID)`，違者擋 PR |
 | **新通道必須註冊兩處** | `limits.go` 加限速 + `gateway.go` 的 `channelIDs()` 加列舉 |
 | **禁止裸 goroutine 定時任務** | 所有排程必須用 `BackgroundTaskManager`，參見 `CONSTITUTION.md` 第四條 |
-| **jpy_yahoo 與 us_yahoo 共用限速器** | 同一 Yahoo Finance endpoint，流量會互相影響 |
+| **frankfurter_fx 使用獨立限速器** | Frankfurter API (api.frankfurter.app) 獨立限速，不再與 us_yahoo 共用 |
 | **janus_regime / sector_data 無限速** | `rate.Inf` 標記，不會觸發等待 |
 | **overlap 保護跳過執行** | 前次任務未結束時，新週期直接 skip，需檢查 log 確認 |
 | **CONSTITUTION.md 六條憲法** | CI 強制檢查，違反直接拒絕合併 |

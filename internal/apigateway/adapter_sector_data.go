@@ -43,7 +43,20 @@ func (a *SectorDataChannelAdapter) Fetch(ctx context.Context) (*FetchResult, err
 }
 
 func (a *SectorDataChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
-	return HealthStatus{Status: "ok", CheckType: "readiness", UpdatedAt: time.Now().Format(time.RFC3339)}, nil
+	_, err := a.provider.FetchSnapshot(ctx)
+	if err != nil {
+		return HealthStatus{
+			Status:    "error",
+			LastError: err.Error(),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "liveness",
+		}, err
+	}
+	return HealthStatus{
+		Status:    "ok",
+		UpdatedAt: time.Now().Format(time.RFC3339),
+		CheckType: "liveness",
+	}, nil
 }
 
 func (a *SectorDataChannelAdapter) RateLimit() *rate.Limiter { return a.limiter }

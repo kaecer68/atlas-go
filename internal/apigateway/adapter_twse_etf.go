@@ -39,17 +39,30 @@ func (a *TWSEETFChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error)
 		return nil, fmt.Errorf("twse etf marshal: %w", err)
 	}
 	return &FetchResult{Data: data, Meta: FetchMetadata{
-		ChannelID: "twse-etf", LatencyMs: time.Since(start).Milliseconds(),
+		ChannelID: "twse_etf", LatencyMs: time.Since(start).Milliseconds(),
 		Timestamp: time.Now(),
 	}}, nil
 }
 
 func (a *TWSEETFChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
-	return HealthStatus{Status: "ok", CheckType: "liveness", UpdatedAt: time.Now().Format(time.RFC3339)}, nil
+	_, err := a.provider.FetchLatest(ctx)
+	if err != nil {
+		return HealthStatus{
+			Status:    "error",
+			LastError: err.Error(),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "liveness",
+		}, err
+	}
+	return HealthStatus{
+		Status:    "ok",
+		UpdatedAt: time.Now().Format(time.RFC3339),
+		CheckType: "liveness",
+	}, nil
 }
 
 func (a *TWSEETFChannelAdapter) RateLimit() *rate.Limiter { return a.limiter }
 
 func (a *TWSEETFChannelAdapter) Metadata() ChannelMetadata {
-	return ChannelMetadata{ChannelID: "twse-etf", Country: "台灣", Platform: "TWSE", APIFormat: "REST JSON", Path: "www.twse.com.tw/exchangeReport/TWT44U", HasLimiter: true}
+	return ChannelMetadata{ChannelID: "twse_etf", Country: "台灣", Platform: "TWSE", APIFormat: "REST JSON", Path: "www.twse.com.tw/exchangeReport/TWT44U", HasLimiter: true}
 }

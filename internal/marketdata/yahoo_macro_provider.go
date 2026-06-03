@@ -48,13 +48,14 @@ func (y *YahooFinanceMacroProvider) Name() string {
 func (y *YahooFinanceMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
 	// ^BDIY (Baltic Dry Index) is not available on Yahoo Finance.
 	// See https://github.com/ranaroussi/yfinance/issues/1667
+	// JPY=X has been removed from this provider — frankfurter_fx channel
+	// is now the sole authoritative source for USD/JPY via api.frankfurter.app.
 	symbols := map[string]string{
 		"DX-Y.NYB": "dxy",
 		"^TNX":     "us10y",
 		"^VIX":     "vix",
 		"CL=F":     "oil",
 		"GC=F":     "gold",
-		"JPY=X":    "jpy",
 		"USDTWD=X": "usd_twd",
 		"SI=F":     "silver",
 		"HG=F":     "copper",

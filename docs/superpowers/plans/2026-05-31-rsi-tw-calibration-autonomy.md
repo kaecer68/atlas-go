@@ -28,7 +28,7 @@
 
 #### 原因 1：資料饋送不完整
 - `GeopoliticalRisk` 在 `handlers.go:204` **硬編碼為 0**
-- Gateway channels (`taifex-daily`, `twse-oddlot`, `twse-etf`) 若回傳錯誤，fetcher 回傳 nil，子指標全部 fallback 到 0.5
+- Gateway channels (`taifex_daily`, `twse_oddlot`, `twse_etf`) 若回傳錯誤，fetcher 回傳 nil，子指標全部 fallback 到 0.5
 - **無監控機制**顯示哪些 fetcher 成功/失敗
 
 #### 原因 2：參數全部為啟發式預設值
@@ -151,9 +151,9 @@
 - [ ] 前端顯示資料來源健康狀態（🟢/🟡/🔴）
 
 ### 3.3 Gateway Channel 驗證
-- [ ] 確認 `taifex-daily` channel 已註冊且提供真實數據
-- [ ] 確認 `twse-oddlot` channel 已註冊且提供真實數據
-- [ ] 確認 `twse-etf` channel 已註冊且提供真實數據
+- [ ] 確認 `taifex_daily` channel 已註冊且提供真實數據
+- [ ] 確認 `twse_oddlot` channel 已註冊且提供真實數據
+- [ ] 確認 `twse_etf` channel 已註冊且提供真實數據
 - [ ] 若 Gateway channel 返回錯誤，記錄詳細錯誤原因（而非靜默 fallback）
 
 ### 3.4 `CreditTightening` 信號

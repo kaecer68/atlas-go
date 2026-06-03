@@ -115,10 +115,10 @@ const (
 yahooLimiter := rate.NewLimiter(YahooFinanceRate, 1)
 
 registry.Register("us_yahoo", provider, yahooLimiter)
-registry.Register("jpy_yahoo", provider, yahooLimiter)
+registry.Register("frankfurter_fx", provider, fxLimiter)  // 獨立 limiter，非 Yahoo endpoint
 
 // ❌ 違規：各自獨立 limiteregistry.Register("us_yahoo", provider, rate.NewLimiter(YahooFinanceRate, 1))
-registry.Register("jpy_yahoo", provider, rate.NewLimiter(YahooFinanceRate, 1))
+registry.Register("frankfurter_fx", provider, rate.NewLimiter(YahooFinanceRate, 1))
 ```
 
 ---
@@ -484,12 +484,12 @@ echo "✅ os.Getenv 檢查通過"
 | fugle | 60/min | Liveness | 否 | ✅ |
 | fubon | Per-min | Liveness | 否 | ✅ |
 | finmind | 6/s (免費) | Liveness | 否 | ✅ |
-| jpy_yahoo | 共享 1/s | Liveness | 否 | ✅ |
-| geopolitical | 1/10s | Liveness | ✅ (6h) | ✅ |
+| frankfurter_fx | 1/10s (獨立) | Liveness | 否 | ✅ |
+| geopolitical | 1/min | Liveness | ✅ (6h) | ✅ |
 | twse_margin | 1/5s | Readiness | ✅ (30min) | ✅ |
 | export_statistics | 1/5s | Readiness | ✅ (12h) | ✅ |
 | tsmc_revenue | 繼承 FinMind | Liveness | ✅ (24h) | ✅ |
-| geopolitical_taiwan | 1/10s | Liveness | ✅ (6h) | ✅ |
+| geopolitical_taiwan | 1/min | Liveness | ✅ (6h) | ✅ |
 | janus_regime | 不限流 | Computed | 否 | ❌ |
 | tej | Per-sec + daily | Liveness | 否 | ✅ |
 | exchange_rate | 1/5s | Liveness | 否 | ❌ |

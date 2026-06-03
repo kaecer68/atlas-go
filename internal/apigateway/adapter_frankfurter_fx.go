@@ -11,36 +11,36 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
-// JPYYahooChannelAdapter fetches USD/JPY exchange rate via Frankfurter API.
-// Note: Despite the historical channel name "jpy_yahoo", this adapter uses
-// the Frankfurter foreign exchange API (api.frankfurter.app), not Yahoo Finance.
-type JPYYahooChannelAdapter struct {
+// FrankfurterFXChannelAdapter fetches USD/JPY exchange rate via Frankfurter API
+// (api.frankfurter.app). This is the authoritative JPY source — us_yahoo no longer
+// fetches JPY=X to avoid data overlap.
+type FrankfurterFXChannelAdapter struct {
 	provider *marketdata.FrankfurterFXProvider
 	limiter  *rate.Limiter
 }
 
-// NewJPYYahooChannelAdapter creates a new adapter for the JPY Yahoo channel.
-func NewJPYYahooChannelAdapter(provider *marketdata.FrankfurterFXProvider) *JPYYahooChannelAdapter {
-	return &JPYYahooChannelAdapter{
+// NewFrankfurterFXChannelAdapter creates a new adapter for the Frankfurter FX channel.
+func NewFrankfurterFXChannelAdapter(provider *marketdata.FrankfurterFXProvider) *FrankfurterFXChannelAdapter {
+	return &FrankfurterFXChannelAdapter{
 		provider: provider,
-		limiter:  rate.NewLimiter(rate.Every(10*time.Second), 1),
+		limiter:  rate.NewLimiter(FrankfurterFXRate, FrankfurterFXBurst),
 	}
 }
 
 // Fetch retrieves the latest USD/JPY exchange rate.
-func (a *JPYYahooChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+func (a *FrankfurterFXChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 	snap, err := a.provider.FetchSnapshot(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("jpy_yahoo fetch: %w", err)
+		return nil, fmt.Errorf("frankfurter_fx fetch: %w", err)
 	}
 	data, err := json.Marshal(snap.JPY)
 	if err != nil {
-		return nil, fmt.Errorf("jpy_yahoo marshal: %w", err)
+		return nil, fmt.Errorf("frankfurter_fx marshal: %w", err)
 	}
 	return &FetchResult{
 		Data: data,
 		Meta: FetchMetadata{
-			ChannelID:          "jpy_yahoo",
+			ChannelID:          "frankfurter_fx",
 			RateLimitRemaining: int(a.limiter.Tokens()),
 			Timestamp:          time.Now(),
 		},
@@ -48,7 +48,7 @@ func (a *JPYYahooChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error
 }
 
 // HealthCheck verifies the Frankfurter API is reachable.
-func (a *JPYYahooChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
+func (a *FrankfurterFXChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
 	_, err := a.provider.FetchSnapshot(ctx)
 	if err != nil {
 		return HealthStatus{
@@ -65,15 +65,15 @@ func (a *JPYYahooChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus,
 	}, nil
 }
 
-// RateLimit returns the JPY Yahoo rate limiter.
-func (a *JPYYahooChannelAdapter) RateLimit() *rate.Limiter {
+// RateLimit returns the Frankfurter FX rate limiter.
+func (a *FrankfurterFXChannelAdapter) RateLimit() *rate.Limiter {
 	return a.limiter
 }
 
-// Metadata returns static channel metadata for JPY Yahoo.
-func (a *JPYYahooChannelAdapter) Metadata() ChannelMetadata {
+// Metadata returns static channel metadata for Frankfurter FX.
+func (a *FrankfurterFXChannelAdapter) Metadata() ChannelMetadata {
 	return ChannelMetadata{
-		ChannelID:  "jpy_yahoo",
+		ChannelID:  "frankfurter_fx",
 		Country:    "日本",
 		Platform:   "Frankfurter (USD/JPY)",
 		APIFormat:  "REST JSON",
