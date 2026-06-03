@@ -956,6 +956,21 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered macro_ingest background task (5m interval)")
 			}
 
+			// Silicon cycle indicator update (10m, offset from macro_ingest 5m
+			// to ensure fresh TSMC/SOX data). Uses the macro data pipeline already
+			// maintained by macro_ingest — no additional external API calls.
+			if industrySvc := dashboard.GetIndustryService(); industrySvc != nil && industrySvc.SiliconTracker != nil {
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "silicon_cycle_update",
+					Interval: 10 * time.Minute,
+					Enabled:  true,
+					Task: func(ctx context.Context) error {
+						return industrySvc.UpdateSiliconIndicators(ctx)
+					},
+				})
+				log.Printf("[Gateway] registered silicon_cycle_update background task (10m interval)")
+			}
+
 			// Narrative model + template hit-rate self-calibration (24h).
 			{
 				dashRef := dashboard
@@ -1064,6 +1079,25 @@ func run(args []string, deps appDeps) error {
 					}
 					if err := system.RecordSessionSummary(result, candidate); err != nil {
 						return fmt.Errorf("record session: %w", err)
+					}
+
+					// Record cycle calibration outcome for layer accuracy tracking.
+					// Uses the composite card sentiment signals against the actual
+					// portfolio return to measure which layers were directionally correct.
+					if dashboard != nil && dashboard.GetIndustryService() != nil {
+						card, cardErr := dashboard.GetIndustryService().BuildCycleStatusCard(nextClose)
+						if cardErr == nil && card != nil {
+							signals := map[string]float64{
+								"silicon":        card.SiliconScore,
+								"business_cycle": card.CycleConfidence,
+								"seasonal":       card.SeasonalAdjustment,
+								"events":         card.EventSentiment,
+								"supply_chain":   card.SupplyChainSignal,
+							}
+							dashboard.RecordCycleCalibrationOutcome(
+								system.Session().ID, nextClose, signals, result.BeforeTaxPnL,
+							)
+						}
 					}
 
 					logging.Info(

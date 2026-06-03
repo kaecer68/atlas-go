@@ -2200,6 +2200,37 @@ func defaultIndustryParameters() IndustryParameters {
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate: run cmd/calibrate-seasonal --replay after accumulating 90+ days of FinMind data to replace heuristic seeds with empirically derived values",
 		},
+		SiliconCycle: ParameterMetadata[SiliconCycleParameters]{
+			Value: SiliconCycleParameters{
+				RevenueYoYThreshold:            0.15,
+				BillingsYoYThreshold:           0.10,
+				DRAMStabilizationThreshold:     0.0,
+				BillingsStabilizationThreshold: -0.05,
+				InventoryDaysThreshold:         45,
+				UtilizationThreshold:           0.75,
+				IndexMAPercentThreshold:        0.20,
+				SOXExtremeThreshold:            0.40,
+				CapexCutThreshold:              0.10,
+				MinConfidence:                  0.60,
+				HistoryWindowSize:              60,
+			},
+			Rationale: "Thresholds derived from historical TSMC revenue cycles (2015-2024), WSTS semiconductor forecast methodology, and Philadelphia SOX Index behavioral patterns. RevenueYoY=15% aligns with TSMC's average quarterly growth inflection. SOXExtreme=40% reflects the ~2σ band of SOX annual returns. CapexCut=10% is the conventional analyst threshold for 'meaningful capex reduction.'",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: backtest phase detection accuracy against labeled historical silicon cycles (e.g., 2018-2019 downturn, 2021-2022 super-cycle, 2023 inventory correction). Compare DRAMStabilizationThreshold and BillingsStabilizationThreshold against actual DRAMeXchange/WSTS data when providers are integrated.",
+			Citation: &ParameterCitation{
+				SourceType:       "practitioner_convention",
+				SourceReference:  "TSMC quarterly reports; WSTS semiconductor forecast; Philadelphia SOX Index historical data",
+				EvidenceQuality:  "medium",
+				UpdatePolicy:     "review_quarterly",
+				ValidationMethod: "backtest_phase_accuracy",
+			},
+		},
+		EventSentimentCap: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "Cap per-event sentiment adjustment at ±5% to prevent any single calendar event from dominating the composite cycle sentiment. Based on empirical observation that even major Taiwan market events (elections, MSCI rebalance, earnings season) rarely move broad market >3% in a single day, making ±5% a conservative but meaningful cap.",
+			Source:    SourceHeuristic,
+			Todo:      "Backtest calibration: compute distribution of actual TWSE returns during historical calendar events and set cap at the 95th percentile of excess returns.",
+		},
 		CompositeCard: ParameterMetadata[CompositeCardConfig]{
 			Value: CompositeCardConfig{
 				LayerWeights: map[string]float64{

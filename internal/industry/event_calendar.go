@@ -1081,9 +1081,20 @@ func (tec *EventCalendar) buildSingleEvent(rule EventRule, year int) CalendarEve
 // Sentiment computation
 // ---------------------------------------------------------------------------
 
+// getSentimentCap returns the per-event sentiment cap from ParametersConfig,
+// falling back to the default of 0.05 when config is unavailable.
+func (tec *EventCalendar) getSentimentCap() float64 {
+	cfg := config.GetParametersConfig()
+	if cfg != nil && cfg.Industry.EventSentimentCap.Value != 0 {
+		return cfg.Industry.EventSentimentCap.Value
+	}
+	return 0.05
+}
+
 // computeSentimentAdjustment calculates the sentiment adjustment for an event
 // given the current time. The adjustment decays linearly from the peak date
-// and is capped at ±0.05.
+// and is capped by the per-event sentiment cap from ParametersConfig
+// (default ±0.05, configurable via Industry.EventSentimentCap).
 func (tec *EventCalendar) computeSentimentAdjustment(evt CalendarEvent, now time.Time) float64 {
 	// Direction multiplier
 	dirMul := 1.0
@@ -1108,13 +1119,13 @@ func (tec *EventCalendar) computeSentimentAdjustment(evt CalendarEvent, now time
 		decayFactor = math.Max(0, 1.0-daysFromPeak/float64(evt.DecayDays))
 	}
 
-	// Base weight * direction * decay, capped at ±0.05
-	adjustment := evt.BaseWeight * dirMul * decayFactor * 0.05
-	if adjustment > 0.05 {
-		adjustment = 0.05
+	cap := tec.getSentimentCap()
+	adjustment := evt.BaseWeight * dirMul * decayFactor * cap
+	if adjustment > cap {
+		adjustment = cap
 	}
-	if adjustment < -0.05 {
-		adjustment = -0.05
+	if adjustment < -cap {
+		adjustment = -cap
 	}
 	return math.Round(adjustment*10000) / 10000
 }
