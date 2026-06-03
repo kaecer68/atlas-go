@@ -343,8 +343,8 @@ func TestChannelRegistry_ConcurrentAccess(t *testing.T) {
 
 func TestChannelIDs(t *testing.T) {
 	ids := channelIDs()
-	if len(ids) != 22 {
-		t.Fatalf("expected 22 channel IDs, got %d", len(ids))
+	if len(ids) != 23 {
+		t.Fatalf("expected 23 channel IDs, got %d", len(ids))
 	}
 
 	expected := []string{
@@ -352,8 +352,8 @@ func TestChannelIDs(t *testing.T) {
 		"finmind", "jpy_yahoo", "geopolitical", "twse_margin",
 		"export_statistics", "tsmc_revenue", "geopolitical_taiwan",
 		"janus_regime", "tej", "exchange_rate", "sox_index",
-		"sector_data", "day_trading", "twse-etf", "taifex-daily",
-		"twse-oddlot", "bdi",
+		"dram_spot_price", "sector_data", "day_trading",
+		"twse-etf", "taifex-daily", "twse-oddlot", "bdi",
 	}
 	seen := make(map[string]bool)
 	for _, id := range ids {

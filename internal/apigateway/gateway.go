@@ -158,6 +158,7 @@ func channelIDs() []string {
 		"tej",
 		"exchange_rate",
 		"sox_index",
+		"dram_spot_price",
 		"sector_data",
 		"day_trading",
 		"bdi",
