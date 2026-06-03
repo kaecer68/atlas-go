@@ -54,7 +54,7 @@ func GetSharedFinMindClient(apiKey string) *FinMindClient {
 		sharedFinMindClient = &FinMindClient{
 			apiKey:      apiKey,
 			httpClient:  httpclient.NewFactory().NewClient(30 * time.Second),
-			rateLimiter: rate.NewLimiter(rate.Every(time.Minute/finmindRateLimit), finmindBurst),
+			rateLimiter: rate.NewLimiter(rate.Every(time.Hour/finmindRateLimit), finmindBurst),
 		}
 	})
 	return sharedFinMindClient
@@ -85,7 +85,7 @@ func NewFinMindClient(apiKey string) *FinMindClient {
 	return &FinMindClient{
 		apiKey:      apiKey,
 		httpClient:  httpclient.NewFactory().NewClient(30 * time.Second),
-		rateLimiter: rate.NewLimiter(rate.Every(time.Minute/finmindRateLimit), finmindBurst),
+		rateLimiter: rate.NewLimiter(rate.Every(time.Hour/finmindRateLimit), finmindBurst),
 	}
 }
 
