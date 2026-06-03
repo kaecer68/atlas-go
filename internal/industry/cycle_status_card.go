@@ -390,9 +390,15 @@ func (b *CycleStatusCardBuilder) resolveEventLayer(card *CycleStatusCard, now ti
 	events := b.eventCalendar.DetectActiveEvents(now)
 	card.ActiveEvents = events
 	if len(events) == 0 {
+		card.EventSentiment = 1.0
 		return 1.0
 	}
-	return b.eventCalendar.GetCompositeEventSentiment(now)
+	// ST-3 fix: actually assign the computed sentiment to the card field.
+	// Previously this value was only returned for composite coefficient calculation
+	// but card.EventSentiment remained at zero value (0.0).
+	sentiment := b.eventCalendar.GetCompositeEventSentiment(now)
+	card.EventSentiment = sentiment
+	return sentiment
 }
 
 func computeCompositeCoefficient(

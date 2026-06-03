@@ -5156,85 +5156,99 @@
           "name": "spring_festival",
           "base_weight": 0.6,
           "decay_days": 5,
-          "direction": "bullish"
+          "direction": "bullish",
+          "event_type": "spring_festival"
         },
         {
           "name": "ex_dividend",
           "base_weight": 0.7,
           "decay_days": 7,
-          "direction": "mixed"
+          "direction": "mixed",
+          "event_type": "ex_dividend"
         },
         {
           "name": "shareholder_meeting",
           "base_weight": 0.5,
           "decay_days": 5,
-          "direction": "bullish"
+          "direction": "bullish",
+          "event_type": "shareholder_meeting"
         },
         {
           "name": "window_dressing",
           "base_weight": 0.8,
           "decay_days": 14,
-          "direction": "bullish"
+          "direction": "bullish",
+          "event_type": "window_dressing"
         },
         {
           "name": "election",
           "base_weight": 0.6,
           "decay_days": 5,
-          "direction": "bullish"
+          "direction": "bullish",
+          "event_type": "election"
         },
         {
           "name": "msci_rebalance",
           "base_weight": 0.9,
           "decay_days": 3,
-          "direction": "neutral"
+          "direction": "neutral",
+          "event_type": "msci_rebalance"
         },
         {
           "name": "financial_report",
           "base_weight": 0.7,
           "decay_days": 5,
-          "direction": "mixed"
+          "direction": "mixed",
+          "event_type": "financial_report"
         },
         {
           "name": "investor_conference",
           "base_weight": 0.6,
           "decay_days": 14,
-          "direction": "bullish"
+          "direction": "bullish",
+          "event_type": "investor_conference"
         },
         {
           "name": "monthly_revenue",
           "base_weight": 0.4,
           "decay_days": 3,
-          "direction": "mixed"
+          "direction": "mixed",
+          "event_type": "monthly_revenue"
         },
         {
           "name": "long_holiday",
           "base_weight": 0.5,
           "decay_days": 2,
-          "direction": "bearish"
+          "direction": "bearish",
+          "event_type": "long_holiday"
         },
         {
           "name": "dividend_payout",
           "base_weight": 0.5,
           "decay_days": 14,
-          "direction": "bullish"
+          "direction": "bullish",
+          "event_type": "dividend_payout"
         },
         {
           "name": "taiwan50_rebalance",
           "base_weight": 0.7,
           "decay_days": 3,
-          "direction": "neutral"
+          "direction": "neutral",
+          "event_type": "taiwan50_rebalance"
         },
         {
           "name": "futures_settlement",
           "base_weight": 0.6,
           "decay_days": 2,
-          "direction": "bearish"
+          "direction": "bearish",
+          "event_type": "futures_settlement"
         },
         {
           "name": "position_building",
           "base_weight": 0.5,
           "decay_days": 7,
-          "direction": "bullish"
+          "direction": "bullish",
+          "event_type": "position_building"
         }
       ],
       "rationale": "Taiwan market calendar event rules with base weights and decay days. Weights: spring_festival 0.60, ex_dividend 0.70, shareholder_meeting 0.50, window_dressing 0.80, election 0.60, msci_rebalance 0.90, financial_report 0.70, investor_conference 0.60, monthly_revenue 0.40, long_holiday 0.50, dividend_payout 0.50, taiwan50_rebalance 0.70, futures_settlement 0.60, position_building 0.50.",

@@ -392,35 +392,43 @@ func (h *Handlers) HandleCalendarEvents(r *http.Request) (int, any) {
 	events := h.Svc.EventCalendar.GetAllEvents()
 
 	type eventDTO struct {
-		ID                 string   `json:"id"`
-		Name               string   `json:"name"`
-		EventType          string   `json:"event_type"`
-		Description        string   `json:"description"`
-		Direction          string   `json:"direction"`
-		BaseWeight         float64  `json:"base_weight"`
-		Active             bool     `json:"active"`
-		StartDate          string   `json:"start_date"`
-		EndDate            string   `json:"end_date"`
-		PeakDate           string   `json:"peak_date"`
-		DecayDays          int      `json:"decay_days"`
-		AffectedIndustries []string `json:"affected_industries"`
+		ID                  string   `json:"id"`
+		Name                string   `json:"name"`
+		EventType           string   `json:"event_type"`
+		Description         string   `json:"description"`
+		Direction           string   `json:"direction"`
+		BaseWeight          float64  `json:"base_weight"`
+		Active              bool     `json:"active"`
+		StartDate           string   `json:"start_date"`
+		EndDate             string   `json:"end_date"`
+		PeakDate            string   `json:"peak_date"`
+		DecayDays           int      `json:"decay_days"`
+		AffectedIndustries  []string `json:"affected_industries"`
+		SentimentAdjustment float64  `json:"sentiment_adjustment"`
+		DataSource          string   `json:"data_source"`
+		EvidenceQuality     string   `json:"evidence_quality"`
+		GeneratedAt         string   `json:"generated_at"`
 	}
 
 	result := make([]eventDTO, 0, len(events))
 	for _, evt := range events {
 		result = append(result, eventDTO{
-			ID:                 evt.ID,
-			Name:               evt.Name,
-			EventType:          evt.EventType,
-			Description:        evt.Description,
-			Direction:          evt.Direction,
-			BaseWeight:         evt.BaseWeight,
-			Active:             evt.Active,
-			StartDate:          evt.StartDate.Format("2006-01-02"),
-			EndDate:            evt.EndDate.Format("2006-01-02"),
-			PeakDate:           evt.PeakDate.Format("2006-01-02"),
-			DecayDays:          evt.DecayDays,
-			AffectedIndustries: evt.AffectedIndustries,
+			ID:                  evt.ID,
+			Name:                evt.Name,
+			EventType:           evt.EventType,
+			Description:         evt.Description,
+			Direction:           evt.Direction,
+			BaseWeight:          evt.BaseWeight,
+			Active:              evt.Active,
+			StartDate:           evt.StartDate.Format("2006-01-02"),
+			EndDate:             evt.EndDate.Format("2006-01-02"),
+			PeakDate:            evt.PeakDate.Format("2006-01-02"),
+			DecayDays:           evt.DecayDays,
+			AffectedIndustries:  evt.AffectedIndustries,
+			SentimentAdjustment: evt.SentimentAdjustment,
+			DataSource:          string(evt.DataSource),
+			EvidenceQuality:     string(evt.EvidenceQuality),
+			GeneratedAt:         evt.GeneratedAt.Format(time.RFC3339),
 		})
 	}
 

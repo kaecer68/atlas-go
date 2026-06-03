@@ -774,7 +774,10 @@ type SiliconCycleParameters struct {
 
 // EventCalendarRule defines a Taiwan market calendar event rule
 // configurable via ParametersConfig.Industry.EventCalendarRules.
+// EventType is the canonical key used to match this rule to the corresponding
+// entry in defaultEventRules(). If EventType is empty, Name is used as fallback.
 type EventCalendarRule struct {
+	EventType  string  `json:"event_type"`
 	Name       string  `json:"name"`
 	BaseWeight float64 `json:"base_weight"`
 	DecayDays  int     `json:"decay_days"`
