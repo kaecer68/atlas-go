@@ -160,8 +160,8 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 
 	// --- TWSE Odd-Lot Trading (no API key required) ---
 	oddlotAdapter := NewTWSEOddLotChannelAdapter()
-	g.registry.Register("twse-oddlot", oddlotAdapter)
-	logging.Info("apigateway", "adapter_registered", "channel", "twse-oddlot")
+	g.registry.Register("twse_oddlot", oddlotAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "twse_oddlot")
 
 	// --- TWSE ETF Net Subscription (no API key required) ---
 	etfAdapter := NewTWSEETFChannelAdapter()

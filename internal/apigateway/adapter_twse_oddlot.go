@@ -39,7 +39,7 @@ func (a *TWSEOddLotChannelAdapter) Fetch(ctx context.Context) (*FetchResult, err
 		return nil, fmt.Errorf("odd-lot marshal: %w", err)
 	}
 	return &FetchResult{Data: data, Meta: FetchMetadata{
-		ChannelID: "twse-odd-lot", LatencyMs: time.Since(start).Milliseconds(),
+		ChannelID: "twse_oddlot", LatencyMs: time.Since(start).Milliseconds(),
 		Timestamp: time.Now(),
 	}}, nil
 }
@@ -52,7 +52,7 @@ func (a *TWSEOddLotChannelAdapter) RateLimit() *rate.Limiter { return a.limiter 
 
 func (a *TWSEOddLotChannelAdapter) Metadata() ChannelMetadata {
 	return ChannelMetadata{
-		ChannelID:  "twse-odd-lot",
+		ChannelID:  "twse_oddlot",
 		Country:    "台灣",
 		Platform:   "TWSE",
 		APIFormat:  "REST JSON",

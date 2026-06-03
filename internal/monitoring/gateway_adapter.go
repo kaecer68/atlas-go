@@ -354,7 +354,7 @@ func NewTaifexFetcher(fetcher DataFetcher) apisystem.TaifexFetcher {
 // NewOddLotFetcher creates a fetcher for TWSE odd-lot trading data.
 func NewOddLotFetcher(fetcher DataFetcher) apisystem.OddLotFetcher {
 	return func(ctx context.Context) (*marketdata.OddLotStats, error) {
-		data, err := fetcher(ctx, "twse-oddlot")
+		data, err := fetcher(ctx, "twse_oddlot")
 		if err != nil {
 			return nil, err
 		}
