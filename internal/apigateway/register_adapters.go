@@ -124,6 +124,12 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	g.registry.Register("sox_index", soxAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "sox_index")
 
+
+		// --- DRAM Spot Price (Micron MU stock proxy) ---
+		dramProvider := marketdata.NewDRAMSpotPriceProvider()
+		dramAdapter := NewDRAMSpotPriceChannelAdapter(dramProvider)
+		g.registry.Register("dram_spot_price", dramAdapter)
+		logging.Info("apigateway", "adapter_registered", "channel", "dram_spot_price")
 	// --- BDI (Baltic Dry Index from CNBC) ---
 	bdiProvider := marketdata.NewBDIProvider()
 	bdiAdapter := NewBDIChannelAdapter(bdiProvider)
