@@ -264,6 +264,7 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 		evt.DecayDays = 3
 
 		tec.providerEvents = append(tec.providerEvents, evt)
+		tec.events = append(tec.events, evt) // 立即可見，不需等下次 RefreshEvents
 		added++
 	}
 
