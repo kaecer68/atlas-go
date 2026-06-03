@@ -149,9 +149,11 @@ type PhaseTransition struct {
 // SiliconCycleTracker monitors and tracks the semiconductor industry cycle
 // using a 4-phase state machine driven by key silicon industry indicators.
 type SiliconCycleTracker struct {
-	currentPhase SiliconCyclePhase
-	mu           sync.RWMutex
-	history      []PhaseTransition
+	currentPhase     SiliconCyclePhase
+	mu               sync.RWMutex
+	history          []PhaseTransition
+	latestIndicators SiliconIndicators // most recent indicators (updated on every DetectPhase)
+	hasIndicators    bool              // true after at least one DetectPhase call
 }
 
 // NewSiliconCycleTracker creates a new silicon cycle engine initialized to
@@ -165,11 +167,15 @@ func NewSiliconCycleTracker() *SiliconCycleTracker {
 
 // DetectPhase evaluates the current silicon indicators against the state machine
 // rules and returns the resulting phase. If a phase transition occurs, it is
-// recorded in the engine's history. The input time is used as the transition
-// timestamp.
+// recorded in the engine's history. The latest indicators are always stored so
+// the frontend can display real-time values even when no transition has occurred.
 func (e *SiliconCycleTracker) DetectPhase(now time.Time, indicators SiliconIndicators) SiliconCyclePhase {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
+	// Always store the latest indicators for frontend display.
+	e.latestIndicators = indicators
+	e.hasIndicators = true
 
 	params := getSiliconParams()
 	prevPhase := e.currentPhase
@@ -359,12 +365,25 @@ func (e *SiliconCycleTracker) GetTransitionCount() int {
 	return len(e.history)
 }
 
+// GetLatestIndicators returns the most recent silicon indicators, even when
+// no phase transition has occurred. Returns (SiliconIndicators, true) after
+// at least one DetectPhase call, or (SiliconIndicators{}, false) if never called.
+func (e *SiliconCycleTracker) GetLatestIndicators() (SiliconIndicators, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if !e.hasIndicators {
+		return SiliconIndicators{}, false
+	}
+	return e.latestIndicators, true
+}
+
 // Reset resets the engine to PhaseBottomRecovery with an empty history.
 func (e *SiliconCycleTracker) Reset() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.currentPhase = PhaseBottomRecovery
 	e.history = make([]PhaseTransition, 0)
+	e.hasIndicators = false
 }
 
 // DaysInCurrentPhase estimates the number of days spent in the current phase
@@ -424,16 +443,15 @@ func ExtractSiliconIndicators(snap marketdata.MacroDataSnapshot) SiliconIndicato
 	// DRAM trend from MU (Micron) daily change: positive → DRAM trending up.
 	dramTrend := snap.DRAMSpotPrice.ChangePct / 100.0
 
-	// SOX daily change as a weak YoY proxy. Annualize by 252 trading days.
-	soxDaily := snap.SOXIndex.ChangePct / 100.0
-	soxAnnualized := soxDaily * 252.0
+	// SOX YoY from provider (now computes proper year-over-year via 1y range).
+	soxYoY := snap.SOXIndex.ChangePct / 100.0
 
 	return SiliconIndicators{
 		TSMCMonthlyRevenueYoY:          tsmcRevYoY,
-		GlobalSemiconductorBillingsYoY: soxAnnualized * 0.85, // SOX → billings scaling (~85% correlation)
+		GlobalSemiconductorBillingsYoY: soxYoY * 0.85, // SOX → billings scaling (~85% correlation)
 		DRAMSpotPriceTrend:             dramTrend,
 		TaiwanSemiconductorIndexMA:     0.0, // pending TWSE TAISEMI integration
 		TSMCCapexGuidance:              capexSignal,
-		PhiladelphiaSOXIndexYoY:        soxAnnualized,
+		PhiladelphiaSOXIndexYoY:        soxYoY,
 	}
 }
