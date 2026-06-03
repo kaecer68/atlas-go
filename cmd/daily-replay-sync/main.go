@@ -103,7 +103,7 @@ func main() {
 
 func runDailySync(csvPath string, pool *pgxpool.Pool) error {
 	stateDir := filepath.Join(filepath.Dir(filepath.Dir(csvPath)), "state")
-	client := marketdata.NewTWSEClient()
+	client := marketdata.GetSharedTWSEClient()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -160,7 +160,7 @@ func runBackfill(csvPath, startStr, endStr string) error {
 		return fmt.Errorf("end date before start date")
 	}
 
-	client := marketdata.NewTWSEClient()
+	client := marketdata.GetSharedTWSEClient()
 	ctx := context.Background()
 	symbols := orchestrator.DefaultSymbols()
 

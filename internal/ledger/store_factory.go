@@ -4,11 +4,42 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
+
+var (
+	sharedSQLiteDBs = make(map[string]*sql.DB)
+	sharedSQLiteMu  sync.Mutex
+)
+
+// getSharedSQLiteDB returns a shared *sql.DB for the given path.
+// The DB is opened once per path, WAL mode is enabled, foreign keys
+// are enforced, and the ledger schema is initialized on the first call.
+func getSharedSQLiteDB(path string) (*sql.DB, error) {
+	sharedSQLiteMu.Lock()
+	defer sharedSQLiteMu.Unlock()
+
+	if db, ok := sharedSQLiteDBs[path]; ok {
+		return db, nil
+	}
+
+	db, err := OpenSQLiteDB(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := InitSchema(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	sharedSQLiteDBs[path] = db
+	return db, nil
+}
 
 func NewFullStore(cfg config.Config) (FullStore, error) {
 	switch cfg.StoreBackend {
@@ -24,14 +55,9 @@ func newStore(baseDir string) *Store {
 }
 
 func newSQLiteFullStore(path string) (*SQLiteStore, error) {
-	db, err := OpenSQLiteDB(path)
+	db, err := getSharedSQLiteDB(path)
 	if err != nil {
-		return nil, fmt.Errorf("open sqlite db: %w", err)
-	}
-
-	if err := InitSchema(db); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("init schema: %w", err)
+		return nil, fmt.Errorf("shared sqlite: %w", err)
 	}
 
 	return &SQLiteStore{
@@ -191,13 +217,9 @@ func (s *SQLiteStore) RecordMutationBrief(windowID string, brief domain.Mutation
 func NewOutcomeStore(cfg config.Config) (OutcomeStore, error) {
 	switch cfg.StoreBackend {
 	case "sqlite":
-		db, err := OpenSQLiteDB(cfg.SQLitePath)
+		db, err := getSharedSQLiteDB(cfg.SQLitePath)
 		if err != nil {
-			return nil, fmt.Errorf("open sqlite db: %w", err)
-		}
-		if err := InitSchema(db); err != nil {
-			_ = db.Close()
-			return nil, fmt.Errorf("init schema: %w", err)
+			return nil, fmt.Errorf("shared sqlite: %w", err)
 		}
 		return NewSQLiteOutcomeStore(db), nil
 	default:
@@ -208,13 +230,9 @@ func NewOutcomeStore(cfg config.Config) (OutcomeStore, error) {
 func NewSessionStore(cfg config.Config) (SessionStore, error) {
 	switch cfg.StoreBackend {
 	case "sqlite":
-		db, err := OpenSQLiteDB(cfg.SQLitePath)
+		db, err := getSharedSQLiteDB(cfg.SQLitePath)
 		if err != nil {
-			return nil, fmt.Errorf("open sqlite db: %w", err)
-		}
-		if err := InitSchema(db); err != nil {
-			_ = db.Close()
-			return nil, fmt.Errorf("init schema: %w", err)
+			return nil, fmt.Errorf("shared sqlite: %w", err)
 		}
 		return NewSQLiteSessionStore(db), nil
 	default:
@@ -225,13 +243,9 @@ func NewSessionStore(cfg config.Config) (SessionStore, error) {
 func NewQuoteStore(cfg config.Config) (QuoteStore, error) {
 	switch cfg.StoreBackend {
 	case "sqlite":
-		db, err := OpenSQLiteDB(cfg.SQLitePath)
+		db, err := getSharedSQLiteDB(cfg.SQLitePath)
 		if err != nil {
-			return nil, fmt.Errorf("open sqlite db: %w", err)
-		}
-		if err := InitSchema(db); err != nil {
-			_ = db.Close()
-			return nil, fmt.Errorf("init schema: %w", err)
+			return nil, fmt.Errorf("shared sqlite: %w", err)
 		}
 		return NewSQLiteQuoteStore(db), nil
 	default:

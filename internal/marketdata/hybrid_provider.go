@@ -80,7 +80,7 @@ func NewHybridProvider(finmindAPIKey, fugleAPIKey string) *HybridProvider {
 		fubonProvider:   fubonProvider,
 		finmindProvider: finmindProvider,
 		fugleProvider:   fugleProvider,
-		twseClient:      NewTWSEClient(),
+		twseClient:      GetSharedTWSEClient(),
 		cbState:         ProviderCircuitClosed,
 		cbConfig:        defaultCircuitBreakerConfig(),
 	}

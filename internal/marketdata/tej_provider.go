@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -69,9 +70,43 @@ type TEJStockPriceRow struct {
 	TradeVal float64 `json:"trade_val"` // 成交值(千元)
 }
 
-// NewTEJClient creates a TEJ API client.
-// apiKey: obtained from TEJ website (free trial key).
+var (
+	sharedTEJClient     *TEJClient
+	sharedTEJClientOnce sync.Once
+	sharedTEJClientMu   sync.RWMutex
+)
+
+// GetSharedTEJClient returns a singleton TEJClient that all components
+// share. Using a single client ensures one token bucket enforces the
+// rate limit across all call sites. The apiKey is used only on first
+// call; subsequent calls ignore it.
+func GetSharedTEJClient(apiKey string) *TEJClient {
+	sharedTEJClientOnce.Do(func() {
+		sharedTEJClient = newTEJClientInternal(apiKey)
+	})
+	return sharedTEJClient
+}
+
+// ResetSharedTEJClient clears the singleton (for tests).
+func ResetSharedTEJClient() {
+	sharedTEJClientMu.Lock()
+	defer sharedTEJClientMu.Unlock()
+	sharedTEJClient = nil
+	sharedTEJClientOnce = sync.Once{}
+}
+
+// NewTEJClient creates a standalone TEJClient with its own rate limiter
+// and quota tracker. Prefer GetSharedTEJClient in production to avoid
+// multiple independent token buckets that can collectively exceed the
+// API tier limit.
+//
+// Deprecated: use GetSharedTEJClient for production code.
 func NewTEJClient(apiKey string) *TEJClient {
+	return newTEJClientInternal(apiKey)
+}
+
+// newTEJClientInternal creates a TEJ API client (shared implementation).
+func newTEJClientInternal(apiKey string) *TEJClient {
 	params := config.GetParametersConfig()
 	dailyLimit := getTEJDailyLimit()
 	return &TEJClient{

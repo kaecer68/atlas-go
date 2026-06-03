@@ -22,7 +22,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 
 	// --- Fugle ---
 	if cfg.FugleAPIKey != "" {
-		fugleClient := marketdata.NewFugleClient(cfg.FugleAPIKey)
+		fugleClient := marketdata.GetSharedFugleClient(cfg.FugleAPIKey)
 		fugleAdapter := NewFugleChannelAdapter(fugleClient)
 		g.registry.Register("fugle", fugleAdapter)
 		logging.Info("apigateway", "adapter_registered", "channel", "fugle")
@@ -82,7 +82,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 
 	// --- TEJ ---
 	if tejKey := config.GetSecret("TEJ_API_KEY"); tejKey != "" {
-		tejClient := marketdata.NewTEJClient(tejKey)
+		tejClient := marketdata.GetSharedTEJClient(tejKey)
 		tejAdapter := NewTEJChannelAdapter(tejClient)
 		g.registry.Register("tej", tejAdapter)
 		logging.Info("apigateway", "adapter_registered", "channel", "tej")
