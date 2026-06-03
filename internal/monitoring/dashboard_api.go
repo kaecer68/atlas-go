@@ -94,7 +94,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	if cfg.YahooEnabled {
 		providers = append(providers, marketdata.NewYahooFinanceMacroProvider())
 		providers = append(providers, marketdata.NewSOXIndexProvider())
-			providers = append(providers, marketdata.NewDRAMSpotPriceProvider())
+		providers = append(providers, marketdata.NewDRAMSpotPriceProvider())
 	}
 
 	providers = append(providers, marketdata.NewFrankfurterFXProvider())
