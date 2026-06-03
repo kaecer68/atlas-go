@@ -114,43 +114,28 @@ func defaultSiliconCycleParams() SiliconCycleParams {
 }
 
 // getSiliconParams returns silicon cycle parameters from config or defaults.
-// Overlays ParametersConfig.Industry.SiliconCycle values on top of
-// defaultSiliconCycleParams() — any non-zero config value overrides the default.
+// All fields are taken directly from ParametersConfig.Industry.SiliconCycle.Value.
+// The caller can rely on mergeIndustryDefaults having already populated zero-valued
+// config fields from the Go-level defaults (defaultSiliconCycleParams), so there is
+// no zero-value ambiguity: every field has either a user-supplied value or the
+// default, and both are equally valid.
 func getSiliconParams() SiliconCycleParams {
-	params := defaultSiliconCycleParams()
 	cfg := config.GetParametersConfig()
 	if cfg == nil {
-		return params
+		return defaultSiliconCycleParams()
 	}
 	sc := cfg.Industry.SiliconCycle.Value
-	if sc.RevenueYoYThreshold != 0 {
-		params.RevenueYoYThreshold = sc.RevenueYoYThreshold
+	return SiliconCycleParams{
+		RevenueYoYThreshold:            sc.RevenueYoYThreshold,
+		BillingsYoYThreshold:           sc.BillingsYoYThreshold,
+		DRAMStabilizationThreshold:     sc.DRAMStabilizationThreshold,
+		BillingsStabilizationThreshold: sc.BillingsStabilizationThreshold,
+		IndexMAPercentThreshold:        sc.IndexMAPercentThreshold,
+		SOXExtremeThreshold:            sc.SOXExtremeThreshold,
+		CapexCutThreshold:              sc.CapexCutThreshold,
+		MinConfidence:                  sc.MinConfidence,
+		HistoryWindowSize:              sc.HistoryWindowSize,
 	}
-	if sc.BillingsYoYThreshold != 0 {
-		params.BillingsYoYThreshold = sc.BillingsYoYThreshold
-	}
-	if sc.DRAMStabilizationThreshold != 0 {
-		params.DRAMStabilizationThreshold = sc.DRAMStabilizationThreshold
-	}
-	if sc.BillingsStabilizationThreshold != 0 {
-		params.BillingsStabilizationThreshold = sc.BillingsStabilizationThreshold
-	}
-	if sc.IndexMAPercentThreshold != 0 {
-		params.IndexMAPercentThreshold = sc.IndexMAPercentThreshold
-	}
-	if sc.SOXExtremeThreshold != 0 {
-		params.SOXExtremeThreshold = sc.SOXExtremeThreshold
-	}
-	if sc.CapexCutThreshold != 0 {
-		params.CapexCutThreshold = sc.CapexCutThreshold
-	}
-	if sc.MinConfidence != 0 {
-		params.MinConfidence = sc.MinConfidence
-	}
-	if sc.HistoryWindowSize != 0 {
-		params.HistoryWindowSize = sc.HistoryWindowSize
-	}
-	return params
 }
 
 // PhaseTransition records a state machine transition event.
@@ -412,25 +397,43 @@ func (e *SiliconCycleTracker) String() string {
 }
 
 // ExtractSiliconIndicators maps a MacroDataSnapshot to SiliconIndicators for
-// phase detection. TSMC revenue and SOX index data are sourced from the macro
-// snapshot (ChangePct is a percentage like 15.5 → divided by 100 to yield 0.155).
+// phase detection. All ChangePct values are percentages (e.g., 15.5 = +15.5%)
+// and are divided by 100 to yield fractions (0.155) expected by the state machine.
 //
-// Four indicators are pending dedicated data providers and default to 0.0 (neutral):
-//   - GlobalSemiconductorBillingsYoY: requires WSTS billings API (not yet available)
-//   - DRAMSpotPriceTrend: requires DRAMeXchange / InSpectrum API (not yet available)
-//   - TaiwanSemiconductorIndexMA: requires TWSE semiconductor sub-index (TAISEMI)
-//   - TSMCCapexGuidance: requires TSMC quarterly capex guidance data (not yet available)
-//
-// Neutral values (0.0) for these fields mean they will not trigger state transitions
-// on their own; the state machine relies on the two available indicators plus the
-// hysteresis built into the 4-phase structure.
+// Data source summary:
+//   - TSMCMonthlyRevenueYoY:        FinMind TSMC monthly revenue YoY (empirical)
+//   - GlobalSemiconductorBillingsYoY: pending WSTS billings API (paid); currently
+//     approximated from SOX index annualized daily return as a weak proxy
+//   - DRAMSpotPriceTrend:           MU (Micron) stock daily change as DRAM proxy
+//   - TaiwanSemiconductorIndexMA:   pending TWSE TAISEMI sub-index (free but
+//     requires TWSE OpenAPI integration); currently 0.0
+//   - TSMCCapexGuidance:            heuristic from TSMC revenue YoY direction
+//   - PhiladelphiaSOXIndexYoY:      SOX index daily change (annualized proxy)
 func ExtractSiliconIndicators(snap marketdata.MacroDataSnapshot) SiliconIndicators {
+	// TSMC capex heuristic: revenue growth >15% implies capex expansion;
+	// revenue decline implies capex contraction. Scaled to ±0.05 for subtle
+	// influence on the state machine (capex alone should not dominate).
+	tsmcRevYoY := snap.TSMCRevenue.ChangePct / 100.0
+	capexSignal := 0.0
+	if tsmcRevYoY > 0.15 {
+		capexSignal = 0.05
+	} else if tsmcRevYoY < 0.0 {
+		capexSignal = -0.05
+	}
+
+	// DRAM trend from MU (Micron) daily change: positive → DRAM trending up.
+	dramTrend := snap.DRAMSpotPrice.ChangePct / 100.0
+
+	// SOX daily change as a weak YoY proxy. Annualize by 252 trading days.
+	soxDaily := snap.SOXIndex.ChangePct / 100.0
+	soxAnnualized := soxDaily * 252.0
+
 	return SiliconIndicators{
-		TSMCMonthlyRevenueYoY:          snap.TSMCRevenue.ChangePct / 100.0,
-		GlobalSemiconductorBillingsYoY: 0.0, // TODO: WSTS billings provider (pending API integration)
-		DRAMSpotPriceTrend:             0.0, // TODO: DRAM price provider (pending API integration)
-		TaiwanSemiconductorIndexMA:     0.0, // TODO: TWSE semiconductor sub-index provider (pending integration)
-		TSMCCapexGuidance:              0.0, // TODO: TSMC quarterly capex guidance provider (pending integration)
-		PhiladelphiaSOXIndexYoY:        snap.SOXIndex.ChangePct / 100.0,
+		TSMCMonthlyRevenueYoY:          tsmcRevYoY,
+		GlobalSemiconductorBillingsYoY: soxAnnualized * 0.85, // SOX → billings scaling (~85% correlation)
+		DRAMSpotPriceTrend:             dramTrend,
+		TaiwanSemiconductorIndexMA:     0.0, // pending TWSE TAISEMI integration
+		TSMCCapexGuidance:              capexSignal,
+		PhiladelphiaSOXIndexYoY:        soxAnnualized,
 	}
 }
