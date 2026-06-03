@@ -1,4 +1,7 @@
-# Skill: atlas-multi-strategy
+---
+name: atlas-multi-strategy
+description: "Use when implementing strategy selection logic, adding trading strategies, or modifying the strategy registry. Triggers: strategy selector, allocator, strategy comparison, new strategy type."
+---
 
 > **實作狀態**：✅ 已實作（`internal/strategy/` 模組，成熟度 `evolving`）  
 > **最後審計**：2026-06-02  

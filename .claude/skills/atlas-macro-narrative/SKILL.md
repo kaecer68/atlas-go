@@ -1,4 +1,7 @@
-# Atlas Macro Narrative Skill
+---
+name: atlas-macro-narrative
+description: "Use when analyzing macro narrative events, deriving foreign capital flow probabilities, or working with the six macro dimensions. Triggers: macro analysis, narrative event detection, Taiwan stress index, causal chain analysis."
+---
 
 ## 核心使命
 

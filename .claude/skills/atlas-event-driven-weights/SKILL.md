@@ -1,4 +1,7 @@
-# Skill: atlas-event-driven-weights
+---
+name: atlas-event-driven-weights
+description: "Use when modifying factor weights, adding factor types, or connecting narrative events to portfolio factor calculations. Triggers: factor weight logic changes, new factor type, FactorBridge, FactorWeightEngine modifications."
+---
 
 > **實作狀態**：⚠️ 部分實作 — 核心元件已實作，部分功能已整合至現有模組  
 > **最後審計**：2026-06-02  

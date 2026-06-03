@@ -1,4 +1,7 @@
-# Skill: atlas-risk-management
+---
+name: atlas-risk-management
+description: "Use when modifying risk gates, VaR calculation, drawdown management, or self-calibration logic. Triggers: risk threshold changes, pre-trade/post-trade checks, portfolio risk, RiskGate modifications."
+---
 
 > **實作狀態**：✅ 核心已實作 — 四層風險架構（pre-trade／in-trade／post-trade／portfolio）全數完工，含宏觀感知回撤與自主校準  
 > **最後審計**：2026-06-02  
