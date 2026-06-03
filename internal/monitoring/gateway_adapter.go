@@ -47,6 +47,7 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 		{channelID: "sector_data", apply: a.applySectorData},
 		{channelID: "bdi", apply: a.applyBDI},
 		{channelID: "dram_spot_price", apply: a.applyDRAMSpotPrice},
+		{channelID: "twse_sector_index", apply: a.applyTWSESectorIndex},
 	}
 
 	var merged marketdata.MacroDataSnapshot
@@ -217,6 +218,16 @@ func (a *macroDataGatewayAdapter) applyDRAMSpotPrice(snap *marketdata.MacroDataS
 	}
 	if s.DRAMSpotPrice.Symbol != "" {
 		snap.DRAMSpotPrice = s.DRAMSpotPrice
+	}
+}
+
+func (a *macroDataGatewayAdapter) applyTWSESectorIndex(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var point marketdata.MacroDataPoint
+	if err := json.Unmarshal(data, &point); err != nil {
+		return
+	}
+	if point.Symbol != "" {
+		snap.TaiwanSemiIndex = point
 	}
 }
 

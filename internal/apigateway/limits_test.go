@@ -26,6 +26,8 @@ func TestNewRateLimitManager_AllChannels(t *testing.T) {
 		"tej":                 false,
 		"exchange_rate":       false,
 		"sox_index":           false,
+		"dram_spot_price":     false,
+		"twse_sector_index":   false,
 		"sector_data":         false,
 		"day_trading":         false,
 		"twse-etf":            false,
@@ -77,7 +79,7 @@ func TestNewRateLimitManager_NonInfiniteRateChannels(t *testing.T) {
 		"us_yahoo", "jpy_yahoo", "twse_capital_flow", "fugle", "fubon",
 		"finmind", "geopolitical", "geopolitical_taiwan", "twse_margin",
 		"export_statistics", "tsmc_revenue", "tej", "exchange_rate",
-		"sox_index", "day_trading", "twse-etf", "taifex-daily", "twse-oddlot", "bdi",
+		"sox_index", "dram_spot_price", "twse_sector_index", "day_trading", "twse-etf", "taifex-daily", "twse-oddlot", "bdi",
 	}
 	for _, channel := range nonInfiniteChannels {
 		t.Run(channel, func(t *testing.T) {
@@ -334,6 +336,8 @@ func TestStatus_BurstMatchesConfig(t *testing.T) {
 		{"sox_index", ExportStatisticsBurst},
 		{"sector_data", 0},
 		{"day_trading", TWSEMarginBurst},
+		{"dram_spot_price", ExportStatisticsBurst},
+		{"twse_sector_index", ExportStatisticsBurst},
 		{"bdi", ExportStatisticsBurst},
 	}
 

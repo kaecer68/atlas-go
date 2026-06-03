@@ -32,6 +32,7 @@ type MacroDataSnapshot struct {
 	TSMCRevenue         MacroDataPoint `json:"tsmc_revenue"`
 	SOXIndex            MacroDataPoint `json:"sox_index"`
 	DRAMSpotPrice       MacroDataPoint `json:"dram_spot_price"`
+	TaiwanSemiIndex     MacroDataPoint `json:"taiwan_semi_index"`
 	CoWoSUtilization    MacroDataPoint `json:"cowos_utilization"`
 	CapexGrowth         MacroDataPoint `json:"capex_growth"`
 	CPIYoY              MacroDataPoint `json:"cpi_yoy"`

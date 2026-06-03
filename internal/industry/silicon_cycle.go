@@ -424,8 +424,8 @@ func (e *SiliconCycleTracker) String() string {
 //   - GlobalSemiconductorBillingsYoY: pending WSTS billings API (paid); currently
 //     approximated from SOX index annualized daily return as a weak proxy
 //   - DRAMSpotPriceTrend:           MU (Micron) stock daily change as DRAM proxy
-//   - TaiwanSemiconductorIndexMA:   pending TWSE TAISEMI sub-index (free but
-//     requires TWSE OpenAPI integration); currently 0.0
+//   - TaiwanSemiconductorIndexMA:   now fetched via twse_sector_index channel
+//     from TWSE OpenAPI v1
 //   - TSMCCapexGuidance:            heuristic from TSMC revenue YoY direction
 //   - PhiladelphiaSOXIndexYoY:      SOX index daily change (annualized proxy)
 func ExtractSiliconIndicators(snap marketdata.MacroDataSnapshot) SiliconIndicators {
@@ -450,7 +450,7 @@ func ExtractSiliconIndicators(snap marketdata.MacroDataSnapshot) SiliconIndicato
 		TSMCMonthlyRevenueYoY:          tsmcRevYoY,
 		GlobalSemiconductorBillingsYoY: soxYoY * 0.85, // SOX → billings scaling (~85% correlation)
 		DRAMSpotPriceTrend:             dramTrend,
-		TaiwanSemiconductorIndexMA:     0.0, // pending TWSE TAISEMI integration
+		TaiwanSemiconductorIndexMA:     snap.TaiwanSemiIndex.ChangePct / 100.0,
 		TSMCCapexGuidance:              capexSignal,
 		PhiladelphiaSOXIndexYoY:        soxYoY,
 	}
