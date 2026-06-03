@@ -64,6 +64,7 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 		if hasValidYahooData(snap) {
 			prev, _ := m.loadLatestSnapshot() //nolint:errcheck
 			snap = mergeWithPrev(snap, prev)
+			snap = computeChangePct(snap, prev)
 			if saveErr := m.saveSnapshot(snap); saveErr != nil {
 				logging.Warn("ingestor", "partial_save_failed", logging.Err(saveErr))
 			}
