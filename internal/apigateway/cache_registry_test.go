@@ -349,11 +349,11 @@ func TestChannelIDs(t *testing.T) {
 
 	expected := []string{
 		"us_yahoo", "twse_replay", "twse_capital_flow", "fugle", "fubon",
-		"finmind", "jpy_yahoo", "geopolitical", "twse_margin",
+		"finmind", "frankfurter_fx", "geopolitical", "twse_margin",
 		"export_statistics", "tsmc_revenue", "geopolitical_taiwan",
 		"janus_regime", "tej", "exchange_rate", "sox_index",
 		"dram_spot_price", "twse_sector_index", "sector_data", "day_trading",
-		"twse-etf", "taifex-daily", "twse_oddlot", "bdi",
+		"twse_etf", "taifex_daily", "twse_oddlot", "bdi",
 	}
 	seen := make(map[string]bool)
 	for _, id := range ids {

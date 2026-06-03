@@ -76,7 +76,7 @@ Start here when exploring this area:
 | `export_statistics` | NewExportStatisticsProvider | always |
 | `tej` | NewTEJClient | TEJ_API_KEY set |
 | `geopolitical` | NewCompositeGeopoliticalProvider | always |
-| `jpy_yahoo` | NewFrankfurterFXProvider | always |
+| `frankfurter_fx` | NewFrankfurterFXProvider | always |
 | `tsmc_revenue` | NewTSMCRevenueProvider | always |
 | `geopolitical_taiwan` | NewTaiwanRSSGeopoliticalProvider | always |
 | `janus_regime` | janus.Engine | janusEngine != nil |

@@ -60,7 +60,7 @@ func (a *TaifexChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) 
 	return &FetchResult{
 		Data: data,
 		Meta: FetchMetadata{
-			ChannelID:          "taifex-daily",
+			ChannelID:          "taifex_daily",
 			LatencyMs:          time.Since(start).Milliseconds(),
 			RateLimitRemaining: int(a.limiter.Tokens()),
 			Timestamp:          time.Now(),
@@ -94,7 +94,7 @@ func (a *TaifexChannelAdapter) RateLimit() *rate.Limiter {
 // Metadata returns static channel metadata for TAIFEX daily data.
 func (a *TaifexChannelAdapter) Metadata() ChannelMetadata {
 	return ChannelMetadata{
-		ChannelID:  "taifex-daily",
+		ChannelID:  "taifex_daily",
 		Country:    "台灣",
 		Platform:   "TAIFEX 期交所",
 		APIFormat:  "REST JSON",

@@ -2,11 +2,11 @@ package apigateway
 
 import "testing"
 
-func TestJPYYahooChannelAdapter_Metadata(t *testing.T) {
-	a := &JPYYahooChannelAdapter{}
+func TestFrankfurterFXChannelAdapter_Metadata(t *testing.T) {
+	a := &FrankfurterFXChannelAdapter{}
 	m := a.Metadata()
-	if m.ChannelID != "jpy_yahoo" {
-		t.Errorf("ChannelID = %q, want jpy_yahoo", m.ChannelID)
+	if m.ChannelID != "frankfurter_fx" {
+		t.Errorf("ChannelID = %q, want frankfurter_fx", m.ChannelID)
 	}
 	if m.Country != "日本" {
 		t.Errorf("Country = %q, want 日本", m.Country)
@@ -25,10 +25,10 @@ func TestJPYYahooChannelAdapter_Metadata(t *testing.T) {
 	}
 }
 
-func TestJPYYahooChannelAdapter_RateLimit(t *testing.T) {
-	a := NewJPYYahooChannelAdapter(nil)
+func TestFrankfurterFXChannelAdapter_RateLimit(t *testing.T) {
+	a := NewFrankfurterFXChannelAdapter(nil)
 	if a == nil {
-		t.Fatal("NewJPYYahooChannelAdapter returned nil")
+		t.Fatal("NewFrankfurterFXChannelAdapter returned nil")
 	}
 	limiter := a.RateLimit()
 	if limiter == nil {

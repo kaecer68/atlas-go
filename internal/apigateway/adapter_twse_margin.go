@@ -21,7 +21,7 @@ type TWSEMarginChannelAdapter struct {
 func NewTWSEMarginChannelAdapter(provider *marketdata.TWSEMarginBalanceProvider) *TWSEMarginChannelAdapter {
 	return &TWSEMarginChannelAdapter{
 		provider: provider,
-		limiter:  rate.NewLimiter(TWSEOpenAPIRate, TWSEOpenAPIBurst),
+		limiter:  rate.NewLimiter(TWSEMarginRate, TWSEMarginBurst),
 	}
 }
 

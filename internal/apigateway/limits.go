@@ -14,10 +14,6 @@ var (
 	YahooFinanceRate  = rate.Every(1 * time.Second)
 	YahooFinanceBurst = 1
 
-	// TWSEOpenAPIRate: 5 req/sec per IP.
-	TWSEOpenAPIRate  = rate.Every(200 * time.Millisecond)
-	TWSEOpenAPIBurst = 5
-
 	// TWSECapitalFlowRate: conservative.
 	TWSECapitalFlowRate  = rate.Every(5 * time.Second)
 	TWSECapitalFlowBurst = 1
@@ -38,8 +34,12 @@ var (
 	FugleBasicRate  = rate.Every(time.Second)
 	FugleBasicBurst = 1
 
-	// GeopoliticalRate: RSS sources.
-	GeopoliticalRate  = rate.Every(10 * time.Second)
+	// FrankfurterFXRate: Frankfurter API (api.frankfurter.app). Free tier, no auth.
+	FrankfurterFXRate  = rate.Every(10 * time.Second)
+	FrankfurterFXBurst = 1
+
+	// GeopoliticalRate: RSS sources (1 req/min to avoid overwhelming feeds).
+	GeopoliticalRate  = rate.Every(time.Minute)
 	GeopoliticalBurst = 1
 
 	// ExportStatisticsRate: manual triggers should not be overly restricted.
@@ -67,7 +67,7 @@ func NewRateLimitManager() *RateLimitManager {
 	return &RateLimitManager{
 		limiters: map[string]*rate.Limiter{
 			"us_yahoo":            yahooSharedLimiter,
-			"jpy_yahoo":           yahooSharedLimiter,
+			"frankfurter_fx":      rate.NewLimiter(FrankfurterFXRate, FrankfurterFXBurst),
 			"twse_replay":         rate.NewLimiter(rate.Inf, 0), // no limit for file-based
 			"twse_capital_flow":   rate.NewLimiter(TWSECapitalFlowRate, TWSECapitalFlowBurst),
 			"fugle":               rate.NewLimiter(FugleBasicRate, FugleBasicBurst),
@@ -77,8 +77,8 @@ func NewRateLimitManager() *RateLimitManager {
 			"geopolitical_taiwan": rate.NewLimiter(GeopoliticalRate, GeopoliticalBurst),
 			"twse_margin":         rate.NewLimiter(TWSEMarginRate, TWSEMarginBurst),
 			"export_statistics":   rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
-			"tsmc_revenue":        rate.NewLimiter(FinMindFreeRate, FinMindFreeBurst), // inherits FinMind
-			"janus_regime":        rate.NewLimiter(rate.Inf, 0),                       // no limit for compute
+			"tsmc_revenue":        rate.NewLimiter(rate.Every(2*time.Minute), 1), // TSMC monthly revenue
+			"janus_regime":        rate.NewLimiter(rate.Inf, 0),                  // no limit for compute
 			"tej":                 rate.NewLimiter(TEJRate, TEJBurst),
 			"exchange_rate":       rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"sox_index":           rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
@@ -87,9 +87,9 @@ func NewRateLimitManager() *RateLimitManager {
 			"bdi":                 rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"dram_spot_price":     rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"twse_sector_index":   rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
-			"taifex-daily":        rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+			"taifex_daily":        rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"twse_oddlot":         rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
-			"twse-etf":            rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+			"twse_etf":            rate.NewLimiter(rate.Every(1*time.Second), 1), // adapter ground truth
 		},
 	}
 }

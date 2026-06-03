@@ -21,7 +21,7 @@ type TWSECapitalFlowChannelAdapter struct {
 func NewTWSECapitalFlowChannelAdapter(provider *marketdata.TWSECapitalFlowProvider) *TWSECapitalFlowChannelAdapter {
 	return &TWSECapitalFlowChannelAdapter{
 		provider: provider,
-		limiter:  rate.NewLimiter(TWSEOpenAPIRate, TWSEOpenAPIBurst),
+		limiter:  rate.NewLimiter(TWSECapitalFlowRate, TWSECapitalFlowBurst),
 	}
 }
 

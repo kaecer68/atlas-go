@@ -105,7 +105,7 @@ func (s *DataChannelService) getCachedFinMindHealth() (status, updated, lastErro
 
 // getCachedFrankfurterHealth returns Frankfurter FX health from Gateway health store.
 func (s *DataChannelService) getCachedFrankfurterHealth() (status, updated, lastError string) {
-	return s.getHealthFromStore("jpy_yahoo", "enabled")
+	return s.getHealthFromStore("frankfurter_fx", "enabled")
 }
 
 type ChannelHealthStoreAdapter struct {
@@ -264,7 +264,7 @@ func (s *DataChannelService) GetAllChannelStatuses(ctx context.Context) ([]DataC
 	channels = append(channels, s.buildFugleChannel())
 	channels = append(channels, s.buildFubonChannel())
 	channels = append(channels, s.buildFinMindChannel())
-	channels = append(channels, s.buildJPYYahooChannel(now))
+	channels = append(channels, s.buildFrankfurterFXChannel(now))
 	channels = append(channels, s.buildGeopoliticalChannel(now))
 	channels = append(channels, s.buildTWSEMarginChannel(now))
 	channels = append(channels, s.buildExportStatisticsChannel(now))
@@ -386,21 +386,21 @@ func (s *DataChannelService) buildFinMindChannel() DataChannel {
 	}
 }
 
-func (s *DataChannelService) buildJPYYahooChannel(now time.Time) DataChannel {
+func (s *DataChannelService) buildFrankfurterFXChannel(now time.Time) DataChannel {
 	macroPath := filepath.Join(s.WorkDir, "data/state/macro/latest.json")
 	status, updated := checkJPYHealth(macroPath, now)
-	rec := s.healthStore.Get("jpy_yahoo")
+	rec := s.healthStore.Get("frankfurter_fx")
 	if rec != nil && rec.LastError != "" {
 		updated = "上次失敗: " + rec.LastError
 	}
 
-	// Also check Frankfurter FX API as an alternative JPY source.
+	// Check Frankfurter FX API health as primary JPY source.
 	fxStatus, _, fxLastError := s.getCachedFrankfurterHealth()
 	if status == "error" && fxStatus == "ok" {
-		// File data is stale but the Frankfurter API (alternative JPY source) is reachable.
+		// File data is stale but the Frankfurter API is reachable.
 		status = "warn"
-		updated = "檔案數據過期，但替代來源 Frankfurter API 連線正常"
-		rec = s.healthStore.Get("jpy_yahoo")
+		updated = "檔案數據過期，但 Frankfurter API 連線正常"
+		rec = s.healthStore.Get("frankfurter_fx")
 		if rec != nil && rec.LastError != "" {
 			updated += " · 最後成功: " + rec.LastSuccessAt
 		}
@@ -411,7 +411,7 @@ func (s *DataChannelService) buildJPYYahooChannel(now time.Time) DataChannel {
 			lastError = lastErrorStr
 		}
 		return DataChannel{
-			ChannelID:  "jpy_yahoo",
+			ChannelID:  "frankfurter_fx",
 			Country:    "日本",
 			Platform:   "Frankfurter (USD/JPY)",
 			APIFormat:  "REST JSON",
@@ -425,7 +425,7 @@ func (s *DataChannelService) buildJPYYahooChannel(now time.Time) DataChannel {
 	}
 
 	return DataChannel{
-		ChannelID:  "jpy_yahoo",
+		ChannelID:  "frankfurter_fx",
 		Country:    "日本",
 		Platform:   "Frankfurter (USD/JPY)",
 		APIFormat:  "REST JSON",

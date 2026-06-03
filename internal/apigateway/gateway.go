@@ -148,7 +148,7 @@ func channelIDs() []string {
 		"fugle",
 		"fubon",
 		"finmind",
-		"jpy_yahoo",
+		"frankfurter_fx",
 		"geopolitical",
 		"twse_margin",
 		"export_statistics",
@@ -163,8 +163,8 @@ func channelIDs() []string {
 		"sector_data",
 		"day_trading",
 		"bdi",
-		"taifex-daily",
+		"taifex_daily",
 		"twse_oddlot",
-		"twse-etf",
+		"twse_etf",
 	}
 }

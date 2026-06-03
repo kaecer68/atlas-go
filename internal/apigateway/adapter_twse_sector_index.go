@@ -70,12 +70,22 @@ func (a *TWSESectorIndexChannelAdapter) Fetch(ctx context.Context) (*FetchResult
 	}, nil
 }
 
-// HealthCheck performs a liveness check.
+// HealthCheck verifies TWSE OpenAPI connectivity by fetching a single-day range.
 func (a *TWSESectorIndexChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
+	today := time.Now()
+	_, err := a.provider.FetchSectorIndices(ctx, today, today)
+	if err != nil {
+		return HealthStatus{
+			Status:    "error",
+			LastError: err.Error(),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "liveness",
+		}, err
+	}
 	return HealthStatus{
 		Status:    "ok",
-		CheckType: "liveness",
 		UpdatedAt: time.Now().Format(time.RFC3339),
+		CheckType: "liveness",
 	}, nil
 }
 

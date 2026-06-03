@@ -37,7 +37,7 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 
 	channels := []channelMapping{
 		{channelID: "us_yahoo", apply: a.applyUSYahoo},
-		{channelID: "jpy_yahoo", apply: a.applyJPYFrankfurter},
+		{channelID: "frankfurter_fx", apply: a.applyFrankfurterFX},
 		{channelID: "exchange_rate", apply: a.applyExchangeRate},
 		{channelID: "sox_index", apply: a.applySOXIndex},
 		{channelID: "twse_capital_flow", apply: a.applyCapitalFlow},
@@ -113,8 +113,11 @@ func (a *macroDataGatewayAdapter) applyUSYahoo(snap *marketdata.MacroDataSnapsho
 	}
 }
 
-func (a *macroDataGatewayAdapter) applyJPYFrankfurter(snap *marketdata.MacroDataSnapshot, data []byte) {
-	// Only use Frankfurter as fallback when Yahoo didn't provide JPY data.
+func (a *macroDataGatewayAdapter) applyFrankfurterFX(snap *marketdata.MacroDataSnapshot, data []byte) {
+	// Frankfurter is the primary (and now sole) JPY source.
+	// us_yahoo no longer fetches JPY=X, so there's no fallback logic needed.
+	// The defensive check below handles the edge case where another channel
+	// provided JPY data first.
 	if snap.JPY.Symbol != "" {
 		return
 	}
@@ -336,7 +339,7 @@ var (
 // NewTaifexFetcher creates a fetcher for TAIFEX PCR and retail futures OI data.
 func NewTaifexFetcher(fetcher DataFetcher) apisystem.TaifexFetcher {
 	return func(ctx context.Context) (*marketdata.PCRStats, *marketdata.RetailFuturesOI, error) {
-		data, err := fetcher(ctx, "taifex-daily")
+		data, err := fetcher(ctx, "taifex_daily")
 		if err != nil {
 			return nil, nil, err
 		}
@@ -369,7 +372,7 @@ func NewOddLotFetcher(fetcher DataFetcher) apisystem.OddLotFetcher {
 // NewETFFetcher creates a fetcher for TWSE ETF subscription data.
 func NewETFFetcher(fetcher DataFetcher) apisystem.ETFFetcher {
 	return func(ctx context.Context) (*marketdata.ETFStats, error) {
-		data, err := fetcher(ctx, "twse-etf")
+		data, err := fetcher(ctx, "twse_etf")
 		if err != nil {
 			return nil, err
 		}
