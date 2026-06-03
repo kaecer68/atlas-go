@@ -1,4 +1,7 @@
-# Atlas Strategy Evolution Skill
+---
+name: atlas-strategy-evolution
+description: "Use when working with the strategy evolution loop, model performance feedback, or dynamic agent adjustment. Triggers: evolution cycle, agent performance evaluation, mutation brief, weakest agent selection."
+---
 
 **版本**: 1.0  
 **日期**: 2026-04-23  
