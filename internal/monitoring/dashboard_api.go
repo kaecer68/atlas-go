@@ -331,6 +331,8 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 
 func newWiredEventCalendar(provider marketdata.CalendarEventProvider) *industry.EventCalendar {
 	ec := industry.NewEventCalendar()
+	// Always generate default-rule events for the current year.
+	ec.RefreshEvents(time.Now())
 	if provider == nil {
 		return ec
 	}

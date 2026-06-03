@@ -32,6 +32,26 @@ const (
 	EventPositionBuilding   TaiwanEventType = "position_building"
 )
 
+// EventDataSource tracks the provenance of calendar event data.
+type EventDataSource string
+
+const (
+	DataSourceDefaultRules EventDataSource = "default_rules"    // 硬編碼規則生成
+	DataSourceTWSE         EventDataSource = "twse_provider"    // TWSE OpenAPI
+	DataSourceFinMind      EventDataSource = "finmind_provider" // FinMind API
+	DataSourceMOPS         EventDataSource = "mops_provider"    // 公開資訊觀測站
+)
+
+// EventEvidence tracks the evidentiary support level for calendar event data.
+type EventEvidence string
+
+const (
+	EvidenceBacktested EventEvidence = "backtested" // 經過回測驗證
+	EvidenceEstimated  EventEvidence = "estimated"  // 基於歷史經驗估算
+	EvidenceUnverified EventEvidence = "unverified" // 未經任何驗證
+	EvidenceRealTime   EventEvidence = "realtime"   // 即時 API 資料
+)
+
 // CalendarEvent represents a concrete calendar event with computed dates.
 type CalendarEvent struct {
 	ID                  string    `json:"id"`
@@ -48,6 +68,12 @@ type CalendarEvent struct {
 	DecayDays           int       `json:"decay_days"`
 	AffectedIndustries  []string  `json:"affected_industries"`
 	SentimentAdjustment float64   `json:"sentiment_adjustment"`
+	// DataSource tracks the provenance of this event (default_rules, twse_provider, etc.).
+	DataSource EventDataSource `json:"data_source"`
+	// EvidenceQuality indicates the level of evidentiary support for this event.
+	EvidenceQuality EventEvidence `json:"evidence_quality"`
+	// GeneratedAt records when this event was created, allowing freshness checks.
+	GeneratedAt time.Time `json:"generated_at"`
 }
 
 // String returns a human-readable summary of the event.
@@ -76,26 +102,72 @@ type EventRule struct {
 // EventCalendar is the engine that manages Taiwan market calendar events.
 // Follows the same structural pattern as SeasonalEngine.
 type EventCalendar struct {
-	events      []CalendarEvent
-	mu          sync.RWMutex
-	config      *config.ParametersConfig
-	annualRules map[string]EventRule
+	events         []CalendarEvent
+	providerEvents []CalendarEvent // 外部 provider 事件，RefreshEvents 不會覆蓋
+	mu             sync.RWMutex
+	config         *config.ParametersConfig
+	annualRules    map[string]EventRule
+	generatedAt    time.Time // 當前批次的生成時間戳，避免 per-event time.Now()
 }
 
 // NewEventCalendar creates a new EventCalendar with default event rules.
-// Follows the same constructor pattern as NewSeasonalEngine.
+// If ParametersConfig.Industry.EventCalendarRules is populated, its entries
+// overlay BaseWeight/DecayDays/Direction onto the matching default rules (ST-1).
 func NewEventCalendar() *EventCalendar {
 	cfg := config.GetParametersConfig()
 	tec := &EventCalendar{
 		config:      cfg,
 		annualRules: defaultEventRules(),
 	}
+	tec.applyConfigOverrides()
 	return tec
 }
 
+// applyConfigOverrides reads EventCalendarRules from ParametersConfig and overlays
+// tunable scalar fields (BaseWeight, DecayDays, Direction) onto the hardcoded
+// annualRules map. Date computation functions and AffectedIndustries are NOT
+// overridable from JSON (they require Go code). Entries without a matching
+// EventType in annualRules are silently skipped for forward compatibility.
+func (tec *EventCalendar) applyConfigOverrides() {
+	cfg := tec.config
+	if cfg == nil {
+		return
+	}
+	rules := cfg.Industry.EventCalendarRules.Value
+	if len(rules) == 0 {
+		return
+	}
+	for _, cr := range rules {
+		// Match by EventType first; fall back to Name for backward compatibility.
+		key := cr.EventType
+		if key == "" {
+			key = cr.Name
+		}
+		rule, ok := tec.annualRules[key]
+		if !ok {
+			continue
+		}
+		// Overlay tunable fields only when the config value is non-zero.
+		if cr.BaseWeight > 0 {
+			rule.BaseWeight = cr.BaseWeight
+		}
+		if cr.DecayDays > 0 {
+			rule.DecayDays = cr.DecayDays
+		}
+		if cr.Direction != "" {
+			rule.Direction = cr.Direction
+		}
+		tec.annualRules[key] = rule
+	}
+	logging.Debug("event_calendar", "config_overrides_applied",
+		logging.FInt("rule_count", len(rules)),
+	)
+}
+
 // UpdateFromProvider fetches calendar events from an external provider and merges
-// them into the existing event list. Provider events are additive — they do not
-// replace existing events of different types. Deduplication is by (EventType, Date).
+// them into the provider event list. Provider events are stored separately in
+// tec.providerEvents so that RefreshEvents() does not overwrite them.
+// Deduplication is by (EventType, Date, Symbol).
 //
 // This method is safe for concurrent use via the EventCalendar's internal mutex.
 func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marketdata.CalendarEventProvider) {
@@ -118,17 +190,52 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 		return
 	}
 
+	tec.generatedAt = time.Now()
+
+	// Determine data source from provider name.
+	source := DataSourceTWSE
+	switch provider.Name() {
+	case "twse_calendar":
+		source = DataSourceTWSE
+	case "finmind_calendar":
+		source = DataSourceFinMind
+	default:
+		source = DataSourceTWSE
+	}
+
 	tec.mu.Lock()
 	defer tec.mu.Unlock()
 
+	// Dedup against both default events and existing provider events.
+	// Key format: EventType + "|" + Date + "|" + Symbol (consistent across all sources).
 	seen := make(map[string]bool)
 	for _, evt := range tec.events {
-		key := evt.EventType + "|" + evt.PeakDate.Format("2006-01-02")
+		key := evt.EventType + "|" + evt.PeakDate.Format("2006-01-02") + "|"
+		seen[key] = true
+	}
+	for _, evt := range tec.providerEvents {
+		key := evt.EventType + "|" + evt.PeakDate.Format("2006-01-02") + "|" + evt.ID
 		seen[key] = true
 	}
 
+	var added int
+	var rejected int
 	for _, pe := range providerEvents {
-		key := pe.EventType + "|" + pe.Date
+		// ST-5: Validate provider event data sanity.
+		if valErr := validateProviderEvent(pe); valErr != nil {
+			rejected++
+			if rejected <= 5 {
+				logging.Warn("event_calendar", "provider_event_rejected",
+					logging.FStr("provider", provider.Name()),
+					logging.FStr("reason", valErr.Error()),
+					logging.FStr("symbol", pe.Symbol),
+					logging.FStr("date", pe.Date),
+				)
+			}
+			continue
+		}
+
+		key := pe.EventType + "|" + pe.Date + "|" + pe.Symbol
 		if seen[key] {
 			continue
 		}
@@ -136,6 +243,7 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 
 		eventDate, parseErr := time.Parse("2006-01-02", pe.Date)
 		if parseErr != nil {
+			rejected++
 			logging.Warn("event_calendar", "parse_date_failed",
 				logging.FStr("date", pe.Date),
 				logging.Err(parseErr),
@@ -143,29 +251,60 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 			continue
 		}
 
-		evt := CalendarEvent{
-			ID:                  fmt.Sprintf("%s_%s_%s", pe.EventType, pe.Date, pe.Symbol),
-			Name:                pe.Name,
-			NameEN:              "",
-			EventType:           pe.EventType,
-			Description:         pe.Description,
-			Direction:           pe.Direction,
-			BaseWeight:          pe.Weight,
-			Active:              false,
-			StartDate:           eventDate.AddDate(0, 0, -3),
-			EndDate:             eventDate.AddDate(0, 0, 3),
-			PeakDate:            eventDate,
-			DecayDays:           3,
-			SentimentAdjustment: 0.0,
-		}
+		evt := tec.newProviderEvent(source)
+		evt.ID = fmt.Sprintf("%s_%s_%s", pe.EventType, pe.Date, pe.Symbol)
+		evt.Name = pe.Name
+		evt.EventType = pe.EventType
+		evt.Description = pe.Description
+		evt.Direction = pe.Direction
+		evt.BaseWeight = pe.Weight
+		evt.StartDate = eventDate.AddDate(0, 0, -3)
+		evt.EndDate = eventDate.AddDate(0, 0, 3)
+		evt.PeakDate = eventDate
+		evt.DecayDays = 3
 
-		tec.events = append(tec.events, evt)
+		tec.providerEvents = append(tec.providerEvents, evt)
+		added++
 	}
 
 	logging.Info("event_calendar", "provider_merged",
 		logging.FStr("provider", provider.Name()),
-		logging.FInt("added", len(providerEvents)),
+		logging.FInt("added", added),
+		logging.FInt("rejected", rejected),
+		logging.FInt("total_provider_events", len(tec.providerEvents)),
 	)
+}
+
+// validateProviderEvent performs sanity checks on a provider event (ST-5).
+// Returns nil if valid, or a descriptive error if invalid.
+func validateProviderEvent(pe marketdata.CalendarProviderData) error {
+	if pe.Symbol == "" {
+		return fmt.Errorf("empty symbol")
+	}
+	if pe.EventType == "" {
+		return fmt.Errorf("empty event_type")
+	}
+	if pe.Date == "" {
+		return fmt.Errorf("empty date")
+	}
+	if pe.Weight < 0.0 || pe.Weight > 1.0 {
+		return fmt.Errorf("weight %.2f out of [0.0, 1.0] range", pe.Weight)
+	}
+	switch pe.Direction {
+	case "bullish", "bearish", "mixed", "neutral":
+		// valid
+	default:
+		return fmt.Errorf("invalid direction: %q", pe.Direction)
+	}
+	// Validate date is parseable and within reasonable range.
+	t, err := time.Parse("2006-01-02", pe.Date)
+	if err != nil {
+		return fmt.Errorf("unparseable date %q: %w", pe.Date, err)
+	}
+	if t.Year() < 2010 || t.Year() > 2040 {
+		return fmt.Errorf("date year %d out of [2010, 2040] range", t.Year())
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------------
@@ -173,39 +312,74 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 // ---------------------------------------------------------------------------
 
 // lunarNewYearDates maps year to lunar new year (春節) date in Asia/Taipei.
+// Coverage: 2023-2030. Beyond this range, getLunarDate logs a warning and
+// falls back to an approximate date.
 var lunarNewYearDates = map[int]time.Time{
+	2023: time.Date(2023, 1, 22, 0, 0, 0, 0, time.UTC),
 	2024: time.Date(2024, 2, 10, 0, 0, 0, 0, time.UTC),
 	2025: time.Date(2025, 1, 29, 0, 0, 0, 0, time.UTC),
 	2026: time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC),
 	2027: time.Date(2027, 2, 6, 0, 0, 0, 0, time.UTC),
 	2028: time.Date(2028, 1, 26, 0, 0, 0, 0, time.UTC),
+	2029: time.Date(2029, 2, 13, 0, 0, 0, 0, time.UTC),
+	2030: time.Date(2030, 2, 3, 0, 0, 0, 0, time.UTC),
 }
 
 // lunarDragonBoatDates maps year to 端午節 date (lunar 5/5).
 var lunarDragonBoatDates = map[int]time.Time{
+	2023: time.Date(2023, 6, 22, 0, 0, 0, 0, time.UTC),
 	2024: time.Date(2024, 6, 10, 0, 0, 0, 0, time.UTC),
 	2025: time.Date(2025, 5, 31, 0, 0, 0, 0, time.UTC),
 	2026: time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC),
 	2027: time.Date(2027, 6, 9, 0, 0, 0, 0, time.UTC),
 	2028: time.Date(2028, 5, 28, 0, 0, 0, 0, time.UTC),
+	2029: time.Date(2029, 6, 16, 0, 0, 0, 0, time.UTC),
+	2030: time.Date(2030, 6, 5, 0, 0, 0, 0, time.UTC),
 }
 
 // lunarMidAutumnDates maps year to 中秋節 date (lunar 8/15).
 var lunarMidAutumnDates = map[int]time.Time{
+	2023: time.Date(2023, 9, 29, 0, 0, 0, 0, time.UTC),
 	2024: time.Date(2024, 9, 17, 0, 0, 0, 0, time.UTC),
 	2025: time.Date(2025, 10, 6, 0, 0, 0, 0, time.UTC),
 	2026: time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC),
 	2027: time.Date(2027, 9, 15, 0, 0, 0, 0, time.UTC),
 	2028: time.Date(2028, 10, 3, 0, 0, 0, 0, time.UTC),
+	2029: time.Date(2029, 9, 22, 0, 0, 0, 0, time.UTC),
+	2030: time.Date(2030, 9, 12, 0, 0, 0, 0, time.UTC),
 }
 
 // tombSweepingDates maps year to 清明節 date.
 var tombSweepingDates = map[int]time.Time{
+	2023: time.Date(2023, 4, 5, 0, 0, 0, 0, time.UTC),
 	2024: time.Date(2024, 4, 4, 0, 0, 0, 0, time.UTC),
 	2025: time.Date(2025, 4, 4, 0, 0, 0, 0, time.UTC),
 	2026: time.Date(2026, 4, 5, 0, 0, 0, 0, time.UTC),
 	2027: time.Date(2027, 4, 5, 0, 0, 0, 0, time.UTC),
 	2028: time.Date(2028, 4, 4, 0, 0, 0, 0, time.UTC),
+	2029: time.Date(2029, 4, 4, 0, 0, 0, 0, time.UTC),
+	2030: time.Date(2030, 4, 5, 0, 0, 0, 0, time.UTC),
+}
+
+// getLunarDate looks up a date from a lunar calendar table. If the year is not
+// covered, it logs a warning and returns the fallback date. This makes fallback
+// usage visible rather than silently producing inaccurate dates.
+func getLunarDate(year int, table map[int]time.Time, fallback time.Time, holidayName string) time.Time {
+	if d, ok := table[year]; ok {
+		return d
+	}
+	logging.Warn("event_calendar", "lunar_date_fallback",
+		logging.FStr("holiday", holidayName),
+		logging.FInt("year", year),
+		logging.FStr("fallback", fallback.Format("2006-01-02")),
+	)
+	return fallback
+}
+
+// GetLunarCoverageYears returns the min and max year covered by the lunar
+// calendar lookup tables. Years outside this range use approximate fallbacks.
+func GetLunarCoverageYears() (int, int) {
+	return 2023, 2030
 }
 
 // taiwanHoliday is a fixed-date or lookup-based Taiwan public holiday.
@@ -219,30 +393,18 @@ type taiwanHoliday struct {
 var taiwanPublicHolidays = []taiwanHoliday{
 	{Name: "元旦", Month: 1, Day: 1},
 	{Name: "春節", Compute: func(y int) time.Time {
-		if d, ok := lunarNewYearDates[y]; ok {
-			return d
-		}
-		return time.Date(y, 2, 1, 0, 0, 0, 0, time.UTC)
+		return getLunarDate(y, lunarNewYearDates, time.Date(y, 2, 1, 0, 0, 0, 0, time.UTC), "春節")
 	}},
 	{Name: "228和平紀念日", Month: 2, Day: 28},
 	{Name: "清明節", Compute: func(y int) time.Time {
-		if d, ok := tombSweepingDates[y]; ok {
-			return d
-		}
-		return time.Date(y, 4, 5, 0, 0, 0, 0, time.UTC)
+		return getLunarDate(y, tombSweepingDates, time.Date(y, 4, 5, 0, 0, 0, 0, time.UTC), "清明節")
 	}},
 	{Name: "勞動節", Month: 5, Day: 1},
 	{Name: "端午節", Compute: func(y int) time.Time {
-		if d, ok := lunarDragonBoatDates[y]; ok {
-			return d
-		}
-		return time.Date(y, 6, 10, 0, 0, 0, 0, time.UTC)
+		return getLunarDate(y, lunarDragonBoatDates, time.Date(y, 6, 10, 0, 0, 0, 0, time.UTC), "端午節")
 	}},
 	{Name: "中秋節", Compute: func(y int) time.Time {
-		if d, ok := lunarMidAutumnDates[y]; ok {
-			return d
-		}
-		return time.Date(y, 9, 20, 0, 0, 0, 0, time.UTC)
+		return getLunarDate(y, lunarMidAutumnDates, time.Date(y, 9, 20, 0, 0, 0, 0, time.UTC), "中秋節")
 	}},
 	{Name: "國慶日", Month: 10, Day: 10},
 }
@@ -327,22 +489,15 @@ func defaultEventRules() map[string]EventRule {
 		EventType: "spring_festival",
 		Name:      "春節前後",
 		ComputePeakDate: func(year int) time.Time {
-			if d, ok := lunarNewYearDates[year]; ok {
-				return d
-			}
-			return time.Date(year, 2, 1, 0, 0, 0, 0, time.UTC)
+			return getLunarDate(year, lunarNewYearDates, time.Date(year, 2, 1, 0, 0, 0, 0, time.UTC), "春節")
 		},
 		ComputeStartDate: func(year int) time.Time {
-			if d, ok := lunarNewYearDates[year]; ok {
-				return d.AddDate(0, 0, -5)
-			}
-			return time.Date(year, 2, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, -5)
+			d := getLunarDate(year, lunarNewYearDates, time.Date(year, 2, 1, 0, 0, 0, 0, time.UTC), "春節")
+			return d.AddDate(0, 0, -5)
 		},
 		ComputeEndDate: func(year int) time.Time {
-			if d, ok := lunarNewYearDates[year]; ok {
-				return d.AddDate(0, 0, 10)
-			}
-			return time.Date(year, 2, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, 10)
+			d := getLunarDate(year, lunarNewYearDates, time.Date(year, 2, 1, 0, 0, 0, 0, time.UTC), "春節")
+			return d.AddDate(0, 0, 10)
 		},
 		Direction:          "bullish",
 		BaseWeight:         0.60,
@@ -601,6 +756,28 @@ func defaultEventRules() map[string]EventRule {
 }
 
 // ---------------------------------------------------------------------------
+// newDefaultEvent creates a CalendarEvent with default evidence markers for
+// hardcoded-rule-generated events. All build*Event methods should use this.
+// Uses tec.generatedAt which is set once per RefreshEvents/UpdateFromProvider call
+// to avoid calling time.Now() per-event during bulk generation.
+func (tec *EventCalendar) newDefaultEvent() CalendarEvent {
+	return CalendarEvent{
+		DataSource:      DataSourceDefaultRules,
+		EvidenceQuality: EvidenceUnverified,
+		GeneratedAt:     tec.generatedAt,
+	}
+}
+
+// newProviderEvent creates a CalendarEvent with evidence markers for
+// externally-sourced provider events.
+func (tec *EventCalendar) newProviderEvent(source EventDataSource) CalendarEvent {
+	return CalendarEvent{
+		DataSource:      source,
+		EvidenceQuality: EvidenceEstimated,
+		GeneratedAt:     tec.generatedAt,
+	}
+}
+
 // EventCalendar methods
 // ---------------------------------------------------------------------------
 
@@ -609,6 +786,7 @@ func (tec *EventCalendar) RefreshEvents(now time.Time) {
 	tec.mu.Lock()
 	defer tec.mu.Unlock()
 
+	tec.generatedAt = time.Now()
 	year := now.Year()
 	var allEvents []CalendarEvent
 
@@ -717,7 +895,10 @@ func (tec *EventCalendar) RefreshEvents(now time.Time) {
 		allEvents = append(allEvents, evt)
 	}
 
-	tec.events = allEvents
+	// ST-2 fix: Preserve provider events across RefreshEvents calls.
+	// Provider events are stored separately and appended after regeneration
+	// to prevent RefreshEvents from discarding TWSE/external data.
+	tec.events = append(allEvents, tec.providerEvents...)
 }
 
 // DetectActiveEvents returns all events active at the given time.
@@ -847,22 +1028,19 @@ func (tec *EventCalendar) buildEventFromRule(rule EventRule, year int, month tim
 		endDate = time.Date(year, 12, 31, 0, 0, 0, 0, time.UTC)
 	}
 
-	return CalendarEvent{
-		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
-		Name:                rule.Name,
-		NameEN:              "",
-		EventType:           rule.EventType,
-		Description:         fmt.Sprintf("季底作帳 - %s", month.String()),
-		Direction:           rule.Direction,
-		BaseWeight:          rule.BaseWeight,
-		Active:              false,
-		StartDate:           startDate,
-		EndDate:             endDate,
-		PeakDate:            endDate,
-		DecayDays:           rule.DecayDays,
-		AffectedIndustries:  rule.AffectedIndustries,
-		SentimentAdjustment: 0.0,
-	}
+	evt := tec.newDefaultEvent()
+	evt.ID = fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month)
+	evt.Name = rule.Name
+	evt.EventType = rule.EventType
+	evt.Description = fmt.Sprintf("季底作帳 - %s", month.String())
+	evt.Direction = rule.Direction
+	evt.BaseWeight = rule.BaseWeight
+	evt.StartDate = startDate
+	evt.EndDate = endDate
+	evt.PeakDate = endDate
+	evt.DecayDays = rule.DecayDays
+	evt.AffectedIndustries = rule.AffectedIndustries
+	return evt
 }
 
 func (tec *EventCalendar) buildMonthlyEvent(rule EventRule, year int, month time.Month) CalendarEvent {
@@ -874,22 +1052,19 @@ func (tec *EventCalendar) buildMonthlyEvent(rule EventRule, year int, month time
 		endDate = time.Date(year, 12, 31, 0, 0, 0, 0, time.UTC)
 	}
 
-	return CalendarEvent{
-		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
-		Name:                rule.Name,
-		NameEN:              "",
-		EventType:           rule.EventType,
-		Description:         fmt.Sprintf("%s - %s", rule.Name, month.String()),
-		Direction:           rule.Direction,
-		BaseWeight:          rule.BaseWeight,
-		Active:              false,
-		StartDate:           startDate,
-		EndDate:             endDate,
-		PeakDate:            peakDate,
-		DecayDays:           rule.DecayDays,
-		AffectedIndustries:  rule.AffectedIndustries,
-		SentimentAdjustment: 0.0,
-	}
+	evt := tec.newDefaultEvent()
+	evt.ID = fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month)
+	evt.Name = rule.Name
+	evt.EventType = rule.EventType
+	evt.Description = fmt.Sprintf("%s - %s", rule.Name, month.String())
+	evt.Direction = rule.Direction
+	evt.BaseWeight = rule.BaseWeight
+	evt.StartDate = startDate
+	evt.EndDate = endDate
+	evt.PeakDate = peakDate
+	evt.DecayDays = rule.DecayDays
+	evt.AffectedIndustries = rule.AffectedIndustries
+	return evt
 }
 
 func (tec *EventCalendar) buildHolidayEvent(rule EventRule, h taiwanHoliday, year int) CalendarEvent {
@@ -903,44 +1078,38 @@ func (tec *EventCalendar) buildHolidayEvent(rule EventRule, h taiwanHoliday, yea
 	startDate := holidayDate.AddDate(0, 0, -3)
 	endDate := holidayDate.AddDate(0, 0, 2)
 
-	return CalendarEvent{
-		ID:                  fmt.Sprintf("%s_%s_%d", rule.EventType, h.Name, year),
-		Name:                fmt.Sprintf("連假 - %s", h.Name),
-		NameEN:              "",
-		EventType:           rule.EventType,
-		Description:         fmt.Sprintf("%s前後交易淡季", h.Name),
-		Direction:           rule.Direction,
-		BaseWeight:          rule.BaseWeight,
-		Active:              false,
-		StartDate:           startDate,
-		EndDate:             endDate,
-		PeakDate:            holidayDate,
-		DecayDays:           rule.DecayDays,
-		AffectedIndustries:  rule.AffectedIndustries,
-		SentimentAdjustment: 0.0,
-	}
+	evt := tec.newDefaultEvent()
+	evt.ID = fmt.Sprintf("%s_%s_%d", rule.EventType, h.Name, year)
+	evt.Name = fmt.Sprintf("連假 - %s", h.Name)
+	evt.EventType = rule.EventType
+	evt.Description = fmt.Sprintf("%s前後交易淡季", h.Name)
+	evt.Direction = rule.Direction
+	evt.BaseWeight = rule.BaseWeight
+	evt.StartDate = startDate
+	evt.EndDate = endDate
+	evt.PeakDate = holidayDate
+	evt.DecayDays = rule.DecayDays
+	evt.AffectedIndustries = rule.AffectedIndustries
+	return evt
 }
 
 func (tec *EventCalendar) buildPositionBuildingEvent(rule EventRule, year int, month time.Month) CalendarEvent {
 	startDate := lastWeekStart(year, month)
 	windowStart := lastTwoWeekStart(year, month)
 
-	return CalendarEvent{
-		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
-		Name:                rule.Name,
-		NameEN:              "",
-		EventType:           rule.EventType,
-		Description:         fmt.Sprintf("卡位行情 - %s", month.String()),
-		Direction:           rule.Direction,
-		BaseWeight:          rule.BaseWeight,
-		Active:              false,
-		StartDate:           startDate,
-		EndDate:             windowStart.AddDate(0, 0, -1),
-		PeakDate:            startDate.AddDate(0, 0, 2),
-		DecayDays:           rule.DecayDays,
-		AffectedIndustries:  rule.AffectedIndustries,
-		SentimentAdjustment: 0.0,
-	}
+	evt := tec.newDefaultEvent()
+	evt.ID = fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month)
+	evt.Name = rule.Name
+	evt.EventType = rule.EventType
+	evt.Description = fmt.Sprintf("卡位行情 - %s", month.String())
+	evt.Direction = rule.Direction
+	evt.BaseWeight = rule.BaseWeight
+	evt.StartDate = startDate
+	evt.EndDate = windowStart.AddDate(0, 0, -1)
+	evt.PeakDate = startDate.AddDate(0, 0, 2)
+	evt.DecayDays = rule.DecayDays
+	evt.AffectedIndustries = rule.AffectedIndustries
+	return evt
 }
 
 func (tec *EventCalendar) buildElectionEvent(rule EventRule, year int) CalendarEvent {
@@ -958,123 +1127,105 @@ func (tec *EventCalendar) buildElectionEvent(rule EventRule, year int) CalendarE
 		id = fmt.Sprintf("%s_local_%d", rule.EventType, year)
 	}
 
-	return CalendarEvent{
-		ID:                  id,
-		Name:                rule.Name,
-		NameEN:              "",
-		EventType:           rule.EventType,
-		Description:         desc,
-		Direction:           rule.Direction,
-		BaseWeight:          rule.BaseWeight,
-		Active:              false,
-		StartDate:           startDate,
-		EndDate:             endDate,
-		PeakDate:            peakDate,
-		DecayDays:           rule.DecayDays,
-		AffectedIndustries:  rule.AffectedIndustries,
-		SentimentAdjustment: 0.0,
-	}
+	evt := tec.newDefaultEvent()
+	evt.ID = id
+	evt.Name = rule.Name
+	evt.EventType = rule.EventType
+	evt.Description = desc
+	evt.Direction = rule.Direction
+	evt.BaseWeight = rule.BaseWeight
+	evt.StartDate = startDate
+	evt.EndDate = endDate
+	evt.PeakDate = peakDate
+	evt.DecayDays = rule.DecayDays
+	evt.AffectedIndustries = rule.AffectedIndustries
+	return evt
 }
 
 func (tec *EventCalendar) buildMSCIEvent(rule EventRule, year int, month time.Month) CalendarEvent {
 	settlementDate := lastBusinessDay(year, month)
 
-	return CalendarEvent{
-		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
-		Name:                rule.Name,
-		NameEN:              "",
-		EventType:           rule.EventType,
-		Description:         fmt.Sprintf("MSCI季度調整 - %s", month.String()),
-		Direction:           rule.Direction,
-		BaseWeight:          rule.BaseWeight,
-		Active:              false,
-		StartDate:           settlementDate.AddDate(0, 0, -3),
-		EndDate:             settlementDate.AddDate(0, 0, 3),
-		PeakDate:            settlementDate,
-		DecayDays:           rule.DecayDays,
-		AffectedIndustries:  rule.AffectedIndustries,
-		SentimentAdjustment: 0.0,
-	}
+	evt := tec.newDefaultEvent()
+	evt.ID = fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month)
+	evt.Name = rule.Name
+	evt.EventType = rule.EventType
+	evt.Description = fmt.Sprintf("MSCI季度調整 - %s", month.String())
+	evt.Direction = rule.Direction
+	evt.BaseWeight = rule.BaseWeight
+	evt.StartDate = settlementDate.AddDate(0, 0, -3)
+	evt.EndDate = settlementDate.AddDate(0, 0, 3)
+	evt.PeakDate = settlementDate
+	evt.DecayDays = rule.DecayDays
+	evt.AffectedIndustries = rule.AffectedIndustries
+	return evt
 }
 
 func (tec *EventCalendar) buildReportEvent(rule EventRule, deadline time.Time, label string, _ int) CalendarEvent {
-	return CalendarEvent{
-		ID:                  fmt.Sprintf("%s_%s", rule.EventType, deadline.Format("2006-01-02")),
-		Name:                fmt.Sprintf("%s - %s", rule.Name, label),
-		NameEN:              "",
-		EventType:           rule.EventType,
-		Description:         fmt.Sprintf("%s deadline %s", label, deadline.Format("2006-01-02")),
-		Direction:           rule.Direction,
-		BaseWeight:          rule.BaseWeight,
-		Active:              false,
-		StartDate:           deadline.AddDate(0, 0, -5),
-		EndDate:             deadline.AddDate(0, 0, 5),
-		PeakDate:            deadline,
-		DecayDays:           rule.DecayDays,
-		AffectedIndustries:  rule.AffectedIndustries,
-		SentimentAdjustment: 0.0,
-	}
+	evt := tec.newDefaultEvent()
+	evt.ID = fmt.Sprintf("%s_%s", rule.EventType, deadline.Format("2006-01-02"))
+	evt.Name = fmt.Sprintf("%s - %s", rule.Name, label)
+	evt.EventType = rule.EventType
+	evt.Description = fmt.Sprintf("%s deadline %s", label, deadline.Format("2006-01-02"))
+	evt.Direction = rule.Direction
+	evt.BaseWeight = rule.BaseWeight
+	evt.StartDate = deadline.AddDate(0, 0, -5)
+	evt.EndDate = deadline.AddDate(0, 0, 5)
+	evt.PeakDate = deadline
+	evt.DecayDays = rule.DecayDays
+	evt.AffectedIndustries = rule.AffectedIndustries
+	return evt
 }
 
 func (tec *EventCalendar) buildTW50Event(rule EventRule, year int, month time.Month) CalendarEvent {
 	settlementDate := thirdFriday(year, month)
 
-	return CalendarEvent{
-		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
-		Name:                rule.Name,
-		NameEN:              "",
-		EventType:           rule.EventType,
-		Description:         fmt.Sprintf("台灣50季度調整 - %s", month.String()),
-		Direction:           rule.Direction,
-		BaseWeight:          rule.BaseWeight,
-		Active:              false,
-		StartDate:           settlementDate.AddDate(0, 0, -3),
-		EndDate:             settlementDate.AddDate(0, 0, 3),
-		PeakDate:            settlementDate,
-		DecayDays:           rule.DecayDays,
-		AffectedIndustries:  rule.AffectedIndustries,
-		SentimentAdjustment: 0.0,
-	}
+	evt := tec.newDefaultEvent()
+	evt.ID = fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month)
+	evt.Name = rule.Name
+	evt.EventType = rule.EventType
+	evt.Description = fmt.Sprintf("台灣50季度調整 - %s", month.String())
+	evt.Direction = rule.Direction
+	evt.BaseWeight = rule.BaseWeight
+	evt.StartDate = settlementDate.AddDate(0, 0, -3)
+	evt.EndDate = settlementDate.AddDate(0, 0, 3)
+	evt.PeakDate = settlementDate
+	evt.DecayDays = rule.DecayDays
+	evt.AffectedIndustries = rule.AffectedIndustries
+	return evt
 }
 
 func (tec *EventCalendar) buildRevenueEvent(rule EventRule, year int, month time.Month) CalendarEvent {
 	revenueDate := time.Date(year, month, 10, 0, 0, 0, 0, time.UTC)
 
-	return CalendarEvent{
-		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
-		Name:                rule.Name,
-		NameEN:              "",
-		EventType:           rule.EventType,
-		Description:         fmt.Sprintf("%s monthly revenue", month.String()),
-		Direction:           rule.Direction,
-		BaseWeight:          rule.BaseWeight,
-		Active:              false,
-		StartDate:           revenueDate.AddDate(0, 0, -3),
-		EndDate:             revenueDate.AddDate(0, 0, 3),
-		PeakDate:            revenueDate,
-		DecayDays:           rule.DecayDays,
-		AffectedIndustries:  rule.AffectedIndustries,
-		SentimentAdjustment: 0.0,
-	}
+	evt := tec.newDefaultEvent()
+	evt.ID = fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month)
+	evt.Name = rule.Name
+	evt.EventType = rule.EventType
+	evt.Description = fmt.Sprintf("%s monthly revenue", month.String())
+	evt.Direction = rule.Direction
+	evt.BaseWeight = rule.BaseWeight
+	evt.StartDate = revenueDate.AddDate(0, 0, -3)
+	evt.EndDate = revenueDate.AddDate(0, 0, 3)
+	evt.PeakDate = revenueDate
+	evt.DecayDays = rule.DecayDays
+	evt.AffectedIndustries = rule.AffectedIndustries
+	return evt
 }
 
 func (tec *EventCalendar) buildSingleEvent(rule EventRule, year int) CalendarEvent {
-	return CalendarEvent{
-		ID:                  fmt.Sprintf("%s_%d", rule.EventType, year),
-		Name:                rule.Name,
-		NameEN:              "",
-		EventType:           rule.EventType,
-		Description:         rule.Name,
-		Direction:           rule.Direction,
-		BaseWeight:          rule.BaseWeight,
-		Active:              false,
-		StartDate:           rule.ComputeStartDate(year),
-		EndDate:             rule.ComputeEndDate(year),
-		PeakDate:            rule.ComputePeakDate(year),
-		DecayDays:           rule.DecayDays,
-		AffectedIndustries:  rule.AffectedIndustries,
-		SentimentAdjustment: 0.0,
-	}
+	evt := tec.newDefaultEvent()
+	evt.ID = fmt.Sprintf("%s_%d", rule.EventType, year)
+	evt.Name = rule.Name
+	evt.EventType = rule.EventType
+	evt.Description = rule.Name
+	evt.Direction = rule.Direction
+	evt.BaseWeight = rule.BaseWeight
+	evt.StartDate = rule.ComputeStartDate(year)
+	evt.EndDate = rule.ComputeEndDate(year)
+	evt.PeakDate = rule.ComputePeakDate(year)
+	evt.DecayDays = rule.DecayDays
+	evt.AffectedIndustries = rule.AffectedIndustries
+	return evt
 }
 
 // ---------------------------------------------------------------------------
@@ -1096,7 +1247,15 @@ func (tec *EventCalendar) getSentimentCap() float64 {
 // and is capped by the per-event sentiment cap from ParametersConfig
 // (default ±0.05, configurable via Industry.EventSentimentCap).
 func (tec *EventCalendar) computeSentimentAdjustment(evt CalendarEvent, now time.Time) float64 {
-	// Direction multiplier
+	// Direction multiplier.
+	// "bullish" = net positive sentiment for affected industries.
+	// "bearish" = net negative sentiment for affected industries.
+	// "mixed"   = asymmetric impact (bullish for some industries, bearish for others).
+	//             Per-industry resolution happens upstream in GetEventAdjustment via
+	//             the AffectedIndustries matching logic. Net composite direction is zero
+	//             because positive and negative effects cancel in aggregate.
+	// "neutral" = the event exists and may cause volatility, but has no directional bias
+	//             for any industry (e.g., MSCI rebalance = flow rotation, not direction).
 	dirMul := 1.0
 	switch evt.Direction {
 	case "bullish":
