@@ -16,7 +16,7 @@ import (
 )
 
 func TestDashboardAPI_SetStorageReporter(t *testing.T) {
-	d := NewDashboardAPI(".", ".", nil)
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
 	mgr := storage.NewLifecycleManager(t.TempDir())
 
 	d.SetStorageReporter(mgr)
@@ -32,7 +32,7 @@ func TestDashboardAPI_SetStorageReporter(t *testing.T) {
 }
 
 func TestDashboardAPI_RegisterRoutes_WithStorageReporter(t *testing.T) {
-	d := NewDashboardAPI(".", ".", nil)
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
 	mgr := storage.NewLifecycleManager(t.TempDir())
 	d.SetStorageReporter(mgr)
 
@@ -50,7 +50,7 @@ func TestDashboardAPI_RegisterRoutes_WithStorageReporter(t *testing.T) {
 }
 
 func TestDashboardAPI_RegisterRoutes_WithoutStorageReporter(t *testing.T) {
-	d := NewDashboardAPI(".", ".", nil)
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
 
 	mux := http.NewServeMux()
 	d.RegisterRoutes(mux)
@@ -103,7 +103,7 @@ func TestNewWiredIndustryServiceWithReplay(t *testing.T) {
 }
 
 func TestHandleRiskCalibration_NoGate(t *testing.T) {
-	d := NewDashboardAPI(".", ".", nil)
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
 	mux := http.NewServeMux()
 	d.RegisterRoutes(mux)
 
@@ -117,7 +117,7 @@ func TestHandleRiskCalibration_NoGate(t *testing.T) {
 }
 
 func TestHandleRiskCalibration_NoReportYet(t *testing.T) {
-	d := NewDashboardAPI(".", ".", nil)
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
 	gate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
 	d.SetRiskGate(gate)
 
@@ -134,7 +134,7 @@ func TestHandleRiskCalibration_NoReportYet(t *testing.T) {
 }
 
 func TestHandleRiskCalibration_WithReport(t *testing.T) {
-	d := NewDashboardAPI(".", ".", nil)
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
 	gate := risk.NewRiskGate(risk.NewPreTradeGate(), risk.NewInTradeGate(), risk.NewPostTradeGate())
 	gate.SetLastCalibration(&risk.CalibrationReport{
 		Verdict:   "stable",
@@ -165,7 +165,7 @@ func TestHandleIndustryLinkage_ReturnsLeoAndMining(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(origDir) }()
 
-	d := NewDashboardAPI(".", ".", nil)
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
 	mux := http.NewServeMux()
 	d.RegisterAllRoutes(mux, RouteOptions{})
 
@@ -231,7 +231,7 @@ func TestHandleIndustryOverview_ReturnsLeoAndMining(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(origDir) }()
 
-	d := NewDashboardAPI(".", ".", nil)
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
 	mux := http.NewServeMux()
 	d.RegisterAllRoutes(mux, RouteOptions{})
 

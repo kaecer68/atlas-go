@@ -336,9 +336,13 @@ func newWiredEventCalendar(provider marketdata.CalendarEventProvider) *industry.
 	if provider == nil {
 		return ec
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
-	ec.UpdateFromProvider(ctx, provider)
+	// Load TWSE calendar events asynchronously — don't block API startup.
+	// EventCalendar is protected by sync.RWMutex so concurrent access is safe.
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
+		ec.UpdateFromProvider(ctx, provider)
+	}()
 	return ec
 }
 

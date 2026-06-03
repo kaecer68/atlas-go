@@ -47,28 +47,9 @@
 | `atlas-event-driven-weights` | 事件驅動因子權重、FactorBridge | ⚠️ 部分實作 |
 
 ### 自動生成技能（generated/*）
-對應 `internal/*` 模組，由工具自動同步，提供模組級程式碼導航。
+對應 `internal/*` 模組，由工具自動同步，提供模組級程式碼導航.
 
-### GitNexus 技能（6 個）
-CLI 操作、工具指南、程式碼探索、影響分析、除錯、重構。
 
----
-
-## 已搬移的設計文件
-
-以下原本是 skill 檔案，已移至 `docs/investor-ui/`：
-- `investor-ui.md` — UI 核心架構與設計原則
-- `investor-pages.md` — 6 頁面 wireframe 規格
-- `investor-nlg.md` — NLG 推薦解釋層設計
-- `investor-trustscore.md` — TrustScore 信任分數系統設計
-- `investor-roadmap.md` — Phase A/B 實作路線圖
-
-## 已刪除的重複/藍圖技能
-
-以下技能因與 AGENTS.md、docs/、internal/*/AGENTS.md 重複，或為未實作的純藍圖，已移除：
-`core-architecture`、`data-management`、`operations-guide`、`fin-backtest-engine`、`fin-ml-pipeline`、`fin-model-eval`、`fin-robustness`、`dynamic-correlation`、`news-sentiment`
-
----
 
 ## 技能使用流程
 
