@@ -32,7 +32,7 @@ func TestNewRateLimitManager_AllChannels(t *testing.T) {
 		"day_trading":         false,
 		"twse-etf":            false,
 		"taifex-daily":        false,
-		"twse-oddlot":         false,
+		"twse_oddlot":         false,
 		"bdi":                 false,
 	}
 
@@ -79,7 +79,7 @@ func TestNewRateLimitManager_NonInfiniteRateChannels(t *testing.T) {
 		"us_yahoo", "jpy_yahoo", "twse_capital_flow", "fugle", "fubon",
 		"finmind", "geopolitical", "geopolitical_taiwan", "twse_margin",
 		"export_statistics", "tsmc_revenue", "tej", "exchange_rate",
-		"sox_index", "dram_spot_price", "twse_sector_index", "day_trading", "twse-etf", "taifex-daily", "twse-oddlot", "bdi",
+		"sox_index", "dram_spot_price", "twse_sector_index", "day_trading", "twse-etf", "taifex-daily", "twse_oddlot", "bdi",
 	}
 	for _, channel := range nonInfiniteChannels {
 		t.Run(channel, func(t *testing.T) {

@@ -205,6 +205,9 @@ export interface CalendarEvent {
   decay_days: number;
   affected_industries: string[];
   sentiment_adjustment: number;
+  data_source: string;
+  evidence_quality: string;
+  generated_at: string;
 }
 
 export interface CalibratorChange {

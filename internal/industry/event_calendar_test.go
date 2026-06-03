@@ -1,8 +1,11 @@
 package industry
 
 import (
+	"context"
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 func TestNewEventCalendar(t *testing.T) {
@@ -390,4 +393,312 @@ func TestGetAllEvents(t *testing.T) {
 	for eventType, count := range typeCounts {
 		t.Logf("  %s: %d events", eventType, count)
 	}
+}
+
+// --- ST-1: Config override tests ---
+
+func TestApplyConfigOverrides(t *testing.T) {
+	tec := NewEventCalendar()
+	tec.RefreshEvents(time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC))
+
+	events := tec.GetAllEvents()
+
+	// Verify that default rules match parameters.json values (which are identical)
+	for _, e := range events {
+		switch e.EventType {
+		case "spring_festival":
+			if e.BaseWeight != 0.6 {
+				t.Errorf("spring_festival: expected weight 0.6, got %.2f", e.BaseWeight)
+			}
+			if e.DecayDays != 5 {
+				t.Errorf("spring_festival: expected decay 5, got %d", e.DecayDays)
+			}
+		case "msci_rebalance":
+			if e.BaseWeight != 0.9 {
+				t.Errorf("msci_rebalance: expected weight 0.9, got %.2f", e.BaseWeight)
+			}
+		case "window_dressing":
+			if e.BaseWeight != 0.8 {
+				t.Errorf("window_dressing: expected weight 0.8, got %.2f", e.BaseWeight)
+			}
+		}
+	}
+
+	// Verify that annualRules were actually modified by config
+	rule, ok := tec.annualRules["spring_festival"]
+	if !ok {
+		t.Fatal("spring_festival rule not found in annualRules")
+	}
+	if rule.BaseWeight != 0.6 {
+		t.Errorf("annualRules[spring_festival].BaseWeight = %.2f, want 0.6", rule.BaseWeight)
+	}
+}
+
+// --- ST-2: Provider events survive RefreshEvents ---
+
+type testCalendarProvider struct {
+	events []marketdata.CalendarProviderData
+}
+
+func (p *testCalendarProvider) Name() string { return "twse_calendar" }
+func (p *testCalendarProvider) FetchEvents(_ context.Context, _ int) ([]marketdata.CalendarProviderData, error) {
+	return p.events, nil
+}
+
+func TestProviderEventsPreservedAcrossRefresh(t *testing.T) {
+	tec := NewEventCalendar()
+	now := time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)
+	tec.RefreshEvents(now)
+
+	provider := &testCalendarProvider{
+		events: []marketdata.CalendarProviderData{
+			{Date: "2026-07-10", EventType: "ex_dividend", Name: "台積電 除息", Symbol: "2330", Direction: "mixed", Weight: 0.8},
+			{Date: "2026-06-25", EventType: "shareholder_meeting", Name: "聯發科 股東會", Symbol: "2454", Direction: "bullish", Weight: 0.3},
+		},
+	}
+
+	tec.UpdateFromProvider(context.Background(), provider)
+
+	// Provider events should be immediately visible
+	countBefore := countProviderEvents(tec.GetAllEvents())
+	if countBefore != 2 {
+		t.Fatalf("expected 2 provider events after UpdateFromProvider, got %d", countBefore)
+	}
+
+	// RefreshEvents should NOT destroy them
+	tec.RefreshEvents(now)
+	countAfter := countProviderEvents(tec.GetAllEvents())
+	if countAfter != 2 {
+		t.Errorf("expected 2 provider events after RefreshEvents, got %d (events were destroyed!)", countAfter)
+	}
+
+	// Verify specific event data is intact
+	found := false
+	for _, e := range tec.GetAllEvents() {
+		if e.ID == "ex_dividend_2026-07-10_2330" {
+			found = true
+			if e.Name != "台積電 除息" {
+				t.Errorf("TSMC event name = %q, want %q", e.Name, "台積電 除息")
+			}
+			if e.DataSource != DataSourceTWSE {
+				t.Errorf("TSMC event DataSource = %q, want %q", e.DataSource, DataSourceTWSE)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("TSMC provider event (ex_dividend_2026-07-10_2330) not found after RefreshEvents")
+	}
+}
+
+func countProviderEvents(events []CalendarEvent) int {
+	n := 0
+	for _, e := range events {
+		if e.DataSource == DataSourceTWSE {
+			n++
+		}
+	}
+	return n
+}
+
+// --- ST-5: Validation table-driven tests ---
+
+func TestValidateProviderEvent(t *testing.T) {
+	tests := []struct {
+		name    string
+		event   marketdata.CalendarProviderData
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "valid event",
+			event:   marketdata.CalendarProviderData{Date: "2026-06-15", EventType: "ex_dividend", Symbol: "2330", Direction: "bullish", Weight: 0.5},
+			wantErr: false,
+		},
+		{
+			name:    "empty symbol",
+			event:   marketdata.CalendarProviderData{Date: "2026-06-15", EventType: "ex_dividend", Symbol: "", Direction: "bullish", Weight: 0.5},
+			wantErr: true,
+			errMsg:  "empty symbol",
+		},
+		{
+			name:    "empty event_type",
+			event:   marketdata.CalendarProviderData{Date: "2026-06-15", EventType: "", Symbol: "2330", Direction: "bullish", Weight: 0.5},
+			wantErr: true,
+			errMsg:  "empty event_type",
+		},
+		{
+			name:    "empty date",
+			event:   marketdata.CalendarProviderData{Date: "", EventType: "ex_dividend", Symbol: "2330", Direction: "bullish", Weight: 0.5},
+			wantErr: true,
+			errMsg:  "empty date",
+		},
+		{
+			name:    "weight too high",
+			event:   marketdata.CalendarProviderData{Date: "2026-06-15", EventType: "ex_dividend", Symbol: "2330", Direction: "bullish", Weight: 1.5},
+			wantErr: true,
+			errMsg:  "weight",
+		},
+		{
+			name:    "weight negative",
+			event:   marketdata.CalendarProviderData{Date: "2026-06-15", EventType: "ex_dividend", Symbol: "2330", Direction: "bullish", Weight: -0.1},
+			wantErr: true,
+			errMsg:  "weight",
+		},
+		{
+			name:    "invalid direction",
+			event:   marketdata.CalendarProviderData{Date: "2026-06-15", EventType: "ex_dividend", Symbol: "2330", Direction: "sideways", Weight: 0.5},
+			wantErr: true,
+			errMsg:  "invalid direction",
+		},
+		{
+			name:    "date year too old",
+			event:   marketdata.CalendarProviderData{Date: "2005-06-15", EventType: "ex_dividend", Symbol: "2330", Direction: "bullish", Weight: 0.5},
+			wantErr: true,
+			errMsg:  "date year",
+		},
+		{
+			name:    "date year too far future",
+			event:   marketdata.CalendarProviderData{Date: "2050-06-15", EventType: "ex_dividend", Symbol: "2330", Direction: "bullish", Weight: 0.5},
+			wantErr: true,
+			errMsg:  "date year",
+		},
+		{
+			name:    "unparseable date",
+			event:   marketdata.CalendarProviderData{Date: "not-a-date", EventType: "ex_dividend", Symbol: "2330", Direction: "bullish", Weight: 0.5},
+			wantErr: true,
+			errMsg:  "unparseable",
+		},
+		{
+			name:    "direction mixed is valid",
+			event:   marketdata.CalendarProviderData{Date: "2026-06-15", EventType: "ex_dividend", Symbol: "2330", Direction: "mixed", Weight: 0.5},
+			wantErr: false,
+		},
+		{
+			name:    "direction neutral is valid",
+			event:   marketdata.CalendarProviderData{Date: "2026-06-15", EventType: "ex_dividend", Symbol: "2330", Direction: "neutral", Weight: 0.0},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateProviderEvent(tt.event)
+			if tt.wantErr && err == nil {
+				t.Errorf("expected error containing %q, got nil", tt.errMsg)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected no error, got: %v", err)
+			}
+			if tt.wantErr && err != nil && tt.errMsg != "" {
+				if got := err.Error(); !contains(got, tt.errMsg) {
+					t.Errorf("error = %q, want to contain %q", got, tt.errMsg)
+				}
+			}
+		})
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsStr(s, substr))
+}
+
+func containsStr(s, sub string) bool {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}
+
+// --- ST-7: Lunar date fallback test ---
+
+func TestGetLunarDateFallback(t *testing.T) {
+	fallback := time.Date(2035, 2, 1, 0, 0, 0, 0, time.UTC)
+
+	// Year within coverage → returns exact date
+	d := getLunarDate(2026, lunarNewYearDates, fallback, "春節")
+	expected := time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC)
+	if !d.Equal(expected) {
+		t.Errorf("2026 春節: got %v, want %v", d, expected)
+	}
+
+	// Year outside coverage → returns fallback
+	d = getLunarDate(2035, lunarNewYearDates, fallback, "春節")
+	if !d.Equal(fallback) {
+		t.Errorf("2035 春節: got %v, want fallback %v", d, fallback)
+	}
+
+	// Verify coverage range
+	minY, maxY := GetLunarCoverageYears()
+	if minY != 2023 || maxY != 2030 {
+		t.Errorf("coverage = %d-%d, want 2023-2030", minY, maxY)
+	}
+
+	// Verify all years within coverage return non-fallback for all tables
+	tables := map[string]map[int]time.Time{
+		"spring":    lunarNewYearDates,
+		"dragon":    lunarDragonBoatDates,
+		"midautumn": lunarMidAutumnDates,
+		"tombsweep": tombSweepingDates,
+	}
+	for name, table := range tables {
+		for y := minY; y <= maxY; y++ {
+			d := getLunarDate(y, table, fallback, name)
+			if d.Equal(fallback) {
+				t.Errorf("%s year %d: returned fallback (table entry missing)", name, y)
+			}
+		}
+	}
+}
+
+// --- ST-4: Evidence fields test ---
+
+func TestEvidenceFieldsPopulated(t *testing.T) {
+	tec := NewEventCalendar()
+	now := time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)
+	tec.RefreshEvents(now)
+
+	events := tec.GetAllEvents()
+	if len(events) == 0 {
+		t.Fatal("no events generated")
+	}
+
+	for _, e := range events {
+		if e.DataSource == "" {
+			t.Errorf("event %q has empty DataSource", e.ID)
+		}
+		if e.EvidenceQuality == "" {
+			t.Errorf("event %q has empty EvidenceQuality", e.ID)
+		}
+		if e.GeneratedAt.IsZero() {
+			t.Errorf("event %q has zero GeneratedAt", e.ID)
+		}
+		// All default-rule events should be DataSourceDefaultRules
+		if e.DataSource != DataSourceDefaultRules {
+			t.Errorf("event %q: DataSource = %q, want %q", e.ID, e.DataSource, DataSourceDefaultRules)
+		}
+	}
+
+	// Provider events should have different evidence markers
+	provider := &testCalendarProvider{
+		events: []marketdata.CalendarProviderData{
+			{Date: "2026-08-01", EventType: "ex_dividend", Name: "Test", Symbol: "9999", Direction: "bullish", Weight: 0.5},
+		},
+	}
+	tec.UpdateFromProvider(context.Background(), provider)
+
+	for _, e := range tec.GetAllEvents() {
+		if e.ID == "ex_dividend_2026-08-01_9999" {
+			if e.DataSource != DataSourceTWSE {
+				t.Errorf("provider event DataSource = %q, want %q", e.DataSource, DataSourceTWSE)
+			}
+			if e.EvidenceQuality != EvidenceEstimated {
+				t.Errorf("provider event EvidenceQuality = %q, want %q", e.EvidenceQuality, EvidenceEstimated)
+			}
+			return
+		}
+	}
+	t.Error("provider event not found in GetAllEvents")
 }

@@ -88,7 +88,7 @@ func NewRateLimitManager() *RateLimitManager {
 			"dram_spot_price":     rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"twse_sector_index":   rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"taifex-daily":        rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
-			"twse-oddlot":         rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+			"twse_oddlot":         rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"twse-etf":            rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 		},
 	}
