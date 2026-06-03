@@ -880,7 +880,7 @@ func run(args []string, deps appDeps) error {
 			if svc := dashboard.GetIndustryService(); svc != nil {
 				var finmindClient *marketdata.FinMindClient
 				if cfg.FinMindAPIKey != "" {
-					finmindClient = marketdata.NewFinMindClient(cfg.FinMindAPIKey)
+					finmindClient = marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey)
 				}
 				cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient)
 				_ = taskMgr.Register(&apigateway.ScheduledTask{

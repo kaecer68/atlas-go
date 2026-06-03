@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -38,6 +39,48 @@ type FinMindResponse struct {
 	Data   []map[string]any `json:"data"`
 }
 
+var (
+	sharedFinMindClient     *FinMindClient
+	sharedFinMindClientOnce sync.Once
+	sharedFinMindClientMu   sync.RWMutex
+)
+
+// GetSharedFinMindClient returns a singleton FinMindClient that all components
+// share. Using a single client ensures one token bucket enforces the 600 req/hr
+// limit across all call sites (gateway channels, TSMC revenue, cycle aggregator).
+// The apiKey is used only on first call; subsequent calls ignore it.
+func GetSharedFinMindClient(apiKey string) *FinMindClient {
+	sharedFinMindClientOnce.Do(func() {
+		sharedFinMindClient = &FinMindClient{
+			apiKey:      apiKey,
+			httpClient:  httpclient.NewFactory().NewClient(30 * time.Second),
+			rateLimiter: rate.NewLimiter(rate.Every(time.Minute/finmindRateLimit), finmindBurst),
+		}
+	})
+	return sharedFinMindClient
+}
+
+// UpdateSharedFinMindAPIKey replaces the API key on the shared client without
+// recreating the rate limiter. Use after rotating the FinMind token at runtime.
+func UpdateSharedFinMindAPIKey(apiKey string) {
+	sharedFinMindClientMu.Lock()
+	defer sharedFinMindClientMu.Unlock()
+	if sharedFinMindClient != nil {
+		sharedFinMindClient.apiKey = apiKey
+	}
+}
+
+// ResetSharedFinMindClient clears the singleton (for tests).
+func ResetSharedFinMindClient() {
+	sharedFinMindClientMu.Lock()
+	defer sharedFinMindClientMu.Unlock()
+	sharedFinMindClient = nil
+	sharedFinMindClientOnce = sync.Once{}
+}
+
+// NewFinMindClient creates a standalone FinMindClient with its own rate limiter.
+// Prefer GetSharedFinMindClient in production to avoid multiple independent
+// token buckets that can collectively exceed the free-tier limit.
 func NewFinMindClient(apiKey string) *FinMindClient {
 	return &FinMindClient{
 		apiKey:      apiKey,
@@ -227,7 +270,7 @@ func NewFinMindProviderWithClient(client *FinMindClient) *FinMindProvider {
 }
 
 func NewFinMindProvider(apiKey string) *FinMindProvider {
-	return &FinMindProvider{client: NewFinMindClient(apiKey)}
+	return &FinMindProvider{client: GetSharedFinMindClient(apiKey)}
 }
 
 func (p *FinMindProvider) Name() string {

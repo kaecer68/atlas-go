@@ -42,7 +42,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 
 	// --- FinMind ---
 	if cfg.FinMindAPIKey != "" {
-		finmindClient := marketdata.NewFinMindClient(cfg.FinMindAPIKey)
+		finmindClient := marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey)
 		finmindAdapter := NewFinMindChannelAdapter(finmindClient)
 		g.registry.Register("finmind", finmindAdapter)
 		logging.Info("apigateway", "adapter_registered", "channel", "finmind")
