@@ -127,7 +127,7 @@
   text-align: center;
   font-family: var(--font-mono);
 }
-.ev-agent-rank.top { color: var(--accent); font-weight: 600; }
+/* .ev-agent-rank.top removed — unused modifier */
 .ev-agent-name {
   flex: 1;
   font-size: 12px;
@@ -257,26 +257,7 @@
   border-bottom: 1px solid var(--border);
 }
 .ev-score-table tbody tr:hover { background: rgba(255,255,255,.02); }
-
-/* Sharpe Gradient Bar */
-.ev-sharpe-bar {
-  width: 50px;
-  height: 6px;
-  border-radius: 3px;
-  background: linear-gradient(90deg, var(--down) 0%, var(--warn) 50%, var(--up) 100%);
-  position: relative;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.ev-sharpe-bar .ev-sharpe-marker {
-  position: absolute;
-  top: -1px;
-  width: 3px;
-  height: 8px;
-  background: var(--text);
-  border-radius: 1px;
-  transition: left .3s ease;
-}
+/* Sharpe Gradient Bar removed — unused ev-sharpe-bar/ev-sharpe-marker components */
 
 /* Experiment Log */
 .ev-exp-item {
@@ -309,25 +290,7 @@
   font-family: var(--font-mono);
   margin-left: auto;
 }
-
-/* Categorical Layer Section */
-.ev-layer-section { margin-bottom: 16px; }
-.ev-layer-title {
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-}
-.ev-layer-title .count {
-  font-size: 10px;
-  font-family: var(--font-mono);
-  background: var(--bg);
-  padding: 1px 6px;
-  border-radius: 3px;
-}
+/* Categorical Layer Section removed — unused ev-layer-* components */
 
 /* Panel Section Titles */
 .ev-section-title {

@@ -1,7 +1,5 @@
 /* Atlas Dashboard - Grid Layouts */
-.container { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); padding: var(--space-md); }
-@media (max-width: 1100px) { .container { grid-template-columns: 1fr; } }
-.live-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 1fr); gap: var(--space-md); align-items: start; }
+/* .container removed — unused in favor of page-specific grids */.live-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 1fr); gap: var(--space-md); align-items: start; }
 @media (max-width: 900px) { .live-grid { grid-template-columns: 1fr; } }
 .two-col-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); }
 .two-col-grid > * { min-width: 0; }

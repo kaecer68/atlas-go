@@ -1,5 +1,3 @@
 /* Atlas Dashboard - Typography */
 .panel h3 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
-.text-caption { font-size: 11px; color: var(--muted); }
-.text-body { font-size: 13px; }
-.text-heading { font-size: 17px; font-weight: 600; }
+/* .text-caption, .text-body, .text-heading removed — unused semantic classes */

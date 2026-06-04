@@ -12,7 +12,7 @@
 .risk-item .risk-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .risk-severity { font-size: 11px; padding: 2px 8px; border-radius: 999px; }
 .risk-severity.high { background: rgba(217,58,58,.15); color: var(--down); border: 1px solid rgba(217,58,58,.3); }
-.risk-severity.medium { background: rgba(245,166,35,.15); color: var(--warn); border: 1px solid rgba(245,166,35,.3); }
+/* .risk-severity.medium removed — unused modifier */
 .risk-severity.low { background: rgba(38,161,123,.15); color: var(--up); border: 1px solid rgba(38,161,123,.3); }
 .seasonal-pattern { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
 .seasonal-pattern .pattern-name { font-weight: 600; font-size: 13px; margin-bottom: 4px; }

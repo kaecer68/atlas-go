@@ -40,14 +40,7 @@
   }
   .pipeline-action { min-height: 44px; padding: 8px 12px; }
   .refresh { min-height: 44px; min-width: 44px; }
-  .table-scroll-hint {
-    display: block;
-    text-align: center;
-    font-size: 11px;
-    color: var(--muted);
-    padding: 4px 0;
-  }
-  .table-scroll-hint::after { content: ' ← 左右滑動 →'; }
+  /* .table-scroll-hint removed — unused */
 }
 @media (min-width: 768px) and (max-width: 900px) {
   #sidebar { width: 200px; }
