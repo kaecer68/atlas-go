@@ -38,7 +38,7 @@ export function switchPage(id, silent) {
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
   if (!pageLoadStatus[id]) { pageLoadStatus[id] = true; loadPageData(id); }
-  if (!silent) history.pushState({page: id}, '', '#page-' + id);
+  if (!silent) history.pushState({page: id}, '', '/' + id);
 }
 
 export function toggleSidebar() {
@@ -432,6 +432,18 @@ if (typeof window !== 'undefined') {
   startAutoRefresh();
   initEventStream();
   history.replaceState({page: 'overview'}, '', '#page-overview');
+  // Redirect old hash URLs to clean URLs
+  if (window.location.hash && window.location.hash.startsWith('#page-')) {
+    var pageId = window.location.hash.replace('#page-', '');
+    window.location.replace('/' + pageId);
+  } else {
+    // Parse initial route from URL pathname
+    var path = window.location.pathname.replace(/^\//, '');
+    if (path && path !== 'overview') {
+      history.replaceState({page: path}, '', '/' + path);
+      switchPage(path, true);
+    }
+  }
 }
 
 function initEventStream() {
