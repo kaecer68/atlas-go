@@ -236,7 +236,7 @@ jobs:
         if [ "${{ needs.build.result }}" != "success" ] || [ "${{ needs.test-cmd-atlas.result }}" != "success" ] || [ "${{ needs.lint.result }}" != "success" ]; then
           STATUS_FLAG=":x:"
         fi
-        cat <<EOF | gh pr comment ${{ github.event.pull_request.number }} --body-file -
+        cat <<EOF | gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body-file -
         ## ${STATUS_FLAG} CI Summary
 
         | Job | Result |

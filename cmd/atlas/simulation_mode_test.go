@@ -58,7 +58,8 @@ func TestSimulationModeDefaultPath(t *testing.T) {
 		if !strings.Contains(errStr, "simulation failed") &&
 			!strings.Contains(errStr, "candidate selection failed") &&
 			!strings.Contains(errStr, "record session summary") &&
-			!strings.Contains(errStr, "simulation shutdown") {
+			!strings.Contains(errStr, "simulation shutdown") &&
+			!strings.Contains(errStr, "simulation: shutdown") {
 			t.Fatalf("expected simulation path error, got: %v", err)
 		}
 	}

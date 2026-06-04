@@ -1965,7 +1965,7 @@ func runSimulation(cfg config.Config, verbose bool, collector *monitoring.Metric
 
 	select {
 	case <-shutdown:
-		return fmt.Errorf("simulation shutdown")
+		return fmt.Errorf("simulation: shutdown")
 	case err := <-done:
 		return err
 	}
