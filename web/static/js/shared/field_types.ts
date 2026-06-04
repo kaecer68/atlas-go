@@ -772,6 +772,7 @@ export interface EventBlock {
 }
 
 export interface EventCalendarRule {
+  event_type: string;
   name: string;
   base_weight: number;
   decay_days: number;
@@ -1321,6 +1322,7 @@ export interface IndustryParameters {
   default_metrics: string;
   silicon_cycle: string;
   event_calendar_rules: string;
+  event_sentiment_cap: string;
   composite_card: string;
   seasonal_multipliers: string;
 }
@@ -2557,12 +2559,15 @@ export interface ShockImpact {
 export interface SiliconCycleParameters {
   revenue_yoy_threshold: number;
   billings_yoy_threshold: number;
+  dram_stabilization_threshold: number;
+  billings_stabilization_threshold: number;
   inventory_days_threshold: number;
   utilization_threshold: number;
   index_ma_percent_threshold: number;
   sox_extreme_threshold: number;
   capex_cut_threshold: number;
   min_confidence: number;
+  history_window_size: number;
 }
 
 export interface SiliconIndicatorSnapshot {

@@ -186,6 +186,9 @@ export const FIELD = {
     decay_days: 'decay_days',
     affected_industries: 'affected_industries',
     sentiment_adjustment: 'sentiment_adjustment',
+    data_source: 'data_source',
+    evidence_quality: 'evidence_quality',
+    generated_at: 'generated_at',
   },
   CalibratorChange: {
     param_name: 'param_name',
@@ -693,6 +696,7 @@ export const FIELD = {
     premarket: 'premarket',
   },
   EventCalendarRule: {
+    event_type: 'event_type',
     name: 'name',
     base_weight: 'base_weight',
     decay_days: 'decay_days',
@@ -1200,6 +1204,7 @@ export const FIELD = {
     default_metrics: 'default_metrics',
     silicon_cycle: 'silicon_cycle',
     event_calendar_rules: 'event_calendar_rules',
+    event_sentiment_cap: 'event_sentiment_cap',
     composite_card: 'composite_card',
     seasonal_multipliers: 'seasonal_multipliers',
   },
@@ -2328,12 +2333,15 @@ export const FIELD = {
   SiliconCycleParameters: {
     revenue_yoy_threshold: 'revenue_yoy_threshold',
     billings_yoy_threshold: 'billings_yoy_threshold',
+    dram_stabilization_threshold: 'dram_stabilization_threshold',
+    billings_stabilization_threshold: 'billings_stabilization_threshold',
     inventory_days_threshold: 'inventory_days_threshold',
     utilization_threshold: 'utilization_threshold',
     index_ma_percent_threshold: 'index_ma_percent_threshold',
     sox_extreme_threshold: 'sox_extreme_threshold',
     capex_cut_threshold: 'capex_cut_threshold',
     min_confidence: 'min_confidence',
+    history_window_size: 'history_window_size',
   },
   SiliconIndicatorSnapshot: {
     tsmc_monthly_revenue_yoy: 'tsmc_monthly_revenue_yoy',

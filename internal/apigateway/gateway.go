@@ -31,7 +31,15 @@ func NewGateway(workDir string, pool *pgxpool.Pool) (*Gateway, error) {
 	cache := NewCacheLayer()
 	health := NewUnifiedHealthStore(filepath.Join(workDir, "data/state"), pool)
 	limiters := NewRateLimitManager()
-	breakers := NewCircuitBreakerManager(channelIDs())
+	breakers := NewCircuitBreakerManagerWithThresholds(map[string]int{
+		"twse_capital_flow": 5,
+		"twse_margin":       5,
+		"twse_replay":       5,
+		"twse_oddlot":       5,
+		"twse_etf":          5,
+		"export_statistics": 5,
+		"tsmc_revenue":      5,
+	}, CircuitBreakerFailureThreshold, channelIDs())
 	registry := NewChannelRegistry(limiters, breakers)
 
 	return &Gateway{
