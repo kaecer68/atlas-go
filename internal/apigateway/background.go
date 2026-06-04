@@ -100,7 +100,7 @@ func NewBackgroundTaskManager(gateway *Gateway) *BackgroundTaskManager {
 
 // Register adds a task to the registry.
 func (m *BackgroundTaskManager) Register(task *ScheduledTask) error {
-	if task.ChannelID != "" && !m.gateway.HasChannel(task.ChannelID) {
+	if task.ChannelID != "" && m.gateway != nil && !m.gateway.HasChannel(task.ChannelID) {
 		return fmt.Errorf("task %s: channel %s not registered in gateway", task.Name, task.ChannelID)
 	}
 

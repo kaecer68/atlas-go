@@ -77,6 +77,7 @@ type appDeps struct {
 	newDashboardAPI func(string, string, *monitoring.MetricsCollector) *monitoring.DashboardAPI
 	listenAndServe  func(*http.Server) error
 	shutdown        chan struct{}
+	dataFetcher     monitoring.DataFetcher // when non-nil, skips Gateway init and uses this fetcher
 }
 
 func defaultAppDeps() appDeps {
@@ -271,22 +272,28 @@ func run(args []string, deps appDeps) error {
 		// Initialize Gateway BEFORE DashboardAPI so data providers use Gateway from the start.
 		var gateway *apigateway.Gateway
 		var gatewayFetcher monitoring.DataFetcher
-		gw, gwErr := apigateway.NewGateway(cfg.WorkDir, pool)
-		if gwErr != nil {
-			log.Printf("[Gateway] initialization failed: %v", gwErr)
-		} else if err := apigateway.RegisterChannelAdapters(gw, cfg.WorkDir, cfg, janusEngine); err != nil {
-			log.Printf("[Gateway] adapter registration failed: %v", err)
+		if deps.dataFetcher != nil {
+			// Test override: skip real Gateway initialization, use injected fetcher.
+			gatewayFetcher = deps.dataFetcher
+			log.Printf("[Gateway] using injected data fetcher (test mode)")
 		} else {
-			gateway = gw
-			log.Printf("[Gateway] initialized with %d channels + adapters", len(gateway.ChannelIDs()))
-			gatewayFetcher = func(ctx context.Context, channelID string) ([]byte, error) {
-				result, err := gateway.Fetch(ctx, channelID)
-				if err != nil {
-					return nil, err
+			gw, gwErr := apigateway.NewGateway(cfg.WorkDir, pool)
+			if gwErr != nil {
+				log.Printf("[Gateway] initialization failed: %v", gwErr)
+			} else if err := apigateway.RegisterChannelAdapters(gw, cfg.WorkDir, cfg, janusEngine); err != nil {
+				log.Printf("[Gateway] adapter registration failed: %v", err)
+			} else {
+				gateway = gw
+				log.Printf("[Gateway] initialized with %d channels + adapters", len(gateway.ChannelIDs()))
+				gatewayFetcher = func(ctx context.Context, channelID string) ([]byte, error) {
+					result, err := gateway.Fetch(ctx, channelID)
+					if err != nil {
+						return nil, err
+					}
+					return result.Data, nil
 				}
-				return result.Data, nil
+				log.Printf("[Gateway] data fetcher prepared for DashboardAPI")
 			}
-			log.Printf("[Gateway] data fetcher prepared for DashboardAPI")
 		}
 
 		mux := http.NewServeMux()
@@ -550,6 +557,10 @@ func run(args []string, deps appDeps) error {
 		var taskMgr *apigateway.BackgroundTaskManager
 		if gateway != nil {
 			taskMgr = apigateway.NewBackgroundTaskManager(gateway)
+		} else {
+			taskMgr = apigateway.NewBackgroundTaskManager(nil)
+		}
+		if gateway != nil {
 
 			// Wire failure alerts for background tasks.
 			taskMgr.SetFailureHandler(func(name string, consecutiveFailures int, err error) {
