@@ -555,6 +555,12 @@ func run(args []string, deps appDeps) error {
 			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 			w.Header().Set("Pragma", "no-cache")
 			w.Header().Set("Expires", "0")
+			// SPA fallback: serve index.html for paths that don't match static files
+			cleanPath := filepath.Clean(r.URL.Path)
+			staticPath := filepath.Join(cfg.WorkDir, "web/static", cleanPath)
+			if info, err := os.Stat(staticPath); err != nil || info.IsDir() {
+				r.URL.Path = "/"
+			}
 			fs.ServeHTTP(w, r)
 		}))
 		mux.Handle("/static/", http.StripPrefix("/static/", fs))
@@ -2066,7 +2072,15 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		monitor.SetAlertStore(alertStore)
 	}
 
-	mux.Handle("/", http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static"))))
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// SPA fallback: serve index.html for paths that don't match static files
+		cleanPath := filepath.Clean(r.URL.Path)
+		staticPath := filepath.Join(cfg.WorkDir, "web/static", cleanPath)
+		if info, err := os.Stat(staticPath); err != nil || info.IsDir() {
+			r.URL.Path = "/"
+		}
+		http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static"))).ServeHTTP(w, r)
+	})
 	apiAddr := ":8080"
 	srv := &http.Server{
 		Addr:              apiAddr,
