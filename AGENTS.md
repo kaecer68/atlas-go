@@ -36,7 +36,7 @@
 - 需要理解符號全貌時，優先 `gitnexus_context`，其次 `codegraph trace`。
 
 ## 規範衝突
-以 `.omo/CONSTITUTION.md` 及 `internal/apigateway/CONSTITUTION.md` 為最終仲裁。
+以 `internal/apigateway/CONSTITUTION.md` 為最終仲裁。
 
 ## 完整開發手冊
 需要架構細節、所有執行指令、完整陷阱列表與資源導航時，請查閱 `docs/DEVELOPMENT.md`（或 `docs/AGENTS.md`，視你搬移後的檔名）。一般任務無需載入。
