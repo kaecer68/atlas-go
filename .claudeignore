@@ -75,3 +75,30 @@ complexity_top20.txt
 .playwright-mcp/
 .opencode/
 .env/
+
+# 歷史計畫與設計文檔（不影響運行）
+docs/superpowers/plans/
+docs/superpowers/*-plan.md
+
+# 配置檔案（不應被 Claude 讀取）
+configs/parameters.json
+configs/settings.local.json
+
+# field_types generated files
+web/static/js/field_types.d.ts
+web/static/js/field_names.js
+
+# Claude 技能目錄本身
+.claude/
+
+# Python 快取
+__pycache__/
+*.pyc
+
+# Python virtual environment
+venv/
+.venv/
+
+# OS files
+.DS_Store
+Thumbs.db
