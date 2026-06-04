@@ -431,7 +431,7 @@ if (typeof window !== 'undefined') {
   loadAll();
   startAutoRefresh();
   initEventStream();
-  history.replaceState({page: 'overview'}, '', '#page-overview');
+  history.replaceState({page: 'overview'}, '', '/overview');
   // Redirect old hash URLs to clean URLs
   if (window.location.hash && window.location.hash.startsWith('#page-')) {
     var pageId = window.location.hash.replace('#page-', '');
