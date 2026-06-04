@@ -12,9 +12,8 @@
 //
 // Writes:
 //
-//	web/static/js/shared/field_names.js  — snake_case field name constants
-//	web/static/js/shared/field_types.ts   — TypeScript interfaces for explicit import
-//	web/static/js/shared/field_types.d.ts — ambient declarations, IDE auto-discovers
+//	web/static/js/shared/field_types.ts   — TypeScript interfaces (single source of truth)
+//	web/static/js/shared/valid_fields.json — flat valid field list for CI
 //
 // This eliminates manual synchronization between Go backend structs
 // and frontend field access — a single source of truth.
@@ -45,9 +44,7 @@ func main() {
 	if filepath.Base(domainDir) == "domain" {
 		rootDir = filepath.Dir(rootDir)
 	}
-	outJS := filepath.Join(rootDir, "web/static/js/shared/field_names.js")
 	outTS := filepath.Join(rootDir, "web/static/js/shared/field_types.ts")
-	outDTS := filepath.Join(rootDir, "web/static/js/shared/field_types.d.ts")
 	outValidFields := filepath.Join(rootDir, "web/static/js/shared/valid_fields.json")
 
 	// Scan domain types first (foundational), then API response types (depend on domain types).
@@ -118,10 +115,8 @@ func main() {
 		}
 	}
 
-	writeFieldNames(structs, outJS)
-	writeTypeScriptInterfaces(structs, outTS, false)
-	writeTypeScriptInterfaces(structs, outDTS, true)
-	writeValidFields(structs, outValidFields)
+writeTypeScriptInterfaces(structs, outTS, false)
+writeValidFields(structs, outValidFields)
 }
 
 func findDomainDir() string {
