@@ -227,6 +227,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build, test-cmd-atlas, lint, security, integration]
     if: github.event_name == 'pull_request' && always()
+    permissions:
+      pull-requests: write
     steps:
     - name: Post CI summary comment
       env:
