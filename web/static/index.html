@@ -74,7 +74,7 @@
       <div class="panel wide mt-sm" id="liveEventPanel">
         <h2>📡 即時事件流</h2>
         <div id="liveProgress"></div>
-        <div id="liveStatusHint" class="live-status-hint" style="margin: 8px 0; padding: 8px 12px; background: var(--panel-l2); border-radius: 6px; font-size: 12px; color: var(--muted);"></div>
+        <div id="liveStatusHint" class="live-status-hint hint-box"></div>
         <div id="toolEvents" class="mt-sm"></div>
       </div>
 
@@ -118,7 +118,7 @@
                 <div class="cb-metric-value" id="cbCooldown">-</div>
             </div>
         </div>
-        <div class="cb-hint" style="margin-top: 8px; padding: 8px 12px; background: var(--panel-l2); border-radius: 6px; font-size: 12px; color: var(--muted); line-height: 1.5;">
+        <div class="cb-hint hint-box" style="line-height: 1.5;">
             💡 熔斷機制僅在實盤交易（Live Mode）時啟用。狀態顯示「正常」表示未觸發任何熔斷條件，此時無事件記錄為預期行為。
         </div>
         <div class="cb-events-container mt-sm">
@@ -191,33 +191,33 @@
         <div class="filter-row">
           <div class="filter-group">
             <label>P/E 比（最小～最大）</label>
-            <div style="display:flex;gap:6px;align-items:center">
+            <div class="flex-gap-6">
               <input type="number" id="peMin" placeholder="0" min="0" step="0.1" aria-label="P/E 最小值">
-              <span style="color:var(--muted);font-size:11px">～</span>
+              <span class="text-xs-muted">～</span>
               <input type="number" id="peMax" placeholder="無上限" min="0" step="0.1" aria-label="P/E 最大值">
             </div>
           </div>
           <div class="filter-group">
             <label>P/B 比（最小～最大）</label>
-            <div style="display:flex;gap:6px;align-items:center">
+            <div class="flex-gap-6">
               <input type="number" id="pbMin" placeholder="0" min="0" step="0.1" aria-label="P/B 最小值">
-              <span style="color:var(--muted);font-size:11px">～</span>
+              <span class="text-xs-muted">～</span>
               <input type="number" id="pbMax" placeholder="無上限" min="0" step="0.1" aria-label="P/B 最大值">
             </div>
           </div>
           <div class="filter-group">
             <label>股息率（最小～最大）%</label>
-            <div style="display:flex;gap:6px;align-items:center">
+            <div class="flex-gap-6">
               <input type="number" id="dyMin" placeholder="0" min="0" step="0.1" aria-label="股息率最小值">
-              <span style="color:var(--muted);font-size:11px">～</span>
+              <span class="text-xs-muted">～</span>
               <input type="number" id="dyMax" placeholder="無上限" min="0" step="0.1" aria-label="股息率最大值">
             </div>
           </div>
           <div class="filter-group">
             <label>報酬率範圍 %</label>
-            <div style="display:flex;gap:6px;align-items:center">
+            <div class="flex-gap-6">
               <input type="number" id="retMin" placeholder="-100" step="0.1" aria-label="報酬率最小值">
-              <span style="color:var(--muted);font-size:11px">～</span>
+              <span class="text-xs-muted">～</span>
               <input type="number" id="retMax" placeholder="100" step="0.1" aria-label="報酬率最大值">
             </div>
           </div>
@@ -225,7 +225,7 @@
         <div class="filter-actions">
           <button class="primary">套用篩選</button>
           <button>清除條件</button>
-          <span id="filterResultCount" style="margin-left:auto;font-size:11px;color:var(--muted)"></span>
+          <span id="filterResultCount" class="ml-auto text-xs-muted"></span>
         </div>
       </div>
       <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
@@ -317,7 +317,7 @@
           <button class="primary">啟動回測</button>
           <span id="backtestStatusText" class="text-muted text-sm"></span>
         </div>
-        <div id="backtestStatusDetail" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
+        <div id="backtestStatusDetail" class="mt-8 text-12-muted"></div>
       </div>
       <div class="panel wide"><h2>回測報告</h2><div id="backtestReport" class="empty loading">載入中…</div></div>
     </div>
@@ -422,28 +422,28 @@
       <details class="help-details mt-md">
         <summary><strong>🔑 API Key 管理</strong></summary>
         <div style="padding:10px 0;display:flex;flex-direction:column;gap:10px">
-          <div style="display:flex;align-items:center;gap:10px">
-            <label class="label-muted" style="width:120px">Yahoo Finance:</label>
+          <div class="flex-gap-10">
+            <label class="label-muted label-w-sm">Yahoo Finance:</label>
             <input type="password" id="dcApiKeyYahoo" class="input-w-md" placeholder="API Key">
             <button data-provider="yahoo">更新</button>
           </div>
-          <div style="display:flex;align-items:center;gap:10px">
-            <label class="label-muted" style="width:120px">FinMind:</label>
+          <div class="flex-gap-10">
+            <label class="label-muted label-w-sm">FinMind:</label>
             <input type="password" id="dcApiKeyFinmind" class="input-w-md" placeholder="API Key">
             <button data-provider="finmind">更新</button>
           </div>
-          <div style="display:flex;align-items:center;gap:10px">
-            <label class="label-muted" style="width:120px">Fugle:</label>
+          <div class="flex-gap-10">
+            <label class="label-muted label-w-sm">Fugle:</label>
             <input type="password" id="dcApiKeyFugle" class="input-w-md" placeholder="API Key">
             <button data-provider="fugle">更新</button>
           </div>
-           <div style="display:flex;align-items:center;gap:10px">
-            <label class="label-muted" style="width:120px">Fubon (富邦):</label>
+           <div class="flex-gap-10">
+            <label class="label-muted label-w-sm">Fubon (富邦):</label>
             <input type="password" id="dcApiKeyFubon" class="input-w-md" placeholder="API Key">
             <button data-provider="fubon">更新</button>
           </div>
-          <div style="display:flex;align-items:center;gap:10px">
-            <label class="label-muted" style="width:120px">TEJ:</label>
+          <div class="flex-gap-10">
+            <label class="label-muted label-w-sm">TEJ:</label>
             <input type="password" id="dcApiKeyTej" class="input-w-md" placeholder="API Key">
             <button data-provider="tej">更新</button>
           </div>
@@ -486,11 +486,11 @@
         <div class="panel"><h2>供應鏈連動</h2><div id="industryLinkage" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>季節性模式</h2><div id="industrySeasonality" class="empty loading">載入中…</div></div>
       </div>
-      <div class="panel wide" style="margin-top:16px">
+      <div class="panel wide mt-16">
         <h2>供應鏈網路圖</h2>
         <div id="industryGraph" class="empty loading" style="height: 400px;">載入中…</div>
       </div>
-      <div class="panel" style="margin-top:16px"><h2>衝擊模擬</h2>
+      <div class="panel mt-16"><h2>衝擊模擬</h2>
         <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
           <select id="shockSource" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text)"><option value="">選擇來源產業</option></select>
           <input type="number" id="shockMagnitude" placeholder="衝擊幅度 (例: -0.05)" step="0.01" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:160px">
@@ -520,10 +520,10 @@
         <div style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.6">
           閾值校正根據歷史營收數據重新計算各產業的擴張/復甦/成熟/衰退門檻。<br>
           系統<strong>每月自動執行一次</strong>。若需手動校正，可使用以下按鈕或 CLI：<br>
-          <code style="background:var(--panel-l2);padding:2px 6px;border-radius:4px;font-size:12px">go run ./cmd/calibrate-thresholds</code>
-          （需先執行 <code style="background:var(--panel-l2);padding:2px 6px;border-radius:4px;font-size:12px">backfill-month-revenue</code> 累積歷史數據）
+          <code class="code-inline">go run ./cmd/calibrate-thresholds</code>
+          （需先執行 <code class="code-inline">backfill-month-revenue</code> 累積歷史數據）
         </div>
-        <div style="display:flex;gap:8px">
+        <div class="flex-gap-8">
           <button id="btnCalibrateThresholds" style="background:var(--warn);color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600">🔄 手動校正閾值</button>
           <button data-page="parameters" style="background:var(--bg);border:1px solid var(--border);padding:8px 16px;border-radius:6px;cursor:pointer">📋 查看參數管理</button>
         </div>
@@ -609,15 +609,15 @@
         <p class="page-desc">MiroFish 平行市場模擬引擎 — 情境探索與共識分析</p>
       </div>
       <div class="kpi-grid" id="swarm-status"></div>
-      <div class="section" style="margin-top:16px">
+      <div class="section mt-16">
         <h3>📊 共識分析</h3>
         <div class="panel" id="swarm-consensus"></div>
       </div>
-      <div class="section" style="margin-top:16px">
+      <div class="section mt-16">
         <h3>⚠️ 異常偵測</h3>
         <div class="panel" id="swarm-anomalies"></div>
       </div>
-      <div class="section" style="margin-top:16px">
+      <div class="section mt-16">
         <h3>📈 情境參數</h3>
         <div class="panel" id="swarm-scenarios"></div>
       </div>
@@ -637,7 +637,7 @@
       <div><strong>基線</strong><pre id="diffBaseline"></pre></div>
       <div><strong>候選</strong><pre id="diffCandidate"></pre></div>
     </div>
-    <div class="control-group" style="margin-top:10px;justify-content:flex-end">
+    <div class="control-group mt-10 justify-end">
       <button>關閉</button>
     </div>
   </div>
@@ -647,9 +647,9 @@
 <div class="modal-overlay" id="promoteModal" role="dialog" aria-modal="true">
   <div class="modal" style="width:min(520px,94vw)">
     <h3>確認晉升 Baseline Policy</h3>
-    <p style="font-size:13px;color:var(--muted)">此操作將更新 <code>data/state/baseline_policy.json</code>。請確認以下資訊無誤：</p>
+    <p class="text-muted-md">此操作將更新 <code>data/state/baseline_policy.json</code>。請確認以下資訊無誤：</p>
     <div id="promotePreview" style="font-size:12px;margin:10px 0"></div>
-    <div class="control-group" style="justify-content:flex-end">
+    <div class="control-group justify-end">
       <button>取消</button>
       <button class="primary">確認晉升</button>
     </div>
@@ -661,7 +661,7 @@
   <div class="modal" style="width:min(560px,94vw)">
     <h3 id="infoTitle">說明</h3>
     <div id="infoContent" style="font-size:13px;line-height:1.7"></div>
-    <div class="control-group" style="margin-top:14px;justify-content:flex-end">
+    <div class="control-group mt-14 justify-end">
       <button>關閉</button>
     </div>
   </div>
@@ -679,7 +679,7 @@
       <button class="tab-btn" data-tab="risk">風險</button>
     </div>
     <div id="industryModalContent"><div class="empty">載入中…</div></div>
-    <div class="control-group" style="margin-top:14px;justify-content:flex-end">
+    <div class="control-group mt-14 justify-end">
       <button>關閉</button>
     </div>
   </div>
@@ -689,8 +689,8 @@
   <div class="modal" style="width:min(600px,94vw);max-height:85vh;overflow-y:auto">
     <h3>📊 週期羅盤 — 燈號計算說明</h3>
 
-    <div style="margin-bottom:14px">
-      <h4 style="margin:12px 0 6px">🟢 燈號顏色</h4>
+    <div class="mb-14">
+      <h4 class="h4-section-title">🟢 燈號顏色</h4>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:13px">
         <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#10b981;margin-right:6px"></span>復甦 (綠)</div>
         <div><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#3b82f6;margin-right:6px"></span>擴張 (藍)</div>
@@ -699,9 +699,9 @@
       </div>
     </div>
 
-    <div style="margin-bottom:14px">
-      <h4 style="margin:12px 0 6px">🔍 週期判定</h4>
-      <p style="font-size:13px;color:var(--muted);margin:0 0 6px">
+    <div class="mb-14">
+      <h4 class="h4-section-title">🔍 週期判定</h4>
+      <p class="text-muted-md" style="margin:0 0 6px">
         用 <b>營收年增率</b> 和 <b>獲利年增率</b> 與產業閾值比較：
       </p>
       <table style="font-size:12px;width:100%">
@@ -718,13 +718,13 @@
       </p>
     </div>
 
-    <div style="margin-bottom:14px">
-      <h4 style="margin:12px 0 6px">📈 信心度 — 週期判斷可靠度</h4>
-      <p style="font-size:13px;color:var(--muted);margin:0 0 6px">
+    <div class="mb-14">
+      <h4 class="h4-section-title">📈 信心度 — 週期判斷可靠度</h4>
+      <p class="text-muted-md" style="margin:0 0 6px">
         <b>信心度不是「產業強弱」，而是「週期定位的可信程度」</b>（0%～100%）。<br>
         數值越高，代表當前產業處於該週期階段的證據越充分。
       </p>
-      <p style="font-size:13px;color:var(--muted);margin:6px 0 6px">
+      <p class="text-muted-md" style="margin:6px 0 6px">
         <b>信心度 = 邊界距離 × 45% + 訊號新鮮度 × 20% + 季節性契合 × 15% + 供應鏈穩定度 × 10% + 敘事事件吻合 × 10%</b>
       </p>
       <ul style="font-size:12px;color:var(--muted);padding-left:18px;margin:0">
@@ -740,8 +740,8 @@
       </p>
     </div>
 
-    <div style="margin-bottom:14px">
-      <h4 style="margin:12px 0 6px">🔗 進階機制</h4>
+    <div class="mb-14">
+      <h4 class="h4-section-title">🔗 進階機制</h4>
       <ul style="font-size:12px;color:var(--muted);padding-left:18px;margin:0">
         <li><b>衰退期相關性提升</b>：當系統偵測到「衰退」時，產業間的衝擊傳導相關性自動提升 30%（Ang & Chen 2002 實證），反映系統性風險主導下「同漲同跌」現象</li>
         <li><b>動態環境調變</b>：原油、美元指數、BDI 的 90 日滾動中位數基準，自動適應市場結構變化，消除靜態基準漂移</li>
@@ -749,15 +749,15 @@
       </ul>
     </div>
 
-    <div style="margin-bottom:14px">
-      <h4 style="margin:12px 0 6px">⚠️ 使用須知</h4>
+    <div class="mb-14">
+      <h4 class="h4-section-title">⚠️ 使用須知</h4>
       <p style="font-size:12px;color:var(--down);margin:0">
         週期羅盤是<b>輔助判斷工具</b>，非買賣建議。低信心度（&lt;40%）的燈號僅供參考，建議搭配產業詳情頁的供應鏈連動、季節性模式與風險指標綜合評估。
         產業週期具有慣性，單一月份數據異常不一定代表階段轉換。
       </p>
     </div>
 
-    <div class="control-group" style="margin-top:14px;justify-content:flex-end">
+    <div class="control-group mt-14 justify-end">
       <button>關閉</button>
     </div>
   </div>

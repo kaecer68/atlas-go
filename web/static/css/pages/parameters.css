@@ -1,0 +1,20 @@
+/* Atlas Dashboard - Parameter Management */
+.params-table { table-layout: fixed; width: 100%; border-collapse: collapse; }
+.params-table th { text-align: left; padding: 4px 8px; font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border); }
+.params-table td { padding: 4px 8px; font-size: 12px; vertical-align: top; }
+.param-key { word-break: break-all; color: var(--accent); }
+.param-val { word-break: break-all; }
+.param-meta { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.param-val-trunc { cursor: pointer; color: var(--accent-secondary); display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.param-val-trunc.expanded { white-space: pre-wrap; word-break: break-all; overflow: visible; }
+.param-val-trunc::after { content: ' \01F50D'; font-size: 10px; opacity: 0.5; }
+.param-val-trunc.expanded::after { content: ' \2715'; }
+.param-map-collapsed { cursor: pointer; color: var(--accent-secondary); font-size: 11px; font-family: var(--font-mono); }
+.param-map-collapsed:hover { color: var(--accent); }
+.map-sub-table { margin: 4px 0; }
+.map-sub-table td { padding: 2px 6px; font-size: 11px; }
+.map-sub-table .param-key { font-size: 11px; }
+.btn-sm { font-size: 11px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 3px; background: var(--panel-l2); color: var(--text); cursor: pointer; }
+.btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+.param-val-editable { cursor: pointer; }
+.param-val-editable:hover { background: var(--panel-l2); border-radius: 3px; }
