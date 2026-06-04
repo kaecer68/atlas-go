@@ -130,7 +130,6 @@ func FriedmanH(predictor Predictor, X [][]float64, y []float64, featureNames []s
 
 // computePairwiseH computes the H-statistic for a single pair of features (fi, fj).
 func computePairwiseH(predictor Predictor, X [][]float64, fi, fj int, yMean float64, gridResolution int) (float64, error) {
-
 	// Extract feature ranges
 	minFi, maxFi := featureRange(X, fi)
 	minFj, maxFj := featureRange(X, fj)

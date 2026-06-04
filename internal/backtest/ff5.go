@@ -11,7 +11,7 @@ import (
 // attribution regression. The regression decomposes portfolio returns into
 // systematic factor exposures plus a true alpha (intercept).
 type FF5Result struct {
-	// Alpha is the annualised alpha derived from the regression intercept
+	// Alpha is the annualized alpha derived from the regression intercept
 	// (intercept × 252 trading days).
 	Alpha float64 `json:"alpha"`
 
@@ -30,13 +30,13 @@ type FF5Result struct {
 	// R2 is the coefficient of determination (unadjusted).
 	R2 float64 `json:"r2"`
 
-	// AdjR2 is the adjusted R² that penalises for the number of regressors.
+	// AdjR2 is the adjusted R² that penalizes for the number of regressors.
 	AdjR2 float64 `json:"adj_r2"`
 
 	// N is the number of daily observations used in the regression.
 	N int `json:"n"`
 
-	// AnnualizedVol is the annualised residual (idiosyncratic) volatility,
+	// AnnualizedVol is the annualized residual (idiosyncratic) volatility,
 	// computed as sqrt(MSE × 252).
 	AnnualizedVol float64 `json:"annualized_vol"`
 }
@@ -123,7 +123,7 @@ func ComputeFF5Alpha(portfolioReturns []float64, factorReturns map[string][]floa
 
 	mse := 0.0
 	residuals := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range portfolioReturns {
 		r := portfolioReturns[i] - yHat.AtVec(i)
 		residuals[i] = r
 		mse += r * r
@@ -151,7 +151,7 @@ func ComputeFF5Alpha(portfolioReturns []float64, factorReturns map[string][]floa
 	yMean /= float64(n)
 
 	var ssRes float64
-	for i := 0; i < n; i++ {
+	for i := range portfolioReturns {
 		ssRes += residuals[i] * residuals[i]
 		ssTot += (portfolioReturns[i] - yMean) * (portfolioReturns[i] - yMean)
 	}
