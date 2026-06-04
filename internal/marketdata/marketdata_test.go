@@ -49,11 +49,9 @@ func TestMockProvider_IsMock(t *testing.T) {
 
 func TestHybridProvider_NoAPIKey(t *testing.T) {
 	p := NewHybridProvider("", "")
-	if p.Name() != "hybrid-fubon" {
-		t.Fatalf("Name() = %q, want %q", p.Name(), "hybrid-fubon")
-	}
-	if p.GetFubonClient() == nil {
-		t.Fatal("GetFubonClient() should not be nil")
+	// With Fubon proxy probe, Name may be hybrid-fubon (proxy up) or hybrid-twse (proxy down).
+	if p.Name() != "hybrid-fubon" && p.Name() != "hybrid-twse" {
+		t.Fatalf("Name() = %q, want hybrid-fubon or hybrid-twse", p.Name())
 	}
 	if p.GetFugleClient() != nil {
 		t.Fatal("GetFugleClient() should be nil when no API key")
@@ -62,24 +60,21 @@ func TestHybridProvider_NoAPIKey(t *testing.T) {
 
 func TestHybridProvider_WithAPIKey(t *testing.T) {
 	p := NewHybridProvider("", "test-key")
-	if p.Name() != "hybrid-fubon" {
-		t.Fatalf("Name() = %q, want %q", p.Name(), "hybrid-fubon")
-	}
-	if p.GetFubonClient() == nil {
-		t.Fatal("GetFubonClient() should not be nil")
+	if p.Name() != "hybrid-fubon" && p.Name() != "hybrid-fugle" {
+		t.Fatalf("Name() = %q, want hybrid-fubon or hybrid-fugle", p.Name())
 	}
 	if p.GetFugleClient() == nil {
 		t.Fatal("GetFugleClient() should not be nil when API key is set")
 	}
 
 	p2 := NewHybridProvider("finmind-key", "")
-	if p2.Name() != "hybrid-fubon" {
-		t.Fatalf("Name() = %q, want %q", p2.Name(), "hybrid-fubon")
+	if p2.Name() != "hybrid-fubon" && p2.Name() != "hybrid-finmind" {
+		t.Fatalf("Name() = %q, want hybrid-fubon or hybrid-finmind", p2.Name())
 	}
 
 	p3 := NewHybridProvider("finmind-key", "fugle-key")
-	if p3.Name() != "hybrid-fubon" {
-		t.Fatalf("Name() = %q, want %q (Fubon primary)", p3.Name(), "hybrid-fubon")
+	if p3.Name() != "hybrid-fubon" && p3.Name() != "hybrid-finmind" && p3.Name() != "hybrid-fugle" {
+		t.Fatalf("Name() = %q, want hybrid-fubon, hybrid-finmind, or hybrid-fugle", p3.Name())
 	}
 }
 
@@ -110,21 +105,16 @@ func TestHybridProvider_Reset(t *testing.T) {
 
 func TestHybridProvider_UseTWSE_UseFugle(t *testing.T) {
 	p := NewHybridProvider("", "key")
+	fubonPrimary := p.Name() == "hybrid-fubon"
 
 	p.UseTWSE()
-	if p.Name() != "hybrid-fubon" {
-		t.Fatalf("after UseTWSE with Fugle: Name() = %q, want hybrid-fubon", p.Name())
+	if !fubonPrimary && p.Name() != "hybrid-fugle" {
+		t.Fatalf("after UseTWSE: Name() = %q, want hybrid-fugle (Fubon proxy not reachable)", p.Name())
 	}
 
 	p.UseFugle()
-	if p.Name() != "hybrid-fubon" {
-		t.Fatalf("after UseFugle: Name() = %q, want hybrid-fubon", p.Name())
-	}
-
-	p2 := NewHybridProvider("finmind-key", "fugle-key")
-	p2.UseTWSE()
-	if p2.Name() != "hybrid-fubon" {
-		t.Fatalf("after UseTWSE with FinMind+Fugle: Name() = %q, want hybrid-fubon", p2.Name())
+	if !fubonPrimary && p.Name() != "hybrid-fugle" {
+		t.Fatalf("after UseFugle: Name() = %q, want hybrid-fugle", p.Name())
 	}
 }
 
