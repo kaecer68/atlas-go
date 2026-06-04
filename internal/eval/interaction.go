@@ -130,7 +130,6 @@ func FriedmanH(predictor Predictor, X [][]float64, y []float64, featureNames []s
 
 // computePairwiseH computes the H-statistic for a single pair of features (fi, fj).
 func computePairwiseH(predictor Predictor, X [][]float64, fi, fj int, yMean float64, gridResolution int) (float64, error) {
-	nSamples := len(X)
 
 	// Extract feature ranges
 	minFi, maxFi := featureRange(X, fi)
@@ -175,10 +174,7 @@ func computePairwiseH(predictor Predictor, X [][]float64, fi, fj int, yMean floa
 		return 0, nil
 	}
 
-	hSquared := numerator / denominator / float64(nSamples) * float64(nSamples) // cancel out; keep formula clean
-	// Actually, the standard Friedman H² formula normalizes by the number of grid points implicitly
-	// since both sums are over the same grid. Just use the ratio directly.
-	hSquared = numerator / denominator
+	hSquared := numerator / denominator
 
 	if hSquared < 0 {
 		return 0, nil
