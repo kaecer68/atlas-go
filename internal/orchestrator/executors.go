@@ -1093,7 +1093,7 @@ func loadSymbolsFromCSV(path string) []string {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	r := csv.NewReader(f)
 	header, err := r.Read()
 	if err != nil {

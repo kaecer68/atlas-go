@@ -193,7 +193,7 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 	tec.generatedAt = time.Now()
 
 	// Determine data source from provider name.
-	source := DataSourceTWSE
+	var source EventDataSource
 	switch provider.Name() {
 	case "twse_calendar":
 		source = DataSourceTWSE

@@ -695,7 +695,7 @@ func TestFlagParsingLogFormatOverride(t *testing.T) {
 				return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 			},
 			dataFetcher: monitoring.NoopFetcher(),
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
+			newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 				return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 			},
 			listenAndServe: func(srv *http.Server) error {

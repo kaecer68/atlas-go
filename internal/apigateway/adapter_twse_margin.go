@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -29,6 +30,12 @@ func NewTWSEMarginChannelAdapter(provider *marketdata.TWSEMarginBalanceProvider)
 func (a *TWSEMarginChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 	snap, err := a.provider.FetchSnapshot(ctx)
 	if err != nil {
+		// Non-trading days or holidays: TWSE returns no data for the past 7 days,
+		// which is expected behavior. Return a stale result instead of an error
+		// to avoid triggering the circuit breaker.
+		if strings.Contains(err.Error(), "no TWSE") || strings.Contains(err.Error(), "no data") {
+			return &FetchResult{Stale: true, Meta: FetchMetadata{ChannelID: "twse_margin", Timestamp: time.Now()}}, nil
+		}
 		return nil, fmt.Errorf("margin fetch: %w", err)
 	}
 	data, err := json.Marshal(snap)
