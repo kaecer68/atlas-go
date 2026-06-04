@@ -262,10 +262,13 @@ export function renderCycleStatusCard(card) {
   html += `<details style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px">`;
   html += `<summary style="cursor:pointer;font-weight:800;font-size:14px">決策鏈分解 (Decision Chain Breakdown)</summary>`;
   if (breakdown.length > 0) {
-    html += `<table style="font-size:11px;margin-top:10px"><thead><tr><th>Layer</th><th>Raw</th><th>Weight</th><th>Contribution</th><th>Reason</th></tr></thead><tbody>`;
+    html += `<table style="font-size:11px;margin-top:10px"><thead><tr><th>層級</th><th>原始值</th><th>權重</th><th>貢獻值</th><th>原因</th></tr></thead><tbody>`;
+    const layerLabels = {silicon:"矽循環",business_cycle:"商業週期",seasonal:"季節性",events:"事件",supply_chain:"供應鏈"};
     breakdown.forEach((item) => {
       const delta = cycleDelta(item.contribution);
-      html += `<tr><td>${item.layer || "-"}</td><td>${cycleNumber(item.raw_value, 3)}</td><td>${typeof item.weight === "number" ? (item.weight * 100).toFixed(0) + "%" : "-"}</td><td style="color:${delta.color};font-weight:800">${delta.text}</td><td>${item.reason || "-"}</td></tr>`;
+      let reason = item.reason || "";
+      reason = reason.replace(/silicon phase=/,"矽階段=").replace(/^phase=/,"階段=").replace(/score=/g,"評分=").replace(/confidence=/g,"信賴度=").replace(/(\d+) active patterns/,"$1 個活躍模式").replace(/(\d+) active events/,"$1 個活躍事件").replace("upstream-downstream momentum","上下游動能") || "-";
+      html += `<tr><td>${layerLabels[item.layer] || item.layer || "-"}</td><td>${cycleNumber(item.raw_value, 3)}</td><td>${typeof item.weight === "number" ? (item.weight * 100).toFixed(0) + "%" : "-"}</td><td style="color:${delta.color};font-weight:800">${delta.text}</td><td>${reason}</td></tr>`;
     });
     html += `</tbody></table>`;
   } else {
