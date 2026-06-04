@@ -1,9 +1,9 @@
 /**
- * @typedef {import('./shared/field_types.d.ts').GuardOutcome} GuardOutcome
- * @typedef {import('./shared/field_types.d.ts').RecommendationOutcome} RecommendationOutcome
- * @typedef {import('./shared/field_types.d.ts').RiskSnapshot} RiskSnapshot
- * @typedef {import('./shared/field_types.d.ts').SessionSummary} SessionSummary
- * @typedef {import('./shared/field_types.d.ts').Scorecard} Scorecard
+ * @typedef {import('./shared/field_types.ts').GuardOutcome} GuardOutcome
+ * @typedef {import('./shared/field_types.ts').RecommendationOutcome} RecommendationOutcome
+ * @typedef {import('./shared/field_types.ts').RiskSnapshot} RiskSnapshot
+ * @typedef {import('./shared/field_types.ts').SessionSummary} SessionSummary
+ * @typedef {import('./shared/field_types.ts').Scorecard} Scorecard
  */
 
 import { loadReasoningTrace } from './components/reasoning-trace.js';

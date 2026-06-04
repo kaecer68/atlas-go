@@ -670,9 +670,8 @@
 <script type="module">
   import { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState } from './js/shared/utils.js';
   import { agentName as agentNameEsm, regimeLabel as regimeLabelEsm, AGENT_NAME_MAP, PAGE_TITLES } from './js/shared/constants.js';
-  import { FIELD } from './js/shared/field_names.js';
   import { renderEquityCurve, renderAgentScoreboard, renderRegimeContext, renderAllocationGuidance } from './js/components/sparkline.js';
-  Object.assign(window, { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState, agentNameEsm, regimeLabelEsm, FIELD });
+  Object.assign(window, { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState, agentNameEsm, regimeLabelEsm });
 </script>
 
 <div class="modal-overlay" id="industryModal" role="dialog" aria-modal="true" onclick="if(event.target===this)closeIndustryModal()">

@@ -3,6 +3,8 @@ package marketdata
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -62,8 +64,21 @@ type HybridProvider struct {
 func NewHybridProvider(finmindAPIKey, fugleAPIKey string) *HybridProvider {
 	var fubonProvider *FubonProvider
 	if os.Getenv("FUBON_PROXY_URL") != "" || fubonProxyBaseURL != "" {
-		fubonClient := NewFubonClient("")
-		fubonProvider = NewFubonProviderWithClient(fubonClient)
+		// Probe the proxy before creating the client to avoid constant
+		// "connection refused" warnings when the proxy is not running.
+		proxyAddr := "localhost:8081"
+		if envURL := os.Getenv("FUBON_PROXY_URL"); envURL != "" {
+			if u, err := url.Parse(envURL); err == nil && u.Host != "" {
+				proxyAddr = u.Host
+			}
+		}
+		if conn, err := net.DialTimeout("tcp", proxyAddr, 2*time.Second); err != nil {
+			logging.Info("hybrid_provider", "fubon_proxy_not_reachable", "msg", "skipping fubon fallback — proxy not running")
+		} else {
+			_ = conn.Close()
+			fubonClient := NewFubonClient("")
+			fubonProvider = NewFubonProviderWithClient(fubonClient)
+		}
 	}
 
 	var finmindProvider *FinMindProvider
