@@ -1,0 +1,9 @@
+/* Atlas Dashboard - Header */
+header { padding: 18px 20px 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+header h1 { margin: 0 0 4px; font-size: var(--text-2xl); font-weight: var(--font-bold); letter-spacing: -0.02em; }
+header p { margin: 0; color: var(--muted); font-size: var(--text-sm); }
+header a { color: var(--accent); text-decoration: none; font-size: 13px; }
+.health-bar { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.health-bar .pill { background: var(--panel); border: 1px solid var(--border); padding: 4px 10px; border-radius: 999px; }
+.health-bar .pill.warn { border-color: var(--warn); color: var(--warn); }
+.health-bar .pill.err { border-color: var(--down); color: var(--down); }

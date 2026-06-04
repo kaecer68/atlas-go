@@ -1,0 +1,9 @@
+/* Atlas Dashboard - Notification Type Colors */
+.notification.type-error { border-left: 3px solid var(--color-danger); }
+.notification.type-error .notif-icon { color: var(--color-danger); }
+.notification.type-warning { border-left: 3px solid var(--color-warning); }
+.notification.type-warning .notif-icon { color: var(--color-warning); }
+.notification.type-info { border-left: 3px solid var(--color-info); }
+.notification.type-info .notif-icon { color: var(--color-info); }
+.notification.type-success { border-left: 3px solid var(--color-success); }
+.notification.type-success .notif-icon { color: var(--color-success); }
