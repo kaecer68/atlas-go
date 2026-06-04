@@ -17,33 +17,33 @@
   <div class="brand">
     <h1>Atlas-Go</h1>
     <p>人機協作控制塔</p>
-    <button class="theme-toggle" onclick="toggleTheme()" title="切換主題">🌓</button>
+    <button class="theme-toggle" title="切換主題">🌓</button>
   </div>
   <nav role="navigation" aria-label="主要導航">
-    <a class="active" data-page="overview" onclick="switchPage('overview')" tabindex="0" title="總覽">📊 總覽</a>
-    <a data-page="evolution_panel" onclick="switchPage('evolution_panel')" tabindex="0" title="演化透視">🧬 演化透視</a>
-    <a data-page="synergy" onclick="switchPage('synergy')" tabindex="0" title="人機協同">🤝 人機協同</a>
-    <a data-page="narrative" onclick="switchPage('narrative')" tabindex="0" title="宏觀敘事">🌍 宏觀敘事</a>
-    <a data-page="industry" onclick="switchPage('industry')" tabindex="0" title="產業生態系">🏭 產業生態系</a>
-    <a data-page="pipeline" onclick="switchPage('pipeline')" tabindex="0" title="投資管線">📋 投資管線</a>
-    <a data-page="decision" onclick="switchPage('decision')" tabindex="0" title="決策鏈">🔗 決策鏈</a>
-    <a data-page="reasoning-trace" onclick="switchPage('reasoning-trace')" tabindex="0" title="決策追蹤">🔍 決策追蹤</a>
-    <a data-page="live" onclick="switchPage('live')" tabindex="0" title="風控結果">🛡️ 風控結果</a>
-    <a data-page="portfolio" onclick="switchPage('portfolio')" tabindex="0" title="組合持倉">📂 組合持倉</a>
-    <a data-page="performance-report" onclick="switchPage('performance-report')" tabindex="0" title="績效報告">📊 績效報告</a>
+    <a class="active" data-page="overview" tabindex="0" title="總覽">📊 總覽</a>
+    <a data-page="evolution_panel" tabindex="0" title="演化透視">🧬 演化透視</a>
+    <a data-page="synergy" tabindex="0" title="人機協同">🤝 人機協同</a>
+    <a data-page="narrative" tabindex="0" title="宏觀敘事">🌍 宏觀敘事</a>
+    <a data-page="industry" tabindex="0" title="產業生態系">🏭 產業生態系</a>
+    <a data-page="pipeline" tabindex="0" title="投資管線">📋 投資管線</a>
+    <a data-page="decision" tabindex="0" title="決策鏈">🔗 決策鏈</a>
+    <a data-page="reasoning-trace" tabindex="0" title="決策追蹤">🔍 決策追蹤</a>
+    <a data-page="live" tabindex="0" title="風控結果">🛡️ 風控結果</a>
+    <a data-page="portfolio" tabindex="0" title="組合持倉">📂 組合持倉</a>
+    <a data-page="performance-report" tabindex="0" title="績效報告">📊 績效報告</a>
 
-    <a data-page="agents" onclick="switchPage('agents')" tabindex="0" title="AI 觀測台">🤖 AI 觀測台</a>
-    <a data-page="experiments" onclick="switchPage('experiments')" tabindex="0" title="模擬交易">🧪 模擬交易</a>
-    <a data-page="reports" onclick="switchPage('reports')" tabindex="0" title="最新回測">📈 最新回測</a>
-    <a data-page="controls" onclick="switchPage('controls')" tabindex="0" title="控制與稽核">⚙️ 控制與稽核</a>
+    <a data-page="agents" tabindex="0" title="AI 觀測台">🤖 AI 觀測台</a>
+    <a data-page="experiments" tabindex="0" title="模擬交易">🧪 模擬交易</a>
+    <a data-page="reports" tabindex="0" title="最新回測">📈 最新回測</a>
+    <a data-page="controls" tabindex="0" title="控制與稽核">⚙️ 控制與稽核</a>
     <div class="nav-divider"></div>
-    <a data-page="datachannels" onclick="switchPage('datachannels')" tabindex="0" title="信息通道">📡 信息通道</a>
-    <a data-page="alerts" onclick="switchPage('alerts')" tabindex="0" title="系統警報">🚨 系統警報</a>
-    <a data-page="metrics" onclick="switchPage('metrics')" tabindex="0" title="指標監控">📉 指標監控</a>
-    <a data-page="parameters" onclick="switchPage('parameters')" tabindex="0" title="參數管理">🎛️ 參數管理</a>
-   <a data-page="config" onclick="switchPage('config')" tabindex="0" title="部署配置">⚙️ 部署配置</a>
-    <a data-page="eventlogic-rules" onclick="switchPage('eventlogic-rules')" tabindex="0" title="事件邏輯規則">🧠 事件邏輯</a>
-    <a data-page="swarm" onclick="switchPage('swarm')" tabindex="0" title="Swarm 模擬">🐟 Swarm 模擬</a>
+    <a data-page="datachannels" tabindex="0" title="信息通道">📡 信息通道</a>
+    <a data-page="alerts" tabindex="0" title="系統警報">🚨 系統警報</a>
+    <a data-page="metrics" tabindex="0" title="指標監控">📉 指標監控</a>
+    <a data-page="parameters" tabindex="0" title="參數管理">🎛️ 參數管理</a>
+   <a data-page="config" tabindex="0" title="部署配置">⚙️ 部署配置</a>
+    <a data-page="eventlogic-rules" tabindex="0" title="事件邏輯規則">🧠 事件邏輯</a>
+    <a data-page="swarm" tabindex="0" title="Swarm 模擬">🐟 Swarm 模擬</a>
   </nav>
   <div class="foot">
     <span class="text-muted">v8 · 統一介面</span>
@@ -53,13 +53,13 @@
 <main id="main" role="main">
   <div id="topbar">
     <div class="flex-center-gap">
-      <button id="menuToggle" onclick="toggleSidebar()">☰</button>
+      <button id="menuToggle">☰</button>
       <h2 id="pageTitle">總覽</h2>
     </div>
     <div class="refresh-pill" id="refreshPill">
       <span class="dot"></span>
       <span id="refreshTime">等待更新…</span>
-      <button id="refreshToggle" onclick="toggleAutoRefresh()" title="暫停/恢復自動刷新" style="margin-left:6px;background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px">⏸</button>
+      <button id="refreshToggle" title="暫停/恢復自動刷新" style="margin-left:6px;background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px">⏸</button>
     </div>
   </div>
 
@@ -80,19 +80,19 @@
 
       <div class="kpi-group-title">🌍 市場環境</div>
       <div class="kpi-grid" id="overviewMarket">
-        <div class="kpi-card clickable" onclick="openKpiHelp('narrative')"><div class="kpi-label">敘事脈絡</div><div class="kpi-value">-</div></div>
-        <div class="kpi-card clickable" onclick="openKpiHelp('regime')"><div class="kpi-label">市場狀態</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card clickable" data-kpi="narrative"><div class="kpi-label">敘事脈絡</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card clickable" data-kpi="regime"><div class="kpi-label">市場狀態</div><div class="kpi-value">-</div></div>
       </div>
       <div class="kpi-group-title">⚠️ 風險信號</div>
       <div class="kpi-grid" id="overviewRisk">
-        <div class="kpi-card clickable" onclick="openKpiHelp('weakest')"><div class="kpi-label">待改進 AI 策略</div><div class="kpi-value">-</div></div>
-        <div class="kpi-card clickable" onclick="openKpiHelp('crowding')"><div class="kpi-label">擁擠標的</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card clickable" data-kpi="weakest"><div class="kpi-label">待改進 AI 策略</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card clickable" data-kpi="crowding"><div class="kpi-label">擁擠標的</div><div class="kpi-value">-</div></div>
       </div>
       <div class="kpi-group-title">🔧 系統狀態</div>
       <div class="kpi-grid" id="overviewSystem">
-        <div class="kpi-card clickable" onclick="openKpiHelp('data_time')"><div class="kpi-label">資料時間</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card clickable" data-kpi="data_time"><div class="kpi-label">資料時間</div><div class="kpi-value">-</div></div>
         <div class="kpi-card"><div class="kpi-label">基線版本</div><div class="kpi-value">-</div></div>
-        <div class="kpi-card clickable" onclick="openKpiHelp('experiment')"><div class="kpi-label">實驗狀態</div><div class="kpi-value">-</div></div>
+        <div class="kpi-card clickable" data-kpi="experiment"><div class="kpi-label">實驗狀態</div><div class="kpi-value">-</div></div>
       </div>
 
       
@@ -179,11 +179,11 @@
     <div class="page" id="page-pipeline">
       <div class="workflow mb-sm">
         <div class="step">AI 推薦</div><span class="arrow">→</span>
-        <div class="step clickable" id="workflowScreening" onclick="toggleWorkflowScreening()" title="點擊顯示/隱藏被篩選層排除的標的">篩選層</div><span class="arrow">→</span>
+        <div class="step clickable" id="workflowScreening" title="點擊顯示/隱藏被篩選層排除的標的">篩選層</div><span class="arrow">→</span>
         <div class="step">控制層</div><span class="arrow">→</span>
         <div class="step">模擬投組</div>
       </div>
-      <button class="filter-toggle" id="filterToggle" onclick="toggleFilterPanel()" title="點擊展開/收合進階篩選">
+      <button class="filter-toggle" id="filterToggle" title="點擊展開/收合進階篩選">
         <span class="icon">⚙</span> 進階篩選
         <span id="filterBadge"></span>
       </button>
@@ -223,8 +223,8 @@
           </div>
         </div>
         <div class="filter-actions">
-          <button class="primary" onclick="applyFilters()">套用篩選</button>
-          <button onclick="clearFilters()">清除條件</button>
+          <button class="primary">套用篩選</button>
+          <button>清除條件</button>
           <span id="filterResultCount" class="ml-auto text-xs-muted"></span>
         </div>
       </div>
@@ -252,7 +252,7 @@
 
     <!-- 組合持倉 -->
     <div id="page-portfolio" class="page">
-      <h1 id="pageTitle">📂 組合持倉</h1>
+      <h1 id="portfolioPageTitle">📂 組合持倉</h1>
       <div class="kpi-grid" id="portfolioKPIs"></div>
       <div class="panel wide" id="equityCurvePanel" style="display:none">
         <h2>淨值趨勢</h2>
@@ -314,7 +314,7 @@
           <input type="date" id="backtestStart" aria-label="回測開始日期">
           <label class="label-muted" for="backtestEnd">結束</label>
           <input type="date" id="backtestEnd" aria-label="回測結束日期">
-          <button class="primary" onclick="runBacktest()">啟動回測</button>
+          <button class="primary">啟動回測</button>
           <span id="backtestStatusText" class="text-muted text-sm"></span>
         </div>
         <div id="backtestStatusDetail" class="mt-8 text-12-muted"></div>
@@ -331,8 +331,8 @@
             <div class="mb-xs text-sm"><strong>AI 覆寫</strong> <span id="overrideBadges"></span></div>
             <div class="control-group">
               <select id="agentSelect"></select>
-              <button onclick="pauseAgent()">暫停</button>
-              <button onclick="resumeAgent()">恢復</button>
+              <button data-action="pause-agent">暫停</button>
+              <button data-action="resume-agent">恢復</button>
             </div>
             <div style="margin-top:8px;font-size:13px"><strong>產業封鎖</strong></div>
             <div class="control-group">
@@ -343,23 +343,23 @@
                 <option value="high_dividend">高股息</option>
                 <option value="etf_rotation">ETF 輪動</option>
               </select>
-              <button onclick="banSector()">封鎖</button>
-              <button onclick="unbanSector()">解除</button>
+              <button data-action="ban-sector">封鎖</button>
+              <button data-action="unban-sector">解除</button>
             </div>
           </div>
           <div>
             <div class="mb-xs text-sm"><strong>基線管理</strong></div>
             <div class="control-group">
               <select id="promoteSelect"><option value="">-- 選擇已接受的實驗 --</option></select>
-              <button class="primary" onclick="promoteExperiment()">晉升</button>
+              <button class="primary" data-action="promote-experiment">晉升</button>
             </div>
             <div class="control-group">
               <select id="revertSelect"><option value="">-- 選擇要回滾的版本 --</option></select>
               <input id="revertReason" type="text" placeholder="原因" class="input-w-md">
-               <button class="danger" onclick="revertExperiment()">回滾</button>
+               <button class="danger" data-action="revert-experiment">回滾</button>
         </div>
      </div>
-  </div>
+   </div>
 </div>
       <div class="panel wide"><h2>人工干預紀錄</h2><div id="auditLog" class="empty loading">載入中…</div></div>
     </div>
@@ -367,16 +367,16 @@
       <div class="panel wide" style="margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap" id="evolutionViews">
            <span style="font-size:13px;font-weight:700">視覺圖：</span>
-           <button class="view-btn active" id="evView-compact" onclick="window._evSwitch('compact')">總覽儀表板</button>
-           <button class="view-btn" id="evView-detailed" onclick="window._evSwitch('detailed')">詳細分析</button>
-           <button class="view-btn" id="evView-categorical" onclick="window._evSwitch('categorical')">分類視覺圖</button>
+           <button class="view-btn active" id="evView-compact">總覽儀表板</button>
+           <button class="view-btn" id="evView-detailed">詳細分析</button>
+           <button class="view-btn" id="evView-categorical">分類視覺圖</button>
         </div>
       </div>
       <div id="evolutionContent" class="empty loading">載入中…</div>
       <div id="evolutionCatContent" style="display:none;margin-top:12px"></div>
-      <div class="panel wide" id="equityCurvePanel" style="display:none;margin-top:12px">
+      <div class="panel wide" id="evolutionEquityCurvePanel" style="display:none;margin-top:12px">
         <h3>權益曲線</h3>
-        <canvas id="equityChart" style="width:100%"></canvas>
+        <canvas id="evolutionEquityChart" style="width:100%"></canvas>
       </div>
     </div>
     <!-- 信息通道 -->
@@ -390,16 +390,16 @@
         <div class="flex-between">
           <h2 class="m-0">資料通道管理中心</h2>
           <div class="control-group m-0">
-            <button class="primary" id="btnIngestChannels" onclick="triggerChannelsIngest()">立即更新 Macro + Geo 資料</button>
+            <button class="primary" id="btnIngestChannels">立即更新 Macro + Geo 資料</button>
           </div>
         </div>
 
         <!-- 控制面板 -->
         <div id="dcControlPanel" class="rc-summary mt-md">
           <div class="rc-summary__left">
-            <button class="primary" onclick="dcEnableAll()">全部啟用</button>
-            <button class="danger" onclick="dcDisableAll()">全部停用</button>
-            <button onclick="loadDataChannels()">刷新狀態</button>
+            <button class="primary" data-action="dc-enable-all">全部啟用</button>
+            <button class="danger" data-action="dc-disable-all">全部停用</button>
+            <button data-action="dc-refresh">刷新狀態</button>
           </div>
           <div class="rc-summary__gauge">
             <div class="rc-summary__bar"><div class="rc-summary__fill" id="dcTotalBar" style="width:100%;background:var(--accent)"></div></div>
@@ -425,27 +425,27 @@
           <div class="flex-gap-10">
             <label class="label-muted label-w-sm">Yahoo Finance:</label>
             <input type="password" id="dcApiKeyYahoo" class="input-w-md" placeholder="API Key">
-            <button onclick="dcUpdateApiKey('yahoo')">更新</button>
+            <button data-provider="yahoo">更新</button>
           </div>
           <div class="flex-gap-10">
             <label class="label-muted label-w-sm">FinMind:</label>
             <input type="password" id="dcApiKeyFinmind" class="input-w-md" placeholder="API Key">
-            <button onclick="dcUpdateApiKey('finmind')">更新</button>
+            <button data-provider="finmind">更新</button>
           </div>
           <div class="flex-gap-10">
             <label class="label-muted label-w-sm">Fugle:</label>
             <input type="password" id="dcApiKeyFugle" class="input-w-md" placeholder="API Key">
-            <button onclick="dcUpdateApiKey('fugle')">更新</button>
+            <button data-provider="fugle">更新</button>
           </div>
            <div class="flex-gap-10">
             <label class="label-muted label-w-sm">Fubon (富邦):</label>
             <input type="password" id="dcApiKeyFubon" class="input-w-md" placeholder="API Key">
-            <button onclick="dcUpdateApiKey('fubon')">更新</button>
+            <button data-provider="fubon">更新</button>
           </div>
           <div class="flex-gap-10">
             <label class="label-muted label-w-sm">TEJ:</label>
             <input type="password" id="dcApiKeyTej" class="input-w-md" placeholder="API Key">
-            <button onclick="dcUpdateApiKey('tej')">更新</button>
+            <button data-provider="tej">更新</button>
           </div>
         </div>
       </details>
@@ -467,8 +467,8 @@
         <div class="flex-between mb-sm">
           <h2 class="m-0">系統警報</h2>
           <div class="control-group m-0">
-            <button onclick="loadAlerts()">🔄 重新整理</button>
-            <button onclick="showUnacknowledgedOnly()">僅顯示未確認</button>
+            <button data-action="load-alerts">🔄 重新整理</button>
+            <button data-action="show-unacknowledged">僅顯示未確認</button>
           </div>
         </div>
         <div id="alertsPanel" class="empty loading">載入中…</div>
@@ -482,7 +482,7 @@
       </details>
       <div class="two-col-grid">
         <div class="panel"><h2>產業地圖</h2><div id="industryMap" class="empty loading">載入中…</div></div>
-        <div class="panel"><h2>週期羅盤 <span class="cursor-pointer text-accent" onclick="toggleCycleLegend()" title="週期燈號計算說明" style="font-size:14px">ℹ️</span></h2><div id="industryCycle" class="empty loading">載入中…</div></div>
+        <div class="panel"><h2>週期羅盤 <span class="cursor-pointer text-accent" title="週期燈號計算說明" style="font-size:14px">ℹ️</span></h2><div id="industryCycle" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>供應鏈連動</h2><div id="industryLinkage" class="empty loading">載入中…</div></div>
         <div class="panel"><h2>季節性模式</h2><div id="industrySeasonality" class="empty loading">載入中…</div></div>
       </div>
@@ -495,7 +495,7 @@
           <select id="shockSource" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text)"><option value="">選擇來源產業</option></select>
           <input type="number" id="shockMagnitude" placeholder="衝擊幅度 (例: -0.05)" step="0.01" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:160px">
           <input type="number" id="shockDepth" value="3" min="1" max="5" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:60px" title="傳導深度">
-          <button onclick="window.runShockSimulation()" style="padding:4px 12px;border-radius:4px;border:1px solid var(--up);background:var(--bg);color:var(--up);cursor:pointer">▶ 執行模擬</button>
+          <button id="btnRunShockSim" style="padding:4px 12px;border-radius:4px;border:1px solid var(--up);background:var(--bg);color:var(--up);cursor:pointer">▶ 執行模擬</button>
         </div>
         <div id="industryShockSim" class="empty">選擇產業與衝擊幅度進行供應鏈衝擊傳導模擬</div>
       </div>
@@ -524,8 +524,8 @@
           （需先執行 <code class="code-inline">backfill-month-revenue</code> 累積歷史數據）
         </div>
         <div class="flex-gap-8">
-          <button onclick="fetch('/api/admin/calibrate-thresholds',{method:'POST'}).then(r=>r.json()).then(d=>alert(d.status||d.error||'完成')).catch(e=>alert('校正失敗: '+e))" style="background:var(--warn);color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600">🔄 手動校正閾值</button>
-          <button onclick="switchPage('parameters')" style="background:var(--bg);border:1px solid var(--border);padding:8px 16px;border-radius:6px;cursor:pointer">📋 查看參數管理</button>
+          <button id="btnCalibrateThresholds" style="background:var(--warn);color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600">🔄 手動校正閾值</button>
+          <button data-page="parameters" style="background:var(--bg);border:1px solid var(--border);padding:8px 16px;border-radius:6px;cursor:pointer">📋 查看參數管理</button>
         </div>
       </div>
     </div>
@@ -625,12 +625,12 @@
   </div>
 </div>
 
-<button class="refresh" onclick="loadAll()" title="手動重新整理">🔄 重新整理</button>
+<button class="refresh" title="手動重新整理">🔄 重新整理</button>
 
 <div class="notification-center" id="notificationCenter" role="status" aria-live="polite" aria-label="通知中心"></div>
 
 <!-- Modal: Prompt Diff -->
-<div class="modal-overlay" id="diffModal" role="dialog" aria-modal="true" onclick="if(event.target===this)closeModal()">
+<div class="modal-overlay" id="diffModal" role="dialog" aria-modal="true">
   <div class="modal">
     <h3>提示詞差異比對</h3>
     <div class="diff" id="diffContent">
@@ -638,59 +638,54 @@
       <div><strong>候選</strong><pre id="diffCandidate"></pre></div>
     </div>
     <div class="control-group mt-10 justify-end">
-      <button onclick="closeModal()">關閉</button>
+      <button>關閉</button>
     </div>
   </div>
 </div>
 
 <!-- Modal: Promote Confirm -->
-<div class="modal-overlay" id="promoteModal" role="dialog" aria-modal="true" onclick="if(event.target===this)closePromoteModal()">
+<div class="modal-overlay" id="promoteModal" role="dialog" aria-modal="true">
   <div class="modal" style="width:min(520px,94vw)">
     <h3>確認晉升 Baseline Policy</h3>
     <p class="text-muted-md">此操作將更新 <code>data/state/baseline_policy.json</code>。請確認以下資訊無誤：</p>
     <div id="promotePreview" style="font-size:12px;margin:10px 0"></div>
     <div class="control-group justify-end">
-      <button onclick="closePromoteModal()">取消</button>
-      <button class="primary" onclick="confirmPromote()">確認晉升</button>
+      <button>取消</button>
+      <button class="primary">確認晉升</button>
     </div>
   </div>
 </div>
 
 <!-- Modal: KPI Help -->
-<div class="modal-overlay" id="infoModal" role="dialog" aria-modal="true" onclick="if(event.target===this)closeInfoModal()">
+<div class="modal-overlay" id="infoModal" role="dialog" aria-modal="true">
   <div class="modal" style="width:min(560px,94vw)">
     <h3 id="infoTitle">說明</h3>
     <div id="infoContent" style="font-size:13px;line-height:1.7"></div>
     <div class="control-group mt-14 justify-end">
-      <button onclick="closeInfoModal()">關閉</button>
+      <button>關閉</button>
     </div>
   </div>
 </div>
 
-<script type="module">
-  import { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState } from './js/shared/utils.js';
-  import { agentName as agentNameEsm, regimeLabel as regimeLabelEsm, AGENT_NAME_MAP, PAGE_TITLES } from './js/shared/constants.js';
-  import { renderEquityCurve, renderAgentScoreboard, renderRegimeContext, renderAllocationGuidance } from './js/components/sparkline.js';
-  Object.assign(window, { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState, agentNameEsm, regimeLabelEsm });
-</script>
+<script type="module" src="js/bootstrap-utils.js"></script>
 
-<div class="modal-overlay" id="industryModal" role="dialog" aria-modal="true" onclick="if(event.target===this)closeIndustryModal()">
+<div class="modal-overlay" id="industryModal" role="dialog" aria-modal="true">
   <div class="modal" style="width:min(720px,94vw)">
     <h3 id="industryModalTitle">產業詳細分析</h3>
     <div class="industry-tabs" id="industryTabs">
-      <button class="tab-btn active" data-tab="cycle" onclick="window.switchIndustryTab('cycle')">週期定位</button>
-      <button class="tab-btn" data-tab="linkage" onclick="window.switchIndustryTab('linkage')">供應鏈</button>
-      <button class="tab-btn" data-tab="seasonality" onclick="window.switchIndustryTab('seasonality')">季節性</button>
-      <button class="tab-btn" data-tab="risk" onclick="window.switchIndustryTab('risk')">風險</button>
+      <button class="tab-btn active" data-tab="cycle">週期定位</button>
+      <button class="tab-btn" data-tab="linkage">供應鏈</button>
+      <button class="tab-btn" data-tab="seasonality">季節性</button>
+      <button class="tab-btn" data-tab="risk">風險</button>
     </div>
     <div id="industryModalContent"><div class="empty">載入中…</div></div>
     <div class="control-group mt-14 justify-end">
-      <button onclick="closeIndustryModal()">關閉</button>
+      <button>關閉</button>
     </div>
   </div>
 </div>
 
-<div class="modal-overlay" id="cycleLegendModal" role="dialog" aria-modal="true" onclick="if(event.target===this)closeCycleLegend()">
+<div class="modal-overlay" id="cycleLegendModal" role="dialog" aria-modal="true">
   <div class="modal" style="width:min(600px,94vw);max-height:85vh;overflow-y:auto">
     <h3>📊 週期羅盤 — 燈號計算說明</h3>
 
@@ -763,33 +758,14 @@
     </div>
 
     <div class="control-group mt-14 justify-end">
-      <button onclick="closeCycleLegend()">關閉</button>
+      <button>關閉</button>
     </div>
   </div>
 </div>
 
-<script type="module">
-  import './js/main.js';
-</script>
+<script type="module">import "./js/main.js";</script>
 
-
-<script type="module">
-  import { CircuitBreakerPanel } from './js/components/circuit-breaker.js';
-  import { renderPerformanceReport } from './js/components/performance-report.js';
-  import { eventSource } from './js/services/event-source.js';
-  import { SimHealthPanel } from './js/components/sim-health.js';
-
-  // Module scripts are deferred; DOM is already ready.
-  const cbPanel = new CircuitBreakerPanel('circuitBreakerPanel');
-  eventSource.on('*', (ev) => cbPanel.handleSSE(ev));
-
-  renderPerformanceReport('performanceReportContainer');
-
-  // Initialize Simulation Health Panel on the metrics page
-  const simHealthContainer = document.getElementById('simHealthContainer');
-  if (simHealthContainer) {
-    window.simHealthPanel = new SimHealthPanel('simHealthContainer');
-  }
-</script>
+<script type="module" src="js/component-init.js"></script>
+<script type="module" src="js/event-listeners.js"></script>
 </body>
 </html>

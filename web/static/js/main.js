@@ -111,6 +111,27 @@ async function loadModules() {
     if (modules.experiments.openInfoHelp) window.openInfoHelp = modules.experiments.openInfoHelp;
     if (modules.experiments.closeInfoModal) window.closeInfoModal = modules.experiments.closeInfoModal;
     if (modules.experiments.openKpiHelp) window.openKpiHelp = modules.experiments.openKpiHelp;
+    if (modules.experiments.closeModal) window.closeModal = modules.experiments.closeModal;
+    if (modules.experiments.closePromoteModal) window.closePromoteModal = modules.experiments.closePromoteModal;
+    if (modules.experiments.confirmPromote) window.confirmPromote = modules.experiments.confirmPromote;
+    if (modules.experiments.promoteExperiment) window.promoteExperiment = modules.experiments.promoteExperiment;
+    if (modules.experiments.revertExperiment) window.revertExperiment = modules.experiments.revertExperiment;
+    if (modules.experiments.pauseAgent) window.pauseAgent = modules.experiments.pauseAgent;
+    if (modules.experiments.resumeAgent) window.resumeAgent = modules.experiments.resumeAgent;
+    if (modules.experiments.banSector) window.banSector = modules.experiments.banSector;
+    if (modules.experiments.unbanSector) window.unbanSector = modules.experiments.unbanSector;
+  }
+  if (modules.pipe) {
+    if (modules.pipe.toggleFilterPanel) window.toggleFilterPanel = modules.pipe.toggleFilterPanel;
+    if (modules.pipe.applyFilters) window.applyFilters = modules.pipe.applyFilters;
+    if (modules.pipe.clearFilters) window.clearFilters = modules.pipe.clearFilters;
+    if (modules.pipe.toggleWorkflowScreening) window.toggleWorkflowScreening = modules.pipe.toggleWorkflowScreening;
+  }
+  if (modules.back) {
+    if (modules.back.runBacktest) window.runBacktest = modules.back.runBacktest;
+  }
+  if (modules.alerts) {
+    if (modules.alerts.loadAlerts) window.loadAlerts = modules.alerts.loadAlerts;
   }
   return modules;
 }
@@ -388,6 +409,21 @@ if (typeof window !== "undefined") window.switchPage = switchPage;
 if (typeof window !== "undefined") window.toggleSidebar = toggleSidebar;
 if (typeof window !== "undefined") window.retryLoad = retryLoad;
 if (typeof window !== "undefined") window.fmtNTD = fmtNTD;
+if (typeof window !== "undefined") window.loadAll = loadAll;
+
+window.toggleAutoRefresh = function() {
+  if (autoRefreshEnabled) {
+    stopAutoRefresh();
+    autoRefreshEnabled = false;
+    var btn = document.getElementById('refreshToggle');
+    if (btn) btn.textContent = '▶';
+  } else {
+    autoRefreshEnabled = true;
+    startAutoRefresh();
+    var btn = document.getElementById('refreshToggle');
+    if (btn) btn.textContent = '⏸';
+  }
+};
 
 if (typeof window !== 'undefined') {
   populateAgentSelect();
