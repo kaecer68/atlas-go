@@ -27,6 +27,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/eventlogic"
 	"github.com/kaecer68/atlas-go/internal/experiment"
+	"github.com/kaecer68/atlas-go/internal/fubonproxy"
 	"github.com/kaecer68/atlas-go/internal/importer"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
@@ -295,6 +296,15 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] data fetcher prepared for DashboardAPI")
 			}
 		}
+
+		// Start fubon-proxy process manager (non-fatal on failure).
+		fubonMgr := fubonproxy.NewManager(cfg.WorkDir)
+		if err := fubonMgr.Start(context.Background()); err != nil {
+			log.Printf("[FubonProxy] start warning (non-fatal): %v", err)
+		} else {
+			log.Printf("[FubonProxy] process manager started")
+		}
+		defer fubonMgr.Stop()
 
 		mux := http.NewServeMux()
 		log.Printf("[Auth] API key authentication %s", map[bool]string{true: "ENABLED", false: "DISABLED (no ATLAS_API_KEY set)"}[os.Getenv("ATLAS_API_KEY") != ""])
