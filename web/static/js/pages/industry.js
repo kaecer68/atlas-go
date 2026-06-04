@@ -72,7 +72,13 @@ function cycleStatusText(value) {
     .replace("recovery", "復甦")
     .replace("expansion", "擴張")
     .replace("mature", "成熟")
-    .replace("recession", "衰退");
+    .replace("recession", "衰退")
+    .replace("active_restocking", "主動補庫存")
+    .replace("passive_restocking", "被動補庫存")
+    .replace("active_destocking", "主動去庫存")
+    .replace("passive_destocking", "被動去庫存")
+    .replace("maintenance", "維護性支出")
+    .replace("contraction", "緊縮");
 }
 
 function cycleNumber(value, digits) {
@@ -97,7 +103,22 @@ function cycleEventStyle(direction) {
 
 function cyclePhaseBadge(value) {
   const phase = String(value || "").toLowerCase();
-  const color = phase === "expansion" || phase === "recovery" ? "var(--up)" : phase === "mature" ? "var(--warn)" : phase === "recession" ? "var(--down)" : "var(--muted)";
+  const colorMap = {
+    // Business cycle
+    "expansion": "var(--up)",
+    "recovery": "var(--up)",
+    "mature": "var(--warn)",
+    "recession": "var(--down)",
+    // Inventory cycle
+    "active_restocking": "var(--up)",
+    "passive_restocking": "var(--warn)",
+    "active_destocking": "var(--down)",
+    "passive_destocking": "var(--warn)",
+    // Capex cycle
+    "contraction": "var(--down)",
+    "maintenance": "var(--warn)",
+  };
+  const color = colorMap[phase] || "var(--muted)";
   return `<span style="color:${color};border:1px solid ${color};border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;background:var(--bg)">${cycleStatusText(value)}</span>`;
 }
 
@@ -149,6 +170,15 @@ export function renderCycleStatusCard(card) {
   const activeEvents = card.active_events || [];
   const activePatterns = card.active_patterns || [];
 
+  const INDICATOR_LABELS = {
+    tsmc_monthly_revenue_yoy: "台積電月營收年增率",
+    global_semiconductor_billings_yoy: "全球半導體出貨年增率",
+    dram_spot_price_trend: "DRAM 現貨價格趨勢",
+    taiwan_semiconductor_index_ma: "半導體指數偏離季線",
+    tsmc_capex_guidance: "台積電資本支出指引",
+    philadelphia_sox_index_yoy: "費城半導體指數年增率",
+  };
+
   let html = `<div style="display:flex;flex-direction:column;gap:12px">`;
 
   html += `<div style="position:relative;overflow:hidden;background:linear-gradient(135deg,${sentimentColor},rgba(255,255,255,0.04));border:1px solid ${sentimentColor};border-radius:14px;padding:18px;color:#fff;box-shadow:0 12px 32px rgba(0,0,0,0.18)">`;
@@ -172,7 +202,7 @@ export function renderCycleStatusCard(card) {
   });
   html += `</div>`;
 
-  html += `<div style="display:grid;grid-template-columns:minmax(240px,1.1fr) minmax(240px,1fr);gap:12px">`;
+  html += `<div style="display:flex;flex-direction:column;gap:12px">`;
   html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px">`;
   html += `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px"><div><div style="font-weight:800;font-size:14px">矽循環時鐘</div><div style="font-size:11px;color:var(--muted);margin-top:2px">Phase ${phaseIndex} · ${card.silicon_phase_name || "-"}</div></div><div style="text-align:right"><div style="font-size:11px;color:var(--muted)">Score</div><div style="font-size:18px;font-weight:800;color:var(--accent)">${cycleNumber(card.silicon_score, 3)}</div></div></div>`;
   html += `<div style="display:flex;gap:5px;margin:8px 0 12px">`;
@@ -185,13 +215,13 @@ export function renderCycleStatusCard(card) {
   const indicators = card.silicon_indicators || {};
   const indicatorEntries = Object.entries(indicators);
   if (indicatorEntries.length > 0) {
-    html += `<div class="table-wrapper"><table style="font-size:11px"><thead><tr><th>指標</th><th>值</th><th>趨勢</th></tr></thead><tbody>`;
+    html += `<div style="overflow-x:auto;max-width:100%"><table style="font-size:11px;width:100%"><thead><tr><th>指標</th><th>值</th><th>趨勢</th></tr></thead><tbody>`;
     indicatorEntries.forEach(([key, raw]) => {
       const value = raw && typeof raw === "object" ? raw.value : raw;
       const trend = raw && typeof raw === "object" ? raw.trend : value;
       const arrow = trend === "down" || trend < 0 ? "↓" : trend === "neutral" || trend === 0 ? "→" : "↑";
       const color = arrow === "↑" ? "var(--up)" : arrow === "↓" ? "var(--down)" : "var(--muted)";
-      html += `<tr><td>${key}</td><td>${typeof value === "number" ? value.toFixed(2) : value}</td><td style="color:${color};font-weight:800">${arrow}</td></tr>`;
+      html += `<tr><td>${INDICATOR_LABELS[key] || key}</td><td style="white-space:nowrap">${typeof value === "number" ? value.toFixed(2) : value}</td><td style="color:${color};font-weight:800">${arrow}</td></tr>`;
     });
     html += `</tbody></table></div>`;
   } else {
@@ -206,7 +236,7 @@ export function renderCycleStatusCard(card) {
       const style = cycleEventStyle(event.direction);
       html += `<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--border)">`;
       html += `<div style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:${style.color};border:1px solid ${style.color};font-weight:800">${style.icon}</div>`;
-      html += `<div style="flex:1"><div style="font-size:12px;font-weight:800">${event.name || event.event_type || "未命名事件"}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${event.event_type || "-"} · ${style.label} · 權重 ${cycleNumber(event.base_weight, 2)} · 情緒 ${cycleNumber(event.sentiment_adjustment, 3)}x</div></div>`;
+      html += `<div style="flex:1"><div style="font-size:12px;font-weight:800">${event.name || event.event_type || "未命名事件"}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${style.label} · 權重 ${cycleNumber(event.base_weight, 2)} · 情緒 ${cycleNumber(event.sentiment_adjustment, 3)}x</div></div>`;
       html += `</div>`;
     });
   } else {

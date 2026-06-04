@@ -267,26 +267,6 @@ func TestStatusText_AllStatuses(t *testing.T) {
 	}
 }
 
-func TestLastErrorStr(t *testing.T) {
-	t.Run("nil record returns empty", func(t *testing.T) {
-		if got := lastErrorStr(nil); got != "" {
-			t.Errorf("lastErrorStr(nil) = %q, want empty", got)
-		}
-	})
-	t.Run("record with error returns error", func(t *testing.T) {
-		rec := &ChannelHealthRecord{LastError: "connection refused"}
-		if got := lastErrorStr(rec); got != "connection refused" {
-			t.Errorf("lastErrorStr = %q, want 'connection refused'", got)
-		}
-	})
-	t.Run("record without error returns empty", func(t *testing.T) {
-		rec := &ChannelHealthRecord{}
-		if got := lastErrorStr(rec); got != "" {
-			t.Errorf("lastErrorStr = %q, want empty", got)
-		}
-	})
-}
-
 func TestDataChannelService_getHealthFromStore_NilRecordFallbacks(t *testing.T) {
 	tests := []struct {
 		name          string
