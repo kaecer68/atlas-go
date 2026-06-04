@@ -2,8 +2,10 @@ package apigateway
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/janus"
@@ -29,15 +31,23 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	}
 
 	// --- Fubon ---
+	// Startup probe: skip registration if the local proxy is not reachable,
+	// avoiding constant connection-refused errors at runtime.
 	fubonKey := cfg.FubonAPIKey
 	if fubonKey == "" {
 		fubonKey = config.GetSecret("ATLAS_FUBON_API_KEY")
 	}
 	if fubonKey != "" {
-		fubonClient := marketdata.NewFubonClient(fubonKey)
-		fubonAdapter := NewFubonChannelAdapter(fubonClient)
-		g.registry.Register("fubon", fubonAdapter)
-		logging.Info("apigateway", "adapter_registered", "channel", "fubon")
+		conn, err := net.DialTimeout("tcp", "localhost:8081", 2*time.Second)
+		if err != nil {
+			logging.Info("apigateway", "fubon_proxy_not_reachable", "msg", "skipping fubon adapter registration — proxy at localhost:8081 not running")
+		} else {
+			conn.Close()
+			fubonClient := marketdata.NewFubonClient(fubonKey)
+			fubonAdapter := NewFubonChannelAdapter(fubonClient)
+			g.registry.Register("fubon", fubonAdapter)
+			logging.Info("apigateway", "adapter_registered", "channel", "fubon")
+		}
 	}
 
 	// --- FinMind ---

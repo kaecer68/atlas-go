@@ -52,7 +52,7 @@
 | **大小** | ~144MB, ~38,630 lines |
 | **成熟度** | S (stable) |
 | **Schema** | [`schemas/recommendation_outcomes.schema.json`](../schemas/recommendation_outcomes.schema.json) |
-| **Metadata** | [`data/state/outcomes/_metadata.json`](../data/state/outcomes/_metadata.json) |
+| **Metadata** | `data/state/outcomes/_metadata.json` |
 
 **描述**: 所有 session 的推薦結果聚合檔，以 O_APPEND 模式累積寫入。每筆記錄包含推薦方向、forward return、因子分數、信念度 breakdown、guard 狀態。
 
