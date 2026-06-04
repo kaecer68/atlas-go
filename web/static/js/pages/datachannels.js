@@ -169,7 +169,7 @@ export function loadFetchLogs() {
   const el = document.getElementById('fetchLogs');
   if (!el) return;
 
-  let html = '<table class="text-sm"><thead><tr><th style="width:20%">時間</th><th style="width:35%">通道</th><th style="width:20%">結果</th><th style="width:25%">延遲</th></tr></thead><tbody>';
+  let html = '<div class="dc-table-wrap"><table class="dc-table" style="table-layout:fixed"><thead><tr><th class="w-20">時間</th><th class="w-35">通道</th><th class="w-20">結果</th><th class="w-25">延遲</th></tr></thead><tbody>';
   fetchLogs.forEach(log => {
     const resultIcon = log.result === 'ok' ? '✓' : (log.result === 'warn' ? '⚠' : '✗');
     const resultColor = log.result === 'ok' ? 'var(--up)' : (log.result === 'warn' ? 'var(--warn)' : 'var(--down)');
@@ -180,7 +180,7 @@ export function loadFetchLogs() {
       <td class="text-muted text-xs">${log.latency}</td>
     </tr>`;
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   el.innerHTML = html;
 }
 
@@ -231,7 +231,7 @@ export function renderDataChannels(data) {
 
   Object.keys(byCountry).forEach(country => {
     html += `<div style="margin:12px 0"><div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:6px">${country}</div>`;
-    html += '<table class="text-sm"><thead><tr><th style="width:8%">燈號</th><th style="width:12%">平台名稱</th><th style="width:10%">API 格式</th><th style="width:20%">資料路徑</th><th style="width:12%">本地儲存</th><th style="width:15%">狀態</th><th style="width:13%">操作</th><th style="width:10%">最後更新</th></tr></thead><tbody>';
+    html += '<div class="dc-table-wrap"><table class="dc-table" style="table-layout:fixed"><thead><tr><th class="w-8">燈號</th><th class="w-12">平台名稱</th><th class="w-10">API 格式</th><th class="w-20">資料路徑</th><th class="w-12">本地儲存</th><th class="w-15">狀態</th><th class="w-13">操作</th><th class="w-10">最後更新</th></tr></thead><tbody>';
     byCountry[country].forEach(c => {
       const errorHint = c.last_error ? `<div style="font-size:11px;color:var(--down);margin-top:2px">⚠ ${escapeHtml(c.last_error)}</div>` : '';
       const toggleBtn = `<button class="text-xs" onclick="toggleChannel('${c.channel_id}', this.dataset.enabled !== 'true')" data-enabled="${c.status !== 'inactive'}" style="padding:2px 8px;border-radius:4px;background:var(--border);border:1px solid var(--border);cursor:pointer">${c.status === 'inactive' ? '啟用' : '停用'}</button>`;
@@ -247,7 +247,7 @@ export function renderDataChannels(data) {
         <td class="text-xs">${c.updated_at}</td>
       </tr>`;
     });
-    html += '</tbody></table></div>';
+    html += '</tbody></table></div></div>';
   });
 
   if (data.alerts && data.alerts.length) {
@@ -298,8 +298,8 @@ export function renderMacroDataHealth(data) {
         <span style="color:var(--down)">🔴 ${errCount} 異常</span>
       </div>
     </div>
-    <table class="text-sm"><thead><tr>
-      <th style="width:35%">指標</th><th style="width:20%">數值</th><th style="width:20%">日變動%</th><th style="width:25%">狀態</th>
+    <div class="dc-table-wrap"><table class="dc-table" style="table-layout:fixed"><thead><tr>
+      <th class="w-35">指標</th><th class="w-20">數值</th><th class="w-20">日變動%</th><th class="w-25">狀態</th>
     </tr></thead><tbody>`;
 
   indicators.forEach(ind => {
@@ -315,7 +315,7 @@ export function renderMacroDataHealth(data) {
     </tr>`;
   });
 
-  html += '</tbody></table></div>';
+  html += '</tbody></table></div></div>';
   el.innerHTML = html;
 }
 
