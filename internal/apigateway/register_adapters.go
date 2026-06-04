@@ -43,6 +43,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 			logging.Info("apigateway", "fubon_proxy_not_reachable", "msg", "skipping fubon adapter registration — proxy at localhost:8081 not running")
 		} else {
 			_ = conn.Close()
+			_ = conn.Close()
 			fubonClient := marketdata.NewFubonClient(fubonKey)
 			fubonAdapter := NewFubonChannelAdapter(fubonClient)
 			g.registry.Register("fubon", fubonAdapter)
