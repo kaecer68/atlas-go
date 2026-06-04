@@ -392,6 +392,14 @@ body { display: flex; margin: 0; min-height: 100vh; }
   .label-muted { font-size: 12px; color: var(--muted); }
   .text-sm { font-size: 12px; }
   .hidden { display: none; }
+  .w-8  { width: 8%; }
+  .w-10 { width: 10%; }
+  .w-12 { width: 12%; }
+  .w-13 { width: 13%; }
+  .w-15 { width: 15%; }
+  .w-20 { width: 20%; }
+  .w-25 { width: 25%; }
+  .w-35 { width: 35%; }
   .chain-step { padding: 10px 12px; margin: 6px 0; background: #0d1015; border-radius: 8px; border-left: 3px solid var(--accent); }
   .chain-step-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--bg); font-size: 11px; font-weight: 700; flex-shrink: 0; margin-right: 10px; }
   .chain-impact { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px; flex-shrink: 0; }
