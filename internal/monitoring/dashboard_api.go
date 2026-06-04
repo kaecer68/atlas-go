@@ -264,13 +264,15 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 	modulator := industry.NewDynamicEnvModulator(baseline, baseline)
 	modulator.RecordSnapshot(baseline) // seed history for rolling baseline
 	if macroProvider != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if snap, err := macroProvider.FetchSnapshot(ctx); err == nil {
-			modulator.UpdateCurrent(snap)
-			modulator.RecordSnapshot(snap)
-			modulator.UpdateRollingBaseline() // compute rolling median baseline
-		}
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			defer cancel()
+			if snap, err := macroProvider.FetchSnapshot(ctx); err == nil {
+				modulator.UpdateCurrent(snap)
+				modulator.RecordSnapshot(snap)
+				modulator.UpdateRollingBaseline() // compute rolling median baseline
+			}
+		}()
 	}
 	seasonalEngine.SetDynamicEnv(modulator)
 
@@ -300,15 +302,16 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 	// Bootstrap silicon tracker with the initial macro snapshot so the
 	// cycle status card has non-zero indicators from the first request.
 	if macroProvider != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		if snap, err := macroProvider.FetchSnapshot(ctx); err == nil {
-			indicators := industry.ExtractSiliconIndicators(snap)
-			siliconTracker.DetectPhase(time.Now(), indicators)
-			cancel()
-		} else {
-			cancel()
-			logging.Warn("monitoring", "silicon_bootstrap_failed", "err", err)
-		}
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			defer cancel()
+			if snap, err := macroProvider.FetchSnapshot(ctx); err == nil {
+				indicators := industry.ExtractSiliconIndicators(snap)
+				siliconTracker.DetectPhase(time.Now(), indicators)
+			} else {
+				logging.Warn("monitoring", "silicon_bootstrap_failed", "err", err)
+			}
+		}()
 	}
 
 	replayPath := config.Load().ReplayDataPath

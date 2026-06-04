@@ -3362,7 +3362,7 @@
     },
     "seasonal_patterns": {
       "calibration_data_source": "data/replay/finmind_2020_2024.jsonl",
-      "calibration_timestamp": "2026-06-04T04:04:45Z",
+      "calibration_timestamp": "2026-06-04T08:47:09Z",
       "citation": {
         "calibration_method": "backtest_empirical",
         "dependencies": [
@@ -3376,13 +3376,13 @@
         "update_policy": "auto",
         "validation_method": "empirical_calibration"
       },
-      "last_calibrated": "2026-06-04T04:04:45Z",
+      "last_calibrated": "2026-06-04T08:47:09Z",
       "rationale": "7 canonical Taiwan seasonal patterns calibrated against 5-year FinMind data (2020-2024)",
       "source": "empirical_calibration",
       "value": [
         {
-          "adjustment_factor": 0.44399012341608945,
-          "avg_market_return": -0.0008906518974233703,
+          "adjustment_factor": 0.4439901234160897,
+          "avg_market_return": -0.0008906518974233699,
           "avoided_industries": [
             "semiconductor",
             "electronics"
@@ -3404,7 +3404,7 @@
         },
         {
           "adjustment_factor": 1.0125613452649154,
-          "avg_market_return": 0.0009444284842021113,
+          "avg_market_return": 0.000944428484202112,
           "avoided_industries": [
             "consumer",
             "shipping"
@@ -3424,7 +3424,7 @@
           "start_month": 3
         },
         {
-          "adjustment_factor": -0.2634376289519962,
+          "adjustment_factor": -0.26343762895199596,
           "avg_market_return": -0.0003826577806334154,
           "avoided_industries": [
             "semiconductor",
@@ -3446,7 +3446,7 @@
         },
         {
           "adjustment_factor": 2.424901710785858,
-          "avg_market_return": 0.0005628465432415168,
+          "avg_market_return": 0.000562846543241517,
           "avoided_industries": [
             "consumer"
           ],
@@ -3510,8 +3510,8 @@
           "start_month": 11
         },
         {
-          "adjustment_factor": -0.2883015395477875,
-          "avg_market_return": -0.000795142392082031,
+          "adjustment_factor": -0.28830153954778703,
+          "avg_market_return": -0.0007951423920820311,
           "avoided_industries": [
             "semiconductor"
           ],
@@ -3529,7 +3529,7 @@
           "start_month": 6
         },
         {
-          "adjustment_factor": 2.2338961696284536,
+          "adjustment_factor": 2.233896169628453,
           "avg_market_return": 0.0014494034888542684,
           "avoided_industries": [
             "consumer",
@@ -3550,8 +3550,8 @@
           "start_month": 7
         },
         {
-          "adjustment_factor": 2.555461115152644,
-          "avg_market_return": 0.0017225752557071111,
+          "adjustment_factor": 2.5554611151526454,
+          "avg_market_return": 0.0017225752557071122,
           "avoided_industries": [
             "consumer",
             "financials"
@@ -3572,8 +3572,8 @@
           "start_month": 1
         },
         {
-          "adjustment_factor": 0.5598339559661005,
-          "avg_market_return": 0.0006084743045294052,
+          "adjustment_factor": 0.5598339559661001,
+          "avg_market_return": 0.0006084743045294047,
           "avoided_industries": [
             "shipping",
             "consumer"
@@ -3593,8 +3593,8 @@
           "start_month": 8
         },
         {
-          "adjustment_factor": 3.44143401207912,
-          "avg_market_return": 0.0022324430826447224,
+          "adjustment_factor": 3.4414340120791196,
+          "avg_market_return": 0.002232443082644722,
           "avoided_industries": [
             "consumer",
             "defensive"

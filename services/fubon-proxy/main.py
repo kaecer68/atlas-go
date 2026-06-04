@@ -15,6 +15,10 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+# 自动加载 ~/.config/atlas-go/.env（与 Go 程序使用同一配置源）
+from dotenv import load_dotenv
+load_dotenv(os.path.expanduser("~/.config/atlas-go/.env"))
+
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,

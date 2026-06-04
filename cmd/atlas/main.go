@@ -27,6 +27,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/eventlogic"
 	"github.com/kaecer68/atlas-go/internal/experiment"
+	"github.com/kaecer68/atlas-go/internal/fubonproxy"
 	"github.com/kaecer68/atlas-go/internal/importer"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
@@ -295,6 +296,19 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] data fetcher prepared for DashboardAPI")
 			}
 		}
+
+		// Auto-start Fubon MarketData Proxy so real-time quotes are available.
+		fubonMgr := fubonproxy.NewManager(cfg.WorkDir)
+		if err := fubonMgr.Start(context.Background()); err != nil {
+			log.Printf("[FubonProxy] auto-start failed: %v", err)
+		} else {
+			log.Printf("[FubonProxy] manager started")
+		}
+		defer func() {
+			if err := fubonMgr.Stop(); err != nil {
+				log.Printf("[FubonProxy] stop error: %v", err)
+			}
+		}()
 
 		mux := http.NewServeMux()
 		log.Printf("[Auth] API key authentication %s", map[bool]string{true: "ENABLED", false: "DISABLED (no ATLAS_API_KEY set)"}[os.Getenv("ATLAS_API_KEY") != ""])

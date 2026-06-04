@@ -5,10 +5,26 @@
 
 全局規則仍遵循 `~/.claude/CLAUDE.md`。
 
+## 多工具協作指引
+
+本專案同時使用 Claude Code 與 OpenCode。為避免重複載入與矛盾：
+
+- **Claude Code**：優先讀取 `AGENTS.md` 取得完整規則。本檔案 (`CLAUDE.md`) 僅作為進入點，不載入重複內容。
+- **OpenCode**：遵循其自身 skill 系統。若需本專案規則，統一引用 `AGENTS.md`，禁止在 skill 定義中複製貼上 AGENTS.md 內容。
+- **通用原則**：任何工具載入專案規則時，以 `AGENTS.md` 為唯一權威來源。禁止在 CLAUDE.md、skill 檔案、prompt template 中重複定義。
+
+## Token Efficiency Rules
+
+- **Scoped reads**: 使用精確檔案路徑（如 `web/static/css/main.css`）而非目錄讀取。禁止讀取 `data/`、`.codegraph/`、`.gitnexus/`、`graphify-out/`。
+- **/compact between subtasks**: 在獨立子任務間執行 `/compact` 回收 context window。
+- **Frontend scope**: CSS/JS 變更完全跳過 impact analysis。僅在 Go backend 變更觸及 3+ 符號時執行 `gitnexus_impact`。
+- **Precise file targeting**: 讀取前先用 `glob` 確認確切檔案路徑。避免投機性讀取大檔案。
+- **No duplicate rules**: 本檔案刻意不重複 AGENTS.md 規則。單一權威來源。
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **atlas-go** (38002 symbols, 87949 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **atlas-go** (38024 symbols, 88043 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

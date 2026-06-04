@@ -25,7 +25,7 @@
 | `bootstrap` | 系統初始化 — HTTP 路由、Dashboard 註冊 | `Bootstrap()` |
 | `config` | 環境變數讀取（`ATLAS_*` 前綴）、參數配置管理 | `Config`, `ParametersConfig` |
 | `domain` | 領域型別 — canonical types、string enum（全系統依賴） | `Regime`, `Recommendation`, `Position` |
-| `eventbus` | 事件匯流排 — Publish/Subscribe | `ChannelEventBus` |
+| `fubonproxy` | Fubon 行情代理進程管理 — 自動啟動、健康監控、自動重啟、優雅關閉 | `Manager` |
 | `eventlogic` | 事件邏輯 — 系統事件處理規則 | — |
 | `experiment` | 實驗生命週期 — mutation → execute → judge → promote/revert | `Executor`, `Judge`, `Candidate` |
 | `industry` | 產業生態系 — 供應鏈連動、季節性模式、週期羅盤 | `SupplyChainGraph`, `SeasonalEngine`, `CycleTracker` |
