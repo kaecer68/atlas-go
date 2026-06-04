@@ -1,0 +1,28 @@
+/* Atlas Dashboard - Animations */
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading::before {
+  content: "";
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+@keyframes skeletonShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--border) 25%, rgba(255,255,255,.08) 50%, var(--border) 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.5s ease-in-out infinite;
+  border-radius: 4px;
+}
+.skeleton-line { height: 12px; margin-bottom: 8px; }
+.skeleton-line:last-child { width: 60%; }
+.skeleton-block { height: 60px; margin-bottom: 12px; }
+.skeleton-title { height: 18px; width: 40%; margin-bottom: 12px; }
+.skeleton-text { height: 12px; width: 80%; margin-bottom: 6px; }
