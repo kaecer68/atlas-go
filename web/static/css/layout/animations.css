@@ -24,5 +24,4 @@
 .skeleton-line { height: 12px; margin-bottom: 8px; }
 .skeleton-line:last-child { width: 60%; }
 .skeleton-block { height: 60px; margin-bottom: 12px; }
-.skeleton-title { height: 18px; width: 40%; margin-bottom: 12px; }
-.skeleton-text { height: 12px; width: 80%; margin-bottom: 6px; }
+/* .skeleton-title and .skeleton-text removed — unused variants */
