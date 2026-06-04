@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -50,17 +51,30 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 		{channelID: "twse_sector_index", apply: a.applyTWSESectorIndex},
 	}
 
-	var merged marketdata.MacroDataSnapshot
-	var errs []error
+	var (
+		merged marketdata.MacroDataSnapshot
+		errs   []error
+		mu     sync.Mutex
+		wg     sync.WaitGroup
+	)
 
 	for _, ch := range channels {
-		data, err := a.fetcher(ctx, ch.channelID)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", ch.channelID, err))
-			continue
-		}
-		ch.apply(&merged, data)
+		wg.Add(1)
+		go func(ch channelMapping) {
+			defer wg.Done()
+			data, err := a.fetcher(ctx, ch.channelID)
+			if err != nil {
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("%s: %w", ch.channelID, err))
+				mu.Unlock()
+				return
+			}
+			mu.Lock()
+			ch.apply(&merged, data)
+			mu.Unlock()
+		}(ch)
 	}
+	wg.Wait()
 
 	if merged.RecordedAt == 0 {
 		merged.RecordedAt = time.Now().Unix()
