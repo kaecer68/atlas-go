@@ -210,6 +210,16 @@ export interface CalendarEvent {
   generated_at: string;
 }
 
+export interface CalibrationHealthSummary {
+  last_calibrated_at?: string | null;
+  pattern_count: number;
+  total_observations: number;
+  verdict_counts: Record<string, number>;
+  darwinian_violations: number;
+  out_of_range_count: number;
+  health: string;
+}
+
 export interface CalibratorChange {
   param_name: string;
   before: number;
@@ -2845,6 +2855,17 @@ export interface UniverseOverlapResponse {
   agents: string[];
   matrix: Record<string, Record<string, number>>;
   warnings: string[];
+}
+
+export interface ValidationResult {
+  pattern_id: string;
+  train_accuracy: number;
+  test_accuracy: number;
+  degradation: number;
+  pass: boolean;
+  train_sample_size: number;
+  test_sample_size: number;
+  margin: number;
 }
 
 export interface ValueYieldExecutorParameters {
