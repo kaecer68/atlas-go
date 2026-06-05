@@ -67,12 +67,15 @@ const (
 
 // TaiwanStressCalculator computes the stress index from macro and capital flow data.
 type TaiwanStressCalculator struct {
-	geoProvider   GeopoliticalRiskProvider
-	mu            sync.RWMutex
-	cache         *TaiwanStressIndex
-	cachedAt      time.Time
-	cacheTTL      time.Duration
-	weightsConfig *StressIndexWeightsConfig
+	geoProvider    GeopoliticalRiskProvider
+	mu             sync.RWMutex
+	cache          *TaiwanStressIndex
+	cachedAt       time.Time
+	cacheTTL       time.Duration
+	weightsConfig  *StressIndexWeightsConfig
+	regimeConfig   *RegimeCalibratedConfig
+	baselines      *BaselineConfig
+	signalStrategy SignalStrategy
 }
 
 // StressIndexWeightsConfig holds runtime-configurable weights for the stress index.
@@ -175,21 +178,134 @@ func NewTaiwanStressCalculator(geoProvider GeopoliticalRiskProvider, workDir str
 	}
 }
 
+// NewTaiwanStressCalculatorWithBaseline creates a calculator with baseline-aware hybrid
+// signal computation for DXY, JPY, Oil, and Gold components. When baselines is non-nil
+// and signalStrategy is SignalHybrid, these four components use max(|level deviation|, |change_pct|)
+// instead of pure change_pct. Other components (US10Y, ForeignFlow, VIX, Geopolitical) are unchanged.
+func NewTaiwanStressCalculatorWithBaseline(geoProvider GeopoliticalRiskProvider, workDir string, baselines *BaselineConfig, strategy SignalStrategy) *TaiwanStressCalculator {
+	cfg := loadWeightsFromParameters()
+	return &TaiwanStressCalculator{
+		geoProvider:    geoProvider,
+		cacheTTL:       5 * time.Minute,
+		weightsConfig:  cfg,
+		baselines:      baselines,
+		signalStrategy: strategy,
+	}
+}
+
+// useHybridSignal returns true when the calculator should use hybrid signal
+// for DXY/JPY/Oil/Gold components.
+func (c *TaiwanStressCalculator) useHybridSignal() bool {
+	return c.baselines != nil && c.signalStrategy == SignalHybrid
+}
+
+// computeStressComponent computes a single stress component for the given factor.
+// When hybrid signal is enabled, it returns the larger of |level deviation| and |change_pct|
+// scaled appropriately. Otherwise, it uses the raw changePct.
+func (c *TaiwanStressCalculator) computeStressComponent(factor string, snap, prev marketdata.MacroDataSnapshot, scale float64) float64 {
+	changePct := factorChangePct(factor, snap, prev)
+	if !c.useHybridSignal() {
+		return clampComponent(math.Abs(changePct) * scale)
+	}
+
+	levelDev := ComputeLevelSignal(factor, snap, 0, c.baselines)
+	changeAbs := math.Abs(changePct)
+	if math.Abs(levelDev) > changeAbs {
+		return clampComponent(math.Abs(levelDev) * scale)
+	}
+	return clampComponent(changeAbs * scale)
+}
+
+// factorChangePct extracts the change percentage for a factor from the snapshot pair.
+func factorChangePct(factor string, snap, prev marketdata.MacroDataSnapshot) float64 {
+	switch factor {
+	case "dxy":
+		return snap.DXY.ChangePct
+	case "jpy":
+		if snap.JPY.ChangePct != 0 {
+			return snap.JPY.ChangePct
+		}
+		if snap.JPY.Symbol != "" && prev.JPY.Symbol != "" && prev.JPY.Value != 0 {
+			return (snap.JPY.Value - prev.JPY.Value) / prev.JPY.Value * 100
+		}
+		return 0
+	case "oil":
+		return snap.Oil.ChangePct
+	case "gold":
+		return snap.Gold.ChangePct
+	default:
+		return 0
+	}
+}
+
+// clampComponent clamps a stress component to [0, 100].
+func clampComponent(v float64) float64 {
+	if v > 100 {
+		return 100
+	}
+	if v < 0 {
+		return 0
+	}
+	return v
+}
+
+// selectConfigForSnapshot returns the regime-appropriate config based on VIX.
+// Falls back to the calculator's default weightsConfig when regimeConfig is nil.
+func (c *TaiwanStressCalculator) selectConfigForSnapshot(snap marketdata.MacroDataSnapshot) StressIndexWeightsConfig {
+	if c.regimeConfig != nil {
+		regime := classifyRegime(snap.VIX.Value)
+		return c.regimeConfig.SelectConfig(regime)
+	}
+	if c.weightsConfig != nil {
+		return *c.weightsConfig
+	}
+	return StressIndexWeightsConfig{
+		Scaling: StressIndexScaling{
+			DXY: stressScaleDXY, US10Y: stressScaleUS10Y,
+			ForeignFlow: stressScaleForeignFlow, VIX: stressScaleVIX,
+			JPY: stressScaleJPY, Geopolitical: stressScaleGeopolitical,
+			Oil: stressScaleOil, Gold: stressScaleGold,
+		},
+		Weights: StressIndexWeights{
+			DXY: stressWeightDXY, US10Y: stressWeightUS10Y,
+			ForeignFlow: stressWeightForeignFlow, VIX: stressWeightVIX,
+			JPY: stressWeightJPY, Geopolitical: stressWeightGeopolitical,
+			Oil: stressWeightOil, Gold: stressWeightGold,
+		},
+		Thresholds: StressIndexThresholds{
+			Crisis: stressThresholdCrisis,
+			High:   stressThresholdHigh,
+			Alert:  stressThresholdAlert,
+		},
+	}
+}
+
 // Calculate computes the stress index from the given snapshot and geopolitical score.
 // The prev snapshot is used to compute change percentages for indicators where the current change is zero.
 // Uses runtime weights from configs/stress_index_weights.json if loaded, falling back to compile-time defaults.
+// When baselines are configured with SignalHybrid, DXY/JPY/Oil/Gold components use hybrid signal.
 func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapshot, geoScore GeopoliticalRiskScore) TaiwanStressIndex {
 	components := make(map[string]float64)
 
-	scaleDXY, scaleUS10Y, scaleFlow, scaleVIX, scaleJPY, scaleGeo, scaleOil, scaleGold := c.getScaling()
-	wDXY, wUS10Y, wFlow, wVIX, wJPY, wGeo, wOil, wGold := c.getWeights()
-	tCrisis, tHigh, tAlert := c.getThresholds()
+	cfg := c.selectConfigForSnapshot(snap)
+	scaleDXY, scaleUS10Y, scaleFlow, scaleVIX, scaleJPY, scaleGeo, scaleOil, scaleGold :=
+		cfg.Scaling.DXY, cfg.Scaling.US10Y, cfg.Scaling.ForeignFlow, cfg.Scaling.VIX,
+		cfg.Scaling.JPY, cfg.Scaling.Geopolitical, cfg.Scaling.Oil, cfg.Scaling.Gold
+	wDXY, wUS10Y, wFlow, wVIX, wJPY, wGeo, wOil, wGold :=
+		cfg.Weights.DXY, cfg.Weights.US10Y, cfg.Weights.ForeignFlow, cfg.Weights.VIX,
+		cfg.Weights.JPY, cfg.Weights.Geopolitical, cfg.Weights.Oil, cfg.Weights.Gold
+	tCrisis, tHigh, tAlert :=
+		cfg.Thresholds.Crisis, cfg.Thresholds.High, cfg.Thresholds.Alert
 
-	dxyComponent := math.Abs(snap.DXY.ChangePct) * scaleDXY
-	if dxyComponent > 100 {
-		dxyComponent = 100
+	if c.useHybridSignal() {
+		components["dxy"] = c.computeStressComponent("dxy", snap, prev, scaleDXY) * wDXY
+	} else {
+		dxyComponent := math.Abs(snap.DXY.ChangePct) * scaleDXY
+		if dxyComponent > 100 {
+			dxyComponent = 100
+		}
+		components["dxy"] = dxyComponent * wDXY
 	}
-	components["dxy"] = dxyComponent * wDXY
 
 	us10yChange := snap.US10Y.Value
 	if us10yChange < 0 {
@@ -217,30 +333,42 @@ func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapsh
 	}
 	components["vix"] = vixComponent * wVIX
 
-	jpyChange := math.Abs(snap.JPY.ChangePct)
-	if jpyChange == 0 && snap.JPY.Symbol != "" && prev.JPY.Symbol != "" && prev.JPY.Value != 0 {
-		jpyChange = math.Abs((snap.JPY.Value-prev.JPY.Value)/prev.JPY.Value) * 100
+	if c.useHybridSignal() {
+		components["jpy"] = c.computeStressComponent("jpy", snap, prev, scaleJPY) * wJPY
+	} else {
+		jpyChange := math.Abs(snap.JPY.ChangePct)
+		if jpyChange == 0 && snap.JPY.Symbol != "" && prev.JPY.Symbol != "" && prev.JPY.Value != 0 {
+			jpyChange = math.Abs((snap.JPY.Value-prev.JPY.Value)/prev.JPY.Value) * 100
+		}
+		jpyComponent := jpyChange * scaleJPY
+		if jpyComponent > 100 {
+			jpyComponent = 100
+		}
+		components["jpy"] = jpyComponent * wJPY
 	}
-	jpyComponent := jpyChange * scaleJPY
-	if jpyComponent > 100 {
-		jpyComponent = 100
-	}
-	components["jpy"] = jpyComponent * wJPY
 
 	geoComponent := geoScore.Intensity * scaleGeo
 	components["geopolitical"] = geoComponent * wGeo
 
-	oilComponent := math.Abs(snap.Oil.ChangePct) * scaleOil
-	if oilComponent > 100 {
-		oilComponent = 100
+	if c.useHybridSignal() {
+		components["oil"] = c.computeStressComponent("oil", snap, prev, scaleOil) * wOil
+	} else {
+		oilComponent := math.Abs(snap.Oil.ChangePct) * scaleOil
+		if oilComponent > 100 {
+			oilComponent = 100
+		}
+		components["oil"] = oilComponent * wOil
 	}
-	components["oil"] = oilComponent * wOil
 
-	goldComponent := math.Abs(snap.Gold.ChangePct) * scaleGold
-	if goldComponent > 100 {
-		goldComponent = 100
+	if c.useHybridSignal() {
+		components["gold"] = c.computeStressComponent("gold", snap, prev, scaleGold) * wGold
+	} else {
+		goldComponent := math.Abs(snap.Gold.ChangePct) * scaleGold
+		if goldComponent > 100 {
+			goldComponent = 100
+		}
+		components["gold"] = goldComponent * wGold
 	}
-	components["gold"] = goldComponent * wGold
 
 	score := components["dxy"] + components["us10y"] + components["foreign_flow"] +
 		components["vix"] + components["jpy"] + components["geopolitical"] + components["oil"] + components["gold"]
@@ -263,36 +391,43 @@ func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapsh
 	}
 }
 
-func (c *TaiwanStressCalculator) getScaling() (dxy, us10y, flow, vix, jpy, geo, oil, gold float64) {
-	if c.weightsConfig != nil {
-		return c.weightsConfig.Scaling.DXY, c.weightsConfig.Scaling.US10Y,
-			c.weightsConfig.Scaling.ForeignFlow, c.weightsConfig.Scaling.VIX,
-			c.weightsConfig.Scaling.JPY, c.weightsConfig.Scaling.Geopolitical,
-			c.weightsConfig.Scaling.Oil, c.weightsConfig.Scaling.Gold
-	}
-	return stressScaleDXY, stressScaleUS10Y, stressScaleForeignFlow,
-		stressScaleVIX, stressScaleJPY, stressScaleGeopolitical,
-		stressScaleOil, stressScaleGold
-}
-
-func (c *TaiwanStressCalculator) getWeights() (dxy, us10y, flow, vix, jpy, geo, oil, gold float64) {
-	if c.weightsConfig != nil {
-		return c.weightsConfig.Weights.DXY, c.weightsConfig.Weights.US10Y,
-			c.weightsConfig.Weights.ForeignFlow, c.weightsConfig.Weights.VIX,
-			c.weightsConfig.Weights.JPY, c.weightsConfig.Weights.Geopolitical,
-			c.weightsConfig.Weights.Oil, c.weightsConfig.Weights.Gold
-	}
-	return stressWeightDXY, stressWeightUS10Y, stressWeightForeignFlow,
-		stressWeightVIX, stressWeightJPY, stressWeightGeopolitical,
-		stressWeightOil, stressWeightGold
-}
-
 func (c *TaiwanStressCalculator) getThresholds() (crisis, high, alert float64) {
 	if c.weightsConfig != nil {
 		return c.weightsConfig.Thresholds.Crisis, c.weightsConfig.Thresholds.High,
 			c.weightsConfig.Thresholds.Alert
 	}
 	return stressThresholdCrisis, stressThresholdHigh, stressThresholdAlert
+}
+
+// ApplyCalibratedScales updates the calculator's weightsConfig with calibrated scales.
+// If weightsConfig is nil, creates a new one with default weights and thresholds.
+func (c *TaiwanStressCalculator) ApplyCalibratedScales(scaling StressIndexScaling) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.weightsConfig == nil {
+		c.weightsConfig = &StressIndexWeightsConfig{
+			Weights: StressIndexWeights{
+				DXY: stressWeightDXY, US10Y: stressWeightUS10Y,
+				ForeignFlow: stressWeightForeignFlow, VIX: stressWeightVIX,
+				JPY: stressWeightJPY, Geopolitical: stressWeightGeopolitical,
+				Oil: stressWeightOil, Gold: stressWeightGold,
+			},
+			Thresholds: StressIndexThresholds{
+				Crisis: stressThresholdCrisis,
+				High:   stressThresholdHigh,
+				Alert:  stressThresholdAlert,
+			},
+		}
+	}
+	c.weightsConfig.Scaling = scaling
+}
+
+// SetRegimeConfig installs a regime-aware config. When set, Calculate()
+// automatically selects the appropriate weights/scales/thresholds based on VIX.
+func (c *TaiwanStressCalculator) SetRegimeConfig(rc *RegimeCalibratedConfig) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.regimeConfig = rc
 }
 
 // CalculateFromSnapshot fetches the geopolitical score and computes the index.
