@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/web"
-
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/autobacktest"
 	"github.com/kaecer68/atlas-go/internal/backtest"
