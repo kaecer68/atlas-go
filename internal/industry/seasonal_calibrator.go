@@ -136,12 +136,18 @@ func average(vals []float64) float64 {
 // 輸入為該期間內逐筆的日報酬小數（例如 0.001 = 0.1%），輸出為整段期間的累積漲跌幅。
 // 例如 30 個交易日每天 +0.1% → (1.001^30) - 1 ≈ 0.0304（≈3.04%）。
 // 這與 SeasonalPattern.AvgMarketReturn 欄位的語義一致：「該季節典型累積報酬」。
+//
+// NaN / ±Inf 輸入回傳 0：JSON 無法表示 NaN，讓它流入 parameters.json 會污染
+// 下次讀取，因此寧可放棄該期資料。
 func periodReturn(dailyReturns []float64) float64 {
 	if len(dailyReturns) == 0 {
 		return 0
 	}
 	compounded := 1.0
 	for _, r := range dailyReturns {
+		if math.IsNaN(r) || math.IsInf(r, 0) {
+			return 0
+		}
 		compounded *= (1.0 + r)
 	}
 	return compounded - 1.0
