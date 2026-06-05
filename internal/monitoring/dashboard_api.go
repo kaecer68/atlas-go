@@ -82,6 +82,7 @@ type DashboardAPI struct {
 	latestDrawdown     *portfolio.DrawdownResult
 	drawdownMu         sync.RWMutex
 	eventLogicHandlers *apieventlogic.Handlers
+	calibrationTask    *narrative.CalibrationTask
 }
 
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
@@ -684,6 +685,17 @@ func (a *DashboardAPI) RegisterEventLogicRoutes(mux *http.ServeMux) {
 	if a.eventLogicHandlers != nil {
 		a.eventLogicHandlers.RegisterRoutes(mux)
 	}
+}
+
+func (a *DashboardAPI) SetCalibrationTask(task *narrative.CalibrationTask) {
+	a.calibrationTask = task
+}
+
+func (a *DashboardAPI) RunCalibration() (*narrative.CalibrationValidation, error) {
+	if a.calibrationTask == nil {
+		return nil, fmt.Errorf("run calibration: no calibration task set")
+	}
+	return a.calibrationTask.RunCalibrationCycle()
 }
 
 func (a *DashboardAPI) RegisterIndustryRoutes(mux *http.ServeMux) {

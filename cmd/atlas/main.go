@@ -617,6 +617,33 @@ func run(args []string, deps appDeps) error {
 			} else {
 				log.Printf("[Gateway] seasonal_calibration skipped: os.Executable failed: %v", exeErr)
 			}
+
+			// Register calibration_cycle background task (rolling calibration framework).
+			// Maturity-gated: BackgroundCalibrationScheduler.RunDaily checks maturityTracker
+			// and skips gracefully in BURN_IN mode (no validation, no false signals).
+			if maturityTracker != nil {
+				calTask := narrative.NewCalibrationTask(cfg.WorkDir)
+				calScheduler := scheduler.NewBackgroundCalibrationScheduler(maturityTracker)
+				calScheduler.Register(&scheduler.CalibrationTask{
+					Name:        "narrative_weight_calibration",
+					MinMaturity: domain.MaturityCalibrating,
+					Run: func(_ context.Context) error {
+						_, err := calTask.RunCalibrationCycle()
+						return err
+					},
+				})
+				dashboard.SetCalibrationTask(calTask)
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "calibration_cycle",
+					Interval: 24 * time.Hour,
+					Jitter:   30 * time.Minute,
+					Enabled:  paramsCfg.Narrative.CalibrationEnabled.Value,
+					Task:     calScheduler.RunDaily,
+				})
+				log.Printf("[Gateway] registered calibration_cycle background task (24h interval, maturity-gated)")
+			} else {
+				log.Printf("[Gateway] calibration_cycle skipped: maturity tracker is nil")
+			}
 			// Register health_check via HealthChecker.RunOnce (stateStore is nil in API mode).
 			if monitor != nil {
 				healthChecker := monitoring.NewHealthChecker(monitor, nil)
