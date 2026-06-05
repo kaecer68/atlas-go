@@ -94,13 +94,13 @@ func signalForScaling(factor string, records []CalibrationRecord) []float64 {
 		var v float64
 		switch factor {
 		case "dxy":
-			v = absSignalForChangeFactor("dxy", r, nil)
+			v = absSignalForChangeFactor("dxy", r)
 		case "jpy":
-			v = absSignalForChangeFactor("jpy", r, nil)
+			v = absSignalForChangeFactor("jpy", r)
 		case "oil":
-			v = absSignalForChangeFactor("oil", r, nil)
+			v = absSignalForChangeFactor("oil", r)
 		case "gold":
-			v = absSignalForChangeFactor("gold", r, nil)
+			v = absSignalForChangeFactor("gold", r)
 		case "us10y":
 			v = math.Abs(r.Snapshot.US10Y.Value)
 		case "foreign_flow":
@@ -119,20 +119,10 @@ func signalForScaling(factor string, records []CalibrationRecord) []float64 {
 	return signals
 }
 
-// absSignalForChangeFactor returns the absolute signal for change-pct-based factors
-// (DXY, JPY, Oil, Gold). When baselines are available, it uses the hybrid signal
-// (max of |level_deviation| and |change_pct|). Otherwise, it falls back to |change_pct|.
-func absSignalForChangeFactor(factor string, r CalibrationRecord, baselines *BaselineConfig) float64 {
-	changePct := factorChangePctFromSnapshot(factor, r)
-	if baselines != nil && baselines.GetBaseline(factor) != nil {
-		levelDev := ComputeLevelSignal(factor, r.Snapshot, r.ForeignNet, baselines)
-		changeAbs := math.Abs(changePct)
-		if math.Abs(levelDev) > changeAbs {
-			return math.Abs(levelDev)
-		}
-		return changeAbs
-	}
-	return math.Abs(changePct)
+// absSignalForChangeFactor returns the absolute change-pct signal for change-pct-based
+// factors (DXY, JPY, Oil, Gold).
+func absSignalForChangeFactor(factor string, r CalibrationRecord) float64 {
+	return math.Abs(factorChangePctFromSnapshot(factor, r))
 }
 
 // factorChangePctFromSnapshot extracts the change percentage for a factor from a record's snapshot.
