@@ -218,6 +218,7 @@ export interface CalibrationHealthSummary {
   darwinian_violations: number;
   out_of_range_count: number;
   health: string;
+  reason?: string;
 }
 
 export interface CalibratorChange {
