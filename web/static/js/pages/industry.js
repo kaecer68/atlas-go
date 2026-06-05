@@ -668,7 +668,7 @@ function renderSeasonalityTab(detail) {
     '</div>';
   patterns.forEach((p) => {
     const accuracy = Math.round((p.historical_accuracy || 0) * 100);
-    const returnPct = ((p.avg_market_return || 0) * 100 * 12).toFixed(1);
+    const returnPct = ((p.avg_market_return || 0) * 100).toFixed(1);
     const period = `${p.start_month}/${p.start_day} ~ ${p.end_month}/${p.end_day}`;
     const impactColor =
       p.impact === "positive"

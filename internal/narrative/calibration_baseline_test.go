@@ -346,3 +346,77 @@ func TestSignalStrategy_Values(t *testing.T) {
 		t.Fatalf("expected SignalHybrid=2, got %d", SignalHybrid)
 	}
 }
+
+func TestSaveAndLoadBaselines_RoundTrip(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	cfg := &BaselineConfig{
+		Window: 60,
+		Baselines: map[string]*FactorBaseline{
+			"dxy":   {Factor: "dxy", Mean: 0.1, StdDev: 0.5, Count: 60},
+			"jpy":   {Factor: "jpy", Mean: 0.0, StdDev: 0.7, Count: 60},
+			"us10y": {Factor: "us10y", Mean: 4.5, StdDev: 0.3, Count: 60},
+		},
+	}
+
+	if err := SaveBaselines(dir, cfg); err != nil {
+		t.Fatalf("SaveBaselines failed: %v", err)
+	}
+
+	loaded, err := LoadBaselines(dir)
+	if err != nil {
+		t.Fatalf("LoadBaselines failed: %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("LoadBaselines returned nil without error")
+	}
+	if loaded.Window != 60 {
+		t.Errorf("expected Window=60, got %d", loaded.Window)
+	}
+	if len(loaded.Baselines) != 3 {
+		t.Errorf("expected 3 baselines, got %d", len(loaded.Baselines))
+	}
+	if bl, ok := loaded.Baselines["dxy"]; !ok || bl.Mean != 0.1 {
+		t.Errorf("expected dxy baseline with Mean=0.1, got %+v", bl)
+	}
+}
+
+func TestLoadBaselines_MissingFileReturnsNil(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	loaded, err := LoadBaselines(dir)
+	if err != nil {
+		t.Fatalf("LoadBaselines on empty dir should not error, got: %v", err)
+	}
+	if loaded != nil {
+		t.Errorf("expected nil config for missing file, got %+v", loaded)
+	}
+}
+
+func TestSaveBaselines_NilConfig(t *testing.T) {
+	t.Parallel()
+
+	if err := SaveBaselines(t.TempDir(), nil); err == nil {
+		t.Fatal("expected error for nil config")
+	}
+}
+
+func TestSaveBaselines_EmptyWorkDir(t *testing.T) {
+	t.Parallel()
+
+	cfg := &BaselineConfig{Window: 30}
+	if err := SaveBaselines("", cfg); err == nil {
+		t.Fatal("expected error for empty workDir")
+	}
+}
+
+func TestLoadBaselines_EmptyWorkDir(t *testing.T) {
+	t.Parallel()
+
+	_, err := LoadBaselines("")
+	if err == nil {
+		t.Fatal("expected error for empty workDir")
+	}
+}

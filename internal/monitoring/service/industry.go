@@ -98,7 +98,7 @@ type SeasonalPattern struct {
 	EndMonth           int      `json:"end_month"`
 	EndDay             int      `json:"end_day"`
 	HistoricalAccuracy float64  `json:"historical_accuracy"`
-	TypicalReturn      float64  `json:"typical_return"`
+	AvgMarketReturn    float64  `json:"avg_market_return"`
 	AdjustmentFactor   float64  `json:"adjustment_factor"`
 	FavoredIndustries  []string `json:"favored_industries,omitempty"`
 	AvoidedIndustries  []string `json:"avoided_industries,omitempty"`
@@ -161,7 +161,7 @@ func (s *IndustryService) GetSeasonalPatterns(industryID string, now time.Time) 
 				EndMonth:           p.EndMonth,
 				EndDay:             p.EndDay,
 				HistoricalAccuracy: p.HistoricalAccuracy,
-				TypicalReturn:      p.AvgMarketReturn,
+				AvgMarketReturn:    p.AvgMarketReturn,
 				AffectedIndustries: p.AffectedIndustries(),
 			})
 		}
@@ -188,7 +188,7 @@ func (s *IndustryService) GetSeasonalPatterns(industryID string, now time.Time) 
 				EndMonth:           p.EndMonth,
 				EndDay:             p.EndDay,
 				HistoricalAccuracy: p.HistoricalAccuracy,
-				TypicalReturn:      p.TypicalReturn(),
+				AvgMarketReturn:    p.AvgMarketReturn,
 				AdjustmentFactor:   p.AdjustmentFactor,
 				FavoredIndustries:  p.FavoredIndustries,
 				AvoidedIndustries:  p.AvoidedIndustries,
@@ -211,8 +211,10 @@ func (s *IndustryService) GetSeasonalCalendar(industryID string, year int) []map
 					"id":                  p.ID,
 					"name":                p.Name,
 					"historical_accuracy": p.HistoricalAccuracy,
-					"typical_return":      p.TypicalReturn(),
-					"adjustment_factor":   p.AdjustmentFactor,
+					"avg_market_return":   p.AvgMarketReturn,
+					// Deprecated: remove after 2026-Q3 migration window.
+					"typical_return":    p.AvgMarketReturn,
+					"adjustment_factor": p.AdjustmentFactor,
 				})
 			}
 		}

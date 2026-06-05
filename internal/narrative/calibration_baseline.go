@@ -1,7 +1,11 @@
 package narrative
 
 import (
+	"encoding/json"
+	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
@@ -131,4 +135,48 @@ func stdDev(values []float64) float64 {
 		sum += d * d
 	}
 	return math.Sqrt(sum / float64(len(values)))
+}
+
+const BaselinesFileName = "baselines.json"
+
+const BaselinesDir = "data/state/calibration"
+
+func SaveBaselines(workDir string, cfg *BaselineConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("save baselines: nil config")
+	}
+	if workDir == "" {
+		return fmt.Errorf("save baselines: empty workDir")
+	}
+	path := filepath.Join(workDir, BaselinesDir, BaselinesFileName)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("save baselines: mkdir: %w", err)
+	}
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("save baselines: marshal: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("save baselines: write: %w", err)
+	}
+	return nil
+}
+
+func LoadBaselines(workDir string) (*BaselineConfig, error) {
+	if workDir == "" {
+		return nil, fmt.Errorf("load baselines: empty workDir")
+	}
+	path := filepath.Join(workDir, BaselinesDir, BaselinesFileName)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("load baselines: read: %w", err)
+	}
+	var cfg BaselineConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("load baselines: unmarshal: %w", err)
+	}
+	return &cfg, nil
 }

@@ -55,7 +55,9 @@ func (h *Handlers) HandleIndustrySeasonality(r *http.Request) (int, any) {
 			"end_month":           p.EndMonth,
 			"end_day":             p.EndDay,
 			"historical_accuracy": p.HistoricalAccuracy,
-			"typical_return":      p.TypicalReturn,
+			"avg_market_return":   p.AvgMarketReturn,
+			// Deprecated: remove after 2026-Q3 migration window.
+			"typical_return":      p.AvgMarketReturn,
 			"affected_industries": p.AffectedIndustries,
 		})
 	}
@@ -72,11 +74,13 @@ func (h *Handlers) HandleIndustrySeasonality(r *http.Request) (int, any) {
 			"end_month":           p.EndMonth,
 			"end_day":             p.EndDay,
 			"historical_accuracy": p.HistoricalAccuracy,
-			"typical_return":      p.TypicalReturn,
-			"adjustment_factor":   p.AdjustmentFactor,
-			"favored_industries":  p.FavoredIndustries,
-			"avoided_industries":  p.AvoidedIndustries,
-			"impact":              p.Impact,
+			"avg_market_return":   p.AvgMarketReturn,
+			// Deprecated: remove after 2026-Q3 migration window.
+			"typical_return":     p.AvgMarketReturn,
+			"adjustment_factor":  p.AdjustmentFactor,
+			"favored_industries": p.FavoredIndustries,
+			"avoided_industries": p.AvoidedIndustries,
+			"impact":             p.Impact,
 		})
 	}
 

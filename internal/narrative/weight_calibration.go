@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -397,7 +398,9 @@ func (t *CalibrationTask) RunCalibrationCycle() (*CalibrationValidation, error) 
 
 	baselineCfg := &BaselineConfig{Window: n.CalibrationBaselineWindow.Value}
 	baselines := ComputeBaselines(records, baselineCfg)
-	_ = baselines
+	if err := SaveBaselines(t.workDir, baselines); err != nil {
+		logging.Warn("calibration", "save_baselines_failed", "error", err.Error())
+	}
 
 	scaleCalibrator := NewScaleCalibrator().WithTarget(n.CalibrationTargetMedian.Value)
 	newScaling := scaleCalibrator.CalibrateScales(records)

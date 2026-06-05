@@ -169,13 +169,26 @@ func (c *StressIndexWeightsConfig) isValid() bool {
 // When geoProvider is nil, stress index geo component will be zero (caller should inject
 // a proper provider via the apigateway GeopoliticalChannelAdapter).
 // Loads runtime weights from the centralized parameters system (config.GetParametersConfig).
+// If workDir is non-empty and persisted baselines exist at
+// workDir/data/state/calibration/baselines.json, the calculator auto-enables
+// hybrid signal (max of |level deviation| and |change_pct|) for
+// DXY/JPY/US10Y/Oil/Gold. Production hot path: callers do not need to
+// invoke NewTaiwanStressCalculatorWithBaseline explicitly. First-run
+// (no baselines file) gracefully falls back to pure change_pct.
 func NewTaiwanStressCalculator(geoProvider GeopoliticalRiskProvider, workDir string) *TaiwanStressCalculator {
 	cfg := loadWeightsFromParameters()
-	return &TaiwanStressCalculator{
+	calc := &TaiwanStressCalculator{
 		geoProvider:   geoProvider,
 		cacheTTL:      5 * time.Minute,
 		weightsConfig: cfg,
 	}
+	if workDir != "" {
+		if bl, err := LoadBaselines(workDir); err == nil && bl != nil {
+			calc.baselines = bl
+			calc.signalStrategy = SignalHybrid
+		}
+	}
+	return calc
 }
 
 // NewTaiwanStressCalculatorWithBaseline creates a calculator with baseline-aware hybrid
@@ -227,6 +240,14 @@ func factorChangePct(factor string, snap, prev marketdata.MacroDataSnapshot) flo
 		}
 		if snap.JPY.Symbol != "" && prev.JPY.Symbol != "" && prev.JPY.Value != 0 {
 			return (snap.JPY.Value - prev.JPY.Value) / prev.JPY.Value * 100
+		}
+		return 0
+	case "us10y":
+		if snap.US10Y.ChangePct != 0 {
+			return snap.US10Y.ChangePct
+		}
+		if snap.US10Y.Symbol != "" && prev.US10Y.Symbol != "" && prev.US10Y.Value != 0 {
+			return (snap.US10Y.Value - prev.US10Y.Value) / prev.US10Y.Value * 100
 		}
 		return 0
 	case "oil":
@@ -306,15 +327,19 @@ func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapsh
 		components["dxy"] = dxyComponent * wDXY
 	}
 
-	us10yChange := snap.US10Y.Value
-	if us10yChange < 0 {
-		us10yChange = -us10yChange
+	if c.useHybridSignal() {
+		components["us10y"] = c.computeStressComponent("us10y", snap, prev, scaleUS10Y) * wUS10Y
+	} else {
+		us10yChange := snap.US10Y.Value
+		if us10yChange < 0 {
+			us10yChange = -us10yChange
+		}
+		us10yComponent := us10yChange * scaleUS10Y
+		if us10yComponent > 100 {
+			us10yComponent = 100
+		}
+		components["us10y"] = us10yComponent * wUS10Y
 	}
-	us10yComponent := us10yChange * scaleUS10Y
-	if us10yComponent > 100 {
-		us10yComponent = 100
-	}
-	components["us10y"] = us10yComponent * wUS10Y
 
 	foreignFlow := -snap.ForeignInvestorNet.Value
 	foreignComponent := foreignFlow * scaleFlow
