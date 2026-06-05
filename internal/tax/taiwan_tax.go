@@ -13,7 +13,7 @@ import (
 // The default DividendTaxRate (0.28) already bakes in the NHI supplementary
 // premium (二代健保補充保費) at NHISurchargeRate (2%). Set TaxConfig.IncludeNHI
 // to false to compute dividend tax at the NHI-exclusive rate (28% − 2% = 26%),
-// modelling scenarios where the supplementary premium is waived (e.g. non-
+// modeling scenarios where the supplementary premium is waived (e.g. non-
 // resident accounts, employer-paid dividends, or counterfactual analysis).
 type TaiwanTaxCalculator struct {
 	cfg domain.TaxConfig

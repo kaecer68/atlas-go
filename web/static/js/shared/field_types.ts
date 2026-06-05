@@ -1034,6 +1034,11 @@ export interface FactorWeightParameters {
   aggressive_quality?: string;
 }
 
+export interface FallbackPriceTarget {
+  target_multiplier: string;
+  stop_loss_multiplier: string;
+}
+
 export interface FetcherStatus {
   day_trading: string;
   taifex: string;
@@ -1791,6 +1796,7 @@ export interface ParameterSnapshot {
 export interface ParametersConfig {
   version: string;
   updated_at: string;
+  fallback_price_targets?: Record<string, string>;
   darwinian: string;
   factor: string;
   factor_weight?: string;
