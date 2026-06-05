@@ -518,7 +518,7 @@ func (s *PipelineService) loadSessionPipelineData(sessionID, sessionsDir string,
 			tp := outcome.TargetPrice
 			slp := outcome.StopLossPrice
 			if tp == 0 && slp == 0 && price > 0 {
-				tp, slp = fallbackPriceTargets(outcome.Skill, price, side)
+				tp, slp = fallbackPriceTargets(outcome.Skill, price, outcome.Side)
 			}
 			if !showAll && !passedGuards {
 				continue
@@ -542,7 +542,7 @@ func (s *PipelineService) loadSessionPipelineData(sessionID, sessionsDir string,
 				TargetPrice:         tp,
 				StopLossPrice:       slp,
 				ForwardReturn:       fr,
-				Hit:                 (side == string(domain.SideSell) && fr < 0) || (side == string(domain.SideBuy) && fr > 0),
+				Hit:                 (outcome.Side == domain.SideSell && fr < 0) || (outcome.Side == domain.SideBuy && fr > 0),
 				Reason:              outcome.Reason,
 				Price:               price,
 				PassedGuards:        passedGuards,

@@ -231,28 +231,36 @@ func computePipelineTags(ds *replay.Dataset, symbol string, date time.Time) []st
 	return tags
 }
 
-func FallbackPriceTargets(_ context.Context, skill string, price float64, side string) (float64, float64, error) {
+func FallbackPriceTargets(_ context.Context, skill string, price float64, side domain.Side) (float64, float64, error) {
 	target, stopLoss := fallbackPriceTargets(skill, price, side)
 	return target, stopLoss, nil
 }
 
-func fallbackPriceTargets(skill string, price float64, side string) (float64, float64) {
+func fallbackPriceTargets(skill string, price float64, side domain.Side) (float64, float64) {
 	targets := config.GetParametersConfig().FallbackPriceTargets
-	var targetMult, stopLossMult float64
-	if t, ok := targets[skill]; ok {
-		targetMult = t.TargetMultiplier.Value
-		stopLossMult = t.StopLossMultiplier.Value
-	} else if t, ok := targets["_default"]; ok {
-		targetMult = t.TargetMultiplier.Value
-		stopLossMult = t.StopLossMultiplier.Value
-	} else {
-		targetMult = 1.05
-		stopLossMult = 0.95
+	targetMult, stopLossMult, ok := resolveFallbackMultipliers(targets, skill)
+	if !ok {
+		// parameters_defaults.go 必須含 _default 條目，否則視為部署錯誤。
+		// 不可降級為 magic number 1.05/0.95，違反 AGENTS.md「禁止硬編碼 magic number」。
+		panic(fmt.Sprintf("monitoring: FallbackPriceTargets missing _default entry (skill=%q, total_keys=%d)", skill, len(targets)))
 	}
-	if side == "SELL" {
+	if side == domain.SideSell {
 		return price * stopLossMult, price * targetMult
 	}
 	return price * targetMult, price * stopLossMult
+}
+
+// resolveFallbackMultipliers 優先以 skill 名稱查詢 fallback price target，
+// 找不到則回退到 _default。回傳值 (target, stopLoss, ok)：ok=false 表示
+// 連 _default 都沒有，這時呼叫端應 panic（部署錯誤，非業務可恢復情境）。
+func resolveFallbackMultipliers(targets map[string]config.FallbackPriceTarget, skill string) (float64, float64, bool) {
+	if t, ok := targets[skill]; ok {
+		return t.TargetMultiplier.Value, t.StopLossMultiplier.Value, true
+	}
+	if t, ok := targets["_default"]; ok {
+		return t.TargetMultiplier.Value, t.StopLossMultiplier.Value, true
+	}
+	return 0, 0, false
 }
 
 func isStockPickingLayer(layer string) bool {
