@@ -596,6 +596,27 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered channel_health_sync background task (5m interval)")
 			}
 
+			// Register seasonal_calibration background task. Guard: skip silently if
+			// the calibrate-seasonal binary is not co-located with the current binary
+			// (production deploys without it stay clean; no live-trading impact).
+			exePath, exeErr := os.Executable()
+			if exeErr == nil {
+				seasonalBin := filepath.Join(filepath.Dir(exePath), "calibrate-seasonal")
+				if _, statErr := os.Stat(seasonalBin); statErr == nil {
+					_ = taskMgr.Register(&apigateway.ScheduledTask{
+						Name:     "seasonal_calibration",
+						Interval: scheduler.SeasonalCalibrationDefaults.Interval,
+						Jitter:   30 * time.Minute,
+						Enabled:  true,
+						Task:     scheduler.SeasonalCalibrationTaskFunc(seasonalBin),
+					})
+					log.Printf("[Gateway] registered seasonal_calibration background task (7d interval)")
+				} else {
+					log.Printf("[Gateway] seasonal_calibration skipped: binary not found at %s", seasonalBin)
+				}
+			} else {
+				log.Printf("[Gateway] seasonal_calibration skipped: os.Executable failed: %v", exeErr)
+			}
 			// Register health_check via HealthChecker.RunOnce (stateStore is nil in API mode).
 			if monitor != nil {
 				healthChecker := monitoring.NewHealthChecker(monitor, nil)
