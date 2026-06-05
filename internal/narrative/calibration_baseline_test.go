@@ -420,3 +420,86 @@ func TestLoadBaselines_EmptyWorkDir(t *testing.T) {
 		t.Fatal("expected error for empty workDir")
 	}
 }
+
+func TestFactorSignal_JPYUsesRawRate(t *testing.T) {
+	t.Parallel()
+
+	// JPY carry trade unwinds are state-driven: extreme USD/JPY rate level
+	// relative to history signals pressure, not single-day moves.
+	// factorSignal must return the raw rate, not ChangePct.
+	flatSnap := marketdata.MacroDataSnapshot{
+		JPY: marketdata.MacroDataPoint{Symbol: "USDJPY=X", Value: 160.0, ChangePct: 0.0},
+	}
+	if got := factorSignal("jpy", flatSnap, 0); got != 160.0 {
+		t.Fatalf("flat day: expected JPY signal=160.0 (raw rate), got %v (would zero out level signal)", got)
+	}
+
+	movingSnap := marketdata.MacroDataSnapshot{
+		JPY: marketdata.MacroDataPoint{Symbol: "USDJPY=X", Value: 152.0, ChangePct: 0.5},
+	}
+	if got := factorSignal("jpy", movingSnap, 0); got != 152.0 {
+		t.Fatalf("moving day: expected JPY signal=152.0 (raw rate), got %v", got)
+	}
+}
+
+func TestComputeLevelSignal_JPYOnFlatDay(t *testing.T) {
+	t.Parallel()
+
+	// Baseline computed from historical JPY rates (mean=150, stddev=3).
+	bl := &BaselineConfig{
+		Window: 30,
+		Baselines: map[string]*FactorBaseline{
+			"jpy": {Factor: "jpy", Mean: 150.0, StdDev: 3.0, Count: 30},
+		},
+	}
+
+	// Flat day: ChangePct=0, but USD/JPY at 162 (4 sigma above mean).
+	// Old code would have levelDev=0 here (since JPY.ChangePct=0 and
+	// historical mean of ChangePct≈0). New code: (162-150)/3 = 4.0
+	// → 4 sigma deviation → strong stress signal.
+	flatSnap := marketdata.MacroDataSnapshot{
+		JPY: marketdata.MacroDataPoint{Symbol: "USDJPY=X", Value: 162.0, ChangePct: 0.0},
+	}
+	levelDev := ComputeLevelSignal("jpy", flatSnap, 0, bl)
+	if math.Abs(levelDev-4.0) > 1e-9 {
+		t.Fatalf("flat day with USDJPY=162 vs baseline mean=150 stddev=3: expected levelDev=4.0, got %v", levelDev)
+	}
+
+	// Also test the opposite direction (JPY strengthening → carry unwind).
+	strongSnap := marketdata.MacroDataSnapshot{
+		JPY: marketdata.MacroDataPoint{Symbol: "USDJPY=X", Value: 138.0, ChangePct: 0.0},
+	}
+	levelDevStrong := ComputeLevelSignal("jpy", strongSnap, 0, bl)
+	if math.Abs(levelDevStrong-(-4.0)) > 1e-9 {
+		t.Fatalf("strong JPY (USDJPY=138) vs baseline: expected levelDev=-4.0, got %v", levelDevStrong)
+	}
+}
+
+func TestExtractFactorValues_JPYCapturesRateVariation(t *testing.T) {
+	t.Parallel()
+
+	// Build records with varying USD/JPY rates but flat ChangePct.
+	// extractFactorValues should return the rate sequence, enabling
+	// ComputeBaselines to produce a non-zero stddev for level signals.
+	records := []CalibrationRecord{
+		{Snapshot: marketdata.MacroDataSnapshot{JPY: marketdata.MacroDataPoint{Value: 148.0, ChangePct: 0.0}}},
+		{Snapshot: marketdata.MacroDataSnapshot{JPY: marketdata.MacroDataPoint{Value: 150.0, ChangePct: 0.0}}},
+		{Snapshot: marketdata.MacroDataSnapshot{JPY: marketdata.MacroDataPoint{Value: 152.0, ChangePct: 0.0}}},
+		{Snapshot: marketdata.MacroDataSnapshot{JPY: marketdata.MacroDataPoint{Value: 154.0, ChangePct: 0.0}}},
+		{Snapshot: marketdata.MacroDataSnapshot{JPY: marketdata.MacroDataPoint{Value: 156.0, ChangePct: 0.0}}},
+	}
+
+	cfg := &BaselineConfig{Window: 60}
+	bls := ComputeBaselines(records, cfg)
+	jpyBl, ok := bls.Baselines["jpy"]
+	if !ok {
+		t.Fatal("expected jpy baseline")
+	}
+	if jpyBl.Mean != 152.0 {
+		t.Errorf("expected JPY baseline mean=152.0, got %v", jpyBl.Mean)
+	}
+	expectedStddev := math.Sqrt(((148-152)*(148-152) + (150-152)*(150-152) + (152-152)*(152-152) + (154-152)*(154-152) + (156-152)*(156-152)) / 5.0)
+	if math.Abs(jpyBl.StdDev-expectedStddev) > 1e-9 {
+		t.Errorf("expected JPY baseline stddev=%v, got %v", expectedStddev, jpyBl.StdDev)
+	}
+}

@@ -262,7 +262,12 @@ func factorSignal(factor string, snap marketdata.MacroDataSnapshot, foreignNet f
 	case "vix":
 		return snap.VIX.Value - 20
 	case "jpy":
-		return snap.JPY.ChangePct
+		// Use raw USD/JPY exchange rate (e.g., 150.5) rather than ChangePct.
+		// Carry trade unwinds are state-driven (extreme JPY level vs history),
+		// not event-driven (single-day move). On flat days ChangePct=0 would
+		// zero out the level signal; using the rate produces a non-zero z-score
+		// whenever JPY is at an extreme level relative to its 60d history.
+		return snap.JPY.Value
 	case "geopolitical":
 		return snap.Gold.ChangePct + snap.Oil.ChangePct
 	case "oil":

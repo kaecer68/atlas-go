@@ -23,7 +23,7 @@ func validationTestRecords(n int) []CalibrationRecord {
 				DXY:                marketdata.MacroDataPoint{ChangePct: 0.1 * float64(i%5)},
 				US10Y:              marketdata.MacroDataPoint{Value: 4.0 + float64(i%3)*0.5},
 				VIX:                marketdata.MacroDataPoint{Value: 15.0 + float64(i%4)},
-				JPY:                marketdata.MacroDataPoint{ChangePct: 0.05 * float64(i%4)},
+				JPY:                marketdata.MacroDataPoint{Value: 145.0 + float64(i%5), ChangePct: 0.05 * float64(i%4)},
 				Oil:                marketdata.MacroDataPoint{ChangePct: 0.2 * float64(i%3)},
 				Gold:               marketdata.MacroDataPoint{ChangePct: 0.1 * float64(i%3)},
 				ForeignInvestorNet: marketdata.MacroDataPoint{Value: -float64(i % 5)},
@@ -111,7 +111,7 @@ func TestValidateCalibration_NewConfigBetter(t *testing.T) {
 				DXY:                marketdata.MacroDataPoint{ChangePct: 0.001},
 				US10Y:              marketdata.MacroDataPoint{Value: 0.1},
 				VIX:                marketdata.MacroDataPoint{Value: vixValue},
-				JPY:                marketdata.MacroDataPoint{ChangePct: 0.001},
+				JPY:                marketdata.MacroDataPoint{Value: 150.0, ChangePct: 0.001},
 				Oil:                marketdata.MacroDataPoint{ChangePct: 0.001},
 				Gold:               marketdata.MacroDataPoint{ChangePct: 0.001},
 				ForeignInvestorNet: marketdata.MacroDataPoint{Value: -0.1},
@@ -180,7 +180,7 @@ func TestValidateCalibration_NewConfigWorse(t *testing.T) {
 				DXY:                marketdata.MacroDataPoint{ChangePct: 0.001},
 				US10Y:              marketdata.MacroDataPoint{Value: 0.1},
 				VIX:                marketdata.MacroDataPoint{Value: vixValue},
-				JPY:                marketdata.MacroDataPoint{ChangePct: 0.001},
+				JPY:                marketdata.MacroDataPoint{Value: 150.0, ChangePct: 0.001},
 				Oil:                marketdata.MacroDataPoint{ChangePct: 0.001},
 				Gold:               marketdata.MacroDataPoint{ChangePct: 0.001},
 				ForeignInvestorNet: marketdata.MacroDataPoint{Value: -0.1},
@@ -255,7 +255,7 @@ func TestComputeStressFromConfig(t *testing.T) {
 			DXY:                marketdata.MacroDataPoint{ChangePct: 0.1},
 			US10Y:              marketdata.MacroDataPoint{Value: 4.0},
 			VIX:                marketdata.MacroDataPoint{Value: 20.0},
-			JPY:                marketdata.MacroDataPoint{ChangePct: 0.05},
+			JPY:                marketdata.MacroDataPoint{Value: 152.0, ChangePct: 0.05},
 			Oil:                marketdata.MacroDataPoint{ChangePct: 0.2},
 			Gold:               marketdata.MacroDataPoint{ChangePct: 0.1},
 			ForeignInvestorNet: marketdata.MacroDataPoint{Value: -3.0},
@@ -279,14 +279,14 @@ func TestComputeStressFromConfig(t *testing.T) {
 	//   us10y:  |4.0| * 1  = 4.0       * 0.1 = 0.4
 	//   fflow:  |-(-3.0)| * 1 = 3.0    * 0.2 = 0.6
 	//   vix:    20.0 * 1 = 20.0        * 0.1 = 2.0
-	//   jpy:    |0.05| * 10 = 0.5      * 0.1 = 0.05
+	//   jpy:    |152.0| * 10 = 1520 → clamp 100 * 0.1 = 10.0
 	//   geo:    0
 	//   oil:    |0.2| * 10 = 2.0       * 0.1 = 0.2
 	//   gold:   |0.1| * 10 = 1.0       * 0.2 = 0.2
-	//   total = 0.2 + 0.4 + 0.6 + 2.0 + 0.05 + 0 + 0.2 + 0.2 = 3.65
+	//   total = 0.2 + 0.4 + 0.6 + 2.0 + 10.0 + 0 + 0.2 + 0.2 = 13.6
 	score := computeStressFromConfig(record, config, nil)
 
-	expected := 3.65
+	expected := 13.6
 	if math.Abs(score-expected) > 0.01 {
 		t.Errorf("score = %.4f, want %.2f", score, expected)
 	}
@@ -320,7 +320,7 @@ func TestComputeStressFromConfig_VariousConfigs(t *testing.T) {
 			DXY:                marketdata.MacroDataPoint{ChangePct: 0.5},
 			US10Y:              marketdata.MacroDataPoint{Value: 4.5},
 			VIX:                marketdata.MacroDataPoint{Value: 25.0},
-			JPY:                marketdata.MacroDataPoint{ChangePct: 0.3},
+			JPY:                marketdata.MacroDataPoint{Value: 155.0, ChangePct: 0.3},
 			Oil:                marketdata.MacroDataPoint{ChangePct: 0.4},
 			Gold:               marketdata.MacroDataPoint{ChangePct: 0.2},
 			ForeignInvestorNet: marketdata.MacroDataPoint{Value: -5.0},
