@@ -19,7 +19,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kaecer68/atlas-go/web"
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/autobacktest"
 	"github.com/kaecer68/atlas-go/internal/backtest"
@@ -53,6 +52,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/scheduler"
 	"github.com/kaecer68/atlas-go/internal/storage"
 	"github.com/kaecer68/atlas-go/internal/swarm"
+	"github.com/kaecer68/atlas-go/web"
 )
 
 // experimentMonitorAdapter wraps *monitoring.Monitor to match experiment.AutoExperimentMonitor interface.
