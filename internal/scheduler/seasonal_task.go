@@ -33,6 +33,12 @@ var SeasonalCalibrationDefaults = struct {
 // NewSeasonalCalibrationTask 建立一個會以子行程方式執行
 // `calibrate-seasonal -update` 的 CalibrationTask。
 //
+// Deprecated: 此工廠產出的 *CalibrationTask 只能被 BackgroundCalibrationScheduler
+// 消費,但目前 main.go 是用 apigateway.BackgroundTaskManager 註冊背景任務,
+// 直接呼叫 SeasonalCalibrationTaskFunc(binaryPath) 作為 ScheduledTask.Task。
+// 保留此工廠以備未來切換到 BackgroundCalibrationScheduler,但目前無生產消費者。
+// 新代碼請使用 SeasonalCalibrationTaskFunc。
+//
 // 參數說明:
 //   - binaryPath:`calibrate-seasonal` 二進位絕對路徑(由呼叫端注入,
 //     避免在 scheduler 套件硬編路徑,符合 dependency injection 原則)。
