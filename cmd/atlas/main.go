@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"log/slog"
 	"net/http"
@@ -17,6 +18,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/kaecer68/atlas-go/web"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/autobacktest"
@@ -550,20 +553,13 @@ func run(args []string, deps appDeps) error {
 				params.RuleEngineIntervalSec.Value)
 		}
 
-		fs := http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static")))
-		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-			w.Header().Set("Pragma", "no-cache")
-			w.Header().Set("Expires", "0")
-			// SPA fallback: serve index.html for paths that don't match static files
-			cleanPath := filepath.Clean(r.URL.Path)
-			staticPath := filepath.Join(cfg.WorkDir, "web/static", cleanPath)
-			if info, err := os.Stat(staticPath); err != nil || info.IsDir() {
-				r.URL.Path = "/"
-			}
-			fs.ServeHTTP(w, r)
-		}))
-		mux.Handle("/static/", http.StripPrefix("/static/", fs))
+		subFS, err := fs.Sub(web.DistFS, "dist")
+		if err != nil {
+			log.Fatalf("failed to get dist sub FS: %v", err)
+		}
+		handler := staticHandler(subFS)
+		mux.Handle("/", handler)
+		mux.Handle("/static/", http.StripPrefix("/static/", handler))
 		log.Printf("dashboard api listening on %s", *apiAddr)
 
 		// Publish bootstrap events so the dashboard SSE stream shows system status immediately.
@@ -1872,6 +1868,30 @@ func run(args []string, deps appDeps) error {
 	return runSimulation(cfg, false, collector, repo, deps.shutdown)
 }
 
+// staticHandler returns an http.Handler that serves static assets from the given fs.FS.
+// It applies Cache-Control headers (immutable for hashed assets, no-cache for others)
+// and implements SPA fallback (serves index.html for paths not matching any file).
+func staticHandler(assets fs.FS) http.Handler {
+	fileServer := http.FileServer(http.FS(assets))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		cleanPath := filepath.Clean(r.URL.Path)
+		// Serve hashed assets with long-lived cache
+		if strings.Contains(cleanPath, "-") && (strings.HasSuffix(cleanPath, ".js") || strings.HasSuffix(cleanPath, ".css")) {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			w.Header().Del("Pragma")
+			w.Header().Del("Expires")
+		}
+		// SPA fallback: serve index.html for paths that don't match static files
+		if _, err := fs.Stat(assets, strings.TrimPrefix(cleanPath, "/")); err != nil {
+			r.URL.Path = "/"
+		}
+		fileServer.ServeHTTP(w, r)
+	})
+}
+
 func runSimulation(cfg config.Config, verbose bool, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, shutdown <-chan struct{}) error {
 	system, err := orchestrator.NewProductionSystem(cfg)
 	if err != nil {
@@ -2072,15 +2092,11 @@ func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.Metri
 		monitor.SetAlertStore(alertStore)
 	}
 
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// SPA fallback: serve index.html for paths that don't match static files
-		cleanPath := filepath.Clean(r.URL.Path)
-		staticPath := filepath.Join(cfg.WorkDir, "web/static", cleanPath)
-		if info, err := os.Stat(staticPath); err != nil || info.IsDir() {
-			r.URL.Path = "/"
-		}
-		http.FileServer(http.Dir(filepath.Join(cfg.WorkDir, "web/static"))).ServeHTTP(w, r)
-	})
+	subFS, err := fs.Sub(web.DistFS, "dist")
+	if err != nil {
+		log.Fatalf("failed to get dist sub FS: %v", err)
+	}
+	mux.Handle("/", staticHandler(subFS))
 	apiAddr := ":8080"
 	srv := &http.Server{
 		Addr:              apiAddr,

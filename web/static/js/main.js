@@ -82,24 +82,24 @@ var modules = {};
 async function loadModules() {
   if (modules._loaded) return modules;
   var imports = [
-    import('./pages/dashboard.js?v=' + APP_VERSION),
-    import('./pages/pipeline.js?v=' + APP_VERSION),
-    import('./pages/risk.js?v=' + APP_VERSION),
-    import('./pages/narrative.js?v=' + APP_VERSION),
-    import('./pages/backtest.js?v=' + APP_VERSION),
-    import('./pages/inbox.js?v=' + APP_VERSION),
-    import('./pages/experiments.js?v=' + APP_VERSION),
-    import('./pages/alerts.js?v=' + APP_VERSION),
-    import('./pages/metrics.js?v=' + APP_VERSION),
-    import('./pages/industry.js?v=' + APP_VERSION),
-    import('./pages/datachannels.js?v=' + APP_VERSION),
-    import('./pages/parameters.js?v=' + APP_VERSION),
-    import('./pages/deploy-config.js?v=' + APP_VERSION),
-    import('./pages/synergy.js?v=' + APP_VERSION),
-    import('./pages/evolution_panel.js?v=' + APP_VERSION),
-    import('./pages/decision-chain.js?v=' + APP_VERSION),
-    import('./pages/eventlogic-rules.js?v=' + APP_VERSION),
-  import('./pages/swarm.js?v=' + APP_VERSION),
+    import('./pages/dashboard.js'),
+    import('./pages/pipeline.js'),
+    import('./pages/risk.js'),
+    import('./pages/narrative.js'),
+    import('./pages/backtest.js'),
+    import('./pages/inbox.js'),
+    import('./pages/experiments.js'),
+    import('./pages/alerts.js'),
+    import('./pages/metrics.js'),
+    import('./pages/industry.js'),
+    import('./pages/datachannels.js'),
+    import('./pages/parameters.js'),
+    import('./pages/deploy-config.js'),
+    import('./pages/synergy.js'),
+    import('./pages/evolution_panel.js'),
+    import('./pages/decision-chain.js'),
+    import('./pages/eventlogic-rules.js'),
+  import('./pages/swarm.js'),
   ];
   var results = await Promise.allSettled(imports);
   var keys = ['dash', 'pipe', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'industry', 'datachannels', 'parameters', 'deployConfig', 'synergy', 'evolution_panel', 'decision', 'eventlogic', 'swarm'];
@@ -340,7 +340,7 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'portfolio') {
     try {
-      var portfolioModule = await import('./pages/portfolio.js?v=' + APP_VERSION).catch(function(err) {
+      var portfolioModule = await import('./pages/portfolio.js').catch(function(err) {
         console.error('[Dynamic import] portfolio module load failed:', err);
         return null;
       });
@@ -374,7 +374,7 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'evolution_panel') {
     try {
-      import('./pages/evolution_panel.js?v=' + APP_VERSION).then(function(evo) {
+      import('./pages/evolution_panel.js').then(function(evo) {
         if (evo.loadEvolutionData) evo.loadEvolutionData();
       }).catch(function(err) {
         console.error('[Dynamic import] evolution_panel module load failed:', err);
@@ -550,7 +550,7 @@ if (typeof window !== "undefined") window.toggleTheme = function() {
 if (typeof window !== "undefined") window.showUnacknowledgedOnly = function() { console.log('showUnacknowledgedOnly: not yet reimplemented'); };
 
 // datachannels globals
-import('./pages/datachannels.js?v=' + APP_VERSION).then(function(m) {
+import('./pages/datachannels.js').then(function(m) {
   if (typeof window === 'undefined') return;
   if (m.triggerChannelsIngest) window.triggerChannelsIngest = m.triggerChannelsIngest;
   if (m.enableAllChannels) window.dcEnableAll = m.enableAllChannels;
