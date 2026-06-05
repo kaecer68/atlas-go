@@ -139,6 +139,68 @@ active → confirmed → faded → expired
 
 ---
 
+## ROLLING CALIBRATION FRAMEWORK
+
+台灣壓力指數的自動校準框架。詳見 `docs/MACRO_CALIBRATION.md`。
+
+### 五層架構
+1. **Baseline**（`calibration_baseline.go`）：60d rolling Mean/Count 統計
+2. **Scale**（`calibration_scales.go`）：自動調整使各因子貢獻相當
+3. **Regime**（`calibration_regime.go`）：VIX-based 切換 bull/normal/bear/crisis
+4. **Validation**（`calibration_validation.go`）：80/20 split，hit-rate 退化則跳過 export
+5. **Scheduler**（`internal/scheduler/auto_calibration.go`）：Maturity-gated 每日觸發
+
+### 核心規則
+
+- **Hybrid Signal 是預設**：`TaiwanStressIndex.Calculate` 使用 `max(|level_z|, |change_pct|)`，不可降級為單一 change-pct。
+- **`FactorBaseline` 不存 Baseline 欄位**：只存 `Mean` 與 `Count`，z-score 使用時即時計算（避免 Darwinian 權重靜默正規化）。
+- **`BaselineConfig` 是 map**：新增 factor 不需修改 struct 定義（OCP 開放封閉原則）。
+- **`ValidateCalibration` 是獨立函式**：非 `WeightCalibrationEngine` method，鬆耦合、可獨立測試。
+- **`CalibrationTask` 沒有 goroutine**：背景排程一律交給 `BackgroundCalibrationScheduler.RunDaily`（由 `BackgroundTaskManager` 註冊）。不可在 narrative 模組內啟動長期 goroutine。
+- **校準參數一律取自 `ParametersConfig`**：透過 `config.GetParametersConfig()` 取得，禁止 hardcode。
+- **`calibration_enabled` 預設 false**：啟用前需在 staging 環境驗證至少 30 日。
+
+### Maturity-Gated 行為
+
+| 系統成熟度 | 行為 |
+|----------|------|
+| `BURN_IN` | log `burn_in_skip`、完全跳過校準 |
+| `CALIBRATING` | 執行校準 + validation gate |
+| `FULL_AUTO` | 執行校準 + validation gate |
+
+### 驗證失敗（Degradation）處理
+
+`ValidateCalibration` 回傳 `IsDegradation: true` 時：
+- 不寫入新 config（保留舊 config）
+- log warning 到 monitoring
+- 當日 `Calculate` 仍用舊 config（不中斷服務）
+
+### ANTI-PATTERNS（校準專屬）
+
+- **手寫校準腳本**：不可在 `cmd/` 下新增 ad-hoc 校準工具，必須透過 `CalibrationTask` 框架。
+- **跳過 validation gate**：不可直接寫入新 config 而不通過 `ValidateCalibration`。
+- **在 narrative 模組啟動 goroutine**：校準相關的 background goroutine 一律在 `internal/scheduler` 內。
+- **Hardcode 校準參數**：所有閾值（window、target_median、min_records 等）必須從 `ParametersConfig` 取得。
+
+### 測試
+
+```bash
+# Baseline + Hybrid Signal
+go test -v ./internal/narrative/calibration_baseline_test.go
+# Scale Calibration
+go test -v ./internal/narrative/calibration_scales_test.go
+# Regime-Aware Weights
+go test -v ./internal/narrative/calibration_regime_test.go
+# Validation Gate
+go test -v ./internal/narrative/calibration_validation_test.go
+# 整合：TaiwanStressIndex 端到端
+go test -v ./internal/narrative/taiwan_stress_index_test.go
+# Scheduler 整合
+go test -v ./internal/scheduler/auto_calibration_test.go
+```
+
+---
+
 ## 測試與驗證
 
 - 偵測邏輯驗證：`go test -v ./internal/narrative/ingestor_test.go`
