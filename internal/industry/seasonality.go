@@ -23,7 +23,7 @@ type SeasonalPattern struct {
 	AvoidedIndustries  []string `json:"avoided_industries"`
 	AdjustmentFactor   float64  `json:"adjustment_factor"`   // e.g., 1.2 for favored
 	HistoricalAccuracy float64  `json:"historical_accuracy"` // 0.0 to 1.0
-	AvgMarketReturn    float64  `json:"avg_market_return"`   // Historical average TAIEX return
+	AvgMarketReturn    float64  `json:"avg_market_return"`   // 期間累積報酬（geometric compound return）：e.g. 0.032 = 該季節 3.2% 累積漲幅。校準器與預設值單位需對齊。
 	Description        string   `json:"description"`
 }
 
@@ -32,10 +32,6 @@ func (p SeasonalPattern) IsRelevantForIndustry(industryID string) bool {
 		return true
 	}
 	return slices.Contains(p.AvoidedIndustries, industryID)
-}
-
-func (p SeasonalPattern) TypicalReturn() float64 {
-	return p.AvgMarketReturn
 }
 
 func (p SeasonalPattern) AffectedIndustries() []string {
