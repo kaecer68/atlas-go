@@ -212,7 +212,9 @@ func (s *IndustryService) GetSeasonalCalendar(industryID string, year int) []map
 					"name":                p.Name,
 					"historical_accuracy": p.HistoricalAccuracy,
 					"avg_market_return":   p.AvgMarketReturn,
-					"adjustment_factor":   p.AdjustmentFactor,
+					// Deprecated: remove after 2026-Q3 migration window.
+					"typical_return":    p.AvgMarketReturn,
+					"adjustment_factor": p.AdjustmentFactor,
 				})
 			}
 		}
