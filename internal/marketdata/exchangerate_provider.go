@@ -17,15 +17,17 @@ const exchangeRateEndpoint = "https://open.er-api.com/v6/latest/USD"
 // ExchangeRateProvider fetches exchange rates from the free ExchangeRate-API.
 // Supports TWD (not available in ECB/Frankfurter dataset) and JPY.
 // No API key required, rate-limited to ~1 request/minute on free tier.
+// Historical rates require paid plan — ChangePct falls back to 0 with a
+// warning log. Use FrankfurterFXProvider for daily change tracking on JPY.
 type ExchangeRateProvider struct {
-	client   *http.Client
-	endpoint string
+	client    *http.Client
+	latestURL string
 }
 
 func NewExchangeRateProvider() *ExchangeRateProvider {
 	return &ExchangeRateProvider{
-		client:   httpclient.NewFactory().NewClient(10 * time.Second),
-		endpoint: exchangeRateEndpoint,
+		client:    httpclient.NewFactory().NewClient(10 * time.Second),
+		latestURL: exchangeRateEndpoint,
 	}
 }
 
@@ -34,7 +36,7 @@ func (e *ExchangeRateProvider) Name() string {
 }
 
 func (e *ExchangeRateProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, e.endpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, e.latestURL, nil)
 	if err != nil {
 		return MacroDataSnapshot{}, fmt.Errorf("exchangerate request: %w", err)
 	}
@@ -84,6 +86,9 @@ func (e *ExchangeRateProvider) FetchSnapshot(ctx context.Context) (MacroDataSnap
 			ChangePct: 0,
 			Timestamp: time.Now().Unix(),
 		}
+		logging.Warn("exchangerate_provider", "jpy_change_pct_unavailable",
+			"reason", "free tier lacks historical endpoint",
+			"recommendation", "use FrankfurterFXProvider for daily change tracking")
 	}
 
 	return snap, nil
