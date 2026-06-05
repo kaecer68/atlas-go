@@ -21,10 +21,22 @@ import "github.com/kaecer68/atlas-go/internal/domain"
 cfg := domain.TaxConfig{
     DividendTaxRate:    0.28,
     TransactionTaxRate: 0.003,
+    IncludeNHI:         true,  // 預設 true：包含二代健保補充保費
 }
 
 calculator := tax.NewTaiwanTaxCalculator(cfg)
 ```
+
+### IncludeNHI（2026-06-05 起生效）
+
+`TaxConfig.IncludeNHI` 控制股利稅率是否含二代健保補充保費：
+
+| IncludeNHI | 有效股利稅率（預設） | 說明 |
+|------------|----------------------|------|
+| `true`（預設） | `0.28` | 28% 已內含 2% 健保補充保費 |
+| `false` | `0.26` | 28% − 2% = 26%，用於非居住民帳戶、雇主配息、情境分析等場景 |
+
+實作：`taiwan_tax.go:NHISurchargeRate` (const 0.02) 與 `effectiveDividendTaxRate()` helper；`CalculateDividendTax` 與 `TaxSnapshot` 計算皆透過此 helper。詳見 `internal/tax/AGENTS.md`。
 
 ## 使用方法
 

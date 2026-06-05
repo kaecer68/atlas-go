@@ -1317,10 +1317,14 @@ func quoteBySymbolMap(quotes []domain.Quote) map[string]domain.Quote {
 	return m
 }
 
-func buildFinalRecKey(finalRecs []domain.Recommendation) map[string]struct{} {
+// buildPassedSymbolKey 回傳通過控制層 (CIO) 篩選的標的集合。改採 Symbol-only
+// key 是為了對齊 internal/orchestrator/AGENTS.md「ID 混淆」陷阱：CIO aggregator
+// 會以「最佳 agent」覆寫 Agent 欄位，若仍以 Symbol+"|"+Agent 作為 key 進行
+// PassedGuards 查核，非最佳 agent 的原始推薦會被誤判為未過濾。
+func buildPassedSymbolKey(finalRecs []domain.Recommendation) map[string]struct{} {
 	keys := make(map[string]struct{}, len(finalRecs))
 	for _, rec := range finalRecs {
-		keys[rec.Symbol+"|"+rec.Agent] = struct{}{}
+		keys[rec.Symbol] = struct{}{}
 	}
 	return keys
 }
@@ -1386,13 +1390,13 @@ func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes [
 		return nil
 	}
 	quoteMap := quoteBySymbolMap(quotes)
-	finalKey := buildFinalRecKey(finalRecs)
+	passedSymbols := buildPassedSymbolKey(finalRecs)
 	snapshot := buildParameterSnapshot()
 	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
 	for _, rec := range rawRecs {
 		quote := quoteMap[rec.Symbol]
 		forwardReturn := syntheticForwardReturn(rec.Symbol, quote, asOf)
-		_, passed := finalKey[rec.Symbol+"|"+rec.Agent]
+		_, passed := passedSymbols[rec.Symbol]
 		guardReason := ""
 		if !passed {
 			guardReason = "未通過控制層過濾"
@@ -1430,7 +1434,7 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 		return nil
 	}
 	quoteMap := quoteBySymbolMap(quotes)
-	finalKey := buildFinalRecKey(finalRecs)
+	passedSymbols := buildPassedSymbolKey(finalRecs)
 	snapshot := buildParameterSnapshot()
 	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
 	for _, rec := range rawRecs {
@@ -1441,7 +1445,7 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 			forwardReturn = syntheticForwardReturn(rec.Symbol, quote, asOf)
 			synthetic = true
 		}
-		_, passed := finalKey[rec.Symbol+"|"+rec.Agent]
+		_, passed := passedSymbols[rec.Symbol]
 		guardReason := ""
 		if !passed {
 			guardReason = "未通過控制層過濾"

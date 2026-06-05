@@ -58,6 +58,18 @@ go test ./internal/screener/... -run TestScreenFiltersByPE -v
 
 1. **篩選條件過嚴**可能導致某檔標的「完全沒有推薦」，這是預期行為
 2. **nil 或 absent** 的欄位表示不篩選（pass-through）
+
+## 缺資料拒絕（fail-closed）
+
+2026-06-05 起，三大基本面欄位都會在資料缺失時主動 fail（不再靜默放行）：
+
+| 欄位 | 缺資料失敗代碼 | 說明 |
+|------|---------------|------|
+| P/E | `pe_missing` | `data.PriceToEarnings <= 0` 時 |
+| P/B | `pb_missing` | `data.PriceToBook <= 0` 時 |
+| DividendYield | `dividend_yield_missing` | `data.DividendYield <= 0` 時 |
+
+行為：當 screener 收到 `RangeFilter` 或 `MinFilter` 類型的條件但底層資料缺失，會以 `criterion_label`、閾值、實際值（`0`）記錄到 `ScreeningFailure`，供 dashboard `pipeline` 頁面的「被篩除」區塊展示。
 3. 調整門檻前請先用 `go test ./internal/screener/...` 驗證
 4. 篩選結果會記錄 `ScreeningReject` 供稽核
 

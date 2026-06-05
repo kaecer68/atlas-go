@@ -1160,34 +1160,42 @@ type RSITwParameters struct {
 	LastCalibratedScore ParameterMetadata[float64] `json:"last_calibrated_score,omitempty"`
 }
 
+// FallbackPriceTarget holds per-skill target and stop-loss multipliers
+// used by the monitoring service when price targets are not explicitly set.
+type FallbackPriceTarget struct {
+	TargetMultiplier   ParameterMetadata[float64] `json:"target_multiplier"`
+	StopLossMultiplier ParameterMetadata[float64] `json:"stop_loss_multiplier"`
+}
+
 type ParametersConfig struct {
-	Version             string                        `json:"version"`
-	UpdatedAt           time.Time                     `json:"updated_at"`
-	Darwinian           DarwinianParameters           `json:"darwinian"`
-	Factor              FactorParameters              `json:"factor"`
-	FactorWeight        FactorWeightParameters        `json:"factor_weight,omitempty"`
-	Optimizer           OptimizerParameters           `json:"optimizer"`
-	Sizing              SizingParameters              `json:"sizing"`
-	Health              HealthParameters              `json:"health"`
-	GARCH               GARCHParameters               `json:"garch"`
-	Experiment          ExperimentParameters          `json:"experiment"`
-	Baseline            BaselineParameters            `json:"baseline"`
-	Orchestrator        OrchestratorParameters        `json:"orchestrator"`
-	Risk                RiskParameters                `json:"risk"`
-	Drawdown            DrawdownParameters            `json:"drawdown"`
-	Realtime            RealtimeParameters            `json:"realtime"`
-	Janus               JanusParameters               `json:"janus"`
-	Narrative           NarrativeParameters           `json:"narrative"`
-	NarrativeConviction NarrativeConvictionParameters `json:"narrative_conviction,omitempty"`
-	Marketdata          MarketdataParameters          `json:"marketdata"`
-	Industry            IndustryParameters            `json:"industry"`
-	Strategy            StrategyParameters            `json:"strategy"`
-	PreciousMetals      PreciousMetalsParameters      `json:"precious_metals"`
-	SectorExecutor      SectorExecutorParameters      `json:"sector_executor,omitempty"`
-	Alert               AlertParameters               `json:"alert"`
-	RiskGate            RiskGateParameters            `json:"risk_gate,omitempty"`
-	Engine              EngineParameters              `json:"engine,omitempty"`
-	RSITw               RSITwParameters               `json:"rsi_tw,omitempty"`
+	Version              string                         `json:"version"`
+	UpdatedAt            time.Time                      `json:"updated_at"`
+	FallbackPriceTargets map[string]FallbackPriceTarget `json:"fallback_price_targets,omitempty"`
+	Darwinian            DarwinianParameters            `json:"darwinian"`
+	Factor               FactorParameters               `json:"factor"`
+	FactorWeight         FactorWeightParameters         `json:"factor_weight,omitempty"`
+	Optimizer            OptimizerParameters            `json:"optimizer"`
+	Sizing               SizingParameters               `json:"sizing"`
+	Health               HealthParameters               `json:"health"`
+	GARCH                GARCHParameters                `json:"garch"`
+	Experiment           ExperimentParameters           `json:"experiment"`
+	Baseline             BaselineParameters             `json:"baseline"`
+	Orchestrator         OrchestratorParameters         `json:"orchestrator"`
+	Risk                 RiskParameters                 `json:"risk"`
+	Drawdown             DrawdownParameters             `json:"drawdown"`
+	Realtime             RealtimeParameters             `json:"realtime"`
+	Janus                JanusParameters                `json:"janus"`
+	Narrative            NarrativeParameters            `json:"narrative"`
+	NarrativeConviction  NarrativeConvictionParameters  `json:"narrative_conviction,omitempty"`
+	Marketdata           MarketdataParameters           `json:"marketdata"`
+	Industry             IndustryParameters             `json:"industry"`
+	Strategy             StrategyParameters             `json:"strategy"`
+	PreciousMetals       PreciousMetalsParameters       `json:"precious_metals"`
+	SectorExecutor       SectorExecutorParameters       `json:"sector_executor,omitempty"`
+	Alert                AlertParameters                `json:"alert"`
+	RiskGate             RiskGateParameters             `json:"risk_gate,omitempty"`
+	Engine               EngineParameters               `json:"engine,omitempty"`
+	RSITw                RSITwParameters                `json:"rsi_tw,omitempty"`
 }
 
 // EngineParameters holds parameters migrated from EngineConfig with full ParameterMetadata wrapping.

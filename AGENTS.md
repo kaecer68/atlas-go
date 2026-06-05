@@ -14,7 +14,7 @@
 - 修改 `ScreeningCriteria` 門檻前，務必執行 `go test ./internal/screener/...`。
 - Darwinian 權重範圍 `[0.3, 2.5]`，超界值會靜默正規化，不可假設原值傳播。
 - **RecordedAt 不可作為排序依據**，排序應以 `SessionID` 中的交易日為準。
-- **GuardOutcomes 會覆寫 Agent ID**，導致 `PassedGuards` 全部變為 false，操作時務必保留原始 ID。
+- ~~GuardOutcomes 會覆寫 Agent ID~~（已修復，2026-06-05）：`buildPassedSymbolKey` 改採 Symbol-only key，CIO aggregator 覆寫 Agent 欄位不再影響 `PassedGuards` 查核。詳見 `internal/orchestrator/AGENTS.md`「ID 混淆」陷阱。
 
 ## 架構禁令（CI 強制）
 - optimizer 不得降級為線性加權。

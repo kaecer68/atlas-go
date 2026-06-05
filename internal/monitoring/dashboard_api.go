@@ -489,23 +489,36 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 				return nil
 			}
 			events := a.narrativeEngine.DetectEvents(narrative.MarketNarrativeData{})
+			var allowedIDs map[string]struct{}
+			if len(eventIDs) > 0 {
+				allowedIDs = make(map[string]struct{}, len(eventIDs))
+				for _, id := range eventIDs {
+					allowedIDs[id] = struct{}{}
+				}
+			}
 			var activeThemes []string
 			var primaryTheme string
 			var primaryHitRate float64
 			var directionHint string
 			for _, event := range events {
-				if event.Status == "active" || event.Status == "confirmed" {
-					activeThemes = append(activeThemes, event.Theme)
-					if primaryTheme == "" {
-						primaryTheme = event.Theme
-						primaryHitRate = event.HitRate
-						if event.Sentiment > 0.3 {
-							directionHint = "positive"
-						} else if event.Sentiment < -0.3 {
-							directionHint = "negative"
-						} else {
-							directionHint = "neutral"
-						}
+				if event.Status != "active" && event.Status != "confirmed" {
+					continue
+				}
+				if allowedIDs != nil {
+					if _, ok := allowedIDs[event.ID]; !ok {
+						continue
+					}
+				}
+				activeThemes = append(activeThemes, event.Theme)
+				if primaryTheme == "" {
+					primaryTheme = event.Theme
+					primaryHitRate = event.HitRate
+					if event.Sentiment > 0.3 {
+						directionHint = "positive"
+					} else if event.Sentiment < -0.3 {
+						directionHint = "negative"
+					} else {
+						directionHint = "neutral"
 					}
 				}
 			}
@@ -528,10 +541,22 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			if !ok {
 				return nil
 			}
+			var seasonalMultiplier float64
+			if se := a.industryService.SeasonalEngine; se != nil {
+				seasonalMultiplier = se.GetPatternAdjustment(skill, time.Now())
+			}
+			var systemicImportance float64
+			if la := a.industryService.LinkageAnalyzer; la != nil {
+				if score := la.CalculateLinkageScore(skill); score != nil {
+					systemicImportance = score.SystemicImportance
+				}
+			}
 			return &service.IndustryContextData{
-				IndustryID:      skill,
-				BusinessCycle:   string(pos.BusinessCycle),
-				CycleConfidence: pos.Confidence,
+				IndustryID:         skill,
+				BusinessCycle:      string(pos.BusinessCycle),
+				CycleConfidence:    pos.Confidence,
+				SeasonalMultiplier: seasonalMultiplier,
+				SystemicImportance: systemicImportance,
 			}
 		}).
 		WithCycleCardProvider(func() *industry.CycleStatusCard {

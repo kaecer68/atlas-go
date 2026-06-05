@@ -11,33 +11,34 @@ import (
 func DefaultParametersConfig() *ParametersConfig {
 	now := time.Now()
 	return &ParametersConfig{
-		Version:             "1.0",
-		UpdatedAt:           now,
-		Darwinian:           defaultDarwinianParameters(),
-		Factor:              defaultFactorParameters(),
-		Optimizer:           defaultOptimizerParameters(),
-		Sizing:              defaultSizingParameters(),
-		Health:              defaultHealthParameters(),
-		GARCH:               defaultGARCHParameters(),
-		Experiment:          defaultExperimentParameters(),
-		Baseline:            defaultBaselineParameters(),
-		Orchestrator:        defaultOrchestratorParameters(),
-		Risk:                defaultRiskParameters(),
-		Drawdown:            defaultDrawdownParameters(),
-		Realtime:            defaultRealtimeParameters(),
-		Narrative:           defaultNarrativeParameters(),
-		Janus:               defaultJanusParameters(),
-		Marketdata:          defaultMarketdataParameters(),
-		Industry:            defaultIndustryParameters(),
-		Strategy:            defaultStrategyParameters(),
-		PreciousMetals:      defaultPreciousMetalsParameters(),
-		FactorWeight:        defaultFactorWeightParameters(),
-		NarrativeConviction: defaultNarrativeConvictionParameters(),
-		SectorExecutor:      defaultSectorExecutorParameters(),
-		Alert:               defaultAlertParameters(),
-		RiskGate:            defaultRiskGateParameters(),
-		Engine:              defaultEngineParameters(),
-		RSITw:               defaultRSITwParameters(),
+		Version:              "1.0",
+		UpdatedAt:            now,
+		FallbackPriceTargets: defaultFallbackPriceTargets(),
+		Darwinian:            defaultDarwinianParameters(),
+		Factor:               defaultFactorParameters(),
+		Optimizer:            defaultOptimizerParameters(),
+		Sizing:               defaultSizingParameters(),
+		Health:               defaultHealthParameters(),
+		GARCH:                defaultGARCHParameters(),
+		Experiment:           defaultExperimentParameters(),
+		Baseline:             defaultBaselineParameters(),
+		Orchestrator:         defaultOrchestratorParameters(),
+		Risk:                 defaultRiskParameters(),
+		Drawdown:             defaultDrawdownParameters(),
+		Realtime:             defaultRealtimeParameters(),
+		Narrative:            defaultNarrativeParameters(),
+		Janus:                defaultJanusParameters(),
+		Marketdata:           defaultMarketdataParameters(),
+		Industry:             defaultIndustryParameters(),
+		Strategy:             defaultStrategyParameters(),
+		PreciousMetals:       defaultPreciousMetalsParameters(),
+		FactorWeight:         defaultFactorWeightParameters(),
+		NarrativeConviction:  defaultNarrativeConvictionParameters(),
+		SectorExecutor:       defaultSectorExecutorParameters(),
+		Alert:                defaultAlertParameters(),
+		RiskGate:             defaultRiskGateParameters(),
+		Engine:               defaultEngineParameters(),
+		RSITw:                defaultRSITwParameters(),
 	}
 }
 
@@ -3297,6 +3298,55 @@ func defaultRSITwParameters() RSITwParameters {
 			Rationale: "20% sentiment reduction when credit tightening signal active",
 			Source:    SourceHeuristic,
 			Todo:      "Wire credit tightening signal to actual central bank / margin rate data",
+		},
+	}
+}
+
+func defaultFallbackPriceTargets() map[string]FallbackPriceTarget {
+	return map[string]FallbackPriceTarget{
+		"semiconductor_desk": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.06, Rationale: "6% upside target for semiconductor sector", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.95, Rationale: "5% stop-loss for semiconductor sector", Source: SourceHeuristic},
+		},
+		"ai_supply_chain_desk": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.08, Rationale: "8% upside target for AI supply chain", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.95, Rationale: "5% stop-loss for AI supply chain", Source: SourceHeuristic},
+		},
+		"etf_rotation_desk": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.04, Rationale: "4% upside target for ETF rotation", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.97, Rationale: "3% stop-loss for ETF rotation", Source: SourceHeuristic},
+		},
+		"financials_desk": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.05, Rationale: "5% upside target for financials", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.96, Rationale: "4% stop-loss for financials", Source: SourceHeuristic},
+		},
+		"shipping_desk": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.07, Rationale: "7% upside target for shipping sector", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.94, Rationale: "6% stop-loss for shipping sector", Source: SourceHeuristic},
+		},
+		"growth_momentum": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.08, Rationale: "8% upside target for growth momentum", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.95, Rationale: "5% stop-loss for growth momentum", Source: SourceHeuristic},
+		},
+		"value_yield": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.05, Rationale: "5% upside target for value/yield", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.96, Rationale: "4% stop-loss for value/yield", Source: SourceHeuristic},
+		},
+		"earnings_quality": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.06, Rationale: "6% upside target for earnings quality", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.95, Rationale: "5% stop-loss for earnings quality", Source: SourceHeuristic},
+		},
+		"technical_breakout": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.10, Rationale: "10% upside target for technical breakout", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.94, Rationale: "6% stop-loss for technical breakout", Source: SourceHeuristic},
+		},
+		"alpha_discovery": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.06, Rationale: "6% upside target for alpha discovery", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.95, Rationale: "5% stop-loss for alpha discovery", Source: SourceHeuristic},
+		},
+		"_default": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.05, Rationale: "5% default upside target", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.95, Rationale: "5% default stop-loss", Source: SourceHeuristic},
 		},
 	}
 }

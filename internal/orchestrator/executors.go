@@ -891,17 +891,15 @@ func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *Plugi
 	current = applyCrowdingPenalty(current)
 	current = applyAntiCorrelationLayer(current, 0)
 
-	// Align the last guard's OutputCount with the true final recommendation count
-	// so that downstream outcome building and UI display are consistent.
-	if len(outcomes) > 0 {
-		last := &outcomes[len(outcomes)-1]
-		last.OutputCount = len(current)
-		if last.OutputCount < last.InputCount {
-			last.Reason = fmt.Sprintf("過濾了 %d 筆推薦，僅保留符合條件的標的", last.InputCount-last.OutputCount)
-		} else {
-			last.Reason = "未過濾任何推薦，全部放行"
-		}
-	}
+	// Do NOT overwrite the last guard's OutputCount/Reason here.
+	// Each guard already records its own input/output count during control
+	// execution (see the loop above). Crowding penalty and anti-correlation
+	// filtering are post-guard stages whose effect is reflected in `current`,
+	// not in any individual guard's outcome. Overwriting here would conflate
+	// "what the guard passed" with "what survived all post-processing", which
+	// breaks the audit trail (PassedGuards can no longer attribute filtering
+	// to the correct stage). Downstream readers should derive the final count
+	// from len(current) and treat GuardOutcome counts as per-guard.
 
 	return current, outcomes
 }
