@@ -325,6 +325,13 @@ type NarrativeParameters struct {
 	TaiwanStressHighThreshold   ParameterMetadata[float64] `json:"taiwan_stress_high_threshold"`
 	TaiwanStressAlertThreshold  ParameterMetadata[float64] `json:"taiwan_stress_alert_threshold"`
 
+	// --- Rolling Calibration Framework Parameters ---
+	CalibrationBaselineWindow ParameterMetadata[int]     `json:"calibration_baseline_window"`
+	CalibrationTargetMedian   ParameterMetadata[float64] `json:"calibration_target_median"`
+	CalibrationValidationPct  ParameterMetadata[float64] `json:"calibration_validation_pct"`
+	CalibrationMinRecords     ParameterMetadata[int]     `json:"calibration_min_records"`
+	CalibrationEnabled        ParameterMetadata[bool]    `json:"calibration_enabled"`
+
 	// Event lifecycle TTL multipliers (days per theme)
 	EventTTLMultiplier ParameterMetadata[map[string]float64] `json:"event_ttl_multiplier"`
 
@@ -2311,6 +2318,19 @@ func mergeNarrativeDefaults(cfg *ParametersConfig) {
 	if n.TaiwanStressCrisisThreshold.Value == 0 {
 		n.TaiwanStressCrisisThreshold = def.TaiwanStressCrisisThreshold
 	}
+	if n.CalibrationBaselineWindow.Value == 0 {
+		n.CalibrationBaselineWindow = def.CalibrationBaselineWindow
+	}
+	if n.CalibrationTargetMedian.Value == 0 {
+		n.CalibrationTargetMedian = def.CalibrationTargetMedian
+	}
+	if n.CalibrationValidationPct.Value == 0 {
+		n.CalibrationValidationPct = def.CalibrationValidationPct
+	}
+	if n.CalibrationMinRecords.Value == 0 {
+		n.CalibrationMinRecords = def.CalibrationMinRecords
+	}
+	n.CalibrationEnabled = def.CalibrationEnabled
 }
 
 // mergeDrawdownDefaults fills zero-valued drawdown fields with defaults.

@@ -1647,6 +1647,11 @@ export interface NarrativeParameters {
   taiwan_stress_crisis_threshold: string;
   taiwan_stress_high_threshold: string;
   taiwan_stress_alert_threshold: string;
+  calibration_baseline_window: string;
+  calibration_target_median: string;
+  calibration_validation_pct: string;
+  calibration_min_records: string;
+  calibration_enabled: string;
   event_ttl_multiplier: string;
   model_lookback_days: string;
   model_hold_window_days: string;

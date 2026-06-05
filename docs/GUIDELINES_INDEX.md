@@ -12,8 +12,9 @@
 
 ```
 階層 1: 憲法（Constitution）
-  └── .omo/CONSTITUTION.md
+  └── .omo/CONSTITUTION.md（⚠️ 已被 `.claudeignore` 排除，Claude Code 無法讀取）
       深度工作與數學/實證約束；非 CI 強制，但對 optimizer / portfolio / risk 具關鍵約束。
+      如需查閱，請直接使用 `cat .omo/CONSTITUTION.md` 終端指令。
   └── internal/apigateway/CONSTITUTION.md
       強制規範，CI 自動檢查。違反會阻斷 PR。
 
@@ -49,7 +50,7 @@
 
 | 文件 | 範圍 | AI 入口可達性 |
 |------|------|-------------|
-| `.omo/CONSTITUTION.md` | 深度工作要求、矩陣運算、實證驗證、反駁要求、資產通用程式碼、程式碼預算 | ✅ 從 `agents.md` → `copilot-instructions.md`；非 CI 強制但對核心演算極重要 |
+| `.omo/CONSTITUTION.md` | 深度工作要求、矩陣運算、實證驗證、反駁要求、資產通用程式碼、程式碼預算 | ❌ 已被 `.claudeignore` 排除。如需查閱請用 `cat .omo/CONSTITUTION.md` |
 | `internal/apigateway/CONSTITUTION.md` | 數據源管理：Gateway 模式、限流、熔斷、背景任務、環境變數 | ✅ 從 `agents.md` → `copilot-instructions.md` |
 
 ### 階層 2：領域守則（Instructions）
