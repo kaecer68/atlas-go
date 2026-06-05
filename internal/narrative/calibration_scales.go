@@ -57,7 +57,7 @@ func (c *ScaleCalibrator) CalibrateScales(records []CalibrationRecord) StressInd
 	scales := make(map[string]float64, len(factors))
 
 	for _, factor := range factors {
-		signals := signalForScaling(factor, records, nil)
+		signals := signalForScaling(factor, records)
 		medianAbs := medianAbsValue(signals)
 		if medianAbs == 0 {
 			scales[factor] = 1.0
@@ -88,19 +88,19 @@ func (c *ScaleCalibrator) CalibrateScales(records []CalibrationRecord) StressInd
 // For ForeignFlow: median of |-snap.ForeignInvestorNet.Value| (absolute net flow in 億)
 // For VIX: median of snap.VIX.Value (raw VIX, not scaled)
 // For Geopolitical: median of geoScore (but we only have snap, so use 0 — skipped)
-func signalForScaling(factor string, records []CalibrationRecord, baselines *BaselineConfig) []float64 {
+func signalForScaling(factor string, records []CalibrationRecord) []float64 {
 	signals := make([]float64, 0, len(records))
 	for _, r := range records {
 		var v float64
 		switch factor {
 		case "dxy":
-			v = absSignalForChangeFactor("dxy", r, baselines)
+			v = absSignalForChangeFactor("dxy", r, nil)
 		case "jpy":
-			v = absSignalForChangeFactor("jpy", r, baselines)
+			v = absSignalForChangeFactor("jpy", r, nil)
 		case "oil":
-			v = absSignalForChangeFactor("oil", r, baselines)
+			v = absSignalForChangeFactor("oil", r, nil)
 		case "gold":
-			v = absSignalForChangeFactor("gold", r, baselines)
+			v = absSignalForChangeFactor("gold", r, nil)
 		case "us10y":
 			v = math.Abs(r.Snapshot.US10Y.Value)
 		case "foreign_flow":

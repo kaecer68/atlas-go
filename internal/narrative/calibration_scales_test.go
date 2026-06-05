@@ -162,13 +162,13 @@ func TestSignalForScaling_CollectsSignals(t *testing.T) {
 		records[i] = syntheticScalingRecord(0.1, 4.0, float64(10+i), 0, 0, 0, 0)
 	}
 
-	signals := signalForScaling("vix", records, nil)
+	signals := signalForScaling("vix", records)
 	if len(signals) != 10 {
 		t.Errorf("expected 10 VIX signals, got %d", len(signals))
 	}
 
 	// DXY should also produce 10 signals (all 0.1 change)
-	signals = signalForScaling("dxy", records, nil)
+	signals = signalForScaling("dxy", records)
 	if len(signals) != 10 {
 		t.Errorf("expected 10 DXY signals, got %d", len(signals))
 	}
@@ -178,7 +178,7 @@ func TestSignalForScaling_CollectsSignals(t *testing.T) {
 	for i := range zeroRecords {
 		zeroRecords[i] = syntheticScalingRecord(0, 0, 0, 0, 0, 0, 0)
 	}
-	signals = signalForScaling("vix", zeroRecords, nil)
+	signals = signalForScaling("vix", zeroRecords)
 	if len(signals) != 0 {
 		t.Errorf("expected 0 VIX signals for zero records, got %d", len(signals))
 	}

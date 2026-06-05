@@ -288,14 +288,13 @@ func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapsh
 	components := make(map[string]float64)
 
 	cfg := c.selectConfigForSnapshot(snap)
-	scaleDXY, scaleUS10Y, scaleFlow, scaleVIX, scaleJPY, scaleGeo, scaleOil, scaleGold :=
-		cfg.Scaling.DXY, cfg.Scaling.US10Y, cfg.Scaling.ForeignFlow, cfg.Scaling.VIX,
+	scaleDXY, scaleUS10Y, scaleFlow, scaleVIX, scaleJPY, scaleGeo, scaleOil, scaleGold := cfg.Scaling.DXY,
+		cfg.Scaling.US10Y, cfg.Scaling.ForeignFlow, cfg.Scaling.VIX,
 		cfg.Scaling.JPY, cfg.Scaling.Geopolitical, cfg.Scaling.Oil, cfg.Scaling.Gold
-	wDXY, wUS10Y, wFlow, wVIX, wJPY, wGeo, wOil, wGold :=
-		cfg.Weights.DXY, cfg.Weights.US10Y, cfg.Weights.ForeignFlow, cfg.Weights.VIX,
+	wDXY, wUS10Y, wFlow, wVIX, wJPY, wGeo, wOil, wGold := cfg.Weights.DXY,
+		cfg.Weights.US10Y, cfg.Weights.ForeignFlow, cfg.Weights.VIX,
 		cfg.Weights.JPY, cfg.Weights.Geopolitical, cfg.Weights.Oil, cfg.Weights.Gold
-	tCrisis, tHigh, tAlert :=
-		cfg.Thresholds.Crisis, cfg.Thresholds.High, cfg.Thresholds.Alert
+	tCrisis, tHigh, tAlert := cfg.Thresholds.Crisis, cfg.Thresholds.High, cfg.Thresholds.Alert
 
 	if c.useHybridSignal() {
 		components["dxy"] = c.computeStressComponent("dxy", snap, prev, scaleDXY) * wDXY

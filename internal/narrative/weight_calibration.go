@@ -392,7 +392,7 @@ func (t *CalibrationTask) RunCalibrationCycle() (*CalibrationValidation, error) 
 		return nil, fmt.Errorf("calibration: load data: %w", err)
 	}
 	if len(records) < n.CalibrationMinRecords.Value {
-		return nil, fmt.Errorf("calibration: insufficient records: %d < %d", len(records), int(n.CalibrationMinRecords.Value))
+		return nil, fmt.Errorf("calibration: insufficient records: %d < %d", len(records), n.CalibrationMinRecords.Value)
 	}
 
 	baselineCfg := &BaselineConfig{Window: n.CalibrationBaselineWindow.Value}
