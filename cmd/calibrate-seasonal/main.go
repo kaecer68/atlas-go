@@ -382,8 +382,13 @@ func loadReplayDatasetJSONL(path string) (*replay.Dataset, error) {
 
 func validateCalibrationResult(r industry.SeasonalCalibration) []string {
 	var violations []string
-	if r.ObservedAdjustment < 0.3 || r.ObservedAdjustment > 2.5 {
-		violations = append(violations, fmt.Sprintf("adjustment_factor=%.3f outside Darwinian [0.3, 2.5]", r.ObservedAdjustment))
+	if r.ObservedAdjustment < industry.DarwinianMinAdjustment || r.ObservedAdjustment > industry.DarwinianMaxAdjustment {
+		violations = append(violations, fmt.Sprintf(
+			"adjustment_factor=%.3f outside Darwinian [%.1f, %.1f]",
+			r.ObservedAdjustment,
+			industry.DarwinianMinAdjustment,
+			industry.DarwinianMaxAdjustment,
+		))
 	}
 	if r.ObservedAccuracy < 0.0 || r.ObservedAccuracy > 1.0 {
 		violations = append(violations, fmt.Sprintf("historical_accuracy=%.3f outside [0, 1]", r.ObservedAccuracy))
