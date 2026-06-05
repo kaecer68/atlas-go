@@ -498,7 +498,11 @@ func TestExtractFactorValues_JPYCapturesRateVariation(t *testing.T) {
 	if jpyBl.Mean != 152.0 {
 		t.Errorf("expected JPY baseline mean=152.0, got %v", jpyBl.Mean)
 	}
-	expectedStddev := math.Sqrt(((148-152)*(148-152) + (150-152)*(150-152) + (152-152)*(152-152) + (154-152)*(154-152) + (156-152)*(156-152)) / 5.0)
+	expectedStddev := math.Sqrt((math.Pow(148.0-jpyBl.Mean, 2) +
+		math.Pow(150.0-jpyBl.Mean, 2) +
+		math.Pow(152.0-jpyBl.Mean, 2) +
+		math.Pow(154.0-jpyBl.Mean, 2) +
+		math.Pow(156.0-jpyBl.Mean, 2)) / 5.0)
 	if math.Abs(jpyBl.StdDev-expectedStddev) > 1e-9 {
 		t.Errorf("expected JPY baseline stddev=%v, got %v", expectedStddev, jpyBl.StdDev)
 	}

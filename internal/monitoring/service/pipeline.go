@@ -499,9 +499,11 @@ func (s *PipelineService) loadSessionPipelineData(sessionID, sessionsDir string,
 				passedGuards = true
 			}
 			if ds != nil && !outcome.RecordedAt.IsZero() {
-				if fr == 0 {
+				// 僅在 synthetic 結果上回填：真實 0% 漲跌不可誤判為「未設定」。
+				if fr == 0 && outcome.IsSynthetic {
 					if recalculated, ok := ds.ForwardReturn(outcome.Symbol, outcome.RecordedAt, 1); ok {
 						fr = recalculated
+						outcome.ForwardReturn = fr
 					}
 				}
 				if price == 0 {
@@ -516,7 +518,7 @@ func (s *PipelineService) loadSessionPipelineData(sessionID, sessionsDir string,
 			tp := outcome.TargetPrice
 			slp := outcome.StopLossPrice
 			if tp == 0 && slp == 0 && price > 0 {
-				tp, slp = fallbackPriceTargets(outcome.Skill, price)
+				tp, slp = fallbackPriceTargets(outcome.Skill, price, side)
 			}
 			if !showAll && !passedGuards {
 				continue
@@ -540,7 +542,7 @@ func (s *PipelineService) loadSessionPipelineData(sessionID, sessionsDir string,
 				TargetPrice:         tp,
 				StopLossPrice:       slp,
 				ForwardReturn:       fr,
-				Hit:                 fr > 0,
+				Hit:                 (side == string(domain.SideSell) && fr < 0) || (side == string(domain.SideBuy) && fr > 0),
 				Reason:              outcome.Reason,
 				Price:               price,
 				PassedGuards:        passedGuards,

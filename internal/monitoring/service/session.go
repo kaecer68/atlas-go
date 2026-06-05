@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/replay"
@@ -201,62 +203,54 @@ func computePipelineTags(ds *replay.Dataset, symbol string, date time.Time) []st
 		tags = append(tags, "放量")
 	}
 
-	high5 := bar.Close
-	low5 := bar.Close
+	high5 := math.Inf(-1)
+	low5 := math.Inf(1)
 	for i, d := range ds.Dates {
 		if d.Format("2006-01-02") == dateKey {
 			start := max(i-4, 0)
-			for _, pd := range ds.Dates[start : i+1] {
+			// 排除今日 (i)，僅比較 start..i-1 這 4 個過往交易日，
+			// 避免 bar.Close 與自身比較導致 high5/low5 永遠 == bar.Close。
+			for _, pd := range ds.Dates[start:i] {
 				b := ds.ByDate[pd.Format("2006-01-02")][symbol]
 				if b.Close > high5 {
 					high5 = b.Close
 				}
-				if b.Close > 0 && (low5 == 0 || b.Close < low5) {
+				if b.Close > 0 && b.Close < low5 {
 					low5 = b.Close
 				}
 			}
 			break
 		}
 	}
-	if bar.Close > 0 && bar.Close == high5 {
+	if bar.Close > 0 && bar.Close > high5 {
 		tags = append(tags, "創5日高")
 	}
-	if bar.Close > 0 && low5 > 0 && bar.Close == low5 {
+	if bar.Close > 0 && low5 > 0 && bar.Close < low5 {
 		tags = append(tags, "創5日低")
 	}
 	return tags
 }
 
-func FallbackPriceTargets(_ context.Context, skill string, price float64) (float64, float64, error) {
-	target, stopLoss := fallbackPriceTargets(skill, price)
+func FallbackPriceTargets(_ context.Context, skill string, price float64, side string) (float64, float64, error) {
+	target, stopLoss := fallbackPriceTargets(skill, price, side)
 	return target, stopLoss, nil
 }
 
-func fallbackPriceTargets(skill string, price float64) (float64, float64) {
+func fallbackPriceTargets(skill string, price float64, side string) (float64, float64) {
+	targets := config.GetParametersConfig().FallbackPriceTargets
 	var targetMult, stopLossMult float64
-	switch skill {
-	case "semiconductor_desk":
-		targetMult, stopLossMult = 1.06, 0.95
-	case "ai_supply_chain_desk":
-		targetMult, stopLossMult = 1.08, 0.95
-	case "etf_rotation_desk":
-		targetMult, stopLossMult = 1.04, 0.97
-	case "financials_desk":
-		targetMult, stopLossMult = 1.05, 0.96
-	case "shipping_desk":
-		targetMult, stopLossMult = 1.07, 0.94
-	case "growth_momentum":
-		targetMult, stopLossMult = 1.08, 0.95
-	case "value_yield":
-		targetMult, stopLossMult = 1.05, 0.96
-	case "earnings_quality":
-		targetMult, stopLossMult = 1.06, 0.95
-	case "technical_breakout":
-		targetMult, stopLossMult = 1.10, 0.94
-	case "alpha_discovery":
-		targetMult, stopLossMult = 1.06, 0.95
-	default:
-		targetMult, stopLossMult = 1.05, 0.95
+	if t, ok := targets[skill]; ok {
+		targetMult = t.TargetMultiplier.Value
+		stopLossMult = t.StopLossMultiplier.Value
+	} else if t, ok := targets["_default"]; ok {
+		targetMult = t.TargetMultiplier.Value
+		stopLossMult = t.StopLossMultiplier.Value
+	} else {
+		targetMult = 1.05
+		stopLossMult = 0.95
+	}
+	if side == "SELL" {
+		return price * stopLossMult, price * targetMult
 	}
 	return price * targetMult, price * stopLossMult
 }

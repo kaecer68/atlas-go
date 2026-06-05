@@ -58,8 +58,8 @@ Start here when exploring this area:
 | `isStockPickingLayerByID` | Function | `internal/monitoring/service/pipeline.go` | 538 |
 | `statusText` | Function | `internal/monitoring/service/system.go` | 155 |
 | `buildChannelInfo` | Function | `internal/monitoring/service/system.go` | 170 |
-| `fallbackPriceTargets` | Function | `internal/monitoring/service/pipeline.go` | 547 |
-| `computePipelineTags` | Function | `internal/monitoring/service/pipeline.go` | 576 |
+| `fallbackPriceTargets` | Function | `internal/monitoring/service/session.go` | 235 |
+| `computePipelineTags` | Function | `internal/monitoring/service/session.go` | 173 |
 | `handleUniverseOverlap` | Method | `internal/monitoring/dashboard_api.go` | 897 |
 
 ## Execution Flows
