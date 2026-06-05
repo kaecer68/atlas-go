@@ -118,13 +118,13 @@ func (h *Handlers) HandleSeasonalAnalysis(r *http.Request) (int, any) {
 		active, historical, adjustment := h.IndustryService.GetSeasonalPatterns("", now)
 		expectations := make([]SeasonalExpectation, len(active))
 		for i, p := range active {
-			gap := currentReturn - p.TypicalReturn
+			gap := currentReturn - p.AvgMarketReturn
 			expectations[i] = SeasonalExpectation{
 				Theme:               p.Name,
-				HistoricalAvgReturn: p.TypicalReturn,
+				HistoricalAvgReturn: p.AvgMarketReturn,
 				CurrentReturn:       currentReturn,
 				ExpectationGap:      gap,
-				AlreadyPricedIn:     currentReturn > p.TypicalReturn,
+				AlreadyPricedIn:     currentReturn > p.AvgMarketReturn,
 			}
 		}
 		return http.StatusOK, map[string]any{
@@ -209,13 +209,13 @@ func (h *Handlers) HandleNarrativeBundle(r *http.Request) (int, any) {
 			active, historical, adjustment := h.IndustryService.GetSeasonalPatterns("", now)
 			expectations := make([]SeasonalExpectation, len(active))
 			for i, p := range active {
-				gap := currentReturn - p.TypicalReturn
+				gap := currentReturn - p.AvgMarketReturn
 				expectations[i] = SeasonalExpectation{
 					Theme:               p.Name,
-					HistoricalAvgReturn: p.TypicalReturn,
+					HistoricalAvgReturn: p.AvgMarketReturn,
 					CurrentReturn:       currentReturn,
 					ExpectationGap:      gap,
-					AlreadyPricedIn:     currentReturn > p.TypicalReturn,
+					AlreadyPricedIn:     currentReturn > p.AvgMarketReturn,
 				}
 			}
 			seasonal = map[string]any{
