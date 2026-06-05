@@ -3,6 +3,7 @@ package narrative
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -10,6 +11,18 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+)
+
+// SignalStrategy determines how factor signals are computed.
+//   - SignalChange (default): uses the raw change-pct or value signal (original behavior).
+//   - SignalLevel: uses the z-score deviation from rolling baseline mean.
+//   - SignalHybrid: uses the signal with the larger absolute magnitude between change and level.
+type SignalStrategy int
+
+const (
+	SignalChange = iota // default: original change-pct signal
+	SignalLevel         // level-based z-score from rolling baseline
+	SignalHybrid        // max(|change|, |level deviation|)
 )
 
 type CalibrationRecord struct {
@@ -282,4 +295,58 @@ func sameDirection(a, b float64) bool {
 
 func defaultCalibrationWeights() StressIndexWeights {
 	return StressIndexWeights{DXY: 0.13, US10Y: 0.18, ForeignFlow: 0.22, VIX: 0.13, JPY: 0.08, Geopolitical: 0.13, Oil: 0.07, Gold: 0.06}
+}
+
+// factorSignalWithStrategy computes the factor signal according to the given strategy.
+// Falls back to SignalChange when baseline is nil or the strategy is SignalChange.
+func factorSignalWithStrategy(factor string, snap marketdata.MacroDataSnapshot, foreignNet float64, strategy SignalStrategy, cfg *BaselineConfig) float64 {
+	switch strategy {
+	case SignalHybrid:
+		if cfg != nil {
+			return ComputeHybridSignal(factor, snap, foreignNet, cfg)
+		}
+		return factorSignal(factor, snap, foreignNet)
+	case SignalLevel:
+		if cfg != nil {
+			return ComputeLevelSignal(factor, snap, foreignNet, cfg)
+		}
+		return factorSignal(factor, snap, foreignNet)
+	default:
+		return factorSignal(factor, snap, foreignNet)
+	}
+}
+
+// ComputeFactorAccuracyWithBaseline measures how well each factor predicts
+// outflow direction, using the specified signal strategy. When strategy is
+// SignalChange or cfg is nil, behavior is identical to ComputeFactorAccuracy.
+func (e *WeightCalibrationEngine) ComputeFactorAccuracyWithBaseline(records []CalibrationRecord, strategy SignalStrategy, cfg *BaselineConfig) map[string]float64 {
+	accuracies := map[string]float64{}
+	if len(records) == 0 {
+		return accuracies
+	}
+
+	factors := []string{"dxy", "us10y", "foreign_flow", "vix", "jpy", "geopolitical", "oil", "gold"}
+	for _, factor := range factors {
+		correct := 0
+		total := 0
+		for _, r := range records {
+			pred := factorSignalWithStrategy(factor, r.Snapshot, r.ForeignNet, strategy, cfg)
+			if pred == 0 || r.Outflow == 0 {
+				continue
+			}
+			if math.IsNaN(pred) || math.IsInf(pred, 0) {
+				continue
+			}
+			total++
+			if sameDirection(pred, r.Outflow) {
+				correct++
+			}
+		}
+		if total == 0 {
+			accuracies[factor] = 0
+			continue
+		}
+		accuracies[factor] = float64(correct) / float64(total)
+	}
+	return accuracies
 }
