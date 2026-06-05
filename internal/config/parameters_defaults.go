@@ -1308,6 +1308,32 @@ func defaultNarrativeParameters() NarrativeParameters {
 			Rationale: "Alert regime threshold (yellow alert)",
 			Source:    SourceHeuristic,
 		},
+		CalibrationBaselineWindow: ParameterMetadata[int]{
+			Value:     60,
+			Rationale: "60 trading days ≈ 3 calendar months for rolling baseline; long enough to span a full seasonal cycle, short enough to remain market-relevant",
+			Source:    SourceHeuristic,
+			Todo:      "re-evaluate window after 6 months of live calibration data",
+		},
+		CalibrationTargetMedian: ParameterMetadata[float64]{
+			Value:     20.0,
+			Rationale: "target 20 points per factor under normal conditions; keeps the Taiwan Stress Index within the 0-100 range while allowing headroom for stress spikes",
+			Source:    SourceHeuristic,
+		},
+		CalibrationValidationPct: ParameterMetadata[float64]{
+			Value:     0.2,
+			Rationale: "standard 80/20 train/validation split; validation set is used to detect out-of-sample degradation before export",
+			Source:    SourceHeuristic,
+		},
+		CalibrationMinRecords: ParameterMetadata[int]{
+			Value:     10,
+			Rationale: "minimum 10 historical records to attempt calibration; below this, statistical significance is too low to trust the new config",
+			Source:    SourceHeuristic,
+		},
+		CalibrationEnabled: ParameterMetadata[bool]{
+			Value:     false,
+			Rationale: "disabled by default; enable after initial validation confirms improvement over hand-tuned config",
+			Source:    SourceHeuristic,
+		},
 		EventTTLMultiplier: ParameterMetadata[map[string]float64]{
 			Value: map[string]float64{
 				"AI_capex_surge":          90,

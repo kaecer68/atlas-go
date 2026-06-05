@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -349,4 +350,104 @@ func (e *WeightCalibrationEngine) ComputeFactorAccuracyWithBaseline(records []Ca
 		accuracies[factor] = float64(correct) / float64(total)
 	}
 	return accuracies
+}
+
+// CalibrationTask orchestrates the complete rolling calibration lifecycle.
+// It loads historical data, computes baselines, calibrates scales and weights,
+// validates the results, and exports the configuration.
+type CalibrationTask struct {
+	engine  *WeightCalibrationEngine
+	workDir string
+}
+
+// NewCalibrationTask creates a calibration task with the given work directory.
+func NewCalibrationTask(workDir string) *CalibrationTask {
+	return &CalibrationTask{
+		engine:  &WeightCalibrationEngine{},
+		workDir: workDir,
+	}
+}
+
+// RunCalibrationCycle executes one complete calibration cycle:
+//  1. Load historical data from workDir (window = params.CalibrationBaselineWindow)
+//  2. Compute baselines from training data
+//  3. Initialize calibrators with target median
+//  4. Calibrate scales via ScaleCalibrator.CalibrateScales(records)
+//  5. Calibrate regime-aware weights via RegimeAwareCalibrator.CalibrateWeightsByRegime(records)
+//  6. Build new config vs old config
+//  7. Validate new config vs old config via ValidateCalibration
+//  8. If validated: export new config via ExportConfig
+//  9. If degraded: return validation result with IsDegradation=true, skip export
+//
+// Returns error if data loading fails. Returns CalibrationValidation on success (even if degraded).
+func (t *CalibrationTask) RunCalibrationCycle() (*CalibrationValidation, error) {
+	p := config.GetParametersConfig()
+	if p == nil {
+		return nil, fmt.Errorf("calibration: no parameters config available")
+	}
+	n := p.Narrative
+
+	records, err := t.engine.LoadHistoricalData(t.workDir, n.CalibrationBaselineWindow.Value)
+	if err != nil {
+		return nil, fmt.Errorf("calibration: load data: %w", err)
+	}
+	if len(records) < n.CalibrationMinRecords.Value {
+		return nil, fmt.Errorf("calibration: insufficient records: %d < %d", len(records), int(n.CalibrationMinRecords.Value))
+	}
+
+	baselineCfg := &BaselineConfig{Window: n.CalibrationBaselineWindow.Value}
+	baselines := ComputeBaselines(records, baselineCfg)
+	_ = baselines
+
+	scaleCalibrator := NewScaleCalibrator().WithTarget(n.CalibrationTargetMedian.Value)
+	newScaling := scaleCalibrator.CalibrateScales(records)
+
+	regimeCalibrator := NewRegimeAwareCalibrator()
+	regimeConfig := regimeCalibrator.CalibrateWeightsByRegime(records)
+
+	newConfig := StressIndexWeightsConfig{
+		Scaling:    newScaling,
+		Weights:    regimeConfig.Normal.Weights,
+		Thresholds: regimeConfig.Normal.Thresholds,
+	}
+
+	oldConfig := StressIndexWeightsConfig{
+		Scaling: StressIndexScaling{
+			DXY:          n.TaiwanStressDXYScale.Value,
+			US10Y:        n.TaiwanStressUS10YScale.Value,
+			ForeignFlow:  n.TaiwanStressForeignScale.Value,
+			VIX:          n.TaiwanStressVIXScale.Value,
+			JPY:          n.TaiwanStressJPYScale.Value,
+			Geopolitical: n.TaiwanStressGeoScale.Value,
+			Oil:          n.TaiwanStressOilScale.Value,
+			Gold:         n.TaiwanStressGoldScale.Value,
+		},
+		Weights: StressIndexWeights{
+			DXY:          n.TaiwanStressDXYWeight.Value,
+			US10Y:        n.TaiwanStressUS10YWeight.Value,
+			ForeignFlow:  n.TaiwanStressForeignWeight.Value,
+			VIX:          n.TaiwanStressVIXWeight.Value,
+			JPY:          n.TaiwanStressJPYWeight.Value,
+			Geopolitical: n.TaiwanStressGeoWeight.Value,
+			Oil:          n.TaiwanStressOilWeight.Value,
+			Gold:         n.TaiwanStressGoldWeight.Value,
+		},
+		Thresholds: StressIndexThresholds{
+			Crisis: n.TaiwanStressCrisisThreshold.Value,
+			High:   n.TaiwanStressHighThreshold.Value,
+			Alert:  n.TaiwanStressAlertThreshold.Value,
+		},
+	}
+
+	validation := ValidateCalibration(records, oldConfig, newConfig)
+
+	if validation.IsDegradation {
+		return &validation, nil
+	}
+
+	if err := t.engine.ExportConfig(t.workDir, newConfig.Weights, newConfig.Scaling, newConfig.Thresholds); err != nil {
+		return &validation, fmt.Errorf("calibration: export: %w", err)
+	}
+
+	return &validation, nil
 }
