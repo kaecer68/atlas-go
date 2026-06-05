@@ -153,6 +153,11 @@ func updateParametersFile(results []industry.SeasonalCalibration, threshold int,
 			continue
 		}
 
+		if violations := validateCalibrationResult(result); len(violations) > 0 {
+			skipped = append(skipped, fmt.Sprintf("%s (calibration out of range: %v)", patternID, violations))
+			continue
+		}
+
 		pattern["historical_accuracy"] = result.ObservedAccuracy
 		pattern["avg_market_return"] = result.ObservedAvgReturn
 		pattern["adjustment_factor"] = result.ObservedAdjustment
@@ -373,4 +378,18 @@ func loadReplayDatasetJSONL(path string) (*replay.Dataset, error) {
 		return ds.Dates[i].Before(ds.Dates[j])
 	})
 	return ds, nil
+}
+
+func validateCalibrationResult(r industry.SeasonalCalibration) []string {
+	var violations []string
+	if r.ObservedAdjustment < 0.3 || r.ObservedAdjustment > 2.5 {
+		violations = append(violations, fmt.Sprintf("adjustment_factor=%.3f outside Darwinian [0.3, 2.5]", r.ObservedAdjustment))
+	}
+	if r.ObservedAccuracy < 0.0 || r.ObservedAccuracy > 1.0 {
+		violations = append(violations, fmt.Sprintf("historical_accuracy=%.3f outside [0, 1]", r.ObservedAccuracy))
+	}
+	if r.ObservedAvgReturn < -1.0 || r.ObservedAvgReturn > 1.0 {
+		violations = append(violations, fmt.Sprintf("avg_market_return=%.3f outside [-1, 1]", r.ObservedAvgReturn))
+	}
+	return violations
 }
