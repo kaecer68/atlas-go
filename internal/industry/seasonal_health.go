@@ -23,6 +23,27 @@ const (
 	HealthCritical HealthStatus = "critical"
 )
 
+// HealthReason 為 Health 欄位的成因說明（snake_case，供 dashboard 顯示）。
+type HealthReason string
+
+const (
+	ReasonNoCalibrationData    HealthReason = "no_calibration_data"
+	ReasonMalformedData        HealthReason = "malformed_calibration_data"
+	ReasonNoCalibratedPatterns HealthReason = "no_calibrated_patterns"
+	ReasonDarwinianViolations  HealthReason = "darwinian_violations"
+	ReasonOutOfRangeValues     HealthReason = "out_of_range_values"
+	ReasonInsufficientSamples  HealthReason = "insufficient_samples"
+)
+
+// seasonalDataStatus 表達 parameters.json 中 seasonal_patterns 結構的健度。
+type seasonalDataStatus int
+
+const (
+	seasonalDataOK seasonalDataStatus = iota
+	seasonalDataMissingSection
+	seasonalDataMalformedValue
+)
+
 // CalibrationHealthSummary 為 parameters.json 中季節性模式校準品質的快照。
 // 設計為 dashboard 區塊的單一資料來源。
 type CalibrationHealthSummary struct {
@@ -33,10 +54,20 @@ type CalibrationHealthSummary struct {
 	DarwinianViolations int            `json:"darwinian_violations"`
 	OutOfRangeCount     int            `json:"out_of_range_count"`
 	Health              HealthStatus   `json:"health"`
+	Reason              HealthReason   `json:"reason,omitempty"`
 }
 
 // SummarizeCalibrationHealth 從 parameters.json 解析 seasonal_patterns 並產生健康摘要。
-// 不需要先跑校準;直接讀檔即可。任何欄位缺失會回退為零值而非錯誤,便於監控穩健性。
+// 不需要先跑校準；直接讀檔即可。
+//
+// 健度分級（由嚴重到輕）：
+//   - critical + reason="no_calibration_data"：parameters.json 缺少 industry.seasonal_patterns 區塊
+//   - critical + reason="malformed_calibration_data"：value 不是 array 結構
+//   - degraded + reason="no_calibrated_patterns"：value 為空陣列
+//   - critical + reason="darwinian_violations"：有 pattern 違反 Darwinian 邊界
+//   - critical + reason="out_of_range_values"：有 pattern 欄位（accuracy / return）超出合法區間
+//   - degraded + reason="insufficient_samples"：平均觀察樣本 < 3
+//   - healthy：以上皆未觸發
 func SummarizeCalibrationHealth(paramsPath string) (*CalibrationHealthSummary, error) {
 	raw, err := os.ReadFile(paramsPath)
 	if err != nil {
@@ -52,8 +83,25 @@ func SummarizeCalibrationHealth(paramsPath string) (*CalibrationHealthSummary, e
 		VerdictCounts: make(map[string]int),
 	}
 
-	patterns := extractSeasonalPatterns(root)
+	patterns, dataStatus := extractSeasonalPatterns(root)
 	summary.PatternCount = len(patterns)
+
+	switch dataStatus {
+	case seasonalDataMissingSection:
+		summary.Health = HealthCritical
+		summary.Reason = ReasonNoCalibrationData
+		return summary, nil
+	case seasonalDataMalformedValue:
+		summary.Health = HealthCritical
+		summary.Reason = ReasonMalformedData
+		return summary, nil
+	}
+
+	if summary.PatternCount == 0 {
+		summary.Health = HealthDegraded
+		summary.Reason = ReasonNoCalibratedPatterns
+		return summary, nil
+	}
 
 	var latest *time.Time
 	for _, p := range patterns {
@@ -87,22 +135,32 @@ func SummarizeCalibrationHealth(paramsPath string) (*CalibrationHealthSummary, e
 		}
 	}
 	summary.LastCalibratedAt = latest
-	summary.Health = deriveHealth(summary)
+	summary.Health, summary.Reason = deriveHealth(summary)
 	return summary, nil
 }
 
-func extractSeasonalPatterns(root map[string]interface{}) []map[string]interface{} {
+// extractSeasonalPatterns 從 root 中取出 seasonal_patterns.value 陣列，
+// 並回傳其健度狀態以區分「結構不存在」、「結構錯誤」、「結構正常」三種情境。
+// 容忍陣列中個別元素不是 object（會被略過），但陣列本身必須存在且型別正確。
+func extractSeasonalPatterns(root map[string]interface{}) ([]map[string]interface{}, seasonalDataStatus) {
+	if root == nil {
+		return nil, seasonalDataMissingSection
+	}
 	industry, ok := root["industry"].(map[string]interface{})
 	if !ok {
-		return nil
+		return nil, seasonalDataMissingSection
 	}
 	sp, ok := industry["seasonal_patterns"].(map[string]interface{})
 	if !ok {
-		return nil
+		return nil, seasonalDataMissingSection
 	}
-	arr, ok := sp["value"].([]interface{})
+	rawValue, exists := sp["value"]
+	if !exists {
+		return nil, seasonalDataMissingSection
+	}
+	arr, ok := rawValue.([]interface{})
 	if !ok {
-		return nil
+		return nil, seasonalDataMalformedValue
 	}
 	out := make([]map[string]interface{}, 0, len(arr))
 	for _, item := range arr {
@@ -110,19 +168,20 @@ func extractSeasonalPatterns(root map[string]interface{}) []map[string]interface
 			out = append(out, m)
 		}
 	}
-	return out
+	return out, seasonalDataOK
 }
 
-// 健康判定啟發式:
-//   - critical:DarwinianViolations > 0 或 OutOfRangeCount > 0
-//   - degraded:TotalObservations < PatternCount * 3 (平均觀察樣本不足)
-//   - healthy:其他
-func deriveHealth(s *CalibrationHealthSummary) HealthStatus {
-	if s.DarwinianViolations > 0 || s.OutOfRangeCount > 0 {
-		return HealthCritical
+// deriveHealth 套用健康判定啟發式。已假設 PatternCount > 0（caller 應在
+// 進入此函式前先處理 missing / malformed / empty 等前置情境）。
+func deriveHealth(s *CalibrationHealthSummary) (HealthStatus, HealthReason) {
+	if s.DarwinianViolations > 0 {
+		return HealthCritical, ReasonDarwinianViolations
 	}
-	if s.PatternCount > 0 && s.TotalObservations < s.PatternCount*3 {
-		return HealthDegraded
+	if s.OutOfRangeCount > 0 {
+		return HealthCritical, ReasonOutOfRangeValues
 	}
-	return HealthHealthy
+	if s.TotalObservations < s.PatternCount*3 {
+		return HealthDegraded, ReasonInsufficientSamples
+	}
+	return HealthHealthy, ""
 }
