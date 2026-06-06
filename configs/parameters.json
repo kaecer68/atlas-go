@@ -5537,6 +5537,46 @@
         "dependencies": [],
         "last_validated": "2026-05-31T00:00:00.000000"
       }
+    },
+    "classification_tree": {
+      "value": {
+        "segments": [
+          {"id": "semiconductor", "name": "半導體產業", "name_en": "Semiconductor", "level": 1, "weight": 0.30, "geographic_exposure": "Export", "cyclicality": "Cyclical", "technology_intensity": "HighTech", "capital_intensity": "HighCapital", "representative_stocks": ["2330.TW", "2303.TW", "2454.TW"], "description": "台灣經濟支柱，包含晶圓代工、IC設計、封測"},
+          {"id": "shipping", "name": "航運產業", "name_en": "Shipping & Logistics", "level": 1, "weight": 0.08, "geographic_exposure": "Global", "cyclicality": "Cyclical", "technology_intensity": "LowTech", "capital_intensity": "HighCapital", "representative_stocks": ["2603.TW", "2609.TW", "2615.TW"], "description": "受全球貿易週期影響顯著"},
+          {"id": "financials", "name": "金融保險", "name_en": "Financials", "level": 1, "weight": 0.12, "geographic_exposure": "Domestic", "cyclicality": "Hybrid", "technology_intensity": "LowTech", "capital_intensity": "MediumCapital", "representative_stocks": ["2881.TW", "2882.TW", "2886.TW"], "description": "利率敏感，獲利受央行政策影響"},
+          {"id": "electronics", "name": "電子零組件", "name_en": "Electronics Components", "level": 1, "weight": 0.15, "geographic_exposure": "Export", "cyclicality": "Cyclical", "technology_intensity": "HighTech", "capital_intensity": "MediumCapital", "representative_stocks": ["2317.TW", "2382.TW", "2357.TW"], "description": "連結全球科技供應鏈"},
+          {"id": "ai_supply_chain", "name": "AI 供應鏈", "name_en": "AI Supply Chain", "level": 1, "weight": 0.10, "geographic_exposure": "Export", "cyclicality": "Cyclical", "technology_intensity": "HighTech", "capital_intensity": "HighCapital", "representative_stocks": ["2383.TW", "3661.TW", "4938.TW"], "description": "新興高成長領域"},
+          {"id": "industrial", "name": "傳產機械", "name_en": "Industrial Machinery", "level": 1, "weight": 0.08, "geographic_exposure": "Domestic", "cyclicality": "Cyclical", "technology_intensity": "MediumTech", "capital_intensity": "MediumCapital", "representative_stocks": ["1513.TW", "1590.TW"], "description": "經濟週期後段受益者"},
+          {"id": "energy", "name": "能源電力", "name_en": "Energy & Power", "level": 1, "weight": 0.05, "geographic_exposure": "Domestic", "cyclicality": "Hybrid", "technology_intensity": "LowTech", "capital_intensity": "HighCapital", "representative_stocks": ["6505.TW", "9917.TW"], "description": "基礎設施，需求穩定"},
+          {"id": "consumer", "name": "消費零售", "name_en": "Consumer Retail", "level": 1, "weight": 0.05, "geographic_exposure": "Domestic", "cyclicality": "Defensive", "technology_intensity": "LowTech", "capital_intensity": "LowCapital", "representative_stocks": ["2912.TW", "9927.TW"], "description": "內需導向，經濟下行相對穩定"},
+          {"id": "robotics", "name": "機器人產業", "name_en": "Robotics", "level": 1, "weight": 0.03, "geographic_exposure": "Export", "cyclicality": "Cyclical", "technology_intensity": "HighTech", "capital_intensity": "HighCapital", "representative_stocks": ["2356.TW", "2049.TW"], "description": "新興自動化領域"},
+          {"id": "mining", "name": "採礦與基本金屬", "name_en": "Mining & Metals", "level": 1, "weight": 0.02, "geographic_exposure": "Global", "cyclicality": "Cyclical", "technology_intensity": "LowTech", "capital_intensity": "HighCapital", "representative_stocks": ["1605.TW", "1707.TW"], "description": "大宗商品週期"},
+          {"id": "leo_satellite", "name": "低軌衛星", "name_en": "LEO Satellite", "level": 1, "weight": 0.02, "geographic_exposure": "Export", "cyclicality": "Cyclical", "technology_intensity": "HighTech", "capital_intensity": "HighCapital", "representative_stocks": ["6271.TW", "3426.TW"], "description": "衛星通訊新興供應鏈"},
+          {"id": "etf_rotation", "name": "ETF 輪動", "name_en": "ETF Rotation", "level": 1, "weight": 0.00, "geographic_exposure": "Domestic", "cyclicality": "Hybrid", "technology_intensity": "LowTech", "capital_intensity": "LowCapital", "representative_stocks": [], "description": "跨產業策略配置"},
+          {"id": "foundry", "name": "晶圓代工", "name_en": "Foundry", "level": 2, "parent_id": "semiconductor", "weight": 0.50, "geographic_exposure": "Export", "cyclicality": "Cyclical", "technology_intensity": "HighTech", "capital_intensity": "HighCapital", "representative_stocks": ["2330.TW", "2303.TW"], "description": "TSMC, UMC"},
+          {"id": "server_assembly", "name": "伺服器組裝", "name_en": "Server Assembly", "level": 2, "parent_id": "semiconductor", "weight": 0.25, "geographic_exposure": "Export", "cyclicality": "Cyclical", "technology_intensity": "HighTech", "capital_intensity": "HighCapital", "representative_stocks": ["2324.TW", "2356.TW"], "description": "AI server assembly"},
+          {"id": "cooling", "name": "散熱方案", "name_en": "Cooling Solutions", "level": 2, "parent_id": "semiconductor", "weight": 0.25, "geographic_exposure": "Export", "cyclicality": "Cyclical", "technology_intensity": "HighTech", "capital_intensity": "MediumCapital", "representative_stocks": ["3324.TW", "6230.TW"], "description": "Liquid/air cooling"},
+          {"id": "precious_metals_recycling", "name": "貴金屬回收", "name_en": "Precious Metals Recycling", "level": 2, "parent_id": "mining", "weight": 0.30, "geographic_exposure": "Global", "cyclicality": "Cyclical", "technology_intensity": "MediumTech", "capital_intensity": "MediumCapital", "representative_stocks": ["3550.TW", "8936.TW"], "description": "Gold/silver recovery"},
+          {"id": "copper_industry", "name": "銅工業", "name_en": "Copper Industry", "level": 2, "parent_id": "mining", "weight": 0.25, "geographic_exposure": "Global", "cyclicality": "Cyclical", "technology_intensity": "LowTech", "capital_intensity": "HighCapital", "representative_stocks": ["1605.TW", "8930.TW"], "description": "Copper mining/refining"},
+          {"id": "rare_earth_specialty", "name": "稀土及特殊材料", "name_en": "Rare Earth & Specialty", "level": 2, "parent_id": "mining", "weight": 0.20, "geographic_exposure": "Global", "cyclicality": "Cyclical", "technology_intensity": "HighTech", "capital_intensity": "HighCapital", "representative_stocks": ["2031.TW", "1815.TW"], "description": "Rare earth elements"},
+          {"id": "metal_processing", "name": "金屬加工", "name_en": "Metal Processing", "level": 2, "parent_id": "mining", "weight": 0.25, "geographic_exposure": "Domestic", "cyclicality": "Cyclical", "technology_intensity": "LowTech", "capital_intensity": "MediumCapital", "representative_stocks": ["2015.TW", "5007.TW"], "description": "Metal fabrication"},
+          {"id": "satellite_rf_components", "name": "衛星射頻元件", "name_en": "Satellite RF Components", "level": 2, "parent_id": "leo_satellite", "weight": 0.35, "geographic_exposure": "Export", "cyclicality": "Cyclical", "technology_intensity": "HighTech", "capital_intensity": "HighCapital", "representative_stocks": ["6271.TW", "4958.TW"], "description": "RF front-end modules"},
+          {"id": "satellite_pcb", "name": "衛星用 PCB", "name_en": "Satellite PCB", "level": 2, "parent_id": "leo_satellite", "weight": 0.25, "geographic_exposure": "Export", "cyclicality": "Cyclical", "technology_intensity": "HighTech", "capital_intensity": "MediumCapital", "representative_stocks": ["2355.TW", "8046.TW"], "description": "High-frequency PCB"},
+          {"id": "ground_equipment", "name": "地面設備", "name_en": "Ground Equipment", "level": 2, "parent_id": "leo_satellite", "weight": 0.25, "geographic_exposure": "Domestic", "cyclicality": "Cyclical", "technology_intensity": "MediumTech", "capital_intensity": "HighCapital", "representative_stocks": ["2314.TW", "2353.TW"], "description": "Ground stations & terminals"},
+          {"id": "laser_communication", "name": "雷射通訊", "name_en": "Laser Communication", "level": 2, "parent_id": "leo_satellite", "weight": 0.15, "geographic_exposure": "Export", "cyclicality": "Cyclical", "technology_intensity": "HighTech", "capital_intensity": "HighCapital", "representative_stocks": ["3426.TW", "6533.TW"], "description": "Optical inter-satellite links"}
+        ]
+      },
+      "rationale": "Complete industry classification hierarchy migrated from hardcoded types.go to ParametersConfig. L1 weights sum to 1.0, L2 weights within each parent sum to 1.0. Representative stocks and attributes serve as initialization seeds; auto_tree_update pipeline refreshes weights quarterly from market-cap data.",
+      "source": "heuristic",
+      "citation": {
+        "source_type": "heuristic",
+        "source_reference": "DefaultClassification() in parameters_defaults.go, previously hardcoded in internal/industry/types.go",
+        "evidence_quality": "medium",
+        "update_policy": "manual",
+        "validation_method": "cross_reference",
+        "dependencies": ["internal/industry/types.go segmentFromConfig()"],
+        "last_validated": "2026-06-05T00:00:00.000000"
+      }
     }
   },
   "strategy": {

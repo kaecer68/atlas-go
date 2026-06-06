@@ -2746,6 +2746,9 @@ func mergeIndustryDefaults(cfg *ParametersConfig) {
 	if i.EventSentimentCap.Value == 0 {
 		i.EventSentimentCap = def.EventSentimentCap
 	}
+	if len(i.ClassificationTree.Value.Segments) == 0 {
+		i.ClassificationTree = def.ClassificationTree
+	}
 }
 
 // mergeRSITwDefaults fills zero-valued RSITwParameters fields with defaults.
