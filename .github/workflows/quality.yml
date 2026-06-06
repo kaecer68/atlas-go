@@ -35,6 +35,15 @@ jobs:
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
+    - name: Set up Node.js
+      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+      with:
+        node-version: '22'
+
+    - name: Build frontend
+      working-directory: web
+      run: npm ci && npm run build
+
     - name: Set up Go
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
       with:
@@ -95,14 +104,23 @@ jobs:
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
+    - name: Set up Node.js
+      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+      with:
+        node-version: '22'
+
+    - name: Build frontend
+      working-directory: web
+      run: npm ci && npm run build
+
     - name: Set up Go
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
       with:
         go-version-file: go.mod
 
-    - name: Run tests with coverage
+    - name: Run tests with coverage (exclude cmd/atlas — heavy integration, see ci-cd.yml:test-cmd-atlas)
       run: |
-        go test -coverprofile=coverage.out ./...
+        go test -coverprofile=coverage.out $(go list ./... | grep -v '/cmd/atlas$')
         go tool cover -func=coverage.out | tail -n 1
 
     - name: Check coverage threshold
