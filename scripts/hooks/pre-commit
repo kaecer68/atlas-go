@@ -18,7 +18,7 @@ if echo "$STAGED" | grep -q '^internal/domain/.*\.go$'; then
     echo ""
 
     # Always stage generated files (no-op if unchanged)
-    git add web/static/js/shared/field_names.js web/static/js/shared/field_types.ts web/static/js/shared/field_types.d.ts 2>/dev/null || true
+    git add web/static/js/shared/field_types.ts 2>/dev/null || true
     echo "  ✅ generated files auto-synced"
     echo ""
 fi

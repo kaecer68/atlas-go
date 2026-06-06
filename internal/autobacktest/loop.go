@@ -2,6 +2,7 @@ package autobacktest
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -67,3 +68,28 @@ func next13_30(from time.Time) time.Time {
 }
 
 var timeNow = time.Now
+
+func RunScheduledBacktest(ctx context.Context, runner *Runner) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	taipei, err := time.LoadLocation("Asia/Taipei")
+	if err != nil {
+		taipei = time.FixedZone("CST", 8*3600)
+	}
+	now := time.Now().In(taipei)
+	if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+		return nil
+	}
+	scheduled := time.Date(now.Year(), now.Month(), now.Day(), 13, 30, 0, 0, taipei)
+	diff := now.Sub(scheduled)
+	if diff < -30*time.Minute || diff > 30*time.Minute {
+		return nil
+	}
+	logging.Info("autobacktest", "triggering_scheduled_backtest")
+	if err := runner.RunAndStore(); err != nil {
+		return fmt.Errorf("autobacktest RunAndStore: %w", err)
+	}
+	logging.Info("autobacktest", "scheduled_backtest_completed")
+	return nil
+}

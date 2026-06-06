@@ -49,15 +49,7 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 
 	sessionCount := 0
 	persistentState := domain.NewSimulationState(policy.Constraints.StartingCash)
-	for _, date := range ds.Dates {
-		if date.Before(startDate) || date.After(endDate) {
-			continue
-		}
-
-		if _, ok := ds.NextDate(date, 1); !ok {
-			continue
-		}
-
+	for _, date := range ds.WindowDates(startDate, endDate, 1) {
 		cfg := r.cfg
 		cfg.ReplaySessionDate = date.Format("2006-01-02")
 		system, err := orchestrator.NewSystem(cfg)
@@ -68,7 +60,7 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 			system.SetEventBus(r.eventBus)
 		}
 		if r.janusEngine != nil {
-			system.WithJANUS(r.janusEngine)
+			system.WithJANUS(r.janusEngine, nil)
 		}
 		system.WithPersistentState(&persistentState)
 		result, err := system.RunDailySimulation(date)
@@ -94,7 +86,11 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 
 	windowOutcomes := 0
 	for _, outcome := range outcomes {
-		if !outcome.RecordedAt.Before(startDate) && !outcome.RecordedAt.After(endDate) {
+		outcomeDate, err := time.Parse("2006-01-02", outcome.Window)
+		if err != nil {
+			continue
+		}
+		if !outcomeDate.Before(startDate) && !outcomeDate.After(endDate) {
 			windowOutcomes++
 		}
 	}

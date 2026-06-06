@@ -22,29 +22,38 @@ import (
 
 // stockNameMap mirrors frontend mapping for CSV output
 var stockNameMap = map[string]string{
-	"0050": "元大台灣50",
-	"0056": "元大高股息",
-	"1301": "台塑",
-	"1303": "南亞",
-	"1326": "台化",
-	"2303": "聯電",
-	"2308": "台達電",
-	"2317": "鴻海",
-	"2330": "台積電",
-	"2382": "廣達",
-	"2454": "聯發科",
-	"2603": "長榮",
-	"2609": "陽明",
-	"2615": "萬海",
-	"2881": "富邦金",
-	"2882": "國泰金",
-	"2886": "兆豐金",
-	"2891": "中信金",
-	"2892": "第一金",
-	"3008": "大立光",
-	"3034": "聯詠",
-	"3037": "欣興",
-	"6669": "緯穎",
+	"0050":   "元大台灣50",
+	"0056":   "元大高股息",
+	"00878":  "國泰永續高股息",
+	"006208": "富邦台50",
+	"00692":  "富邦公司治理",
+	"00713":  "元大高股息低波動",
+	"00881":  "國泰台灣5G+",
+	"00891":  "中信關鍵半導體",
+	"00919":  "群益台灣精選高息",
+	"00929":  "復華台灣科技優息",
+	"00940":  "元大台灣價值高息",
+	"1301":   "台塑",
+	"1303":   "南亞",
+	"1326":   "台化",
+	"2303":   "聯電",
+	"2308":   "台達電",
+	"2317":   "鴻海",
+	"2330":   "台積電",
+	"2382":   "廣達",
+	"2454":   "聯發科",
+	"2603":   "長榮",
+	"2609":   "陽明",
+	"2615":   "萬海",
+	"2881":   "富邦金",
+	"2882":   "國泰金",
+	"2886":   "兆豐金",
+	"2891":   "中信金",
+	"2892":   "第一金",
+	"3008":   "大立光",
+	"3034":   "聯詠",
+	"3037":   "欣興",
+	"6669":   "緯穎",
 }
 
 type csvRecord struct {
@@ -94,7 +103,7 @@ func main() {
 
 func runDailySync(csvPath string, pool *pgxpool.Pool) error {
 	stateDir := filepath.Join(filepath.Dir(filepath.Dir(csvPath)), "state")
-	client := marketdata.NewTWSEClient()
+	client := marketdata.GetSharedTWSEClient()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -151,7 +160,7 @@ func runBackfill(csvPath, startStr, endStr string) error {
 		return fmt.Errorf("end date before start date")
 	}
 
-	client := marketdata.NewTWSEClient()
+	client := marketdata.GetSharedTWSEClient()
 	ctx := context.Background()
 	symbols := orchestrator.DefaultSymbols()
 

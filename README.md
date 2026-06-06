@@ -124,6 +124,59 @@ For the complete operating skill map and guardrails, see:
 - `docs/iteration_playbook.md` — 迭代指南
 - `docs/evolution_loop.md` — 演化循環
 
+## Web Dashboard
+
+The web dashboard (`web/static/`) is a vanilla JS SPA served by Go's `http.FileServer`.
+It provides real-time simulation monitoring, agent configuration, and experiment management.
+
+### Navigation
+
+The SPA uses the **History API** for clean URL routing (e.g., `/overview`, `/portfolio`).
+The Go backend includes a catch-all fallback in both `runSimulation()` and `runLiveTrading()`
+that rewrites unmatched paths to serve `index.html`, enabling direct URL access and refresh on any route.
+Legacy hash URLs (`#page-overview`) are automatically redirected.
+
+### CSS Architecture
+
+Styles are modularized into 50+ files under `web/static/css/`:
+
+```text
+web/static/css/
+|-- main.css                # @import aggregator (42 imports, cascade-order)
+|-- base/                   # Design tokens and resets
+|   |-- variables.css       # CSS custom properties (theme)
+|   |-- reset.css           # Element resets
+|   |-- tables.css          # Table base styles
+|   `-- typography.css      # Font and text utilities
+|-- layout/                 # Structural layout
+|   |-- animations.css, grid.css, header.css, page-shell.css
+|   |-- responsive.css, sidebar.css, topbar.css
+|-- components/             # Reusable UI components
+|   |-- badge, chain, circuit-breaker, controls, empty-state
+|   |-- error-banner, filter-panel, inbox-card, live-progress
+|   |-- loading-bar, metric, misc, modal, notification
+|   |-- notification-colors, panel, performance-report, pipeline
+|   |-- refresh, refresh-pill, sse-status, table-pagination
+|   |-- tabs, tool-events, utilities, view-controls, workflow
+`-- pages/                  # Page-specific styles
+    |-- decision-chain.css, evolution-panel.css, industry.css
+    |-- overview.css, parameters.css
+```
+
+### JavaScript Modules
+
+Key JS files in `web/static/js/`:
+
+| File | Purpose |
+|------|---------|
+| `main.js` | SPA router (`switchPage()`), navigation, auto-refresh |
+| `bootstrap-utils.js` | Utility imports and `window.*` assignments |
+| `component-init.js` | CircuitBreaker, PerformanceReport, SimHealth panel init |
+| `event-listeners.js` | `DOMContentLoaded`-bound event delegation (~80 handlers) |
+| `dashboard.js`, `pipeline.js`, `portfolio.js`, etc. | Page-specific data loading modules |
+
+All inline `onclick` handlers have been extracted to `event-listeners.js` using `addEventListener`.
+
 ## Repository Structure
 
 ```text
@@ -133,6 +186,7 @@ For the complete operating skill map and guardrails, see:
 |-- configs/                # Agent and runtime configuration
 |-- prompts/                # Agent and experiment prompts
 |-- data/                   # Runtime state and replay data
+|-- web/                    # Web dashboard (SPA + static assets)
 |-- docs/                   # Architecture and operations docs
 `-- scripts/                # Operational helper scripts
 ```

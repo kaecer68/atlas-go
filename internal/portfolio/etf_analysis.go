@@ -1,6 +1,7 @@
 package portfolio
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sync"
@@ -151,4 +152,103 @@ func (ea *ETFAnalyzer) IsETF(symbol string) bool {
 	defer ea.mu.RUnlock()
 	_, ok := ea.metadata[symbol]
 	return ok
+}
+
+// GetNAV returns the current NAV for a symbol, or 0 if not found.
+func (ea *ETFAnalyzer) GetNAV(symbol string) float64 {
+	ea.mu.RLock()
+	defer ea.mu.RUnlock()
+	meta, ok := ea.metadata[symbol]
+	if !ok {
+		return 0
+	}
+	return meta.NAV
+}
+
+// SymbolsWithZeroNAV returns all ETF symbols whose NAV is zero (never populated).
+func (ea *ETFAnalyzer) SymbolsWithZeroNAV() []string {
+	ea.mu.RLock()
+	defer ea.mu.RUnlock()
+	var symbols []string
+	for sym, meta := range ea.metadata {
+		if meta.NAV <= 0 {
+			symbols = append(symbols, sym)
+		}
+	}
+	return symbols
+}
+
+// RefreshNAV updates the NAV for a single symbol. Thread-safe.
+// Returns false if the symbol has no metadata.
+func (ea *ETFAnalyzer) RefreshNAV(symbol string, nav float64) bool {
+	ea.mu.Lock()
+	defer ea.mu.Unlock()
+	meta, ok := ea.metadata[symbol]
+	if !ok {
+		return false
+	}
+	meta.NAV = nav
+	ea.metadata[symbol] = meta
+	return true
+}
+
+// UpdateNAVFromQuotes updates ETF NAVs using market quotes (Last price)
+// as a NAV proxy. This is a fallback when real NAV data is unavailable
+// and is reasonable since most ETFs trade within 0.5% of NAV.
+func (ea *ETFAnalyzer) UpdateNAVFromQuotes(quotes []domain.Quote) int {
+	ea.mu.Lock()
+	defer ea.mu.Unlock()
+
+	updated := 0
+	for _, q := range quotes {
+		if q.Last <= 0 {
+			continue
+		}
+		meta, ok := ea.metadata[q.Symbol]
+		if !ok {
+			continue
+		}
+		meta.NAV = q.Last
+		ea.metadata[q.Symbol] = meta
+		updated++
+	}
+	return updated
+}
+
+// ETFNAVFetcher fetches NAV for a given ETF symbol.
+type ETFNAVFetcher interface {
+	FetchNAV(ctx context.Context, symbol string) (float64, error)
+}
+
+// RefreshNAVFromFetcher fetches NAV data for all tracked symbols using a fetcher.
+// Symbols with existing non-zero NAV are skipped by default; pass force=true
+// to refresh all symbols. Returns the count of successfully updated symbols.
+func (ea *ETFAnalyzer) RefreshNAVFromFetcher(ctx context.Context, fetcher ETFNAVFetcher, force bool) int {
+	symbols := ea.AllSymbols()
+	updated := 0
+
+	for _, sym := range symbols {
+		if !force && ea.GetNAV(sym) > 0 {
+			continue
+		}
+		nav, err := fetcher.FetchNAV(ctx, sym)
+		if err != nil {
+			continue
+		}
+		if ea.RefreshNAV(sym, nav) {
+			updated++
+		}
+	}
+	return updated
+}
+
+// AllSymbols returns all ETF symbols tracked by this analyzer.
+func (ea *ETFAnalyzer) AllSymbols() []string {
+	ea.mu.RLock()
+	defer ea.mu.RUnlock()
+	symbols := make([]string, 0, len(ea.metadata))
+	for sym := range ea.metadata {
+		symbols = append(symbols, sym)
+	}
+	return symbols
 }

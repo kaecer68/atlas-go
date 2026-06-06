@@ -1,5 +1,4 @@
 export { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState } from './utils.js';
-export { FIELD } from './field_names.js';
 
 export function agentName(id) {
   return AGENT_NAME_MAP[id] || id;
@@ -23,6 +22,13 @@ export const AGENT_NAME_MAP = {
   'ai-desk-01': 'AI 供應鏈',
   'shipping-desk-01': '航運產業',
   'earnings-quality-01': '盈餘品質',
+  'leo-satellite-desk-01': '低軌衛星',
+  'robotics-desk-01': '機器人產業',
+  'mining-desk-01': '礦業/貴金屬',
+  'energy-desk-01': '能源產業',
+  'electronics-desk-01': '電子零組件',
+  'consumer-desk-01': '消費產業',
+  'industrial-desk-01': '工業/製造',
   'etf_rotation_desk': 'ETF 輪動',
   'value_yield': '價值收益',
   'growth_momentum': '成長動能',
@@ -32,6 +38,13 @@ export const AGENT_NAME_MAP = {
   'ai_supply_chain_desk': 'AI 供應鏈',
   'shipping_desk': '航運產業',
   'earnings_quality': '盈餘品質',
+  'leo_satellite_desk': '低軌衛星',
+  'robotics_desk': '機器人產業',
+  'mining_desk': '礦業/貴金屬',
+  'energy_desk': '能源產業',
+  'electronics_desk': '電子零組件',
+  'consumer_desk': '消費產業',
+  'industrial_desk': '工業/製造',
   'cro_risk': '風控長',
   'cio_portfolio': '投資長',
 };

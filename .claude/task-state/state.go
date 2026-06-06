@@ -39,7 +39,7 @@ type Manager struct {
 
 // NewManager creates a new task state manager
 func NewManager(storageDir string) (*Manager, error) {
-	if err := os.MkdirAll(storageDir, 0755); err != nil {
+	if err := os.MkdirAll(storageDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create storage dir: %w", err)
 	}
 
@@ -186,7 +186,7 @@ func (m *Manager) persist(state *TaskState) error {
 		return fmt.Errorf("marshal state: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("write state file: %w", err)
 	}
 

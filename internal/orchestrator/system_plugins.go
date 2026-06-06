@@ -11,11 +11,11 @@ import (
 )
 
 // WithJANUS attaches a JANUS engine to the system for backtest validation.
-func (s *System) WithJANUS(j *janus.Engine) *System {
+func (s *System) WithJANUS(j *janus.Engine, pm *prism.PRISMManager) *System {
 	if s.host == nil {
 		s.host = &PluginHost{}
 	}
-	s.host.Register(&janusPlugin{engine: j}, s.SystemCore)
+	s.host.Register(&janusPlugin{engine: j, prismManager: pm}, s.SystemCore)
 	return s
 }
 

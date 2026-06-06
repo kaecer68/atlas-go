@@ -37,7 +37,7 @@ func TestPostTradeGate_DrawdownDefensive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if dec.Verdict < VerdictAlertOnly {
+	if dec.Verdict.Level() < LevelAlertOnly {
 		t.Errorf("expected alert for 15%% drawdown, got %s", dec.Verdict)
 	}
 	if dec.Mode != string(ModeDefensive) {

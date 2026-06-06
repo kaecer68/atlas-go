@@ -88,7 +88,7 @@ type RuleSnapshot struct {
 type HistoryRecorder struct{ path string }
 
 func NewHistoryRecorder(path string) *HistoryRecorder {
-	os.MkdirAll(filepath.Dir(path), 0o755)
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
 	return &HistoryRecorder{path: path}
 }
 
@@ -98,8 +98,8 @@ func (h *HistoryRecorder) RecordSnapshot(s RuleSnapshot) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
-	f.Write(append(line, '\n'))
+	defer func() { _ = f.Close() }()
+	_, _ = f.Write(append(line, '\n'))
 }
 
 func (h *HistoryRecorder) SnapshotAll(reg *RuleRegistry) {

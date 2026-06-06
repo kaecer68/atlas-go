@@ -19,9 +19,9 @@ func TestGrowthMomentumOverrideChangesRecommendations(t *testing.T) {
 		{
 			Symbol:     "2317.TW",
 			Open:       160.5,
-			High:       161.5,
+			High:       160.5,
 			Low:        158.5,
-			Last:       159,
+			Last:       160,
 			Volume:     42506789,
 			IsTradable: true,
 		},

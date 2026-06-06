@@ -49,7 +49,7 @@ type MacroRiskAssessmentEngine struct {
 }
 
 func NewMacroRiskAssessmentEngine() *MacroRiskAssessmentEngine {
-	return NewMacroRiskAssessmentEngineWithConfig(config.GetEngineConfig().MacroRisk)
+	return NewMacroRiskAssessmentEngineWithConfig(config.GetParametersConfig().Engine.MacroRisk.ToConfig())
 }
 
 func NewMacroRiskAssessmentEngineWithConfig(cfg config.MacroRiskConfig) *MacroRiskAssessmentEngine {

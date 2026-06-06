@@ -36,7 +36,7 @@ func TestSOXIndexProvider_FetchSnapshot_Success(t *testing.T) {
 	}`
 
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v8/finance/chart/^SOX" {
+		if !strings.Contains(r.URL.Path, "SOX") {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -45,12 +45,13 @@ func TestSOXIndexProvider_FetchSnapshot_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider := NewSOXIndexProvider()
-	provider.httpClient = server.Client()
-	provider.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(server.Client())
 
 	ctx := context.Background()
-	snap, err := provider.FetchSnapshot(ctx)
+	snap, err := NewSOXIndexProvider().FetchSnapshot(ctx)
 	if err != nil {
 		t.Fatalf("FetchSnapshot() error = %v", err)
 	}
@@ -58,11 +59,9 @@ func TestSOXIndexProvider_FetchSnapshot_Success(t *testing.T) {
 	if snap.SOXIndex.Symbol != "^SOX" {
 		t.Errorf("SOXIndex.Symbol = %q, want %q", snap.SOXIndex.Symbol, "^SOX")
 	}
-
 	if snap.SOXIndex.Value != 5100.0 {
 		t.Errorf("SOXIndex.Value = %v, want %v", snap.SOXIndex.Value, 5100.0)
 	}
-
 	if snap.SOXIndex.ChangePct != 2.0 {
 		t.Errorf("SOXIndex.ChangePct = %v, want %v", snap.SOXIndex.ChangePct, 2.0)
 	}
@@ -74,16 +73,17 @@ func TestSOXIndexProvider_FetchSnapshot_APIFailure(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider := NewSOXIndexProvider()
-	provider.httpClient = server.Client()
-	provider.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(server.Client())
 
 	ctx := context.Background()
-	_, err := provider.FetchSnapshot(ctx)
+	_, err := NewSOXIndexProvider().FetchSnapshot(ctx)
 	if err == nil {
 		t.Fatal("expected error on API failure")
 	}
-	if !strings.Contains(err.Error(), "http status 500") {
+	if !strings.Contains(err.Error(), "http 500") {
 		t.Errorf("expected status error, got: %v", err)
 	}
 }
@@ -96,12 +96,13 @@ func TestSOXIndexProvider_FetchSnapshot_InvalidJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider := NewSOXIndexProvider()
-	provider.httpClient = server.Client()
-	provider.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(server.Client())
 
 	ctx := context.Background()
-	_, err := provider.FetchSnapshot(ctx)
+	_, err := NewSOXIndexProvider().FetchSnapshot(ctx)
 	if err == nil {
 		t.Fatal("expected error on invalid JSON")
 	}
@@ -120,12 +121,13 @@ func TestSOXIndexProvider_FetchSnapshot_EmptyResult(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider := NewSOXIndexProvider()
-	provider.httpClient = server.Client()
-	provider.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(server.Client())
 
 	ctx := context.Background()
-	_, err := provider.FetchSnapshot(ctx)
+	_, err := NewSOXIndexProvider().FetchSnapshot(ctx)
 	if err == nil {
 		t.Fatal("expected error on empty result")
 	}
@@ -161,16 +163,17 @@ func TestSOXIndexProvider_FetchSnapshot_NaNPrice(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider := NewSOXIndexProvider()
-	provider.httpClient = server.Client()
-	provider.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(server.Client())
 
 	ctx := context.Background()
-	_, err := provider.FetchSnapshot(ctx)
+	_, err := NewSOXIndexProvider().FetchSnapshot(ctx)
 	if err == nil {
 		t.Fatal("expected error on NaN price")
 	}
-	if !strings.Contains(err.Error(), "invalid") {
+	if !strings.Contains(err.Error(), "invalid latest") {
 		t.Errorf(`expected error containing "invalid", got: %v`, err)
 	}
 }
@@ -182,12 +185,13 @@ func TestSOXIndexProvider_FetchSnapshot_HTMLResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider := NewSOXIndexProvider()
-	provider.httpClient = server.Client()
-	provider.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(server.Client())
 
 	ctx := context.Background()
-	_, err := provider.FetchSnapshot(ctx)
+	_, err := NewSOXIndexProvider().FetchSnapshot(ctx)
 	if err == nil {
 		t.Fatal("expected error on HTML response")
 	}
@@ -197,7 +201,6 @@ func TestSOXIndexProvider_FetchSnapshot_HTMLResponse(t *testing.T) {
 }
 
 func TestSOXIndexProvider_FetchSnapshot_HostFallback(t *testing.T) {
-	// First host returns 500, second returns valid data.
 	calls := 0
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
@@ -212,16 +215,16 @@ func TestSOXIndexProvider_FetchSnapshot_HostFallback(t *testing.T) {
 	defer server.Close()
 
 	host := strings.TrimPrefix(server.URL, "https://")
-	provider := NewSOXIndexProvider()
-	provider.httpClient = server.Client()
-	provider.hosts = []string{host, host}
+	origHosts := yahooHosts
+	yahooHosts = []string{host, host}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(server.Client())
 
 	ctx := context.Background()
-	snap, err := provider.FetchSnapshot(ctx)
+	snap, err := NewSOXIndexProvider().FetchSnapshot(ctx)
 	if err != nil {
 		t.Fatalf("FetchSnapshot() error after fallback = %v", err)
 	}
-
 	if snap.SOXIndex.Value != 5100.0 {
 		t.Errorf("SOXIndex.Value = %v, want %v", snap.SOXIndex.Value, 5100.0)
 	}
@@ -256,7 +259,6 @@ func TestSOXIndexProvider_CompositeMerge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchSnapshot() error = %v", err)
 	}
-
 	if merged.SOXIndex.Symbol != "^SOX" {
 		t.Errorf("merged.SOXIndex.Symbol = %q, want %q", merged.SOXIndex.Symbol, "^SOX")
 	}

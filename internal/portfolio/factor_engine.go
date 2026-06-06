@@ -1,13 +1,21 @@
 package portfolio
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sync"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
+
+// QuoteProvider fetches quotes for a set of symbols.
+type QuoteProvider interface {
+	GetQuotes(ctx context.Context, asOf time.Time, symbols []string) ([]domain.Quote, error)
+}
 
 func isFinite(f float64) bool {
 	return !math.IsInf(f, 0) && !math.IsNaN(f)
@@ -47,6 +55,7 @@ type FactorEngine struct {
 	params        *RuntimeParameters
 	narrativeProv func(symbol string) *domain.NarrativeFactorScore
 	cycleProv     func(symbol string) *domain.IndustryCycleFactorScore
+	linkageProv   func(symbol string) *domain.LinkageFactorScore
 	pmCtxProv     PMContextProvider
 	etfAnalyzer   *ETFAnalyzer
 	mu            sync.RWMutex
@@ -113,6 +122,13 @@ func (fe *FactorEngine) WithIndustryCycleProvider(fn func(symbol string) *domain
 	return fe
 }
 
+func (fe *FactorEngine) WithLinkageProvider(fn func(symbol string) *domain.LinkageFactorScore) *FactorEngine {
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
+	fe.linkageProv = fn
+	return fe
+}
+
 // SetCycleTracker replaces the industry cycle provider to use a shared CycleTracker.
 func (fe *FactorEngine) SetCycleTracker(ct *industry.CycleTracker) {
 	fe.mu.Lock()
@@ -136,6 +152,53 @@ func (fe *FactorEngine) SetCycleTracker(ct *industry.CycleTracker) {
 	}
 }
 
+// SetCycleCardBuilder enhances the cycle provider to use composite cycle sentiment
+// from CycleStatusCardBuilder, producing more accurate FactorIndustryCycle scores.
+// Falls back to CycleTracker when the card builder returns no card.
+func (fe *FactorEngine) SetCycleCardBuilder(cb *industry.CycleStatusCardBuilder, ct *industry.CycleTracker) {
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
+	fe.cycleProv = func(symbol string) *domain.IndustryCycleFactorScore {
+		id := classifyIndustry(symbol)
+		if id == "" {
+			return nil
+		}
+		var phase string
+		var phaseScore, confidence float64
+		if cb != nil {
+			card, err := cb.BuildCard(time.Now(), id)
+			if err == nil && card != nil {
+				phase = card.BusinessCycle
+				phaseScore = 1.0 + (card.CompositeCoefficient-1.0)*2.0
+				confidence = card.CycleConfidence
+				if phase == "" {
+					phase = "unknown"
+				}
+				return &domain.IndustryCycleFactorScore{
+					Score:      math.Max(0, math.Min(2.0, phaseScore)),
+					Phase:      phase,
+					PhaseScore: phaseScore,
+					Confidence: confidence,
+					IndustryID: id,
+				}
+			}
+		}
+		if ct != nil {
+			pos, ok := ct.GetPosition(id)
+			if ok {
+				return &domain.IndustryCycleFactorScore{
+					Score:      pos.GetPhaseScore(),
+					Phase:      string(pos.BusinessCycle),
+					PhaseScore: pos.GetPhaseScore(),
+					Confidence: pos.Confidence,
+					IndustryID: id,
+				}
+			}
+		}
+		return nil
+	}
+}
+
 // WithPreciousMetalsProvider attaches a macro data provider for precious metals factor scoring.
 func (fe *FactorEngine) WithPreciousMetalsProvider(fn PMContextProvider) *FactorEngine {
 	fe.mu.Lock()
@@ -150,6 +213,39 @@ func (fe *FactorEngine) WithETFAnalyzer(ea *ETFAnalyzer) *FactorEngine {
 	defer fe.mu.Unlock()
 	fe.etfAnalyzer = ea
 	return fe
+}
+
+// GetETFAnalyzer returns the attached ETF analyzer, or nil.
+func (fe *FactorEngine) GetETFAnalyzer() *ETFAnalyzer {
+	fe.mu.RLock()
+	defer fe.mu.RUnlock()
+	return fe.etfAnalyzer
+}
+
+// RefreshETFNAV refreshes ETF NAV values for all tracked ETFs using
+// the given QuoteProvider to fetch market quotes. Returns the number of
+// symbols whose NAV was updated. If the provider is nil or no
+// ETFAnalyzer is attached, returns 0.
+func (fe *FactorEngine) RefreshETFNAV(ctx context.Context, provider QuoteProvider) int {
+	fe.mu.RLock()
+	ea := fe.etfAnalyzer
+	fe.mu.RUnlock()
+	if ea == nil || provider == nil {
+		return 0
+	}
+
+	symbols := ea.AllSymbols()
+	if len(symbols) == 0 {
+		return 0
+	}
+
+	quotes, err := provider.GetQuotes(ctx, time.Now(), symbols)
+	if err != nil {
+		logging.Warn("factor_engine", "refresh_etf_nav_failed", logging.Err(err))
+		return 0
+	}
+
+	return ea.UpdateNAVFromQuotes(quotes)
 }
 
 // CalculateMomentumScore computes momentum based on price change over the configured lookback period.
@@ -427,9 +523,11 @@ func (fe *FactorEngine) CalculateInstitutionalSentimentScore(input FactorBridgeI
 	foreignWeight := weights["foreign"]
 	domesticWeight := weights["domestic"]
 	marginWeight := weights["margin"]
+	retailWeight := weights["retail"]
 	score := foreignWeight*input.ForeignFlowScore +
 		domesticWeight*input.DomesticFlowScore +
-		marginWeight*input.MarginBalanceScore
+		marginWeight*input.MarginBalanceScore +
+		retailWeight*input.RetailSentimentScore
 	if score > 1.0 {
 		score = 1.0
 	}
@@ -438,14 +536,16 @@ func (fe *FactorEngine) CalculateInstitutionalSentimentScore(input FactorBridgeI
 	}
 	return domain.FactorScoreItem{
 		Score:   score,
-		Formula: fmt.Sprintf("%.2f*ForeignFlowScore + %.2f*DomesticFlowScore + %.2f*MarginBalanceScore", foreignWeight, domesticWeight, marginWeight),
+		Formula: fmt.Sprintf("%.2f*ForeignFlowScore + %.2f*DomesticFlowScore + %.2f*MarginBalanceScore + %.2f*RetailSentimentScore", foreignWeight, domesticWeight, marginWeight, retailWeight),
 		RawInputs: map[string]float64{
 			"foreign_score":   input.ForeignFlowScore,
 			"domestic_score":  input.DomesticFlowScore,
 			"margin_score":    input.MarginBalanceScore,
+			"retail_score":    input.RetailSentimentScore,
 			"foreign_weight":  foreignWeight,
 			"domestic_weight": domesticWeight,
 			"margin_weight":   marginWeight,
+			"retail_weight":   retailWeight,
 		},
 	}
 }
@@ -621,10 +721,11 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 		FactorAgent:    agent.Score,
 	}
 
-	var nar, icl domain.FactorScoreItem
+	var nar, icl, link domain.FactorScoreItem
 	fe.mu.RLock()
 	narProv := fe.narrativeProv
 	iclProv := fe.cycleProv
+	linkProv := fe.linkageProv
 	fe.mu.RUnlock()
 
 	if narProv != nil {
@@ -647,6 +748,16 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 			result[FactorIndustryCycle] = icl.Score
 		}
 	}
+	if linkProv != nil {
+		if lfs := linkProv(symbol); lfs != nil {
+			link = domain.FactorScoreItem{
+				Score:     lfs.Score,
+				Formula:   fmt.Sprintf("linkage(systemic=%.2f, propagation=%.2f)", lfs.SystemicImportance, lfs.ShockPropagation),
+				RawInputs: map[string]float64{"systemic_importance": lfs.SystemicImportance, "shock_propagation_speed": lfs.ShockPropagation, "avg_correlation": lfs.AvgCorrelation},
+			}
+			result[FactorLinkage] = link.Score
+		}
+	}
 
 	breakdown := &domain.FactorScoreBreakdown{
 		Momentum:               mom,
@@ -657,6 +768,7 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 		Liquidity:              liq,
 		Narrative:              nar,
 		IndustryCycle:          icl,
+		Linkage:                link,
 	}
 
 	// Precious Metals: compute PM score when symbol is a known PM instrument.

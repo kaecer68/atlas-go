@@ -79,10 +79,20 @@ func builtinAgentExecutors() []AgentExecutor {
 		ETFRotationExecutor{},
 		FinancialsExecutor{},
 		ShippingExecutor{},
+		RoboticsDeskExecutor{},
+		MiningDeskExecutor{},
+		EnergyDeskExecutor{},
+		ElectronicsDeskExecutor{},
+		ConsumerDeskExecutor{},
+		IndustrialDeskExecutor{},
 		GrowthMomentumExecutor{},
 		ValueYieldExecutor{},
 		EarningsQualityExecutor{},
 		TechnicalBreakoutExecutor{},
+		// SuperinvestorExecutor is also registered in builtinControlExecutors().
+		// This dual registration enables the PM role (AgentExecutor.Recommend +
+		// ControlExecutor.Apply). See plugin_control.go for architectural context.
+		SuperinvestorExecutor{},
 	}
 }
 
@@ -97,5 +107,6 @@ func builtinControlExecutors() []ControlExecutor {
 	return []ControlExecutor{
 		NewCRORiskExecutor(),
 		CIOPortfolioExecutor{},
+		SuperinvestorExecutor{},
 	}
 }

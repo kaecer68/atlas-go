@@ -6,22 +6,27 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/eval"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
+	"github.com/kaecer68/atlas-go/internal/feature"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
 type Judge struct {
-	store          ledger.ExperimentStore
-	replayDataPath string
-	baselinePath   string
-	oosValidator   *OOSValidator
-	params         *config.ParametersConfig
-	eventBus       *eventbus.ChannelEventBus
+	store           ledger.ExperimentStore
+	replayDataPath  string
+	baselinePath    string
+	oosValidator    *OOSValidator
+	params          *config.ParametersConfig
+	eventBus        *eventbus.ChannelEventBus
+	maturityTracker *domain.MaturityTracker
 }
 
 func NewJudge(store ledger.ExperimentStore, replayDataPath, baselinePath string) *Judge {
@@ -37,6 +42,12 @@ func NewJudge(store ledger.ExperimentStore, replayDataPath, baselinePath string)
 // WithEventBus sets the Judge's event bus for publishing insufficient data events.
 func (j *Judge) WithEventBus(bus *eventbus.ChannelEventBus) *Judge {
 	j.eventBus = bus
+	return j
+}
+
+// WithMaturityTracker attaches a maturity tracker for burn-in gating.
+func (j *Judge) WithMaturityTracker(mt *domain.MaturityTracker) *Judge {
+	j.maturityTracker = mt
 	return j
 }
 
@@ -75,7 +86,8 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 		return domain.PromptExperimentResult{}, err
 	}
 	checks := judgeReplayChecks(string(promptBytes), result)
-	checks = append(checks,
+	checks = append(
+		checks,
 		fmt.Sprintf("baseline observations: %d", summary.BaselineObservations),
 		fmt.Sprintf("candidate observations: %d", summary.CandidateObservations),
 	)
@@ -103,6 +115,21 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 	result.EvaluationMode = "prompt_aware_replay_judged"
 	result.JudgeChecks = checks
 	result.RecordedAt = time.Now()
+
+	// Attach formal eval metrics (R²_OOS, Sharpe, CumReturn, MaxDD) using the
+	// canonical eval package. Uses candidate returns for strategy evaluation.
+	if len(result.CandidateReturns) > 0 {
+		var r2OOS float64
+		if len(result.BaselineReturns) == len(result.CandidateReturns) && len(result.BaselineReturns) > 0 {
+			r2OOS = eval.OOSR2(result.BaselineReturns, result.CandidateReturns)
+		}
+		result.EvalMetrics = &eval.EvalResult{
+			R2OOS:     r2OOS,
+			Sharpe:    eval.SharpeRatio(result.CandidateReturns, 0),
+			CumReturn: eval.CumulativeReturn(result.CandidateReturns),
+			MaxDD:     eval.MaxDrawdown(result.CandidateReturns),
+		}
+	}
 
 	// Load parameter snapshot and perform sensitivity analysis
 	if result.ParameterSnapshotID != "" {
@@ -172,6 +199,9 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 				return domain.PromptExperimentResult{}, fmt.Errorf("transition experiment status: %w", err)
 			}
 			result.Notes = append(result.Notes, "Replay judge accepted the candidate for the next baseline promotion step.")
+
+			// Compute factor importance if replay data is available.
+			j.computeAndAttachImportance(&result)
 		}
 	} else {
 		if err := domain.TransitionExperimentStatus(&result.Experiment, domain.ExperimentRejected); err != nil {
@@ -301,6 +331,12 @@ func promptTighteningJudgeChecks(lower string, result domain.PromptExperimentRes
 }
 
 func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, string) {
+	// Burn-in gate: do not judge experiments until statistical engines are reliable.
+	if j.maturityTracker != nil && j.maturityTracker.Current() == domain.MaturityBurnIn {
+		return false, fmt.Sprintf("rejected: burn_in mode (%d days until calibrating)",
+			j.maturityTracker.DaysUntil(domain.MaturityCalibrating))
+	}
+
 	gates := result.Experiment.AcceptanceGates
 	baseline := result.Experiment.BaselineValue
 	candidate := result.Experiment.CandidateValue
@@ -387,11 +423,11 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, st
 				return false, fmt.Sprintf("rejected: OOS validation failed: %s", result.OOSResult.Reason)
 			}
 		case "preserve_downside_protection":
-			baselineDD := maxDrawdown(result.BaselineReturns)
-			candidateDD := maxDrawdown(result.CandidateReturns)
+			baselineDD := eval.MaxDrawdown(result.BaselineReturns)
+			candidateDD := eval.MaxDrawdown(result.CandidateReturns)
 			ratio := j.params.Experiment.DrawdownProtectionRatio.Value
-			if candidateDD < baselineDD*ratio {
-				return false, fmt.Sprintf("rejected: candidate drawdown %.2f exceeds %.0f%% of baseline %.2f", candidateDD, ratio*100, baselineDD)
+			if candidateDD > baselineDD*ratio {
+				return false, fmt.Sprintf("rejected: candidate drawdown %.4f exceeds %.0f%% of baseline %.4f", candidateDD, ratio*100, baselineDD)
 			}
 		case "reduce_concentration_risk":
 			baselineVol := calculateVolatility(result.BaselineReturns)
@@ -466,6 +502,10 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, st
 			if candidateMCR < baselineMCR-0.1 {
 				return false, fmt.Sprintf("rejected: candidate momentum catch rate %.1f%% below baseline %.1f%%", candidateMCR*100, baselineMCR*100)
 			}
+		case "retail_sentiment_filter":
+			if math.Abs(result.Brief.RSITwScore) >= 0.7 {
+				return false, fmt.Sprintf("rejected: extreme retail sentiment (%.2f) — noisy environment", result.Brief.RSITwScore)
+			}
 		default:
 			return false, fmt.Sprintf("rejected: unknown gate %q", gate)
 		}
@@ -474,7 +514,7 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult) (bool, st
 }
 
 func welchTTest(baselineReturns, candidateReturns []float64) (tStat float64, df float64) {
-	if len(baselineReturns) < 2 || len(candidateReturns) < 2 {
+	if len(baselineReturns) < 63 || len(candidateReturns) < 63 {
 		return 0, 0
 	}
 
@@ -523,28 +563,8 @@ func meanAndVariance(data []float64) (mean, variance float64) {
 	return mean, variance
 }
 
-func maxDrawdown(returns []float64) float64 {
-	if len(returns) == 0 {
-		return 0
-	}
-	peak := 1.0
-	maxDD := 0.0
-	cum := 1.0
-	for _, r := range returns {
-		cum *= 1 + r
-		if cum > peak {
-			peak = cum
-		}
-		dd := (peak - cum) / peak
-		if dd > maxDD {
-			maxDD = dd
-		}
-	}
-	return -maxDD
-}
-
 func calculateVolatility(returns []float64) float64 {
-	if len(returns) < 2 {
+	if len(returns) < 30 {
 		return 0
 	}
 	_, variance := meanAndVariance(returns)
@@ -706,4 +726,49 @@ func computeWeightDrift(result domain.PromptExperimentResult) float64 {
 		return 0
 	}
 	return totalDrift / float64(count)
+}
+
+// computeAndAttachImportance loads replay data, extracts features, and runs
+// permutation importance. Results are attached to result.ImportanceResult.
+// Failures are non-fatal — they are logged as notes.
+func (j *Judge) computeAndAttachImportance(result *domain.PromptExperimentResult) {
+	if j.replayDataPath == "" {
+		return
+	}
+
+	ds, err := replay.LoadTWSEOpenDataCSV(j.replayDataPath)
+	if err != nil {
+		result.Notes = append(result.Notes, fmt.Sprintf("importance: failed to load replay data: %v", err))
+		return
+	}
+
+	// Flatten dataset into sorted bars.
+	var bars []domain.DailyBar
+	for _, date := range ds.Dates {
+		for _, bar := range ds.ByDate[date.Format("2006-01-02")] {
+			bars = append(bars, bar)
+		}
+	}
+	sort.Slice(bars, func(i, j int) bool { return bars[i].Date.Before(bars[j].Date) })
+
+	if len(bars) < 200 {
+		result.Notes = append(result.Notes, fmt.Sprintf("importance: %d bars insufficient for reliable importance", len(bars)))
+		return
+	}
+
+	defaultFeatures := []string{"close", "volume", "return_1d"}
+	unknown := feature.Validate(defaultFeatures)
+	if len(unknown) > 0 {
+		result.Notes = append(result.Notes, fmt.Sprintf("importance: unknown features: %v", unknown))
+		return
+	}
+
+	p := NewFactorPredictor()
+	imp, err := p.ComputeImportanceFromBars(bars, defaultFeatures, 5)
+	if err != nil {
+		result.Notes = append(result.Notes, fmt.Sprintf("importance: computation failed: %v", err))
+		return
+	}
+
+	result.ImportanceResult = &imp
 }

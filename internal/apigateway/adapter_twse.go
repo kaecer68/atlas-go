@@ -21,7 +21,7 @@ type TWSEChannelAdapter struct {
 func NewTWSEChannelAdapter(client *marketdata.TWSEClient) *TWSEChannelAdapter {
 	return &TWSEChannelAdapter{
 		client:  client,
-		limiter: rate.NewLimiter(TWSEOpenAPIRate, TWSEOpenAPIBurst),
+		limiter: rate.NewLimiter(rate.Inf, 0), // file-based replay, no rate limit
 	}
 }
 

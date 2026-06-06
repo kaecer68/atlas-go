@@ -1,0 +1,24 @@
+{
+  "$schema": "../../../../schemas/data_metadata.schema.json",
+  "name": "approvals",
+  "description": "人工核准/否決/補追決策記錄。每個決策對應一筆 (symbol, agent_id) 組合，確保人工意圖在控制層被尊重。",
+  "maturity": "stable",
+  "data_type": "directory",
+  "format": "個別決策 JSON 檔案",
+  "producer_module": "internal/monitoring",
+  "producer_function": "Dashboard API human intervention handlers",
+  "consumer_modules": [
+    "internal/orchestrator"
+  ],
+  "schema_ref": null,
+  "catalog_ref": "docs/DATA_CATALOG.md#approvals",
+  "created_date": "2026-05-01",
+  "last_modified": "continuous",
+  "estimated_size": {
+    "files": 74,
+    "growth_rate": "~1-3/day"
+  },
+  "retention_policy": "indefinite",
+  "tags": ["approvals", "human-intervention", "override", "audit"],
+  "notes": "三種干預類型：放行（approve）、否決（reject）、補追（補放行已被擋的推薦）。"
+}

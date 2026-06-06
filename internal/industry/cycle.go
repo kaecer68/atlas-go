@@ -76,6 +76,7 @@ type CycleTracker struct {
 	narrativeHitRate   func() float64
 	narrativeAdjust    func(industryID string) NarrativeAdjustment
 	lastNarrativeTheme map[string]string // active narrative theme per industry (updated during detectBusinessCycle)
+	classificationTree *ClassificationTree
 }
 
 // NewCycleTracker creates a new cycle tracker.
@@ -84,6 +85,7 @@ func NewCycleTracker() *CycleTracker {
 		positions:          make(map[string]*CyclePosition),
 		history:            make(map[string][]CyclePosition),
 		lastNarrativeTheme: make(map[string]string),
+		classificationTree: DefaultClassification(),
 	}
 	ct.initializeDefaultPositions()
 	return ct
@@ -107,7 +109,22 @@ func (ct *CycleTracker) SetNarrativeAdjuster(fn func(industryID string) Narrativ
 }
 
 func (ct *CycleTracker) HasEmpiricalData(industryID string) bool {
-	return len(ct.history[industryID]) > 1
+	return len(ct.history[industryID]) > 0
+}
+
+// EvidenceTier returns the quality tier of cycle data for an industry.
+//   - "empirical": updated by real FinMind data (>1 history entries)
+//   - "estimated": initialized from seed values (exactly 1 entry)
+//   - "insufficient": no data at all (0 entries)
+func (ct *CycleTracker) EvidenceTier(industryID string) string {
+	switch n := len(ct.history[industryID]); {
+	case n > 1:
+		return "empirical"
+	case n == 1:
+		return "estimated"
+	default:
+		return "insufficient"
+	}
 }
 
 func (ct *CycleTracker) NarrativeTheme(industryID string) string {
@@ -117,167 +134,58 @@ func (ct *CycleTracker) NarrativeTheme(industryID string) string {
 	return ct.lastNarrativeTheme[industryID]
 }
 
+// defaultSeedMetrics returns the hardcoded fallback seed values for CycleTracker.
+// These match the ParametersConfig default values shipped in parameters_defaults.go.
+// If config is unavailable or unpopulated, these ensure the tracker still starts
+// with sensible bootstrap values.
+func defaultSeedMetrics() map[string]IndustryMetrics {
+	return map[string]IndustryMetrics{
+		"semiconductor":             {IndustryID: "semiconductor", RevenueGrowthYoY: 0.25, ProfitGrowthYoY: 0.30, InventoryTurnover: 5.5, CapacityUtilization: 0.85},
+		"ai_supply_chain":           {IndustryID: "ai_supply_chain", RevenueGrowthYoY: 0.45, ProfitGrowthYoY: 0.50, InventoryTurnover: 6.0, CapacityUtilization: 0.90},
+		"robotics":                  {IndustryID: "robotics", RevenueGrowthYoY: 0.15, ProfitGrowthYoY: 0.12, InventoryTurnover: 4.0, CapacityUtilization: 0.70},
+		"financials":                {IndustryID: "financials", RevenueGrowthYoY: 0.08, ProfitGrowthYoY: 0.10, InventoryTurnover: 0.0, CapacityUtilization: 0.75},
+		"shipping":                  {IndustryID: "shipping", RevenueGrowthYoY: -0.05, ProfitGrowthYoY: -0.10, InventoryTurnover: 3.0, CapacityUtilization: 0.65},
+		"energy":                    {IndustryID: "energy", RevenueGrowthYoY: 0.05, ProfitGrowthYoY: 0.03, InventoryTurnover: 4.5, CapacityUtilization: 0.70},
+		"electronics":               {IndustryID: "electronics", RevenueGrowthYoY: 0.12, ProfitGrowthYoY: 0.15, InventoryTurnover: 5.0, CapacityUtilization: 0.75},
+		"consumer":                  {IndustryID: "consumer", RevenueGrowthYoY: 0.03, ProfitGrowthYoY: 0.05, InventoryTurnover: 6.0, CapacityUtilization: 0.70},
+		"industrial":                {IndustryID: "industrial", RevenueGrowthYoY: 0.06, ProfitGrowthYoY: 0.08, InventoryTurnover: 4.0, CapacityUtilization: 0.68},
+		"foundry":                   {IndustryID: "foundry", RevenueGrowthYoY: 0.22, ProfitGrowthYoY: 0.28, InventoryTurnover: 5.0, CapacityUtilization: 0.88},
+		"server_assembly":           {IndustryID: "server_assembly", RevenueGrowthYoY: 0.40, ProfitGrowthYoY: 0.45, InventoryTurnover: 6.5, CapacityUtilization: 0.85},
+		"cooling":                   {IndustryID: "cooling", RevenueGrowthYoY: 0.20, ProfitGrowthYoY: 0.22, InventoryTurnover: 5.5, CapacityUtilization: 0.80},
+		"leo_satellite":             {IndustryID: "leo_satellite", RevenueGrowthYoY: 0.35, ProfitGrowthYoY: 0.40, InventoryTurnover: 4.5, CapacityUtilization: 0.75},
+		"satellite_rf_components":   {IndustryID: "satellite_rf_components", RevenueGrowthYoY: 0.45, ProfitGrowthYoY: 0.50, InventoryTurnover: 5.0, CapacityUtilization: 0.80},
+		"satellite_pcb":             {IndustryID: "satellite_pcb", RevenueGrowthYoY: 0.30, ProfitGrowthYoY: 0.35, InventoryTurnover: 4.0, CapacityUtilization: 0.78},
+		"ground_equipment":          {IndustryID: "ground_equipment", RevenueGrowthYoY: 0.25, ProfitGrowthYoY: 0.28, InventoryTurnover: 3.5, CapacityUtilization: 0.72},
+		"laser_communication":       {IndustryID: "laser_communication", RevenueGrowthYoY: 0.50, ProfitGrowthYoY: 0.55, InventoryTurnover: 3.0, CapacityUtilization: 0.70},
+		"mining":                    {IndustryID: "mining", RevenueGrowthYoY: 0.10, ProfitGrowthYoY: 0.12, InventoryTurnover: 4.5, CapacityUtilization: 0.75},
+		"precious_metals_recycling": {IndustryID: "precious_metals_recycling", RevenueGrowthYoY: 0.15, ProfitGrowthYoY: 0.18, InventoryTurnover: 5.0, CapacityUtilization: 0.80},
+		"copper_industry":           {IndustryID: "copper_industry", RevenueGrowthYoY: 0.08, ProfitGrowthYoY: 0.10, InventoryTurnover: 4.0, CapacityUtilization: 0.72},
+		"rare_earth_specialty":      {IndustryID: "rare_earth_specialty", RevenueGrowthYoY: 0.05, ProfitGrowthYoY: 0.06, InventoryTurnover: 3.5, CapacityUtilization: 0.70},
+		"metal_processing":          {IndustryID: "metal_processing", RevenueGrowthYoY: 0.06, ProfitGrowthYoY: 0.08, InventoryTurnover: 4.5, CapacityUtilization: 0.73},
+		"etf_rotation":              {IndustryID: "etf_rotation", RevenueGrowthYoY: 0.05, ProfitGrowthYoY: 0.05, InventoryTurnover: 0.0, CapacityUtilization: 0.0},
+	}
+}
+
 // initializeDefaultPositions populates the tracker with default cycle positions
-// for known industries. This ensures the API returns meaningful data even before
-// real-time metrics are available.
+// for known industries. It first attempts to load seed values from ParametersConfig;
+// if config is unavailable or unpopulated it falls back to hardcoded defaults.
 func (ct *CycleTracker) initializeDefaultPositions() {
-	defaults := map[string]IndustryMetrics{
-		"semiconductor": {
-			IndustryID:          "semiconductor",
-			RevenueGrowthYoY:    0.25,
-			ProfitGrowthYoY:     0.30,
-			InventoryTurnover:   5.5,
-			CapacityUtilization: 0.85,
-		},
-		"ai_supply_chain": {
-			IndustryID:          "ai_supply_chain",
-			RevenueGrowthYoY:    0.45,
-			ProfitGrowthYoY:     0.50,
-			InventoryTurnover:   6.0,
-			CapacityUtilization: 0.90,
-		},
-		"robotics": {
-			IndustryID:          "robotics",
-			RevenueGrowthYoY:    0.15,
-			ProfitGrowthYoY:     0.12,
-			InventoryTurnover:   4.0,
-			CapacityUtilization: 0.70,
-		},
-		"financials": {
-			IndustryID:          "financials",
-			RevenueGrowthYoY:    0.08,
-			ProfitGrowthYoY:     0.10,
-			InventoryTurnover:   0.0,
-			CapacityUtilization: 0.75,
-		},
-		"shipping": {
-			IndustryID:          "shipping",
-			RevenueGrowthYoY:    -0.05,
-			ProfitGrowthYoY:     -0.10,
-			InventoryTurnover:   3.0,
-			CapacityUtilization: 0.65,
-		},
-		"energy": {
-			IndustryID:          "energy",
-			RevenueGrowthYoY:    0.05,
-			ProfitGrowthYoY:     0.03,
-			InventoryTurnover:   4.5,
-			CapacityUtilization: 0.70,
-		},
-		"electronics": {
-			IndustryID:          "electronics",
-			RevenueGrowthYoY:    0.12,
-			ProfitGrowthYoY:     0.15,
-			InventoryTurnover:   5.0,
-			CapacityUtilization: 0.75,
-		},
-		"consumer": {
-			IndustryID:          "consumer",
-			RevenueGrowthYoY:    0.03,
-			ProfitGrowthYoY:     0.05,
-			InventoryTurnover:   6.0,
-			CapacityUtilization: 0.70,
-		},
-		"industrial": {
-			IndustryID:          "industrial",
-			RevenueGrowthYoY:    0.06,
-			ProfitGrowthYoY:     0.08,
-			InventoryTurnover:   4.0,
-			CapacityUtilization: 0.68,
-		},
-		"foundry": {
-			IndustryID:          "foundry",
-			RevenueGrowthYoY:    0.22,
-			ProfitGrowthYoY:     0.28,
-			InventoryTurnover:   5.0,
-			CapacityUtilization: 0.88,
-		},
-		"server_assembly": {
-			IndustryID:          "server_assembly",
-			RevenueGrowthYoY:    0.40,
-			ProfitGrowthYoY:     0.45,
-			InventoryTurnover:   6.5,
-			CapacityUtilization: 0.85,
-		},
-		"cooling": {
-			IndustryID:          "cooling",
-			RevenueGrowthYoY:    0.20,
-			ProfitGrowthYoY:     0.22,
-			InventoryTurnover:   5.5,
-			CapacityUtilization: 0.80,
-		},
-		"leo_satellite": {
-			IndustryID:          "leo_satellite",
-			RevenueGrowthYoY:    0.35,
-			ProfitGrowthYoY:     0.40,
-			InventoryTurnover:   4.5,
-			CapacityUtilization: 0.75,
-		},
-		"satellite_rf_components": {
-			IndustryID:          "satellite_rf_components",
-			RevenueGrowthYoY:    0.45,
-			ProfitGrowthYoY:     0.50,
-			InventoryTurnover:   5.0,
-			CapacityUtilization: 0.80,
-		},
-		"satellite_pcb": {
-			IndustryID:          "satellite_pcb",
-			RevenueGrowthYoY:    0.30,
-			ProfitGrowthYoY:     0.35,
-			InventoryTurnover:   4.0,
-			CapacityUtilization: 0.78,
-		},
-		"ground_equipment": {
-			IndustryID:          "ground_equipment",
-			RevenueGrowthYoY:    0.25,
-			ProfitGrowthYoY:     0.28,
-			InventoryTurnover:   3.5,
-			CapacityUtilization: 0.72,
-		},
-		"laser_communication": {
-			IndustryID:          "laser_communication",
-			RevenueGrowthYoY:    0.50,
-			ProfitGrowthYoY:     0.55,
-			InventoryTurnover:   3.0,
-			CapacityUtilization: 0.70,
-		},
-		"mining": {
-			IndustryID:          "mining",
-			RevenueGrowthYoY:    0.10,
-			ProfitGrowthYoY:     0.12,
-			InventoryTurnover:   4.5,
-			CapacityUtilization: 0.75,
-		},
-		"precious_metals_recycling": {
-			IndustryID:          "precious_metals_recycling",
-			RevenueGrowthYoY:    0.15,
-			ProfitGrowthYoY:     0.18,
-			InventoryTurnover:   5.0,
-			CapacityUtilization: 0.80,
-		},
-		"copper_industry": {
-			IndustryID:          "copper_industry",
-			RevenueGrowthYoY:    0.08,
-			ProfitGrowthYoY:     0.10,
-			InventoryTurnover:   4.0,
-			CapacityUtilization: 0.72,
-		},
-		"rare_earth_specialty": {
-			IndustryID:          "rare_earth_specialty",
-			RevenueGrowthYoY:    0.05,
-			ProfitGrowthYoY:     0.06,
-			InventoryTurnover:   3.5,
-			CapacityUtilization: 0.70,
-		},
-		"metal_processing": {
-			IndustryID:          "metal_processing",
-			RevenueGrowthYoY:    0.06,
-			ProfitGrowthYoY:     0.08,
-			InventoryTurnover:   4.5,
-			CapacityUtilization: 0.73,
-		},
+	cfg := config.GetParametersConfig()
+	if cfg != nil && cfg.Industry.DefaultMetrics.Value != nil && len(cfg.Industry.DefaultMetrics.Value) > 0 {
+		cfgSeeds := cfg.Industry.DefaultMetrics.Value
+		for id, seed := range cfgSeeds {
+			ct.UpdatePosition(id, IndustryMetrics{
+				IndustryID:          id,
+				RevenueGrowthYoY:    seed.RevenueGrowthYoY,
+				ProfitGrowthYoY:     seed.ProfitGrowthYoY,
+				InventoryTurnover:   seed.InventoryTurnover,
+				CapacityUtilization: seed.CapacityUtilization,
+			})
+		}
+		return
 	}
 
+	defaults := defaultSeedMetrics()
 	for id, metrics := range defaults {
 		ct.UpdatePosition(id, metrics)
 	}
@@ -290,7 +198,13 @@ func (ct *CycleTracker) UpdatePosition(industryID string, metrics IndustryMetric
 
 	// Store historical data
 	ct.history[industryID] = append(ct.history[industryID], *position)
-	if len(ct.history[industryID]) > 90 { // Keep 90 days of history
+	retention := 90
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		if r := cfg.Industry.HistoryRetentionDays.Value; r > 0 {
+			retention = r
+		}
+	}
+	if len(ct.history[industryID]) > retention {
 		ct.history[industryID] = ct.history[industryID][1:]
 	}
 
@@ -366,20 +280,40 @@ func (ct *CycleTracker) detectCyclePosition(industryID string, metrics IndustryM
 	return position
 }
 
-// detectBusinessCycle determines the business cycle phase.
-func (ct *CycleTracker) detectBusinessCycle(metrics IndustryMetrics) CyclePhase {
-	params := config.GetParametersConfig().Industry
-	thresholds, ok := params.CycleThresholds.Value[metrics.IndustryID]
-	if !ok {
-		thresholds = config.CycleThresholdConfig{
-			ExpansionRevenuePct: 0.20,
-			ExpansionProfitPct:  0.20,
-			RecoveryRevenuePct:  0.05,
-			RecoveryProfitPct:   0.05,
-			MatureRevenuePct:    -0.05,
-			MatureProfitPct:     -0.05,
+// getCycleThresholds looks up per-industry thresholds with fallback chain:
+// exact match → parent L1 → _default. Eliminates global hardcoded fallback.
+func (ct *CycleTracker) getCycleThresholds(industryID string) config.CycleThresholdConfig {
+	cfg := config.GetParametersConfig()
+	if cfg == nil {
+		return config.CycleThresholdConfig{}
+	}
+	thresholds := cfg.Industry.CycleThresholds.Value
+
+	// 1. Exact match
+	if t, ok := thresholds[industryID]; ok {
+		return t
+	}
+
+	// 2. Parent L1 fallback (for L2/L3 segments)
+	if ct.classificationTree != nil {
+		if seg, ok := ct.classificationTree.GetSegment(industryID); ok && seg.ParentID != "" {
+			if t, ok := thresholds[seg.ParentID]; ok {
+				return t
+			}
 		}
 	}
+
+	// 3. Global default fallback
+	if t, ok := thresholds["_default"]; ok {
+		return t
+	}
+
+	return config.CycleThresholdConfig{}
+}
+
+// detectBusinessCycle determines the business cycle phase.
+func (ct *CycleTracker) detectBusinessCycle(metrics IndustryMetrics) CyclePhase {
+	thresholds := ct.getCycleThresholds(metrics.IndustryID)
 
 	revenueGrowth := metrics.RevenueGrowthYoY
 	profitGrowth := metrics.ProfitGrowthYoY
@@ -424,8 +358,15 @@ func (ct *CycleTracker) detectInventoryCycle(metrics IndustryMetrics) InventoryC
 
 // detectCapexCycle determines the capex cycle state.
 func (ct *CycleTracker) detectCapexCycle(metrics IndustryMetrics) CapexCycle {
-	params := config.GetParametersConfig().Industry
-	t := params.CapexCycleThresholds.Value
+	t := config.CapexCycleThresholdConfig{
+		ExpansionCapacityMin:   0.85,
+		ExpansionRevenueMin:    0.15,
+		MaintenanceCapacityMin: 0.70,
+		MaintenanceRevenueMin:  0.05,
+	}
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		t = cfg.Industry.CapexCycleThresholds.Value
+	}
 
 	switch {
 	case metrics.CapacityUtilization > t.ExpansionCapacityMin && metrics.RevenueGrowthYoY > t.ExpansionRevenueMin:
@@ -462,13 +403,6 @@ func (ct *CycleTracker) calculateConfidence(industryID string, metrics IndustryM
 	}
 
 	boundary := ct.boundaryConfidence(industryID, metrics)
-	// When revenue or profit is negative, the industry is in contraction.
-	// High boundary confidence (far from positive thresholds) should not boost
-	// overall confidence — it just means the decline is unambiguous, not that
-	// the industry data is strong. Halve boundary contribution in that case.
-	if metrics.RevenueGrowthYoY < 0 || metrics.ProfitGrowthYoY < 0 {
-		boundary *= 0.5
-	}
 	confidence := signal*cfgSignal.SignalBoundaryMix + boundary*(1.0-cfgSignal.SignalBoundaryMix)
 
 	seasonalScore := 0.0
@@ -570,18 +504,7 @@ func (ct *CycleTracker) computeLinkageConfidence(industryID string) float64 {
 // boundaryConfidence returns 0–1: 0 = metric at a phase threshold (ambiguous),
 // 1 = far from any threshold (strong conviction in detected phase).
 func (ct *CycleTracker) boundaryConfidence(industryID string, metrics IndustryMetrics) float64 {
-	params := config.GetParametersConfig().Industry
-	thresholds, ok := params.CycleThresholds.Value[industryID]
-	if !ok {
-		thresholds = config.CycleThresholdConfig{
-			ExpansionRevenuePct: 0.20,
-			ExpansionProfitPct:  0.20,
-			RecoveryRevenuePct:  0.05,
-			RecoveryProfitPct:   0.05,
-			MatureRevenuePct:    -0.05,
-			MatureProfitPct:     -0.05,
-		}
-	}
+	thresholds := ct.getCycleThresholds(industryID)
 
 	revMinDist := math.Abs(metrics.RevenueGrowthYoY - thresholds.ExpansionRevenuePct)
 	for _, t := range []float64{thresholds.RecoveryRevenuePct, thresholds.MatureRevenuePct} {
@@ -599,7 +522,7 @@ func (ct *CycleTracker) boundaryConfidence(industryID string, metrics IndustryMe
 
 	tr := thresholds.ExpansionRevenuePct - thresholds.MatureRevenuePct
 	if tr <= 0 {
-		tr = 0.25
+		tr = config.GetParametersConfig().Industry.BoundaryFallback.Value
 	}
 	denom := tr * config.GetParametersConfig().Industry.ConfidenceSignal.Value.BoundaryDenomFactor
 
@@ -607,6 +530,66 @@ func (ct *CycleTracker) boundaryConfidence(industryID string, metrics IndustryMe
 	profitScore := math.Min(profitMinDist/denom, 1.0)
 
 	return (revScore + profitScore) / 2.0
+}
+
+// BuildConfidenceBreakdown returns per-industry confidence dimension weights.
+// Each dimension is modulated by actual data quality signals:
+//   - boundary: config-driven threshold quality (static)
+//   - freshness: scaled by EvidenceTier and update recency
+//   - seasonal:  full weight if SeasonalEngine has patterns, else 0
+//   - linkage:   full weight if industry is in supply chain graph, else 0.3x
+//   - narrative: full weight if NarrativeTheme is non-empty, else 0.5x
+func (ct *CycleTracker) BuildConfidenceBreakdown(industryID string) map[string]float64 {
+	mix := config.GetParametersConfig().Industry.ConfidenceMix.Value
+
+	boundary := mix.WeightBoundary
+
+	var qualityMultiplier float64
+	switch ct.EvidenceTier(industryID) {
+	case "empirical":
+		qualityMultiplier = 1.0
+	case "estimated":
+		qualityMultiplier = 0.4
+	default:
+		qualityMultiplier = 0.0
+	}
+
+	timeMultiplier := 1.0
+	if pos, ok := ct.positions[industryID]; ok {
+		daysSinceUpdate := time.Since(pos.UpdatedAt).Hours() / 24.0
+		timeMultiplier = math.Max(0.3, 1.0-daysSinceUpdate/90.0)
+	}
+
+	freshness := mix.WeightFreshness * qualityMultiplier * timeMultiplier
+
+	seasonal := 0.0
+	if ct.seasonalEngine != nil && len(ct.seasonalEngine.GetPatternsForIndustry(industryID)) > 0 {
+		seasonal = mix.WeightSeasonal
+	}
+
+	var linkage float64
+	if ct.linkageAnalyzer != nil {
+		if _, ok := ct.linkageAnalyzer.GetSupplyChainGraph().GetNode(industryID); ok {
+			linkage = mix.WeightLinkage
+		} else {
+			linkage = mix.WeightLinkage * 0.3
+		}
+	} else {
+		linkage = mix.WeightLinkage * 0.3
+	}
+
+	narrative := mix.WeightNarrative * 0.5
+	if ct.NarrativeTheme(industryID) != "" {
+		narrative = mix.WeightNarrative
+	}
+
+	return map[string]float64{
+		"boundary":  boundary,
+		"freshness": freshness,
+		"seasonal":  seasonal,
+		"linkage":   linkage,
+		"narrative": narrative,
+	}
 }
 
 // getLeadingIndicators returns leading indicators for an industry.
@@ -749,7 +732,8 @@ func (cp *CyclePosition) GetPhaseScore() float64 {
 
 // String returns a human-readable summary of the cycle position.
 func (cp *CyclePosition) String() string {
-	return fmt.Sprintf("%s: Business=%s, Inventory=%s, Capex=%s, Confidence=%.0f%%",
+	return fmt.Sprintf(
+		"%s: Business=%s, Inventory=%s, Capex=%s, Confidence=%.0f%%",
 		cp.IndustryID,
 		cp.BusinessCycle,
 		cp.InventoryCycle,

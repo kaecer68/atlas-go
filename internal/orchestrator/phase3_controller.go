@@ -109,6 +109,7 @@ func (c *Phase3Controller) RunSwarmCycle(baseState swarm.MarketState) {
 
 	c.swarm.InitializeScenarios(baseState)
 	c.swarm.Start()
+	c.swarm.EvolveGeneration()
 
 	// Export training data for downstream consumption
 	if c.trainingStore != nil {
@@ -166,6 +167,15 @@ func (c *Phase3Controller) ApplyPRISMWeights(recs []domain.Recommendation, regim
 	agentSharpe := make(map[string]float64)
 	for _, r := range results {
 		if r.Regime != pr {
+			continue
+		}
+		if r.Result.Synthetic {
+			continue
+		}
+		if r.Result.Error != "" {
+			continue
+		}
+		if r.Result.SignalsCount == 0 {
 			continue
 		}
 		if r.Result.SharpeRatio > agentSharpe[r.AgentID] {
@@ -331,9 +341,10 @@ func (c *Phase3Controller) RunParallelOptimization(baseState swarm.MarketState, 
 
 	go func() {
 		defer wg.Done()
-		if err := c.ApplyPRISMWeights(nil, regime); err != nil {
-			logging.Warn("Phase3Controller", "ApplyPRISMWeights failed", "err", err)
-		}
+		c.ApplyPRISMWeights(nil, regime)
+		// Note: ApplyPRISMWeights returns []Recommendation, not error.
+		// When called with nil recs it is a no-op (internal guards return immediately).
+		// Failures are surfaced via PRISM manager logs, not via this callsite.
 	}()
 
 	go func() {

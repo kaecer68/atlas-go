@@ -132,7 +132,8 @@ func TestLoadAgentObservatoryReadsFromSessionScope(t *testing.T) {
 	sessionID := "session-20260422-daily"
 
 	// Write only the session-scoped outcome file.
-	writeTestSessionArtifacts(t, baseDir, sessionID,
+	writeTestSessionArtifacts(
+		t, baseDir, sessionID,
 		domain.SessionSummary{SessionID: sessionID, Regime: domain.RegimeRiskOn, RecordedAt: recordedAt, OutcomeCount: 1},
 		domain.RecommendationOutcome{
 			AgentID:             "agent-session",
@@ -180,7 +181,8 @@ func TestLoadForecastVsRealityReadsPredictionsFromSelectedSession(t *testing.T) 
 	sessionID := "session-20260422-daily"
 
 	// Write a session-scoped outcome with a ForwardReturn so Hit can be determined.
-	writeTestSessionArtifacts(t, baseDir, sessionID,
+	writeTestSessionArtifacts(
+		t, baseDir, sessionID,
 		domain.SessionSummary{SessionID: sessionID, Regime: domain.RegimeRiskOn, RecordedAt: recordedAt, OutcomeCount: 1},
 		domain.RecommendationOutcome{
 			AgentID:       "agent-fvr",
@@ -226,7 +228,8 @@ func TestReportServiceLoadRecommendationsForDateSupportsCanonicalOutcomeJSON(t *
 	baseDir := t.TempDir()
 	recordedAt := time.Date(2026, time.April, 22, 4, 2, 30, 0, time.UTC)
 	sessionID := "session-20260422-daily"
-	writeTestSessionArtifacts(t, baseDir, sessionID,
+	writeTestSessionArtifacts(
+		t, baseDir, sessionID,
 		domain.SessionSummary{SessionID: sessionID, Regime: domain.RegimeRiskOn, RecordedAt: recordedAt},
 		domain.RecommendationOutcome{
 			AgentID:             "agent-1",
@@ -263,7 +266,8 @@ func TestPipelineServiceLoadRecommendationPipelineSupportsCanonicalOutcomeJSON(t
 	baseDir := t.TempDir()
 	recordedAt := time.Date(2026, time.April, 22, 4, 2, 30, 0, time.UTC)
 	sessionID := "session-20260422-daily"
-	writeTestSessionArtifacts(t, baseDir, sessionID,
+	writeTestSessionArtifacts(
+		t, baseDir, sessionID,
 		domain.SessionSummary{SessionID: sessionID, Regime: domain.RegimeRiskOn, RecordedAt: recordedAt},
 		domain.RecommendationOutcome{
 			AgentID:             "agent-2",
@@ -304,5 +308,118 @@ func TestPipelineServiceLoadRecommendationPipelineSupportsCanonicalOutcomeJSON(t
 	}
 	if data.Items[0].FactorScores.Total != 0.67 {
 		t.Fatalf("factor_scores.total: got %v", data.Items[0].FactorScores.Total)
+	}
+}
+
+func writeTestSessionOutcomes(t *testing.T, baseDir, sessionID string, summary domain.SessionSummary, outcomes []domain.RecommendationOutcome) {
+	t.Helper()
+	sessionDir := filepath.Join(baseDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir session dir: %v", err)
+	}
+
+	summaryBytes, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatalf("marshal summary: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sessionDir, "summary.json"), summaryBytes, 0o644); err != nil {
+		t.Fatalf("write summary.json: %v", err)
+	}
+
+	var buf []byte
+	for _, o := range outcomes {
+		b, err := json.Marshal(o)
+		if err != nil {
+			t.Fatalf("marshal outcome: %v", err)
+		}
+		buf = append(buf, b...)
+		buf = append(buf, '\n')
+	}
+	if err := os.WriteFile(filepath.Join(sessionDir, "recommendation_outcomes.jsonl"), buf, 0o644); err != nil {
+		t.Fatalf("write recommendation_outcomes.jsonl: %v", err)
+	}
+}
+
+// TestHitRespectsTradeDirection verifies that the Hit flag is computed with
+// respect to the recommendation's trade direction:
+//   - BUY with positive forward return  -> Hit=true
+//   - BUY with negative forward return  -> Hit=false
+//   - SELL with negative forward return -> Hit=true
+//   - SELL with positive forward return -> Hit=false
+func TestHitRespectsTradeDirection(t *testing.T) {
+	baseDir := t.TempDir()
+	recordedAt := time.Date(2026, time.April, 22, 4, 2, 30, 0, time.UTC)
+	sessionID := "session-20260422-daily"
+
+	type scenario struct {
+		agentID    string
+		side       domain.Side
+		forwardRet float64
+		wantHit    bool
+	}
+	scenarios := []scenario{
+		{agentID: "buy-up", side: domain.SideBuy, forwardRet: 0.025, wantHit: true},
+		{agentID: "buy-down", side: domain.SideBuy, forwardRet: -0.015, wantHit: false},
+		{agentID: "sell-down", side: domain.SideSell, forwardRet: -0.030, wantHit: true},
+		{agentID: "sell-up", side: domain.SideSell, forwardRet: 0.010, wantHit: false},
+	}
+
+	outcomes := make([]domain.RecommendationOutcome, 0, len(scenarios))
+	for i, s := range scenarios {
+		outcomes = append(outcomes, domain.RecommendationOutcome{
+			AgentID:       s.agentID,
+			Skill:         "value_yield",
+			Layer:         domain.LayerStyle,
+			Symbol:        "2330.TW",
+			Side:          s.side,
+			Conviction:    70 + i,
+			TargetPrice:   100,
+			StopLossPrice: 90,
+			ForwardReturn: s.forwardRet,
+			Price:         100,
+			PassedGuards:  true,
+			RecordedAt:    recordedAt,
+		})
+	}
+
+	writeTestSessionOutcomes(
+		t, baseDir, sessionID,
+		domain.SessionSummary{SessionID: sessionID, Regime: domain.RegimeRiskOn, RecordedAt: recordedAt, OutcomeCount: len(outcomes)},
+		outcomes,
+	)
+
+	svc := NewPipelineService(baseDir, baseDir, ledger.NewStore(baseDir))
+	data, err := svc.LoadRecommendationPipeline(sessionID, true)
+	if err != nil {
+		t.Fatalf("load recommendation pipeline: %v", err)
+	}
+	if data == nil {
+		t.Fatal("expected pipeline data")
+	}
+	if len(data.Items) != len(scenarios) {
+		t.Fatalf("expected %d items, got %d", len(scenarios), len(data.Items))
+	}
+
+	// Index items by AgentID for order-independent assertions.
+	byAgent := make(map[string]int, len(data.Items))
+	for i, item := range data.Items {
+		byAgent[item.AgentID] = i
+	}
+	for _, s := range scenarios {
+		idx, ok := byAgent[s.agentID]
+		if !ok {
+			t.Fatalf("missing item for agent %q", s.agentID)
+		}
+		got := data.Items[idx]
+		if got.Side != string(s.side) {
+			t.Errorf("[%s] side: got %q want %q", s.agentID, got.Side, s.side)
+		}
+		if got.ForwardReturn != s.forwardRet {
+			t.Errorf("[%s] forward_return: got %v want %v", s.agentID, got.ForwardReturn, s.forwardRet)
+		}
+		if got.Hit != s.wantHit {
+			t.Errorf("[%s] hit: got %v want %v (side=%s, fr=%v)",
+				s.agentID, got.Hit, s.wantHit, s.side, s.forwardRet)
+		}
 	}
 }

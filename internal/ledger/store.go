@@ -14,6 +14,7 @@ type OutcomeStore interface {
 	RecordSessionOutcomes(session domain.ReplaySession, outcomes []domain.RecommendationOutcome) error
 	LoadOutcomes() ([]domain.RecommendationOutcome, error)
 	LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOutcome, error)
+	LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error)
 
 	// Screening rejects
 	RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error

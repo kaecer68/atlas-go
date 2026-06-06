@@ -1,6 +1,7 @@
 package experiment
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -265,8 +266,10 @@ func (h *Handlers) HandleInbox(r *http.Request) (int, any) {
 	}
 
 	experimentsDir := filepath.Join(h.LedgerDir, "experiments")
-	if _, err := experiment.ExpireOldExperiments(experimentsDir, experiment.DefaultExperimentTTL); err != nil { //nolint:staticcheck // 過期清理失敗不影響 inbox 回應
+	if _, err := experiment.ExpireOldExperiments(experimentsDir, experiment.DefaultExperimentTTL); err != nil { //nolint:staticcheck
 	}
+
+	ledgerExperiments := loadLedgerExperiments(filepath.Join(h.LedgerDir, "experiments.jsonl"))
 
 	entries, err := os.ReadDir(experimentsDir)
 	if err != nil {
@@ -366,6 +369,28 @@ func (h *Handlers) HandleInbox(r *http.Request) (int, any) {
 		recentHistory = recentHistory[:10]
 	}
 
+	for _, item := range ledgerExperiments {
+		if item.Status == domain.ExperimentPlanned || item.Status == domain.ExperimentRunning {
+			pendingJudges = append(pendingJudges, item)
+		} else {
+			recentHistory = append(recentHistory, item)
+		}
+	}
+	// Deduplicate: keep only the latest experiment per agent from ledger
+	ledgerByAgent := make(map[string]ExperimentInboxItem)
+	for _, item := range pendingJudges {
+		if _, ok := ledgerByAgent[item.TargetAgentID]; !ok {
+			ledgerByAgent[item.TargetAgentID] = item
+		}
+	}
+	pendingJudges = make([]ExperimentInboxItem, 0, len(ledgerByAgent))
+	for _, item := range ledgerByAgent {
+		pendingJudges = append(pendingJudges, item)
+	}
+	if len(pendingJudges) > 100 {
+		pendingJudges = pendingJudges[:100]
+	}
+
 	allItems := make([]ExperimentInboxItem, 0, len(pendingJudges)+len(pendingPromotes)+len(recentHistory))
 	allItems = append(allItems, pendingJudges...)
 	allItems = append(allItems, pendingPromotes...)
@@ -378,4 +403,34 @@ func (h *Handlers) HandleInbox(r *http.Request) (int, any) {
 		BaselineVersion: policy.Version,
 		Items:           allItems,
 	}
+}
+
+func loadLedgerExperiments(path string) []ExperimentInboxItem {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = f.Close() }()
+
+	var items []ExperimentInboxItem
+	scanner := bufio.NewScanner(f)
+	buf := make([]byte, 1024*1024)
+	scanner.Buffer(buf, 1024*1024)
+	for scanner.Scan() {
+		var rec domain.ExperimentRecord
+		if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
+			continue
+		}
+		items = append(items, ExperimentInboxItem{
+			ExperimentID:   rec.ID,
+			TargetAgentID:  rec.TargetAgentID,
+			Skill:          rec.Skill,
+			MutationType:   rec.MutationType,
+			Status:         rec.Status,
+			BaselineValue:  rec.BaselineValue,
+			CandidateValue: rec.CandidateValue,
+			RecordedAt:     time.Now(),
+		})
+	}
+	return items
 }

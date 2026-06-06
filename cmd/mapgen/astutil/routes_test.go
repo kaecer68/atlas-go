@@ -317,9 +317,9 @@ var x = 1
 		t.Fatalf("parse: %v", err)
 	}
 	for _, decl := range f.Decls {
-		if _, ok := decl.(*ast.GenDecl); ok {
-			// Should not panic on non-func decls
+		if _, isGenDecl := decl.(*ast.GenDecl); isGenDecl {
 			continue
 		}
+		_ = decl // ensure non-GenDecl declarations parse successfully
 	}
 }

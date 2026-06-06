@@ -477,3 +477,40 @@ func TestGenerationsCounter(t *testing.T) {
 		t.Errorf("expected 2 generations, got %d", sw.Generations())
 	}
 }
+
+func TestSnapshotGeneration(t *testing.T) {
+	config := DefaultSwarmConfig()
+	config.FishCount = 10
+	config.SimulationHorizon = 12 * time.Hour
+	config.TimeStep = time.Hour
+
+	sw := NewMiroFishSwarm(config)
+	baseState := MarketState{
+		Timestamp: time.Now(),
+		Prices:    map[string]float64{"A": 100.0},
+		Volumes:   map[string]float64{"A": 1000000},
+	}
+	sw.InitializeScenarios(baseState)
+	sw.Start()
+
+	snap := sw.Snapshot()
+	if len(snap.Scenarios) == 0 {
+		t.Fatal("expected scenarios in snapshot")
+	}
+	if len(snap.Consensus) == 0 {
+		t.Fatal("expected consensus in snapshot")
+	}
+	if snap.TotalFish == 0 {
+		t.Errorf("expected positive fish count, got %d", snap.TotalFish)
+	}
+	if snap.ConsensusConfidence <= 0 {
+		t.Errorf("expected positive confidence, got %f", snap.ConsensusConfidence)
+	}
+
+	tmpFile := t.TempDir() + "/snapshot.json"
+	if err := sw.SaveSnapshot(tmpFile); err != nil {
+		t.Fatalf("SaveSnapshot: %v", err)
+	}
+	t.Logf("Snapshot: %d scenarios, %d consensus symbols, %d fish",
+		len(snap.Scenarios), len(snap.Consensus), snap.TotalFish)
+}

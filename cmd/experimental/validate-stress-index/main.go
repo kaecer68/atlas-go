@@ -133,7 +133,8 @@ func main() {
 			continue
 		}
 		up := countPositive(vals)
-		fmt.Printf("Regime %-6s: %2d days | up: %2d (%5.1f%%) | down: %2d (%5.1f%%) | avg return: %+.2f%%\n",
+		fmt.Printf(
+			"Regime %-6s: %2d days | up: %2d (%5.1f%%) | down: %2d (%5.1f%%) | avg return: %+.2f%%\n",
 			name, len(vals), up, float64(up)/float64(len(vals))*100,
 			len(vals)-up, float64(len(vals)-up)/float64(len(vals))*100,
 			mean(vals)*100,

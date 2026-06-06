@@ -262,6 +262,19 @@
         "rare_earth",
         "platinum"
       ]
+    },
+    {
+      "industry_id": "etf_rotation",
+      "tier": 0,
+      "upstream_of": [],
+      "downstream_of": [
+        "financials"
+      ],
+      "key_materials": [
+        "capital_flow",
+        "liquidity",
+        "market_sentiment"
+      ]
     }
   ],
   "correlations": {
@@ -306,6 +319,9 @@
     "mining↔energy": 0.35,
     "mining↔financials": 0.30,
     "mining↔shipping": 0.25,
-    "mining↔consumer": 0.10
+    "mining↔consumer": 0.10,
+    "etf_rotation↔financials": 0.45,
+    "etf_rotation↔semiconductor": 0.30,
+    "etf_rotation↔shipping": 0.05
   }
 }

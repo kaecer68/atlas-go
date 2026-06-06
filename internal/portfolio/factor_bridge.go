@@ -2,6 +2,7 @@ package portfolio
 
 import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/retail"
 )
 
 type MacroDataSnapshot = marketdata.MacroDataSnapshot
@@ -21,6 +22,7 @@ type FactorBridge struct {
 	foreignFlowStd float64
 	marginAvg      float64
 	marginStd      float64
+	calculator     *retail.Calculator // optional RSI-tw calculator for retail sentiment
 }
 
 // NewFactorBridge creates a FactorBridge with default calibration values.
@@ -31,6 +33,12 @@ func NewFactorBridge() *FactorBridge {
 		marginAvg:      0,
 		marginStd:      50e8,
 	}
+}
+
+// SetCalculator attaches an RSI-tw Calculator for real retail sentiment computation.
+// When nil (default), computeRetailSentiment falls back to naive margin change % logic.
+func (fb *FactorBridge) SetCalculator(c *retail.Calculator) {
+	fb.calculator = c
 }
 
 // Convert transforms a MacroDataSnapshot into a FactorBridgeInput.
@@ -61,9 +69,22 @@ func (fb *FactorBridge) standardize(value, avg, std float64) float64 {
 	return z
 }
 
-// computeRetailSentiment derives retail sentiment from margin balance changes.
+// computeRetailSentiment derives retail sentiment from margin balance changes,
+// or from the attached RSI-tw Calculator when available.
 func (fb *FactorBridge) computeRetailSentiment(snap MacroDataSnapshot) float64 {
-	// Retail sentiment based on margin balance change percentage
+	if fb.calculator != nil {
+		input := retail.RSITwInput{
+			VIXLevel:           snap.VIX.Value,
+			MarginBalance:      snap.RetailMarginBalance.Value,
+			ForeignInvestorNet: snap.ForeignInvestorNet.Value,
+			DomesticFundNet:    snap.DomesticFundNet.Value,
+			MarginPercentile:   0, // unavailable from MacroDataSnapshot; calculator falls back gracefully
+		}
+		snap_ := fb.calculator.ComputeFinal(input)
+		return snap_.Score
+	}
+
+	// Fallback: naive retail sentiment based on margin balance change percentage
 	change := snap.RetailMarginBalance.ChangePct
 	if change > 10 {
 		return 1.0 // Extremely bullish retail

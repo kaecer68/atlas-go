@@ -20,6 +20,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/taiwan/stress-index", shared.Get(h.HandleTaiwanStressIndex))
 	mux.Handle("GET /api/macro/snapshot/latest", shared.Get(h.HandleMacroSnapshotLatest))
 	mux.Handle("GET /api/macro/snapshot/history", shared.Get(h.HandleMacroSnapshotHistory))
+	mux.Handle("GET /api/dashboard/macro-data-health", shared.Get(h.HandleMacroDataHealth))
 }
 
 func (h *Handlers) HandleMacroIngest(r *http.Request) (int, any) {
@@ -93,4 +94,12 @@ func (h *Handlers) HandleChannelsIngest(r *http.Request) (int, any) {
 		"geo_ok":      false,
 		"geo_error":   "geo ingest not yet wired to macro service",
 	}
+}
+
+func (h *Handlers) HandleMacroDataHealth(r *http.Request) (int, any) {
+	health, err := h.Service.GetMacroDataHealth()
+	if err != nil {
+		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("macro data health: %v", err)}
+	}
+	return http.StatusOK, health
 }

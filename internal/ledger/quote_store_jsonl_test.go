@@ -1,8 +1,10 @@
 package ledger
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -223,5 +225,57 @@ func TestJSONLQuoteStoreNoDuplicates(t *testing.T) {
 	}
 	if loaded[0].Date.Day() != 2 {
 		t.Errorf("expected date day 2, got %d", loaded[0].Date.Day())
+	}
+}
+
+func TestJSONLQuoteStoreConcurrentWrites(t *testing.T) {
+	tmp := t.TempDir()
+	store := NewJSONLQuoteStore(tmp)
+
+	const goroutines = 8
+	var wg sync.WaitGroup
+	errCh := make(chan error, goroutines)
+	symbols := make([]string, goroutines)
+	for g := 0; g < goroutines; g++ {
+		wg.Add(1)
+		symbols[g] = fmt.Sprintf("233%d", g)
+		go func(g int) {
+			defer wg.Done()
+			bars := []domain.DailyBar{
+				{Date: time.Date(2026, 6, g+1, 0, 0, 0, 0, time.UTC), Symbol: symbols[g], Name: "test", Open: 100, High: 110, Low: 90, Close: 105, Volume: 1000, Source: "test"},
+			}
+			if err := store.RecordQuotes(bars); err != nil {
+				errCh <- fmt.Errorf("goroutine %d: %w", g, err)
+			}
+		}(g)
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Fatalf("concurrent RecordQuotes failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(tmp, "quotes.jsonl.tmp")); !os.IsNotExist(err) {
+		t.Errorf("expected .tmp file to be removed after concurrent writes, but it exists")
+	}
+
+	seen := make(map[string]bool, goroutines)
+	for _, sym := range symbols {
+		loaded, err := store.LoadQuotes(sym, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC))
+		if err != nil {
+			t.Fatalf("LoadQuotes(%s) failed: %v", sym, err)
+		}
+		if len(loaded) > 1 {
+			t.Errorf("symbol %s: expected at most 1 bar, got %d (O_TRUNC collision)", sym, len(loaded))
+		}
+		if len(loaded) == 1 {
+			if loaded[0].Symbol != sym {
+				t.Errorf("symbol mismatch: expected %s, got %s", sym, loaded[0].Symbol)
+			}
+			seen[sym] = true
+		}
+	}
+	if len(seen) != 1 {
+		t.Errorf("expected exactly one writer to win O_TRUNC race, got %d winners: %v", len(seen), seen)
 	}
 }

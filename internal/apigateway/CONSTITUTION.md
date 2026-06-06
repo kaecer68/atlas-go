@@ -9,7 +9,7 @@
 
 ## 前言
 
-本系統目前管理 **14 個信息通道**、**3 套健康檢查實作**、**8 個背景任務**，存在以下結構性問題：
+本系統目前管理 **15 個信息通道**、**3 套健康檢查實作**、**8 個背景任務**，存在以下結構性問題：
 
 - 7 個通道無 Rate Limiter，高頻調用時容易被封鎖
 - 3 套健康檢查實作導致兩頁面（總覽 vs 信息通道管理）顯示不一致
@@ -82,7 +82,7 @@ package apigateway
 import "golang.org/x/time/rate"
 
 const (
-    // Yahoo Finance: 共享 limiter（us_yahoo + jpy_yahoo 共用同一端點）
+		// Yahoo Finance: 共享 limiter（us_yahoo 共用同一端點）
     YahooFinanceRate = rate.Every(1 * time.Second)
     
     // TWSE OpenAPI: 5 req/sec per IP
@@ -111,14 +111,14 @@ const (
 共享同一 API 端點的通道必須使用同一個 `rate.Limiter` 實例：
 
 ```go
-// ✅ 合規：us_yahoo 和 jpy_yahoo 共用 limiter
+		// ✅ 合規：us_yahoo 使用共用 limiter
 yahooLimiter := rate.NewLimiter(YahooFinanceRate, 1)
 
 registry.Register("us_yahoo", provider, yahooLimiter)
-registry.Register("jpy_yahoo", provider, yahooLimiter)
+registry.Register("frankfurter_fx", provider, fxLimiter)  // 獨立 limiter，非 Yahoo endpoint
 
 // ❌ 違規：各自獨立 limiteregistry.Register("us_yahoo", provider, rate.NewLimiter(YahooFinanceRate, 1))
-registry.Register("jpy_yahoo", provider, rate.NewLimiter(YahooFinanceRate, 1))
+registry.Register("frankfurter_fx", provider, rate.NewLimiter(YahooFinanceRate, 1))
 ```
 
 ---
@@ -474,7 +474,7 @@ echo "✅ os.Getenv 檢查通過"
 
 ---
 
-## 附錄 A：14 個通道規範
+## 附錄 A：15 個通道規範
 
 | 通道 ID | 限流策略 | 健康檢查模式 | 背景任務 | 熔斷啟用 |
 |---------|---------|-------------|---------|---------|
@@ -484,17 +484,18 @@ echo "✅ os.Getenv 檢查通過"
 | fugle | 60/min | Liveness | 否 | ✅ |
 | fubon | Per-min | Liveness | 否 | ✅ |
 | finmind | 6/s (免費) | Liveness | 否 | ✅ |
-| jpy_yahoo | 共享 1/s | Liveness | 否 | ✅ |
-| geopolitical | 1/10s | Liveness | ✅ (6h) | ✅ |
+| frankfurter_fx | 1/10s (獨立) | Liveness | 否 | ✅ |
+| geopolitical | 1/min | Liveness | ✅ (6h) | ✅ |
 | twse_margin | 1/5s | Readiness | ✅ (30min) | ✅ |
 | export_statistics | 1/5s | Readiness | ✅ (12h) | ✅ |
 | tsmc_revenue | 繼承 FinMind | Liveness | ✅ (24h) | ✅ |
-| geopolitical_taiwan | 1/10s | Liveness | ✅ (6h) | ✅ |
+| geopolitical_taiwan | 1/min | Liveness | ✅ (6h) | ✅ |
 | janus_regime | 不限流 | Computed | 否 | ❌ |
 | tej | Per-sec + daily | Liveness | 否 | ✅ |
 | exchange_rate | 1/5s | Liveness | 否 | ❌ |
 | sox_index | 1/5s | Liveness | 否 | ❌ |
 | sector_data | 不限流 | Readiness | 否 | ❌ |
+| bdi | 1/5s | Liveness | 否 | ❌ |
 
 ## 附錄 B：違規處理流程
 

@@ -24,6 +24,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/swarm-consensus", shared.Get(h.HandleConsensus))
 	mux.Handle("GET /api/dashboard/swarm-anomalies", shared.Get(h.HandleAnomalies))
 	mux.Handle("GET /api/dashboard/swarm-scenarios", shared.Get(h.HandleScenarios))
+	mux.Handle("GET /api/dashboard/swarm-strategies", shared.Get(h.HandleStrategies))
 }
 
 // HandleStatus returns a summary of the latest swarm simulation.
@@ -69,4 +70,16 @@ func (h *Handlers) HandleScenarios(r *http.Request) (int, any) {
 		scenarios = []swarm.ScenarioSnapshot{}
 	}
 	return http.StatusOK, scenarios
+}
+
+// HandleStrategies returns top learning strategies from the MetaLearner.
+func (h *Handlers) HandleStrategies(r *http.Request) (int, any) {
+	strategies, err := h.Svc.LoadRecommendedStrategies()
+	if err != nil {
+		return http.StatusNotFound, map[string]string{"error": "no strategy data available"}
+	}
+	if len(strategies) == 0 {
+		return http.StatusOK, []service.StrategySummary{}
+	}
+	return http.StatusOK, strategies
 }

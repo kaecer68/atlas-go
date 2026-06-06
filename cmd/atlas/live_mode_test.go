@@ -22,8 +22,9 @@ func TestLiveModeBrokerGuardrails(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -55,13 +56,14 @@ func TestLiveModeDashboardAPIWiring(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			mu.Lock()
 			dashboardAPICalled = true
 			capturedLedgerDir = dir
 			capturedCollector = collector
 			mu.Unlock()
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -112,8 +114,9 @@ func TestLiveModeRejectsUnsupportedBrokerAdapter(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -140,8 +143,9 @@ func TestLiveModeValidatesBrokerBeforeStarting(t *testing.T) {
 				BrokerSigner:     "placeholder",
 			}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -170,9 +174,10 @@ func TestLiveModeAcceptsDryRunBroker(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			dashboardAPICalled.Store(true)
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -208,8 +213,9 @@ func TestLiveModePropagatesBrokerConfig(t *testing.T) {
 				BrokerSigner:     "placeholder",
 			}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -250,8 +256,9 @@ func TestLiveModeDoesNotStartAPIServerViaDeps(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			listenAndServeCalled.Store(true)
@@ -286,9 +293,10 @@ func TestLiveModeWithSwaggerEnabled(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			dashboardAPICalled.Store(true)
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -322,8 +330,9 @@ func TestLiveModeRejectsNegativeMaxRetries(t *testing.T) {
 				BrokerMaxRetries: -1,
 			}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -351,8 +360,9 @@ func TestLiveModeWithAllValidBrokerFlags(t *testing.T) {
 				BrokerSigner:     "placeholder",
 			}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -394,8 +404,9 @@ func TestLiveModeWithFileNonceStore(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -430,8 +441,9 @@ func TestLiveModeRejectsInvalidRetryStatusCodes(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -458,8 +470,9 @@ func TestLiveModeRejectsRedisNonceStoreWithoutURL(t *testing.T) {
 				BrokerNonceStore: "redis",
 			}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -486,8 +499,9 @@ func TestLiveModeWithRedisNonceStoreAndURL(t *testing.T) {
 				BrokerMaxRetries: 1,
 			}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil

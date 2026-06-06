@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/replay"
 	"github.com/kaecer68/atlas-go/internal/repository"
+	"github.com/kaecer68/atlas-go/internal/retail"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/sim"
 	"github.com/kaecer68/atlas-go/internal/strategy"
@@ -31,6 +33,7 @@ import (
 type SimulationCore struct {
 	cfg             config.Config
 	provider        marketdata.Provider
+	factorEngine    *portfolio.FactorEngine
 	engine          *sim.Engine
 	registry        domain.AgentRegistry
 	policy          baseline.Policy
@@ -64,6 +67,7 @@ type StrategyLayer struct {
 	comparisonEngine  *strategy.ComparisonEngine
 	thresholdEngine   *sim.DynamicThresholdEngine
 	strategyAllocator *strategy.StrategyAllocator // P2: nil-safe multi-strategy allocator
+	strategyEvolver   *StrategyEvolver            // nil-safe: no evolution when nil
 }
 
 type RiskOps struct {
@@ -121,6 +125,8 @@ type System struct {
 	drawdownReporter func(portfolio.DrawdownResult)
 	traceVerbose     bool // when true, SimTraceWriter emits color-coded terminal output
 	phase3Ctrl       *Phase3Controller
+
+	maturityTracker *domain.MaturityTracker
 }
 
 // Phase3Controller returns the Phase 3 optimization controller, if attached.
@@ -128,6 +134,15 @@ func (s *System) Phase3Controller() *Phase3Controller { return s.phase3Ctrl }
 
 // SetVerboseTrace enables or disables color-coded verbose trace output.
 func (s *System) SetVerboseTrace(v bool) { s.traceVerbose = v }
+
+// MaturityTracker returns the system's maturity tracker (nil if not attached).
+func (s *System) MaturityTracker() *domain.MaturityTracker { return s.maturityTracker }
+
+// WithMaturityTracker attaches a maturity tracker to the system.
+func (s *System) WithMaturityTracker(mt *domain.MaturityTracker) *System {
+	s.maturityTracker = mt
+	return s
+}
 
 // SystemOption configures optional subsystems during System construction.
 // Use the With* functions to create options.
@@ -176,6 +191,44 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 	runtimeParams := loadRuntimeParamsOrDefault(cfg.ParametersConfigPath)
 	macroSnapshot := &marketdata.MacroDataSnapshot{}
 	factorEngine, hp, fp := buildFactorEngine(runtimeParams, macroSnapshot, cfg.ReplayDataPath)
+
+	// Calibrate ETF NAV from replay data — use latest close prices as NAV proxy.
+	// ETF market prices tightly track NAV (typically <0.5% tracking error), making
+	// close prices a reliable fallback when no real-time NAV API is available.
+	// Replay CSV uses symbol format "0050" (no .TW suffix); strip suffix for lookup.
+	if ds != nil && len(ds.Dates) > 0 {
+		etfSymbols := factorEngine.GetETFAnalyzer().AllSymbols()
+		if len(etfSymbols) > 0 {
+			// Map ETFAnalyzer symbols (0050.TW) to replay symbols (0050)
+			replaySymbols := make([]string, 0, len(etfSymbols))
+			lookup := make(map[string]string, len(etfSymbols))
+			for _, sym := range etfSymbols {
+				replaySym := strings.TrimSuffix(sym, ".TW")
+				replaySymbols = append(replaySymbols, replaySym)
+				lookup[replaySym] = sym
+			}
+			latestDate := ds.Dates[len(ds.Dates)-1]
+			quotes := ds.QuotesForDate(latestDate, replaySymbols)
+			// Restore .TW suffix on returned quotes so UpdateNAVFromQuotes matches
+			for i := range quotes {
+				if orig, ok := lookup[quotes[i].Symbol]; ok {
+					quotes[i].Symbol = orig
+				}
+			}
+			if updated := factorEngine.GetETFAnalyzer().UpdateNAVFromQuotes(quotes); updated > 0 {
+				logging.Info("orchestrator", "etf_nav_calibrated",
+					"date", latestDate.Format("2006-01-02"),
+					"updated", updated,
+					"total", len(etfSymbols))
+			} else {
+				logging.Warn("orchestrator", "etf_nav_calibrate_no_data",
+					"date", latestDate.Format("2006-01-02"),
+					"symbols", len(etfSymbols),
+					"hint", "replay data may not contain ETF symbols — extend replay data to include ETFs")
+			}
+		}
+	}
+
 	if eventBus == nil {
 		eventBus = eventbus.NewChannelEventBus(256)
 	}
@@ -191,9 +244,12 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 
 	macroRiskEngine, structuralTrendEngine, macroDrawdownEngine, sectorDataProvider := buildMacroEngines(cfg.LedgerDir)
 
+	simCore := buildSimulationCore(cfg, registry, policy, ds, optimizer, store)
+	simCore.factorEngine = factorEngine
+
 	sys := &System{
 		SystemCore: &SystemCore{
-			sim:             buildSimulationCore(cfg, registry, policy, ds, optimizer, store),
+			sim:             simCore,
 			port:            buildPortfolioManager(runtimeParams, registry, eventBus, factorEngine),
 			strat:           buildStrategyLayer(thresholdEngine),
 			risk:            buildRiskOps(cfg, eventBus, macroRiskEngine, structuralTrendEngine, macroDrawdownEngine, sectorDataProvider),
@@ -232,6 +288,30 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 	}
 
 	return sys, nil
+}
+
+// ResolveReplayContext loads the core replay execution context: agent registry,
+// baseline policy, and replay dataset. Falls back to seeds/defaults when files
+// are missing. This provides a single authority for replay context resolution,
+// used by both NewSystem and backtest.Runner.
+func ResolveReplayContext(cfg config.Config) (domain.AgentRegistry, baseline.Policy, *replay.Dataset) {
+	var registry domain.AgentRegistry
+	var err error
+	if len(cfg.AgentRegistryExtraPaths) > 0 {
+		allPaths := append([]string{cfg.AgentRegistryPath}, cfg.AgentRegistryExtraPaths...)
+		registry, err = LoadRegistryMulti(allPaths...)
+	} else {
+		registry, err = LoadRegistry(cfg.AgentRegistryPath)
+	}
+	if err != nil {
+		registry = SeedRegistry()
+	}
+	policy, err := baseline.Load(cfg.BaselinePolicyPath)
+	if err != nil {
+		policy = baseline.DefaultPolicy()
+	}
+	ds, _ := replay.LoadTWSEOpenDataCSV(cfg.ReplayDataPath)
+	return registry, policy, ds
 }
 
 func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, error) {
@@ -273,6 +353,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		*s.macroSnapshot = QuotesToMacroDataSnapshot(quotes)
 		if opt := s.Sim().engine.Optimizer(); opt != nil {
 			fb := portfolio.NewFactorBridge()
+			fb.SetCalculator(retail.GetCalculator())
 			opt.WithBridgeInput(fb.Convert(*s.macroSnapshot))
 		}
 	}
@@ -283,6 +364,9 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	tw.Record(4, "recommend", "START", nil)
 	tw.Record(5, "guard_filter", "START", nil)
 
+	if err := s.ensurePersistentStateLoaded(); err != nil {
+		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
+	}
 	events := s.detectNarrativeEvents(quotes)
 	researchResult := ExecuteWithContext(ExecutionContext{
 		Registry:        s.Sim().registry,
@@ -387,9 +471,6 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	if s.Risk().eventBus != nil {
 		go s.Risk().eventBus.PublishRecommendation("orchestrator", finalRecs)
 	}
-	if err := s.ensurePersistentStateLoaded(); err != nil {
-		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
-	}
 	tw.Record(6, "sim_exec", "START", nil)
 	var result domain.SimulationResult
 	if s.Sim().persistentState != nil {
@@ -435,12 +516,18 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	s.updateCapitalMetrics(s.Sim().ctx, result)
 
 	tw.Record(7, "ledger_write", "START", nil)
-	outcomes := buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf)
+	// Use replay-based forward returns when dataset is available (real data).
+	// Falls back to synthetic when replay is nil.
+	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, s.Sim().replay)
+	if len(outcomes) == 0 {
+		outcomes = buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf)
+	}
+	// Write outcomes to ALL stores: PostgreSQL (if available), global file, and per-session file.
+	// The XOR pattern was removed because DualWriteRepository already handles DB ↔ file sync.
 	if s.Risk().repo != nil {
 		_ = s.Risk().repo.RecordOutcomes(s.Sim().ctx, outcomes)
-	} else {
-		_ = s.Sim().ledger.RecordOutcomes(outcomes)
 	}
+	_ = s.Sim().ledger.RecordOutcomes(outcomes)
 	_ = s.Sim().ledger.RecordSessionOutcomes(s.Sim().session, outcomes)
 	_ = s.Sim().ledger.RecordSessionScreeningRejects(s.Sim().session.ID, rejects)
 	if s.Risk().metricsCollector != nil {
@@ -552,6 +639,9 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	tw.Record(4, "recommend", "START", nil)
 	tw.Record(5, "guard_filter", "START", nil)
 
+	if err := s.ensurePersistentStateLoaded(); err != nil {
+		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
+	}
 	events := s.detectNarrativeEvents(quotes)
 	researchResult := ExecuteWithContext(ExecutionContext{
 		Registry:        s.Sim().registry,
@@ -655,9 +745,6 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	if s.Risk().eventBus != nil {
 		go s.Risk().eventBus.PublishRecommendation("orchestrator", finalRecs)
 	}
-	if err := s.ensurePersistentStateLoaded(); err != nil {
-		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
-	}
 	tw.Record(6, "sim_exec", "START", nil)
 	var result domain.SimulationResult
 	if s.Sim().persistentState != nil {
@@ -674,9 +761,8 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, sessionDate, s.Sim().replay)
 	if s.Risk().repo != nil {
 		_ = s.Risk().repo.RecordOutcomes(s.Sim().ctx, outcomes)
-	} else {
-		_ = s.Sim().ledger.RecordOutcomes(outcomes)
 	}
+	_ = s.Sim().ledger.RecordOutcomes(outcomes)
 	_ = s.Sim().ledger.RecordSessionOutcomes(s.Sim().session, outcomes)
 	_ = s.Sim().ledger.RecordSessionScreeningRejects(s.Sim().session.ID, rejects)
 	if s.Risk().metricsCollector != nil {
@@ -817,6 +903,19 @@ func (s *System) GetStrategyAllocator() *strategy.StrategyAllocator {
 // nil-safe: if nil, Selector path is used (backward compatible).
 func (s *System) WithStrategyAllocator(sa *strategy.StrategyAllocator) *System {
 	s.strat.strategyAllocator = sa
+	return s
+}
+
+// GetStrategyEvolver returns the strategy evolver (nil if not attached).
+func (s *System) GetStrategyEvolver() *StrategyEvolver {
+	return s.strat.strategyEvolver
+}
+
+// WithStrategyEvolver attaches a strategy evolver for macro-driven state transitions.
+// When attached, the macro pipeline evaluates strategy evolution after drawdown assessment.
+// nil-safe: if nil, no strategy evolution occurs (backward compatible).
+func (s *System) WithStrategyEvolver(ev *StrategyEvolver) *System {
+	s.strat.strategyEvolver = ev
 	return s
 }
 
@@ -1013,9 +1112,13 @@ func (s *System) applyAlphaDiscovery(quotes []domain.Quote, recs []domain.Recomm
 }
 
 func (s *System) NextExperimentCandidate() (*domain.Candidate, error) {
-	outcomes, err := s.Sim().ledger.LoadOutcomes()
-	if err != nil {
-		return nil, err
+	// Use session-dir outcomes (richest data source) instead of sparse global file.
+	outcomes, err := s.Sim().ledger.LoadOutcomesFromSessions()
+	if err != nil || len(outcomes) == 0 {
+		outcomes, err = s.Sim().ledger.LoadOutcomes()
+		if err != nil {
+			return nil, err
+		}
 	}
 	scorecards := ledger.BuildScorecards(outcomes)
 	candidate := domain.SelectWeakestAgent(s.Sim().registry, scorecards)
@@ -1023,6 +1126,50 @@ func (s *System) NextExperimentCandidate() (*domain.Candidate, error) {
 		_ = s.Sim().ledger.RecordExperiment(candidate.Experiment)
 		_ = s.Sim().ledger.RecordSessionExperiment(s.Sim().session, candidate.Experiment)
 	}
+
+	// New agent onboarding: create experiments for agents with outcomes but no
+	// prior experiment records. Reads experiments.jsonl directly to check.
+	existingIDs := make(map[string]bool)
+	if expData, err := os.ReadFile(filepath.Join(s.Sim().cfg.LedgerDir, "experiments.jsonl")); err == nil {
+		for _, line := range strings.Split(string(expData), "\n") {
+			if line == "" {
+				continue
+			}
+			var rec domain.ExperimentRecord
+			if json.Unmarshal([]byte(line), &rec) == nil {
+				existingIDs[rec.TargetAgentID] = true
+			}
+		}
+	}
+	for _, sc := range scorecards {
+		if sc.WindowCount == 0 || existingIDs[sc.AgentID] {
+			continue
+		}
+		// Find agent spec from registry
+		var ag domain.AgentSpec
+		for _, a := range s.Sim().registry.Agents {
+			if a.ID == sc.AgentID {
+				ag = a
+				break
+			}
+		}
+		if ag.ID == "" || !ag.Enabled {
+			continue
+		}
+		eid := fmt.Sprintf("onboard-%s-%d", ag.ID, time.Now().Unix())
+		_ = s.Sim().ledger.RecordExperiment(domain.ExperimentRecord{
+			ID:               eid,
+			TargetAgentID:    ag.ID,
+			Skill:            ag.Skill,
+			MutationType:     "onboarding",
+			Status:           domain.ExperimentPlanned,
+			BaselineValue:    sc.SharpeLike,
+			AcceptanceMetric: "sharpe_like",
+		})
+		logging.Info("experiment", "onboarding_created",
+			"agent", ag.ID, "skill", ag.Skill)
+	}
+
 	return candidate, nil
 }
 
@@ -1083,14 +1230,16 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 
 	// Anomaly detection: warn on empty or suspicious sessions
 	if summary.OutcomeCount == 0 {
-		logging.Warn("system", "empty_session",
+		logging.Info(
+			"system", "session_no_outcomes",
 			"session_id", summary.SessionID,
 			"orders", summary.OrderCount,
 			"positions", summary.PositionCount,
 		)
 	}
 	if summary.PortfolioValue == 0 && summary.OrderCount > 0 {
-		logging.Warn("system", "zero_portfolio_with_orders",
+		logging.Warn(
+			"system", "zero_portfolio_with_orders",
 			"session_id", summary.SessionID,
 			"orders", summary.OrderCount,
 		)
@@ -1136,7 +1285,8 @@ func (s *System) saveSessionTrades(sessionID string, trades []domain.TradeRecord
 }
 
 func (s *System) ensurePersistentStateLoaded() error {
-	if s.Sim().session.Mode != "daily" || s.Sim().persistentState != nil {
+	mode := s.Sim().session.Mode
+	if (mode != "daily" && mode != "replay") || s.Sim().persistentState != nil {
 		return nil
 	}
 	loaded, err := sim.LoadPersistentState(s.Sim().cfg.LedgerDir)
@@ -1152,7 +1302,8 @@ func (s *System) ensurePersistentStateLoaded() error {
 }
 
 func (s *System) persistPersistentState() error {
-	if s.Sim().session.Mode != "daily" || s.Sim().persistentState == nil {
+	mode := s.Sim().session.Mode
+	if (mode != "daily" && mode != "replay") || s.Sim().persistentState == nil {
 		return nil
 	}
 	return sim.SavePersistentState(s.Sim().cfg.LedgerDir, s.Sim().persistentState)
@@ -1166,15 +1317,19 @@ func quoteBySymbolMap(quotes []domain.Quote) map[string]domain.Quote {
 	return m
 }
 
-func buildFinalRecKey(finalRecs []domain.Recommendation) map[string]struct{} {
+// buildPassedSymbolKey 回傳通過控制層 (CIO) 篩選的標的集合。改採 Symbol-only
+// key 是為了對齊 internal/orchestrator/AGENTS.md「ID 混淆」陷阱：CIO aggregator
+// 會以「最佳 agent」覆寫 Agent 欄位，若仍以 Symbol+"|"+Agent 作為 key 進行
+// PassedGuards 查核，非最佳 agent 的原始推薦會被誤判為未過濾。
+func buildPassedSymbolKey(finalRecs []domain.Recommendation) map[string]struct{} {
 	keys := make(map[string]struct{}, len(finalRecs))
 	for _, rec := range finalRecs {
-		keys[rec.Symbol+"|"+rec.Agent] = struct{}{}
+		keys[rec.Symbol] = struct{}{}
 	}
 	return keys
 }
 
-func syntheticForwardReturn(symbol string, quote domain.Quote) float64 {
+func syntheticForwardReturn(symbol string, quote domain.Quote, asOf time.Time) float64 {
 	if quote.Open > 0 {
 		intraday := (quote.Last - quote.Open) / quote.Open
 		fr := intraday * 0.8
@@ -1194,7 +1349,8 @@ func syntheticForwardReturn(symbol string, quote domain.Quote) float64 {
 	for _, r := range symbol {
 		sum += int64(r)
 	}
-	return (float64(sum%100)/100.0)*0.04 - 0.02
+	daySeed := int64(asOf.YearDay())
+	return (float64((sum+daySeed)%10000)/10000.0)*0.04 - 0.02
 }
 
 func buildParameterSnapshot() *shared.ParameterSnapshot {
@@ -1234,13 +1390,13 @@ func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes [
 		return nil
 	}
 	quoteMap := quoteBySymbolMap(quotes)
-	finalKey := buildFinalRecKey(finalRecs)
+	passedSymbols := buildPassedSymbolKey(finalRecs)
 	snapshot := buildParameterSnapshot()
 	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
 	for _, rec := range rawRecs {
 		quote := quoteMap[rec.Symbol]
-		forwardReturn := syntheticForwardReturn(rec.Symbol, quote)
-		_, passed := finalKey[rec.Symbol+"|"+rec.Agent]
+		forwardReturn := syntheticForwardReturn(rec.Symbol, quote, asOf)
+		_, passed := passedSymbols[rec.Symbol]
 		guardReason := ""
 		if !passed {
 			guardReason = "未通過控制層過濾"
@@ -1278,18 +1434,18 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 		return nil
 	}
 	quoteMap := quoteBySymbolMap(quotes)
-	finalKey := buildFinalRecKey(finalRecs)
+	passedSymbols := buildPassedSymbolKey(finalRecs)
 	snapshot := buildParameterSnapshot()
 	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
 	for _, rec := range rawRecs {
 		quote := quoteMap[rec.Symbol]
 		synthetic := false
 		forwardReturn, ok := ds.ForwardReturn(rec.Symbol, asOf, 1)
-		if !ok || forwardReturn == 0 {
-			forwardReturn = syntheticForwardReturn(rec.Symbol, quote)
+		if !ok {
+			forwardReturn = syntheticForwardReturn(rec.Symbol, quote, asOf)
 			synthetic = true
 		}
-		_, passed := finalKey[rec.Symbol+"|"+rec.Agent]
+		_, passed := passedSymbols[rec.Symbol]
 		guardReason := ""
 		if !passed {
 			guardReason = "未通過控制層過濾"
@@ -1331,6 +1487,23 @@ func (s *System) resolveReplayDate() (time.Time, bool) {
 		if err == nil {
 			return date, true
 		}
+	}
+	if len(s.Sim().replay.Dates) > 1 {
+		// Walk backward from last date to find one with measurable forward returns.
+		// The last dates may be flat (data generation gap), so skip to dates with
+		// actual price movement.
+		for i := len(s.Sim().replay.Dates) - 2; i >= 0; i-- {
+			date := s.Sim().replay.Dates[i]
+			// Check if at least one stock has non-zero ForwardReturn on this date
+			testSymbols := []string{"2330.TW", "2317.TW", "2881.TW"}
+			for _, sym := range testSymbols {
+				if fr, ok := s.Sim().replay.ForwardReturn(sym, date, 1); ok && fr != 0 {
+					return date, true
+				}
+			}
+		}
+		// Fallback: use second-to-last date even if flat
+		return s.Sim().replay.Dates[len(s.Sim().replay.Dates)-2], true
 	}
 	if len(s.Sim().replay.Dates) > 0 {
 		return s.Sim().replay.Dates[len(s.Sim().replay.Dates)-1], true
@@ -1483,7 +1656,24 @@ func (s *System) updateCapitalMetrics(ctx context.Context, result domain.Simulat
 	macroAssessment := s.assessMacroRisk(s.Sim().lastQuotes)
 	if macroAssessment != nil {
 		structuralAssessment, _ := s.assessStructuralTrends(ctx, QuotesToMacroDataSnapshot(s.Sim().lastQuotes))
-		_ = s.evaluateDrawdown(macroAssessment, structuralAssessment)
+		drawdownDecision := s.evaluateDrawdown(macroAssessment, structuralAssessment)
+		if s.strat.strategyEvolver != nil {
+			if ev := s.strat.strategyEvolver.Evaluate(macroAssessment, structuralAssessment, drawdownDecision); ev != nil {
+				logging.Info("strategy", "evolved",
+					logging.FStr("from", fmt.Sprintf("%d", ev.FromState)),
+					logging.FStr("to", fmt.Sprintf("%d", ev.ToState)),
+					logging.FStr("reason", ev.Reason))
+			}
+
+			rotator := portfolio.NewSectorRotator()
+			currentAllocs := s.currentSectorAllocations()
+			plan := rotator.GeneratePlan(macroAssessment, currentAllocs)
+			if modified, rationale := s.strat.strategyEvolver.ApplySectorRotation(plan); modified {
+				logging.Info("sector_rotation", "applied",
+					logging.FStr("primary_flow", plan.PrimaryFlow),
+					logging.FStr("rationale", rationale))
+			}
+		}
 	}
 }
 
@@ -1494,6 +1684,10 @@ func vixFromQuotes(quotes []domain.Quote) float64 {
 		}
 	}
 	return 20.0
+}
+
+func (s *System) currentSectorAllocations() map[string]float64 {
+	return nil
 }
 
 // RunDailyStressTests executes all built-in stress scenarios against the current

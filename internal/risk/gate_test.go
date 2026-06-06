@@ -121,6 +121,15 @@ func TestRiskGate_InTradeCheckNotInitialized(t *testing.T) {
 	}
 }
 
+func TestRiskGate_PreTradeCheckNotInitialized(t *testing.T) {
+	g := &RiskGate{} // nil preTrade
+
+	_, err := g.PreTradeCheck(context.Background(), OrderIntent{}, PortfolioState{})
+	if err == nil {
+		t.Fatal("expected error for uninitialized preTrade gate")
+	}
+}
+
 func TestRiskGate_PostTradeCheckNotInitialized(t *testing.T) {
 	g := &RiskGate{} // nil postTrade
 

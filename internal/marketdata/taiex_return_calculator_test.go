@@ -22,11 +22,12 @@ func TestTAIEXReturnCalculator_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	calc := NewTAIEXReturnCalculator()
-	calc.client = server.Client()
-	calc.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(server.Client())
 
-	ret, err := calc.Get1MonthReturn(context.Background())
+	ret, err := NewTAIEXReturnCalculator().Get1MonthReturn(context.Background())
 	if err != nil {
 		t.Fatalf("Get1MonthReturn failed: %v", err)
 	}
@@ -51,11 +52,12 @@ func TestTAIEXReturnCalculator_CurrentPriceFromCloses(t *testing.T) {
 	}))
 	defer server.Close()
 
-	calc := NewTAIEXReturnCalculator()
-	calc.client = server.Client()
-	calc.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(server.Client())
 
-	ret, err := calc.Get1MonthReturn(context.Background())
+	ret, err := NewTAIEXReturnCalculator().Get1MonthReturn(context.Background())
 	if err != nil {
 		t.Fatalf("Get1MonthReturn failed: %v", err)
 	}
@@ -72,11 +74,12 @@ func TestTAIEXReturnCalculator_APIFailure(t *testing.T) {
 	}))
 	defer server.Close()
 
-	calc := NewTAIEXReturnCalculator()
-	calc.client = server.Client()
-	calc.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(server.Client())
 
-	_, err := calc.Get1MonthReturn(context.Background())
+	_, err := NewTAIEXReturnCalculator().Get1MonthReturn(context.Background())
 	if err == nil {
 		t.Fatal("expected error on API failure")
 	}
@@ -89,11 +92,12 @@ func TestTAIEXReturnCalculator_HTMLResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	calc := NewTAIEXReturnCalculator()
-	calc.client = server.Client()
-	calc.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(server.Client())
 
-	_, err := calc.Get1MonthReturn(context.Background())
+	_, err := NewTAIEXReturnCalculator().Get1MonthReturn(context.Background())
 	if err == nil {
 		t.Fatal("expected error on HTML response")
 	}
@@ -107,19 +111,18 @@ func TestTAIEXReturnCalculator_InvalidJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
-	calc := NewTAIEXReturnCalculator()
-	calc.client = server.Client()
-	calc.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(server.Client())
 
-	_, err := calc.Get1MonthReturn(context.Background())
+	_, err := NewTAIEXReturnCalculator().Get1MonthReturn(context.Background())
 	if err == nil {
 		t.Fatal("expected error on invalid JSON")
 	}
 }
 
 func TestTAIEXReturnCalculator_HostFallback(t *testing.T) {
-	// fetchPrice iterates hosts: call 1 (host[0]) → 429, call 2 (host[1]) → 200
-	// fetchPastPrice: call 3 (host[0]) → 200
 	var callCount int
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
@@ -138,11 +141,12 @@ func TestTAIEXReturnCalculator_HostFallback(t *testing.T) {
 	defer server.Close()
 
 	host := strings.TrimPrefix(server.URL, "https://")
-	calc := NewTAIEXReturnCalculator()
-	calc.client = server.Client()
-	calc.hosts = []string{host, host}
+	origHosts := yahooHosts
+	yahooHosts = []string{host, host}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(server.Client())
 
-	ret, err := calc.Get1MonthReturn(context.Background())
+	ret, err := NewTAIEXReturnCalculator().Get1MonthReturn(context.Background())
 	if err != nil {
 		t.Fatalf("Get1MonthReturn failed after fallback: %v", err)
 	}
@@ -161,11 +165,12 @@ func TestTAIEXReturnCalculator_NoValidPrice(t *testing.T) {
 	}))
 	defer server.Close()
 
-	calc := NewTAIEXReturnCalculator()
-	calc.client = server.Client()
-	calc.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(server.Client())
 
-	_, err := calc.Get1MonthReturn(context.Background())
+	_, err := NewTAIEXReturnCalculator().Get1MonthReturn(context.Background())
 	if err == nil {
 		t.Fatal("expected error when no valid price data")
 	}
@@ -179,11 +184,12 @@ func TestTAIEXReturnCalculator_EmptyResult(t *testing.T) {
 	}))
 	defer server.Close()
 
-	calc := NewTAIEXReturnCalculator()
-	calc.client = server.Client()
-	calc.hosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(server.Client())
 
-	_, err := calc.Get1MonthReturn(context.Background())
+	_, err := NewTAIEXReturnCalculator().Get1MonthReturn(context.Background())
 	if err == nil {
 		t.Fatal("expected error on empty result")
 	}

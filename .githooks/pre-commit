@@ -1,0 +1,67 @@
+#!/bin/sh
+# atlas-go pre-commit hook
+# Blocks Mach-O/ELF compiled binaries and orphan artifacts from entering git index.
+
+set -e
+
+echo "🔍 pre-commit: checking for orphan/build artifacts..."
+
+had_errors=0
+
+# ─── Check 1: Mach-O / ELF compiled binaries ─────────────────────────────
+staged_files=$(git diff --cached --name-only --diff-filter=ACR 2>/dev/null)
+
+# On macOS, `file` detects Mach-O. On Linux, ELF.
+for f in $staged_files; do
+  if [ -f "$f" ]; then
+    ft=$(file "$f" 2>/dev/null)
+    case "$ft" in
+      *"Mach-O"*|*"ELF"*)
+        echo "ERROR: Compiled binary should not be committed: $f"
+        echo "  → Add to .gitignore and run: git rm --cached $f"
+        had_errors=1
+        ;;
+    esac
+  fi
+done
+
+# ─── Check 2: PID files ──────────────────────────────────────────────────
+for f in $staged_files; do
+  case "$f" in
+    *.pid)
+      echo "ERROR: PID file should not be committed: $f"
+      echo "  → Add /.gitignore entry and run: git rm --cached $f"
+      had_errors=1
+      ;;
+  esac
+done
+
+# ─── Check 3: Graphify semantic cache (should be in .gitignore) ──────────
+for f in $staged_files; do
+  case "$f" in
+    .graphify_*.json|graphify-out/*)
+      echo "WARNING: Graphify artifact staged: $f"
+      echo "  → .gitignore should already exclude this. Check .gitignore."
+      ;;
+  esac
+done
+
+# ─── Check 4: Coverage output files ──────────────────────────────────────
+for f in $staged_files; do
+  case "$f" in
+    *.out|cov_*|coverage.out)
+      echo "ERROR: Coverage report should not be committed: $f"
+      echo "  → /.gitignore already covers '*.out'. Run: git rm --cached $f"
+      had_errors=1
+      ;;
+  esac
+done
+
+if [ "$had_errors" -ne 0 ]; then
+  echo ""
+  echo "❌ Commit blocked. Remove the offending files from the index and try again."
+  echo "   Tip: git rm --cached <file>  (keeps file on disk)"
+  exit 1
+fi
+
+echo "✅ pre-commit: all checks passed"

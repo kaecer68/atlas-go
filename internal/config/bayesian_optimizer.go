@@ -184,7 +184,7 @@ func (opt *BayesianOptimizer) record(x []float64, y float64) {
 }
 
 func (opt *BayesianOptimizer) fitGP() {
-	if len(opt.observations) < 2 {
+	if len(opt.observations) < 10 {
 		return
 	}
 	n := len(opt.observations)
@@ -208,7 +208,7 @@ func stdFromBounds(bounds [][2]float64) float64 {
 }
 
 func (opt *BayesianOptimizer) proposeNext() []float64 {
-	if len(opt.observations) < 2 {
+	if len(opt.observations) < 10 {
 		return opt.randomPoint()
 	}
 	dim := len(opt.bounds)

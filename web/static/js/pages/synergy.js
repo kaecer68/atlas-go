@@ -2,25 +2,45 @@ import { escapeHtml } from '../main.js';
 import { agentName as getAgentName } from '../shared/constants.js';
 
 const MUTATION_TYPE_MAP = {
-  'prompt_tightening': '提示詞收緊',
-  'prompt_relaxation': '提示詞放寬',
-  'constraint_tightening': '約束收緊',
-  'constraint_relaxation': '約束放寬',
-  'risk_rule_update': '風控規則更新',
-  'portfolio_constraint': '投組約束調整',
-  'governance_routing': '治理路由調整',
-  'volume_filter': '成交量篩選調整',
-  'conviction_adjustment': '信念值調整',
+  'prompt_tightening': '策略收緊',
+  'prompt_relaxation': '策略放寬',
+  'constraint_tightening': '限制收緊',
+  'constraint_relaxation': '限制放寬',
+  'risk_rule_update': '風控更新',
+  'risk_rule_change': '風控調整',
+  'portfolio_constraint_revision': '投組治理',
+  'portfolio_constraint': '投組約束',
+  'governance_routing': '治理路由',
+  'volume_filter': '成交量篩選',
+  'conviction_adjustment': '信念調整',
   'parameter_sweep': '參數掃描',
+  'promote_spawned': '晉升候選',
+  'onboarding': '新手上路',
 };
 
 function mutationName(type) {
-  return MUTATION_TYPE_MAP[type] || type || '未知';
+  return MUTATION_TYPE_MAP[type] || type || '';
 }
 
-function fmtPct(v) {
-  if (v == null || isNaN(v)) return '-';
-  return (v * 100).toFixed(1) + '%';
+function mutationDescription(type, skill) {
+  const skillName = getAgentName(skill) || skill || '';
+  const m = {
+    'prompt_tightening': `${skillName} 的選股條件已被系統自動收緊，以提高推薦品質。`,
+    'prompt_relaxation': `${skillName} 的選股條件已被系統自動放寬，以增加機會覆蓋。`,
+    'risk_rule_change': `${skillName} 的風險閾值已被系統自動調整，以優化風險回報。`,
+    'risk_rule_update': `${skillName} 的風控規則已被系統更新。`,
+    'portfolio_constraint_revision': `${skillName} 的投組治理限制已被重新審視。`,
+    'portfolio_constraint': `${skillName} 的投組部位限制已被調整。`,
+    'governance_routing': `${skillName} 的執行路由已被調整。`,
+    'volume_filter': `${skillName} 的成交量篩選門檻已被調整。`,
+    'conviction_adjustment': `${skillName} 的信念值計算參數已被調整。`,
+    'parameter_sweep': `${skillName} 的參數已被系統掃描優化。`,
+    'promote_spawned': `${skillName} 新生成代理表現優異，已被晉升。`,
+    'constraint_tightening': `${skillName} 的限制條件已被收緊。`,
+    'constraint_relaxation': `${skillName} 的限制條件已被放寬。`,
+    'onboarding': `${skillName} 為系統新加入的代理，正在進行首次策略評估。`,
+  };
+  return m[type] || `系統已對 ${skillName} 進行自動優化調整。`;
 }
 
 function fmtVal(v) {
@@ -124,9 +144,10 @@ function renderLeaderboard(status, trend) {
     if (trendDir === 'down') trendHtml = '<span class="text-down">↓</span>';
 
     const sharpe = agent.rolling_sharpe || 0;
+    const totalSignals = agent.total_signals || 0;
     const sharpeHtml = sharpe > 0
       ? `<span style="color:var(--up)">${sharpe.toFixed(2)}</span>`
-      : (sharpe === 0 ? '<span class="text-muted">N/A</span>' : `<span style="color:var(--down)">${sharpe.toFixed(2)}</span>`);
+      : (sharpe < 0 ? `<span style="color:var(--down)">${sharpe.toFixed(2)}</span>` : '<span class="text-muted">N/A</span>');
 
     const hitRate = agent.hit_rate || 0;
     const hitRateHtml = hitRate >= 0.6
@@ -179,10 +200,26 @@ function renderCandidates(inbox) {
     return;
   }
 
-  const versionHtml = inbox.baseline_version ? `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">基線版本：v${inbox.baseline_version}</div>` : '';
+  const versionHtml = inbox.baseline_version ? `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">基線版本：v${inbox.baseline_version}</div>` : '';
+  const explainHtml = '<div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.4">系統每日自動選出表現最弱的 Agent 作為實驗候選(planned)。每 7 天執行測試後更新結果。下方為每個 Agent 的最新候選。</div>';
 
-  let html = versionHtml;
+  // Sort items into sections: planned, tested (accepted/rejected), history
+  const planned = [], tested = [], history = [];
   inbox.items.forEach(item => {
+    const s = item.status || '';
+    if (s === 'planned' || s === 'running') planned.push(item);
+    else if (s === 'accepted' || s === 'rejected') tested.push(item);
+    else history.push(item);
+  });
+
+  let html = versionHtml + explainHtml;
+
+  // Section headers — full-width separators in the grid
+  function sectionHeader(title, color) {
+    return `<div style="grid-column:1/-1;font-weight:700;color:${color};margin-top:12px;font-size:13px;padding-bottom:4px;border-bottom:1px solid var(--border)">${title}</div>`;
+  }
+
+  function renderCard(item) {
     const agentId = item.target_agent_id || '';
     const mutation = item.mutation_type || '';
     const summary = item.mutation_summary || '';
@@ -191,7 +228,9 @@ function renderCandidates(inbox) {
     const bv = item.baseline_value;
     const cv = item.candidate_value;
     let compareHtml = '';
-    if (bv != null && cv != null && (bv !== 0 || cv !== 0)) {
+    if (status === 'planned') {
+      compareHtml = `<div class="meta" style="font-size:11px">基線 SharpeLike ${fmtVal(bv)} → 候選 <span style="color:var(--warn)">待測試</span></div>`;
+    } else if (bv != null && cv != null && (bv !== 0 || cv !== 0)) {
       const better = cv > bv;
       compareHtml = `<div class="meta" style="font-size:11px">基線 ${fmtVal(bv)} → 候選 <span style="color:${better ? 'var(--up)' : 'var(--down)'}">${fmtVal(cv)}</span></div>`;
     }
@@ -212,14 +251,28 @@ function renderCandidates(inbox) {
       <div class="inbox-card">
         <div class="title">${escapeHtml(item.experiment_id)}</div>
         <div class="meta">${escapeHtml(getAgentName(agentId))} ${statusBadge(status)}</div>
-        <div class="meta">突變：${escapeHtml(mutationName(mutation))}</div>
+        <div class="meta"><strong>${escapeHtml(mutationName(mutation))}</strong></div>
+        <div style="font-size:11px;color:var(--muted);margin:4px 0;line-height:1.5">${escapeHtml(mutationDescription(mutation, item.skill))}</div>
         ${compareHtml}
         ${moneyHtml}
-        ${summary ? `<div style="font-size:10px; color:var(--muted); margin-top:4px; word-break:break-all;">${escapeHtml(summary)}</div>` : ''}
+        ${summary ? `<div style="font-size:10px;color:var(--muted);margin-top:4px;word-break:break-all">${escapeHtml(summary)}</div>` : ''}
         ${rejectHtml}
       </div>
     `;
-  });
+  }
+
+  if (planned.length) {
+    html += sectionHeader(`📋 待測試（${planned.length}）`, 'var(--warn)');
+    planned.forEach(renderCard);
+  }
+  if (tested.length) {
+    html += sectionHeader(`✅ 已測試（${tested.length}）`, 'var(--up)');
+    tested.forEach(renderCard);
+  }
+  if (history.length) {
+    html += sectionHeader(`📁 歷史記錄（${history.length}）`, 'var(--muted)');
+    history.forEach(renderCard);
+  }
 
   container.innerHTML = html;
 }

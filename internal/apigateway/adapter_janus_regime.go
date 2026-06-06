@@ -21,7 +21,7 @@ type JANUSRegimeChannelAdapter struct {
 func NewJANUSRegimeChannelAdapter(engine *janus.Engine) *JANUSRegimeChannelAdapter {
 	return &JANUSRegimeChannelAdapter{
 		engine:  engine,
-		limiter: rate.NewLimiter(rate.Every(5*time.Second), 1),
+		limiter: rate.NewLimiter(rate.Inf, 0), // computed data, no rate limit
 	}
 }
 

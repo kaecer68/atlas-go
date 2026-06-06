@@ -11,8 +11,10 @@ import (
 )
 
 type janusPlugin struct {
-	engine *janus.Engine
-	core   ServiceRegistry
+	engine       *janus.Engine
+	prismManager *prism.PRISMManager
+	consumed     int
+	core         ServiceRegistry
 }
 
 func (p *janusPlugin) Name() string { return "janus" }
@@ -86,6 +88,35 @@ func (p *janusPlugin) PostSimulation(quotes []domain.Quote, regime domain.Regime
 
 	// Recompute weights and regime classification.
 	p.engine.Update()
+
+	if p.prismManager == nil {
+		return
+	}
+
+	results := p.prismManager.GetCompletedResults()
+	if len(results) == 0 {
+		return
+	}
+	if p.consumed > len(results) {
+		p.consumed = 0
+	}
+	pending := results[p.consumed:]
+	if len(pending) == 0 {
+		return
+	}
+
+	consumed := false
+	for _, result := range pending {
+		if result.Result.Error != "" || result.Result.Synthetic {
+			continue
+		}
+		p.engine.RecordTrainingResult(result.Regime, result.Result)
+		consumed = true
+	}
+	p.consumed = len(results)
+	if consumed {
+		p.engine.Update()
+	}
 }
 
 type swarmPlugin struct {

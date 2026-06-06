@@ -2,8 +2,10 @@ package orchestrator
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -129,6 +131,7 @@ func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommen
 		targetPrice    float64
 		stopLossPrice  float64
 		bestAgent      string
+		bestSide       domain.Side
 	}
 
 	params := config.GetParametersConfig().Orchestrator
@@ -146,6 +149,7 @@ func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommen
 			entry.targetPrice = rec.TargetPrice
 			entry.stopLossPrice = rec.StopLossPrice
 			entry.bestAgent = rec.Agent
+			entry.bestSide = rec.Side
 		}
 	}
 
@@ -171,12 +175,26 @@ func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommen
 			Skill:         agent.Skill,
 			Layer:         agent.Layer,
 			Symbol:        symbol,
-			Side:          domain.SideBuy,
+			Side:          entry.bestSide,
 			Conviction:    avgConviction,
 			Reason:        reason,
 			TargetPrice:   entry.targetPrice,
 			StopLossPrice: entry.stopLossPrice,
 		})
+	}
+
+	// Apply diversity bonus: penalize crowded symbols, reward unique high-conviction picks.
+	for i := range out {
+		entry := bySymbol[out[i].Symbol]
+		if entry.count > 1 {
+			penalty := math.Min(0.20, float64(entry.count-1)*0.05)
+			out[i].Conviction = int(float64(out[i].Conviction) * (1 - penalty))
+		} else if out[i].Conviction >= 50 {
+			out[i].Conviction += 5
+			if out[i].Conviction > 100 {
+				out[i].Conviction = 100
+			}
+		}
 	}
 
 	slices.SortFunc(out, func(a, b domain.Recommendation) int {
@@ -224,6 +242,7 @@ func (e CIOPortfolioExecutorWithWeights) Apply(agent domain.AgentSpec, recs []do
 		stopLossPrice      float64
 		bestScore          float64
 		bestAgent          string
+		bestSide           domain.Side
 	}
 
 	bySymbol := map[string]*agg{}
@@ -251,6 +270,7 @@ func (e CIOPortfolioExecutorWithWeights) Apply(agent domain.AgentSpec, recs []do
 			entry.targetPrice = rec.TargetPrice
 			entry.stopLossPrice = rec.StopLossPrice
 			entry.bestAgent = rec.Agent
+			entry.bestSide = rec.Side
 		}
 	}
 
@@ -316,13 +336,142 @@ func (e CIOPortfolioExecutorWithWeights) Apply(agent domain.AgentSpec, recs []do
 	return out
 }
 
-// SuperinvestorExecutor handles superinvestor layer recommendations with quality filtering
+// SuperinvestorExecutor implements BOTH AgentExecutor (signal generation via Recommend)
+// and ControlExecutor (quality gate via Apply) for superinvestor-layer agents.
+//
+// DUAL ROLE — Portfolio Manager analogy:
+//   - AgentExecutor.Recommend(): Generates themed, high-conviction recommendations.
+//     Each superinvestor acts as a PM with concentrated universe and philosophy-specific
+//     conviction adjustments. Base conviction starts at SuperinvestorConvictionBase (70),
+//     higher than sector agents (~55-60), reflecting a PM's quality bar.
+//   - ControlExecutor.Apply(): Filters ALL recommendations by SuperinvestorMinConviction (65).
+//     This quality gate runs AFTER Darwinian weighting but BEFORE final output.
+//
+// The same struct appears in BOTH builtinAgentExecutors() and builtinControlExecutors()
+// in loader.go. Do NOT split into separate structs — the dual role is intentional.
+//
+// Darwinian tracking: LayerSuperinvestor agents are automatically tracked by
+// DarwinianWeightManager (see darwinian_weights.go InitializeFromRegistry).
+// Performance-based weight adjustments flow back into conviction via
+// ApplyDarwinianWeightsWithEvents().
 type SuperinvestorExecutor struct{}
 
 func (SuperinvestorExecutor) Supports(agent domain.AgentSpec) bool {
 	return agent.Layer == domain.LayerSuperinvestor
 }
 
+// Recommend generates a themed, high-conviction recommendation for superinvestor agents.
+// This is the Portfolio Manager role: concentrated, thesis-driven picks from a curated universe.
+//
+// Conviction logic:
+//  1. Base = SuperinvestorConvictionBase parameter (default 70, higher than sector's ~55)
+//  2. Theme-specific keyword boosts (driven by agent prompt content + quote conditions)
+//  3. Momentum and liquidity factor adjustments
+//  4. Floor check against SuperinvestorMinConviction — PMs don't recommend unless conviction
+//     meets the quality bar
+func (SuperinvestorExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
+	params := config.GetParametersConfig().Orchestrator
+	minConv := params.SuperinvestorMinConviction.Value
+
+	// Use dynamicSignalStrength as base (55-75 range) to match sector agent behavior.
+	// Add superinvestor conviction premium (+5) to maintain PM quality bar.
+	b := newConvictionBuilder(dynamicSignalStrength(quote, signalParamsFromAgent(agent))+5, minConv)
+
+	// Theme-specific conviction adjustments based on agent skill
+	switch agent.Skill {
+	case "druckenmiller_macro":
+		if strings.Contains(prompt, "momentum") && quote.Last > quote.Open {
+			b.add("macro_momentum_boost", 8, "momentum keyword + uptrend matches Druckenmiller thesis")
+		}
+		if strings.Contains(prompt, "asymmetric") && quote.Volume > 10_000_000 {
+			b.add("asymmetric_volume", 5, "asymmetric keyword + high volume")
+		}
+		if strings.Contains(prompt, "macro") && quote.Last > quote.High*0.98 {
+			b.add("macro_near_high", 5, "macro keyword + near session high")
+		}
+
+	case "aschenbrenner_ai_compute":
+		if strings.Contains(prompt, "ai_capex") && quote.Last > quote.Open {
+			b.add("ai_capex_boost", 8, "ai_capex keyword + uptrend matches compute cycle thesis")
+		}
+		if strings.Contains(prompt, "compute") && quote.Last > quote.High*0.98 {
+			b.add("compute_near_high", 5, "compute keyword + near session high")
+		}
+		if strings.Contains(prompt, "datacenter") {
+			b.add("datacenter_boost", 6, "datacenter keyword indicates infrastructure demand")
+		}
+
+	case "baker_deep_tech":
+		if strings.Contains(prompt, "ip_moat") && quote.Last > quote.Open {
+			b.add("ip_moat_boost", 8, "ip_moat keyword + uptrend indicates moat recognition")
+		}
+		if strings.Contains(prompt, "patent") {
+			b.add("patent_boost", 5, "patent keyword indicates IP catalyst")
+		}
+		if strings.Contains(prompt, "differentiation") && quote.Last > quote.High*0.98 {
+			b.add("differentiation_near_high", 5, "differentiation keyword + strong close")
+		}
+
+	case "ackman_quality":
+		if strings.Contains(prompt, "quality") && quote.Last > quote.Open {
+			b.add("quality_boost", 8, "quality keyword + uptrend matches compounder thesis")
+		}
+		if strings.Contains(prompt, "catalyst") {
+			b.add("catalyst_boost", 7, "catalyst keyword indicates near-term activation")
+		}
+		if strings.Contains(prompt, "compounder") && quote.Last > quote.High*0.99 {
+			b.add("compounder_near_high", 5, "compounder keyword + near session high")
+		}
+	}
+
+	// PMs require price confirmation — penalize weak closes
+	if quote.Last < quote.Open {
+		b.add("weak_close_penalty", -10, "last < open — PM requires price confirmation")
+	}
+	if quote.Last < quote.High*0.95 {
+		b.add("far_from_high_penalty", -8, "last < 95% of high — weak session")
+	}
+
+	fc := loadFactorConfig()
+	addMomentumAdjustment(b, fq, quote.Symbol, fc)
+	addLiquidityAdjustment(b, fq, quote.Symbol, fc)
+
+	if !b.floorCheck() {
+		return domain.Recommendation{}, false
+	}
+
+	// Tighter price targets for PMs (10% upside, 8% downside vs sector's 7%/6%)
+	tp, slp := priceTargets(quote, 1.10, 0.92)
+	conv, cb := b.build()
+
+	reason := "superinvestor thematic conviction"
+	switch agent.Skill {
+	case "druckenmiller_macro":
+		reason = "macro momentum asymmetric thesis"
+	case "aschenbrenner_ai_compute":
+		reason = "AI compute cycle durable demand thesis"
+	case "baker_deep_tech":
+		reason = "deep tech IP moat differentiation thesis"
+	case "ackman_quality":
+		reason = "quality compounder catalyst thesis"
+	}
+
+	return domain.Recommendation{
+		Agent:               agent.ID,
+		Skill:               agent.Skill,
+		Layer:               agent.Layer,
+		Symbol:              quote.Symbol,
+		Side:                domain.SideBuy,
+		Conviction:          conv,
+		Reason:              reason,
+		TargetPrice:         tp,
+		StopLossPrice:       slp,
+		ConvictionBreakdown: cb,
+	}, true
+}
+
+// Apply implements ControlExecutor — quality gate that filters recommendations
+// by SuperinvestorMinConviction. This runs AFTER Darwinian weighting.
 func (SuperinvestorExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy) []domain.Recommendation {
 	params := config.GetParametersConfig().Orchestrator
 	minConviction := max(policy.ConvictionFloor, params.SuperinvestorMinConviction.Value)

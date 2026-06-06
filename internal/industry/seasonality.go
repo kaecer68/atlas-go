@@ -23,7 +23,7 @@ type SeasonalPattern struct {
 	AvoidedIndustries  []string `json:"avoided_industries"`
 	AdjustmentFactor   float64  `json:"adjustment_factor"`   // e.g., 1.2 for favored
 	HistoricalAccuracy float64  `json:"historical_accuracy"` // 0.0 to 1.0
-	AvgMarketReturn    float64  `json:"avg_market_return"`   // Historical average TAIEX return
+	AvgMarketReturn    float64  `json:"avg_market_return"`   // 期間累積報酬（geometric compound return）：e.g. 0.032 = 該季節 3.2% 累積漲幅。校準器與預設值單位需對齊。
 	Description        string   `json:"description"`
 }
 
@@ -32,10 +32,6 @@ func (p SeasonalPattern) IsRelevantForIndustry(industryID string) bool {
 		return true
 	}
 	return slices.Contains(p.AvoidedIndustries, industryID)
-}
-
-func (p SeasonalPattern) TypicalReturn() float64 {
-	return p.AvgMarketReturn
 }
 
 func (p SeasonalPattern) AffectedIndustries() []string {
@@ -62,7 +58,11 @@ type NarrativeSeasonalProvider interface {
 
 // NewSeasonalEngine creates a seasonal engine using the parameter-managed seasonal patterns.
 func NewSeasonalEngine() *SeasonalEngine {
-	return NewSeasonalEngineFromConfig(config.GetParametersConfig())
+	cfg := config.GetParametersConfig()
+	if cfg == nil {
+		return NewSeasonalEngineFromConfig(nil)
+	}
+	return NewSeasonalEngineFromConfig(cfg)
 }
 
 // Deprecated: use cfg.Industry.SeasonalPatterns from parameters.json instead.
@@ -76,7 +76,7 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           15,
 			EndMonth:           2,
 			EndDay:             15,
-			FavoredIndustries:  []string{"financials", "high_dividend", "small_cap", "mining"},
+			FavoredIndustries:  []string{"financials", "mining"},
 			AvoidedIndustries:  []string{"semiconductor", "ai_supply_chain"},
 			AdjustmentFactor:   1.15,
 			HistoricalAccuracy: 0.70,
@@ -91,8 +91,7 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           1,
 			EndMonth:           4,
 			EndDay:             15,
-			FavoredIndustries:  []string{"ai_supply_chain", "growth_momentum"},
-			AvoidedIndustries:  []string{"traditional", "commodity"},
+			FavoredIndustries:  []string{"ai_supply_chain"},
 			AdjustmentFactor:   1.10,
 			HistoricalAccuracy: 0.55,
 			AvgMarketReturn:    0.015,
@@ -106,8 +105,8 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           1,
 			EndMonth:           6,
 			EndDay:             30,
-			FavoredIndustries:  []string{"financials", "high_dividend", "consumer"},
-			AvoidedIndustries:  []string{"semiconductor", "ai_supply_chain", "technology"},
+			FavoredIndustries:  []string{"financials", "consumer"},
+			AvoidedIndustries:  []string{"semiconductor", "ai_supply_chain"},
 			AdjustmentFactor:   1.20,
 			HistoricalAccuracy: 0.65,
 			AvgMarketReturn:    0.025,
@@ -121,8 +120,8 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           1,
 			EndMonth:           9,
 			EndDay:             15,
-			FavoredIndustries:  []string{"semiconductor", "ai_supply_chain", "pcb", "electronics"},
-			AvoidedIndustries:  []string{"consumer", "tourism", "traditional"},
+			FavoredIndustries:  []string{"semiconductor", "ai_supply_chain", "electronics"},
+			AvoidedIndustries:  []string{"consumer"},
 			AdjustmentFactor:   1.25,
 			HistoricalAccuracy: 0.75,
 			AvgMarketReturn:    0.085,
@@ -136,7 +135,7 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           15,
 			EndMonth:           10,
 			EndDay:             31,
-			FavoredIndustries:  []string{"earnings_beaters"},
+			FavoredIndustries:  []string{},
 			AvoidedIndustries:  []string{"earnings_missers"},
 			AdjustmentFactor:   1.10,
 			HistoricalAccuracy: 0.60,
@@ -151,8 +150,8 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           1,
 			EndMonth:           12,
 			EndDay:             31,
-			FavoredIndustries:  []string{"large_cap", "financials", "index_heavyweights"},
-			AvoidedIndustries:  []string{"small_cap", "speculative"},
+			FavoredIndustries:  []string{"financials"},
+			AvoidedIndustries:  []string{},
 			AdjustmentFactor:   1.12,
 			HistoricalAccuracy: 0.58,
 			AvgMarketReturn:    0.018,
@@ -166,8 +165,8 @@ func DefaultSeasonalPatterns() []SeasonalPattern {
 			StartDay:           1,
 			EndMonth:           8,
 			EndDay:             31,
-			FavoredIndustries:  []string{"energy", "utilities", "power_equipment"},
-			AvoidedIndustries:  []string{"high_power_consumption", "steel", "petrochemicals"},
+			FavoredIndustries:  []string{"energy"},
+			AvoidedIndustries:  []string{},
 			AdjustmentFactor:   1.08,
 			HistoricalAccuracy: 0.62,
 			AvgMarketReturn:    0.012,
@@ -267,7 +266,7 @@ func (se *SeasonalEngine) GetPatternAdjustment(industryID string, t time.Time) f
 	}
 
 	if adjustment <= 0 {
-		adjustment = 0.01
+		adjustment = config.GetParametersConfig().Industry.AdjustmentFloor.Value
 	}
 	return adjustment
 }
@@ -282,18 +281,30 @@ func (se *SeasonalEngine) GetActivePatternNames(t time.Time) []string {
 	return names
 }
 
+// daysInMonth for non-leap year (used for day-of-year conversion).
+var daysInMonth = []int{0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
+
+// dayOfYear converts month/day to day-of-year (1..365) using a non-leap-year reference.
+func dayOfYear(month, day int) int {
+	doy := 0
+	for m := 1; m < month; m++ {
+		doy += daysInMonth[m]
+	}
+	return doy + day
+}
+
 // isDateInRange checks if a date falls within a seasonal range (handles year wrap).
 func (se *SeasonalEngine) isDateInRange(month, day, startMonth, startDay, endMonth, endDay int) bool {
-	dateValue := month*100 + day
-	startValue := startMonth*100 + startDay
-	endValue := endMonth*100 + endDay
+	dateDOY := dayOfYear(month, day)
+	startDOY := dayOfYear(startMonth, startDay)
+	endDOY := dayOfYear(endMonth, endDay)
 
-	if startValue <= endValue {
-		// Normal range (e.g., 7/1 to 9/15)
-		return dateValue >= startValue && dateValue <= endValue
+	if startDOY <= endDOY {
+		// Normal range (e.g., day 182 to day 258)
+		return dateDOY >= startDOY && dateDOY <= endDOY
 	}
-	// Wrapped range (e.g., 12/20 to 1/15)
-	return dateValue >= startValue || dateValue <= endValue
+	// Wrapped range (e.g., day 354 to day 15)
+	return dateDOY >= startDOY || dateDOY <= endDOY
 }
 
 // GetPatternByID returns a specific seasonal pattern by ID.
@@ -392,7 +403,8 @@ func (se *SeasonalEngine) patternSpansMonth(p SeasonalPattern, month int) bool {
 
 // String returns a human-readable summary of the seasonal pattern.
 func (p SeasonalPattern) String() string {
-	return fmt.Sprintf("%s (%s): %02d/%02d-%02d/%02d, Accuracy: %.0f%%, Avg Return: %.1f%%",
+	return fmt.Sprintf(
+		"%s (%s): %02d/%02d-%02d/%02d, Accuracy: %.0f%%, Avg Return: %.1f%%",
 		p.Name, p.NameEN,
 		p.StartMonth, p.StartDay,
 		p.EndMonth, p.EndDay,
@@ -489,7 +501,7 @@ func (se *SeasonalEngine) GetAdjustmentBreakdown(industryID string, t time.Time)
 	}
 	ab.DynamicEnv = env
 
-	ab.Composite = math.Max(direct*sc*narr*env, 0.01)
+	ab.Composite = math.Max(direct*sc*narr*env, config.GetParametersConfig().Industry.AdjustmentFloor.Value)
 	return ab
 }
 
@@ -516,6 +528,9 @@ func seasonalPatternsFromConfig(cfgs []config.SeasonalPatternConfig) []SeasonalP
 }
 
 func NewSeasonalEngineFromConfig(cfg *config.ParametersConfig) *SeasonalEngine {
+	if cfg == nil {
+		return &SeasonalEngine{patterns: DefaultSeasonalPatterns()}
+	}
 	patterns := seasonalPatternsFromConfig(cfg.Industry.SeasonalPatterns.Value)
 	return &SeasonalEngine{patterns: patterns}
 }
@@ -572,13 +587,29 @@ func (se *SeasonalEngine) detectThemeDirection(theme string) float64 {
 		}
 	}
 
+	oilThreshold := 0.05
+	usRatesThreshold := 0.03
+	jpyCarryThreshold := 0.03
+	if cfg := config.GetParametersConfig(); cfg != nil {
+		de := cfg.Industry.DynamicEnv.Value
+		if t := de.OilPriceShockThreshold; t > 0 {
+			oilThreshold = t
+		}
+		if t := de.UsRatesDxyThreshold; t > 0 {
+			usRatesThreshold = t
+		}
+		if t := de.JpyCarryDxyThreshold; t > 0 {
+			jpyCarryThreshold = t
+		}
+	}
+
 	switch theme {
 	case "oil_price_shock":
 		// Use actual oil price deviation
 		dev := se.dynamicEnv.OilDeviation()
-		if dev > 0.05 {
+		if dev > oilThreshold {
 			return 1.0 // oil rising
-		} else if dev < -0.05 {
+		} else if dev < -oilThreshold {
 			return -1.0 // oil falling
 		}
 		// Near neutral, use small positive bias (shocks are typically supply disruptions = price up)
@@ -588,9 +619,9 @@ func (se *SeasonalEngine) detectThemeDirection(theme string) float64 {
 		// Use US 10Y yield deviation as proxy for rate direction
 		// DXY deviation is positively correlated with rates
 		dxyDev := se.dynamicEnv.DXYDeviation()
-		if dxyDev > 0.03 {
+		if dxyDev > usRatesThreshold {
 			return 1.0 // dollar strong = rates likely rising
-		} else if dxyDev < -0.03 {
+		} else if dxyDev < -usRatesThreshold {
 			return -1.0 // dollar weak = rates likely falling
 		}
 		return 1.0
@@ -610,7 +641,7 @@ func (se *SeasonalEngine) detectThemeDirection(theme string) float64 {
 		// JPY carry unwind is inherently a negative event for exporters
 		// Direction is determined by JPY strength (not directly tracked, use DXY inverse)
 		dxyDev := se.dynamicEnv.DXYDeviation()
-		if dxyDev < -0.03 {
+		if dxyDev < -jpyCarryThreshold {
 			return -1.0 // dollar weak = JPY likely strong = unwind pressure
 		}
 		return -1.0 // Default negative

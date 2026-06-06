@@ -845,11 +845,19 @@ func TestBayesianOptimizer_FitGP_EnoughObservations(t *testing.T) {
 	opt := NewBayesianOptimizer([][2]float64{{0, 1}}, eval, DefaultOptimizerConfig())
 	opt.observations = []point{
 		{X: []float64{0.0}, Value: 0.0},
-		{X: []float64{1.0}, Value: 1.0},
+		{X: []float64{0.1}, Value: 0.1},
+		{X: []float64{0.2}, Value: 0.2},
+		{X: []float64{0.3}, Value: 0.3},
+		{X: []float64{0.4}, Value: 0.4},
+		{X: []float64{0.5}, Value: 0.5},
+		{X: []float64{0.6}, Value: 0.6},
+		{X: []float64{0.7}, Value: 0.7},
+		{X: []float64{0.8}, Value: 0.8},
+		{X: []float64{0.9}, Value: 0.9},
 	}
 	opt.fitGP()
 	if !opt.gp.trained {
-		t.Error("GP should be trained after fitGP with >=2 observations")
+		t.Error("GP should be trained after fitGP with >=10 observations")
 	}
 }
 

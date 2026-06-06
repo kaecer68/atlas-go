@@ -32,7 +32,8 @@ func paramSensitivity(paramValue string) *float64 {
 // not hardcoded in the engine.
 type IndustryCycleModulator struct {
 	tracker         *industry.CycleTracker
-	skillToIndustry map[string]string // nil = no-op (config not loaded); not a bug
+	skillToIndustry map[string]string         // nil = no-op (config not loaded); not a bug
+	cycleCard       *industry.CycleStatusCard // Wave 4: composite cycle sentiment card
 }
 
 func NewIndustryCycleModulator(tracker *industry.CycleTracker) *IndustryCycleModulator {
@@ -45,6 +46,79 @@ func NewIndustryCycleModulator(tracker *industry.CycleTracker) *IndustryCycleMod
 
 func (m *IndustryCycleModulator) IsAvailable() bool {
 	return m != nil && m.tracker != nil
+}
+
+// SetCycleCard stores a CycleStatusCard for use in position sizing and
+// score modulation. Pass nil to clear the cached card.
+func (m *IndustryCycleModulator) SetCycleCard(card *industry.CycleStatusCard) {
+	if m == nil {
+		return
+	}
+	m.cycleCard = card
+}
+
+// GetCycleCard returns the currently cached CycleStatusCard, or nil.
+func (m *IndustryCycleModulator) GetCycleCard() *industry.CycleStatusCard {
+	if m == nil {
+		return nil
+	}
+	return m.cycleCard
+}
+
+// ModulatePosition adjusts a position size by the composite cycle sentiment.
+// When cycle confidence is low (< 0.3), position is reduced by 20%.
+// When cycle confidence is high (> 0.7), full position is allowed.
+// When no card is available, the position is returned unchanged.
+func (m *IndustryCycleModulator) ModulatePosition(size float64, card *industry.CycleStatusCard) float64 {
+	if card == nil || size <= 0 {
+		return size
+	}
+	conf := card.CycleConfidence
+	switch {
+	case conf < 0.3:
+		return size * 0.80
+	case conf > 0.7:
+		return size
+	default:
+		return size * 0.90
+	}
+}
+
+// ModulateScore adjusts a conviction score by the composite cycle coefficient.
+// CompositeCoefficient ranges [0.8, 1.2]; scores are scaled proportionally.
+// When no card is available, the score is returned unchanged.
+func (m *IndustryCycleModulator) ModulateScore(score int, card *industry.CycleStatusCard) int {
+	if card == nil || score <= 0 {
+		return score
+	}
+	coef := card.CompositeCoefficient
+	if coef == 0 {
+		return score
+	}
+	multiplier := 1.0 + (coef-1.0)*2.0
+	if multiplier < 0.6 {
+		multiplier = 0.6
+	}
+	if multiplier > 1.4 {
+		multiplier = 1.4
+	}
+	return int(float64(score) * multiplier)
+}
+
+// CycleConfidenceFromCard returns the cycle confidence from the cached card
+// for the given industry. Falls back to CycleTracker if card is unavailable.
+func (m *IndustryCycleModulator) CycleConfidenceFromCard(industryID string) float64 {
+	card := m.GetCycleCard()
+	if card != nil {
+		return card.CycleConfidence
+	}
+	if m.tracker != nil {
+		pos, ok := m.tracker.GetPosition(industryID)
+		if ok {
+			return pos.Confidence
+		}
+	}
+	return 0.5
 }
 
 func phaseDelta(phase industry.CyclePhase) int {

@@ -1,0 +1,25 @@
+{
+  "$schema": "../../../../schemas/data_metadata.schema.json",
+  "name": "capital_flow",
+  "description": "每日主力/法人資金流向數據。驅動行業輪動分析。同時寫入 PostgreSQL capital_flow hypertable（雙儲存）。",
+  "maturity": "evolving",
+  "data_type": "directory",
+  "format": "YYYYMMDD_capital_flow.json（每日獨立檔案，P1.1 命名修正後）",
+  "producer_module": "internal/marketdata",
+  "producer_function": "twse_capital_flow_provider.Fetch",
+  "consumer_modules": [
+    "internal/industry"
+  ],
+  "schema_ref": null,
+  "catalog_ref": "docs/DATA_CATALOG.md#capital_flow",
+  "created_date": "2025-05-19",
+  "last_modified": "continuous",
+  "estimated_size": {
+    "files": 82,
+    "growth_rate": "~1/day"
+  },
+  "retention_policy": "indefinite",
+  "backup_policy": "PostgreSQL dual-write",
+  "tags": ["capital-flow", "institutional", "sector-rotation"],
+  "notes": "⚠️ 雙儲存（檔案 + PostgreSQL）。P1.1 已修正命名格式從 YYYYMMDD.json → YYYYMMDD_capital_flow.json。舊格式檔案需手動重新命名。"
+}

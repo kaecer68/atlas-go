@@ -24,6 +24,9 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/dashboard/industry-shock-simulation", shared.Post(h.HandleShockSimulation))
 	mux.Handle("GET /api/dashboard/industry-graph", shared.Get(h.HandleIndustryGraph))
 	mux.Handle("GET /api/dashboard/industry-detail", shared.Get(h.HandleIndustryDetail))
+	mux.Handle("GET /api/dashboard/cycle-status-card", shared.Get(h.HandleCycleStatusCard))
+	mux.Handle("GET /api/dashboard/industry-calibration", shared.Get(h.HandleIndustryCalibration))
+	mux.Handle("GET /api/dashboard/calendar-events", shared.Get(h.HandleCalendarEvents))
 }
 
 func (h *Handlers) HandleIndustryClassification(r *http.Request) (int, any) {
@@ -52,7 +55,9 @@ func (h *Handlers) HandleIndustrySeasonality(r *http.Request) (int, any) {
 			"end_month":           p.EndMonth,
 			"end_day":             p.EndDay,
 			"historical_accuracy": p.HistoricalAccuracy,
-			"typical_return":      p.TypicalReturn,
+			"avg_market_return":   p.AvgMarketReturn,
+			// Deprecated: remove after 2026-Q3 migration window.
+			"typical_return":      p.AvgMarketReturn,
 			"affected_industries": p.AffectedIndustries,
 		})
 	}
@@ -69,11 +74,13 @@ func (h *Handlers) HandleIndustrySeasonality(r *http.Request) (int, any) {
 			"end_month":           p.EndMonth,
 			"end_day":             p.EndDay,
 			"historical_accuracy": p.HistoricalAccuracy,
-			"typical_return":      p.TypicalReturn,
-			"adjustment_factor":   p.AdjustmentFactor,
-			"favored_industries":  p.FavoredIndustries,
-			"avoided_industries":  p.AvoidedIndustries,
-			"impact":              p.Impact,
+			"avg_market_return":   p.AvgMarketReturn,
+			// Deprecated: remove after 2026-Q3 migration window.
+			"typical_return":     p.AvgMarketReturn,
+			"adjustment_factor":  p.AdjustmentFactor,
+			"favored_industries": p.FavoredIndustries,
+			"avoided_industries": p.AvoidedIndustries,
+			"impact":             p.Impact,
 		})
 	}
 
@@ -324,5 +331,113 @@ func (h *Handlers) HandleIndustryGraph(r *http.Request) (int, any) {
 	return http.StatusOK, map[string]any{
 		"nodes": nodeList,
 		"edges": edgeList,
+	}
+}
+
+func (h *Handlers) HandleCycleStatusCard(r *http.Request) (int, any) {
+	industryID := r.URL.Query().Get("industry")
+	now := time.Now()
+
+	var card any
+	var err error
+	if industryID != "" {
+		card, err = h.Svc.BuildIndustryCycleStatusCard(now, industryID)
+	} else {
+		card, err = h.Svc.BuildCycleStatusCard(now)
+	}
+	if err != nil {
+		return http.StatusInternalServerError, map[string]any{
+			"error": err.Error(),
+		}
+	}
+	return http.StatusOK, map[string]any{
+		"card": card,
+	}
+}
+
+func (h *Handlers) HandleIndustryCalibration(r *http.Request) (int, any) {
+	if h.Svc == nil {
+		return http.StatusInternalServerError, map[string]string{"error": "service not available"}
+	}
+
+	metrics := h.Svc.GetCalibrationMetrics()
+	if metrics == nil {
+		return http.StatusOK, map[string]any{
+			"calibrated": false,
+			"message":    "no calibration data available",
+			"layers":     []map[string]any{},
+		}
+	}
+
+	var layers []map[string]any
+	for layer, m := range metrics {
+		layers = append(layers, map[string]any{
+			"layer":           layer,
+			"total_signals":   m.TotalSignals,
+			"correct_signals": m.CorrectSignals,
+			"accuracy":        m.Accuracy,
+			"last_updated":    m.LastUpdated,
+		})
+	}
+
+	cal := h.Svc.CycleCalibration
+	return http.StatusOK, map[string]any{
+		"calibrated":    true,
+		"outcome_count": cal.GetOutcomeCount(),
+		"layers":        layers,
+	}
+}
+
+func (h *Handlers) HandleCalendarEvents(r *http.Request) (int, any) {
+	if h.Svc == nil || h.Svc.EventCalendar == nil {
+		return http.StatusInternalServerError, map[string]string{"error": "calendar service not available"}
+	}
+
+	events := h.Svc.EventCalendar.GetAllEvents()
+
+	type eventDTO struct {
+		ID                  string   `json:"id"`
+		Name                string   `json:"name"`
+		EventType           string   `json:"event_type"`
+		Description         string   `json:"description"`
+		Direction           string   `json:"direction"`
+		BaseWeight          float64  `json:"base_weight"`
+		Active              bool     `json:"active"`
+		StartDate           string   `json:"start_date"`
+		EndDate             string   `json:"end_date"`
+		PeakDate            string   `json:"peak_date"`
+		DecayDays           int      `json:"decay_days"`
+		AffectedIndustries  []string `json:"affected_industries"`
+		SentimentAdjustment float64  `json:"sentiment_adjustment"`
+		DataSource          string   `json:"data_source"`
+		EvidenceQuality     string   `json:"evidence_quality"`
+		GeneratedAt         string   `json:"generated_at"`
+	}
+
+	result := make([]eventDTO, 0, len(events))
+	for _, evt := range events {
+		result = append(result, eventDTO{
+			ID:                  evt.ID,
+			Name:                evt.Name,
+			EventType:           evt.EventType,
+			Description:         evt.Description,
+			Direction:           evt.Direction,
+			BaseWeight:          evt.BaseWeight,
+			Active:              evt.Active,
+			StartDate:           evt.StartDate.Format("2006-01-02"),
+			EndDate:             evt.EndDate.Format("2006-01-02"),
+			PeakDate:            evt.PeakDate.Format("2006-01-02"),
+			DecayDays:           evt.DecayDays,
+			AffectedIndustries:  evt.AffectedIndustries,
+			SentimentAdjustment: evt.SentimentAdjustment,
+			DataSource:          string(evt.DataSource),
+			EvidenceQuality:     string(evt.EvidenceQuality),
+			GeneratedAt:         evt.GeneratedAt.Format(time.RFC3339),
+		})
+	}
+
+	return http.StatusOK, map[string]any{
+		"events": result,
+		"count":  len(result),
 	}
 }
