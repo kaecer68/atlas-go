@@ -179,4 +179,3 @@ func smt(ag AgentSpec, sc Scorecard) (string, string, []string) {
 	}
 	return "prompt_tightening", "Prompt refinement can improve quality.", []string{"improve_sharpe_like", "no_material_drawdown_degradation", "no_constraint_bypass"}
 }
-}
