@@ -1209,22 +1209,3 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 		logging.FInt("added_events", len(events)),
 	)
 }
-
-// validateProviderEvent validates a CalendarProviderData entry from an external
-// provider. It checks for known event types, valid direction values, reasonable
-// date ranges, and weight bounds.
-func validateProviderEvent(e marketdata.CalendarProviderData) error {
-	if e.EventType == "" || e.Date == "" {
-		return fmt.Errorf("empty type or date")
-	}
-	if _, err := time.Parse("2006-01-02", e.Date); err != nil {
-		return fmt.Errorf("unparseable date %q", e.Date)
-	}
-	if e.Direction != "" && e.Direction != "bullish" && e.Direction != "bearish" && e.Direction != "mixed" && e.Direction != "neutral" {
-		return fmt.Errorf("invalid direction %q", e.Direction)
-	}
-	if e.Weight < 0 || e.Weight > 1.0 {
-		return fmt.Errorf("weight out of range: %f", e.Weight)
-	}
-	return nil
-}
