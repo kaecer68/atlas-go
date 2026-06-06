@@ -98,13 +98,14 @@ type DarwinianAgentWeight struct {
 
 // DarwinianWeightManager implements Atlas-GIC style Darwinian weight system
 type DarwinianWeightManager struct {
-	weights      map[string]*DarwinianAgentWeight
-	configPath   string
-	historyPath  string
-	lookbackDays int
-	params       *RuntimeParameters
-	mu           sync.RWMutex
-	eventBus     *eventbus.ChannelEventBus
+	weights         map[string]*DarwinianAgentWeight
+	configPath      string
+	historyPath     string
+	lookbackDays    int
+	params          *RuntimeParameters
+	mu              sync.RWMutex
+	eventBus        *eventbus.ChannelEventBus
+	maturityTracker *domain.MaturityTracker
 }
 
 // NewDarwinianWeightManager creates a new Darwinian weight manager
@@ -215,6 +216,14 @@ func (m *DarwinianWeightManager) WithEventBus(eb *eventbus.ChannelEventBus) *Dar
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.eventBus = eb
+	return m
+}
+
+// WithMaturityTracker attaches a maturity tracker for burn-in gating.
+func (m *DarwinianWeightManager) WithMaturityTracker(mt *domain.MaturityTracker) *DarwinianWeightManager {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.maturityTracker = mt
 	return m
 }
 
@@ -367,18 +376,30 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 	adjustments := make(map[string]float64)
 	var clampingEvents []ClampingEvent
 
+	burnIn := m.maturityTracker != nil && m.maturityTracker.Current() == domain.MaturityBurnIn
+
 	// Check cooldown and collect eligible agents
 	now := time.Now()
 	eligible := make([]*DarwinianAgentWeight, 0)
+	cooldown := m.params.Darwinian.DailyAdjustmentCooldown
+	if burnIn {
+		cooldown = cooldown * 2 // Double cooldown during burn-in
+	}
 
 	for _, w := range m.weights {
-		if now.Sub(w.LastAdjustedAt) >= m.params.Darwinian.DailyAdjustmentCooldown {
+		if now.Sub(w.LastAdjustedAt) >= cooldown {
 			eligible = append(eligible, w)
 		}
 	}
 
 	if len(eligible) < 2 {
 		return adjustments, clampingEvents
+	}
+
+	if burnIn {
+		logging.Info("darwinian_weights", "burn_in_conservative",
+			"days_until_calibrating", m.maturityTracker.DaysUntil(domain.MaturityCalibrating),
+			"eligible_agents", len(eligible))
 	}
 
 	// Auto-reset stuck agents: agents at minimum weight for consecutive cycles
@@ -423,15 +444,16 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		w := eligible[i]
 		oldWeight := w.Weight
 
-		// Normalize Sharpe to [0,1] before using in bonus.
-		// Using sigmoid-like: sharpe/(sharpe+2.0) ensures:
-		//   Sharpe 0 → 0 (no bonus)
-		//   Sharpe 2 → ~0.5 (moderate bonus)
-		//   Sharpe 4+ → →1.0 (capped bonus)
-		// This prevents overflow from IEEE 754 edge cases in calculateSharpe.
-		denom := m.params.Darwinian.SharpeNormalizeDenom
-		normalizedSharpe := w.RollingSharpe / (w.RollingSharpe + denom)
-		performanceBonus := 1.0 + normalizedSharpe*m.params.Darwinian.MaxPerformanceBonusPct
+		// During burn-in, disable performance bonus (Sharpe is unstable).
+		// Use a conservative multiplier to allow slow evolution.
+		var performanceBonus float64
+		if burnIn {
+			performanceBonus = 1.0 // No bonus during burn-in
+		} else {
+			denom := m.params.Darwinian.SharpeNormalizeDenom
+			normalizedSharpe := w.RollingSharpe / (w.RollingSharpe + denom)
+			performanceBonus = 1.0 + normalizedSharpe*m.params.Darwinian.MaxPerformanceBonusPct
+		}
 
 		volatilityPenalty := 1.0
 		if w.RollingVolatility > m.params.Darwinian.VolatilityPenaltyThreshold {
@@ -439,6 +461,9 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		}
 
 		multiplier := m.params.Darwinian.TopQuartileMultiplier * performanceBonus * volatilityPenalty
+		if burnIn {
+			multiplier = math.Sqrt(multiplier) // Reduce adjustment magnitude by ~50%
+		}
 		clamped, event := m.constrainWeight(w.AgentID, oldWeight*multiplier)
 		w.Weight = clamped
 		if event != nil {
@@ -455,14 +480,19 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		oldWeight := w.Weight
 
 		// Slight adjustment based on hit rate
+		var multiplier float64
 		if w.HitRate > m.params.Darwinian.HitRateHighThreshold {
-			clamped, event := m.constrainWeight(w.AgentID, oldWeight*m.params.Darwinian.MiddleTierBoostMultiplier)
-			w.Weight = clamped
-			if event != nil {
-				clampingEvents = append(clampingEvents, *event)
-			}
+			multiplier = m.params.Darwinian.MiddleTierBoostMultiplier
 		} else if w.HitRate < m.params.Darwinian.HitRateLowThreshold {
-			clamped, event := m.constrainWeight(w.AgentID, oldWeight*m.params.Darwinian.MiddleTierCutMultiplier)
+			multiplier = m.params.Darwinian.MiddleTierCutMultiplier
+		} else {
+			multiplier = 1.0
+		}
+		if burnIn {
+			multiplier = math.Sqrt(multiplier)
+		}
+		if multiplier != 1.0 {
+			clamped, event := m.constrainWeight(w.AgentID, oldWeight*multiplier)
 			w.Weight = clamped
 			if event != nil {
 				clampingEvents = append(clampingEvents, *event)
@@ -485,6 +515,9 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		}
 
 		multiplier := m.params.Darwinian.BottomQuartileMultiplier * riskMultiplier
+		if burnIn {
+			multiplier = math.Sqrt(multiplier)
+		}
 		clamped, event := m.constrainWeight(w.AgentID, oldWeight*multiplier)
 		w.Weight = clamped
 		if event != nil {

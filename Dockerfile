@@ -1,4 +1,15 @@
 # Multi-stage build for Atlas-Go
+
+# Stage 1: Frontend build
+FROM node:22-alpine AS nodebuilder
+WORKDIR /build
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/esbuild.config.mjs .
+COPY web/static ./static
+RUN npm run build
+
+# Stage 2: Go build
 FROM golang:1.25-alpine AS builder
 
 # Install build dependencies
@@ -13,6 +24,7 @@ RUN go mod download
 
 # Copy source code
 COPY . .
+COPY --from=nodebuilder /build/dist ./web/dist
 
 ARG TARGETARCH
 
@@ -47,7 +59,6 @@ COPY --from=builder /build/configs /app/configs
 COPY --from=builder /build/prompts /app/prompts
 COPY --from=builder /build/scripts /app/scripts
 COPY --from=builder /build/sql /app/sql
-COPY --from=builder /build/web/static /app/web/static
 
 # Create necessary directories
 RUN mkdir -p /app/data /app/reports /app/logs && \

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -72,6 +73,7 @@ const (
 	// 自动监控事件
 	EventSharpeDegradation EventType = "monitor.sharpe.degradation"
 	EventDrawdownBreach    EventType = "monitor.drawdown.breach"
+	EventHealthAlert       EventType = "monitor.health.alert"
 )
 
 // MarketEventPayload 市场事件载荷
@@ -197,6 +199,18 @@ type NarrativeEventPayload struct {
 	Description      string  `json:"description"`
 }
 
+// HealthAlertPayload carries a single system health alert for downstream
+// consumers (dashboard, Telegram, email, etc.).
+type HealthAlertPayload struct {
+	Severity        string    `json:"severity"`
+	Category        string    `json:"category"`
+	Message         string    `json:"message"`
+	Value           float64   `json:"value"`
+	Threshold       float64   `json:"threshold"`
+	SuggestedAction string    `json:"suggested_action"`
+	Timestamp       time.Time `json:"timestamp"`
+}
+
 // BusEvent 总线事件
 type BusEvent struct {
 	ID          string    `json:"id"`
@@ -246,6 +260,7 @@ var eventDescriptions = map[EventType]eventDesc{
 	EventMarketClose:                {"市場收盤，停止即時交易", "info"},
 	EventExperimentInsufficientData: {"實驗數據不足，無法進行統計比較", "warning"},
 	EventNarrative:                  {"偵測到宏觀敘事事件", "warning"},
+	EventHealthAlert:                {"系統健康監控警報觸發", "warning"},
 }
 
 var narrativeThemeLabels = map[string]string{
@@ -331,6 +346,10 @@ type ChannelEventBus struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
 	wg             sync.WaitGroup
+
+	// Observable counters (atomic)
+	publishDropped  int64
+	handlerTimeouts int64
 }
 
 type subscriber struct {
@@ -362,11 +381,13 @@ func (b *ChannelEventBus) Publish(event BusEvent) {
 	case b.eventChan <- event:
 		return
 	case <-b.ctx.Done():
+		atomic.AddInt64(&b.publishDropped, 1)
 		logging.Warn("eventbus", "publish_dropped",
 			logging.FStr("event_id", event.ID),
 			logging.FStr("event_type", string(event.Type)),
 			logging.FStr("reason", "bus_closed"))
 	default:
+		atomic.AddInt64(&b.publishDropped, 1)
 		logging.Warn("eventbus", "publish_dropped",
 			logging.FStr("event_id", event.ID),
 			logging.FStr("event_type", string(event.Type)),
@@ -643,6 +664,17 @@ func parseFloat(s string) float64 {
 	return v
 }
 
+// PublishHealthAlert publishes a system health alert to the event bus.
+func (b *ChannelEventBus) PublishHealthAlert(alert HealthAlertPayload) {
+	b.Publish(BusEvent{
+		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+		Type:      EventHealthAlert,
+		Timestamp: time.Now(),
+		Payload:   alert,
+		Severity:  alert.Severity,
+	})
+}
+
 // Subscribe 订阅特定类型事件
 func (b *ChannelEventBus) Subscribe(eventType EventType, handler EventHandler) Subscription {
 	b.mutex.Lock()
@@ -750,21 +782,31 @@ func (b *ChannelEventBus) handleEvent(sub *subscriber, event BusEvent) {
 
 	ctx, cancel := context.WithTimeout(b.ctx, 30*time.Second)
 	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if err := sub.handler(ctx, event); err != nil {
+			logging.Error("eventbus", "handler_error", "subscriber_id", sub.id, logging.Err(err))
 
-	if err := sub.handler(ctx, event); err != nil {
-		logging.Error("eventbus", "handler_error", "subscriber_id", sub.id, logging.Err(err))
-
-		if sub.critical {
-			select {
-			case b.criticalErrCh <- HandlerError{
-				EventType:    event.Type,
-				SubscriberID: sub.id,
-				Err:          err,
-			}:
-			default:
-				logging.Error("eventbus", "critical_err_ch_full", "subscriber_id", sub.id)
+			if sub.critical {
+				select {
+				case b.criticalErrCh <- HandlerError{
+					EventType:    event.Type,
+					SubscriberID: sub.id,
+					Err:          err,
+				}:
+				default:
+					logging.Error("eventbus", "critical_err_ch_full", "subscriber_id", sub.id)
+				}
 			}
 		}
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		atomic.AddInt64(&b.handlerTimeouts, 1)
+		logging.Error("eventbus", "handler_timeout", "subscriber_id", sub.id)
 	}
 }
 
@@ -822,6 +864,8 @@ func (b *ChannelEventBus) Stats() map[string]any {
 	stats["subscribers_by_type"] = len(b.subscribers)
 	stats["channel_capacity"] = cap(b.eventChan)
 	stats["channel_length"] = len(b.eventChan)
+	stats["publish_dropped"] = atomic.LoadInt64(&b.publishDropped)
+	stats["handler_timeouts"] = atomic.LoadInt64(&b.handlerTimeouts)
 
 	return stats
 }

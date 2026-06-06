@@ -69,6 +69,180 @@ func (r *FileSystemPromptResolver) Resolve(agent domain.AgentSpec) (string, erro
 	return strings.ToLower(string(bytes)), nil
 }
 
+// PositionEvaluator evaluates a held position and produces a rotation recommendation
+// (SELL or REDUCE) when the position should be trimmed or exited.
+type PositionEvaluator interface {
+	Supports(agent domain.AgentSpec) bool
+	EvaluatePosition(pos domain.Position, quote domain.Quote, agent domain.AgentSpec, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool)
+}
+
+// PortfolioRotator evaluates held positions through registered PositionEvaluators
+// and generates SELL/REDUCE recommendations to rotate out of underperforming holdings.
+type PortfolioRotator struct {
+	evaluators []PositionEvaluator
+}
+
+func NewPortfolioRotator(evaluators ...PositionEvaluator) *PortfolioRotator {
+	return &PortfolioRotator{evaluators: evaluators}
+}
+
+// Rotate evaluates all positions through all registered evaluators and returns
+// sell/reduce recommendations. Only one recommendation per position (the first
+// evaluator to fire) is returned.
+// Rotate evaluates held positions against a single agent and returns
+// SELL/REDUCE recommendations. Used for per-agent position evaluation.
+func (r *PortfolioRotator) Rotate(positions []domain.Position, quotes map[string]domain.Quote, agent domain.AgentSpec, prompt string, regime domain.Regime, fq FactorQuery) []domain.Recommendation {
+	if r == nil || len(r.evaluators) == 0 {
+		return nil
+	}
+	var recs []domain.Recommendation
+	seen := make(map[string]bool)
+	for _, pos := range positions {
+		if seen[pos.Symbol] {
+			continue
+		}
+		quote, ok := quotes[pos.Symbol]
+		if !ok || !quote.IsTradable {
+			continue
+		}
+		for _, eval := range r.evaluators {
+			if !eval.Supports(agent) {
+				continue
+			}
+			if rec, ok := eval.EvaluatePosition(pos, quote, agent, prompt, regime, fq); ok {
+				recs = append(recs, rec)
+				seen[pos.Symbol] = true
+				break
+			}
+		}
+	}
+	return recs
+}
+
+// RotatePortfolio performs portfolio-level rotation: scores all held positions,
+// compares against BUY candidates, and generates SELL signals for the weakest
+// holding(s) when the portfolio is at capacity and BUY candidates exist.
+func (r *PortfolioRotator) RotatePortfolio(
+	positions []domain.Position,
+	buyRecs []domain.Recommendation,
+	quotes map[string]domain.Quote,
+	registry domain.AgentRegistry,
+	plugins *PluginRegistry,
+	overrides map[string]string,
+	regime domain.Regime,
+	fq FactorQuery,
+) []domain.Recommendation {
+	if r == nil || len(r.evaluators) == 0 || len(positions) == 0 || len(buyRecs) == 0 {
+		return nil
+	}
+
+	// Score each held position using the best-matching evaluator.
+	// Apply a concentration penalty: positions exceeding the max limit (15%)
+	// get their conviction reduced, making them more likely to be rotated out.
+	type positionScore struct {
+		pos        domain.Position
+		conviction int
+	}
+	var positionScores []positionScore
+
+	// Compute total portfolio value for concentration calculations
+	totalValue := 0.0
+	for _, pos := range positions {
+		totalValue += pos.MarketValue
+	}
+
+	const maxPositionPct = 0.15
+	const concentrationPenalty = 30 // conviction reduction per 1% over limit
+
+	for _, pos := range positions {
+		quote, ok := quotes[pos.Symbol]
+		if !ok || !quote.IsTradable {
+			continue
+		}
+		bestConviction := 0
+		for _, agent := range registry.Agents {
+			if !agent.Enabled || agent.Layer == domain.LayerControl || agent.Layer == domain.LayerContext {
+				continue
+			}
+			prompt := plugins.ResolvePrompt(agent, overrides)
+			for _, eval := range r.evaluators {
+				if !eval.Supports(agent) {
+					continue
+				}
+				if rec, ok := eval.EvaluatePosition(pos, quote, agent, prompt, regime, fq); ok {
+					if rec.Conviction > bestConviction {
+						bestConviction = rec.Conviction
+					}
+					break
+				}
+			}
+		}
+		// Fallback: neutral score for positions without evaluator coverage
+		if bestConviction == 0 {
+			bestConviction = 50
+		}
+
+		// Concentration penalty: positions over 15% get scored lower
+		if totalValue > 0 {
+			pct := pos.MarketValue / totalValue
+			if pct > maxPositionPct {
+				overPct := (pct - maxPositionPct) * 100
+				penalty := int(overPct * concentrationPenalty)
+				if penalty > bestConviction-10 {
+					penalty = bestConviction - 10
+				}
+				bestConviction -= penalty
+			}
+		}
+
+		positionScores = append(positionScores, positionScore{
+			pos: pos, conviction: bestConviction,
+		})
+	}
+
+	if len(positionScores) == 0 {
+		return nil
+	}
+
+	// Find weakest held position
+	weakest := positionScores[0]
+	for _, ps := range positionScores[1:] {
+		if ps.conviction < weakest.conviction {
+			weakest = ps
+		}
+	}
+
+	// Find strongest BUY candidate not already held
+	heldSymbols := make(map[string]bool)
+	for _, pos := range positions {
+		heldSymbols[pos.Symbol] = true
+	}
+	var bestBuy *domain.Recommendation
+	for i := range buyRecs {
+		if heldSymbols[buyRecs[i].Symbol] {
+			continue
+		}
+		if bestBuy == nil || buyRecs[i].Conviction > bestBuy.Conviction {
+			bestBuy = &buyRecs[i]
+		}
+	}
+
+	if bestBuy == nil {
+		return nil
+	}
+
+	// Generate SELL for weakest holding to free up capacity for the best BUY
+	return []domain.Recommendation{{
+		Agent:      bestBuy.Agent,
+		Skill:      bestBuy.Skill,
+		Layer:      bestBuy.Layer,
+		Symbol:     weakest.pos.Symbol,
+		Side:       domain.SideSell,
+		Conviction: 100,
+		Reason:     fmt.Sprintf("rotation: replace %s (score=%d) with %s (conviction=%d)", weakest.pos.Symbol, weakest.conviction, bestBuy.Symbol, bestBuy.Conviction),
+	}}
+}
+
 type PluginRegistry struct {
 	regimeExecutors    []RegimeExecutor
 	agentExecutors     []AgentExecutor
@@ -79,7 +253,8 @@ type PluginRegistry struct {
 	cycleModulator     *IndustryCycleModulator
 	narrativeModulator *NarrativeConvictionModulator
 	mlScorer           *MLScorer
-	promptResolver     PromptResolver // plugin boundary — injected via WithPromptResolver; nil = fallback to os.ReadFile
+	promptResolver     PromptResolver    // plugin boundary — injected via WithPromptResolver; nil = fallback to os.ReadFile
+	rotator            *PortfolioRotator // position rotation evaluator
 }
 
 func NewPluginRegistry(loaders ...ExecutorLoader) *PluginRegistry {
@@ -136,6 +311,22 @@ func (r *PluginRegistry) WithMLScorer(s *MLScorer) *PluginRegistry {
 func (r *PluginRegistry) WithPromptResolver(pr PromptResolver) *PluginRegistry {
 	r.promptResolver = pr
 	return r
+}
+
+// RegisterPositionEvaluators registers executor instances as PositionEvaluator
+// for use by PortfolioRotator during recommendation collection.
+func (r *PluginRegistry) RegisterPositionEvaluators(evaluators ...PositionEvaluator) *PluginRegistry {
+	if r.rotator == nil {
+		r.rotator = NewPortfolioRotator(evaluators...)
+	} else {
+		r.rotator.evaluators = append(r.rotator.evaluators, evaluators...)
+	}
+	return r
+}
+
+// Rotator returns the PortfolioRotator, or nil if no evaluators are registered.
+func (r *PluginRegistry) Rotator() *PortfolioRotator {
+	return r.rotator
 }
 
 // WireScreenerTraceWriter attaches a trace writer to the underlying screener

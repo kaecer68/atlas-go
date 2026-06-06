@@ -152,6 +152,53 @@ func (fe *FactorEngine) SetCycleTracker(ct *industry.CycleTracker) {
 	}
 }
 
+// SetCycleCardBuilder enhances the cycle provider to use composite cycle sentiment
+// from CycleStatusCardBuilder, producing more accurate FactorIndustryCycle scores.
+// Falls back to CycleTracker when the card builder returns no card.
+func (fe *FactorEngine) SetCycleCardBuilder(cb *industry.CycleStatusCardBuilder, ct *industry.CycleTracker) {
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
+	fe.cycleProv = func(symbol string) *domain.IndustryCycleFactorScore {
+		id := classifyIndustry(symbol)
+		if id == "" {
+			return nil
+		}
+		var phase string
+		var phaseScore, confidence float64
+		if cb != nil {
+			card, err := cb.BuildCard(time.Now(), id)
+			if err == nil && card != nil {
+				phase = card.BusinessCycle
+				phaseScore = 1.0 + (card.CompositeCoefficient-1.0)*2.0
+				confidence = card.CycleConfidence
+				if phase == "" {
+					phase = "unknown"
+				}
+				return &domain.IndustryCycleFactorScore{
+					Score:      math.Max(0, math.Min(2.0, phaseScore)),
+					Phase:      phase,
+					PhaseScore: phaseScore,
+					Confidence: confidence,
+					IndustryID: id,
+				}
+			}
+		}
+		if ct != nil {
+			pos, ok := ct.GetPosition(id)
+			if ok {
+				return &domain.IndustryCycleFactorScore{
+					Score:      pos.GetPhaseScore(),
+					Phase:      string(pos.BusinessCycle),
+					PhaseScore: pos.GetPhaseScore(),
+					Confidence: pos.Confidence,
+					IndustryID: id,
+				}
+			}
+		}
+		return nil
+	}
+}
+
 // WithPreciousMetalsProvider attaches a macro data provider for precious metals factor scoring.
 func (fe *FactorEngine) WithPreciousMetalsProvider(fn PMContextProvider) *FactorEngine {
 	fe.mu.Lock()
@@ -476,9 +523,11 @@ func (fe *FactorEngine) CalculateInstitutionalSentimentScore(input FactorBridgeI
 	foreignWeight := weights["foreign"]
 	domesticWeight := weights["domestic"]
 	marginWeight := weights["margin"]
+	retailWeight := weights["retail"]
 	score := foreignWeight*input.ForeignFlowScore +
 		domesticWeight*input.DomesticFlowScore +
-		marginWeight*input.MarginBalanceScore
+		marginWeight*input.MarginBalanceScore +
+		retailWeight*input.RetailSentimentScore
 	if score > 1.0 {
 		score = 1.0
 	}
@@ -487,14 +536,16 @@ func (fe *FactorEngine) CalculateInstitutionalSentimentScore(input FactorBridgeI
 	}
 	return domain.FactorScoreItem{
 		Score:   score,
-		Formula: fmt.Sprintf("%.2f*ForeignFlowScore + %.2f*DomesticFlowScore + %.2f*MarginBalanceScore", foreignWeight, domesticWeight, marginWeight),
+		Formula: fmt.Sprintf("%.2f*ForeignFlowScore + %.2f*DomesticFlowScore + %.2f*MarginBalanceScore + %.2f*RetailSentimentScore", foreignWeight, domesticWeight, marginWeight, retailWeight),
 		RawInputs: map[string]float64{
 			"foreign_score":   input.ForeignFlowScore,
 			"domestic_score":  input.DomesticFlowScore,
 			"margin_score":    input.MarginBalanceScore,
+			"retail_score":    input.RetailSentimentScore,
 			"foreign_weight":  foreignWeight,
 			"domestic_weight": domesticWeight,
 			"margin_weight":   marginWeight,
+			"retail_weight":   retailWeight,
 		},
 	}
 }

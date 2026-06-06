@@ -65,6 +65,7 @@ type MutationBrief struct {
 	MaturityLevel       string            `json:"maturity_level"`
 	IterationGuidance   []string          `json:"iteration_guidance"`
 	RecommendedWindow   string            `json:"recommended_window"`
+	RSITwScore          float64           `json:"rsi_tw_score,omitempty"`
 	GeneratedAt         time.Time         `json:"generated_at"`
 }
 

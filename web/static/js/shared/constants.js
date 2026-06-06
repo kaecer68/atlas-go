@@ -1,5 +1,4 @@
 export { fmt, fmtPct, fmtFloat, fmtInt, pnlColor, pnlSign, convColor, escapeHtml, emptyState } from './utils.js';
-export { FIELD } from './field_names.js';
 
 export function agentName(id) {
   return AGENT_NAME_MAP[id] || id;

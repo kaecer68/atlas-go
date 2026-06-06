@@ -103,11 +103,6 @@ func (s *DataChannelService) getCachedFinMindHealth() (status, updated, lastErro
 	return s.getHealthFromStore("finmind", s.FinMindAPIKey)
 }
 
-// getCachedFrankfurterHealth returns Frankfurter FX health from Gateway health store.
-func (s *DataChannelService) getCachedFrankfurterHealth() (status, updated, lastError string) {
-	return s.getHealthFromStore("jpy_yahoo", "enabled")
-}
-
 type ChannelHealthStoreAdapter struct {
 	pool  *pgxpool.Pool
 	dir   string
@@ -254,6 +249,29 @@ func (s *DataChannelService) GetChannelStatus(ctx context.Context, channel strin
 	return DataChannel{}, fmt.Errorf("channel not found: %s", channel)
 }
 
+// resolveStatusFromStore merges the Gateway health store record with a
+// file-age-based health check. The health store takes priority because it
+// reflects the actual result of the last fetch attempt. File-age alone
+// can produce false "待更新" warnings on weekends/holidays when no fetch
+// is expected but the channel itself is healthy.
+func (s *DataChannelService) resolveStatusFromStore(channelID string, fileStatus, fileUpdated string) (status, updated, lastError string) {
+	rec := s.healthStore.Get(channelID)
+	if rec == nil {
+		return fileStatus, fileUpdated, ""
+	}
+
+	switch rec.Status {
+	case "ok":
+		// Last fetch succeeded — channel is healthy regardless of data age.
+		return "ok", rec.LastFetchAt, ""
+	case "error":
+		// Last fetch failed — report the actual error.
+		return "error", "上次失敗: " + rec.LastError, rec.LastError
+	default:
+		return fileStatus, fileUpdated, rec.LastError
+	}
+}
+
 func (s *DataChannelService) GetAllChannelStatuses(ctx context.Context) ([]DataChannel, error) {
 	now := time.Now()
 	channels := make([]DataChannel, 0, 14)
@@ -264,7 +282,7 @@ func (s *DataChannelService) GetAllChannelStatuses(ctx context.Context) ([]DataC
 	channels = append(channels, s.buildFugleChannel())
 	channels = append(channels, s.buildFubonChannel())
 	channels = append(channels, s.buildFinMindChannel())
-	channels = append(channels, s.buildJPYYahooChannel(now))
+	channels = append(channels, s.buildFrankfurterFXChannel(now))
 	channels = append(channels, s.buildGeopoliticalChannel(now))
 	channels = append(channels, s.buildTWSEMarginChannel(now))
 	channels = append(channels, s.buildExportStatisticsChannel(now))
@@ -278,11 +296,8 @@ func (s *DataChannelService) GetAllChannelStatuses(ctx context.Context) ([]DataC
 
 func (s *DataChannelService) buildUSYahooChannel(now time.Time) DataChannel {
 	macroPath := filepath.Join(s.WorkDir, "data/state/macro/latest.json")
-	status, updated := checkMacroHealth(macroPath, now)
-	rec := s.healthStore.Get("us_yahoo")
-	if rec != nil && rec.LastError != "" {
-		updated = "上次失敗: " + rec.LastError
-	}
+	fileStatus, fileUpdated := checkMacroHealth(macroPath, now)
+	status, updated, lastError := s.resolveStatusFromStore("us_yahoo", fileStatus, fileUpdated)
 	return DataChannel{
 		ChannelID:  "us_yahoo",
 		Country:    "美國",
@@ -293,17 +308,14 @@ func (s *DataChannelService) buildUSYahooChannel(now time.Time) DataChannel {
 		Status:     status,
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
-		LastError:  lastErrorStr(rec),
+		LastError:  lastError,
 	}
 }
 
 func (s *DataChannelService) buildTWSEReplayChannel(now time.Time) DataChannel {
 	replayPath := config.GetReplayDataPath(s.WorkDir)
-	status, updated := checkReplayHealth(replayPath, now)
-	rec := s.healthStore.Get("twse_replay")
-	if rec != nil && rec.LastError != "" {
-		updated = "上次失敗: " + rec.LastError
-	}
+	fileStatus, fileUpdated := checkReplayHealth(replayPath, now)
+	status, updated, lastError := s.resolveStatusFromStore("twse_replay", fileStatus, fileUpdated)
 	return DataChannel{
 		ChannelID:  "twse_replay",
 		Country:    "台灣",
@@ -314,17 +326,14 @@ func (s *DataChannelService) buildTWSEReplayChannel(now time.Time) DataChannel {
 		Status:     status,
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
-		LastError:  lastErrorStr(rec),
+		LastError:  lastError,
 	}
 }
 
 func (s *DataChannelService) buildTWSECapitalFlowChannel(now time.Time) DataChannel {
 	capFlowDir := filepath.Join(s.WorkDir, "data/state/capital_flow")
-	status, updated := checkCapitalFlowHealth(capFlowDir, now)
-	rec := s.healthStore.Get("twse_capital_flow")
-	if rec != nil && rec.LastError != "" {
-		updated = "上次失敗: " + rec.LastError
-	}
+	fileStatus, fileUpdated := checkCapitalFlowHealth(capFlowDir, now)
+	status, updated, _ := s.resolveStatusFromStore("twse_capital_flow", fileStatus, fileUpdated)
 	return DataChannel{
 		ChannelID:  "twse_capital_flow",
 		Country:    "台灣",
@@ -386,46 +395,25 @@ func (s *DataChannelService) buildFinMindChannel() DataChannel {
 	}
 }
 
-func (s *DataChannelService) buildJPYYahooChannel(now time.Time) DataChannel {
+func (s *DataChannelService) buildFrankfurterFXChannel(now time.Time) DataChannel {
 	macroPath := filepath.Join(s.WorkDir, "data/state/macro/latest.json")
-	status, updated := checkJPYHealth(macroPath, now)
-	rec := s.healthStore.Get("jpy_yahoo")
-	if rec != nil && rec.LastError != "" {
-		updated = "上次失敗: " + rec.LastError
-	}
+	fileStatus, fileUpdated := checkJPYHealth(macroPath, now)
+	status, updated, lastError := s.resolveStatusFromStore("frankfurter_fx", fileStatus, fileUpdated)
 
-	// Also check Frankfurter FX API as an alternative JPY source.
-	fxStatus, _, fxLastError := s.getCachedFrankfurterHealth()
-	if status == "error" && fxStatus == "ok" {
-		// File data is stale but the Frankfurter API (alternative JPY source) is reachable.
+	// Edge case: file data is stale but the fetch mechanism is working.
+	// resolveStatusFromStore returns "ok" in this case, which is correct
+	// for the channel health, but we surface a note about stale file data.
+	if fileStatus == "error" && status == "ok" {
 		status = "warn"
-		updated = "檔案數據過期，但替代來源 Frankfurter API 連線正常"
-		rec = s.healthStore.Get("jpy_yahoo")
-		if rec != nil && rec.LastError != "" {
+		updated = "檔案數據過期，但 Frankfurter API 連線正常"
+		rec := s.healthStore.Get("frankfurter_fx")
+		if rec != nil && rec.LastSuccessAt != "" {
 			updated += " · 最後成功: " + rec.LastSuccessAt
-		}
-	} else if status == "error" && fxStatus == "error" {
-		lastError := fxLastError
-		lastErrorStr := lastErrorStr(rec)
-		if lastErrorStr != "" {
-			lastError = lastErrorStr
-		}
-		return DataChannel{
-			ChannelID:  "jpy_yahoo",
-			Country:    "日本",
-			Platform:   "Frankfurter (USD/JPY)",
-			APIFormat:  "REST JSON",
-			Path:       "api.frankfurter.app/latest?from=USD&to=JPY",
-			Storage:    "data/state/macro/latest.json",
-			Status:     status,
-			StatusText: statusText(status),
-			UpdatedAt:  fmt.Sprintf("Frankfurter API 連線失敗: %s", lastError),
-			LastError:  lastError,
 		}
 	}
 
 	return DataChannel{
-		ChannelID:  "jpy_yahoo",
+		ChannelID:  "frankfurter_fx",
 		Country:    "日本",
 		Platform:   "Frankfurter (USD/JPY)",
 		APIFormat:  "REST JSON",
@@ -434,17 +422,14 @@ func (s *DataChannelService) buildJPYYahooChannel(now time.Time) DataChannel {
 		Status:     status,
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
-		LastError:  lastErrorStr(rec),
+		LastError:  lastError,
 	}
 }
 
 func (s *DataChannelService) buildGeopoliticalChannel(now time.Time) DataChannel {
 	geoPath := filepath.Join(s.WorkDir, "data/state/geopolitical/latest.json")
-	status, updated := checkGeopoliticalHealth(geoPath, now)
-	rec := s.healthStore.Get("geopolitical")
-	if rec != nil && rec.LastError != "" {
-		updated = "上次失敗: " + rec.LastError
-	}
+	fileStatus, fileUpdated := checkGeopoliticalHealth(geoPath, now)
+	status, updated, lastError := s.resolveStatusFromStore("geopolitical", fileStatus, fileUpdated)
 	return DataChannel{
 		ChannelID:  "geopolitical",
 		Country:    "中東/全球",
@@ -455,17 +440,14 @@ func (s *DataChannelService) buildGeopoliticalChannel(now time.Time) DataChannel
 		Status:     status,
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
-		LastError:  lastErrorStr(rec),
+		LastError:  lastError,
 	}
 }
 
 func (s *DataChannelService) buildTWSEMarginChannel(now time.Time) DataChannel {
 	marginDir := filepath.Join(s.WorkDir, "data/state/margin")
-	status, updated := checkMarginHealth(marginDir, now)
-	rec := s.healthStore.Get("twse_margin")
-	if rec != nil && rec.LastError != "" {
-		updated = "上次失敗: " + rec.LastError
-	}
+	fileStatus, fileUpdated := checkMarginHealth(marginDir, now)
+	status, updated, lastError := s.resolveStatusFromStore("twse_margin", fileStatus, fileUpdated)
 	return DataChannel{
 		ChannelID:  "twse_margin",
 		Country:    "台灣",
@@ -476,17 +458,14 @@ func (s *DataChannelService) buildTWSEMarginChannel(now time.Time) DataChannel {
 		Status:     status,
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
-		LastError:  lastErrorStr(rec),
+		LastError:  lastError,
 	}
 }
 
 func (s *DataChannelService) buildExportStatisticsChannel(now time.Time) DataChannel {
 	exportDir := filepath.Join(s.WorkDir, "data/state/export")
-	status, updated := checkExportHealth(exportDir, now)
-	rec := s.healthStore.Get("export_statistics")
-	if rec != nil && rec.LastError != "" {
-		updated = "上次失敗: " + rec.LastError
-	}
+	fileStatus, fileUpdated := checkExportHealth(exportDir, now)
+	status, updated, lastError := s.resolveStatusFromStore("export_statistics", fileStatus, fileUpdated)
 	return DataChannel{
 		ChannelID:  "export_statistics",
 		Country:    "台灣",
@@ -497,16 +476,14 @@ func (s *DataChannelService) buildExportStatisticsChannel(now time.Time) DataCha
 		Status:     status,
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
+		LastError:  lastError,
 	}
 }
 
 func (s *DataChannelService) buildTSMCRevenueChannel(now time.Time) DataChannel {
 	tsmcDir := filepath.Join(s.WorkDir, "data/state/tsmc_revenue")
-	status, updated := checkTSMCRevenueHealth(tsmcDir, now)
-	rec := s.healthStore.Get("tsmc_revenue")
-	if rec != nil && rec.LastError != "" {
-		updated = "上次失敗: " + rec.LastError
-	}
+	fileStatus, fileUpdated := checkTSMCRevenueHealth(tsmcDir, now)
+	status, updated, lastError := s.resolveStatusFromStore("tsmc_revenue", fileStatus, fileUpdated)
 	return DataChannel{
 		ChannelID:  "tsmc_revenue",
 		Country:    "台灣",
@@ -517,17 +494,14 @@ func (s *DataChannelService) buildTSMCRevenueChannel(now time.Time) DataChannel 
 		Status:     status,
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
-		LastError:  lastErrorStr(rec),
+		LastError:  lastError,
 	}
 }
 
 func (s *DataChannelService) buildTaiwanGeopoliticalChannel(now time.Time) DataChannel {
 	twGeoPath := filepath.Join(s.WorkDir, "data/state/geopolitical/taiwan/latest.json")
-	status, updated := checkGeopoliticalHealth(twGeoPath, now)
-	rec := s.healthStore.Get("geopolitical_taiwan")
-	if rec != nil && rec.LastError != "" {
-		updated = "上次失敗: " + rec.LastError
-	}
+	fileStatus, fileUpdated := checkGeopoliticalHealth(twGeoPath, now)
+	status, updated, lastError := s.resolveStatusFromStore("geopolitical_taiwan", fileStatus, fileUpdated)
 	return DataChannel{
 		ChannelID:  "geopolitical_taiwan",
 		Country:    "台灣",
@@ -538,17 +512,13 @@ func (s *DataChannelService) buildTaiwanGeopoliticalChannel(now time.Time) DataC
 		Status:     status,
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
-		LastError:  lastErrorStr(rec),
+		LastError:  lastError,
 	}
 }
 
 func (s *DataChannelService) buildJanusRegimeChannel(now time.Time) DataChannel {
-	status, updated := checkJanusHealth(s.JanusEngine, now)
-	lastError := ""
-	rec := s.healthStore.Get("janus_regime")
-	if rec != nil && rec.LastError != "" {
-		lastError = rec.LastError
-	}
+	fileStatus, fileUpdated := checkJanusHealth(s.JanusEngine, now)
+	status, updated, lastError := s.resolveStatusFromStore("janus_regime", fileStatus, fileUpdated)
 	return DataChannel{
 		ChannelID:  "janus_regime",
 		Country:    "全域",
@@ -616,11 +586,4 @@ func (s *DataChannelService) GetAlerts(ctx context.Context) ([]ChannelAlert, err
 
 func statusText(status string) string {
 	return StatusText(status)
-}
-
-func lastErrorStr(rec *ChannelHealthRecord) string {
-	if rec != nil {
-		return rec.LastError
-	}
-	return ""
 }

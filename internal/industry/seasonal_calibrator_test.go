@@ -30,9 +30,9 @@ func writeTempParams(t *testing.T, seasonalPatterns map[string]any) string {
 
 func TestLoadCalibrationEvidence_GoStructFormat(t *testing.T) {
 	path := writeTempParams(t, map[string]any{
-		"value":               []any{},
-		"last_calibrated":     "2026-05-30T12:00:00Z",
-		"calibration_method":  "backtest_empirical",
+		"value":              []any{},
+		"last_calibrated":    "2026-05-30T12:00:00Z",
+		"calibration_method": "backtest_empirical",
 		"citation": map[string]any{
 			"source_reference": "finmind data",
 			"evidence_quality": "high",

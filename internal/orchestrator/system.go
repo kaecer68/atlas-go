@@ -22,6 +22,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/replay"
 	"github.com/kaecer68/atlas-go/internal/repository"
+	"github.com/kaecer68/atlas-go/internal/retail"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/sim"
 	"github.com/kaecer68/atlas-go/internal/strategy"
@@ -124,6 +125,8 @@ type System struct {
 	drawdownReporter func(portfolio.DrawdownResult)
 	traceVerbose     bool // when true, SimTraceWriter emits color-coded terminal output
 	phase3Ctrl       *Phase3Controller
+
+	maturityTracker *domain.MaturityTracker
 }
 
 // Phase3Controller returns the Phase 3 optimization controller, if attached.
@@ -131,6 +134,15 @@ func (s *System) Phase3Controller() *Phase3Controller { return s.phase3Ctrl }
 
 // SetVerboseTrace enables or disables color-coded verbose trace output.
 func (s *System) SetVerboseTrace(v bool) { s.traceVerbose = v }
+
+// MaturityTracker returns the system's maturity tracker (nil if not attached).
+func (s *System) MaturityTracker() *domain.MaturityTracker { return s.maturityTracker }
+
+// WithMaturityTracker attaches a maturity tracker to the system.
+func (s *System) WithMaturityTracker(mt *domain.MaturityTracker) *System {
+	s.maturityTracker = mt
+	return s
+}
 
 // SystemOption configures optional subsystems during System construction.
 // Use the With* functions to create options.
@@ -278,6 +290,30 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 	return sys, nil
 }
 
+// ResolveReplayContext loads the core replay execution context: agent registry,
+// baseline policy, and replay dataset. Falls back to seeds/defaults when files
+// are missing. This provides a single authority for replay context resolution,
+// used by both NewSystem and backtest.Runner.
+func ResolveReplayContext(cfg config.Config) (domain.AgentRegistry, baseline.Policy, *replay.Dataset) {
+	var registry domain.AgentRegistry
+	var err error
+	if len(cfg.AgentRegistryExtraPaths) > 0 {
+		allPaths := append([]string{cfg.AgentRegistryPath}, cfg.AgentRegistryExtraPaths...)
+		registry, err = LoadRegistryMulti(allPaths...)
+	} else {
+		registry, err = LoadRegistry(cfg.AgentRegistryPath)
+	}
+	if err != nil {
+		registry = SeedRegistry()
+	}
+	policy, err := baseline.Load(cfg.BaselinePolicyPath)
+	if err != nil {
+		policy = baseline.DefaultPolicy()
+	}
+	ds, _ := replay.LoadTWSEOpenDataCSV(cfg.ReplayDataPath)
+	return registry, policy, ds
+}
+
 func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, error) {
 	if s.Risk().eventBus != nil {
 		go s.Risk().eventBus.PublishSimulationStart(s.Sim().session.ID, asOf)
@@ -317,6 +353,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		*s.macroSnapshot = QuotesToMacroDataSnapshot(quotes)
 		if opt := s.Sim().engine.Optimizer(); opt != nil {
 			fb := portfolio.NewFactorBridge()
+			fb.SetCalculator(retail.GetCalculator())
 			opt.WithBridgeInput(fb.Convert(*s.macroSnapshot))
 		}
 	}
@@ -327,6 +364,9 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	tw.Record(4, "recommend", "START", nil)
 	tw.Record(5, "guard_filter", "START", nil)
 
+	if err := s.ensurePersistentStateLoaded(); err != nil {
+		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
+	}
 	events := s.detectNarrativeEvents(quotes)
 	researchResult := ExecuteWithContext(ExecutionContext{
 		Registry:        s.Sim().registry,
@@ -430,9 +470,6 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	finalRecs = s.host.ProcessRecommendations(regime, finalRecs)
 	if s.Risk().eventBus != nil {
 		go s.Risk().eventBus.PublishRecommendation("orchestrator", finalRecs)
-	}
-	if err := s.ensurePersistentStateLoaded(); err != nil {
-		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
 	}
 	tw.Record(6, "sim_exec", "START", nil)
 	var result domain.SimulationResult
@@ -602,6 +639,9 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	tw.Record(4, "recommend", "START", nil)
 	tw.Record(5, "guard_filter", "START", nil)
 
+	if err := s.ensurePersistentStateLoaded(); err != nil {
+		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
+	}
 	events := s.detectNarrativeEvents(quotes)
 	researchResult := ExecuteWithContext(ExecutionContext{
 		Registry:        s.Sim().registry,
@@ -704,9 +744,6 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	finalRecs = s.host.ProcessRecommendations(regime, finalRecs)
 	if s.Risk().eventBus != nil {
 		go s.Risk().eventBus.PublishRecommendation("orchestrator", finalRecs)
-	}
-	if err := s.ensurePersistentStateLoaded(); err != nil {
-		return domain.SimulationResult{}, fmt.Errorf("load persistent state: %w", err)
 	}
 	tw.Record(6, "sim_exec", "START", nil)
 	var result domain.SimulationResult
@@ -1193,14 +1230,16 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 
 	// Anomaly detection: warn on empty or suspicious sessions
 	if summary.OutcomeCount == 0 {
-		logging.Warn("system", "empty_session",
+		logging.Info(
+			"system", "session_no_outcomes",
 			"session_id", summary.SessionID,
 			"orders", summary.OrderCount,
 			"positions", summary.PositionCount,
 		)
 	}
 	if summary.PortfolioValue == 0 && summary.OrderCount > 0 {
-		logging.Warn("system", "zero_portfolio_with_orders",
+		logging.Warn(
+			"system", "zero_portfolio_with_orders",
 			"session_id", summary.SessionID,
 			"orders", summary.OrderCount,
 		)
@@ -1246,7 +1285,8 @@ func (s *System) saveSessionTrades(sessionID string, trades []domain.TradeRecord
 }
 
 func (s *System) ensurePersistentStateLoaded() error {
-	if s.Sim().session.Mode != "daily" || s.Sim().persistentState != nil {
+	mode := s.Sim().session.Mode
+	if (mode != "daily" && mode != "replay") || s.Sim().persistentState != nil {
 		return nil
 	}
 	loaded, err := sim.LoadPersistentState(s.Sim().cfg.LedgerDir)
@@ -1262,7 +1302,8 @@ func (s *System) ensurePersistentStateLoaded() error {
 }
 
 func (s *System) persistPersistentState() error {
-	if s.Sim().session.Mode != "daily" || s.Sim().persistentState == nil {
+	mode := s.Sim().session.Mode
+	if (mode != "daily" && mode != "replay") || s.Sim().persistentState == nil {
 		return nil
 	}
 	return sim.SavePersistentState(s.Sim().cfg.LedgerDir, s.Sim().persistentState)
@@ -1276,10 +1317,14 @@ func quoteBySymbolMap(quotes []domain.Quote) map[string]domain.Quote {
 	return m
 }
 
-func buildFinalRecKey(finalRecs []domain.Recommendation) map[string]struct{} {
+// buildPassedSymbolKey 回傳通過控制層 (CIO) 篩選的標的集合。改採 Symbol-only
+// key 是為了對齊 internal/orchestrator/AGENTS.md「ID 混淆」陷阱：CIO aggregator
+// 會以「最佳 agent」覆寫 Agent 欄位，若仍以 Symbol+"|"+Agent 作為 key 進行
+// PassedGuards 查核，非最佳 agent 的原始推薦會被誤判為未過濾。
+func buildPassedSymbolKey(finalRecs []domain.Recommendation) map[string]struct{} {
 	keys := make(map[string]struct{}, len(finalRecs))
 	for _, rec := range finalRecs {
-		keys[rec.Symbol+"|"+rec.Agent] = struct{}{}
+		keys[rec.Symbol] = struct{}{}
 	}
 	return keys
 }
@@ -1345,13 +1390,13 @@ func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes [
 		return nil
 	}
 	quoteMap := quoteBySymbolMap(quotes)
-	finalKey := buildFinalRecKey(finalRecs)
+	passedSymbols := buildPassedSymbolKey(finalRecs)
 	snapshot := buildParameterSnapshot()
 	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
 	for _, rec := range rawRecs {
 		quote := quoteMap[rec.Symbol]
 		forwardReturn := syntheticForwardReturn(rec.Symbol, quote, asOf)
-		_, passed := finalKey[rec.Symbol+"|"+rec.Agent]
+		_, passed := passedSymbols[rec.Symbol]
 		guardReason := ""
 		if !passed {
 			guardReason = "未通過控制層過濾"
@@ -1389,7 +1434,7 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 		return nil
 	}
 	quoteMap := quoteBySymbolMap(quotes)
-	finalKey := buildFinalRecKey(finalRecs)
+	passedSymbols := buildPassedSymbolKey(finalRecs)
 	snapshot := buildParameterSnapshot()
 	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
 	for _, rec := range rawRecs {
@@ -1400,7 +1445,7 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 			forwardReturn = syntheticForwardReturn(rec.Symbol, quote, asOf)
 			synthetic = true
 		}
-		_, passed := finalKey[rec.Symbol+"|"+rec.Agent]
+		_, passed := passedSymbols[rec.Symbol]
 		guardReason := ""
 		if !passed {
 			guardReason = "未通過控制層過濾"

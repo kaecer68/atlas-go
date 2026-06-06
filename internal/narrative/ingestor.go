@@ -64,6 +64,7 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 		if hasValidYahooData(snap) {
 			prev, _ := m.loadLatestSnapshot() //nolint:errcheck
 			snap = mergeWithPrev(snap, prev)
+			snap = computeChangePct(snap, prev)
 			if saveErr := m.saveSnapshot(snap); saveErr != nil {
 				logging.Warn("ingestor", "partial_save_failed", logging.Err(saveErr))
 			}
@@ -74,6 +75,16 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 		prev, prevErr := m.loadLatestSnapshot()
 		if prevErr == nil {
 			prevPrev, _ := m.loadPreviousSnapshot(prev) //nolint:errcheck
+			// Repair ChangePct from prevPrev if the previous run left it at zero
+			// (first-run or all-providers-fail scenario).
+			if prev.JPY.ChangePct == 0 && prev.JPY.Symbol != "" && prev.JPY.Value != 0 &&
+				prevPrev.JPY.Symbol != "" && prevPrev.JPY.Value != 0 {
+				prev.JPY.ChangePct = (prev.JPY.Value - prevPrev.JPY.Value) / prevPrev.JPY.Value * 100
+			}
+			if prev.USD_TWD.ChangePct == 0 && prev.USD_TWD.Symbol != "" && prev.USD_TWD.Value != 0 &&
+				prevPrev.USD_TWD.Symbol != "" && prevPrev.USD_TWD.Value != 0 {
+				prev.USD_TWD.ChangePct = (prev.USD_TWD.Value - prevPrev.USD_TWD.Value) / prevPrev.USD_TWD.Value * 100
+			}
 			events := detectEventsFromSnapshot(prev, prevPrev, m.divergenceDetect)
 			m.publishEvents(events)
 			return events, prev, nil
@@ -82,6 +93,20 @@ func (m *MacroIngestor) Ingest(ctx context.Context) ([]NarrativeEvent, marketdat
 	}
 
 	prev, _ := m.loadLatestSnapshot() //nolint:errcheck
+
+	// Fallback: if prev has zero values for JPY or USD_TWD, try a deeper snapshot
+	// so computeChangePct can calculate meaningful deltas (first-run or corrupted-data scenario).
+	if prev.JPY.Value == 0 || prev.JPY.Symbol == "" || prev.USD_TWD.Value == 0 || prev.USD_TWD.Symbol == "" {
+		if prevPrev, err := m.loadPreviousSnapshot(prev); err == nil {
+			if prev.JPY.Value == 0 || prev.JPY.Symbol == "" {
+				prev.JPY = prevPrev.JPY
+			}
+			if prev.USD_TWD.Value == 0 || prev.USD_TWD.Symbol == "" {
+				prev.USD_TWD = prevPrev.USD_TWD
+			}
+		}
+	}
+
 	events := detectEventsFromSnapshot(snap, prev, m.divergenceDetect)
 	m.publishEvents(events)
 

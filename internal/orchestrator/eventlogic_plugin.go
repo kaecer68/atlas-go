@@ -81,7 +81,8 @@ func (p *eventlogicPlugin) PostSimulation(_ []domain.Quote, _ domain.Regime, _ t
 			continue
 		}
 		promoted++
-		logging.Info("eventlogic_plugin", "rule_promoted",
+		logging.Info(
+			"eventlogic_plugin", "rule_promoted",
 			logging.FStr("rule_id", rule.ID),
 			logging.FFloat64("hit_rate", rule.HitRate),
 			logging.FInt("total_tests", rule.TotalTests),

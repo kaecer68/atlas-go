@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -122,6 +123,32 @@ func dynamicSignalStrength(quote domain.Quote, params signalParams) int {
 	return conviction
 }
 
+func (SemiconductorExecutor) EvaluatePosition(pos domain.Position, quote domain.Quote, agent domain.AgentSpec, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
+	if !slices.Contains(agent.Universe, pos.Symbol) {
+		return domain.Recommendation{}, false
+	}
+	ss := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
+	if quote.Last < quote.Open*0.97 {
+		return domain.Recommendation{
+			Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+			Side: domain.SideSell, Conviction: 100 - ss,
+			Reason: "momentum decay: significant weakness (Last << Open)",
+		}, true
+	}
+	if shouldReducePosition(quote) {
+		return domain.Recommendation{
+			Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+			Side: domain.SideReduce, Conviction: 50,
+			Reason: "signal weakening: reduce exposure",
+		}, true
+	}
+	return domain.Recommendation{
+		Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+		Side: domain.SideBuy, Conviction: ss,
+		Reason: "position evaluation: maintain holding",
+	}, true
+}
+
 type AISupplyChainExecutor struct{}
 
 func (AISupplyChainExecutor) Supports(agent domain.AgentSpec) bool {
@@ -156,6 +183,32 @@ func (AISupplyChainExecutor) Recommend(agent domain.AgentSpec, quote domain.Quot
 		TargetPrice:         tp,
 		StopLossPrice:       slp,
 		ConvictionBreakdown: cb,
+	}, true
+}
+
+func (AISupplyChainExecutor) EvaluatePosition(pos domain.Position, quote domain.Quote, agent domain.AgentSpec, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
+	if !slices.Contains(agent.Universe, pos.Symbol) {
+		return domain.Recommendation{}, false
+	}
+	ss := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
+	if quote.Last < quote.Open*0.97 {
+		return domain.Recommendation{
+			Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+			Side: domain.SideSell, Conviction: 100 - ss,
+			Reason: "momentum decay: significant weakness (Last << Open)",
+		}, true
+	}
+	if shouldReducePosition(quote) {
+		return domain.Recommendation{
+			Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+			Side: domain.SideReduce, Conviction: 50,
+			Reason: "signal weakening: reduce exposure",
+		}, true
+	}
+	return domain.Recommendation{
+		Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+		Side: domain.SideBuy, Conviction: ss,
+		Reason: "position evaluation: maintain holding",
 	}, true
 }
 
@@ -239,10 +292,10 @@ func (ETFRotationExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote,
 			base = 65
 			reason = "safe-haven gold ETF in risk-off regime"
 		case "dividend", "defensive":
-			base = 60
+			base = 50
 			reason = "defensive dividend ETF in risk-off regime"
 		default:
-			base = 45
+			base = 50
 			reason = "equity ETF penalized in risk-off regime"
 		}
 	case domain.RegimeRiskOn:
@@ -261,6 +314,10 @@ func (ETFRotationExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote,
 			reason = "diversified ETF in risk-on regime"
 		}
 	default:
+		switch etfType {
+		case "dividend", "defensive":
+			base = 50
+		}
 		if quote.Last > quote.Open {
 			reason = "balanced ETF allocation with positive momentum in neutral regime"
 		} else {
@@ -333,6 +390,32 @@ func (ETFRotationExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote,
 		TargetPrice:         tp,
 		StopLossPrice:       slp,
 		ConvictionBreakdown: cb,
+	}, true
+}
+
+func (ETFRotationExecutor) EvaluatePosition(pos domain.Position, quote domain.Quote, agent domain.AgentSpec, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
+	if !slices.Contains(agent.Universe, pos.Symbol) {
+		return domain.Recommendation{}, false
+	}
+	ss := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
+	if quote.Last < quote.Open*0.97 {
+		return domain.Recommendation{
+			Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+			Side: domain.SideSell, Conviction: 100 - ss,
+			Reason: "momentum decay: significant weakness (Last << Open)",
+		}, true
+	}
+	if shouldReducePosition(quote) {
+		return domain.Recommendation{
+			Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+			Side: domain.SideReduce, Conviction: 50,
+			Reason: "signal weakening: reduce exposure",
+		}, true
+	}
+	return domain.Recommendation{
+		Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+		Side: domain.SideBuy, Conviction: ss,
+		Reason: "position evaluation: maintain holding",
 	}, true
 }
 
@@ -507,6 +590,32 @@ func (FinancialsExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, 
 	}, true
 }
 
+func (FinancialsExecutor) EvaluatePosition(pos domain.Position, quote domain.Quote, agent domain.AgentSpec, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
+	if !slices.Contains(agent.Universe, pos.Symbol) {
+		return domain.Recommendation{}, false
+	}
+	ss := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
+	if quote.Last < quote.Open*0.97 {
+		return domain.Recommendation{
+			Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+			Side: domain.SideSell, Conviction: 100 - ss,
+			Reason: "momentum decay: significant weakness (Last << Open)",
+		}, true
+	}
+	if shouldReducePosition(quote) {
+		return domain.Recommendation{
+			Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+			Side: domain.SideReduce, Conviction: 50,
+			Reason: "signal weakening: reduce exposure",
+		}, true
+	}
+	return domain.Recommendation{
+		Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+		Side: domain.SideBuy, Conviction: ss,
+		Reason: "position evaluation: maintain holding",
+	}, true
+}
+
 func finConviction(agent domain.AgentSpec, prompt string, quote domain.Quote, fq FactorQuery) (int, *domain.ConvictionBreakdown) {
 	db, bp, cqb, cqp, ssb, ssp, cab := finDividendBoost, finBalanceSheetPenalty, finCreditQualityBoost, finCreditQualityPenalty, finSpreadSensitivityBoost, finSpreadSensitivityPenalty, finCapitalAdequacyBoost
 	pto, pth := finPriceToOpenThreshold, finPriceToHighThreshold
@@ -584,6 +693,32 @@ func (ShippingExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, pr
 		TargetPrice:         tp,
 		StopLossPrice:       slp,
 		ConvictionBreakdown: cb,
+	}, true
+}
+
+func (ShippingExecutor) EvaluatePosition(pos domain.Position, quote domain.Quote, agent domain.AgentSpec, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
+	if !slices.Contains(agent.Universe, pos.Symbol) {
+		return domain.Recommendation{}, false
+	}
+	ss := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
+	if quote.Last < quote.Open*0.97 {
+		return domain.Recommendation{
+			Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+			Side: domain.SideSell, Conviction: 100 - ss,
+			Reason: "momentum decay: significant weakness (Last << Open)",
+		}, true
+	}
+	if shouldReducePosition(quote) {
+		return domain.Recommendation{
+			Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+			Side: domain.SideReduce, Conviction: 50,
+			Reason: "signal weakening: reduce exposure",
+		}, true
+	}
+	return domain.Recommendation{
+		Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+		Side: domain.SideBuy, Conviction: ss,
+		Reason: "position evaluation: maintain holding",
 	}, true
 }
 
@@ -819,4 +954,10 @@ func (IndustrialDeskExecutor) Recommend(agent domain.AgentSpec, quote domain.Quo
 		StopLossPrice:       slp,
 		ConvictionBreakdown: cb,
 	}, true
+}
+
+// shouldReducePosition returns true when the quote shows signs of momentum decay
+// or volume atrophy that warrant reducing or selling the position.
+func shouldReducePosition(quote domain.Quote) bool {
+	return quote.Last < quote.Open || quote.Volume < 1_000_000
 }

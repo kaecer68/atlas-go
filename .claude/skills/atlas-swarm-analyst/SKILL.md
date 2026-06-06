@@ -1,4 +1,7 @@
-# Atlas Swarm Analyst Skill
+---
+name: atlas-swarm-analyst
+description: "Use when reading MiroFish Swarm simulation results, reporting market consensus, or detecting anomalies from swarm data. Triggers: swarm analysis, market consensus, fish performance, anomaly detection."
+---
 
 **用途**: 讓 OpenClaw/Hermes/claude 等 AI Agent 能讀取 MiroFish Swarm 的模擬結果，以自然語言向投資人報告市場共識、異常偵測與情境分析。
 

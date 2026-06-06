@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -123,6 +124,32 @@ func (GrowthMomentumExecutor) Recommend(agent domain.AgentSpec, quote domain.Quo
 	}, true
 }
 
+func (GrowthMomentumExecutor) EvaluatePosition(pos domain.Position, quote domain.Quote, agent domain.AgentSpec, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
+	if !slices.Contains(agent.Universe, pos.Symbol) {
+		return domain.Recommendation{}, false
+	}
+	ss := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
+	if quote.Last < quote.Open*0.97 {
+		return domain.Recommendation{
+			Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+			Side: domain.SideSell, Conviction: 100 - ss,
+			Reason: "momentum decay: significant weakness (Last << Open)",
+		}, true
+	}
+	if shouldReducePosition(quote) {
+		return domain.Recommendation{
+			Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+			Side: domain.SideReduce, Conviction: 50,
+			Reason: "signal weakening: reduce exposure",
+		}, true
+	}
+	return domain.Recommendation{
+		Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+		Side: domain.SideBuy, Conviction: ss,
+		Reason: "position evaluation: maintain holding",
+	}, true
+}
+
 type ValueYieldExecutor struct{}
 
 func (ValueYieldExecutor) Supports(agent domain.AgentSpec) bool {
@@ -162,6 +189,32 @@ func (ValueYieldExecutor) Recommend(agent domain.AgentSpec, quote domain.Quote, 
 		TargetPrice:         tp,
 		StopLossPrice:       slp,
 		ConvictionBreakdown: cb,
+	}, true
+}
+
+func (ValueYieldExecutor) EvaluatePosition(pos domain.Position, quote domain.Quote, agent domain.AgentSpec, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
+	if !slices.Contains(agent.Universe, pos.Symbol) {
+		return domain.Recommendation{}, false
+	}
+	ss := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
+	if quote.Last < quote.Open*0.97 {
+		return domain.Recommendation{
+			Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+			Side: domain.SideSell, Conviction: 100 - ss,
+			Reason: "momentum decay: significant weakness (Last << Open)",
+		}, true
+	}
+	if shouldReducePosition(quote) {
+		return domain.Recommendation{
+			Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+			Side: domain.SideReduce, Conviction: 50,
+			Reason: "signal weakening: reduce exposure",
+		}, true
+	}
+	return domain.Recommendation{
+		Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+		Side: domain.SideBuy, Conviction: ss,
+		Reason: "position evaluation: maintain holding",
 	}, true
 }
 
@@ -205,6 +258,32 @@ func (EarningsQualityExecutor) Recommend(agent domain.AgentSpec, quote domain.Qu
 	}, true
 }
 
+func (EarningsQualityExecutor) EvaluatePosition(pos domain.Position, quote domain.Quote, agent domain.AgentSpec, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
+	if !slices.Contains(agent.Universe, pos.Symbol) {
+		return domain.Recommendation{}, false
+	}
+	ss := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
+	if quote.Last < quote.Open*0.97 {
+		return domain.Recommendation{
+			Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+			Side: domain.SideSell, Conviction: 100 - ss,
+			Reason: "momentum decay: significant weakness (Last << Open)",
+		}, true
+	}
+	if shouldReducePosition(quote) {
+		return domain.Recommendation{
+			Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+			Side: domain.SideReduce, Conviction: 50,
+			Reason: "signal weakening: reduce exposure",
+		}, true
+	}
+	return domain.Recommendation{
+		Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+		Side: domain.SideBuy, Conviction: ss,
+		Reason: "position evaluation: maintain holding",
+	}, true
+}
+
 type TechnicalBreakoutExecutor struct{}
 
 func (TechnicalBreakoutExecutor) Supports(agent domain.AgentSpec) bool {
@@ -230,6 +309,32 @@ func (TechnicalBreakoutExecutor) Recommend(agent domain.AgentSpec, quote domain.
 		TargetPrice:         tp,
 		StopLossPrice:       slp,
 		ConvictionBreakdown: cb,
+	}, true
+}
+
+func (TechnicalBreakoutExecutor) EvaluatePosition(pos domain.Position, quote domain.Quote, agent domain.AgentSpec, prompt string, regime domain.Regime, fq FactorQuery) (domain.Recommendation, bool) {
+	if !slices.Contains(agent.Universe, pos.Symbol) {
+		return domain.Recommendation{}, false
+	}
+	ss := dynamicSignalStrength(quote, signalParamsFromAgent(agent))
+	if quote.Last < quote.Open*0.97 {
+		return domain.Recommendation{
+			Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+			Side: domain.SideSell, Conviction: 100 - ss,
+			Reason: "momentum decay: significant weakness (Last << Open)",
+		}, true
+	}
+	if shouldReducePosition(quote) {
+		return domain.Recommendation{
+			Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+			Side: domain.SideReduce, Conviction: 50,
+			Reason: "signal weakening: reduce exposure",
+		}, true
+	}
+	return domain.Recommendation{
+		Agent: agent.ID, Skill: agent.Skill, Layer: agent.Layer, Symbol: pos.Symbol,
+		Side: domain.SideBuy, Conviction: ss,
+		Reason: "position evaluation: maintain holding",
 	}, true
 }
 

@@ -43,7 +43,8 @@ func (a *AuditSubscriber) SetSessionID(sessionID string) {
 }
 
 func (a *AuditSubscriber) log(_ context.Context, ev eventbus.BusEvent) error {
-	logging.Info("risk_audit", "risk_event",
+	logging.Info(
+		"risk_audit", "risk_event",
 		logging.FStr("event_type", string(ev.Type)),
 		logging.FStr("event_id", ev.ID),
 		logging.FStr("payload", fmt.Sprintf("%+v", ev.Payload)),

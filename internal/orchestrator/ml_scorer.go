@@ -2,11 +2,12 @@ package orchestrator
 
 import (
 	"fmt"
+	"math"
+	"sort"
+
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ml"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
-	"math"
-	"sort"
 )
 
 // ScoredQuote pairs a Quote with its ML-predicted score.

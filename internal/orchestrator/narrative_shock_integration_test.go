@@ -33,22 +33,26 @@ func TestNarrativeShockIntegration(t *testing.T) {
 	}
 
 	// Change to project root so relative paths (data/replay/, configs/) resolve correctly.
-	// Search upward from the current working directory for go.mod.
+	// Use t.Chdir (Go 1.24+) to scope the working directory change to this test only,
+	// preventing side effects on other tests that use relative paths.
 	if _, err := os.Stat("go.mod"); os.IsNotExist(err) {
 		cwd, _ := os.Getwd()
 		dir := cwd
+		found := false
 		for i := 0; i < 10; i++ {
 			parent := filepath.Dir(dir)
 			if parent == dir {
 				t.Fatalf("cannot find project root (go.mod) from %s", cwd)
 			}
 			if _, err := os.Stat(filepath.Join(parent, "go.mod")); err == nil {
-				if err := os.Chdir(parent); err != nil {
-					t.Fatalf("os.Chdir(%s): %v", parent, err)
-				}
+				t.Chdir(parent)
+				found = true
 				break
 			}
 			dir = parent
+		}
+		if !found {
+			t.Fatalf("cannot find project root (go.mod) from %s", cwd)
 		}
 	}
 
@@ -86,7 +90,8 @@ func TestNarrativeShockIntegration(t *testing.T) {
 
 	// --- Baseline run ---
 	baseRegimeBase, baseRaw, _, _ := ExecuteRegistryResearchDetailedWithPolicyAndGuards(
-		registry, baseQuotes, policy.PromptOverrides, policy.ExecutionPolicy)
+		registry, baseQuotes, policy.PromptOverrides, policy.ExecutionPolicy,
+	)
 	baseEvents := nEngine.DetectEvents(quotesToMarketData(baseQuotes))
 	baseRegime := AdjustRegimeFromNarrative(baseRegimeBase, baseEvents)
 
@@ -105,7 +110,8 @@ func TestNarrativeShockIntegration(t *testing.T) {
 		Source:     "mock",
 	})
 	shockRegimeBase, shockRaw, _, _ := ExecuteRegistryResearchDetailedWithPolicyAndGuards(
-		registry, shockQuotes, policy.PromptOverrides, policy.ExecutionPolicy)
+		registry, shockQuotes, policy.PromptOverrides, policy.ExecutionPolicy,
+	)
 	shockEvents := nEngine.DetectEvents(quotesToMarketData(shockQuotes))
 	shockRegime := AdjustRegimeFromNarrative(shockRegimeBase, shockEvents)
 
