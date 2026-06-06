@@ -100,11 +100,14 @@ func (f *FrankfurterFXProvider) fetchRate(ctx context.Context, url string) (floa
 	return rate, nil
 }
 
+// fetchPreviousBusinessDayRate walks back up to 7 business days and
+// returns the first rate that DIFFERS from currentRate (0.01 tolerance).
+// Returns the earliest available rate if all match (pegged currency).
+// On weekends/holidays, Frankfurter's /latest endpoint still shows the
+// last trading day's rate, so simply walking back 1 day would return
+// the same value (changePct=0). Comparing against the most recent
+// DIFFERENT rate produces a meaningful daily-change signal.
 func (f *FrankfurterFXProvider) fetchPreviousBusinessDayRate(ctx context.Context, currentRate float64) (float64, string, error) {
-	// Walk back up to 7 business days. Return the first rate that DIFFERS
-	// from currentRate (within 0.01 tolerance) — the most recent meaningful
-	// change point. Falls back to the earliest available rate if all match
-	// (rate truly unchanged for a week, e.g. pegged currency scenarios).
 	var firstRate float64
 	var firstDate string
 	for i := 1; i <= 7; i++ {
