@@ -344,6 +344,25 @@ func (ne *NarrativeEngine) DetectEvents(data MarketNarrativeData) []NarrativeEve
 	if evt := detectInflationSpikeKBEvent(data); evt != nil {
 		events = append(events, *evt)
 	}
+	// Extended macro event detectors (from previously unused snapshot data)
+	if evt := detectCPIInflationEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
+	if evt := detectBDIShippingEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
+	if evt := detectCopperIndustrialEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
+	if evt := detectTaiwanExportBoomEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
+	if evt := detectSOXSemiconductorCycleEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
+	if evt := detectDRAMMemoryCycleEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
 	return events
 }
 
@@ -632,6 +651,13 @@ type MarketNarrativeData struct {
 	RetailInstitutionalDivergence float64 // + retail bullish, - retail bearish
 	MarginZScore                  float64 // how extreme current margin balance is (reverse indicator)
 	EarningsSurprisePct           float64 // actual earnings surprise percentage
+	// Extended macro inputs (from snapshot data previously unused by narrative)
+	CPIYoY                     float64 // consumer price index YoY %
+	BDIChangePct               float64 // Baltic Dry Index change %
+	CopperChangePct            float64 // copper price change %
+	ExportElectronicsChangePct float64 // Taiwan electronics export change %
+	SOXIndexChangePct          float64 // Philadelphia Semiconductor Index change %
+	DRAMSpotPriceChangePct     float64 // DRAM spot price change %
 }
 
 // detectUSRatesEvent is the KB-pipeline detector (MarketNarrativeData input).
@@ -1336,12 +1362,47 @@ func detectDollarSurgeKBEvent(data MarketNarrativeData) *NarrativeEvent {
 }
 
 // detectEarningsSurpriseKBEvent is the KB-pipeline detector for earnings_surprise.
-// Uses AICapexSentiment as a proxy: strong AI capex sentiment correlates with earnings strength.
-// INTENTIONALLY NOT MERGED with NewEarningsSurpriseEvent (which takes surprisePct).
-// Reason: The KB version uses AICapexSentiment (sentiment proxy) while
-// NewEarningsSurpriseEvent uses actual earnings surprise percentage. Different signal sources.
+// Uses EarningsSurprisePct directly when available (query-param overlay or external feed).
+// Falls back to AICapexSentiment only when EarningsSurprisePct is zero.
 func detectEarningsSurpriseKBEvent(data MarketNarrativeData) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
+
+	// Primary: actual earnings surprise percentage
+	if data.EarningsSurprisePct != 0 {
+		threshold := params.EarningsSurpriseThreshold.Value
+		if math.Abs(data.EarningsSurprisePct) >= threshold {
+			now := time.Now().UTC()
+			dur := getThemeDuration("earnings_surprise")
+			sentiment := 0.7
+			capitalFlow := "earnings_beat"
+			if data.EarningsSurprisePct < 0 {
+				sentiment = -0.7
+				capitalFlow = "earnings_miss"
+			}
+			return &NarrativeEvent{
+				ID:               fmt.Sprintf("evt-earn-%d", nowUnix()),
+				Theme:            "earnings_surprise",
+				Region:           "TW",
+				Sentiment:        sentiment,
+				Confidence:       computeDeviationConfidence(math.Abs(data.EarningsSurprisePct), threshold, params.EarningsSurpriseConfidence.Value, params.ConfidenceDeviationCeiling.Value),
+				ConfidenceSource: "deviation_based_v1",
+				HitRate:          hitRateForTheme("earnings_surprise"),
+				CapitalFlow:      capitalFlow,
+				TimeWindow:       "1_week",
+				Timestamp:        now,
+				Duration:         dur,
+				ExpiresAt:        now.Add(dur),
+				Severity:         "high",
+				Status:           "active",
+				SourceData: map[string]float64{
+					"earnings_surprise_pct": data.EarningsSurprisePct,
+				},
+			}
+		}
+		return nil
+	}
+
+	// Fallback: AICapexSentiment proxy when actual earnings data is unavailable
 	if data.AICapexSentiment > params.AICapexSentimentThreshold.Value {
 		now := time.Now().UTC()
 		dur := getThemeDuration("earnings_surprise")
@@ -1405,6 +1466,238 @@ func detectInflationSpikeKBEvent(data MarketNarrativeData) *NarrativeEvent {
 		}
 	}
 	return nil
+}
+
+// --- Extended macro event detectors (previously unused snapshot data) ---
+
+// detectCPIInflationEvent triggers when US CPI YoY exceeds 3% (above target)
+// or drops below 1% (deflation risk).
+func detectCPIInflationEvent(data MarketNarrativeData) *NarrativeEvent {
+	const cpiHighThreshold = 3.0
+	const cpiLowThreshold = 1.0
+	if data.CPIYoY <= 0 {
+		return nil
+	}
+	triggered := data.CPIYoY > cpiHighThreshold || data.CPIYoY < cpiLowThreshold
+	if !triggered {
+		return nil
+	}
+	params := config.GetParametersConfig().Narrative
+	now := time.Now().UTC()
+	dur := getThemeDuration("inflation_spike")
+	sentiment := -0.5
+	capitalFlow := "inflation_reprice"
+	threshold := cpiHighThreshold
+	if data.CPIYoY < cpiLowThreshold {
+		threshold = cpiLowThreshold
+		sentiment = -0.3
+		capitalFlow = "deflation_risk"
+	}
+	confidence := computeDeviationConfidence(data.CPIYoY, threshold, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-cpi-%d", nowUnix()),
+		Theme:            "inflation_spike",
+		Region:           "US",
+		Sentiment:        sentiment,
+		Confidence:       confidence,
+		ConfidenceSource: "deviation_based_v1",
+		HitRate:          hitRateForTheme("inflation_spike"),
+		CapitalFlow:      capitalFlow,
+		TimeWindow:       "1_month",
+		Timestamp:        now,
+		Duration:         dur,
+		ExpiresAt:        now.Add(dur),
+		Severity:         "medium",
+		Status:           "active",
+		SourceData: map[string]float64{
+			"cpi_yoy": data.CPIYoY,
+		},
+	}
+}
+
+// detectBDIShippingEvent triggers on Baltic Dry Index moves >10% (global trade signal).
+func detectBDIShippingEvent(data MarketNarrativeData) *NarrativeEvent {
+	const bdiThreshold = 10.0
+	if math.Abs(data.BDIChangePct) <= bdiThreshold {
+		return nil
+	}
+	params := config.GetParametersConfig().Narrative
+	now := time.Now().UTC()
+	dur := getThemeDuration("shipping_rate_spike")
+	sentiment := 0.4
+	capitalFlow := "shipping_demand"
+	if data.BDIChangePct < 0 {
+		sentiment = -0.4
+		capitalFlow = "shipping_slump"
+	}
+	confidence := computeDeviationConfidence(data.BDIChangePct, bdiThreshold, params.ConfidenceBaseTaiwanStress.Value, params.ConfidenceDeviationCeiling.Value)
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-bdi-%d", nowUnix()),
+		Theme:            "shipping_rate_spike",
+		Region:           "Global",
+		Sentiment:        sentiment,
+		Confidence:       confidence,
+		ConfidenceSource: "deviation_based_v1",
+		HitRate:          hitRateForTheme("shipping_rate_spike"),
+		CapitalFlow:      capitalFlow,
+		TimeWindow:       "1_week",
+		Timestamp:        now,
+		Duration:         dur,
+		ExpiresAt:        now.Add(dur),
+		Severity:         "medium",
+		Status:           "active",
+		SourceData: map[string]float64{
+			"bdi_change_pct": data.BDIChangePct,
+		},
+	}
+}
+
+// detectCopperIndustrialEvent triggers on copper price moves >3% (Dr. Copper signal).
+func detectCopperIndustrialEvent(data MarketNarrativeData) *NarrativeEvent {
+	const copperThreshold = 3.0
+	if math.Abs(data.CopperChangePct) <= copperThreshold {
+		return nil
+	}
+	params := config.GetParametersConfig().Narrative
+	now := time.Now().UTC()
+	dur := getThemeDuration("china_slowdown")
+	sentiment := 0.5
+	capitalFlow := "industrial_demand"
+	if data.CopperChangePct < 0 {
+		sentiment = -0.5
+		capitalFlow = "industrial_slowdown"
+	}
+	confidence := computeDeviationConfidence(data.CopperChangePct, copperThreshold, params.ConfidenceBaseTaiwanStress.Value, params.ConfidenceDeviationCeiling.Value)
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-copper-%d", nowUnix()),
+		Theme:            "china_slowdown",
+		Region:           "Global",
+		Sentiment:        sentiment,
+		Confidence:       confidence,
+		ConfidenceSource: "deviation_based_v1",
+		HitRate:          hitRateForTheme("china_slowdown"),
+		CapitalFlow:      capitalFlow,
+		TimeWindow:       "1_week",
+		Timestamp:        now,
+		Duration:         dur,
+		ExpiresAt:        now.Add(dur),
+		Severity:         "medium",
+		Status:           "active",
+		SourceData: map[string]float64{
+			"copper_change_pct": data.CopperChangePct,
+		},
+	}
+}
+
+// detectTaiwanExportBoomEvent triggers on Taiwan electronics export moves >5%.
+func detectTaiwanExportBoomEvent(data MarketNarrativeData) *NarrativeEvent {
+	const exportThreshold = 5.0
+	if math.Abs(data.ExportElectronicsChangePct) <= exportThreshold {
+		return nil
+	}
+	params := config.GetParametersConfig().Narrative
+	now := time.Now().UTC()
+	dur := getThemeDuration("taiwan_export_boom")
+	sentiment := 0.6
+	capitalFlow := "export_inflow"
+	if data.ExportElectronicsChangePct < 0 {
+		sentiment = -0.6
+		capitalFlow = "export_outflow"
+	}
+	confidence := computeDeviationConfidence(data.ExportElectronicsChangePct, exportThreshold, params.ConfidenceBaseTaiwanStress.Value, params.ConfidenceDeviationCeiling.Value)
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-export-%d", nowUnix()),
+		Theme:            "taiwan_export_boom",
+		Region:           "TW",
+		Sentiment:        sentiment,
+		Confidence:       confidence,
+		ConfidenceSource: "deviation_based_v1",
+		HitRate:          hitRateForTheme("taiwan_export_boom"),
+		CapitalFlow:      capitalFlow,
+		TimeWindow:       "1_month",
+		Timestamp:        now,
+		Duration:         dur,
+		ExpiresAt:        now.Add(dur),
+		Severity:         "medium",
+		Status:           "active",
+		SourceData: map[string]float64{
+			"export_electronics_change_pct": data.ExportElectronicsChangePct,
+		},
+	}
+}
+
+// detectSOXSemiconductorCycleEvent triggers on SOX index moves >5%.
+func detectSOXSemiconductorCycleEvent(data MarketNarrativeData) *NarrativeEvent {
+	const soxThreshold = 5.0
+	if math.Abs(data.SOXIndexChangePct) <= soxThreshold {
+		return nil
+	}
+	params := config.GetParametersConfig().Narrative
+	now := time.Now().UTC()
+	dur := getThemeDuration("semiconductor_cycle_peak")
+	sentiment := 0.6
+	capitalFlow := "tech_capex_inflow"
+	if data.SOXIndexChangePct < 0 {
+		sentiment = -0.6
+		capitalFlow = "tech_capex_slowdown"
+	}
+	confidence := computeDeviationConfidence(data.SOXIndexChangePct, soxThreshold, params.ConfidenceBaseTSMCRevenue.Value, params.ConfidenceDeviationCeiling.Value)
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-sox-%d", nowUnix()),
+		Theme:            "semiconductor_cycle_peak",
+		Region:           "US",
+		Sentiment:        sentiment,
+		Confidence:       confidence,
+		ConfidenceSource: "deviation_based_v1",
+		HitRate:          hitRateForTheme("semiconductor_cycle_peak"),
+		CapitalFlow:      capitalFlow,
+		TimeWindow:       "1_month",
+		Timestamp:        now,
+		Duration:         dur,
+		ExpiresAt:        now.Add(dur),
+		Severity:         "medium",
+		Status:           "active",
+		SourceData: map[string]float64{
+			"sox_index_change_pct": data.SOXIndexChangePct,
+		},
+	}
+}
+
+// detectDRAMMemoryCycleEvent triggers on DRAM spot price moves >5%.
+func detectDRAMMemoryCycleEvent(data MarketNarrativeData) *NarrativeEvent {
+	const dramThreshold = 5.0
+	if math.Abs(data.DRAMSpotPriceChangePct) <= dramThreshold {
+		return nil
+	}
+	params := config.GetParametersConfig().Narrative
+	now := time.Now().UTC()
+	dur := getThemeDuration("semiconductor_cycle_peak")
+	sentiment := 0.5
+	capitalFlow := "memory_demand"
+	if data.DRAMSpotPriceChangePct < 0 {
+		sentiment = -0.5
+		capitalFlow = "memory_oversupply"
+	}
+	confidence := computeDeviationConfidence(data.DRAMSpotPriceChangePct, dramThreshold, params.ConfidenceBaseTSMCRevenue.Value, params.ConfidenceDeviationCeiling.Value)
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-dram-%d", nowUnix()),
+		Theme:            "semiconductor_cycle_peak",
+		Region:           "Global",
+		Sentiment:        sentiment,
+		Confidence:       confidence,
+		ConfidenceSource: "deviation_based_v1",
+		HitRate:          hitRateForTheme("semiconductor_cycle_peak"),
+		CapitalFlow:      capitalFlow,
+		TimeWindow:       "1_month",
+		Timestamp:        now,
+		Duration:         dur,
+		ExpiresAt:        now.Add(dur),
+		Severity:         "medium",
+		Status:           "active",
+		SourceData: map[string]float64{
+			"dram_spot_price_change_pct": data.DRAMSpotPriceChangePct,
+		},
+	}
 }
 
 // computeDeviationConfidence calculates event confidence based on how far the observed value deviates from the threshold.

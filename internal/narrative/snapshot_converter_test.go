@@ -17,6 +17,15 @@ func TestMarketNarrativeDataFromSnapshot_AllFields(t *testing.T) {
 		Gold:        marketdata.MacroDataPoint{Symbol: "GC=F", ChangePct: 0.80},
 		JPY:         marketdata.MacroDataPoint{Symbol: "USDJPY=X", ChangePct: -0.50},
 		TSMCRevenue: marketdata.MacroDataPoint{Symbol: "TSMC", ChangePct: 45.0},
+		// Extended fields
+		CPIYoY:              marketdata.MacroDataPoint{Symbol: "CPI", Value: 3.5},
+		Bdi:                 marketdata.MacroDataPoint{Symbol: "BDI", ChangePct: 12.0},
+		Copper:              marketdata.MacroDataPoint{Symbol: "HG=F", ChangePct: -4.0},
+		ExportElectronics:   marketdata.MacroDataPoint{Symbol: "TWEXPORT", ChangePct: 7.0},
+		SOXIndex:            marketdata.MacroDataPoint{Symbol: "SOX", ChangePct: 6.0},
+		DRAMSpotPrice:       marketdata.MacroDataPoint{Symbol: "DRAM", ChangePct: -8.0},
+		ForeignInvestorNet:  marketdata.MacroDataPoint{Symbol: "TWFLOW", Value: -80.0},
+		RetailMarginBalance: marketdata.MacroDataPoint{Symbol: "TWMARGIN", ChangePct: 5.0},
 	}
 
 	data := MarketNarrativeDataFromSnapshot(snap)
@@ -52,11 +61,33 @@ func TestMarketNarrativeDataFromSnapshot_AllFields(t *testing.T) {
 	if data.GeopoliticalGPR != 0 {
 		t.Errorf("GeopoliticalGPR: expected 0, got %v", data.GeopoliticalGPR)
 	}
-	if data.RetailInstitutionalDivergence != 0 {
-		t.Errorf("RetailInstitutionalDivergence: expected 0, got %v", data.RetailInstitutionalDivergence)
+	// RetailInstitutionalDivergence computed from ForeignInvestorNet + RetailMarginBalance
+	// foreignSignal = -(-80)/50 = 1.6, retailSignal = 5/2.5 = 2.0, div = (2.0+1.6)/2 = 1.8
+	if math.Abs(data.RetailInstitutionalDivergence-1.8) > 1e-9 {
+		t.Errorf("RetailInstitutionalDivergence: expected 1.8, got %v", data.RetailInstitutionalDivergence)
 	}
-	if data.MarginZScore != 0 {
-		t.Errorf("MarginZScore: expected 0, got %v", data.MarginZScore)
+	// MarginZScore = 5.0/2.0 = 2.5
+	if math.Abs(data.MarginZScore-2.5) > 1e-9 {
+		t.Errorf("MarginZScore: expected 2.5, got %v", data.MarginZScore)
+	}
+	// Extended macro inputs
+	if data.CPIYoY != 3.5 {
+		t.Errorf("CPIYoY: expected 3.5, got %v", data.CPIYoY)
+	}
+	if data.BDIChangePct != 12.0 {
+		t.Errorf("BDIChangePct: expected 12.0, got %v", data.BDIChangePct)
+	}
+	if data.CopperChangePct != -4.0 {
+		t.Errorf("CopperChangePct: expected -4.0, got %v", data.CopperChangePct)
+	}
+	if data.ExportElectronicsChangePct != 7.0 {
+		t.Errorf("ExportElectronicsChangePct: expected 7.0, got %v", data.ExportElectronicsChangePct)
+	}
+	if data.SOXIndexChangePct != 6.0 {
+		t.Errorf("SOXIndexChangePct: expected 6.0, got %v", data.SOXIndexChangePct)
+	}
+	if data.DRAMSpotPriceChangePct != -8.0 {
+		t.Errorf("DRAMSpotPriceChangePct: expected -8.0, got %v", data.DRAMSpotPriceChangePct)
 	}
 }
 

@@ -401,5 +401,89 @@ func DefaultTemplates() []CausalTemplate {
 • 金融股因現金股利穩定且殖利率高，是除權息旺季的核心受惠板塊。
 • 電子股因進入傳統淡季，相對吸引力下降，資金常輪動至傳產與高股息板塊。`,
 		},
+		{
+			ID:             "運價飆升",
+			Name:           "運價飆升",
+			TriggerTheme:   "shipping_rate_spike",
+			RequiredRegion: "Global",
+			Steps: []CausalStep{
+				{Description: "BDI 波羅的海乾散貨指數急升 → 全球貿易需求強勁", Affected: []string{"航運", "散裝航運"}, Impact: 0.7},
+				{Description: "運價上漲帶動航運股獲利大幅改善", Affected: []string{"航運", "貨櫃航運"}, Impact: 0.6},
+				{Description: "進口成本上升 → 通膨壓力增加", Affected: []string{"消費", "進口商"}, Impact: -0.3},
+			},
+			HistoricalHitRate: 0.62,
+			SourceReferences:  []string{"Baltic Exchange BDI Index", "Clarksons Shipping Intelligence"},
+			Rationale: `BDI（波羅的海乾散貨指數）是全球貿易需求的重要領先指標。當BDI急升時：
+1. 反映全球原物料與商品貿易活躍
+2. 航運股（長榮、陽明、萬海）獲利直接受惠
+3. 但也暗示進口成本上升，對部分產業形成壓力
+
+配置建議：
+• 【押注】航運股：運價與獲利直接掛鉤
+• 【迴避】進口導向產業：成本上升壓縮利潤`,
+		},
+		{
+			ID:             "中國經濟放緩",
+			Name:           "中國經濟放緩",
+			TriggerTheme:   "china_slowdown",
+			RequiredRegion: "Asia",
+			Steps: []CausalStep{
+				{Description: "銅價下跌（Dr. Copper）→ 工業需求疲軟訊號", Affected: []string{"工業金屬", "原物料"}, Impact: -0.6},
+				{Description: "中國需求放緩 → 台灣出口導向產業承壓", Affected: []string{"台股大盤", "電子零組件"}, Impact: -0.5},
+				{Description: "避險資金轉向內需與防禦型板塊", Affected: []string{"內需", "高股息", "金融"}, Impact: 0.3},
+			},
+			HistoricalHitRate: 0.60,
+			SourceReferences:  []string{"LME Copper Price", "China NBS Manufacturing PMI"},
+			Rationale: `銅被稱為「Dr. Copper」，因為銅價變化通常領先全球經濟週期。銅價大跌往往預示：
+1. 中國與全球工業需求正在放緩
+2. 台灣出口導向的電子與傳產供應鏈將面臨訂單下滑
+3. 原物料與工業金屬板塊全面承壓
+
+配置建議：
+• 【押注】內需、高股息、金融：與中國出口關聯度較低
+• 【迴避】原物料、工業金屬、部分電子零組件：需求放緩直接衝擊`,
+		},
+		{
+			ID:             "台灣出口強勁",
+			Name:           "台灣出口強勁",
+			TriggerTheme:   "taiwan_export_boom",
+			RequiredRegion: "TW",
+			Steps: []CausalStep{
+				{Description: "台灣電子零組件出口大幅成長 → 科技需求強勁", Affected: []string{"半導體", "電子零組件"}, Impact: 0.7},
+				{Description: "外資因基本面改善而加碼台股", Affected: []string{"外資流向_台股", "台股大盤"}, Impact: 0.6},
+				{Description: "台幣升值壓力 → 出口商匯兌收益增加", Affected: []string{"出口股"}, Impact: 0.3},
+			},
+			HistoricalHitRate: 0.65,
+			SourceReferences:  []string{"Taiwan Ministry of Economic Affairs Export Statistics", "Customs Administration Monthly Report"},
+			Rationale: `台灣出口佔GDP比重超過65%，電子零組件為主要出口項目。當電子出口大幅成長時：
+1. 反映全球科技需求強勁，半導體與AI供應鏈訂單滿載
+2. 外資因基本面改善而積極加碼台股
+3. 台幣往往因出口收入增加而升值
+
+配置建議：
+• 【押注】半導體、AI供應鏈、電子零組件：出口成長的直接受益者
+• 【押注】台股大盤ETF（0050）：外資流入推升整體市場`,
+		},
+		{
+			ID:             "半導體週期高峰",
+			Name:           "半導體週期高峰",
+			TriggerTheme:   "semiconductor_cycle_peak",
+			RequiredRegion: "Global",
+			Steps: []CausalStep{
+				{Description: "費城半導體指數（SOX）或DRAM價格急升 → 半導體週期高點確認", Affected: []string{"半導體", "晶圓代工"}, Impact: 0.7},
+				{Description: "產能滿載、價格上漲 → 獲利大幅改善", Affected: []string{"半導體", "記憶體"}, Impact: 0.6},
+				{Description: "資本支出擴張 → 設備與材料股受惠", Affected: []string{"半導體設備", "材料"}, Impact: 0.5},
+			},
+			HistoricalHitRate: 0.68,
+			SourceReferences:  []string{"WSTS Semiconductor Market Forecast", "DRAMeXchange Spot Price"},
+			Rationale: `當費城半導體指數（SOX）或DRAM現貨價格大幅上漲時，通常確認半導體週期處於上升階段：
+1. 產能供不應求，晶圓代工與記憶體價格上漲
+2. 上游設備與材料廠商訂單滿載
+3. 台灣作為全球半導體製造中心，相關供應鏈全面受惠
+
+配置建議：
+• 【押注】半導體、晶圓代工、記憶體、設備：週期上升的直接受益者
+• 【押注】AI供應鏈：在半導體週期高峰時，AI相關需求提供額外動能`,
+		},
 	}
 }

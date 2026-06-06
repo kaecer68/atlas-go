@@ -1,4 +1,4 @@
-import { eventName, stressLabel, regionName, sectorName, templateName, capitalFlowName, modelName, timeWindowName } from '../names.js';
+import { eventName, stressLabel, regionName, sectorName, templateName, capitalFlowName, modelName, timeWindowName, confidenceSourceName, severityName, statusName } from '../names.js';
 import { renderEmptyState, sortNarrativeEvents } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
 
@@ -269,9 +269,46 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
         const sClass = e.sentiment > 0 ? 'up' : 'down';
         const sText = e.sentiment > 0 ? '正面' : '負面';
         const tw = timeWindowName(e.time_window || '-');
+        const sev = severityName(e.severity || '-');
+        const st = statusName(e.status || '-');
+        const cs = confidenceSourceName(e.confidence_source || '-');
+        // Build source data display (translated keys)
+        let sourceDataHtml = '';
+        if (e.source_data && Object.keys(e.source_data).length > 0) {
+          const keyMap = {
+            'us10y_change_bps': '美債10年變動(bps)',
+            'dxy_change_pct': '美元指數變動%',
+            'vix_level': 'VIX 水位',
+            'usd_twd_change_pct': '台幣變動%',
+            'oil_change_pct': '油價變動%',
+            'gold_change_pct': '黃金變動%',
+            'gold_level': '黃金價位',
+            'jpy_change_pct': '日圓變動%',
+            'jpy_level': '日圓價位',
+            'ai_capex_sentiment': 'AI 資本支出情緒',
+            'geopolitical_gpr': '地緣政治風險指數',
+            'margin_zscore': '融資 Z-score',
+            'retail_institutional_divergence': '散戶機構分歧',
+            'earnings_surprise_pct': '財報驚喜%',
+            'cpi_yoy': 'CPI 年增率%',
+            'bdi_change_pct': 'BDI 變動%',
+            'copper_change_pct': '銅價變動%',
+            'export_electronics_change_pct': '電子出口變動%',
+            'sox_index_change_pct': 'SOX 指數變動%',
+            'dram_spot_price_change_pct': 'DRAM 現貨變動%'
+          };
+          const sdItems = Object.entries(e.source_data).map(([k, v]) => {
+            const label = keyMap[k] || k;
+            const val = typeof v === 'number' ? v.toFixed(2) : v;
+            return `${label}: ${val}`;
+          }).join(' · ');
+          sourceDataHtml = `<div class="text-muted text-sm mt-xs" style="font-size:11px">觸發條件：${escapeHtml(sdItems)}</div>`;
+        }
         return `<div style="border-left:3px solid var(--accent);padding:10px 12px;margin:8px 0;background:#0d1015;border-radius:8px">
           <div class="font-bold">${escapeHtml(eventName(e.theme))} <span class="${sClass}">${sText} (${e.sentiment})</span></div>
-          <div class="text-muted text-sm mt-xs">區域：${escapeHtml(regionName(e.region))} · 信心度：${((e.confident || e.confidence || 0) * 100).toFixed(0)}% · 資金流：${escapeHtml(capitalFlowName(e.capital_flow || '-'))} · 時間窗口：${escapeHtml(tw)}</div>
+          <div class="text-muted text-sm mt-xs">區域：${escapeHtml(regionName(e.region))} · 信心度：${((e.confident || e.confidence || 0) * 100).toFixed(0)}% · 嚴重程度：${escapeHtml(sev)} · 狀態：${escapeHtml(st)}</div>
+          <div class="text-muted text-sm mt-xs">資金流：${escapeHtml(capitalFlowName(e.capital_flow || '-'))} · 時間窗口：${escapeHtml(tw)} · 信心來源：${escapeHtml(cs)}</div>
+          ${sourceDataHtml}
         </div>`;
       }).join('');
     }
