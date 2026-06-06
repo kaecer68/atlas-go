@@ -42,6 +42,7 @@ func main() {
 
 	provider := marketdata.NewCompositeMacroProvider(
 		marketdata.NewYahooFinanceMacroProvider(),
+		marketdata.NewFrankfurterFXProvider(),
 		marketdata.NewTWSECapitalFlowProvider(capitalFlowDir),
 		marketdata.NewExportStatisticsProvider(exportDir),
 		marketdata.NewTWSEMarginBalanceProvider(""),
