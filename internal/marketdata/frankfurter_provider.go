@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"time"
 
@@ -42,7 +43,7 @@ func (f *FrankfurterFXProvider) FetchSnapshot(ctx context.Context) (MacroDataSna
 	}
 
 	changePct := 0.0
-	prevRate, prevErr := f.fetchPreviousBusinessDayRate(ctx)
+	prevRate, _, prevErr := f.fetchPreviousBusinessDayRate(ctx, jpyRate)
 	if prevErr != nil {
 		logging.Warn("frankfurter_provider", "previous_rate_unavailable",
 			"error", prevErr.Error(), "fallback", "ChangePct=0")
@@ -99,16 +100,32 @@ func (f *FrankfurterFXProvider) fetchRate(ctx context.Context, url string) (floa
 	return rate, nil
 }
 
-func (f *FrankfurterFXProvider) fetchPreviousBusinessDayRate(ctx context.Context) (float64, error) {
+func (f *FrankfurterFXProvider) fetchPreviousBusinessDayRate(ctx context.Context, currentRate float64) (float64, string, error) {
+	// Walk back up to 7 business days. Return the first rate that DIFFERS
+	// from currentRate (within 0.01 tolerance) — the most recent meaningful
+	// change point. Falls back to the earliest available rate if all match
+	// (rate truly unchanged for a week, e.g. pegged currency scenarios).
+	var firstRate float64
+	var firstDate string
 	for i := 1; i <= 7; i++ {
 		date := previousBusinessDay(time.Now(), i)
 		url := fmt.Sprintf("%s/%s?from=USD&to=JPY", f.baseURL, date.Format("2006-01-02"))
 		rate, err := f.fetchRate(ctx, url)
-		if err == nil {
-			return rate, nil
+		if err != nil {
+			continue
+		}
+		if firstRate == 0 {
+			firstRate = rate
+			firstDate = date.Format("2006-01-02")
+		}
+		if math.Abs(rate-currentRate) > 0.01 {
+			return rate, date.Format("2006-01-02"), nil
 		}
 	}
-	return 0, fmt.Errorf("no historical rate found in past 7 days")
+	if firstRate > 0 {
+		return firstRate, firstDate, nil
+	}
+	return 0, "", fmt.Errorf("no historical rate found in past 7 days")
 }
 
 func previousBusinessDay(now time.Time, daysBack int) time.Time {
