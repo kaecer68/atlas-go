@@ -1,10 +1,12 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
 	"os"
+	"regexp"
 	"time"
 )
 
@@ -2460,6 +2462,50 @@ func GetParametersConfigPath() string {
 	return parametersPath
 }
 
+// mirrorCalibrationTimestamp injects a sibling `calibration_timestamp` field
+// after every `last_calibrated` field found in the marshaled JSON, copying
+// the same value. This keeps the two timestamp fields — one written by the
+// Go struct (ParameterMetadata.LastCalibrated) and one written by raw-JSON
+// consumers (cmd/calibrate-seasonal) — in sync after every Save() call.
+//
+// The injection operates line by line on the indented output, preserving
+// the surrounding indentation. The original `last_calibrated` line is
+// rewritten with a guaranteed trailing comma (the injected sibling requires
+// it), and the mirror inherits a trailing comma only when the original
+// line had one — preserving valid JSON when `last_calibrated` was the
+// final field of its object. The function is a no-op when no
+// `last_calibrated` field is present.
+var calibrationTimestampLineRe = regexp.MustCompile(`^(\s*)"last_calibrated":\s*"([^"]*)"(,?)\s*$`)
+
+func mirrorCalibrationTimestamp(data []byte) []byte {
+	lines := bytes.Split(data, []byte("\n"))
+	out := make([][]byte, 0, len(lines)+4)
+	for _, line := range lines {
+		m := calibrationTimestampLineRe.FindSubmatch(line)
+		if m == nil {
+			out = append(out, line)
+			continue
+		}
+		indent := m[1]
+		value := m[2]
+		hadTrailingComma := len(m) >= 4 && len(m[3]) > 0
+		rewritten := append([]byte{}, indent...)
+		rewritten = append(rewritten, []byte(`"last_calibrated": "`)...)
+		rewritten = append(rewritten, value...)
+		rewritten = append(rewritten, '"', ',')
+		out = append(out, rewritten)
+		injected := append([]byte{}, indent...)
+		injected = append(injected, []byte(`"calibration_timestamp": "`)...)
+		injected = append(injected, value...)
+		injected = append(injected, '"')
+		if hadTrailingComma {
+			injected = append(injected, ',')
+		}
+		out = append(out, injected)
+	}
+	return bytes.Join(out, []byte("\n"))
+}
+
 // Save writes the configuration to the given JSON file (non-atomic).
 func (p *ParametersConfig) Save(path string) error {
 	p.UpdatedAt = time.Now()
@@ -2467,6 +2513,7 @@ func (p *ParametersConfig) Save(path string) error {
 	if err != nil {
 		return fmt.Errorf("marshal parameters config: %w", err)
 	}
+	data = mirrorCalibrationTimestamp(data)
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("write parameters config: %w", err)
 	}
@@ -2485,6 +2532,7 @@ func (p *ParametersConfig) SaveWithRollback(path string) error {
 	if err != nil {
 		return fmt.Errorf("marshal parameters config: %w", err)
 	}
+	data = mirrorCalibrationTimestamp(data)
 
 	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
 		return fmt.Errorf("write temp parameters config: %w", err)
