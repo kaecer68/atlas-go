@@ -24,6 +24,7 @@ func DefaultThemeDurations() map[string]time.Duration {
 	return map[string]time.Duration{
 		"AI_capex_surge":                  90 * 24 * time.Hour,
 		"US_rates_up":                     7 * 24 * time.Hour,
+		"US_rates_down":                   7 * 24 * time.Hour,
 		"JPY_carry_unwind":                14 * 24 * time.Hour,
 		"geopolitical_risk_spike":         30 * 24 * time.Hour,
 		"oil_price_shock":                 15 * 24 * time.Hour,
@@ -41,6 +42,7 @@ func DefaultThemeDurations() map[string]time.Duration {
 		"gold_rally":                      7 * 24 * time.Hour,
 		"dollar_surge":                    7 * 24 * time.Hour,
 		"inflation_spike":                 15 * 24 * time.Hour,
+		"dividend_season":                 30 * 24 * time.Hour,
 	}
 }
 

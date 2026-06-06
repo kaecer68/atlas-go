@@ -3199,7 +3199,7 @@
       }
     },
     "oil_change_pct_threshold": {
-      "value": 4.857142857142857,
+      "value": 3.0,
       "rationale": "Oil price change % threshold (absolute) to trigger oil_price_shock event",
       "source": "heuristic",
       "last_calibrated": "2026-05-28T22:31:32.042963+08:00",
@@ -3539,6 +3539,8 @@
         "Fed_emergency_cut": 3,
         "JPY_carry_unwind": 14,
         "US_rates_up": 7,
+        "US_rates_down": 7,
+        "dividend_season": 30,
         "earnings_surprise": 10,
         "geopolitical_risk_spike": 30,
         "oil_price_shock": 15
@@ -3656,7 +3658,9 @@
         "JPY_carry_unwind": 0.68,
         "US_rates_up": 0.72,
         "geopolitical_risk_spike": 0.65,
-        "oil_price_shock": 0.58
+        "oil_price_shock": 0.58,
+        "US_rates_down": 0.70,
+        "dividend_season": 0.65
       },
       "rationale": "Historical hit rates for narrative themes; AI_capex_surge highest (0.81), oil_price_shock lowest (0.58) due to TW semiconductor hedging",
       "source": "heuristic",
@@ -3679,6 +3683,8 @@
         "defense_industrial": "geopolitical_risk_spike",
         "fixed_income": "US_rates_up",
         "macro_research": "US_rates_up",
+        "dividend_analyst": "dividend_season",
+        "rates_desk": "US_rates_down",
         "risk_analytics": "geopolitical_risk_spike",
         "semiconductor_desk": "AI_capex_surge"
       },

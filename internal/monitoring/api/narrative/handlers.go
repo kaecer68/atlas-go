@@ -44,13 +44,16 @@ func parseFloatQuery(r *http.Request, key string) float64 {
 
 // buildNarrativeData fetches real-time macro snapshot data and overlays
 // query-param overrides.  Fields not available in the snapshot
-// (GeopoliticalGPR, RetailInstitutionalDivergence, MarginZScore) remain
-// at their query-param values (defaulting to 0).
+// (RetailInstitutionalDivergence, MarginZScore, EarningsSurprisePct) remain
+// at their query-param values (defaulting to 0).  GeopoliticalGPR is fetched
+// from the geoProvider inside BuildMarketNarrativeData and can be overridden
+// by query param.
 func (h *Handlers) buildNarrativeData(ctx context.Context, r *http.Request) narrative.MarketNarrativeData {
 	data := narrative.MarketNarrativeData{
 		GeopoliticalGPR:               parseFloatQuery(r, "geopolitical_gpr"),
 		RetailInstitutionalDivergence: parseFloatQuery(r, "retail_divergence"),
 		MarginZScore:                  parseFloatQuery(r, "margin_zscore"),
+		EarningsSurprisePct:           parseFloatQuery(r, "earnings_surprise_pct"),
 	}
 
 	if snapData, err := h.Svc.BuildMarketNarrativeData(ctx); err == nil {
@@ -60,10 +63,14 @@ func (h *Handlers) buildNarrativeData(ctx context.Context, r *http.Request) narr
 		data.USD_TWD_ChangePct = snapData.USD_TWD_ChangePct
 		data.OilChangePct = snapData.OilChangePct
 		data.GoldChangePct = snapData.GoldChangePct
+		data.GoldLevel = snapData.GoldLevel
 		data.JPY_ChangePct = snapData.JPY_ChangePct
+		data.JPYLevel = snapData.JPYLevel
 		data.AICapexSentiment = snapData.AICapexSentiment
-		// GeopoliticalGPR, RetailInstitutionalDivergence, MarginZScore
-		// remain from query params (can be overridden manually).
+		// Overlay geoProvider result with query-param override (manual override wins).
+		if data.GeopoliticalGPR == 0 {
+			data.GeopoliticalGPR = snapData.GeopoliticalGPR
+		}
 	} else {
 		logging.Warn("narrative_handlers", "snapshot_fallback", logging.Err(err))
 		// Graceful degradation: use query-param defaults for missing fields.
@@ -73,7 +80,9 @@ func (h *Handlers) buildNarrativeData(ctx context.Context, r *http.Request) narr
 		data.USD_TWD_ChangePct = parseFloatQuery(r, "usd_twd_change_pct")
 		data.OilChangePct = parseFloatQuery(r, "oil_change_pct")
 		data.GoldChangePct = parseFloatQuery(r, "gold_change_pct")
+		data.GoldLevel = parseFloatQuery(r, "gold_level")
 		data.JPY_ChangePct = parseFloatQuery(r, "jpy_change_pct")
+		data.JPYLevel = parseFloatQuery(r, "jpy_level")
 		data.AICapexSentiment = parseFloatQuery(r, "ai_capex_sentiment")
 	}
 	return data

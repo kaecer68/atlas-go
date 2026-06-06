@@ -738,6 +738,7 @@ func (a *DashboardAPI) RegisterSwaggerRoutes(mux *http.ServeMux) {
 func (a *DashboardAPI) RegisterNarrativeRoutes(mux *http.ServeMux) {
 	svc := service.NewNarrativeService(a.workDir, a.narrativeEngine, a.reportGenerator)
 	svc.SetMacroProvider(a.macroProvider)
+	svc.SetGeoProvider(a.geoProvider)
 	handlers := &apinarrative.Handlers{
 		Svc:             svc,
 		IndustryService: a.industryService,

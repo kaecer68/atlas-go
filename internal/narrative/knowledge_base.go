@@ -302,6 +302,9 @@ func (ne *NarrativeEngine) DetectEvents(data MarketNarrativeData) []NarrativeEve
 	if evt := detectUSRatesEvent(data); evt != nil {
 		events = append(events, *evt)
 	}
+	if evt := detectUSRatesDownEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
 	if evt := detectAICapexEvent(data); evt != nil {
 		events = append(events, *evt)
 	}
@@ -621,11 +624,14 @@ type MarketNarrativeData struct {
 	USD_TWD_ChangePct             float64
 	OilChangePct                  float64
 	GoldChangePct                 float64
+	GoldLevel                     float64 // absolute gold price level (e.g. 2300)
 	JPY_ChangePct                 float64
+	JPYLevel                      float64 // absolute USD/JPY level (e.g. 155)
 	AICapexSentiment              float64 // +1 bullish, -1 bearish
 	GeopoliticalGPR               float64 // Geopolitical risk index level
 	RetailInstitutionalDivergence float64 // + retail bullish, - retail bearish
 	MarginZScore                  float64 // how extreme current margin balance is (reverse indicator)
+	EarningsSurprisePct           float64 // actual earnings surprise percentage
 }
 
 // detectUSRatesEvent is the KB-pipeline detector (MarketNarrativeData input).
@@ -667,6 +673,46 @@ func detectUSRatesEvent(data MarketNarrativeData) *NarrativeEvent {
 		}
 	}
 	return nil
+}
+
+// detectUSRatesDownEvent detects dovish Fed signals: US10Y yield drop OR DXY weakness.
+func detectUSRatesDownEvent(data MarketNarrativeData) *NarrativeEvent {
+	params := config.GetParametersConfig().Narrative
+	// Thresholds: US10Y drops > 5 bps OR DXY drops > 0.8%.
+	const us10yDownThreshold = -5.0
+	const dxyDownThreshold = -0.8
+	triggered := data.US10YChangeBps < us10yDownThreshold || data.DXYChangePct < dxyDownThreshold
+	if !triggered {
+		return nil
+	}
+	confidenceUS10Y := computeDeviationConfidence(math.Abs(data.US10YChangeBps), math.Abs(us10yDownThreshold), params.ConfidenceBaseUSRates.Value, params.ConfidenceDeviationCeiling.Value)
+	confidenceDXY := computeDeviationConfidence(math.Abs(data.DXYChangePct), math.Abs(dxyDownThreshold), params.ConfidenceBaseUSRates.Value, params.ConfidenceDeviationCeiling.Value)
+	confidence := confidenceUS10Y
+	if confidenceDXY > confidence {
+		confidence = confidenceDXY
+	}
+	now := time.Now().UTC()
+	dur := getThemeDuration("US_rates_down")
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-us-rates-down-%d", nowUnix()),
+		Theme:            "US_rates_down",
+		Region:           "US",
+		Sentiment:        0.5,
+		Confidence:       confidence,
+		ConfidenceSource: "deviation_based_v1",
+		HitRate:          hitRateForTheme("US_rates_down"),
+		CapitalFlow:      "risk_on_liquidity",
+		TimeWindow:       "1_week",
+		Timestamp:        now,
+		Duration:         dur,
+		ExpiresAt:        now.Add(dur),
+		Severity:         "medium",
+		Status:           "active",
+		SourceData: map[string]float64{
+			"us10y_change_bps": data.US10YChangeBps,
+			"dxy_change_pct":   data.DXYChangePct,
+		},
+	}
 }
 
 // buildAICapexSurgeEvent creates an AI_capex_surge NarrativeEvent from a sentiment score.
@@ -853,7 +899,48 @@ func buildJPYCarryUnwindEvent(jpyChangePct, vixLevel float64, ts time.Time) *Nar
 }
 
 func detectJPYCarryUnwindEvent(data MarketNarrativeData) *NarrativeEvent {
-	return buildJPYCarryUnwindEvent(data.JPY_ChangePct, data.VIXLevel, time.Now().UTC())
+	params := config.GetParametersConfig().Narrative
+	// Hybrid trigger: JPY level > 155 (structural carry risk) OR change > threshold OR VIX > threshold.
+	const jpyLevelThreshold = 155.0
+	triggered := data.JPYLevel > jpyLevelThreshold ||
+		data.JPY_ChangePct > params.JPYChangePctThreshold.Value ||
+		data.VIXLevel > params.VIXLevelThreshold.Value
+	if !triggered {
+		return nil
+	}
+	confidenceLevel := computeDeviationConfidence(data.JPYLevel, jpyLevelThreshold, params.ConfidenceBaseJPYCarry.Value, params.ConfidenceDeviationCeiling.Value)
+	confidenceJPY := computeDeviationConfidence(data.JPY_ChangePct, params.JPYChangePctThreshold.Value, params.ConfidenceBaseJPYCarry.Value, params.ConfidenceDeviationCeiling.Value)
+	confidenceVIX := computeDeviationConfidence(data.VIXLevel, params.VIXLevelThreshold.Value, params.ConfidenceBaseJPYCarry.Value, params.ConfidenceDeviationCeiling.Value)
+	confidence := confidenceLevel
+	if confidenceJPY > confidence {
+		confidence = confidenceJPY
+	}
+	if confidenceVIX > confidence {
+		confidence = confidenceVIX
+	}
+	ts := time.Now().UTC()
+	dur := getThemeDuration("JPY_carry_unwind")
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-jpy-%d", ts.UnixNano()),
+		Theme:            "JPY_carry_unwind",
+		Region:           "JP",
+		Sentiment:        -0.6,
+		Confidence:       confidence,
+		ConfidenceSource: "deviation_based_v1",
+		HitRate:          hitRateForTheme("JPY_carry_unwind"),
+		CapitalFlow:      "global_liquidity_drain",
+		TimeWindow:       "immediate",
+		Timestamp:        ts,
+		Duration:         dur,
+		ExpiresAt:        ts.Add(dur),
+		Severity:         "medium",
+		Status:           "active",
+		SourceData: map[string]float64{
+			"jpy_level":      data.JPYLevel,
+			"jpy_change_pct": data.JPY_ChangePct,
+			"vix_level":      data.VIXLevel,
+		},
+	}
 }
 
 // buildUSDTWDVolatilityEvent creates a USD_TWD_volatility NarrativeEvent from a change percentage.
@@ -931,42 +1018,47 @@ func detectTaiwanPoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
 // indicator. They detect different aspects of the semiconductor cycle.
 func detectSemiconductorDownturnEvent(data MarketNarrativeData) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
-	if data.VIXLevel > params.VIXLevelThreshold.Value && data.DXYChangePct > params.DXYChangePctThreshold.Value && data.AICapexSentiment < params.AICapexNegativeSentimentThreshold.Value {
-		confidenceVIX := computeDeviationConfidence(data.VIXLevel, params.VIXLevelThreshold.Value, params.ConfidenceBaseTSMCRevenue.Value, params.ConfidenceDeviationCeiling.Value)
-		confidenceDXY := computeDeviationConfidence(data.DXYChangePct, params.DXYChangePctThreshold.Value, params.ConfidenceBaseTSMCRevenue.Value, params.ConfidenceDeviationCeiling.Value)
-		confidenceAI := computeDeviationConfidence(math.Abs(data.AICapexSentiment), math.Abs(params.AICapexNegativeSentimentThreshold.Value), params.ConfidenceBaseTSMCRevenue.Value, params.ConfidenceDeviationCeiling.Value)
-		confidence := confidenceVIX
-		if confidenceDXY > confidence {
-			confidence = confidenceDXY
-		}
-		if confidenceAI > confidence {
-			confidence = confidenceAI
-		}
-		now := time.Now().UTC()
-		dur := getThemeDuration("semiconductor_downturn")
-		return &NarrativeEvent{
-			ID:               fmt.Sprintf("evt-semi-dt-%d", nowUnix()),
-			Theme:            "semiconductor_downturn",
-			Region:           "TW",
-			Sentiment:        -0.6,
-			Confidence:       confidence,
-			ConfidenceSource: "deviation_based_v1",
-			HitRate:          hitRateForTheme("semiconductor_downturn"),
-			CapitalFlow:      "tech_capex_slowdown",
-			TimeWindow:       "1_month",
-			Timestamp:        now,
-			Duration:         dur,
-			ExpiresAt:        now.Add(dur),
-			Severity:         "high",
-			Status:           "active",
-			SourceData: map[string]float64{
-				"vix_level":          data.VIXLevel,
-				"dxy_change_pct":     data.DXYChangePct,
-				"ai_capex_sentiment": data.AICapexSentiment,
-			},
-		}
+	// Relaxed from 3-factor AND to 2-of-3 to avoid silent failure during AI capex boom.
+	condVIX := data.VIXLevel > params.VIXLevelThreshold.Value
+	condDXY := data.DXYChangePct > params.DXYChangePctThreshold.Value
+	condAI := data.AICapexSentiment < params.AICapexNegativeSentimentThreshold.Value
+	triggered := (condVIX && condDXY) || (condVIX && condAI) || (condDXY && condAI)
+	if !triggered {
+		return nil
 	}
-	return nil
+	confidenceVIX := computeDeviationConfidence(data.VIXLevel, params.VIXLevelThreshold.Value, params.ConfidenceBaseTSMCRevenue.Value, params.ConfidenceDeviationCeiling.Value)
+	confidenceDXY := computeDeviationConfidence(data.DXYChangePct, params.DXYChangePctThreshold.Value, params.ConfidenceBaseTSMCRevenue.Value, params.ConfidenceDeviationCeiling.Value)
+	confidenceAI := computeDeviationConfidence(math.Abs(data.AICapexSentiment), math.Abs(params.AICapexNegativeSentimentThreshold.Value), params.ConfidenceBaseTSMCRevenue.Value, params.ConfidenceDeviationCeiling.Value)
+	confidence := confidenceVIX
+	if confidenceDXY > confidence {
+		confidence = confidenceDXY
+	}
+	if confidenceAI > confidence {
+		confidence = confidenceAI
+	}
+	now := time.Now().UTC()
+	dur := getThemeDuration("semiconductor_downturn")
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-semi-dt-%d", nowUnix()),
+		Theme:            "semiconductor_downturn",
+		Region:           "TW",
+		Sentiment:        -0.6,
+		Confidence:       confidence,
+		ConfidenceSource: "deviation_based_v1",
+		HitRate:          hitRateForTheme("semiconductor_downturn"),
+		CapitalFlow:      "tech_capex_slowdown",
+		TimeWindow:       "1_month",
+		Timestamp:        now,
+		Duration:         dur,
+		ExpiresAt:        now.Add(dur),
+		Severity:         "high",
+		Status:           "active",
+		SourceData: map[string]float64{
+			"vix_level":          data.VIXLevel,
+			"dxy_change_pct":     data.DXYChangePct,
+			"ai_capex_sentiment": data.AICapexSentiment,
+		},
+	}
 }
 
 func detectSeasonalEvent() *NarrativeEvent {
@@ -1073,6 +1165,32 @@ func detectSeasonalEvent() *NarrativeEvent {
 		}
 	}
 
+	// Dividend season: Jun–Aug (除權息旺季)
+	if month >= 6 && month <= 8 {
+		const dividendConfidence = 0.60
+		dur := getThemeDuration("dividend_season")
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-dividend-%d", nowUnix()),
+			Theme:            "dividend_season",
+			Region:           "TW",
+			Sentiment:        0.3,
+			Confidence:       dividendConfidence,
+			ConfidenceSource: "calendar_seasonal",
+			HitRate:          hitRateForTheme("dividend_season"),
+			CapitalFlow:      "dividend_rotation",
+			TimeWindow:       "2_months",
+			Timestamp:        now,
+			Duration:         dur,
+			ExpiresAt:        now.Add(dur),
+			Severity:         "low",
+			Status:           "active",
+			SourceData: map[string]float64{
+				"month": float64(month),
+				"day":   float64(day),
+			},
+		}
+	}
+
 	if month == 11 || month == 12 {
 		hitRate := params.YearEndWindowDressingConfidence.Value
 		dur := getThemeDuration("year_end_window_dressing")
@@ -1148,31 +1266,40 @@ func detectRetailDivergenceEvent(data MarketNarrativeData) *NarrativeEvent {
 // ingestor version uses a MacroDataPoint with ChangePct. Different input shapes, same theme.
 func detectGoldRallyKBEvent(data MarketNarrativeData) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
-	if data.GoldChangePct > params.GoldChangePctThreshold.Value {
-		confidence := computeDeviationConfidence(data.GoldChangePct, params.GoldChangePctThreshold.Value, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
-		now := time.Now().UTC()
-		dur := getThemeDuration("gold_rally")
-		return &NarrativeEvent{
-			ID:               fmt.Sprintf("evt-gold-rally-%d", nowUnix()),
-			Theme:            "gold_rally",
-			Region:           "COM",
-			Sentiment:        0.6,
-			Confidence:       confidence,
-			ConfidenceSource: "deviation_based_v1",
-			HitRate:          hitRateForTheme("gold_rally"),
-			CapitalFlow:      "flight_to_gold",
-			TimeWindow:       "1_week",
-			Timestamp:        now,
-			Duration:         dur,
-			ExpiresAt:        now.Add(dur),
-			Severity:         "medium",
-			Status:           "active",
-			SourceData: map[string]float64{
-				"gold_change_pct": data.GoldChangePct,
-			},
-		}
+	// Hybrid: gold change > threshold OR absolute level > 2300 (structural safe-haven demand).
+	const goldLevelThreshold = 2300.0
+	triggered := data.GoldChangePct > params.GoldChangePctThreshold.Value || data.GoldLevel > goldLevelThreshold
+	if !triggered {
+		return nil
 	}
-	return nil
+	confidenceChange := computeDeviationConfidence(data.GoldChangePct, params.GoldChangePctThreshold.Value, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
+	confidenceLevel := computeDeviationConfidence(data.GoldLevel, goldLevelThreshold, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
+	confidence := confidenceChange
+	if confidenceLevel > confidence {
+		confidence = confidenceLevel
+	}
+	now := time.Now().UTC()
+	dur := getThemeDuration("gold_rally")
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-gold-rally-%d", nowUnix()),
+		Theme:            "gold_rally",
+		Region:           "COM",
+		Sentiment:        0.6,
+		Confidence:       confidence,
+		ConfidenceSource: "deviation_based_v1",
+		HitRate:          hitRateForTheme("gold_rally"),
+		CapitalFlow:      "flight_to_gold",
+		TimeWindow:       "1_week",
+		Timestamp:        now,
+		Duration:         dur,
+		ExpiresAt:        now.Add(dur),
+		Severity:         "medium",
+		Status:           "active",
+		SourceData: map[string]float64{
+			"gold_change_pct": data.GoldChangePct,
+			"gold_level":      data.GoldLevel,
+		},
+	}
 }
 
 // detectDollarSurgeKBEvent is the KB-pipeline detector for dollar_surge (DXYChangePct input).

@@ -29,10 +29,13 @@ func MarketNarrativeDataFromSnapshot(snap marketdata.MacroDataSnapshot) MarketNa
 		USD_TWD_ChangePct:             snap.USD_TWD.ChangePct,
 		OilChangePct:                  snap.Oil.ChangePct,
 		GoldChangePct:                 snap.Gold.ChangePct,
+		GoldLevel:                     snap.Gold.Value,
 		JPY_ChangePct:                 snap.JPY.ChangePct,
+		JPYLevel:                      snap.JPY.Value,
 		AICapexSentiment:              aiSentiment,
 		GeopoliticalGPR:               0, // not available in snapshot; caller should overlay
 		RetailInstitutionalDivergence: 0, // not available in snapshot; caller should overlay
 		MarginZScore:                  0, // not available in snapshot; caller should overlay
+		EarningsSurprisePct:           0, // not available in snapshot; caller should overlay
 	}
 }
