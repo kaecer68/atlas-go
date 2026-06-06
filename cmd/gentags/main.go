@@ -54,11 +54,12 @@ func main() {
 	reportDir := findReportingDir(rootDir)
 	configDir := findConfigDir(rootDir)
 	industryDir := findIndustryDir(rootDir)
-	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" {
+	narrativeDir := findNarrativeDir(rootDir)
+	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" {
 		// Build merged struct names from all directories so cross-package
 		// type references resolve correctly.
 		allNames := preScanStructNames(domainDir)
-		for _, d := range []string{apiDir, svcDir, configDir, industryDir} {
+		for _, d := range []string{apiDir, svcDir, configDir, industryDir, narrativeDir} {
 			if d == "" {
 				continue
 			}
@@ -109,6 +110,16 @@ func main() {
 			for k, v := range industryStructs {
 				if _, exists := structs[k]; exists {
 					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and industry; using industry version\n", k)
+				}
+				structs[k] = v
+			}
+		}
+		// Merge narrative structs (e.g. NarrativeEvent, CausalChain).
+		if narrativeDir != "" {
+			narrativeStructs := parseStructsWithNames(narrativeDir, allNames)
+			for k, v := range narrativeStructs {
+				if _, exists := structs[k]; exists {
+					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and narrative; using narrative version\n", k)
 				}
 				structs[k] = v
 			}
@@ -172,6 +183,14 @@ func findIndustryDir(rootDir string) string {
 
 func findConfigDir(rootDir string) string {
 	candidate := filepath.Join(rootDir, "internal", "config")
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
+	return ""
+}
+
+func findNarrativeDir(rootDir string) string {
+	candidate := filepath.Join(rootDir, "internal", "narrative")
 	if _, err := os.Stat(candidate); err == nil {
 		return candidate
 	}

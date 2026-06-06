@@ -125,6 +125,11 @@ export interface BacktestWindowSummary {
   generated_at: string;
 }
 
+export interface BaselineConfig {
+  baselines: Record<string, string | null>;
+  window: number;
+}
+
 export interface BaselineHistoryRecord {
   id: string;
   execution_id?: string;
@@ -221,6 +226,18 @@ export interface CalibrationHealthSummary {
   reason?: string;
 }
 
+export interface CalibrationValidation {
+  old_config: string;
+  new_config: string;
+  old_accuracy: number;
+  new_accuracy: number;
+  improvement: number;
+  is_degradation: boolean;
+  degradation_msg?: string;
+  validation_size: number;
+  training_size: number;
+}
+
 export interface CalibratorChange {
   param_name: string;
   before: number;
@@ -275,6 +292,34 @@ export interface CardConfig {
   sentiment_thresholds: Record<string, string>;
   clamp_min: number;
   clamp_max: number;
+}
+
+export interface CausalChain {
+  event_id: string;
+  template_id: string;
+  trigger_theme: string;
+  affected_sectors: string[];
+  favored_sectors: string[];
+  avoided_sectors: string[];
+  steps: string[];
+  score: number;
+}
+
+export interface CausalStep {
+  description: string;
+  affected: string[];
+  impact: number;
+}
+
+export interface CausalTemplate {
+  id: string;
+  name: string;
+  trigger_theme: string;
+  required_region?: string;
+  steps: string[];
+  historical_hit_rate: number;
+  source_references: string[];
+  rationale: string;
 }
 
 export interface ChannelAlert {
@@ -777,8 +822,8 @@ export interface EquityCurvePoint {
 }
 
 export interface EventBlock {
-  today: string[];
-  recent: string[];
+  today: NarrativeEvent[];
+  recent: NarrativeEvent[];
   premarket?: string | null;
 }
 
@@ -906,6 +951,13 @@ export interface FactorAttribution {
   quality: string;
   agent: string;
   total: string;
+}
+
+export interface FactorBaseline {
+  factor: string;
+  mean: number;
+  std_dev: number;
+  count: number;
 }
 
 export interface FactorConvictionParams {
@@ -1102,6 +1154,17 @@ export interface GARCHParameters {
   reduce_magnitude: string;
   increase_magnitude: string;
   weekly_rebalance_days: string;
+}
+
+export interface GeopoliticalRiskScore {
+  region: string;
+  intensity: number;
+  sentiment: number;
+  confidence: number;
+  oil_impact: number;
+  shipping_impact: number;
+  sources: string[];
+  timestamp: string;
 }
 
 export interface GraphEdge {
@@ -1384,6 +1447,20 @@ export interface InventoryCycleThresholdConfig {
   active_destocking_capacity_max: number;
 }
 
+export interface InvestmentModel {
+  id: string;
+  name: string;
+  description: string;
+  rationale: string;
+  active_themes: string[];
+  favored_sectors: string[];
+  avoided_sectors: string[];
+  recent_prediction: number;
+  recent_error: number;
+  hit_rate: number;
+  weight: number;
+}
+
 export interface JanusParameters {
   short_window_days: string;
   medium_window_days: string;
@@ -1496,6 +1573,18 @@ export interface MacroRadarResponse {
   recorded_at: string;
 }
 
+export interface MacroRiskAssessment {
+  level: string;
+  foreign_outflow_probability: number;
+  primary_flow: string;
+  favored_sectors?: string[];
+  avoided_sectors?: string[];
+  structural_override: boolean;
+  confidence: number;
+  rationale: string;
+  timestamp: string;
+}
+
 export interface MacroRiskConfig {
   carry_trade_unwind_threshold: number;
   vix_threshold: number;
@@ -1590,6 +1679,15 @@ export interface NarrativeAdjustment {
   active_theme?: string;
 }
 
+export interface NarrativeCalibrationReport {
+  timestamp: string;
+  models_updated: number;
+  templates_updated: number;
+  models: string[];
+  verdict: string;
+  summary: string;
+}
+
 export interface NarrativeContextItem {
   active_themes: string[];
   primary_theme?: string;
@@ -1600,6 +1698,24 @@ export interface NarrativeContextItem {
 export interface NarrativeConvictionParameters {
   theme_hit_rates?: string;
   skill_to_theme?: string;
+}
+
+export interface NarrativeEvent {
+  id: string;
+  theme: string;
+  region: string;
+  sentiment: number;
+  confidence: number;
+  confidence_source: string;
+  hit_rate: number;
+  capital_flow: string;
+  time_window: string;
+  timestamp: string;
+  source_data?: Record<string, number>;
+  duration: string;
+  expires_at: string;
+  severity: string;
+  status: string;
 }
 
 export interface NarrativeFactorScore {
@@ -2224,6 +2340,13 @@ export interface RegimeBreakdown {
   regimes: Record<string, string>;
 }
 
+export interface RegimeCalibratedConfig {
+  bull: string;
+  normal: string;
+  bear: string;
+  crisis: string;
+}
+
 export interface RegimeHistoryData {
   sessions: string[];
   transitions: string[];
@@ -2447,11 +2570,12 @@ export interface SeasonalCalibration {
 }
 
 export interface SeasonalExpectation {
-  theme: string;
   historical_avg_return: number;
   current_return: number;
   expectation_gap: number;
   already_priced_in: boolean;
+  surprise_potential: number;
+  confidence: number;
 }
 
 export interface SeasonalMultiplierConfig {
@@ -2703,6 +2827,59 @@ export interface StrategySummary {
   score: number;
 }
 
+export interface StressIndexScaling {
+  dxy: number;
+  us10y: number;
+  foreign_flow: number;
+  vix: number;
+  jpy: number;
+  geopolitical: number;
+  oil: number;
+  gold: number;
+}
+
+export interface StressIndexThresholds {
+  crisis: number;
+  high: number;
+  alert: number;
+}
+
+export interface StressIndexWeights {
+  dxy: number;
+  us10y: number;
+  foreign_flow: number;
+  vix: number;
+  jpy: number;
+  geopolitical: number;
+  oil: number;
+  gold: number;
+}
+
+export interface StressIndexWeightsConfig {
+  scaling: string;
+  weights: string;
+  thresholds: string;
+}
+
+export interface StructuralTrend {
+  name: string;
+  theme: string;
+  strength: number;
+  confidence: number;
+  hit_rate: number;
+  evidence: string[];
+  timestamp: string;
+}
+
+export interface StructuralTrendAssessment {
+  trends: string[];
+  dominant_trend?: string | null;
+  override_score: number;
+  should_override_risk: boolean;
+  rationale: string;
+  timestamp: string;
+}
+
 export interface StructuralTrendConfig {
   min_trend_strength: number;
   min_confidence: number;
@@ -2765,6 +2942,13 @@ export interface SystemHealthResponse {
   regime: string;
   data_channels?: string[];
   cycle_stale: boolean;
+}
+
+export interface TaiwanStressIndex {
+  score: number;
+  regime: string;
+  components: Record<string, number>;
+  timestamp: number;
 }
 
 export interface TaskExecution {
@@ -2903,6 +3087,12 @@ export interface WeightFactor {
 export interface channelState {
   enabled: boolean;
   updated_at: string;
+}
+
+export interface marginHistoryFile {
+  date: string;
+  margin_balance: number;
+  change_pct: number;
 }
 
 export interface maturityTrackerState {

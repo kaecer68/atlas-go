@@ -132,10 +132,38 @@ export const EVENT_NAME_MAP = {
   'election_cycle': '選舉週期',
   'earnings_blackout': '財報空窗期',
   'tech_peak_season': '科技旺季效應',
-  'year_end_window_dressing': '年底作帳行情'
+  'year_end_window_dressing': '年底作帳行情',
+  'dividend_season': '除權息旺季'
 };
 
 export function eventName(theme) { return EVENT_NAME_MAP[theme] || theme; }
+
+// Confidence source name mapping
+export const CONFIDENCE_SOURCE_NAME_MAP = {
+  'deviation_based_v1': '偏離度模型 v1',
+  'calendar_seasonal': '季節性日曆',
+  'calendar_political': '政治日曆'
+};
+
+export function confidenceSourceName(cs) { return CONFIDENCE_SOURCE_NAME_MAP[cs] || cs; }
+
+// Severity name mapping
+export const SEVERITY_NAME_MAP = {
+  'low': '低',
+  'medium': '中',
+  'high': '高'
+};
+
+export function severityName(s) { return SEVERITY_NAME_MAP[s] || s; }
+
+// Status name mapping
+export const STATUS_NAME_MAP = {
+  'active': '進行中',
+  'confirmed': '已確認',
+  'expired': '已過期'
+};
+
+export function statusName(s) { return STATUS_NAME_MAP[s] || s; }
 
 // Region name mapping
 export const REGION_NAME_MAP = {
