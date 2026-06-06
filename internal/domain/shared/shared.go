@@ -18,8 +18,9 @@ const (
 type Side string
 
 const (
-	SideBuy  Side = "BUY"
-	SideSell Side = "SELL"
+	SideBuy    Side = "BUY"
+	SideSell   Side = "SELL"
+	SideReduce Side = "REDUCE"
 )
 
 // Quote represents a market data snapshot for a single symbol.

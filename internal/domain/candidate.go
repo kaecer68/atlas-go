@@ -15,6 +15,7 @@ type Candidate struct {
 func SelectWeakestAgent(registry AgentRegistry, scorecards []Scorecard) *Candidate {
 	return SelectWeakestAgentExcluding(registry, scorecards, nil)
 }
+
 func SelectWeakestAgentExcluding(registry AgentRegistry, scorecards []Scorecard, extinctAgentIDs map[string]bool) *Candidate {
 	if len(scorecards) == 0 {
 		return nil
@@ -61,6 +62,7 @@ func SelectWeakestAgentExcluding(registry AgentRegistry, scorecards []Scorecard,
 	}
 	return nil
 }
+
 func SelectBestSpawnedAgent(registry AgentRegistry, scorecards []Scorecard, spawnedAgentIDs map[string]bool, baselineSharpe float64) *Candidate {
 	if len(scorecards) == 0 || len(spawnedAgentIDs) == 0 {
 		return nil
@@ -85,12 +87,14 @@ func SelectBestSpawnedAgent(registry AgentRegistry, scorecards []Scorecard, spaw
 	}
 	return best
 }
+
 func BuildMutationBrief(windowID string, candidate *Candidate) *MutationBrief {
 	if candidate == nil {
 		return nil
 	}
 	return &MutationBrief{ContractVersion: MutationBriefContractVersion, ProposalID: pidf(candidate.Experiment), WindowID: windowID, TargetAgentID: candidate.Agent.ID, TargetSkill: candidate.Agent.Skill, TargetLayer: candidate.Agent.Layer, PromptFile: candidate.Agent.PromptFile, MutationType: candidate.Experiment.MutationType, FailurePattern: "Repeated negative outcomes.", Hypothesis: candidate.Experiment.Hypothesis, AcceptanceMetric: candidate.Experiment.AcceptanceMetric, AcceptanceGates: candidate.Experiment.AcceptanceGates, ForbiddenActions: candidate.Agent.ForbiddenActions, RequiredSkills: candidate.Agent.RequiredSkills, ObservedWindowCount: candidate.Scorecard.WindowCount, MaturityLevel: cml(candidate.Scorecard.WindowCount), IterationGuidance: cig(candidate.Agent.Layer, candidate.Scorecard.WindowCount), RecommendedWindow: crw(candidate.Scorecard.WindowCount), GeneratedAt: time.Now()}
 }
+
 func pidf(exp ExperimentRecord) string {
 	if exp.ProposalID != "" {
 		return exp.ProposalID
@@ -100,6 +104,7 @@ func pidf(exp ExperimentRecord) string {
 	}
 	return ""
 }
+
 func clp(a AgentSpec, ok bool) int {
 	if !ok {
 		return 99
@@ -115,6 +120,7 @@ func clp(a AgentSpec, ok bool) int {
 		return 3
 	}
 }
+
 func cml(w int) string {
 	switch {
 	case w >= 5:
@@ -125,6 +131,7 @@ func cml(w int) string {
 		return "level_1_exploratory"
 	}
 }
+
 func crw(w int) string {
 	switch {
 	case w >= 5:
@@ -135,6 +142,7 @@ func crw(w int) string {
 		return "next short validation window"
 	}
 }
+
 func cig(layer AgentLayer, w int) []string {
 	g := []string{"Change one bounded behavior only.", "Preserve required skills and forbidden action boundaries."}
 	switch layer {
@@ -154,6 +162,7 @@ func cig(layer AgentLayer, w int) []string {
 	}
 	return g
 }
+
 func smt(ag AgentSpec, sc Scorecard) (string, string, []string) {
 	s, w, l := sc.SharpeLike, sc.WindowCount, ag.Layer
 	if l == LayerControl {

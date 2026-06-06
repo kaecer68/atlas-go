@@ -27,11 +27,12 @@ func TestRunAPIModeStartsServerAndRegistersRoutes(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: ledgerDir}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			if dir != ledgerDir {
 				t.Fatalf("ledger dir = %q, want %q", dir, ledgerDir)
 			}
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			gotAddr = srv.Addr
@@ -72,8 +73,9 @@ func TestRunAPIModeReturnsListenError(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir()}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return errors.New("bind failed")
@@ -97,8 +99,9 @@ func TestRunRejectsLiveBrokerWithoutExplicitAllow(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerMaxRetries: 1}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -124,11 +127,12 @@ func TestRunAllowsLiveBrokerWhenExplicitlyEnabled(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerMaxRetries: 1}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
 			if dir != ledgerDir {
 				t.Fatalf("ledger dir = %q, want %q", dir, ledgerDir)
 			}
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			gotAddr = srv.Addr
@@ -158,8 +162,9 @@ func TestRunRejectsUnsupportedBrokerAdapter(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerMaxRetries: 1}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -180,8 +185,9 @@ func TestRunRejectsHTTPBrokerAdapterWithoutExplicitAllow(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -203,8 +209,9 @@ func TestRunAllowsHTTPBrokerAdapterWithExplicitAllow(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -228,8 +235,9 @@ func TestRunRejectsRealSignerWithoutKeyID(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "live", BrokerAdapter: "http", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -251,8 +259,9 @@ func TestRunLiveHTTPFullFlagChainInAPIMode(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -288,54 +297,44 @@ func TestRunLiveHTTPFullFlagChainInAPIMode(t *testing.T) {
 
 func TestStaticFileServerServesIndex(t *testing.T) {
 	tmpDir := t.TempDir()
-	staticDir := filepath.Join(tmpDir, "web", "static")
-	if err := os.MkdirAll(staticDir, 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(staticDir, "index.html"), []byte("<h1>Atlas</h1>"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "index.html"), []byte("<h1>Atlas</h1>"), 0o644); err != nil {
 		t.Fatalf("write index.html: %v", err)
 	}
 
-	shutdown := make(chan struct{})
-	listenDone := make(chan struct{})
-	var gotHandler http.Handler
-	deps := appDeps{
-		loadConfig: func() config.Config {
-			return config.Config{WorkDir: tmpDir, LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
-		},
-		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
-		},
-		listenAndServe: func(srv *http.Server) error {
-			gotHandler = srv.Handler
-			close(listenDone)
-			return nil
-		},
-		shutdown: shutdown,
+	handler := staticHandler(os.DirFS(tmpDir))
+
+	req := httptest.NewRequest(http.MethodGet, "/unknown", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "<h1>Atlas</h1>") {
+		t.Fatalf("expected index.html content, got %s", rec.Body.String())
 	}
 
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		close(shutdown)
-	}()
-
-	if err := run([]string{"-api"}, deps); err != nil {
-		t.Fatalf("run returned error: %v", err)
+	if err := os.WriteFile(filepath.Join(tmpDir, "main.js"), []byte("console.log('test');"), 0o644); err != nil {
+		t.Fatalf("write main.js: %v", err)
 	}
-	<-listenDone
-	if gotHandler == nil {
-		t.Fatalf("expected http handler to be registered")
+	req2 := httptest.NewRequest(http.MethodGet, "/main.js", nil)
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("expected 200 for main.js, got %d", rec2.Code)
 	}
 
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	gotHandler.ServeHTTP(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("GET / status = %d, want 200", rr.Code)
+	if err := os.WriteFile(filepath.Join(tmpDir, "main-ab12cd34.js"), []byte("console.log('test');"), 0o644); err != nil {
+		t.Fatalf("write hashed asset: %v", err)
 	}
-	body := rr.Body.String()
-	if !strings.Contains(body, "<h1>Atlas</h1>") {
-		t.Fatalf("unexpected body: %q", body)
+	req3 := httptest.NewRequest(http.MethodGet, "/main-ab12cd34.js", nil)
+	rec3 := httptest.NewRecorder()
+	handler.ServeHTTP(rec3, req3)
+	if rec3.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec3.Code)
+	}
+	cc := rec3.Header().Get("Cache-Control")
+	if !strings.Contains(cc, "immutable") {
+		t.Fatalf("expected immutable cache for hashed asset, got: %s", cc)
 	}
 }
 
@@ -360,7 +359,7 @@ func TestDashboardAPIUsesWorkDirForPaths(t *testing.T) {
 		t.Fatalf("write window summary: %v", err)
 	}
 
-	api := monitoring.NewDashboardAPI(tmpDir, ledgerDir, nil)
+	api := monitoring.NewDashboardAPIWithGateway(tmpDir, ledgerDir, nil, monitoring.NoopFetcher())
 	mux := http.NewServeMux()
 	api.RegisterRoutes(mux)
 
@@ -386,8 +385,9 @@ func TestAPIModeRegistersAdminReloadConfigRoute(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{WorkDir: t.TempDir(), LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			gotHandler = srv.Handler
@@ -428,8 +428,9 @@ func TestAPIModeRegistersMetricsRoute(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{WorkDir: t.TempDir(), LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			gotHandler = srv.Handler
@@ -470,8 +471,9 @@ func TestAPIModeAdminReloadConfigRejectsGet(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{WorkDir: t.TempDir(), LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			gotHandler = srv.Handler
@@ -513,8 +515,9 @@ func TestConfigLoadingBehavior(t *testing.T) {
 			configCalled = true
 			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			close(listenDone)
@@ -549,8 +552,9 @@ func TestConfigLoadingWithBrokerModeOverride(t *testing.T) {
 			loadedConfig = config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 			return loadedConfig
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			close(listenDone)
@@ -576,17 +580,25 @@ func TestConfigLoadingWithBrokerModeOverride(t *testing.T) {
 
 func TestFlagParsingEmptyArgs(t *testing.T) {
 	ledgerDir := t.TempDir()
+	shutdown := make(chan struct{})
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
 		},
+		shutdown: shutdown,
 	}
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		close(shutdown)
+	}()
 
 	err := run([]string{}, deps)
 	// Simulation may succeed with empty data (graceful degradation) or fail;
@@ -603,8 +615,9 @@ func TestFlagParsingInvalidFlag(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: t.TempDir(), BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			return nil
@@ -628,8 +641,9 @@ func TestFlagParsingMultipleBrokerOverrides(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1, BrokerSigner: "placeholder"}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			close(listenDone)
@@ -669,8 +683,9 @@ func TestFlagParsingLogFormatOverride(t *testing.T) {
 			loadConfig: func() config.Config {
 				return config.Config{LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 			},
+			dataFetcher: monitoring.NoopFetcher(),
 			newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-				return monitoring.NewDashboardAPI(workDir, dir, collector)
+				return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 			},
 			listenAndServe: func(srv *http.Server) error {
 				close(listenDone)
@@ -702,8 +717,9 @@ func TestAPIModeRegistersNarrativeRoutes(t *testing.T) {
 		loadConfig: func() config.Config {
 			return config.Config{WorkDir: t.TempDir(), LedgerDir: ledgerDir, BrokerMode: "dry-run", BrokerAdapter: "guarded", BrokerMaxRetries: 1}
 		},
+		dataFetcher: monitoring.NoopFetcher(),
 		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
-			return monitoring.NewDashboardAPI(workDir, dir, collector)
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
 		},
 		listenAndServe: func(srv *http.Server) error {
 			gotHandler = srv.Handler

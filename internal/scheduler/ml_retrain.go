@@ -24,7 +24,7 @@ type MLRetrainScheduler struct {
 	workDir  string
 }
 
-// NewMLRetrainScheduler creates a scheduler with all four models initialised.
+// NewMLRetrainScheduler creates a scheduler with all four models initialized.
 func NewMLRetrainScheduler(dataPath string) *MLRetrainScheduler {
 	return &MLRetrainScheduler{
 		models: map[string]ml.Model{
@@ -110,7 +110,7 @@ func (s *MLRetrainScheduler) GetLatestModel(name string) (ml.Model, error) {
 	return model, nil
 }
 
-func (s *MLRetrainScheduler) fitAndPersist(ctx context.Context, name string, model ml.Model, X [][]float64, y []float64) error {
+func (s *MLRetrainScheduler) fitAndPersist(_ context.Context, name string, model ml.Model, X [][]float64, y []float64) error {
 	if err := model.Fit(X, y); err != nil {
 		return fmt.Errorf("ml_retrain: fit %s: %w", name, err)
 	}

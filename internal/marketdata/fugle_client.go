@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -74,8 +75,38 @@ func getFugleRateLimit() int {
 	}
 }
 
-// NewFugleClient 创建 Fugle 客户端
+var (
+	sharedFugleClient     *FugleClient
+	sharedFugleClientOnce sync.Once
+	sharedFugleClientMu   sync.RWMutex
+)
+
+// GetSharedFugleClient returns a singleton FugleClient shared across all
+// components (gateway channel, hybrid provider). Using one client ensures
+// a single rate limiter enforces the Fugle API tier limit globally.
+func GetSharedFugleClient(apiKey string) *FugleClient {
+	sharedFugleClientOnce.Do(func() {
+		sharedFugleClient = newFugleClient(apiKey)
+	})
+	return sharedFugleClient
+}
+
+// ResetSharedFugleClient clears the singleton (for tests).
+func ResetSharedFugleClient() {
+	sharedFugleClientMu.Lock()
+	defer sharedFugleClientMu.Unlock()
+	sharedFugleClient = nil
+	sharedFugleClientOnce = sync.Once{}
+}
+
+// NewFugleClient creates a standalone FugleClient with its own rate limiter.
+// Prefer GetSharedFugleClient in production to avoid multiple independent
+// rate limiter token buckets.
 func NewFugleClient(apiKey string) *FugleClient {
+	return newFugleClient(apiKey)
+}
+
+func newFugleClient(apiKey string) *FugleClient {
 	params := config.GetParametersConfig()
 	limit := getFugleRateLimit()
 	// Override with parameters config if explicitly set higher than default free tier

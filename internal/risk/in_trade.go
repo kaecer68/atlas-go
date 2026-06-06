@@ -57,7 +57,7 @@ func (g *InTradeGate) Evaluate(_ context.Context, positions []InTradePosition, h
 	for _, pos := range positions {
 		r := g.checkStopLoss(pos)
 		allDetails = append(allDetails, r)
-		if !r.Passed && decision.Verdict < VerdictBlock {
+		if !r.Passed && decision.Verdict.Level() < LevelBlock {
 			decision.Verdict = VerdictBlock
 			decision.Reason = r.Message
 			decision.Action = RiskAction{
@@ -69,7 +69,7 @@ func (g *InTradeGate) Evaluate(_ context.Context, positions []InTradePosition, h
 
 		r = g.checkTakeProfit(pos)
 		allDetails = append(allDetails, r)
-		if !r.Passed && decision.Verdict < VerdictReduce {
+		if !r.Passed && decision.Verdict.Level() < LevelReduce {
 			decision.Verdict = VerdictReduce
 			decision.Reason = r.Message
 			decision.Action = RiskAction{
@@ -82,7 +82,7 @@ func (g *InTradeGate) Evaluate(_ context.Context, positions []InTradePosition, h
 
 		r = g.checkTrailingStop(pos)
 		allDetails = append(allDetails, r)
-		if !r.Passed && decision.Verdict < VerdictBlock {
+		if !r.Passed && decision.Verdict.Level() < LevelBlock {
 			decision.Verdict = VerdictBlock
 			decision.Reason = r.Message
 			decision.Action = RiskAction{
@@ -95,7 +95,7 @@ func (g *InTradeGate) Evaluate(_ context.Context, positions []InTradePosition, h
 
 	r := g.checkVolatilitySpike(histVol, currentVol)
 	allDetails = append(allDetails, r)
-	if !r.Passed && decision.Verdict < VerdictReduce {
+	if !r.Passed && decision.Verdict.Level() < LevelReduce {
 		decision.Verdict = VerdictReduce
 		if decision.Action.Type == ActionSell {
 			decision.Action.TargetPct = 0.5

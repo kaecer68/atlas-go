@@ -5,6 +5,14 @@
 // Use: import type { GuardOutcome, RecommendationOutcome } from './field_types.js';
 //      const item: RecommendationOutcome = apiResponse.items[0];
 
+export interface AdjustmentBreakdown {
+  direct_match: number;
+  supply_chain: number;
+  narrative: number;
+  dynamic_env: number;
+  composite: number;
+}
+
 export interface AgentAttribution {
   agent_id: string;
   agent_name: string;
@@ -117,6 +125,11 @@ export interface BacktestWindowSummary {
   generated_at: string;
 }
 
+export interface BaselineConfig {
+  baselines: Record<string, string | null>;
+  window: number;
+}
+
 export interface BaselineHistoryRecord {
   id: string;
   execution_id?: string;
@@ -140,6 +153,7 @@ export interface BaselineParameters {
   require_cro_pass: string;
   transaction_cost_bps: string;
   slippage_bps: string;
+  avg_trading_cost: string;
   reserve_cash_fraction: string;
 }
 
@@ -179,6 +193,49 @@ export interface BrokerRuntimeAudit {
   nonce_store: string;
   nonce_store_path: string;
   nonce_redis_prefix: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  name: string;
+  name_en: string;
+  event_type: string;
+  description: string;
+  direction: string;
+  base_weight: number;
+  active: boolean;
+  start_date: string;
+  end_date: string;
+  peak_date: string;
+  decay_days: number;
+  affected_industries: string[];
+  sentiment_adjustment: number;
+  data_source: string;
+  evidence_quality: string;
+  generated_at: string;
+}
+
+export interface CalibrationHealthSummary {
+  last_calibrated_at?: string | null;
+  pattern_count: number;
+  total_observations: number;
+  verdict_counts: Record<string, number>;
+  darwinian_violations: number;
+  out_of_range_count: number;
+  health: string;
+  reason?: string;
+}
+
+export interface CalibrationValidation {
+  old_config: string;
+  new_config: string;
+  old_accuracy: number;
+  new_accuracy: number;
+  improvement: number;
+  is_degradation: boolean;
+  degradation_msg?: string;
+  validation_size: number;
+  training_size: number;
 }
 
 export interface CalibratorChange {
@@ -230,6 +287,41 @@ export interface CapitalSnapshot {
   advance_reason?: string;
 }
 
+export interface CardConfig {
+  layer_weights: Record<string, number>;
+  sentiment_thresholds: Record<string, string>;
+  clamp_min: number;
+  clamp_max: number;
+}
+
+export interface CausalChain {
+  event_id: string;
+  template_id: string;
+  trigger_theme: string;
+  affected_sectors: string[];
+  favored_sectors: string[];
+  avoided_sectors: string[];
+  steps: string[];
+  score: number;
+}
+
+export interface CausalStep {
+  description: string;
+  affected: string[];
+  impact: number;
+}
+
+export interface CausalTemplate {
+  id: string;
+  name: string;
+  trigger_theme: string;
+  required_region?: string;
+  steps: string[];
+  historical_hit_rate: number;
+  source_references: string[];
+  rationale: string;
+}
+
 export interface ChannelAlert {
   channel_id: string;
   status: string;
@@ -267,6 +359,17 @@ export interface CircuitBreakerStatus {
   cooldown_until: string;
   intraday_peak: number;
   day_start_value: number;
+}
+
+export interface ClassificationTreeConfig {
+  segments: string[];
+}
+
+export interface CompositeCardConfig {
+  layer_weights: Record<string, number>;
+  sentiment_thresholds: Record<string, string>;
+  clamp_min: number;
+  clamp_max: number;
 }
 
 export interface ConfidenceMixConfig {
@@ -343,21 +446,86 @@ export interface CrossFootCheck {
   difference: number;
 }
 
+export interface CustomerConcentration {
+  customer_name: string;
+  customer_ticker?: string;
+  revenue_share_pct: number;
+  geographic_region: string;
+  risk_score: number;
+  last_order_date?: string | null;
+  order_visibility_months: number;
+}
+
+export interface CycleCalibrationConfig {
+  min_samples: number;
+  learning_rate: number;
+  hit_rate_high: number;
+  hit_rate_low: number;
+  weight_clamp_min: number;
+  weight_clamp_max: number;
+  window_size: number;
+}
+
+export interface CycleOutcome {
+  session_id: string;
+  date: string;
+  layer_signals: Record<string, number>;
+  actual_return: number;
+}
+
+export interface CyclePhaseTransition {
+  from_phase: string;
+  to_phase: string;
+  probability: number;
+  triggers: string[];
+  typical_duration_days: number;
+}
+
 export interface CyclePosition {
-  industry: string;
-  name: string;
+  industry_id: string;
   business_cycle: string;
   inventory_cycle: string;
   capex_cycle: string;
   confidence: number;
+  continuous_phase_score: number;
+  leading_indicators: string[];
+  lagging_indicators: string[];
+  cycle_duration_days: number;
+  expected_phase_change?: string | null;
   updated_at: string;
+}
+
+export interface CycleStatusCard {
+  date: string;
+  generated_at: string;
+  silicon_phase: number;
+  silicon_phase_name: string;
+  silicon_score: number;
+  silicon_indicators: string | null;
+  business_cycle: string;
+  inventory_cycle: string;
+  capex_cycle: string;
+  cycle_confidence: number;
   is_favorable: boolean;
-  phase_score: number;
-  trend: string;
-  confidence_breakdown?: Record<string, number>;
-  narrative_theme?: string;
-  threshold_evidence?: Record<string, string>;
-  evidence: string;
+  active_patterns: string[];
+  seasonal_adjustment: number;
+  active_events: string[];
+  event_sentiment: number;
+  supply_chain_signal: number;
+  composite_coefficient: number;
+  sentiment_label: string;
+  breakdown: string[];
+}
+
+export interface CycleStatusResponse {
+  sentiment_label: string;
+  composite_coefficient: number;
+  cycle_confidence: number;
+  business_cycle: string;
+  silicon_phase_name: string;
+  is_favorable: boolean;
+  active_patterns: number;
+  active_events: number;
 }
 
 export interface CycleThresholdConfig {
@@ -567,6 +735,11 @@ export interface DynamicEnvConfig {
   dxy_low_threshold: number;
   dxy_export_penalty: number;
   dxy_export_benefit: number;
+  history_window_days: number;
+  history_cap_multiplier: number;
+  oil_price_shock_threshold: number;
+  us_rates_dxy_threshold: number;
+  jpy_carry_dxy_threshold: number;
 }
 
 export interface EarningsQualityExecutorParameters {
@@ -653,9 +826,17 @@ export interface EquityCurvePoint {
 }
 
 export interface EventBlock {
-  today: string[];
-  recent: string[];
+  today: NarrativeEvent[];
+  recent: NarrativeEvent[];
   premarket?: string | null;
+}
+
+export interface EventCalendarRule {
+  event_type: string;
+  name: string;
+  base_weight: number;
+  decay_days: number;
+  direction: string;
 }
 
 export interface ExecutionPolicy {
@@ -774,6 +955,13 @@ export interface FactorAttribution {
   quality: string;
   agent: string;
   total: string;
+}
+
+export interface FactorBaseline {
+  factor: string;
+  mean: number;
+  std_dev: number;
+  count: number;
 }
 
 export interface FactorConvictionParams {
@@ -902,6 +1090,19 @@ export interface FactorWeightParameters {
   aggressive_quality?: string;
 }
 
+export interface FallbackPriceTarget {
+  target_multiplier: string;
+  stop_loss_multiplier: string;
+}
+
+export interface FetcherStatus {
+  day_trading: string;
+  taifex: string;
+  odd_lot: string;
+  etf: string;
+  geopolitical_risk: string;
+}
+
 export interface FinancialsExecutorParameters {
   dividend_boost: string;
   balance_sheet_penalty: string;
@@ -957,6 +1158,17 @@ export interface GARCHParameters {
   reduce_magnitude: string;
   increase_magnitude: string;
   weekly_rebalance_days: string;
+}
+
+export interface GeopoliticalRiskScore {
+  region: string;
+  intensity: number;
+  sentiment: number;
+  confidence: number;
+  oil_impact: number;
+  shipping_impact: number;
+  sources: string[];
+  timestamp: string;
 }
 
 export interface GraphEdge {
@@ -1039,6 +1251,25 @@ export interface InTradeGateParameters {
   circuit_breaker_daily_loss_pct: string;
 }
 
+export interface Indicator {
+  name: string;
+  value: number;
+  unit: string;
+  trend: string;
+  threshold: number;
+  is_leading: boolean;
+  weight: number;
+  last_updated: string;
+}
+
+export interface IndustryClassification {
+  symbol: string;
+  level1: string;
+  level2: string;
+  level3: string;
+  updated_at: string;
+}
+
 export interface IndustryContextItem {
   industry_id: string;
   business_cycle: string;
@@ -1053,6 +1284,13 @@ export interface IndustryCycleFactorScore {
   phase_score?: number;
   confidence?: number;
   industry_id?: string;
+}
+
+export interface IndustryDefaultMetrics {
+  revenue_growth_yoy: number;
+  profit_growth_yoy: number;
+  inventory_turnover: number;
+  capacity_utilization: number;
 }
 
 export interface IndustryDetail {
@@ -1072,6 +1310,33 @@ export interface IndustryDetail {
   regime_context: string;
 }
 
+export interface IndustryLinkageScore {
+  industry_id: string;
+  upstream_count: number;
+  downstream_count: number;
+  avg_correlation: number;
+  systemic_importance: number;
+  shock_propagation_speed: number;
+  timestamp: string;
+}
+
+export interface IndustryMetrics {
+  industry_id: string;
+  pe: number;
+  pb: number;
+  dividend_yield: number;
+  revenue_growth_yoy: number;
+  profit_growth_yoy: number;
+  inventory_turnover: number;
+  capacity_utilization: number;
+  timestamp: string;
+}
+
+export interface IndustryMultiplierMap {
+  bull_multiplier: Record<string, number>;
+  bear_multiplier: Record<string, number>;
+}
+
 export interface IndustryOverview {
   id: string;
   name: string;
@@ -1083,7 +1348,7 @@ export interface IndustryOverview {
   cycle_confidence: number;
   is_favorable: boolean;
   seasonal_patterns: string[];
-  linkage_score: string | null;
+  linkage_score: IndustryLinkageScore | null;
   cycle_multiplier: number;
   seasonal_multiplier: number;
   linkage_multiplier: number;
@@ -1135,7 +1400,15 @@ export interface IndustryParameters {
   max_daily_weight_change: string;
   linkage_params: string;
   dynamic_env: string;
+  cycle_calibration: string;
   history_retention_days: string;
+  default_metrics: string;
+  silicon_cycle: string;
+  event_calendar_rules: string;
+  event_sentiment_cap: string;
+  composite_card: string;
+  seasonal_multipliers: string;
+  classification_tree: string;
 }
 
 export interface IndustryRecommendation {
@@ -1147,6 +1420,36 @@ export interface IndustryRecommendation {
   rationale: string;
   time_horizon: string;
   risk_adjusted: boolean;
+}
+
+export interface IndustrySegment {
+  id: string;
+  name: string;
+  name_en: string;
+  level: string;
+  parent_id?: string;
+  weight?: number;
+  geographic_exposure: string;
+  cyclicality: string;
+  technology_intensity: string;
+  capital_intensity: string;
+  representative_stocks?: string[];
+  description?: string;
+}
+
+export interface IndustrySegmentConfig {
+  id: string;
+  name: string;
+  name_en: string;
+  level: number;
+  parent_id?: string;
+  weight?: number;
+  geographic_exposure: string;
+  cyclicality: string;
+  technology_intensity: string;
+  capital_intensity: string;
+  representative_stocks?: string[];
+  description?: string;
 }
 
 export interface IntegrityCheck {
@@ -1162,6 +1465,20 @@ export interface InventoryCycleThresholdConfig {
   passive_restocking_capacity_min: number;
   active_destocking_inventory_max: number;
   active_destocking_capacity_max: number;
+}
+
+export interface InvestmentModel {
+  id: string;
+  name: string;
+  description: string;
+  rationale: string;
+  active_themes: string[];
+  favored_sectors: string[];
+  avoided_sectors: string[];
+  recent_prediction: number;
+  recent_error: number;
+  hit_rate: number;
+  weight: number;
 }
 
 export interface JanusParameters {
@@ -1191,6 +1508,21 @@ export interface LEOSatelliteExecutorParameters {
   stop_loss_multiplier: string;
 }
 
+export interface LayerAdjustment {
+  layer: string;
+  raw_value: number;
+  weight: number;
+  contribution: number;
+  reason: string;
+}
+
+export interface LayerMetrics {
+  total_signals: number;
+  correct_signals: number;
+  accuracy: number;
+  last_updated: string;
+}
+
 export interface LinkageConfig {
   downstream_decay_factor: number;
   upstream_decay_factor: number;
@@ -1212,12 +1544,23 @@ export interface LinkageFactorScore {
   industry_id?: string;
 }
 
+export interface LinkageHistoryRecord {
+  date: string;
+  industry_id: string;
+  systemic_importance: number;
+  shock_propagation_speed: number;
+  avg_correlation: number;
+  upstream_count: number;
+  downstream_count: number;
+  recorded_at: string;
+}
+
 export interface LinkageInfo {
   industry: string;
   upstream: string[];
   downstream: string[];
   correlations: Record<string, string>[];
-  linkage_score: string | null;
+  linkage_score: IndustryLinkageScore | null;
 }
 
 export interface LiveStatusResponse {
@@ -1226,12 +1569,40 @@ export interface LiveStatusResponse {
   timestamp: string;
 }
 
+export interface MacroDataHealthResponse {
+  recorded_at: number;
+  generated_at: string;
+  indicators: string[];
+}
+
+export interface MacroIndicatorHealth {
+  name: string;
+  symbol: string;
+  value: number;
+  change_pct: number;
+  timestamp: number;
+  status: string;
+  status_text: string;
+}
+
 export interface MacroRadarResponse {
   session_id: string;
   regime: string;
   guard_outcomes: GuardOutcome[];
   broker_runtime: BrokerRuntimeAudit;
   recorded_at: string;
+}
+
+export interface MacroRiskAssessment {
+  level: string;
+  foreign_outflow_probability: number;
+  primary_flow: string;
+  favored_sectors?: string[];
+  avoided_sectors?: string[];
+  structural_override: boolean;
+  confidence: number;
+  rationale: string;
+  timestamp: string;
 }
 
 export interface MacroRiskConfig {
@@ -1317,7 +1688,24 @@ export interface MutationBrief {
   maturity_level: string;
   iteration_guidance: string[];
   recommended_window: string;
+  rsi_tw_score?: number;
   generated_at: string;
+}
+
+export interface NarrativeAdjustment {
+  revenue_bias: number;
+  profit_bias: number;
+  confidence: number;
+  active_theme?: string;
+}
+
+export interface NarrativeCalibrationReport {
+  timestamp: string;
+  models_updated: number;
+  templates_updated: number;
+  models: string[];
+  verdict: string;
+  summary: string;
 }
 
 export interface NarrativeContextItem {
@@ -1330,6 +1718,24 @@ export interface NarrativeContextItem {
 export interface NarrativeConvictionParameters {
   theme_hit_rates?: string;
   skill_to_theme?: string;
+}
+
+export interface NarrativeEvent {
+  id: string;
+  theme: string;
+  region: string;
+  sentiment: number;
+  confidence: number;
+  confidence_source: string;
+  hit_rate: number;
+  capital_flow: string;
+  time_window: string;
+  timestamp: string;
+  source_data?: Record<string, number>;
+  duration: string;
+  expires_at: string;
+  severity: string;
+  status: string;
 }
 
 export interface NarrativeFactorScore {
@@ -1393,6 +1799,11 @@ export interface NarrativeParameters {
   taiwan_stress_crisis_threshold: string;
   taiwan_stress_high_threshold: string;
   taiwan_stress_alert_threshold: string;
+  calibration_baseline_window: string;
+  calibration_target_median: string;
+  calibration_validation_pct: string;
+  calibration_min_records: string;
+  calibration_enabled: string;
   event_ttl_multiplier: string;
   model_lookback_days: string;
   model_hold_window_days: string;
@@ -1400,6 +1811,13 @@ export interface NarrativeParameters {
   retail_fear_percentile_threshold: string;
   retail_acceleration_window_days: string;
   inflation_estimate?: string;
+  spring_festival_confidence: string;
+  election_cycle_confidence: string;
+  earnings_blackout_confidence: string;
+  tech_peak_season_confidence: string;
+  year_end_window_dressing_confidence: string;
+  earnings_surprise_confidence: string;
+  earnings_surprise_threshold: string;
 }
 
 export interface NewsLatencyConfig {
@@ -1411,6 +1829,15 @@ export interface NewsLatencyConfig {
   drop_high_threshold: number;
   drop_medium_threshold: number;
   confidence_divisor: number;
+}
+
+export interface NewsSource {
+  name: string;
+  region: string;
+  tier: number;
+  latency_hours: number;
+  reliability: number;
+  url?: string;
 }
 
 export interface OOSResult {
@@ -1462,6 +1889,7 @@ export interface OrchestratorParameters {
   sector_rotation_base_allocations: string;
   sector_rotation_macro_adjustments?: string;
   sector_rotation_flow_adjustments?: string;
+  use_ml_scoring: string;
 }
 
 export interface ParameterChange {
@@ -1504,6 +1932,7 @@ export interface ParameterSnapshot {
 export interface ParametersConfig {
   version: string;
   updated_at: string;
+  fallback_price_targets?: Record<string, string>;
   darwinian: string;
   factor: string;
   factor_weight?: string;
@@ -1528,6 +1957,7 @@ export interface ParametersConfig {
   alert: string;
   risk_gate?: string;
   engine?: string;
+  rsi_tw?: string;
 }
 
 export interface PerformanceReport {
@@ -1559,6 +1989,13 @@ export interface PhaseScoresConfig {
   score_recovery: number;
   score_mature: number;
   score_recession: number;
+}
+
+export interface PhaseTransition {
+  from_phase: string;
+  to_phase: string;
+  timestamp: string;
+  indicators: string;
 }
 
 export interface PipelineItem {
@@ -1686,6 +2123,7 @@ export interface PreTradeGateParameters {
   min_cash_buffer_pct: string;
   max_correlation: string;
   min_adv_ratio: string;
+  max_open_positions: string;
 }
 
 export interface PreciousMetalsParameters {
@@ -1740,6 +2178,8 @@ export interface PromptExperimentResult {
   candidate_factor_count?: number;
   baseline_monetary_ntd?: number;
   candidate_monetary_ntd?: number;
+  eval_metrics?: string | null;
+  importance_result?: string | null;
 }
 
 export interface Quote {
@@ -1753,6 +2193,77 @@ export interface Quote {
   as_of: string;
   is_tradable: boolean;
   source: string;
+}
+
+export interface RSITwCategoryA {
+  margin_maintenance_z: number;
+  day_trading_z: number;
+  margin_balance_z: number;
+  vix_risk_score: number;
+  weekly_pcr: number;
+  odd_lot_imbalance: number;
+  a_score: number;
+  is_fallback: boolean;
+}
+
+export interface RSITwCategoryC {
+  futures_retail_oi: number;
+  broker_flow_score: number;
+  etf_subscription_score: number;
+  c_score: number;
+  is_fallback: boolean;
+}
+
+export interface RSITwCategoryD {
+  adjustment_factor: number;
+  active_events: string[];
+  d_multiplier: number;
+  is_fallback: boolean;
+}
+
+export interface RSITwParameters {
+  a1_weight: string;
+  a2_weight: string;
+  a3_weight: string;
+  a4_weight: string;
+  a5_weight: string;
+  a6_weight: string;
+  a_part_weight: string;
+  c_part_weight: string;
+  a3_midpoint: string;
+  a3_scale: string;
+  a4_vix_thresholds: string;
+  a4_vix_scores: string;
+  a5_pcr_thresholds: string;
+  a5_pcr_scores: string;
+  a5_pcr_fallback: string;
+  a6_oddlot_thresholds: string;
+  a6_oddlot_scores: string;
+  a6_oddlot_fallback: string;
+  c1_weight: string;
+  c2_weight: string;
+  c3_weight: string;
+  c1_very_bullish_threshold: string;
+  c1_bullish_threshold: string;
+  c1_bearish_threshold: string;
+  c1_very_bearish_threshold: string;
+  c2_neutral_midpoint: string;
+  c2_netflow_scaling_factor: string;
+  c3_very_bullish_threshold: string;
+  c3_bullish_threshold: string;
+  c3_bearish_threshold: string;
+  d_geopolitical_risk_threshold: string;
+  d_geopolitical_risk_multiplier: string;
+  d_vix_spike_threshold: string;
+  d_vix_spike_multiplier: string;
+  d_credit_tightening_multiplier: string;
+  last_calibrated_score?: string;
+}
+
+export interface RSITwSubIndicators {
+  category_a?: string | null;
+  category_c?: string | null;
+  category_d?: string | null;
 }
 
 export interface RangeFilter {
@@ -1842,10 +2353,18 @@ export interface RecommendationPipelineResponse {
   recorded_at: string;
   is_fallback_session: boolean;
   fallback_message: string;
+  cycle_status?: CycleStatusResponse | null;
 }
 
 export interface RegimeBreakdown {
   regimes: Record<string, string>;
+}
+
+export interface RegimeCalibratedConfig {
+  bull: string;
+  normal: string;
+  bear: string;
+  crisis: string;
 }
 
 export interface RegimeHistoryData {
@@ -1908,6 +2427,11 @@ export interface RetailSentimentResponse {
   score: number;
   change_pct: number;
   interpretation: string;
+  composite_sentiment: number;
+  retail_futures_oi?: number;
+  etf_net_subscription?: number;
+  sentiment_sub_indicators?: RSITwSubIndicators | null;
+  fetcher_status: string;
 }
 
 export interface RetailSentimentSnapshot {
@@ -1916,6 +2440,24 @@ export interface RetailSentimentSnapshot {
   day_trading_ratio: number;
   margin_percentile: number;
   timestamp: string;
+  retail_futures_oi?: number;
+  etf_net_subscription?: number;
+  composite_sentiment: number;
+  sentiment_sub_indicators?: string | null;
+}
+
+export interface RiskEvent {
+  id: string;
+  type: string;
+  severity: string;
+  industry_id: string;
+  symbol?: string;
+  description: string;
+  impact_estimate: number;
+  confidence: number;
+  detected_at: string;
+  source: string;
+  recommended_action?: string;
 }
 
 export interface RiskExposureResponse {
@@ -1964,6 +2506,14 @@ export interface RiskParameters {
   take_profit: string;
   max_loss_per_trade: string;
   max_total_exposure: string;
+}
+
+export interface RiskProfile {
+  customer_concentration: number;
+  news_latency_risk: number;
+  asymmetric_risk: number;
+  supply_chain_depth: number;
+  key_customers?: string[];
 }
 
 export interface RiskSnapshot {
@@ -2020,30 +2570,53 @@ export interface ScreeningReject {
   recorded_at: string;
 }
 
+export interface SeasonalCalendar {
+  year: number;
+  patterns: string[];
+  by_month: Record<number, string[]>;
+}
+
+export interface SeasonalCalibration {
+  pattern_id: string;
+  pattern_name: string;
+  observed_accuracy: number;
+  observed_avg_return: number;
+  observed_adjustment: number;
+  declared_accuracy: number;
+  declared_return: number;
+  declared_adjustment: number;
+  observation_count: number;
+  verdict: string;
+}
+
 export interface SeasonalExpectation {
-  theme: string;
   historical_avg_return: number;
   current_return: number;
   expectation_gap: number;
   already_priced_in: boolean;
+  surprise_potential: number;
+  confidence: number;
+}
+
+export interface SeasonalMultiplierConfig {
+  theme_multipliers: Record<string, string>;
+  theme_correlations: Record<string, Record<string, number>>;
 }
 
 export interface SeasonalPattern {
   id: string;
   name: string;
-  name_en?: string;
-  description: string;
+  name_en: string;
   start_month: number;
   start_day: number;
   end_month: number;
   end_day: number;
-  historical_accuracy: number;
-  typical_return: number;
+  favored_industries: string[];
+  avoided_industries: string[];
   adjustment_factor: number;
-  favored_industries?: string[];
-  avoided_industries?: string[];
-  affected_industries?: string[];
-  impact?: string;
+  historical_accuracy: number;
+  avg_market_return: number;
+  description: string;
 }
 
 export interface SeasonalPatternConfig {
@@ -2061,6 +2634,22 @@ export interface SeasonalPatternConfig {
   historical_accuracy: number;
   avg_market_return: number;
   description: string;
+}
+
+export interface SeasonalPatternSnapshot {
+  id: string;
+  name: string;
+  adjustment_factor: number;
+}
+
+export interface SeasonalPerformance {
+  pattern_id: string;
+  year: number;
+  actual_return: number;
+  predicted_return: number;
+  accuracy: number;
+  favored_industries: string[];
+  recorded_at: string;
 }
 
 export interface SectorAttribution {
@@ -2096,6 +2685,11 @@ export interface SectorRotationConfig {
   rebalance_threshold: number;
 }
 
+export interface SentimentBounds {
+  min: number;
+  max: number;
+}
+
 export interface SessionSummary {
   session_id: string;
   regime: string;
@@ -2126,6 +2720,29 @@ export interface ShippingExecutorParameters {
 export interface ShockImpact {
   industry: string;
   impact: number;
+}
+
+export interface SiliconCycleParameters {
+  revenue_yoy_threshold: number;
+  billings_yoy_threshold: number;
+  dram_stabilization_threshold: number;
+  billings_stabilization_threshold: number;
+  inventory_days_threshold: number;
+  utilization_threshold: number;
+  index_ma_percent_threshold: number;
+  sox_extreme_threshold: number;
+  capex_cut_threshold: number;
+  min_confidence: number;
+  history_window_size: number;
+}
+
+export interface SiliconIndicatorSnapshot {
+  tsmc_monthly_revenue_yoy: number;
+  global_semiconductor_billings_yoy: number;
+  dram_spot_price_trend: number;
+  taiwan_semiconductor_index_ma: number;
+  tsmc_capex_guidance: number;
+  philadelphia_sox_index_yoy: number;
 }
 
 export interface SimulationConfig {
@@ -2230,6 +2847,59 @@ export interface StrategySummary {
   score: number;
 }
 
+export interface StressIndexScaling {
+  dxy: number;
+  us10y: number;
+  foreign_flow: number;
+  vix: number;
+  jpy: number;
+  geopolitical: number;
+  oil: number;
+  gold: number;
+}
+
+export interface StressIndexThresholds {
+  crisis: number;
+  high: number;
+  alert: number;
+}
+
+export interface StressIndexWeights {
+  dxy: number;
+  us10y: number;
+  foreign_flow: number;
+  vix: number;
+  jpy: number;
+  geopolitical: number;
+  oil: number;
+  gold: number;
+}
+
+export interface StressIndexWeightsConfig {
+  scaling: string;
+  weights: string;
+  thresholds: string;
+}
+
+export interface StructuralTrend {
+  name: string;
+  theme: string;
+  strength: number;
+  confidence: number;
+  hit_rate: number;
+  evidence: string[];
+  timestamp: string;
+}
+
+export interface StructuralTrendAssessment {
+  trends: string[];
+  dominant_trend?: string | null;
+  override_score: number;
+  should_override_risk: boolean;
+  rationale: string;
+  timestamp: string;
+}
+
 export interface StructuralTrendConfig {
   min_trend_strength: number;
   min_confidence: number;
@@ -2239,6 +2909,14 @@ export interface StructuralTrendConfig {
   cowos_utilization_threshold: number;
   capex_growth_threshold: number;
   semiconductor_index_threshold: number;
+}
+
+export interface SupplyChainNode {
+  industry_id: string;
+  tier: number;
+  upstream_of?: string[];
+  downstream_of?: string[];
+  key_materials?: string[];
 }
 
 export interface SwarmStatusResponse {
@@ -2284,6 +2962,13 @@ export interface SystemHealthResponse {
   regime: string;
   data_channels?: string[];
   cycle_stale: boolean;
+}
+
+export interface TaiwanStressIndex {
+  score: number;
+  regime: string;
+  components: Record<string, number>;
+  timestamp: number;
 }
 
 export interface TaskExecution {
@@ -2388,6 +3073,17 @@ export interface UniverseOverlapResponse {
   warnings: string[];
 }
 
+export interface ValidationResult {
+  pattern_id: string;
+  train_accuracy: number;
+  test_accuracy: number;
+  degradation: number;
+  pass: boolean;
+  train_sample_size: number;
+  test_sample_size: number;
+  margin: number;
+}
+
 export interface ValueYieldExecutorParameters {
   cash_flow_boost: string;
   yield_trap_penalty: string;
@@ -2413,6 +3109,17 @@ export interface channelState {
   updated_at: string;
 }
 
+export interface marginHistoryFile {
+  date: string;
+  margin_balance: number;
+  change_pct: number;
+}
+
+export interface maturityTrackerState {
+  first_start_date: string;
+  last_checked: string;
+}
+
 export interface rawOutcome {
   agent_id: string;
   symbol: string;
@@ -2424,6 +3131,14 @@ export interface rawOutcome {
   passed_guards: boolean;
   recorded_at: string;
   session_id: string;
+}
+
+export interface revenueRecord {
+  date: string;
+  stock_id: string;
+  revenue: number;
+  revenue_month: number;
+  revenue_year: number;
 }
 
 export interface statsResponse {
@@ -2444,6 +3159,11 @@ export interface submitTaskRequest {
 export interface submitTaskResponse {
   id: string;
   status: string;
+}
+
+export interface supplyChainGraphJSON {
+  nodes: string[];
+  correlations: Record<string, number>;
 }
 
 export interface validateRuleResponse {

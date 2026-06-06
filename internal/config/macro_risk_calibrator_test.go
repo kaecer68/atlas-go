@@ -45,7 +45,6 @@ func TestMacroRiskEvaluator_DefaultConfig(t *testing.T) {
 	cfg := DefaultParametersConfig()
 	evaluator := (&MacroRiskCalibrator{}).BuildEvaluator()
 	score, err := evaluator(cfg)
-
 	if err != nil {
 		t.Fatalf("evaluator returned error on default config: %v", err)
 	}
@@ -68,7 +67,6 @@ func TestMacroRiskEvaluator_ConstraintViolation(t *testing.T) {
 
 	evaluator := (&MacroRiskCalibrator{}).BuildEvaluator()
 	score, err := evaluator(cfg)
-
 	if err != nil {
 		t.Fatalf("evaluator returned error on constraint-violating config: %v", err)
 	}

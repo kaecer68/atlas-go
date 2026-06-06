@@ -59,7 +59,7 @@ func (g *PostTradeGate) Evaluate(input PostTradeInput, currentMode string) (*Ris
 			Description: fmt.Sprintf("critical drawdown %.1f%% - switching to SUSPENDED", input.CurrentDrawdownPct*100),
 		}
 	} else if !r.Passed {
-		if decision.Verdict < VerdictAlertOnly {
+		if decision.Verdict.Level() < LevelAlertOnly {
 			decision.Verdict = VerdictAlertOnly
 		}
 		decision.Mode = string(ModeDefensive)
@@ -73,7 +73,7 @@ func (g *PostTradeGate) Evaluate(input PostTradeInput, currentMode string) (*Ris
 
 	r = g.checkRollingSharpe(input.RollingSharpe)
 	details = append(details, r)
-	if !r.Passed && decision.Verdict < VerdictAlertOnly {
+	if !r.Passed && decision.Verdict.Level() < LevelAlertOnly {
 		decision.Verdict = VerdictAlertOnly
 		decision.Mode = string(ModeCautious)
 		decision.Reason = r.Message
@@ -86,7 +86,7 @@ func (g *PostTradeGate) Evaluate(input PostTradeInput, currentMode string) (*Ris
 
 	r = g.checkConsecutiveLosses(input.ConsecutiveLosses)
 	details = append(details, r)
-	if !r.Passed && decision.Verdict < VerdictAlertOnly {
+	if !r.Passed && decision.Verdict.Level() < LevelAlertOnly {
 		decision.Verdict = VerdictAlertOnly
 		decision.Mode = string(ModeCautious)
 		decision.Reason = r.Message

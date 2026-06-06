@@ -86,7 +86,11 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 
 	windowOutcomes := 0
 	for _, outcome := range outcomes {
-		if !outcome.RecordedAt.Before(startDate) && !outcome.RecordedAt.After(endDate) {
+		outcomeDate, err := time.Parse("2006-01-02", outcome.Window)
+		if err != nil {
+			continue
+		}
+		if !outcomeDate.Before(startDate) && !outcomeDate.After(endDate) {
 			windowOutcomes++
 		}
 	}

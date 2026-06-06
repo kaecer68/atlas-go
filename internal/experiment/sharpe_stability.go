@@ -15,8 +15,8 @@ const DefaultSharpeStabilityThreshold = 0.5
 // The second condition prevents flagging a series as "stable" when mean≈0 and stddev≈1,
 // which in financial terms is not a reliable signal.
 func SharpeStabilityCheck(sharpeSeries []float64, threshold float64) (stable bool, stderr float64, err error) {
-	if len(sharpeSeries) < 2 {
-		return false, 0, fmt.Errorf("insufficient data: need at least 2 data points")
+	if len(sharpeSeries) < 30 {
+		return false, 0, fmt.Errorf("insufficient data: need at least 30 data points")
 	}
 
 	mean := 0.0

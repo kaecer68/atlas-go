@@ -78,8 +78,6 @@ func TestOOSR2(t *testing.T) {
 }
 
 func TestSharpeRatio(t *testing.T) {
-	const tolerance = 1e-8
-
 	t.Run("empty returns", func(t *testing.T) {
 		got := eval.SharpeRatio([]float64{}, 0)
 		if got != 0 {

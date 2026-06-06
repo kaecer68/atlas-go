@@ -57,17 +57,15 @@ func AblationAnalysis(X [][]float64, y []float64, allFactors []string, excludedF
 	}
 
 	// Identify column indices for excluded and remaining factors
-	var excludedIndices []int
 	var remainingFactors []string
 	var remainingIndices []int
 
 	for i, factor := range allFactors {
 		if excludedSet[factor] {
-			excludedIndices = append(excludedIndices, i)
-		} else {
-			remainingFactors = append(remainingFactors, factor)
-			remainingIndices = append(remainingIndices, i)
+			continue
 		}
+		remainingFactors = append(remainingFactors, factor)
+		remainingIndices = append(remainingIndices, i)
 	}
 
 	// Error if any excluded factor was not found

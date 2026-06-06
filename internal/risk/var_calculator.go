@@ -33,7 +33,7 @@ func (c *VaRCalculator) ComputeRiskSnapshot(dailyReturns []float64, portfolioVal
 // CalculateVaR computes historical VaR and CVaR from a series of daily returns.
 // confidence should be 0.95 or 0.99.
 func CalculateVaR(dailyReturns []float64, confidence float64) float64 {
-	if len(dailyReturns) == 0 {
+	if len(dailyReturns) < 252 {
 		return 0.0
 	}
 	sorted := make([]float64, len(dailyReturns))
@@ -50,7 +50,7 @@ func CalculateVaR(dailyReturns []float64, confidence float64) float64 {
 // CalculateCVaR computes Conditional VaR (Expected Shortfall) as the average
 // of returns worse than the VaR threshold.
 func CalculateCVaR(dailyReturns []float64, confidence float64) float64 {
-	if len(dailyReturns) == 0 {
+	if len(dailyReturns) < 252 {
 		return 0.0
 	}
 	varThreshold := CalculateVaR(dailyReturns, confidence)
@@ -120,7 +120,7 @@ func CalculateComponentVaR(returns map[string][]float64, weights map[string]floa
 			minLen = len(r)
 		}
 	}
-	if minLen < 2 {
+	if minLen < 252 {
 		return nil
 	}
 

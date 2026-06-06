@@ -1,3 +1,5 @@
+import { escapeHtml } from './utils.js';
+
 export async function getJSON(url) {
   var res = await fetch(url);
   if (!res.ok) throw new Error(url + ': ' + res.status);
@@ -21,10 +23,7 @@ export async function postJSON(url, body) {
 
 export function notify(msg, type) { console.log('[' + (type || 'info') + '] ' + msg); }
 
-export function escapeHtml(text) {
-  if (!text) return '';
-  return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+export { escapeHtml };
 
 export function formatDate(d) { return d ? new Date(d).toLocaleString('zh-TW') : '-'; }
 
@@ -34,4 +33,14 @@ export function renderEmptyState(msg, hint) {
 
 export function renderSkeleton(lines) {
   return Array(lines || 4).fill('<div class="skeleton-line"></div>').join('');
+}
+
+// Sort narrative events by composite strength (|sentiment| * confidence * hit_rate).
+// Higher values indicate more significant events.  Mutates the input array.
+export function sortNarrativeEvents(events) {
+  return events.sort(function(a, b) {
+    var strengthA = Math.abs(a.sentiment || 0) * (a.confidence || 1) * (a.hit_rate || 0.5);
+    var strengthB = Math.abs(b.sentiment || 0) * (b.confidence || 1) * (b.hit_rate || 0.5);
+    return strengthB - strengthA;
+  });
 }

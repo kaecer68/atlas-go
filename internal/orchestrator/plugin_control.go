@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -130,6 +131,7 @@ func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommen
 		targetPrice    float64
 		stopLossPrice  float64
 		bestAgent      string
+		bestSide       domain.Side
 	}
 
 	params := config.GetParametersConfig().Orchestrator
@@ -147,6 +149,7 @@ func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommen
 			entry.targetPrice = rec.TargetPrice
 			entry.stopLossPrice = rec.StopLossPrice
 			entry.bestAgent = rec.Agent
+			entry.bestSide = rec.Side
 		}
 	}
 
@@ -172,12 +175,26 @@ func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommen
 			Skill:         agent.Skill,
 			Layer:         agent.Layer,
 			Symbol:        symbol,
-			Side:          domain.SideBuy,
+			Side:          entry.bestSide,
 			Conviction:    avgConviction,
 			Reason:        reason,
 			TargetPrice:   entry.targetPrice,
 			StopLossPrice: entry.stopLossPrice,
 		})
+	}
+
+	// Apply diversity bonus: penalize crowded symbols, reward unique high-conviction picks.
+	for i := range out {
+		entry := bySymbol[out[i].Symbol]
+		if entry.count > 1 {
+			penalty := math.Min(0.20, float64(entry.count-1)*0.05)
+			out[i].Conviction = int(float64(out[i].Conviction) * (1 - penalty))
+		} else if out[i].Conviction >= 50 {
+			out[i].Conviction += 5
+			if out[i].Conviction > 100 {
+				out[i].Conviction = 100
+			}
+		}
 	}
 
 	slices.SortFunc(out, func(a, b domain.Recommendation) int {
@@ -225,6 +242,7 @@ func (e CIOPortfolioExecutorWithWeights) Apply(agent domain.AgentSpec, recs []do
 		stopLossPrice      float64
 		bestScore          float64
 		bestAgent          string
+		bestSide           domain.Side
 	}
 
 	bySymbol := map[string]*agg{}
@@ -252,6 +270,7 @@ func (e CIOPortfolioExecutorWithWeights) Apply(agent domain.AgentSpec, recs []do
 			entry.targetPrice = rec.TargetPrice
 			entry.stopLossPrice = rec.StopLossPrice
 			entry.bestAgent = rec.Agent
+			entry.bestSide = rec.Side
 		}
 	}
 

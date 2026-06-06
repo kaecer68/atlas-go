@@ -2,8 +2,10 @@ package ledger
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -124,5 +126,96 @@ func TestRecordAndLoadSessionScreeningRejects(t *testing.T) {
 	}
 	if len(loaded) != 2 {
 		t.Fatalf("expected 2 rejects, got %d", len(loaded))
+	}
+}
+
+func TestStore_ConcurrentWrites(t *testing.T) {
+	baseDir := t.TempDir()
+	store := NewStore(baseDir)
+
+	const goroutines = 8
+	const perGoroutine = 50
+	const total = goroutines * perGoroutine
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, goroutines)
+	for g := 0; g < goroutines; g++ {
+		wg.Add(1)
+		go func(g int) {
+			defer wg.Done()
+			batch := make([]domain.RecommendationOutcome, perGoroutine)
+			for i := 0; i < perGoroutine; i++ {
+				batch[i] = domain.RecommendationOutcome{
+					AgentID:       fmt.Sprintf("agent-%d", g),
+					Skill:         "alpha",
+					Window:        "1d",
+					Symbol:        fmt.Sprintf("%04d.TW", g*perGoroutine+i),
+					Side:          "BUY",
+					ForwardReturn: float64(i) * 0.001,
+					Hit:           i%2 == 0,
+					RecordedAt:    time.Now().UTC(),
+				}
+			}
+			if err := store.RecordOutcomes(batch); err != nil {
+				errCh <- fmt.Errorf("goroutine %d: %w", g, err)
+			}
+		}(g)
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Fatalf("concurrent RecordOutcomes failed: %v", err)
+	}
+
+	loaded, err := store.LoadOutcomes()
+	if err != nil {
+		t.Fatalf("LoadOutcomes failed: %v", err)
+	}
+	if len(loaded) != total {
+		t.Fatalf("expected %d outcomes, got %d (data lost under concurrent writes)", total, len(loaded))
+	}
+
+	seen := make(map[string]bool, total)
+	for _, oc := range loaded {
+		key := oc.Symbol
+		if seen[key] {
+			t.Errorf("duplicate outcome: %s", key)
+		}
+		seen[key] = true
+	}
+	if len(seen) != total {
+		t.Errorf("expected %d unique outcomes, got %d", total, len(seen))
+	}
+}
+
+func TestStore_ConcurrentMixedReadWrite(t *testing.T) {
+	baseDir := t.TempDir()
+	store := NewStore(baseDir)
+
+	const goroutines = 6
+	var wg sync.WaitGroup
+	errCh := make(chan error, goroutines)
+	for g := 0; g < goroutines; g++ {
+		wg.Add(1)
+		go func(g int) {
+			defer wg.Done()
+			summary := domain.SessionSummary{
+				SessionID:    fmt.Sprintf("session-%d", g),
+				Regime:       domain.RegimeNeutral,
+				OutcomeCount: 1,
+			}
+			if err := store.RecordSessionSummary(domain.ReplaySession{ID: summary.SessionID}, summary); err != nil {
+				errCh <- fmt.Errorf("write goroutine %d: %w", g, err)
+				return
+			}
+			if _, _, err := store.LoadAllSessionScorecards(); err != nil {
+				errCh <- fmt.Errorf("read goroutine %d: %w", g, err)
+			}
+		}(g)
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Fatalf("concurrent mixed read/write failed: %v", err)
 	}
 }

@@ -3,13 +3,28 @@ package narrative
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+)
+
+// SignalStrategy determines how factor signals are computed.
+//   - SignalChange (default): uses the raw change-pct or value signal (original behavior).
+//   - SignalLevel: uses the z-score deviation from rolling baseline mean.
+//   - SignalHybrid: uses the signal with the larger absolute magnitude between change and level.
+type SignalStrategy int
+
+const (
+	SignalChange = iota // default: original change-pct signal
+	SignalLevel         // level-based z-score from rolling baseline
+	SignalHybrid        // max(|change|, |level deviation|)
 )
 
 type CalibrationRecord struct {
@@ -247,7 +262,12 @@ func factorSignal(factor string, snap marketdata.MacroDataSnapshot, foreignNet f
 	case "vix":
 		return snap.VIX.Value - 20
 	case "jpy":
-		return snap.JPY.ChangePct
+		// Use raw USD/JPY exchange rate (e.g., 150.5) rather than ChangePct.
+		// Carry trade unwinds are state-driven (extreme JPY level vs history),
+		// not event-driven (single-day move). On flat days ChangePct=0 would
+		// zero out the level signal; using the rate produces a non-zero z-score
+		// whenever JPY is at an extreme level relative to its 60d history.
+		return snap.JPY.Value
 	case "geopolitical":
 		return snap.Gold.ChangePct + snap.Oil.ChangePct
 	case "oil":
@@ -282,4 +302,160 @@ func sameDirection(a, b float64) bool {
 
 func defaultCalibrationWeights() StressIndexWeights {
 	return StressIndexWeights{DXY: 0.13, US10Y: 0.18, ForeignFlow: 0.22, VIX: 0.13, JPY: 0.08, Geopolitical: 0.13, Oil: 0.07, Gold: 0.06}
+}
+
+// factorSignalWithStrategy computes the factor signal according to the given strategy.
+// Falls back to SignalChange when baseline is nil or the strategy is SignalChange.
+func factorSignalWithStrategy(factor string, snap marketdata.MacroDataSnapshot, foreignNet float64, strategy SignalStrategy, cfg *BaselineConfig) float64 {
+	switch strategy {
+	case SignalHybrid:
+		if cfg != nil {
+			return ComputeHybridSignal(factor, snap, foreignNet, cfg)
+		}
+		return factorSignal(factor, snap, foreignNet)
+	case SignalLevel:
+		if cfg != nil {
+			return ComputeLevelSignal(factor, snap, foreignNet, cfg)
+		}
+		return factorSignal(factor, snap, foreignNet)
+	default:
+		return factorSignal(factor, snap, foreignNet)
+	}
+}
+
+// ComputeFactorAccuracyWithBaseline measures how well each factor predicts
+// outflow direction, using the specified signal strategy. When strategy is
+// SignalChange or cfg is nil, behavior is identical to ComputeFactorAccuracy.
+func (e *WeightCalibrationEngine) ComputeFactorAccuracyWithBaseline(records []CalibrationRecord, strategy SignalStrategy, cfg *BaselineConfig) map[string]float64 {
+	accuracies := map[string]float64{}
+	if len(records) == 0 {
+		return accuracies
+	}
+
+	factors := []string{"dxy", "us10y", "foreign_flow", "vix", "jpy", "geopolitical", "oil", "gold"}
+	for _, factor := range factors {
+		correct := 0
+		total := 0
+		for _, r := range records {
+			pred := factorSignalWithStrategy(factor, r.Snapshot, r.ForeignNet, strategy, cfg)
+			if pred == 0 || r.Outflow == 0 {
+				continue
+			}
+			if math.IsNaN(pred) || math.IsInf(pred, 0) {
+				continue
+			}
+			total++
+			if sameDirection(pred, r.Outflow) {
+				correct++
+			}
+		}
+		if total == 0 {
+			accuracies[factor] = 0
+			continue
+		}
+		accuracies[factor] = float64(correct) / float64(total)
+	}
+	return accuracies
+}
+
+// CalibrationTask orchestrates the complete rolling calibration lifecycle.
+// It loads historical data, computes baselines, calibrates scales and weights,
+// validates the results, and exports the configuration.
+type CalibrationTask struct {
+	engine  *WeightCalibrationEngine
+	workDir string
+}
+
+// NewCalibrationTask creates a calibration task with the given work directory.
+func NewCalibrationTask(workDir string) *CalibrationTask {
+	return &CalibrationTask{
+		engine:  &WeightCalibrationEngine{},
+		workDir: workDir,
+	}
+}
+
+// RunCalibrationCycle executes one complete calibration cycle:
+//  1. Load historical data from workDir (window = params.CalibrationBaselineWindow)
+//  2. Compute baselines from training data
+//  3. Initialize calibrators with target median
+//  4. Calibrate scales via ScaleCalibrator.CalibrateScales(records)
+//  5. Calibrate regime-aware weights via RegimeAwareCalibrator.CalibrateWeightsByRegime(records)
+//  6. Build new config vs old config
+//  7. Validate new config vs old config via ValidateCalibration
+//  8. If validated: export new config via ExportConfig
+//  9. If degraded: return validation result with IsDegradation=true, skip export
+//
+// Returns error if data loading fails. Returns CalibrationValidation on success (even if degraded).
+func (t *CalibrationTask) RunCalibrationCycle() (*CalibrationValidation, error) {
+	p := config.GetParametersConfig()
+	if p == nil {
+		return nil, fmt.Errorf("calibration: no parameters config available")
+	}
+	n := p.Narrative
+
+	records, err := t.engine.LoadHistoricalData(t.workDir, n.CalibrationBaselineWindow.Value)
+	if err != nil {
+		return nil, fmt.Errorf("calibration: load data: %w", err)
+	}
+	if len(records) < n.CalibrationMinRecords.Value {
+		return nil, fmt.Errorf("calibration: insufficient records: %d < %d", len(records), n.CalibrationMinRecords.Value)
+	}
+
+	baselineCfg := &BaselineConfig{Window: n.CalibrationBaselineWindow.Value}
+	baselines := ComputeBaselines(records, baselineCfg)
+	if err := SaveBaselines(t.workDir, baselines); err != nil {
+		logging.Warn("calibration", "save_baselines_failed", "error", err.Error())
+	}
+
+	scaleCalibrator := NewScaleCalibrator().WithTarget(n.CalibrationTargetMedian.Value)
+	newScaling := scaleCalibrator.CalibrateScales(records)
+
+	regimeCalibrator := NewRegimeAwareCalibrator()
+	regimeConfig := regimeCalibrator.CalibrateWeightsByRegime(records)
+
+	newConfig := StressIndexWeightsConfig{
+		Scaling:    newScaling,
+		Weights:    regimeConfig.Normal.Weights,
+		Thresholds: regimeConfig.Normal.Thresholds,
+	}
+
+	oldConfig := StressIndexWeightsConfig{
+		Scaling: StressIndexScaling{
+			DXY:          n.TaiwanStressDXYScale.Value,
+			US10Y:        n.TaiwanStressUS10YScale.Value,
+			ForeignFlow:  n.TaiwanStressForeignScale.Value,
+			VIX:          n.TaiwanStressVIXScale.Value,
+			JPY:          n.TaiwanStressJPYScale.Value,
+			Geopolitical: n.TaiwanStressGeoScale.Value,
+			Oil:          n.TaiwanStressOilScale.Value,
+			Gold:         n.TaiwanStressGoldScale.Value,
+		},
+		Weights: StressIndexWeights{
+			DXY:          n.TaiwanStressDXYWeight.Value,
+			US10Y:        n.TaiwanStressUS10YWeight.Value,
+			ForeignFlow:  n.TaiwanStressForeignWeight.Value,
+			VIX:          n.TaiwanStressVIXWeight.Value,
+			JPY:          n.TaiwanStressJPYWeight.Value,
+			Geopolitical: n.TaiwanStressGeoWeight.Value,
+			Oil:          n.TaiwanStressOilWeight.Value,
+			Gold:         n.TaiwanStressGoldWeight.Value,
+		},
+		Thresholds: StressIndexThresholds{
+			Crisis: n.TaiwanStressCrisisThreshold.Value,
+			High:   n.TaiwanStressHighThreshold.Value,
+			Alert:  n.TaiwanStressAlertThreshold.Value,
+		},
+	}
+
+	validation := ValidateCalibration(records, oldConfig, newConfig)
+
+	if validation.IsDegradation {
+		return &validation, nil
+	}
+
+	if err := t.engine.ExportConfig(t.workDir, newConfig.Weights, newConfig.Scaling, newConfig.Thresholds); err != nil {
+		return &validation, fmt.Errorf("calibration: export: %w", err)
+	}
+
+	return &validation, nil
 }

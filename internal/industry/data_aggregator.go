@@ -116,7 +116,8 @@ func (a *DataAggregator) AggregateIndustry(ctx context.Context, industryID strin
 	}
 
 	a.tracker.UpdatePosition(industryID, metrics)
-	logging.Info("data_aggregator", "industry_updated",
+	logging.Info(
+		"data_aggregator", "industry_updated",
 		"industry", industryID,
 		"rev_growth", fmt.Sprintf("%.2f", metrics.RevenueGrowthYoY),
 		"profit_growth", fmt.Sprintf("%.2f", metrics.ProfitGrowthYoY),
