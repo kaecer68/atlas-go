@@ -1,12 +1,15 @@
 package industry
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 // TaiwanEventType is a canonical string enum for Taiwan market event types.
@@ -29,11 +32,32 @@ const (
 	EventPositionBuilding   TaiwanEventType = "position_building"
 )
 
+// EventDataSource tracks the provenance of calendar event data.
+type EventDataSource string
+
+const (
+	DataSourceDefaultRules EventDataSource = "default_rules"    // 硬編碼規則生成
+	DataSourceTWSE         EventDataSource = "twse_provider"    // TWSE OpenAPI
+	DataSourceFinMind      EventDataSource = "finmind_provider" // FinMind API
+	DataSourceMOPS         EventDataSource = "mops_provider"    // 公開資訊觀測站
+)
+
+// EventEvidence tracks the evidentiary support level for calendar event data.
+type EventEvidence string
+
+const (
+	EvidenceBacktested EventEvidence = "backtested" // 經過回測驗證
+	EvidenceEstimated  EventEvidence = "estimated"  // 基於歷史經驗估算
+	EvidenceUnverified EventEvidence = "unverified" // 未經任何驗證
+	EvidenceRealTime   EventEvidence = "realtime"   // 即時 API 資料
+)
+
 // CalendarEvent represents a concrete calendar event with computed dates.
 type CalendarEvent struct {
 	ID                  string    `json:"id"`
 	Name                string    `json:"name"`
 	NameEN              string    `json:"name_en"`
+	EventType           string    `json:"event_type"`
 	Description         string    `json:"description"`
 	Direction           string    `json:"direction"` // "bullish" | "bearish" | "mixed" | "neutral"
 	BaseWeight          float64   `json:"base_weight"`
@@ -44,6 +68,12 @@ type CalendarEvent struct {
 	DecayDays           int       `json:"decay_days"`
 	AffectedIndustries  []string  `json:"affected_industries"`
 	SentimentAdjustment float64   `json:"sentiment_adjustment"`
+	// DataSource tracks the provenance of this event (default_rules, twse_provider, etc.).
+	DataSource EventDataSource `json:"data_source"`
+	// EvidenceQuality indicates the level of evidentiary support for this event.
+	EvidenceQuality EventEvidence `json:"evidence_quality"`
+	// GeneratedAt records when this event was created, allowing freshness checks.
+	GeneratedAt time.Time `json:"generated_at"`
 }
 
 // String returns a human-readable summary of the event.
@@ -75,6 +105,7 @@ type EventCalendar struct {
 	mu          sync.RWMutex
 	config      *config.ParametersConfig
 	annualRules map[string]EventRule
+	generatedAt time.Time
 }
 
 // NewEventCalendar creates a new EventCalendar with default event rules.
@@ -99,33 +130,93 @@ var lunarNewYearDates = map[int]time.Time{
 	2026: time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC),
 	2027: time.Date(2027, 2, 6, 0, 0, 0, 0, time.UTC),
 	2028: time.Date(2028, 1, 26, 0, 0, 0, 0, time.UTC),
+	2029: time.Date(2029, 2, 13, 0, 0, 0, 0, time.UTC),
+	2030: time.Date(2030, 2, 3, 0, 0, 0, 0, time.UTC),
 }
 
 // lunarDragonBoatDates maps year to 端午節 date (lunar 5/5).
 var lunarDragonBoatDates = map[int]time.Time{
+	2023: time.Date(2023, 6, 22, 0, 0, 0, 0, time.UTC),
 	2024: time.Date(2024, 6, 10, 0, 0, 0, 0, time.UTC),
 	2025: time.Date(2025, 5, 31, 0, 0, 0, 0, time.UTC),
 	2026: time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC),
 	2027: time.Date(2027, 6, 9, 0, 0, 0, 0, time.UTC),
 	2028: time.Date(2028, 5, 28, 0, 0, 0, 0, time.UTC),
+	2029: time.Date(2029, 6, 16, 0, 0, 0, 0, time.UTC),
+	2030: time.Date(2030, 6, 5, 0, 0, 0, 0, time.UTC),
 }
 
 // lunarMidAutumnDates maps year to 中秋節 date (lunar 8/15).
 var lunarMidAutumnDates = map[int]time.Time{
+	2023: time.Date(2023, 9, 29, 0, 0, 0, 0, time.UTC),
 	2024: time.Date(2024, 9, 17, 0, 0, 0, 0, time.UTC),
 	2025: time.Date(2025, 10, 6, 0, 0, 0, 0, time.UTC),
 	2026: time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC),
 	2027: time.Date(2027, 9, 15, 0, 0, 0, 0, time.UTC),
 	2028: time.Date(2028, 10, 3, 0, 0, 0, 0, time.UTC),
+	2029: time.Date(2029, 9, 22, 0, 0, 0, 0, time.UTC),
+	2030: time.Date(2030, 9, 12, 0, 0, 0, 0, time.UTC),
 }
 
 // tombSweepingDates maps year to 清明節 date.
 var tombSweepingDates = map[int]time.Time{
+	2023: time.Date(2023, 4, 5, 0, 0, 0, 0, time.UTC),
 	2024: time.Date(2024, 4, 4, 0, 0, 0, 0, time.UTC),
 	2025: time.Date(2025, 4, 4, 0, 0, 0, 0, time.UTC),
 	2026: time.Date(2026, 4, 5, 0, 0, 0, 0, time.UTC),
 	2027: time.Date(2027, 4, 5, 0, 0, 0, 0, time.UTC),
 	2028: time.Date(2028, 4, 4, 0, 0, 0, 0, time.UTC),
+	2029: time.Date(2029, 4, 4, 0, 0, 0, 0, time.UTC),
+	2030: time.Date(2030, 4, 5, 0, 0, 0, 0, time.UTC),
+}
+
+// getLunarDate looks up a date from a lunar calendar table. If the year is not
+// covered by the hardcoded table, it attempts automatic lunar-to-solar computation
+// via lunar-go. The hardcoded table serves as a fast-path cache and verification
+// benchmark; automatic computation removes the 2023-2030 coverage ceiling (ST-8).
+// Only if automatic computation also fails does it return the fallback date.
+func getLunarDate(year int, table map[int]time.Time, fallback time.Time, holidayName string) time.Time {
+	if d, ok := table[year]; ok {
+		return d
+	}
+
+	var computed time.Time
+	switch holidayName {
+	case "春節":
+		computed = computeLunarNewYear(year)
+	case "端午節":
+		computed = computeDragonBoat(year)
+	case "中秋節":
+		computed = computeMidAutumn(year)
+	case "清明節":
+		computed = computeQingming(year)
+	}
+
+	if !computed.IsZero() {
+		logging.Info(
+			"event_calendar", "lunar_date_auto_computed",
+			logging.FStr("holiday", holidayName),
+			logging.FInt("year", year),
+			logging.FStr("date", computed.Format("2006-01-02")),
+		)
+		return computed
+	}
+
+	logging.Warn(
+		"event_calendar", "lunar_date_fallback",
+		logging.FStr("holiday", holidayName),
+		logging.FInt("year", year),
+		logging.FStr("fallback", fallback.Format("2006-01-02")),
+	)
+	return fallback
+}
+
+// GetLunarCoverageYears returns the effective coverage range of the lunar calendar
+// system. Since ST-8 (lunar automation), the range is effectively unbounded;
+// the returned values indicate the verified hardcoded cache range (2023-2030).
+// Callers should treat any year as computable.
+func GetLunarCoverageYears() (int, int) {
+	return 2023, 2030
 }
 
 // taiwanHoliday is a fixed-date or lookup-based Taiwan public holiday.
@@ -521,6 +612,28 @@ func defaultEventRules() map[string]EventRule {
 }
 
 // ---------------------------------------------------------------------------
+// newDefaultEvent creates a CalendarEvent with default evidence markers for
+// hardcoded-rule-generated events. All build*Event methods should use this.
+// Uses tec.generatedAt which is set once per RefreshEvents/UpdateFromProvider call
+// to avoid calling time.Now() per-event during bulk generation.
+func (tec *EventCalendar) newDefaultEvent() CalendarEvent {
+	return CalendarEvent{
+		DataSource:      DataSourceDefaultRules,
+		EvidenceQuality: EvidenceUnverified,
+		GeneratedAt:     tec.generatedAt,
+	}
+}
+
+// newProviderEvent creates a CalendarEvent with evidence markers for
+// externally-sourced provider events.
+func (tec *EventCalendar) newProviderEvent(source EventDataSource) CalendarEvent {
+	return CalendarEvent{
+		DataSource:      source,
+		EvidenceQuality: EvidenceEstimated,
+		GeneratedAt:     tec.generatedAt,
+	}
+}
+
 // EventCalendar methods
 // ---------------------------------------------------------------------------
 
@@ -529,6 +642,7 @@ func (tec *EventCalendar) RefreshEvents(now time.Time) {
 	tec.mu.Lock()
 	defer tec.mu.Unlock()
 
+	tec.generatedAt = time.Now()
 	year := now.Year()
 	var allEvents []CalendarEvent
 
@@ -1027,4 +1141,90 @@ func (tec *EventCalendar) computeSentimentAdjustment(evt CalendarEvent, now time
 		adjustment = -0.05
 	}
 	return math.Round(adjustment*10000) / 10000
+}
+
+// UpdateFromProvider fetches events from an external provider and merges them
+// into the calendar. Provider events are appended alongside default-rule events;
+// the EventDataSource and EventEvidence fields distinguish their provenance.
+// Safe for concurrent use via the calendar's internal RWMutex.
+func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marketdata.CalendarEventProvider) {
+	if provider == nil {
+		return
+	}
+	year := tec.generatedAt.Year()
+	if year == 0 {
+		year = time.Now().Year()
+	}
+	events, err := provider.FetchEvents(ctx, year)
+	if err != nil {
+		logging.Warn("event_calendar", "provider_fetch_failed",
+			logging.FStr("provider", provider.Name()),
+			logging.Err(err),
+		)
+		return
+	}
+	if len(events) == 0 {
+		return
+	}
+
+	// Convert provider data to CalendarEvent using the TWSE provider data source.
+	ds := DataSourceTWSE
+	if provider.Name() == "finmind" {
+		ds = DataSourceFinMind
+	}
+
+	tec.mu.Lock()
+	defer tec.mu.Unlock()
+	for _, pd := range events {
+		startDate, err := time.Parse("2006-01-02", pd.Date)
+		if err != nil {
+			logging.Warn("event_calendar", "parse_date_failed",
+				logging.FStr("provider", provider.Name()),
+				logging.FStr("date", pd.Date),
+				logging.Err(err),
+			)
+			continue
+		}
+		evt := CalendarEvent{
+			ID:              fmt.Sprintf("%s_%s_%s", ds, pd.EventType, pd.Date),
+			Name:            pd.Name,
+			NameEN:          pd.Name,
+			EventType:       pd.EventType,
+			Description:     pd.Description,
+			Direction:       pd.Direction,
+			BaseWeight:      pd.Weight,
+			Active:          true,
+			StartDate:       startDate,
+			EndDate:         startDate.AddDate(0, 0, 1), // default 1-day event
+			PeakDate:        startDate,
+			DecayDays:       7,
+			DataSource:      ds,
+			EvidenceQuality: EvidenceRealTime,
+			GeneratedAt:     time.Now(),
+		}
+		tec.events = append(tec.events, evt)
+	}
+	logging.Info("event_calendar", "provider_events_added",
+		logging.FStr("provider", provider.Name()),
+		logging.FInt("added_events", len(events)),
+	)
+}
+
+// validateProviderEvent validates a CalendarProviderData entry from an external
+// provider. It checks for known event types, valid direction values, reasonable
+// date ranges, and weight bounds.
+func validateProviderEvent(e marketdata.CalendarProviderData) error {
+	if e.EventType == "" || e.Date == "" {
+		return fmt.Errorf("empty type or date")
+	}
+	if _, err := time.Parse("2006-01-02", e.Date); err != nil {
+		return fmt.Errorf("unparseable date %q", e.Date)
+	}
+	if e.Direction != "" && e.Direction != "bullish" && e.Direction != "bearish" && e.Direction != "mixed" && e.Direction != "neutral" {
+		return fmt.Errorf("invalid direction %q", e.Direction)
+	}
+	if e.Weight < 0 || e.Weight > 1.0 {
+		return fmt.Errorf("weight out of range: %f", e.Weight)
+	}
+	return nil
 }

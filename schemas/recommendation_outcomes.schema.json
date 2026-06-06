@@ -1,0 +1,143 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/kaecer68/atlas-go/schemas/recommendation_outcomes.schema.json",
+  "title": "Recommendation Outcome",
+  "description": "單筆推薦的評估結果記錄。每行為獨立 JSON 物件，以 O_APPEND 模式寫入。包含推薦方向、forward return、因子分數、信念度 breakdown、guard 狀態。",
+  "type": "object",
+  "required": ["symbol", "agent_id", "side", "recorded_at"],
+  "properties": {
+    "symbol": {
+      "type": "string",
+      "description": "股票代碼，格式如 '2330.TW' 或 '2303.TW'",
+      "pattern": "^\\d{4}(\\.TW)?$"
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "產生推薦的 agent 識別碼，如 'semi-desk-01'"
+    },
+    "side": {
+      "type": "string",
+      "description": "推薦方向",
+      "enum": ["BUY", "SELL", "HOLD"]
+    },
+    "layer": {
+      "type": "string",
+      "description": "agent 所屬層級，如 'sector'、'style'、'superinvestor'"
+    },
+    "skill": {
+      "type": "string",
+      "description": "agent 的 skill 標籤，如 'semiconductor_desk'"
+    },
+    "reason": {
+      "type": "string",
+      "description": "推薦理由文字"
+    },
+    "conviction": {
+      "type": "integer",
+      "description": "信念度分數 (整數)",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "conviction_breakdown": {
+      "type": "object",
+      "description": "信念度計算 breakdown（base、floor、final、steps）",
+      "properties": {
+        "base": { "type": "integer" },
+        "floor": { "type": "integer" },
+        "final": { "type": "integer" },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "rule": { "type": "string", "description": "規則名稱" },
+              "delta": { "type": "integer", "description": "信念度增減" },
+              "reason": { "type": "string", "description": "增減原因" }
+            }
+          }
+        }
+      }
+    },
+    "factor_scores": {
+      "type": "object",
+      "description": "因子分數 breakdown",
+      "properties": {
+        "momentum": { "type": "number" },
+        "value": { "type": "number" },
+        "quality": { "type": "number" }
+      }
+    },
+    "passed_guards": {
+      "type": "boolean",
+      "description": "是否通過控制層 guard"
+    },
+    "guard_reason": {
+      "type": "string",
+      "description": "guard 拒絕原因（通過時為空字串）"
+    },
+    "price": {
+      "type": "number",
+      "description": "推薦時的市場價格"
+    },
+    "target_price": {
+      "type": "number",
+      "description": "目標價格"
+    },
+    "stop_loss_price": {
+      "type": "number",
+      "description": "停損價格"
+    },
+    "forward_return": {
+      "type": "number",
+      "description": "forward return（可能為 0 表示尚未結算）"
+    },
+    "benchmark_delta": {
+      "type": "number",
+      "description": "相對於 benchmark 的超額報酬"
+    },
+    "hit": {
+      "type": "boolean",
+      "description": "是否命中（forward return 正且通過 guard）"
+    },
+    "hit_rate": {
+      "type": "integer",
+      "description": "命中率計數器"
+    },
+    "is_synthetic": {
+      "type": "boolean",
+      "description": "是否為合成測試數據（非真實交易）"
+    },
+    "parameter_snapshot": {
+      "type": "object",
+      "description": "參數配置快照（factor_weights 等）",
+      "properties": {
+        "factor_weights": {
+          "type": "object",
+          "description": "因子權重配置",
+          "properties": {
+            "agent": { "type": "number" },
+            "industry_cycle": { "type": "number" },
+            "inst_sent": { "type": "number" },
+            "liquidity": { "type": "number" },
+            "momentum": { "type": "number" },
+            "quality": { "type": "number" },
+            "size": { "type": "number" },
+            "value": { "type": "number" },
+            "volatility": { "type": "number" }
+          }
+        }
+      }
+    },
+    "window": {
+      "type": "string",
+      "description": "交易日視窗，格式 'YYYY-MM-DD'",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "記錄時間（ISO 8601/RFC 3339）"
+    }
+  },
+  "additionalProperties": true
+}

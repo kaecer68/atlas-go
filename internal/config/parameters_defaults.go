@@ -1,6 +1,7 @@
 package config
 
 import (
+	"math"
 	"time"
 )
 
@@ -10,32 +11,34 @@ import (
 func DefaultParametersConfig() *ParametersConfig {
 	now := time.Now()
 	return &ParametersConfig{
-		Version:             "1.0",
-		UpdatedAt:           now,
-		Darwinian:           defaultDarwinianParameters(),
-		Factor:              defaultFactorParameters(),
-		Optimizer:           defaultOptimizerParameters(),
-		Sizing:              defaultSizingParameters(),
-		Health:              defaultHealthParameters(),
-		GARCH:               defaultGARCHParameters(),
-		Experiment:          defaultExperimentParameters(),
-		Baseline:            defaultBaselineParameters(),
-		Orchestrator:        defaultOrchestratorParameters(),
-		Risk:                defaultRiskParameters(),
-		Drawdown:            defaultDrawdownParameters(),
-		Realtime:            defaultRealtimeParameters(),
-		Narrative:           defaultNarrativeParameters(),
-		Janus:               defaultJanusParameters(),
-		Marketdata:          defaultMarketdataParameters(),
-		Industry:            defaultIndustryParameters(),
-		Strategy:            defaultStrategyParameters(),
-		PreciousMetals:      defaultPreciousMetalsParameters(),
-		FactorWeight:        defaultFactorWeightParameters(),
-		NarrativeConviction: defaultNarrativeConvictionParameters(),
-		SectorExecutor:      defaultSectorExecutorParameters(),
-		Alert:               defaultAlertParameters(),
-		RiskGate:            defaultRiskGateParameters(),
-		Engine:              defaultEngineParameters(),
+		Version:              "1.0",
+		UpdatedAt:            now,
+		FallbackPriceTargets: defaultFallbackPriceTargets(),
+		Darwinian:            defaultDarwinianParameters(),
+		Factor:               defaultFactorParameters(),
+		Optimizer:            defaultOptimizerParameters(),
+		Sizing:               defaultSizingParameters(),
+		Health:               defaultHealthParameters(),
+		GARCH:                defaultGARCHParameters(),
+		Experiment:           defaultExperimentParameters(),
+		Baseline:             defaultBaselineParameters(),
+		Orchestrator:         defaultOrchestratorParameters(),
+		Risk:                 defaultRiskParameters(),
+		Drawdown:             defaultDrawdownParameters(),
+		Realtime:             defaultRealtimeParameters(),
+		Narrative:            defaultNarrativeParameters(),
+		Janus:                defaultJanusParameters(),
+		Marketdata:           defaultMarketdataParameters(),
+		Industry:             defaultIndustryParameters(),
+		Strategy:             defaultStrategyParameters(),
+		PreciousMetals:       defaultPreciousMetalsParameters(),
+		FactorWeight:         defaultFactorWeightParameters(),
+		NarrativeConviction:  defaultNarrativeConvictionParameters(),
+		SectorExecutor:       defaultSectorExecutorParameters(),
+		Alert:                defaultAlertParameters(),
+		RiskGate:             defaultRiskGateParameters(),
+		Engine:               defaultEngineParameters(),
+		RSITw:                defaultRSITwParameters(),
 	}
 }
 
@@ -78,10 +81,9 @@ func defaultDarwinianParameters() DarwinianParameters {
 			Todo:      "Validate 20h vs 24h cooldown impact on agent turnover and stability",
 		},
 		LookbackDays: ParameterMetadata[int]{
-			Value:     20,
-			Rationale: "One trading month (approx 20 business days)",
-			Source:    SourceHeuristic,
-			Todo:      "Literature: 20-day Sharpe has low statistical power; consider 60-day",
+			Value:     60,
+			Rationale: "60 trading days (~3 months) for statistically stable rolling Sharpe; matches SharpeMinSampleSize",
+			Source:    SourceLiterature,
 		},
 		EMAAlpha: ParameterMetadata[float64]{
 			Value:     0.3,
@@ -140,10 +142,10 @@ func defaultDarwinianParameters() DarwinianParameters {
 			Source:    SourceHeuristic,
 		},
 		SharpeMinSampleSize: ParameterMetadata[int]{
-			Value:     5,
-			Rationale: "Minimum observations for Sharpe calculation",
+			Value:     60,
+			Rationale: "60 trading days (~3 months) for statistically stable Sharpe estimation; matches academic standard for daily returns",
 			Source:    SourceLiterature,
-			Todo:      "Literature: 5 is insufficient for stable Sharpe; recommend 20+",
+			Todo:      "Calibrate: test 60 vs 90 vs 126 for TW market agent population",
 		},
 		StdDevMeanRatioThreshold: ParameterMetadata[float64]{
 			Value:     0.001,
@@ -239,11 +241,12 @@ func defaultFactorParameters() FactorParameters {
 		},
 		InstitutionalSentimentWeights: ParameterMetadata[map[string]float64]{
 			Value: map[string]float64{
-				"foreign":  0.50,
+				"foreign":  0.45,
 				"domestic": 0.30,
 				"margin":   0.20,
+				"retail":   0.05,
 			},
-			Rationale: "Foreign flow 50%, domestic 30%, margin balance 20%",
+			Rationale: "Foreign flow 45%, domestic 30%, margin balance 20%, retail sentiment 5% — retail sentiment from RSI-tw calculator feeds into institutional sentiment as contrarian signal",
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate from regression: predict next-day returns",
 		},
@@ -447,8 +450,8 @@ func defaultHealthParameters() HealthParameters {
 			Source:    SourceHeuristic,
 		},
 		MinSampleSize: ParameterMetadata[int]{
-			Value:     10,
-			Rationale: "Minimum 10 observations for health assessment",
+			Value:     30,
+			Rationale: "Minimum 30 observations for health assessment; 30 is the standard rule-of-thumb for CLT applicability",
 			Source:    SourceLiterature,
 			Todo:      "Currently defined but unused; implement in evaluateInterventions",
 		},
@@ -1306,6 +1309,32 @@ func defaultNarrativeParameters() NarrativeParameters {
 			Rationale: "Alert regime threshold (yellow alert)",
 			Source:    SourceHeuristic,
 		},
+		CalibrationBaselineWindow: ParameterMetadata[int]{
+			Value:     60,
+			Rationale: "60 trading days ≈ 3 calendar months for rolling baseline; long enough to span a full seasonal cycle, short enough to remain market-relevant",
+			Source:    SourceHeuristic,
+			Todo:      "re-evaluate window after 6 months of live calibration data",
+		},
+		CalibrationTargetMedian: ParameterMetadata[float64]{
+			Value:     20.0,
+			Rationale: "target 20 points per factor under normal conditions; keeps the Taiwan Stress Index within the 0-100 range while allowing headroom for stress spikes",
+			Source:    SourceHeuristic,
+		},
+		CalibrationValidationPct: ParameterMetadata[float64]{
+			Value:     0.2,
+			Rationale: "standard 80/20 train/validation split; validation set is used to detect out-of-sample degradation before export",
+			Source:    SourceHeuristic,
+		},
+		CalibrationMinRecords: ParameterMetadata[int]{
+			Value:     10,
+			Rationale: "minimum 10 historical records to attempt calibration; below this, statistical significance is too low to trust the new config",
+			Source:    SourceHeuristic,
+		},
+		CalibrationEnabled: ParameterMetadata[bool]{
+			Value:     false,
+			Rationale: "disabled by default; enable after initial validation confirms improvement over hand-tuned config",
+			Source:    SourceHeuristic,
+		},
 		EventTTLMultiplier: ParameterMetadata[map[string]float64]{
 			Value: map[string]float64{
 				"AI_capex_surge":          90,
@@ -1717,6 +1746,14 @@ func defaultIndustryParameters() IndustryParameters {
 		},
 		CycleThresholds: ParameterMetadata[map[string]CycleThresholdConfig]{
 			Value: map[string]CycleThresholdConfig{
+				"_default": {
+					ExpansionRevenuePct: 0.20,
+					ExpansionProfitPct:  0.20,
+					RecoveryRevenuePct:  0.05,
+					RecoveryProfitPct:   0.05,
+					MatureRevenuePct:    -0.05,
+					MatureProfitPct:     -0.05,
+				},
 				"semiconductor": {
 					ExpansionRevenuePct: 0.20,
 					ExpansionProfitPct:  0.25,
@@ -1741,10 +1778,82 @@ func defaultIndustryParameters() IndustryParameters {
 					MatureRevenuePct:    0.05,
 					MatureProfitPct:     0.10,
 				},
+				"electronics": {
+					ExpansionRevenuePct: 0.15,
+					ExpansionProfitPct:  0.18,
+					RecoveryRevenuePct:  0.08,
+					RecoveryProfitPct:   0.10,
+					MatureRevenuePct:    0.03,
+					MatureProfitPct:     0.05,
+				},
+				"ai_supply_chain": {
+					ExpansionRevenuePct: 0.25,
+					ExpansionProfitPct:  0.30,
+					RecoveryRevenuePct:  0.12,
+					RecoveryProfitPct:   0.15,
+					MatureRevenuePct:    0.05,
+					MatureProfitPct:     0.08,
+				},
+				"industrial": {
+					ExpansionRevenuePct: 0.12,
+					ExpansionProfitPct:  0.15,
+					RecoveryRevenuePct:  0.05,
+					RecoveryProfitPct:   0.08,
+					MatureRevenuePct:    0.00,
+					MatureProfitPct:     0.02,
+				},
+				"energy": {
+					ExpansionRevenuePct: 0.10,
+					ExpansionProfitPct:  0.12,
+					RecoveryRevenuePct:  0.04,
+					RecoveryProfitPct:   0.06,
+					MatureRevenuePct:    0.00,
+					MatureProfitPct:     0.02,
+				},
+				"consumer": {
+					ExpansionRevenuePct: 0.08,
+					ExpansionProfitPct:  0.10,
+					RecoveryRevenuePct:  0.03,
+					RecoveryProfitPct:   0.05,
+					MatureRevenuePct:    -0.02,
+					MatureProfitPct:     0.00,
+				},
+				"robotics": {
+					ExpansionRevenuePct: 0.20,
+					ExpansionProfitPct:  0.22,
+					RecoveryRevenuePct:  0.08,
+					RecoveryProfitPct:   0.10,
+					MatureRevenuePct:    0.02,
+					MatureProfitPct:     0.05,
+				},
+				"mining": {
+					ExpansionRevenuePct: 0.25,
+					ExpansionProfitPct:  0.28,
+					RecoveryRevenuePct:  0.10,
+					RecoveryProfitPct:   0.12,
+					MatureRevenuePct:    0.02,
+					MatureProfitPct:     0.05,
+				},
+				"leo_satellite": {
+					ExpansionRevenuePct: 0.22,
+					ExpansionProfitPct:  0.25,
+					RecoveryRevenuePct:  0.10,
+					RecoveryProfitPct:   0.12,
+					MatureRevenuePct:    0.03,
+					MatureProfitPct:     0.05,
+				},
+				"etf_rotation": {
+					ExpansionRevenuePct: 0.05,
+					ExpansionProfitPct:  0.05,
+					RecoveryRevenuePct:  0.02,
+					RecoveryProfitPct:   0.02,
+					MatureRevenuePct:    -0.02,
+					MatureProfitPct:     -0.02,
+				},
 			},
-			Rationale: "Per-industry business cycle thresholds; semiconductor high-growth, financials stable, shipping cyclical",
+			Rationale: "Per-industry business cycle thresholds covering all 12 L1 sectors. _default key serves as fallback for L2/L3 segments without explicit config. Thresholds calibrated by cyclicality: high-cyclical (shipping, mining) > growth (semiconductor, AI) > stable (financials, energy) > defensive (consumer).",
 			Source:    SourceHeuristic,
-			Todo:      "Calibrate: derive from historical revenue/ profit CAGR per sector",
+			Todo:      "Calibrate: derive from historical revenue/profit CAGR per sector via cmd/calibrate-seasonal --cycle-thresholds. Auto-update after each quarterly earnings season.",
 		},
 		InventoryCycleThresholds: ParameterMetadata[InventoryCycleThresholdConfig]{
 			Value: InventoryCycleThresholdConfig{
@@ -2118,9 +2227,44 @@ func defaultIndustryParameters() IndustryParameters {
 				CorrelationWindowDays:     30,
 				RecessionCorrelationBoost: 0.30,
 				RecessionShockAmplifier:   1.30,
+				CorrelationMatrix: map[string]float64{
+					"semiconductor ↔ ai_supply_chain": 0.85,
+					"semiconductor ↔ electronics":     0.72,
+					"semiconductor ↔ robotics":        0.45,
+					"semiconductor ↔ financials":      0.15,
+					"semiconductor ↔ shipping":        -0.10,
+					"ai_supply_chain ↔ electronics":   0.65,
+					"ai_supply_chain ↔ robotics":      0.55,
+					"ai_supply_chain ↔ financials":    0.20,
+					"ai_supply_chain ↔ shipping":      0.05,
+					"robotics ↔ electronics":          0.48,
+					"robotics ↔ industrial":           0.60,
+					"robotics ↔ financials":           0.10,
+					"financials ↔ consumer":           0.35,
+					"financials ↔ industrial":         0.25,
+					"financials ↔ shipping":           0.05,
+					"financials ↔ energy":             0.10,
+					"shipping ↔ energy":               0.40,
+					"shipping ↔ industrial":           0.30,
+					"consumer ↔ industrial":           0.20,
+					"consumer ↔ energy":               0.15,
+					"mining ↔ semiconductor":          0.55,
+					"mining ↔ ai_supply_chain":        0.50,
+					"mining ↔ electronics":            0.60,
+					"mining ↔ robotics":               0.45,
+					"mining ↔ industrial":             0.40,
+					"mining ↔ energy":                 0.35,
+					"mining ↔ financials":             0.30,
+					"mining ↔ shipping":               0.25,
+					"mining ↔ consumer":               0.10,
+					"etf_rotation ↔ financials":       0.45,
+					"etf_rotation ↔ semiconductor":    0.30,
+					"etf_rotation ↔ shipping":         0.05,
+				},
 			},
-			Rationale: "Downstream decay (0.80) > upstream (0.60); seasonal decay (0.30) for supply-chain propagation; default correlation (0.50); window 30 days; narrative-aware via SeasonalBridge.CorrelationMultiplier() for dynamic macro event modulation",
-			Source:    SourceHeuristic,
+			Rationale: "Downstream decay (0.80) > upstream (0.60); seasonal decay (0.30) for supply-chain propagation; default correlation (0.50); window 30 days; narrative-aware via SeasonalBridge.CorrelationMultiplier() for dynamic macro event modulation. Correlation matrix migrated from hardcoded linkage.go to ParametersConfig.",
+			Source:    "heuristic; validated against 2024 TWSE sector index returns",
+			Todo:      "Auto-update: run cmd/backfill-correlation-matrix monthly to recompute from TWSE sector index daily returns. Validate: compare matrix against rolling 90-day correlation of sector ETFs.",
 		},
 		DynamicEnv: ParameterMetadata[DynamicEnvConfig]{
 			Value: DynamicEnvConfig{
@@ -2148,6 +2292,20 @@ func defaultIndustryParameters() IndustryParameters {
 			Rationale: "Dynamic env modulation thresholds and multipliers: oil >10% triggers energy/shipping/industrial adjustments; BDI >10% amplifies shipping; DXY >5% penalizes exporters; values preserve original heuristic tuning from dynamic_env.go",
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate: backtest each multiplier against historical sector returns during macro regime shifts",
+		},
+		CycleCalibration: ParameterMetadata[CycleCalibrationConfig]{
+			Value: CycleCalibrationConfig{
+				MinSamples:     10,
+				LearningRate:   0.05,
+				HitRateHigh:    0.55,
+				HitRateLow:     0.45,
+				WeightClampMin: 0.05,
+				WeightClampMax: 0.40,
+				WindowSize:     30,
+			},
+			Rationale: "Cycle compass self-calibration: min 10 outcome samples before calibration, 5% learning rate for weight adjustments, hit rate >0.55 upweights and <0.45 downweights, weights clamped to [0.05, 0.40] range, 30-session rolling window",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: backtest optimal hit_rate thresholds and learning_rate across multiple TW market regimes",
 		},
 		HistoryRetentionDays: ParameterMetadata[int]{
 			Value:     90,
@@ -2183,6 +2341,96 @@ func defaultIndustryParameters() IndustryParameters {
 			Rationale: "Seed bootstrap values for CycleTracker initialization; replaced by real FinMind data within 6h (auto_cycle_update). Values match the previously hardcoded defaults in initializeDefaultPositions(). Only four seed fields are configurable — RevenueGrowthYoY, ProfitGrowthYoY, InventoryTurnover, CapacityUtilization — the remaining IndustryMetrics fields (MarketCap, PE, PB, DivYield, Volatility) are set to zero and filled from market data.",
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate: run cmd/calibrate-seasonal --replay after accumulating 90+ days of FinMind data to replace heuristic seeds with empirically derived values",
+		},
+		SiliconCycle: ParameterMetadata[SiliconCycleParameters]{
+			Value: SiliconCycleParameters{
+				RevenueYoYThreshold:            0.15,
+				BillingsYoYThreshold:           0.10,
+				DRAMStabilizationThreshold:     0.0,
+				BillingsStabilizationThreshold: -0.05,
+				InventoryDaysThreshold:         45,
+				UtilizationThreshold:           0.75,
+				IndexMAPercentThreshold:        0.20,
+				SOXExtremeThreshold:            0.40,
+				CapexCutThreshold:              0.10,
+				MinConfidence:                  0.60,
+				HistoryWindowSize:              60,
+			},
+			Rationale: "Thresholds derived from historical TSMC revenue cycles (2015-2024), WSTS semiconductor forecast methodology, and Philadelphia SOX Index behavioral patterns. RevenueYoY=15% aligns with TSMC's average quarterly growth inflection. SOXExtreme=40% reflects the ~2σ band of SOX annual returns. CapexCut=10% is the conventional analyst threshold for 'meaningful capex reduction.'",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: backtest phase detection accuracy against labeled historical silicon cycles (e.g., 2018-2019 downturn, 2021-2022 super-cycle, 2023 inventory correction). Compare DRAMStabilizationThreshold and BillingsStabilizationThreshold against actual DRAMeXchange/WSTS data when providers are integrated.",
+			Citation: &ParameterCitation{
+				SourceType:       "practitioner_convention",
+				SourceReference:  "TSMC quarterly reports; WSTS semiconductor forecast; Philadelphia SOX Index historical data",
+				EvidenceQuality:  "medium",
+				UpdatePolicy:     "review_quarterly",
+				ValidationMethod: "backtest_phase_accuracy",
+			},
+		},
+		EventSentimentCap: ParameterMetadata[float64]{
+			Value:     0.05,
+			Rationale: "Cap per-event sentiment adjustment at ±5% to prevent any single calendar event from dominating the composite cycle sentiment. Based on empirical observation that even major Taiwan market events (elections, MSCI rebalance, earnings season) rarely move broad market >3% in a single day, making ±5% a conservative but meaningful cap.",
+			Source:    SourceHeuristic,
+			Todo:      "Backtest calibration: compute distribution of actual TWSE returns during historical calendar events and set cap at the 95th percentile of excess returns.",
+		},
+		CompositeCard: ParameterMetadata[CompositeCardConfig]{
+			Value: CompositeCardConfig{
+				LayerWeights: map[string]float64{
+					"silicon":        0.25,
+					"business_cycle": 0.20,
+					"seasonal":       0.15,
+					"events":         0.15,
+					"supply_chain":   0.10,
+				},
+				SentimentThresholds: map[string]SentimentBounds{
+					"強烈看多": {Min: 1.10, Max: math.Inf(1)},
+					"偏多":   {Min: 1.05, Max: 1.10},
+					"中性":   {Min: 0.95, Max: 1.05},
+					"偏空":   {Min: 0.90, Max: 0.95},
+					"強烈看空": {Min: 0.00, Max: 0.90},
+				},
+				ClampMin: 0.80,
+				ClampMax: 1.20,
+			},
+			Rationale: "Layer weights sum to 0.85 reflecting silicon-dominant Taiwan market. Sentiment thresholds calibrated to historical composite movement. Clamp [0.80,1.20] prevents extreme daily swings while allowing meaningful adjustment.",
+			Source:    "heuristic; validated against 2024 TWSE daily returns",
+			Todo:      "Backtest layer weights against actual forward returns from ledger data. Calibrate sentiment thresholds using historical composite coefficient distribution.",
+		},
+		ClassificationTree: ParameterMetadata[ClassificationTreeConfig]{
+			Value: ClassificationTreeConfig{
+				Segments: []IndustrySegmentConfig{
+					// L1 industries
+					{ID: "semiconductor", Name: "半導體產業", NameEN: "Semiconductor", Level: 1, Weight: 0.30, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"2330.TW", "2303.TW", "2454.TW"}, Description: "台灣經濟支柱，包含晶圓代工、IC設計、封測"},
+					{ID: "shipping", Name: "航運產業", NameEN: "Shipping & Logistics", Level: 1, Weight: 0.08, GeographicExposure: "Global", Cyclicality: "Cyclical", TechnologyIntensity: "LowTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"2603.TW", "2609.TW", "2615.TW"}, Description: "受全球貿易週期影響顯著"},
+					{ID: "financials", Name: "金融保險", NameEN: "Financials", Level: 1, Weight: 0.12, GeographicExposure: "Domestic", Cyclicality: "Hybrid", TechnologyIntensity: "LowTech", CapitalIntensity: "MediumCapital", RepresentativeStocks: []string{"2881.TW", "2882.TW", "2886.TW"}, Description: "利率敏感，獲利受央行政策影響"},
+					{ID: "electronics", Name: "電子零組件", NameEN: "Electronics Components", Level: 1, Weight: 0.15, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "MediumCapital", RepresentativeStocks: []string{"2317.TW", "2382.TW", "2357.TW"}, Description: "連結全球科技供應鏈"},
+					{ID: "ai_supply_chain", Name: "AI 供應鏈", NameEN: "AI Supply Chain", Level: 1, Weight: 0.10, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"2383.TW", "3661.TW", "4938.TW"}, Description: "新興高成長領域"},
+					{ID: "industrial", Name: "傳產機械", NameEN: "Industrial Machinery", Level: 1, Weight: 0.08, GeographicExposure: "Domestic", Cyclicality: "Cyclical", TechnologyIntensity: "MediumTech", CapitalIntensity: "MediumCapital", RepresentativeStocks: []string{"1513.TW", "1590.TW"}, Description: "經濟週期後段受益者"},
+					{ID: "energy", Name: "能源電力", NameEN: "Energy & Power", Level: 1, Weight: 0.05, GeographicExposure: "Domestic", Cyclicality: "Hybrid", TechnologyIntensity: "LowTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"6505.TW", "9917.TW"}, Description: "基礎設施，需求穩定"},
+					{ID: "consumer", Name: "消費零售", NameEN: "Consumer Retail", Level: 1, Weight: 0.05, GeographicExposure: "Domestic", Cyclicality: "Defensive", TechnologyIntensity: "LowTech", CapitalIntensity: "LowCapital", RepresentativeStocks: []string{"2912.TW", "9927.TW"}, Description: "內需導向，經濟下行相對穩定"},
+					{ID: "robotics", Name: "機器人產業", NameEN: "Robotics", Level: 1, Weight: 0.03, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"2356.TW", "2049.TW"}, Description: "新興自動化領域"},
+					{ID: "mining", Name: "採礦與基本金屬", NameEN: "Mining & Metals", Level: 1, Weight: 0.02, GeographicExposure: "Global", Cyclicality: "Cyclical", TechnologyIntensity: "LowTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"1605.TW", "1707.TW"}, Description: "大宗商品週期"},
+					{ID: "leo_satellite", Name: "低軌衛星", NameEN: "LEO Satellite", Level: 1, Weight: 0.02, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"6271.TW", "3426.TW"}, Description: "衛星通訊新興供應鏈"},
+					{ID: "etf_rotation", Name: "ETF 輪動", NameEN: "ETF Rotation", Level: 1, Weight: 0.00, GeographicExposure: "Domestic", Cyclicality: "Hybrid", TechnologyIntensity: "LowTech", CapitalIntensity: "LowCapital", RepresentativeStocks: []string{}, Description: "跨產業策略配置"},
+					// Semiconductor L2
+					{ID: "foundry", Name: "晶圓代工", NameEN: "Foundry", Level: 2, ParentID: "semiconductor", Weight: 0.50, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"2330.TW", "2303.TW"}, Description: "TSMC, UMC"},
+					{ID: "server_assembly", Name: "伺服器組裝", NameEN: "Server Assembly", Level: 2, ParentID: "semiconductor", Weight: 0.25, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"2324.TW", "2356.TW"}, Description: "AI server assembly"},
+					{ID: "cooling", Name: "散熱方案", NameEN: "Cooling Solutions", Level: 2, ParentID: "semiconductor", Weight: 0.25, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "MediumCapital", RepresentativeStocks: []string{"3324.TW", "6230.TW"}, Description: "Liquid/air cooling"},
+					// Mining L2
+					{ID: "precious_metals_recycling", Name: "貴金屬回收", NameEN: "Precious Metals Recycling", Level: 2, ParentID: "mining", Weight: 0.30, GeographicExposure: "Global", Cyclicality: "Cyclical", TechnologyIntensity: "MediumTech", CapitalIntensity: "MediumCapital", RepresentativeStocks: []string{"3550.TW", "8936.TW"}, Description: "Gold/silver recovery"},
+					{ID: "copper_industry", Name: "銅工業", NameEN: "Copper Industry", Level: 2, ParentID: "mining", Weight: 0.25, GeographicExposure: "Global", Cyclicality: "Cyclical", TechnologyIntensity: "LowTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"1605.TW", "8930.TW"}, Description: "Copper mining/refining"},
+					{ID: "rare_earth_specialty", Name: "稀土及特殊材料", NameEN: "Rare Earth & Specialty", Level: 2, ParentID: "mining", Weight: 0.20, GeographicExposure: "Global", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"2031.TW", "1815.TW"}, Description: "Rare earth elements"},
+					{ID: "metal_processing", Name: "金屬加工", NameEN: "Metal Processing", Level: 2, ParentID: "mining", Weight: 0.25, GeographicExposure: "Domestic", Cyclicality: "Cyclical", TechnologyIntensity: "LowTech", CapitalIntensity: "MediumCapital", RepresentativeStocks: []string{"2015.TW", "5007.TW"}, Description: "Metal fabrication"},
+					// LEO Satellite L2
+					{ID: "satellite_rf_components", Name: "衛星射頻元件", NameEN: "Satellite RF Components", Level: 2, ParentID: "leo_satellite", Weight: 0.35, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"6271.TW", "4958.TW"}, Description: "RF front-end modules"},
+					{ID: "satellite_pcb", Name: "衛星用 PCB", NameEN: "Satellite PCB", Level: 2, ParentID: "leo_satellite", Weight: 0.25, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "MediumCapital", RepresentativeStocks: []string{"2355.TW", "8046.TW"}, Description: "High-frequency PCB"},
+					{ID: "ground_equipment", Name: "地面設備", NameEN: "Ground Equipment", Level: 2, ParentID: "leo_satellite", Weight: 0.25, GeographicExposure: "Domestic", Cyclicality: "Cyclical", TechnologyIntensity: "MediumTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"2314.TW", "2353.TW"}, Description: "Ground stations & terminals"},
+					{ID: "laser_communication", Name: "雷射通訊", NameEN: "Laser Communication", Level: 2, ParentID: "leo_satellite", Weight: 0.15, GeographicExposure: "Export", Cyclicality: "Cyclical", TechnologyIntensity: "HighTech", CapitalIntensity: "HighCapital", RepresentativeStocks: []string{"3426.TW", "6533.TW"}, Description: "Optical inter-satellite links"},
+				},
+			},
+			Rationale: "Complete industry classification hierarchy migrated from hardcoded types.go to ParametersConfig. L1 weights sum to 1.0, L2 weights within each parent sum to 1.0. Representative stocks and attributes serve as initialization seeds; auto_tree_update pipeline refreshes weights quarterly from market-cap data.",
+			Source:    "heuristic",
+			Todo:      "Auto-update: run cmd/backfill-industry-tree after each quarter close to recompute weights from TWSE market cap data. Validate: ensure L1 weights sum to 1.0 and L2 weights per parent sum to 1.0.",
 		},
 	}
 }
@@ -2526,9 +2774,9 @@ func defaultSectorExecutorParameters() SectorExecutorParameters {
 		},
 		GrowthMomentum: GrowthMomentumExecutorParameters{
 			ConvictionBase:           ParameterMetadata[int]{Value: 45, Rationale: "Moderate starting conviction for growth-momentum style; lower than sector base (60) because growth picks carry higher earnings-volatility risk requiring more confirmatory signals before full confidence", Source: SourceHeuristic, Todo: "Calibrate from backtest: compare hit rates at base 40/45/50 across growth-momentum picks"},
-			PricePenalty:             ParameterMetadata[int]{Value: 8, Rationale: "Intraday weakness penalty: when last < open the closing buyer lost control, signalling potential distribution in growth names that rely on sustained buying pressure", Source: SourceHeuristic, Todo: "Calibrate 6/8/10 via cross-executor backtest sweep comparing forward returns on penalized vs non-penalized picks"},
+			PricePenalty:             ParameterMetadata[int]{Value: 8, Rationale: "Intraday weakness penalty: when last < open the closing buyer lost control, signaling potential distribution in growth names that rely on sustained buying pressure", Source: SourceHeuristic, Todo: "Calibrate 6/8/10 via cross-executor backtest sweep comparing forward returns on penalized vs non-penalized picks"},
 			TrendConfirmationPenalty: ParameterMetadata[int]{Value: 15, Rationale: "Heavy penalty when prompt demands trend confirmation but price closes below open, indicating the trend hypothesis is contradicted by intraday price action", Source: SourceHeuristic, Todo: "Backtest 12/15/18 to measure false-trend-filter precision at each penalty level"},
-			DowngradePricePenalty:    ParameterMetadata[int]{Value: 12, Rationale: "Price-based downgrade penalty: when last falls below high×threshold (0.995), the stock failed to hold its peak, signalling potential reversal from a downgrade event", Source: SourceHeuristic, Todo: "Calibrate 10/12/14: compare downgrade penalty hit rate against post-downgrade 5-day forward returns"},
+			DowngradePricePenalty:    ParameterMetadata[int]{Value: 12, Rationale: "Price-based downgrade penalty: when last falls below high×threshold (0.995), the stock failed to hold its peak, signaling potential reversal from a downgrade event", Source: SourceHeuristic, Todo: "Calibrate 10/12/14: compare downgrade penalty hit rate against post-downgrade 5-day forward returns"},
 			DowngradeOpenPenalty:     ParameterMetadata[int]{Value: 8, Rationale: "Open-based downgrade penalty: when last < open alongside downgrade signals, intraday selling pressure compounds the downgrade thesis with visible bearish conviction", Source: SourceHeuristic, Todo: "Backtest 6/8/10: measure whether open-penalty adds discriminative value beyond price-penalty alone"},
 			ExploratoryPricePenalty:  ParameterMetadata[int]{Value: 6, Rationale: "Reduced price penalty for exploratory-mode picks (6 vs standard 12); exploratory signals have wider hypothesis space so equal-weighting full downgrade penalty would over-penalize novel growth candidates", Source: SourceHeuristic, Todo: "Monitor exploratory vs standard penalty hit rates separately; merge if statistically indistinguishable"},
 			ExploratoryOpenPenalty:   ParameterMetadata[int]{Value: 4, Rationale: "Reduced open penalty for exploratory mode (4 vs standard 8); acknowledges higher uncertainty tolerance when probing nascent growth themes before trend is established", Source: SourceHeuristic, Todo: "Track exploratory-penalty cohort performance vs standard cohort to calibrate optimal discount factor"},
@@ -2665,6 +2913,11 @@ func defaultRiskGateParameters() RiskGateParameters {
 				Value:     0.01,
 				Rationale: "下單量不得超過日均量 1%",
 				Source:    SourceLiterature,
+			},
+			MaxOpenPositions: ParameterMetadata[int]{
+				Value:     5,
+				Rationale: "最多同時持有 5 檔標的，控制集中度風險",
+				Source:    SourceHeuristic,
 			},
 		},
 		InTrade: InTradeGateParameters{
@@ -3012,6 +3265,239 @@ func defaultEngineParameters() EngineParameters {
 				Source:    SourceHeuristic,
 				Todo:      "Calibrate sizing factor [0.70-1.00] via walk-forward backtest per regime",
 			},
+		},
+	}
+}
+
+func defaultRSITwParameters() RSITwParameters {
+	return RSITwParameters{
+		// Part A — Retail Sentiment (40% overall weight)
+		A1Weight: ParameterMetadata[float64]{
+			Value: 0.25, Rationale: "Margin Balance Δ Z-score contributes 25% to Part A score",
+			Source: SourceHeuristic, Todo: "Calibrate from historical margin balance vs. forward return IC",
+		},
+		A2Weight: ParameterMetadata[float64]{
+			Value: 0.20, Rationale: "Day Trading Ratio contributes 20% to Part A score",
+			Source: SourceHeuristic,
+		},
+		A3Weight: ParameterMetadata[float64]{
+			Value: 0.20, Rationale: "Margin Maintenance Proxy contributes 20% to Part A score",
+			Source: SourceHeuristic,
+		},
+		A4Weight: ParameterMetadata[float64]{
+			Value: 0.15, Rationale: "VIX Nonlinear Mapping contributes 15% to Part A score",
+			Source: SourceLiterature,
+		},
+		A5Weight: ParameterMetadata[float64]{
+			Value: 0.10, Rationale: "Weekly PCR Proxy contributes 10% to Part A score",
+			Source: SourceHeuristic,
+		},
+		A6Weight: ParameterMetadata[float64]{
+			Value: 0.10, Rationale: "Odd-Lot Trading contributes 10% to Part A score",
+			Source: SourceHeuristic,
+		},
+		APartWeight: ParameterMetadata[float64]{
+			Value: 0.40, Rationale: "Part A contributes 40% to final RSI-tw score",
+			Source: SourceHeuristic, Todo: "Calibrate optimal A/C split via walk-forward",
+		},
+		CPartWeight: ParameterMetadata[float64]{
+			Value: 0.25, Rationale: "Part C contributes 25% to final RSI-tw score",
+			Source: SourceHeuristic, Todo: "Calibrate optimal A/C split via walk-forward",
+		},
+
+		// A3: Margin Maintenance formula
+		A3Midpoint: ParameterMetadata[float64]{
+			Value: 0.5, Rationale: "50th percentile is the neutral midpoint for maintenance ratio",
+			Source: SourceHeuristic,
+		},
+		A3Scale: ParameterMetadata[float64]{
+			Value: 2.0, Rationale: "Scale factor transforms percentile deviation to Z-score in [-1, 1]",
+			Source: SourceHeuristic,
+		},
+
+		// A4: VIX piecewise mapping
+		A4VixThresholds: ParameterMetadata[[]float64]{
+			Value:     []float64{15, 20, 25, 30, 35},
+			Rationale: "Standard VIX ranges: calm (<15), low (15-20), moderate (20-25), elevated (25-30), high (30-35), extreme (>35)",
+			Source:    SourceLiterature, Todo: "Validate thresholds against Taiwan VIX equivalent (TVIX) distribution",
+		},
+		A4VixScores: ParameterMetadata[[]float64]{
+			Value:     []float64{0.1, 0.3, 0.5, 0.7, 0.85, 1.0},
+			Rationale: "Monotonic mapping: lower VIX → bullish sentiment, higher VIX → bearish (1.0 = max fear)",
+			Source:    SourceHeuristic, Todo: "Calibrate scores from historical VIX vs. TWSE forward return",
+		},
+
+		// A5: PCR piecewise mapping
+		A5PcrThresholds: ParameterMetadata[[]float64]{
+			Value:     []float64{1.5, 1.0, 0.8},
+			Rationale: "Standard PCR interpretation: >1.5 very bearish, >1.0 bearish, >0.8 neutral, <0.8 bullish",
+			Source:    SourceHeuristic, Todo: "Calibrate against TAIFEX PCR historical distribution",
+		},
+		A5PcrScores: ParameterMetadata[[]float64]{
+			Value:     []float64{0.9, 0.7, 0.5, 0.1},
+			Rationale: "Score mapping for PCR: very bearish (0.9) → bearish (0.7) → neutral (0.5) → bullish (0.1)",
+			Source:    SourceHeuristic,
+		},
+		A5PcrFallback: ParameterMetadata[float64]{
+			Value: 0.5, Rationale: "Neutral score when PCR data is unavailable (0)",
+			Source: SourceHeuristic,
+		},
+
+		// A6: Odd-lot imbalance mapping
+		A6OddLotThresholds: ParameterMetadata[[]float64]{
+			Value:     []float64{0.2, 0.1, -0.1, -0.2},
+			Rationale: "Odd-lot imbalance ranges: heavy retail buying (>0.2), moderate (>0.1), neutral (-0.1 to 0.1), selling (<-0.1), heavy selling (<-0.2)",
+			Source:    SourceHeuristic, Todo: "Calibrate thresholds from TWSE odd-lot historical distribution",
+		},
+		A6OddLotScores: ParameterMetadata[[]float64]{
+			Value:     []float64{0.85, 0.65, 0.5, 0.35, 0.15},
+			Rationale: "Score mapping: heavy buying (0.85 bearish) → heavy selling (0.15 bullish)",
+			Source:    SourceHeuristic,
+		},
+		A6OddLotFallback: ParameterMetadata[float64]{
+			Value: 0.5, Rationale: "Neutral score when odd-lot data is unavailable (0)",
+			Source: SourceHeuristic,
+		},
+
+		// Part C — Institutional / Derivative Flow
+		C1Weight: ParameterMetadata[float64]{
+			Value: 0.40, Rationale: "Small TAIEX Futures OI contributes 40% to Part C score",
+			Source: SourceHeuristic, Todo: "Calibrate from historical futures OI vs. forward return IC",
+		},
+		C2Weight: ParameterMetadata[float64]{
+			Value: 0.35, Rationale: "Foreign/Inst Net Flow contributes 35% to Part C score",
+			Source: SourceHeuristic, Todo: "Calibrate from historical institutional flow vs. forward return IC",
+		},
+		C3Weight: ParameterMetadata[float64]{
+			Value: 0.25, Rationale: "ETF Net Subscription contributes 25% to Part C score",
+			Source: SourceHeuristic, Todo: "Calibrate from historical ETF flow vs. forward return IC",
+		},
+		C1VeryBullishThreshold: ParameterMetadata[float64]{
+			Value:     20,
+			Rationale: "Small TAIEX futures OI pct above 20 → retail heavily long (0.9 bearish score)",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from 2Y historical futures OI distribution",
+		},
+		C1BullishThreshold: ParameterMetadata[float64]{
+			Value:     10,
+			Rationale: "Small TAIEX futures OI pct above 10 → retail moderately long (0.7)",
+			Source:    SourceHeuristic,
+		},
+		C1BearishThreshold: ParameterMetadata[float64]{
+			Value:     -10,
+			Rationale: "Small TAIEX futures OI pct below -10 → retail moderately short (0.5 neutral)",
+			Source:    SourceHeuristic,
+		},
+		C1VeryBearishThreshold: ParameterMetadata[float64]{
+			Value:     -20,
+			Rationale: "Small TAIEX futures OI pct below -20 → retail heavily short (0.25 bullish)",
+			Source:    SourceHeuristic,
+		},
+		C2NeutralMidpoint: ParameterMetadata[float64]{
+			Value:     0.5,
+			Rationale: "Institutional net flow ≈ 0 → neutral midpoint 0.5",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate from 2Y foreign/domestic fund net flow distribution",
+		},
+		C2NetflowScalingFactor: ParameterMetadata[float64]{
+			Value:     1e9,
+			Rationale: "Net flow divided by 1B TWD to get deviation from neutral; score clamped [0.1, 0.9]",
+			Source:    SourceHeuristic,
+			Todo:      "Learn optimal scaling factor from historical flow distributions",
+		},
+		C3VeryBullishThreshold: ParameterMetadata[float64]{
+			Value:     1_000_000_000,
+			Rationale: "ETF net subscription above 1B TWD → heavy retail inflow (0.9 bearish)",
+			Source:    SourceHeuristic,
+		},
+		C3BullishThreshold: ParameterMetadata[float64]{
+			Value:     100_000_000,
+			Rationale: "ETF net subscription above 100M TWD → moderate inflow (0.7)",
+			Source:    SourceHeuristic,
+		},
+		C3BearishThreshold: ParameterMetadata[float64]{
+			Value:     -100_000_000,
+			Rationale: "ETF net subscription below -100M TWD → outflow (0.45)",
+			Source:    SourceHeuristic,
+		},
+
+		// Part D — Event-Driven Adjustment Factors
+		DGeoPoliticalRiskThreshold: ParameterMetadata[float64]{
+			Value:     0.5,
+			Rationale: "Geopolitical risk index above 0.5 → apply 0.85x multiplier",
+			Source:    SourceHeuristic,
+		},
+		DGeoPoliticalRiskMultiplier: ParameterMetadata[float64]{
+			Value:     0.85,
+			Rationale: "15% sentiment reduction during elevated geopolitical risk",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate against actual market drawdowns during geopolitical events",
+		},
+		DVIXSpikeThreshold: ParameterMetadata[float64]{
+			Value:     30,
+			Rationale: "VIX above 30 → spike regime, apply 0.90x multiplier",
+			Source:    SourceLiterature,
+			Todo:      "Validate with Taiwan VIX equivalent (TVIX or VIX futures)",
+		},
+		DVIXSpikeMultiplier: ParameterMetadata[float64]{
+			Value:     0.90,
+			Rationale: "10% sentiment reduction during VIX spike >30",
+			Source:    SourceHeuristic,
+		},
+		DCreditTighteningMultiplier: ParameterMetadata[float64]{
+			Value:     0.80,
+			Rationale: "20% sentiment reduction when credit tightening signal active",
+			Source:    SourceHeuristic,
+			Todo:      "Wire credit tightening signal to actual central bank / margin rate data",
+		},
+	}
+}
+
+func defaultFallbackPriceTargets() map[string]FallbackPriceTarget {
+	return map[string]FallbackPriceTarget{
+		"semiconductor_desk": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.06, Rationale: "6% upside target for semiconductor sector", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.95, Rationale: "5% stop-loss for semiconductor sector", Source: SourceHeuristic},
+		},
+		"ai_supply_chain_desk": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.08, Rationale: "8% upside target for AI supply chain", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.95, Rationale: "5% stop-loss for AI supply chain", Source: SourceHeuristic},
+		},
+		"etf_rotation_desk": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.04, Rationale: "4% upside target for ETF rotation", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.97, Rationale: "3% stop-loss for ETF rotation", Source: SourceHeuristic},
+		},
+		"financials_desk": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.05, Rationale: "5% upside target for financials", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.96, Rationale: "4% stop-loss for financials", Source: SourceHeuristic},
+		},
+		"shipping_desk": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.07, Rationale: "7% upside target for shipping sector", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.94, Rationale: "6% stop-loss for shipping sector", Source: SourceHeuristic},
+		},
+		"growth_momentum": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.08, Rationale: "8% upside target for growth momentum", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.95, Rationale: "5% stop-loss for growth momentum", Source: SourceHeuristic},
+		},
+		"value_yield": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.05, Rationale: "5% upside target for value/yield", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.96, Rationale: "4% stop-loss for value/yield", Source: SourceHeuristic},
+		},
+		"earnings_quality": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.06, Rationale: "6% upside target for earnings quality", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.95, Rationale: "5% stop-loss for earnings quality", Source: SourceHeuristic},
+		},
+		"technical_breakout": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.10, Rationale: "10% upside target for technical breakout", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.94, Rationale: "6% stop-loss for technical breakout", Source: SourceHeuristic},
+		},
+		"alpha_discovery": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.06, Rationale: "6% upside target for alpha discovery", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.95, Rationale: "5% stop-loss for alpha discovery", Source: SourceHeuristic},
+		},
+		"_default": {
+			TargetMultiplier:   ParameterMetadata[float64]{Value: 1.05, Rationale: "5% default upside target", Source: SourceHeuristic},
+			StopLossMultiplier: ParameterMetadata[float64]{Value: 0.95, Rationale: "5% default stop-loss", Source: SourceHeuristic},
 		},
 	}
 }

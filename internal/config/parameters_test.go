@@ -1,8 +1,10 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -199,6 +201,169 @@ func TestParametersConfig_SaveAndLoad(t *testing.T) {
 	}
 	if !loaded.UpdatedAt.After(before) {
 		t.Errorf("updated_at not refreshed")
+	}
+}
+
+// TestParametersConfig_SavePreservesCalibrationEvidence verifies that
+// ParametersConfig.Save() writes both `last_calibrated` (the Go struct
+// field) AND `calibration_timestamp` (the raw JSON field) whenever
+// LastCalibrated is set. This is required by cmd/validate-parameters and
+// internal/industry.LoadCalibrationEvidence, both of which read the raw
+// JSON. Previously, the second field was silently dropped by
+// json.MarshalIndent of the Go struct.
+func TestParametersConfig_SavePreservesCalibrationEvidence(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "parameters.json")
+
+	cfg := DefaultParametersConfig()
+	now := time.Date(2026, 6, 6, 12, 0, 0, 0, time.UTC)
+	cfg.Industry.SeasonalPatterns.LastCalibrated = &now
+	cfg.Industry.SeasonalPatterns.CalibrationMethod = "backtest_empirical"
+
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+
+	raw := string(data)
+	if !strings.Contains(raw, `"last_calibrated": "2026-06-06T12:00:00Z"`) {
+		t.Errorf("expected last_calibrated entry in output, got:\n%s", raw)
+	}
+	if !strings.Contains(raw, `"calibration_timestamp": "2026-06-06T12:00:00Z"`) {
+		t.Errorf("expected calibration_timestamp mirror in output, got:\n%s", raw)
+	}
+
+	// Round-trip through LoadParametersConfig and confirm the
+	// calibration_timestamp is still present in the persisted file
+	// (LoadParametersConfig drops unknown fields, which is the bug we fix
+	// by writing them in Save, not Load).
+	loaded, err := LoadParametersConfig(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if loaded.Industry.SeasonalPatterns.LastCalibrated == nil {
+		t.Errorf("LastCalibrated dropped on load")
+	}
+
+	var generic map[string]any
+	if err := json.Unmarshal(data, &generic); err != nil {
+		t.Errorf("output is not valid JSON: %v", err)
+	}
+}
+
+// TestParametersConfig_SaveOmitsCalibrationTimestampWhenUnset verifies that
+// Save() does not invent a calibration_timestamp when LastCalibrated is nil.
+func TestParametersConfig_SaveOmitsCalibrationTimestampWhenUnset(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "parameters.json")
+
+	cfg := DefaultParametersConfig()
+	cfg.Industry.SeasonalPatterns.LastCalibrated = nil
+
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	raw := string(data)
+	if strings.Contains(raw, `"calibration_timestamp"`) {
+		t.Errorf("calibration_timestamp should not be written when LastCalibrated is nil, got:\n%s", raw)
+	}
+	if strings.Contains(raw, `"last_calibrated"`) {
+		t.Errorf("last_calibrated should not be written when LastCalibrated is nil, got:\n%s", raw)
+	}
+}
+
+// TestParametersConfig_SaveWithRollbackPreservesCalibrationEvidence is the
+// atomic-write counterpart to TestParametersConfig_SavePreservesCalibrationEvidence.
+func TestParametersConfig_SaveWithRollbackPreservesCalibrationEvidence(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "parameters.json")
+
+	cfg := DefaultParametersConfig()
+	now := time.Date(2026, 6, 6, 12, 0, 0, 0, time.UTC)
+	cfg.Industry.SeasonalPatterns.LastCalibrated = &now
+
+	if err := cfg.SaveWithRollback(path); err != nil {
+		t.Fatalf("save with rollback: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	raw := string(data)
+	if !strings.Contains(raw, `"last_calibrated": "2026-06-06T12:00:00Z"`) {
+		t.Errorf("SaveWithRollback dropped last_calibrated")
+	}
+	if !strings.Contains(raw, `"calibration_timestamp": "2026-06-06T12:00:00Z"`) {
+		t.Errorf("SaveWithRollback dropped calibration_timestamp mirror")
+	}
+	for _, suffix := range []string{".tmp", ".bak"} {
+		if _, err := os.Stat(path + suffix); err == nil {
+			t.Errorf("side file %s was not cleaned up", path+suffix)
+		}
+	}
+}
+
+// TestMirrorCalibrationTimestamp_PreservesJSON verifies the post-processor
+// itself: any input containing `last_calibrated` should produce output that
+// (a) still parses as valid JSON, (b) contains a sibling
+// `calibration_timestamp` with the same value, and (c) keeps surrounding
+// content byte-identical apart from the injection.
+func TestMirrorCalibrationTimestamp_PreservesJSON(t *testing.T) {
+	const ts1 = "2026-06-06T12:00:00Z"
+	const ts2 = "2026-01-01T00:00:00Z"
+	const ts3 = "2026-02-02T00:00:00Z"
+	cases := []struct {
+		name               string
+		in                 string
+		wantLastCalibrated int
+	}{
+		{
+			name:               "trailing comma (mid-object)",
+			in:                 "{\n  \"a\": 1,\n  \"last_calibrated\": \"" + ts1 + "\",\n  \"b\": 2\n}\n",
+			wantLastCalibrated: 1,
+		},
+		{
+			name:               "no trailing comma (last field)",
+			in:                 "{\n  \"a\": 1,\n  \"last_calibrated\": \"" + ts1 + "\"\n}\n",
+			wantLastCalibrated: 1,
+		},
+		{
+			name:               "absent (no-op)",
+			in:                 "{\n  \"a\": 1,\n  \"b\": 2\n}\n",
+			wantLastCalibrated: 0,
+		},
+		{
+			name: "multiple occurrences",
+			in: "{\n  \"x\": {\n    \"last_calibrated\": \"" + ts2 + "\",\n    \"v\": 1\n  },\n" +
+				"  \"y\": {\n    \"last_calibrated\": \"" + ts3 + "\"\n  }\n}\n",
+			wantLastCalibrated: 2,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := string(mirrorCalibrationTimestamp([]byte(tc.in)))
+			var parsed any
+			if err := json.Unmarshal([]byte(got), &parsed); err != nil {
+				t.Fatalf("output is not valid JSON: %v\noutput:\n%s", err, got)
+			}
+			if n := strings.Count(got, `"calibration_timestamp"`); n != tc.wantLastCalibrated {
+				t.Errorf("expected %d calibration_timestamp injections, got %d\noutput:\n%s",
+					tc.wantLastCalibrated, n, got)
+			}
+			if n := strings.Count(got, `"last_calibrated"`); n != tc.wantLastCalibrated {
+				t.Errorf("last_calibrated count changed: want %d, got %d", tc.wantLastCalibrated, n)
+			}
+		})
 	}
 }
 

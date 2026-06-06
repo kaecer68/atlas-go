@@ -128,6 +128,8 @@ func (e *Engine) ScreenDetailed(ctx context.Context, symbol string, criteria dom
 				if criteria.DividendYield.Max != nil && data.DividendYield > *criteria.DividendYield.Max {
 					return fail("dividend_yield_max", "Dividend yield", fmt.Sprintf("%.2f", *criteria.DividendYield.Max), fmt.Sprintf("%.2f", data.DividendYield)), nil
 				}
+			} else {
+				return fail("dividend_yield_missing", "Dividend yield", "required", "missing data"), nil
 			}
 		}
 	}

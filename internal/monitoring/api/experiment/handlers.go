@@ -410,7 +410,7 @@ func loadLedgerExperiments(path string) []ExperimentInboxItem {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var items []ExperimentInboxItem
 	scanner := bufio.NewScanner(f)

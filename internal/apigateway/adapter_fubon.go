@@ -21,7 +21,7 @@ type FubonChannelAdapter struct {
 func NewFubonChannelAdapter(client *marketdata.FubonClient) *FubonChannelAdapter {
 	return &FubonChannelAdapter{
 		client:  client,
-		limiter: rate.NewLimiter(TWSEOpenAPIRate, TWSEOpenAPIBurst),
+		limiter: rate.NewLimiter(FugleBasicRate, FugleBasicBurst), // same tier as Fugle
 	}
 }
 

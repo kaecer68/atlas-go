@@ -344,3 +344,131 @@ func TestCalculateFromSnapshotWithStore_NoProviderNoStoreFallsBack(t *testing.T)
 		t.Fatalf("expected geopolitical=0, got %v", v)
 	}
 }
+
+func TestNewTaiwanStressCalculator_AutoLoadsBaselines(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	bl := &BaselineConfig{
+		Window: 30,
+		Baselines: map[string]*FactorBaseline{
+			"dxy": {Factor: "dxy", Mean: 0.0, StdDev: 0.5, Count: 30},
+		},
+	}
+	if err := SaveBaselines(dir, bl); err != nil {
+		t.Fatalf("SaveBaselines: %v", err)
+	}
+
+	calc := NewTaiwanStressCalculator(nil, dir)
+	if calc.baselines == nil {
+		t.Fatal("expected baselines to be auto-loaded from workDir, got nil")
+	}
+	if calc.signalStrategy != SignalHybrid {
+		t.Errorf("expected SignalHybrid after auto-load, got %d", calc.signalStrategy)
+	}
+	if !calc.useHybridSignal() {
+		t.Error("expected useHybridSignal() to be true after auto-load")
+	}
+}
+
+func TestNewTaiwanStressCalculator_FallsBackWithoutBaselines(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	calc := NewTaiwanStressCalculator(nil, dir)
+	if calc.baselines != nil {
+		t.Errorf("expected nil baselines when no file exists, got %+v", calc.baselines)
+	}
+	if calc.useHybridSignal() {
+		t.Error("expected useHybridSignal() to be false on first run (no baselines file)")
+	}
+}
+
+func TestNewTaiwanStressCalculator_EmptyWorkDirNoHybrid(t *testing.T) {
+	t.Parallel()
+
+	calc := NewTaiwanStressCalculator(nil, "")
+	if calc.baselines != nil {
+		t.Error("expected nil baselines for empty workDir")
+	}
+	if calc.useHybridSignal() {
+		t.Error("expected useHybridSignal() to be false for empty workDir")
+	}
+}
+
+func TestCalculate_US10YHybridSignal_OnFlatDay(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	bl := &BaselineConfig{
+		Window: 30,
+		Baselines: map[string]*FactorBaseline{
+			"us10y": {Factor: "us10y", Mean: 4.0, StdDev: 0.3, Count: 30},
+		},
+	}
+	if err := SaveBaselines(dir, bl); err != nil {
+		t.Fatalf("SaveBaselines: %v", err)
+	}
+
+	calc := NewTaiwanStressCalculator(nil, dir)
+	if !calc.useHybridSignal() {
+		t.Fatal("expected hybrid signal to be enabled after auto-load")
+	}
+
+	// US10Y flat day: ChangePct=0, but value=4.8 deviates from baseline mean 4.0.
+	// z-score = (4.8 - 4.0) / 0.3 = 2.67. Hybrid path should pick this up
+	// even though ChangePct=0.
+	snap := marketdata.MacroDataSnapshot{
+		US10Y:      marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.8, ChangePct: 0},
+		RecordedAt: 1713000000,
+	}
+	idx := calc.Calculate(snap, marketdata.MacroDataSnapshot{}, GeopoliticalRiskScore{})
+
+	us10yComponent, ok := idx.Components["us10y"]
+	if !ok {
+		t.Fatal("expected us10y component in result")
+	}
+	if us10yComponent <= 0 {
+		t.Fatalf("expected non-zero us10y component on flat day with high level deviation, got %v", us10yComponent)
+	}
+}
+
+func TestCalculate_US10YHybridSignal_CompareWithLegacy(t *testing.T) {
+	t.Parallel()
+
+	// Legacy constructor (empty workDir) uses raw yield * scale.
+	legacyCalc := NewTaiwanStressCalculator(nil, "")
+
+	// Hybrid constructor (with baselines) uses z-score for level signal.
+	dir := t.TempDir()
+	bl := &BaselineConfig{
+		Window: 30,
+		Baselines: map[string]*FactorBaseline{
+			"us10y": {Factor: "us10y", Mean: 4.0, StdDev: 0.3, Count: 30},
+		},
+	}
+	if err := SaveBaselines(dir, bl); err != nil {
+		t.Fatalf("SaveBaselines: %v", err)
+	}
+	hybridCalc := NewTaiwanStressCalculator(nil, dir)
+
+	// Flat day (ChangePct=0): legacy uses raw Value*scale, hybrid uses |level_dev|*scale.
+	// Both should give non-zero for US10Y=4.8 vs baseline mean 4.0.
+	snap := marketdata.MacroDataSnapshot{
+		US10Y:      marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.8, ChangePct: 0},
+		RecordedAt: 1713000000,
+	}
+	legacyIdx := legacyCalc.Calculate(snap, marketdata.MacroDataSnapshot{}, GeopoliticalRiskScore{})
+	hybridIdx := hybridCalc.Calculate(snap, marketdata.MacroDataSnapshot{}, GeopoliticalRiskScore{})
+
+	legacyUS10Y := legacyIdx.Components["us10y"]
+	hybridUS10Y := hybridIdx.Components["us10y"]
+
+	if legacyUS10Y <= 0 {
+		t.Fatalf("legacy US10Y should be non-zero (raw yield 4.8 * scale), got %v", legacyUS10Y)
+	}
+	if hybridUS10Y <= 0 {
+		t.Fatalf("hybrid US10Y should be non-zero (z-score), got %v", hybridUS10Y)
+	}
+	t.Logf("legacy=%.4f hybrid=%.4f (both non-zero confirms US10Y coverage)", legacyUS10Y, hybridUS10Y)
+}

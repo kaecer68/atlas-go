@@ -86,13 +86,13 @@ func (m *PLS) Fit(X [][]float64, y []float64) error {
 	for j := 0; j < p; j++ {
 		var sum float64
 		for i := 0; i < n; i++ {
-			sum += X[i][j]
+			sum += X[i][j] //nolint:gosec // G602: bounds validated at lines 55-70
 		}
 		m.xMean[j] = sum / float64(n)
 
 		var sqSum float64
 		for i := 0; i < n; i++ {
-			diff := X[i][j] - m.xMean[j]
+			diff := X[i][j] - m.xMean[j] //nolint:gosec // G602: bounds validated at lines 55-70
 			sqSum += diff * diff
 		}
 		std := math.Sqrt(sqSum / float64(n))
@@ -106,7 +106,7 @@ func (m *PLS) Fit(X [][]float64, y []float64) error {
 	X0 := mat.NewDense(n, p, nil)
 	for i := 0; i < n; i++ {
 		for j := 0; j < p; j++ {
-			X0.Set(i, j, (X[i][j]-m.xMean[j])/m.xStd[j])
+			X0.Set(i, j, (X[i][j]-m.xMean[j])/m.xStd[j]) //nolint:gosec // G602: bounds validated at lines 55-70
 		}
 	}
 

@@ -1,5 +1,5 @@
 import { agentName, stockName, regimeLabel, eventName, stressLabel, sectorName } from '../names.js';
-import { getJSON, notify } from '../shared/app-utils.js';
+import { getJSON, notify, sortNarrativeEvents } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
 
 
@@ -27,12 +27,8 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   const regimeColor = regime === 'RISK_ON' ? 'var(--up)' : (regime === 'RISK_OFF' ? 'var(--down)' : (regime === 'NEUTRAL' ? 'var(--warn)' : 'inherit'));
 
   const nev = (narrativeEvents && narrativeEvents.events) || [];
-  // 以「情緒絕對值 × 信心度」排序，取最強烈的事件作為代表
-  const sortedEvents = nev.slice().sort((a, b) => {
-    const strengthA = Math.abs(a.sentiment || 0) * (a.confidence || 1);
-    const strengthB = Math.abs(b.sentiment || 0) * (b.confidence || 1);
-    return strengthB - strengthA;
-  });
+  // 以「情緒絕對值 × 信心度 × 命中率」排序，取最強烈的事件作為代表
+  const sortedEvents = sortNarrativeEvents(nev.slice());
   const topEvent = sortedEvents[0];
   const stressScore = stress && typeof stress.score === 'number' ? stress.score.toFixed(1) : '-';
   const stressRegime = stress ? stressLabel(stress.regime || '-') : '-';

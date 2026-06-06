@@ -17,7 +17,7 @@ func TestExchangeRateProvider_FetchSnapshot(t *testing.T) {
 
 	provider := NewExchangeRateProvider()
 	provider.client = ts.Client()
-	provider.endpoint = ts.URL + "/v6/latest/USD"
+	provider.latestURL = ts.URL + "/v6/latest/USD"
 
 	snap, err := provider.FetchSnapshot(context.Background())
 	if err != nil {
@@ -53,7 +53,7 @@ func TestExchangeRateProvider_ZeroRate(t *testing.T) {
 
 	provider := NewExchangeRateProvider()
 	provider.client = ts.Client()
-	provider.endpoint = ts.URL + "/v6/latest/USD"
+	provider.latestURL = ts.URL + "/v6/latest/USD"
 
 	snap, err := provider.FetchSnapshot(context.Background())
 	if err != nil {
@@ -78,7 +78,7 @@ func TestExchangeRateProvider_MissingRate(t *testing.T) {
 
 	provider := NewExchangeRateProvider()
 	provider.client = ts.Client()
-	provider.endpoint = ts.URL + "/v6/latest/USD"
+	provider.latestURL = ts.URL + "/v6/latest/USD"
 
 	snap, err := provider.FetchSnapshot(context.Background())
 	if err != nil {
@@ -101,7 +101,7 @@ func TestExchangeRateProvider_Unavailable(t *testing.T) {
 
 	provider := NewExchangeRateProvider()
 	provider.client = ts.Client()
-	provider.endpoint = ts.URL + "/v6/latest/USD"
+	provider.latestURL = ts.URL + "/v6/latest/USD"
 
 	_, err := provider.FetchSnapshot(context.Background())
 	if err == nil {
@@ -119,7 +119,7 @@ func TestExchangeRateProvider_APIError(t *testing.T) {
 
 	provider := NewExchangeRateProvider()
 	provider.client = ts.Client()
-	provider.endpoint = ts.URL + "/v6/latest/USD"
+	provider.latestURL = ts.URL + "/v6/latest/USD"
 
 	_, err := provider.FetchSnapshot(context.Background())
 	if err == nil {

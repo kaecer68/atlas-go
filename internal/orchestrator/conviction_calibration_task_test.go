@@ -9,11 +9,11 @@ import (
 func TestRecommendations_FilterBySkill(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessionsDir := filepath.Join(tmpDir, "data", "state", "sessions")
-	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
 		t.Fatalf("mkdir sessions: %v", err)
 	}
 	sessionDir := filepath.Join(sessionsDir, "session-20260101-daily")
-	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
 		t.Fatalf("mkdir session: %v", err)
 	}
 
@@ -21,7 +21,7 @@ func TestRecommendations_FilterBySkill(t *testing.T) {
 {"symbol":"B","forward_return":0.03,"factor_scores":{"value":0.3},"agent_id":"exec2","skill":"value"}
 {"symbol":"C","forward_return":-0.02,"factor_scores":{"momentum":-0.1},"agent_id":"exec1","skill":"momentum"}
 `
-	if err := os.WriteFile(filepath.Join(sessionDir, "recommendation_outcomes.jsonl"), []byte(jsonlContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(sessionDir, "recommendation_outcomes.jsonl"), []byte(jsonlContent), 0o644); err != nil {
 		t.Fatalf("write jsonl: %v", err)
 	}
 
@@ -70,7 +70,7 @@ func TestRecommendations_FilterBySkill(t *testing.T) {
 func TestRecommendations_EmptySessionDir(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessionsDir := filepath.Join(tmpDir, "data", "state", "sessions")
-	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
 		t.Fatalf("mkdir sessions: %v", err)
 	}
 	provider := NewConvictionCalibrationProvider(tmpDir)

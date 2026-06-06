@@ -2,8 +2,10 @@ package sim
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -21,6 +23,15 @@ type TraceWriter interface {
 	Record(step int, layer, status string, meta map[string]any)
 }
 
+// RotationFunc evaluates held positions against BUY candidates and returns SELL
+// recommendations for the weakest holding(s) to make room for new entries.
+type RotationFunc func(
+	positions []domain.Position,
+	recs []domain.Recommendation,
+	quotes map[string]domain.Quote,
+	maxOpenPositions int,
+) []domain.Recommendation
+
 type Engine struct {
 	constraints     domain.SimulationConstraints
 	optimizer       *portfolio.Optimizer
@@ -33,6 +44,7 @@ type Engine struct {
 	thresholdEngine *DynamicThresholdEngine
 	preTradeGate    *risk.PreTradeGate
 	traceWriter     TraceWriter
+	rotationFunc    RotationFunc
 }
 
 type sellDetail struct {
@@ -142,6 +154,24 @@ func (e *Engine) filterByPreTradeGate(
 			continue
 		}
 		if decision.Verdict == risk.VerdictBlock || decision.Verdict == risk.VerdictHalt {
+			// Auto-size: when blocked by position concentration, reduce order
+			// to fit within the limit instead of rejecting entirely.
+			if strings.Contains(decision.Reason, "position") && strings.Contains(decision.Reason, "would be") {
+				currentPct := posMap[rec.Symbol] / totalValue
+				limit := e.preTradeGate.MaxPositionPct()
+				if currentPct < limit {
+					maxNotional := (limit - currentPct) * totalValue
+					if maxNotional > totalValue*0.01 {
+						order.Notional = maxNotional
+						decision2, err2 := e.preTradeGate.Check(context.TODO(), order, pf, "NORMAL")
+						if err2 == nil && decision2.Verdict != risk.VerdictBlock && decision2.Verdict != risk.VerdictHalt {
+							filtered = append(filtered, rec)
+							pf = applyOrderToState(pf, order)
+							continue
+						}
+					}
+				}
+			}
 			logging.Info("sim", "pre_trade_blocked",
 				"symbol", rec.Symbol,
 				"reason", decision.Reason)
@@ -255,6 +285,13 @@ func (e *Engine) RunDay(
 		}
 	}
 
+	// 1.5. Rotation: evaluate held positions and generate SELL signals to
+	// make room for BUY candidates. Uses live in-simulation portfolio state.
+	if e.rotationFunc != nil && len(state.Positions) > 0 && len(recs) > 0 && e.constraints.MaxOpenPositions > 0 {
+		sellRecs := e.rotationFunc(state.Positions, recs, quoteBySymbol, e.constraints.MaxOpenPositions)
+		recs = append(recs, sellRecs...)
+	}
+
 	// 2. Sell logic
 	if e.constraints.SellLogicEnabled() {
 		sellOrders, sellDetails := e.executeSells(state, quoteBySymbol, recs, &fallbackEvents)
@@ -269,6 +306,52 @@ func (e *Engine) RunDay(
 				Amount:   float64(sd.Quantity) * sd.ExecPrice,
 				Reason:   sd.Reason,
 			})
+		}
+	}
+
+	// 2.5. Rebalancing: trim positions exceeding the pre-trade max position limit.
+	// This runs after sell logic (stop-loss/take-profit) and before buy logic,
+	// freeing capital and enforcing diversification proactively.
+	if e.preTradeGate != nil && e.preTradeGate.MaxPositionPct() > 0 {
+		totalValue := state.PortfolioValue()
+		limit := e.preTradeGate.MaxPositionPct()
+		for i := range state.Positions {
+			if state.Positions[i].Quantity <= 0 {
+				continue
+			}
+			q, ok := quoteBySymbol[state.Positions[i].Symbol]
+			if !ok || !q.IsTradable {
+				continue
+			}
+			pct := state.Positions[i].MarketValue / totalValue
+			if pct > limit {
+				excessValue := state.Positions[i].MarketValue - totalValue*limit
+				reduceQty := int(excessValue / q.Last)
+				if reduceQty > 0 && reduceQty < state.Positions[i].Quantity {
+					slippageBPS := e.getSlippageBPS(state.Positions[i].Symbol, quoteBySymbol, &fallbackEvents)
+					price := applyBPS(q.Last, -(slippageBPS + e.constraints.TransactionCostBPS))
+					proceeds := float64(reduceQty) * price
+					state.Cash += proceeds
+					state.Positions[i].Quantity -= reduceQty
+					state.Positions[i].MarketValue = float64(state.Positions[i].Quantity) * q.Last
+					state.RealizedPnL += float64(reduceQty) * (price - state.Positions[i].AverageCost)
+					orders = append(orders, domain.Order{
+						Symbol:   state.Positions[i].Symbol,
+						Side:     domain.SideSell,
+						Quantity: reduceQty,
+						Price:    price,
+						Reason:   fmt.Sprintf("rebalance: %.1f%% > %.0f%%", pct*100, limit*100),
+					})
+					trades = append(trades, domain.TradeRecord{
+						Symbol:   state.Positions[i].Symbol,
+						Side:     domain.SideSell,
+						Quantity: reduceQty,
+						Price:    price,
+						Amount:   proceeds,
+						Reason:   "rebalance_trim",
+					})
+				}
+			}
 		}
 	}
 
@@ -672,7 +755,7 @@ func totalCost(orders []domain.Order) float64 {
 }
 
 func calculateSharpe(returns []float64) float64 {
-	if len(returns) < 2 {
+	if len(returns) < 60 {
 		return 0
 	}
 	mean := 0.0

@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/kaecer68/atlas-go/schemas/metrics.schema.json",
+  "title": "System Metrics Record",
+  "description": "監控指標記錄。每行為獨立 JSON 物件，記錄系統執行的關鍵量化指標，如篩選率、警報統計等。",
+  "type": "object",
+  "required": ["timestamp"],
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "指標記錄時間戳（ISO 8601/RFC 3339）"
+    },
+    "screening_total": {
+      "type": "integer",
+      "description": "篩選標的總數"
+    },
+    "screening_passed": {
+      "type": "integer",
+      "description": "篩選通過的標的數"
+    },
+    "screening_rate": {
+      "type": "number",
+      "description": "篩選通過率（百分比）"
+    },
+    "alerts_triggered": {
+      "type": "integer",
+      "description": "觸發的警報總數"
+    },
+    "alerts_acknowledged": {
+      "type": "integer",
+      "description": "已確認的警報數"
+    },
+    "alerts_by_type": {
+      "type": "object",
+      "description": "各類型警報的數量分佈",
+      "additionalProperties": {
+        "type": "integer",
+        "description": "該類型警報的數量"
+      }
+    }
+  },
+  "additionalProperties": true
+}

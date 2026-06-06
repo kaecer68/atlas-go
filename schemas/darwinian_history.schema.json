@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/kaecer68/atlas-go/schemas/darwinian_history.schema.json",
+  "title": "Darwinian Weight History",
+  "description": "Darwinian 權重演進歷史記錄。每行為獨立 JSON 物件，以 O_APPEND 模式寫入。記錄每次權重調整的時間點快照。",
+  "type": "object",
+  "required": ["timestamp", "weights"],
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "權重調整時間戳（ISO 8601/RFC 3339）"
+    },
+    "weights": {
+      "type": "object",
+      "description": "所有 agent 的權重快照（agent_id → 權重值）",
+      "additionalProperties": {
+        "type": "number",
+        "description": "該 agent 的 Darwinian 權重（範圍由配置決定）"
+      }
+    }
+  },
+  "additionalProperties": true
+}

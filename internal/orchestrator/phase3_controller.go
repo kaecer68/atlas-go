@@ -341,9 +341,10 @@ func (c *Phase3Controller) RunParallelOptimization(baseState swarm.MarketState, 
 
 	go func() {
 		defer wg.Done()
-		if err := c.ApplyPRISMWeights(nil, regime); err != nil {
-			logging.Warn("Phase3Controller", "ApplyPRISMWeights failed", "err", err)
-		}
+		c.ApplyPRISMWeights(nil, regime)
+		// Note: ApplyPRISMWeights returns []Recommendation, not error.
+		// When called with nil recs it is a no-op (internal guards return immediately).
+		// Failures are surfaced via PRISM manager logs, not via this callsite.
 	}()
 
 	go func() {

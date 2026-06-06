@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 // SiliconCyclePhase represents the phase of the semiconductor industry cycle.
@@ -361,4 +362,49 @@ func (e *SiliconCycleTracker) String() string {
 	defer e.mu.RUnlock()
 	return fmt.Sprintf("SiliconCycle: Phase=%s(%d), Transitions=%d",
 		e.currentPhase.String(), e.currentPhase, len(e.history))
+}
+
+// ExtractSiliconIndicators maps a MacroDataSnapshot into the six
+// SiliconIndicators used by SiliconCycleTracker.DetectPhase.
+//
+// Conversion rules (consistent with silicon_cycle_test.go fixtures):
+//   - TSMCMonthlyRevenueYoY:  MacroDataSnapshot.TSMCRevenue.ChangePct / 100
+//   - GlobalSemiconductorBillingsYoY: SOX index YoY (scaled by 0.85, the
+//     historical correlation between SOX YoY and WSTS billings YoY)
+//   - DRAMSpotPriceTrend:     MacroDataSnapshot.DRAMSpotPrice.ChangePct / 100
+//     (MU stock daily change serves as a high-frequency DRAM proxy)
+//   - TaiwanSemiconductorIndexMA: MacroDataSnapshot.TaiwanSemiIndex.ChangePct / 100
+//   - TSMCCapexGuidance:      heuristic from TSMC revenue YoY direction
+//     (revenue growth >15% → +0.05; revenue decline → -0.05; else 0)
+//   - PhiladelphiaSOXIndexYoY: SOX index YoY (annualized daily proxy)
+//
+// All four heuristic-derived values default to 0.0 when the underlying
+// snapshot fields are zero-valued, so providers that have not yet been
+// integrated do not poison phase detection.
+func ExtractSiliconIndicators(snap marketdata.MacroDataSnapshot) SiliconIndicators {
+	// TSMC capex heuristic: revenue growth >15% implies capex expansion;
+	// revenue decline implies capex contraction. Scaled to ±0.05 for subtle
+	// influence on the state machine (capex alone should not dominate).
+	tsmcRevYoY := snap.TSMCRevenue.ChangePct / 100.0
+	capexSignal := 0.0
+	if tsmcRevYoY > 0.15 {
+		capexSignal = 0.05
+	} else if tsmcRevYoY < 0.0 {
+		capexSignal = -0.05
+	}
+
+	// DRAM trend from MU (Micron) daily change: positive → DRAM trending up.
+	dramTrend := snap.DRAMSpotPrice.ChangePct / 100.0
+
+	// SOX YoY from provider (now computes proper year-over-year via 1y range).
+	soxYoY := snap.SOXIndex.ChangePct / 100.0
+
+	return SiliconIndicators{
+		TSMCMonthlyRevenueYoY:          tsmcRevYoY,
+		GlobalSemiconductorBillingsYoY: soxYoY * 0.85, // SOX → billings scaling (~85% correlation)
+		DRAMSpotPriceTrend:             dramTrend,
+		TaiwanSemiconductorIndexMA:     snap.TaiwanSemiIndex.ChangePct / 100.0,
+		TSMCCapexGuidance:              capexSignal,
+		PhiladelphiaSOXIndexYoY:        soxYoY,
+	}
 }

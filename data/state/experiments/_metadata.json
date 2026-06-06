@@ -1,0 +1,26 @@
+{
+  "$schema": "../../../../schemas/data_metadata.schema.json",
+  "name": "experiments",
+  "description": "實驗生命週期記錄（mutation → execute → judge → promote/revert）。包含每個實驗的詳細 JSON 數據與歷史歸檔。",
+  "maturity": "stable",
+  "data_type": "directory",
+  "format": "個別 JSON 檔案 + archive/ 歷史歸檔",
+  "producer_module": "internal/experiment",
+  "producer_function": "Executor.Run",
+  "consumer_modules": [
+    "internal/experiment",
+    "cmd/judge-experiment",
+    "cmd/promote-baseline"
+  ],
+  "schema_ref": null,
+  "catalog_ref": "docs/DATA_CATALOG.md#experiments",
+  "created_date": "2026-03-30",
+  "last_modified": "continuous",
+  "estimated_size": {
+    "files": 183,
+    "growth_rate": "variable"
+  },
+  "retention_policy": "indefinite",
+  "tags": ["experiments", "evolution", "mutation", "judge"],
+  "notes": "另有 experiments.jsonl 平面檔案（append-only），將在 P3.0 移入此目錄。"
+}

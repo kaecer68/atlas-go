@@ -288,7 +288,7 @@ func (cm *CorrelationMatrix) RecalculateFromReturns(industryReturns map[string][
 			if len(returnsB) < n {
 				n = len(returnsB)
 			}
-			if n < 15 {
+			if n < 30 {
 				continue
 			}
 			corr := pearsonCorrelation(returnsA[:n], returnsB[:n])
@@ -411,7 +411,7 @@ func (sp *ShockPropagation) getNarrativeAdjustedCorrelation(industryA, industryB
 		multiplier := sp.narrativeProvider.CorrelationMultiplier(theme, industryA, industryB)
 		adjusted *= multiplier
 	}
-	return math.Max(0, math.Min(1.0, adjusted))
+	return math.Max(-1.0, math.Min(1.0, adjusted))
 }
 
 // PropagateShock calculates the impact of a shock on an industry, with
@@ -639,58 +639,15 @@ func DefaultSupplyChainGraph() *SupplyChainGraph {
 	return graph
 }
 
-// DefaultCorrelationMatrix returns a sample correlation matrix for Taiwan industries.
+// DefaultCorrelationMatrix returns the correlation matrix loaded from ParametersConfig.
+// Falls back to a minimal safe matrix if config is unavailable.
 func DefaultCorrelationMatrix() *CorrelationMatrix {
-	cm := NewCorrelationMatrix(30)
-
-	// Semiconductor correlations
-	cm.UpdateCorrelation("semiconductor", "ai_supply_chain", 0.85)
-	cm.UpdateCorrelation("semiconductor", "electronics", 0.72)
-	cm.UpdateCorrelation("semiconductor", "robotics", 0.45)
-	cm.UpdateCorrelation("semiconductor", "financials", 0.15)
-	cm.UpdateCorrelation("semiconductor", "shipping", -0.10)
-
-	// AI supply chain correlations
-	cm.UpdateCorrelation("ai_supply_chain", "electronics", 0.65)
-	cm.UpdateCorrelation("ai_supply_chain", "robotics", 0.55)
-	cm.UpdateCorrelation("ai_supply_chain", "financials", 0.20)
-	cm.UpdateCorrelation("ai_supply_chain", "shipping", 0.05)
-
-	// Robotics correlations
-	cm.UpdateCorrelation("robotics", "electronics", 0.48)
-	cm.UpdateCorrelation("robotics", "industrial", 0.60)
-	cm.UpdateCorrelation("robotics", "financials", 0.10)
-
-	// Financials correlations
-	cm.UpdateCorrelation("financials", "consumer", 0.35)
-	cm.UpdateCorrelation("financials", "industrial", 0.25)
-	cm.UpdateCorrelation("financials", "shipping", 0.05)
-	cm.UpdateCorrelation("financials", "energy", 0.10)
-
-	// Shipping correlations
-	cm.UpdateCorrelation("shipping", "energy", 0.40)
-	cm.UpdateCorrelation("shipping", "industrial", 0.30)
-
-	// Consumer correlations
-	cm.UpdateCorrelation("consumer", "industrial", 0.20)
-	cm.UpdateCorrelation("consumer", "energy", 0.15)
-
-	cm.UpdateCorrelation("mining", "semiconductor", 0.55)
-	cm.UpdateCorrelation("mining", "ai_supply_chain", 0.50)
-	cm.UpdateCorrelation("mining", "electronics", 0.60)
-	cm.UpdateCorrelation("mining", "robotics", 0.45)
-	cm.UpdateCorrelation("mining", "industrial", 0.40)
-	cm.UpdateCorrelation("mining", "energy", 0.35)
-	cm.UpdateCorrelation("mining", "financials", 0.30)
-	cm.UpdateCorrelation("mining", "shipping", 0.25)
-	cm.UpdateCorrelation("mining", "consumer", 0.10)
-
-	// ETF Rotation correlations
-	cm.UpdateCorrelation("etf_rotation", "financials", 0.45)
-	cm.UpdateCorrelation("etf_rotation", "semiconductor", 0.30)
-	cm.UpdateCorrelation("etf_rotation", "shipping", 0.05)
-
-	return cm
+	cfg := config.GetParametersConfig()
+	if cfg != nil {
+		return LoadCorrelationMatrixFromConfig(&cfg.Industry.LinkageParams.Value)
+	}
+	// Minimal safe fallback: empty matrix with default correlation handled by GetCorrelation
+	return NewCorrelationMatrix(30)
 }
 
 // LoadCorrelationMatrixFromConfig parses the config's CorrelationMatrix map
@@ -715,7 +672,8 @@ func LoadCorrelationMatrixFromConfig(cfg *config.LinkageConfig) *CorrelationMatr
 }
 
 func (ls *IndustryLinkageScore) String() string {
-	return fmt.Sprintf("%s: Upstream=%d, Downstream=%d, AvgCorr=%.2f, Systemic=%.0f%%",
+	return fmt.Sprintf(
+		"%s: Upstream=%d, Downstream=%d, AvgCorr=%.2f, Systemic=%.0f%%",
 		ls.IndustryID,
 		ls.UpstreamCount,
 		ls.DownstreamCount,

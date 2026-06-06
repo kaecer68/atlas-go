@@ -103,7 +103,8 @@ func showPromotionHistory(manager *baseline.Manager) error {
 	fmt.Println(string(make([]byte, 80)))
 
 	for _, record := range history {
-		fmt.Printf("%-5d %-20s %-15s %-20s %-10s\n",
+		fmt.Printf(
+			"%-5d %-20s %-15s %-20s %-10s\n",
 			record.Version,
 			truncate(record.ExperimentID, 18),
 			truncate(record.TargetSkill, 13),

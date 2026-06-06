@@ -1,10 +1,12 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
 	"os"
+	"regexp"
 	"time"
 )
 
@@ -325,6 +327,13 @@ type NarrativeParameters struct {
 	TaiwanStressHighThreshold   ParameterMetadata[float64] `json:"taiwan_stress_high_threshold"`
 	TaiwanStressAlertThreshold  ParameterMetadata[float64] `json:"taiwan_stress_alert_threshold"`
 
+	// --- Rolling Calibration Framework Parameters ---
+	CalibrationBaselineWindow ParameterMetadata[int]     `json:"calibration_baseline_window"`
+	CalibrationTargetMedian   ParameterMetadata[float64] `json:"calibration_target_median"`
+	CalibrationValidationPct  ParameterMetadata[float64] `json:"calibration_validation_pct"`
+	CalibrationMinRecords     ParameterMetadata[int]     `json:"calibration_min_records"`
+	CalibrationEnabled        ParameterMetadata[bool]    `json:"calibration_enabled"`
+
 	// Event lifecycle TTL multipliers (days per theme)
 	EventTTLMultiplier ParameterMetadata[map[string]float64] `json:"event_ttl_multiplier"`
 
@@ -399,6 +408,28 @@ type MarketdataParameters struct {
 	RetryBackoffMs       ParameterMetadata[int]     `json:"retry_backoff_ms"`
 }
 
+// IndustrySegmentConfig holds a single industry segment definition for the classification tree.
+// This is the ParameterConfig-compatible version of industry.IndustrySegment.
+type IndustrySegmentConfig struct {
+	ID                   string   `json:"id"`
+	Name                 string   `json:"name"`
+	NameEN               string   `json:"name_en"`
+	Level                int      `json:"level"`
+	ParentID             string   `json:"parent_id,omitempty"`
+	Weight               float64  `json:"weight,omitempty"`
+	GeographicExposure   string   `json:"geographic_exposure"`
+	Cyclicality          string   `json:"cyclicality"`
+	TechnologyIntensity  string   `json:"technology_intensity"`
+	CapitalIntensity     string   `json:"capital_intensity"`
+	RepresentativeStocks []string `json:"representative_stocks,omitempty"`
+	Description          string   `json:"description,omitempty"`
+}
+
+// ClassificationTreeConfig holds the complete industry classification tree.
+type ClassificationTreeConfig struct {
+	Segments []IndustrySegmentConfig `json:"segments"`
+}
+
 // IndustryParameters holds tunable values for industry analysis, seasonality,
 // business cycle detection, and risk scoring.
 type IndustryParameters struct {
@@ -463,12 +494,100 @@ type IndustryParameters struct {
 
 	DynamicEnv ParameterMetadata[DynamicEnvConfig] `json:"dynamic_env"`
 
+	// Cycle compass calibration parameters for per-layer accuracy tracking.
+	CycleCalibration ParameterMetadata[CycleCalibrationConfig] `json:"cycle_calibration"`
+
 	// Cycle tracking operational parameters
 	HistoryRetentionDays ParameterMetadata[int] `json:"history_retention_days"`
 
 	// Bootstrap seed values for CycleTracker initialization, used before
 	// real FinMind data becomes available (replaced within 6h by auto_cycle_update).
 	DefaultMetrics ParameterMetadata[map[string]IndustryDefaultMetrics] `json:"default_metrics"`
+
+	SiliconCycle       ParameterMetadata[SiliconCycleParameters] `json:"silicon_cycle"`
+	EventCalendarRules ParameterMetadata[[]EventCalendarRule]    `json:"event_calendar_rules"`
+
+	// EventSentimentCap limits the per-event sentiment adjustment to prevent
+	// any single calendar event from dominating the composite signal.
+	EventSentimentCap ParameterMetadata[float64] `json:"event_sentiment_cap"`
+
+	// CompositeCard holds tunable parameters for building the CycleStatusCard composite sentiment gauge.
+	CompositeCard ParameterMetadata[CompositeCardConfig] `json:"composite_card"`
+
+	// SeasonalMultipliers holds theme→industry multiplier maps for seasonal bridge narrative adjustments.
+	SeasonalMultipliers ParameterMetadata[SeasonalMultiplierConfig] `json:"seasonal_multipliers"`
+
+	// ClassificationTree defines the complete industry hierarchy (L1/L2/L3).
+	// Previously hardcoded in internal/industry/types.go; now parameter-managed.
+	ClassificationTree ParameterMetadata[ClassificationTreeConfig] `json:"classification_tree"`
+}
+
+// CompositeCardConfig holds tunable parameters for building the CycleStatusCard composite sentiment gauge.
+type CompositeCardConfig struct {
+	LayerWeights        map[string]float64         `json:"layer_weights"`
+	SentimentThresholds map[string]SentimentBounds `json:"sentiment_thresholds"`
+	ClampMin            float64                    `json:"clamp_min"`
+	ClampMax            float64                    `json:"clamp_max"`
+}
+
+// SentimentBounds defines the value range for a sentiment label.
+type SentimentBounds struct {
+	Min float64 `json:"min"`
+	Max float64 `json:"max"`
+}
+
+// SeasonalMultiplierConfig holds theme→industry multiplier maps for seasonal bridge narrative adjustments.
+type SeasonalMultiplierConfig struct {
+	ThemeMultipliers  map[string]IndustryMultiplierMap `json:"theme_multipliers"`
+	ThemeCorrelations map[string]map[string]float64    `json:"theme_correlations"`
+}
+
+// IndustryMultiplierMap holds bull/bear multipliers per industry for a theme.
+type IndustryMultiplierMap struct {
+	BullMultiplier map[string]float64 `json:"bull_multiplier"`
+	BearMultiplier map[string]float64 `json:"bear_multiplier"`
+}
+
+// MarshalJSON implements json.Marshaler. When Max is +Inf, it serializes as the
+// string "+Inf"; otherwise it uses the standard numeric representation.
+func (s SentimentBounds) MarshalJSON() ([]byte, error) {
+	enc := struct {
+		Min float64 `json:"min"`
+		Max any     `json:"max"`
+	}{Min: s.Min}
+	if math.IsInf(s.Max, 1) {
+		enc.Max = "+Inf"
+	} else {
+		enc.Max = s.Max
+	}
+	return json.Marshal(enc)
+}
+
+// UnmarshalJSON implements json.Unmarshaler, accepting "+Inf" string for Max
+// in addition to standard numeric values.
+func (s *SentimentBounds) UnmarshalJSON(data []byte) error {
+	var num struct {
+		Min float64 `json:"min"`
+		Max float64 `json:"max"`
+	}
+	if err := json.Unmarshal(data, &num); err == nil {
+		s.Min = num.Min
+		s.Max = num.Max
+		return nil
+	}
+	var str struct {
+		Min float64 `json:"min"`
+		Max string  `json:"max"`
+	}
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	s.Min = str.Min
+	if str.Max == "+Inf" {
+		s.Max = math.Inf(1)
+		return nil
+	}
+	return fmt.Errorf("unknown max value: %q (expected \"+Inf\" or number)", str.Max)
 }
 
 // IndustryDefaultMetrics holds bootstrap seed values for CycleTracker initialization.
@@ -480,6 +599,19 @@ type IndustryDefaultMetrics struct {
 	ProfitGrowthYoY     float64 `json:"profit_growth_yoy"`
 	InventoryTurnover   float64 `json:"inventory_turnover"`
 	CapacityUtilization float64 `json:"capacity_utilization"`
+}
+
+// CycleCalibrationConfig holds calibration parameters for the cycle compass
+// layer weight self-calibration loop. Each layer's hit rate is tracked over
+// a rolling window and weights are adjusted up/down based on accuracy.
+type CycleCalibrationConfig struct {
+	MinSamples     int     `json:"min_samples"`
+	LearningRate   float64 `json:"learning_rate"`
+	HitRateHigh    float64 `json:"hit_rate_high"`
+	HitRateLow     float64 `json:"hit_rate_low"`
+	WeightClampMin float64 `json:"weight_clamp_min"`
+	WeightClampMax float64 `json:"weight_clamp_max"`
+	WindowSize     int     `json:"window_size"`
 }
 
 // CycleThresholdConfig holds business cycle thresholds for a specific industry.
@@ -655,6 +787,36 @@ type DynamicEnvConfig struct {
 	OilPriceShockThreshold float64 `json:"oil_price_shock_threshold"`
 	UsRatesDxyThreshold    float64 `json:"us_rates_dxy_threshold"`
 	JpyCarryDxyThreshold   float64 `json:"jpy_carry_dxy_threshold"`
+}
+
+// SiliconCycleParameters holds thresholds for semiconductor silicon cycle phase detection.
+// Field names correspond 1:1 with SiliconCycleParams in internal/industry/silicon_cycle.go,
+// plus two forward-looking fields (InventoryDaysThreshold, UtilizationThreshold) reserved
+// for future inventory-based and capacity-utilization-based cycle detection layers.
+type SiliconCycleParameters struct {
+	RevenueYoYThreshold            float64 `json:"revenue_yoy_threshold"`
+	BillingsYoYThreshold           float64 `json:"billings_yoy_threshold"`
+	DRAMStabilizationThreshold     float64 `json:"dram_stabilization_threshold"`
+	BillingsStabilizationThreshold float64 `json:"billings_stabilization_threshold"`
+	InventoryDaysThreshold         float64 `json:"inventory_days_threshold"`
+	UtilizationThreshold           float64 `json:"utilization_threshold"`
+	IndexMAPercentThreshold        float64 `json:"index_ma_percent_threshold"`
+	SOXExtremeThreshold            float64 `json:"sox_extreme_threshold"`
+	CapexCutThreshold              float64 `json:"capex_cut_threshold"`
+	MinConfidence                  float64 `json:"min_confidence"`
+	HistoryWindowSize              int     `json:"history_window_size"`
+}
+
+// EventCalendarRule defines a Taiwan market calendar event rule
+// configurable via ParametersConfig.Industry.EventCalendarRules.
+// EventType is the canonical key used to match this rule to the corresponding
+// entry in defaultEventRules(). If EventType is empty, Name is used as fallback.
+type EventCalendarRule struct {
+	EventType  string  `json:"event_type"`
+	Name       string  `json:"name"`
+	BaseWeight float64 `json:"base_weight"`
+	DecayDays  int     `json:"decay_days"`
+	Direction  string  `json:"direction"`
 }
 
 // StrategyParameters holds tunable values for strategy selection and switching.
@@ -867,6 +1029,7 @@ type PreTradeGateParameters struct {
 	MinCashBufferPct     ParameterMetadata[float64] `json:"min_cash_buffer_pct"`
 	MaxCorrelation       ParameterMetadata[float64] `json:"max_correlation"`
 	MinADVRatio          ParameterMetadata[float64] `json:"min_adv_ratio"`
+	MaxOpenPositions     ParameterMetadata[int]     `json:"max_open_positions"`
 }
 
 // InTradeGateParameters holds in-trade monitoring parameters.
@@ -968,34 +1131,99 @@ type PostTradeGateParameters struct {
 	EvaluationIntervalHours ParameterMetadata[int]     `json:"evaluation_interval_hours"`
 }
 
-// ParametersConfig is the top-level configuration for all investment model parameters.
+// RSITwParameters holds tunable values for the RSI-tw retail sentiment calculator.
+type RSITwParameters struct {
+	// Part A — Retail Sentiment (40% overall weight)
+	A1Weight    ParameterMetadata[float64] `json:"a1_weight"`     // Margin Balance Δ Z-score (default 0.25)
+	A2Weight    ParameterMetadata[float64] `json:"a2_weight"`     // Day Trading Ratio (default 0.20)
+	A3Weight    ParameterMetadata[float64] `json:"a3_weight"`     // Margin Maintenance Proxy (default 0.20)
+	A4Weight    ParameterMetadata[float64] `json:"a4_weight"`     // VIX Nonlinear Mapping (default 0.15)
+	A5Weight    ParameterMetadata[float64] `json:"a5_weight"`     // Weekly PCR Proxy (default 0.10)
+	A6Weight    ParameterMetadata[float64] `json:"a6_weight"`     // Odd-Lot Trading (default 0.10)
+	APartWeight ParameterMetadata[float64] `json:"a_part_weight"` // Part A overall weight (default 0.40)
+	CPartWeight ParameterMetadata[float64] `json:"c_part_weight"` // Part C overall weight (default 0.25)
+
+	// A3: Margin Maintenance formula (z = (p - midpoint) * scale)
+	A3Midpoint ParameterMetadata[float64] `json:"a3_midpoint"` // neutral midpoint (default 0.5)
+	A3Scale    ParameterMetadata[float64] `json:"a3_scale"`    // Z-score scaling factor (default 2.0)
+
+	// A4: VIX piecewise mapping — thresholds are lower bounds (exclusive), scores are the mapping result.
+	// thresholds[0]=15, thresholds[1]=20, ...; scores[0]=0.1 (vix<15), scores[5]=1.0 (vix>=35)
+	A4VixThresholds ParameterMetadata[[]float64] `json:"a4_vix_thresholds"` // [15, 20, 25, 30, 35]
+	A4VixScores     ParameterMetadata[[]float64] `json:"a4_vix_scores"`     // [0.1, 0.3, 0.5, 0.7, 0.85, 1.0]
+
+	// A5: PCR piecewise mapping — thresholds are compared with > (strict), scores in order
+	A5PcrThresholds ParameterMetadata[[]float64] `json:"a5_pcr_thresholds"` // [1.5, 1.0, 0.8]
+	A5PcrScores     ParameterMetadata[[]float64] `json:"a5_pcr_scores"`     // [0.9, 0.7, 0.5, 0.1]
+	A5PcrFallback   ParameterMetadata[float64]   `json:"a5_pcr_fallback"`   // score when pcr==0 (default 0.5)
+
+	// A6: Odd-lot imbalance mapping — thresholds with > (strict), scores in order
+	A6OddLotThresholds ParameterMetadata[[]float64] `json:"a6_oddlot_thresholds"` // [0.2, 0.1, -0.1, -0.2]
+	A6OddLotScores     ParameterMetadata[[]float64] `json:"a6_oddlot_scores"`     // [0.85, 0.65, 0.5, 0.35, 0.15]
+	A6OddLotFallback   ParameterMetadata[float64]   `json:"a6_oddlot_fallback"`   // score when imb==0 (default 0.5)
+
+	// Part C — Institutional / Derivative Flow (25% weight)
+	C1Weight               ParameterMetadata[float64] `json:"c1_weight"`                 // Small TAIEX Futures OI (default 0.40)
+	C2Weight               ParameterMetadata[float64] `json:"c2_weight"`                 // Foreign/Inst Net Flow (default 0.35)
+	C3Weight               ParameterMetadata[float64] `json:"c3_weight"`                 // ETF Net Subscription (default 0.25)
+	C1VeryBullishThreshold ParameterMetadata[float64] `json:"c1_very_bullish_threshold"` // futures OI pct above this → 0.9
+	C1BullishThreshold     ParameterMetadata[float64] `json:"c1_bullish_threshold"`      // futures OI pct above this → 0.7
+	C1BearishThreshold     ParameterMetadata[float64] `json:"c1_bearish_threshold"`      // futures OI pct below this → 0.5
+	C1VeryBearishThreshold ParameterMetadata[float64] `json:"c1_very_bearish_threshold"` // futures OI pct below this → 0.25
+	C2NeutralMidpoint      ParameterMetadata[float64] `json:"c2_neutral_midpoint"`       // base score when netFlow ≈ 0 (0.5)
+	C2NetflowScalingFactor ParameterMetadata[float64] `json:"c2_netflow_scaling_factor"` // divisor for continuous scoring
+	C3VeryBullishThreshold ParameterMetadata[float64] `json:"c3_very_bullish_threshold"` // ETF net sub above this → 0.9
+	C3BullishThreshold     ParameterMetadata[float64] `json:"c3_bullish_threshold"`      // ETF net sub above this → 0.7
+	C3BearishThreshold     ParameterMetadata[float64] `json:"c3_bearish_threshold"`      // ETF net sub below this → 0.45
+
+	// Part D — Event-Driven Adjustment Factors
+	DGeoPoliticalRiskThreshold  ParameterMetadata[float64] `json:"d_geopolitical_risk_threshold"`  // geopolitical risk above this → 0.85
+	DGeoPoliticalRiskMultiplier ParameterMetadata[float64] `json:"d_geopolitical_risk_multiplier"` // 0.85
+	DVIXSpikeThreshold          ParameterMetadata[float64] `json:"d_vix_spike_threshold"`          // VIX above this → 0.90
+	DVIXSpikeMultiplier         ParameterMetadata[float64] `json:"d_vix_spike_multiplier"`         // 0.90
+	DCreditTighteningMultiplier ParameterMetadata[float64] `json:"d_credit_tightening_multiplier"` // 0.80
+
+	// LastCalibratedScore records the most recent autonomous calibration score,
+	// loaded at startup so PreTradeGate does not start with a blind 0.0.
+	LastCalibratedScore ParameterMetadata[float64] `json:"last_calibrated_score,omitempty"`
+}
+
+// FallbackPriceTarget holds per-skill target and stop-loss multipliers
+// used by the monitoring service when price targets are not explicitly set.
+type FallbackPriceTarget struct {
+	TargetMultiplier   ParameterMetadata[float64] `json:"target_multiplier"`
+	StopLossMultiplier ParameterMetadata[float64] `json:"stop_loss_multiplier"`
+}
+
 type ParametersConfig struct {
-	Version             string                        `json:"version"`
-	UpdatedAt           time.Time                     `json:"updated_at"`
-	Darwinian           DarwinianParameters           `json:"darwinian"`
-	Factor              FactorParameters              `json:"factor"`
-	FactorWeight        FactorWeightParameters        `json:"factor_weight,omitempty"`
-	Optimizer           OptimizerParameters           `json:"optimizer"`
-	Sizing              SizingParameters              `json:"sizing"`
-	Health              HealthParameters              `json:"health"`
-	GARCH               GARCHParameters               `json:"garch"`
-	Experiment          ExperimentParameters          `json:"experiment"`
-	Baseline            BaselineParameters            `json:"baseline"`
-	Orchestrator        OrchestratorParameters        `json:"orchestrator"`
-	Risk                RiskParameters                `json:"risk"`
-	Drawdown            DrawdownParameters            `json:"drawdown"`
-	Realtime            RealtimeParameters            `json:"realtime"`
-	Janus               JanusParameters               `json:"janus"`
-	Narrative           NarrativeParameters           `json:"narrative"`
-	NarrativeConviction NarrativeConvictionParameters `json:"narrative_conviction,omitempty"`
-	Marketdata          MarketdataParameters          `json:"marketdata"`
-	Industry            IndustryParameters            `json:"industry"`
-	Strategy            StrategyParameters            `json:"strategy"`
-	PreciousMetals      PreciousMetalsParameters      `json:"precious_metals"`
-	SectorExecutor      SectorExecutorParameters      `json:"sector_executor,omitempty"`
-	Alert               AlertParameters               `json:"alert"`
-	RiskGate            RiskGateParameters            `json:"risk_gate,omitempty"`
-	Engine              EngineParameters              `json:"engine,omitempty"`
+	Version              string                         `json:"version"`
+	UpdatedAt            time.Time                      `json:"updated_at"`
+	FallbackPriceTargets map[string]FallbackPriceTarget `json:"fallback_price_targets,omitempty"`
+	Darwinian            DarwinianParameters            `json:"darwinian"`
+	Factor               FactorParameters               `json:"factor"`
+	FactorWeight         FactorWeightParameters         `json:"factor_weight,omitempty"`
+	Optimizer            OptimizerParameters            `json:"optimizer"`
+	Sizing               SizingParameters               `json:"sizing"`
+	Health               HealthParameters               `json:"health"`
+	GARCH                GARCHParameters                `json:"garch"`
+	Experiment           ExperimentParameters           `json:"experiment"`
+	Baseline             BaselineParameters             `json:"baseline"`
+	Orchestrator         OrchestratorParameters         `json:"orchestrator"`
+	Risk                 RiskParameters                 `json:"risk"`
+	Drawdown             DrawdownParameters             `json:"drawdown"`
+	Realtime             RealtimeParameters             `json:"realtime"`
+	Janus                JanusParameters                `json:"janus"`
+	Narrative            NarrativeParameters            `json:"narrative"`
+	NarrativeConviction  NarrativeConvictionParameters  `json:"narrative_conviction,omitempty"`
+	Marketdata           MarketdataParameters           `json:"marketdata"`
+	Industry             IndustryParameters             `json:"industry"`
+	Strategy             StrategyParameters             `json:"strategy"`
+	PreciousMetals       PreciousMetalsParameters       `json:"precious_metals"`
+	SectorExecutor       SectorExecutorParameters       `json:"sector_executor,omitempty"`
+	Alert                AlertParameters                `json:"alert"`
+	RiskGate             RiskGateParameters             `json:"risk_gate,omitempty"`
+	Engine               EngineParameters               `json:"engine,omitempty"`
+	RSITw                RSITwParameters                `json:"rsi_tw,omitempty"`
 }
 
 // EngineParameters holds parameters migrated from EngineConfig with full ParameterMetadata wrapping.
@@ -1325,6 +1553,9 @@ func (p *ParametersConfig) Validate() error {
 	}
 	if p.RiskGate.PreTrade.VaRConfidenceLevel.Value <= 0 || p.RiskGate.PreTrade.VaRConfidenceLevel.Value > 1 {
 		return fmt.Errorf("risk_gate.pre_trade.var_confidence_level (%.3f) must be in (0,1]", p.RiskGate.PreTrade.VaRConfidenceLevel.Value)
+	}
+	if p.RiskGate.PreTrade.MaxOpenPositions.Value < 1 {
+		return fmt.Errorf("risk_gate.pre_trade.max_open_positions (%d) must be >= 1", p.RiskGate.PreTrade.MaxOpenPositions.Value)
 	}
 
 	// Drawdown constraints
@@ -1921,6 +2152,25 @@ func (p *ParametersConfig) validateEngine() error {
 		return fmt.Errorf("engine.structural_trend.min_trend_strength (%.3f) must be in [0,1]", e.StructuralTrend.MinTrendStrength.Value)
 	}
 
+	// RSITw threshold ordering — C1 (futures OI) thresholds must be monotonically non-decreasing
+	if p.RSITw.C1VeryBullishThreshold.Value < p.RSITw.C1BullishThreshold.Value {
+		return fmt.Errorf("rsi_tw.c1_very_bullish_threshold (%.0f) must be >= c1_bullish_threshold (%.0f)", p.RSITw.C1VeryBullishThreshold.Value, p.RSITw.C1BullishThreshold.Value)
+	}
+	if p.RSITw.C1BullishThreshold.Value < p.RSITw.C1BearishThreshold.Value {
+		return fmt.Errorf("rsi_tw.c1_bullish_threshold (%.0f) must be >= c1_bearish_threshold (%.0f)", p.RSITw.C1BullishThreshold.Value, p.RSITw.C1BearishThreshold.Value)
+	}
+	if p.RSITw.C1BearishThreshold.Value < p.RSITw.C1VeryBearishThreshold.Value {
+		return fmt.Errorf("rsi_tw.c1_bearish_threshold (%.0f) must be >= c1_very_bearish_threshold (%.0f)", p.RSITw.C1BearishThreshold.Value, p.RSITw.C1VeryBearishThreshold.Value)
+	}
+
+	// C3 (ETF net subscription) thresholds must be monotonically non-decreasing
+	if p.RSITw.C3VeryBullishThreshold.Value < p.RSITw.C3BullishThreshold.Value {
+		return fmt.Errorf("rsi_tw.c3_very_bullish_threshold (%.0f) must be >= c3_bullish_threshold (%.0f)", p.RSITw.C3VeryBullishThreshold.Value, p.RSITw.C3BullishThreshold.Value)
+	}
+	if p.RSITw.C3BullishThreshold.Value < p.RSITw.C3BearishThreshold.Value {
+		return fmt.Errorf("rsi_tw.c3_bullish_threshold (%.0f) must be >= c3_bearish_threshold (%.0f)", p.RSITw.C3BullishThreshold.Value, p.RSITw.C3BearishThreshold.Value)
+	}
+
 	return nil
 }
 
@@ -1954,6 +2204,7 @@ func LoadParametersConfig(path string) (*ParametersConfig, error) {
 	mergeEngineDefaults(&cfg)
 	mergeSectorExecutorDefaults(&cfg)
 	mergeIndustryDefaults(&cfg)
+	mergeRSITwDefaults(&cfg)
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate parameters config: %w", err)
@@ -2103,6 +2354,19 @@ func mergeNarrativeDefaults(cfg *ParametersConfig) {
 	if n.TaiwanStressCrisisThreshold.Value == 0 {
 		n.TaiwanStressCrisisThreshold = def.TaiwanStressCrisisThreshold
 	}
+	if n.CalibrationBaselineWindow.Value == 0 {
+		n.CalibrationBaselineWindow = def.CalibrationBaselineWindow
+	}
+	if n.CalibrationTargetMedian.Value == 0 {
+		n.CalibrationTargetMedian = def.CalibrationTargetMedian
+	}
+	if n.CalibrationValidationPct.Value == 0 {
+		n.CalibrationValidationPct = def.CalibrationValidationPct
+	}
+	if n.CalibrationMinRecords.Value == 0 {
+		n.CalibrationMinRecords = def.CalibrationMinRecords
+	}
+	n.CalibrationEnabled = def.CalibrationEnabled
 }
 
 // mergeDrawdownDefaults fills zero-valued drawdown fields with defaults.
@@ -2224,16 +2488,105 @@ func GetParametersConfigPath() string {
 	return parametersPath
 }
 
-// Save writes the configuration to the given JSON file.
+// mirrorCalibrationTimestamp injects a sibling `calibration_timestamp` field
+// after every `last_calibrated` field found in the marshaled JSON, copying
+// the same value. This keeps the two timestamp fields — one written by the
+// Go struct (ParameterMetadata.LastCalibrated) and one written by raw-JSON
+// consumers (cmd/calibrate-seasonal) — in sync after every Save() call.
+//
+// The injection operates line by line on the indented output, preserving
+// the surrounding indentation. The original `last_calibrated` line is
+// rewritten with a guaranteed trailing comma (the injected sibling requires
+// it), and the mirror inherits a trailing comma only when the original
+// line had one — preserving valid JSON when `last_calibrated` was the
+// final field of its object. The function is a no-op when no
+// `last_calibrated` field is present.
+var calibrationTimestampLineRe = regexp.MustCompile(`^(\s*)"last_calibrated":\s*"([^"]*)"(,?)\s*$`)
+
+func mirrorCalibrationTimestamp(data []byte) []byte {
+	lines := bytes.Split(data, []byte("\n"))
+	out := make([][]byte, 0, len(lines)+4)
+	for _, line := range lines {
+		m := calibrationTimestampLineRe.FindSubmatch(line)
+		if m == nil {
+			out = append(out, line)
+			continue
+		}
+		indent := m[1]
+		value := m[2]
+		hadTrailingComma := len(m) >= 4 && len(m[3]) > 0
+		rewritten := append([]byte{}, indent...)
+		rewritten = append(rewritten, []byte(`"last_calibrated": "`)...)
+		rewritten = append(rewritten, value...)
+		rewritten = append(rewritten, '"', ',')
+		out = append(out, rewritten)
+		injected := append([]byte{}, indent...)
+		injected = append(injected, []byte(`"calibration_timestamp": "`)...)
+		injected = append(injected, value...)
+		injected = append(injected, '"')
+		if hadTrailingComma {
+			injected = append(injected, ',')
+		}
+		out = append(out, injected)
+	}
+	return bytes.Join(out, []byte("\n"))
+}
+
+// Save writes the configuration to the given JSON file (non-atomic).
 func (p *ParametersConfig) Save(path string) error {
 	p.UpdatedAt = time.Now()
 	data, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal parameters config: %w", err)
 	}
+	data = mirrorCalibrationTimestamp(data)
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("write parameters config: %w", err)
 	}
+	return nil
+}
+
+// SaveWithRollback atomically writes the configuration with automatic rollback.
+// Write pattern: .tmp → fsync → rename existing → .bak → rename .tmp → target.
+// If any step after the .bak fails, the original file is restored from .bak.
+func (p *ParametersConfig) SaveWithRollback(path string) error {
+	tmpPath := path + ".tmp"
+	bakPath := path + ".bak"
+
+	p.UpdatedAt = time.Now()
+	data, err := json.MarshalIndent(p, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal parameters config: %w", err)
+	}
+	data = mirrorCalibrationTimestamp(data)
+
+	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+		return fmt.Errorf("write temp parameters config: %w", err)
+	}
+
+	f, err := os.OpenFile(tmpPath, os.O_RDONLY, 0)
+	if err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("open temp file for sync: %w", err)
+	}
+	_ = f.Sync()
+	_ = f.Close()
+
+	if _, statErr := os.Stat(path); statErr == nil {
+		if err := os.Rename(path, bakPath); err != nil {
+			_ = os.Remove(tmpPath)
+			return fmt.Errorf("backup existing config: %w", err)
+		}
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		if _, bakErr := os.Stat(bakPath); bakErr == nil {
+			_ = os.Rename(bakPath, path)
+		}
+		return fmt.Errorf("promote temp config: %w", err)
+	}
+
+	_ = os.Remove(bakPath)
 	return nil
 }
 
@@ -2261,6 +2614,9 @@ func mergeRiskGateDefaults(cfg *ParametersConfig) {
 	}
 	if r.PreTrade.MinADVRatio.Value == 0 {
 		r.PreTrade.MinADVRatio = def.PreTrade.MinADVRatio
+	}
+	if r.PreTrade.MaxOpenPositions.Value == 0 {
+		r.PreTrade.MaxOpenPositions = def.PreTrade.MaxOpenPositions
 	}
 	if r.InTrade.MonitorIntervalSec.Value == 0 {
 		r.InTrade.MonitorIntervalSec = def.InTrade.MonitorIntervalSec
@@ -2381,5 +2737,141 @@ func mergeIndustryDefaults(cfg *ParametersConfig) {
 	}
 	if i.HistoryRetentionDays.Value == 0 {
 		i.HistoryRetentionDays = def.HistoryRetentionDays
+	}
+	if i.SiliconCycle.Value.RevenueYoYThreshold == 0 &&
+		i.SiliconCycle.Value.BillingsYoYThreshold == 0 &&
+		i.SiliconCycle.Value.IndexMAPercentThreshold == 0 {
+		i.SiliconCycle = def.SiliconCycle
+	}
+	if i.EventSentimentCap.Value == 0 {
+		i.EventSentimentCap = def.EventSentimentCap
+	}
+	if len(i.ClassificationTree.Value.Segments) == 0 {
+		i.ClassificationTree = def.ClassificationTree
+	}
+}
+
+// mergeRSITwDefaults fills zero-valued RSITwParameters fields with defaults.
+func mergeRSITwDefaults(cfg *ParametersConfig) {
+	def := DefaultParametersConfig().RSITw
+	r := &cfg.RSITw
+
+	// Part A weights
+	if r.A1Weight.Value == 0 {
+		r.A1Weight = def.A1Weight
+	}
+	if r.A2Weight.Value == 0 {
+		r.A2Weight = def.A2Weight
+	}
+	if r.A3Weight.Value == 0 {
+		r.A3Weight = def.A3Weight
+	}
+	if r.A4Weight.Value == 0 {
+		r.A4Weight = def.A4Weight
+	}
+	if r.A5Weight.Value == 0 {
+		r.A5Weight = def.A5Weight
+	}
+	if r.A6Weight.Value == 0 {
+		r.A6Weight = def.A6Weight
+	}
+	if r.APartWeight.Value == 0 {
+		r.APartWeight = def.APartWeight
+	}
+	if r.CPartWeight.Value == 0 {
+		r.CPartWeight = def.CPartWeight
+	}
+
+	// A3 formula
+	if r.A3Midpoint.Value == 0 {
+		r.A3Midpoint = def.A3Midpoint
+	}
+	if r.A3Scale.Value == 0 {
+		r.A3Scale = def.A3Scale
+	}
+
+	// A4 VIX mapping
+	if len(r.A4VixThresholds.Value) == 0 {
+		r.A4VixThresholds = def.A4VixThresholds
+	}
+	if len(r.A4VixScores.Value) == 0 {
+		r.A4VixScores = def.A4VixScores
+	}
+
+	// A5 PCR mapping
+	if len(r.A5PcrThresholds.Value) == 0 {
+		r.A5PcrThresholds = def.A5PcrThresholds
+	}
+	if len(r.A5PcrScores.Value) == 0 {
+		r.A5PcrScores = def.A5PcrScores
+	}
+	if r.A5PcrFallback.Value == 0 {
+		r.A5PcrFallback = def.A5PcrFallback
+	}
+
+	// A6 Odd-lot mapping
+	if len(r.A6OddLotThresholds.Value) == 0 {
+		r.A6OddLotThresholds = def.A6OddLotThresholds
+	}
+	if len(r.A6OddLotScores.Value) == 0 {
+		r.A6OddLotScores = def.A6OddLotScores
+	}
+	if r.A6OddLotFallback.Value == 0 {
+		r.A6OddLotFallback = def.A6OddLotFallback
+	}
+
+	// Part C sub-weights
+	if r.C1Weight.Value == 0 {
+		r.C1Weight = def.C1Weight
+	}
+	if r.C2Weight.Value == 0 {
+		r.C2Weight = def.C2Weight
+	}
+	if r.C3Weight.Value == 0 {
+		r.C3Weight = def.C3Weight
+	}
+
+	// Part C thresholds (existing)
+	if r.C1VeryBullishThreshold.Value == 0 {
+		r.C1VeryBullishThreshold = def.C1VeryBullishThreshold
+	}
+	if r.C1BullishThreshold.Value == 0 {
+		r.C1BullishThreshold = def.C1BullishThreshold
+	}
+	if r.C1BearishThreshold.Value == 0 {
+		r.C1BearishThreshold = def.C1BearishThreshold
+	}
+	if r.C1VeryBearishThreshold.Value == 0 {
+		r.C1VeryBearishThreshold = def.C1VeryBearishThreshold
+	}
+	if r.C2NeutralMidpoint.Value == 0 {
+		r.C2NeutralMidpoint = def.C2NeutralMidpoint
+	}
+	if r.C2NetflowScalingFactor.Value == 0 {
+		r.C2NetflowScalingFactor = def.C2NetflowScalingFactor
+	}
+	if r.C3VeryBullishThreshold.Value == 0 {
+		r.C3VeryBullishThreshold = def.C3VeryBullishThreshold
+	}
+	if r.C3BullishThreshold.Value == 0 {
+		r.C3BullishThreshold = def.C3BullishThreshold
+	}
+	if r.C3BearishThreshold.Value == 0 {
+		r.C3BearishThreshold = def.C3BearishThreshold
+	}
+	if r.DGeoPoliticalRiskThreshold.Value == 0 {
+		r.DGeoPoliticalRiskThreshold = def.DGeoPoliticalRiskThreshold
+	}
+	if r.DGeoPoliticalRiskMultiplier.Value == 0 {
+		r.DGeoPoliticalRiskMultiplier = def.DGeoPoliticalRiskMultiplier
+	}
+	if r.DVIXSpikeThreshold.Value == 0 {
+		r.DVIXSpikeThreshold = def.DVIXSpikeThreshold
+	}
+	if r.DVIXSpikeMultiplier.Value == 0 {
+		r.DVIXSpikeMultiplier = def.DVIXSpikeMultiplier
+	}
+	if r.DCreditTighteningMultiplier.Value == 0 {
+		r.DCreditTighteningMultiplier = def.DCreditTighteningMultiplier
 	}
 }

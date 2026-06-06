@@ -39,8 +39,8 @@ func TestDarwinianWeightManager(t *testing.T) {
 			t.Error("Expected weights map to be initialized")
 		}
 
-		if m.lookbackDays != 20 {
-			t.Errorf("Expected lookbackDays=20, got %d", m.lookbackDays)
+		if m.lookbackDays != 60 {
+			t.Errorf("Expected lookbackDays=60, got %d", m.lookbackDays)
 		}
 	})
 
@@ -130,9 +130,9 @@ func TestDarwinianWeightManager(t *testing.T) {
 		m := NewDarwinianWeightManager("/tmp/test_dw.json")
 		seedAgent(m, "agent_001", "tech", "sector", 1.0)
 
-		// Add returns with known positive mean
-		returns := []float64{0.01, 0.02, -0.01, 0.015, 0.005, -0.005, 0.01, 0.02}
-		for _, r := range returns {
+		// Add 60 returns with known positive mean and realistic variance
+		for i := 0; i < 60; i++ {
+			r := 0.01 + []float64{0.02, -0.01, 0.015, -0.005, 0.025}[i%5]
 			m.RecordOutcome("agent_001", r, r > 0)
 		}
 
@@ -141,7 +141,7 @@ func TestDarwinianWeightManager(t *testing.T) {
 			t.Fatal("Expected agent data")
 		}
 
-		// With 8 returns (>5 threshold), Sharpe should be calculated and positive
+		// With 60 returns (>=60 threshold), Sharpe should be calculated and positive
 		if data.RollingSharpe <= 0 {
 			t.Errorf("Expected positive Sharpe for positive-mean returns, got %f", data.RollingSharpe)
 		}
@@ -151,9 +151,9 @@ func TestDarwinianWeightManager(t *testing.T) {
 		m := NewDarwinianWeightManager("/tmp/test_dw.json")
 		seedAgent(m, "agent_neg", "financials", "sector", 1.0)
 
-		// Add returns with known negative mean
-		negReturns := []float64{-0.01, -0.02, 0.005, -0.015, -0.005, -0.01}
-		for _, r := range negReturns {
+		// Add 60 returns with known negative mean and realistic variance
+		for i := 0; i < 60; i++ {
+			r := -0.01 + []float64{-0.02, 0.01, -0.015, 0.005, -0.025}[i%5]
 			m.RecordOutcome("agent_neg", r, r > 0)
 		}
 
@@ -162,7 +162,7 @@ func TestDarwinianWeightManager(t *testing.T) {
 			t.Fatal("Expected agent data")
 		}
 
-		// With 6 negative-mean returns, Sharpe should be negative (not zero)
+		// With 60 negative-mean returns, Sharpe should be negative (not zero)
 		if data.RollingSharpe >= 0 {
 			t.Errorf("Expected negative Sharpe for negative-mean returns, got %f", data.RollingSharpe)
 		}

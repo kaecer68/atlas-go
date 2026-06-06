@@ -13,7 +13,12 @@ func TestCalculateVolatility_Helpers(t *testing.T) {
 	if v := calculateVolatility([]float64{0.01}); v != 0 {
 		t.Errorf("single: got %f, want 0", v)
 	}
-	v := calculateVolatility([]float64{0.01, -0.02, 0.03, -0.01, 0.005})
+	// 30 samples required for volatility calculation
+	returns := make([]float64, 30)
+	for i := range returns {
+		returns[i] = []float64{0.01, -0.02, 0.03, -0.01, 0.005}[i%5]
+	}
+	v := calculateVolatility(returns)
 	if v <= 0 {
 		t.Errorf("expected positive volatility, got %f", v)
 	}

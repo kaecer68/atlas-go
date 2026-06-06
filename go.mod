@@ -5,6 +5,7 @@ go 1.25.0
 require golang.org/x/time v0.15.0
 
 require (
+	github.com/6tail/lunar-go v1.4.6
 	github.com/alicebob/miniredis/v2 v2.37.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/google/uuid v1.6.0

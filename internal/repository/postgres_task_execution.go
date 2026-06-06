@@ -368,7 +368,8 @@ func (s *TaskExecutionStore) QueryMetricTrends(ctx context.Context, filter domai
 		var p domain.MetricTrendPoint
 		err := rows.Scan(
 			&p.ID, &p.ExecutionID, &p.ExperimentID, &p.SeriesKey, &p.MetricName, &p.MetricScope,
-			&p.MetricValue, &p.BaselineValue, &p.DeltaValue, &p.SampledAt, &p.Tags)
+			&p.MetricValue, &p.BaselineValue, &p.DeltaValue, &p.SampledAt, &p.Tags,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("scan metric: %w", err)
 		}

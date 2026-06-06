@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // CalibrationEngine optimizes factor conviction thresholds and deltas for each
@@ -14,7 +16,15 @@ import (
 // executors to discover calibratable parameters, then applies coordinate-descent
 // optimization to find parameter values that maximize the correlation between
 // factor-driven conviction adjustments and forward returns.
-type CalibrationEngine struct{}
+type CalibrationEngine struct {
+	maturityTracker *domain.MaturityTracker
+}
+
+// WithMaturityTracker attaches a maturity tracker for burn-in gating.
+func (e *CalibrationEngine) WithMaturityTracker(mt *domain.MaturityTracker) *CalibrationEngine {
+	e.maturityTracker = mt
+	return e
+}
 
 // CalibRecommendation is a historical recommendation with factor scores and
 // realized forward return, used as input to the calibration optimizer.
@@ -50,6 +60,13 @@ type ConvictionCalibrationReport struct {
 // StrategyProvider and has sufficient historical data (>= minimumSamples).
 // Returns reports for executors that were successfully calibrated.
 func (e *CalibrationEngine) CalibrateAll(providers []StrategyProvider, dataProvider CalibrationDataProvider, minimumSamples int) ([]ConvictionCalibrationReport, error) {
+	// Burn-in gate: skip calibration until statistical engines are reliable.
+	if e.maturityTracker != nil && e.maturityTracker.Current() == domain.MaturityBurnIn {
+		logging.Info("calibration_engine", "burn_in_skip",
+			"days_until_calibrating", e.maturityTracker.DaysUntil(domain.MaturityCalibrating))
+		return nil, nil
+	}
+
 	if minimumSamples <= 0 {
 		minimumSamples = 10
 	}
@@ -329,7 +346,7 @@ func (e *CalibrationEngine) ApplyToConfigPath(report ConvictionCalibrationReport
 			return fmt.Errorf("ApplyToConfig: %w", err)
 		}
 	}
-	return params.Save(path)
+	return params.SaveWithRollback(path)
 }
 
 // applyParamField maps a ParameterMeta.Name string to the corresponding

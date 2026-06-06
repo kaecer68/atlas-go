@@ -78,6 +78,22 @@ func resolveCardConfig() CardConfig {
 	return defaultCardConfig()
 }
 
+// globalCycleCalibration is the singleton calibration tracker injected at
+// application bootstrap. If nil, resolveCardConfig returns defaults.
+var globalCycleCalibration *CycleCalibration
+
+// SetGlobalCycleCalibration injects the calibration tracker into the
+// cycle status card builder. Thread-safe: the calibration instance
+// itself handles internal synchronization.
+func SetGlobalCycleCalibration(cal *CycleCalibration) {
+	globalCycleCalibration = cal
+}
+
+// GetGlobalCycleCalibration returns the current calibration tracker or nil.
+func GetGlobalCycleCalibration() *CycleCalibration {
+	return globalCycleCalibration
+}
+
 // CycleStatusCard is the daily composite sentiment card that combines all
 // four cycle sub-systems into a single coefficient (0.8–1.2) with full
 // audit trail for the decision chain frontend.

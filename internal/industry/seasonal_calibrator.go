@@ -65,15 +65,15 @@ func calibrateSinglePattern(p SeasonalPattern, industryReturns map[string]map[st
 			continue
 		}
 
-		favAvg := average(favoredReturns)
-		avdAvg := average(avoidedReturns)
+		favPeriod := periodReturn(favoredReturns)
+		avdPeriod := periodReturn(avoidedReturns)
 		totalObservations++
 
-		if favAvg > avdAvg {
+		if favPeriod > avdPeriod {
 			correctPredictions++
 		}
-		patternReturns = append(patternReturns, favAvg)
-		baselineReturns = append(baselineReturns, avdAvg)
+		patternReturns = append(patternReturns, favPeriod)
+		baselineReturns = append(baselineReturns, avdPeriod)
 	}
 
 	cal.ObservationCount = totalObservations
@@ -130,6 +130,27 @@ func average(vals []float64) float64 {
 		sum += v
 	}
 	return sum / float64(len(vals))
+}
+
+// periodReturn 計算一段期間的累積複利報酬（geometric compound return）。
+// 輸入為該期間內逐筆的日報酬小數（例如 0.001 = 0.1%），輸出為整段期間的累積漲跌幅。
+// 例如 30 個交易日每天 +0.1% → (1.001^30) - 1 ≈ 0.0304（≈3.04%）。
+// 這與 SeasonalPattern.AvgMarketReturn 欄位的語義一致：「該季節典型累積報酬」。
+//
+// NaN / ±Inf 輸入回傳 0：JSON 無法表示 NaN，讓它流入 parameters.json 會污染
+// 下次讀取，因此寧可放棄該期資料。
+func periodReturn(dailyReturns []float64) float64 {
+	if len(dailyReturns) == 0 {
+		return 0
+	}
+	compounded := 1.0
+	for _, r := range dailyReturns {
+		if math.IsNaN(r) || math.IsInf(r, 0) {
+			return 0
+		}
+		compounded *= (1.0 + r)
+	}
+	return compounded - 1.0
 }
 
 // CalibrationReport returns a human-readable summary of calibration results.
@@ -277,4 +298,95 @@ func LoadCalibrationEvidence(path string) map[string]any {
 		result["data_source"] = src
 	}
 	return result
+}
+
+// ValidationResult captures the A/B holdout test outcome for a single pattern.
+type ValidationResult struct {
+	PatternID       string  `json:"pattern_id"`
+	TrainAccuracy   float64 `json:"train_accuracy"`
+	TestAccuracy    float64 `json:"test_accuracy"`
+	Degradation     float64 `json:"degradation"`
+	Pass            bool    `json:"pass"`
+	TrainSampleSize int     `json:"train_sample_size"`
+	TestSampleSize  int     `json:"test_sample_size"`
+	Margin          float64 `json:"margin"`
+}
+
+func makeYears(startYear, endYear int) []int {
+	years := make([]int, 0, endYear-startYear+1)
+	for y := startYear; y <= endYear; y++ {
+		years = append(years, y)
+	}
+	return years
+}
+
+func evaluatePatternYears(p SeasonalPattern, industryReturns map[string]map[string]float64, years []int) (int, int) {
+	var correct, total int
+	for _, year := range years {
+		startDate := time.Date(year, time.Month(p.StartMonth), p.StartDay, 0, 0, 0, 0, time.UTC)
+		endDate := time.Date(year, time.Month(p.EndMonth), p.EndDay, 0, 0, 0, 0, time.UTC)
+		if p.StartMonth > p.EndMonth {
+			endDate = endDate.AddDate(1, 0, 0)
+		}
+		favored := collectIndustryReturns(industryReturns, p.FavoredIndustries, startDate, endDate)
+		avoided := collectIndustryReturns(industryReturns, p.AvoidedIndustries, startDate, endDate)
+		if len(favored) == 0 || len(avoided) == 0 {
+			continue
+		}
+		total++
+		if periodReturn(favored) > periodReturn(avoided) {
+			correct++
+		}
+	}
+	return correct, total
+}
+
+// ValidateCalibration runs an out-of-sample A/B holdout test on a pattern.
+// It splits [startYear, endYear] into train (first (1-testFraction)) and test
+// (last testFraction) sub-ranges, counts fav>avd occurrences in each, and
+// reports degradation. The pattern passes when TestAccuracy >= TrainAccuracy
+// - margin. Defaults: testFraction=0.2, margin=0.05.
+func ValidateCalibration(p SeasonalPattern, industryReturns map[string]map[string]float64, startYear, endYear int, testFraction, margin float64) ValidationResult {
+	if testFraction <= 0 || testFraction >= 1 {
+		testFraction = 0.2
+	}
+	if margin < 0 {
+		margin = 0.05
+	}
+	years := makeYears(startYear, endYear)
+	if len(years) < 2 {
+		return ValidationResult{PatternID: p.ID, Margin: margin}
+	}
+	splitIdx := int(float64(len(years)) * (1.0 - testFraction))
+	if splitIdx < 1 {
+		splitIdx = 1
+	}
+	if splitIdx >= len(years) {
+		splitIdx = len(years) - 1
+	}
+	trainCorrect, trainTotal := evaluatePatternYears(p, industryReturns, years[:splitIdx])
+	testCorrect, testTotal := evaluatePatternYears(p, industryReturns, years[splitIdx:])
+	result := ValidationResult{
+		PatternID:       p.ID,
+		TrainSampleSize: trainTotal,
+		TestSampleSize:  testTotal,
+		Margin:          margin,
+	}
+	if trainTotal > 0 {
+		result.TrainAccuracy = float64(trainCorrect) / float64(trainTotal)
+	}
+	if testTotal > 0 {
+		result.TestAccuracy = float64(testCorrect) / float64(testTotal)
+	}
+	result.Degradation = result.TrainAccuracy - result.TestAccuracy
+	result.Pass = result.TestAccuracy >= result.TrainAccuracy-margin
+	return result
+}
+
+func ValidateAllPatterns(engine *SeasonalEngine, industryReturns map[string]map[string]float64, startYear, endYear int, testFraction, margin float64) []ValidationResult {
+	out := make([]ValidationResult, 0)
+	for _, p := range engine.GetAllPatterns() {
+		out = append(out, ValidateCalibration(p, industryReturns, startYear, endYear, testFraction, margin))
+	}
+	return out
 }

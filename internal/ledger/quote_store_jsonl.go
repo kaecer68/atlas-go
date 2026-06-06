@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -13,6 +14,7 @@ import (
 
 type JSONLQuoteStore struct {
 	baseDir string
+	mu      sync.Mutex
 }
 
 func NewJSONLQuoteStore(baseDir string) *JSONLQuoteStore {
@@ -20,6 +22,8 @@ func NewJSONLQuoteStore(baseDir string) *JSONLQuoteStore {
 }
 
 func (s *JSONLQuoteStore) RecordQuotes(quotes []domain.DailyBar) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := os.MkdirAll(s.baseDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir all: %w", err)
 	}
@@ -46,6 +50,8 @@ func (s *JSONLQuoteStore) RecordQuotes(quotes []domain.DailyBar) error {
 }
 
 func (s *JSONLQuoteStore) LoadQuotes(symbol string, start, end time.Time) ([]domain.DailyBar, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	path := filepath.Join(s.baseDir, "quotes.jsonl")
 	f, err := os.Open(path)
 	if err != nil {
@@ -75,6 +81,8 @@ func (s *JSONLQuoteStore) LoadQuotes(symbol string, start, end time.Time) ([]dom
 }
 
 func (s *JSONLQuoteStore) LoadLatestQuotes(symbols []string) (map[string]domain.DailyBar, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	path := filepath.Join(s.baseDir, "quotes.jsonl")
 	f, err := os.Open(path)
 	if err != nil {

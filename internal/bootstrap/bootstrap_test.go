@@ -89,7 +89,8 @@ func TestInitRuntime(t *testing.T) {
 
 func TestApplyBrokerConfig(t *testing.T) {
 	cfg := config.Config{BrokerMode: "dry-run", BrokerMaxRetries: 3}
-	err := ApplyBrokerConfig(&cfg,
+	err := ApplyBrokerConfig(
+		&cfg,
 		BrokerOverrides{
 			Mode:            "live",
 			Adapter:         "http",
@@ -121,7 +122,8 @@ func TestApplyBrokerConfigRejectsInvalidMode(t *testing.T) {
 
 func TestApplyBrokerConfigRejectsLiveWithoutFlag(t *testing.T) {
 	cfg := config.Config{BrokerMode: "dry-run"}
-	err := ApplyBrokerConfig(&cfg,
+	err := ApplyBrokerConfig(
+		&cfg,
 		BrokerOverrides{
 			Mode:            "live",
 			AllowLiveBroker: false,

@@ -147,7 +147,7 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 		buildChannelInfo("twse_capital_flow", "TWSE 三大法人", checkCapitalFlowHealth, filepath.Join(s.WorkDir, "data/state/capital_flow"), now),
 		buildChannelInfo("geopolitical", "地緣政治風險", checkGeopoliticalHealth, filepath.Join(s.WorkDir, "data/state/geopolitical/latest.json"), now),
 		buildChannelInfo("twse_replay", "TWSE Replay", checkReplayHealth, config.GetReplayDataPath(s.WorkDir), now),
-		buildChannelInfo("jpy_yahoo", "日元匯率 (JPY)", checkJPYHealth, filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now),
+		buildChannelInfo("frankfurter_fx", "日元匯率 (JPY)", checkJPYHealth, filepath.Join(s.WorkDir, "data/state/macro/latest.json"), now),
 		buildChannelInfo("twse_margin", "TWSE 融資融券", checkMarginHealth, filepath.Join(s.WorkDir, "data/state/margin"), now),
 		buildChannelInfo("export_statistics", "台灣海關進出口", checkExportHealth, filepath.Join(s.WorkDir, "data/state/export"), now),
 		buildChannelInfo("tsmc_revenue", "台積電月營收", checkTSMCRevenueHealth, filepath.Join(s.WorkDir, "data/state/tsmc_revenue"), now),
@@ -254,10 +254,12 @@ func checkMacroHealth(path string, now time.Time) (string, string) {
 		USD_TWD struct {
 			Symbol    string  `json:"symbol"`
 			ChangePct float64 `json:"change_pct"`
+			Timestamp int64   `json:"timestamp"`
 		} `json:"usd_twd"`
 		JPY struct {
 			Symbol    string  `json:"symbol"`
 			ChangePct float64 `json:"change_pct"`
+			Timestamp int64   `json:"timestamp"`
 		} `json:"jpy"`
 	}
 	if err := json.Unmarshal(data, &snap); err != nil {
@@ -266,12 +268,18 @@ func checkMacroHealth(path string, now time.Time) (string, string) {
 
 	// Check data validity: forex pairs with symbol but zero change_pct
 	// indicate a data pipeline issue (e.g., Yahoo returning only 1 data point).
+	// Only flag when the data timestamp is also missing or older than 24h,
+	// since a zero change on recent data is legitimate (first run or flat market).
 	var staleIndicators []string
 	if snap.USD_TWD.Symbol != "" && snap.USD_TWD.ChangePct == 0 {
-		staleIndicators = append(staleIndicators, "USD/TWD")
+		if snap.USD_TWD.Timestamp == 0 || now.Sub(time.Unix(snap.USD_TWD.Timestamp, 0)) > 24*time.Hour {
+			staleIndicators = append(staleIndicators, "USD/TWD")
+		}
 	}
 	if snap.JPY.Symbol != "" && snap.JPY.ChangePct == 0 {
-		staleIndicators = append(staleIndicators, "JPY")
+		if snap.JPY.Timestamp == 0 || now.Sub(time.Unix(snap.JPY.Timestamp, 0)) > 24*time.Hour {
+			staleIndicators = append(staleIndicators, "JPY")
+		}
 	}
 
 	latest := info.ModTime()

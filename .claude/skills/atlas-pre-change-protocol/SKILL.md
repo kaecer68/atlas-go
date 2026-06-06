@@ -1,6 +1,6 @@
 ---
 name: atlas-pre-change-protocol
-description: "MUST use before ANY code modification OR investigation in atlas-go. Mandates GitNexus blast radius for changes, graphify architecture check for both changes and investigations, data source tracing, and design intent verification. Triggers: any edit, refactor, fix, add, delete, investigate, check, find, audit, research, review, look into, or code change request. Prevents shallow patch fixes, dead code misidentification, and uninformed investigations."
+description: "MUST use before ANY code modification in atlas-go. Mandates GitNexus blast radius for changes, graphify architecture check, data source tracing, and design intent verification. Triggers: any edit, refactor, fix, add, delete, or code change request. Prevents shallow patch fixes and dead code misidentification. (Read-only investigations are exempt — this skill only triggers on write-intent tasks.)"
 ---
 
 # Atlas Pre-Change Protocol
@@ -19,8 +19,6 @@ Load this skill when the user requests ANY of these:
 | Code modification | "fix X", "add Y", "change Z", "refactor W" |
 | Code removal | "delete this", "remove dead code", "clean up" |
 | Bug reports | "this is broken", "X returns wrong result" |
-| Investigation | "check X", "find Y", "investigate Z", "look into W", "audit", "research", "review" |
-| Architecture questions | "how does X work", "what calls Y", "what depends on Z" |
 | File changes | Any edit in `internal/` or `cmd/` |
 | "Simple" fixes | "just add a field", "quick rename", "one-line change" |
 
@@ -86,7 +84,7 @@ Verify no constitutional violations before writing code:
 | If touching... | Must read... | Key rules |
 |---------------|--------------|-----------|
 | Data fetching / API calls | `internal/apigateway/CONSTITUTION.md` | Art.1: registered channels only. Art.4: BackgroundTaskManager only. Art.5: ParametersConfig only. |
-| Portfolio / optimizer | `.omo/CONSTITUTION.md` | Art.1: matrix ops required (Ledoit-Wolf), NOT linear weighting. Art.3: asset-universal code. |
+| Portfolio / optimizer | `docs/GUIDELINES_INDEX.md` + module AGENTS.md | Matrix ops required (Ledoit-Wolf), NOT linear weighting. Asset-universal code. |
 | FactorType changes | `AGENTS.md` §高危陷阱 #22 | Must update 7 locations. Verify with `verify_factor_integrity.sh`. |
 
 ### Step 5: PATTERN MATCHING
@@ -172,7 +170,7 @@ Before modifying or removing code, understand WHY it exists:
 
 **Truth-source hierarchy** (when docs conflict):
 1. `docs/GUIDELINES_INDEX.md` — final arbiter
-2. `internal/apigateway/CONSTITUTION.md` + `.omo/CONSTITUTION.md` — mandatory rules (CI-enforced)
+2. `internal/apigateway/CONSTITUTION.md` — mandatory rules (CI-enforced)
 3. `AGENTS.md` + local `internal/*/AGENTS.md` — module boundaries and pitfalls
 4. Source code — ultimate truth
 

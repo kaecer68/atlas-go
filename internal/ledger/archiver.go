@@ -90,7 +90,8 @@ func (a *Archiver) archiveIfNeeded(filename string) error {
 		return fmt.Errorf("truncate file: %w", err)
 	}
 
-	logging.Info("ledger_archiver", "archived",
+	logging.Info(
+		"ledger_archiver", "archived",
 		"file", filename,
 		"archive", archiveName,
 		"original_size_mb", info.Size()/1024/1024,
@@ -144,12 +145,14 @@ func (a *Archiver) cleanupOldArchives() error {
 		if info.ModTime().Before(cutoff) {
 			path := filepath.Join(a.archiveDir(), entry.Name())
 			if err := os.Remove(path); err != nil {
-				logging.Warn("ledger_archiver", "cleanup_failed",
+				logging.Warn(
+					"ledger_archiver", "cleanup_failed",
 					"file", entry.Name(),
 					"error", err.Error(),
 				)
 			} else {
-				logging.Info("ledger_archiver", "cleaned_up",
+				logging.Info(
+					"ledger_archiver", "cleaned_up",
 					"file", entry.Name(),
 					"age_days", int(time.Since(info.ModTime()).Hours()/24),
 				)

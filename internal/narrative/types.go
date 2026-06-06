@@ -46,6 +46,8 @@ type CausalChain struct {
 	TemplateID      string       `json:"template_id"`
 	TriggerTheme    string       `json:"trigger_theme"`    // the event theme that triggered this chain
 	AffectedSectors []string     `json:"affected_sectors"` // aggregated sectors from all steps
+	FavoredSectors  []string     `json:"favored_sectors"`  // sectors with net positive impact
+	AvoidedSectors  []string     `json:"avoided_sectors"`  // sectors with net negative impact
 	Steps           []CausalStep `json:"steps"`
 	Score           float64      `json:"score"` // combined confidence * historical hit rate
 }
