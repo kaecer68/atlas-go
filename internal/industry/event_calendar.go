@@ -159,7 +159,8 @@ func (tec *EventCalendar) applyConfigOverrides() {
 		}
 		tec.annualRules[key] = rule
 	}
-	logging.Debug("event_calendar", "config_overrides_applied",
+	logging.Debug(
+		"event_calendar", "config_overrides_applied",
 		logging.FInt("rule_count", len(rules)),
 	)
 }
@@ -179,7 +180,8 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 	year := now.Year()
 	providerEvents, err := provider.FetchEvents(ctx, year)
 	if err != nil {
-		logging.Warn("event_calendar", "provider_fetch_failed",
+		logging.Warn(
+			"event_calendar", "provider_fetch_failed",
 			logging.FStr("provider", provider.Name()),
 			logging.Err(err),
 		)
@@ -225,7 +227,8 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 		if valErr := validateProviderEvent(pe); valErr != nil {
 			rejected++
 			if rejected <= 5 {
-				logging.Warn("event_calendar", "provider_event_rejected",
+				logging.Warn(
+					"event_calendar", "provider_event_rejected",
 					logging.FStr("provider", provider.Name()),
 					logging.FStr("reason", valErr.Error()),
 					logging.FStr("symbol", pe.Symbol),
@@ -244,7 +247,8 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 		eventDate, parseErr := time.Parse("2006-01-02", pe.Date)
 		if parseErr != nil {
 			rejected++
-			logging.Warn("event_calendar", "parse_date_failed",
+			logging.Warn(
+				"event_calendar", "parse_date_failed",
 				logging.FStr("date", pe.Date),
 				logging.Err(parseErr),
 			)
@@ -268,7 +272,8 @@ func (tec *EventCalendar) UpdateFromProvider(ctx context.Context, provider marke
 		added++
 	}
 
-	logging.Info("event_calendar", "provider_merged",
+	logging.Info(
+		"event_calendar", "provider_merged",
 		logging.FStr("provider", provider.Name()),
 		logging.FInt("added", added),
 		logging.FInt("rejected", rejected),
@@ -363,13 +368,39 @@ var tombSweepingDates = map[int]time.Time{
 }
 
 // getLunarDate looks up a date from a lunar calendar table. If the year is not
-// covered, it logs a warning and returns the fallback date. This makes fallback
-// usage visible rather than silently producing inaccurate dates.
+// covered by the hardcoded table, it attempts automatic lunar-to-solar computation
+// via lunar-go. The hardcoded table serves as a fast-path cache and verification
+// benchmark; automatic computation removes the 2023-2030 coverage ceiling (ST-8).
+// Only if automatic computation also fails does it return the fallback date.
 func getLunarDate(year int, table map[int]time.Time, fallback time.Time, holidayName string) time.Time {
 	if d, ok := table[year]; ok {
 		return d
 	}
-	logging.Warn("event_calendar", "lunar_date_fallback",
+
+	var computed time.Time
+	switch holidayName {
+	case "春節":
+		computed = computeLunarNewYear(year)
+	case "端午節":
+		computed = computeDragonBoat(year)
+	case "中秋節":
+		computed = computeMidAutumn(year)
+	case "清明節":
+		computed = computeQingming(year)
+	}
+
+	if !computed.IsZero() {
+		logging.Info(
+			"event_calendar", "lunar_date_auto_computed",
+			logging.FStr("holiday", holidayName),
+			logging.FInt("year", year),
+			logging.FStr("date", computed.Format("2006-01-02")),
+		)
+		return computed
+	}
+
+	logging.Warn(
+		"event_calendar", "lunar_date_fallback",
 		logging.FStr("holiday", holidayName),
 		logging.FInt("year", year),
 		logging.FStr("fallback", fallback.Format("2006-01-02")),
@@ -377,8 +408,10 @@ func getLunarDate(year int, table map[int]time.Time, fallback time.Time, holiday
 	return fallback
 }
 
-// GetLunarCoverageYears returns the min and max year covered by the lunar
-// calendar lookup tables. Years outside this range use approximate fallbacks.
+// GetLunarCoverageYears returns the effective coverage range of the lunar calendar
+// system. Since ST-8 (lunar automation), the range is effectively unbounded;
+// the returned values indicate the verified hardcoded cache range (2023-2030).
+// Callers should treat any year as computable.
 func GetLunarCoverageYears() (int, int) {
 	return 2023, 2030
 }

@@ -624,10 +624,10 @@ func TestGetLunarDateFallback(t *testing.T) {
 		t.Errorf("2026 春節: got %v, want %v", d, expected)
 	}
 
-	// Year outside coverage → returns fallback
+	// Year outside coverage → ST-8: auto-computed instead of fallback
 	d = getLunarDate(2035, lunarNewYearDates, fallback, "春節")
-	if !d.Equal(fallback) {
-		t.Errorf("2035 春節: got %v, want fallback %v", d, fallback)
+	if d.Equal(fallback) {
+		t.Errorf("2035 春節: expected auto-computed date, got fallback %v", d)
 	}
 
 	// Verify coverage range

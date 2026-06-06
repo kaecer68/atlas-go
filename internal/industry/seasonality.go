@@ -281,18 +281,30 @@ func (se *SeasonalEngine) GetActivePatternNames(t time.Time) []string {
 	return names
 }
 
+// daysInMonth for non-leap year (used for day-of-year conversion).
+var daysInMonth = []int{0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
+
+// dayOfYear converts month/day to day-of-year (1..365) using a non-leap-year reference.
+func dayOfYear(month, day int) int {
+	doy := 0
+	for m := 1; m < month; m++ {
+		doy += daysInMonth[m]
+	}
+	return doy + day
+}
+
 // isDateInRange checks if a date falls within a seasonal range (handles year wrap).
 func (se *SeasonalEngine) isDateInRange(month, day, startMonth, startDay, endMonth, endDay int) bool {
-	dateValue := month*100 + day
-	startValue := startMonth*100 + startDay
-	endValue := endMonth*100 + endDay
+	dateDOY := dayOfYear(month, day)
+	startDOY := dayOfYear(startMonth, startDay)
+	endDOY := dayOfYear(endMonth, endDay)
 
-	if startValue <= endValue {
-		// Normal range (e.g., 7/1 to 9/15)
-		return dateValue >= startValue && dateValue <= endValue
+	if startDOY <= endDOY {
+		// Normal range (e.g., day 182 to day 258)
+		return dateDOY >= startDOY && dateDOY <= endDOY
 	}
-	// Wrapped range (e.g., 12/20 to 1/15)
-	return dateValue >= startValue || dateValue <= endValue
+	// Wrapped range (e.g., day 354 to day 15)
+	return dateDOY >= startDOY || dateDOY <= endDOY
 }
 
 // GetPatternByID returns a specific seasonal pattern by ID.

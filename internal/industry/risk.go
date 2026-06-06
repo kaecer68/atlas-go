@@ -61,18 +61,20 @@ type AsymmetricRiskConfig = config.AsymmetricRiskConfig
 
 // RiskMonitor monitors industry-specific risks.
 type RiskMonitor struct {
-	mu               sync.RWMutex
-	customerData     map[string][]CustomerConcentration // symbol -> customers
-	newsSources      []NewsSource
-	asymmetricConfig config.AsymmetricRiskConfig
+	mu                 sync.RWMutex
+	customerData       map[string][]CustomerConcentration // symbol -> customers
+	newsSources        []NewsSource
+	asymmetricConfig   config.AsymmetricRiskConfig
+	classificationTree *ClassificationTree
 }
 
 // NewRiskMonitor creates a new risk monitor with default customer concentration data loaded.
 func NewRiskMonitor() *RiskMonitor {
 	rm := &RiskMonitor{
-		customerData:     make(map[string][]CustomerConcentration),
-		newsSources:      DefaultNewsSources(),
-		asymmetricConfig: config.GetParametersConfig().Industry.AsymmetricRisk.Value,
+		customerData:       make(map[string][]CustomerConcentration),
+		newsSources:        DefaultNewsSources(),
+		asymmetricConfig:   config.GetParametersConfig().Industry.AsymmetricRisk.Value,
+		classificationTree: DefaultClassification(),
 	}
 
 	// Load default customer concentration data during initialization
@@ -167,11 +169,14 @@ func (rm *RiskMonitor) CalculateCustomerConcentrationRisk(symbol string) *RiskEv
 		severity = RiskLevelMedium
 	}
 
+	// Resolve industry from classification tree
+	industryID := rm.industryForSymbol(symbol)
+
 	return &RiskEvent{
 		ID:                fmt.Sprintf("risk-customer-%s-%d", symbol, time.Now().Unix()),
 		Type:              "customer_concentration",
 		Severity:          severity,
-		IndustryID:        "semiconductor", // Default, should be parameterized
+		IndustryID:        industryID,
 		Symbol:            symbol,
 		Description:       fmt.Sprintf("Top customer %s accounts for %.0f%% of revenue; US exposure %.0f%%", topCustomerName, topCustomerShare, usExposure),
 		ImpactEstimate:    -riskScore * params.ImpactMultiplier.Value,
@@ -180,6 +185,31 @@ func (rm *RiskMonitor) CalculateCustomerConcentrationRisk(symbol string) *RiskEv
 		Source:            "internal_analysis",
 		RecommendedAction: rm.getCustomerConcentrationAction(riskScore),
 	}
+}
+
+// industryForSymbol resolves the L1 industry ID for a symbol by scanning the classification tree.
+func (rm *RiskMonitor) industryForSymbol(symbol string) string {
+	if rm.classificationTree == nil {
+		return ""
+	}
+	for _, seg := range rm.classificationTree.GetAllSegments() {
+		for _, s := range seg.RepresentativeStocks {
+			if s == symbol {
+				// Return the top-level parent
+				if seg.Level == Level1 {
+					return seg.ID
+				}
+				if seg.ParentID != "" {
+					if parent, ok := rm.classificationTree.GetSegment(seg.ParentID); ok && parent.Level == Level1 {
+						return parent.ID
+					}
+					return seg.ParentID
+				}
+				return seg.ID
+			}
+		}
+	}
+	return ""
 }
 
 func (rm *RiskMonitor) getCustomerConcentrationAction(riskScore float64) string {
@@ -338,7 +368,7 @@ func (rm *RiskMonitor) getAsymmetricAction(dropPct float64) string {
 	}
 }
 
-// GetAllRisks returns all risks for a symbol.
+// GetAllRisks returns all risks for a single symbol.
 func (rm *RiskMonitor) GetAllRisks(symbol string, industryID string, priceChangePct float64, volumeMultiplier float64) []RiskEvent {
 	var risks []RiskEvent
 
@@ -355,6 +385,44 @@ func (rm *RiskMonitor) GetAllRisks(symbol string, industryID string, priceChange
 	}
 
 	return risks
+}
+
+// GetAllRisksForIndustry aggregates risks across all representative stocks in an industry.
+// If industryID is "ALL", aggregates across all L1 industries.
+func (rm *RiskMonitor) GetAllRisksForIndustry(industryID string, priceChangePct float64, volumeMultiplier float64) []RiskEvent {
+	var symbols []string
+	if industryID == "ALL" {
+		if rm.classificationTree != nil {
+			for _, seg := range rm.classificationTree.GetLevel1() {
+				symbols = append(symbols, seg.RepresentativeStocks...)
+			}
+		}
+	} else {
+		if rm.classificationTree != nil {
+			if seg, ok := rm.classificationTree.GetSegment(industryID); ok {
+				symbols = append(symbols, seg.RepresentativeStocks...)
+				for _, child := range rm.classificationTree.GetChildren(industryID) {
+					symbols = append(symbols, child.RepresentativeStocks...)
+				}
+			}
+		}
+	}
+
+	var allRisks []RiskEvent
+	seen := make(map[string]bool)
+	for _, symbol := range symbols {
+		if seen[symbol] {
+			continue
+		}
+		seen[symbol] = true
+		symIndustry := rm.industryForSymbol(symbol)
+		if symIndustry == "" {
+			symIndustry = industryID
+		}
+		risks := rm.GetAllRisks(symbol, symIndustry, priceChangePct, volumeMultiplier)
+		allRisks = append(allRisks, risks...)
+	}
+	return allRisks
 }
 
 // GetHighestRisk returns the highest severity risk.
