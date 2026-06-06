@@ -530,6 +530,11 @@ func run(args []string, deps appDeps) error {
 				system.Session().ID, result.Regime, len(result.Orders), len(result.Positions))
 		}))
 		mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
+		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		})
 		monitor = monitoring.NewMonitor()
 		if alertStore != nil {
 			monitor.SetAlertStore(alertStore)
@@ -1868,7 +1873,7 @@ func run(args []string, deps appDeps) error {
 		authWrappedMux := apishared.AuthMiddleware(mux)
 		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
-			if r.URL.Path == "/metrics" || strings.HasPrefix(r.URL.Path, "/static/") {
+			if r.URL.Path == "/metrics" || r.URL.Path == "/health" || strings.HasPrefix(r.URL.Path, "/static/") {
 				mux.ServeHTTP(w, r)
 				return
 			}
