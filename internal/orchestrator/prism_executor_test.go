@@ -11,6 +11,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
+
 // TestPRISMTrainingExecutorRunUsesLedgerMaxDrawdown verifies the executor
 // computes MaxDrawdown via ledger.BuildScorecards by checking the result is a
 // positive (non-zero) drawdown magnitude. Ledger's maxDrawdown returns positive,
@@ -57,7 +58,6 @@ func TestPRISMTrainingExecutorRunUsesLedgerMaxDrawdown(t *testing.T) {
 		t.Fatal("expected at least one agent with PRISM outcomes in sample replay window")
 	}
 }
-
 
 func TestPRISMTrainingExecutorRunFiltersSamplesByTaskRegime(t *testing.T) {
 	riskOnDate := time.Date(2026, 3, 26, 0, 0, 0, 0, time.UTC)
