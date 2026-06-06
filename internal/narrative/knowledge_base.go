@@ -89,12 +89,15 @@ func (kb *KnowledgeBase) MatchChains(event NarrativeEvent) []CausalChain {
 		copy(steps, tmpl.Steps)
 
 		affected := collectAffectedSectors(tmpl.Steps)
+		favored, avoided := classifySectorsByImpact(tmpl.Steps)
 
 		chains = append(chains, CausalChain{
 			EventID:         event.ID,
 			TemplateID:      tmpl.ID,
 			TriggerTheme:    tmpl.TriggerTheme,
 			AffectedSectors: affected,
+			FavoredSectors:  favored,
+			AvoidedSectors:  avoided,
 			Steps:           steps,
 			Score:           score,
 		})
@@ -115,6 +118,26 @@ func collectAffectedSectors(steps []CausalStep) []string {
 		out = append(out, s)
 	}
 	return out
+}
+
+// classifySectorsByImpact groups affected sectors into favored (net positive
+// impact) and avoided (net negative impact) based on the cumulative Impact
+// across all steps that mention each sector.
+func classifySectorsByImpact(steps []CausalStep) (favored, avoided []string) {
+	netImpact := make(map[string]float64)
+	for _, step := range steps {
+		for _, s := range step.Affected {
+			netImpact[s] += step.Impact
+		}
+	}
+	for s, impact := range netImpact {
+		if impact > 0 {
+			favored = append(favored, s)
+		} else if impact < 0 {
+			avoided = append(avoided, s)
+		}
+	}
+	return favored, avoided
 }
 
 // NarrativeEngine orchestrates event detection and causal chain matching.
@@ -351,22 +374,58 @@ func (ne *NarrativeEngine) ActiveModels(eventThemes []string) []InvestmentModel 
 }
 
 // UpdateModelWeights adjusts model weights based on recent prediction errors.
+// Uses inverse-error weighting with a 40% single-model cap to prevent one
+// lucky model from dominating the ensemble.
 func (ne *NarrativeEngine) UpdateModelWeights() {
-	// Simple inverse-error weighting.
+	const maxWeight = 0.40
+
+	// Compute raw inverse-error weights.
+	invErrs := make([]float64, len(ne.models))
 	var totalInvErr float64
 	for i := range ne.models {
 		err := ne.models[i].RecentError
 		if err <= 0 {
 			err = 0.001
 		}
-		totalInvErr += 1.0 / err
+		invErrs[i] = 1.0 / err
+		totalInvErr += invErrs[i]
 	}
+
+	weights := make([]float64, len(ne.models))
 	for i := range ne.models {
-		err := ne.models[i].RecentError
-		if err <= 0 {
-			err = 0.001
+		weights[i] = invErrs[i] / totalInvErr
+	}
+
+	// Iteratively cap and redistribute excess.
+	for {
+		excess := 0.0
+		uncappedSum := 0.0
+		cappedCount := 0
+		for i, w := range weights {
+			if w > maxWeight {
+				excess += w - maxWeight
+				weights[i] = maxWeight
+				cappedCount++
+			} else {
+				uncappedSum += w
+			}
 		}
-		ne.models[i].Weight = (1.0 / err) / totalInvErr
+		if excess == 0 || uncappedSum == 0 {
+			break
+		}
+		// Redistribute excess proportionally to uncapped models.
+		for i, w := range weights {
+			if w < maxWeight {
+				weights[i] = w + (w/uncappedSum)*excess
+			}
+		}
+		if cappedCount == len(weights) {
+			break
+		}
+	}
+
+	for i := range ne.models {
+		ne.models[i].Weight = weights[i]
 	}
 }
 
@@ -584,6 +643,8 @@ func detectUSRatesEvent(data MarketNarrativeData) *NarrativeEvent {
 		if confidenceDXY > confidence {
 			confidence = confidenceDXY
 		}
+		now := time.Now().UTC()
+		dur := getThemeDuration("US_rates_up")
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-us-rates-%d", nowUnix()),
 			Theme:            "US_rates_up",
@@ -594,7 +655,11 @@ func detectUSRatesEvent(data MarketNarrativeData) *NarrativeEvent {
 			HitRate:          hitRateForTheme("US_rates_up"),
 			CapitalFlow:      "flight_to_USD",
 			TimeWindow:       "1_week",
-			Timestamp:        time.Now().UTC(),
+			Timestamp:        now,
+			Duration:         dur,
+			ExpiresAt:        now.Add(dur),
+			Severity:         "medium",
+			Status:           "active",
 			SourceData: map[string]float64{
 				"us10y_change_bps": data.US10YChangeBps,
 				"dxy_change_pct":   data.DXYChangePct,
@@ -610,6 +675,7 @@ func buildAICapexSurgeEvent(sentiment float64, ts time.Time) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 	if sentiment > params.AICapexSentimentThreshold.Value {
 		confidence := computeDeviationConfidence(sentiment, params.AICapexSentimentThreshold.Value, params.ConfidenceBaseAICapex.Value, params.ConfidenceDeviationCeiling.Value)
+		dur := getThemeDuration("AI_capex_surge")
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-ai-capex-%d", ts.UnixNano()),
 			Theme:            "AI_capex_surge",
@@ -621,6 +687,10 @@ func buildAICapexSurgeEvent(sentiment float64, ts time.Time) *NarrativeEvent {
 			CapitalFlow:      "tech_capex_inflow",
 			TimeWindow:       "1_month",
 			Timestamp:        ts,
+			Duration:         dur,
+			ExpiresAt:        ts.Add(dur),
+			Severity:         "high",
+			Status:           "active",
 			SourceData: map[string]float64{
 				"ai_capex_sentiment": sentiment,
 			},
@@ -647,6 +717,8 @@ func NewEarningsSurpriseEvent(surprisePct float64) *NarrativeEvent {
 		capitalFlow = "earnings_miss"
 	}
 
+	now := time.Now().UTC()
+	dur := getThemeDuration("earnings_surprise")
 	return &NarrativeEvent{
 		ID:               fmt.Sprintf("evt-earn-%d", nowUnix()),
 		Theme:            "earnings_surprise",
@@ -657,9 +729,11 @@ func NewEarningsSurpriseEvent(surprisePct float64) *NarrativeEvent {
 		HitRate:          hitRateForTheme("earnings_surprise"),
 		CapitalFlow:      capitalFlow,
 		TimeWindow:       "1_week",
-		Duration:         10 * 24 * time.Hour,
-		Timestamp:        time.Now().UTC(),
+		Duration:         dur,
+		ExpiresAt:        now.Add(dur),
+		Timestamp:        now,
 		Severity:         "high",
+		Status:           "active",
 		SourceData: map[string]float64{
 			"surprise_pct": surprisePct,
 		},
@@ -681,6 +755,8 @@ func detectGeopoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
 		if confidenceGold > confidence {
 			confidence = confidenceGold
 		}
+		now := time.Now().UTC()
+		dur := getThemeDuration("geopolitical_risk_spike")
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-geo-%d", nowUnix()),
 			Theme:            "geopolitical_risk_spike",
@@ -691,7 +767,11 @@ func detectGeopoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
 			HitRate:          hitRateForTheme("geopolitical_risk_spike"),
 			CapitalFlow:      "risk_off",
 			TimeWindow:       "immediate",
-			Timestamp:        time.Now().UTC(),
+			Timestamp:        now,
+			Duration:         dur,
+			ExpiresAt:        now.Add(dur),
+			Severity:         "high",
+			Status:           "active",
 			SourceData: map[string]float64{
 				"geopolitical_gpr": data.GeopoliticalGPR,
 				"gold_change_pct":  data.GoldChangePct,
@@ -708,6 +788,7 @@ func buildOilShockEvent(changePct float64, ts time.Time) *NarrativeEvent {
 	threshold := params.OilChangePctThreshold.Value
 	if changePct > threshold || changePct < -threshold {
 		confidence := computeDeviationConfidence(changePct, threshold, params.ConfidenceBaseOilShock.Value, params.ConfidenceDeviationCeiling.Value)
+		dur := getThemeDuration("oil_price_shock")
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-oil-%d", ts.UnixNano()),
 			Theme:            "oil_price_shock",
@@ -719,6 +800,10 @@ func buildOilShockEvent(changePct float64, ts time.Time) *NarrativeEvent {
 			CapitalFlow:      "inflation_reprice",
 			TimeWindow:       "1_week",
 			Timestamp:        ts,
+			Duration:         dur,
+			ExpiresAt:        ts.Add(dur),
+			Severity:         "medium",
+			Status:           "active",
 			SourceData: map[string]float64{
 				"oil_change_pct": changePct,
 			},
@@ -742,6 +827,7 @@ func buildJPYCarryUnwindEvent(jpyChangePct, vixLevel float64, ts time.Time) *Nar
 		if confidenceVIX > confidence {
 			confidence = confidenceVIX
 		}
+		dur := getThemeDuration("JPY_carry_unwind")
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-jpy-%d", ts.UnixNano()),
 			Theme:            "JPY_carry_unwind",
@@ -753,6 +839,10 @@ func buildJPYCarryUnwindEvent(jpyChangePct, vixLevel float64, ts time.Time) *Nar
 			CapitalFlow:      "global_liquidity_drain",
 			TimeWindow:       "immediate",
 			Timestamp:        ts,
+			Duration:         dur,
+			ExpiresAt:        ts.Add(dur),
+			Severity:         "medium",
+			Status:           "active",
 			SourceData: map[string]float64{
 				"jpy_change_pct": jpyChangePct,
 				"vix_level":      vixLevel,
@@ -776,6 +866,7 @@ func buildUSDTWDVolatilityEvent(changePct float64, ts time.Time) *NarrativeEvent
 			sentiment = -0.7
 		}
 		confidence := computeDeviationConfidence(changePct, params.USDTWDChangePctThreshold.Value, params.ConfidenceBaseTaiwanStress.Value, params.ConfidenceDeviationCeiling.Value)
+		dur := getThemeDuration("USD_TWD_volatility")
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-usd-twd-%d", ts.UnixNano()),
 			Theme:            "USD_TWD_volatility",
@@ -787,6 +878,10 @@ func buildUSDTWDVolatilityEvent(changePct float64, ts time.Time) *NarrativeEvent
 			CapitalFlow:      "fx_driven_outflow",
 			TimeWindow:       "1_week",
 			Timestamp:        ts,
+			Duration:         dur,
+			ExpiresAt:        ts.Add(dur),
+			Severity:         "medium",
+			Status:           "active",
 			SourceData: map[string]float64{
 				"usd_twd_change_pct": changePct,
 			},
@@ -803,6 +898,8 @@ func detectTaiwanPoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 	if data.GeopoliticalGPR > params.GeopoliticalGPRThreshold.Value {
 		confidence := computeDeviationConfidence(data.GeopoliticalGPR, params.GeopoliticalGPRThreshold.Value, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
+		now := time.Now().UTC()
+		dur := getThemeDuration("taiwan_political_risk")
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-tw-pol-%d", nowUnix()),
 			Theme:            "taiwan_political_risk",
@@ -813,7 +910,11 @@ func detectTaiwanPoliticalRiskEvent(data MarketNarrativeData) *NarrativeEvent {
 			HitRate:          hitRateForTheme("taiwan_political_risk"),
 			CapitalFlow:      "risk_off",
 			TimeWindow:       "immediate",
-			Timestamp:        time.Now().UTC(),
+			Timestamp:        now,
+			Duration:         dur,
+			ExpiresAt:        now.Add(dur),
+			Severity:         "high",
+			Status:           "active",
 			SourceData: map[string]float64{
 				"geopolitical_gpr": data.GeopoliticalGPR,
 			},
@@ -841,6 +942,8 @@ func detectSemiconductorDownturnEvent(data MarketNarrativeData) *NarrativeEvent 
 		if confidenceAI > confidence {
 			confidence = confidenceAI
 		}
+		now := time.Now().UTC()
+		dur := getThemeDuration("semiconductor_downturn")
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-semi-dt-%d", nowUnix()),
 			Theme:            "semiconductor_downturn",
@@ -851,7 +954,11 @@ func detectSemiconductorDownturnEvent(data MarketNarrativeData) *NarrativeEvent 
 			HitRate:          hitRateForTheme("semiconductor_downturn"),
 			CapitalFlow:      "tech_capex_slowdown",
 			TimeWindow:       "1_month",
-			Timestamp:        time.Now().UTC(),
+			Timestamp:        now,
+			Duration:         dur,
+			ExpiresAt:        now.Add(dur),
+			Severity:         "high",
+			Status:           "active",
 			SourceData: map[string]float64{
 				"vix_level":          data.VIXLevel,
 				"dxy_change_pct":     data.DXYChangePct,
@@ -869,6 +976,7 @@ func detectSeasonalEvent() *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 
 	if (month == 1 && day >= 15) || (month == 2 && day <= 15) {
+		dur := getThemeDuration("spring_festival_season")
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-spring-%d", nowUnix()),
 			Theme:            "spring_festival_season",
@@ -880,6 +988,10 @@ func detectSeasonalEvent() *NarrativeEvent {
 			CapitalFlow:      "seasonal_rotation",
 			TimeWindow:       "1_month",
 			Timestamp:        now,
+			Duration:         dur,
+			ExpiresAt:        now.Add(dur),
+			Severity:         "low",
+			Status:           "active",
 			SourceData: map[string]float64{
 				"month": float64(month),
 				"day":   float64(day),
@@ -888,6 +1000,7 @@ func detectSeasonalEvent() *NarrativeEvent {
 	}
 
 	if (month == 1 && day <= 15) || (month == 12 && day >= 20) {
+		dur := getThemeDuration("election_cycle")
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-election-%d", nowUnix()),
 			Theme:            "election_cycle",
@@ -899,6 +1012,10 @@ func detectSeasonalEvent() *NarrativeEvent {
 			CapitalFlow:      "policy_uncertainty",
 			TimeWindow:       "1_month",
 			Timestamp:        now,
+			Duration:         dur,
+			ExpiresAt:        now.Add(dur),
+			Severity:         "low",
+			Status:           "active",
 			SourceData: map[string]float64{
 				"month": float64(month),
 				"day":   float64(day),
@@ -908,6 +1025,7 @@ func detectSeasonalEvent() *NarrativeEvent {
 
 	if (month == 3 && day >= 1) || (month == 4 && day <= 15) {
 		hitRate := params.EarningsBlackoutConfidence.Value
+		dur := getThemeDuration("earnings_blackout")
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-blackout-%d", nowUnix()),
 			Theme:            "earnings_blackout",
@@ -919,6 +1037,10 @@ func detectSeasonalEvent() *NarrativeEvent {
 			CapitalFlow:      "pre_earnings_positioning",
 			TimeWindow:       "1_month",
 			Timestamp:        now,
+			Duration:         dur,
+			ExpiresAt:        now.Add(dur),
+			Severity:         "low",
+			Status:           "active",
 			SourceData: map[string]float64{
 				"month": float64(month),
 				"day":   float64(day),
@@ -928,6 +1050,7 @@ func detectSeasonalEvent() *NarrativeEvent {
 
 	if (month == 7 && day >= 1) || (month == 8) || (month == 9 && day <= 15) {
 		hitRate := params.TechPeakSeasonConfidence.Value
+		dur := getThemeDuration("tech_peak_season")
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-tech-peak-%d", nowUnix()),
 			Theme:            "tech_peak_season",
@@ -939,6 +1062,10 @@ func detectSeasonalEvent() *NarrativeEvent {
 			CapitalFlow:      "tech_capex_inflow",
 			TimeWindow:       "2_months",
 			Timestamp:        now,
+			Duration:         dur,
+			ExpiresAt:        now.Add(dur),
+			Severity:         "low",
+			Status:           "active",
 			SourceData: map[string]float64{
 				"month": float64(month),
 				"day":   float64(day),
@@ -948,6 +1075,7 @@ func detectSeasonalEvent() *NarrativeEvent {
 
 	if month == 11 || month == 12 {
 		hitRate := params.YearEndWindowDressingConfidence.Value
+		dur := getThemeDuration("year_end_window_dressing")
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-yearend-%d", nowUnix()),
 			Theme:            "year_end_window_dressing",
@@ -959,6 +1087,10 @@ func detectSeasonalEvent() *NarrativeEvent {
 			CapitalFlow:      "institutional_rebalancing",
 			TimeWindow:       "2_months",
 			Timestamp:        now,
+			Duration:         dur,
+			ExpiresAt:        now.Add(dur),
+			Severity:         "low",
+			Status:           "active",
 			SourceData: map[string]float64{
 				"month": float64(month),
 				"day":   float64(day),
@@ -984,6 +1116,8 @@ func detectRetailDivergenceEvent(data MarketNarrativeData) *NarrativeEvent {
 		if confidenceDivergence > confidence {
 			confidence = confidenceDivergence
 		}
+		now := time.Now().UTC()
+		dur := getThemeDuration("retail_institutional_divergence")
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-retail-div-%d", nowUnix()),
 			Theme:            "retail_institutional_divergence",
@@ -994,7 +1128,11 @@ func detectRetailDivergenceEvent(data MarketNarrativeData) *NarrativeEvent {
 			HitRate:          hitRateForTheme("retail_institutional_divergence"),
 			CapitalFlow:      "crowding_risk",
 			TimeWindow:       "immediate",
-			Timestamp:        time.Now().UTC(),
+			Timestamp:        now,
+			Duration:         dur,
+			ExpiresAt:        now.Add(dur),
+			Severity:         "medium",
+			Status:           "active",
 			SourceData: map[string]float64{
 				"margin_zscore":                   data.MarginZScore,
 				"retail_institutional_divergence": data.RetailInstitutionalDivergence,
@@ -1009,11 +1147,9 @@ func detectRetailDivergenceEvent(data MarketNarrativeData) *NarrativeEvent {
 // Reason: The KB version uses GoldChangePct from MarketNarrativeData directly, while the
 // ingestor version uses a MacroDataPoint with ChangePct. Different input shapes, same theme.
 func detectGoldRallyKBEvent(data MarketNarrativeData) *NarrativeEvent {
-	if data.GoldChangePct > 3.0 {
-		confidence := data.GoldChangePct / 5.0
-		if confidence > 1.0 {
-			confidence = 1.0
-		}
+	params := config.GetParametersConfig().Narrative
+	if data.GoldChangePct > params.GoldChangePctThreshold.Value {
+		confidence := computeDeviationConfidence(data.GoldChangePct, params.GoldChangePctThreshold.Value, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
 		now := time.Now().UTC()
 		dur := getThemeDuration("gold_rally")
 		return &NarrativeEvent{
@@ -1044,11 +1180,9 @@ func detectGoldRallyKBEvent(data MarketNarrativeData) *NarrativeEvent {
 // Reason: The KB version uses DXYChangePct from MarketNarrativeData directly, while the
 // ingestor version uses a MacroDataPoint with ChangePct. Different input shapes, same theme.
 func detectDollarSurgeKBEvent(data MarketNarrativeData) *NarrativeEvent {
-	if data.DXYChangePct > 1.5 {
-		confidence := data.DXYChangePct / 3.0
-		if confidence > 1.0 {
-			confidence = 1.0
-		}
+	params := config.GetParametersConfig().Narrative
+	if data.DXYChangePct > params.DXYChangePctThreshold.Value {
+		confidence := computeDeviationConfidence(data.DXYChangePct, params.DXYChangePctThreshold.Value, params.ConfidenceBaseUSRates.Value, params.ConfidenceDeviationCeiling.Value)
 		now := time.Now().UTC()
 		dur := getThemeDuration("dollar_surge")
 		return &NarrativeEvent{
@@ -1080,7 +1214,8 @@ func detectDollarSurgeKBEvent(data MarketNarrativeData) *NarrativeEvent {
 // Reason: The KB version uses AICapexSentiment (sentiment proxy) while
 // NewEarningsSurpriseEvent uses actual earnings surprise percentage. Different signal sources.
 func detectEarningsSurpriseKBEvent(data MarketNarrativeData) *NarrativeEvent {
-	if data.AICapexSentiment > 0.7 {
+	params := config.GetParametersConfig().Narrative
+	if data.AICapexSentiment > params.AICapexSentimentThreshold.Value {
 		now := time.Now().UTC()
 		dur := getThemeDuration("earnings_surprise")
 		return &NarrativeEvent{
@@ -1088,7 +1223,7 @@ func detectEarningsSurpriseKBEvent(data MarketNarrativeData) *NarrativeEvent {
 			Theme:            "earnings_surprise",
 			Region:           "TW",
 			Sentiment:        0.7,
-			Confidence:       data.AICapexSentiment,
+			Confidence:       computeDeviationConfidence(data.AICapexSentiment, params.AICapexSentimentThreshold.Value, params.ConfidenceBaseAICapex.Value, params.ConfidenceDeviationCeiling.Value),
 			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("earnings_surprise"),
 			CapitalFlow:      "earnings_beat",
@@ -1113,15 +1248,20 @@ func detectEarningsSurpriseKBEvent(data MarketNarrativeData) *NarrativeEvent {
 // Reason: The KB version uses VIXLevel + DXYChangePct from MarketNarrativeData directly,
 // while the ingestor version uses MacroDataPoint structs. Different input shapes, same theme.
 func detectInflationSpikeKBEvent(data MarketNarrativeData) *NarrativeEvent {
-	if data.VIXLevel > 25 && data.DXYChangePct > 1.0 {
+	params := config.GetParametersConfig().Narrative
+	if data.VIXLevel > params.VIXLevelThreshold.Value && data.DXYChangePct > params.DXYChangePctThreshold.Value {
 		now := time.Now().UTC()
 		dur := getThemeDuration("inflation_spike")
+		confidence := computeDeviationConfidence(data.VIXLevel, params.VIXLevelThreshold.Value, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
+		if data.DXYChangePct > params.DXYChangePctThreshold.Value {
+			confidence = clampConfidence(confidence + 0.05)
+		}
 		return &NarrativeEvent{
 			ID:               fmt.Sprintf("evt-inflation-spike-%d", nowUnix()),
 			Theme:            "inflation_spike",
 			Region:           "US",
 			Sentiment:        -0.6,
-			Confidence:       (data.VIXLevel-25)/15.0 + 0.5, // scales 25→0.5, 40→1.0
+			Confidence:       confidence,
 			ConfidenceSource: "deviation_based_v1",
 			HitRate:          hitRateForTheme("inflation_spike"),
 			CapitalFlow:      "inflation_reprice",
@@ -1158,20 +1298,12 @@ func computeDeviationConfidence(observed, threshold, base, ceiling float64) floa
 }
 
 // getThemeDuration returns the typical duration for a narrative event theme.
-// Uses the same durations as EventLifecycleManager.defaultDurations().
+// Delegates to DefaultThemeDurations for a single source of truth.
 func getThemeDuration(theme string) time.Duration {
-	switch theme {
-	case "gold_rally":
-		return 7 * 24 * time.Hour
-	case "dollar_surge":
-		return 7 * 24 * time.Hour
-	case "earnings_surprise":
-		return 10 * 24 * time.Hour
-	case "inflation_spike":
-		return 15 * 24 * time.Hour
-	default:
-		return 7 * 24 * time.Hour
+	if d, ok := DefaultThemeDurations()[theme]; ok {
+		return d
 	}
+	return 7 * 24 * time.Hour
 }
 
 var nowUnix = func() int64 {
