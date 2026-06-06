@@ -19,13 +19,13 @@ type TSMCRevenueProvider struct {
 
 func NewTSMCRevenueProvider(apiKey string) *TSMCRevenueProvider {
 	return &TSMCRevenueProvider{
-		client: NewFinMindClient(apiKey),
+		client: GetSharedFinMindClient(apiKey),
 	}
 }
 
 func NewTSMCRevenueProviderWithStorage(apiKey, storageDir string) *TSMCRevenueProvider {
 	return &TSMCRevenueProvider{
-		client:     NewFinMindClient(apiKey),
+		client:     GetSharedFinMindClient(apiKey),
 		storageDir: storageDir,
 	}
 }

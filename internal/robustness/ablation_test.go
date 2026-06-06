@@ -135,7 +135,6 @@ func TestAblationAnalysis(t *testing.T) {
 		report, err := robustness.AblationAnalysis(X, y, allFactors, []string{"momentum"}, func() robustness.Model {
 			return &linearModel{}
 		})
-
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -171,7 +170,6 @@ func TestAblationAnalysis(t *testing.T) {
 		report, err := robustness.AblationAnalysis(X, y, allFactors, []string{"value"}, func() robustness.Model {
 			return &linearModel{}
 		})
-
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -245,7 +243,6 @@ func TestAblationAnalysis(t *testing.T) {
 		report, err := robustness.AblationAnalysis(zeroX, zeroY, allFactors, []string{"value"}, func() robustness.Model {
 			return &linearModel{}
 		})
-
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

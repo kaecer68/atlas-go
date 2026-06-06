@@ -134,6 +134,65 @@ func TestSQLiteOutcomeStoreRecordSessionOutcomes(t *testing.T) {
 	}
 }
 
+func TestSQLiteOutcomeStoreLoadOutcomesFromSessions(t *testing.T) {
+	db, err := OpenSQLiteDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenSQLiteDB failed: %v", err)
+	}
+	defer db.Close()
+
+	if err := InitSchema(db); err != nil {
+		t.Fatalf("InitSchema failed: %v", err)
+	}
+
+	store := NewSQLiteOutcomeStore(db)
+
+	globalOutcomes := []domain.RecommendationOutcome{
+		{
+			AgentID: "global-agent", Symbol: "9999", Side: domain.SideBuy, Conviction: 50,
+			RecordedAt: time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC),
+		},
+	}
+	if err := store.RecordOutcomes(globalOutcomes); err != nil {
+		t.Fatalf("RecordOutcomes failed: %v", err)
+	}
+
+	sessionA := domain.ReplaySession{ID: "session-A", Mode: "backtest", Market: "TWSE", SessionDate: time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)}
+	sessionB := domain.ReplaySession{ID: "session-B", Mode: "backtest", Market: "TWSE", SessionDate: time.Date(2026, 1, 16, 0, 0, 0, 0, time.UTC)}
+
+	if err := store.RecordSessionOutcomes(sessionA, []domain.RecommendationOutcome{
+		{AgentID: "agent-a1", Symbol: "2330", Side: domain.SideBuy, Conviction: 80, RecordedAt: time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)},
+		{AgentID: "agent-a2", Symbol: "2454", Side: domain.SideBuy, Conviction: 70, RecordedAt: time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)},
+	}); err != nil {
+		t.Fatalf("RecordSessionOutcomes A failed: %v", err)
+	}
+	if err := store.RecordSessionOutcomes(sessionB, []domain.RecommendationOutcome{
+		{AgentID: "agent-b1", Symbol: "2317", Side: domain.SideBuy, Conviction: 60, RecordedAt: time.Date(2026, 1, 16, 0, 0, 0, 0, time.UTC)},
+	}); err != nil {
+		t.Fatalf("RecordSessionOutcomes B failed: %v", err)
+	}
+
+	loaded, err := store.LoadOutcomesFromSessions()
+	if err != nil {
+		t.Fatalf("LoadOutcomesFromSessions failed: %v", err)
+	}
+	if len(loaded) != 3 {
+		t.Fatalf("expected 3 session outcomes (excluding global sparse), got %d", len(loaded))
+	}
+	symbols := map[string]bool{}
+	for _, o := range loaded {
+		symbols[o.Symbol] = true
+		if o.AgentID == "global-agent" {
+			t.Errorf("global sparse outcome leaked into FromSessions: %+v", o)
+		}
+	}
+	for _, want := range []string{"2330", "2454", "2317"} {
+		if !symbols[want] {
+			t.Errorf("expected symbol %s in FromSessions result, missing", want)
+		}
+	}
+}
+
 func TestSQLiteOutcomeStoreLoadSessionOutcomesEmpty(t *testing.T) {
 	db, err := OpenSQLiteDB(":memory:")
 	if err != nil {

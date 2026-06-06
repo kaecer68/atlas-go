@@ -1,0 +1,79 @@
+/* Atlas Dashboard - Live Progress Component */
+.live-progress-container {
+  padding: var(--space-md);
+  background: var(--panel-l2);
+  border-radius: 8px;
+  margin-bottom: var(--space-md);
+}
+.progress-track {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+}
+.progress-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  z-index: 2;
+  opacity: 0.5;
+  transition: opacity 0.3s ease;
+}
+.progress-step.completed { opacity: 0.8; }
+.progress-step.active { opacity: 1; transform: scale(1.05); }
+.step-icon {
+  font-size: 20px;
+  background: var(--panel-l3);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border);
+  margin-bottom: 8px;
+}
+.progress-step.active .step-icon {
+  border-color: var(--accent);
+  box-shadow: 0 0 10px rgba(79, 193, 255, 0.3);
+}
+.progress-step.completed .step-icon {
+  border-color: var(--color-success);
+}
+.step-label {
+  font-size: var(--text-xs);
+  color: var(--text);
+}
+.step-shimmer {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border-radius: 50%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  animation: skeletonShimmer 1.5s infinite;
+}
+.progress-connector {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  margin: 0 10px;
+  position: relative;
+  top: -10px;
+}
+.progress-connector.completed {
+  background: var(--color-success);
+}
+.stage-hint {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--panel-l3);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+  text-align: center;
+  border: 1px solid var(--border);
+}
+.stage-hint::before {
+  content: "\01F4A1 ";
+}

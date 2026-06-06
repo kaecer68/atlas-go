@@ -113,7 +113,7 @@ func run(args []string) error {
 		}
 	}
 
-	if err := paramsCfg.Save(paramsPath); err != nil {
+	if err := paramsCfg.SaveWithRollback(paramsPath); err != nil {
 		return fmt.Errorf("save parameters: %w", err)
 	}
 
@@ -423,7 +423,7 @@ func calibrateDarwinian(ie *config.InferenceEngine, n int, cfg *config.Parameter
 	agentSharpes := make([]float64, 0, len(agentReturns))
 	agentVols := make([]float64, 0, len(agentReturns))
 	for _, returns := range agentReturns {
-		if len(returns) < int(cfg.Darwinian.SharpeMinSampleSize.Value) {
+		if len(returns) < cfg.Darwinian.SharpeMinSampleSize.Value {
 			continue
 		}
 		mean := 0.0

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -65,6 +66,25 @@ func NewSizer() *Sizer {
 	}
 }
 
+// NewSizerFromConfig 從 ParametersConfig 構造 Sizer，將可用的 Sizing 參數
+// 同步進 RiskParameters，解決 SetRiskParameters 從未被 production code 呼叫的
+// dead-code 問題。VolLookback 因 ParametersConfig 未提供，保留預設值。
+func NewSizerFromConfig(cfg *config.ParametersConfig) *Sizer {
+	s := NewSizer()
+	if cfg == nil {
+		return s
+	}
+	rp := RiskParameters{
+		KellyFraction:      cfg.Sizing.KellyFraction.Value,
+		MaxPositionByADV:   cfg.Sizing.MaxPositionByADV.Value,
+		MaxDrawdownLimit:   cfg.Sizing.MaxDrawdownLimit.Value,
+		ATRMultiplier:      cfg.Sizing.ATRMultiplier.Value,
+		CorrelationPenalty: cfg.Sizing.CorrelationPenalty.Value,
+	}
+	s.SetRiskParameters(rp)
+	return s
+}
+
 // SetRiskParameters 设置风险参数
 func (s *Sizer) SetRiskParameters(params RiskParameters) {
 	s.mu.Lock()
@@ -114,7 +134,7 @@ func (s *Sizer) CalculateSize(
 
 	// 4. 应用流动性限制
 	adv := s.getADV(signal.Symbol)
-	liquidityLimitedSize := s.applyLiquidityLimit(atrAdjustedSize, adv, params.MaxPositionByADV)
+	liquidityLimitedSize := s.applyLiquidityLimit(atrAdjustedSize, adv, quote.Last, params.MaxPositionByADV)
 
 	// 5. 应用相关性惩罚
 	corrPenalty := s.calculateCorrelationPenalty(signal.Symbol, currentPortfolio)
@@ -225,12 +245,15 @@ func (s *Sizer) adjustForATR(baseSize, atr, price, multiplier float64) float64 {
 }
 
 // applyLiquidityLimit 应用流动性限制
-func (s *Sizer) applyLiquidityLimit(size, adv, maxPct float64) float64 {
-	if adv == 0 {
+// adv 為日均成交股數，price 為當前報價，maxPct 為單一持倉占 ADV 的上限比例
+// (例如 0.01 代表 1% 的日成交量)。maxByLiquidity = adv * price * maxPct 為
+// 流動性允許的最大持倉金額(原為簡化計算直接乘 100，已修正)。
+func (s *Sizer) applyLiquidityLimit(size, adv, price, maxPct float64) float64 {
+	if adv == 0 || price <= 0 {
 		return size
 	}
 
-	maxByLiquidity := adv * maxPct * 100 // 假设价格 100，简化计算
+	maxByLiquidity := adv * price * maxPct
 	if size > maxByLiquidity {
 		return maxByLiquidity
 	}

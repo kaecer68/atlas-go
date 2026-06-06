@@ -10,6 +10,18 @@ import json
 import logging
 from typing import List, Optional
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+# 自動載入 ~/.config/atlas-go/.env
+_env_path = Path.home() / ".config" / "atlas-go" / ".env"
+if _env_path.exists():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(str(_env_path))
+        logger = logging.getLogger(__name__)
+        logger.info(f"Loaded environment from {_env_path}")
+    except ImportError:
+        pass
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse

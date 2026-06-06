@@ -1,4 +1,7 @@
-# Atlas Macro Narrative Skill
+---
+name: atlas-macro-narrative
+description: "Use when analyzing macro narrative events, deriving foreign capital flow probabilities, or working with the six macro dimensions. Triggers: macro analysis, narrative event detection, Taiwan stress index, causal chain analysis."
+---
 
 ## 核心使命
 
@@ -183,7 +186,7 @@ IF 宏觀風險 = 橙色
    - 計算外資出逃機率
    - 輸出 `MacroRiskLevel`（綠/黃/橙/紅）
 
-2. **DrawdownGuard** (`internal/risk/drawdown_guard.go`)
+2. **DrawdownGuard** (`internal/risk/macro_aware_drawdown.go`)
    - 接收 `MacroRiskLevel`
    - 調整回撤閾值（風險高時提前觸發）
    - 結構性機會豁免邏輯
@@ -227,6 +230,46 @@ IF 宏觀風險 = 橙色
 
 ---
 
-*技能版本: 1.0*  
-*最後更新: 2026-04-23*  
+## 八、Rolling Calibration Framework（壓力指數自動校準）
+
+**觸發情境**：
+- 收到「Taiwan Stress Index 漏報」、「stress index 都是 0」、「平穩日沒訊號」等問題回報
+- 收到「為什麼 ChangePct=0」、「怎麼處理 macro factor 平穩日」等問題
+- 需要新增 macro factor（例如：人民幣、銅、費城半導體指數）
+- 需要修改 baseline window、target median、validation 比例等校準參數
+- 需要在 `TaiwanStressIndex` 上新增/修改任何校準邏輯
+
+**必讀文件**：`docs/MACRO_CALIBRATION.md`
+
+### 核心概念速查
+
+- **Hybrid Signal**：`max(|level_z|, |change_pct|)`，解 DXY/JPY/Oil/Gold 平穩日訊號消失問題
+- **五層**：Baseline → Scale → Regime → Validation → Maturity-Gated Scheduler
+- **Maturity Gating**：`BackgroundCalibrationScheduler.RunDaily` 在 BURN_IN 模式 log skip 不執行
+- **校準預設關閉**：`calibration_enabled = false`（AGENTS.md 規範），啟用前需 30 日 staging 驗證
+
+### 修改校準邏輯的必守規則
+
+1. **新 factor 走 map**：在 `BaselineConfig`（map）加入新 key，不要加 struct 欄位
+2. **新參數走 `ParametersConfig`**：所有校準閾值一律 `config.GetParametersConfig()` 取得
+3. **新 scheduler 走 `BackgroundTaskManager`**：不要在 narrative 模組內啟 goroutine
+4. **改計算公式前先看偏差備註**：`docs/MACRO_CALIBRATION.md` 第五節記錄了 5 項 vs 原計畫的設計偏差（Mean/Count 替代 Baseline、map 替代 8 欄位、z-score 替代百分比等）
+5. **Validation 退化不可靜默吞**：必須 log warning + 保留舊 config，不可自動降級
+
+### 修改前的 7 步 Pre-Change Protocol
+
+修改任何 `internal/narrative/calibration_*.go` 前：
+
+1. 執行 `gitnexus impact` 看 `calibration_baseline.go`/`calibration_regime.go` 的 blast radius
+2. 確認 `TaiwanStressIndex` 的呼叫者清單（risk/portfolio/monitoring）
+3. 確認 `ParametersConfig` 是否需新增欄位（若是，需同步更新 `parameters.go`、`parameters_defaults.go`、`configs/parameters.json` 三個檔案）
+4. 確認是否影響既有 `*_test.go`（76 packages test pass 為 baseline）
+5. 若改 baseline 演算法：先看 `docs/MACRO_CALIBRATION.md` 第二節「關鍵設計」了解為何選擇 z-score / map / Mean-Count
+6. 若改 Maturity Gating：先確認 `internal/scheduler/auto_calibration_test.go` 涵蓋 BURN_IN skip 行為
+7. 改完後跑 `go build ./... && go test ./internal/narrative/... ./internal/scheduler/... && gofmt -l . && staticcheck ./...`
+
+---
+
+*技能版本: 1.1*  
+*最後更新: 2026-06-05*  
 *適用對象: Atlas-Go AI Agent*

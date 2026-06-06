@@ -161,10 +161,14 @@ func (p *TWSESectorIndexProvider) fetchSingleDay(ctx context.Context, date time.
 			continue
 		}
 
+		// Parse daily change percentage from TWSE response (e.g., "0.62" or "-0.43").
+		changePct, _ := strconv.ParseFloat(strings.TrimSpace(item.ChangePct), 64)
+
 		result[industryID] = SectorIndexData{
-			Date:     dateFormatted,
-			Industry: industryID,
-			Index:    indexValue,
+			Date:      dateFormatted,
+			Industry:  industryID,
+			Index:     indexValue,
+			ReturnPct: changePct,
 		}
 	}
 

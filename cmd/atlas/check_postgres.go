@@ -246,7 +246,8 @@ func startPostgresService() error {
 	// Explicitly pass DB_PASSWORD so docker-compose resolves ${DB_PASSWORD} in compose
 	// files even when .env is absent from the project root. The value comes from
 	// loadEnvFile() reading ~/.config/atlas-go/.env.
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(
+		os.Environ(),
 		"DB_PASSWORD="+config.GetSecret("DB_PASSWORD"),
 	)
 	return cmd.Run()

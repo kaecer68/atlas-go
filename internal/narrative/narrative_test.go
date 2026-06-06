@@ -286,8 +286,15 @@ func TestDetectEventsNoTrigger(t *testing.T) {
 		VIXLevel:         15,  // below 25 threshold
 	}
 	events := ne.DetectEvents(data)
-	if len(events) != 0 {
-		t.Fatalf("expected 0 events, got %d", len(events))
+	// Exclude calendar-driven seasonal events (data-independent) from the count.
+	var nonSeasonal int
+	for _, e := range events {
+		if e.ConfidenceSource != "calendar_seasonal" && e.ConfidenceSource != "calendar_political" {
+			nonSeasonal++
+		}
+	}
+	if nonSeasonal != 0 {
+		t.Fatalf("expected 0 non-seasonal events, got %d (total %d)", nonSeasonal, len(events))
 	}
 }
 
@@ -400,6 +407,11 @@ func TestSeasonalEventUsesParametersConfig(t *testing.T) {
 		if event.Confidence != params.YearEndWindowDressingConfidence.Value {
 			t.Fatalf("year_end_window_dressing: expected confidence %f from ParametersConfig, got %f",
 				params.YearEndWindowDressingConfidence.Value, event.Confidence)
+		}
+	case "dividend_season":
+		// dividend_season uses a hardcoded confidence (not in ParametersConfig).
+		if event.Confidence != 0.60 {
+			t.Fatalf("dividend_season: expected confidence 0.60, got %f", event.Confidence)
 		}
 	default:
 		t.Fatalf("unexpected seasonal event theme: %s", event.Theme)

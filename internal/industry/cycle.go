@@ -76,6 +76,7 @@ type CycleTracker struct {
 	narrativeHitRate   func() float64
 	narrativeAdjust    func(industryID string) NarrativeAdjustment
 	lastNarrativeTheme map[string]string // active narrative theme per industry (updated during detectBusinessCycle)
+	classificationTree *ClassificationTree
 }
 
 // NewCycleTracker creates a new cycle tracker.
@@ -84,6 +85,7 @@ func NewCycleTracker() *CycleTracker {
 		positions:          make(map[string]*CyclePosition),
 		history:            make(map[string][]CyclePosition),
 		lastNarrativeTheme: make(map[string]string),
+		classificationTree: DefaultClassification(),
 	}
 	ct.initializeDefaultPositions()
 	return ct
@@ -278,26 +280,40 @@ func (ct *CycleTracker) detectCyclePosition(industryID string, metrics IndustryM
 	return position
 }
 
-// detectBusinessCycle determines the business cycle phase.
-func defaultCycleThresholds() config.CycleThresholdConfig {
-	return config.CycleThresholdConfig{
-		ExpansionRevenuePct: 0.20,
-		ExpansionProfitPct:  0.20,
-		RecoveryRevenuePct:  0.05,
-		RecoveryProfitPct:   0.05,
-		MatureRevenuePct:    -0.05,
-		MatureProfitPct:     -0.05,
+// getCycleThresholds looks up per-industry thresholds with fallback chain:
+// exact match → parent L1 → _default. Eliminates global hardcoded fallback.
+func (ct *CycleTracker) getCycleThresholds(industryID string) config.CycleThresholdConfig {
+	cfg := config.GetParametersConfig()
+	if cfg == nil {
+		return config.CycleThresholdConfig{}
 	}
+	thresholds := cfg.Industry.CycleThresholds.Value
+
+	// 1. Exact match
+	if t, ok := thresholds[industryID]; ok {
+		return t
+	}
+
+	// 2. Parent L1 fallback (for L2/L3 segments)
+	if ct.classificationTree != nil {
+		if seg, ok := ct.classificationTree.GetSegment(industryID); ok && seg.ParentID != "" {
+			if t, ok := thresholds[seg.ParentID]; ok {
+				return t
+			}
+		}
+	}
+
+	// 3. Global default fallback
+	if t, ok := thresholds["_default"]; ok {
+		return t
+	}
+
+	return config.CycleThresholdConfig{}
 }
 
 // detectBusinessCycle determines the business cycle phase.
 func (ct *CycleTracker) detectBusinessCycle(metrics IndustryMetrics) CyclePhase {
-	thresholds := defaultCycleThresholds()
-	if cfg := config.GetParametersConfig(); cfg != nil {
-		if t, ok := cfg.Industry.CycleThresholds.Value[metrics.IndustryID]; ok {
-			thresholds = t
-		}
-	}
+	thresholds := ct.getCycleThresholds(metrics.IndustryID)
 
 	revenueGrowth := metrics.RevenueGrowthYoY
 	profitGrowth := metrics.ProfitGrowthYoY
@@ -387,13 +403,6 @@ func (ct *CycleTracker) calculateConfidence(industryID string, metrics IndustryM
 	}
 
 	boundary := ct.boundaryConfidence(industryID, metrics)
-	// When revenue or profit is negative, the industry is in contraction.
-	// High boundary confidence (far from positive thresholds) should not boost
-	// overall confidence — it just means the decline is unambiguous, not that
-	// the industry data is strong. Halve boundary contribution in that case.
-	if metrics.RevenueGrowthYoY < 0 || metrics.ProfitGrowthYoY < 0 {
-		boundary *= 0.5
-	}
 	confidence := signal*cfgSignal.SignalBoundaryMix + boundary*(1.0-cfgSignal.SignalBoundaryMix)
 
 	seasonalScore := 0.0
@@ -495,11 +504,7 @@ func (ct *CycleTracker) computeLinkageConfidence(industryID string) float64 {
 // boundaryConfidence returns 0–1: 0 = metric at a phase threshold (ambiguous),
 // 1 = far from any threshold (strong conviction in detected phase).
 func (ct *CycleTracker) boundaryConfidence(industryID string, metrics IndustryMetrics) float64 {
-	params := config.GetParametersConfig().Industry
-	thresholds, ok := params.CycleThresholds.Value[industryID]
-	if !ok {
-		thresholds = defaultCycleThresholds()
-	}
+	thresholds := ct.getCycleThresholds(industryID)
 
 	revMinDist := math.Abs(metrics.RevenueGrowthYoY - thresholds.ExpansionRevenuePct)
 	for _, t := range []float64{thresholds.RecoveryRevenuePct, thresholds.MatureRevenuePct} {
@@ -727,7 +732,8 @@ func (cp *CyclePosition) GetPhaseScore() float64 {
 
 // String returns a human-readable summary of the cycle position.
 func (cp *CyclePosition) String() string {
-	return fmt.Sprintf("%s: Business=%s, Inventory=%s, Capex=%s, Confidence=%.0f%%",
+	return fmt.Sprintf(
+		"%s: Business=%s, Inventory=%s, Capex=%s, Confidence=%.0f%%",
 		cp.IndustryID,
 		cp.BusinessCycle,
 		cp.InventoryCycle,

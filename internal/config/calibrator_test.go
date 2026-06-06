@@ -110,40 +110,56 @@ func TestMarkCalibrated(t *testing.T) {
 		check   func(*ParametersConfig) *time.Time
 	}{
 		// MacroRisk
-		{"macro risk - carry trade", "engine_macro_risk_carry_trade_unwind_threshold",
+		{
+			"macro risk - carry trade", "engine_macro_risk_carry_trade_unwind_threshold",
 			func(c *ParametersConfig) *time.Time {
 				return c.Engine.MacroRisk.CarryTradeUnwindThreshold.LastCalibrated
-			}},
-		{"macro risk - VIX", "engine_macro_risk_vix_threshold",
-			func(c *ParametersConfig) *time.Time { return c.Engine.MacroRisk.VIXThreshold.LastCalibrated }},
+			},
+		},
+		{
+			"macro risk - VIX", "engine_macro_risk_vix_threshold",
+			func(c *ParametersConfig) *time.Time { return c.Engine.MacroRisk.VIXThreshold.LastCalibrated },
+		},
 
 		// StructuralTrend
-		{"structural trend - min trend", "engine_structural_trend_min_trend_strength",
-			func(c *ParametersConfig) *time.Time { return c.Engine.StructuralTrend.MinTrendStrength.LastCalibrated }},
+		{
+			"structural trend - min trend", "engine_structural_trend_min_trend_strength",
+			func(c *ParametersConfig) *time.Time { return c.Engine.StructuralTrend.MinTrendStrength.LastCalibrated },
+		},
 
 		// Drawdown
-		{"drawdown - orange", "engine_drawdown_orange_override_min_score",
-			func(c *ParametersConfig) *time.Time { return c.Engine.Drawdown.OrangeOverrideMinScore.LastCalibrated }},
+		{
+			"drawdown - orange", "engine_drawdown_orange_override_min_score",
+			func(c *ParametersConfig) *time.Time { return c.Engine.Drawdown.OrangeOverrideMinScore.LastCalibrated },
+		},
 
 		// Executors
-		{"executors - VIX crash", "engine_executors_vix_momentum_crash_threshold",
+		{
+			"executors - VIX crash", "engine_executors_vix_momentum_crash_threshold",
 			func(c *ParametersConfig) *time.Time {
 				return c.Engine.Executors.VIXMomentumCrashThreshold.LastCalibrated
-			}},
+			},
+		},
 
 		// Simulation
-		{"simulation - neutral regime", "engine_simulation_neutral_regime_sizing_factor",
+		{
+			"simulation - neutral regime", "engine_simulation_neutral_regime_sizing_factor",
 			func(c *ParametersConfig) *time.Time {
 				return c.Engine.Simulation.NeutralRegimeSizingFactor.LastCalibrated
-			}},
+			},
+		},
 
 		// Narrative
-		{"narrative - AI revenue", "narrative_ai_revenue_growth_threshold",
-			func(c *ParametersConfig) *time.Time { return c.Narrative.AIRevenueGrowthThreshold.LastCalibrated }},
+		{
+			"narrative - AI revenue", "narrative_ai_revenue_growth_threshold",
+			func(c *ParametersConfig) *time.Time { return c.Narrative.AIRevenueGrowthThreshold.LastCalibrated },
+		},
 
 		// FactorWeight
-		{"factor weight - conservative value", "factor_weight_conservative_value",
-			func(c *ParametersConfig) *time.Time { return c.FactorWeight.ConservativeValue.LastCalibrated }},
+		{
+			"factor weight - conservative value", "factor_weight_conservative_value",
+			func(c *ParametersConfig) *time.Time { return c.FactorWeight.ConservativeValue.LastCalibrated },
+		},
 	}
 
 	method := "bayesian_optimization"

@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/kaecer68/atlas-go/schemas/screened_symbols.schema.json",
+  "title": "Screened Symbol Record",
+  "description": "篩選器記錄。每行為獨立 JSON 物件，記錄每個標的在篩選階段是否通過各項條件門檻。位於 per-session 目錄下。",
+  "type": "object",
+  "required": ["symbol", "criterion", "agent_id", "session_id"],
+  "properties": {
+    "symbol": {
+      "type": "string",
+      "description": "股票代碼，格式如 '2330.TW'",
+      "pattern": "^\\d{4}(\\.TW)?$"
+    },
+    "criterion": {
+      "type": "string",
+      "description": "篩選條件代碼，如 'pe_ratio'、'pb_ratio'、'volume'"
+    },
+    "criterion_label": {
+      "type": "string",
+      "description": "篩選條件人類可讀標籤"
+    },
+    "threshold": {
+      "type": "string",
+      "description": "篩選門檻值（可能為文字描述）"
+    },
+    "actual_value": {
+      "type": "string",
+      "description": "標的實際值"
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "對應的 agent 識別碼"
+    },
+    "skill": {
+      "type": "string",
+      "description": "agent 的 skill 標籤"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Session 識別碼，格式如 'session-20260602-daily'",
+      "pattern": "^session-\\d{8}-daily$"
+    },
+    "factor_scores": {
+      "type": "object",
+      "description": "因子分數 breakdown（momentum、value、quality）"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "記錄時間（ISO 8601/RFC 3339）"
+    }
+  },
+  "additionalProperties": true
+}

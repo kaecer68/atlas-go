@@ -21,7 +21,7 @@ type TEJChannelAdapter struct {
 func NewTEJChannelAdapter(client *marketdata.TEJClient) *TEJChannelAdapter {
 	return &TEJChannelAdapter{
 		client:  client,
-		limiter: rate.NewLimiter(TWSEOpenAPIRate, TWSEOpenAPIBurst),
+		limiter: rate.NewLimiter(TEJRate, TEJBurst),
 	}
 }
 

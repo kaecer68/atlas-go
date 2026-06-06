@@ -2,8 +2,12 @@ package orchestrator
 
 import (
 	"context"
+	"encoding/csv"
 	"fmt"
+	"math"
+	"os"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -13,6 +17,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/ml"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/retail"
 )
 
 // LayerRouter encapsulates layer-based agent routing logic.
@@ -409,6 +414,21 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 		symbols := agent.Universe
 		if len(symbols) == 0 {
 			symbols = slices.Collect(symbolIterator(DefaultSymbols()))
+		} else {
+			// Auto-expand agent universe from CSV data
+			expanded := ExpandUniverse("data/replay/tw_extended_90days.csv", nil)
+			if len(expanded) > 0 {
+				seen := make(map[string]bool)
+				for _, s := range symbols {
+					seen[s] = true
+				}
+				for _, s := range expanded {
+					if !seen[s] {
+						symbols = append(symbols, s)
+						seen[s] = true
+					}
+				}
+			}
 		}
 
 		for _, symbol := range symbols {
@@ -438,10 +458,53 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 				}
 				continue
 			}
+			// Factor quality gate: skip symbols with low pre-computed factor scores
+			if factorSnapshot != nil {
+				var preTotal float64
+				var preCount int
+				if s, ok := factorSnapshot.GetScore(symbol, portfolio.FactorMomentum); ok {
+					preTotal += s
+					preCount++
+				}
+				if s, ok := factorSnapshot.GetScore(symbol, portfolio.FactorValue); ok {
+					preTotal += s
+					preCount++
+				}
+				if s, ok := factorSnapshot.GetScore(symbol, portfolio.FactorQuality); ok {
+					preTotal += s
+					preCount++
+				}
+				if s, ok := factorSnapshot.GetScore(symbol, portfolio.FactorLiquidity); ok {
+					preTotal += s
+					preCount++
+				}
+				if preCount > 0 && preTotal/float64(preCount) < 40 {
+					continue
+				}
+			}
 			rec, ok := plugins.Recommendation(agent, quote, prompt, regime, factorSnapshot)
 			if !ok {
 				continue
 			}
+
+			// Multi-timeframe adjustment: use intraday OHLC position as a
+			// lightweight proxy for short-to-medium-term momentum.  Stocks
+			// trading near the day high suggest strength across timeframes;
+			// stocks near the day low suggest weakening momentum.
+			if quote.High > 0 && quote.Low > 0 && quote.Last > 0 {
+				dayRange := quote.High - quote.Low
+				if dayRange > 0 {
+					position := (quote.Last - quote.Low) / dayRange // 0=at low, 1=at high
+					if position < 0.3 {
+						// Near day low: weaker across all timeframes
+						rec.Conviction -= 5
+					} else if position > 0.7 {
+						// Near day high: stronger across all timeframes
+						rec.Conviction += 3
+					}
+				}
+			}
+
 			recs = append(recs, rec)
 		}
 	}
@@ -453,6 +516,31 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 			eventIDs[j] = e.ID
 		}
 		recs[i].SupportingEvents = eventIDs
+	}
+
+	// Diversity metrics: track recommendation concentration
+	if len(recs) > 0 {
+		symbolCounts := make(map[string]int)
+		for _, rec := range recs {
+			symbolCounts[rec.Symbol]++
+		}
+		var hhi float64
+		var topSymbol string
+		var topCount int
+		for sym, count := range symbolCounts {
+			share := float64(count) / float64(len(recs)) * 100
+			hhi += share * share
+			if count > topCount {
+				topSymbol = sym
+				topCount = count
+			}
+		}
+		logging.Info("diversity", "metrics",
+			"total_recs", len(recs),
+			"unique_symbols", len(symbolCounts),
+			"hhi", int(hhi),
+			"top_symbol", topSymbol,
+			"top_count", topCount)
 	}
 
 	agentWeights := make(map[string]float64)
@@ -506,6 +594,74 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 				recs[ms.RecIndex].ConvictionBreakdown.Steps = append(recs[ms.RecIndex].ConvictionBreakdown.Steps, step)
 				recs[ms.RecIndex].ConvictionBreakdown.Final = recs[ms.RecIndex].Conviction
 			}
+		}
+	}
+
+	// Wave 4: Apply CycleStatusCard composite sentiment as an additional
+	// conviction layer for recommendations with known industry mappings.
+	if plugins.cycleModulator != nil && plugins.cycleModulator.skillToIndustry != nil {
+		card := plugins.cycleModulator.GetCycleCard()
+		if card != nil {
+			skillLookup := make(map[string]string, len(registry.Agents))
+			for _, agent := range registry.Agents {
+				skillLookup[agent.ID] = agent.Skill
+			}
+			for i := range recs {
+				if recs[i].ConvictionBreakdown == nil {
+					continue
+				}
+				skill := skillLookup[recs[i].Agent]
+				industryID, ok := plugins.cycleModulator.skillToIndustry[skill]
+				if !ok {
+					continue
+				}
+				cycleConf := plugins.cycleModulator.CycleConfidenceFromCard(industryID)
+				delta := 0
+				switch {
+				case card.CompositeCoefficient > 1.05:
+					delta = int(math.Round(10 * (card.CompositeCoefficient - 1.0)))
+				case card.CompositeCoefficient < 0.95:
+					delta = int(math.Round(10 * (card.CompositeCoefficient - 1.0)))
+				}
+				cycleStep := domain.ConvictionStep{
+					Rule:        "modulator:cycle_status_card",
+					Delta:       delta,
+					Reason:      fmt.Sprintf("週期綜合情緒: %s (%.3f, 週期信心:%.0f%%)", card.SentimentLabel, card.CompositeCoefficient, cycleConf*100),
+					Source:      "CycleStatusCard",
+					ParamRef:    "industry.CycleStatusCard.CompositeCoefficient",
+					ParamValue:  fmt.Sprintf("%.3f", card.CompositeCoefficient),
+					Sensitivity: paramSensitivity(fmt.Sprintf("%.3f", card.CompositeCoefficient)),
+				}
+				recs[i].Conviction += delta
+				recs[i].ConvictionBreakdown.Steps = append(recs[i].ConvictionBreakdown.Steps, cycleStep)
+				recs[i].ConvictionBreakdown.Final = recs[i].Conviction
+			}
+		}
+	}
+
+	if calc := retail.GetCalculator(); calc != nil {
+		score := calc.LastScore()
+		if absScore := math.Abs(score); absScore >= 0.5 {
+			convictionDelta := int(math.Round(-15.0 * absScore))
+			for i := range recs {
+				if recs[i].ConvictionBreakdown == nil {
+					continue
+				}
+				rsiTwStep := domain.ConvictionStep{
+					Rule:        "modulator:rsi_tw_sentiment",
+					Delta:       convictionDelta,
+					Reason:      fmt.Sprintf("散戶情緒極端 (%.2f)，降低信心", score),
+					Source:      "RSITwCalculator",
+					ParamRef:    "retail.RSITw.Score",
+					ParamValue:  fmt.Sprintf("%.4f", score),
+					Sensitivity: paramSensitivity(fmt.Sprintf("%.4f", score)),
+				}
+				recs[i].Conviction += convictionDelta
+				recs[i].ConvictionBreakdown.Steps = append(recs[i].ConvictionBreakdown.Steps, rsiTwStep)
+				recs[i].ConvictionBreakdown.Final = recs[i].Conviction
+			}
+			logging.Info("orchestrator", "rsi_tw conviction adjustment applied",
+				"score", score, "delta", convictionDelta, "recs", len(recs))
 		}
 	}
 
@@ -735,17 +891,15 @@ func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *Plugi
 	current = applyCrowdingPenalty(current)
 	current = applyAntiCorrelationLayer(current, 0)
 
-	// Align the last guard's OutputCount with the true final recommendation count
-	// so that downstream outcome building and UI display are consistent.
-	if len(outcomes) > 0 {
-		last := &outcomes[len(outcomes)-1]
-		last.OutputCount = len(current)
-		if last.OutputCount < last.InputCount {
-			last.Reason = fmt.Sprintf("過濾了 %d 筆推薦，僅保留符合條件的標的", last.InputCount-last.OutputCount)
-		} else {
-			last.Reason = "未過濾任何推薦，全部放行"
-		}
-	}
+	// Do NOT overwrite the last guard's OutputCount/Reason here.
+	// Each guard already records its own input/output count during control
+	// execution (see the loop above). Crowding penalty and anti-correlation
+	// filtering are post-guard stages whose effect is reflected in `current`,
+	// not in any individual guard's outcome. Overwriting here would conflate
+	// "what the guard passed" with "what survived all post-processing", which
+	// breaks the audit trail (PassedGuards can no longer attribute filtering
+	// to the correct stage). Downstream readers should derive the final count
+	// from len(current) and treat GuardOutcome counts as per-guard.
 
 	return current, outcomes
 }
@@ -871,29 +1025,38 @@ func DefaultExecutionPolicy() domain.ExecutionPolicy {
 }
 
 func DefaultSymbols() []string {
-	return []string{
+	base := []string{
 		"2330.TW",
 		"2317.TW",
 		"2382.TW",
+		"2345.TW",
+		"2412.TW",
 		"2454.TW",
 		"2303.TW",
 		"2308.TW",
 		"3008.TW",
 		"3034.TW",
 		"3037.TW",
+		"3711.TW",
 		"6669.TW",
 		"2603.TW",
 		"2609.TW",
 		"2615.TW",
 		"2881.TW",
 		"2882.TW",
+		"2884.TW",
+		"2885.TW",
 		"2886.TW",
+		"2887.TW",
 		"2891.TW",
 		"2892.TW",
 		"1301.TW",
 		"1303.TW",
 		"1326.TW",
 		"0050.TW",
+		"0051.TW",
+		"0052.TW",
+		"0053.TW",
 		"0056.TW",
 		"00878.TW",
 		"006208.TW",
@@ -905,6 +1068,89 @@ func DefaultSymbols() []string {
 		"00929.TW",
 		"00940.TW",
 	}
+
+	// Auto-sync: merge symbols from replay CSV if available
+	csvSymbols := loadSymbolsFromCSV("data/replay/tw_extended_90days.csv")
+	if len(csvSymbols) > 0 {
+		seen := make(map[string]bool)
+		for _, s := range base {
+			seen[s] = true
+		}
+		for _, s := range csvSymbols {
+			if !seen[s] {
+				base = append(base, s)
+				seen[s] = true
+			}
+		}
+	}
+	return base
+}
+
+func loadSymbolsFromCSV(path string) []string {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = f.Close() }()
+	r := csv.NewReader(f)
+	header, err := r.Read()
+	if err != nil {
+		return nil
+	}
+	// Find "symbol" column
+	symIdx := -1
+	for i, col := range header {
+		if strings.EqualFold(strings.TrimSpace(col), "symbol") {
+			symIdx = i
+			break
+		}
+	}
+	if symIdx < 0 {
+		return nil
+	}
+	seen := make(map[string]bool)
+	for {
+		record, err := r.Read()
+		if err != nil {
+			break
+		}
+		if symIdx < len(record) {
+			sym := strings.TrimSpace(record[symIdx])
+			if sym != "" {
+				seen[sym] = true
+			}
+		}
+	}
+	result := make([]string, 0, len(seen))
+	for s := range seen {
+		result = append(result, s)
+	}
+	sort.Strings(result)
+	return result
+}
+
+// ExpandUniverse reads the replay CSV and returns all symbols matching
+// the given prefix patterns. When prefixes is nil or empty, all CSV symbols
+// are returned. This allows agent universes to auto-expand as new symbols
+// are added to the replay data.
+func ExpandUniverse(csvPath string, prefixes []string) []string {
+	csvSymbols := loadSymbolsFromCSV(csvPath)
+	if len(csvSymbols) == 0 {
+		return nil
+	}
+	if len(prefixes) == 0 {
+		return csvSymbols
+	}
+	var result []string
+	for _, sym := range csvSymbols {
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(sym, prefix) {
+				result = append(result, sym)
+				break
+			}
+		}
+	}
+	return result
 }
 
 func RegistrySymbols(registry domain.AgentRegistry) []string {

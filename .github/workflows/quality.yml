@@ -35,6 +35,15 @@ jobs:
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
+    - name: Set up Node.js
+      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+      with:
+        node-version: '22'
+
+    - name: Build frontend
+      working-directory: web
+      run: npm ci && npm run build
+
     - name: Set up Go
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
       with:
@@ -95,14 +104,23 @@ jobs:
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
+    - name: Set up Node.js
+      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+      with:
+        node-version: '22'
+
+    - name: Build frontend
+      working-directory: web
+      run: npm ci && npm run build
+
     - name: Set up Go
       uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
       with:
         go-version-file: go.mod
 
-    - name: Run tests with coverage
+    - name: Run tests with coverage (exclude cmd/atlas — heavy integration, see ci-cd.yml:test-cmd-atlas)
       run: |
-        go test -coverprofile=coverage.out ./...
+        go test -coverprofile=coverage.out $(go list ./... | grep -v '/cmd/atlas$')
         go tool cover -func=coverage.out | tail -n 1
 
     - name: Check coverage threshold
@@ -210,6 +228,38 @@ jobs:
   # Gate 3: LoadCalibrationEvidence unit tests — covered by the existing
   # coverage job (go test ./... includes ./internal/industry/...).
 
+  # Data naming convention check — validates data/ files follow
+  # docs/DATA_NAMING_CONVENTION.md (R1-R10). Blocking for R1/R2 violations,
+  # warning for flat files pending P3.0 restructure.
+  data-naming:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check data file naming conventions
+      run: bash scripts/ci/check_data_naming.sh
+
+  # JSON Schema validation — validates JSONL files against their schemas.
+  # Graceful: skips if schemas/ doesn't exist yet, non-blocking warnings
+  # for files without schemas.
+  json-schema-validate:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check JSON Schema validation
+      run: bash scripts/ci/validate_json_schemas.sh --json
+
+  # Data catalog freshness — ensures docs/DATA_CATALOG.md accurately reflects
+  # data/ directory content. Graceful until catalog population (P1.3).
+  data-catalog:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check data catalog freshness
+      run: bash scripts/ci/check_data_catalog.sh --warn-only
+
   # Orphan artifact detection — ensures no compiled binaries, PID files,
   # coverage reports, or graphify cache artifacts have been committed.
   check-orphan-artifacts:
@@ -252,3 +302,38 @@ jobs:
           exit 1
         fi
         echo "✅ No orphan artifacts found"
+
+  # Frontend smoke — Playwright-based UI check on key pages.
+  # Derives target pages from PR diff; falls back to overview+narrative+live+portfolio.
+  # Skips (exit 0) if diff doesn't touch any monitored path.
+  frontend-smoke:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Node.js
+      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
+      with:
+        node-version: '22'
+
+    - name: Set up Go
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      with:
+        go-version-file: go.mod
+
+    - name: Cache Go modules
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install Playwright chromium
+      working-directory: web
+      run: npx playwright install --with-deps chromium
+
+    - name: Run frontend smoke
+      run: bash scripts/ci/frontend_smoke.sh origin/${{ github.base_ref }}

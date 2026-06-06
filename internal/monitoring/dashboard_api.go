@@ -82,6 +82,7 @@ type DashboardAPI struct {
 	latestDrawdown     *portfolio.DrawdownResult
 	drawdownMu         sync.RWMutex
 	eventLogicHandlers *apieventlogic.Handlers
+	calibrationTask    *narrative.CalibrationTask
 }
 
 func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollector) *DashboardAPI {
@@ -94,6 +95,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	if cfg.YahooEnabled {
 		providers = append(providers, marketdata.NewYahooFinanceMacroProvider())
 		providers = append(providers, marketdata.NewSOXIndexProvider())
+		providers = append(providers, marketdata.NewDRAMSpotPriceProvider())
 	}
 
 	providers = append(providers, marketdata.NewFrankfurterFXProvider())
@@ -262,14 +264,18 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 	}
 	modulator := industry.NewDynamicEnvModulator(baseline, baseline)
 	modulator.RecordSnapshot(baseline) // seed history for rolling baseline
+	// Bootstrap DynamicEnvModulator asynchronously — don't block API startup.
+	// DynamicEnvModulator methods are safe for concurrent use.
 	if macroProvider != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if snap, err := macroProvider.FetchSnapshot(ctx); err == nil {
-			modulator.UpdateCurrent(snap)
-			modulator.RecordSnapshot(snap)
-			modulator.UpdateRollingBaseline() // compute rolling median baseline
-		}
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			defer cancel()
+			if snap, err := macroProvider.FetchSnapshot(ctx); err == nil {
+				modulator.UpdateCurrent(snap)
+				modulator.RecordSnapshot(snap)
+				modulator.UpdateRollingBaseline() // compute rolling median baseline
+			}
+		}()
 	}
 	seasonalEngine.SetDynamicEnv(modulator)
 
@@ -279,6 +285,8 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 	// Wire cycle tracker into linkage analyzer for regime-aware correlation adjustment
 	// During recession, correlations rise (Ang & Chen 2002)
 	linkageAnalyzer.SetCycleProvider(cycleTracker)
+
+	siliconTracker := industry.NewSiliconCycleTracker()
 
 	svc := service.NewIndustryService(
 		industry.DefaultClassification(),
@@ -290,6 +298,26 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 		nil, // eventCalendar
 	)
 
+	// Wire the macro provider into the silicon cycle aggregator so that
+	// scheduled silicon_cycle_update tasks can pull real TSMC/SOX data.
+	svc.SetMacroProvider(macroProvider)
+
+	// Bootstrap silicon tracker with the initial macro snapshot so the
+	// cycle status card has non-zero indicators from the first request.
+	// SiliconTracker.DetectPhase is safe for concurrent use.
+	if macroProvider != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			defer cancel()
+			if snap, err := macroProvider.FetchSnapshot(ctx); err == nil {
+				indicators := industry.ExtractSiliconIndicators(snap)
+				siliconTracker.DetectPhase(time.Now(), indicators)
+			} else {
+				logging.Warn("monitoring", "silicon_bootstrap_failed", "err", err)
+			}
+		}()
+	}
+
 	replayPath := config.Load().ReplayDataPath
 	if replayPath != "" {
 		sectorSymbolsPath := filepath.Join(config.Load().WorkDir, "configs", "sector_symbols.json")
@@ -300,7 +328,29 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 		}
 	}
 
+	params := config.GetParametersConfig()
+	calCfg := params.Industry.CycleCalibration.Value
+	cal := industry.NewCycleCalibration(calCfg)
+	svc.SetCycleCalibration(cal)
+
 	return svc
+}
+
+func newWiredEventCalendar(provider marketdata.CalendarEventProvider) *industry.EventCalendar {
+	ec := industry.NewEventCalendar()
+	// Always generate default-rule events for the current year.
+	ec.RefreshEvents(time.Now())
+	if provider == nil {
+		return ec
+	}
+	// Load TWSE calendar events asynchronously — don't block API startup.
+	// EventCalendar is protected by sync.RWMutex so concurrent access is safe.
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
+		ec.UpdateFromProvider(ctx, provider)
+	}()
+	return ec
 }
 
 func (a *DashboardAPI) SetEventBus(eventBus *eventbus.ChannelEventBus) {
@@ -358,6 +408,13 @@ func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.Na
 	// so that seasonal adjustments reflect real-time macro conditions.
 	if a.industryService != nil && a.industryService.SeasonalEngine != nil {
 		a.industryService.SeasonalEngine.UpdateDynamicEnv(snap)
+	}
+
+	// Update silicon cycle tracker with fresh TSMC revenue and SOX index data
+	// so the cycle status card reflects the latest macro snapshot.
+	if a.industryService != nil && a.industryService.SiliconTracker != nil {
+		indicators := industry.ExtractSiliconIndicators(snap)
+		a.industryService.SiliconTracker.DetectPhase(time.Now(), indicators)
 	}
 	return events, snap, err
 }
@@ -432,23 +489,36 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 				return nil
 			}
 			events := a.narrativeEngine.DetectEvents(narrative.MarketNarrativeData{})
+			var allowedIDs map[string]struct{}
+			if len(eventIDs) > 0 {
+				allowedIDs = make(map[string]struct{}, len(eventIDs))
+				for _, id := range eventIDs {
+					allowedIDs[id] = struct{}{}
+				}
+			}
 			var activeThemes []string
 			var primaryTheme string
 			var primaryHitRate float64
 			var directionHint string
 			for _, event := range events {
-				if event.Status == "active" || event.Status == "confirmed" {
-					activeThemes = append(activeThemes, event.Theme)
-					if primaryTheme == "" {
-						primaryTheme = event.Theme
-						primaryHitRate = event.HitRate
-						if event.Sentiment > 0.3 {
-							directionHint = "positive"
-						} else if event.Sentiment < -0.3 {
-							directionHint = "negative"
-						} else {
-							directionHint = "neutral"
-						}
+				if event.Status != "active" && event.Status != "confirmed" {
+					continue
+				}
+				if allowedIDs != nil {
+					if _, ok := allowedIDs[event.ID]; !ok {
+						continue
+					}
+				}
+				activeThemes = append(activeThemes, event.Theme)
+				if primaryTheme == "" {
+					primaryTheme = event.Theme
+					primaryHitRate = event.HitRate
+					if event.Sentiment > 0.3 {
+						directionHint = "positive"
+					} else if event.Sentiment < -0.3 {
+						directionHint = "negative"
+					} else {
+						directionHint = "neutral"
 					}
 				}
 			}
@@ -471,11 +541,33 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			if !ok {
 				return nil
 			}
-			return &service.IndustryContextData{
-				IndustryID:      skill,
-				BusinessCycle:   string(pos.BusinessCycle),
-				CycleConfidence: pos.Confidence,
+			var seasonalMultiplier float64
+			if se := a.industryService.SeasonalEngine; se != nil {
+				seasonalMultiplier = se.GetPatternAdjustment(skill, time.Now())
 			}
+			var systemicImportance float64
+			if la := a.industryService.LinkageAnalyzer; la != nil {
+				if score := la.CalculateLinkageScore(skill); score != nil {
+					systemicImportance = score.SystemicImportance
+				}
+			}
+			return &service.IndustryContextData{
+				IndustryID:         skill,
+				BusinessCycle:      string(pos.BusinessCycle),
+				CycleConfidence:    pos.Confidence,
+				SeasonalMultiplier: seasonalMultiplier,
+				SystemicImportance: systemicImportance,
+			}
+		}).
+		WithCycleCardProvider(func() *industry.CycleStatusCard {
+			if a.industryService == nil || a.industryService.CardBuilder == nil {
+				return nil
+			}
+			card, err := a.industryService.CardBuilder.BuildCompositeCard(time.Now())
+			if err != nil {
+				return nil
+			}
+			return card
 		})
 	pipelineHandlers := apipipeline.NewHandlers(pipelineSvc)
 	pipelineHandlers.ReasoningHandler = &apipipeline.ReasoningHandler{BaseDir: a.ledgerDir}
@@ -545,6 +637,12 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		systemHandlers.DayTradingFetcher = apisystem.DayTradingFetcher(
 			NewDayTradingFetcher(a.dataFetcher),
 		)
+		systemHandlers.TaifexFetcher = NewTaifexFetcher(a.dataFetcher)
+		systemHandlers.OddLotFetcher = NewOddLotFetcher(a.dataFetcher)
+		systemHandlers.ETFFetcher = NewETFFetcher(a.dataFetcher)
+	}
+	if a.geoProvider != nil || a.taiwanGeoProvider != nil {
+		systemHandlers.GeopoliticalRiskFetcher = newGeopoliticalRiskFetcher(a.geoProvider, a.taiwanGeoProvider)
 	}
 	systemHandlers.RegisterRoutes(mux)
 
@@ -570,7 +668,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	if cfg.FinMindAPIKey != "" {
 		// FinMind dividend provider is tax-utility, not a data channel.
 		// Gateway migration deferred — see docs/GATEWAY_MIGRATION_TRACKING.md.
-		finMindClient := marketdata.NewFinMindClient(cfg.FinMindAPIKey)
+		finMindClient := marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey)
 		cacheDir := filepath.Join(a.workDir, "data", "cache", "dividends")
 		dividendProvider = marketdata.NewFinMindDividendProvider(finMindClient, cacheDir)
 	}
@@ -614,6 +712,17 @@ func (a *DashboardAPI) RegisterEventLogicRoutes(mux *http.ServeMux) {
 	}
 }
 
+func (a *DashboardAPI) SetCalibrationTask(task *narrative.CalibrationTask) {
+	a.calibrationTask = task
+}
+
+func (a *DashboardAPI) RunCalibration() (*narrative.CalibrationValidation, error) {
+	if a.calibrationTask == nil {
+		return nil, fmt.Errorf("run calibration: no calibration task set")
+	}
+	return a.calibrationTask.RunCalibrationCycle()
+}
+
 func (a *DashboardAPI) RegisterIndustryRoutes(mux *http.ServeMux) {
 	handlers := &apiindustry.Handlers{
 		Svc: a.industryService,
@@ -628,6 +737,8 @@ func (a *DashboardAPI) RegisterSwaggerRoutes(mux *http.ServeMux) {
 
 func (a *DashboardAPI) RegisterNarrativeRoutes(mux *http.ServeMux) {
 	svc := service.NewNarrativeService(a.workDir, a.narrativeEngine, a.reportGenerator)
+	svc.SetMacroProvider(a.macroProvider)
+	svc.SetGeoProvider(a.geoProvider)
 	handlers := &apinarrative.Handlers{
 		Svc:             svc,
 		IndustryService: a.industryService,
@@ -778,6 +889,18 @@ func (a *DashboardAPI) GetIndustryService() *service.IndustryService {
 	return a.industryService
 }
 
+// RecordCycleCalibrationOutcome stores a calibration data point for the
+// cycle layer accuracy tracker. Called by the backtest pipeline after
+// daily returns are computed. Safe when industryService or CycleCalibration
+// is nil — the call is silently dropped.
+func (a *DashboardAPI) RecordCycleCalibrationOutcome(
+	sessionID string, date time.Time, layerSignals map[string]float64, actualReturn float64,
+) {
+	if a.industryService != nil {
+		a.industryService.RecordCycleCalibrationOutcome(sessionID, date, layerSignals, actualReturn)
+	}
+}
+
 func (a *DashboardAPI) RegisterTaskExecRoutes(mux *http.ServeMux) {
 	if a.taskManager == nil {
 		logging.Warn("dashboardapi", "taskexec_skip_registration", "reason", "taskManager is nil")
@@ -820,6 +943,6 @@ func configHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg := config.Load()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(cfg)
+		_ = json.NewEncoder(w).Encode(cfg)
 	})
 }

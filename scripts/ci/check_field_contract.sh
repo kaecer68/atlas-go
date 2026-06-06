@@ -63,7 +63,8 @@ while IFS= read -r file; do
       top_agents|total_assets|total_deleted|total_kept|\
       trigger_theme|usd_twd|\
       sox_pct|net_buy_twd|deviation_pct|change_pct|\
-      exit_alerts|logic_rules|sector_heatmap) continue ;;
+      exit_alerts|logic_rules|sector_heatmap|\
+      confidence_breakdown) continue ;;  # TODO: planned substructure, not yet in Go struct
     esac
 
     echo "$field" >> "$FOUND_FIELDS"

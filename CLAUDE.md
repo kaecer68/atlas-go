@@ -1,10 +1,11 @@
-# CLAUDE.md
+# CLAUDE.md — atlas-go 規則索引
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+本檔案僅作為工具進入點。所有專案專屬規則、陷阱與禁令，請直接參考 **AGENTS.md**。
+本檔案不重複任何規則，以確保單一權威來源，避免 token 重複計費。
 
-## Project Overview
+全局規則仍遵循 `~/.claude/CLAUDE.md`。
 
-`atlas-go` is a simulation-first, audit-driven investment research system for Taiwan equities. It orchestrates layered AI agents over historical market data, evaluates mutations via experiments, and manages baseline policies through an explicit promote/revert gate.
+## Token Efficiency Rules
 
 - **Language**: Go 1.25.0
 - **Module**: `github.com/kaecer68/atlas-go`

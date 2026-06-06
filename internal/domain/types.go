@@ -198,11 +198,51 @@ type CapitalSnapshot struct {
 }
 
 type RetailSentimentSnapshot struct {
-	MarginBalance    float64   `json:"margin_balance"`
-	MarginChangePct  float64   `json:"margin_change_pct"`
-	DayTradingRatio  float64   `json:"day_trading_ratio"`
-	MarginPercentile float64   `json:"margin_percentile"`
-	Timestamp        time.Time `json:"timestamp"`
+	MarginBalance          float64             `json:"margin_balance"`
+	MarginChangePct        float64             `json:"margin_change_pct"`
+	DayTradingRatio        float64             `json:"day_trading_ratio"`
+	MarginPercentile       float64             `json:"margin_percentile"`
+	Timestamp              time.Time           `json:"timestamp"`
+	RetailFuturesOI        float64             `json:"retail_futures_oi,omitempty"`        // 小台指散戶未平倉比例
+	ETINetSubscription     float64             `json:"etf_net_subscription,omitempty"`     // ETF 淨申購
+	CompositeSentiment     float64             `json:"composite_sentiment"`                // RSI-tw 綜合指數 -1.0 to 1.0
+	SentimentSubIndicators *RSITwSubIndicators `json:"sentiment_sub_indicators,omitempty"` // 子指標明細
+}
+
+// RSITwSubIndicators holds the sub-indicator breakdown for RSI-tw composite sentiment.
+type RSITwSubIndicators struct {
+	CategoryA *RSITwCategoryA `json:"category_a,omitempty"`
+	CategoryC *RSITwCategoryC `json:"category_c,omitempty"`
+	CategoryD *RSITwCategoryD `json:"category_d,omitempty"`
+}
+
+// RSITwCategoryA covers margin & market-sentiment proxies (40% weight).
+type RSITwCategoryA struct {
+	MarginMaintenanceZ float64 `json:"margin_maintenance_z"` // 維持率 Z-score
+	DayTradingZ        float64 `json:"day_trading_z"`        // 當沖 Z-score
+	MarginBalanceZ     float64 `json:"margin_balance_z"`     // 融資餘額 Z-score
+	VIXRiskScore       float64 `json:"vix_risk_score"`       // VIX 風險分數 0-1
+	WeeklyPCR          float64 `json:"weekly_pcr"`           // 週選擇權 PCR
+	OddLotImbalance    float64 `json:"odd_lot_imbalance"`    // 零股交易失衡
+	AScore             float64 `json:"a_score"`              // Part A 綜合分數
+	IsFallback         bool    `json:"is_fallback"`          // true if any sub-indicator is fallback
+}
+
+// RSITwCategoryC covers institutional / futures / ETF flow proxies (25% weight).
+type RSITwCategoryC struct {
+	FuturesRetailOI      float64 `json:"futures_retail_oi"`      // 散戶期貨 OI
+	BrokerFlowScore      float64 `json:"broker_flow_score"`      // 券商分點流向
+	ETFSubscriptionScore float64 `json:"etf_subscription_score"` // ETF 申購分數
+	CScore               float64 `json:"c_score"`                // Part C 綜合分數
+	IsFallback           bool    `json:"is_fallback"`            // true if any sub-indicator is fallback
+}
+
+// RSITwCategoryD captures the event-driven adjustment multiplier.
+type RSITwCategoryD struct {
+	AdjustmentFactor float64  `json:"adjustment_factor"` // 事件調整倍數 0.8-1.2
+	ActiveEvents     []string `json:"active_events"`     // 目前觸發的事件
+	DMultiplier      float64  `json:"d_multiplier"`      // 最終乘數
+	IsFallback       bool     `json:"is_fallback"`       // true if any sub-factor is fallback
 }
 
 func (s RetailSentimentSnapshot) CalculateSentimentScore() float64 {

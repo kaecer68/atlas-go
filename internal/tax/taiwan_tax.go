@@ -9,9 +9,20 @@ import (
 // Tax rates:
 //   - Dividend income tax: 28% (included in comprehensive income tax)
 //   - Securities transaction tax (sell side only): 0.3% of sell notional
+//
+// The default DividendTaxRate (0.28) already bakes in the NHI supplementary
+// premium (二代健保補充保費) at NHISurchargeRate (2%). Set TaxConfig.IncludeNHI
+// to false to compute dividend tax at the NHI-exclusive rate (28% − 2% = 26%),
+// modeling scenarios where the supplementary premium is waived (e.g. non-
+// resident accounts, employer-paid dividends, or counterfactual analysis).
 type TaiwanTaxCalculator struct {
 	cfg domain.TaxConfig
 }
+
+// NHISurchargeRate is the NHI supplementary premium portion embedded in
+// domain.DefaultTaiwanTaxConfig().DividendTaxRate (0.28). It is subtracted
+// from the dividend tax rate when TaxConfig.IncludeNHI is false.
+const NHISurchargeRate = 0.02
 
 // NewTaiwanTaxCalculator creates a calculator with the given config.
 // Use domain.DefaultTaiwanTaxConfig() for standard Taiwan rates.
@@ -24,12 +35,29 @@ func (c *TaiwanTaxCalculator) Config() domain.TaxConfig {
 	return c.cfg
 }
 
+// effectiveDividendTaxRate returns the dividend tax rate actually applied to
+// calculations, gating out the NHI surcharge when cfg.IncludeNHI is false.
+func (c *TaiwanTaxCalculator) effectiveDividendTaxRate() float64 {
+	if c.cfg.IncludeNHI {
+		return c.cfg.DividendTaxRate
+	}
+	// Defensive floor: never go below zero even if a caller misconfigures
+	// DividendTaxRate below the NHI surcharge.
+	rate := c.cfg.DividendTaxRate - NHISurchargeRate
+	if rate < 0 {
+		return 0
+	}
+	return rate
+}
+
 // CalculateDividendTax returns the tax owed on a dividend amount.
+// When TaxConfig.IncludeNHI is false, the NHI surcharge (NHISurchargeRate)
+// is excluded from the effective rate.
 func (c *TaiwanTaxCalculator) CalculateDividendTax(dividendAmount float64) float64 {
 	if dividendAmount <= 0 {
 		return 0
 	}
-	return dividendAmount * c.cfg.DividendTaxRate
+	return dividendAmount * c.effectiveDividendTaxRate()
 }
 
 // CalculateTransactionTax returns the securities transaction tax on a sell notional.
@@ -47,7 +75,7 @@ func (c *TaiwanTaxCalculator) CalculatePositionTax(pos domain.Position, sellPric
 	if pos.Quantity <= 0 || sellPrice <= 0 {
 		return domain.TaxSnapshot{
 			Symbol:             pos.Symbol,
-			DividendTaxRate:    c.cfg.DividendTaxRate,
+			DividendTaxRate:    c.effectiveDividendTaxRate(),
 			TransactionTaxRate: c.cfg.TransactionTaxRate,
 		}
 	}
@@ -62,7 +90,7 @@ func (c *TaiwanTaxCalculator) CalculatePositionTax(pos domain.Position, sellPric
 
 	return domain.TaxSnapshot{
 		Symbol:             pos.Symbol,
-		DividendTaxRate:    c.cfg.DividendTaxRate,
+		DividendTaxRate:    c.effectiveDividendTaxRate(),
 		TransactionTaxRate: c.cfg.TransactionTaxRate,
 		DividendTax:        divTax,
 		TransactionTax:     txnTax,

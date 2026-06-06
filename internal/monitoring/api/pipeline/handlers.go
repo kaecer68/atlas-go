@@ -282,6 +282,7 @@ func (h *Handlers) HandleRecommendationPipeline(r *http.Request) (int, any) {
 		RecordedAt:        data.RecordedAt,
 		IsFallbackSession: data.IsFallbackSession,
 		FallbackMessage:   data.FallbackMessage,
+		CycleStatus:       data.CycleStatus,
 	}
 	return http.StatusOK, resp
 }
@@ -334,14 +335,15 @@ type PipelineItemMetrics struct {
 }
 
 type RecommendationPipelineResponse struct {
-	SessionID         string                   `json:"session_id"`
-	Regime            domain.Regime            `json:"regime"`
-	Items             []PipelineItem           `json:"items"`
-	GuardOutcomes     []domain.GuardOutcome    `json:"guard_outcomes"`
-	ScreenedItems     []domain.ScreeningReject `json:"screened_items"`
-	RecordedAt        time.Time                `json:"recorded_at"`
-	IsFallbackSession bool                     `json:"is_fallback_session"`
-	FallbackMessage   string                   `json:"fallback_message"`
+	SessionID         string                       `json:"session_id"`
+	Regime            domain.Regime                `json:"regime"`
+	Items             []PipelineItem               `json:"items"`
+	GuardOutcomes     []domain.GuardOutcome        `json:"guard_outcomes"`
+	ScreenedItems     []domain.ScreeningReject     `json:"screened_items"`
+	RecordedAt        time.Time                    `json:"recorded_at"`
+	IsFallbackSession bool                         `json:"is_fallback_session"`
+	FallbackMessage   string                       `json:"fallback_message"`
+	CycleStatus       *service.CycleStatusResponse `json:"cycle_status,omitempty"`
 }
 
 // HandleSessions handles GET /api/dashboard/sessions.

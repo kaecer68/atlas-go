@@ -2,8 +2,10 @@ package apigateway
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/janus"
@@ -22,34 +24,43 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 
 	// --- Fugle ---
 	if cfg.FugleAPIKey != "" {
-		fugleClient := marketdata.NewFugleClient(cfg.FugleAPIKey)
+		fugleClient := marketdata.GetSharedFugleClient(cfg.FugleAPIKey)
 		fugleAdapter := NewFugleChannelAdapter(fugleClient)
 		g.registry.Register("fugle", fugleAdapter)
 		logging.Info("apigateway", "adapter_registered", "channel", "fugle")
 	}
 
 	// --- Fubon ---
+	// Startup probe: skip registration if the local proxy is not reachable,
+	// avoiding constant connection-refused errors at runtime.
 	fubonKey := cfg.FubonAPIKey
 	if fubonKey == "" {
 		fubonKey = config.GetSecret("ATLAS_FUBON_API_KEY")
 	}
 	if fubonKey != "" {
-		fubonClient := marketdata.NewFubonClient(fubonKey)
-		fubonAdapter := NewFubonChannelAdapter(fubonClient)
-		g.registry.Register("fubon", fubonAdapter)
-		logging.Info("apigateway", "adapter_registered", "channel", "fubon")
+		conn, err := net.DialTimeout("tcp", "localhost:8081", 2*time.Second)
+		if err != nil {
+			logging.Info("apigateway", "fubon_proxy_not_reachable", "msg", "skipping fubon adapter registration — proxy at localhost:8081 not running")
+		} else {
+			_ = conn.Close()
+			_ = conn.Close()
+			fubonClient := marketdata.NewFubonClient(fubonKey)
+			fubonAdapter := NewFubonChannelAdapter(fubonClient)
+			g.registry.Register("fubon", fubonAdapter)
+			logging.Info("apigateway", "adapter_registered", "channel", "fubon")
+		}
 	}
 
 	// --- FinMind ---
 	if cfg.FinMindAPIKey != "" {
-		finmindClient := marketdata.NewFinMindClient(cfg.FinMindAPIKey)
+		finmindClient := marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey)
 		finmindAdapter := NewFinMindChannelAdapter(finmindClient)
 		g.registry.Register("finmind", finmindAdapter)
 		logging.Info("apigateway", "adapter_registered", "channel", "finmind")
 	}
 
 	// --- TWSE (no API key required) ---
-	twseClient := marketdata.NewTWSEClient()
+	twseClient := marketdata.GetSharedTWSEClient()
 	twseAdapter := NewTWSEChannelAdapter(twseClient)
 	g.registry.Register("twse_replay", twseAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "twse_replay")
@@ -82,7 +93,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 
 	// --- TEJ ---
 	if tejKey := config.GetSecret("TEJ_API_KEY"); tejKey != "" {
-		tejClient := marketdata.NewTEJClient(tejKey)
+		tejClient := marketdata.GetSharedTEJClient(tejKey)
 		tejAdapter := NewTEJChannelAdapter(tejClient)
 		g.registry.Register("tej", tejAdapter)
 		logging.Info("apigateway", "adapter_registered", "channel", "tej")
@@ -94,15 +105,16 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	logging.Info("apigateway", "adapter_registered", "channel", "geopolitical")
 
 	// --- JPY (Frankfurter API for USD/JPY rate) ---
-	// Despite the "jpy_yahoo" channel ID, this uses Frankfurter FX API (api.frankfurter.app),
-	// not Yahoo Finance. The channel name is historical.
+	// The channel was historically named "jpy_yahoo" but has always used the
+	// Frankfurter FX API (api.frankfurter.app). Renamed to frankfurter_fx to
+	// reflect the actual data source. us_yahoo no longer fetches JPY=X to avoid overlap.
 	jpyProvider := marketdata.NewFrankfurterFXProvider()
-	jpyAdapter := NewJPYYahooChannelAdapter(jpyProvider)
-	g.registry.Register("jpy_yahoo", jpyAdapter)
-	logging.Info("apigateway", "adapter_registered", "channel", "jpy_yahoo")
+	jpyAdapter := NewFrankfurterFXChannelAdapter(jpyProvider)
+	g.registry.Register("frankfurter_fx", jpyAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "frankfurter_fx")
 
 	// --- TSMC Revenue (FinMind, requires API key) ---
-	tsmcProvider := marketdata.NewTSMCRevenueProvider(cfg.FinMindAPIKey)
+	tsmcProvider := marketdata.NewTSMCRevenueProviderWithStorage(cfg.FinMindAPIKey, filepath.Join(workDir, "data/state/tsmc_revenue"))
 	tsmcAdapter := NewTSMCRevenueChannelAdapter(tsmcProvider)
 	g.registry.Register("tsmc_revenue", tsmcAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "tsmc_revenue")
@@ -124,6 +136,18 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	g.registry.Register("sox_index", soxAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "sox_index")
 
+	// --- DRAM Spot Price (Micron MU stock proxy) ---
+	dramProvider := marketdata.NewDRAMSpotPriceProvider()
+	dramAdapter := NewDRAMSpotPriceChannelAdapter(dramProvider)
+	g.registry.Register("dram_spot_price", dramAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "dram_spot_price")
+
+	// --- TWSE Sector Index (Taiwan Semiconductor Index, TAISEMI proxy) ---
+	twseSectorProvider := marketdata.NewTWSESectorIndexProvider(filepath.Join(workDir, "data/state/sector_index"))
+	twseSectorAdapter := NewTWSESectorIndexChannelAdapter(twseSectorProvider)
+	g.registry.Register("twse_sector_index", twseSectorAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "twse_sector_index")
+
 	// --- BDI (Baltic Dry Index from CNBC) ---
 	bdiProvider := marketdata.NewBDIProvider()
 	bdiAdapter := NewBDIChannelAdapter(bdiProvider)
@@ -140,6 +164,21 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	dayTradingAdapter := NewDayTradingChannelAdapter()
 	g.registry.Register("day_trading", dayTradingAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "day_trading")
+
+	// --- TAIFEX Daily (PCR, retail futures OI — no API key required) ---
+	taifexAdapter := NewTaifexChannelAdapter()
+	g.registry.Register("taifex_daily", taifexAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "taifex_daily")
+
+	// --- TWSE Odd-Lot Trading (no API key required) ---
+	oddlotAdapter := NewTWSEOddLotChannelAdapter()
+	g.registry.Register("twse_oddlot", oddlotAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "twse_oddlot")
+
+	// --- TWSE ETF Net Subscription (no API key required) ---
+	etfAdapter := NewTWSEETFChannelAdapter()
+	g.registry.Register("twse_etf", etfAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "twse_etf")
 
 	// --- JANUS Regime (internal computed engine, optional) ---
 	if janusEngine != nil {

@@ -160,7 +160,8 @@ func (g *RiskGate) SelfCalibrate(ctx context.Context, provider CalibrationProvid
 		delta := (best - current) / current * 100
 		change.Rationale = fmt.Sprintf(
 			"baseline_score=%.4f, optimized_score=%.4f (%+.1f%% delta). %d sessions evaluated.",
-			baseline, result.BestScore, delta, len(sessions))
+			baseline, result.BestScore, delta, len(sessions),
+		)
 		change.Confidence = classifyDelta(delta, len(sessions))
 
 		report.Changes = append(report.Changes, change)
@@ -181,7 +182,7 @@ func (g *RiskGate) SelfCalibrate(ctx context.Context, provider CalibrationProvid
 				params.Risk.MaxDailyLossPct.CalibrationMethod = "bayesian_optimization"
 			}
 		}
-		if err := config.GetParametersConfig().Save(config.GetParametersConfigPath()); err != nil {
+		if err := params.SaveWithRollback(config.GetParametersConfigPath()); err != nil {
 			// Non-fatal: calibration results remain valid in memory.
 			fmt.Printf("self_calibrate: failed to persist parameters: %v\n", err)
 		}
@@ -191,12 +192,14 @@ func (g *RiskGate) SelfCalibrate(ctx context.Context, provider CalibrationProvid
 		report.Verdict = "stable"
 		report.Summary = fmt.Sprintf(
 			"risk gate thresholds optimal (baseline=%.4f). no adjustments needed across %d sessions.",
-			baseline, len(sessions))
+			baseline, len(sessions),
+		)
 	} else {
 		report.Verdict = "calibrated"
 		report.Summary = fmt.Sprintf(
 			"adjusted %d parameters based on %d session outcomes (baseline=%.4f, optimized=%.4f)",
-			len(report.Changes), len(sessions), baseline, result.BestScore)
+			len(report.Changes), len(sessions), baseline, result.BestScore,
+		)
 	}
 
 	return report, nil

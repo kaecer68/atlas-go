@@ -170,7 +170,7 @@ type RevertRecord struct {
 }
 
 func DefaultPolicy() Policy {
-	cfg := config.DefaultParametersConfig().Baseline
+	cfg := config.GetParametersConfig().Baseline
 	constraints := domain.SimulationConstraints{
 		StartingCash:                cfg.StartingCash.Value,
 		MaxPositionWeight:           cfg.MaxPositionWeight.Value,
@@ -268,7 +268,7 @@ func Save(path string, policy Policy) error {
 func ExecutionPolicyFromConstraints(constraints domain.SimulationConstraints) domain.ExecutionPolicy {
 	floor := constraints.MinRecommendationConviction
 	if floor <= 0 {
-		floor = config.DefaultParametersConfig().Baseline.MinRecommendationConviction.Value
+		floor = config.GetParametersConfig().Baseline.MinRecommendationConviction.Value
 	}
 	return domain.ExecutionPolicy{
 		ConvictionFloor: floor,

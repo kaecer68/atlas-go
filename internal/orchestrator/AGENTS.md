@@ -51,6 +51,8 @@
 ## 陷阱與反模式
 
 - **禁止跨層呼叫**：Executor 不應直接讀取 `SystemCore` 的私有欄位，應透過傳入的 `registry` 或 `quotes`。
-- **ID 混淆**：控制層（CIO）輸出必須保留原始 Agent ID，不可覆寫，否則 `PassedGuards` 稽核會失效。
+- **ID 混淆（已修復，2026-06-05）**：原 `buildFinalRecKey` 以 `Symbol+"|"+Agent` 為 key 進行 `PassedGuards` 查核，但 CIO aggregator 會以 bestAgent 覆寫 Agent 欄位，導致非最佳 agent 原始推薦查核失敗。
+  現已改為 `buildPassedSymbolKey`（Symbol-only key），CIO 覆寫不再影響 `PassedGuards` 查核。
+  仍應保留原始 Agent ID（`finalRecs[].Agent`），供後端 `recommendation_outcomes.jsonl` 與 `PassedGuards` audit trail 使用——僅僅不再依賴它做查核。
 - **靜默過濾**：若標的不符合 `Screener` 門檻，將完全不會進入 `Recommend` 階段，開發時若發現「推薦消失」請優先檢查 `agents.json`。
 - **Registry 變更**：修改 `AgentRegistry` 後，必須確認 `ExecuteRegistryResearch` 的路由邏輯能正確匹配新 Layer。

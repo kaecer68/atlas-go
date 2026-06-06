@@ -129,8 +129,8 @@ func TestPreTradeGate_AllRulesPass(t *testing.T) {
 	if dec.Verdict != VerdictAllow {
 		t.Errorf("expected ALLOW for valid order, got %s (reason: %s)", dec.Verdict, dec.Reason)
 	}
-	if len(dec.Details) != 4 {
-		t.Errorf("expected 4 rule results, got %d", len(dec.Details))
+	if len(dec.Details) != 6 {
+		t.Errorf("expected 6 rule results, got %d", len(dec.Details))
 	}
 }
 
@@ -171,6 +171,9 @@ func TestPreTradeGate_ConfigValues(t *testing.T) {
 	}
 	if g.MinCashBuffer() != 0.05 {
 		t.Errorf("MinCashBuffer = %.2f, want 0.05", g.MinCashBuffer())
+	}
+	if g.MaxOpenPositions() != 5 {
+		t.Errorf("MaxOpenPositions = %d, want 5", g.MaxOpenPositions())
 	}
 }
 
@@ -219,4 +222,57 @@ func assertRulePassed(t *testing.T, dec *RiskDecision, ruleName string, want boo
 			return
 		}
 	}
+}
+
+func TestPreTradeGate_MaxOpenPositionsExceeded(t *testing.T) {
+	g := NewPreTradeGate()
+	// Use a portfolio with 5 existing positions — max allowed
+	pf := defaultPortfolio()
+	pf.Positions = map[string]float64{"2330": 100000, "2454": 100000, "3008": 100000, "2317": 100000, "2882": 100000}
+	order := defaultOrder()
+	order.Symbol = "2881" // New symbol, would be 6th position
+	order.Side = "BUY"
+
+	dec, err := g.Check(context.Background(), order, pf, "NORMAL")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if dec.Verdict != VerdictBlock {
+		t.Errorf("expected BLOCK for max open positions exceeded, got %s", dec.Verdict)
+	}
+	assertRulePassed(t, dec, "max_open_positions", false)
+}
+
+func TestPreTradeGate_MaxOpenPositionsWithinLimit(t *testing.T) {
+	g := NewPreTradeGate()
+	pf := defaultPortfolio()
+	pf.Positions = map[string]float64{"2330": 100000} // Only 1 position
+	order := defaultOrder()
+	order.Symbol = "2454" // New symbol, would be 2nd position
+	order.Side = "BUY"
+
+	dec, err := g.Check(context.Background(), order, pf, "NORMAL")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if dec.Verdict != VerdictAllow {
+		t.Errorf("expected ALLOW for within max positions, got %s (reason: %s)", dec.Verdict, dec.Reason)
+	}
+	assertRulePassed(t, dec, "max_open_positions", true)
+}
+
+func TestPreTradeGate_MaxOpenPositionsSellOnExistingPosition(t *testing.T) {
+	g := NewPreTradeGate()
+	pf := defaultPortfolio()
+	pf.Positions = map[string]float64{"2330": 100000, "2454": 100000, "3008": 100000, "2317": 100000, "2882": 100000}
+	order := defaultOrder()
+	order.Symbol = "2330" // Already held — sell does not increase count
+	order.Side = "SELL"
+
+	dec, err := g.Check(context.Background(), order, pf, "NORMAL")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// SELL on existing position should pass max_open_positions
+	assertRulePassed(t, dec, "max_open_positions", true)
 }

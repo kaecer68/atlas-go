@@ -115,14 +115,55 @@ export const EVENT_NAME_MAP = {
   'china_slowdown': '中國經濟放緩',
   'taiwan_export_boom': '台灣出口強勁',
   'semiconductor_cycle_peak': '半導體週期高峰',
+  'semiconductor_downturn': '半導體週期下行',
   'financials_deregulation': '金融去管制',
   'shipping_rate_spike': '運價飆升',
   'oil_price_shock': '油價衝擊',
   'JPY_carry_unwind': '日圓套利平倉',
-  'middle_east_escalation': '中東衝突升級'
+  'middle_east_escalation': '中東衝突升級',
+  'taiwan_political_risk': '台灣地緣政治風險',
+  'USD_TWD_volatility': '台幣劇烈波動',
+  'retail_institutional_divergence': '散戶機構分歧',
+  'gold_rally': '黃金避險行情',
+  'dollar_surge': '美元強勢',
+  'inflation_spike': '通膨升溫',
+  'earnings_surprise': '財報驚喜',
+  'spring_festival_season': '春節行情',
+  'election_cycle': '選舉週期',
+  'earnings_blackout': '財報空窗期',
+  'tech_peak_season': '科技旺季效應',
+  'year_end_window_dressing': '年底作帳行情',
+  'dividend_season': '除權息旺季'
 };
 
 export function eventName(theme) { return EVENT_NAME_MAP[theme] || theme; }
+
+// Confidence source name mapping
+export const CONFIDENCE_SOURCE_NAME_MAP = {
+  'deviation_based_v1': '偏離度模型 v1',
+  'calendar_seasonal': '季節性日曆',
+  'calendar_political': '政治日曆'
+};
+
+export function confidenceSourceName(cs) { return CONFIDENCE_SOURCE_NAME_MAP[cs] || cs; }
+
+// Severity name mapping
+export const SEVERITY_NAME_MAP = {
+  'low': '低',
+  'medium': '中',
+  'high': '高'
+};
+
+export function severityName(s) { return SEVERITY_NAME_MAP[s] || s; }
+
+// Status name mapping
+export const STATUS_NAME_MAP = {
+  'active': '進行中',
+  'confirmed': '已確認',
+  'expired': '已過期'
+};
+
+export function statusName(s) { return STATUS_NAME_MAP[s] || s; }
 
 // Region name mapping
 export const REGION_NAME_MAP = {
@@ -130,7 +171,9 @@ export const REGION_NAME_MAP = {
   'Global': '全球',
   'Asia': '亞洲',
   'JP': '日本',
-  'Middle East': '中東'
+  'Middle East': '中東',
+  'TW': '台灣',
+  'COM': '國際商品'
 };
 
 export function regionName(r) { return REGION_NAME_MAP[r] || r; }
@@ -142,7 +185,17 @@ export const CAPITAL_FLOW_NAME_MAP = {
   'risk_on': '風險偏好流入',
   'tech_capex_inflow': '科技資本支出流入',
   'inflation_reprice': '通膨重新定價',
-  'global_liquidity_drain': '全球流動性收緊'
+  'global_liquidity_drain': '全球流動性收緊',
+  'tech_capex_slowdown': '科技資本支出放緩',
+  'seasonal_rotation': '季節性輪動',
+  'policy_uncertainty': '政策不確定性',
+  'pre_earnings_positioning': '財報前佈局',
+  'institutional_rebalancing': '機構再平衡',
+  'crowding_risk': '擁擠風險',
+  'flight_to_gold': '黃金避險',
+  'fx_driven_outflow': '匯率驅動流出',
+  'earnings_beat': '財報優於預期',
+  'earnings_miss': '財報不如預期'
 };
 
 export function capitalFlowName(cf) { return CAPITAL_FLOW_NAME_MAP[cf] || cf; }
@@ -187,6 +240,9 @@ export const SECTOR_NAME_MAP = {
   'petrochemicals': '石化',
   'consumer': '消費',
   'tourism': '觀光',
+  'defensive': '防禦性板塊',
+  'technology': '科技板塊',
+  'traditional': '傳產板塊',
   'DXY': '美元指數',
   'gold': '黃金',
   'JPY': '日圓',
@@ -210,7 +266,8 @@ export function sectorName(s) { return SECTOR_NAME_MAP[s] || s; }
 export const TIME_WINDOW_NAME_MAP = {
   'immediate': '即時',
   '1_week': '1 週',
-  '1_month': '1 個月'
+  '1_month': '1 個月',
+  '2_months': '2 個月'
 };
 
 export function timeWindowName(tw) { return TIME_WINDOW_NAME_MAP[tw] || tw; }

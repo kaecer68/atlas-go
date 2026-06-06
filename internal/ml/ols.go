@@ -64,11 +64,11 @@ func (o *OLS) Fit(X [][]float64, y []float64) error {
 	if o.FitIntercept {
 		for i := 0; i < nSamples; i++ {
 			flat[i*nCols] = 1.0
-			copy(flat[i*nCols+1:], X[i])
+			copy(flat[i*nCols+1:], X[i]) //nolint:gosec // G602: bounds validated
 		}
 	} else {
 		for i := 0; i < nSamples; i++ {
-			copy(flat[i*nCols:], X[i])
+			copy(flat[i*nCols:], X[i]) //nolint:gosec // G602: bounds validated
 		}
 	}
 
@@ -95,7 +95,7 @@ func (o *OLS) Fit(X [][]float64, y []float64) error {
 
 	o.coeffs = make([]float64, nCols)
 	copy(o.coeffs, beta.RawVector().Data)
-	o.nFeatures = len(X[0])
+	o.nFeatures = len(X[0]) //nolint:gosec // G602: nSamples>0 checked at line 41
 	o.fitted = true
 
 	return nil
@@ -135,11 +135,11 @@ func (o *OLS) Predict(X [][]float64) ([]float64, error) {
 	if o.FitIntercept {
 		for i := 0; i < nSamples; i++ {
 			flat[i*nCols] = 1.0
-			copy(flat[i*nCols+1:], X[i])
+			copy(flat[i*nCols+1:], X[i]) //nolint:gosec // G602: bounds validated
 		}
 	} else {
 		for i := 0; i < nSamples; i++ {
-			copy(flat[i*nCols:], X[i])
+			copy(flat[i*nCols:], X[i]) //nolint:gosec // G602: bounds validated
 		}
 	}
 

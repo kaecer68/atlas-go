@@ -1,5 +1,5 @@
-import { eventName, stressLabel, regionName, sectorName, templateName, capitalFlowName, modelName, timeWindowName } from '../names.js';
-import { renderEmptyState } from '../shared/app-utils.js';
+import { eventName, stressLabel, regionName, sectorName, templateName, capitalFlowName, modelName, timeWindowName, confidenceSourceName, severityName, statusName } from '../names.js';
+import { renderEmptyState, sortNarrativeEvents } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
 
 let templateAccordionState = { openTemplateId: null };
@@ -23,6 +23,16 @@ function toggleTemplateAccordion(idx) {
   templateAccordionState.openTemplateId = wasOpen ? null : 'tmpl-rationale-' + idx;
 }
 
+function toggleSubIndicators() {
+  var body = document.getElementById('subIndicatorBody');
+  var arrow = document.getElementById('subIndicatorArrow');
+  if (!body || !arrow) return;
+  var isHidden = body.style.display === 'none' || body.style.display === '';
+  body.style.display = isHidden ? 'block' : 'none';
+  arrow.textContent = isHidden ? '▲' : '▼';
+  arrow.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+}
+
 function toggleModelAccordion(idx) {
   const targetRow = document.getElementById('model-rationale-' + idx);
   const targetBtn = document.getElementById('model-btn-' + idx);
@@ -43,17 +53,14 @@ function toggleModelAccordion(idx) {
 
 window.toggleTemplateAccordion = toggleTemplateAccordion;
 window.toggleModelAccordion = toggleModelAccordion;
+window.toggleSubIndicators = toggleSubIndicators;
 
 export function renderLiveNarrativeStrip(events, stress, models, chains) {
   const el = document.getElementById('liveNarrativeStrip');
   if (!el) return;
   el.classList.remove('loading');
   const eventList = (events && events.events) || [];
-  const sortedEvents = eventList.slice().sort((a, b) => {
-    const strengthA = Math.abs(a.sentiment || 0) * (a.confidence || 1);
-    const strengthB = Math.abs(b.sentiment || 0) * (b.confidence || 1);
-    return strengthB - strengthA;
-  });
+  const sortedEvents = sortNarrativeEvents(eventList.slice());
   const topEvent = sortedEvents[0];
   const stressScore = stress && typeof stress.score === 'number' ? stress.score.toFixed(1) : '-';
   const sLabel = stress ? stressLabel(stress.regime || '-') : '-';
@@ -77,7 +84,8 @@ export function renderLiveNarrativeStrip(events, stress, models, chains) {
       favored = matchedModel.favored_sectors || [];
       avoided = matchedModel.avoided_sectors || [];
     } else if (matchedChain) {
-      favored = matchedChain.affected_sectors || [];
+      favored = matchedChain.favored_sectors || [];
+      avoided = matchedChain.avoided_sectors || [];
     }
   }
 
@@ -254,20 +262,53 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     eventsEl.classList.remove('loading');
     const list = (events && events.events) || [];
     // 同樣按強度排序，讓最劇烈的事件優先呈現
-    const sortedList = list.slice().sort((a, b) => {
-      const strengthA = Math.abs(a.sentiment || 0) * (a.confidence || 1);
-      const strengthB = Math.abs(b.sentiment || 0) * (b.confidence || 1);
-      return strengthB - strengthA;
-    });
+    const sortedList = sortNarrativeEvents(list.slice());
     if (!sortedList.length) { eventsEl.innerHTML = renderEmptyState('目前無觸發的宏觀敘事', ''); }
     else {
       eventsEl.innerHTML = sortedList.map(e => {
         const sClass = e.sentiment > 0 ? 'up' : 'down';
         const sText = e.sentiment > 0 ? '正面' : '負面';
         const tw = timeWindowName(e.time_window || '-');
+        const sev = severityName(e.severity || '-');
+        const st = statusName(e.status || '-');
+        const cs = confidenceSourceName(e.confidence_source || '-');
+        // Build source data display (translated keys)
+        let sourceDataHtml = '';
+        if (e.source_data && Object.keys(e.source_data).length > 0) {
+          const keyMap = {
+            'us10y_change_bps': '美債10年變動(bps)',
+            'dxy_change_pct': '美元指數變動%',
+            'vix_level': 'VIX 水位',
+            'usd_twd_change_pct': '台幣變動%',
+            'oil_change_pct': '油價變動%',
+            'gold_change_pct': '黃金變動%',
+            'gold_level': '黃金價位',
+            'jpy_change_pct': '日圓變動%',
+            'jpy_level': '日圓價位',
+            'ai_capex_sentiment': 'AI 資本支出情緒',
+            'geopolitical_gpr': '地緣政治風險指數',
+            'margin_zscore': '融資 Z-score',
+            'retail_institutional_divergence': '散戶機構分歧',
+            'earnings_surprise_pct': '財報驚喜%',
+            'cpi_yoy': 'CPI 年增率%',
+            'bdi_change_pct': 'BDI 變動%',
+            'copper_change_pct': '銅價變動%',
+            'export_electronics_change_pct': '電子出口變動%',
+            'sox_index_change_pct': 'SOX 指數變動%',
+            'dram_spot_price_change_pct': 'DRAM 現貨變動%'
+          };
+          const sdItems = Object.entries(e.source_data).map(([k, v]) => {
+            const label = keyMap[k] || k;
+            const val = typeof v === 'number' ? v.toFixed(2) : v;
+            return `${label}: ${val}`;
+          }).join(' · ');
+          sourceDataHtml = `<div class="text-muted text-sm mt-xs" style="font-size:11px">觸發條件：${escapeHtml(sdItems)}</div>`;
+        }
         return `<div style="border-left:3px solid var(--accent);padding:10px 12px;margin:8px 0;background:#0d1015;border-radius:8px">
           <div class="font-bold">${escapeHtml(eventName(e.theme))} <span class="${sClass}">${sText} (${e.sentiment})</span></div>
-          <div class="text-muted text-sm mt-xs">區域：${escapeHtml(regionName(e.region))} · 信心度：${((e.confident || e.confidence || 0) * 100).toFixed(0)}% · 資金流：${escapeHtml(capitalFlowName(e.capital_flow || '-'))} · 時間窗口：${escapeHtml(tw)}</div>
+          <div class="text-muted text-sm mt-xs">區域：${escapeHtml(regionName(e.region))} · 信心度：${((e.confident || e.confidence || 0) * 100).toFixed(0)}% · 嚴重程度：${escapeHtml(sev)} · 狀態：${escapeHtml(st)}</div>
+          <div class="text-muted text-sm mt-xs">資金流：${escapeHtml(capitalFlowName(e.capital_flow || '-'))} · 時間窗口：${escapeHtml(tw)} · 信心來源：${escapeHtml(cs)}</div>
+          ${sourceDataHtml}
         </div>`;
       }).join('');
     }
@@ -402,13 +443,82 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
 
       const shortBalanceHelp = `全市場散戶向券商融券賣股票的總金額（單位：億元）。融券餘額越高代表散戶看空力道越強，是觀察市場空方情緒的重要指標。\\n\\n解讀標準：\\n• 融券餘額大幅上升：散戶積極做空，市場看空情緒濃厚\\n• 融券餘額大幅下降：散戶回補空單，空方力道減弱，可能出現軋空行情\\n• 融資/融券比率異常：若融資高但融券也高，代表市場分歧加大\\n\\n當前數值：${shortBalance.toFixed(0)} 億（變化 ${shortChangeStr}）\\n${shortChangePct > 0.05 ? '⚠️ 融券大幅增加，散戶積極做空' : shortChangePct < -0.05 ? '📈 融券大幅減少，空方回補，注意軋空風險' : '✅ 融券變化正常'}`;
 
+      const hasSubIndicators = retailSentiment.sentiment_sub_indicators &&
+          (retailSentiment.sentiment_sub_indicators.category_a || retailSentiment.sentiment_sub_indicators.category_c);
+
+      const compositeScore = retailSentiment.composite_sentiment || 0;
+      const compositeClass = compositeScore > 0.5 ? 'err' : compositeScore > 0 ? 'up' : compositeScore > -0.5 ? 'down' : 'warn';
+      const compositeLabel = compositeScore > 0.5 ? '極度樂觀' : compositeScore > 0 ? '偏多' : compositeScore > -0.5 ? '偏空' : '極度恐慌';
+      const compositeHelp = `RSI-tw 綜合散戶情緒指數（Retail Sentiment Index — Taiwan）\\n\\nPart A（40%）：融資維持率、當沖比率、融資餘額變化、VIX風險映射、週選擇權PCR、零股失衡\\nPart C（25%）：散戶期貨未平倉、券商分點流向、ETF申購\\nPart D：事件調整乘數（0.8-1.2）\\n\\n分數範圍：-1.0 ~ +1.0\\n• ＞+0.5：散戶狂熱，市場接近短期頂部\\n• +0.2 ~ +0.5：散戶偏多\\n• -0.2 ~ +0.2：中性\\n• -0.5 ~ -0.2：散戶偏空\\n• ＜-0.5：散戶恐慌，可能是底部訊號\\n\\n當前數值：${compositeScore.toFixed(2)} — ${compositeLabel}`;
+
+      var subIndicatorHTML = '';
+      if (hasSubIndicators) {
+        var si = retailSentiment.sentiment_sub_indicators;
+        var ca = si.category_a || {};
+        var cc = si.category_c || {};
+        var cd = si.category_d || {};
+
+        var aIndicatorRows = [
+          ['維持率 Z-score', ca.margin_maintenance_z],
+          ['當沖 Z-score', ca.day_trading_z],
+          ['融資餘額 Z-score', ca.margin_balance_z],
+          ['VIX 風險分數', ca.vix_risk_score],
+          ['週選擇權 PCR', ca.weekly_pcr],
+          ['零股交易失衡', ca.odd_lot_imbalance]
+        ].map(function(r) {
+          var v = (r[1] || 0).toFixed(3);
+          var cls = r[1] > 0.5 ? 'up' : r[1] < -0.5 ? 'down' : '';
+          return '<tr><td style="font-size:12px;padding:3px 8px">' + r[0] + '</td><td style="font-size:12px;text-align:right;padding:3px 8px" class="' + cls + '">' + v + '</td></tr>';
+        }).join('');
+
+        var cIndicatorRows = [
+          ['散戶期貨 OI', cc.futures_retail_oi],
+          ['券商分點流向', cc.broker_flow_score],
+          ['ETF 申購分數', cc.etf_subscription_score]
+        ].map(function(r) {
+          var v = (r[1] || 0).toFixed(3);
+          var cls = r[1] > 0.5 ? 'up' : r[1] < -0.5 ? 'down' : '';
+          return '<tr><td style="font-size:12px;padding:3px 8px">' + r[0] + '</td><td style="font-size:12px;text-align:right;padding:3px 8px" class="' + cls + '">' + v + '</td></tr>';
+        }).join('');
+
+        var dEvents = (cd.active_events && cd.active_events.length > 0) ? cd.active_events.join('、') : '無觸發事件';
+        var dAdj = cd.adjustment_factor || cd.d_multiplier || 1.0;
+        var dAdjClass = dAdj < 0.95 ? 'warn' : dAdj > 1.05 ? 'up' : '';
+
+        subIndicatorHTML = `
+          <div class="mt-sm" style="border:1px solid var(--border);border-radius:6px;overflow:hidden">
+            <div id="subIndicatorToggle" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;background:var(--bg);user-select:none" onclick="toggleSubIndicators()">
+              <span style="font-size:12px;font-weight:600;color:var(--accent)">📊 子指標明細</span>
+              <span id="subIndicatorArrow" style="font-size:11px;transition:transform 0.2s">▼</span>
+            </div>
+            <div id="subIndicatorBody" style="display:none;padding:10px 12px;border-top:1px solid var(--border)">
+              <div style="margin-bottom:10px">
+                <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--accent)">Part A（40%）— 散戶情緒 <span style="font-weight:400;font-size:11px;color:var(--text-muted)">A Score: ${(ca.a_score || 0).toFixed(3)}</span></div>
+                <table style="width:100%;border-collapse:collapse">${aIndicatorRows}</table>
+              </div>
+              <div style="margin-bottom:10px">
+                <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--accent)">Part C（25%）— 機構/衍生品流向 <span style="font-weight:400;font-size:11px;color:var(--text-muted)">C Score: ${(cc.c_score || 0).toFixed(3)}</span></div>
+                <table style="width:100%;border-collapse:collapse">${cIndicatorRows}</table>
+              </div>
+              <div>
+                <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--accent)">Part D — 事件調整 <span style="font-weight:400;font-size:11px;color:var(--text-muted)">乘數: <span class="${dAdjClass}">${dAdj.toFixed(3)}</span></span></div>
+                <div style="font-size:11px;color:var(--text)">${dEvents}</div>
+              </div>
+            </div>
+          </div>`;
+      }
+
       retailEl.innerHTML = `
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
           <span class="text-muted text-sm">散戶情緒指標</span>
           <span class="badge ${readingClass}">${readingMap[retailSentiment.extreme_reading] || retailSentiment.extreme_reading}</span>
           ${dataStatusBadge}
         </div>
-        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+          <div class="kpi-card" style="cursor:pointer;" data-help="${compositeHelp.replace(/"/g, '&quot;')}" data-title="RSI-tw 綜合指數說明">
+            <div class="kpi-label" style="color:var(--accent);text-decoration:underline dotted;">RSI-tw 綜合 ℹ️</div>
+            <div class="kpi-value ${compositeClass}" class="text-lg">${compositeScore.toFixed(2)}</div>
+          </div>
           <div class="kpi-card" style="cursor:pointer;" data-help="${sentimentHelp.replace(/"/g, '&quot;')}" data-title="情緒分數說明">
             <div class="kpi-label" style="color:var(--accent);text-decoration:underline dotted;">情緒分數 ℹ️</div>
             <div class="kpi-value" class="text-lg">${score}</div>
@@ -431,6 +541,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           </div>
         </div>
         <div class="mt-sm text-muted text-sm">歷史百分位: ${marginPercentile.toFixed(0)}th</div>
+        ${subIndicatorHTML}
       `;
 
       retailEl.querySelectorAll('.kpi-card[data-help]').forEach(function(card) {
