@@ -653,6 +653,92 @@ func TestGetLunarDateFallback(t *testing.T) {
 	}
 }
 
+// TestLunarAutoComputation verifies that automatic lunar computation produces
+// identical results to the hardcoded lookup table for 2023-2030 (ST-8).
+func TestLunarAutoComputation(t *testing.T) {
+	testCases := []struct {
+		name    string
+		compute func(int) time.Time
+		tables  map[int]time.Time
+	}{
+		{"春節", computeLunarNewYear, lunarNewYearDates},
+		{"端午節", computeDragonBoat, lunarDragonBoatDates},
+		{"中秋節", computeMidAutumn, lunarMidAutumnDates},
+		{"清明節", computeQingming, tombSweepingDates},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			for year := 2023; year <= 2030; year++ {
+				auto := tc.compute(year)
+				cached, ok := tc.tables[year]
+				if !ok {
+					t.Fatalf("missing cached date for %s %d", tc.name, year)
+				}
+				if !auto.Equal(cached) {
+					t.Errorf("%s %d: auto=%s cached=%s mismatch",
+						tc.name, year, auto.Format("2006-01-02"), cached.Format("2006-01-02"))
+				}
+			}
+		})
+	}
+}
+
+// TestLunarAutoComputationFarFuture verifies automatic computation for years
+// well outside the original 2023-2030 hardcoded range (ST-8).
+func TestLunarAutoComputationFarFuture(t *testing.T) {
+	// 2100 Spring Festival
+	d := computeLunarNewYear(2100)
+	expected := time.Date(2100, 2, 9, 0, 0, 0, 0, time.UTC)
+	if !d.Equal(expected) {
+		t.Errorf("2100 春節: got %s, want %s", d.Format("2006-01-02"), expected.Format("2006-01-02"))
+	}
+
+	// 2049 Dragon Boat
+	d = computeDragonBoat(2049)
+	if d.Month() != 6 || d.Day() != 4 {
+		t.Errorf("2049 端午: got %s, expected Jun 4", d.Format("2006-01-02"))
+	}
+
+	// 2049 Mid-Autumn
+	d = computeMidAutumn(2049)
+	if d.Month() != 9 || d.Day() != 11 {
+		t.Errorf("2049 中秋: got %s, expected Sep 11", d.Format("2006-01-02"))
+	}
+
+	// 2049 Qingming
+	d = computeQingming(2049)
+	if d.Month() != 4 || (d.Day() != 4 && d.Day() != 5) {
+		t.Errorf("2049 清明: got %s, expected Apr 4 or 5", d.Format("2006-01-02"))
+	}
+}
+
+// TestLunarHolidayEventsAuto verifies that holiday events use auto-computed
+// dates for years outside the hardcoded table (ST-8).
+func TestLunarHolidayEventsAuto(t *testing.T) {
+	tec := NewEventCalendar()
+	now := time.Date(2049, 2, 10, 0, 0, 0, 0, time.UTC)
+	tec.RefreshEvents(now)
+
+	active := tec.DetectActiveEvents(now)
+
+	hasSpringFestival := false
+	for _, evt := range active {
+		if len(evt.ID) >= len("spring_festival") && evt.ID[:len("spring_festival")] == "spring_festival" {
+			hasSpringFestival = true
+			expectedPeak := time.Date(2049, 2, 2, 0, 0, 0, 0, time.UTC)
+			if !evt.PeakDate.Equal(expectedPeak) {
+				t.Errorf("2049 spring_festival peak: got %s, want %s",
+					evt.PeakDate.Format("2006-01-02"), expectedPeak.Format("2006-01-02"))
+			}
+			break
+		}
+	}
+	if !hasSpringFestival {
+		t.Error("expected spring_festival to be active around 2049 lunar new year")
+	}
+}
+
 // --- ST-4: Evidence fields test ---
 
 func TestEvidenceFieldsPopulated(t *testing.T) {
