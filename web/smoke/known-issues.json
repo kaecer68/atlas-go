@@ -1,18 +1,19 @@
-[
-  {
-    "pattern": "/api/dashboard/risk-calibration",
-    "note": "Backend handler returns 500 in dry-run mode — known transient dependency chain not yet initialized"
-  },
-  {
-    "pattern": "/api/dashboard/risk-exposure",
-    "note": "Backend handler fails without live portfolio position data populated"
-  },
-  {
-    "pattern": "ERR_EMPTY_RESPONSE",
-    "note": "SSE/stream endpoints close without pushing data in dry-run mode"
-  },
-  {
-    "pattern": "is not valid JSON",
-    "note": "500 error responses return HTML page instead of JSON body"
-  }
-]
+{
+  "patterns": [
+    {
+      "pattern": "risk-exposure.*Failed to fetch",
+      "reason": "Risk exposure fetch fails when no live session data or ledger is empty — expected in dry-run mode",
+      "ticket": "atlas-go#0"
+    },
+    {
+      "pattern": "ERR_EMPTY_RESPONSE",
+      "reason": "Empty response from server — known intermittent issue with in-memory state during smoke test",
+      "ticket": "atlas-go#0"
+    },
+    {
+      "pattern": "Unexpected token.*is not valid JSON",
+      "reason": "JSON parse error when API returns non-JSON response — expected in dry-run mode for some endpoints",
+      "ticket": "atlas-go#0"
+    }
+  ]
+}

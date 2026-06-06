@@ -38,9 +38,7 @@ func (h *Handlers) WithCorrelationMatrix(cm *industry.CorrelationMatrix) *Handle
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/risk", shared.Get(h.HandleRiskMetrics))
 	mux.Handle("GET /api/dashboard/correlation-matrix", shared.Get(h.HandleCorrelationMatrix))
-	if h.RiskGate != nil {
-		mux.Handle("GET /api/dashboard/risk-calibration", shared.Get(h.HandleRiskCalibration))
-	}
+	mux.Handle("GET /api/dashboard/risk-calibration", shared.Get(h.HandleRiskCalibration))
 }
 
 func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
@@ -178,6 +176,12 @@ func (h *Handlers) WithRiskGate(rg *risk.RiskGate) *Handlers {
 
 // HandleRiskCalibration serves the latest risk gate calibration report.
 func (h *Handlers) HandleRiskCalibration(r *http.Request) (int, any) {
+	if h.RiskGate == nil {
+		return http.StatusOK, map[string]any{
+			"status":  "not_available",
+			"message": "risk gate not configured in this mode",
+		}
+	}
 	report := h.RiskGate.LastCalibrationReport()
 	if report == nil {
 		return http.StatusOK, map[string]any{
