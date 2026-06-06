@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -16,6 +17,7 @@ type NarrativeService struct {
 	NarrativeEngine *narrative.NarrativeEngine
 	ReportGenerator *narrative.ReportGenerator
 	macroProvider   marketdata.MacroDataProvider
+	geoProvider     narrative.GeopoliticalRiskProvider
 }
 
 func NewNarrativeService(workDir string, narrativeEngine *narrative.NarrativeEngine, reportGenerator *narrative.ReportGenerator) *NarrativeService {
@@ -30,10 +32,15 @@ func (s *NarrativeService) SetMacroProvider(p marketdata.MacroDataProvider) {
 	s.macroProvider = p
 }
 
+func (s *NarrativeService) SetGeoProvider(p narrative.GeopoliticalRiskProvider) {
+	s.geoProvider = p
+}
+
 // BuildMarketNarrativeData fetches the latest macro snapshot and converts it
-// into the narrative detection input struct.  Fields not available in the
-// snapshot (GeopoliticalGPR, RetailInstitutionalDivergence, MarginZScore)
-// are zeroed; the caller should overlay query-param overrides if desired.
+// into the narrative detection input struct.  GeopoliticalGPR is fetched from
+// the geoProvider if available; other fields not available in the snapshot
+// (RetailInstitutionalDivergence, MarginZScore, EarningsSurprisePct) remain
+// zeroed and should be overlaid by query-param overrides if desired.
 func (s *NarrativeService) BuildMarketNarrativeData(ctx context.Context) (narrative.MarketNarrativeData, error) {
 	if s.macroProvider == nil {
 		return narrative.MarketNarrativeData{}, fmt.Errorf("macro provider not set")
@@ -42,7 +49,20 @@ func (s *NarrativeService) BuildMarketNarrativeData(ctx context.Context) (narrat
 	if err != nil {
 		return narrative.MarketNarrativeData{}, fmt.Errorf("fetch snapshot: %w", err)
 	}
-	return narrative.MarketNarrativeDataFromSnapshot(snap), nil
+	data := narrative.MarketNarrativeDataFromSnapshot(snap)
+
+	// Overlay geopolitical risk score if provider is available.
+	if s.geoProvider != nil {
+		geoCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		if score, err := s.geoProvider.FetchScore(geoCtx); err == nil {
+			data.GeopoliticalGPR = score.Intensity
+		} else {
+			logging.Warn("narrative_service", "geo_provider_fallback", logging.Err(err))
+		}
+	}
+
+	return data, nil
 }
 
 func (s *NarrativeService) DetectEvents(data narrative.MarketNarrativeData) []narrative.NarrativeEvent {

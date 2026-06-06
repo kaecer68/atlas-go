@@ -361,5 +361,45 @@ func DefaultTemplates() []CausalTemplate {
 			SourceReferences:  []string{"TWSE historical December data", "fund manager behavior studies"},
 			Rationale:         "每年12月投信與集團作帳行情為台股傳統，配合年終獎金效應，資金流入股市",
 		},
+		{
+			ID:             "美國降息 / 鴿派聯準會",
+			Name:           "美國降息 / 鴿派聯準會",
+			TriggerTheme:   "US_rates_down",
+			RequiredRegion: "US",
+			Steps: []CausalStep{
+				{Description: "美債殖利率下降 → 美元走弱", Affected: []string{"DXY", "新興市場貨幣"}, Impact: -0.6},
+				{Description: "美元走弱 + 利率下降推動資金回流新興亞洲", Affected: []string{"外資流向_台股"}, Impact: 0.7},
+				{Description: "台股大盤受惠；高Beta板塊估值擴張", Affected: []string{"AI供應鏈", "中小型股"}, Impact: 0.6},
+				{Description: "金融股淨息差壓縮，相對劣於大盤", Affected: []string{"金融"}, Impact: -0.3},
+			},
+			HistoricalHitRate: 0.70,
+			SourceReferences:  []string{"IMF Working Paper WP/19/128", "BIS Quarterly Review Dec 2022"},
+			Rationale: `當美國進入鴿派降息週期，無風險利率下降會降低全球資產折現率。外資因美元資產收益率下降而流出美國、回流新興市場，台股資金面寬鬆；高估值科技股對折現率最敏感，本益比會被擴張。
+
+因此，此時應該【押注】對利率下降「受惠」的板塊：
+• AI供應鏈（台積電、廣達等）：遠期現金流的估值折讓減少，股價彈性最大。
+• 中小型股：外資回流時流動性溢價改善，漲幅常大於大盤。
+
+同時必須【迴避】對利率下降「受損」的板塊：
+• 金融股（富邦金、國泰金）：淨息差（NIM）隨利率下降而壓縮，獲利承壓。`,
+		},
+		{
+			ID:             "除權息旺季",
+			Name:           "除權息旺季",
+			TriggerTheme:   "dividend_season",
+			RequiredRegion: "TW",
+			Steps: []CausalStep{
+				{Description: "6–8月進入台股除權除息高峰期，高股息股吸引避險與收益型資金", Affected: []string{"高股息", "金融"}, Impact: 0.6},
+				{Description: "存股族與退休基金加碼高股息標的，提供股價支撐", Affected: []string{"高股息ETF", "大型權值"}, Impact: 0.4},
+				{Description: "電子股進入傳統淡季，資金輪動至傳產與高股息", Affected: []string{"電子股"}, Impact: -0.3},
+			},
+			HistoricalHitRate: 0.65,
+			SourceReferences:  []string{"TWSE Dividend Distribution Calendar", "Taiwan Stock Exchange Historical Data"},
+			Rationale: `台股每年6–8月為除權除息旺季，超過70%的上市櫃公司在此期間發放股利。高股息策略在這段期間有顯著的「確定性溢價」：
+
+• 高股息股（0056、00878成分股）會吸引存股族、退休基金與外資收益型帳戶加碼，股價在除息前常出現「搶息行情」。
+• 金融股因現金股利穩定且殖利率高，是除權息旺季的核心受惠板塊。
+• 電子股因進入傳統淡季，相對吸引力下降，資金常輪動至傳產與高股息板塊。`,
+		},
 	}
 }
